@@ -55,6 +55,133 @@ fn env_line<'a>(block: &'a str, key: &str) -> Result<&'a str, &'static str> {
     Err("env line")
 }
 
+/// Locate a named rendered step, failing when the marker is absent.
+fn step_at(task: &str, name: &str, missing: &'static str) -> Result<usize, &'static str> {
+    task.find(&format!("- name: {name}")).ok_or(missing)
+}
+
+/// Assert the Cargo source restore and local MBX setup for a crate job.
+fn assert_mbx_setup(task: &str) -> TestResult {
+    let source_restore = step_at(task, "Restore Cargo sources", "source restore")?;
+    let private_store = step_at(task, "Prepare private MBX store", "private MBX store")?;
+    let setup = step_at(task, "Setup MBX", "MBX setup")?;
+    let key = step_at(task, "Prepare MBX bundle key", "MBX bundle key")?;
+    assert_eq!(
+        task.matches("- name: Setup MBX").count(),
+        1,
+        "one MBX setup step"
+    );
+    assert!(
+        source_restore < private_store && private_store < setup && setup < key,
+        "source restore/private store/local MBX setup order:\n{task}"
+    );
+
+    let source_cache = &task[source_restore..private_store];
+    assert!(
+        source_cache.contains("uses: actions/cache/restore@"),
+        "explicit Cargo source restore:\n{source_cache}"
+    );
+    let private = &task[private_store..setup];
+    assert!(
+        private.contains("mktemp -d")
+            && private.contains("velnor-mbx-store.XXXXXXXXXX")
+            && private.contains("MBX_CACHE_DIR=%s"),
+        "fresh private MBX store:\n{private}"
+    );
+    let local_setup = &task[setup..key];
+    assert!(
+        local_setup.contains("uses: jdx/mr-boxington-action@")
+            && local_setup.contains("backend: local"),
+        "local MBX action setup:\n{local_setup}"
+    );
+    assert!(
+        !task.contains("github-cache-mode"),
+        "retired cache mode:\n{task}"
+    );
+    Ok(())
+}
+
+/// Assert MBX bundle restore/import, source fetch, and all crate builds precede export.
+fn assert_mbx_bundle_order(task: &str) -> TestResult {
+    let key = step_at(task, "Prepare MBX bundle key", "MBX bundle key")?;
+    let restore = step_at(task, "Restore MBX single bundle", "bundle restore")?;
+    let import = step_at(task, "Import MBX single bundle", "bundle import")?;
+    let fetch = step_at(task, "Fetch Cargo sources", "source fetch")?;
+    let clippy = step_at(task, "Clippy", "first MBX build")?;
+    let tests = step_at(task, "Unit and integration tests", "MBX tests")?;
+    let doctests = step_at(task, "Doctests", "MBX doctests")?;
+    let documentation = step_at(task, "Documentation", "last MBX build")?;
+    let export = step_at(task, "Export MBX single bundle", "bundle export")?;
+    let save = step_at(task, "Save MBX single bundle", "bundle save")?;
+    assert!(
+        key < restore
+            && restore < import
+            && import < fetch
+            && fetch < clippy
+            && clippy < tests
+            && tests < doctests
+            && doctests < documentation
+            && documentation < export
+            && export < save,
+        "bundle restore/import, Cargo fetch/build, export/save order:\n{task}"
+    );
+    let cargo_fetch = &task[fetch..clippy];
+    assert!(
+        cargo_fetch.contains("cargo fetch --locked"),
+        "Cargo source fetch:\n{cargo_fetch}"
+    );
+    for (start, end, command) in [
+        (clippy, tests, "mbx clippy"),
+        (tests, doctests, "mbx test"),
+        (doctests, documentation, "mbx test"),
+        (documentation, export, "mbx doc"),
+    ] {
+        assert!(
+            task[start..end].contains(command),
+            "MBX build command {command}:\n{}",
+            &task[start..end]
+        );
+    }
+    Ok(())
+}
+
+/// Assert explicit bundle actions and shared restore/save identity.
+fn assert_mbx_bundle_actions(task: &str) -> TestResult {
+    let restore = step_at(task, "Restore MBX single bundle", "bundle restore")?;
+    let import = step_at(task, "Import MBX single bundle", "bundle import")?;
+    let fetch = step_at(task, "Fetch Cargo sources", "source fetch")?;
+    let export = step_at(task, "Export MBX single bundle", "bundle export")?;
+    let save = step_at(task, "Save MBX single bundle", "bundle save")?;
+    let bundle_path = "${{ runner.temp }}/mbx-single-bundle";
+    let bundle_key = "${{ steps.mbx-bundle-key.outputs.primary }}";
+    let bundle_restore = &task[restore..import];
+    assert!(
+        bundle_restore.contains("uses: actions/cache/restore@")
+            && bundle_restore.contains(&format!("key: {bundle_key}"))
+            && bundle_restore.contains(&format!("path: {bundle_path}")),
+        "explicit bundle restore:\n{bundle_restore}"
+    );
+    let bundle_import = &task[import..fetch];
+    assert!(
+        bundle_import.contains("mbx cache import"),
+        "explicit bundle import:\n{bundle_import}"
+    );
+    let bundle_export = &task[export..save];
+    assert!(
+        bundle_export.contains("mbx cache export --group")
+            && bundle_export.contains("RUNNER_TEMP/mbx-single-bundle"),
+        "bundle export command and path:\n{bundle_export}"
+    );
+    let bundle_save = &task[save..];
+    assert!(
+        bundle_save.contains("uses: actions/cache/save@")
+            && bundle_save.contains(&format!("key: {bundle_key}"))
+            && bundle_save.contains(&format!("path: {bundle_path}")),
+        "explicit bundle save shares restore identity:\n{bundle_save}"
+    );
+    Ok(())
+}
+
 #[test]
 fn w1_crate_jobs_group_obligations_per_crate() -> TestResult {
     let (_repo, yaml) = preview_yaml(config_with_branch())?;
@@ -117,6 +244,10 @@ fn w1_crate_job_prepares_pinned_tools() -> TestResult {
 fn w1_crate_prepare_adds_mbx_driver() -> TestResult {
     let repo = make_repo(config_with_branch())?;
     with_mbx(&repo)?;
+    fs::write(
+        repo.path().join("Cargo.lock"),
+        "version = 4\n\n[[package]]\nname = \"demo\"\nversion = \"0.1.0\"\n",
+    )?;
     let prep = prepare(repo.path())?;
     let tree = render_staged_tree(&prep)?;
     let yaml = tree.get(WORKFLOW_PATH).ok_or("missing workflow")?;
@@ -126,16 +257,9 @@ fn w1_crate_prepare_adds_mbx_driver() -> TestResult {
         task.contains(&catalog.tool_spec(PinnedTool::MrBoxington)),
         "mbx spec:\n{task}"
     );
-    assert_eq!(
-        task.matches("Restore MBX objects").count(),
-        1,
-        "one objects step:\n{task}"
-    );
-    assert!(
-        task.contains("github-cache-mode: objects")
-            || task.contains("github-cache-mode: \"objects\""),
-        "{task}"
-    );
+    assert_mbx_setup(task)?;
+    assert_mbx_bundle_order(task)?;
+    assert_mbx_bundle_actions(task)?;
     Ok(())
 }
 

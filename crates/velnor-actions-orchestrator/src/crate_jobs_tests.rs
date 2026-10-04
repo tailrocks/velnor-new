@@ -236,9 +236,9 @@ fn drivers_follow_per_crate_selection() {
     assert_eq!(found.drivers["rust-demo"], RenderDriver::Mbx);
     assert_eq!(found.drivers["rust-nested"], RenderDriver::Cargo);
     let steps = names(&found.jobs[0].1);
-    assert!(steps.contains(&"Restore MBX objects"), "{steps:?}");
+    assert!(steps.contains(&"Setup MBX"), "{steps:?}");
     let steps = names(&found.jobs[1].1);
-    assert!(!steps.contains(&"Restore MBX objects"), "{steps:?}");
+    assert!(!steps.contains(&"Setup MBX"), "{steps:?}");
 }
 
 #[test]

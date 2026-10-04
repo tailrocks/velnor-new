@@ -23,7 +23,7 @@ fn assert_provider_restore_only(names: &[&str]) {
     for rust in [
         "Restore Cargo sources",
         "Restore Cargo registry",
-        "Restore MBX objects",
+        "Setup MBX",
     ] {
         assert!(!names.contains(&rust), "no rust-pinned {rust}: {names:?}");
     }

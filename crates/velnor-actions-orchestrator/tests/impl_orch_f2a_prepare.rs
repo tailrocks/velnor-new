@@ -1,13 +1,13 @@
 //! Prepare-path scan split from `impl_orch_f2a` (400-line gate).
 
 use crate::impl_common::TestResult;
-use crate::impl_orch_f2a::{code_of, orch_src, src_files};
+use crate::impl_orch_f2a::{code_of, orch_src, product_src_files};
 
 #[test]
 fn plan_and_generate_share_one_prepare_path() -> TestResult {
     let mut discover_calls = Vec::new();
     let mut config_calls = Vec::new();
-    for path in src_files()? {
+    for path in product_src_files()? {
         let name = path
             .file_name()
             .map(|file| file.to_string_lossy().into_owned())

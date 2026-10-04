@@ -1,16 +1,15 @@
 //! Cache and lane step templates over validated action refs.
 //!
-//! Covers MBX objects-mode restore, `actions/cache` restore/save, and
+//! Covers MBX local setup, `actions/cache` restore/save, and
 //! per-lane target directories; pins arrive validated.
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::cachekey::mbx_cache_generation;
 use velnor_actions_contract::{Job, Step, StepKind};
 
 use crate::{
     RenderError,
-    steps::{action_step, action_step_with_env, validate_uses},
+    steps::{action_step, validate_uses},
 };
 
 #[path = "cache_steps_tools.rs"]
@@ -21,7 +20,7 @@ pub use tools::{
     TOOLS_SAVE_USES, tools_cache_key, tools_restore_step, tools_save_step,
 };
 
-/// Pinned mr-boxington action name (objects mode).
+/// Pinned mr-boxington action name (local setup backend).
 pub const MBX_ACTION_NAME: &str = "jdx/mr-boxington-action";
 /// Cache restore/save action names.
 pub const CACHE_RESTORE_NAME: &str = "actions/cache/restore";
@@ -53,11 +52,11 @@ pub fn is_never_archive_path(path: &str) -> bool {
 pub enum CompileDriver {
     /// Cargo profile: MBX action and installation are absent.
     Cargo,
-    /// MBX profile: the objects-mode action restores compiler objects.
+    /// MBX profile: the local action installs MBX before explicit import.
     Mbx,
 }
 
-/// MBX objects step only for MBX-selected profiles; Cargo yields none.
+/// MBX setup step only for MBX-selected profiles; Cargo yields none.
 ///
 /// Workflow contract §3 emits `jdx/mr-boxington-action` only when the
 /// Rust detector selects MBX; Cargo legs carry neither the action nor
@@ -79,7 +78,7 @@ pub fn mbx_step_for_driver(
 ///
 /// Jobs without a declared driver are skipped (plan/final/lint carry
 /// none); declared Cargo jobs must be MBX-free while MBX jobs carry
-/// exactly one objects-mode step.
+/// exactly one local MBX setup step.
 /// # Errors
 pub fn check_mbx_gating(
     jobs: &BTreeMap<String, Job>,
@@ -140,31 +139,23 @@ fn uses_mbx_tool(step: &Step) -> bool {
     matches!(&step.kind, velnor_actions_contract::StepKind::Shell { run, .. } if run.iter().any(|arg| arg == "mbx" || arg.contains("mr-boxington")))
 }
 
-/// Env key the cache backend reads for its restore/save mode.
-pub const MBX_CACHE_MODE_ENV: &str = "ACTIONS_CACHE_MODE";
-/// Display name of the MBX objects restore step.
-pub const MBX_RESTORE_NAME: &str = "Restore MBX objects";
+/// Display name of the pinned MBX local setup step.
+pub const MBX_SETUP_NAME: &str = "Setup MBX";
 /// MBX automatic collection must stay enabled so low-disk builds can recover.
 pub(crate) const MBX_GC_AUTO_ENV: &str = "MBX_GC_AUTO";
 /// MBX 1.21.1+ honors this value and protects active build consumers.
 pub(crate) const MBX_GC_AUTO_VALUE: &str = "1";
-/// Mode that skips the action post. `read` does not permit writes.
-pub(crate) const MBX_ACTION_CACHE_MODE: &str = "read";
-
-/// Objects-mode MBX step; cargo profiles must never emit or install MBX.
+/// Local-backend MBX step; cargo profiles must never emit or install MBX.
 ///
 /// The action installs exactly `mbx_version` (the catalog pin): without
 /// the `version` input the action resolves `latest`, and an action-SHA
 /// pin never proves the installed executable (P07 effective-version
 /// defect; the action documents that setting `version` always installs
 /// that release: `https://github.com/jdx/mr-boxington-action`).
-/// The step-level [`MBX_CACHE_MODE_ENV`] is the literal `read`. The
-/// action's post exports inside the live store and then archives that
-/// copy, and a default-branch push saves even when `save-on-*` is off.
-/// `read` is the switch that skips that post. Push saves are a later
-/// single-bundle step, still refused for pull requests.
-/// The cache generation follows the exact MBX release, so upgrading its
-/// storage or collection behavior starts with an isolated cold namespace.
+/// The official action uses its supported local backend for setup only.
+/// Velnor restores and saves its stable directory bundle through pinned
+/// `actions/cache` steps so the action's GitHub backend cannot do a second,
+/// implicit restore/import/save against a different path.
 /// # Errors
 pub fn mbx_objects_step(
     uses: &str,
@@ -184,18 +175,10 @@ pub fn mbx_objects_step(
         )));
     }
     let with = BTreeMap::from([
-        ("github-cache-mode".to_owned(), "objects".to_owned()),
+        ("backend".to_owned(), "local".to_owned()),
         ("version".to_owned(), mbx_version.to_owned()),
-        (
-            "cache-generation".to_owned(),
-            mbx_cache_generation(mbx_version),
-        ),
     ]);
-    let env = BTreeMap::from([(
-        MBX_CACHE_MODE_ENV.to_owned(),
-        MBX_ACTION_CACHE_MODE.to_owned(),
-    )]);
-    action_step_with_env(MBX_RESTORE_NAME, uses, with, env)
+    action_step(MBX_SETUP_NAME, uses, with)
 }
 
 /// Exact MBX versions: three nonempty numeric dot parts, nothing else.
@@ -290,7 +273,7 @@ fn sources_subset_ok(path: &str) -> bool {
 
 /// Check restore-before/save-after ordering over cache action steps.
 ///
-/// Every `actions/cache/restore` step (plus MBX objects restore) must
+/// Every `actions/cache/restore` step (plus MBX local setup) must
 /// precede every `actions/cache/save` step within one job.
 /// # Errors
 pub fn check_cache_step_order(steps: &[Step]) -> Result<(), RenderError> {

@@ -61,7 +61,7 @@ jobs:
         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
           cache: "true"
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-cd6926493099032f
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-83215c7a9cfccf4d
           cache_save: "false"
           env: "false"
           install: "false"
@@ -76,7 +76,7 @@ jobs:
           MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_TOOLCHAIN: 1.98.1
-        run: mise --no-config --no-env --no-hooks install rust@1.98.1 mr-boxington@1.21.1 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.30.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146
+        run: mise --no-config --no-env --no-hooks install rust@1.98.1 mr-boxington@1.22.0 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.30.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146
       - name: Prepare Rust components
         env:
           MISE_AUTO_INSTALL: "false"
@@ -185,7 +185,7 @@ jobs:
         if: success() && github.event_name == 'push'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
-          key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-cd6926493099032f
+          key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-83215c7a9cfccf4d
           path: ~/.local/share/mise
   publish-baseline:
     name: Publish baseline
@@ -234,7 +234,7 @@ jobs:
         with:
           if-no-files-found: error
           name: ${{ steps.publish-baseline.outputs.artifact_name }}
-          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}/baseline.json
+          path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}/published-baseline/baseline.json
           retention-days: "90"
   required:
     name: Required
@@ -341,7 +341,7 @@ jobs:
         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
           cache: "true"
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-cd6926493099032f
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-83215c7a9cfccf4d
           cache_save: "false"
           env: "false"
           install: "false"
@@ -378,7 +378,7 @@ jobs:
           MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_TOOLCHAIN: 1.98.1
-        run: mise --no-config --no-env --no-hooks install rust@1.98.1 mr-boxington@1.21.1 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.30.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146
+        run: mise --no-config --no-env --no-hooks install rust@1.98.1 mr-boxington@1.22.0 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.30.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146
       - name: Prepare Rust components
         env:
           MISE_AUTO_INSTALL: "false"
@@ -397,15 +397,26 @@ jobs:
           key: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-${{hashFiles('Cargo.lock')}}
           path: "${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin\n${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
           restore-keys: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-
-      - name: Restore MBX objects
+      - name: Prepare private MBX store
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; test -n \"$RUNNER_TEMP\"; bundle=\"$RUNNER_TEMP/mbx-single-bundle\"; if [ -e \"$bundle\" ] || [ -L \"$bundle\" ]; then echo \"stable MBX bundle path already exists in runner.temp\" >&2; exit 1; fi; root_file=\"$GITHUB_OUTPUT.mbx-root\"; if [ -e \"$root_file\" ] || [ -L \"$root_file\" ]; then echo \"MBX root marker already exists\" >&2; exit 1; fi; mktemp -d \"$RUNNER_TEMP/velnor-mbx-store.XXXXXXXXXX\" > \"$root_file\"; IFS= read -r root < \"$root_file\"; root_id=\"${root##*/}\"; group=\"velnor-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${root_id}\"; printf '\\''MBX_CACHE_DIR=%s\\nMBX_TARGET_ROOT=%s/targets\\nMBX_SHIMS_DIR=%s/shims\\nMBX_CACHE_EXPORT_GROUP=%s\\n'\\'' \"$root\" \"$root\" \"$root\" \"$group\" >> \"$GITHUB_ENV\"'"
+      - name: Setup MBX
         id: mbx
         uses: jdx/mr-boxington-action@1687e54eb349cadf61fa38b5813a77875489e8e6
         with:
-          cache-generation: velnor-mbx-1.21.1
-          github-cache-mode: objects
-          version: 1.21.1
-        env:
-          ACTIONS_CACHE_MODE: read
+          backend: local
+          version: 1.22.0
       - name: Prepare MBX bundle key
         id: mbx-bundle-key
         env:
@@ -417,16 +428,30 @@ jobs:
           GH_HOST: ""
           GH_TOKEN: ""
           GITHUB_TOKEN: ""
-          MBX_KEY: ${{ steps.mbx.outputs.cache-primary-key }}
+          MBX_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          MBX_CACHE_SCOPE: rust-parity-app
+          MBX_EXPECTED_VERSION: 1.22.0
+          MBX_GENERATION: velnor-mbx-1.22.0
+          MBX_MATRIX_CONTEXT: ${{ toJSON(matrix) }}
+          MBX_VERSION: ${{ steps.mbx.outputs.mbx-version }}
+          MISE_AUTO_INSTALL: "false"
+          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          MISE_EXEC_AUTO_INSTALL: "false"
           MISE_GITHUB_TOKEN: ""
+          MISE_LOCKFILE: "0"
+          MISE_NO_CONFIG: "1"
+          MISE_NO_ENV: "1"
+          MISE_NO_HOOKS: "1"
+          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           NODE_AUTH_TOKEN: ""
           NPM_TOKEN: ""
-        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; key=\"$MBX_KEY\"; case \"$key\" in '\\'''\\''|*-) exit 1 ;; esac; prefix=\"${key%-*}-\"; echo \"prefix=${prefix}\" >> \"$GITHUB_OUTPUT\"'"
+          RUSTUP_TOOLCHAIN: 1.98.1
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; set -o pipefail; case \"$RUNNER_OS:$RUNNER_ARCH\" in Linux:X64|Linux:x64|Linux:AMD64) os=linux; arch=x64 ;; Linux:ARM64|Linux:arm64) os=linux; arch=arm64 ;; *) echo \"unsupported runner for MBX directory cache key\" >&2; exit 1 ;; esac; test \"$MBX_VERSION\" = \"$MBX_EXPECTED_VERSION\"; test -n \"$RUSTUP_TOOLCHAIN\"; workflow_ref=${GITHUB_WORKFLOW_REF:?missing GITHUB_WORKFLOW_REF}; case \"$workflow_ref\" in *@refs/*) workflow_path=${workflow_ref%%@refs/*} ;; *) echo \"invalid GITHUB_WORKFLOW_REF\" >&2; exit 1 ;; esac; test -n \"$workflow_path\"; scope_file=\"$GITHUB_OUTPUT.mbx-scope\"; identity_file=\"$GITHUB_OUTPUT.mbx-rustc\"; hash_file=\"$GITHUB_OUTPUT.mbx-hash\"; for file in \"$scope_file\" \"$identity_file\" \"$hash_file\"; do if [ -e \"$file\" ] || [ -L \"$file\" ]; then echo \"MBX key marker already exists\" >&2; exit 1; fi; done; printf '\\''%s\\n%s\\n%s\\n'\\'' \"$workflow_path\" \"$MBX_CACHE_SCOPE\" \"$MBX_MATRIX_CONTEXT\" > \"$scope_file\"; sha256sum \"$scope_file\" | cut -c1-64 > \"$hash_file\"; IFS= read -r scope_hash < \"$hash_file\"; test -n \"$scope_hash\"; mise --no-config --no-env --no-hooks exec \"rust@$RUSTUP_TOOLCHAIN\" -- rustc -vV > \"$identity_file\"; sha256sum \"$identity_file\" | cut -c1-64 > \"$hash_file\"; IFS= read -r compiler_hash < \"$hash_file\"; test -n \"$compiler_hash\"; toolchain=\"rust-${RUSTUP_TOOLCHAIN}-${compiler_hash}\"; revision=\"$GITHUB_SHA\"; if [ -n \"$MBX_BASE_SHA\" ]; then revision=\"$MBX_BASE_SHA\"; fi; case \"$revision\" in '\\'''\\''|*[!0-9a-f]*) exit 1 ;; esac; test \"${#revision}\" -eq 40; prefix=\"${os}-${arch}-mbx-${MBX_GENERATION}-dir-${toolchain}-scope-${scope_hash}-\"; printf '\\''primary=%s%s\\nprefix=%s\\n'\\'' \"$prefix\" \"$revision\" \"$prefix\" >> \"$GITHUB_OUTPUT\"'"
       - name: Restore MBX single bundle
         id: mbx-bundle
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
-          key: ${{ steps.mbx.outputs.cache-primary-key }}
+          key: ${{ steps.mbx-bundle-key.outputs.primary }}
           path: ${{ runner.temp }}/mbx-single-bundle
           restore-keys: ${{ steps.mbx-bundle-key.outputs.prefix }}
       - name: Import MBX single bundle
@@ -443,7 +468,7 @@ jobs:
           MISE_GITHUB_TOKEN: ""
           NODE_AUTH_TOKEN: ""
           NPM_TOKEN: ""
-        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; bundle=\"$RUNNER_TEMP/mbx-single-bundle\"; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; if [ -z \"$MATCHED\" ]; then echo \"no mbx bundle matched\"; exit 0; fi; if [ ! -d \"$bundle\" ]; then echo \"mbx bundle missing; continuing cold\"; exit 0; fi; if ! mbx cache import \"$bundle\"; then echo \"mbx bundle import failed; continuing cold\"; rm -rf \"$bundle\"; exit 0; fi'"
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; bundle=\"$RUNNER_TEMP/mbx-single-bundle\"; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; if [ -z \"$MATCHED\" ]; then echo '\\''no MBX bundle matched'\\''; exit 0; fi; if [ ! -d \"$bundle\" ]; then echo '\\''matched MBX bundle is missing; the fresh store stays cold'\\''; exit 0; fi; if mbx cache import \"$bundle\"; then echo '\\''MBX bundle imported'\\''; else echo '\\''MBX bundle import failed; abandoning its private store'\\''; root_file=\"$GITHUB_OUTPUT.mbx-fallback\"; if [ -e \"$root_file\" ] || [ -L \"$root_file\" ]; then echo \"MBX fallback marker already exists\" >&2; exit 1; fi; mktemp -d \"$RUNNER_TEMP/velnor-mbx-fallback.XXXXXXXXXX\" > \"$root_file\"; IFS= read -r root < \"$root_file\"; root_id=\"${root##*/}\"; group=\"velnor-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${root_id}\"; printf '\\''MBX_CACHE_DIR=%s\\nMBX_TARGET_ROOT=%s/targets\\nMBX_SHIMS_DIR=%s/shims\\nMBX_CACHE_EXPORT_GROUP=%s\\n'\\'' \"$root\" \"$root\" \"$root\" \"$group\" >> \"$GITHUB_ENV\"; echo '\\''fresh cold MBX store selected for subsequent steps'\\''; fi'"
       - name: Fetch Cargo sources
         env:
           MISE_AUTO_INSTALL: "false"
@@ -482,9 +507,9 @@ jobs:
           VELNOR_DOWNSTREAM_TASK_IDS: stack/rust/crates/app/build/default,stack/rust/crates/app/nextest/default/shard-1-of-2,stack/rust/crates/app/nextest/default/shard-2-of-2,stack/rust/crates/app/doctest/default,stack/rust/crates/app/doc/default
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/app/clippy/default
           VELNOR_MATRIX_KEY: m-c560a3bfe9e3edbf
-          VELNOR_TASK_DIGEST: b3-d486d41c2f9e130d8c61b8cfad294c01ea7e83f1d6a754ae8ab8043eb9249405
+          VELNOR_TASK_DIGEST: b3-9b5879b52d0a60c7766f156be928e50e5106f02c63f1c7081f6036c1be71a2a9
           VELNOR_TASK_ID: stack/rust/crates/app/clippy/default
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; date +%s%3N > \"$RUNNER_TEMP/velnor/start-m-c560a3bfe9e3edbf\"; mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx clippy --locked --offline --manifest-path crates/app/Cargo.toml --package parity-app --all-targets -- -D warnings; code=$?; read -r start_ms rest < \"$RUNNER_TEMP/velnor/start-m-c560a3bfe9e3edbf\"; VELNOR_EXIT_CODE=\"$code\" VELNOR_START_MS=\"$start_ms\" VELNOR_INTERNAL_OP=write-task-report-v1 \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\"'"
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; date +%s%3N > \"$RUNNER_TEMP/velnor/start-m-c560a3bfe9e3edbf\"; mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.22.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx clippy --locked --offline --manifest-path crates/app/Cargo.toml --package parity-app --all-targets -- -D warnings; code=$?; read -r start_ms rest < \"$RUNNER_TEMP/velnor/start-m-c560a3bfe9e3edbf\"; VELNOR_EXIT_CODE=\"$code\" VELNOR_START_MS=\"$start_ms\" VELNOR_INTERNAL_OP=write-task-report-v1 \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\"'"
       - name: Build test executables
         if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/app/build/default,')"
         env:
@@ -511,9 +536,9 @@ jobs:
           VELNOR_DOWNSTREAM_TASK_IDS: stack/rust/crates/app/nextest/default/shard-1-of-2,stack/rust/crates/app/nextest/default/shard-2-of-2,stack/rust/crates/app/doctest/default,stack/rust/crates/app/doc/default
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/app/build/default
           VELNOR_MATRIX_KEY: m-b7640e836e4084e7
-          VELNOR_TASK_DIGEST: b3-60fc0670e29721fa3a956f82c0277da842eb0be65e7552844258e17f0b2995d5
+          VELNOR_TASK_DIGEST: b3-37011f204b80f7c34ce9c4f1e0910e3ab19bcb418f3d25a66eab3d44acf65751
           VELNOR_TASK_ID: stack/rust/crates/app/build/default
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; date +%s%3N > \"$RUNNER_TEMP/velnor/start-m-b7640e836e4084e7\"; mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx build --locked --offline --manifest-path crates/app/Cargo.toml --package parity-app; code=$?; read -r start_ms rest < \"$RUNNER_TEMP/velnor/start-m-b7640e836e4084e7\"; VELNOR_EXIT_CODE=\"$code\" VELNOR_START_MS=\"$start_ms\" VELNOR_INTERNAL_OP=write-task-report-v1 \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\"'"
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; date +%s%3N > \"$RUNNER_TEMP/velnor/start-m-b7640e836e4084e7\"; mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.22.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx nextest list --profile ci --list-type binaries-only --locked --offline --manifest-path crates/app/Cargo.toml --package parity-app; code=$?; read -r start_ms rest < \"$RUNNER_TEMP/velnor/start-m-b7640e836e4084e7\"; VELNOR_EXIT_CODE=\"$code\" VELNOR_START_MS=\"$start_ms\" VELNOR_INTERNAL_OP=write-task-report-v1 \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\"'"
       - name: Unit and integration tests (shard 1 of 2)
         if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/app/nextest/default/shard-1-of-2,')"
         env:
@@ -540,9 +565,9 @@ jobs:
           VELNOR_DOWNSTREAM_TASK_IDS: stack/rust/crates/app/nextest/default/shard-2-of-2,stack/rust/crates/app/doctest/default,stack/rust/crates/app/doc/default
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/app/nextest/default/shard-1-of-2
           VELNOR_MATRIX_KEY: m-0309cf3b8be11ce8
-          VELNOR_TASK_DIGEST: b3-6b879c094d98c11b49d27211a13c0d193d552f9f2d93f84dd0ff8f698c205ed1
+          VELNOR_TASK_DIGEST: b3-b343a759d528860a260842f782a1a98b20e65a05365a0386de526fb3e4e94b8a
           VELNOR_TASK_ID: stack/rust/crates/app/nextest/default/shard-1-of-2
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; date +%s%3N > \"$RUNNER_TEMP/velnor/start-m-0309cf3b8be11ce8\"; mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx nextest run --profile ci --locked --offline --manifest-path crates/app/Cargo.toml --package parity-app --no-tests fail; code=$?; read -r start_ms rest < \"$RUNNER_TEMP/velnor/start-m-0309cf3b8be11ce8\"; VELNOR_EXIT_CODE=\"$code\" VELNOR_START_MS=\"$start_ms\" VELNOR_INTERNAL_OP=write-task-report-v1 \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\"'"
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; date +%s%3N > \"$RUNNER_TEMP/velnor/start-m-0309cf3b8be11ce8\"; mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.22.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx nextest run --profile ci --locked --offline --manifest-path crates/app/Cargo.toml --package parity-app --no-tests fail; code=$?; read -r start_ms rest < \"$RUNNER_TEMP/velnor/start-m-0309cf3b8be11ce8\"; VELNOR_EXIT_CODE=\"$code\" VELNOR_START_MS=\"$start_ms\" VELNOR_INTERNAL_OP=write-task-report-v1 \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\"'"
       - name: Unit and integration tests (shard 2 of 2)
         if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/app/nextest/default/shard-2-of-2,')"
         env:
@@ -569,9 +594,9 @@ jobs:
           VELNOR_DOWNSTREAM_TASK_IDS: stack/rust/crates/app/doctest/default,stack/rust/crates/app/doc/default
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/app/nextest/default/shard-2-of-2
           VELNOR_MATRIX_KEY: m-5b6ce8bc01e41a33
-          VELNOR_TASK_DIGEST: b3-3d5d47b851d4fbb75791d47a942cd0f85ada3d7f2812d9c0ebdb28c8283398b1
+          VELNOR_TASK_DIGEST: b3-2b63764a661a763c1c79a2d520af26f347bb8b68a5b63507ec97c0a3b885d18a
           VELNOR_TASK_ID: stack/rust/crates/app/nextest/default/shard-2-of-2
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; date +%s%3N > \"$RUNNER_TEMP/velnor/start-m-5b6ce8bc01e41a33\"; mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx nextest run --profile ci --locked --offline --manifest-path crates/app/Cargo.toml --package parity-app --no-tests fail; code=$?; read -r start_ms rest < \"$RUNNER_TEMP/velnor/start-m-5b6ce8bc01e41a33\"; VELNOR_EXIT_CODE=\"$code\" VELNOR_START_MS=\"$start_ms\" VELNOR_INTERNAL_OP=write-task-report-v1 \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\"'"
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; date +%s%3N > \"$RUNNER_TEMP/velnor/start-m-5b6ce8bc01e41a33\"; mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.22.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx nextest run --profile ci --locked --offline --manifest-path crates/app/Cargo.toml --package parity-app --no-tests fail; code=$?; read -r start_ms rest < \"$RUNNER_TEMP/velnor/start-m-5b6ce8bc01e41a33\"; VELNOR_EXIT_CODE=\"$code\" VELNOR_START_MS=\"$start_ms\" VELNOR_INTERNAL_OP=write-task-report-v1 \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\"'"
       - name: Doctests
         if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/app/doctest/default,')"
         env:
@@ -598,9 +623,9 @@ jobs:
           VELNOR_DOWNSTREAM_TASK_IDS: stack/rust/crates/app/doc/default
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/app/doctest/default
           VELNOR_MATRIX_KEY: m-a286706805d0f77d
-          VELNOR_TASK_DIGEST: b3-0d46a23d02bf77381fafa116aab29f304479419a80ce7c975ddf438fc1e0a175
+          VELNOR_TASK_DIGEST: b3-7d36fdb460ea2d753b044bda1f0a2ec1572d2296ac5531125a895d5320e7c833
           VELNOR_TASK_ID: stack/rust/crates/app/doctest/default
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; date +%s%3N > \"$RUNNER_TEMP/velnor/start-m-a286706805d0f77d\"; mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx test --locked --offline --manifest-path crates/app/Cargo.toml --package parity-app --doc; code=$?; read -r start_ms rest < \"$RUNNER_TEMP/velnor/start-m-a286706805d0f77d\"; VELNOR_EXIT_CODE=\"$code\" VELNOR_START_MS=\"$start_ms\" VELNOR_INTERNAL_OP=write-task-report-v1 \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\"'"
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; date +%s%3N > \"$RUNNER_TEMP/velnor/start-m-a286706805d0f77d\"; mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.22.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx test --locked --offline --manifest-path crates/app/Cargo.toml --package parity-app --doc; code=$?; read -r start_ms rest < \"$RUNNER_TEMP/velnor/start-m-a286706805d0f77d\"; VELNOR_EXIT_CODE=\"$code\" VELNOR_START_MS=\"$start_ms\" VELNOR_INTERNAL_OP=write-task-report-v1 \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\"'"
       - name: Documentation
         if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/app/doc/default,')"
         env:
@@ -627,9 +652,9 @@ jobs:
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/app/doc/default
           VELNOR_MATRIX_KEY: m-d0e8abd0cfc431dc
-          VELNOR_TASK_DIGEST: b3-6caed196eba13f03d9ee0012a088657795119c4899f33debd81c7e31c710ff2d
+          VELNOR_TASK_DIGEST: b3-773ad48119820b18af0748865d4510e63a1f6997f1d5ed513db4b848551fda93
           VELNOR_TASK_ID: stack/rust/crates/app/doc/default
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; date +%s%3N > \"$RUNNER_TEMP/velnor/start-m-d0e8abd0cfc431dc\"; mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx doc --locked --offline --manifest-path crates/app/Cargo.toml --package parity-app --no-deps; code=$?; read -r start_ms rest < \"$RUNNER_TEMP/velnor/start-m-d0e8abd0cfc431dc\"; VELNOR_EXIT_CODE=\"$code\" VELNOR_START_MS=\"$start_ms\" VELNOR_INTERNAL_OP=write-task-report-v1 \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\"'"
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; date +%s%3N > \"$RUNNER_TEMP/velnor/start-m-d0e8abd0cfc431dc\"; mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.22.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx doc --locked --offline --manifest-path crates/app/Cargo.toml --package parity-app --no-deps; code=$?; read -r start_ms rest < \"$RUNNER_TEMP/velnor/start-m-d0e8abd0cfc431dc\"; VELNOR_EXIT_CODE=\"$code\" VELNOR_START_MS=\"$start_ms\" VELNOR_INTERNAL_OP=write-task-report-v1 \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\"'"
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -640,7 +665,7 @@ jobs:
           retention-days: "30"
       - name: Export MBX single bundle
         id: mbx-export
-        if: success() && github.event_name == 'push' && steps.mbx.outputs.cache-hit != 'true' && steps.mbx-bundle.outputs.cache-hit != 'true'
+        if: success() && github.event_name == 'push' && github.ref_name == github.event.repository.default_branch && steps.mbx-bundle.outputs.cache-hit != 'true'
         env:
           ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
           ACTIONS_ID_TOKEN_REQUEST_URL: ""
@@ -653,12 +678,12 @@ jobs:
           MISE_GITHUB_TOKEN: ""
           NODE_AUTH_TOKEN: ""
           NPM_TOKEN: ""
-        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; mbx gc; mbx cache dir > \"$RUNNER_TEMP/mbx-store-path\"; IFS= read -r store < \"$RUNNER_TEMP/mbx-store-path\"; test -n \"$store\"; bundle=\"$RUNNER_TEMP/mbx-single-bundle\"; case \"$bundle\" in \"$store\"|\"$store\"/*) exit 1 ;; esac; case \"$store\" in /|.) exit 1 ;; *mbx*) ;; *) exit 1 ;; esac; rm -rf \"$bundle\"; if mbx cache export --group \"$MBX_CACHE_EXPORT_GROUP\" --format directory \"$bundle\" >\"$RUNNER_TEMP/mbx-export.out\" 2>&1; then test -d \"$bundle\"; rm -rf \"$store\"; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; echo \"ready=true\" >> \"$GITHUB_OUTPUT\"; else rm -rf \"$bundle\"; if grep -q \"no completed mbx builds are recorded for export group\" \"$RUNNER_TEMP/mbx-export.out\"; then echo \"ready=false\" >> \"$GITHUB_OUTPUT\"; exit 0; fi; cat \"$RUNNER_TEMP/mbx-export.out\"; exit 1; fi'"
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; bundle=\"$RUNNER_TEMP/mbx-single-bundle\"; export_log=\"$GITHUB_OUTPUT.mbx-export\"; gc_log=\"$GITHUB_OUTPUT.mbx-gc\"; for file in \"$export_log\" \"$gc_log\"; do if [ -e \"$file\" ] || [ -L \"$file\" ]; then echo \"MBX export marker already exists\" >&2; exit 1; fi; done; if mbx cache export --group \"$MBX_CACHE_EXPORT_GROUP\" --format directory \"$bundle\" >\"$export_log\" 2>&1; then test -d \"$bundle\"; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; if mbx gc --max-size 0 --json >\"$gc_log\" 2>&1; then cat \"$gc_log\"; echo '\\''gc-succeeded=true'\\'' >> \"$GITHUB_OUTPUT\"; echo '\\''ready=true'\\'' >> \"$GITHUB_OUTPUT\"; else cat \"$gc_log\"; echo '\\''gc-succeeded=false'\\'' >> \"$GITHUB_OUTPUT\"; echo '\\''ready=false'\\'' >> \"$GITHUB_OUTPUT\"; fi; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; else if grep -Fq '\\''no completed mbx builds are recorded for export group'\\'' \"$export_log\"; then cat \"$export_log\"; echo '\\''ready=false'\\'' >> \"$GITHUB_OUTPUT\"; exit 0; fi; cat \"$export_log\"; exit 1; fi'"
       - name: Save MBX single bundle
-        if: success() && github.event_name == 'push' && steps.mbx.outputs.cache-hit != 'true' && steps.mbx-bundle.outputs.cache-hit != 'true' && steps.mbx-export.outputs.ready == 'true'
+        if: success() && github.event_name == 'push' && github.ref_name == github.event.repository.default_branch && steps.mbx-bundle.outputs.cache-hit != 'true' && steps.mbx-export.outputs.ready == 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
-          key: ${{ steps.mbx.outputs.cache-primary-key }}
+          key: ${{ steps.mbx-bundle-key.outputs.primary }}
           path: ${{ runner.temp }}/mbx-single-bundle
   rust-parity-tool:
     name: Rust / parity-tool
@@ -677,7 +702,7 @@ jobs:
         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
           cache: "true"
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-cd6926493099032f
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-83215c7a9cfccf4d
           cache_save: "false"
           env: "false"
           install: "false"
@@ -714,7 +739,7 @@ jobs:
           MISE_NO_HOOKS: "1"
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_TOOLCHAIN: 1.98.1
-        run: mise --no-config --no-env --no-hooks install rust@1.98.1 mr-boxington@1.21.1 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.30.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146
+        run: mise --no-config --no-env --no-hooks install rust@1.98.1 mr-boxington@1.22.0 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.30.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146
       - name: Prepare Rust components
         env:
           MISE_AUTO_INSTALL: "false"
@@ -733,15 +758,26 @@ jobs:
           key: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-${{hashFiles('Cargo.lock')}}
           path: "${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin\n${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
           restore-keys: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-
-      - name: Restore MBX objects
+      - name: Prepare private MBX store
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+          ACTIONS_ID_TOKEN_REQUEST_URL: ""
+          ACTIONS_RUNTIME_TOKEN: ""
+          CARGO_REGISTRY_TOKEN: ""
+          GH_CONFIG_DIR: ""
+          GH_HOST: ""
+          GH_TOKEN: ""
+          GITHUB_TOKEN: ""
+          MISE_GITHUB_TOKEN: ""
+          NODE_AUTH_TOKEN: ""
+          NPM_TOKEN: ""
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; test -n \"$RUNNER_TEMP\"; bundle=\"$RUNNER_TEMP/mbx-single-bundle\"; if [ -e \"$bundle\" ] || [ -L \"$bundle\" ]; then echo \"stable MBX bundle path already exists in runner.temp\" >&2; exit 1; fi; root_file=\"$GITHUB_OUTPUT.mbx-root\"; if [ -e \"$root_file\" ] || [ -L \"$root_file\" ]; then echo \"MBX root marker already exists\" >&2; exit 1; fi; mktemp -d \"$RUNNER_TEMP/velnor-mbx-store.XXXXXXXXXX\" > \"$root_file\"; IFS= read -r root < \"$root_file\"; root_id=\"${root##*/}\"; group=\"velnor-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${root_id}\"; printf '\\''MBX_CACHE_DIR=%s\\nMBX_TARGET_ROOT=%s/targets\\nMBX_SHIMS_DIR=%s/shims\\nMBX_CACHE_EXPORT_GROUP=%s\\n'\\'' \"$root\" \"$root\" \"$root\" \"$group\" >> \"$GITHUB_ENV\"'"
+      - name: Setup MBX
         id: mbx
         uses: jdx/mr-boxington-action@1687e54eb349cadf61fa38b5813a77875489e8e6
         with:
-          cache-generation: velnor-mbx-1.21.1
-          github-cache-mode: objects
-          version: 1.21.1
-        env:
-          ACTIONS_CACHE_MODE: read
+          backend: local
+          version: 1.22.0
       - name: Prepare MBX bundle key
         id: mbx-bundle-key
         env:
@@ -753,16 +789,30 @@ jobs:
           GH_HOST: ""
           GH_TOKEN: ""
           GITHUB_TOKEN: ""
-          MBX_KEY: ${{ steps.mbx.outputs.cache-primary-key }}
+          MBX_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          MBX_CACHE_SCOPE: rust-parity-tool
+          MBX_EXPECTED_VERSION: 1.22.0
+          MBX_GENERATION: velnor-mbx-1.22.0
+          MBX_MATRIX_CONTEXT: ${{ toJSON(matrix) }}
+          MBX_VERSION: ${{ steps.mbx.outputs.mbx-version }}
+          MISE_AUTO_INSTALL: "false"
+          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          MISE_EXEC_AUTO_INSTALL: "false"
           MISE_GITHUB_TOKEN: ""
+          MISE_LOCKFILE: "0"
+          MISE_NO_CONFIG: "1"
+          MISE_NO_ENV: "1"
+          MISE_NO_HOOKS: "1"
+          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           NODE_AUTH_TOKEN: ""
           NPM_TOKEN: ""
-        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; key=\"$MBX_KEY\"; case \"$key\" in '\\'''\\''|*-) exit 1 ;; esac; prefix=\"${key%-*}-\"; echo \"prefix=${prefix}\" >> \"$GITHUB_OUTPUT\"'"
+          RUSTUP_TOOLCHAIN: 1.98.1
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; set -o pipefail; case \"$RUNNER_OS:$RUNNER_ARCH\" in Linux:X64|Linux:x64|Linux:AMD64) os=linux; arch=x64 ;; Linux:ARM64|Linux:arm64) os=linux; arch=arm64 ;; *) echo \"unsupported runner for MBX directory cache key\" >&2; exit 1 ;; esac; test \"$MBX_VERSION\" = \"$MBX_EXPECTED_VERSION\"; test -n \"$RUSTUP_TOOLCHAIN\"; workflow_ref=${GITHUB_WORKFLOW_REF:?missing GITHUB_WORKFLOW_REF}; case \"$workflow_ref\" in *@refs/*) workflow_path=${workflow_ref%%@refs/*} ;; *) echo \"invalid GITHUB_WORKFLOW_REF\" >&2; exit 1 ;; esac; test -n \"$workflow_path\"; scope_file=\"$GITHUB_OUTPUT.mbx-scope\"; identity_file=\"$GITHUB_OUTPUT.mbx-rustc\"; hash_file=\"$GITHUB_OUTPUT.mbx-hash\"; for file in \"$scope_file\" \"$identity_file\" \"$hash_file\"; do if [ -e \"$file\" ] || [ -L \"$file\" ]; then echo \"MBX key marker already exists\" >&2; exit 1; fi; done; printf '\\''%s\\n%s\\n%s\\n'\\'' \"$workflow_path\" \"$MBX_CACHE_SCOPE\" \"$MBX_MATRIX_CONTEXT\" > \"$scope_file\"; sha256sum \"$scope_file\" | cut -c1-64 > \"$hash_file\"; IFS= read -r scope_hash < \"$hash_file\"; test -n \"$scope_hash\"; mise --no-config --no-env --no-hooks exec \"rust@$RUSTUP_TOOLCHAIN\" -- rustc -vV > \"$identity_file\"; sha256sum \"$identity_file\" | cut -c1-64 > \"$hash_file\"; IFS= read -r compiler_hash < \"$hash_file\"; test -n \"$compiler_hash\"; toolchain=\"rust-${RUSTUP_TOOLCHAIN}-${compiler_hash}\"; revision=\"$GITHUB_SHA\"; if [ -n \"$MBX_BASE_SHA\" ]; then revision=\"$MBX_BASE_SHA\"; fi; case \"$revision\" in '\\'''\\''|*[!0-9a-f]*) exit 1 ;; esac; test \"${#revision}\" -eq 40; prefix=\"${os}-${arch}-mbx-${MBX_GENERATION}-dir-${toolchain}-scope-${scope_hash}-\"; printf '\\''primary=%s%s\\nprefix=%s\\n'\\'' \"$prefix\" \"$revision\" \"$prefix\" >> \"$GITHUB_OUTPUT\"'"
       - name: Restore MBX single bundle
         id: mbx-bundle
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
-          key: ${{ steps.mbx.outputs.cache-primary-key }}
+          key: ${{ steps.mbx-bundle-key.outputs.primary }}
           path: ${{ runner.temp }}/mbx-single-bundle
           restore-keys: ${{ steps.mbx-bundle-key.outputs.prefix }}
       - name: Import MBX single bundle
@@ -779,7 +829,7 @@ jobs:
           MISE_GITHUB_TOKEN: ""
           NODE_AUTH_TOKEN: ""
           NPM_TOKEN: ""
-        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; bundle=\"$RUNNER_TEMP/mbx-single-bundle\"; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; if [ -z \"$MATCHED\" ]; then echo \"no mbx bundle matched\"; exit 0; fi; if [ ! -d \"$bundle\" ]; then echo \"mbx bundle missing; continuing cold\"; exit 0; fi; if ! mbx cache import \"$bundle\"; then echo \"mbx bundle import failed; continuing cold\"; rm -rf \"$bundle\"; exit 0; fi'"
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; bundle=\"$RUNNER_TEMP/mbx-single-bundle\"; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; if [ -z \"$MATCHED\" ]; then echo '\\''no MBX bundle matched'\\''; exit 0; fi; if [ ! -d \"$bundle\" ]; then echo '\\''matched MBX bundle is missing; the fresh store stays cold'\\''; exit 0; fi; if mbx cache import \"$bundle\"; then echo '\\''MBX bundle imported'\\''; else echo '\\''MBX bundle import failed; abandoning its private store'\\''; root_file=\"$GITHUB_OUTPUT.mbx-fallback\"; if [ -e \"$root_file\" ] || [ -L \"$root_file\" ]; then echo \"MBX fallback marker already exists\" >&2; exit 1; fi; mktemp -d \"$RUNNER_TEMP/velnor-mbx-fallback.XXXXXXXXXX\" > \"$root_file\"; IFS= read -r root < \"$root_file\"; root_id=\"${root##*/}\"; group=\"velnor-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${root_id}\"; printf '\\''MBX_CACHE_DIR=%s\\nMBX_TARGET_ROOT=%s/targets\\nMBX_SHIMS_DIR=%s/shims\\nMBX_CACHE_EXPORT_GROUP=%s\\n'\\'' \"$root\" \"$root\" \"$root\" \"$group\" >> \"$GITHUB_ENV\"; echo '\\''fresh cold MBX store selected for subsequent steps'\\''; fi'"
       - name: Fetch Cargo sources
         env:
           MISE_AUTO_INSTALL: "false"
@@ -818,9 +868,9 @@ jobs:
           VELNOR_DOWNSTREAM_TASK_IDS: stack/rust/crates/tool/build/default,stack/rust/crates/tool/nextest/default/shard-1-of-2,stack/rust/crates/tool/nextest/default/shard-2-of-2,stack/rust/crates/tool/doc/default
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/tool/clippy/default
           VELNOR_MATRIX_KEY: m-1805dad3c0b2c11b
-          VELNOR_TASK_DIGEST: b3-ec3c8836ba7de8a1f51f90fdea3ff9bf9e6c02e1492af2f7a4603de9a60cdc92
+          VELNOR_TASK_DIGEST: b3-489edc3cf36cf51167ff6ce8341510d898583a877d814c397d7c43284b2b5079
           VELNOR_TASK_ID: stack/rust/crates/tool/clippy/default
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; date +%s%3N > \"$RUNNER_TEMP/velnor/start-m-1805dad3c0b2c11b\"; mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx clippy --locked --offline --manifest-path crates/tool/Cargo.toml --package parity-tool --all-targets -- -D warnings; code=$?; read -r start_ms rest < \"$RUNNER_TEMP/velnor/start-m-1805dad3c0b2c11b\"; VELNOR_EXIT_CODE=\"$code\" VELNOR_START_MS=\"$start_ms\" VELNOR_INTERNAL_OP=write-task-report-v1 \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\"'"
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; date +%s%3N > \"$RUNNER_TEMP/velnor/start-m-1805dad3c0b2c11b\"; mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.22.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx clippy --locked --offline --manifest-path crates/tool/Cargo.toml --package parity-tool --all-targets -- -D warnings; code=$?; read -r start_ms rest < \"$RUNNER_TEMP/velnor/start-m-1805dad3c0b2c11b\"; VELNOR_EXIT_CODE=\"$code\" VELNOR_START_MS=\"$start_ms\" VELNOR_INTERNAL_OP=write-task-report-v1 \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\"'"
       - name: Build test executables
         if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/tool/build/default,')"
         env:
@@ -847,9 +897,9 @@ jobs:
           VELNOR_DOWNSTREAM_TASK_IDS: stack/rust/crates/tool/nextest/default/shard-1-of-2,stack/rust/crates/tool/nextest/default/shard-2-of-2,stack/rust/crates/tool/doc/default
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/tool/build/default
           VELNOR_MATRIX_KEY: m-12bd939a9fdedf5f
-          VELNOR_TASK_DIGEST: b3-ea49000b14d45440b16ff257064d8a8fb9e97a4958a79f2c97b5538d2663e558
+          VELNOR_TASK_DIGEST: b3-262511c74054f5b7eaf9a08742ffda0ad54641eb0448f36a703a74cf4d5a5596
           VELNOR_TASK_ID: stack/rust/crates/tool/build/default
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; date +%s%3N > \"$RUNNER_TEMP/velnor/start-m-12bd939a9fdedf5f\"; mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx build --locked --offline --manifest-path crates/tool/Cargo.toml --package parity-tool; code=$?; read -r start_ms rest < \"$RUNNER_TEMP/velnor/start-m-12bd939a9fdedf5f\"; VELNOR_EXIT_CODE=\"$code\" VELNOR_START_MS=\"$start_ms\" VELNOR_INTERNAL_OP=write-task-report-v1 \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\"'"
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; date +%s%3N > \"$RUNNER_TEMP/velnor/start-m-12bd939a9fdedf5f\"; mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.22.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx nextest list --profile ci --list-type binaries-only --locked --offline --manifest-path crates/tool/Cargo.toml --package parity-tool; code=$?; read -r start_ms rest < \"$RUNNER_TEMP/velnor/start-m-12bd939a9fdedf5f\"; VELNOR_EXIT_CODE=\"$code\" VELNOR_START_MS=\"$start_ms\" VELNOR_INTERNAL_OP=write-task-report-v1 \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\"'"
       - name: Unit and integration tests (shard 1 of 2)
         if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/tool/nextest/default/shard-1-of-2,')"
         env:
@@ -876,9 +926,9 @@ jobs:
           VELNOR_DOWNSTREAM_TASK_IDS: stack/rust/crates/tool/nextest/default/shard-2-of-2,stack/rust/crates/tool/doc/default
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/tool/nextest/default/shard-1-of-2
           VELNOR_MATRIX_KEY: m-623a018565b7cb15
-          VELNOR_TASK_DIGEST: b3-6e6010e8bc70a39a5d18bb42a76d512aa5acf6caef7b92fbe42432738bd84f26
+          VELNOR_TASK_DIGEST: b3-cbfee60d8afc08838b328d0378d7b2b4b474e646835c6b6cf1563190cfdbafa8
           VELNOR_TASK_ID: stack/rust/crates/tool/nextest/default/shard-1-of-2
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; date +%s%3N > \"$RUNNER_TEMP/velnor/start-m-623a018565b7cb15\"; mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx nextest run --profile ci --locked --offline --manifest-path crates/tool/Cargo.toml --package parity-tool --no-tests fail; code=$?; read -r start_ms rest < \"$RUNNER_TEMP/velnor/start-m-623a018565b7cb15\"; VELNOR_EXIT_CODE=\"$code\" VELNOR_START_MS=\"$start_ms\" VELNOR_INTERNAL_OP=write-task-report-v1 \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\"'"
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; date +%s%3N > \"$RUNNER_TEMP/velnor/start-m-623a018565b7cb15\"; mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.22.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx nextest run --profile ci --locked --offline --manifest-path crates/tool/Cargo.toml --package parity-tool --no-tests fail; code=$?; read -r start_ms rest < \"$RUNNER_TEMP/velnor/start-m-623a018565b7cb15\"; VELNOR_EXIT_CODE=\"$code\" VELNOR_START_MS=\"$start_ms\" VELNOR_INTERNAL_OP=write-task-report-v1 \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\"'"
       - name: Unit and integration tests (shard 2 of 2)
         if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/tool/nextest/default/shard-2-of-2,')"
         env:
@@ -905,9 +955,9 @@ jobs:
           VELNOR_DOWNSTREAM_TASK_IDS: stack/rust/crates/tool/doc/default
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/tool/nextest/default/shard-2-of-2
           VELNOR_MATRIX_KEY: m-39c0a5a5ea9387da
-          VELNOR_TASK_DIGEST: b3-63e39b7ff5cb263caa62977b4fedcbc7dfe24e1d73c31623619e9046219474ba
+          VELNOR_TASK_DIGEST: b3-a7482d64754dd026649fad4dd9c95e1a10bdaf11b987edd8d8bcd5463092059c
           VELNOR_TASK_ID: stack/rust/crates/tool/nextest/default/shard-2-of-2
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; date +%s%3N > \"$RUNNER_TEMP/velnor/start-m-39c0a5a5ea9387da\"; mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx nextest run --profile ci --locked --offline --manifest-path crates/tool/Cargo.toml --package parity-tool --no-tests fail; code=$?; read -r start_ms rest < \"$RUNNER_TEMP/velnor/start-m-39c0a5a5ea9387da\"; VELNOR_EXIT_CODE=\"$code\" VELNOR_START_MS=\"$start_ms\" VELNOR_INTERNAL_OP=write-task-report-v1 \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\"'"
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; date +%s%3N > \"$RUNNER_TEMP/velnor/start-m-39c0a5a5ea9387da\"; mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.22.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx nextest run --profile ci --locked --offline --manifest-path crates/tool/Cargo.toml --package parity-tool --no-tests fail; code=$?; read -r start_ms rest < \"$RUNNER_TEMP/velnor/start-m-39c0a5a5ea9387da\"; VELNOR_EXIT_CODE=\"$code\" VELNOR_START_MS=\"$start_ms\" VELNOR_INTERNAL_OP=write-task-report-v1 \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\"'"
       - name: Documentation
         if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/tool/doc/default,')"
         env:
@@ -934,9 +984,9 @@ jobs:
           RUSTUP_TOOLCHAIN: 1.98.1
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/tool/doc/default
           VELNOR_MATRIX_KEY: m-027253d227704e16
-          VELNOR_TASK_DIGEST: b3-3bd029c250bea7b95109f953fcfdc1b6a41c87679d671d79dd13cce977195ea8
+          VELNOR_TASK_DIGEST: b3-bf648e179ccbd6a5aaf3ad2b2e000980c81e2b740e892fc2320fd2a962b86fad
           VELNOR_TASK_ID: stack/rust/crates/tool/doc/default
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; date +%s%3N > \"$RUNNER_TEMP/velnor/start-m-027253d227704e16\"; mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx doc --locked --offline --manifest-path crates/tool/Cargo.toml --package parity-tool --no-deps; code=$?; read -r start_ms rest < \"$RUNNER_TEMP/velnor/start-m-027253d227704e16\"; VELNOR_EXIT_CODE=\"$code\" VELNOR_START_MS=\"$start_ms\" VELNOR_INTERNAL_OP=write-task-report-v1 \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\"'"
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; date +%s%3N > \"$RUNNER_TEMP/velnor/start-m-027253d227704e16\"; mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.22.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx doc --locked --offline --manifest-path crates/tool/Cargo.toml --package parity-tool --no-deps; code=$?; read -r start_ms rest < \"$RUNNER_TEMP/velnor/start-m-027253d227704e16\"; VELNOR_EXIT_CODE=\"$code\" VELNOR_START_MS=\"$start_ms\" VELNOR_INTERNAL_OP=write-task-report-v1 \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\"'"
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -947,7 +997,7 @@ jobs:
           retention-days: "30"
       - name: Export MBX single bundle
         id: mbx-export
-        if: success() && github.event_name == 'push' && steps.mbx.outputs.cache-hit != 'true' && steps.mbx-bundle.outputs.cache-hit != 'true'
+        if: success() && github.event_name == 'push' && github.ref_name == github.event.repository.default_branch && steps.mbx-bundle.outputs.cache-hit != 'true'
         env:
           ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
           ACTIONS_ID_TOKEN_REQUEST_URL: ""
@@ -960,10 +1010,10 @@ jobs:
           MISE_GITHUB_TOKEN: ""
           NODE_AUTH_TOKEN: ""
           NPM_TOKEN: ""
-        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; mbx gc; mbx cache dir > \"$RUNNER_TEMP/mbx-store-path\"; IFS= read -r store < \"$RUNNER_TEMP/mbx-store-path\"; test -n \"$store\"; bundle=\"$RUNNER_TEMP/mbx-single-bundle\"; case \"$bundle\" in \"$store\"|\"$store\"/*) exit 1 ;; esac; case \"$store\" in /|.) exit 1 ;; *mbx*) ;; *) exit 1 ;; esac; rm -rf \"$bundle\"; if mbx cache export --group \"$MBX_CACHE_EXPORT_GROUP\" --format directory \"$bundle\" >\"$RUNNER_TEMP/mbx-export.out\" 2>&1; then test -d \"$bundle\"; rm -rf \"$store\"; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; echo \"ready=true\" >> \"$GITHUB_OUTPUT\"; else rm -rf \"$bundle\"; if grep -q \"no completed mbx builds are recorded for export group\" \"$RUNNER_TEMP/mbx-export.out\"; then echo \"ready=false\" >> \"$GITHUB_OUTPUT\"; exit 0; fi; cat \"$RUNNER_TEMP/mbx-export.out\"; exit 1; fi'"
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; bundle=\"$RUNNER_TEMP/mbx-single-bundle\"; export_log=\"$GITHUB_OUTPUT.mbx-export\"; gc_log=\"$GITHUB_OUTPUT.mbx-gc\"; for file in \"$export_log\" \"$gc_log\"; do if [ -e \"$file\" ] || [ -L \"$file\" ]; then echo \"MBX export marker already exists\" >&2; exit 1; fi; done; if mbx cache export --group \"$MBX_CACHE_EXPORT_GROUP\" --format directory \"$bundle\" >\"$export_log\" 2>&1; then test -d \"$bundle\"; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; if mbx gc --max-size 0 --json >\"$gc_log\" 2>&1; then cat \"$gc_log\"; echo '\\''gc-succeeded=true'\\'' >> \"$GITHUB_OUTPUT\"; echo '\\''ready=true'\\'' >> \"$GITHUB_OUTPUT\"; else cat \"$gc_log\"; echo '\\''gc-succeeded=false'\\'' >> \"$GITHUB_OUTPUT\"; echo '\\''ready=false'\\'' >> \"$GITHUB_OUTPUT\"; fi; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; else if grep -Fq '\\''no completed mbx builds are recorded for export group'\\'' \"$export_log\"; then cat \"$export_log\"; echo '\\''ready=false'\\'' >> \"$GITHUB_OUTPUT\"; exit 0; fi; cat \"$export_log\"; exit 1; fi'"
       - name: Save MBX single bundle
-        if: success() && github.event_name == 'push' && steps.mbx.outputs.cache-hit != 'true' && steps.mbx-bundle.outputs.cache-hit != 'true' && steps.mbx-export.outputs.ready == 'true'
+        if: success() && github.event_name == 'push' && github.ref_name == github.event.repository.default_branch && steps.mbx-bundle.outputs.cache-hit != 'true' && steps.mbx-export.outputs.ready == 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
-          key: ${{ steps.mbx.outputs.cache-primary-key }}
+          key: ${{ steps.mbx-bundle-key.outputs.primary }}
           path: ${{ runner.temp }}/mbx-single-bundle
