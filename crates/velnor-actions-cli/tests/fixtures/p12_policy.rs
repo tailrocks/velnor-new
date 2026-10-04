@@ -12,8 +12,13 @@ const MUTANTS: &str = ".cargo/mutants.toml";
 
 /// Temporary-hold object with full attribution for `key`.
 fn hold(key: &str, granted: &str, expires: &str) -> String {
+    hold_version(key, "9.9.9", granted, expires)
+}
+
+/// Temporary-hold object with the reviewed release version for `key`.
+fn hold_version(key: &str, version: &str, granted: &str, expires: &str) -> String {
     format!(
-        "{{\"key\":\"{key}\",\"held_version\":\"9.9.9\",\"owner\":\"team\",\
+        "{{\"key\":\"{key}\",\"held_version\":\"{version}\",\"owner\":\"team\",\
          \"issue\":\"#1\",\"reason\":\"blocked\",\"granted\":\"{granted}\",\
          \"expires\":\"{expires}\"}}"
     )
@@ -27,8 +32,10 @@ fn missing_action_row_fails() -> Result<(), Box<dyn Error>> {
         \"pinned_sha\":\"55cc8345863c7cc4c66a329aec7e433d2d1c52a9\",\
         \"qualified_version\":\"v6.1.0\",\
         \"qualified_sha\":\"55cc8345863c7cc4c66a329aec7e433d2d1c52a9\",\
-        \"source\":\"https://api.github.com/repos/actions/cache/releases/latest\",\
-        \"status\":\"current\"}";
+        \"source\":\"https://api.github.com/repos/actions/cache/commits/v6.1.0\",\
+        \"status\":\"current\",\
+        \"latest_source\":\"https://api.github.com/repos/actions/cache/releases/latest\",\
+        \"latest\":\"v6.1.0\"}";
     harness::mutate(&fixture.dir, INVENTORY, &format!(",{row}"), "")?;
     let run = harness::run_script(&fixture.dir, &[])?;
     harness::assert_fail(&run, "action actions/cache/save");
@@ -166,6 +173,54 @@ fn held_status_needs_a_covering_hold() -> Result<(), Box<dyn Error>> {
     )?;
     let run = harness::run_script(&fixture.dir, &[])?;
     harness::assert_clean(&run);
+    harness::cleanup(&fixture);
+    Ok(())
+}
+
+#[test]
+fn held_release_pin_keeps_tag_and_latest_upstream_checks() -> Result<(), Box<dyn Error>> {
+    let fixture = harness::passing("p12-held-release")?;
+    harness::mutate(
+        &fixture.dir,
+        INVENTORY,
+        "\"latest\":\"v4.3.0\"",
+        "\"latest\":\"v4.4.0\"",
+    )?;
+    harness::mutate(
+        &fixture.dir,
+        INVENTORY,
+        "\"source\":\"https://api.github.com/repos/jdx/mise-action/commits/v4.3.0\",\"status\":\"current\"",
+        "\"source\":\"https://api.github.com/repos/jdx/mise-action/commits/v4.3.0\",\"status\":\"held\"",
+    )?;
+    let granted = harness::days_iso(-1)?;
+    let expires = harness::days_iso(5)?;
+    let hold = hold_version("jdx/mise-action", "v4.3.0", &granted, &expires);
+    harness::mutate(
+        &fixture.dir,
+        INVENTORY,
+        "\"temporary_holds\":[]",
+        &format!("\"temporary_holds\":[{hold}]"),
+    )?;
+    let offline = harness::run_script(&fixture.dir, &[])?;
+    harness::assert_clean(&offline);
+
+    harness::write_probe_fixture(&fixture, true)?;
+    harness::write(
+        &fixture.dir,
+        "upstream/mise-action.json",
+        "{\"tag_name\": \"v4.4.0\"}",
+    )?;
+    let probe = harness::run_script(&fixture.dir, &["--check-upstream"])?;
+    harness::assert_fail(&probe, "stale pin: pinned='v4.3.0' latest='v4.4.0'");
+    assert!(
+        harness::rows(&probe).iter().any(|line| {
+            line.contains("\"subject\":\"jdx/mise-action\"")
+                && line.contains("\"status\":\"pass\"")
+                && line.contains("verified release tag v4.3.0 -> ")
+        }),
+        "held release tag SHA was not verified:\n{}",
+        probe.stdout
+    );
     harness::cleanup(&fixture);
     Ok(())
 }

@@ -22,9 +22,9 @@
 # Usage: scripts/check-freshness.sh [--root DIR] [--check-upstream]
 #                                   [--with-advisories]
 #   --root DIR         validate a fixture tree instead of this repository.
-#   --check-upstream   bounded read-only upstream probe: refetch each row's
-#                      latest stable release (10 s timeout and 512 KiB cap
-#                      per request) and fail stale pins and lookup failures.
+#   --check-upstream   bounded read-only upstream probe: re-resolve release
+#                      tag SHAs and refetch latest release evidence (10 s
+#                      timeout and 512 KiB cap per request); fail mismatches.
 #                      Writes nothing; run by the generated weekly
 #                      `.github/workflows/freshness.yml`, never gating builds.
 #   --with-advisories  run the live `cargo deny check advisories` scan
@@ -98,7 +98,9 @@ import urllib.request
 
 sys.dont_write_bytecode = True
 sys.path.insert(0, sys.argv[5])
-from freshness_action_pins import commit_sha_from_response, validate_action_pin
+from freshness_action_pins import (
+    commit_sha_from_response, release_tag_matches, validate_action_pin,
+)
 
 root, inv_path = sys.argv[1], sys.argv[2]
 check_upstream = sys.argv[3] == "1"
@@ -916,9 +918,27 @@ else:
 # --- Bounded read-only upstream probe (weekly freshness.yml; writes nothing).
 FETCH_TIMEOUT = 10
 FETCH_CAP = 512 * 1024
+FIXTURE_MAP = os.path.join(root, "upstream", "sources.tsv")
+SCRIPT_ROOT = os.path.abspath(os.path.join(sys.argv[5], os.pardir))
 
 
 def fetch_text(url):
+    # `--root` Rust fixtures retain canonical inventory URLs and route their
+    # bounded probes to local bodies through this explicit mapping file.
+    if os.path.abspath(root) != SCRIPT_ROOT and os.path.isfile(FIXTURE_MAP):
+        fixture_sources = {}
+        with open(FIXTURE_MAP, encoding="utf-8") as handle:
+            for line in handle:
+                source, separator, filename = line.rstrip("\n").partition("\t")
+                if not separator or not filename or os.path.basename(filename) != filename:
+                    raise ValueError("invalid upstream fixture source map")
+                fixture_sources[source] = filename
+        filename = fixture_sources.get(url)
+        if filename is None:
+            raise LookupError(f"upstream fixture has no body for {url}")
+        with open(os.path.join(root, "upstream", filename),
+                  encoding="utf-8") as handle:
+            return handle.read(FETCH_CAP + 1)[:FETCH_CAP + 1]
     request = urllib.request.Request(
         url, headers={"User-Agent": "velnor-freshness-probe",
                       "Accept": "application/json"})
@@ -995,8 +1015,30 @@ if check_upstream:
     for key, action in sorted(action_pinned.items()):
         if validate_action_pin(action) is not None:
             continue
-        source = action.get("source", "")
         pinned = action.get("pinned_version")
+        if action.get("pin_kind") == "release":
+            tag_source = action.get("source", "")
+            try:
+                tag_body = fetch_text(tag_source)
+            except Exception as err:  # noqa: BLE001 - probe maps all to failed
+                fail_row("upstream-probe", key,
+                         f"tag lookup_failed ({err}); source {tag_source}, "
+                         f"checked {stamp}")
+            else:
+                if release_tag_matches(action, tag_body):
+                    pass_row("upstream-probe", key,
+                             f"verified release tag {pinned} -> "
+                             f"{action.get('pinned_sha')}; source "
+                             f"{tag_source}, checked {stamp}")
+                else:
+                    fail_row("upstream-probe", key,
+                             f"release tag SHA mismatch: pinned_sha="
+                             f"{action.get('pinned_sha')!r} "
+                             f"qualified_sha={action.get('qualified_sha')!r}; "
+                             f"source {tag_source}, checked {stamp}")
+            source = action.get("latest_source", "")
+        else:
+            source = action.get("source", "")
         try:
             latest = sniff_latest(source, fetch_text(source))
         except Exception as err:  # noqa: BLE001 - probe maps all to failed

@@ -104,11 +104,12 @@ writes nothing back to the repository, so evidence timestamps still
 advance only through reviewed update sets, and the real-root
 `upstream-freshness` rows stay honestly red once `checked_at` ages past
 `check_interval_hours`.
-`--check-upstream` is the bounded probe that the freshness job runs: one GET per
-row (10 s timeout, 512 KiB cap, small fixed row count), parsing only
-GitHub-releases tags, `crates.io` `max_version`, and the rust channel
-manifest's `[pkg.rust]` version. It writes nothing. Every probe row
-records its source URL and check timestamp; stale pins and lookup
+`--check-upstream` is the bounded probe that the freshness job runs: one GET
+per tool or immutable commit row, and two per release row (tag-to-SHA plus
+latest-release evidence; 10 s timeout and 512 KiB cap per request). It parses
+GitHub commit/tag responses, release tags, `crates.io` `max_version`, and the
+rust channel manifest's `[pkg.rust]` version. It writes nothing. Every probe
+row records its source URL and check timestamp; stale pins and lookup
 failures fail as rows — signal for the next update set, not a build
 gate. A `lookup_failed` row is fail-closed signal, never current:
 re-run the probe to separate a transient fetch fault (a retry resolves

@@ -8,20 +8,10 @@ const INVENTORY: &str = ".velnor/freshness-inventory.json";
 const POLICY: &str = ".velnor/version-policy.toml";
 const CATALOG: &str = "crates/velnor-actions-mise/src/catalog.rs";
 
-/// Passing fixture with every probe source rewritten to canned `file://` URLs.
+/// Passing fixture with canonical sources mapped to local probe responses.
 fn probe_fixture(prefix: &str) -> Result<harness::Fixture, Box<dyn Error>> {
     let fixture = harness::passing(prefix)?;
-    let upstream = fixture.dir.join("upstream");
-    std::fs::create_dir_all(&upstream)?;
-    let path = fixture.dir.join(INVENTORY);
-    let mut body = std::fs::read_to_string(&path)?;
-    for (url, file, canned) in harness::probe_rows() {
-        harness::write(&fixture.dir, &format!("upstream/{file}"), canned)?;
-        let file_url = format!("file://{}", upstream.join(file).display());
-        assert!(body.contains(url), "anchor {url}");
-        body = body.replace(url, &file_url);
-    }
-    std::fs::write(path, body)?;
+    harness::write_probe_fixture(&fixture, true)?;
     Ok(fixture)
 }
 
