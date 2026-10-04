@@ -172,10 +172,14 @@ fn assert_run_body(
         .find(|(step, _)| step == name)
         .ok_or("script step missing")?;
     assert!(body.1.ends_with(source));
-    assert!(body.1.starts_with(
-        crate::schema2::mbx_stock_restore::STOCK_RESTORE_CLASSIFIER_SCRIPT
-    ));
-    assert!(body.1.contains(super::super::private_io::PRIVATE_IO_HELPERS));
+    assert!(
+        body.1
+            .starts_with(crate::schema2::mbx_stock_restore::STOCK_RESTORE_CLASSIFIER_SCRIPT)
+    );
+    assert!(
+        body.1
+            .contains(super::super::private_io::PRIVATE_IO_HELPERS)
+    );
     Ok(())
 }
 

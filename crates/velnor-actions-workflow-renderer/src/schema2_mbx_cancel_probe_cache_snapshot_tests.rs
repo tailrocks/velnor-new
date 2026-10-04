@@ -112,12 +112,11 @@ fn assert_observer_after_unknown(mode: &str) -> Result<(), Box<dyn Error>> {
         "{}",
         String::from_utf8_lossy(&result.stderr)
     );
-    let evidence =
-        fs::read_to_string(
-            fixture
-                .root
-                .join("mbx-cancel-observer/observer/child-evidence.json"),
-        )?;
+    let evidence = fs::read_to_string(
+        fixture
+            .root
+            .join("mbx-cancel-observer/observer/child-evidence.json"),
+    )?;
     assert!(
         evidence.contains("\"cache_after\":{\"count\":-1"),
         "{mode}: {evidence}"

@@ -78,7 +78,9 @@ fn skipped_receipt_validation_still_writes_not_run_result() -> Result<(), Box<dy
     prepare_observer_root(
         &fixture.root,
         &fixture.bin,
-        &env.iter().map(|(key, value)| (key.clone(), value.clone())).collect::<Vec<_>>(),
+        &env.iter()
+            .map(|(key, value)| (key.clone(), value.clone()))
+            .collect::<Vec<_>>(),
     )?;
     let result = run_bash(
         scripts::OBSERVER_CLASSIFY,
