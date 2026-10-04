@@ -452,5 +452,30 @@ run_case dash-positional case_dash_positional
 run_case stream-no-raw-archive case_stream_no_raw
 run_case emit-death-does-not-hang case_emit_death_does_not_hang
 
+# actions/cache create: --posix -cf --exclude -P -C --files-from --use-compress-program.
+# Hosted restore is GNU tar without --posix. Reject --posix on extract.
+case_cache_posix() {
+  local root="$work/posix" err status=0
+  rm -rf -- "$root"
+  mkdir -p "$root/src" "$root/dest"
+  printf 'cache-ok\n' >"$root/src/g4-cache.txt"
+  printf 'g4-cache.txt\n' >"$root/manifest"
+  (
+    cd "$root" || exit 1
+    bash "$shim" --posix -cf cache.tzst --exclude cache.tzst -P \
+      -C "$root/src" --files-from "$root/manifest" \
+      --use-compress-program "gzip -c"
+  ) || return 1
+  tar.gnu -xf "$root/cache.tzst" -P -C "$root/dest" \
+    --use-compress-program "gzip -dc" || return 1
+  grep -qx cache-ok "$root/dest/g4-cache.txt" || return 1
+  err="$root/err"
+  run_shim "$err" --posix -xf "$root/cache.tzst" -P -C "$root/dest" || status=$?
+  [ "$status" -ne 0 ] || return 1
+  grep -F -q -- '--posix' "$err" || return 1
+}
+
+run_case cache-posix case_cache_posix
+
 printf 'RESULT pass=%s fail=%s\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

@@ -183,6 +183,15 @@ finish_tar() {
   if [ "$absolute" -eq 1 ] && [ -n "$strip" ]; then
     die "unsupported -P with --strip-components"
   fi
+  # actions/cache create passes --posix. That format is the pax writer.
+  # Extract and list do not implement it, so they still fail closed.
+  if [ "${posix:-0}" -eq 1 ]; then
+    if [ "$mode" != c ]; then
+      die "unsupported option --posix"
+    fi
+    write_pax_archive
+    return
+  fi
   # Every --files-from create is written from that file. BusyBox has no -T,
   # and copying the list onto argv fails once the names exceed ARG_MAX.
   if [ "$mode" = c ] && [ -n "$files_from" ]; then

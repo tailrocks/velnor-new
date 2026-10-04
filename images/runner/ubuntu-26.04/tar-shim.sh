@@ -14,6 +14,7 @@ zstd=0
 program=""
 strip=""
 absolute=0
+posix=0
 excludes=()
 positionals=()
 args=("$@")
@@ -48,7 +49,11 @@ while [ "$i" -lt "${#args[@]}" ]; do
     --zstd)
       zstd=1
       ;;
-    --posix | --delay-directory-restore | --force-local | --no-same-owner | --no-same-permissions | --numeric-owner | --overwrite)
+    --posix)
+      # Create already goes through the pax writer. Extract stays fail-closed.
+      posix=1
+      ;;
+    --delay-directory-restore | --force-local | --no-same-owner | --no-same-permissions | --numeric-owner | --overwrite)
       die "unsupported option $arg"
       ;;
     --version)
