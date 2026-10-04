@@ -85,8 +85,12 @@ check_hash_totals() {
   local summary="$evidence/duplicate-content-summary-$1.tsv"
   if [ ! -s "$hashes" ] || [ ! -s "$summary" ] || ! awk -F '\t' '
     FILENAME == ARGV[1] { if (FNR > 1) { if ($3 !~ /^[0-9]+$/) bad=1; rows++; total+=$3 } next }
-    $1 == "hashed_logical_bytes" { expected=$2; found=1 }
-    END { if (bad || !found || expected !~ /^[0-9]+$/ || rows == 0 || total != expected) exit 1 }
+    $1 == "hashed_regular_file_count" { expected_rows=$2; rows_found=1 }
+    $1 == "hashed_logical_bytes" { expected_bytes=$2; bytes_found=1 }
+    END {
+      if (bad || !rows_found || !bytes_found || expected_rows !~ /^[0-9]+$/ ||
+          expected_bytes !~ /^[0-9]+$/ || rows == 0 || rows != expected_rows || total != expected_bytes) exit 1
+    }
   ' "$hashes" "$summary"; then
     fail_partial "hash_inventory_mismatch:$label"
   fi

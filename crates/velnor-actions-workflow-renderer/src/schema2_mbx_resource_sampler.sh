@@ -236,7 +236,7 @@ hash_inventory_file() {
     snapshot_status=1
     return 1
   }
-  hash_bytes=$((hash_bytes + size))
+  hash_bytes=$((hash_bytes + size)); hash_files=$((hash_files + 1))
   if ! printf '%s\t%s\t%s\t%s\n' "$root_name" "$hash" "$size" "$escaped" >> "$hashes_file"; then
     snapshot_status=1
     return 1
@@ -256,6 +256,7 @@ duplicate_content_summary() {
     printf 'interpretation\tequal SHA-256 content only; does not prove shared or duplicated physical extents\n'
     printf 'root_bundle_matching_file_count\t%s\n' "$duplicate_count"
     printf 'root_bundle_matching_logical_bytes\t%s\n' "$duplicate_bytes"
+    printf 'hashed_regular_file_count\t%s\n' "$hash_files"
     printf 'hashed_logical_bytes\t%s\n' "$hash_bytes"
     printf 'hash_byte_cap\t%s\n' "$max_hash_bytes"
     printf 'hash_cap_reached\t%s\n' "$hash_cap_hit"
@@ -284,7 +285,7 @@ prepare_snapshot_files() {
 register_snapshot_roots() {
   local snapshot_label="$1" role="$2" required=0
   snapshot_status=0
-  hash_bytes=0
+  hash_bytes=0; hash_files=0
   hash_cap_hit=false
   add_root cargo-home "${CARGO_HOME-}" true
   selected_root="${MBX_SELECTED_CACHE_ROOT:-${MBX_CACHE_DIR-}}"
