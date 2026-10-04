@@ -15,6 +15,7 @@ mod closure_paths;
 mod commands;
 mod composite;
 mod document;
+mod document_steps;
 mod error;
 mod expressions;
 mod final_steps;
@@ -49,6 +50,7 @@ mod support;
 pub mod tofu_cache;
 pub mod toolchain_env;
 pub mod tree;
+mod workflow_policy;
 pub mod yaml;
 
 pub use artifact_paths::{
