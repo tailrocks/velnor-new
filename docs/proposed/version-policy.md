@@ -144,10 +144,15 @@ exact allowlisted action repositories, and the pair must appear in that action's
 bundled approved-pin
 catalog (latest release plus maintained compatibility pins). Each action row
 in `.velnor/freshness-inventory.json` declares `pin_kind = "release"` or
-`pin_kind = "commit"`. Commit rows bind the label, pinned and qualified SHA,
-recorded latest SHA, and exact GitHub commit API endpoint; an action subpath is
-removed from that endpoint so `actions/cache/restore` and `actions/cache/save`
-use the `actions/cache` repository. The Alint action
+`pin_kind = "commit"`. Release rows bind the version and full pinned/qualified
+SHA to the exact GitHub `/commits/{tag}` endpoint for the action's owner and
+repository. Their separate `latest_source` records the same-repository
+release or tag listing used for upstream freshness comparison. The scheduled
+probe requires the tag endpoint's response SHA to equal both reviewed SHAs.
+Commit rows bind the label, pinned and qualified SHA, recorded latest SHA,
+and exact GitHub commit API endpoint; an action subpath is removed from that
+endpoint so `actions/cache/restore` and `actions/cache/save` use the
+`actions/cache` repository. The Alint action
 is not a per-project override: Velnor emits exactly
 `asamarts/alint@9f9d34ba0eae3888299b9e570f43338b0e7f2cdb` (`# v0.16.1`).
 Changing that pin is a Velnor version-policy change,

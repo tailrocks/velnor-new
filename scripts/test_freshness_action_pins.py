@@ -8,6 +8,10 @@ sys.dont_write_bytecode = True
 from freshness_action_pins import (
     commit_sha_from_response,
     github_commit_source,
+    github_latest_release_sources,
+    github_tag_commit_source,
+    release_tag_matches,
+    release_tag_sha_from_response,
     validate_action_pin,
 )
 
@@ -31,6 +35,22 @@ def commit_entry():
 
 def body(sha):
     return '{"sha":"' + sha + '","commit":{"message":"fixture"}}'
+
+
+def release_entry():
+    version = "v1.7.0"
+    key = "jdx/mr-boxington-action"
+    return {
+        "key": key,
+        "pin_kind": "release",
+        "pinned_version": version,
+        "pinned_sha": SHA,
+        "qualified_version": version,
+        "qualified_sha": SHA,
+        "latest": version,
+        "latest_source": github_latest_release_sources(key)[0],
+        "source": github_tag_commit_source(key, version),
+    }
 
 
 class CommitPinFixtures(unittest.TestCase):
@@ -110,11 +130,44 @@ class CommitPinFixtures(unittest.TestCase):
         )
 
     def test_release_mode_accepts_semver_label(self):
-        entry = {
-            "pin_kind": "release",
-            "pinned_version": "v1.7.0",
-        }
+        entry = release_entry()
         self.assertIsNone(validate_action_pin(entry))
+        self.assertEqual(release_tag_sha_from_response(entry["source"], body(SHA)), SHA)
+        self.assertTrue(release_tag_matches(entry, body(SHA)))
+
+    def test_release_tag_source_binds_action_repository_and_tag(self):
+        entry = release_entry()
+        entry["source"] = github_tag_commit_source("actions/checkout", "v1.7.0")
+        self.assertIn("exact tag endpoint", validate_action_pin(entry))
+
+        entry = release_entry()
+        entry["source"] = github_tag_commit_source(
+            "jdx/mr-boxington-action", "v1.6.0",
+        )
+        self.assertIn("exact tag endpoint", validate_action_pin(entry))
+
+    def test_release_tag_response_must_match_pinned_and_qualified_sha(self):
+        entry = release_entry()
+        self.assertFalse(release_tag_matches(entry, body(OTHER_SHA)))
+
+        entry["qualified_sha"] = OTHER_SHA
+        self.assertIn("qualified release identity", validate_action_pin(entry))
+        self.assertFalse(release_tag_matches(entry, body(SHA)))
+
+    def test_release_tag_rejects_wrong_endpoint(self):
+        entry = release_entry()
+        entry["source"] = entry["latest_source"]
+        self.assertIn("exact tag endpoint", validate_action_pin(entry))
+        self.assertFalse(release_tag_matches(entry, body(SHA)))
+        self.assertIsNone(release_tag_sha_from_response(entry["source"], body(SHA)))
+
+    def test_release_latest_endpoint_must_match_action_repository(self):
+        entry = release_entry()
+        entry["latest_source"] = github_latest_release_sources("actions/checkout")[0]
+        self.assertEqual(
+            validate_action_pin(entry),
+            "release latest_source must be an exact endpoint for its repository",
+        )
 
 
 if __name__ == "__main__":
