@@ -7,16 +7,47 @@
 # (plan-v1 response, expected-set, task report); this script pins the
 # user-facing plan text and generated YAML bytes around it.
 #
-# Usage: scripts/capture-opentofu-goldens.sh [capture|check]
+# Usage: scripts/capture-opentofu-goldens.sh [capture|check [CLI_BINARY]]
 #   capture  regenerate docs/proposed/opentofu-goldens/ (only at known-good)
 #   check    regenerate to temp and byte-diff (default; never writes goldens)
+#   CLI_BINARY uses that exact executable and skips the default debug build.
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-BIN="$ROOT/target/debug/velnor-actions"
 GOLDEN_DIR="$ROOT/docs/proposed/opentofu-goldens"
 WORK=""
 MODE="${1:-check}"
+BIN_EXPLICIT=0
+
+if [ "$#" -gt 2 ]; then
+  echo "FATAL: usage: $0 [capture|check [CLI_BINARY]]"
+  exit 2
+fi
+case "$MODE" in
+  capture|check) ;;
+  *)
+    echo "FATAL: usage: $0 [capture|check [CLI_BINARY]]"
+    exit 2
+    ;;
+esac
+if ! CALLER_DIR="$(pwd -P)"; then
+  echo "FATAL: could not resolve caller directory"
+  exit 2
+fi
+if [ "$#" -eq 2 ]; then
+  BIN_EXPLICIT=1
+  BIN_ARG="$2"
+  if [ -z "$BIN_ARG" ]; then
+    echo "FATAL: explicit CLI binary path is empty"
+    exit 2
+  fi
+  case "$BIN_ARG" in
+    /*) BIN="$BIN_ARG" ;;
+    *) BIN="$CALLER_DIR/$BIN_ARG" ;;
+  esac
+else
+  BIN="$ROOT/target/debug/velnor-actions"
+fi
 
 FIXTURES="nested mbx-nextest empty-suite minimal-cargo"
 
@@ -70,6 +101,13 @@ link_identity() {
 }
 
 build_bin() {
+  if [ "$BIN_EXPLICIT" -eq 1 ]; then
+    if [ ! -f "$BIN" ] || [ ! -x "$BIN" ]; then
+      echo "FATAL: explicit CLI binary must be a regular executable file: $BIN"
+      exit 2
+    fi
+    return 0
+  fi
   (cd "$ROOT" && cargo build --locked -p velnor-actions-cli) >/dev/null 2>&1 \
     || { echo "FATAL: cargo build failed"; exit 2; }
 }
