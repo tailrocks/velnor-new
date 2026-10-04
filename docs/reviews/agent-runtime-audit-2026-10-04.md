@@ -135,3 +135,44 @@ The replacement found no published fixed mise release; official adoption remains
 PARTIAL. Its runtime was independently bound through the root spawn record,
 returned handle, child task record, and child turn context. This incident adds
 no product-code change and does not qualify the earlier actor's report.
+
+## Follow-up reviewer model-policy incident
+
+At `2026-10-04T05:45:58.925Z`, the compliant implementation actor
+`/root/version_fixture_closure_v4` spawned a nested independent reviewer
+without a model and with a full-history fork. The parent actor itself was
+verified `gpt-6-luna/max`; that did not override the nested call's inherited
+runtime.
+
+| Evidence | Value |
+| --- | --- |
+| Parent session/log | `01a1056e-8937-7b10-94ee-28b58d9724e0`; `rollout-2026-10-04T12-41-32-01a1056e-8937-7b10-94ee-28b58d9724e0.jsonl` |
+| Parent runtime | Latest turn `01a1056e-8a07-7d22-a049-1504a5e0c878`, `2026-10-04T05:53:54.754Z`, `gpt-6-luna/max` |
+| Spawn | Parent log line 152, call `call_OhFB3Kv9LvOrll0o5XIv8kPw`, `2026-10-04T05:45:58.925Z`; `model` omitted, `reasoning_effort=medium`, `fork_turns=all` |
+| Returned handle | Parent log line 155: `/root/version_fixture_closure_v4/versionfixture_independent_review` |
+| Child task | Child log line 16, `2026-10-04T05:46:02.317Z`, sender `/root/version_fixture_closure_v4` |
+| Child log | `rollout-2026-10-04T12-45-59-01a10572-99d4-7e93-b44d-4b55a3bb1eab.jsonl`; child thread `01a10572-99d4-7e93-b44d-4b55a3bb1eab`; parent thread `01a1056e-8937-7b10-94ee-28b58d9724e0` |
+| Invalid review turn | Child log line 14, turn `01a10572-9af4-7462-acc7-478435e4122f`, `2026-10-04T05:46:02.254Z`, actual `gpt-5.6-luna/medium` |
+
+The nested report is excluded as independent acceptance evidence. The old
+reviewer was interrupted after the mismatch was found; no code changes came
+from that actor. The implementation candidate itself remains valid work from
+the parent `gpt-6-luna/max` actor.
+
+### Fresh exact review
+
+The owner then obtained a new independent exact review with explicit
+`gpt-6.1-sol/medium` and `fork_turns=none`:
+
+| Evidence | Value |
+| --- | --- |
+| Spawn | Parent log line 825, call `call_a7LFQSVFXUIxveQ3TilLClcY`, `2026-10-04T06:10:48.814Z`, model `gpt-6.1-sol`, effort `medium`, fork `none` |
+| Returned handle | Parent log line 828: `/root/version_fixture_closure_v4/versionfixture_final_review` |
+| Reviewer log/session | `rollout-2026-10-04T13-10-48-01a10589-557c-7da1-9df5-4146dc3a969c.jsonl`; child thread `01a10589-557c-7da1-9df5-4146dc3a969c`; parent thread `01a1056e-8937-7b10-94ee-28b58d9724e0` |
+| Verified review turn | `01a10589-57df-7ef0-8f3a-d3947dd4d869`, `2026-10-04T06:10:52.449Z`, actual `gpt-6.1-sol/medium`; a later reviewer turn at `06:15:24.030Z` retained the same model/effort |
+| Reviewed source | `fbff07adba5f6e33b4dc8d41ed1f39216908488b` |
+| Result | `GO`; no current-default release-identity counterexamples. The duplicate current `0.1.0` manifest fixture was removed by deriving the expected manifest from the existing package-version fixture authority. |
+
+The fresh review replaces the earlier provisional triage; it does not retroactively
+make the old reviewer compliant. No product-runtime claim or PR merge follows
+from this documentation correction.
