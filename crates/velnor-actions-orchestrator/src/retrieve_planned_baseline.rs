@@ -38,9 +38,13 @@ pub(super) fn retrieve_typed_baseline_to(
     let Some(branch) = super::default_branch_for(catalog, run_dir, repo) else {
         return false;
     };
-    let Some(parent) = resolve_planned(plan, repo, &branch, |args| {
-        BaselineLookup::run(catalog, run_dir, args)
-    }) else {
+    let Some(parent) = resolve_planned(
+        plan,
+        repo,
+        &branch,
+        |args| BaselineLookup::run(catalog, run_dir, args),
+        |args| BaselineLookup::run_archive(catalog, run_dir, args),
+    ) else {
         return false;
     };
     super::stage_manifest(run_dir, &parent)
@@ -90,16 +94,26 @@ pub(super) fn resolve_planned(
     repo: &str,
     branch: &str,
     mut run: impl FnMut(Vec<OsString>) -> Result<String, String>,
+    mut run_archive: impl FnMut(Vec<OsString>) -> Result<Vec<u8>, String>,
 ) -> Option<BaselineManifest> {
     let claim = ParentClaim::from_plan(plan)?;
     let workflow = velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
     let lookup = BaselineLookup::new(&claim.base, workflow, branch, repo).ok()?;
-    let listed = run(lookup.artifacts_args(claim.run_id)).ok()?;
-    crate::run_select::select_baseline_artifact(&listed, &claim.name).ok()?;
+    let metadata = crate::baseline_artifact_listing::select_metadata(
+        &lookup.repo,
+        claim.run_id,
+        &claim.name,
+        &mut run,
+    )
+    .ok()?;
     let temp = tempfile::tempdir().ok()?;
-    run(lookup
-        .download_args(&claim.name, claim.run_id, temp.path())
-        .ok()?)
+    let archive = run_archive(lookup.artifact_zip_args(metadata.id).ok()?).ok()?;
+    crate::cover::shard_baseline::archive::stage_baseline_archive(
+        temp.path(),
+        &claim.name,
+        &metadata,
+        &archive,
+    )
     .ok()?;
     let payload = read_parent(temp.path(), &claim)?;
     let endpoint = format!(
@@ -154,7 +168,9 @@ pub(crate) fn authentic_attempt(
         && run["status"] == "completed"
         && run["conclusion"] == "success"
         && run["head_branch"] == branch
-        && run["path"] == workflow
+        && run["path"]
+            .as_str()
+            .is_some_and(|path| attempt_path_matches(path, workflow, branch))
         && run["repository"]["full_name"]
             .as_str()
             .and_then(crate::origin::validate_repository_slug)
@@ -165,6 +181,20 @@ pub(crate) fn authentic_attempt(
         && workflow_ref == format!("refs/heads/{branch}")
         && manifest.ref_ == format!("refs/heads/{branch}")
         && manifest.repository_id == digest_b3(format!("github.com/{repo}").as_bytes())
+}
+
+/// Accept the API's bare path or its documented `path@branch` form only.
+fn attempt_path_matches(actual: &str, workflow: &str, branch: &str) -> bool {
+    if actual == workflow {
+        return true;
+    }
+    let Some(suffix) = actual
+        .strip_prefix(workflow)
+        .and_then(|remainder| remainder.strip_prefix('@'))
+    else {
+        return false;
+    };
+    suffix == branch || suffix == format!("refs/heads/{branch}")
 }
 
 #[cfg(test)]

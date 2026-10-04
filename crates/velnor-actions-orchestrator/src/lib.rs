@@ -6,6 +6,7 @@
 //! Mise, vectors to `vectors` via Mise requests, text to the renderer.
 
 mod attach;
+mod baseline_artifact_listing;
 mod baseline_publish;
 mod clippy_groups;
 mod config;

@@ -6,7 +6,6 @@ pub(crate) mod provenance_check;
 #[path = "provenance_resolve.rs"]
 pub(crate) mod provenance_resolve;
 
-use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
 use std::collections::BTreeSet;
@@ -14,7 +13,6 @@ use std::collections::BTreeSet;
 use velnor_actions_contract::{
     Plan, PlanBaseline, WorkflowEvent, canonical_json_bytes, digest_b3, validate_digest,
 };
-use velnor_actions_mise::BaselineLookup as MiseBaselineLookup;
 
 use self::provenance_check::{
     ProvenanceExpectations, baseline_can_carry, publish_event_eligible,
@@ -222,34 +220,6 @@ fn lookup_manifest(plan: &mut Plan, inputs: BaselineInputs<'_>) -> Option<Baseli
             None
         }
     }
-}
-
-/// Baseline download argv for one exact artifact (PAR-5.10).
-///
-/// Only exact-name downloads exist: without a known artifact name there
-/// is no bounded download, so no command is returned and the lookup
-/// fails closed to execute-all. The whole-run download fallback is gone.
-/// `--repo` pins the download to the expected repository, and a
-/// malformed repo slug yields no command instead of an unscoped one.
-pub(crate) fn baseline_download_args(
-    base: &str,
-    workflow: &str,
-    branch: &str,
-    artifact: Option<&str>,
-    run_id: u64,
-    dir: &Path,
-    repo: &str,
-) -> Vec<OsString> {
-    if let Some(name) = artifact.filter(|name| !name.is_empty())
-        && let Ok(lookup) = MiseBaselineLookup::new(base, workflow, branch, name)
-        && let Some(repo) = crate::origin::validate_repository_slug(repo)
-    {
-        let mut args = lookup.download_args(run_id, dir);
-        args.push(OsString::from("--repo"));
-        args.push(OsString::from(repo));
-        return args;
-    }
-    Vec::new()
 }
 
 /// One exact-base baseline from a download entry (PAR-5.5).

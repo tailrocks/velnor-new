@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::cover::revalidate::cover_revalidate_fixtures::{manifest_for, plan_for, verdict};
+use std::cell::RefCell;
 use velnor_actions_contract::{canonical_json_bytes, digest_b3};
 
 fn retry_parent() -> BaselineManifest {
@@ -22,48 +23,56 @@ fn normal_retry_lookup(
         "o/r",
     )
     .expect("lookup");
-    let mut calls = Vec::new();
-    let found = resolve_with(&lookup, &parent.artifact_name, |args| {
-        let args: Vec<_> = args
-            .iter()
-            .map(|arg| arg.to_string_lossy().into_owned())
-            .collect();
-        calls.push(args.clone());
-        if args[0] == "run" && args[1] == "list" {
-            Ok(
-                serde_json::json!([{"databaseId":7,"headSha":parent.source_commit,
-                "event":"push","conclusion":current_conclusion,"headBranch":"testmain",
-                "attempt":2}])
-                .to_string(),
-            )
-        } else if args[0] == "run" {
-            let at = args.iter().position(|arg| arg == "--dir").expect("dir") + 1;
-            let directory = Path::new(&args[at]);
-            std::fs::create_dir(directory).expect("download dir");
-            std::fs::write(
-                directory.join("baseline.json"),
-                canonical_json_bytes(parent).expect("canonical original bytes"),
-            )
-            .expect("original download");
-            Ok(String::new())
-        } else if args[1].ends_with("/artifacts") {
-            Ok(
-                serde_json::json!({"artifacts":[{"id":99,"name":parent.artifact_name,
-                "expired":false}]})
-                .to_string(),
-            )
-        } else {
-            assert!(args[1].ends_with("/runs/7/attempts/1"));
-            Ok(
-                serde_json::json!({"id":7,"run_attempt":1,"head_sha":parent.source_commit,
-                "event":"push","status":"completed","conclusion":original_conclusion,
-                "head_branch":"testmain","path":".github/workflows/ci.yml",
-                "repository":{"full_name":"O/R"}})
-                .to_string(),
-            )
-        }
+    let payload = canonical_json_bytes(parent).expect("canonical original bytes");
+    let archive = super::archive::test_archive("baseline.json", &payload);
+    let service_artifact = serde_json::json!({
+        "id": 99,
+        "name": parent.artifact_name,
+        "expired": false,
+        "size_in_bytes": archive.len(),
+        "digest": format!("sha256:{}", crate::cover_identity::generator::sha256_hex(&archive)),
     });
-    (found, calls)
+    let calls = RefCell::new(Vec::new());
+    let found = resolve_with(
+        &lookup,
+        &parent.artifact_name,
+        |args| {
+            let args: Vec<_> = args
+                .iter()
+                .map(|arg| arg.to_string_lossy().into_owned())
+                .collect();
+            calls.borrow_mut().push(args.clone());
+            if args[0] == "run" && args[1] == "list" {
+                Ok(
+                    serde_json::json!([{"databaseId":7,"headSha":parent.source_commit,
+                    "event":"push","conclusion":current_conclusion,"headBranch":"testmain",
+                    "attempt":2}])
+                    .to_string(),
+                )
+            } else if args[1].contains("/artifacts?name=") {
+                Ok(serde_json::json!({"total_count":1,"artifacts":[service_artifact]}).to_string())
+            } else {
+                assert!(args[1].ends_with("/runs/7/attempts/1"));
+                Ok(
+                    serde_json::json!({"id":7,"run_attempt":1,"head_sha":parent.source_commit,
+                    "event":"push","status":"completed","conclusion":original_conclusion,
+                    "head_branch":"testmain","path":".github/workflows/ci.yml",
+                    "repository":{"full_name":"O/R"}})
+                    .to_string(),
+                )
+            }
+        },
+        |args| {
+            let args: Vec<_> = args
+                .iter()
+                .map(|arg| arg.to_string_lossy().into_owned())
+                .collect();
+            calls.borrow_mut().push(args.clone());
+            assert_eq!(args, ["api", "repos/o/r/actions/artifacts/99/zip"]);
+            Ok(archive.clone())
+        },
+    );
+    (found, calls.into_inner())
 }
 
 #[test]
@@ -95,18 +104,34 @@ fn replayed_publication_remains_usable_for_next_plan_coverage() {
 }
 
 #[test]
-fn current_summary_never_authorizes_original_attempt_success() {
+fn failed_summary_cannot_reuse_successful_original_attempt() {
     let parent = retry_parent();
-    // Failed retry does not invalidate independently proven original success.
-    assert!(normal_retry_lookup(&parent, "failure", "success").0.is_ok());
-    // A successful summary cannot turn the downloaded failed attempt into proof.
+    let (failed_summary, calls) = normal_retry_lookup(&parent, "failure", "success");
+    assert!(failed_summary.is_err());
+    assert_eq!(
+        calls.len(),
+        1,
+        "failed summary rejects before artifact lookup"
+    );
+}
+
+#[test]
+fn successful_summary_reuses_authenticated_attempt_one() {
+    let parent = retry_parent();
+    let (found, calls) = normal_retry_lookup(&parent, "success", "success");
+    assert_eq!(found.expect("selected summary")[0].run_attempt, 1);
+    assert!(
+        calls
+            .iter()
+            .any(|args| args[1].ends_with("/runs/7/attempts/1"))
+    );
+}
+
+#[test]
+fn successful_summary_cannot_authorize_failed_original_attempt() {
+    let parent = retry_parent();
     assert!(
         normal_retry_lookup(&parent, "success", "failure")
-            .0
-            .is_err()
-    );
-    assert!(
-        normal_retry_lookup(&parent, "failure", "failure")
             .0
             .is_err()
     );
