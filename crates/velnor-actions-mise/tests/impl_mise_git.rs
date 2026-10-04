@@ -44,7 +44,7 @@ fn git_executable() -> Result<OsString, String> {
     env::split_paths(&path)
         .map(|directory| directory.join("git"))
         .find(|candidate| candidate.is_file())
-        .map(|candidate| candidate.into_os_string())
+        .map(PathBuf::into_os_string)
         .ok_or_else(|| "git executable missing".to_owned())
 }
 
