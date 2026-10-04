@@ -17,7 +17,7 @@ pub struct ActionPinOverride {
     pub action: String,
     /// Exact 40-char commit SHA.
     pub sha: String,
-    /// Matching stable version or fork-commit identity (`fork-<sha-prefix>`).
+    /// Matching stable version or immutable-commit identity (`commit-<sha-prefix>`).
     pub version: String,
 }
 
@@ -26,7 +26,7 @@ pub struct ActionPinOverride {
 pub struct ApprovedPin {
     /// Exact 40-char commit SHA.
     pub sha: String,
-    /// Matching stable version or fork-commit identity (`fork-<sha-prefix>`).
+    /// Matching stable version or immutable-commit identity (`commit-<sha-prefix>`).
     pub version: String,
 }
 

@@ -37,7 +37,7 @@ pub struct ActionsConfig {
 pub struct ActionPinOverride {
     /// Exact 40-char lowercase-hex commit SHA.
     pub sha: String,
-    /// Matching stable version or fork-commit identity (`fork-<sha-prefix>`).
+    /// Matching stable version or immutable-commit identity (`commit-<sha-prefix>`).
     pub version: String,
 }
 
@@ -86,7 +86,7 @@ fn is_pin_label(sha: &str, value: &str) -> bool {
     is_version_tag(value)
         || sha
             .get(..7)
-            .is_some_and(|prefix| value == format!("fork-{prefix}"))
+            .is_some_and(|prefix| value == format!("commit-{prefix}"))
 }
 
 fn is_version_tag(value: &str) -> bool {

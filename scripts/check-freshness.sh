@@ -83,7 +83,8 @@ if ! command -v python3 >/dev/null 2>&1; then
   exit 1
 fi
 
-python3 - "$ROOT" "$INV" "$CHECK_UPSTREAM" "$WITH_ADVISORIES" <<'EOF'
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+python3 - "$ROOT" "$INV" "$CHECK_UPSTREAM" "$WITH_ADVISORIES" "$SCRIPT_DIR" <<'EOF'
 import datetime
 import glob as globmod
 import json
@@ -94,6 +95,10 @@ import subprocess
 import sys
 import tomllib
 import urllib.request
+
+sys.dont_write_bytecode = True
+sys.path.insert(0, sys.argv[5])
+from freshness_action_pins import commit_sha_from_response, validate_action_pin
 
 root, inv_path = sys.argv[1], sys.argv[2]
 check_upstream = sys.argv[3] == "1"
@@ -702,7 +707,7 @@ def evidence_age_hours(entry):
 
 
 def freshness_row(subject, entry, pinned, qualified, latest=None,
-                  pin_for_latest=None):
+                  pin_for_latest=None, action_entry=False):
     source = entry.get("source", "")
     if not isinstance(source, str) or "://" not in source:
         fail_row("upstream-freshness", subject, "missing source URL")
@@ -720,22 +725,12 @@ def freshness_row(subject, entry, pinned, qualified, latest=None,
         fail_row("upstream-freshness", subject,
                  f"check timestamp {stamp} is in the future")
         return
-    status = entry.get("status")
-    pin_kind = entry.get("pin_kind", "release")
-    if pin_kind not in ("release", "fork-commit"):
-        fail_row("upstream-freshness", subject,
-                 f"unsupported pin_kind: {pin_kind!r}")
-        return
-    if pin_kind == "fork-commit":
-        sha = entry.get("pinned_sha", "")
-        version = entry.get("pinned_version", "")
-        source_want = f"https://api.github.com/repos/{entry.get('key')}/commits/{sha}"
-        prefix = sha[:7] if isinstance(sha, str) and \
-            re.fullmatch(r"[0-9a-f]{40}", sha) else ""
-        if source != source_want or not prefix or version != f"fork-{prefix}":
-            fail_row("upstream-freshness", subject,
-                     "fork-commit source, SHA, or pin label mismatch")
+    if action_entry:
+        pin_error = validate_action_pin(entry)
+        if pin_error is not None:
+            fail_row("upstream-freshness", subject, pin_error)
             return
+    status = entry.get("status")
     if status == "held":
         if subject not in hold_keys and entry.get("key", subject) not in hold_keys:
             fail_row("upstream-freshness", subject,
@@ -757,13 +752,19 @@ def freshness_row(subject, entry, pinned, qualified, latest=None,
         fail_row("upstream-freshness", subject,
                  f"unqualified pin: pinned={pinned!r} qualified={qualified!r}")
         return
-    if latest is not None and norm_version(latest) != \
-            norm_version(pin_for_latest if pin_for_latest is not None
-                         else (pinned if isinstance(pinned, str) else "")):
-        fail_row("upstream-freshness", subject,
-                 f"stale pin: pinned={pinned!r} latest={latest!r} "
-                 f"(source {source}, checked {stamp})")
-        return
+    if latest is not None:
+        is_commit_pin = action_entry and entry.get("pin_kind") == "commit"
+        if is_commit_pin:
+            latest_matches = latest == entry.get("pinned_sha")
+        else:
+            latest_matches = norm_version(latest) == \
+                norm_version(pin_for_latest if pin_for_latest is not None
+                             else (pinned if isinstance(pinned, str) else ""))
+        if not latest_matches:
+            fail_row("upstream-freshness", subject,
+                     f"stale pin: pinned={pinned!r} latest={latest!r} "
+                     f"(source {source}, checked {stamp})")
+            return
     pass_row("upstream-freshness", subject,
              f"current, evidence {stamp}")
 
@@ -777,7 +778,7 @@ for key, action in sorted(action_pinned.items()):
     qualified = (action.get("qualified_version"),
                  action.get("qualified_sha"))
     freshness_row(key, action, pinned, qualified, action.get("latest"),
-                  action.get("pinned_version"))
+                  action.get("pinned_version"), action_entry=True)
 freshness_row("runner", runner, runner.get("default"), runner.get("default"))
 
 # --- Exceptions: hard maxima, full attribution, strict chronology (§1).
@@ -947,11 +948,8 @@ def sniff_latest(source, body):
     except ValueError:
         payload = None
     if payload is not None:
-        if "/commits/" in source and isinstance(payload, dict):
-            commit_sha = payload.get("sha")
-            if isinstance(commit_sha, str) and \
-                    re.fullmatch(r"[0-9a-f]{40}", commit_sha):
-                return commit_sha
+        if "/commits/" in source:
+            return commit_sha_from_response(source, body)
         if "crates.io/api/v1/crates/" in source \
                 and isinstance(payload, dict):
             crate = payload.get("crate") or {}
@@ -995,6 +993,8 @@ if check_upstream:
                      f"pinned==latest {latest}; source {source}, "
                      f"checked {stamp}")
     for key, action in sorted(action_pinned.items()):
+        if validate_action_pin(action) is not None:
+            continue
         source = action.get("source", "")
         pinned = action.get("pinned_version")
         try:
@@ -1004,10 +1004,10 @@ if check_upstream:
                      f"lookup_failed ({err}); source {source}, "
                      f"checked {stamp}")
             continue
-        if action.get("pin_kind", "release") == "fork-commit":
+        if action.get("pin_kind") == "commit":
             if latest != action.get("pinned_sha"):
                 fail_row("upstream-probe", key,
-                         f"fork commit mismatch: pinned_sha="
+                         f"immutable commit mismatch: pinned_sha="
                          f"{action.get('pinned_sha')!r} latest={latest!r}; "
                          f"source {source}, checked {stamp}")
             else:

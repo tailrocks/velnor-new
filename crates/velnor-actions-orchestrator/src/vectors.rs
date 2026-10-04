@@ -35,7 +35,7 @@ pub(crate) fn validator_install_pin(spec: &str) -> Option<(&'static str, &'stati
     }
 }
 
-/// Exact Linux x86_64 musl release for cargo-machete.
+/// Exact Linux `x86_64` musl release for cargo-machete.
 /// GitHub's release API digest, its published `.sha256` companion, and the
 /// downloaded asset hash agree. Ubi's cold install enumerated the broad API.
 const CARGO_MACHETE_VERSION: &str = "0.9.2";

@@ -132,33 +132,33 @@ fn override_approved_pair_accepted() {
 }
 
 #[test]
-fn fork_commit_override_label_tracks_approved_sha() {
+fn commit_override_label_tracks_approved_sha() {
     let sha = "abcdef0123456789abcdef0123456789abcdef01";
     let mut catalog = ApprovedPinCatalog::new();
     assert_eq!(
-        catalog.insert("jdx/mr-boxington-action", sha, "fork-abcdef0"),
+        catalog.insert("jdx/mr-boxington-action", sha, "commit-abcdef0"),
         Ok(())
     );
     let request = ActionPinOverride {
         action: "jdx/mr-boxington-action".to_owned(),
         sha: sha.to_owned(),
-        version: "fork-abcdef0".to_owned(),
+        version: "commit-abcdef0".to_owned(),
     };
     let reference = catalog.validate_override(&request);
     assert_eq!(
         reference.as_ref().map(PinnedActionRef::render_uses),
         Ok(
-            "uses: jdx/mr-boxington-action@abcdef0123456789abcdef0123456789abcdef01 # fork-abcdef0"
+            "uses: jdx/mr-boxington-action@abcdef0123456789abcdef0123456789abcdef01 # commit-abcdef0"
                 .to_owned()
         )
     );
 
     let mut mismatch = request;
-    mismatch.version = "fork-abcdef1".to_owned();
+    mismatch.version = "commit-abcdef1".to_owned();
     assert!(matches!(
         catalog.validate_override(&mismatch),
         Err(ActionlintError::OverrideRejected { problem, .. })
-            if problem == "invalid_version:fork-abcdef1"
+            if problem == "invalid_version:commit-abcdef1"
     ));
 }
 
