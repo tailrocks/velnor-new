@@ -3,13 +3,18 @@
 use std::collections::HashMap;
 use std::path::Path;
 
-use bollard::models::{ContainerConfig, ContainerInspectResponse, HostConfig, MountPoint};
+use bollard::models::{
+    ContainerConfig, ContainerInspectResponse, HostConfig, HostConfigCgroupnsModeEnum, MountPoint,
+};
 
 use crate::error::HostError;
 use crate::journal::LaunchIdentity;
 use crate::worker::{CreateProjection, dind_create, label_map, runner_create_for_identity};
 
 use super::{inspect_labels_match, same_launch, topology_matches, validate_existing_row};
+
+#[path = "containers_cgroupns_tests.rs"]
+mod cgroupns;
 
 const UBUNTU_PATH: &str = "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
 
@@ -75,6 +80,7 @@ fn inspect_projection(spec: &CreateProjection) -> Result<ContainerInspectRespons
             ..Default::default()
         }),
         host_config: Some(HostConfig {
+            cgroupns_mode: Some(HostConfigCgroupnsModeEnum::PRIVATE),
             privileged: Some(spec.privileged),
             network_mode: spec.network_mode.clone(),
             ..Default::default()

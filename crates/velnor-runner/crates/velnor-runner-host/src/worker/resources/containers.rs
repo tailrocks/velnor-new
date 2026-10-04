@@ -4,7 +4,7 @@ use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 
 use bollard::Docker;
-use bollard::models::ContainerSummaryStateEnum as ContainerState;
+use bollard::models::{ContainerSummaryStateEnum as ContainerState, HostConfigCgroupnsModeEnum};
 use bollard::query_parameters::ListContainersOptionsBuilder;
 use tokio::time::timeout;
 
@@ -305,6 +305,7 @@ fn topology_matches(
         || !execution_matches(spec, config)
         || !environment_matches(spec, config)?
         || host.privileged != Some(spec.privileged)
+        || host.cgroupns_mode != Some(HostConfigCgroupnsModeEnum::PRIVATE)
         || !network_matches(spec.network_mode.as_deref(), host.network_mode.as_deref())
     {
         return Ok(false);

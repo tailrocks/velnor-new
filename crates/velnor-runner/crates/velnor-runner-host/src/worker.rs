@@ -8,7 +8,8 @@ use std::time::Duration;
 
 use bollard::Docker;
 use bollard::models::{
-    ContainerCreateBody, HostConfig, Mount as DockerMount, MountBindOptions, MountType,
+    ContainerCreateBody, HostConfig, HostConfigCgroupnsModeEnum, Mount as DockerMount,
+    MountBindOptions, MountType,
 };
 use bollard::query_parameters::{
     AttachContainerOptionsBuilder, CreateContainerOptions, StartContainerOptions,
@@ -36,7 +37,7 @@ mod projection_tests;
 const PLATFORM: &str = "linux/amd64";
 pub(super) const DIND_IMAGE: &str = "velnor-dind:29.8.2";
 const RUNNER_ENTRYPOINT: &str = "/usr/local/bin/velnor-runner-entrypoint";
-const DIND_ENTRYPOINT: [&str; 2] = ["dockerd", "--host=unix:///var/run/docker.sock"];
+const DIND_ENTRYPOINT: [&str; 1] = ["/usr/local/bin/velnor-dind-entrypoint"];
 const CONTAINER_CREATE_TIMEOUT: Duration = Duration::from_secs(10);
 const CONTAINER_START_TIMEOUT: Duration = Duration::from_secs(10);
 const JIT_DELIVERY_TIMEOUT: Duration = Duration::from_secs(10);
@@ -203,6 +204,7 @@ fn host_config(spec: &CreateProjection) -> Result<HostConfig, HostError> {
     let mut mounts = docker_mounts(&spec.mounts)?.unwrap_or_default();
     mounts.extend(bind_mounts(spec)?);
     Ok(HostConfig {
+        cgroupns_mode: Some(HostConfigCgroupnsModeEnum::PRIVATE),
         privileged: Some(spec.privileged),
         mounts: Some(mounts),
         network_mode: spec.network_mode.clone(),

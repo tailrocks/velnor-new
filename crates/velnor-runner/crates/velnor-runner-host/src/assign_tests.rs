@@ -1,6 +1,6 @@
 //! Poll offers. No transport.
 
-use velnor_runner_github::{InnerJob, InnerKind, ParsedBatch, Poll};
+use velnor_runner_github::{ImmutableJobContext, InnerJob, InnerKind, ParsedBatch, Poll};
 
 use crate::{Offer, offer};
 
@@ -16,12 +16,24 @@ fn job(kind: InnerKind, request_id: Option<i64>) -> InnerJob {
     InnerJob {
         kind,
         request_id,
+        context: empty_context(),
         runner_id: None,
         runner_name: None,
         result: None,
-        job_id: None,
-        labels: Vec::new(),
         fields: Vec::new(),
+    }
+}
+
+fn empty_context() -> ImmutableJobContext {
+    ImmutableJobContext {
+        repository_name: None,
+        owner_name: None,
+        job_id: None,
+        job_workflow_ref: None,
+        job_display_name: None,
+        workflow_run_id: None,
+        event_name: None,
+        request_labels: Vec::new(),
     }
 }
 

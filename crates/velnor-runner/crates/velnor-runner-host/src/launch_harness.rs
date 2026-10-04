@@ -5,8 +5,8 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use velnor_runner_github::{
-    Exchange, InnerJob, InnerKind, Method, ParsedBatch, Poll, SessionRequest, Statistics,
-    Transport, TransportFail,
+    Exchange, ImmutableJobContext, InnerJob, InnerKind, Method, ParsedBatch, Poll, SessionRequest,
+    Statistics, Transport, TransportFail,
 };
 
 use crate::launch::{Drive, Lane};
@@ -164,11 +164,10 @@ pub(crate) fn assigned_wait(message_id: i64, assigned: i64) -> Poll {
         jobs: vec![InnerJob {
             kind: InnerKind::Assigned,
             request_id: Some(0),
+            context: empty_context(),
             runner_id: None,
             runner_name: None,
             result: None,
-            job_id: None,
-            labels: Vec::new(),
             fields: Vec::new(),
         }],
     })
@@ -184,15 +183,27 @@ pub(crate) fn available(ids: &[i64]) -> Poll {
             .map(|id| InnerJob {
                 kind: InnerKind::Available,
                 request_id: Some(id),
+                context: empty_context(),
                 runner_id: None,
                 runner_name: None,
                 result: None,
-                job_id: None,
-                labels: Vec::new(),
                 fields: Vec::new(),
             })
             .collect(),
     })
+}
+
+fn empty_context() -> ImmutableJobContext {
+    ImmutableJobContext {
+        repository_name: None,
+        owner_name: None,
+        job_id: None,
+        job_workflow_ref: None,
+        job_display_name: None,
+        workflow_run_id: None,
+        event_name: None,
+        request_labels: Vec::new(),
+    }
 }
 
 pub(crate) async fn open(label: &str) -> Result<(Scratch, Journal), String> {

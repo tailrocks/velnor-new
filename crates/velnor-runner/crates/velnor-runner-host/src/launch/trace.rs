@@ -40,8 +40,8 @@ pub(super) fn batch(polled: &Poll) {
         batch.jobs.len()
     );
     for job in &batch.jobs {
-        let labels = job.labels.join(",");
-        let job_id = job.job_id.as_deref().unwrap_or("-");
+        let labels = job.context.request_labels.join(",");
+        let job_id = job.context.job_id.as_deref().unwrap_or("-");
         let fields = job.fields.join(",");
         eprintln!(
             "batch job kind={} request_id={} job_id={job_id} labels={labels} fields={fields}",

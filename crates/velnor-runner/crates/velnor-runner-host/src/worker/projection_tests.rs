@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
-use bollard::models::MountType;
+use bollard::models::{HostConfigCgroupnsModeEnum, MountType};
 
 use crate::error::HostError;
 use crate::journal::LaunchIdentity;
@@ -66,6 +66,16 @@ fn runner_and_dind_project_distinct_owned_names_and_labels() -> Result<(), HostE
 
     let runner_create = bollard_create(&runner)?;
     let dind_create = bollard_create(&dind)?;
+    for create in [&runner_create, &dind_create] {
+        assert_eq!(
+            create
+                .config
+                .host_config
+                .as_ref()
+                .and_then(|host| host.cgroupns_mode),
+            Some(HostConfigCgroupnsModeEnum::PRIVATE)
+        );
+    }
     assert_eq!(
         runner_create.options.name.as_deref(),
         runner.name.as_deref()
