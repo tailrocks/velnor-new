@@ -19,10 +19,10 @@ mod impl_cli_parity_golden_normalize;
 mod impl_cli_protocol;
 #[path = "impl_cli_report.rs"]
 mod impl_cli_report;
-#[path = "impl_cli_schema2.rs"]
-mod impl_cli_schema2;
 #[path = "impl_cli_smoke.rs"]
 mod impl_cli_smoke;
+#[path = "impl_cli_task_clock.rs"]
+mod impl_cli_task_clock;
 #[path = "impl_cli_tmp.rs"]
 mod impl_cli_tmp;
 #[path = "impl_cli_verify_local.rs"]

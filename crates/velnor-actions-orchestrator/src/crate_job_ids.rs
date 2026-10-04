@@ -9,7 +9,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{
-    CRATE_JOB_ID_PREFIX, ProposedTask, Stack, TOFU_JOB_ID_PREFIX, assign_crate_job_ids,
+    CRATE_JOB_ID_PREFIX, ProposedTask, Stack, TOFU_JOB_ID_PREFIX, WORKLOAD_JOB_ID_PREFIX,
+    assign_crate_job_ids,
 };
 use velnor_actions_workflow_renderer::render::PLAN_JOB_ID;
 
@@ -37,7 +38,8 @@ pub(crate) fn job_id_for_member(tasks: &[ProposedTask], member: &ProposedTask) -
 /// Stable IDs for every runnable group, prefixed per stack.
 ///
 /// All-tofu groups take `tofu-<slug>` (their exact-set identity);
-/// every other group keeps `rust-<slug>`, so mixed groups inherit
+/// workload groups take `workload-<slug>`; every other group keeps
+/// `rust-<slug>`, so mixed groups inherit
 /// the rust union exactly like their install set. Namespaces never
 /// collide across prefixes; within a prefix the contract
 /// disambiguates colliding slugs. Both the renderer and the planner
@@ -45,9 +47,10 @@ pub(crate) fn job_id_for_member(tasks: &[ProposedTask], member: &ProposedTask) -
 pub(crate) fn assign_group_ids(
     grouped: &BTreeMap<(String, String), Vec<&ProposedTask>>,
 ) -> BTreeMap<(String, String), String> {
-    let (rust, tofu) = id_inputs(grouped);
+    let (rust, tofu, workload) = id_inputs(grouped);
     let mut assigned = assign_crate_job_ids(&rust, CRATE_JOB_ID_PREFIX);
     assigned.extend(assign_crate_job_ids(&tofu, TOFU_JOB_ID_PREFIX));
+    assigned.extend(assign_crate_job_ids(&workload, WORKLOAD_JOB_ID_PREFIX));
     assigned
 }
 
@@ -61,6 +64,14 @@ pub(crate) fn group_is_tofu(members: &[&ProposedTask]) -> bool {
         && members
             .iter()
             .all(|task| Stack::from_id(&task.stack_id) == Some(Stack::Tofu))
+}
+
+/// True when every group member is an explicit workload task.
+pub(crate) fn group_is_workload(members: &[&ProposedTask]) -> bool {
+    !members.is_empty()
+        && members
+            .iter()
+            .all(|task| Stack::from_id(&task.stack_id) == Some(Stack::Workload))
 }
 
 /// Runnable tasks by `(package_id, configuration)` in sorted order.
@@ -88,9 +99,12 @@ type IdInputs = BTreeSet<(String, String, String)>;
 
 /// ID-assignment inputs per stack: one triple per group, named by its
 /// first member.
-fn id_inputs(grouped: &BTreeMap<(String, String), Vec<&ProposedTask>>) -> (IdInputs, IdInputs) {
+fn id_inputs(
+    grouped: &BTreeMap<(String, String), Vec<&ProposedTask>>,
+) -> (IdInputs, IdInputs, IdInputs) {
     let mut rust = BTreeSet::new();
     let mut tofu = BTreeSet::new();
+    let mut workload = BTreeSet::new();
     for ((package_id, configuration), members) in grouped {
         let Some(first) = members.first() else {
             continue;
@@ -102,9 +116,15 @@ fn id_inputs(grouped: &BTreeMap<(String, String), Vec<&ProposedTask>>) -> (IdInp
         );
         if group_is_tofu(members) {
             tofu.insert(triple);
+        } else if group_is_workload(members) {
+            workload.insert(triple);
         } else {
             rust.insert(triple);
         }
     }
-    (rust, tofu)
+    (rust, tofu, workload)
 }
+
+#[cfg(test)]
+#[path = "crate_job_ids_tests.rs"]
+mod tests;

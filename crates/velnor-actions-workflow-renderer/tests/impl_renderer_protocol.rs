@@ -31,6 +31,9 @@ fn fixture_ctx() -> RenderContext {
         candidate: None,
         preseed: false,
         plan_consumer_env: std::collections::BTreeMap::new(),
+        source_helpers: Vec::new(),
+        native_pages_approvals: Vec::new(),
+        native_publish_approvals: Vec::new(),
     }
 }
 
@@ -39,23 +42,33 @@ fn fixture_ir(steps: Vec<velnor_actions_contract::Step>) -> WorkflowIr {
     jobs.insert(
         "plan".to_owned(),
         Job {
+            cache_mode: None,
             display_name: "Plan".to_owned(),
             runs_on: LABEL.to_owned(),
             timeout_minutes: JobTimeout::PLAN,
             needs: Vec::new(),
             condition: None,
             permissions: None,
+            tool_producer: None,
+            mbx_producer: None,
+            source_producer: None,
+            native_pages_deploy: None,
+            native_publish: None,
+            outputs: Vec::new(),
             environment: None,
             steps,
         },
     );
     WorkflowIr {
+        cache_mode: velnor_actions_contract::CacheMode::Read,
+        run_name: None,
         name: "CI".to_owned(),
         triggers: Trigger {
             pull_request_types: ["opened", "synchronize", "reopened", "ready_for_review"]
                 .iter()
                 .map(ToString::to_string)
                 .collect(),
+            push_tags: Vec::new(),
             push_branches: vec!["main".to_owned()],
             merge_group: true,
             workflow_dispatch: None,
@@ -100,6 +113,58 @@ fn plan_sequence_wires_write_request_before_plan() -> Result<(), RenderError> {
     )));
     assert!(text.contains(&format!("{INTERNAL_OP_ENV}: plan-v1")));
     assert_env_gate_only(&text);
+    Ok(())
+}
+
+#[test]
+fn early_and_ready_promotion_receive_live_auth_only_in_consumer_boundary() -> Result<(), RenderError>
+{
+    let ir = fixture_ir(vec![
+        checkout_step(&checkout_pin())?,
+        write_request_step("plan-v1")?,
+        velnor_actions_workflow_renderer::early_plan::early_plan_step()?,
+        plan_step(),
+    ]);
+    let mut ctx = fixture_ctx();
+    ctx.plan_consumer_env.insert(
+        "MISE_DATA_DIR".to_owned(),
+        "${{ runner.temp }}/velnor/planning/mise".to_owned(),
+    );
+    let text = render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &ctx)?;
+    for channel in [
+        "GH_REPO: ${{ github.repository }}",
+        "GH_TOKEN: ${{ github.token }}",
+    ] {
+        assert_eq!(
+            text.matches(channel).count(),
+            2,
+            "early and final Plan: {channel}"
+        );
+    }
+    assert!(text.contains("VELNOR_EARLY_NEEDS_CARGO: ${{ steps.early_plan.outputs.needs_cargo }}"));
+    assert_eq!(text.matches("VELNOR_PLAN_FRESHNESS:").count(), 2);
+    assert!(
+        text.contains("cargo_fallback_required: ${{ steps.plan.outputs.cargo_fallback_required }}")
+    );
+    assert_eq!(
+        text.matches("MISE_DATA_DIR: ${{ runner.temp }}/velnor/planning/mise")
+            .count(),
+        2,
+        "both consumer planning operations share the planning root"
+    );
+    assert!(!text.contains("MISE_DATA_DIR: ${{ runner.temp }}/velnor/mise"));
+    let ordinary = fixture_ir(vec![checkout_step(&checkout_pin())?, plan_step()]);
+    let ordinary = render_workflow_ir(&ordinary, WorkflowPolicy::ConsumerV1, None, &fixture_ctx())?;
+    assert!(
+        !ordinary.contains("GH_TOKEN:"),
+        "ordinary plan receives no replay credentials"
+    );
+    assert_env_gate_only(&text);
+    assert!(
+        ordinary
+            .contains("cargo_fallback_required: ${{ steps.plan.outputs.cargo_fallback_required }}"),
+        "ordinary Plan exports its actual publication result"
+    );
     Ok(())
 }
 

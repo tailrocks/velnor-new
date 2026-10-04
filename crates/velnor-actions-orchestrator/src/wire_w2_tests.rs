@@ -31,7 +31,6 @@ fn group(kind: TaskKind, task_id: &str) -> ProposedTask {
         uses_network: false,
         uses_clock: false,
         uses_random: false,
-        run_ignored: None,
         nextest_profile: NextestProfile::Default,
     };
     let task = velnor_actions_rust::propose_task(&group).expect("fixture proposes");
@@ -195,6 +194,8 @@ fn reuse_event_names_match_mode_spellings() {
         WorkflowEvent::Push,
         WorkflowEvent::MergeGroup,
         WorkflowEvent::Local,
+        WorkflowEvent::Schedule,
+        WorkflowEvent::WorkflowDispatch,
     ] {
         let name = reuse_event_name(event);
         assert!(mode_for_event(name).is_ok(), "{name}");

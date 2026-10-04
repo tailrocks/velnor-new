@@ -348,3 +348,46 @@ fn fetch_step_carries_auth_without_request_file() -> Result<(), RenderError> {
     );
     Ok(())
 }
+
+#[test]
+fn publisher_fetch_auth_keeps_request_bound() -> Result<(), RenderError> {
+    use velnor_actions_workflow_renderer::steps::{PUBLISH_OPERATION, publish_step};
+    let plan = job(
+        "plan",
+        "Plan",
+        Vec::new(),
+        vec![
+            checkout_step(&checkout_pin())?,
+            acquire_fixture()?,
+            plan_step(),
+        ],
+    );
+    let (id, mut publisher) = job(
+        "publish-baseline",
+        "Publish baseline",
+        vec!["required".to_owned()],
+        vec![
+            acquire_fixture()?,
+            write_request_step(PUBLISH_OPERATION)?,
+            publish_step(),
+        ],
+    );
+    publisher.condition =
+        Some("github.event_name == 'push' && github.ref == 'refs/heads/main'".to_owned());
+    let text = strict(
+        &fixture_ir(vec![plan, final_job()?, (id, publisher)]),
+        &fixture_ctx(),
+    )?;
+    let publish = step_block(&text, "Publish baseline");
+    for want in [
+        "GH_TOKEN",
+        "github.token",
+        "GH_REPO",
+        "github.repository",
+        "VELNOR_REQUEST_FILE",
+    ] {
+        assert!(publish.contains(want), "missing {want}:\n{publish}");
+    }
+    assert!(!step_block(&text, "Write request").contains("GH_TOKEN"));
+    Ok(())
+}

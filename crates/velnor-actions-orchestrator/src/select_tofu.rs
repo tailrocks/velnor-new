@@ -13,8 +13,7 @@ use std::path::Path;
 
 use velnor_actions_contract::{DetectionStatus, ProposedTask};
 use velnor_actions_tofu::{
-    Family, ModuleEdges, chdir_finding_for_root, family_of, key_for_root, root_for_key,
-    select_roots,
+    Family, ModuleEdges, chdir_finding_for_root, family_of, key_for_root, select_roots,
 };
 
 use crate::OrchestratorError;
@@ -38,6 +37,49 @@ pub struct TofuSelectionUnit {
 
 /// Max base files fetched; beyond this, broaden instead of reading.
 const MAX_TOFU_BASE_FILE_BATCH: usize = 512;
+
+/// Fixed evidence marker; only the contained source-lock inspection authors it.
+pub(crate) const PUBLIC_PROVIDER_TRANSPORT: &str = "VELNOR_TOFU_PUBLIC_PROVIDERS";
+
+/// Fixed identity key carrying the generation-captured provider descriptor.
+pub(crate) const TOFU_PROVIDER_EXPORT: &str = "VELNOR_TOFU_PROVIDER_EXPORT";
+
+/// Attach public-distribution evidence to each root's task identities.
+pub(crate) fn qualify_provider_transport(
+    repository: &Path,
+    proposals: &mut [ProposedTask],
+    reads: &mut velnor_actions_tofu::FileCache,
+) {
+    for task in proposals {
+        if task.stack_id != velnor_actions_tofu::STACK_ID {
+            continue;
+        }
+        let Ok(root) = velnor_actions_tofu::normalized_root_for_proposal(task) else {
+            task.identity.environment.remove(TOFU_PROVIDER_EXPORT);
+            task.identity
+                .environment
+                .insert(PUBLIC_PROVIDER_TRANSPORT.to_owned(), "false".to_owned());
+            continue;
+        };
+        let descriptor =
+            crate::tofu_cache_source::provider_export_descriptor_at_root(repository, root, reads);
+        let public = descriptor.is_some();
+        if let Some(descriptor) = descriptor {
+            if let Ok(encoded) = serde_json::to_string(&descriptor) {
+                task.identity
+                    .environment
+                    .insert(TOFU_PROVIDER_EXPORT.to_owned(), encoded);
+            } else {
+                task.identity.environment.remove(TOFU_PROVIDER_EXPORT);
+            }
+        } else {
+            task.identity.environment.remove(TOFU_PROVIDER_EXPORT);
+        }
+        task.identity
+            .environment
+            .insert(PUBLIC_PROVIDER_TRANSPORT.to_owned(), public.to_string());
+    }
+}
 
 /// Normalized configured roots backing selected tofu projects.
 pub(crate) fn tofu_selected_roots(statuses: &[DetectionStatus]) -> Vec<String> {
@@ -69,8 +111,10 @@ pub(crate) fn push_chdir_findings(discovery: &Discovery, warnings: &mut Vec<Stri
         if task.stack_id != velnor_actions_tofu::STACK_ID {
             continue;
         }
-        let root = root_for_key(&task.identity.unit_key);
-        if let Some(finding) = chdir_finding_for_root(&root) {
+        let Ok(root) = velnor_actions_tofu::normalized_root_for_proposal(task) else {
+            continue;
+        };
+        if let Some(finding) = chdir_finding_for_root(root) {
             findings.insert(finding);
         }
     }
@@ -269,6 +313,10 @@ pub(crate) fn derive_tofu(
 ) -> Result<Vec<ProposedTask>, OrchestratorError> {
     use velnor_actions_tofu::{TofuTaskGroup, TofuTaskKind};
     let selected = tofu_selected_roots(statuses);
+    let mut locators = velnor_actions_tofu::RootLocatorRegistry::default();
+    for root in &selected {
+        locators.admit(root)?;
+    }
     let covered = velnor_actions_tofu::covered_fmt_roots(&selected);
     let mut proposals = Vec::new();
     for root in &selected {

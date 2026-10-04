@@ -1,0 +1,66 @@
+import groovy.json.JsonSlurper
+import java.nio.charset.Charset
+import java.security.MessageDigest
+import org.gradle.api.tasks.compile.JavaCompile
+import org.gradle.api.tasks.testing.Test
+
+def home = new File(System.getenv('GRADLE_USER_HOME')).absoluteFile
+def expectedRoot = new File(System.getenv('GITHUB_WORKSPACE'), 'backend').canonicalFile
+def sha256 = { File file -> MessageDigest.getInstance('SHA-256').digest(file.bytes).encodeHex().toString() }
+def sourcePath = 'processor-target-validation/src/main/java/com/chainargos/processor/binding/RpcEndpointBinding.java'
+def sourceDigest = '5860e10d5ce8657e00b38824fd8a68888bfab44397e9aaa8fd8df300a9c43ba4'
+def auditedSettings = null
+
+gradle.settingsEvaluated { settings ->
+    auditedSettings = settings
+    settings.buildCache.remote = null
+    settings.buildCache.local.directory = new File(home, 'velnor-compile-cache-v1')
+    settings.buildCache.local.enabled = true
+    settings.buildCache.local.push = false
+}
+
+def qualified = { task ->
+    if (!(task instanceof JavaCompile) || task.path != ':processor-target-validation:compileJava') return false
+    if (task.class.name != 'org.gradle.api.tasks.compile.JavaCompile_Decorated' || task.actions.size() != 1) return false
+    if (task.actions[0].class.name != 'org.gradle.api.internal.project.taskfactory.IncrementalTaskAction') return false
+    if (task.project.rootDir.canonicalFile != expectedRoot || gradle.gradleVersion != '9.5.1') return false
+    def source = new File(expectedRoot, sourcePath).absoluteFile
+    if (source.canonicalFile != source || !source.isFile() || sha256(source) != sourceDigest) return false
+    if (task.source.files != [source] as Set) return false
+    def options = task.options
+    if (options.compilerArgs != ['-parameters'] || !options.compilerArgumentProviders.empty || options.fork) return false
+    if (options.annotationProcessorPath != null && !options.annotationProcessorPath.files.empty) return false
+    if (options.sourcepath != null && !options.sourcepath.files.empty) return false
+    if (options.bootstrapClasspath != null && !options.bootstrapClasspath.files.empty) return false
+    if (options.extensionDirs != null && !options.extensionDirs.empty) return false
+    if (Charset.defaultCharset().name() != 'UTF-8' || options.encoding != null) return false
+    if (task.sourceCompatibility != '25' || task.targetCompatibility != '25') return false
+    def compiler = task.javaCompiler.get().metadata
+    if (compiler.languageVersion.asInt() != 25 || compiler.javaRuntimeVersion != '25.0.4.1+1-jvmci-25.3-b22') return false
+    if (compiler.vendor != 'GraalVM Community') return false
+    if (compiler.installationPath.asFile.canonicalFile != new File(System.getenv('JAVA_HOME')).canonicalFile) return false
+    def expectedDestination = new File(task.project.buildDir, 'classes/java/main').canonicalFile
+    if (task.destinationDirectory.get().asFile.canonicalFile != expectedDestination) return false
+    def proof = new File(home, 'velnor-public-artifacts.json')
+    if (!proof.isFile() || proof.canonicalFile != proof.absoluteFile) return false
+    def digests = new JsonSlurper().parse(proof)
+    if (!(digests instanceof List) || digests.empty) return false
+    def permitted = digests.collect { it.sha256 } as Set
+    def classpath = task.classpath.files
+    if (classpath.size() != permitted.size() || classpath.any { file -> !file.isFile() || file.canonicalFile != file.absoluteFile || !permitted.contains(sha256(file)) }) return false
+    if ((classpath.collect { file -> sha256(file) } as Set) != permitted) return false
+    return true
+}
+
+gradle.taskGraph.whenReady { graph ->
+    if (auditedSettings == null || auditedSettings.rootDir.canonicalFile != expectedRoot) throw new GradleException('Unqualified Gradle output root')
+    if (auditedSettings.buildCache.remote != null) throw new GradleException('Remote Gradle cache prohibited')
+    if (auditedSettings.buildCache.local.directory.canonicalFile != new File(home, 'velnor-compile-cache-v1').canonicalFile) throw new GradleException('Gradle output cache owner changed')
+    graph.allTasks.each { task ->
+        task.outputs.doNotCacheIf('Only reviewed native Java compilation is transferable') { !qualified(task) }
+        if (task instanceof Test) task.outputs.upToDateWhen { false }
+        if (qualified(task)) {
+            task.inputs.property('velnorNativeCompilerPolicy', 'processor-java-v2-gradle9.5.1-community25.0.4.1+1-jvmci-25.3-b22')
+        }
+    }
+}

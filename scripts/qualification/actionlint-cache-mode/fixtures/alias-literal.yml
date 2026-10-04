@@ -1,0 +1,8 @@
+on: push
+cache-mode: &mode read
+jobs:
+  check:
+    cache-mode: *mode
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo qualified

@@ -164,7 +164,7 @@ fn merge_with(
     let mut request = serde_json::json!({
         "schema": 1,
         "run_key": "local",
-        "actual_event": plan_value.get("event").cloned().unwrap_or(serde_json::Value::Null),
+        "actual_scope": "affected", "actual_event": plan_value.get("event").cloned().unwrap_or(serde_json::Value::Null),
         "plan": plan,
         "matrix": plan.matrix,
         "matrix_reports": reports,

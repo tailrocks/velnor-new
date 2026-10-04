@@ -106,11 +106,22 @@ fn pure_tofu_repo_drops_all_rust_setup() -> TestResult {
     );
     let (run, env) = shell_of(plan, "Prepare pinned tools")?;
     assert!(
-        !run.contains(&catalog.tool_spec(PinnedTool::Rust)),
+        !run.contains(
+            &catalog
+                .tool_spec(PinnedTool::Rust)
+                .expect("qualified selector")
+        ),
         "pure-tofu plan installs no Rust: {run:?}"
     );
     assert!(
-        run.contains(&catalog.tool_spec(PinnedTool::Opentofu)),
+        run.contains(
+            &catalog
+                .native_tool_spec(
+                    velnor_actions_mise::catalog::qualification::DistributionHost::LinuxAmd64,
+                    PinnedTool::Opentofu,
+                )
+                .expect("qualified selector")
+        ),
         "pure-tofu plan installs opentofu: {run:?}"
     );
     for key in ["MISE_RUSTUP_HOME", "MISE_CARGO_HOME", "RUSTUP_TOOLCHAIN"] {
@@ -165,8 +176,18 @@ fn mixed_repo_plan_carries_union_with_pure_tofu_group() -> TestResult {
     let plan = jobs.get("plan").ok_or("missing plan job")?;
     let (run, env) = shell_of(plan, "Prepare pinned tools")?;
     assert!(
-        run.contains(&catalog.tool_spec(PinnedTool::Rust))
-            && run.contains(&catalog.tool_spec(PinnedTool::Opentofu)),
+        run.contains(
+            &catalog
+                .tool_spec(PinnedTool::Rust)
+                .expect("qualified selector")
+        ) && run.contains(
+            &catalog
+                .native_tool_spec(
+                    velnor_actions_mise::catalog::qualification::DistributionHost::LinuxAmd64,
+                    PinnedTool::Opentofu,
+                )
+                .expect("qualified selector")
+        ),
         "mixed plan installs the union: {run:?}"
     );
     assert!(
@@ -184,8 +205,19 @@ fn mixed_repo_plan_carries_union_with_pure_tofu_group() -> TestResult {
             continue;
         }
         let (run, _) = shell_of(job, "Prepare pinned tools")?;
-        let has_rust = run.contains(&catalog.tool_spec(PinnedTool::Rust));
-        let has_tofu = run.contains(&catalog.tool_spec(PinnedTool::Opentofu));
+        let has_rust = run.contains(
+            &catalog
+                .tool_spec(PinnedTool::Rust)
+                .expect("qualified selector"),
+        );
+        let has_tofu = run.contains(
+            &catalog
+                .native_tool_spec(
+                    velnor_actions_mise::catalog::qualification::DistributionHost::LinuxAmd64,
+                    PinnedTool::Opentofu,
+                )
+                .expect("qualified selector"),
+        );
         if has_rust && !has_tofu {
             saw_rust = true;
             assert!(

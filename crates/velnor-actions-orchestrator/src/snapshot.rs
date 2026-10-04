@@ -26,8 +26,9 @@ pub(crate) const UNRESOLVED_GENERATOR_SHA: &str =
 /// Current canonical-schema version; evidence carrying any other version
 /// migrates explicitly or is rejected, never silently reinterpreted.
 /// Version 2 records per-task input-closure digests in baseline entries;
-/// version 1 baselines bound no source bytes and are rejected outright.
-pub(crate) const CANONICAL_SCHEMA_VERSION: u32 = 2;
+/// Version 3 requires structured execution identity on every entry.
+/// Earlier versions are rejected outright.
+pub(crate) const CANONICAL_SCHEMA_VERSION: u32 = 3;
 
 /// BLAKE3 digest over canonical JSON bytes: the single digest function.
 ///
@@ -139,6 +140,8 @@ pub(crate) fn platform_id_for(label: &str, target: &str) -> Result<String, Contr
 pub(crate) struct ExecutionSnapshot {
     /// Workspace-root to canonical graph digest.
     graph_digests: std::collections::BTreeMap<String, String>,
+    /// Conservative first-party checkout input identity, resolved once.
+    checkout_inputs: velnor_actions_rust::semantic_inputs::SemanticInventory,
     /// Workspace-root to workspace identity digest.
     workspace_ids: std::collections::BTreeMap<String, String>,
     /// Package ID to owning workspace root.
@@ -164,12 +167,49 @@ impl ExecutionSnapshot {
                 manifest_index.insert(package.manifest.clone(), package.id.clone());
             }
         }
+        for task in &discovery.proposals {
+            if velnor_actions_contract::Stack::from_id(&task.stack_id)
+                != Some(velnor_actions_contract::Stack::Workload)
+            {
+                continue;
+            }
+            let unit = &task.identity.unit_id;
+            let digest = canonical_digest(&serde_json::json!({
+                "unit": unit,
+                "root": task.identity.unit_path,
+                "kind": task.configuration,
+                "inputs": task.identity.declared_inputs,
+            }))
+            .unwrap_or_else(|_| digest_b3(b"workload_graph_error"));
+            graph_digests.insert(unit.clone(), digest.clone());
+            workspace_ids.insert(unit.clone(), digest);
+            member_index.insert(unit.clone(), unit.clone());
+        }
         Self {
             graph_digests,
+            checkout_inputs: velnor_actions_rust::semantic_inputs::SemanticInventory {
+                paths: Vec::new(),
+                provenance: velnor_actions_contract::Provenance::Unknown {
+                    reason: "checkout_not_bound".to_owned(),
+                },
+            },
             workspace_ids,
             member_index,
             manifest_index,
         }
+    }
+
+    /// Bind checkout input bytes once for this analysis.
+    pub(crate) fn with_checkout(mut self, root: &std::path::Path) -> Self {
+        self.checkout_inputs = super::closure::checkout_inputs::collect(root);
+        self
+    }
+
+    /// Conservative checkout input identity shared by every task.
+    pub(crate) fn checkout_inputs(
+        &self,
+    ) -> &velnor_actions_rust::semantic_inputs::SemanticInventory {
+        &self.checkout_inputs
     }
 
     /// Graph digest for the workspace owning `package_id` or `manifest`.
@@ -231,7 +271,8 @@ mod tests {
         let older = platform_id_for("ubuntu-24.04", "x86_64-unknown-linux-gnu").expect("platform");
         assert_ne!(linux, older);
         assert!(velnor_actions_contract::validate_digest(&linux).is_ok());
-        assert!(check_canonical_version(2).is_ok());
+        assert!(check_canonical_version(3).is_ok());
+        assert!(check_canonical_version(2).is_err());
         assert!(check_canonical_version(0).is_err());
         assert!(check_canonical_version(1).is_err());
     }

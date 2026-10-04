@@ -1,0 +1,8 @@
+name: Cache qualification
+on: push
+jobs:
+  check:
+    cache-mode: false
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo qualified

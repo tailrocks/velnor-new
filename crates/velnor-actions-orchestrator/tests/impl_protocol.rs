@@ -37,12 +37,16 @@ fn write_request_materializes_pull_request() -> TestResult {
     assert_eq!(value["event"], "pull_request");
     assert_eq!(value["base"], base);
     assert_eq!(value["head"], head);
+    assert_eq!(value["scope"], "affected");
     assert_eq!(value["root"], ".");
     let keys: Vec<&str> = value
         .as_object()
         .map(|map| map.keys().map(String::as_str).collect())
         .unwrap_or_default();
-    assert_eq!(keys, ["base", "event", "head", "op", "root", "schema"]);
+    assert_eq!(
+        keys,
+        ["base", "event", "head", "op", "root", "schema", "scope"]
+    );
     Ok(())
 }
 
@@ -104,39 +108,6 @@ fn write_request_materializes_merge_group() -> TestResult {
     assert_eq!(value["event"], "merge_group");
     assert_eq!(value["base"], base);
     assert_eq!(value["head"], head);
-    Ok(())
-}
-
-#[test]
-fn write_request_rejects_bad_inputs() -> TestResult {
-    let dir = TempDir::new()?;
-    let payload = r#"{"before":"abc","after":"def"}"#;
-    let bad_op = dir.path().join("bogus-v9-request.json");
-    let err = err_of(
-        write_request_parts(&bad_op, "push", payload, None, None, dir.path()),
-        "unknown op refused",
-    )?;
-    assert!(err.to_string().contains("unknown_request_op"), "{err}");
-    assert!(!bad_op.exists());
-    let bad_event = dir.path().join("plan-v1-request.json");
-    let err = err_of(
-        write_request_parts(&bad_event, "schedule", payload, None, None, dir.path()),
-        "unknown event refused",
-    )?;
-    assert!(err.to_string().contains("unsupported_event"), "{err}");
-    let err = err_of(
-        write_request_parts(&bad_event, "push", "not json", None, None, dir.path()),
-        "malformed payload refused",
-    )?;
-    assert!(err.to_string().contains("malformed_event_payload"), "{err}");
-
-    fs::write(&bad_event, "{}")?;
-    let err = err_of(
-        write_request_parts(&bad_event, "push", payload, None, None, dir.path()),
-        "existing file refused",
-    )?;
-    assert!(err.to_string().contains("request_exists"), "{err}");
-    assert_eq!(fs::read_to_string(&bad_event)?, "{}");
     Ok(())
 }
 
@@ -287,6 +258,7 @@ fn merge_assembled_request_roundtrips_to_passed() -> TestResult {
     value["required_jobs"] = serde_json::json!([{"job_id": "plan", "conclusion": "success"}]);
     value["assembly_errors"] = serde_json::json!([]);
     value["actual_event"] = value["plan"]["event"].clone();
+    value["actual_scope"] = serde_json::json!("affected");
     let final_report: velnor_actions_contract::FinalReport =
         serde_json::from_str(&merge_internal(&value.to_string())?)?;
     assert_eq!(
@@ -383,3 +355,6 @@ fn merge_verdict_mapping() -> TestResult {
     assert!(err_of(merge_passed("not json"), "verdict rejects garbage").is_ok());
     Ok(())
 }
+
+#[path = "impl_protocol_verification.rs"]
+mod verification;

@@ -9,7 +9,7 @@ use velnor_actions_workflow_renderer::tofu_cache::{
 
 const HOME: &str = "${{ runner.temp }}/velnor/cargo";
 const KEY: &str = "velnor-v1-sources-trusted-compat-snapshot";
-const PROVIDER_KEY: &str = "velnor-v1-tofu-providers-x86_64-unknown-linux-gnu-1.13.1-root-0123456789ab-${{hashFiles('.terraform.lock.hcl')}}";
+const PROVIDER_KEY: &str = "velnor-v2-tofu-providers-x86_64-unknown-linux-gnu-1.13.1-root-0123456789ab-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
 #[test]
 fn never_archive_mirror_lists_state_plans_and_credentials() {

@@ -1,5 +1,11 @@
 //! Shared spawn and tempdir helpers for CLI integration tests.
 
+#[path = "../../test_support/git_fixture.rs"]
+pub(crate) mod git_fixture;
+
+#[path = "impl_cli_git_isolation.rs"]
+mod isolation_tests;
+
 use std::error::Error;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -61,11 +67,7 @@ pub(crate) fn spawn_isolated(
 
 /// Initialize a Git working tree in `dir`.
 pub(crate) fn git_init(dir: &Path) -> Result<(), Box<dyn Error>> {
-    let output = Command::new("git")
-        .arg("init")
-        .arg("-q")
-        .arg(dir)
-        .output()?;
+    let output = git_fixture::command(dir)?.arg("init").arg("-q").output()?;
     if output.status.success() {
         Ok(())
     } else {
@@ -96,7 +98,10 @@ pub(crate) fn commit_all(dir: &Path) -> Result<String, Box<dyn Error>> {
             "fixture",
         ],
     ] {
-        let output = Command::new("git").args(&args).current_dir(dir).output()?;
+        let output = git_fixture::command(dir)?
+            .args(&args)
+            .current_dir(dir)
+            .output()?;
         if !output.status.success() {
             return Err(format!("git {args:?} failed: {}", output.status).into());
         }
@@ -106,7 +111,7 @@ pub(crate) fn commit_all(dir: &Path) -> Result<String, Box<dyn Error>> {
 
 /// Current HEAD sha of a fixture repo.
 pub(crate) fn head_sha(dir: &Path) -> Result<String, Box<dyn Error>> {
-    let output = Command::new("git")
+    let output = git_fixture::command(dir)?
         .args(["rev-parse", "HEAD"])
         .current_dir(dir)
         .output()?;
@@ -150,6 +155,7 @@ pub(crate) fn add_crate_pair(repo: &Path) -> Result<(), Box<dyn Error>> {
         let output = Command::new("cargo")
             .arg("init")
             .arg("--quiet")
+            .args(["--vcs", "none"])
             .arg("--lib")
             .arg("--name")
             .arg(name)

@@ -13,10 +13,10 @@ fn scratch_dir(test: &str) -> Result<PathBuf, String> {
 }
 
 #[test]
-fn allowlist_accepts_exactly_five_verbs() {
+fn allowlist_accepts_exactly_six_verbs() {
     assert_eq!(
         ALLOWED_GIT_VERBS,
-        ["rev-parse", "ls-files", "diff", "show", "config"]
+        ["rev-parse", "ls-files", "ls-tree", "diff", "show", "config"]
     );
     for verb in ALLOWED_GIT_VERBS {
         assert!(is_allowed_git_verb(verb), "verb must be allowed: {verb}");
@@ -27,6 +27,7 @@ fn allowlist_accepts_exactly_five_verbs() {
     }
     assert_eq!(GitRequest::rev_parse(Vec::new()).verb(), "rev-parse");
     assert_eq!(GitRequest::ls_files(Vec::new()).verb(), "ls-files");
+    assert_eq!(GitRequest::ls_tree(Vec::new()).verb(), "ls-tree");
     assert_eq!(GitRequest::diff(Vec::new()).verb(), "diff");
     assert_eq!(GitRequest::show(Vec::new()).verb(), "show");
     assert_eq!(GitRequest::config(Vec::new()).verb(), "config");
@@ -82,6 +83,33 @@ fn git_command_in_records_cwd() {
     let command = request.command_in(&cwd);
     assert_eq!(command.cwd(), Some(&cwd));
     assert_eq!(command.argv(), request.argv());
+}
+
+#[test]
+fn discovery_git_owns_optional_lock_control() -> Result<(), String> {
+    for verb in ALLOWED_GIT_VERBS {
+        let request = GitRequest::new(verb, Vec::new()).map_err(|error| error.to_string())?;
+        let command = request.command();
+        assert!(
+            command
+                .full_env()
+                .contains(&(OsString::from("GIT_OPTIONAL_LOCKS"), OsString::from("0"),))
+        );
+        let hostile_parent = [(OsString::from("GIT_OPTIONAL_LOCKS"), OsString::from("1"))];
+        let environment = command.spawn_env(&hostile_parent);
+        assert_eq!(
+            environment
+                .iter()
+                .rev()
+                .find(|(key, _)| key == "GIT_OPTIONAL_LOCKS"),
+            Some(&(OsString::from("GIT_OPTIONAL_LOCKS"), OsString::from("0")))
+        );
+        assert!(matches!(
+            command.with_env(&[(OsString::from("GIT_OPTIONAL_LOCKS"), OsString::from("1"))]),
+            Err(MiseError::InvalidStepInput { field, .. }) if field == "GIT_OPTIONAL_LOCKS"
+        ));
+    }
+    Ok(())
 }
 
 #[test]

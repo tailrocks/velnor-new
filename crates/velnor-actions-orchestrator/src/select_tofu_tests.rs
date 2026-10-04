@@ -20,6 +20,8 @@ fn selected(root: &str) -> DetectionStatus {
 /// Minimal discovery carrying tofu statuses plus selection records.
 fn discovery_with(statuses: Vec<DetectionStatus>, units: Vec<TofuSelectionUnit>) -> Discovery {
     Discovery {
+        rust_inventory: None,
+        raw_inventories: Vec::new(),
         statuses,
         workspaces: Vec::new(),
         proposals: Vec::new(),
@@ -121,11 +123,11 @@ fn derive_tofu_proposes_triples_with_fmt_scope_targets() {
     assert!(fmt.iter().all(|task| !task.no_targets));
     let validate = tasks
         .iter()
-        .find(|task| task.task_id == "stack/tofu/stacks/b/validate/default")
+        .find(|task| task.task_id == "stack/tofu/dir-737461636b732f62/validate/default")
         .expect("second validate");
     assert_eq!(
         validate.depends_on,
-        vec!["stack/tofu/stacks/b/init/default".to_owned()]
+        vec!["stack/tofu/dir-737461636b732f62/init/default".to_owned()]
     );
 }
 
@@ -138,10 +140,10 @@ fn derive_tofu_merges_nested_fmt_scopes() {
     let fmt_no_targets = |unit: &str| {
         tasks
             .iter()
-            .find(|task| task.task_kind == "fmt" && task.identity.unit_id == unit)
+            .find(|task| task.task_kind == "fmt" && task.identity.unit_id == key_for_root(unit))
             .map(|task| task.no_targets)
     };
-    assert_eq!(fmt_no_targets("root"), Some(false), "outer fmt runs");
+    assert_eq!(fmt_no_targets(""), Some(false), "outer fmt runs");
     assert_eq!(
         fmt_no_targets("stacks/a"),
         Some(true),
@@ -173,8 +175,8 @@ fn derive_tofu_inits_once_per_root() {
     assert_eq!(
         inits,
         [
-            "stack/tofu/stacks/a/init/default",
-            "stack/tofu/stacks/b/init/default",
+            "stack/tofu/dir-737461636b732f61/init/default",
+            "stack/tofu/dir-737461636b732f62/init/default",
         ],
         "duplicate statuses still derive one init per root"
     );

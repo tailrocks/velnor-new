@@ -13,18 +13,7 @@ use crate::impl_common::{
 };
 
 /// Release-enabled consumer config selecting the fixture crate.
-const OIDC_CONFIG: &str = "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n[stacks.rust.release]\nenabled = true\npackages = [\"demo\"]\n";
-
-/// Full generated tree with release enabled, in sorted path order.
-const RELEASE_FAMILY: [&str; 7] = [
-    ".github/AGENTS.md",
-    ".github/CLAUDE.md",
-    ".github/actionlint.yaml",
-    ".github/release-plz-bootstrap.toml",
-    ".github/release-plz.toml",
-    ".github/workflows/ci.yml",
-    ".github/workflows/release.yml",
-];
+const OIDC_CONFIG: &str = "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n[stacks.rust.release]\nenabled = true\npackages = [\"demo\"]\nexpected_owners = { demo = [\"user:1\"] }\n";
 
 /// Committed fixture repo with a GitHub origin (release identity inputs).
 fn release_repo(config: &str) -> Result<TempDir, Box<dyn std::error::Error>> {
@@ -46,7 +35,21 @@ fn release_repo(config: &str) -> Result<TempDir, Box<dyn std::error::Error>> {
 
 /// Expected family as owned strings for report comparison.
 fn family_vec() -> Vec<String> {
-    RELEASE_FAMILY.iter().map(ToString::to_string).collect()
+    let mut paths: Vec<String> = velnor_actions_workflow_renderer::release_tree::RELEASE_TREE_PATHS
+        .iter()
+        .map(ToString::to_string)
+        .collect();
+    paths.extend(
+        [
+            ".github/AGENTS.md",
+            ".github/CLAUDE.md",
+            ".github/actionlint.yaml",
+            ".github/workflows/ci.yml",
+        ]
+        .map(str::to_owned),
+    );
+    paths.sort();
+    paths
 }
 
 /// Forge bindings, omitted default registry, and checkout split (OIDC mode).
@@ -54,12 +57,12 @@ fn assert_oidc_release_shape(yaml: &str, head: &str) {
     assert_eq!(
         yaml.matches("GIT_TOKEN: ${{ secrets.GITHUB_TOKEN }}")
             .count(),
-        4,
+        3,
         "forge binding on every release-plz step:\n{yaml}"
     );
     assert_eq!(
         yaml.matches("secrets.").count(),
-        4,
+        3,
         "no secret outside the forge binding:\n{yaml}"
     );
     assert!(
@@ -68,8 +71,8 @@ fn assert_oidc_release_shape(yaml: &str, head: &str) {
     );
     assert_eq!(
         yaml.matches(&format!("ref: {head}")).count(),
-        2,
-        "source pin on preflight plus publish only:\n{yaml}"
+        3,
+        "source pin on preflight, publish, and reconciliation:\n{yaml}"
     );
     assert!(
         yaml.contains("--manifest-path release-source/Cargo.toml"),
@@ -157,7 +160,7 @@ fn release_enabled_emits_family_oidc() -> TestResult {
     assert!(yaml.contains("environment: release"), "pinned env");
     assert!(yaml.contains("id-token: write"), "oidc grant");
     assert!(
-        !yaml.contains("CARGO_REGISTRY_TOKEN"),
+        !yaml.contains("secrets.CARGO_REGISTRY_TOKEN"),
         "oidc carries no token"
     );
     assert_oidc_release_shape(&yaml, &head);
@@ -197,7 +200,7 @@ fn release_emission_is_byte_deterministic() -> TestResult {
 }
 
 #[test]
-fn release_bootstrap_mode_adds_token_job() -> TestResult {
+fn release_bootstrap_mode_uses_only_token_job() -> TestResult {
     let repo = make_repo(config_with_branch())?;
     let root = repo.path();
     git(
@@ -213,7 +216,7 @@ fn release_bootstrap_mode_adds_token_job() -> TestResult {
     git(&["commit", "-m", "bootstrap fixture"], root)?;
     let head = git_line(&["rev-parse", "HEAD"], root)?;
     let config = format!(
-        "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n[stacks.rust.release]\nenabled = true\npackages = [\"demo\"]\nauthentication = \"bootstrap-token\"\n[stacks.rust.release.bootstrap]\npackage = \"demo\"\nversion = \"0.1.0\"\nsource_sha = \"{head}\"\n"
+        "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n[stacks.rust.release]\nenabled = true\npackages = [\"demo\"]\nexpected_owners = {{ demo = [\"user:1\"] }}\nauthentication = \"bootstrap-token\"\n[stacks.rust.release.bootstrap]\npackage = \"demo\"\nversion = \"0.1.0\"\nsource_sha = \"{head}\"\n"
     );
     fs::write(root.join(".velnor/config.toml"), config)?;
     let prep = prepare(root)?;
@@ -239,22 +242,22 @@ fn release_bootstrap_mode_adds_token_job() -> TestResult {
     );
     assert_eq!(
         yaml.matches("--config .github/release-plz.toml").count(),
-        3,
-        "preparation, oidc publish, and reconcile keep the normal config:\n{yaml}"
+        1,
+        "preparation keeps the normal config:\n{yaml}"
     );
     assert!(
         yaml.contains("${{ secrets.CARGO_REGISTRY_TOKEN }}"),
         "single registry binding"
     );
     assert_eq!(
-        yaml.matches("CARGO_REGISTRY_TOKEN").count(),
-        2,
-        "exactly one registry binding (key plus ref)"
+        yaml.matches("secrets.CARGO_REGISTRY_TOKEN").count(),
+        1,
+        "exactly one registry secret binding"
     );
     assert_eq!(
         yaml.matches("GIT_TOKEN: ${{ secrets.GITHUB_TOKEN }}")
             .count(),
-        5,
+        3,
         "forge binding on every release-plz step:\n{yaml}"
     );
     assert!(
@@ -264,11 +267,11 @@ fn release_bootstrap_mode_adds_token_job() -> TestResult {
     assert_eq!(
         yaml.matches(&format!("ref: {head}")).count(),
         3,
-        "source pin on preflight plus both publishers:\n{yaml}"
+        "source pin on preflight, bootstrap, and reconciliation:\n{yaml}"
     );
     assert!(
         yaml.contains("github.event.inputs.version == '0.1.0'"),
-        "publishers gate on the bootstrap version:\n{yaml}"
+        "bootstrap publisher gates on its exact version:\n{yaml}"
     );
     assert!(
         yaml.contains("version:") && yaml.contains("0.1.0"),
@@ -279,7 +282,7 @@ fn release_bootstrap_mode_adds_token_job() -> TestResult {
 
 #[test]
 fn release_without_release_pr_validates_instead() -> TestResult {
-    let config = "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n[stacks.rust.release]\nenabled = true\npackages = [\"demo\"]\nrelease_pr = false\n";
+    let config = "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n[stacks.rust.release]\nenabled = true\npackages = [\"demo\"]\nexpected_owners = { demo = [\"user:1\"] }\nrelease_pr = false\n";
     let repo = release_repo(config)?;
     let tree = render_staged_tree(&prepare(repo.path())?)?;
     let yaml = tree
@@ -307,7 +310,7 @@ fn release_requires_origin_identity() -> TestResult {
 
 #[test]
 fn release_unknown_package_fails_closed() -> TestResult {
-    let config = "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n[stacks.rust.release]\nenabled = true\npackages = [\"nope\"]\n";
+    let config = "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n[stacks.rust.release]\nenabled = true\npackages = [\"nope\"]\nexpected_owners = { nope = [\"user:1\"] }\n";
     let repo = release_repo(config)?;
     let prep = prepare(repo.path())?;
     let err = err_of(render_staged_tree(&prep), "unknown package")?;
@@ -326,7 +329,7 @@ fn release_bootstrap_mismatch_fails_closed() -> TestResult {
         ("demo", "9.9.9", "bootstrap_version_mismatch"),
     ] {
         let config = format!(
-            "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n[stacks.rust.release]\nenabled = true\npackages = [\"demo\"]\nauthentication = \"bootstrap-token\"\n[stacks.rust.release.bootstrap]\npackage = \"{package}\"\nversion = \"{version}\"\nsource_sha = \"{head}\"\n"
+            "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n[stacks.rust.release]\nenabled = true\npackages = [\"demo\"]\nexpected_owners = {{ demo = [\"user:1\"] }}\nauthentication = \"bootstrap-token\"\n[stacks.rust.release.bootstrap]\npackage = \"{package}\"\nversion = \"{version}\"\nsource_sha = \"{head}\"\n"
         );
         let repo = release_repo(&config)?;
         let prep = prepare(repo.path())?;
@@ -339,7 +342,7 @@ fn release_bootstrap_mismatch_fails_closed() -> TestResult {
 #[test]
 fn release_velnor_policy_rejects_enabled() -> TestResult {
     without_ambient_identity("release_velnor_policy_rejects_enabled", || {
-        let config = "schema = 1\n[workflow]\ndefault_branch = \"testmain\"\npolicy = \"velnor-repository-v1\"\n[stacks.rust.release]\nenabled = true\npackages = [\"demo\"]\n";
+        let config = "schema = 1\n[workflow]\ndefault_branch = \"testmain\"\npolicy = \"velnor-repository-v1\"\n[stacks.rust.release]\nenabled = true\npackages = [\"demo\"]\nexpected_owners = { demo = [\"user:1\"] }\n";
         let repo = make_repo(config)?;
         let git_config = repo.path().join(".git/config");
         let mut text = fs::read_to_string(&git_config)?;
@@ -353,4 +356,39 @@ fn release_velnor_policy_rejects_enabled() -> TestResult {
         );
         Ok(())
     })
+}
+
+#[test]
+fn bootstrap_record_cannot_authorize_another_package() -> TestResult {
+    let repo = release_repo(config_with_branch())?;
+    let root = repo.path();
+    let manifest = fs::read_to_string(root.join("Cargo.toml"))?;
+    fs::write(
+        root.join("Cargo.toml"),
+        format!("{manifest}\n[workspace]\nmembers = [\"helper\"]\n"),
+    )?;
+    fs::create_dir_all(root.join("helper/src"))?;
+    fs::write(
+        root.join("helper/Cargo.toml"),
+        "[package]\nname=\"helper\"\nversion=\"0.1.0\"\nedition=\"2024\"\n",
+    )?;
+    fs::write(root.join("helper/src/lib.rs"), "pub fn helper() {}\n")?;
+    git(&["add", "."], root)?;
+    git(&["commit", "-m", "add selected package"], root)?;
+    let head = git_line(&["rev-parse", "HEAD"], root)?;
+    fs::write(
+        root.join(".velnor/config.toml"),
+        format!(
+            "schema=1\n[workflow]\nname=\"CI\"\ndefault_branch=\"testmain\"\n[stacks.rust.release]\nenabled=true\npackages=[\"demo\",\"helper\"]\nexpected_owners={{demo=[\"user:1\"],helper=[\"user:1\"]}}\nauthentication=\"bootstrap-token\"\n[stacks.rust.release.bootstrap]\npackage=\"demo\"\nversion=\"0.1.0\"\nsource_sha=\"{head}\"\n"
+        ),
+    )?;
+    let error =
+        render_staged_tree(&prepare(root)?).expect_err("one record cannot expand its package set");
+    assert!(
+        error
+            .to_string()
+            .contains("bootstrap_record_requires_exact_single_package"),
+        "{error}"
+    );
+    Ok(())
 }

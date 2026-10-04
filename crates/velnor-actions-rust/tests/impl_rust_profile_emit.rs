@@ -29,7 +29,6 @@ fn profile_group(kind: TaskKind, runner: TestRunner) -> TaskGroup {
         uses_network: false,
         uses_clock: false,
         uses_random: false,
-        run_ignored: None,
         nextest_profile: NextestProfile::Default,
     }
 }

@@ -3,9 +3,7 @@
 //! Declared via `#[path]` from `internal_plan.rs` under `cfg(test)`.
 
 use super::identities::*;
-use velnor_actions_contract::cachekey::{
-    FormatInputs, ToolchainInputs, cache_format_id, mbx_cache_generation, toolchain_id,
-};
+use velnor_actions_contract::cachekey::{ToolchainInputs, toolchain_id};
 use velnor_actions_contract::component_id_for_unit;
 use velnor_actions_contract::{ProposedTask, digest_b3, validate_digest};
 use velnor_actions_mise::ToolCatalog;
@@ -36,7 +34,6 @@ fn group(kind: TaskKind, task_id: &str, driver: CompileDriver, runner: TestRunne
         uses_network: false,
         uses_clock: false,
         uses_random: false,
-        run_ignored: None,
         nextest_profile: NextestProfile::Default,
     };
     let task = velnor_actions_rust::propose_task(&group).expect("fixture proposes");
@@ -176,30 +173,6 @@ fn formats_stay_single_and_graphs_relocate() {
 }
 
 #[test]
-fn cache_format_identity_tracks_emitted_mbx_generation() {
-    let version = velnor_actions_mise::catalog::MR_BOXINGTON_VERSION;
-    let generation = mbx_cache_generation(version);
-    let current = cache_format_id(&FormatInputs {
-        adapter: "mbx".to_owned(),
-        format: "velnor-cache-v1".to_owned(),
-        generation,
-    })
-    .expect("current MBX format identity");
-    let stale = cache_format_id(&FormatInputs {
-        adapter: "mbx".to_owned(),
-        format: "velnor-cache-v1".to_owned(),
-        generation: mbx_cache_generation("1.21.0"),
-    })
-    .expect("stale MBX format identity");
-
-    assert_eq!(cache_format_id_for(CompileDriver::Mbx), current);
-    assert_ne!(
-        current, stale,
-        "a cache generation change must re-key identity"
-    );
-}
-
-#[test]
 fn compiler_spec_versions_flip_the_digest() {
     let inputs = |tools: Vec<String>| ToolchainInputs {
         tools,
@@ -255,7 +228,7 @@ fn tofu_task(kind: &str) -> ProposedTask {
     use std::ffi::OsString;
     use velnor_actions_contract::{CachePolicy, IdentityInputs, ResourceClass, ResourceDemand};
     ProposedTask {
-        task_id: format!("stack/tofu/root/{kind}/default"),
+        task_id: format!("stack/tofu/dir-/{kind}/default"),
         stack_id: "tofu".to_owned(),
         component_id: "tofu:".to_owned(),
         task_kind: kind.to_owned(),
@@ -278,7 +251,7 @@ fn tofu_task(kind: &str) -> ProposedTask {
         },
         identity: IdentityInputs {
             unit_id: String::new(),
-            unit_key: "root".to_owned(),
+            unit_key: "dir-".to_owned(),
             unit_path: String::new(),
             project_root: ".".to_owned(),
             target: "host".to_owned(),
@@ -351,6 +324,8 @@ fn tofu_cache_format_is_distinct_and_valid() {
 /// Minimal discovery with no workspaces or tool checks.
 fn empty_discovery() -> crate::discover::Discovery {
     crate::discover::Discovery {
+        rust_inventory: None,
+        raw_inventories: Vec::new(),
         statuses: Vec::new(),
         workspaces: Vec::new(),
         proposals: Vec::new(),

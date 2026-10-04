@@ -5,11 +5,11 @@ use velnor_actions_contract::{FreshnessRequirement, digest_b3};
 use velnor_actions_mise::cache::mode_for_event;
 use velnor_actions_mise::catalog::lock::{parse_version_policy, verify_policy_header};
 use velnor_actions_mise::{
-    ARCHIVE_FILE, ArchiveIdentityInputs, MISSING_RECOMMENDED_INPUT, MissReason, NextestArchive,
-    NextestDriver, PinnedTool, RUST_VERSION, SaveInputs, TOOLING_INPUT_INVALID, ToolCatalog,
-    archive_identity, archive_write_required, check_freshness_requirements, count_inventory_tests,
-    inspect_mise_file, is_allowed_mise_subcommand, is_mise_env_symbol, lock_tool_versions,
-    requires_archive_transfer, save_decision, save_useful, stack_for_symbol, writers_overlap,
+    ARCHIVE_FILE, ArchiveIdentityInputs, MISSING_RECOMMENDED_INPUT, NextestArchive, NextestDriver,
+    PinnedTool, RUST_VERSION, TOOLING_INPUT_INVALID, ToolCatalog, archive_identity,
+    archive_write_required, check_freshness_requirements, count_inventory_tests, inspect_mise_file,
+    is_allowed_mise_subcommand, is_mise_env_symbol, lock_tool_versions, requires_archive_transfer,
+    save_useful, stack_for_symbol, writers_overlap,
 };
 
 #[test]
@@ -24,55 +24,6 @@ fn fork_event_is_read_only() {
         TaskCacheMode::Off
     );
     assert!(mode_for_event("bogus").is_err());
-}
-
-#[test]
-fn save_decision_denies_with_reasons() {
-    let save = |trust: &str, event: &str, passed: bool| {
-        save_decision(&SaveInputs {
-            layer_trust: trust,
-            event,
-            passed,
-            unavailable: false,
-            active_writer: false,
-        })
-    };
-    assert_eq!(save("trusted", "push", true), Ok(()));
-    assert_eq!(save("pr", "push", true), Ok(()));
-    for (trust, event, passed) in [
-        ("trusted", "pull_request", true),
-        ("trusted", "push", false),
-        ("pr", "pull_request", true),
-        ("pr", "pull_request", false),
-        ("pr", "push", false),
-        ("pr", "merge_group", true),
-        ("pr", "fork", true),
-        ("pr", "release", true),
-        ("pr", "local", true),
-        ("unknown", "push", true),
-    ] {
-        assert_eq!(
-            save(trust, event, passed),
-            Err(MissReason::CACHE_WRITE_DISABLED),
-            "{trust} {event} {passed}"
-        );
-    }
-    let down = save_decision(&SaveInputs {
-        layer_trust: "pr",
-        event: "push",
-        passed: true,
-        unavailable: true,
-        active_writer: false,
-    });
-    assert_eq!(down, Err(MissReason::CACHE_UNAVAILABLE));
-    let overlap = save_decision(&SaveInputs {
-        layer_trust: "pr",
-        event: "push",
-        passed: true,
-        unavailable: false,
-        active_writer: true,
-    });
-    assert_eq!(overlap, Err(MissReason::CACHE_WRITE_DISABLED));
 }
 
 #[test]

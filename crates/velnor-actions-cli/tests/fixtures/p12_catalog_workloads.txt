@@ -1,0 +1,61 @@
+//! Exact native workload pins; qualification sources checked 2026-10-03.
+
+/// Bun `bun-v1.4.2`, qualified against immutable Parallax install/build/test/browser commands.
+/// Source: `https://github.com/oven-sh/bun/releases/tag/bun-v1.4.2`; checked 2026-10-03.
+pub const BUN_VERSION: &str = "1.4.2";
+/// Swift release `swift-6.4.0-RELEASE`; Mise core installs the macOS package.
+/// Requires Xcode SDKs on macOS; Linux artifacts require compatible glibc libraries.
+pub const SWIFT_VERSION: &str = "6.4.0";
+/// Ruby stable release `v4.0.7`; Mise core uses ruby-build.
+/// Installing Ruby requires the platform's compiler and development libraries.
+pub const RUBY_VERSION: &str = "4.0.7";
+/// REUSE pin from the jackin canary lock; upstream tag `v6.2.0` exists.
+/// The pipx backend requires a Python runtime and pipx or uv installation.
+pub const REUSE_VERSION: &str = "6.2.0";
+/// Community GraalVM selection owned by the qualified distribution registry.
+pub const JAVA_VERSION: &str = super::qualification::JAVA_SELECTION_VERSION;
+/// Managed Gradle selection; consumer wrapper and bootstrap pins stay separate.
+pub const GRADLE_VERSION: &str = super::qualification::GRADLE_SELECTION_VERSION;
+
+/// CPython `v3.14.8`, qualified against the source-bound REUSE 6.2.0 workload.
+/// Runtime provider: Astral python-build-standalone `20261001` (separate artifact identity).
+/// Source: `https://github.com/python/cpython/tree/v3.14.8`; checked 2026-10-03.
+pub const PYTHON_VERSION: &str = "3.14.8";
+/// uv `0.12.22`, qualified with Python 3.14.8 against source-bound REUSE 6.2.0.
+/// Source: `https://github.com/astral-sh/uv/releases/tag/0.12.22`; checked 2026-10-03.
+pub const UV_VERSION: &str = "0.12.22";
+
+/// Cargo audit release `cargo-audit/v0.22.2`, matching the canary pin.
+pub const CARGO_AUDIT_VERSION: &str = "0.22.2";
+/// Cargo deny release `0.20.2`, matching the canary pin.
+pub const CARGO_DENY_VERSION: &str = "0.20.2";
+/// Alint release `v0.17.0`, qualified against the actual repository config.
+/// Source: `https://github.com/asamarts/alint/releases/tag/v0.17.0`; checked 2026-10-03.
+pub const ALINT_VERSION: &str = "0.17.0";
+
+/// Node.js `v24.21.0` (24 LTS), qualified against immutable Java wallet package commands.
+/// Source: `https://github.com/nodejs/node/releases/tag/v24.21.0`; checked 2026-10-03.
+pub const NODE_VERSION: &str = "24.21.0";
+
+/// Native addon ABI for Node 24.21.0, verified in upstream `src/node_version.h`.
+pub const NODE_MODULE_ABI_VERSION: &str = "137";
+/// npm bundled by Node 24.21.0, verified in upstream `deps/npm/package.json`.
+pub const NODE_NPM_VERSION: &str = "11.19.0";
+
+/// Boltffi release `v0.30.1`, matching the desktop canary's crate pin.
+/// Source: `https://github.com/boltffi/boltffi/releases/tag/v0.30.1`; checked 2026-10-03.
+pub const BOLTFFI_VERSION: &str = "0.30.1";
+/// XcodeGen release `2.46.0`, matching the desktop canary lock.
+/// Source: `https://github.com/yonaskolb/XcodeGen/releases/tag/2.46.0`; checked 2026-10-03.
+pub const XCODEGEN_VERSION: &str = "2.46.0";
+
+/// jq release `jq-1.8.2`, matching the tap fixture tool requirement.
+/// Source: `https://github.com/jqlang/jq/releases/tag/jq-1.8.2`; checked 2026-10-03.
+pub const JQ_VERSION: &str = "1.8.2";
+
+/// SwiftLint release `0.65.1`, matching the immutable desktop canary lock.
+/// Source: `https://github.com/realm/SwiftLint/releases/tag/0.65.1`; checked 2026-10-03.
+pub const SWIFTLINT_VERSION: &str = "0.65.1";
+/// Periphery release `3.8.0`, matching the immutable desktop canary lock.
+/// Source: `https://github.com/peripheryapp/periphery/releases/tag/3.8.0`; checked 2026-10-03.
+pub const PERIPHERY_VERSION: &str = "3.8.0";

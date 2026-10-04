@@ -1,11 +1,15 @@
 //! Gate 4 renderer cases: MBX objects, cache actions, lane target dirs.
 
-use velnor_actions_contract::{Step, StepKind};
+use velnor_actions_contract::workflow::ir::CACHE_MODE_PUSH_WRITE_EXPR;
+use velnor_actions_contract::{Step, StepKind, WorkflowPolicy};
 use velnor_actions_workflow_renderer::steps::{
-    CompileDriver, MBX_CACHE_MODE_ENV, TOOLS_CACHE_PATH, TOOLS_RESTORE_NAME, TOOLS_SAVE_NAME,
-    cache_action_step, mbx_steps_for_driver, target_dir_for_lane, tools_cache_key,
+    CompilerDriver, MBX_CACHE_MODE_ENV, TOOLS_RESTORE_NAME, TOOLS_SAVE_NAME, cache_action_step,
+    checkout_step, mbx_objects_step, mbx_step_for_driver, target_dir_for_lane, tool_payload_paths,
     tools_restore_step, tools_save_step,
 };
+use velnor_actions_workflow_renderer::{RenderError, render_workflow_ir};
+
+use velnor_actions_workflow_renderer::cache_p08::mise_cache_key_for_tools;
 
 use super::impl_renderer_fixtures::*;
 
@@ -14,12 +18,13 @@ fn sha() -> &'static str {
     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 }
 
-/// Step kinds stay closed: action, shell, internal — no parallel syntax.
+/// Step kinds stay closed; source helpers carry their own authority.
 fn kind_name(step: &Step) -> &'static str {
     match &step.kind {
         StepKind::Action { .. } => "action",
         StepKind::Shell { .. } => "shell",
         StepKind::Internal { .. } => "internal",
+        StepKind::SourceBoundHelper { .. } => "source-bound-helper",
     }
 }
 
@@ -32,6 +37,50 @@ fn step_kinds_have_no_parallel_syntax() {
         kind_name(&velnor_actions_workflow_renderer::steps::plan_step()),
         "internal"
     );
+}
+
+#[test]
+fn mbx_objects_step_pins_action_and_mode() {
+    let uses = format!("jdx/mr-boxington-action@{}", sha());
+    let step = mbx_objects_step(&uses, false, "1.19.0").expect("mbx");
+    assert_eq!(kind_name(&step), "action");
+    match &step.kind {
+        StepKind::Action {
+            uses: got, with, ..
+        } => {
+            assert!(got.starts_with("jdx/mr-boxington-action@"), "{got}");
+            assert_eq!(
+                with.get("github-cache-mode").map(String::as_str),
+                Some("objects")
+            );
+            assert_eq!(
+                with.get("version").map(String::as_str),
+                Some("1.19.0"),
+                "action installs the exact catalog pin, never latest"
+            );
+            assert!(!with.contains_key("mode"), "no such action input");
+        }
+        _ => panic!("mbx must be an action step"),
+    }
+    assert!(
+        mbx_objects_step(&uses, true, "1.19.0").is_err(),
+        "cargo profiles never emit MBX"
+    );
+    let other = format!("actions/cache/restore@{}", sha());
+    assert!(
+        mbx_objects_step(&other, false, "1.19.0").is_err(),
+        "wrong action rejected"
+    );
+    assert!(
+        mbx_objects_step("jdx/mr-boxington-action@main", false, "1.19.0").is_err(),
+        "unpinned rejected"
+    );
+    for bad in ["latest", "v1.19.0", "1.19", "1.19.0.1", "1.19.x", ""] {
+        assert!(
+            mbx_objects_step(&uses, false, bad).is_err(),
+            "loose mbx version {bad:?} must fail"
+        );
+    }
 }
 
 #[test]
@@ -124,89 +173,83 @@ fn cache_save_writes_task_artifacts_only() {
 }
 
 #[test]
-fn tools_cache_key_scopes_target_mise_generator_job_and_toolfiles() {
-    let key = tools_cache_key("x86_64-unknown-linux-gnu", "2026.9.16", "0.1.0", "plan")
+fn tools_cache_key_uses_only_explicit_catalog_and_platform_identity() {
+    let specs = ["rust@1.98.1".to_owned()];
+    let key = mise_cache_key_for_tools("x86_64-unknown-linux-gnu", "2026.9.16", &specs)
         .expect("tools key");
-    assert!(key.starts_with("mise-tools-v1-"), "{key}");
-    for part in [
-        "x86_64-unknown-linux-gnu",
-        "2026.9.16",
-        "0.1.0",
-        "plan",
-        "hashFiles('mise.toml','.mise.toml','mise.lock','.mise.lock','.tool-versions')",
+    assert!(key.starts_with("mise-v3-x86_64-unknown-linux-gnu-2026.9.16-"));
+    assert!(
+        !key.contains("hashFiles"),
+        "repository toolfiles never affect isolated catalog"
+    );
+    for (target, mise) in [
+        ("", "2026.9.16"),
+        ("x86_64-unknown-linux-gnu", "latest"),
+        ("wasm32-unknown-unknown", "2026.9.16"),
     ] {
-        assert!(key.contains(part), "key misses {part}: {key}");
+        assert!(mise_cache_key_for_tools(target, mise, &specs).is_err());
     }
-    assert!(!key.contains(' ') && !key.contains('\n'), "{key}");
+}
+
+#[test]
+fn tools_restore_and_save_share_complete_ordered_payload_and_implementation() {
+    let key = "mise-v3-x86_64-unknown-linux-gnu-2026.9.16-aaaaaaaaaaaaaaaa";
+    let restore = tools_restore_step(key).expect("restore");
+    let save = tools_save_step(key).expect("save");
+    assert_eq!(restore.name, TOOLS_RESTORE_NAME);
+    assert_eq!(save.name, TOOLS_SAVE_NAME);
+    let StepKind::Action {
+        uses: restore_uses,
+        with: restore_with,
+        ..
+    } = &restore.kind
+    else {
+        panic!("restore action");
+    };
+    let StepKind::Action {
+        uses: save_uses,
+        with: save_with,
+        ..
+    } = &save.kind
+    else {
+        panic!("save action");
+    };
+    assert_eq!(
+        restore_uses.split_once('@').expect("pin").1,
+        save_uses.split_once('@').expect("pin").1
+    );
+    let expected = [
+        "${{ runner.temp }}/velnor/mise",
+        "${{ runner.temp }}/velnor/rustup",
+        "${{ runner.temp }}/velnor/cargo/bin",
+        "${{ runner.temp }}/velnor/cargo/.crates.toml",
+        "${{ runner.temp }}/velnor/cargo/.crates2.json",
+    ]
+    .join("\n");
+    assert_eq!(tool_payload_paths().join("\n"), expected);
+    assert_eq!(restore_with.get("path"), save_with.get("path"));
+    assert_eq!(restore_with.get("path"), Some(&expected));
+    assert_eq!(restore_with.get("key").map(String::as_str), Some(key));
+    assert_eq!(restore_with.get("key"), save_with.get("key"));
+    assert!(
+        !restore_with.contains_key("restore-keys"),
+        "no unsafe broad tool fallback"
+    );
+    assert!(!save_with.contains_key("restore-keys"));
     for bad in [
-        ("", "2026.9.16", "0.1.0", "plan"),
-        ("x86_64-unknown-linux-gnu", "latest", "0.1.0", "plan"),
-        (
-            "x86_64-unknown-linux-gnu",
-            "2026.9.16",
-            "0.1.0",
-            "velnor plan",
-        ),
-        (
-            "x86_64-unknown-linux-gnu",
-            "2026.9.16",
-            "0.1.0",
-            "plan${{x}}",
-        ),
-        ("wasm32-unknown-unknown", "2026.9.16", "0.1.0", "plan"),
+        "$CARGO_HOME/registry",
+        "${{ runner.temp }}/velnor/cargo",
+        "~/.local/share/mise",
     ] {
         assert!(
-            tools_cache_key(bad.0, bad.1, bad.2, bad.3).is_err(),
-            "key accepted {bad:?}"
+            cache_action_step(true, restore_uses, "tools", key, &[], &[bad.to_owned()]).is_err(),
+            "tool archive must reject unowned {bad}"
         );
     }
 }
 
 #[test]
-fn tools_restore_and_save_pin_mise_data_dir_only() {
-    let key = tools_cache_key("x86_64-unknown-linux-gnu", "2026.9.16", "0.1.0", "plan")
-        .expect("tools key");
-    let restore = tools_restore_step(&key).expect("restore");
-    assert_eq!(restore.name, TOOLS_RESTORE_NAME);
-    let StepKind::Action { uses, with, .. } = &restore.kind else {
-        panic!("restore must be an action step");
-    };
-    assert!(uses.starts_with("actions/cache/restore@"), "{uses}");
-    assert_eq!(with.get("key").map(String::as_str), Some(key.as_str()));
-    assert_eq!(with.get("path").map(String::as_str), Some(TOOLS_CACHE_PATH));
-    assert!(
-        with.get("restore-keys")
-            .is_some_and(|keys| keys.starts_with("mise-tools-v1-")),
-        "restore carries a prefix key"
-    );
-    let save = tools_save_step(&key).expect("save");
-    assert_eq!(save.name, TOOLS_SAVE_NAME);
-    let StepKind::Action { uses, with, .. } = &save.kind else {
-        panic!("save must be an action step");
-    };
-    assert!(uses.starts_with("actions/cache/save@"), "{uses}");
-    assert_eq!(with.get("key").map(String::as_str), Some(key.as_str()));
-    assert_eq!(with.get("path").map(String::as_str), Some(TOOLS_CACHE_PATH));
-    assert!(
-        !with.contains_key("restore-keys"),
-        "save has no restore keys"
-    );
-    assert!(
-        cache_action_step(
-            true,
-            &format!("actions/cache/restore@{}", sha()),
-            "tools",
-            &key,
-            &[],
-            &["$CARGO_HOME/registry".to_owned()]
-        )
-        .is_err(),
-        "tools layer rejects non-mise paths"
-    );
-}
-
-#[test]
-fn strict_restores_builtin_and_saves_on_elected_writer()
+fn strict_restores_explicit_payload_without_consumer_export()
 -> Result<(), velnor_actions_workflow_renderer::RenderError> {
     use velnor_actions_workflow_renderer::checkout_step;
     let lint = job(
@@ -224,21 +267,32 @@ fn strict_restores_builtin_and_saves_on_elected_writer()
     let text = strict(&fixture_ir(vec![lint]), &fixture_ctx())?;
     let names = step_names(&text, "actionlint");
     assert!(
-        !names.iter().any(|s| s == TOOLS_RESTORE_NAME),
-        "P08: restores stay built-in: {names:?}"
+        names.iter().any(|s| s == TOOLS_RESTORE_NAME),
+        "explicit restore present: {names:?}"
     );
     assert_eq!(
         names.iter().filter(|s| *s == TOOLS_SAVE_NAME).count(),
-        1,
-        "P08: sole owner saves once: {names:?}"
+        0,
+        "consumer never saves executable payload: {names:?}"
     );
-    assert_eq!(
-        names.iter().position(|s| s == "Setup Mise"),
-        Some(1),
-        "setup right after checkout: {names:?}"
+    let restore = names
+        .iter()
+        .position(|s| s == TOOLS_RESTORE_NAME)
+        .expect("restore");
+    let setup = names
+        .iter()
+        .position(|s| s == velnor_actions_workflow_renderer::SETUP_MISE_NAME)
+        .expect("bootstrap");
+    assert!(
+        restore < setup,
+        "restored executable verified by bootstrap: {names:?}"
     );
-    for need in ["cache: \"true\"", "cache_key: mise-v1-"] {
-        assert!(text.contains(need), "built-in cache {need}:\n{text}");
+    for need in [
+        "VELNOR_MISE_VERSION:",
+        "VELNOR_MISE_SHA256:",
+        "key: mise-v3-",
+    ] {
+        assert!(text.contains(need), "explicit authority {need}:\n{text}");
     }
     Ok(())
 }
@@ -286,36 +340,54 @@ fn lane_target_dirs_stay_isolated() {
 #[test]
 fn mbx_objects_step_gates_save_to_push_via_cache_mode() {
     let uses = format!("jdx/mr-boxington-action@{}", sha());
-    let [_, direct] = mbx_tool_steps(&uses, "1.19.0", "1.98.1").expect("direct MBX steps");
-    let [_, driven] = mbx_steps_for_driver(
-        &uses,
-        CompileDriver::Mbx,
-        "1.19.0",
-        "1.98.1",
-        mbx_tool_env("1.98.1"),
-    )
-    .expect("driver MBX")
-    .expect("MBX driver emits");
+    let direct = mbx_objects_step(&uses, false, "1.19.0").expect("mbx");
+    let driven = mbx_step_for_driver(&uses, CompilerDriver::Mbx, "1.19.0")
+        .expect("driver mbx")
+        .expect("mbx driver emits");
     for step in [&direct, &driven] {
         let StepKind::Action { env, .. } = &step.kind else {
             panic!("mbx must be an action step");
         };
         assert_eq!(
             env.get(MBX_CACHE_MODE_ENV).map(String::as_str),
-            Some("read"),
-            "the action stays restore-only so its post cannot triple the store"
+            Some(CACHE_MODE_PUSH_WRITE_EXPR),
+            "every MBX step pins the push-only cache mode"
         );
     }
     assert!(
-        mbx_steps_for_driver(
-            &uses,
-            CompileDriver::Cargo,
-            "1.19.0",
-            "1.98.1",
-            mbx_tool_env("1.98.1"),
-        )
-        .expect("cargo driver")
-        .is_none(),
-        "cargo drivers emit no preflight or MBX step to gate"
+        mbx_step_for_driver(&uses, CompilerDriver::Cargo, "1.19.0")
+            .expect("cargo driver")
+            .is_none(),
+        "cargo drivers emit no MBX step to gate"
     );
+    // The mode expression must branch on the event: a constant `write`
+    // would reopen PR saves, a constant `read` would break push saves.
+    assert!(CACHE_MODE_PUSH_WRITE_EXPR.contains("github.event_name == 'push'"));
+    assert!(CACHE_MODE_PUSH_WRITE_EXPR.contains("'write'"));
+    assert!(CACHE_MODE_PUSH_WRITE_EXPR.contains("'read'"));
+}
+
+#[test]
+fn action_step_env_renders_only_when_present() -> Result<(), RenderError> {
+    let uses = format!("jdx/mr-boxington-action@{}", sha());
+    let mbx = mbx_objects_step(&uses, false, "1.19.0")?;
+    let plain = checkout_step(&checkout_pin())?;
+    let text = render_workflow_ir(
+        &fixture_ir(vec![job("demo", "Demo", Vec::new(), vec![plain, mbx])]),
+        WorkflowPolicy::ConsumerV1,
+        None,
+        &fixture_ctx(),
+    )?;
+    assert!(
+        text.contains(&format!(
+            "{MBX_CACHE_MODE_ENV}: {CACHE_MODE_PUSH_WRITE_EXPR}"
+        )),
+        "mbx mode renders on the step:\n{text}"
+    );
+    assert_eq!(
+        text.matches("env:").count(),
+        1,
+        "env-less action steps render no env map:\n{text}"
+    );
+    Ok(())
 }

@@ -10,7 +10,7 @@ use std::fs;
 use std::path::Path;
 use std::process::ExitCode;
 
-use velnor_actions_orchestrator::baseline_publish;
+use velnor_actions_orchestrator::{PublishOutputs, baseline_publish};
 
 /// Environment variable carrying the `$GITHUB_OUTPUT` path. Never printed.
 const GITHUB_OUTPUT_ENV: &str = "GITHUB_OUTPUT";
@@ -33,7 +33,7 @@ pub(crate) fn run_publish_internal(path: &Path) -> ExitCode {
     let Some(output_path) = env::var_os(GITHUB_OUTPUT_ENV).filter(|value| !value.is_empty()) else {
         return fail_internal("missing github output");
     };
-    let body = format!("artifact_name={}\n", outputs.artifact_name);
+    let body = output_body(&outputs);
     match fs::OpenOptions::new()
         .append(true)
         .create(true)
@@ -47,8 +47,41 @@ pub(crate) fn run_publish_internal(path: &Path) -> ExitCode {
     }
 }
 
+/// GitHub output protocol: retry status and the original evidence attempt.
+fn output_body(outputs: &PublishOutputs) -> String {
+    format!(
+        "artifact_name={}\nupload_needed={}\nbaseline_run_attempt={}\n",
+        outputs.artifact_name, outputs.upload_needed, outputs.baseline_run_attempt
+    )
+}
+
 /// Report a private failure without printing the private operation.
 fn fail_internal(problem: &str) -> ExitCode {
     eprintln!("velnor-actions: internal request failed: {problem}");
     ExitCode::from(1)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn retry_output_preserves_original_attempt_and_disables_upload() {
+        let outputs = PublishOutputs {
+            artifact_name: "velnor-baseline-existing".to_owned(),
+            upload_needed: false,
+            baseline_run_attempt: 1,
+        };
+        assert_eq!(
+            output_body(&outputs),
+            "artifact_name=velnor-baseline-existing\nupload_needed=false\nbaseline_run_attempt=1\n"
+        );
+        assert!(
+            output_body(&PublishOutputs {
+                upload_needed: true,
+                ..outputs
+            })
+            .contains("\nupload_needed=true\n")
+        );
+    }
 }

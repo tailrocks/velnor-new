@@ -1,8 +1,8 @@
 //! Crate-job ID assignment per stack prefix (T19 G1).
 use std::collections::BTreeSet;
 use velnor_actions_contract::{
-    CRATE_JOB_ID_PREFIX, TOFU_JOB_ID_PREFIX, assign_crate_job_ids, digest_b3, is_crate_job_id,
-    slugify_segment, validate_job_id,
+    CRATE_JOB_ID_PREFIX, TOFU_JOB_ID_PREFIX, WORKLOAD_JOB_ID_PREFIX, assign_crate_job_ids,
+    digest_b3, is_crate_job_id, slugify_segment, validate_job_id, workload_display_name,
 };
 
 /// One assignment input triple.
@@ -111,4 +111,27 @@ fn branding_gate_skips_both_crate_prefixes() {
     for id in ["plan", "required", "actionlint", "candidate"] {
         assert!(!is_crate_job_id(id), "{id}");
     }
+}
+
+#[test]
+fn workload_jobs_keep_their_namespace_and_kind_configuration() {
+    let inputs = [triple("workload:docs", "docs", "docs_build")]
+        .into_iter()
+        .collect();
+    let ids = assign_crate_job_ids(&inputs, WORKLOAD_JOB_ID_PREFIX);
+    let id = ids
+        .get(&("workload:docs".to_owned(), "docs_build".to_owned()))
+        .expect("workload ID");
+    assert_eq!(id, "workload-docs-docs-build");
+    assert!(is_crate_job_id(id));
+    assert!(validate_job_id("workload-velnor-docs").is_ok());
+    assert_eq!(
+        workload_display_name("docs", "docs_build"),
+        "Workload / docs (docs_build)"
+    );
+    assert_eq!(workload_display_name("docs", "default"), "Workload / docs");
+    assert_eq!(
+        workload_display_name("docs\n${{x}}", "docs_build"),
+        "Workload / docs?$?{{x}} (docs_build)"
+    );
 }

@@ -1,14 +1,5 @@
-//! Consumer release emission: selection plus release-tree assembly.
-//!
-//! Builds the release family (`release.yml` plus both effective
-//! configs) when `[stacks.rust.release].enabled` under `consumer-v1`;
-//! anything else yields no files. Selection reuses the Rust adapter's
-//! allowlist resolution over pinned `cargo metadata`; identities the
-//! config schema does not carry derive in
-//! [`crate::release_identity`], and jobs assemble in
-//! [`crate::release_steps`]. Publication-graph validation against live
-//! registry state stays a runtime preflight concern: generation runs
-//! no registry queries.
+//! Consumer release selection and source-qualified workflow assembly.
+//! Live registry proof stays in runtime helpers; generation queries no registry.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -16,29 +7,42 @@ use velnor_actions_contract::WorkflowPolicy;
 use velnor_actions_contract::config::{ReleaseAuthentication, RustReleaseConfig};
 use velnor_actions_mise::{MetadataDiscovery, ToolCatalog};
 use velnor_actions_rust::release_select::{
-    DEFAULT_REGISTRY, ReleaseRequest as SelectRequest, ReleaseScope, ReleaseSelection,
-    select_release_set,
+    ReleaseRequest as SelectRequest, ReleaseScope, ReleaseSelection, select_release_set,
 };
-use velnor_actions_workflow_renderer::release_config::{
-    BootstrapReleasePlzConfig, ReleasePlzConfig, ReleasePlzPackage,
-};
-use velnor_actions_workflow_renderer::release_jobs::ReleaseWorkflowSpec;
 use velnor_actions_workflow_renderer::release_spec::{
-    BootstrapPlan, DispatchInput, ReleaseTriggers, lock::stable_lock_group, publish_gate_condition,
-    validate_source_sha,
+    BootstrapPlan, DispatchInput, ReleaseTriggers, publish_gate_condition, validate_source_sha,
 };
 use velnor_actions_workflow_renderer::release_tree::{ReleaseRenderContext, render_release_files};
 use velnor_actions_workflow_renderer::{MiseSetup, render::RenderedFile};
 
+#[path = "release_bootstrap_approval.rs"]
+mod bootstrap_approval;
+#[path = "release_helper_approval.rs"]
+mod helper_approval;
+#[path = "release_admission.rs"]
+pub(crate) mod release_admission;
+#[path = "release_checkouts.rs"]
+pub(crate) mod release_checkouts;
+#[path = "release_identity.rs"]
+pub(crate) mod release_identity;
+#[path = "release_source_artifact_input.rs"]
+pub(crate) mod release_source_artifact_input;
+#[path = "release_steps.rs"]
+pub(crate) mod release_steps;
+#[path = "release_support_sources.rs"]
+mod release_support_sources;
+#[path = "release_workflow_spec.rs"]
+pub(crate) mod release_workflow_spec;
+use bootstrap_approval::approved_bootstrap;
+
 use crate::OrchestratorError;
 use crate::config::CONFIG_REL;
 use crate::prepare::GenerationPreparation;
-use crate::release_identity::{
-    common_registry, head_sha, origin_repository, plan_id_for_source, workspace_slug,
+use crate::release_emit::release_identity::{
+    common_registry, head_sha, origin_repository, plan_id_for_source,
 };
-use crate::release_steps::{JobInputs, assemble_jobs};
+use crate::release_emit::release_steps::JobInputs;
 
-/// Release workflow display name (fixed; config carries no workflow name).
 const RELEASE_WORKFLOW_NAME: &str = "Velnor Release";
 
 /// Render the release family, or nothing when release is not enabled.
@@ -57,13 +61,12 @@ pub(crate) fn release_files(
     let Some(release) = enabled_release(prep)? else {
         return Ok(Vec::new());
     };
-    if !release.version_groups.is_empty() {
-        return Err(OrchestratorError::unsupported(
-            "version_groups",
-            "native groups need renderer config support: remove version_groups",
-        ));
-    }
+    require_source_intent_qualification()?;
     let selection = select_packages(prep, release)?;
+    velnor_actions_rust::release_graph::validate_selected_dependency_obligations(&selection)
+        .map_err(|error| OrchestratorError::Contract {
+            problem: error.to_string(),
+        })?;
     if selection.is_empty() {
         return Err(OrchestratorError::Contract {
             problem: "release_nothing_selected".to_owned(),
@@ -86,42 +89,55 @@ pub(crate) fn release_files(
         &registry,
         version,
     );
-    let gate = publish_gate_condition(&repository, &bootstrap);
+    render_selected_release(prep, mise, release, &selection, bootstrap)
+}
+
+/// Repository code can mutate the packaging result before artifact upload.
+/// Release emission stays closed until a trusted source relation proves intent.
+fn require_source_intent_qualification() -> Result<(), OrchestratorError> {
+    Err(OrchestratorError::unsupported(
+        "release_source_intent",
+        "release_source_intent_unqualified",
+    ))
+}
+
+fn render_selected_release(
+    prep: &GenerationPreparation,
+    mise: &MiseSetup,
+    release: &RustReleaseConfig,
+    selection: &ReleaseSelection,
+    bootstrap: BootstrapPlan,
+) -> Result<Vec<RenderedFile>, OrchestratorError> {
+    let repository = bootstrap.repository.clone();
+    let source_sha = bootstrap.source_sha.clone();
+    let gate = publish_gate_condition(&repository, &bootstrap, &prep.default_branch);
     let catalog = ToolCatalog::pinned();
-    // Omit `--registry` for the cargo-implicit default: release-plz 0.3.169
-    // resolves the flag value from Cargo config, where that name is absent.
-    let registry_arg = (registry != DEFAULT_REGISTRY).then_some(registry.as_str());
-    let jobs = assemble_jobs(&JobInputs {
+    let reconciliation = crate::release_emit::release_steps::reconcile::approved_policy(
+        release, &bootstrap, &catalog,
+    )?;
+    let bootstrap_tools = approved_bootstrap(prep, mise)?;
+    let inputs = JobInputs {
+        selection,
         release,
         gate,
         sha: &source_sha,
-        registry: registry_arg,
+        repository: &repository,
+        branch: &prep.default_branch,
+        packages: &bootstrap.packages,
+        reconciliation: &reconciliation,
+        actual_registry: &bootstrap.registry,
         label: &prep.runner_label,
-        mise,
+        bootstrap_tools: &bootstrap_tools,
         catalog: &catalog,
-    })?;
-    let concurrency = stable_lock_group(
-        &registry,
-        &repository,
-        &workspace_slug(&release.manifest_path),
-    )?;
-    let spec = ReleaseWorkflowSpec {
-        name: RELEASE_WORKFLOW_NAME.to_owned(),
-        repository,
-        triggers: release_triggers(&prep.default_branch, &bootstrap),
-        concurrency,
-        jobs,
-        bootstrap,
-        publish_environment: release.environment.clone(),
-        bootstrap_environment: release.environment.clone(),
     };
+    let spec = release_workflow_spec::compile(&inputs)?;
+    release_source_artifact_input::validate_workflow(&inputs, &spec)?;
+    release_steps::reconcile::validate_prepared_workflow(&inputs, &spec)?;
     let ctx = ReleaseRenderContext {
         generator_version: env!("CARGO_PKG_VERSION").to_owned(),
         runs_on: prep.runner_label.clone(),
     };
-    let config = plz_config(release, &selection);
-    let bootstrap_config = BootstrapReleasePlzConfig::new(config.clone())?;
-    Ok(render_release_files(&spec, &ctx, &config, &bootstrap_config)?.as_sorted_vec())
+    Ok(render_release_files(&spec, &ctx)?.as_sorted_vec())
 }
 
 /// Borrow the active release section, enforcing the consumer-only policy.
@@ -147,6 +163,12 @@ pub(crate) fn enabled_release(
             CONFIG_REL,
             "stacks.rust.release.enabled",
             "release_requires_consumer_policy",
+        ));
+    }
+    if !release.version_groups.is_empty() {
+        return Err(OrchestratorError::unsupported(
+            "version_groups",
+            "native groups need renderer config support: remove version_groups",
         ));
     }
     Ok(Some(release))
@@ -242,6 +264,13 @@ fn check_bootstrap_record(
             "missing_bootstrap_record",
         ));
     };
+    if selection.packages.len() != 1 {
+        return Err(OrchestratorError::config(
+            CONFIG_REL,
+            "stacks.rust.release.packages",
+            "bootstrap_record_requires_exact_single_package",
+        ));
+    }
     let selected = selection
         .packages
         .iter()
@@ -344,24 +373,5 @@ fn release_triggers(branch: &str, bootstrap: &BootstrapPlan) -> ReleaseTriggers 
         push_branches: vec![branch.to_owned()],
         schedule: None,
         dispatch_inputs,
-    }
-}
-
-/// Effective normal-policy config: tag plus allowlist, no features.
-///
-/// The schema carries no `publish_features`, so emission sets none;
-/// `semver_check` stays true per the release contract.
-fn plz_config(release: &RustReleaseConfig, selection: &ReleaseSelection) -> ReleasePlzConfig {
-    ReleasePlzConfig {
-        tag_pattern: release.tag_name.clone(),
-        semver_check: true,
-        packages: selection
-            .packages
-            .iter()
-            .map(|package| ReleasePlzPackage {
-                name: package.name.clone(),
-                publish_features: Vec::new(),
-            })
-            .collect(),
     }
 }

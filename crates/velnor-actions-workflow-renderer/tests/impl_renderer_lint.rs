@@ -29,17 +29,27 @@ fn fixture_ctx() -> RenderContext {
         candidate: None,
         preseed: false,
         plan_consumer_env: std::collections::BTreeMap::new(),
+        source_helpers: Vec::new(),
+        native_pages_approvals: Vec::new(),
+        native_publish_approvals: Vec::new(),
     }
 }
 
 fn lint_job() -> Result<Job, RenderError> {
     Ok(Job {
+        cache_mode: None,
         display_name: LINT_DISPLAY.to_owned(),
         runs_on: LABEL.to_owned(),
         timeout_minutes: JobTimeout::VALIDATOR,
         needs: Vec::new(),
         condition: None,
         permissions: None,
+        tool_producer: None,
+        mbx_producer: None,
+        source_producer: None,
+        native_pages_deploy: None,
+        native_publish: None,
+        outputs: Vec::new(),
         environment: None,
         steps: vec![
             checkout_step(&checkout_pin())?,
@@ -68,12 +78,19 @@ fn fixture_ir() -> Result<WorkflowIr, RenderError> {
     jobs.insert(
         "plan".to_owned(),
         Job {
+            cache_mode: None,
             display_name: "Plan".to_owned(),
             runs_on: LABEL.to_owned(),
             timeout_minutes: JobTimeout::PLAN,
             needs: Vec::new(),
             condition: None,
             permissions: None,
+            tool_producer: None,
+            mbx_producer: None,
+            source_producer: None,
+            native_pages_deploy: None,
+            native_publish: None,
+            outputs: Vec::new(),
             environment: None,
             steps: vec![checkout_step(&checkout_pin())?],
         },
@@ -81,24 +98,34 @@ fn fixture_ir() -> Result<WorkflowIr, RenderError> {
     jobs.insert(
         "required".to_owned(),
         Job {
+            cache_mode: None,
             display_name: "Required".to_owned(),
             runs_on: LABEL.to_owned(),
             timeout_minutes: JobTimeout::REQUIRED,
             needs: vec!["plan".to_owned(), LINT_ID.to_owned()],
             condition: Some("always()".to_owned()),
             permissions: None,
+            tool_producer: None,
+            mbx_producer: None,
+            source_producer: None,
+            native_pages_deploy: None,
+            native_publish: None,
+            outputs: Vec::new(),
             environment: None,
             steps: vec![merge_step()],
         },
     );
     jobs.insert(LINT_ID.to_owned(), lint_job()?);
     Ok(WorkflowIr {
+        cache_mode: velnor_actions_contract::CacheMode::Read,
+        run_name: None,
         name: "CI".to_owned(),
         triggers: Trigger {
             pull_request_types: ["opened", "synchronize", "reopened", "ready_for_review"]
                 .iter()
                 .map(ToString::to_string)
                 .collect(),
+            push_tags: Vec::new(),
             push_branches: vec!["main".to_owned()],
             merge_group: true,
             workflow_dispatch: None,
@@ -206,11 +233,11 @@ fn velnor_policy_emits_full_sha_alint_pin() -> Result<(), RenderError> {
     )?;
     assert_eq!(
         ALINT_USES,
-        "asamarts/alint@9f9d34ba0eae3888299b9e570f43338b0e7f2cdb"
+        "asamarts/alint@d93c0283b19dd78afcd8a4b303f1556a7759ba81"
     );
     assert!(text.contains("  alint:"), "alint job missing:\n{text}");
     assert!(
-        text.contains("uses: asamarts/alint@9f9d34ba0eae3888299b9e570f43338b0e7f2cdb"),
+        text.contains("uses: asamarts/alint@d93c0283b19dd78afcd8a4b303f1556a7759ba81"),
         "full-SHA pin missing:\n{text}"
     );
     assert!(

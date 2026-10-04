@@ -1,0 +1,183 @@
+{
+  "scope": "Local synthetic native inventory correctness and Python tar roundtrip only; not hosted cache qualification or pinned actions/cache protocol proof",
+  "script_path": "crates/velnor-actions-workflow-renderer/src/cache_snapshot.sh",
+  "script_sha256": "60e763412d1497b7bb180b0d5b750e89d466884b295049ddf53dd7dd134a4cc0",
+  "host": {
+    "platform": "Darwin",
+    "release": "27.0.0",
+    "machine": "arm64",
+    "python": "3.14.8"
+  },
+  "archive_method": "Python tarfile uncompressed tar, relative payload roots, extractall filter=data, fresh temporary owned root",
+  "assertions": {
+    "bun_nested_git_mutation_changes_digest": true,
+    "bun_nested_tmp_mutation_changes_digest": true,
+    "bun_archive_roundtrip_preserves_digest_and_skips_save": true,
+    "npm_index_v5_is_ignored": true,
+    "npm_proof_deletion_changes_digest": true,
+    "npm_same_byte_proof_repair_enables_save": true,
+    "npm_archive_roundtrip_preserves_digest_and_skips_save": true
+  },
+  "cases": [
+    {
+      "case": "bun_initial",
+      "layer": "bun_downloads",
+      "phase": "before",
+      "roots": [
+        "native/bun/install/cache"
+      ],
+      "restored_key": "trusted-hit",
+      "returncode": 0,
+      "stdout": "velnor: bun_downloads snapshot phase=before files=3 bytes=43 hash_seconds=0 hash_resolution_seconds=1 digest=9f6966b0e99d5a78e82943296ca8c5d6ff0178bc92ae9250538985b16ed6c1cc\n",
+      "stderr": "",
+      "digest": "9f6966b0e99d5a78e82943296ca8c5d6ff0178bc92ae9250538985b16ed6c1cc",
+      "github_env": ""
+    },
+    {
+      "case": "bun_nested_git_changed",
+      "layer": "bun_downloads",
+      "phase": "before",
+      "roots": [
+        "native/bun/install/cache"
+      ],
+      "restored_key": "trusted-hit",
+      "returncode": 0,
+      "stdout": "velnor: bun_downloads snapshot phase=before files=3 bytes=43 hash_seconds=0 hash_resolution_seconds=1 digest=ac9096b9b5b0ceeb45c9bccab31d27610e311f32388c4af810cef4294f477268\n",
+      "stderr": "",
+      "digest": "ac9096b9b5b0ceeb45c9bccab31d27610e311f32388c4af810cef4294f477268",
+      "github_env": ""
+    },
+    {
+      "case": "bun_nested_tmp_changed",
+      "layer": "bun_downloads",
+      "phase": "before",
+      "roots": [
+        "native/bun/install/cache"
+      ],
+      "restored_key": "trusted-hit",
+      "returncode": 0,
+      "stdout": "velnor: bun_downloads snapshot phase=before files=3 bytes=43 hash_seconds=0 hash_resolution_seconds=1 digest=50502aa1dc8b28d21a037a061284b1f6524945d2d9110da49a5137f88de3033d\n",
+      "stderr": "",
+      "digest": "50502aa1dc8b28d21a037a061284b1f6524945d2d9110da49a5137f88de3033d",
+      "github_env": ""
+    },
+    {
+      "case": "bun_archive_restored_before",
+      "layer": "bun_downloads",
+      "phase": "before",
+      "roots": [
+        "native/bun/install/cache"
+      ],
+      "restored_key": "trusted-hit",
+      "returncode": 0,
+      "stdout": "velnor: bun_downloads snapshot phase=before files=3 bytes=43 hash_seconds=0 hash_resolution_seconds=1 digest=50502aa1dc8b28d21a037a061284b1f6524945d2d9110da49a5137f88de3033d\n",
+      "stderr": "",
+      "digest": "50502aa1dc8b28d21a037a061284b1f6524945d2d9110da49a5137f88de3033d",
+      "github_env": ""
+    },
+    {
+      "case": "bun_archive_restored_after",
+      "layer": "bun_downloads",
+      "phase": "after",
+      "roots": [
+        "native/bun/install/cache"
+      ],
+      "restored_key": "trusted-hit",
+      "returncode": 0,
+      "stdout": "velnor: bun_downloads snapshot phase=after files=3 bytes=43 hash_seconds=0 hash_resolution_seconds=1 digest=50502aa1dc8b28d21a037a061284b1f6524945d2d9110da49a5137f88de3033d\n",
+      "stderr": "",
+      "digest": "50502aa1dc8b28d21a037a061284b1f6524945d2d9110da49a5137f88de3033d",
+      "github_env": "VELNOR_BUN_DOWNLOADS_SNAPSHOT_DIGEST=50502aa1dc8b28d21a037a061284b1f6524945d2d9110da49a5137f88de3033d\nVELNOR_BUN_DOWNLOADS_SNAPSHOT_CHANGED=false\n"
+    },
+    {
+      "case": "npm_initial",
+      "layer": "npm_downloads",
+      "phase": "before",
+      "roots": [
+        "native/npm/_cacache/content-v2",
+        "native/npm/public-proof-v1.json"
+      ],
+      "restored_key": "trusted-hit",
+      "returncode": 0,
+      "stdout": "velnor: npm_downloads snapshot phase=before files=2 bytes=27 hash_seconds=1 hash_resolution_seconds=1 digest=d3eafca4be732d2185966886fa3bd105fb41b337e8d1488045612fc32b93abe7\n",
+      "stderr": "",
+      "digest": "d3eafca4be732d2185966886fa3bd105fb41b337e8d1488045612fc32b93abe7",
+      "github_env": ""
+    },
+    {
+      "case": "npm_index_v5_added",
+      "layer": "npm_downloads",
+      "phase": "before",
+      "roots": [
+        "native/npm/_cacache/content-v2",
+        "native/npm/public-proof-v1.json"
+      ],
+      "restored_key": "trusted-hit",
+      "returncode": 0,
+      "stdout": "velnor: npm_downloads snapshot phase=before files=2 bytes=27 hash_seconds=0 hash_resolution_seconds=1 digest=d3eafca4be732d2185966886fa3bd105fb41b337e8d1488045612fc32b93abe7\n",
+      "stderr": "",
+      "digest": "d3eafca4be732d2185966886fa3bd105fb41b337e8d1488045612fc32b93abe7",
+      "github_env": ""
+    },
+    {
+      "case": "npm_proof_deleted_before",
+      "layer": "npm_downloads",
+      "phase": "before",
+      "roots": [
+        "native/npm/_cacache/content-v2",
+        "native/npm/public-proof-v1.json"
+      ],
+      "restored_key": "trusted-hit",
+      "returncode": 0,
+      "stdout": "velnor: npm_downloads snapshot phase=before files=1 bytes=14 hash_seconds=0 hash_resolution_seconds=1 digest=76e6bfdf7e2c912d1b13c7e5bd88b83c1837d7585799ef81b253844cc16dcf72\n",
+      "stderr": "",
+      "digest": "76e6bfdf7e2c912d1b13c7e5bd88b83c1837d7585799ef81b253844cc16dcf72",
+      "github_env": ""
+    },
+    {
+      "case": "npm_proof_same_bytes_repaired_after",
+      "layer": "npm_downloads",
+      "phase": "after",
+      "roots": [
+        "native/npm/_cacache/content-v2",
+        "native/npm/public-proof-v1.json"
+      ],
+      "restored_key": "trusted-hit",
+      "returncode": 0,
+      "stdout": "velnor: npm_downloads snapshot phase=after files=2 bytes=27 hash_seconds=0 hash_resolution_seconds=1 digest=d3eafca4be732d2185966886fa3bd105fb41b337e8d1488045612fc32b93abe7\n",
+      "stderr": "",
+      "digest": "d3eafca4be732d2185966886fa3bd105fb41b337e8d1488045612fc32b93abe7",
+      "github_env": "VELNOR_NPM_DOWNLOADS_SNAPSHOT_DIGEST=d3eafca4be732d2185966886fa3bd105fb41b337e8d1488045612fc32b93abe7\nVELNOR_NPM_DOWNLOADS_SNAPSHOT_CHANGED=true\n"
+    },
+    {
+      "case": "npm_archive_restored_before",
+      "layer": "npm_downloads",
+      "phase": "before",
+      "roots": [
+        "native/npm/_cacache/content-v2",
+        "native/npm/public-proof-v1.json"
+      ],
+      "restored_key": "trusted-hit",
+      "returncode": 0,
+      "stdout": "velnor: npm_downloads snapshot phase=before files=2 bytes=27 hash_seconds=0 hash_resolution_seconds=1 digest=d3eafca4be732d2185966886fa3bd105fb41b337e8d1488045612fc32b93abe7\n",
+      "stderr": "",
+      "digest": "d3eafca4be732d2185966886fa3bd105fb41b337e8d1488045612fc32b93abe7",
+      "github_env": ""
+    },
+    {
+      "case": "npm_archive_restored_after",
+      "layer": "npm_downloads",
+      "phase": "after",
+      "roots": [
+        "native/npm/_cacache/content-v2",
+        "native/npm/public-proof-v1.json"
+      ],
+      "restored_key": "trusted-hit",
+      "returncode": 0,
+      "stdout": "velnor: npm_downloads snapshot phase=after files=2 bytes=27 hash_seconds=0 hash_resolution_seconds=1 digest=d3eafca4be732d2185966886fa3bd105fb41b337e8d1488045612fc32b93abe7\n",
+      "stderr": "",
+      "digest": "d3eafca4be732d2185966886fa3bd105fb41b337e8d1488045612fc32b93abe7",
+      "github_env": "VELNOR_NPM_DOWNLOADS_SNAPSHOT_DIGEST=d3eafca4be732d2185966886fa3bd105fb41b337e8d1488045612fc32b93abe7\nVELNOR_NPM_DOWNLOADS_SNAPSHOT_CHANGED=false\n"
+    }
+  ]
+}

@@ -1,8 +1,8 @@
 //! Tofu provider-cache step templates: saves plus the owned-path allowlist.
 //!
 //! Restore steps arrive from the orchestrator (per-root keys need the
-//! catalog tofu pin); saves append post-hoc through writer election
-//! ([`elect_tofu_provider_savers`](crate::cache_p08::elect_tofu_provider_savers)).
+//! catalog tofu pin). Only a standalone admitted source producer saves;
+//! validator consumers restore read-only.
 //! Both archive exactly one job-private plugin-cache dir, never the
 //! data dir beside it.
 

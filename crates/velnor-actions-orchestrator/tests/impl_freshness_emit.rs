@@ -93,6 +93,14 @@ fn freshness_preview_validates_and_writes() -> TestResult {
     without_ambient_identity("freshness_preview_validates_and_writes", || {
         let repo = make_velnor_repo(VELNOR_CONFIG)?;
         let prep = prepare(repo.path())?;
+        let helper_cold = "mbx_cache_cold:plan:";
+        assert!(
+            prep.discovery
+                .recommendations
+                .iter()
+                .all(|recommendation| { !recommendation.starts_with(helper_cold) }),
+            "helper outcomes arise only after current-source attach"
+        );
         let parent = TempDir::new()?;
         let preview = parent.path().join("preview");
         let report = generate(
@@ -101,6 +109,33 @@ fn freshness_preview_validates_and_writes() -> TestResult {
                 output_dir: Some(preview.clone()),
             },
         )?;
+        let cold: Vec<_> = report
+            .recommendations
+            .iter()
+            .filter(|recommendation| recommendation.starts_with(helper_cold))
+            .collect();
+        assert!(
+            !cold.is_empty(),
+            "public generate retains finalized helper outcomes"
+        );
+        let plan = velnor_actions_orchestrator::plan_text_checked(&prep)?;
+        for recommendation in cold {
+            assert!(
+                plan.contains(recommendation),
+                "plan shares generated outcome: {recommendation}"
+            );
+        }
+        assert!(
+            report
+                .files_written
+                .iter()
+                .all(|path| !path.starts_with(".github/velnor/mbx-source-draft-")),
+            "unqualified source domains produce no invented review drafts"
+        );
+        assert!(
+            !plan.contains(".github/velnor/mbx-source-draft-"),
+            "plan lists the same absent source drafts as generate"
+        );
         assert!(
             report.files_written.contains(&FRESHNESS_PATH.to_owned()),
             "written: {:?}",

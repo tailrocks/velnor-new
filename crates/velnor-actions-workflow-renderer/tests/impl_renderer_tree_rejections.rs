@@ -16,12 +16,13 @@ fn renderer_rejects_unpinned_actions_inside_ir() -> Result<(), RenderError> {
     let ctx = fixture_ctx();
     for (name, uses) in [
         ("Fetch", "actions/checkout@main"),
-        ("Run Alint", "asamarts/alint@v0.16.1"),
+        ("Run Alint", "asamarts/alint@v0.17.0"),
     ] {
         let mut ir = fixture_ir()?;
         ir.jobs.insert(
             "velnor-task".to_owned(),
             task_job(Step {
+                id: None,
                 name: name.to_owned(),
                 condition: None,
                 kind: StepKind::Action {
@@ -55,11 +56,11 @@ fn velnor_policy_emits_full_sha_alint_pin() -> Result<(), RenderError> {
     )?;
     assert_eq!(
         ALINT_USES,
-        "asamarts/alint@9f9d34ba0eae3888299b9e570f43338b0e7f2cdb"
+        "asamarts/alint@d93c0283b19dd78afcd8a4b303f1556a7759ba81"
     );
     assert!(text.contains("  alint:"), "alint job missing:\n{text}");
     assert!(
-        text.contains("uses: asamarts/alint@9f9d34ba0eae3888299b9e570f43338b0e7f2cdb"),
+        text.contains("uses: asamarts/alint@d93c0283b19dd78afcd8a4b303f1556a7759ba81"),
         "full-SHA pin missing:\n{text}"
     );
     assert!(

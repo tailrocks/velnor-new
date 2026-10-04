@@ -145,12 +145,12 @@ pub(crate) fn manifest_for(plan: &Plan, base: &str, tasks: &Json) -> Json {
     let workflow = velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
     let name = format!("velnor-baseline-{base}-{compat}");
     let numeric = baseline_artifact_numeric_id(&name);
-    serde_json::json!({"schema": 2, "repository_id": anchor_id(), "source_commit": base, "ref": "refs/heads/testmain", "event": "push", "workflow_ref": format!("o/r/{workflow}@refs/heads/testmain"), "run_id": 7, "run_attempt": 1, "final_status": "passed", "generator_version": plan.generator.version, "generator_sha256": plan.generator.sha256, "compatibility_id": compat, "artifact_id": numeric, "artifact_name": name, "tasks": tasks})
+    serde_json::json!({"schema": 2, "repository_id": anchor_id(), "source_commit": base, "ref": "refs/heads/testmain", "event": "push", "workflow_ref": format!("o/r/{workflow}@refs/heads/testmain"), "run_id": 7, "run_attempt": 1, "final_status": "passed", "generator_version": plan.generator.version, "generator_sha256": plan.generator.sha256, "compatibility_id": compat, "artifact_id": numeric, "parent": null, "artifact_name": name, "tasks": tasks})
 }
 
 /// Task entries binding every seed obligation exactly.
 pub(crate) fn entries_for(plan: &Plan) -> Json {
-    Json::Array(plan.obligations.iter().map(|ob| serde_json::json!({"task_id": ob.task_id, "task_digest": ob.task_digest, "input_digest": ob.input_digest, "closure_digest": ob.closure_digest, "proof_run_id": 7, "observed_run_id": 7})).collect())
+    Json::Array(plan.obligations.iter().map(|ob| serde_json::json!({"task_id": ob.task_id, "task_digest": ob.task_digest, "input_digest": ob.input_digest, "closure_digest": ob.closure_digest, "proof_run_id": 7, "carried_from": null, "observed_run_id": 7})).collect())
 }
 
 /// One test identity JSON value.
@@ -259,7 +259,7 @@ pub(crate) fn merge_status(
         &plan_value,
         &serde_json::to_value(reports).unwrap_or(Json::Null),
     );
-    let mut request = serde_json::json!({"schema": 1, "run_key": "local", "actual_event": plan_value.get("event").cloned().unwrap_or(Json::Null), "plan": plan, "matrix": plan.matrix, "matrix_reports": reports, "task_reports": task_files, "required_job_ids": ["plan"], "required_jobs": [{"job_id": "plan", "conclusion": "success"}], "shard_proofs": proofs});
+    let mut request = serde_json::json!({"schema": 1, "run_key": "local", "actual_scope": "affected", "actual_event": plan_value.get("event").cloned().unwrap_or(Json::Null), "plan": plan, "matrix": plan.matrix, "matrix_reports": reports, "task_reports": task_files, "required_job_ids": ["plan"], "required_jobs": [{"job_id": "plan", "conclusion": "success"}], "shard_proofs": proofs});
     for (key, value) in extra.as_object().ok_or("not an object")? {
         request[key] = value.clone();
     }

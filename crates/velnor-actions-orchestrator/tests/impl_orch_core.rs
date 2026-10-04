@@ -45,7 +45,7 @@ pub(crate) fn merge_request(
     serde_json::json!({
         "schema": 1,
         "run_key": "local",
-        "actual_event": plan.get("event").cloned().unwrap_or(serde_json::Value::Null),
+        "actual_scope": "affected", "actual_event": plan.get("event").cloned().unwrap_or(serde_json::Value::Null),
         "plan": plan,
         "matrix": matrix,
         "matrix_reports": reports,
@@ -55,9 +55,9 @@ pub(crate) fn merge_request(
     })
 }
 
-/// One successful required job.
-pub(crate) fn success_jobs() -> serde_json::Value {
-    serde_json::json!([{"job_id": "plan", "conclusion": "success"}])
+/// Successful conclusions for every owning job in the fixture plan.
+pub(crate) fn success_jobs(plan: &impl serde::Serialize) -> serde_json::Value {
+    crate::impl_merge::success_jobs(plan)
 }
 
 /// JSON helper result.
@@ -103,11 +103,11 @@ pub(crate) fn manifest_for(plan: &Plan, base: &str, branch: &str) -> WireResult 
         "run_id": 7, "run_attempt": 1, "final_status": "passed",
         "generator_version": plan.generator.version, "generator_sha256": plan.generator.sha256,
         "compatibility_id": digest, "artifact_id": numeric,
-        "artifact_name": name,
+        "parent": null, "artifact_name": name,
         "tasks": plan.obligations.iter().map(|ob| json!({"task_id": ob.task_id,
             "task_digest": ob.task_digest, "input_digest": ob.input_digest,
             "closure_digest": ob.closure_digest,
-            "proof_run_id": 7, "observed_run_id": 7})).collect::<Vec<_>>()}),
+            "proof_run_id": 7, "carried_from": null, "observed_run_id": 7})).collect::<Vec<_>>()}),
     )
 }
 
@@ -119,7 +119,7 @@ pub(crate) fn merge_request_for(plan: &Plan, reports: &[MatrixReport]) -> WireRe
         &plan,
         &plan["matrix"].clone(),
         &reports,
-        &success_jobs(),
+        &success_jobs(&plan),
     ))
 }
 

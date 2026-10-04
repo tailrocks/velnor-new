@@ -1,7 +1,7 @@
 //! Compiled pin resolution: Mise setup plus helper provenance.
 //!
 //! Resolves `[actions.overrides]` against the compiled approved-pair catalog,
-//! gates the installed-mise digest to the single x64-Linux runner target, and
+//! requires owned distribution qualification for the x64-Linux runner target, and
 //! builds digest-verified helper acquisition from release or lock provenance.
 //! Anything without provenance fails closed; no digest is ever invented.
 
@@ -13,7 +13,9 @@ use velnor_actions_contract::{
     GeneratorLock, ReleaseManifest, Step, VelnorConfig, check_release_artifact,
     target_for_runner_label,
 };
-use velnor_actions_mise::MISE_VERSION;
+use velnor_actions_mise::catalog::qualification::{
+    DistributionHost, DistributionRequirement, DistributionTool, QualifiedDistribution,
+};
 use velnor_actions_workflow_renderer::{
     HelperProvenance, MiseSetup, STAGED_BINARY_PREFIX, provision_acquire_step,
 };
@@ -21,29 +23,24 @@ use velnor_actions_workflow_renderer::{
 use crate::OrchestratorError;
 use crate::discover::Discovery;
 
+#[path = "generator_runtime_release.rs"]
+pub(crate) mod runtime_release;
+
 /// Override key selecting the Mise setup action pin.
 const MISE_ACTION_KEY: &str = "jdx/mise-action";
 
-/// Installed `mise` binary digest for mise 2026.9.18 on Linux x86-64.
-///
-/// Source: `SHASUMS256.txt` of the jdx/mise `v2026.9.18` release, verified
-/// 2026-09-30 by downloading `mise-v2026.9.18-linux-x64.tar.zst`, extracting
-/// `mise/bin/mise`, and hashing the extracted binary. The setup action
-/// compares its `sha256` input against the installed binary, not the archive,
-/// so only this digest is emitted, and only for x64-Linux runners.
-const MISE_BINARY_SHA256_LINUX_X64: &str =
-    "d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4";
-
-/// Runner target the compiled mise digest covers.
+/// Runner target supported by the owned distribution qualification gate.
 const LINUX_X64_TARGET: &str = "x86_64-unknown-linux-gnu";
 
 /// Resolve typed Mise setup pins: overrides plus the compiled catalog.
 ///
 /// The `uses` ref comes from `[actions.overrides]` when present (approved
 /// pairs only; anything else fails closed) or the compiled default pin.
-/// `version` is the compiled Mise release; `sha256` is the verified
-/// installed-binary digest, so non-x64-Linux labels fail closed rather than
-/// emitting a digest for the wrong architecture.
+/// Owned Mise publication/behavioral qualification is mandatory. Selected
+/// MBX distributions are gated by their source-bound installation factory.
+/// Missing records fail before workflow emission. The official setup action
+/// cannot yet acquire owned assets, so qualified records also require a
+/// source-bound bootstrap before this gate can admit setup.
 pub(crate) fn resolve_mise_setup(
     config: &VelnorConfig,
     label: &str,
@@ -53,10 +50,23 @@ pub(crate) fn resolve_mise_setup(
             problem: format!("mise_setup_unsupported_target:{label}"),
         });
     }
-    Ok(MiseSetup {
-        uses: mise_action_uses(config)?,
-        version: MISE_VERSION.to_owned(),
-        sha256: MISE_BINARY_SHA256_LINUX_X64.to_owned(),
+    let _approved_action = mise_action_uses(config)?;
+    let mise = QualifiedDistribution::require_for_generator(
+        DistributionTool::Mise,
+        DistributionHost::LinuxAmd64,
+        DistributionRequirement::RequiresNoMiserc,
+    )
+    .map_err(|error| OrchestratorError::Contract {
+        problem: error.to_string(),
+    })?;
+    // The official action cannot acquire the owned record's exact asset. Keep
+    // emission closed until a source-bound owned bootstrap is implemented.
+    Err(OrchestratorError::Contract {
+        problem: format!(
+            "owned_mise_requires_qualified_asset_acquisition:{}:{}",
+            mise.owner(),
+            mise.qualification_digest(),
+        ),
     })
 }
 
@@ -188,26 +198,14 @@ fn acquire_step(
         sha256: sha.to_owned(),
         commit: commit.to_owned(),
     };
-    Ok(provision_acquire_step(&provenance, acquire_argv(staged))?)
-}
-
-/// Fixed acquisition argv over the staged path plus asset env references.
-///
-/// Curl is pinned to HTTPS-only (`--proto '=https'`) over TLS 1.2+ and
-/// the staged path is defensively double-quoted (X12).
-fn acquire_argv(staged: &str) -> Vec<String> {
-    let dir = staged.rsplit_once('/').map_or(staged, |(head, _)| head);
-    let script = format!(
-        "mkdir -p \"{dir}\" && curl -fsSL --proto '=https' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"{staged}\" && echo \"$VELNOR_ASSET_SHA256  {staged}\" | sha256sum -c - && chmod +x \"{staged}\""
-    );
-    vec!["sh".to_owned(), "-c".to_owned(), script]
+    Ok(provision_acquire_step(&provenance, staged)?)
 }
 
 /// `cfg(test)`-only fixture manifest matching the workspace version.
 #[cfg(test)]
 fn test_manifest_json() -> String {
     let version = env!("CARGO_PKG_VERSION");
-    let targets = velnor_actions_contract::SUPPORTED_TARGETS
+    let targets = ["x86_64-unknown-linux-gnu", "aarch64-apple-darwin", "x86_64-apple-darwin"]
         .iter()
         .map(|target| {
             format!(

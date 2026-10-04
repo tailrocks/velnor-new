@@ -1,10 +1,11 @@
 //! Task identities: canonical graph, bundles, lanes, toolchains (P03).
 //! Declared via `#[path]` from `internal_plan.rs` (no `lib.rs` edit).
-
+#[path = "execution_identity.rs"]
+mod execution_identity;
+pub(crate) use execution_identity::{execution_identity_for, live_mbx_digest};
 use serde::{Deserialize, Serialize};
 use velnor_actions_contract::cachekey::{
-    FormatInputs, LaneInputs, ToolchainInputs, cache_format_id, lane_id, mbx_cache_generation,
-    toolchain_id,
+    FormatInputs, LaneInputs, ToolchainInputs, cache_format_id, lane_id, toolchain_id,
 };
 use velnor_actions_contract::{
     ContractError, ProposedTask, Stack, component_id_for_unit, digest_b3,
@@ -211,13 +212,13 @@ pub(crate) fn extension_bundle_with_snapshot(
     if !bundle.has_build_script {
         bundle.rerun_inputs = Some(Vec::new());
     }
-    if Stack::from_id(&task.stack_id) == Some(Stack::Tofu) {
-        // Tofu slots resolve through the tofu bridge (root lockfile);
+    if Stack::from_id(&task.stack_id) != Some(Stack::Rust) {
+        // Native adapter slots resolve through the tofu bridge (root lockfile);
         // the rust probes below would bind Cargo content instead.
         bundle.lock_digest =
-            velnor_actions_rust::tasks::DigestSlot::Unknown("tofu_adapter_owned".to_owned());
+            velnor_actions_rust::tasks::DigestSlot::Unknown("native_adapter_owned".to_owned());
         bundle.nextest_digest =
-            velnor_actions_rust::tasks::DigestSlot::Unknown("tofu_adapter_owned".to_owned());
+            velnor_actions_rust::tasks::DigestSlot::Unknown("native_adapter_owned".to_owned());
     } else if let Some(root) = root {
         bundle.lock_digest = super::closure_slots::lock_digest_at_root(root, &bundle.manifest);
         bundle.nextest_digest = super::closure_slots::nextest_digest_at_root(root, nextest_config);
@@ -235,6 +236,7 @@ pub(crate) fn platform_id_for_group(
     label: &str,
     task: &ProposedTask,
 ) -> Result<String, ContractError> {
+    let label = crate::workloads::runner_for_task(task, label);
     let target = if task.identity.target == "host" {
         velnor_actions_contract::target_for_runner_label(label).ok_or_else(|| {
             ContractError::identity(
@@ -306,20 +308,21 @@ pub(crate) fn lane_id_for(task: &ProposedTask, workspace_id: &str) -> String {
 /// Rust hardcodes the Rust/MBX/Nextest pinned tools; tofu pins
 /// `opentofu` plus the per-root provider-surface declaration (the
 /// provider inputs resolve per root through the tofu adapter).
-/// Neither stack may reuse the other's path or [`cache_format_id_for`].
+/// Native workload identity resolves through its vector authority.
 ///
 /// # Errors
-///
-/// Returns [`ContractError`] for proposals outside a registered stack
-/// or tofu kinds outside the known tokens.
+/// Returns [`ContractError`] for unsupported stack identities.
 pub(crate) fn toolchain_inputs_for(
     task: &ProposedTask,
     catalog: &ToolCatalog,
 ) -> Result<ToolchainInputs, ContractError> {
     match Stack::require_known(&task.stack_id)? {
         Stack::Rust => {}
+        Stack::Workload => {
+            return super::workload_identity::toolchain_inputs(task, catalog);
+        }
         Stack::Tofu => {
-            let specs = catalog.tool_specs(&[PinnedTool::Opentofu]);
+            let specs = catalog.tool_specs(&[PinnedTool::Opentofu])?;
             return velnor_actions_tofu::toolchain_inputs_for_task(task, specs);
         }
     }
@@ -331,7 +334,7 @@ pub(crate) fn toolchain_inputs_for(
     if needs.nextest {
         tools.push(PinnedTool::Nextest);
     }
-    let mut specs = catalog.tool_specs(&tools);
+    let mut specs = catalog.tool_specs(&tools)?;
     specs.sort();
     Ok(ToolchainInputs {
         tools: specs,
@@ -350,6 +353,9 @@ pub(crate) fn toolchain_digest_for(
     task: &ProposedTask,
     catalog: &ToolCatalog,
 ) -> Result<String, ContractError> {
+    if Stack::from_id(&task.stack_id) == Some(Stack::Workload) {
+        return crate::workloads::toolchain_id(task, catalog);
+    }
     toolchain_id(&toolchain_inputs_for(task, catalog)?)
 }
 
@@ -358,16 +364,10 @@ pub(crate) fn toolchain_digest_for(
 /// The single cache format is versioned here; the typed driver admits
 /// no unknown spelling, so no fallback digest can ever trigger.
 pub(crate) fn cache_format_id_for(driver: CompileDriver) -> String {
-    let generation = match driver {
-        CompileDriver::Cargo => "1".to_owned(),
-        CompileDriver::Mbx => {
-            mbx_cache_generation(velnor_actions_mise::catalog::MR_BOXINGTON_VERSION)
-        }
-    };
     if let Ok(id) = cache_format_id(&FormatInputs {
         adapter: driver.as_str().to_owned(),
         format: CACHE_FORMAT_LABEL.to_owned(),
-        generation,
+        generation: "1".to_owned(),
     }) {
         return id;
     }

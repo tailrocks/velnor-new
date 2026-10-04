@@ -12,22 +12,12 @@ pub enum Trust {
     Pr,
 }
 
-/// Canonical trust scope for one triggering event.
+/// Conservative trust scope when only the event is known.
 ///
-/// Only branch pushes run protected-branch content; pull requests,
-/// forks, local runs, and merge-group runs all execute unreviewed or
-/// speculative content under PR scope. Merge-group runs in particular
-/// test speculative merges of unreviewed PRs, so `Trusted` there would
-/// let PR content pollute trusted caches (consistent with baseline
-/// publish staying push-only). Single source for plan stamping and
-/// merge-time coherence.
+/// An event name cannot establish branch protection, default-branch identity,
+/// or repository source authority. Qualified runner context may establish
+/// `Trusted` separately; event-only callers always remain read-only.
 #[must_use]
-pub const fn trust_for_event(event: WorkflowEvent) -> Trust {
-    match event {
-        WorkflowEvent::Push => Trust::Trusted,
-        WorkflowEvent::PullRequest
-        | WorkflowEvent::Fork
-        | WorkflowEvent::Local
-        | WorkflowEvent::MergeGroup => Trust::Pr,
-    }
+pub const fn trust_for_event(_event: WorkflowEvent) -> Trust {
+    Trust::Pr
 }

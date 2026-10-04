@@ -1,9 +1,10 @@
 //! Staging-only zizmor config cases: zero-ignore staging config over full-SHA refs.
 
+use crate::git_fixture;
+
 use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use tempfile::TempDir;
 use velnor_actions_actionlint::actions::{
@@ -23,14 +24,21 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 /// Run git with inherited failure context.
 fn git(args: &[&str], cwd: &Path) -> TestResult {
-    let status = Command::new("git").args(args).current_dir(cwd).status()?;
+    let status = git_fixture::command(cwd)?
+        .args(args)
+        .current_dir(cwd)
+        .status()?;
     assert!(status.success(), "git {args:?} failed");
     Ok(())
 }
 
 /// Release-manifest fixture for `prepare`.
 fn manifest_json() -> String {
-    let targets = velnor_actions_contract::SUPPORTED_TARGETS
+    let targets = [
+        "x86_64-unknown-linux-gnu",
+        "aarch64-apple-darwin",
+        "x86_64-apple-darwin",
+    ]
     .iter()
     .map(|target| {
         format!(
@@ -56,7 +64,9 @@ fn binary_record(target: &str) -> String {
 
 /// Generator-lock fixture for Velnor-policy `prepare`.
 fn lock_text() -> String {
-    let bins = binary_record("x86_64-unknown-linux-gnu") + &binary_record("aarch64-apple-darwin");
+    let bins = binary_record("x86_64-unknown-linux-gnu")
+        + &binary_record("aarch64-apple-darwin")
+        + &binary_record("x86_64-apple-darwin");
     format!(
         "schema = 1\n[generator]\nbinary = \"velnor-actions\"\nversion = \"0.1.0\"\ncommit = \"{}\"\n{bins}[mise-bootstrap]\nversion = \"2026.9.18\"\nartifact = \"https://example.invalid/mise\"\nsha256 = \"{}\"\n",
         "e".repeat(40),

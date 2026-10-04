@@ -297,42 +297,6 @@ pub fn probe_tool_availability(qualified: bool, probe_failed: bool) -> ToolAvail
     }
 }
 
-/// Save-decision inputs for one cache layer (CACHE-2.x).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct SaveInputs<'a> {
-    /// Layer trust scope (`trusted` saves only on protected pushes).
-    pub layer_trust: &'a str,
-    /// Workflow event name.
-    pub event: &'a str,
-    /// Whether required checks passed.
-    pub passed: bool,
-    /// Cache backend unavailable.
-    pub unavailable: bool,
-    /// Another writer holds this layer (overlap guard).
-    pub active_writer: bool,
-}
-
-/// Decide one cache save: allowed, or denied with its miss reason.
-///
-/// Denials never fail tasks: save failures leave success successful and
-/// report `cache_write_disabled` or `cache_unavailable`.
-///
-/// # Errors
-///
-/// Returns the [`MissReason`] denying the save.
-pub fn save_decision(inputs: &SaveInputs<'_>) -> Result<(), MissReason> {
-    if inputs.unavailable {
-        return Err(MissReason::CACHE_UNAVAILABLE);
-    }
-    if inputs.active_writer {
-        return Err(MissReason::CACHE_WRITE_DISABLED);
-    }
-    if !crate::cache::save_allowed(inputs.layer_trust, inputs.event, inputs.passed) {
-        return Err(MissReason::CACHE_WRITE_DISABLED);
-    }
-    Ok(())
-}
-
 /// Whether a save carries a useful delta (CACHE-2.4).
 ///
 /// A restore hit with no content change, a cancelled task, or an empty
@@ -345,7 +309,7 @@ pub fn save_useful(unchanged_hit: bool, cancelled: bool, empty: bool) -> bool {
 /// Whether another active writer already claims `layer`.
 ///
 /// The orchestrator feeds its cache-ownership table; a claimed layer
-/// denies the save through [`SaveInputs::active_writer`].
+/// lets generated producers reject overlapping writer claims.
 #[must_use]
 pub fn writers_overlap(active_writers: &[String], layer: &str) -> bool {
     active_writers.iter().any(|writer| writer == layer)

@@ -36,6 +36,8 @@ impl PermissionLevel {
 pub struct JobPermissions {
     /// Repository contents access.
     pub contents: PermissionLevel,
+    /// Read-only CI run/job/artifact admission API.
+    pub actions: PermissionLevel,
     /// Pull-request access.
     pub pull_requests: PermissionLevel,
     /// OIDC token access.
@@ -48,29 +50,43 @@ impl JobPermissions {
     pub fn expected(role: ReleaseRole) -> Self {
         use PermissionLevel::{None, Read, Write};
         match role {
-            ReleaseRole::Preparation => Self {
-                contents: Write,
-                pull_requests: Write,
-                id_token: None,
-            },
-            ReleaseRole::Preflight => Self {
-                contents: Read,
+            ReleaseRole::PackagePreparedAnonymous => Self {
+                contents: None,
+                actions: None,
                 pull_requests: None,
                 id_token: None,
             },
-            ReleaseRole::PublishOidc => Self {
-                contents: Write,
-                pull_requests: Read,
-                id_token: Write,
-            },
-            ReleaseRole::PublishBootstrap => Self {
-                contents: Write,
-                pull_requests: Read,
+            ReleaseRole::PackageAnonymous | ReleaseRole::PreparationAnonymous => Self {
+                contents: Read,
+                actions: None,
+                pull_requests: None,
                 id_token: None,
             },
-            ReleaseRole::Reconcile => Self {
+            ReleaseRole::SourceSnapshotForge
+            | ReleaseRole::PreflightForge
+            | ReleaseRole::Reconcile
+            | ReleaseRole::RegistryPublishBootstrap => Self {
                 contents: Read,
-                pull_requests: Read,
+                actions: Read,
+                pull_requests: None,
+                id_token: None,
+            },
+            ReleaseRole::RegistryPublishOidc => Self {
+                contents: Read,
+                actions: Read,
+                pull_requests: None,
+                id_token: Write,
+            },
+            ReleaseRole::ForgePublish => Self {
+                contents: Write,
+                actions: Read,
+                pull_requests: None,
+                id_token: None,
+            },
+            ReleaseRole::PreparationForge => Self {
+                contents: Write,
+                actions: Read,
+                pull_requests: Write,
                 id_token: None,
             },
         }

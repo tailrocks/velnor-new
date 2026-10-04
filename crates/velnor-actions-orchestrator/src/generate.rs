@@ -2,12 +2,16 @@
 //! In-place commits exchange atomically on Linux/macOS, else fall back
 //! to a guarded two-rename commit preserving old output on failure.
 
-use std::path::{Path, PathBuf};
+use std::{
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+};
 
 use velnor_actions_actionlint::render_actionlint_yaml;
-use velnor_actions_contract::{ExecutionMode, expand_workflow};
+use velnor_actions_contract::Job;
+use velnor_actions_mise::RuntimePaths;
 use velnor_actions_workflow_renderer::guard::{self, SafeTreePath};
-use velnor_actions_workflow_renderer::render::RenderedTree;
+use velnor_actions_workflow_renderer::render::{RenderedTree, render_workflow_ir_strict_with_jobs};
 use velnor_actions_workflow_renderer::steps::rehead_actionlint_marker;
 use velnor_actions_workflow_renderer::tree::render_tree_with_extra;
 
@@ -16,7 +20,8 @@ use crate::finalized::owned_preparation;
 use crate::pins::resolve_mise_setup;
 use crate::prepare::GenerationPreparation;
 use crate::provenance::{ProfileProvenance, profile_provenance};
-use crate::validate::validate_staged;
+
+type RenderedGeneration = (RenderedTree, BTreeMap<String, Job>);
 
 /// Filesystem guards: snapshots, destination validation, and ownership.
 #[path = "generate_guards.rs"]
@@ -26,6 +31,10 @@ pub(crate) mod guards;
 pub use guards::ToolSnapshot;
 
 use guards::{GenerateOwnership, prepare_preview_dir, same_filesystem};
+
+/// Repository-owned content carried into the replacement transaction.
+#[path = "generate_preserve.rs"]
+mod preserve;
 
 /// Options for [`generate`].
 #[derive(Debug, Clone, Default)]
@@ -62,25 +71,22 @@ pub fn generate(
     prep: &GenerationPreparation,
     opts: &GenerateOptions,
 ) -> Result<GenerateReport, OrchestratorError> {
-    generate_dispatched(prep, opts, None)
+    generate_in_runtime(prep, opts, RuntimePaths::full())
 }
 
-/// [`generate`] with an explicit dispatch mode overriding `execution.mode`.
-///
-/// # Errors
-///
-/// Same as [`generate`], plus routing errors.
-pub fn generate_dispatched(
+/// Generate under an explicit compiled Mise runtime domain.
+pub(crate) fn generate_in_runtime(
     prep: &GenerationPreparation,
     opts: &GenerateOptions,
-    dispatch: Option<ExecutionMode>,
+    runtime: RuntimePaths,
 ) -> Result<GenerateReport, OrchestratorError> {
     fail_on_blocking_findings(prep)?;
     let tools = ToolSnapshot::capture(&prep.root);
     let tofu_roots = crate::select_tofu::tofu_selected_roots(&prep.discovery.statuses);
     let tofu_locks = velnor_actions_tofu::TofuLockSnapshot::capture(&prep.root, &tofu_roots);
-    let tree = render_staged_tree_with(prep, dispatch)?;
-    let validated_by = validate_staged(&tree)?;
+    let owned = owned_preparation(prep)?;
+    let tree = render_owned_staged_tree(&owned)?;
+    let validated_by = crate::validate::validate_staged_in_runtime(&tree, runtime)?;
     tools.verify(&prep.root)?;
     tofu_locks
         .verify(&prep.root)
@@ -94,7 +100,7 @@ pub fn generate_dispatched(
     };
     Ok(GenerateReport {
         files_written: tree.paths(),
-        recommendations: prep.discovery.recommendations.clone(),
+        recommendations: owned.discovery.recommendations.clone(),
         validated_by,
         profiles: profile_provenance(prep),
         warnings,
@@ -132,52 +138,53 @@ fn fail_on_blocking_findings(prep: &GenerationPreparation) -> Result<(), Orchest
 ///
 /// Returns lock, render, actionlint, or unsafe-path errors.
 pub fn render_staged_tree(prep: &GenerationPreparation) -> Result<RenderedTree, OrchestratorError> {
-    render_staged_tree_with(prep, None)
+    let owned = owned_preparation(prep)?;
+    render_owned_staged_tree(&owned)
 }
 
-/// [`render_staged_tree`] with a dispatch-mode override.
-///
-/// # Errors
-///
-/// Same as [`render_staged_tree`].
-pub fn render_staged_tree_with(
-    prep: &GenerationPreparation,
-    dispatch: Option<ExecutionMode>,
+/// Render an already attached preparation without repeating finalization.
+pub(crate) fn render_owned_staged_tree(
+    owned: &GenerationPreparation,
 ) -> Result<RenderedTree, OrchestratorError> {
-    let owned = owned_preparation(prep)?;
-    let tree = render_all(&owned, dispatch)?;
+    Ok(render_owned_staged_tree_with_jobs(owned)?.0)
+}
+
+/// Share one strict renderer finalization between checked tree and plan job report.
+pub(crate) fn render_owned_staged_tree_with_jobs(
+    owned: &GenerationPreparation,
+) -> Result<RenderedGeneration, OrchestratorError> {
+    let (tree, jobs) = render_all(owned)?;
     check_tree_paths(&tree)?;
-    Ok(tree)
+    Ok((tree, jobs))
 }
 
 /// Render base files plus release extras into the marker-checked tree, in memory only.
-fn render_all(
-    prep: &GenerationPreparation,
-    dispatch: Option<ExecutionMode>,
-) -> Result<RenderedTree, OrchestratorError> {
+fn render_all(prep: &GenerationPreparation) -> Result<RenderedGeneration, OrchestratorError> {
     let version = env!("CARGO_PKG_VERSION");
     let mise = resolve_mise_setup(&prep.config, &prep.runner_label)?;
-    let ir = expand_workflow(&prep.workflow.ir, &prep.config, dispatch).map_err(|err| {
-        OrchestratorError::Contract {
-            problem: err.to_string(),
-        }
-    })?;
-    let rendered = velnor_actions_workflow_renderer::render::render_workflow_ir_strict_shared(
-        &ir,
+    let (workflow, jobs) = render_workflow_ir_strict_with_jobs(
+        &prep.workflow.ir,
         prep.config.workflow.policy,
         prep.workflow.support.as_ref(),
         &prep.workflow.context,
         &mise,
     )?;
-    let workflow = rendered.yaml;
     let actionlint = render_actionlint_yaml(&prep.workflow.actionlint)?;
     let actionlint = rehead_actionlint_marker(&actionlint.yaml, version)?;
     let mut extra = crate::release_emit::release_files(prep, &mise)?;
+    extra.extend(crate::delivery_emit::delivery_files(prep)?);
     extra.extend(crate::freshness_emit::freshness_files(prep)?);
-    extra.extend(crate::routing::extra_files(&prep.config, version)?);
-    extra.extend(rendered.shared);
+    extra.extend(crate::owned_tool_publication::files(prep)?);
+    extra.extend(prep.workflow.mbx_finalization.review_files(version)?);
+    extra.extend(
+        velnor_actions_workflow_renderer::source_helper::source_helper_files(
+            &prep.workflow.context.source_helpers,
+            version,
+        )?,
+    );
+    let extra = crate::delivery_emit::unique_support_files(extra)?;
     let tree = render_tree_with_extra(&workflow, &actionlint, &extra, version)?;
-    Ok(tree)
+    Ok((tree, jobs))
 }
 
 /// Validate every rendered path lexically plus symlink-prefix probing.
@@ -235,6 +242,7 @@ fn replace_in_place(
     let staging = tempfile::tempdir_in(root)
         .map_err(|err| OrchestratorError::io(root.display().to_string(), err.to_string()))?;
     let staged = staging.path().join(".github");
+    preserve::copy_repository_content(&target, &staged)?;
     write_tree(&staged, tree)?;
     if !same_filesystem(staging.path(), root)? {
         return Err(OrchestratorError::Contract {
@@ -323,7 +331,9 @@ fn write_preview(
     for rel in check_tree_paths(tree)? {
         guard::check_no_symlink(&canonical, &rel, is_symlink)?;
     }
-    write_tree(&canonical.join(".github"), tree)
+    let github = canonical.join(".github");
+    preserve::copy_repository_content(&prep.root.join(".github"), &github)?;
+    write_tree(&github, tree)
 }
 
 /// Staged tree writing: regular files and symbolic links.

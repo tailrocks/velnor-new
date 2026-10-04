@@ -1,9 +1,10 @@
 **Status:** Proposed specification. The orchestrator coordinates writes; named
-adapters own each generated format. No generated-file behavior is implemented.
+adapters own each generated format.
 
 # Velnor Actions generated-file contract
 
-Velnor V1 generate writes one complete tree:
+Velnor V1 generates these owned entries and preserves repository-owned entries
+within the same staged `.github` tree:
 
 ```text
 .github/
@@ -43,7 +44,7 @@ block (least privilege for its role); see [workflow
 | .github/AGENTS.md | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Generated agent instructions with version marker; replaced with the complete .github tree |
 | .github/CLAUDE.md | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Symbolic link to AGENTS.md; replaced with the complete .github tree |
 | .github/workflows/** | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Generated workflows; replaced with the complete .github tree |
-| .github/release-plz*.toml | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Generated effective release-plz configs (consumer-v1, release enabled); replaced with the complete .github tree |
+| .github/release-plz.toml, .github/release-plz-bootstrap.toml | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Generated effective release-plz configs (consumer-v1, release enabled); replaced with the complete .github tree |
 | mise.toml, mise.lock, rust-toolchain.toml | None | None | Repository-owned read-only inputs; never create or modify |
 
 Velnor V1 MUST NOT create .mise/tasks files or any other generated task
@@ -144,19 +145,29 @@ or an unvalidated shell fragment.
 
 ## 3. Replacement and preview
 
-generate MUST render into a temporary staging tree and validate every output
-before writing. With no --output-dir, it MUST atomically replace the entire
-repository .github directory after successful validation. This deliberately
-removes old workflows and manually maintained files inside .github; users must
-keep any required content in Velnor configuration or another repository
-location. If generation fails, the existing .github directory remains
-unchanged.
+The generator owns all `.github/workflows/**`, including manually authored
+workflows, plus exactly `.github/AGENTS.md`, `.github/CLAUDE.md`,
+`.github/actionlint.yaml`, `.github/release-plz.toml`, and
+`.github/release-plz-bootstrap.toml`. Disabled or obsolete owned outputs are
+removed. Other names, including `release-plz-local.toml`, are repository owned;
+release ownership is an exact path inventory, never a filename wildcard.
+
+generate MUST validate generated output, then assemble a temporary staging tree
+by copying repository-owned `.github` entries and writing generated entries.
+Preservation includes file bytes and permissions, recursive directories with
+their permissions, hidden entries, empty directories, and symbolic links with
+their literal targets, including dangling links. Copying MUST NOT follow links.
+A symlink at the source `.github` root or an unsupported entry type fails before
+replacement. With no --output-dir, generation MUST atomically replace the
+repository `.github` directory with that combined tree. Failure before commit
+leaves the existing `.github` directory unchanged.
 
 With --output-dir PATH, PATH is the exact fresh preview root. It MUST be absent
 or empty; the command writes PATH/.github there, prints its absolute path, and
 modifies no repository file. Callers MUST choose a unique directory under /tmp
-or runner temporary storage. The preview tree MUST have the same .github
-contents as a real generation.
+or runner temporary storage. The preview tree MUST include the same preserved repository entries and
+generated outputs as a real generation. Preserved entries receive no generated
+marker and are not interpreted as generator output.
 
 The generated workflow MUST preserve the repository-owned
 rust-toolchain.toml, mise.toml, and mise.lock byte-for-byte because generation

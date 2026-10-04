@@ -1,0 +1,6 @@
+on: push
+cache-mode: read
+jobs:
+  call:
+    cache-mode: none
+    uses: owner/repository/build.yml

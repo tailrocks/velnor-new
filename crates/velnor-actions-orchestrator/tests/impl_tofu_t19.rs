@@ -123,11 +123,11 @@ fn tofu_roots_join_the_package_inventory() -> TestResult {
     // The plan carries the full universe: both roots selected, each
     // with its triple listed; changed-work marks obligations, not rows.
     assert!(
-        rows.contains(&("stacks/a", true, vec!["selected"])),
+        rows.contains(&("dir-737461636b732f61", true, vec!["selected"])),
         "affected root selected: {rows:?}"
     );
     assert!(
-        rows.contains(&("stacks/b", true, vec!["selected"])),
+        rows.contains(&("dir-737461636b732f62", true, vec!["selected"])),
         "full universe keeps every root: {rows:?}"
     );
     let ids: Vec<&str> = plan
@@ -142,7 +142,7 @@ fn tofu_roots_join_the_package_inventory() -> TestResult {
     let tasks: Vec<&str> = plan
         .packages
         .iter()
-        .find(|row| row.package_id == "stacks/a")
+        .find(|row| row.package_id == velnor_actions_tofu::key_for_root("stacks/a"))
         .ok_or("stacks/a row")?
         .tasks
         .iter()
@@ -152,7 +152,7 @@ fn tofu_roots_join_the_package_inventory() -> TestResult {
     assert!(
         tasks
             .iter()
-            .all(|id| id.starts_with("stack/tofu/stacks/a/")),
+            .all(|id| id.starts_with("stack/tofu/dir-737461636b732f61/")),
         "{tasks:?}"
     );
     Ok(())
@@ -175,7 +175,9 @@ fn docs_only_marks_tofu_obligations_unchanged() -> TestResult {
     );
     for root in ["stacks/a", "stacks/b"] {
         assert!(
-            plan.packages.iter().any(|row| row.package_id == root),
+            plan.packages
+                .iter()
+                .any(|row| row.package_id == velnor_actions_tofu::key_for_root(root)),
             "{root} row present"
         );
     }
@@ -187,7 +189,7 @@ fn docs_only_marks_tofu_obligations_unchanged() -> TestResult {
 fn affected_tofu_root_marks_its_triple_changed() -> TestResult {
     let (_repo, plan) = plan_for_tofu_change("stacks/a/main.tf")?;
     for ob in &plan.obligations {
-        let affected = ob.task_id.starts_with("stack/tofu/stacks/a/");
+        let affected = ob.task_id.starts_with("stack/tofu/dir-737461636b732f61/");
         assert_eq!(
             ob.reason == "affected_by_change",
             affected,
@@ -233,7 +235,7 @@ fn tofu_passed_round_trip() -> TestResult {
         &plan_value,
         &serde_json::to_value(&plan.matrix)?,
         &serde_json::to_value(&reports)?,
-        &success_jobs(),
+        &success_jobs(&plan),
     );
     assert_eq!(merge(&request)?.status, FinalStatus::Passed);
     Ok(())
@@ -287,6 +289,7 @@ fn missing_tofu_report_fails_required_closed() -> TestResult {
             .collect(),
     );
     value["actual_event"] = value["plan"]["event"].clone();
+    value["actual_scope"] = serde_json::json!("affected");
     let report: velnor_actions_contract::FinalReport =
         serde_json::from_str(&merge_internal(&value.to_string())?)?;
     assert_eq!(report.status, FinalStatus::PlanningFailed);
@@ -380,7 +383,7 @@ fn missing_plan_on_tofu_inventory_diagnoses_planning_failed() -> TestResult {
     let request = json!({
         "schema": 1,
         "run_key": "local",
-        "actual_event": "pull_request",
+        "actual_scope": "affected", "actual_event": "pull_request",
         "plan": plan,
         "matrix": null,
         "matrix_reports": [],

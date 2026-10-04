@@ -29,6 +29,9 @@ fn fixture_ctx() -> RenderContext {
         candidate: None,
         preseed: false,
         plan_consumer_env: std::collections::BTreeMap::new(),
+        source_helpers: Vec::new(),
+        native_pages_approvals: Vec::new(),
+        native_publish_approvals: Vec::new(),
     }
 }
 
@@ -37,24 +40,34 @@ fn fixture_ir(task: Job) -> Result<WorkflowIr, RenderError> {
     jobs.insert(
         "plan".to_owned(),
         Job {
+            cache_mode: None,
             display_name: "Plan".to_owned(),
             runs_on: LABEL.to_owned(),
             timeout_minutes: JobTimeout::PLAN,
             needs: Vec::new(),
             condition: None,
             permissions: None,
+            tool_producer: None,
+            mbx_producer: None,
+            source_producer: None,
+            native_pages_deploy: None,
+            native_publish: None,
+            outputs: Vec::new(),
             environment: None,
             steps: vec![checkout_step(&checkout_pin())?, plan_step()],
         },
     );
     jobs.insert("velnor-task".to_owned(), task);
     Ok(WorkflowIr {
+        cache_mode: velnor_actions_contract::CacheMode::Read,
+        run_name: None,
         name: "CI".to_owned(),
         triggers: Trigger {
             pull_request_types: ["opened", "synchronize", "reopened", "ready_for_review"]
                 .iter()
                 .map(ToString::to_string)
                 .collect(),
+            push_tags: Vec::new(),
             push_branches: vec!["main".to_owned()],
             merge_group: true,
             workflow_dispatch: None,
@@ -72,12 +85,19 @@ fn fixture_ir(task: Job) -> Result<WorkflowIr, RenderError> {
 fn task_job(env: &BTreeMap<String, String>, needs: Vec<String>) -> Result<Job, RenderError> {
     let argv = ["sh", "-c", "echo hi"].map(str::to_owned).to_vec();
     Ok(Job {
+        cache_mode: None,
         display_name: "Task".to_owned(),
         runs_on: LABEL.to_owned(),
         timeout_minutes: JobTimeout::CRATE,
         needs,
         condition: None,
         permissions: None,
+        tool_producer: None,
+        mbx_producer: None,
+        source_producer: None,
+        native_pages_deploy: None,
+        native_publish: None,
+        outputs: Vec::new(),
         environment: None,
         steps: vec![
             checkout_step(&checkout_pin())?,
@@ -168,12 +188,19 @@ fn fixture_ir_with(id: &str, job: Job) -> Result<WorkflowIr, RenderError> {
 fn capped_job(env: &BTreeMap<String, String>, needs: Vec<String>) -> Result<Job, RenderError> {
     let argv = ["sh", "-c", "echo hi"].map(str::to_owned).to_vec();
     Ok(Job {
+        cache_mode: None,
         display_name: "Rust / stacks-a".to_owned(),
         runs_on: LABEL.to_owned(),
         timeout_minutes: JobTimeout::CRATE,
         needs,
         condition: None,
         permissions: None,
+        tool_producer: None,
+        mbx_producer: None,
+        source_producer: None,
+        native_pages_deploy: None,
+        native_publish: None,
+        outputs: Vec::new(),
         environment: None,
         steps: vec![
             checkout_step(&checkout_pin())?,

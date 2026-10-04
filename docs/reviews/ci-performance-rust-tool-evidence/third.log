@@ -1,0 +1,6 @@
+mise by @jdx – installing 1 tool
+mise ⇢ rust@1.98.1  18ms · already installed
+mise ████████████████ 1/1 · installed 0 tools · 1 already installed in 19ms
+mise WARN  rust installed but not activated — it is not in any config file.
+To install and activate, run:
+  mise use rust

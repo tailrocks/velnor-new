@@ -9,6 +9,7 @@ fn enabled_publishable() -> RustReleaseConfig {
     RustReleaseConfig {
         enabled: true,
         publishable_workspace: true,
+        expected_owners: BTreeMap::from([("demo-crate".to_owned(), vec!["user:1".to_owned()])]),
         ..RustReleaseConfig::default()
     }
 }
@@ -46,6 +47,9 @@ fn publishable_opt_in_rejects_combined_allowlist() {
 #[test]
 fn publishable_opt_in_defers_group_membership_to_emission() {
     let mut config = enabled_publishable();
+    config
+        .expected_owners
+        .insert("aaa-crate".to_owned(), vec!["user:1".to_owned()]);
     config.version_groups = BTreeMap::from([(
         "core".to_owned(),
         vec!["aaa-crate".to_owned(), "demo-crate".to_owned()],
@@ -67,7 +71,7 @@ fn publishable_opt_in_defers_group_membership_to_emission() {
 
 #[test]
 fn publishable_opt_in_decodes_and_roundtrips() {
-    let document = r#"{"enabled":true,"publishable_workspace":true}"#;
+    let document = r#"{"enabled":true,"publishable_workspace":true,"expected_owners":{"demo-crate":["user:1"]}}"#;
     let config: RustReleaseConfig = serde_json::from_str(document).expect("decode");
     assert!(config.publishable_workspace);
     assert_eq!(config.validate(FILE), Ok(()));

@@ -108,12 +108,19 @@ pub(crate) fn candidate_job(ctx: &RenderContext, spec: &CandidateSpec) -> Result
     let artifact = candidate_artifact_name(target)?;
     let candidate_binary = format!("{}/velnor-actions", steps::CANDIDATE_STAGE_DIR);
     Ok(Job {
+        cache_mode: None,
         display_name: "Candidate".to_owned(),
         runs_on: ctx.runs_on.clone(),
         timeout_minutes: JobTimeout::CANDIDATE,
         needs: vec![PLAN_JOB_ID.to_owned()],
         condition: None,
         permissions: None,
+        tool_producer: None,
+        mbx_producer: None,
+        source_producer: None,
+        native_pages_deploy: None,
+        native_publish: None,
+        outputs: Vec::new(),
         environment: None,
         steps: vec![
             steps::checkout_step(&ctx.checkout_uses)?,
@@ -176,12 +183,19 @@ pub(crate) fn release_job(ctx: &RenderContext) -> Result<Job, RenderError> {
         })?;
     let artifact = candidate_artifact_name(target)?;
     Ok(Job {
+        cache_mode: None,
         display_name: super::support::RELEASE_DISPLAY_NAME.to_owned(),
         runs_on: ctx.runs_on.clone(),
         timeout_minutes: JobTimeout::RELEASE,
         needs: vec![CANDIDATE_JOB_ID.to_owned()],
         condition: Some(super::support::RELEASE_REF_CONDITION.to_owned()),
         permissions: None,
+        tool_producer: None,
+        mbx_producer: None,
+        source_producer: None,
+        native_pages_deploy: None,
+        native_publish: None,
+        outputs: Vec::new(),
         environment: None,
         steps: vec![
             steps::checkout_step(&ctx.checkout_uses)?,

@@ -14,14 +14,22 @@ use crate::vectors::CARGO_DENY_VERSION;
 
 fn shell_job(run: Vec<String>) -> Job {
     Job {
+        cache_mode: None,
         display_name: "Plan".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
         timeout_minutes: JobTimeout::PLAN,
         needs: Vec::new(),
         condition: None,
         permissions: None,
+        tool_producer: None,
+        mbx_producer: None,
+        source_producer: None,
+        native_pages_deploy: None,
+        native_publish: None,
+        outputs: Vec::new(),
         environment: None,
         steps: vec![Step {
+            id: None,
             name: PREPARE_PINNED_TOOLS_STEP.to_owned(),
             condition: None,
             kind: StepKind::Shell {
@@ -43,9 +51,12 @@ fn deny_command(script: &str) -> ValidatorCommand {
 
 fn ir_for(job: Job) -> WorkflowIr {
     WorkflowIr {
+        cache_mode: velnor_actions_contract::CacheMode::Read,
+        run_name: None,
         name: "CI".to_owned(),
         triggers: Trigger {
             pull_request_types: Vec::new(),
+            push_tags: Vec::new(),
             push_branches: Vec::new(),
             merge_group: false,
             workflow_dispatch: None,
@@ -75,7 +86,7 @@ fn foreign_spec_and_malformed_argv_block() {
         outcome
             .blocking
             .iter()
-            .any(|line| line.contains("unauditable_install_spec:node@20.0.0")),
+            .any(|line| line.contains("unauditable_install_qualification:plan:node@20.0.0")),
         "foreign spec must block: {:?}",
         outcome.blocking
     );
@@ -92,20 +103,21 @@ fn foreign_spec_and_malformed_argv_block() {
 }
 
 #[test]
-fn unknown_label_skips_loudly_without_blocking() {
+fn unknown_job_host_blocks_install_audit() {
     let dir = tempfile::tempdir().expect("tempdir");
-    let ir = ir_for(shell_job(vec![
+    let mut job = shell_job(vec![
         "mise".to_owned(),
-        "--no-env".to_owned(),
-        "--no-hooks".to_owned(),
         "install".to_owned(),
-        "rust@1.98.1".to_owned(),
-    ]));
-    let outcome = audit_prepare_installs(dir.path(), &ir, "self-hosted-1", &[]);
-    assert!(outcome.blocking.is_empty());
-    let summary = outcome.recommendation.expect("loud skip");
-    assert!(summary.contains("self-hosted-1"), "{summary}");
-    assert!(summary.contains("tool_install_unverified"), "{summary}");
+        "actionlint@1.7.12".to_owned(),
+    ]);
+    job.runs_on = "self-hosted-1".to_owned();
+    let outcome = audit_prepare_installs(dir.path(), &ir_for(job), "ubuntu-26.04", &[]);
+    assert!(
+        outcome
+            .blocking
+            .iter()
+            .any(|problem| problem == "unauditable_install_host:plan:self-hosted-1")
+    );
 }
 
 #[test]
@@ -290,4 +302,65 @@ fn oversized_tool_file_blocks() {
         "oversized lock must block: {:?}",
         outcome.blocking
     );
+}
+
+#[test]
+fn native_install_authority_uses_each_jobs_runner() {
+    use velnor_actions_mise::{PinnedTool, ToolCatalog, catalog::qualification::DistributionHost};
+    let catalog = ToolCatalog::pinned();
+    let selector = catalog
+        .native_tool_spec(DistributionHost::MacosArm64, PinnedTool::Node)
+        .expect("macOS ARM64 Node fixture has a qualified installed payload");
+    let argv = vec!["mise".to_owned(), "install".to_owned(), selector];
+    let dir = tempfile::tempdir().expect("isolated missing-lock fixture");
+    let mut mac_job = shell_job(argv.clone());
+    mac_job.runs_on = "macos-26".to_owned();
+    let mac = audit_prepare_installs(dir.path(), &ir_for(mac_job), "ubuntu-26.04", &[]);
+    assert!(
+        mac.blocking.is_empty(),
+        "actual qualified Mac host: {:?}",
+        mac.blocking
+    );
+    let linux = audit_prepare_installs(dir.path(), &ir_for(shell_job(argv)), "macos-26", &[]);
+    assert!(
+        linux
+            .blocking
+            .iter()
+            .any(|problem| problem.starts_with("unauditable_install_qualification:plan:"))
+    );
+}
+
+#[test]
+fn mixed_runner_checksum_holes_use_actual_job_platforms() {
+    let dir = tempfile::tempdir().expect("isolated mixed runner lock fixture");
+    let spec = format!(
+        "actionlint@{}",
+        velnor_actions_mise::ToolCatalog::pinned()
+            .version(velnor_actions_mise::PinnedTool::Actionlint)
+    );
+    let mut mac = shell_job(vec!["mise".to_owned(), "install".to_owned(), spec.clone()]);
+    mac.runs_on = "macos-26".to_owned();
+    let mut ir = ir_for(mac);
+    ir.jobs.insert(
+        "linux".to_owned(),
+        shell_job(vec!["mise".to_owned(), "install".to_owned(), spec]),
+    );
+    let version = velnor_actions_mise::ToolCatalog::pinned()
+        .version(velnor_actions_mise::PinnedTool::Actionlint)
+        .to_owned();
+    for (present, missing) in [("linux-x64", "macos-arm64"), ("macos-arm64", "linux-x64")] {
+        std::fs::write(dir.path().join("mise.lock"), format!(
+            "[[tools.actionlint]]\nversion = \"{version}\"\n[tools.actionlint.\"platforms.{present}\"]\nchecksum = \"sha256:{}\"\n", "a".repeat(64)))
+            .expect("write fixture lock");
+        let outcome = audit_prepare_installs(dir.path(), &ir, "ubuntu-26.04", &[]);
+        assert!(
+            outcome
+                .blocking
+                .iter()
+                .any(|problem| problem.starts_with("lock_missing_platform:")
+                    && problem.contains(missing)),
+            "{present} checksum cannot cover {missing}: {:?}",
+            outcome.blocking
+        );
+    }
 }

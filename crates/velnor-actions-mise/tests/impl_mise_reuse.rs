@@ -18,7 +18,7 @@ fn descriptor(task: &str) -> CachedTaskDescriptor {
         outputs: vec!["target/debug/app".to_owned()],
         command_inputs: vec!["rustc --version".to_owned()],
         env: BTreeMap::new(),
-        tools: vec!["rust@1.98.1".to_owned()],
+        tools: vec!["rust[profile=minimal,components=clippy,rustfmt]@1.98.1".to_owned()],
         dep_keys: Vec::new(),
     }
 }
@@ -79,7 +79,7 @@ fn release_events_never_reuse() {
     );
     let fixture = Gate6Fixture::new("gate6/clippy-cache").expect("fixture");
     assert!(
-        TaskArtifactTransport::open(&fixture, TaskCacheMode::Off, Path::new("/tmp/cache")).is_err(),
+        TaskArtifactTransport::open(&fixture, TaskCacheMode::Off, Path::new("<PRIVATE_TMP>")).is_err(),
         "Off mode must not open transport"
     );
     assert!(
@@ -170,17 +170,17 @@ fn cache_key_derivation_requires_matching_grant() {
 fn artifact_transport_stays_opaque_and_rooted() {
     let fixture = Gate6Fixture::new("gate6/clippy-cache").expect("fixture");
     let transport =
-        TaskArtifactTransport::open(&fixture, TaskCacheMode::ReadOnly, Path::new("/tmp/cache"))
+        TaskArtifactTransport::open(&fixture, TaskCacheMode::ReadOnly, Path::new("<PRIVATE_TMP>"))
             .expect("transport opens");
     assert_eq!(
         transport.root(),
-        Path::new("/tmp/cache/task-artifacts/v2"),
+        Path::new("<PRIVATE_TMP>"),
         "fixed layout suffix"
     );
     assert_eq!(transport.mode(), TaskCacheMode::ReadOnly);
     assert_eq!(
         transport.resolve("clippy/out.json").expect("resolve"),
-        Path::new("/tmp/cache/task-artifacts/v2/clippy/out.json")
+        Path::new("<PRIVATE_TMP>")
     );
     for bad in ["", "/abs/path", "../escape", "a/../../escape"] {
         assert!(transport.resolve(bad).is_err(), "{bad} must not resolve");

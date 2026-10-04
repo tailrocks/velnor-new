@@ -4,6 +4,11 @@ T28 row contract (`docs/reviews/opentofu-evidence.md:47`): "Final full
 gate set incl. Gates 0–8 re-runs at final Phase-B source. No waived
 failures."
 
+This is a frozen T28 run record. Its Alint pin skew and temporary-hold
+statements describe that capture, not current policy; the 0.17.0 paired
+qualification later superseded the Alint hold (see
+`docs/reviews/ci-performance-freshness-audit.md`, 2026-10-02 checkpoint).
+
 Source identity: `667b692aafb7a8f2b00d9bc3bf9544dbf8b4d324` (accepted
 T27 landing commit) plus the comment-only fixes in the T28 commit
 itself (3 rustdoc one-word delinks + 1 shellcheck directive line; zero
@@ -75,9 +80,11 @@ count stays 0); all existing pins green and behavior-identical (the
 
 ## Recorded out-of-scope gaps (evidence, not fixed, not waived)
 
-- 3 freshness `temporary_holds` (rust 1.98.1, jdx/mise-action v5.0.0,
-  asamarts/alint v0.16.1) expire 2026-10-15 (issue #6); valid today,
-  re-check at any later identity or `exception-expiry` fails.
+- At this capture, 3 freshness `temporary_holds` (rust 1.98.1,
+  jdx/mise-action v5.0.0, asamarts/alint v0.16.1) expired 2026-10-15
+  (issue #6); they were valid at T28 capture. The Alint hold was later
+  superseded by the 0.17.0 paired qualification; re-checking this historical
+  identity after expiry still fails `exception-expiry`.
 - `--check-upstream` (weekly-job mode, not a root gate): 10+
   `upstream-probe` rows fail — all `lookup_failed (HTTP Error 403:
   rate limit exceeded)` on api.github.com (environmental, same class

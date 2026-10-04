@@ -36,7 +36,6 @@ fn digest_full(
         uses_network: false,
         uses_clock: false,
         uses_random: false,
-        run_ignored: None,
         nextest_profile: NextestProfile::Default,
     };
     let task = velnor_actions_rust::propose_task(&group).expect("fixture proposes");
@@ -47,6 +46,8 @@ fn digest_full(
         data: serde_json::json!({}),
     };
     task_identity_digest(&IdentityInputs {
+        helper_obligation: None,
+        native_recipe: None,
         task: &task,
         argv,
         toolchain_id: toolchain,
@@ -166,11 +167,11 @@ fn tofu_metadata_and_cache_ids_derive() {
     use velnor_actions_tofu::TofuTaskKind;
     let task = tofu_proposal(TofuTaskKind::Validate);
     let meta = adapter_metadata(&task, &[]).expect("metadata");
-    assert_eq!(meta["unit_id"], serde_json::json!("root"));
+    assert_eq!(meta["unit_id"], serde_json::json!("dir-"));
     assert_eq!(meta["compile_driver"], serde_json::json!("tofu"));
     assert_eq!(meta["test_runner"], serde_json::json!("none"));
     let catalog = velnor_actions_mise::ToolCatalog::pinned();
-    let toolchain = toolchain_id(&task, &catalog).expect("toolchain");
+    let toolchain = toolchain_id_for_runner(&task, &catalog, "ubuntu-24.04").expect("toolchain");
     let ids = cache_ids_for(&task, "ubuntu-24.04", &toolchain).expect("cache ids");
     assert_eq!(
         ids.cache_format_id(),

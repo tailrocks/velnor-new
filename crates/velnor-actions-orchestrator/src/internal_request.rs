@@ -5,9 +5,9 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use velnor_actions_contract::{
-    FINAL_JSON_FILENAME, FinalStatus, MATRIX_JSON_FILENAME, PLAN_JSON_FILENAME, WorkflowEvent,
-    canonical_json_bytes, canonical_json_str, matrix_json_bytes, plan_json_bytes, run_key_for_ci,
-    validate_run_key,
+    FINAL_JSON_FILENAME, FinalStatus, MATRIX_JSON_FILENAME, PLAN_JSON_FILENAME, VerificationScope,
+    WorkflowEvent, canonical_json_bytes, canonical_json_str, matrix_json_bytes, parse_strict_json,
+    plan_json_bytes, run_key_for_ci, validate_run_key,
 };
 
 use crate::OrchestratorError;
@@ -15,9 +15,9 @@ use crate::decisions::plan_artifact_dir;
 use crate::internal::{
     MERGE_OP, PLAN_OP, PlanResponse, SCHEMA, check_schema, internal, internal_contract,
 };
-use crate::request_event::{request_refs, workflow_event_for};
+use crate::request_event::{request_refs_for_scope, request_scope, workflow_event_for};
 
-/// Plan-time request: `{schema, op, event, base, head, root}` (schema 1).
+/// Plan-time request: `{schema, op, event, scope, base, head, root}` (schema 1).
 #[derive(Debug, Serialize)]
 struct EventRequest {
     /// Request schema; always 1.
@@ -30,6 +30,8 @@ struct EventRequest {
     base: Option<String>,
     /// Head commit.
     head: String,
+    /// Verification scope selected at the event boundary.
+    scope: VerificationScope,
     /// Repository root; always `.` (the job checkout).
     root: String,
     /// Runner-owned repository slug (`owner/repo`) for provenance.
@@ -39,6 +41,12 @@ struct EventRequest {
     /// Omitted when unset (local runs fall back to the git origin).
     #[serde(skip_serializing_if = "Option::is_none")]
     repository: Option<String>,
+    /// Publication facts captured at the runner boundary.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    publication_context: Option<crate::internal::analysis_publication::AnalysisPublicationContext>,
+    /// Runner-owned producer scheduling facts.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    producer_context: Option<velnor_actions_contract::ProducerEventContext>,
 }
 
 /// Canonical `plan`/`matrix` outputs for `$GITHUB_OUTPUT`.
@@ -106,8 +114,9 @@ pub fn write_request() -> Result<PathBuf, OrchestratorError> {
 /// The consuming op comes from the `<op>-request.json` file name; the file
 /// is written exclusively (a pre-existing file errors, never overwritten).
 /// The merge target assembles its request from downloaded artifacts and
-/// ignores the event payload; the publish target records the push
-/// refs plus the protected-branch evidence for the publish gate.
+/// captures the runner event and verification scope; the publish target
+/// records the push refs plus the protected-branch evidence for the publish
+/// gate.
 /// Parent directories are created under `anchor` with symlink refusal;
 /// the caller passes the runner-owned directory the request path must
 /// stay inside.
@@ -127,7 +136,12 @@ pub fn write_request_parts(
     let path = request_path.to_path_buf();
     let op = request_op(&path)?;
     if op == MERGE_OP {
-        return crate::merge_request::write_merge_request(&path);
+        return crate::merge_request::write_merge_request_parts(
+            &path,
+            event_name,
+            payload_json,
+            anchor,
+        );
     }
     if op == crate::baseline_publish::PUBLISH_OP {
         return crate::baseline_publish::write_publish_request(
@@ -139,20 +153,25 @@ pub fn write_request_parts(
             anchor,
         );
     }
-    let payload: serde_json::Value =
-        serde_json::from_str(payload_json).map_err(|_| internal("malformed_event_payload"))?;
+    let payload =
+        parse_strict_json(payload_json).map_err(|_| internal("malformed_event_payload"))?;
     let event = workflow_event_for(event_name, &payload)?;
-    let (base, head) = request_refs(event, &payload, github_sha)?;
+    let scope = request_scope::scope_for(event, &payload)?;
+    let (base, head) = request_refs_for_scope(event, &payload, github_sha, scope)?;
     let request = EventRequest {
         schema: SCHEMA,
         op,
         event,
         base,
         head,
+        scope,
         root: ".".to_owned(),
         repository: repository
             .filter(|slug| !slug.is_empty())
             .map(str::to_owned),
+        publication_context:
+            crate::internal::analysis_publication::AnalysisPublicationContext::capture(&payload),
+        producer_context: crate::internal::plan_producers::capture(&payload),
     };
     let bytes = canonical_json_bytes(&request).map_err(internal_contract)?;
     if let Some(parent) = path.parent() {
@@ -292,8 +311,7 @@ pub fn publish_final_report(
 
 /// True when one `merge-v1` response is a passing verdict.
 ///
-/// Only `passed` passes: `no_work` proves nothing validated, so the gate
-/// stays red; every other status fails.
+/// `passed` and validated `no_work` pass; every other status fails.
 ///
 /// # Errors
 ///

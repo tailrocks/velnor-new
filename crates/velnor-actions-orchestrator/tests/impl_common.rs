@@ -1,5 +1,8 @@
 //! Shared fixtures and helpers for orchestrator integration tests.
 
+#[path = "../../test_support/git_fixture.rs"]
+pub(crate) mod git_fixture;
+
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -9,7 +12,7 @@ use std::time::SystemTime;
 use tempfile::TempDir;
 use velnor_actions_contract::{MatrixReport, Plan};
 use velnor_actions_orchestrator::{
-    GenerationPreparation, OrchestratorError, finalized_jobs, plan_internal, plan_text,
+    GenerationPreparation, OrchestratorError, plan_internal, plan_text_checked,
 };
 
 /// Test error shortcut.
@@ -21,7 +24,7 @@ pub(crate) type TestResult = Result<(), Box<dyn std::error::Error>>;
 /// the plan/generate parity path (validators included) instead of a
 /// pre-merge IR projection no user ever sees.
 pub(crate) fn plan_for(prep: &GenerationPreparation) -> Result<String, Box<dyn std::error::Error>> {
-    Ok(plan_text(prep, &finalized_jobs(prep)?))
+    Ok(plan_text_checked(prep)?)
 }
 
 /// Marker proving the current process already scrubbed ambient identity.
@@ -113,7 +116,11 @@ pub(crate) type Snapshot = BTreeMap<String, (Vec<u8>, SystemTime)>;
 /// as consumer provenance. Every fixture repo carries it so consumer
 /// `prepare` succeeds.
 pub(crate) fn fixture_manifest_json() -> String {
-    let targets = velnor_actions_contract::SUPPORTED_TARGETS
+    let targets = [
+        "x86_64-unknown-linux-gnu",
+        "aarch64-apple-darwin",
+        "x86_64-apple-darwin",
+    ]
     .iter()
     .map(|target| {
         format!(
@@ -173,7 +180,7 @@ pub(crate) fn write_nextest_task(root: &Path) -> TestResult {
 
 /// Run git with inherited failure context.
 pub(crate) fn git(args: &[&str], cwd: &Path) -> TestResult {
-    let status = StdCommand::new("git")
+    let status = git_fixture::command(cwd)?
         .args(args)
         .current_dir(cwd)
         .status()?;
@@ -196,7 +203,7 @@ pub(crate) fn anchor_id() -> String {
 
 /// Single git stdout line.
 pub(crate) fn git_line(args: &[&str], cwd: &Path) -> Result<String, Box<dyn std::error::Error>> {
-    let output = StdCommand::new("git")
+    let output = git_fixture::command(cwd)?
         .args(args)
         .current_dir(cwd)
         .output()?;

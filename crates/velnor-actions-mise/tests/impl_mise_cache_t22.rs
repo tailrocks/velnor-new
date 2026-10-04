@@ -6,8 +6,7 @@ use velnor_actions_contract::cachekey::MISS_REASONS;
 use velnor_actions_contract::digest_b3;
 use velnor_actions_mise::cache_sources as sources;
 use velnor_actions_mise::restore::{
-    MissReason, RestoreEvidence, ReuseFallback, SaveInputs, fallback_for_error, save_decision,
-    verify_restored_task_result,
+    MissReason, RestoreEvidence, ReuseFallback, fallback_for_error, verify_restored_task_result,
 };
 use velnor_actions_mise::restore_evidence::{
     RestoreObservation, output_bytes_complete, verify_provider_restore,
@@ -100,13 +99,6 @@ fn provider_corruption_discards_and_refetches_through_the_model_checks() {
     assert_eq!(verify_provider_restore(&tampered), Err("cache_corrupt"));
     let evidence = RestoreEvidence::verify(&tampered);
     assert_eq!(evidence.check(), Err(MissReason::CACHE_CORRUPT));
-    let decision = sources::fetch_decision(false, "cache_corrupt").expect("fetch");
-    assert_eq!(
-        decision,
-        sources::FetchDecision::ExplicitFetch {
-            miss_reason: "cache_corrupt",
-        }
-    );
     let fallback = ReuseFallback::execute_with(MissReason::CACHE_CORRUPT);
     assert!(fallback.proceeds_to_execute(), "a miss never fails a task");
 }
@@ -248,84 +240,4 @@ fn wrong_tool_version_cools_to_tool_missing_and_executes() {
     let reason = fallback_for_error(&err).expect("maps, never propagates");
     assert_eq!(reason, MissReason::TOOL_MISSING);
     assert!(ReuseFallback::execute_with(reason).proceeds_to_execute());
-}
-
-#[test]
-fn fetch_decision_keeps_its_closed_reason_set() {
-    assert_eq!(
-        sources::fetch_decision(true, "no_entry").expect("skip"),
-        sources::FetchDecision::OfflineSkip
-    );
-    for reason in [
-        "no_entry",
-        "source_missing",
-        "cache_unavailable",
-        "cache_corrupt",
-    ] {
-        assert_eq!(
-            sources::fetch_decision(false, reason).expect("fetch"),
-            sources::FetchDecision::ExplicitFetch {
-                miss_reason: reason
-            },
-            "{reason} must fetch"
-        );
-    }
-    for reason in ["bogus", "compatibility_mismatch", "task_result_incomplete"] {
-        assert!(
-            sources::fetch_decision(false, reason).is_err(),
-            "{reason} must stay outside the fetch set"
-        );
-    }
-}
-
-#[test]
-fn save_decision_keeps_single_writer_push_gated_saves() {
-    fn save<'a>(
-        layer_trust: &'a str,
-        event: &'a str,
-        passed: bool,
-        active_writer: bool,
-    ) -> SaveInputs<'a> {
-        SaveInputs {
-            layer_trust,
-            event,
-            passed,
-            unavailable: false,
-            active_writer,
-        }
-    }
-    assert!(save_decision(&save("trusted", "push", true, false)).is_ok());
-    assert!(save_decision(&save("pr", "push", true, false)).is_ok());
-    assert_eq!(
-        save_decision(&save("trusted", "push", true, true)),
-        Err(MissReason::CACHE_WRITE_DISABLED),
-        "one writer per key"
-    );
-    for event in ["pull_request", "fork", "merge_group", "release", "local"] {
-        assert_eq!(
-            save_decision(&save("trusted", event, true, false)),
-            Err(MissReason::CACHE_WRITE_DISABLED),
-            "{event} never saves"
-        );
-    }
-    assert_eq!(
-        save_decision(&save("trusted", "push", false, false)),
-        Err(MissReason::CACHE_WRITE_DISABLED),
-        "failed runs never save"
-    );
-    assert_eq!(
-        save_decision(&save("unknown", "push", true, false)),
-        Err(MissReason::CACHE_WRITE_DISABLED),
-        "unknown trust denies closed"
-    );
-    assert_eq!(
-        save_decision(&SaveInputs {
-            layer_trust: "trusted",
-            event: "push",
-            passed: true,
-            unavailable: true,
-            active_writer: false,
-        }),
-        Err(MissReason::CACHE_UNAVAILABLE)
-    );
 }

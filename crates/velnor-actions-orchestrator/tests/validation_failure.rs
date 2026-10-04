@@ -5,6 +5,10 @@
 //! keeps working. No process-env mutation, no new dependencies.
 
 #[cfg(unix)]
+#[path = "../../test_support/git_fixture.rs"]
+pub(crate) mod git_fixture;
+
+#[cfg(unix)]
 mod probe {
     use std::collections::BTreeMap;
     use std::fs;
@@ -65,7 +69,7 @@ exec \"$VELNOR_REAL_MISE\" \"$@\"
             vec!["config", "commit.gpgsign", "false"],
         ] {
             assert!(
-                Command::new("git")
+                super::git_fixture::command(root)?
                     .args(&args)
                     .current_dir(root)
                     .status()?
@@ -183,7 +187,11 @@ exec \"$VELNOR_REAL_MISE\" \"$@\"
 
     /// Debug-only consumer-manifest fixture for the scrubbed repo.
     fn manifest_fixture() -> String {
-        let targets = velnor_actions_contract::SUPPORTED_TARGETS
+        let targets = [
+            "x86_64-unknown-linux-gnu",
+            "aarch64-apple-darwin",
+            "x86_64-apple-darwin",
+        ]
         .iter()
         .map(|target| {
             format!(

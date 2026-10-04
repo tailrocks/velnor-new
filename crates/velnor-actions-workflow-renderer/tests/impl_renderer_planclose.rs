@@ -28,6 +28,8 @@ fn strict_plan_job_gets_full_prelude_in_order() -> Result<(), RenderError> {
         [
             "Checkout",
             SETUP_MISE_NAME,
+            "Resolve tool cache platform",
+            "Restore Mise tools",
             ACQUIRE_NAME,
             CHECK_GENERATED_NAME,
             "Write request",
@@ -37,8 +39,8 @@ fn strict_plan_job_gets_full_prelude_in_order() -> Result<(), RenderError> {
         ]
     );
     assert!(
-        !text.contains("Restore Mise tools"),
-        "P08: restores stay built-in:\n{text}"
+        text.contains("Restore Mise tools"),
+        "explicit canonical tool restore:\n{text}"
     );
     Ok(())
 }

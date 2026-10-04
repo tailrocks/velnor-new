@@ -12,6 +12,7 @@ use crate::catalog::{PinnedTool, ToolCatalog};
 use crate::command::IsolatedCommand;
 use crate::error::MiseError;
 use crate::requests::PinnedToolExec;
+use crate::runtime_paths::RuntimePaths;
 
 /// Full commit SHA length required for the exact base.
 const FULL_SHA_LEN: usize = 40;
@@ -133,7 +134,7 @@ impl BaselineLookup {
     /// Returns [`MiseError::ForbiddenPayload`] only if the fixed payload
     /// were forbidden, which construction rules out.
     pub fn list_argv(&self, catalog: &ToolCatalog) -> Result<Vec<OsString>, MiseError> {
-        Ok(Self::exec_for(self.list_args())?.argv(catalog))
+        Self::exec_for(self.list_args())?.argv(catalog)
     }
 
     /// Full mise argv downloading one exact run plus artifact.
@@ -148,7 +149,7 @@ impl BaselineLookup {
         run_id: u64,
         dir: &Path,
     ) -> Result<Vec<OsString>, MiseError> {
-        Ok(Self::exec_for(self.download_args(run_id, dir))?.argv(catalog))
+        Self::exec_for(self.download_args(run_id, dir))?.argv(catalog)
     }
 
     /// Isolated command running fixed `gh` args under the pinned catalog.
@@ -168,6 +169,26 @@ impl BaselineLookup {
         args: Vec<OsString>,
     ) -> Result<IsolatedCommand, MiseError> {
         Self::exec_for(args)?.command(catalog)
+    }
+
+    /// Isolated `gh` command bound to a compiled generator runtime domain.
+    ///
+    /// Early planning uses [`RuntimePaths::planning`] so its installer and
+    /// later `gh` calls share one exact Mise root. Ordinary baseline callers
+    /// keep [`Self::command`] and the full workflow root.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`MiseError::EmptyCommand`] for empty args and
+    /// [`MiseError::ForbiddenPayload`] only if the fixed payload were
+    /// forbidden, which construction rules out.
+    pub fn command_with_runtime(
+        &self,
+        catalog: &ToolCatalog,
+        args: Vec<OsString>,
+        runtime: RuntimePaths,
+    ) -> Result<IsolatedCommand, MiseError> {
+        Self::exec_for(args)?.command_with_runtime(catalog, runtime)
     }
 
     /// Pinned `gh` execution for validated fixed args.

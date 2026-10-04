@@ -2,15 +2,11 @@
 //!
 //! Second render entrypoint: [`render_release_workflow`] turns a validated
 //! spec plus fixed argv into `release.yml`, and
-//! [`render_release_files`] adds the two effective release-plz configs.
+//! [`render_release_files`] adds the complete immutable helper source family.
 
 use crate::{
     RenderError, guard, marker,
-    release_config::{
-        BootstrapReleasePlzConfig, ReleasePlzConfig, render_bootstrap_release_plz_config,
-        render_release_plz_config,
-    },
-    release_gates::{ReleaseConfigBinding, check_release_jobs},
+    release_gates::check_release_jobs,
     release_jobs::{ReleaseJobSpec, ReleaseWorkflowSpec},
     release_spec::ReleaseTriggers,
     render::RenderedFile,
@@ -20,24 +16,76 @@ use crate::{
 
 /// Generated release workflow path inside the repository.
 pub const RELEASE_WORKFLOW_PATH: &str = ".github/workflows/release.yml";
-/// Generated effective normal-policy release-plz config path.
-pub const RELEASE_CONFIG_PATH: &str = ".github/release-plz.toml";
-/// Generated bootstrap-only release-plz config path.
-pub const RELEASE_BOOTSTRAP_CONFIG_PATH: &str = ".github/release-plz-bootstrap.toml";
 /// Workspace-relative directory of the exact-source checkout.
 ///
-/// Jobs that run release-plz against the approved source check the
-/// policy tree out at the workspace root (event SHA: configs live
-/// there) plus the approved source SHA into this directory; release-plz
-/// then takes `--config` from the root and `--manifest-path` from here
-/// (release contract §11: never dirty the release checkout to insert
-/// config). Fixed so gates can bind argv to the source tree.
+/// Anonymous package and preparation helpers use the approved source SHA in
+/// this fixed directory. Credentialed publisher jobs consume verified artifacts.
 pub const RELEASE_SOURCE_DIR: &str = "release-source";
+/// Fixed credential-free package helper path.
+pub const PACKAGE_SCRIPT_PATH: &str = ".github/velnor/release_package.sh";
+/// Fixed credentialed forge preflight helper path.
+pub const FORGE_PREFLIGHT_SCRIPT_PATH: &str = ".github/velnor/release_forge_preflight.sh";
+/// Fixed reconciliation launcher path.
+pub const RECONCILE_SCRIPT_PATH: &str = ".github/velnor/release_reconcile.sh";
 /// Every release-owned tree path, sorted.
 pub const RELEASE_TREE_PATHS: &[&str] = &[
-    RELEASE_BOOTSTRAP_CONFIG_PATH,
-    RELEASE_CONFIG_PATH,
-    RELEASE_WORKFLOW_PATH,
+    ".github/velnor/release_admission.py",
+    ".github/velnor/release_forge_preflight.py",
+    ".github/velnor/release_forge_preflight.sh",
+    ".github/velnor/release_forge_publish.py",
+    ".github/velnor/release_forge_publish.sh",
+    ".github/velnor/release_forge_publish_api.py",
+    ".github/velnor/release_forge_publish_read.py",
+    ".github/velnor/release_forge_publish_verify.py",
+    ".github/velnor/release_original_source_origin.py",
+    ".github/velnor/release_original_source_origin_context.py",
+    ".github/velnor/release_package.py",
+    ".github/velnor/release_package.sh",
+    ".github/velnor/release_package_contract.py",
+    ".github/velnor/release_preflight_cargo.py",
+    ".github/velnor/release_prepare_anonymous.py",
+    ".github/velnor/release_prepare_anonymous.sh",
+    ".github/velnor/release_prepare_bytes.py",
+    ".github/velnor/release_prepare_forge.py",
+    ".github/velnor/release_prepare_forge.sh",
+    ".github/velnor/release_prepare_forge_metadata.py",
+    ".github/velnor/release_prepare_forge_workspace.py",
+    ".github/velnor/release_prepare_notes.py",
+    ".github/velnor/release_prepare_summary.py",
+    ".github/velnor/release_publish_artifact.py",
+    ".github/velnor/release_publish_auth.py",
+    ".github/velnor/release_publish_entry.py",
+    ".github/velnor/release_publish_manifest.py",
+    ".github/velnor/release_publish_metadata.py",
+    ".github/velnor/release_publish_proof.py",
+    ".github/velnor/release_publish_registry.py",
+    ".github/velnor/release_publish_transport.py",
+    ".github/velnor/release_publish_verify.py",
+    ".github/velnor/release_reconcile.sh",
+    ".github/velnor/release_reconcile_cargo.py",
+    ".github/velnor/release_reconcile_common.py",
+    ".github/velnor/release_reconcile_entry.py",
+    ".github/velnor/release_reconcile_forge.py",
+    ".github/velnor/release_reconcile_registry.py",
+    ".github/velnor/release_registry_artifact_proof.sh",
+    ".github/velnor/release_registry_publish.sh",
+    ".github/velnor/release_source_snapshot.py",
+    ".github/velnor/release_source_snapshot.sh",
+    ".github/velnor/release_source_snapshot_entry.py",
+    ".github/velnor/release_source_snapshot_output.py",
+    ".github/velnor/release_source_tree.py",
+    ".github/velnor/release_source_validation.py",
+    ".github/workflows/release.yml",
+];
+
+/// Retired launcher paths accepted only for marker-proven stale removal.
+pub const RELEASE_RETIRED_TREE_PATHS: &[&str] = &[
+    ".github/release-plz-bootstrap.toml",
+    ".github/release-plz.toml",
+    ".github/velnor/release_preflight.py",
+    ".github/velnor/release_preflight.sh",
+    ".github/velnor/release_reconcile.py",
+    ".github/velnor/release_reconcile_preflight.py",
 ];
 
 /// Release-owned paths the generator removes when release is disabled.
@@ -82,17 +130,14 @@ pub fn render_release_workflow(
 ) -> Result<String, RenderError> {
     ctx.validate()?;
     spec.validate()?;
+    crate::source_helper::validate_registry(&spec.helper_registry, &ctx.generator_version)?;
     for (id, job) in &spec.jobs {
         if job.runs_on != ctx.runs_on {
             return Err(RenderError::InvalidWorkflow(format!("label_mismatch:{id}")));
         }
     }
-    let binding = ReleaseConfigBinding {
-        effective: RELEASE_CONFIG_PATH,
-        bootstrap: RELEASE_BOOTSTRAP_CONFIG_PATH,
-    };
-    check_release_jobs(spec, &binding)?;
-    let document = release_document(spec)?;
+    check_release_jobs(spec)?;
+    let document = release_document(spec, &ctx.generator_version)?;
     let document = crate::yaml::quote_run_values_in_yaml(document);
     let text = marker::with_marker(&ctx.generator_version, &render_yaml(&document))?;
     steps::scan_for_private_subcommands(&text)?;
@@ -100,10 +145,13 @@ pub fn render_release_workflow(
 }
 
 /// Build the release document: name, on, permissions, concurrency, jobs.
-fn release_document(spec: &ReleaseWorkflowSpec) -> Result<Yaml, RenderError> {
+fn release_document(spec: &ReleaseWorkflowSpec, version: &str) -> Result<Yaml, RenderError> {
     let mut jobs = Vec::with_capacity(spec.jobs.len());
     for (id, job) in &spec.jobs {
-        jobs.push((id.clone(), release_job_to_yaml(job)?));
+        jobs.push((
+            id.clone(),
+            release_job_to_yaml(job, &spec.helper_registry, version)?,
+        ));
     }
     Ok(Yaml::Map(vec![
         ("name".to_owned(), Yaml::str(spec.name.clone())),
@@ -170,7 +218,11 @@ fn release_triggers_to_yaml(triggers: &ReleaseTriggers) -> Yaml {
 }
 
 /// Render one release job with environment, permissions, needs, steps.
-fn release_job_to_yaml(job: &ReleaseJobSpec) -> Result<Yaml, RenderError> {
+fn release_job_to_yaml(
+    job: &ReleaseJobSpec,
+    records: &[velnor_actions_contract::CompiledSourceHelper],
+    version: &str,
+) -> Result<Yaml, RenderError> {
     steps::scan_for_private_subcommands(&job.display_name)?;
     let mut entries = vec![
         ("name".to_owned(), Yaml::str(job.display_name.clone())),
@@ -186,6 +238,10 @@ fn release_job_to_yaml(job: &ReleaseJobSpec) -> Result<Yaml, RenderError> {
     entries.push((
         "permissions".to_owned(),
         Yaml::Map(vec![
+            (
+                "actions".to_owned(),
+                Yaml::str(job.permissions.actions.as_str()),
+            ),
             (
                 "contents".to_owned(),
                 Yaml::str(job.permissions.contents.as_str()),
@@ -208,44 +264,56 @@ fn release_job_to_yaml(job: &ReleaseJobSpec) -> Result<Yaml, RenderError> {
             .collect();
         entries.push(("needs".to_owned(), Yaml::Seq(needs)));
     }
+    entries.push((
+        "outputs".to_owned(),
+        Yaml::Map(
+            job.outputs
+                .iter()
+                .map(|output| (output.name.clone(), Yaml::str(output.value.expression())))
+                .collect(),
+        ),
+    ));
     if let Some(condition) = &job.condition {
         steps::scan_for_private_subcommands(condition)?;
         entries.push(("if".to_owned(), Yaml::str(condition.clone())));
     }
     let mut rendered = Vec::with_capacity(job.steps.len());
     for step in &job.steps {
-        rendered.push(crate::steps_plain::plain_step_to_yaml(step)?);
+        let yaml = if matches!(
+            step.kind,
+            velnor_actions_contract::StepKind::SourceBoundHelper { .. }
+        ) {
+            crate::source_helper::source_helper_step_to_yaml(step, records, version, &job.runs_on)?
+        } else {
+            crate::steps_plain::plain_step_to_yaml(step)?
+        };
+        rendered.push(yaml);
     }
     entries.push(("steps".to_owned(), Yaml::Seq(rendered)));
     Ok(Yaml::Map(entries))
 }
 
-/// The three rendered release files with their fixed tree paths.
+/// Complete release family, including fixed protected interpreter support files.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReleaseFiles {
     /// `release.yml` workflow bytes.
     pub workflow: RenderedFile,
-    /// Effective normal-policy config bytes.
-    pub config: RenderedFile,
-    /// Bootstrap-only config bytes.
-    pub bootstrap_config: RenderedFile,
+    /// Generator-owned fixed Python helpers and receipt launchers.
+    pub helpers: Vec<RenderedFile>,
 }
 
 impl ReleaseFiles {
-    /// Borrow the three files as a sorted vector for tree assembly.
+    /// Borrow the complete family as a sorted vector for tree assembly.
     #[must_use]
     pub fn as_sorted_vec(&self) -> Vec<RenderedFile> {
-        let mut files = vec![
-            self.workflow.clone(),
-            self.config.clone(),
-            self.bootstrap_config.clone(),
-        ];
+        let mut files = vec![self.workflow.clone()];
+        files.extend(self.helpers.iter().cloned());
         files.sort_by(|left, right| left.path.cmp(&right.path));
         files
     }
 }
 
-/// Render the workflow plus both effective configs with fixed paths.
+/// Render the workflow and its complete immutable source-owned helper family.
 ///
 /// # Errors
 ///
@@ -253,37 +321,54 @@ impl ReleaseFiles {
 pub fn render_release_files(
     spec: &ReleaseWorkflowSpec,
     ctx: &ReleaseRenderContext,
-    config: &ReleasePlzConfig,
-    bootstrap: &BootstrapReleasePlzConfig,
 ) -> Result<ReleaseFiles, RenderError> {
     let workflow = render_release_workflow(spec, ctx)?;
-    let normal = render_release_plz_config(config, &ctx.generator_version)?;
-    let bootstrap_text = render_bootstrap_release_plz_config(bootstrap, &ctx.generator_version)?;
     let files = ReleaseFiles {
         workflow: RenderedFile {
             path: RELEASE_WORKFLOW_PATH.to_owned(),
             bytes: workflow,
         },
-        config: RenderedFile {
-            path: RELEASE_CONFIG_PATH.to_owned(),
-            bytes: normal,
-        },
-        bootstrap_config: RenderedFile {
-            path: RELEASE_BOOTSTRAP_CONFIG_PATH.to_owned(),
-            bytes: bootstrap_text,
-        },
+        helpers: support_files(&ctx.generator_version, &spec.support_sources)?,
     };
     check_release_paths(&files)?;
+    Ok(files)
+}
+
+/// Emit fixed sources with exactly the same marker bytes as shared native helpers.
+fn support_files(
+    version: &str,
+    owned: &[velnor_actions_contract::CompiledSupportSource],
+) -> Result<Vec<RenderedFile>, RenderError> {
+    let mut files = Vec::with_capacity(owned.len());
+    for source in owned {
+        marker::check_first_line(source.source(), version)?;
+        files.push(RenderedFile {
+            path: source.path().to_owned(),
+            bytes: source.source().to_owned(),
+        });
+    }
     Ok(files)
 }
 
 /// Validate the release paths against the fixed release allowlist.
 fn check_release_paths(files: &ReleaseFiles) -> Result<(), RenderError> {
     guard::validate_allowlisted_path(&files.workflow.path, &[RELEASE_WORKFLOW_PATH])?;
-    guard::validate_allowlisted_path(&files.config.path, &[RELEASE_CONFIG_PATH])?;
-    guard::validate_allowlisted_path(
-        &files.bootstrap_config.path,
-        &[RELEASE_BOOTSTRAP_CONFIG_PATH],
-    )?;
+    for file in &files.helpers {
+        guard::validate_allowlisted_path(&file.path, RELEASE_TREE_PATHS)?;
+    }
+    let paths = files
+        .as_sorted_vec()
+        .into_iter()
+        .map(|file| file.path)
+        .collect::<Vec<_>>();
+    if paths
+        .iter()
+        .map(String::as_str)
+        .ne(RELEASE_TREE_PATHS.iter().copied())
+    {
+        return Err(RenderError::InvalidWorkflow(
+            "release_helper_inventory".to_owned(),
+        ));
+    }
     Ok(())
 }

@@ -82,9 +82,9 @@ fn sample_text() -> Result<String, OrchestratorError> {
 /// Commented sample body from cli-contract section 4.
 const SAMPLE_BODY: &str = r#"schema = 1
 
-# Velnor replaces the entire .github tree on generate. Keep CODEOWNERS at the
-# repository root or under docs/ (both are GitHub-recognized); anything inside
-# .github is removed.
+# Velnor owns .github/workflows/ and its exact generated instruction, actionlint,
+# and release config paths. Other .github entries (including CODEOWNERS) survive
+# generation and previews with their bytes, permissions, and symlink targets.
 
 # Optional workflow display and policy settings. Omitted values use Velnor defaults.
 # [workflow]
@@ -108,6 +108,27 @@ const SAMPLE_BODY: &str = r#"schema = 1
 # Optional exact registered stack IDs to suppress after detection.
 # [stacks]
 # ignore = []                           # Example: ["rust"].
+
+# Optional named native workloads, sorted by name. Operations use fixed argv;
+# roots and inputs are explicit repository-relative paths. No raw shell/commands.
+# Enable only operations matching the repository's declared contract:
+# bun_ci runs frozen install/build/test; docker_build builds root/Dockerfile;
+# swift_test builds and tests a Swift package. No universal commands are inferred.
+# [[stacks.workloads]]
+# name = "bun-web"
+# kind = "bun_ci"
+# root = "web"
+# inputs = ["web/bun.lock", "web/package.json"]
+# [[stacks.workloads]]
+# name = "docker-service"
+# kind = "docker_build"
+# root = "service"
+# inputs = ["service/Dockerfile"]
+# [[stacks.workloads]]
+# name = "swift-desktop"
+# kind = "swift_test"
+# root = "desktop"
+# inputs = ["desktop/Package.resolved", "desktop/Package.swift"]
 
 # Optional Rust task configuration. The Rust detector is automatic in V1.
 # [stacks.rust]

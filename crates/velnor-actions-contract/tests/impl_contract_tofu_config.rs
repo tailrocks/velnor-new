@@ -133,6 +133,7 @@ fn missing_roots_key_rejected() {
 fn absent_tofu_table_stays_valid_and_schema_stable() {
     assert_eq!(VelnorConfig::SCHEMA, 1);
     let stacks = StacksConfig {
+        workloads: Vec::new(),
         ignore: Vec::new(),
         rust: None,
         tofu: None,
@@ -152,15 +153,13 @@ fn unit_prefix_folds_dot_only() {
 }
 
 #[test]
-fn reserved_root_spelling_rejected() {
+fn literal_root_spelling_is_an_ordinary_directory() {
     for raw in [&["root"][..], &[".", "root"][..]] {
-        let err = tofu(raw).validate("config.toml").expect_err("root fails");
-        assert!(
-            err.to_string().contains("reserved_root_key"),
-            "{raw:?}: {err}"
-        );
+        tofu(raw)
+            .validate("config.toml")
+            .expect("distinct roots validate");
     }
-    assert!(Utf8RepoRelDir::parse("root").is_err());
+    assert!(Utf8RepoRelDir::parse("root").is_ok());
     assert!(Utf8RepoRelDir::parse("roots").is_ok());
     assert!(Utf8RepoRelDir::parse("a/root").is_ok());
 }
@@ -169,12 +168,14 @@ fn reserved_root_spelling_rejected() {
 fn tofu_is_a_registered_ignorable_stack() {
     assert!(VelnorConfig::REGISTERED_STACKS.contains(&"tofu"));
     let stacks = StacksConfig {
+        workloads: Vec::new(),
         ignore: vec!["tofu".to_owned()],
         rust: None,
         tofu: None,
     };
     assert!(stacks.validate("config.toml").is_ok());
     let stacks = StacksConfig {
+        workloads: Vec::new(),
         ignore: vec!["cobol".to_owned()],
         rust: None,
         tofu: None,

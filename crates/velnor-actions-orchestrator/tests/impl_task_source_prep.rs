@@ -80,10 +80,9 @@ fn crate_job_fetches_lockful_sources_before_obligations() -> TestResult {
     };
     assert_eq!(&run[..2], ["sh", "-c"]);
     for need in [
-        "metadata --locked --offline",
+        "fetch --locked --offline",
         "cargo fetch --locked",
-        "mkdir -p \"$RUNNER_TEMP/velnor/cargo-clean\"",
-        "cd \"$RUNNER_TEMP/velnor/cargo-clean\"",
+        "cd \"$GITHUB_WORKSPACE\"",
         "--manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\"",
     ] {
         assert!(run[2].contains(need), "fetch script misses {need}");
@@ -194,6 +193,105 @@ fn mbx_objects_precede_fetch_on_mbx_crates() -> TestResult {
     assert!(
         names.iter().all(|name| *name != "Restore Cargo registry"),
         "MBX crates never stack rust-cache: {names:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn unqualified_registry_disables_source_transport_but_keeps_real_fetch() -> TestResult {
+    let repo = make_repo(config_with_branch())?;
+    fs::write(repo.path().join("Cargo.lock"), demo_lock("demo"))?;
+    fs::create_dir(repo.path().join(".cargo"))?;
+    fs::write(
+        repo.path().join(".cargo/config.toml"),
+        "[registries.private]\nindex='https://private.example/index'\n",
+    )?;
+    let prep = prepare(repo.path())?;
+    for (id, job) in &prep.workflow.ir.jobs {
+        assert!(
+            job.steps.iter().all(|step| !matches!(
+                step.name.as_str(),
+                "Restore Cargo sources" | "Save Cargo sources" | "Restore Cargo registry"
+            )),
+            "unqualified source transport in {id}"
+        );
+    }
+    let crate_job = prep
+        .workflow
+        .ir
+        .jobs
+        .get("rust-demo")
+        .ok_or_else(|| std::io::Error::other("missing crate job"))?;
+    assert!(
+        crate_job
+            .steps
+            .iter()
+            .any(|step| step.name == "Fetch Cargo sources")
+    );
+    assert!(crate_job.steps.iter().any(|step| step.name == "Clippy"));
+    Ok(())
+}
+
+/// Standalone workspaces must keep their fetch preparation in their own lanes.
+#[test]
+fn crate_jobs_fetch_only_their_workspace_while_plan_fetches_both() -> TestResult {
+    let repo = make_repo(config_with_branch())?;
+    let root = repo.path();
+    fs::write(root.join("Cargo.lock"), demo_lock("demo"))?;
+    let nested = root.join("standalone");
+    fs::create_dir_all(nested.join("src"))?;
+    fs::write(
+        nested.join("Cargo.toml"),
+        "[package]\nname = \"other\"\nversion = \"0.1.0\"\nedition = \"2021\"\n[workspace]\n",
+    )?;
+    fs::write(nested.join("src/lib.rs"), "pub fn standalone() {}\n")?;
+    fs::write(nested.join("Cargo.lock"), demo_lock("other"))?;
+    let prep = prepare(root)?;
+    assert_eq!(
+        prep.discovery.workspaces.len(),
+        2,
+        "two actual Cargo inventories"
+    );
+    for (id, expected, excluded) in [
+        ("rust-demo", "Cargo.toml", "standalone/Cargo.toml"),
+        ("rust-other", "standalone/Cargo.toml", "Cargo.toml"),
+    ] {
+        let job = prep
+            .workflow
+            .ir
+            .jobs
+            .get(id)
+            .ok_or_else(|| std::io::Error::other(format!("missing {id}")))?;
+        let steps: Vec<_> = job
+            .steps
+            .iter()
+            .filter(|step| step.name.starts_with("Fetch Cargo sources"))
+            .collect();
+        assert_eq!(steps.len(), 1, "{id} fetches only its own workspace");
+        let StepKind::Shell { run, .. } = &steps[0].kind else {
+            return Err("fetch must be a shell step".into());
+        };
+        assert!(run[2].contains(&format!("--manifest-path \"$GITHUB_WORKSPACE/{expected}\"")));
+        assert!(!run[2].contains(&format!("--manifest-path \"$GITHUB_WORKSPACE/{excluded}\"")));
+    }
+    let plan = prep
+        .workflow
+        .ir
+        .jobs
+        .get("plan")
+        .ok_or_else(|| std::io::Error::other("missing plan"))?;
+    let names: Vec<_> = plan
+        .steps
+        .iter()
+        .filter(|step| step.name.starts_with("Fetch Cargo sources"))
+        .map(|step| step.name.as_str())
+        .collect();
+    assert_eq!(
+        names,
+        [
+            "Fetch Cargo sources",
+            "Fetch Cargo sources (standalone/Cargo.toml)"
+        ]
     );
     Ok(())
 }

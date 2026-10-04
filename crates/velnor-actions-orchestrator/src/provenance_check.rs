@@ -11,6 +11,12 @@ use velnor_actions_contract::{digest_b3, validate_digest};
 use crate::internal_plan::snapshot::UNRESOLVED_GENERATOR_SHA;
 use crate::merge::BaselineManifest;
 
+#[path = "provenance_lineage.rs"]
+mod provenance_lineage;
+pub(crate) use provenance_lineage::{
+    baseline_can_carry, validate_manifest_lineage, validate_manifest_lineage_at,
+};
+
 // Unit tests live here so `provenance_check.rs` keeps its size gate.
 #[cfg(test)]
 #[path = "provenance_check_tests.rs"]
@@ -47,10 +53,8 @@ pub(crate) struct ProvenanceExpectations {
 /// Only validated values construct coverage proofs and baseline records;
 /// validated-but-uncarried dimensions (event, ref, workflow, attempt,
 /// schema, generator, repository) are enforced by validation.
-/// Forwarded proof runs (originating run differs from the carrying run)
-/// fail validation outright: the manifest cannot prove the originating
-/// run succeeded, and warn-and-cover would grant coverage for success
-/// nobody attested.
+/// Carried execution proofs require a digest-bound chain of protected
+/// successful baselines ending at their original direct execution.
 #[derive(Debug, Clone)]
 pub(crate) struct ValidatedProvenance {
     /// Exact trusted source commit.
@@ -150,14 +154,7 @@ pub(crate) fn validate_provenance(
             == crate::cover_compat::baseline_artifact_numeric_id(&manifest.artifact_name),
         "artifact_mismatch",
     )?;
-    for task in &manifest.tasks {
-        validate_task_entry(task, manifest.run_id)?;
-    }
-    let bound = manifest
-        .tasks
-        .iter()
-        .all(|task| task_run_ids_bound(task, manifest.run_id));
-    reject(bound, "originating_run_unverified")?;
+    validate_manifest_lineage(manifest)?;
     Ok(ValidatedProvenance {
         source_commit: manifest.source_commit.clone(),
         run_id: manifest.run_id,
@@ -167,26 +164,14 @@ pub(crate) fn validate_provenance(
     })
 }
 
-/// Shared run-binding predicate: a task entry is bound to the carrying
-/// manifest's own run only. Plan-time [`validate_provenance`] and
-/// merge-time revalidation call this one predicate so a forwarded proof
-/// the plan rejects can never pass at merge.
-pub(crate) fn task_run_ids_bound(
-    task: &crate::merge::required_evidence::BaselineTaskEntry,
-    run_id: u64,
-) -> bool {
-    run_id > 0 && task.proof_run_id == run_id && task.observed_run_id == run_id
-}
-
 /// Validate one task entry: identities, run binding, freshness, proof.
 ///
-/// Every entry passes every check: a structured proof adds its binding
-/// check on top instead of replacing the identity, run, and freshness
-/// checks. The observing run must be the carrying manifest's own run:
+/// Every entry requires structured proof in addition to its identity, run
+/// and freshness checks. The observing run must be the carrying manifest's own run:
 /// an entry "observed" by any other run is a carried-proof identity
 /// mismatch. A same-run proof run is success-bound by the manifest's
-/// own trusted checks; a forwarded proof run fails the manifest in
-/// [`validate_provenance`], never warn-and-cover.
+/// own trusted checks; a forwarded proof requires authenticated lineage
+/// through [`validate_manifest_lineage`].
 /// # Errors
 ///
 /// Returns the first failing check's reason.
@@ -209,10 +194,12 @@ pub(crate) fn validate_task_entry(
         .as_ref()
         .is_none_or(|proof| proof.validate().is_ok());
     reject(fresh_ok, "bad_external_data")?;
-    if let Some(proof) = &task.proof {
-        proof.validate().map_err(|_| "bad_task_proof".to_owned())?;
-        reject(proof_matches_task(proof, task), "proof_mismatch")?;
-    }
+    let proof = task
+        .proof
+        .as_ref()
+        .ok_or_else(|| "missing_task_proof".to_owned())?;
+    proof.validate().map_err(|_| "bad_task_proof".to_owned())?;
+    reject(proof_matches_task(proof, task), "proof_mismatch")?;
     Ok(())
 }
 

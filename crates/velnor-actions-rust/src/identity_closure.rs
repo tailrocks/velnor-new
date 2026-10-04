@@ -192,7 +192,6 @@ mod tests {
             uses_clock: false,
             uses_random: false,
             nextest_profile: crate::profile::NextestProfile::Default,
-            run_ignored: None,
         }
     }
 

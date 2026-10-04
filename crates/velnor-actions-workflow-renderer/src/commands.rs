@@ -7,6 +7,11 @@ use std::collections::BTreeMap;
 
 use crate::{RenderError, steps::scan_for_private_subcommands};
 
+mod inline_shell;
+
+pub(crate) use inline_shell::inline_script_index;
+pub use inline_shell::quote_literal_run_arg;
+
 /// Validate a fixed argument vector: nonempty, no shell fragments.
 ///
 /// Rejects empty argv, empty args, control characters, command substitution,
@@ -19,6 +24,9 @@ use crate::{RenderError, steps::scan_for_private_subcommands};
 ///
 /// Returns [`RenderError::BadCommand`] or [`RenderError::PrivateSubcommand`].
 pub fn validate_command_argv(argv: &[String]) -> Result<(), RenderError> {
+    if crate::cache_p08::is_preflight_argv(argv) {
+        return Ok(());
+    }
     if argv.is_empty() {
         return Err(RenderError::BadCommand("empty_argv".to_owned()));
     }
@@ -61,7 +69,21 @@ pub fn validate_command_argv(argv: &[String]) -> Result<(), RenderError> {
 ///
 /// Returns [`RenderError::BadCommand`] or [`RenderError::PrivateSubcommand`].
 pub fn validate_env(env: &BTreeMap<String, String>) -> Result<(), RenderError> {
+    crate::cache_p08::validate_preflight_env(env)?;
     for (key, value) in env {
+        if matches!(
+            key.as_str(),
+            "GITHUB_ENV" | "GITHUB_OUTPUT" | "GITHUB_PATH" | "GITHUB_STATE" | "GITHUB_STEP_SUMMARY"
+        ) {
+            return Err(RenderError::BadCommand(
+                "runner_command_environment_override".to_owned(),
+            ));
+        }
+        if key.starts_with("VELNOR_COMPILED_HELPER_") {
+            return Err(RenderError::BadCommand(
+                "source_helper_reserved_environment".to_owned(),
+            ));
+        }
         if key.is_empty()
             || !key
                 .bytes()
@@ -98,33 +120,19 @@ pub fn validate_env(env: &BTreeMap<String, String>) -> Result<(), RenderError> {
 pub fn join_argv_for_run(argv: &[String]) -> Result<String, RenderError> {
     validate_command_argv(argv)?;
     let prefix = crate::toolchain_env::unset_prefix_len(argv);
-    let script_at = is_inline_shell(&argv[prefix..]).then_some(prefix + 2);
+    let script_at = inline_script_index(&argv[prefix..]).map(|index| prefix + index);
     Ok(argv
         .iter()
         .enumerate()
         .map(|(index, arg)| {
             if script_at == Some(index) {
-                quote_script_arg(arg)
+                quote_literal_run_arg(arg)
             } else {
                 quote_run_arg(arg)
             }
         })
         .collect::<Vec<_>>()
         .join(" "))
-}
-
-/// True for `sh -c <script>`/`bash -c <script>` vectors.
-pub(crate) fn is_inline_shell(argv: &[String]) -> bool {
-    argv.len() > 2 && matches!(argv[0].as_str(), "sh" | "bash") && argv[1].as_str() == "-c"
-}
-
-/// Single-quote one inline script; only `'` needs escaping.
-///
-/// Inside single quotes `$`, `"`, and `\` stay literal for the outer
-/// shell, so the inner shell expands inherited env plus its own
-/// assignments exactly as the fixed script intends.
-fn quote_script_arg(script: &str) -> String {
-    format!("'{}'", script.replace('\'', "'\\''"))
 }
 
 /// POSIX-quote one argv element, preserving `$` expansion spans.

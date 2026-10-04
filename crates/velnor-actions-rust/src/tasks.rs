@@ -87,8 +87,6 @@ pub struct TaskGroup {
     pub test_runner: TestRunner,
     /// Resolved Nextest profile.
     pub nextest_profile: NextestProfile,
-    /// Whether nextest should run ignored tests.
-    pub run_ignored: Option<String>,
     /// Declared non-Rust task inputs (sorted, deduped).
     pub declared_inputs: Vec<String>,
     /// Build script may read undeclared inputs (conservative at derive).
@@ -152,7 +150,6 @@ struct GroupBase<'a> {
     driver: CompileDriver,
     runner: TestRunner,
     nextest_profile: NextestProfile,
-    run_ignored: Option<String>,
     package: &'a PackageRecord,
 }
 
@@ -177,12 +174,11 @@ pub fn derive_task_groups(inputs: &DeriveInputs<'_>) -> Result<Vec<TaskGroup>, C
         driver: inputs.profile.compile_driver,
         runner: inputs.profile.test_runner,
         nextest_profile: inputs.profile.nextest_profile,
-        run_ignored: inputs.profile.run_ignored.clone(),
         package: inputs.package,
     };
     let clippy_id = task_id(&base, TaskKind::Clippy)?;
     let mut groups = vec![clippy_group(&base, &clippy_id)];
-    let (build_id, test_kind) = if inputs.profile.test_runner == TestRunner::CargoNextest {
+    let build_id = if inputs.profile.test_runner == TestRunner::CargoNextest {
         let id = task_id(&base, TaskKind::Build)?;
         groups.push(plain_group(
             &base,
@@ -191,9 +187,14 @@ pub fn derive_task_groups(inputs: &DeriveInputs<'_>) -> Result<Vec<TaskGroup>, C
             std::slice::from_ref(&clippy_id),
             &[],
         ));
-        (Some(id), TaskKind::Nextest)
+        Some(id)
     } else {
-        (None, TaskKind::Test)
+        None
+    };
+    let test_kind = if inputs.profile.test_runner == TestRunner::CargoNextest {
+        TaskKind::Nextest
+    } else {
+        TaskKind::Test
     };
     let test_id = task_id(&base, test_kind)?;
     groups.push(test_group(
@@ -251,7 +252,6 @@ pub fn derive_workspace_fmt(
         compile_driver: profile.compile_driver,
         test_runner: profile.test_runner,
         nextest_profile: profile.nextest_profile,
-        run_ignored: None,
         declared_inputs: Vec::new(),
         undeclared_reads: false,
         uses_network: false,
@@ -318,7 +318,6 @@ fn plain_group(
         compile_driver: base.driver,
         test_runner: base.runner,
         nextest_profile: base.nextest_profile,
-        run_ignored: None,
         declared_inputs: Vec::new(),
         undeclared_reads: base.package.has_build_script,
         uses_network: false,
@@ -342,15 +341,10 @@ fn test_group(
     clippy_id: &str,
     build_id: Option<&str>,
 ) -> TaskGroup {
-    let mut group = plain_group(base, kind, id, &[clippy_id.to_owned()], &[]);
+    let gate = clippy_id.to_owned();
+    let mut group = plain_group(base, kind, id, std::slice::from_ref(&gate), &[]);
     if kind == TaskKind::Test {
         group.target_flags = target_flags(base.package);
-    }
-    if kind == TaskKind::Nextest {
-        group.run_ignored = base.run_ignored.clone().or_else(|| {
-            (base.package.name.contains("conformance") || base.package.name.contains("visual"))
-                .then(|| "all".to_owned())
-        });
     }
     group.no_test_targets = !has_test_targets(base.package);
     group.depends_on = build_id.map(str::to_owned).into_iter().collect();
@@ -359,24 +353,37 @@ fn test_group(
 
 /// Build the doctest group, separate in either test profile.
 fn doctest_group(base: &GroupBase<'_>, id: &str, clippy_id: &str) -> TaskGroup {
-    let mut group = plain_group(base, TaskKind::Doctest, id, &[clippy_id.to_owned()], &[]);
+    let gate = clippy_id.to_owned();
+    let mut group = plain_group(
+        base,
+        TaskKind::Doctest,
+        id,
+        std::slice::from_ref(&gate),
+        &[],
+    );
     group.no_test_targets = !base.package.targets.iter().any(|target| target.doctest);
     group
 }
 
 /// Test-bearing non-doc target flags; `test = false` targets get none.
 fn target_flags(package: &PackageRecord) -> Vec<String> {
-    [
+    let mut flags = Vec::new();
+    for (kind, flag) in [
         ("lib", "--lib"),
         ("bin", "--bins"),
         ("test", "--tests"),
         ("example", "--examples"),
         ("bench", "--benches"),
-    ]
-    .into_iter()
-    .filter(|(k, _)| package.targets.iter().any(|t| t.kind == *k && t.test))
-    .map(|(_, f)| (*f).to_owned())
-    .collect()
+    ] {
+        let hit = package
+            .targets
+            .iter()
+            .any(|target| target.kind == kind && target.test);
+        if hit {
+            flags.push(flag);
+        }
+    }
+    flags.into_iter().map(str::to_owned).collect()
 }
 
 /// Whether any target is exercised by `cargo test` (mirrors `test`).

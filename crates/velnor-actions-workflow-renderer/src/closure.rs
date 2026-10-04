@@ -59,12 +59,12 @@ pub enum HelperProvenance {
 /// Acquire step from typed provenance; the seed path fails closed.
 ///
 /// Release provenance builds the digest-verified staging step over
-/// caller-supplied fixed argv (download plus `sha256sum -c`); the seed
+/// the canonical staged-path constructor; the seed
 /// path emits nothing and reports the documented manual remediation.
 /// # Errors
 pub fn provision_acquire_step(
     provenance: &HelperProvenance,
-    argv: Vec<String>,
+    staged: &str,
 ) -> Result<Step, RenderError> {
     match provenance {
         HelperProvenance::ReleaseAsset {
@@ -77,7 +77,7 @@ pub fn provision_acquire_step(
                 (steps::ASSET_SHA_ENV.to_owned(), sha256.clone()),
                 (steps::RELEASE_COMMIT_ENV.to_owned(), commit.clone()),
             ]);
-            steps::acquire_velnor_step(argv, &env)
+            steps::acquire_velnor_step(staged, &env)
         }
         HelperProvenance::SeedRequired => {
             Err(RenderError::InvalidWorkflow(SEED_REMEDIATION.to_owned()))
@@ -290,10 +290,11 @@ pub(crate) fn insert_plan_closure(
     }) else {
         return Ok(());
     };
-    if !plan
-        .steps
-        .iter()
-        .any(|step| step.name == CHECK_GENERATED_NAME)
+    if !crate::early_plan::has_early_plan(plan)
+        && !plan
+            .steps
+            .iter()
+            .any(|step| step.name == CHECK_GENERATED_NAME)
     {
         let check = freshness_step(&ctx.staged_binary, FRESHNESS_OUTDIR, &ctx.plan_consumer_env)?;
         plan.steps.insert(at, check);

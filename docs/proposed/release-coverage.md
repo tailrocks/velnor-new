@@ -36,14 +36,16 @@ mismatch fail-closed, manifest/environment/tag validation, non-lockstep
 allowlist-bound groups, stack key paths, determinism, IR permission rules,
 dispatch charset/order, schedule and environment safety.
 
-## Coordinator argv (`velnor-actions-mise`)
+## Fixed publication protocol and preparation
 
-`impl_mise_release_plz.rs`: exact `0.3.169` pin, full-SHA256 cksum,
-release-pr/release argv shapes, phase separation, explicit `--config`,
-token/OIDC constructor split, trusted-publishing gate, pinned coordinator
-command, policy/freshness mirrors. `impl_mise_release_modes.rs` adds:
-dry-run snapshot without token, auth no-blend/no-fallback, single `-p`
-semantics, spaced-path argv safety, coordinator payload equality past `--`.
+Publication uses fixed Rust-owned registry and composer-owned forge helpers.
+Required protocol cases include exact Cargo metadata/framing, immutable crate
+checksums, owner policy, dependency order, OIDC/bootstrap exclusivity,
+accepted-upload timeout, delayed index visibility, partial receipts, and
+collision recovery. Preparation qualifies the pinned anonymous release-plz
+`update` seam separately from fixed GitHub PR writes. Protocol provenance is
+recorded in `docs/reviews/fixed-registry-publisher-protocol.md`; offline
+mocked protocol tests must accompany the owner modules.
 
 ## Workflow rendering (`velnor-actions-workflow-renderer`)
 
@@ -63,8 +65,10 @@ semantics, spaced-path argv safety, coordinator payload equality past `--`.
 
 ## Cross-cutting semantics
 
-- **SHA vs workflow SHA:** preflight and publishers check out the approved
-  `source_sha` exactly (`checkout_without_exact_source` otherwise); the
+- **SHA vs workflow SHA:** anonymous packaging checks out the approved
+  `source_sha` exactly. Fresh publishers authenticate immutable package
+  artifacts by server ID, raw ZIP digest, source, producer, run and attempt;
+  they perform no checkout. The
   publish gate references only the approved plan/source, never
   `github.sha`/`github.ref` (asserted in the gate test).
 - **Release-PR head vs merge:** dispatch defaults bind the approved plan
@@ -77,10 +81,12 @@ semantics, spaced-path argv safety, coordinator payload equality past `--`.
   generator emits the structure CI executes — publishers never cancel
   (`publisher_cancel` rejected), overlapping sets serialize on the
   stable repository-anchored lock (run/version-unique keys rejected),
-  every publish needs preflight (eligibility rechecked after the lock),
+  every registry publication needs package and fresh forge preflight;
+  forge publication additionally needs the registry receipt;
   reconcile `always()` runs and independently verifies, and identical
   inputs render byte-identical files (determinism tests). The generator
-  performs no retries itself.
+  performs no retries itself. Fixed runtime protocol helpers use bounded
+  observation and recovery without replaying an uncertain upload blindly.
 - **Preview/migration/cleanup:** `generate --output-dir` previews the
   same tree; `release_stale_paths` names the three release-owned paths
   the tree swap removes when release is disabled

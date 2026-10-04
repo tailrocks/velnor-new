@@ -1,0 +1,56 @@
+{
+  "kind": "local_semantics_only_not_fresh_hosted_performance",
+  "fixture": "<LOCAL_TMP>",
+  "cache": "<LOCAL_TMP>",
+  "steps": [
+    {
+      "argv": [
+        "<LOCAL_HOME>/.local/share/mise/installs/mr-boxington/1.21.0/.mise-bins/mbx",
+        "nextest",
+        "--version"
+      ],
+      "exit": 0,
+      "seconds": 0.059897457977058366,
+      "log": "<LOCAL_TMP>",
+      "contains_failure": false
+    },
+    {
+      "argv": [
+        "<LOCAL_HOME>/.local/share/mise/installs/mr-boxington/1.21.0/.mise-bins/mbx",
+        "nextest",
+        "list",
+        "--profile",
+        "default",
+        "--list-type",
+        "binaries-only",
+        "--locked",
+        "--offline",
+        "--package",
+        "velnor-c08-probe"
+      ],
+      "exit": 0,
+      "seconds": 0.6241893749975134,
+      "log": "<LOCAL_TMP>",
+      "contains_failure": false
+    },
+    {
+      "argv": [
+        "<LOCAL_HOME>/.local/share/mise/installs/mr-boxington/1.21.0/.mise-bins/mbx",
+        "nextest",
+        "run",
+        "--profile",
+        "default",
+        "--locked",
+        "--offline",
+        "--package",
+        "velnor-c08-probe",
+        "--no-tests",
+        "fail"
+      ],
+      "exit": 100,
+      "seconds": 1.2962330000009388,
+      "log": "<LOCAL_TMP>",
+      "contains_failure": true
+    }
+  ]
+}

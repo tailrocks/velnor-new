@@ -13,13 +13,13 @@ use velnor_actions_actionlint::{
     actions::{CACHE_ACTION_SHA, CACHE_ACTION_VERSION},
     checkout_inputs_schema, validate_action_inputs,
 };
-use velnor_actions_contract::{Job, ProposedTask, Step, StepKind};
+use velnor_actions_contract::{CompiledSourceHelper, Job, ProposedTask, Step, StepKind};
 use velnor_actions_mise::{Gate6Fixture, TaskCacheMode, ToolCatalog, ToolHomes};
 use velnor_actions_rust::is_workspace_fmt_task;
 use velnor_actions_workflow_renderer::plan_format;
 use velnor_actions_workflow_renderer::render::PLAN_JOB_ID;
 use velnor_actions_workflow_renderer::steps::{
-    CompileDriver, TASK_ARTIFACTS_DIR, cache_action_step, check_mbx_gating,
+    CompilerDriver, TASK_ARTIFACTS_DIR, cache_action_step, check_mbx_gating,
 };
 
 use crate::OrchestratorError;
@@ -53,6 +53,7 @@ pub(crate) fn checkout_step() -> Result<Step, OrchestratorError> {
         }
     })?;
     Ok(Step {
+        id: None,
         name: "Checkout".to_owned(),
         condition: None,
         kind: StepKind::Action {
@@ -65,11 +66,10 @@ pub(crate) fn checkout_step() -> Result<Step, OrchestratorError> {
 
 /// Checkout with full history for git-archaeology jobs (plan only).
 ///
-/// Plan verifies the checkout against the PR head through the merge
-/// commit's second parent and diffs `base...head` for affected work;
-/// both need history the default depth-1 checkout never fetches, so a
-/// shallow plan checkout fails closed with `checkout_head_mismatch` on
-/// every pull-request run (CI run 36749240499).
+/// Plan binds a PR merge checkout to its exact event base and head through
+/// both parents, then compares the exact base and integration-candidate
+/// trees. Immutable base inventory also needs those objects; depth-1
+/// checkout cannot prove their identities and fails conservatively.
 ///
 /// # Errors
 ///
@@ -85,6 +85,7 @@ pub(crate) fn checkout_step_full() -> Result<Step, OrchestratorError> {
         }
     })?;
     Ok(Step {
+        id: None,
         name: "Checkout".to_owned(),
         condition: None,
         kind: StepKind::Action {
@@ -148,9 +149,6 @@ pub(crate) fn maybe_task_cache_steps(
     ])
 }
 
-/// Display name of the plan-job deferred format-report step.
-pub(crate) const REPORT_FORMAT_NAME: &str = "Report Format";
-
 /// Plan-job `Format` step for the workspace formatting scope only.
 ///
 /// Root cause (P05-5): the plan job duplicated the first crate's
@@ -163,10 +161,8 @@ pub(crate) const REPORT_FORMAT_NAME: &str = "Report Format";
 /// same config, so this step never re-checks crate-owned files (R28).
 /// No synthesis, no fallback.
 ///
-/// The step saves its exit code to an outcome file instead of
-/// reporting directly: the workflow contract fixes `Format` before
-/// `Plan`, so the plan the report binds does not exist yet. The
-/// post-plan steps from [`workspace_format_report_steps`] report it.
+/// The step runs after `Plan`, skips only this exact obligation's trusted
+/// coverage, and writes its report before propagating a formatting failure.
 ///
 /// # Errors
 ///
@@ -174,11 +170,12 @@ pub(crate) const REPORT_FORMAT_NAME: &str = "Report Format";
 pub(crate) fn workspace_format_step(
     discovery: &Discovery,
     catalog: &ToolCatalog,
+    label: &str,
 ) -> Result<Option<Step>, OrchestratorError> {
     let Some(fmt) = workspace_fmt_group(discovery) else {
         return Ok(None);
     };
-    let argv = crate::vectors::task_argv(fmt, catalog)?;
+    let (argv, identity) = workspace_format_identity(fmt, catalog, label)?;
     if argv.first().is_none_or(|program| program != "mise") {
         return Err(OrchestratorError::Contract {
             problem: "format_without_mise".to_owned(),
@@ -190,19 +187,57 @@ pub(crate) fn workspace_format_step(
         }
     })?;
     let matrix_key = matrix_key_for(fmt)?;
-    let outcome = crate::matrix_step::outcome_path_for_key(&matrix_key);
     let start = crate::matrix_step::start_path_for_key(&matrix_key);
-    let run = crate::matrix_step::outcome_wrapper_argv(&joined, &outcome, &start);
-    let env = format_step_env(catalog)?;
-    velnor_actions_workflow_renderer::shell_step(plan_format::FORMAT_STEP_NAME, run, env)
-        .map(Some)
-        .map_err(OrchestratorError::from)
+    let helper = crate::matrix_step::helper_path_for_version();
+    let run = crate::matrix_step::report_wrapper_argv(&joined, &helper, &start);
+    let mut env = format_step_env(catalog)?;
+    env.extend(identity);
+    let mut step =
+        velnor_actions_workflow_renderer::shell_step(plan_format::FORMAT_STEP_NAME, run, env)?;
+    step.condition = Some(format!(
+        "!contains(steps.plan.outputs.covered_tasks, ',{},')",
+        fmt.task_id
+    ));
+    Ok(Some(step))
+}
+
+/// Original adapter argv and runner toolchain bind the workspace report frame.
+fn workspace_format_identity(
+    task: &ProposedTask,
+    catalog: &ToolCatalog,
+    label: &str,
+) -> Result<(Vec<String>, BTreeMap<String, String>), OrchestratorError> {
+    task.validate()?;
+    if !is_workspace_fmt_task(&task.task_kind, &task.identity.unit_id, &task.display_name) {
+        return Err(crate::internal::internal(
+            "workspace_format_identity_mismatch",
+        ));
+    }
+    let argv = crate::vectors::task_argv_for_runner(task, catalog, label)?;
+    let toolchain = crate::internal_plan::toolchain_id_for_runner(task, catalog, label)?;
+    let digest = crate::internal::plan_obligation::task_digest(
+        &task.task_id,
+        &argv,
+        &toolchain,
+        None,
+        None,
+    )?;
+    let matrix_id =
+        velnor_actions_contract::matrix_id_for_task_group(&task.stack_id, &task.task_id)?;
+    let matrix_key = matrix_key_for(task)?;
+    let identity = crate::matrix_step::obligation_identity_env(
+        &task.task_id,
+        &digest,
+        &matrix_id,
+        &matrix_key,
+        None,
+    );
+    Ok((argv, identity))
 }
 
 /// Post-plan report steps for the workspace `Fmt` obligation.
 ///
-/// Reports the saved `Format` outcome through the staged helper once
-/// the plan exists, then uploads the plan job's one crate artifact.
+/// Uploads the plan job's workspace-format artifact after its report wrapper.
 /// Empty when the plan job owns no format scope.
 ///
 /// # Errors
@@ -214,21 +249,15 @@ pub(crate) fn workspace_format_report_steps(
     let Some(fmt) = workspace_fmt_group(discovery) else {
         return Ok(Vec::new());
     };
-    let matrix_key = matrix_key_for(fmt)?;
-    let outcome = crate::matrix_step::outcome_path_for_key(&matrix_key);
-    let start = crate::matrix_step::start_path_for_key(&matrix_key);
-    let helper = crate::matrix_step::helper_path_for_version();
-    let report = velnor_actions_workflow_renderer::shell_step(
-        REPORT_FORMAT_NAME,
-        crate::matrix_step::deferred_report_argv(&outcome, &helper, &start),
-        BTreeMap::from([(
-            crate::task_report::TASK_ID_ENV.to_owned(),
-            fmt.task_id.clone(),
-        )]),
-    )
-    .map_err(OrchestratorError::from)?;
-    let upload = crate::matrix_step::crate_upload_step(PLAN_JOB_ID)?;
-    Ok(vec![report, upload])
+    let condition = format!(
+        "always() && !contains(steps.plan.outputs.covered_tasks, ',{},')",
+        fmt.task_id
+    );
+    let mut stage = crate::matrix_step::stage_reports_step();
+    let mut upload = crate::matrix_step::crate_upload_step(PLAN_JOB_ID)?;
+    stage.condition = Some(condition.clone());
+    upload.condition = Some(condition);
+    Ok(vec![stage, upload])
 }
 
 /// Package-less workspace `Fmt` task, when the plan job owns one.
@@ -268,11 +297,16 @@ fn format_step_env(catalog: &ToolCatalog) -> Result<BTreeMap<String, String>, Or
 /// Returns a render error when MBX presence mismatches the driver.
 pub(crate) fn check_crate_mbx_gating(
     jobs: &BTreeMap<String, Job>,
-    drivers: &BTreeMap<String, CompileDriver>,
+    drivers: &BTreeMap<String, CompilerDriver>,
+    records: &[CompiledSourceHelper],
 ) -> Result<(), OrchestratorError> {
-    check_mbx_gating(jobs, drivers).map_err(OrchestratorError::from)
+    check_mbx_gating(jobs, drivers, records).map_err(OrchestratorError::from)
 }
 
 #[cfg(test)]
 #[path = "wire_w1_tests.rs"]
 mod wire_w1_tests;
+
+#[cfg(test)]
+#[path = "wire_workspace_obligation_tests.rs"]
+mod wire_workspace_obligation_tests;

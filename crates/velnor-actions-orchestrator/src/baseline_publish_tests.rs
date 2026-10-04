@@ -6,6 +6,14 @@ use std::collections::BTreeMap;
 use std::fs;
 
 use super::*;
+
+#[path = "baseline_publish_carry_tests.rs"]
+mod carry;
+use carry::obligation_for;
+#[path = "baseline_publish_execution_tests.rs"]
+mod execution;
+#[path = "baseline_publish_retry_tests.rs"]
+mod retry;
 use velnor_actions_contract::{
     ExecuteTaskIds, ExecuteTaskRef, MatrixEntry, ObligationDecision, Plan, PlanBaseline,
     PlanGenerator, PlanMatrix, PlanObligation, PlanRunner, RunnerSelection, Trust,
@@ -62,24 +70,6 @@ fn entry_for(task_id: &str, kind: &str, seed: u8, run_key: &str) -> (MatrixEntry
     (entry, task_digest)
 }
 
-/// One obligation with an explicit decision.
-fn obligation_for(
-    task_id: &str,
-    task_digest: String,
-    seed: u8,
-    decision: ObligationDecision,
-) -> PlanObligation {
-    PlanObligation {
-        task_id: task_id.to_owned(),
-        decision,
-        reason: "test".to_owned(),
-        task_digest,
-        input_digest: digest(seed + 10),
-        closure_digest: digest(seed + 20),
-        baseline_proof: None,
-    }
-}
-
 /// Valid push fixture plan over `head` with clippy plus test.
 fn fixture_plan(head: &str, run_key: &str) -> Plan {
     let clippy = "stack/rust/demo/clippy/default";
@@ -87,12 +77,14 @@ fn fixture_plan(head: &str, run_key: &str) -> Plan {
     let (clippy_entry, clippy_digest) = entry_for(clippy, "clippy", 1, run_key);
     let (test_entry, test_digest) = entry_for(test, "test", 2, run_key);
     let plan = Plan {
+        producers: Default::default(),
         schema: 1,
         run_key: run_key.to_owned(),
         plan_id: plan_id_for_run(run_key).expect("plan id"),
         base: Some("b".repeat(40)),
         head: head.to_owned(),
         event: WorkflowEvent::Push,
+        scope: velnor_actions_contract::VerificationScope::Affected,
         runner: PlanRunner {
             label: "ubuntu-26.04".to_owned(),
             selection: RunnerSelection::LatestDefault,
@@ -130,13 +122,28 @@ fn staged_run(plan: &Plan, run_key: &str) -> tempfile::TempDir {
         serde_json::to_string(plan).expect("plan json"),
     )
     .expect("plan file");
+    carry::stage_report(&dir, plan);
     temp
+}
+
+/// Publication fixture with a complete service listing proving no existing artifact.
+fn publish_fixture(
+    request: &str,
+    run_key: &str,
+    temp: &Path,
+) -> Result<PublishOutputs, OrchestratorError> {
+    baseline_publish_with_lookup(request, run_key, temp, |_, _, _, _| Ok(None))
 }
 
 /// Staged manifest value for one publish run.
 fn staged_manifest(temp: &Path, run_key: &str) -> serde_json::Value {
-    let bytes =
-        fs::read(temp.join("velnor").join(run_key).join(BASELINE_FILENAME)).expect("staged");
+    let bytes = fs::read(
+        temp.join("velnor")
+            .join(run_key)
+            .join("published")
+            .join(BASELINE_FILENAME),
+    )
+    .expect("staged");
     serde_json::from_slice(&bytes).expect("manifest json")
 }
 
@@ -145,12 +152,12 @@ fn publish_stages_trusted_manifest_under_derived_name() {
     let head = "a".repeat(40);
     let plan = fixture_plan(&head, "r7-a1");
     let temp = staged_run(&plan, "r7-a1");
-    let outputs = baseline_publish_to(&request_json(&head), "r7-a1", temp.path()).expect("publish");
+    let outputs = publish_fixture(&request_json(&head), "r7-a1", temp.path()).expect("publish");
     let compat = crate::cover_compat::baseline_compat_for_plan(&plan).expect("compat");
     let expected = artifact_id_for_baseline(&head, &compat).expect("name");
     assert_eq!(outputs.artifact_name, expected);
     let staged = staged_manifest(temp.path(), "r7-a1");
-    assert_eq!(staged["schema"], 2);
+    assert_eq!(staged["schema"], 3);
     assert_eq!(staged["source_commit"], head);
     assert_eq!(staged["ref"], "refs/heads/testmain");
     assert_eq!(staged["event"], "push");
@@ -170,41 +177,13 @@ fn publish_stages_trusted_manifest_under_derived_name() {
     assert_eq!(staged["tasks"].as_array().expect("tasks").len(), 2);
 }
 
-#[test]
-fn publish_skips_covered_without_carry_forward() {
-    let head = "a".repeat(40);
-    let mut plan = fixture_plan(&head, "r7-a1");
-    let compat = digest(8);
-    let name = format!("velnor-baseline-{head}-{compat}");
-    let proof = velnor_actions_contract::BaselineProof::new(
-        &head,
-        7,
-        crate::cover_compat::baseline_artifact_numeric_id(&name),
-        &name,
-        &digest(9),
-    )
-    .expect("proof constructs");
-    plan.obligations[1].decision = ObligationDecision::CoveredByTrustedBaseline;
-    plan.obligations[1].baseline_proof = Some(proof);
-    plan.matrix.include.pop();
-    plan.validate().expect("covered plan validates");
-    let temp = staged_run(&plan, "r7-a1");
-    baseline_publish_to(&request_json(&head), "r7-a1", temp.path()).expect("publish");
-    let staged = staged_manifest(temp.path(), "r7-a1");
-    let tasks = staged["tasks"].as_array().expect("tasks");
-    assert_eq!(tasks.len(), 1, "covered tasks never carry forward");
-    assert_eq!(tasks[0]["task_id"], "stack/rust/demo/clippy/default");
-    assert_eq!(tasks[0]["proof_run_id"], 7);
-    assert_eq!(tasks[0]["observed_run_id"], 7);
-}
-
 /// Refusal problem for one request/plan pair.
 ///
 /// Refusals stage nothing: the run directory carries no baseline file
 /// after the refused call.
 fn refuse_problem(request: &str, plan: &Plan, run_key: &str) -> String {
     let temp = staged_run(plan, run_key);
-    let problem = baseline_publish_to(request, run_key, temp.path())
+    let problem = publish_fixture(request, run_key, temp.path())
         .expect_err("must refuse")
         .to_string();
     assert!(
@@ -212,6 +191,7 @@ fn refuse_problem(request: &str, plan: &Plan, run_key: &str) -> String {
             .path()
             .join("velnor")
             .join(run_key)
+            .join("published")
             .join(BASELINE_FILENAME)
             .exists(),
         "refusals stage nothing: {problem}"
@@ -306,9 +286,9 @@ fn publish_never_overwrites_staged_evidence() {
     let head = "a".repeat(40);
     let plan = fixture_plan(&head, "r7-a1");
     let temp = staged_run(&plan, "r7-a1");
-    baseline_publish_to(&request_json(&head), "r7-a1", temp.path()).expect("first publish");
+    publish_fixture(&request_json(&head), "r7-a1", temp.path()).expect("first publish");
     assert!(
-        baseline_publish_to(&request_json(&head), "r7-a1", temp.path()).is_err(),
+        publish_fixture(&request_json(&head), "r7-a1", temp.path()).is_err(),
         "a second publish must fail instead of overwriting"
     );
 }
@@ -318,7 +298,7 @@ fn staged_manifest_passes_consumer_validation() {
     let head = "a".repeat(40);
     let plan = fixture_plan(&head, "r7-a1");
     let temp = staged_run(&plan, "r7-a1");
-    baseline_publish_to(&request_json(&head), "r7-a1", temp.path()).expect("publish");
+    publish_fixture(&request_json(&head), "r7-a1", temp.path()).expect("publish");
     let staged = staged_manifest(temp.path(), "r7-a1");
     let manifest: BaselineManifest = serde_json::from_value(staged).expect("manifest");
     let expected = ProvenanceExpectations {

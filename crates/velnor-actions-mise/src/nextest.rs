@@ -141,12 +141,12 @@ pub(crate) fn argv_of(
     catalog: &ToolCatalog,
     driver: NextestDriver,
     payload: &[OsString],
-) -> Vec<OsString> {
+) -> Result<Vec<OsString>, MiseError> {
     let mut argv = vec![OsString::from("mise")];
     argv.extend(crate::command::mise_argv_tail(
         "exec",
-        &catalog.tool_specs(&driver.tools()),
+        &catalog.tool_specs(&driver.tools())?,
         payload,
     ));
-    argv
+    Ok(argv)
 }

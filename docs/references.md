@@ -67,7 +67,7 @@ when tool pins or protocol integrations are updated.
 - [Mise global `--no-config`, `--no-env`, and `--no-hooks` flags](https://mise.jdx.dev/cli/)
 - [Mise file tasks and default task directories](https://mise.jdx.dev/tasks/file-tasks.html)
 - [Mise task configuration and included file-task directories](https://mise.jdx.dev/tasks/task-configuration.html)
-- [Alint GitHub Action v0.16.1](https://github.com/asamarts/alint/releases/tag/v0.16.1)
+- [Alint GitHub Action v0.17.0](https://github.com/asamarts/alint/releases/tag/v0.17.0)
 - [Mise lockfile behavior](https://mise.jdx.dev/dev-tools/mise-lock.html)
 - [Mise Rust toolchain and component behavior](https://mise.jdx.dev/lang/rust.html)
 - [Mr. Boxington getting started and direct `mbx` commands](https://mr-boxington.jdx.dev/getting-started)

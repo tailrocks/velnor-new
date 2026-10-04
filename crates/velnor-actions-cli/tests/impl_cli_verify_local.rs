@@ -74,12 +74,6 @@ fn verify_local_entrypoint_lists_exact_stages() -> Result<(), Box<dyn Error>> {
         staged_calls(&script)?,
         [
             "fmt",
-            "runner-fmt",
-            "runner-clippy",
-            "runner-nextest",
-            "runner-test",
-            "runner-doctest",
-            "runner-deny",
             "repo-policy",
             "clippy-$safe",
             "test-$safe",

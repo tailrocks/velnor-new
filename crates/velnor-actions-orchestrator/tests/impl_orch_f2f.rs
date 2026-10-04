@@ -20,6 +20,7 @@ fn expected_internal(dir: &str) -> Vec<&str> {
             "velnor-actions-actionlint",
             "velnor-actions-contract",
             "velnor-actions-mise",
+            "velnor-actions-native",
             "velnor-actions-rust",
             "velnor-actions-tofu",
             "velnor-actions-workflow-renderer",
@@ -36,6 +37,7 @@ fn members() -> Vec<&'static str> {
         "crates/velnor-actions-cli",
         "crates/velnor-actions-contract",
         "crates/velnor-actions-mise",
+        "crates/velnor-actions-native",
         "crates/velnor-actions-orchestrator",
         "crates/velnor-actions-rust",
         "crates/velnor-actions-tofu",
@@ -46,7 +48,13 @@ fn members() -> Vec<&'static str> {
 #[test]
 fn crate_boundaries_match_architecture_dependency_direction() -> TestResult {
     let output = std::process::Command::new("cargo")
-        .args(["metadata", "--format-version", "1", "--manifest-path"])
+        .args([
+            "metadata",
+            "--locked",
+            "--format-version",
+            "1",
+            "--manifest-path",
+        ])
         .arg(repo_root().join("Cargo.toml"))
         .current_dir(repo_root())
         .output()?;

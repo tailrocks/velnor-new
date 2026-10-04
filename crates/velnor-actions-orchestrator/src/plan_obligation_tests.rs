@@ -10,6 +10,8 @@ use velnor_actions_contract::cachekey::{RUST_EXTENSION_SCHEMA, TOFU_EXTENSION_SC
 /// Minimal discovery with no workspaces or tool checks.
 fn empty_discovery() -> Discovery {
     Discovery {
+        rust_inventory: None,
+        raw_inventories: Vec::new(),
         statuses: Vec::new(),
         workspaces: Vec::new(),
         proposals: Vec::new(),
@@ -146,7 +148,6 @@ fn rust_tasks_keep_the_rust_envelope() {
         uses_network: false,
         uses_clock: false,
         uses_random: false,
-        run_ignored: None,
     };
     let task = velnor_actions_rust::propose_task(&group).expect("fixture proposes");
     task.validate().expect("fixture valid");

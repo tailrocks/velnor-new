@@ -21,7 +21,7 @@ fn manifest_and_expected(base: &str) -> (BaselineManifest, ProvenanceExpectation
     let anchor = digest_b3("github.com/o/r".as_bytes());
     let name = baseline_artifact_name(base, &digest).expect("name");
     let manifest = BaselineManifest {
-        schema: 2,
+        schema: crate::internal_plan::snapshot::CANONICAL_SCHEMA_VERSION,
         repository_id: anchor.clone(),
         source_commit: base.to_owned(),
         ref_: "refs/heads/testmain".to_owned(),
@@ -36,6 +36,7 @@ fn manifest_and_expected(base: &str) -> (BaselineManifest, ProvenanceExpectation
         artifact_id: crate::cover_compat::baseline_artifact_numeric_id(&name),
         artifact_name: name,
         tasks: Vec::new(),
+        parent: None,
         expires_at_unix: None,
     };
     let expected = ProvenanceExpectations {
@@ -115,6 +116,7 @@ fn every_wrong_dimension_fails_validation() {
             reason.to_owned()
         );
     };
+    check(&|m| m.schema = 2, "stale_schema:migration_required:v2");
     check(&|m| m.schema = 1, "stale_schema:migration_required:v1");
     check(&|m| m.schema = 0, "stale_schema:migration_required:v0");
     check(&|m| m.source_commit = "b".repeat(40), "wrong_commit");
@@ -245,16 +247,19 @@ fn include_defined_origin_resolves() {
 
 /// Valid task entry over `digest`, observed by the manifest run.
 fn task_entry(digest: &str) -> crate::merge::required_evidence::BaselineTaskEntry {
-    crate::merge::required_evidence::BaselineTaskEntry {
+    let mut entry = crate::merge::required_evidence::BaselineTaskEntry {
         task_id: "stack/rust/root/clippy/default".to_owned(),
         task_digest: digest.to_owned(),
         input_digest: digest.to_owned(),
         closure_digest: digest.to_owned(),
         proof_run_id: 7,
+        carried_from: None,
         observed_run_id: 7,
         external_data: None,
         proof: None,
-    }
+    };
+    entry.proof = Some(task_proof(&entry, &entry.input_digest));
+    entry
 }
 
 /// Structured proof binding `entry`, with `input_digest` overridden.
@@ -307,6 +312,7 @@ fn task_entries_validate_identity_runs_freshness_and_proof_binding() {
         mutate(&mut entry);
         assert_eq!(run(&entry).expect_err(reason), reason.to_owned());
     };
+    check(&|entry| entry.proof = None, "missing_task_proof");
     check(
         &|entry| entry.closure_digest = "bogus".to_owned(),
         "bad_task_identity",

@@ -10,7 +10,7 @@
 #[path = "support_tokens.rs"]
 mod tokens;
 
-pub(crate) use tokens::check_token_hygiene;
+pub(crate) use tokens::{check_native_token_hygiene, check_token_hygiene};
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -190,16 +190,24 @@ pub(crate) fn alint_job(ctx: &RenderContext) -> Result<Job, RenderError> {
     with.insert("version".to_owned(), ALINT_BINARY_VERSION.to_owned());
     steps::scan_for_private_subcommands(ALINT_USES)?;
     Ok(Job {
+        cache_mode: None,
         display_name: ValidatorKind::Alint.display_name().to_owned(),
         runs_on: ctx.runs_on.clone(),
         timeout_minutes: JobTimeout::VALIDATOR,
         needs: Vec::new(),
         condition: None,
         permissions: None,
+        tool_producer: None,
+        mbx_producer: None,
+        source_producer: None,
+        native_pages_deploy: None,
+        native_publish: None,
+        outputs: Vec::new(),
         environment: None,
         steps: vec![
             checkout,
             Step {
+                id: None,
                 name: "Run Alint".to_owned(),
                 condition: None,
                 kind: StepKind::Action {
@@ -228,12 +236,19 @@ pub(crate) fn validator_job(
 ) -> Result<Job, RenderError> {
     let command = find_validator_command(&ctx.validator_commands, validator)?;
     Ok(Job {
+        cache_mode: None,
         display_name: validator.display_name().to_owned(),
         runs_on: ctx.runs_on.clone(),
         timeout_minutes: JobTimeout::VALIDATOR,
         needs: Vec::new(),
         condition: None,
         permissions: None,
+        tool_producer: None,
+        mbx_producer: None,
+        source_producer: None,
+        native_pages_deploy: None,
+        native_publish: None,
+        outputs: Vec::new(),
         environment: None,
         steps: vec![
             steps::checkout_step(&ctx.checkout_uses)?,

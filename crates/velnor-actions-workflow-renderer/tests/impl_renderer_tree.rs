@@ -29,6 +29,9 @@ fn fixture_ctx() -> RenderContext {
         candidate: None,
         preseed: false,
         plan_consumer_env: std::collections::BTreeMap::new(),
+        source_helpers: Vec::new(),
+        native_pages_approvals: Vec::new(),
+        native_publish_approvals: Vec::new(),
     }
 }
 
@@ -38,6 +41,7 @@ fn exact_triggers() -> Trigger {
             .iter()
             .map(ToString::to_string)
             .collect(),
+        push_tags: Vec::new(),
         push_branches: vec!["main".to_owned()],
         merge_group: true,
         workflow_dispatch: None,
@@ -54,12 +58,19 @@ fn exact_concurrency() -> Concurrency {
 
 fn plan_job() -> Result<Job, RenderError> {
     Ok(Job {
+        cache_mode: None,
         display_name: "Plan".to_owned(),
         runs_on: LABEL.to_owned(),
         timeout_minutes: JobTimeout::PLAN,
         needs: Vec::new(),
         condition: None,
         permissions: None,
+        tool_producer: None,
+        mbx_producer: None,
+        source_producer: None,
+        native_pages_deploy: None,
+        native_publish: None,
+        outputs: Vec::new(),
         environment: None,
         steps: vec![checkout_step(&checkout_pin())?, plan_step()],
     })
@@ -69,6 +80,8 @@ fn fixture_ir() -> Result<WorkflowIr, RenderError> {
     let mut jobs = BTreeMap::new();
     jobs.insert("plan".to_owned(), plan_job()?);
     Ok(WorkflowIr {
+        cache_mode: velnor_actions_contract::CacheMode::Read,
+        run_name: None,
         name: "CI".to_owned(),
         triggers: exact_triggers(),
         permissions: Permissions::default(),
@@ -271,13 +284,13 @@ fn rendered_yaml_contains_no_private_subcommands() -> Result<(), RenderError> {
 fn internal_gate_requires_staged_binary_and_request_dir() -> Result<(), RenderError> {
     let ir = fixture_ir()?;
     let mut ctx = fixture_ctx();
-    ctx.staged_binary = "/tmp/velnor-actions-0.1.0".to_owned();
+    ctx.staged_binary = "<PRIVATE_TMP>".to_owned();
     assert!(render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &ctx).is_err());
     let mut ctx = fixture_ctx();
     ctx.staged_binary = "$RUNNER_TEMP/velnor/bin/velnor-actions-9.9.9".to_owned();
     assert!(render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &ctx).is_err());
     let mut ctx = fixture_ctx();
-    ctx.request_dir = "/tmp/velnor".to_owned();
+    ctx.request_dir = "<PRIVATE_TMP>".to_owned();
     assert!(render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &ctx).is_err());
     Ok(())
 }

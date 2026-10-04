@@ -335,8 +335,8 @@ fn plan_files_match_contract_renderers() -> TestResult {
     let outputs = plan_outputs(&response.to_string())?;
     assert_eq!(outputs.plan_id.as_str(), plan.plan_id.as_str());
     assert_eq!(outputs.run_key.as_str(), plan.run_key.as_str());
-    let joined = plan_json_path(Path::new("/tmp/x/velnor"), "local")?;
-    let want = std::path::PathBuf::from("/tmp/x/velnor/local/plan.json");
+    let joined = plan_json_path(Path::new("<PRIVATE_TMP>"), "local")?;
+    let want = std::path::PathBuf::from("<PRIVATE_TMP>");
     assert_eq!(joined, want);
     Ok(())
 }
@@ -351,7 +351,7 @@ fn empty_matrix_folds_conclusions() -> TestResult {
     plan_value["edges"] = json!([]);
     let mut matrix = serde_json::to_value(&plan.matrix)?;
     matrix["include"] = json!([]);
-    let request = merge_request(&plan_value, &matrix, &json!([]), &success_jobs());
+    let request = merge_request(&plan_value, &matrix, &json!([]), &success_jobs(&plan));
     assert_eq!(merge(&request)?.status, C::FinalStatus::NoWork);
     let failed = json!([{"job_id": "plan", "conclusion": "failure"}]);
     let request = merge_request(&plan_value, &matrix, &json!([]), &failed);

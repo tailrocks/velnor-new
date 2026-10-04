@@ -142,8 +142,9 @@ impl NextestArchive {
     }
 
     /// Full mise argument vector including the program.
-    #[must_use]
-    pub fn argv(&self, catalog: &ToolCatalog) -> Vec<OsString> {
+    /// # Errors
+    /// Returns an error when the selected tool lacks catalog authority.
+    pub fn argv(&self, catalog: &ToolCatalog) -> Result<Vec<OsString>, MiseError> {
         argv_of(catalog, self.driver, &self.payload())
     }
 
@@ -152,7 +153,7 @@ impl NextestArchive {
     /// # Errors
     ///
     /// Returns [`MiseError::EmptyCommand`] only if the fixed payload were
-    /// empty, which construction rules out.
+    /// empty, which construction rules out. Catalog selection errors propagate.
     pub fn command(&self, catalog: &ToolCatalog) -> Result<IsolatedCommand, MiseError> {
         nextest_exec(self.driver, &self.payload()[1..])?.command(catalog)
     }
@@ -230,8 +231,9 @@ impl NextestList {
     }
 
     /// Full mise argument vector including the program.
-    #[must_use]
-    pub fn argv(&self, catalog: &ToolCatalog) -> Vec<OsString> {
+    /// # Errors
+    /// Returns an error when the selected tool lacks catalog authority.
+    pub fn argv(&self, catalog: &ToolCatalog) -> Result<Vec<OsString>, MiseError> {
         argv_of(catalog, self.driver, &self.payload())
     }
 
@@ -240,7 +242,7 @@ impl NextestList {
     /// # Errors
     ///
     /// Returns [`MiseError::EmptyCommand`] only if the fixed payload were
-    /// empty, which construction rules out.
+    /// empty, which construction rules out. Catalog selection errors propagate.
     pub fn command(&self, catalog: &ToolCatalog) -> Result<IsolatedCommand, MiseError> {
         nextest_exec(self.driver, &self.payload()[1..])?.command(catalog)
     }
@@ -341,8 +343,9 @@ impl NextestRun {
     }
 
     /// Full mise argument vector including the program.
-    #[must_use]
-    pub fn argv(&self, catalog: &ToolCatalog) -> Vec<OsString> {
+    /// # Errors
+    /// Returns an error when the selected tool lacks catalog authority.
+    pub fn argv(&self, catalog: &ToolCatalog) -> Result<Vec<OsString>, MiseError> {
         argv_of(catalog, self.driver, &self.payload())
     }
 
@@ -351,7 +354,7 @@ impl NextestRun {
     /// # Errors
     ///
     /// Returns [`MiseError::EmptyCommand`] only if the fixed payload were
-    /// empty, which construction rules out.
+    /// empty, which construction rules out. Catalog selection errors propagate.
     pub fn command(&self, catalog: &ToolCatalog) -> Result<IsolatedCommand, MiseError> {
         nextest_exec(self.driver, &self.payload()[1..])?.command(catalog)
     }

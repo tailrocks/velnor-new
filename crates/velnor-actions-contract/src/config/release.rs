@@ -4,6 +4,7 @@
 //! Unknown fields are rejected by serde; [`RustReleaseConfig::validate`]
 //! reports file, key path, and problem for every other violation.
 
+use super::release_owners::{is_package_name, validate_expected_owners};
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
@@ -74,6 +75,9 @@ pub struct RustReleaseConfig {
     /// publishable-workspace opt-in, emission enforces set membership.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub version_groups: BTreeMap<String, Vec<String>>,
+    /// Exact registry owner identities, per package; no inferred ownership.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub expected_owners: BTreeMap<String, Vec<String>>,
 }
 
 /// Default workspace manifest path.
@@ -111,6 +115,7 @@ impl Default for RustReleaseConfig {
             tag_name: default_tag_name(),
             bootstrap: None,
             version_groups: BTreeMap::new(),
+            expected_owners: BTreeMap::new(),
         }
     }
 }
@@ -142,6 +147,7 @@ impl RustReleaseConfig {
             &self.packages,
             self.publishable_workspace,
         )?;
+        validate_expected_owners(file, &self.expected_owners, self.enabled)?;
         Ok(())
     }
 
@@ -353,16 +359,6 @@ fn validate_version_groups(
         }
     }
     Ok(())
-}
-
-/// Cargo package-name shape: start letter/`_`, rest alnum/`-`/`_`.
-fn is_package_name(name: &str) -> bool {
-    let mut bytes = name.bytes();
-    let Some(first) = bytes.next() else {
-        return false;
-    };
-    (first.is_ascii_alphabetic() || first == b'_')
-        && bytes.all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_'))
 }
 
 /// Strict bootstrap version: exactly three dot-separated numeric parts.

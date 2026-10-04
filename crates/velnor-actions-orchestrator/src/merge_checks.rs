@@ -56,7 +56,8 @@ pub(crate) fn check_plan_shape(
 /// so a forged plan artifact could claim `Push` with `Trusted` scope on
 /// PR content and pass. The plan's event must equal the actual event
 /// captured at merge assembly (same run, runner ground truth), and the
-/// plan's trust must equal the canonical scope for that actual event;
+/// plan's trust must equal the scope independently derived from live runner
+/// protection and source provenance at merge time;
 /// every task file's event/trust pair must still equal the plan's.
 /// Anything else fails closed with a scope token, never silently.
 pub(crate) fn check_trust_coherence(
@@ -67,7 +68,9 @@ pub(crate) fn check_trust_coherence(
 ) {
     let coherent = match request.actual_event {
         Some(actual) => {
-            plan.event == actual && plan.trust == velnor_actions_contract::trust_for_event(actual)
+            let trust =
+                crate::internal::AnalysisPublicationContext::runner_trust(actual, &plan.head, None);
+            plan.event == actual && plan.trust == trust
         }
         None => false,
     };

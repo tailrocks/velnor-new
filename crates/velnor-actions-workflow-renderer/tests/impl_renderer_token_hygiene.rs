@@ -14,8 +14,7 @@ use super::impl_renderer_fixtures::*;
 fn token_hygiene_scopes_gh_token_to_plan() -> Result<(), RenderError> {
     use velnor_actions_contract::{Step, StepKind};
     use velnor_actions_workflow_renderer::toolchain_env::with_credential_scrub;
-    // The shell constructor rejects `github.token` env values outright:
-    // only the render-time fetch binding may carry one.
+    // Project shell construction rejects credential keys; fixed admission uses its own boundary.
     let err = shell_step(
         "Plan",
         vec!["true".to_owned()],
@@ -23,7 +22,7 @@ fn token_hygiene_scopes_gh_token_to_plan() -> Result<(), RenderError> {
     )
     .expect_err("github.token in constructor env must fail");
     assert!(
-        format!("{err:?}").contains("bad_env_expression"),
+        format!("{err:?}").contains("credential_step_env"),
         "wrong rejection: {err:?}"
     );
     // Hand-built IR carrying the scoped shape still fails at render.
@@ -36,6 +35,7 @@ fn token_hygiene_scopes_gh_token_to_plan() -> Result<(), RenderError> {
         vec![
             checkout_step(&checkout_pin())?,
             Step {
+                id: None,
                 name: "Plan".to_owned(),
                 condition: None,
                 kind: StepKind::Shell {
@@ -67,6 +67,7 @@ fn token_hygiene_scopes_gh_token_to_plan() -> Result<(), RenderError> {
         vec![
             checkout_step(&checkout_pin())?,
             Step {
+                id: None,
                 name: "Leak".to_owned(),
                 condition: None,
                 kind: StepKind::Shell {
@@ -127,6 +128,7 @@ fn token_hygiene_rejects_prints_and_task_tokens() -> Result<(), RenderError> {
         "Task",
         vec!["plan".to_owned()],
         vec![velnor_actions_contract::Step {
+            id: None,
             name: "Run task".to_owned(),
             condition: None,
             kind: velnor_actions_contract::StepKind::Shell {
@@ -190,6 +192,7 @@ fn token_hygiene_constructor_owns_overlay_and_rejects_all_nine_keys() -> Result<
             "Task",
             vec!["plan".to_owned()],
             vec![Step {
+                id: None,
                 name: "Run task".to_owned(),
                 condition: None,
                 kind: StepKind::Shell {
@@ -227,6 +230,7 @@ fn scrub_coverage_rejects_bare_and_partial_shell_env() -> Result<(), RenderError
             vec![
                 checkout_step(&checkout_pin())?,
                 Step {
+                    id: None,
                     name: "Run task".to_owned(),
                     condition: None,
                     kind: StepKind::Shell {
@@ -261,8 +265,6 @@ fn scrub_coverage_allows_ambient_auth_steps_and_release() -> Result<(), RenderEr
     for name in [
         "Prepare pinned tools",
         "Prepare Rust components",
-        "Fetch Cargo sources",
-        "Fetch Cargo sources (nested/Cargo.toml)",
         DENY_STEP_NAME,
         MACHETE_STEP_NAME,
         "Run zizmor",

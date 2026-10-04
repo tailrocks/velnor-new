@@ -40,12 +40,19 @@ fn render_gate_roundtrip_accepts_plan() -> TestResult {
     jobs.insert(
         "plan".to_owned(),
         Job {
+            cache_mode: None,
             display_name: "Plan".to_owned(),
             runs_on: "ubuntu-26.04".to_owned(),
             timeout_minutes: JobTimeout::PLAN,
             needs: Vec::new(),
             condition: None,
             permissions: None,
+            tool_producer: None,
+            mbx_producer: None,
+            source_producer: None,
+            native_pages_deploy: None,
+            native_publish: None,
+            outputs: Vec::new(),
             environment: None,
             steps: vec![
                 checkout_step(&pin)?,
@@ -55,12 +62,15 @@ fn render_gate_roundtrip_accepts_plan() -> TestResult {
         },
     );
     let ir = WorkflowIr {
+        cache_mode: velnor_actions_contract::CacheMode::Read,
+        run_name: None,
         name: "CI".to_owned(),
         triggers: Trigger {
             pull_request_types: ["opened", "synchronize", "reopened", "ready_for_review"]
                 .iter()
                 .map(ToString::to_string)
                 .collect(),
+            push_tags: Vec::new(),
             push_branches: vec!["main".to_owned()],
             merge_group: true,
             workflow_dispatch: None,
@@ -83,6 +93,9 @@ fn render_gate_roundtrip_accepts_plan() -> TestResult {
         candidate: None,
         preseed: false,
         plan_consumer_env: std::collections::BTreeMap::new(),
+        source_helpers: Vec::new(),
+        native_pages_approvals: Vec::new(),
+        native_publish_approvals: Vec::new(),
     };
     let text = render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &ctx)?;
     let pairs = internal_env_pairs(&text);

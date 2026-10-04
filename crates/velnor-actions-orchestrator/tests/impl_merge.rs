@@ -36,7 +36,7 @@ pub(crate) fn merge_request(
     serde_json::json!({
         "schema": 1,
         "run_key": "local",
-        "actual_event": plan_value.get("event").cloned().unwrap_or(serde_json::Value::Null),
+        "actual_scope": "affected", "actual_event": plan_value.get("event").cloned().unwrap_or(serde_json::Value::Null),
         "plan": plan,
         "matrix": matrix,
         "matrix_reports": reports,
@@ -122,9 +122,18 @@ pub(crate) fn task_reports_for(
     serde_json::Value::Array(out)
 }
 
-/// One successful required job.
-pub(crate) fn success_jobs() -> serde_json::Value {
-    serde_json::json!([{"job_id": "plan", "conclusion": "success"}])
+/// Successful conclusions for every owning job in the fixture plan.
+pub(crate) fn success_jobs(plan: &impl serde::Serialize) -> serde_json::Value {
+    let plan = serde_json::to_value(plan).expect("fixture plan serializes");
+    let mut ids = std::collections::BTreeSet::from(["plan"]);
+    for obligation in plan["obligations"].as_array().into_iter().flatten() {
+        ids.insert(obligation["job_id"].as_str().expect("fixture owner"));
+    }
+    serde_json::Value::Array(
+        ids.into_iter()
+            .map(|job_id| serde_json::json!({"job_id": job_id, "conclusion": "success"}))
+            .collect(),
+    )
 }
 
 /// Rewrite the single task of a passing report, keeping counts coherent.
@@ -200,7 +209,7 @@ fn round_trip_passed_with_counts() -> TestResult {
         &plan,
         &serde_json::to_value(&plan.matrix)?,
         &serde_json::to_value(&reports)?,
-        &success_jobs(),
+        &success_jobs(&plan),
     );
     let final_report = merge(&request)?;
     final_report.validate()?;
@@ -247,7 +256,7 @@ fn one_failed_crate_fails_required_with_counts() -> TestResult {
         &plan,
         &serde_json::to_value(&plan.matrix)?,
         &serde_json::to_value(&reports)?,
-        &success_jobs(),
+        &success_jobs(&plan),
     );
     let final_report = merge(&request)?;
     assert_eq!(final_report.status, FinalStatus::Failed);
@@ -280,7 +289,7 @@ fn precedence_matrix() -> TestResult {
         TaskStatus::Failed,
         MatrixStatus::Failed,
     )?;
-    assert_eq!(run(reports, success_jobs())?, FinalStatus::Failed);
+    assert_eq!(run(reports, success_jobs(&plan))?, FinalStatus::Failed);
 
     // Cancelled beats missing but loses to failure.
     let mut reports = passing_reports(&plan)?;
@@ -290,12 +299,12 @@ fn precedence_matrix() -> TestResult {
         MatrixStatus::Cancelled,
     )?;
     reports.pop();
-    assert_eq!(run(reports, success_jobs())?, FinalStatus::Cancelled);
+    assert_eq!(run(reports, success_jobs(&plan))?, FinalStatus::Cancelled);
 
     // Missing alone is not-run, never success.
     let mut reports = passing_reports(&plan)?;
     reports.pop();
-    assert_eq!(run(reports, success_jobs())?, FinalStatus::NotRun);
+    assert_eq!(run(reports, success_jobs(&plan))?, FinalStatus::NotRun);
 
     // Failed beats cancelled plus missing.
     let mut reports = passing_reports(&plan)?;
@@ -312,21 +321,24 @@ fn precedence_matrix() -> TestResult {
         )?;
     }
     reports.pop();
-    assert_eq!(run(reports, success_jobs())?, FinalStatus::Failed);
+    assert_eq!(run(reports, success_jobs(&plan))?, FinalStatus::Failed);
 
     // Required-job conclusions join the same precedence.
     let reports = passing_reports(&plan)?;
-    let failed_job = serde_json::json!([{"job_id": "plan", "conclusion": "failure"}]);
+    let mut failed_job = success_jobs(&plan);
+    failed_job[0]["conclusion"] = serde_json::json!("failure");
     assert_eq!(run(reports.clone(), failed_job)?, FinalStatus::Failed);
-    let cancelled_job = serde_json::json!([{"job_id": "plan", "conclusion": "cancelled"}]);
+    let mut cancelled_job = success_jobs(&plan);
+    cancelled_job[0]["conclusion"] = serde_json::json!("cancelled");
     assert_eq!(run(reports.clone(), cancelled_job)?, FinalStatus::Cancelled);
-    let skipped_job = serde_json::json!([{"job_id": "plan", "conclusion": "skipped"}]);
+    let mut skipped_job = success_jobs(&plan);
+    skipped_job[0]["conclusion"] = serde_json::json!("skipped");
     assert_eq!(run(reports.clone(), skipped_job)?, FinalStatus::NotRun);
 
     // Duplicate reports are not-run, never success.
     let mut reports = passing_reports(&plan)?;
     reports.push(reports[first].clone());
-    assert_eq!(run(reports, success_jobs())?, FinalStatus::NotRun);
+    assert_eq!(run(reports, success_jobs(&plan))?, FinalStatus::NotRun);
 
     // Unexpected reports fail planning, even beside failures.
     let mut reports = passing_reports(&plan)?;
@@ -336,7 +348,10 @@ fn precedence_matrix() -> TestResult {
         MatrixStatus::Failed,
     )?;
     reports.push(foreign_report()?);
-    assert_eq!(run(reports, success_jobs())?, FinalStatus::PlanningFailed);
+    assert_eq!(
+        run(reports, success_jobs(&plan))?,
+        FinalStatus::PlanningFailed
+    );
 
     // Matrix/plan disagreement fails planning.
     let reports = passing_reports(&plan)?;
@@ -349,7 +364,7 @@ fn precedence_matrix() -> TestResult {
         &plan,
         &trimmed,
         &serde_json::to_value(&reports)?,
-        &success_jobs(),
+        &success_jobs(&plan),
     );
     assert_eq!(merge(&request)?.status, FinalStatus::PlanningFailed);
     Ok(())

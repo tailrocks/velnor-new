@@ -1,9 +1,10 @@
 //! Rust/Cargo stack discovery and task proposals.
 //!
-//! Pure inventory, evidence, and task-group derivation from bytes the
-//! orchestrator supplies. This crate launches no processes, builds no tool
-//! invocations, reads no files itself, and renders no workflow text. It owns
-//! read-only inspection of supplied `rust-toolchain.toml` bytes.
+//! Task-local evidence probes read checkout files from the supplied root and
+//! inventory. This crate launches no processes and renders no workflow text.
+//! It owns supplied Rust toolchain inspection and fixed source-bound native
+//! producer recipes; Mise lowers their tool invocation and the orchestrator
+//! composes their prerequisites.
 
 mod argv;
 pub mod cargo_env;
@@ -14,9 +15,11 @@ pub mod evidence;
 mod evidence_text;
 pub mod graph;
 pub mod identity;
-mod manifest_edges;
+mod manifest_graph;
 pub mod metadata;
 pub mod metadata_edges;
+pub mod native_ffi;
+mod native_ffi_evidence;
 pub mod profile;
 mod profile_select;
 pub mod propose;
@@ -26,7 +29,9 @@ pub mod release_facts;
 pub mod release_graph;
 pub mod release_select;
 pub mod release_semver;
+pub mod release_support_sources;
 pub mod scan;
+pub mod semantic_inputs;
 pub mod stability;
 mod task_identity;
 pub mod tasks;
@@ -48,7 +53,7 @@ pub use identity::{
     GroupExtensionInputs, adapter_entry_metadata, entry_metadata_for_task, expand_shards_for_group,
     extension_for_proposal,
 };
-pub use manifest_edges::manifest_edges;
+pub use manifest_graph::qualify_manifest_graph;
 pub use metadata::{
     METADATA_FORMAT_VERSION, MetadataError, PackageRecord, TargetRecord, WorkspaceRecord,
     parse_metadata_json,

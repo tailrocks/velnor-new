@@ -4,6 +4,8 @@
 //! scale suites reuse it through that parent (the P13
 //! `perf_fixtures_p13` precedent: one owner, `crate::` sharing).
 
+use crate::impl_common::git_fixture;
+
 use std::fs;
 use std::path::Path;
 use std::time::Instant;
@@ -32,6 +34,22 @@ pub(crate) fn tofu_root_names(roots: usize) -> Vec<String> {
     (0..roots)
         .map(|index| format!("stacks/r{index:03}"))
         .collect()
+}
+
+/// A complete public-registry lock used by positive transport fixtures.
+const PUBLIC_PROVIDER_LOCK: &str = r#"provider "registry.opentofu.org/hashicorp/null" {
+  version = "3.2.1"
+  hashes = ["h1:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="]
+}
+"#;
+
+/// Add one real public-source lock to every synthetic tofu root.
+pub(crate) fn write_public_provider_locks(root: &Path, roots: &[String]) -> TestResult {
+    for unit in roots {
+        let path = root.join(unit).join(".terraform.lock.hcl");
+        fs::write(path, PUBLIC_PROVIDER_LOCK)?;
+    }
+    Ok(())
 }
 
 /// Write `.velnor` inputs: config plus the consumer-manifest fixture.
@@ -187,7 +205,7 @@ pub(crate) fn plan_at_event(
 /// direct-`cargo metadata` proxy; plan itself adds the untracked pass).
 pub(crate) fn index_baseline_ms(root: &Path) -> Result<u128, Box<dyn std::error::Error>> {
     let start = Instant::now();
-    let output = std::process::Command::new("git")
+    let output = git_fixture::command(root)?
         .args(["ls-files"])
         .current_dir(root)
         .output()?;

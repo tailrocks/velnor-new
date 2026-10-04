@@ -10,6 +10,7 @@ use std::fs;
 use std::path::Path;
 
 use velnor_actions_contract::Plan;
+use velnor_actions_tofu::key_for_root;
 
 use crate::impl_common::{TestResult, make_repo};
 use crate::impl_select::{commit, plan_pr, reasons_for};
@@ -42,15 +43,21 @@ fn reasons(plan: &Plan, member: &str) -> Vec<String> {
         .collect()
 }
 
+/// Reasons for every obligation of one configured tofu root.
+fn tofu_reasons(plan: &Plan, root: &str) -> Vec<String> {
+    let key = key_for_root(root);
+    reasons(plan, &key)
+}
+
 /// Assert every triple leg of `root` changed and `other` did not.
 fn assert_narrow(plan: &Plan, root: &str, other: &str) {
-    let hit = reasons(plan, root);
+    let hit = tofu_reasons(plan, root);
     assert_eq!(hit.len(), 3, "{root} proposes the triple: {hit:?}");
     assert!(
         hit.iter().all(|reason| reason == "affected_by_change"),
         "{root}: {hit:?}"
     );
-    let miss = reasons(plan, other);
+    let miss = tofu_reasons(plan, other);
     assert_eq!(miss.len(), 3, "{other} proposes the triple: {miss:?}");
     assert!(
         miss.iter().all(|reason| reason != "affected_by_change"),
@@ -121,7 +128,7 @@ fn dynamic_base_source_widens_with_recorded_warning() -> TestResult {
     let head = commit(root, "head")?;
     let (plan, warnings) = plan_pr(root, Some(&base), &head)?;
     for root in ["stacks/a", "stacks/b"] {
-        let hit = reasons(&plan, root);
+        let hit = tofu_reasons(&plan, root);
         assert!(
             hit.iter().all(|reason| reason == "affected_by_change"),
             "{root}: {hit:?}"
@@ -151,7 +158,7 @@ fn rust_change_leaves_tofu_unaffected() -> TestResult {
         "rust selects: {rust:?}"
     );
     for root in ["stacks/a", "stacks/b"] {
-        let miss = reasons(&plan, root);
+        let miss = tofu_reasons(&plan, root);
         assert_eq!(miss.len(), 3, "{root} proposes the triple");
         assert!(
             miss.iter().all(|reason| reason != "affected_by_change"),

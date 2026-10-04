@@ -12,15 +12,21 @@ use velnor_actions_rust::{
 
 #[test]
 fn registry_orders_rust_first() {
-    assert_eq!(VelnorConfig::REGISTERED_STACKS, &["rust", "tofu"]);
-    assert_eq!(Stack::all(), &[Stack::Rust, Stack::Tofu]);
+    assert_eq!(
+        VelnorConfig::REGISTERED_STACKS,
+        &["rust", "tofu", "workload"]
+    );
+    assert_eq!(Stack::all(), &[Stack::Rust, Stack::Tofu, Stack::Workload]);
 }
 
 #[test]
 fn registration_matches_contract_registry() {
     assert!(VelnorConfig::REGISTERED_STACKS.contains(&STACK_ID));
     assert_eq!(STACK_ID, Stack::Rust.id());
-    assert_eq!(&[STACK_ID, "tofu"], VelnorConfig::REGISTERED_STACKS);
+    assert_eq!(
+        &[STACK_ID, "tofu", "workload"],
+        VelnorConfig::REGISTERED_STACKS
+    );
 }
 
 #[test]

@@ -76,6 +76,8 @@ impl super::IsolatedCommand {
             cwd: None,
             extra_env,
             policy: EnvPolicy::Verify,
+            runtime_paths: None,
+            resolved_git: None,
         })
     }
 }

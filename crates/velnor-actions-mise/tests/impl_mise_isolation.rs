@@ -12,8 +12,11 @@ use velnor_actions_mise::command::{
 };
 use velnor_actions_mise::{GitRequest, MiseError};
 
+#[path = "impl_mise_isolation_reserved.rs"]
+mod reserved;
+
 fn specs() -> Vec<String> {
-    vec!["rust@1.98.1".to_owned()]
+    vec!["rust[profile=minimal,components=clippy,rustfmt]@1.98.1".to_owned()]
 }
 
 fn payload() -> Vec<OsString> {
@@ -55,6 +58,7 @@ fn reserved_keys_cover_isolation_disable_and_credentials() {
         "MISE_NO_ENV",
         "MISE_NO_HOOKS",
         "MISE_LOCKFILE",
+        "RUSTUP_AUTO_INSTALL",
         "MISE_AUTO_INSTALL",
         "MISE_EXEC_AUTO_INSTALL",
         "MISE_GITHUB_TOKEN",
@@ -89,6 +93,9 @@ fn reserved_override_rejected() -> Result<(), String> {
         ("MISE_NO_CONFIG", "0"),
         ("MISE_AUTO_INSTALL", "true"),
         ("MISE_EXEC_AUTO_INSTALL", "true"),
+        ("RUSTUP_AUTO_INSTALL", "0"),
+        ("RUSTUP_AUTO_INSTALL", "false"),
+        ("RUSTUP_AUTO_INSTALL", ""),
         ("MISE_GITHUB_TOKEN", "sentinel"),
         ("GITHUB_TOKEN", "sentinel"),
         ("ACTIONS_ID_TOKEN_REQUEST_TOKEN", "sentinel"),
@@ -124,6 +131,7 @@ fn reserved_override_rejected() -> Result<(), String> {
 fn repo_task_rejects_reserved_declared_keys() {
     for key in [
         "MISE_NO_CONFIG",
+        "RUSTUP_AUTO_INSTALL",
         "MISE_AUTO_INSTALL",
         "MISE_GITHUB_TOKEN",
         "GITHUB_TOKEN",
@@ -204,6 +212,7 @@ fn sentinel_credential_absent() -> Result<(), String> {
         "MISE_NO_ENV=1",
         "MISE_NO_HOOKS=1",
         "MISE_LOCKFILE=0",
+        "RUSTUP_AUTO_INSTALL=0",
         "VELNOR_P07_DECLARED=present",
     ] {
         assert!(
@@ -366,33 +375,4 @@ fn mid_run_cancel_kills_child_and_reports_cancelled() {
         matches!(&err, MiseError::SpawnFailed { message, .. } if message == "cancelled"),
         "got {err}"
     );
-}
-
-#[test]
-fn hook_escape_privileged_declared_keys_never_run() {
-    for key in [
-        "MISE_NO_CONFIG",
-        "MISE_NO_ENV",
-        "MISE_NO_HOOKS",
-        "MISE_LOCKFILE",
-        "MISE_AUTO_INSTALL",
-        "MISE_EXEC_AUTO_INSTALL",
-        "MISE_GITHUB_TOKEN",
-        "GITHUB_TOKEN",
-        "GH_TOKEN",
-        "ACTIONS_RUNTIME_TOKEN",
-        "ACTIONS_ID_TOKEN_REQUEST_TOKEN",
-        "ACTIONS_ID_TOKEN_REQUEST_URL",
-        "CARGO_REGISTRY_TOKEN",
-    ] {
-        assert!(is_reserved_env_key(key), "{key} must be reserved");
-        let declared = vec![(OsString::from(key), OsString::from("hostile"))];
-        assert!(
-            matches!(
-                IsolatedCommand::repo_task("sh", Vec::new(), &declared),
-                Err(MiseError::InvalidStepInput { .. })
-            ),
-            "project task declaring {key} must fail before spawn"
-        );
-    }
 }

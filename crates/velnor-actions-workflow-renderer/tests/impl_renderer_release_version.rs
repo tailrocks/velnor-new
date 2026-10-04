@@ -98,9 +98,9 @@ fn publish_gate_appends_bootstrap_version() {
     let mut plan = bootstrap();
     plan.version = Some("1.2.3".to_owned());
     assert_eq!(
-        publish_gate_condition(REPO, &plan),
+        publish_gate_condition(REPO, &plan, "main"),
         format!(
-            "github.repository == '{REPO}' && github.event.inputs.plan == '{}' && github.event.inputs.source_sha == '{SHA}' && github.event.inputs.version == '1.2.3'",
+            "github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.ref == format('refs/heads/{{0}}', github.event.repository.default_branch) && github.repository == '{REPO}' && github.event.inputs.plan == '{}' && github.event.inputs.source_sha == '{SHA}' && github.event.inputs.version == '1.2.3'",
             plan.plan_id,
         ),
         "versioned gate snapshot"

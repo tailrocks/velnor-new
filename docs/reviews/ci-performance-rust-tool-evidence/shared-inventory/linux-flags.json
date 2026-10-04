@@ -1,0 +1,18 @@
+{
+  "platform": "linux",
+  "python": "3.11.2 (main, May 12 2026, 05:17:27) [GCC 12.2.0]",
+  "engine_sha256": "5f1c3df6ab4e03833ba025d3d2923b49e3bb104af41150558d88937fed9e7118",
+  "clean_flags": "0x800000",
+  "nodump_flags": "0x800040",
+  "clean_export_available": false,
+  "checks": [
+    "record clean flags succeeds",
+    "strict any flags clean behavior matches actual filesystem",
+    "actual Linux NODUMP flag changed",
+    "Linux flags change recorded opaquely",
+    "strict any flags rejects NODUMP without digest",
+    "NODUMP reset restores clean flags",
+    "symlink probe does not follow target",
+    "descriptor metadata mismatch rejected"
+  ]
+}

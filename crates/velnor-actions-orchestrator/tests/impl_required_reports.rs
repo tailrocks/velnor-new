@@ -56,6 +56,7 @@ fn merge_staged(
             .collect(),
     );
     value["actual_event"] = value["plan"]["event"].clone();
+    value["actual_scope"] = serde_json::json!("affected");
     Ok(serde_json::from_str(&merge_internal(&value.to_string())?)?)
 }
 

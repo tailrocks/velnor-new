@@ -1,0 +1,9 @@
+name: Cache qualification
+on: push
+cache-mode: read
+jobs:
+  check:
+    needs: missing_job
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo qualified

@@ -76,9 +76,19 @@ pub(crate) fn insert_final_fanin(
     ctx: &RenderContext,
 ) -> Result<(), RenderError> {
     let candidate = jobs.contains_key(CANDIDATE_JOB_ID);
+    let producer_observations: Vec<String> = jobs
+        .iter()
+        .filter(|(_, job)| job.source_producer.is_some() || job.tool_producer.is_some())
+        .map(|(id, _)| id.clone())
+        .collect();
     let Some(final_job) = jobs.get_mut(FINAL_JOB_ID) else {
         return Ok(());
     };
+    // Typed cache roles are observations. Required folds their declared
+    // advisory policy while actual tasks retain their own evidence gates.
+    final_job.needs.extend(producer_observations);
+    final_job.needs.sort();
+    final_job.needs.dedup();
     if candidate
         && !final_job
             .steps

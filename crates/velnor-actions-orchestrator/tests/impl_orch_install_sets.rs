@@ -171,7 +171,11 @@ fn every_emitted_install_argv_carries_no_config() -> TestResult {
         let request = MiseInstall::new(vec![PinnedTool::Rust]).map_err(|err| err.to_string())?;
         let step = PreparePinnedTools::new(vec![PinnedTool::Rust], ToolHomes::runner_temp())
             .map_err(|err| err.to_string())?;
-        for argv in [install.argv(), request.argv(&catalog), step.argv(&catalog)] {
+        for argv in [
+            install.argv(),
+            request.argv(&catalog)?,
+            step.argv(&catalog)?,
+        ] {
             let tokens = argv_text(&argv);
             let at = tokens
                 .iter()

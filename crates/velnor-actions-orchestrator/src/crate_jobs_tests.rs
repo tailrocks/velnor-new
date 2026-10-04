@@ -7,6 +7,7 @@ use crate::clippy_groups::ClippyMemoryPlan;
 use crate::crate_job_ids::job_id_for_member;
 use crate::matrix_step::shard_suffix;
 use velnor_actions_rust::{CompileDriver, NextestProfile, TaskGroup, TaskKind, TestRunner};
+use velnor_actions_workflow_renderer::render::PLAN_JOB_ID;
 
 /// Runnable fixture proposal for one package/kind pair.
 pub(super) fn group(package: &str, kind: TaskKind, gated_by: &[&str]) -> ProposedTask {
@@ -33,7 +34,6 @@ pub(super) fn group(package: &str, kind: TaskKind, gated_by: &[&str]) -> Propose
         uses_network: false,
         uses_clock: false,
         uses_random: false,
-        run_ignored: None,
     };
     let task = velnor_actions_rust::propose_task(&group).expect("fixture proposes");
     task.validate().expect("fixture valid");
@@ -43,6 +43,8 @@ pub(super) fn group(package: &str, kind: TaskKind, gated_by: &[&str]) -> Propose
 /// Discovery shell carrying only task proposals.
 pub(super) fn discovery(groups: Vec<ProposedTask>) -> Discovery {
     Discovery {
+        rust_inventory: None,
+        raw_inventories: Vec::new(),
         statuses: Vec::new(),
         workspaces: Vec::new(),
         proposals: groups,
@@ -218,9 +220,6 @@ fn shards_name_their_index() {
     );
 }
 
-#[path = "crate_jobs_mbx_tests.rs"]
-mod mbx_tests;
-
 #[test]
 fn empty_groups_build_no_jobs() {
     let found = build_crate_jobs(
@@ -283,6 +282,7 @@ fn nonempty_custom_tasks_reject_with_zero_groups() {
 #[test]
 fn acquire_stages_before_report_wrappers() {
     let acquire = Step {
+        id: None,
         name: "Acquire Velnor".to_owned(),
         condition: None,
         kind: velnor_actions_contract::StepKind::Shell {
@@ -328,9 +328,15 @@ fn velnor_policy_trims_trio_except_validator_spawning_suites() {
     use velnor_actions_mise::PinnedTool;
     let catalog = ToolCatalog::pinned();
     let trio = [
-        catalog.tool_spec(PinnedTool::Actionlint),
-        catalog.tool_spec(PinnedTool::Shellcheck),
-        catalog.tool_spec(PinnedTool::Zizmor),
+        catalog
+            .tool_spec(PinnedTool::Actionlint)
+            .expect("qualified selector"),
+        catalog
+            .tool_spec(PinnedTool::Shellcheck)
+            .expect("qualified selector"),
+        catalog
+            .tool_spec(PinnedTool::Zizmor)
+            .expect("qualified selector"),
     ];
     let found = build_crate_jobs(
         "ubuntu-26.04",
@@ -359,8 +365,15 @@ fn velnor_policy_trims_trio_except_validator_spawning_suites() {
             );
         }
         assert!(
-            run.contains(&catalog.tool_spec(PinnedTool::Rust)),
+            run.contains(
+                &catalog
+                    .tool_spec(PinnedTool::Rust)
+                    .expect("qualified selector")
+            ),
             "{id} keeps its driver: {run:?}"
         );
     }
 }
+
+#[path = "crate_jobs_mbx_selection_tests.rs"]
+mod mbx_selection;

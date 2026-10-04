@@ -22,7 +22,8 @@ fn binary_record(target: &str, sha: &str) -> String {
 
 fn lock_text(sha: &str) -> String {
     let bins = binary_record("x86_64-unknown-linux-gnu", sha)
-        + &binary_record("aarch64-apple-darwin", sha);
+        + &binary_record("aarch64-apple-darwin", sha)
+        + &binary_record("x86_64-apple-darwin", sha);
     format!(
         "schema = 1\n[generator]\nbinary = \"velnor-actions\"\nversion = \"0.1.0\"\ncommit = \"{}\"\n{bins}[mise-bootstrap]\nversion = \"2026.9.18\"\nartifact = \"https://example.invalid/mise\"\nsha256 = \"{}\"\n",
         "a".repeat(40),
@@ -31,7 +32,7 @@ fn lock_text(sha: &str) -> String {
 }
 
 fn manifest_text(sha: &str) -> String {
-    let targets = velnor_actions_contract::SUPPORTED_TARGETS
+    let targets = ["x86_64-unknown-linux-gnu", "aarch64-apple-darwin", "x86_64-apple-darwin"]
         .iter()
         .map(|t| format!("{{\"target\":\"{t}\",\"artifact\":\"https://github.com/tailrocks/velnor-new/releases/download/v0.1.0/velnor-actions-0.1.0-{t}\",\"sha256\":\"{sha}\"}}"))
         .collect::<Vec<_>>()
@@ -53,6 +54,9 @@ fn ctx() -> RenderContext {
         candidate: None,
         preseed: false,
         plan_consumer_env: std::collections::BTreeMap::new(),
+        source_helpers: Vec::new(),
+        native_pages_approvals: Vec::new(),
+        native_publish_approvals: Vec::new(),
     }
 }
 
@@ -61,12 +65,19 @@ fn ir_with(steps: Vec<Step>) -> Result<WorkflowIr, Box<dyn std::error::Error>> {
     jobs.insert(
         "plan".to_owned(),
         Job {
+            cache_mode: None,
             display_name: "P".to_owned(),
             runs_on: "ubuntu-26.04".to_owned(),
             timeout_minutes: JobTimeout::CRATE,
             needs: Vec::new(),
             condition: None,
             permissions: None,
+            tool_producer: None,
+            mbx_producer: None,
+            source_producer: None,
+            native_pages_deploy: None,
+            native_publish: None,
+            outputs: Vec::new(),
             environment: None,
             steps: vec![
                 checkout_step(&format!("actions/checkout@{:040x}", 0))?,
@@ -77,23 +88,33 @@ fn ir_with(steps: Vec<Step>) -> Result<WorkflowIr, Box<dyn std::error::Error>> {
     jobs.insert(
         "candidate".to_owned(),
         Job {
+            cache_mode: None,
             display_name: "C".to_owned(),
             runs_on: "ubuntu-26.04".to_owned(),
             timeout_minutes: JobTimeout::CRATE,
             needs: vec!["plan".to_owned()],
             condition: None,
             permissions: None,
+            tool_producer: None,
+            mbx_producer: None,
+            source_producer: None,
+            native_pages_deploy: None,
+            native_publish: None,
+            outputs: Vec::new(),
             environment: None,
             steps,
         },
     );
     Ok(WorkflowIr {
+        cache_mode: velnor_actions_contract::CacheMode::Read,
+        run_name: None,
         name: "CI".to_owned(),
         triggers: Trigger {
             pull_request_types: ["opened", "synchronize", "reopened", "ready_for_review"]
                 .iter()
                 .map(ToString::to_string)
                 .collect(),
+            push_tags: Vec::new(),
             push_branches: vec!["main".to_owned()],
             merge_group: true,
             workflow_dispatch: None,

@@ -28,3 +28,59 @@ fn action_step_with_env_validates_env_keys_and_values() {
         );
     }
 }
+
+#[test]
+fn cache_mode_requires_default_branch_push_predicate() {
+    use velnor_actions_contract::workflow::ir::CACHE_MODE_PUSH_WRITE_EXPR;
+    let build = |mode: &str| {
+        action_step_with_env(
+            "Cache mode",
+            &pin("jdx/mr-boxington-action"),
+            BTreeMap::new(),
+            BTreeMap::from([("ACTIONS_CACHE_MODE".to_owned(), mode.to_owned())]),
+        )
+    };
+    assert!(build(CACHE_MODE_PUSH_WRITE_EXPR).is_ok());
+    for weakened in [
+        "${{ github.event_name == 'push' && 'write' || 'read' }}",
+        "${{ github.event_name == 'pull_request' && 'write' || 'read' }}",
+        "${{ github.event_name == 'merge_group' && 'write' || 'read' }}",
+        "${{ github.ref == 'refs/heads/main' && 'write' || 'read' }}",
+    ] {
+        assert!(build(weakened).is_err(), "unsafe mode accepted: {weakened}");
+    }
+}
+
+#[test]
+fn cache_save_input_rejects_event_only_and_untrusted_writers() {
+    use velnor_actions_contract::workflow::ir::CACHE_DEFAULT_BRANCH_WRITE_EXPR;
+    use velnor_actions_workflow_renderer::action_step;
+    let build = |condition: &str| {
+        action_step(
+            "Build cache",
+            &pin("Swatinem/rust-cache"),
+            BTreeMap::from([("save-if".to_owned(), condition.to_owned())]),
+        )
+    };
+    assert!(build(CACHE_DEFAULT_BRANCH_WRITE_EXPR).is_ok());
+    for weakened in [
+        "${{ github.event_name == 'push' }}",
+        "${{ github.event_name == 'pull_request' }}",
+        "${{ github.event_name == 'merge_group' }}",
+        "${{ failure() }}",
+        "${{ cancelled() }}",
+    ] {
+        assert!(
+            build(weakened).is_err(),
+            "unsafe writer accepted: {weakened}"
+        );
+    }
+    assert!(
+        action_step(
+            "Build cache",
+            &pin("Swatinem/rust-cache"),
+            BTreeMap::from([("key".to_owned(), "${{ env.VELNOR_CACHE_IMAGE }}".to_owned())]),
+        )
+        .is_ok()
+    );
+}

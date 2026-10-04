@@ -1,8 +1,7 @@
 //! Removed-path selection: deleted members and cross-package moves.
 //!
-//! Ownership resolves against head manifest directories by path prefix,
-//! so paths deleted at head still select their surviving owners (and
-//! the base graph still resolves removed edges against head IDs).
+//! File moves select old and new owners. Deleted manifests and workspace
+//! topology changes broaden when base ownership is incomplete.
 
 use std::fs;
 use std::path::Path;
@@ -14,9 +13,8 @@ use crate::impl_select::{commit, plan_pr, reasons_for};
 
 /// Nested workspace with a root package plus `members` under `rust/`.
 ///
-/// The nested manifest keeps member add/remove edits out of the
-/// repo-root `Cargo.toml` broaden rule, so structural removals flow
-/// through the base/head graphs instead of broadening.
+/// The nested manifest exercises workspace configuration broadening
+/// independently of the repository-root `Cargo.toml` rule.
 fn make_nested_repo(members: &[&str]) -> Result<TempDir, Box<dyn std::error::Error>> {
     let dir = TempDir::new()?;
     let root = dir.path();
@@ -111,7 +109,57 @@ fn deleted_member_selects_surviving_owners() -> TestResult {
         alpha.iter().all(|r| *r == "affected_by_change"),
         "dependent manifest changed: {alpha:?}"
     );
-    assert!(warnings.is_empty(), "narrow, got {warnings:?}");
+    assert!(
+        warnings
+            .iter()
+            .any(|warning| warning == "root_config_changed:all_changed"),
+        "workspace topology must broaden: {warnings:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn nested_workspace_inherited_settings_select_all_members() -> TestResult {
+    let repo = make_nested_repo(&["alpha", "beta"])?;
+    let root = repo.path();
+    let base = commit(root, "one")?;
+    let manifest = fs::read_to_string(root.join("rust/Cargo.toml"))?;
+    fs::write(
+        root.join("rust/Cargo.toml"),
+        format!("{manifest}\n[profile.dev]\nopt-level = 1\n"),
+    )?;
+    let head = commit(root, "two")?;
+    let (plan, warnings) = plan_pr(root, Some(&base), &head)?;
+    crate::impl_select::assert_all_changed(&plan);
+    assert!(
+        warnings
+            .iter()
+            .any(|warning| warning == "root_config_changed:all_changed")
+    );
+    Ok(())
+}
+
+#[test]
+fn deleted_manifest_without_base_inventory_broadens() -> TestResult {
+    let repo = make_nested_repo(&["alpha", "beta"])?;
+    let root = repo.path();
+    let retired = root.join("rust/alpha/retired/Cargo.toml");
+    fs::create_dir_all(retired.parent().ok_or("missing fixture parent")?)?;
+    fs::write(
+        &retired,
+        "[package]\nname = \"retired\"\nversion = \"0.1.0\"\n",
+    )?;
+    let base = commit(root, "one")?;
+    fs::remove_file(retired)?;
+    let head = commit(root, "two")?;
+    let (plan, warnings) = plan_pr(root, Some(&base), &head)?;
+    crate::impl_select::assert_all_changed(&plan);
+    assert!(
+        warnings
+            .iter()
+            .any(|warning| warning
+                == "comparison_unavailable:base_metadata_unavailable:rust/alpha/retired/Cargo.toml:all_changed")
+    );
     Ok(())
 }
 

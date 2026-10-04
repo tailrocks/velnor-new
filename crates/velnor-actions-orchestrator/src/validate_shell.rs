@@ -3,20 +3,19 @@
 use std::ffi::OsString;
 use std::path::Path;
 
-use velnor_actions_mise::{PinnedTool, ProcessOutput, ToolCatalog};
+use velnor_actions_mise::{PinnedTool, ProcessOutput, RuntimePaths, ToolCatalog};
 
 use crate::OrchestratorError;
-use crate::validate::{diagnose, pinned_output};
+use crate::validate::{diagnose, pinned_output_in_runtime};
 
-#[path = "validate_shell_yaml.rs"]
-mod workflow;
-
-/// Prove the pinned shellcheck resolves, runs, and reports its pin.
-pub(crate) fn run_shellcheck_probe(
+/// Prove shellcheck under a compiled runtime domain.
+pub(crate) fn run_shellcheck_probe_in_runtime(
     catalog: &ToolCatalog,
     staging: &Path,
+    runtime: RuntimePaths,
 ) -> Result<(), OrchestratorError> {
-    let output = shellcheck_output(catalog, vec![OsString::from("--version")], staging)?;
+    let output =
+        shellcheck_output_in_runtime(catalog, vec![OsString::from("--version")], staging, runtime)?;
     if !output.success {
         return Err(OrchestratorError::Validation {
             tool: "shellcheck".to_owned(),
@@ -27,18 +26,20 @@ pub(crate) fn run_shellcheck_probe(
     check_shellcheck_version(&text, catalog.version(PinnedTool::Shellcheck))
 }
 
-/// Run the pinned shellcheck binary with fixed args in staging.
-fn shellcheck_output(
+/// Run shellcheck under a compiled runtime domain.
+fn shellcheck_output_in_runtime(
     catalog: &ToolCatalog,
     args: Vec<OsString>,
     staging: &Path,
+    runtime: RuntimePaths,
 ) -> Result<ProcessOutput, OrchestratorError> {
-    pinned_output(
+    pinned_output_in_runtime(
         catalog,
         "shellcheck",
         vec![PinnedTool::Shellcheck],
         args,
         staging,
+        runtime,
     )
 }
 
@@ -58,23 +59,21 @@ fn check_shellcheck_version(output: &str, pinned: &str) -> Result<(), Orchestrat
     }
 }
 
-/// Lint every staged `run:` body with one pinned shellcheck run; fail closed.
-///
-/// Bodies ride one argv (shellcheck checks each file and reports per-file
-/// gcc diagnostics), so per-crate jobs add files, not subprocesses.
-pub(crate) fn run_shellcheck_bodies(
+/// Lint staged `run:` bodies under a compiled runtime domain.
+pub(crate) fn run_shellcheck_bodies_in_runtime(
     catalog: &ToolCatalog,
     staging: &Path,
     workflows: &[String],
+    runtime: RuntimePaths,
 ) -> Result<(), OrchestratorError> {
-    let bodies = workflow::staged_runs(staging, workflows)?;
+    let bodies = staged_run_bodies(staging, workflows)?;
     let mut files: Vec<OsString> = Vec::new();
-    for (index, run) in bodies.iter().enumerate() {
-        if run.body.trim().is_empty() {
+    for (index, body) in bodies.iter().enumerate() {
+        if body.trim().is_empty() {
             continue;
         }
         let path = staging.join(format!("shellcheck-{index}.sh"));
-        std::fs::write(&path, format!("{}\n{}\n", run.shell.shebang(), run.body))
+        std::fs::write(&path, format!("#!/bin/sh\n{body}\n"))
             .map_err(|err| OrchestratorError::io(path.display().to_string(), err.to_string()))?;
         files.push(path.into_os_string());
     }
@@ -90,7 +89,7 @@ pub(crate) fn run_shellcheck_bodies(
         OsString::from("--format=gcc"),
     ];
     args.extend(files.iter().cloned());
-    let output = shellcheck_output(catalog, args, staging)?;
+    let output = shellcheck_output_in_runtime(catalog, args, staging, runtime)?;
     if !output.success {
         return Err(OrchestratorError::Validation {
             tool: "shellcheck".to_owned(),
@@ -104,7 +103,7 @@ pub(crate) fn run_shellcheck_bodies(
         OsString::from("--include=SC2086"),
     ];
     args.extend(files);
-    let output = shellcheck_output(catalog, args, staging)?;
+    let output = shellcheck_output_in_runtime(catalog, args, staging, runtime)?;
     if output.success {
         Ok(())
     } else {
@@ -113,6 +112,30 @@ pub(crate) fn run_shellcheck_bodies(
             problem: diagnose(&output),
         })
     }
+}
+
+/// Extract `run:` bodies from staged workflows; block scalars fail closed.
+fn staged_run_bodies(
+    staging: &Path,
+    workflows: &[String],
+) -> Result<Vec<String>, OrchestratorError> {
+    let mut bodies = Vec::new();
+    for rel in workflows {
+        let path = staging.join(rel);
+        let text = std::fs::read_to_string(&path)
+            .map_err(|err| OrchestratorError::io(path.display().to_string(), err.to_string()))?;
+        for line in text.lines() {
+            let Some(rest) = line.trim_start().strip_prefix("run:") else {
+                continue;
+            };
+            let scalar = rest.strip_prefix(' ').unwrap_or(rest).trim_end();
+            if scalar.is_empty() || scalar.starts_with(['|', '>']) {
+                return Err(shellcheck_fail("run_block_scalar_unlintable"));
+            }
+            bodies.push(unquote_run_scalar(scalar)?);
+        }
+    }
+    Ok(bodies)
 }
 
 /// Unquote one single-line scalar: plain or double-quoted only.
@@ -167,20 +190,16 @@ mod tests {
 
     /// One staged workflow carrying one `run:` line per entry, in order.
     fn staged_runs(runs: &[&str]) -> Result<(tempfile::TempDir, Vec<String>), String> {
-        let mut yaml = String::from("jobs:\n  a:\n    runs-on: ubuntu-26.04\n    steps:\n");
+        let dir = tempfile::tempdir().map_err(|err| err.to_string())?;
+        let rel = ".github/workflows/t.yml".to_owned();
+        std::fs::create_dir_all(dir.path().join(".github/workflows"))
+            .map_err(|err| err.to_string())?;
+        let mut yaml = String::from("jobs:\n  a:\n    steps:\n");
         for (index, run) in runs.iter().enumerate() {
             use std::fmt::Write as _;
             writeln!(yaml, "      - name: t{index}\n        run: {run}")
                 .map_err(|err| err.to_string())?;
         }
-        staged_workflow(&yaml)
-    }
-
-    fn staged_workflow(yaml: &str) -> Result<(tempfile::TempDir, Vec<String>), String> {
-        let dir = tempfile::tempdir().map_err(|err| err.to_string())?;
-        let rel = ".github/workflows/t.yml".to_owned();
-        std::fs::create_dir_all(dir.path().join(".github/workflows"))
-            .map_err(|err| err.to_string())?;
         std::fs::write(dir.path().join(&rel), yaml).map_err(|err| err.to_string())?;
         Ok((dir, vec![rel]))
     }
@@ -189,20 +208,32 @@ mod tests {
     fn shellcheck_clean_passes_violation_and_block_fail() -> Result<(), String> {
         let catalog = ToolCatalog::pinned();
         let (clean, workflows) = staged_run("echo \"hi\"")?;
-        run_shellcheck_bodies(&catalog, clean.path(), &workflows).map_err(|err| err.to_string())?;
+        run_shellcheck_bodies_in_runtime(&catalog, clean.path(), &workflows, RuntimePaths::full())
+            .map_err(|err| err.to_string())?;
         // Error-level SC2070 trips the `-S warning` pass (see
         // `shellcheck_pure_sc2086_body_fails` for the targeted SC2086 pass).
         let (dirty, workflows) = staged_run("echo $FOO/bar && [ -n $BAZ ]")?;
         assert!(
-            run_shellcheck_bodies(&catalog, dirty.path(), &workflows).is_err_and(|err| {
+            run_shellcheck_bodies_in_runtime(
+                &catalog,
+                dirty.path(),
+                &workflows,
+                RuntimePaths::full()
+            )
+            .is_err_and(|err| {
                 matches!(&err, OrchestratorError::Validation { tool, .. } if tool == "shellcheck")
                     && err.to_string().contains("SC2070")
             })
         );
         let (blocked, workflows) = staged_run("|")?;
         assert!(
-            run_shellcheck_bodies(&catalog, blocked.path(), &workflows)
-                .is_err_and(|err| { err.to_string().contains("run_block_scalar_unlintable") })
+            run_shellcheck_bodies_in_runtime(
+                &catalog,
+                blocked.path(),
+                &workflows,
+                RuntimePaths::full()
+            )
+            .is_err_and(|err| { err.to_string().contains("run_block_scalar_unlintable") })
         );
         Ok(())
     }
@@ -215,7 +246,13 @@ mod tests {
         let catalog = ToolCatalog::pinned();
         let (dirty, workflows) = staged_run("echo $FOO/bar")?;
         assert!(
-            run_shellcheck_bodies(&catalog, dirty.path(), &workflows).is_err_and(|err| {
+            run_shellcheck_bodies_in_runtime(
+                &catalog,
+                dirty.path(),
+                &workflows,
+                RuntimePaths::full()
+            )
+            .is_err_and(|err| {
                 matches!(&err, OrchestratorError::Validation { tool, .. } if tool == "shellcheck")
                     && err.to_string().contains("SC2086")
             })
@@ -227,37 +264,25 @@ mod tests {
     fn shellcheck_batch_lints_every_body() -> Result<(), String> {
         let catalog = ToolCatalog::pinned();
         let (clean, workflows) = staged_runs(&["echo \"one\"", "echo \"two\""])?;
-        run_shellcheck_bodies(&catalog, clean.path(), &workflows).map_err(|err| err.to_string())?;
+        run_shellcheck_bodies_in_runtime(&catalog, clean.path(), &workflows, RuntimePaths::full())
+            .map_err(|err| err.to_string())?;
         // A violation in a later body still fails the single batched run.
         let (dirty, workflows) = staged_runs(&["echo \"one\"", "echo $FOO/bar && [ -n $BAZ ]"])?;
         assert!(
-            run_shellcheck_bodies(&catalog, dirty.path(), &workflows).is_err_and(|err| {
+            run_shellcheck_bodies_in_runtime(
+                &catalog,
+                dirty.path(),
+                &workflows,
+                RuntimePaths::full()
+            )
+            .is_err_and(|err| {
                 matches!(&err, OrchestratorError::Validation { tool, .. } if tool == "shellcheck")
                     && err.to_string().contains("SC2070")
             })
         );
         // All-empty bodies lint nothing and pass.
         let (empty, workflows) = staged_runs(&["\"\""])?;
-        run_shellcheck_bodies(&catalog, empty.path(), &workflows).map_err(|err| err.to_string())?;
-        Ok(())
-    }
-
-    #[test]
-    fn shellcheck_uses_the_resolved_bash_or_posix_dialect() -> Result<(), String> {
-        let catalog = ToolCatalog::pinned();
-        let yaml = |shell: &str| {
-            format!(
-                "jobs:\n  probe:\n    runs-on: [self-hosted, runner]\n    defaults:\n      run:\n        shell: {shell}\n    steps:\n      - name: array\n        run: \"items=(one); test \\\"${{items[0]}}\\\" = one\"\n"
-            )
-        };
-        let (bash, workflows) = staged_workflow(&yaml("bash -e {0}"))?;
-        run_shellcheck_bodies(&catalog, bash.path(), &workflows).map_err(|err| err.to_string())?;
-        let (sh, workflows) = staged_workflow(&yaml("sh -e {0}"))?;
-        assert!(run_shellcheck_bodies(&catalog, sh.path(), &workflows).is_err());
-
-        let container_yaml = "jobs:\n  scale-container:\n    runs-on: [self-hosted, runner]\n    steps:\n      - name: posix\n        run: test -n \"$HOME\" && printf '%s\\n' ready\n    container: alpine:3.22\n";
-        let (container, workflows) = staged_workflow(container_yaml)?;
-        run_shellcheck_bodies(&catalog, container.path(), &workflows)
+        run_shellcheck_bodies_in_runtime(&catalog, empty.path(), &workflows, RuntimePaths::full())
             .map_err(|err| err.to_string())?;
         Ok(())
     }

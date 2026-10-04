@@ -14,8 +14,11 @@
 /// `install`/`exec`, `<tool>@<version>`, `--`) never contain
 /// whitespace by construction, so splitting loses no signal.
 pub(crate) fn detector_words(run: &[String]) -> Vec<String> {
-    if crate::commands::is_inline_shell(run) {
-        run[2].split_whitespace().map(unquote_word).collect()
+    if let Some(script_at) = crate::commands::inline_script_index(run) {
+        run[script_at]
+            .split_whitespace()
+            .map(unquote_word)
+            .collect()
     } else {
         run.iter().map(|arg| unquote_word(arg.as_str())).collect()
     }

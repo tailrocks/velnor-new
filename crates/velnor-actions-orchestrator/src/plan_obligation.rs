@@ -9,31 +9,23 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use serde::Serialize;
-use velnor_actions_contract::{
-    MatrixEntry, PlanObligation, ProposedTask, Stack, StackExtension, canonical_json_bytes,
-    digest_b3,
-};
+use velnor_actions_contract::{MatrixEntry, PlanObligation, ProposedTask};
 use velnor_actions_mise::ToolCatalog;
 use velnor_actions_mise::restore::probe_tool_availability;
-use velnor_actions_rust::extension_for_proposal;
 
 use crate::OrchestratorError;
 use crate::discover::Discovery;
 use crate::internal::{internal, internal_contract};
-use crate::internal_plan::closure::resolve_closure_at_root;
-use crate::internal_plan::identities::{
-    ExtensionBundle, extension_bundle_with_snapshot, platform_id_for_group,
-};
-use crate::internal_plan::snapshot::{ExecutionSnapshot, canonical_digest};
+use crate::internal_plan::snapshot::ExecutionSnapshot;
 use crate::internal_plan::wire_w2::{self, GroupWire};
 use crate::internal_plan::{
-    IdentityInputs, adapter_metadata, cache_ids_for, evidence_for_group, execute_ids,
-    nextest_config_for, record_task_cache, task_identity_digest, toolchain_id,
+    adapter_metadata, cache_ids_for, evidence_for_group, execute_ids, record_task_cache,
 };
 use crate::schedule::assign_lanes;
 use crate::select::group_changed;
-use crate::vectors::task_argv;
+#[path = "source_identity.rs"]
+pub(crate) mod source_identity;
+use source_identity::{ResolvedSourceIdentity, SourceIdentityInputs, extension_for_task};
 
 #[cfg(test)]
 #[path = "plan_obligation_tests.rs"]
@@ -49,12 +41,6 @@ pub(crate) struct GroupInputs<'a> {
     pub(crate) run_key: &'a str,
     /// Runner label.
     pub(crate) label: &'a str,
-    /// Deprecated ordinal lane from the caller; ignored.
-    ///
-    /// Lane identity derives from responsibility and config (see
-    /// `cache_ids_for`); this field stays only because the non-owned
-    /// plan caller still supplies it. Removal awaits that migration.
-    pub(crate) lane: u32,
     /// Pinned tool catalog.
     pub(crate) catalog: &'a ToolCatalog,
     /// Reuse wiring inputs.
@@ -88,93 +74,10 @@ pub(crate) fn changed_keys(
 /// True when one universe member counts as changed.
 pub(crate) fn member_changed(
     task: &ProposedTask,
-    changed: Option<&BTreeSet<String>>,
+    changed: Option<&crate::select::ChangedSelection>,
     keys: &BTreeSet<String>,
 ) -> bool {
-    changed.is_none_or(|set| group_changed(task, set, keys))
-}
-
-/// Extension bundle plus closure-bound identity digests for one task.
-struct PlannedIdentity {
-    /// Snapshot-indexed bundle with checkout-bound lock/Nextest digests.
-    bundle: ExtensionBundle,
-    /// Canonical digest over the complete input closure.
-    closure_digest: String,
-    /// Input digest with the closure digest bound into the envelope.
-    input_digest: String,
-}
-
-/// Stack-extension envelope plus reuse eligibility for one task.
-///
-/// Closed per-stack dispatch: rust tasks derive through the rust
-/// bridge over the snapshot bundle; tofu tasks derive through the
-/// tofu bridge with a checkout-bound root-lockfile slot. Both feed
-/// the same neutral envelope and gate.
-fn extension_for_task(
-    task: &ProposedTask,
-    root: &Path,
-    bundle: &ExtensionBundle,
-    reads: &mut velnor_actions_tofu::FileCache,
-) -> Result<(StackExtension, bool), OrchestratorError> {
-    if Stack::from_id(&task.stack_id) == Some(Stack::Tofu) {
-        let ext = crate::internal_plan::tofu_extension_for(task, root, bundle, reads)
-            .map_err(internal_contract)?;
-        return Ok((ext.to_stack_extension(), ext.reuse_eligible().is_ok()));
-    }
-    let ext = extension_for_proposal(task, &bundle.inputs()).map_err(internal_contract)?;
-    Ok((ext.to_stack_extension(), ext.reuse_eligible().is_ok()))
-}
-
-/// Snapshot bundle plus closure-bound identity digests for one task.
-///
-/// The closure resolves against the checkout and its digest binds into
-/// the identity envelope, so a source edit flips `input_digest` even
-/// when the changed-work hint misses it.
-fn planned_identity(
-    inputs: &GroupInputs<'_>,
-    argv: &[String],
-    toolchain: &str,
-    platform_id: &str,
-    reads: &mut velnor_actions_tofu::FileCache,
-) -> Result<PlannedIdentity, OrchestratorError> {
-    let task = inputs.task;
-    let manifest = task.identity.unit_path.clone();
-    let nextest_config = nextest_config_for(inputs.discovery, task);
-    let bundle = extension_bundle_with_snapshot(
-        inputs.snapshot,
-        inputs.discovery,
-        task,
-        Some(inputs.root),
-        nextest_config.as_deref(),
-    );
-    let (extension, _) = extension_for_task(task, inputs.root, &bundle, reads)?;
-    let closure = resolve_closure_at_root(
-        inputs.root,
-        task,
-        nextest_config.as_deref(),
-        bundle.graph_digest(),
-        toolchain,
-        platform_id,
-        &mut *reads,
-    )
-    .map_err(internal_contract)?;
-    let closure_digest = canonical_digest(&closure).map_err(internal_contract)?;
-    let input_digest = task_identity_digest(&IdentityInputs {
-        task,
-        argv,
-        toolchain_id: toolchain,
-        platform_id,
-        manifest: &manifest,
-        generator: inputs.wire.generator,
-        extension,
-        closure_digest: &closure_digest,
-    })
-    .map_err(internal_contract)?;
-    Ok(PlannedIdentity {
-        bundle,
-        closure_digest,
-        input_digest,
-    })
+    changed.is_none_or(|set| group_changed(task, &set.affected, keys))
 }
 
 /// Obligation plus matrix entry for one universe member.
@@ -187,45 +90,30 @@ pub(crate) fn plan_group(
     reads: &mut velnor_actions_tofu::FileCache,
 ) -> Result<(PlanObligation, MatrixEntry), OrchestratorError> {
     let task = inputs.task;
-    let _ = inputs.lane;
-    let toolchain = toolchain_id(task, inputs.catalog).map_err(internal_contract)?;
-    let argv = task_argv(task, inputs.catalog)?;
-    let platform_id = platform_id_for_group(inputs.label, task).map_err(internal_contract)?;
-    let identity = planned_identity(inputs, &argv, &toolchain, &platform_id, &mut *reads)?;
-    let (_, reuse_eligible) = extension_for_task(task, inputs.root, &identity.bundle, reads)?;
+    let identity = source_identity::resolve(
+        &SourceIdentityInputs {
+            discovery: inputs.discovery,
+            task,
+            root: inputs.root,
+            snapshot: inputs.snapshot,
+            catalog: inputs.catalog,
+            generator: inputs.wire.generator,
+            label: inputs.label,
+        },
+        reads,
+    )?;
+    let reuse = planned_reuse(
+        inputs,
+        &identity,
+        &identity.toolchain_id,
+        &identity.platform_id,
+        reads,
+    )?;
+    let argv = identity.argv;
+    let toolchain = identity.toolchain_id;
     let input_digest = identity.input_digest;
     let closure_digest = identity.closure_digest;
-    let reuse = if inputs.changed {
-        wire_w2::ReuseOutcome::execute("affected_by_change")
-    } else {
-        wire_w2::plan_reuse_outcome(
-            task,
-            inputs.wire.event,
-            probe_tool_availability(false, false),
-            &toolchain,
-            &input_digest,
-            reuse_eligible,
-        )?
-    };
-    let gate = wire_w2::check_archive_identity_with_source(
-        task,
-        &toolchain,
-        &platform_id,
-        identity.bundle.config_digest(),
-        Some(&closure_digest),
-    )?;
-    // The archive identity binds the content closure, never a manifest
-    // pathname: a same-path source edit flips the closure and the
-    // identity with it. Unbound sources refuse the task (execute with
-    // reason); changed work already executes under its own reason.
-    // Malformed specs stay hard errors: the planner generated them.
-    let reuse = match gate {
-        wire_w2::ArchiveGate::SourceUnbound if !inputs.changed => {
-            wire_w2::ReuseOutcome::execute("archive_source_unbound")
-        }
-        _ => reuse,
-    };
-    let task_digest = task_digest(&task.task_id, &argv, &toolchain).map_err(internal_contract)?;
+    let task_digest = identity.task_digest;
     // The persisted input digest flows through the validated reuse
     // outcome when one exists, so merge-time live comparison judges the
     // exact recorded value; forced-execution paths carry the identity.
@@ -233,17 +121,25 @@ pub(crate) fn plan_group(
         .recorded_input_digest
         .clone()
         .unwrap_or_else(|| input_digest.clone());
+    let job_id = crate::crate_job_ids::job_id_for_member(&inputs.discovery.proposals, task)
+        .ok_or_else(|| internal("crate_job_id_missing"))?;
     let obligation = PlanObligation {
         task_id: task.task_id.clone(),
+        job_id: job_id.clone(),
         decision: reuse.decision,
         reason: reuse.reason,
         task_digest: task_digest.clone(),
         input_digest: recorded,
         closure_digest,
+        execution_identity: identity.execution_identity,
         baseline_proof: None,
     };
     let mut metadata = adapter_metadata(task, evidence_for_group(inputs.discovery, task))
         .map_err(internal_contract)?;
+    if let Some(helper) = identity.helper_obligation {
+        metadata["helper_obligation"] = serde_json::to_value(helper)
+            .map_err(|error| internal(&format!("helper_descriptor_serialization:{error}")))?;
+    }
     record_task_cache(
         &mut metadata,
         reuse.task_cache_enabled,
@@ -251,8 +147,6 @@ pub(crate) fn plan_group(
     );
     let run = velnor_actions_workflow_renderer::join_argv_for_run(&argv)
         .map_err(|err| internal(&err.to_string()))?;
-    let job_id = crate::crate_job_ids::job_id_for_member(&inputs.discovery.proposals, task)
-        .ok_or_else(|| internal("crate_job_id_missing"))?;
     let mut entry = MatrixEntry::derive(
         &task.stack_id,
         &task.task_id,
@@ -268,7 +162,45 @@ pub(crate) fn plan_group(
     let cache_ids = cache_ids_for(task, inputs.label, &toolchain).map_err(internal_contract)?;
     record_lane_target_dir(&mut entry.adapter_metadata, cache_ids.lane_id());
     entry.cache_ids = Some(cache_ids);
+    entry.native_recipe = identity.native_recipe;
     Ok((obligation, entry))
+}
+
+/// Reuse disposition from the task's source-bound identity, never a pathname alone.
+fn planned_reuse(
+    inputs: &GroupInputs<'_>,
+    identity: &ResolvedSourceIdentity,
+    toolchain: &str,
+    platform: &str,
+    reads: &mut velnor_actions_tofu::FileCache,
+) -> Result<wire_w2::ReuseOutcome, OrchestratorError> {
+    let task = inputs.task;
+    let (_, eligible) = extension_for_task(task, inputs.root, &identity.bundle, reads)?;
+    let reuse = if inputs.changed {
+        wire_w2::ReuseOutcome::execute("affected_by_change")
+    } else {
+        wire_w2::plan_reuse_outcome(
+            task,
+            inputs.wire.event,
+            probe_tool_availability(false, false),
+            toolchain,
+            &identity.input_digest,
+            eligible,
+        )?
+    };
+    let gate = wire_w2::check_archive_identity_with_source(
+        task,
+        toolchain,
+        platform,
+        identity.bundle.config_digest(),
+        Some(&identity.closure_digest),
+    )?;
+    Ok(match gate {
+        wire_w2::ArchiveGate::SourceUnbound if !inputs.changed => {
+            wire_w2::ReuseOutcome::execute("archive_source_unbound")
+        }
+        _ => reuse,
+    })
 }
 
 /// Record the lane's isolated `CARGO_TARGET_DIR` on entry metadata.
@@ -285,11 +217,6 @@ fn record_lane_target_dir(metadata: &mut serde_json::Value, lane_id: &str) {
     );
 }
 
-/// Digest of canonical bytes for a serializable input struct.
-fn digest_of<T: Serialize>(inputs: &T) -> Result<String, velnor_actions_contract::ContractError> {
-    Ok(digest_b3(&canonical_json_bytes(inputs)?))
-}
-
 /// Task digest binding argv plus toolchain for one obligation.
 ///
 /// Shared by event-time plan obligations and static crate-job
@@ -298,21 +225,14 @@ pub(crate) fn task_digest(
     task_id: &str,
     argv: &[String],
     toolchain_id: &str,
+    helper_obligation: Option<&velnor_actions_contract::HelperObligationDescriptor>,
+    native_recipe: Option<&velnor_actions_contract::NativeValidationDescriptor>,
 ) -> Result<String, velnor_actions_contract::ContractError> {
-    digest_of(&TaskDigestInputs {
+    velnor_actions_contract::canonical_task_digest(
         task_id,
         argv,
         toolchain_id,
-    })
-}
-
-/// Task-digest preimage fields.
-#[derive(Debug, Serialize)]
-struct TaskDigestInputs<'a> {
-    /// Stable task ID.
-    task_id: &'a str,
-    /// Fixed argument vector.
-    argv: &'a [String],
-    /// Toolchain identity digest.
-    toolchain_id: &'a str,
+        helper_obligation,
+        native_recipe,
+    )
 }

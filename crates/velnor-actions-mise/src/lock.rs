@@ -105,6 +105,11 @@ pub fn verify_version_policy(text: &str, catalog: &ToolCatalog) -> Result<(), Lo
     let doc = parse_toml(text)?;
     check_schema(&doc, 1)?;
     let tools = section(&doc, "tools")?;
+    for name in tools.keys() {
+        if name != "mise" && PinnedTool::from_tool_name(name).is_err() {
+            return Err(mismatch(format!("tool_unknown:{name}")));
+        }
+    }
     for tool in PinnedTool::ALL {
         let pinned = catalog.version(tool);
         match tools.get(tool.tool_name()) {
@@ -318,10 +323,14 @@ fn entry(entries: &BTreeMap<String, String>, key: &str) -> Result<String, LockEr
 
 /// Fetch the single section with `name`.
 fn section(doc: &TomlDoc, name: &str) -> Result<BTreeMap<String, String>, LockError> {
-    doc.iter()
-        .find(|(title, _)| title == name)
-        .map(|(_, entries)| entries.clone())
-        .ok_or_else(|| invalid(format!("missing_section:{name}")))
+    let mut matches = doc.iter().filter(|(title, _)| title == name);
+    let Some((_, entries)) = matches.next() else {
+        return Err(invalid(format!("missing_section:{name}")));
+    };
+    if matches.next().is_some() {
+        return Err(malformed(format!("duplicate_section:{name}")));
+    }
+    Ok(entries.clone())
 }
 
 /// Map a parsed document onto the typed [`GeneratorLock`].

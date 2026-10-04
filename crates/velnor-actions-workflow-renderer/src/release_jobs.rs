@@ -6,65 +6,109 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{JobTimeout, Step, StepKind, validate_job_id};
+use velnor_actions_contract::{JobTimeout, Step, StepKind};
 
 use crate::{
     RenderError,
     release_permissions::JobPermissions,
     release_spec::{
         BootstrapPlan, ReleaseConcurrency, ReleaseTriggers, check_lock_anchor, is_clean_text,
-        publish_gate_condition, validate_environment, validate_repository,
+        validate_environment, validate_repository,
     },
     steps::scan_for_private_subcommands,
 };
 
-/// Release boundary role carried by one job (bootstrap optional).
+/// Closed authority boundaries in the immutable release pipeline.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ReleaseRole {
-    /// Release-PR preparation (GitHub authority, no registry/OIDC).
-    Preparation,
-    /// Preflight validation (read-only, exact-source checkout).
-    Preflight,
-    /// Trusted-publishing publication (OIDC, pinned environment).
-    PublishOidc,
-    /// Bootstrap-token publication (distinct job, pinned environment).
-    PublishBootstrap,
-    /// Independent reconciliation (read-only, always runs).
+    /// Fresh read-only source API snapshot producer with no repository execution.
+    SourceSnapshotForge,
+    /// Anonymous Cargo packaging with no ancestors.
+    PackageAnonymous,
+    /// Fresh anonymous preparation of original archives from immutable source.
+    PackagePreparedAnonymous,
+    /// Fresh read-only immutable package admission.
+    PreflightForge,
+    /// Token-only crates.io publication using OIDC.
+    RegistryPublishOidc,
+    /// Token-only first publication using the approved bootstrap secret.
+    RegistryPublishBootstrap,
+    /// Fresh write-only GitHub tag and release coordination.
+    ForgePublish,
+    /// Fresh independent publication reconciliation.
     Reconcile,
+    /// Anonymous proposed manifest/lock/changelog generation.
+    PreparationAnonymous,
+    /// Fresh GitHub `GitData` and pull request coordination.
+    PreparationForge,
 }
 
 impl ReleaseRole {
-    /// Machine-readable role name for errors.
+    /// Fixed role spelling for diagnostics.
     #[must_use]
-    pub fn as_str(self) -> &'static str {
+    pub const fn as_str(self) -> &'static str {
         match self {
-            Self::Preparation => "preparation",
-            Self::Preflight => "preflight",
-            Self::PublishOidc => "publish-oidc",
-            Self::PublishBootstrap => "publish-bootstrap",
+            Self::SourceSnapshotForge => "source-snapshot-forge",
+            Self::PackageAnonymous => "package-anonymous",
+            Self::PackagePreparedAnonymous => "package-prepared-anonymous",
+            Self::PreflightForge => "preflight-forge",
+            Self::RegistryPublishOidc => "registry-publish-oidc",
+            Self::RegistryPublishBootstrap => "registry-publish-bootstrap",
+            Self::ForgePublish => "forge-publish",
             Self::Reconcile => "reconcile",
+            Self::PreparationAnonymous => "preparation-anonymous",
+            Self::PreparationForge => "preparation-forge",
         }
     }
 
-    /// True for validation-only roles (never hold write authority).
+    /// Exact producer identity also used by authenticated artifact transport.
     #[must_use]
-    pub fn is_validation(self) -> bool {
-        matches!(self, Self::Preflight | Self::Reconcile)
+    pub const fn job_id(self) -> &'static str {
+        match self {
+            Self::SourceSnapshotForge => "release-source-snapshot",
+            Self::PackageAnonymous | Self::PackagePreparedAnonymous => "release-package",
+            Self::PreflightForge => "release-preflight",
+            Self::RegistryPublishOidc | Self::RegistryPublishBootstrap => {
+                "release-registry-publish"
+            }
+            Self::ForgePublish => "release-forge-publish",
+            Self::Reconcile => "release-reconcile",
+            Self::PreparationAnonymous => "release-preparation-source",
+            Self::PreparationForge => "release-preparation",
+        }
     }
 
-    /// Forward-only pipeline rank (needs must point to lower ranks).
-    fn rank(self) -> u8 {
+    /// Roles which never possess write credentials.
+    #[must_use]
+    pub const fn is_validation(self) -> bool {
+        matches!(
+            self,
+            Self::SourceSnapshotForge
+                | Self::PackageAnonymous
+                | Self::PackagePreparedAnonymous
+                | Self::PreflightForge
+                | Self::Reconcile
+                | Self::PreparationAnonymous
+        )
+    }
+
+    /// Forward-only role order.
+    pub(super) const fn rank(self) -> u8 {
         match self {
-            Self::Preparation => 0,
-            Self::Preflight => 1,
-            Self::PublishOidc | Self::PublishBootstrap => 2,
-            Self::Reconcile => 3,
+            Self::SourceSnapshotForge => 0,
+            Self::PackageAnonymous
+            | Self::PackagePreparedAnonymous
+            | Self::PreparationAnonymous => 1,
+            Self::PreflightForge | Self::PreparationForge => 2,
+            Self::RegistryPublishOidc | Self::RegistryPublishBootstrap => 3,
+            Self::ForgePublish => 4,
+            Self::Reconcile => 5,
         }
     }
 }
 
 /// One release job: a contract step list plus typed role metadata.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReleaseJobSpec {
     /// Boundary role this job serves.
     pub role: ReleaseRole,
@@ -85,11 +129,13 @@ pub struct ReleaseJobSpec {
     pub permissions: JobPermissions,
     /// Ordered steps (action/shell only; internal ops rejected).
     pub steps: Vec<Step>,
+    /// Exact declared helper and artifact outputs, reconstructed by the owner.
+    pub outputs: Vec<velnor_actions_contract::workflow::outputs::JobOutput>,
 }
 
 /// Validate one `if:` condition shape (single line, no secret handles).
 fn check_condition_text(condition: &str) -> Result<(), RenderError> {
-    if !is_clean_text(condition, 512) || condition.contains("secrets.") {
+    if !is_clean_text(condition, 1024) || condition.contains("secrets.") {
         return Err(RenderError::InvalidWorkflow(format!(
             "bad_condition:{condition}"
         )));
@@ -114,6 +160,8 @@ impl ReleaseJobSpec {
         if self.steps.is_empty() {
             return Err(RenderError::InvalidWorkflow(format!("empty_steps:{id}")));
         }
+        velnor_actions_contract::workflow::step::validate_step_ids(&self.steps)
+            .map_err(RenderError::Contract)?;
         for step in &self.steps {
             if !is_clean_text(&step.name, 128) {
                 return Err(RenderError::InvalidWorkflow(format!("bad_step_name:{id}")));
@@ -138,7 +186,7 @@ impl ReleaseJobSpec {
 }
 
 /// Complete typed release workflow: identity, triggers, jobs, plan.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReleaseWorkflowSpec {
     /// Workflow display name.
     pub name: String,
@@ -150,8 +198,18 @@ pub struct ReleaseWorkflowSpec {
     pub concurrency: ReleaseConcurrency,
     /// Jobs keyed by job ID (sorted).
     pub jobs: BTreeMap<String, ReleaseJobSpec>,
+    /// Whether the approved release policy requires proposal preparation.
+    pub preparation_enabled: bool,
+    /// Exact frozen execution records supplied by each compiled helper owner.
+    pub helper_registry: Vec<velnor_actions_contract::CompiledSourceHelper>,
+    /// Complete marked support bytes supplied by their compiled source owner.
+    pub support_sources: Vec<velnor_actions_contract::CompiledSupportSource>,
+    /// Frozen checkout and source-owner bootstrap approval.
+    pub bootstrap_tools: crate::release_bootstrap::ReleaseBootstrapApproval,
     /// Approved exact-source plan.
     pub bootstrap: BootstrapPlan,
+    /// Immutable package, ownership, tool, and authentication approval.
+    pub reconciliation: crate::release_spec::ReleaseReconcilePolicy,
     /// Pinned environment for the OIDC publish job.
     pub publish_environment: String,
     /// Pinned environment for the bootstrap publish job.
@@ -170,7 +228,9 @@ impl ReleaseWorkflowSpec {
         }
         scan_for_private_subcommands(&self.name)?;
         validate_repository(&self.repository)?;
+        self.bootstrap_tools.validate()?;
         self.bootstrap.validate()?;
+        self.reconciliation.validate(&self.bootstrap)?;
         if self.bootstrap.repository != self.repository {
             return Err(RenderError::InvalidWorkflow(
                 "bootstrap_repository_mismatch".to_owned(),
@@ -181,140 +241,60 @@ impl ReleaseWorkflowSpec {
         self.triggers.validate(&self.bootstrap)?;
         self.concurrency.validate()?;
         check_lock_anchor(&self.concurrency.group, &self.repository)?;
-        check_role_set(&self.jobs)?;
+        check_role_set(
+            &self.jobs,
+            self.bootstrap.version.is_some(),
+            self.preparation_enabled,
+        )?;
         for (id, job) in &self.jobs {
             job.validate_shape(id)?;
+            self.bootstrap_tools
+                .check_registry(&self.helper_registry, &job.runs_on)?;
         }
         check_needs_graph(&self.jobs)?;
-        check_role_conditions(&self.jobs, &self.repository, &self.bootstrap)?;
+        check_role_conditions(
+            &self.jobs,
+            &self.repository,
+            &self.bootstrap,
+            &self.triggers.push_branches,
+        )?;
+        self.check_publisher_environments()?;
         check_publish_needs(&self.jobs)?;
+
+        Ok(())
+    }
+
+    /// Publisher authority binds the workflow's exact protected environments.
+    fn check_publisher_environments(&self) -> Result<(), RenderError> {
+        for (id, job) in &self.jobs {
+            let expected = match job.role {
+                ReleaseRole::RegistryPublishOidc | ReleaseRole::PreparationForge => {
+                    &self.publish_environment
+                }
+                ReleaseRole::RegistryPublishBootstrap => &self.bootstrap_environment,
+                ReleaseRole::ForgePublish if self.bootstrap.version.is_some() => {
+                    &self.bootstrap_environment
+                }
+                ReleaseRole::ForgePublish => &self.publish_environment,
+                _ => {
+                    if job.environment.is_some() {
+                        return Err(RenderError::InvalidWorkflow(format!(
+                            "release_validation_environment:{id}"
+                        )));
+                    }
+                    continue;
+                }
+            };
+            if job.environment.as_ref() != Some(expected) {
+                return Err(RenderError::InvalidWorkflow(format!(
+                    "publish_environment_mismatch:{id}"
+                )));
+            }
+        }
         Ok(())
     }
 }
 
-/// Require valid IDs plus the exact role set (bootstrap optional).
-fn check_role_set(jobs: &BTreeMap<String, ReleaseJobSpec>) -> Result<(), RenderError> {
-    let mut roles: Vec<ReleaseRole> = Vec::with_capacity(jobs.len());
-    for (id, job) in jobs {
-        validate_job_id(id).map_err(RenderError::Contract)?;
-        roles.push(job.role);
-    }
-    roles.sort();
-    let mut required = vec![
-        ReleaseRole::Preparation,
-        ReleaseRole::Preflight,
-        ReleaseRole::PublishOidc,
-        ReleaseRole::Reconcile,
-    ];
-    required.sort();
-    let mut with_bootstrap = required.clone();
-    with_bootstrap.push(ReleaseRole::PublishBootstrap);
-    with_bootstrap.sort();
-    if roles != required && roles != with_bootstrap {
-        return Err(RenderError::InvalidWorkflow(format!(
-            "release_role_set:{}",
-            roles.len()
-        )));
-    }
-    Ok(())
-}
-
-/// Require known, forward-only needs (rank order forbids cycles).
-fn check_needs_graph(jobs: &BTreeMap<String, ReleaseJobSpec>) -> Result<(), RenderError> {
-    for (id, job) in jobs {
-        for need in &job.needs {
-            let Some(target) = jobs.get(need) else {
-                return Err(RenderError::InvalidWorkflow(format!(
-                    "unknown_need:{id}:{need}"
-                )));
-            };
-            if need == id {
-                return Err(RenderError::InvalidWorkflow(format!("self_need:{id}")));
-            }
-            if target.role.rank() >= job.role.rank() {
-                return Err(RenderError::InvalidWorkflow(format!(
-                    "backward_need:{id}:{need}"
-                )));
-            }
-        }
-    }
-    Ok(())
-}
-
-/// Require exact publish gates plus the always-on reconcile condition.
-fn check_role_conditions(
-    jobs: &BTreeMap<String, ReleaseJobSpec>,
-    repository: &str,
-    bootstrap: &BootstrapPlan,
-) -> Result<(), RenderError> {
-    let gate = publish_gate_condition(repository, bootstrap);
-    for (id, job) in jobs {
-        match job.role {
-            ReleaseRole::PublishOidc | ReleaseRole::PublishBootstrap => {
-                if job.condition.as_deref() != Some(gate.as_str()) {
-                    return Err(RenderError::InvalidWorkflow(format!(
-                        "publish_gate_mismatch:{id}"
-                    )));
-                }
-            }
-            ReleaseRole::Reconcile => {
-                if job.condition.as_deref() != Some("always()") {
-                    return Err(RenderError::InvalidWorkflow(format!(
-                        "reconcile_condition:{id}"
-                    )));
-                }
-            }
-            ReleaseRole::Preparation | ReleaseRole::Preflight => {}
-        }
-    }
-    Ok(())
-}
-
-/// Require publication after preflight and reconciliation after publishing.
-fn check_publish_needs(jobs: &BTreeMap<String, ReleaseJobSpec>) -> Result<(), RenderError> {
-    let id_for = |role: ReleaseRole| {
-        jobs.iter()
-            .find_map(|(id, job)| (job.role == role).then_some(id))
-    };
-    let Some(preflight) = id_for(ReleaseRole::Preflight) else {
-        return Err(RenderError::InvalidWorkflow(
-            "release_role_set:preflight".to_owned(),
-        ));
-    };
-    let publishers: Vec<&String> = jobs
-        .iter()
-        .filter(|(_, job)| {
-            matches!(
-                job.role,
-                ReleaseRole::PublishOidc | ReleaseRole::PublishBootstrap
-            )
-        })
-        .map(|(id, _)| id)
-        .collect();
-    for publisher in &publishers {
-        let gated = jobs
-            .get(*publisher)
-            .is_some_and(|job| job.needs.contains(preflight));
-        if !gated {
-            return Err(RenderError::InvalidWorkflow(format!(
-                "publish_without_preflight:{publisher}"
-            )));
-        }
-    }
-    let Some(reconcile) = id_for(ReleaseRole::Reconcile) else {
-        return Err(RenderError::InvalidWorkflow(
-            "release_role_set:reconcile".to_owned(),
-        ));
-    };
-    let reconciled = jobs.get(reconcile).is_some_and(|job| {
-        publishers
-            .iter()
-            .all(|publisher| job.needs.contains(*publisher))
-    });
-    if !reconciled {
-        return Err(RenderError::InvalidWorkflow(format!(
-            "reconcile_without_publish:{reconcile}"
-        )));
-    }
-    Ok(())
-}
+#[path = "release_graph_gates.rs"]
+mod graph;
+use graph::{check_needs_graph, check_publish_needs, check_role_conditions, check_role_set};

@@ -15,6 +15,10 @@ use crate::command::{
 };
 use crate::error::MiseError;
 
+mod host;
+mod qualification;
+mod runtime;
+
 /// Cargo payload program executed after the `--` separator.
 const CARGO_PROGRAM: &str = "cargo";
 
@@ -23,13 +27,14 @@ const CARGO_METADATA: &str = "metadata";
 
 /// Conservative discovery of one manifest through pinned Cargo.
 ///
-/// Exact payload: `cargo metadata --format-version 1 --no-deps
-/// --manifest-path <manifest>`. No `--locked`/`--offline`: discovery must not
-/// wait for full resolution. `--no-deps` skips resolution entirely, so the
+/// Exact payload: `cargo metadata --format-version 1 --locked --no-deps
+/// --manifest-path <manifest>`. `--locked` preserves the locked-execution
+/// policy; `--no-deps` skips resolution entirely, so the
 /// probe performs no index access, network fetch, or repository write --
 /// not even for lockless-with-dependencies manifests (poison-fixture proven;
 /// the orchestrator also brackets every run with a tool snapshot that fails
-/// closed on drift). Full resolution is qualification's job, lockful-only.
+/// closed on drift). This does not prove lockfile presence or resolution;
+/// full resolution is qualification's job, lockful-only.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MetadataDiscovery {
     /// Manifest whose metadata is requested.
@@ -65,6 +70,7 @@ impl MetadataDiscovery {
             OsString::from(CARGO_METADATA),
             OsString::from("--format-version"),
             OsString::from("1"),
+            OsString::from("--locked"),
             OsString::from("--no-deps"),
             OsString::from("--manifest-path"),
             self.manifest.as_os_str().to_owned(),
@@ -72,9 +78,10 @@ impl MetadataDiscovery {
     }
 
     /// Full mise argument vector including the program.
-    #[must_use]
-    pub fn argv(&self, catalog: &ToolCatalog) -> Vec<OsString> {
-        full_mise_argv(catalog, &[PinnedTool::Rust], &self.cargo_argv())
+    /// # Errors
+    /// Rejects native selectors without explicit host qualification.
+    pub fn argv(&self, catalog: &ToolCatalog) -> Result<Vec<OsString>, MiseError> {
+        full_mise_argv(catalog, &metadata_tools(catalog), &self.cargo_argv())
     }
 
     /// Isolated command running this discovery.
@@ -84,7 +91,7 @@ impl MetadataDiscovery {
     /// Returns [`MiseError::EmptyCommand`] only if the fixed payload were
     /// empty, which the constructor rules out.
     pub fn command(&self, catalog: &ToolCatalog) -> Result<IsolatedCommand, MiseError> {
-        let specs = catalog.tool_specs(&[PinnedTool::Rust]);
+        let specs = catalog.tool_specs(&metadata_tools(catalog))?;
         IsolatedCommand::mise_exec(&specs, &self.cargo_argv())
     }
 
@@ -111,73 +118,6 @@ impl MetadataDiscovery {
 pub struct MetadataQualification {
     /// Workspace-root manifest whose resolution is qualified.
     workspace_manifest: PathBuf,
-}
-
-impl MetadataQualification {
-    /// Qualify resolution for one workspace-root manifest.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`MiseError::InvalidManifestPath`] for an empty path.
-    pub fn new(workspace_manifest: PathBuf) -> Result<Self, MiseError> {
-        if workspace_manifest.as_os_str().is_empty() {
-            return Err(MiseError::InvalidManifestPath {
-                path: String::new(),
-            });
-        }
-        Ok(Self { workspace_manifest })
-    }
-
-    /// Workspace-root manifest whose resolution is qualified.
-    #[must_use]
-    pub fn workspace_manifest(&self) -> &Path {
-        &self.workspace_manifest
-    }
-
-    /// Cargo-side payload arguments, byte-exact per the contract.
-    #[must_use]
-    pub fn cargo_argv(&self) -> Vec<OsString> {
-        vec![
-            OsString::from(CARGO_PROGRAM),
-            OsString::from(CARGO_METADATA),
-            OsString::from("--format-version"),
-            OsString::from("1"),
-            OsString::from("--locked"),
-            OsString::from("--offline"),
-            OsString::from("--manifest-path"),
-            self.workspace_manifest.as_os_str().to_owned(),
-        ]
-    }
-
-    /// Full mise argument vector including the program.
-    #[must_use]
-    pub fn argv(&self, catalog: &ToolCatalog) -> Vec<OsString> {
-        full_mise_argv(catalog, &[PinnedTool::Rust], &self.cargo_argv())
-    }
-
-    /// Isolated command running this qualification.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`MiseError::EmptyCommand`] only if the fixed payload were
-    /// empty, which the constructor rules out.
-    pub fn command(&self, catalog: &ToolCatalog) -> Result<IsolatedCommand, MiseError> {
-        let specs = catalog.tool_specs(&[PinnedTool::Rust]);
-        IsolatedCommand::mise_exec(&specs, &self.cargo_argv())
-    }
-
-    /// Run qualification and return the raw metadata JSON string.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`MiseError::SpawnFailed`] when Cargo cannot launch,
-    /// [`MiseError::NonZeroExit`] on nonzero status, and
-    /// [`MiseError::InvalidUtf8`] when stdout is not text.
-    pub fn run(&self, catalog: &ToolCatalog) -> Result<String, MiseError> {
-        let output = self.command(catalog)?.run()?;
-        output.require_success("mise")?;
-        output.stdout_text("mise")
-    }
 }
 
 /// One payload program run under at least one pinned tool.
@@ -268,8 +208,9 @@ impl PinnedToolExec {
     }
 
     /// Full mise argument vector including the program.
-    #[must_use]
-    pub fn argv(&self, catalog: &ToolCatalog) -> Vec<OsString> {
+    /// # Errors
+    /// Rejects native selectors without explicit host qualification.
+    pub fn argv(&self, catalog: &ToolCatalog) -> Result<Vec<OsString>, MiseError> {
         full_mise_argv(catalog, &self.tools, &self.payload())
     }
 
@@ -280,7 +221,7 @@ impl PinnedToolExec {
     /// Returns [`MiseError::EmptyCommand`] only if the payload were empty,
     /// which the constructor rules out.
     pub fn command(&self, catalog: &ToolCatalog) -> Result<IsolatedCommand, MiseError> {
-        let specs = catalog.tool_specs(&self.tools);
+        let specs = catalog.tool_specs(&self.tools)?;
         let command = IsolatedCommand::mise_exec(&specs, &self.payload())?;
         if self.tools.as_slice() == [PinnedTool::Gh] {
             return Ok(command.with_policy(crate::command::EnvPolicy::Baseline));
@@ -334,12 +275,13 @@ impl MiseInstall {
     }
 
     /// Full mise argument vector including the program.
-    #[must_use]
-    pub fn argv(&self, catalog: &ToolCatalog) -> Vec<OsString> {
-        let specs = catalog.tool_specs(&self.tools);
+    /// # Errors
+    /// Rejects native selectors without explicit host qualification.
+    pub fn argv(&self, catalog: &ToolCatalog) -> Result<Vec<OsString>, MiseError> {
+        let specs = catalog.tool_specs(&self.tools)?;
         let mut argv = vec![OsString::from("mise")];
         argv.extend(mise_install_argv_tail(&specs));
-        argv
+        Ok(argv)
     }
 
     /// Isolated command running this installation.
@@ -349,7 +291,7 @@ impl MiseInstall {
     /// Returns [`MiseError::EmptyToolchain`] only if the tool list were
     /// empty, which the constructor rules out.
     pub fn command(&self, catalog: &ToolCatalog) -> Result<IsolatedCommand, MiseError> {
-        let specs = catalog.tool_specs(&self.tools);
+        let specs = catalog.tool_specs(&self.tools)?;
         IsolatedCommand::mise_install(&specs)
     }
 
@@ -365,7 +307,10 @@ impl MiseInstall {
 }
 
 /// Reject `rustup` payloads (bare or absolute) and `cargo install` payloads.
-fn reject_forbidden_payload(program: &OsStr, args: &[OsString]) -> Result<(), MiseError> {
+pub(crate) fn reject_forbidden_payload(
+    program: &OsStr,
+    args: &[OsString],
+) -> Result<(), MiseError> {
     let stem = Path::new(program)
         .file_stem()
         .map(|stem| stem.to_string_lossy().into_owned())
@@ -392,9 +337,17 @@ fn full_mise_argv(
     catalog: &ToolCatalog,
     tools: &[PinnedTool],
     payload: &[OsString],
-) -> Vec<OsString> {
-    let specs = catalog.tool_specs(tools);
+) -> Result<Vec<OsString>, MiseError> {
+    let specs = catalog.tool_specs(tools)?;
     let mut argv = vec![OsString::from("mise")];
     argv.extend(mise_argv_tail("exec", &specs, payload));
-    argv
+    Ok(argv)
+}
+
+fn metadata_tools(catalog: &ToolCatalog) -> Vec<PinnedTool> {
+    let mut tools = vec![catalog.compiler_tool()];
+    if catalog.rust_uses_mbx() {
+        tools.push(PinnedTool::MrBoxington);
+    }
+    tools
 }

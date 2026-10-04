@@ -49,11 +49,24 @@ fn dispatch_and_schedule_triggers_render() -> Result<(), RenderError> {
     );
     let mut ir = fixture_ir(vec![plan]);
     ir.triggers.workflow_dispatch = Some(velnor_actions_contract::workflow::ir::WorkflowDispatch {
-        inputs: vec![velnor_actions_contract::workflow::ir::DispatchInput {
-            name: "plan".to_owned(),
-            required: true,
-            default: Some("plan-r1-a1".to_owned()),
-        }],
+        inputs: vec![
+            velnor_actions_contract::workflow::ir::DispatchInput {
+                input_type: velnor_actions_contract::workflow::ir::DispatchInputType::String,
+                description: None,
+                options: Vec::new(),
+                name: "plan".to_owned(),
+                required: true,
+                default: Some("plan-r1-a1".to_owned()),
+            },
+            velnor_actions_contract::workflow::ir::DispatchInput {
+                input_type: velnor_actions_contract::workflow::ir::DispatchInputType::Boolean,
+                description: None,
+                options: Vec::new(),
+                name: "simulate_failure".to_owned(),
+                required: false,
+                default: Some("false".to_owned()),
+            },
+        ],
     });
     ir.triggers.schedule = Some(velnor_actions_contract::ScheduleTrigger {
         cron: vec!["0 6 * * 1".to_owned()],
@@ -61,6 +74,9 @@ fn dispatch_and_schedule_triggers_render() -> Result<(), RenderError> {
     let text = strict(&ir, &fixture_ctx())?;
     assert!(text.contains("workflow_dispatch:"), "{text}");
     assert!(text.contains("type: string"), "{text}");
+    assert!(text.contains("type: boolean"), "{text}");
+    assert!(text.contains("default: false"), "{text}");
+    assert!(!text.contains("issues:"), "{text}");
     assert!(text.contains("default: plan-r1-a1"), "{text}");
     assert!(text.contains("schedule:"), "{text}");
     assert!(text.contains("cron: 0 6 * * 1"), "{text}");

@@ -16,6 +16,10 @@ use crate::release_facts::{DepFact, DepSource};
 use crate::release_select::{ReleaseSelection, supported_or_default};
 use crate::release_semver::{VersionReq, parse_req, parse_version, req_matches};
 
+#[path = "release_selected_obligations.rs"]
+mod selected_obligations;
+pub use selected_obligations::validate_selected_dependency_obligations;
+
 /// Observed registry state: package name to published versions.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RegistryState {
@@ -247,20 +251,7 @@ fn check_path_dep(
             detail: format!("path target {to} is not a reported package"),
         });
     };
-    let Some(parsed) = parse_version(version) else {
-        return Err(ReleaseError::InvalidVersion {
-            package: target.to_owned(),
-            version: version.to_owned(),
-        });
-    };
-    if !req_matches(req, &parsed) {
-        return Err(ReleaseError::RequirementMismatch {
-            package: name.to_owned(),
-            dep: fact.name.clone(),
-            req: fact.req.clone(),
-            found: version.to_owned(),
-        });
-    }
+    selected_obligations::check_path_version(name, fact, target, version, req)?;
     if !lookups.selected.contains(target) {
         if registry_satisfies(lookups.registry, target, req) {
             return Ok(());

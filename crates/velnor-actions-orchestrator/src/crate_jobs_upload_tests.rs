@@ -138,8 +138,8 @@ fn obligations_upload_one_artifact_per_job() {
     );
     assert_eq!(
         with["path"].as_str(),
-        "${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}",
-        "upload carries the whole run dir",
+        "${{ runner.temp }}/velnor/report-payload/r${{ github.run_id }}-a${{ github.run_attempt }}",
+        "upload carries only staged report evidence",
     );
     assert_eq!(with["if-no-files-found"].as_str(), "error");
     assert!(
@@ -150,11 +150,16 @@ fn obligations_upload_one_artifact_per_job() {
     );
     let steps = names(&demo);
     let at = |name: &str| steps.iter().position(|seen| *seen == name);
-    let (Some(run), Some(upload)) = (
+    let (Some(run), Some(stage), Some(upload)) = (
         at("Unit and integration tests"),
+        at("Stage report payload"),
         at(velnor_actions_workflow_renderer::CRATE_REPORT_UPLOAD_NAME),
     ) else {
         panic!("report/upload steps missing: {steps:?}");
     };
-    assert!(run < upload, "uploads close the job: {steps:?}");
+    assert!(
+        run < stage && stage < upload,
+        "staging precedes upload: {steps:?}"
+    );
+    assert_eq!(demo.steps[stage].condition.as_deref(), Some("always()"));
 }

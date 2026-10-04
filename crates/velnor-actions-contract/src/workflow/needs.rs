@@ -130,12 +130,19 @@ mod tests {
     /// Minimal job with the given `needs` for inventory tests.
     fn job_with_needs(needs: &[&str]) -> Job {
         Job {
+            cache_mode: None,
             display_name: "Test".to_owned(),
             runs_on: "ubuntu-26.04".to_owned(),
             timeout_minutes: crate::workflow::timeout::JobTimeout::VALIDATOR,
             needs: needs.iter().map(ToString::to_string).collect(),
             condition: None,
             permissions: None,
+            tool_producer: None,
+            mbx_producer: None,
+            source_producer: None,
+            native_pages_deploy: None,
+            native_publish: None,
+            outputs: Vec::new(),
             environment: None,
             steps: Vec::new(),
         }

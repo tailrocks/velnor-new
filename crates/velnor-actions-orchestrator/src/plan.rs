@@ -13,8 +13,8 @@ use velnor_actions_workflow_renderer::release_tree::RELEASE_TREE_PATHS;
 use velnor_actions_workflow_renderer::render::{ACTIONLINT_PATH, WORKFLOW_PATH};
 
 use crate::OrchestratorError;
-use crate::finalized::finalized_jobs;
-use crate::generate::render_staged_tree;
+use crate::finalized::owned_preparation;
+use crate::generate::render_owned_staged_tree_with_jobs;
 use crate::plan_stacks::stacks_section;
 use crate::prepare::GenerationPreparation;
 
@@ -30,19 +30,18 @@ use crate::prepare::GenerationPreparation;
 /// Returns render, actionlint, lock, or unsafe-path errors from the
 /// discarded renderer pass.
 pub fn plan_text_checked(prep: &GenerationPreparation) -> Result<String, OrchestratorError> {
-    let _ = render_staged_tree(prep)?;
-    let jobs = finalized_jobs(prep)?;
-    Ok(plan_text(prep, &jobs))
+    let owned = owned_preparation(prep)?;
+    let (_, jobs) = render_owned_staged_tree_with_jobs(&owned)?;
+    plan_text_owned(&owned, &jobs)
 }
 
-/// Render the concise deterministic `plan` report from finalized jobs.
-///
-/// `jobs` must be [`finalized_jobs`] for `prep`: the attached IR plus
-/// merged support, setup insertion, closures, and the final fan-in.
-/// Passing pre-merge IR jobs would reintroduce the plan/YAML gaps
-/// (missing validators, stale step counts, partial pins).
-#[must_use]
-pub fn plan_text(prep: &GenerationPreparation, jobs: &BTreeMap<String, Job>) -> String {
+/// Format the same owned preparation whose tree and jobs were rendered.
+/// # Errors
+/// Propagates invalid owned source approvals or source workflow rendering failures.
+fn plan_text_owned(
+    prep: &GenerationPreparation,
+    jobs: &BTreeMap<String, Job>,
+) -> Result<String, OrchestratorError> {
     let mut out = String::new();
     push(
         &mut out,
@@ -51,10 +50,10 @@ pub fn plan_text(prep: &GenerationPreparation, jobs: &BTreeMap<String, Job>) -> 
     push(&mut out, &format!("Repository: {}", prep.root.display()));
     out.push('\n');
     stacks_section(&mut out, prep);
-    workflow_section(&mut out, prep, jobs);
+    workflow_section(&mut out, prep, jobs)?;
     migration_section(&mut out);
     recommendations_section(&mut out, prep);
-    out
+    Ok(out)
 }
 
 /// Append one line plus a newline.
@@ -64,13 +63,27 @@ pub(crate) fn push(out: &mut String, line: &str) {
 }
 
 /// Planned workflow files, jobs, matrix, runner, cache, and pins.
-fn workflow_section(out: &mut String, prep: &GenerationPreparation, jobs: &BTreeMap<String, Job>) {
+fn workflow_section(
+    out: &mut String,
+    prep: &GenerationPreparation,
+    jobs: &BTreeMap<String, Job>,
+) -> Result<(), OrchestratorError> {
     out.push('\n');
     push(out, "Workflow to generate");
     push(out, &format!("  {ACTIONLINT_PATH}"));
     push(out, &format!("  {WORKFLOW_PATH}"));
     release_file_lines(out, prep);
     freshness_file_lines(out, prep);
+    for file in crate::owned_tool_publication::files(prep)? {
+        push(out, &format!("  {}", file.path));
+    }
+    for file in prep
+        .workflow
+        .mbx_finalization
+        .review_files(env!("CARGO_PKG_VERSION"))?
+    {
+        push(out, &format!("  {}", file.path));
+    }
     push(
         out,
         &format!(
@@ -115,6 +128,7 @@ fn workflow_section(out: &mut String, prep: &GenerationPreparation, jobs: &BTree
         out,
         "  Pull-request execution narrows crate obligations through its event-time affected-work plan.",
     );
+    Ok(())
 }
 
 /// Every distinct action pin the finalized jobs embed, sorted.

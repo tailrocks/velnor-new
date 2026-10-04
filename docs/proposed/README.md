@@ -24,7 +24,10 @@ globs. These are not CLI flags.
 | MBX | Reusable Rust compilation work and compiler resource coordination | Test pass/fail results |
 | GitHub Actions | Scheduling generated jobs and reporting required check status | Velnor's project discovery and cache validity rules |
 
-`generate` replaces `.github/` as one complete tree. `init` separately creates
+`generate` preserves repository-owned nonworkflow `.github/` entries, then
+replaces the directory with their staged copy and the generated outputs. Exact
+ownership and preservation rules live in [generated-file §3](generated-file-contract.md).
+`init` separately creates
 the user-owned `.velnor/config.toml` sample. The path is
 `GitHub step → pinned tools → Mise command → stack task`; Velnor Actions scans
 the repo and renders that workflow. `plan` shows a text summary; `generate
@@ -50,7 +53,7 @@ composes them. The CLI package declares the `velnor-actions` binary. Generic
 package names such as `velnor-model`, `velnor-core`, and `velnor-rust` are
 forbidden.
 
-The generator crates MUST NOT implement a runner, a Scale Set client, or an Actions interpreter. That work lives in the nested `crates/velnor-runner` workspace under the [macOS Scale Set runner](macos-scaleset-runner.md) specification. Kubernetes, a web server, a TUI, a remote cache service, and a deployment system remain out of scope. Generated workflows MAY use a small allowlist of full-SHA-pinned setup actions; Velnor does not execute arbitrary `uses:` actions itself.
+V1 MUST NOT implement Docker, self-hosted runner registration, GitHub runner protocol, Scale Sets, Kubernetes, a database, web server, TUI, remote cache service, general workflow interpreter, or deployment system. Generated workflows MAY use a small allowlist of full-SHA-pinned setup actions; Velnor does not execute arbitrary `uses:` actions itself.
 
 ## Normative specifications
 
@@ -73,6 +76,5 @@ The generator crates MUST NOT implement a runner, a Scale Set client, or an Acti
 17. [OpenTofu contract](opentofu-contract.md) defines the native `tofu` stack extension, tracked in `../reviews/opentofu-evidence.md`.
 18. [Rust dependency policy](rust-dependency-policy.md) defines dependency narrowness, the initial crate set, and deny/machete supply-chain gates (companion to the quality contract §7).
 19. [Rust test policy](rust-test-policy.md) defines test layout, integration entry points, doctest separation, fixture independence, and snapshot review (companion to the quality contract §4).
-20. [macOS Scale Set runner](macos-scaleset-runner.md) is the active runner specification. It supersedes conflicting deferred roadmap clauses.
 
 The listed documents are intended to be implementable without inventing behavior. If a behavior is not specified, fail with a clear error and add a decision to the spec before implementing it. Do not silently broaden V1.

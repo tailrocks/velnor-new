@@ -11,8 +11,8 @@
 #                     upstream evidence, deny policy; the live advisory scan
 #                     runs in CI, not here)
 #   generated-tree    build the CLI, `generate --output-dir` to a temp dir,
-#                     and `diff -r` schema-1 files. Schema-2 workflow files are
-#                     left out of that diff and locked by the orchestrator test.
+#                     and `diff -r` the staged `.github` tree (mirrors the CI
+#                     "Check generated files" step)
 #   clippy-<crate>    per-crate pinned `cargo clippy --all-targets -- -D warnings`
 #   test-<crate>      per-crate pinned `cargo test` (unit plus integration plus doc)
 #   doctest-<crate>   per-crate pinned `cargo test --doc` for crates with library
@@ -56,10 +56,10 @@ stage() {
   local name="$1"
   shift
   echo "--- verify-local: $name"
-  if "$@" >"/tmp/verify-local-$name.log" 2>&1; then
+  if "$@" >"<PRIVATE_TMP>" 2>&1; then
     pass "$name"
   else
-    fail "$name (log: /tmp/verify-local-$name.log)"
+    fail "$name (log: <PRIVATE_TMP>"
   fi
 }
 
@@ -92,10 +92,10 @@ for tool, mkey, pkey in pairs:
         sys.exit(1)
     specs.append(f"{tool}@{mv}")
 print(" ".join(specs))
-' 2>"/tmp/verify-local-toolchain.log")"
+' 2>"<PRIVATE_TMP>")"
 if [ -z "$SPECS" ]; then
-  cat "/tmp/verify-local-toolchain.log" >&2 || true
-  echo "verify-local: FAIL: toolchain (pin drift; log: /tmp/verify-local-toolchain.log)"
+  cat "<PRIVATE_TMP>" >&2 || true
+  echo "verify-local: FAIL: toolchain (pin drift; log: <PRIVATE_TMP>"
   exit 1
 fi
 echo "pinned specs: $SPECS"
@@ -113,16 +113,16 @@ if [ "$LOCAL_MISE" != "$POLICY_MISE" ]; then
 fi
 # shellcheck disable=SC2206
 SPEC_ARR=($SPECS)
-if ! mise install "${SPEC_ARR[@]}" >>"/tmp/verify-local-toolchain.log" 2>&1; then
-  fail "toolchain (mise install failed; log: /tmp/verify-local-toolchain.log)"
+if ! mise install "${SPEC_ARR[@]}" >>"<PRIVATE_TMP>" 2>&1; then
+  fail "toolchain (mise install failed; log: <PRIVATE_TMP>"
   echo "verify-local: FAIL:$FAILURES"
   exit 1
 fi
 MISE_EXEC=(mise exec "${SPEC_ARR[@]}" --)
 # The effective binaries must BE the pins: a symlink-rust or an ambient
 # cargo-nextest next to cargo can otherwise shadow the pinned tools.
-CARGO_VER="$("${MISE_EXEC[@]}" cargo --version 2>>"/tmp/verify-local-toolchain.log" | awk "{print \$2}")"
-MBX_VER="$("${MISE_EXEC[@]}" mbx --version 2>>"/tmp/verify-local-toolchain.log" | awk "{print \$2}")"
+CARGO_VER="$("${MISE_EXEC[@]}" cargo --version 2>>"<PRIVATE_TMP>" | awk "{print \$2}")"
+MBX_VER="$("${MISE_EXEC[@]}" mbx --version 2>>"<PRIVATE_TMP>" | awk "{print \$2}")"
 echo "effective: cargo $CARGO_VER, mbx $MBX_VER"
 if [ "$CARGO_VER" != "$RUST_PIN" ] || [ "$MBX_VER" != "$MBX_PIN" ]; then
   fail "toolchain (effective cargo $CARGO_VER / mbx $MBX_VER != pins $RUST_PIN / $MBX_PIN)"
@@ -150,22 +150,6 @@ pass "toolchain"
 # --- fmt -----------------------------------------------------------------
 stage fmt "${MISE_EXEC[@]}" cargo fmt --all --check
 
-# Nested runner workspace. Root `cargo --workspace` excludes it
-# (`exclude = ["crates/velnor-runner"]`). cargo-deny 0.20.2 matches
-# `CARGO_DENY_VERSION`; that pin rejects `--locked`.
-RUNNER_MANIFEST="crates/velnor-runner/Cargo.toml"
-if [ -f "$RUNNER_MANIFEST" ]; then
-  stage runner-fmt "${MISE_EXEC[@]}" cargo fmt --manifest-path "$RUNNER_MANIFEST" --all -- --check
-  stage runner-clippy "${MISE_EXEC[@]}" cargo clippy --manifest-path "$RUNNER_MANIFEST" --locked --workspace --all-targets -- -D warnings
-  if [ "${#NEXTEST_RUN[@]}" -gt 0 ]; then
-    stage runner-nextest "${NEXTEST_RUN[@]}" run --manifest-path "$RUNNER_MANIFEST" --locked --workspace
-  else
-    stage runner-test "${MISE_EXEC[@]}" cargo test --manifest-path "$RUNNER_MANIFEST" --locked --workspace
-  fi
-  stage runner-doctest "${MISE_EXEC[@]}" cargo test --manifest-path "$RUNNER_MANIFEST" --locked --workspace --doc
-  stage runner-deny mise exec "cargo-deny@0.20.2" -- cargo deny --manifest-path "$RUNNER_MANIFEST" check
-fi
-
 # --- repo policy -----------------------------------------------------------
 stage repo-policy scripts/check-freshness.sh
 
@@ -177,45 +161,30 @@ if [ -z "$GEN_DIR" ]; then
 else
   echo "--- verify-local: generated-tree"
   if "${MISE_EXEC[@]}" cargo build --locked -p velnor-actions-cli --bin velnor-actions \
-    >"/tmp/verify-local-generated-build.log" 2>&1; then
+    >"<PRIVATE_TMP>" 2>&1; then
     BIN="$(find target/debug target/release -maxdepth 1 -name velnor-actions -type f 2>/dev/null | head -n 1)"
     if [ -z "$BIN" ] && [ -n "${CARGO_TARGET_DIR:-}" ]; then
       BIN="$(find "$CARGO_TARGET_DIR/debug" "$CARGO_TARGET_DIR/release" -maxdepth 1 -name velnor-actions -type f 2>/dev/null | head -n 1)"
     fi
-    # Schema 1 does not emit these. They are schema-2 generator bytes.
-    STRIP="$(mktemp -d 2>/dev/null || true)"
-    if [ -z "$STRIP" ]; then
-      fail "generated-tree (mktemp failed)"
+    if [ -n "$BIN" ] && "$BIN" generate --output-dir "$GEN_DIR/tree" \
+      >"<PRIVATE_TMP>" 2>&1 &&
+      diff -r --brief .github "$GEN_DIR/tree/.github" \
+        >"<PRIVATE_TMP>" 2>&1; then
+      pass "generated-tree"
     else
-      cp -R .github "$STRIP/github"
-      rm -f \
-        "$STRIP/github/workflows/qualification.yml" \
-        "$STRIP/github/workflows/image-release.yml" \
-        "$STRIP/github/workflows/macos-binary-release.yml" \
-        "$STRIP/github/workflows/generator-release.yml"
-      if [ -n "$BIN" ] && "$BIN" generate --output-dir "$GEN_DIR/tree" \
-        >"/tmp/verify-local-generated-run.log" 2>&1 &&
-        diff -r --brief "$STRIP/github" "$GEN_DIR/tree/.github" \
-          >"/tmp/verify-local-generated-diff.log" 2>&1; then
-        pass "generated-tree"
-      else
-        fail "generated-tree (see /tmp/verify-local-generated-*.log)"
-      fi
+      fail "generated-tree (see <PRIVATE_TMP>"
     fi
   else
-    fail "generated-tree (build failed: /tmp/verify-local-generated-build.log)"
+    fail "generated-tree (build failed: <PRIVATE_TMP>"
   fi
   rm -rf "$GEN_DIR"
-  if [ -n "${STRIP:-}" ]; then
-    rm -rf "$STRIP"
-  fi
 fi
 
 # --- per-crate clippy, tests, doctests, docs ---------------------------------
 MEMBERS=""
-MEMBERS="$("${MISE_EXEC[@]}" python3 -c 'import json,subprocess; print(" ".join(sorted(p["name"] for p in json.loads(subprocess.run(["cargo","metadata","--locked","--no-deps","--format-version","1","--offline"],capture_output=True,text=True,check=True).stdout)["packages"])))' 2>/tmp/verify-local-crate-list.log)"
+MEMBERS="$("${MISE_EXEC[@]}" python3 -c 'import json,subprocess; print(" ".join(sorted(p["name"] for p in json.loads(subprocess.run(["cargo","metadata","--locked","--no-deps","--format-version","1","--offline"],capture_output=True,text=True,check=True).stdout)["packages"])))' 2><PRIVATE_TMP>"
 if [ -z "$MEMBERS" ]; then
-  fail "crate-list (log: /tmp/verify-local-crate-list.log)"
+  fail "crate-list (log: <PRIVATE_TMP>"
 else
   for member in $MEMBERS; do
     safe="$(printf '%s' "$member" | tr -c 'A-Za-z0-9' '_')"
@@ -226,9 +195,9 @@ else
     stage "test-$safe" "${MISE_EXEC[@]}" cargo test --locked -p "$member"
   done
   LIB_MEMBERS=""
-  LIB_MEMBERS="$("${MISE_EXEC[@]}" python3 -c 'import json,subprocess; print(" ".join(sorted(p["name"] for p in json.loads(subprocess.run(["cargo","metadata","--locked","--no-deps","--format-version","1","--offline"],capture_output=True,text=True,check=True).stdout)["packages"] if any("lib" in t.get("kind", []) for t in p["targets"]))))' 2>/tmp/verify-local-doctest-list.log)"
+  LIB_MEMBERS="$("${MISE_EXEC[@]}" python3 -c 'import json,subprocess; print(" ".join(sorted(p["name"] for p in json.loads(subprocess.run(["cargo","metadata","--locked","--no-deps","--format-version","1","--offline"],capture_output=True,text=True,check=True).stdout)["packages"] if any("lib" in t.get("kind", []) for t in p["targets"]))))' 2><PRIVATE_TMP>"
   if [ -z "$LIB_MEMBERS" ]; then
-    fail "doctest-list (log: /tmp/verify-local-doctest-list.log)"
+    fail "doctest-list (log: <PRIVATE_TMP>"
   else
     for member in $MEMBERS; do
       safe="$(printf '%s' "$member" | tr -c 'A-Za-z0-9' '_')"
@@ -255,25 +224,25 @@ fi
 echo "--- verify-local: fixtures"
 if "${MISE_EXEC[@]}" cargo test --locked -p velnor-actions-orchestrator --test velnor_orchestrator \
   evasion_fixtures_are_all_flagged \
-  >"/tmp/verify-local-fixtures.log" 2>&1; then
+  >"<PRIVATE_TMP>" 2>&1; then
   pass "fixtures"
 else
-  fail "fixtures (log: /tmp/verify-local-fixtures.log)"
+  fail "fixtures (log: <PRIVATE_TMP>"
 fi
 
 # --- whole-workspace integration pass ----------------------------------------
 echo "--- verify-local: integration"
 if [ "${#NEXTEST_RUN[@]}" -gt 0 ]; then
   if "${NEXTEST_RUN[@]}" run --workspace --locked --profile ci --no-tests fail \
-    >"/tmp/verify-local-integration.log" 2>&1; then
+    >"<PRIVATE_TMP>" 2>&1; then
     pass "integration (nextest ci)"
   else
-    fail "integration (log: /tmp/verify-local-integration.log)"
+    fail "integration (log: <PRIVATE_TMP>"
   fi
-elif "${MISE_EXEC[@]}" cargo test --locked --workspace >"/tmp/verify-local-integration.log" 2>&1; then
+elif "${MISE_EXEC[@]}" cargo test --locked --workspace >"<PRIVATE_TMP>" 2>&1; then
   pass "integration (cargo test)"
 else
-  fail "integration (log: /tmp/verify-local-integration.log)"
+  fail "integration (log: <PRIVATE_TMP>"
 fi
 
 # --- summary -------------------------------------------------------------------

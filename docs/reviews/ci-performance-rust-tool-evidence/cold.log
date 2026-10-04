@@ -1,0 +1,40 @@
+mise by @jdx – installing 1 tool
+mise rust@1.98.1 info: syncing channel updates for 1.98.1-aarch64-apple-darwin
+mise rust@1.98.1 info: latest update on 2026-09-03 for version 1.98.1 (48a229cea 2026-09-01)
+mise rust@1.98.1 info: downloading 5 components
+mise ░░░░░░░░░░░░░░░░ 0/1 · 3.0s
+  rust@1.98.1  installing  3.0s
+mise ░░░░░░░░░░░░░░░░ 0/1 · 6.0s
+  rust@1.98.1  installing  6.0s
+mise ░░░░░░░░░░░░░░░░ 0/1 · 9.0s
+  rust@1.98.1  installing  9.0s
+mise ░░░░░░░░░░░░░░░░ 0/1 · 12.0s
+  rust@1.98.1  installing  12.0s
+mise ░░░░░░░░░░░░░░░░ 0/1 · 15.0s
+  rust@1.98.1  installing  15.0s
+mise ░░░░░░░░░░░░░░░░ 0/1 · 18.0s
+  rust@1.98.1  installing  18.0s
+mise ░░░░░░░░░░░░░░░░ 0/1 · 21.0s
+  rust@1.98.1  installing  21.0s
+mise ░░░░░░░░░░░░░░░░ 0/1 · 24.0s
+  rust@1.98.1  installing  24.0s
+mise ░░░░░░░░░░░░░░░░ 0/1 · 27.0s
+  rust@1.98.1  installing  27.0s
+mise ░░░░░░░░░░░░░░░░ 0/1 · 30.0s
+  rust@1.98.1  installing  30.0s
+mise ░░░░░░░░░░░░░░░░ 0/1 · 33.0s
+  rust@1.98.1  installing  33.0s
+mise ░░░░░░░░░░░░░░░░ 0/1 · 36.3s
+  rust@1.98.1  installing  36.3s
+mise ░░░░░░░░░░░░░░░░ 0/1 · 40.0s
+  rust@1.98.1  installing  40.0s
+mise rust@1.98.1   1.98.1-aarch64-apple-darwin installed - rustc 1.98.1 (48a229cea 2026-09-01)
+mise rust@1.98.1 info: default toolchain set to 1.98.1-aarch64-apple-darwin
+mise rust@1.98.1 info: checking for self-update (current version: 1.29.1)
+mise rust@1.98.1 info: `RUSTUP_VERSION` has been set to `1.29.1`
+mise rust@1.98.1 rustc 1.98.1 (48a229cea 2026-09-01)
+mise ✓ rust@1.98.1  42.6s
+mise ████████████████ 1/1 · installed 1 tool in 42.6s
+mise WARN  rust installed but not activated — it is not in any config file.
+To install and activate, run:
+  mise use rust

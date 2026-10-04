@@ -95,12 +95,13 @@ fails closed past 40 roots on the 320 KiB matrix budget (the
   `FileCache` per phase; walks, bytes, and parsed models memoize
   within the owning call (pins: `impl_tofu_t25`,
   `impl_tofu_file_cache`).
-- Telemetry population (`TaskTiming` slots): PARTIAL — executed
-  task reports now carry the measured wall in `task_ms`
-  (`accounted_total == duration_ms`, remaining slots zero);
-  queue/runner/cache/prep/download/compiler/mbx/test/lock slots
-  are unmeasured (the wrapper captures one stamp), and
-  `aggregate_timings` has no merge sink (no schema change made).
+- Telemetry population (`TaskTiming` slots): PARTIAL — the T25 tree
+  put measured task wall in `task_ms` and fabricated zero for other slots.
+  Those zeros were not observations. The current contract preserves
+  measured task wall as `Some(duration_ms)` with `task_wrapper_wall`
+  provenance; queue/runner/cache/prep/download/compiler/mbx/test/lock slots
+  remain `None`/JSON null. Inclusive task wall is not added to child work;
+  the unused additive total and aggregation helpers were removed.
 - Baselines: MUST NOT update automatically — untouched, and
   `rq53_limits_discipline_no_baseline` stays green.
 
@@ -160,6 +161,7 @@ Kept intentionally, each justified:
   the final gate counts); zero removed assertions; the only
   assertion edits are added timing-slot asserts on the measured
   report path (unmeasured-`None` pins untouched).
-- `TaskTiming`/`accounted_total`/`slots` math pins, timeout
-  consts, shard budgets, parser budgets, and all T18/T19 tofu
-  suites green without modification to their asserts.
+- At the historical T25 tree, timing math pins, timeout constants,
+  shard budgets, parser budgets, and T18/T19 tofu suites passed.
+  Current timing assertions instead distinguish unavailable categories
+  from measured zero and require matching task-wall provenance.

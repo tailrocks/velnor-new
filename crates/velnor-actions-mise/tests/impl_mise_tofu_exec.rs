@@ -115,6 +115,7 @@ fn tofu_exec_bakes_exact_isolation_env() -> Result<(), String> {
             ("MISE_NO_ENV".to_owned(), "1".to_owned()),
             ("MISE_NO_HOOKS".to_owned(), "1".to_owned()),
             ("MISE_LOCKFILE".to_owned(), "0".to_owned()),
+            ("RUSTUP_AUTO_INSTALL".to_owned(), "0".to_owned()),
             ("MISE_AUTO_INSTALL".to_owned(), "false".to_owned()),
             ("MISE_EXEC_AUTO_INSTALL".to_owned(), "false".to_owned()),
             ("TF_IN_AUTOMATION".to_owned(), "1".to_owned()),

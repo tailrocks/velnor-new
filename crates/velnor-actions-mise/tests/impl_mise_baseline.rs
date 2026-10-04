@@ -1,7 +1,7 @@
 //! Exact-base baseline lookup cases (PAR-5.10).
 use std::ffi::OsString;
 use std::path::PathBuf;
-use velnor_actions_mise::{BaselineLookup, MiseError, ToolCatalog};
+use velnor_actions_mise::{BaselineLookup, MiseError, RuntimePaths, ToolCatalog};
 
 const BASE: &str = "0123456789abcdef0123456789abcdef01234567";
 
@@ -49,7 +49,7 @@ fn baseline_list_args_are_fixed_and_exact() -> Result<(), String> {
 
 #[test]
 fn baseline_download_args_name_exact_artifact() -> Result<(), String> {
-    let dir = PathBuf::from("/tmp/velnor-baseline-abc");
+    let dir = PathBuf::from("<PRIVATE_TMP>");
     assert_eq!(
         lookup()?.download_args(12345, &dir),
         strings(&[
@@ -59,7 +59,7 @@ fn baseline_download_args_name_exact_artifact() -> Result<(), String> {
             "--name",
             "coverage-manifests",
             "--dir",
-            "/tmp/velnor-baseline-abc",
+            "<PRIVATE_TMP>",
         ])
     );
     Ok(())
@@ -92,7 +92,7 @@ fn baseline_argv_runs_pinned_gh() -> Result<(), String> {
             "50",
         ])
     );
-    let dir = PathBuf::from("/tmp/velnor-baseline-abc");
+    let dir = PathBuf::from("<PRIVATE_TMP>");
     let argv = lookup
         .download_argv(&catalog, 12345, &dir)
         .map_err(|err| err.to_string())?;
@@ -132,6 +132,21 @@ fn baseline_lookup_commands_carry_baseline_policy() -> Result<(), String> {
         debug.contains("Baseline"),
         "baseline lookup must carry Baseline: {debug}"
     );
+    Ok(())
+}
+
+#[test]
+fn baseline_lookup_can_bind_the_compiled_planning_root() -> Result<(), String> {
+    let catalog = pinned();
+    let lookup = lookup()?;
+    let command = lookup
+        .command_with_runtime(&catalog, lookup.list_args(), RuntimePaths::planning())
+        .map_err(|err| err.to_string())?;
+    let env = command.full_env();
+    assert!(env.iter().any(|(key, value)| {
+        key == "MISE_DATA_DIR" && value == "${{ runner.temp }}/velnor/planning/mise"
+    }));
+    assert!(format!("{command:?}").contains("Baseline"));
     Ok(())
 }
 

@@ -23,13 +23,15 @@ pub enum Stack {
     Rust,
     /// `OpenTofu` stack (`tofu`).
     Tofu,
+    /// Explicit portable workloads (`workload`).
+    Workload,
 }
 
 impl Stack {
     /// Every known stack, in registry (ascending id) order.
     #[must_use]
     pub fn all() -> &'static [Self] {
-        &[Self::Rust, Self::Tofu]
+        &[Self::Rust, Self::Tofu, Self::Workload]
     }
 
     /// Registered stack id for this stack.
@@ -38,6 +40,7 @@ impl Stack {
         match self {
             Self::Rust => "rust",
             Self::Tofu => "tofu",
+            Self::Workload => "workload",
         }
     }
 

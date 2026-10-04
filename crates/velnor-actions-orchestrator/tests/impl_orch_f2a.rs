@@ -6,12 +6,12 @@ use crate::impl_common::{TestResult, passing_reports, plan_for_source_change};
 use crate::impl_orch_plansel::merge_status;
 
 /// Orchestrator `src/` directory.
-pub(crate) fn orch_src() -> PathBuf {
+fn orch_src() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src")
 }
 
 /// Sorted `.rs` files directly under `src/`.
-pub(crate) fn src_files() -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
+fn src_files() -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
     let mut out = Vec::new();
     for entry in std::fs::read_dir(orch_src())? {
         let path = entry?.path();
@@ -46,7 +46,7 @@ fn strip_line_comment(line: &str) -> &str {
 }
 
 /// Code lines of one file: `(number, code)` with comments stripped.
-pub(crate) fn code_of(path: &Path) -> Result<Vec<(usize, String)>, Box<dyn std::error::Error>> {
+fn code_of(path: &Path) -> Result<Vec<(usize, String)>, Box<dyn std::error::Error>> {
     let text = std::fs::read_to_string(path)?;
     Ok(text
         .lines()
@@ -121,27 +121,13 @@ fn orch_spawns_no_processes_and_confines_shell_wrappers() -> TestResult {
         {
             continue;
         }
-        let name = path
-            .file_name()
-            .map(|name| name.to_string_lossy().into_owned())
-            .unwrap_or_default();
-        if matches!(
-            name.as_str(),
-            "validate_shell_yaml.rs" | "validate_shell_yaml_shell.rs"
-        ) {
-            let text = std::fs::read_to_string(&path)?;
-            assert!(!text.contains("StepKind"));
-            assert!(!text.contains("argv"));
-            assert!(!text.contains("Vec<String>"));
-            assert!(!text.contains("Command::"));
-            assert!(!text.contains("std::process"));
-            assert!(!text.contains("\"-c\""));
-            assert!(!text.contains("\"-s\""));
-            continue;
-        }
         let text = std::fs::read_to_string(&path)?;
         if text.contains("\"sh\"") {
-            sh_files.insert(name);
+            sh_files.insert(
+                path.file_name()
+                    .map(|name| name.to_string_lossy().into_owned())
+                    .unwrap_or_default(),
+            );
         }
     }
     assert_eq!(
@@ -151,8 +137,47 @@ fn orch_spawns_no_processes_and_confines_shell_wrappers() -> TestResult {
             "pins.rs".to_owned(),
             "qualify.rs".to_owned(),
             "source_prep.rs".to_owned(),
+            "tofu_config_step.rs".to_owned(),
         ]),
-        "fixed sh wrappers live in matrix_step/pins/qualify/source_prep only"
+        "shell wrappers stay confined to the approved fixed-template owners"
+    );
+    Ok(())
+}
+
+#[test]
+fn plan_and_generate_share_one_prepare_path() -> TestResult {
+    let mut discover_calls = Vec::new();
+    let mut config_calls = Vec::new();
+    for path in src_files()? {
+        let name = path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        for (line, code) in code_of(&path)? {
+            if code.contains("discover(") && !code.contains("fn discover(") {
+                discover_calls.push(format!("{name}:{line}"));
+            }
+            if code.contains("load_config(") && !code.contains("fn load_config(") {
+                config_calls.push(format!("{name}:{line}"));
+            }
+        }
+    }
+    assert_eq!(discover_calls.len(), 1, "{discover_calls:?}");
+    assert!(
+        discover_calls[0].starts_with("prepare.rs"),
+        "{discover_calls:?}"
+    );
+    assert_eq!(config_calls.len(), 1, "{config_calls:?}");
+    assert!(
+        config_calls[0].starts_with("prepare.rs"),
+        "{config_calls:?}"
+    );
+    let internal = std::fs::read_to_string(orch_src().join("internal.rs"))?;
+    assert!(internal.contains("prepare(&root)"), "plan runs prepare");
+    let generate = std::fs::read_to_string(orch_src().join("generate.rs"))?;
+    assert!(
+        generate.contains("prep: &GenerationPreparation"),
+        "generate consumes preparation"
     );
     Ok(())
 }

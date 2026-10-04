@@ -10,10 +10,19 @@ use velnor_actions_contract::{
 fn obligation(task_id: &str, task_digest: &str, input_digest: &str) -> PlanObligation {
     PlanObligation {
         task_id: task_id.to_owned(),
+        job_id: "rust-demo".to_owned(),
         decision: ObligationDecision::Execute,
         reason: "selected".to_owned(),
         task_digest: task_digest.to_owned(),
         input_digest: input_digest.to_owned(),
+        execution_identity: velnor_actions_contract::TaskExecutionIdentity::new(
+            &velnor_actions_contract::digest_b3(b"fixture-graph"),
+            &velnor_actions_contract::digest_b3(b"fixture-toolchain"),
+            &velnor_actions_contract::digest_b3(b"fixture-mbx"),
+            &velnor_actions_contract::digest_b3(b"fixture-platform"),
+            "default",
+        )
+        .expect("execution identity"),
         closure_digest: input_digest.to_owned(),
         baseline_proof: None,
     }
@@ -26,12 +35,14 @@ fn plan_with(label: &str, obligations: Vec<PlanObligation>) -> Plan {
         .map(|obligation| obligation.task_id.clone())
         .collect();
     Plan {
+        producers: Default::default(),
         schema: 1,
         run_key: "local".to_owned(),
         plan_id: "plan-local".to_owned(),
         base: None,
         head: "head".to_owned(),
         event: WorkflowEvent::Push,
+        scope: velnor_actions_contract::VerificationScope::Affected,
         runner: PlanRunner {
             label: label.to_owned(),
             selection: RunnerSelection::LatestDefault,

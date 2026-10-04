@@ -1,17 +1,22 @@
 //! Init/config plus internal plan/merge integration cases.
 
+#[path = "impl_git_clone_isolation.rs"]
+mod clone_tests;
+#[path = "../../test_support/git_clone_fixture.rs"]
+mod git_clone_fixture;
+
 use std::fs;
 
 use tempfile::TempDir;
 use velnor_actions_contract::{FinalReport, RunnerSelection};
 use velnor_actions_orchestrator::{
-    OrchestratorError, finalized_jobs, init_config, merge_internal, plan_internal, plan_text,
-    prepare, resolve_root,
+    OrchestratorError, finalized_jobs, init_config, merge_internal, plan_internal,
+    plan_text_checked, prepare, resolve_root,
 };
 
 use crate::impl_common::{
-    TestResult, config_with_branch, err_of, fixture_manifest_json, git, make_repo, passing_reports,
-    plan_for_source_change, without_ambient_identity,
+    TestResult, config_with_branch, err_of, fixture_manifest_json, git, git_fixture, make_repo,
+    passing_reports, plan_for_source_change, without_ambient_identity,
 };
 use crate::impl_merge::task_reports_for;
 
@@ -46,7 +51,7 @@ fn init_creates_sample_and_refuses_overwrite() -> TestResult {
 
 #[test]
 fn config_errors_name_file_and_key_path() -> TestResult {
-    let repo = make_repo("schema = 99\n")?;
+    let repo = make_repo("schema = 2\n")?;
     let err = err_of(prepare(repo.path()), "bad schema")?;
     assert!(err.to_string().contains(".velnor/config.toml"), "got {err}");
     assert!(err.to_string().contains("schema"), "got {err}");
@@ -90,14 +95,8 @@ fn default_branch_prefers_config_then_origin_head() -> TestResult {
     git(&["commit", "-m", "seed"], origin.path())?;
     let parent = TempDir::new()?;
     let clone_path = parent.path().join("clone");
-    git(
-        &[
-            "clone",
-            &origin.path().display().to_string(),
-            &clone_path.display().to_string(),
-        ],
-        parent.path(),
-    )?;
+    let output = git_clone_fixture::clone_fixture(origin.path(), &clone_path)?.output()?;
+    assert!(output.status.success(), "{:?}", output.stderr);
     fs::create_dir_all(clone_path.join(".velnor"))?;
     fs::write(clone_path.join(".velnor/config.toml"), "schema = 1\n")?;
     fs::write(
@@ -160,7 +159,7 @@ fn internal_merge_aggregates_reports() -> TestResult {
     let merge_request = serde_json::json!({
         "schema": 1,
         "run_key": "local",
-        "actual_event": "pull_request",
+        "actual_scope": "affected", "actual_event": "pull_request",
         "plan": plan,
         "matrix": plan.matrix,
         "matrix_reports": [],
@@ -181,7 +180,7 @@ fn internal_merge_aggregates_reports() -> TestResult {
     let merge_request = serde_json::json!({
         "schema": 1,
         "run_key": "local",
-        "actual_event": "pull_request",
+        "actual_scope": "affected", "actual_event": "pull_request",
         "plan": plan,
         "matrix": plan.matrix,
         "matrix_reports": reports,
@@ -284,7 +283,7 @@ fn unknown_override_key_rejected_with_key_path() -> TestResult {
     );
     // Policy-owned alint overrides reject like unknown keys (§2, GitHub Action defaults).
     let repo = make_repo(
-        "schema = 1\n[workflow]\ndefault_branch = \"testmain\"\n[actions.overrides]\n\"asamarts/alint\" = { version = \"v0.16.1\", sha = \"9f9d34ba0eae3888299b9e570f43338b0e7f2cdb\" }\n",
+        "schema = 1\n[workflow]\ndefault_branch = \"testmain\"\n[actions.overrides]\n\"asamarts/alint\" = { version = \"v0.17.0\", sha = \"d93c0283b19dd78afcd8a4b303f1556a7759ba81\" }\n",
     )?;
     let m = err_of(prepare(repo.path()), "alint override rejected")?.to_string();
     assert!(m.contains("actions.overrides.asamarts/alint"));
@@ -361,7 +360,7 @@ fn plan_job_lines_come_from_finalized_jobs() -> TestResult {
     let repo = make_repo(config_with_branch())?;
     let prep = prepare(repo.path())?;
     let jobs = finalized_jobs(&prep)?;
-    let text = plan_text(&prep, &jobs);
+    let text = plan_text_checked(&prep)?;
     assert!(!jobs.is_empty(), "finalized jobs exist");
     for (id, job) in &jobs {
         let line = format!("- {id} ({} steps)", job.steps.len());

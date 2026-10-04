@@ -1,0 +1,227 @@
+{
+  "label": "CURRENT local wrapper source proof; not hosted performance",
+  "construction": "Current Rust factory semantics reconstructed by exact snapshot_source() replacement order, domain_case formatting and parsed ALL/name/roots registry; generated_source marker uses workspace package version 0.1.0. Actual Rust factory not executed; Cargo prohibited. Sole current opaque engine concatenated unchanged; no duplicate implementation.",
+  "engine_sha256": "c0ba56c1242913c6b6d4c2b3f3cb7d35534a2e1dcad2109eaf127189e59a7b2d",
+  "body_sha256": "f25e5d099ee4b821274e6db91b6e7f95ec93f80f631a6d0d06cc8803d90be79c",
+  "generated_wrapper_sha256": "0b1c67888727dcba17812be5bbdf321ac635d6d355cbbf2d78efe5e749af3c96",
+  "generated_lines": 393,
+  "body_lines": 392,
+  "engine_lines": 274,
+  "source_files_sha256": {
+    "crates/velnor-actions-mise/src/cache_snapshot.rs": "63b1e352c031e01bd6e257f7bf62af75b197568b2b79151c3c8fd1c3c811cb3a",
+    "crates/velnor-actions-mise/src/cache_snapshot.sh": "9b4435eb562111b05b5d3d471121f2c7acc944eb8af5f25ca5e6bf520c600071",
+    "crates/velnor-actions-mise/src/opaque_inventory.rs": "6ba91774401abcbe34d59b229a6bb8b885ee9be64a586720c458829a47b67ce6",
+    "crates/velnor-actions-mise/src/metadata_container.py": "3bba7f21fc728bea94c1d8202611537a1f8791585313e126a7a00b0249823fb1",
+    "crates/velnor-actions-mise/src/opaque_inventory_metadata.py": "a0246209d02c71cb7d23c962a71d82473bb28b45be3e6e0be174b2131d166077",
+    "crates/velnor-actions-mise/src/opaque_inventory.py": "8b291cc7bc670309e68d20ce277d24b9fe6555237a8412847dea296addd1823f",
+    "crates/velnor-actions-contract/src/workflow/cache_snapshot_domain.rs": "5a4bf99857a5808fd07da64b17993952e3a03c88b769135f702a025bcd5e8529",
+    "crates/velnor-actions-contract/src/marker.rs": "7421eb25b4116d9460d2d45ef66399cefe2e5c69523502352f87b02f3fd2db24"
+  },
+  "domains": [
+    {
+      "name": "tools",
+      "roots": [
+        "mise",
+        "rustup",
+        "cargo/bin",
+        "cargo/.crates.toml",
+        "cargo/.crates2.json"
+      ]
+    },
+    {
+      "name": "planning_tools",
+      "roots": [
+        "planning/mise"
+      ]
+    },
+    {
+      "name": "npm_bootstrap",
+      "roots": [
+        "npm-source/mise"
+      ]
+    },
+    {
+      "name": "bun_bootstrap",
+      "roots": [
+        "bun-source/mise"
+      ]
+    },
+    {
+      "name": "tofu_bootstrap",
+      "roots": [
+        "tofu-provider-producer/mise"
+      ]
+    },
+    {
+      "name": "gradle_bootstrap",
+      "roots": [
+        "gradle-source/mise"
+      ]
+    },
+    {
+      "name": "sources",
+      "roots": [
+        "cargo/registry/index",
+        "cargo/registry/cache",
+        "cargo/git/db"
+      ]
+    },
+    {
+      "name": "bun_downloads",
+      "roots": [
+        "native/bun/install/cache"
+      ]
+    },
+    {
+      "name": "npm_downloads",
+      "roots": [
+        "native/npm/_cacache/content-v2",
+        "native/npm/public-proof-v1.json"
+      ]
+    },
+    {
+      "name": "gradle_dependencies",
+      "roots": [
+        "native/gradle/caches/modules-2/files-2.1"
+      ]
+    }
+  ],
+  "host": "macOS-27.0-arm64-arm-64bit-Mach-O",
+  "python": "Python 3.9.6",
+  "bash_n_exit": 0,
+  "results": [
+    {
+      "case": "populated",
+      "phase": "before",
+      "exit": 0,
+      "seconds": 0.10024362499825656,
+      "stdout": "velnor: tools snapshot phase=before files=1 bytes=31 hash_seconds=0 hash_resolution_seconds=1 digest=68c91d77070ff1e4e4cf38854e12ac5c52437859b9b09949125bbbcf8adae0cb\n",
+      "stderr": "",
+      "output": "available=false\ndigest=68c91d77070ff1e4e4cf38854e12ac5c52437859b9b09949125bbbcf8adae0cb\navailable=true\n",
+      "env": "VELNOR_TOOLS_SNAPSHOT_CHANGED=true\n"
+    },
+    {
+      "case": "populated",
+      "phase": "after",
+      "exit": 0,
+      "seconds": 0.09290891699492931,
+      "stdout": "",
+      "stderr": "velnor: opaque inventory unavailable\nvelnor: tools snapshot unavailable; export suppressed\n",
+      "output": "available=false\n",
+      "env": "VELNOR_TOOLS_SNAPSHOT_CHANGED=true\nVELNOR_TOOLS_SNAPSHOT_CHANGED=false\n"
+    },
+    {
+      "case": "fifo",
+      "phase": "before",
+      "exit": 0,
+      "seconds": 0.08480708301067352,
+      "stdout": "",
+      "stderr": "velnor: opaque inventory unavailable\nvelnor: tools snapshot unavailable; export suppressed\n",
+      "output": "available=false\n",
+      "env": "VELNOR_TOOLS_SNAPSHOT_CHANGED=true\nVELNOR_TOOLS_SNAPSHOT_CHANGED=false\n"
+    },
+    {
+      "case": "staleleaf",
+      "phase": "before",
+      "exit": 0,
+      "seconds": 0.010608792013954371,
+      "stdout": "",
+      "stderr": "velnor: tools snapshot unavailable; export suppressed\n",
+      "output": "available=false\n",
+      "env": "VELNOR_TOOLS_SNAPSHOT_CHANGED=true\nVELNOR_TOOLS_SNAPSHOT_CHANGED=false\n"
+    },
+    {
+      "case": "specialmode",
+      "phase": "after",
+      "exit": 0,
+      "seconds": 0.08624375000363216,
+      "stdout": "",
+      "stderr": "velnor: opaque inventory unavailable\nvelnor: tools snapshot unavailable; export suppressed\n",
+      "output": "available=false\n",
+      "env": "VELNOR_TOOLS_SNAPSHOT_CHANGED=true\nVELNOR_TOOLS_SNAPSHOT_CHANGED=false\n"
+    },
+    {
+      "case": "output_directory",
+      "phase": "before",
+      "exit": 0,
+      "seconds": 0.004787292011315003,
+      "stdout": "",
+      "stderr": "<local-proof>/cache_snapshot.sh: line 17: <local-proof>/output_directory/before.output: Is a directory\nvelnor: tools snapshot unavailable; export suppressed\n",
+      "output": null,
+      "env": "VELNOR_TOOLS_SNAPSHOT_CHANGED=true\nVELNOR_TOOLS_SNAPSHOT_CHANGED=false\n"
+    },
+    {
+      "case": "renamed_appledouble",
+      "phase": "before",
+      "exit": 0,
+      "seconds": 0.09966758301015943,
+      "stdout": "velnor: tools snapshot phase=before files=1 bytes=42 hash_seconds=0 hash_resolution_seconds=1 digest=86d271f550efd4c4c9f047615a23350bee0b2eb9452b08fbf2f5879af1f0d0ab\n",
+      "stderr": "",
+      "output": "available=false\ndigest=86d271f550efd4c4c9f047615a23350bee0b2eb9452b08fbf2f5879af1f0d0ab\navailable=true\n",
+      "env": "VELNOR_TOOLS_SNAPSHOT_CHANGED=true\n"
+    },
+    {
+      "case": "renamed_appledouble",
+      "phase": "after",
+      "exit": 0,
+      "seconds": 0.09225708298617974,
+      "stdout": "",
+      "stderr": "velnor: opaque inventory unavailable\nvelnor: tools snapshot unavailable; export suppressed\n",
+      "output": "available=false\n",
+      "env": "VELNOR_TOOLS_SNAPSHOT_CHANGED=true\nVELNOR_TOOLS_SNAPSHOT_CHANGED=false\n"
+    },
+    {
+      "case": "empty_terminal_ordering",
+      "phase": "before",
+      "exit": 0,
+      "stdout": "velnor: tools snapshot phase=before files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=bb8d9a41fdda35c61110f1acff6937582b6db06d093c4b48e12b392df5769a62\n",
+      "stderr": "",
+      "output": "available=false\ndigest=bb8d9a41fdda35c61110f1acff6937582b6db06d093c4b48e12b392df5769a62\navailable=true\n",
+      "env": "",
+      "claim": "Missing roots exercise successful terminal publication only; no populated strict-after or hosted performance claim."
+    },
+    {
+      "case": "empty_terminal_ordering",
+      "phase": "after",
+      "exit": 0,
+      "stdout": "velnor: tools snapshot phase=after files=0 bytes=0 hash_seconds=0 hash_resolution_seconds=1 digest=bb8d9a41fdda35c61110f1acff6937582b6db06d093c4b48e12b392df5769a62\n",
+      "stderr": "",
+      "output": "available=false\nchanged=false\ndigest=bb8d9a41fdda35c61110f1acff6937582b6db06d093c4b48e12b392df5769a62\navailable=true\n",
+      "env": "VELNOR_TOOLS_SNAPSHOT_DIGEST=bb8d9a41fdda35c61110f1acff6937582b6db06d093c4b48e12b392df5769a62\nVELNOR_TOOLS_SNAPSHOT_CHANGED=false\n",
+      "claim": "Missing roots exercise successful terminal publication only; no populated strict-after or hosted performance claim."
+    }
+  ],
+  "limitations": [
+    "Host populated strict metadata after fails closed; no positive hosted performance claim.",
+    "Renamed AppleDouble complete wrapper strict after blocked by host metadata; unmodified engine file method separately proves content-based guard using actual renamed file bytes.",
+    "Source reconstructed from current factory formatting and registry; Rust factory not executed because Cargo prohibited."
+  ],
+  "direct_current_engine_guard_results": [
+    {
+      "case": "actual renamed AppleDouble file read; metadata traversal bypassed, file guard unmodified",
+      "error": "unsupported metadata container",
+      "expected": "unsupported metadata container",
+      "passed": true
+    },
+    {
+      "case": "actual FIFO visit record metadata; no stream read",
+      "error": "unsupported inventory entry",
+      "expected": "unsupported inventory entry",
+      "passed": true
+    },
+    {
+      "case": "actual setuid directory visit; before metadata inspection",
+      "error": "unsupported inventory mode",
+      "expected": "unsupported inventory mode",
+      "passed": true
+    },
+    {
+      "case": "host strict metadata direct file record",
+      "error": "unsupported filesystem metadata",
+      "expected": "unsupported filesystem metadata",
+      "passed": true
+    }
+  ],
+  "scope": "Local current-source behavior proof only; no hosted timing, no populated strict-after success claim.",
+  "generated_marker": "# Generated by Velnor Actions 0.1.0; edit .velnor/config.toml and regenerate."
+}

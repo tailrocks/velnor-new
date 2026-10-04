@@ -64,6 +64,12 @@ pub enum OrchestratorError {
         /// Machine-readable problem detail.
         problem: String,
     },
+    /// Authenticated analysis cannot cover the current repository snapshot.
+    #[error("needs_cargo: {problem}")]
+    NeedsCargo {
+        /// Why fresh Cargo discovery and qualification are required.
+        problem: String,
+    },
     /// Tool execution for discovery failed without a Cargo diagnostic.
     #[error("preparation_incomplete: {manifest}: {problem}")]
     PreparationIncomplete {
@@ -210,6 +216,14 @@ impl OrchestratorError {
     #[must_use]
     pub fn is_unsupported(&self) -> bool {
         matches!(self, Self::Unsupported { .. })
+    }
+}
+
+impl From<velnor_actions_mise::MiseError> for OrchestratorError {
+    fn from(error: velnor_actions_mise::MiseError) -> Self {
+        Self::Contract {
+            problem: error.to_string(),
+        }
     }
 }
 

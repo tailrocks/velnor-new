@@ -1,31 +1,19 @@
-//! P08 Cargo source subset, single writer, and restore-before-fetch order.
+//! Canonical credential-free Cargo source archive subset.
 //!
 //! Sources live at the Cargo home actually used (`MISE_CARGO_HOME`,
 //! `${{ runner.temp }}/velnor/cargo`), never the ambient `~/.cargo`.
-//! Only the sufficient subset is archived (Cargo CI guidance):
-//! `.crates.toml`, `.crates2.json`, `bin/`, `registry/index/`,
-//! `registry/cache/`, `git/db/`. Extracted `registry/src/` is omitted
-//! (re-extracted from cache; avoids cache/src duplication). Credentials
-//! (`credentials*`, token-bearing configs) are never archived.
+//! Only credential-free source state is archived: registry index/archive
+//! data and Git object databases. Executables and install metadata belong
+//! to the tool payload. Extracted registry sources are reconstructed from
+//! archives; credentials and ambient Cargo configuration are excluded.
 //!
-//! One race-safe trusted writer (the plan job) seeds the shared immutable
-//! snapshot; crate jobs restore read-only and never save the same key.
-//! Seven jobs racing to save one immutable key is rejected by construction.
+//! Reader and pure-producer transports share these paths and validation.
+//! Writer admission belongs to the typed source-producer and cache-mode gates.
 
 use crate::error::MiseError;
 
 /// Sufficient Cargo-home subset (relative to the owned home).
-pub const SOURCE_SUBSET: [&str; 6] = [
-    ".crates.toml",
-    ".crates2.json",
-    "bin",
-    "registry/index",
-    "registry/cache",
-    "git/db",
-];
-
-/// Role allowed to save the shared sources snapshot.
-pub const TRUSTED_WRITER_ROLE: &str = "plan";
+pub const SOURCE_SUBSET: [&str; 3] = ["registry/index", "registry/cache", "git/db"];
 
 /// Never-archive markers: state, plans, and credential-bearing names
 /// must never enter a cache archive (T22).
@@ -43,18 +31,6 @@ pub fn is_never_archive_path(path: &str) -> bool {
     NEVER_ARCHIVE_MARKERS
         .iter()
         .any(|marker| path.contains(marker))
-}
-
-/// Fetch decision after a restore attempt.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum FetchDecision {
-    /// All locked sources present: skip online fetch, run offline.
-    OfflineSkip,
-    /// Cold/incomplete cache: fetch via the explicit path, record miss.
-    ExplicitFetch {
-        /// Closed miss reason (`no_entry`, `source_missing`, ...).
-        miss_reason: &'static str,
-    },
 }
 
 /// Source-subset archive paths under one Cargo home expression.
@@ -111,73 +87,4 @@ fn reject(path: &str) -> MiseError {
         field: "sources_path".to_owned(),
         value: path.to_owned(),
     }
-}
-
-/// True only for the single trusted writer role.
-#[must_use]
-pub fn is_trusted_writer(role: &str) -> bool {
-    role == TRUSTED_WRITER_ROLE
-}
-
-/// Decide offline-skip vs explicit fetch from a completeness probe.
-///
-/// # Errors
-///
-/// Returns [`MiseError::InvalidStepInput`] for an unknown reason.
-pub fn fetch_decision(
-    sources_complete: bool,
-    miss_reason: &'static str,
-) -> Result<FetchDecision, MiseError> {
-    if sources_complete {
-        return Ok(FetchDecision::OfflineSkip);
-    }
-    if !matches!(
-        miss_reason,
-        "no_entry" | "source_missing" | "cache_unavailable" | "cache_corrupt"
-    ) {
-        return Err(MiseError::InvalidStepInput {
-            field: "miss_reason".to_owned(),
-            value: miss_reason.to_owned(),
-        });
-    }
-    Ok(FetchDecision::ExplicitFetch { miss_reason })
-}
-
-/// Require restore/config steps before every fetch/build/test step.
-///
-/// `names` is the job's step-name sequence. Every `Fetch Cargo sources`
-/// (and `Clippy` as the first build/test obligation) must follow a
-/// sources restore and, on MBX jobs, the MBX objects restore.
-///
-/// # Errors
-///
-/// Returns [`MiseError::CacheNotEligible`] when fetch precedes restore.
-pub fn check_restore_before_fetch(names: &[String], has_mbx: bool) -> Result<(), MiseError> {
-    let at = |want: &str| names.iter().position(|n| n == want);
-    let restore = at("Restore Cargo sources");
-    let fetch = at("Fetch Cargo sources").or_else(|| {
-        names
-            .iter()
-            .position(|n| n.starts_with("Fetch Cargo sources"))
-    });
-    if let (Some(restore_at), Some(fetch_at)) = (restore, fetch)
-        && fetch_at < restore_at
-    {
-        return Err(MiseError::CacheNotEligible {
-            task: "fetch".to_owned(),
-            reason: "fetch_before_restore".to_owned(),
-        });
-    }
-    if has_mbx {
-        let mbx = at("Restore MBX objects");
-        if let (Some(mbx_at), Some(fetch_at)) = (mbx, fetch)
-            && fetch_at < mbx_at
-        {
-            return Err(MiseError::CacheNotEligible {
-                task: "fetch".to_owned(),
-                reason: "fetch_before_mbx".to_owned(),
-            });
-        }
-    }
-    Ok(())
 }

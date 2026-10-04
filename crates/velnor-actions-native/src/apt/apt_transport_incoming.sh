@@ -1,0 +1,4 @@
+set -euo pipefail
+exec python3 -I -S - "$@" <<'VELNOR_APT_TRANSPORT_SOURCE'
+@@APT_TRANSPORT_SOURCE@@
+VELNOR_APT_TRANSPORT_SOURCE

@@ -10,6 +10,9 @@ const SHA: &str = "0123456789abcdef0123456789abcdef01234567";
 
 fn input(name: &str, required: bool, default: Option<&str>) -> DispatchInput {
     DispatchInput {
+        input_type: velnor_actions_contract::workflow::ir::DispatchInputType::String,
+        description: None,
+        options: Vec::new(),
         name: name.to_owned(),
         required,
         default: default.map(str::to_owned),
@@ -28,6 +31,7 @@ fn identity_problem(workflow: &WorkflowIr) -> Option<String> {
 fn ci_triggers() -> Trigger {
     Trigger {
         pull_request_types: vec!["opened".to_owned()],
+        push_tags: Vec::new(),
         push_branches: vec!["main".to_owned()],
         merge_group: false,
         workflow_dispatch: None,
@@ -37,14 +41,22 @@ fn ci_triggers() -> Trigger {
 
 fn ci_job() -> Job {
     Job {
+        cache_mode: None,
         display_name: "demo check".to_owned(),
         runs_on: "ubuntu-24.04".to_owned(),
         timeout_minutes: JobTimeout::CRATE,
         needs: vec![],
         condition: None,
         permissions: None,
+        tool_producer: None,
+        mbx_producer: None,
+        source_producer: None,
+        native_pages_deploy: None,
+        native_publish: None,
+        outputs: Vec::new(),
         environment: None,
         steps: vec![Step {
+            id: None,
             name: "run".to_owned(),
             condition: None,
             kind: StepKind::Internal {
@@ -56,6 +68,8 @@ fn ci_job() -> Job {
 
 fn ci_workflow() -> WorkflowIr {
     WorkflowIr {
+        cache_mode: velnor_actions_contract::CacheMode::Read,
+        run_name: None,
         name: "demo CI".to_owned(),
         triggers: ci_triggers(),
         permissions: Permissions::default(),
@@ -102,7 +116,7 @@ fn ir_rejects_permission_violations() {
     let mut bound = id_token.clone();
     check_job(&mut bound).expect("job").environment = Some("demo-publish".to_owned());
     bound.triggers.pull_request_types.clear();
-    assert_eq!(bound.validate(), Ok(()));
+    assert!(bound.validate().is_err());
     let mut on_pr = ci_workflow();
     let scoped = Permissions {
         contents: PermissionLevel::Write,
@@ -116,6 +130,9 @@ fn ir_rejects_permission_violations() {
         pull_requests: PermissionLevel::Write,
         id_token: PermissionLevel::Write,
         actions: PermissionLevel::Write,
+        issues: PermissionLevel::Write,
+        pages: PermissionLevel::None,
+        attestations: PermissionLevel::None,
     };
     let mut workflow_all = ci_workflow();
     workflow_all.permissions = write_all.clone();
@@ -134,7 +151,10 @@ fn ir_rejects_permission_violations() {
 
 #[test]
 fn ir_validates_dispatch_input_charset_and_order() {
-    assert_eq!(DispatchInput::INPUT_TYPE, "string");
+    assert_eq!(
+        velnor_actions_contract::workflow::ir::DispatchInputType::String.as_str(),
+        "string"
+    );
     let mut workflow = ci_workflow();
     workflow.triggers.pull_request_types.clear();
     workflow.triggers.workflow_dispatch = Some(WorkflowDispatch {
@@ -192,4 +212,68 @@ fn ir_validates_schedule_and_environment_safety() {
             .expect("must reject")
             .ends_with("bad_environment:check")
     );
+}
+
+#[test]
+fn dispatch_boolean_defaults_validate_and_legacy_reads_default_to_string() {
+    use velnor_actions_contract::workflow::ir::DispatchInputType;
+    let old: DispatchInput =
+        serde_json::from_str(r#"{"name":"scope","required":false,"default":"full"}"#)
+            .expect("old input");
+    assert_eq!(old.input_type, DispatchInputType::String);
+    let permissions: Permissions = serde_json::from_str(
+        r#"{"contents":"read","pull_requests":"none","id_token":"none","actions":"read"}"#,
+    )
+    .expect("old permissions");
+    assert_eq!(permissions.issues, PermissionLevel::None);
+    for value in ["true", "false", "False", "1", "${{ github.token }}"] {
+        let mut input = input("simulate_failure", false, Some(value));
+        input.input_type = DispatchInputType::Boolean;
+        let mut workflow = ci_workflow();
+        workflow.triggers.workflow_dispatch = Some(WorkflowDispatch {
+            inputs: vec![input],
+        });
+        assert_eq!(
+            workflow.validate().is_ok(),
+            matches!(value, "true" | "false"),
+            "{value}"
+        );
+    }
+}
+
+#[test]
+fn native_pages_permissions_cannot_escalate_ci_jobs() {
+    let mut workflow = ci_workflow();
+    workflow.permissions.pages = PermissionLevel::Read;
+    assert_eq!(workflow.validate(), Ok(()));
+    workflow.permissions.pages = PermissionLevel::Write;
+    assert!(workflow.validate().is_err());
+    workflow.permissions.pages = PermissionLevel::None;
+    check_job(&mut workflow).expect("job").permissions = Some(Permissions {
+        pages: PermissionLevel::Write,
+        attestations: PermissionLevel::None,
+        ..Permissions::default()
+    });
+    assert!(workflow.validate().is_err());
+    workflow.triggers.pull_request_types.clear();
+    check_job(&mut workflow).expect("job").environment = Some("github-pages".to_owned());
+    assert!(workflow.validate().is_err());
+}
+
+#[test]
+fn native_oidc_requires_an_approved_closed_role_even_with_environment() {
+    for environment in ["arbitrary", "github-pages", "package-feed"] {
+        let mut workflow = ci_workflow();
+        let job = check_job(&mut workflow).expect("job");
+        job.environment = Some(environment.to_owned());
+        job.permissions = Some(Permissions {
+            id_token: PermissionLevel::Write,
+            ..Permissions::default()
+        });
+        let error = identity_problem(&workflow).expect("must reject");
+        assert!(
+            error.contains("id_token_write_needs_closed_role"),
+            "{error}"
+        );
+    }
 }

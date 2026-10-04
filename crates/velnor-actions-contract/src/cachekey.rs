@@ -11,23 +11,12 @@ use crate::errors::ContractError;
 
 /// Cache-key schema id, always `v1`.
 pub const CACHE_SCHEMA_ID: &str = "v1";
-/// Prefix shared by the MBX action namespace and task cache identity.
-pub const MBX_CACHE_GENERATION_PREFIX: &str = "velnor-mbx-";
 pub use crate::extension_schemas::{
     KNOWN_STACK_EXTENSION_SCHEMAS, RUST_EXTENSION_SCHEMA, TOFU_EXTENSION_SCHEMA,
     is_known_stack_extension_schema,
 };
 /// Maximum GitHub cache-key bytes; longer keys fail generation.
 pub const MAX_CACHE_KEY_BYTES: usize = 512;
-
-/// Build the MBX action generation for one exact runtime version.
-///
-/// Callers validate the version through the pinned tool catalog or action
-/// input gate before constructing this identity component.
-#[must_use]
-pub fn mbx_cache_generation(version: &str) -> String {
-    format!("{MBX_CACHE_GENERATION_PREFIX}{version}")
-}
 
 /// The 13 allowed `miss_reason` values (cache §3).
 pub const MISS_REASONS: [&str; 13] = [
@@ -285,45 +274,10 @@ impl CacheIdentity {
     }
 }
 
-/// Build `velnor-v1-<layer>-<trust>-<compat>-<snapshot>` (≤512 bytes).
-/// # Errors
-pub fn cache_key(
-    layer: &str,
-    trust: &str,
-    compatibility: &str,
-    snapshot: &str,
-) -> Result<String, ContractError> {
-    if !matches!(layer, "sources" | "mbx" | "task" | "tofu-providers") {
-        return Err(ContractError::identity("cache.layer", "unknown_layer"));
-    }
-    if !matches!(trust, "trusted" | "pr") {
-        return Err(ContractError::identity("cache.trust", "unknown_trust"));
-    }
-    validate_digest(compatibility)?;
-    validate_digest(snapshot)?;
-    let key = format!("velnor-v1-{layer}-{trust}-{compatibility}-{snapshot}");
-    if key.len() > MAX_CACHE_KEY_BYTES {
-        return Err(ContractError::identity("cache.key", "key_too_long"));
-    }
-    Ok(key)
-}
+#[path = "cache_key_format.rs"]
+mod key_format;
 
-/// Build a same-compat restore prefix (snapshot omitted).
-/// # Errors
-pub fn restore_prefix(
-    layer: &str,
-    trust: &str,
-    compatibility: &str,
-) -> Result<String, ContractError> {
-    if !matches!(layer, "sources" | "mbx" | "task" | "tofu-providers") {
-        return Err(ContractError::identity("cache.layer", "unknown_layer"));
-    }
-    if !matches!(trust, "trusted" | "pr") {
-        return Err(ContractError::identity("cache.trust", "unknown_trust"));
-    }
-    validate_digest(compatibility)?;
-    Ok(format!("velnor-v1-{layer}-{trust}-{compatibility}-"))
-}
+pub use key_format::{TOFU_PROVIDERS_KEY_PREFIX, cache_key, restore_prefix};
 
 #[cfg(test)]
 mod tests {

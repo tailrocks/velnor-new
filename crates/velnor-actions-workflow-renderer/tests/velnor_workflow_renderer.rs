@@ -3,6 +3,8 @@
 mod impl_adapter_wire_renderer;
 #[path = "impl_renderer_acquire.rs"]
 mod impl_renderer_acquire;
+#[path = "impl_renderer_cache_mode.rs"]
+mod impl_renderer_cache_mode;
 #[path = "impl_renderer_cache_steps.rs"]
 mod impl_renderer_cache_steps;
 #[path = "impl_renderer_cache_t22.rs"]
@@ -25,14 +27,6 @@ mod impl_renderer_guard;
 mod impl_renderer_lint;
 #[path = "impl_renderer_matrix.rs"]
 mod impl_renderer_matrix;
-#[path = "impl_renderer_mbx_action.rs"]
-mod impl_renderer_mbx_action;
-#[path = "impl_renderer_mbx_bundle.rs"]
-mod impl_renderer_mbx_bundle;
-#[path = "impl_renderer_mbx_gc_policy.rs"]
-mod impl_renderer_mbx_gc_policy;
-#[path = "impl_renderer_mbx_preflight.rs"]
-mod impl_renderer_mbx_preflight;
 #[path = "impl_renderer_mbxgate.rs"]
 mod impl_renderer_mbxgate;
 #[path = "impl_renderer_msrv.rs"]
@@ -77,6 +71,8 @@ mod impl_renderer_release_tree;
 mod impl_renderer_release_units;
 #[path = "impl_renderer_release_version.rs"]
 mod impl_renderer_release_version;
+#[path = "impl_renderer_rust_options.rs"]
+mod impl_renderer_rust_options;
 #[path = "impl_renderer_setup.rs"]
 mod impl_renderer_setup;
 #[path = "impl_renderer_steps.rs"]

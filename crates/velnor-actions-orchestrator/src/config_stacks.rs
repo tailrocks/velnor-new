@@ -8,7 +8,7 @@ use serde::Deserialize;
 use velnor_actions_contract::config::RustReleaseConfig;
 use velnor_actions_contract::{
     DeclaredCompileDriver, DeclaredTestRunner, RustConfiguration, RustStackConfig, StacksConfig,
-    TofuStackConfig, Utf8RepoRelDir,
+    TofuStackConfig, Utf8RepoRelDir, WorkloadConfig,
 };
 
 use crate::OrchestratorError;
@@ -25,6 +25,9 @@ pub(crate) struct PartialStacks {
     rust: Option<PartialRustStack>,
     /// Tofu stack options.
     tofu: Option<PartialTofuStack>,
+    /// Explicit portable workloads.
+    #[serde(default)]
+    workloads: Vec<WorkloadConfig>,
 }
 
 /// Rust stack section with every value optional.
@@ -37,8 +40,6 @@ pub(crate) struct PartialRustStack {
     compile_driver: Option<DeclaredCompileDriver>,
     /// Sticky declared test runner.
     test_runner: Option<DeclaredTestRunner>,
-    /// Ignored test execution mode.
-    run_ignored: Option<String>,
     /// Rust release policy; disabled by default.
     release: Option<RustReleaseConfig>,
     /// Allowlisted Mise custom-task names; empty by default.
@@ -62,7 +63,6 @@ impl PartialStacks {
                 configurations: stack.configurations.unwrap_or(defaults.configurations),
                 compile_driver: stack.compile_driver,
                 test_runner: stack.test_runner,
-                run_ignored: stack.run_ignored,
                 release: stack.release.unwrap_or_default(),
                 custom_tasks: stack.custom_tasks.unwrap_or_default(),
             }
@@ -86,6 +86,7 @@ impl PartialStacks {
             ignore: self.ignore,
             rust,
             tofu,
+            workloads: self.workloads,
         })
     }
 }
@@ -112,8 +113,9 @@ mod tests {
         let root = rooted("schema = 1\n");
         let config = load(root.path()).expect("minimal config");
         assert!(config.stacks.rust.is_none());
-        let root =
-            rooted("schema = 1\n[stacks.rust.release]\nenabled = true\npackages = [\"demo\"]\n");
+        let root = rooted(
+            "schema = 1\n[stacks.rust.release]\nenabled = true\npackages = [\"demo\"]\nexpected_owners = { demo = [\"user:1\"] }\n",
+        );
         let config = load(root.path()).expect("release config");
         let rust = config.stacks.rust.expect("rust stack");
         assert!(rust.release.enabled);
@@ -135,6 +137,36 @@ mod tests {
         let config = load(root.path()).expect("rust config");
         let rust = config.stacks.rust.expect("rust stack");
         assert!(rust.custom_tasks.is_empty());
+    }
+
+    #[test]
+    fn workloads_parse_with_root_default_and_reject_escape_hatches() {
+        let load = load_config;
+        let root = rooted(
+            "schema = 1\n[[stacks.workloads]]\nname = 'container'\nkind = 'docker_build'\ninputs = ['Dockerfile']\n",
+        );
+        let config = load(root.path()).expect("portable config");
+        assert_eq!(config.stacks.workloads[0].root.as_str(), ".");
+        assert_eq!(config.stacks.workloads[0].inputs, ["Dockerfile"]);
+        let root = rooted("schema = 1\n");
+        assert!(
+            load(root.path())
+                .expect("defaults")
+                .stacks
+                .workloads
+                .is_empty()
+        );
+        for field in ["command = 'id'", "inputs = ['../escape']", "kind = 'shell'"] {
+            let body = if field.starts_with("kind") {
+                format!("schema = 1\n[[stacks.workloads]]\nname = 'check'\n{field}\n")
+            } else {
+                format!(
+                    "schema = 1\n[[stacks.workloads]]\nname = 'check'\nkind = 'reuse'\n{field}\n"
+                )
+            };
+            let root = rooted(&body);
+            assert!(load(root.path()).is_err(), "{field}");
+        }
     }
 
     #[test]

@@ -1,10 +1,18 @@
 //! Event-time `merge-v1` JSON entrypoint (schema 1).
 
 // Inventory and plan checks live beside the merge so `lib.rs` stays untouched.
+#[path = "action_admission.rs"]
+pub(crate) mod action_admission;
+#[path = "helper_admission.rs"]
+pub(crate) mod helper_admission;
 #[path = "merge_checks.rs"]
 pub(crate) mod merge_checks;
 #[path = "merge_lenient.rs"]
 mod merge_lenient;
+#[path = "merge_scope.rs"]
+mod merge_scope;
+#[path = "required_producer_reports.rs"]
+pub(crate) mod producer_reports;
 #[path = "required_evidence.rs"]
 pub(crate) mod required_evidence;
 
@@ -12,9 +20,9 @@ use std::collections::BTreeSet;
 
 use serde::Deserialize;
 use velnor_actions_contract::{
-    FinalCounts, FinalReport, FinalStatus, MatrixReport, ObligationDecision, Plan, PlanMatrix,
-    RequiredJobResult, TaskReport, WorkflowEvent, final_report_id_for_run, parse_strict_json,
-    validate_run_key,
+    ActionBinding, ActionReport, FinalCounts, FinalReport, FinalStatus, HelperObligationBinding,
+    HelperObligationReport, MatrixReport, ObligationDecision, Plan, PlanMatrix, RequiredJobResult,
+    TaskReport, WorkflowEvent, final_report_id_for_run, parse_strict_json, validate_run_key,
 };
 
 use self::merge_checks::{
@@ -22,6 +30,7 @@ use self::merge_checks::{
     check_plan_evidence, check_plan_shape, check_trust_coherence, expected_task_reports,
     partition_task_reports, plan_digests, plan_entries, shards_failed,
 };
+use self::merge_scope::check_scope_coherence;
 pub(crate) use self::required_evidence::BaselineManifest;
 use self::required_evidence::{
     check_required_evidence, diagnostic_without_plan, fold_jobs, reported_job_results,
@@ -44,6 +53,12 @@ pub(crate) struct MergeRequest {
     /// stronger event fails closed instead of inheriting its stamp).
     #[serde(default)]
     actual_event: Option<WorkflowEvent>,
+    /// Verification scope independently observed from the runner event.
+    #[serde(default)]
+    actual_scope: Option<velnor_actions_contract::VerificationScope>,
+    /// Producer scheduling facts independently observed at final assembly.
+    #[serde(default)]
+    pub(crate) actual_producer_context: Option<velnor_actions_contract::ProducerEventContext>,
     /// Head-bound candidate attestation; required in candidate mode.
     #[serde(default)]
     candidate_attestation: Option<CandidateAttestation>,
@@ -58,10 +73,25 @@ pub(crate) struct MergeRequest {
     /// Per-task report files backing every aggregate entry.
     #[serde(default)]
     pub(crate) task_reports: Vec<TaskReport>,
+    /// Pre-action scope evidence for selected Action API obligations.
+    #[serde(default)]
+    pub(crate) action_begins: Vec<ActionBinding>,
+    /// Terminal upstream outcomes, independent of task caches.
+    #[serde(default)]
+    pub(crate) action_reports: Vec<ActionReport>,
+    /// Pre-execution compiled helper obligation bindings.
+    #[serde(default)]
+    pub(crate) helper_begins: Vec<HelperObligationBinding>,
+    /// Terminal compiled helper outcomes, independent of task caches.
+    #[serde(default)]
+    pub(crate) helper_reports: Vec<HelperObligationReport>,
     /// Declared validator inventory from the workflow `needs` channel.
     pub(crate) required_job_ids: Vec<String>,
     /// Observed validator conclusions covering the inventory exactly.
     pub(crate) required_jobs: Vec<RequiredJobResult>,
+    /// Terminal observations from source-bound isolated producer jobs.
+    #[serde(default)]
+    pub(crate) producer_reports: Vec<required_evidence::producer_roles::ProducerReport>,
     /// Assembly failure details; every entry fails the verdict.
     #[serde(default)]
     pub(crate) assembly_errors: Vec<String>,
@@ -179,6 +209,7 @@ fn build_final(request: &MergeRequest, plan: &Plan) -> Result<FinalReport, Orche
     )?;
     check_plan_shape(plan, &mut signals, &mut miss_reasons);
     check_trust_coherence(plan, request, &mut signals, &mut miss_reasons);
+    check_scope_coherence(plan, request, &mut signals, &mut miss_reasons);
     check_candidate_binding(plan, request, &mut signals, &mut miss_reasons);
     check_plan_evidence(plan, request, &mut signals, &mut miss_reasons);
     check_execute_inventory(plan, &mut signals, &mut miss_reasons);
@@ -192,6 +223,8 @@ fn build_final(request: &MergeRequest, plan: &Plan) -> Result<FinalReport, Orche
     let mut downloaded = Vec::new();
     let mut uncovered = 0u32;
     check_required_evidence(plan, request, &mut signals, &mut miss_reasons);
+    action_admission::check_actions(plan, request, &mut signals, &mut miss_reasons);
+    helper_admission::check_helpers(plan, request, &mut signals, &mut miss_reasons);
     for entry in &plan.matrix.include {
         let Some(report) = partition.valid.get(entry.report_id.as_str()) else {
             uncovered += 1;
@@ -218,7 +251,7 @@ fn build_final(request: &MergeRequest, plan: &Plan) -> Result<FinalReport, Orche
             uncovered += 1;
         }
     }
-    fold_jobs(&request.required_jobs, &mut signals);
+    fold_jobs(plan, request, &mut signals);
     downloaded.sort();
     downloaded.dedup();
     let status = decide(&signals, plan);

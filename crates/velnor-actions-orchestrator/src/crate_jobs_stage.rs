@@ -21,7 +21,7 @@ use velnor_actions_rust::tool_needs;
 /// Tofu tasks bind no rust tools through an explicit arm, never the
 /// rust unknown-spelling fallthrough.
 pub(crate) fn needs(task: &ProposedTask) -> velnor_actions_rust::ToolNeeds {
-    if Stack::from_id(&task.stack_id) == Some(Stack::Tofu) {
+    if Stack::from_id(&task.stack_id) != Some(Stack::Rust) {
         return velnor_actions_rust::ToolNeeds {
             mbx: false,
             nextest: false,
@@ -33,7 +33,9 @@ pub(crate) fn needs(task: &ProposedTask) -> velnor_actions_rust::ToolNeeds {
 /// True when the task needs the Rust toolchain (tofu tasks never do;
 /// unknown stacks keep the rust fallthrough, matching [`needs`]).
 pub(crate) fn is_rust(task: &ProposedTask) -> bool {
-    !is_opentofu(task)
+    Stack::from_id(&task.stack_id) == Some(Stack::Rust)
+        || (Stack::from_id(&task.stack_id) == Some(Stack::Workload)
+            && crate::workloads::requires_rust(&task.configuration))
 }
 
 /// True when the task compiles through MBX (unknown spellings are Cargo).
@@ -62,7 +64,8 @@ pub(crate) const STAGED_TOFU_JOB_CONDITION: &str = "always()";
 ///
 /// `tofu_ids` names the staged jobs; every other job keeps its
 /// `needs` untouched. Staging is deterministic for a fixed ID set.
-/// Jobs that gain a lane predecessor also gain [`STAGED_TOFU_JOB_CONDITION`].
+/// Lane predecessors preserve the crate selection predicate; jobs without
+/// one receive [`STAGED_TOFU_JOB_CONDITION`].
 pub(crate) fn stage_tofu_root_jobs(
     jobs: &mut [(String, Job)],
     tofu_ids: &[String],
@@ -84,7 +87,16 @@ pub(crate) fn stage_tofu_root_jobs(
     for (id, job) in jobs.iter_mut() {
         if let Some(previous) = predecessors.get(id.as_str()) {
             job.needs.push((*previous).to_owned());
-            job.condition = Some(STAGED_TOFU_JOB_CONDITION.to_owned());
+            // Existing crate predicates contain an explicit status function,
+            // so skipped predecessors cannot suppress selected downstream work.
+            // Preserve that selection; bare test jobs still use the lane gate.
+            if job.condition.is_none() {
+                job.condition = Some(STAGED_TOFU_JOB_CONDITION.to_owned());
+            }
         }
     }
 }
+
+#[cfg(test)]
+#[path = "impl_job_selection.rs"]
+mod tests;

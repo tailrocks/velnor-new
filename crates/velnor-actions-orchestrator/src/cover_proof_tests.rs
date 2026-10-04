@@ -31,7 +31,7 @@ fn live_proof_dims(
     );
     (
         bundle.graph_digest().to_owned(),
-        toolchain_id(task, catalog).expect("toolchain"),
+        toolchain_id_for_runner(task, catalog, label).expect("toolchain"),
         platform_id_for_group(label, task).expect("platform"),
     )
 }
@@ -115,7 +115,7 @@ fn cover_with(
     let mut manifest = manifest_with(&[(rust, &fixture.live)]);
     manifest.tasks[0].proof = Some(proof);
     let mut plan = plan_with(&[rust]);
-    let unchanged = BTreeSet::new();
+    let unchanged = selection(&[]);
     let covered = apply_coverage(
         &mut plan,
         &manifest,

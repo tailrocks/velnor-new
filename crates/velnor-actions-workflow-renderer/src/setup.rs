@@ -1,89 +1,103 @@
-//! Pinned Mise setup pins plus the legacy cache-off template.
-//!
-//! Pins arrive as typed [`MiseSetup`] from the orchestrator's compiled
-//! catalog; the renderer never invents them. Strict insertion with the
-//! qualified built-in cache lives in `cache_p08` (P08); this module keeps
-//! the pin type, its validation, and the legacy `cache:false` template
-//! for fixtures and upgrade inputs.
+//! Neutral owner-qualified Mise acquisition records; no action or catalog policy.
+use std::collections::BTreeMap;
+use velnor_actions_contract::{CompiledSourceHelper, SourceBoundOperation, Step, ToolCacheDomain};
 
-use velnor_actions_contract::Step;
+use crate::RenderError;
 
-use crate::{RenderError, steps};
+/// Contract-fixed display name of the acquisition step.
+pub const SETUP_MISE_NAME: &str = "Acquire qualified Mise";
 
-/// Pinned Mise setup action name.
-pub const MISE_ACTION_NAME: &str = "jdx/mise-action";
-/// Contract-fixed display name of the setup step.
-pub const SETUP_MISE_NAME: &str = "Setup Mise";
+/// Exact installed binary identity bound to its compiled acquisition authority.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MiseBootstrap {
+    /// Source-owned executable target for this runner label.
+    pub target: String,
+    /// SHA-256 of the extracted executable, never the release archive.
+    pub binary_sha256: String,
+    /// Source owner record, with an exact closed-domain environment.
+    pub helper: CompiledSourceHelper,
+}
 
-/// Typed Mise setup pins: action ref plus exact binary identity.
-///
-/// The orchestrator resolves `[actions.overrides]` and the compiled
-/// catalog before constructing this; `sha256` is the digest of the
-/// extracted `mise` binary for the single runner platform (the action
-/// compares the input against the installed binary, not the archive).
+/// Acquisition authority indexed by closed domain and actual final job label.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MiseSetup {
-    /// Full-SHA `jdx/mise-action` ref.
-    pub uses: String,
-    /// Exact Mise release (`MISE_VERSION` catalog format, never `latest`).
+    /// Exact owned Mise release identity.
     pub version: String,
-    /// Lowercase hex SHA-256 of the installed `mise` binary.
-    pub sha256: String,
+    /// Every entry comes from the compiled Mise owner; absent entries fail closed.
+    pub bootstraps: BTreeMap<(ToolCacheDomain, String), MiseBootstrap>,
 }
 
 impl MiseSetup {
-    /// Validate every pin before any step is built from it.
+    /// Validate neutral bindings before constructing workflow steps.
     /// # Errors
+    /// Rejects absent authority or mismatched binary, version, domain or operation.
     pub fn validate(&self) -> Result<(), RenderError> {
-        steps::validate_uses(&self.uses)?;
-        if !self.uses.starts_with(&format!("{MISE_ACTION_NAME}@")) {
-            return Err(RenderError::BadActionRef(format!(
-                "not_mise_action:{}",
-                self.uses
-            )));
+        if !is_catalog_version(&self.version) || self.bootstraps.is_empty() {
+            return Err(invalid("mise_bootstrap_authority_missing"));
         }
-        if !is_catalog_version(&self.version) {
-            return Err(RenderError::BadCommand(format!(
-                "bad_mise_version:{}",
-                self.version
-            )));
-        }
-        if !velnor_actions_contract::ids::is_lower_hex_len(&self.sha256, 64) {
-            return Err(RenderError::BadCommand("bad_mise_sha256".to_owned()));
+        for ((domain, label), bootstrap) in &self.bootstraps {
+            let invocation = bootstrap.helper.invocation();
+            invocation.validate().map_err(RenderError::Contract)?;
+            let env = bootstrap.helper.environment();
+            if label.trim().is_empty()
+                || label.contains("${{")
+                || label.chars().any(char::is_control)
+                || invocation.descriptor().operation() != SourceBoundOperation::MiseBootstrap
+                || velnor_actions_contract::tool_target_for_runner_label(label)
+                    != Some(bootstrap.target.as_str())
+                || env.get("VELNOR_MISE_TARGET") != Some(&bootstrap.target)
+                || !invocation.installed_selectors().is_empty()
+                || !velnor_actions_contract::ids::is_lower_hex_len(&bootstrap.binary_sha256, 64)
+                || env.get("VELNOR_MISE_SHA256") != Some(&bootstrap.binary_sha256)
+                || env.get("VELNOR_MISE_VERSION") != Some(&self.version)
+                || env.get("MISE_DATA_DIR").map(String::as_str) != Some(domain.root())
+                || env
+                    .get("VELNOR_QUALIFIED_TOOL_IDENTITY")
+                    .is_none_or(String::is_empty)
+            {
+                return Err(invalid("mise_bootstrap_binding_changed"));
+            }
         }
         Ok(())
     }
+
+    /// Select authority using the domain and enclosing job's actual label.
+    /// # Errors
+    /// Rejects missing or malformed source qualification.
+    pub fn bootstrap(
+        &self,
+        domain: ToolCacheDomain,
+        runs_on: &str,
+    ) -> Result<&MiseBootstrap, RenderError> {
+        self.validate()?;
+        self.bootstraps
+            .get(&(domain, runs_on.to_owned()))
+            .ok_or_else(|| invalid("mise_bootstrap_host_domain_unqualified"))
+    }
 }
 
-/// Legacy `Setup Mise` step: exact pins, `cache:false` (upgrade input).
-///
-/// `install: false` keeps project tool files, tasks, and hooks from
-/// running; `env: false` keeps Mise env out of subsequent steps.
-/// Retained for fixtures and as the upgrade input that strict rendering
-/// replaces with the qualified built-in-cache shape (`cache:true` plus
-/// an explicit `cache_key`, never the workspace-hashing default that
-/// ELOOPs on symlink loops). The `with` map is exactly these six keys.
+/// Build exact acquisition authority for one final job and tool domain.
 /// # Errors
-pub fn mise_setup_step(setup: &MiseSetup) -> Result<Step, RenderError> {
-    setup.validate()?;
-    steps::action_step(
+/// Rejects absent qualification or changed source owner environment.
+pub fn mise_setup_step(
+    setup: &MiseSetup,
+    domain: ToolCacheDomain,
+    runs_on: &str,
+) -> Result<Step, RenderError> {
+    let bootstrap = setup.bootstrap(domain, runs_on)?;
+    crate::source_helper::source_helper_step(
         SETUP_MISE_NAME,
-        &setup.uses,
-        std::collections::BTreeMap::from([
-            ("version".to_owned(), setup.version.clone()),
-            ("sha256".to_owned(), setup.sha256.clone()),
-            ("install".to_owned(), "false".to_owned()),
-            ("env".to_owned(), "false".to_owned()),
-            ("cache".to_owned(), "false".to_owned()),
-            ("cache_save".to_owned(), "false".to_owned()),
-        ]),
+        &bootstrap.helper,
+        bootstrap.helper.environment().clone(),
     )
 }
 
-/// True for catalog version spellings (`2026.9.18`); never `latest`.
+fn invalid(reason: &str) -> RenderError {
+    RenderError::BadCommand(reason.to_owned())
+}
+
 fn is_catalog_version(value: &str) -> bool {
     !value.is_empty()
-        && value != "latest"
         && !value.contains("latest")
         && value
             .bytes()
@@ -91,3 +105,11 @@ fn is_catalog_version(value: &str) -> bool {
         && value.contains('.')
         && !value.contains("${{")
 }
+
+#[cfg(test)]
+#[path = "setup_fixture.rs"]
+pub(crate) mod fixture;
+
+#[cfg(test)]
+#[path = "setup_tests.rs"]
+mod tests;

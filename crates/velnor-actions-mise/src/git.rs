@@ -1,6 +1,6 @@
 //! Git invocation restricted to the read-only discovery allowlist.
 //!
-//! Only `rev-parse`, `ls-files`, `diff`, `show`, and `config` may run,
+//! Only `rev-parse`, `ls-files`, `ls-tree`, `diff`, `show`, and `config` may run,
 //! always through the fixed wrapper with the isolation environment.
 //! Anything else is a typed rejection, never a spawned process.
 
@@ -18,7 +18,8 @@ const GIT_PROGRAM: &str = "git";
 /// `config` is read-only here: callers query repository identity through
 /// `git config --get` in the working tree so linked worktrees, includes,
 /// and worktree configuration resolve with Git semantics.
-pub const ALLOWED_GIT_VERBS: [&str; 5] = ["rev-parse", "ls-files", "diff", "show", "config"];
+pub const ALLOWED_GIT_VERBS: [&str; 6] =
+    ["rev-parse", "ls-files", "ls-tree", "diff", "show", "config"];
 
 /// Whether a verb is inside the discovery allowlist.
 #[must_use]
@@ -64,6 +65,12 @@ impl GitRequest {
     #[must_use]
     pub fn ls_files(args: Vec<OsString>) -> Self {
         Self::allowed("ls-files", args)
+    }
+
+    /// `git ls-tree` with byte-exact arguments.
+    #[must_use]
+    pub fn ls_tree(args: Vec<OsString>) -> Self {
+        Self::allowed("ls-tree", args)
     }
 
     /// `git diff` with byte-exact arguments.

@@ -14,6 +14,8 @@ fn workflow_event_local_and_fork_roundtrip() {
     for (event, name) in [
         (WorkflowEvent::Local, "local"),
         (WorkflowEvent::Fork, "fork"),
+        (WorkflowEvent::Schedule, "schedule"),
+        (WorkflowEvent::WorkflowDispatch, "workflow_dispatch"),
     ] {
         let text = serde_json::to_string(&event).expect("serialize");
         assert_eq!(text, format!("\"{name}\""));
@@ -24,6 +26,22 @@ fn workflow_event_local_and_fork_roundtrip() {
     assert_eq!(legacy, WorkflowEvent::PullRequest);
     let back: WorkflowEvent = serde_json::from_str("\"merge_group\"").expect("legacy");
     assert_eq!(back, WorkflowEvent::MergeGroup);
+}
+
+#[test]
+fn verification_events_preserve_read_only_trust() {
+    use velnor_actions_contract::{Trust, trust_for_event};
+    for event in [
+        WorkflowEvent::Push,
+        WorkflowEvent::PullRequest,
+        WorkflowEvent::Fork,
+        WorkflowEvent::MergeGroup,
+        WorkflowEvent::Schedule,
+        WorkflowEvent::WorkflowDispatch,
+        WorkflowEvent::Local,
+    ] {
+        assert_eq!(trust_for_event(event), Trust::Pr);
+    }
 }
 
 #[test]
@@ -140,19 +158,27 @@ fn task_report_schedule_fields_validate() -> Result<(), ContractError> {
     let entry = sample_entry(&run_key)?;
     let task_digest = digest_b3(b"task-bytes");
     let timing = TaskTiming {
-        queue_ms: 10,
-        runner_ms: 20,
-        task_ms: 30,
-        cache_ms: 4,
-        prep_ms: 5,
-        download_ms: 6,
-        compiler_ms: 70,
-        mbx_ms: 8,
-        test_ms: 90,
-        lock_wait_ms: 1,
+        task_ms: Some(244),
+        task_source: Some(velnor_actions_contract::TaskTimingSource::TaskWrapperWall),
+        ..TaskTiming::default()
     };
-    assert_eq!(timing.accounted_total(), 244);
     assert_eq!(timing.slots().len(), 10);
+    let wire = serde_json::to_value(timing).expect("timing JSON");
+    assert_eq!(wire["task_ms"], 244);
+    assert_eq!(wire["task_source"], "task_wrapper_wall");
+    for key in [
+        "queue_ms",
+        "runner_ms",
+        "cache_ms",
+        "prep_ms",
+        "download_ms",
+        "compiler_ms",
+        "mbx_ms",
+        "test_ms",
+        "lock_wait_ms",
+    ] {
+        assert!(wire[key].is_null(), "{key} must remain unknown");
+    }
     let mut report = TaskReport {
         schema: 1,
         task_report_id: task_report_id_for_task(&run_key, &entry.matrix_key, &task_digest)?,
@@ -185,5 +211,33 @@ fn task_report_schedule_fields_validate() -> Result<(), ContractError> {
     assert!(report.validate().is_err());
     report.queue = None;
     report.validate()?;
+    report.duration_ms = Some(245);
+    assert!(report.validate().is_err(), "wall observations must agree");
     Ok(())
+}
+
+#[test]
+fn timing_rejects_unproven_measurements() {
+    let mut timing = TaskTiming::default();
+    assert!(timing.validate().is_ok());
+    timing.task_ms = Some(0);
+    assert!(
+        timing.validate().is_err(),
+        "wall measurement requires its origin"
+    );
+    timing.task_source = Some(velnor_actions_contract::TaskTimingSource::TaskWrapperWall);
+    assert!(timing.validate().is_ok(), "measured zero is valid");
+    let wire = serde_json::to_value(timing).expect("timing JSON");
+    assert_eq!(wire["task_ms"], 0);
+    timing.compiler_ms = Some(0);
+    assert!(
+        timing.validate().is_err(),
+        "uncollected category cannot claim zero"
+    );
+    timing.compiler_ms = None;
+    timing.task_ms = None;
+    assert!(
+        timing.validate().is_err(),
+        "origin requires its measurement"
+    );
 }

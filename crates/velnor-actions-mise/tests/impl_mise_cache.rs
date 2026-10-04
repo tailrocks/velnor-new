@@ -22,7 +22,7 @@ fn sample_descriptor() -> CachedTaskDescriptor {
         outputs: vec!["report.json".to_owned()],
         command_inputs: vec!["cargo clippy --version".to_owned()],
         env: BTreeMap::from([("RUSTFLAGS".to_owned(), "-D warnings".to_owned())]),
-        tools: vec!["rust@1.98.1".to_owned()],
+        tools: vec!["rust[profile=minimal,components=clippy,rustfmt]@1.98.1".to_owned()],
         dep_keys: Vec::new(),
     }
 }
@@ -53,31 +53,31 @@ fn cache_modes_roundtrip_display_parse() {
 
 #[test]
 fn artifact_dir_prefers_task_cache_parent() {
-    let task_parent = Path::new("/tmp/task-cache");
-    let default_parent = Path::new("/tmp/mise-cache");
+    let task_parent = Path::new("<PRIVATE_TMP>");
+    let default_parent = Path::new("<PRIVATE_TMP>");
     assert_eq!(
         resolve_task_artifact_dir(Some(task_parent), Some(default_parent)),
-        Some(PathBuf::from("/tmp/task-cache/task-artifacts/v2"))
+        Some(PathBuf::from("<PRIVATE_TMP>"))
     );
     assert_eq!(
         resolve_task_artifact_dir(None, Some(default_parent)),
-        Some(PathBuf::from("/tmp/mise-cache/task-artifacts/v2"))
+        Some(PathBuf::from("<PRIVATE_TMP>"))
     );
     assert_eq!(resolve_task_artifact_dir(None, None), None);
 }
 
 #[test]
 fn artifact_path_joins_and_rejects_escapes() {
-    let root = Path::new("/tmp/task-cache/task-artifacts/v2");
+    let root = Path::new("<PRIVATE_TMP>");
     assert_eq!(
         artifact_path(root, "clippy/report.json"),
         Ok(PathBuf::from(
-            "/tmp/task-cache/task-artifacts/v2/clippy/report.json"
+            "<PRIVATE_TMP>"
         ))
     );
     assert_eq!(
         artifact_path(root, "a/./b"),
-        Ok(PathBuf::from("/tmp/task-cache/task-artifacts/v2/a/b"))
+        Ok(PathBuf::from("<PRIVATE_TMP>"))
     );
     for relative in ["/etc/passwd", "..", "../escape", "a/../b", ".", ""] {
         assert!(

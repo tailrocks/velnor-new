@@ -91,7 +91,7 @@ fn manifest_for(plan: &Plan, base: &str) -> serde_json::Value {
             serde_json::json!({
                 "task_id": ob.task_id, "task_digest": ob.task_digest,
                 "input_digest": ob.input_digest, "closure_digest": ob.closure_digest,
-                "proof_run_id": 7, "observed_run_id": 7,
+                "proof_run_id": 7, "carried_from": null, "observed_run_id": 7,
             })
         })
         .collect();
@@ -102,7 +102,7 @@ fn manifest_for(plan: &Plan, base: &str) -> serde_json::Value {
         "run_id": 7, "run_attempt": 1, "final_status": "passed",
         "generator_version": plan.generator.version, "generator_sha256": plan.generator.sha256,
         "compatibility_id": compat, "artifact_id": baseline_artifact_numeric_id(&name),
-        "artifact_name": name, "tasks": tasks,
+        "parent": null, "artifact_name": name, "tasks": tasks,
     })
 }
 
@@ -117,8 +117,8 @@ fn injection_revs_broaden_without_spawning_flags() -> TestResult {
     )?;
     let head = commit(root, "two")?;
     for evil in [
-        "--output=/tmp/velnor_trust_pwn",
-        "$(touch /tmp/velnor_trust_pwn)",
+        "--output=<PRIVATE_TMP>",
+        "$(touch <PRIVATE_TMP>",
         "-x",
     ] {
         let (plan, warnings) = plan_with(root, Some(evil), &head, None)?;
@@ -139,7 +139,7 @@ fn injection_revs_broaden_without_spawning_flags() -> TestResult {
         let err = plan_with(root, Some(&base), evil, None).expect_err("evil head rejected");
         assert!(err.to_string().contains("bad_head"), "got {err}");
         assert!(
-            !std::path::Path::new("/tmp/velnor_trust_pwn").exists(),
+            !std::path::Path::new("<PRIVATE_TMP>").exists(),
             "no flag effect"
         );
     }
@@ -306,7 +306,7 @@ fn merge_flags_wrong_manifest_digest() -> TestResult {
     plan.validate()?;
     let reports = passing_reports(&plan)?;
     let request = serde_json::json!({
-        "schema": 1, "run_key": "local", "actual_event": "pull_request",
+        "schema": 1, "run_key": "local", "actual_scope": "affected", "actual_event": "pull_request",
         "plan": plan, "matrix": plan.matrix,
         "matrix_reports": reports, "baseline_manifest": manifest,
         "required_job_ids": ["plan"],

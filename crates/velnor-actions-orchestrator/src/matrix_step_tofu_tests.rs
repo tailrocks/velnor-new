@@ -57,7 +57,7 @@ fn tofu_step_env_rejects_triple_and_reserved_keys() {
 /// Tofu obligation fixture for step construction.
 fn tofu_obligation() -> CrateObligation {
     CrateObligation {
-        task_id: "stack/tofu/root/init/default".to_owned(),
+        task_id: "stack/tofu/dir-/init/default".to_owned(),
         kind: "init".to_owned(),
         step_name: "Init for validate".to_owned(),
         gated_by: Vec::new(),
@@ -70,15 +70,15 @@ fn tofu_obligation() -> CrateObligation {
 #[test]
 fn tofu_step_names_render_through_tofu_table() {
     assert_eq!(
-        step_name_for("init", "stack/tofu/root/init/default"),
+        step_name_for("init", "stack/tofu/dir-/init/default"),
         "Init for validate"
     );
     assert_eq!(
-        step_name_for("validate", "stack/tofu/root/validate/default"),
+        step_name_for("validate", "stack/tofu/dir-/validate/default"),
         "Validate"
     );
     assert_eq!(
-        step_name_for("fmt", "stack/tofu/root/fmt/default"),
+        step_name_for("fmt", "stack/tofu/dir-/fmt/default"),
         FORMAT_STEP_NAME
     );
     assert_eq!(
@@ -92,17 +92,19 @@ fn tofu_obligation_step_carries_tofu_matrix_id_and_no_doc_env() {
     use velnor_actions_rust::RUSTDOCFLAGS_ENV;
     let step =
         obligation_step(&tofu_obligation(), &ToolCatalog::pinned(), &[], None).expect("step");
-    let velnor_actions_contract::StepKind::Shell { env, .. } = &step.kind else {
+    let velnor_actions_contract::StepKind::Shell { env, run } = &step.kind else {
         panic!("obligation must be a shell step");
     };
     assert_eq!(
         env.get(OBLIGATION_MATRIX_ID_ENV).map(String::as_str),
-        Some("stack:tofu|task:stack/tofu/root/init/default")
+        Some("stack:tofu|task:stack/tofu/dir-/init/default")
     );
     assert!(
         !env.contains_key(RUSTDOCFLAGS_ENV),
         "tofu must not carry doc env"
     );
+    let script = run.join(" ");
+    assert!(script.contains(&crate::tofu_config_step::isolation_prefix()));
 }
 
 #[test]
@@ -119,16 +121,22 @@ fn tofu_obligation_step_carries_isolated_cache_dir() {
         .get(velnor_actions_tofu::TF_PLUGIN_CACHE_DIR_ENV)
         .expect("cache dir");
     assert!(
-        data.starts_with("${{ runner.temp }}/velnor/tofu-data/root-"),
+        data.starts_with("${{ runner.temp }}/velnor/tofu-data/b3-"),
         "{data}"
     );
     assert!(
-        cache.starts_with("${{ runner.temp }}/velnor/tofu-cache/root-"),
+        cache.starts_with("${{ runner.temp }}/velnor/tofu-cache/b3-"),
         "{cache}"
     );
     let data_slug = data.rsplit('/').next().expect("slug");
     let cache_slug = cache.rsplit('/').next().expect("slug");
     assert_eq!(data_slug, cache_slug, "one slug, two bases");
+    assert_eq!(
+        env["TF_CLI_CONFIG_FILE"],
+        format!("{}/cli.tfrc", env["HOME"])
+    );
+    assert_eq!(env["XDG_CONFIG_HOME"], format!("{}/config", env["HOME"]));
+    assert_ne!(env["HOME"], *cache);
 }
 
 #[test]

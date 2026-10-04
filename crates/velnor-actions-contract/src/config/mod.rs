@@ -3,38 +3,58 @@
 //! Unknown fields are rejected; validation reports file, key path, problem.
 
 mod actions;
+mod delivery;
+mod delivery_apt;
+mod delivery_desktop;
 mod discovery;
-mod execution;
+mod native_desktop;
+mod native_desktop_checks;
+mod oci;
 mod release;
+mod release_owners;
 mod resources;
-mod runs_on;
 mod stacks;
+mod swift_inputs;
 mod tofu;
 mod workflow;
+mod workflow_verification;
+mod workload_gradle;
+mod workload_package;
+mod workload_package_update;
+mod workloads;
 
 pub use actions::{ActionPinOverride, ActionsConfig, OVERRIDABLE_ACTIONS};
+pub use delivery::DeliveryConfig;
+pub use delivery_apt::AptDeliveryConfig;
+pub use delivery_desktop::DesktopDeliveryConfig;
 pub use discovery::DiscoveryConfig;
-pub use execution::{
-    ExecutionConfig, ExecutionMode, ExecutionOverride, ExecutionParity, ExecutionProfile,
-    ExecutionRole, HOSTED_PROFILE_ID, ProfileKind, RoutingWorkflow, SCALE_SET_PROFILE_ID,
+pub use native_desktop::{
+    AppleAppProfile, NativeDesktopProfile, NativeDesktopTarget, RustFfiProfile,
 };
+pub use native_desktop_checks::{NativeDesktopChecks, SwiftTestFramework};
+pub use oci::{OciImage, OciPlatform, OciReleaseConfig, RegistryAuthentication};
 pub use release::{BootstrapRelease, ReleaseAuthentication, RustReleaseConfig};
 pub use resources::{
     ResourcesConfig, ShardTimingEvidence, TestShardingConfig, validate_shard_changes_need_evidence,
 };
-pub use runs_on::{
-    LINUX_AMD64, RunsOn, SCALE_SET_NAME, ScaleSetSelector, VELNOR_LABEL, is_hosted_catalog,
-    is_legacy_hosted_label,
-};
 pub use stacks::{
-    DeclaredCompileDriver, DeclaredTestRunner, RustConfiguration, RustStackConfig, StacksConfig,
-    is_valid_custom_task_name, is_valid_feature_name, is_valid_rust_target,
+    DeclaredCompileDriver, DeclaredTestRunner, RustConfiguration, RustFeatureMode, RustStackConfig,
+    StacksConfig, is_valid_custom_task_name, is_valid_feature_name, is_valid_rust_target,
 };
+pub use swift_inputs::{SwiftChecks, SwiftFfiArtifacts, SwiftInputs};
 pub use tofu::{RootProblem, TofuStackConfig, Utf8RepoRelDir};
 pub use workflow::{
     GeneratorValidation, LATEST_RUNNER_LABEL, RUNNER_LABEL_CATALOG, RunnerSelection,
     VelnorSupportWorkflow, WorkflowConfig, WorkflowPolicy,
 };
+pub use workflow_verification::VerificationConfig;
+
+pub use workload_gradle::{GradleWorkloadConfig, PostgresBinding, PostgresFixture};
+pub use workload_package::PackageScript;
+pub use workload_package_update::{
+    PackageUpdateArchive, PackageUpdateArtifact, PackageUpdateFixture, PackageUpdateOutput,
+};
+pub use workloads::{WorkloadConfig, WorkloadKind, is_valid_workload_name, is_valid_workload_path};
 
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
@@ -43,7 +63,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct VelnorConfig {
-    /// Config schema version. `1` is hosted-only. `2` is routing.
+    /// Config schema version; must be 1.
     pub schema: u32,
     /// Workflow policy and naming.
     pub workflow: WorkflowConfig,
@@ -58,58 +78,42 @@ pub struct VelnorConfig {
     /// Action-pin overrides; absent means bundled latest pins.
     #[serde(default)]
     pub actions: ActionsConfig,
-    /// Schema 2 routing. Absent on schema 1.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub execution: Option<ExecutionConfig>,
+    /// Optional native delivery workflows; disabled when omitted.
+    #[serde(default)]
+    pub delivery: DeliveryConfig,
 }
 
 impl VelnorConfig {
-    /// Schema 1: hosted-only generation. Schema 2 is routing.
+    /// Schema version this contract accepts.
     pub const SCHEMA: u32 = 1;
-    /// Routing schema.
-    pub const SCHEMA_V2: u32 = 2;
     /// Stack IDs registered in V1.
-    pub const REGISTERED_STACKS: &'static [&'static str] = &["rust", "tofu"];
+    pub const REGISTERED_STACKS: &'static [&'static str] = &["rust", "tofu", "workload"];
     /// Validate every field; failures name file, key path, and problem.
     /// # Errors
     pub fn validate(&self, file: &str) -> Result<(), ContractError> {
-        self.check_schema(file)?;
+        if self.schema != Self::SCHEMA {
+            return Err(ContractError::UnsupportedSchema {
+                field: "schema",
+                found: self.schema.to_string(),
+                expected: "1",
+            });
+        }
         self.workflow.validate(file)?;
         self.resources.validate(file)?;
         self.test_sharding.validate(file)?;
         self.stacks.validate(file)?;
         self.discovery.validate(file)?;
         self.actions.validate(file)?;
+        if self.delivery.is_configured() && self.workflow.policy != WorkflowPolicy::ConsumerV1 {
+            return Err(ContractError::config(
+                file,
+                "delivery",
+                "delivery_requires_consumer_policy",
+            ));
+        }
+        self.delivery.validate(file)?;
         self.check_shard_budgets(file)?;
         Ok(())
-    }
-
-    /// Schema 1 rejects routing. Schema 2 requires `[execution]`.
-    fn check_schema(&self, file: &str) -> Result<(), ContractError> {
-        match self.schema {
-            1 => {
-                if self.execution.is_some() {
-                    return Err(ContractError::config(
-                        file,
-                        "execution",
-                        "schema1_rejects_execution",
-                    ));
-                }
-                Ok(())
-            }
-            2 => {
-                let execution = self
-                    .execution
-                    .as_ref()
-                    .ok_or_else(|| ContractError::config(file, "execution", "missing_execution"))?;
-                execution.validate(file)
-            }
-            _ => Err(ContractError::UnsupportedSchema {
-                field: "schema",
-                found: self.schema.to_string(),
-                expected: "1 or 2",
-            }),
-        }
     }
 
     /// Reject shard counts beyond the test-process budget (par §8).
@@ -135,3 +139,8 @@ impl VelnorConfig {
         Ok(())
     }
 }
+
+mod required_obligations;
+pub use required_obligations::{
+    RequiredNativeObligation, RequiredNativeObligations, RequiredNativePhase,
+};

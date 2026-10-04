@@ -103,7 +103,12 @@ fn w1_crate_job_prepares_pinned_tools() -> TestResult {
     assert!(checkout < prepare && prepare < run, "order:\n{task}");
     let catalog = ToolCatalog::pinned();
     assert!(
-        task.contains(&format!("install {}", catalog.tool_spec(PinnedTool::Rust))),
+        task.contains(&format!(
+            "install {}",
+            catalog
+                .tool_spec(PinnedTool::Rust)
+                .expect("qualified selector")
+        )),
         "install:\n{task}"
     );
     assert!(
@@ -123,7 +128,11 @@ fn w1_crate_prepare_adds_mbx_driver() -> TestResult {
     let task = window(yaml, "  rust-demo:", "  required:")?;
     let catalog = ToolCatalog::pinned();
     assert!(
-        task.contains(&catalog.tool_spec(PinnedTool::MrBoxington)),
+        task.contains(
+            &catalog
+                .tool_spec(PinnedTool::MrBoxington)
+                .expect("qualified selector")
+        ),
         "mbx spec:\n{task}"
     );
     assert_eq!(
@@ -147,7 +156,11 @@ fn w1_crate_prepare_and_obligations_share_toolchain_union() -> TestResult {
     let run_at = task.find("- name: Clippy").ok_or("first obligation")?;
     let catalog = ToolCatalog::pinned();
     assert!(
-        task[prepare_at..run_at].contains(&catalog.tool_spec(PinnedTool::Rust)),
+        task[prepare_at..run_at].contains(
+            &catalog
+                .tool_spec(PinnedTool::Rust)
+                .expect("qualified selector")
+        ),
         "prepare installs the driver:\n{task}"
     );
     for tool in [
@@ -155,7 +168,7 @@ fn w1_crate_prepare_and_obligations_share_toolchain_union() -> TestResult {
         PinnedTool::Shellcheck,
         PinnedTool::Zizmor,
     ] {
-        let spec = catalog.tool_spec(tool);
+        let spec = catalog.tool_spec(tool).expect("qualified selector");
         assert!(
             task[prepare_at..run_at].contains(&spec),
             "crate jobs install {spec} for test-spawned generate:\n{task}"

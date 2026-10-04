@@ -119,34 +119,31 @@ impl ValidatorKind {
 /// orchestration IDs stay unbranded (P05-7).
 pub const CRATE_JOB_ID_PREFIX: &str = "rust-";
 
-/// Root-slug job-ID prefix: IDs below it derive from tofu root paths.
-///
-/// [`assign_crate_job_ids`] emits one `tofu-<slug>` ID per all-tofu
-/// group, giving tofu obligations their exact-set identity without
-/// touching the rust contract above. Mixed groups keep `rust-`.
+/// Root-slug job-ID prefix for all-tofu groups; mixed groups keep `rust-`.
 pub const TOFU_JOB_ID_PREFIX: &str = "tofu-";
 
-/// Display-name prefix for tofu root jobs (`OpenToFu — <root>`).
-///
-/// All-tofu groups take this prefix; every other group keeps
-/// `Rust / `, so displays partition exactly like the ID namespaces.
+/// Display-name prefix for all-tofu root jobs (`OpenToFu — <root>`).
 pub const TOFU_DISPLAY_PREFIX: &str = "OpenToFu — ";
 
-/// True for crate-group job IDs under either stack prefix.
-///
-/// Single definition of the crate-job ID namespace: plan counts,
-/// lock/pre-seed attach, and the pre-seed closure gate all consult
-/// this instead of matching one prefix.
+/// Job-ID namespace for explicit named workloads.
+pub const WORKLOAD_JOB_ID_PREFIX: &str = "workload-";
+
+/// Display-name prefix for explicit named workloads.
+pub const WORKLOAD_DISPLAY_PREFIX: &str = "Workload / ";
+
+/// Shared unit-job namespace predicate for plan counts and cache binding.
 #[must_use]
 pub fn is_crate_job_id(id: &str) -> bool {
-    id.starts_with(CRATE_JOB_ID_PREFIX) || id.starts_with(TOFU_JOB_ID_PREFIX)
+    id.starts_with(CRATE_JOB_ID_PREFIX)
+        || id.starts_with(TOFU_JOB_ID_PREFIX)
+        || id.starts_with(WORKLOAD_JOB_ID_PREFIX)
 }
 
 /// Validate a producer job ID: unbranded ASCII plus collision-safe shape.
 ///
 /// Rejects empty IDs and non-`[a-z0-9-_]` bytes; `velnor` branding is
 /// rejected on orchestration IDs only, while crate-group IDs under
-/// either stack prefix keep their real names so self-hosting
+/// any stack prefix keep their real names so self-hosting
 /// repositories and `velnor-*` tofu roots validate. The legacy
 /// renderer constants keep working because this gate applies to
 /// producer constructors only, never `Job::validate`.
@@ -265,13 +262,25 @@ pub fn tofu_display_name(root_label: &str) -> String {
     sanitize_display_text(&format!("{TOFU_DISPLAY_PREFIX}{root_label}"))
 }
 
+/// Display name for one named workload, including its kind configuration.
+#[must_use]
+pub fn workload_display_name(name: &str, configuration: &str) -> String {
+    let composed = if configuration == "default" {
+        format!("{WORKLOAD_DISPLAY_PREFIX}{name}")
+    } else {
+        format!("{WORKLOAD_DISPLAY_PREFIX}{name} ({configuration})")
+    };
+    sanitize_display_text(&composed)
+}
+
 /// Assign stable collision-safe crate job IDs for one package set.
 ///
 /// Base form is `<prefix><slug>` (`<prefix><slug>-<config>` off
 /// default); on slug collision the later key in sorted order takes
 /// `-<digest8>` of its package ID plus configuration. Deterministic
 /// for a fixed set. Callers pass [`CRATE_JOB_ID_PREFIX`] for rust
-/// groups and [`TOFU_JOB_ID_PREFIX`] for all-tofu groups; namespaces
+/// groups, [`TOFU_JOB_ID_PREFIX`] for all-tofu groups, and
+/// [`WORKLOAD_JOB_ID_PREFIX`] for workload groups; namespaces
 /// never collide across prefixes.
 #[must_use]
 pub fn assign_crate_job_ids(

@@ -2,17 +2,17 @@
 use super::baseline::{BaselineProof, PlanBaseline};
 use super::cache_ids::EntryCacheIds;
 use super::execute::{ExecuteTaskIds, ExecuteTaskRef};
+use super::scope::VerificationScope;
 use super::trust::Trust;
-use crate::canonical::{normalize_posix_path, validate_digest};
-use crate::config::{RUNNER_LABEL_CATALOG, RunnerSelection, VelnorConfig};
+mod matrix;
+mod ownership;
+use crate::canonical::validate_digest;
+use crate::config::{RUNNER_LABEL_CATALOG, RunnerSelection};
 use crate::errors::ContractError;
 use crate::graph::{
     TaskEdge, check_sorted, check_sorted_by, check_sorted_unique, validate_plan_edges,
 };
-use crate::ids::{
-    artifact_id_for_crate_job, matrix_id_for_task_group, matrix_key_for_id, plan_id_for_run,
-    report_id_for_matrix, validate_id, validate_run_key, validate_task_id,
-};
+use crate::ids::{plan_id_for_run, validate_run_key, validate_task_id};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 /// One `matrix.include` entry.
@@ -43,6 +43,9 @@ pub struct MatrixEntry {
     pub job_id: String,
     /// Derived job artifact name carrying this entry's reports.
     pub artifact_id: String,
+    /// Independent closed native semantic recipe; helper invocation is comparison evidence.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub native_recipe: Option<super::NativeValidationDescriptor>,
     /// Cache identity digests recorded in the plan (cache §1).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cache_ids: Option<EntryCacheIds>,
@@ -69,6 +72,9 @@ pub struct Plan {
     pub head: String,
     /// Triggering event.
     pub event: WorkflowEvent,
+    /// Verification universe.
+    #[serde(default)]
+    pub scope: VerificationScope,
     /// Selected runner.
     pub runner: PlanRunner,
     /// Trust scope.
@@ -91,6 +97,9 @@ pub struct Plan {
     /// Typed graph edges incl. resource exclusions (par §3, §7).
     #[serde(default)]
     pub edges: Vec<TaskEdge>,
+    /// Exact typed pure-producer inventory and scheduling facts.
+    #[serde(default)]
+    pub producers: super::producer_inventory::ProducerInventory,
 }
 /// Triggering workflow event.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -102,6 +111,10 @@ pub enum WorkflowEvent {
     Push,
     /// Merge group.
     MergeGroup,
+    /// Scheduled run.
+    Schedule,
+    /// Manual workflow dispatch.
+    WorkflowDispatch,
     /// Local pre-push run (tracked+staged+untracked+deletions).
     Local,
     /// Fork pull-request run (untrusted, read-only caches).
@@ -150,6 +163,8 @@ pub struct PlanPackage {
 pub struct PlanObligation {
     /// Obligation task ID.
     pub task_id: String,
+    /// Owning crate job or plan job, including covered obligations.
+    pub job_id: String,
     /// Coverage decision.
     pub decision: ObligationDecision,
     /// Decision reason.
@@ -158,13 +173,15 @@ pub struct PlanObligation {
     pub task_digest: String,
     /// Input digest.
     pub input_digest: String,
-    /// Canonical digest over the task's complete input closure.
+    /// Canonical digest over the task's input closure, including explicit unknowns.
     ///
     /// The plan path resolves the closure against the checkout and binds
     /// this digest into `input_digest`; baseline publishers copy it into
     /// their entries so coverage can compare closures explicitly instead
     /// of trusting the changed-work hint.
     pub closure_digest: String,
+    /// Validated source-bound execution dimensions, without a proof run.
+    pub execution_identity: super::TaskExecutionIdentity,
     /// Baseline proof (required when covered).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub baseline_proof: Option<BaselineProof>,
@@ -186,87 +203,6 @@ pub enum ObligationDecision {
 pub struct PlanMatrix {
     /// Matrix entries (sorted by `id`).
     pub include: Vec<MatrixEntry>,
-}
-impl MatrixEntry {
-    /// Build an entry, deriving `id`, `matrix_key`, `report_id`, `artifact_id`.
-    /// # Errors
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "entry identity needs all nine inputs at once"
-    )]
-    pub fn derive(
-        stack_id: &str,
-        task_group_id: &str,
-        run: &str,
-        task_digest: &str,
-        adapter_metadata: serde_json::Value,
-        execute_task_ids: ExecuteTaskIds,
-        input_digest: &str,
-        run_key: &str,
-        job_id: &str,
-    ) -> Result<Self, ContractError> {
-        let id = matrix_id_for_task_group(stack_id, task_group_id)?;
-        let matrix_key = matrix_key_for_id(&id)?;
-        validate_run_key(run_key)?;
-        validate_digest(input_digest)?;
-        validate_matrix_run(run)?;
-        validate_digest(task_digest)?;
-        execute_task_ids.validate()?;
-        Ok(Self {
-            report_id: report_id_for_matrix(run_key, &matrix_key)?,
-            artifact_id: artifact_id_for_crate_job(run_key, job_id)?,
-            id,
-            matrix_key,
-            job_id: job_id.to_owned(),
-            stack_id: stack_id.to_owned(),
-            task_id: task_group_id.to_owned(),
-            run: run.to_owned(),
-            task_digest: task_digest.to_owned(),
-            adapter_metadata,
-            execute_task_ids,
-            input_digest: input_digest.to_owned(),
-            cache_ids: None,
-            declared_outputs: Vec::new(),
-            test_run: Vec::new(),
-        })
-    }
-    /// Validate derivations, digests, and task references for a run key.
-    /// # Errors
-    pub fn validate(&self, run_key: &str) -> Result<(), ContractError> {
-        validate_id(&self.id)?;
-        validate_run_key(run_key)?;
-        let expect_key = matrix_key_for_id(&self.id)?;
-        if expect_key != self.matrix_key {
-            return Err(ContractError::identity("matrix_key", "key_mismatch"));
-        }
-        if report_id_for_matrix(run_key, &self.matrix_key)? != self.report_id {
-            return Err(ContractError::identity("report_id", "report_mismatch"));
-        }
-        if artifact_id_for_crate_job(run_key, &self.job_id)? != self.artifact_id {
-            return Err(ContractError::identity("artifact_id", "artifact_mismatch"));
-        }
-        validate_digest(&self.input_digest)?;
-        validate_matrix_run(&self.run)?;
-        validate_digest(&self.task_digest)?;
-        self.execute_task_ids.validate()?;
-        for output in &self.declared_outputs {
-            normalize_posix_path(output)?;
-        }
-        for task_ref in &self.test_run {
-            task_ref.validate()?;
-        }
-        if !VelnorConfig::REGISTERED_STACKS.contains(&self.stack_id.as_str()) {
-            return Err(ContractError::identity("stack_id", "unregistered_stack"));
-        }
-        if let Some(cache_ids) = &self.cache_ids {
-            cache_ids.validate()?;
-        }
-        let expect_id = matrix_id_for_task_group(&self.stack_id, &self.task_id)?;
-        if expect_id != self.id {
-            return Err(ContractError::identity("id", "id_mismatch"));
-        }
-        Ok(())
-    }
 }
 impl PlanRunner {
     /// Validate the recorded label against the exact-label catalog.
@@ -298,6 +234,9 @@ impl Plan {
         if plan_id_for_run(&self.run_key)? != self.plan_id {
             return Err(ContractError::identity("plan_id", "plan_mismatch"));
         }
+        self.scope.validate(self.event, &self.obligations)?;
+        self.scope.validate_base(self.base.as_deref())?;
+        self.scope.validate_baseline(&self.baseline)?;
         self.runner.validate()?;
         check_sorted_unique(&self.task_ids, "task_ids")?;
         check_sorted_by(&self.packages, "packages", |pkg| pkg.package_id.as_str())?;
@@ -317,7 +256,8 @@ impl Plan {
                 return Err(ContractError::Collision(detail));
             }
         }
-        check_obligation_agreement(&self.task_ids, &self.obligations)?;
+        ownership::check_obligation_agreement(&self.task_ids, &self.obligations)?;
+        ownership::check_matrix_ownership(&self.matrix, &self.obligations)?;
         for package in &self.packages {
             check_sorted(&package.reasons, "packages.reasons")?;
             check_sorted(&package.tasks, "packages.tasks")?;
@@ -326,6 +266,7 @@ impl Plan {
             obligation.validate()?;
         }
         validate_plan_edges(&self.edges, &self.task_ids)?;
+        self.producers.validate(self)?;
         Ok(())
     }
 }
@@ -333,9 +274,11 @@ impl PlanObligation {
     /// Validate one obligation record.
     fn validate(&self) -> Result<(), ContractError> {
         validate_task_id(&self.task_id)?;
+        ownership::validate_obligation_job(&self.job_id)?;
         validate_digest(&self.task_digest)?;
         validate_digest(&self.input_digest)?;
         validate_digest(&self.closure_digest)?;
+        self.execution_identity.validate()?;
         if self.reason.trim().is_empty() {
             return Err(ContractError::identity(
                 "obligations.reason",
@@ -368,23 +311,4 @@ pub fn validate_matrix_run(value: &str) -> Result<(), ContractError> {
         return Err(ContractError::identity("run", "multiline_run"));
     }
     Ok(())
-}
-
-/// Check `task_ids` contains every obligation ID, nothing else (wf §4).
-fn check_obligation_agreement(
-    task_ids: &[String],
-    obligations: &[PlanObligation],
-) -> Result<(), ContractError> {
-    let mut expected: Vec<&str> = obligations
-        .iter()
-        .map(|obligation| obligation.task_id.as_str())
-        .collect();
-    expected.sort_unstable();
-    let mut actual: Vec<&str> = task_ids.iter().map(String::as_str).collect();
-    actual.sort_unstable();
-    if expected == actual {
-        Ok(())
-    } else {
-        Err(ContractError::identity("task_ids", "obligation_mismatch"))
-    }
 }
