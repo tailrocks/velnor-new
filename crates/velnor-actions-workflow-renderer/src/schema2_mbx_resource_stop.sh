@@ -13,7 +13,10 @@ check_inventory_counts() {
   local label="$1" roots="$evidence/roots-$1.tsv" inventory="$evidence/inventory-$1.tsv"
   local summary="$evidence/inventory-summary-$1.tsv"
   if ! awk -F '\t' '
-    FILENAME == ARGV[1] { if (FNR > 1) roots[$1]++; next }
+    FILENAME == ARGV[1] {
+      if (NF != 4 || $1 == "" || $3 !~ /^[0-9]+$/ || $4 !~ /^[0-9]+$/) bad=1
+      roots[$1]++; next
+    }
     FILENAME == ARGV[2] {
       if (FNR == 1) next
       if (NF != 8 || $1 == "" || $4 !~ /^[0-9]+$/ || $5 !~ /^[0-9]+$/ ||
