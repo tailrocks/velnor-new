@@ -106,28 +106,29 @@ Each path has one owner:
 |---|---|---|
 | Mise tools and Rust components | Compiled-in generator catalog, executed by Mise | Embed and invoke exact versions; disable project config, env files, and hooks |
 | Cargo registry and Git sources | Velnor source layer | Exclude credentials; separate from MBX |
-| Compiler objects and scheduler state | `jdx/mr-boxington-action` when MBX is selected | The action owns the object format (`github-cache-mode: objects`). Generated jobs set `ACTIONS_CACHE_MODE=read` so its post does not export inside the live store. `mbx cache export` writes one directory at `$RUNNER_TEMP/mbx-single-bundle`; `actions/cache` archives only that directory; `mbx cache import` loads it. Velnor does not reimplement the object format |
+| Compiler objects and scheduler state | `jdx/mr-boxington-action` when MBX is selected | The action owns the object format (`github-cache-mode: objects`) and the ordinary hosted-job restore/import/export/save lifecycle. Hosted jobs enable `isolate-objects-cache` and suffix the primary key with `github.job`; the action uses a private `RUNNER_TEMP` store and transports its opaque bundle. Velnor does not reimplement the object format |
 | Mutable target directory | Matrix job | Reuse sequentially; never share concurrently |
 | Successful task result | Mise task cache | Use only for qualified deterministic tasks and complete outputs |
 
-The orchestrator decides whether each cache operation is allowed and records that decision in the plan. The
-workflow renderer serializes approved GitHub cache restore/save operations from typed workflow IR; it does not
-choose keys, trust, eligibility, or save timing. Mise installs the exact MBX binary. The pinned
-Mr. Boxington action owns the object format. The archive rule below is the transport.
+The orchestrator selects the Rust profile, MBX version and generation, and whether the MBX action is present.
+For ordinary MBX jobs, the pinned action owns GitHub cache restore/import and its post-step export/save; its
+configured policy decides whether the current run may write. The renderer does not create a second MBX
+archive path. Velnor-managed Cargo-source and Mise task-cache operations remain serialized from typed
+workflow IR. Mise installs the exact MBX binary.
 
 Cache save is allowed only after its producer succeeded, the current run is trusted for that namespace, and
 the export has a useful delta. A task-result cache hit, failed/cancelled task, untrusted PR, empty export, or
 unavailable producer MUST NOT trigger a trusted save. Restore and save destinations MUST not overlap active
 compiler writers.
 
-The generated workflow MUST use these paths. `CARGO_TARGET_DIR` is never an archive path:
+The generated workflow MUST use these paths. `CARGO_TARGET_DIR` is never an archive path. The MBX action
+creates its private object store below `RUNNER_TEMP`; Velnor does not set or archive that store path:
 
 ```text
 VELNOR_CACHE_ROOT     = $RUNNER_TEMP/velnor/cache
 CARGO_HOME            = $VELNOR_CACHE_ROOT/cargo
 CARGO_SOURCE_PATHS    = $CARGO_HOME/registry $CARGO_HOME/git
 CARGO_TARGET_DIR      = $RUNNER_TEMP/velnor/target/<lane_id>
-MBX_TARGET_DIR        = $RUNNER_TEMP/velnor/target/<lane_id>
 MISE_TASK_CACHE_DIR   = $VELNOR_CACHE_ROOT/mise-task
 MISE_TASK_ARTIFACTS   = $MISE_TASK_CACHE_DIR/task-artifacts/v2
 REPORT_DIR            = $RUNNER_TEMP/velnor/<run-key>/<matrix-key>
@@ -138,12 +139,27 @@ REPORT_DIR            = $RUNNER_TEMP/velnor/<run-key>/<matrix-key>
 `$MISE_TASK_CACHE_DIR/task-artifacts/v2`; CI sets that environment variable before Mise starts and archives
 only that directory.
 
-`actions/cache/restore` and `actions/cache/save` MAY archive `CARGO_SOURCE_PATHS`,
-qualified `MISE_TASK_ARTIFACTS`, and `$RUNNER_TEMP/mbx-single-bundle`. The action
-owns the MBX object format. `ACTIONS_CACHE_MODE=read` skips its in-store post,
-which exhausted runner disk (run `37114238559`). A miss, a missing directory, or
-a failed `mbx cache import` continues cold. Velnor MUST NOT reimplement either
-format. A Cargo-profile job does not invoke the Mr. Boxington action.
+Velnor's `actions/cache/restore` and `actions/cache/save` steps MAY archive only
+`CARGO_SOURCE_PATHS` and qualified `MISE_TASK_ARTIFACTS`. The MBX action owns its
+separate portable bundle: it restores and imports into its private store, then
+its post step exports after the job's compiler writers have finished, removes
+the live store, and passes only the bundle to the cache service. Hosted MBX
+jobs use `isolate-objects-cache: true` and `cache-key-suffix: ${{ github.job }}`
+so concurrent jobs have distinct primary keys; compatible restore prefixes may
+still provide a warm start. Exact hits skip another save, and an empty export
+does not publish a cache. The action enforces its configured save/trust policy.
+
+A cache miss or absent entry continues cold. A malformed bundle, failed MBX
+import, export or local-storage error, or cleanup failure remains a job error;
+the required report merger must observe a failed action post. Only cache-service
+or transport outages explicitly classified by the pinned action may be
+reported as cache unavailable. The old `ACTIONS_CACHE_MODE=read` plus
+Velnor-owned `$RUNNER_TEMP/mbx-single-bundle` flow was retired; run
+`37114238559` describes that former path, not the current generated workflow.
+The dispatch-only schema-2 qualification workflow is separate: its run-bound
+protected-main writer and dependent read-only reader deliberately set
+`ACTIONS_CACHE_MODE` and do not use the ordinary hosted-job key suffix. A
+Cargo-profile job does not invoke the Mr. Boxington action.
 
 Velnor MUST NOT configure Mise `task.cache.remote_url`, remote namespaces, remote tokens, or OIDC task-cache
 credentials in V1. There is no Velnor cache server. The selected task-result transport is an opaque GitHub
