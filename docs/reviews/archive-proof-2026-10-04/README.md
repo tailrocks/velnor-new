@@ -56,3 +56,5 @@ Verify compressed support-file digests from this directory with `(cd support && 
 | `post-publication-proof-enumeration-addendum.json` | 67855 | `68f84758234395a049e83c17070403915d07ada1a92bbe9c4b6785ebb21cada0` |
 
 Archive ref anchors and branch retirement remain separate gates. The six source branches remain present until exact consumer/history closure, protected anchor tag verification, rollback mapping, and the `2026-10-11` owner checkpoint are complete. Three additional MBX refs are outside the six-ref archive and retirement scope.
+
+See [`snapshot-retirement-ledger.md`](snapshot-retirement-ledger.md) for the six flat tag targets, the refreshed nine-ref scan, historical custom-commit ancestry, rollback command, and remaining deletion gates.
