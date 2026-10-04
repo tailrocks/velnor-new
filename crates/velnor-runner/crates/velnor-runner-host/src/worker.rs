@@ -27,6 +27,7 @@ pub(crate) use prepared::{
 };
 pub(crate) use projection::dind_create;
 pub(crate) use projection::identity_labels_match;
+pub(crate) use projection::launch_identity_labels_match;
 pub(super) use projection::{container_labels, container_name, runner_create_for_identity};
 
 #[cfg(test)]

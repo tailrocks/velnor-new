@@ -6,9 +6,9 @@ use bollard::models::{ContainerConfig, ContainerInspectResponse};
 
 use crate::error::HostError;
 use crate::journal::LaunchIdentity;
-use crate::worker::{dind_create, label_map};
+use crate::worker::{dind_create, label_map, runner_create_for_identity};
 
-use super::{inspect_labels_match, same_launch};
+use super::{inspect_labels_match, same_launch, validate_existing_row};
 
 fn identity() -> Result<LaunchIdentity, HostError> {
     LaunchIdentity::new(
@@ -41,7 +41,29 @@ fn inspect_accepts_inherited_oci_labels_with_exact_velnor_identity() -> Result<(
     let inspected = inspect_with_labels(actual.clone());
 
     assert!(inspect_labels_match(&expected, &inspected)?);
+    assert_eq!(validate_existing_row(&expected, &actual)?, "dind");
+    Ok(())
+}
+
+#[test]
+fn runner_preflight_accepts_its_existing_dind_role() -> Result<(), HostError> {
+    let identity = identity()?;
+    let runner = runner_create_for_identity(&identity, None)?;
+    let dind = dind_create(&identity)?;
+    let expected = label_map(&runner.labels)?.ok_or(HostError::Ownership)?;
+    let mut actual = label_map(&dind.labels)?.ok_or(HostError::Ownership)?;
+    actual.insert(
+        "org.opencontainers.image.version".to_owned(),
+        "26.04".to_owned(),
+    );
+
+    assert_eq!(
+        expected.get("velnor.role").map(String::as_str),
+        Some("runner")
+    );
+    assert_eq!(actual.get("velnor.role").map(String::as_str), Some("dind"));
     assert!(same_launch(&expected, &actual));
+    assert_eq!(validate_existing_row(&expected, &actual)?, "dind");
     Ok(())
 }
 

@@ -99,3 +99,22 @@ pub(crate) fn identity_labels_match(
             .filter(|key| key.starts_with("velnor."))
             .all(|key| expected.contains_key(key))
 }
+
+/// Match launch identity across the DinD and runner roles.
+pub(crate) fn launch_identity_labels_match(
+    expected: &HashMap<String, String>,
+    actual: &HashMap<String, String>,
+) -> bool {
+    expected
+        .iter()
+        .filter(|(key, _)| key.as_str() != "velnor.role")
+        .all(|(key, value)| actual.get(key) == Some(value))
+        && matches!(
+            actual.get("velnor.role").map(String::as_str),
+            Some("dind" | "runner")
+        )
+        && actual
+            .keys()
+            .filter(|key| key.starts_with("velnor.") && key.as_str() != "velnor.role")
+            .all(|key| expected.contains_key(key))
+}

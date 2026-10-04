@@ -9,7 +9,7 @@ use tokio::time::timeout;
 
 use super::super::{
     CreateProjection, DIND_IMAGE, dind_create, identity_labels_match, join_dind_net, label_map,
-    mount_source, runner_create_for_identity,
+    launch_identity_labels_match, mount_source, runner_create_for_identity,
 };
 use super::confirmed_not_found;
 use crate::action_archive_seed::ActionArchiveLease;
@@ -50,12 +50,9 @@ pub(super) async fn refuse_existing(
     let mut runner = Vec::new();
     for row in rows {
         let labels = row.labels.as_ref().ok_or(HostError::Ownership)?;
-        if !same_launch(&expected, labels) {
-            return Err(HostError::Ownership);
-        }
-        match labels.get("velnor.role").map(String::as_str) {
-            Some("dind") => dind.push(row),
-            Some("runner") => runner.push(row),
+        match validate_existing_row(&expected, labels)? {
+            "dind" => dind.push(row),
+            "runner" => runner.push(row),
             _ => return Err(HostError::Ownership),
         }
     }
@@ -209,7 +206,21 @@ async fn verify_existing(
 }
 
 fn same_launch(expected: &HashMap<String, String>, actual: &HashMap<String, String>) -> bool {
-    identity_labels_match(expected, actual)
+    launch_identity_labels_match(expected, actual)
+}
+
+fn validate_existing_row(
+    expected: &HashMap<String, String>,
+    actual: &HashMap<String, String>,
+) -> Result<&'static str, HostError> {
+    if !same_launch(expected, actual) {
+        return Err(HostError::Ownership);
+    }
+    match actual.get("velnor.role").map(String::as_str) {
+        Some("dind") => Ok("dind"),
+        Some("runner") => Ok("runner"),
+        _ => Err(HostError::Ownership),
+    }
 }
 
 fn dind_projection(runner: &CreateProjection) -> Result<CreateProjection, HostError> {
