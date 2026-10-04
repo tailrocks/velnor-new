@@ -14,14 +14,19 @@ now `3a28c199f17da335ecd9abd8dd67ebf1aecc0421` (updated
 `2026-10-04T05:01:14Z`). Their refs are refreshed in the companion CSV;
 all other refs, rows, order, and owner checkpoints are preserved.
 
-At 07:53 UTC, exact-pattern full-tree scans of those two pinned PR heads found
-zero matches. Jackin inventory: 2,519 text and 116 binary files. Java
-monorepo inventory: 7,007 text and 5,939 binary files. Binary counts are
-inventory evidence; they do not imply semantic text coverage of binary
-contents. See [the retirement-union refresh](consumer-retirement-union-2026-10-04.md)
-for the exact-pattern set, row-level heads, and scan limits. The refresh did
-not repeat generic path or workflow-use classification for those two new
-heads; those fields retain their prior-snapshot evidence.
+At 07:53 UTC, scans of those two pinned PR heads found zero matches for the
+29 retired-reference needles: nine owned-source ref names, 18 reviewed or
+excluded SHAs, `owned-source/`, and `tailrocks/velnor-new@`. The full 31-needle
+R1 set also includes two generic Velnor URL literals, which match expected
+documentation, workflow, and manifest files. The union CSV's generic-path
+counts/classifications for the moved PR rows retain their prior-snapshot
+provenance; they are not current-head counts. Jackin inventory: 2,519 text and 116 binary files. Java monorepo
+inventory: 7,007 text and 5,939 binary files. Binary counts are inventory
+evidence; they do not imply semantic text coverage of binary contents. See
+[the retirement-union refresh](consumer-retirement-union-2026-10-04.md) for
+the exact-pattern set, row-level heads, and scan limits. The refresh did not
+repeat generic path or workflow-use classification for those two new heads;
+those fields retain their prior-snapshot evidence.
 
 This is readiness evidence, not adoption or migration approval. All 46
 consumer repositories await the exact immutable `0.1.1` packet from source
@@ -50,7 +55,7 @@ Scope has 47 rows including generator and 46 consumers. Its ordered consumer nam
 
 GitHub metadata resolved all 46 repositories. Every default branch is main; all current configs, manifests, and CI workflow files were accessible. Four private ChainArgos repos were readable. The only canonicalization is tailrocks/tui-snap to tailrocks/tuiscotti (repository id 1358764452). No repository was inaccessible.
 
-The companion CSV preserves all 46 numbered rows in Appendix-C order: exact default SHA/time, config/manifest/CI blob IDs, effective policy, generator source/platform digests, workflow files, caller inventory, stock-MBX classification, all 40 open PR head refs/SHAs, and owner checkpoints. Only the open-PR-head values for Jackin #1111 and ChainArgos/java-monorepo #2085 were refreshed from the 07:42 snapshot; other CSV fields preserve the original bounded audit evidence.
+The companion scope-audit CSV preserves all 46 numbered rows in Appendix-C order: exact default SHA/time, config/manifest/CI blob IDs, effective policy, generator source/platform digests, workflow files, caller inventory, stock-MBX classification, all 40 open PR head refs/SHAs, and owner checkpoints. The 07:42 snapshot refreshed the open-PR head values for Jackin #1111 and ChainArgos/java-monorepo #2085 in both CSVs. All other scope-audit fields preserve the original bounded audit evidence.
 
 ## Current consumer state
 
@@ -166,6 +171,6 @@ Checkpoint for each row: 2026-10-11 UTC. Owner supplies a result tied to exact r
 
 ## Companion CSV and boundary
 
-consumer-scope-audit-2026-10-04.csv contains the 02:27 snapshot’s 46 rows and 40 then-current open PR heads in Appendix-C order. The fresh retirement addendum has its own 86-row default/PR-head CSV; PR #1111 advanced after the earlier snapshot and is recorded at its refreshed head there.
+consumer-scope-audit-2026-10-04.csv retains the original 02:27 snapshot’s 46 rows and Appendix-C order. Its 40 open-PR head values were refreshed from the 07:42 snapshot for the two moved PRs; the other scope-audit fields preserve the earlier evidence. The 86-row retirement-union CSV records all 46 default and 40 PR-head snapshots plus the refreshed per-ref scan results.
 
 This is a passive evidence commit only. No consumer, generator behavior, release, PR, or branch changed. No tests/builds run. No consumer-repository worktrees created.
