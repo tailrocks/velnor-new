@@ -173,9 +173,13 @@ fn is_tool_spec(value: &str) -> bool {
         && !version.is_empty()
         && !value.contains(' ')
         && !value.contains('\n')
-        && tool
-            .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b':' | b'/' | b'-' | b'_' | b'.'))
+        && tool.bytes().all(|b| {
+            b.is_ascii_alphanumeric()
+                || matches!(
+                    b,
+                    b':' | b'/' | b'-' | b'_' | b'.' | b'[' | b']' | b'=' | b','
+                )
+        })
         && version
             .bytes()
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b'_' | b'+'))
