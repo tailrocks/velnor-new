@@ -3,14 +3,12 @@ fn plan_validates_sorting_and_matrix() -> Result<(), ContractError> {
     let run_key = run_key_for_ci(3, 1);
     let entry = sample_entry(&run_key)?;
     let plan = Plan {
-        producers: Default::default(),
         schema: 1,
         run_key: run_key.clone(),
         plan_id: plan_id_for_run(&run_key)?,
         base: None,
         head: "ab".repeat(20),
         event: WorkflowEvent::PullRequest,
-        scope: velnor_actions_contract::VerificationScope::Affected,
         runner: PlanRunner {
             label: "ubuntu-26.04".to_owned(),
             selection: RunnerSelection::LatestDefault,
@@ -32,19 +30,10 @@ fn plan_validates_sorting_and_matrix() -> Result<(), ContractError> {
         }],
         obligations: vec![PlanObligation {
             task_id: TASK.to_owned(),
-            job_id: "plan".to_owned(),
             decision: ObligationDecision::Execute,
             reason: "changed".to_owned(),
             task_digest: digest_b3(b"task"),
             input_digest: digest_b3(b"inputs"),
-            execution_identity: velnor_actions_contract::TaskExecutionIdentity::new(
-                &velnor_actions_contract::digest_b3(b"fixture-graph"),
-                &velnor_actions_contract::digest_b3(b"fixture-toolchain"),
-                &velnor_actions_contract::digest_b3(b"fixture-mbx"),
-                &velnor_actions_contract::digest_b3(b"fixture-platform"),
-                "default",
-            )
-            .expect("execution identity"),
             closure_digest: digest_b3(b"closure"),
             baseline_proof: None,
         }],

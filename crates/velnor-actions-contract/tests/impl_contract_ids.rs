@@ -66,8 +66,6 @@ pub(crate) fn sample_identity() -> TaskIdentity {
             schema: "rust-task-v1".to_owned(),
             data: serde_json::json!({"manifest": MANIFEST}),
         },
-        helper_obligation: None,
-        native_recipe: None,
     }
 }
 

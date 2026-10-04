@@ -43,22 +43,14 @@ fn final_reports_validate() -> Result<(), ContractError> {
 #[test]
 fn workflow_ir_validates_pins_and_refs() -> Result<(), ContractError> {
     let job = Job {
-        cache_mode: None,
         display_name: "Plan".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
         timeout_minutes: JobTimeout::PLAN,
         needs: vec![],
         condition: None,
         permissions: None,
-        tool_producer: None,
-        mbx_producer: None,
-        source_producer: None,
-        native_pages_deploy: None,
-        native_publish: None,
-        outputs: Vec::new(),
         environment: None,
         steps: vec![Step {
-            id: None,
             name: "Checkout".to_owned(),
             condition: None,
             kind: StepKind::Shell {
@@ -68,12 +60,9 @@ fn workflow_ir_validates_pins_and_refs() -> Result<(), ContractError> {
         }],
     };
     let ir = WorkflowIr {
-        cache_mode: velnor_actions_contract::CacheMode::Read,
-        run_name: None,
         name: "CI".to_owned(),
         triggers: Trigger {
             pull_request_types: vec!["opened".to_owned()],
-            push_tags: Vec::new(),
             push_branches: vec!["main".to_owned()],
             merge_group: true,
             workflow_dispatch: None,
