@@ -67,6 +67,13 @@ fn full_launch_is_not_started_or_acked() {
 }
 
 #[test]
+fn full_capacity_holds_uncovered_scale() {
+    assert_eq!(decide(2, 0, 2, Idle::Launch), Admit::Hold);
+    assert_eq!(decide(2, 0, 2, Idle::Scale), Admit::Hold);
+    assert_eq!(decide(2, 0, 1, Idle::Scale), Admit::Start { stop: false });
+}
+
+#[test]
 fn ack_does_not_start_or_free_a_slot() {
     let running = 2;
     assert_eq!(decide(1, 0, 1, Idle::Ack), Admit::Ack { stop: false });

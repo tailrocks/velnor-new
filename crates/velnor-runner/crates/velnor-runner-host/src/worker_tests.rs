@@ -64,7 +64,20 @@ fn dind_is_privileged_and_shares_the_runner_volumes() -> Result<(), HostError> {
     assert_eq!(spec.cmd, Vec::<String>::new());
     assert_eq!(spec.image, "velnor-dind:29.8.2");
     assert_eq!(spec.platform, "linux/amd64");
-    assert_eq!(spec.mounts, runner_plan("worker_a")?.mounts);
+    let runner = runner_plan("worker_a")?;
+    assert_eq!(&spec.mounts[..runner.mounts.len()], &runner.mounts[..]);
+    assert!(
+        !runner
+            .mounts
+            .iter()
+            .any(|mount| mount.target == "/var/lib/docker")
+    );
+    assert_eq!(
+        spec.mounts
+            .last()
+            .map(|mount| (mount.source.as_str(), mount.target.as_str())),
+        Some(("volume:worker_a-docker", "/var/lib/docker"))
+    );
     assert!(spec.network_mode.is_none());
     Ok(())
 }

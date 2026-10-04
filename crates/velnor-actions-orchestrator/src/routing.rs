@@ -6,9 +6,9 @@
 use std::path::Path;
 
 use velnor_actions_contract::config::LATEST_RUNNER_LABEL;
-use velnor_actions_contract::{ExecutionConfig, ExecutionMode, VelnorConfig};
+use velnor_actions_contract::{ExecutionConfig, ExecutionMode, RoutingWorkflow, VelnorConfig};
 use velnor_actions_workflow_renderer::{
-    RenderedFile, Schema2WorkflowRequest, render_schema2_workflows,
+    MbxQualificationPins, RenderedFile, Schema2WorkflowRequest, render_schema2_workflows,
 };
 
 use crate::OrchestratorError;
@@ -66,7 +66,7 @@ pub(crate) fn extra_files(
     if execution.workflows.is_empty() {
         return Ok(Vec::new());
     }
-    let request = workflow_request(execution, version)?;
+    let request = workflow_request(config, execution, version)?;
     render_schema2_workflows(&request).map_err(|err| OrchestratorError::Render {
         problem: err.to_string(),
     })
@@ -111,6 +111,7 @@ fn with_trailing_newline(text: String) -> String {
 }
 
 fn workflow_request(
+    config: &VelnorConfig,
     execution: &ExecutionConfig,
     version: &str,
 ) -> Result<Schema2WorkflowRequest, OrchestratorError> {
@@ -122,10 +123,35 @@ fn workflow_request(
             OrchestratorError::config(CONFIG_REL, "execution.profiles.hosted.label", "missing")
         })?;
     let scale_set = execution.scale_selector().map_err(config_error)?;
+    let mbx_qualification = if execution
+        .workflows
+        .contains(&RoutingWorkflow::Qualification)
+    {
+        let mbx_action = velnor_actions_actionlint::actions::PinnedActionRef::new(
+            "jdx/mr-boxington-action",
+            None,
+            velnor_actions_actionlint::actions::MR_BOXINGTON_ACTION_SHA,
+            velnor_actions_actionlint::actions::MR_BOXINGTON_ACTION_VERSION,
+        )?;
+        let tool_catalog = velnor_actions_mise::ToolCatalog::pinned();
+        Some(MbxQualificationPins {
+            mise_setup: crate::pins::resolve_mise_setup(config, &hosted)?,
+            mbx_action_uses: mbx_action.uses_value(),
+            mbx_version: tool_catalog
+                .version(velnor_actions_mise::PinnedTool::MrBoxington)
+                .to_owned(),
+            rust_version: tool_catalog
+                .version(velnor_actions_mise::PinnedTool::Rust)
+                .to_owned(),
+        })
+    } else {
+        None
+    };
     Ok(Schema2WorkflowRequest {
         version: version.to_owned(),
         hosted_label: hosted,
         scale_set,
         workflows: execution.workflows.clone(),
+        mbx_qualification,
     })
 }

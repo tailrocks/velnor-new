@@ -24,6 +24,8 @@ mod bind;
 mod capacity;
 mod gate;
 mod inspect;
+#[cfg(all(test, unix))]
+mod inspect_tests;
 
 pub(crate) use inspect::classify_inspect;
 mod session;
