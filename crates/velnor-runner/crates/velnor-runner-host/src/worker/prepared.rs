@@ -74,19 +74,6 @@ pub(crate) async fn start_runner_until(
     crate::stage::start_runner_until(docker, prepared, jit, archive_lease).await
 }
 
-/// Remove a prepared DinD only when no runner exists for the durable launch.
-///
-/// # Errors
-///
-/// Returns [`HostError::Cleanup`] or an ownership error when exact local absence
-/// cannot be confirmed. The caller must retain the reservation on any error.
-pub(crate) async fn cleanup_prepared_dind(
-    docker: &Docker,
-    prepared: &PreparedDind,
-) -> Result<(), HostError> {
-    crate::stage::cleanup_prepared_dind(docker, prepared).await
-}
-
 fn container_id(id: &str) -> bool {
     (12..=64).contains(&id.len()) && id.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
