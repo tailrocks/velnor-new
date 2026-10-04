@@ -67,6 +67,7 @@ mod impl_plan_migration;
 mod impl_plan_parity;
 mod impl_plan_prepare;
 mod impl_prepare_generate;
+mod impl_prepare_lockless_metadata;
 mod impl_preseed_manifest;
 mod impl_protocol;
 mod impl_protocol_fork;
