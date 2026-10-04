@@ -12,7 +12,7 @@
       "status": "held"
     },
     {
-      "checked_at": "2026-10-03T07:09:17Z",
+      "checked_at": "2026-10-04T12:12:20Z",
       "key": "actions/checkout",
       "latest": "v7.0.1",
       "pinned_sha": "3d3c42e5aac5ba805825da76410c181273ba90b1",
@@ -23,7 +23,7 @@
       "status": "current"
     },
     {
-      "checked_at": "2026-10-03T07:09:17Z",
+      "checked_at": "2026-10-04T12:12:20Z",
       "key": "actions/download-artifact",
       "latest": "v8.0.1",
       "pinned_sha": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
@@ -34,7 +34,7 @@
       "status": "current"
     },
     {
-      "checked_at": "2026-10-03T07:09:17Z",
+      "checked_at": "2026-10-04T12:12:20Z",
       "key": "actions/upload-artifact",
       "latest": "v7.0.1",
       "pinned_sha": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -45,7 +45,7 @@
       "status": "current"
     },
     {
-      "checked_at": "2026-10-03T07:09:17Z",
+      "checked_at": "2026-10-04T12:12:20Z",
       "key": "actions/cache/restore",
       "latest": "v6.1.0",
       "pinned_sha": "55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
@@ -56,7 +56,7 @@
       "status": "current"
     },
     {
-      "checked_at": "2026-10-03T07:09:17Z",
+      "checked_at": "2026-10-04T12:12:20Z",
       "key": "actions/cache/save",
       "latest": "v6.1.0",
       "pinned_sha": "55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
@@ -89,7 +89,7 @@
       "status": "held"
     },
     {
-      "checked_at": "2026-10-03T07:09:17Z",
+      "checked_at": "2026-10-04T12:12:20Z",
       "key": "Swatinem/rust-cache",
       "latest": "v2.9.2",
       "pinned_sha": "6323deb102c322ba6fcbdcafc7e3dddab59af2b6",
@@ -101,7 +101,7 @@
     }
   ],
   "check_interval_hours": 24,
-  "checked_at": "2026-10-03T07:09:17Z",
+  "checked_at": "2026-10-04T12:12:20Z",
   "exceptions": [],
   "max_exception_days": 14,
   "runner": {
@@ -182,7 +182,7 @@
       "status": "current"
     },
     {
-      "checked_at": "2026-10-03T07:09:17Z",
+      "checked_at": "2026-10-04T12:12:20Z",
       "latest": "v2.102.0",
       "name": "gh",
       "pinned": "2.102.0",
@@ -191,7 +191,7 @@
       "status": "current"
     },
     {
-      "checked_at": "2026-10-03T07:09:17Z",
+      "checked_at": "2026-10-04T12:12:20Z",
       "latest": "v1.7.12",
       "name": "actionlint",
       "pinned": "1.7.12",
@@ -200,7 +200,7 @@
       "status": "current"
     },
     {
-      "checked_at": "2026-10-03T07:09:17Z",
+      "checked_at": "2026-10-04T12:12:20Z",
       "latest": "v0.11.0",
       "name": "shellcheck",
       "pinned": "0.11.0",
@@ -209,7 +209,7 @@
       "status": "current"
     },
     {
-      "checked_at": "2026-10-03T07:09:17Z",
+      "checked_at": "2026-10-04T12:12:20Z",
       "latest": "v1.30.1",
       "name": "zizmor",
       "pinned": "1.30.1",
@@ -218,7 +218,7 @@
       "status": "current"
     },
     {
-      "checked_at": "2026-10-03T07:09:17Z",
+      "checked_at": "2026-10-04T12:12:20Z",
       "latest": "0.9.146",
       "name": "nextest",
       "pinned": "0.9.146",
@@ -227,7 +227,7 @@
       "status": "current"
     },
     {
-      "checked_at": "2026-10-03T07:09:17Z",
+      "checked_at": "2026-10-04T12:12:20Z",
       "latest": "v1.13.1",
       "name": "opentofu",
       "pinned": "1.13.1",
@@ -236,7 +236,7 @@
       "status": "current"
     },
     {
-      "checked_at": "2026-10-03T07:09:17Z",
+      "checked_at": "2026-10-04T12:12:20Z",
       "latest": "0.3.169",
       "name": "release-plz",
       "pinned": "0.3.169",
