@@ -85,14 +85,15 @@ fn plan_and_workflow_ids_agree() -> TestResult {
 #[test]
 fn source_build_consumer_gate_registered() -> TestResult {
     use velnor_actions_orchestrator::consumer_acquire_step_with_manifest;
+    let version = env!("CARGO_PKG_VERSION");
     let err =
-        consumer_acquire_step_with_manifest("ubuntu-26.04", "0.1.0", None).expect_err("None fails");
+        consumer_acquire_step_with_manifest("ubuntu-26.04", version, None).expect_err("None fails");
     let text = err.to_string();
     assert!(text.contains("consumer_requires_release_install"), "{text}");
     assert!(text.contains("official"), "{text}");
     let step = consumer_acquire_step_with_manifest(
         "ubuntu-26.04",
-        "0.1.0",
+        version,
         Some(&fixture_manifest_json()),
     )?;
     assert_eq!(step.name, "Acquire Velnor");
