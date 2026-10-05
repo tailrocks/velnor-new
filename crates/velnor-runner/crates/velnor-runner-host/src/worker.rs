@@ -5,24 +5,54 @@
 use std::collections::HashMap;
 
 use bollard::Docker;
-use bollard::models::{
-    ContainerCreateBody, HostConfig, Mount as DockerMount, MountType, VolumeCreateRequest,
-};
+use bollard::models::{ContainerCreateBody, HostConfig, Mount as DockerMount, MountType};
 use bollard::query_parameters::{
     AttachContainerOptionsBuilder, CreateContainerOptions, StartContainerOptions,
 };
 use tokio::io::AsyncWriteExt;
 
+use crate::docker_client::docker_deadline;
 use crate::docker_spec::{ContainerPlan, Mount, audit_plan, runner_plan};
 use crate::error::HostError;
 use crate::stage::PairStop;
 
+mod volumes;
+pub(crate) use volumes::{create_named_volumes, remove_worker_volumes};
+#[cfg(all(test, unix))]
+mod volumes_tests;
+
 const PLATFORM: &str = "linux/amd64";
 const DIND_IMAGE: &str = "velnor-dind:29.8.2";
+const IDENTITY_HEX: &[u8; 16] = b"0123456789abcdef";
+
+/// Generate a collision-resistant worker volume base for one journal row.
+pub(crate) fn new_worker_volume() -> Result<String, HostError> {
+    let mut random = [0_u8; 16];
+    getrandom::fill(&mut random).map_err(|_| HostError::Identity)?;
+    let mut name = String::with_capacity(33);
+    name.push('w');
+    for byte in random {
+        push_nibble(&mut name, byte >> 4)?;
+        push_nibble(&mut name, byte & 0x0f)?;
+    }
+    Ok(name)
+}
+
+fn push_nibble(name: &mut String, nibble: u8) -> Result<(), HostError> {
+    let index = usize::from(nibble);
+    let digit = IDENTITY_HEX
+        .get(index)
+        .copied()
+        .ok_or(HostError::Identity)?;
+    name.push(char::from(digit));
+    Ok(())
+}
 
 /// One Docker create. Not a bollard type. JIT is not a field.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CreateProjection {
+    /// Deterministic per-worker container name used for crash recovery.
+    pub name: String,
     /// Image reference.
     pub image: String,
     /// OCI platform. Always `linux/amd64`.
@@ -75,6 +105,7 @@ pub fn runner_create(plan: &ContainerPlan) -> Result<CreateProjection, HostError
         return Err(HostError::ForbiddenMount);
     }
     Ok(CreateProjection {
+        name: plan.name.clone(),
         image: plan.image.clone(),
         platform: plan.platform.clone(),
         env: plan.env.clone(),
@@ -112,21 +143,35 @@ fn dind_container_id(id: &str) -> bool {
 
 /// Private `DinD` create. Privilege is not a flag on the runner plan.
 ///
-/// Mounts are the runner plan's socket volume at `/run` and the work volume at
-/// `/home/runner/_work`. Same names [`runner_plan`] rejects.
+/// Mounts are the runner plan's socket volume at `/run`, the work volume at
+/// `/home/runner/work`, and a DinD-only volume at `/var/lib/docker`. The data
+/// volume is not on the runner. vfs on the container layer slows later
+/// Testcontainers starts.
 ///
 /// # Errors
 ///
 /// Returns [`HostError::ForbiddenMount`] when `private_volume` is not one private name.
 pub fn dind_create(private_volume: &str) -> Result<CreateProjection, HostError> {
     let runner = runner_plan(private_volume)?;
+    let mut mounts = runner.mounts;
+    mounts.push(Mount {
+        source: format!("volume:{private_volume}-docker"),
+        target: "/var/lib/docker".to_owned(),
+    });
+    let mut labels = vec![
+        "velnor.role=dind".to_owned(),
+        format!("velnor.volume={private_volume}"),
+        format!("velnor.worker={private_volume}"),
+    ];
+    labels.sort_unstable();
     Ok(CreateProjection {
+        name: format!("{private_volume}-dind"),
         image: DIND_IMAGE.to_owned(),
         platform: runner.platform,
         env: Vec::new(),
         cmd: Vec::new(),
-        labels: Vec::new(),
-        mounts: runner.mounts,
+        labels,
+        mounts,
         privileged: true,
         open_stdin: false,
         network_mode: None,
@@ -156,7 +201,7 @@ pub fn bollard_create(spec: &CreateProjection) -> Result<BollardCreate, HostErro
     };
     Ok(BollardCreate {
         options: CreateContainerOptions {
-            name: None,
+            name: Some(spec.name.clone()),
             platform: PLATFORM.to_owned(),
         },
         config,
@@ -179,8 +224,13 @@ pub async fn start_pair(
     private_volume: &str,
     jit: &[u8],
 ) -> Result<Started, HostError> {
-    let partial =
-        crate::stage::start_pair_until(docker, private_volume, jit, PairStop::Jit).await?;
+    let partial = Box::pin(crate::stage::start_pair_until(
+        docker,
+        private_volume,
+        jit,
+        PairStop::Jit,
+    ))
+    .await?;
     Ok(Started {
         dind_id: partial.dind_id.ok_or(HostError::Docker)?,
         runner_id: partial.runner_id.ok_or(HostError::Docker)?,
@@ -248,29 +298,45 @@ fn label_map(labels: &[String]) -> Result<Option<HashMap<String, String>>, HostE
     Ok(Some(map))
 }
 
-pub(crate) async fn create_named_volumes(
-    docker: &Docker,
-    plan: &ContainerPlan,
-) -> Result<(), HostError> {
-    for mount in &plan.mounts {
-        let name = volume_name(&mount.source)?;
-        let request = VolumeCreateRequest {
-            name: Some(name.to_owned()),
-            ..Default::default()
-        };
-        docker
-            .create_volume(request)
-            .await
-            .map_err(|_| HostError::Docker)?;
-    }
-    Ok(())
-}
-
 fn volume_name(source: &str) -> Result<&str, HostError> {
     source
         .strip_prefix("volume:")
         .filter(|name| !name.is_empty())
         .ok_or(HostError::ForbiddenMount)
+}
+
+pub(crate) async fn worker_id_for_name(
+    docker: &Docker,
+    name: &str,
+    volume: &str,
+    role: &str,
+) -> Result<Option<String>, HostError> {
+    if name.is_empty() || volume.is_empty() || role.is_empty() {
+        return Err(HostError::Docker);
+    }
+    match Box::pin(docker_deadline(docker.inspect_container(name, None))).await? {
+        Ok(body) => {
+            let id = body
+                .id
+                .filter(|id| !id.is_empty())
+                .ok_or(HostError::Docker)?;
+            let labels = body
+                .config
+                .and_then(|config| config.labels)
+                .ok_or(HostError::Docker)?;
+            if labels.get("velnor.volume").map(String::as_str) != Some(volume)
+                || labels.get("velnor.worker").map(String::as_str) != Some(volume)
+                || labels.get("velnor.role").map(String::as_str) != Some(role)
+            {
+                return Err(HostError::Docker);
+            }
+            Ok(Some(id))
+        }
+        Err(bollard::errors::Error::DockerResponseServerError {
+            status_code: 404, ..
+        }) => Ok(None),
+        Err(_) => Err(HostError::Docker),
+    }
 }
 
 pub(crate) async fn create_only(

@@ -3275,6 +3275,7 @@ name = "velnor-runner-host"
 version = "0.1.0"
 dependencies = [
  "bollard",
+ "getrandom 0.4.3",
  "security-framework",
  "serde",
  "serde_json",

@@ -5,11 +5,11 @@ use bollard::errors::Error as DockerError;
 
 use crate::scale_set::EnsureError;
 
-pub(super) async fn container_running(docker: &Docker, id: &str) -> Result<bool, EnsureError> {
+pub(crate) async fn container_running(docker: &Docker, id: &str) -> Result<bool, EnsureError> {
     classify_inspect(docker.inspect_container(id, None).await)
 }
 
-fn classify_inspect(
+pub(crate) fn classify_inspect(
     response: Result<bollard::models::ContainerInspectResponse, DockerError>,
 ) -> Result<bool, EnsureError> {
     match response {

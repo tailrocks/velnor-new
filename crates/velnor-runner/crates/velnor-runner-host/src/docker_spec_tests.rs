@@ -8,6 +8,7 @@ use crate::{
 
 fn base_plan() -> ContainerPlan {
     ContainerPlan {
+        name: "worker-runner".to_owned(),
         privileged: false,
         platform: "linux/amd64".to_owned(),
         image: "velnor-runner:ubuntu-26.04-2.337.0".to_owned(),
@@ -45,7 +46,7 @@ fn runner_plan_is_not_privileged() -> Result<(), HostError> {
     assert_eq!(plan.mounts[0].source, "volume:worker_a");
     assert_eq!(plan.mounts[0].target, "/run");
     assert_eq!(plan.mounts[1].source, "volume:worker_a-work");
-    assert_eq!(plan.mounts[1].target, "/home/runner/_work");
+    assert_eq!(plan.mounts[1].target, "/home/runner/work");
     assert_eq!(plan.env.len(), 0);
     assert!(audit_plan(&plan).is_ok());
     let mut privileged = plan;

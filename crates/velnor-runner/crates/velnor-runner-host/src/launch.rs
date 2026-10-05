@@ -18,15 +18,16 @@ use crate::journal::Journal;
 use crate::listen::{Link, Secret, admin_link};
 use crate::reconcile::Reconcile;
 use crate::scale_set::EnsureError;
-use crate::worker::{Started, start_pair};
+use crate::worker::Started;
 
+mod bind;
 mod capacity;
 mod gate;
-#[cfg(all(test, unix))]
-mod initial_scale_tests;
 mod inspect;
 #[cfg(all(test, unix))]
 mod inspect_tests;
+
+pub(crate) use inspect::classify_inspect;
 mod session;
 mod slot;
 mod steps;
@@ -40,12 +41,12 @@ pub(crate) use capacity::{install_job_capacity, job_capacity};
 #[cfg(test)]
 pub(crate) use capacity::{
     Admit, Seat, admit, needs_running, parse_admit_target, parse_job_capacity, poll_limit,
-    wide_poll_limit,
+    statistics_blocked, wide_poll_limit,
 };
 #[cfg(test)]
-pub(crate) use slot::occupies;
-#[cfg(test)]
 pub(crate) use steps::{Idle, idle};
+#[cfg(test)]
+pub(crate) use turn::admission;
 
 /// What one launch attempt started. No JIT and no token.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -76,6 +77,7 @@ pub async fn launch_once(
     docker: &bollard::Docker,
     journal: &Journal,
 ) -> Result<LaunchReport, EnsureError> {
+    slot::release_exited(journal, docker).await?;
     let set = ensure_product_scale_set(pat, owner, repo)?;
     if std::env::var("VELNOR_RECONCILE").ok().as_deref() == Some("1") {
         let decision = gate::reconcile_gate(journal, docker).await?;
@@ -168,7 +170,7 @@ pub(crate) async fn drive_offer<T, S, F>(
 ) -> Result<Option<Started>, EnsureError>
 where
     T: velnor_runner_github::Transport + Lane,
-    S: FnOnce(&str, &[u8]) -> F,
+    S: FnOnce(&str, &[u8], bind::Bind) -> F,
     F: Future<Output = Result<Started, HostError>>,
 {
     if matches!(steps::idle(polled), steps::Idle::Scale) {
@@ -228,10 +230,10 @@ async fn scale_session(
         queue: None,
     };
     let name = runner_name(&session.session_id);
-    steps::scale_unacked(&mut lane, &ctx, journal, &name, |volume, jit| {
+    steps::scale_unacked(&mut lane, &ctx, journal, &name, |volume, jit, bind| {
         let volume = volume.to_owned();
         let payload = jit.to_vec();
-        async move { start_pair(docker, &volume, &payload).await }
+        async move { bind::start_bound(docker, &volume, &payload, &bind).await }
     })
     .await
 }
@@ -267,7 +269,7 @@ async fn drive_ready(
     capacity: u32,
 ) -> Result<Option<Started>, EnsureError> {
     if slot::busy(journal, docker, capacity).await? {
-        return held(link, ready);
+        return Ok(None);
     }
     let ctx = Drive {
         set_id: ready.set_id,
@@ -281,20 +283,18 @@ async fn drive_ready(
         admin,
         queue: ready.queue,
     };
-    drive_offer(&mut lane, &ctx, ready.polled, journal, |volume, jit| {
-        let volume = volume.to_owned();
-        let payload = jit.to_vec();
-        async move { start_pair(docker, &volume, &payload).await }
-    })
+    drive_offer(
+        &mut lane,
+        &ctx,
+        ready.polled,
+        journal,
+        |volume, jit, bind| {
+            let volume = volume.to_owned();
+            let payload = jit.to_vec();
+            async move { bind::start_bound(docker, &volume, &payload, &bind).await }
+        },
+    )
     .await
-}
-
-fn held(link: &mut Link, ready: Ready<'_>) -> Result<Option<Started>, EnsureError> {
-    if !matches!(steps::idle(ready.polled), steps::Idle::Scale) {
-        return Ok(None);
-    }
-    ack_ready(link, ready.session, ready.path, ready.queue, ready.polled)?;
-    Ok(None)
 }
 
 fn ack_ready(

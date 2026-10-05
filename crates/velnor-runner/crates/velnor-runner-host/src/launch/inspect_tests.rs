@@ -20,10 +20,7 @@ async fn non_not_found_inspect_error_blocks_admission_and_reconcile() -> Result<
     let (scratch, journal) = journal("inspect-error").await?;
     let row_id = launch_row(&journal).await?;
     let before = journal.rows().await.map_err(|error| error.to_string())?;
-    let stub = DockerStub::open(vec![
-        http(500, r#"{"message":"private runner-id detail"}"#),
-        http(500, r#"{"message":"private runner-id detail"}"#),
-    ])?;
+    let stub = DockerStub::open(vec![http(500, r#"{"message":"private runner-id detail"}"#)])?;
 
     let busy = within(slot::busy(&journal, &stub.docker, 1), "capacity probe").await?;
     let reconcile = within(
@@ -33,9 +30,8 @@ async fn non_not_found_inspect_error_blocks_admission_and_reconcile() -> Result<
     .await?;
     stub.finish().await?;
 
-    let expected = inspect_error(500);
-    assert_eq!(busy, Err(expected));
-    assert_eq!(reconcile, Err(expected));
+    assert_eq!(busy, Ok(true));
+    assert_eq!(reconcile, Err(inspect_error(500)));
     let errors = format!("{busy:?} {reconcile:?}");
     if errors.contains("runner-id") || errors.contains("private runner-id detail") {
         return Err("inspect error exposed Docker response data".to_owned());
@@ -66,8 +62,8 @@ async fn docker_api_observations_preserve_only_known_running_states() -> Result<
         Ok(0),
         Ok(1),
         Ok(0),
-        Err(inspect_error(200)),
-        Err(inspect_error(200)),
+        Err(docker_error()),
+        Err(docker_error()),
     ] {
         let actual = within(
             slot::running_count(&journal, &stub.docker),
@@ -104,7 +100,7 @@ async fn closed_docker_connection_is_not_treated_as_absent() -> Result<(), Strin
     .await?;
     stub.finish().await?;
 
-    assert_eq!(actual, Err(inspect_error(0)));
+    assert_eq!(actual, Err(docker_error()));
     let after = journal.rows().await.map_err(|error| error.to_string())?;
     assert_eq!(after, before);
     no_response_body_in_journal(&scratch.file())
@@ -157,6 +153,13 @@ pub(super) const fn inspect_error(status: u16) -> EnsureError {
     EnsureError::Unexpected {
         status,
         step: "docker inspect",
+    }
+}
+
+const fn docker_error() -> EnsureError {
+    EnsureError::Unexpected {
+        status: 0,
+        step: "docker",
     }
 }
 
