@@ -3,15 +3,20 @@
 use std::error::Error;
 use std::path::Path;
 
-use crate::impl_cli_tmp::{cleanup, code, fresh_tempdir, git_init, spawn};
+use crate::impl_cli_tmp::{
+    cleanup, code, fresh_tempdir, git_init, install_consumer_manifest, spawn,
+};
 
 const MAX_WORKFLOW_BYTES: usize = 500_000;
 
 /// Build a schema-2 ToFu-only repo using both hosted and scale-set lanes.
+///
+/// Default policy is ConsumerV1, so generation requires the release manifest.
 fn paired_tofu_repo(roots: usize) -> Result<std::path::PathBuf, Box<dyn Error>> {
     let repo = fresh_tempdir(&format!("tofu-paired-{roots}"))?;
     git_init(&repo)?;
     std::fs::create_dir_all(repo.join(".velnor"))?;
+    install_consumer_manifest(&repo)?;
     let names = (0..roots)
         .map(|index| format!("stacks/r{index:03}"))
         .collect::<Vec<_>>();

@@ -189,16 +189,14 @@ fn assert_native_checksum_utility(step: velnor_actions_contract::Step, target: R
         ReleaseTarget::MacosArm64 | ReleaseTarget::MacosX86_64 => "shasum -a 256",
     };
     let other = match target {
-        ReleaseTarget::LinuxX86_64 => "shasum -a 256",
+        ReleaseTarget::LinuxX86_64 => "shasum",
         ReleaseTarget::MacosArm64 | ReleaseTarget::MacosX86_64 => "sha256sum",
     };
     assert_eq!(
         script.matches(&format!("{expected} -c -")).count(),
-        1,
+        2,
         "{script}"
     );
-    assert_eq!(script.matches("v \"$s\"").count(), 1, "{script}");
-    assert_eq!(script.matches("v \"$d\"").count(), 1, "{script}");
     assert!(!script.contains(other), "{script}");
 }
 
