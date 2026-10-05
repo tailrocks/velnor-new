@@ -32,26 +32,30 @@ pub(crate) enum Idle {
     Blocked,
 }
 
-/// Classify one poll. One available id is acquired. An assigned population
-/// starts one runner before ack. Anything else that is safe to delete is acked.
+/// Classify one poll. One available id is acquired. A positive current assigned
+/// population starts one runner before ack. Missing or invalid census stays queued.
 #[must_use]
 pub(crate) fn idle(polled: &Poll) -> Idle {
     match polled {
         Poll::Empty => Idle::Empty,
         Poll::Batch(batch) => match offer(polled) {
             Offer::Acquire { ids, .. } if ids.len() == 1 => Idle::Launch,
-            Offer::Wait if needs_scale(batch) && may_ack(batch, true) => Idle::Scale,
-            Offer::Wait if may_ack(batch, true) => Idle::Ack,
+            Offer::Wait if may_ack(batch, true) => match assigned_population(batch) {
+                Some(population) if population > 0 => Idle::Scale,
+                Some(0) => Idle::Ack,
+                Some(_) | None => Idle::Blocked,
+            },
             Offer::Acquire { .. } | Offer::Wait => Idle::Blocked,
         },
     }
 }
 
-fn needs_scale(batch: &velnor_runner_github::ParsedBatch) -> bool {
+fn assigned_population(batch: &velnor_runner_github::ParsedBatch) -> Option<i64> {
     batch
         .statistics
         .as_ref()
-        .is_some_and(|stats| stats.assigned_population() > 0)
+        .map(velnor_runner_github::Statistics::assigned_population)
+        .filter(|population| *population >= 0)
 }
 
 pub(super) fn assignment(

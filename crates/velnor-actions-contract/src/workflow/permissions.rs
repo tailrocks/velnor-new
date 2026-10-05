@@ -41,13 +41,13 @@ impl Permissions {
 }
 
 impl Default for Permissions {
-    /// CI default: `contents`/`actions` read, everything else none.
+    /// CI default: `contents` read; every other scope none.
     fn default() -> Self {
         Self {
             contents: PermissionLevel::Read,
             pull_requests: PermissionLevel::None,
             id_token: PermissionLevel::None,
-            actions: PermissionLevel::Read,
+            actions: PermissionLevel::None,
         }
     }
 }

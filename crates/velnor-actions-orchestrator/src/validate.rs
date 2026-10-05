@@ -44,7 +44,7 @@ pub(crate) fn validate_staged(tree: &RenderedTree) -> Result<Vec<String>, Orches
     run_shellcheck_probe(&catalog, staging.path())?;
     write_zizmor_config(staging.path(), tree)?;
     run_zizmor(&catalog, staging.path())?;
-    run_shellcheck_bodies(&catalog, staging.path(), &workflows)?;
+    run_shellcheck_bodies(&catalog, staging.path(), &workflows, tree)?;
     let mut validated = vec![
         catalog.tool_spec(PinnedTool::Actionlint),
         catalog.tool_spec(PinnedTool::Shellcheck),

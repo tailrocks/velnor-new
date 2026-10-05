@@ -192,13 +192,15 @@ fn preseed_verify_pins_binary_and_mbx_route() -> Result<(), RenderError> {
     for need in [
         "test -x target/release/velnor-actions",
         "mise --no-config --no-env --no-hooks exec mr-boxington@1.19.0 -- mbx --version",
-        "grep -qxF \"mbx 1.19.0\"",
+        "mkdir -p \"$RUNNER_TEMP/velnor\"",
+        "mise --no-config --no-env --no-hooks exec mr-boxington@1.19.0 -- mbx --version > \"$RUNNER_TEMP/velnor/preseed-mbx-version\"",
+        "grep -qxF \"mbx 1.19.0\" \"$RUNNER_TEMP/velnor/preseed-mbx-version\"",
     ] {
         assert!(run[2].contains(need), "verify misses {need}: {}", run[2]);
     }
     assert!(
-        !run[2].contains('\'') && !run[2].contains("$(") && !run[2].contains('`'),
-        "verify keeps shellcheck-safe quoting: {}",
+        !run[2].contains('\'') && !run[2].contains('`') && !run[2].contains('|'),
+        "verify has no unneeded quoting or status-masking pipeline: {}",
         run[2]
     );
     for bad_version in ["", "latest", "1.19", "v1.19.0", "1.19.0 "] {

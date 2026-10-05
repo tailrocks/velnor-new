@@ -2,9 +2,11 @@
 //!
 //! Split from `impl_renderer_preseed.rs` (alint `rust-max-lines`): these
 //! tests pin the download-side verify script without plan/final fixtures.
+use std::collections::BTreeMap;
+
 use velnor_actions_workflow_renderer::{
     PRESEED_VERIFY_MANIFEST_NAME, RenderError, preseed_manifest_verify_script,
-    preseed_manifest_verify_step,
+    preseed_manifest_verify_step, preseed_verify_step,
 };
 
 /// Expected target triple the generator renders into the verify step.
@@ -114,5 +116,75 @@ fn preseed_verify_script_rejects_tampered_payload() -> Result<(), RenderError> {
     assert!(!missing, "missing manifest must fail");
     assert!(!empty, "empty manifest must fail");
     assert!(!bad_schema, "schema 2 must fail");
+    Ok(())
+}
+
+#[cfg(unix)]
+#[test]
+fn preseed_verify_fails_when_mise_emits_version_then_exits_nonzero()
+-> Result<(), Box<dyn std::error::Error>> {
+    use std::os::unix::fs::PermissionsExt;
+    use std::process::Command;
+
+    use super::impl_renderer_fixtures::mise_argv;
+
+    let step = preseed_verify_step(
+        &mise_argv("mr-boxington@1.19.0", "mbx", &["--version"]),
+        "1.19.0",
+        &BTreeMap::new(),
+    )?;
+    let velnor_actions_contract::StepKind::Shell { run, .. } = &step.kind else {
+        return Err(std::io::Error::other("preseed verify must be a shell step").into());
+    };
+    let script = run
+        .get(2)
+        .ok_or_else(|| std::io::Error::other("preseed verify run script is missing"))?;
+    let nonce = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)?
+        .as_nanos();
+    let root = std::env::temp_dir().join(format!(
+        "velnor preseed mbx failure {} {nonce}",
+        std::process::id()
+    ));
+    let release = root.join("target/release");
+    let bin = root.join("bin");
+    std::fs::create_dir_all(&release)?;
+    std::fs::create_dir(&bin)?;
+    let helper = release.join("velnor-actions");
+    std::fs::write(&helper, "#!/bin/sh\nexit 0\n")?;
+    let mut permissions = std::fs::metadata(&helper)?.permissions();
+    permissions.set_mode(0o755);
+    std::fs::set_permissions(&helper, permissions)?;
+
+    let marker = root.join("mise-was-called");
+    let runner_temp = root.join("runner-temp");
+    let mise = bin.join("mise");
+    std::fs::write(
+        &mise,
+        "#!/bin/sh\nprintf '%s\\n' 'mbx 1.19.0'\nprintf invoked > \"$MISE_MARKER\"\nexit 7\n",
+    )?;
+    let mut permissions = std::fs::metadata(&mise)?.permissions();
+    permissions.set_mode(0o755);
+    std::fs::set_permissions(&mise, permissions)?;
+    let inherited_path =
+        std::env::var_os("PATH").ok_or_else(|| std::io::Error::other("PATH is unavailable"))?;
+    let path =
+        std::env::join_paths(std::iter::once(bin).chain(std::env::split_paths(&inherited_path)))?;
+    let output = Command::new("/bin/sh")
+        .args(["-c", script])
+        .current_dir(&root)
+        .env("PATH", path)
+        .env("RUNNER_TEMP", &runner_temp)
+        .env("MISE_MARKER", &marker)
+        .output()?;
+    let called = std::fs::read_to_string(marker)?;
+    let version_output = std::fs::read_to_string(runner_temp.join("velnor/preseed-mbx-version"))?;
+    std::fs::remove_dir_all(&root)?;
+    assert_eq!(called, "invoked");
+    assert_eq!(version_output, "mbx 1.19.0\n");
+    assert!(
+        !output.status.success(),
+        "the rendered verification step accepted a failed MBX producer"
+    );
     Ok(())
 }
