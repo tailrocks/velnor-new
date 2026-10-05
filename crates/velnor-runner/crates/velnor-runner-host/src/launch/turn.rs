@@ -334,8 +334,10 @@ mod tests {
 }
 
 #[cfg(all(test, unix))]
+mod progress_tests;
+#[cfg(all(test, unix))]
 mod start_idless_tests;
 #[cfg(all(test, unix))]
-mod progress_tests;
+mod start_jit_rejection_tests;
 #[cfg(all(test, unix))]
 mod start_tests;

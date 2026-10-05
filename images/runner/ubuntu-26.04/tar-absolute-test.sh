@@ -306,6 +306,7 @@ case_absolute_file() {
 . "$here/tar-absolute-test-extended.sh"
 
 run_case dash-positional case_dash_positional
+run_case dash-attached-values case_dash_attached_values
 run_case stream-no-raw-archive case_stream_no_raw
 run_case emit-death-does-not-hang case_emit_death_does_not_hang
 

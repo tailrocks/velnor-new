@@ -14,6 +14,7 @@ zstd=0
 program=""
 absolute=0
 posix=0
+legacy_cluster=0
 excludes=()
 positionals=()
 args=("$@")
@@ -23,6 +24,7 @@ i=0
 if [ "${#args[@]}" -gt 0 ]; then
   first="${args[0]}"
   if [[ "$first" != -* && "$first" =~ ^[A-Za-z]+$ ]]; then
+    legacy_cluster=1
     args=("-${first}" "${args[@]:1}")
   fi
 fi
@@ -128,16 +130,19 @@ while [ "$i" -lt "${#args[@]}" ]; do
             die "unsupported flag -$flag"
             ;;
           f | C)
-            # GNU old style: `tar cfz archive` keeps `z` as a flag and takes
-            # the archive from the next word. The rest of the cluster is an
-            # attached argument only when it is not more option letters.
+            # In dashless old-style clusters, later flag letters stay flags.
+            # In dashed GNU clusters, -f/-C consume the complete remainder.
             rest="${cluster:$((k + 1))}"
             attached=0
             if [ -n "$rest" ]; then
-              case "${rest:0:1}" in
-                c | x | t | z | P | j | J | Z | v | h | m | o | k | O | a | f | C) ;;
-                *) attached=1 ;;
-              esac
+              if [ "$legacy_cluster" -eq 0 ] || [ "$i" -ne 0 ]; then
+                attached=1
+              else
+                case "${rest:0:1}" in
+                  c | x | t | z | P | j | J | Z | v | h | m | o | k | O | a | f | C) ;;
+                  *) attached=1 ;;
+                esac
+              fi
             fi
             if [ "$attached" -eq 1 ]; then
               value="$rest"

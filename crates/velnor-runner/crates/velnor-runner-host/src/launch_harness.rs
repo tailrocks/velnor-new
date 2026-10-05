@@ -55,6 +55,7 @@ pub(crate) enum Mode {
     AcquireServerError,
     AckFail,
     JitFail,
+    JitForbidden,
     JitConflict,
     JitMalformed,
 }
@@ -70,6 +71,12 @@ impl Transport for Script {
             if matches!(self.mode, Mode::JitConflict) {
                 return Ok(Exchange {
                     status: 409,
+                    body: Vec::new(),
+                });
+            }
+            if matches!(self.mode, Mode::JitForbidden) {
+                return Ok(Exchange {
+                    status: 403,
                     body: Vec::new(),
                 });
             }

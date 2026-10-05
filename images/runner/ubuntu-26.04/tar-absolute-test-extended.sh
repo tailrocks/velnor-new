@@ -46,6 +46,25 @@ case_dash_positional() {
   cmp -s "$root/src/-dash-member" "$root/out/-dash-member" || return 1
 }
 
+case_dash_attached_values() {
+  local root="$work/dash-attached" plain old
+  rm -rf -- "$root"
+  mkdir -p "$root/cache" "$root/out"
+  printf 'attached-ok\n' >"$root/cache/payload"
+  (
+    cd "$root" || return 1
+    bash "$shim" -cfarchive.tar -Ccache payload || return 1
+    bash "$shim" cfz oldstyle.tar -Ccache payload || return 1
+  ) || return 1
+  [ -f "$root/archive.tar" ] || return 1
+  [ -f "$root/oldstyle.tar" ] || return 1
+  plain="$(tar.gnu -tf "$root/archive.tar")"
+  old="$(tar.gnu -tzf "$root/oldstyle.tar")"
+  [ "$plain" = payload ] && [ "$old" = payload ] || return 1
+  bash "$shim" -xf "$root/archive.tar" -C "$root/out" || return 1
+  cmp -s "$root/cache/payload" "$root/out/payload"
+}
+
 # Fail if a compressed -P extract writes an uncompressed archive under TMPDIR.
 case_stream_no_raw() {
   local root="$work/stream"
