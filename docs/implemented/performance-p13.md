@@ -48,7 +48,8 @@ Direct `cargo metadata --no-deps --offline` on the 100-crate
 fixture: 0.04, 0.03, 0.04 s — a lower bound per eliminated
 subprocess; the mise-wrapped cost is UNMEASURED. A 100-crate
 full plan fails closed with `matrix_budget_exceeded:595321`
-(320 KiB cap, never truncates), so plan scales to 40 while
+(it exceeded the then-current 320 KiB cap and also exceeds the current
+512 KiB artifact cap, never truncates), so plan scales to 40 while
 `prepare` scales to 100. Counts are O(workspaces) vs
 O(manifests) by construction; wall shapes (prepare 52→104 ms,
 plan rising with obligations, generate ~180 ms → ~1.7 s across
