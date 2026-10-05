@@ -3,7 +3,8 @@ use super::invalid;
 use crate::MiseError;
 use std::collections::{BTreeMap, BTreeSet};
 use velnor_actions_contract::config::{
-    CheckPlatform, QualifiedTool, QualifiedToolBackend, validate_qualified_tools,
+    CheckPlatform, CheckSystemToolKind, HostContainerProfile, MiseCheck, QualifiedTool,
+    QualifiedToolBackend, validate_qualified_tools,
 };
 use velnor_actions_contract::{canonical_json_bytes, digest_b3};
 
@@ -16,8 +17,9 @@ pub(super) struct ResolvedTools {
 pub(super) fn resolve(
     registry: &[QualifiedTool],
     roots: &[String],
-    platform: CheckPlatform,
+    check: &MiseCheck,
 ) -> Result<ResolvedTools, MiseError> {
+    let platform = check.runner.platform;
     validate_qualified_tools(registry, ".velnor/config.toml")
         .map_err(|e| invalid("qualified_tools", e.to_string()))?;
     let registry: BTreeMap<&str, &QualifiedTool> = registry
@@ -43,6 +45,7 @@ pub(super) fn resolve(
         )?;
     }
     let mut executables = BTreeSet::new();
+    let reserved = reserved_executables(check);
     for tool in &declarations {
         insert_selector(&mut selectors, selector(tool))?;
         let qualification = tool
@@ -51,6 +54,12 @@ pub(super) fn resolve(
             .find(|proof| proof.platform == platform)
             .ok_or_else(|| invalid("qualified_tool_platform", &tool.id))?;
         for executable in &qualification.executables {
+            if reserved.contains(executable.name.as_str()) {
+                return Err(invalid(
+                    "qualified_tool_executable",
+                    format!("runtime_owned_projected_name:{}", executable.name),
+                ));
+            }
             if !executables.insert(&executable.name) {
                 return Err(invalid(
                     "qualified_tool_executable",
@@ -66,6 +75,31 @@ pub(super) fn resolve(
         specs,
         fingerprint,
     })
+}
+
+fn reserved_executables(check: &MiseCheck) -> BTreeSet<&'static str> {
+    let mut names = BTreeSet::from(["mise"]);
+    match check.runner.container.as_ref() {
+        Some(HostContainerProfile::Docker { .. }) => {
+            names.insert("docker");
+        }
+        Some(HostContainerProfile::OrbStack { .. }) => {
+            names.insert("docker");
+            names.insert("orbctl");
+        }
+        None => {}
+    }
+    for tool in &check.system_tools {
+        match tool.kind {
+            CheckSystemToolKind::Swift => {
+                names.insert("swift");
+            }
+            CheckSystemToolKind::Xcode => {
+                names.insert("xcodebuild");
+            }
+        }
+    }
+    names
 }
 /// Canonical identity is independent of the dependency installation schedule.
 pub(super) fn fingerprint(

@@ -31,6 +31,7 @@ fn expected_modules() -> Vec<&'static str> {
         "check_file_read.rs",
         "check_metadata.rs",
         "check_orbstack_app_observation.rs",
+        "check_qualified_tool_names_tests.rs",
         "check_qualified_tools.rs",
         "check_qualified_tools_tests.rs",
         "check_system_tools.rs",

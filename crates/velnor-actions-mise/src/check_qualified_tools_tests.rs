@@ -4,6 +4,8 @@ use velnor_actions_contract::config::{
     QualifiedCargoInstallation, QualifiedToolArtifact, QualifiedToolExecutable,
     QualifiedToolOptions, QualifiedToolPlatform, QualifiedToolProbe,
 };
+#[path = "check_qualified_tool_names_tests.rs"]
+mod names;
 fn platform(name: &str, version: &str, url: String) -> QualifiedToolPlatform {
     QualifiedToolPlatform {
         platform: CheckPlatform::LinuxX64,
@@ -89,7 +91,7 @@ fn codebook() -> QualifiedTool {
 }
 #[test]
 fn explicit_named_rust_retains_the_qualified_repository_version() {
-    let resolved = resolve(&[rust()], &["rust".to_owned()], CheckPlatform::LinuxX64)
+    let resolved = names::resolve_on(&[rust()], &["rust".to_owned()], CheckPlatform::LinuxX64)
         .expect("qualified override");
     assert_eq!(resolved.specs, ["rust@1.97.1"]);
     assert_eq!(resolved.declarations[0].version, "1.97.1");
@@ -98,14 +100,14 @@ fn explicit_named_rust_retains_the_qualified_repository_version() {
 #[test]
 fn undeclared_tools_never_resolve_from_the_compiled_catalog() {
     for id in ["rust", "cargo-nextest", "node", "unknown"] {
-        assert!(resolve(&[], &[id.to_owned()], CheckPlatform::LinuxX64).is_err());
+        assert!(names::resolve_on(&[], &[id.to_owned()], CheckPlatform::LinuxX64).is_err());
     }
     assert!(fingerprint(&[], &["rust@1.98.1".to_owned()]).is_err());
     assert!(fingerprint(&[rust()], &[]).is_err());
 }
 #[test]
 fn installation_dependencies_are_ordered_without_task_graph_edges() {
-    let resolved = resolve(
+    let resolved = names::resolve_on(
         &[codebook(), rust()],
         &["codebook".to_owned()],
         CheckPlatform::LinuxX64,
@@ -128,7 +130,7 @@ fn installation_dependencies_are_ordered_without_task_graph_edges() {
 fn every_qualification_and_option_dimension_changes_the_identity() {
     let registry = vec![codebook(), rust()];
     let digest = |records: &[QualifiedTool]| {
-        resolve(records, &["codebook".to_owned()], CheckPlatform::LinuxX64)
+        names::resolve_on(records, &["codebook".to_owned()], CheckPlatform::LinuxX64)
             .expect("qualified closure")
             .fingerprint
     };
@@ -156,7 +158,7 @@ fn every_qualification_and_option_dimension_changes_the_identity() {
 fn qualified_scope_is_platform_specific_and_backend_conflicts_fail() {
     let row = node("node", "24.18.0");
     assert!(
-        resolve(
+        names::resolve_on(
             std::slice::from_ref(&row),
             &["node".to_owned()],
             CheckPlatform::MacosArm64,
@@ -165,7 +167,7 @@ fn qualified_scope_is_platform_specific_and_backend_conflicts_fail() {
     );
     let alternate = node("other-node", "24.17.0");
     assert!(
-        resolve(
+        names::resolve_on(
             &[row, alternate],
             &["node".to_owned(), "other-node".to_owned()],
             CheckPlatform::LinuxX64,
@@ -173,6 +175,7 @@ fn qualified_scope_is_platform_specific_and_backend_conflicts_fail() {
         .is_err()
     );
 }
+
 #[test]
 fn pure_projection_preserves_cargo_features_and_explicit_rust_profile() {
     let projected =
@@ -199,7 +202,7 @@ fn prebuilt_cargo_qualification_has_no_synthetic_installer_dependency() {
     tool.platforms[0].artifacts[0].url =
         "https://github.com/codebook/codebook/releases/download/v0.3.42/codebook-linux-x64.tar.gz"
             .to_owned();
-    let resolved = resolve(
+    let resolved = names::resolve_on(
         std::slice::from_ref(&tool),
         &["codebook".to_owned()],
         CheckPlatform::LinuxX64,
@@ -213,7 +216,7 @@ fn prebuilt_cargo_qualification_has_no_synthetic_installer_dependency() {
 
 #[test]
 fn canonical_fingerprint_ignores_dependency_transport_order() {
-    let resolved = resolve(
+    let resolved = names::resolve_on(
         &[codebook(), rust()],
         &["codebook".to_owned()],
         CheckPlatform::LinuxX64,
@@ -229,8 +232,8 @@ fn canonical_fingerprint_ignores_dependency_transport_order() {
 
 fn discovered_qualification() -> super::super::DiscoveredCheck {
     use velnor_actions_contract::config::{CheckExecutor, CheckRunner, MiseCheck};
-    let resolved =
-        resolve(&[rust()], &["rust".to_owned()], CheckPlatform::LinuxX64).expect("qualified Rust");
+    let resolved = names::resolve_on(&[rust()], &["rust".to_owned()], CheckPlatform::LinuxX64)
+        .expect("qualified Rust");
     let check = MiseCheck {
         id: "verify".to_owned(),
         task: "verify".to_owned(),

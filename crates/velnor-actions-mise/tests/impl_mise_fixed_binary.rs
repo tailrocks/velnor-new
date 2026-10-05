@@ -146,7 +146,7 @@ fn fixed_binary_rejects_ambient_path_replacement() -> TestResult {
     write_program(
         &home.join("bin/mise"),
         velnor_actions_mise::MISE_VERSION,
-        r#"test -z "${HTTP_PROXY+x}${HTTPS_PROXY+x}${NO_PROXY+x}${ALL_PROXY+x}${http_proxy+x}${https_proxy+x}${no_proxy+x}${all_proxy+x}" || exit 88; printf 'OWNED_EXECUTABLE\n'"#,
+        r#"test "$HTTP_PROXY" = 'http://proxy-bait.invalid:9' && test "$HTTPS_PROXY" = 'http://proxy-bait.invalid:9' && test "$NO_PROXY" = 'http://proxy-bait.invalid:9' && test "$ALL_PROXY" = 'http://proxy-bait.invalid:9' && test "$http_proxy" = 'http://proxy-bait.invalid:9' && test "$https_proxy" = 'http://proxy-bait.invalid:9' && test "$no_proxy" = 'http://proxy-bait.invalid:9' && test "$all_proxy" = 'http://proxy-bait.invalid:9' || exit 88; test -z "${GH_TOKEN+x}${DOCKER_HOST+x}" || exit 89; printf 'OWNED_EXECUTABLE\n'"#,
     )?;
     write_program(
         &poison.join("mise"),
@@ -162,6 +162,8 @@ fn fixed_binary_rejects_ambient_path_replacement() -> TestResult {
         .env("VELNOR_FIXED_BINARY_REPO", &repo)
         .env("VELNOR_FIXED_BINARY_HOME", &home)
         .env("PATH", &poison)
+        .env("GH_TOKEN", "credential-bait")
+        .env("DOCKER_HOST", "endpoint-bait")
         .envs(
             velnor_actions_mise::command::PROXY_ENV_KEYS
                 .map(|key| (key, "http://proxy-bait.invalid:9")),
@@ -196,38 +198,32 @@ fn owned_binary_wrong_version_fails_before_task_execution() -> TestResult {
 }
 
 #[test]
-fn qualified_check_pure_environment_excludes_ambient_proxy_authority() {
-    use velnor_actions_mise::command::{EnvPolicy, PROXY_ENV_KEYS};
+fn qualified_children_keep_proxy_keys_without_ambient_credentials_or_endpoints() {
+    use velnor_actions_mise::command::{EnvPolicy, PROXY_ENV_KEYS, proxy_passthrough};
     let parent: Vec<_> = PROXY_ENV_KEYS
         .iter()
         .map(|key| ((*key).into(), "http://proxy-bait.invalid:9".into()))
-        .collect();
-    let actual = EnvPolicy::QualifiedCheck.child_env(&parent, &[]);
-    assert!(
-        actual.is_empty(),
-        "qualified environment inherited proxy authority"
-    );
-}
-
-#[test]
-fn qualified_policies_are_closed_and_repo_task_preserves_proxy_contract() {
-    use velnor_actions_mise::command::{EnvPolicy, PROXY_ENV_KEYS};
-    let parent: Vec<_> = PROXY_ENV_KEYS
-        .iter()
-        .map(|key| ((*key).into(), "http://proxy-bait.invalid:9".into()))
+        .chain([
+            ("GH_TOKEN".into(), "credential-bait".into()),
+            ("DOCKER_HOST".into(), "endpoint-bait".into()),
+        ])
         .collect();
     let additions = vec![("HOME".into(), "/owned/home".into())];
-    for policy in [
-        EnvPolicy::QualifiedCheck,
-        EnvPolicy::QualifiedProbe,
-        EnvPolicy::QualifiedAcquisition,
-    ] {
+    let expected_proxy = proxy_passthrough(&parent);
+    for policy in [EnvPolicy::QualifiedCheck, EnvPolicy::QualifiedAcquisition] {
         assert!(!policy.inherits_parent());
-        assert!(!policy.allows_proxy_passthrough());
-        assert_eq!(policy.child_env(&parent, &additions), additions);
+        assert!(policy.allows_proxy_passthrough());
+        let mut expected = expected_proxy.clone();
+        expected.extend(additions.clone());
+        assert_eq!(policy.child_env(&parent, &additions), expected);
     }
+    assert!(!EnvPolicy::QualifiedProbe.allows_proxy_passthrough());
+    assert_eq!(
+        EnvPolicy::QualifiedProbe.child_env(&parent, &additions),
+        additions
+    );
     assert!(EnvPolicy::RepoTask.allows_proxy_passthrough());
-    assert_eq!(EnvPolicy::RepoTask.child_env(&parent, &[]), parent);
+    assert_eq!(EnvPolicy::RepoTask.child_env(&parent, &[]), expected_proxy);
 }
 
 fn test_deadline() -> TestResult<velnor_actions_mise::CheckDeadline> {

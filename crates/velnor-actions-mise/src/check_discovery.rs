@@ -83,7 +83,7 @@ fn discover(
     for input in &inputs {
         repository_path(root, input)?;
     }
-    let resolved = qualified::resolve(qualified_tools, &check.tools, check.runner.platform)?;
+    let resolved = qualified::resolve(qualified_tools, &check.tools, check)?;
     let proposal = propose_check(
         check,
         &source,
