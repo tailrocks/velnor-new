@@ -114,6 +114,20 @@ fn assert_reader(reader: &str) {
         reader.contains("tee \\\"$RUNNER_TEMP/mbx-reuse-stats.json\\\""),
         "{reader}"
     );
+    assert!(
+        !reader.contains("tee \\\"$RUNNER_TEMP/mbx-object-stats.json\\\" | jq"),
+        "{reader}"
+    );
+    assert!(
+        reader.contains("jq -e '.objects > 0' \\\"$RUNNER_TEMP/mbx-object-stats.json\\\""),
+        "{reader}"
+    );
+    assert!(
+        reader.contains(
+            "jq -e '.savings.cached_compilations > 0' \\\"$RUNNER_TEMP/mbx-reuse-stats.json\\\""
+        ),
+        "{reader}"
+    );
     assert!(reader.contains("version: 1.21.1"), "{reader}");
     assert!(reader.contains("RUSTUP_TOOLCHAIN: 1.98.1"), "{reader}");
     assert!(
