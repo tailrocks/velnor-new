@@ -1,8 +1,8 @@
 //! MBX action gating: emitted only for MBX-selected drivers.
 use std::collections::BTreeMap;
-use velnor_actions_workflow_renderer::steps::mbx_step_for_driver;
 use velnor_actions_workflow_renderer::{
     CompileDriver, RenderError, check_mbx_gating, checkout_step, shell_step,
+    steps::mbx_steps_for_driver,
 };
 
 use super::impl_renderer_fixtures::*;
@@ -17,18 +17,39 @@ fn mbx_argv() -> Vec<String> {
 
 #[test]
 fn mbx_emitted_only_for_mbx_driver() -> Result<(), RenderError> {
-    let selected =
-        mbx_step_for_driver(&mbx_pin(), CompileDriver::Mbx, "1.19.0")?.expect("mbx step");
-    assert_eq!(selected.name, "Setup MBX");
-    assert!(mbx_step_for_driver(&mbx_pin(), CompileDriver::Cargo, "1.19.0")?.is_none());
+    let [preflight, selected] = mbx_tool_steps(&mbx_pin(), "1.19.0", "1.98.1")?;
+    assert_eq!(preflight.name, "Verify MBX and Rust toolchains");
+    assert_eq!(selected.name, "Restore MBX objects");
     assert!(
-        mbx_step_for_driver(&checkout_pin(), CompileDriver::Mbx, "1.19.0")
-            .is_err_and(|err| format!("{err:?}").contains("not_mbx_action")),
+        mbx_steps_for_driver(
+            &mbx_pin(),
+            CompileDriver::Cargo,
+            "1.19.0",
+            "1.98.1",
+            mbx_tool_env("1.98.1"),
+        )?
+        .is_none()
+    );
+    assert!(
+        mbx_steps_for_driver(
+            &checkout_pin(),
+            CompileDriver::Mbx,
+            "1.19.0",
+            "1.98.1",
+            mbx_tool_env("1.98.1"),
+        )
+        .is_err_and(|err| format!("{err:?}").contains("not_mbx_action")),
         "non-MBX action must fail"
     );
     assert!(
-        mbx_step_for_driver(&mbx_pin(), CompileDriver::Mbx, "latest")
-            .is_err_and(|err| format!("{err:?}").contains("bad_mbx_version")),
+        mbx_steps_for_driver(
+            &mbx_pin(),
+            CompileDriver::Mbx,
+            "latest",
+            "1.98.1",
+            mbx_tool_env("1.98.1"),
+        )
+        .is_err_and(|err| format!("{err:?}").contains("bad_mbx_version")),
         "floating action version must fail"
     );
     Ok(())
@@ -54,11 +75,11 @@ fn mbx_gating_rejects_unselected_mbx() -> Result<(), RenderError> {
     );
     jobs.get_mut("velnor-cargo").expect("cargo job").steps.pop();
     check_mbx_gating(&jobs, &cargo_only)?;
-    let mbx = mbx_step_for_driver(&mbx_pin(), CompileDriver::Mbx, "1.19.0")?.expect("mbx step");
+    let mbx = mbx_tool_steps(&mbx_pin(), "1.19.0", "1.98.1")?;
     jobs.get_mut("velnor-cargo")
         .expect("cargo job")
         .steps
-        .push(mbx);
+        .extend(mbx);
     assert!(
         check_mbx_gating(&jobs, &cargo_only)
             .is_err_and(|err| format!("{err:?}").contains("mbx_action_without_selection")),

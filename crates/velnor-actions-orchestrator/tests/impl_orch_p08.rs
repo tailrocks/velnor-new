@@ -13,6 +13,8 @@ use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
 use super::impl_common::{TestResult, config_with_branch, make_repo};
 
+const SCALE_SET_CONFIG: &str = "schema = 2\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n[execution]\ndefault_profile = \"hosted\"\nhosted_profile = \"hosted\"\nscale_set_profile = \"local\"\nmode = \"scale-set\"\n[execution.profiles.hosted]\nkind = \"github-hosted\"\nlabel = \"ubuntu-26.04\"\nplatform = \"linux/amd64\"\n[execution.profiles.local]\nkind = \"github-scale-set\"\nname = \"ubuntu-26.04-scale-set\"\nlabels = [\"ubuntu-26.04-scale-set\", \"velnor\"]\nplatform = \"linux/amd64\"\n";
+
 /// Hand-written lock for a no-deps fixture package: hermetic, no network.
 pub(super) fn demo_lock(name: &str) -> String {
     format!("version = 4\n\n[[package]]\nname = \"{name}\"\nversion = \"0.1.0\"\n")
@@ -61,6 +63,19 @@ fn job_names(job: &str, mbx: bool) -> Result<Vec<String>, Box<dyn std::error::Er
         .get(job)
         .ok_or_else(|| std::io::Error::other(format!("missing {job}")))?;
     Ok(found.steps.iter().map(|step| step.name.clone()).collect())
+}
+
+fn scale_set_mbx_yaml() -> Result<String, Box<dyn std::error::Error>> {
+    let repo = make_repo(SCALE_SET_CONFIG)?;
+    let root = repo.path();
+    fs::write(root.join("Cargo.lock"), demo_lock("demo"))?;
+    with_mbx(root)?;
+    let prep = prepare(root)?;
+    let tree = render_staged_tree(&prep)?;
+    Ok(tree
+        .get(WORKFLOW_PATH)
+        .ok_or_else(|| std::io::Error::other("missing workflow"))?
+        .to_owned())
 }
 
 #[test]
@@ -143,9 +158,18 @@ fn step_at(task: &str, name: &str, missing: &'static str) -> Result<usize, &'sta
 }
 
 fn assert_local_mbx_backend(task: &str) -> TestResult {
-    let setup = step_at(task, "Setup MBX", "MBX setup")?;
-    let key = step_at(task, "Prepare MBX bundle key", "MBX bundle key")?;
-    assert!(task[setup..key].contains("backend: local"), "local backend");
+    assert!(
+        task.contains("runs-on: [velnor, ubuntu-26.04-scale-set]"),
+        "external MBX bundles are limited to the configured Scale Set lane:\n{task}"
+    );
+    let key = step_at(task, "Prepare MBX cache identity", "MBX cache identity")?;
+    let setup = step_at(task, "Prepare MBX local cache store", "MBX setup")?;
+    let restore = step_at(task, "Restore MBX single bundle", "bundle restore")?;
+    assert!(key < setup && setup < restore, "cache setup order:\n{task}");
+    assert!(
+        task[setup..restore].contains("backend: local"),
+        "local backend"
+    );
     Ok(())
 }
 
@@ -177,22 +201,31 @@ fn assert_mbx_bundle_lifecycle(task: &str) -> TestResult {
 
 #[test]
 fn c4_mbx_and_restore_precede_fetch_with_offline_skip() -> TestResult {
-    let names = job_names("rust-demo", true)?;
-    let at = |name: &str| names.iter().position(|seen| seen == name);
-    let (Some(restore), Some(mbx), Some(fetch), Some(clippy)) = (
-        at("Restore Cargo sources"),
-        at("Setup MBX"),
-        at("Fetch Cargo sources"),
-        at("Clippy"),
-    ) else {
-        return Err(format!("order missing: {names:?}").into());
-    };
-    assert!(
-        restore < mbx && mbx < fetch && fetch < clippy,
-        "restore<mbx<fetch<clippy: {names:?}"
-    );
-    let yaml = yaml_for(true)?;
+    let yaml = scale_set_mbx_yaml()?;
     let task = rust_demo_job(&yaml)?;
+    let at = |name: &str| step_at(task, name, "ordered MBX step");
+    let (restore, preflight, key, store, setup, bundle, import, fetch, clippy) = (
+        at("Restore Cargo sources")?,
+        at("Verify MBX and Rust toolchains")?,
+        at("Prepare MBX cache identity")?,
+        at("Prepare private MBX store")?,
+        at("Prepare MBX local cache store")?,
+        at("Restore MBX single bundle")?,
+        at("Import MBX single bundle")?,
+        at("Fetch Cargo sources")?,
+        at("Clippy")?,
+    );
+    assert!(
+        restore < preflight
+            && preflight < key
+            && key < store
+            && store < setup
+            && setup < bundle
+            && bundle < import
+            && import < fetch
+            && fetch < clippy,
+        "restore<preflight<key<store<local setup<bundle<import<fetch<clippy:\n{task}"
+    );
     assert_source_fetch_contract(task);
     assert_local_mbx_backend(task)?;
     assert_mbx_bundle_lifecycle(task)?;

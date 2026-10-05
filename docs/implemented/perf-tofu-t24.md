@@ -82,7 +82,13 @@ shapes differ only by fixture width. Selection asserts hold in
 every case (docs zero-affected, root triple-only, module caller,
 lock root, mixed rust-only, fork PR-trust with PR digest).
 
-## 3. Synthetic scaling (n=5 per width)
+## 3. Historical synthetic scaling (n=5 per width)
+
+These are measurements from the historical `f57e0b4` source before the
+adopted 500,000-byte workflow-file limit. The 100-root generate result
+below records renderer throughput only; the current generator rejects
+that output before writing it. Current size-boundary measurements follow
+in section 4.
 
 At the measured head, plan scaled to 40 roots (120 obligations, under
 the then-current 320 KiB matrix budget); prepare/generate scaled to 100 roots (300
@@ -101,7 +107,29 @@ by the single actionlint YAML pass, the P13-observed shape).
 `perf: op=plan` uses the shared `crates=` label for root count;
 the tofu `perf: op=prepare/generate` lines use `roots=`.
 
-## 4. Verdicts
+## 4. Current workflow-file size gate
+
+The current generator enforces the 500,000 UTF-8-byte workflow limit
+from `workflow-contract.md`, including the generated marker. On the
+PR28 integrated source, the synthetic Tofu fixture measured these
+`.github/workflows/ci.yml` sizes locally:
+
+| Roots | Result | Workflow bytes |
+| ---: | --- | ---: |
+| 1 | generated | 21,898 |
+| 10 | generated | 98,086 |
+| 40 | generated | 352,186 |
+| 60 | rejected before writes | 521,586 |
+| 100 | rejected before writes | 860,386 |
+
+The rejection reports
+`workflow_too_large:.github/workflows/ci.yml:<actual>:500000`. The 60-root
+regression preserves an existing preview workflow and sibling file byte
+for byte; the 100-root regression leaves a fresh output path absent.
+These are local deterministic byte measurements, not hosted timing or
+runner-capacity claims.
+
+## 5. Verdicts
 
 - Gates 1–7 as named invariant tests: PASSED (7/7 green at
   `f57e0b4`; full suite steady, see the T24 report).

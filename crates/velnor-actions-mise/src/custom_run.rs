@@ -2,8 +2,9 @@
 //!
 //! Unlike the isolated vectors, this carries no global flags: custom
 //! tasks are defined in the repository's own Mise configuration, so
-//! `--no-config` would hide them. The safety boundary is the explicit
-//! `[stacks.rust] custom_tasks` allowlist, never flag isolation.
+//! `--no-config` would hide them. This shape is only a validated
+//! name vector; execution authorization and environment isolation live in
+//! the qualified named-check constructor.
 //!
 //! No `--` separator: `mise run -- <task>` does not pin the task as a
 //! positional — mise runs the `default` task with `<task>` as its

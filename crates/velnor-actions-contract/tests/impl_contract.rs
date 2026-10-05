@@ -15,6 +15,8 @@ fn config_validation_reports_key_paths() {
         TestShardingConfig, VelnorConfig, WorkflowConfig,
     };
     let valid = VelnorConfig {
+        checks: Vec::new(),
+        qualified_tools: Vec::new(),
         schema: 1,
         workflow: WorkflowConfig {
             name: "CI".to_owned(),
@@ -45,7 +47,6 @@ fn config_validation_reports_key_paths() {
                 compile_driver: None,
                 test_runner: None,
                 run_ignored: None,
-                custom_tasks: Vec::new(),
                 release: RustReleaseConfig::default(),
             }),
             tofu: None,
@@ -89,6 +90,8 @@ fn runner_label_uses_exact_catalog_match() {
         VelnorConfig,
     };
     let base = || VelnorConfig {
+        checks: Vec::new(),
+        qualified_tools: Vec::new(),
         schema: 1,
         workflow: velnor_actions_contract::WorkflowConfig {
             name: "CI".to_owned(),
@@ -154,6 +157,8 @@ fn uppercase_rust_config_name_rejected_with_key_path() {
         WorkflowPolicy,
     };
     let mut config = VelnorConfig {
+        checks: Vec::new(),
+        qualified_tools: Vec::new(),
         schema: 1,
         workflow: WorkflowConfig {
             name: "CI".to_owned(),
@@ -184,7 +189,6 @@ fn uppercase_rust_config_name_rejected_with_key_path() {
                 compile_driver: None,
                 test_runner: None,
                 run_ignored: None,
-                custom_tasks: Vec::new(),
                 release: RustReleaseConfig::default(),
             }),
             tofu: None,
@@ -329,33 +333,14 @@ fn manifest_schemas_validate_and_lookup_targets() -> Result<(), ContractError> {
 }
 
 #[test]
-fn custom_tasks_allowlist_validates_sorted_unique_names() {
-    use velnor_actions_contract::RustStackConfig;
-    let file = ".velnor/config.toml";
-    let stack = RustStackConfig::default_config();
-    assert_eq!(stack.validate(file), Ok(()));
-    let mut good = stack.clone();
-    good.custom_tasks = vec!["audit".to_owned(), "lint".to_owned()];
-    assert_eq!(good.validate(file), Ok(()));
-    let mut unsorted = stack.clone();
-    unsorted.custom_tasks = vec!["lint".to_owned(), "audit".to_owned()];
-    assert!(unsorted.validate(file).is_err(), "unsorted must fail");
-    let mut dup = stack.clone();
-    dup.custom_tasks = vec!["audit".to_owned(), "audit".to_owned()];
-    assert!(dup.validate(file).is_err(), "duplicate must fail");
-    for bad in [
-        "",
-        "  ",
-        "two words",
-        "a/b",
-        "${{secrets.x}}",
-        "$(evil)",
-        "`evil`",
-    ] {
-        let mut named = stack.clone();
-        named.custom_tasks = vec![bad.to_owned()];
-        assert!(named.validate(file).is_err(), "{bad:?} must fail");
-    }
+fn removed_rust_custom_tasks_configuration_is_rejected() {
+    let stack = velnor_actions_contract::RustStackConfig::default_config();
+    let mut value = serde_json::to_value(stack).expect("serialize Rust config");
+    value
+        .as_object_mut()
+        .expect("config object")
+        .insert("custom_tasks".to_owned(), serde_json::json!(["audit"]));
+    assert!(serde_json::from_value::<velnor_actions_contract::RustStackConfig>(value).is_err());
 }
 
 #[test]

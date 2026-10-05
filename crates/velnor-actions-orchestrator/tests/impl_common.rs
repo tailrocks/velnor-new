@@ -113,18 +113,19 @@ pub(crate) type Snapshot = BTreeMap<String, (Vec<u8>, SystemTime)>;
 /// as consumer provenance. Every fixture repo carries it so consumer
 /// `prepare` succeeds.
 pub(crate) fn fixture_manifest_json() -> String {
+    let version = env!("CARGO_PKG_VERSION");
     let targets = velnor_actions_contract::SUPPORTED_TARGETS
-    .iter()
-    .map(|target| {
-        format!(
-            "{{\"target\":\"{target}\",\"artifact\":\"https://github.com/tailrocks/velnor-new/releases/download/v0.1.0/velnor-actions-0.1.0-{target}\",\"sha256\":\"{}\"}}",
-            "a".repeat(64)
-        )
+        .iter()
+        .map(|target| {
+            format!(
+                "{{\"target\":\"{target}\",\"artifact\":\"https://github.com/tailrocks/velnor-new/releases/download/v{version}/velnor-actions-{version}-{target}\",\"sha256\":\"{}\"}}",
+                "a".repeat(64)
+            )
     })
     .collect::<Vec<_>>()
     .join(",");
     format!(
-        "{{\"schema\":1,\"version\":\"0.1.0\",\"repository\":\"tailrocks/velnor-new\",\"commit\":\"{}\",\"targets\":[{targets}]}}",
+        "{{\"schema\":1,\"version\":\"{version}\",\"repository\":\"tailrocks/velnor-new\",\"commit\":\"{}\",\"targets\":[{targets}]}}",
         "a".repeat(40)
     )
 }

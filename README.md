@@ -27,7 +27,8 @@ No ambient Cargo, Rust, or MBX is required: `mise.toml` pins every tool
 The full clean-checkout proof below ran 2026-10-01 at commit `34550e8`, whose MBX pin was 1.21.0.
 The separate 1.22.0 acquisition check on 2026-10-04 covered only the
 same-repository qualification candidate; it did not change the 1.21.1
-production pin.
+production pin. The full proof used a fresh clone with `cargo` and `mbx`
+absent from `PATH`:
 
 ```sh
 git clone https://github.com/tailrocks/velnor-new.git
@@ -41,6 +42,11 @@ mise exec -- cargo build --locked -p velnor-actions-cli
 ./target/debug/velnor-actions generate --output-dir /private/tmp/velnor-preview
 diff -r .github /private/tmp/velnor-preview/.github  # no output: preview matches
 ```
+
+Retained tool pins on 2026-10-05: Mise 2026.9.18 under hold #6 and MBX
+1.21.1 under hold #29. The MBX macOS ARM64 binary passed an isolated Rust
+1.98.1 build/test and cache export/import/rebuild fixture; the historical
+output above is unchanged.
 
 Notes: `plan`/`generate` require the checkout's origin to be
 `tailrocks/velnor-new` (a local-path clone is identity-rejected until its

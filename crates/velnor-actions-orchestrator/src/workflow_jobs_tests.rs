@@ -12,6 +12,7 @@ use velnor_actions_contract::WorkflowPolicy;
 /// Discovery with no selected workloads.
 fn empty_discovery() -> Discovery {
     Discovery {
+        mise_checks: Vec::new(),
         statuses: Vec::new(),
         workspaces: Vec::new(),
         proposals: Vec::new(),
@@ -71,7 +72,7 @@ fn rust_proposals_require_rust_without_inventory_records() {
 /// Internal operation of one step, if any.
 fn operation_of(step: &Step) -> Option<&str> {
     match &step.kind {
-        StepKind::Internal { operation } => Some(operation),
+        StepKind::Internal { operation, .. } => Some(operation),
         StepKind::Action { .. } | StepKind::Shell { .. } => None,
     }
 }
@@ -105,6 +106,7 @@ fn plan_job_writes_request_before_plan() {
             acquire,
             &catalog,
             true,
+            true,
             false,
             false,
             false,
@@ -122,6 +124,7 @@ fn plan_job_checks_out_full_history_for_archaeology() {
         "ubuntu-26.04",
         None,
         &catalog,
+        true,
         true,
         false,
         false,
@@ -210,6 +213,7 @@ fn plan_job_prepares_pinned_tools_before_generate_consumers() {
             None,
             &catalog,
             true,
+            true,
             use_mbx,
             use_nextest,
             false,
@@ -281,6 +285,7 @@ fn pure_tofu_plan_drops_all_rust_setup() {
         "ubuntu-26.04",
         None,
         &catalog,
+        false,
         false,
         false,
         false,

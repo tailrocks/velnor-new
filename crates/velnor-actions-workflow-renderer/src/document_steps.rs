@@ -40,14 +40,21 @@ fn internal_env(
     ctx: &RenderContext,
     needs_envs: &[(String, String)],
     job_env: &BTreeMap<String, String>,
+    step_env: &BTreeMap<String, String>,
     actions_read: bool,
-) -> Yaml {
+) -> Result<Yaml, RenderError> {
+    commands::validate_env(step_env)?;
     if op == steps::FETCH_OPERATION {
-        return Yaml::Map(vec![
+        if !step_env.is_empty() {
+            return Err(RenderError::InvalidWorkflow(
+                "fetch_internal_env_not_supported".to_owned(),
+            ));
+        }
+        return Ok(Yaml::Map(vec![
             ("GH_REPO".to_owned(), Yaml::str("${{ github.repository }}")),
             ("GH_TOKEN".to_owned(), Yaml::str("${{ github.token }}")),
             (INTERNAL_OP_ENV.to_owned(), Yaml::str(op.to_owned())),
-        ]);
+        ]));
     }
     let request = format!("{}/{target}-request.json", ctx.request_dir);
     let mut env = Vec::new();
@@ -67,7 +74,17 @@ fn internal_env(
             }
         }
     }
-    Yaml::Map(env)
+    let mut seen: std::collections::BTreeSet<String> =
+        env.iter().map(|(key, _)| key.clone()).collect();
+    for (key, value) in step_env {
+        if !seen.insert(key.clone()) {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "duplicate_internal_env:{key}"
+            )));
+        }
+        env.push((key.clone(), Yaml::str(value.clone())));
+    }
+    Ok(Yaml::Map(env))
 }
 
 /// Render one action step: name, condition, pin, inputs, step env.
@@ -91,7 +108,7 @@ fn action_step_to_yaml(
     }
     commands::validate_env(env)?;
     let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
-    crate::mbx_bundle::push_step_id(&mut entries, step);
+    crate::mbx_bundle::push_step_id(&mut entries, &step.name);
     if let Some(condition) = &step.condition {
         steps::scan_for_private_subcommands(condition)?;
         entries.push(("if".to_owned(), Yaml::str(condition.clone())));
@@ -104,7 +121,12 @@ fn action_step_to_yaml(
     if job_id == FINAL_JOB_ID && is_verdict_download(step) {
         entries.push(("continue-on-error".to_owned(), Yaml::Bool(true)));
     }
-    entries.push(("uses".to_owned(), Yaml::str(uses.to_owned())));
+    let uses_yaml = if uses == crate::tool_seed::TOOL_SEED_USES {
+        Yaml::annotated(uses, "zizmor: ignore[self-repository]")
+    } else {
+        Yaml::str(uses.to_owned())
+    };
+    entries.push(("uses".to_owned(), uses_yaml));
     if !with.is_empty() {
         entries.push(("with".to_owned(), string_map_yaml(with)));
     }
@@ -148,7 +170,7 @@ pub(crate) fn step_to_yaml(
             commands::validate_command_argv(run)?;
             commands::validate_env(env)?;
             let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
-            crate::mbx_bundle::push_step_id(&mut entries, step);
+            crate::mbx_bundle::push_step_id(&mut entries, &step.name);
             if let Some(condition) = &step.condition {
                 steps::scan_for_private_subcommands(condition)?;
                 entries.push(("if".to_owned(), Yaml::str(condition.clone())));
@@ -168,7 +190,10 @@ pub(crate) fn step_to_yaml(
             ));
             Ok(Yaml::Map(entries))
         }
-        StepKind::Internal { operation } => {
+        StepKind::Internal {
+            operation,
+            env: step_env,
+        } => {
             let (op, target) = steps::split_internal_operation(operation)?;
             if op == steps::FETCH_OPERATION && !actions_read {
                 return Err(RenderError::InvalidWorkflow(
@@ -191,7 +216,7 @@ pub(crate) fn step_to_yaml(
             };
             entries.push((
                 "env".to_owned(),
-                internal_env(op, target, ctx, channel, job_env, actions_read),
+                internal_env(op, target, ctx, channel, job_env, step_env, actions_read)?,
             ));
             push_composite_shell(&mut entries, composite);
             entries.push((

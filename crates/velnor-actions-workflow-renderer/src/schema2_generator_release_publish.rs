@@ -27,6 +27,7 @@ assert_files() {
   dir="$1"
   asset="$2"
   sidecar="$3"
+  provenance="$4"
   unexpected="$(find "$dir" -mindepth 1 -maxdepth 1 ! -type f -print -quit)" || return 1
   test -z "$unexpected" || return 1
   actual_files="$(find "$dir" -mindepth 1 -maxdepth 1 -type f -printf '%f\n')" || return 1
@@ -37,6 +38,7 @@ EOF
   expected="$(LC_ALL=C sort <<EOF
 $asset
 $sidecar
+$provenance
 EOF
 )" || return 1
   test "$actual" = "$expected" || return 1
@@ -65,23 +67,15 @@ verify_attestation() {
   gh attestation verify "$1" --repo "$GITHUB_REPOSITORY" --signer-workflow "$GITHUB_REPOSITORY/@WORKFLOW@" --source-digest "$GITHUB_SHA" --source-ref refs/heads/main --deny-self-hosted-runners
 }
 validate_assets() {
-  assert_files @LINUX_DIR@ @LINUX_BIN@ @LINUX_SUM@ || return 1
-  assert_files @MACOS_ARM_DIR@ @MACOS_ARM_BIN@ @MACOS_ARM_SUM@ || return 1
-  assert_files @MACOS_X64_DIR@ @MACOS_X64_BIN@ @MACOS_X64_SUM@ || return 1
-  linux_sha="$(verify_sidecar @LINUX_DIR@/@LINUX_BIN@ @LINUX_DIR@/@LINUX_SUM@)" || return 1
-  macos_arm_sha="$(verify_sidecar @MACOS_ARM_DIR@/@MACOS_ARM_BIN@ @MACOS_ARM_DIR@/@MACOS_ARM_SUM@)" || return 1
-  macos_x64_sha="$(verify_sidecar @MACOS_X64_DIR@/@MACOS_X64_BIN@ @MACOS_X64_DIR@/@MACOS_X64_SUM@)" || return 1
-  for artifact in @LINUX_DIR@/@LINUX_BIN@ @LINUX_DIR@/@LINUX_SUM@ @MACOS_ARM_DIR@/@MACOS_ARM_BIN@ @MACOS_ARM_DIR@/@MACOS_ARM_SUM@ @MACOS_X64_DIR@/@MACOS_X64_BIN@ @MACOS_X64_DIR@/@MACOS_X64_SUM@; do
+  assert_files @LINUX_DIR@ @LINUX_BIN@ @LINUX_SUM@ @LINUX_PROVENANCE@ || return 1
+  assert_files @MACOS_ARM_DIR@ @MACOS_ARM_BIN@ @MACOS_ARM_SUM@ @MACOS_ARM_PROVENANCE@ || return 1
+  assert_files @MACOS_X64_DIR@ @MACOS_X64_BIN@ @MACOS_X64_SUM@ @MACOS_X64_PROVENANCE@ || return 1
+  verify_sidecar @LINUX_DIR@/@LINUX_BIN@ @LINUX_DIR@/@LINUX_SUM@ >/dev/null || return 1
+  verify_sidecar @MACOS_ARM_DIR@/@MACOS_ARM_BIN@ @MACOS_ARM_DIR@/@MACOS_ARM_SUM@ >/dev/null || return 1
+  verify_sidecar @MACOS_X64_DIR@/@MACOS_X64_BIN@ @MACOS_X64_DIR@/@MACOS_X64_SUM@ >/dev/null || return 1
+  for artifact in @LINUX_DIR@/@LINUX_BIN@ @LINUX_DIR@/@LINUX_SUM@ @LINUX_DIR@/@LINUX_PROVENANCE@ @MACOS_ARM_DIR@/@MACOS_ARM_BIN@ @MACOS_ARM_DIR@/@MACOS_ARM_SUM@ @MACOS_ARM_DIR@/@MACOS_ARM_PROVENANCE@ @MACOS_X64_DIR@/@MACOS_X64_BIN@ @MACOS_X64_DIR@/@MACOS_X64_SUM@ @MACOS_X64_DIR@/@MACOS_X64_PROVENANCE@; do
     verify_attestation "$artifact" || return 1
   done
-}
-verify_canonical_manifest() {
-  manifest="$1"
-  tag="$2"
-  linux_sha="$3"
-  macos_arm_sha="$4"
-  macos_x64_sha="$5"
-  jq -e --arg commit "$GITHUB_SHA" --arg tag "$tag" --arg linux_sha "$linux_sha" --arg macos_arm_sha "$macos_arm_sha" --arg macos_x64_sha "$macos_x64_sha" '. == {schema:1,version:"@VERSION@",repository:"@REPOSITORY@",commit:$commit,targets:[{target:"@LINUX_TARGET@",artifact:("https://github.com/@REPOSITORY@/releases/download/"+$tag+"/@LINUX_BIN@"),sha256:$linux_sha},{target:"@MACOS_ARM_TARGET@",artifact:("https://github.com/@REPOSITORY@/releases/download/"+$tag+"/@MACOS_ARM_BIN@"),sha256:$macos_arm_sha},{target:"@MACOS_X64_TARGET@",artifact:("https://github.com/@REPOSITORY@/releases/download/"+$tag+"/@MACOS_X64_BIN@"),sha256:$macos_x64_sha}]}' "$manifest" >/dev/null
 }
 "#;
 
@@ -89,12 +83,13 @@ const PREPARE_BODY: &str = r#"
 verify_same_sha_ci || exit 1
 verify_release_environment || exit 1
 validate_assets || exit 1
-tag="generator-$GITHUB_SHA"
-rm -rf release-manifest
+rust_version="$(catalog_version RUST_VERSION)"
+mr_boxington_version="$(catalog_version MR_BOXINGTON_VERSION)"
+bash scripts/generator-release/create-release-manifest.sh "@VERSION@" "@REPOSITORY@" "$rust_version" "$mr_boxington_version"
 mkdir -p release-manifest
 manifest="@MANIFEST_PATH@"
-jq -n --arg commit "$GITHUB_SHA" --arg tag "$tag" --arg linux_sha "$linux_sha" --arg macos_arm_sha "$macos_arm_sha" --arg macos_x64_sha "$macos_x64_sha" '{schema:1,version:"@VERSION@",repository:"@REPOSITORY@",commit:$commit,targets:[{target:"@LINUX_TARGET@",artifact:("https://github.com/@REPOSITORY@/releases/download/"+$tag+"/@LINUX_BIN@"),sha256:$linux_sha},{target:"@MACOS_ARM_TARGET@",artifact:("https://github.com/@REPOSITORY@/releases/download/"+$tag+"/@MACOS_ARM_BIN@"),sha256:$macos_arm_sha},{target:"@MACOS_X64_TARGET@",artifact:("https://github.com/@REPOSITORY@/releases/download/"+$tag+"/@MACOS_X64_BIN@"),sha256:$macos_x64_sha}]}' > "$manifest"
-verify_canonical_manifest "$manifest" "$tag" "$linux_sha" "$macos_arm_sha" "$macos_x64_sha" || exit 1
+mv release-manifest.json "$manifest"
+test -s "$manifest"
 "#;
 
 const PUBLISH_BODY: &str = r#"
@@ -106,9 +101,12 @@ unexpected="$(find release-manifest -mindepth 1 -maxdepth 1 ! -type f -print -qu
 test -z "$unexpected" || exit 1
 actual_manifest="$(find release-manifest -mindepth 1 -maxdepth 1 -type f -printf '%f\n')" || exit 1
 test "$actual_manifest" = "@MANIFEST_NAME@" || exit 1
-tag="generator-$GITHUB_SHA"
 verify_attestation "$manifest" || exit 1
-verify_canonical_manifest "$manifest" "$tag" "$linux_sha" "$macos_arm_sha" "$macos_x64_sha" || exit 1
+rust_version="$(catalog_version RUST_VERSION)"
+mr_boxington_version="$(catalog_version MR_BOXINGTON_VERSION)"
+bash scripts/generator-release/create-release-manifest.sh "@VERSION@" "@REPOSITORY@" "$rust_version" "$mr_boxington_version"
+cmp release-manifest.json "$manifest"
+tag="v@VERSION@"
 if git ls-remote --quiet --exit-code --refs "https://github.com/$GITHUB_REPOSITORY.git" "refs/tags/$tag" >/dev/null 2>&1; then
   echo "release tag already exists: $tag" >&2
   exit 1
@@ -116,7 +114,7 @@ else
   status="$?"
   test "$status" -eq 2 || exit "$status"
 fi
-gh release create "$tag" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$tag" --latest=false --notes "velnor-actions @VERSION@ built from $GITHUB_SHA." @LINUX_DIR@/@LINUX_BIN@ @LINUX_DIR@/@LINUX_SUM@ @MACOS_ARM_DIR@/@MACOS_ARM_BIN@ @MACOS_ARM_DIR@/@MACOS_ARM_SUM@ @MACOS_X64_DIR@/@MACOS_X64_BIN@ @MACOS_X64_DIR@/@MACOS_X64_SUM@ "$manifest"
+gh release create "$tag" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "velnor-actions $tag" --latest=false --notes "velnor-actions @VERSION@ built from $GITHUB_SHA." @LINUX_DIR@/@LINUX_BIN@ @LINUX_DIR@/@LINUX_SUM@ @LINUX_DIR@/@LINUX_PROVENANCE@ @MACOS_ARM_DIR@/@MACOS_ARM_BIN@ @MACOS_ARM_DIR@/@MACOS_ARM_SUM@ @MACOS_ARM_DIR@/@MACOS_ARM_PROVENANCE@ @MACOS_X64_DIR@/@MACOS_X64_BIN@ @MACOS_X64_DIR@/@MACOS_X64_SUM@ @MACOS_X64_DIR@/@MACOS_X64_PROVENANCE@ "$manifest"
 "#;
 
 pub(super) fn prepare_manifest(version: &str, assets: &AssetNames) -> String {
@@ -149,12 +147,21 @@ fn replacements(mut script: String, version: &str, assets: &AssetNames) -> Strin
         ("@LINUX_DIR@", "linux-assets"),
         ("@LINUX_BIN@", assets.linux_bin.as_str()),
         ("@LINUX_SUM@", assets.linux_sum.as_str()),
-        ("@MACOS_ARM_DIR@", "macos-arm64-assets"),
+        ("@LINUX_PROVENANCE@", assets.linux_provenance.as_str()),
+        ("@MACOS_ARM_DIR@", "macos-assets"),
         ("@MACOS_ARM_BIN@", assets.macos_arm_bin.as_str()),
         ("@MACOS_ARM_SUM@", assets.macos_arm_sum.as_str()),
-        ("@MACOS_X64_DIR@", "macos-x64-assets"),
+        (
+            "@MACOS_ARM_PROVENANCE@",
+            assets.macos_arm_provenance.as_str(),
+        ),
+        ("@MACOS_X64_DIR@", "macos-intel-assets"),
         ("@MACOS_X64_BIN@", assets.macos_x64_bin.as_str()),
         ("@MACOS_X64_SUM@", assets.macos_x64_sum.as_str()),
+        (
+            "@MACOS_X64_PROVENANCE@",
+            assets.macos_x64_provenance.as_str(),
+        ),
         ("@LINUX_TARGET@", "x86_64-unknown-linux-gnu"),
         ("@MACOS_ARM_TARGET@", "aarch64-apple-darwin"),
         ("@MACOS_X64_TARGET@", "x86_64-apple-darwin"),

@@ -182,18 +182,23 @@ fn mbx_objects_precede_fetch_on_mbx_crates() -> TestResult {
         .ok_or_else(|| std::io::Error::other("missing crate job"))?;
     let names: Vec<&str> = job.steps.iter().map(|step| step.name.as_str()).collect();
     let at = |name: &str| names.iter().position(|seen| *seen == name);
-    // P08: restore shared sources, configure MBX, then probe-and-fetch.
+    // Hosted MBX restores shared Cargo sources, verifies the pinned
+    // toolchains, restores MBX objects, then probes-and-fetches.
     let (Some(restore_at), Some(objects_at), Some(fetch_at), Some(run_at)) = (
         at("Restore Cargo sources"),
-        at("Setup MBX"),
+        at("Restore MBX objects"),
         at("Fetch Cargo sources"),
         at("Clippy"),
     ) else {
         return Err(format!("mbx crate misses source/object order: {names:?}").into());
     };
+    let preflight_at = at("Verify MBX and Rust toolchains").ok_or("MBX preflight")?;
     assert!(
-        restore_at < objects_at && objects_at < fetch_at && fetch_at < run_at,
-        "restore<objects<fetch<obligations: {names:?}"
+        restore_at < preflight_at
+            && preflight_at < objects_at
+            && objects_at < fetch_at
+            && fetch_at < run_at,
+        "restore<preflight<objects<fetch<obligations: {names:?}"
     );
     assert!(
         names.iter().all(|name| *name != "Restore Cargo registry"),

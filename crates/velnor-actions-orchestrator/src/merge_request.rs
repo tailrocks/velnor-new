@@ -109,6 +109,12 @@ pub(crate) fn assemble_with_needs(
         &run_dir.join("reports"),
         &mut errors,
     );
+    let check_proofs = crate::check_evidence::gate::read_proofs(
+        &plan,
+        &run_dir.join("reports"),
+        &task_reports,
+        &mut errors,
+    );
     let baseline = read_json_with_limit(
         run_dir,
         "baseline.json",
@@ -128,6 +134,7 @@ pub(crate) fn assemble_with_needs(
         "matrix": matrix,
         "matrix_reports": reports,
         "task_reports": task_reports,
+        "check_proofs": check_proofs,
         "required_job_ids": inventory,
         "required_jobs": jobs,
         "assembly_errors": errors,

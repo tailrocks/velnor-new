@@ -82,6 +82,11 @@ fn sample_text() -> Result<String, OrchestratorError> {
 /// Commented sample body from cli-contract section 4.
 const SAMPLE_BODY: &str = r#"schema = 1
 
+# Optional repository-owned named Mise checks, independent of language stacks.
+# checks = []
+# Configure task names, explicit platforms, tool pins, and scenario evidence as
+# described in docs/implemented/named-mise-checks.md before adding checks.
+
 # Velnor replaces the entire .github tree on generate. Keep CODEOWNERS at the
 # repository root or under docs/ (both are GitHub-recognized); anything inside
 # .github is removed.

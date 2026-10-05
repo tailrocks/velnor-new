@@ -138,11 +138,11 @@ fn dispatch_switch_preserves_custom_actions_and_removes_shared_outputs() -> Test
         Some(ExecutionMode::Hosted),
     )?;
     assert!(
-        hosted
-            .files_written
-            .iter()
-            .all(|path| !path.starts_with(".github/actions/")),
-        "hosted output has no shared action: {:?}",
+        hosted.files_written.iter().all(|path| {
+            !path.starts_with(".github/actions/")
+                || path == ".github/actions/velnor-tool-seed/action.yml"
+        }),
+        "hosted output has no lane action beyond the generator tool seed: {:?}",
         hosted.files_written
     );
     assert!(!github.join("actions/rust-demo/action.yml").exists());

@@ -13,6 +13,7 @@ use velnor_actions_workflow_renderer::render::{RenderContext, WORKFLOW_PATH};
 /// Minimal crate job covering the crate attach branch.
 fn legacy_task_job() -> Job {
     Job {
+        check_runner: None,
         display_name: "Rust / demo".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
         timeout_minutes: JobTimeout::CRATE,
@@ -74,6 +75,7 @@ fn lock_acquire_inserts_digest_verified_stage() {
                 "ubuntu-26.04",
                 None,
                 &catalog,
+                true,
                 true,
                 false,
                 false,
@@ -157,6 +159,7 @@ fn lock_acquire_records_source_commit() {
             None,
             &catalog,
             true,
+            true,
             false,
             false,
             false,
@@ -199,6 +202,7 @@ fn preseed_attach_builds_once_and_sets_mode() {
                     "ubuntu-26.04",
                     None,
                     &catalog,
+                    true,
                     true,
                     false,
                     false,
@@ -303,6 +307,7 @@ fn preseed_fixture(use_mbx: bool, fetch_roots: &[String]) -> WorkflowPlan {
                     None,
                     &catalog,
                     true,
+                    true,
                     use_mbx,
                     false,
                     false,
@@ -352,14 +357,14 @@ mod mbx_tests;
 
 #[test]
 fn preseed_skips_mbx_setup_for_cargo_only_plans() {
-    use velnor_actions_workflow_renderer::steps::MBX_SETUP_NAME;
+    use velnor_actions_workflow_renderer::steps::{MBX_PREFLIGHT_NAME, MBX_RESTORE_NAME};
     use velnor_actions_workflow_renderer::{PRESEED_BUILD_NAME, PRESEED_VERIFY_NAME};
     let mut plan = preseed_fixture(false, &[String::new()]);
     attach_preseed(&mut plan, "ubuntu-26.04", "0.1.0").expect("attach");
     let steps = &plan.ir.jobs["plan"].steps;
     let names: Vec<&str> = steps.iter().map(|step| step.name.as_str()).collect();
     assert!(
-        !names.contains(&MBX_SETUP_NAME),
+        !names.contains(&MBX_PREFLIGHT_NAME) && !names.contains(&MBX_RESTORE_NAME),
         "cargo-only plans stay MBX-free: {names:?}"
     );
     let probe = names

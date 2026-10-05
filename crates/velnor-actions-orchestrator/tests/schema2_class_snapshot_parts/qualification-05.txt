@@ -1,0 +1,120 @@
+    timeout-minutes: 30
+    steps:
+      - name: Hold host port
+        run: "docker run -d --name g4-hold -p 8080:80 alpine:3.22 sleep 120 && i=0 && while [ \"$i\" -lt 30 ]; do docker port g4-hold 80 | grep -q 8080 && break; i=$((i+1)); sleep 1; done && docker port g4-hold 80 | grep -q 8080 && echo port-held && sleep 45 && docker rm -f g4-hold"
+  ports-b-hosted:
+    name: Ports B / GitHub hosted
+    if: inputs.mode == 'ports'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    steps:
+      - name: Hold host port
+        run: "docker run -d --name g4-hold -p 8080:80 alpine:3.22 sleep 120 && i=0 && while [ \"$i\" -lt 30 ]; do docker port g4-hold 80 | grep -q 8080 && break; i=$((i+1)); sleep 1; done && docker port g4-hold 80 | grep -q 8080 && echo port-held && sleep 45 && docker rm -f g4-hold"
+  ports-a-scale-set:
+    name: Ports A / Velnor Scale Set
+    if: inputs.mode == 'ports'
+    runs-on: [velnor, ubuntu-26.04-scale-set]
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash -e {0}
+    steps:
+      - name: Hold host port
+        run: "docker run -d --name g4-hold -p 8080:80 alpine:3.22 sleep 120 && i=0 && while [ \"$i\" -lt 30 ]; do docker port g4-hold 80 | grep -q 8080 && break; i=$((i+1)); sleep 1; done && docker port g4-hold 80 | grep -q 8080 && echo port-held && sleep 45 && docker rm -f g4-hold"
+  ports-b-scale-set:
+    name: Ports B / Velnor Scale Set
+    if: inputs.mode == 'ports'
+    runs-on: [velnor, ubuntu-26.04-scale-set]
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash -e {0}
+    steps:
+      - name: Hold host port
+        run: "docker run -d --name g4-hold -p 8080:80 alpine:3.22 sleep 120 && i=0 && while [ \"$i\" -lt 30 ]; do docker port g4-hold 80 | grep -q 8080 && break; i=$((i+1)); sleep 1; done && docker port g4-hold 80 | grep -q 8080 && echo port-held && sleep 45 && docker rm -f g4-hold"
+  pressure-a-hosted:
+    name: Pressure A / GitHub hosted
+    if: inputs.mode == 'pressure'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    steps:
+      - name: Pressure sleep
+        run: echo pressure-start && sleep 150 && echo pressure-ok
+  pressure-b-hosted:
+    name: Pressure B / GitHub hosted
+    if: inputs.mode == 'pressure'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    steps:
+      - name: Pressure sleep
+        run: echo pressure-start && sleep 150 && echo pressure-ok
+  pressure-c-hosted:
+    name: Pressure C / GitHub hosted
+    if: inputs.mode == 'pressure'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    steps:
+      - name: Pressure sleep
+        run: echo pressure-start && sleep 150 && echo pressure-ok
+  pressure-a-scale-set:
+    name: Pressure A / Velnor Scale Set
+    if: inputs.mode == 'pressure'
+    runs-on: [velnor, ubuntu-26.04-scale-set]
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash -e {0}
+    steps:
+      - name: Pressure sleep
+        run: echo pressure-start && sleep 150 && echo pressure-ok
+  pressure-b-scale-set:
+    name: Pressure B / Velnor Scale Set
+    if: inputs.mode == 'pressure'
+    runs-on: [velnor, ubuntu-26.04-scale-set]
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash -e {0}
+    steps:
+      - name: Pressure sleep
+        run: echo pressure-start && sleep 150 && echo pressure-ok
+  pressure-c-scale-set:
+    name: Pressure C / Velnor Scale Set
+    if: inputs.mode == 'pressure'
+    runs-on: [velnor, ubuntu-26.04-scale-set]
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash -e {0}
+    steps:
+      - name: Pressure sleep
+        run: echo pressure-start && sleep 150 && echo pressure-ok
+  secret-hosted:
+    name: Secret / GitHub hosted
+    if: inputs.mode == 'secret'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    steps:
+      - name: Hold secret canary
+        env:
+          G3_CANARY: ${{ secrets.G3_CANARY }}
+        run: "test -n \"$G3_CANARY\" && sleep 180"
+  secret-scale-set:
+    name: Secret / Velnor Scale Set
+    if: inputs.mode == 'secret'
+    runs-on: [velnor, ubuntu-26.04-scale-set]
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
+    steps:
+      - name: Hold secret canary
+        env:
+          G3_CANARY: ${{ secrets.G3_CANARY }}
+        run: "test -n \"$G3_CANARY\" && sleep 180"
+  mbx-cache-write-hosted:
+    name: MBX objects cache / protected-main writer
+    if: inputs.mode == 'mbx-cache-roundtrip' && github.ref == 'refs/heads/main' && github.ref_protected == true
+    runs-on: ubuntu-26.04
+    timeout-minutes: 45
+    permissions:

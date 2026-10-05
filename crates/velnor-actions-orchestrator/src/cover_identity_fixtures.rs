@@ -105,6 +105,7 @@ pub(super) fn manifest_with(entries: &[(&str, &str)]) -> BaselineManifest {
 pub(super) fn discovery_with(task_ids: &[&str]) -> Discovery {
     use velnor_actions_rust::{CompileDriver, NextestProfile, TaskGroup, TaskKind, TestRunner};
     Discovery {
+        mise_checks: Vec::new(),
         statuses: Vec::new(),
         workspaces: Vec::new(),
         proposals: task_ids

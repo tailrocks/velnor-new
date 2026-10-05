@@ -174,8 +174,8 @@ fn mixed_repo_plan_carries_union_with_pure_tofu_group() -> TestResult {
         "mixed plan keeps the triple"
     );
     assert!(
-        names(plan).contains(&"Prepare Rust components"),
-        "mixed plan keeps components"
+        !names(plan).contains(&"Prepare Rust components"),
+        "helper-only mixed Plan does not install Clippy/rustfmt components"
     );
     let mut saw_rust = false;
     let mut saw_tofu = false;

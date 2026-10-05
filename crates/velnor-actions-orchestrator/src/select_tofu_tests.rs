@@ -20,6 +20,7 @@ fn selected(root: &str) -> DetectionStatus {
 /// Minimal discovery carrying tofu statuses plus selection records.
 fn discovery_with(statuses: Vec<DetectionStatus>, units: Vec<TofuSelectionUnit>) -> Discovery {
     Discovery {
+        mise_checks: Vec::new(),
         statuses,
         workspaces: Vec::new(),
         proposals: Vec::new(),

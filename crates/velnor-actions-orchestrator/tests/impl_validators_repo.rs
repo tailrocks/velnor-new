@@ -9,7 +9,7 @@ use velnor_actions_contract::{PullRequestCachePolicy, WorkflowPolicy};
 use velnor_actions_mise::cache::validate_sources_path;
 use velnor_actions_orchestrator::{prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::steps::{
-    CompileDriver, TASK_ARTIFACTS_DIR, cache_action_step, mbx_step_for_driver,
+    CompileDriver, TASK_ARTIFACTS_DIR, cache_action_step, mbx_steps_for_driver,
 };
 
 use crate::impl_common::{fixture_manifest_json, without_ambient_identity};
@@ -122,24 +122,24 @@ fn full_render_places_one_preflight_before_each_mbx_setup() -> TestResult {
                 .map(|(position, _)| position)
                 .collect();
             let setup_positions: Vec<usize> = yaml
-                .match_indices("name: Setup MBX")
+                .match_indices("name: Restore MBX objects")
                 .map(|(position, _)| position)
                 .collect();
             assert!(
                 !setup_positions.is_empty(),
-                "sample emits MBX setup: {yaml}"
+                "sample emits hosted MBX object restore: {yaml}"
             );
             assert_eq!(
                 preflight_positions.len(),
                 setup_positions.len(),
-                "full rendering injects exactly one central preflight per MBX job"
+                "full rendering injects exactly one central preflight per hosted MBX restore"
             );
             assert!(
                 preflight_positions
                     .iter()
                     .zip(&setup_positions)
                     .all(|(preflight, setup)| preflight < setup),
-                "preflight precedes each MBX setup: {yaml}"
+                "preflight precedes each MBX object restore: {yaml}"
             );
             Ok(())
         },
@@ -325,23 +325,43 @@ fn cache_action_transport_never_carries_mbx() {
 fn mbx_transport_stays_with_mr_boxington_action() {
     let mbx = uses("jdx/mr-boxington-action");
     let pin = velnor_actions_mise::MR_BOXINGTON_VERSION;
-    let step = mbx_step_for_driver(&mbx, CompileDriver::Mbx, pin)
-        .expect("setup step")
-        .expect("MBX profile");
+    let [preflight, step] =
+        mbx_steps_for_driver(&mbx, CompileDriver::Mbx, pin, "1.98.1", mbx_test_env())
+            .expect("setup step")
+            .expect("MBX profile");
+    assert_eq!(preflight.name, "Verify MBX and Rust toolchains");
+    assert!(format!("{:?}", preflight.kind).contains("mise --no-config"));
     assert!(
         format!("{:?}", step.kind).contains("jdx/mr-boxington-action"),
         "mbx bytes move only through the external action"
     );
-    let velnor_actions_contract::StepKind::Action { with, .. } = &step.kind else {
+    let velnor_actions_contract::StepKind::Action { with, env, .. } = &step.kind else {
         panic!("MBX setup must be an action");
     };
-    assert_eq!(with.get("version").map(String::as_str), Some(pin));
-    assert_eq!(with.get("backend").map(String::as_str), Some("local"));
+    assert!(!with.contains_key("version"));
+    assert_eq!(with.get("toolchain").map(String::as_str), Some("1.98.1"));
+    assert_eq!(env.get("VELNOR_MBX_VERSION").map(String::as_str), Some(pin));
     assert!(
-        mbx_step_for_driver(&mbx, CompileDriver::Cargo, pin)
+        mbx_steps_for_driver(&mbx, CompileDriver::Cargo, pin, "1.98.1", mbx_test_env())
             .expect("Cargo profile")
             .is_none()
     );
     let other = uses("actions/cache/restore");
-    assert!(mbx_step_for_driver(&other, CompileDriver::Mbx, pin).is_err());
+    assert!(
+        mbx_steps_for_driver(&other, CompileDriver::Mbx, pin, "1.98.1", mbx_test_env()).is_err()
+    );
+}
+
+fn mbx_test_env() -> std::collections::BTreeMap<String, String> {
+    std::collections::BTreeMap::from([
+        (
+            "MISE_RUSTUP_HOME".to_owned(),
+            "${{ runner.temp }}/rustup".to_owned(),
+        ),
+        (
+            "MISE_CARGO_HOME".to_owned(),
+            "${{ runner.temp }}/cargo".to_owned(),
+        ),
+        ("RUSTUP_TOOLCHAIN".to_owned(), "1.98.1".to_owned()),
+    ])
 }

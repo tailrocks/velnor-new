@@ -10,7 +10,9 @@ use velnor_actions_contract::Step;
 use velnor_actions_mise::{PREPARE_PINNED_TOOLS_STEP, ToolCatalog};
 use velnor_actions_workflow_renderer::cache_p08::RESTORE_SOURCES_NAME;
 use velnor_actions_workflow_renderer::render::{RenderContext, WORKFLOW_PATH};
-use velnor_actions_workflow_renderer::steps::{MBX_SETUP_NAME, STAGED_BINARY_PREFIX};
+use velnor_actions_workflow_renderer::steps::{
+    MBX_PREFLIGHT_NAME, MBX_RESTORE_NAME, STAGED_BINARY_PREFIX,
+};
 
 /// Pre-seed fixture plan over one plan job plus the final gate.
 fn preseed_fixture(use_mbx: bool, fetch_roots: &[String]) -> WorkflowPlan {
@@ -24,6 +26,7 @@ fn preseed_fixture(use_mbx: bool, fetch_roots: &[String]) -> WorkflowPlan {
                     "ubuntu-26.04",
                     None,
                     &catalog,
+                    true,
                     true,
                     use_mbx,
                     false,
@@ -83,16 +86,22 @@ fn preseed_mbx_setup_and_build_follow_sources_with_homes() {
             .position(|step| *step == name)
             .unwrap_or_else(|| panic!("missing {name}: {names:?}"))
     };
-    let (restore, mbx, probe, build, verify, save) = (
+    let (restore, preflight, mbx, probe, build, verify, save) = (
         at(RESTORE_SOURCES_NAME),
-        at(MBX_SETUP_NAME),
+        at(MBX_PREFLIGHT_NAME),
+        at(MBX_RESTORE_NAME),
         at(crate::source_prep::FETCH_SOURCES_STEP),
         at(PRESEED_BUILD_NAME),
         at(PRESEED_VERIFY_NAME),
         at(SAVE_SOURCES_NAME),
     );
     assert!(
-        restore < mbx && mbx < probe && probe < build && build < verify && verify < save,
+        restore < preflight
+            && preflight < mbx
+            && mbx < probe
+            && probe < build
+            && build < verify
+            && verify < save,
         "preseed order: {names:?}"
     );
     assert_owned_homes(steps, PRESEED_BUILD_NAME);
@@ -107,7 +116,7 @@ fn preseed_skips_mbx_setup_for_cargo_only_plans() {
     let steps = &plan.ir.jobs["plan"].steps;
     let names: Vec<&str> = steps.iter().map(|step| step.name.as_str()).collect();
     assert!(
-        !names.contains(&MBX_SETUP_NAME),
+        !names.contains(&MBX_PREFLIGHT_NAME) && !names.contains(&MBX_RESTORE_NAME),
         "cargo-only plans stay rust-cache-only: {names:?}"
     );
     let probe = names
@@ -144,7 +153,7 @@ fn preseed_anchor_uses_mbx_action_identity() {
             },
         },
         Step {
-            name: MBX_SETUP_NAME.to_owned(),
+            name: MBX_PREFLIGHT_NAME.to_owned(),
             condition: None,
             kind: velnor_actions_contract::StepKind::Shell {
                 run: vec!["true".to_owned()],

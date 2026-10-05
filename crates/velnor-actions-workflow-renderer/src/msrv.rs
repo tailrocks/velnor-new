@@ -100,6 +100,7 @@ pub fn msrv_job(
     Ok(Job {
         display_name: format!("MSRV {}", spec.package),
         runs_on: label.to_owned(),
+        check_runner: None,
         timeout_minutes: JobTimeout::MSRV,
         needs: Vec::new(),
         condition: None,

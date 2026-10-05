@@ -210,12 +210,24 @@ fn preflight_checks_exact_installs_before_exposing_paths() -> Result<(), Box<dyn
         panic!("setup must be an action step");
     };
     assert!(uses.starts_with("jdx/mr-boxington-action@"));
-    assert_eq!(with.get("backend").map(String::as_str), Some("local"));
     assert_eq!(
-        with.get("version").map(String::as_str),
+        with.get("github-cache-mode").map(String::as_str),
+        Some("objects")
+    );
+    assert_eq!(with.get("version"), None);
+    assert_eq!(with.get("backend"), None);
+    assert_eq!(
+        with.get("toolchain").map(String::as_str),
+        Some(TEST_RUST_TOOLCHAIN)
+    );
+    assert_eq!(
+        env.get("VELNOR_MBX_VERSION").map(String::as_str),
         Some(TEST_MBX_VERSION)
     );
-    assert!(env.is_empty(), "local setup carries no cache-mode override");
+    assert_eq!(
+        env.get("ACTIONS_CACHE_MODE").map(String::as_str),
+        Some("read")
+    );
     assert_valid_preflight(&fixture, script)?;
     assert_rejects_unqualified_preflight(&fixture, script)?;
     Ok(())

@@ -7,6 +7,8 @@ use velnor_actions_workflow_renderer::RenderedTree;
 mod qualification_tests;
 
 pub(super) const GENERATOR_RELEASE: &str = include_str!("schema2_generator_release_snapshot.yml");
+const RELEASE_QUALIFICATION_HELPER: &str =
+    include_str!("../../../scripts/generator-release/qualification-goldens.sh");
 
 /// Byte-lock the rendered workflow and check release invariants.
 pub(super) fn assert_rendered(tree: &RenderedTree) -> Result<(), Box<dyn std::error::Error>> {
@@ -36,8 +38,41 @@ fn assert_generator(body: &str) -> Result<(), Box<dyn std::error::Error>> {
     assert_attest(body, "attest-macos-x64", "build-macos-x64")?;
     assert_manifest(body)?;
     qualification_tests::assert_qualification_jobs(body)?;
+    assert_candidate_helper_contract();
     assert_publish(super::job_body(body, "publish-generator")?)?;
     Ok(())
+}
+
+fn assert_candidate_helper_contract() {
+    assert!(
+        RELEASE_QUALIFICATION_HELPER
+            .contains("$manifest_file_sha\" != \"$CANDIDATE_MANIFEST_SHA256")
+    );
+    assert!(RELEASE_QUALIFICATION_HELPER.contains("$manifest_sha\" != \"$source_sha"));
+    assert!(
+        RELEASE_QUALIFICATION_HELPER
+            .contains("cp \"$CANDIDATE_MANIFEST\" \"$repo/.velnor/release-manifest.json\"")
+    );
+    assert!(
+        RELEASE_QUALIFICATION_HELPER
+            .contains("cmp -s \"$CANDIDATE_MANIFEST\" \"$repo/.velnor/release-manifest.json\"")
+    );
+    assert!(
+        RELEASE_QUALIFICATION_HELPER.contains("grep -RFqF -- \"$linux_sha\" \"$preview/.github\"")
+    );
+    assert!(
+        RELEASE_QUALIFICATION_HELPER
+            .contains("generated workflows do not embed the Linux candidate digest")
+    );
+    assert!(RELEASE_QUALIFICATION_HELPER.contains("\"$BIN\" generate --output-dir \"$preview\""));
+    assert!(
+        RELEASE_QUALIFICATION_HELPER.contains("normalize_candidate_source_commit \"$preview\"")
+    );
+    assert!(
+        RELEASE_QUALIFICATION_HELPER
+            .contains("generated workflows do not bind the candidate source commit")
+    );
+    assert!(RELEASE_QUALIFICATION_HELPER.contains("printf '%040d' 0 | tr '0' 'b'"));
 }
 
 fn assert_workflow_shape(body: &str) {
@@ -63,7 +98,9 @@ fn assert_workflow_shape(body: &str) {
     assert!(!body.contains("pull_request:"), "{body}");
     assert!(!body.contains("inputs:"), "{body}");
     assert!(!body.contains("gh release create \"v0.1.0\""), "{body}");
-    assert!(body.contains("generator-$GITHUB_SHA"), "{body}");
+    assert!(body.contains("tag=\\\"v0.1.1\\\""), "{body}");
+    assert!(body.contains("gh release create \\\"$tag\\\""), "{body}");
+    assert!(!body.contains("generator-$GITHUB_SHA"), "{body}");
     assert_eq!(body.matches("contents: write").count(), 1, "{body}");
     assert_eq!(body.matches("id-token: write").count(), 4, "{body}");
     assert_eq!(body.matches("attestations: write").count(), 4, "{body}");
@@ -208,6 +245,11 @@ fn assert_build(
         "{job}"
     );
     assert!(job.contains("git rev-parse HEAD"), "{job}");
+    assert!(
+        job.contains("Record source-bound candidate provenance"),
+        "{job}"
+    );
+    assert!(job.contains(".provenance.json"), "{job}");
     assert!(job.contains("actions/upload-artifact@"), "{job}");
 }
 
@@ -243,12 +285,9 @@ fn assert_publish(publish: &str) -> Result<(), Box<dyn std::error::Error>> {
     assert!(publish.contains("verify_same_sha_ci"), "{publish}");
     assert!(publish.contains("verify_release_environment"), "{publish}");
     assert!(publish.contains("assert_files linux-assets"), "{publish}");
+    assert!(publish.contains("assert_files macos-assets"), "{publish}");
     assert!(
-        publish.contains("assert_files macos-arm64-assets"),
-        "{publish}"
-    );
-    assert!(
-        publish.contains("assert_files macos-x64-assets"),
+        publish.contains("assert_files macos-intel-assets"),
         "{publish}"
     );
     assert!(publish.contains("verify_sidecar"), "{publish}");
@@ -277,14 +316,17 @@ fn assert_publish(publish: &str) -> Result<(), Box<dyn std::error::Error>> {
         .rfind("verify_attestation")
         .ok_or("missing manifest attestation verification")?;
     let canonical = publish
-        .rfind("verify_canonical_manifest")
-        .ok_or("missing canonical manifest verification")?;
+        .rfind("create-release-manifest.sh")
+        .ok_or("missing canonical manifest producer")?;
     let release = publish
         .find("gh release create")
         .ok_or("missing release publication")?;
     assert!(validate < manifest && manifest < verify_manifest && verify_manifest < canonical);
     assert!(canonical < release);
-    assert!(publish.contains("schema:1"), "{publish}");
+    assert!(publish.contains("cmp release-manifest.json"), "{publish}");
+    assert!(publish.contains("tag=\\\"v0.1.1\\\""), "{publish}");
+    assert!(!publish.contains("jq -n"), "{publish}");
+    assert!(!publish.contains("verify_canonical_manifest"), "{publish}");
     assert!(
         publish.contains(&format!(
             "velnor-actions-{version}-x86_64-unknown-linux-gnu"
@@ -296,13 +338,7 @@ fn assert_publish(publish: &str) -> Result<(), Box<dyn std::error::Error>> {
         publish.contains(&format!("velnor-actions {version} built from")),
         "{publish}"
     );
-    assert!(publish.contains("repository:"), "{publish}");
     assert!(publish.contains("tailrocks/velnor-new"), "{publish}");
-    assert!(publish.contains("commit:$commit"), "{publish}");
-    assert!(publish.contains("targets:"), "{publish}");
-    assert!(publish.contains("sha256:$linux_sha"), "{publish}");
-    assert!(publish.contains("sha256:$macos_arm_sha"), "{publish}");
-    assert!(publish.contains("sha256:$macos_x64_sha"), "{publish}");
     assert!(publish.contains("--latest=false"), "{publish}");
     Ok(())
 }
@@ -316,7 +352,9 @@ fn assert_manifest(body: &str) -> Result<(), Box<dyn std::error::Error>> {
     assert!(job.contains("verify_same_sha_ci"), "{job}");
     assert!(job.contains("verify_release_environment"), "{job}");
     assert!(job.contains("validate_assets"), "{job}");
-    assert!(job.contains("verify_canonical_manifest"), "{job}");
+    assert!(job.contains("create-release-manifest.sh"), "{job}");
+    assert!(job.contains("manifest_sha256"), "{job}");
+    assert!(!job.contains("jq -n"), "{job}");
     assert!(job.contains("actions/attest-build-provenance@"), "{job}");
     assert!(
         job.contains(&format!("release-manifest/{RELEASE_MANIFEST_FILENAME}")),
@@ -324,13 +362,18 @@ fn assert_manifest(body: &str) -> Result<(), Box<dyn std::error::Error>> {
     );
     assert!(job.contains("Upload attested release manifest"), "{job}");
     let validation = job.find("validate_assets").ok_or("missing validation")?;
-    let create = job.find("jq -n").ok_or("missing manifest creation")?;
+    let create = job
+        .find("create-release-manifest.sh")
+        .ok_or("missing canonical manifest creation")?;
+    let digest = job
+        .find("Record same-run manifest digest")
+        .ok_or("missing same-run manifest digest")?;
     let attest = job
         .find("Attest built assets")
         .ok_or("missing manifest attestation")?;
     let upload = job
         .find("Upload attested release manifest")
         .ok_or("missing manifest upload")?;
-    assert!(validation < create && create < attest && attest < upload);
+    assert!(validation < create && create < digest && digest < attest && attest < upload);
     Ok(())
 }

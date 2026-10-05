@@ -55,6 +55,7 @@ fn job(display_name: &str, runs_on: &str, steps: Vec<Step>) -> Job {
         condition: None,
         permissions: None,
         environment: None,
+        check_runner: None,
         steps,
     }
 }

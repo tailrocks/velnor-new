@@ -4,6 +4,7 @@
 
 use super::*;
 use velnor_actions_rust::TaskKind;
+use velnor_actions_rust::task_kind_rank;
 
 /// Tofu proposal via the T12 adapter constructor.
 fn tofu_group(root: &str, kind: velnor_actions_tofu::TofuTaskKind) -> ProposedTask {
@@ -23,7 +24,14 @@ fn assert_provider_restore_only(names: &[&str]) {
     for rust in [
         "Restore Cargo sources",
         "Restore Cargo registry",
-        "Setup MBX",
+        "Verify MBX and Rust toolchains",
+        "Prepare MBX cache identity",
+        "Prepare private MBX store",
+        "Prepare MBX local cache store",
+        "Restore MBX single bundle",
+        "Import MBX single bundle",
+        "Export MBX single bundle",
+        "Save MBX single bundle",
     ] {
         assert!(!names.contains(&rust), "no rust-pinned {rust}: {names:?}");
     }
@@ -86,7 +94,6 @@ fn pure_tofu_group_renders_without_rust_setup() {
         &crate_jobs_tests::discovery(tasks),
         &ToolCatalog::pinned(),
         &[String::new()],
-        &[],
         None,
         2,
     )
@@ -160,7 +167,6 @@ fn mixed_group_keeps_the_rust_union() {
         &crate_jobs_tests::discovery(vec![rust, tofu]),
         &ToolCatalog::pinned(),
         &[],
-        &[],
         None,
         2,
     )
@@ -233,7 +239,6 @@ fn tofu_root_jobs_stage_lanes_by_max_parallel() {
         &crate_jobs_tests::discovery(tasks),
         &ToolCatalog::pinned(),
         &[],
-        &[],
         None,
         2,
     )
@@ -258,7 +263,6 @@ fn wide_cap_stages_nothing() {
         &crate_jobs_tests::discovery(tasks),
         &ToolCatalog::pinned(),
         &[],
-        &[],
         None,
         5,
     )
@@ -278,7 +282,6 @@ fn rust_jobs_never_stage() {
         WorkflowPolicy::ConsumerV1,
         &crate_jobs_tests::discovery(vec![clippy, nested]),
         &ToolCatalog::pinned(),
-        &[],
         &[],
         None,
         1,
@@ -316,7 +319,6 @@ fn first_tofu_obligation_declares_the_cap() {
         WorkflowPolicy::ConsumerV1,
         &crate_jobs_tests::discovery(tasks),
         &ToolCatalog::pinned(),
-        &[],
         &[],
         None,
         3,
@@ -364,7 +366,6 @@ fn all_tofu_groups_take_tofu_ids_mixed_keep_rust() {
             tofu_group("stacks/b", TofuTaskKind::Validate),
         ]),
         &ToolCatalog::pinned(),
-        &[],
         &[],
         None,
         2,
