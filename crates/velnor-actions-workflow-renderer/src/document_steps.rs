@@ -48,6 +48,13 @@ fn internal_env(
         ]);
     }
     let request = format!("{}/{target}-request.json", ctx.request_dir);
+    if op == steps::RESOLVE_QUALIFICATION_OPERATION {
+        return Yaml::Map(vec![
+            ("GH_TOKEN".to_owned(), Yaml::str("${{ github.token }}")),
+            (INTERNAL_OP_ENV.to_owned(), Yaml::str(op.to_owned())),
+            (REQUEST_FILE_ENV.to_owned(), Yaml::str(request)),
+        ]);
+    }
     let mut env = vec![(INTERNAL_OP_ENV.to_owned(), Yaml::str(op.to_owned()))];
     for (key, value) in needs_envs {
         env.push((key.clone(), Yaml::str(value.clone())));

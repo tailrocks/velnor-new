@@ -43,6 +43,8 @@ pub const PUBLISH_OPERATION: &str = "publish-baseline-v1";
 pub const FETCH_OPERATION: &str = "fetch-reports-v1";
 /// Write-request operation name.
 pub const WRITE_REQUEST_OPERATION: &str = "write-request-v1";
+/// Resolve exact predecessor receipts for a typed qualification plan.
+pub const RESOLVE_QUALIFICATION_OPERATION: &str = "resolve-qualification-v1";
 /// Required prefix of the digest-verified staged binary path.
 pub const STAGED_BINARY_PREFIX: &str = "$RUNNER_TEMP/velnor/bin/velnor-actions-";
 /// Required prefix of internal request directories (expression form: shell

@@ -78,6 +78,7 @@ fn lock_acquire_inserts_digest_verified_stage() {
                 false,
                 false,
                 false,
+                false,
                 &[],
             )
             .expect("plan job"),
@@ -160,6 +161,7 @@ fn lock_acquire_records_source_commit() {
             false,
             false,
             false,
+            false,
             &[],
         )
         .expect("plan job"),
@@ -200,6 +202,7 @@ fn preseed_attach_builds_once_and_sets_mode() {
                     None,
                     &catalog,
                     true,
+                    false,
                     false,
                     false,
                     false,
@@ -304,6 +307,7 @@ fn preseed_fixture(use_mbx: bool, fetch_roots: &[String]) -> WorkflowPlan {
                     &catalog,
                     true,
                     use_mbx,
+                    false,
                     false,
                     false,
                     fetch_roots,

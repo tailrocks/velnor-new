@@ -100,7 +100,8 @@ fn merge_requires_identical_qualification_provenance() {
         |value| value.git_ref = "refs/heads/feature".to_owned(),
         |value| value.ref_protected = false,
         |value| {
-            value.workflow_ref = "other/project/.github/workflows/ci.yml@refs/heads/main".to_owned()
+            value.workflow_ref =
+                "other/project/.github/workflows/ci.yml@refs/heads/main".to_owned();
         },
         |value| value.workflow_sha = "1123456789abcdef0123456789abcdef01234567".to_owned(),
         |value| value.source_sha = "2123456789abcdef0123456789abcdef01234567".to_owned(),

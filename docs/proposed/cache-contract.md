@@ -304,6 +304,8 @@ and SHA-256. The report MUST verify the manifest before running any candidate co
 run-scoped qualification outputs and MUST NOT be restored by ordinary cache keys or treated as a promoted
 generator binary. The merge re-checks the head-bound attestation (`commit == plan.head`) in candidate mode;
 manifest fields beyond the commit are consumer-asserted audit data at merge time (S10/D6 residual).
+Hosted cache qualification and its immutable evidence chain are defined in
+[`hosted-cache-qualification-contract.md`](hosted-cache-qualification-contract.md).
 
 Field grammars here are normative over examples. `*_digest` fields are
 path-independent semantic identities: BLAKE3 over canonical JSON with

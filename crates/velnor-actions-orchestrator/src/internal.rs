@@ -32,7 +32,9 @@ pub use crate::internal_request::{
     merge_passed, publish_final_report, publish_plan_files, response_path_for, write_request,
     write_request_parts,
 };
-pub use crate::plan_output_limits::{PlanOutputs, plan_outputs, plan_outputs_with_admission};
+pub use crate::plan_output_limits::{
+    PlanOutputs, plan_outputs, plan_outputs_from_staged_admission, plan_outputs_with_admission,
+};
 
 /// Schema version accepted by both internal entrypoints.
 pub(crate) const SCHEMA: u32 = 1;
@@ -269,7 +271,7 @@ pub(crate) fn internal_contract(error: ContractError) -> OrchestratorError {
 }
 
 /// Repository root: explicit override or resolved from the current directory.
-fn plan_root(override_root: Option<&Path>) -> Result<PathBuf, OrchestratorError> {
+pub(crate) fn plan_root(override_root: Option<&Path>) -> Result<PathBuf, OrchestratorError> {
     if let Some(root) = override_root {
         return root
             .canonicalize()

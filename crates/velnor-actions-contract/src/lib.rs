@@ -146,6 +146,5 @@ pub use workflow::{
     QualificationSourceDelta,
 };
 pub use workflow::{DYNAMIC_MATRIX_OUTPUT_MODE, PLAN_MATRIX_OUTPUT_MODE_ENV};
-
 /// Version marker for the contract schema shell.
 pub const CONTRACT_VERSION: u32 = 0;

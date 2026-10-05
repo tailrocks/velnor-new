@@ -130,10 +130,9 @@ fn tofu_reuse_claims_fail_closed_at_merge() -> TestResult {
 }
 
 /// Every finalized tofu job saves exactly its own restored key under
-/// the push-only gate; the plan job saves nothing.
+/// the push-only gate plus the raw-dispatch denial; the plan job saves nothing.
 #[test]
 fn finalized_tofu_jobs_save_exactly_their_restored_key() -> TestResult {
-    use velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION;
     let dir = make_pure_tofu_repo(&two_root_config(), &two_root_files())?;
     let jobs = finalized_jobs(&prepare(dir.path())?)?;
     let plan = jobs.get("plan").ok_or("plan job")?;
@@ -162,7 +161,12 @@ fn finalized_tofu_jobs_save_exactly_their_restored_key() -> TestResult {
             .collect();
         assert_eq!(saves.len(), 1, "{id} saves once");
         let save = saves[0];
-        assert_eq!(save.condition.as_deref(), Some(CACHE_SAVE_CONDITION));
+        assert_eq!(
+            save.condition.as_deref(),
+            Some(
+                "(success() && github.event_name == 'push') && github.event_name != 'workflow_dispatch'"
+            )
+        );
         let StepKind::Action { with: inputs, .. } = &save.kind else {
             return Err(format!("{id} save must be an action step").into());
         };

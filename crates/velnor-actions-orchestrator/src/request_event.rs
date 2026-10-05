@@ -7,6 +7,19 @@ use velnor_actions_contract::{
 use crate::OrchestratorError;
 use crate::internal::internal;
 
+/// Runner-owned GitHub context bound into a qualification plan.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct QualificationRunnerContext<'a> {
+    pub(crate) repository: Option<&'a str>,
+    pub(crate) git_ref: Option<&'a str>,
+    pub(crate) ref_protected: Option<&'a str>,
+    pub(crate) workflow_ref: Option<&'a str>,
+    pub(crate) workflow_sha: Option<&'a str>,
+    pub(crate) source_sha: Option<&'a str>,
+    pub(crate) run_id: Option<&'a str>,
+    pub(crate) run_attempt: Option<&'a str>,
+}
+
 /// Resolve one GitHub event name plus payload to a workflow event.
 ///
 /// Shared by plan-request materialization and merge-time actual-event
@@ -41,14 +54,7 @@ pub(crate) fn workflow_event_for(
 pub(crate) fn qualification_dispatch_for_parts(
     event_name: &str,
     payload: &serde_json::Value,
-    repository: Option<&str>,
-    git_ref: Option<&str>,
-    ref_protected: Option<&str>,
-    workflow_ref: Option<&str>,
-    workflow_sha: Option<&str>,
-    source_sha: Option<&str>,
-    run_id: Option<&str>,
-    run_attempt: Option<&str>,
+    runner: QualificationRunnerContext<'_>,
 ) -> Result<Option<QualificationDispatch>, OrchestratorError> {
     if event_name != "workflow_dispatch" {
         return Ok(None);
@@ -60,8 +66,8 @@ pub(crate) fn qualification_dispatch_for_parts(
         .ok_or_else(|| internal("missing_qualification_default_branch"))?;
     let payload_ref = nonempty(payload["ref"].as_str())
         .ok_or_else(|| internal("missing_qualification_payload_ref"))?;
-    let repository = required_context(repository, "repository")?;
-    let git_ref = required_context(git_ref, "ref")?;
+    let repository = required_context(runner.repository, "repository")?;
+    let git_ref = required_context(runner.git_ref, "ref")?;
     if payload_repository != repository || payload_ref != git_ref {
         return Err(internal("qualification_payload_context_mismatch"));
     }
@@ -76,10 +82,12 @@ pub(crate) fn qualification_dispatch_for_parts(
         _ => return Err(internal("invalid_qualification_phase")),
     };
     let predecessor = qualification_predecessor(inputs)?;
-    let run_id = run_id
+    let run_id = runner
+        .run_id
         .and_then(|value| value.parse::<u64>().ok())
         .ok_or_else(|| internal("invalid_qualification_run_id"))?;
-    let run_attempt = run_attempt
+    let run_attempt = runner
+        .run_attempt
         .and_then(|value| value.parse::<u32>().ok())
         .ok_or_else(|| internal("invalid_qualification_run_attempt"))?;
     let context = QualificationDispatch {
@@ -88,10 +96,10 @@ pub(crate) fn qualification_dispatch_for_parts(
         repository,
         default_branch,
         git_ref,
-        ref_protected: ref_protected == Some("true"),
-        workflow_ref: required_context(workflow_ref, "workflow_ref")?,
-        workflow_sha: required_context(workflow_sha, "workflow_sha")?,
-        source_sha: required_context(source_sha, "source_sha")?,
+        ref_protected: runner.ref_protected == Some("true"),
+        workflow_ref: required_context(runner.workflow_ref, "workflow_ref")?,
+        workflow_sha: required_context(runner.workflow_sha, "workflow_sha")?,
+        source_sha: required_context(runner.source_sha, "source_sha")?,
         run_id,
         run_attempt,
         predecessor,
@@ -214,8 +222,21 @@ fn is_zero_sha(sha: &str) -> bool {
 
 #[cfg(test)]
 mod qualification_tests {
-    use super::qualification_dispatch_for_parts;
+    use super::{QualificationRunnerContext, qualification_dispatch_for_parts};
     use velnor_actions_contract::QualificationPhase;
+
+    fn runner() -> QualificationRunnerContext<'static> {
+        QualificationRunnerContext {
+            repository: Some("owner/project"),
+            git_ref: Some("refs/heads/main"),
+            ref_protected: Some("true"),
+            workflow_ref: Some("owner/project/.github/workflows/ci.yml@refs/heads/main"),
+            workflow_sha: Some("0123456789abcdef0123456789abcdef01234567"),
+            source_sha: Some("0123456789abcdef0123456789abcdef01234567"),
+            run_id: Some("41"),
+            run_attempt: Some("3"),
+        }
+    }
 
     #[test]
     fn dispatch_inputs_select_typed_phase_and_bind_runner_identity() {
@@ -232,25 +253,17 @@ mod qualification_tests {
                 "default_branch": "main"
             }
         });
-        let context = qualification_dispatch_for_parts(
-            "workflow_dispatch",
-            &payload,
-            Some("owner/project"),
-            Some("refs/heads/main"),
-            Some("true"),
-            Some("owner/project/.github/workflows/ci.yml@refs/heads/main"),
-            Some("0123456789abcdef0123456789abcdef01234567"),
-            Some("0123456789abcdef0123456789abcdef01234567"),
-            Some("41"),
-            Some("3"),
-        )
-        .expect("dispatch context")
-        .expect("qualification");
+        let context = qualification_dispatch_for_parts("workflow_dispatch", &payload, runner())
+            .expect("dispatch context")
+            .expect("qualification");
         assert_eq!(context.phase, QualificationPhase::Third);
         assert_eq!(context.campaign, "campaign-2030");
         assert_eq!(context.run_id, 41);
         assert_eq!(context.run_attempt, 3);
-        assert_eq!(context.predecessor.unwrap().run_id, 39);
+        assert_eq!(
+            context.predecessor.as_ref().map(|value| value.run_id),
+            Some(39)
+        );
     }
 
     #[test]
@@ -271,14 +284,10 @@ mod qualification_tests {
                 qualification_dispatch_for_parts(
                     "workflow_dispatch",
                     &payload,
-                    Some("owner/project"),
-                    Some("refs/heads/main"),
-                    Some("true"),
-                    Some("owner/project/.github/workflows/ci.yml@refs/heads/main"),
-                    Some("0123456789abcdef0123456789abcdef01234567"),
-                    Some("0123456789abcdef0123456789abcdef01234567"),
-                    Some("41"),
-                    Some("1"),
+                    QualificationRunnerContext {
+                        run_attempt: Some("1"),
+                        ..runner()
+                    },
                 )
                 .is_err()
             );
@@ -324,14 +333,10 @@ mod qualification_tests {
                 qualification_dispatch_for_parts(
                     "workflow_dispatch",
                     &payload,
-                    Some("owner/project"),
-                    Some("refs/heads/main"),
-                    Some("true"),
-                    Some("owner/project/.github/workflows/ci.yml@refs/heads/main"),
-                    Some("0123456789abcdef0123456789abcdef01234567"),
-                    Some("0123456789abcdef0123456789abcdef01234567"),
-                    Some("41"),
-                    Some("1"),
+                    QualificationRunnerContext {
+                        run_attempt: Some("1"),
+                        ..runner()
+                    },
                 )
                 .is_err()
             );

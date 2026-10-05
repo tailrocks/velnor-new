@@ -8,6 +8,7 @@ pub mod execute;
 pub mod ir;
 pub mod jobs;
 pub mod lanes;
+mod matrix_entry;
 pub mod needs;
 pub mod permissions;
 pub mod plan;

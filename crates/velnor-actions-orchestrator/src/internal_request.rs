@@ -15,8 +15,9 @@ use crate::decisions::plan_artifact_dir;
 use crate::internal::{
     MERGE_OP, PLAN_OP, PlanResponse, SCHEMA, check_schema, internal, internal_contract,
 };
-use crate::request_event::qualification_dispatch_for_parts;
-use crate::request_event::{request_refs, workflow_event_for};
+use crate::request_event::{
+    QualificationRunnerContext, qualification_dispatch_for_parts, request_refs, workflow_event_for,
+};
 
 /// Plan-time request: `{schema, op, event, base, head, root}` (schema 1).
 #[derive(Debug, Serialize)]
@@ -134,14 +135,16 @@ pub fn write_request_parts(
     let qualification = qualification_dispatch_for_parts(
         event_name,
         &payload,
-        repository,
-        env::var("GITHUB_REF").ok().as_deref(),
-        env::var("GITHUB_REF_PROTECTED").ok().as_deref(),
-        env::var("GITHUB_WORKFLOW_REF").ok().as_deref(),
-        env::var("GITHUB_WORKFLOW_SHA").ok().as_deref(),
-        github_sha,
-        env::var("GITHUB_RUN_ID").ok().as_deref(),
-        env::var("GITHUB_RUN_ATTEMPT").ok().as_deref(),
+        QualificationRunnerContext {
+            repository,
+            git_ref: env::var("GITHUB_REF").ok().as_deref(),
+            ref_protected: env::var("GITHUB_REF_PROTECTED").ok().as_deref(),
+            workflow_ref: env::var("GITHUB_WORKFLOW_REF").ok().as_deref(),
+            workflow_sha: env::var("GITHUB_WORKFLOW_SHA").ok().as_deref(),
+            source_sha: github_sha,
+            run_id: env::var("GITHUB_RUN_ID").ok().as_deref(),
+            run_attempt: env::var("GITHUB_RUN_ATTEMPT").ok().as_deref(),
+        },
     )?;
     let (base, head) = request_refs(event, &payload, github_sha)?;
     let request = EventRequest {

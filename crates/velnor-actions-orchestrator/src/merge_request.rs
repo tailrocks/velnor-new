@@ -40,7 +40,9 @@ use self::needs_channel::{NEEDS_ENV, parse_needs};
 use crate::OrchestratorError;
 use crate::internal::{internal, internal_contract};
 use crate::internal_request::resolve_run_key;
-use crate::request_event::{qualification_dispatch_for_parts, workflow_event_for};
+use crate::request_event::{
+    QualificationRunnerContext, qualification_dispatch_for_parts, workflow_event_for,
+};
 
 /// Assemble one canonical merge request from a run directory.
 ///
@@ -207,9 +209,7 @@ fn resolve_actual_qualification(
     event_payload: Option<&str>,
     errors: &mut Vec<String>,
 ) -> Option<QualificationDispatch> {
-    let Some(name) = event_name else {
-        return None;
-    };
+    let name = event_name?;
     if name != "workflow_dispatch" {
         return None;
     }
@@ -217,25 +217,24 @@ fn resolve_actual_qualification(
         errors.push("missing_actual_payload".to_owned());
         return None;
     };
-    let payload = match parse_strict_json(text) {
-        Ok(payload) => payload,
-        Err(_) => {
-            errors.push("malformed_actual_payload".to_owned());
-            return None;
-        }
+    let Ok(payload) = parse_strict_json(text) else {
+        errors.push("malformed_actual_payload".to_owned());
+        return None;
     };
     let read = |name: &str| std::env::var(name).ok();
     match qualification_dispatch_for_parts(
         name,
         &payload,
-        read("GITHUB_REPOSITORY").as_deref(),
-        read("GITHUB_REF").as_deref(),
-        read("GITHUB_REF_PROTECTED").as_deref(),
-        read("GITHUB_WORKFLOW_REF").as_deref(),
-        read("GITHUB_WORKFLOW_SHA").as_deref(),
-        read("GITHUB_SHA").as_deref(),
-        read("GITHUB_RUN_ID").as_deref(),
-        read("GITHUB_RUN_ATTEMPT").as_deref(),
+        QualificationRunnerContext {
+            repository: read("GITHUB_REPOSITORY").as_deref(),
+            git_ref: read("GITHUB_REF").as_deref(),
+            ref_protected: read("GITHUB_REF_PROTECTED").as_deref(),
+            workflow_ref: read("GITHUB_WORKFLOW_REF").as_deref(),
+            workflow_sha: read("GITHUB_WORKFLOW_SHA").as_deref(),
+            source_sha: read("GITHUB_SHA").as_deref(),
+            run_id: read("GITHUB_RUN_ID").as_deref(),
+            run_attempt: read("GITHUB_RUN_ATTEMPT").as_deref(),
+        },
     ) {
         Ok(context) => context,
         Err(OrchestratorError::Internal { problem }) => {
