@@ -90,6 +90,12 @@ fn action_step_to_yaml(
             Yaml::str(crate::render::FINAL_CONDITION.to_owned()),
         ));
     }
+    if matches!(
+        step.name.as_str(),
+        crate::mbx_bundle::MBX_BUNDLE_RESTORE_NAME | crate::mbx_bundle::MBX_BUNDLE_SAVE_NAME
+    ) {
+        entries.push(("continue-on-error".to_owned(), Yaml::Bool(true)));
+    }
     if job_id == FINAL_JOB_ID && is_verdict_download(step) {
         entries.push(("continue-on-error".to_owned(), Yaml::Bool(true)));
     }
@@ -125,13 +131,22 @@ pub(crate) fn step_to_yaml(
     match &step.kind {
         StepKind::Action { uses, with, env } => action_step_to_yaml(job_id, step, uses, with, env),
         StepKind::Shell { run, env } => {
-            commands::validate_command_argv(run)?;
+            commands::validate_step_command_argv(&step.name, run)?;
             commands::validate_env(env)?;
             let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
             crate::mbx_bundle::push_step_id(&mut entries, &step.name);
             if let Some(condition) = &step.condition {
                 steps::scan_for_private_subcommands(condition)?;
                 entries.push(("if".to_owned(), Yaml::str(condition.clone())));
+            }
+            if matches!(
+                step.name.as_str(),
+                crate::mbx_bundle::MBX_STORE_INIT_NAME
+                    | crate::mbx_bundle::MBX_BUNDLE_KEY_NAME
+                    | crate::mbx_bundle::MBX_BUNDLE_IMPORT_NAME
+                    | crate::mbx_bundle::MBX_BUNDLE_EXPORT_NAME
+            ) {
+                entries.push(("continue-on-error".to_owned(), Yaml::Bool(true)));
             }
             if !env.is_empty() {
                 let vars: Vec<(String, Yaml)> = env
@@ -143,7 +158,7 @@ pub(crate) fn step_to_yaml(
             push_composite_shell(&mut entries, composite);
             entries.push((
                 "run".to_owned(),
-                Yaml::str(commands::join_argv_for_run(run)?),
+                Yaml::str(commands::join_argv_for_step(&step.name, run)?),
             ));
             Ok(Yaml::Map(entries))
         }

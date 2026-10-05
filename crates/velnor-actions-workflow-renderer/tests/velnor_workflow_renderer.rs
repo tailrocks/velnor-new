@@ -7,6 +7,8 @@ mod impl_renderer_acquire;
 mod impl_renderer_cache_steps;
 #[path = "impl_renderer_cache_t22.rs"]
 mod impl_renderer_cache_t22;
+#[path = "impl_renderer_expr_cache_keys.rs"]
+mod impl_renderer_expr_cache_keys;
 #[path = "impl_renderer_f2close.rs"]
 mod impl_renderer_f2close;
 #[path = "impl_renderer_f2close_hygiene.rs"]
@@ -31,6 +33,8 @@ mod impl_renderer_mbx_action;
 mod impl_renderer_mbx_bundle;
 #[path = "impl_renderer_mbx_gc_policy.rs"]
 mod impl_renderer_mbx_gc_policy;
+#[path = "impl_renderer_mbx_hosted_isolation.rs"]
+mod impl_renderer_mbx_hosted_isolation;
 #[path = "impl_renderer_mbx_preflight.rs"]
 mod impl_renderer_mbx_preflight;
 #[path = "impl_renderer_mbxgate.rs"]
@@ -85,6 +89,8 @@ mod impl_renderer_steps;
 mod impl_renderer_steps_env;
 #[path = "impl_renderer_steps_quote.rs"]
 mod impl_renderer_steps_quote;
+#[path = "impl_renderer_steps_shell_security.rs"]
+mod impl_renderer_steps_shell_security;
 #[path = "impl_renderer_sweep.rs"]
 mod impl_renderer_sweep;
 #[path = "impl_renderer_timeout.rs"]

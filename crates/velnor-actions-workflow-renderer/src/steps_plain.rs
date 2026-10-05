@@ -36,7 +36,7 @@ pub(crate) fn plain_step_to_yaml(step: &Step) -> Result<Yaml, RenderError> {
             Ok(Yaml::Map(entries))
         }
         StepKind::Shell { run, env } => {
-            commands::validate_command_argv(run)?;
+            commands::validate_step_command_argv(&step.name, run)?;
             commands::validate_env(env)?;
             let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
             if let Some(condition) = &step.condition {
@@ -48,7 +48,7 @@ pub(crate) fn plain_step_to_yaml(step: &Step) -> Result<Yaml, RenderError> {
             }
             entries.push((
                 "run".to_owned(),
-                Yaml::str(commands::join_argv_for_run(run)?),
+                Yaml::str(commands::join_argv_for_step(&step.name, run)?),
             ));
             Ok(Yaml::Map(entries))
         }

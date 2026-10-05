@@ -5,8 +5,9 @@
 use std::collections::BTreeMap;
 use velnor_actions_workflow_renderer::{
     ASSET_SHA_ENV, ASSET_URL_ENV, RELEASE_COMMIT_ENV, RenderError, STAGED_BINARY_PREFIX,
-    acquire_velnor_step, action_step, checkout_step, internal_step, merge_step, plan_step,
-    scan_for_private_subcommands, shell_step, validate_command_argv, validate_env, validate_uses,
+    acquire_velnor_step, action_step, checkout_step, internal_step, join_argv_for_run, merge_step,
+    plan_step, scan_for_private_subcommands, shell_step, validate_command_argv, validate_env,
+    validate_uses,
 };
 
 fn pin(name: &str) -> String {
@@ -55,8 +56,28 @@ fn argv_validation_rejects_policy_violations() {
     assert!(validate_command_argv(&argv(&["echo", "`evil`"])).is_err());
     assert!(validate_command_argv(&argv(&["ok", ""])).is_err());
     assert!(validate_command_argv(&argv(&["bad\nline"])).is_err());
+    assert!(validate_command_argv(&argv(&["bad\rline"])).is_err());
+    assert!(validate_command_argv(&argv(&["bad\0line"])).is_err());
+    assert!(validate_command_argv(&argv(&["bash", "-c", "echo one\necho two"])).is_err());
     assert!(validate_command_argv(&argv(&["velnor-actions", "__internal"])).is_err());
     assert!(validate_command_argv(&argv(&["mise", "exec", "--", "cargo", "test"])).is_ok());
+}
+
+#[test]
+fn untrusted_multiline_scripts_stay_rejected_after_env_unset_prefix() {
+    let wrapped = velnor_actions_workflow_renderer::toolchain_env::with_env_unset_argv(&argv(&[
+        "bash",
+        "-c",
+        "echo one\necho two",
+    ]));
+    assert!(validate_command_argv(&wrapped).is_err());
+
+    let mut outside_script =
+        velnor_actions_workflow_renderer::toolchain_env::with_env_unset_argv(&argv(&[
+            "bash", "-c", "echo one",
+        ]));
+    outside_script.push("another\nargument".to_owned());
+    assert!(validate_command_argv(&outside_script).is_err());
 }
 
 #[test]
@@ -92,7 +113,16 @@ fn step_names_reject_github_expressions() {
 
 #[test]
 fn argv_rejects_background_shell_but_keeps_chains_and_urls() {
-    for script in ["a & b", "sleep 1&", "& echo hi", "run & sleep"] {
+    for script in [
+        "a & b",
+        "sleep 1&",
+        "sleep 1&echo done",
+        "sleep 1 &\techo done",
+        "sleep 1\t&echo done",
+        "& echo hi",
+        "run & sleep",
+        r"echo \>&echo done",
+    ] {
         assert!(
             validate_command_argv(&argv(&["sh", "-c", script])).is_err(),
             "background accepted: {script}"
@@ -101,6 +131,11 @@ fn argv_rejects_background_shell_but_keeps_chains_and_urls() {
     for script in [
         "a && b",
         "cmd 2>&1",
+        "cat <&0",
+        "cmd &>out",
+        "echo '&'",
+        "echo \\&",
+        "echo done # & ignored",
         "curl 'https://example.invalid/x?a=1&b=2'",
         "echo done",
     ] {
@@ -109,6 +144,146 @@ fn argv_rejects_background_shell_but_keeps_chains_and_urls() {
             "legal rejected: {script}"
         );
     }
+    assert!(validate_command_argv(&argv(&["curl", "https://example.invalid/x?a=1&b=2",])).is_ok());
+    assert!(
+        validate_command_argv(&argv(&[
+            "bash",
+            "-c",
+            "curl https://example.invalid/x?a=1&b=2",
+        ]))
+        .is_err()
+    );
+    assert!(
+        validate_command_argv(&argv(&[
+            "env",
+            "-u",
+            "CUSTOM",
+            "bash",
+            "-c",
+            "sleep 1&echo done",
+        ]))
+        .is_err()
+    );
+}
+
+#[test]
+fn argv_scans_path_shells_and_bounded_option_forms() {
+    for command in [
+        argv(&["/bin/sh", "-c", "sleep 1&echo done"]),
+        argv(&["/usr/bin/bash", "-ec", "sleep 1&echo done"]),
+        argv(&["bash", "-e", "-u", "-c", "sleep 1&echo done"]),
+        argv(&[
+            "/usr/bin/env",
+            "-u",
+            "CUSTOM",
+            "/bin/bash",
+            "--norc",
+            "-c",
+            "sleep 1&echo done",
+        ]),
+        argv(&[
+            "env",
+            "-u",
+            "CUSTOM",
+            "bash",
+            "-O",
+            "extglob",
+            "-c",
+            "sleep 1&echo done",
+        ]),
+        argv(&["bash", "+o", "pipefail", "-c", "sleep 1&echo done"]),
+        argv(&["bash", "+O", "extglob", "-c", "sleep 1&echo done"]),
+        argv(&[
+            "env",
+            "-u",
+            "CUSTOM",
+            "/usr/bin/env",
+            "--chdir=/tmp",
+            "/bin/bash",
+            "-c",
+            "sleep 1&echo done",
+        ]),
+        argv(&[
+            "env",
+            "--unknown-wrapper-option",
+            "bash",
+            "-c",
+            "sleep 1&echo done",
+        ]),
+        argv(&["env", "-uCUSTOM", "bash", "-c", "sleep 1&echo done"]),
+        argv(&["env", "-S", "bash -c 'sleep 1&echo done'"]),
+    ] {
+        assert!(
+            validate_command_argv(&command).is_err(),
+            "unsafe shell invocation accepted: {command:?}"
+        );
+    }
+
+    for command in [
+        argv(&["/bin/bash", "-euc", "first && second"]),
+        argv(&[
+            "env",
+            "-u",
+            "CUSTOM",
+            "/bin/sh",
+            "-e",
+            "-u",
+            "-c",
+            "first && second",
+        ]),
+    ] {
+        assert!(
+            validate_command_argv(&command).is_ok(),
+            "supported shell invocation rejected: {command:?}"
+        );
+    }
+
+    let mut nested = Vec::new();
+    for _ in 0..5 {
+        nested.push("env".to_owned());
+    }
+    nested.extend(argv(&["bash", "-c", "sleep 1&echo done"]));
+    assert!(
+        validate_command_argv(&nested).is_err(),
+        "deep env chain accepted"
+    );
+
+    assert!(
+        validate_command_argv(&argv(&[
+            "env",
+            "FOO=bar",
+            "curl",
+            "https://example.invalid/x?a=1&b=2",
+        ]))
+        .is_ok()
+    );
+    assert!(validate_command_argv(&argv(&["env", "--version"])).is_ok());
+}
+
+#[test]
+fn inline_shell_quote_preserves_inner_expansions() -> Result<(), RenderError> {
+    let script = "printf \"%s\" \"$value\" && printf \"%s\" \"inner\"";
+    let command = argv(&[
+        "env",
+        "-u",
+        "CUSTOM",
+        "/usr/bin/env",
+        "--chdir=/tmp",
+        "/bin/bash",
+        "-ec",
+        script,
+    ]);
+    let rendered = join_argv_for_run(&command)?;
+    assert_eq!(
+        rendered,
+        format!("env -u CUSTOM /usr/bin/env --chdir=/tmp /bin/bash -ec '{script}'")
+    );
+    let after_separator = argv(&["env", "--", "FOO=bar", "bash", "-c", "echo $value"]);
+    assert_eq!(
+        join_argv_for_run(&after_separator)?,
+        "env -- FOO=bar bash -c 'echo $value'"
+    );
+    Ok(())
 }
 
 #[test]
