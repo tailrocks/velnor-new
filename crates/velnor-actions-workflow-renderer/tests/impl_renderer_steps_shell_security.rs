@@ -1,5 +1,5 @@
 //! Inline-shell command-substitution rejection cases.
-use velnor_actions_workflow_renderer::validate_command_argv;
+use velnor_actions_workflow_renderer::{RenderError, join_argv_for_run, validate_command_argv};
 
 fn argv(items: &[&str]) -> Vec<String> {
     items.iter().map(ToString::to_string).collect()
@@ -24,14 +24,30 @@ fn generic_inline_shell_rejects_substitution_even_when_quoted() {
 
 #[test]
 fn env_separator_assignments_do_not_hide_shell_operators() {
-    let err = validate_command_argv(&argv(&[
+    for assignment in ["FOO=bar", "FOO-BAR=value"] {
+        let err = validate_command_argv(&argv(&[
+            "env",
+            "--",
+            assignment,
+            "bash",
+            "-c",
+            "sleep 1&echo done",
+        ]))
+        .expect_err("env assignment after -- must not hide a shell launcher");
+        assert!(err.to_string().contains("background_shell"), "{err}");
+    }
+}
+
+#[test]
+fn env_separator_assignment_keeps_the_inline_script_quoted() -> Result<(), RenderError> {
+    let rendered = join_argv_for_run(&argv(&[
         "env",
         "--",
-        "FOO=bar",
+        "FOO-BAR=value",
         "bash",
         "-c",
-        "sleep 1&echo done",
-    ]))
-    .expect_err("env assignment after -- must not hide a shell launcher");
-    assert!(err.to_string().contains("background_shell"), "{err}");
+        "echo $value",
+    ]))?;
+    assert_eq!(rendered, "env -- FOO-BAR=value bash -c 'echo $value'");
+    Ok(())
 }

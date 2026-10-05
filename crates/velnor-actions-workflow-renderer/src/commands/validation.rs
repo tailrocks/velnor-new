@@ -251,11 +251,7 @@ fn is_env_assignment(value: &str) -> bool {
     let Some((name, _)) = value.split_once('=') else {
         return false;
     };
-    let mut bytes = name.bytes();
-    bytes
-        .next()
-        .is_some_and(|byte| byte.is_ascii_alphabetic() || byte == b'_')
-        && bytes.all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
+    !name.is_empty()
 }
 
 /// Validate a fixed env map: `A-Z0-9_` keys, single-line clean values.
