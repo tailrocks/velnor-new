@@ -1,4 +1,9 @@
 //! Admission bound for the exact named-check execution proof transport.
+
+/// Maximum source or task-projection bytes admitted for one named check.
+pub const MAX_CHECK_SOURCE_BYTES: usize = 8 * 1024 * 1024;
+/// Maximum bytes in any parsed native system-tool version component string.
+pub const MAX_CHECK_SYSTEM_VERSION_BYTES: usize = 128;
 use super::{MiseCheck, QualifiedTool, QualifiedToolPlatform};
 use crate::errors::ContractError;
 use serde::Serialize;
@@ -66,6 +71,7 @@ pub fn check_execution_receipt_upper_bound(
     if let Some(profile) = &check.runner.container {
         budget = add(budget, container_budget(profile)?)?;
     }
+    budget = add(budget, system_tools_budget(check)?)?;
     let by_id: BTreeMap<_, _> = tools.iter().map(|tool| (tool.id.as_str(), tool)).collect();
     let mut closure = BTreeSet::new();
     let mut pending: Vec<_> = check.tools.iter().map(String::as_str).collect();
@@ -91,6 +97,42 @@ pub fn check_execution_receipt_upper_bound(
         }
     }
     Ok(budget)
+}
+
+fn system_tools_budget(check: &MiseCheck) -> Result<usize, ContractError> {
+    let path = format!("/{}", "\u{1}".repeat(MAX_CHECK_CONTAINER_PATH_BYTES - 1));
+    let version = format!(
+        "{}99",
+        "9.".repeat((MAX_CHECK_SYSTEM_VERSION_BYTES - 2) / 2)
+    );
+    let proofs: Vec<_> = check
+        .system_tools
+        .iter()
+        .map(|tool| {
+            let swift = tool.kind == super::CheckSystemToolKind::Swift;
+            let prefix = if check.runner.platform == super::CheckPlatform::MacosArm64 {
+                "arm64-apple-macosx"
+            } else {
+                "x86_64-apple-macosx"
+            };
+            json!({
+                "declared": tool,
+                "observed_version": tool.version,
+                "observed_build": tool.build,
+                "observed_target": swift.then(|| format!("{prefix}{version}")),
+                "executable": if swift { path.clone() } else { "/usr/bin/xcodebuild".to_owned() },
+                "launcher": if swift { "/usr/bin/xcrun" } else { "/usr/bin/xcodebuild" },
+                "developer_dir": path,
+                "developer_stdout_digest": format!("b3-{}", "0".repeat(64)),
+                "developer_stderr_digest": format!("b3-{}", "0".repeat(64)),
+                "stdout_digest": format!("b3-{}", "0".repeat(64)),
+                "stderr_digest": format!("b3-{}", "0".repeat(64)),
+                "discovery_stdout_digest": swift.then(|| format!("b3-{}", "0".repeat(64))),
+                "discovery_stderr_digest": swift.then(|| format!("b3-{}", "0".repeat(64))),
+            })
+        })
+        .collect();
+    encoded_len(&proofs)
 }
 
 fn qualified_tool_budget(

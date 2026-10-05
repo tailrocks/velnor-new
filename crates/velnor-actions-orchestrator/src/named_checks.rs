@@ -85,6 +85,18 @@ pub(crate) fn resolve_closure(
     toolchain: &str,
     platform: &str,
 ) -> Result<TaskInputClosure, ContractError> {
+    resolve_closure_until(root, task, graph, toolchain, platform, None)
+}
+
+/// Resolve declared byte inputs while consuming an optional check deadline.
+pub(crate) fn resolve_closure_until(
+    root: &Path,
+    task: &ProposedTask,
+    graph: &str,
+    toolchain: &str,
+    platform: &str,
+    deadline: Option<velnor_actions_mise::CheckDeadline>,
+) -> Result<TaskInputClosure, ContractError> {
     require_mise(task)?;
     let mut builder = ClosureBuilder::new()
         .digest("graph", graph)
@@ -97,8 +109,12 @@ pub(crate) fn resolve_closure(
             },
         );
     for path in &task.identity.declared_inputs {
-        let read = read_repo_bytes(root, path, MAX_REPO_FILE_BYTES)
-            .map_err(|e| ContractError::identity("check_input", e.to_string()))?;
+        let read = if let Some(deadline) = deadline {
+            crate::safe_read::read_repo_bytes_until(root, path, MAX_REPO_FILE_BYTES, deadline)
+        } else {
+            read_repo_bytes(root, path, MAX_REPO_FILE_BYTES)
+        }
+        .map_err(|e| ContractError::identity("check_input", e.to_string()))?;
         let provenance = match read {
             RepoBytes::Bytes(bytes) => Provenance::Known {
                 digest: digest_b3(&bytes),
@@ -109,9 +125,23 @@ pub(crate) fn resolve_closure(
         };
         builder = builder.input(&format!("file:{path}"), provenance);
     }
-    let head = velnor_actions_mise::GitRequest::rev_parse(vec!["HEAD".into()]).run_in(root);
+    let request = velnor_actions_mise::GitRequest::rev_parse(vec!["HEAD".into()]);
+    let head = if let Some(deadline) = deadline {
+        Some(
+            request
+                .run_in_until(root, deadline)
+                .map_err(|error| ContractError::identity("check_head", error.to_string()))?,
+        )
+    } else {
+        request.run_in(root).ok()
+    };
+    if let Some(deadline) = deadline {
+        deadline
+            .remaining()
+            .map_err(|error| ContractError::identity("check_head", error.to_string()))?;
+    }
     let provenance = match head {
-        Ok(output) if output.success => {
+        Some(output) if output.success => {
             let sha = output
                 .stdout_text("git")
                 .map_err(|e| ContractError::identity("check_head", e.to_string()))?;

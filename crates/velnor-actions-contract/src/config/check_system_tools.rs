@@ -27,7 +27,7 @@ pub enum CheckSystemToolKind {
 
 fn safe_version(value: &str) -> bool {
     !value.is_empty()
-        && value.len() <= 128
+        && value.len() <= super::super::MAX_CHECK_SYSTEM_VERSION_BYTES
         && value.split('.').all(|component| {
             !component.is_empty() && component.bytes().all(|byte| byte.is_ascii_digit())
         })

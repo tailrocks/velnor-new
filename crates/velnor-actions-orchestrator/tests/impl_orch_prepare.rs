@@ -67,7 +67,9 @@ fn plan_and_generate_share_one_prepare_path() -> TestResult {
         .next()
         .expect("execution body");
     assert!(execution.contains("crate::config::load_config(root)?"));
-    assert!(execution.contains("bind_check(root, &item, &plan, entry, task_id, &catalog)?"));
+    assert!(
+        execution.contains("bind_check(root, &item, &plan, entry, task_id, &catalog, deadline)?")
+    );
     let binding = runtime
         .split("fn bind_check(")
         .nth(1)
@@ -76,7 +78,7 @@ fn plan_and_generate_share_one_prepare_path() -> TestResult {
         .next()
         .expect("binding body");
     assert!(
-        binding.contains("named_checks::plan::derive("),
+        binding.contains("named_checks::plan::derive_lanes_until("),
         "runtime shares planner identity"
     );
     let planning = std::fs::read_to_string(orch_src().join("plan_obligation.rs"))?;
@@ -88,7 +90,7 @@ fn plan_and_generate_share_one_prepare_path() -> TestResult {
         .next()
         .expect("planning body");
     assert!(
-        group.contains("named_checks::plan::derive("),
+        group.contains("named_checks::plan::derive_lanes("),
         "named obligations share runtime derivation"
     );
     Ok(())

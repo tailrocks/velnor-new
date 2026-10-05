@@ -294,7 +294,8 @@ fn valid_proof_target(platform: CheckPlatform, target: Option<&str>, swift: bool
 }
 
 fn valid_version(value: &str) -> bool {
-    value.split('.').count() >= 2
+    value.len() <= velnor_actions_contract::MAX_CHECK_SYSTEM_VERSION_BYTES
+        && value.split('.').count() >= 2
         && value.split('.').all(|part| {
             !part.is_empty()
                 && part.bytes().all(|b| b.is_ascii_digit())
@@ -327,6 +328,10 @@ fn absolute_identity(value: &str) -> bool {
             )
         })
 }
+
+#[cfg(test)]
+#[path = "check_system_tools_tests.rs"]
+mod tests;
 
 fn canonical_executable(value: &str) -> Result<String, MiseError> {
     let path = Path::new(value)
@@ -362,7 +367,7 @@ fn probe(
         args.iter().map(OsString::from).collect(),
         env,
     )
-    .run_bounded(64 * 1024, deadline.remaining()?)?;
+    .run_until(64 * 1024, deadline)?;
     strict_text(&result.stdout)?;
     if !strict_text(&result.stderr)?.is_empty() || !result.success {
         return Err(invalid("system_tools", "native_probe_failed"));

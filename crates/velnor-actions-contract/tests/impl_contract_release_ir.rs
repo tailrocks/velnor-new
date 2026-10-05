@@ -50,6 +50,7 @@ fn ci_job() -> Job {
             condition: None,
             kind: StepKind::Internal {
                 operation: "demo".to_owned(),
+                env: std::collections::BTreeMap::new(),
             },
         }],
     }

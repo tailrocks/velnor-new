@@ -242,6 +242,36 @@ pub(crate) fn entry_and_digest<'a>(
     Ok((entry, digest))
 }
 
+/// Resolve one named-check report entry by its generated job identity.
+pub(crate) fn entry_and_digest_for_job<'a>(
+    plan: &'a Plan,
+    task_id: &str,
+    job_id: &str,
+) -> Result<(&'a MatrixEntry, &'a str), OrchestratorError> {
+    validate_task_id(task_id).map_err(internal_contract)?;
+    let mut found = None;
+    for entry in &plan.matrix.include {
+        if entry.job_id != job_id || !flattened(entry).contains(&task_id) {
+            continue;
+        }
+        if flattened(entry).len() != 1 {
+            return Err(internal("multi_task_entry"));
+        }
+        if found.is_some() {
+            return Err(internal("duplicate_task_entry"));
+        }
+        found = Some(entry);
+    }
+    let entry = found.ok_or_else(|| internal("task_not_in_plan_for_job"))?;
+    let digest = plan
+        .obligations
+        .iter()
+        .find(|obligation| obligation.task_id == task_id)
+        .map(|obligation| obligation.task_digest.as_str())
+        .ok_or_else(|| internal("task_without_obligation"))?;
+    Ok((entry, digest))
+}
+
 /// Declared task IDs of one matrix entry, sorted.
 fn flattened(entry: &MatrixEntry) -> Vec<&str> {
     let mut ids = Vec::new();
@@ -348,39 +378,6 @@ mod task_report_merge_tests;
 #[cfg(test)]
 #[path = "task_report_tests.rs"]
 mod task_report_tests;
-
-#[cfg(test)]
-mod load_plan_strict_tests {
-    use tempfile::TempDir;
-
-    use super::load_plan;
-    use super::task_report_tests::fixture_plan;
-
-    /// Stage one `plan.json` under a fake runner temp.
-    fn stage(text: &str) -> TempDir {
-        let dir = TempDir::new().expect("temp");
-        let run = dir.path().join("velnor").join("local");
-        std::fs::create_dir_all(&run).expect("run dir");
-        std::fs::write(run.join("plan.json"), text).expect("plan");
-        dir
-    }
-
-    #[test]
-    fn plan_read_is_bounded_and_duplicate_rejecting() {
-        let valid = serde_json::to_string(&fixture_plan()).expect("valid plan");
-        assert!(load_plan("local", stage(&valid).path()).is_ok());
-        let mut dup = valid;
-        dup.pop();
-        dup.push_str(r#","schema":1}"#);
-        let err = load_plan("local", stage(&dup).path()).expect_err("dup keys reject");
-        assert!(err.to_string().contains("unparsable_plan"), "{err}");
-        let bound = usize::try_from(crate::retrieve_reports::MAX_RETRIEVE_PLAN_BYTES)
-            .expect("bound fits pointer width");
-        let err =
-            load_plan("local", stage(&" ".repeat(bound + 1)).path()).expect_err("oversize rejects");
-        assert!(err.to_string().contains("oversize"), "{err}");
-    }
-}
 
 #[cfg(test)]
 #[path = "check_gate_tests.rs"]

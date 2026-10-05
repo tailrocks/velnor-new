@@ -5,10 +5,13 @@ use crate::internal_plan::identities::{platform_id_for_group, toolchain_digest_f
 use crate::internal_plan::snapshot::canonical_digest;
 use crate::internal_plan::{IdentityInputs, execute_ids, task_identity_digest};
 use std::path::Path;
-use velnor_actions_contract::{MatrixEntry, ObligationDecision, PlanGenerator, PlanObligation};
+use velnor_actions_contract::{
+    MatrixEntry, NamedCheckLane, ObligationDecision, PlanGenerator, PlanObligation,
+};
 use velnor_actions_mise::{DiscoveredCheck, ToolCatalog};
 
 /// Shared plan-time and runtime derivation; no detector or Cargo inventory required.
+#[cfg(test)]
 pub(crate) fn derive(
     root: &Path,
     item: &DiscoveredCheck,
@@ -16,6 +19,46 @@ pub(crate) fn derive(
     generator: &PlanGenerator,
     catalog: &ToolCatalog,
 ) -> Result<(PlanObligation, MatrixEntry), OrchestratorError> {
+    let job_id = format!("check-{}", item.check.id);
+    let lane = NamedCheckLane {
+        variant: None,
+        job_id,
+    };
+    let (obligation, mut entries) = derive_lanes(root, item, run_key, generator, catalog, &[lane])?;
+    let entry = entries
+        .pop()
+        .ok_or_else(|| internal("named_check_lane_missing"))?;
+    if !entries.is_empty() {
+        return Err(internal("named_check_single_lane_mismatch"));
+    }
+    Ok((obligation, entry))
+}
+
+/// Derive one logical obligation and one matrix entry for each emitted lane.
+pub(crate) fn derive_lanes(
+    root: &Path,
+    item: &DiscoveredCheck,
+    run_key: &str,
+    generator: &PlanGenerator,
+    catalog: &ToolCatalog,
+    lanes: &[NamedCheckLane],
+) -> Result<(PlanObligation, Vec<MatrixEntry>), OrchestratorError> {
+    derive_lanes_until(root, item, run_key, generator, catalog, lanes, None)
+}
+
+/// Derive lane entries and source identities against the same deadline as execution.
+pub(crate) fn derive_lanes_until(
+    root: &Path,
+    item: &DiscoveredCheck,
+    run_key: &str,
+    generator: &PlanGenerator,
+    catalog: &ToolCatalog,
+    lanes: &[NamedCheckLane],
+    deadline: Option<velnor_actions_mise::CheckDeadline>,
+) -> Result<(PlanObligation, Vec<MatrixEntry>), OrchestratorError> {
+    if lanes.is_empty() {
+        return Err(internal("named_check_lane_missing"));
+    }
     let task = &item.proposal;
     let argv = crate::vectors::task_argv(task, catalog)?;
     let toolchain = toolchain_digest_for(task, catalog).map_err(internal_contract)?;
@@ -23,8 +66,9 @@ pub(crate) fn derive(
         platform_id_for_group(&item.check.runner.label, task).map_err(internal_contract)?;
     let graph =
         canonical_digest(&(&item.check.id, &item.check.directory)).map_err(internal_contract)?;
-    let mut closure = super::resolve_closure(root, task, &graph, &toolchain, &platform)
-        .map_err(internal_contract)?;
+    let mut closure =
+        super::resolve_closure_until(root, task, &graph, &toolchain, &platform, deadline)
+            .map_err(internal_contract)?;
     closure.inputs.insert(
         "task_definition".to_owned(),
         velnor_actions_contract::Provenance::Known {
@@ -63,23 +107,28 @@ pub(crate) fn derive(
     };
     let run = velnor_actions_workflow_renderer::join_argv_for_run(&argv)
         .map_err(|e| internal(&e.to_string()))?;
-    let mut entry = MatrixEntry::derive(
-        &task.stack_id,
-        &task.task_id,
-        &run,
-        &task_digest,
-        super::metadata_for(item).map_err(internal_contract)?,
-        execute_ids(task),
-        &input_digest,
-        run_key,
-        &format!("check-{}", item.check.id),
-    )
-    .map_err(internal_contract)?;
-    entry.declared_outputs = item
-        .check
-        .evidence
-        .iter()
-        .map(|evidence| evidence.path.clone())
-        .collect();
-    Ok((obligation, entry))
+    let mut entries = Vec::with_capacity(lanes.len());
+    for lane in lanes {
+        let mut entry = MatrixEntry::derive_for_lane(
+            &task.stack_id,
+            &task.task_id,
+            &run,
+            &task_digest,
+            super::metadata_for(item).map_err(internal_contract)?,
+            execute_ids(task),
+            &input_digest,
+            run_key,
+            &lane.job_id,
+            lane.variant,
+        )
+        .map_err(internal_contract)?;
+        entry.declared_outputs = item
+            .check
+            .evidence
+            .iter()
+            .map(|evidence| evidence.path.clone())
+            .collect();
+        entries.push(entry);
+    }
+    Ok((obligation, entries))
 }

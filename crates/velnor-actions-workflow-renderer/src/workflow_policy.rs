@@ -45,7 +45,19 @@ pub(crate) fn check_single_label(
 ) -> Result<(), RenderError> {
     for (id, job) in &ir.jobs {
         if let Some(runner) = &job.check_runner {
-            if !id.starts_with("check-") || runner.label != job.runs_on {
+            let scale_set = velnor_actions_contract::RunsOn::parse(&job.runs_on)
+                .is_ok_and(|selector| selector.is_scale_set());
+            let valid_placement = if scale_set {
+                runner.platform == velnor_actions_contract::CheckPlatform::LinuxX64
+                    && runner.executor == velnor_actions_contract::CheckExecutor::Hosted
+                    && job.condition.as_deref()
+                        == Some(
+                            velnor_actions_contract::config::EPHEMERAL_CHECK_ADMISSION_CONDITION,
+                        )
+            } else {
+                runner.label == job.runs_on
+            };
+            if !id.starts_with("check-") || !valid_placement {
                 return Err(RenderError::InvalidWorkflow(format!(
                     "check_runner_mismatch:{id}"
                 )));

@@ -146,7 +146,7 @@ fn fetch_insert_at(job: &Job) -> usize {
     let want = [steps::WRITE_REQUEST_OPERATION, steps::MERGE_OPERATION].join(":");
     let at = |op: &str| {
         job.steps.iter().position(
-            |step| matches!(&step.kind, StepKind::Internal { operation } if operation == op),
+            |step| matches!(&step.kind, StepKind::Internal { operation, .. } if operation == op),
         )
     };
     at(&want)

@@ -226,10 +226,9 @@ fn run(
     command: Result<velnor_actions_mise::IsolatedCommand, velnor_actions_mise::MiseError>,
     deadline: CheckDeadline,
 ) -> Result<(), OrchestratorError> {
-    let timeout = deadline.remaining().map_err(|e| internal(&e.to_string()))?;
     let output = command
         .map_err(|e| internal(&e.to_string()))?
-        .run_bounded(8 * 1024 * 1024, timeout)
+        .run_until(8 * 1024 * 1024, deadline)
         .map_err(|e| internal(&e.to_string()))?;
     output
         .require_success("qualified-tool-acquisition")

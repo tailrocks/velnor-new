@@ -252,7 +252,7 @@ fn insert_format_report_steps(plan: &mut Job, reports: Vec<Step>) {
         .steps
         .iter()
         .position(|step| {
-            matches!(&step.kind, StepKind::Internal { operation } if operation == PLAN_OPERATION)
+            matches!(&step.kind, StepKind::Internal { operation, .. } if operation == PLAN_OPERATION)
         })
         .map_or(plan.steps.len(), |plan_at| plan_at + 1);
     plan.steps.splice(at..at, reports);
@@ -268,7 +268,7 @@ fn insert_format_step(plan: &mut Job, format: Step) {
         .steps
         .iter()
         .position(|step| {
-            matches!(&step.kind, StepKind::Internal { operation } if operation == PLAN_OPERATION)
+            matches!(&step.kind, StepKind::Internal { operation, .. } if operation == PLAN_OPERATION)
         })
         .unwrap_or(plan.steps.len());
     plan.steps.insert(at, format);

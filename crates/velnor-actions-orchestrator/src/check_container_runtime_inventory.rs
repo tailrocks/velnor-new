@@ -5,6 +5,7 @@ use std::path::{Component, Path};
 use velnor_actions_contract::config::{
     MAX_CHECK_CONTAINER_RUNTIME_ENTRIES, MAX_CHECK_CONTAINER_RUNTIME_ENTRY_PATH_BYTES,
 };
+use velnor_actions_mise::CheckDeadline;
 
 use super::{RuntimeEntryEvidence, RuntimeEntryKind};
 
@@ -81,10 +82,12 @@ pub(super) fn validate_socket(
     })
 }
 
-pub(super) fn inspect_runtime(
+pub(super) fn inspect_runtime_until(
     directory: &Path,
     expected_owner: u32,
+    deadline: Option<CheckDeadline>,
 ) -> Result<(Vec<RuntimeEntryEvidence>, RuntimeRootEvidence), OrchestratorError> {
+    checkpoint(deadline)?;
     let metadata = fs::symlink_metadata(directory).map_err(|e| io(directory, e))?;
     if metadata.file_type().is_symlink() || !metadata.is_dir() || owner(&metadata) != expected_owner
     {
@@ -103,7 +106,7 @@ pub(super) fn inspect_runtime(
         mode: root_mode,
     };
     let mut entries = Vec::new();
-    walk_runtime(directory, directory, expected_owner, &mut entries)?;
+    walk_runtime(directory, directory, expected_owner, &mut entries, deadline)?;
     if !entries
         .iter()
         .any(|entry| entry.path == "status" && entry.kind == RuntimeEntryKind::Directory)
@@ -114,6 +117,7 @@ pub(super) fn inspect_runtime(
         return Err(internal("orbstack_runtime_required_metadata"));
     }
     entries.sort_by(|left, right| left.path.cmp(&right.path));
+    checkpoint(deadline)?;
     Ok((entries, root))
 }
 
@@ -122,16 +126,14 @@ fn walk_runtime(
     directory: &Path,
     expected_owner: u32,
     entries: &mut Vec<RuntimeEntryEvidence>,
+    deadline: Option<CheckDeadline>,
 ) -> Result<(), OrchestratorError> {
-    let mut paths = Vec::new();
     for entry in fs::read_dir(directory).map_err(|e| io(directory, e))? {
-        paths.push(entry.map_err(|e| io(directory, e))?.path());
-    }
-    paths.sort();
-    for path in paths {
+        checkpoint(deadline)?;
         if entries.len() >= MAX_CHECK_CONTAINER_RUNTIME_ENTRIES {
             return Err(internal("orbstack_runtime_entry_limit"));
         }
+        let path = entry.map_err(|e| io(directory, e))?.path();
         let metadata = fs::symlink_metadata(&path).map_err(|e| io(&path, e))?;
         if metadata.file_type().is_symlink() {
             return Err(internal("orbstack_runtime_symlink"));
@@ -149,8 +151,18 @@ fn walk_runtime(
             owner: expected_owner,
         });
         if kind == RuntimeEntryKind::Directory {
-            walk_runtime(root, &path, expected_owner, entries)?;
+            walk_runtime(root, &path, expected_owner, entries, deadline)?;
         }
+        checkpoint(deadline)?;
+    }
+    Ok(())
+}
+
+fn checkpoint(deadline: Option<CheckDeadline>) -> Result<(), OrchestratorError> {
+    if let Some(deadline) = deadline {
+        deadline
+            .remaining()
+            .map_err(|error| crate::internal::internal(&error.to_string()))?;
     }
     Ok(())
 }

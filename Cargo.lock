@@ -705,6 +705,7 @@ dependencies = [
 name = "velnor-actions-mise"
 version = "0.1.0"
 dependencies = [
+ "rustix",
  "serde",
  "serde_json",
  "velnor-actions-contract",

@@ -6,7 +6,12 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::workflow::lanes::{HOSTED_SUFFIX, SCALE_SUFFIX};
+use velnor_actions_contract::config::{
+    CheckExecutor, CheckPlatform, EPHEMERAL_CHECK_ADMISSION_CONDITION,
+};
+use velnor_actions_contract::workflow::lanes::{
+    HOSTED_SUFFIX, NAMED_CHECK_JOB_ID_ENV, NAMED_CHECK_LANE_VARIANT_ENV, SCALE_SUFFIX,
+};
 use velnor_actions_contract::{Job, Step, StepKind};
 
 use crate::composite::composite_yaml;
@@ -48,10 +53,10 @@ struct SharedLaneParts {
 ///
 /// # Errors
 ///
-/// A pair whose timeout, condition, permissions, environment, or steps
-/// differ fails closed. Elected cache saves (`Save Mise tools`, `Save Tofu
-/// providers`) stay on the job that owns them and are not part of that
-/// comparison. An unsafe logical id fails closed.
+/// A pair whose timeout, condition, permissions, environment, or shared
+/// steps differ fails closed. Report uploads, named-check execution identity,
+/// and elected cache saves stay on the lane that owns them. An unsafe logical
+/// id fails closed.
 pub(crate) fn share_lanes(
     jobs: &BTreeMap<String, Job>,
     ctx: &RenderContext,
@@ -113,7 +118,7 @@ fn logical_id(hosted_id: &str) -> Option<&str> {
 
 fn split_pair(hosted: &Job, local: &Job, checkout_uses: &str) -> Option<SharedLaneParts> {
     if hosted.timeout_minutes != local.timeout_minutes
-        || hosted.condition != local.condition
+        || !same_or_admitted_check_condition(hosted, local)
         || hosted.permissions != local.permissions
         || hosted.environment != local.environment
     {
@@ -124,14 +129,29 @@ fn split_pair(hosted: &Job, local: &Job, checkout_uses: &str) -> Option<SharedLa
     if hosted_checkout != local_checkout {
         return None;
     }
-    let (hosted_common, hosted_extra) = peel_saves(hosted_steps);
-    let (local_common, local_extra) = peel_saves(local_steps);
+    let (hosted_common, hosted_extra) = peel_lane_specific(hosted_steps);
+    let (local_common, local_extra) = peel_lane_specific(local_steps);
     (hosted_common == local_common).then_some(SharedLaneParts {
         checkout: hosted_checkout.clone(),
         common: hosted_common,
         hosted_extra,
         local_extra,
     })
+}
+
+fn same_or_admitted_check_condition(hosted: &Job, local: &Job) -> bool {
+    if hosted.condition == local.condition {
+        return true;
+    }
+    hosted.condition.is_none()
+        && local.condition.as_deref() == Some(EPHEMERAL_CHECK_ADMISSION_CONDITION)
+        && matches!(
+            (&hosted.check_runner, &local.check_runner),
+            (Some(hosted_runner), Some(local_runner))
+                if hosted_runner == local_runner
+                    && hosted_runner.platform == CheckPlatform::LinuxX64
+                    && hosted_runner.executor == CheckExecutor::Hosted
+        )
 }
 
 fn peel_checkout<'a>(steps: &'a [Step], checkout_uses: &str) -> Option<(&'a Step, &'a [Step])> {
@@ -160,11 +180,11 @@ fn is_checkout_step(step: &Step) -> bool {
         )
 }
 
-fn peel_saves(steps: &[Step]) -> (Vec<Step>, Vec<Step>) {
+fn peel_lane_specific(steps: &[Step]) -> (Vec<Step>, Vec<Step>) {
     let mut common = Vec::new();
     let mut extra = Vec::new();
     for step in steps {
-        if is_elected_save(step) {
+        if is_lane_specific(step) {
             extra.push(step.clone());
         } else {
             common.push(step.clone());
@@ -173,9 +193,20 @@ fn peel_saves(steps: &[Step]) -> (Vec<Step>, Vec<Step>) {
     (common, extra)
 }
 
-fn is_elected_save(step: &Step) -> bool {
-    step.name == crate::cache_steps::TOOLS_SAVE_NAME
+fn is_lane_specific(step: &Step) -> bool {
+    if step.name == crate::cache_steps::TOOLS_SAVE_NAME
         || step.name == crate::tofu_cache::TOFU_PROVIDERS_SAVE_NAME
+    {
+        return true;
+    }
+    match &step.kind {
+        StepKind::Action { uses, .. } if uses == crate::steps::UPLOAD_ARTIFACT_USES => true,
+        StepKind::Shell { env, .. } | StepKind::Internal { env, .. } => {
+            env.contains_key(NAMED_CHECK_JOB_ID_ENV)
+                || env.contains_key(NAMED_CHECK_LANE_VARIANT_ENV)
+        }
+        _ => false,
+    }
 }
 
 fn set_steps(jobs: &mut BTreeMap<String, Job>, id: &str, steps: Vec<Step>) {
@@ -215,3 +246,7 @@ mod shell_tests;
 #[cfg(test)]
 #[path = "lane_share_unpinned_tests.rs"]
 mod unpinned_tests;
+
+#[cfg(test)]
+#[path = "lane_share_named_check_tests.rs"]
+mod named_check_tests;

@@ -23,7 +23,20 @@ impl Job {
                     "ephemeral_check_requires_admission_condition",
                 ));
             }
-            if runner.label != self.runs_on {
+            let scale_set = crate::config::RunsOn::parse(&self.runs_on)
+                .is_ok_and(|selector| selector.is_scale_set());
+            if scale_set
+                && (runner.platform != crate::config::CheckPlatform::LinuxX64
+                    || runner.executor != crate::config::CheckExecutor::Hosted
+                    || self.condition.as_deref()
+                        != Some(crate::config::EPHEMERAL_CHECK_ADMISSION_CONDITION))
+            {
+                return Err(ContractError::identity(
+                    "job.runs_on",
+                    "check_runner_scale_set_mismatch",
+                ));
+            }
+            if !scale_set && runner.label != self.runs_on {
                 return Err(ContractError::identity(
                     "job.runs_on",
                     "check_runner_label_mismatch",

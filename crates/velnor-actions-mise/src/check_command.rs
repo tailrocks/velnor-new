@@ -21,8 +21,12 @@ impl IsolatedCommand {
         owned: &QualifiedCheck,
         deadline: crate::CheckDeadline,
     ) -> Result<Self, MiseError> {
-        let found = std::fs::read_to_string(&owned.config)
-            .map_err(|e| invalid("check_config", e.to_string()))?;
+        let found = crate::checks::file_read::read_text(
+            &owned.config,
+            velnor_actions_contract::MAX_CHECK_SOURCE_BYTES,
+            Some(deadline),
+            "check_config",
+        )?;
         if found != owned.bound_projection()? {
             return Err(invalid("check_config", "projection_changed"));
         }
@@ -65,7 +69,7 @@ fn verified_mise_program(
             .collect(),
         owned.owned_env()?,
     );
-    let output = probe.run_bounded(64 * 1024, deadline.remaining()?)?;
+    let output = probe.run_until(64 * 1024, deadline)?;
     let version = String::from_utf8_lossy(&output.stdout);
     if !output.success || version.split_whitespace().next() != Some(crate::MISE_VERSION) {
         return Err(invalid(

@@ -52,7 +52,7 @@ pub use catalog::{
     validate_exact_version,
 };
 pub use check_deadline::CheckDeadline;
-pub use checks::{DiscoveredCheck, QualifiedCheck, discover_checks};
+pub use checks::{DiscoveredCheck, QualifiedCheck, discover_checks, discover_checks_until};
 pub use command::{
     ALLOWED_MISE_SUBCOMMANDS, CREDENTIAL_ENV_KEYS, ENDPOINT_ENV_KEYS, ISOLATION_ENV,
     IsolatedCommand, MISE_CARGO_HOME_ENV, MISE_GLOBAL_FLAGS, MISE_RUSTUP_HOME_ENV,

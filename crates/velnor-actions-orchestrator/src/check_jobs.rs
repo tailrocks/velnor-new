@@ -3,7 +3,10 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::config::{CheckExecutor, EPHEMERAL_CHECK_ADMISSION_CONDITION};
-use velnor_actions_contract::{Job, JobTimeout, Permissions, Step, WorkflowPolicy};
+use velnor_actions_contract::{
+    Job, JobTimeout, NAMED_CHECK_JOB_ID_ENV, NAMED_CHECK_LANE_VARIANT_ENV, Permissions, Step,
+    WorkflowPolicy,
+};
 use velnor_actions_mise::{DiscoveredCheck, ToolCatalog};
 use velnor_actions_workflow_renderer::render::PLAN_JOB_ID;
 use velnor_actions_workflow_renderer::steps::INTERNAL_OP_ENV;
@@ -75,6 +78,11 @@ fn execute_check_step(
 ) -> Result<Step, OrchestratorError> {
     let identity = BTreeMap::from([
         ("VELNOR_CHECK_ID".to_owned(), discovered.check.id.clone()),
+        (
+            NAMED_CHECK_JOB_ID_ENV.to_owned(),
+            format!("check-{}", discovered.check.id),
+        ),
+        (NAMED_CHECK_LANE_VARIANT_ENV.to_owned(), "single".to_owned()),
         (
             "VELNOR_TASK_ID".to_owned(),
             discovered.proposal.task_id.clone(),

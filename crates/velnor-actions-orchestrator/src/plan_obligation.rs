@@ -11,8 +11,8 @@ use std::path::Path;
 
 use serde::Serialize;
 use velnor_actions_contract::{
-    MatrixEntry, PlanObligation, ProposedTask, Stack, StackExtension, canonical_json_bytes,
-    digest_b3,
+    MatrixEntry, NamedCheckLane, PlanObligation, ProposedTask, Stack, StackExtension,
+    canonical_json_bytes, digest_b3,
 };
 use velnor_actions_mise::ToolCatalog;
 use velnor_actions_mise::restore::probe_tool_availability;
@@ -65,6 +65,8 @@ pub(crate) struct GroupInputs<'a> {
     pub(crate) snapshot: &'a ExecutionSnapshot,
     /// Repository checkout the closure resolves against.
     pub(crate) root: &'a Path,
+    /// Emitted report identities for named checks.
+    pub(crate) named_check_lanes: &'a BTreeMap<String, Vec<NamedCheckLane>>,
 }
 
 /// Deterministic lane per universe task ID.
@@ -189,17 +191,23 @@ fn planned_identity(
 pub(crate) fn plan_group(
     inputs: &GroupInputs<'_>,
     reads: &mut velnor_actions_tofu::FileCache,
-) -> Result<(PlanObligation, MatrixEntry), OrchestratorError> {
+) -> Result<(PlanObligation, Vec<MatrixEntry>), OrchestratorError> {
     let task = inputs.task;
     if Stack::from_id(&task.stack_id) == Some(Stack::Mise) {
         let item = crate::internal_plan::named_checks::discovered(inputs.discovery, task)
             .map_err(internal_contract)?;
-        return crate::internal_plan::named_checks::plan::derive(
+        let job_id = format!("check-{}", item.check.id);
+        let check_lanes = inputs
+            .named_check_lanes
+            .get(&job_id)
+            .ok_or_else(|| internal("named_check_lane_missing"))?;
+        return crate::internal_plan::named_checks::plan::derive_lanes(
             inputs.root,
             item,
             inputs.run_key,
             inputs.wire.generator,
             inputs.catalog,
+            check_lanes,
         );
     }
     let _ = inputs.lane;
@@ -248,6 +256,7 @@ pub(crate) fn plan_group(
         closure_digest,
         reuse,
     )
+    .map(|(obligation, entry)| (obligation, vec![entry]))
 }
 
 /// Complete existing matrix transport after execution disposition is decided.

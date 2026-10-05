@@ -1,7 +1,7 @@
 //! Closed declarations for isolated, credential-free verification jobs.
 
-use crate::errors::ContractError;
 use super::mise::is_valid_mise_task_name;
+use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
 
 /// Generated job-key prefix for a declared workflow verification task.

@@ -3,21 +3,25 @@
 //! Schema 1 returns the same jobs. Control and single-writer jobs stay
 //! one hosted job. `both` duplicates eligible verification only.
 
-use crate::config::{
-    ExecutionConfig, ExecutionMode, ExecutionRole, VERIFICATION_TASK_JOB_PREFIX, VelnorConfig,
-    VerificationRunner,
-};
-use crate::errors::ContractError;
-
 use super::ValidatorKind;
 use super::ir::{Job, WorkflowIr};
 use super::jobs::{PLAN_JOB_ID, REQUIRED_JOB_ID};
+use super::named_check_lanes::add_named_check_lanes;
+pub use super::named_check_lanes::{
+    NAMED_CHECK_JOB_ID_ENV, NAMED_CHECK_LANE_VARIANT_ENV, NAMED_CHECK_LANES_ENV, NamedCheckLane,
+    NamedCheckLaneVariant, named_check_lanes,
+};
+use crate::config::{
+    CheckExecutor, CheckPlatform, EPHEMERAL_CHECK_ADMISSION_CONDITION, ExecutionConfig,
+    ExecutionMode, ExecutionRole, VERIFICATION_TASK_JOB_PREFIX, VelnorConfig, VerificationRunner,
+};
+use crate::errors::ContractError;
+use std::collections::BTreeMap;
 
 /// Suffix for the hosted copy of a verification job.
 pub const HOSTED_SUFFIX: &str = "__hosted";
 /// Suffix for the scale-set copy of a verification job.
 pub const SCALE_SUFFIX: &str = "__local";
-
 /// Planner class of a job id. Role overrides cannot change this.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LaneClass {
@@ -31,7 +35,7 @@ pub enum LaneClass {
 
 /// Where one verification workload is emitted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Placement {
+pub(super) enum Placement {
     HostedOnly,
     ScaleSetOnly,
     Both,
@@ -84,6 +88,7 @@ pub fn expand_workflow(
         .as_ref()
         .ok_or_else(|| ContractError::config("config.toml", "execution", "missing_execution"))?;
     check_override_keys(ir, execution)?;
+    let check_lanes = named_check_lanes(ir, config, dispatch)?;
     let map = id_map(ir, execution, dispatch)?;
     let mut jobs = std::collections::BTreeMap::new();
     for (id, job) in &ir.jobs {
@@ -93,6 +98,7 @@ pub fn expand_workflow(
     }
     let mut expanded = ir.clone();
     expanded.jobs = jobs;
+    add_named_check_lanes(&mut expanded, &check_lanes)?;
     Ok(expanded)
 }
 
@@ -129,7 +135,7 @@ fn id_map(
     Ok(map)
 }
 
-fn placement_for(
+pub(super) fn placement_for(
     execution: &ExecutionConfig,
     dispatch: Option<ExecutionMode>,
     class: LaneClass,
@@ -190,6 +196,11 @@ fn placement_for(
 
 /// Native macOS tasks cannot use the Linux/amd64 Scale Set profile.
 fn verification_task_supports_scale_set(job_id: &str, job: &Job) -> Result<bool, ContractError> {
+    if let Some(check) = &job.check_runner {
+        return Ok(
+            check.platform == CheckPlatform::LinuxX64 && check.executor == CheckExecutor::Hosted
+        );
+    }
     if !job_id.starts_with(VERIFICATION_TASK_JOB_PREFIX) {
         return Ok(true);
     }
@@ -224,33 +235,54 @@ fn emit_job(
 ) -> Result<(), ContractError> {
     match placement {
         Placement::HostedOnly => {
-            jobs.insert(
+            insert_job(
+                jobs,
                 id.to_owned(),
-                retarget(job, None, class, EmitLane::Single, map),
-            );
+                retarget(job, None, id, id, class, EmitLane::Single, map),
+            )?;
         }
         Placement::ScaleSetOnly => {
             let token = execution.scale_selector()?.token();
-            let mut next = retarget(job, Some(&token), class, EmitLane::Single, map);
+            let mut next = retarget(job, Some(&token), id, id, class, EmitLane::Single, map);
             next.display_name = scale_name(&job.display_name);
-            jobs.insert(id.to_owned(), next);
+            insert_job(jobs, id.to_owned(), next)?;
         }
         Placement::Both => {
             let token = execution.scale_selector()?.token();
-            let mut hosted = retarget(job, None, class, EmitLane::Hosted, map);
+            let hosted_id = format!("{id}{HOSTED_SUFFIX}");
+            let scale_id = format!("{id}{SCALE_SUFFIX}");
+            let mut hosted = retarget(job, None, id, &hosted_id, class, EmitLane::Hosted, map);
             hosted.display_name = hosted_name(&job.display_name);
-            jobs.insert(format!("{id}{HOSTED_SUFFIX}"), hosted);
-            let mut scale = retarget(job, Some(&token), class, EmitLane::Scale, map);
+            insert_job(jobs, hosted_id, hosted)?;
+            let mut scale = retarget(
+                job,
+                Some(&token),
+                id,
+                &scale_id,
+                class,
+                EmitLane::Scale,
+                map,
+            );
             scale.display_name = scale_name(&job.display_name);
-            jobs.insert(format!("{id}{SCALE_SUFFIX}"), scale);
+            insert_job(jobs, scale_id, scale)?;
         }
     }
+    Ok(())
+}
+
+fn insert_job(jobs: &mut BTreeMap<String, Job>, id: String, job: Job) -> Result<(), ContractError> {
+    if jobs.contains_key(&id) {
+        return Err(ContractError::Collision(format!("expanded job id {id}")));
+    }
+    jobs.insert(id, job);
     Ok(())
 }
 
 fn retarget(
     job: &Job,
     runs_on: Option<&str>,
+    source_id: &str,
+    output_id: &str,
     class: LaneClass,
     lane: EmitLane,
     map: &std::collections::BTreeMap<String, Vec<String>>,
@@ -258,9 +290,45 @@ fn retarget(
     let mut next = job.clone();
     if let Some(token) = runs_on {
         token.clone_into(&mut next.runs_on);
+        if next.check_runner.is_some() {
+            next.condition = Some(EPHEMERAL_CHECK_ADMISSION_CONDITION.to_owned());
+        }
     }
+    retarget_check_identity(&mut next, source_id, output_id, lane);
     next.needs = expand_needs(&job.needs, map, class, lane);
     next
+}
+
+fn retarget_check_identity(job: &mut Job, source_id: &str, output_id: &str, lane: EmitLane) {
+    for step in &mut job.steps {
+        match &mut step.kind {
+            super::ir::StepKind::Shell { env, .. } => {
+                if let Some(job_id) = env.get_mut(NAMED_CHECK_JOB_ID_ENV)
+                    && job_id == source_id
+                {
+                    output_id.clone_into(job_id);
+                }
+                if let Some(variant) = env.get_mut(NAMED_CHECK_LANE_VARIANT_ENV) {
+                    match lane {
+                        EmitLane::Hosted => "hosted".clone_into(variant),
+                        EmitLane::Scale => "scale_set".clone_into(variant),
+                        EmitLane::Single => {}
+                    }
+                }
+            }
+            super::ir::StepKind::Action { with, .. } => {
+                if let Some(name) = with.get_mut("name")
+                    && name.starts_with("velnor-crate-")
+                    && name.ends_with(&format!("-{source_id}"))
+                {
+                    let prefix_len = name.len() - source_id.len();
+                    name.truncate(prefix_len);
+                    name.push_str(output_id);
+                }
+            }
+            _ => {}
+        }
+    }
 }
 
 fn expand_needs(

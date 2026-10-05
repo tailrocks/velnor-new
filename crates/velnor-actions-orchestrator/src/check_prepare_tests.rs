@@ -1,5 +1,8 @@
 //! Runtime filesystem ownership preserves source snapshots and refuses escapes.
 use super::*;
+fn deadline() -> CheckDeadline {
+    CheckDeadline::after(std::time::Duration::from_secs(60)).expect("deadline")
+}
 fn discovered(root: &Path) -> DiscoveredCheck {
     std::fs::write(root.join("mise.toml"), "[tasks.proof]\nrun = 'true'\n").expect("source");
     let check = serde_json::from_value(serde_json::json!({
@@ -16,13 +19,13 @@ fn discovered(root: &Path) -> DiscoveredCheck {
 fn source_change_refuses_before_projection_or_execution() {
     let root = tempfile::TempDir::new().expect("root");
     let item = discovered(root.path());
-    verify_source(root.path(), &item).expect("same bytes");
+    verify_source(root.path(), &item, deadline()).expect("same bytes");
     std::fs::write(
         root.path().join("mise.toml"),
         "[tasks.proof]\nrun = 'false'\n",
     )
     .expect("mutate");
-    assert!(verify_source(root.path(), &item).is_err());
+    assert!(verify_source(root.path(), &item, deadline()).is_err());
 }
 #[test]
 fn owned_homes_cannot_live_inside_repository() {
@@ -47,5 +50,5 @@ fn source_symlink_refuses_even_when_target_stays_in_repository() {
     )
     .expect("move");
     std::os::unix::fs::symlink("actual.toml", root.path().join("mise.toml")).expect("link");
-    assert!(verify_source(root.path(), &item).is_err());
+    assert!(verify_source(root.path(), &item, deadline()).is_err());
 }

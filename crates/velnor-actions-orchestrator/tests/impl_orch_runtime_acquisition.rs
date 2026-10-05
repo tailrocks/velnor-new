@@ -63,8 +63,8 @@ fn acquisition_requires_bound_plan_and_verified_archive() -> TestResult {
     assert_order(
         &runtime,
         &[
-            "bind_check(root, &item, &plan, entry, task_id, &catalog)?;",
-            "let outcome = run_check(root, temp, &item, &plan);",
+            "bind_check(root, &item, &plan, entry, task_id, &catalog, deadline)?;",
+            "let outcome = run_check(root, temp, &item, &plan, deadline);",
         ],
     )?;
     let preparation = std::fs::read_to_string(super::orch_src().join("check_prepare.rs"))?;

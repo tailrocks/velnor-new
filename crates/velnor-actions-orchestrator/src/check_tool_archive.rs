@@ -4,11 +4,9 @@ use std::collections::HashSet;
 #[cfg(not(unix))]
 use std::fs::OpenOptions;
 use std::fs::{self, File};
-use std::io::{self, Read, Seek, SeekFrom};
+use std::io::Read;
 use std::path::Path;
 
-use flate2::read::GzDecoder;
-use lzma_rust2::XzReader;
 use tar::EntryType;
 use zip::ZipArchive;
 
@@ -16,6 +14,8 @@ use crate::OrchestratorError;
 use crate::internal::internal;
 use velnor_actions_mise::CheckDeadline;
 
+#[path = "check_tool_archive_deadline.rs"]
+mod archive_deadline;
 #[path = "check_tool_archive_links.rs"]
 mod links;
 #[path = "check_tool_archive_paths.rs"]
@@ -24,6 +24,7 @@ mod paths;
 mod tar_preflight;
 #[path = "check_tool_archive_zip.rs"]
 mod zip_checks;
+use archive_deadline::{DeadlineIo, archive_error, check_deadline, gzip_reader, xz_reader};
 
 const MAX_ARCHIVE_BYTES: u64 = 1024 * 1024 * 1024;
 const MAX_ENTRIES: usize = 100_000;
@@ -93,15 +94,12 @@ pub(crate) fn extract_archive(
     check_deadline(deadline)?;
     let format = paths::archive_format(url)?;
     let extension_entries = match format {
-        ArchiveFormat::TarGzip => tar_preflight::preflight_tar(GzDecoder::new(DeadlineIo::new(
-            open_archive(archive)?,
-            deadline,
-        )))?,
-        ArchiveFormat::TarXz => tar_preflight::preflight_tar(XzReader::new_mem_limit(
-            DeadlineIo::new(open_archive(archive)?, deadline),
-            false,
-            XZ_MEMORY_LIMIT_KIB,
-        ))?,
+        ArchiveFormat::TarGzip => {
+            tar_preflight::preflight_tar(gzip_reader(open_archive(archive)?, deadline))?
+        }
+        ArchiveFormat::TarXz => {
+            tar_preflight::preflight_tar(xz_reader(open_archive(archive)?, deadline))?
+        }
         ArchiveFormat::Zip => {
             let mut source = open_archive(archive)?;
             zip_checks::preflight_zip_entries(&mut source, deadline)?;
@@ -115,22 +113,12 @@ pub(crate) fn extract_archive(
     let source = open_archive(archive)?;
     paths::create_destination(destination)?;
     let result = match format {
-        ArchiveFormat::TarGzip => extract_tar(
-            GzDecoder::new(DeadlineIo::new(source, deadline)),
-            destination,
-            budget,
-            deadline,
-        ),
-        ArchiveFormat::TarXz => extract_tar(
-            XzReader::new_mem_limit(
-                DeadlineIo::new(source, deadline),
-                false,
-                XZ_MEMORY_LIMIT_KIB,
-            ),
-            destination,
-            budget,
-            deadline,
-        ),
+        ArchiveFormat::TarGzip => {
+            extract_tar(gzip_reader(source, deadline), destination, budget, deadline)
+        }
+        ArchiveFormat::TarXz => {
+            extract_tar(xz_reader(source, deadline), destination, budget, deadline)
+        }
         ArchiveFormat::Zip => extract_zip(source, destination, budget, deadline),
     };
     if let Err(error) = result {
@@ -247,6 +235,7 @@ fn extract_tar<R: Read>(
     paths::apply_directory_modes(destination, directories, deadline)?;
     Ok(())
 }
+
 fn extract_zip(
     source: File,
     destination: &Path,
@@ -322,52 +311,6 @@ fn reserve_size(
     budget.admit_bytes(size)?;
     *total = next;
     Ok(())
-}
-
-fn check_deadline(deadline: CheckDeadline) -> Result<(), OrchestratorError> {
-    deadline
-        .remaining()
-        .map(|_| ())
-        .map_err(|error| internal(&error.to_string()))
-}
-
-struct DeadlineIo<R> {
-    inner: R,
-    deadline: CheckDeadline,
-}
-
-impl<R> DeadlineIo<R> {
-    fn new(inner: R, deadline: CheckDeadline) -> Self {
-        Self { inner, deadline }
-    }
-
-    fn checkpoint(&self) -> io::Result<()> {
-        self.deadline
-            .remaining()
-            .map(|_| ())
-            .map_err(|error| io::Error::new(io::ErrorKind::TimedOut, error.to_string()))
-    }
-}
-
-impl<R: Read> Read for DeadlineIo<R> {
-    fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
-        self.checkpoint()?;
-        let count = self.inner.read(buffer)?;
-        self.checkpoint()?;
-        Ok(count)
-    }
-}
-
-impl<R: Seek> Seek for DeadlineIo<R> {
-    fn seek(&mut self, position: SeekFrom) -> io::Result<u64> {
-        self.checkpoint()?;
-        let position = self.inner.seek(position)?;
-        self.checkpoint()?;
-        Ok(position)
-    }
-}
-fn archive_error(problem: &str) -> OrchestratorError {
-    internal(&format!("tool_archive:{problem}"))
 }
 
 fn io_error(path: &Path, error: impl std::fmt::Display) -> OrchestratorError {

@@ -278,7 +278,7 @@ pub(crate) fn check_candidate_invariants(jobs: &BTreeMap<String, Job>) -> Result
             ));
         }
         for step in &candidate.steps {
-            if let StepKind::Internal { operation } = &step.kind
+            if let StepKind::Internal { operation, .. } = &step.kind
                 && operation == steps::PLAN_OPERATION
             {
                 return Err(RenderError::InvalidWorkflow(

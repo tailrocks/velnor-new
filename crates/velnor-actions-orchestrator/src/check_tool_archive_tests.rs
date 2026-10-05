@@ -359,24 +359,8 @@ fn archive_source_symlink_is_rejected() {
     assert!(extract(&linked, &destination, "https://example.test/tool.zip").is_err());
 }
 
-#[test]
-fn tar_preflight_checks_the_shared_deadline_during_decoded_reads() {
-    struct SlowArchive;
-
-    impl std::io::Read for SlowArchive {
-        fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
-            std::thread::sleep(Duration::from_millis(20));
-            buffer.fill(0);
-            Ok(buffer.len())
-        }
-    }
-
-    let deadline = CheckDeadline::after(Duration::from_millis(5)).expect("deadline");
-    let error = tar_preflight::preflight_tar(DeadlineIo::new(SlowArchive, deadline))
-        .expect_err("preflight cannot outlive the check");
-    assert!(matches!(error, OrchestratorError::Internal { .. }));
-    assert!(deadline.remaining().is_err());
-}
-
 #[path = "check_tool_archive_metadata_tests.rs"]
 mod metadata_tests;
+
+#[path = "check_tool_archive_deadline_tests.rs"]
+mod deadline_tests;

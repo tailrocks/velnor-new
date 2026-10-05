@@ -230,7 +230,7 @@ fn probe(
         args.iter().map(OsString::from).collect(),
         env.to_vec(),
     );
-    let result = command.run_bounded(capture_limit, deadline.remaining()?)?;
+    let result = command.run_until(capture_limit, deadline)?;
     if !result.success {
         return Err(probe_failure(program, args, &result));
     }

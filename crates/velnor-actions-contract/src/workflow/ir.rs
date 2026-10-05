@@ -155,6 +155,9 @@ pub enum StepKind {
     Internal {
         /// Internal operation name.
         operation: String,
+        /// Fixed environment values attached by workflow expansion.
+        #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+        env: BTreeMap<String, String>,
     },
 }
 impl WorkflowIr {
@@ -291,11 +294,17 @@ impl Step {
                     ));
                 }
             }
-            StepKind::Internal { operation } => {
+            StepKind::Internal { operation, env } => {
                 if operation.trim().is_empty() {
                     return Err(ContractError::identity(
                         "step.operation",
                         format!("empty_operation:{job}"),
+                    ));
+                }
+                if env.keys().any(|key| key.trim().is_empty()) {
+                    return Err(ContractError::identity(
+                        "step.env",
+                        format!("bad_internal_env:{job}"),
                     ));
                 }
             }

@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 use velnor_actions_contract::config::HostOrbStackSdk;
+use velnor_actions_mise::CheckDeadline;
 
 #[path = "check_container_bundle_tree.rs"]
 mod tree;
@@ -40,10 +41,20 @@ struct SourceIdentity {
 }
 
 /// Verify the outer app, retain the complete nested CLI bundle, and freeze it.
+#[cfg(test)]
 pub(crate) fn project_sdk(
     home: &Path,
     sdk: &HostOrbStackSdk,
 ) -> Result<SdkProjection, OrchestratorError> {
+    project_sdk_until(home, sdk, None)
+}
+
+pub(crate) fn project_sdk_until(
+    home: &Path,
+    sdk: &HostOrbStackSdk,
+    deadline: Option<CheckDeadline>,
+) -> Result<SdkProjection, OrchestratorError> {
+    checkpoint(deadline)?;
     let app = existing_directory(Path::new(&sdk.app_bundle_path), "sdk_app_bundle")?;
     let home = existing_directory(home, "sdk_home")?;
     let SourceIdentity {
@@ -52,7 +63,7 @@ pub(crate) fn project_sdk(
         observed_info,
         observed_main,
         observed_source,
-    } = verify_source(&app, sdk)?;
+    } = verify_source(&app, sdk, deadline)?;
     let rel_cli = relative(&sdk.cli_relative_path, "sdk_cli_path")?;
     let projection_root = home.join("orbstack-sdk");
     let name = source
@@ -69,13 +80,13 @@ pub(crate) fn project_sdk(
     if let Err(error) = tree::create_destination(&destination) {
         return abort(&projection_root, error);
     }
-    if let Err(error) = tree::populate(&destination, &entries) {
+    if let Err(error) = tree::populate_until(&destination, &entries, deadline) {
         return abort(&projection_root, error);
     }
     if let Err(error) = tree::set_directory_mode(&projection_root, 0o700) {
         return abort(&projection_root, error);
     }
-    let owned_entries = match tree::collect_tree(&destination) {
+    let owned_entries = match tree::collect_tree_until(&destination, deadline) {
         Ok(entries) => entries,
         Err(error) => return abort(&projection_root, error),
     };
@@ -85,7 +96,7 @@ pub(crate) fn project_sdk(
     if let Err(error) = tree::verify_owned_root(&destination) {
         return abort(&projection_root, error);
     }
-    let observed_owned = match tree::tree_digest(&owned_entries) {
+    let observed_owned = match tree::tree_digest_until(&owned_entries, deadline) {
         Ok(hash) => hash,
         Err(error) => return abort(&projection_root, error),
     };
@@ -93,7 +104,12 @@ pub(crate) fn project_sdk(
         return abort(&projection_root, internal("sdk_owned_tree_sha256"));
     }
     let owned_cli = destination.join(&rel_cli);
-    let owned_cli_hash = match checked_hash(&owned_cli, &sdk.cli_sha256, "sdk_owned_cli_sha256") {
+    let owned_cli_hash = match checked_hash_until(
+        &owned_cli,
+        &sdk.cli_sha256,
+        "sdk_owned_cli_sha256",
+        deadline,
+    ) {
         Ok(hash) => hash,
         Err(error) => return abort(&projection_root, error),
     };
@@ -116,27 +132,44 @@ pub(crate) fn project_sdk(
     })
 }
 
-fn verify_source(app: &Path, sdk: &HostOrbStackSdk) -> Result<SourceIdentity, OrchestratorError> {
+fn verify_source(
+    app: &Path,
+    sdk: &HostOrbStackSdk,
+    deadline: Option<CheckDeadline>,
+) -> Result<SourceIdentity, OrchestratorError> {
+    checkpoint(deadline)?;
     let info = app.join("Contents/Info.plist");
     reject_links(&info)?;
-    let observed_info = checked_hash(&info, &sdk.info_plist_sha256, "sdk_info_plist_sha256")?;
+    let observed_info = checked_hash_until(
+        &info,
+        &sdk.info_plist_sha256,
+        "sdk_info_plist_sha256",
+        deadline,
+    )?;
     let main = app.join(relative(&sdk.main_executable_path, "sdk_main_path")?);
     reject_links(&main)?;
-    let observed_main = checked_hash(
+    let observed_main = checked_hash_until(
         &main,
         &sdk.main_executable_sha256,
         "sdk_main_executable_sha256",
+        deadline,
     )?;
     let source = declared_bundle(app, &sdk.cli_bundle_path)?;
     let rel_cli = relative(&sdk.cli_relative_path, "sdk_cli_path")?;
-    let entries = tree::collect_tree(&source)?;
-    let observed_source = tree::tree_digest(&entries)?;
+    let entries = tree::collect_tree_until(&source, deadline)?;
+    let observed_source = tree::tree_digest_until(&entries, deadline)?;
     require(
         &observed_source,
         &sdk.source_tree_sha256,
         "sdk_source_tree_sha256",
     )?;
-    checked_hash(&source.join(rel_cli), &sdk.cli_sha256, "sdk_cli_sha256")?;
+    checked_hash_until(
+        &source.join(rel_cli),
+        &sdk.cli_sha256,
+        "sdk_cli_sha256",
+        deadline,
+    )?;
+    checkpoint(deadline)?;
     Ok(SourceIdentity {
         source,
         entries,
@@ -147,29 +180,45 @@ fn verify_source(app: &Path, sdk: &HostOrbStackSdk) -> Result<SourceIdentity, Or
 }
 
 /// Recheck source identity and the retained tree around each readonly probe.
+#[cfg(test)]
 pub(crate) fn revalidate_sdk(
     projection: &SdkProjection,
     sdk: &HostOrbStackSdk,
 ) -> Result<(), OrchestratorError> {
+    revalidate_sdk_until(projection, sdk, None)
+}
+
+pub(crate) fn revalidate_sdk_until(
+    projection: &SdkProjection,
+    sdk: &HostOrbStackSdk,
+    deadline: Option<CheckDeadline>,
+) -> Result<(), OrchestratorError> {
+    checkpoint(deadline)?;
     let app = existing_directory(&projection.app_bundle, "sdk_app_bundle")?;
     let info_path = app.join("Contents/Info.plist");
     reject_links(&info_path)?;
-    let info = checked_hash(&info_path, &sdk.info_plist_sha256, "sdk_info_plist_sha256")?;
+    let info = checked_hash_until(
+        &info_path,
+        &sdk.info_plist_sha256,
+        "sdk_info_plist_sha256",
+        deadline,
+    )?;
     if info != projection.observed_info_plist_sha256 {
         return Err(internal("sdk_info_plist_changed"));
     }
     let main_rel = relative(&sdk.main_executable_path, "sdk_main_path")?;
     let main_path = app.join(main_rel);
     reject_links(&main_path)?;
-    let main = checked_hash(
+    let main = checked_hash_until(
         &main_path,
         &sdk.main_executable_sha256,
         "sdk_main_executable_sha256",
+        deadline,
     )?;
     if main != projection.observed_main_executable_sha256 {
         return Err(internal("sdk_main_executable_changed"));
     }
-    let source = sdk_tree_sha256(&projection.source_bundle)?;
+    let source = sdk_tree_sha256_until(&projection.source_bundle, deadline)?;
     if source != sdk.source_tree_sha256 || source != projection.observed_source_tree_sha256 {
         return Err(internal("sdk_source_tree_changed"));
     }
@@ -180,26 +229,30 @@ pub(crate) fn revalidate_sdk(
     existing_directory(root, "sdk_owned_root")?;
     tree::verify_owned_root(root)?;
     tree::verify_owned_root(&projection.owned_bundle)?;
-    let owned = sdk_tree_sha256(&projection.owned_bundle)?;
+    let owned = sdk_tree_sha256_until(&projection.owned_bundle, deadline)?;
     if owned != sdk.owned_tree_sha256 || owned != projection.observed_owned_tree_sha256 {
         return Err(internal("sdk_owned_tree_changed"));
     }
     let rel_cli = relative(&sdk.cli_relative_path, "sdk_cli_path")?;
-    let cli = checked_hash(
+    let cli = checked_hash_until(
         &projection.owned_bundle.join(rel_cli),
         &sdk.cli_sha256,
         "sdk_owned_cli_sha256",
+        deadline,
     )?;
     if cli != projection.observed_cli_sha256 {
         return Err(internal("sdk_cli_changed"));
     }
-    Ok(())
+    checkpoint(deadline)
 }
 
 /// Compute the SDK tree identity with the projection's canonical recipe.
-pub(crate) fn sdk_tree_sha256(root: &Path) -> Result<String, OrchestratorError> {
-    let entries = tree::collect_tree(root)?;
-    tree::tree_digest(&entries)
+pub(crate) fn sdk_tree_sha256_until(
+    root: &Path,
+    deadline: Option<CheckDeadline>,
+) -> Result<String, OrchestratorError> {
+    let entries = tree::collect_tree_until(root, deadline)?;
+    tree::tree_digest_until(&entries, deadline)
 }
 
 fn existing_directory(path: &Path, reason: &str) -> Result<PathBuf, OrchestratorError> {
@@ -269,9 +322,23 @@ fn reject_links(path: &Path) -> Result<(), OrchestratorError> {
     Ok(())
 }
 
-fn checked_hash(path: &Path, expected: &str, reason: &str) -> Result<String, OrchestratorError> {
-    let observed = tree::file_hash(path)?;
+fn checked_hash_until(
+    path: &Path,
+    expected: &str,
+    reason: &str,
+    deadline: Option<CheckDeadline>,
+) -> Result<String, OrchestratorError> {
+    let observed = tree::file_hash_until(path, deadline)?;
     require(&observed, expected, reason)
+}
+
+fn checkpoint(deadline: Option<CheckDeadline>) -> Result<(), OrchestratorError> {
+    if let Some(deadline) = deadline {
+        deadline
+            .remaining()
+            .map_err(|error| crate::internal::internal(&error.to_string()))?;
+    }
+    Ok(())
 }
 
 fn require(observed: &str, expected: &str, reason: &str) -> Result<String, OrchestratorError> {

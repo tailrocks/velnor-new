@@ -96,10 +96,7 @@ pub fn verify_qualified_executable(
     };
     let command =
         IsolatedCommand::qualified_check_probe(observed.path.as_os_str().to_owned(), args, env);
-    let output = command.run_bounded(
-        MAX_CHECK_QUALIFIED_PROBE_CAPTURE_BYTES,
-        deadline.remaining()?,
-    )?;
+    let output = command.run_until(MAX_CHECK_QUALIFIED_PROBE_CAPTURE_BYTES, deadline)?;
     if !output.success {
         return Err(invalid("version_probe_failed"));
     }

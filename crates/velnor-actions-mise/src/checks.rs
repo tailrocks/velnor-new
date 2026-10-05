@@ -11,8 +11,11 @@ pub use capabilities::{
     OrbStackAppObservation, OrbStackObservation, PreparedContainer,
     validate_check_capability_proof, verify_check_capabilities,
 };
+#[path = "check_file_read.rs"]
+pub(crate) mod file_read;
 #[path = "check_metadata.rs"]
 mod metadata;
+pub use discovery::discover_checks_until;
 pub use discovery::{DiscoveredCheck, discover_checks};
 pub use execution::QualifiedCheck;
 pub use metadata::CheckEntryMetadata;

@@ -6,21 +6,28 @@ use sha2::{Digest, Sha256};
 use std::fs;
 use std::io::Read;
 #[cfg(unix)]
-use std::os::unix::fs::{MetadataExt, PermissionsExt};
+use std::os::unix::fs::MetadataExt;
 use std::path::{Component, Path};
 use velnor_actions_contract::canonical_json_bytes;
+use velnor_actions_mise::CheckDeadline;
 
 const MAX_ENTRIES: usize = 1_000;
 const MAX_BYTES: u64 = 256 * 1024 * 1024;
 const READ_CHUNK: usize = 64 * 1024;
 
+#[path = "check_container_bundle_tree_write.rs"]
+mod write;
+#[cfg(test)]
+pub(super) use write::populate;
+pub(super) use write::{create_destination, populate_until, set_directory_mode, verify_owned_root};
+
 pub(super) struct Entry {
-    path: String,
-    mode: u32,
-    kind: Kind,
+    pub(super) path: String,
+    pub(super) mode: u32,
+    pub(super) kind: Kind,
 }
 
-enum Kind {
+pub(super) enum Kind {
     Directory,
     File {
         sha256: String,
@@ -34,7 +41,16 @@ struct Walk {
     bytes: u64,
 }
 
+#[cfg(test)]
 pub(super) fn collect_tree(root: &Path) -> Result<Vec<Entry>, OrchestratorError> {
+    collect_tree_until(root, None)
+}
+
+pub(super) fn collect_tree_until(
+    root: &Path,
+    deadline: Option<CheckDeadline>,
+) -> Result<Vec<Entry>, OrchestratorError> {
+    checkpoint(deadline)?;
     let root = super::existing_directory(root, "sdk_tree_root")?;
     let root_mode =
         metadata_mode(&fs::symlink_metadata(&root).map_err(|error| io_error(&root, error))?);
@@ -43,14 +59,21 @@ pub(super) fn collect_tree(root: &Path) -> Result<Vec<Entry>, OrchestratorError>
         entries: Vec::new(),
         bytes: 0,
     };
-    visit(&root, &root, &mut walk)?;
+    visit(&root, &root, &mut walk, deadline)?;
+    checkpoint(deadline)?;
     walk.entries
         .sort_by(|left, right| left.path.cmp(&right.path));
     Ok(walk.entries)
 }
 
-fn visit(root: &Path, directory: &Path, walk: &mut Walk) -> Result<(), OrchestratorError> {
+fn visit(
+    root: &Path,
+    directory: &Path,
+    walk: &mut Walk,
+    deadline: Option<CheckDeadline>,
+) -> Result<(), OrchestratorError> {
     for item in fs::read_dir(directory).map_err(|error| io_error(directory, error))? {
+        checkpoint(deadline)?;
         let path = item.map_err(|error| io_error(directory, error))?.path();
         let relative = relative_path(root, &path)?;
         let metadata = fs::symlink_metadata(&path).map_err(|error| io_error(&path, error))?;
@@ -68,9 +91,9 @@ fn visit(root: &Path, directory: &Path, walk: &mut Walk) -> Result<(), Orchestra
                     kind: Kind::Directory,
                 },
             )?;
-            visit(root, &path, walk)?;
+            visit(root, &path, walk, deadline)?;
         } else if metadata.is_file() {
-            let file = read_regular(&path, MAX_BYTES.saturating_sub(walk.bytes), true)?;
+            let file = read_regular(&path, MAX_BYTES.saturating_sub(walk.bytes), true, deadline)?;
             walk.bytes = walk.bytes.saturating_add(file.length);
             add(
                 walk,
@@ -87,6 +110,7 @@ fn visit(root: &Path, directory: &Path, walk: &mut Walk) -> Result<(), Orchestra
         } else {
             return Err(unsafe_path(&path, "sdk_special_file"));
         }
+        checkpoint(deadline)?;
     }
     Ok(())
 }
@@ -106,11 +130,20 @@ struct FileData {
     bytes: Vec<u8>,
 }
 
-pub(super) fn file_hash(path: &Path) -> Result<String, OrchestratorError> {
-    Ok(read_regular(path, MAX_BYTES, false)?.sha256)
+pub(super) fn file_hash_until(
+    path: &Path,
+    deadline: Option<CheckDeadline>,
+) -> Result<String, OrchestratorError> {
+    Ok(read_regular(path, MAX_BYTES, false, deadline)?.sha256)
 }
 
-fn read_regular(path: &Path, remaining: u64, retain: bool) -> Result<FileData, OrchestratorError> {
+fn read_regular(
+    path: &Path,
+    remaining: u64,
+    retain: bool,
+    deadline: Option<CheckDeadline>,
+) -> Result<FileData, OrchestratorError> {
+    checkpoint(deadline)?;
     let fd = rustix::fs::open(
         path,
         rustix::fs::OFlags::RDONLY | rustix::fs::OFlags::NOFOLLOW | rustix::fs::OFlags::CLOEXEC,
@@ -136,6 +169,7 @@ fn read_regular(path: &Path, remaining: u64, retain: bool) -> Result<FileData, O
     let mut buffer = vec![0_u8; READ_CHUNK];
     let mut length = 0_u64;
     loop {
+        checkpoint(deadline)?;
         let count = file
             .read(&mut buffer)
             .map_err(|error| io_error(path, error))?;
@@ -152,6 +186,7 @@ fn read_regular(path: &Path, remaining: u64, retain: bool) -> Result<FileData, O
         if retain {
             bytes.extend_from_slice(&buffer[..count]);
         }
+        checkpoint(deadline)?;
     }
     Ok(FileData {
         sha256: hex(&hash.finalize()),
@@ -161,7 +196,16 @@ fn read_regular(path: &Path, remaining: u64, retain: bool) -> Result<FileData, O
     })
 }
 
+#[cfg(test)]
 pub(super) fn tree_digest(entries: &[Entry]) -> Result<String, OrchestratorError> {
+    tree_digest_until(entries, None)
+}
+
+pub(super) fn tree_digest_until(
+    entries: &[Entry],
+    deadline: Option<CheckDeadline>,
+) -> Result<String, OrchestratorError> {
+    checkpoint(deadline)?;
     let manifest = entries
         .iter()
         .map(|entry| match &entry.kind {
@@ -180,88 +224,17 @@ pub(super) fn tree_digest(entries: &[Entry]) -> Result<String, OrchestratorError
         })
         .collect::<Vec<_>>();
     let bytes = canonical_json_bytes(&manifest).map_err(|_| internal("sdk_tree_manifest"))?;
+    checkpoint(deadline)?;
     Ok(sha256_hex(&bytes))
 }
 
-pub(super) fn populate(destination: &Path, entries: &[Entry]) -> Result<(), OrchestratorError> {
-    for entry in entries {
-        if matches!(&entry.kind, Kind::Directory) {
-            let path = destination.join(&entry.path);
-            fs::create_dir(&path).map_err(|error| io_error(&path, error))?;
-        }
-    }
-    for entry in entries {
-        if let Kind::File {
-            bytes, executable, ..
-        } = &entry.kind
-        {
-            let path = destination.join(&entry.path);
-            crate::exclusive_write::write_exclusive(&path, bytes, "sdk_file")?;
-            set_mode(&path, readonly_mode(*executable), false)?;
-        }
-    }
-    set_directory_mode(destination, 0o700)?;
-    for entry in entries.iter().rev() {
-        if matches!(&entry.kind, Kind::Directory) {
-            set_directory_mode(&destination.join(&entry.path), 0o700)?;
-        }
+pub(super) fn checkpoint(deadline: Option<CheckDeadline>) -> Result<(), OrchestratorError> {
+    if let Some(deadline) = deadline {
+        deadline
+            .remaining()
+            .map_err(|error| crate::internal::internal(&error.to_string()))?;
     }
     Ok(())
-}
-
-pub(super) fn create_destination(path: &Path) -> Result<(), OrchestratorError> {
-    super::reject_links(path.parent().unwrap_or_else(|| Path::new("/")))?;
-    match fs::symlink_metadata(path) {
-        Ok(_) => Err(OrchestratorError::OverwriteRefused {
-            path: path.display().to_string(),
-        }),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            fs::create_dir(path).map_err(|error| io_error(path, error))
-        }
-        Err(error) => Err(io_error(path, error)),
-    }
-}
-
-pub(super) fn set_directory_mode(path: &Path, value: u32) -> Result<(), OrchestratorError> {
-    set_mode(path, value, true)
-}
-
-pub(super) fn verify_owned_root(path: &Path) -> Result<(), OrchestratorError> {
-    let metadata = fs::symlink_metadata(path).map_err(|error| io_error(path, error))?;
-    if metadata.file_type().is_symlink() || !metadata.is_dir() {
-        return Err(unsafe_path(path, "sdk_owned_root_type"));
-    }
-    #[cfg(unix)]
-    {
-        let full_mode = metadata.permissions().mode();
-        reject_special_mode(path, full_mode)?;
-        if full_mode & 0o777 != 0o700 {
-            return Err(internal("sdk_owned_root_mode"));
-        }
-    }
-    Ok(())
-}
-
-fn set_mode(path: &Path, value: u32, directory: bool) -> Result<(), OrchestratorError> {
-    let metadata = fs::symlink_metadata(path).map_err(|error| io_error(path, error))?;
-    if metadata.file_type().is_symlink()
-        || (directory && !metadata.is_dir())
-        || (!directory && !metadata.is_file())
-    {
-        return Err(unsafe_path(path, "sdk_output_type"));
-    }
-    #[cfg(unix)]
-    {
-        fs::set_permissions(path, fs::Permissions::from_mode(value & 0o777))
-            .map_err(|error| io_error(path, error))?;
-    }
-    #[cfg(not(unix))]
-    let _ = value;
-    Ok(())
-}
-
-fn readonly_mode(executable: bool) -> u32 {
-    0o400 | if executable { 0o100 } else { 0 }
 }
 
 fn relative_path(root: &Path, path: &Path) -> Result<String, OrchestratorError> {
@@ -299,7 +272,7 @@ fn metadata_mode(metadata: &fs::Metadata) -> u32 {
     }
 }
 
-fn reject_special_mode(path: &Path, mode: u32) -> Result<(), OrchestratorError> {
+pub(super) fn reject_special_mode(path: &Path, mode: u32) -> Result<(), OrchestratorError> {
     if mode & 0o7000 != 0 {
         return Err(unsafe_path(path, "sdk_special_mode"));
     }
@@ -326,11 +299,11 @@ fn hex(bytes: &[u8]) -> String {
     out
 }
 
-fn io_error(path: &Path, error: impl std::fmt::Display) -> OrchestratorError {
+pub(super) fn io_error(path: &Path, error: impl std::fmt::Display) -> OrchestratorError {
     OrchestratorError::io(path.display().to_string(), error.to_string())
 }
 
-fn unsafe_path(path: &Path, reason: &str) -> OrchestratorError {
+pub(super) fn unsafe_path(path: &Path, reason: &str) -> OrchestratorError {
     OrchestratorError::UnsafePath {
         path: path.display().to_string(),
         reason: reason.to_owned(),

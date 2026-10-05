@@ -242,6 +242,8 @@ fn setup_uses_extracted_binary_digest_for_each_platform() {
         assert_eq!(setup.sha256, expected);
         assert_ne!(setup.sha256, MISE_BINARY_SHA256_LINUX_X64);
     }
+}
+
 #[test]
 fn verification_mise_setup_pins_each_runner_architecture() {
     let config = config_with(BTreeMap::new());

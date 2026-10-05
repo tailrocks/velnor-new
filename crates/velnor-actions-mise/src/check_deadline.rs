@@ -44,7 +44,7 @@ mod tests {
             vec![OsString::from("1")],
             Vec::new(),
         );
-        let result = command.run_bounded(1024, deadline.remaining().expect("remaining budget"));
+        let result = command.run_until(1024, deadline);
         assert!(result.is_err());
         assert!(deadline.remaining().is_err());
     }

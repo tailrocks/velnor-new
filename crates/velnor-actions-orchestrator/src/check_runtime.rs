@@ -7,9 +7,11 @@ use std::ffi::OsString;
 use std::path::Path;
 use std::time::{Duration, Instant};
 use velnor_actions_contract::config::MAX_CHECK_EXECUTION_RECEIPT_BYTES;
-use velnor_actions_contract::{MatrixEntry, ObligationDecision, Plan, canonical_json_bytes};
-use velnor_actions_mise::CheckDeadline;
-use velnor_actions_mise::{DiscoveredCheck, ToolCatalog, discover_checks};
+use velnor_actions_contract::{
+    MatrixEntry, NAMED_CHECK_JOB_ID_ENV, NAMED_CHECK_LANE_VARIANT_ENV, NamedCheckLane,
+    NamedCheckLaneVariant, ObligationDecision, Plan, canonical_json_bytes,
+};
+use velnor_actions_mise::{CheckDeadline, DiscoveredCheck, ToolCatalog, discover_checks_until};
 #[path = "check_prepare.rs"]
 pub(crate) mod preparation;
 use preparation::prepare_check;
@@ -31,8 +33,18 @@ pub fn execute_check() -> Result<usize, OrchestratorError> {
         .ok_or_else(|| internal("missing_runner_temp"))?;
     let id = required_env(CHECK_ID_ENV)?;
     let task_id = required_env(crate::task_report::TASK_ID_ENV)?;
+    let job_id = required_env(NAMED_CHECK_JOB_ID_ENV)?;
+    let lane = required_env(NAMED_CHECK_LANE_VARIANT_ENV)?;
     let run_key = crate::internal_request::resolve_run_key(None)?;
-    execute_check_to(Path::new(&root), Path::new(&temp), &run_key, &id, &task_id)
+    execute_check_to(
+        Path::new(&root),
+        Path::new(&temp),
+        &run_key,
+        &id,
+        &task_id,
+        &job_id,
+        &lane,
+    )
 }
 fn required_env(key: &str) -> Result<String, OrchestratorError> {
     env::var(key)
@@ -47,6 +59,8 @@ pub(crate) fn execute_check_to(
     run_key: &str,
     id: &str,
     task_id: &str,
+    job_id: &str,
+    lane: &str,
 ) -> Result<usize, OrchestratorError> {
     let plan = crate::task_report::load_plan(run_key, temp)?;
     crate::select::verify_checkout(root, plan.event, &plan.head)?;
@@ -56,20 +70,29 @@ pub(crate) fn execute_check_to(
         .iter()
         .find(|check| check.id == id)
         .ok_or_else(|| internal("check_not_configured"))?;
+    let deadline = CheckDeadline::after(Duration::from_secs(
+        u64::from(definition.timeout_minutes) * 60,
+    ))
+    .map_err(|e| internal(&e.to_string()))?;
     let catalog = ToolCatalog::pinned();
-    let mut discovered = discover_checks(
+    let mut discovered = discover_checks_until(
         root,
         std::slice::from_ref(definition),
         &config.qualified_tools,
+        deadline,
     )
     .map_err(|e| internal(&e.to_string()))?;
     let item = discovered
         .pop()
         .ok_or_else(|| internal("check_not_discovered"))?;
-    let (entry, digest) = crate::task_report::entry_and_digest(&plan, task_id)?;
-    bind_check(root, &item, &plan, entry, task_id, &catalog)?;
+    let (entry, digest) = crate::task_report::entry_and_digest_for_job(&plan, task_id, job_id)?;
+    let lane_variant = parse_lane_variant(lane)?;
+    if entry.lane_variant != lane_variant {
+        return Err(internal("check_lane_variant_mismatch"));
+    }
+    bind_check(root, &item, &plan, entry, task_id, &catalog, deadline)?;
     let started = Instant::now();
-    let outcome = run_check(root, temp, &item, &plan);
+    let outcome = run_check(root, temp, &item, &plan, deadline);
     let (code, receipt) = match &outcome {
         Ok(success) => (0, success.evidence.as_ref()),
         Err(_) => (1, None),
@@ -103,6 +126,7 @@ fn bind_check(
     entry: &MatrixEntry,
     task_id: &str,
     catalog: &ToolCatalog,
+    deadline: CheckDeadline,
 ) -> Result<(), OrchestratorError> {
     if item.proposal.task_id != task_id {
         return Err(internal("check_task_identity"));
@@ -115,13 +139,23 @@ fn bind_check(
     for input in &item.config_inputs {
         reject_link_components(root, input)?;
     }
-    let (expected, expected_entry) = crate::internal_plan::named_checks::plan::derive(
-        root,
-        item,
-        &plan.run_key,
-        &plan.generator,
-        catalog,
-    )?;
+    let lane = NamedCheckLane {
+        variant: entry.lane_variant,
+        job_id: entry.job_id.clone(),
+    };
+    let (expected, mut expected_entries) =
+        crate::internal_plan::named_checks::plan::derive_lanes_until(
+            root,
+            item,
+            &plan.run_key,
+            &plan.generator,
+            catalog,
+            &[lane],
+            Some(deadline),
+        )?;
+    let expected_entry = expected_entries
+        .pop()
+        .ok_or_else(|| internal("named_check_lane_missing"))?;
     let actual = plan
         .obligations
         .iter()
@@ -139,6 +173,15 @@ fn bind_check(
     Ok(())
 }
 
+fn parse_lane_variant(value: &str) -> Result<Option<NamedCheckLaneVariant>, OrchestratorError> {
+    match value {
+        "single" => Ok(None),
+        "hosted" => Ok(Some(NamedCheckLaneVariant::Hosted)),
+        "scale_set" => Ok(Some(NamedCheckLaneVariant::ScaleSet)),
+        _ => Err(internal("check_lane_variant_invalid")),
+    }
+}
+
 struct CheckOutcome {
     evidence: Option<EvidenceReceipt>,
     container: Option<crate::check_evidence::gate::container::ContainerReceipt>,
@@ -151,11 +194,9 @@ fn run_check(
     temp: &Path,
     item: &DiscoveredCheck,
     plan: &Plan,
+    deadline: CheckDeadline,
 ) -> Result<CheckOutcome, OrchestratorError> {
-    let deadline = CheckDeadline::after(Duration::from_secs(
-        u64::from(item.check.timeout_minutes) * 60,
-    ))
-    .map_err(|e| internal(&e.to_string()))?;
+    deadline.remaining().map_err(|e| internal(&e.to_string()))?;
     if let Some(evidence) = &item.check.evidence {
         reject_link_components(root, &evidence.path)?;
         if std::fs::symlink_metadata(root.join(&evidence.path)).is_ok() {
@@ -187,8 +228,7 @@ fn run_check(
         .map_err(|e| internal(&e.to_string()))?
         .with_env(&pairs)
         .map_err(|e| internal(&e.to_string()))?;
-    let timeout = deadline.remaining().map_err(|e| internal(&e.to_string()))?;
-    let task_output = command.run_bounded(8 * 1024 * 1024, timeout);
+    let task_output = command.run_until(8 * 1024 * 1024, deadline);
     let after_result =
         preparation::container::probe(&item.check.runner, owned.container.as_ref(), deadline);
     let output = task_output.map_err(|e| internal(&e.to_string()))?;

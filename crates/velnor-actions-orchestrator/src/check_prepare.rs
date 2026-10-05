@@ -54,7 +54,9 @@ pub(super) fn prepare_check(
     check: &DiscoveredCheck,
     deadline: CheckDeadline,
 ) -> Result<OwnedCheck, OrchestratorError> {
-    verify_source(root, check)?;
+    checkpoint(deadline)?;
+    verify_source(root, check, deadline)?;
+    checkpoint(deadline)?;
     let cwd = velnor_actions_mise::checks::repository_path(root, &check.check.directory)
         .map_err(|e| internal(&e.to_string()))?;
     let root = root.canonicalize().map_err(|_| internal("check_root"))?;
@@ -83,10 +85,20 @@ pub(super) fn prepare_check(
     }
 }
 
-fn verify_source(root: &Path, check: &DiscoveredCheck) -> Result<(), OrchestratorError> {
+fn verify_source(
+    root: &Path,
+    check: &DiscoveredCheck,
+    deadline: CheckDeadline,
+) -> Result<(), OrchestratorError> {
+    checkpoint(deadline)?;
     let path = &check.proposal.identity.unit_path;
     reject_link_components(root, path)?;
-    match crate::safe_read::read_repo_file(root, path, crate::safe_read::MAX_REPO_FILE_BYTES)? {
+    match crate::safe_read::read_repo_file_until(
+        root,
+        path,
+        crate::safe_read::MAX_REPO_FILE_BYTES,
+        deadline,
+    )? {
         crate::safe_read::RepoRead::Text(current) if current == check.config_source => Ok(()),
         _ => Err(internal("check_source_changed_since_discovery")),
     }
@@ -108,11 +120,18 @@ fn materialize(
         "bin",
         "docker",
     ] {
+        checkpoint(deadline)?;
         std::fs::create_dir(home.join(name)).map_err(|_| internal("check_home_creation"))?;
+        checkpoint(deadline)?;
     }
-    binary::project_mise_binary(home, check.check.runner.platform)?;
-    crate::exclusive_write::write_exclusive(&home.join("empty.toml"), b"", "check_config")?;
-    let container = container::prepare(home, &check.check.runner)?;
+    binary::project_mise_binary(home, check.check.runner.platform, deadline)?;
+    crate::exclusive_write::write_exclusive_until(
+        &home.join("empty.toml"),
+        b"",
+        "check_config",
+        || checkpoint(deadline),
+    )?;
+    let container = container::prepare(home, &check.check.runner, deadline)?;
     let proof = container::probe(&check.check.runner, container.as_ref(), deadline)?;
     let system_tools = velnor_actions_mise::checks::verify_check_system_tools(
         check.check.runner.platform,
@@ -138,10 +157,11 @@ fn materialize(
     let projection = qualified
         .bound_projection()
         .map_err(|e| internal(&e.to_string()))?;
-    crate::exclusive_write::write_exclusive(
+    crate::exclusive_write::write_exclusive_until(
         &home.join("tasks.toml"),
         projection.as_bytes(),
         "check_config",
+        || checkpoint(deadline),
     )?;
     let qualified_tools = acquisition::acquire(&qualified, check, home, deadline)?;
     Ok(PreparedParts {
@@ -150,6 +170,13 @@ fn materialize(
         system_tools,
         qualified_tools,
     })
+}
+
+fn checkpoint(deadline: CheckDeadline) -> Result<(), OrchestratorError> {
+    deadline
+        .remaining()
+        .map(|_| ())
+        .map_err(|error| internal(&error.to_string()))
 }
 
 fn link_program(program: &OsStr, destination: &Path) -> Result<(), OrchestratorError> {

@@ -6,6 +6,7 @@ use crate::internal::internal;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 use velnor_actions_contract::config::{HostContainerProfile, MAX_CHECK_CONTAINER_PATH_BYTES};
+use velnor_actions_mise::CheckDeadline;
 
 #[path = "check_container_runtime_context.rs"]
 mod context;
@@ -13,12 +14,9 @@ mod context;
 mod inventory;
 #[path = "check_container_runtime_socket_paths.rs"]
 mod socket_paths;
-use context::{
-    context_config_bytes, context_metadata_bytes, ensure_children, owned_directory,
-    owned_regular_file, read_limited,
-};
+use context::{context_config_bytes, context_metadata_bytes, validate_owned_context};
 pub(crate) use inventory::{RuntimeObservation, RuntimeRootEvidence, SocketEvidence};
-use inventory::{inspect_runtime, owner, validate_socket};
+use inventory::{inspect_runtime_until, owner, validate_socket};
 
 /// Safe, declaration-bound runtime evidence retained for the capability receipt.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
@@ -73,13 +71,23 @@ pub(crate) enum RuntimeEntryKind {
 }
 
 /// Validate and project one typed host container runtime without process I/O.
+#[cfg(test)]
 pub(super) fn prepare_runtime(
     home: &Path,
     profile: &HostContainerProfile,
 ) -> Result<RuntimeProjection, OrchestratorError> {
+    prepare_runtime_until(home, profile, None)
+}
+
+pub(super) fn prepare_runtime_until(
+    home: &Path,
+    profile: &HostContainerProfile,
+    deadline: Option<CheckDeadline>,
+) -> Result<RuntimeProjection, OrchestratorError> {
+    checkpoint(deadline)?;
     #[cfg(not(unix))]
     {
-        let _ = (home, profile);
+        let _ = (home, profile, deadline);
         return Err(OrchestratorError::unsupported(
             "container_runtime",
             "unix_platform_required",
@@ -97,11 +105,12 @@ pub(super) fn prepare_runtime(
                 return Err(internal("orbstack_runtime_owner"));
             }
             let directory = canonical_directory(Path::new(&sdk.runtime_dir), "runtime_dir")?;
-            let (entries, root) = inspect_runtime(&directory, uid)?;
+            let (entries, root) = inspect_runtime_until(&directory, uid, deadline)?;
             if socket_path.parent() != Some(directory.as_path()) {
                 return Err(internal("orbstack_socket_parent"));
             }
             let link = home.join(".orbstack").join("run");
+            checkpoint(deadline)?;
             socket_paths::validate(&home, &entries)?;
             project_runtime_link(&home, &link, &directory)?;
             (Some(directory), Some(uid), entries, Some(link), Some(root))
@@ -111,11 +120,12 @@ pub(super) fn prepare_runtime(
     let before = validate_socket(&socket_path, expected_owner)?;
     let endpoint = format!("unix://{}", before.path);
     let (docker_config, context_metadata, context_hash) =
-        write_context(&home, &context, &endpoint)?;
+        write_context(&home, &context, &endpoint, deadline)?;
     let after = validate_socket(&socket_path, expected_owner)?;
     if before != after || endpoint != format!("unix://{}", after.path) {
         return Err(internal("container_socket_changed_during_projection"));
     }
+    checkpoint(deadline)?;
     let runtime_entries = if runtime_dir.is_some() {
         runtime_entries
     } else {
@@ -143,7 +153,16 @@ pub(super) fn prepare_runtime(
 }
 
 /// Revalidate the external endpoint and `OrbStack` authority before probing.
+#[cfg(test)]
 pub(super) fn revalidate_runtime(projection: &RuntimeProjection) -> Result<(), OrchestratorError> {
+    revalidate_runtime_until(projection, None)
+}
+
+pub(super) fn revalidate_runtime_until(
+    projection: &RuntimeProjection,
+    deadline: Option<CheckDeadline>,
+) -> Result<(), OrchestratorError> {
+    checkpoint(deadline)?;
     let expected_owner = projection.runtime_uid.unwrap_or(projection.socket.owner);
     let current = validate_socket(&projection.socket_path, expected_owner)?;
     if current != projection.socket || projection.endpoint != format!("unix://{}", current.path) {
@@ -157,7 +176,7 @@ pub(super) fn revalidate_runtime(projection: &RuntimeProjection) -> Result<(), O
     ) {
         (None, None, None, None) => {}
         (Some(directory), Some(uid), Some(link), Some(expected_root)) => {
-            let (_, current_root) = inspect_runtime(directory, uid)?;
+            let (_, current_root) = inspect_runtime_until(directory, uid, deadline)?;
             if &current_root != expected_root {
                 return Err(internal("orbstack_runtime_root_changed_after_projection"));
             }
@@ -173,14 +192,24 @@ pub(super) fn revalidate_runtime(projection: &RuntimeProjection) -> Result<(), O
         }
         _ => return Err(internal("container_runtime_projection_shape")),
     }
-    validate_owned_context(projection)
+    validate_owned_context(projection, deadline)?;
+    checkpoint(deadline)
 }
 
 /// Revalidate all runtime state, then freshly capture identity evidence.
+#[cfg(test)]
 pub(super) fn observe_runtime(
     projection: &RuntimeProjection,
 ) -> Result<RuntimeObservation, OrchestratorError> {
-    revalidate_runtime(projection)?;
+    observe_runtime_until(projection, None)
+}
+
+pub(super) fn observe_runtime_until(
+    projection: &RuntimeProjection,
+    deadline: Option<CheckDeadline>,
+) -> Result<RuntimeObservation, OrchestratorError> {
+    revalidate_runtime_until(projection, deadline)?;
+    checkpoint(deadline)?;
     let expected_owner = projection.runtime_uid.unwrap_or(projection.socket.owner);
     let socket = validate_socket(&projection.socket_path, expected_owner)?;
     let runtime_root = match (
@@ -191,7 +220,7 @@ pub(super) fn observe_runtime(
     ) {
         (None, None, None, None) => None,
         (Some(directory), Some(uid), Some(_), Some(_)) => {
-            let (_, root) = inspect_runtime(directory, uid)?;
+            let (_, root) = inspect_runtime_until(directory, uid, deadline)?;
             Some(root)
         }
         _ => return Err(internal("container_runtime_observation_shape")),
@@ -205,54 +234,13 @@ pub(super) fn observe_runtime(
     })
 }
 
-fn validate_owned_context(projection: &RuntimeProjection) -> Result<(), OrchestratorError> {
-    let config = &projection.docker_config;
-    let metadata = &projection.context_metadata;
-    let config_file = config.join("config.json");
-    let metadata_dir = config.join("contexts").join("meta");
-    let hash_dir = metadata_dir.join(&projection.context_hash);
-    if metadata.parent() != Some(hash_dir.as_path()) {
-        return Err(internal("container_context_projection_path"));
-    }
-    for path in [
-        &config_file,
-        metadata,
-        config,
-        &config.join("contexts"),
-        &metadata_dir,
-        &hash_dir,
-    ] {
-        check_ancestors(path)?;
-    }
-    let expected_owner = projection.home_owner;
-    for path in [config, &config.join("contexts"), &metadata_dir, &hash_dir] {
-        owned_directory(path, expected_owner)?;
-    }
-    if !owned_regular_file(&config_file, expected_owner)?
-        || !owned_regular_file(metadata, expected_owner)?
-    {
-        return Err(internal("container_context_projection_missing"));
-    }
-    ensure_children(config, &["config.json", "contexts"])?;
-    ensure_children(&config.join("contexts"), &["meta"])?;
-    ensure_children(&metadata_dir, &[&projection.context_hash])?;
-    ensure_children(&hash_dir, &["meta.json"])?;
-    let expected_config = context_config_bytes(&projection.context)?;
-    let expected_metadata =
-        context_metadata_bytes(&projection.context, &projection.endpoint, &hash_dir)?;
-    if read_limited(&config_file)? != expected_config
-        || read_limited(metadata)? != expected_metadata
-    {
-        return Err(internal("container_context_projection_changed"));
-    }
-    Ok(())
-}
-
 fn write_context(
     home: &Path,
     context: &str,
     endpoint: &str,
+    deadline: Option<CheckDeadline>,
 ) -> Result<(PathBuf, PathBuf, String), OrchestratorError> {
+    checkpoint(deadline)?;
     let config = home.join("docker");
     require_directory(&config, "docker_config")?;
     if fs::read_dir(&config)
@@ -267,14 +255,30 @@ fn write_context(
     exclusive_write::create_dir_no_symlink(home, &metadata_dir)?;
     let metadata_path = metadata_dir.join("meta.json");
     let metadata_bytes = context_metadata_bytes(context, endpoint, &metadata_dir)?;
-    exclusive_write::write_exclusive(&metadata_path, &metadata_bytes, "container_context")?;
+    exclusive_write::write_exclusive_until(
+        &metadata_path,
+        &metadata_bytes,
+        "container_context",
+        || checkpoint(deadline),
+    )?;
     let config_bytes = context_config_bytes(context)?;
-    exclusive_write::write_exclusive(
+    exclusive_write::write_exclusive_until(
         &config.join("config.json"),
         &config_bytes,
         "container_config",
+        || checkpoint(deadline),
     )?;
+    checkpoint(deadline)?;
     Ok((config, metadata_path, hash))
+}
+
+fn checkpoint(deadline: Option<CheckDeadline>) -> Result<(), OrchestratorError> {
+    if let Some(deadline) = deadline {
+        deadline
+            .remaining()
+            .map_err(|error| crate::internal::internal(&error.to_string()))?;
+    }
+    Ok(())
 }
 
 fn project_runtime_link(

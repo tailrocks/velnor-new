@@ -378,4 +378,8 @@ mod unix_tests {
         assert!(prepare_runtime(&home, &profile).is_err());
         drop(listener);
     }
+
+    mod inventory_tests {
+        include!("check_container_runtime_inventory_tests.rs");
+    }
 }

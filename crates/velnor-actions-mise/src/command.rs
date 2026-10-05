@@ -1,5 +1,7 @@
 //! Fixed subprocess wrapper: the sole `std::process::Command` constructor.
 //! Policy (`command_env.rs`) and output (`command_output.rs`) declare here.
+#[path = "command_cancellable.rs"]
+mod cancellable;
 #[path = "check_command.rs"]
 mod check;
 #[path = "command_env.rs"]
@@ -23,15 +25,13 @@ pub use self::env::{
 use self::env::{pairs_of, redact_env_for_debug, strip_credentials};
 pub(crate) use self::output::redact_argv_for_debug;
 pub use self::output::{
-    CancelHandle, ProcessOutput, SPAWN_CANCELLED_MESSAGE, SPAWN_TIMEOUT_MESSAGE_PREFIX,
-    is_cancel_or_timeout,
+    CancelHandle, ProcessOutput, SPAWN_CANCELLED_MESSAGE, SPAWN_DEADLINE_MESSAGE,
+    SPAWN_TIMEOUT_MESSAGE_PREFIX, is_cancel_or_timeout,
 };
-use self::output::{read_capped, signal_of};
-
 use std::ffi::{OsStr, OsString};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use crate::error::MiseError;
 
@@ -249,77 +249,6 @@ impl IsolatedCommand {
     /// Returns [`MiseError::SpawnFailed`] on spawn/output/timeout failure.
     pub fn run_bounded(&self, cap: usize, timeout: Duration) -> Result<ProcessOutput, MiseError> {
         self.run_cancellable(cap, timeout, &CancelHandle::new())
-    }
-
-    /// Spawn the child under explicit bounds plus external cancellation.
-    /// Residual: grandchildren inheriting the pipes can delay EOF after kill.
-    ///
-    /// A pre-cancelled handle fails without spawning; mid-run
-    /// cancellation kills the child. Both surface as typed
-    /// [`MiseError::SpawnFailed`], classified by [`is_cancel_or_timeout`].
-    ///
-    /// # Errors
-    ///
-    /// Returns [`MiseError::SpawnFailed`] on spawn failure, output-limit
-    /// breach, reader failure, timeout, or cancellation.
-    pub fn run_cancellable(
-        &self,
-        cap: usize,
-        timeout: Duration,
-        cancel: &CancelHandle,
-    ) -> Result<ProcessOutput, MiseError> {
-        let program = self.program.to_string_lossy().into_owned();
-        let fail = |message: &str| MiseError::SpawnFailed {
-            program: program.clone(),
-            message: message.to_owned(),
-        };
-        if cancel.is_cancelled() {
-            return Err(fail(SPAWN_CANCELLED_MESSAGE));
-        }
-        let mut child = self
-            .command()
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .map_err(|err| fail(&err.to_string()))?;
-        let (stdout, stderr) = (child.stdout.take(), child.stderr.take());
-        let out_reader = std::thread::spawn(move || read_capped(stdout, cap));
-        let err_reader = std::thread::spawn(move || read_capped(stderr, cap));
-        let deadline = Instant::now() + timeout;
-        loop {
-            if cancel.is_cancelled() {
-                drop((child.kill(), child.wait(), out_reader, err_reader));
-                return Err(fail(SPAWN_CANCELLED_MESSAGE));
-            }
-            let status = child.try_wait().map_err(|err| fail(&err.to_string()))?;
-            if let Some(status) = status {
-                let (out, out_capped) = out_reader
-                    .join()
-                    .map_err(|_| fail("reader_panicked:stdout"))?;
-                let (err, err_capped) = err_reader
-                    .join()
-                    .map_err(|_| fail("reader_panicked:stderr"))?;
-                if out_capped || err_capped {
-                    let stream = if out_capped { "stdout" } else { "stderr" };
-                    return Err(fail(&format!("{stream}_limit_exceeded:{cap}")));
-                }
-                let code = status.code();
-                let success = status.success();
-                return Ok(ProcessOutput {
-                    stdout: out,
-                    stderr: err,
-                    code,
-                    signal: signal_of(status),
-                    success,
-                });
-            }
-            if Instant::now() >= deadline {
-                drop((child.kill(), child.wait(), out_reader, err_reader));
-                let message = format!("{SPAWN_TIMEOUT_MESSAGE_PREFIX}{}", timeout.as_secs());
-                return Err(fail(&message));
-            }
-            std::thread::sleep(Duration::from_millis(5));
-        }
     }
 
     fn command(&self) -> Command {
