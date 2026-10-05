@@ -54,8 +54,8 @@ pub use discover::{
     BUILTIN_EXCLUSIONS, DETECTION_SCHEMA, DetectError, DetectedProject, DetectionStatus,
     DetectorEntry, FileIndex, IGNORED_REASON, IndexError, IndexMode, Stack, apply_stack_ignores,
     build_index, build_index_from_list, build_index_from_tracked, build_index_walk,
-    check_duplicates, is_excluded, matches_glob, reverse_closure, selected_projects,
-    validate_pattern,
+    check_duplicates, is_excluded, is_reserved_cache_path_bytes, matches_glob, reverse_closure,
+    selected_projects, validate_pattern,
 };
 pub use errors::{ContractError, sanitize_error_detail};
 pub use extensions::{
