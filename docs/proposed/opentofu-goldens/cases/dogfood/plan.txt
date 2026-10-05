@@ -33,7 +33,6 @@ Workflow to generate
   .github/actionlint.yaml
   .github/workflows/ci.yml
   .github/workflows/freshness.yml
-  .github/workflows/foundation-qualification.yml
   Workflow: CI (velnor-repository-v1)
   Push branch: main
   Runner: ubuntu-26.04 (latest pinned default)
