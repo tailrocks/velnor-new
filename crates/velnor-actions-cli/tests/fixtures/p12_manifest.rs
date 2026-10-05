@@ -33,6 +33,46 @@ fn complete_supported_inventory_passes() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
+fn excluded_nested_workspace_uses_its_own_lock() -> Result<(), Box<dyn Error>> {
+    let fixture = harness::passing("p12-nested-workspace")?;
+    harness::add_nested_workspace(&fixture)?;
+
+    let run = harness::run_script(&fixture.dir, &[])?;
+    harness::assert_clean(&run);
+    for needle in [
+        "worker:dependencies:runneronly",
+        "crates/runner/(lock-membership)",
+        "crates/runner/(lock-graph)",
+    ] {
+        assert!(
+            run.stdout.contains(needle),
+            "missing {needle}:\n{}",
+            run.stdout
+        );
+    }
+    harness::cleanup(&fixture);
+    Ok(())
+}
+
+#[test]
+fn nested_workspace_dependency_skew_fails() -> Result<(), Box<dyn Error>> {
+    let fixture = harness::passing("p12-nested-skew")?;
+    harness::add_nested_workspace(&fixture)?;
+    harness::mutate(
+        &fixture.dir,
+        "crates/runner/crates/worker/Cargo.toml",
+        "runneronly = \"=1.2.3\"",
+        "runneronly = \"=1.2.4\"",
+    )?;
+
+    let run = harness::run_script(&fixture.dir, &[])?;
+    harness::assert_fail(&run, "worker:dependencies:runneronly");
+    assert!(run.stdout.contains("no locked identity"), "{}", run.stdout);
+    harness::cleanup(&fixture);
+    Ok(())
+}
+
+#[test]
 fn inexact_requirement_fails() -> Result<(), Box<dyn Error>> {
     let fixture = harness::passing("p12-inexact")?;
     harness::mutate(
