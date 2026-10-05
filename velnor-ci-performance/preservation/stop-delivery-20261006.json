@@ -1,0 +1,170 @@
+{
+  "status": "Original CI goal stopped. Partial source preserved as-is. No completion or deployment claim.",
+  "velnor_remote_refs_verified": {
+    "refs/heads/codex/chainargos-ci-performance": "5666cfdf5191b482d22b4cb50809d5af1cef87e5",
+    "refs/heads/codex/ci-performance-r1-checkpoint-20261006": "1faa42a2650ff459ce7f15725a187d9bd61de724",
+    "refs/heads/codex/g0-conflict-state-wip-20261006": "f1a2cbd419e31cea66290c0d554fcb520e920a9d",
+    "refs/heads/codex/g0-generator-publication": "71494f442b4e8a2419a8e9b5e29ba86fbd77afad",
+    "refs/heads/codex/g0-quote-current-main": "766fbe11988868ec4eb339327ef6ac09c2b26678",
+    "refs/heads/codex/g0-release-manifest-t1-wip-20261006": "071f5f236efb7248ab38773da7281331c5faa07f",
+    "refs/heads/codex/r1-guest-resource-metrics-wip-20261006": "508533c8a5b698125e2d7ac057b60df56c968bff",
+    "refs/heads/codex/r1-volume-test-checkpoint-20261006": "e2fca8a878120f378fa83b6e8ddf443c648264aa",
+    "refs/heads/codex/v0111-draft-recovery-86f864a": "e6fbaec74788844f43b4a4a16e59f849a2a9e156",
+    "refs/heads/codex/v0111-product-release-closure": "dce2d28671948710e9aa6cc7fa9d4fad96155729",
+    "refs/tags/wip-preserve/g0-generation-fixture-19203e1-20261006": "f638ec6631b13015bab290dc3df9de4999c49902",
+    "refs/tags/wip-preserve/pr38-save-order-ff81-20261006": "fb98297c6ca1706783a8cb8d6af92b25ed3f41e6",
+    "refs/tags/wip-preserve/pr38-seed-miss-036-20261006": "4b175cf768113b5077179359f8b14ed0341f369c",
+    "refs/tags/wip-preserve/r1-20261006/cache-admission-79e8a12": "79e8a12625045749ab94cfa2c1e309a70c02bce0",
+    "refs/tags/wip-preserve/r1-20261006/discovery-prune-5122b0e": "5122b0e6ac7e8b366d4fb604f3f65240881fa667",
+    "refs/tags/wip-preserve/r1-20261006/docker-delete-12962b2": "12962b2ab11b959a7ac00179d38070c7237b317e",
+    "refs/tags/wip-preserve/r1-20261006/legacy-journal-0efce75": "0efce75fb442698efbea20ff90010e3f9d98bce3",
+    "refs/tags/wip-preserve/r1-20261006/pr70-save-order-764fe32": "764fe32dbedfc6b46c8cba0277406fe3453ae5bc",
+    "refs/tags/wip-preserve/r1-20261006/pr75-followup-10a6b12": "10a6b12666d92278fc2bbd1ad723fc6fa2ee46e9",
+    "refs/tags/wip-preserve/r1-20261006/r1-integration-7ccc-006aa7b4": "006aa7b4a7ba764e6d77fb058bba1ae89b1729aa",
+    "refs/tags/wip-preserve/r1-20261006/r1-journal-port-8e6d2941": "8e6d29417217bdd3da2665e73b99194d8c1590e6",
+    "refs/tags/wip-preserve/r1-20261006/r1-runner-overflow-111e-2a0e4ab2": "2a0e4ab2d9dccf675ab644186556d47b52504fc1",
+    "refs/tags/wip-preserve/r1-20261006/r1-runner-overflow-fd833-40c34e26": "40c34e26894f832469510ed14e98af52b6890fb6",
+    "refs/tags/wip-preserve/r1-20261006/r1-runner-test-018215-da79cf13": "da79cf135eb37b0e3578573ae8516d90e585b5a6",
+    "refs/tags/wip-preserve/r1-20261006/r1-runner-test-0a52-f48ef76f": "f48ef76f71be19d375b0a222e8c39ad603ed8e79",
+    "refs/tags/wip-preserve/r1-20261006/r1-runner-test-33945-0b58b76d": "0b58b76dbf2fae6fb5746c65ce6e0752f0ab4966",
+    "refs/tags/wip-preserve/r1-20261006/r1-runner-test-4f64-5138149c": "5138149c9bb3ee7af97dcf93aae2ba1175717f97",
+    "refs/tags/wip-preserve/r1-20261006/scheduler-capacity-11a7a51": "11a7a516c698f880ecfd67bb1ece613f5840d991",
+    "refs/tags/wip-preserve/r1-20261006/scheduler-poll-45db07e": "45db07ebdcfea6e147ce268db3cf1041baf25c95",
+    "refs/tags/wip-preserve/r1-20261006/seeds-work-a0d9795": "a0d97950d880d37c764d739bbfba09d0d061e1c0",
+    "refs/tags/wip-preserve/r1-20261006/services-combined-2419d04": "2419d0415c18b12de3012e93916e0122af2022fb",
+    "refs/tags/wip-preserve/r1-20261006/services-compile-5a5057d": "5a5057da1ea2f7bcc0d41010220697c89885405b",
+    "refs/tags/wip-preserve/r1-20261006/stage-identity-6a13904": "6a1390429544c64975c5f55d85e00943a88664fc",
+    "refs/tags/wip-preserve/stop-heads-20261006/076dc3f322fc0e02888def52d29cc9c3ff90854d": "076dc3f322fc0e02888def52d29cc9c3ff90854d",
+    "refs/tags/wip-preserve/stop-heads-20261006/0f67e848ad227c16e29cd8a00493d4d6f9a172ed": "0f67e848ad227c16e29cd8a00493d4d6f9a172ed",
+    "refs/tags/wip-preserve/stop-heads-20261006/12a71c6d070954f97a9d28aa0a56e3ab030c80dd": "12a71c6d070954f97a9d28aa0a56e3ab030c80dd",
+    "refs/tags/wip-preserve/stop-heads-20261006/1faa42a2650ff459ce7f15725a187d9bd61de724": "1faa42a2650ff459ce7f15725a187d9bd61de724",
+    "refs/tags/wip-preserve/stop-heads-20261006/226a1bff9f220abe4c3a34385b5db25373714ac8": "226a1bff9f220abe4c3a34385b5db25373714ac8",
+    "refs/tags/wip-preserve/stop-heads-20261006/2b0f5d83dd798a8745f6c8cfa18f4b859eb67744": "2b0f5d83dd798a8745f6c8cfa18f4b859eb67744",
+    "refs/tags/wip-preserve/stop-heads-20261006/56ccc7f3a6a65ef8361853d8015151d95c79b9c9": "56ccc7f3a6a65ef8361853d8015151d95c79b9c9",
+    "refs/tags/wip-preserve/stop-heads-20261006/579dbb1d9c0eda6b19eddf825357820922c4dc28": "579dbb1d9c0eda6b19eddf825357820922c4dc28",
+    "refs/tags/wip-preserve/stop-heads-20261006/630ec33ba08cc1737d384691a135cbbfa3d4df12": "630ec33ba08cc1737d384691a135cbbfa3d4df12",
+    "refs/tags/wip-preserve/stop-heads-20261006/67e8d9da9a98b11d86a09ade6ead3fc8681b7ec0": "67e8d9da9a98b11d86a09ade6ead3fc8681b7ec0",
+    "refs/tags/wip-preserve/stop-heads-20261006/703d1b84d9f9e0246a52e3989bf3b78a13bbbf05": "703d1b84d9f9e0246a52e3989bf3b78a13bbbf05",
+    "refs/tags/wip-preserve/stop-heads-20261006/7581150e73df43aeaa8a7b8ab80157c87afa02d7": "7581150e73df43aeaa8a7b8ab80157c87afa02d7",
+    "refs/tags/wip-preserve/stop-heads-20261006/766fbe11988868ec4eb339327ef6ac09c2b26678": "766fbe11988868ec4eb339327ef6ac09c2b26678",
+    "refs/tags/wip-preserve/stop-heads-20261006/7e6cd8c2cde7c41cfd11a0833935099c8f4c8aa1": "7e6cd8c2cde7c41cfd11a0833935099c8f4c8aa1",
+    "refs/tags/wip-preserve/stop-heads-20261006/817d04abc7903be03b9d141dbfce85cd136850bb": "817d04abc7903be03b9d141dbfce85cd136850bb",
+    "refs/tags/wip-preserve/stop-heads-20261006/91b37bccfec1146199524d9017846eb9d0575c42": "91b37bccfec1146199524d9017846eb9d0575c42",
+    "refs/tags/wip-preserve/stop-heads-20261006/9badf6491f5637f884d484fb4e2f7a3b6d4e6831": "9badf6491f5637f884d484fb4e2f7a3b6d4e6831",
+    "refs/tags/wip-preserve/stop-heads-20261006/a3d14cbb2690d5f48daecf9e1d6db53a451ea0da": "a3d14cbb2690d5f48daecf9e1d6db53a451ea0da",
+    "refs/tags/wip-preserve/stop-heads-20261006/a917608caa7b1b2ce368fd11d842a60ae383748b": "a917608caa7b1b2ce368fd11d842a60ae383748b",
+    "refs/tags/wip-preserve/stop-heads-20261006/aa7d05e43383997231b02bdad781be1115d26b1a": "aa7d05e43383997231b02bdad781be1115d26b1a",
+    "refs/tags/wip-preserve/stop-heads-20261006/ac3ab6a3d5ba3701c1300bbdd8114390093c5c29": "ac3ab6a3d5ba3701c1300bbdd8114390093c5c29",
+    "refs/tags/wip-preserve/stop-heads-20261006/b3857ec26515d5309cae329082b164fa842dc871": "b3857ec26515d5309cae329082b164fa842dc871",
+    "refs/tags/wip-preserve/stop-heads-20261006/bc79d1415b767fa0ac3cdace1fa9852985d59921": "bc79d1415b767fa0ac3cdace1fa9852985d59921",
+    "refs/tags/wip-preserve/stop-heads-20261006/bdb1e14509225d18b4d8ee180731825d0826c16f": "bdb1e14509225d18b4d8ee180731825d0826c16f",
+    "refs/tags/wip-preserve/stop-heads-20261006/c8a42ba234556ef2be1742d8ed608d394b778e53": "c8a42ba234556ef2be1742d8ed608d394b778e53",
+    "refs/tags/wip-preserve/stop-heads-20261006/d435ac5b7e686ad9c9c594dde4b024b702435e47": "d435ac5b7e686ad9c9c594dde4b024b702435e47",
+    "refs/tags/wip-preserve/stop-heads-20261006/f0d5d3858a7972c36103f3956c2f4fde8ef08967": "f0d5d3858a7972c36103f3956c2f4fde8ef08967",
+    "refs/tags/wip-preserve/stop-heads-20261006/f3a96d9829f44945afa6d51d357f64d4be92ad71": "f3a96d9829f44945afa6d51d357f64d4be92ad71"
+  },
+  "consumer_remote_refs_verified": {
+    "refs/heads/archive/chainargos-cleanup-20261006/nextest-adoption-b6f4506": "b6f450653c07b9c65c8ec9f80df187ff8639d166",
+    "refs/heads/archive/chainargos-cleanup-20261006/service-preflight-followup-70fa83a": "70fa83a54a52a05f81b6538bfbaf7fa46186d13e",
+    "refs/heads/archive/chainargos-cleanup-20261006/velnor-ci-7824de1": "7824de1eaed29c37d55e199aec1eaa959b0ff9e6"
+  },
+  "snapshot_commit": "5666cfdf5191b482d22b4cb50809d5af1cef87e5",
+  "snapshot_counts": {
+    "copied_bytes": 7019088,
+    "index_stage_blobs_preserved": 320,
+    "status_rows": 343,
+    "withheld_items": 0,
+    "worktrees": 18
+  },
+  "snapshot_source_worktrees_removed": [
+    "/private/tmp/velnor-cache-c-703d",
+    "/private/tmp/velnor-cache-c-parser-ac3ab",
+    "/private/tmp/velnor-cache-c-parser-probe",
+    "/private/tmp/velnor-cache-lane-integration",
+    "/private/tmp/velnor-d-test-binary-prep",
+    "/private/tmp/velnor-discovery-run-0e203",
+    "/private/tmp/velnor-g0-base-tool-seed-fix-bdb",
+    "/private/tmp/velnor-g0-cli-fixture.1VpK4u",
+    "/private/tmp/velnor-g0-current-7fb",
+    "/private/tmp/velnor-g0-quote-debug",
+    "/private/tmp/velnor-guest-resource-main-d435",
+    "/private/tmp/velnor-pr38-save-order-fix-12a71c6",
+    "/private/tmp/velnor-quote-fea935",
+    "/private/tmp/velnor-r1-inbox-capacity-3a4",
+    "/private/tmp/velnor-r1-journal-p1-retest",
+    "/private/tmp/velnor-r1-journal-p1-snapshot",
+    "/private/tmp/velnor-worker-resource-budget",
+    "/private/tmp/velnor-workflow-cache"
+  ],
+  "local_branch_cleanup": [
+    {
+      "branch": "codex/d-test-binary-prep",
+      "removed": true
+    },
+    {
+      "branch": "codex/g0-quote-main-fea935",
+      "removed": true
+    },
+    {
+      "branch": "codex/cache-admission-caab",
+      "removed": true
+    },
+    {
+      "branch": "codex/freshness-evidence-captures-20261005",
+      "removed": true
+    },
+    {
+      "branch": "codex/runner-readiness-pr",
+      "removed": true
+    },
+    {
+      "branch": "codex/ci-performance-r1-checkpoint-20261006",
+      "removed": true
+    }
+  ],
+  "existing_agent_output_summary": {
+    "runner_compile_fix": "Frozen seven-path PR38 candidate. No final tests. Preserved at 4b175cf768113b5077179359f8b14ed0341f369c.",
+    "guest_resource_metrics": "G0 fixture provenance retained. Synthetic trailer and policy fixtures held for unclear ownership.",
+    "probe_redaction_fix": "Partial inventories and remote ref snapshots. No source edits. Findings stored in the source-state manifest.",
+    "remaining_runner_cleanup": "Partial history/status inventory. Clean local-only histories now preserved under WIP tags. No test claim.",
+    "coordinator": "Stopped child assignments. Forwarded existing output only.",
+    "postgres_contract_research": "Existing benign stale-bytecode probe fixtures retained on campaign branch. This proves import substitution only, not extraction success or attacker access.",
+    "release": "Committed and pushed WIP states. No implementation, tests, merges, release or deployment after stop."
+  },
+  "holds": [
+    {
+      "path": "/private/tmp/velnor-pr95-dogfood-goldens",
+      "reason": "Other worker owns this state. Previously active. Not removed."
+    },
+    {
+      "path": "/private/tmp/velnor-runner-null-stats-current-2217",
+      "reason": "Unrelated owner and build state. Not removed."
+    },
+    {
+      "path": "/private/tmp/velnor-subagent-model-policy",
+      "reason": "Separate work owned by another task. Not removed."
+    },
+    {
+      "path": "/private/tmp/velnor-local-release-manifest-verify",
+      "reason": "Unrelated 58-path release WIP. Not removed."
+    },
+    {
+      "path": "/private/tmp/velnor-commit-trailer-simulation",
+      "reason": "Creator and goal ownership not established."
+    },
+    {
+      "path": "/private/tmp/velnor-hostile-policy.cC3Wql",
+      "reason": "Creator and goal ownership not established."
+    },
+    {
+      "path": "/private/tmp/velnor-stale-pyc-private-logs-20261006",
+      "reason": "Private logs retained with restricted permissions. Not published."
+    }
+  ],
+  "limits": [
+    "Primary repositories have no stashes at the final check.",
+    "Unrelated permanent worktrees and local branches were not deleted.",
+    "Temporary non-Git directories and dangling objects were not exhaustively reconciled. Retain any uncovered state.",
+    "Private evidence and raw runtime logs are not published."
+  ]
+}
