@@ -1,4 +1,4 @@
-//! Bounded structural preflight for tar inputs consumed by repository tooling.
+//! Bounded structural preflight for raw candidate and gzip Cargo tar inputs.
 
 use std::io::{self, Read};
 
@@ -11,7 +11,7 @@ mod profile;
 #[path = "stream.rs"]
 mod stream;
 use pax::{check_header as check_pax_header, parse as parse_pax};
-use profile::{Profile, profile};
+use profile::{ArchiveEncoding, Profile, profile};
 use stream::{drain_zero_tail, read_exact, read_metadata, skip_padded};
 
 const BLOCK_SIZE: usize = 512;
@@ -66,7 +66,8 @@ impl<R: Read> Read for Bounded<R> {
 
 /// Check archive framing and resource limits before a higher-level tar parser runs.
 ///
-/// The supported modes are `candidate` and `cargo-package`.
+/// `candidate` accepts raw tar from the release producer. `cargo-package`
+/// accepts gzip-compressed tar. Each mode rejects the other encoding.
 ///
 /// # Errors
 ///
@@ -77,10 +78,19 @@ pub fn validate<R: Read>(reader: R, mode: &str) -> Result<(), String> {
 }
 
 fn validate_with_profile<R: Read>(reader: R, policy: Profile) -> Result<(), String> {
-    let input = Bounded::new(reader, policy.input_limit, "compressed input");
-    let decoder = MultiGzDecoder::new(input);
-    let mut archive = Bounded::new(decoder, policy.archive_limit, "gzip expansion");
-    scan_tar(&mut archive, policy)
+    match policy.encoding {
+        ArchiveEncoding::RawTar => {
+            let input = Bounded::new(reader, policy.input_limit, "tar input");
+            let mut archive = Bounded::new(input, policy.archive_limit, "tar size");
+            scan_tar(&mut archive, policy)
+        }
+        ArchiveEncoding::Gzip => {
+            let input = Bounded::new(reader, policy.input_limit, "compressed input");
+            let decoder = MultiGzDecoder::new(input);
+            let mut archive = Bounded::new(decoder, policy.archive_limit, "gzip expansion");
+            scan_tar(&mut archive, policy)
+        }
+    }
 }
 
 fn scan_tar<R: Read>(reader: &mut R, profile: Profile) -> Result<(), String> {

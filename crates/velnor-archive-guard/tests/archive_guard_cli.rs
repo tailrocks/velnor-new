@@ -33,8 +33,8 @@ fn invoke(arguments: &[&str], input: &[u8]) -> Result<std::process::Output, Box<
 }
 
 #[test]
-fn accepts_candidate_gzip_tar_from_stdin_without_environment() -> Result<(), Box<dyn Error>> {
-    let input = gzip(&[0_u8; 1024])?;
+fn accepts_release_producer_raw_tar_from_stdin_without_environment() -> Result<(), Box<dyn Error>> {
+    let input = producer_tar()?;
     let output = invoke(&["candidate"], &input)?;
     assert!(
         output.status.success(),
@@ -46,8 +46,24 @@ fn accepts_candidate_gzip_tar_from_stdin_without_environment() -> Result<(), Box
 }
 
 #[test]
+fn rejects_gzip_candidate_and_raw_cargo_package_without_format_sniffing()
+-> Result<(), Box<dyn Error>> {
+    let raw = producer_tar()?;
+    let compressed = gzip(&raw)?;
+
+    let candidate = invoke(&["candidate"], &compressed)?;
+    assert!(!candidate.status.success());
+    assert!(!String::from_utf8_lossy(&candidate.stderr).is_empty());
+
+    let cargo_package = invoke(&["cargo-package"], &raw)?;
+    assert!(!cargo_package.status.success());
+    assert!(!String::from_utf8_lossy(&cargo_package.stderr).is_empty());
+    Ok(())
+}
+
+#[test]
 fn accepts_cargo_package_gzip_tar_from_stdin_without_environment() -> Result<(), Box<dyn Error>> {
-    let input = gzip(&[0_u8; 1024])?;
+    let input = gzip(&producer_tar()?)?;
     let output = invoke(&["cargo-package"], &input)?;
     assert!(output.status.success());
     assert!(output.stdout.is_empty());
@@ -131,6 +147,35 @@ fn fixture_root() -> Result<PathBuf, Box<dyn Error>> {
     ));
     fs::create_dir(&root)?;
     Ok(root)
+}
+
+fn producer_tar() -> Result<Vec<u8>, Box<dyn Error>> {
+    let root = fixture_root()?;
+    fs::write(root.join("binary"), b"release binary")?;
+    fs::write(root.join("checksum"), b"sha256:fixture")?;
+    fs::write(root.join("provenance"), b"source=commit")?;
+    let archive = root.join("generator-assets.tar");
+    let output = Command::new("tar")
+        .args([
+            "-cf",
+            "generator-assets.tar",
+            "binary",
+            "checksum",
+            "provenance",
+        ])
+        .current_dir(&root)
+        .output()?;
+    if !output.status.success() {
+        fs::remove_dir_all(&root)?;
+        return Err(std::io::Error::other(format!(
+            "release tar producer failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        ))
+        .into());
+    }
+    let bytes = fs::read(archive)?;
+    fs::remove_dir_all(root)?;
+    Ok(bytes)
 }
 
 fn gzip(bytes: &[u8]) -> Result<Vec<u8>, Box<dyn Error>> {
