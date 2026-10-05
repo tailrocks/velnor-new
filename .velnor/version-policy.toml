@@ -69,9 +69,9 @@ reviewed = "2026-09-28"
 
 [[actions]]
 name = "jdx/mr-boxington-action"
-version = "v1.7.1"
-sha = "d0825fbaf3cc36ca2609aa38e71046265a1f1e37"
-reviewed = "2026-10-04"
+version = "v1.6.0"
+sha = "1687e54eb349cadf61fa38b5813a77875489e8e6"
+reviewed = "2026-10-03"
 
 [[actions]]
 name = "asamarts/alint"

@@ -189,13 +189,12 @@ temporary files. This avoids a second GitHub HTTP client and reuses Mise as the
 tool installer.
 
 Generated workflows set workflow-level `contents: read` and omit `actions`.
-The `required` job alone receives job-level `contents: read` and `actions: read`
-for exact report downloads and any validated baseline artifact. Job permissions
-replace workflow permissions, so both scopes are explicit on that job. The current `plan` job
-has no token binding for prior-baseline lookup; it cannot authenticate that
-request. A lookup miss records `baseline_unavailable` and schedules affected
-obligations. A separate reviewed change must scope a token and `actions: read`
-to `plan` before generated workflows can claim authenticated baseline reuse.
+Repository-policy `plan` and `required` receive job-level `contents: read` and
+`actions: read` for authenticated artifact lookup; job permissions replace
+workflow permissions. `plan` binds `GH_TOKEN` and `GH_REPO` only to its
+internal baseline-lookup step, while `required` binds them only to the exact
+report-fetch step. Consumer plans do not request Actions access; a lookup miss
+records `baseline_unavailable` and schedules affected obligations.
 Before any repository task starts, Velnor removes `GH_TOKEN`, `GITHUB_TOKEN`,
 `ACTIONS_RUNTIME_TOKEN`, and other undeclared action credential variables from
 the child environment. No `pull_request_target`, PR write token, wildcard

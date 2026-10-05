@@ -1,13 +1,15 @@
-//! Hosted-only MBX objects-cache qualification.
+//! Hosted-only MBX objects-cache qualification experiment.
 //!
 //! Write and read are separate jobs in one dispatch. The writer is restricted
 //! to protected main; the shared cache generation is bound to that run,
 //! attempt, source SHA, action pin, and MBX release. The dependent reader
 //! cannot publish a cache or pass on data from an earlier run.
+//! The action ref is an explicit candidate input separate from the production
+//! pin; emitting this probe does not assert that candidate qualification passed.
 //!
 //! Both jobs set `MBX_GC_AUTO=1` for this protected-main roundtrip probe.
-//! Production hosted Linux jobs set `MBX_GC_AUTO=0` and `MBX_SHARE_OUT_DIR=0`
-//! separately. This probe does not pass those production lane controls.
+//! This probe does not exercise production's typed hosted action backend or
+//! Scale Set local backend, nor the universal `MBX_SHARE_OUT_DIR=0` policy.
 
 use super::features::{checkout_step, finish, gated, lane_base, run_step};
 use super::{MbxQualificationPins, RunnerSpec};
@@ -49,12 +51,12 @@ pub(super) fn jobs(
     hosted: &RunnerSpec,
 ) -> Result<Vec<(String, Yaml)>, RenderError> {
     request.mise_setup.validate()?;
-    validate_uses(&request.mbx_action_uses)?;
+    validate_uses(&request.candidate_action_uses)?;
     let action_prefix = format!("{MBX_ACTION_NAME}@");
-    if !request.mbx_action_uses.starts_with(&action_prefix) {
+    if !request.candidate_action_uses.starts_with(&action_prefix) {
         return Err(RenderError::BadActionRef(format!(
             "not_mbx_action:{}",
-            request.mbx_action_uses
+            request.candidate_action_uses
         )));
     }
     validate_exact_version(&request.mbx_version, "mbx")?;
@@ -156,13 +158,13 @@ fn mbx_action_step(request: &MbxQualificationPins, writer: bool) -> Yaml {
     let generation = format!(
         "velnor-qualification-mbx-{}-action-{}-run-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}-${{{{ github.sha }}}}",
         request.mbx_version,
-        &request.mbx_action_uses[format!("{MBX_ACTION_NAME}@").len()..]
+        &request.candidate_action_uses[format!("{MBX_ACTION_NAME}@").len()..]
     );
     Yaml::Map(vec![
         ("name".to_owned(), Yaml::str("Restore MBX objects")),
         (
             "uses".to_owned(),
-            Yaml::str(request.mbx_action_uses.clone()),
+            Yaml::str(request.candidate_action_uses.clone()),
         ),
         ("id".to_owned(), Yaml::str("mbx_cache")),
         (
