@@ -117,7 +117,11 @@ fn expected_tools_save(key: &str) -> Result<Step, RenderError> {
 fn validate_existing_tools_save(job: &Job, key: &str) -> Result<(), RenderError> {
     let expected = expected_tools_save(key)?;
     let saves = tools_save_steps(job);
-    if saves.len() > 1 || saves.first().is_some_and(|step| *step != &expected) {
+    if saves.len() > 1
+        || saves
+            .first()
+            .is_some_and(|step| !crate::cache_p08::same_step_semantics(step, &expected))
+    {
         return Err(RenderError::InvalidWorkflow(
             "tools_cache_save_shape".to_owned(),
         ));
