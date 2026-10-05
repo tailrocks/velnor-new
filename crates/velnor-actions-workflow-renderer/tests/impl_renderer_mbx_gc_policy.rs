@@ -8,7 +8,7 @@ use velnor_actions_workflow_renderer::{RenderError, render_workflow_ir};
 
 use super::impl_renderer_fixtures::*;
 
-/// Hosted Linux MBX jobs disable collection and shared OUT_DIR.
+/// Hosted Linux MBX jobs disable collection and shared `OUT_DIR`.
 #[test]
 fn action_step_env_renders_only_when_present() -> Result<(), RenderError> {
     let uses = format!("jdx/mr-boxington-action@{}", "a".repeat(40));
@@ -27,13 +27,17 @@ fn action_step_env_renders_only_when_present() -> Result<(), RenderError> {
     )?;
     assert!(
         text.contains(&format!(
-            "{MBX_CACHE_MODE_ENV}: ${{{{ runner.environment == 'github-hosted' && github.event_name == 'push'"
+            "{MBX_CACHE_MODE_ENV}: ${{{{ runner.environment == 'github-hosted' && (github.event_name == 'push'"
         )),
         "hosted cache mode is event-gated:\n{text}"
     );
     assert!(
         text.contains("github.ref_protected == true && 'write' || 'read'"),
         "untrusted events stay read-only:\n{text}"
+    );
+    assert!(
+        text.contains("|| 'none' }}"),
+        "non-hosted mode is none:\n{text}"
     );
     assert!(
         text.contains("isolate-objects-cache: ${{ runner.environment == 'github-hosted' && runner.os == 'Linux' }}"),

@@ -61,7 +61,7 @@ fn assert_hosted_cache_policy(text: &str, action: &str, restore: usize) {
         "{action}"
     );
     assert!(action.contains(&expected_generation()), "{action}");
-    let policy = text.find("MBX_SHARE_OUT_DIR: \"0\"").expect("share env");
+    let policy = text.find("MBX_SHARE_OUT_DIR: \"0\"").unwrap_or(usize::MAX);
     assert!(policy < restore, "job env precedes restore:\n{text}");
     assert!(text.contains("MBX_GC_AUTO: \"0\""), "{text}");
 }
