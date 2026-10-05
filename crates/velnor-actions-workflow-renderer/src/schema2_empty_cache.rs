@@ -6,7 +6,7 @@
 
 use super::super::features::run_step;
 use super::steps::{mapping, run_env};
-use super::{Extras, both};
+use super::{Extras, RunnerSpec, both};
 use crate::yaml::Yaml;
 
 const RESTORE: &str = "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
@@ -20,7 +20,7 @@ const MISS: &str = "test -z \"$HIT\" || test \"$HIT\" = false";
 const HIT: &str = "grep -qx cache-ok \"g4 cache/note.txt\" && test \"$HIT\" = true";
 
 /// Hosted and scale-set jobs for `inputs.mode == 'empty-cache'`.
-pub(super) fn jobs(hosted: &Yaml, scale: &Yaml) -> Vec<(String, Yaml)> {
+pub(super) fn jobs(hosted: &RunnerSpec, scale: &RunnerSpec) -> Vec<(String, Yaml)> {
     both(
         "empty-cache",
         "Empty cache",
@@ -101,11 +101,59 @@ fn path_value(path: &str) -> Yaml {
 
 #[cfg(test)]
 mod tests {
-    use super::{MISS, WRITE};
+    use super::{MISS, RunnerSpec, WRITE};
+    use crate::yaml::Yaml;
     use std::process::Command;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     static NEXT_TEMP_DIR: AtomicUsize = AtomicUsize::new(0);
+
+    fn job_fields<'a>(jobs: &'a [(String, Yaml)], id: &str) -> &'a [(String, Yaml)] {
+        let Some((_, Yaml::Map(fields))) = jobs.iter().find(|(candidate, _)| candidate == id)
+        else {
+            panic!("missing job {id}");
+        };
+        fields
+    }
+
+    fn field<'a>(fields: &'a [(String, Yaml)], key: &str) -> Option<&'a Yaml> {
+        fields
+            .iter()
+            .find(|(candidate, _)| candidate == key)
+            .map(|(_, value)| value)
+    }
+
+    #[test]
+    fn empty_cache_jobs_preserve_typed_runner_lanes() {
+        let hosted = RunnerSpec::hosted("ubuntu-26.04").expect("catalog hosted lane");
+        let scale = RunnerSpec::scale_set(Yaml::Flow(vec![
+            "velnor".to_owned(),
+            "ubuntu-26.04-scale-set".to_owned(),
+        ]));
+        let jobs = super::super::class_jobs(&hosted, &scale);
+        let hosted = job_fields(&jobs, "empty-cache-hosted");
+        let scale = job_fields(&jobs, "empty-cache-scale-set");
+
+        assert_eq!(field(hosted, "runs-on"), Some(&Yaml::str("ubuntu-26.04")));
+        assert!(field(hosted, "defaults").is_none());
+        assert_eq!(
+            field(scale, "runs-on"),
+            Some(&Yaml::Flow(vec![
+                "velnor".to_owned(),
+                "ubuntu-26.04-scale-set".to_owned(),
+            ]))
+        );
+        assert_eq!(
+            field(scale, "defaults"),
+            Some(&Yaml::Map(vec![(
+                "run".to_owned(),
+                Yaml::Map(vec![(
+                    "shell".to_owned(),
+                    Yaml::str(crate::runs_on::SCALE_SET_RUN_SHELL),
+                )]),
+            )]))
+        );
+    }
 
     #[test]
     fn cache_miss_accepts_unset_and_empty_outputs_only() -> std::io::Result<()> {
