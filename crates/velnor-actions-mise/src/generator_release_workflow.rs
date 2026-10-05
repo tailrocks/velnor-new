@@ -12,7 +12,10 @@ use crate::steps::{PreparePinnedTools, ToolHomes};
 
 const MISE_ACTION_PREFIX: &str = "jdx/mise-action@";
 const SETUP_MISE_STEP: &str = "Setup pinned Mise";
-const INSTALL_RUST_STEP: &str = "Install pinned Rust";
+const INSTALL_RUST_MBX_STEP: &str = "Install pinned Rust and MBX";
+const CARGO_PROGRAM: &str = "cargo";
+const CARGO_BUILD_COMMAND: &str = "build";
+const MBX_PROGRAM: &str = "mbx";
 
 /// Installed GNU/Linux x64 Mise binary SHA used by the pinned setup action.
 /// It was independently measured from both archive variants in immutable
@@ -35,7 +38,11 @@ pub use checks::{
     rust_toolchain_check_step, version_smoke_check_step,
 };
 
-/// Lower the validated Mise action pin and exact Rust install to workflow steps.
+#[cfg(test)]
+#[path = "generator_release_workflow_tests.rs"]
+mod tests;
+
+/// Lower the validated Mise action pin and exact Rust and MBX installs to workflow steps.
 ///
 /// # Errors
 ///
@@ -73,9 +80,12 @@ pub fn setup_rust_steps(
             env: BTreeMap::new(),
         },
     };
-    let install = PreparePinnedTools::new(vec![PinnedTool::Rust], homes.clone())?;
+    let install = PreparePinnedTools::new(
+        vec![PinnedTool::Rust, PinnedTool::MrBoxington],
+        homes.clone(),
+    )?;
     let install = shell_step(
-        INSTALL_RUST_STEP,
+        INSTALL_RUST_MBX_STEP,
         install.argv(catalog),
         install.env(catalog),
     )?;
@@ -89,6 +99,60 @@ pub const fn generator_release_mise_binary_sha256(target: GeneratorReleaseTarget
         GeneratorReleaseTarget::LinuxX86_64 => MISE_BINARY_SHA256_LINUX_X64,
         GeneratorReleaseTarget::MacosArm64 => MISE_BINARY_SHA256_MACOS_ARM64,
     }
+}
+
+/// Lower one Cargo build request to the pinned Rust and MBX Mise tools.
+///
+/// The input must be exactly `cargo build ...`. The output selects both
+/// exact catalog pins and invokes `mbx build ...`; other Cargo commands
+/// must use [`rust_exec_step`] when they do not compile source.
+///
+/// This function creates no process and does not execute the request.
+///
+/// # Errors
+///
+/// Returns [`MiseError`] for a malformed name or build payload, or for
+/// non-UTF-8 workflow arguments or environment values.
+pub fn mbx_cargo_build_step(
+    name: &str,
+    program: &OsStr,
+    args: &[OsString],
+    homes: &ToolHomes,
+    catalog: &ToolCatalog,
+) -> Result<Step, MiseError> {
+    if name.trim().is_empty() || name.bytes().any(|byte| byte.is_ascii_control()) {
+        return Err(invalid_step_input("name", name));
+    }
+    if program != OsStr::new(CARGO_PROGRAM) {
+        return Err(invalid_step_input("program", &program.to_string_lossy()));
+    }
+    if args
+        .first()
+        .is_none_or(|command| command.as_os_str() != OsStr::new(CARGO_BUILD_COMMAND))
+    {
+        return Err(invalid_step_input("payload", "expected_cargo_build"));
+    }
+    for argument in args {
+        let Some(value) = argument.to_str() else {
+            return Err(invalid_step_input("args", "non_utf8"));
+        };
+        if value.is_empty() {
+            return Err(invalid_step_input("args", "empty_argument"));
+        }
+        if value.chars().any(char::is_control) {
+            return Err(invalid_step_input("args", "control_character"));
+        }
+    }
+
+    let mut mbx_args = Vec::with_capacity(args.len());
+    mbx_args.push(OsString::from(CARGO_BUILD_COMMAND));
+    mbx_args.extend(args.iter().skip(1).cloned());
+    let request = PinnedToolExec::new(
+        vec![PinnedTool::Rust, PinnedTool::MrBoxington],
+        OsStr::new(MBX_PROGRAM),
+        mbx_args,
+    )?;
+    shell_step(name, request.argv(catalog), homes.exec_env(catalog))
 }
 
 /// Lower one pinned Cargo request to a Mise `exec` step.

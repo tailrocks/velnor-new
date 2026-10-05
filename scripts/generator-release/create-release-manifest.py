@@ -14,6 +14,8 @@ from pathlib import Path
 from typing import NoReturn
 from urllib.parse import urlsplit
 
+from github_release_api import valid_release_version
+
 REPOSITORY = "tailrocks/velnor-new"
 MANIFEST_NAME = "velnor-actions-release-manifest.json"
 MANIFEST_CHECKSUM_NAME = f"{MANIFEST_NAME}.sha256"
@@ -105,7 +107,7 @@ def validate_identity(
 ) -> None:
     if repository != REPOSITORY:
         fail("unexpected_repository")
-    if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version):
+    if not valid_release_version(version):
         fail("malformed_version")
     if not re.fullmatch(r"[0-9a-f]{40}", commit):
         fail("malformed_source_commit")

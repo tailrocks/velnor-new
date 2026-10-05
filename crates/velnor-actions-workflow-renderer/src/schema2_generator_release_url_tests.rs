@@ -1,4 +1,3 @@
-use super::super::{LINUX_BIN, RELEASE_VERSION, RUST_INSTALL, build_script, publish_script};
 use super::{
     Fixture, LINUX_TARGET, MANIFEST_NAME, assert_failure, assert_success, asset_record, asset_url,
     output_text, release_json, run_helper,
@@ -10,19 +9,6 @@ const MANIFEST_CHECKSUM_NAME: &str = "velnor-actions-release-manifest.json.sha25
 const BAD_SIDECAR_SHA: &str = "20c131057bedc10ae24bdae230efd695d3aebc91d453ce9e30fc18c61027e121";
 const TAMPERED_MANIFEST_SHA: &str =
     "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356";
-
-#[test]
-fn release_build_uses_mise_mbx_and_the_pinned_source_version() {
-    assert!(RUST_INSTALL.contains("rust@1.98.1"));
-    assert!(RUST_INSTALL.contains("mr-boxington@1.21.1"));
-    let build = build_script(LINUX_BIN);
-    assert!(build.contains("mise exec -- mbx build --locked --release"));
-    assert!(!build.contains("cargo build"));
-    assert!(build.contains("git rev-parse HEAD"));
-    assert!(build.contains("test \"$source_sha\" = \"$GITHUB_SHA\""));
-    assert!(build.contains(&format!("velnor-actions {RELEASE_VERSION}")));
-    assert!(publish_script().contains("publish_generator_release.py"));
-}
 
 #[test]
 fn reject_noncanonical_browser_download_urls() -> Result<(), Box<dyn Error>> {

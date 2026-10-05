@@ -26,6 +26,7 @@ from github_release_api import (
     release_json,
     run_command,
     tag_commit,
+    valid_release_version,
     write_exclusive,
 )
 
@@ -72,7 +73,7 @@ def verify_source(commit: str) -> None:
 
 
 def publish(version: str) -> None:
-    if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", version):
+    if not valid_release_version(version):
         fail("malformed_version")
     commit = os.environ.get("GITHUB_SHA", "")
     verify_event(commit)

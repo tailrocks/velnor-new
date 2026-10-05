@@ -25,6 +25,19 @@ def fail(problem: str) -> NoReturn:
     raise ValueError(problem)
 
 
+def valid_release_version(version: str) -> bool:
+    """Match the contract crate's exact stable X.Y.Z release grammar."""
+    parts = version.split(".")
+    return len(parts) == 3 and all(
+        re.fullmatch(r"0|[1-9][0-9]*", part) is not None
+        and (
+            len(part) < 20
+            or (len(part) == 20 and part <= "18446744073709551615")
+        )
+        for part in parts
+    )
+
+
 def run_command(
     arguments: list[str],
     install: bool = False,

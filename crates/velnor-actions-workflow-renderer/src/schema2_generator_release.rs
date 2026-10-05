@@ -7,12 +7,12 @@ use crate::RenderError;
 use crate::runs_on::runs_on_yaml;
 use crate::steps::{DOWNLOAD_ARTIFACT_USES, UPLOAD_ARTIFACT_USES};
 use crate::yaml::Yaml;
+use velnor_actions_contract::GeneratorReleaseSourceBinding;
 
 use super::Schema2WorkflowRequest;
 use super::features::{CHECKOUT_USES, base, finish, publish_step, run_step};
 
 /// GitHub-hosted macOS label. The arm64 binary is not built on Ubuntu.
-const MACOS_RUNS_ON: &str = "macos-15";
 /// Same `jdx/mise-action` commit CI pins. Not a floating tag.
 const MISE_USES: &str = "jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5";
 /// Catalog version. Not a floating `latest`.
@@ -20,11 +20,6 @@ const MISE_VERSION: &str = "2026.9.18";
 /// `actions/attest-build-provenance` tag `v4.2.2` (commit, not a floating tag).
 const ATTEST_USES: &str =
     "actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8";
-const RELEASE_VERSION: &str = "0.1.0";
-const LINUX_BIN: &str = "velnor-actions-0.1.0-x86_64-unknown-linux-gnu";
-const MACOS_BIN: &str = "velnor-actions-0.1.0-aarch64-apple-darwin";
-const LINUX_SUM: &str = "velnor-actions-0.1.0-x86_64-unknown-linux-gnu.sha256";
-const MACOS_SUM: &str = "velnor-actions-0.1.0-aarch64-apple-darwin.sha256";
 const LINUX_ARTIFACT: &str = "generator-linux-assets";
 const MACOS_ARTIFACT: &str = "generator-macos-assets";
 const LINUX_DIR: &str = "linux-assets";
@@ -37,9 +32,8 @@ const ACCEPTED_CHECKSUM: &str =
 const ACCEPTANCE_RECEIPT: &str =
     "${{ runner.temp }}/velnor-generator-accepted/velnor-actions-release-acceptance.json";
 
-const RUST_INSTALL: &str = "\
-set -eu
-mise install rust@1.98.1 mr-boxington@1.21.1";
+const PUBLISHER_WORKFLOW_REF: &str =
+    "tailrocks/velnor-new/.github/workflows/generator-release.yml@refs/heads/main";
 
 /// Linux x64 and macOS arm64 builds, two attestations, then one publish.
 ///
@@ -48,163 +42,29 @@ mise install rust@1.98.1 mr-boxington@1.21.1";
 /// An illegal hosted or macOS label fails.
 pub(super) fn generator_release(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> {
     let hosted = runs_on_yaml(&request.hosted_label)?;
-    let macos = runs_on_yaml(MACOS_RUNS_ON)?;
-    let mut jobs = linux_jobs(hosted.clone());
-    jobs.extend(macos_jobs(macos));
-    jobs.push(publish_job(hosted));
+    let binding = GeneratorReleaseSourceBinding::for_current_workflow(&request.version)
+        .map_err(|error| RenderError::InvalidWorkflow(error.to_string()))?;
+    let mut jobs = Vec::new();
+    for target in binding.targets() {
+        jobs.extend(build::target_jobs(target, &binding)?);
+    }
+    jobs.push(publish_job(hosted, &binding));
     Ok(document(jobs))
 }
 
-fn linux_jobs(hosted: Yaml) -> Vec<(String, Yaml)> {
-    let files = [LINUX_BIN, LINUX_SUM];
-    let steps = build_steps(
-        LINUX_BIN,
-        "Verify ELF architecture",
-        &linux_verify(LINUX_BIN),
-        "sha256sum",
-        LINUX_SUM,
-    );
-    vec![
-        build_job(
-            "build-linux",
-            "Build Linux velnor-actions",
-            hosted.clone(),
-            steps,
-            "Upload Linux assets",
-            LINUX_ARTIFACT,
-            &files,
-        ),
-        attest_job(
-            "attest-linux",
-            "Attest Linux velnor-actions",
-            hosted,
-            "build-linux",
-            LINUX_ARTIFACT,
-            &files,
-        ),
-    ]
-}
-
-fn macos_jobs(macos: Yaml) -> Vec<(String, Yaml)> {
-    let files = [MACOS_BIN, MACOS_SUM];
-    let steps = build_steps(
-        MACOS_BIN,
-        "Verify Mach-O architecture",
-        &macos_verify(MACOS_BIN),
-        "shasum -a 256",
-        MACOS_SUM,
-    );
-    vec![
-        build_job(
-            "build-macos",
-            "Build macOS velnor-actions",
-            macos.clone(),
-            steps,
-            "Upload macOS assets",
-            MACOS_ARTIFACT,
-            &files,
-        ),
-        attest_job(
-            "attest-macos",
-            "Attest macOS velnor-actions",
-            macos,
-            "build-macos",
-            MACOS_ARTIFACT,
-            &files,
-        ),
-    ]
-}
-
-fn build_steps(
-    asset: &str,
-    verify_name: &str,
-    verify: &str,
-    sum_cmd: &str,
-    sidecar: &str,
-) -> Vec<Yaml> {
-    vec![
-        mise_step(),
-        run_step("Install pinned Rust", RUST_INSTALL),
-        run_step("Build velnor-actions", &build_script(asset)),
-        run_step(verify_name, verify),
-        run_step("Checksum built bytes", &sum_script(sum_cmd, asset, sidecar)),
-    ]
-}
-
-fn build_script(asset: &str) -> String {
+fn publish_script(binding: &GeneratorReleaseSourceBinding) -> String {
     format!(
-        "set -eu\nsource_sha=\"$(git rev-parse HEAD)\"\ntest \"$source_sha\" = \"$GITHUB_SHA\"\nmise exec -- mbx build --locked --release -p velnor-actions-cli\nbinary_version=\"$(target/release/velnor-actions --version)\"\ntest \"$binary_version\" = \"velnor-actions {RELEASE_VERSION}\"\ncp target/release/velnor-actions {asset}\ntest -s {asset}"
+        "set -euo pipefail\nPYTHONDONTWRITEBYTECODE=1 python3 scripts/generator-release/publish_generator_release.py --version {}",
+        shell_quote(binding.version())
     )
 }
 
-fn linux_verify(asset: &str) -> String {
-    format!(
-        "set -eu\ndesc=\"$(file -b {asset})\"\ncase \"$desc\" in\n  *ELF*x86-64*) ;;\n  *) echo \"not an x86-64 ELF: $desc\" >&2; exit 1 ;;\nesac"
-    )
-}
-
-fn macos_verify(asset: &str) -> String {
-    format!(
-        "set -eu\ndesc=\"$(file -b {asset})\"\ncase \"$desc\" in\n  *Mach-O*arm64*) ;;\n  *) echo \"not an arm64 Mach-O: $desc\" >&2; exit 1 ;;\nesac"
-    )
-}
-
-fn sum_script(command: &str, asset: &str, sidecar: &str) -> String {
-    format!("set -eu\n{command} {asset} > {sidecar}")
-}
-
-fn publish_script() -> String {
-    format!(
-        "set -eu\nPYTHONDONTWRITEBYTECODE=1 python3 scripts/generator-release/publish_generator_release.py --version {RELEASE_VERSION}"
-    )
-}
-
-fn build_job(
-    id: &str,
-    name: &str,
-    runs_on: Yaml,
-    steps: Vec<Yaml>,
-    upload_name: &str,
-    artifact: &str,
-    files: &[&str],
-) -> (String, Yaml) {
-    let mut prefixed = vec![checkout_step()];
-    prefixed.extend(steps);
-    prefixed.push(upload_step(upload_name, artifact, files));
-    finish(
-        id,
-        with_permissions(base(name, runs_on, 120), build_permissions()),
-        prefixed,
-    )
-}
-
-fn attest_job(
-    id: &str,
-    name: &str,
-    runs_on: Yaml,
-    needs: &str,
-    artifact: &str,
-    files: &[&str],
-) -> (String, Yaml) {
-    finish(
-        id,
-        with_needs(
-            with_permissions(base(name, runs_on, 20), attest_permissions()),
-            &[needs],
-        ),
-        vec![
-            download_step("Download built assets", artifact, ASSET_DIR),
-            attest_step(&subject_list(files)),
-        ],
-    )
-}
-
-fn publish_job(hosted: Yaml) -> (String, Yaml) {
+fn publish_job(hosted: Yaml, binding: &GeneratorReleaseSourceBinding) -> (String, Yaml) {
     finish(
         "publish-generator",
         with_needs(
             with_permissions(
-                base("Publish velnor-actions", hosted, 30),
+                trusted_main_dispatch(base("Publish velnor-actions", hosted, 30)),
                 publish_permissions(),
             ),
             &["attest-linux", "attest-macos"],
@@ -214,7 +74,7 @@ fn publish_job(hosted: Yaml) -> (String, Yaml) {
             mise_step(),
             download_step("Download Linux assets", LINUX_ARTIFACT, LINUX_DIR),
             download_step("Download macOS assets", MACOS_ARTIFACT, MACOS_DIR),
-            publish_step(&publish_script()),
+            publish_step(&publish_script(binding)),
             upload_accepted_metadata_step(),
         ],
     )
@@ -234,6 +94,14 @@ fn mise_step() -> Yaml {
             ]),
         ),
     ])
+}
+
+fn trusted_main_dispatch(mut fields: Vec<(String, Yaml)>) -> Vec<(String, Yaml)> {
+    let condition = format!(
+        "github.event_name == 'workflow_dispatch' && github.repository == 'tailrocks/velnor-new' && github.ref == 'refs/heads/main' && github.workflow_ref == '{PUBLISHER_WORKFLOW_REF}' && github.workflow_sha == github.sha"
+    );
+    fields.push(("if".to_owned(), Yaml::str(condition)));
+    fields
 }
 
 fn checkout_step() -> Yaml {
@@ -376,6 +244,10 @@ fn newline_list(files: &[&str]) -> String {
     files.join("\n")
 }
 
+fn shell_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "'\\''"))
+}
+
 fn document(jobs: Vec<(String, Yaml)>) -> Yaml {
     Yaml::Map(vec![
         ("name".to_owned(), Yaml::str("Generator release")),
@@ -394,3 +266,6 @@ fn document(jobs: Vec<(String, Yaml)>) -> Yaml {
 #[cfg(test)]
 #[path = "schema2_generator_release_provenance_tests.rs"]
 mod provenance_tests;
+
+#[path = "schema2_generator_release_build.rs"]
+mod build;

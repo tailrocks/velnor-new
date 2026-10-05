@@ -4,7 +4,7 @@ use std::ffi::OsString;
 use std::path::PathBuf;
 
 use velnor_actions_contract::{
-    ContractError, GeneratorReleasePlan, GeneratorReleaseTarget, require_release_version,
+    ContractError, GeneratorReleaseSourceBinding, GeneratorReleaseTarget, require_release_version,
 };
 
 /// One locked Cargo build request for the generator executable.
@@ -97,7 +97,7 @@ impl GeneratorCargoBuild {
     /// Returns [`ContractError`] when `rust_toolchain_version` is not exact `X.Y.Z`.
     pub fn verification(
         self,
-        plan: &GeneratorReleasePlan,
+        plan: &GeneratorReleaseSourceBinding,
         rust_toolchain_version: &str,
     ) -> Result<GeneratorBinaryVerification, ContractError> {
         require_release_version(rust_toolchain_version, "rust-toolchain")?;

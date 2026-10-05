@@ -3,6 +3,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::time::{SystemTime, UNIX_EPOCH};
+use velnor_actions_contract::{GeneratorReleaseSourceBinding, RoutingWorkflow};
 
 #[path = "schema2_generator_release_api_fixtures.rs"]
 mod api_fixtures;
@@ -77,6 +78,10 @@ impl Fixture {
 fn manifest_uses_actual_api_urls_and_verifies_the_published_release() -> Result<(), Box<dyn Error>>
 {
     let fixture = Fixture::new("actual-url")?;
+    let binding = GeneratorReleaseSourceBinding::for_current_workflow(RELEASE_VERSION)?;
+    let source_plan = binding.bind(&fixture.commit)?;
+    assert_eq!(source_plan.tag(), fixture.tag);
+    assert_eq!(source_plan.source_sha(), fixture.commit);
     let initial = release_json(true, false, &fixture.tag, &fixture.records);
     let output = run_helper(
         &fixture,
@@ -122,6 +127,27 @@ fn manifest_uses_actual_api_urls_and_verifies_the_published_release() -> Result<
         &checksum_digest,
         Some(&asset_url(&fixture.tag, MANIFEST_CHECKSUM_NAME)),
     ));
+    let final_asset_names = final_records
+        .iter()
+        .map(|record| record_name(record))
+        .collect::<Result<Vec<_>, _>>()?;
+    assert_eq!(final_asset_names, source_plan.final_asset_names());
+
+    let workflow_request = super::Schema2WorkflowRequest {
+        version: RELEASE_VERSION.to_owned(),
+        hosted_label: "ubuntu-26.04".to_owned(),
+        scale_set: super::Schema2WorkflowRequest::canonical_scale_set()?,
+        workflows: std::collections::BTreeSet::from([RoutingWorkflow::GeneratorRelease]),
+        mbx_qualification: None,
+    };
+    let workflow = crate::yaml::render_yaml(&super::generator_release(&workflow_request)?);
+    assert!(workflow.contains("VELNOR_RELEASE_SOURCE_SHA: ${{ github.sha }}"));
+    assert!(workflow.contains(&source_plan.final_asset_names()[0]));
+    assert!(workflow.contains(&source_plan.final_asset_names()[3]));
+    assert!(workflow.contains("--version '0.1.0'"));
+    assert!(workflow.contains("--target x86_64-unknown-linux-gnu"));
+    assert!(workflow.contains("--target aarch64-apple-darwin"));
+
     let draft = release_json(true, false, &fixture.tag, &final_records);
     let output = run_helper(
         &fixture,
@@ -141,6 +167,17 @@ fn manifest_uses_actual_api_urls_and_verifies_the_published_release() -> Result<
     );
     assert_success(&output);
     Ok(())
+}
+
+fn record_name(record: &str) -> Result<String, Box<dyn Error>> {
+    Ok(record
+        .split_once("\"name\":\"")
+        .ok_or("missing release asset name")?
+        .1
+        .split_once('"')
+        .ok_or("unterminated release asset name")?
+        .0
+        .to_owned())
 }
 
 #[test]
@@ -207,6 +244,25 @@ fn source_target_version_digest_and_asset_path_mismatches_fail() -> Result<(), B
     let release = release_json(true, false, &fixture.tag, &fixture.records);
     let output = run_helper(&fixture, "create", &release, "0.1.1", &fixture.commit);
     assert_failure(&output, "release_asset_set_mismatch");
+
+    let fixture = Fixture::new("noncanonical-version")?;
+    let release = release_json(true, false, &fixture.tag, &fixture.records);
+    let output = run_helper(&fixture, "create", &release, "01.0.0", &fixture.commit);
+    assert_failure(&output, "malformed_version");
+    assert!(!fixture.manifest().exists());
+
+    let fixture = Fixture::new("oversized-version")?;
+    let release = release_json(true, false, &fixture.tag, &fixture.records);
+    let oversized_version = format!("{}.0.0", "9".repeat(5000));
+    let output = run_helper(
+        &fixture,
+        "create",
+        &release,
+        &oversized_version,
+        &fixture.commit,
+    );
+    assert_failure(&output, "malformed_version");
+    assert!(!fixture.manifest().exists());
 
     let fixture = Fixture::new("wrong-digest")?;
     let mut records = fixture.records.clone();

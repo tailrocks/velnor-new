@@ -1,5 +1,7 @@
 use super::{GeneratorBinaryCheck, GeneratorCargoBuild};
-use velnor_actions_contract::{GeneratorReleasePlan, GeneratorReleaseTarget};
+use velnor_actions_contract::{GeneratorReleaseSourceBinding, GeneratorReleaseTarget};
+
+const SOURCE_SHA: &str = "0123456789abcdef0123456789abcdef01234567";
 
 #[test]
 fn every_target_build_uses_one_explicit_locked_release_command_and_output_root() {
@@ -36,7 +38,8 @@ fn every_target_build_uses_one_explicit_locked_release_command_and_output_root()
 
 #[test]
 fn verification_binds_release_plan_target_output_and_closed_proofs() {
-    let plan = GeneratorReleasePlan::for_version("0.1.1").expect("release plan");
+    let plan = GeneratorReleaseSourceBinding::for_current_workflow("0.1.1")
+        .expect("release source binding");
     let cases = [
         (
             GeneratorReleaseTarget::LinuxX86_64,
@@ -79,7 +82,8 @@ fn verification_binds_release_plan_target_output_and_closed_proofs() {
 
 #[test]
 fn verification_rejects_non_exact_rust_toolchain_version() {
-    let plan = GeneratorReleasePlan::for_version("0.1.1").expect("release plan");
+    let plan = GeneratorReleaseSourceBinding::for_current_workflow("0.1.1")
+        .expect("release source binding");
     let build = GeneratorCargoBuild::new(GeneratorReleaseTarget::LinuxX86_64);
     assert!(build.verification(&plan, "stable").is_err());
     assert!(build.verification(&plan, "1.98").is_err());

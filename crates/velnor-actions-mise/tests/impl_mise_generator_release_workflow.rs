@@ -1,8 +1,8 @@
 use velnor_actions_contract::{GeneratorReleaseTarget, Step, StepKind};
 
 use velnor_actions_mise::{
-    MISE_VERSION, ToolCatalog, ToolHomes, generator_release_mise_binary_sha256, rust_exec_step,
-    setup_rust_steps,
+    MISE_VERSION, MR_BOXINGTON_VERSION, RUST_VERSION, ToolCatalog, ToolHomes,
+    generator_release_mise_binary_sha256, rust_exec_step, setup_rust_steps,
 };
 
 const MISE_USES: &str = "jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5";
@@ -60,17 +60,15 @@ fn assert_setup_steps(
     let StepKind::Shell { run, env } = &steps[1].kind else {
         return false;
     };
-    assert_eq!(
-        run,
-        &[
-            "mise",
-            "--no-config",
-            "--no-env",
-            "--no-hooks",
-            "install",
-            "rust@1.98.1",
-        ]
-    );
+    let expected_run = ["mise", "--no-config", "--no-env", "--no-hooks", "install"]
+        .map(str::to_owned)
+        .into_iter()
+        .chain([
+            format!("rust@{RUST_VERSION}"),
+            format!("mr-boxington@{MR_BOXINGTON_VERSION}"),
+        ])
+        .collect::<Vec<_>>();
+    assert_eq!(run, &expected_run);
     assert_eq!(
         env.get("MISE_RUSTUP_HOME").map(String::as_str),
         Some("${{ runner.temp }}/velnor/rustup")
