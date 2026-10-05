@@ -23,6 +23,8 @@ fn renderer_rejects_unpinned_actions_inside_ir() -> Result<(), RenderError> {
             "velnor-task".to_owned(),
             task_job(Step {
                 name: name.to_owned(),
+                id: None,
+                role: None,
                 condition: None,
                 kind: StepKind::Action {
                     uses: uses.to_owned(),

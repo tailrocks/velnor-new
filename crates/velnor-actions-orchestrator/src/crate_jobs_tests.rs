@@ -260,6 +260,8 @@ fn empty_groups_build_no_jobs() {
 fn acquire_stages_before_report_wrappers() {
     let acquire = Step {
         name: "Acquire Velnor".to_owned(),
+        id: None,
+        role: None,
         condition: None,
         kind: velnor_actions_contract::StepKind::Shell {
             run: vec![String::from("true")],

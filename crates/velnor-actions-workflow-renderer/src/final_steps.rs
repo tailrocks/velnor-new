@@ -10,7 +10,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Job, Step};
+use velnor_actions_contract::{Job, Step, StepRole};
 
 use crate::{
     RenderError,
@@ -37,7 +37,9 @@ pub(crate) const FINAL_ARTIFACT_PATH: &str =
 /// `continue-on-error` (F5): hard failures fail the job, unmasked.
 /// # Errors
 pub(crate) fn fetch_reports_step() -> Result<Step, RenderError> {
-    steps::internal_step(FETCH_REPORTS_NAME, steps::FETCH_OPERATION)
+    let mut step = steps::internal_step(FETCH_REPORTS_NAME, steps::FETCH_OPERATION)?;
+    step.role = Some(StepRole::FetchReports);
+    Ok(step)
 }
 
 /// Final-report upload step (`velnor-final-<run-key>`, fails loud).
@@ -47,7 +49,7 @@ pub(crate) fn fetch_reports_step() -> Result<Step, RenderError> {
 /// attached at render.
 /// # Errors
 pub(crate) fn publish_final_report_step() -> Result<Step, RenderError> {
-    steps::action_step(
+    let mut step = steps::action_step(
         PUBLISH_FINAL_NAME,
         steps::UPLOAD_ARTIFACT_USES,
         BTreeMap::from([
@@ -59,7 +61,9 @@ pub(crate) fn publish_final_report_step() -> Result<Step, RenderError> {
                 steps::ARTIFACT_RETENTION_DAYS.to_string(),
             ),
         ]),
-    )
+    )?;
+    step.role = Some(StepRole::PublishFinal);
+    Ok(step)
 }
 
 /// Insert the fan-in fetch and final publish into the final job.
@@ -83,7 +87,7 @@ pub(crate) fn insert_final_fanin(
         && !final_job
             .steps
             .iter()
-            .any(|step| step.name == ATTESTATION_DOWNLOAD_NAME)
+            .any(|step| step.role == Some(StepRole::AttestationDownload))
     {
         let at = fetch_insert_at(final_job);
         final_job.steps.insert(at, download_attestation_step(ctx)?);
@@ -91,7 +95,7 @@ pub(crate) fn insert_final_fanin(
     if !final_job
         .steps
         .iter()
-        .any(|step| step.name == FETCH_REPORTS_NAME)
+        .any(|step| step.role == Some(StepRole::FetchReports))
     {
         let at = fetch_insert_at(final_job);
         final_job.steps.insert(at, fetch_reports_step()?);
@@ -99,7 +103,7 @@ pub(crate) fn insert_final_fanin(
     if !final_job
         .steps
         .iter()
-        .any(|step| step.name == PUBLISH_FINAL_NAME)
+        .any(|step| step.role == Some(StepRole::PublishFinal))
     {
         final_job.steps.push(publish_final_report_step()?);
     }
@@ -130,6 +134,7 @@ fn download_attestation_step(ctx: &RenderContext) -> Result<Step, RenderError> {
     );
     let mut step = steps::download_artifact_step(&artifact, &path)?;
     ATTESTATION_DOWNLOAD_NAME.clone_into(&mut step.name);
+    step.role = Some(StepRole::AttestationDownload);
     Ok(step)
 }
 
@@ -139,7 +144,7 @@ fn fetch_insert_at(job: &Job) -> usize {
     if let Some(at) = job
         .steps
         .iter()
-        .position(|step| step.name == crate::closure::DOWNLOAD_PLAN_NAME)
+        .position(|step| step.role == Some(StepRole::DownloadPlan))
     {
         return at + 1;
     }

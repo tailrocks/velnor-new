@@ -6,7 +6,10 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Job, Step, StepKind};
+use velnor_actions_contract::workflow::step_identity::{
+    TOOL_SEED_USES, is_configured_checkout, is_tool_seed_step,
+};
+use velnor_actions_contract::{Job, Step, StepKind, StepRole};
 
 use crate::yaml::Yaml;
 use crate::{RenderError, cache_p08::MiseToolsCacheKey};
@@ -16,8 +19,6 @@ pub(crate) use crate::tool_seed_admission::{SEED_ROOT, require_seed_root};
 
 /// Display name of the copy step ahead of `Setup Mise`.
 pub(crate) const TOOL_SEED_NAME: &str = "Restore Velnor tool seed";
-/// Workflow `uses` of the one local tool-seed composite.
-pub(crate) const TOOL_SEED_USES: &str = "./.github/actions/velnor-tool-seed";
 /// Repository path of that composite.
 const TOOL_SEED_ACTION_PATH: &str = ".github/actions/velnor-tool-seed/action.yml";
 
@@ -94,18 +95,6 @@ fn checkout_before(job: &Job, setup_index: usize, checkout_uses: &str) -> Option
         .position(|step| is_configured_checkout(step, checkout_uses))
 }
 
-pub(crate) fn is_configured_checkout(step: &Step, expected_uses: &str) -> bool {
-    step.condition.is_none()
-        && matches!(
-            &step.kind,
-            StepKind::Action { uses, with, env }
-                if uses == expected_uses
-                    && with.len() == 1
-                    && with.get("persist-credentials").is_some_and(|value| value == "false")
-                    && env.is_empty()
-        )
-}
-
 pub(crate) fn reject_orphan_seed(job_id: &str, job: &Job) -> Result<(), RenderError> {
     if seed_indices(job).is_empty() {
         Ok(())
@@ -142,6 +131,7 @@ pub(crate) fn validate_seed_action(
     };
     let key = with.get("cache_key");
     if uses != TOOL_SEED_USES
+        || !is_tool_seed_step(step)
         || step.condition.is_some()
         || !env.is_empty()
         || with.len() != 1
@@ -156,17 +146,19 @@ pub(crate) fn validate_seed_action(
 }
 
 fn seed_step(cache_key: &MiseToolsCacheKey) -> Result<Step, RenderError> {
-    crate::steps::action_step(
+    let mut step = crate::steps::action_step(
         TOOL_SEED_NAME,
         TOOL_SEED_USES,
         BTreeMap::from([("cache_key".to_owned(), cache_key.as_str().to_owned())]),
-    )
+    )?;
+    step.role = Some(StepRole::ToolSeed);
+    Ok(step)
 }
 
 /// True when any job renders the tool-seed step.
 pub(crate) fn any_job_has_seed(jobs: &std::collections::BTreeMap<String, Job>) -> bool {
     jobs.values()
-        .any(|job| job.steps.iter().any(is_tool_seed_action))
+        .any(|job| job.steps.iter().any(is_tool_seed_step))
 }
 
 /// One composite action for every tool-seed step.
