@@ -70,7 +70,7 @@ pub(super) fn asset_records(version: &str, tag: &str) -> Vec<String> {
         let name = format!("velnor-actions-{version}-{target}");
         records.push(asset_record(
             &name,
-            bytes.len() as u64,
+            u64::try_from(bytes.len()).unwrap_or(u64::MAX),
             binary_digest,
             Some(&asset_url(tag, &name)),
         ));
