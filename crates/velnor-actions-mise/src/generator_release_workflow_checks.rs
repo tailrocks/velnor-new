@@ -12,6 +12,7 @@ use crate::steps::ToolHomes;
 use super::{invalid_step_input, rust_exec_step};
 
 const ELF_HEADER_GUARD_AWK: &str = r#"
+{ print }
 /^[[:space:]]*Class:/ {
   value = $0
   sub(/^[[:space:]]*Class:[[:space:]]*/, "", value)
@@ -29,6 +30,7 @@ END {
 "#;
 
 const GNU_ABI_GUARD_AWK: &str = r#"
+{ print }
 function canonical_component(value) {
   return value ~ /^(0|[1-9][0-9]?)$/;
 }
@@ -50,9 +52,10 @@ function supported_glibc_name(value, version, count, part, major, minor, patch) 
 /^Version needs section / { in_needs = 1; saw_needs = 1; next }
 /^Version/ { in_needs = 0 }
 in_needs {
-  for (field = 1; field < NF; field++) {
-    if ($field != "Name:") continue
-    name = $(field + 1)
+  field_count = split($0, fields, /[[:space:]]+/)
+  for (field = 1; field < field_count; field++) {
+    if (fields[field] != "Name:") continue
+    name = fields[field + 1]
     if (name !~ /^GLIBC_/) continue
     count++
     if (!supported_glibc_name(name)) bad = 1
@@ -78,7 +81,7 @@ pub fn native_host_check_step(
         GeneratorReleaseTarget::MacosArm64 => "Darwin arm64",
     };
     let body = format!(
-        "actual=\"$(uname -sm)\"\nprintf 'Native host: %s\\n' \"$actual\"\ntest \"$actual\" = {}",
+        "uname -sm | awk -v expected={} '{{ print \"Native host: \" $0; if (NR != 1 || $0 != expected) bad = 1 }} END {{ if (bad) exit 1 }}'",
         shell_quote(expected)
     );
     guarded_step("Verify native build host", &body, homes, catalog)
@@ -97,7 +100,7 @@ pub fn rust_toolchain_check_step(
 ) -> Result<Step, MiseError> {
     validate_exact_version("rust_toolchain_version", rust_toolchain_version)?;
     let body = format!(
-        "identity=\"$(rustc -vV)\"\nprintf '%s\\n' \"$identity\"\ngrep -Fxq -- {} <<<\"$identity\"\ngrep -Fxq -- {} <<<\"$identity\"",
+        "rustc -vV | awk -v release={} -v host={} '{{ print; if ($0 == release) has_release = 1; if ($0 == host) has_host = 1 }} END {{ if (!has_release || !has_host) exit 1 }}'",
         shell_quote(&format!("release: {rust_toolchain_version}")),
         shell_quote(&format!("host: {}", target.triple()))
     );
@@ -118,7 +121,7 @@ pub fn binary_format_architecture_check_step(
     let binary = checked_binary_path(binary_relative_path)?;
     let body = match target {
         GeneratorReleaseTarget::LinuxX86_64 => format!(
-            "header=\"$(readelf -hW {})\"\nprintf '%s\\n' \"$header\" | awk {}",
+            "readelf -hW {} | awk {}",
             shell_quote(&binary),
             shell_quote(ELF_HEADER_GUARD_AWK)
         ),
@@ -146,7 +149,7 @@ pub fn gnu_runtime_abi_check_step(
     require_target(target, GeneratorReleaseTarget::LinuxX86_64)?;
     let binary = checked_binary_path(binary_relative_path)?;
     let body = format!(
-        "needs=\"$(readelf --version-info --wide {})\"\nprintf '%s\\n' \"$needs\" | awk {}\nresolved=\"$(ldd -v {})\"\nprintf '%s\\n' \"$resolved\"\nif grep -Fq -- 'not found' <<<\"$resolved\"; then exit 1; fi",
+        "readelf --version-info --wide {} | awk {}; ldd -v {} | awk '/not found/ {{ bad = 1 }} {{ print }} END {{ if (bad) exit 1 }}'",
         shell_quote(&binary),
         shell_quote(GNU_ABI_GUARD_AWK),
         shell_quote(&binary)
@@ -170,8 +173,7 @@ pub fn apple_sdk_check_step(
     catalog: &ToolCatalog,
 ) -> Result<Step, MiseError> {
     require_apple_target(target)?;
-    let body =
-        "sdk=\"$(xcrun --show-sdk-path)\"\ntest -d \"$sdk\"\nprintf 'Apple SDK: %s\\n' \"$sdk\"";
+    let body = "xcrun --show-sdk-path | awk '{ count++; sdk = $0 } END { if (count != 1 || sdk == \"\") exit 1; print sdk }' | while IFS= read -r sdk; do test -d \"$sdk\" || exit 1; printf 'Apple SDK: %s\\n' \"$sdk\"; done";
     guarded_step("Observe selected Apple SDK", body, homes, catalog)
 }
 
@@ -186,7 +188,7 @@ pub fn apple_linker_check_step(
     catalog: &ToolCatalog,
 ) -> Result<Step, MiseError> {
     require_apple_target(target)?;
-    let body = "clang=\"$(xcrun --find clang)\"\nlinker=\"$(xcrun --find ld)\"\ntest -x \"$clang\"\ntest -x \"$linker\"\nprintf 'Apple Clang: %s\\nApple linker: %s\\n' \"$clang\" \"$linker\"";
+    let body = "{ xcrun --find clang || exit 1; xcrun --find ld || exit 1; } | awk 'NR == 1 { clang = $0 } NR == 2 { linker = $0 } END { if (NR != 2 || clang == \"\" || linker == \"\") exit 1; print clang; print linker }' | { IFS= read -r clang || exit 1; IFS= read -r linker || exit 1; test -x \"$clang\" || exit 1; test -x \"$linker\" || exit 1; printf 'Apple Clang: %s\\nApple linker: %s\\n' \"$clang\" \"$linker\"; }";
     guarded_step("Observe selected Apple linker", body, homes, catalog)
 }
 
@@ -204,7 +206,7 @@ pub fn version_smoke_check_step(
     validate_exact_version("release_version", version)?;
     let binary = checked_binary_path(binary_relative_path)?;
     let body = format!(
-        "actual=\"$({} --version)\"\nprintf 'Binary version: %s\\n' \"$actual\"\ntest \"$actual\" = {}",
+        "{} --version | awk -v expected={} '{{ raw = raw $0 \"\\n\" }} END {{ sub(/\\n+$/, \"\", raw); if (raw != expected) exit 1; printf \"Binary version: %s\\n\", raw }}'",
         shell_quote(&binary),
         shell_quote(&format!("velnor-actions {version}"))
     );
@@ -223,7 +225,7 @@ pub fn help_smoke_check_step(
 ) -> Result<Step, MiseError> {
     let binary = checked_binary_path(binary_relative_path)?;
     let body = format!(
-        "help=\"$({} --help)\"\nprintf '%s\\n' \"$help\"\ngrep -Fq -- 'Usage: velnor-actions <COMMAND>' <<<\"$help\"\nfor command in init plan generate config; do grep -Eq \"^[[:space:]]+$command([[:space:]]|$)\" <<<\"$help\"; done",
+        "{} --help | awk '{{ help = help $0 \"\\n\"; if ($0 ~ /^[[:space:]]+init([[:space:]]|$)/) has_init = 1; if ($0 ~ /^[[:space:]]+plan([[:space:]]|$)/) has_plan = 1; if ($0 ~ /^[[:space:]]+generate([[:space:]]|$)/) has_generate = 1; if ($0 ~ /^[[:space:]]+config([[:space:]]|$)/) has_config = 1 }} END {{ sub(/\\n+$/, \"\", help); printf \"%s\\n\", help; if (index(help, \"Usage: velnor-actions <COMMAND>\") == 0 || !has_init || !has_plan || !has_generate || !has_config) exit 1 }}'",
         shell_quote(&binary)
     );
     guarded_step("Smoke test release binary help", &body, homes, catalog)
@@ -231,7 +233,7 @@ pub fn help_smoke_check_step(
 
 fn apple_format_script(binary: &str, architecture: &str) -> String {
     format!(
-        "description=\"$(file -b {})\"\nprintf 'Mach-O: %s\\n' \"$description\"\ncase \"$description\" in *Mach-O*{}*) ;; *) exit 1 ;; esac\narchitectures=\"$(lipo -archs {})\"\ntest \"$architectures\" = {}",
+        "file -b {} | awk -v expected={} '{{ description = description $0 \"\\n\" }} END {{ sub(/\\n+$/, \"\", description); printf \"Mach-O: %s\\n\", description; macho = index(description, \"Mach-O\"); arch = index(description, expected); if (macho == 0 || arch <= macho) exit 1 }}'; lipo -archs {} | awk -v expected={} '{{ architectures = architectures $0 \"\\n\" }} END {{ sub(/\\n+$/, \"\", architectures); if (architectures != expected) exit 1 }}'",
         shell_quote(binary),
         shell_quote(architecture),
         shell_quote(binary),
@@ -245,7 +247,21 @@ fn guarded_step(
     homes: &ToolHomes,
     catalog: &ToolCatalog,
 ) -> Result<Step, MiseError> {
-    let script = format!("set -euo pipefail\n{body}\n");
+    // Workflow validation rejects controls and command substitution in every argv token.
+    // Flatten the fixed Bash and AWK bodies into one line and stream captured output.
+    let body = body
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .collect::<Vec<_>>()
+        .join("; ");
+    let script = format!("set -euo pipefail; {body}");
+    if script.chars().any(char::is_control) {
+        return Err(invalid_step_input("script", "control_character"));
+    }
+    if script.contains("$(") || script.contains('`') {
+        return Err(invalid_step_input("script", "command_substitution"));
+    }
     let args = ["-e", "-u", "-o", "pipefail", "-c"]
         .into_iter()
         .map(OsString::from)
