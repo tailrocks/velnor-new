@@ -295,17 +295,23 @@ pub const MISE_STATIC_ENV: [(&str, &str); 6] = [
     ("MISE_NO_HOOKS", "1"),
 ];
 
-/// Centralized job-level environment variables hoisted from steps.
+/// Centralized workflow-level environment variables hoisted from jobs and steps.
 ///
 /// Contains the 11 blank credential scrub / endpoint variables stopping
 /// ambient inheritance and the 6 static Mise isolation / auto-install variables.
 #[must_use]
-pub fn job_level_env() -> BTreeMap<String, String> {
+pub fn workflow_level_env() -> BTreeMap<String, String> {
     let mut map = credential_scrub();
     for (key, value) in MISE_STATIC_ENV {
         map.insert(key.to_owned(), value.to_owned());
     }
     map
+}
+
+/// Centralized job-level environment variables hoisted from steps.
+#[must_use]
+pub fn job_level_env() -> BTreeMap<String, String> {
+    workflow_level_env()
 }
 
 /// Reject privileged isolation keys in a project-task step env map.

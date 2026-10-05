@@ -16,6 +16,24 @@ permissions:
 concurrency:
   group: velnor-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+env:
+  ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+  ACTIONS_ID_TOKEN_REQUEST_URL: ""
+  ACTIONS_RUNTIME_TOKEN: ""
+  CARGO_REGISTRY_TOKEN: ""
+  GH_CONFIG_DIR: ""
+  GH_HOST: ""
+  GH_TOKEN: ""
+  GITHUB_TOKEN: ""
+  MISE_AUTO_INSTALL: "false"
+  MISE_EXEC_AUTO_INSTALL: "false"
+  MISE_GITHUB_TOKEN: ""
+  MISE_LOCKFILE: "0"
+  MISE_NO_CONFIG: "1"
+  MISE_NO_ENV: "1"
+  MISE_NO_HOOKS: "1"
+  NODE_AUTH_TOKEN: ""
+  NPM_TOKEN: ""
 jobs:
   actionlint:
     name: Actionlint
@@ -132,25 +150,8 @@ jobs:
     runs-on: ubuntu-26.04
     timeout-minutes: 10
     env:
-      ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-      ACTIONS_ID_TOKEN_REQUEST_URL: ""
-      ACTIONS_RUNTIME_TOKEN: ""
-      CARGO_REGISTRY_TOKEN: ""
-      GH_CONFIG_DIR: ""
-      GH_HOST: ""
-      GH_TOKEN: ""
-      GITHUB_TOKEN: ""
       MBX_GC_AUTO: "1"
       MBX_SHARE_OUT_DIR: "0"
-      MISE_AUTO_INSTALL: "false"
-      MISE_EXEC_AUTO_INSTALL: "false"
-      MISE_GITHUB_TOKEN: ""
-      MISE_LOCKFILE: "0"
-      MISE_NO_CONFIG: "1"
-      MISE_NO_ENV: "1"
-      MISE_NO_HOOKS: "1"
-      NODE_AUTH_TOKEN: ""
-      NPM_TOKEN: ""
       RUSTUP_TOOLCHAIN: 1.98.1
     permissions:
       contents: read
@@ -311,24 +312,6 @@ jobs:
     name: Publish baseline
     runs-on: ubuntu-26.04
     timeout-minutes: 10
-    env:
-      ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-      ACTIONS_ID_TOKEN_REQUEST_URL: ""
-      ACTIONS_RUNTIME_TOKEN: ""
-      CARGO_REGISTRY_TOKEN: ""
-      GH_CONFIG_DIR: ""
-      GH_HOST: ""
-      GH_TOKEN: ""
-      GITHUB_TOKEN: ""
-      MISE_AUTO_INSTALL: "false"
-      MISE_EXEC_AUTO_INSTALL: "false"
-      MISE_GITHUB_TOKEN: ""
-      MISE_LOCKFILE: "0"
-      MISE_NO_CONFIG: "1"
-      MISE_NO_ENV: "1"
-      MISE_NO_HOOKS: "1"
-      NODE_AUTH_TOKEN: ""
-      NPM_TOKEN: ""
     needs:
       - required
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -371,23 +354,6 @@ jobs:
     runs-on: ubuntu-26.04
     timeout-minutes: 10
     env:
-      ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-      ACTIONS_ID_TOKEN_REQUEST_URL: ""
-      ACTIONS_RUNTIME_TOKEN: ""
-      CARGO_REGISTRY_TOKEN: ""
-      GH_CONFIG_DIR: ""
-      GH_HOST: ""
-      GH_TOKEN: ""
-      GITHUB_TOKEN: ""
-      MISE_AUTO_INSTALL: "false"
-      MISE_EXEC_AUTO_INSTALL: "false"
-      MISE_GITHUB_TOKEN: ""
-      MISE_LOCKFILE: "0"
-      MISE_NO_CONFIG: "1"
-      MISE_NO_ENV: "1"
-      MISE_NO_HOOKS: "1"
-      NODE_AUTH_TOKEN: ""
-      NPM_TOKEN: ""
       RUSTUP_TOOLCHAIN: 1.98.1
     permissions:
       contents: read
@@ -483,25 +449,8 @@ jobs:
     runs-on: ubuntu-26.04
     timeout-minutes: 30
     env:
-      ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-      ACTIONS_ID_TOKEN_REQUEST_URL: ""
-      ACTIONS_RUNTIME_TOKEN: ""
-      CARGO_REGISTRY_TOKEN: ""
-      GH_CONFIG_DIR: ""
-      GH_HOST: ""
-      GH_TOKEN: ""
-      GITHUB_TOKEN: ""
       MBX_GC_AUTO: "1"
       MBX_SHARE_OUT_DIR: "0"
-      MISE_AUTO_INSTALL: "false"
-      MISE_EXEC_AUTO_INSTALL: "false"
-      MISE_GITHUB_TOKEN: ""
-      MISE_LOCKFILE: "0"
-      MISE_NO_CONFIG: "1"
-      MISE_NO_ENV: "1"
-      MISE_NO_HOOKS: "1"
-      NODE_AUTH_TOKEN: ""
-      NPM_TOKEN: ""
       RUSTUP_TOOLCHAIN: 1.98.1
     needs:
       - plan
@@ -680,25 +629,8 @@ jobs:
     runs-on: ubuntu-26.04
     timeout-minutes: 30
     env:
-      ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-      ACTIONS_ID_TOKEN_REQUEST_URL: ""
-      ACTIONS_RUNTIME_TOKEN: ""
-      CARGO_REGISTRY_TOKEN: ""
-      GH_CONFIG_DIR: ""
-      GH_HOST: ""
-      GH_TOKEN: ""
-      GITHUB_TOKEN: ""
       MBX_GC_AUTO: "1"
       MBX_SHARE_OUT_DIR: "0"
-      MISE_AUTO_INSTALL: "false"
-      MISE_EXEC_AUTO_INSTALL: "false"
-      MISE_GITHUB_TOKEN: ""
-      MISE_LOCKFILE: "0"
-      MISE_NO_CONFIG: "1"
-      MISE_NO_ENV: "1"
-      MISE_NO_HOOKS: "1"
-      NODE_AUTH_TOKEN: ""
-      NPM_TOKEN: ""
       RUSTUP_TOOLCHAIN: 1.98.1
     needs:
       - plan
@@ -861,25 +793,8 @@ jobs:
     runs-on: ubuntu-26.04
     timeout-minutes: 30
     env:
-      ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-      ACTIONS_ID_TOKEN_REQUEST_URL: ""
-      ACTIONS_RUNTIME_TOKEN: ""
-      CARGO_REGISTRY_TOKEN: ""
-      GH_CONFIG_DIR: ""
-      GH_HOST: ""
-      GH_TOKEN: ""
-      GITHUB_TOKEN: ""
       MBX_GC_AUTO: "1"
       MBX_SHARE_OUT_DIR: "0"
-      MISE_AUTO_INSTALL: "false"
-      MISE_EXEC_AUTO_INSTALL: "false"
-      MISE_GITHUB_TOKEN: ""
-      MISE_LOCKFILE: "0"
-      MISE_NO_CONFIG: "1"
-      MISE_NO_ENV: "1"
-      MISE_NO_HOOKS: "1"
-      NODE_AUTH_TOKEN: ""
-      NPM_TOKEN: ""
       RUSTUP_TOOLCHAIN: 1.98.1
     needs:
       - plan
@@ -1052,25 +967,8 @@ jobs:
     runs-on: ubuntu-26.04
     timeout-minutes: 30
     env:
-      ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-      ACTIONS_ID_TOKEN_REQUEST_URL: ""
-      ACTIONS_RUNTIME_TOKEN: ""
-      CARGO_REGISTRY_TOKEN: ""
-      GH_CONFIG_DIR: ""
-      GH_HOST: ""
-      GH_TOKEN: ""
-      GITHUB_TOKEN: ""
       MBX_GC_AUTO: "1"
       MBX_SHARE_OUT_DIR: "0"
-      MISE_AUTO_INSTALL: "false"
-      MISE_EXEC_AUTO_INSTALL: "false"
-      MISE_GITHUB_TOKEN: ""
-      MISE_LOCKFILE: "0"
-      MISE_NO_CONFIG: "1"
-      MISE_NO_ENV: "1"
-      MISE_NO_HOOKS: "1"
-      NODE_AUTH_TOKEN: ""
-      NPM_TOKEN: ""
       RUSTUP_TOOLCHAIN: 1.98.1
     needs:
       - plan
@@ -1249,25 +1147,8 @@ jobs:
     runs-on: ubuntu-26.04
     timeout-minutes: 30
     env:
-      ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-      ACTIONS_ID_TOKEN_REQUEST_URL: ""
-      ACTIONS_RUNTIME_TOKEN: ""
-      CARGO_REGISTRY_TOKEN: ""
-      GH_CONFIG_DIR: ""
-      GH_HOST: ""
-      GH_TOKEN: ""
-      GITHUB_TOKEN: ""
       MBX_GC_AUTO: "1"
       MBX_SHARE_OUT_DIR: "0"
-      MISE_AUTO_INSTALL: "false"
-      MISE_EXEC_AUTO_INSTALL: "false"
-      MISE_GITHUB_TOKEN: ""
-      MISE_LOCKFILE: "0"
-      MISE_NO_CONFIG: "1"
-      MISE_NO_ENV: "1"
-      MISE_NO_HOOKS: "1"
-      NODE_AUTH_TOKEN: ""
-      NPM_TOKEN: ""
       RUSTUP_TOOLCHAIN: 1.98.1
     needs:
       - plan
@@ -1440,25 +1321,8 @@ jobs:
     runs-on: ubuntu-26.04
     timeout-minutes: 30
     env:
-      ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-      ACTIONS_ID_TOKEN_REQUEST_URL: ""
-      ACTIONS_RUNTIME_TOKEN: ""
-      CARGO_REGISTRY_TOKEN: ""
-      GH_CONFIG_DIR: ""
-      GH_HOST: ""
-      GH_TOKEN: ""
-      GITHUB_TOKEN: ""
       MBX_GC_AUTO: "1"
       MBX_SHARE_OUT_DIR: "0"
-      MISE_AUTO_INSTALL: "false"
-      MISE_EXEC_AUTO_INSTALL: "false"
-      MISE_GITHUB_TOKEN: ""
-      MISE_LOCKFILE: "0"
-      MISE_NO_CONFIG: "1"
-      MISE_NO_ENV: "1"
-      MISE_NO_HOOKS: "1"
-      NODE_AUTH_TOKEN: ""
-      NPM_TOKEN: ""
       RUSTUP_TOOLCHAIN: 1.98.1
     needs:
       - plan
@@ -1631,25 +1495,8 @@ jobs:
     runs-on: ubuntu-26.04
     timeout-minutes: 30
     env:
-      ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-      ACTIONS_ID_TOKEN_REQUEST_URL: ""
-      ACTIONS_RUNTIME_TOKEN: ""
-      CARGO_REGISTRY_TOKEN: ""
-      GH_CONFIG_DIR: ""
-      GH_HOST: ""
-      GH_TOKEN: ""
-      GITHUB_TOKEN: ""
       MBX_GC_AUTO: "1"
       MBX_SHARE_OUT_DIR: "0"
-      MISE_AUTO_INSTALL: "false"
-      MISE_EXEC_AUTO_INSTALL: "false"
-      MISE_GITHUB_TOKEN: ""
-      MISE_LOCKFILE: "0"
-      MISE_NO_CONFIG: "1"
-      MISE_NO_ENV: "1"
-      MISE_NO_HOOKS: "1"
-      NODE_AUTH_TOKEN: ""
-      NPM_TOKEN: ""
       RUSTUP_TOOLCHAIN: 1.98.1
     needs:
       - plan
@@ -1822,25 +1669,8 @@ jobs:
     runs-on: ubuntu-26.04
     timeout-minutes: 30
     env:
-      ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-      ACTIONS_ID_TOKEN_REQUEST_URL: ""
-      ACTIONS_RUNTIME_TOKEN: ""
-      CARGO_REGISTRY_TOKEN: ""
-      GH_CONFIG_DIR: ""
-      GH_HOST: ""
-      GH_TOKEN: ""
-      GITHUB_TOKEN: ""
       MBX_GC_AUTO: "1"
       MBX_SHARE_OUT_DIR: "0"
-      MISE_AUTO_INSTALL: "false"
-      MISE_EXEC_AUTO_INSTALL: "false"
-      MISE_GITHUB_TOKEN: ""
-      MISE_LOCKFILE: "0"
-      MISE_NO_CONFIG: "1"
-      MISE_NO_ENV: "1"
-      MISE_NO_HOOKS: "1"
-      NODE_AUTH_TOKEN: ""
-      NPM_TOKEN: ""
       RUSTUP_TOOLCHAIN: 1.98.1
     needs:
       - plan
@@ -2013,25 +1843,8 @@ jobs:
     runs-on: ubuntu-26.04
     timeout-minutes: 30
     env:
-      ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-      ACTIONS_ID_TOKEN_REQUEST_URL: ""
-      ACTIONS_RUNTIME_TOKEN: ""
-      CARGO_REGISTRY_TOKEN: ""
-      GH_CONFIG_DIR: ""
-      GH_HOST: ""
-      GH_TOKEN: ""
-      GITHUB_TOKEN: ""
       MBX_GC_AUTO: "1"
       MBX_SHARE_OUT_DIR: "0"
-      MISE_AUTO_INSTALL: "false"
-      MISE_EXEC_AUTO_INSTALL: "false"
-      MISE_GITHUB_TOKEN: ""
-      MISE_LOCKFILE: "0"
-      MISE_NO_CONFIG: "1"
-      MISE_NO_ENV: "1"
-      MISE_NO_HOOKS: "1"
-      NODE_AUTH_TOKEN: ""
-      NPM_TOKEN: ""
       RUSTUP_TOOLCHAIN: 1.98.1
     needs:
       - plan
@@ -2204,25 +2017,8 @@ jobs:
     runs-on: ubuntu-26.04
     timeout-minutes: 30
     env:
-      ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-      ACTIONS_ID_TOKEN_REQUEST_URL: ""
-      ACTIONS_RUNTIME_TOKEN: ""
-      CARGO_REGISTRY_TOKEN: ""
-      GH_CONFIG_DIR: ""
-      GH_HOST: ""
-      GH_TOKEN: ""
-      GITHUB_TOKEN: ""
       MBX_GC_AUTO: "1"
       MBX_SHARE_OUT_DIR: "0"
-      MISE_AUTO_INSTALL: "false"
-      MISE_EXEC_AUTO_INSTALL: "false"
-      MISE_GITHUB_TOKEN: ""
-      MISE_LOCKFILE: "0"
-      MISE_NO_CONFIG: "1"
-      MISE_NO_ENV: "1"
-      MISE_NO_HOOKS: "1"
-      NODE_AUTH_TOKEN: ""
-      NPM_TOKEN: ""
       RUSTUP_TOOLCHAIN: 1.98.1
     needs:
       - plan
@@ -2395,25 +2191,8 @@ jobs:
     runs-on: ubuntu-26.04
     timeout-minutes: 30
     env:
-      ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-      ACTIONS_ID_TOKEN_REQUEST_URL: ""
-      ACTIONS_RUNTIME_TOKEN: ""
-      CARGO_REGISTRY_TOKEN: ""
-      GH_CONFIG_DIR: ""
-      GH_HOST: ""
-      GH_TOKEN: ""
-      GITHUB_TOKEN: ""
       MBX_GC_AUTO: "1"
       MBX_SHARE_OUT_DIR: "0"
-      MISE_AUTO_INSTALL: "false"
-      MISE_EXEC_AUTO_INSTALL: "false"
-      MISE_GITHUB_TOKEN: ""
-      MISE_LOCKFILE: "0"
-      MISE_NO_CONFIG: "1"
-      MISE_NO_ENV: "1"
-      MISE_NO_HOOKS: "1"
-      NODE_AUTH_TOKEN: ""
-      NPM_TOKEN: ""
       RUSTUP_TOOLCHAIN: 1.98.1
     needs:
       - plan
@@ -2586,25 +2365,8 @@ jobs:
     runs-on: ubuntu-26.04
     timeout-minutes: 30
     env:
-      ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-      ACTIONS_ID_TOKEN_REQUEST_URL: ""
-      ACTIONS_RUNTIME_TOKEN: ""
-      CARGO_REGISTRY_TOKEN: ""
-      GH_CONFIG_DIR: ""
-      GH_HOST: ""
-      GH_TOKEN: ""
-      GITHUB_TOKEN: ""
       MBX_GC_AUTO: "1"
       MBX_SHARE_OUT_DIR: "0"
-      MISE_AUTO_INSTALL: "false"
-      MISE_EXEC_AUTO_INSTALL: "false"
-      MISE_GITHUB_TOKEN: ""
-      MISE_LOCKFILE: "0"
-      MISE_NO_CONFIG: "1"
-      MISE_NO_ENV: "1"
-      MISE_NO_HOOKS: "1"
-      NODE_AUTH_TOKEN: ""
-      NPM_TOKEN: ""
       RUSTUP_TOOLCHAIN: 1.98.1
     needs:
       - plan
@@ -2777,25 +2539,8 @@ jobs:
     runs-on: ubuntu-26.04
     timeout-minutes: 30
     env:
-      ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-      ACTIONS_ID_TOKEN_REQUEST_URL: ""
-      ACTIONS_RUNTIME_TOKEN: ""
-      CARGO_REGISTRY_TOKEN: ""
-      GH_CONFIG_DIR: ""
-      GH_HOST: ""
-      GH_TOKEN: ""
-      GITHUB_TOKEN: ""
       MBX_GC_AUTO: "1"
       MBX_SHARE_OUT_DIR: "0"
-      MISE_AUTO_INSTALL: "false"
-      MISE_EXEC_AUTO_INSTALL: "false"
-      MISE_GITHUB_TOKEN: ""
-      MISE_LOCKFILE: "0"
-      MISE_NO_CONFIG: "1"
-      MISE_NO_ENV: "1"
-      MISE_NO_HOOKS: "1"
-      NODE_AUTH_TOKEN: ""
-      NPM_TOKEN: ""
       RUSTUP_TOOLCHAIN: 1.98.1
     needs:
       - plan

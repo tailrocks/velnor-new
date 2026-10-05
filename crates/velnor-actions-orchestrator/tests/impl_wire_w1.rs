@@ -310,7 +310,7 @@ fn w1_plan_format_runs_fmt_check() -> TestResult {
         "job env misses RUSTUP_TOOLCHAIN:\n{job}"
     );
     for key in ["MISE_AUTO_INSTALL:", "MISE_EXEC_AUTO_INSTALL:"] {
-        assert!(job.contains(key), "job env misses {key}:\n{job}");
+        assert!(yaml.contains(key), "workflow env misses {key}:\n{yaml}");
     }
     // Regression: exactly one Format step per crate job, none in plan.
     let formats = yaml.matches("- name: Format").count();
