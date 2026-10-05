@@ -21,6 +21,9 @@ use velnor_actions_workflow_renderer::render::PLAN_JOB_ID;
 /// rendered jobs can never disagree. `None` only when the member
 /// is absent from the assignment inputs (never from the plan path).
 pub(crate) fn job_id_for_member(tasks: &[ProposedTask], member: &ProposedTask) -> Option<String> {
+    if Stack::from_id(&member.stack_id) == Some(Stack::Mise) {
+        return Some(format!("check-{}", member.identity.unit_id));
+    }
     if member.identity.unit_id.is_empty() {
         return Some(PLAN_JOB_ID.to_owned());
     }

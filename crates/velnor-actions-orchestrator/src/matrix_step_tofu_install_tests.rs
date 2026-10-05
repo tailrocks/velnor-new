@@ -45,6 +45,7 @@ fn group(package: &str) -> ProposedTask {
 /// Discovery shell carrying only task proposals.
 fn discovery(groups: Vec<ProposedTask>) -> Discovery {
     Discovery {
+        mise_checks: Vec::new(),
         statuses: Vec::new(),
         workspaces: Vec::new(),
         proposals: groups,
@@ -137,7 +138,6 @@ fn mise_crate_job_prepare_installs_opentofu() {
         ]),
         &catalog,
         &[],
-        &[],
         None,
         2,
     )
@@ -198,6 +198,7 @@ fn every_workspace_member_is_classified_for_tofu() {
             "velnor-actions-tofu",
             "velnor-actions-workflow-renderer",
             "velnor-actions-actionlint",
+            "velnor-archive-guard",
         ]
         .contains(&member.as_str());
         assert!(
