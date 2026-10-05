@@ -184,9 +184,11 @@ pub fn render_schema2_workflows(
 }
 
 fn file(path: &str, version: &str, body: &Yaml) -> Result<RenderedFile, RenderError> {
+    let bytes = with_marker(version, &render_yaml(body))?;
+    crate::workflow_size::check_workflow_size(path, &bytes)?;
     Ok(RenderedFile {
         path: path.to_owned(),
-        bytes: with_marker(version, &render_yaml(body))?,
+        bytes,
     })
 }
 

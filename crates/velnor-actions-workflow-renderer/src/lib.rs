@@ -51,6 +51,7 @@ pub mod tofu_cache;
 pub mod toolchain_env;
 pub mod tree;
 mod workflow_policy;
+mod workflow_size;
 pub mod yaml;
 
 pub use artifact_paths::{
@@ -108,6 +109,7 @@ pub use steps::{
     scan_for_private_subcommands, shell_step, validate_uses, write_request_step,
 };
 pub use tree::{render_tree, render_tree_with_extra};
+pub use workflow_size::MAX_WORKFLOW_BYTES;
 pub use yaml::{Yaml, quote_scalar, render_yaml};
 
 pub use error::RenderError;
