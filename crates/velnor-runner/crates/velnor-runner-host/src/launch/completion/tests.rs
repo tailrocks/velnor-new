@@ -116,18 +116,20 @@ pub(in crate::launch) struct BlockingRunnerApi {
     release: Arc<(Mutex<bool>, Condvar)>,
     runner_name: String,
     runner_id: i64,
+    runner_scale_set_id: i64,
     registered: Arc<AtomicBool>,
     get_count: Arc<std::sync::atomic::AtomicUsize>,
     calls: Arc<Mutex<Vec<(String, String, Option<String>)>>>,
 }
 
 impl BlockingRunnerApi {
-    fn new(runner_name: &str, runner_id: i64) -> Self {
+    fn new(runner_name: &str, runner_id: i64, runner_scale_set_id: i64) -> Self {
         Self {
             entered: Arc::new(AtomicBool::new(false)),
             release: Arc::new((Mutex::new(false), Condvar::new())),
             runner_name: runner_name.to_owned(),
             runner_id,
+            runner_scale_set_id,
             registered: Arc::new(AtomicBool::new(true)),
             get_count: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
             calls: Arc::new(Mutex::new(Vec::new())),
@@ -135,7 +137,15 @@ impl BlockingRunnerApi {
     }
 
     pub(in crate::launch) fn released(runner_name: &str, runner_id: i64) -> Self {
-        let api = Self::new(runner_name, runner_id);
+        Self::released_for_scale_set(runner_name, runner_id, 7)
+    }
+
+    pub(in crate::launch) fn released_for_scale_set(
+        runner_name: &str,
+        runner_id: i64,
+        runner_scale_set_id: i64,
+    ) -> Self {
+        let api = Self::new(runner_name, runner_id, runner_scale_set_id);
         api.release();
         api
     }
@@ -193,7 +203,7 @@ impl Transport for BlockingRunnerApi {
                 "value": [{
                     "id": self.runner_id,
                     "name": self.runner_name,
-                    "runnerScaleSetId": 7
+                    "runnerScaleSetId": self.runner_scale_set_id
                 }]
             })
             .to_string()

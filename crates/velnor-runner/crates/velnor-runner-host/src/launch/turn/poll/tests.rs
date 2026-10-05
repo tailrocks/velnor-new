@@ -184,17 +184,27 @@ async fn schedule_completion(
         .request_id
         .ok_or_else(test_journal_error)?;
     let assignment_key = format!("{SET_ID}:{request_id}");
-    let row = journal
-        .rows()
-        .await
-        .map_err(|error| {
-            eprintln!("poll-test journal rows failed: {error:?}");
-            test_journal_error()
-        })?
-        .into_iter()
+    let rows = journal.rows().await.map_err(|error| {
+        eprintln!("poll-test journal rows failed: {error:?}");
+        test_journal_error()
+    })?;
+    let row = rows
+        .iter()
         .find(|row| row.assignment_key.as_deref() == Some(&assignment_key))
+        .cloned()
         .ok_or_else(|| {
-            eprintln!("poll-test assignment row missing: {assignment_key}");
+            let summary: Vec<_> = rows
+                .iter()
+                .map(|row| {
+                    (
+                        row.id,
+                        row.assignment_key.as_deref(),
+                        row.state,
+                        row.cleanup_proven,
+                    )
+                })
+                .collect();
+            eprintln!("poll-test assignment row missing: wanted={assignment_key} rows={summary:?}");
             test_journal_error()
         })?;
     let identity = journal.launch_identity(row.id).await.map_err(|error| {
@@ -208,7 +218,7 @@ async fn schedule_completion(
     let dind_id = row.dind_id.ok_or_else(test_journal_error)?;
     let engine = CompletionEngine::with_stopped_pair(&identity, &runner_id, &dind_id)
         .map_err(|_| test_journal_error())?;
-    let api = BlockingRunnerApi::released(&name, 71);
+    let api = BlockingRunnerApi::released_for_scale_set(&name, 71, SET_ID);
     cleanups.extend(
         completion::schedule_completed_isolated(
             api,
