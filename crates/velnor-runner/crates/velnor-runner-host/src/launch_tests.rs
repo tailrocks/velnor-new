@@ -4,7 +4,8 @@ use std::sync::{Arc, Mutex};
 
 use velnor_runner_github::{ParsedBatch, Poll};
 
-use crate::launch::{Idle, drive_offer, idle};
+use crate::journal::Outcome;
+use crate::launch::{Idle, drive_offer, fail_unstarted, idle};
 use crate::launch_harness::{CANARY, Mode, Script, absent, assigned_wait, available, ctx, open};
 use crate::launch_test_support::valid_worker_volume;
 use crate::{EnsureError, HostError, IntentState, Started};
@@ -22,6 +23,27 @@ fn statistics_advance_and_offers_stay() {
     assert_eq!(idle(&available(&[3, 4])), Idle::Blocked);
     assert_eq!(idle(&assigned_wait(7, 1)), Idle::Scale);
     assert_eq!(idle(&assigned_wait(7, 0)), Idle::Ack);
+}
+
+#[tokio::test]
+async fn name_taken_failure_releases_the_unstarted_scale_row() -> Result<(), String> {
+    let (scratch, journal) = open("name-taken").await?;
+    let id = journal
+        .begin("launch", "m100000769")
+        .await
+        .map_err(|err| err.to_string())?;
+    journal
+        .finish(id, Outcome::Uncertain)
+        .await
+        .map_err(|err| err.to_string())?;
+    fail_unstarted(&journal, &assigned_wait(100_000_769, 5))
+        .await
+        .map_err(|err| err.to_string())?;
+    let state = journal.read(id).await.map_err(|err| err.to_string())?;
+    if state != IntentState::Failed {
+        return Err(format!("state {state:?}"));
+    }
+    absent(&scratch.file())
 }
 
 #[tokio::test]

@@ -24,6 +24,9 @@ mod bind;
 mod capacity;
 mod gate;
 mod inspect;
+mod name_taken;
+#[cfg(all(test, unix))]
+mod busy_slot_tests;
 #[cfg(all(test, unix))]
 mod inspect_tests;
 
@@ -43,6 +46,8 @@ pub(crate) use capacity::{
     Admit, Seat, admit, needs_running, parse_admit_target, parse_job_capacity, poll_limit,
     statistics_blocked, wide_poll_limit,
 };
+#[cfg(test)]
+pub(crate) use name_taken::{fail_unstarted, should_ack};
 #[cfg(test)]
 pub(crate) use steps::{Idle, idle};
 #[cfg(test)]

@@ -15,11 +15,6 @@ use super::{Ready, ack_ready, drive_ready, scale_session};
 
 /// Poll until admission stops and no owned launch container is running.
 ///
-/// The target equals capacity unless `VELNOR_ADMIT_TARGET` is higher.
-/// Capacity 1 still decides to stop after the first start. The session stays
-/// while that container is running, and this does not remove it.
-/// A full slot skips the statistics mint so restart does not start a second worker.
-///
 /// # Errors
 ///
 /// Returns [`EnsureError`] when one message carries two ids, or a later step fails.
@@ -85,10 +80,7 @@ impl PollHost for Turn<'_> {
     }
 }
 
-/// Keep polling after admission stops while an owned container is running.
-///
-/// An empty session stays open past `bound`. `launch_once` deletes the session
-/// only after this returns, so eight empty polls must not return.
+/// Keep polling while an owned container runs. An empty session stays open past `bound`.
 async fn until_idle(
     turn: &mut Turn<'_>,
     workers: &mut Vec<Started>,
@@ -221,34 +213,55 @@ impl Turn<'_> {
                 ack_ready(self.link, self.session, path, queue, polled)?;
                 Ok(stop)
             }
-            Admit::Start { stop } => {
-                let admin = self.link.base().to_owned();
-                let mut lane = super::HostLane {
-                    link: self.link,
-                    admin,
-                    queue,
-                };
-                let launched = drive_ready(
-                    &mut lane,
-                    Ready {
-                        set_id: self.set_id,
-                        session: self.session,
-                        admin_token: self.admin_token,
-                        path,
-                        polled,
-                    },
-                    self.journal,
-                    self.docker,
-                    self.capacity,
-                )
-                .await?;
-                let Some(worker) = launched else {
-                    return Ok(false);
-                };
-                workers.push(worker);
-                Ok(stop)
-            }
+            Admit::Start { stop } => self.start(workers, path, queue, polled, stop).await,
         }
+    }
+
+    async fn start(
+        &mut self,
+        workers: &mut Vec<Started>,
+        path: String,
+        queue: Option<String>,
+        polled: &Poll,
+        stop: bool,
+    ) -> Result<bool, EnsureError> {
+        let admin = self.link.base().to_owned();
+        let mut lane = super::HostLane {
+            link: self.link,
+            admin,
+            queue: queue.clone(),
+        };
+        let launched = drive_ready(
+            &mut lane,
+            Ready {
+                set_id: self.set_id,
+                session: self.session,
+                admin_token: self.admin_token,
+                path: path.clone(),
+                polled,
+            },
+            self.journal,
+            self.docker,
+            self.capacity,
+        )
+        .await;
+        if let Err(EnsureError::Conflict) = &launched
+            && super::name_taken::should_ack(
+                steps::idle(polled),
+                self.session
+                    .statistics()
+                    .map(velnor_runner_github::Statistics::assigned_population),
+            )
+        {
+            super::name_taken::fail_unstarted(self.journal, polled).await?;
+            ack_ready(self.link, self.session, path, queue, polled)?;
+            return Ok(false);
+        }
+        let Some(worker) = launched? else {
+            return Ok(false);
+        };
+        workers.push(worker);
+        Ok(stop)
     }
 
     async fn stay(&self, workers: &[Started]) -> Result<bool, EnsureError> {
@@ -306,91 +319,4 @@ mod tests {
     }
 }
 
-#[cfg(all(test, unix))]
-mod busy_tests {
-    use velnor_runner_github::{
-        Exchange, Poll, QueueSession, SessionRequest, Transport, TransportFail, create_session,
-    };
 
-    use super::super::inspect_tests::{DockerStub, launch_row, within};
-    use super::super::steps::{Idle, idle};
-    use super::super::{Ready, drive_ready};
-    use crate::IntentState;
-    use crate::launch_harness::{Mode, Script, absent, assigned_wait, available, open};
-
-    const SESSION: &[u8] = br#"{"sessionId":"sess","messageQueueUrl":"https://queues.example/messages","messageQueueAccessToken":"queue-token"}"#;
-
-    struct SessionTransport;
-
-    impl Transport for SessionTransport {
-        fn exchange(&mut self, _request: &SessionRequest) -> Result<Exchange, TransportFail> {
-            Ok(Exchange {
-                status: 200,
-                body: SESSION.to_vec(),
-            })
-        }
-    }
-
-    fn queue_session() -> Result<QueueSession, String> {
-        create_session(&mut SessionTransport, 1, "owner", "admin-token")
-            .map_err(|err| err.to_string())
-    }
-
-    #[tokio::test]
-    async fn busy_slot_does_not_ack_scale_assignment() -> Result<(), String> {
-        let (scratch, journal) = open("busy-scale").await?;
-        launch_row(&journal).await?;
-        let polls = [
-            assigned_wait(11, 1),
-            available(&[4]),
-            assigned_wait(12, 0),
-            Poll::Empty,
-            available(&[4, 5]),
-        ];
-        let classes = [
-            Idle::Scale,
-            Idle::Launch,
-            Idle::Ack,
-            Idle::Empty,
-            Idle::Blocked,
-        ];
-        for (polled, class) in polls.iter().zip(classes) {
-            assert_eq!(idle(polled), class);
-        }
-        let stub = DockerStub::open(Vec::new())?;
-        let session = queue_session()?;
-        let mut script = Script {
-            calls: Vec::new(),
-            mode: Mode::Ok,
-        };
-        let mut started_any = false;
-        for polled in &polls {
-            let started = within(
-                drive_ready(
-                    &mut script,
-                    Ready {
-                        set_id: 1,
-                        session: &session,
-                        admin_token: "admin-token",
-                        path: "queues/messages".to_owned(),
-                        polled,
-                    },
-                    &journal,
-                    &stub.docker,
-                    1,
-                ),
-                "busy drive",
-            )
-            .await?
-            .map_err(|err| err.to_string())?;
-            started_any |= started.is_some();
-        }
-        stub.finish().await?;
-        assert!(!started_any);
-        assert!(script.calls.is_empty());
-        let rows = journal.rows().await.map_err(|err| err.to_string())?;
-        assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0].state, IntentState::Pending);
-        absent(&scratch.file())
-    }
-}
