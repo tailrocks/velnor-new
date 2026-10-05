@@ -3,13 +3,13 @@
 
 use std::path::Path;
 
-use velnor_actions_contract::{FileIndex, build_index, build_index_from_list};
+use velnor_actions_contract::{
+    FileIndex, build_index, build_index_from_list, is_reserved_cache_path_bytes,
+};
 use velnor_actions_mise::GitRequest;
 
 use crate::OrchestratorError;
 use crate::git_paths::split_nul_paths_skipping;
-
-const RESERVED_CACHE_PATH: &str = ".velnor/cache";
 
 /// `git ls-files` outcome: non-git roots walk the filesystem, while
 /// undecodable entries skip with an explicit flag (never a silent
@@ -81,13 +81,6 @@ fn git_file_list(root: &Path) -> GitFiles {
 }
 
 /// Match the reserved cache root and descendants, not similarly named paths.
-fn is_reserved_cache_path(path: &[u8]) -> bool {
-    path == RESERVED_CACHE_PATH.as_bytes()
-        || path
-            .strip_prefix(RESERVED_CACHE_PATH.as_bytes())
-            .is_some_and(|suffix| suffix.starts_with(b"/"))
-}
-
 /// One `git ls-files -z` run; `None` only when git fails or is absent.
 /// Output always splits: undecodable entries skip with an explicit flag.
 fn ls_files(root: &Path, args: Vec<std::ffi::OsString>) -> Option<GitPathList> {
@@ -99,7 +92,7 @@ fn ls_files(root: &Path, args: Vec<std::ffi::OsString>) -> Option<GitPathList> {
         .stdout
         .split(|byte| *byte == 0)
         .filter(|path| !path.is_empty())
-        .find(|path| is_reserved_cache_path(path))
+        .find(|path| is_reserved_cache_path_bytes(path))
         .map(|path| String::from_utf8_lossy(path).into_owned());
     let (paths, skipped_non_utf8) = split_nul_paths_skipping(&output.stdout);
     Some(GitPathList {
@@ -110,5 +103,5 @@ fn ls_files(root: &Path, args: Vec<std::ffi::OsString>) -> Option<GitPathList> {
 }
 
 #[cfg(test)]
-#[path = "discover_index_cache_tests.rs"]
+#[path = "../tests/discover_index_cache_tests.rs"]
 mod cache_tests;

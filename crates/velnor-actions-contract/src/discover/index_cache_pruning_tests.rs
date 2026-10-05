@@ -5,7 +5,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use super::build_index_walk;
+use super::{build_index_from_list, build_index_walk};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -120,6 +120,43 @@ fn symlink_target_inside_cache_is_not_indexed() -> TestResult {
     let index = build_index_walk(root.path(), &[])?;
     assert!(!index.contains("src/cache-alias.crate"));
     assert!(!index.contains(".velnor/cache/cargo/registry/cache/item.crate"));
+    Ok(())
+}
+
+/// Both index construction routes prune targets behind the cache-root symlink.
+#[test]
+#[cfg(unix)]
+fn cache_target_admission_matches_for_list_and_walk() -> TestResult {
+    let root = TempDir::new()?;
+    let external = TempDir::new()?;
+    write_file(external.path(), "payload.crate")?;
+    let cache_parent = root.path().join(".velnor");
+    fs::create_dir_all(&cache_parent)?;
+    std::os::unix::fs::symlink(external.path(), cache_parent.join("cache"))?;
+    let alias_parent = root.path().join("src");
+    fs::create_dir_all(&alias_parent)?;
+    std::os::unix::fs::symlink(
+        "../.velnor/cache/payload.crate",
+        alias_parent.join("cache-alias.crate"),
+    )?;
+
+    let walked = build_index_walk(root.path(), &[])?;
+    let listed = build_index_from_list(root.path(), &["src/cache-alias.crate".to_owned()], &[])?;
+    assert!(!walked.contains("src/cache-alias.crate"));
+    assert!(!listed.contains("src/cache-alias.crate"));
+    Ok(())
+}
+
+#[test]
+fn listed_dot_path_cannot_bypass_reserved_cache_filter() -> TestResult {
+    let root = TempDir::new()?;
+    let repo = root.path();
+    std::fs::create_dir_all(repo.join(".velnor/cache"))?;
+    std::fs::write(repo.join(".velnor/cache/payload.crate"), b"cache")?;
+
+    let index = build_index_from_list(repo, &["./.velnor/cache/payload.crate".to_owned()], &[])?;
+
+    assert!(index.files().is_empty());
     Ok(())
 }
 

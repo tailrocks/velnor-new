@@ -77,6 +77,48 @@ fn tracked_cache_submodule_fails_discovery() -> TestResult {
     Ok(())
 }
 
+/// Git-backed indexing drops aliases into the cache while preserving siblings.
+#[test]
+#[cfg(unix)]
+fn git_backed_cache_alias_is_pruned_without_hiding_similarly_named_source() -> TestResult {
+    let root = TempDir::new()?;
+    init_git(root.path())?;
+    write_file(root.path(), ".velnor/cache/payload.crate")?;
+    write_file(root.path(), ".velnor/cache-extra/source.toml")?;
+    fs::create_dir_all(root.path().join("src"))?;
+    std::os::unix::fs::symlink(
+        "../.velnor/cache/payload.crate",
+        root.path().join("src/cache-alias.crate"),
+    )?;
+    std::os::unix::fs::symlink(
+        "../.velnor/cache-extra/source.toml",
+        root.path().join("src/source-alias.toml"),
+    )?;
+    git(root.path(), &["add", "src"])?;
+
+    let (index, _) = build_file_index(root.path(), &[])?;
+    assert!(!index.contains("src/cache-alias.crate"));
+    assert!(index.contains("src/source-alias.toml"));
+    Ok(())
+}
+
+/// A stale Git file entry cannot resolve through a replaced directory into cache.
+#[test]
+#[cfg(unix)]
+fn git_backed_stale_path_through_cache_symlink_is_pruned() -> TestResult {
+    let root = TempDir::new()?;
+    init_git(root.path())?;
+    write_file(root.path(), "src/generated/manifest.toml")?;
+    git(root.path(), &["add", "src/generated/manifest.toml"])?;
+    fs::remove_dir_all(root.path().join("src/generated"))?;
+    write_file(root.path(), ".velnor/cache/manifest.toml")?;
+    std::os::unix::fs::symlink("../.velnor/cache", root.path().join("src/generated"))?;
+
+    let (index, _) = build_file_index(root.path(), &[])?;
+    assert!(!index.contains("src/generated/manifest.toml"));
+    Ok(())
+}
+
 /// Untracked cache payload is excluded, while similarly named source remains.
 #[test]
 fn cache_siblings_and_outside_source_remain_indexed() -> TestResult {
