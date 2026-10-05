@@ -184,13 +184,41 @@ fn git_fixture_commands_require_shared_authority() -> Result<(), Box<dyn Error>>
         .parent()
         .ok_or("missing crates directory")?;
     let helper = crates.join("test_support/git_fixture.rs");
+    let identity_reader = crates.join("velnor-actions-cli/examples/validate_commit_trailers.rs");
+    let identity_source = std::fs::read_to_string(&identity_reader)?;
+    assert_eq!(
+        identity_source.matches("Command::new(\"git\")").count(),
+        1,
+        "only the checked local-identity reader may spawn Git directly"
+    );
+    let identity_function = identity_source
+        .split_once("fn git_identity(")
+        .and_then(|(_, rest)| {
+            rest.split_once("\nfn parse_git_identity(")
+                .map(|(body, _)| body)
+        })
+        .ok_or("missing local-identity Git reader")?;
+    let identity_caller = identity_source
+        .split_once("fn validate_local_identities_with_env(")
+        .and_then(|(_, rest)| rest.split_once("\nfn git_identity(").map(|(body, _)| body))
+        .ok_or("missing local-identity caller")?;
+    assert!(identity_caller.contains("[(\"AUTHOR\", \"author\"), (\"COMMITTER\", \"committer\")]"));
+    assert_eq!(identity_function.matches(".arg(").count(), 2);
+    assert!(identity_function.contains(".arg(\"var\")"));
+    assert!(identity_function.contains(".arg(format!(\"GIT_{kind}_IDENT\"))"));
+    assert!(!identity_function.contains(".args("));
+    assert!(identity_function.contains(".current_dir(root)"));
+    assert!(identity_function.contains(".env(\"GIT_OPTIONAL_LOCKS\", \"0\")"));
     let mut pending = vec![crates.to_path_buf()];
     while let Some(directory) = pending.pop() {
         for entry in std::fs::read_dir(directory)? {
             let path = entry?.path();
             if path.is_dir() {
                 pending.push(path);
-            } else if path.extension().is_some_and(|value| value == "rs") && path != helper {
+            } else if path.extension().is_some_and(|value| value == "rs")
+                && path != helper
+                && path != identity_reader
+            {
                 let source = std::fs::read_to_string(&path)?;
                 let direct_git = ["Command::new(", "\"git\")"].concat();
                 assert!(
