@@ -9,7 +9,7 @@ use super::workflow_steps::{self, checkout_step, with_permissions};
 pub(super) const VERSION: &str = "0.1.1";
 pub(super) const REPOSITORY: &str = "tailrocks/velnor-new";
 const CI_WORKFLOW: &str = "ci.yml";
-const GH_VERSION: &str = "2.102.0";
+pub(super) const GH_VERSION: &str = "2.102.0";
 
 /// One target binary, checksum sidecar, and source-bound build record.
 #[derive(Clone, Copy)]
@@ -282,7 +282,7 @@ fn ci_check_step() -> Yaml {
     )
 }
 
-fn ci_check_script() -> String {
+pub(super) fn ci_check_script() -> String {
     format!(
         r#"set -eu
 test "$GITHUB_REPOSITORY" = '{REPOSITORY}'

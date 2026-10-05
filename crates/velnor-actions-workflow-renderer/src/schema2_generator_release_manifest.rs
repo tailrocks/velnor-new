@@ -21,6 +21,13 @@ fn manifest_script() -> String {
     format!("bash scripts/generator-release/create-release-manifest.sh '{VERSION}' '{REPOSITORY}'")
 }
 
+fn pinned_gh_definition() -> String {
+    format!(
+        "gh() {{\n  mise --no-config --no-env --no-hooks exec gh@{} -- gh \"$@\"\n}}",
+        assets::GH_VERSION
+    )
+}
+
 /// Attest the manifest after validating all downloaded product records.
 pub(super) fn job(
     hosted: Yaml,
@@ -30,12 +37,21 @@ pub(super) fn job(
         .iter()
         .map(|asset| asset.attest_job)
         .collect::<Vec<_>>();
-    let mut steps = ASSETS
+    let mut steps = vec![
+        workflow_steps::mise_step(),
+        workflow_steps::bash_step(
+            "Install pinned GitHub CLI",
+            &format!(
+                "mise --no-config --no-env --no-hooks install gh@{}",
+                assets::GH_VERSION
+            ),
+        ),
+    ];
+    steps.extend(ASSETS
         .iter()
         .flat_map(|asset| {
             assets::download_steps(*asset, &format!("Download {} assets", asset.target))
-        })
-        .collect::<Vec<_>>();
+        }));
     let bundle_path = manifest_attestation_bundle_path();
     steps.extend([
         workflow_steps::bash_step(
@@ -90,14 +106,19 @@ pub(super) fn publish_script() -> String {
     let assets = release_asset_paths();
     let preflight = tag_preflight_script();
     let postflight = published_release_verify_script();
+    let ci_recheck = assets::ci_check_script();
     format!(
-        "set -eu\ntag=\"v{VERSION}\"\n{verify}\n{preflight}\ngh release create \"$tag\" -R \"${{GITHUB_REPOSITORY}}\" --target \"$GITHUB_SHA\" --title \"velnor-actions $tag\" --latest=false --notes \"velnor-actions {VERSION} built from ${{GITHUB_SHA}}.\" {assets}\n{postflight}"
+        "{}\nset -eu\ntag=\"v{VERSION}\"\n{verify}\n{preflight}\n{ci_recheck}\ngh release create \"$tag\" -R \"${{GITHUB_REPOSITORY}}\" --target \"$GITHUB_SHA\" --title \"velnor-actions $tag\" --latest=false --notes \"velnor-actions {VERSION} built from ${{GITHUB_SHA}}.\" {assets}\n{postflight}",
+        pinned_gh_definition()
     )
 }
 
 /// Require confirmed 404 responses for both immutable tag and release lookups.
 pub(super) fn tag_preflight_script() -> String {
-    format!("bash scripts/generator-release/preflight-release-tag.sh '{VERSION}' '{REPOSITORY}'")
+    format!(
+        "bash scripts/generator-release/preflight-release-tag.sh '{VERSION}' '{REPOSITORY}' '{}'",
+        assets::GH_VERSION
+    )
 }
 
 /// Verify immutable release metadata, target commit, exact asset set, and digests.
@@ -109,7 +130,8 @@ pub(super) fn published_release_verify_script() -> String {
         .collect::<Vec<_>>()
         .join("\n");
     format!(
-        "set -eu\ntag=\"v{VERSION}\"\nref=\"$(gh api \"repos/$GITHUB_REPOSITORY/git/ref/tags/$tag\")\"\nref_type=\"$(printf '%s\\n' \"$ref\" | jq -er .object.type)\"\nref_sha=\"$(printf '%s\\n' \"$ref\" | jq -er .object.sha)\"\ncase \"$ref_type\" in\n  commit) tag_commit=\"$ref_sha\" ;;\n  tag) tag_commit=\"$(gh api \"repos/$GITHUB_REPOSITORY/git/tags/$ref_sha\" --jq .object.sha)\" ;;\n  *) echo \"release tag has unexpected object type: $ref_type\" >&2; exit 1 ;;\nesac\ntest \"$tag_commit\" = \"$GITHUB_SHA\"\nrelease=\"$(gh api \"repos/$GITHUB_REPOSITORY/releases/tags/$tag\")\"\nprintf '%s\\n' \"$release\" | jq -e --arg tag \"$tag\" '.tag_name == $tag and .draft == false and .prerelease == false and .immutable == true' > /dev/null\npaths=(\n{bash_paths}\n)\ntest \"$(printf '%s\\n' \"$release\" | jq -r '.assets | length')\" -eq {}\nfor path in \"${{paths[@]}}\"; do\n  name=\"${{path##*/}}\"\n  digest=\"$(sha256sum \"$path\" | awk 'NR == 1 {{ print $1; next }} {{ exit 1 }} END {{ if (NR != 1) exit 1 }}')\"\n  expected=\"sha256:$digest\"\n  actual=\"$(printf '%s\\n' \"$release\" | jq -er --arg name \"$name\" '[.assets[] | select(.name == $name)] | if length == 1 then .[0].digest else error(\"missing or duplicate release asset\") end')\"\n  test \"$actual\" = \"$expected\"\ndone",
+        "{}\nset -eu\ntag=\"v{VERSION}\"\nref=\"$(gh api \"repos/$GITHUB_REPOSITORY/git/ref/tags/$tag\")\"\nref_type=\"$(printf '%s\\n' \"$ref\" | jq -er .object.type)\"\nref_sha=\"$(printf '%s\\n' \"$ref\" | jq -er .object.sha)\"\ncase \"$ref_type\" in\n  commit) tag_commit=\"$ref_sha\" ;;\n  tag) tag_commit=\"$(gh api \"repos/$GITHUB_REPOSITORY/git/tags/$ref_sha\" --jq .object.sha)\" ;;\n  *) echo \"release tag has unexpected object type: $ref_type\" >&2; exit 1 ;;\nesac\ntest \"$tag_commit\" = \"$GITHUB_SHA\"\nrelease=\"$(gh api \"repos/$GITHUB_REPOSITORY/releases/tags/$tag\")\"\nprintf '%s\\n' \"$release\" | jq -e --arg tag \"$tag\" '.tag_name == $tag and .draft == false and .prerelease == false and .immutable == true' > /dev/null\npaths=(\n{bash_paths}\n)\ntest \"$(printf '%s\\n' \"$release\" | jq -r '.assets | length')\" -eq {}\nfor path in \"${{paths[@]}}\"; do\n  name=\"${{path##*/}}\"\n  digest=\"$(sha256sum \"$path\" | awk 'NR == 1 {{ print $1; next }} {{ exit 1 }} END {{ if (NR != 1) exit 1 }}')\"\n  expected=\"sha256:$digest\"\n  actual=\"$(printf '%s\\n' \"$release\" | jq -er --arg name \"$name\" '[.assets[] | select(.name == $name)] | if length == 1 then .[0].digest else error(\"missing or duplicate release asset\") end')\"\n  test \"$actual\" = \"$expected\"\ndone",
+        pinned_gh_definition(),
         paths.len()
     )
 }
@@ -126,7 +148,7 @@ pub(super) fn attestation_bundle_script() -> String {
         }
     }
     lines.push(attestation_verify_script(&format!("{DIR}/{FILE}"), FILE));
-    lines.join("\n")
+    format!("{}\n{}", pinned_gh_definition(), lines.join("\n"))
 }
 
 /// Fetch and verify the three signed bundles after one product attestation.
@@ -138,7 +160,7 @@ pub(super) fn asset_attestation_bundle_script(product: assets::ProductAsset) -> 
             subject,
         ));
     }
-    lines.join("\n")
+    format!("{}\n{}", pinned_gh_definition(), lines.join("\n"))
 }
 
 /// Stable bundle paths uploaded by one product attestation job.
@@ -152,7 +174,8 @@ pub(super) fn asset_attestation_bundle_paths(product: assets::ProductAsset) -> V
 /// Fetch and verify the signed manifest bundle after manifest attestation.
 pub(super) fn manifest_attestation_bundle_script() -> String {
     format!(
-        "set -eu\nmkdir -p {ATTESTATION_DIR}\n{}",
+        "{}\nset -eu\nmkdir -p {ATTESTATION_DIR}\n{}",
+        pinned_gh_definition(),
         attestation_fetch_script(FILE, FILE)
     )
 }
