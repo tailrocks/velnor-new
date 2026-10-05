@@ -14,6 +14,7 @@ use velnor_actions_orchestrator::{
     GenerateOptions, OrchestratorError, generate, plan_internal, prepare,
 };
 use velnor_actions_rust::parse_metadata_json;
+use velnor_actions_workflow_renderer::MAX_WORKFLOW_BYTES;
 
 use self::perf_fixtures_p13::{malformed_repo, nested_path_dep_repo, nested_repo, workspace_repo};
 use self::perf_harness_p13::{
@@ -84,7 +85,7 @@ fn plan_100_crates_reports_matrix_budget() -> TestResult {
     Ok(())
 }
 
-/// Generate wall time on 1/10/100-crate workspaces (preview dir, no writes).
+/// Generate one small workspace and reject 10/100-crate output over the cap.
 #[test]
 fn generate_scales_with_crate_count() -> TestResult {
     for members in [1_usize, 10, 100] {
@@ -97,15 +98,44 @@ fn generate_scales_with_crate_count() -> TestResult {
         let opts = GenerateOptions {
             output_dir: Some(target),
         };
-        let (report, gen_ms) = timed(|| generate(&prep, &opts));
-        let report = report?;
-        assert!(!report.files_written.is_empty(), "files staged");
-        eprintln!(
-            "perf: op=generate crates={members} prepare_ms={prep_ms} generate_ms={gen_ms} files={}",
-            report.files_written.len()
-        );
+        if members == 1 {
+            let (report, gen_ms) = timed(|| generate(&prep, &opts));
+            let report = report?;
+            assert!(!report.files_written.is_empty(), "files staged");
+            eprintln!(
+                "perf: op=generate_success crates={members} prepare_ms={prep_ms} generate_ms={gen_ms} files={}",
+                report.files_written.len()
+            );
+        } else {
+            let error = err_of(generate(&prep, &opts), "oversized generated workflow")?;
+            assert_workflow_size_rejection(&error);
+            assert!(!out.path().join(format!("gen-{members}")).exists());
+            eprintln!(
+                "perf: op=generate_size_rejection crates={members} prepare_ms={prep_ms} error={error}"
+            );
+        }
     }
     Ok(())
+}
+
+fn assert_workflow_size_rejection(error: &OrchestratorError) {
+    let valid_size_error = match error {
+        OrchestratorError::Render { problem } => problem
+            .strip_prefix("workflow_too_large:.github/workflows/ci.yml:")
+            .and_then(|detail| detail.split_once(':'))
+            .is_some_and(|(actual, limit)| {
+                matches!(
+                    (actual.parse::<usize>(), limit.parse::<usize>()),
+                    (Ok(actual), Ok(limit))
+                        if actual > MAX_WORKFLOW_BYTES && limit == MAX_WORKFLOW_BYTES
+                )
+            }),
+        _ => false,
+    };
+    assert!(
+        valid_size_error,
+        "expected explicit workflow size rejection, got {error}"
+    );
 }
 
 /// Nested and independent workspaces keep their own inventories.
