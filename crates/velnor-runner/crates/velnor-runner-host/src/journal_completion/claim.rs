@@ -5,6 +5,8 @@ use crate::journal::Journal;
 use crate::reconcile::IntentRow;
 
 use super::CleanupClaim;
+#[path = "claim_effect.rs"]
+mod claim_effect;
 #[path = "claim_sql.rs"]
 mod claim_sql;
 use claim_sql::{claim_cleanup_row, finish_transition, unix_seconds};
@@ -82,6 +84,7 @@ impl Journal {
         id: i64,
         clock: impl FnOnce() -> Result<(i64, i64), HostError>,
     ) -> Result<Option<CleanupClaim>, HostError> {
+        let _intent = self.completion_lock(id)?.lock_owned().await;
         let _write = self.write_guard().await;
         self.sync_lineage().await?;
         let connection = self.connection().await?;
@@ -142,6 +145,7 @@ impl Journal {
         generation: i64,
         clock: impl FnOnce() -> Result<(i64, i64), HostError>,
     ) -> Result<bool, HostError> {
+        let _intent = self.completion_lock(id)?.lock_owned().await;
         let _write = self.write_guard().await;
         self.sync_lineage().await?;
         let connection = self.connection().await?;
@@ -215,6 +219,7 @@ impl Journal {
         generation: i64,
         clock: impl FnOnce() -> Result<i64, HostError>,
     ) -> Result<bool, HostError> {
+        let _intent = self.completion_lock(id)?.lock_owned().await;
         let _write = self.write_guard().await;
         self.sync_lineage().await?;
         let connection = self.connection().await?;
@@ -291,6 +296,7 @@ impl Journal {
         generation: i64,
         clock: impl FnOnce() -> Result<i64, HostError>,
     ) -> Result<bool, HostError> {
+        let _intent = self.completion_lock(id)?.lock_owned().await;
         let _write = self.write_guard().await;
         self.sync_lineage().await?;
         let connection = self.connection().await?;

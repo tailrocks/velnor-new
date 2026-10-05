@@ -163,12 +163,13 @@ async fn drop_revision_triggers(connection: &Connection) -> Result<(), HostError
 async fn install_revision_triggers(connection: &Connection) -> Result<(), HostError> {
     for statement in [
         "DROP TRIGGER IF EXISTS journal_lineage_revision",
+        "DROP TRIGGER IF EXISTS completion_cleanup_revision_delete",
         "CREATE TRIGGER IF NOT EXISTS intents_revision_insert AFTER INSERT ON intents BEGIN UPDATE journal_meta SET revision = revision + 1 WHERE singleton = 1; END",
         "CREATE TRIGGER IF NOT EXISTS intents_revision_update AFTER UPDATE ON intents BEGIN UPDATE journal_meta SET revision = revision + 1 WHERE singleton = 1; END",
         "CREATE TRIGGER IF NOT EXISTS intents_revision_delete AFTER DELETE ON intents BEGIN UPDATE journal_meta SET revision = revision + 1 WHERE singleton = 1; END",
         "CREATE TRIGGER IF NOT EXISTS completion_cleanup_revision_insert AFTER INSERT ON completion_cleanup BEGIN UPDATE journal_meta SET revision = revision + 1 WHERE singleton = 1; END",
         "CREATE TRIGGER IF NOT EXISTS completion_cleanup_revision_update AFTER UPDATE ON completion_cleanup BEGIN UPDATE journal_meta SET revision = revision + 1 WHERE singleton = 1; END",
-        "CREATE TRIGGER IF NOT EXISTS completion_cleanup_revision_delete AFTER DELETE ON completion_cleanup BEGIN UPDATE journal_meta SET revision = revision + 1 WHERE singleton = 1; END",
+        "CREATE TRIGGER completion_cleanup_revision_delete AFTER DELETE ON completion_cleanup WHEN NOT EXISTS (SELECT 1 FROM intents WHERE id = OLD.intent_id AND cleanup_proven = 1) BEGIN UPDATE journal_meta SET revision = revision + 1 WHERE singleton = 1; END",
         "CREATE TRIGGER journal_lineage_revision AFTER UPDATE OF instance_id, engine_id, lineage_pinned ON journal_meta WHEN OLD.instance_id IS NOT NEW.instance_id OR OLD.engine_id IS NOT NEW.engine_id OR OLD.lineage_pinned IS NOT NEW.lineage_pinned BEGIN UPDATE journal_meta SET revision = revision + 1 WHERE singleton = 1; END",
     ] {
         connection
