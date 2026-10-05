@@ -9,7 +9,7 @@ use crate::{
     RenderError,
     steps::{
         FETCH_OPERATION, MERGE_OPERATION, PLAN_OPERATION, PUBLISH_OPERATION,
-        WRITE_REQUEST_OPERATION, scan_for_private_subcommands,
+        QUALIFICATION_ADMISSION_OPERATION, WRITE_REQUEST_OPERATION, scan_for_private_subcommands,
     },
 };
 
@@ -27,6 +27,9 @@ pub(crate) fn split_internal_operation(operation: &str) -> Result<(&str, &str), 
         || operation == PUBLISH_OPERATION
     {
         return Ok((operation, operation));
+    }
+    if operation == QUALIFICATION_ADMISSION_OPERATION {
+        return Ok((operation, PLAN_OPERATION));
     }
     let rest = operation
         .strip_prefix(WRITE_REQUEST_OPERATION)

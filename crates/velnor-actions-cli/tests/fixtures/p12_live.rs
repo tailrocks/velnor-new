@@ -241,7 +241,7 @@ fn policy_file_is_complete() -> Result<(), Box<dyn Error>> {
         .lines()
         .filter(|line| line.trim() == "[[actions]]")
         .count();
-    assert_eq!(tables, 9, "nine action mirrors");
+    assert_eq!(tables, 8, "eight action mirrors");
     let mutants = crate::impl_repo_policy::read(".cargo/mutants.toml")?;
     assert!(
         mutants.contains("# pinned: cargo-mutants = \"27.1.0\""),
