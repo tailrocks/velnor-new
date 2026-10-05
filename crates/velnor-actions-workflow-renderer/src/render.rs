@@ -17,9 +17,8 @@ use velnor_actions_contract::{
 };
 
 use crate::{
-    RenderError, cache_p08, closure, commands, dispatch_cache_boundary, document, final_steps,
-    guard, marker, matrix, msrv, preseed_closure, steps, support, workflow_policy,
-    yaml::render_yaml,
+    RenderError, cache_p08, closure, commands, document, final_steps, guard, marker, matrix, msrv,
+    preseed_closure, steps, support, workflow_policy, yaml::render_yaml,
 };
 
 pub use crate::matrix::{
@@ -186,7 +185,6 @@ fn render_workflow_parts(
     closure::insert_task_closure(&mut jobs)?;
     closure::insert_final_closure(&mut jobs)?;
     final_steps::insert_final_fanin(&mut jobs, ctx)?;
-    dispatch_cache_boundary::suppress_unvalidated_cache_access(&mut jobs);
     render_merged(ir, &jobs, ctx)
 }
 
@@ -264,13 +262,13 @@ pub fn finalize_jobs(
             velnor_actions_contract::target_for_runner_label(&ctx.runs_on).ok_or_else(|| {
                 RenderError::InvalidWorkflow(format!("tools_cache_unsupported_target:{id}"))
             })?;
-        cache_p08::ensure_tools_cache_v2(id, job, mise, always, target)?;
-        cache_p08::check_no_legacy_rust_cache(id, job)?;
+        cache_p08::ensure_setup_p08(id, job, mise, always, target)?;
+        cache_p08::check_no_rust_cache_with_mbx(id, job)?;
         cache_p08::check_mbx_before_fetch(id, job)?;
         closure::check_internal_staged(id, job, ctx.preseed)?;
     }
     // Writer election needs every setup inserted: one saver per key.
-    cache_p08::elect_tools_cache_writers(&mut jobs)?;
+    cache_p08::elect_mise_cache_writers(&mut jobs)?;
     // Provider election needs every restore inserted: one saver per key.
     cache_p08::elect_tofu_provider_savers(&mut jobs)?;
     closure::check_plan_anchor(&jobs)?;
@@ -280,7 +278,6 @@ pub fn finalize_jobs(
     closure::insert_task_closure(&mut jobs)?;
     closure::insert_final_closure(&mut jobs)?;
     final_steps::insert_final_fanin(&mut jobs, ctx)?;
-    dispatch_cache_boundary::suppress_unvalidated_cache_access(&mut jobs);
     Ok(jobs)
 }
 
@@ -352,16 +349,10 @@ fn render_merged(
         jobs.clone()
     };
     let mbx_gc_jobs = crate::mbx_gc_policy::jobs_with_hosted_linux_mbx_objects(&jobs);
+    let mbx_share_out_jobs = crate::mbx_gc_policy::jobs_with_mbx_objects(&jobs);
     let shared = crate::lane_share::share_lanes(&jobs, ctx)?;
-    let mut document = document::workflow_to_yaml(
-        ir,
-        &shared.jobs,
-        ctx,
-        &shared.calls,
-        &shared.checkouts,
-        &shared.preludes,
-        &mbx_gc_jobs,
-    )?;
+    let mut document =
+        document::workflow_to_yaml(ir, &shared, ctx, &mbx_gc_jobs, &mbx_share_out_jobs)?;
     if let Some((source, max_parallel)) = &matrix {
         matrix::attach_task_matrix(&mut document, source, *max_parallel)?;
     } else {

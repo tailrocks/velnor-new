@@ -16,6 +16,7 @@ mod commands;
 mod composite;
 mod dispatch_cache_boundary;
 mod document;
+mod document_lanes;
 mod document_steps;
 mod error;
 mod expressions;
