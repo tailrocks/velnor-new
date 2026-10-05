@@ -38,10 +38,9 @@ pub const MISE_VERSION: &str = "2026.9.18";
 /// Qualified Rust stable toolchain.
 /// Source: `https://static.rust-lang.org/dist/channel-rust-stable.toml`; checked 2026-09-28.
 pub const RUST_VERSION: &str = "1.98.1";
-/// Qualified `mr-boxington` tool (binary on PATH is `mbx`; tag `v1.22.0`).
-/// Source: `https://api.github.com/repos/jdx/mr-boxington/releases/tags/v1.22.0`;
-/// release commit `10474d43342ad65df3b02323dd8092d18ab38101`; checked 2026-10-04.
-pub const MR_BOXINGTON_VERSION: &str = "1.22.0";
+/// Qualified `mr-boxington` tool (binary on PATH is `mbx`; tag `v1.21.1`).
+/// Source: `https://api.github.com/repos/jdx/mr-boxington/releases/latest`; checked 2026-10-03.
+pub const MR_BOXINGTON_VERSION: &str = "1.21.1";
 /// Qualified GitHub CLI (tag `v2.102.0`).
 /// Source: `https://api.github.com/repos/cli/cli/releases/latest`; checked 2026-09-30.
 pub const GH_VERSION: &str = "2.102.0";

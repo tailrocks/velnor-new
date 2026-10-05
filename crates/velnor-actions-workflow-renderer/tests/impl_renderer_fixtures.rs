@@ -22,7 +22,7 @@ pub(crate) const MISE_SHA256: &str =
     "d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4";
 pub(crate) const STAGED: &str = "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0";
 
-pub(crate) const TEST_MBX_VERSION: &str = "1.22.0";
+pub(crate) const TEST_MBX_VERSION: &str = "1.21.1";
 pub(crate) const TEST_RUST_TOOLCHAIN: &str = "1.98.1";
 
 pub(crate) fn mbx_tool_env(rust_toolchain: &str) -> BTreeMap<String, String> {
