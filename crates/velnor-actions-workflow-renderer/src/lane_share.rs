@@ -210,15 +210,17 @@ fn split_shared_steps(
         return None;
     }
     let (prefix, hosted_prelude, local_prelude, hosted_tail, local_tail) = if hosted_action {
-        let hosted_at = mbx_prelude_index(hosted_steps)?;
-        let local_at = mbx_prelude_index(local_steps)?;
+        let hosted_at = crate::lane_share_sections::mbx_prelude_index(hosted_steps)?;
+        let local_at = crate::lane_share_sections::mbx_prelude_index(local_steps)?;
         let hosted_prefix = &hosted_steps[..hosted_at];
         let local_prefix = &local_steps[..local_at];
         if hosted_prefix != local_prefix {
             return None;
         }
-        let (hosted_prelude, hosted_tail) = peel_mbx_prelude(&hosted_steps[hosted_at..])?;
-        let (local_prelude, local_tail) = peel_mbx_prelude(&local_steps[local_at..])?;
+        let (hosted_prelude, hosted_tail) =
+            crate::lane_share_sections::peel_mbx_prelude(&hosted_steps[hosted_at..])?;
+        let (local_prelude, local_tail) =
+            crate::lane_share_sections::peel_mbx_prelude(&local_steps[local_at..])?;
         (
             hosted_prefix.to_vec(),
             hosted_prelude,
@@ -235,8 +237,19 @@ fn split_shared_steps(
             local_steps,
         )
     };
-    let (hosted_common, hosted_postlude) = peel_postlude(hosted_tail);
-    let (local_common, local_postlude) = peel_postlude(local_tail);
+    let (hosted_provider_prefix, hosted_tail) =
+        crate::lane_share_sections::peel_provider_restore_prefix(hosted_tail);
+    let (local_provider_prefix, local_tail) =
+        crate::lane_share_sections::peel_provider_restore_prefix(local_tail);
+    if hosted_provider_prefix != local_provider_prefix {
+        return None;
+    }
+    let mut hosted_prelude = hosted_prelude;
+    let mut local_prelude = local_prelude;
+    hosted_prelude.extend(hosted_provider_prefix);
+    local_prelude.extend(local_provider_prefix);
+    let (hosted_common, hosted_postlude) = crate::lane_share_sections::peel_postlude(hosted_tail);
+    let (local_common, local_postlude) = crate::lane_share_sections::peel_postlude(local_tail);
     (hosted_common == local_common).then_some(SharedLaneParts {
         checkout: checkout.clone(),
         prefix,
@@ -246,66 +259,6 @@ fn split_shared_steps(
         hosted_postlude,
         local_postlude,
     })
-}
-
-fn mbx_prelude_index(steps: &[Step]) -> Option<usize> {
-    let preflight = steps
-        .iter()
-        .position(|step| step.role == Some(StepRole::MbxPreflight))?;
-    (preflight < steps.len()).then_some(preflight)
-}
-
-fn peel_mbx_prelude(steps: &[Step]) -> Option<(Vec<Step>, &[Step])> {
-    let mut end = 0;
-    for step in steps {
-        if is_mbx_prelude_step(step) {
-            end += 1;
-        } else {
-            break;
-        }
-    }
-    let prelude = &steps[..end];
-    if prelude.first()?.role != Some(StepRole::MbxPreflight)
-        || !prelude.iter().any(crate::cache_steps::is_mbx_action)
-    {
-        return None;
-    }
-    Some((prelude.to_vec(), &steps[end..]))
-}
-
-fn is_mbx_prelude_step(step: &Step) -> bool {
-    matches!(
-        step.role,
-        Some(
-            StepRole::MbxPreflight
-                | StepRole::MbxCache
-                | StepRole::MbxBundleKey
-                | StepRole::MbxLocalSetup
-                | StepRole::MbxBundleRestore
-                | StepRole::MbxBundleImport
-        )
-    )
-}
-
-fn peel_postlude(steps: &[Step]) -> (Vec<Step>, Vec<Step>) {
-    let mut common = Vec::new();
-    let mut postlude = Vec::new();
-    for step in steps {
-        if is_postlude_step(step) {
-            postlude.push(step.clone());
-        } else {
-            common.push(step.clone());
-        }
-    }
-    (common, postlude)
-}
-
-fn is_postlude_step(step: &Step) -> bool {
-    is_elected_save(step)
-        || matches!(
-            step.role,
-            Some(StepRole::MbxBundleExport | StepRole::MbxBundleSave)
-        )
 }
 
 fn peel_checkout<'a>(steps: &'a [Step], checkout_uses: &str) -> Option<(&'a Step, &'a [Step])> {
@@ -332,13 +285,6 @@ fn is_checkout_step(step: &Step) -> bool {
             StepKind::Action { uses, .. }
                 if uses.starts_with("actions/checkout@")
         )
-}
-
-fn is_elected_save(step: &Step) -> bool {
-    matches!(
-        step.role,
-        Some(StepRole::ToolsCacheSave | StepRole::TofuProvidersSave)
-    )
 }
 
 fn set_steps(jobs: &mut BTreeMap<String, Job>, id: &str, steps: Vec<Step>) {
