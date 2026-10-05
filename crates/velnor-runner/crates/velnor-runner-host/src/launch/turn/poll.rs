@@ -2,6 +2,7 @@
 
 use std::future::Future;
 use std::pin::Pin;
+use std::time::Duration;
 
 use velnor_runner_github::Poll;
 
@@ -9,7 +10,7 @@ use crate::journal::{Journal, LaunchReservation};
 use crate::scale_set::EnsureError;
 use crate::worker::Started;
 
-use super::{PollAdmission, admission, capacity, steps};
+use super::{PollAdmission, admission};
 use crate::launch::capacity::Admit;
 
 #[cfg(test)]
@@ -39,6 +40,64 @@ pub(in crate::launch) trait PollDispatcher {
     ) -> DispatchFuture<'a>;
 }
 
+pub(in crate::launch) type LoopFuture<'a, T> =
+    Pin<Box<dyn Future<Output = Result<T, EnsureError>> + 'a>>;
+
+/// Operations used by the listener's bounded wait loop.
+pub(in crate::launch) trait LoopDriver {
+    /// Poll and apply one queue response.
+    fn drive<'a>(&'a mut self, workers: &'a mut Vec<Started>) -> LoopFuture<'a, bool>;
+
+    /// Count workers that are running now.
+    fn running<'a>(&'a mut self) -> LoopFuture<'a, u32>;
+
+    /// Check for durable completion cleanup that still owns a slot.
+    fn has_pending_cleanup<'a>(&'a mut self) -> LoopFuture<'a, bool>;
+
+    /// Wait between polls when a worker or cleanup is still active.
+    fn pause<'a>(&'a mut self, duration: Duration) -> LoopFuture<'a, ()>;
+}
+
+/// Keep polling through active work and cleanup, then leave after two idle notices.
+pub(in crate::launch) async fn until_idle<D: LoopDriver>(
+    turn: &mut D,
+    workers: &mut Vec<Started>,
+    bound: usize,
+) -> Result<(), EnsureError> {
+    let mut polls = 0usize;
+    let mut missed = 0u8;
+    loop {
+        if polls >= bound && departed(turn, workers, missed).await? {
+            return Ok(());
+        }
+        let stop = turn.drive(workers).await?;
+        polls = polls.saturating_add(1);
+        if !stop {
+            continue;
+        }
+        if turn.running().await? > 0 || turn.has_pending_cleanup().await? {
+            missed = 0;
+            turn.pause(Duration::from_secs(2)).await?;
+            continue;
+        }
+        missed = missed.saturating_add(1);
+        if workers.is_empty() || missed >= 2 {
+            return Ok(());
+        }
+        turn.pause(Duration::from_secs(2)).await?;
+    }
+}
+
+async fn departed<D: LoopDriver>(
+    turn: &mut D,
+    workers: &[Started],
+    missed: u8,
+) -> Result<bool, EnsureError> {
+    let running = turn.running().await?;
+    let pending = turn.has_pending_cleanup().await?;
+    Ok(running == 0 && !pending && (workers.is_empty() || missed >= 2))
+}
+
 /// Apply the same admission and dispatch logic used by the listener.
 pub(in crate::launch) async fn apply<D: PollDispatcher>(
     journal: &Journal,
@@ -52,7 +111,6 @@ pub(in crate::launch) async fn apply<D: PollDispatcher>(
     queue: Option<String>,
     dispatcher: &mut D,
 ) -> Result<bool, EnsureError> {
-    let idle = steps::idle(polled);
     let started = u32::try_from(workers.len()).unwrap_or(u32::MAX);
     let decision = admission(
         journal,
@@ -69,7 +127,6 @@ pub(in crate::launch) async fn apply<D: PollDispatcher>(
         target,
         capacity_limit,
         workers,
-        idle,
         journal,
         polled,
         path,
@@ -84,7 +141,6 @@ async fn dispatch<D: PollDispatcher>(
     target: u32,
     capacity_limit: u32,
     workers: &mut Vec<Started>,
-    idle: steps::Idle,
     journal: &Journal,
     polled: &Poll,
     path: String,

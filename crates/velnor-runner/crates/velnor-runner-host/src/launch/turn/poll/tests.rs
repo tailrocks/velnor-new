@@ -1,34 +1,38 @@
-//! Scripted waves through the listener's production admission and dispatch seam.
+//! Capacity-one waves through the listener's production wait loop.
 
-use velnor_runner_github::{
-    ImmutableJobContext, InnerJob, InnerKind, ParsedBatch, Poll, Statistics,
-};
+use std::collections::VecDeque;
+
+use velnor_runner_github::{ImmutableJobContext, InnerJob, InnerKind, ParsedBatch, Poll};
 
 use crate::error::PreparationCause;
 use crate::journal::{Journal, LaunchReservation};
 use crate::launch::capacity::install_job_capacity;
-use crate::launch::turn::poll::{DispatchFuture, PollDispatcher, apply};
-use crate::launch::{Drive, Lane, drive_offer_reserved};
-use crate::launch_harness::{Mode, Scratch, Script, assigned_wait, available};
+use crate::launch::completion::{self, BlockingRunnerApi, CompletionEngine};
+use crate::launch::turn::poll::{
+    DispatchFuture, LoopDriver, LoopFuture, PollDispatcher, apply, until_idle,
+};
+use crate::launch::{Drive, drive_offer_reserved};
+use crate::launch_harness::{Mode, Scratch, assigned_wait, available};
 use crate::worker::{PreparedDind, Started};
 use crate::{EnsureError, HostError};
 
 const SET_ID: i64 = 1;
+const CAPACITY: u32 = 1;
 
 struct Waves {
-    script: Script,
-    fail_next_preparation: bool,
+    script: crate::launch_harness::Script,
+    fail_message: Option<i64>,
     start_count: usize,
 }
 
 impl Waves {
-    fn new() -> Self {
+    fn new(fail_message: i64) -> Self {
         Self {
-            script: Script {
+            script: crate::launch_harness::Script {
                 calls: Vec::new(),
                 mode: Mode::Ok,
             },
-            fail_next_preparation: false,
+            fail_message: Some(fail_message),
             start_count: 0,
         }
     }
@@ -44,8 +48,7 @@ impl PollDispatcher for Waves {
         let Poll::Batch(batch) = polled else {
             return Ok(());
         };
-        let context = drive_context();
-        crate::launch::steps_ack::acknowledge(&mut self.script, &context, batch)
+        crate::launch::steps_ack::acknowledge(&mut self.script, &drive_context(), batch)
     }
 
     fn start<'a>(
@@ -57,7 +60,7 @@ impl PollDispatcher for Waves {
         reservation: Option<LaunchReservation>,
     ) -> DispatchFuture<'a> {
         let script = &mut self.script;
-        let fail_preparation = std::mem::take(&mut self.fail_next_preparation);
+        let fail = self.fail_message == batch_message(polled);
         self.start_count = self.start_count.saturating_add(1);
         let start_number = self.start_count;
         Box::pin(async move {
@@ -70,23 +73,157 @@ impl PollDispatcher for Waves {
                 journal,
                 reservation,
                 move |identity| async move {
-                    if fail_preparation {
+                    if fail {
                         return Err(HostError::PreparationFailedClean(
                             PreparationCause::DindReadiness,
                         ));
                     }
-                    let dind_id = format!("{start_number:064x}");
+                    let dind_id = format!("{:064x}", start_number + 10);
                     PreparedDind::from_journal(&identity, &dind_id)
                 },
                 move |_identity, prepared, _jit| async move {
+                    let runner_id = format!("{start_number:064x}");
                     Ok(Started {
                         dind_id: prepared.dind_id().to_owned(),
-                        runner_id: format!("runner-{start_number}"),
+                        runner_id,
                     })
                 },
             )
             .await
         })
+    }
+}
+
+struct ListenerSession {
+    journal: Journal,
+    polls: VecDeque<Poll>,
+    dispatcher: Waves,
+    running: u32,
+    seen: usize,
+    cleanups: Vec<tokio::task::JoinHandle<()>>,
+}
+
+impl LoopDriver for ListenerSession {
+    fn drive<'a>(&'a mut self, workers: &'a mut Vec<Started>) -> LoopFuture<'a, bool> {
+        Box::pin(async move {
+            let mut polled = self.polls.pop_front().unwrap_or(Poll::Empty);
+            self.seen = self.seen.saturating_add(1);
+            if schedule_completion(&self.journal, &mut polled, &mut self.cleanups).await? {
+                self.running = 0;
+            }
+            let before = workers.len();
+            let stop = apply(
+                &self.journal,
+                SET_ID,
+                CAPACITY,
+                CAPACITY,
+                workers,
+                self.running,
+                &polled,
+                "queues/messages".to_owned(),
+                None,
+                &mut self.dispatcher,
+            )
+            .await?;
+            if workers.len() > before {
+                self.running = self.running.saturating_add(1);
+            }
+            Ok(stop)
+        })
+    }
+
+    fn running<'a>(&'a mut self) -> LoopFuture<'a, u32> {
+        Box::pin(async move { Ok(self.running) })
+    }
+
+    fn has_pending_cleanup<'a>(&'a mut self) -> LoopFuture<'a, bool> {
+        Box::pin(async move {
+            self.journal
+                .completed_launches()
+                .await
+                .map(|rows| !rows.is_empty())
+                .map_err(|_| EnsureError::Unexpected {
+                    status: 0,
+                    step: "test-journal",
+                })
+        })
+    }
+
+    fn pause<'a>(&'a mut self, _duration: std::time::Duration) -> LoopFuture<'a, ()> {
+        Box::pin(async move {
+            for cleanup in self.cleanups.drain(..) {
+                cleanup.await.map_err(|_| EnsureError::Unexpected {
+                    status: 0,
+                    step: "test-cleanup",
+                })?;
+            }
+            tokio::task::yield_now().await;
+            Ok(())
+        })
+    }
+}
+
+async fn schedule_completion(
+    journal: &Journal,
+    polled: &mut Poll,
+    cleanups: &mut Vec<tokio::task::JoinHandle<()>>,
+) -> Result<bool, EnsureError> {
+    let Poll::Batch(batch) = polled else {
+        return Ok(false);
+    };
+    let Some(index) = batch
+        .jobs
+        .iter()
+        .position(|job| job.kind == InnerKind::Completed)
+    else {
+        return Ok(false);
+    };
+    let request_id = batch.jobs[index]
+        .request_id
+        .ok_or_else(test_journal_error)?;
+    let row = journal
+        .rows()
+        .await
+        .map_err(|_| test_journal_error())?
+        .into_iter()
+        .find(|row| row.request_id == Some(request_id))
+        .ok_or_else(test_journal_error)?;
+    let identity = journal
+        .launch_identity(row.id)
+        .await
+        .map_err(|_| test_journal_error())?;
+    let name = format!("v{}", identity.launch_id());
+    batch.jobs[index].runner_name = Some(name.clone());
+    completion::record_completion_events(journal, SET_ID, polled).await?;
+    let runner_id = row.docker_id.ok_or_else(test_journal_error)?;
+    let dind_id = row.dind_id.ok_or_else(test_journal_error)?;
+    let engine = CompletionEngine::with_stopped_pair(&identity, &runner_id, &dind_id)
+        .map_err(|_| test_journal_error())?;
+    let api = BlockingRunnerApi::released(&name, 71);
+    cleanups.extend(
+        completion::schedule_completed_isolated(
+            api,
+            SET_ID,
+            "admin-token",
+            journal.clone(),
+            engine,
+        )
+        .await?,
+    );
+    Ok(true)
+}
+
+fn test_journal_error() -> EnsureError {
+    EnsureError::Unexpected {
+        status: 0,
+        step: "test-journal",
+    }
+}
+
+fn batch_message(polled: &Poll) -> Option<i64> {
+    match polled {
+        Poll::Batch(batch) => Some(batch.message_id),
+        Poll::Empty => None,
     }
 }
 
@@ -99,55 +236,8 @@ fn drive_context() -> Drive {
     }
 }
 
-async fn open(scratch: &Scratch) -> Result<Journal, String> {
-    let journal = Journal::open(&scratch.file())
-        .await
-        .map_err(|error| error.to_string())?;
-    journal
-        .bind_engine("docker-engine-test")
-        .await
-        .map_err(|error| error.to_string())?;
-    Ok(journal)
-}
-
-async fn apply_poll(
-    journal: &Journal,
-    dispatcher: &mut Waves,
-    workers: &mut Vec<Started>,
-    polled: &Poll,
-) -> Result<bool, EnsureError> {
-    apply(
-        journal,
-        SET_ID,
-        1,
-        1,
-        workers,
-        0,
-        polled,
-        "queues/messages".to_owned(),
-        None,
-        dispatcher,
-    )
-    .await
-}
-
-async fn mark_completed_and_clean(
-    journal: &Journal,
-    dispatcher: &mut Waves,
-    workers: &mut Vec<Started>,
-    request_id: i64,
-) -> Result<(), String> {
-    let rows = journal.rows().await.map_err(|error| error.to_string())?;
-    let row = rows
-        .iter()
-        .find(|row| row.request_id == Some(request_id))
-        .ok_or_else(|| "completed assignment was not journaled".to_owned())?;
-    let launch_id = row
-        .launch_id
-        .as_deref()
-        .ok_or_else(|| "completed assignment has no launch id".to_owned())?;
-    let runner_name = format!("v{launch_id}");
-    let completed = Poll::Batch(ParsedBatch {
+fn completion_poll(request_id: i64) -> Poll {
+    Poll::Batch(ParsedBatch {
         message_id: 200 + request_id,
         statistics: None,
         jobs: vec![InnerJob {
@@ -155,25 +245,11 @@ async fn mark_completed_and_clean(
             request_id: Some(request_id),
             context: empty_context(),
             runner_id: Some(71),
-            runner_name: Some(runner_name),
-            result: None,
+            runner_name: None,
+            result: Some("Succeeded".to_owned()),
             fields: Vec::new(),
         }],
-    });
-    crate::launch::completion::record_completion_events(journal, SET_ID, &completed)
-        .await
-        .map_err(|error| error.to_string())?;
-    apply_poll(journal, dispatcher, workers, &completed)
-        .await
-        .map_err(|error| error.to_string())?;
-    journal
-        .mark_completion_worker_cleanup_proven(row.id)
-        .await
-        .map_err(|error| error.to_string())?;
-    journal
-        .record_cleanup(row.id)
-        .await
-        .map_err(|error| error.to_string())
+    })
 }
 
 fn empty_context() -> ImmutableJobContext {
@@ -189,61 +265,59 @@ fn empty_context() -> ImmutableJobContext {
     }
 }
 
-fn assigned(message_id: i64) -> Poll {
-    let mut poll = assigned_wait(message_id, 1);
-    if let Poll::Batch(batch) = &mut poll {
-        batch.statistics = Some(Statistics {
-            total_available_jobs: 0,
-            total_acquired_jobs: 0,
-            total_assigned_jobs: 1,
-            total_running_jobs: 0,
-            total_registered_runners: 0,
-            total_busy_runners: 0,
-            total_idle_runners: 0,
-        });
-    }
-    poll
+async fn open_journal(scratch: &Scratch) -> Result<Journal, String> {
+    let journal = Journal::open(&scratch.file())
+        .await
+        .map_err(|error| error.to_string())?;
+    journal
+        .bind_engine("docker-engine-test")
+        .await
+        .map_err(|error| error.to_string())?;
+    Ok(journal)
 }
 
 #[tokio::test]
-async fn production_dispatch_refills_after_completion_restart_and_clean_failure()
+async fn listener_session_refills_capacity_one_after_completion_and_clean_failure()
 -> Result<(), String> {
-    let _capacity = install_job_capacity(1);
-    let scratch = Scratch::new("poll-three-waves").map_err(|error| error.to_string())?;
-    let journal = open(&scratch).await?;
+    let _capacity = install_job_capacity(CAPACITY);
+    let scratch = Scratch::new("poll-capacity-one-waves").map_err(|error| error.to_string())?;
+    let journal = open_journal(&scratch).await?;
+    let polls = VecDeque::from([
+        available(&[42]),
+        completion_poll(42),
+        available(&[43]),
+        completion_poll(43),
+        assigned_wait(101, 1),
+        available(&[44]),
+        completion_poll(44),
+        Poll::Empty,
+        Poll::Empty,
+    ]);
+    let mut session = ListenerSession {
+        journal,
+        polls,
+        dispatcher: Waves::new(101),
+        running: 0,
+        seen: 0,
+        cleanups: Vec::new(),
+    };
     let mut workers = Vec::new();
-    let mut dispatcher = Waves::new();
 
-    assert!(apply_poll(&journal, &mut dispatcher, &mut workers, &available(&[42])).await?);
-    assert_eq!(workers.len(), 1);
-    mark_completed_and_clean(&journal, &mut dispatcher, &mut workers, 42).await?;
+    until_idle(&mut session, &mut workers, 1)
+        .await
+        .map_err(|error| error.to_string())?;
 
-    drop(journal);
-    let journal = open(&scratch).await?;
-    workers.clear();
-    dispatcher.fail_next_preparation = true;
+    assert_eq!(session.seen, 9);
+    assert_eq!(workers.len(), 3);
+    assert_eq!(session.dispatcher.start_count, 4);
+    assert_eq!(session.running, 0);
+    assert_eq!(session.journal.occupied_launches().await, Ok(0));
     assert_eq!(
-        apply_poll(&journal, &mut dispatcher, &mut workers, &assigned(101)).await,
-        Err(EnsureError::Unexpected {
-            status: 0,
-            step: "dind-ready",
-        })
+        session.dispatcher.script.calls,
+        [
+            "acquire", "jit", "ack", "ack", "acquire", "jit", "ack", "ack", "ack", "acquire",
+            "jit", "ack", "ack",
+        ]
     );
-    assert_eq!(journal.occupied_launches().await, Ok(0));
-    let calls_after_failure = dispatcher.script.calls.clone();
-    assert!(!apply_poll(&journal, &mut dispatcher, &mut workers, &assigned(101)).await?);
-    assert_eq!(dispatcher.script.calls, calls_after_failure);
-
-    drop(journal);
-    let journal = open(&scratch).await?;
-    workers.clear();
-    assert!(apply_poll(&journal, &mut dispatcher, &mut workers, &available(&[43])).await?);
-    assert_eq!(workers.len(), 1);
-    assert_eq!(
-        dispatcher.script.calls,
-        ["acquire", "jit", "ack", "ack", "acquire", "jit", "ack"]
-    );
-    assert_eq!(dispatcher.start_count, 4);
-    assert_eq!(journal.occupied_launches().await, Ok(1));
     Ok(())
 }

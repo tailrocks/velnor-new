@@ -21,7 +21,7 @@ mod lease;
 mod retry;
 mod stalled;
 
-use engine::CompletionEngine;
+pub(super) use engine::CompletionEngine;
 
 async fn launch(
     journal: &Journal,
@@ -111,7 +111,7 @@ async fn wait_for_lookup(api: &BlockingRunnerApi) -> Result<(), String> {
 }
 
 #[derive(Clone)]
-struct BlockingRunnerApi {
+pub(super) struct BlockingRunnerApi {
     entered: Arc<AtomicBool>,
     release: Arc<(Mutex<bool>, Condvar)>,
     runner_name: String,
@@ -134,7 +134,7 @@ impl BlockingRunnerApi {
         }
     }
 
-    fn released(runner_name: &str, runner_id: i64) -> Self {
+    pub(in crate::launch) fn released(runner_name: &str, runner_id: i64) -> Self {
         let api = Self::new(runner_name, runner_id);
         api.release();
         api

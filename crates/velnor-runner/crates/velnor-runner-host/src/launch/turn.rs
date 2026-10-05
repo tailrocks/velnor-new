@@ -85,7 +85,7 @@ pub(super) async fn poll_and_drive(
     } else {
         capacity::poll_bound(capacity)
     };
-    until_idle(&mut turn, &mut workers, bound).await?;
+    poll::until_idle(&mut turn, &mut workers, bound).await?;
     Ok(workers)
 }
 
@@ -184,58 +184,6 @@ pub(super) async fn admission(
     })
 }
 
-/// Keep polling after admission stops while an owned container is running.
-async fn until_idle(
-    turn: &mut Turn<'_>,
-    workers: &mut Vec<Started>,
-    bound: usize,
-) -> Result<(), EnsureError> {
-    let mut polls = 0usize;
-    let mut missed = 0u8;
-    loop {
-        if polls >= bound && departed(turn, workers, missed).await? {
-            return Ok(());
-        }
-        let stop = turn.drive_poll(workers).await?;
-        polls = polls.saturating_add(1);
-        if !stop {
-            continue;
-        }
-        let running = slot::running_count(turn.journal, turn.docker).await?;
-        if running > 0 {
-            missed = 0;
-            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-            continue;
-        }
-        if !turn
-            .journal
-            .completed_launches()
-            .await
-            .map_err(slot::map_journal)?
-            .is_empty()
-        {
-            missed = 0;
-            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-            continue;
-        }
-        missed = missed.saturating_add(1);
-        if workers.is_empty() || missed >= 2 {
-            return Ok(());
-        }
-        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-    }
-}
-
-async fn departed(turn: &Turn<'_>, workers: &[Started], missed: u8) -> Result<bool, EnsureError> {
-    let running = slot::running_count(turn.journal, turn.docker).await?;
-    let pending = turn
-        .journal
-        .completed_launches()
-        .await
-        .map_err(slot::map_journal)?;
-    Ok(running == 0 && pending.is_empty() && (workers.is_empty() || missed >= 2))
-}
-
 fn assigned_in(polled: &Poll) -> u32 {
     let Poll::Batch(batch) = polled else {
         return 0;
@@ -245,6 +193,34 @@ fn assigned_in(polled: &Poll) -> u32 {
         .as_ref()
         .map_or(0, velnor_runner_github::Statistics::assigned_population);
     u32::try_from(raw.max(0)).unwrap_or(u32::MAX)
+}
+
+impl poll::LoopDriver for Turn<'_> {
+    fn drive<'a>(&'a mut self, workers: &'a mut Vec<Started>) -> poll::LoopFuture<'a, bool> {
+        Box::pin(self.drive_poll(workers))
+    }
+
+    fn running<'a>(&'a mut self) -> poll::LoopFuture<'a, u32> {
+        Box::pin(slot::running_count(self.journal, self.docker))
+    }
+
+    fn has_pending_cleanup<'a>(&'a mut self) -> poll::LoopFuture<'a, bool> {
+        Box::pin(async move {
+            Ok(!self
+                .journal
+                .completed_launches()
+                .await
+                .map_err(slot::map_journal)?
+                .is_empty())
+        })
+    }
+
+    fn pause<'a>(&'a mut self, duration: std::time::Duration) -> poll::LoopFuture<'a, ()> {
+        Box::pin(async move {
+            tokio::time::sleep(duration).await;
+            Ok(())
+        })
+    }
 }
 
 struct Turn<'a> {

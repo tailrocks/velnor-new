@@ -140,7 +140,12 @@ where
         .map_err(map_journal)?;
     let id = match reservation {
         LaunchReservation::AtCapacity => return Ok(None),
-        LaunchReservation::Completed(_) => return Ok(None),
+        LaunchReservation::Completed(_) => {
+            if let Some(batch) = batch {
+                acknowledge(lane, ctx, batch)?;
+            }
+            return Ok(None);
+        }
         LaunchReservation::Existing(id) => {
             if docker_pair_bound(journal, id).await? {
                 return finish_live(lane, ctx, journal, id, batch).await;
@@ -185,10 +190,10 @@ where
                 .await
                 .map_err(map_journal)?;
             journal.record_cleanup(id).await.map_err(map_journal)?;
-            return Err(EnsureError::Unexpected {
-                status: 0,
-                step: "dind-ready",
-            });
+            if let Some(batch) = batch {
+                acknowledge(lane, ctx, batch)?;
+            }
+            return Ok(None);
         }
         Err(_) => return hold(journal, id, EnsureError::Uncertain).await,
     };

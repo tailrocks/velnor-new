@@ -26,7 +26,7 @@ pub(super) struct CompletionEngine {
 }
 
 impl CompletionEngine {
-    pub(super) fn with_stopped_pair(
+    pub(in crate::launch) fn with_stopped_pair(
         identity: &LaunchIdentity,
         runner_id: &str,
         dind_id: &str,

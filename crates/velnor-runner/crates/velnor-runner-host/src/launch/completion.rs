@@ -23,6 +23,9 @@ static ACTIVE_CLEANUPS: OnceLock<Arc<AtomicUsize>> = OnceLock::new();
 #[cfg(test)]
 mod tests;
 
+#[cfg(test)]
+pub(super) use tests::{BlockingRunnerApi, CompletionEngine};
+
 mod support;
 
 use support::{
