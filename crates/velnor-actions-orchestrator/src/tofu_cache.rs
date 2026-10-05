@@ -192,10 +192,9 @@ mod tests {
         };
         assert!(uses.starts_with("actions/cache/restore@"), "{uses}");
         assert_eq!(with.get("key").map(String::as_str), Some(key.as_str()));
-        assert_eq!(
-            with.get("restore-keys").map(String::as_str),
-            Some(""),
-            "L2 exact-key restore carries no prefix"
+        assert!(
+            !with.contains_key("restore-keys"),
+            "L2 exact-key restore omits the prefix input"
         );
     }
 

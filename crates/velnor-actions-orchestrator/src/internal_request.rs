@@ -5,9 +5,9 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use velnor_actions_contract::{
-    FINAL_JSON_FILENAME, FinalStatus, MATRIX_JSON_FILENAME, PLAN_JSON_FILENAME, WorkflowEvent,
-    canonical_json_bytes, canonical_json_str, matrix_json_bytes, plan_json_bytes, run_key_for_ci,
-    validate_run_key,
+    CacheWriterFacts, FINAL_JSON_FILENAME, FinalStatus, MATRIX_JSON_FILENAME, PLAN_JSON_FILENAME,
+    WorkflowEvent, canonical_json_bytes, canonical_json_str, matrix_json_bytes, plan_json_bytes,
+    run_key_for_ci, validate_run_key,
 };
 
 use crate::OrchestratorError;
@@ -15,7 +15,7 @@ use crate::decisions::plan_artifact_dir;
 use crate::internal::{
     MERGE_OP, PLAN_OP, PlanResponse, SCHEMA, check_schema, internal, internal_contract,
 };
-use crate::request_event::{request_refs, workflow_event_for};
+use crate::request_event::{cache_writer_facts, request_refs, workflow_event_for};
 
 /// Plan-time request: `{schema, op, event, base, head, root}` (schema 1).
 #[derive(Debug, Serialize)]
@@ -39,6 +39,9 @@ struct EventRequest {
     /// Omitted when unset (local runs fall back to the git origin).
     #[serde(skip_serializing_if = "Option::is_none")]
     repository: Option<String>,
+    /// Event/ref/repository facts. Protection comes from the branch API.
+    #[serde(default, skip_serializing_if = "CacheWriterFacts::is_empty")]
+    cache_writer: CacheWriterFacts,
 }
 
 /// Canonical `plan`/`matrix` outputs for `$GITHUB_OUTPUT`.
@@ -153,6 +156,11 @@ pub fn write_request_parts(
         repository: repository
             .filter(|slug| !slug.is_empty())
             .map(str::to_owned),
+        cache_writer: if event == WorkflowEvent::Push {
+            cache_writer_facts(event, &payload, repository)
+        } else {
+            CacheWriterFacts::default()
+        },
     };
     let bytes = canonical_json_bytes(&request).map_err(internal_contract)?;
     if let Some(parent) = path.parent() {

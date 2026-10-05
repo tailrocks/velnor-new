@@ -61,6 +61,7 @@ fn prepare_pinned_tools_env_disables_knobs_and_carries_homes() -> Result<(), Str
         ("MISE_NO_ENV", "1"),
         ("MISE_NO_HOOKS", "1"),
         ("MISE_LOCKFILE", "0"),
+        ("MISE_DATA_DIR", "/velnor/mise"),
         ("MISE_RUSTUP_HOME", "/velnor/rustup"),
         ("MISE_CARGO_HOME", "/velnor/cargo"),
         ("RUSTUP_TOOLCHAIN", "1.98.1"),
@@ -73,12 +74,12 @@ fn prepare_pinned_tools_env_disables_knobs_and_carries_homes() -> Result<(), Str
             "explicit install must stay enabled: {blocked}"
         );
     }
-    assert_eq!(env.len(), 7, "exact step env, no drift: {env:?}");
+    assert_eq!(env.len(), 8, "exact step env, no drift: {env:?}");
     Ok(())
 }
 
 #[test]
-fn prepare_pinned_tools_env_without_homes_is_isolation_only() -> Result<(), String> {
+fn prepare_pinned_tools_env_without_homes_keeps_data_dir() -> Result<(), String> {
     let step = prepare()?;
     let env = step.env_without_homes();
     let expected: Vec<(OsString, OsString)> = [
@@ -86,13 +87,14 @@ fn prepare_pinned_tools_env_without_homes_is_isolation_only() -> Result<(), Stri
         ("MISE_NO_ENV", "1"),
         ("MISE_NO_HOOKS", "1"),
         ("MISE_LOCKFILE", "0"),
+        ("MISE_DATA_DIR", "${{ runner.temp }}/velnor/mise"),
     ]
     .into_iter()
     .map(|(key, value)| (OsString::from(key), OsString::from(value)))
     .collect();
     assert_eq!(
         env, expected,
-        "triple-less prepare env is the exact isolation overlay: {env:?}"
+        "triple-less prepare env keeps the fixed mise data dir: {env:?}"
     );
     Ok(())
 }
@@ -200,13 +202,14 @@ fn prepared_inputs_env_matches_command() -> Result<(), String> {
         ("MISE_LOCKFILE", "0"),
         ("MISE_AUTO_INSTALL", "false"),
         ("MISE_EXEC_AUTO_INSTALL", "false"),
+        ("MISE_DATA_DIR", "/velnor/mise"),
         ("MISE_RUSTUP_HOME", "/velnor/rustup"),
         ("MISE_CARGO_HOME", "/velnor/cargo"),
         ("RUSTUP_TOOLCHAIN", "1.98.1"),
     ] {
         assert!(env_has(&env, key, value), "missing {key}={value}: {env:?}");
     }
-    assert_eq!(env.len(), 9, "exact step env, no drift: {env:?}");
+    assert_eq!(env.len(), 10, "exact step env, no drift: {env:?}");
     Ok(())
 }
 
@@ -232,6 +235,11 @@ fn tool_homes_runner_temp_uses_expression_paths() {
         "${{ runner.temp }}/velnor/cargo",
         "shell $VAR never expands in env position"
     );
+    assert!(env_has(
+        &homes.exec_env(&pinned()),
+        "MISE_DATA_DIR",
+        "${{ runner.temp }}/velnor/mise"
+    ));
 }
 
 #[test]
@@ -245,13 +253,14 @@ fn tool_homes_exec_env_is_verification_env() -> Result<(), String> {
         ("MISE_LOCKFILE", "0"),
         ("MISE_AUTO_INSTALL", "false"),
         ("MISE_EXEC_AUTO_INSTALL", "false"),
+        ("MISE_DATA_DIR", "/velnor/mise"),
         ("MISE_RUSTUP_HOME", "/velnor/rustup"),
         ("MISE_CARGO_HOME", "/velnor/cargo"),
         ("RUSTUP_TOOLCHAIN", "1.98.1"),
     ] {
         assert!(env_has(&env, key, value), "missing {key}={value}: {env:?}");
     }
-    assert_eq!(env.len(), 9, "exact step env, no drift: {env:?}");
+    assert_eq!(env.len(), 10, "exact step env, no drift: {env:?}");
     let qualified = VerifyPreparedInputs::new(PathBuf::from("Cargo.toml"), homes()?)
         .map_err(|err| err.to_string())?;
     assert_eq!(
@@ -317,6 +326,14 @@ fn tool_homes_rejects_empty() {
     ));
     assert!(matches!(
         ToolHomes::new("/velnor/rustup", ""),
+        Err(MiseError::InvalidStepInput { .. })
+    ));
+    assert!(matches!(
+        ToolHomes::new("velnor/rustup", "/velnor/cargo"),
+        Err(MiseError::InvalidStepInput { .. })
+    ));
+    assert!(matches!(
+        ToolHomes::new("/velnor/rustup", "${{ runner.temp }}/velnor/cargo"),
         Err(MiseError::InvalidStepInput { .. })
     ));
     let err = ToolHomes::new("", "").expect_err("empty homes must fail");
