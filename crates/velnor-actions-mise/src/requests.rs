@@ -1,8 +1,9 @@
 //! Typed mise requests: metadata discovery, qualification, and pinned exec.
 //!
 //! Discovery uses Cargo even for MBX workspaces (metadata discovery is not
-//! compilation). Discovery never resolves (`--no-deps`: no fetch, no write);
-//! only lockful qualification resolves, `--locked --offline`. Callers own
+//! compilation). Discovery requires `--locked` and never resolves
+//! (`--no-deps`: no fetch, no lockfile write); only lockful qualification
+//! resolves fully with `--locked --offline`. Callers own
 //! parsing; discovery and qualification return the raw metadata JSON string,
 //! and pinned exec returns the typed output.
 
@@ -23,11 +24,12 @@ const CARGO_METADATA: &str = "metadata";
 
 /// Conservative discovery of one manifest through pinned Cargo.
 ///
-/// Exact payload: `cargo metadata --format-version 1 --no-deps
-/// --manifest-path <manifest>`. No `--locked`/`--offline`: discovery must not
-/// wait for full resolution. `--no-deps` skips resolution entirely, so the
+/// Exact payload: `cargo metadata --format-version 1 --locked --no-deps
+/// --manifest-path <manifest>`. Discovery must not wait for full resolution.
+/// `--locked` enforces lock immutability without
+/// requiring a lockfile when `--no-deps` skips dependency resolution. The
 /// probe performs no index access, network fetch, or repository write --
-/// not even for lockless-with-dependencies manifests (poison-fixture proven;
+/// even for lockless-with-dependencies manifests (poison-fixture proven;
 /// the orchestrator also brackets every run with a tool snapshot that fails
 /// closed on drift). Full resolution is qualification's job, lockful-only.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -65,6 +67,7 @@ impl MetadataDiscovery {
             OsString::from(CARGO_METADATA),
             OsString::from("--format-version"),
             OsString::from("1"),
+            OsString::from("--locked"),
             OsString::from("--no-deps"),
             OsString::from("--manifest-path"),
             self.manifest.as_os_str().to_owned(),

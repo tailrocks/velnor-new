@@ -176,6 +176,21 @@ pub(crate) fn cleanup(fixture: &Fixture) {
 
 const TOOL_PROBE_ROWS: &[(&str, &str, &str)] = &[
     (
+        "https://pypi.org/pypi/reuse/json",
+        "reuse.json",
+        "{\"info\":{\"version\":\"6.2.0\"}}",
+    ),
+    (
+        "https://www.python.org/downloads/",
+        "python.html",
+        "<a>Download Python 3.14.8</a>",
+    ),
+    (
+        "https://api.github.com/repos/astral-sh/uv/releases/latest",
+        "uv.json",
+        "{\"tag_name\":\"0.12.22\"}",
+    ),
+    (
         "https://api.github.com/repos/jdx/mise/releases/latest",
         "mise.json",
         "{\"tag_name\": \"v2026.9.16\"}",
