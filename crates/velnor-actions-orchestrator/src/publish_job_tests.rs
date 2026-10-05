@@ -21,12 +21,19 @@ fn publish_job_needs_required_and_gates_push() {
     assert_eq!(job.needs, [FINAL_JOB_ID.to_owned()]);
     assert_eq!(
         job.condition.as_deref(),
-        Some("github.event_name == 'push' && github.ref == 'refs/heads/testmain'")
+        Some(velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION)
+    );
+    assert_eq!(
+        job.condition.as_deref(),
+        Some(
+            "success() && github.event_name == 'push' && github.ref_protected == true && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)"
+        )
     );
     let names: Vec<&str> = job.steps.iter().map(|step| step.name.as_str()).collect();
     assert_eq!(
         names,
         [
+            "Prepare pinned tools",
             "Download plan",
             "Write request",
             "Publish baseline",
@@ -34,11 +41,11 @@ fn publish_job_needs_required_and_gates_push() {
         ]
     );
     assert_eq!(
-        operation_of(&job.steps[1]),
+        operation_of(&job.steps[2]),
         Some("write-request-v1:publish-baseline-v1")
     );
-    assert_eq!(operation_of(&job.steps[2]), Some(PUBLISH_OPERATION));
-    let StepKind::Action { uses, with, .. } = &job.steps[3].kind else {
+    assert_eq!(operation_of(&job.steps[3]), Some(PUBLISH_OPERATION));
+    let StepKind::Action { uses, with, .. } = &job.steps[4].kind else {
         panic!("upload must be an action step");
     };
     assert_eq!(uses, UPLOAD_ARTIFACT_USES);
@@ -55,10 +62,14 @@ fn publish_job_needs_required_and_gates_push() {
         with.get("if-no-files-found").map(String::as_str),
         Some("error")
     );
-    let StepKind::Action { uses, .. } = &job.steps[0].kind else {
+    let StepKind::Action { uses, .. } = &job.steps[1].kind else {
         panic!("plan download must be an action step");
     };
     assert_eq!(uses, DOWNLOAD_ARTIFACT_USES);
+    let StepKind::Shell { run, .. } = &job.steps[0].kind else {
+        panic!("pinned GH install must be a shell step");
+    };
+    assert!(run.contains(&ToolCatalog::pinned().tool_spec(PinnedTool::Gh)));
 }
 
 #[test]

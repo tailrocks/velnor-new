@@ -19,7 +19,10 @@
 use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
-use velnor_actions_contract::{WorkflowEvent, canonical_json_bytes, digest_b3, parse_strict_json};
+use velnor_actions_contract::{
+    CacheWriterFacts, WorkflowEvent, canonical_json_bytes, digest_b3, parse_strict_json,
+};
+use velnor_actions_mise::CacheWriterContext;
 
 use crate::OrchestratorError;
 use crate::cover_baseline::provenance_check::{
@@ -28,14 +31,14 @@ use crate::cover_baseline::provenance_check::{
 use crate::internal::{SCHEMA, check_schema, internal, internal_contract};
 use crate::internal_request::resolve_run_key;
 use crate::merge::BaselineManifest;
-use crate::request_event::{request_refs, workflow_event_for};
+use crate::request_event::{cache_writer_facts, request_refs, workflow_event_for};
 
 /// Publish operation tag.
 pub const PUBLISH_OP: &str = "publish-baseline-v1";
 /// Staged baseline filename inside the run directory.
 pub(crate) const BASELINE_FILENAME: &str = "baseline.json";
 
-/// `publish-baseline-v1` request: push refs plus protected-branch evidence.
+/// `publish-baseline-v1` request: push refs and repository identity.
 ///
 /// Materialized at the request boundary from the GitHub environment;
 /// the op consumes this file and reads no `GITHUB_*` ambient state
@@ -49,19 +52,11 @@ struct PublishRequest {
     /// Consuming operation; must be `publish-baseline-v1` when present.
     #[serde(default)]
     op: Option<String>,
-    /// Triggering event; must be `push`.
-    event: WorkflowEvent,
     /// Pushed head commit.
     head: String,
-    /// Runner-owned repository slug (`owner/repo`) for provenance.
+    /// Immutable event/ref/default/repository facts; protection comes from GitHub API.
     #[serde(default)]
-    repository: Option<String>,
-    /// Pushed ref from the event payload.
-    #[serde(default)]
-    git_ref: Option<String>,
-    /// Repository default branch from the event payload.
-    #[serde(default)]
-    default_branch: Option<String>,
+    cache_writer: CacheWriterFacts,
 }
 
 /// Publish outputs: the derived artifact name for the upload step.
@@ -74,8 +69,8 @@ pub struct PublishOutputs {
 /// Materialize one canonical publish request from explicit inputs.
 ///
 /// Parses the event payload exactly like plan requests (shared event
-/// and ref resolution, so the layers can never disagree), records the
-/// pushed ref plus the payload's default branch, and writes the file
+/// and ref resolution, so the layers can never disagree), records writer
+/// facts without claiming protection, and writes the file
 /// exclusively under `anchor`. The op enforces the push gate; this
 /// writer records, never judges.
 ///
@@ -100,16 +95,8 @@ pub(crate) fn write_publish_request(
     let request = serde_json::json!({
         "schema": SCHEMA,
         "op": PUBLISH_OP,
-        "event": event,
         "head": head,
-        "repository": repository.filter(|slug| !slug.is_empty()),
-        "git_ref": nonempty(payload.get("ref").and_then(serde_json::Value::as_str)),
-        "default_branch": nonempty(
-            payload
-                .get("repository")
-                .and_then(|repo| repo.get("default_branch"))
-                .and_then(serde_json::Value::as_str)
-        ),
+        "cache_writer": cache_writer_facts(event, &payload, repository),
     });
     let bytes = canonical_json_bytes(&request).map_err(internal_contract)?;
     if let Some(parent) = path.parent() {
@@ -117,14 +104,6 @@ pub(crate) fn write_publish_request(
     }
     crate::exclusive_write::write_exclusive(&path, &bytes, "request")?;
     Ok(path)
-}
-
-/// Trimmed non-empty string, if any.
-fn nonempty(value: Option<&str>) -> Option<String> {
-    value
-        .map(str::trim)
-        .filter(|text| !text.is_empty())
-        .map(str::to_owned)
 }
 
 /// Build and stage the trusted `baseline.json` for one push.
@@ -163,9 +142,38 @@ pub(crate) fn baseline_publish_to(
     runner_temp: &Path,
 ) -> Result<PublishOutputs, OrchestratorError> {
     velnor_actions_contract::validate_run_key(run_key).map_err(internal_contract)?;
+    ci_run_ids(run_key)?;
     let request = publish_request(request_json)?;
+    let writer_context = crate::cache_writer::context_for_facts(
+        &request.cache_writer,
+        WorkflowEvent::Push,
+        &velnor_actions_mise::ToolCatalog::pinned(),
+        Path::new("."),
+    );
+    baseline_publish_with_context(request, run_key, runner_temp, &writer_context)
+}
+
+/// Publish with authorization carried by the opaque Mise query context.
+fn baseline_publish_with_context(
+    request: PublishRequest,
+    run_key: &str,
+    runner_temp: &Path,
+    writer_context: &CacheWriterContext,
+) -> Result<PublishOutputs, OrchestratorError> {
+    velnor_actions_contract::validate_run_key(run_key).map_err(internal_contract)?;
     let (run_id, run_attempt) = ci_run_ids(run_key)?;
-    publish_gate(&request)?;
+    publish_gate(&request, writer_context)?;
+    baseline_publish_after_gate(request, run_key, runner_temp, run_id, run_attempt)
+}
+
+/// Publish work after the opaque context has passed the trust gate.
+fn baseline_publish_after_gate(
+    request: PublishRequest,
+    run_key: &str,
+    runner_temp: &Path,
+    run_id: u64,
+    run_attempt: u64,
+) -> Result<PublishOutputs, OrchestratorError> {
     let plan = crate::task_report::load_plan(run_key, runner_temp)?;
     bind_plan(&request, &plan)?;
     let manifest = publish_manifest(&request, &plan, run_id, run_attempt)?;
@@ -207,32 +215,58 @@ fn ci_run_ids(run_key: &str) -> Result<(u64, u64), OrchestratorError> {
         .ok_or_else(|| internal("bad_run_key"))
 }
 
-/// Refuse anything but a protected default-branch push.
+/// Refuse anything without complete current protected-default evidence.
 ///
-/// The event must be `push`, the pushed ref must equal the payload's
-/// own default branch, and the repository slug must be present and
-/// well-formed. Non-push runs never reach here (the job gates them),
-/// but a hand-edited workflow must still fail closed.
-fn publish_gate(request: &PublishRequest) -> Result<(), OrchestratorError> {
-    if request.event != WorkflowEvent::Push {
-        return Err(internal("publish_refused:wrong_event"));
-    }
-    let protected = request
-        .default_branch
-        .as_deref()
-        .filter(|branch| !branch.is_empty() && !branch.chars().any(char::is_whitespace))
-        .map(|branch| format!("refs/heads/{branch}"));
-    if protected.is_none() || request.git_ref.as_ref() != protected.as_ref() {
+/// The request event and repository identity are checked first; then
+/// the typed context must bind the exact pushed ref to the current API
+/// default branch and its explicit protection result.
+fn publish_gate(
+    request: &PublishRequest,
+    writer_context: &CacheWriterContext,
+) -> Result<(), OrchestratorError> {
+    publish_request_facts_gate(request)?;
+    if !writer_context.permits_trusted_write() {
         return Err(internal("publish_refused:unprotected_ref"));
     }
-    let anchored = request
-        .repository
-        .as_deref()
-        .and_then(crate::origin::validate_repository_slug);
-    if anchored.is_none() {
+    Ok(())
+}
+
+/// Validate event and repository identity shared by production and tests.
+fn publish_request_facts_gate(request: &PublishRequest) -> Result<(), OrchestratorError> {
+    if request.cache_writer.event != Some(WorkflowEvent::Push) {
+        return Err(internal("publish_refused:wrong_event"));
+    }
+    if request_repository(request).is_err() {
         return Err(internal("publish_refused:repository_unanchored"));
     }
     Ok(())
+}
+
+/// Test-only trusted path; production callers must pass the opaque context.
+#[cfg(test)]
+fn baseline_publish_for_test(
+    request: PublishRequest,
+    run_key: &str,
+    runner_temp: &Path,
+    authorized: bool,
+) -> Result<PublishOutputs, OrchestratorError> {
+    velnor_actions_contract::validate_run_key(run_key).map_err(internal_contract)?;
+    let (run_id, run_attempt) = ci_run_ids(run_key)?;
+    publish_request_facts_gate(&request)?;
+    if !authorized {
+        return Err(internal("publish_refused:unprotected_ref"));
+    }
+    baseline_publish_after_gate(request, run_key, runner_temp, run_id, run_attempt)
+}
+
+/// Repository slug proved to match the event repository and current GitHub API.
+fn request_repository(request: &PublishRequest) -> Result<&str, OrchestratorError> {
+    request
+        .cache_writer
+        .repository
+        .as_deref()
+        .and_then(crate::origin::validate_repository_slug)
+        .ok_or_else(|| internal("publish_refused:repository_unanchored"))
 }
 
 /// Bind the downloaded plan to the pushed head and event.
@@ -294,12 +328,9 @@ fn publish_manifest(
         crate::cover_compat::baseline_compat_for_plan(plan).map_err(|reason| internal(&reason))?;
     let name = velnor_actions_contract::artifact_id_for_baseline(&request.head, &compat)
         .map_err(|_| internal("publish_refused:bad_source_commit"))?;
-    let slug = request
-        .repository
-        .as_deref()
-        .and_then(crate::origin::validate_repository_slug)
-        .ok_or_else(|| internal("publish_refused:repository_unanchored"))?;
+    let slug = request_repository(request)?;
     let git_ref = request
+        .cache_writer
         .git_ref
         .clone()
         .ok_or_else(|| internal("publish_refused:unprotected_ref"))?;
@@ -334,12 +365,9 @@ fn self_check(
     request: &PublishRequest,
     manifest: &BaselineManifest,
 ) -> Result<(), OrchestratorError> {
-    let slug = request
-        .repository
-        .as_deref()
-        .and_then(crate::origin::validate_repository_slug)
-        .ok_or_else(|| internal("publish_refused:repository_unanchored"))?;
+    let slug = request_repository(request)?;
     let branch = request
+        .cache_writer
         .default_branch
         .clone()
         .ok_or_else(|| internal("publish_refused:unprotected_ref"))?;

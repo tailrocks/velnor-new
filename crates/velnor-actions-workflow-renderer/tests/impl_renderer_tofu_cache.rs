@@ -50,8 +50,8 @@ fn provider_layer_admits_exact_keys_without_restore_prefix() -> Result<(), Rende
     assert_eq!(with.get("key").map(String::as_str), Some(KEY));
     assert_eq!(
         with.get("restore-keys").map(String::as_str),
-        Some(""),
-        "L2 exact-key restore carries no prefix"
+        None,
+        "L2 exact-key restore omits an empty prefix input"
     );
     assert_eq!(TOFU_PROVIDERS_RESTORE_NAME, "Restore Tofu providers");
     assert!(
