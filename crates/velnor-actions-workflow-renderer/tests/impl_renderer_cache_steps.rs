@@ -314,8 +314,8 @@ fn lane_target_dirs_stay_isolated() {
 #[test]
 fn mbx_objects_step_gates_save_to_push_via_cache_mode() {
     let uses = format!("jdx/mr-boxington-action@{}", sha());
-    let [_, direct] = mbx_tool_steps(&uses, "1.19.0", "1.98.1").expect("direct MBX steps");
-    let [_, driven] = mbx_steps_for_driver(
+    let [_, direct, _] = mbx_tool_steps(&uses, "1.19.0", "1.98.1").expect("direct MBX steps");
+    let [_, driven, _] = mbx_steps_for_driver(
         &uses,
         CompileDriver::Mbx,
         "1.19.0",
@@ -330,8 +330,10 @@ fn mbx_objects_step_gates_save_to_push_via_cache_mode() {
         };
         assert_eq!(
             env.get(MBX_CACHE_MODE_ENV).map(String::as_str),
-            Some("read"),
-            "the action stays restore-only so its post cannot triple the store"
+            Some(
+                "${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}"
+            ),
+            "only protected default-branch pushes may write"
         );
     }
     assert!(

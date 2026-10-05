@@ -91,7 +91,6 @@ fn action_step_to_yaml(
     }
     commands::validate_env(env)?;
     let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
-    crate::mbx_bundle::push_step_id(&mut entries, &step.name);
     if let Some(condition) = &step.condition {
         steps::scan_for_private_subcommands(condition)?;
         entries.push(("if".to_owned(), Yaml::str(condition.clone())));
@@ -153,7 +152,6 @@ pub(crate) fn step_to_yaml(
             commands::validate_command_argv(run)?;
             commands::validate_env(env)?;
             let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
-            crate::mbx_bundle::push_step_id(&mut entries, &step.name);
             if let Some(condition) = &step.condition {
                 steps::scan_for_private_subcommands(condition)?;
                 entries.push(("if".to_owned(), Yaml::str(condition.clone())));

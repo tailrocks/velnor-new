@@ -350,7 +350,10 @@ fn four_combos_argv() -> TestResult {
         let run = entry_run(&plan, kind)?.to_owned();
         assert!(run.starts_with("mise "), "{run}");
         assert!(run.contains(&rust), "{run}");
-        assert_eq!(run.contains(&mbx), use_mbx, "{run}");
+        assert!(
+            !run.contains(&mbx),
+            "the native action owns MBX installation; no Mise selector: {run}"
+        );
         assert_eq!(run.contains(&nextest), use_nextest, "{run}");
         let program = if use_mbx { "-- mbx " } else { "-- cargo " };
         assert!(run.contains(program), "{run}");

@@ -40,7 +40,7 @@ fn preseed_manifest_op_writes_manifest_and_copy() -> Result<(), Box<dyn Error>> 
             ("VELNOR_PRESEED_TARGET", "x86_64-unknown-linux-gnu"),
             (
                 "VELNOR_PRESEED_TOOLCHAIN",
-                "rust@1.98.1+mr-boxington@1.21.1",
+                "rust@1.98.1+mr-boxington@1.22.0",
             ),
         ],
         &tmp,
@@ -55,7 +55,7 @@ fn preseed_manifest_op_writes_manifest_and_copy() -> Result<(), Box<dyn Error>> 
     assert_eq!(
         std::fs::read_to_string(out.join("preseed-manifest.json"))?,
         format!(
-            "{{\"schema\":1,\"commit\":\"{}\",\"target\":\"x86_64-unknown-linux-gnu\",\"toolchain\":\"rust@1.98.1+mr-boxington@1.21.1\",\"sha256\":\"b590a9ae60c41869ef1374d22f8f1cc8046d919250fd9ddf4e06a51c0eef5b1d\"}}",
+            "{{\"schema\":1,\"commit\":\"{}\",\"target\":\"x86_64-unknown-linux-gnu\",\"toolchain\":\"rust@1.98.1+mr-boxington@1.22.0\",\"sha256\":\"b590a9ae60c41869ef1374d22f8f1cc8046d919250fd9ddf4e06a51c0eef5b1d\"}}",
             "c".repeat(40)
         )
     );

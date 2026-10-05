@@ -15,7 +15,7 @@ use crate::requests::PinnedToolExec;
 pub enum NextestDriver {
     /// Plain Cargo profile: `cargo nextest ...` under Rust plus Nextest.
     Cargo,
-    /// MBX profile: `mbx nextest ...` under Rust plus MBX plus Nextest.
+    /// MBX profile: `mbx nextest ...` under action-owned MBX plus Rust and Nextest.
     Mbx,
 }
 
@@ -33,12 +33,7 @@ impl NextestDriver {
     #[must_use]
     pub fn tools(self) -> Vec<PinnedTool> {
         match self {
-            Self::Cargo => vec![PinnedTool::Rust, PinnedTool::Nextest],
-            Self::Mbx => vec![
-                PinnedTool::Rust,
-                PinnedTool::MrBoxington,
-                PinnedTool::Nextest,
-            ],
+            Self::Cargo | Self::Mbx => vec![PinnedTool::Rust, PinnedTool::Nextest],
         }
     }
 }
