@@ -12,7 +12,7 @@ use std::io::Read;
 use std::path::Path;
 
 use sha2::{Digest, Sha256};
-use velnor_actions_contract::{GeneratorReleaseTarget, ReleaseManifest, ids::is_lower_hex_len};
+use velnor_actions_contract::{ReleaseManifest, ReleaseTarget, ids::is_lower_hex_len};
 
 use crate::OrchestratorError;
 
@@ -22,8 +22,8 @@ const MAX_MANIFEST_BYTES_U64: u64 = 8 * 1024 * 1024;
 const MAX_BINARY_BYTES: u64 = 512 * 1024 * 1024;
 /// Typed producer pair. Not the three-target consumer release inventory.
 const PRODUCER_TARGETS: [&str; 2] = [
-    GeneratorReleaseTarget::LinuxX86_64.triple(),
-    GeneratorReleaseTarget::MacosArm64.triple(),
+    ReleaseTarget::LinuxX86_64.triple(),
+    ReleaseTarget::MacosArm64.triple(),
 ];
 
 /// Verify a release manifest against two local target binaries.
@@ -55,12 +55,12 @@ pub fn verify_local_generator_release_manifest(
     }
     verify_target_binary(
         &manifest,
-        GeneratorReleaseTarget::LinuxX86_64.triple(),
+        ReleaseTarget::LinuxX86_64.triple(),
         linux_x64_binary,
     )?;
     verify_target_binary(
         &manifest,
-        GeneratorReleaseTarget::MacosArm64.triple(),
+        ReleaseTarget::MacosArm64.triple(),
         macos_arm64_binary,
     )
 }
