@@ -21,3 +21,17 @@ fn generic_inline_shell_rejects_substitution_even_when_quoted() {
         );
     }
 }
+
+#[test]
+fn env_separator_assignments_do_not_hide_shell_operators() {
+    let err = validate_command_argv(&argv(&[
+        "env",
+        "--",
+        "FOO=bar",
+        "bash",
+        "-c",
+        "sleep 1&echo done",
+    ]))
+    .expect_err("env assignment after -- must not hide a shell launcher");
+    assert!(err.to_string().contains("background_shell"), "{err}");
+}

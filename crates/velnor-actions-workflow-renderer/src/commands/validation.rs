@@ -204,7 +204,16 @@ fn env_command_index(argv: &[String], env_index: usize) -> Result<Option<usize>,
             return Ok(None);
         };
         match arg.as_str() {
-            "--" => return Ok(Some(index + 1)),
+            "--" => {
+                index += 1;
+                while argv
+                    .get(index)
+                    .is_some_and(|value| is_env_assignment(value))
+                {
+                    index += 1;
+                }
+                return Ok(Some(index));
+            }
             "-u" | "--unset" => {
                 if argv.get(index + 1).is_none() {
                     return Err(unsupported_shell_wrapper());

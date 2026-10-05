@@ -278,6 +278,11 @@ fn inline_shell_quote_preserves_inner_expansions() -> Result<(), RenderError> {
         rendered,
         format!("env -u CUSTOM /usr/bin/env --chdir=/tmp /bin/bash -ec '{script}'")
     );
+    let after_separator = argv(&["env", "--", "FOO=bar", "bash", "-c", "echo $value"]);
+    assert_eq!(
+        join_argv_for_run(&after_separator)?,
+        "env -- FOO=bar bash -c 'echo $value'"
+    );
     Ok(())
 }
 
