@@ -53,6 +53,8 @@ mod impl_mise_p08;
 mod impl_mise_policy;
 #[path = "impl_mise_preflight.rs"]
 mod impl_mise_preflight;
+#[path = "impl_mise_process_group.rs"]
+mod impl_mise_process_group;
 #[path = "impl_mise_redaction.rs"]
 mod impl_mise_redaction;
 #[path = "impl_mise_release_modes.rs"]

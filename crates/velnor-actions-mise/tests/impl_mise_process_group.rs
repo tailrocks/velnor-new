@@ -3,8 +3,8 @@
 
 use std::ffi::OsString;
 use std::time::Duration;
-use velnor_actions_mise::command::{IsolatedCommand, is_cancel_or_timeout, is_reserved_env_key};
 use velnor_actions_mise::MiseError;
+use velnor_actions_mise::command::{IsolatedCommand, is_cancel_or_timeout, is_reserved_env_key};
 
 #[test]
 fn successful_parent_cannot_leave_a_pipe_holding_descendant_running() -> Result<(), String> {

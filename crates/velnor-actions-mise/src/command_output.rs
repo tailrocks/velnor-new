@@ -44,6 +44,9 @@ pub const SPAWN_CANCELLED_MESSAGE: &str = "cancelled";
 pub const SPAWN_TIMEOUT_MESSAGE_PREFIX: &str = "timeout_after_secs:";
 /// `SpawnFailed` message for an already-running absolute deadline.
 pub const SPAWN_DEADLINE_MESSAGE: &str = "timeout_after_absolute_deadline";
+/// Delimiter for bounded cleanup diagnostics appended to an abort reason.
+const CLEANUP_FAILURE_DELIMITER: &str = ";cleanup_failed:";
+pub(super) const MAX_CLEANUP_FAILURE_BYTES: usize = 1024;
 
 /// Whether a command error is timeout/cancellation, not a task outcome.
 ///
@@ -51,10 +54,20 @@ pub const SPAWN_DEADLINE_MESSAGE: &str = "timeout_after_absolute_deadline";
 /// propagate to the caller and never degrade into a normal cache miss.
 #[must_use]
 pub fn is_cancel_or_timeout(error: &MiseError) -> bool {
-    matches!(error, MiseError::SpawnFailed { message, .. }
-        if message == SPAWN_CANCELLED_MESSAGE
-            || message == SPAWN_DEADLINE_MESSAGE
-            || message.starts_with(SPAWN_TIMEOUT_MESSAGE_PREFIX))
+    let MiseError::SpawnFailed { message, .. } = error else {
+        return false;
+    };
+    let primary = message
+        .split_once(CLEANUP_FAILURE_DELIMITER)
+        .filter(|(_, details)| {
+            !details.is_empty()
+                && details.len() <= MAX_CLEANUP_FAILURE_BYTES
+                && !details.contains(CLEANUP_FAILURE_DELIMITER)
+        })
+        .map_or(message.as_str(), |(primary, _)| primary);
+    primary == SPAWN_CANCELLED_MESSAGE
+        || primary == SPAWN_DEADLINE_MESSAGE
+        || primary.starts_with(SPAWN_TIMEOUT_MESSAGE_PREFIX)
 }
 
 /// Typed child-process result: captured streams plus a typed exit.

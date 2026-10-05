@@ -242,7 +242,13 @@ fn poll_pipe<Fd: std::os::fd::AsFd>(
 fn cleanup_context(primary: &str, cleanup: Result<(), String>) -> String {
     match cleanup {
         Ok(()) => primary.to_owned(),
-        Err(problem) => format!("{primary};cleanup_failed:{problem}"),
+        Err(problem) => {
+            let mut end = problem.len().min(super::output::MAX_CLEANUP_FAILURE_BYTES);
+            while !problem.is_char_boundary(end) {
+                end -= 1;
+            }
+            format!("{primary};cleanup_failed:{}", &problem[..end])
+        }
     }
 }
 
