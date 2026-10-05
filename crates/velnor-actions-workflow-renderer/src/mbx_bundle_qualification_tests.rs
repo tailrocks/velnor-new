@@ -217,6 +217,7 @@ fn importer_receipt_preserves_raw_streams_and_exit_status() -> Result<(), String
     assert!(String::from_utf8_lossy(&result.stdout).contains("fallback"));
     assert!(String::from_utf8_lossy(&result.stderr).contains("import-err"));
     let body = fs::read_to_string(&receipt).map_err(|error| display_error(&error))?;
+    assert!(body.starts_with("command=import\n"), "{body}");
     assert!(
         body.contains("stdout_bytes=11\nimport-out\nstderr_bytes=11\nimport-err\n\nexit_status=42"),
         "{body}"

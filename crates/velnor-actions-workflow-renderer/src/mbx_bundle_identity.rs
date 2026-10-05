@@ -12,6 +12,7 @@ use crate::RenderError;
 
 pub(super) const QUALIFICATION_WRITER_IMPORT_GUARD: &str = r#"set -eu; if [ "$CACHE_HIT" = "true" ] || [ -n "$MATCHED" ]; then echo "qualification writer restore was not cold" >&2; exit 1; fi;"#;
 pub(super) const QUALIFICATION_READER_IMPORT_GUARD: &str = r#"set -eu; if [ "$CACHE_HIT" != "true" ]; then echo "qualification reader restore was not an exact cache hit" >&2; exit 1; fi; if [ -z "$MATCHED" ] || [ "$MATCHED" != "$EXPECTED_KEY" ]; then echo "qualification reader key did not match the writer primary" >&2; exit 1; fi;"#;
+pub(super) const QUALIFICATION_OBSERVER_IMPORT_GUARD: &str = r#"set -eu; if [ "$CACHE_HIT" != "true" ]; then if [ -n "$MATCHED" ]; then echo "observer miss had an unexpected matched key" >&2; exit 1; fi; echo "no exact observer cache hit; import skipped"; else if [ -z "$MATCHED" ] || [ "$MATCHED" != "$EXPECTED_KEY" ]; then echo "observer restore did not match the derived primary" >&2; exit 1; fi; fi;"#;
 
 pub(super) fn import_guard(role: Option<bool>, env: &mut BTreeMap<String, String>) -> &'static str {
     match role {
@@ -32,6 +33,20 @@ pub(super) fn import_guard(role: Option<bool>, env: &mut BTreeMap<String, String
         }
         None => "",
     }
+}
+
+pub(super) fn observer_import_guard(env: &mut BTreeMap<String, String>) -> &'static str {
+    env.extend(BTreeMap::from([
+        (
+            "CACHE_HIT".to_owned(),
+            "${{ steps.mbx-bundle.outputs.cache-hit }}".to_owned(),
+        ),
+        (
+            "EXPECTED_KEY".to_owned(),
+            "${{ steps.mbx-bundle-key.outputs.primary }}".to_owned(),
+        ),
+    ]));
+    QUALIFICATION_OBSERVER_IMPORT_GUARD
 }
 
 /// Internal identity used by the explicit restore/import/export lifecycle.
@@ -309,6 +324,12 @@ fn valid_scope(scope: &str) -> bool {
         && scope.bytes().all(|byte| {
             byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'/' | b':')
         })
+}
+
+pub(super) fn valid_qualification_scope(scope: &str) -> bool {
+    scope.starts_with(MBX_QUALIFICATION_SCOPE_PREFIX)
+        && scope.len() > MBX_QUALIFICATION_SCOPE_PREFIX.len()
+        && valid_scope(scope)
 }
 
 fn identity_error(id: &str, problem: &str) -> RenderError {

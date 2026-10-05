@@ -33,6 +33,8 @@ mod impl_renderer_mbx_gc_policy;
 mod impl_renderer_mbx_identity;
 #[path = "impl_renderer_mbx_pr_cache_policy.rs"]
 mod impl_renderer_mbx_pr_cache_policy;
+#[path = "impl_renderer_mbx_resource_corruption.rs"]
+mod impl_renderer_mbx_resource_corruption;
 #[path = "impl_renderer_mbxgate.rs"]
 mod impl_renderer_mbxgate;
 #[path = "impl_renderer_msrv.rs"]

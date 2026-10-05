@@ -52,10 +52,10 @@ fn expression_spans(text: &str) -> Option<Vec<&str>> {
 /// fixed secret bindings (bootstrap registry plus the release forge
 /// token, whose placements the release gates still police separately),
 /// cache-mode selector (a pure function of the event name over string
-/// literals), and MBX key inputs from the setup and restore steps.
-/// Notably absent: `github.token` (render-time fetch binding only)
-/// and run IDs (never in env).
-const ENV_EXPRESSIONS: [&str; 18] = [
+/// literals), MBX key inputs, and exact child-run identity outputs.
+/// Notably absent: `github.token` (render-time fetch binding only),
+/// direct `github.run_id`, and arbitrary step outputs.
+const ENV_EXPRESSIONS: [&str; 26] = [
     "runner.temp",
     "github.ref_name",
     "github.event_name",
@@ -65,6 +65,14 @@ const ENV_EXPRESSIONS: [&str; 18] = [
     "steps.mbx.outputs.mbx-version",
     "steps.mbx-bundle.outputs.cache-matched-key",
     "steps.mbx-bundle.outputs.cache-hit",
+    "steps.mbx-bundle-import.outputs.selected_cache_root",
+    "steps.mbx-cancel-receipt.outputs.child_run_id",
+    "steps.mbx-cancel-receipt.outputs.child_attempt",
+    "steps.mbx-cancel-receipt.outputs.source_sha",
+    "steps.mbx-cancel-receipt.outputs.cache_key",
+    "steps.mbx-cancel-receipt.outputs.generation",
+    "steps.mbx-cancel-receipt.outputs.rustc_identity",
+    "steps.mbx-cancel-receipt.outputs.mbx_version",
     "steps.mbx-bundle-key.outputs.primary",
     "github.event.pull_request.base.sha",
     "toJSON(matrix)",
