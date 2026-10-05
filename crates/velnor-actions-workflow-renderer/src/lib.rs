@@ -3,6 +3,7 @@
 //! Validated IR plus fixed argv in, marked YAML out: no subprocesses, no
 //! stack or tool branching, quoting-only shell shaping.
 
+mod acquire_action;
 mod action_ref;
 pub mod agents_md;
 mod artifact_paths;
@@ -24,6 +25,7 @@ mod final_steps;
 pub mod freshness;
 pub mod guard;
 mod lane_share;
+mod lane_share_composite;
 mod lane_share_sections;
 pub mod lane_target;
 pub mod marker;

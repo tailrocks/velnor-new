@@ -9,6 +9,8 @@ use std::collections::BTreeSet;
 pub const TOFU_PROVIDER_ADMISSION_USES: &str = "./.github/actions/tofu-provider-admission";
 /// Fixed local action path for the exact-key host tool seed.
 pub const TOOL_SEED_USES: &str = "./.github/actions/velnor-tool-seed";
+/// Prefix for renderer-generated, content-addressed helper-acquisition actions.
+pub const ACQUIRE_VELNOR_ACTION_PREFIX: &str = "./.github/actions/acquire-b3-";
 /// Expression path for the job-private `OpenTofu` plugin cache.
 pub const TOFU_PROVIDER_CACHE_BASE_EXPR: &str = "${{ runner.temp }}/velnor/tofu-cache";
 /// Exact-key layer identity shared by the restore and save protocol.
@@ -171,7 +173,6 @@ impl StepRole {
             | Self::CargoMachete
             | Self::Actionlint
             | Self::Zizmor
-            | Self::AcquireVelnor
             | Self::PreseedStage
             | Self::CheckGenerated
             | Self::PlanFormat
@@ -182,6 +183,9 @@ impl StepRole {
             | Self::PreseedVerifyBuild
             | Self::PreseedVerifyManifest
             | Self::MbxPreflight => matches!(kind, StepKind::Shell { .. }),
+            Self::AcquireVelnor => {
+                matches!(kind, StepKind::Shell { .. }) || valid_acquire_action(kind)
+            }
         }
     }
 
@@ -251,6 +255,19 @@ fn valid_tool_seed_payload(kind: &StepKind) -> bool {
             && env.is_empty())
 }
 
+/// Validate the fixed caller shape for one generated acquisition composite.
+fn valid_acquire_action(kind: &StepKind) -> bool {
+    matches!(kind, StepKind::Action { uses, with, env }
+        if is_acquire_action_uses(uses) && with.is_empty() && env.is_empty())
+}
+
+/// Whether `uses` names a renderer-generated, full-digest acquisition action.
+#[must_use]
+pub fn is_acquire_action_uses(uses: &str) -> bool {
+    uses.strip_prefix(ACQUIRE_VELNOR_ACTION_PREFIX)
+        .is_some_and(|digest| crate::ids::is_lower_hex_len(digest, 64))
+}
+
 /// True when an action payload uses a fixed name prefix.
 fn action_has_prefix_for_kind(kind: &StepKind, prefix: &str) -> bool {
     matches!(kind, StepKind::Action { uses, .. } if action_has_prefix(uses, prefix))
@@ -263,7 +280,7 @@ fn action_has_prefix(uses: &str, prefix: &str) -> bool {
 
 /// True when an internal operation matches its role contract.
 fn internal_operation(kind: &StepKind, expected: &str) -> bool {
-    matches!(kind, StepKind::Internal { operation } if operation == expected)
+    matches!(kind, StepKind::Internal { operation, .. } if operation == expected)
 }
 
 /// Validate the typed Mise setup payload shape shared by render paths.

@@ -61,19 +61,17 @@ fn emitted_verification_job_scrubs_credentials_without_disabling_mise_config() {
         preludes: &steps,
         postludes: &steps,
     };
-    let yaml = job_to_yaml(
-        &id,
-        &job,
-        &context,
-        &[],
-        None,
-        &lanes,
-        super::MbxJobPolicy {
+    let needs_envs = Vec::new();
+    let render_context = super::JobRenderContext {
+        needs_envs: &needs_envs,
+        shared: None,
+        lanes: &lanes,
+        mbx_policy: super::MbxJobPolicy {
             native_mbx: false,
             actions_read: false,
         },
-    )
-    .expect("render verification job");
+    };
+    let yaml = job_to_yaml(&id, &job, &context, &render_context).expect("render verification job");
     let rendered = crate::yaml::render_yaml(&yaml);
 
     assert!(rendered.contains("GITHUB_TOKEN: \"\""));
