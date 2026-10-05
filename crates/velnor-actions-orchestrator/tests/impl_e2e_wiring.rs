@@ -101,7 +101,7 @@ fn uses_staged_helper(step: &StepText) -> bool {
         && step.body.contains("$RUNNER_TEMP/velnor/bin")
 }
 
-/// Setup Mise must be first (modulo Checkout plus tools restore) and precede every `mise` use.
+/// Setup Mise must follow Checkout, runtime identity, and tools restore and precede each `mise` use.
 fn check_setup_first(job: &JobText) -> Result<(), String> {
     let setup = job.steps.iter().position(|s| s.name == "Setup Mise");
     let first_mise = job.steps.iter().position(uses_mise);
@@ -116,26 +116,15 @@ fn check_setup_first(job: &JobText) -> Result<(), String> {
     }
 }
 
-/// Setup position is legal at 0-1 (right after Checkout; P08 has no
-/// manual tools restore ahead of it).
+/// Setup position is legal at 0-3 (Checkout, identity, and V2 restore).
 fn setup_is_early(_job: &JobText, at: usize) -> bool {
-    at <= 1
+    at <= 3
 }
 
-/// Setup Mise must enable the qualified built-in cache: `cache:true` with
-/// an explicit tool-union `cache_key` (never the workspace-hashing default
-/// that ELOOPs on the symlink-loop fixture, never a job-role suffix).
-/// Every setup restores read-only (`cache_save: "false"`): the pinned
-/// action saves only inside its disabled `install` leg, so no setup may
-/// promise a built-in save. Push-gated saves are explicit `Save Mise
-/// tools` steps on the elected writer per key.
-fn check_setup_cache_on(job: &JobText) -> Result<(), String> {
+/// Setup Mise must leave restore and save ownership to the explicit V2 layer.
+fn check_setup_cache_disabled(job: &JobText) -> Result<(), String> {
     for step in job.steps.iter().filter(|s| s.name == "Setup Mise") {
-        for need in [
-            "cache: \"true\"",
-            "cache_key: mise-v1-",
-            "cache_save: \"false\"",
-        ] {
+        for need in ["cache: \"false\"", "cache_save: \"false\""] {
             if !step.body.contains(need) {
                 return Err(format!("{}: Setup Mise misses {need}", job.id));
             }
@@ -143,8 +132,8 @@ fn check_setup_cache_on(job: &JobText) -> Result<(), String> {
         if step.body.contains("cache_save: ${{") {
             return Err(format!("{}: Setup Mise must not promise a save", job.id));
         }
-        if step.body.contains("hashFiles(") {
-            return Err(format!("{}: Setup Mise must not hashFiles", job.id));
+        if step.body.contains("cache_key:") {
+            return Err(format!("{}: Setup Mise must not own a tools key", job.id));
         }
     }
     Ok(())
@@ -204,7 +193,7 @@ fn check_tree(yaml: &str) -> Result<Vec<JobText>, String> {
     }
     for job in &jobs {
         check_setup_first(job)?;
-        check_setup_cache_on(job)?;
+        check_setup_cache_disabled(job)?;
         check_tools_save_shape(job)?;
         check_provisioned(job)?;
         check_named(job)?;

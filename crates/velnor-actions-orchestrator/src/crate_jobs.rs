@@ -111,7 +111,6 @@ pub(crate) fn build_crate_jobs(
             obligations: obligations_for(tasks, catalog)?,
         };
         model.validate()?;
-        let repo_has_mbx = crate::workflow::plan_uses_mbx(discovery);
         let mut job = render_job(
             label,
             policy,
@@ -122,7 +121,6 @@ pub(crate) fn build_crate_jobs(
             use_mbx,
             use_nextest,
             use_opentofu,
-            repo_has_mbx,
             acquire,
             max_parallel_jobs,
         )?;
@@ -239,7 +237,6 @@ fn render_job(
     use_mbx: bool,
     use_nextest: bool,
     use_opentofu: bool,
-    repo_has_mbx: bool,
     acquire: Option<&Step>,
     max_parallel_jobs: u32,
 ) -> Result<Job, OrchestratorError> {
@@ -264,8 +261,6 @@ fn render_job(
         catalog,
         fetch_roots,
         use_rust,
-        use_mbx,
-        repo_has_mbx,
     )?);
     if use_opentofu {
         let root = crate::tofu_cache::tofu_root_for_obligations(&model.obligations)?;
@@ -315,20 +310,17 @@ fn render_job(
     })
 }
 
-/// Restore step for one crate: shared sources, or Cargo-only registry.
+/// Restore step for one Rust crate's exact shared Cargo sources subset.
 ///
 /// Lockless emits nothing, and tofu roles restore providers through
-/// the separate provider-cache step (never here). Cargo-only repos
-/// (no MBX anywhere) restore via pinned `rust-cache` (read-only);
-/// every other lockful crate restores the shared `actions/cache`
-/// snapshot (read-only, never saves the shared key).
+/// the separate provider-cache step (never here). Compiler driver does
+/// not change the archive paths: readers restore the shared `actions/cache`
+/// snapshot and never save the shared key.
 fn restore_step_for_crate(
     label: &str,
     catalog: &ToolCatalog,
     fetch_roots: &[String],
     use_rust: bool,
-    use_mbx: bool,
-    repo_has_mbx: bool,
 ) -> Result<Option<Step>, OrchestratorError> {
     if !use_rust || fetch_roots.is_empty() {
         return Ok(None);
@@ -339,13 +331,6 @@ fn restore_step_for_crate(
         }
     })?;
     let rust = catalog.version(PinnedTool::Rust);
-    if !use_mbx && !repo_has_mbx {
-        let shared = format!(
-            "{}-{target}-{rust}",
-            crate::source_cache::RUST_CACHE_SHARED_PREFIX
-        );
-        return crate::source_cache::rust_cache_step(&shared, false).map(Some);
-    }
     let key = crate::source_cache::sources_cache_key(target, rust, fetch_roots)?;
     let prefix = crate::source_cache::sources_restore_prefix(&key);
     crate::source_cache::sources_restore_step(&key, &[prefix]).map(Some)

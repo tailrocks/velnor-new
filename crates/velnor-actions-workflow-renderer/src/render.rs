@@ -254,13 +254,13 @@ pub fn finalize_jobs(
             velnor_actions_contract::target_for_runner_label(&ctx.runs_on).ok_or_else(|| {
                 RenderError::InvalidWorkflow(format!("tools_cache_unsupported_target:{id}"))
             })?;
-        cache_p08::ensure_setup_p08(id, job, mise, always, target)?;
-        cache_p08::check_no_rust_cache_with_mbx(id, job)?;
+        cache_p08::ensure_tools_cache_v2(id, job, mise, always, target)?;
+        cache_p08::check_no_legacy_rust_cache(id, job)?;
         cache_p08::check_mbx_before_fetch(id, job)?;
         closure::check_internal_staged(id, job, ctx.preseed)?;
     }
     // Writer election needs every setup inserted: one saver per key.
-    cache_p08::elect_mise_cache_writers(&mut jobs)?;
+    cache_p08::elect_tools_cache_writers(&mut jobs)?;
     // Provider election needs every restore inserted: one saver per key.
     cache_p08::elect_tofu_provider_savers(&mut jobs)?;
     closure::check_plan_anchor(&jobs)?;
@@ -343,6 +343,7 @@ fn render_merged(
         ctx,
         &shared.calls,
         &shared.checkouts,
+        &shared.preludes,
         &mbx_gc_jobs,
     )?;
     if let Some((source, max_parallel)) = &matrix {

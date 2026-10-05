@@ -120,11 +120,12 @@ fn action_inputs<'a>(
     Err(std::io::Error::other(format!("missing {name}")).into())
 }
 
-/// (`job`, `cache_key`) pairs in render order (setup is render-inserted).
-fn mise_keys_by_job(yaml: &str) -> Vec<(String, String)> {
+/// (`job`, V2 key) pairs in render order (cache steps are render-inserted).
+fn tools_keys_by_job(yaml: &str) -> Vec<(String, String)> {
     let mut out = Vec::new();
     let mut job = String::new();
     let mut in_jobs = false;
+    let mut in_tools_restore = false;
     for line in yaml.lines() {
         if line == "jobs:" {
             in_jobs = true;
@@ -132,9 +133,14 @@ fn mise_keys_by_job(yaml: &str) -> Vec<(String, String)> {
         }
         if in_jobs && line.starts_with("  ") && !line.starts_with("   ") && line.ends_with(':') {
             line.trim().trim_end_matches(':').clone_into(&mut job);
+            in_tools_restore = false;
         }
-        if let Some(value) = line.trim().strip_prefix("cache_key: ") {
+        if let Some(name) = line.trim().strip_prefix("- name: ") {
+            in_tools_restore = name.trim_matches('"') == "Restore Mise tools";
+        }
+        if in_tools_restore && let Some(value) = line.trim().strip_prefix("key: ") {
             out.push((job.clone(), value.trim_matches('"').to_owned()));
+            in_tools_restore = false;
         }
     }
     out
@@ -190,11 +196,11 @@ fn per_job_sources_keys_identical_plan_and_crates() -> TestResult {
 fn per_job_mise_keys_qualified_without_job_suffix() -> TestResult {
     for mbx in [false, true] {
         let yaml = yaml_for(mbx)?;
-        let pairs = mise_keys_by_job(&yaml);
+        let pairs = tools_keys_by_job(&yaml);
         assert!(pairs.len() >= 3, "plan plus crates (mbx={mbx}): {pairs:?}");
         for (job, key) in &pairs {
             assert!(!job.is_empty(), "key inside a job: {key}");
-            assert!(key.starts_with("mise-v1-"), "qualified: {key}");
+            assert!(key.starts_with("mise-tools-v2-"), "qualified: {key}");
             assert!(!key.contains("latest"), "pinned: {key}");
             for role in ["-plan", "rust-", "-a-", "-b-"] {
                 assert!(!key.contains(role), "no role suffix: {key}");
@@ -220,7 +226,7 @@ fn per_job_mise_keys_qualified_without_job_suffix() -> TestResult {
 fn sources_paths_cover_owned_subset_only() -> TestResult {
     let (_repo, prep) = prep_for(true)?;
     let expected = cache_sources::sources_cache_paths(SHARED_HOME).expect("subset");
-    assert_eq!(expected.len(), 6, "sufficient subset");
+    assert_eq!(expected.len(), 3, "registry and Git source subset");
     let mut jobs = vec!["plan".to_owned()];
     jobs.extend(crate_jobs(&prep));
     for job in &jobs {
@@ -237,6 +243,7 @@ fn sources_paths_cover_owned_subset_only() -> TestResult {
     let entries = cache_path_entries(&yaml);
     assert!(!entries.is_empty(), "path inputs present");
     let mut snapshot = 0;
+    let mut tools = 0;
     for entry in &entries {
         for banned in ["credentials", "registry/src", "~/.cargo"] {
             assert!(
@@ -245,14 +252,23 @@ fn sources_paths_cover_owned_subset_only() -> TestResult {
             );
         }
         if entry.starts_with(&format!("{SHARED_HOME}/")) {
-            snapshot += 1;
-            assert!(
-                expected.iter().any(|ok| ok == entry),
-                "owned-home entries are the subset: {entry}"
-            );
+            if expected.iter().any(|ok| ok == entry) {
+                snapshot += 1;
+            } else if [
+                format!("{SHARED_HOME}/.crates.toml"),
+                format!("{SHARED_HOME}/.crates2.json"),
+                format!("{SHARED_HOME}/bin"),
+            ]
+            .contains(entry)
+            {
+                tools += 1;
+            } else {
+                panic!("owned-home path has no cache owner: {entry}");
+            }
         }
     }
     assert!(snapshot >= 6, "snapshot paths rendered: {snapshot}");
+    assert!(tools >= 3, "tool paths move to V2 tools archive: {tools}");
     Ok(())
 }
 
@@ -314,29 +330,61 @@ fn restore_mbx_fetch_order_every_crate_job() -> TestResult {
 }
 
 #[test]
-fn cargo_only_shared_registry_single_shape() -> TestResult {
+fn cargo_only_uses_same_exact_sources_archive() -> TestResult {
     let (_repo, prep) = prep_for(false)?;
     let mut jobs = vec!["plan".to_owned()];
     jobs.extend(crate_jobs(&prep));
     let mut shared = String::new();
     for job in &jobs {
-        let with = action_inputs(job_steps(&prep, job)?, "Restore Cargo registry")?;
-        let key = with.get("shared-key").cloned().ok_or("shared-key")?;
-        assert!(key.starts_with("velnor-cargo-"), "shared prefix: {key}");
+        let steps = job_steps(&prep, job)?;
+        let with = action_inputs(steps, "Restore Cargo sources")?;
+        let key = with.get("key").cloned().ok_or("key")?;
+        assert!(
+            key.starts_with("velnor-v1-sources-"),
+            "shared prefix: {key}"
+        );
         if shared.is_empty() {
             shared.clone_from(&key);
         }
-        assert_eq!(key, shared, "{job} shares the registry key");
-        let save = with.get("save-if").cloned().unwrap_or_default();
-        assert_eq!(
-            save,
-            if job == "plan" { "true" } else { "false" },
-            "{job} save-if"
-        );
+        assert_eq!(key, shared, "{job} shares the sources key");
+        let path = with.get("path").cloned().ok_or("path")?;
+        for owned in [
+            "${{ runner.temp }}/velnor/cargo/registry/index",
+            "${{ runner.temp }}/velnor/cargo/registry/cache",
+            "${{ runner.temp }}/velnor/cargo/git/db",
+        ] {
+            assert!(
+                path.contains(owned),
+                "{job} sources path omits {owned}: {path}"
+            );
+        }
+        for excluded in [
+            "${{ runner.temp }}/velnor/cargo/bin",
+            ".crates.toml",
+            ".crates2.json",
+        ] {
+            assert!(
+                !path.contains(excluded),
+                "{job} sources path includes {excluded}: {path}"
+            );
+        }
+        if job == "plan" {
+            let save = action_inputs(steps, "Save Cargo sources")?;
+            assert_eq!(save.get("key"), Some(&key));
+        } else {
+            assert!(!steps.iter().any(|step| step.name == "Save Cargo sources"));
+        }
     }
     let yaml = yaml_for(false)?;
     assert!(!yaml.contains("mr-boxington-action"), "no MBX stacked");
-    assert!(!yaml.contains("Save Cargo sources"), "no snapshot save");
+    assert!(
+        yaml.contains("Save Cargo sources"),
+        "plan seeds one snapshot"
+    );
+    assert!(
+        !yaml.contains("Swatinem/rust-cache"),
+        "broad archive removed"
+    );
     Ok(())
 }
 
@@ -344,7 +392,7 @@ fn cargo_only_shared_registry_single_shape() -> TestResult {
 fn service_report_parses_live_shape_for_sequential_runs() {
     // Fixed format sample (live `gh cache list --json` shape); the numbers
     // it carries are illustrative — real totals live in performance.md.
-    let body = r#"[{"key":"velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-aa","sizeInBytes":17568922},{"key":"mise-v1-x86_64-unknown-linux-gnu-2026.9.16-bb","sizeInBytes":65857248}]"#;
+    let body = r#"[{"key":"velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-aa","sizeInBytes":17568922},{"key":"mise-tools-v2-typed-runtime-bb","sizeInBytes":65857248}]"#;
     let report =
         cache_trust::summarize_cache_usage(body, 10_737_418_240, 17_568_922, 3).expect("report");
     assert_eq!(report.active_bytes, 17_568_922 + 65_857_248);

@@ -321,6 +321,10 @@ fn has_bare_ampersand(line: &str) -> bool {
         *byte == b'&'
             && bytes.get(index.wrapping_sub(1)) != Some(&b'&')
             && bytes.get(index + 1) != Some(&b'&')
+            && !(bytes.get(index.wrapping_sub(1)) == Some(&b'>')
+                && bytes
+                    .get(index + 1)
+                    .is_some_and(|next| next.is_ascii_digit() || *next == b'-'))
     })
 }
 

@@ -221,7 +221,8 @@ fn velnor_policy_renders_validators_only() -> Result<(), RenderError> {
     }
     assert!(text.contains(ALINT_USES));
     assert!(text.contains("fail-on-warning"));
-    assert!(!text.contains("qualification"));
+    assert!(!text.contains("\n  qualification:\n"));
+    assert!(!text.contains("name: Qualification\n"));
     assert!(!text.contains("toolchain"));
     assert!(!text.contains(CANDIDATE_JOB_ID));
     let mut dup_ctx = fixture_ctx();

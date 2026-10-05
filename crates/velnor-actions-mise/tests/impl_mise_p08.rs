@@ -11,8 +11,11 @@ fn c1_inventory_lists_every_runtime_path_with_one_owner() {
     for id in [
         "mise-installs",
         "rustup-toolchains",
-        "cargo-sources",
-        "cargo-binaries",
+        "cargo-registry-sources",
+        "cargo-git-sources",
+        "cargo-install-binaries",
+        "cargo-install-receipt",
+        "cargo-install-receipt-json",
         "cargo-target",
         "mbx-objects",
         "tofu-provider-cache",
@@ -20,7 +23,15 @@ fn c1_inventory_lists_every_runtime_path_with_one_owner() {
         assert!(paths::is_known_id(id), "missing {id}");
         assert!(!paths::owner_for(id).expect("owner").is_empty());
     }
-    assert_eq!(inv.len(), 8, "exact inventory size");
+    assert_eq!(inv.len(), 11, "exact inventory size");
+    assert_eq!(
+        paths::owner_for("cargo-registry-sources").expect("registry owner"),
+        "velnor/sources"
+    );
+    assert_eq!(
+        paths::owner_for("cargo-install-binaries").expect("binary owner"),
+        "catalog/tools"
+    );
     assert_eq!(
         paths::owner_for("tofu-provider-cache").expect("owner"),
         "velnor/tofu-providers"
@@ -43,7 +54,7 @@ fn c1_dangling_symlink_never_counts_as_warm() {
 fn c3_subset_lives_at_real_home_without_credentials() {
     let home = "${{ runner.temp }}/velnor/cargo";
     let got = sources::sources_cache_paths(home).expect("paths");
-    assert_eq!(got.len(), 6);
+    assert_eq!(got.len(), 3);
     assert!(sources::validate_sources_subset(&got, home).is_ok());
     assert!(sources::sources_cache_paths("").is_err());
     for bad in [
@@ -253,8 +264,8 @@ fn c12_remote_mbx_backends_rejected() {
 #[test]
 fn c13_usage_report_composes_service_parse_quota_and_transfer() {
     // Live `gh cache list --json` shape (fixed format sample, not a
-    // measurement): one shared sources entry plus two tools entries.
-    let body = r#"[{"key":"velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-aa","sizeInBytes":17568922},{"key":"mise-v1-x86_64-unknown-linux-gnu-2026.9.16-bb","sizeInBytes":65857248},{"key":"mise-v1-x86_64-unknown-linux-gnu-2026.9.16-cc","sizeInBytes":54077706}]"#;
+    // measurement): one shared sources entry plus two V2 tools entries.
+    let body = r#"[{"key":"velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-aa","sizeInBytes":17568922},{"key":"mise-tools-v2-typed-runtime-bb","sizeInBytes":65857248},{"key":"mise-tools-v2-typed-runtime-cc","sizeInBytes":54077706}]"#;
     let report = trust::summarize_cache_usage(body, 10_737_418_240, 17_568_922, 8).expect("report");
     assert_eq!(report.active_bytes, 17_568_922 + 65_857_248 + 54_077_706);
     assert_eq!(report.count, 3);
