@@ -147,6 +147,10 @@ fn seed_step() -> Yaml {
             Yaml::str(crate::tool_seed::TOOL_SEED_NAME),
         ),
         (
+            "if".to_owned(),
+            Yaml::str(cache_p08::TOOLS_CACHE_RESTORE_CONDITION),
+        ),
+        (
             "uses".to_owned(),
             Yaml::annotated(
                 crate::tool_seed::TOOL_SEED_USES,
