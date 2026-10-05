@@ -76,6 +76,12 @@ fn external_deps_allowlisted_used_and_narrow() -> Result<(), Box<dyn Error>> {
         // compile-gated at 1.98.1); default features only, facade-owned
         // byte/count/depth caps, no expression evaluation.
         "hcl",
+        // Reviewed proc-macro token-tree support for the test-source scanner.
+        "proc-macro2",
+        // Reviewed Rust syntax tree for the Cargo test-target source-closure
+        // guard; `full` parses complete source files and `visit` resolves
+        // module declarations without text-pattern heuristics.
+        "syn",
     ];
     for (dir, _) in MEMBERS {
         let body = manifest(dir)?;
@@ -89,9 +95,12 @@ fn external_deps_allowlisted_used_and_narrow() -> Result<(), Box<dyn Error>> {
             if let Some(index) = line.find("features") {
                 let quoted: Vec<&str> = line[index..].split('"').collect();
                 for feature in quoted.into_iter().skip(1).step_by(2) {
-                    // Only `derive` globally, plus `fs` on rustix for the
-                    // P09 atomic directory exchange (no net/pty/terminal).
-                    let narrow = feature == "derive" || (key == "rustix" && feature == "fs");
+                    // Only `derive` globally, `fs` on rustix for the P09
+                    // atomic directory exchange, and `full`/`visit` on syn
+                    // for complete Rust AST traversal.
+                    let narrow = feature == "derive"
+                        || (key == "rustix" && feature == "fs")
+                        || (key == "syn" && matches!(feature, "full" | "visit"));
                     assert!(narrow, "{dir}/{key} feature {feature}");
                 }
             }
