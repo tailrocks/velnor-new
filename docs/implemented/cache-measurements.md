@@ -184,19 +184,17 @@ runs, so fork read-only has unit evidence only:
 `pr_save_allowed`/`is_read_only`/`mode_for_event`); simultaneous-writer
 attempts (PARTIAL: warm-run sources save hit backend reservation
 refusal, but no controlled two-writer race on one key was run).
-Historical V1 measurement conclusion: the Mise built-in cache never saved — the pinned
+ANSWERED: why the Mise built-in cache never saved — the pinned
 `jdx/mise-action@v5.0.0` (`9149ea8`) saves only inside its `install`
 leg (`src/index.ts:run()` gates `saveCache` on the `install` input;
 `action.yml` offers no PR-scoped save input and the source has zero
 `pull_request` handling), which Velnor disables (`install: false`),
 so the push-gated `cache_save` expression never saved on any event
 (all 134 runs to date are `pull_request` per the 2026-10-01 API
-census; push triggers only on `main`, unmerged). That V1 built-in-cache
-design is superseded: generated workflows now turn off the action-owned
-cache and use the V2 runtime-qualified tools archive documented in the
-cache contract. These historical measurements do not qualify a V2 cold
-writer, warm restore, or performance result. Full per-action PR-save
-verdict: gate-4 doc R13 bullet.
+census; push triggers only on `main`, unmerged). Setups are now restore-only and elected writers
+carry explicit push-gated `Save Mise tools` steps; warmth still needs
+one post-merge `main` push to seed the `mise-v1-*` entries. Full
+per-action PR-save verdict: gate-4 doc R13 bullet.
 
 ## Hosted MBX object-cache round-trip
 
@@ -216,54 +214,43 @@ collection behavior before export. This probe does not exercise either
 production lane route. Dispatch once from protected `main` with mode
 `mbx-cache-roundtrip`; the writer and reader run in order at the same SHA.
 
-This is a small end-to-end action and cache round-trip probe. It does not
-measure disk or inode peaks and does not qualify the affected ChainArgos
-workload. That evidence must come from the consumer's affected crates after
-adoption; a green probe alone is not an ENOSPC repair verdict.
+This is a small end-to-end action and cache round-trip probe. The writer
+samples `df -B1 -P` and `df -i -P` on `$RUNNER_TEMP` after the probe build.
+The reader prints those same lines. `tee` writes each MBX stats JSON to the
+step log and to a file, and `jq -e` reads that file. It still does not qualify
+the affected ChainArgos workload.
+A green probe alone is not an ENOSPC repair verdict.
 
-## Generated workflow-size envelope with V2 cache identities
+## Generated workflow size with V2 cache identity
 
-The workflow contract remains an exact 500,000-byte ceiling. The deterministic
-P13 workspace fixture measured:
+The generator enforces a fixed 500,000-byte `ci.yml` cap. After compacting the
+runtime identity body into one version-marked script plus one local composite
+action per used hosted lane, the deterministic P13 workspace fixture measured:
 
-| `workspace_repo` members | Rendered `ci.yml` bytes | Result |
+| `workspace_repo` members | `ci.yml` bytes | Result |
 | ---: | ---: | --- |
-| 1 | 66,164 | accepted |
-| 10 | 201,443 | accepted |
-| 29 | 487,032 | accepted |
-| 30 | 502,063 | rejected by the byte cap |
-| 40 | 652,373 | rejected by the byte cap |
-| 100 | 1,554,233 | rejected by the byte cap |
+| 1 | 33,737 | accepted |
+| 10 | 110,831 | accepted |
+| 29 | 273,585 | accepted |
+| 30 | 282,151 | accepted |
+| 40 | 367,811 | accepted |
+| 60 | 539,131 | rejected by the byte cap |
+| 100 | 881,771 | rejected by the byte cap |
 
-The separate T24 ToFu-root fixture has a lower measured boundary:
+The separate T24 ToFu-root fixture measured:
 
-| ToFu roots | Rendered `ci.yml` bytes | Result |
+| ToFu roots | `ci.yml` bytes | Result |
 | ---: | ---: | --- |
-| 1 | 49,978 | accepted |
-| 10 | 180,616 | accepted |
-| 31 | 485,536 | accepted |
-| 32 | 500,056 | rejected by the byte cap |
-| 40 | 616,216 | rejected by the byte cap |
-| 60 | 906,616 | rejected by the byte cap |
-| 100 | 1,487,416 | rejected by the byte cap |
+| 1 | 24,016 | accepted |
+| 10 | 96,469 | accepted |
+| 31 | 265,624 | accepted |
+| 32 | 273,679 | accepted |
+| 40 | 338,119 | accepted |
+| 60 | 499,219 | accepted |
+| 100 | 821,419 | rejected by the byte cap |
 
-The 30-, 40-, and 100-member renders and the 32-, 40-, 60-, and 100-root
-renders fail with `workflow_too_large` before writing a partial tree. These
-are local generator measurements, not hosted workflow or cache-performance
-evidence.
-
-The increase is produced by the V2 cache contract: the 40-member fixture has 44
-independent jobs with one runtime identity step and one Mise-tools restore per
-job, plus three elected Mise-tools saves. Each identity step is 6,620 rendered
-bytes because it validates the observed runner, image, home, and owned cache
-paths before constructing that job's restore key. The 44 identity steps account
-for 291,280 bytes. At clean comparison commit `3ec6f32b`, the generator source
-omitted the V2 cache consumers, while its checked-in `.github/workflows/ci.yml`
-still contained the older V2 output; generating that same 40-member fixture
-from the source produced 337,372 bytes. PR38 completes the V2 producer
-migration and regenerates the repository workflow so producer and checked-in
-output agree. Workflow bytes depend on the generated job and task shape, so
-member count is a measured fixture boundary, not a separate contract; the
-renderer's 500,000-byte check is authoritative. These sizes document
-generated-output coherence under the existing cap, not a general capacity or
-performance improvement.
+These are fixture-specific local generator measurements. The 60-root output is
+781 bytes below the current limit; this does not promise that other 60-root
+workflows fit. A rejected render reports its actual size and leaves no partial
+output tree. The cap remains authoritative, and these figures do not measure
+hosted cache hits, transfer size, disk usage, or build performance.

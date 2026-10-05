@@ -138,23 +138,31 @@ on:
   merge_group:
 ```
 
-The default branch name MUST come from explicit repository configuration or the local
-`refs/remotes/origin/HEAD` symbolic ref. If neither is available, generation fails with an instruction to set
-`workflow.default_branch`; it never assumes `main` or fetches a remote. The generator MUST NOT combine broad
-branch pushes with pull-request path filters. A valid planning job MUST run even when no stack task is
-selected.
+The default branch name MUST come from explicit repository configuration or the local `refs/remotes/origin/HEAD`
+symbolic ref. If neither is available, generation fails with an instruction to set `workflow.default_branch`; it
+never assumes `main` or fetches a remote. The generator MUST NOT combine broad branch pushes with pull-request
+path filters. A valid planning job MUST run even when no stack task is selected.
 
-Every generated workflow MUST set:
+Every generated workflow MUST set only the permissions required by its jobs.
+At workflow level, generated CI MUST set `contents: read` and MUST omit
+`actions`. GitHub denies omitted token scopes when a permissions map exists.
+Only the repository-policy `plan` and the `required` job may set job-level `actions: read`; both maps MUST
+retain `contents: read` because job permissions replace workflow permissions.
+Repository-policy `plan` uses Actions read to authenticate the bounded prior-baseline lookup,
+binding `GH_TOKEN` and `GH_REPO` only to its internal `plan-v1` step. `required`
+uses Actions read to fetch exact current-run report artifacts and a validated
+baseline artifact, binding those variables only to its report-fetch step.
+Other jobs MUST NOT receive `actions: read` or a nonempty Actions token.
 
 ```yaml
 permissions:
   contents: read
-  actions: read
 ```
 
-All other permissions MUST be absent or `none`. `actions: read` is only for the exact trusted baseline
-artifact. Release publication uses a separate workflow with explicit permissions; fork pull requests receive
-no write access. `[stacks.rust.release]` adds `release.yml` (see [release contract](release-contract.md)) with per-job permissions that MUST NOT weaken this default.
+All other permissions MUST be absent or `none`. Release publication uses a
+separate workflow with explicit permissions; fork pull requests receive no write access. `[stacks.rust.release]`
+adds `release.yml` (see [release contract](release-contract.md)) with per-job permissions that MUST NOT weaken
+this default.
 
 The workflow concurrency group MUST be:
 
@@ -175,20 +183,18 @@ names, generated command labels, or CLI subcommands. The sole Velnor executable 
 1. `plan`: checkout; setup Mise through its pinned action with exact catalog `version`/`sha256`; acquire
    the bootstrap asset from the generated descriptor and verify it. Consumers embed the generating release version, target URL, and
    digest; Velnor uses the matching `.velnor/generator.lock` record and checks equality. Install exact tools
-   from the embedded catalog, including GitHub CLI for trusted-baseline lookup. Discover obligations, resolve
-   a valid baseline, classify every obligation, and emit the bounded matrix and complete plan report. In
-   bootstrap validation mode, check generated files with the locked binary. In candidate mode, do not invoke
-   the candidate or require the bootstrap to reproduce new generator output.
-2. `rust-<slug>`: one job per selected crate, grouping that crate's
-obligations in contract order. It runs the focused steps in the [task execution contract](task-execution-contract.md) and uploads
-one stack-neutral report even after failure.
+   from the embedded catalog, including GitHub CLI. Under repository policy, only the internal `plan-v1` step
+   receives `GH_TOKEN` and `GH_REPO` for authenticated baseline lookup. It classifies obligations and emits the bounded matrix and
+   complete plan report. In bootstrap mode it checks generated files with the locked binary; candidate mode
+   does not invoke the candidate or require the bootstrap to reproduce its output.
+2. `rust-<slug>`: one job per selected crate, grouping its obligations in contract order. It runs the focused
+steps in the [task execution contract](task-execution-contract.md) and uploads one stack-neutral report after failure too.
 3. `actionlint`: checkout without persisted credentials; setup Mise with pinned action, version,
    and SHA-256; install exact
    Actionlint and ShellCheck versions with project config, env, and hooks disabled; run
    `mise --no-config exec actionlint@<exact> shellcheck@<exact> -- actionlint -color` from the root. This
    required job reads `.github/actionlint.yaml` and checks every generated workflow, even with no Rust stack.
-4. `required`: `if: always()`, depends on the base and enabled policy jobs, validates reports/conclusions,
-and is the required status check.
+4. `required`: `if: always()`, depends on base and enabled policy jobs, validates reports/conclusions, and is the required status check.
 
 Only for `workflow.policy = "velnor-repository-v1"`, emit one independent job per repository validator plus generated `release.yml` and `velnor-qualification.yml` workflows rendered from typed workflow IR, each with an explicit `permissions:` block (least privilege for its role). `alint`
 checks out source with `persist-credentials: false` and runs the full-SHA-pinned `asamarts/alint` action with `path: .`,
@@ -265,20 +271,15 @@ direct pinned Mise commands or a locked helper staged under the runner's tempora
 8. `Publish plan`: validate the plan, emit the bounded `matrix.include` output,
 and upload `velnor-plan-<run-key>` with `if: always()`.
 
-Under `velnor-repository-v1`, Alint uses the full-SHA-pinned `asamarts/alint` action against Velnor's `.alint.yml`;
-the final gate checks its job conclusion. The `cargo-deny`, `cargo-machete`, and `zizmor` jobs run their
-dependency/security commands through pinned Mise. `consumer-v1` emits none of these jobs and needs no policy-only files.
+Under `velnor-repository-v1`, Alint uses the full-SHA-pinned `asamarts/alint` action against Velnor's `.alint.yml`; the final gate checks its conclusion. The `cargo-deny`, `cargo-machete`, and `zizmor` jobs use pinned Mise. `consumer-v1` emits none of these jobs and needs no policy-only files.
 
-Crate-job steps are the named steps in the task execution contract. Each crate job consumes
-its obligations from `plan`; it MUST NOT rediscover stacks or packages. `required` steps
-are: `Download plan`, `Download every expected matrix artifact`, `Merge reports` through a fixed internal
-workflow step, and `Publish final report` with `if: always()`. The merge step MUST run even when a crate job
-failed or was cancelled. It uses direct pinned Mise commands or a locked helper staged under the runner's
-temporary directory.
+Crate-job steps are the named steps in the task execution contract. Each consumes obligations from `plan` and
+MUST NOT rediscover stacks or packages. `required` downloads the plan and expected matrix artifacts, merges the
+reports through a fixed internal step, and publishes the final report with `if: always()`. The merge step runs
+even after a crate job fails or is cancelled; it uses pinned Mise or a locked temporary helper.
 
-The workflow run key is `r<github.run_id>-a<github.run_attempt>`, created by `plan` and passed
-unchanged to every job. Local runs use `local` and do not upload artifacts. The key MUST NOT enter task or
-cache identities.
+The workflow run key is `r<github.run_id>-a<github.run_attempt>`, created by `plan` and passed unchanged to every
+job. Local runs use `local` and do not upload artifacts. The key MUST NOT enter task or cache identities.
 
 Actions MUST be selected only from this allowlist:
 
@@ -374,15 +375,14 @@ candidate artifact is `velnor-candidate-<run-key>-<target-key>`, where `target-k
 triple with non-alphanumeric runs replaced by `-`. Artifact names MUST be unique within the run and MUST use
 only the derived values above.
 
-The default matrix policy is one entry per selected stack task-group/configuration with at least one `execute`
-obligation. Its `execute_task_ids` contains only obligations that this matrix entry must run; `test_run` is an
-array of shard task IDs, including `shard-1-of-1` when not sharded. The complete plan retains covered/reused
-obligations separately. The V1 Rust adapter MUST NOT generate `--all-features` configurations. Cross-package
-or cross-component integration tasks MUST be represented by explicit matrix entries. An intentionally empty
-test target MUST remain visible in the plan.
+The default matrix policy emits one entry per selected stack task-group/configuration with an `execute`
+obligation. Its `execute_task_ids` contains only work to run; `test_run` lists shard IDs, including
+`shard-1-of-1` when unsharded, while the plan retains covered/reused work separately. V1 MUST NOT generate
+`--all-features` configurations. Cross-package integration tasks need explicit entries, and empty test targets
+remain visible in the plan.
 
-The plan file written by `plan` MUST be `$RUNNER_TEMP/velnor/<run-key>/plan.json` and MUST contain the
-same `matrix.include` array that is sent through `GITHUB_OUTPUT`. Its schema-1 shape is defined by the
+The plan file written by `plan` MUST be `$RUNNER_TEMP/velnor/<run-key>/plan.json` and contain the same
+`matrix.include` array sent through `GITHUB_OUTPUT`. Its schema-1 shape is defined by the
 [architecture contract](architecture.md); baseline and obligation fields use the exact proof format in the
 [parallelism and affected-work contract](parallelism-and-selection-contract.md).
 

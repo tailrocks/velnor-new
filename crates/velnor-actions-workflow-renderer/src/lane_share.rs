@@ -342,6 +342,7 @@ fn composite_file(
             true,
             &empty_job_env,
             None,
+            false,
         )?);
     }
     let body = composite_yaml(logical, rendered)?;
