@@ -2,7 +2,7 @@
 
 use crate::errors::ContractError;
 
-use super::{BuildTask, VerificationTask};
+use super::{BuildTask, NativeImageTask, VerificationTask};
 
 /// Generated job-key prefix shared by every workflow task variant.
 pub const WORKFLOW_TASK_JOB_PREFIX: &str = "task-";
@@ -15,6 +15,8 @@ pub enum WorkflowTask {
     Verification(VerificationTask),
     /// Native task allowed to compile repository code under explicit bounds.
     Build(BuildTask),
+    /// Hosted native-platform image validation task.
+    NativeImage(NativeImageTask),
 }
 
 impl WorkflowTask {
@@ -24,6 +26,7 @@ impl WorkflowTask {
         match self {
             Self::Verification(task) => &task.id,
             Self::Build(task) => &task.id,
+            Self::NativeImage(task) => &task.id,
         }
     }
 
@@ -33,6 +36,7 @@ impl WorkflowTask {
         match self {
             Self::Verification(task) => task.validate(file),
             Self::Build(task) => task.validate(file),
+            Self::NativeImage(task) => task.validate(file),
         }
     }
 }
@@ -64,7 +68,10 @@ pub fn is_valid_workflow_task_id(id: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{WorkflowTask, is_valid_workflow_task_id};
-    use crate::config::{BuildTask, BuildTaskRunner, VerificationRunner, VerificationTask};
+    use crate::config::{
+        BuildTask, BuildTaskRunner, NativeImageCachePolicy, NativeImagePlatform, NativeImageTask,
+        VerificationRunner, VerificationTask,
+    };
 
     fn verification(id: &str) -> WorkflowTask {
         WorkflowTask::Verification(VerificationTask {
@@ -84,6 +91,16 @@ mod tests {
             timeout_minutes: 120,
             cargo_build_jobs: 2,
             nextest_test_threads: 2,
+        })
+    }
+
+    fn native_image(id: &str) -> WorkflowTask {
+        WorkflowTask::NativeImage(NativeImageTask {
+            id: id.to_owned(),
+            platform: NativeImagePlatform::LinuxArm64,
+            script: "maintained-image-build/arm64-image-validation.sh".to_owned(),
+            timeout_minutes: 60,
+            cache: NativeImageCachePolicy::TaskOwnedBuilder,
         })
     }
 
@@ -126,5 +143,26 @@ mod tests {
             serde_json::from_value::<WorkflowTask>(value).expect("decode verification"),
             verification
         );
+    }
+
+    #[test]
+    fn native_image_is_a_direct_tagged_variant_in_the_shared_id_namespace() {
+        let task = native_image("architect-arm64-image");
+        assert!(task.validate("config.toml").is_ok());
+        let value = serde_json::to_value(&task).expect("serialize native image");
+        assert_eq!(value["kind"], "native-image");
+        assert_eq!(value["id"], "architect-arm64-image");
+        assert_eq!(value["platform"], "linux-arm64");
+        assert_eq!(value["script"], "maintained-image-build/arm64-image-validation.sh");
+        assert_eq!(value["cache"], "task-owned-builder");
+        assert!(value.get("native_image").is_none());
+        assert_eq!(
+            serde_json::from_value::<WorkflowTask>(value).expect("decode native image"),
+            task
+        );
+        assert!(serde_json::from_str::<WorkflowTask>(
+            r#"{"kind":"native-image","id":"x","platform":"linux-arm64","script":"maintained-image-build/x.sh","timeout_minutes":60,"cache":"global"}"#
+        )
+        .is_err());
     }
 }

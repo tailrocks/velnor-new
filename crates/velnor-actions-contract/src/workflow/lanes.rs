@@ -161,7 +161,9 @@ fn placement_for(
                 .tasks
                 .iter()
                 .find(|task| format!("{WORKFLOW_TASK_JOB_PREFIX}{}", task.id()) == job_id)
-                .is_some_and(|task| matches!(task, WorkflowTask::Build(_)))
+                .is_some_and(|task| {
+                    matches!(task, WorkflowTask::Build(_) | WorkflowTask::NativeImage(_))
+                })
             {
                 "workflow_task_hosted_only_scale_set_override"
             } else {
@@ -228,6 +230,7 @@ fn workflow_task_supports_scale_set(
             verification.runner == VerificationRunner::LinuxX64,
         ),
         WorkflowTask::Build(build) => (build.runner.runs_on(), false),
+        WorkflowTask::NativeImage(image) => (image.platform.runs_on(), false),
     };
     if job.runs_on != expected_runner {
         return Err(ContractError::config(

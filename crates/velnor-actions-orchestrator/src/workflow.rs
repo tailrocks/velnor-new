@@ -23,7 +23,8 @@ use velnor_actions_workflow_renderer::render::{
 };
 use velnor_actions_workflow_renderer::steps::PLAN_OPERATION;
 use velnor_actions_workflow_renderer::{
-    WorkflowTaskPolicy, build_build_task_job, build_verification_task_job,
+    WorkflowTaskPolicy, build_build_task_job, build_native_image_job,
+    build_verification_task_job,
 };
 
 use crate::OrchestratorError;
@@ -34,6 +35,8 @@ use crate::workflow_jobs::{final_job, lint_job, plan_job};
 
 #[path = "workflow_context.rs"]
 mod workflow_context;
+#[path = "native_image_tasks.rs"]
+mod native_image_tasks;
 
 pub(crate) use crate::workflow_jobs::LINT_JOB_ID;
 
@@ -109,6 +112,7 @@ fn build_plan_job(
 ///
 /// Returns contract, render-context, or tool-request errors.
 pub(crate) fn build_workflow(
+    root: &std::path::Path,
     config: &VelnorConfig,
     branch: &str,
     label: &str,
@@ -121,6 +125,7 @@ pub(crate) fn build_workflow(
     let policy = config.workflow.policy;
     let verification_policies = crate::verification_tasks::policies(config, discovery)?;
     let build_policies = crate::build_tasks::policies(config, discovery)?;
+    let native_image_policies = native_image_tasks::policies(root, config)?;
     let mut workflow_tasks = verification_policies
         .iter()
         .cloned()
@@ -130,6 +135,12 @@ pub(crate) fn build_workflow(
                 .iter()
                 .cloned()
                 .map(WorkflowTaskPolicy::Build),
+        )
+        .chain(
+            native_image_policies
+                .iter()
+                .cloned()
+                .map(WorkflowTaskPolicy::NativeImage),
         )
         .collect::<Vec<_>>();
     workflow_tasks.sort_by(|left, right| left.id().cmp(right.id()));
@@ -221,6 +232,10 @@ fn insert_workflow_task_jobs(
             WorkflowTaskPolicy::Build(policy) => (
                 policy.job_id(),
                 build_build_task_job(policy, CHECKOUT_USES)?,
+            ),
+            WorkflowTaskPolicy::NativeImage(policy) => (
+                policy.job_id(),
+                build_native_image_job(policy, CHECKOUT_USES)?,
             ),
         };
         if jobs.insert(id.clone(), job).is_some() {

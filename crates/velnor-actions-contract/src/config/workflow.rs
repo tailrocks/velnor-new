@@ -142,6 +142,7 @@ impl WorkflowConfig {
     fn validate_tasks(&self, file: &str) -> Result<(), ContractError> {
         let mut previous = None;
         let mut build_tasks = 0;
+        let mut native_image_tasks = 0;
         for task in &self.tasks {
             task.validate(file)?;
             if matches!(task, WorkflowTask::Build(_)) {
@@ -151,6 +152,16 @@ impl WorkflowConfig {
                         file,
                         "workflow.tasks",
                         "more_than_one_native_build_task",
+                    ));
+                }
+            }
+            if matches!(task, WorkflowTask::NativeImage(_)) {
+                native_image_tasks += 1;
+                if native_image_tasks > 1 {
+                    return Err(ContractError::config(
+                        file,
+                        "workflow.tasks",
+                        "more_than_one_native_image_task",
                     ));
                 }
             }
@@ -173,7 +184,8 @@ impl WorkflowConfig {
 mod tests {
     use super::{GeneratorValidation, WorkflowConfig, WorkflowPolicy};
     use crate::config::{
-        BuildTask, BuildTaskRunner, VerificationRunner, VerificationTask, WorkflowTask,
+        BuildTask, BuildTaskRunner, NativeImageCachePolicy, NativeImagePlatform, NativeImageTask,
+        VerificationRunner, VerificationTask, WorkflowTask,
     };
 
     /// Workflow config carrying `name`, all else default.
@@ -275,5 +287,33 @@ mod tests {
             .validate("config.toml")
             .expect_err("duplicate IDs across variants fail");
         assert!(error.to_string().contains("duplicate_workflow_task_id"));
+    }
+
+    #[test]
+    fn native_image_tasks_share_ids_and_have_one_hosted_capability_slot() {
+        let image = |id: &str| {
+            WorkflowTask::NativeImage(NativeImageTask {
+                id: id.to_owned(),
+                platform: NativeImagePlatform::LinuxArm64,
+                script: "maintained-image-build/arm64-image-validation.sh".to_owned(),
+                timeout_minutes: 60,
+                cache: NativeImageCachePolicy::TaskOwnedBuilder,
+            })
+        };
+        let mut valid = named("CI");
+        valid.tasks = vec![image("architect-arm64-image")];
+        assert!(valid.validate("config.toml").is_ok());
+
+        valid.tasks = vec![image("architect-arm64-image"), image("other-image")];
+        let error = valid
+            .validate("config.toml")
+            .expect_err("multiple image tasks exceed the one-host resource envelope");
+        assert!(error.to_string().contains("more_than_one_native_image_task"));
+
+        valid.tasks = vec![image("required")];
+        let error = valid
+            .validate("config.toml")
+            .expect_err("image tasks use the workflow-wide ID namespace");
+        assert!(error.to_string().contains("bad_workflow_task_id"));
     }
 }

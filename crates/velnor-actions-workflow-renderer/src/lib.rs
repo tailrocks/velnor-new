@@ -31,6 +31,7 @@ pub mod marker;
 mod matrix;
 mod matrix_output_mode;
 mod mbx_gc_policy;
+mod native_image_jobs;
 pub mod msrv;
 pub mod overlap;
 pub mod plan_format;
@@ -74,6 +75,10 @@ pub use build_task_jobs::{
     BUILD_TASK_DEVELOPER_DIR, BuildTaskArtifact, BuildTaskPolicy, BuildTaskTool,
     CARGO_BINSTALL_ONLY_ENV, INSTALL_BUILD_TASK_BOOTSTRAP_NAME, RUN_BUILD_TASK_NAME,
     VERIFY_BUILD_TASK_MACOS_NAME, VERIFY_BUILD_TASK_MBX_NAME, build_build_task_job,
+};
+pub use native_image_jobs::{
+    NativeImageTaskPolicy, RUN_NATIVE_IMAGE_TASK_NAME, VERIFY_NATIVE_IMAGE_HOST_NAME,
+    VERIFY_NATIVE_IMAGE_SOURCE_NAME, build_native_image_job,
 };
 pub use candidate::{
     VERIFY_MANIFEST_NAME, candidate_artifact_name, candidate_manifest_verify_script,

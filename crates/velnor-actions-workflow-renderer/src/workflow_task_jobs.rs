@@ -4,7 +4,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{Job, WORKFLOW_TASK_JOB_PREFIX};
 
-use crate::{BuildTaskPolicy, RenderError, VerificationTaskPolicy};
+use crate::{BuildTaskPolicy, NativeImageTaskPolicy, RenderError, VerificationTaskPolicy};
 
 /// One source-validated renderer policy for a declared workflow task.
 #[derive(Debug, Clone)]
@@ -13,6 +13,8 @@ pub enum WorkflowTaskPolicy {
     Verification(VerificationTaskPolicy),
     /// Native build task, hosted-only with explicit resource limits.
     Build(BuildTaskPolicy),
+    /// Native-platform image validation task, hosted-only on matching hardware.
+    NativeImage(NativeImageTaskPolicy),
 }
 
 impl WorkflowTaskPolicy {
@@ -22,6 +24,7 @@ impl WorkflowTaskPolicy {
         match self {
             Self::Verification(policy) => &policy.task.id,
             Self::Build(policy) => &policy.task.id,
+            Self::NativeImage(policy) => &policy.task.id,
         }
     }
 
@@ -31,6 +34,7 @@ impl WorkflowTaskPolicy {
         match self {
             Self::Verification(policy) => &policy.runner_label,
             Self::Build(policy) => &policy.runner_label,
+            Self::NativeImage(policy) => &policy.runner_label,
         }
     }
 
@@ -40,6 +44,7 @@ impl WorkflowTaskPolicy {
         match self {
             Self::Verification(policy) => policy.owns_job_id(job_id),
             Self::Build(policy) => policy.job_id() == job_id,
+            Self::NativeImage(policy) => policy.job_id() == job_id,
         }
     }
 }
@@ -71,6 +76,13 @@ pub(crate) fn validate_workflow_task_jobs(
             }
             WorkflowTaskPolicy::Build(task) => {
                 job_ids.extend(crate::build_task_jobs::validate_build_task_jobs(
+                    jobs,
+                    std::slice::from_ref(task),
+                    checkout_uses,
+                )?)
+            }
+            WorkflowTaskPolicy::NativeImage(task) => {
+                job_ids.extend(crate::native_image_jobs::validate_native_image_jobs(
                     jobs,
                     std::slice::from_ref(task),
                     checkout_uses,

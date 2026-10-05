@@ -33,7 +33,7 @@ pub(crate) fn policies(
         .iter()
         .filter_map(|task| match task {
             WorkflowTask::Verification(verification) => Some(verification),
-            WorkflowTask::Build(_) => None,
+            WorkflowTask::Build(_) | WorkflowTask::NativeImage(_) => None,
         })
         .map(|task| {
             let resolved =

@@ -28,7 +28,7 @@ pub(crate) fn policies(
         .iter()
         .filter_map(|task| match task {
             WorkflowTask::Build(build) => Some(build),
-            WorkflowTask::Verification(_) => None,
+            WorkflowTask::Verification(_) | WorkflowTask::NativeImage(_) => None,
         })
         .collect::<Vec<_>>();
     if build_tasks.is_empty() {

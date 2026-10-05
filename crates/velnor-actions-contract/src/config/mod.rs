@@ -6,6 +6,7 @@ mod actions;
 mod build_task;
 mod discovery;
 mod execution;
+mod image_task;
 mod release;
 mod resources;
 mod runs_on;
@@ -22,6 +23,7 @@ pub use execution::{
     ExecutionConfig, ExecutionMode, ExecutionOverride, ExecutionParity, ExecutionProfile,
     ExecutionRole, HOSTED_PROFILE_ID, ProfileKind, RoutingWorkflow, SCALE_SET_PROFILE_ID,
 };
+pub use image_task::{NativeImageCachePolicy, NativeImagePlatform, NativeImageTask};
 pub use release::{BootstrapRelease, ReleaseAuthentication, RustReleaseConfig};
 pub use resources::{
     ResourcesConfig, ShardTimingEvidence, TestShardingConfig, validate_shard_changes_need_evidence,

@@ -43,7 +43,8 @@ pub use closure::{ClosureBuilder, Provenance, TaskInputClosure};
 pub use config::{
     BuildTask, BuildTaskRunner, DeclaredCompileDriver, DeclaredTestRunner, DiscoveryConfig,
     ExecutionConfig, ExecutionMode, ExecutionRole, GeneratorValidation, ProfileKind,
-    ResourcesConfig, RootProblem, RoutingWorkflow, RunnerSelection, RunsOn, RustConfiguration,
+    NativeImageCachePolicy, NativeImagePlatform, NativeImageTask, ResourcesConfig, RootProblem,
+    RoutingWorkflow, RunnerSelection, RunsOn, RustConfiguration,
     RustStackConfig, SCALE_SET_NAME, ScaleSetSelector, ShardTimingEvidence, StacksConfig,
     TestShardingConfig, TofuStackConfig, Utf8RepoRelDir, VELNOR_LABEL, VelnorConfig,
     VelnorSupportWorkflow, VerificationRunner, VerificationTask, WORKFLOW_TASK_JOB_PREFIX,
