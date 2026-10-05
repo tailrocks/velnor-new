@@ -13,7 +13,7 @@ use crate::{
     yaml::Yaml,
 };
 use velnor_actions_contract::{
-    Job, Permissions, RunsOn, Step, StepKind, StepRole, Trigger, WorkflowIr,
+    Job, Permissions, RunsOn, StepKind, StepRole, Trigger, WorkflowIr,
     workflow::{ir::DispatchInput, permissions::PermissionLevel},
 };
 
@@ -30,8 +30,7 @@ pub(crate) fn workflow_to_yaml(
     ir: &WorkflowIr,
     shared: &LaneShare,
     ctx: &RenderContext,
-    mbx_gc_jobs: &BTreeSet<String>,
-    mbx_share_out_jobs: &BTreeSet<String>,
+    mbx_jobs: &BTreeSet<String>,
 ) -> Result<Yaml, RenderError> {
     let jobs = &shared.jobs;
     if shared.calls.keys().ne(shared.checkouts.keys())
@@ -63,8 +62,7 @@ pub(crate) fn workflow_to_yaml(
                 call,
                 &lane_steps,
                 MbxJobPolicy {
-                    gc_auto_disabled: mbx_gc_jobs.contains(id),
-                    share_out_dir_disabled: mbx_share_out_jobs.contains(id),
+                    native_mbx: mbx_jobs.contains(id),
                     actions_read,
                 },
             )?,
@@ -233,8 +231,7 @@ fn dispatch_input_to_yaml(input: &DispatchInput) -> Yaml {
 
 #[derive(Clone, Copy)]
 struct MbxJobPolicy {
-    gc_auto_disabled: bool,
-    share_out_dir_disabled: bool,
+    native_mbx: bool,
     actions_read: bool,
 }
 
@@ -259,32 +256,6 @@ fn job_to_yaml(
         .env_steps
         .get(id)
         .map_or(job.steps.as_slice(), Vec::as_slice);
-    let job_env = job_environment(id, source_steps, ctx, mbx_policy);
-    let mut entries = job_header_fields(job, runs_on);
-    append_job_options(&mut entries, job, scale_set, &job_env)?;
-    let rendered_steps = crate::document_lanes::render_job_steps(
-        id,
-        job,
-        ctx,
-        needs_envs,
-        shared,
-        lanes,
-        &crate::document_lanes::JobStepContext {
-            job_env: &job_env,
-            runs_on: Some(&job.runs_on),
-            actions_read: mbx_policy.actions_read,
-        },
-    )?;
-    entries.push(("steps".to_owned(), Yaml::Seq(rendered_steps)));
-    Ok(Yaml::Map(entries))
-}
-
-fn job_environment(
-    id: &str,
-    source_steps: &[Step],
-    ctx: &RenderContext,
-    mbx_policy: MbxJobPolicy,
-) -> BTreeMap<String, String> {
     let step_has_env = source_steps.iter().any(|step| match &step.kind {
         StepKind::Shell { env, .. } | StepKind::Action { env, .. } => !env.is_empty(),
         StepKind::Internal { .. } => false,
@@ -329,19 +300,33 @@ fn job_environment(
             }
         }
     }
-    if mbx_policy.gc_auto_disabled {
+    if mbx_policy.native_mbx {
         job_env.insert(
             crate::cache_steps::MBX_GC_AUTO_ENV.to_owned(),
             crate::cache_steps::MBX_GC_AUTO_VALUE.to_owned(),
         );
-    }
-    if mbx_policy.share_out_dir_disabled {
         job_env.insert(
             crate::cache_steps::MBX_SHARE_OUT_DIR_ENV.to_owned(),
             crate::cache_steps::MBX_SHARE_OUT_DIR_VALUE.to_owned(),
         );
     }
-    job_env
+    let mut entries = job_header_fields(job, runs_on);
+    append_job_options(&mut entries, job, scale_set, &job_env)?;
+    let rendered_steps = crate::document_lanes::render_job_steps(
+        id,
+        job,
+        ctx,
+        needs_envs,
+        shared,
+        lanes,
+        &crate::document_lanes::JobStepContext {
+            job_env: &job_env,
+            runs_on: Some(&job.runs_on),
+            actions_read: mbx_policy.actions_read,
+        },
+    )?;
+    entries.push(("steps".to_owned(), Yaml::Seq(rendered_steps)));
+    Ok(Yaml::Map(entries))
 }
 
 fn job_header_fields(job: &Job, runs_on: Yaml) -> Vec<(String, Yaml)> {

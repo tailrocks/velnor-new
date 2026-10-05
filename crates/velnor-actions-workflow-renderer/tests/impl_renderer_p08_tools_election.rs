@@ -6,7 +6,7 @@ use super::impl_renderer_fixtures::{LABEL, mise};
 use velnor_actions_contract::{Job, JobTimeout, Step, StepKind, StepRole};
 use velnor_actions_workflow_renderer::RenderError;
 use velnor_actions_workflow_renderer::cache_p08::{
-    ToolsCacheInputs, ToolsCachePayload, elect_tools_cache_writers,
+    ToolsCacheInputs, ToolsCachePayload, elect_cache_writers,
 };
 
 const TOOL: &str = "actionlint@1.7.12";
@@ -43,7 +43,7 @@ fn paired_jobs() -> Result<BTreeMap<String, Job>, RenderError> {
 
 fn canonical_save() -> Result<Step, RenderError> {
     let mut jobs = BTreeMap::from([("plan".to_owned(), keyed_job()?)]);
-    elect_tools_cache_writers(&mut jobs)?;
+    elect_cache_writers(&mut jobs)?;
     jobs.get("plan")
         .and_then(|job| {
             job.steps
@@ -101,7 +101,7 @@ fn tools_cache_election_rejects_loser_saves_and_mutated_loser_shapes() -> Result
         Some(SaveMutation::Gate),
     ] {
         let mut jobs = paired_jobs()?;
-        elect_tools_cache_writers(&mut jobs)?;
+        elect_cache_writers(&mut jobs)?;
         let save = match mutation {
             Some(value) => mutated_save(&canonical, value)?,
             None => canonical.clone(),
@@ -111,7 +111,7 @@ fn tools_cache_election_rejects_loser_saves_and_mutated_loser_shapes() -> Result
             .steps
             .push(save);
         assert!(
-            elect_tools_cache_writers(&mut jobs).is_err(),
+            elect_cache_writers(&mut jobs).is_err(),
             "a non-elected job cannot keep a save, even when its payload is mutated"
         );
     }
@@ -128,7 +128,7 @@ fn tools_cache_election_rejects_mutated_winner_key_path_and_gate() -> Result<(),
             .ok_or_else(|| RenderError::InvalidWorkflow("test_winner_missing".to_owned()))?;
         winner.steps.push(mutated_save(&canonical, mutation)?);
         assert!(
-            elect_tools_cache_writers(&mut jobs).is_err(),
+            elect_cache_writers(&mut jobs).is_err(),
             "an elected save must match the exact key, path, and gate"
         );
     }
@@ -149,18 +149,16 @@ fn tools_cache_election_rejects_orphan_and_duplicate_winner_saves() -> Result<()
         environment: None,
         steps: vec![canonical.clone()],
     };
-    assert!(
-        elect_tools_cache_writers(&mut BTreeMap::from([("orphan".to_owned(), orphan)])).is_err()
-    );
+    assert!(elect_cache_writers(&mut BTreeMap::from([("orphan".to_owned(), orphan)])).is_err());
 
     let mut jobs = BTreeMap::from([("plan".to_owned(), keyed_job()?)]);
-    elect_tools_cache_writers(&mut jobs)?;
+    elect_cache_writers(&mut jobs)?;
     let winner = jobs
         .get_mut("plan")
         .ok_or_else(|| RenderError::InvalidWorkflow("test_winner_missing".to_owned()))?;
     let index = save_index(winner)
         .ok_or_else(|| RenderError::InvalidWorkflow("test_save_missing".to_owned()))?;
     winner.steps.push(winner.steps[index].clone());
-    assert!(elect_tools_cache_writers(&mut jobs).is_err());
+    assert!(elect_cache_writers(&mut jobs).is_err());
     Ok(())
 }

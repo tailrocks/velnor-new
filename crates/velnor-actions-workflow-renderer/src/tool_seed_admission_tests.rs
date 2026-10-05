@@ -12,7 +12,7 @@ fn scratch(name: &str) -> PathBuf {
     ));
     fs::remove_dir_all(&path).ok();
     fs::create_dir_all(&path).expect("scratch");
-    path
+    path.canonicalize().expect("canonical scratch")
 }
 
 fn seed(root: &Path) {

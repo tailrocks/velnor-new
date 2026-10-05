@@ -19,7 +19,7 @@ mod save_policy;
 #[path = "cache_p08_setup.rs"]
 mod setup_pipeline;
 
-pub use crate::cache_elect::{elect_tofu_provider_savers, elect_tools_cache_writers};
+pub use crate::cache_elect::elect_cache_writers;
 
 /// Display name of the shared sources restore step.
 pub const RESTORE_SOURCES_NAME: &str = "Restore Cargo sources";

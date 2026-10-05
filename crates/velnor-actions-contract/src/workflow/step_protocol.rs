@@ -143,6 +143,9 @@ fn validate_provider_save(
         return Err(invalid(scope, "tofu_provider_save_count"));
     }
     if let Some(index) = roles.saves.first().copied() {
+        if index <= binding.restore_index {
+            return Err(invalid(scope, "tofu_provider_save_before_restore"));
+        }
         let save = &steps[index];
         let save_with = action_with(save).ok_or_else(|| invalid(scope, "tofu_save_shape"))?;
         let restore = &steps[binding.restore_index];

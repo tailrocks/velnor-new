@@ -215,12 +215,16 @@ pub(crate) fn alint_job(ctx: &RenderContext) -> Result<Job, RenderError> {
     })
 }
 
-/// Fixed validator job: checkout, pinned tool preparation, then execution.
+/// Fixed validator job: checkout plus its caller-supplied command.
 ///
-/// Tool preparation retains ambient credentials because Mise `ubi:`
-/// bootstrap needs authenticated quota. The analyzer command's fixed
-/// argv removes credentials before execution; cargo-backed deny also
-/// uses an isolated directory and absolute manifest paths.
+/// The validator runs its pinned analyzer with ambient auth: the cold
+/// tool bootstrap needs authenticated quota (the scrub overlay broke
+/// `ubi:` installs with API 401s and zizmor with empty-token aborts,
+/// CI run 36815180228). Static analyzers execute no repository code;
+/// cargo-backed validators (deny) run from the cargo isolation dir
+/// with an absolute manifest path, so repo `.cargo/config.toml`
+/// providers never execute while ambient auth is in scope. The step
+/// carries no scrub keys at all.
 pub(crate) fn validator_job(
     ctx: &RenderContext,
     validator: ValidatorKind,
@@ -240,13 +244,13 @@ pub(crate) fn validator_job(
     });
     let mut job_steps = vec![steps::checkout_step(&ctx.checkout_uses)?];
     if !command.prepare_argv.is_empty() {
-        let mut preparation = steps::ambient_shell_step(
+        let mut prepare = steps::ambient_shell_step(
             "Prepare pinned tools",
             command.prepare_argv.clone(),
             BTreeMap::new(),
         )?;
-        preparation.role = Some(StepRole::PreparePinnedTools);
-        job_steps.push(preparation);
+        prepare.role = Some(StepRole::PreparePinnedTools);
+        job_steps.push(prepare);
     }
     job_steps.push(step);
     Ok(Job {

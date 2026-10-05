@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Job, Step, StepKind};
+use velnor_actions_contract::{Job, Step};
 
 use crate::RenderError;
 use crate::composite::shared_call;
@@ -22,7 +22,6 @@ pub(crate) struct JobStepContext<'a> {
     pub runs_on: Option<&'a str>,
     pub actions_read: bool,
 }
-
 /// Render a normal job body or a paired lane's cache prelude/composite/postlude.
 pub(crate) fn render_job_steps(
     id: &str,
@@ -156,12 +155,8 @@ fn append_steps(
 }
 
 fn valid_shared_checkout(checkout: &Step, expected_uses: &str) -> bool {
-    checkout.role == Some(velnor_actions_contract::StepRole::Checkout)
-        && checkout.condition.is_none()
-        && matches!(
-            &checkout.kind,
-            StepKind::Action { uses, with, .. }
-                if uses == expected_uses
-                    && with.get("persist-credentials").map(String::as_str) == Some("false")
-        )
+    velnor_actions_contract::workflow::step_identity::is_configured_checkout(
+        checkout,
+        expected_uses,
+    )
 }

@@ -21,8 +21,11 @@ use crate::{
     preseed_closure, steps, support, workflow_policy, yaml::render_yaml,
 };
 
+#[path = "render_action_pins.rs"]
+mod action_pins_impl;
 #[path = "validator_tools.rs"]
 mod validator_tools;
+pub use action_pins_impl::action_pins;
 
 pub use crate::matrix::{
     COVERED_TASKS_OUTPUT, MATRIX_MAX_PARALLEL_ENV, MATRIX_NEEDS_JOB_ENV, MATRIX_OUTPUT_ENV,
@@ -194,6 +197,7 @@ fn render_workflow_parts(
     closure::insert_task_closure(&mut jobs)?;
     closure::insert_final_closure(&mut jobs)?;
     final_steps::insert_final_fanin(&mut jobs, ctx)?;
+    validate_final_jobs(ir, &jobs)?;
     render_merged(ir, &jobs, ctx)
 }
 
@@ -285,10 +289,8 @@ pub fn finalize_jobs(
         cache_p08::check_mbx_before_fetch(id, job)?;
         closure::check_internal_staged(id, job, ctx.preseed)?;
     }
-    // Writer election needs every setup inserted: one saver per key.
-    cache_p08::elect_tools_cache_writers(&mut jobs)?;
-    // Provider election needs every restore inserted: one saver per key.
-    cache_p08::elect_tofu_provider_savers(&mut jobs)?;
+    // Both cache families are validated globally before either gets a save.
+    cache_p08::elect_cache_writers(&mut jobs)?;
     closure::check_plan_anchor(&jobs)?;
     preseed_closure::check_preseed_closure(&jobs, ctx.preseed)?;
     closure::insert_plan_closure(&mut jobs, ctx)?;
@@ -296,24 +298,15 @@ pub fn finalize_jobs(
     closure::insert_task_closure(&mut jobs)?;
     closure::insert_final_closure(&mut jobs)?;
     final_steps::insert_final_fanin(&mut jobs, ctx)?;
+    validate_final_jobs(ir, &jobs)?;
     Ok(jobs)
 }
 
-/// Sorted unique pinned `uses:` refs across every action step (plan display).
-/// Generated local composites are paths, not external action pins.
-#[must_use]
-pub fn action_pins(jobs: &BTreeMap<String, Job>) -> Vec<String> {
-    let mut pins = std::collections::BTreeSet::new();
-    for job in jobs.values() {
-        for step in &job.steps {
-            if let velnor_actions_contract::StepKind::Action { uses, .. } = &step.kind
-                && !uses.starts_with("./.github/actions/")
-            {
-                pins.insert(uses.clone());
-            }
-        }
-    }
-    pins.into_iter().collect()
+/// Validate every finalized job after policy merging and internal expansion.
+fn validate_final_jobs(ir: &WorkflowIr, jobs: &BTreeMap<String, Job>) -> Result<(), RenderError> {
+    let mut finalized = ir.clone();
+    finalized.jobs.clone_from(jobs);
+    finalized.validate().map_err(RenderError::Contract)
 }
 
 /// Validate context/IR plus policy merge and support invariants.
@@ -368,11 +361,9 @@ fn render_merged(
     } else {
         jobs.clone()
     };
-    let mbx_gc_jobs = crate::mbx_gc_policy::jobs_with_hosted_linux_mbx_objects(&jobs);
-    let mbx_share_out_jobs = crate::mbx_gc_policy::jobs_with_mbx_objects(&jobs);
+    let mbx_jobs = crate::mbx_gc_policy::jobs_with_mbx_objects(&jobs);
     let shared = crate::lane_share::share_lanes(&jobs, ctx)?;
-    let mut document =
-        document::workflow_to_yaml(ir, &shared, ctx, &mbx_gc_jobs, &mbx_share_out_jobs)?;
+    let mut document = document::workflow_to_yaml(ir, &shared, ctx, &mbx_jobs)?;
     if let Some((source, max_parallel)) = &matrix {
         matrix::attach_task_matrix(&mut document, source, *max_parallel)?;
     } else {
