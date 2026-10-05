@@ -55,14 +55,15 @@ fn reject_duplicate_inventory_rows(ctx: &mut FreshnessContext) -> bool {
 }
 
 fn check_tool_pins(ctx: &mut FreshnessContext) {
-    ctx.tools = ctx
+    let tools = ctx
         .inv
         .get("tools")
         .and_then(Value::as_array)
         .cloned()
         .unwrap_or_default();
+    ctx.tools.clear();
     let mut seen = BTreeSet::new();
-    for tool in ctx.tools.clone() {
+    for tool in tools {
         if !tool.is_object() {
             ctx.fail_row(
                 "inventory-shape",
@@ -87,6 +88,7 @@ fn check_tool_pins(ctx: &mut FreshnessContext) {
             );
             continue;
         };
+        ctx.tools.push(tool.clone());
         let actual = ctx.rust_const(CATALOG, constant);
         compare_pin(
             ctx,
@@ -128,7 +130,6 @@ fn check_action_pins(ctx: &mut FreshnessContext) {
             .and_then(Value::as_str)
             .unwrap_or("<missing>")
             .to_owned();
-        ctx.action_pinned.insert(key.clone(), action.clone());
         let Some((_, prefix)) = EXPECTED_ACTIONS
             .iter()
             .find(|(expected, _)| *expected == key)
@@ -140,6 +141,7 @@ fn check_action_pins(ctx: &mut FreshnessContext) {
             );
             continue;
         };
+        ctx.action_pinned.insert(key.clone(), action.clone());
         let version_const = format!("{prefix}_VERSION");
         let sha_const = format!("{prefix}_SHA");
         let version = ctx.rust_const(ACTIONS, &version_const);
@@ -300,6 +302,7 @@ fn check_runner_pins(ctx: &mut FreshnessContext) {
 
 #[cfg(test)]
 mod duplicate_tests {
+    use serde_json::Value;
     use serde_json::json;
 
     use super::check_local_pins;
@@ -341,5 +344,50 @@ mod duplicate_tests {
                 1
             );
         }
+    }
+
+    #[test]
+    fn unknown_unique_rows_never_enter_upstream_probe_state() {
+        let tools = (0..32)
+            .map(|index| {
+                serde_json::json!({
+                    "name": format!("unknown-tool-{index}"),
+                    "pinned": "9.9.9",
+                    "source": "file:///missing-tool-source"
+                })
+            })
+            .collect::<Vec<_>>();
+        let actions = (0..32)
+            .map(|index| {
+                serde_json::json!({
+                    "key": format!("unknown/action-{index}"),
+                    "pinned_version": "v9.9.9",
+                    "pinned_sha": "0123456789012345678901234567890123456789",
+                    "source": "file:///missing-action-source"
+                })
+            })
+            .collect::<Vec<_>>();
+        let mut context = FreshnessContext::new(std::path::PathBuf::new(), true, false);
+        context.inv = serde_json::json!({
+            "tools": tools,
+            "actions": actions,
+            "runner": {"default": "ubuntu-26.04", "supported": ["ubuntu-26.04"]}
+        });
+
+        check_local_pins(&mut context);
+        assert!(context.tools.is_empty());
+        assert!(context.action_pinned.is_empty());
+
+        crate::probe::check_upstream_probe(&mut context);
+
+        let probe_rows = context
+            .output
+            .lines()
+            .filter_map(|line| line.strip_prefix("row: "))
+            .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
+            .filter(|row| row.get("check").and_then(Value::as_str) == Some("upstream-probe"))
+            .filter(|row| row.get("subject").and_then(Value::as_str) != Some("runner"))
+            .collect::<Vec<_>>();
+        assert!(probe_rows.is_empty());
     }
 }

@@ -164,22 +164,44 @@ fn http_uri(uri: &str) -> Result<ureq::http::Uri, String> {
 }
 
 fn normalize_redirect_path(path: &str) -> String {
-    let trailing_slash = path.ends_with('/');
-    let mut segments = Vec::new();
-    for segment in path.split('/') {
-        match segment {
-            "" | "." => {}
-            ".." => {
-                segments.pop();
-            }
-            value => segments.push(value),
+    let mut input = path.to_owned();
+    let mut output = String::new();
+    while !input.is_empty() {
+        if input.starts_with("../") {
+            input.drain(..3);
+        } else if input.starts_with("./") || input.starts_with("/./") {
+            input.drain(..2);
+        } else if input == "/." {
+            "/".clone_into(&mut input);
+        } else if input.starts_with("/../") {
+            input.drain(..3);
+            remove_last_path_segment(&mut output);
+        } else if input == "/.." {
+            "/".clone_into(&mut input);
+            remove_last_path_segment(&mut output);
+        } else if input == "." || input == ".." {
+            input.clear();
+        } else {
+            let segment_end = if let Some(after_root) = input.strip_prefix('/') {
+                after_root
+                    .find('/')
+                    .map_or(input.len(), |offset| offset + 1)
+            } else {
+                input.find('/').unwrap_or(input.len())
+            };
+            output.push_str(&input[..segment_end]);
+            input.drain(..segment_end);
         }
     }
-    let mut normalized = format!("/{}", segments.join("/"));
-    if trailing_slash && !normalized.ends_with('/') {
-        normalized.push('/');
+    output
+}
+
+fn remove_last_path_segment(output: &mut String) {
+    if let Some(segment_start) = output.rfind('/') {
+        output.truncate(segment_start);
+    } else {
+        output.clear();
     }
-    normalized
 }
 
 fn upstream_agent() -> Result<&'static ureq::Agent, String> {

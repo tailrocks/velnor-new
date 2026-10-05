@@ -12,10 +12,10 @@ fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
-/// Allowed intra-workspace edges per member package.
+/// Allowed intra-workspace edges per product or support package.
 fn expected_internal(dir: &str) -> Vec<&str> {
     match dir {
-        "crates/velnor-actions-contract" => vec![],
+        "crates/velnor-actions-contract" | "crates/velnor-actions-freshness" => vec![],
         "crates/velnor-actions-orchestrator" => vec![
             "velnor-actions-actionlint",
             "velnor-actions-contract",
@@ -24,12 +24,14 @@ fn expected_internal(dir: &str) -> Vec<&str> {
             "velnor-actions-tofu",
             "velnor-actions-workflow-renderer",
         ],
-        "crates/velnor-actions-cli" => vec!["velnor-actions-orchestrator"],
+        "crates/velnor-actions-cli" => {
+            vec!["velnor-actions-orchestrator", "velnor-actions-freshness"]
+        }
         _ => vec!["velnor-actions-contract"],
     }
 }
 
-/// Member directories in dependency-table order.
+/// Product members plus the separately owned repository-maintenance library.
 fn members() -> Vec<&'static str> {
     vec![
         "crates/velnor-actions-actionlint",
@@ -39,6 +41,7 @@ fn members() -> Vec<&'static str> {
         "crates/velnor-actions-orchestrator",
         "crates/velnor-actions-rust",
         "crates/velnor-actions-tofu",
+        "crates/velnor-actions-freshness",
         "crates/velnor-actions-workflow-renderer",
     ]
 }

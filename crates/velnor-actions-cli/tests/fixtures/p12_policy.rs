@@ -12,8 +12,12 @@ const MUTANTS: &str = ".cargo/mutants.toml";
 
 /// Temporary-hold object with full attribution for `key`.
 fn hold(key: &str, granted: &str, expires: &str) -> String {
+    hold_version(key, "9.9.9", granted, expires)
+}
+
+fn hold_version(key: &str, version: &str, granted: &str, expires: &str) -> String {
     format!(
-        "{{\"key\":\"{key}\",\"held_version\":\"9.9.9\",\"owner\":\"team\",\
+        "{{\"key\":\"{key}\",\"held_version\":\"{version}\",\"owner\":\"team\",\
          \"issue\":\"#1\",\"reason\":\"blocked\",\"granted\":\"{granted}\",\
          \"expires\":\"{expires}\"}}"
     )
@@ -162,6 +166,14 @@ fn held_status_needs_a_covering_hold() -> Result<(), Box<dyn Error>> {
         INVENTORY,
         "\"temporary_holds\":[]",
         &format!("\"temporary_holds\":[{}]", hold("gh", &granted, &expires)),
+    )?;
+    let run = harness::run_script(&fixture.dir, &[])?;
+    harness::assert_fail(&run, "temporary hold covers held_version");
+    harness::mutate(
+        &fixture.dir,
+        INVENTORY,
+        "\"held_version\":\"9.9.9\"",
+        "\"held_version\":\"2.101.0\"",
     )?;
     let run = harness::run_script(&fixture.dir, &[])?;
     harness::assert_clean(&run);

@@ -6,6 +6,9 @@ rust-version.workspace = true
 license.workspace = true
 autotests = false
 
+[package.metadata.velnor]
+v1-task-owner = "repository-maintenance"
+
 [dependencies]
 flate2 = { version = "=1.1.10", default-features = false, features = ["rust_backend"] }
 rustls = { version = "=0.23.45", default-features = false, features = ["ring"] }

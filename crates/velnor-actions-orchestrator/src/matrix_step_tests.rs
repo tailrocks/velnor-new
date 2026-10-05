@@ -265,6 +265,7 @@ fn validator_installs_follow_executed_suite_per_policy() {
         "velnor-actions-contract",
         "velnor-actions-mise",
         "demo",
+        "velnor-actions-freshness",
     ] {
         assert!(
             crate_needs_generate_validators(WorkflowPolicy::ConsumerV1, package),
@@ -284,6 +285,7 @@ fn validator_installs_follow_executed_suite_per_policy() {
         "velnor-actions-tofu",
         "velnor-actions-workflow-renderer",
         "velnor-actions-actionlint",
+        "velnor-actions-freshness",
         "demo",
     ] {
         assert!(
@@ -337,6 +339,7 @@ fn every_workspace_member_is_classified() {
             "velnor-actions-tofu",
             "velnor-actions-workflow-renderer",
             "velnor-actions-actionlint",
+            "velnor-actions-freshness",
         ]
         .contains(&member.as_str());
         assert!(

@@ -43,6 +43,31 @@ fn redirects_are_bounded_and_relative_locations_resolve() -> Result<(), Box<dyn 
         resolve_redirect("https://example.test/a/b", "?next=1"),
         Ok("https://example.test/a/b?next=1".to_owned())
     );
+    for (base, location, expected) in [
+        ("https://example.test/a/b", ".", "https://example.test/a/"),
+        (
+            "https://example.test/a/b/c",
+            "..",
+            "https://example.test/a/",
+        ),
+        (
+            "https://example.test/a/b",
+            "/releases//latest",
+            "https://example.test/releases//latest",
+        ),
+        (
+            "https://example.test/a/b",
+            "/releases/latest/.",
+            "https://example.test/releases/latest/",
+        ),
+        (
+            "https://example.test/a/b",
+            "/releases/latest/..",
+            "https://example.test/releases/",
+        ),
+    ] {
+        assert_eq!(resolve_redirect(base, location), Ok(expected.to_owned()));
+    }
     assert!(resolve_redirect("https://example.test/a", "file:///etc/passwd").is_err());
     assert!(resolve_redirect("https://example.test/a", "mailto:ops@example.test").is_err());
     let responses = (0..MAX_REDIRECTS)

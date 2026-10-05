@@ -9,7 +9,7 @@ The audit found three short-name sign-offs in the published PR #68 branch histor
 | `fafaa87430bf9ffa0b454198a2b09aaff835d664` | Author, committer, and sign-off use `Alexey <alexey@zhokhov.com>` | Same evidence limit. |
 | `ac3ab6a3d5ba3701c1300bbdd8114390093c5c29` | Full-name author; sign-off uses `Alexey <alexey@zhokhov.com>` | The submitted squash message omitted “Zhokhov”; GitHub preserved that text. |
 
-The documented repository-local Git identity is `Alexey Zhokhov <alexey@zhokhov.com>`. The private `repo-policy-v1` / `trailer-policy` operation validates the exact terminal trailer block. Its optional `VELNOR_REPO_POLICY_CHECK_LOCAL_IDENTITIES=1` setting also checks the effective Git author and committer identities against that documented identity. The published branch and protected history are not rewritten. After publication, inspect the actual remote commit message and identity; validation cannot repair an already published commit.
+The documented repository-local Git identity is `Alexey Zhokhov <alexey@zhokhov.com>`. The private `repo-policy-v1` / `trailer-policy` operation validates the exact terminal trailer block. Its `VELNOR_REPO_POLICY_CHECK_LOCAL_IDENTITIES=1` setting checks the effective Git author and committer identities against that documented identity; include it for every local commit, while API-submitted message validation may omit it. The published branch and protected history are not rewritten. After publication, inspect the actual remote commit message and identity; validation cannot repair an already published commit.
 
 Run the following from the repository root before submitting a commit or squash message. `MESSAGE_FILE` must resolve to an absolute path to an existing message file:
 
@@ -23,4 +23,4 @@ env \
   cargo run --quiet --locked -p velnor-actions-cli --bin velnor-actions
 ```
 
-For a local commit, optionally add `VELNOR_REPO_POLICY_CHECK_LOCAL_IDENTITIES=1` to the `env` assignments to check both configured Git identities. The command reads the exact terminal trailer block from `docs/implemented/codex-agent-configuration.md` and rejects missing, malformed, reversed, duplicated, nonterminal, or body-decoy required trailers. After an API merge, independently inspect the actual remote commit message and author metadata.
+For every local commit, add `VELNOR_REPO_POLICY_CHECK_LOCAL_IDENTITIES=1` to the `env` assignments to check both configured Git identities. API-submitted message validation may omit this setting. The command reads the exact terminal trailer block from `docs/implemented/codex-agent-configuration.md` and rejects missing, malformed, reversed, duplicated, nonterminal, or body-decoy required trailers. After an API merge, independently inspect the actual remote commit message and author metadata.

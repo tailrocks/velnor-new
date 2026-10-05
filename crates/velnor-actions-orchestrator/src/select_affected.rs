@@ -128,6 +128,7 @@ mod tests {
             targets: Vec::new(),
             features: Vec::new(),
             has_build_script: false,
+            v1_task_owner: velnor_actions_rust::VelnorV1TaskOwner::Project,
         };
         Discovery {
             statuses: Vec::new(),
@@ -187,6 +188,7 @@ mod tests {
                 targets: Vec::new(),
                 features: Vec::new(),
                 has_build_script: false,
+                v1_task_owner: velnor_actions_rust::VelnorV1TaskOwner::Project,
             })
             .collect();
         discovery.workspaces[0].record.members =

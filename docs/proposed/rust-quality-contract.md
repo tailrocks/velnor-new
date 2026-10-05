@@ -52,23 +52,12 @@ the table below plus one separately classified repository-only support member,
 `velnor-actions-freshness`. Cargo metadata defines package membership and
 dependency relationships. V1 adds no custom architecture linter; its §5
 mechanism allowlist, Alint, Clippy, tests, and review govern those decisions.
-Within V1 product behavior, Rust/Cargo metadata and `rust-toolchain.toml` belong
-to `velnor-actions-rust`, while Mise syntax, environment, and task metadata
-belong to `velnor-actions-mise`; actionlint metadata belongs to
-`velnor-actions-actionlint`. Repository-only support may inspect Velnor-owned
-Cargo/Mise sources only for private maintenance operations; those results MUST
-NOT feed V1 planning. Alint enforces only its configured generic file/path,
-required-file, and line-count rules.
-The CLI package MUST declare binary `velnor-actions`, the only target name without the
-package-purpose suffix. Non-Rust directories MAY remain in their own
-conventional locations.
+Within V1 product behavior, Rust/Cargo metadata and `rust-toolchain.toml` belong to `velnor-actions-rust`; Mise syntax, environment, and task metadata belong to `velnor-actions-mise`; actionlint metadata belongs to `velnor-actions-actionlint`.
+Repository-only support may inspect Velnor-owned Cargo/Mise sources only for private maintenance operations; those results MUST NOT feed V1 planning. Alint enforces only its configured generic file/path, required-file, and line-count rules.
+The CLI package MUST declare binary `velnor-actions`, the only target name without the package-purpose suffix. Non-Rust directories MAY remain in their own conventional locations.
 
-The eight V1 crates have fixed boundaries. Every V1 Cargo package MUST use the
-`velnor-actions-<purpose>` namespace. Generic names such as `velnor-model`,
-`velnor-core`, `velnor-rust`, `velnor-common`, and `velnor-utils` are forbidden. The
-`velnor-actions` binary is owned by package `velnor-actions-cli`. Future
-stacks use dedicated names such as `velnor-actions-node`; they remain
-independent of other stack crates.
+The eight V1 crates have fixed boundaries. Every V1 Cargo package MUST use the `velnor-actions-<purpose>` namespace. Generic names such as `velnor-model`, `velnor-core`, `velnor-rust`, `velnor-common`, and `velnor-utils` are forbidden.
+The `velnor-actions` binary is owned by package `velnor-actions-cli`. Future stacks use dedicated names such as `velnor-actions-node`; they remain independent of other stack crates.
 
 | Crate | MUST own | MUST NOT own |
 | --- | --- | --- |
@@ -82,9 +71,16 @@ independent of other stack crates.
 | `velnor-actions-tofu` | All OpenToFu/HCL discovery, root/module interpretation, task payloads, affected selection, identity extensions | Rust/Cargo, Mise execution, workflow YAML, process details, non-tofu stacks |
 | `velnor-actions-freshness` (repository-only support) | Read-only repository freshness/pin/lock/advisory checks and bounded bootstrap metadata operations behind the existing CLI private gate | V1 planning, task graph or selection, runner behavior, product evidence claims, public commands, or workflow generation |
 
-The support member is separate from the eight product crates and outside the
-V1 product graph. Only the CLI private maintenance gate depends on it; the
-orchestrator MUST NOT consume it.
+The support member is separate from the eight product crates and outside the V1 product graph. Only the CLI private maintenance gate depends on it; the orchestrator MUST NOT consume it.
+
+The support package declares its task owner with Cargo package metadata:
+
+```toml
+[package.metadata.velnor]
+v1-task-owner = "repository-maintenance"
+```
+
+The Rust metadata adapter maps that value to a typed owner and rejects unknown owner values. Under `VelnorRepositoryV1`, the orchestrator omits only root-workspace packages with this owner from V1 task derivation and feature union; `prepare` verifies the canonical origin first. Under `ConsumerV1`, the same metadata does not exclude a same-named project. Package names and paths alone never grant this exclusion.
 
 Hard invariants 10–12 (spec §3.3) are normative throughout. 10 — One owner per
 domain rule per the table above; extend an existing owner before making a new
