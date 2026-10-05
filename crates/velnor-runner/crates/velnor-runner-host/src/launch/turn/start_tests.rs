@@ -94,6 +94,80 @@ async fn volume_only_live_row_keeps_the_current_assignment_unacked() -> Result<(
 }
 
 #[tokio::test]
+async fn unlabeled_volume_keeps_cleanup_unproven_and_redelivery_unacked() -> Result<(), String> {
+    let (scratch, journal) = open("turn-unlabeled-volume").await?;
+    let (row, _) = journal
+        .begin_launch("m95")
+        .await
+        .map_err(|error| error.to_string())?;
+    let worker = "w00000000000000000000000000000000";
+    journal
+        .bind_worker_volume(row, worker)
+        .await
+        .map_err(|error| error.to_string())?;
+    journal
+        .finish(row, Outcome::Uncertain)
+        .await
+        .map_err(|error| error.to_string())?;
+
+    let session = zero_assignment_session()?;
+    let polled = assigned_wait(95, 1);
+    let unlabeled = serde_json::json!({
+        "Name": worker,
+        "Driver": "local",
+        "Mountpoint": "/var/lib/docker/volumes/w/_data",
+        "Labels": {},
+        "Options": {},
+        "Scope": "local"
+    })
+    .to_string();
+    let docker = DockerStub::open(vec![
+        http(404, r#"{"message":"missing"}"#),
+        http(404, r#"{"message":"missing"}"#),
+        http(200, &unlabeled),
+    ])?;
+    let decision = crate::launch::admission(&docker.docker, &journal, 1, 1, 0, &polled).await;
+    let requests = docker.finish().await?;
+
+    assert_eq!(decision, Ok(crate::launch::Admit::Hold));
+    assert_eq!(requests.len(), 3);
+    assert!(requests.iter().all(|request| request.starts_with("GET ")));
+    let rows = journal.rows().await.map_err(|error| error.to_string())?;
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].state, IntentState::Uncertain);
+    assert_eq!(rows[0].worker_volume.as_deref(), Some(worker));
+    assert!(!rows[0].cleanup_proven);
+
+    let docker = DockerStub::open(Vec::new())?;
+    let mut script = Script {
+        calls: Vec::new(),
+        mode: Mode::JitConflict,
+    };
+    let mut workers: Vec<Started> = Vec::new();
+    let redelivered = start_turn(
+        &mut script,
+        &mut workers,
+        ready(&session, &polled),
+        &journal,
+        &docker.docker,
+        1,
+        false,
+    )
+    .await;
+    docker.finish().await?;
+
+    assert_eq!(redelivered, Ok(false));
+    assert!(script.calls.is_empty());
+    assert!(workers.is_empty());
+    let rows = journal.rows().await.map_err(|error| error.to_string())?;
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].state, IntentState::Uncertain);
+    assert_eq!(rows[0].worker_volume.as_deref(), Some(worker));
+    assert!(!rows[0].cleanup_proven);
+    absent(&scratch.file())
+}
+
+#[tokio::test]
 async fn missing_current_census_blocks_ack_and_start() -> Result<(), String> {
     let (scratch, journal) = open("turn-missing-census").await?;
     let mut polled = assigned_wait(94, 1);

@@ -4,6 +4,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use bollard::Docker;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{UnixListener, UnixStream};
+use tokio::sync::oneshot;
 
 use super::TIMEOUT;
 
@@ -16,7 +17,9 @@ pub(in crate::launch) struct DockerResponse {
 pub(in crate::launch) struct DockerStub {
     pub(in crate::launch) docker: Docker,
     path: PathBuf,
-    task: Option<tokio::task::JoinHandle<Result<(), String>>>,
+    task: Option<tokio::task::JoinHandle<Result<Vec<String>, String>>>,
+    stop: Option<oneshot::Sender<()>>,
+    expected: usize,
 }
 
 impl DockerStub {
@@ -28,11 +31,34 @@ impl DockerStub {
             std::process::id()
         ));
         let listener = UnixListener::bind(&path).map_err(|error| error.to_string())?;
+        let expected = responses.len();
+        let (stop, mut stopped) = oneshot::channel();
         let task = tokio::spawn(async move {
+            let mut requests = Vec::with_capacity(expected);
             for response in responses {
-                send_response(&listener, &response).await?;
+                let (mut stream, _) = listener.accept().await.map_err(|error| error.to_string())?;
+                requests.push(read_request(&mut stream).await?);
+                send_response(&mut stream, &response).await?;
             }
-            Ok(())
+            loop {
+                tokio::select! {
+                    accepted = listener.accept() => {
+                        let (mut stream, _) = accepted.map_err(|error| error.to_string())?;
+                        requests.push(read_request(&mut stream).await?);
+                        send_response(
+                            &mut stream,
+                            &DockerResponse {
+                                status: Some(500),
+                                body: r#"{"message":"unexpected Docker request"}"#.to_owned(),
+                                hang: false,
+                            },
+                        )
+                        .await?;
+                    }
+                    _ = &mut stopped => break,
+                }
+            }
+            Ok(requests)
         });
         let socket = path
             .to_str()
@@ -49,10 +75,18 @@ impl DockerStub {
             docker,
             path,
             task: Some(task),
+            stop: Some(stop),
+            expected,
         })
     }
 
-    pub(in crate::launch) async fn finish(mut self) -> Result<(), String> {
+    pub(in crate::launch) async fn finish(mut self) -> Result<Vec<String>, String> {
+        let stop = self
+            .stop
+            .take()
+            .ok_or_else(|| "Docker stub already stopped".to_owned())?;
+        stop.send(())
+            .map_err(|()| "Docker stub already stopped".to_owned())?;
         let mut task = self
             .task
             .take()
@@ -61,11 +95,19 @@ impl DockerStub {
             result.map_err(|error| error.to_string())?
         } else {
             task.abort();
-            return Err("Docker stub timed out waiting for requests".to_owned());
+            return Err("Docker stub timed out waiting to stop".to_owned());
         };
         let removed = std::fs::remove_file(&self.path).map_err(|error| error.to_string());
-        served?;
-        removed
+        let requests = served?;
+        removed?;
+        if requests.len() != self.expected {
+            return Err(format!(
+                "expected {} Docker requests, got {}",
+                self.expected,
+                requests.len()
+            ));
+        }
+        Ok(requests)
     }
 }
 
@@ -104,9 +146,7 @@ pub(super) fn hanging() -> DockerResponse {
     }
 }
 
-async fn send_response(listener: &UnixListener, response: &DockerResponse) -> Result<(), String> {
-    let (mut stream, _) = listener.accept().await.map_err(|error| error.to_string())?;
-    read_request(&mut stream).await?;
+async fn send_response(stream: &mut UnixStream, response: &DockerResponse) -> Result<(), String> {
     if response.hang {
         std::future::pending::<()>().await;
     }
@@ -125,16 +165,28 @@ async fn send_response(listener: &UnixListener, response: &DockerResponse) -> Re
         .map_err(|error| error.to_string())
 }
 
-async fn read_request(stream: &mut UnixStream) -> Result<(), String> {
-    let mut request = [0_u8; 2048];
-    let read = stream
-        .read(&mut request)
-        .await
-        .map_err(|error| error.to_string())?;
-    if read == 0 {
-        return Err("Docker client closed before sending a request".to_owned());
+async fn read_request(stream: &mut UnixStream) -> Result<String, String> {
+    let mut request = Vec::new();
+    let mut buffer = [0_u8; 256];
+    loop {
+        let read = stream
+            .read(&mut buffer)
+            .await
+            .map_err(|error| error.to_string())?;
+        if read == 0 {
+            return Err("Docker client closed before sending a request".to_owned());
+        }
+        request.extend_from_slice(&buffer[..read]);
+        if request.windows(2).any(|bytes| bytes == b"\r\n") {
+            break;
+        }
     }
-    Ok(())
+    let request = std::str::from_utf8(&request).map_err(|error| error.to_string())?;
+    request
+        .lines()
+        .next()
+        .map(str::to_owned)
+        .ok_or_else(|| "Docker client sent an empty request".to_owned())
 }
 
 const fn reason(status: u16) -> &'static str {
