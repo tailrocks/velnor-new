@@ -1,5 +1,8 @@
+use std::future::Future;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::task::{Context, Wake, Waker};
 use std::time::Duration;
 
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
@@ -99,6 +102,24 @@ async fn exact_volume_remove_errors_and_confirms_single_target() -> Result<(), S
     Ok(())
 }
 
+#[tokio::test]
+async fn cancelling_finish_aborts_stub_and_cleans_socket() -> Result<(), String> {
+    let stub = ScriptedDocker::open(vec![(200, String::new())])?;
+    let path = stub.path.clone();
+    let started = Arc::clone(&stub.server_started);
+    let stopped = Arc::clone(&stub.server_stopped);
+    wait_for_flag(started).await?;
+
+    let mut finish = Box::pin(stub.finish());
+    let waker = Waker::from(Arc::new(NoopWake));
+    let mut context = Context::from_waker(&waker);
+    assert!(finish.as_mut().poll(&mut context).is_pending());
+    drop(finish);
+
+    assert!(!path.exists());
+    wait_for_flag(stopped).await
+}
+
 async fn verified_work_volume(docker: &bollard::Docker) -> Result<VerifiedWorkerVolume, String> {
     match verify_worker_volume(docker, WORKER, WorkerVolumeRole::Work)
         .await
@@ -113,6 +134,8 @@ struct ScriptedDocker {
     docker: bollard::Docker,
     path: PathBuf,
     task: Option<tokio::task::JoinHandle<Result<Vec<String>, String>>>,
+    server_started: Arc<AtomicBool>,
+    server_stopped: Arc<AtomicBool>,
     finished: bool,
 }
 
@@ -138,31 +161,55 @@ impl ScriptedDocker {
                     return Err(error.to_string());
                 }
             };
-        let task = tokio::spawn(serve_volume_stub(listener, responses));
+        let server_started = Arc::new(AtomicBool::new(false));
+        let server_stopped = Arc::new(AtomicBool::new(false));
+        let task_started = Arc::clone(&server_started);
+        let task_stopped = Arc::clone(&server_stopped);
+        let task = tokio::spawn(async move {
+            let _completion = TaskCompletion(task_stopped);
+            task_started.store(true, Ordering::SeqCst);
+            serve_volume_stub(listener, responses).await
+        });
         Ok(Self {
             docker,
             path,
             task: Some(task),
+            server_started,
+            server_stopped,
             finished: false,
         })
     }
 
     async fn finish(mut self) -> Result<Vec<String>, String> {
-        let mut task = self
-            .task
-            .take()
-            .ok_or_else(|| "stub already stopped".to_owned())?;
-        let result = match tokio::time::timeout(Duration::from_secs(2), &mut task).await {
-            Ok(result) => result.map_err(|error| error.to_string())??,
-            Err(_) => {
-                task.abort();
-                return Err("Docker stub timed out".to_owned());
+        let result = {
+            let task = self
+                .task
+                .as_mut()
+                .ok_or_else(|| "stub already stopped".to_owned())?;
+            match tokio::time::timeout(Duration::from_secs(2), task).await {
+                Ok(result) => result.map_err(|error| error.to_string())??,
+                Err(_) => return Err("Docker stub timed out".to_owned()),
             }
         };
+        self.task = None;
         remove_socket_after_finish(&self.path)?;
         self.finished = true;
         Ok(result)
     }
+}
+
+struct TaskCompletion(Arc<AtomicBool>);
+
+impl Drop for TaskCompletion {
+    fn drop(&mut self) {
+        self.0.store(true, Ordering::SeqCst);
+    }
+}
+
+struct NoopWake;
+
+impl Wake for NoopWake {
+    fn wake(self: Arc<Self>) {}
 }
 
 impl Drop for ScriptedDocker {
@@ -229,4 +276,14 @@ fn remove_socket_after_finish(path: &PathBuf) -> Result<(), String> {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
         Err(error) => Err(error.to_string()),
     }
+}
+
+async fn wait_for_flag(flag: Arc<AtomicBool>) -> Result<(), String> {
+    tokio::time::timeout(Duration::from_secs(1), async {
+        while !flag.load(Ordering::SeqCst) {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .map_err(|error| error.to_string())
 }
