@@ -1,4 +1,4 @@
-//! Cold MBX pre-seed tool installation coverage.
+//! Native MBX owner ordering and cold Rust preflight coverage.
 
 #[cfg(unix)]
 mod unix {
@@ -28,12 +28,6 @@ case "$operation" in
         for selector do
             printf 'install:%s\n' "$selector" >> "$VELNOR_MISE_STUB_LOG"
             case "$selector" in
-                mr-boxington@*)
-                    mkdir -p "$VELNOR_MISE_STATE/mbx-root"
-                    cp "$VELNOR_MBX_TEMPLATE" "$VELNOR_MISE_STATE/mbx-root/mbx"
-                    chmod +x "$VELNOR_MISE_STATE/mbx-root/mbx"
-                    touch "$VELNOR_MISE_STATE/mbx-installed"
-                    ;;
                 rust@*)
                     mkdir -p "$VELNOR_MISE_STATE/rust-root"
                     cp "$VELNOR_RUST_TEMPLATE" "$VELNOR_MISE_STATE/rust-root/rustc"
@@ -47,7 +41,6 @@ case "$operation" in
         selector=$1
         printf 'where:%s\n' "$selector" >> "$VELNOR_MISE_STUB_LOG"
         case "$selector" in
-            mr-boxington@*) marker=mbx-installed; root=mbx-root ;;
             rust@*) marker=rust-installed; root=rust-root ;;
             *) exit 3 ;;
         esac
@@ -57,11 +50,10 @@ case "$operation" in
     *) exit 2 ;;
 esac
 "#;
-    const MBX_STUB: &str = "#!/bin/sh\nprintf '%s\\n' 'mbx 1.21.1'\n";
     const RUSTC_STUB: &str = "#!/bin/sh\nprintf '%s\\n' 'rustc 1.98.1' 'host: x86_64-unknown-linux-gnu' 'release: 1.98.1'\n";
 
     #[test]
-    fn cargo_only_preseed_installs_mbx_before_cold_preflight() -> TestResult {
+    fn native_mbx_action_follows_rust_preflight_and_precedes_version_check() -> TestResult {
         let temp = tempfile::tempdir()?;
         let state = temp.path().join("empty-mise-state");
         let stub_bin = temp.path().join("stub-bin");
@@ -70,69 +62,77 @@ esac
         let log = temp.path().join("mise.log");
         let runner_temp = temp.path().join("runner-temp");
         fs::create_dir_all(&runner_temp)?;
+        let cold_runner_temp = temp.path().join("cold-runner-temp");
+        fs::create_dir_all(&cold_runner_temp)?;
         let github_path = temp.path().join("github-path");
-        let mbx_template = temp.path().join("mbx-template");
+        let github_env = temp.path().join("github-env");
+        fs::write(&github_path, "")?;
+        fs::write(&github_env, "")?;
         let rust_template = temp.path().join("rust-template");
         write_executable(&stub_bin.join("mise"), MISE_STUB)?;
-        write_executable(&mbx_template, MBX_STUB)?;
         write_executable(&rust_template, RUSTC_STUB)?;
 
         let catalog = ToolCatalog::pinned();
         let rust_install = install_step("Prepare pinned tools", vec![PinnedTool::Rust], &catalog)?;
-        let mbx_install = install_step(
-            "Prepare pre-seed MBX",
-            vec![PinnedTool::MrBoxington],
-            &catalog,
-        )?;
-        let preflight = preflight_step(&catalog)?;
-        let steps = [&rust_install, &mbx_install, &preflight];
-        assert_eq!(
-            steps.map(|step| step.name.as_str()),
-            [
-                "Prepare pinned tools",
-                "Prepare pre-seed MBX",
-                "Verify MBX and Rust toolchains"
-            ]
-        );
+        let [preflight, mbx_action, version_check] = mbx_steps(&catalog)?;
+        assert_eq!(preflight.name, "Verify Rust before MBX action");
+        assert_eq!(mbx_action.name, "Restore MBX objects");
+        assert_eq!(version_check.name, "Verify native MBX version");
         assert!(
             !shell_run(&rust_install)?
                 .join(" ")
                 .contains("mr-boxington@")
         );
+        let StepKind::Action { uses, with, .. } = &mbx_action.kind else {
+            return Err(std::io::Error::other("MBX owner must be an action").into());
+        };
+        assert_eq!(
+            uses,
+            &format!("jdx/mr-boxington-action@{MR_BOXINGTON_ACTION_SHA}")
+        );
+        assert_eq!(
+            with.get("github-cache-mode").map(String::as_str),
+            Some("objects")
+        );
+        assert_eq!(
+            with.get("save-on-workflow-dispatch").map(String::as_str),
+            Some("false")
+        );
         assert!(
-            shell_run(&mbx_install)?
+            shell_run(&version_check)?
                 .join(" ")
-                .contains("mr-boxington@1.21.1")
+                .contains("mbx --version")
         );
 
+        let cold_env = runner_env(
+            &stub_bin,
+            &state,
+            &log,
+            &rust_template,
+            &cold_runner_temp,
+            &github_path,
+            &github_env,
+        )?;
+        assert!(
+            !run_step(&preflight, &cold_env)?.status.success(),
+            "cold Rust lookup must fail"
+        );
         let env = runner_env(
             &stub_bin,
             &state,
             &log,
-            &mbx_template,
             &rust_template,
             &runner_temp,
             &github_path,
+            &github_env,
         )?;
-        assert!(
-            !run_step(&preflight, &env)?.status.success(),
-            "cold MBX lookup must fail"
-        );
         assert!(
             run_step(&rust_install, &env)?.status.success(),
             "Cargo install"
         );
-        assert!(
-            !run_step(&preflight, &env)?.status.success(),
-            "Rust-only setup must not satisfy pre-seed MBX preflight"
-        );
-        assert!(
-            run_step(&mbx_install, &env)?.status.success(),
-            "pinned MBX install"
-        );
         let ready = run_step(&preflight, &env)?;
         assert!(ready.status.success(), "preflight after install: {ready:?}");
-        assert_install_precedes_lookup(&log)?;
+        assert_rust_install_precedes_lookup(&log, catalog.version(PinnedTool::Rust))?;
         Ok(())
     }
 
@@ -150,7 +150,7 @@ esac
         )?)
     }
 
-    fn preflight_step(catalog: &ToolCatalog) -> Result<Step, Box<dyn std::error::Error>> {
+    fn mbx_steps(catalog: &ToolCatalog) -> Result<[Step; 3], Box<dyn std::error::Error>> {
         let uses = format!("jdx/mr-boxington-action@{MR_BOXINGTON_ACTION_SHA}");
         let homes = ToolHomes::runner_temp();
         let env = strings_map(homes.env(catalog))?;
@@ -162,10 +162,7 @@ esac
             env,
         )?
         .ok_or_else(|| std::io::Error::other("MBX driver steps missing"))?;
-        steps
-            .into_iter()
-            .next()
-            .ok_or_else(|| std::io::Error::other("preflight step missing").into())
+        Ok(steps)
     }
 
     fn strings(values: Vec<OsString>) -> Result<Vec<String>, Box<dyn std::error::Error>> {
@@ -197,10 +194,10 @@ esac
         stub_bin: &Path,
         state: &Path,
         log: &Path,
-        mbx_template: &Path,
         rust_template: &Path,
         runner_temp: &Path,
         github_path: &Path,
+        github_env: &Path,
     ) -> Result<Vec<(&'static str, OsString)>, Box<dyn std::error::Error>> {
         let mut paths = vec![stub_bin.to_owned()];
         paths.extend(std::env::split_paths(
@@ -210,10 +207,16 @@ esac
             ("PATH", std::env::join_paths(paths)?),
             ("VELNOR_MISE_STATE", state.as_os_str().to_owned()),
             ("VELNOR_MISE_STUB_LOG", log.as_os_str().to_owned()),
-            ("VELNOR_MBX_TEMPLATE", mbx_template.as_os_str().to_owned()),
             ("VELNOR_RUST_TEMPLATE", rust_template.as_os_str().to_owned()),
             ("RUNNER_TEMP", runner_temp.as_os_str().to_owned()),
+            (
+                "MBX_CACHE_DIR",
+                runner_temp.join("velnor/mbx").into_os_string(),
+            ),
             ("GITHUB_PATH", github_path.as_os_str().to_owned()),
+            ("GITHUB_ENV", github_env.as_os_str().to_owned()),
+            ("GITHUB_RUN_ID", "1".into()),
+            ("GITHUB_RUN_ATTEMPT", "1".into()),
         ])
     }
 
@@ -250,17 +253,21 @@ esac
         fs::set_permissions(path, permissions)
     }
 
-    fn assert_install_precedes_lookup(log: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    fn assert_rust_install_precedes_lookup(
+        log: &Path,
+        rust_version: &str,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let events = fs::read_to_string(log)?;
         let lines = events.lines().collect::<Vec<_>>();
+        let selector = format!("rust@{rust_version}");
         let install = lines
             .iter()
-            .position(|line| *line == "install:mr-boxington@1.21.1")
-            .ok_or("pinned MBX install event")?;
+            .position(|line| line == &&format!("install:{selector}"))
+            .ok_or("pinned Rust install event")?;
         let lookup = lines
             .iter()
-            .rposition(|line| *line == "where:mr-boxington@1.21.1")
-            .ok_or("final MBX lookup event")?;
+            .rposition(|line| line == &&format!("where:{selector}"))
+            .ok_or("final Rust lookup event")?;
         assert!(install < lookup, "install must precede lookup: {events}");
         Ok(())
     }

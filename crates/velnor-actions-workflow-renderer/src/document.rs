@@ -30,8 +30,7 @@ pub(crate) fn workflow_to_yaml(
     ir: &WorkflowIr,
     shared: &LaneShare,
     ctx: &RenderContext,
-    mbx_gc_jobs: &BTreeSet<String>,
-    mbx_share_out_jobs: &BTreeSet<String>,
+    mbx_jobs: &BTreeSet<String>,
 ) -> Result<Yaml, RenderError> {
     let jobs = &shared.jobs;
     if shared.calls.keys().ne(shared.checkouts.keys())
@@ -52,7 +51,7 @@ pub(crate) fn workflow_to_yaml(
     for (id, job) in jobs {
         let call = shared.calls.get(id).map(String::as_str);
         let actions_read =
-            job.permissions.as_ref().unwrap_or(&ir.permissions).actions == PermissionLevel::Read;
+            grants_exact_actions_read(job.permissions.as_ref().unwrap_or(&ir.permissions).actions);
         rendered_jobs.push((
             id.clone(),
             job_to_yaml(
@@ -63,8 +62,7 @@ pub(crate) fn workflow_to_yaml(
                 call,
                 &lane_steps,
                 MbxJobPolicy {
-                    gc_auto_disabled: mbx_gc_jobs.contains(id),
-                    share_out_dir_disabled: mbx_share_out_jobs.contains(id),
+                    native_mbx: mbx_jobs.contains(id),
                     actions_read,
                 },
             )?,
@@ -89,6 +87,13 @@ pub(crate) fn workflow_to_yaml(
         ),
         ("jobs".to_owned(), Yaml::Map(rendered_jobs)),
     ]))
+}
+
+/// Report download is intentionally limited to the least-privilege `read` grant.
+/// A broader `write` grant can access artifacts on GitHub, but does not satisfy
+/// this renderer policy; callers must model the dedicated reader scope.
+fn grants_exact_actions_read(level: PermissionLevel) -> bool {
+    level == PermissionLevel::Read
 }
 
 fn lane_steps(shared: &LaneShare) -> crate::document_lanes::SharedLaneSteps<'_> {
@@ -232,8 +237,7 @@ fn dispatch_input_to_yaml(input: &DispatchInput) -> Yaml {
 
 #[derive(Clone, Copy)]
 struct MbxJobPolicy {
-    gc_auto_disabled: bool,
-    share_out_dir_disabled: bool,
+    native_mbx: bool,
     actions_read: bool,
 }
 
@@ -302,13 +306,11 @@ fn job_to_yaml(
             }
         }
     }
-    if mbx_policy.gc_auto_disabled {
+    if mbx_policy.native_mbx {
         job_env.insert(
             crate::cache_steps::MBX_GC_AUTO_ENV.to_owned(),
             crate::cache_steps::MBX_GC_AUTO_VALUE.to_owned(),
         );
-    }
-    if mbx_policy.share_out_dir_disabled {
         job_env.insert(
             crate::cache_steps::MBX_SHARE_OUT_DIR_ENV.to_owned(),
             crate::cache_steps::MBX_SHARE_OUT_DIR_VALUE.to_owned(),

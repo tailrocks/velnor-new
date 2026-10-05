@@ -276,7 +276,6 @@ fn render_job(
     steps.push(crate::matrix_step::prepare_crate_tools_step(
         catalog,
         use_rust,
-        use_mbx,
         use_nextest,
         crate::matrix_step::prepare_install_opentofu(policy, &model.package_name, use_opentofu),
         needs_validators,

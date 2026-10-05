@@ -6,8 +6,6 @@ use crate::yaml::Yaml;
 pub(crate) fn push_step_id(entries: &mut Vec<(String, Yaml)>, name: &str) {
     if let Some(id) = step_id(name) {
         entries.push(("id".to_owned(), Yaml::str(id.to_owned())));
-    } else {
-        crate::mbx_bundle::push_step_id(entries, name);
     }
 }
 

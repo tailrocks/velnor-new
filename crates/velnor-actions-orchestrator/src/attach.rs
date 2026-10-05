@@ -11,7 +11,7 @@ use velnor_actions_contract::{
     GeneratorLock, Step, WorkflowIr, is_crate_job_id, target_for_runner_label,
 };
 use velnor_actions_mise::{
-    PREPARE_PINNED_TOOLS_STEP, PinnedTool, PreparePinnedTools, ToolCatalog, ToolHomes,
+    PREPARE_PINNED_TOOLS_STEP, PREPARE_RUST_COMPONENTS_STEP, PinnedTool, ToolCatalog,
 };
 use velnor_actions_workflow_renderer::cache_p08::RESTORE_SOURCES_NAME;
 use velnor_actions_workflow_renderer::render::{FINAL_JOB_ID, PLAN_JOB_ID, PUBLISH_JOB_ID};
@@ -23,12 +23,8 @@ use velnor_actions_workflow_renderer::{
 
 use crate::OrchestratorError;
 use crate::pins::lock_acquire_step;
-use crate::utf8::{strings_of, strings_of_env};
 use crate::vectors::{candidate_build_argv, mbx_probe_argv};
 use crate::workflow::WorkflowPlan;
-
-/// Explicit pinned-tool install required by the pre-seed MBX build.
-const PREPARE_PRESEED_MBX_STEP: &str = "Prepare pre-seed MBX";
 
 /// Attach lock-backed Acquire steps to plan, final, publish, and crate jobs.
 ///
@@ -121,11 +117,6 @@ pub(crate) fn attach_preseed(
             problem: "plan_job_missing".to_owned(),
         });
     };
-    if !has_pinned_mbx_install(&plan.steps, &catalog) {
-        let preseed_mbx = prepare_preseed_mbx_step(&catalog)?;
-        let at = after_prepare(&plan.steps);
-        plan.steps.insert(at, preseed_mbx);
-    }
     insert_plan_mbx_restore(&catalog, &mut plan.steps)?;
     let at = preseed_anchor(&plan.steps);
     plan.steps.splice(at..at, plan_steps);
@@ -172,41 +163,6 @@ pub(crate) fn attach_preseed(
     Ok(())
 }
 
-/// Prepare the pinned MBX tool required by this explicit pre-seed obligation.
-///
-/// The ordinary plan tool set follows detected repository work. Pre-seed
-/// builds the generator with MBX even for Cargo-only repositories, so this
-/// separate typed install must precede the exact-path/preflight restore.
-/// # Errors
-fn prepare_preseed_mbx_step(catalog: &ToolCatalog) -> Result<Step, OrchestratorError> {
-    let prepare = PreparePinnedTools::new(vec![PinnedTool::MrBoxington], ToolHomes::runner_temp())
-        .map_err(|err| OrchestratorError::Contract {
-            problem: err.to_string(),
-        })?;
-    let run = strings_of(prepare.argv(catalog))
-        .map_err(|problem| OrchestratorError::Contract { problem })?;
-    let env = strings_of_env(&prepare.env(catalog))
-        .map_err(|problem| OrchestratorError::Contract { problem })?;
-    velnor_actions_workflow_renderer::ambient_shell_step(PREPARE_PRESEED_MBX_STEP, run, env)
-        .map_err(|err| OrchestratorError::Contract {
-            problem: err.to_string(),
-        })
-}
-
-/// Whether the ordinary plan preparation already installs the exact MBX pin.
-fn has_pinned_mbx_install(steps: &[Step], catalog: &ToolCatalog) -> bool {
-    let expected = catalog.tool_specs(&[PinnedTool::MrBoxington]);
-    steps.iter().any(|step| {
-        if step.name != PREPARE_PINNED_TOOLS_STEP {
-            return false;
-        }
-        let velnor_actions_contract::StepKind::Shell { run, .. } = &step.kind else {
-            return false;
-        };
-        expected.iter().all(|spec| run.contains(spec))
-    })
-}
-
 /// Insert index for plan-job provisioning: after `Prepare pinned tools`.
 ///
 /// Contract order is Checkout < Setup Mise < Prepare < Acquire; the
@@ -218,58 +174,71 @@ fn after_prepare(steps: &[Step]) -> usize {
         .map_or(1, |index| index + 1)
 }
 
-/// Insert the plan-job MBX objects restore ahead of fetch (pre-seed only).
+/// Insert the native MBX owner before the pre-seed build.
 ///
-/// The pre-seed build compiles through MBX on every repo, so the plan
-/// job warms the object store exactly like an MBX crate job: right after
-/// the shared-sources restore, ahead of fetch. Plans without a shared
-/// restore (lockless plans) stay untouched; there are no source
-/// dependencies to seed in those jobs.
+/// Lockful plans already carry the shared sources cache from the plan job;
+/// lockless plans have no source cache and install MBX after Rust setup.
 fn insert_plan_mbx_restore(
     catalog: &ToolCatalog,
     steps: &mut Vec<Step>,
 ) -> Result<(), OrchestratorError> {
-    let Some(restore_at) = steps
+    if steps.iter().any(is_mbx_action) {
+        return Err(OrchestratorError::Contract {
+            problem: "preseed_mbx_action_duplicated".to_owned(),
+        });
+    }
+    let restore_at = steps
         .iter()
         .position(|step| step.name == RESTORE_SOURCES_NAME)
-    else {
-        return Ok(());
-    };
+        .map_or_else(|| after_rust_setup(steps), |index| index + 1);
     for (offset, step) in crate::mbx_preflight::steps_for_catalog(catalog)?
         .into_iter()
         .enumerate()
     {
-        steps.insert(restore_at + 1 + offset, step);
+        steps.insert(restore_at + offset, step);
     }
     Ok(())
+}
+
+/// Insert after the pinned Rust setup and any separate component selection.
+fn after_rust_setup(steps: &[Step]) -> usize {
+    steps
+        .iter()
+        .position(|step| step.name == PREPARE_RUST_COMPONENTS_STEP)
+        .or_else(|| {
+            steps
+                .iter()
+                .position(|step| step.name == PREPARE_PINNED_TOOLS_STEP)
+        })
+        .map_or(1, |index| index + 1)
+}
+
+fn is_mbx_action(step: &Step) -> bool {
+    matches!(&step.kind, velnor_actions_contract::StepKind::Action { uses, .. } if uses.starts_with("jdx/mr-boxington-action@"))
 }
 
 /// Insert index for the plan-job pre-seed build block.
 ///
 /// The build compiles code, so it runs after the source-probing steps
 /// that guarantee sources present (which is after every restore);
-/// without them it anchors after the MBX install, which also covers
-/// lockless plans and hand-built fixtures without cache steps.
+/// without them it anchors after the last restore, and the fallback
+/// covers lockless plans and hand-built fixtures without cache steps.
 fn preseed_anchor(steps: &[Step]) -> usize {
-    if let Some(last) = steps.iter().rposition(|step| {
-        step.name
-            .starts_with(crate::source_prep::FETCH_SOURCES_STEP)
-    }) {
-        return last + 1;
-    }
-    if let Some(last) = steps.iter().rposition(|step| is_plan_restore(&step.name)) {
-        return last + 1;
-    }
-    if let Some(prepare) = steps
+    let last_required = steps
         .iter()
-        .position(|step| step.name == PREPARE_PRESEED_MBX_STEP)
-    {
-        return prepare + 1;
-    }
-    after_prepare(steps)
+        .enumerate()
+        .filter(|(_, step)| {
+            step.name
+                .starts_with(crate::source_prep::FETCH_SOURCES_STEP)
+                || is_plan_restore(&step.name)
+                || step.name == velnor_actions_workflow_renderer::MBX_VERSION_CHECK_NAME
+        })
+        .map(|(index, _)| index)
+        .max();
+    last_required.map_or_else(|| after_prepare(steps), |index| index + 1)
 }
 
-/// True for plan-job restore steps (shared Cargo sources, MBX objects).
+/// True for plan-job restore steps (shared, registry, MBX objects).
 fn is_plan_restore(name: &str) -> bool {
     name == RESTORE_SOURCES_NAME || name == MBX_RESTORE_NAME
 }

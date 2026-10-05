@@ -41,9 +41,6 @@ fn disable_mise_cache(step: &mut Step) {
 }
 
 fn is_cache_access(step: &Step) -> bool {
-    if is_mbx_bundle_shell(step) {
-        return true;
-    }
     let StepKind::Action { uses, .. } = &step.kind else {
         return false;
     };
@@ -51,15 +48,6 @@ fn is_cache_access(step: &Step) -> bool {
         || uses.starts_with("actions/cache/")
         || uses.starts_with("jdx/mr-boxington-action@")
         || uses == crate::tool_seed::TOOL_SEED_USES
-}
-
-fn is_mbx_bundle_shell(step: &Step) -> bool {
-    matches!(
-        step.name.as_str(),
-        crate::mbx_bundle::MBX_CACHE_KEY_NAME
-            | crate::mbx_bundle::MBX_BUNDLE_IMPORT_NAME
-            | crate::mbx_bundle::MBX_BUNDLE_EXPORT_NAME
-    )
 }
 
 fn suppress_dispatch(step: &mut Step) {
@@ -112,17 +100,6 @@ mod tests {
         }
     }
 
-    fn shell_cache_step(name: &str) -> Step {
-        Step {
-            name: name.to_owned(),
-            condition: None,
-            kind: StepKind::Shell {
-                run: vec!["sh".to_owned(), "-c".to_owned(), "true".to_owned()],
-                env: BTreeMap::new(),
-            },
-        }
-    }
-
     fn job(needs: &[&str], step: Step) -> Job {
         Job {
             display_name: "cache job".to_owned(),
@@ -148,10 +125,6 @@ mod tests {
                 job(&[], cache_step("jdx/mise-action@sha", "tools")),
             ),
             (
-                "mbx-plan".to_owned(),
-                job(&[], shell_cache_step(crate::mbx_bundle::MBX_CACHE_KEY_NAME)),
-            ),
-            (
                 "crate".to_owned(),
                 job(&["plan"], cache_step("actions/cache/save@sha", "cargo")),
             ),
@@ -159,7 +132,7 @@ mod tests {
 
         suppress_unvalidated_cache_access(&mut jobs);
 
-        for id in ["plan", "mbx-plan", "crate"] {
+        for id in ["plan", "crate"] {
             let condition = jobs[id].steps[0]
                 .condition
                 .as_deref()
@@ -204,7 +177,13 @@ mod tests {
             kind: StepKind::Action {
                 uses: format!("jdx/mr-boxington-action@{}", "a".repeat(40)),
                 with: BTreeMap::from([("toolchain".to_owned(), "1.98.1".to_owned())]),
-                env: BTreeMap::from([("VELNOR_MBX_VERSION".to_owned(), "1.21.1".to_owned())]),
+                env: BTreeMap::from([
+                    ("VELNOR_MBX_VERSION".to_owned(), "1.21.1".to_owned()),
+                    (
+                        crate::cache_steps::MBX_CACHE_MODE_ENV.to_owned(),
+                        "${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}".to_owned(),
+                    ),
+                ]),
             },
         };
         Ok(Job {
@@ -284,7 +263,7 @@ mod tests {
     }
 
     #[test]
-    fn generated_dispatch_plan_gates_mbx_key_and_action_cache_steps()
+    fn generated_dispatch_plan_gates_native_mbx_and_tools_cache_steps()
     -> Result<(), crate::RenderError> {
         let staged = format!("{STAGED_BINARY_PREFIX}0.1.0");
         let ir = dispatch_ir(dispatch_plan_job(&staged)?);
@@ -297,14 +276,6 @@ mod tests {
             &dispatch_mise(),
         )?;
         let plan = jobs.get(PLAN_JOB_ID).expect("finalized plan job");
-        let key = plan
-            .steps
-            .iter()
-            .find(|step| step.name == crate::mbx_bundle::MBX_CACHE_KEY_NAME)
-            .expect("MBX key step");
-        assert!(key.condition.as_deref().is_some_and(|condition| {
-            condition.contains("github.event_name != 'workflow_dispatch'")
-        }));
         let mbx = plan
             .steps
             .iter()
@@ -313,6 +284,25 @@ mod tests {
         assert!(mbx.condition.as_deref().is_some_and(|condition| {
             condition.contains("github.event_name != 'workflow_dispatch'")
         }));
+        let native_mode = match &mbx.kind {
+            StepKind::Action { env, .. } => env
+                .get(crate::cache_steps::MBX_CACHE_MODE_ENV)
+                .map(String::as_str),
+            _ => None,
+        };
+        assert_eq!(
+            native_mode,
+            Some(
+                "${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}"
+            ),
+            "native object writes remain limited to protected default-branch pushes"
+        );
+        assert!(
+            plan.steps
+                .iter()
+                .all(|step| !step.name.contains("MBX bundle")),
+            "the retired manual transport is absent"
+        );
         let mise = plan
             .steps
             .iter()
@@ -379,6 +369,23 @@ mod tests {
                 .condition
                 .as_deref()
                 .is_some_and(|condition| condition.contains(DISPATCH_DENY))
+        );
+    }
+
+    #[test]
+    fn dispatch_denies_native_mbx_object_restore_before_use() {
+        let native = cache_step(
+            &format!("{}@{}", crate::cache_steps::MBX_ACTION_NAME, "a".repeat(40)),
+            "Restore MBX objects",
+        );
+        let mut jobs = BTreeMap::from([("plan".to_owned(), job(&[], native))]);
+
+        suppress_unvalidated_cache_access(&mut jobs);
+
+        assert_eq!(
+            jobs["plan"].steps[0].condition.as_deref(),
+            Some(DISPATCH_DENY),
+            "native MBX restore is skipped on every workflow dispatch"
         );
     }
 }

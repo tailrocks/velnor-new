@@ -78,7 +78,6 @@ fn lock_acquire_inserts_digest_verified_stage() {
                 false,
                 false,
                 false,
-                false,
                 &[],
             )
             .expect("plan job"),
@@ -161,7 +160,6 @@ fn lock_acquire_records_source_commit() {
             false,
             false,
             false,
-            false,
             &[],
         )
         .expect("plan job"),
@@ -191,7 +189,9 @@ fn lock_acquire_records_source_commit() {
 #[test]
 fn preseed_attach_builds_once_and_sets_mode() {
     use velnor_actions_actionlint::ActionlintConfigInput;
-    use velnor_actions_workflow_renderer::{PRESEED_BUILD_NAME, PRESEED_STAGE_NAME};
+    use velnor_actions_workflow_renderer::{
+        MBX_PREFLIGHT_NAME, MBX_VERSION_CHECK_NAME, PRESEED_BUILD_NAME, PRESEED_STAGE_NAME,
+    };
     let catalog = ToolCatalog::pinned();
     let mut plan = WorkflowPlan {
         ir: bare_ir(BTreeMap::from([
@@ -202,7 +202,6 @@ fn preseed_attach_builds_once_and_sets_mode() {
                     None,
                     &catalog,
                     true,
-                    false,
                     false,
                     false,
                     false,
@@ -248,25 +247,20 @@ fn preseed_attach_builds_once_and_sets_mode() {
         [
             "Checkout",
             "Prepare pinned tools",
-            "Prepare pre-seed MBX",
+            "Prepare Rust components",
+            MBX_PREFLIGHT_NAME,
+            MBX_RESTORE_NAME,
+            MBX_VERSION_CHECK_NAME,
             PRESEED_BUILD_NAME,
             "Verify MBX compile (pre-seed trust-on-review)",
             "Write helper manifest (pre-seed trust-on-review)",
             "Upload helper (pre-seed trust-on-review)",
             PRESEED_STAGE_NAME,
-            "Prepare Rust components",
             "Write request",
             "Plan",
         ]
     );
-    for id in ["rust-demo", "required", "publish-baseline"] {
-        let names: Vec<&str> = plan.ir.jobs[id]
-            .steps
-            .iter()
-            .map(|s| s.name.as_str())
-            .collect();
-        assert_consumer_triple(id, &names);
-    }
+    assert_preseed_consumers(&plan);
     assert!(attach_preseed(&mut plan, "ubuntu-26.04-arm", "0.1.0").is_err());
 }
 
@@ -293,8 +287,20 @@ fn assert_consumer_triple(id: &str, names: &[&str]) {
     );
 }
 
+/// Every pre-seed consumer downloads and verifies the plan's exact helper.
+fn assert_preseed_consumers(plan: &WorkflowPlan) {
+    for id in ["rust-demo", "required", "publish-baseline"] {
+        let names: Vec<&str> = plan.ir.jobs[id]
+            .steps
+            .iter()
+            .map(|step| step.name.as_str())
+            .collect();
+        assert_consumer_triple(id, &names);
+    }
+}
+
 /// Pre-seed fixture plan over one plan job plus the final gate.
-fn preseed_fixture(use_mbx: bool, fetch_roots: &[String]) -> WorkflowPlan {
+fn preseed_fixture(fetch_roots: &[String]) -> WorkflowPlan {
     use velnor_actions_actionlint::ActionlintConfigInput;
     let catalog = ToolCatalog::pinned();
     WorkflowPlan {
@@ -306,7 +312,6 @@ fn preseed_fixture(use_mbx: bool, fetch_roots: &[String]) -> WorkflowPlan {
                     None,
                     &catalog,
                     true,
-                    use_mbx,
                     false,
                     false,
                     false,
@@ -352,34 +357,5 @@ fn assert_owned_homes(steps: &[Step], name: &str) {
 
 #[path = "attach_mbx_tests.rs"]
 mod mbx_tests;
-
-#[test]
-fn preseed_restores_mbx_objects_after_cargo_sources() {
-    use velnor_actions_workflow_renderer::{PRESEED_BUILD_NAME, PRESEED_VERIFY_NAME};
-    let mut plan = preseed_fixture(false, &[String::new()]);
-    attach_preseed(&mut plan, "ubuntu-26.04", "0.1.0").expect("attach");
-    let steps = &plan.ir.jobs["plan"].steps;
-    let names: Vec<&str> = steps.iter().map(|step| step.name.as_str()).collect();
-    let source = names
-        .iter()
-        .position(|step| *step == "Restore Cargo sources")
-        .expect("sources restore present");
-    let objects = names
-        .iter()
-        .position(|step| *step == MBX_RESTORE_NAME)
-        .expect("pre-seed build uses MBX objects");
-    let probe = names
-        .iter()
-        .position(|step| *step == crate::source_prep::FETCH_SOURCES_STEP)
-        .expect("sources step");
-    let build = names
-        .iter()
-        .position(|step| *step == PRESEED_BUILD_NAME)
-        .expect("build step");
-    assert!(
-        source < objects && objects < probe && probe < build,
-        "sources<objects<source-check<build: {names:?}"
-    );
-    assert_owned_homes(steps, PRESEED_BUILD_NAME);
-    assert_owned_homes(steps, PRESEED_VERIFY_NAME);
-}
+#[path = "attach_source_cache_tests.rs"]
+mod source_cache_tests;

@@ -31,10 +31,10 @@ pub(crate) const LINT_DISPLAY_NAME: &str = "Actionlint";
 /// Planner job: checkout, pinned-tool install, optional Acquire, request, plan.
 ///
 /// `Prepare pinned tools` installs the exact catalog tools the later steps consume
-/// through fail-closed `mise exec`, per role: Rust plus the detected MBX driver
-/// for the format/build steps, Nextest when any leg selects it, Opentofu when any
-/// tofu work exists, and the validators the public `generate` runs inside `Check
-/// generated files`. Without it the freshness step fails with `mise ...
+/// through fail-closed `mise exec`, per role: Rust for Rust work, Nextest when any
+/// leg selects it, Opentofu when any tofu work exists, `gh` for qualification
+/// receipt lookup, and the validators the public `generate` runs inside `Check
+/// generated files`. The native MBX action owns its installation. Without it the freshness step fails with `mise ...
 /// couldn't exec process` because implicit installation is disabled there.
 /// Pure-tofu plans install opentofu plus the validators with no Rust setup
 /// (no components, fetch, or owned-homes triple); mixed plans the union.
@@ -60,7 +60,6 @@ pub(crate) fn plan_job(
     acquire: Option<Step>,
     catalog: &ToolCatalog,
     use_rust: bool,
-    use_mbx: bool,
     use_nextest: bool,
     use_opentofu: bool,
     use_gh: bool,
@@ -69,7 +68,7 @@ pub(crate) fn plan_job(
     let mut steps = vec![checkout_history_action()?];
     let prepare = prepare_pinned_tools_step(
         catalog,
-        plan_tools(use_rust, use_mbx, use_nextest, use_opentofu, use_gh),
+        plan_tools(use_rust, use_nextest, use_opentofu, use_gh),
         use_rust,
     )?;
     steps.push(prepare);
@@ -208,18 +207,16 @@ pub(crate) fn read_actions_permissions() -> Permissions {
 /// with no Rust; mixed plans carry the union.
 #[expect(
     clippy::fn_params_excessive_bools,
-    reason = "four independent install flags mirror the role selection"
+    reason = "driver, validator, and resolver install roles are independent"
 )]
 fn plan_tools(
     use_rust: bool,
-    use_mbx: bool,
     use_nextest: bool,
     use_opentofu: bool,
     use_gh: bool,
 ) -> Vec<PinnedTool> {
     let mut tools = Vec::new();
     tools.extend(use_rust.then_some(PinnedTool::Rust));
-    tools.extend(use_mbx.then_some(PinnedTool::MrBoxington));
     tools.extend([
         PinnedTool::Actionlint,
         PinnedTool::Shellcheck,
