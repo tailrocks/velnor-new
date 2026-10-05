@@ -10,6 +10,7 @@ mod resources;
 mod runs_on;
 mod stacks;
 mod tofu;
+mod verification;
 mod workflow;
 
 pub use actions::{ActionPinOverride, ActionsConfig, OVERRIDABLE_ACTIONS};
@@ -31,6 +32,10 @@ pub use stacks::{
     is_valid_custom_task_name, is_valid_feature_name, is_valid_rust_target,
 };
 pub use tofu::{RootProblem, TofuStackConfig, Utf8RepoRelDir};
+pub use verification::{
+    VerificationRunner, VerificationTask, VerificationTaskKind, is_valid_mise_task_name,
+    is_valid_verification_task_id,
+};
 pub use workflow::{
     GeneratorValidation, LATEST_RUNNER_LABEL, RUNNER_LABEL_CATALOG, RunnerSelection,
     VelnorSupportWorkflow, WorkflowConfig, WorkflowPolicy,

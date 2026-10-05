@@ -2,7 +2,9 @@
 
 use velnor_actions_contract::{Concurrency, Trigger, WorkflowIr};
 
-use crate::{CONCURRENCY_CANCEL, CONCURRENCY_GROUP, EXPECTED_PR_TYPES, RenderError};
+use crate::{
+    CONCURRENCY_CANCEL, CONCURRENCY_GROUP, EXPECTED_PR_TYPES, RenderError, VerificationTaskPolicy,
+};
 
 /// Require the exact trigger shape: 4 PR types, one push branch, merge group.
 pub(crate) fn check_triggers(triggers: &Trigger) -> Result<(), RenderError> {
@@ -36,9 +38,18 @@ pub(crate) fn check_concurrency(concurrency: &Concurrency) -> Result<(), RenderE
 }
 
 /// Require every job to use the single context label.
-pub(crate) fn check_single_label(ir: &WorkflowIr, label: &str) -> Result<(), RenderError> {
+pub(crate) fn check_single_label(
+    ir: &WorkflowIr,
+    label: &str,
+    verification_tasks: &[VerificationTaskPolicy],
+) -> Result<(), RenderError> {
     for (id, job) in &ir.jobs {
+        let task_label = verification_tasks
+            .iter()
+            .find(|task| task.job_id().as_str() == id.as_str())
+            .map(|task| task.runner_label.as_str());
         if job.runs_on != label
+            && task_label != Some(job.runs_on.as_str())
             && !velnor_actions_contract::RunsOn::parse(&job.runs_on)
                 .is_ok_and(|selector| selector.is_scale_set())
         {

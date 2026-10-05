@@ -179,7 +179,12 @@ schema = 1
 # configurations = [{ name = "default", features = ["default"], target = "host" }]
 # compile_driver = "cargo"         # Sticky override: "cargo" or "mbx"; conflicts with durable evidence fail closed.
 # test_runner = "cargo_test"       # Sticky override: "cargo_test" or "cargo_nextest".
-# custom_tasks = []                # Allowlisted Mise task names (sorted, unique); non-empty is rejected (`custom_tasks_unqualified`) until the execution path is qualified. Once qualified, only these run as `mise run <name>` steps: review before allowlisting.
+# [[workflow.tasks]]               # Optional isolated, non-Rust verification job.
+# id = "native-format"
+# kind = "verification"
+# mise_task = "desktop-format-check"
+# runner = "macos-arm64"           # Or "linux-x64".
+# timeout_minutes = 10              # Required, bounded 1..=360.
 
 # Optional repository-relative POSIX globs excluded before detector input.
 # [discovery]

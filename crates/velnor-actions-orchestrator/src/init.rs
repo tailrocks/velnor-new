@@ -95,6 +95,15 @@ const SAMPLE_BODY: &str = r#"schema = 1
 # generator_validation = "bootstrap"  # Generator validation mode.
 # max_parallel_jobs = 2                # Maximum generated matrix concurrency.
 
+# Optional no-Rust verification tasks. Each sorted declaration gets a
+# tokenless standalone job and joins the Required check on all CI triggers.
+# [[workflow.tasks]]
+# id = "native-format"
+# kind = "verification"
+# mise_task = "desktop-format-check"
+# runner = "macos-arm64"               # Or "linux-x64".
+# timeout_minutes = 10                  # Bounded 1..=360.
+
 # Optional resource limits for generated jobs.
 # [resources]
 # compiler_process_budget = 2           # MBX/Cargo compiler process budget.
@@ -114,7 +123,7 @@ const SAMPLE_BODY: &str = r#"schema = 1
 # configurations = [{ name = "default", features = ["default"], target = "host" }]
 # compile_driver = "cargo"         # Sticky override: "cargo" (default) or "mbx". Without it, a repo-local Mise Cargo wrapper selects MBX. Each key overrides its own axis only; conflicts with durable evidence fail closed.
 # test_runner = "cargo_test"       # Sticky override: "cargo_test" (default) or "cargo_nextest". Without it, .config/nextest.toml selects Nextest ([profile.ci] when declared, else the documented default profile).
-# custom_tasks = []                # Allowlisted Mise task names (sorted, unique); only these run as `mise run <name>` steps in crate jobs. Each named task's Mise-defined commands execute in CI: review before allowlisting.
+# Do not put free-form Mise commands in credential-bearing Rust jobs.
 
 # Optional repository-relative POSIX globs excluded before detector input.
 # [discovery]

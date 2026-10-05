@@ -6,7 +6,7 @@
 //! helpers, and the plan anchor; the legacy entrypoint preserves the
 //! previous contract for in-flight callers.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{
     CI_WORKFLOW_PATH, Job, PLAN_JOB_ID as CONTRACT_PLAN_JOB_ID,
@@ -89,6 +89,8 @@ pub struct RenderContext {
     /// review). Accepts fixed pre-seed staging for internal steps and
     /// requires the build-once artifact closure; never set for consumers.
     pub preseed: bool,
+    /// Sorted isolated verification jobs with per-runner Mise pins.
+    pub verification_tasks: Vec<crate::VerificationTaskPolicy>,
     /// Caller-validated env for plan-job helper consumers: the freshness
     /// step and the `plan-v1` internal step run the helper, whose
     /// locked/offline qualification reads the Cargo home the Fetch step
@@ -246,7 +248,16 @@ pub fn finalize_jobs(
 ) -> Result<BTreeMap<String, Job>, RenderError> {
     mise.validate()?;
     let mut jobs = merged_jobs(ir, policy, support, ctx)?;
+    let verification_job_ids: BTreeSet<String> = ctx
+        .verification_tasks
+        .iter()
+        .map(crate::VerificationTaskPolicy::job_id)
+        .collect();
     for (id, job) in &mut jobs {
+        if verification_job_ids.contains(id) {
+            closure::check_internal_staged(id, job, ctx.preseed)?;
+            continue;
+        }
         let always = id == PLAN_JOB_ID || id == TASK_JOB_ID;
         let target =
             velnor_actions_contract::target_for_runner_label(&ctx.runs_on).ok_or_else(|| {
@@ -302,7 +313,7 @@ fn merged_jobs(
     ir.validate().map_err(RenderError::Contract)?;
     workflow_policy::check_triggers(&ir.triggers)?;
     workflow_policy::check_concurrency(&ir.concurrency)?;
-    workflow_policy::check_single_label(ir, &ctx.runs_on)?;
+    workflow_policy::check_single_label(ir, &ctx.runs_on, &ctx.verification_tasks)?;
     let mut jobs = ir.jobs.clone();
     match policy {
         WorkflowPolicy::ConsumerV1 => support::reject_consumer_support(&jobs, support)?,
@@ -310,6 +321,12 @@ fn merged_jobs(
             support::merge_support_jobs(&mut jobs, support, ctx)?;
         }
     }
+    let verification_ids = crate::verification_jobs::validate_verification_jobs(
+        &jobs,
+        &ctx.verification_tasks,
+        &ctx.checkout_uses,
+    )?;
+    crate::verification_jobs::extend_required_needs(&mut jobs, &verification_ids)?;
     msrv::check_no_msrv(&jobs)?;
     support::check_candidate_invariants(&jobs)?;
     support::check_final_gate(&jobs)?;
