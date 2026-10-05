@@ -73,7 +73,7 @@ fn two_obligation_job() -> (String, Job, String, String) {
 
 #[test]
 fn obligations_wrap_report_capture() {
-    let (_, demo, clippy_id, test_id) = two_obligation_job();
+    let (_, demo, clippy_id, _test_id) = two_obligation_job();
     let steps = names(&demo);
     assert_eq!(&steps[..2], ["Checkout", "Download plan"], "{steps:?}");
     for (name, command) in [
@@ -99,12 +99,9 @@ fn obligations_wrap_report_capture() {
         first_env.get("VELNOR_TASK_ID").map(String::as_str),
         Some(clippy_id.as_str())
     );
-    let downstream = first_env
-        .get(crate::task_report::DOWNSTREAM_IDS_ENV)
-        .expect("downstream ids");
     assert!(
-        downstream.split(',').collect::<Vec<_>>() == [test_id.as_str()],
-        "downstream: {downstream}"
+        !first_env.contains_key(crate::task_report::DOWNSTREAM_IDS_ENV),
+        "downstream ids are derived from the plan on failure"
     );
     assert!(
         !env_of(&demo, "Unit and integration tests")

@@ -9,10 +9,10 @@ Review date: 4 October 2026, Singapore time.
 - `owned-source-review.md`: findings, evidence strength, ancestry summary, necessity decisions, and unresolved questions.
 - `owned-source-spec.md`: exact proposed end state; Phase 0 selective Rust regression port; script decisions; implementation slices, rollout, rollback and completion gates.
 - `owned-source-goal.md`: self-contained agent-team goal. It defaults to research-only and does not authorize repository writes or branch deletion.
-- `velnor-owned-source-implementation-goal.md`: later implementation-mode goal prompt, retained verbatim as a passive reference.
+- `velnor-owned-source-implementation-goal.md` and `velnor-owned-source-implementation-goal-continuation.md`: the later implementation-mode goal prompt, retained in order as a passive reference and split to meet the repository's 400-line document limit.
 - `owned-source-inventories.md`: API-derived custom-commit statistics and the ref, consumer and Python coverage ledgers.
 - `owned-source-inventory.json`: machine-readable inventory, including 15 unique custom commits, 14 observed refs, 46 named consumers and 36 Python principal/support/test files.
-- `SHA256SUMS`: checksums for all seven package documents, excluding the checksum manifest itself.
+- `SHA256SUMS`: checksums for all eight package documents, excluding the checksum manifest itself.
 
 The two goal prompts are preserved as historical reference documents. This documentation-only publication does not invoke them or authorize the implementation work they describe.
 

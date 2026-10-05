@@ -5,17 +5,17 @@ e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./dogfood/dogf
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./dogfood/generate.stdout.txt
 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./dogfood/plan.exit
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./dogfood/plan.stderr.txt
-56706e51efcc2a9be8ee3f6a5154e1df7016495623f8aa5705a002655d1f44c1  ./dogfood/plan.txt
+ccb5889dc14cbb63864d6467f2784e9ea27e2f88dc4ec00cedcd2d2d91888ede  ./dogfood/plan.txt
 a63e6a4550e75e14c2dd2ebe6efefe1360a847967c0ee2f28803eb43949dc6e4  ./dogfood/preview/.github/AGENTS.md
 0da1fbb188c99eb4cffe66befed975368b8b86ef7e375d2b8ac9a6540818fbff  ./dogfood/preview/.github/actionlint.yaml
-e3534c7655467ed1178f034d001a4f4837651e485ffda2ff94f93c389bcf9770  ./dogfood/preview/.github/workflows/ci.yml
+542e42169daf38b522ecb474e9c17a668851df142552b7a2afa3aa65d9f0402f  ./dogfood/preview/.github/workflows/ci.yml
 c777fb6c4837da2fd38fe4ac68b5235b759fb628de68a22c6adc14153ba086a3  ./dogfood/preview/.github/workflows/foundation-qualification.yml
 0d41b05d10d4da7b26a719f82908f2a47e7224ed93ef3383d81a6d45179fb5d8  ./dogfood/preview/.github/workflows/freshness.yml
 d13645f1aa9667a1ce9fa0886ca5f4930c3a9a0e33c3dfe7df6b8942cad9962a  ./dogfood/preview/.github/workflows/generator-release.yml
 a103db30bc49166259cbb40e9948c2677fbc49d84164cc7f71c262ea5d3ecdab  ./dogfood/preview/.github/workflows/image-release.yml
 f3edd65a1dcc1de22b67e08446003e41d10c8fd4595ffcff72fb9e821a935846  ./dogfood/preview/.github/workflows/macos-binary-release.yml
-34a2d1087aade9df4145579c5dffa643e26751d2b35d4cf0ca02960b0d1cae1d  ./dogfood/preview/.github/workflows/qualification.yml
-922e6b05a64af17b3e576f4cd223c2749203d7d8d73eaa3714aaf413fe008f23  ./dogfood/tree.sha256
+73baa85ecd7f4e187c0bcbd81526cda956c5aef60f3c354b0cd353accfd29158  ./dogfood/preview/.github/workflows/qualification.yml
+699030882396443cbd89df26402193134634d6577c18ea033a37e9c8788331e2  ./dogfood/tree.sha256
 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./empty-suite/generate.exit
 2b8a5970c82395615b1e51c370a508026b99d2b0e20ccbda540d88f573e74174  ./empty-suite/generate.stderr.txt
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./empty-suite/generate.stdout.txt
@@ -24,18 +24,18 @@ e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./empty-suite/
 8255b377c540e1faec02b8c6e3d5ece720622662e7a4f34cd6375dc4b600110d  ./empty-suite/plan.txt
 a63e6a4550e75e14c2dd2ebe6efefe1360a847967c0ee2f28803eb43949dc6e4  ./empty-suite/preview/.github/AGENTS.md
 b3f39f72416eee5077f2fd187f860e6d9a0a9ea4b33fdf3cfc671b1afbb34e0e  ./empty-suite/preview/.github/actionlint.yaml
-ba06686fbd9df07c91550b4631a46e5bba8e48ddad28127c022676c0d79ce839  ./empty-suite/preview/.github/workflows/ci.yml
-4ffd5654bc2ab99f3ade5447970893112d16c19312aafae834e4403233464696  ./empty-suite/tree.sha256
+82825af6d763b79c5fd74d1986eba7b39e1161b678a67504e51957b28756468a  ./empty-suite/preview/.github/workflows/ci.yml
+f37cc98114bd1c29f8a373151629511b01ed09d34ea8e038842b013f92eb644d  ./empty-suite/tree.sha256
 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./mbx-nextest/generate.exit
 df07fb90a5ed0a23cb5c657213cf8c363e6fad526d53c161c2d4081acb380dcf  ./mbx-nextest/generate.stderr.txt
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./mbx-nextest/generate.stdout.txt
 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./mbx-nextest/plan.exit
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./mbx-nextest/plan.stderr.txt
-b57d9d9f98ecdd533aff417535aa47e48fb7a670aef2f75eeecca2aa6b8f64e0  ./mbx-nextest/plan.txt
+962c734f57b579d232c09b239a83306f3ec38d356801f85ab95258f7e48fa063  ./mbx-nextest/plan.txt
 a63e6a4550e75e14c2dd2ebe6efefe1360a847967c0ee2f28803eb43949dc6e4  ./mbx-nextest/preview/.github/AGENTS.md
 b3f39f72416eee5077f2fd187f860e6d9a0a9ea4b33fdf3cfc671b1afbb34e0e  ./mbx-nextest/preview/.github/actionlint.yaml
-e8802a93126eef06c49b9aa6e609165837de18bfcd5ce90247aad62a461772c8  ./mbx-nextest/preview/.github/workflows/ci.yml
-c4d13712fcaf2153b4b2f5b4912b6d1c4a4d5c11996c69a4de5d95e2fdbc77f4  ./mbx-nextest/tree.sha256
+3c3cf1bcafd840a1891a7f32d7f6f894d52b438cd9a8c55d668ed25f8b857c24  ./mbx-nextest/preview/.github/workflows/ci.yml
+b052ea31b56604d7dd00b2fbb6f5991de02d92f9dc9e6781dfcf038051ff9204  ./mbx-nextest/tree.sha256
 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./minimal-cargo/generate.exit
 2b8a5970c82395615b1e51c370a508026b99d2b0e20ccbda540d88f573e74174  ./minimal-cargo/generate.stderr.txt
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./minimal-cargo/generate.stdout.txt
@@ -44,8 +44,8 @@ e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./minimal-carg
 92b28f43d07cb152bc91e34e321f24e310edc61bc3387039e425dac5e142a814  ./minimal-cargo/plan.txt
 a63e6a4550e75e14c2dd2ebe6efefe1360a847967c0ee2f28803eb43949dc6e4  ./minimal-cargo/preview/.github/AGENTS.md
 b3f39f72416eee5077f2fd187f860e6d9a0a9ea4b33fdf3cfc671b1afbb34e0e  ./minimal-cargo/preview/.github/actionlint.yaml
-fab25d231d27b3326662990aa2bc01c12d50e107d341ffab2ff8d22c6b30739e  ./minimal-cargo/preview/.github/workflows/ci.yml
-57d761c7b6170426a666cda16ce9611a9736a66f74de0b74e205b0553a8733ed  ./minimal-cargo/tree.sha256
+7272c0450007c20a5c77a6099baad1e40f130a5b9e92a0423dd43d2244b956e0  ./minimal-cargo/preview/.github/workflows/ci.yml
+87f38de1ee69d29d201ca05f48149ac2115df6bc91ae91d6d6155edcec6c136a  ./minimal-cargo/tree.sha256
 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./nested/generate.exit
 2b8a5970c82395615b1e51c370a508026b99d2b0e20ccbda540d88f573e74174  ./nested/generate.stderr.txt
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./nested/generate.stdout.txt
@@ -54,8 +54,8 @@ e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./nested/plan.
 29b08f2f2d77403b90cf841abb1487e6f999156d0804bd8d8ae956c6aae31d3d  ./nested/plan.txt
 a63e6a4550e75e14c2dd2ebe6efefe1360a847967c0ee2f28803eb43949dc6e4  ./nested/preview/.github/AGENTS.md
 b3f39f72416eee5077f2fd187f860e6d9a0a9ea4b33fdf3cfc671b1afbb34e0e  ./nested/preview/.github/actionlint.yaml
-8b95b019ef1e9babff88e8582611cf92d13f7071838c02f8470fa95d0f0e21a3  ./nested/preview/.github/workflows/ci.yml
-34902eaae57b734443801dc4aaac091690ff7c75017048a42e9ad332f0e80129  ./nested/tree.sha256
+e5cb7d9bacebbd72d857724c05afb31e080f5761705914d518802bbdc9550756  ./nested/preview/.github/workflows/ci.yml
+fd6a6af79fa2e6be0ae5358acf8c618eb49158874ac8e83a3b812466ed6f1c9b  ./nested/tree.sha256
 link ./dogfood/preview/.github/CLAUDE.md -> AGENTS.md
 link ./empty-suite/preview/.github/CLAUDE.md -> AGENTS.md
 link ./mbx-nextest/preview/.github/CLAUDE.md -> AGENTS.md

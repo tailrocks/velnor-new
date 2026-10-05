@@ -22,6 +22,11 @@ use crate::worker::{Started, start_pair};
 
 mod capacity;
 mod gate;
+#[cfg(all(test, unix))]
+mod initial_scale_tests;
+mod inspect;
+#[cfg(all(test, unix))]
+mod inspect_tests;
 mod session;
 mod slot;
 mod steps;

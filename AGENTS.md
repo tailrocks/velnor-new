@@ -46,3 +46,10 @@
 - Accepted feedback: fix, verify, commit, push, and reply on GitHub with the fixing commit URL before resolving. Rejected feedback: reply with evidence and rationale before resolving. Address general comments in linked PR replies. Never delete feedback or resolve it without a justified disposition.
 - Re-fetch feedback at the final head SHA. Merge only with no unaddressed feedback or unresolved threads and all required checks and approvals satisfied. Only explicit, PR-specific human authorization waives identified feedback.
 - Keep agent instructions lean. Put explanations, plans, and progress in documentation, not here.
+
+## Subagent model policy
+
+- Implementation, execution, and implementation-oriented research use exactly `gpt-6-luna` with `max` reasoning effort.
+- Review, verification, and independent assessment use exactly `gpt-6.1-sol` with `medium` reasoning effort.
+- Do not use fallback, automatic routing, or model substitution. If the exact model and effort cannot be guaranteed, stop and report.
+- Keep implementation and review separate; substantive work requires independent review. Follow the full role, delegation, and compliance rules in [the mandatory subagent model policy](docs/implemented/subagent-model-policy.md).

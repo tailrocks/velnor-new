@@ -137,7 +137,7 @@ pub fn cargo_payload_argv(group: &TaskGroup) -> Result<Vec<OsString>, ContractEr
     Ok(args)
 }
 
-/// Payload argv with the resolved Nextest profile after `run` or `list`;
+/// Payload argv with the group's resolved Nextest profile after `run` or `list`;
 /// others match [`cargo_payload_argv`] byte for byte (doctests stay
 /// separate). The profile comes from the group itself, never a parallel
 /// argument that could disagree with it.
@@ -204,6 +204,11 @@ fn push_kind_args(
             ]);
             push_manifest(args, manifest)?;
             push_package(args, group)?;
+            if let Some(mode) = &group.run_ignored
+                && mode != "default"
+            {
+                args.extend([flag("--run-ignored"), flag(mode)]);
+            }
             args.extend([flag("--no-tests"), flag("fail")]);
         }
         TaskKind::Doctest => {
