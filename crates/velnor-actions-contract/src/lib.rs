@@ -105,16 +105,18 @@ pub use targets::{
 };
 pub use tooling::ToolIdentity;
 pub use vcs::VcsInputs;
+pub use workflow::DYNAMIC_MATRIX_OUTPUT_MODE;
 pub use workflow::{
     BaselineProof, BaselineStatus, CANDIDATE_ATTESTATION_FILENAME, CANDIDATE_EVIDENCE_SUBDIR,
     CI_WORKFLOW_PATH, CRATE_JOB_ID_PREFIX, CacheLayer, CacheOutcome, CacheResult, Concurrency,
     CrateJob, CrateObligation, DispatchInput, DispatchInputType, EntryCacheIds, ExecuteTaskIds,
     ExecuteTaskRef, FINAL_JSON_FILENAME, FRESHNESS_CRON_WEEKLY, FRESHNESS_WORKFLOW_PATH,
-    FinalCounts, FinalReport, FinalStatus, HOSTED_SUFFIX, Job, JobConclusion, JobTimeout,
-    MATRIX_JSON_FILENAME, ManifestTaskProof, MatrixEntry, MatrixReport, MatrixStatus,
-    MatrixTaskEntry, NEEDS_CHANNEL_ENV, NEEDS_CHANNEL_EXPRESSION, NEEDS_EXPECTED_ENV,
-    NeedsConclusions, NotSelectedReason, ObligationDecision, PLAN_DISPLAY_NAME, PLAN_JOB_ID,
-    PLAN_JSON_FILENAME, PermissionLevel, Permissions, Plan, PlanBaseline, PlanGenerator,
+    FinalCounts, FinalReport, FinalStatus, GeneratorReleasePlan, GeneratorReleaseTarget,
+    HOSTED_SUFFIX, Job, JobConclusion, JobTimeout, MATRIX_JSON_FILENAME, ManifestTaskProof,
+    MatrixEntry, MatrixReport, MatrixStatus, MatrixTaskEntry, NEEDS_CHANNEL_ENV,
+    NEEDS_CHANNEL_EXPRESSION, NEEDS_EXPECTED_ENV, NeedsConclusions, NotSelectedReason,
+    ObligationDecision, PLAN_DISPLAY_NAME, PLAN_JOB_ID, PLAN_JSON_FILENAME,
+    PLAN_MATRIX_OUTPUT_MODE_ENV, PermissionLevel, Permissions, Plan, PlanBaseline, PlanGenerator,
     PlanMatrix, PlanObligation, PlanPackage, PlanRunner, QualificationDispatch, QualificationPhase,
     QualificationRunRef, REQUIRED_CONDITION, REQUIRED_DISPLAY_NAME, REQUIRED_JOB_ID,
     RequiredCheckMigration, RequiredJobResult, SCALE_SUFFIX, STALE_WORKFLOW_PATHS, ScheduleTrigger,
@@ -145,6 +147,5 @@ pub use workflow::{
     QualificationRuntimeIdentityRequirements, QualificationRuntimePlatform,
     QualificationSourceDelta,
 };
-pub use workflow::{DYNAMIC_MATRIX_OUTPUT_MODE, PLAN_MATRIX_OUTPUT_MODE_ENV};
 /// Version marker for the contract schema shell.
 pub const CONTRACT_VERSION: u32 = 0;
