@@ -56,7 +56,6 @@ fn provider_restore_precedes_init_obligation() {
         &crate_jobs_tests::discovery(tofu_triples(&["stacks/a"])),
         &ToolCatalog::pinned(),
         &[],
-        &[],
         None,
         2,
     )
@@ -98,7 +97,6 @@ fn provider_restore_keys_are_per_root() {
         &crate_jobs_tests::discovery(tofu_triples(&["stacks/a", "stacks/b"])),
         &ToolCatalog::pinned(),
         &[],
-        &[],
         None,
         5,
     )
@@ -138,7 +136,6 @@ fn rust_jobs_carry_no_provider_restore() {
         &crate_jobs_tests::discovery(vec![rust]),
         &ToolCatalog::pinned(),
         &[String::new()],
-        &[],
         None,
         2,
     )
@@ -164,7 +161,6 @@ fn mixed_job_restores_both_sources_and_providers() {
         &crate_jobs_tests::discovery(vec![rust, tofu]),
         &ToolCatalog::pinned(),
         &[String::new()],
-        &[],
         None,
         2,
     )

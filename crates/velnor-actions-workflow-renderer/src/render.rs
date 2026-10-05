@@ -259,12 +259,21 @@ pub fn finalize_jobs(
             closure::check_internal_staged(id, job, ctx.preseed)?;
             continue;
         }
-        let always = id == PLAN_JOB_ID || id == TASK_JOB_ID;
-        let target =
-            velnor_actions_contract::target_for_runner_label(&ctx.runs_on).ok_or_else(|| {
+        let always = id == PLAN_JOB_ID || id == TASK_JOB_ID || job.check_runner.is_some();
+        let target = job
+            .check_runner
+            .as_ref()
+            .map(|runner| runner.platform.target())
+            .or_else(|| crate::runs_on::target_for_runner(&job.runs_on))
+            .ok_or_else(|| {
                 RenderError::InvalidWorkflow(format!("tools_cache_unsupported_target:{id}"))
             })?;
-        cache_p08::ensure_setup_p08(id, job, mise, always, target, &ctx.checkout_uses)?;
+        let setup = if job.check_runner.is_some() {
+            mise.for_target(target)?
+        } else {
+            mise.clone()
+        };
+        cache_p08::ensure_setup_p08(id, job, &setup, always, target, &ctx.checkout_uses)?;
         cache_p08::check_no_rust_cache_with_mbx(id, job)?;
         cache_p08::check_mbx_before_fetch(id, job)?;
         closure::check_internal_staged(id, job, ctx.preseed)?;

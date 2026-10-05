@@ -23,6 +23,7 @@ fn base_job(setup: &MiseSetup) -> Job {
     Job {
         display_name: "Seed mutation fixture".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
+        check_runner: None,
         timeout_minutes: JobTimeout::PLAN,
         needs: Vec::new(),
         condition: None,
