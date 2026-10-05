@@ -40,106 +40,6 @@ fn ready<'a>(session: &'a QueueSession, polled: &'a Poll) -> Ready<'a> {
 }
 
 #[tokio::test]
-async fn zero_initial_census_and_positive_poll_keep_jit_conflict_unacked() -> Result<(), String> {
-    let (scratch, journal) = open("turn-census-conflict").await?;
-    let session = zero_assignment_session()?;
-    assert_eq!(
-        session
-            .statistics()
-            .map(velnor_runner_github::Statistics::assigned_population),
-        Some(0)
-    );
-    let polled = assigned_wait(91, 1);
-    assert_eq!(crate::launch::idle(&polled), crate::launch::Idle::Scale);
-
-    let docker = DockerStub::open(Vec::new())?;
-    let mut script = Script {
-        calls: Vec::new(),
-        mode: Mode::JitConflict,
-    };
-    let mut workers: Vec<Started> = Vec::new();
-    let result = start_turn(
-        &mut script,
-        &mut workers,
-        ready(&session, &polled),
-        &journal,
-        &docker.docker,
-        2,
-        false,
-    )
-    .await;
-    drop(docker);
-
-    assert_eq!(result, Err(EnsureError::Conflict));
-    assert_eq!(script.calls, ["jit"]);
-    assert!(workers.is_empty());
-    let rows = journal.rows().await.map_err(|error| error.to_string())?;
-    assert_eq!(rows.len(), 1);
-    assert_eq!(rows[0].subject, "m91");
-    assert_eq!(rows[0].state, IntentState::Failed);
-    assert!(rows[0].docker_id.is_none());
-    assert!(rows[0].dind_id.is_none());
-    assert!(rows[0].worker_volume.is_none());
-    absent(&scratch.file())
-}
-
-#[tokio::test]
-async fn missing_status_keeps_the_slot_and_blocks_assignment() -> Result<(), String> {
-    let (scratch, journal) = open("turn-missing-runner-status").await?;
-    let (row, _) = journal
-        .begin_launch("m96")
-        .await
-        .map_err(|error| error.to_string())?;
-    journal
-        .bind(row, Some("runner-container"), None)
-        .await
-        .map_err(|error| error.to_string())?;
-    journal
-        .finish(row, Outcome::Uncertain)
-        .await
-        .map_err(|error| error.to_string())?;
-    let before = journal.rows().await.map_err(|error| error.to_string())?;
-    let session = zero_assignment_session()?;
-    let polled = assigned_wait(96, 1);
-    let docker = DockerStub::open(vec![http(200, r#"{"State":{"Running":false}}"#)])?;
-    let mut script = Script {
-        calls: Vec::new(),
-        mode: Mode::Ok,
-    };
-    let mut workers: Vec<Started> = Vec::new();
-
-    let result = start_turn(
-        &mut script,
-        &mut workers,
-        ready(&session, &polled),
-        &journal,
-        &docker.docker,
-        2,
-        false,
-    )
-    .await;
-    let requests = docker.finish().await?;
-
-    assert_eq!(
-        result,
-        Err(EnsureError::Unexpected {
-            status: 0,
-            step: "docker",
-        })
-    );
-    assert_eq!(requests.len(), 1);
-    assert!(requests[0].contains("/containers/runner-container/json"));
-    assert!(script.calls.is_empty());
-    assert!(workers.is_empty());
-    assert_eq!(crate::launch::slot::occupied(&journal).await, Ok(1));
-    let after = journal.rows().await.map_err(|error| error.to_string())?;
-    assert_eq!(after, before);
-    assert_eq!(after[0].state, IntentState::Uncertain);
-    assert_eq!(after[0].docker_id.as_deref(), Some("runner-container"));
-    absent(&scratch.file())
-}
-
-#[tokio::test]
 async fn dind_only_live_row_keeps_the_current_assignment_unacked() -> Result<(), String> {
     bound_resource_keeps_assignment("turn-dind-only", BoundResource::Dind).await
 }
@@ -379,3 +279,6 @@ async fn bound_resource_keeps_assignment(
     }
     absent(&scratch.file())
 }
+
+#[path = "start_admission_tests.rs"]
+mod admission_tests;

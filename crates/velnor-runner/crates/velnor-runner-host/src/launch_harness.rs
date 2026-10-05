@@ -137,6 +137,31 @@ pub(crate) fn ctx() -> Drive {
     }
 }
 
+pub(crate) fn started_progress(message_id: i64, assigned: i64) -> Poll {
+    let mut poll = assigned_wait(message_id, assigned);
+    let Poll::Batch(batch) = &mut poll else {
+        return poll;
+    };
+    batch.jobs = vec![
+        progress_job(InnerKind::Started),
+        progress_job(InnerKind::Started),
+    ];
+    poll
+}
+
+fn progress_job(kind: InnerKind) -> InnerJob {
+    InnerJob {
+        kind,
+        request_id: Some(0),
+        job_id: None,
+        labels: Vec::new(),
+        runner_id: None,
+        runner_name: None,
+        result: None,
+        fields: Vec::new(),
+    }
+}
+
 pub(crate) fn assigned_wait(message_id: i64, assigned: i64) -> Poll {
     kind_wait(message_id, assigned, InnerKind::Assigned)
 }
