@@ -254,6 +254,7 @@ pub fn finalize_jobs(
             .iter()
             .any(|task| task.owns_job_id(id))
         {
+            crate::tool_seed::reject_orphan_seed(id, job)?;
             closure::check_internal_staged(id, job, ctx.preseed)?;
             continue;
         }
@@ -262,7 +263,7 @@ pub fn finalize_jobs(
             velnor_actions_contract::target_for_runner_label(&ctx.runs_on).ok_or_else(|| {
                 RenderError::InvalidWorkflow(format!("tools_cache_unsupported_target:{id}"))
             })?;
-        cache_p08::ensure_setup_p08(id, job, mise, always, target)?;
+        cache_p08::ensure_setup_p08(id, job, mise, always, target, &ctx.checkout_uses)?;
         cache_p08::check_no_rust_cache_with_mbx(id, job)?;
         cache_p08::check_mbx_before_fetch(id, job)?;
         closure::check_internal_staged(id, job, ctx.preseed)?;

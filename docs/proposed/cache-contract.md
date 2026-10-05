@@ -135,6 +135,23 @@ MISE_TASK_ARTIFACTS   = $MISE_TASK_CACHE_DIR/task-artifacts/v2
 REPORT_DIR            = $RUNNER_TEMP/velnor/<run-key>/<matrix-key>
 ```
 
+An optional host-image seed at `/opt/velnor/seed` is a separate bootstrap input, not another cache
+archive or a replacement for the action/cache transport. The only permitted importer copies from it;
+seed import never deletes or writes into the seed. Mise seed admission requires its stored key to equal
+the key derived from that job's complete pinned Mise tool set. MBX admission requires an exact stored
+restore-prefix match. Missing, malformed, or mismatched seed data MUST take the cold path before any
+restore destination is created or modified.
+
+The seed boundary requires an external provisioner assumption: image provisioning completes before
+repository-controlled workflow code runs, controls the root-owned seed and its exact read-only mount,
+and prevents that code from changing the mount table or backing state. A `PROVENANCE` marker is only a
+format check; it cannot establish this trust by itself. The importer admits only a root-owned, exact
+read-only, non-overlay mount with no nested mounts or writable same-device aliases. It rejects symlinks,
+special files, non-root-owned entries, traversal errors, trees deeper than 16 levels, or trees above
+100,000 entries. The full tree is checked before copying. If the external provisioner cannot guarantee
+that no writable backing alias or lower layer exists, the seed MUST be absent and jobs MUST run cold.
+No in-repository seed producer or hosted seed qualification is claimed by this contract.
+
 `CARGO_HOME` is set to this isolated path for every generated task. The source archive MUST include only
 `registry/` and `git/`, never credentials or other files under Cargo home. Mise stores task artifacts under
 `$MISE_TASK_CACHE_DIR/task-artifacts/v2`; CI sets that environment variable before Mise starts and archives
