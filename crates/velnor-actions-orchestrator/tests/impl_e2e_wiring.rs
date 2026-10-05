@@ -149,7 +149,7 @@ fn check_verify_mbx(plan: &JobText, mbx: &str) -> Result<(), String> {
     for need in [
         "test -x target/release/velnor-actions".to_owned(),
         "mbx --version".to_owned(),
-        format!("grep -qxF \\\"mbx {mbx}\\\""),
+        format!("grep -qxF \\\"mbx {mbx}\\\" \\\"$RUNNER_TEMP/velnor/preseed-mbx-version\\\""),
     ] {
         if !verify.body.contains(&need) {
             return Err(format!("verify misses {need}"));
