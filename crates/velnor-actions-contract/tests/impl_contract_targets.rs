@@ -12,10 +12,7 @@ use velnor_actions_contract::{
 fn supported_targets_and_naming() {
     assert_eq!(
         SUPPORTED_TARGETS,
-        [
-            "x86_64-unknown-linux-gnu",
-            "aarch64-apple-darwin",
-        ]
+        ["x86_64-unknown-linux-gnu", "aarch64-apple-darwin",]
     );
     assert!(is_supported_target("x86_64-unknown-linux-gnu"));
     assert!(!is_supported_target("wasm32-unknown-unknown"));
@@ -29,8 +26,12 @@ fn supported_targets_and_naming() {
         Some(ReleaseTarget::LinuxX86_64.triple())
     );
     assert!(target_for_runner_label("ubuntu-26.04-arm").is_none());
-    assert!(ReleaseTarget::for_runner_label("macos-15").is_none());
-    assert!(ReleaseTarget::for_runner_label("macos-15-intel").is_none());
+    assert_eq!(
+        ReleaseTarget::for_runner_label("macos-15"),
+        Some(ReleaseTarget::MacosArm64)
+    );
+    assert_eq!(ReleaseTarget::for_runner_label("macos-15-intel"), None);
+    assert!(ReleaseTarget::parse_triple("x86_64-apple-darwin").is_none());
 }
 
 #[test]

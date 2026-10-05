@@ -14,11 +14,12 @@ published while preparing this change.
   independent reproducible rebuild (second party, pinned catalog, sha256
   match) recorded in the seed PR (Gap E review). Pre-seed is trust-on-review.
 - BOOT-2.1 (release assets): SOURCE-IMPLEMENTED, NOT RELEASED. The protected
-  workflow builds three target binaries, qualifies the exact uploaded bytes,
-  and produces the canonical versioned manifest from their measured digests.
-  Unblock = a successful exact-source hosted run verifies all three native
-  targets and publishes the immutable assets and manifest; a separate review
-  then verifies the published bytes and updates consumer provenance.
+  workflow builds Linux x64 and macOS arm64 binaries, qualifies the exact
+  uploaded bytes, and produces the canonical versioned manifest from their
+  measured digests. Unblock = a successful exact-source hosted run verifies
+  both native targets and publishes the immutable assets and manifest; a
+  separate review then verifies the published bytes and updates consumer
+  provenance.
 - BOOT-4.7 (protected release job): SOURCE-IMPLEMENTED, INFRASTRUCTURE
   UNVERIFIED. The renderer emits a dispatch-only publisher with a protected
   `generator-release` environment, serialized publication, source/CI rechecks,

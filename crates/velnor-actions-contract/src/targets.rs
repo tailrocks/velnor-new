@@ -39,6 +39,7 @@ impl ReleaseTarget {
     pub fn for_runner_label(label: &str) -> Option<Self> {
         match label {
             "ubuntu-22.04" | "ubuntu-24.04" | "ubuntu-26.04" => Some(Self::LinuxX86_64),
+            "macos-15" | "macos-15-arm64" => Some(Self::MacosArm64),
             _ => None,
         }
     }
@@ -50,7 +51,7 @@ pub const SUPPORTED_TARGETS: [&str; 2] = [
     ReleaseTarget::MacosArm64.triple(),
 ];
 
-/// Canonical release-manifest JSON asset filename (version is inside the JSON).
+/// Published generator release-manifest asset filename (version is inside the JSON).
 pub const RELEASE_MANIFEST_FILENAME: &str = "release-manifest.json";
 
 /// Whether `target` is a supported release triple.

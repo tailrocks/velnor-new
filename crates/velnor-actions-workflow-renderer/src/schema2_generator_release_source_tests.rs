@@ -1,7 +1,8 @@
 use super::QUALIFICATION_SOURCE_PREPARE;
-use crate::schema2::GeneratorReleasePins;
+use crate::schema2::{GeneratorReleasePins, Schema2WorkflowRequest};
 use crate::setup::MiseSetup;
 use crate::yaml::Yaml;
+use std::collections::BTreeSet;
 use std::error::Error;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
@@ -103,6 +104,40 @@ fn reject_invalid_source_identity_before_running_git() -> Result<(), Box<dyn Err
         .output()?;
     assert!(!result.status.success());
     assert!(!log.exists(), "Git ran for an invalid source identity");
+    Ok(())
+}
+
+#[test]
+fn every_qualifier_fetches_validated_public_source_before_local_action()
+-> Result<(), Box<dyn Error>> {
+    let request = Schema2WorkflowRequest {
+        version: "0.1.1".to_owned(),
+        hosted_label: "ubuntu-26.04".to_owned(),
+        scale_set: Schema2WorkflowRequest::canonical_scale_set()?,
+        workflows: BTreeSet::new(),
+        mbx_qualification: None,
+        generator_release: Some(test_pins()),
+    };
+    let workflow = super::super::generator_release(&request)?.workflow;
+    let jobs = map_field(map_entries(&workflow)?, "jobs")?;
+    let jobs = map_entries(jobs)?;
+
+    for (job_id, action) in [
+        (
+            "qualify-linux",
+            "./.github/actions/generator-release-qualify-linux",
+        ),
+        (
+            "qualify-macos",
+            "./.github/actions/generator-release-qualify-macos",
+        ),
+    ] {
+        let job = map_field(jobs, job_id)?;
+        let steps = sequence(map_field(map_entries(job)?, "steps")?)?;
+        assert_eq!(steps.len(), 2, "{job_id} must fetch source, then qualify");
+        assert_source_step(&steps[0], job_id)?;
+        assert_qualifier_step(&steps[1], steps, action, job_id)?;
+    }
     Ok(())
 }
 

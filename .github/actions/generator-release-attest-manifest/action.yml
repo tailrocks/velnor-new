@@ -8,9 +8,6 @@ inputs:
   macos_arm64_artifact_id:
     description: Artifact ID from the macOS arm64 build job
     required: true
-  macos_x86_64_artifact_id:
-    description: Artifact ID from the macOS x86_64 build job
-    required: true
   manifest_artifact_id:
     description: Artifact ID of the canonical same-run manifest
     required: true
@@ -60,6 +57,7 @@ runs:
     - name: Verify source-bound candidate provenance
       shell: bash
       run: "set -eu\ndigest=\"$(awk -v expected='velnor-actions-0.1.1-aarch64-apple-darwin' 'NR == 1 { if (NF != 2 || length($1) != 64 || $1 !~ /^[0-9a-f]+$/ || $2 != expected) exit 1; print $1; next } { exit 1 } END { if (NR != 1) exit 1 }' 'macos-assets/velnor-actions-0.1.1-aarch64-apple-darwin.sha256')\"\njq -e --arg version \"0.1.1\" --arg repository \"$GITHUB_REPOSITORY\" --arg commit \"$GITHUB_SHA\" --arg target \"aarch64-apple-darwin\" --arg asset \"velnor-actions-0.1.1-aarch64-apple-darwin\" --arg sha256 \"$digest\" --arg rust '1.98.1' --arg mr_boxington '1.21.1' '.schema == 1 and .version == $version and .repository == $repository and .commit == $commit and .target == $target and .asset == $asset and .sha256 == $sha256 and .toolchain.rust == $rust and .toolchain[\"mr-boxington\"] == $mr_boxington' macos-assets/velnor-actions-0.1.1-aarch64-apple-darwin.provenance.json > /dev/null"
+<<<<<<< HEAD
     - name: Download x86_64-apple-darwin candidate assets
       uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
       with:
@@ -74,6 +72,8 @@ runs:
     - name: Verify source-bound candidate provenance
       shell: bash
       run: "set -eu\ndigest=\"$(awk -v expected='velnor-actions-0.1.1-x86_64-apple-darwin' 'NR == 1 { if (NF != 2 || length($1) != 64 || $1 !~ /^[0-9a-f]+$/ || $2 != expected) exit 1; print $1; next } { exit 1 } END { if (NR != 1) exit 1 }' 'macos-intel-assets/velnor-actions-0.1.1-x86_64-apple-darwin.sha256')\"\njq -e --arg version \"0.1.1\" --arg repository \"$GITHUB_REPOSITORY\" --arg commit \"$GITHUB_SHA\" --arg target \"x86_64-apple-darwin\" --arg asset \"velnor-actions-0.1.1-x86_64-apple-darwin\" --arg sha256 \"$digest\" --arg rust '1.98.1' --arg mr_boxington '1.21.1' '.schema == 1 and .version == $version and .repository == $repository and .commit == $commit and .target == $target and .asset == $asset and .sha256 == $sha256 and .toolchain.rust == $rust and .toolchain[\"mr-boxington\"] == $mr_boxington' macos-intel-assets/velnor-actions-0.1.1-x86_64-apple-darwin.provenance.json > /dev/null"
+=======
+>>>>>>> 71494f442b4e8a2419a8e9b5e29ba86fbd77afad
     - name: Download exact canonical candidate manifest
       uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
       with:

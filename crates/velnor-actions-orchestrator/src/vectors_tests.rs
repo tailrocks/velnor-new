@@ -89,6 +89,11 @@ fn mbx_probe_vector_is_byte_exact() {
     assert_eq!(probe, want);
 }
 
+#[test]
+fn quoted_argv_rejects_malformed_parameter_expansion() {
+    assert!(join_quoted_argv(&argv_of(&["${RUNNER_TEMP!}"])).is_err());
+}
+
 /// Minimal proposal with one compile driver.
 fn group_with_driver(driver: velnor_actions_rust::CompileDriver) -> ProposedTask {
     let group = velnor_actions_rust::TaskGroup {

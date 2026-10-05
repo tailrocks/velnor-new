@@ -263,10 +263,19 @@ pub fn acquire_script_argv(
         });
     }
     let seed = format!("{seed_root}/generator/{name}");
+    let seed_check = verify_sha256("\"$s\"");
+    let download_check = verify_sha256("\"$d\"");
     let script = format!(
-        "mkdir -p \"{dir}\" && s=\"{seed}\" d=\"{staged}\" && if [ -f \"$s\" ] && echo \"$VELNOR_ASSET_SHA256  $s\" | sha256sum -c -; then cp \"$s\" \"$d\"; else curl -fsSL --proto '=https' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\" && echo \"$VELNOR_ASSET_SHA256  $d\" | sha256sum -c -; fi && chmod +x \"$d\""
+        "mkdir -p \"{dir}\" && s=\"{seed}\" d=\"{staged}\" && if [ -f \"$s\" ] && {{ {seed_check}; }}; then cp \"$s\" \"$d\"; else curl -fsSL --proto '=https' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\" && {{ {download_check}; }}; fi && chmod +x \"$d\""
     );
     Ok(vec!["sh".to_owned(), "-c".to_owned(), script])
+}
+
+/// Verify an asset with either SHA-256 utility shipped by supported runners.
+fn verify_sha256(path: &str) -> String {
+    format!(
+        "if command -v sha256sum >/dev/null 2>&1; then printf '%s  %s\\n' \"$VELNOR_ASSET_SHA256\" {path} | sha256sum -c -; elif command -v shasum >/dev/null 2>&1; then printf '%s  %s\\n' \"$VELNOR_ASSET_SHA256\" {path} | shasum -a 256 -c -; else echo 'no SHA-256 utility is available' >&2; exit 1; fi"
+    )
 }
 
 fn absolute_token(value: &str) -> bool {

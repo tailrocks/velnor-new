@@ -121,6 +121,93 @@ fn fixture_manifest_embeds_runner_target_record() {
     );
 }
 
+#[cfg(unix)]
+#[test]
+fn macos_acquire_uses_shasum_when_sha256sum_is_absent() -> Result<(), Box<dyn std::error::Error>> {
+    use std::fs;
+    use std::process::Command;
+    use velnor_actions_contract::StepKind;
+
+    let version = env!("CARGO_PKG_VERSION");
+    let step = consumer_acquire_from("macos-15", version, Some(&test_manifest_json()))?;
+    let StepKind::Shell { run, .. } = step.kind else {
+        return Err("Acquire Velnor must use a shell step".into());
+    };
+    let temp = tempfile::tempdir()?;
+    let bin = temp.path().join("bin");
+    let destination = temp.path().join("velnor").join("bin");
+    fs::create_dir(&bin)?;
+    fs::create_dir_all(&destination)?;
+    let staged = destination.join(format!("velnor-actions-{version}"));
+    let sha = "a".repeat(64);
+    let call_log = temp.path().join("shasum-call");
+    write_executable(&bin.join("mkdir"), "#!/bin/sh\nexit 0\n")?;
+    write_executable(
+        &bin.join("curl"),
+        "#!/bin/sh\nout=\nwhile [ \"$#\" -gt 0 ]; do\n  if [ \"$1\" = -o ]; then shift; out=$1; fi\n  shift\ndone\n[ -n \"$out\" ] || exit 40\nprintf payload > \"$out\"\n",
+    )?;
+    write_executable(
+        &bin.join("shasum"),
+        "#!/bin/sh\n[ \"$*\" = '-a 256 -c -' ] || exit 41\nIFS= read -r line || exit 42\n[ \"$line\" = \"$TEST_SHA256  $TEST_STAGED\" ] || exit 43\nprintf '%s' \"$*\" > \"$TEST_SHA_CALL\"\n",
+    )?;
+    write_executable(
+        &bin.join("chmod"),
+        "#!/bin/sh\n[ \"$1\" = +x ] && [ \"$2\" = \"$TEST_STAGED\" ]\n",
+    )?;
+
+    let output = Command::new("/bin/sh")
+        .arg("-c")
+        .arg(&run[2])
+        .env_clear()
+        .env("PATH", &bin)
+        .env("RUNNER_TEMP", temp.path())
+        .env("VELNOR_ASSET_URL", "https://example.invalid/asset")
+        .env("VELNOR_ASSET_SHA256", &sha)
+        .env("TEST_SHA256", &sha)
+        .env("TEST_STAGED", &staged)
+        .env("TEST_SHA_CALL", &call_log)
+        .output()?;
+    assert!(
+        output.status.success(),
+        "script failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(fs::read_to_string(call_log)?, "-a 256 -c -");
+    assert_eq!(fs::read_to_string(&staged)?, "payload");
+
+    fs::remove_file(bin.join("shasum"))?;
+    let missing_verifier = Command::new("/bin/sh")
+        .arg("-c")
+        .arg(&run[2])
+        .env_clear()
+        .env("PATH", &bin)
+        .env("RUNNER_TEMP", temp.path())
+        .env("VELNOR_ASSET_URL", "https://example.invalid/asset")
+        .env("VELNOR_ASSET_SHA256", &sha)
+        .env("TEST_SHA256", &sha)
+        .env("TEST_STAGED", &staged)
+        .env("TEST_SHA_CALL", temp.path().join("missing-shasum-call"))
+        .output()?;
+    assert!(!missing_verifier.status.success());
+    assert!(
+        String::from_utf8_lossy(&missing_verifier.stderr)
+            .contains("no SHA-256 utility is available")
+    );
+    Ok(())
+}
+
+/// Write an executable shell fixture for the isolated acquisition test.
+#[cfg(unix)]
+fn write_executable(path: &std::path::Path, contents: &str) -> std::io::Result<()> {
+    use std::fs;
+    use std::os::unix::fs::PermissionsExt;
+
+    fs::write(path, contents)?;
+    let mut permissions = fs::metadata(path)?.permissions();
+    permissions.set_mode(0o755);
+    fs::set_permissions(path, permissions)
+}
+
 #[test]
 fn mise_setup_defaults_to_compiled_pins() {
     let setup = resolve_mise_setup(&config_with(BTreeMap::new()), "ubuntu-26.04")

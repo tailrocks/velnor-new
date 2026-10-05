@@ -59,8 +59,8 @@ verify_asset aarch64-apple-darwin macos-assets macos_arm64_sha256
 tag="v${version}"
 jq -n --arg version "$version" --arg repository "$repository" \
   --arg commit "$GITHUB_SHA" --arg tag "$tag" \
-  --arg linux_sha256 "$linux_sha256" --arg macos_arm64_sha256 "$macos_arm64_sha256" \
-  '{schema:1, version:$version, repository:$repository, commit:$commit,
+  --arg linux_sha256 "$linux_sha256" --arg macos_arm64_sha256 "$macos_arm64_sha256" '
+  {schema:1, version:$version, repository:$repository, commit:$commit,
    targets:[
      {target:"x86_64-unknown-linux-gnu",
       artifact:("https://github.com/" + $repository + "/releases/download/" + $tag + "/velnor-actions-" + $version + "-x86_64-unknown-linux-gnu"),
@@ -79,7 +79,6 @@ jq -e --arg version "$version" --arg repository "$repository" \
    (.targets[0].sha256 | test("^[0-9a-f]{64}$")) and
    .targets[1].target == "aarch64-apple-darwin" and
    .targets[1].artifact == ("https://github.com/" + $repository + "/releases/download/" + $tag + "/velnor-actions-" + $version + "-aarch64-apple-darwin") and
-   (.targets[1].sha256 | test("^[0-9a-f]{64}$"))
-' \
+   (.targets[1].sha256 | test("^[0-9a-f]{64}$"))' \
   release-manifest.json >/dev/null
 test -s release-manifest.json

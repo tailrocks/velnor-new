@@ -182,6 +182,7 @@ jobs:
         uses: ./.github/actions/generator-release-attest-macos # zizmor: ignore[self-repository]
         with:
           artifact_id: ${{ needs.build-macos.outputs.artifact_id }}
+<<<<<<< HEAD
   build-macos-intel:
     runs-on: macos-15-intel
     timeout-minutes: 120
@@ -248,6 +249,8 @@ jobs:
         uses: ./.github/actions/generator-release-attest-macos-intel # zizmor: ignore[self-repository]
         with:
           artifact_id: ${{ needs.build-macos-intel.outputs.artifact_id }}
+=======
+>>>>>>> 71494f442b4e8a2419a8e9b5e29ba86fbd77afad
   candidate-manifest:
     runs-on: ubuntu-26.04
     timeout-minutes: 20
@@ -258,7 +261,6 @@ jobs:
       - verify-release-source
       - build-linux
       - build-macos
-      - build-macos-intel
     outputs:
       artifact_id: ${{ steps.upload.outputs.artifact-id }}
       manifest_sha256: ${{ steps.manifest_digest.outputs.manifest_sha256 }}
@@ -305,6 +307,7 @@ jobs:
       - name: Verify source-bound build record
         shell: bash
         run: "set -eu\ndigest=\"$(awk -v expected='velnor-actions-0.1.1-aarch64-apple-darwin' 'NR == 1 { if (NF != 2 || length($1) != 64 || $1 !~ /^[0-9a-f]+$/ || $2 != expected) exit 1; print $1; next } { exit 1 } END { if (NR != 1) exit 1 }' 'macos-assets/velnor-actions-0.1.1-aarch64-apple-darwin.sha256')\"\njq -e --arg version \"0.1.1\" --arg repository \"$GITHUB_REPOSITORY\" --arg commit \"$GITHUB_SHA\" --arg target \"aarch64-apple-darwin\" --arg asset \"velnor-actions-0.1.1-aarch64-apple-darwin\" --arg sha256 \"$digest\" --arg rust '1.98.1' --arg mr_boxington '1.21.1' '.schema == 1 and .version == $version and .repository == $repository and .commit == $commit and .target == $target and .asset == $asset and .sha256 == $sha256 and .toolchain.rust == $rust and .toolchain[\"mr-boxington\"] == $mr_boxington' macos-assets/velnor-actions-0.1.1-aarch64-apple-darwin.provenance.json > /dev/null"
+<<<<<<< HEAD
       - name: Download exact build artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
@@ -319,6 +322,8 @@ jobs:
       - name: Verify source-bound build record
         shell: bash
         run: "set -eu\ndigest=\"$(awk -v expected='velnor-actions-0.1.1-x86_64-apple-darwin' 'NR == 1 { if (NF != 2 || length($1) != 64 || $1 !~ /^[0-9a-f]+$/ || $2 != expected) exit 1; print $1; next } { exit 1 } END { if (NR != 1) exit 1 }' 'macos-intel-assets/velnor-actions-0.1.1-x86_64-apple-darwin.sha256')\"\njq -e --arg version \"0.1.1\" --arg repository \"$GITHUB_REPOSITORY\" --arg commit \"$GITHUB_SHA\" --arg target \"x86_64-apple-darwin\" --arg asset \"velnor-actions-0.1.1-x86_64-apple-darwin\" --arg sha256 \"$digest\" --arg rust '1.98.1' --arg mr_boxington '1.21.1' '.schema == 1 and .version == $version and .repository == $repository and .commit == $commit and .target == $target and .asset == $asset and .sha256 == $sha256 and .toolchain.rust == $rust and .toolchain[\"mr-boxington\"] == $mr_boxington' macos-intel-assets/velnor-actions-0.1.1-x86_64-apple-darwin.provenance.json > /dev/null"
+=======
+>>>>>>> 71494f442b4e8a2419a8e9b5e29ba86fbd77afad
       - name: Create canonical candidate manifest from verified build bytes
         shell: bash
         run: "test \"$GITHUB_WORKFLOW_SHA\" = \"$GITHUB_SHA\"\nbash scripts/generator-release/create-release-manifest.sh '0.1.1' 'tailrocks/velnor-new' '1.98.1' '1.21.1'"
@@ -350,10 +355,8 @@ jobs:
       - candidate-manifest
       - build-linux
       - build-macos
-      - build-macos-intel
       - attest-linux
       - attest-macos
-      - attest-macos-intel
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -365,7 +368,6 @@ jobs:
         with:
           linux_artifact_id: ${{ needs.build-linux.outputs.artifact_id }}
           macos_arm64_artifact_id: ${{ needs.build-macos.outputs.artifact_id }}
-          macos_x86_64_artifact_id: ${{ needs.build-macos-intel.outputs.artifact_id }}
           manifest_artifact_id: ${{ needs.candidate-manifest.outputs.artifact_id }}
           manifest_sha256: ${{ needs.candidate-manifest.outputs.manifest_sha256 }}
   publish-generator:
@@ -377,12 +379,10 @@ jobs:
     needs:
       - attest-linux
       - attest-macos
-      - attest-macos-intel
       - attest-manifest
       - candidate-manifest
       - build-linux
       - build-macos
-      - build-macos-intel
     environment:
       name: generator-release
     steps:
@@ -396,7 +396,6 @@ jobs:
         with:
           linux_artifact_id: ${{ needs.build-linux.outputs.artifact_id }}
           macos_arm64_artifact_id: ${{ needs.build-macos.outputs.artifact_id }}
-          macos_x86_64_artifact_id: ${{ needs.build-macos-intel.outputs.artifact_id }}
           manifest_artifact_id: ${{ needs.candidate-manifest.outputs.artifact_id }}
           manifest_sha256: ${{ needs.candidate-manifest.outputs.manifest_sha256 }}
       - name: Upload verified immutable release acceptance

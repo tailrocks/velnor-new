@@ -98,14 +98,15 @@ esac
 write_test_manifest() {
   local manifest="$1" commit="$2" linux_sha="$3" arm_sha="$4"
   jq -n --arg version "$CLI_VERSION" --arg commit "$commit" \
-    --arg linux "$linux_sha" --arg arm "$arm_sha" '    {schema:1, version:$version, repository:"tailrocks/velnor-new", commit:$commit,
+    --arg linux "$linux_sha" --arg arm "$arm_sha" '
+    {schema:1, version:$version, repository:"tailrocks/velnor-new", commit:$commit,
      targets:[
        {target:"x86_64-unknown-linux-gnu",
         artifact:("https://github.com/tailrocks/velnor-new/releases/download/v" + $version + "/velnor-actions-" + $version + "-x86_64-unknown-linux-gnu"),
         sha256:$linux},
        {target:"aarch64-apple-darwin",
         artifact:("https://github.com/tailrocks/velnor-new/releases/download/v" + $version + "/velnor-actions-" + $version + "-aarch64-apple-darwin"),
-        sha256:$arm},
+        sha256:$arm}
      ]}' >"$manifest"
 }
 
