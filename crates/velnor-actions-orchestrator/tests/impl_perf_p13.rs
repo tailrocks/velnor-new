@@ -11,7 +11,8 @@ pub(crate) mod perf_fixtures_p13;
 pub(crate) mod perf_harness_p13;
 
 use velnor_actions_orchestrator::{
-    GenerateOptions, OrchestratorError, generate, plan_internal, prepare,
+    GenerateOptions, OrchestratorError, PlanOutputMode, generate, plan_internal, plan_outputs,
+    prepare,
 };
 use velnor_actions_rust::parse_metadata_json;
 
@@ -19,12 +20,12 @@ use self::perf_fixtures_p13::{malformed_repo, nested_path_dep_repo, nested_repo,
 use self::perf_harness_p13::{
     commit_two, obligation_task_ids, perf_line, plan_at, plan_two_commits, timed,
 };
-use crate::impl_common::TestResult;
 use crate::impl_common::err_of;
+use crate::impl_common::{TestResult, git, git_line};
 
 /// Plan wall time plus obligation counts on 1/10/40-crate workspaces.
 ///
-/// 40 stays under the 320 KiB matrix budget; 60 already exceeds it by
+/// 40 stays under the 512 KiB matrix-artifact budget; 60 exceeds it by
 /// design (`matrix_budget_enforced_never_truncated` pins that ceiling).
 #[test]
 fn plan_scales_with_crate_count() -> TestResult {
@@ -36,6 +37,47 @@ fn plan_scales_with_crate_count() -> TestResult {
         assert!(!plan.obligations.is_empty(), "obligations exist");
         perf_line("plan", members, wall_ms, &plan);
     }
+    Ok(())
+}
+
+/// A full 44-crate dynamic plan fits both independent platform budgets.
+#[test]
+fn full_44_crate_matrix_fits_artifact_and_job_output_budgets() -> TestResult {
+    let repo = workspace_repo(43)?;
+    let root = repo.path();
+    git(&["add", "."], root)?;
+    git(&["commit", "-m", "initial"], root)?;
+    let head = git_line(&["rev-parse", "HEAD"], root)?;
+    let request = serde_json::json!({
+        "schema": 1,
+        "run_key": "local",
+        "base": serde_json::Value::Null,
+        "head": head,
+        "event": "push",
+        "root": root.display().to_string(),
+    });
+    let response = plan_internal(&request.to_string())?;
+    let value: serde_json::Value = serde_json::from_str(&response)?;
+    let plan: velnor_actions_contract::Plan = serde_json::from_value(value["plan"].clone())?;
+    assert_eq!(plan.packages.len(), 44, "root package plus 43 members");
+    assert!(!plan.matrix.include.is_empty(), "dynamic matrix has work");
+    assert!(
+        plan.matrix.include.len() <= 256,
+        "within Actions matrix job cap"
+    );
+    let outputs = plan_outputs(&response, PlanOutputMode::DynamicMatrix)?;
+    assert!(outputs.matrix.len() <= 512 * 1024, "matrix artifact budget");
+    assert!(
+        outputs.job_outputs_utf16_bytes <= 900_000,
+        "aggregate UTF-16 output budget"
+    );
+    eprintln!(
+        "matrix-acceptance: crates={} matrix_entries={} matrix_bytes={} job_outputs_utf16_bytes={}",
+        plan.packages.len(),
+        plan.matrix.include.len(),
+        outputs.matrix.len(),
+        outputs.job_outputs_utf16_bytes,
+    );
     Ok(())
 }
 
