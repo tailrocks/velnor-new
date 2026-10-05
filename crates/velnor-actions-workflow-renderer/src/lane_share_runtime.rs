@@ -2,7 +2,7 @@
 
 use velnor_actions_contract::{RunsOn, Step, StepKind, StepRole};
 
-/// Peel typed runtime identity, seed, and restore steps before lane sharing.
+/// Peel the runtime identity and restore owners before lane sharing.
 pub(super) fn peel_tools_cache_prelude(
     steps: &[Step],
     runs_on: &str,

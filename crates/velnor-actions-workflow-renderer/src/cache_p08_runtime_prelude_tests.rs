@@ -23,8 +23,8 @@ fn payload(runs_on: &str) -> Result<super::super::ToolsCachePayload, RenderError
 }
 
 #[test]
-fn fixed_composite_forwards_identity_and_runs_seed_before_outer_restore() -> Result<(), RenderError>
-{
+fn fixed_composite_forwards_identity_without_importing_before_outer_restore()
+-> Result<(), RenderError> {
     for (lane, helper, wrapper) in [
         (
             "ubuntu-22.04",
@@ -65,19 +65,9 @@ fn fixed_composite_forwards_identity_and_runs_seed_before_outer_restore() -> Res
             file.path,
             format!("{}/action.yml", wrapper.trim_start_matches("./"))
         );
-        let identity_at = file
-            .bytes
-            .find(&format!("uses: {helper}"))
-            .expect("identity child");
-        let seed_at = file
-            .bytes
-            .find(&format!("uses: {}", crate::tool_seed::TOOL_SEED_USES))
-            .expect("seed child");
-        let enabled_gate = file
-            .bytes
-            .find(&format!("if: {}", cache_p08::TOOLS_CACHE_RESTORE_CONDITION))
-            .expect("seed enabled gate");
-        assert!(identity_at < enabled_gate && enabled_gate < seed_at);
+        assert!(file.bytes.contains(&format!("uses: {helper}")));
+        assert!(!file.bytes.contains(crate::tool_seed::TOOL_SEED_USES));
+        assert!(!file.bytes.contains("cache_key:"));
         assert!(file.bytes.contains("id: v2"));
         assert!(file.bytes.contains("d:"));
         assert!(file.bytes.contains("inputs.d"));

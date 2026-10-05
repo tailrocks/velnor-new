@@ -134,7 +134,7 @@ impl ToolsCachePayload {
         cache_p08::TOOLS_CACHE_KEY_EXPRESSION.to_owned()
     }
 
-    /// Runtime identity and matching tool-seed step; unknown identities take a cold path.
+    /// Runtime identity step gating restore and save; unsupported lanes remain cold.
     /// # Errors
     pub fn runtime_prelude_step(&self) -> Result<Step, RenderError> {
         runtime_prelude::step(self)

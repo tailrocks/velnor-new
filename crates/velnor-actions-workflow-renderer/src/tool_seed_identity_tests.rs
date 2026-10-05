@@ -25,7 +25,7 @@ fn assert_configured_checkout_prelude(setup: &crate::MiseSetup) {
         TARGET,
         CHECKOUT,
     )
-    .expect("setup and seed");
+    .expect("setup and runtime identity");
     assert_eq!(
         rendered_job.steps[1].name,
         crate::cache_p08::TOOLS_CACHE_IDENTITY_NAME
@@ -39,7 +39,7 @@ fn assert_configured_checkout_prelude(setup: &crate::MiseSetup) {
         Some(velnor_actions_contract::StepId::ToolsCacheIdentity)
     );
     let StepKind::Action { with, .. } = &rendered_job.steps[1].kind else {
-        panic!("V2 identity and seed use the registered prelude composite")
+        panic!("V2 identity uses the registered prelude composite")
     };
     assert_eq!(
         with.get(crate::cache_p08::TOOLS_CACHE_IDENTITY_DIGEST_INPUT)
@@ -54,8 +54,8 @@ fn assert_configured_checkout_prelude(setup: &crate::MiseSetup) {
     assert_eq!(rendered_job.steps[3].role, Some(StepRole::MiseSetup));
     let action = crate::cache_p08::runtime_prelude_action_file(TARGET_RUNS, "0.1.0")
         .expect("prelude action file");
-    assert!(action.bytes.contains(&cache_key()));
-    assert!(action.bytes.contains("cache_key:"));
+    assert!(!action.bytes.contains(TOOL_SEED_USES));
+    assert!(!action.bytes.contains("cache_key:"));
 }
 
 fn assert_full_history_checkout_is_seedable(setup: &crate::MiseSetup) {

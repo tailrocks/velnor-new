@@ -1,4 +1,4 @@
-//! Fixed hosted composite for V2 runtime identity and exact-key seed import.
+//! Fixed hosted composite for V2 runtime identity.
 
 use std::collections::BTreeMap;
 
@@ -83,13 +83,12 @@ pub(super) fn action_file(runs_on: &str, version: &str) -> Result<RenderedFile, 
         RenderError::BadCommand("unsupported_tools_cache_identity_lane".to_owned())
     })?;
     let inner_identity = identity_step(runs_on)?;
-    let inner_seed = seed_step();
     let outputs = output_map();
     let body = Yaml::Map(vec![
         ("name".to_owned(), Yaml::str("Velnor hosted tools prelude")),
         (
             "description".to_owned(),
-            Yaml::str("Qualify the hosted image and copy a matching tool seed."),
+            Yaml::str("Qualify the hosted image before its tools restore."),
         ),
         ("inputs".to_owned(), input_map()),
         ("outputs".to_owned(), outputs),
@@ -97,10 +96,7 @@ pub(super) fn action_file(runs_on: &str, version: &str) -> Result<RenderedFile, 
             "runs".to_owned(),
             Yaml::Map(vec![
                 ("using".to_owned(), Yaml::str("composite")),
-                (
-                    "steps".to_owned(),
-                    Yaml::Seq(vec![inner_identity, inner_seed]),
-                ),
+                ("steps".to_owned(), Yaml::Seq(vec![inner_identity])),
             ]),
         ),
     ]);
@@ -138,33 +134,6 @@ fn identity_step(runs_on: &str) -> Result<Yaml, RenderError> {
         ),
     ];
     Ok(Yaml::Map(entries))
-}
-
-fn seed_step() -> Yaml {
-    Yaml::Map(vec![
-        (
-            "name".to_owned(),
-            Yaml::str(crate::tool_seed::TOOL_SEED_NAME),
-        ),
-        (
-            "if".to_owned(),
-            Yaml::str(cache_p08::TOOLS_CACHE_RESTORE_CONDITION),
-        ),
-        (
-            "uses".to_owned(),
-            Yaml::annotated(
-                crate::tool_seed::TOOL_SEED_USES,
-                "zizmor: ignore[self-repository]",
-            ),
-        ),
-        (
-            "with".to_owned(),
-            Yaml::Map(vec![(
-                "cache_key".to_owned(),
-                Yaml::str(cache_p08::TOOLS_CACHE_KEY_EXPRESSION),
-            )]),
-        ),
-    ])
 }
 
 fn input_map() -> Yaml {

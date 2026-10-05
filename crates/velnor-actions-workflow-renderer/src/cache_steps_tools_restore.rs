@@ -55,6 +55,11 @@ for f in "$RUNNER_TEMP/velnor/cargo/.crates.toml" "$RUNNER_TEMP/velnor/cargo/.cr
     rm -f "$f"
 done"#;
 
+const SEED_IMPORT_CONDITION: &str = concat!(
+    "success() && (steps.restore.outputs.cache-hit != 'true' || ",
+    "steps.restore.outputs.cache-matched-key != inputs.key)",
+);
+
 fn restore_step() -> Result<Yaml, RenderError> {
     steps::validate_uses(super::TOOLS_RESTORE_ACTION_USES)?;
     let path = super::TOOLS_CACHE_PATHS.join("\n");
@@ -104,6 +109,30 @@ fn admission_step() -> Yaml {
     ])
 }
 
+fn seed_step() -> Yaml {
+    Yaml::Map(vec![
+        (
+            "name".to_owned(),
+            Yaml::str(crate::tool_seed::TOOL_SEED_NAME),
+        ),
+        ("if".to_owned(), Yaml::str(SEED_IMPORT_CONDITION)),
+        (
+            "uses".to_owned(),
+            Yaml::annotated(
+                crate::tool_seed::TOOL_SEED_USES,
+                "zizmor: ignore[self-repository]",
+            ),
+        ),
+        (
+            "with".to_owned(),
+            Yaml::Map(vec![(
+                "cache_key".to_owned(),
+                Yaml::str("${{ inputs.key }}"),
+            )]),
+        ),
+    ])
+}
+
 /// Build the pinned restore action with its renderer-owned archive paths.
 /// # Errors
 pub(crate) fn action_file(version: &str) -> Result<RenderedFile, RenderError> {
@@ -114,7 +143,7 @@ pub(crate) fn action_file(version: &str) -> Result<RenderedFile, RenderError> {
         ),
         (
             "description".to_owned(),
-            Yaml::str("Restore the exact renderer-owned V2 Mise tools paths."),
+            Yaml::str("Restore exact tools-cache bytes or import the trusted matching seed."),
         ),
         (
             "inputs".to_owned(),
@@ -135,7 +164,7 @@ pub(crate) fn action_file(version: &str) -> Result<RenderedFile, RenderError> {
                 ("using".to_owned(), Yaml::str("composite")),
                 (
                     "steps".to_owned(),
-                    Yaml::Seq(vec![restore_step()?, admission_step()]),
+                    Yaml::Seq(vec![restore_step()?, admission_step(), seed_step()]),
                 ),
             ]),
         ),
@@ -151,3 +180,7 @@ pub(crate) fn action_file(version: &str) -> Result<RenderedFile, RenderError> {
         bytes,
     })
 }
+
+#[cfg(test)]
+#[path = "cache_steps_tools_restore_tests.rs"]
+mod tests;
