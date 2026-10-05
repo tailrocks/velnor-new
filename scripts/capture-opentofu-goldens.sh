@@ -152,6 +152,12 @@ setup_case() {
   fi
   if [ "$MODE" = "check-release" ]; then
     stage_candidate_manifest "$repo" "$case"
+  # Ordinary structural goldens require explicit fixture provenance too;
+  # only check-release is allowed to stage an actual candidate manifest.
+  elif ! cp "$ROOT/fixtures/consumer-release-manifest.json" \
+    "$repo/.velnor/release-manifest.json"; then
+    echo "FATAL: could not stage the explicit consumer manifest fixture for $case"
+    exit 2
   fi
   (cd "$repo" \
     && git init -q \
