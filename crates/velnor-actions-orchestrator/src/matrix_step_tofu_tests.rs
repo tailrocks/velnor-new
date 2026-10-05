@@ -57,7 +57,7 @@ fn tofu_step_env_rejects_triple_and_reserved_keys() {
 /// Tofu obligation fixture for step construction.
 fn tofu_obligation() -> CrateObligation {
     CrateObligation {
-        task_id: "stack/tofu/root/init/default".to_owned(),
+        task_id: "stack/tofu/dir-/init/default".to_owned(),
         kind: "init".to_owned(),
         step_name: "Init for validate".to_owned(),
         gated_by: Vec::new(),
@@ -70,15 +70,15 @@ fn tofu_obligation() -> CrateObligation {
 #[test]
 fn tofu_step_names_render_through_tofu_table() {
     assert_eq!(
-        step_name_for("init", "stack/tofu/root/init/default"),
+        step_name_for("init", "stack/tofu/dir-/init/default"),
         "Init for validate"
     );
     assert_eq!(
-        step_name_for("validate", "stack/tofu/root/validate/default"),
+        step_name_for("validate", "stack/tofu/dir-/validate/default"),
         "Validate"
     );
     assert_eq!(
-        step_name_for("fmt", "stack/tofu/root/fmt/default"),
+        step_name_for("fmt", "stack/tofu/dir-/fmt/default"),
         FORMAT_STEP_NAME
     );
     assert_eq!(
@@ -97,7 +97,7 @@ fn tofu_obligation_step_carries_tofu_matrix_id_and_no_doc_env() {
     };
     assert_eq!(
         env.get(OBLIGATION_MATRIX_ID_ENV).map(String::as_str),
-        Some("stack:tofu|task:stack/tofu/root/init/default")
+        Some("stack:tofu|task:stack/tofu/dir-/init/default")
     );
     assert!(
         !env.contains_key(RUSTDOCFLAGS_ENV),
@@ -119,11 +119,11 @@ fn tofu_obligation_step_carries_isolated_cache_dir() {
         .get(velnor_actions_tofu::TF_PLUGIN_CACHE_DIR_ENV)
         .expect("cache dir");
     assert!(
-        data.starts_with("${{ runner.temp }}/velnor/tofu-data/root-"),
+        data.starts_with("${{ runner.temp }}/velnor/tofu-data/b3-"),
         "{data}"
     );
     assert!(
-        cache.starts_with("${{ runner.temp }}/velnor/tofu-cache/root-"),
+        cache.starts_with("${{ runner.temp }}/velnor/tofu-cache/b3-"),
         "{cache}"
     );
     let data_slug = data.rsplit('/').next().expect("slug");
@@ -137,4 +137,19 @@ fn stackless_obligation_task_ids_keep_malformed_vocabulary() {
     bad.task_id = "bogus".to_owned();
     let err = obligation_step(&bad, &ToolCatalog::pinned(), &[], None).expect_err("must fail");
     assert!(err.to_string().contains("malformed_task_id"), "{err}");
+}
+
+#[test]
+fn tofu_isolation_rejects_noncanonical_task_root_keys() {
+    for key in ["root", "dir-ROOT", "dir-2e"] {
+        let extra = BTreeMap::from([(
+            TASK_ID_ENV.to_owned(),
+            format!("stack/tofu/{key}/validate/default"),
+        )]);
+        assert!(tofu_env::tofu_data_dir_for_extra(&extra).is_err(), "{key}");
+        assert!(
+            tofu_env::tofu_plugin_cache_dir_for_extra(&extra).is_err(),
+            "{key}"
+        );
+    }
 }

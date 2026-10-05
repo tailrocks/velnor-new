@@ -365,7 +365,7 @@ fn ignored_rust_plans_no_work() -> TestResult {
 }
 
 #[test]
-fn prepare_lockless_with_deps_writes_nothing() -> TestResult {
+fn prepare_lockless_with_deps_is_locked_no_deps_and_writes_nothing() -> TestResult {
     let repo = make_repo(config_with_branch())?;
     let root = repo.path();
     fs::write(
@@ -380,11 +380,13 @@ fn prepare_lockless_with_deps_writes_nothing() -> TestResult {
     let argv = velnor_actions_mise::MetadataDiscovery::new(root.join("Cargo.toml"))?.cargo_argv();
     let skips = argv.iter().any(|arg| arg == "--no-deps");
     assert!(skips, "discovery skips resolution");
+    assert!(argv.iter().any(|arg| arg == "--locked"));
     let probe = std::process::Command::new("cargo")
         .args([
             "metadata",
             "--format-version",
             "1",
+            "--locked",
             "--no-deps",
             "--manifest-path",
         ])
@@ -394,5 +396,7 @@ fn prepare_lockless_with_deps_writes_nothing() -> TestResult {
         .output()?;
     assert!(probe.status.success(), "no-deps never fetches");
     assert!(probe.stderr.is_empty(), "no index chatter");
+    assert_eq!(before, snapshot(root)?, "locked no-deps must not write");
+    assert!(!root.join("Cargo.lock").exists(), "no lockfile synthesized");
     Ok(())
 }

@@ -268,6 +268,9 @@ EXPECTED_TOOLS = {
     "nextest": "NEXTEST_VERSION",
     "opentofu": "OPENTOFU_VERSION",
     "release-plz": "RELEASE_PLZ_VERSION",
+    "reuse": "REUSE_VERSION",
+    "python": "PYTHON_VERSION",
+    "uv": "UV_VERSION",
 }
 EXPECTED_ACTIONS = {
     "jdx/mise-action": "MISE_ACTION",
@@ -936,6 +939,11 @@ def sniff_latest(source, body):
                 and isinstance(payload, dict):
             crate = payload.get("crate") or {}
             return crate.get("max_version")
+        info = payload.get("info") if isinstance(payload, dict) else None
+        if isinstance(info, dict):
+            version = info.get("version")
+            if isinstance(version, str) and re.fullmatch(r"\d+\.\d+\.\d+", version):
+                return version
         tag = github_tag(payload)
         if tag:
             return tag
@@ -943,6 +951,9 @@ def sniff_latest(source, body):
             else {}
         if crate.get("max_version"):
             return crate["max_version"]
+    python = re.search(r">Download Python (\d+\.\d+\.\d+)<", body)
+    if python:
+        return python.group(1)
     match = re.search(r"\[pkg\.rust\]\s*\nversion\s*=\s*\""
                       r"(\d+\.\d+\.\d+)", body)
     if not match:

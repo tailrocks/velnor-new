@@ -39,6 +39,8 @@ pub fn plan_text_checked(prep: &GenerationPreparation) -> Result<String, Orchest
 ///
 /// `jobs` must be [`finalized_jobs`] for `prep`: the attached IR plus
 /// merged support, setup insertion, closures, and the final fan-in.
+/// This pure formatter does not validate source publication or runtime admission;
+/// [`plan_text_checked`] renders and validates source identities before reporting.
 /// Passing pre-merge IR jobs would reintroduce the plan/YAML gaps
 /// (missing validators, stale step counts, partial pins).
 #[must_use]
@@ -71,6 +73,9 @@ fn workflow_section(out: &mut String, prep: &GenerationPreparation, jobs: &BTree
     push(out, &format!("  {WORKFLOW_PATH}"));
     release_file_lines(out, prep);
     freshness_file_lines(out, prep);
+    if let Some(path) = crate::foundation_qualification::planned_path(prep.config.workflow.policy) {
+        push(out, &format!("  {path}"));
+    }
     push(
         out,
         &format!(
