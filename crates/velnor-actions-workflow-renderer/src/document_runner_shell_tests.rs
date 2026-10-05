@@ -111,12 +111,19 @@ fn credential_scrub_is_factored_to_workflow_env() {
     let rendered = workflow_to_yaml(&workflow(jobs), &shared, &ctx, &BTreeSet::new())
         .expect("workflow renders");
     let yaml = crate::yaml::render_yaml(&rendered);
+    let workflow_env = yaml
+        .split_once("env:\n")
+        .and_then(|(_, rest)| rest.split_once("\nconcurrency:"))
+        .map(|(env, _)| env)
+        .expect("workflow environment");
     let probe = yaml.split("  probe:\n").nth(1).expect("probe job");
 
     assert_eq!(yaml.matches("GH_TOKEN: \"\"").count(), 1);
     assert!(yaml.contains("env:\n  ACTIONS_ID_TOKEN_REQUEST_TOKEN: \"\""));
+    assert!(workflow_env.contains("MISE_NO_CONFIG: \"1\""));
+    assert!(workflow_env.contains("MISE_EXEC_AUTO_INSTALL: \"false\""));
     assert!(!probe.contains("GH_TOKEN: \"\""));
-    assert!(probe.contains("MISE_NO_CONFIG: \"1\""));
+    assert!(!probe.contains("MISE_NO_CONFIG: \"1\""));
     assert!(probe.contains("PROBE_VALUE: visible"));
 }
 
@@ -161,12 +168,13 @@ fn rustdocflags_remain_scoped_to_the_documentation_step() {
         .expect("workflow renders");
     let jobs = field(&rendered, "jobs").expect("jobs map");
     let task = field(jobs, "task").expect("task job");
-    let job_env = field(task, "env").expect("job environment");
-    assert_eq!(
-        field(job_env, "RUSTDOCFLAGS"),
-        None,
-        "task-specific rustdoc flags must not enter the job environment"
-    );
+    if let Some(job_env) = field(task, "env") {
+        assert_eq!(
+            field(job_env, "RUSTDOCFLAGS"),
+            None,
+            "task-specific rustdoc flags must not enter the job environment"
+        );
+    }
     let crate::yaml::Yaml::Seq(steps) = field(task, "steps").expect("job steps") else {
         panic!("steps must be a sequence");
     };
