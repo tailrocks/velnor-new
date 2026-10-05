@@ -29,9 +29,9 @@ SSH agent, or controller config. UID `1000` (`runner`), group `docker` GID `999`
 In-container passwordless sudo is for job steps only. The entrypoint also
 removes `/.dockerenv` before the listener so Testcontainers reaches published
 ports as `localhost`, matching a GitHub-hosted VM. Certificate verification
-is unchanged. It writes `CARGO_BUILD_JOBS` into `/home/runner/.env` as half of
-`nproc` (at least 1). Cargo and mbx honor that when `-j` is absent, so two
-slots do not each take every visible CPU.
+is unchanged. The image does not override Cargo's job count. Workflows may set
+`CARGO_BUILD_JOBS` or pass Cargo's `-j` option according to their own resource
+budget; the runner does not infer compile parallelism from host `nproc`.
 
 `disableUpdate=true` is a scale-set registration invariant. This image does
 not set it and does not set `RUNNER_ALLOW_RUNASROOT`.
