@@ -3,7 +3,9 @@
 
 use std::path::Path;
 
-use velnor_actions_contract::{FileIndex, build_index, build_index_from_list};
+use velnor_actions_contract::{
+    FileIndex, build_index, build_index_from_list, is_reserved_cache_path_bytes,
+};
 use velnor_actions_mise::GitRequest;
 
 use crate::OrchestratorError;
@@ -17,9 +19,16 @@ enum GitFiles {
     NonRepo,
     /// Enumerated paths plus whether any entry was skipped.
     Files {
-        files: Vec<String>,
-        skipped_non_utf8: bool,
+        tracked: GitPathList,
+        untracked: GitPathList,
     },
+}
+
+/// One `git ls-files -z` result with raw cache identity retained.
+struct GitPathList {
+    paths: Vec<String>,
+    skipped_non_utf8: bool,
+    reserved_cache_path: Option<String>,
 }
 
 /// Build the file index plus whether any name was skipped.
@@ -32,11 +41,14 @@ pub(crate) fn build_file_index(
     root: &Path,
     exclusions: &[String],
 ) -> Result<(FileIndex, bool), OrchestratorError> {
-    if let GitFiles::Files {
-        files,
-        skipped_non_utf8,
-    } = git_file_list(root)
-    {
+    if let GitFiles::Files { tracked, untracked } = git_file_list(root) {
+        if let Some(path) = tracked.reserved_cache_path {
+            return Err(OrchestratorError::Discovery {
+                problem: format!("tracked_reserved_cache_path:{path}"),
+            });
+        }
+        let skipped_non_utf8 = tracked.skipped_non_utf8 || untracked.skipped_non_utf8;
+        let files: Vec<String> = tracked.paths.into_iter().chain(untracked.paths).collect();
         let index = build_index_from_list(root, &files, exclusions).map_err(|err| {
             OrchestratorError::Discovery {
                 problem: err.to_string(),
@@ -51,7 +63,7 @@ pub(crate) fn build_file_index(
     Ok((index, skipped))
 }
 
-/// Tracked plus untracked repository-relative paths; `NonRepo` when git
+/// Tracked and untracked repository-relative paths; `NonRepo` when git
 /// itself is unavailable. Undecodable entries skip with an explicit flag.
 fn git_file_list(root: &Path) -> GitFiles {
     let tracked = ls_files(root, vec![std::ffi::OsString::from("-z")]);
@@ -65,20 +77,31 @@ fn git_file_list(root: &Path) -> GitFiles {
     let (Some(tracked), Some(untracked)) = (tracked, untracked) else {
         return GitFiles::NonRepo;
     };
-    let skipped = tracked.1 || untracked.1;
-    let files = tracked.0.into_iter().chain(untracked.0).collect();
-    GitFiles::Files {
-        files,
-        skipped_non_utf8: skipped,
-    }
+    GitFiles::Files { tracked, untracked }
 }
 
+/// Match the reserved cache root and descendants, not similarly named paths.
 /// One `git ls-files -z` run; `None` only when git fails or is absent.
 /// Output always splits: undecodable entries skip with an explicit flag.
-fn ls_files(root: &Path, args: Vec<std::ffi::OsString>) -> Option<(Vec<String>, bool)> {
+fn ls_files(root: &Path, args: Vec<std::ffi::OsString>) -> Option<GitPathList> {
     let output = GitRequest::ls_files(args).run_in(root).ok()?;
     if !output.success {
         return None;
     }
-    Some(split_nul_paths_skipping(&output.stdout))
+    let reserved_cache_path = output
+        .stdout
+        .split(|byte| *byte == 0)
+        .filter(|path| !path.is_empty())
+        .find(|path| is_reserved_cache_path_bytes(path))
+        .map(|path| String::from_utf8_lossy(path).into_owned());
+    let (paths, skipped_non_utf8) = split_nul_paths_skipping(&output.stdout);
+    Some(GitPathList {
+        paths,
+        skipped_non_utf8,
+        reserved_cache_path,
+    })
 }
+
+#[cfg(test)]
+#[path = "discover_index_cache_tests.rs"]
+mod cache_tests;

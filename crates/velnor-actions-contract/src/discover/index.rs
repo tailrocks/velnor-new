@@ -4,10 +4,11 @@ use std::collections::BTreeSet;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
+use super::cache_admission::{CacheAdmission, is_reserved_cache_path};
 use super::glob::{is_excluded, validate_pattern};
 
 /// Built-in exclusions applied before every detector runs.
-pub const BUILTIN_EXCLUSIONS: &[&str] = &[".git/**"];
+pub const BUILTIN_EXCLUSIONS: &[&str] = &[".git/**", ".velnor/cache/**"];
 
 /// Sorted repository-relative file paths plus the canonical root.
 #[derive(Debug, Clone)]
@@ -114,6 +115,7 @@ pub fn build_index_walk(root: &Path, exclusions: &[String]) -> Result<FileIndex,
     let canonical = root
         .canonicalize()
         .map_err(|err| IndexError::RootUnreadable(err.to_string()))?;
+    let cache_admission = CacheAdmission::new(&canonical);
     let mut files = BTreeSet::new();
     let mut stack = vec![canonical.clone()];
     let mut visited = BTreeSet::from([canonical.clone()]);
@@ -126,6 +128,7 @@ pub fn build_index_walk(root: &Path, exclusions: &[String]) -> Result<FileIndex,
             &mut visited,
             &mut files,
             &mut skipped_non_utf8,
+            &cache_admission,
         )?;
     }
     Ok(FileIndex {
@@ -137,10 +140,10 @@ pub fn build_index_walk(root: &Path, exclusions: &[String]) -> Result<FileIndex,
 
 /// Build the sorted index from a caller-supplied allowlist.
 ///
-/// `files` must be repository-relative POSIX paths the caller enumerated
-/// (tracked via `git ls-files` plus an explicit untracked pass; orchestrator
-/// wiring pending). Pure apart from canonicalizing `root`: drops duplicates,
-/// applies exclusions, and sorts. Existence is not checked.
+/// `files` must be repository-relative POSIX paths the caller enumerated.
+/// Drops duplicates, applies exclusions, and sorts. Existing symlink path
+/// components are resolved only to keep aliases into the private cache out of
+/// the index; missing listed paths remain allowed.
 ///
 /// # Errors
 ///
@@ -159,9 +162,16 @@ pub fn build_index_from_list(
     let canonical = root
         .canonicalize()
         .map_err(|err| IndexError::RootUnreadable(err.to_string()))?;
+    let mut cache_admission = CacheAdmission::new(&canonical);
+    let mut admitted = BTreeSet::new();
+    for entry in apply_exclusions(files.iter().cloned().collect(), exclusions) {
+        if !cache_admission.listed_path_is_reserved(&canonical, &entry)? {
+            admitted.insert(entry);
+        }
+    }
     Ok(FileIndex {
         root: canonical,
-        files: apply_exclusions(files.iter().cloned().collect(), exclusions),
+        files: admitted.into_iter().collect(),
         skipped_non_utf8: false,
     })
 }
@@ -175,7 +185,7 @@ fn apply_exclusions(files: BTreeSet<String>, exclusions: &[String]) -> Vec<Strin
         .collect();
     files
         .into_iter()
-        .filter(|path| !is_excluded(path, &patterns))
+        .filter(|path| !is_reserved_cache_path(path) && !is_excluded(path, &patterns))
         .collect()
 }
 
@@ -199,16 +209,32 @@ fn walk_dir(
     visited: &mut BTreeSet<PathBuf>,
     files: &mut BTreeSet<String>,
     skipped_non_utf8: &mut bool,
+    cache_admission: &CacheAdmission,
 ) -> Result<(), IndexError> {
     let entries = std::fs::read_dir(dir).map_err(|err| IndexError::ReadFailed(err.to_string()))?;
     for entry in entries {
         let entry = entry.map_err(|err| IndexError::ReadFailed(err.to_string()))?;
         let path = entry.path();
+        if cache_admission.target_is_reserved(&path)
+            || relative_posix(root, &path)?
+                .as_deref()
+                .is_some_and(is_reserved_cache_path)
+        {
+            continue;
+        }
         let kind = entry
             .file_type()
             .map_err(|err| IndexError::ReadFailed(err.to_string()))?;
         if kind.is_symlink() {
-            walk_link(&path, root, stack, visited, files, skipped_non_utf8)?;
+            walk_link(
+                &path,
+                root,
+                stack,
+                visited,
+                files,
+                skipped_non_utf8,
+                cache_admission,
+            )?;
         } else if kind.is_dir() {
             if visited.insert(path.clone()) {
                 stack.push(path);
@@ -228,10 +254,16 @@ fn walk_link(
     visited: &mut BTreeSet<PathBuf>,
     files: &mut BTreeSet<String>,
     skipped_non_utf8: &mut bool,
+    cache_admission: &CacheAdmission,
 ) -> Result<(), IndexError> {
-    let target = link
-        .canonicalize()
-        .map_err(|_| IndexError::SymlinkLoop(show(link)))?;
+    let target = match link.canonicalize() {
+        Ok(target) => target,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(_) => return Err(IndexError::SymlinkLoop(show(link))),
+    };
+    if cache_admission.target_is_reserved(&target) {
+        return Ok(());
+    }
     if !target.starts_with(root) {
         return Err(IndexError::SymlinkEscape(show(link)));
     }
@@ -293,6 +325,10 @@ fn relative_posix(root: &Path, path: &Path) -> Result<Option<String>, IndexError
 fn show(path: &Path) -> String {
     path.to_string_lossy().into_owned()
 }
+
+#[cfg(test)]
+#[path = "index_cache_pruning_tests.rs"]
+mod cache_pruning_tests;
 
 #[cfg(test)]
 mod tests {

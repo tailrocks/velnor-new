@@ -48,6 +48,8 @@ fn expected_modules() -> Vec<&'static str> {
         "command_tofu.rs",
         "error.rs",
         "gate6.rs",
+        "generator_release_workflow.rs",
+        "generator_release_workflow_checks.rs",
         "gh.rs",
         "git.rs",
         "lib.rs",

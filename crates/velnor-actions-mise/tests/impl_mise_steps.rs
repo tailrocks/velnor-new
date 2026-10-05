@@ -298,15 +298,27 @@ fn rust_components_command_matches_step() -> Result<(), String> {
     let catalog = pinned();
     let request = PrepareRustComponents::new(homes()?);
     let command = request.command(&catalog).map_err(|err| err.to_string())?;
+    let env = request.env(&catalog);
     assert_eq!(command.argv(), request.argv(&catalog));
-    assert_eq!(command.full_env(), request.env(&catalog));
+    assert_eq!(command.full_env(), env);
     assert!(command.disables_auto_install());
-    assert!(env_has(
-        &request.env(&catalog),
-        "RUSTUP_TOOLCHAIN",
-        "1.98.1"
-    ));
+    assert!(env_has(&env, "RUSTUP_TOOLCHAIN", "1.98.1"));
+    assert_eq!(
+        env_value(&env, "RUSTUP_HOME"),
+        env_value(&env, "MISE_RUSTUP_HOME")
+    );
+    assert_eq!(
+        env_value(&env, "CARGO_HOME"),
+        env_value(&env, "MISE_CARGO_HOME")
+    );
+    assert!(env_value(&env, "RUSTUP_HOME").is_some());
     Ok(())
+}
+
+fn env_value<'a>(env: &'a [(OsString, OsString)], key: &str) -> Option<&'a OsString> {
+    env.iter()
+        .find(|(item_key, _)| item_key == key)
+        .map(|(_, value)| value)
 }
 
 #[test]
