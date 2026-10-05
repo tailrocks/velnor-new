@@ -18,7 +18,7 @@ async fn crash_after_create_recovers_ids_cleans_pair_and_starts_new_generation()
     let occupied = admission(&engine, &journal, 1, 1, 0, &assigned_wait(9, 1))
         .await
         .map_err(|err| err.to_string())?;
-    assert_eq!(occupied, Admit::Ack { stop: true });
+    assert_eq!(occupied, Admit::Hold);
     let rows = journal.rows().await.map_err(|err| err.to_string())?;
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].docker_id.as_deref(), Some(runner.as_str()));
@@ -151,7 +151,7 @@ async fn independent_journals_never_adopt_or_delete_each_others_workers() -> Res
     let retained = admission(&engine, &journal_b, 1, 1, 0, &assigned_wait(13, 1))
         .await
         .map_err(|err| err.to_string())?;
-    assert_eq!(retained, Admit::Ack { stop: true });
+    assert_eq!(retained, Admit::Hold);
     let recovered_rows = journal_b.rows().await.map_err(|err| err.to_string())?;
     assert_eq!(
         recovered_rows[0].docker_id.as_deref(),

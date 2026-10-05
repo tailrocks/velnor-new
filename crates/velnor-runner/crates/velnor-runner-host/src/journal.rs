@@ -78,7 +78,7 @@ impl Journal {
 
     /// Insert a pending intent and commit before returning.
     ///
-    /// The same `kind` and `subject` reuse the live row. A failed row starts a new id.
+    /// The same `kind` and `subject` reuse the live row. A failed or cleaned row starts a new id.
     ///
     /// # Errors
     ///

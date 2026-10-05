@@ -157,6 +157,11 @@ pub(crate) async fn admission<E: crate::stage::PairEngine + ?Sized>(
     } else {
         0
     };
+    if idle == steps::Idle::Mint && assigned_runner_live(engine, journal, polled).await? {
+        return Ok(Admit::Ack {
+            stop: capacity::covered_ack_stops(capacity, target, started),
+        });
+    }
     Ok(capacity::admit(capacity::Seat {
         capacity,
         target,
@@ -166,6 +171,18 @@ pub(crate) async fn admission<E: crate::stage::PairEngine + ?Sized>(
         assigned: assigned_in(polled),
         idle,
     }))
+}
+
+async fn assigned_runner_live<E: crate::stage::PairEngine + ?Sized>(
+    engine: &E,
+    journal: &Journal,
+    polled: &Poll,
+) -> Result<bool, EnsureError> {
+    let Poll::Batch(batch) = polled else {
+        return Ok(false);
+    };
+    let subject = format!("m{}", batch.message_id);
+    slot::subject_running(journal, engine, &subject).await
 }
 
 struct Turn<'a> {

@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use crate::launch::{Admit, admission, drive_offer, statistics_blocked};
+use crate::launch::{Admit, admission, drive_offer};
 use crate::launch_harness::{absent, assigned_wait, ctx, open};
 use crate::launch_test_support::{Engine, hex, script, seed_done};
 use crate::stage::{PairStop, drive};
@@ -245,11 +245,18 @@ async fn replay_of_a_running_worker_does_not_mint_again() -> Result<(), String> 
     engine
         .plant_owned(&volume, "dind", &dind, true)
         .map_err(|err| err.to_string())?;
-    assert!(statistics_blocked(1, 1, 2, 1));
-    let decision = admission(&engine, &journal, 2, 2, 0, &assigned_wait(8, 1))
+    let fresh = admission(&engine, &journal, 2, 2, 0, &assigned_wait(8, 1))
         .await
         .map_err(|err| err.to_string())?;
-    assert_eq!(decision, Admit::Ack { stop: false });
+    assert_eq!(fresh, Admit::Start { stop: false });
+    let held = admission(&engine, &journal, 1, 1, 0, &assigned_wait(8, 1))
+        .await
+        .map_err(|err| err.to_string())?;
+    assert_eq!(held, Admit::Hold);
+    let replay = admission(&engine, &journal, 1, 1, 0, &assigned_wait(7, 1))
+        .await
+        .map_err(|err| err.to_string())?;
+    assert_eq!(replay, Admit::Ack { stop: true });
     assert!(engine.removed().map_err(|err| err.to_string())?.is_empty());
     let mut calls = script();
     let again = drive_offer(

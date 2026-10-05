@@ -41,7 +41,7 @@ pub(crate) use capacity::{install_job_capacity, job_capacity};
 #[cfg(test)]
 pub(crate) use capacity::{
     Admit, Seat, admit, needs_running, parse_admit_target, parse_job_capacity, poll_limit,
-    statistics_blocked, wide_poll_limit,
+    wide_poll_limit,
 };
 #[cfg(test)]
 pub(crate) use steps::{Idle, idle};
@@ -185,7 +185,7 @@ where
     S: FnOnce(&str, &[u8], bind::Bind) -> F,
     F: Future<Output = Result<Started, HostError>>,
 {
-    if matches!(steps::idle(polled), steps::Idle::Scale) {
+    if matches!(steps::idle(polled), steps::Idle::Scale | steps::Idle::Mint) {
         let Poll::Batch(batch) = polled else {
             return Ok(None);
         };
