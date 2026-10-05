@@ -248,7 +248,7 @@ pub fn is_configured_checkout(step: &Step, expected_uses: &str) -> bool {
     step.role == Some(StepRole::Checkout)
         && step.condition.is_none()
         && matches!(&step.kind, StepKind::Action { uses, .. } if uses == expected_uses)
-        && valid_checkout_payload(&step.kind)
+        && valid_configured_checkout_payload(&step.kind)
 }
 
 /// Check that a step is the unconditional local tool-seed consumer.
@@ -261,10 +261,17 @@ pub fn is_tool_seed_step(step: &Step) -> bool {
 
 /// Require the standard credential-free checkout action payload.
 fn valid_checkout_payload(kind: &StepKind) -> bool {
-    matches!(kind, StepKind::Action { uses, with, env }
+    matches!(kind, StepKind::Action { uses, with, .. }
         if action_has_prefix(uses, "actions/checkout@")
+            && with.get("persist-credentials").is_some_and(|value| value == "false"))
+}
+
+/// Require the simple generated checkout shape used before host-seed reads.
+fn valid_configured_checkout_payload(kind: &StepKind) -> bool {
+    matches!(kind, StepKind::Action { uses, with, env }
+        if valid_checkout_payload(kind)
+            && action_has_prefix(uses, "actions/checkout@")
             && with.len() == 1
-            && with.get("persist-credentials").is_some_and(|value| value == "false")
             && env.is_empty())
 }
 
