@@ -132,7 +132,7 @@ async fn container_identity_requires_id_and_exact_labels() -> Result<(), String>
 }
 
 #[tokio::test]
-async fn post_delete_non_not_found_keeps_cleanup_unproven() -> Result<(), String> {
+async fn uncertain_volume_skips_docker_cleanup_without_remote_settlement() -> Result<(), String> {
     let scratch = crate::launch_harness::Scratch::new("volume-post-delete")
         .map_err(|error| error.to_string())?;
     let journal = crate::Journal::open(&scratch.file())
@@ -152,7 +152,7 @@ async fn post_delete_non_not_found_keeps_cleanup_unproven() -> Result<(), String
         .await
         .map_err(|error| error.to_string())?;
 
-    let stub = DockerStub::open(pair_cleanup_responses())?;
+    let stub = DockerStub::open(Vec::new())?;
     let decision = admission(
         &stub.docker,
         &journal,
@@ -164,48 +164,16 @@ async fn post_delete_non_not_found_keeps_cleanup_unproven() -> Result<(), String
     .await;
     let requests = stub.finish().await?;
 
-    assert_eq!(
-        decision,
-        Err(crate::EnsureError::Unexpected {
-            status: 0,
-            step: "docker"
-        })
-    );
-    assert_eq!(requests.len(), 18);
+    assert_eq!(decision, Ok(crate::launch::Admit::Hold));
+    assert!(requests.is_empty());
     let rows = journal.rows().await.map_err(|error| error.to_string())?;
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].state, IntentState::Uncertain);
-    assert!(rows[0].docker_id.is_some());
-    assert!(rows[0].dind_id.is_some());
+    assert_eq!(rows[0].docker_id, None);
+    assert_eq!(rows[0].dind_id, None);
+    assert_eq!(rows[0].worker_volume.as_deref(), Some(WORKER));
     assert!(!rows[0].cleanup_proven);
     Ok(())
-}
-
-fn pair_cleanup_responses() -> Vec<Response> {
-    let mut responses = vec![
-        http(
-            200,
-            &container_json("runner-id", Some(WORKER), Some("runner")),
-        ),
-        http(200, &container_json("dind-id", Some(WORKER), Some("dind"))),
-        http(200, r#"{"State":{"Running":false}}"#),
-        http(
-            200,
-            &container_json("runner-id", Some(WORKER), Some("runner")),
-        ),
-        http(204, ""),
-        http(404, r#"{"message":"missing"}"#),
-        http(200, &container_json("dind-id", Some(WORKER), Some("dind"))),
-        http(204, ""),
-        http(404, r#"{"message":"missing"}"#),
-    ];
-    for (index, (name, role)) in volume_names().into_iter().enumerate() {
-        responses.push(http(200, &volume_json(name, WORKER, role)));
-        responses.push(http(204, ""));
-        let status = if index == 2 { 500 } else { 404 };
-        responses.push(http(status, r#"{"message":"not absent"}"#));
-    }
-    responses
 }
 
 fn volume_names() -> [(&'static str, &'static str); 3] {

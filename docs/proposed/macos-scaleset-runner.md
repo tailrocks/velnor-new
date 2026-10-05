@@ -117,7 +117,10 @@ Persist intent, then perform the external call, then record success or
 uncertainty. Do not hold a database transaction across HTTP or Docker. `Drop`
 does not free a durable slot. Restart reconciles journal, exact Docker objects,
 and GitHub state before advertising capacity, and adopts still-running owned
-workers. An engine identity change stops automatic mutation.
+workers. Pending or uncertain rows lack enough durable stage and remote-operation
+identity to settle an interrupted acquire or JIT request from Docker state alone;
+retain their slot and owned volumes until an authoritative settlement mechanism
+exists. An engine identity change stops automatic mutation.
 
 Disabled runner self-update is a registration invariant. Do not patch the
 official runner. Do not spoof `/proc` to bypass `AssertCompatibleOS`.
