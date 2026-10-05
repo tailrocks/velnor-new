@@ -68,11 +68,12 @@ pub(crate) fn trusted_script_argument(name: &str, argv: &[String]) -> Option<usi
     (script == expected || script == &credential_prefixed).then_some(prefix + 2)
 }
 
-/// Recognize only the one complete renderer-owned MBX export step in a job.
+/// Recognize only the one complete renderer-owned Scale Set export step in a job.
 pub(crate) fn is_exact_generated_export_step(job: &Job, candidate: &Step) -> bool {
-    let Ok(expected) = export_step() else {
+    let Ok(mut expected) = export_step() else {
         return false;
     };
+    expected.condition = Some(format!("{} && {PREP_IF}", store::SCALE_SET_ONLY_IF));
     if candidate != &expected {
         return false;
     }
