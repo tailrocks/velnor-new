@@ -102,6 +102,9 @@ fn validate_id_kind(id: Option<StepId>, kind: &StepKind, job: &str) -> Result<()
             matches!(kind, StepKind::Internal { operation } if operation == "publish-baseline-v1")
         }
         StepId::MbxBundleKey | StepId::MbxExport => matches!(kind, StepKind::Shell { .. }),
+        StepId::MbxCacheRestore => {
+            matches!(kind, StepKind::Action { uses, .. } if uses.starts_with("jdx/mr-boxington-action@"))
+        }
         StepId::MbxBundle => {
             matches!(kind, StepKind::Action { uses, .. } if uses.starts_with("actions/cache/restore@"))
         }

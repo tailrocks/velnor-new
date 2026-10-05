@@ -18,6 +18,8 @@ pub enum StepId {
     PublishBaseline,
     /// MBX cache identity outputs consumed by the bundle restore.
     MbxBundleKey,
+    /// MBX action cache restore outputs exposed to later workflow steps.
+    MbxCacheRestore,
     /// MBX bundle restore output consumed by its import step.
     MbxBundle,
     /// MBX export output consumed by its save gate.
@@ -34,6 +36,7 @@ impl StepId {
             Self::Plan => "plan",
             Self::PublishBaseline => "publish-baseline",
             Self::MbxBundleKey => "mbx-cache-key",
+            Self::MbxCacheRestore => "mbx",
             Self::MbxBundle => "mbx-bundle",
             Self::MbxExport => "mbx-export",
             Self::TofuProviders => "tofu-providers",
@@ -206,6 +209,7 @@ impl StepRole {
             Self::PlanProducer => Some(StepId::Plan),
             Self::BaselinePublisher => Some(StepId::PublishBaseline),
             Self::MbxBundleKey => Some(StepId::MbxBundleKey),
+            Self::MbxCache => Some(StepId::MbxCacheRestore),
             Self::MbxBundleRestore => Some(StepId::MbxBundle),
             Self::MbxBundleExport => Some(StepId::MbxExport),
             Self::TofuProvidersRestore => Some(StepId::TofuProviders),
@@ -219,6 +223,7 @@ impl StepRole {
             StepId::Plan => Self::PlanProducer,
             StepId::PublishBaseline => Self::BaselinePublisher,
             StepId::MbxBundleKey => Self::MbxBundleKey,
+            StepId::MbxCacheRestore => Self::MbxCache,
             StepId::MbxBundle => Self::MbxBundleRestore,
             StepId::MbxExport => Self::MbxBundleExport,
             StepId::TofuProviders => Self::TofuProvidersRestore,

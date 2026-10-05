@@ -140,6 +140,7 @@ fn configure_runner_scoped_cache(job: &mut Job) -> Result<bool, RenderError> {
         with.remove("restore-keys");
         env.remove(MBX_CACHE_MODE_ENV);
         MBX_LOCAL_SETUP_NAME.clone_into(&mut step.name);
+        step.id = None;
         step.role = Some(StepRole::MbxLocalSetup);
     } else {
         with.insert("backend".to_owned(), "github".to_owned());
