@@ -3,6 +3,7 @@
 //! `remove_recorded` deletes only when the name still resolves to the owned id.
 
 use bollard::Docker;
+use bollard::errors::Error as DockerError;
 use bollard::query_parameters::RemoveContainerOptionsBuilder;
 
 use crate::docker_spec::{DeleteDecision, delete_decision, runner_plan};
@@ -73,11 +74,18 @@ impl PairEngine for Docker {
 
     async fn id_for_name(&self, name: &str) -> Result<Option<String>, HostError> {
         if name.is_empty() {
-            return Ok(None);
+            return Err(HostError::Docker);
         }
         match self.inspect_container(name, None).await {
-            Ok(body) => Ok(body.id.filter(|id| !id.is_empty())),
-            Err(_) => Ok(None),
+            Ok(body) => body
+                .id
+                .filter(|id| !id.is_empty())
+                .map(Some)
+                .ok_or(HostError::Docker),
+            Err(DockerError::DockerResponseServerError {
+                status_code: 404, ..
+            }) => Ok(None),
+            Err(_) => Err(HostError::Docker),
         }
     }
 }
@@ -145,7 +153,8 @@ pub(crate) async fn drive<E: PairEngine>(
 ///
 /// # Errors
 ///
-/// Returns [`HostError::Docker`] when the owned container cannot be removed.
+/// Returns [`HostError::Docker`] when the name is empty, its identity cannot be
+/// established, or the owned container cannot be removed.
 pub async fn remove_recorded(
     docker: &Docker,
     owned_id: &str,
@@ -222,3 +231,6 @@ impl PartialPair {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

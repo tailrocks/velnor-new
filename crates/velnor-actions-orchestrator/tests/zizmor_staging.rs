@@ -30,11 +30,7 @@ fn git(args: &[&str], cwd: &Path) -> TestResult {
 
 /// Release-manifest fixture for `prepare`.
 fn manifest_json() -> String {
-    let targets = [
-        "x86_64-unknown-linux-gnu",
-        "aarch64-apple-darwin",
-        "x86_64-apple-darwin",
-    ]
+    let targets = velnor_actions_contract::SUPPORTED_TARGETS
     .iter()
     .map(|target| {
         format!(
@@ -60,9 +56,7 @@ fn binary_record(target: &str) -> String {
 
 /// Generator-lock fixture for Velnor-policy `prepare`.
 fn lock_text() -> String {
-    let bins = binary_record("x86_64-unknown-linux-gnu")
-        + &binary_record("aarch64-apple-darwin")
-        + &binary_record("x86_64-apple-darwin");
+    let bins = binary_record("x86_64-unknown-linux-gnu") + &binary_record("aarch64-apple-darwin");
     format!(
         "schema = 1\n[generator]\nbinary = \"velnor-actions\"\nversion = \"0.1.0\"\ncommit = \"{}\"\n{bins}[mise-bootstrap]\nversion = \"2026.9.18\"\nartifact = \"https://example.invalid/mise\"\nsha256 = \"{}\"\n",
         "e".repeat(40),

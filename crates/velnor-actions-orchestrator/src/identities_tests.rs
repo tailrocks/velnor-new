@@ -36,6 +36,7 @@ fn group(kind: TaskKind, task_id: &str, driver: CompileDriver, runner: TestRunne
         uses_network: false,
         uses_clock: false,
         uses_random: false,
+        run_ignored: None,
         nextest_profile: NextestProfile::Default,
     };
     let task = velnor_actions_rust::propose_task(&group).expect("fixture proposes");
