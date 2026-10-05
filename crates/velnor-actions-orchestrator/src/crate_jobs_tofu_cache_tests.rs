@@ -81,7 +81,7 @@ fn provider_restore_precedes_init_obligation() {
     let with = step_inputs(job, "Restore Tofu providers");
     let key = with.get("key").expect("restore key");
     assert!(
-        key.starts_with("velnor-v1-tofu-providers-x86_64-unknown-linux-gnu-1.13.1-stacks-a-"),
+        key.starts_with("velnor-v1-tofu-providers-x86_64-unknown-linux-gnu-1.13.1-b3-"),
         "{key}"
     );
     assert!(
@@ -274,4 +274,14 @@ fn provider_key_rejects_overlong_keys_from_deep_roots() {
             .is_ok(),
         "ordinary nesting builds"
     );
+}
+
+#[test]
+fn provider_cache_rejects_different_exact_roots_in_one_group() {
+    let tasks = tofu_triples(&["", "root"]);
+    let refs: Vec<_> = tasks.iter().collect();
+    let obligations = obligations_for(&refs, &ToolCatalog::pinned()).expect("obligations");
+    let err = crate::tofu_cache::tofu_root_for_obligations(&obligations)
+        .expect_err("distinct roots cannot share a provider cache");
+    assert!(err.to_string().contains("tofu_mixed_roots"), "{err}");
 }
