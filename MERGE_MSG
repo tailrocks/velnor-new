@@ -1,0 +1,12 @@
+Merge remote-tracking branch 'refs/remotes/canonical/perf/cache-selection-qualification' into recovery/main-plus-perf
+
+# Conflicts:
+#	.github/workflows/ci.yml
+#	crates/velnor-actions-cli/src/args.rs
+#	crates/velnor-actions-cli/src/dispatch.rs
+#	crates/velnor-actions-orchestrator/src/generate.rs
+#	crates/velnor-actions-orchestrator/src/lib.rs
+#	fixtures/parity/multi-crate/expected/ci.yml
+#	fixtures/parity/multi-crate/expected/expected-set.json
+#	fixtures/parity/multi-crate/expected/plan-v1.json
+#	fixtures/parity/multi-crate/expected/task-report.json
