@@ -77,6 +77,21 @@ pub(super) fn require_owned_id(
     Ok(id.to_owned())
 }
 
+/// Confirm a known container ID and the full ownership label set after rename.
+pub(super) fn require_owned_container_id(
+    container: &ProbeContainer,
+    expected_id: &str,
+    labels: &HashMap<String, String>,
+) -> Result<(), GuestSampleFailure> {
+    if container.id.as_deref() != Some(expected_id)
+        || &container.labels != labels
+        || !valid_container_id(expected_id)
+    {
+        return Err(GuestSampleFailure::Ownership);
+    }
+    Ok(())
+}
+
 /// Accept only full lowercase Docker container IDs before using an API path.
 pub(super) fn valid_container_id(id: &str) -> bool {
     id.len() == 64

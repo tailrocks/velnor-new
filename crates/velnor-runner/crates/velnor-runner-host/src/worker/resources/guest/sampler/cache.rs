@@ -56,7 +56,8 @@ pub(crate) fn spawn_guest_sampler(
     Ok(GuestSampleCache { samples, stop })
 }
 
-async fn sampling_loop<C: GuestDockerClient + 'static>(
+/// Run refreshes until shutdown, completing the current bounded attempt first.
+pub(super) async fn sampling_loop<C: GuestDockerClient + 'static>(
     client: Arc<C>,
     identity: LaunchIdentity,
     interval: Duration,

@@ -25,6 +25,8 @@ pub(crate) enum GuestSampleFailure {
     Timeout,
     /// The probe could not be created or its create response was uncertain.
     ProbeCreate,
+    /// The daemon did not settle an uncertain create within the attempt window.
+    CreateUncertain,
     /// The probe did not exit successfully.
     ProbeExit,
     /// Probe output was missing or was not valid UTF-8.

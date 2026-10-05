@@ -2,7 +2,10 @@
 
 mod adapter;
 mod cache;
+mod cleanup;
+mod exit;
 mod identity;
+mod reconcile;
 mod snapshot;
 
 pub(crate) use cache::{GuestSampleCache, spawn_guest_sampler};
@@ -15,10 +18,10 @@ mod tests;
 use std::collections::HashMap;
 use std::future::Future;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use bollard::models::SystemInfo;
-use tokio::time::{sleep, timeout};
+use tokio::time::{Instant as TokioInstant, sleep, timeout};
 
 use crate::journal::LaunchIdentity;
 
@@ -31,6 +34,9 @@ use identity::{
 const OPERATION_TIMEOUT: Duration = Duration::from_secs(3);
 const PROBE_RUN_TIMEOUT: Duration = Duration::from_secs(5);
 const CLEANUP_TIMEOUT: Duration = Duration::from_secs(3);
+const ATTEMPT_TIMEOUT: Duration = Duration::from_secs(20);
+const CLEANUP_RESERVE: Duration = Duration::from_secs(6);
+const CREATE_RECONCILE_TIMEOUT: Duration = Duration::from_secs(4);
 const EXIT_POLL_INTERVAL: Duration = Duration::from_millis(100);
 
 /// The small Docker API used by the sampler and its deterministic fake.
@@ -44,7 +50,7 @@ trait GuestDockerClient: Send + Sync {
         reference: &str,
     ) -> impl Future<Output = Result<Option<ProbeImage>, GuestSampleFailure>> + Send;
 
-    /// Inspect a probe by its controller-reserved name.
+    /// Inspect a probe by its controller-reserved name or known daemon ID.
     fn inspect_container(
         &self,
         name: &str,
@@ -62,12 +68,14 @@ trait GuestDockerClient: Send + Sync {
         id: &str,
     ) -> impl Future<Output = Result<(), GuestSampleFailure>> + Send;
 
-    /// Read probe stdout without retaining more than `limit` bytes.
+    /// Read the fixed sample file while the probe is alive.
+    ///
+    /// `None` means the selected daemon confirmed the file is not ready yet.
     fn read_output(
         &self,
         id: &str,
         limit: usize,
-    ) -> impl Future<Output = Result<Vec<u8>, GuestSampleFailure>> + Send;
+    ) -> impl Future<Output = Result<Option<Vec<u8>>, GuestSampleFailure>> + Send;
 
     /// Force-remove a controller-owned probe ID.
     fn remove_container(
@@ -112,6 +120,9 @@ struct SamplerTiming {
     operation: Duration,
     probe_run: Duration,
     cleanup: Duration,
+    attempt: Duration,
+    cleanup_reserve: Duration,
+    create_reconcile: Duration,
     exit_poll: Duration,
 }
 
@@ -121,6 +132,9 @@ impl Default for SamplerTiming {
             operation: OPERATION_TIMEOUT,
             probe_run: PROBE_RUN_TIMEOUT,
             cleanup: CLEANUP_TIMEOUT,
+            attempt: ATTEMPT_TIMEOUT,
+            cleanup_reserve: CLEANUP_RESERVE,
+            create_reconcile: CREATE_RECONCILE_TIMEOUT,
             exit_poll: EXIT_POLL_INTERVAL,
         }
     }
@@ -144,27 +158,59 @@ impl<'a, C: GuestDockerClient> GuestSampler<'a, C> {
 
     async fn call<T>(
         &self,
+        deadline: TokioInstant,
         future: impl Future<Output = Result<T, GuestSampleFailure>>,
     ) -> Result<T, GuestSampleFailure> {
-        bounded_timeout(self.timing.operation, future).await
+        let call_deadline = deadline.min(TokioInstant::now() + self.timing.operation);
+        let remaining = call_deadline.saturating_duration_since(TokioInstant::now());
+        let result = bounded_timeout(remaining, future).await?;
+        if TokioInstant::now() >= call_deadline {
+            Err(GuestSampleFailure::Timeout)
+        } else {
+            Ok(result)
+        }
     }
 
     async fn cleanup_call<T>(
         &self,
+        deadline: TokioInstant,
         future: impl Future<Output = Result<T, GuestSampleFailure>>,
     ) -> Result<T, GuestSampleFailure> {
-        bounded_timeout(self.timing.cleanup, future).await
+        let call_deadline = deadline.min(TokioInstant::now() + self.timing.cleanup);
+        let remaining = call_deadline.saturating_duration_since(TokioInstant::now());
+        let result = bounded_timeout(remaining, future).await?;
+        if TokioInstant::now() >= call_deadline {
+            Err(GuestSampleFailure::Timeout)
+        } else {
+            Ok(result)
+        }
     }
 
     /// Read, parse, and clean one probe attempt.
     async fn sample_once(&self) -> GuestSampleSnapshot {
+        let attempt_deadline = TokioInstant::now() + self.timing.attempt;
+        let cleanup_reserve = self.timing.cleanup_reserve.min(self.timing.attempt);
+        let work_deadline = attempt_deadline - cleanup_reserve;
         let mut engine_verified = false;
         let mut owned_id = None;
+        let mut expected_image = None;
         let result = self
-            .collect_sample(&mut engine_verified, &mut owned_id)
+            .collect_sample(
+                work_deadline,
+                &mut engine_verified,
+                &mut owned_id,
+                &mut expected_image,
+            )
             .await;
+        let create_uncertain = matches!(&result, Err(GuestSampleFailure::CreateUncertain));
         let cleanup = if engine_verified {
-            self.cleanup_probe(owned_id.as_deref()).await
+            self.cleanup_probe(
+                owned_id.as_deref(),
+                expected_image.as_deref(),
+                create_uncertain,
+                attempt_deadline,
+            )
+            .await
         } else {
             Ok(())
         };
@@ -176,34 +222,43 @@ impl<'a, C: GuestDockerClient> GuestSampler<'a, C> {
 
     async fn collect_sample(
         &self,
+        deadline: TokioInstant,
         engine_verified: &mut bool,
         owned_id: &mut Option<String>,
+        expected_image: &mut Option<String>,
     ) -> Result<GuestResourceSample, GuestSampleFailure> {
-        self.verify_engine().await?;
+        self.verify_engine(deadline).await?;
         *engine_verified = true;
-
-        let image = self
-            .call(self.client.inspect_image(IMAGE_REFERENCE))
-            .await?
-            .ok_or(GuestSampleFailure::ProbeImage)?;
-        let image_id = trusted_image_id(&image)?;
-        let info = self.verify_engine().await?;
-        let mut request = probe_container(&info).ok_or(GuestSampleFailure::ProbeInput)?;
-        request.config.image = Some(image_id.clone());
         let name = container_name(self.identity);
         let labels = owner_labels(self.identity);
-        request.options.name = Some(name.clone());
-        request.config.labels = Some(labels.clone());
 
-        if let Some(existing) = self.call(self.client.inspect_container(&name)).await? {
+        if let Some(existing) = self
+            .call(deadline, self.client.inspect_container(&name))
+            .await?
+        {
             *owned_id = Some(require_owned_id(&existing, &name, &labels)?);
-            self.remove_owned(owned_id.as_deref().ok_or(GuestSampleFailure::Ownership)?)
-                .await?;
+            let id = owned_id.as_deref().ok_or(GuestSampleFailure::Ownership)?;
+            self.remove_owned(id, &labels, None, deadline).await?;
             *owned_id = None;
         }
 
-        self.verify_engine().await?;
-        match self.call(self.client.create_container(request)).await {
+        let image = self
+            .call(deadline, self.client.inspect_image(IMAGE_REFERENCE))
+            .await?
+            .ok_or(GuestSampleFailure::ProbeImage)?;
+        let image_id = trusted_image_id(&image)?;
+        *expected_image = Some(image_id.clone());
+        let info = self.verify_engine(deadline).await?;
+        let mut request = probe_container(&info).ok_or(GuestSampleFailure::ProbeInput)?;
+        request.config.image = Some(image_id.clone());
+        request.options.name = Some(name.clone());
+        request.config.labels = Some(labels.clone());
+
+        self.verify_engine(deadline).await?;
+        match self
+            .call(deadline, self.client.create_container(request))
+            .await
+        {
             Ok(created) => {
                 if !valid_container_id(&created.id) {
                     return Err(GuestSampleFailure::ProbeCreate);
@@ -212,22 +267,19 @@ impl<'a, C: GuestDockerClient> GuestSampler<'a, C> {
                 if created.has_warnings {
                     return Err(GuestSampleFailure::ProbeCreate);
                 }
-                self.start_and_read(&name, &labels, &image_id, &created.id, &info)
+                self.start_and_read(deadline, &name, &labels, &image_id, &created.id, &info)
                     .await
             }
-            Err(error) => {
-                self.verify_engine().await?;
-                match self.call(self.client.inspect_container(&name)).await {
-                    Ok(Some(container)) => {
-                        *owned_id = Some(require_owned_id(&container, &name, &labels)?);
-                        Err(GuestSampleFailure::ProbeCreate)
+            Err(_) => {
+                match self
+                    .reconcile_create(&name, &labels, &image_id, deadline, owned_id)
+                    .await
+                {
+                    Ok(()) => Err(GuestSampleFailure::ProbeCreate),
+                    Err(GuestSampleFailure::EngineIdentity) => {
+                        Err(GuestSampleFailure::EngineIdentity)
                     }
-                    Ok(None) => Err(if error == GuestSampleFailure::Timeout {
-                        GuestSampleFailure::ProbeCreate
-                    } else {
-                        error
-                    }),
-                    Err(_) => Err(GuestSampleFailure::ProbeCreate),
+                    Err(_) => Err(GuestSampleFailure::CreateUncertain),
                 }
             }
         }
@@ -235,33 +287,32 @@ impl<'a, C: GuestDockerClient> GuestSampler<'a, C> {
 
     async fn start_and_read(
         &self,
+        deadline: TokioInstant,
         name: &str,
         labels: &HashMap<String, String>,
         image_id: &str,
         create_id: &str,
         info: &SystemInfo,
     ) -> Result<GuestResourceSample, GuestSampleFailure> {
-        self.verify_engine().await?;
+        self.verify_engine(deadline).await?;
         let container = self
-            .call(self.client.inspect_container(name))
+            .call(deadline, self.client.inspect_container(name))
             .await?
             .ok_or(GuestSampleFailure::ProbeCreate)?;
         let id = require_owned_id(&container, name, labels)?;
         if id != create_id || container.image.as_deref() != Some(image_id) {
             return Err(GuestSampleFailure::Ownership);
         }
-        self.verify_engine().await?;
-        self.call(self.client.start_container(&id)).await?;
-        let exit_code = self.wait_for_exit(name, labels).await?;
+        self.verify_engine(deadline).await?;
+        self.call(deadline, self.client.start_container(&id))
+            .await?;
+        let probe_deadline = (TokioInstant::now() + self.timing.probe_run).min(deadline);
+        let bytes = self.read_output_until_ready(&id, probe_deadline).await?;
+        let exit_code = self
+            .wait_for_exit(name, labels, &id, probe_deadline)
+            .await?;
         if exit_code != 0 {
             return Err(GuestSampleFailure::ProbeExit);
-        }
-        self.verify_engine().await?;
-        let bytes = self
-            .call(self.client.read_output(&id, super::MAX_PROBE_OUTPUT_BYTES))
-            .await?;
-        if bytes.len() > super::MAX_PROBE_OUTPUT_BYTES {
-            return Err(GuestSampleFailure::OutputLimit);
         }
         let output = std::str::from_utf8(&bytes).map_err(|_| GuestSampleFailure::ProbeOutput)?;
         if output.is_empty() {
@@ -270,94 +321,33 @@ impl<'a, C: GuestDockerClient> GuestSampler<'a, C> {
         Ok(parse_sample(info, Some(output)))
     }
 
-    async fn wait_for_exit(
+    async fn read_output_until_ready(
         &self,
-        name: &str,
-        labels: &HashMap<String, String>,
-    ) -> Result<i64, GuestSampleFailure> {
-        let deadline = Instant::now() + self.timing.probe_run;
+        id: &str,
+        deadline: TokioInstant,
+    ) -> Result<Vec<u8>, GuestSampleFailure> {
         loop {
-            if Instant::now() >= deadline {
+            if TokioInstant::now() >= deadline {
                 return Err(GuestSampleFailure::Timeout);
             }
-            let container = self
-                .call(self.client.inspect_container(name))
+            self.verify_engine(deadline).await?;
+            if let Some(bytes) = self
+                .call(
+                    deadline,
+                    self.client.read_output(id, super::MAX_PROBE_OUTPUT_BYTES),
+                )
                 .await?
-                .ok_or(GuestSampleFailure::ProbeExit)?;
-            require_owned_id(&container, name, labels)?;
-            match (container.running, container.exit_code) {
-                (Some(false), Some(code)) => return Ok(code),
-                (Some(true), _) => sleep(self.timing.exit_poll).await,
-                _ => return Err(GuestSampleFailure::ProbeExit),
-            }
-        }
-    }
-
-    async fn cleanup_probe(&self, expected_id: Option<&str>) -> Result<(), GuestSampleFailure> {
-        self.verify_engine().await?;
-        let name = container_name(self.identity);
-        let labels = owner_labels(self.identity);
-        match self
-            .cleanup_call(self.client.inspect_container(&name))
-            .await?
-        {
-            None => Ok(()),
-            Some(container) => {
-                let id = require_owned_id(&container, &name, &labels)?;
-                if expected_id.is_some_and(|expected| expected != id) {
-                    return Err(GuestSampleFailure::Ownership);
+            {
+                if bytes.len() > super::MAX_PROBE_OUTPUT_BYTES {
+                    return Err(GuestSampleFailure::OutputLimit);
                 }
-                self.remove_owned(&id).await
+                return Ok(bytes);
             }
-        }
-    }
-
-    async fn remove_owned(&self, id: &str) -> Result<(), GuestSampleFailure> {
-        self.verify_engine().await?;
-        // Container inspection reconciles both success and lost remove responses.
-        match self.cleanup_call(self.client.remove_container(id)).await {
-            Ok(()) | Err(_) => {}
-        }
-        let name = container_name(self.identity);
-        let labels = owner_labels(self.identity);
-        if self.inspect_after_remove(&name, &labels, id).await? {
-            return Ok(());
-        }
-        self.verify_engine().await?;
-        // A lost delete response is reconciled against the exact owned name and labels.
-        match self.cleanup_call(self.client.remove_container(id)).await {
-            Ok(()) | Err(_) => {}
-        }
-        if self.inspect_after_remove(&name, &labels, id).await? {
-            Ok(())
-        } else {
-            Err(GuestSampleFailure::Cleanup)
-        }
-    }
-
-    async fn inspect_after_remove(
-        &self,
-        name: &str,
-        labels: &HashMap<String, String>,
-        id: &str,
-    ) -> Result<bool, GuestSampleFailure> {
-        self.verify_engine().await?;
-        match self
-            .cleanup_call(self.client.inspect_container(name))
-            .await?
-        {
-            None => Ok(true),
-            Some(container) if require_owned_id(&container, name, labels)? == id => Ok(false),
-            Some(_) => Err(GuestSampleFailure::Ownership),
-        }
-    }
-
-    async fn verify_engine(&self) -> Result<SystemInfo, GuestSampleFailure> {
-        let info = self.call(self.client.info()).await?;
-        if info.id.as_deref() == Some(self.identity.engine_id()) {
-            Ok(info)
-        } else {
-            Err(GuestSampleFailure::EngineIdentity)
+            let remaining = deadline.saturating_duration_since(TokioInstant::now());
+            if remaining.is_zero() {
+                return Err(GuestSampleFailure::Timeout);
+            }
+            sleep(self.timing.exit_poll.min(remaining)).await;
         }
     }
 }
@@ -366,6 +356,9 @@ async fn bounded_timeout<T>(
     limit: Duration,
     future: impl Future<Output = Result<T, GuestSampleFailure>>,
 ) -> Result<T, GuestSampleFailure> {
+    if limit.is_zero() {
+        return Err(GuestSampleFailure::Timeout);
+    }
     timeout(limit, future)
         .await
         .map_err(|_| GuestSampleFailure::Timeout)?

@@ -1,13 +1,16 @@
 #[path = "sampler_tests/fake.rs"]
 mod fake;
+#[path = "sampler_tests/lifecycle.rs"]
+mod lifecycle;
+#[path = "sampler_tests/trust.rs"]
+mod trust;
 
 use std::collections::HashMap;
 use std::error::Error;
 use std::sync::Arc;
+use std::time::Duration;
 
-use super::super::GuestResourceSample;
-use super::identity::{IMAGE_REFERENCE, trusted_image_id};
-use super::{GuestSampleFailure, GuestSampleStatus, ProbeImage};
+use super::{GuestSampleFailure, GuestSampleStatus, IMAGE_REFERENCE};
 use fake::{
     FakeClient, REPLACEMENT_IMAGE, RESOLVED_IMAGE, fast_sampler, identity, image, owned_container,
     unavailable,
@@ -125,16 +128,67 @@ async fn create_timeout_and_lost_response_reconcile_only_owned_probe() -> Result
             let mut state = client.state.lock().await;
             state.create_hangs = hang;
             state.create_loses_response = !hang;
+            if hang {
+                state.late_create_delay = Duration::from_millis(170);
+            }
         }
         let snapshot = fast_sampler(Arc::clone(&client), &identity)
             .sample_once()
             .await;
-        assert!(unavailable(snapshot, GuestSampleFailure::ProbeCreate));
+        let expected = if hang {
+            GuestSampleFailure::CreateUncertain
+        } else {
+            GuestSampleFailure::ProbeCreate
+        };
+        assert!(unavailable(snapshot, expected));
         let state = client.state.lock().await;
         assert_eq!(state.create_count, 1);
+        if hang {
+            assert!(state.post_create_absence_count >= 2);
+            assert!(state.late_create_after_absence_count >= 2);
+        }
         assert_eq!(state.remove_count, 1);
         assert!(state.container.is_none());
     }
+    Ok(())
+}
+
+#[tokio::test]
+async fn exit_status_must_match_created_id_and_selected_engine() -> Result<(), Box<dyn Error>> {
+    let identity = identity()?;
+    let client = Arc::new(FakeClient::new());
+    client.state.lock().await.wrong_exit_id = true;
+
+    let snapshot = fast_sampler(Arc::clone(&client), &identity)
+        .sample_once()
+        .await;
+    assert!(unavailable(snapshot, GuestSampleFailure::Ownership));
+    assert_eq!(client.state.lock().await.remove_count, 0);
+
+    let client = Arc::new(FakeClient::new());
+    client.state.lock().await.wrong_engine_after_start = true;
+    let snapshot = fast_sampler(Arc::clone(&client), &identity)
+        .sample_once()
+        .await;
+    assert!(unavailable(snapshot, GuestSampleFailure::EngineIdentity));
+    assert_eq!(client.state.lock().await.start_count, 1);
+    Ok(())
+}
+
+#[tokio::test]
+async fn removal_reconciles_a_renamed_owned_container_by_known_id() -> Result<(), Box<dyn Error>> {
+    let identity = identity()?;
+    let client = Arc::new(FakeClient::new());
+    client.state.lock().await.rename_on_remove = true;
+
+    let snapshot = fast_sampler(Arc::clone(&client), &identity)
+        .sample_once()
+        .await;
+    let state = client.state.lock().await;
+
+    assert_eq!(snapshot.status, GuestSampleStatus::Available);
+    assert_eq!(state.remove_count, 2);
+    assert!(state.container.is_none());
     Ok(())
 }
 
@@ -202,6 +256,22 @@ async fn output_read_timeout_fails_closed_and_cleans_probe() -> Result<(), Box<d
 }
 
 #[tokio::test]
+async fn output_poll_retries_only_confirmed_absence_while_probe_is_alive()
+-> Result<(), Box<dyn Error>> {
+    let identity = identity()?;
+    let client = Arc::new(FakeClient::new());
+    client.state.lock().await.output_not_ready_checks = 2;
+
+    let snapshot = fast_sampler(Arc::clone(&client), &identity)
+        .sample_once()
+        .await;
+
+    assert_eq!(snapshot.status, GuestSampleStatus::Available);
+    assert_eq!(client.state.lock().await.output_read_count, 3);
+    Ok(())
+}
+
+#[tokio::test]
 async fn start_timeout_and_unconfirmed_cleanup_remain_unknown() -> Result<(), Box<dyn Error>> {
     let identity = identity()?;
     let client = Arc::new(FakeClient::new());
@@ -260,44 +330,22 @@ async fn restart_cleans_prior_owned_probe_before_creating_a_new_one() -> Result<
     Ok(())
 }
 
-#[test]
-fn image_identity_requires_exact_tag_digest_and_platform() {
-    assert_eq!(
-        trusted_image_id(&image(RESOLVED_IMAGE)),
-        Ok(RESOLVED_IMAGE.to_owned())
-    );
-    for invalid in [
-        ProbeImage {
-            id: None,
-            ..image(RESOLVED_IMAGE)
-        },
-        image("sha256:bad"),
-        ProbeImage {
-            repo_tags: vec!["untrusted:tag".to_owned()],
-            ..image(RESOLVED_IMAGE)
-        },
-        ProbeImage {
-            os: Some("darwin".to_owned()),
-            ..image(RESOLVED_IMAGE)
-        },
-        ProbeImage {
-            architecture: Some("arm64".to_owned()),
-            ..image(RESOLVED_IMAGE)
-        },
-    ] {
-        assert_eq!(
-            trusted_image_id(&invalid),
-            Err(GuestSampleFailure::ProbeImage)
-        );
-    }
-}
+#[tokio::test]
+async fn restart_cleans_owned_probe_even_when_local_image_is_unavailable()
+-> Result<(), Box<dyn Error>> {
+    let identity = identity()?;
+    let client = Arc::new(FakeClient::new());
+    client.seed_container(owned_container(&identity)).await;
+    client.state.lock().await.image = None;
 
-#[test]
-fn unusable_samples_never_carry_capacity() {
-    let snapshot = super::GuestSampleSnapshot::completed(Err(GuestSampleFailure::ProbeOutput));
-    assert_eq!(
-        snapshot.status,
-        GuestSampleStatus::Unavailable(GuestSampleFailure::ProbeOutput)
-    );
-    assert_eq!(snapshot.sample, GuestResourceSample::default());
+    let snapshot = fast_sampler(Arc::clone(&client), &identity)
+        .sample_once()
+        .await;
+    let state = client.state.lock().await;
+
+    assert!(unavailable(snapshot, GuestSampleFailure::ProbeImage));
+    assert_eq!(state.create_count, 0);
+    assert_eq!(state.remove_count, 1);
+    assert!(state.container.is_none());
+    Ok(())
 }
