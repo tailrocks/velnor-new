@@ -221,7 +221,7 @@ fn after_rust_setup(steps: &[Step]) -> usize {
 }
 
 fn is_mbx_action(step: &Step) -> bool {
-    matches!(&step.kind, velnor_actions_contract::StepKind::Action { uses, .. } if uses.starts_with("jdx/mr-boxington-action@"))
+    step.role == Some(StepRole::MbxCache)
 }
 
 /// Insert index for the plan-job pre-seed build block.

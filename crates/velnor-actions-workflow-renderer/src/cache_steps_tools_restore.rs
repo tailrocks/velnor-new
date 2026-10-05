@@ -30,13 +30,37 @@ pub(crate) fn validate_call(step: &Step) -> Result<&str, RenderError> {
     Ok(key)
 }
 
-/// Build the pinned restore action with its renderer-owned archive paths.
-/// # Errors
-pub(crate) fn action_file(version: &str) -> Result<RenderedFile, RenderError> {
+/// Drop restored tools bytes unless the pinned action reports an exact key hit.
+const TOOLS_CACHE_ADMISSION_SCRIPT: &str = r#"set -eu
+[ -n "$HOME" ] && [ -n "$RUNNER_TEMP" ] || exit 1
+case "$HOME" in /*) ;; *) exit 1 ;; esac
+case "$RUNNER_TEMP" in /*) ;; *) exit 1 ;; esac
+[ "$HOME" != / ] && [ "$RUNNER_TEMP" != / ] || exit 1
+if [ "$TOOLS_CACHE_HIT" = true ] \
+    && [ -n "$TOOLS_EXPECTED_KEY" ] \
+    && [ "$TOOLS_MATCHED_KEY" = "$TOOLS_EXPECTED_KEY" ]; then
+    [ ! -L "$HOME/.local/share/mise" ] || exit 1
+    [ ! -L "$RUNNER_TEMP/velnor/rustup" ] || exit 1
+    [ ! -L "$RUNNER_TEMP/velnor/cargo/bin" ] || exit 1
+    [ ! -L "$RUNNER_TEMP/velnor/cargo/.crates.toml" ] || exit 1
+    [ ! -L "$RUNNER_TEMP/velnor/cargo/.crates2.json" ] || exit 1
+    exit 0
+fi
+for d in "$HOME/.local/share/mise" "$RUNNER_TEMP/velnor/rustup" "$RUNNER_TEMP/velnor/cargo/bin"; do
+    [ ! -L "$d" ] || exit 1
+    rm -rf "$d"
+done
+for f in "$RUNNER_TEMP/velnor/cargo/.crates.toml" "$RUNNER_TEMP/velnor/cargo/.crates2.json"; do
+    [ ! -L "$f" ] || exit 1
+    rm -f "$f"
+done"#;
+
+fn restore_step() -> Result<Yaml, RenderError> {
     steps::validate_uses(super::TOOLS_RESTORE_ACTION_USES)?;
     let path = super::TOOLS_CACHE_PATHS.join("\n");
-    let inner = Yaml::Map(vec![
+    Ok(Yaml::Map(vec![
         ("name".to_owned(), Yaml::str(super::TOOLS_RESTORE_NAME)),
+        ("id".to_owned(), Yaml::str("restore")),
         (
             "uses".to_owned(),
             Yaml::str(super::TOOLS_RESTORE_ACTION_USES),
@@ -49,7 +73,40 @@ pub(crate) fn action_file(version: &str) -> Result<RenderedFile, RenderError> {
                 ("restore-keys".to_owned(), Yaml::str(String::new())),
             ]),
         ),
-    ]);
+    ]))
+}
+
+fn admission_step() -> Yaml {
+    let env = [
+        ("TOOLS_CACHE_HIT", "steps.restore.outputs.cache-hit"),
+        ("TOOLS_EXPECTED_KEY", "inputs.key"),
+        (
+            "TOOLS_MATCHED_KEY",
+            "steps.restore.outputs.cache-matched-key",
+        ),
+    ]
+    .into_iter()
+    .map(|(key, value)| {
+        let mut expression = String::from("${{ ");
+        expression.push_str(value);
+        expression.push_str(" }}");
+        (key.to_owned(), Yaml::str(expression))
+    })
+    .collect();
+    Yaml::Map(vec![
+        (
+            "name".to_owned(),
+            Yaml::str("Discard tools bytes unless the exact restore key matched"),
+        ),
+        ("shell".to_owned(), Yaml::str("bash")),
+        ("env".to_owned(), Yaml::Map(env)),
+        ("run".to_owned(), Yaml::str(TOOLS_CACHE_ADMISSION_SCRIPT)),
+    ])
+}
+
+/// Build the pinned restore action with its renderer-owned archive paths.
+/// # Errors
+pub(crate) fn action_file(version: &str) -> Result<RenderedFile, RenderError> {
     let body = Yaml::Map(vec![
         (
             "name".to_owned(),
@@ -76,11 +133,15 @@ pub(crate) fn action_file(version: &str) -> Result<RenderedFile, RenderError> {
             "runs".to_owned(),
             Yaml::Map(vec![
                 ("using".to_owned(), Yaml::str("composite")),
-                ("steps".to_owned(), Yaml::Seq(vec![inner])),
+                (
+                    "steps".to_owned(),
+                    Yaml::Seq(vec![restore_step()?, admission_step()]),
+                ),
             ]),
         ),
     ]);
-    let bytes = marker::with_marker(version, &crate::yaml::render_yaml(&body))?;
+    let quoted = crate::yaml::quote_run_values_in_yaml(body);
+    let bytes = marker::with_marker(version, &crate::yaml::render_yaml(&quoted))?;
     steps::scan_for_private_subcommands(&bytes)?;
     let action_directory = super::TOOLS_RESTORE_USES
         .strip_prefix("./")
