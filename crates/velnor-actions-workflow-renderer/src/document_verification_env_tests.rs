@@ -1,12 +1,12 @@
 //! Verification-job environment keeps repo Mise config visible while scrubbing credentials.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use velnor_actions_contract::{VerificationRunner, VerificationTask, VerificationTaskKind};
 
 use crate::{MiseSetup, RenderContext, VerificationTaskPolicy, build_verification_task_job};
 
-use super::{WorkflowStepContext, job_to_yaml};
+use super::job_to_yaml;
 
 #[test]
 fn emitted_verification_job_scrubs_credentials_without_disabling_mise_config() {
@@ -44,14 +44,29 @@ fn emitted_verification_job_scrubs_credentials_without_disabling_mise_config() {
         verification_tasks: vec![policy],
         plan_consumer_env: BTreeMap::new(),
     };
-    let step_context = WorkflowStepContext {
-        shared: &BTreeMap::new(),
-        checkouts: &BTreeMap::new(),
-        preludes: &BTreeMap::new(),
-        mbx_gc_jobs: &BTreeSet::new(),
+    let checkouts = BTreeMap::new();
+    let steps = BTreeMap::new();
+    let lanes = crate::document_lanes::SharedLaneSteps {
+        checkouts: &checkouts,
+        env_steps: &steps,
+        runtime_preludes: &steps,
+        prefixes: &steps,
+        preludes: &steps,
+        postludes: &steps,
     };
-    let yaml =
-        job_to_yaml(&id, &job, &context, &[], &step_context).expect("render verification job");
+    let yaml = job_to_yaml(
+        &id,
+        &job,
+        &context,
+        &[],
+        None,
+        &lanes,
+        super::MbxJobPolicy {
+            gc_auto_disabled: false,
+            share_out_dir_disabled: false,
+        },
+    )
+    .expect("render verification job");
     let rendered = crate::yaml::render_yaml(&yaml);
 
     assert!(rendered.contains("GITHUB_TOKEN: \"\""));

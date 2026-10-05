@@ -13,7 +13,7 @@ pub(crate) fn push_step_id(entries: &mut Vec<(String, Yaml)>, name: &str) {
 fn step_id(name: &str) -> Option<&'static str> {
     match name {
         crate::cache_steps::MBX_RESTORE_NAME => Some("mbx"),
-        crate::mbx_bundle::MBX_BUNDLE_KEY_NAME => Some("mbx-bundle-key"),
+        crate::mbx_bundle::MBX_CACHE_KEY_NAME => Some("mbx-cache-key"),
         crate::mbx_bundle::MBX_BUNDLE_RESTORE_NAME => Some("mbx-bundle"),
         crate::mbx_bundle::MBX_BUNDLE_EXPORT_NAME => Some("mbx-export"),
         crate::cache_p08::TOOLS_CACHE_IDENTITY_NAME => {

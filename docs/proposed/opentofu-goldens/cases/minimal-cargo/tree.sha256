@@ -1,4 +1,4 @@
 a63e6a4550e75e14c2dd2ebe6efefe1360a847967c0ee2f28803eb43949dc6e4  ./.github/AGENTS.md
 b3f39f72416eee5077f2fd187f860e6d9a0a9ea4b33fdf3cfc671b1afbb34e0e  ./.github/actionlint.yaml
-fab25d231d27b3326662990aa2bc01c12d50e107d341ffab2ff8d22c6b30739e  ./.github/workflows/ci.yml
+44fa383cebb5b945ae7c8a9192d88d6c8d616c000a2e6222715d57c5bffe7280  ./.github/workflows/ci.yml
 link ./.github/CLAUDE.md -> AGENTS.md

@@ -64,6 +64,14 @@ pub const CACHE_ACTION_SHA: &str = "55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
 pub const MR_BOXINGTON_ACTION_VERSION: &str = "v1.6.0";
 /// Full commit SHA for [`MR_BOXINGTON_ACTION_VERSION`] (immutable release tag).
 pub const MR_BOXINGTON_ACTION_SHA: &str = "1687e54eb349cadf61fa38b5813a77875489e8e6";
+/// Latest immutable MBX action release used only by the qualification experiment.
+///
+/// This pair is not the production pin. The freshness inventory records the
+/// current release while `.velnor/version-policy.toml` retains the qualified
+/// `v1.6.0` pin until this exact source passes the required qualification.
+pub const MR_BOXINGTON_ACTION_CANDIDATE_VERSION: &str = "v1.7.1";
+/// Full commit SHA of [`MR_BOXINGTON_ACTION_CANDIDATE_VERSION`], kept as an unqualified experiment target.
+pub const MR_BOXINGTON_ACTION_CANDIDATE_SHA: &str = "d0825fbaf3cc36ca2609aa38e71046265a1f1e37";
 
 /// One pinned action reference: `repo[/path]@sha` plus version comment.
 #[derive(Debug, Clone, PartialEq, Eq)]
