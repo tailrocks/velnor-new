@@ -8,8 +8,8 @@ GitHub Scale Set qualification.
 The pinned [actions/runner v2.337.0 `HostContext`](https://github.com/actions/runner/blob/v2.337.0/src/Runner.Common/HostContext.cs#L427-L435)
 resolves Work by joining the runner root with `settings.WorkFolder`; the
 default is `_work` at [`Constants.cs` line 295](https://github.com/actions/runner/blob/v2.337.0/src/Runner.Common/Constants.cs#L295).
-The pinned [actions/scaleset JIT client](https://github.com/actions/scaleset/blob/e6daac702355cdb5b880b4fbdcf6d85dcd9e48e5/client.go#L3348-L3393)
-marshals the JIT settings into the request body, and [`types.go`](https://github.com/actions/scaleset/blob/e6daac702355cdb5b880b4fbdcf6d85dcd9e48e5/types.go#L656-L662)
+The pinned [actions/scaleset JIT client](https://github.com/actions/scaleset/blob/e6daac702355cdb5b880b4fbdcf6d85dcd9e48e5/client.go#L725-L747)
+marshals the JIT settings into the request body, and [`types.go`](https://github.com/actions/scaleset/blob/e6daac702355cdb5b880b4fbdcf6d85dcd9e48e5/types.go#L93-L96)
 defines `workFolder` as a string. With the runner root at `/home/runner`,
 this implementation's explicit `_work` resolves to `/home/runner/_work`.
 
