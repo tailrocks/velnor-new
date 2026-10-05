@@ -15,6 +15,7 @@ fn job_tools_inferred_from_install_and_exec() {
     let job = Job {
         display_name: "Demo".to_owned(),
         runs_on: LABEL.to_owned(),
+        check_runner: None,
         timeout_minutes: JobTimeout::CRATE,
         needs: Vec::new(),
         condition: None,
@@ -57,6 +58,7 @@ fn job_tools_inferred_from_inline_shell_script() {
     let job = Job {
         display_name: "Cargo Deny".to_owned(),
         runs_on: LABEL.to_owned(),
+        check_runner: None,
         timeout_minutes: JobTimeout::VALIDATOR,
         needs: Vec::new(),
         condition: None,
@@ -81,6 +83,7 @@ fn job_tools_inferred_from_quoted_spec() {
     let job = Job {
         display_name: "Demo".to_owned(),
         runs_on: LABEL.to_owned(),
+        check_runner: None,
         timeout_minutes: JobTimeout::CRATE,
         needs: Vec::new(),
         condition: None,
@@ -177,6 +180,7 @@ fn retired_rust_cache_is_rejected_for_every_lane() {
     let cargo_only = Job {
         display_name: "Both".to_owned(),
         runs_on: LABEL.to_owned(),
+        check_runner: None,
         timeout_minutes: JobTimeout::CRATE,
         needs: Vec::new(),
         condition: None,
@@ -218,6 +222,7 @@ fn mbx_restore_precedes_fetch() {
     let good = Job {
         display_name: "Good".to_owned(),
         runs_on: LABEL.to_owned(),
+        check_runner: None,
         timeout_minutes: JobTimeout::CRATE,
         needs: Vec::new(),
         condition: None,

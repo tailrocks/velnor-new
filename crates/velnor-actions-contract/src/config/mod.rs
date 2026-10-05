@@ -3,8 +3,12 @@
 //! Unknown fields are rejected; validation reports file, key path, problem.
 
 mod actions;
+mod check_receipt_budget;
 mod discovery;
 mod execution;
+mod host_container;
+mod mise;
+mod qualified_tools;
 mod release;
 mod resources;
 mod runs_on;
@@ -14,10 +18,32 @@ mod verification;
 mod workflow;
 
 pub use actions::{ActionPinOverride, ActionsConfig, OVERRIDABLE_ACTIONS};
+pub use check_receipt_budget::{
+    MAX_CHECK_CONTAINER_APP_INFO_CAPTURE_BYTES, MAX_CHECK_CONTAINER_APP_VERIFY_CAPTURE_BYTES,
+    MAX_CHECK_CONTAINER_DAEMON_CAPTURE_BYTES, MAX_CHECK_CONTAINER_IDENTITY_CAPTURE_BYTES,
+    MAX_CHECK_CONTAINER_PATH_BYTES, MAX_CHECK_CONTAINER_PROBE_CAPTURE_BYTES,
+    MAX_CHECK_CONTAINER_RUNTIME_ENTRIES, MAX_CHECK_CONTAINER_RUNTIME_ENTRY_PATH_BYTES,
+    MAX_CHECK_EXECUTION_RECEIPT_BYTES, MAX_CHECK_QUALIFIED_PROBE_CAPTURE_BYTES,
+    MAX_CHECK_QUALIFIED_PROBE_EXPECTED_BYTES, MAX_CHECK_SOURCE_BYTES,
+    MAX_CHECK_SYSTEM_VERSION_BYTES, check_execution_receipt_upper_bound,
+};
 pub use discovery::DiscoveryConfig;
 pub use execution::{
     ExecutionConfig, ExecutionMode, ExecutionOverride, ExecutionParity, ExecutionProfile,
     ExecutionRole, HOSTED_PROFILE_ID, ProfileKind, RoutingWorkflow, SCALE_SET_PROFILE_ID,
+};
+pub use host_container::{
+    ContainerPlatform, DaemonIdentityPolicy, HostContainerProfile, HostDockerCli, HostDockerDaemon,
+    HostOrbStackSdk,
+};
+pub use mise::{
+    CheckEvidence, CheckExecutor, CheckPlatform, CheckRunner, CheckSystemTool, CheckSystemToolKind,
+    MiseCheck, is_valid_mise_task_name,
+};
+pub use qualified_tools::{
+    QualifiedCargoInstallation, QualifiedTool, QualifiedToolArtifact, QualifiedToolBackend,
+    QualifiedToolExecutable, QualifiedToolOptions, QualifiedToolPlatform, QualifiedToolProbe,
+    validate_qualified_tools,
 };
 pub use release::{BootstrapRelease, ReleaseAuthentication, RustReleaseConfig};
 pub use resources::{
@@ -34,7 +60,7 @@ pub use stacks::{
 pub use tofu::{RootProblem, TofuStackConfig, Utf8RepoRelDir};
 pub use verification::{
     VERIFICATION_TASK_JOB_PREFIX, VerificationRunner, VerificationTask, VerificationTaskKind,
-    is_valid_mise_task_name, is_valid_verification_task_id,
+    is_valid_verification_task_id,
 };
 pub use workflow::{
     GeneratorValidation, LATEST_RUNNER_LABEL, RUNNER_LABEL_CATALOG, RunnerSelection,
@@ -43,6 +69,11 @@ pub use workflow::{
 
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
+
+/// Mandatory job admission for external ephemeral check runners.
+/// GitHub evaluates job conditions before allocating a runner. Unknown
+/// event classes and fork PRs cannot enter this execution environment.
+pub const EPHEMERAL_CHECK_ADMISSION_CONDITION: &str = "github.event_name == 'push' || github.event_name == 'merge_group' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)";
 
 /// Top-level `.velnor/config.toml` document.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -66,6 +97,12 @@ pub struct VelnorConfig {
     /// Schema 2 routing. Absent on schema 1.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub execution: Option<ExecutionConfig>,
+    /// Explicit repository-owned checks independent of language stacks.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub checks: Vec<MiseCheck>,
+    /// Explicit check-scoped tool qualification registry.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub qualified_tools: Vec<QualifiedTool>,
 }
 
 impl VelnorConfig {
@@ -74,7 +111,7 @@ impl VelnorConfig {
     /// Routing schema.
     pub const SCHEMA_V2: u32 = 2;
     /// Stack IDs registered in V1.
-    pub const REGISTERED_STACKS: &'static [&'static str] = &["rust", "tofu"];
+    pub const REGISTERED_STACKS: &'static [&'static str] = &["mise", "rust", "tofu"];
     /// Validate every field; failures name file, key path, and problem.
     /// # Errors
     pub fn validate(&self, file: &str) -> Result<(), ContractError> {
@@ -85,6 +122,29 @@ impl VelnorConfig {
         self.stacks.validate(file)?;
         self.discovery.validate(file)?;
         self.actions.validate(file)?;
+        validate_qualified_tools(&self.qualified_tools, file)?;
+        let mut check_ids = std::collections::BTreeSet::new();
+        for (index, check) in self.checks.iter().enumerate() {
+            check.validate(file, &format!("checks[{index}]"))?;
+            for tool_id in &check.tools {
+                if !self.qualified_tools.iter().any(|tool| &tool.id == tool_id) {
+                    return Err(ContractError::config(
+                        file,
+                        format!("checks[{index}].tools"),
+                        format!("unknown_qualified_tool:{tool_id}"),
+                    ));
+                }
+            }
+            check_receipt_budget::validate_check_budget(
+                check,
+                &self.qualified_tools,
+                file,
+                &format!("checks[{index}]"),
+            )?;
+            if !check_ids.insert(check.id.as_str()) {
+                return Err(ContractError::config(file, "checks", "duplicate_check_id"));
+            }
+        }
         self.check_shard_budgets(file)?;
         Ok(())
     }
@@ -140,3 +200,7 @@ impl VelnorConfig {
         Ok(())
     }
 }
+
+#[cfg(test)]
+#[path = "check_tool_reference_tests.rs"]
+mod check_tool_reference_tests;

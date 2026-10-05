@@ -58,6 +58,18 @@ pub(crate) fn stacks_section(out: &mut String, prep: &GenerationPreparation) {
             &format!("  Tofu: selected (roots: [{}])", roots.join(", ")),
         );
     }
+    for item in &prep.discovery.mise_checks {
+        push(
+            out,
+            &format!(
+                "  Mise check {}: {} (runner: {}, target: {})",
+                item.check.id,
+                item.check.task,
+                item.check.runner.label,
+                item.check.runner.platform.target()
+            ),
+        );
+    }
     let crates = sorted_crates(prep);
     push(out, &format!("  Workspace crates: {}", crates.len()));
     for (name, manifest, detail) in &crates {

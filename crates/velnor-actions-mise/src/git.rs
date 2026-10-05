@@ -7,7 +7,8 @@
 use std::ffi::OsString;
 use std::path::Path;
 
-use crate::command::{IsolatedCommand, ProcessOutput};
+use crate::CheckDeadline;
+use crate::command::{IsolatedCommand, OUTPUT_CAPTURE_LIMIT_BYTES, ProcessOutput};
 use crate::error::MiseError;
 
 /// Program name for direct Git invocations.
@@ -138,6 +139,20 @@ impl GitRequest {
         self.command_in(cwd).run()
     }
 
+    /// Run the request in `cwd` under a caller-owned absolute deadline.
+    ///
+    /// # Errors
+    /// Returns [`MiseError::SpawnFailed`] when Git cannot be spawned,
+    /// reaped, or finish before the shared deadline.
+    pub fn run_in_until(
+        &self,
+        cwd: &Path,
+        deadline: CheckDeadline,
+    ) -> Result<ProcessOutput, MiseError> {
+        self.command_in(cwd)
+            .run_until(OUTPUT_CAPTURE_LIMIT_BYTES, deadline)
+    }
+
     /// Run the request and return standard output as text on success.
     ///
     /// # Errors
@@ -166,5 +181,26 @@ impl GitRequest {
             verb: verb.to_owned(),
             args,
         }
+    }
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::GitRequest;
+    use crate::CheckDeadline;
+    use std::time::Duration;
+
+    #[test]
+    fn expired_shared_deadline_rejects_git_before_spawn() {
+        let deadline = CheckDeadline::after(Duration::ZERO).expect("deadline");
+        let request = GitRequest::rev_parse(vec!["HEAD".into()]);
+        let error = request
+            .run_in_until(std::path::Path::new("."), deadline)
+            .expect_err("expired git request");
+        assert!(
+            error
+                .to_string()
+                .contains("timeout_after_absolute_deadline")
+        );
     }
 }

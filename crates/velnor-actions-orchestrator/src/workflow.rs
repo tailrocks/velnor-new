@@ -1,10 +1,11 @@
 //! Workflow-IR, render-context, and actionlint-input construction.
 
-//! W1 emission wiring lives in the child module below (self-declared via
-//! `#[path]` so `lib.rs` stays untouched); the integrator only registers
-//! the companion test file.
+//! W1 emission wiring lives in the child module below.
 #[path = "wire_w1.rs"]
 pub(crate) mod wire_w1;
+
+#[path = "check_jobs.rs"]
+pub(crate) mod check_jobs;
 
 use std::collections::BTreeMap;
 
@@ -145,29 +146,18 @@ pub(crate) fn build_workflow(
         fetch_roots,
         acquire.as_ref(),
     )?;
-    let crate_ids: Vec<String> = built.jobs.iter().map(|(id, _)| id.clone()).collect();
+    let mut required_ids: Vec<String> = built.jobs.iter().map(|(id, _)| id.clone()).collect();
     for (id, job) in built.jobs {
         jobs.insert(id, job);
     }
+    for (id, job) in check_jobs::build_check_jobs(policy, discovery, &catalog)? {
+        required_ids.push(id.clone());
+        jobs.insert(id, job);
+    }
     crate::verification_tasks::insert_jobs(&mut jobs, &verification_tasks)?;
-    insert_gate_jobs(&mut jobs, label, branch, &crate_ids, acquire, &catalog)?;
+    insert_gate_jobs(&mut jobs, label, branch, &required_ids, acquire, &catalog)?;
     wire_w1::check_crate_mbx_gating(&jobs, &built.drivers)?;
-    let ir = WorkflowIr {
-        name: config.workflow.name.clone(),
-        triggers: Trigger {
-            pull_request_types: EXPECTED_PR_TYPES.iter().map(ToString::to_string).collect(),
-            push_branches: vec![branch.to_owned()],
-            merge_group: true,
-            workflow_dispatch: None,
-            schedule: None,
-        },
-        permissions: Permissions::default(),
-        concurrency: Concurrency {
-            group: CONCURRENCY_GROUP.to_owned(),
-            cancel_in_progress: CONCURRENCY_CANCEL.to_owned(),
-        },
-        jobs,
-    };
+    let ir = workflow_ir(config, branch, jobs);
     let context = workflow_context::render_context(
         config,
         label,
@@ -184,6 +174,25 @@ pub(crate) fn build_workflow(
         context,
         actionlint,
     })
+}
+
+fn workflow_ir(config: &VelnorConfig, branch: &str, jobs: BTreeMap<String, Job>) -> WorkflowIr {
+    WorkflowIr {
+        name: config.workflow.name.clone(),
+        triggers: Trigger {
+            pull_request_types: EXPECTED_PR_TYPES.iter().map(ToString::to_string).collect(),
+            push_branches: vec![branch.to_owned()],
+            merge_group: true,
+            workflow_dispatch: None,
+            schedule: None,
+        },
+        permissions: Permissions::default(),
+        concurrency: Concurrency {
+            group: CONCURRENCY_GROUP.to_owned(),
+            cancel_in_progress: CONCURRENCY_CANCEL.to_owned(),
+        },
+        jobs,
+    }
 }
 
 fn support_workflow(
@@ -245,7 +254,7 @@ fn insert_format_report_steps(plan: &mut Job, reports: Vec<Step>) {
         .steps
         .iter()
         .position(|step| {
-            matches!(&step.kind, StepKind::Internal { operation } if operation == PLAN_OPERATION)
+            matches!(&step.kind, StepKind::Internal { operation, .. } if operation == PLAN_OPERATION)
         })
         .map_or(plan.steps.len(), |plan_at| plan_at + 1);
     plan.steps.splice(at..at, reports);
@@ -261,7 +270,7 @@ fn insert_format_step(plan: &mut Job, format: Step) {
         .steps
         .iter()
         .position(|step| {
-            matches!(&step.kind, StepKind::Internal { operation } if operation == PLAN_OPERATION)
+            matches!(&step.kind, StepKind::Internal { operation, .. } if operation == PLAN_OPERATION)
         })
         .unwrap_or(plan.steps.len());
     plan.steps.insert(at, format);
@@ -288,12 +297,18 @@ pub(crate) fn plan_uses_opentofu(discovery: &Discovery) -> bool {
         .any(|task| Stack::from_id(&task.stack_id) == Some(Stack::Tofu))
 }
 
-/// True when the plan job needs the Rust toolchain.
-///
-/// Keep Rust unless this is a pure-tofu repo with no Rust workspaces.
-/// Other repos retain it for their format/build steps.
+/// Rust inventory runs Cargo metadata for every detected Rust candidate,
+/// including ignored projects. Named checks with no Cargo candidates
+/// require only their declared tools.
 fn plan_uses_rust(discovery: &Discovery) -> bool {
-    !(plan_uses_opentofu(discovery) && discovery.workspaces.is_empty())
+    !discovery.workspaces.is_empty()
+        || discovery.statuses.iter().any(|status| {
+            let project = match status {
+                velnor_actions_contract::DetectionStatus::Selected(project)
+                | velnor_actions_contract::DetectionStatus::Ignored { project, .. } => project,
+            };
+            Stack::from_id(&project.stack_id) == Some(Stack::Rust)
+        })
 }
 
 /// Typed `Prepare Rust components` step, shared by plan and task jobs.

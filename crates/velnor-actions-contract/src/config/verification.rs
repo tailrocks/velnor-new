@@ -1,5 +1,6 @@
 //! Closed declarations for isolated, credential-free verification jobs.
 
+use super::mise::is_valid_mise_task_name;
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
 
@@ -115,17 +116,6 @@ pub fn is_valid_verification_task_id(id: &str) -> bool {
             .bytes()
             .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
         && !id.contains("--")
-}
-
-/// True for a Mise task name safe as one literal argv element.
-#[must_use]
-pub fn is_valid_mise_task_name(task: &str) -> bool {
-    let mut bytes = task.bytes();
-    match bytes.next() {
-        Some(first) if first.is_ascii_alphanumeric() || first == b'_' => {}
-        _ => return false,
-    }
-    bytes.all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b':'))
 }
 
 #[cfg(test)]

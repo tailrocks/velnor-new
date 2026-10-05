@@ -8,7 +8,7 @@ use velnor_actions_contract::StepKind;
 /// Internal operation of one step, if any.
 fn operation_of(step: &Step) -> Option<&str> {
     match &step.kind {
-        StepKind::Internal { operation } => Some(operation),
+        StepKind::Internal { operation, .. } => Some(operation),
         StepKind::Action { .. } | StepKind::Shell { .. } => None,
     }
 }
