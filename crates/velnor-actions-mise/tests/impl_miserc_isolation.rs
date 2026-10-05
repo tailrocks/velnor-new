@@ -1,4 +1,7 @@
-#![cfg(all(target_os = "linux", target_arch = "x86_64"))]
+#![cfg(any(
+    all(target_os = "linux", target_arch = "x86_64"),
+    all(target_os = "macos", target_arch = "aarch64")
+))]
 
 use std::ffi::OsString;
 use std::os::unix::fs::symlink;
@@ -15,11 +18,15 @@ const FIXED_RELEASE: &str = "2026.10.2";
 const FIXED_SOURCE: &str = "44ea2537166efbe21b19d808355d9914e830941a";
 const FIXED_LINUX_X64_DIGEST: &str =
     "8f5f6660336f572830e33cd9b378d3131e529a0d4c4f0c553776be90a1ba302a";
+const FIXED_MACOS_ARM64_DIGEST: &str =
+    "66d49acecca413c8b334922584982a4907a10588912829873d6c55d0c6d42612";
 const FIXED_BINARY_ENV: &str = "VELNOR_MISE_FIXED_BINARY";
 const AFFECTED_RELEASE: &str = "2026.10.1";
 const AFFECTED_SOURCE: &str = "050ce5a20287a0aafd872b1191699a5fdafff5ac";
 const AFFECTED_LINUX_X64_DIGEST: &str =
     "31e6859cf639ed4594906da3fcd0fe2055e9daddae75e9786dbe50b3fb3c0f4a";
+const AFFECTED_MACOS_ARM64_DIGEST: &str =
+    "d225d1c8ef2934a86be93692a19365fb1df1cd6958a0af7b85909514e0c608a7";
 const AFFECTED_BINARY_ENV: &str = "VELNOR_MISE_AFFECTED_BINARY";
 const PRODUCT_STAGE_ENV: &str = "VELNOR_MISERC_PRODUCT_STAGE";
 const PRODUCT_STAGE_TOKEN_ENV: &str = "VELNOR_MISERC_PRODUCT_STAGE_TOKEN";
@@ -41,6 +48,8 @@ fn expected_digest(release: &str) -> Result<&'static str, String> {
     match (std::env::consts::OS, std::env::consts::ARCH, release) {
         ("linux", "x86_64", FIXED_RELEASE) => Ok(FIXED_LINUX_X64_DIGEST),
         ("linux", "x86_64", AFFECTED_RELEASE) => Ok(AFFECTED_LINUX_X64_DIGEST),
+        ("macos", "aarch64", FIXED_RELEASE) => Ok(FIXED_MACOS_ARM64_DIGEST),
+        ("macos", "aarch64", AFFECTED_RELEASE) => Ok(AFFECTED_MACOS_ARM64_DIGEST),
         (os, arch, _) => Err(format!("official digest unavailable for {os}/{arch}")),
     }
 }

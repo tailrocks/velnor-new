@@ -282,6 +282,7 @@ mod unix_tests {
         let mut child_path = vec![stage.bin.clone()];
         child_path.extend(std::env::split_paths(&inherited_path));
         let child_path = std::env::join_paths(child_path).map_err(|error| error.to_string())?;
+        let temp_root = stage.base.parent().ok_or("stage has no temp root")?;
         let output = Command::new(current)
             .args([
                 "--exact",
@@ -299,6 +300,7 @@ mod unix_tests {
             .env("GIT_CONFIG_SYSTEM", "/dev/null")
             .env("GIT_CONFIG_GLOBAL", "/dev/null")
             .env("HOME", &stage.home)
+            .env("TMPDIR", temp_root)
             .env("PATH", child_path)
             .stdin(std::process::Stdio::null())
             .output()

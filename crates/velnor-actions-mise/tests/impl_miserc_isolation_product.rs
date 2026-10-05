@@ -40,6 +40,11 @@ fn run_product_command(stage: &Stage) -> Result<(), String> {
 
 fn launch_product_test(stage: &Stage, binary: &Path) -> Result<Output, String> {
     let current = std::env::current_exe().map_err(|err| err.to_string())?;
+    let temp_root = stage
+        .root
+        .parent()
+        .and_then(Path::parent)
+        .ok_or("stage root has no temp parent")?;
     Command::new(current)
         .args([
             "--exact",
@@ -58,9 +63,64 @@ fn launch_product_test(stage: &Stage, binary: &Path) -> Result<Output, String> {
         .env("XDG_CONFIG_HOME", &stage.xdg)
         .env("MISE_SYSTEM_CONFIG_DIR", &stage.system)
         .env("PATH", &stage.bin)
+        .env("TMPDIR", temp_root)
         .stdin(Stdio::null())
         .output()
         .map_err(|err| format!("cannot run nested test harness: {err}"))
+}
+
+fn launch_borrowed_stage_test(stage: &Stage) -> Result<Output, String> {
+    let current = std::env::current_exe().map_err(|err| err.to_string())?;
+    let base = stage.root.parent().ok_or("stage root has no base")?;
+    let temp_root = base.parent().ok_or("stage base has no temp root")?;
+    Command::new(current)
+        .args([
+            "--exact",
+            "impl_miserc_isolation::product::env_cleared_child_keeps_the_validated_temp_root",
+            "--nocapture",
+        ])
+        .env_clear()
+        .env(PRODUCT_STAGE_ENV, base)
+        .env(PRODUCT_STAGE_TOKEN_ENV, &stage.marker)
+        .env("TMPDIR", temp_root)
+        .stdin(Stdio::null())
+        .output()
+        .map_err(|err| format!("cannot run borrowed-stage test child: {err}"))
+}
+
+#[test]
+fn env_cleared_child_keeps_the_validated_temp_root() -> Result<(), String> {
+    if let Some(base) = std::env::var_os(PRODUCT_STAGE_ENV) {
+        let expected_root =
+            PathBuf::from(std::env::var_os("TMPDIR").ok_or("missing explicit child TMPDIR")?)
+                .canonicalize()
+                .map_err(|err| err.to_string())?;
+        assert_eq!(
+            std::env::temp_dir()
+                .canonicalize()
+                .map_err(|err| err.to_string())?,
+            expected_root
+        );
+        let marker = std::env::var(PRODUCT_STAGE_TOKEN_ENV).map_err(|err| err.to_string())?;
+        let stage = Stage::from_child_base(&PathBuf::from(base), marker)?;
+        assert!(stage.root.is_dir());
+        return Ok(());
+    }
+    let stage = Stage::new()?;
+    let output = launch_borrowed_stage_test(&stage)?;
+    assert!(
+        output.status.success(),
+        "env-cleared borrowed-stage test failed: {}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        output_text(&output).contains("env_cleared_child_keeps_the_validated_temp_root ... ok"),
+        "nested harness did not report borrowed-stage test: {}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    Ok(())
 }
 
 #[test]
