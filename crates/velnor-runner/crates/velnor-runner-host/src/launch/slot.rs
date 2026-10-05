@@ -67,6 +67,12 @@ async fn release_row<E: PairEngine + ?Sized>(
     if !holds(row) {
         return Ok(());
     }
+    // Create journals the worker volume before any container exists.
+    // A row with no ids and no volume cannot own a container.
+    if blank_identity(row) {
+        journal.record_cleanup(row.id).await.map_err(map_journal)?;
+        return Ok(());
+    }
     let Some(volume) = row.worker_volume.as_deref() else {
         return Ok(());
     };
@@ -189,6 +195,16 @@ async fn delete_owned<E: PairEngine + ?Sized>(
 
 pub(super) fn holds(row: &IntentRow) -> bool {
     row.kind == "launch" && !row.cleanup_proven && row.state != IntentState::Failed
+}
+
+fn blank_identity(row: &IntentRow) -> bool {
+    blank(row.docker_id.as_deref())
+        && blank(row.dind_id.as_deref())
+        && blank(row.worker_volume.as_deref())
+}
+
+fn blank(value: Option<&str>) -> bool {
+    value.is_none_or(str::is_empty)
 }
 
 fn map_journal(error: crate::error::HostError) -> EnsureError {

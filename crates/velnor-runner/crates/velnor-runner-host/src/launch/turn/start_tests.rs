@@ -84,7 +84,7 @@ async fn zero_initial_census_and_positive_poll_keep_jit_conflict_unacked() -> Re
 }
 
 #[tokio::test]
-async fn idless_uncertain_reservation_blocks_turn_without_jit_or_ack() -> Result<(), String> {
+async fn idless_uncertain_row_releases_then_jit_conflict_stays_unacked() -> Result<(), String> {
     let (scratch, journal) = open("turn-idless-uncertain").await?;
     let (row, _) = journal
         .begin_launch("m95")
@@ -117,19 +117,27 @@ async fn idless_uncertain_reservation_blocks_turn_without_jit_or_ack() -> Result
     .await;
     docker.finish().await?;
 
-    assert_eq!(decision, crate::launch::Admit::Hold);
-    assert_eq!(result, Ok(false));
-    assert!(script.calls.is_empty());
+    assert_eq!(decision, crate::launch::Admit::Start { stop: true });
+    assert_eq!(result, Err(EnsureError::Conflict));
+    assert_eq!(script.calls, ["jit"]);
     assert!(workers.is_empty());
-    assert_eq!(crate::launch::slot::occupied(&journal).await, Ok(1));
+    assert_eq!(crate::launch::slot::occupied(&journal).await, Ok(0));
     let rows = journal.rows().await.map_err(|error| error.to_string())?;
-    assert_eq!(rows.len(), 1);
-    assert_eq!(rows[0].id, row);
-    assert_eq!(rows[0].subject, "m95");
-    assert_eq!(rows[0].state, IntentState::Uncertain);
-    assert!(rows[0].docker_id.is_none());
-    assert!(rows[0].dind_id.is_none());
-    assert!(rows[0].worker_volume.is_none());
+    assert_eq!(rows.len(), 2);
+    let original = rows.iter().find(|item| item.id == row).ok_or("original")?;
+    assert_eq!(original.subject, "m95");
+    assert_eq!(original.state, IntentState::Uncertain);
+    assert!(original.cleanup_proven);
+    assert!(original.docker_id.is_none());
+    assert!(original.dind_id.is_none());
+    assert!(original.worker_volume.is_none());
+    let minted = rows.iter().find(|item| item.id != row).ok_or("minted")?;
+    assert_eq!(minted.subject, "m95");
+    assert_eq!(minted.state, IntentState::Failed);
+    assert!(!minted.cleanup_proven);
+    assert!(minted.docker_id.is_none());
+    assert!(minted.dind_id.is_none());
+    assert!(minted.worker_volume.is_none());
     absent(&scratch.file())
 }
 
@@ -138,6 +146,10 @@ async fn full_uncertain_slot_still_acks_progress_notice() -> Result<(), String> 
     let (scratch, journal) = open("turn-progress-uncertain").await?;
     let (row, _) = journal
         .begin_launch("m95")
+        .await
+        .map_err(|error| error.to_string())?;
+    journal
+        .bind_worker(row, None, Some("dind-kept"))
         .await
         .map_err(|error| error.to_string())?;
     journal
@@ -173,6 +185,9 @@ async fn full_uncertain_slot_still_acks_progress_notice() -> Result<(), String> 
     assert_eq!(rows[0].id, row);
     assert_eq!(rows[0].subject, "m95");
     assert_eq!(rows[0].state, IntentState::Uncertain);
+    assert!(!rows[0].cleanup_proven);
+    assert_eq!(rows[0].dind_id.as_deref(), Some("dind-kept"));
+    assert!(rows[0].worker_volume.is_none());
     absent(&scratch.file())
 }
 
