@@ -108,12 +108,12 @@ async fn restart_retires_archive_lease_after_durable_worker_cleanup_proof() -> R
         .await
         .map_err(|error| error.to_string())?;
     let claim = journal
-        .claim_completion_cleanup(id, 100, 110)
+        .claim_completion_cleanup_at(id, 100, 110)
         .await
         .map_err(|error| error.to_string())?
         .ok_or_else(|| "expected cleanup claim".to_owned())?;
     journal
-        .mark_completion_worker_cleanup_proven(id, claim.generation, 101)
+        .mark_completion_worker_cleanup_proven_at(id, claim.generation, 101)
         .await
         .map_err(|error| error.to_string())?;
     assert!(
@@ -190,13 +190,13 @@ async fn restart_finishes_after_archive_retirement_before_journal_commit() -> Re
         .await
         .map_err(|error| error.to_string())?;
     let claim = journal
-        .claim_completion_cleanup(id, 100, 110)
+        .claim_completion_cleanup_at(id, 100, 110)
         .await
         .map_err(|error| error.to_string())?
         .ok_or_else(|| "expected cleanup claim".to_owned())?;
     assert!(
         journal
-            .mark_completion_worker_cleanup_proven(id, claim.generation, 101)
+            .mark_completion_worker_cleanup_proven_at(id, claim.generation, 101)
             .await
             .map_err(|error| error.to_string())?
     );

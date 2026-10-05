@@ -7,7 +7,7 @@ use crate::scale_set::EnsureError;
 use crate::stage::{ObservedWorker, PairEngine, cleanup_worker, reconcile_worker};
 use velnor_runner_github::{Transport, get_runner_by_name, remove_runner};
 
-use super::support::{held, map_journal, open_archive_store, runner_matches, unix_seconds};
+use super::support::{held, map_journal, open_archive_store, runner_matches};
 
 pub(super) fn archive_store_for(
     journal: &Journal,
@@ -86,20 +86,40 @@ async fn bind_observed_ids(
     Ok(())
 }
 
-pub(super) fn remove_registered_runner<T: Transport + ?Sized>(
+pub(super) async fn remove_registered_runner<T: Transport + ?Sized>(
     transport: &mut T,
     admin_token: &str,
     set_id: i64,
     runner_name: &str,
     runner_id: Option<&str>,
+    journal: &Journal,
+    row_id: i64,
+    claim_generation: i64,
 ) -> Result<(), &'static str> {
     let Some(runner_id) = runner_id.and_then(|id| id.parse::<i64>().ok()) else {
         return Err("github-id-missing");
     };
-    match get_runner_by_name(transport, runner_name, admin_token) {
+    if !current_claim(journal, row_id, claim_generation).await? {
+        return Err("cleanup-claim-expired");
+    }
+    let found = get_runner_by_name(transport, runner_name, admin_token);
+    if !current_claim(journal, row_id, claim_generation).await? {
+        return Err("cleanup-claim-expired");
+    }
+    match found {
         Ok(Some(runner)) if runner_matches(&runner, runner_id, set_id, runner_name) => {
+            if !current_claim(journal, row_id, claim_generation).await? {
+                return Err("cleanup-claim-expired");
+            }
             remove_runner(transport, runner.id, admin_token).map_err(|_| "github-delete")?;
-            match get_runner_by_name(transport, runner_name, admin_token) {
+            if !current_claim(journal, row_id, claim_generation).await? {
+                return Err("cleanup-claim-expired");
+            }
+            let absent = get_runner_by_name(transport, runner_name, admin_token);
+            if !current_claim(journal, row_id, claim_generation).await? {
+                return Err("cleanup-claim-expired");
+            }
+            match absent {
                 Ok(None) => Ok(()),
                 Ok(Some(_)) => Err("github-still-present"),
                 Err(_) => Err("github-confirm-absence"),
@@ -111,6 +131,17 @@ pub(super) fn remove_registered_runner<T: Transport + ?Sized>(
     }
 }
 
+async fn current_claim(
+    journal: &Journal,
+    row_id: i64,
+    claim_generation: i64,
+) -> Result<bool, &'static str> {
+    journal
+        .completion_cleanup_claim_current(row_id, claim_generation)
+        .await
+        .map_err(|_| "cleanup-claim-check")
+}
+
 pub(super) async fn finish_proven_completion(
     journal: &Journal,
     row: &IntentRow,
@@ -118,8 +149,14 @@ pub(super) async fn finish_proven_completion(
     archive_store: Option<&ActionArchiveStore>,
     claim_generation: i64,
 ) -> Result<bool, EnsureError> {
+    if !claim_is_current(journal, row.id, claim_generation).await? {
+        return held(row, "cleanup-claim-expired");
+    }
     if let Err(stage) = retire_archive_lease(archive_store, row, identity) {
         return held(row, stage);
+    }
+    if !claim_is_current(journal, row.id, claim_generation).await? {
+        return held(row, "cleanup-claim-expired");
     }
     finish_completion_cleanup(journal, row, claim_generation).await
 }
@@ -144,7 +181,7 @@ async fn finish_completion_cleanup(
     claim_generation: i64,
 ) -> Result<bool, EnsureError> {
     let completed = journal
-        .record_completion_cleanup(row.id, claim_generation, unix_seconds()?)
+        .record_completion_cleanup(row.id, claim_generation)
         .await
         .map_err(map_journal)?;
     if completed {
@@ -170,4 +207,142 @@ pub(super) async fn cleanup_owned_pair<E: PairEngine>(
     )
     .await
     .map_err(|_| "docker-cleanup")
+}
+
+pub(super) async fn reconcile_one<T: Transport + ?Sized, E: PairEngine>(
+    transport: &mut T,
+    set_id: i64,
+    admin_token: &str,
+    journal: &Journal,
+    docker: &E,
+    claim_generation: i64,
+    row: IntentRow,
+) -> Result<bool, EnsureError> {
+    if !claim_is_current(journal, row.id, claim_generation).await? {
+        return held(&row, "cleanup-claim-expired");
+    }
+    let identity = journal.launch_identity(row.id).await.map_err(map_journal)?;
+    let archive_store = match archive_store_for(journal, &row) {
+        Ok(store) => store,
+        Err(stage) => return held(&row, stage),
+    };
+    if journal
+        .completion_worker_cleanup_proven(row.id)
+        .await
+        .map_err(map_journal)?
+    {
+        return finish_proven_completion(
+            journal,
+            &row,
+            &identity,
+            archive_store.as_ref(),
+            claim_generation,
+        )
+        .await;
+    }
+    let archive_lease = match open_archive_lease(archive_store.as_ref(), &row, &identity) {
+        Ok(lease) => lease,
+        Err(stage) => return held(&row, stage),
+    };
+    reconcile_unproven_completion(
+        transport,
+        set_id,
+        admin_token,
+        journal,
+        docker,
+        claim_generation,
+        &row,
+        &identity,
+        archive_store.as_ref(),
+        archive_lease.as_ref(),
+    )
+    .await
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn reconcile_unproven_completion<T: Transport + ?Sized, E: PairEngine>(
+    transport: &mut T,
+    set_id: i64,
+    admin_token: &str,
+    journal: &Journal,
+    docker: &E,
+    claim_generation: i64,
+    row: &IntentRow,
+    identity: &crate::journal::LaunchIdentity,
+    archive_store: Option<&ActionArchiveStore>,
+    archive_lease: Option<&ActionArchiveLease>,
+) -> Result<bool, EnsureError> {
+    let Some(observed) = observe_current_worker(
+        docker,
+        journal,
+        row,
+        identity,
+        archive_lease,
+        claim_generation,
+    )
+    .await?
+    else {
+        return Ok(false);
+    };
+    let runner_name = format!("v{}", identity.launch_id());
+    if let Err(stage) = remove_registered_runner(
+        transport,
+        admin_token,
+        set_id,
+        &runner_name,
+        row.github_runner_id.as_deref(),
+        journal,
+        row.id,
+        claim_generation,
+    )
+    .await
+    {
+        return held(&row, stage);
+    }
+    if !claim_is_current(journal, row.id, claim_generation).await? {
+        return held(&row, "cleanup-claim-expired");
+    }
+    if let Err(stage) = cleanup_owned_pair(docker, identity, &observed, row, archive_lease).await {
+        return held(&row, stage);
+    }
+    if !claim_is_current(journal, row.id, claim_generation).await? {
+        return held(&row, "cleanup-claim-expired");
+    }
+    let marked = journal
+        .mark_completion_worker_cleanup_proven(row.id, claim_generation)
+        .await
+        .map_err(map_journal)?;
+    if !marked {
+        return held(&row, "cleanup-claim-expired");
+    }
+    finish_proven_completion(journal, row, identity, archive_store, claim_generation).await
+}
+
+async fn claim_is_current(
+    journal: &Journal,
+    row_id: i64,
+    generation: i64,
+) -> Result<bool, EnsureError> {
+    journal
+        .completion_cleanup_claim_current(row_id, generation)
+        .await
+        .map_err(map_journal)
+}
+
+async fn observe_current_worker<E: PairEngine>(
+    docker: &E,
+    journal: &Journal,
+    row: &IntentRow,
+    identity: &crate::journal::LaunchIdentity,
+    archive_lease: Option<&crate::action_archive_seed::ActionArchiveLease>,
+    generation: i64,
+) -> Result<Option<crate::stage::ObservedWorker>, EnsureError> {
+    if !claim_is_current(journal, row.id, generation).await? {
+        return Ok(None);
+    }
+    let observed = observe_and_bind(docker, journal, row, identity, archive_lease).await?;
+    if !claim_is_current(journal, row.id, generation).await? {
+        return Ok(None);
+    }
+    Ok(observed)
 }

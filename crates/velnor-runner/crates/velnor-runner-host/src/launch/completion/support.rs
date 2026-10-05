@@ -50,11 +50,9 @@ pub(super) fn unix_seconds() -> Result<i64, EnsureError> {
     i64::try_from(seconds).map_err(|_| completion_error())
 }
 
-pub(super) fn retry_at(attempt: u32) -> Result<i64, EnsureError> {
+pub(super) fn retry_delay(attempt: u32) -> Result<i64, EnsureError> {
     let delay = 2_u64.saturating_pow(attempt).min(30);
-    unix_seconds()?
-        .checked_add(i64::try_from(delay).map_err(|_| completion_error())?)
-        .ok_or_else(completion_error)
+    i64::try_from(delay).map_err(|_| completion_error())
 }
 
 pub(super) fn open_archive_store(journal: &Journal) -> Result<ActionArchiveStore, EnsureError> {

@@ -8,7 +8,7 @@ async fn cleanup_claim_generation_fences_a_stale_worker_after_restart() -> Resul
     let mut claim = None;
     for expected in 1_i64..=5 {
         let next = journal
-            .claim_completion_cleanup(id, now, now + 10)
+            .claim_completion_cleanup_at(id, now, now + 10)
             .await
             .map_err(|error| error.to_string())?
             .ok_or_else(|| "expected a cleanup claim".to_owned())?;
@@ -23,7 +23,7 @@ async fn cleanup_claim_generation_fences_a_stale_worker_after_restart() -> Resul
         .await
         .map_err(|error| error.to_string())?;
     let current = journal
-        .claim_completion_cleanup(id, now, now + 10)
+        .claim_completion_cleanup_at(id, now, now + 10)
         .await
         .map_err(|error| error.to_string())?
         .ok_or_else(|| "expected the sixth cleanup claim".to_owned())?;
@@ -31,21 +31,21 @@ async fn cleanup_claim_generation_fences_a_stale_worker_after_restart() -> Resul
     assert_eq!(current.attempt, 5);
     assert_eq!(
         journal
-            .retry_completion_cleanup(id, stale.generation, 10_000)
+            .retry_completion_cleanup_at(id, stale.generation, now, 10_000)
             .await,
         Ok(false),
         "the stale fifth claimant must not change the sixth lease or retry deadline"
     );
     assert_eq!(
         journal
-            .claim_completion_cleanup(id, now, now + 10)
+            .claim_completion_cleanup_at(id, now, now + 10)
             .await
             .map_err(|error| error.to_string())?,
         None,
         "the current cleanup lease must remain active"
     );
     let next = journal
-        .claim_completion_cleanup(id, now + 10, now + 20)
+        .claim_completion_cleanup_at(id, now + 10, now + 20)
         .await
         .map_err(|error| error.to_string())?
         .ok_or_else(|| "stale retry changed the current retry deadline".to_owned())?;
@@ -61,7 +61,7 @@ async fn stale_claim_cannot_prove_or_commit_cleanup_after_reopen() -> Result<(),
     let mut stale = None;
     for expected in 1_i64..=5 {
         let claim = journal
-            .claim_completion_cleanup(id, now, now + 10)
+            .claim_completion_cleanup_at(id, now, now + 10)
             .await
             .map_err(|error| error.to_string())?
             .ok_or_else(|| "expected a cleanup claim".to_owned())?;
@@ -76,20 +76,20 @@ async fn stale_claim_cannot_prove_or_commit_cleanup_after_reopen() -> Result<(),
         .await
         .map_err(|error| error.to_string())?;
     let current = journal
-        .claim_completion_cleanup(id, now, now + 10)
+        .claim_completion_cleanup_at(id, now, now + 10)
         .await
         .map_err(|error| error.to_string())?
         .ok_or_else(|| "expected claim after restart".to_owned())?;
     assert_eq!(current.generation, 6);
     assert_eq!(
         journal
-            .mark_completion_worker_cleanup_proven(id, stale.generation, now + 1)
+            .mark_completion_worker_cleanup_proven_at(id, stale.generation, now + 1)
             .await,
         Ok(false)
     );
     assert_eq!(
         journal
-            .record_completion_cleanup(id, stale.generation, now + 1)
+            .record_completion_cleanup_at(id, stale.generation, now + 1)
             .await,
         Ok(false)
     );
@@ -102,7 +102,7 @@ async fn stale_claim_cannot_prove_or_commit_cleanup_after_reopen() -> Result<(),
     assert_eq!(journal.occupied_launches().await, Ok(1));
     assert_eq!(
         journal
-            .claim_completion_cleanup(id, now + 1, now + 11)
+            .claim_completion_cleanup_at(id, now + 1, now + 11)
             .await
             .map_err(|error| error.to_string())?,
         None,
@@ -110,13 +110,13 @@ async fn stale_claim_cannot_prove_or_commit_cleanup_after_reopen() -> Result<(),
     );
     assert!(
         journal
-            .mark_completion_worker_cleanup_proven(id, current.generation, now + 2)
+            .mark_completion_worker_cleanup_proven_at(id, current.generation, now + 2)
             .await
             .map_err(|error| error.to_string())?
     );
     assert!(
         journal
-            .record_completion_cleanup(id, current.generation, now + 3)
+            .record_completion_cleanup_at(id, current.generation, now + 3)
             .await
             .map_err(|error| error.to_string())?
     );
@@ -140,7 +140,7 @@ async fn cleanup_claim_generation_overflow_fails_closed() -> Result<(), String> 
         .await
         .map_err(|error| error.to_string())?;
     assert_eq!(
-        journal.claim_completion_cleanup(id, 100, 110).await,
+        journal.claim_completion_cleanup_at(id, 100, 110).await,
         Err(HostError::Journal),
         "the journal must not reuse a cleanup fencing token"
     );
@@ -180,7 +180,7 @@ async fn cleanup_claim_generation_migrates_legacy_attempts() -> Result<(), Strin
         .await
         .map_err(|error| error.to_string())?;
     let claim = reopened
-        .claim_completion_cleanup(id, 100, 110)
+        .claim_completion_cleanup_at(id, 100, 110)
         .await
         .map_err(|error| error.to_string())?
         .ok_or_else(|| "expected a claim after the schema migration".to_owned())?;
@@ -200,13 +200,13 @@ async fn completion_cleanup_marker_is_durable_before_archive_retirement() -> Res
             .map_err(|error| error.to_string())?
     );
     let claim = journal
-        .claim_completion_cleanup(id, 100, 110)
+        .claim_completion_cleanup_at(id, 100, 110)
         .await
         .map_err(|error| error.to_string())?
         .ok_or_else(|| "expected completion cleanup claim".to_owned())?;
     assert!(
         journal
-            .mark_completion_worker_cleanup_proven(id, claim.generation, 101)
+            .mark_completion_worker_cleanup_proven_at(id, claim.generation, 101)
             .await
             .map_err(|error| error.to_string())?
     );

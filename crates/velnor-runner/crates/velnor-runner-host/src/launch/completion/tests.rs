@@ -15,6 +15,8 @@ use crate::journal::{Journal, LaunchIdentity, LaunchReservation, Outcome};
 use crate::launch::completion;
 use crate::launch_harness::open;
 
+mod claim_fence;
+mod docker_transport;
 mod engine;
 mod fair;
 mod lease;
