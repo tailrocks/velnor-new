@@ -1,19 +1,22 @@
 //! Compiled pin resolution: Mise setup plus helper provenance.
 //!
 //! Resolves `[actions.overrides]` against the compiled approved-pair catalog,
-//! gates normal setup to the x64-Linux target and verification setup to its
-//! platform-specific digest, then builds digest-verified helper acquisition
-//! from release or lock provenance. Missing provenance fails closed.
+//! selects the installed Mise digest for each supported runner target, and
+//! builds digest-verified helper acquisition from release or lock provenance.
+//! Anything without provenance fails closed; no digest is ever invented.
 
 use velnor_actions_actionlint::actions::{MISE_ACTION_SHA, MISE_ACTION_VERSION};
 use velnor_actions_actionlint::overrides::{
     ActionPinOverride as ApprovedOverride, ApprovedPinCatalog,
 };
 use velnor_actions_contract::{
-    GeneratorLock, ReleaseManifest, ReleaseTarget, Step, VelnorConfig, VerificationRunner,
-    check_release_artifact,
+    GeneratorLock, RELEASE_MANIFEST_FILENAME, ReleaseManifest, ReleaseTarget, Step, VelnorConfig,
+    VerificationRunner, check_release_artifact,
 };
 use velnor_actions_mise::MISE_VERSION;
+use velnor_actions_workflow_renderer::setup::{
+    MISE_BINARY_SHA256_LINUX_X64, MISE_BINARY_SHA256_MACOS_ARM64, MISE_BINARY_SHA256_MACOS_X64,
+};
 use velnor_actions_workflow_renderer::{
     HelperProvenance, MiseSetup, STAGED_BINARY_PREFIX, provision_acquire_step,
 };
@@ -24,51 +27,25 @@ use crate::discover::Discovery;
 /// Override key selecting the Mise setup action pin.
 const MISE_ACTION_KEY: &str = "jdx/mise-action";
 
-/// Installed `mise` binary digest for mise 2026.9.18 on Linux x86-64.
-///
-/// Source: `SHASUMS256.txt` of the jdx/mise `v2026.9.18` release, verified
-/// 2026-09-30 by downloading `mise-v2026.9.18-linux-x64.tar.zst`, extracting
-/// `mise/bin/mise`, and hashing the extracted binary. The setup action
-/// compares its `sha256` input against the installed binary, not the archive,
-/// so only this digest is emitted, and only for x64-Linux runners.
-const MISE_BINARY_SHA256_LINUX_X64: &str =
-    "d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4";
-
-/// Installed `mise` binary digest for mise 2026.9.18 on Apple ARM64.
-///
-/// Source: the `mise-v2026.9.18-macos-arm64` entry in the official
-/// `SHASUMS256.txt`, fetched over HTTPS on 2026-10-05.
-const MISE_BINARY_SHA256_MACOS_ARM64: &str =
-    "484c135bd4329975d608d3f77e26c2ece5d2f5590f18ca71f44440294f8cfa6f";
-
-/// Installed `mise` binary digest for mise 2026.9.18 on macOS x86-64.
-/// Source: official `SHASUMS256.txt` for the `mise-v2026.9.18-macos-x64` binary.
-const MISE_BINARY_SHA256_MACOS_X64: &str =
-    "02d8ba561847f996925e361262c0610a24f59fcd9e06ba9ed0b6022e19b317c3";
-
-/// Runner target the compiled mise digest covers.
-const LINUX_X64_TARGET: &str = "x86_64-unknown-linux-gnu";
-
 /// Resolve typed Mise setup pins: overrides plus the compiled catalog.
 ///
 /// The `uses` ref comes from `[actions.overrides]` when present (approved
 /// pairs only; anything else fails closed) or the compiled default pin.
 /// `version` is the compiled Mise release; `sha256` is the verified
-/// installed-binary digest, so this general-purpose setup path rejects labels
-/// outside x64 Linux rather than emitting a digest for the wrong architecture.
+/// installed-binary digest selected for the runner architecture. Unsupported
+/// targets fail closed.
 pub(crate) fn resolve_mise_setup(
     config: &VelnorConfig,
     label: &str,
 ) -> Result<MiseSetup, OrchestratorError> {
-    if ReleaseTarget::for_runner_label(label).map(ReleaseTarget::triple) != Some(LINUX_X64_TARGET) {
-        return Err(OrchestratorError::Contract {
+    let target =
+        ReleaseTarget::for_runner_label(label).ok_or_else(|| OrchestratorError::Contract {
             problem: format!("mise_setup_unsupported_target:{label}"),
-        });
-    }
-    resolve_mise_setup_for_release_target(config, ReleaseTarget::LinuxX86_64)
+        })?;
+    resolve_mise_setup_for_release_target(config, target)
 }
 
-/// Resolve a release runner's Mise setup by its explicit target ID.
+/// Resolve a release runner's Mise setup pins from the named platform ID.
 pub(crate) fn resolve_mise_setup_for_release_target(
     config: &VelnorConfig,
     target: ReleaseTarget,
@@ -141,12 +118,7 @@ pub(crate) fn consumer_acquire_for_runner(
     json: Option<&str>,
 ) -> Result<Step, OrchestratorError> {
     runner.validate("workflow", "check.runner")?;
-    let target = ReleaseTarget::parse_triple(runner.platform.target()).ok_or_else(|| {
-        OrchestratorError::Contract {
-            problem: format!("unsupported_target_for_runner:{}", runner.label),
-        }
-    })?;
-    consumer_acquire_for_target(target, version, json)
+    consumer_acquire_for_target(runner.platform.release_target(), version, json)
 }
 
 /// Consumer Acquire step from an explicit manifest (pure; `None` fails).
@@ -190,8 +162,8 @@ fn consumer_acquire_for_target(
                 .to_owned(),
         });
     };
-    let manifest = ReleaseManifest::parse_json(json, "release-manifest.json")?;
-    manifest.validate("release-manifest.json")?;
+    let manifest = ReleaseManifest::parse_json(json, RELEASE_MANIFEST_FILENAME)?;
+    manifest.validate(RELEASE_MANIFEST_FILENAME)?;
     if manifest.version != version {
         return Err(OrchestratorError::Contract {
             problem: format!(
@@ -211,17 +183,16 @@ fn consumer_acquire_for_target(
     check_release_artifact(
         &record.artifact,
         &manifest.version,
-        &manifest.commit,
         target.triple(),
-        "release-manifest.json",
+        RELEASE_MANIFEST_FILENAME,
         "targets.artifact",
     )?;
     acquire_step(
         &record.artifact,
         &record.sha256,
         &manifest.commit,
-        target,
         &format!("{STAGED_BINARY_PREFIX}{version}"),
+        target,
     )
 }
 
@@ -238,19 +209,13 @@ pub(crate) fn lock_acquire_step(
     lock_acquire_for_target(lock, target, staged)
 }
 
-/// Lock-backed Acquire step for one typed named-check runner.
 pub(crate) fn lock_acquire_for_runner(
     lock: &GeneratorLock,
     runner: &velnor_actions_contract::config::CheckRunner,
     staged: &str,
 ) -> Result<Step, OrchestratorError> {
     runner.validate("workflow", "check.runner")?;
-    let target = ReleaseTarget::parse_triple(runner.platform.target()).ok_or_else(|| {
-        OrchestratorError::Contract {
-            problem: format!("unsupported_target_for_runner:{}", runner.label),
-        }
-    })?;
-    lock_acquire_for_target(lock, target, staged)
+    lock_acquire_for_target(lock, runner.platform.release_target(), staged)
 }
 
 fn lock_acquire_for_target(
@@ -267,8 +232,8 @@ fn lock_acquire_for_target(
         &record.artifact,
         &record.sha256,
         &lock.generator.commit,
-        target,
         staged,
+        target,
     )
 }
 
@@ -278,8 +243,8 @@ fn acquire_step(
     url: &str,
     sha: &str,
     commit: &str,
-    target: ReleaseTarget,
     staged: &str,
+    target: ReleaseTarget,
 ) -> Result<Step, OrchestratorError> {
     let provenance = HelperProvenance::ReleaseAsset {
         url: url.to_owned(),
@@ -297,8 +262,8 @@ const GENERATOR_SEED_ROOT: &str = "/opt/velnor/seed";
 
 /// Fixed, target-specific acquisition argv. A matching seed file is copied. Otherwise curl.
 ///
-/// Curl stays HTTPS-only (`--proto '=https'`) over TLS 1.2+. The staged
-/// path stays double-quoted. A hash mismatch does not copy the seed.
+/// Curl stays HTTPS-only (`--proto '=https'`) over TLS 1.2+. Paths are
+/// double-quoted, and a seed with the wrong digest is never copied.
 ///
 /// # Errors
 ///
@@ -309,6 +274,10 @@ pub fn acquire_script_argv(
     seed_root: &str,
     target: ReleaseTarget,
 ) -> Result<Vec<String>, OrchestratorError> {
+    let digest = match target {
+        ReleaseTarget::LinuxX86_64 => "sha256sum -c -",
+        ReleaseTarget::MacosArm64 | ReleaseTarget::MacosX86_64 => "shasum -a 256 -c -",
+    };
     if !absolute_token(seed_root) {
         return Err(OrchestratorError::Contract {
             problem: format!("bad_seed_root:{seed_root}"),
@@ -327,12 +296,8 @@ pub fn acquire_script_argv(
         });
     }
     let seed = format!("{seed_root}/generator/{name}");
-    let checksum_command = match target {
-        ReleaseTarget::LinuxX86_64 => "sha256sum",
-        ReleaseTarget::MacosArm64 | ReleaseTarget::MacosX86_64 => "shasum -a 256",
-    };
     let script = format!(
-        "mkdir -p \"{dir}\" && s=\"{seed}\" d=\"{staged}\" && if [ -f \"$s\" ] && echo \"$VELNOR_ASSET_SHA256  $s\" | {checksum_command} -c -; then cp \"$s\" \"$d\"; else curl -fsSL --proto '=https' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\" && echo \"$VELNOR_ASSET_SHA256  $d\" | {checksum_command} -c -; fi && chmod +x \"$d\""
+        "mkdir -p \"{dir}\" && s=\"{seed}\" d=\"{staged}\" && if [ -f \"$s\" ] && echo \"$VELNOR_ASSET_SHA256  $s\" | {digest}; then cp \"$s\" \"$d\"; else curl -fsSL --proto '=https' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\" && echo \"$VELNOR_ASSET_SHA256  $d\" | {digest}; fi && chmod +x \"$d\""
     );
     Ok(vec!["sh".to_owned(), "-c".to_owned(), script])
 }

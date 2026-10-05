@@ -247,4 +247,32 @@ mod tests {
             assert!(err.to_string().contains(want), "got {err} want {want}");
         }
     }
+    #[test]
+    fn explicit_checks_load_and_minimal_config_omits_empty_checks() {
+        let load = load_config;
+        let root = rooted("schema = 1\n");
+        let config = load(root.path()).expect("minimal config");
+        assert!(config.checks.is_empty());
+        let json = serde_json::to_value(&config).expect("serialize config");
+        assert!(json.get("checks").is_none());
+        let root = rooted(
+            r#"schema = 1
+[[checks]]
+id = "native"
+task = "test:native"
+inputs = ["mise.toml"]
+tools = []
+[checks.runner]
+label = "macos-15"
+platform = "macos_arm64"
+executor = "hosted"
+[checks.evidence]
+path = "evidence/native.json"
+expected_scenarios = ["ffi"]
+"#,
+        );
+        let config = load(root.path()).expect("explicit checks");
+        assert_eq!(config.checks[0].directory, ".");
+        assert_eq!(config.checks[0].timeout_minutes, 30);
+    }
 }

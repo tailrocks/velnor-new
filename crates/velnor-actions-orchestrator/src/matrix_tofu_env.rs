@@ -6,7 +6,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::Stack;
+use velnor_actions_contract::{Stack, workflow::step_identity::TOFU_PROVIDER_CACHE_BASE_EXPR};
 
 use crate::OrchestratorError;
 use crate::task_report::TASK_ID_ENV;
@@ -55,14 +55,11 @@ pub(super) fn tofu_plugin_cache_dir_for_extra(
     let Some(root) = tofu_root_for_extra(extra)? else {
         return Ok(None);
     };
-    velnor_actions_tofu::tofu_cache_dir_under(
-        crate::tofu_cache::TOFU_PROVIDER_CACHE_BASE_EXPR,
-        &root,
-    )
-    .map(Some)
-    .map_err(|err| OrchestratorError::Contract {
-        problem: err.to_string(),
-    })
+    velnor_actions_tofu::tofu_cache_dir_under(TOFU_PROVIDER_CACHE_BASE_EXPR, &root)
+        .map(Some)
+        .map_err(|err| OrchestratorError::Contract {
+            problem: err.to_string(),
+        })
 }
 
 /// Normalized tofu root for obligation extras, when one applies.

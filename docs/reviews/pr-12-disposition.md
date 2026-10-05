@@ -219,9 +219,12 @@ owners.
   The typed `SameRepositoryScoped` config and trusted push-only authorization cleanup are integrated.
   The renderer does not yet consume the config or enable the PR-scoped namespace; that wiring and repeat
   same-repository PR/fork hosted proof remain pending. Do not treat a same-repository PR save as trusted-cache authorization.
-- 2026-10-04 cache-contract delta: renderer consumes `SameRepositoryScoped`, validates same-repository,
-  non-fork PR identity, binds PR number and head SHA into a separate namespace, and gates export/save
-  on effective policy. Wiring is implemented; repeated same-repository PR/fork hosted proof remains pending; PR writes do not authorize trusted-cache writes.
+- 2026-10-04 cache-contract delta was an unqualified implementation experiment: it added
+  `SameRepositoryScoped` and a same-repository PR cache writer, but did not close R13's nonce
+  integration or repeated hosted proof. The 2026-10-05 PR28 integration removes that opt-in and
+  writer from generated workflows. Pull requests therefore remain read-only until the adopted
+  R13 identity and lifecycle proof is complete; any future implementation must use a distinct
+  PR namespace and still cannot authorize trusted-cache writes.
 - Published archive recovery is complete: immutable release `402793692` has
   fresh-download proof with original JSON digest
   `07b853c18389042bb8adde7051b4a188f562f5ba461eb1112e4ac8afeba7c50f`; the

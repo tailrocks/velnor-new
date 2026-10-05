@@ -73,6 +73,18 @@ fn platform_and_executor_are_independent() {
 }
 
 #[test]
+fn check_platform_maps_to_canonical_release_target() {
+    for (platform, target) in [
+        (CheckPlatform::LinuxX64, crate::ReleaseTarget::LinuxX86_64),
+        (CheckPlatform::MacosArm64, crate::ReleaseTarget::MacosArm64),
+        (CheckPlatform::MacosX64, crate::ReleaseTarget::MacosX86_64),
+    ] {
+        assert_eq!(platform.release_target(), target);
+        assert_eq!(platform.target(), target.triple());
+    }
+}
+
+#[test]
 fn unknown_execution_fields_and_executor_are_rejected() {
     for value in [
         r#"{"label":"native","platform":"macos_arm64","executor":"hosted","capabilities":[]}"#,

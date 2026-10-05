@@ -63,8 +63,8 @@ pub use verification::{
     is_valid_verification_task_id,
 };
 pub use workflow::{
-    GeneratorValidation, LATEST_RUNNER_LABEL, PullRequestCachePolicy, RUNNER_LABEL_CATALOG,
-    RunnerSelection, VelnorSupportWorkflow, WorkflowConfig, WorkflowPolicy,
+    GeneratorValidation, LATEST_RUNNER_LABEL, RUNNER_LABEL_CATALOG, RunnerSelection,
+    VelnorSupportWorkflow, WorkflowConfig, WorkflowPolicy,
 };
 
 use crate::errors::ContractError;

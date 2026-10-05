@@ -52,7 +52,7 @@ pub(crate) const MEMBERS: [(&str, &str); 8] = [
     ),
 ];
 
-const WORKSPACE_ROOTS: [&str; 2] = ["", "crates/velnor-runner"];
+pub(crate) const WORKSPACE_ROOTS: [&str; 2] = ["", "crates/velnor-runner"];
 
 /// Repo root: two levels above this crate's manifest directory.
 pub(crate) fn repo_root() -> PathBuf {
@@ -147,8 +147,9 @@ pub(crate) fn test_markers(dir: &str) -> Result<usize, Box<dyn Error>> {
 
 /// True when `dep` is referenced from `dir` sources or tests.
 pub(crate) fn dep_referenced(dir: &str, dep: &str) -> Result<bool, Box<dyn Error>> {
-    let import = format!("use {dep}");
-    let path = format!("{dep}::");
+    let crate_name = dep.replace('-', "_");
+    let import = format!("use {crate_name}");
+    let path = format!("{crate_name}::");
     for area in ["src", "tests"] {
         for file in tree_files(&format!("{dir}/{area}"), "rs")? {
             let body = std::fs::read_to_string(&file)?;

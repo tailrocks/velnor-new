@@ -1,22 +1,19 @@
 # T04 Rust-only golden evidence (Phase A behavior bracket)
 
-## Current release integration checkpoint (2026-10-05)
+## Current generated-source checkpoint (2026-10-05)
 
-After scoping consumer-manifest discovery to `ConsumerV1`, the pinned debug
-CLI regenerated the five fixture captures, including the dogfood preview. The
-golden check matches those captured fixtures. Dogfood itself is `DIFFERS`:
-the checked-in producer workflow has a repository-only `Prepare Rust
-components` step, and its tool-step environments differ from the generated
-preview. This source-tree parity difference is not an identical dogfood result
-and remains visible in `cases/dogfood/dogfood.diff`. The producer repository
-no longer reads or synthesizes a consumer release manifest. No authentic
-same-run three-target candidate manifest is present, so `check-release`,
-hosted qualification, immutable publication, and infrastructure protection
-remain unverified.
+The pinned debug CLI regenerated the shipping `.github` tree and all five
+fixture trees from the composed generator source. The golden check reports
+all five match, and the dogfood verdict is `identical`. The producer
+repository reads no consumer release manifest and synthesizes no manifest.
+The protected-main MBX roundtrip remains an action-candidate probe; no
+same-repository pull-request cache writer is emitted because its nonce and
+lifecycle proof is incomplete. No authentic same-run three-target candidate
+manifest is present, so `check-release`, hosted qualification, immutable
+publication, and infrastructure protection remain unverified.
 
-The following earlier capture record is historical and does not supersede the
-current checkpoint above. Pre-refactor capture at `a12efd7`
-(behavior-identical to `origin/main` 106bfd7; docs-only delta). Every T06 ownership move must re-run the
+Pre-refactor capture at `a12efd7` (behavior-identical to `origin/main`
+106bfd7; docs-only delta). Every T06 ownership move must re-run the
 brackets below with byte-identical results. Never re-bless blindly:
 a mismatch is a behavior change until proven otherwise.
 
@@ -55,7 +52,15 @@ normalization.
 | mbx-nextest | 0 | same |
 | empty-suite | 0 | same |
 | minimal-cargo | 0 | same |
-| dogfood (this repo) | 0 | plan.txt, generate tree, `dogfood.verdict=identical` at the historical capture, tree.sha256 |
+| dogfood (this repo) | 0 | plan.txt, generate tree, `dogfood.verdict=identical`, tree.sha256 |
+
+The four consumer fixtures receive the checked-in
+`fixtures/consumer-release-manifest.json` in their scratch repositories.
+Its placeholder commit and target digests only exercise the canonical
+three-target schema. They are not a source-bound candidate manifest, native
+qualification, or release evidence. The dogfood producer repo stays on its
+VelnorRepositoryV1 path and receives no consumer manifest. The actual CLI
+parity suite also removes the fixture and verifies that `plan` fails closed.
 
 The checked-in producer workflow was regenerated from the reviewed source with
 the locked release candidate (`mbx build --release --locked --package

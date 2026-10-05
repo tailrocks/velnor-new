@@ -54,6 +54,78 @@ async fn scale_mints_jit_then_acks_without_acquire() -> Result<(), String> {
 }
 
 #[tokio::test]
+async fn idless_uncertain_subject_keeps_its_reservation() -> Result<(), String> {
+    let (scratch, journal) = open("idless-uncertain").await?;
+    let row = journal
+        .begin("launch", "m9")
+        .await
+        .map_err(|err| err.to_string())?;
+    journal
+        .finish(row, Outcome::Uncertain)
+        .await
+        .map_err(|err| err.to_string())?;
+    let mut script = Script {
+        calls: Vec::new(),
+        mode: Mode::Ok,
+    };
+    let result = drive_offer(
+        &mut script,
+        &ctx(),
+        &assigned_wait(9, 1),
+        &journal,
+        |_name, _jit, _bind| async { Err(HostError::Docker) },
+    )
+    .await;
+    assert_eq!(result, Err(EnsureError::Uncertain));
+    assert!(script.calls.is_empty());
+    let rows = journal.rows().await.map_err(|err| err.to_string())?;
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].id, row);
+    assert_eq!(rows[0].subject, "m9");
+    assert_eq!(rows[0].state, IntentState::Uncertain);
+    assert!(rows[0].docker_id.is_none());
+    assert!(rows[0].dind_id.is_none());
+    assert!(rows[0].worker_volume.is_none());
+    absent(&scratch.file())
+}
+
+#[tokio::test]
+async fn partial_uncertain_subject_does_not_mint() -> Result<(), String> {
+    let (scratch, journal) = open("partial-mint").await?;
+    let stale = journal
+        .begin("launch", "m9")
+        .await
+        .map_err(|err| err.to_string())?;
+    journal
+        .bind_worker(stale, None, Some("dind-kept"))
+        .await
+        .map_err(|err| err.to_string())?;
+    journal
+        .finish(stale, Outcome::Uncertain)
+        .await
+        .map_err(|err| err.to_string())?;
+    let mut script = Script {
+        calls: Vec::new(),
+        mode: Mode::Ok,
+    };
+    let error = drive_offer(
+        &mut script,
+        &ctx(),
+        &assigned_wait(9, 1),
+        &journal,
+        |_name, _jit, _bind| async { Err(HostError::Docker) },
+    )
+    .await;
+    assert_eq!(error, Err(EnsureError::Uncertain));
+    assert!(script.calls.is_empty());
+    let rows = journal.rows().await.map_err(|err| err.to_string())?;
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].state, IntentState::Uncertain);
+    assert_eq!(rows[0].dind_id.as_deref(), Some("dind-kept"));
+    absent(&scratch.file())
+}
+
+#[tokio::test]
 async fn scale_jit_failure_is_not_acked() -> Result<(), String> {
     let (scratch, journal) = open("scale-jit").await?;
     let mut script = Script {

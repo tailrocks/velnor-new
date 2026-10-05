@@ -79,6 +79,18 @@ pub fn elect_tofu_provider_savers(jobs: &mut BTreeMap<String, Job>) -> Result<()
             by_key.entry(key).or_default().push(id.clone());
         }
     }
+    for owners in by_key.values() {
+        let Some(winner) = owners.iter().min() else {
+            continue;
+        };
+        for owner in owners {
+            if owner != winner && jobs.get(owner).is_some_and(has_provider_save) {
+                return Err(RenderError::InvalidWorkflow(format!(
+                    "tofu_provider_save_not_elected:{owner}"
+                )));
+            }
+        }
+    }
     for (key, owners) in &by_key {
         let Some(winner) = owners.iter().min() else {
             continue;
@@ -86,17 +98,8 @@ pub fn elect_tofu_provider_savers(jobs: &mut BTreeMap<String, Job>) -> Result<()
         let Some(path) = path_for.get(key) else {
             continue;
         };
-        for owner in owners {
-            let Some(job) = jobs.get_mut(owner) else {
-                continue;
-            };
-            if owner == winner {
-                append_provider_save(job, key, path)?;
-            } else if has_provider_save(job) {
-                return Err(RenderError::InvalidWorkflow(format!(
-                    "tofu_provider_save_not_elected:{owner}"
-                )));
-            }
+        if let Some(job) = jobs.get_mut(winner) {
+            append_provider_save(job, key, path)?;
         }
     }
     Ok(())

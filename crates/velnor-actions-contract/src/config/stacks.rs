@@ -1,7 +1,7 @@
 //! Stack selection and per-stack options.
-use super::VelnorConfig;
 use super::release::RustReleaseConfig;
 use super::tofu::TofuStackConfig;
+use crate::discover::Stack;
 use crate::errors::ContractError;
 use crate::ids::is_component_byte;
 use serde::{Deserialize, Serialize};
@@ -153,11 +153,14 @@ impl StacksConfig {
             ));
         }
         for id in &self.ignore {
-            if !VelnorConfig::REGISTERED_STACKS.contains(&id.as_str()) {
+            let stack = Stack::from_id(id).ok_or_else(|| {
+                ContractError::config(file, "stacks.ignore", format!("unknown_stack_id:{id}"))
+            })?;
+            if !stack.is_ignorable() {
                 return Err(ContractError::config(
                     file,
                     "stacks.ignore",
-                    format!("unknown_stack_id:{id}"),
+                    format!("stack_not_ignorable:{id}"),
                 ));
             }
         }
@@ -243,7 +246,12 @@ mod tests {
 
     #[test]
     fn target_grammar_accepts_host_and_triples_only() {
-        for target in ["host", "x86_64-unknown-linux-gnu", "aarch64-apple-darwin"] {
+        for target in [
+            "host",
+            "x86_64-unknown-linux-gnu",
+            "aarch64-apple-darwin",
+            "x86_64-apple-darwin",
+        ] {
             assert!(is_valid_rust_target(target), "{target}");
         }
         // Proven X2 PoC plus metacharacter and flag-shaped values.
@@ -272,5 +280,37 @@ mod tests {
         }];
         let err = stack.validate("config.toml").expect_err("PoC target fails");
         assert!(err.to_string().contains("bad_target"), "{err}");
+    }
+    #[test]
+    fn ignore_admission_uses_typed_stack_eligibility() {
+        use crate::config::StacksConfig;
+        for ids in [
+            vec!["rust".to_owned()],
+            vec!["tofu".to_owned()],
+            vec!["rust".to_owned(), "tofu".to_owned()],
+        ] {
+            let config = StacksConfig {
+                ignore: ids,
+                rust: None,
+                tofu: None,
+            };
+            assert!(config.validate("config.toml").is_ok());
+        }
+        let explicit = StacksConfig {
+            ignore: vec!["mise".to_owned()],
+            rust: None,
+            tofu: None,
+        };
+        let error = explicit
+            .validate("config.toml")
+            .expect_err("explicit checks cannot be ignored");
+        assert!(error.to_string().contains("stack_not_ignorable:mise"));
+        let unknown = StacksConfig {
+            ignore: vec!["unknown".to_owned()],
+            rust: None,
+            tofu: None,
+        };
+        let error = unknown.validate("config.toml").expect_err("unknown stack");
+        assert!(error.to_string().contains("unknown_stack_id:unknown"));
     }
 }

@@ -2,8 +2,6 @@
 
 use std::path::Path;
 
-use velnor_actions_contract::WorkflowPolicy;
-
 use crate::OrchestratorError;
 use crate::safe_read::{MAX_REPO_FILE_BYTES, RepoRead, read_repo_file};
 
@@ -27,72 +25,13 @@ pub(crate) fn read_manifest_file(root: &Path) -> Result<Option<String>, Orchestr
     }
 }
 
-/// Admit the consumer manifest only under consumer policy.
+/// Read only the committed consumer manifest in every build mode.
 ///
-/// Velnor repository policy gets bootstrap provenance from its generator lock.
-/// A consumer manifest is not an input under that policy.
-/// # Errors
-///
-/// Returns IO or unsafe-path errors for unreadable consumer manifests.
-pub(crate) fn for_policy(
-    root: &Path,
-    policy: WorkflowPolicy,
-) -> Result<(Option<String>, bool), OrchestratorError> {
-    match policy {
-        WorkflowPolicy::ConsumerV1 => consumer_manifest_text(root),
-        WorkflowPolicy::VelnorRepositoryV1 => Ok((None, false)),
-    }
-}
-
-/// Consumer manifest text plus stand-in flag: committed file, else a
-/// debug-only stand-in.
-///
-/// Absent files fall back to the embedded stand-in (flagged so
-/// `generate` warns loudly); present-but-unreadable files error
-/// instead of masking. The stand-in carries the bound official-asset
-/// URL shape so the consumer gate validates it exactly like a
-/// committed file.
+/// Absent files stay `None` so the consumer acquire gate fails closed
+/// with `consumer_requires_release_install`; unreadable files error.
 /// # Errors
 ///
 /// Returns IO or unsafe-path errors for present-but-unreadable files.
-#[cfg(debug_assertions)]
-pub(crate) fn consumer_manifest_text(
-    root: &Path,
-) -> Result<(Option<String>, bool), OrchestratorError> {
-    if let Some(text) = read_manifest_file(root)? {
-        return Ok((Some(text), false));
-    }
-    let sha = "a".repeat(64);
-    let version = env!("CARGO_PKG_VERSION");
-    let mut targets = Vec::new();
-    for target in velnor_actions_contract::ReleaseTarget::ALL {
-        targets.push(format!(
-            "{{\"target\":\"{}\",\"artifact\":\"https://github.com/tailrocks/velnor-new/releases/download/v{version}/velnor-actions-{version}-{}\",\"sha256\":\"{sha}\"}}",
-            target.triple(),
-            target.triple()
-        ));
-    }
-    let targets = targets.join(",");
-    let commit = "b".repeat(40);
-    Ok((
-        Some(format!(
-            "{{\"schema\":1,\"version\":\"{version}\",\"repository\":\"tailrocks/velnor-new\",\"commit\":\"{commit}\",\"targets\":[{targets}]}}"
-        )),
-        true,
-    ))
-}
-
-/// Consumer manifest text plus stand-in flag: the committed file only.
-///
-/// Absent files stay `None` (the consumer acquire gate fails closed
-/// with `consumer_requires_release_install`); unreadable files error.
-/// The flag is always false: release builds have no stand-in.
-/// # Errors
-///
-/// Returns IO or unsafe-path errors for present-but-unreadable files.
-#[cfg(not(debug_assertions))]
-pub(crate) fn consumer_manifest_text(
-    root: &Path,
-) -> Result<(Option<String>, bool), OrchestratorError> {
-    read_manifest_file(root).map(|text| (text, false))
+pub(crate) fn consumer_manifest_text(root: &Path) -> Result<Option<String>, OrchestratorError> {
+    read_manifest_file(root)
 }

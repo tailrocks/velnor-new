@@ -6,12 +6,9 @@
 use std::path::Path;
 
 use velnor_actions_contract::config::LATEST_RUNNER_LABEL;
-use velnor_actions_contract::{
-    ExecutionConfig, ExecutionMode, PullRequestCachePolicy, RoutingWorkflow, VelnorConfig,
-};
+use velnor_actions_contract::{ExecutionConfig, ExecutionMode, RoutingWorkflow, VelnorConfig};
 use velnor_actions_workflow_renderer::{
-    MbxQualificationPins, MbxQualificationTarget, RenderedFile, Schema2WorkflowRequest,
-    render_schema2_workflows,
+    MbxQualificationPins, RenderedFile, Schema2WorkflowRequest, render_schema2_workflows,
 };
 
 #[path = "generator_release_pins.rs"]
@@ -144,25 +141,13 @@ fn workflow_request(
         let rust_version = tool_catalog
             .version(velnor_actions_mise::PinnedTool::Rust)
             .to_owned();
-        let protected_main = MbxQualificationTarget {
-            mise_setup: mise_setup.clone(),
-            action_uses: mbx_action.uses_value(),
+        Some(MbxQualificationPins {
+            mise_setup,
+            candidate_action_uses: mbx_action.uses_value(),
             mbx_version: tool_catalog
                 .version(velnor_actions_mise::PinnedTool::MrBoxington)
                 .to_owned(),
-            rust_version: rust_version.clone(),
-        };
-        let same_repository_pr = (config.workflow.pull_request_cache_policy
-            == PullRequestCachePolicy::SameRepositoryScoped)
-            .then(|| MbxQualificationTarget {
-                mise_setup,
-                action_uses: mbx_action.uses_value(),
-                mbx_version: velnor_actions_mise::MR_BOXINGTON_PR_QUALIFICATION_VERSION.to_owned(),
-                rust_version,
-            });
-        Some(MbxQualificationPins {
-            protected_main,
-            same_repository_pr,
+            rust_version,
         })
     } else {
         None

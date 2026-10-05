@@ -61,15 +61,6 @@ fn env_without_request_file_exits_two() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-/// Pin the push branch so plan/generate work without origin/HEAD.
-fn pin_branch(repo: &std::path::Path) -> Result<(), Box<dyn Error>> {
-    let config = repo.join(".velnor").join("config.toml");
-    let mut body = std::fs::read_to_string(&config)?;
-    body.push_str("\n[workflow]\ndefault_branch = \"main\"\n");
-    std::fs::write(&config, body)?;
-    Ok(())
-}
-
 /// Recommendation bodies from the trailing plan-report section.
 fn plan_recommendations(stdout: &str) -> Vec<String> {
     let mut in_section = false;
@@ -93,9 +84,7 @@ fn plan_recommendations(stdout: &str) -> Vec<String> {
 #[test]
 fn plan_emits_recommendations_once_to_stdout_only() -> Result<(), Box<dyn Error>> {
     let tmp = fresh_tempdir("smoke-plan-once")?;
-    git_init(&tmp)?;
-    assert_eq!(code(&spawn(&["init"], &[], &tmp)?), 0);
-    pin_branch(&tmp)?;
+    init_repo(&tmp)?;
     let plan = spawn(&["plan"], &[], &tmp)?;
     assert_eq!(code(&plan), 0);
     let stdout = String::from_utf8_lossy(&plan.stdout).into_owned();
@@ -140,9 +129,7 @@ fn plan_emits_recommendations_once_to_stdout_only() -> Result<(), Box<dyn Error>
 #[test]
 fn generate_keeps_recommendations_on_stderr() -> Result<(), Box<dyn Error>> {
     let tmp = fresh_tempdir("smoke-gen-recs")?;
-    git_init(&tmp)?;
-    assert_eq!(code(&spawn(&["init"], &[], &tmp)?), 0);
-    pin_branch(&tmp)?;
+    init_repo(&tmp)?;
     let plan = spawn(&["plan"], &[], &tmp)?;
     assert_eq!(code(&plan), 0);
     let expected = plan_recommendations(&String::from_utf8_lossy(&plan.stdout));
@@ -220,9 +207,7 @@ fn velnor_generate_omits_consumer_manifest_warning() -> Result<(), Box<dyn Error
 #[test]
 fn generate_writes_manual_change_suggestions_for_malformed_tools() -> Result<(), Box<dyn Error>> {
     let tmp = fresh_tempdir("smoke-malformed-tools")?;
-    git_init(&tmp)?;
-    assert_eq!(code(&spawn(&["init"], &[], &tmp)?), 0);
-    pin_branch(&tmp)?;
+    init_repo(&tmp)?;
     // TOOL-2.2: malformed tool files stay read-only inputs; both commands
     // report `tooling_input_invalid` plus a concrete manual-change suggestion.
     std::fs::write(tmp.join("mise.toml"), "[tools\nrust = \n")?;

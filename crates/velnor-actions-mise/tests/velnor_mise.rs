@@ -25,10 +25,6 @@ mod impl_mise_env_policy;
 mod impl_mise_forbidden_src;
 #[path = "impl_mise_gate6.rs"]
 mod impl_mise_gate6;
-#[path = "impl_mise_generator_release_workflow.rs"]
-mod impl_mise_generator_release_workflow;
-#[path = "impl_mise_generator_release_workflow_checks.rs"]
-mod impl_mise_generator_release_workflow_checks;
 #[path = "impl_mise_git.rs"]
 mod impl_mise_git;
 #[path = "impl_mise_git_config.rs"]

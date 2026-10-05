@@ -70,14 +70,20 @@ pub enum CheckPlatform {
 }
 
 impl CheckPlatform {
+    /// Canonical release target for this declared runner platform.
+    #[must_use]
+    pub const fn release_target(self) -> crate::ReleaseTarget {
+        match self {
+            Self::LinuxX64 => crate::ReleaseTarget::LinuxX86_64,
+            Self::MacosArm64 => crate::ReleaseTarget::MacosArm64,
+            Self::MacosX64 => crate::ReleaseTarget::MacosX86_64,
+        }
+    }
+
     /// Exact supported release target.
     #[must_use]
     pub const fn target(self) -> &'static str {
-        match self {
-            Self::LinuxX64 => "x86_64-unknown-linux-gnu",
-            Self::MacosArm64 => "aarch64-apple-darwin",
-            Self::MacosX64 => "x86_64-apple-darwin",
-        }
+        self.release_target().triple()
     }
     /// Host operating system expected by runtime validation.
     #[must_use]

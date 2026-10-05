@@ -5,7 +5,7 @@ use std::ffi::{OsStr, OsString};
 use velnor_actions_contract::{ProposedTask, Stack};
 use velnor_actions_mise::{
     CandidateBuild, IsolatedCommand, PinnedTool, PinnedToolExec, RouteDriver, ToolCatalog,
-    validate_exact_version,
+    custom_task_run_argv, validate_exact_version,
 };
 use velnor_actions_rust::tool_needs;
 use velnor_actions_workflow_renderer::render::CandidateSpec;
@@ -76,8 +76,27 @@ pub(crate) fn task_argv(
     task: &ProposedTask,
     catalog: &ToolCatalog,
 ) -> Result<Vec<String>, OrchestratorError> {
-    if Stack::from_id(&task.stack_id) == Some(Stack::Tofu) {
-        return tofu_task_argv(task, catalog);
+    match Stack::from_id(&task.stack_id) {
+        Some(Stack::Tofu) => return tofu_task_argv(task, catalog),
+        Some(Stack::Mise) => {
+            let name = task
+                .payload
+                .first()
+                .and_then(|v| v.to_str())
+                .filter(|_| task.payload.len() == 1)
+                .ok_or_else(|| OrchestratorError::Contract {
+                    problem: "named_check_task_payload".to_owned(),
+                })?;
+            return custom_task_run_argv(name).map_err(|e| OrchestratorError::Contract {
+                problem: e.to_string(),
+            });
+        }
+        Some(Stack::Rust) => {}
+        None => {
+            return Err(OrchestratorError::Contract {
+                problem: format!("unknown_task_stack:{}", task.stack_id),
+            });
+        }
     }
     let driver = RouteDriver::from_compile_driver(&task.identity.compile_driver);
     let mut tools = driver.map_or(vec![PinnedTool::Rust], RouteDriver::probe_tools);

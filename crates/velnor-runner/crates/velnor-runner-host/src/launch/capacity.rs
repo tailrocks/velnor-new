@@ -53,6 +53,8 @@ pub(crate) struct Seat {
     pub(crate) assigned: u32,
     /// Classified poll.
     pub(crate) idle: Idle,
+    /// Start or completion notices only. A full slot can acknowledge them.
+    pub(crate) progress: bool,
 }
 
 /// Decide one poll. A free slot starts the next job. Historical `started` does not.
@@ -98,6 +100,11 @@ const fn admit_scale(seat: Seat) -> Admit {
         };
     }
     if !scale_covered(seat) {
+        if seat.progress {
+            return Admit::Ack {
+                stop: started_done(seat),
+            };
+        }
         return Admit::Hold;
     }
     Admit::Ack {

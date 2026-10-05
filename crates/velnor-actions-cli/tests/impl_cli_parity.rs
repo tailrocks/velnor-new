@@ -280,8 +280,9 @@ fn plan_queries_no_caches_and_exposes_no_plan_json() -> Result<(), Box<dyn Error
     // internal plan.json/baseline/matrix artifact is written or named.
     assert_eq!(snapshot(&tmp)?, before, "plan modified the repo");
     for path in before.keys() {
+        let fixture_manifest = path == Path::new(".velnor/release-manifest.json");
         assert!(
-            path.extension().is_none_or(|ext| ext != "json"),
+            fixture_manifest || path.extension().is_none_or(|ext| ext != "json"),
             "json artifact present: {}",
             path.display()
         );

@@ -13,7 +13,7 @@
 //! Scale Set local backend; it remains a separate candidate experiment.
 
 use super::features::{checkout_step, finish, gated, lane_base, run_step};
-use super::{MbxQualificationTarget, RunnerSpec};
+use super::{MbxQualificationPins, RunnerSpec};
 use crate::cache_steps::MBX_ACTION_NAME;
 use crate::yaml::Yaml;
 use crate::{RenderError, steps::validate_uses};
@@ -49,7 +49,7 @@ pub(super) const REUSE_PROBE: &str = "set -e -o pipefail; df -B1 -P \"$RUNNER_TE
 /// # Errors
 /// Invalid action, Mise, MBX, or Rust pins fail closed.
 pub(super) fn jobs(
-    request: &MbxQualificationTarget,
+    request: &MbxQualificationPins,
     hosted: &RunnerSpec,
 ) -> Result<Vec<(String, Yaml)>, RenderError> {
     validate_target(request)?;
@@ -60,21 +60,21 @@ pub(super) fn jobs(
     ])
 }
 
-pub(super) fn validate_target(request: &MbxQualificationTarget) -> Result<(), RenderError> {
+pub(super) fn validate_target(request: &MbxQualificationPins) -> Result<(), RenderError> {
     request.mise_setup.validate()?;
-    validate_uses(&request.action_uses)?;
+    validate_uses(&request.candidate_action_uses)?;
     let action_prefix = format!("{MBX_ACTION_NAME}@");
-    if !request.action_uses.starts_with(&action_prefix) {
+    if !request.candidate_action_uses.starts_with(&action_prefix) {
         return Err(RenderError::BadActionRef(format!(
             "not_mbx_action:{}",
-            request.action_uses
+            request.candidate_action_uses
         )));
     }
     validate_exact_version(&request.mbx_version, "mbx")?;
     validate_exact_version(&request.rust_version, "rust")
 }
 
-fn job(request: &MbxQualificationTarget, hosted: &RunnerSpec, writer: bool) -> (String, Yaml) {
+fn job(request: &MbxQualificationPins, hosted: &RunnerSpec, writer: bool) -> (String, Yaml) {
     let (id, title, mode) = if writer {
         (
             "mbx-cache-write-hosted",
@@ -126,7 +126,7 @@ fn job(request: &MbxQualificationTarget, hosted: &RunnerSpec, writer: bool) -> (
     gated(finish(id, fields, steps), &when)
 }
 
-pub(super) fn mise_setup_step(request: &MbxQualificationTarget) -> Yaml {
+pub(super) fn mise_setup_step(request: &MbxQualificationPins) -> Yaml {
     Yaml::Map(vec![
         ("name".to_owned(), Yaml::str("Set up Mise")),
         (
@@ -147,7 +147,7 @@ pub(super) fn mise_setup_step(request: &MbxQualificationTarget) -> Yaml {
     ])
 }
 
-pub(super) fn mise_install_step(request: &MbxQualificationTarget) -> Yaml {
+pub(super) fn mise_install_step(request: &MbxQualificationPins) -> Yaml {
     let rust = &request.rust_version;
     Yaml::Map(vec![
         (
@@ -163,15 +163,18 @@ pub(super) fn mise_install_step(request: &MbxQualificationTarget) -> Yaml {
     ])
 }
 
-fn mbx_action_step(request: &MbxQualificationTarget, writer: bool) -> Yaml {
+fn mbx_action_step(request: &MbxQualificationPins, writer: bool) -> Yaml {
     let generation = format!(
         "velnor-qualification-mbx-{}-share-out-dir-disabled-v1-action-{}-run-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}-${{{{ github.sha }}}}",
         request.mbx_version,
-        &request.action_uses[format!("{MBX_ACTION_NAME}@").len()..]
+        &request.candidate_action_uses[format!("{MBX_ACTION_NAME}@").len()..]
     );
     Yaml::Map(vec![
         ("name".to_owned(), Yaml::str("Restore MBX objects")),
-        ("uses".to_owned(), Yaml::str(request.action_uses.clone())),
+        (
+            "uses".to_owned(),
+            Yaml::str(request.candidate_action_uses.clone()),
+        ),
         ("id".to_owned(), Yaml::str("mbx_cache")),
         (
             "with".to_owned(),
@@ -190,7 +193,7 @@ fn mbx_action_step(request: &MbxQualificationTarget, writer: bool) -> Yaml {
     ])
 }
 
-fn verify_action_step(request: &MbxQualificationTarget, writer: bool) -> Yaml {
+fn verify_action_step(request: &MbxQualificationPins, writer: bool) -> Yaml {
     let save_eligible = if writer { "true" } else { "false" };
     let save_reason = if writer {
         "workflow_dispatch"
@@ -241,7 +244,7 @@ pub(super) fn build_step() -> Yaml {
     ])
 }
 
-fn qualification_env(request: &MbxQualificationTarget, writer: bool) -> Yaml {
+fn qualification_env(request: &MbxQualificationPins, writer: bool) -> Yaml {
     let home = "${{ github.workspace }}/.velnor-mbx-cache-qualification";
     mapping(&[
         ("MBX_GC_AUTO", "1"),

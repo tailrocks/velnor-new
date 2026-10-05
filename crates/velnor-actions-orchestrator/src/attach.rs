@@ -144,26 +144,13 @@ pub(crate) fn attach_preseed(
             problem: "final_job_missing".to_owned(),
         });
     };
-    final_gate.steps.splice(
-        0..0,
-        [
-            preseed_download_step()?,
-            preseed_manifest_verify_step(target)?,
-            preseed_stage_step(PreseedStageSource::DownloadedArtifact, &staged)?,
-        ],
-    );
-    // The publish job invokes the staged helper too; without the
-    // triple its internal steps fail the staged gate. Absent jobs
-    // stay untouched like zero-crate plans.
+    final_gate
+        .steps
+        .splice(0..0, preseed_consumers(target, &staged)?);
     if let Some(publish) = workflow.ir.jobs.get_mut(PUBLISH_JOB_ID) {
-        publish.steps.splice(
-            0..0,
-            [
-                preseed_download_step()?,
-                preseed_manifest_verify_step(target)?,
-                preseed_stage_step(PreseedStageSource::DownloadedArtifact, &staged)?,
-            ],
-        );
+        publish
+            .steps
+            .splice(0..0, preseed_consumers(target, &staged)?);
     }
     for (id, job) in &mut workflow.ir.jobs {
         if is_crate_job_id(id) || job.check_runner.is_some() {
@@ -176,6 +163,7 @@ pub(crate) fn attach_preseed(
     Ok(())
 }
 
+/// Same-target consumers verify the artifact before staging its bytes.
 fn preseed_consumers(target: &str, staged: &str) -> Result<Vec<Step>, OrchestratorError> {
     Ok(vec![
         preseed_download_step()?,
