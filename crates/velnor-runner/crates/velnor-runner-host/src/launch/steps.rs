@@ -230,7 +230,17 @@ where
 {
     let encoded = match fetch_jit(lane, ctx, name) {
         Ok(encoded) => encoded,
-        Err(error) => return hold(journal, id, map_listen(error)).await,
+        Err(error) => {
+            let mapped = map_listen(error);
+            if matches!(mapped, EnsureError::Conflict) {
+                journal
+                    .finish(id, Outcome::DefiniteFailure)
+                    .await
+                    .map_err(map_journal)?;
+                return Err(mapped);
+            }
+            return hold(journal, id, mapped).await;
+        }
     };
     let bound = super::bind::Bind::new(journal, id);
     let Ok(volume) = crate::worker::new_worker_volume() else {

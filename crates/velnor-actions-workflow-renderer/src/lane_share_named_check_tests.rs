@@ -75,14 +75,7 @@ fn named_check_identity_and_report_upload_stay_on_their_exact_lane() {
     assert!(!shared.files[0].bytes.contains("VELNOR_CHECK_JOB_ID"));
     assert_eq!(shared.jobs["check-demo__hosted"].steps.len(), 2);
     assert_eq!(shared.jobs["check-demo__local"].steps.len(), 2);
-    let yaml = render_jobs(
-        &workflow_ir(),
-        &shared.jobs,
-        &ctx(),
-        &shared.calls,
-        &shared.checkouts,
-    )
-    .expect("workflow renders");
+    let yaml = render_jobs(&workflow_ir(), &shared, &ctx()).expect("workflow renders");
     assert!(yaml.contains("VELNOR_CHECK_JOB_ID: check-demo__hosted"));
     assert!(yaml.contains("VELNOR_CHECK_JOB_ID: check-demo__local"));
     assert!(yaml.contains("name: velnor-crate-run-attempt-check-demo__hosted"));

@@ -310,7 +310,13 @@ fn final_gate_keeps_exact_name_and_condition() -> Result<(), RenderError> {
             timeout_minutes: JobTimeout::REQUIRED,
             needs: vec!["plan".to_owned()],
             condition: Some("always()".to_owned()),
-            permissions: None,
+            permissions: Some(Permissions {
+                contents: velnor_actions_contract::workflow::permissions::PermissionLevel::Read,
+                actions: velnor_actions_contract::workflow::permissions::PermissionLevel::Read,
+                pull_requests:
+                    velnor_actions_contract::workflow::permissions::PermissionLevel::None,
+                id_token: velnor_actions_contract::workflow::permissions::PermissionLevel::None,
+            }),
             environment: None,
             steps: vec![checkout_step(&checkout_pin())?, merge_step()],
         },
