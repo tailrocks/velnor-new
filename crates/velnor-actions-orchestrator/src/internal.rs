@@ -3,6 +3,8 @@
 // Obligation identities live beside the planner so `lib.rs` stays untouched.
 #[path = "plan_obligation.rs"]
 pub(crate) mod plan_obligation;
+#[path = "plan_response.rs"]
+mod plan_response;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};

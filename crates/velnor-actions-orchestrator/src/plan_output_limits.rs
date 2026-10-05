@@ -2,7 +2,7 @@
 
 use crate::{
     OrchestratorError,
-    internal::{PlanResponse, check_schema, internal, internal_contract},
+    internal::{PlanResponse, internal, internal_contract},
 };
 use velnor_actions_contract::{
     QualificationCacheAdmission, QualificationCacheDirective, canonical_json_str,
@@ -49,15 +49,12 @@ pub fn plan_outputs_with_admission(
     mode: PlanOutputMode,
     admission: Option<&QualificationCacheAdmission>,
 ) -> Result<PlanOutputs, OrchestratorError> {
-    let response: PlanResponse =
-        serde_json::from_str(response_json).map_err(|_| internal("malformed_response"))?;
-    check_schema(response.schema)?;
-    response.plan.validate().map_err(internal_contract)?;
+    let response = PlanResponse::parse(response_json)?;
     let qualification = response.plan.qualification.as_ref();
     let directive = QualificationCacheDirective::for_plan(&response.plan, admission)
         .map_err(internal_contract)?;
     let outputs = PlanOutputs {
-        matrix: canonical_json_str(&response.matrix).map_err(internal_contract)?,
+        matrix: canonical_json_str(&response.plan.matrix).map_err(internal_contract)?,
         plan_id: response.plan.plan_id.clone(),
         run_key: response.plan.run_key.clone(),
         covered_tasks: crate::covered_tasks::CoveredTasks::for_plan(&response.plan).encode(),
@@ -77,7 +74,7 @@ pub fn plan_outputs_with_admission(
     };
     let bytes = check_plan_outputs(
         mode,
-        response.matrix.include.len(),
+        response.plan.matrix.include.len(),
         &outputs.promoted_job_outputs(mode),
     )?;
     Ok(PlanOutputs {
