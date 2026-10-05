@@ -5,8 +5,8 @@
 //! attempt, source SHA, action pin, and MBX release. The dependent reader
 //! cannot publish a cache or pass on data from an earlier run.
 //!
-//! Both jobs set `MBX_GC_AUTO=1` to exercise the hosted policy emitted for
-//! production MBX jobs, not the action's hosted default.
+//! The action's hosted object-cache GC default remains unchanged; this
+//! qualification does not opt into cleanup that could race active consumers.
 
 use super::features::{checkout_step, finish, gated, lane_base, run_step};
 use super::{MbxQualificationPins, RunnerSpec};
@@ -233,7 +233,6 @@ fn build_step() -> Yaml {
 fn qualification_env(request: &MbxQualificationPins, writer: bool) -> Yaml {
     let home = "${{ github.workspace }}/.velnor-mbx-cache-qualification";
     mapping(&[
-        ("MBX_GC_AUTO", "1"),
         ("ACTIONS_CACHE_MODE", if writer { "write" } else { "read" }),
         ("CARGO_HOME", &format!("{home}/cargo")),
         ("MISE_AUTO_INSTALL", "false"),

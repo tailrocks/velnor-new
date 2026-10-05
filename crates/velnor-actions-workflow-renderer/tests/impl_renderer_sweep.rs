@@ -65,7 +65,7 @@ fn every_emitted_step_has_name() -> Result<(), RenderError> {
         WorkflowPolicy::VelnorRepositoryV1,
         Some(&support),
         &ctx,
-        &mise(),
+        &mise_set(),
     )?;
     for line in text.lines() {
         let trimmed = line.trim_start();
@@ -115,7 +115,7 @@ fn final_gate_needs_plan_lint_and_support() -> Result<(), RenderError> {
         &ctx,
     )?;
     let start = text.find("required:").expect("final job");
-    let window = snip(&text, start, 1600);
+    let window = snip(&text, start, 600);
     for need in [
         "plan",
         "actionlint",

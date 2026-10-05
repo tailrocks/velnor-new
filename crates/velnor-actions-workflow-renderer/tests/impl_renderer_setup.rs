@@ -1,8 +1,9 @@
 //! Pinned Mise setup emission: template shape plus strict insertion.
 use std::collections::BTreeMap;
-use velnor_actions_contract::Step;
+use velnor_actions_contract::{Step, WorkflowPolicy};
 use velnor_actions_workflow_renderer::{
     MiseSetup, RenderError, SETUP_MISE_NAME, checkout_step, mise_setup_step, plan_step,
+    render_workflow_ir_strict,
 };
 
 use super::impl_renderer_fixtures::*;
@@ -103,6 +104,39 @@ fn strict_inserts_setup_before_mise_exec() -> Result<(), RenderError> {
     ] {
         assert!(text.contains(&line), "sole owner saves {line}:\n{text}");
     }
+    Ok(())
+}
+
+#[test]
+fn strict_selects_setup_digest_for_each_runner_target() -> Result<(), RenderError> {
+    let linux = job(
+        "linux",
+        "Linux",
+        Vec::new(),
+        vec![checkout_step(&checkout_pin())?],
+    );
+    let mut macos = job(
+        "macos",
+        "macOS",
+        Vec::new(),
+        vec![checkout_step(&checkout_pin())?],
+    );
+    macos.1.runs_on = "macos-15".to_owned();
+    let text = render_workflow_ir_strict(
+        &fixture_ir(vec![linux, macos]),
+        WorkflowPolicy::ConsumerV1,
+        None,
+        &fixture_ctx(),
+        &mise_set(),
+    )?;
+    assert!(
+        text.contains(&format!("sha256: \"{MISE_SHA256}\"")),
+        "{text}"
+    );
+    assert!(
+        text.contains(&format!("sha256: \"{}\"", "b".repeat(64))),
+        "{text}"
+    );
     Ok(())
 }
 

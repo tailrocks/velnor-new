@@ -4,33 +4,27 @@ use velnor_actions_contract::{
     Concurrency, Job, JobTimeout, Permissions, Step, Trigger, ValidatorKind, WorkflowIr,
     WorkflowPolicy,
 };
-use velnor_actions_workflow_renderer::steps::{CompileDriver, mbx_steps_for_driver};
+use velnor_actions_workflow_renderer::setup::MiseSetupSet;
 use velnor_actions_workflow_renderer::{
     ASSET_SHA_ENV, ASSET_URL_ENV, CONCURRENCY_CANCEL, CONCURRENCY_GROUP, MiseSetup,
     RELEASE_COMMIT_ENV, RenderContext, RenderError, STAGED_BINARY_PREFIX, ValidatorCommand,
     acquire_velnor_step, checkout_step, plan_step, render_workflow_ir, render_workflow_ir_strict,
     shell_step,
 };
+use velnor_actions_workflow_renderer::steps::{CompileDriver, mbx_steps_for_driver};
 
 pub(crate) const VERSION: &str = "0.1.0";
 pub(crate) const LABEL: &str = "ubuntu-26.04";
 pub(crate) const MISE_USES: &str = "jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5";
-pub(crate) const MISE_VERSION: &str = "2026.9.18";
+pub(crate) const MISE_VERSION: &str = "2026.10.2";
 pub(crate) const MISE_SHA256: &str =
-    "d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4";
-pub(crate) const STAGED: &str = "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0";
-
+    "8f5f6660336f572830e33cd9b378d3131e529a0d4c4f0c553776be90a1ba302a";
 pub(crate) const TEST_MBX_VERSION: &str = "1.21.1";
 pub(crate) const TEST_RUST_TOOLCHAIN: &str = "1.98.1";
+pub(crate) const STAGED: &str = "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0";
 
 pub(crate) fn mbx_tool_env(rust_toolchain: &str) -> BTreeMap<String, String> {
     BTreeMap::from([
-        ("MISE_NO_CONFIG".to_owned(), "1".to_owned()),
-        ("MISE_NO_ENV".to_owned(), "1".to_owned()),
-        ("MISE_NO_HOOKS".to_owned(), "1".to_owned()),
-        ("MISE_LOCKFILE".to_owned(), "0".to_owned()),
-        ("MISE_AUTO_INSTALL".to_owned(), "false".to_owned()),
-        ("MISE_EXEC_AUTO_INSTALL".to_owned(), "false".to_owned()),
         (
             "MISE_RUSTUP_HOME".to_owned(),
             "${{ runner.temp }}/velnor/rustup".to_owned(),
@@ -68,6 +62,18 @@ pub(crate) fn mise() -> MiseSetup {
         version: MISE_VERSION.to_owned(),
         sha256: MISE_SHA256.to_owned(),
     }
+}
+
+pub(crate) fn mise_set() -> MiseSetupSet {
+    let macos = MiseSetup {
+        sha256: "b".repeat(64),
+        ..mise()
+    };
+    MiseSetupSet::new([
+        ("x86_64-unknown-linux-gnu".to_owned(), mise()),
+        ("aarch64-apple-darwin".to_owned(), macos),
+    ])
+    .expect("supported runner setups")
 }
 
 pub(crate) fn fixture_ctx() -> RenderContext {
@@ -156,7 +162,7 @@ pub(crate) fn fixture_ir(jobs: Vec<(String, Job)>) -> WorkflowIr {
 }
 
 pub(crate) fn strict(ir: &WorkflowIr, ctx: &RenderContext) -> Result<String, RenderError> {
-    render_workflow_ir_strict(ir, WorkflowPolicy::ConsumerV1, None, ctx, &mise())
+    render_workflow_ir_strict(ir, WorkflowPolicy::ConsumerV1, None, ctx, &mise_set())
 }
 
 /// Step display names in render order for one job section.

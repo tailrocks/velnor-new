@@ -1,9 +1,9 @@
 //! Compiled pin resolution: Mise setup plus helper provenance.
 //!
 //! Resolves `[actions.overrides]` against the compiled approved-pair catalog,
-//! gates the installed-mise digest to the single x64-Linux runner target, and
-//! builds digest-verified helper acquisition from release or lock provenance.
-//! Anything without provenance fails closed; no digest is ever invented.
+//! selects installed-Mise digests by qualified runner target, and builds
+//! digest-verified helper acquisition from release or lock provenance. Anything
+//! without provenance fails closed; no digest is ever invented.
 
 use velnor_actions_actionlint::actions::{MISE_ACTION_SHA, MISE_ACTION_VERSION};
 use velnor_actions_actionlint::overrides::{
@@ -15,7 +15,7 @@ use velnor_actions_contract::{
 };
 use velnor_actions_mise::MISE_VERSION;
 use velnor_actions_workflow_renderer::{
-    HelperProvenance, MiseSetup, STAGED_BINARY_PREFIX, provision_acquire_step,
+    HelperProvenance, MiseSetup, MiseSetupSet, STAGED_BINARY_PREFIX, provision_acquire_step,
 };
 
 use crate::OrchestratorError;
@@ -24,40 +24,98 @@ use crate::discover::Discovery;
 /// Override key selecting the Mise setup action pin.
 const MISE_ACTION_KEY: &str = "jdx/mise-action";
 
-/// Installed `mise` binary digest for mise 2026.9.18 on Linux x86-64.
+/// Installed `mise` binary digest for mise 2026.10.2 on Linux x86-64.
 ///
-/// Source: `SHASUMS256.txt` of the jdx/mise `v2026.9.18` release, verified
-/// 2026-09-30 by downloading `mise-v2026.9.18-linux-x64.tar.zst`, extracting
-/// `mise/bin/mise`, and hashing the extracted binary. The setup action
-/// compares its `sha256` input against the installed binary, not the archive,
-/// so only this digest is emitted, and only for x64-Linux runners.
+/// Source: official tag `v2026.10.2`, commit
+/// `44ea2537166efbe21b19d808355d9914e830941a`; the Linux x64 archive
+/// `mise-v2026.10.2-linux-x64.tar.gz` SHA-256 is
+/// `79a2bf0ffc9b8a9a6391344e875b3c3679c15053fda3e8728ddf1790d63db788`.
+/// Its extracted `mise/bin/mise` SHA-256 is the digest emitted below. The
+/// real Phase 0 probe passed on Linux x86-64. The setup action checks the
+/// installed binary, not the archive, and this pin is only for x64 Linux.
 const MISE_BINARY_SHA256_LINUX_X64: &str =
-    "d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4";
+    "8f5f6660336f572830e33cd9b378d3131e529a0d4c4f0c553776be90a1ba302a";
+/// Installed Mise digest for the official v2026.10.2 macOS ARM64 binary.
+///
+/// Source: official release asset `mise-v2026.10.2-macos-arm64`, tag commit
+/// `44ea2537166efbe21b19d808355d9914e830941a`; its downloaded executable SHA-256
+/// is `66d49acecca413c8b334922584982a4907a10588912829873d6c55d0c6d42612`.
+/// The `jdx/mise-action` input checks the installed binary digest.
+const MISE_BINARY_SHA256_MACOS_ARM64: &str =
+    "66d49acecca413c8b334922584982a4907a10588912829873d6c55d0c6d42612";
 
-/// Runner target the compiled mise digest covers.
+/// Linux x64 target covered by the compiled Mise digest.
 const LINUX_X64_TARGET: &str = "x86_64-unknown-linux-gnu";
+/// macOS ARM64 target covered by the compiled Mise digest.
+const MACOS_ARM64_TARGET: &str = "aarch64-apple-darwin";
+/// Runner label used by the repository's native Apple Silicon Phase0 job.
+const MACOS_ARM64_RUNNER_LABEL: &str = "macos-15";
 
 /// Resolve typed Mise setup pins: overrides plus the compiled catalog.
 ///
 /// The `uses` ref comes from `[actions.overrides]` when present (approved
 /// pairs only; anything else fails closed) or the compiled default pin.
 /// `version` is the compiled Mise release; `sha256` is the verified
-/// installed-binary digest, so non-x64-Linux labels fail closed rather than
-/// emitting a digest for the wrong architecture.
+/// installed-binary digest for the selected target. Only the repository's
+/// supported Linux x64 and native macOS ARM64 runners are accepted.
 pub(crate) fn resolve_mise_setup(
     config: &VelnorConfig,
     label: &str,
 ) -> Result<MiseSetup, OrchestratorError> {
-    if target_for_runner_label(label) != Some(LINUX_X64_TARGET) {
-        return Err(OrchestratorError::Contract {
+    let target =
+        mise_target_for_runner_label(label).ok_or_else(|| OrchestratorError::Contract {
             problem: format!("mise_setup_unsupported_target:{label}"),
-        });
-    }
+        })?;
     Ok(MiseSetup {
         uses: mise_action_uses(config)?,
         version: MISE_VERSION.to_owned(),
-        sha256: MISE_BINARY_SHA256_LINUX_X64.to_owned(),
+        sha256: mise_binary_sha256(target)?.to_owned(),
     })
+}
+
+/// Resolve all typed Mise setup records needed by one generated workflow.
+///
+/// The configured runner's setup is reused; only the other supported native
+/// platform is resolved separately. Action overrides therefore apply to both
+/// records without duplicating override policy.
+pub(crate) fn resolve_mise_setup_set(
+    config: &VelnorConfig,
+    label: &str,
+    configured_setup: &MiseSetup,
+) -> Result<MiseSetupSet, OrchestratorError> {
+    let configured_target =
+        mise_target_for_runner_label(label).ok_or_else(|| OrchestratorError::Contract {
+            problem: format!("mise_setup_unsupported_target:{label}"),
+        })?;
+    let mut setups = vec![(configured_target.to_owned(), configured_setup.clone())];
+    for (target, runner_label) in [
+        (LINUX_X64_TARGET, "ubuntu-26.04"),
+        (MACOS_ARM64_TARGET, MACOS_ARM64_RUNNER_LABEL),
+    ] {
+        if target != configured_target {
+            setups.push((target.to_owned(), resolve_mise_setup(config, runner_label)?));
+        }
+    }
+    Ok(MiseSetupSet::new(setups)?)
+}
+
+/// Resolve the exact supported target for a hosted label.
+fn mise_target_for_runner_label(label: &str) -> Option<&'static str> {
+    if label == MACOS_ARM64_RUNNER_LABEL {
+        return Some(MACOS_ARM64_TARGET);
+    }
+    (target_for_runner_label(label) == Some(LINUX_X64_TARGET)).then_some(LINUX_X64_TARGET)
+}
+
+/// Select the digest compiled for one supported Mise target.
+fn mise_binary_sha256(target: &str) -> Result<&'static str, OrchestratorError> {
+    match target {
+        LINUX_X64_TARGET => Ok(MISE_BINARY_SHA256_LINUX_X64),
+        MACOS_ARM64_TARGET => Ok(MISE_BINARY_SHA256_MACOS_ARM64),
+        _ => Err(OrchestratorError::Contract {
+            problem: format!("mise_setup_unsupported_target:{target}"),
+        }),
+    }
 }
 
 /// Resolve the Mise action ref: an approved override or the compiled default.
@@ -207,7 +265,7 @@ fn acquire_argv(staged: &str) -> Vec<String> {
 #[cfg(test)]
 fn test_manifest_json() -> String {
     let version = env!("CARGO_PKG_VERSION");
-    let targets = velnor_actions_contract::SUPPORTED_TARGETS
+    let targets = ["x86_64-unknown-linux-gnu", "aarch64-apple-darwin", "x86_64-apple-darwin"]
         .iter()
         .map(|target| {
             format!(

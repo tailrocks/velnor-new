@@ -214,7 +214,6 @@
       contents: read
       actions: write
     env:
-      MBX_GC_AUTO: "1"
       ACTIONS_CACHE_MODE: write
       CARGO_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/cargo
       MISE_AUTO_INSTALL: "false"
@@ -271,7 +270,6 @@
       contents: read
       actions: read
     env:
-      MBX_GC_AUTO: "1"
       ACTIONS_CACHE_MODE: read
       CARGO_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/cargo
       MISE_AUTO_INSTALL: "false"

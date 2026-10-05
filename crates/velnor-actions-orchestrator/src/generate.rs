@@ -13,7 +13,7 @@ use velnor_actions_workflow_renderer::tree::render_tree_with_extra;
 
 use crate::OrchestratorError;
 use crate::finalized::owned_preparation;
-use crate::pins::resolve_mise_setup;
+use crate::pins::{resolve_mise_setup, resolve_mise_setup_set};
 use crate::prepare::GenerationPreparation;
 use crate::provenance::{ProfileProvenance, profile_provenance};
 use crate::validate::validate_staged;
@@ -21,6 +21,10 @@ use crate::validate::validate_staged;
 /// Filesystem guards: snapshots, destination validation, and ownership.
 #[path = "generate_guards.rs"]
 pub(crate) mod guards;
+
+/// Actionlint 1.7.12 false-positive ignore for `$/` self-repository calls.
+#[path = "self_repo_gap.rs"]
+mod self_repo_gap;
 
 /// Re-exported snapshot: the `generate::ToolSnapshot` path is stable API.
 pub use guards::ToolSnapshot;
@@ -166,6 +170,7 @@ fn render_all(
 ) -> Result<RenderedTree, OrchestratorError> {
     let version = env!("CARGO_PKG_VERSION");
     let mise = resolve_mise_setup(&prep.config, &prep.runner_label)?;
+    let mise_set = resolve_mise_setup_set(&prep.config, &prep.runner_label, &mise)?;
     let ir = expand_workflow(&prep.workflow.ir, &prep.config, dispatch).map_err(|err| {
         OrchestratorError::Contract {
             problem: err.to_string(),
@@ -176,7 +181,7 @@ fn render_all(
         prep.config.workflow.policy,
         prep.workflow.support.as_ref(),
         &prep.workflow.context,
-        &mise,
+        &mise_set,
     )?;
     let workflow = rendered.yaml;
     let actionlint = render_actionlint_yaml(&prep.workflow.actionlint)?;
@@ -186,6 +191,7 @@ fn render_all(
     extra.extend(crate::routing::extra_files(&prep.config, version)?);
     extra.extend(rendered.shared);
     extra.extend(crate::foundation_qualification::files(prep)?);
+    let actionlint = self_repo_gap::note(&actionlint, &workflow, &extra)?;
     let tree = render_tree_with_extra(&workflow, &actionlint, &extra, version)?;
     Ok(tree)
 }

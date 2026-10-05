@@ -17,7 +17,7 @@ fn strict_preseed_accepts_staged_internal_steps() -> Result<(), RenderError> {
         WorkflowPolicy::VelnorRepositoryV1,
         None,
         &ctx,
-        &mise(),
+        &mise_set(),
     )?;
     let plan = step_names(&text, "plan");
     for name in [
@@ -60,7 +60,7 @@ fn strict_preseed_closure_rejects_gaps() {
         WorkflowPolicy::VelnorRepositoryV1,
         None,
         &ctx,
-        &mise(),
+        &mise_set(),
     );
     assert!(
         err.is_err_and(|err| err.to_string().contains("preseed_incomplete")),
@@ -75,7 +75,7 @@ fn strict_preseed_closure_rejects_gaps() {
         WorkflowPolicy::VelnorRepositoryV1,
         None,
         &ctx,
-        &mise(),
+        &mise_set(),
     );
     assert!(
         err.is_err_and(|err| err.to_string().contains("preseed_incomplete")),
@@ -90,7 +90,7 @@ fn strict_preseed_closure_rejects_gaps() {
         WorkflowPolicy::VelnorRepositoryV1,
         None,
         &ctx,
-        &mise(),
+        &mise_set(),
     );
     assert!(
         err.is_err_and(|err| err.to_string().contains("internal_without_acquire")),
@@ -109,7 +109,7 @@ fn strict_preseed_closure_rejects_gaps() {
         WorkflowPolicy::VelnorRepositoryV1,
         None,
         &ctx,
-        &mise(),
+        &mise_set(),
     );
     assert!(
         err.is_err_and(|err| err.to_string().contains("preseed_misordered")),
@@ -129,7 +129,7 @@ fn strict_preseed_closure_rejects_plan_manifest_gap() {
         WorkflowPolicy::VelnorRepositoryV1,
         None,
         &ctx,
-        &mise(),
+        &mise_set(),
     );
     assert!(
         err.is_err_and(|err| err.to_string().contains("preseed_incomplete:plan:manifest")),
@@ -150,7 +150,7 @@ fn strict_preseed_closure_rejects_verify_gaps() {
         WorkflowPolicy::VelnorRepositoryV1,
         None,
         &ctx,
-        &mise(),
+        &mise_set(),
     );
     assert!(
         err.is_err_and(|err| err.to_string().contains("preseed_incomplete")),
@@ -169,7 +169,7 @@ fn strict_preseed_closure_rejects_verify_gaps() {
         WorkflowPolicy::VelnorRepositoryV1,
         None,
         &ctx,
-        &mise(),
+        &mise_set(),
     );
     assert!(
         err.is_err_and(|err| err.to_string().contains("preseed_misordered")),
@@ -188,7 +188,7 @@ fn strict_rejects_stage_without_preseed_mode() {
         WorkflowPolicy::VelnorRepositoryV1,
         None,
         &ctx,
-        &mise(),
+        &mise_set(),
     );
     assert!(
         err.is_err_and(|err| err.to_string().contains("preseed_stage_without_mode")),

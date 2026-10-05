@@ -18,7 +18,7 @@ fn protected_main_mbx_roundtrip_is_run_bound_and_read_only_on_restore() -> TestR
     );
     assert!(writer.contains("actions: write"), "{writer}");
     assert!(writer.contains("ACTIONS_CACHE_MODE: write"), "{writer}");
-    assert!(writer.contains("MBX_GC_AUTO: \"1\""), "{writer}");
+    assert!(!writer.contains("MBX_GC_AUTO"), "{writer}");
     assert!(
         writer.contains("save-on-workflow-dispatch: \"true\""),
         "{writer}"
@@ -47,7 +47,7 @@ fn protected_main_mbx_roundtrip_is_run_bound_and_read_only_on_restore() -> TestR
     );
     assert!(reader.contains("actions: read"), "{reader}");
     assert!(reader.contains("ACTIONS_CACHE_MODE: read"), "{reader}");
-    assert!(reader.contains("MBX_GC_AUTO: \"1\""), "{reader}");
+    assert!(!reader.contains("MBX_GC_AUTO"), "{reader}");
     assert!(
         reader.contains("steps.mbx_cache.outputs.cache-hit"),
         "{reader}"
