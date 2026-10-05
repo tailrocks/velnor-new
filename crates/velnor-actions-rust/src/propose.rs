@@ -237,6 +237,7 @@ mod tests {
             compile_driver: CompileDriver::Cargo,
             test_runner: TestRunner::CargoTest,
             nextest_profile: NextestProfile::Default,
+            run_ignored: None,
             declared_inputs: Vec::new(),
             undeclared_reads: false,
             uses_network: false,

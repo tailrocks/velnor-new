@@ -50,6 +50,7 @@ fn cargo_profile() -> RustExecutionProfile {
         runner_source: ProfileSource::Detected,
         nextest_profile: NextestProfile::Default,
         nextest_config: None,
+        run_ignored: None,
     }
 }
 
@@ -63,6 +64,7 @@ fn nextest_profile() -> RustExecutionProfile {
         runner_source: ProfileSource::Detected,
         nextest_profile: NextestProfile::Ci,
         nextest_config: Some(".config/nextest.toml".to_owned()),
+        run_ignored: None,
     }
 }
 

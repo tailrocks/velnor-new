@@ -184,29 +184,18 @@ fn insert_plan_mbx_restore(
     catalog: &ToolCatalog,
     steps: &mut Vec<Step>,
 ) -> Result<(), OrchestratorError> {
-    use velnor_actions_actionlint::PinnedActionRef;
-    use velnor_actions_actionlint::actions::{
-        MR_BOXINGTON_ACTION_SHA, MR_BOXINGTON_ACTION_VERSION,
-    };
     let Some(restore_at) = steps
         .iter()
         .position(|step| step.name == RESTORE_SOURCES_NAME)
     else {
         return Ok(());
     };
-    let uses = PinnedActionRef::new(
-        "jdx/mr-boxington-action",
-        None,
-        MR_BOXINGTON_ACTION_SHA,
-        MR_BOXINGTON_ACTION_VERSION,
-    )?
-    .uses_value();
-    let restore = velnor_actions_workflow_renderer::steps::mbx_objects_step(
-        &uses,
-        false,
-        catalog.version(PinnedTool::MrBoxington),
-    )?;
-    steps.insert(restore_at + 1, restore);
+    for (offset, step) in crate::mbx_preflight::steps_for_catalog(catalog)?
+        .into_iter()
+        .enumerate()
+    {
+        steps.insert(restore_at + 1 + offset, step);
+    }
     Ok(())
 }
 

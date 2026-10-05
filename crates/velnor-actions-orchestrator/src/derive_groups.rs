@@ -317,6 +317,7 @@ mod tests {
             uses_network: false,
             uses_clock: false,
             uses_random: false,
+            run_ignored: None,
             nextest_profile: NextestProfile::Default,
         }
     }
@@ -331,6 +332,7 @@ mod tests {
             runner_source: ProfileSource::Detected,
             nextest_profile: NextestProfile::Default,
             nextest_config: None,
+            run_ignored: None,
         }
     }
 

@@ -9,8 +9,10 @@ use crate::errors::ContractError;
 use super::ir::{Job, WorkflowIr};
 use super::jobs::{PLAN_JOB_ID, REQUIRED_JOB_ID};
 
-const HOSTED_SUFFIX: &str = "__hosted";
-const SCALE_SUFFIX: &str = "__local";
+/// Suffix for the hosted copy of a verification job.
+pub const HOSTED_SUFFIX: &str = "__hosted";
+/// Suffix for the scale-set copy of a verification job.
+pub const SCALE_SUFFIX: &str = "__local";
 
 /// Planner class of a job id. Role overrides cannot change this.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
