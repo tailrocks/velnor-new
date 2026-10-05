@@ -13,7 +13,7 @@ use velnor_actions_actionlint::{
     actions::{CACHE_ACTION_SHA, CACHE_ACTION_VERSION},
     checkout_inputs_schema, validate_action_inputs,
 };
-use velnor_actions_contract::{Job, ProposedTask, Step, StepKind};
+use velnor_actions_contract::{Job, ProposedTask, Step, StepKind, StepRole};
 use velnor_actions_mise::{Gate6Fixture, TaskCacheMode, ToolCatalog, ToolHomes};
 use velnor_actions_rust::is_workspace_fmt_task;
 use velnor_actions_workflow_renderer::plan_format;
@@ -54,6 +54,8 @@ pub(crate) fn checkout_step() -> Result<Step, OrchestratorError> {
     })?;
     Ok(Step {
         name: "Checkout".to_owned(),
+        id: None,
+        role: Some(StepRole::Checkout),
         condition: None,
         kind: StepKind::Action {
             uses: PinnedActionRef::checkout().uses_value(),
@@ -86,6 +88,8 @@ pub(crate) fn checkout_step_full() -> Result<Step, OrchestratorError> {
     })?;
     Ok(Step {
         name: "Checkout".to_owned(),
+        id: None,
+        role: Some(StepRole::Checkout),
         condition: None,
         kind: StepKind::Action {
             uses: PinnedActionRef::checkout().uses_value(),
@@ -194,7 +198,7 @@ pub(crate) fn workspace_format_step(
     let start = crate::matrix_step::start_path_for_key(&matrix_key);
     let run = crate::matrix_step::outcome_wrapper_argv(&joined, &outcome, &start);
     let env = format_step_env(catalog)?;
-    velnor_actions_workflow_renderer::shell_step(plan_format::FORMAT_STEP_NAME, run, env)
+    plan_format::format_step(run, &env)
         .map(Some)
         .map_err(OrchestratorError::from)
 }

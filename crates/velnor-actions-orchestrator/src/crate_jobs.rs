@@ -221,7 +221,7 @@ fn render_job(
     )?);
     if use_opentofu {
         let root = crate::tofu_cache::tofu_root_for_obligations(&model.obligations)?;
-        steps.push(crate::tofu_cache::restore_step_for_tofu_root(
+        steps.extend(crate::tofu_cache::provider_cache_step_for_tofu_root(
             label, catalog, &root,
         )?);
     }

@@ -311,6 +311,8 @@ fn reconcile_is_credential_free_and_internal_ops_rejected() -> Result<(), Render
     );
     let internal = Step {
         name: "Plan".to_owned(),
+        id: None,
+        role: None,
         condition: None,
         kind: StepKind::Internal {
             operation: "plan-v1".to_owned(),

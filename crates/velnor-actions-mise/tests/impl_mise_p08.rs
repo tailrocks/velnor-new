@@ -1,5 +1,6 @@
 //! P08 Mise cache policy: paths, transport, sources, trust (C1,C3-C6,C9-C12).
 
+use velnor_actions_contract::StepRole;
 use velnor_actions_mise::cache_sources as sources;
 use velnor_actions_mise::cache_transport as transport;
 use velnor_actions_mise::cache_trust as trust;
@@ -70,32 +71,21 @@ fn c3_single_trusted_writer_never_races() {
 #[test]
 fn c4_restore_and_mbx_precede_fetch_with_offline_skip() {
     let good = [
-        "Checkout",
-        "Prepare pinned tools",
-        "Restore Cargo sources",
-        "Setup MBX",
-        "Fetch Cargo sources",
-        "Clippy",
-    ]
-    .iter()
-    .map(ToString::to_string)
-    .collect::<Vec<_>>();
-    assert!(
-        sources::check_steps_before_fetch(&good, &["Restore Cargo sources", "Setup MBX"]).is_ok()
-    );
+        Some(StepRole::Checkout),
+        Some(StepRole::PreparePinnedTools),
+        Some(StepRole::CargoSourcesRestore),
+        Some(StepRole::MbxCache),
+        Some(StepRole::CargoSourcesFetch),
+        None,
+    ];
+    assert!(sources::check_restore_before_fetch(&good, true).is_ok());
     let fetch_first = [
-        "Checkout",
-        "Fetch Cargo sources",
-        "Setup MBX",
-        "Restore Cargo sources",
-    ]
-    .iter()
-    .map(ToString::to_string)
-    .collect::<Vec<_>>();
-    assert!(
-        sources::check_steps_before_fetch(&fetch_first, &["Restore Cargo sources", "Setup MBX"])
-            .is_err()
-    );
+        Some(StepRole::Checkout),
+        Some(StepRole::CargoSourcesFetch),
+        Some(StepRole::MbxCache),
+        Some(StepRole::CargoSourcesRestore),
+    ];
+    assert!(sources::check_restore_before_fetch(&fetch_first, true).is_err());
     assert_eq!(
         sources::fetch_decision(true, "no_entry").expect("skip"),
         sources::FetchDecision::OfflineSkip

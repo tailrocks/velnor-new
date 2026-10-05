@@ -1,5 +1,6 @@
 //! MBX action gating: emitted only for MBX-selected drivers.
 use std::collections::BTreeMap;
+use velnor_actions_contract::StepRole;
 use velnor_actions_workflow_renderer::{
     CompileDriver, RenderError, check_mbx_gating, checkout_step, shell_step,
     steps::mbx_steps_for_driver,
@@ -122,11 +123,38 @@ fn cargo_gating_rejects_the_native_action() -> Result<(), RenderError> {
 }
 
 #[test]
+fn mbx_gating_requires_typed_action_and_preflight_roles() -> Result<(), RenderError> {
+    let mut steps = vec![checkout_step(&checkout_pin())?];
+    steps.extend(mbx_tool_steps(&mbx_pin(), "1.19.0", "1.98.1")?);
+    let mut jobs = BTreeMap::from([job("velnor-mbx", "MBX leg", Vec::new(), steps)]);
+    let mbx = BTreeMap::from([("velnor-mbx".to_owned(), CompileDriver::Mbx)]);
+    let preflight = jobs.get("velnor-mbx").expect("MBX job").steps[1].clone();
+    jobs.get_mut("velnor-mbx").expect("MBX job").steps.remove(1);
+    assert!(
+        check_mbx_gating(&jobs, &mbx)
+            .is_err_and(|err| format!("{err:?}").contains("mbx_preflight_missing")),
+        "an MBX action requires its typed Rust preflight"
+    );
+    jobs.get_mut("velnor-mbx")
+        .expect("MBX job")
+        .steps
+        .insert(1, preflight);
+    jobs.get_mut("velnor-mbx").expect("MBX job").steps[2].role = None;
+    assert!(
+        check_mbx_gating(&jobs, &mbx)
+            .is_err_and(|err| format!("{err:?}").contains("mbx_action_role_missing")),
+        "an MBX action needs its typed owner role"
+    );
+    Ok(())
+}
+
+#[test]
 fn mbx_gating_requires_the_exact_guard_before_a_real_command() -> Result<(), RenderError> {
     let mut steps = vec![checkout_step(&checkout_pin())?];
     steps.extend(mbx_tool_steps(&mbx_pin(), "1.19.0", "1.98.1")?);
     let mut jobs = BTreeMap::from([job("velnor-mbx", "MBX leg", Vec::new(), steps)]);
     let mbx = BTreeMap::from([("velnor-mbx".to_owned(), CompileDriver::Mbx)]);
+    jobs.get_mut("velnor-mbx").expect("MBX job").steps[2].role = Some(StepRole::MbxCache);
     jobs.get_mut("velnor-mbx")
         .expect("MBX job")
         .steps

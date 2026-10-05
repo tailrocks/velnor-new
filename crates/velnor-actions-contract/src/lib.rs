@@ -144,6 +144,7 @@ pub use workflow::{
     join_runner_temp, matrix_json_bytes, matrix_report_relpath, named_check_lanes, plan_json_bytes,
     slugify_segment, task_report_relpath, tofu_display_name, trust_for_event,
     validate_final_report_id, validate_job_id, validate_matrix_run,
+    StepId, StepRole,
 };
 
 /// Version marker for the contract schema shell.

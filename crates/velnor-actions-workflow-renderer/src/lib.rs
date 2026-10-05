@@ -24,6 +24,8 @@ mod final_steps;
 pub mod freshness;
 pub mod guard;
 mod lane_share;
+mod lane_share_sections;
+pub mod lane_target;
 pub mod marker;
 mod matrix;
 mod matrix_output_mode;

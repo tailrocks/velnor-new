@@ -1,10 +1,10 @@
-//! Token hygiene: action env scanning plus fetch-exemption shape.
+//! Token hygiene: action env scanning plus typed fetch authority.
 //!
 //! Split from `impl_renderer_token_hygiene` to hold the 400-line gate.
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Job, WorkflowPolicy};
+use velnor_actions_contract::{Job, StepRole, WorkflowPolicy};
 use velnor_actions_workflow_renderer::{
     RenderError, action_step_with_env, ambient_shell_step, checkout_step, plan_step,
     render_workflow_ir, shell_step,
@@ -118,31 +118,32 @@ fn retired_mbx_bundle_outputs_fail_env_validation() -> Result<(), RenderError> {
 }
 
 #[test]
-fn nested_fetch_exemption_requires_generator_shape() -> Result<(), RenderError> {
-    // Genuine nested names stay exempt with unscrubbed ambient env.
+fn ambient_fetch_auth_uses_typed_role_not_display_name() -> Result<(), RenderError> {
+    // A typed fetch retains its generator-owned ambient-auth exemption
+    // after its presentation name changes.
+    let mut allowed_step = ambient_shell_step(
+        "Renamed source preparation",
+        vec!["true".to_owned()],
+        BTreeMap::new(),
+    )?;
+    allowed_step.role = Some(StepRole::CargoSourcesFetch);
+    let allowed = job(
+        "plan",
+        "Plan",
+        Vec::new(),
+        vec![checkout_step(&checkout_pin())?, allowed_step, plan_step()],
+    );
+    render_workflow_ir(
+        &fixture_ir(vec![allowed]),
+        WorkflowPolicy::ConsumerV1,
+        None,
+        &fixture_ctx(),
+    )?;
+
+    // Old and forged labels carry no authority by themselves.
     for name in [
         "Fetch Cargo sources (nested/Cargo.toml)",
         "Fetch Cargo sources (a/b/Cargo.toml)",
-    ] {
-        let allowed = job(
-            "plan",
-            "Plan",
-            Vec::new(),
-            vec![
-                checkout_step(&checkout_pin())?,
-                ambient_shell_step(name, vec!["true".to_owned()], BTreeMap::new())?,
-                plan_step(),
-            ],
-        );
-        render_workflow_ir(
-            &fixture_ir(vec![allowed]),
-            WorkflowPolicy::ConsumerV1,
-            None,
-            &fixture_ctx(),
-        )?;
-    }
-    // Crafted lookalikes are NOT exempt: unscrubbed env fails coverage.
-    for name in [
         "Fetch Cargo sources (x",
         "Fetch Cargo sources (nested/Cargo.toml",
         "Fetch Cargo sources (nested/Cargo.toml))",

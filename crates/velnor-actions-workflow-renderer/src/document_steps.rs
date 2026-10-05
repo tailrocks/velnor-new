@@ -2,6 +2,9 @@
 
 use std::collections::BTreeMap;
 
+use velnor_actions_contract::workflow::step_identity::{
+    StepRole, TOFU_PROVIDER_ADMISSION_USES, TOOL_SEED_USES,
+};
 use velnor_actions_contract::{Step, StepKind};
 
 use crate::{
@@ -20,7 +23,14 @@ fn is_verdict_download(step: &Step) -> bool {
     matches!(
         &step.kind,
         StepKind::Action { uses, .. } if uses == steps::DOWNLOAD_ARTIFACT_USES
-    ) && step.name == crate::closure::DOWNLOAD_PLAN_NAME
+    ) && step.role == Some(StepRole::DownloadPlan)
+}
+
+/// Emit a step's explicitly declared output id.
+fn push_step_id(entries: &mut Vec<(String, Yaml)>, step: &Step) {
+    if let Some(id) = step.id {
+        entries.push(("id".to_owned(), Yaml::str(id.as_str().to_owned())));
+    }
 }
 
 /// Env for one internal step: op plus request file, authorized reads carry auth.
@@ -108,6 +118,7 @@ fn action_step_to_yaml(
     }
     commands::validate_env(env)?;
     let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
+    push_step_id(&mut entries, step);
     if let Some(condition) = &step.condition {
         steps::scan_for_private_subcommands(condition)?;
         entries.push(("if".to_owned(), Yaml::str(condition.clone())));
@@ -120,15 +131,15 @@ fn action_step_to_yaml(
     if job_id == FINAL_JOB_ID && is_verdict_download(step) {
         entries.push(("continue-on-error".to_owned(), Yaml::Bool(true)));
     }
-    if uses.starts_with(crate::tool_seed::TOOL_SEED_USES) {
-        if uses != crate::tool_seed::TOOL_SEED_USES {
+    if uses.starts_with(TOOL_SEED_USES) {
+        if uses != TOOL_SEED_USES {
             return Err(RenderError::InvalidWorkflow(
                 "tool_seed_bad_action_ref".to_owned(),
             ));
         }
         crate::tool_seed::validate_seed_action(step, None)?;
     }
-    let uses_yaml = if uses == crate::tool_seed::TOOL_SEED_USES {
+    let uses_yaml = if matches!(uses, TOOL_SEED_USES | TOFU_PROVIDER_ADMISSION_USES) {
         Yaml::annotated(uses, "zizmor: ignore[self-repository]")
     } else {
         Yaml::str(uses.to_owned())
@@ -177,6 +188,7 @@ pub(crate) fn step_to_yaml(
             commands::validate_command_argv(run)?;
             commands::validate_env(env)?;
             let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
+            push_step_id(&mut entries, step);
             if let Some(condition) = &step.condition {
                 steps::scan_for_private_subcommands(condition)?;
                 entries.push(("if".to_owned(), Yaml::str(condition.clone())));
@@ -207,6 +219,7 @@ pub(crate) fn step_to_yaml(
                 ));
             }
             let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
+            push_step_id(&mut entries, step);
             if let Some(condition) = &step.condition {
                 steps::scan_for_private_subcommands(condition)?;
                 entries.push(("if".to_owned(), Yaml::str(condition.clone())));

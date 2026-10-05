@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 
 use velnor_actions_contract::workflow::jobs::ValidatorKind;
 use velnor_actions_contract::{
-    Concurrency, Job, JobTimeout, Permissions, Step, StepKind, Trigger, WorkflowIr,
+    Concurrency, Job, JobTimeout, Permissions, Step, StepKind, StepRole, Trigger, WorkflowIr,
 };
 use velnor_actions_mise::PREPARE_PINNED_TOOLS_STEP;
 use velnor_actions_workflow_renderer::render::ValidatorCommand;
@@ -24,6 +24,8 @@ fn shell_job(run: Vec<String>) -> Job {
         environment: None,
         steps: vec![Step {
             name: PREPARE_PINNED_TOOLS_STEP.to_owned(),
+            id: None,
+            role: Some(StepRole::PreparePinnedTools),
             condition: None,
             kind: StepKind::Shell {
                 run,

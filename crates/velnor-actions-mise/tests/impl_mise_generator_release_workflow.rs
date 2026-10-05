@@ -1,4 +1,4 @@
-use velnor_actions_contract::{GeneratorReleaseTarget, Step, StepKind};
+use velnor_actions_contract::{GeneratorReleaseTarget, Step, StepKind, StepRole};
 
 use velnor_actions_mise::{
     MISE_VERSION, ToolCatalog, ToolHomes, generator_release_mise_binary_sha256, rust_exec_step,
@@ -42,6 +42,17 @@ fn assert_setup_steps(
     expected_digest: &str,
 ) -> bool {
     assert_eq!(steps.len(), 2);
+    assert_eq!(steps[0].id, None);
+    assert_eq!(steps[0].role, Some(StepRole::MiseSetup));
+    assert_eq!(steps[1].id, None);
+    assert_eq!(steps[1].role, Some(StepRole::PreparePinnedTools));
+    assert!(
+        velnor_actions_contract::workflow::step_identity::validate_step_identity_scope(
+            steps,
+            "generator-release-setup"
+        )
+        .is_ok()
+    );
     let StepKind::Action { uses, with, .. } = &steps[0].kind else {
         return false;
     };
@@ -101,6 +112,8 @@ fn rust_exec_lowers_pinned_cargo_args_and_owned_environment() {
     );
     assert!(step.is_ok(), "Cargo execution step must be valid");
     if let Ok(step) = step {
+        assert_eq!(step.id, None);
+        assert_eq!(step.role, None);
         assert!(matches!(step.kind, StepKind::Shell { .. }));
         if let StepKind::Shell { run, env } = step.kind {
             assert!(run.windows(2).any(|pair| pair == ["exec", "rust@1.98.1"]));
