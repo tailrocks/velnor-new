@@ -5,10 +5,17 @@
 use super::*;
 use crate::publish_job::baseline_publish_job;
 use crate::workflow::{CHECKOUT_USES, REQUEST_DIR};
-use crate::workflow_jobs::{final_job, plan_job};
+use crate::workflow_jobs::{PlanJobToolNeeds, PlanRustNeed, final_job, plan_job};
 use std::collections::BTreeMap;
 use velnor_actions_contract::{Concurrency, Job, JobTimeout, Permissions, Trigger};
 use velnor_actions_workflow_renderer::render::{RenderContext, WORKFLOW_PATH};
+
+fn rust_plan_needs() -> PlanJobToolNeeds {
+    PlanJobToolNeeds {
+        rust: PlanRustNeed::CompilerAndComponents,
+        ..PlanJobToolNeeds::default()
+    }
+}
 
 /// Minimal crate job covering the crate attach branch.
 fn legacy_task_job() -> Job {
@@ -71,17 +78,7 @@ fn lock_acquire_inserts_digest_verified_stage() {
     let mut ir = bare_ir(BTreeMap::from([
         (
             "plan".to_owned(),
-            plan_job(
-                "ubuntu-26.04",
-                None,
-                &catalog,
-                true,
-                false,
-                false,
-                false,
-                &[],
-            )
-            .expect("plan job"),
+            plan_job("ubuntu-26.04", None, &catalog, rust_plan_needs(), &[]).expect("plan job"),
         ),
         (
             "required".to_owned(),
@@ -153,17 +150,7 @@ fn lock_acquire_records_source_commit() {
     let catalog = ToolCatalog::pinned();
     let mut ir = bare_ir(BTreeMap::from([(
         "plan".to_owned(),
-        plan_job(
-            "ubuntu-26.04",
-            None,
-            &catalog,
-            true,
-            false,
-            false,
-            false,
-            &[],
-        )
-        .expect("plan job"),
+        plan_job("ubuntu-26.04", None, &catalog, rust_plan_needs(), &[]).expect("plan job"),
     )]));
     ir.jobs.insert(
         "required".to_owned(),
@@ -199,17 +186,7 @@ fn preseed_attach_builds_once_and_sets_mode() {
         ir: bare_ir(BTreeMap::from([
             (
                 "plan".to_owned(),
-                plan_job(
-                    "ubuntu-26.04",
-                    None,
-                    &catalog,
-                    true,
-                    false,
-                    false,
-                    false,
-                    &[],
-                )
-                .expect("plan job"),
+                plan_job("ubuntu-26.04", None, &catalog, rust_plan_needs(), &[]).expect("plan job"),
             ),
             ("rust-demo".to_owned(), legacy_task_job()),
             (
@@ -313,10 +290,7 @@ fn preseed_fixture(fetch_roots: &[String]) -> WorkflowPlan {
                     "ubuntu-26.04",
                     None,
                     &catalog,
-                    true,
-                    false,
-                    false,
-                    false,
+                    rust_plan_needs(),
                     fetch_roots,
                 )
                 .expect("plan job"),

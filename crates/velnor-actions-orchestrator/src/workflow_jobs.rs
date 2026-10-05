@@ -22,6 +22,34 @@ use crate::OrchestratorError;
 use crate::source_prep::fetch_steps_for_plan;
 use crate::utf8::{strings_of, strings_of_env};
 
+/// Rust needs of the planner job, including the optional format components.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) enum PlanRustNeed {
+    #[default]
+    None,
+    Compiler,
+    CompilerAndComponents,
+}
+
+impl PlanRustNeed {
+    pub(crate) fn has_compiler(self) -> bool {
+        self != Self::None
+    }
+
+    fn has_components(self) -> bool {
+        self == Self::CompilerAndComponents
+    }
+}
+
+/// Named planner tool needs; named fields prevent resolver/tool roles swapping.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) struct PlanJobToolNeeds {
+    pub(crate) rust: PlanRustNeed,
+    pub(crate) nextest: bool,
+    pub(crate) opentofu: bool,
+    pub(crate) gh: bool,
+}
+
 /// Always-on workflow-lint job ID, emitted for both policies.
 pub(crate) const LINT_JOB_ID: &str = "actionlint";
 
@@ -50,29 +78,17 @@ pub(crate) const LINT_DISPLAY_NAME: &str = "Actionlint";
 /// # Errors
 ///
 /// Returns a contract error when a typed step request is rejected.
-#[expect(
-    clippy::too_many_arguments,
-    clippy::fn_params_excessive_bools,
-    reason = "one call site threads job scope plus role selection"
-)]
 pub(crate) fn plan_job(
     label: &str,
     acquire: Option<Step>,
     catalog: &ToolCatalog,
-    use_rust: bool,
-    use_nextest: bool,
-    use_opentofu: bool,
-    use_gh: bool,
+    needs: PlanJobToolNeeds,
     fetch_roots: &[String],
 ) -> Result<Job, OrchestratorError> {
     let mut steps = vec![checkout_history_action()?];
-    let prepare = prepare_pinned_tools_step(
-        catalog,
-        plan_tools(use_rust, use_nextest, use_opentofu, use_gh),
-        use_rust,
-    )?;
+    let prepare = prepare_pinned_tools_step(catalog, plan_tools(needs), needs.rust.has_compiler())?;
     steps.push(prepare);
-    if use_rust {
+    if needs.rust.has_components() {
         steps.push(crate::workflow::prepare_rust_components_step(catalog)?);
     }
     let cached = crate::workflow_jobs_cache::cache_steps_for_plan(label, catalog, fetch_roots)?;
@@ -81,7 +97,7 @@ pub(crate) fn plan_job(
     steps.extend(cached.save);
     steps.extend(acquire);
     steps.push(request_step(PLAN_OPERATION)?);
-    if use_gh {
+    if needs.gh {
         let mut resolve = velnor_actions_workflow_renderer::steps::internal_step(
             "Resolve qualification predecessor",
             RESOLVE_QUALIFICATION_OPERATION,
@@ -208,26 +224,17 @@ pub(crate) fn read_actions_permissions() -> Permissions {
 /// and zizmor; installing only the driver toolchain leaves that step red. Order
 /// follows `PinnedTool::ALL`. Pure-tofu plans carry opentofu plus the validators
 /// with no Rust; mixed plans carry the union.
-#[expect(
-    clippy::fn_params_excessive_bools,
-    reason = "driver, validator, and resolver install roles are independent"
-)]
-fn plan_tools(
-    use_rust: bool,
-    use_nextest: bool,
-    use_opentofu: bool,
-    use_gh: bool,
-) -> Vec<PinnedTool> {
+fn plan_tools(needs: PlanJobToolNeeds) -> Vec<PinnedTool> {
     let mut tools = Vec::new();
-    tools.extend(use_rust.then_some(PinnedTool::Rust));
+    tools.extend(needs.rust.has_compiler().then_some(PinnedTool::Rust));
     tools.extend([
         PinnedTool::Actionlint,
         PinnedTool::Shellcheck,
         PinnedTool::Zizmor,
     ]);
-    tools.extend(use_nextest.then_some(PinnedTool::Nextest));
-    tools.extend(use_opentofu.then_some(PinnedTool::Opentofu));
-    tools.extend(use_gh.then_some(PinnedTool::Gh));
+    tools.extend(needs.nextest.then_some(PinnedTool::Nextest));
+    tools.extend(needs.opentofu.then_some(PinnedTool::Opentofu));
+    tools.extend(needs.gh.then_some(PinnedTool::Gh));
     tools
 }
 
@@ -243,7 +250,7 @@ fn plan_tools(
 fn prepare_pinned_tools_step(
     catalog: &ToolCatalog,
     tools: Vec<PinnedTool>,
-    use_rust: bool,
+    rust_homes: bool,
 ) -> Result<Step, OrchestratorError> {
     let homes = ToolHomes::runner_temp();
     let prepare =
@@ -252,7 +259,7 @@ fn prepare_pinned_tools_step(
         })?;
     let run = strings_of(prepare.argv(catalog))
         .map_err(|problem| OrchestratorError::Contract { problem })?;
-    let env = if use_rust {
+    let env = if rust_homes {
         strings_of_env(&prepare.env(catalog))
     } else {
         strings_of_env(&prepare.env_without_homes())

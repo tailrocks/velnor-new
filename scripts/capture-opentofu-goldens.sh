@@ -88,6 +88,21 @@ copy_tree() {
   cp -RP "$1" "$2"
 }
 
+# Explicit schema-only input for positive ConsumerV1 fixture repos. It
+# carries placeholder values and is never used as release evidence.
+write_fixture_consumer_manifest() {
+  local repo="$1" manifest="$1/.velnor/release-manifest.json"
+  if [ -e "$manifest" ] || [ -L "$manifest" ]; then
+    [ -f "$manifest" ] && [ ! -L "$manifest" ]
+    return $?
+  fi
+  if [ -L "$repo/.velnor" ] || { [ -e "$repo/.velnor" ] && [ ! -d "$repo/.velnor" ]; }; then
+    return 1
+  fi
+  mkdir -p "$repo/.velnor" || return 1
+  cp "$ROOT/fixtures/consumer-release-manifest.json" "$manifest"
+}
+
 # Do not pin checkout-specific paths printed by `generate` in stderr goldens.
 normalize_generate_stderr() {
   local path="$1" normalized="$1.normalized"
@@ -152,11 +167,8 @@ setup_case() {
   fi
   if [ "$MODE" = "check-release" ]; then
     stage_candidate_manifest "$repo" "$case"
-  # Ordinary structural goldens require explicit fixture provenance too;
-  # only check-release is allowed to stage an actual candidate manifest.
-  elif ! cp "$ROOT/fixtures/consumer-release-manifest.json" \
-    "$repo/.velnor/release-manifest.json"; then
-    echo "FATAL: could not stage the explicit consumer manifest fixture for $case"
+  elif ! write_fixture_consumer_manifest "$repo"; then
+    echo "FATAL: could not prepare explicit consumer schema fixture for $case"
     exit 2
   fi
   (cd "$repo" \

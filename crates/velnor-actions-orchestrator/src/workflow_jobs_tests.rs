@@ -5,6 +5,13 @@
 use super::*;
 use velnor_actions_contract::StepKind;
 
+fn needs(rust: PlanRustNeed) -> PlanJobToolNeeds {
+    PlanJobToolNeeds {
+        rust,
+        ..PlanJobToolNeeds::default()
+    }
+}
+
 /// Internal operation of one step, if any.
 fn operation_of(step: &Step) -> Option<&str> {
     match &step.kind {
@@ -41,10 +48,7 @@ fn plan_job_writes_request_before_plan() {
             "ubuntu-26.04",
             acquire,
             &catalog,
-            true,
-            false,
-            false,
-            false,
+            needs(PlanRustNeed::CompilerAndComponents),
             &[],
         )
         .expect("plan job");
@@ -66,10 +70,10 @@ fn qualification_resolver_is_scoped_between_request_and_plan() {
         "ubuntu-26.04",
         None,
         &catalog,
-        true,
-        false,
-        false,
-        true,
+        PlanJobToolNeeds {
+            gh: true,
+            ..needs(PlanRustNeed::CompilerAndComponents)
+        },
         &[],
     )
     .expect("qualification plan job");
@@ -91,7 +95,10 @@ fn qualification_resolver_is_scoped_between_request_and_plan() {
         job.steps[resolver].condition.as_deref(),
         Some("github.event_name == 'workflow_dispatch'")
     );
-    let tools = plan_tools(true, false, false, true);
+    let tools = plan_tools(PlanJobToolNeeds {
+        gh: true,
+        ..needs(PlanRustNeed::CompilerAndComponents)
+    });
     assert!(
         tools.contains(&PinnedTool::Gh),
         "resolver installs pinned gh"
@@ -105,10 +112,7 @@ fn plan_job_checks_out_full_history_for_archaeology() {
         "ubuntu-26.04",
         None,
         &catalog,
-        true,
-        false,
-        false,
-        false,
+        needs(PlanRustNeed::CompilerAndComponents),
         &[],
     )
     .expect("plan job");
@@ -133,7 +137,7 @@ fn plan_job_checks_out_full_history_for_archaeology() {
 #[test]
 fn plan_tools_follow_role_in_all_order() {
     assert_eq!(
-        plan_tools(true, false, false, false),
+        plan_tools(needs(PlanRustNeed::CompilerAndComponents)),
         vec![
             PinnedTool::Rust,
             PinnedTool::Actionlint,
@@ -142,7 +146,10 @@ fn plan_tools_follow_role_in_all_order() {
         ]
     );
     assert_eq!(
-        plan_tools(false, false, true, false),
+        plan_tools(PlanJobToolNeeds {
+            opentofu: true,
+            ..needs(PlanRustNeed::None)
+        }),
         vec![
             PinnedTool::Actionlint,
             PinnedTool::Shellcheck,
@@ -152,7 +159,11 @@ fn plan_tools_follow_role_in_all_order() {
         "pure-tofu plans carry opentofu plus the validators, no Rust"
     );
     assert_eq!(
-        plan_tools(true, true, true, false),
+        plan_tools(PlanJobToolNeeds {
+            nextest: true,
+            opentofu: true,
+            ..needs(PlanRustNeed::CompilerAndComponents)
+        }),
         vec![
             PinnedTool::Rust,
             PinnedTool::Actionlint,
@@ -164,9 +175,16 @@ fn plan_tools_follow_role_in_all_order() {
         "mixed plans carry the union"
     );
     for tools in [
-        plan_tools(true, false, false, false),
-        plan_tools(false, false, true, false),
-        plan_tools(true, true, true, false),
+        plan_tools(needs(PlanRustNeed::CompilerAndComponents)),
+        plan_tools(PlanJobToolNeeds {
+            opentofu: true,
+            ..needs(PlanRustNeed::None)
+        }),
+        plan_tools(PlanJobToolNeeds {
+            nextest: true,
+            opentofu: true,
+            ..needs(PlanRustNeed::CompilerAndComponents)
+        }),
     ] {
         let order: Vec<usize> = tools
             .iter()
@@ -191,10 +209,10 @@ fn plan_job_prepares_pinned_tools_before_generate_consumers() {
             "ubuntu-26.04",
             None,
             &catalog,
-            true,
-            use_nextest,
-            false,
-            false,
+            PlanJobToolNeeds {
+                nextest: use_nextest,
+                ..needs(PlanRustNeed::CompilerAndComponents)
+            },
             &[],
         )
         .expect("plan job");
@@ -288,10 +306,10 @@ fn pure_tofu_plan_drops_all_rust_setup() {
         "ubuntu-26.04",
         None,
         &catalog,
-        false,
-        false,
-        true,
-        false,
+        PlanJobToolNeeds {
+            opentofu: true,
+            ..needs(PlanRustNeed::None)
+        },
         &[],
     )
     .expect("plan job");

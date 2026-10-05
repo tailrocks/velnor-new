@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Candidate release manifest verification and qualification parity helpers.
 
+MAX_CANDIDATE_MANIFEST_BYTES=8388608
+
 file_sha256() {
   local path="$1" output
   if command -v sha256sum >/dev/null 2>&1; then
@@ -14,6 +16,23 @@ file_sha256() {
   printf '%s\n' "$output" | awk 'NR == 1 && length($1) == 64 && $1 !~ /[^0-9a-f]/ { print $1; next } { exit 1 } END { if (NR != 1) exit 1 }'
 }
 
+file_size_bytes() {
+  local path="$1" size
+  case "$path" in
+    /*) ;;
+    *) path="./$path" ;;
+  esac
+  if size="$(stat -c '%s' -- "$path" 2>/dev/null)"; then
+    :
+  elif size="$(stat -f '%z' "$path" 2>/dev/null)"; then
+    :
+  else
+    return 1
+  fi
+  [[ "$size" =~ ^[0-9]+$ ]] || return 1
+  printf '%s\n' "$size"
+}
+
 host_target() {
   case "$(uname -s):$(uname -m)" in
     Linux:x86_64|Linux:amd64) echo "x86_64-unknown-linux-gnu" ;;
@@ -24,9 +43,14 @@ host_target() {
 }
 
 validate_candidate_manifest() {
-  local target version source_sha checkout_sha candidate_sha manifest_sha manifest_file_sha
+  local target version source_sha checkout_sha candidate_sha manifest_sha manifest_file_sha manifest_size
   if [ ! -f "$CANDIDATE_MANIFEST" ] || [ -L "$CANDIDATE_MANIFEST" ]; then
     echo "FATAL: candidate manifest must be a regular non-symlink file: $CANDIDATE_MANIFEST" >&2
+    exit 2
+  fi
+  if ! manifest_size="$(file_size_bytes "$CANDIDATE_MANIFEST")" \
+    || (( manifest_size > MAX_CANDIDATE_MANIFEST_BYTES )); then
+    echo "FATAL: candidate manifest must not exceed $MAX_CANDIDATE_MANIFEST_BYTES bytes" >&2
     exit 2
   fi
   if [[ ! "$CANDIDATE_MANIFEST_SHA256" =~ ^[0-9a-f]{64}$ ]]; then
