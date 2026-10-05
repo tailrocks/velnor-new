@@ -139,6 +139,14 @@ fn render_all(prep: &GenerationPreparation) -> Result<RenderedTree, Orchestrator
     let actionlint = rehead_actionlint_marker(&actionlint.yaml, version)?;
     let mut extra = crate::release_emit::release_files(prep, &mise)?;
     extra.extend(crate::freshness_emit::freshness_files(prep)?);
+    if prep.config.schema == velnor_actions_contract::VelnorConfig::SCHEMA_V2 {
+        extra.extend(
+            velnor_actions_workflow_renderer::schema2::render_schema2_workflows_for(
+                version,
+                &prep.runner_label,
+            )?,
+        );
+    }
     let tree = render_tree_with_extra(&workflow, &actionlint, &extra, version)?;
     Ok(tree)
 }

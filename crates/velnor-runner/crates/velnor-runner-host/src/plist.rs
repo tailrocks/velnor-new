@@ -12,8 +12,9 @@ use crate::error::HostError;
 pub fn launch_agent_plist(binary: &Path) -> Result<String, HostError> {
     let bin = binary
         .to_str()
-        .filter(|text| text.starts_with('/'))
+        .filter(|text| text.starts_with('/') && !text.chars().any(xml_forbidden))
         .ok_or(HostError::Path)?;
+    let bin = xml_text(bin);
     Ok(format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -28,6 +29,23 @@ pub fn launch_agent_plist(binary: &Path) -> Result<String, HostError> {
 </dict></plist>
 "#
     ))
+}
+
+fn xml_forbidden(ch: char) -> bool {
+    matches!(ch, '\0' | '\n' | '\r')
+}
+
+fn xml_text(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for ch in text.chars() {
+        match ch {
+            '&' => out.push_str("&amp;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            _ => out.push(ch),
+        }
+    }
+    out
 }
 
 /// Argv for a Keychain import that reads the secret on stdin, not on argv.

@@ -4,7 +4,9 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use serde::Deserialize;
-use velnor_actions_contract::config::{ActionPinOverride, ActionsConfig};
+use velnor_actions_contract::config::{
+    ActionPinOverride, ActionsConfig, ExecutionConfig, ExecutionMode,
+};
 use velnor_actions_contract::{
     DiscoveryConfig, GeneratorValidation, ResourcesConfig, TestShardingConfig, VelnorConfig,
     WorkflowConfig, WorkflowPolicy,
@@ -38,16 +40,19 @@ pub(crate) fn load_config(root: &Path) -> Result<VelnorConfig, OrchestratorError
         }
         crate::safe_read::RepoRead::Text(text) => text,
     };
-    let partial: PartialConfig = toml::from_str(&text).map_err(|err| {
+    config_from_str(&text)
+}
+
+/// Parse, default, and validate one config document.
+pub(crate) fn config_from_str(text: &str) -> Result<VelnorConfig, OrchestratorError> {
+    let partial: PartialConfig = toml::from_str(text).map_err(|err| {
         config_error(velnor_actions_contract::ContractError::map_decode_error(
             CONFIG_REL,
             &err.to_string(),
         ))
     })?;
     let config = partial.materialize()?;
-    if let Err(err) = config.validate(CONFIG_REL) {
-        return Err(config_error(err));
-    }
+    config.validate(CONFIG_REL).map_err(config_error)?;
     check_policy_mode(&config)?;
     Ok(config)
 }
@@ -111,6 +116,9 @@ struct PartialConfig {
     /// Actions section.
     #[serde(default)]
     actions: PartialActions,
+    /// Execution section. Absent means hosted.
+    #[serde(default)]
+    execution: PartialExecution,
 }
 
 /// Workflow section with every value optional.
@@ -161,6 +169,15 @@ struct PartialDiscovery {
     exclude: Vec<String>,
 }
 
+/// Execution section with every value optional.
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PartialExecution {
+    /// Routing mode.
+    #[serde(default)]
+    mode: Option<ExecutionMode>,
+}
+
 /// Actions section with every value optional.
 #[derive(Debug, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -184,6 +201,9 @@ impl PartialConfig {
             stacks: self.stacks.materialize()?,
             discovery: self.discovery.materialize(),
             actions: self.actions.materialize(),
+            execution: ExecutionConfig {
+                mode: self.execution.mode,
+            },
         })
     }
 }

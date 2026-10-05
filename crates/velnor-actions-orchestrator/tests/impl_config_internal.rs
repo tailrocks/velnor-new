@@ -46,7 +46,7 @@ fn init_creates_sample_and_refuses_overwrite() -> TestResult {
 
 #[test]
 fn config_errors_name_file_and_key_path() -> TestResult {
-    let repo = make_repo("schema = 2\n")?;
+    let repo = make_repo("schema = 99\n")?;
     let err = err_of(prepare(repo.path()), "bad schema")?;
     assert!(err.to_string().contains(".velnor/config.toml"), "got {err}");
     assert!(err.to_string().contains("schema"), "got {err}");

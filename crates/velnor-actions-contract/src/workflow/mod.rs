@@ -11,6 +11,7 @@ pub mod permissions;
 pub mod plan;
 pub mod qualification;
 pub mod report;
+pub mod selector;
 pub mod timeout;
 pub mod trust;
 pub use artifacts::{
@@ -43,6 +44,9 @@ pub use qualification::{
     FinalCounts, FinalReport, FinalStatus, JobConclusion, RequiredJobResult,
     final_report_id_for_run, final_report_relpath, join_runner_temp, matrix_report_relpath,
     task_report_relpath, validate_final_report_id,
+};
+pub use selector::{
+    HostedLabel, RunsOn, SCALE_SET_MARKER, SCALE_SET_NAME, ScaleSetSelector, paired_hosted_label,
 };
 pub use report::{
     CacheLayer, CacheOutcome, CacheResult, MatrixReport, MatrixStatus, MatrixTaskEntry,

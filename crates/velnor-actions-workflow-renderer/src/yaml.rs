@@ -1,8 +1,9 @@
 //! Deterministic YAML emitter: stable order, safe quoting, 2-space indent.
 //!
-//! Block style only, no anchors, aliases, tags, or flow collections beyond
-//! empty `[]`/`{}`. Key order is caller-controlled; determinism follows from
-//! fixed renderer code plus sorted contract maps.
+//! Block style, plus one inline string sequence for scale-set `runs-on`.
+//! No anchors, aliases, or tags. Empty collections stay `[]`/`{}`. Key order
+//! is caller-controlled; determinism follows from fixed renderer code plus
+//! sorted contract maps.
 
 /// Minimal YAML value tree with explicit mapping order.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -17,6 +18,8 @@ pub enum Yaml {
     Int(i64),
     /// Block sequence.
     Seq(Vec<Self>),
+    /// Inline string sequence: `[a, b]`. Not sorted.
+    FlowSeq(Vec<String>),
     /// Block mapping in the given entry order.
     Map(Vec<(String, Self)>),
 }
@@ -28,10 +31,16 @@ impl Yaml {
         Self::Str(value.into())
     }
 
+    /// Inline flow sequence of string scalars, in the given order.
+    #[must_use]
+    pub fn flow_strings(items: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        Self::FlowSeq(items.into_iter().map(Into::into).collect())
+    }
+
     /// True when the value fits on one line after `key: ` or `- `.
     fn is_inline(&self) -> bool {
         match self {
-            Self::Null | Self::Str(_) | Self::Bool(_) | Self::Int(_) => true,
+            Self::Null | Self::Str(_) | Self::Bool(_) | Self::Int(_) | Self::FlowSeq(_) => true,
             Self::Seq(items) => items.is_empty(),
             Self::Map(entries) => entries.is_empty(),
         }
@@ -101,7 +110,7 @@ fn emit_node(value: &Yaml, indent: usize, out: &mut String) {
                 emit_map_entry(key, child, indent, out);
             }
         }
-        Yaml::Null | Yaml::Str(_) | Yaml::Bool(_) | Yaml::Int(_) => {}
+        Yaml::Null | Yaml::Str(_) | Yaml::Bool(_) | Yaml::Int(_) | Yaml::FlowSeq(_) => {}
     }
 }
 
@@ -172,10 +181,23 @@ fn emit_inline(value: &Yaml, out: &mut String) {
         Yaml::Str(text) => out.push_str(&quote_scalar(text)),
         Yaml::Bool(flag) => out.push_str(if *flag { "true" } else { "false" }),
         Yaml::Int(num) => out.push_str(&num.to_string()),
+        Yaml::FlowSeq(items) => emit_flow_seq(items, out),
         Yaml::Seq(items) if items.is_empty() => out.push_str("[]"),
         Yaml::Map(entries) if entries.is_empty() => out.push_str("{}"),
         Yaml::Null | Yaml::Seq(_) | Yaml::Map(_) => {}
     }
+}
+
+/// Emit `[a, b]` with plain-safe quoting and a comma-space separator.
+fn emit_flow_seq(items: &[String], out: &mut String) {
+    out.push('[');
+    for (index, item) in items.iter().enumerate() {
+        if index > 0 {
+            out.push_str(", ");
+        }
+        out.push_str(&quote_scalar(item));
+    }
+    out.push(']');
 }
 
 /// Push 2-space indentation.

@@ -34,6 +34,8 @@ pub mod release_permissions;
 pub mod release_spec;
 pub mod release_tree;
 pub mod render;
+mod routing;
+pub mod schema2;
 pub mod setup;
 pub mod steps;
 mod steps_artifact;

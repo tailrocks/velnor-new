@@ -3,6 +3,7 @@
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
+use velnor_actions_contract::config::ExecutionMode;
 use velnor_actions_contract::{RunnerImageEvidence, RunnerSelection, VelnorConfig, WorkflowPolicy};
 use velnor_actions_mise::GitRequest;
 
@@ -48,6 +49,20 @@ pub struct GenerationPreparation {
 ///
 /// Returns root, config, branch, identity, discovery, or workflow errors.
 pub fn prepare(root: &Path) -> Result<GenerationPreparation, OrchestratorError> {
+    prepare_with(root, None)
+}
+
+/// Build preparation. `dispatch` overrides a schema 2 `execution.mode`.
+///
+/// Schema 1 rejects an explicit mode. Hosted routing leaves rendering unchanged.
+///
+/// # Errors
+///
+/// Returns root, config, branch, identity, discovery, workflow, or routing errors.
+pub fn prepare_with(
+    root: &Path,
+    dispatch: Option<ExecutionMode>,
+) -> Result<GenerationPreparation, OrchestratorError> {
     let canonical = root
         .canonicalize()
         .map_err(|err| OrchestratorError::io(root.display().to_string(), err.to_string()))?;
@@ -62,13 +77,14 @@ pub fn prepare(root: &Path) -> Result<GenerationPreparation, OrchestratorError> 
     let mut discovery = discover(&canonical, &config)?;
     let fetch_roots = lockful_roots(&canonical, &discovery.workspaces);
     let (runner_label, runner_selection) = runner_label_for(&config);
-    let workflow = build_workflow(
+    let mut workflow = build_workflow(
         &config,
         &default_branch,
         &runner_label,
         &discovery,
         &fetch_roots,
     )?;
+    crate::routing::apply_schema2(&mut workflow, &config, &runner_label, dispatch)?;
     let runner_image = runner_image_evidence();
     let audit = crate::lock_audit::audit_prepare_installs(
         &canonical,

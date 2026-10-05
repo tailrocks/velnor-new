@@ -115,3 +115,56 @@ fn generate_output_dir_flag_parses() -> Result<(), Box<dyn Error>> {
     cleanup(&tmp);
     Ok(())
 }
+
+/// Write `.velnor/config.toml` under `root`.
+fn write_config(root: &std::path::Path, body: &str) -> Result<(), Box<dyn Error>> {
+    let dir = root.join(".velnor");
+    std::fs::create_dir_all(&dir)?;
+    std::fs::write(dir.join("config.toml"), body)?;
+    Ok(())
+}
+
+#[test]
+fn migrate_missing_to_exits_two() -> Result<(), Box<dyn Error>> {
+    let tmp = fresh_tempdir("args-migrate-usage")?;
+    let output = spawn(&["config", "migrate"], &[], &tmp)?;
+    assert_eq!(code(&output), 2);
+    cleanup(&tmp);
+    Ok(())
+}
+
+#[test]
+fn migrate_preview_matches_write_and_bad_target_keeps_bytes() -> Result<(), Box<dyn Error>> {
+    let tmp = fresh_tempdir("args-migrate")?;
+    git_init(&tmp)?;
+    let body = "schema = 1\n[workflow]\nrunner_label = \"ubuntu-26.04\"\n";
+    write_config(&tmp, body)?;
+    let path = tmp.join(".velnor/config.toml");
+    let before = std::fs::read(&path)?;
+    let preview = spawn(&["config", "migrate", "--to", "2"], &[], &tmp)?;
+    assert_eq!(code(&preview), 0, "{}", String::from_utf8_lossy(&preview.stderr));
+    assert_eq!(std::fs::read(&path)?, before);
+    let written = spawn(&["config", "migrate", "--to", "2", "--write"], &[], &tmp)?;
+    assert_eq!(code(&written), 0, "{}", String::from_utf8_lossy(&written.stderr));
+    let saved = std::fs::read(&path)?;
+    assert_eq!(written.stdout, saved);
+    assert_ne!(saved, before);
+    assert!(std::str::from_utf8(&saved)?.contains("runner_label = \"ubuntu-26.04\""));
+    let bad = spawn(&["config", "migrate", "--to", "9"], &[], &tmp)?;
+    assert_eq!(code(&bad), 1);
+    assert_eq!(std::fs::read(&path)?, saved);
+    cleanup(&tmp);
+    Ok(())
+}
+
+#[test]
+fn migrate_missing_config_creates_nothing() -> Result<(), Box<dyn Error>> {
+    let tmp = fresh_tempdir("args-migrate-missing")?;
+    git_init(&tmp)?;
+    let path = tmp.join(".velnor/config.toml");
+    let output = spawn(&["config", "migrate", "--to", "2"], &[], &tmp)?;
+    assert_eq!(code(&output), 1);
+    assert!(!path.exists());
+    cleanup(&tmp);
+    Ok(())
+}

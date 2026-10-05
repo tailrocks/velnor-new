@@ -229,6 +229,7 @@ fn preseed_attach_builds_once_and_sets_mode() {
             candidate: None,
             preseed: false,
             plan_consumer_env: std::collections::BTreeMap::new(),
+            route: None,
         },
         actionlint: ActionlintConfigInput::new("0.1.0").with_workflow_path(WORKFLOW_PATH),
     };
@@ -324,6 +325,7 @@ fn preseed_fixture(use_mbx: bool, fetch_roots: &[String]) -> WorkflowPlan {
             candidate: None,
             preseed: false,
             plan_consumer_env: BTreeMap::new(),
+            route: None,
         },
         actionlint: ActionlintConfigInput::new("0.1.0").with_workflow_path(WORKFLOW_PATH),
     }

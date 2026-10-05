@@ -37,6 +37,7 @@ pub(crate) fn valid_config() -> VelnorConfig {
         },
         discovery: DiscoveryConfig { exclude: vec![] },
         actions: ActionsConfig::default(),
+        execution: velnor_actions_contract::config::ExecutionConfig::default(),
     }
 }
 
@@ -155,6 +156,19 @@ fn arch_unknown_keys_fail_with_unknown_config_field() {
     assert_eq!(mapped.to_string(), "cfg.toml: shell: unknown_config_field");
     let other = ContractError::map_decode_error("cfg.toml", "expected value, found eof");
     assert!(other.to_string().starts_with("cfg.toml: document:"));
+}
+
+#[test]
+fn schema2_mode_is_valid_and_schema1_rejects_mode() {
+    use velnor_actions_contract::config::ExecutionMode;
+    let mut config = valid_config();
+    config.schema = VelnorConfig::SCHEMA_V2;
+    assert_eq!(config.validate("cfg"), Ok(()));
+    config.execution.mode = Some(ExecutionMode::Both);
+    assert_eq!(config.validate("cfg"), Ok(()));
+    config.schema = VelnorConfig::SCHEMA;
+    let err = config.validate("cfg").expect_err("schema 1 mode");
+    assert!(err.to_string().contains("schema1_rejects_execution"));
 }
 
 #[test]

@@ -375,6 +375,7 @@ fn render_context(
             &std::collections::BTreeMap::new(),
             plan_needs_rust,
         )?,
+        route: None,
     })
 }
 

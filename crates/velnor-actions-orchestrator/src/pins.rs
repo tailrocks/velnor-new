@@ -227,7 +227,7 @@ fn test_manifest_json() -> String {
 mod tests {
     use super::*;
     use std::collections::BTreeMap;
-    use velnor_actions_contract::config::{ActionPinOverride, ActionsConfig};
+    use velnor_actions_contract::config::{ActionPinOverride, ActionsConfig, ExecutionConfig};
     use velnor_actions_contract::{
         DiscoveryConfig, GeneratorValidation, ResourcesConfig, StacksConfig, TestShardingConfig,
         WorkflowConfig, WorkflowPolicy,
@@ -258,10 +258,9 @@ mod tests {
                 rust: None,
                 tofu: None,
             },
-            discovery: DiscoveryConfig {
-                exclude: Vec::new(),
-            },
+            discovery: DiscoveryConfig { exclude: Vec::new() },
             actions: ActionsConfig { overrides },
+            execution: ExecutionConfig::default(),
         }
     }
 

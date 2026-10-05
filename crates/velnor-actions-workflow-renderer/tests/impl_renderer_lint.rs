@@ -29,6 +29,7 @@ fn fixture_ctx() -> RenderContext {
         candidate: None,
         preseed: false,
         plan_consumer_env: std::collections::BTreeMap::new(),
+        route: None,
     }
 }
 

@@ -26,3 +26,18 @@ pub use ipc::{MAX_FRAME, SOCKET_DIR_MODE, decode_frame, encode_frame};
 pub use journal::{IntentState, Journal, Outcome};
 pub use plist::{keychain_import_argv, launch_agent_plist};
 pub use readiness::{Readiness, doctor_json, readiness_for_empty, status_json};
+
+#[cfg(test)]
+mod connect_tests;
+#[cfg(test)]
+mod docker_client_tests;
+#[cfg(test)]
+mod docker_spec_tests;
+#[cfg(test)]
+mod ipc_tests;
+#[cfg(test)]
+mod journal_tests;
+#[cfg(test)]
+mod plist_tests;
+#[cfg(test)]
+mod readiness_tests;

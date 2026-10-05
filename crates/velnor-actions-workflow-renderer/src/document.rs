@@ -4,10 +4,8 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{
-    Job, Permissions, Step, StepKind, Trigger, WorkflowIr,
-    workflow::{ir::DispatchInput, permissions::PermissionLevel},
-};
+use velnor_actions_contract::workflow::{RunsOn, ir::DispatchInput, permissions::PermissionLevel};
+use velnor_actions_contract::{Job, Permissions, Step, StepKind, Trigger, WorkflowIr};
 
 use crate::{
     RenderError, commands,
@@ -21,11 +19,15 @@ pub(crate) fn workflow_to_yaml(
     ir: &WorkflowIr,
     jobs: &BTreeMap<String, Job>,
     ctx: &RenderContext,
+    selectors: &BTreeMap<String, RunsOn>,
 ) -> Result<Yaml, RenderError> {
     let needs_env = needs_channel_envs(jobs)?;
     let mut rendered_jobs = Vec::with_capacity(jobs.len());
     for (id, job) in jobs {
-        rendered_jobs.push((id.clone(), job_to_yaml(id, job, ctx, &needs_env)?));
+        rendered_jobs.push((
+            id.clone(),
+            job_to_yaml(id, job, ctx, &needs_env, selectors)?,
+        ));
     }
     Ok(Yaml::Map(vec![
         ("name".to_owned(), Yaml::str(ir.name.clone())),
@@ -176,11 +178,15 @@ fn job_to_yaml(
     job: &Job,
     ctx: &RenderContext,
     needs_envs: &[(String, String)],
+    selectors: &BTreeMap<String, RunsOn>,
 ) -> Result<Yaml, RenderError> {
     steps::scan_for_private_subcommands(&job.display_name)?;
     let mut entries = vec![
         ("name".to_owned(), Yaml::str(job.display_name.clone())),
-        ("runs-on".to_owned(), Yaml::str(job.runs_on.clone())),
+        (
+            "runs-on".to_owned(),
+            crate::routing::runs_on_yaml(&job.runs_on, selectors.get(id)),
+        ),
         (
             "timeout-minutes".to_owned(),
             Yaml::Int(i64::from(job.timeout_minutes.minutes())),

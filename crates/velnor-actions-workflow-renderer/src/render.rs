@@ -8,6 +8,8 @@
 
 use std::collections::BTreeMap;
 
+use velnor_actions_contract::config::ExecutionMode;
+use velnor_actions_contract::workflow::RunsOn;
 use velnor_actions_contract::{
     CI_WORKFLOW_PATH, Concurrency, Job, PLAN_JOB_ID as CONTRACT_PLAN_JOB_ID,
     REQUIRED_CONDITION as CONTRACT_REQUIRED_CONDITION,
@@ -98,6 +100,8 @@ pub struct RenderContext {
     /// failed `generate` on ambient homes after plan fetch moved to
     /// owned homes).
     pub plan_consumer_env: BTreeMap<String, String>,
+    /// Lane route. `None` and hosted keep schema-1 `runs-on` bytes.
+    pub route: Option<ExecutionMode>,
 }
 
 /// One fixed validator-job shell step: kind plus display name plus argv.
@@ -297,6 +301,24 @@ fn render_merged(
     jobs: &BTreeMap<String, Job>,
     ctx: &RenderContext,
 ) -> Result<String, RenderError> {
+    match ctx.route {
+        None | Some(ExecutionMode::Hosted) => {
+            render_merged_jobs(ir, jobs, ctx, &BTreeMap::new())
+        }
+        Some(mode) => {
+            let (expanded, selectors) = crate::routing::expand_routes(jobs, mode, &ctx.runs_on)?;
+            render_merged_jobs(ir, &expanded, ctx, &selectors)
+        }
+    }
+}
+
+/// Matrix, selectors, and the quoted workflow text for one job map.
+fn render_merged_jobs(
+    ir: &WorkflowIr,
+    jobs: &BTreeMap<String, Job>,
+    ctx: &RenderContext,
+    selectors: &BTreeMap<String, RunsOn>,
+) -> Result<String, RenderError> {
     let matrix = matrix::task_matrix_of(jobs)?;
     let caps = matrix::crate_job_caps(jobs)?;
     let jobs = if matrix.is_some() || !caps.is_empty() {
@@ -304,13 +326,14 @@ fn render_merged(
     } else {
         jobs.clone()
     };
-    let mut document = document::workflow_to_yaml(ir, &jobs, ctx)?;
+    let mut document = document::workflow_to_yaml(ir, &jobs, ctx, selectors)?;
     if let Some((source, max_parallel)) = &matrix {
         matrix::attach_task_matrix(&mut document, source, *max_parallel)?;
     } else {
         matrix::attach_plan_outputs(&mut document)?;
     }
     matrix::attach_crate_job_caps(&mut document, &caps)?;
+    crate::routing::mirror_task_strategy(&mut document)?;
     matrix::insert_publish_step_id(&mut document)?;
     let document = crate::yaml::quote_run_values_in_yaml(document);
     let text = marker::with_marker(&ctx.generator_version, &render_yaml(&document))?;

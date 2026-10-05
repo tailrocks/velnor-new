@@ -19,11 +19,12 @@ use velnor_actions_orchestrator::{
     COVERED_TASKS_OUTPUT, FETCH_OP, GenerateOptions, MERGE_OP, OrchestratorError, PLAN_OP,
     PRESEED_MANIFEST_OP, PUBLISH_OP, REPORT_OP, REQUEST_FILE_ENV, WRITE_REQUEST_OP, generate,
     init_config, merge_internal, merge_passed, plan_internal, plan_outputs, plan_text_checked,
-    prepare, publish_final_report, publish_plan_files, resolve_root, response_path_for,
+    publish_final_report, publish_plan_files, resolve_root, response_path_for,
     retrieve_reports, write_preseed_manifest, write_request, write_task_report,
 };
 
-use crate::args::{Cli, Command};
+use crate::args::{Cli, Command, ConfigCommand};
+use crate::dispatch_migrate::{prepare_dispatch, run_migrate};
 use crate::dispatch_publish::run_publish_internal;
 
 /// Environment variable selecting the private operation. Never printed.
@@ -71,8 +72,11 @@ struct InternalRequest {
 pub(crate) fn run_public() -> ExitCode {
     match Cli::parse().command {
         Command::Init => run_init(),
-        Command::Plan => run_plan(),
-        Command::Generate { output_dir } => run_generate(output_dir),
+        Command::Plan { mode } => run_plan(mode),
+        Command::Generate { output_dir, mode } => run_generate(output_dir, mode),
+        Command::Config {
+            action: ConfigCommand::Migrate { to, write },
+        } => run_migrate(to, write),
     }
 }
 
@@ -281,11 +285,11 @@ fn run_init() -> ExitCode {
 /// Contract §5 routes findings to stderr in one sentence, but §5's own
 /// example shows `Recommendations` inside the stdout report and §7 assigns
 /// the report to stdout; the example plus §7 govern, so stderr stays empty.
-fn run_plan() -> ExitCode {
+fn run_plan(mode: Option<String>) -> ExitCode {
     let Some(cwd) = working_dir() else {
         return ExitCode::from(1);
     };
-    let preparation = resolve_root(&cwd).and_then(|root| prepare(&root));
+    let preparation = resolve_root(&cwd).and_then(|root| prepare_dispatch(&root, mode.as_deref()));
     let preparation = match preparation {
         Ok(preparation) => preparation,
         Err(error) => return fail_public(&error),
@@ -302,7 +306,7 @@ fn run_plan() -> ExitCode {
 }
 
 /// Dispatch `generate`: files written and recommendations go to stderr.
-fn run_generate(output_dir: Option<PathBuf>) -> ExitCode {
+fn run_generate(output_dir: Option<PathBuf>, mode: Option<String>) -> ExitCode {
     let Some(cwd) = working_dir() else {
         return ExitCode::from(1);
     };
@@ -311,7 +315,7 @@ fn run_generate(output_dir: Option<PathBuf>) -> ExitCode {
         Ok(root) => root,
         Err(error) => return fail_public(&error),
     };
-    let preparation = match prepare(&root) {
+    let preparation = match prepare_dispatch(&root, mode.as_deref()) {
         Ok(preparation) => preparation,
         Err(error) => return fail_public(&error),
     };
@@ -349,7 +353,7 @@ fn absolute_preview(cwd: &Path, dir: &Path) -> PathBuf {
 }
 
 /// Read the working directory, reporting failures as exit 1.
-fn working_dir() -> Option<PathBuf> {
+pub(crate) fn working_dir() -> Option<PathBuf> {
     match env::current_dir() {
         Ok(dir) => Some(dir),
         Err(error) => {
@@ -360,7 +364,7 @@ fn working_dir() -> Option<PathBuf> {
 }
 
 /// Report an orchestrator failure as exit 1.
-fn fail_public(error: &OrchestratorError) -> ExitCode {
+pub(crate) fn fail_public(error: &OrchestratorError) -> ExitCode {
     eprintln!("velnor-actions: {}", single_line(&error.to_string()));
     ExitCode::from(1)
 }
