@@ -46,7 +46,7 @@ pub(crate) fn check_single_label(
     for (id, job) in &ir.jobs {
         let task_label = verification_tasks
             .iter()
-            .find(|task| task.job_id().as_str() == id.as_str())
+            .find(|task| task.owns_job_id(id))
             .map(|task| task.runner_label.as_str());
         if job.runs_on != label
             && task_label != Some(job.runs_on.as_str())

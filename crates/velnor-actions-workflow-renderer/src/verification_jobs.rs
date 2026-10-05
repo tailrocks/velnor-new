@@ -3,10 +3,15 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{
-    Job, JobTimeout, PermissionLevel, Permissions, Step, VerificationTask,
+    HOSTED_SUFFIX, Job, JobTimeout, PermissionLevel, Permissions, RunsOn, SCALE_SUFFIX, Step,
+    VERIFICATION_TASK_JOB_PREFIX, VerificationRunner, VerificationTask,
 };
 
 use crate::{MiseSetup, RenderError, mise_setup_step, shell_step, steps};
+
+#[cfg(test)]
+#[path = "verification_jobs_tests.rs"]
+mod tests;
 
 /// Per-task, orchestrator-resolved runner and Mise binary pin.
 #[derive(Debug, Clone)]
@@ -15,12 +20,12 @@ pub struct VerificationTaskPolicy {
     pub task: VerificationTask,
     /// Exact OS/architecture-specific runner label.
     pub runner_label: String,
+    /// Configured Scale Set selector token, absent for schema 1.
+    pub scale_set_token: Option<String>,
     /// Mise setup action with the binary digest for this runner target.
     pub mise_setup: MiseSetup,
 }
 
-/// Stable prefix for generated verification job IDs.
-pub const VERIFICATION_JOB_PREFIX: &str = "task-";
 /// Step installing the repo's locked task tool closure.
 pub const INSTALL_VERIFICATION_TOOLS_NAME: &str = "Install locked task tools";
 /// Step running the declared, credential-scrubbed Mise task.
@@ -30,11 +35,20 @@ impl VerificationTaskPolicy {
     /// Generated GitHub job key for this declaration.
     #[must_use]
     pub fn job_id(&self) -> String {
-        format!("{VERIFICATION_JOB_PREFIX}{}", self.task.id)
+        format!("{VERIFICATION_TASK_JOB_PREFIX}{}", self.task.id)
+    }
+
+    /// Whether `job_id` is this declaration's base or schema-2 lane copy.
+    #[must_use]
+    pub fn owns_job_id(&self, job_id: &str) -> bool {
+        let base = self.job_id();
+        job_id == base
+            || job_id == format!("{base}{HOSTED_SUFFIX}")
+            || job_id == format!("{base}{SCALE_SUFFIX}")
     }
 }
 
-/// Build the exact tokenless verification job for one declaration.
+/// Build the exact read-only-token verification job for one declaration.
 ///
 /// The only repository-controlled work runs in the final `mise run` step,
 /// after both direct-exec Mise steps have removed runner credentials.
@@ -77,27 +91,128 @@ pub(crate) fn validate_verification_jobs(
                 "verification_tasks_not_sorted_unique".to_owned(),
             ));
         }
-        let id = policy.job_id();
-        let actual = jobs.get(&id).ok_or_else(|| {
-            RenderError::InvalidWorkflow(format!("verification_job_missing:{id}"))
-        })?;
-        let expected = build_verification_task_job(policy, checkout_uses)?;
-        if !same_job_contract(actual, &expected) {
+        let base = policy.job_id();
+        let variants = [
+            (base.clone(), VerificationJobVariant::Base),
+            (
+                format!("{base}{HOSTED_SUFFIX}"),
+                VerificationJobVariant::Hosted,
+            ),
+            (
+                format!("{base}{SCALE_SUFFIX}"),
+                VerificationJobVariant::ScaleSet,
+            ),
+        ];
+        let mut found = false;
+        for (id, variant) in variants {
+            let Some(actual) = jobs.get(&id) else {
+                continue;
+            };
+            found = true;
+            let expected = expected_variant_job(policy, variant, actual, checkout_uses)?;
+            if !same_job_contract(actual, &expected) {
+                return Err(RenderError::InvalidWorkflow(format!(
+                    "verification_job_contract:{id}"
+                )));
+            }
+            job_ids.push(id);
+        }
+        if !found {
             return Err(RenderError::InvalidWorkflow(format!(
-                "verification_job_contract:{id}"
+                "verification_job_missing:{base}"
+            )));
+        }
+        let hosted_id = format!("{base}{HOSTED_SUFFIX}");
+        let scale_id = format!("{base}{SCALE_SUFFIX}");
+        let has_hosted = jobs.contains_key(&hosted_id);
+        let has_scale = jobs.contains_key(&scale_id);
+        if has_hosted != has_scale || (has_hosted && jobs.contains_key(&base)) {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "verification_task_lane_pair_incomplete:{base}"
             )));
         }
         last_id = Some(policy.task.id.as_str());
-        job_ids.push(id);
     }
     if jobs.keys().any(|id| {
-        id.starts_with(VERIFICATION_JOB_PREFIX) && !job_ids.iter().any(|expected| expected == id)
+        id.starts_with(VERIFICATION_TASK_JOB_PREFIX)
+            && !job_ids.iter().any(|expected| expected == id)
     }) {
         return Err(RenderError::InvalidWorkflow(
             "undeclared_verification_job".to_owned(),
         ));
     }
     Ok(job_ids)
+}
+
+/// One rendered form of a typed verification declaration.
+#[derive(Debug, Clone, Copy)]
+enum VerificationJobVariant {
+    Base,
+    Hosted,
+    ScaleSet,
+}
+
+/// Rebuild the fixed task job for one schema-2 placement.
+fn expected_variant_job(
+    policy: &VerificationTaskPolicy,
+    variant: VerificationJobVariant,
+    actual: &Job,
+    checkout_uses: &str,
+) -> Result<Job, RenderError> {
+    let mut expected = build_verification_task_job(policy, checkout_uses)?;
+    match variant {
+        VerificationJobVariant::Base if actual.runs_on == policy.runner_label => {}
+        VerificationJobVariant::Base if is_scale_set(&actual.runs_on) => {
+            require_scale_set(policy, &actual.runs_on)?;
+            expected.runs_on.clone_from(&actual.runs_on);
+            expected.display_name.push_str(SCALE_TASK_NAME_SUFFIX);
+        }
+        VerificationJobVariant::Base => return Err(runner_mismatch(policy)),
+        VerificationJobVariant::Hosted => {
+            require_linux_task(policy)?;
+            if actual.runs_on != policy.runner_label {
+                return Err(runner_mismatch(policy));
+            }
+            expected.display_name.push_str(HOSTED_TASK_NAME_SUFFIX);
+        }
+        VerificationJobVariant::ScaleSet => {
+            require_scale_set(policy, &actual.runs_on)?;
+            expected.runs_on.clone_from(&actual.runs_on);
+            expected.display_name.push_str(SCALE_TASK_NAME_SUFFIX);
+        }
+    }
+    Ok(expected)
+}
+
+/// Lane suffixes mirror the schema-2 workflow contract.
+const HOSTED_TASK_NAME_SUFFIX: &str = " / GitHub hosted / Linux x64";
+const SCALE_TASK_NAME_SUFFIX: &str = " / Velnor Scale Set / Linux x64";
+
+/// Ensure a Scale Set copy is only built for the Linux-x64 task kind.
+fn require_linux_task(policy: &VerificationTaskPolicy) -> Result<(), RenderError> {
+    if policy.task.runner == VerificationRunner::LinuxX64 {
+        return Ok(());
+    }
+    Err(runner_mismatch(policy))
+}
+
+/// Require the exact Scale Set selector resolved from execution config.
+fn require_scale_set(policy: &VerificationTaskPolicy, actual: &str) -> Result<(), RenderError> {
+    require_linux_task(policy)?;
+    if policy.scale_set_token.as_deref() == Some(actual) {
+        return Ok(());
+    }
+    Err(runner_mismatch(policy))
+}
+
+/// Whether a rendered `runs-on` value is a validated Scale Set token.
+fn is_scale_set(runs_on: &str) -> bool {
+    RunsOn::parse(runs_on).is_ok_and(|selector| selector.is_scale_set())
+}
+
+/// Mismatch diagnostic for an unsupported verification-task placement.
+fn runner_mismatch(policy: &VerificationTaskPolicy) -> RenderError {
+    RenderError::InvalidWorkflow(format!("verification_runner_mismatch:{}", policy.task.id))
 }
 
 /// Add every verification job to the required-check fan-in.
@@ -184,171 +299,4 @@ fn same_job_contract(actual: &Job, expected: &Job) -> bool {
         && actual.permissions == expected.permissions
         && actual.environment == expected.environment
         && actual.steps == expected.steps
-}
-
-#[cfg(test)]
-mod tests {
-    use std::collections::BTreeMap;
-
-    use velnor_actions_contract::{
-        Job, JobTimeout, PermissionLevel, VerificationRunner, VerificationTask,
-        VerificationTaskKind,
-    };
-
-    use super::{
-        VerificationTaskPolicy, build_verification_task_job, extend_required_needs,
-        validate_verification_jobs,
-    };
-    use crate::MiseSetup;
-
-    const CHECKOUT: &str = "actions/checkout@0123456789abcdef0123456789abcdef01234567";
-
-    fn policy(id: &str, runner: VerificationRunner) -> VerificationTaskPolicy {
-        VerificationTaskPolicy {
-            task: VerificationTask {
-                id: id.to_owned(),
-                kind: VerificationTaskKind::Verification,
-                mise_task: format!("lint-{id}"),
-                runner,
-                timeout_minutes: 10,
-            },
-            runner_label: runner.runs_on().to_owned(),
-            mise_setup: MiseSetup {
-                uses: "jdx/mise-action@0123456789abcdef0123456789abcdef01234567".to_owned(),
-                version: "2026.9.18".to_owned(),
-                sha256: "a".repeat(64),
-            },
-        }
-    }
-
-    #[test]
-    fn task_job_is_unconditional_cache_off_and_credential_scrubbed() {
-        let linux = policy("construct-assets", VerificationRunner::LinuxX64);
-        let job = build_verification_task_job(&linux, CHECKOUT).expect("fixed task job");
-        assert_eq!(job.runs_on, "ubuntu-26.04");
-        assert!(job.needs.is_empty());
-        assert!(job.condition.is_none());
-        assert_eq!(job.timeout_minutes.minutes(), 10);
-        let permissions = job.permissions.expect("job permissions are explicit");
-        assert_eq!(permissions.contents, PermissionLevel::Read);
-        assert_eq!(permissions.actions, PermissionLevel::None);
-        assert_eq!(permissions.pull_requests, PermissionLevel::None);
-        assert_eq!(permissions.id_token, PermissionLevel::None);
-        assert_eq!(job.steps.len(), 4);
-        if let velnor_actions_contract::StepKind::Action { uses, with, env } = &job.steps[0].kind {
-            assert_eq!(uses.as_str(), CHECKOUT);
-            assert_eq!(
-                with.get("persist-credentials").map(String::as_str),
-                Some("false")
-            );
-            assert!(env.is_empty());
-        } else {
-            panic!("checkout must be a pinned action");
-        }
-        let mise = &job.steps[1];
-        if let velnor_actions_contract::StepKind::Action { with, env, .. } = &mise.kind {
-            assert!(env.is_empty());
-            assert_eq!(with.get("install").map(String::as_str), Some("false"));
-            assert_eq!(with.get("env").map(String::as_str), Some("false"));
-            assert_eq!(with.get("cache").map(String::as_str), Some("false"));
-            assert_eq!(with.get("cache_save").map(String::as_str), Some("false"));
-        } else {
-            panic!("Mise setup must be an action");
-        }
-        for step in &job.steps[2..] {
-            if let velnor_actions_contract::StepKind::Shell { run, env } = &step.kind {
-                let unset = crate::toolchain_env::with_env_unset_argv(&[]);
-                assert!(run.starts_with(&unset));
-                for variable in crate::toolchain_env::STEP_CREDENTIAL_DENYLIST {
-                    assert!(
-                        env.get(variable).is_some_and(String::is_empty),
-                        "{variable}"
-                    );
-                }
-            } else {
-                panic!("Mise task commands must be shell steps");
-            }
-        }
-        if let velnor_actions_contract::StepKind::Shell { run, .. } = &job.steps[2].kind {
-            assert!(run.ends_with(&[
-                "mise".to_owned(),
-                "install".to_owned(),
-                "--locked".to_owned(),
-            ]));
-        }
-        if let velnor_actions_contract::StepKind::Shell { run, .. } = &job.steps[3].kind {
-            assert!(run.ends_with(&[
-                "mise".to_owned(),
-                "run".to_owned(),
-                "lint-construct-assets".to_owned(),
-            ]));
-        }
-    }
-
-    #[test]
-    fn mixed_linux_and_apple_arm_tasks_keep_distinct_runners() {
-        let linux = policy("linux-lint", VerificationRunner::LinuxX64);
-        let macos = policy("native-format", VerificationRunner::MacosArm64);
-        let linux_job = build_verification_task_job(&linux, CHECKOUT).expect("linux job");
-        let macos_job = build_verification_task_job(&macos, CHECKOUT).expect("macos job");
-        assert_eq!(linux_job.runs_on, "ubuntu-26.04");
-        assert_eq!(macos_job.runs_on, "macos-15");
-
-        let jobs = BTreeMap::from([(linux.job_id(), linux_job), (macos.job_id(), macos_job)]);
-        let ids = validate_verification_jobs(&jobs, &[linux, macos], CHECKOUT)
-            .expect("both platform jobs satisfy policy");
-        assert_eq!(ids, ["task-linux-lint", "task-native-format"]);
-    }
-
-    #[test]
-    fn all_declared_tasks_join_required_fan_in() {
-        let linux = policy("linux-lint", VerificationRunner::LinuxX64);
-        let macos = policy("native-format", VerificationRunner::MacosArm64);
-        let mut jobs = BTreeMap::from([
-            (
-                linux.job_id(),
-                build_verification_task_job(&linux, CHECKOUT).expect("linux job"),
-            ),
-            (
-                macos.job_id(),
-                build_verification_task_job(&macos, CHECKOUT).expect("macOS job"),
-            ),
-            (
-                crate::render::FINAL_JOB_ID.to_owned(),
-                Job {
-                    display_name: "Required".to_owned(),
-                    runs_on: "ubuntu-26.04".to_owned(),
-                    timeout_minutes: JobTimeout::PLAN,
-                    needs: vec!["plan".to_owned()],
-                    condition: None,
-                    permissions: None,
-                    environment: None,
-                    steps: Vec::new(),
-                },
-            ),
-        ]);
-        let ids = validate_verification_jobs(&jobs, &[linux, macos], CHECKOUT)
-            .expect("all declared task jobs satisfy policy");
-
-        extend_required_needs(&mut jobs, &ids).expect("required job exists");
-        assert_eq!(
-            jobs[crate::render::FINAL_JOB_ID].needs,
-            vec![
-                "plan".to_owned(),
-                "task-linux-lint".to_owned(),
-                "task-native-format".to_owned(),
-            ]
-        );
-    }
-
-    #[test]
-    fn task_job_contract_rejects_conditions_dependencies_and_extra_steps() {
-        let task = policy("native-format", VerificationRunner::MacosArm64);
-        let mut job = build_verification_task_job(&task, CHECKOUT).expect("task job");
-        job.condition = Some("always()".to_owned());
-        let jobs = BTreeMap::from([(task.job_id(), job)]);
-        let error = validate_verification_jobs(&jobs, &[task], CHECKOUT)
-            .expect_err("conditional task cannot pass");
-        assert!(error.to_string().contains("verification_job_contract"));
-    }
 }

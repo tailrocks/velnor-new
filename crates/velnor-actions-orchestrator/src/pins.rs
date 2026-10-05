@@ -1,9 +1,9 @@
 //! Compiled pin resolution: Mise setup plus helper provenance.
 //!
 //! Resolves `[actions.overrides]` against the compiled approved-pair catalog,
-//! gates the installed-mise digest to the single x64-Linux runner target, and
-//! builds digest-verified helper acquisition from release or lock provenance.
-//! Anything without provenance fails closed; no digest is ever invented.
+//! gates normal setup to the x64-Linux target and verification setup to its
+//! platform-specific digest, then builds digest-verified helper acquisition
+//! from release or lock provenance. Missing provenance fails closed.
 
 use velnor_actions_actionlint::actions::{MISE_ACTION_SHA, MISE_ACTION_VERSION};
 use velnor_actions_actionlint::overrides::{
@@ -49,8 +49,8 @@ const LINUX_X64_TARGET: &str = "x86_64-unknown-linux-gnu";
 /// The `uses` ref comes from `[actions.overrides]` when present (approved
 /// pairs only; anything else fails closed) or the compiled default pin.
 /// `version` is the compiled Mise release; `sha256` is the verified
-/// installed-binary digest, so non-x64-Linux labels fail closed rather than
-/// emitting a digest for the wrong architecture.
+/// installed-binary digest, so this general-purpose setup path rejects labels
+/// outside x64 Linux rather than emitting a digest for the wrong architecture.
 pub(crate) fn resolve_mise_setup(
     config: &VelnorConfig,
     label: &str,

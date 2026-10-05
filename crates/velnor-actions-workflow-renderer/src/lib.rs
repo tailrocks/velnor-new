@@ -111,8 +111,8 @@ pub use steps::{
 };
 pub use tree::{render_tree, render_tree_with_extra};
 pub use verification_jobs::{
-    INSTALL_VERIFICATION_TOOLS_NAME, RUN_VERIFICATION_TASK_NAME, VERIFICATION_JOB_PREFIX,
-    VerificationTaskPolicy, build_verification_task_job,
+    INSTALL_VERIFICATION_TOOLS_NAME, RUN_VERIFICATION_TASK_NAME, VerificationTaskPolicy,
+    build_verification_task_job,
 };
 pub use workflow_size::MAX_WORKFLOW_BYTES;
 pub use yaml::{Yaml, quote_scalar, render_yaml};

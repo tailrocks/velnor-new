@@ -6,7 +6,7 @@
 //! helpers, and the plan anchor; the legacy entrypoint preserves the
 //! previous contract for in-flight callers.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use velnor_actions_contract::{
     CI_WORKFLOW_PATH, Job, PLAN_JOB_ID as CONTRACT_PLAN_JOB_ID,
@@ -248,13 +248,12 @@ pub fn finalize_jobs(
 ) -> Result<BTreeMap<String, Job>, RenderError> {
     mise.validate()?;
     let mut jobs = merged_jobs(ir, policy, support, ctx)?;
-    let verification_job_ids: BTreeSet<String> = ctx
-        .verification_tasks
-        .iter()
-        .map(crate::VerificationTaskPolicy::job_id)
-        .collect();
     for (id, job) in &mut jobs {
-        if verification_job_ids.contains(id) {
+        if ctx
+            .verification_tasks
+            .iter()
+            .any(|task| task.owns_job_id(id))
+        {
             closure::check_internal_staged(id, job, ctx.preseed)?;
             continue;
         }

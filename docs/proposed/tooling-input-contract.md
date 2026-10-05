@@ -77,12 +77,16 @@ the credential-bearing Rust lane. Generic no-Rust checks use sorted
 
 Each `workflow.tasks` entry declares `id`, `kind = "verification"`, an exact
 `mise_task`, `runner`, and bounded `timeout_minutes`. IDs must be sorted,
-unique, and safe as job keys; the generated ID is `task-{id}`. The only V1
-runners are `linux-x64` (`ubuntu-26.04`) and `macos-arm64` (`macos-15`), with
-separate pinned Mise binary digests. Task jobs are unconditional on pull
+unique, and safe as job keys; the generated base ID is `task-{id}`. The only
+V1 runners are `linux-x64` (`ubuntu-26.04`) and `macos-arm64` (`macos-15`),
+with separate pinned Mise binary digests. Task jobs are unconditional on pull
 requests, pushes, and merge groups, have no dependencies of their own, and
-join the `Required` fan-in. Missing, failed, skipped, or cancelled tasks fail
-that required check.
+join the `Required` fan-in. In schema 2, Linux tasks follow `hosted`,
+`scale-set`, or `both` mode; `both` emits a hosted and a Scale Set job, and
+both IDs are required. macOS ARM64 tasks stay hosted in all modes because the
+current Scale Set is Linux/amd64; they remain required but do not qualify as
+paired execution. Missing, failed, skipped, or cancelled tasks fail that
+required check.
 
 Task jobs grant only `contents: read`; other workflow permission scopes are
 explicitly `none`. Checkout disables persisted credentials. The pinned Mise
@@ -90,8 +94,10 @@ setup action does not install project tools, activate repository env, or use
 cache inputs. The job unsets the credential denylist before both
 `mise install --locked` and `mise run <mise_task>`. It creates no task cache,
 artifact, or downstream output. The verification kind is for platform and
-other non-Rust checks only; it must not compile Rust. Rust compilation remains
-in the existing MBX-backed lane pending a separate reviewed capability.
+other non-Rust checks only. Keeping task scripts free of Rust compilation is
+an authoring and review invariant; V1 does not inspect or enforce task bodies.
+Rust compilation remains in the existing MBX-backed lane pending a separate
+reviewed capability.
 Protected release/signing is separate and is not provided by this kind.
 
 Checksums are TOFU (trust on first use): the first download that
