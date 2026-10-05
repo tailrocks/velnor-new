@@ -1,7 +1,7 @@
 //! Gate 4 renderer cases: MBX objects, cache actions, lane target dirs.
 
 use velnor_actions_contract::cachekey::mbx_cache_generation;
-
+use velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION;
 use velnor_actions_contract::{Step, StepKind};
 use velnor_actions_workflow_renderer::steps::{
     CompileDriver, MBX_CACHE_MODE_ENV, TOOLS_CACHE_PATH, TOOLS_RESTORE_NAME, TOOLS_SAVE_NAME,
@@ -151,6 +151,7 @@ fn cache_save_writes_task_artifacts_only() {
     let key = "velnor-v1-task-trusted-compat-snapshot".to_owned();
     let task_dir = "$MISE_TASK_CACHE_DIR/task-artifacts/v2".to_owned();
     let step = cache_action_step(false, &uses, "task", &key, &[], &[task_dir]).expect("save");
+    assert_eq!(step.condition.as_deref(), Some(CACHE_SAVE_CONDITION));
     match &step.kind {
         StepKind::Action { with, .. } => {
             assert!(

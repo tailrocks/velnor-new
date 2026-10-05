@@ -113,6 +113,10 @@ fn pure_tofu_repo_drops_all_rust_setup() -> TestResult {
         run.contains(&catalog.tool_spec(PinnedTool::Opentofu)),
         "pure-tofu plan installs opentofu: {run:?}"
     );
+    assert!(
+        run.contains(&catalog.tool_spec(PinnedTool::Gh)),
+        "pure-tofu plan verifies branch protection: {run:?}"
+    );
     for key in ["MISE_RUSTUP_HOME", "MISE_CARGO_HOME", "RUSTUP_TOOLCHAIN"] {
         assert!(!env.contains_key(key), "plan prepare carries no {key}");
     }
@@ -168,6 +172,10 @@ fn mixed_repo_plan_carries_union_with_pure_tofu_group() -> TestResult {
         run.contains(&catalog.tool_spec(PinnedTool::Rust))
             && run.contains(&catalog.tool_spec(PinnedTool::Opentofu)),
         "mixed plan installs the union: {run:?}"
+    );
+    assert!(
+        run.contains(&catalog.tool_spec(PinnedTool::Gh)),
+        "mixed plan verifies branch protection: {run:?}"
     );
     assert!(
         env.contains_key("RUSTUP_TOOLCHAIN"),

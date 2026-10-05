@@ -6,10 +6,12 @@
 
 use crate::error::MiseError;
 
-/// Default Mise data dir holding installs, shims, and tool state.
-pub const MISE_DATA_DIR: &str = "~/.local/share/mise";
+/// Isolated Mise data root used by generated tool commands.
+pub const MISE_DATA_DIR: &str = "${{ runner.temp }}/velnor/mise";
 /// Mise installs under the data dir (`<tool>/<version>`).
-pub const MISE_INSTALLS_SUFFIX: &str = "installs";
+pub const MISE_INSTALLS_EXPR: &str = "${{ runner.temp }}/velnor/mise/installs";
+/// Separate Setup Mise bootstrap binary home.
+pub const MISE_BOOTSTRAP_BINARY_EXPR: &str = "${{ runner.temp }}/velnor/mise-bootstrap/bin/mise";
 /// Velnor-owned rustup home (expression form for `env:`).
 pub const RUSTUP_HOME_EXPR: &str = "${{ runner.temp }}/velnor/rustup";
 /// Velnor-owned Cargo home (expression form for `env:`).
@@ -20,8 +22,18 @@ pub const CARGO_HOME_SHELL: &str = "$RUNNER_TEMP/velnor/cargo";
 pub const CARGO_REGISTRY_SUFFIX: &str = "registry";
 /// Cargo git sources under the owned home.
 pub const CARGO_GIT_SUFFIX: &str = "git";
+/// Exact Cargo registry source root.
+pub const CARGO_REGISTRY_EXPR: &str = "${{ runner.temp }}/velnor/cargo/registry";
+/// Exact Cargo git source root.
+pub const CARGO_GIT_EXPR: &str = "${{ runner.temp }}/velnor/cargo/git";
 /// Cargo binaries under the owned home.
 pub const CARGO_BIN_SUFFIX: &str = "bin";
+/// Exact Cargo proxy binary directory.
+pub const CARGO_BIN_EXPR: &str = "${{ runner.temp }}/velnor/cargo/bin";
+/// Cargo install metadata maintained alongside proxy binaries.
+pub const CARGO_CRATES_TOML_EXPR: &str = "${{ runner.temp }}/velnor/cargo/.crates.toml";
+/// Cargo install metadata maintained alongside proxy binaries.
+pub const CARGO_CRATES2_JSON_EXPR: &str = "${{ runner.temp }}/velnor/cargo/.crates2.json";
 /// Per-lane target base (concurrent writers never share).
 pub const TARGET_BASE: &str = "$RUNNER_TEMP/velnor/target/";
 /// Velnor-owned tofu data-dir base (expression form for `env:`).
@@ -47,13 +59,23 @@ pub struct RuntimePath {
     pub owner: &'static str,
 }
 
-/// Exact inventory: Mise installs, rustup, Cargo, target, MBX, task, tofu.
+/// Exact inventory: Mise data/bootstrap, Rustup, Cargo, target, MBX, task, tofu.
 #[must_use]
 pub fn inventory() -> Vec<RuntimePath> {
     vec![
         RuntimePath {
-            id: "mise-installs",
+            id: "mise-data",
             path: MISE_DATA_DIR,
+            owner: "catalog/tools",
+        },
+        RuntimePath {
+            id: "mise-installs",
+            path: MISE_INSTALLS_EXPR,
+            owner: "catalog/tools",
+        },
+        RuntimePath {
+            id: "mise-bootstrap-binary",
+            path: MISE_BOOTSTRAP_BINARY_EXPR,
             owner: "catalog/tools",
         },
         RuntimePath {
@@ -68,13 +90,28 @@ pub fn inventory() -> Vec<RuntimePath> {
         },
         RuntimePath {
             id: "cargo-sources",
-            path: CARGO_HOME_EXPR,
+            path: CARGO_REGISTRY_EXPR,
+            owner: "velnor/sources",
+        },
+        RuntimePath {
+            id: "cargo-git-sources",
+            path: CARGO_GIT_EXPR,
             owner: "velnor/sources",
         },
         RuntimePath {
             id: "cargo-binaries",
-            path: CARGO_HOME_EXPR,
-            owner: "velnor/sources",
+            path: CARGO_BIN_EXPR,
+            owner: "catalog/tools",
+        },
+        RuntimePath {
+            id: "cargo-crates-metadata",
+            path: CARGO_CRATES_TOML_EXPR,
+            owner: "catalog/tools",
+        },
+        RuntimePath {
+            id: "cargo-crates2-metadata",
+            path: CARGO_CRATES2_JSON_EXPR,
+            owner: "catalog/tools",
         },
         RuntimePath {
             id: "cargo-target",
