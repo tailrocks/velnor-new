@@ -39,9 +39,10 @@ pub fn jit_request(name: &str) -> Result<Vec<u8>, WireError> {
 /// # Errors
 ///
 /// Returns [`WireError::RegistrationRejected`] for an empty admin token,
-/// [`SessionError::Uncertain`] on timeout or reset, [`SessionError::Wire`]
-/// when the status is not 200 or `encodedJITConfig` is missing or empty,
-/// and [`SessionError::Conflict`] on HTTP 409.
+/// [`SessionError::Uncertain`] on timeout, reset, server failure, or when a
+/// success response lacks a usable `encodedJITConfig`, since the service may
+/// already have created the runner. Returns [`SessionError::Wire`] for other
+/// rejected statuses and [`SessionError::Conflict`] on HTTP 409.
 pub fn jit<T>(
     transport: &mut T,
     scale_set_id: i64,
@@ -60,7 +61,7 @@ where
     };
     let exchange = execute(transport, &request)?;
     require_ok(exchange.status)?;
-    decode_jit(&exchange.body)
+    decode_jit(&exchange.body).map_err(|_| SessionError::Uncertain)
 }
 
 fn decode_jit(body: &[u8]) -> Result<EncodedJit, SessionError> {
@@ -85,6 +86,9 @@ struct JitBody {
 }
 
 fn require_ok(status: u16) -> Result<(), SessionError> {
+    if status >= 500 || ((200..300).contains(&status) && status != 200) {
+        return Err(SessionError::Uncertain);
+    }
     match classify_status(status, &fresh_gate()) {
         Ok(StatusClass::Ok) => Ok(()),
         Ok(class) => Err(reject(class)),

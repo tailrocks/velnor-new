@@ -84,18 +84,27 @@ fn only_an_exact_single_result_is_returned() {
 
 #[test]
 fn lookup_errors_keep_http_and_transport_certainty() {
-    for (status, expected) in [
-        (403, SessionError::Wire(WireError::Forbidden)),
-        (404, SessionError::Wire(WireError::UnexpectedStatus)),
-        (500, SessionError::Wire(WireError::UnexpectedStatus)),
+    for (status, expected, certainty) in [
+        (
+            403,
+            SessionError::Wire(WireError::Forbidden),
+            Certainty::Definite,
+        ),
+        (
+            404,
+            SessionError::Wire(WireError::UnexpectedStatus),
+            Certainty::Uncertain,
+        ),
+        (
+            500,
+            SessionError::Wire(WireError::UnexpectedStatus),
+            Certainty::Uncertain,
+        ),
     ] {
         let mut script = Script::once(status, "ignored");
         let found = error(&get_runner_by_name(&mut script, "runner-31", ADMIN));
         assert_eq!(found, Ok(expected));
-        assert_eq!(
-            found.ok().map(SessionError::certainty),
-            Some(Certainty::Definite)
-        );
+        assert_eq!(found.ok().map(SessionError::certainty), Some(certainty));
     }
     for failure in [TransportFail::Timeout, TransportFail::Reset] {
         let mut script = Script::fail(failure);

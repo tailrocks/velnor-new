@@ -150,7 +150,7 @@ async fn volume_only_live_row_keeps_the_current_assignment_unacked() -> Result<(
 }
 
 #[tokio::test]
-async fn unlabeled_volume_keeps_cleanup_unproven_and_redelivery_unacked() -> Result<(), String> {
+async fn uncertain_volume_keeps_cleanup_unproven_and_redelivery_unacked() -> Result<(), String> {
     let (scratch, journal) = open("turn-unlabeled-volume").await?;
     let (row, _) = journal
         .begin_launch("m95")
@@ -168,26 +168,12 @@ async fn unlabeled_volume_keeps_cleanup_unproven_and_redelivery_unacked() -> Res
 
     let session = zero_assignment_session()?;
     let polled = assigned_wait(95, 1);
-    let unlabeled = serde_json::json!({
-        "Name": worker,
-        "Driver": "local",
-        "Mountpoint": "/var/lib/docker/volumes/w/_data",
-        "Labels": {},
-        "Options": {},
-        "Scope": "local"
-    })
-    .to_string();
-    let docker = DockerStub::open(vec![
-        http(404, r#"{"message":"missing"}"#),
-        http(404, r#"{"message":"missing"}"#),
-        http(200, &unlabeled),
-    ])?;
+    let docker = DockerStub::open(Vec::new())?;
     let decision = crate::launch::admission(&docker.docker, &journal, 1, 1, 0, &polled).await;
     let requests = docker.finish().await?;
 
     assert_eq!(decision, Ok(crate::launch::Admit::Hold));
-    assert_eq!(requests.len(), 3);
-    assert!(requests.iter().all(|request| request.starts_with("GET ")));
+    assert!(requests.is_empty());
     let rows = journal.rows().await.map_err(|error| error.to_string())?;
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].state, IntentState::Uncertain);

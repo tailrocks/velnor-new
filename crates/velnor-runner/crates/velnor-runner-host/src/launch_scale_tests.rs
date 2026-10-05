@@ -140,13 +140,7 @@ async fn scale_jit_failure_is_not_acked() -> Result<(), String> {
         |_name, _jit, _bind| async { Err(HostError::Docker) },
     )
     .await;
-    assert_eq!(
-        error,
-        Err(EnsureError::Unexpected {
-            status: 0,
-            step: "session",
-        })
-    );
+    assert_eq!(error, Err(EnsureError::Uncertain));
     assert_eq!(script.calls, ["jit"]);
     let rows = journal.rows().await.map_err(|err| err.to_string())?;
     assert_eq!(rows[0].state, IntentState::Uncertain);
@@ -350,13 +344,7 @@ async fn a_failed_new_statistics_subject_does_not_ack_or_change_a_pending_row() 
     )
     .await;
 
-    assert_eq!(
-        error,
-        Err(EnsureError::Unexpected {
-            status: 0,
-            step: "session",
-        })
-    );
+    assert_eq!(error, Err(EnsureError::Uncertain));
     assert_eq!(script.calls, ["jit"]);
     let rows = journal.rows().await.map_err(|error| error.to_string())?;
     assert_eq!(rows.len(), 2);

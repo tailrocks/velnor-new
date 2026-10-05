@@ -19,13 +19,7 @@ async fn uncertain_jit_failure_redelivery_stays_queued() -> Result<(), String> {
         |_name, _jit, _bind| async { Err(HostError::Docker) },
     )
     .await;
-    assert_eq!(
-        first,
-        Err(EnsureError::Unexpected {
-            status: 0,
-            step: "session",
-        })
-    );
+    assert_eq!(first, Err(EnsureError::Uncertain));
     assert_eq!(failed.calls, ["jit"]);
 
     let mut replay = Script {
