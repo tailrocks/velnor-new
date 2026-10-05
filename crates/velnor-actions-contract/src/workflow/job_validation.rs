@@ -119,11 +119,7 @@ impl Job {
                 format!("empty_steps:{id}"),
             ));
         }
-        for step in &self.steps {
-            step.validate(id)?;
-        }
-        crate::workflow::step_identity::validate_step_sequence(&self.steps, id)?;
-        Ok(())
+        crate::workflow::step_identity::validate_step_sequence(&self.steps, id)
     }
 }
 

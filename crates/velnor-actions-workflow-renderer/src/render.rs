@@ -9,8 +9,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{
-    Job, ReleaseTarget, RunsOn, SCALE_SET_NAME, ValidatorKind, VelnorSupportWorkflow, WorkflowIr,
-    WorkflowPolicy,
+    Job, ValidatorKind, VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy,
 };
 
 use crate::{
@@ -152,6 +151,7 @@ fn render_workflow_parts(
     closure::insert_task_closure(&mut jobs)?;
     closure::insert_final_closure(&mut jobs)?;
     final_steps::insert_final_fanin(&mut jobs, ctx)?;
+    validate_final_jobs(ir, &jobs)?;
     render_merged(ir, &jobs, ctx)
 }
 
@@ -229,7 +229,7 @@ pub fn finalize_jobs(
             .check_runner
             .as_ref()
             .map(|runner| runner.platform.target())
-            .or_else(|| target_for_runner(&job.runs_on))
+            .or_else(|| crate::runs_on::target_for_runner(&job.runs_on))
             .ok_or_else(|| {
                 RenderError::InvalidWorkflow(format!("tools_cache_unsupported_target:{id}"))
             })?;
@@ -255,17 +255,15 @@ pub fn finalize_jobs(
     closure::insert_final_closure(&mut jobs)?;
     final_steps::insert_final_fanin(&mut jobs, ctx)?;
     crate::dispatch_cache_boundary::suppress_unvalidated_cache_access(&mut jobs);
+    validate_final_jobs(ir, &jobs)?;
     Ok(jobs)
 }
 
-fn target_for_runner(label: &str) -> Option<&'static str> {
-    match RunsOn::parse(label).ok()? {
-        RunsOn::Hosted(label) => ReleaseTarget::for_runner_label(&label).map(ReleaseTarget::triple),
-        RunsOn::ScaleSet(selector) if selector.name() == SCALE_SET_NAME => {
-            Some(ReleaseTarget::LinuxX86_64.triple())
-        }
-        RunsOn::ScaleSet(_) => None,
-    }
+/// Revalidate each complete job after policy merge and all internal expansion.
+fn validate_final_jobs(ir: &WorkflowIr, jobs: &BTreeMap<String, Job>) -> Result<(), RenderError> {
+    let mut finalized = ir.clone();
+    finalized.jobs.clone_from(jobs);
+    finalized.validate().map_err(RenderError::Contract)
 }
 
 /// Sorted unique `uses:` refs across every action step (plan display).
@@ -274,7 +272,9 @@ pub fn action_pins(jobs: &BTreeMap<String, Job>) -> Vec<String> {
     let mut pins = std::collections::BTreeSet::new();
     for job in jobs.values() {
         for step in &job.steps {
-            if let velnor_actions_contract::StepKind::Action { uses, .. } = &step.kind {
+            if let velnor_actions_contract::StepKind::Action { uses, .. } = &step.kind
+                && !uses.starts_with("./.github/actions/")
+            {
                 pins.insert(uses.clone());
             }
         }

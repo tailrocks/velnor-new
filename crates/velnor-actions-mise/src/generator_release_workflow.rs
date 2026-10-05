@@ -76,11 +76,12 @@ pub fn setup_rust_steps(
         },
     };
     let install = PreparePinnedTools::new(vec![PinnedTool::Rust], homes.clone())?;
-    let install = shell_step(
+    let mut install = shell_step(
         INSTALL_RUST_STEP,
         install.argv(catalog),
         install.env(catalog),
     )?;
+    install.role = Some(StepRole::PreparePinnedTools);
     Ok(vec![action, install])
 }
 
