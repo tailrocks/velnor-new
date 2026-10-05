@@ -44,8 +44,25 @@ fn emitted_verification_job_scrubs_credentials_without_disabling_mise_config() {
         verification_tasks: vec![policy],
         plan_consumer_env: BTreeMap::new(),
     };
-    let yaml = job_to_yaml(&id, &job, &context, &[], None, &BTreeMap::new(), false)
-        .expect("render verification job");
+    let checkouts = BTreeMap::new();
+    let steps = BTreeMap::new();
+    let lanes = crate::document_lanes::SharedLaneSteps {
+        checkouts: &checkouts,
+        env_steps: &steps,
+        prefixes: &steps,
+        preludes: &steps,
+        postludes: &steps,
+    };
+    let yaml = job_to_yaml(
+        &id,
+        &job,
+        &context,
+        &[],
+        None,
+        &lanes,
+        super::MbxJobPolicy { native_mbx: false },
+    )
+    .expect("render verification job");
     let rendered = crate::yaml::render_yaml(&yaml);
 
     assert!(rendered.contains("GITHUB_TOKEN: \"\""));

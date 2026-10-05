@@ -1,10 +1,28 @@
 //! Security assertions for the protected-main MBX cache round trip.
 
+use velnor_actions_actionlint::actions::{
+    MR_BOXINGTON_ACTION_CANDIDATE_SHA, MR_BOXINGTON_ACTION_SHA,
+};
 use velnor_actions_orchestrator::{prepare, render_staged_tree};
 
 use crate::impl_common::{TestResult, make_repo};
 
-fn assert_pinned_mbx_owner(job: &str) {
+fn assert_candidate_ref(writer: &str) {
+    assert!(
+        writer.contains(&format!(
+            "uses: jdx/mr-boxington-action@{MR_BOXINGTON_ACTION_CANDIDATE_SHA}"
+        )),
+        "the experiment must invoke its exact immutable candidate"
+    );
+    assert!(
+        !writer.contains(&format!(
+            "uses: jdx/mr-boxington-action@{MR_BOXINGTON_ACTION_SHA}"
+        )),
+        "qualification must not silently substitute the production pin"
+    );
+}
+
+fn assert_candidate_owner(job: &str) {
     for fragment in [
         "version: 1.22.0",
         "toolchain: 1.98.1",
@@ -25,6 +43,7 @@ fn protected_main_mbx_roundtrip_is_run_bound_and_read_only_on_restore() -> TestR
         crate::impl_schema2_routing::required_file(&tree, ".github/workflows/qualification.yml")?;
 
     let writer = crate::impl_schema2_routing::job_body(qualification, "mbx-cache-write-hosted")?;
+    assert_candidate_ref(writer);
     assert!(
         writer.contains("inputs.mode == 'mbx-cache-roundtrip' && github.ref == 'refs/heads/main' && github.ref_protected == true"),
         "{writer}"
@@ -40,7 +59,14 @@ fn protected_main_mbx_roundtrip_is_run_bound_and_read_only_on_restore() -> TestR
         writer.contains("velnor-qualification-mbx-1.22.0-share-out-dir-disabled-v1-action-d0825fbaf3cc36ca2609aa38e71046265a1f1e37-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}"),
         "{writer}"
     );
-    assert_pinned_mbx_owner(writer);
+    assert!(writer.contains("version: 1.22.0"), "{writer}");
+    assert!(writer.contains("RUSTUP_TOOLCHAIN: 1.98.1"), "{writer}");
+    assert!(
+        writer
+            .contains("CARGO_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/cargo"),
+        "{writer}"
+    );
+    assert_candidate_owner(writer);
     assert!(writer.contains("rustc --print sysroot"), "{writer}");
 
     let reader = crate::impl_schema2_routing::job_body(qualification, "mbx-cache-read-hosted")?;
@@ -76,6 +102,13 @@ fn protected_main_mbx_roundtrip_is_run_bound_and_read_only_on_restore() -> TestR
         reader.contains(".savings.cached_compilations > 0"),
         "{reader}"
     );
-    assert_pinned_mbx_owner(reader);
+    assert!(reader.contains("version: 1.22.0"), "{reader}");
+    assert!(reader.contains("RUSTUP_TOOLCHAIN: 1.98.1"), "{reader}");
+    assert!(
+        reader
+            .contains("CARGO_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/cargo"),
+        "{reader}"
+    );
+    assert_candidate_owner(reader);
     Ok(())
 }

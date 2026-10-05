@@ -1,8 +1,5 @@
-use std::collections::BTreeMap;
-
 use velnor_actions_contract::cachekey::mbx_cache_generation;
 use velnor_actions_contract::{Step, StepKind, WorkflowPolicy};
-use velnor_actions_workflow_renderer::action_step;
 use velnor_actions_workflow_renderer::steps::{
     CompileDriver, MBX_CACHE_MODE_ENV, MBX_PREFLIGHT_NAME, mbx_steps_for_driver,
 };
@@ -77,25 +74,30 @@ fn native_action_installs_exact_version_and_owns_object_cache() {
         with.get("version").map(String::as_str),
         Some(TEST_MBX_VERSION)
     );
-    assert_eq!(
-        with.get("cache-key-suffix").map(String::as_str),
-        Some("${{ github.job }}")
+    assert!(!with.contains_key("cache-key-suffix"));
+    assert!(!with.contains_key("isolate-objects-cache"));
+    assert!(!with.contains_key("cache-key"));
+    assert!(!with.contains_key("restore-keys"));
+    let expected_generation = format!(
+        "{}-gc-auto-v1-action-{}-lane-${{{{ runner.environment }}}}-job-${{{{ github.job }}}}",
+        mbx_cache_generation(TEST_MBX_VERSION),
+        "a".repeat(40)
     );
-    assert_eq!(
-        with.get("isolate-objects-cache").map(String::as_str),
-        Some("${{ runner.environment == 'github-hosted' }}")
-    );
-    let expected_generation = mbx_cache_generation(TEST_MBX_VERSION);
     assert_eq!(
         with.get("cache-generation").map(String::as_str),
         Some(expected_generation.as_str()),
-        "the generation matches the exact MBX version and disabled shared OUT_DIR policy"
+        "the provider's default Rust compiler hash stays intact while cache-generation separates jobs"
     );
     assert_eq!(
         env.get(MBX_CACHE_MODE_ENV).map(String::as_str),
         Some(
             "${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}"
         )
+    );
+    assert_eq!(
+        env.get("MBX_CACHE_DIR").map(String::as_str),
+        Some("${{ runner.temp }}/velnor/mbx"),
+        "action main and post use the runner-private stable logical store path"
     );
     assert_eq!(env.get("RUSTUP_HOME"), env.get("MISE_RUSTUP_HOME"));
     assert_eq!(env.get("CARGO_HOME"), env.get("MISE_CARGO_HOME"));
@@ -139,39 +141,6 @@ fn action_construction_rejects_floating_refs_and_tool_versions() {
             mbx_steps_for_driver(MBX_ACTION, CompileDriver::Mbx, TEST_MBX_VERSION, rust, env,)
                 .is_err(),
             "invalid Rust toolchain {rust:?}"
-        );
-    }
-}
-
-#[test]
-fn cache_suffix_accepts_only_the_job_identity_expression() {
-    let valid = BTreeMap::from([
-        (
-            "cache-key-suffix".to_owned(),
-            "${{ github.job }}".to_owned(),
-        ),
-        (
-            "isolate-objects-cache".to_owned(),
-            "${{ runner.environment == 'github-hosted' }}".to_owned(),
-        ),
-    ]);
-    action_step("Restore MBX objects", MBX_ACTION, valid).expect("fixed job identity is allowed");
-    for (key, invalid) in [
-        ("cache-key-suffix", "${{ github.event_name }}"),
-        ("cache-key-suffix", "${{ secrets.GITHUB_TOKEN }}"),
-        (
-            "isolate-objects-cache",
-            "${{ runner.environment == 'self-hosted' }}",
-        ),
-    ] {
-        assert!(
-            action_step(
-                "Restore MBX objects",
-                MBX_ACTION,
-                BTreeMap::from([(key.to_owned(), invalid.to_owned())]),
-            )
-            .is_err(),
-            "unapproved {key} expression {invalid}"
         );
     }
 }
@@ -232,6 +201,7 @@ fn rendered_action_has_rust_homes_and_native_owner_policy() -> Result<(), Render
         "the retired caller-owned fixed scratch leaf is absent"
     );
     assert!(text.contains("MBX_SHARE_OUT_DIR: \"0\""));
+    assert!(text.contains("MBX_CACHE_DIR: ${{ runner.temp }}/velnor/mbx"));
     assert!(text.contains("MBX_GC_AUTO: \"1\""));
     Ok(())
 }

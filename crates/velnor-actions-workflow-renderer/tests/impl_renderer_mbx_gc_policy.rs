@@ -53,8 +53,9 @@ fn action_step_env_renders_only_when_present() -> Result<(), RenderError> {
         "Cargo-only jobs do not receive MBX policy:\n{cargo_text}"
     );
     assert!(
-        !cargo_text.contains("Export MBX single bundle"),
-        "Cargo-only jobs do not emit MBX cache steps:\n{cargo_text}"
+        !cargo_text.contains("jdx/mr-boxington-action")
+            && !cargo_text.contains("MBX_SHARE_OUT_DIR"),
+        "Cargo-only jobs do not carry native MBX cache policy:\n{cargo_text}"
     );
     Ok(())
 }
@@ -99,6 +100,16 @@ fn mbx_job_policy_applies_to_hosted_and_scale_set_lanes() -> Result<(), RenderEr
         text.matches("MBX_SHARE_OUT_DIR: \"0\"").count(),
         2,
         "{text}"
+    );
+    assert_eq!(
+        text.matches("MBX_CACHE_DIR: ${{ runner.temp }}/velnor/mbx")
+            .count(),
+        6,
+        "preflight, action main/post, and version guard use one path per job: {text}"
+    );
+    assert!(
+        !text.contains("isolate-objects-cache"),
+        "v1.6 has no isolation input"
     );
     Ok(())
 }

@@ -11,6 +11,8 @@ use velnor_actions_contract::StepKind;
 
 use super::impl_renderer_fixtures::{TEST_MBX_VERSION, TEST_RUST_TOOLCHAIN, mbx_tool_steps};
 
+#[path = "impl_renderer_mbx_preflight_store.rs"]
+mod store;
 #[path = "impl_renderer_mbx_preflight_version.rs"]
 mod version;
 
@@ -23,7 +25,7 @@ impl TempRoot {
             .map_or(0, |duration| duration.as_nanos());
         let path = std::env::temp_dir().join(format!("velnor-rust-preflight-{nonce}"));
         fs::create_dir(&path)?;
-        Ok(Self(path))
+        Ok(Self(fs::canonicalize(path)?))
     }
 }
 
@@ -59,6 +61,16 @@ fn version_check_script() -> Result<String, Box<dyn std::error::Error>> {
 }
 
 fn run_version_check(root: &Path, script: &str) -> std::io::Result<std::process::Output> {
+    run_version_check_with_cache_dir_mode(root, script, "exact")
+}
+
+fn run_version_check_with_cache_dir_mode(
+    root: &Path,
+    script: &str,
+    cache_dir_mode: &str,
+) -> std::io::Result<std::process::Output> {
+    let mbx_cache_dir = root.join("velnor/mbx");
+    fs::create_dir_all(mbx_cache_dir.join("actions"))?;
     let fake_bin = root.join("fake-bin");
     let path = format!("{}:/usr/bin:/bin", fake_bin.display());
     Command::new("sh")
@@ -66,6 +78,8 @@ fn run_version_check(root: &Path, script: &str) -> std::io::Result<std::process:
         .env_clear()
         .env("PATH", path)
         .env("RUNNER_TEMP", root)
+        .env("MBX_CACHE_DIR", mbx_cache_dir)
+        .env("MBX_CACHE_DIR_MODE", cache_dir_mode)
         .env("GITHUB_RUN_ID", "9876")
         .env("GITHUB_RUN_ATTEMPT", "2")
         .env("GITHUB_JOB", "rust_linux")
@@ -79,7 +93,7 @@ fn assert_version_scratch_removed(root: &Path) -> std::io::Result<()> {
                 !entry
                     .file_name()
                     .to_string_lossy()
-                    .starts_with("velnor-mbx-version-")
+                    .starts_with("velnor-mbx-verify-")
             })
         }),
         "version-check scratch remains"
@@ -145,6 +159,8 @@ fn rust_preflight_exports_only_the_owned_toolchain_and_uses_no_scratch_leaf()
     let path = format!("{}:{path}", fake_bin.display());
     let github_path = root.0.join("github-path");
     fs::write(&github_path, "")?;
+    let github_env = root.0.join("github-env");
+    fs::write(&github_env, "")?;
     let [preflight, action, version_check] = mbx_tool_steps(
         "jdx/mr-boxington-action@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         TEST_MBX_VERSION,
@@ -162,9 +178,11 @@ fn rust_preflight_exports_only_the_owned_toolchain_and_uses_no_scratch_leaf()
         .env("PATH", path)
         .env("RUST_ROOT", &rust_root)
         .env("RUNNER_TEMP", &root.0)
+        .env("MBX_CACHE_DIR", root.0.join("velnor/mbx"))
         .env("GITHUB_RUN_ID", "12345")
         .env("GITHUB_RUN_ATTEMPT", "1")
         .env("GITHUB_PATH", &github_path)
+        .env("GITHUB_ENV", &github_env)
         .env("MISE_RUSTUP_HOME", root.0.join("rustup"))
         .env("MISE_CARGO_HOME", root.0.join("cargo"))
         .env("RUSTUP_HOME", root.0.join("rustup"))
@@ -179,6 +197,12 @@ fn rust_preflight_exports_only_the_owned_toolchain_and_uses_no_scratch_leaf()
         fs::read_to_string(github_path)?,
         format!("{}\n", rust_root.display())
     );
+    assert_eq!(
+        fs::read_to_string(github_env)?,
+        format!("MBX_CACHE_DIR={}/velnor/mbx\n", root.0.display()),
+        "subsequent task steps inherit the exact private store root"
+    );
+    assert!(root.0.join("velnor/mbx").is_dir());
     assert!(!root.0.join("velnor-mbx-preflight-12345-1").exists());
     assert_eq!(fs::read_to_string(external.join("sentinel"))?, "untouched");
     assert_eq!(fs::read_dir(external)?.count(), 1);
@@ -215,14 +239,18 @@ fn preexisting_unique_scratch_symlink_fails_without_touching_its_target()
     };
     let script = run.get(2).ok_or("preflight script missing")?;
     let path = format!("{}:/usr/bin:/bin", fake_bin.display());
+    let github_env = root.0.join("github-env");
+    fs::write(&github_env, "")?;
     let result = Command::new("sh")
         .args(["-c", script])
         .env_clear()
         .env("PATH", path)
         .env("RUNNER_TEMP", &root.0)
+        .env("MBX_CACHE_DIR", root.0.join("velnor/mbx"))
         .env("GITHUB_RUN_ID", "23456")
         .env("GITHUB_RUN_ATTEMPT", "1")
         .env("GITHUB_PATH", root.0.join("github-path"))
+        .env("GITHUB_ENV", &github_env)
         .env("MISE_RUSTUP_HOME", root.0.join("rustup"))
         .env("MISE_CARGO_HOME", root.0.join("cargo"))
         .env("RUSTUP_HOME", root.0.join("rustup"))
@@ -324,7 +352,7 @@ fn native_action_version_guard_preserves_preexisting_scratch_symlink()
     fs::create_dir(&external)?;
     write_tool(&fake_bin.join("mise"), "#!/bin/sh\nexit 99\n")?;
     fs::write(external.join("sentinel"), "untouched")?;
-    let scratch = root.0.join("velnor-mbx-version-9876-2-rust_linux");
+    let scratch = root.0.join("velnor-mbx-verify-9876-2");
     symlink(&external, &scratch)?;
     let result = run_version_check(&root.0, &version_check_script()?)?;
     assert!(

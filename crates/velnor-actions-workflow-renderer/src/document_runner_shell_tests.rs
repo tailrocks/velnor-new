@@ -77,15 +77,10 @@ fn typed_scale_set_jobs_declare_bash_while_hosted_jobs_keep_default() {
         ("hosted".to_owned(), job("ubuntu-26.04")),
         ("scale".to_owned(), job(&runner_token())),
     ]);
-    let rendered = workflow_to_yaml(
-        &workflow(jobs.clone()),
-        &jobs,
-        &context(),
-        &BTreeMap::new(),
-        &BTreeMap::new(),
-        &BTreeSet::new(),
-    )
-    .expect("workflow renders");
+    let ctx = context();
+    let shared = crate::lane_share::share_lanes(&jobs, &ctx).expect("lane sharing validates");
+    let rendered = workflow_to_yaml(&workflow(jobs), &shared, &ctx, &BTreeSet::new())
+        .expect("workflow renders");
     let yaml = crate::yaml::render_yaml(&rendered);
     assert!(
         yaml.contains("- name: Run probe\n        run: echo probe"),
@@ -132,15 +127,10 @@ fn rustdocflags_remain_scoped_to_the_documentation_step() {
     let mut task_job = job("ubuntu-26.04");
     task_job.steps = vec![doc_step, test_step];
     let jobs = BTreeMap::from([("task".to_owned(), task_job)]);
-    let rendered = workflow_to_yaml(
-        &workflow(jobs.clone()),
-        &jobs,
-        &context(),
-        &BTreeMap::new(),
-        &BTreeMap::new(),
-        &BTreeSet::new(),
-    )
-    .expect("workflow renders");
+    let ctx = context();
+    let shared = crate::lane_share::share_lanes(&jobs, &ctx).expect("lane sharing validates");
+    let rendered = workflow_to_yaml(&workflow(jobs), &shared, &ctx, &BTreeSet::new())
+        .expect("workflow renders");
     let jobs = field(&rendered, "jobs").expect("jobs map");
     let task = field(jobs, "task").expect("task job");
     let job_env = field(task, "env").expect("job environment");

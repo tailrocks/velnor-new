@@ -1,16 +1,25 @@
-//! Job-level invariants for every native MBX cache owner.
+//! Typed job-level policy for native MBX object-cache consumers.
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_actions_contract::Job;
+use velnor_actions_contract::{Job, RunsOn};
 
-/// Return jobs that need MBX GC and shared-OUT_DIR policy in their environment.
+/// Return typed runner jobs whose steps use the native MBX action.
 ///
-/// The renderer attaches this policy before lane sharing extracts steps into
-/// composites, so all hosted consuming steps inherit the job environment.
+/// The stable logical cache path is physically private to the hosted runner
+/// or Scale Set worker namespace. All MBX jobs receive the same store policy.
 pub(crate) fn jobs_with_mbx_objects(jobs: &BTreeMap<String, Job>) -> BTreeSet<String> {
     jobs.iter()
-        .filter(|(_, job)| job.steps.iter().any(crate::cache_steps::is_mbx_action))
+        .filter(|(_, job)| {
+            typed_runner(&job.runs_on) && job.steps.iter().any(crate::cache_steps::is_mbx_action)
+        })
         .map(|(id, _)| id.clone())
         .collect()
+}
+
+fn typed_runner(runs_on: &str) -> bool {
+    matches!(
+        RunsOn::parse(runs_on),
+        Ok(RunsOn::Hosted(_) | RunsOn::ScaleSet(_))
+    )
 }

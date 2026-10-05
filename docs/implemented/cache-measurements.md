@@ -204,14 +204,20 @@ must export and save the MBX objects before the dependent reader starts. The
 reader has only `actions: read`, requires an imported object set, and checks
 that MBX reuses a cached compilation. A run-and-attempt-specific generation
 prevents a cache from an earlier dispatch from satisfying this check. The
-reader's `cache-hit=false` assertion intentionally expects the action's
+reader's `cache-hit=true` assertion intentionally requires the action's
 run-specific writer key to be reached by its restore prefix.
 
-Both jobs set `MBX_GC_AUTO=1` for this protected-main round-trip probe.
-Production hosted Linux jobs set `MBX_GC_AUTO=0` and `MBX_SHARE_OUT_DIR=0`.
-This probe does not pass those production lane controls. Dispatch once from
-protected `main` with mode `mbx-cache-roundtrip`; the writer and reader run
-in order at the same SHA.
+Both jobs set `MBX_GC_AUTO=1` and `MBX_SHARE_OUT_DIR=0` for this
+protected-main round-trip probe. The historical production configuration
+measured above used `MBX_GC_AUTO=0` on hosted Linux and the Scale Set local
+backend with a manual bundle. Current repository source instead emits the
+pinned v1.6 native action with `MBX_GC_AUTO=1` and
+`MBX_SHARE_OUT_DIR=0` on both typed production lanes; that source change has
+not established deployed writer/reader parity or qualified production
+behavior. The probe uses a separate candidate action ref, so its result
+does not qualify the production action pin or either typed lane. Dispatch
+once from protected `main` with mode `mbx-cache-roundtrip`; the writer and
+reader run in order at the same SHA.
 
 This is a small end-to-end action and cache round-trip probe. It does not
 measure disk or inode peaks and does not qualify the affected ChainArgos
