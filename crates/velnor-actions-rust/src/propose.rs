@@ -97,7 +97,11 @@ pub fn propose_task(group: &TaskGroup) -> Result<ProposedTask, ContractError> {
             project_root,
             target: group.target.clone(),
             features: group.features.clone(),
-            flags: group.target_flags.clone(),
+            flags: {
+                let mut f = group.target_flags.clone();
+                f.sort();
+                f
+            },
             compile_driver: group.compile_driver.as_str().to_owned(),
             test_runner: group.test_runner.as_str().to_owned(),
             environment,
