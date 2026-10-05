@@ -9,8 +9,9 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use velnor_actions_contract::{
-    ContractError, Plan, PlanBaseline, PlanMatrix, PlanRunner, ProposedTask, RunnerSelection,
-    WorkflowEvent, canonical_json_bytes, parse_strict_json, plan_id_for_run,
+    ContractError, ExecutionMode, NamedCheckLane, Plan, PlanBaseline, PlanMatrix, PlanRunner,
+    ProposedTask, RunnerSelection, WorkflowEvent, canonical_json_bytes, named_check_lanes,
+    parse_strict_json, plan_id_for_run,
 };
 use velnor_actions_mise::ToolCatalog;
 
@@ -86,6 +87,9 @@ struct PlanRequest {
     /// run: the git origin is the fallback.
     #[serde(default)]
     repository: Option<String>,
+    /// Exact named-check job identities carried by the generated workflow.
+    #[serde(default)]
+    named_check_lanes: Option<BTreeMap<String, Vec<NamedCheckLane>>>,
 }
 
 /// `plan-v1` response: schema plus plan and matrix copies.
@@ -130,6 +134,7 @@ pub fn plan_internal(request_json: &str) -> Result<String, OrchestratorError> {
     let root = plan_root(request.root.as_deref())?;
     verify_checkout(&root, request.event, &request.head)?;
     let prep = prepare(&root)?;
+    let named_check_lanes = resolve_named_check_lanes(&prep, request.named_check_lanes.take())?;
     let catalog = ToolCatalog::pinned();
     let mut warnings = Vec::new();
     warnings.extend(crate::evidence::workspace_drift_warnings(
@@ -155,6 +160,7 @@ pub fn plan_internal(request_json: &str) -> Result<String, OrchestratorError> {
         &prep.runner_label,
         prep.runner_selection,
         &catalog,
+        &named_check_lanes,
         warnings,
     )?;
     let manifest = request.baseline_manifest.and_then(|value| {
@@ -185,6 +191,31 @@ pub fn plan_internal(request_json: &str) -> Result<String, OrchestratorError> {
     serde_json::to_string(&response).map_err(|err| OrchestratorError::Internal {
         problem: format!("response_encode:{err}"),
     })
+}
+
+fn resolve_named_check_lanes(
+    prep: &crate::prepare::GenerationPreparation,
+    supplied: Option<BTreeMap<String, Vec<NamedCheckLane>>>,
+) -> Result<BTreeMap<String, Vec<NamedCheckLane>>, OrchestratorError> {
+    let candidates = [
+        None,
+        Some(ExecutionMode::Hosted),
+        Some(ExecutionMode::ScaleSet),
+        Some(ExecutionMode::Both),
+    ];
+    let default =
+        named_check_lanes(&prep.workflow.ir, &prep.config, None).map_err(internal_contract)?;
+    let Some(supplied) = supplied else {
+        return Ok(default);
+    };
+    for dispatch in candidates {
+        let expected = named_check_lanes(&prep.workflow.ir, &prep.config, dispatch)
+            .map_err(internal_contract)?;
+        if supplied == expected {
+            return Ok(supplied);
+        }
+    }
+    Err(internal("named_check_lane_contract_mismatch"))
 }
 
 /// Assemble the `plan-v1` response, staging trusted bytes when covered.
@@ -271,6 +302,7 @@ fn build_plan(
     label: &str,
     selection: RunnerSelection,
     catalog: &ToolCatalog,
+    named_check_lanes: &BTreeMap<String, Vec<NamedCheckLane>>,
     warnings: Vec<String>,
 ) -> Result<Plan, OrchestratorError> {
     let mut obligations = Vec::with_capacity(universe.len());
@@ -303,13 +335,14 @@ fn build_plan(
                 changed: member_changed(task, changed, &keys),
                 snapshot: &snapshot,
                 root,
+                named_check_lanes,
             },
             &mut reads,
         )?;
         task_ids.push(task.task_id.clone());
         digests.insert(task.task_id.clone(), obligation.input_digest.clone());
         obligations.push(obligation);
-        entries.push(entry);
+        entries.extend(entry);
     }
     obligations.sort_by(|left, right| left.task_id.cmp(&right.task_id));
     entries.sort_by(|left, right| left.id.cmp(&right.id));

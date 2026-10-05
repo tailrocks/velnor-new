@@ -59,6 +59,7 @@ pub(crate) fn plan_job(
     acquire: Option<Step>,
     catalog: &ToolCatalog,
     use_rust: bool,
+    use_rust_components: bool,
     use_mbx: bool,
     use_nextest: bool,
     use_opentofu: bool,
@@ -71,7 +72,7 @@ pub(crate) fn plan_job(
         use_rust,
     )?;
     steps.push(prepare);
-    if use_rust {
+    if use_rust_components {
         steps.push(crate::workflow::prepare_rust_components_step(catalog)?);
     }
     let cached =
@@ -85,6 +86,7 @@ pub(crate) fn plan_job(
     Ok(Job {
         display_name: "Plan".to_owned(),
         runs_on: label.to_owned(),
+        check_runner: None,
         timeout_minutes: JobTimeout::PLAN,
         needs: Vec::new(),
         condition: None,
@@ -110,6 +112,7 @@ pub(crate) fn lint_job(label: &str, catalog: &ToolCatalog) -> Result<Job, Orches
     Ok(Job {
         display_name: LINT_DISPLAY_NAME.to_owned(),
         runs_on: label.to_owned(),
+        check_runner: None,
         timeout_minutes: JobTimeout::VALIDATOR,
         needs: Vec::new(),
         condition: None,
@@ -166,6 +169,7 @@ pub(crate) fn final_job(
     Ok(Job {
         display_name: FINAL_DISPLAY_NAME.to_owned(),
         runs_on: label.to_owned(),
+        check_runner: None,
         timeout_minutes: JobTimeout::REQUIRED,
         needs,
         condition: Some(FINAL_CONDITION.to_owned()),

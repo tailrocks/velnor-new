@@ -4,9 +4,7 @@ use velnor_actions_contract::{
     Concurrency, Job, JobTimeout, Permissions, Step, Trigger, ValidatorKind, WorkflowIr,
     WorkflowPolicy, workflow::permissions::PermissionLevel,
 };
-use velnor_actions_workflow_renderer::steps::{
-    CompileDriver, mbx_path_preflight_step, mbx_step_for_driver,
-};
+use velnor_actions_workflow_renderer::steps::{CompileDriver, mbx_steps_for_driver};
 use velnor_actions_workflow_renderer::{
     ASSET_SHA_ENV, ASSET_URL_ENV, CONCURRENCY_CANCEL, CONCURRENCY_GROUP, MiseSetup,
     RELEASE_COMMIT_ENV, RenderContext, RenderError, STAGED_BINARY_PREFIX, ValidatorCommand,
@@ -50,11 +48,38 @@ pub(crate) fn mbx_tool_steps(
     mbx_version: &str,
     rust_toolchain: &str,
 ) -> Result<[Step; 2], RenderError> {
-    let preflight =
-        mbx_path_preflight_step(mbx_version, rust_toolchain, mbx_tool_env(rust_toolchain))?;
-    let setup = mbx_step_for_driver(uses, CompileDriver::Mbx, mbx_version)?
-        .ok_or_else(|| RenderError::InvalidWorkflow("mbx_setup_missing".to_owned()))?;
-    Ok([preflight, setup])
+    mbx_steps_for_driver(
+        uses,
+        CompileDriver::Mbx,
+        mbx_version,
+        rust_toolchain,
+        mbx_tool_env(rust_toolchain),
+    )?
+    .ok_or_else(|| RenderError::InvalidWorkflow("mbx_steps_missing".to_owned()))
+}
+
+/// One action-backed MBX job before its cache route is attached.
+pub(crate) fn mbx_job(id: &str, mbx_version: &str) -> Result<(String, Job), RenderError> {
+    let steps = mbx_tool_steps(
+        &format!("jdx/mr-boxington-action@{}", "a".repeat(40)),
+        mbx_version,
+        TEST_RUST_TOOLCHAIN,
+    )?;
+    Ok(job(id, "MBX job", Vec::new(), steps.into()))
+}
+
+/// One action-backed MBX job whose checkout may be hoisted with its task.
+pub(crate) fn mbx_job_with_checkout(
+    id: &str,
+    mbx_version: &str,
+) -> Result<(String, Job), RenderError> {
+    let mut steps = vec![checkout_step(&checkout_pin())?];
+    steps.extend(mbx_tool_steps(
+        &format!("jdx/mr-boxington-action@{}", "a".repeat(40)),
+        mbx_version,
+        TEST_RUST_TOOLCHAIN,
+    )?);
+    Ok(job(id, "MBX job", Vec::new(), steps))
 }
 
 pub(crate) fn checkout_pin() -> String {
@@ -124,6 +149,7 @@ pub(crate) fn job(id: &str, display: &str, needs: Vec<String>, steps: Vec<Step>)
         Job {
             display_name: display.to_owned(),
             runs_on: LABEL.to_owned(),
+            check_runner: None,
             timeout_minutes: JobTimeout::CRATE,
             needs,
             condition: None,

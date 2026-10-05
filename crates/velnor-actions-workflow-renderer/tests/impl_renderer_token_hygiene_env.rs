@@ -7,7 +7,8 @@ use std::collections::BTreeMap;
 use velnor_actions_contract::{Job, WorkflowPolicy};
 use velnor_actions_workflow_renderer::{
     RenderError, action_step_with_env, ambient_shell_step, checkout_step, plan_step,
-    render_workflow_ir, shell_step, steps::mbx_objects_step,
+    render_workflow_ir, shell_step,
+    steps::{CompileDriver, mbx_steps_for_driver},
 };
 
 use super::impl_renderer_fixtures::*;
@@ -68,10 +69,19 @@ fn token_in_action_env_fails_render() -> Result<(), RenderError> {
 }
 
 #[test]
-fn local_mbx_backend_passes() -> Result<(), RenderError> {
-    let restore = mbx_objects_step(&mbx_pin(), false, "1.5.0")?;
+fn typed_mbx_preflight_and_objects_cache_pass() -> Result<(), RenderError> {
+    let [preflight, restore] = mbx_steps_for_driver(
+        &mbx_pin(),
+        CompileDriver::Mbx,
+        "1.21.1",
+        "1.98.1",
+        mbx_tool_env("1.98.1"),
+    )?
+    .ok_or_else(|| RenderError::InvalidWorkflow("missing_mbx_steps".to_owned()))?;
+    let mut plan = action_plan_job(restore)?.1;
+    plan.steps.insert(2, preflight);
     render_workflow_ir(
-        &fixture_ir(vec![action_plan_job(restore)?]),
+        &fixture_ir(vec![("plan".to_owned(), plan)]),
         WorkflowPolicy::ConsumerV1,
         None,
         &fixture_ctx(),
@@ -86,29 +96,26 @@ fn qualification_restore_outputs_allow_only_exact_guard_bindings() -> Result<(),
         vec!["true".to_owned()],
         BTreeMap::from([
             (
-                "CACHE_HIT".to_owned(),
-                "${{ steps.mbx-bundle.outputs.cache-hit }}".to_owned(),
+                "MATCHED".to_owned(),
+                "${{ steps.mbx-bundle.outputs.cache-matched-key }}".to_owned(),
             ),
             (
-                "EXPECTED_KEY".to_owned(),
-                "${{ steps.mbx-bundle-key.outputs.primary }}".to_owned(),
+                "PREFIX".to_owned(),
+                "${{ steps.mbx-cache-key.outputs.prefix }}".to_owned(),
             ),
         ]),
     )?;
 
     for denied in [
         (
-            "CACHE_HIT",
-            "${{ steps.mbx-bundle.outputs.cache-hit-extra }}",
+            "MATCHED",
+            "${{ steps.mbx-bundle.outputs.cache-matched-key-extra }}",
         ),
         (
-            "EXPECTED_KEY",
-            "${{ steps.mbx-bundle-key.outputs.restore-prefix }}",
+            "PREFIX",
+            "${{ steps.mbx-cache-key.outputs.restore-prefix }}",
         ),
-        (
-            "EXPECTED_KEY",
-            "${{ steps.mbx-bundle-key.outputs.primary-suffix }}",
-        ),
+        ("PREFIX", "${{ steps.mbx-cache-key.outputs.prefix-extra }}"),
     ] {
         let result = shell_step(
             "Qualification cache guard",

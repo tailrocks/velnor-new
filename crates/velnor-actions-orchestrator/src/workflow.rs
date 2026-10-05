@@ -1,9 +1,13 @@
 //! Workflow-IR, render-context, and actionlint-input construction.
+
 //! W1 emission wiring lives in the child module below.
 #[path = "wire_w1.rs"]
 pub(crate) mod wire_w1;
 #[path = "workflow_context.rs"]
 mod workflow_context;
+
+#[path = "check_jobs.rs"]
+pub(crate) mod check_jobs;
 
 use std::collections::BTreeMap;
 
@@ -76,17 +80,22 @@ fn build_plan_job(
     fetch_roots: &[String],
     discovery: &Discovery,
 ) -> Result<Job, OrchestratorError> {
+    let format = wire_w1::workspace_format_step(discovery, catalog)?;
+    // The helper/inventory may need Rust without invoking Clippy or rustfmt.
+    // Install those components only when Plan owns a Format step.
+    let use_rust_components = format.is_some();
     let mut plan = plan_job(
         label,
         acquire,
         catalog,
         use_rust,
+        use_rust_components,
         use_mbx,
         use_nextest,
         use_opentofu,
         fetch_roots,
     )?;
-    if let Some(format) = wire_w1::workspace_format_step(discovery, catalog)? {
+    if let Some(format) = format {
         insert_format_step(&mut plan, format);
     }
     insert_format_report_steps(
@@ -146,29 +155,18 @@ pub(crate) fn build_workflow(
         fetch_roots,
         acquire.as_ref(),
     )?;
-    let crate_ids: Vec<String> = built.jobs.iter().map(|(id, _)| id.clone()).collect();
+    let mut required_ids: Vec<String> = built.jobs.iter().map(|(id, _)| id.clone()).collect();
     for (id, job) in built.jobs {
         jobs.insert(id, job);
     }
+    for (id, job) in check_jobs::build_check_jobs(policy, discovery, &catalog)? {
+        required_ids.push(id.clone());
+        jobs.insert(id, job);
+    }
     crate::verification_tasks::insert_jobs(&mut jobs, &verification_tasks)?;
-    insert_gate_jobs(&mut jobs, label, branch, &crate_ids, acquire, &catalog)?;
+    insert_gate_jobs(&mut jobs, label, branch, &required_ids, acquire, &catalog)?;
     wire_w1::check_crate_mbx_gating(&jobs, &built.drivers)?;
-    let ir = WorkflowIr {
-        name: config.workflow.name.clone(),
-        triggers: Trigger {
-            pull_request_types: EXPECTED_PR_TYPES.iter().map(ToString::to_string).collect(),
-            push_branches: vec![branch.to_owned()],
-            merge_group: true,
-            workflow_dispatch: None,
-            schedule: None,
-        },
-        permissions: Permissions::default(),
-        concurrency: Concurrency {
-            group: CONCURRENCY_GROUP.to_owned(),
-            cancel_in_progress: CONCURRENCY_CANCEL.to_owned(),
-        },
-        jobs,
-    };
+    let ir = workflow_ir(config, branch, jobs);
     let context = workflow_context::render_context(
         config,
         label,
@@ -185,6 +183,25 @@ pub(crate) fn build_workflow(
         context,
         actionlint,
     })
+}
+
+fn workflow_ir(config: &VelnorConfig, branch: &str, jobs: BTreeMap<String, Job>) -> WorkflowIr {
+    WorkflowIr {
+        name: config.workflow.name.clone(),
+        triggers: Trigger {
+            pull_request_types: EXPECTED_PR_TYPES.iter().map(ToString::to_string).collect(),
+            push_branches: vec![branch.to_owned()],
+            merge_group: true,
+            workflow_dispatch: None,
+            schedule: None,
+        },
+        permissions: Permissions::default(),
+        concurrency: Concurrency {
+            group: CONCURRENCY_GROUP.to_owned(),
+            cancel_in_progress: CONCURRENCY_CANCEL.to_owned(),
+        },
+        jobs,
+    }
 }
 
 fn support_workflow(
@@ -246,7 +263,7 @@ fn insert_format_report_steps(plan: &mut Job, reports: Vec<Step>) {
         .steps
         .iter()
         .position(|step| {
-            matches!(&step.kind, StepKind::Internal { operation } if operation == PLAN_OPERATION)
+            matches!(&step.kind, StepKind::Internal { operation, .. } if operation == PLAN_OPERATION)
         })
         .map_or(plan.steps.len(), |plan_at| plan_at + 1);
     plan.steps.splice(at..at, reports);
@@ -262,7 +279,7 @@ fn insert_format_step(plan: &mut Job, format: Step) {
         .steps
         .iter()
         .position(|step| {
-            matches!(&step.kind, StepKind::Internal { operation } if operation == PLAN_OPERATION)
+            matches!(&step.kind, StepKind::Internal { operation, .. } if operation == PLAN_OPERATION)
         })
         .unwrap_or(plan.steps.len());
     plan.steps.insert(at, format);
@@ -305,6 +322,13 @@ pub(crate) fn plan_uses_opentofu(discovery: &Discovery) -> bool {
 pub(crate) fn plan_uses_rust(discovery: &Discovery, policy: WorkflowPolicy) -> bool {
     policy == WorkflowPolicy::VelnorRepositoryV1
         || !discovery.workspaces.is_empty()
+        || discovery.statuses.iter().any(|status| {
+            let project = match status {
+                velnor_actions_contract::DetectionStatus::Selected(project)
+                | velnor_actions_contract::DetectionStatus::Ignored { project, .. } => project,
+            };
+            Stack::from_id(&project.stack_id) == Some(Stack::Rust)
+        })
         || discovery
             .proposals
             .iter()

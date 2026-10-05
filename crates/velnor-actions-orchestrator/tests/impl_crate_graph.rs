@@ -12,6 +12,8 @@ use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
 use super::impl_common::{TestResult, config_with_branch, make_repo};
 
+const SCALE_SET_CONFIG: &str = "schema = 2\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n[execution]\ndefault_profile = \"hosted\"\nhosted_profile = \"hosted\"\nscale_set_profile = \"local\"\nmode = \"scale-set\"\n[execution.profiles.hosted]\nkind = \"github-hosted\"\nlabel = \"ubuntu-26.04\"\nplatform = \"linux/amd64\"\n[execution.profiles.local]\nkind = \"github-scale-set\"\nname = \"ubuntu-26.04-scale-set\"\nlabels = [\"ubuntu-26.04-scale-set\", \"velnor\"]\nplatform = \"linux/amd64\"\n";
+
 /// Staged workflow text for one config; temp keeps the dir alive.
 fn preview_yaml(config: &str) -> Result<(TempDir, String), Box<dyn std::error::Error>> {
     let repo = make_repo(config)?;
@@ -64,16 +66,17 @@ fn step_at(task: &str, name: &str, missing: &'static str) -> Result<usize, &'sta
 fn assert_mbx_setup(task: &str) -> TestResult {
     let source_restore = step_at(task, "Restore Cargo sources", "source restore")?;
     let private_store = step_at(task, "Prepare private MBX store", "private MBX store")?;
-    let setup = step_at(task, "Setup MBX", "MBX setup")?;
-    let key = step_at(task, "Prepare MBX bundle key", "MBX bundle key")?;
+    let key = step_at(task, "Prepare MBX cache identity", "MBX cache identity")?;
+    let setup = step_at(task, "Prepare MBX local cache store", "MBX setup")?;
     assert_eq!(
-        task.matches("- name: Setup MBX").count(),
+        task.matches("- name: Prepare MBX local cache store")
+            .count(),
         1,
         "one MBX setup step"
     );
     assert!(
-        source_restore < private_store && private_store < setup && setup < key,
-        "source restore/private store/local MBX setup order:\n{task}"
+        source_restore < key && key < private_store && private_store < setup,
+        "source restore/cache identity/private store/local MBX setup order:\n{task}"
     );
 
     let source_cache = &task[source_restore..private_store];
@@ -88,7 +91,7 @@ fn assert_mbx_setup(task: &str) -> TestResult {
             && private.contains("MBX_CACHE_DIR=%s"),
         "fresh private MBX store:\n{private}"
     );
-    let local_setup = &task[setup..key];
+    let local_setup = &task[setup..];
     assert!(
         local_setup.contains("uses: jdx/mr-boxington-action@")
             && local_setup.contains("backend: local"),
@@ -103,7 +106,7 @@ fn assert_mbx_setup(task: &str) -> TestResult {
 
 /// Assert MBX bundle restore/import, source fetch, and all crate builds precede export.
 fn assert_mbx_bundle_order(task: &str) -> TestResult {
-    let key = step_at(task, "Prepare MBX bundle key", "MBX bundle key")?;
+    let key = step_at(task, "Prepare MBX cache identity", "MBX cache identity")?;
     let restore = step_at(task, "Restore MBX single bundle", "bundle restore")?;
     let import = step_at(task, "Import MBX single bundle", "bundle import")?;
     let fetch = step_at(task, "Fetch Cargo sources", "source fetch")?;
@@ -153,11 +156,13 @@ fn assert_mbx_bundle_actions(task: &str) -> TestResult {
     let export = step_at(task, "Export MBX single bundle", "bundle export")?;
     let save = step_at(task, "Save MBX single bundle", "bundle save")?;
     let bundle_path = "${{ runner.temp }}/mbx-single-bundle";
-    let bundle_key = "${{ steps.mbx-bundle-key.outputs.primary }}";
+    let bundle_key = "${{ steps.mbx-cache-key.outputs.key }}";
+    let bundle_prefix = "${{ steps.mbx-cache-key.outputs.prefix }}";
     let bundle_restore = &task[restore..import];
     assert!(
         bundle_restore.contains("uses: actions/cache/restore@")
             && bundle_restore.contains(&format!("key: {bundle_key}"))
+            && bundle_restore.contains(&format!("restore-keys: {bundle_prefix}"))
             && bundle_restore.contains(&format!("path: {bundle_path}")),
         "explicit bundle restore:\n{bundle_restore}"
     );
@@ -241,8 +246,8 @@ fn w1_crate_job_prepares_pinned_tools() -> TestResult {
 }
 
 #[test]
-fn w1_crate_prepare_adds_mbx_driver() -> TestResult {
-    let repo = make_repo(config_with_branch())?;
+fn schema2_scale_set_crate_adds_mbx_driver_bundle() -> TestResult {
+    let repo = make_repo(SCALE_SET_CONFIG)?;
     with_mbx(&repo)?;
     fs::write(
         repo.path().join("Cargo.lock"),
@@ -256,6 +261,10 @@ fn w1_crate_prepare_adds_mbx_driver() -> TestResult {
     assert!(
         task.contains(&catalog.tool_spec(PinnedTool::MrBoxington)),
         "mbx spec:\n{task}"
+    );
+    assert!(
+        task.contains("runs-on: [velnor, ubuntu-26.04-scale-set]"),
+        "bundle lifecycle is covered on the configured Scale Set lane:\n{task}"
     );
     assert_mbx_setup(task)?;
     assert_mbx_bundle_order(task)?;

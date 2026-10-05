@@ -4,8 +4,8 @@ use std::collections::BTreeSet;
 use velnor_actions_contract::{RoutingWorkflow, ScheduleTrigger, WorkflowPolicy};
 use velnor_actions_workflow_renderer::freshness::{FreshnessSpec, render_freshness_workflow};
 use velnor_actions_workflow_renderer::release_tree::render_release_workflow;
-use velnor_actions_workflow_renderer::schema2::MbxQualificationPins;
 use velnor_actions_workflow_renderer::schema2::Schema2WorkflowRequest;
+use velnor_actions_workflow_renderer::schema2::{MbxQualificationPins, MbxQualificationTarget};
 use velnor_actions_workflow_renderer::setup::MiseSetup;
 use velnor_actions_workflow_renderer::{
     MAX_WORKFLOW_BYTES, RenderError, RenderedFile, render_schema2_workflows, render_tree,
@@ -128,15 +128,18 @@ fn direct_schema2_renderer_rejects_an_oversized_workflow() -> Result<(), RenderE
         scale_set: Schema2WorkflowRequest::canonical_scale_set()?,
         workflows: BTreeSet::from([RoutingWorkflow::Qualification]),
         mbx_qualification: Some(MbxQualificationPins {
-            mise_setup: MiseSetup {
-                uses: "jdx/mise-action@0123456789abcdef0123456789abcdef01234567".to_owned(),
-                version: "2026.9.18".to_owned(),
-                sha256: "a".repeat(64),
+            protected_main: MbxQualificationTarget {
+                mise_setup: MiseSetup {
+                    uses: "jdx/mise-action@0123456789abcdef0123456789abcdef01234567".to_owned(),
+                    version: "2026.9.18".to_owned(),
+                    sha256: "a".repeat(64),
+                },
+                action_uses: "jdx/mr-boxington-action@0123456789abcdef0123456789abcdef01234567"
+                    .to_owned(),
+                mbx_version: large_mbx_version,
+                rust_version: "1.98.0".to_owned(),
             },
-            candidate_action_uses:
-                "jdx/mr-boxington-action@0123456789abcdef0123456789abcdef01234567".to_owned(),
-            mbx_version: large_mbx_version,
-            rust_version: "1.98.0".to_owned(),
+            same_repository_pr: None,
         }),
     };
     let error =

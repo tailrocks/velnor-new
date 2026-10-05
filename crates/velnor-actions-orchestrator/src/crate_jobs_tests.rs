@@ -2,6 +2,8 @@
 //!
 //! Declared via `#[path]` from `crate_jobs.rs` under `cfg(test)`.
 
+use std::collections::BTreeSet;
+
 use super::*;
 use crate::clippy_groups::ClippyMemoryPlan;
 use crate::crate_job_ids::job_id_for_member;
@@ -43,6 +45,7 @@ pub(super) fn group(package: &str, kind: TaskKind, gated_by: &[&str]) -> Propose
 /// Discovery shell carrying only task proposals.
 pub(super) fn discovery(groups: Vec<ProposedTask>) -> Discovery {
     Discovery {
+        mise_checks: Vec::new(),
         statuses: Vec::new(),
         workspaces: Vec::new(),
         proposals: groups,
@@ -79,7 +82,6 @@ fn groups_obligations_into_one_ordered_job_per_crate() {
         WorkflowPolicy::ConsumerV1,
         &discovery(vec![test, doc, doctest, clippy, other]),
         &ToolCatalog::pinned(),
-        &[],
         &[],
         None,
         2,
@@ -137,7 +139,6 @@ fn skips_testless_and_workspace_groups() {
         &discovery(vec![testless, workspace_fmt, clippy]),
         &ToolCatalog::pinned(),
         &[],
-        &[],
         None,
         2,
     )
@@ -162,7 +163,6 @@ fn member_binding_agrees_with_built_jobs() {
         WorkflowPolicy::ConsumerV1,
         &discovery(groups.clone()),
         &ToolCatalog::pinned(),
-        &[],
         &[],
         None,
         2,
@@ -222,6 +222,29 @@ fn shards_name_their_index() {
 mod mbx_tests;
 
 #[test]
+fn drivers_follow_per_crate_selection() {
+    let mut mbx = group("demo", TaskKind::Clippy, &[]);
+    mbx.identity.compile_driver = CompileDriver::Mbx.as_str().to_owned();
+    let cargo = group("nested", TaskKind::Clippy, &[]);
+    let found = build_crate_jobs(
+        "ubuntu-26.04",
+        WorkflowPolicy::ConsumerV1,
+        &discovery(vec![mbx, cargo]),
+        &ToolCatalog::pinned(),
+        &[],
+        None,
+        2,
+    )
+    .expect("crate jobs");
+    assert_eq!(found.drivers["rust-demo"], RenderDriver::Mbx);
+    assert_eq!(found.drivers["rust-nested"], RenderDriver::Cargo);
+    let steps = names(&found.jobs[0].1);
+    assert!(steps.contains(&"Restore MBX objects"), "{steps:?}");
+    let steps = names(&found.jobs[1].1);
+    assert!(!steps.contains(&"Restore MBX objects"), "{steps:?}");
+}
+
+#[test]
 fn empty_groups_build_no_jobs() {
     let found = build_crate_jobs(
         "ubuntu-26.04",
@@ -229,55 +252,11 @@ fn empty_groups_build_no_jobs() {
         &discovery(Vec::new()),
         &ToolCatalog::pinned(),
         &[],
-        &[],
         None,
         2,
     )
     .expect("empty build");
     assert!(found.jobs.is_empty() && found.drivers.is_empty());
-}
-
-#[test]
-fn nonempty_custom_tasks_reject_until_redesigned() {
-    let clippy = group("demo", TaskKind::Clippy, &[]);
-    let allowlist = vec!["audit".to_owned()];
-    let Err(err) = build_crate_jobs(
-        "ubuntu-26.04",
-        WorkflowPolicy::ConsumerV1,
-        &discovery(vec![clippy]),
-        &ToolCatalog::pinned(),
-        &[],
-        &allowlist,
-        None,
-        2,
-    ) else {
-        panic!("non-empty custom_tasks must fail");
-    };
-    assert!(
-        err.to_string().contains("custom_tasks_unqualified"),
-        "{err}"
-    );
-}
-
-#[test]
-fn nonempty_custom_tasks_reject_with_zero_groups() {
-    let allowlist = vec!["audit".to_owned()];
-    let Err(err) = build_crate_jobs(
-        "ubuntu-26.04",
-        WorkflowPolicy::ConsumerV1,
-        &discovery(Vec::new()),
-        &ToolCatalog::pinned(),
-        &[],
-        &allowlist,
-        None,
-        2,
-    ) else {
-        panic!("non-empty custom_tasks must fail with zero groups");
-    };
-    assert!(
-        err.to_string().contains("custom_tasks_unqualified"),
-        "{err}"
-    );
 }
 
 #[test]
@@ -295,7 +274,6 @@ fn acquire_stages_before_report_wrappers() {
         WorkflowPolicy::ConsumerV1,
         &discovery(vec![group("demo", TaskKind::Clippy, &[])]),
         &ToolCatalog::pinned(),
-        &[],
         &[],
         Some(&acquire),
         2,
@@ -341,7 +319,6 @@ fn velnor_policy_trims_trio_except_validator_spawning_suites() {
             group("velnor-actions-contract", TaskKind::Test, &[]),
         ]),
         &catalog,
-        &[],
         &[],
         None,
         2,

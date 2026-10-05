@@ -269,8 +269,6 @@ fn preseed_plan_installs_before_build_and_check_generated() -> TestResult {
             let steps = plan_steps(&yaml);
             let prepare_at =
                 step_index(&steps, "Prepare pinned tools").ok_or("missing Prepare step")?;
-            let rust_at = step_index(&steps, "Prepare Rust components")
-                .ok_or("missing Rust components step")?;
             let build_at = steps
                 .iter()
                 .position(|(step, _)| step.contains("Build helper"))
@@ -284,8 +282,14 @@ fn preseed_plan_installs_before_build_and_check_generated() -> TestResult {
             let rust = ToolCatalog::pinned().tool_spec(PinnedTool::Rust);
             assert!(steps[prepare_at].1.contains(&rust), "missing {rust}");
             assert!(
-                prepare_at < build_at && build_at < rust_at && rust_at < check_at,
-                "install < build helper < Rust components < generate: {steps:?}"
+                prepare_at < build_at && build_at < check_at,
+                "install < build helper < generate: {steps:?}"
+            );
+            assert!(
+                !steps
+                    .iter()
+                    .any(|(name, _)| name == "Prepare Rust components"),
+                "a helper-only Plan installs Rust but no Clippy/rustfmt components: {steps:?}"
             );
             Ok(())
         },

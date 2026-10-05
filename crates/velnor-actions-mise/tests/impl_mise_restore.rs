@@ -351,7 +351,13 @@ fn fallback_maps_every_error_and_executes() {
 /// failures (e.g. `noent`) map to `cache_unavailable`.
 #[test]
 fn cancelled_child_never_maps_to_miss() {
-    for message in ["cancelled", "timeout_after_secs:30", "timeout_after_secs:0"] {
+    for message in [
+        "cancelled",
+        "timeout_after_secs:30",
+        "timeout_after_secs:0",
+        "cancelled;cleanup_failed:kill_group:permission denied",
+        "timeout_after_absolute_deadline;cleanup_failed:reap_child:still running",
+    ] {
         let error = MiseError::SpawnFailed {
             program: "mise".to_owned(),
             message: message.to_owned(),

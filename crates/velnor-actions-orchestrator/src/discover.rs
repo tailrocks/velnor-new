@@ -4,10 +4,14 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use velnor_actions_contract::{
-    DETECTION_SCHEMA, DetectedProject, DetectionStatus, DetectorEntry, FileIndex, ProposedTask,
-    RustStackConfig, Stack, StackCandidate, VelnorConfig, apply_stack_ignores,
-    check_candidate_outcomes, check_duplicates, selected_projects,
+    DETECTION_SCHEMA, DetectionStatus, FileIndex, ProposedTask, RustStackConfig, VelnorConfig,
+    apply_stack_ignores, check_candidate_outcomes, check_duplicates, selected_projects,
 };
+#[path = "discovery_registry.rs"]
+mod registry;
+pub(crate) use registry::detector_entries;
+use registry::{DETECTORS, detected_projects};
+
 use velnor_actions_mise::ArchivePlan;
 use velnor_actions_rust::{
     Recommendation, RustExecutionProfile, WorkspaceRecord, dedupe_workspaces, propose_task,
@@ -37,6 +41,8 @@ pub struct PlannedWorkspace {
 /// Full detection output feeding planning and rendering.
 #[derive(Debug, Clone)]
 pub struct Discovery {
+    /// Explicit repository-owned checks, independent of detected workspaces.
+    pub mise_checks: Vec<velnor_actions_mise::DiscoveredCheck>,
     /// Per-project selection states.
     pub statuses: Vec<DetectionStatus>,
     /// Selected workspaces with profiles.
@@ -49,7 +55,7 @@ pub struct Discovery {
     pub tool_checks: Vec<ToolInputCheck>,
     /// Barrier-separated Clippy memory schedule.
     pub clippy_memory: ClippyMemoryPlan,
-    /// Sorted unique recommendations.
+    /// Non-fatal generation recommendations.
     pub recommendations: Vec<String>,
     /// Release-manifest text from the committed repo file.
     ///
@@ -63,10 +69,7 @@ pub struct Discovery {
     /// Always false in release builds (no fallback exists there).
     /// `generate` warns loudly when this is set; `plan` stays silent.
     pub consumer_manifest_stand_in: bool,
-    /// Whether index enumeration skipped any non-UTF-8 name.
-    ///
-    /// Selection broadens explicitly on this: a skipped name cannot be
-    /// attributed to an owning package.
+    /// Whether non-UTF-8 names require broad selection.
     pub skipped_non_utf8: bool,
     /// Tofu plan note: ignore marker or table-less evidence advisory.
     ///
@@ -111,13 +114,21 @@ pub(crate) fn discover(root: &Path, config: &VelnorConfig) -> Result<Discovery, 
     })?;
     let workspaces = plan_workspaces(root, &index, &statuses, inventories, config)?;
     qualify_workspaces(root, &workspaces)?;
-    let (proposals, fallbacks) = derive_all(config, &index, &workspaces, &statuses)?;
+    let (mut proposals, fallbacks) = derive_all(config, &index, &workspaces, &statuses)?;
+    let mise_checks =
+        velnor_actions_mise::discover_checks(root, &config.checks, &config.qualified_tools)
+            .map_err(|err| OrchestratorError::Contract {
+                problem: err.to_string(),
+            })?;
+    proposals.extend(mise_checks.iter().map(|item| item.proposal.clone()));
+    proposals.sort_by(|a, b| a.task_id.cmp(&b.task_id));
     let clippy_memory = clippy_memory_groups(&proposals);
     let recommendations =
         collect_recommendations(root, config, &index, &workspaces, &tool_checks, &mut reads);
     let (consumer_manifest_json, consumer_manifest_stand_in) =
         crate::discover_manifest::for_policy(root, config.workflow.policy)?;
     Ok(Discovery {
+        mise_checks,
         statuses,
         workspaces,
         proposals,
@@ -131,72 +142,6 @@ pub(crate) fn discover(root: &Path, config: &VelnorConfig) -> Result<Discovery, 
         tofu_note: tofu_step.note,
         tofu_units,
     })
-}
-
-/// Detector registry (stack id, record schema, implementation), ascending.
-/// V1 registers rust and tofu; schema 1 is `{ stack_id, project_root, manifest }`.
-const DETECTORS: [DetectorEntry; 2] = [
-    (
-        Stack::Rust.id(),
-        DETECTION_SCHEMA,
-        velnor_actions_rust::discover_stack_candidates,
-    ),
-    (
-        Stack::Tofu.id(),
-        DETECTION_SCHEMA,
-        velnor_actions_tofu::discover_stack_candidates,
-    ),
-];
-
-/// Convert neutral candidates to detected projects via closed dispatch.
-///
-/// Candidates group by stack in first-seen order; each stack converts
-/// its own units. Single-stack runs preserve candidate order exactly.
-fn detected_projects(
-    candidates: &[StackCandidate],
-) -> Result<Vec<DetectedProject>, OrchestratorError> {
-    let mut rust = Vec::new();
-    let mut tofu = Vec::new();
-    let mut order: Vec<Stack> = Vec::new();
-    for candidate in candidates {
-        match Stack::require_known(&candidate.stack_id) {
-            Ok(stack @ Stack::Rust) => {
-                if !order.contains(&stack) {
-                    order.push(stack);
-                }
-                rust.push(candidate.clone());
-            }
-            Ok(stack @ Stack::Tofu) => {
-                if !order.contains(&stack) {
-                    order.push(stack);
-                }
-                tofu.push(candidate.clone());
-            }
-            Err(err) => {
-                return Err(OrchestratorError::Detection {
-                    problem: err.to_string(),
-                });
-            }
-        }
-    }
-    let rust_projects = velnor_actions_rust::detected_projects_for_units(&rust);
-    let tofu_projects = velnor_actions_tofu::detected_projects_for_units(&tofu);
-    let mut projects = Vec::with_capacity(rust_projects.len() + tofu_projects.len());
-    for stack in order {
-        match stack {
-            Stack::Rust => projects.extend(rust_projects.clone()),
-            Stack::Tofu => projects.extend(tofu_projects.clone()),
-        }
-    }
-    Ok(projects)
-}
-
-/// Registered detectors as (stack ID, record schema), ascending.
-pub(crate) fn detector_entries() -> Vec<(&'static str, u32)> {
-    DETECTORS
-        .iter()
-        .map(|(stack_id, schema, _)| (*stack_id, *schema))
-        .collect()
 }
 
 /// Sorted local dependency display names for one package.
@@ -313,9 +258,6 @@ pub(crate) fn workspace_manifest(workspace_root: &str) -> String {
 }
 
 /// Workspace-root lockfile path for a workspace root.
-///
-/// Shared by qualification and source-prep gating so both agree on
-/// which workspaces are pinned.
 pub(crate) fn workspace_lock(workspace_root: &str) -> String {
     if workspace_root.is_empty() {
         "Cargo.lock".to_owned()

@@ -17,6 +17,7 @@ pub fn extension_schema_for_stack(stack_id: &str) -> Option<&'static str> {
     match Stack::from_id(stack_id) {
         Some(Stack::Rust) => Some(RUST_EXTENSION_SCHEMA),
         Some(Stack::Tofu) => Some(TOFU_EXTENSION_SCHEMA),
+        Some(Stack::Mise) => Some(velnor_actions_contract::NAMED_CHECK_EXTENSION_SCHEMA),
         None => None,
     }
 }
@@ -145,7 +146,10 @@ mod tests {
             extension_schema_for_stack("rust"),
             Some(RUST_EXTENSION_SCHEMA)
         );
-        assert_eq!(extension_schema_for_stack("mise"), None);
+        assert_eq!(
+            extension_schema_for_stack("mise"),
+            Some(velnor_actions_contract::NAMED_CHECK_EXTENSION_SCHEMA)
+        );
         assert!(coverage_schema_known("stack/rust/root/clippy/default"));
         assert!(!coverage_schema_known("stack/unknown/root/test/default"));
         assert!(coverage_schema_known("internal/policy/default"));

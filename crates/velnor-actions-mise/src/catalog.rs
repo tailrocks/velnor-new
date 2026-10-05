@@ -41,6 +41,11 @@ pub const RUST_VERSION: &str = "1.98.1";
 /// Qualified `mr-boxington` tool (binary on PATH is `mbx`; tag `v1.21.1`).
 /// Source: `https://api.github.com/repos/jdx/mr-boxington/releases/latest`; checked 2026-10-03.
 pub const MR_BOXINGTON_VERSION: &str = "1.21.1";
+/// Held release used only by the explicitly enabled same-repository PR cache probe.
+/// It is not part of [`ToolCatalog`] and is never selected for generated product jobs.
+pub const MR_BOXINGTON_PR_QUALIFICATION_VERSION: &str = "1.22.0";
+/// Upstream tag commit recorded for the held PR qualification release.
+pub const MR_BOXINGTON_PR_QUALIFICATION_SHA: &str = "10474d43342ad65df3b02323dd8092d18ab38101";
 /// Qualified GitHub CLI (tag `v2.102.0`).
 /// Source: `https://api.github.com/repos/cli/cli/releases/latest`; checked 2026-09-30.
 pub const GH_VERSION: &str = "2.102.0";

@@ -40,6 +40,7 @@ fn render_gate_roundtrip_accepts_plan() -> TestResult {
     jobs.insert(
         "plan".to_owned(),
         Job {
+            check_runner: None,
             display_name: "Plan".to_owned(),
             runs_on: "ubuntu-26.04".to_owned(),
             timeout_minutes: JobTimeout::PLAN,

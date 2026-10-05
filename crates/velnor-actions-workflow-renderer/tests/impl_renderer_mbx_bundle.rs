@@ -43,16 +43,19 @@ fn assert_cold_import(imported: &str) {
         "mbx cache import",
         "no mbx bundle matched",
         "mbx bundle missing; continuing cold",
-        "mbx bundle import failed; continuing cold",
+        "mbx bundle import failed; selecting a fresh cold store",
         "df -B1 -P",
         "df -i -P",
+        "/opt/velnor/seed/mbx",
+        "mbx-seed-bundle",
+        "steps.mbx-cache-key.outputs.prefix",
     ] {
         assert!(
             imported.contains(needle),
             "{needle} missing from {imported}"
         );
     }
-    assert!(!imported.contains("test -d"), "{imported}");
+    assert!(!imported.contains("test -d \\\"$bundle\\\""), "{imported}");
 }
 
 #[test]
@@ -137,6 +140,16 @@ fn scale_set_owns_key_group_restore_import_export_and_save() -> Result<(), Rende
         text.contains("backend: local"),
         "Scale Set avoids action restore: {text}"
     );
+    let local_action = text
+        .find("name: Prepare MBX local cache store")
+        .expect("local backend action");
+    let local_action_end = text[local_action..]
+        .find("\n      - name:")
+        .map_or(text.len(), |offset| local_action + offset);
+    assert!(
+        !text[local_action..local_action_end].contains("github-cache-mode"),
+        "local backend omits the GitHub-only action input: {text}"
+    );
     assert!(!text.contains("ACTIONS_CACHE_MODE"), "{text}");
     assert!(!text.contains("cache-primary-key"), "{text}");
     assert!(text.contains("MBX_SHARE_OUT_DIR: \"0\""), "{text}");
@@ -159,8 +172,8 @@ fn assert_scale_set_key(key_step: &str) {
         "RUST_TOOLCHAIN",
         "sha256sum",
         "CACHE_REVISION",
-        "github-actions-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${group_id}",
-        "${GITHUB_JOB}-${CACHE_REVISION}",
+        r"github-actions-\\${GITHUB_RUN_ID}-\\${GITHUB_RUN_ATTEMPT}-\\${group_id}",
+        r"\\${GITHUB_JOB}-\\${revision}",
         "CREATE_EXPORT_GROUP",
         "/proc/sys/kernel/random/uuid",
     ] {

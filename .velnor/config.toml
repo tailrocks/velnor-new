@@ -23,7 +23,6 @@ ignore = []
 [stacks.rust]
 compile_driver = "mbx"
 test_runner = "cargo_nextest"
-custom_tasks = []
 
 [[stacks.rust.configurations]]
 name = "default"

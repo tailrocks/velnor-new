@@ -1,242 +1,120 @@
-          GH_CONFIG_DIR: ""
-          GH_HOST: ""
-          GH_TOKEN: ""
-          GITHUB_TOKEN: ""
-          MISE_AUTO_INSTALL: "false"
-          MISE_CARGO_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/cargo
-          MISE_EXEC_AUTO_INSTALL: "false"
-          MISE_GITHUB_TOKEN: ""
-          MISE_LOCKFILE: "0"
-          MISE_NO_CONFIG: "1"
-          MISE_NO_ENV: "1"
-          MISE_NO_HOOKS: "1"
-          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/rustup
-          NODE_AUTH_TOKEN: ""
-          NPM_TOKEN: ""
-          RUSTUP_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/rustup
-          RUSTUP_TOOLCHAIN: 1.98.1
-        run: bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mise --no-config --no-env --no-hooks install rust@1.98.1 mr-boxington@1.22.0'
-      - name: Verify cache compression support
-        env:
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-          ACTIONS_ID_TOKEN_REQUEST_URL: ""
-          ACTIONS_RUNTIME_TOKEN: ""
-          CARGO_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/cargo
-          CARGO_REGISTRY_TOKEN: ""
-          GH_CONFIG_DIR: ""
-          GH_HOST: ""
-          GH_TOKEN: ""
-          GITHUB_TOKEN: ""
-          MISE_AUTO_INSTALL: "false"
-          MISE_CARGO_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/cargo
-          MISE_EXEC_AUTO_INSTALL: "false"
-          MISE_GITHUB_TOKEN: ""
-          MISE_LOCKFILE: "0"
-          MISE_NO_CONFIG: "1"
-          MISE_NO_ENV: "1"
-          MISE_NO_HOOKS: "1"
-          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/rustup
-          NODE_AUTH_TOKEN: ""
-          NPM_TOKEN: ""
-          RUSTUP_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/rustup
-          RUSTUP_TOOLCHAIN: 1.98.1
-        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; command -v zstd >/dev/null; zstd --version > \"$RUNNER_TEMP/mbx-cache-zstd-version\"; tar --version > \"$RUNNER_TEMP/mbx-cache-tar-version\"; grep -Fq '\\''GNU tar'\\'' \"$RUNNER_TEMP/mbx-cache-tar-version\"'"
-      - name: Verify MBX and Rust toolchains
-        env:
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-          ACTIONS_ID_TOKEN_REQUEST_URL: ""
-          ACTIONS_RUNTIME_TOKEN: ""
-          CARGO_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/cargo
-          CARGO_REGISTRY_TOKEN: ""
-          GH_CONFIG_DIR: ""
-          GH_HOST: ""
-          GH_TOKEN: ""
-          GITHUB_TOKEN: ""
-          MISE_AUTO_INSTALL: "false"
-          MISE_CARGO_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/cargo
-          MISE_EXEC_AUTO_INSTALL: "false"
-          MISE_GITHUB_TOKEN: ""
-          MISE_LOCKFILE: "0"
-          MISE_NO_CONFIG: "1"
-          MISE_NO_ENV: "1"
-          MISE_NO_HOOKS: "1"
-          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/rustup
-          NODE_AUTH_TOKEN: ""
-          NPM_TOKEN: ""
-          RUSTUP_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/rustup
-          RUSTUP_TOOLCHAIN: 1.98.1
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; [ -n \"$GITHUB_PATH\" ] || { printf '\\''%s\\n'\\'' '\\''GITHUB_PATH is required'\\'' >&2; exit 1; }; probe_dir=\"$RUNNER_TEMP/velnor/mbx-preflight\"; mkdir -p \"$probe_dir\"; mbx_probe=\"$probe_dir/mbx-root\"; rust_probe=\"$probe_dir/rust-root\"; mise --no-config --no-env --no-hooks where '\\''mr-boxington@1.22.0'\\'' > \"$mbx_probe\"; mise --no-config --no-env --no-hooks where '\\''rust@1.98.1'\\'' > \"$rust_probe\"; IFS= read -r mbx_root < \"$mbx_probe\" || { printf '\\''%s\\n'\\'' '\\''Mise returned no MBX install path'\\'' >&2; exit 1; }; IFS= read -r rust_root < \"$rust_probe\" || { printf '\\''%s\\n'\\'' '\\''Mise returned no Rust install path'\\'' >&2; exit 1; }; [ -n \"$mbx_root\" ] || { printf '\\''%s\\n'\\'' '\\''Mise returned an empty MBX install path'\\'' >&2; exit 1; }; [ -n \"$rust_root\" ] || { printf '\\''%s\\n'\\'' '\\''Mise returned an empty Rust install path'\\'' >&2; exit 1; }; case \"$mbx_root\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''Mise returned a non-absolute MBX install path'\\'' >&2; exit 1 ;; esac; case \"$rust_root\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''Mise returned a non-absolute Rust install path'\\'' >&2; exit 1 ;; esac; mbx_bin=\"$mbx_root/mbx\"; rustc_bin=\"$rust_root/rustc\"; [ -x \"$mbx_bin\" ] || { printf '\\''expected executable MBX at %s\\n'\\'' \"$mbx_bin\" >&2; exit 1; }; [ -x \"$rustc_bin\" ] || { printf '\\''expected Rustup shim at %s\\n'\\'' \"$rustc_bin\" >&2; exit 1; }; mbx_output_file=\"$probe_dir/mbx-version\"; rustc_output_file=\"$probe_dir/rustc-version\"; \"$mbx_bin\" --version > \"$mbx_output_file\"; IFS= read -r mbx_output < \"$mbx_output_file\" || { printf '\\''%s\\n'\\'' '\\''MBX returned no version'\\'' >&2; exit 1; }; [ \"$mbx_output\" = '\\''mbx 1.22.0'\\'' ] || { printf '\\''expected MBX 1.22.0, got %s\\n'\\'' \"$mbx_output\" >&2; exit 1; }; \"$rustc_bin\" '\\''+1.98.1'\\'' -vV > \"$rustc_output_file\"; grep -Fqx '\\''release: 1.98.1'\\'' \"$rustc_output_file\" || { printf '\\''Rustup did not report exact toolchain 1.98.1\\n'\\'' >&2; exit 1; }; rm -f \"$mbx_probe\" \"$rust_probe\" \"$mbx_output_file\" \"$rustc_output_file\"; rmdir \"$probe_dir\"; printf '\\''%s\\n'\\'' \"$rust_root\" \"$mbx_root\" >> \"$GITHUB_PATH\"'"
-      - name: Prepare private MBX store
-        env:
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-          ACTIONS_ID_TOKEN_REQUEST_URL: ""
-          ACTIONS_RUNTIME_TOKEN: ""
-          CARGO_REGISTRY_TOKEN: ""
-          GH_CONFIG_DIR: ""
-          GH_HOST: ""
-          GH_TOKEN: ""
-          GITHUB_TOKEN: ""
-          MISE_GITHUB_TOKEN: ""
-          NODE_AUTH_TOKEN: ""
-          NPM_TOKEN: ""
-        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; test -n \"$RUNNER_TEMP\"; bundle=\"$RUNNER_TEMP/mbx-single-bundle\"; if [ -e \"$bundle\" ] || [ -L \"$bundle\" ]; then echo \"stable MBX bundle path already exists in runner.temp\" >&2; exit 1; fi; root_file=\"$GITHUB_OUTPUT.mbx-root\"; if [ -e \"$root_file\" ] || [ -L \"$root_file\" ]; then echo \"MBX root marker already exists\" >&2; exit 1; fi; mktemp -d \"$RUNNER_TEMP/velnor-mbx-store.XXXXXXXXXX\" > \"$root_file\"; IFS= read -r root < \"$root_file\"; root_id=\"${root##*/}\"; group=\"velnor-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${root_id}\"; printf '\\''MBX_CACHE_DIR=%s\\nMBX_TARGET_ROOT=%s/targets\\nMBX_SHIMS_DIR=%s/shims\\nMBX_CACHE_EXPORT_GROUP=%s\\n'\\'' \"$root\" \"$root\" \"$root\" \"$group\" >> \"$GITHUB_ENV\"'"
-      - name: Setup MBX
-        id: mbx
-        uses: jdx/mr-boxington-action@1687e54eb349cadf61fa38b5813a77875489e8e6
+    name: Cache / GitHub hosted
+    if: inputs.mode == 'cache'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    needs:
+      - cache-scale-set
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - name: Restore cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
-          backend: local
-          version: 1.22.0
-      - name: Prepare MBX bundle key
-        id: mbx-bundle-key
-        env:
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-          ACTIONS_ID_TOKEN_REQUEST_URL: ""
-          ACTIONS_RUNTIME_TOKEN: ""
-          CARGO_REGISTRY_TOKEN: ""
-          GH_CONFIG_DIR: ""
-          GH_HOST: ""
-          GH_TOKEN: ""
-          GITHUB_TOKEN: ""
-          MBX_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          MBX_CACHE_SCOPE: qualification-mbx-v1/single-bundle-roundtrip
-          MBX_EXPECTED_VERSION: 1.22.0
-          MBX_GENERATION: velnor-mbx-1.22.0
-          MBX_MATRIX_CONTEXT: ${{ toJSON(matrix) }}
-          MBX_VERSION: ${{ steps.mbx.outputs.mbx-version }}
-          MISE_AUTO_INSTALL: "false"
-          MISE_CARGO_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/cargo
-          MISE_EXEC_AUTO_INSTALL: "false"
-          MISE_GITHUB_TOKEN: ""
-          MISE_LOCKFILE: "0"
-          MISE_NO_CONFIG: "1"
-          MISE_NO_ENV: "1"
-          MISE_NO_HOOKS: "1"
-          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/rustup
-          NODE_AUTH_TOKEN: ""
-          NPM_TOKEN: ""
-          RUSTUP_TOOLCHAIN: 1.98.1
-        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; set -o pipefail; case \"$RUNNER_OS:$RUNNER_ARCH\" in Linux:X64|Linux:x64|Linux:AMD64) os=linux; arch=x64 ;; Linux:ARM64|Linux:arm64) os=linux; arch=arm64 ;; *) echo \"unsupported runner for MBX directory cache key\" >&2; exit 1 ;; esac; test \"$MBX_VERSION\" = \"$MBX_EXPECTED_VERSION\"; test -n \"$RUSTUP_TOOLCHAIN\"; workflow_ref=${GITHUB_WORKFLOW_REF:?missing GITHUB_WORKFLOW_REF}; case \"$workflow_ref\" in *@refs/*) workflow_path=${workflow_ref%%@refs/*} ;; *) echo \"invalid GITHUB_WORKFLOW_REF\" >&2; exit 1 ;; esac; test -n \"$workflow_path\"; scope_file=\"$GITHUB_OUTPUT.mbx-scope\"; identity_file=\"$GITHUB_OUTPUT.mbx-rustc\"; hash_file=\"$GITHUB_OUTPUT.mbx-hash\"; for file in \"$scope_file\" \"$identity_file\" \"$hash_file\"; do if [ -e \"$file\" ] || [ -L \"$file\" ]; then echo \"MBX key marker already exists\" >&2; exit 1; fi; done; printf '\\''%s\\n%s\\n%s\\n'\\'' \"$workflow_path\" \"$MBX_CACHE_SCOPE\" \"$MBX_MATRIX_CONTEXT\" > \"$scope_file\"; sha256sum \"$scope_file\" | cut -c1-64 > \"$hash_file\"; IFS= read -r scope_hash < \"$hash_file\"; test -n \"$scope_hash\"; mise --no-config --no-env --no-hooks exec \"rust@$RUSTUP_TOOLCHAIN\" -- rustc -vV > \"$identity_file\"; sha256sum \"$identity_file\" | cut -c1-64 > \"$hash_file\"; IFS= read -r compiler_hash < \"$hash_file\"; test -n \"$compiler_hash\"; toolchain=\"rust-${RUSTUP_TOOLCHAIN}-${compiler_hash}\"; revision=\"$GITHUB_SHA\"; if [ -n \"$MBX_BASE_SHA\" ]; then revision=\"$MBX_BASE_SHA\"; fi; case \"$revision\" in '\\'''\\''|*[!0-9a-f]*) exit 1 ;; esac; test \"${#revision}\" -eq 40; prefix=\"${os}-${arch}-mbx-${MBX_GENERATION}-dir-${toolchain}-scope-${scope_hash}-\";run_id=${GITHUB_RUN_ID:?missing GITHUB_RUN_ID}; run_attempt=${GITHUB_RUN_ATTEMPT:?missing GITHUB_RUN_ATTEMPT}; case \"$run_id\" in '\\'''\\''|*[!0-9]*) echo \"invalid GITHUB_RUN_ID\" >&2; exit 1 ;; esac; case \"$run_attempt\" in '\\'''\\''|*[!0-9]*) echo \"invalid GITHUB_RUN_ATTEMPT\" >&2; exit 1 ;; esac; prefix=\"${prefix}run-${run_id}-attempt-${run_attempt}-\"; printf '\\''primary=%s%s\\nprefix=%s\\ngeneration=%s\\nrustc_identity=%s\\nmbx_version=%s\\n'\\'' \"$prefix\" \"$revision\" \"$prefix\" \"$MBX_GENERATION\" \"$compiler_hash\" \"$MBX_VERSION\" >> \"$GITHUB_OUTPUT\"'"
-      - name: Restore MBX single bundle
-        id: mbx-bundle
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+          path: g4-cache.txt
+          key: g4-cache-${{ github.run_id }}
+          fail-on-cache-miss: "true"
+      - name: Check restore
+        run: grep -qx cache-ok g4-cache.txt
+  oidc-hosted:
+    name: OIDC / GitHub hosted
+    if: inputs.mode == 'oidc'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Require OIDC request URL
+        run: "test -n \"$ACTIONS_ID_TOKEN_REQUEST_URL\""
+  oidc-scale-set:
+    name: OIDC / Velnor Scale Set
+    if: inputs.mode == 'oidc'
+    runs-on: [velnor, ubuntu-26.04-scale-set]
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Require OIDC request URL
+        run: "test -n \"$ACTIONS_ID_TOKEN_REQUEST_URL\""
+  post-fail-hosted:
+    name: Post failure / GitHub hosted
+    if: inputs.mode == 'post-fail'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          key: ${{ steps.mbx-bundle-key.outputs.primary }}
-          path: ${{ runner.temp }}/mbx-single-bundle
-      - name: Import MBX single bundle
-        id: mbx-bundle-import
-        env:
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-          ACTIONS_ID_TOKEN_REQUEST_URL: ""
-          ACTIONS_RUNTIME_TOKEN: ""
-          CACHE_HIT: ${{ steps.mbx-bundle.outputs.cache-hit }}
-          CARGO_REGISTRY_TOKEN: ""
-          EXPECTED_KEY: ${{ steps.mbx-bundle-key.outputs.primary }}
-          GH_CONFIG_DIR: ""
-          GH_HOST: ""
-          GH_TOKEN: ""
-          GITHUB_TOKEN: ""
-          MATCHED: ${{ steps.mbx-bundle.outputs.cache-matched-key }}
-          MISE_GITHUB_TOKEN: ""
-          NODE_AUTH_TOKEN: ""
-          NPM_TOKEN: ""
-        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; if [ \"$CACHE_HIT\" != \"true\" ]; then echo \"qualification reader restore was not an exact cache hit\" >&2; exit 1; fi; if [ -z \"$MATCHED\" ] || [ \"$MATCHED\" != \"$EXPECTED_KEY\" ]; then echo \"qualification reader key did not match the writer primary\" >&2; exit 1; fi;set -eu; set -o pipefail; stream() { count_file=\"$GITHUB_OUTPUT.mbx-import-byte-count\"; if [ -e \"$count_file\" ] || [ -L \"$count_file\" ]; then echo \"MBX import byte-count marker already exists\" >&2; return 1; fi; wc -c < \"$2\" > \"$count_file\" || return 1; read -r bytes < \"$count_file\" || return 1; rm -f \"$count_file\" || return 1; printf '\\''%s_bytes=%s\\n'\\'' \"$1\" \"$bytes\"; cat \"$2\" || return 1; }; mbx() { if [ \"$1\" = \"cache\" ] && [ \"$2\" = \"import\" ] && [ -n \"${MBX_QUALIFICATION_IMPORT_RECEIPT:-}\" ]; then receipt=\"$MBX_QUALIFICATION_IMPORT_RECEIPT\"; receipt_tmp=\"${receipt}.tmp\"; stdout_file=\"$GITHUB_OUTPUT.mbx-import-stdout\"; stderr_file=\"$GITHUB_OUTPUT.mbx-import-stderr\"; for file in \"$receipt\" \"$receipt_tmp\" \"$stdout_file\" \"$stderr_file\"; do if [ -e \"$file\" ] || [ -L \"$file\" ]; then echo \"MBX import receipt marker already exists\" >&2; return 1; fi; done; if command mbx \"$@\" > \"$stdout_file\" 2> \"$stderr_file\"; then status=0; else status=$?; fi; { stream stdout \"$stdout_file\" || return 1; stream stderr \"$stderr_file\" || return 1; printf '\\''\\nexit_status=%s\\n'\\'' \"$status\" || return 1; } > \"$receipt_tmp\" || return 1; mv \"$receipt_tmp\" \"$receipt\" || return 1; cat \"$stdout_file\" || return 1; cat \"$stderr_file\" >&2 || return 1; return \"$status\"; else command mbx \"$@\"; fi; }; set -eu; bundle=\"$RUNNER_TEMP/mbx-single-bundle\"; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; if [ -z \"$MATCHED\" ]; then echo '\\''no MBX bundle matched'\\''; printf '\\''selected_cache_root=%s\\n'\\'' \"$MBX_CACHE_DIR\" >> \"$GITHUB_OUTPUT\"; exit 0; fi; if [ ! -d \"$bundle\" ]; then echo '\\''matched MBX bundle is missing; the fresh store stays cold'\\''; printf '\\''selected_cache_root=%s\\n'\\'' \"$MBX_CACHE_DIR\" >> \"$GITHUB_OUTPUT\"; exit 0; fi; if mbx cache import \"$bundle\"; then echo '\\''MBX bundle imported'\\''; printf '\\''selected_cache_root=%s\\n'\\'' \"$MBX_CACHE_DIR\" >> \"$GITHUB_OUTPUT\"; else echo '\\''MBX bundle import failed; abandoning its private store'\\''; root_file=\"$GITHUB_OUTPUT.mbx-fallback\"; if [ -e \"$root_file\" ] || [ -L \"$root_file\" ]; then echo \"MBX fallback marker already exists\" >&2; exit 1; fi; mktemp -d \"$RUNNER_TEMP/velnor-mbx-fallback.XXXXXXXXXX\" > \"$root_file\"; IFS= read -r root < \"$root_file\"; root_id=\"${root##*/}\"; group=\"velnor-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${root_id}\"; printf '\\''MBX_CACHE_DIR=%s\\nMBX_TARGET_ROOT=%s/targets\\nMBX_SHIMS_DIR=%s/shims\\nMBX_CACHE_EXPORT_GROUP=%s\\n'\\'' \"$root\" \"$root\" \"$root\" \"$group\" >> \"$GITHUB_ENV\"; printf '\\''selected_cache_root=%s\\n'\\'' \"$root\" >> \"$GITHUB_OUTPUT\"; echo '\\''fresh cold MBX store selected for subsequent steps'\\''; fi'"
-      - name: Verify pinned MBX version
-        env:
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-          ACTIONS_ID_TOKEN_REQUEST_URL: ""
-          ACTIONS_RUNTIME_TOKEN: ""
-          CARGO_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/cargo
-          CARGO_REGISTRY_TOKEN: ""
-          GH_CONFIG_DIR: ""
-          GH_HOST: ""
-          GH_TOKEN: ""
-          GITHUB_TOKEN: ""
-          MISE_AUTO_INSTALL: "false"
-          MISE_CARGO_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/cargo
-          MISE_EXEC_AUTO_INSTALL: "false"
-          MISE_GITHUB_TOKEN: ""
-          MISE_LOCKFILE: "0"
-          MISE_NO_CONFIG: "1"
-          MISE_NO_ENV: "1"
-          MISE_NO_HOOKS: "1"
-          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/rustup
-          NODE_AUTH_TOKEN: ""
-          NPM_TOKEN: ""
-          RUSTUP_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/rustup
-          RUSTUP_TOOLCHAIN: 1.98.1
-        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mbx --version > \"$RUNNER_TEMP/mbx-version\" && grep -Fq '\\''1.22.0'\\'' \"$RUNNER_TEMP/mbx-version\"'"
-      - name: Require imported MBX objects
-        env:
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-          ACTIONS_ID_TOKEN_REQUEST_URL: ""
-          ACTIONS_RUNTIME_TOKEN: ""
-          CARGO_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/cargo
-          CARGO_REGISTRY_TOKEN: ""
-          GH_CONFIG_DIR: ""
-          GH_HOST: ""
-          GH_TOKEN: ""
-          GITHUB_TOKEN: ""
-          MISE_AUTO_INSTALL: "false"
-          MISE_CARGO_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/cargo
-          MISE_EXEC_AUTO_INSTALL: "false"
-          MISE_GITHUB_TOKEN: ""
-          MISE_LOCKFILE: "0"
-          MISE_NO_CONFIG: "1"
-          MISE_NO_ENV: "1"
-          MISE_NO_HOOKS: "1"
-          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/rustup
-          NODE_AUTH_TOKEN: ""
-          NPM_TOKEN: ""
-          RUSTUP_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/rustup
-          RUSTUP_TOOLCHAIN: 1.98.1
-        run: bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mbx cache stats --json | jq -e '\''.objects > 0'\'' >/dev/null'
-      - name: Compile MBX cache probe
-        env:
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-          ACTIONS_ID_TOKEN_REQUEST_URL: ""
-          ACTIONS_RUNTIME_TOKEN: ""
-          CARGO_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/cargo
-          CARGO_REGISTRY_TOKEN: ""
-          GH_CONFIG_DIR: ""
-          GH_HOST: ""
-          GH_TOKEN: ""
-          GITHUB_TOKEN: ""
-          MISE_AUTO_INSTALL: "false"
-          MISE_CARGO_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/cargo
-          MISE_EXEC_AUTO_INSTALL: "false"
-          MISE_GITHUB_TOKEN: ""
-          MISE_LOCKFILE: "0"
-          MISE_NO_CONFIG: "1"
-          MISE_NO_ENV: "1"
-          MISE_NO_HOOKS: "1"
-          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/rustup
-          NODE_AUTH_TOKEN: ""
-          NPM_TOKEN: ""
-          RUSTUP_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/rustup
-          RUSTUP_TOOLCHAIN: 1.98.1
-        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; root=\"$GITHUB_WORKSPACE/.velnor-mbx-cache-qualification\"; mkdir -p \"$root/src\"; printf '\\''[package]\\nname = \"mbx-cache-qualification\"\\nversion = \"0.1.0\"\\nedition = \"2024\"\\n\\n[workspace]\\nmembers = [\".\"]\\nresolver = \"3\"\\n\\n[lib]\\npath = \"src/lib.rs\"\\n'\\'' > \"$root/Cargo.toml\"; printf '\\''pub fn cache_probe() -> u64 { 42 }\\n'\\'' > \"$root/src/lib.rs\"; mbx build --manifest-path \"$root/Cargo.toml\"'"
-      - name: Require reused compilation
-        env:
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-          ACTIONS_ID_TOKEN_REQUEST_URL: ""
-          ACTIONS_RUNTIME_TOKEN: ""
-          CARGO_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/cargo
-          CARGO_REGISTRY_TOKEN: ""
-          GH_CONFIG_DIR: ""
-          GH_HOST: ""
-          GH_TOKEN: ""
-          GITHUB_TOKEN: ""
-          MISE_AUTO_INSTALL: "false"
-          MISE_CARGO_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/cargo
-          MISE_EXEC_AUTO_INSTALL: "false"
-          MISE_GITHUB_TOKEN: ""
-          MISE_LOCKFILE: "0"
-          MISE_NO_CONFIG: "1"
-          MISE_NO_ENV: "1"
-          MISE_NO_HOOKS: "1"
-          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/rustup
-          NODE_AUTH_TOKEN: ""
-          NPM_TOKEN: ""
-          RUSTUP_HOME: ${{ runner.temp }}/velnor-mbx-cache-qualification/rustup
-          RUSTUP_TOOLCHAIN: 1.98.1
-        run: bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mbx stats --json | jq -e '\''.savings.cached_compilations > 0'\'' >/dev/null'
+          persist-credentials: "false"
+      - name: Main fails post runs
+        uses: ./qualification/actions/post-fail # zizmor: ignore[self-repository]
+  post-fail-scale-set:
+    name: Post failure / Velnor Scale Set
+    if: inputs.mode == 'post-fail'
+    runs-on: [velnor, ubuntu-26.04-scale-set]
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: "false"
+      - name: Main fails post runs
+        uses: ./qualification/actions/post-fail # zizmor: ignore[self-repository]
+  cancel-hosted:
+    name: Cancel / GitHub hosted
+    if: inputs.mode == 'cancel'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    steps:
+      - name: Sleep until cancelled
+        run: sleep 180
+  cancel-scale-set:
+    name: Cancel / Velnor Scale Set
+    if: inputs.mode == 'cancel'
+    runs-on: [velnor, ubuntu-26.04-scale-set]
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
+    steps:
+      - name: Sleep until cancelled
+        run: sleep 180
+  compose-hosted:
+    name: Compose / GitHub hosted
+    if: inputs.mode == 'compose'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: "false"
+      - name: Start compose
+        run: docker compose -f qualification/compose/stack.yml up -d --wait
+      - name: Prove both services
+        run: "docker compose -f qualification/compose/stack.yml ps --services --status running > \"$RUNNER_TEMP/g4-compose-ps\" && grep -qx api \"$RUNNER_TEMP/g4-compose-ps\" && grep -qx db \"$RUNNER_TEMP/g4-compose-ps\""
+      - name: Remove compose
+        run: docker compose -f qualification/compose/stack.yml down --volumes
+      - name: Record compose
+        run: echo compose-ok
+  compose-scale-set:
+    name: Compose / Velnor Scale Set
+    if: inputs.mode == 'compose'
+    runs-on: [velnor, ubuntu-26.04-scale-set]
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: "false"

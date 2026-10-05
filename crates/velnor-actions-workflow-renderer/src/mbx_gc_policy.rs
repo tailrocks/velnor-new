@@ -2,7 +2,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_actions_contract::{Job, RunsOn};
+use velnor_actions_contract::{Job, ReleaseTarget, RunsOn};
 
 /// Return all typed runner jobs whose steps use MBX objects.
 ///
@@ -42,6 +42,6 @@ fn hosted_linux(runs_on: &str) -> bool {
     matches!(
         RunsOn::parse(runs_on),
         Ok(RunsOn::Hosted(label))
-            if velnor_actions_contract::target_for_runner_label(&label).is_some()
+            if ReleaseTarget::for_runner_label(&label) == Some(ReleaseTarget::LinuxX86_64)
     )
 }

@@ -1,5 +1,5 @@
 use super::*;
-use velnor_actions_workflow_renderer::steps::MBX_SETUP_NAME;
+use velnor_actions_workflow_renderer::steps::{MBX_PREFLIGHT_NAME, MBX_RESTORE_NAME};
 
 #[test]
 fn drivers_follow_per_crate_selection() {
@@ -12,7 +12,6 @@ fn drivers_follow_per_crate_selection() {
         &discovery(vec![mbx, cargo]),
         &ToolCatalog::pinned(),
         &[],
-        &[],
         None,
         2,
     )
@@ -20,32 +19,36 @@ fn drivers_follow_per_crate_selection() {
     assert_eq!(found.drivers["rust-demo"], RenderDriver::Mbx);
     assert_eq!(found.drivers["rust-nested"], RenderDriver::Cargo);
     let steps = names(&found.jobs[0].1);
+    let preflight = steps
+        .iter()
+        .position(|name| *name == MBX_PREFLIGHT_NAME)
+        .expect("MBX preflight");
     let setup = steps
         .iter()
-        .position(|name| *name == MBX_SETUP_NAME)
-        .expect("MBX local setup");
+        .position(|name| *name == MBX_RESTORE_NAME)
+        .expect("MBX objects restore");
     assert!(
-        !steps.contains(&"Verify MBX and Rust toolchains"),
-        "the renderer injects the preflight after full-job expansion: {steps:?}"
+        preflight < setup,
+        "preflight precedes MBX action: {steps:?}"
     );
     assert_eq!(
-        steps.iter().filter(|name| **name == MBX_SETUP_NAME).count(),
+        steps
+            .iter()
+            .filter(|name| **name == MBX_RESTORE_NAME)
+            .count(),
         1,
-        "MBX selection emits exactly one local setup action"
+        "MBX selection emits exactly one objects action"
     );
     let action = &found.jobs[0].1.steps[setup];
-    let velnor_actions_contract::StepKind::Action { with, .. } = &action.kind else {
+    let velnor_actions_contract::StepKind::Action { with, env, .. } = &action.kind else {
         panic!("MBX setup must be an action");
     };
     assert_eq!(
-        with.get("version").map(String::as_str),
+        env.get("VELNOR_MBX_VERSION").map(String::as_str),
         Some(velnor_actions_mise::MR_BOXINGTON_VERSION)
     );
-    assert_eq!(with.get("backend").map(String::as_str), Some("local"));
+    assert!(!with.contains_key("version"));
     let steps = names(&found.jobs[1].1);
-    assert!(!steps.contains(&MBX_SETUP_NAME), "{steps:?}");
-    assert!(
-        !steps.contains(&"Verify MBX and Rust toolchains"),
-        "Cargo jobs have no MBX preflight: {steps:?}"
-    );
+    assert!(!steps.contains(&MBX_PREFLIGHT_NAME), "{steps:?}");
+    assert!(!steps.contains(&MBX_RESTORE_NAME), "{steps:?}");
 }

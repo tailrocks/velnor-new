@@ -1,0 +1,114 @@
+      contents: read
+      actions: write
+    env:
+      MBX_GC_AUTO: "1"
+      ACTIONS_CACHE_MODE: write
+      CARGO_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/cargo
+      MISE_AUTO_INSTALL: "false"
+      MISE_CARGO_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/cargo
+      MISE_EXEC_AUTO_INSTALL: "false"
+      MISE_LOCKFILE: "0"
+      MISE_NO_CONFIG: "1"
+      MISE_NO_ENV: "1"
+      MISE_NO_HOOKS: "1"
+      MISE_RUSTUP_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/rustup
+      RUSTUP_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/rustup
+      RUSTUP_TOOLCHAIN: 1.98.1
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: "false"
+      - name: Set up Mise
+        uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
+        with:
+          version: 2026.9.18
+          sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
+          install: "false"
+          env: "false"
+          cache: "false"
+          cache_save: "false"
+      - name: Install pinned Rust toolchain
+        run: "mise install rust@1.98.1 && printf '%s/bin\\n' \"$(mise exec rust@1.98.1 -- rustc --print sysroot)\" >> \"$GITHUB_PATH\""
+      - name: Restore MBX objects
+        uses: jdx/mr-boxington-action@d0825fbaf3cc36ca2609aa38e71046265a1f1e37
+        id: mbx_cache
+        with:
+          github-cache-mode: objects
+          version: 1.21.1
+          isolate-objects-cache: "true"
+          cache-generation: velnor-qualification-mbx-1.21.1-action-d0825fbaf3cc36ca2609aa38e71046265a1f1e37-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+          save-on-workflow-dispatch: "true"
+      - name: Verify MBX action identity and write policy
+        env:
+          MBX_VERSION: ${{ steps.mbx_cache.outputs.mbx-version }}
+          CACHE_SAVE_ELIGIBLE: ${{ steps.mbx_cache.outputs.cache-save-eligible }}
+          CACHE_SAVE_REASON: ${{ steps.mbx_cache.outputs.cache-save-reason }}
+          CACHE_HIT: ${{ steps.mbx_cache.outputs.cache-hit }}
+        run: "test \"$MBX_VERSION\" = '1.21.1' && test \"$CACHE_SAVE_ELIGIBLE\" = 'true' && test \"$CACHE_SAVE_REASON\" = 'workflow_dispatch'"
+      - name: Compile MBX cache probe
+        run: "set -eu\nroot=\"$(mktemp -d \"$RUNNER_TEMP/velnor-mbx-cache-qualification.XXXXXXXXXX\")\"\nmkdir -p \"$root/src\"\ncat > \"$root/Cargo.toml\" <<'EOF'\n[package]\nname = \"mbx-cache-qualification\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[workspace]\nmembers = [\".\"]\nresolver = \"3\"\n\n[lib]\npath = \"src/lib.rs\"\nEOF\ncat > \"$root/src/lib.rs\" <<'EOF'\npub fn cache_probe() -> u64 { 42 }\nEOF\nmbx build --manifest-path \"$root/Cargo.toml\"\n"
+      - name: Sample runner disk
+        run: "df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\""
+  mbx-cache-read-hosted:
+    name: MBX objects cache / read-only reuse
+    if: inputs.mode == 'mbx-cache-roundtrip' && github.ref == 'refs/heads/main' && github.ref_protected == true
+    runs-on: ubuntu-26.04
+    timeout-minutes: 45
+    needs:
+      - mbx-cache-write-hosted
+    permissions:
+      contents: read
+      actions: read
+    env:
+      MBX_GC_AUTO: "1"
+      ACTIONS_CACHE_MODE: read
+      CARGO_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/cargo
+      MISE_AUTO_INSTALL: "false"
+      MISE_CARGO_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/cargo
+      MISE_EXEC_AUTO_INSTALL: "false"
+      MISE_LOCKFILE: "0"
+      MISE_NO_CONFIG: "1"
+      MISE_NO_ENV: "1"
+      MISE_NO_HOOKS: "1"
+      MISE_RUSTUP_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/rustup
+      RUSTUP_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/rustup
+      RUSTUP_TOOLCHAIN: 1.98.1
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: "false"
+      - name: Set up Mise
+        uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
+        with:
+          version: 2026.9.18
+          sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
+          install: "false"
+          env: "false"
+          cache: "false"
+          cache_save: "false"
+      - name: Install pinned Rust toolchain
+        run: "mise install rust@1.98.1 && printf '%s/bin\\n' \"$(mise exec rust@1.98.1 -- rustc --print sysroot)\" >> \"$GITHUB_PATH\""
+      - name: Restore MBX objects
+        uses: jdx/mr-boxington-action@d0825fbaf3cc36ca2609aa38e71046265a1f1e37
+        id: mbx_cache
+        with:
+          github-cache-mode: objects
+          version: 1.21.1
+          isolate-objects-cache: "true"
+          cache-generation: velnor-qualification-mbx-1.21.1-action-d0825fbaf3cc36ca2609aa38e71046265a1f1e37-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+          save-on-workflow-dispatch: "false"
+      - name: Verify MBX action identity and write policy
+        env:
+          MBX_VERSION: ${{ steps.mbx_cache.outputs.mbx-version }}
+          CACHE_SAVE_ELIGIBLE: ${{ steps.mbx_cache.outputs.cache-save-eligible }}
+          CACHE_SAVE_REASON: ${{ steps.mbx_cache.outputs.cache-save-reason }}
+          CACHE_HIT: ${{ steps.mbx_cache.outputs.cache-hit }}
+        run: "test \"$MBX_VERSION\" = '1.21.1' && test \"$CACHE_SAVE_ELIGIBLE\" = 'false' && test \"$CACHE_SAVE_REASON\" = 'workflow_dispatch; save-on-workflow-dispatch is off' && test \"$CACHE_HIT\" = 'false'"
+      - name: Require imported MBX objects
+        run: "set -e -o pipefail; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; mbx cache stats --json | tee \"$RUNNER_TEMP/mbx-object-stats.json\"; jq -e '.objects > 0' \"$RUNNER_TEMP/mbx-object-stats.json\""
+      - name: Compile MBX cache probe
+        run: "set -eu\nroot=\"$(mktemp -d \"$RUNNER_TEMP/velnor-mbx-cache-qualification.XXXXXXXXXX\")\"\nmkdir -p \"$root/src\"\ncat > \"$root/Cargo.toml\" <<'EOF'\n[package]\nname = \"mbx-cache-qualification\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[workspace]\nmembers = [\".\"]\nresolver = \"3\"\n\n[lib]\npath = \"src/lib.rs\"\nEOF\ncat > \"$root/src/lib.rs\" <<'EOF'\npub fn cache_probe() -> u64 { 42 }\nEOF\nmbx build --manifest-path \"$root/Cargo.toml\"\n"
+      - name: Require reused compilation
+        run: "set -e -o pipefail; df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; mbx stats --json | tee \"$RUNNER_TEMP/mbx-reuse-stats.json\"; jq -e '.savings.cached_compilations > 0' \"$RUNNER_TEMP/mbx-reuse-stats.json\""

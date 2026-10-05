@@ -1,9 +1,8 @@
 //! V1 fixed command vectors built only through the Mise adapter.
 
-use std::collections::BTreeMap;
 use std::ffi::{OsStr, OsString};
 
-use velnor_actions_contract::{ProposedTask, Stack, Step};
+use velnor_actions_contract::{ProposedTask, Stack};
 use velnor_actions_mise::{
     CandidateBuild, IsolatedCommand, PinnedTool, PinnedToolExec, RouteDriver, ToolCatalog,
     custom_run::custom_task_run_argv, validate_exact_version,
@@ -78,8 +77,27 @@ pub(crate) fn task_argv(
     task: &ProposedTask,
     catalog: &ToolCatalog,
 ) -> Result<Vec<String>, OrchestratorError> {
-    if Stack::from_id(&task.stack_id) == Some(Stack::Tofu) {
-        return tofu_task_argv(task, catalog);
+    match Stack::from_id(&task.stack_id) {
+        Some(Stack::Tofu) => return tofu_task_argv(task, catalog),
+        Some(Stack::Mise) => {
+            let name = task
+                .payload
+                .first()
+                .and_then(|v| v.to_str())
+                .filter(|_| task.payload.len() == 1)
+                .ok_or_else(|| OrchestratorError::Contract {
+                    problem: "named_check_task_payload".to_owned(),
+                })?;
+            return custom_task_run_argv(name).map_err(|e| OrchestratorError::Contract {
+                problem: e.to_string(),
+            });
+        }
+        Some(Stack::Rust) => {}
+        None => {
+            return Err(OrchestratorError::Contract {
+                problem: format!("unknown_task_stack:{}", task.stack_id),
+            });
+        }
     }
     let driver = RouteDriver::from_compile_driver(&task.identity.compile_driver);
     let mut tools = driver.map_or(vec![PinnedTool::Rust], RouteDriver::tools);
@@ -285,46 +303,6 @@ fn validator_argv(
             }
         })?;
     strings_of(exec.argv()).map_err(|problem| OrchestratorError::Contract { problem })
-}
-
-/// Shell steps running each allowlisted custom task via `mise run`.
-///
-/// Rejected while non-empty: the emitted steps cannot work as built
-/// (the step env carries `MISE_NO_CONFIG=1`, under which mise reports
-/// `no tasks defined`), so any non-empty allowlist fails `generate`
-/// instead of shipping dead steps. Enabling this path needs a
-/// redesign (a qualified config-visible execution boundary plus the
-/// corrected `mise run <task>` argv), not a flag flip: dropping
-/// `MISE_NO_CONFIG` from the step env would let repository task
-/// bodies execute with the job's credentials and checkout. An empty
-/// allowlist (the default) emits nothing.
-/// # Errors
-///
-/// Returns `custom_tasks_unqualified` for any non-empty allowlist, or
-/// a contract error when a name fails the task-name rule.
-pub(crate) fn custom_task_steps(
-    allowlist: &[String],
-    catalog: &ToolCatalog,
-) -> Result<Vec<Step>, OrchestratorError> {
-    if !allowlist.is_empty() {
-        return Err(OrchestratorError::Contract {
-            problem: "custom_tasks_unqualified:custom_tasks is rejected until the config-visible execution path is redesigned; see custom_task_steps docs"
-                .to_owned(),
-        });
-    }
-    allowlist
-        .iter()
-        .map(|task| {
-            let run = custom_task_run_argv(task).map_err(|err| OrchestratorError::Contract {
-                problem: err.to_string(),
-            })?;
-            let env = crate::matrix_step::task_step_env(catalog, &BTreeMap::new(), true)?;
-            velnor_actions_workflow_renderer::shell_step(&format!("Custom task {task}"), run, env)
-                .map_err(|err| OrchestratorError::Contract {
-                    problem: err.to_string(),
-                })
-        })
-        .collect()
 }
 
 /// Fixed pre-seed MBX route probe through pinned Mise.

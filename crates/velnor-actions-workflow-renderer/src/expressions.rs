@@ -55,7 +55,7 @@ fn expression_spans(text: &str) -> Option<Vec<&str>> {
 /// to the default branch; Scale Set routes do not invoke action restore.
 /// Notably absent: `github.token` (render-time fetch binding only)
 /// and run IDs (never in env).
-const ENV_EXPRESSIONS: [&str; 8] = [
+const ENV_EXPRESSIONS: [&str; 17] = [
     "runner.temp",
     "github.ref_name",
     "github.event_name",
@@ -63,7 +63,16 @@ const ENV_EXPRESSIONS: [&str; 8] = [
     "secrets.CARGO_REGISTRY_TOKEN",
     "secrets.GITHUB_TOKEN",
     "steps.mbx-bundle.outputs.cache-matched-key",
+    "steps.mbx-cache-key.outputs.prefix",
     "github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.sha",
+    "inputs.cache_key",
+    "github.repository",
+    "github.event.pull_request.head.repo.full_name",
+    "github.event.pull_request.base.repo.full_name",
+    "toJSON(github.event.pull_request.head.repo.fork)",
+    "github.event.pull_request.number",
+    "github.event.pull_request.head.sha",
+    "((github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true) || (github.event_name == 'pull_request' && steps.mbx-cache-key.outputs.pr-cache-allowed == 'true')) && 'write' || 'read'",
 ];
 
 /// Exact `${{ }}` inners permitted in action `with:` values.

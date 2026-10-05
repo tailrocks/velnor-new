@@ -3,6 +3,7 @@
 //! Validated IR plus fixed argv in, marked YAML out: no subprocesses, no
 //! stack or tool branching, quoting-only shell shaping.
 
+mod action_ref;
 pub mod agents_md;
 mod artifact_paths;
 pub mod cache_elect;
@@ -50,6 +51,7 @@ mod steps_internal;
 mod steps_plain;
 mod support;
 pub mod tofu_cache;
+mod tool_seed;
 pub mod toolchain_env;
 pub mod tree;
 mod verification_jobs;
@@ -97,7 +99,9 @@ pub use render::{
     RenderedFile, RenderedSymlink, RenderedTree, TASK_JOB_ID, ValidatorCommand, WORKFLOW_PATH,
     action_pins, finalize_jobs, render_workflow_ir, render_workflow_ir_strict,
 };
-pub use schema2::{MbxQualificationPins, Schema2WorkflowRequest, render_schema2_workflows};
+pub use schema2::{
+    MbxQualificationPins, MbxQualificationTarget, Schema2WorkflowRequest, render_schema2_workflows,
+};
 pub use setup::{MISE_ACTION_NAME, SETUP_MISE_NAME, mise_setup_step};
 pub use steps::{
     ACQUIRE_NAME, ASSET_SHA_ENV, ASSET_URL_ENV, BASELINE_PUBLISH_UPLOAD_NAME,

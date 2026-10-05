@@ -140,6 +140,7 @@ fn marker_plan(marker: &str) -> velnor_actions_contract::Plan {
 /// Discovery without task groups.
 fn empty_discovery() -> crate::discover::Discovery {
     crate::discover::Discovery {
+        mise_checks: Vec::new(),
         statuses: Vec::new(),
         workspaces: Vec::new(),
         proposals: Vec::new(),

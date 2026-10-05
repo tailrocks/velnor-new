@@ -177,3 +177,26 @@ fn tofu_metadata_and_cache_ids_derive() {
         identities::cache_format_id_for_tofu().as_str()
     );
 }
+
+#[test]
+fn tofu_repository_root_has_canonical_identity_path() {
+    use velnor_actions_tofu::TofuTaskKind;
+    let task = tofu_proposal(TofuTaskKind::Validate);
+    let generator = default_generator();
+    let extension = StackExtension {
+        schema: "tofu-task-identity-v1".to_owned(),
+        data: serde_json::json!({}),
+    };
+    let digest = task_identity_digest(&IdentityInputs {
+        task: &task,
+        argv: &["tofu".to_owned()],
+        toolchain_id: &digest_b3(b"toolchain"),
+        platform_id: &digest_b3(b"platform"),
+        manifest: "main.tf",
+        generator: &generator,
+        extension,
+        closure_digest: &digest_b3(b"closure"),
+    })
+    .expect("repository root is encoded as a valid relative path");
+    assert!(velnor_actions_contract::is_valid_digest(&digest));
+}

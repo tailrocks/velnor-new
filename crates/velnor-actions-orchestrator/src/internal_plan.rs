@@ -22,6 +22,9 @@ mod internal_plan_tests;
 #[path = "snapshot.rs"]
 pub(crate) mod snapshot;
 
+#[path = "named_checks.rs"]
+pub(crate) mod named_checks;
+
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{
@@ -35,17 +38,7 @@ use velnor_actions_rust::{CompileDriver, Evidence, entry_metadata_for_task};
 use crate::discover::Discovery;
 use crate::internal_plan::identities::ExtensionBundle;
 
-/// Typed tofu identity extension for one task (plan-time and cover-time).
-///
-/// Single construction site: the snapshot bundle carries workspace,
-/// graph, and config digests while the root lockfile slot resolves
-/// against the checkout. Both `plan_group` and cover-time
-/// revalidation derive through here so the two can never drift.
-///
 /// # Errors
-///
-/// Returns [`ContractError`] for kind/driver/runner spellings outside
-/// the known tokens.
 pub(crate) fn tofu_extension_for(
     task: &ProposedTask,
     root: &std::path::Path,
@@ -66,37 +59,29 @@ pub(crate) fn tofu_extension_for(
     velnor_actions_tofu::extension_for_proposal(task, &inputs)
 }
 
-/// Synthetic identity-input path carrying the input-closure digest.
-///
-/// The closure digest is content, not a file: this path never resolves
-/// against the checkout. It only names the [`TaskInput`] slot so the
-/// closure binds into `input_digest` through the standard envelope.
 pub(crate) const CLOSURE_INPUT_PATH: &str = "velnor/input-closure";
 
-/// Opaque adapter metadata for one matrix entry, forwarded uninterpreted.
-///
-/// The owning adapter constructs the value (legacy fields plus detected
-/// driver/runner/evidence); the orchestrator only carries the bytes.
-///
 /// # Errors
-///
-/// Returns [`ContractError`] for driver/runner spellings outside the
-/// known tokens.
 pub(crate) fn adapter_metadata(
     task: &ProposedTask,
     evidence: &[Evidence],
 ) -> Result<serde_json::Value, ContractError> {
-    if Stack::from_id(&task.stack_id) == Some(Stack::Tofu) {
-        let ids: Vec<String> = evidence
-            .iter()
-            .map(velnor_actions_rust::tasks::evidence_id)
-            .collect();
-        return velnor_actions_tofu::entry_metadata_for_task(task, &ids);
+    match Stack::require_known(&task.stack_id)? {
+        Stack::Tofu => {
+            let ids: Vec<String> = evidence
+                .iter()
+                .map(velnor_actions_rust::tasks::evidence_id)
+                .collect();
+            velnor_actions_tofu::entry_metadata_for_task(task, &ids)
+        }
+        Stack::Rust => entry_metadata_for_task(task, evidence),
+        Stack::Mise => Err(ContractError::identity(
+            "check",
+            "discovered_metadata_required",
+        )),
     }
-    entry_metadata_for_task(task, evidence)
 }
 
-/// Profile evidence backing one task: its workspace sightings, if any.
 pub(crate) fn evidence_for_group<'a>(
     discovery: &'a Discovery,
     task: &ProposedTask,
@@ -114,7 +99,6 @@ pub(crate) fn evidence_for_group<'a>(
     &[]
 }
 
-/// Nextest config path backing one task, if the profile names one.
 pub(crate) fn nextest_config_for(discovery: &Discovery, task: &ProposedTask) -> Option<String> {
     for workspace in &discovery.workspaces {
         let owns = workspace
@@ -129,9 +113,6 @@ pub(crate) fn nextest_config_for(discovery: &Discovery, task: &ProposedTask) -> 
     None
 }
 
-/// Orchestrator-recorded cache identities for one entry (cache §2).
-///
-/// Lane identity derives from responsibility and config, never from a
 /// schedule ordinal (ordinals are removed: no lane parameter exists).
 /// Platform identity binds runner image evidence; every digest is
 /// validated at construction, never stored raw.
@@ -144,6 +125,12 @@ pub(crate) fn cache_ids_for(
     label: &str,
     toolchain: &str,
 ) -> Result<EntryCacheIds, ContractError> {
+    if Stack::require_known(&task.stack_id)? == Stack::Mise {
+        return Err(ContractError::identity(
+            "cache",
+            "opaque_check_cache_forbidden",
+        ));
+    }
     let workspace_id = digest_b3(task.identity.unit_path.as_bytes());
     let format_id = if Stack::from_id(&task.stack_id) == Some(Stack::Tofu) {
         identities::cache_format_id_for_tofu()
@@ -233,11 +220,15 @@ pub(crate) fn task_identity_digest(inputs: &IdentityInputs<'_>) -> Result<String
     let mut flags = task.identity.flags.clone();
     flags.sort();
     let root = if task.stack_id == velnor_actions_tofu::STACK_ID {
-        velnor_actions_tofu::normalized_root_for_proposal(task)?;
+        velnor_actions_tofu::normalized_root_for_proposal(task)?
+    } else if Stack::from_id(&task.stack_id) == Some(Stack::Mise) {
         task.identity.project_root.as_str()
     } else {
         project_root_of(inputs.manifest)
     };
+    // OpenTofu's empty normalized root is the repository root on the
+    // wire, which the canonical identity path validator represents as `.`.
+    let root = if root.is_empty() { "." } else { root };
     let identity = TaskIdentity {
         schema_version: 1,
         stack_id: task.stack_id.clone(),
@@ -334,6 +325,15 @@ pub(crate) fn plan_packages(discovery: &Discovery, selected: &BTreeSet<&str>) ->
         }
     }
     packages.extend(tofu_packages(discovery, selected));
+    packages.extend(discovery.mise_checks.iter().map(|item| {
+        package_row(
+            &item.proposal.identity.unit_id,
+            &item.check.id,
+            &item.proposal.identity.unit_path,
+            discovery,
+            selected,
+        )
+    }));
     packages.sort_by(|left, right| left.package_id.cmp(&right.package_id));
     packages
 }

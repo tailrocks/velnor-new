@@ -208,15 +208,9 @@ fn yaml_steps(yaml: &str) -> BTreeMap<String, Vec<String>> {
     jobs
 }
 
-/// R22: every Rust job reinstalls clippy/rustfmt after cache restore.
-///
-/// Cold-install-always policy: the fixed `rustup component add` step
-/// is unconditional (no `if:`), so it runs on cold AND warm runs alike;
-/// ordered after `Setup Mise`, a component-less restored toolchain
-/// (upstream jdx/mise-action#215) is repaired before any obligation.
-/// Pinned at IR level (unconditionality) and YAML level (final order).
+/// R22: verify the tool-component step in the typed plan.
 #[test]
-fn rust_components_install_unconditionally_after_restore() -> TestResult {
+fn rust_components_install_unconditionally_in_ir() -> TestResult {
     for mbx in [false, true] {
         let repo = make_workspace(&lock_for(&["a", "b"]), mbx)?;
         let prep = prepare(repo.path())?;
@@ -228,6 +222,13 @@ fn rust_components_install_unconditionally_after_restore() -> TestResult {
             }
             rust_jobs += usize::from(id.starts_with("rust-"));
             let names: Vec<&str> = job.steps.iter().map(|step| step.name.as_str()).collect();
+            if id == "plan" && !names.contains(&"Format") {
+                assert!(
+                    !names.contains(&PREPARE_RUST_COMPONENTS_STEP),
+                    "helper-only Plan needs Rust but not Clippy/rustfmt components (mbx={mbx})"
+                );
+                continue;
+            }
             let missing =
                 |what: &str| std::io::Error::other(format!("{id} misses {what} (mbx={mbx})"));
             let setup = names
@@ -265,6 +266,19 @@ fn rust_components_install_unconditionally_after_restore() -> TestResult {
             }
         }
         assert_eq!(rust_jobs, 2, "both fixture crates watched (mbx={mbx})");
+    }
+    Ok(())
+}
+
+/// R22: the generated workflow preserves the typed component ordering.
+///
+/// The fixed `rustup component add` step is unconditional, so cold and
+/// warm runs both repair a component-less restored toolchain before checks.
+#[test]
+fn rust_components_install_unconditionally_in_yaml() -> TestResult {
+    for mbx in [false, true] {
+        let repo = make_workspace(&lock_for(&["a", "b"]), mbx)?;
+        let prep = prepare(repo.path())?;
         let tree = render_staged_tree(&prep)?;
         let yaml = tree
             .get(WORKFLOW_PATH)
@@ -274,6 +288,15 @@ fn rust_components_install_unconditionally_after_restore() -> TestResult {
             let names = emitted
                 .get(id)
                 .ok_or_else(|| std::io::Error::other(format!("missing {id}")))?;
+            if id == "plan" && !names.iter().any(|name| name == "Format") {
+                assert!(
+                    !names
+                        .iter()
+                        .any(|name| name == PREPARE_RUST_COMPONENTS_STEP),
+                    "helper-only Plan omits Rust components (mbx={mbx})"
+                );
+                continue;
+            }
             let at = |want: &str| {
                 names
                     .iter()

@@ -204,11 +204,11 @@ pub(crate) fn restore_step_for_tofu_root(
     catalog: &velnor_actions_mise::ToolCatalog,
     root: &str,
 ) -> Result<Step, OrchestratorError> {
-    let target = velnor_actions_contract::target_for_runner_label(label).ok_or_else(|| {
-        OrchestratorError::Contract {
+    let target = velnor_actions_contract::ReleaseTarget::for_runner_label(label)
+        .map(velnor_actions_contract::ReleaseTarget::triple)
+        .ok_or_else(|| OrchestratorError::Contract {
             problem: format!("bad_label:{label}"),
-        }
-    })?;
+        })?;
     let tofu = catalog.version(PinnedTool::Opentofu);
     let key = tofu_providers_cache_key(target, tofu, root)?;
     let path = tofu_provider_cache_path(root)?;

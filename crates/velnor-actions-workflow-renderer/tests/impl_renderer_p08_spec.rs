@@ -18,6 +18,7 @@ fn http_backend_spec_gets_mise_setup_in_generated_workflow() {
     let job = Job {
         display_name: "Cargo Machete".to_owned(),
         runs_on: LABEL.to_owned(),
+        check_runner: None,
         timeout_minutes: JobTimeout::VALIDATOR,
         needs: Vec::new(),
         condition: None,

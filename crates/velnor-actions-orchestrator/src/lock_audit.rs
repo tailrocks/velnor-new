@@ -22,11 +22,10 @@
 //! upstream bytes, and a self-consistent malicious lock (attacker
 //! URL plus matching checksum) is a malicious commit, out of scope.
 
-use std::collections::BTreeSet;
 use std::io::Read;
 use std::path::Path;
 
-use velnor_actions_contract::{Step, StepKind, WorkflowIr, target_for_runner_label};
+use velnor_actions_contract::{ReleaseTarget, Step, StepKind, WorkflowIr};
 use velnor_actions_mise::toolfiles::lockfile::{
     InstallCoverage, InstallSubject, audit_install_coverage, mise_platform_for_target,
     parse_mise_lockfile, subject_for_install_spec,
@@ -35,6 +34,9 @@ use velnor_actions_mise::{MISE_LOCK_FILE, PREPARE_PINNED_TOOLS_STEP, ToolCatalog
 use velnor_actions_workflow_renderer::render::ValidatorCommand;
 
 use crate::vectors::validator_install_pin;
+#[path = "lock_audit_names.rs"]
+mod names;
+use names::subject_names;
 
 /// Audit outcome: one advisory summary plus fail-closed diagnostics.
 pub(crate) struct LockAuditOutcome {
@@ -120,7 +122,8 @@ pub(crate) fn audit_prepare_installs(
             blocking,
         };
     }
-    let Some(platform) = target_for_runner_label(label)
+    let Some(platform) = ReleaseTarget::for_runner_label(label)
+        .map(ReleaseTarget::triple)
         .and_then(mise_platform_for_target)
         .map(str::to_owned)
     else {
@@ -389,12 +392,3 @@ fn audit_against_lock(
 #[cfg(test)]
 #[path = "lock_audit_tests.rs"]
 mod lock_audit_tests;
-
-/// Sorted `tool@pin` display names for findings.
-fn subject_names(subjects: &[InstallSubject]) -> String {
-    let names: BTreeSet<&str> = subjects
-        .iter()
-        .map(|subject| subject.display.as_str())
-        .collect();
-    names.into_iter().collect::<Vec<_>>().join(", ")
-}

@@ -13,22 +13,19 @@ use velnor_actions_contract::{ProposedTask, WorkflowEvent};
 use velnor_actions_mise::GitRequest;
 use velnor_actions_rust::SelectionBroadening;
 
-use crate::OrchestratorError;
 use crate::decisions::{broadening_for_path, selection_broadens_for_path};
 use crate::discover::Discovery;
 use crate::git_paths::{NON_UTF8_PATH, split_nul_paths};
-use crate::internal::internal;
 use crate::select_affected::{affected_packages, has_unowned_file};
 use crate::select_edges::{base_edges, head_edges};
 use crate::validators::{validate_diff_rev, validate_select_diff_args};
 
+#[path = "select_checkout.rs"]
+mod checkout;
+pub(crate) use checkout::{verify_checkout, verify_checkout_until};
+
 /// Full obligation universe: every task with applicable targets.
-///
-/// Tasks without applicable targets are never obligations: scheduling
-/// them would emit impossible work (for example `cargo test --doc` for a
-/// package with no doctest-able target). Each omission is recorded as a
-/// `valid_no_test_targets:<task-id>` warning, never silent. Tofu
-/// subdir roots additionally record one `path.cwd:<root>` caveat each.
+/// No-target omissions and Tofu working-directory caveats are recorded.
 pub(crate) fn select_universe<'a>(
     discovery: &'a Discovery,
     warnings: &mut Vec<String>,
@@ -179,9 +176,6 @@ fn affected_from_changed(
 }
 
 /// True when one task counts as changed under the affected packages.
-///
-/// Tasks with an empty unit ID follow their manifest siblings: a
-/// workspace-level task is affected when any same-manifest package is.
 pub(crate) fn group_changed(
     task: &ProposedTask,
     changed: &BTreeSet<String>,
@@ -189,52 +183,6 @@ pub(crate) fn group_changed(
 ) -> bool {
     changed.contains(&task.identity.unit_id)
         || (task.identity.unit_id.is_empty() && changed_keys.contains(&task.identity.unit_key))
-}
-
-/// Verify the analyzed checkout matches the intended head.
-///
-/// Identities describe the working tree; a checkout at any other commit
-/// would validate the wrong tree. Push and merge-group runs resolve
-/// `HEAD` exactly; PR and fork runs additionally accept the merge
-/// checkout (`HEAD^2`), which is what would land. Local runs analyze
-/// the working tree itself and skip this check.
-///
-/// # Errors
-///
-/// Returns [`OrchestratorError::Internal`] for checkout/head mismatch or
-/// unresolvable `HEAD`.
-pub(crate) fn verify_checkout(
-    root: &Path,
-    event: WorkflowEvent,
-    head: &str,
-) -> Result<(), OrchestratorError> {
-    if event == WorkflowEvent::Local {
-        return Ok(());
-    }
-    validate_diff_rev(head, "bad_head").map_err(|problem| internal(&problem))?;
-    let checkout = head_sha(root).map_err(|p| internal(&format!("bad_checkout:{p}")))?;
-    if checkout == head {
-        return Ok(());
-    }
-    if matches!(event, WorkflowEvent::PullRequest | WorkflowEvent::Fork)
-        && second_parent(root).as_deref() == Some(head)
-    {
-        return Ok(());
-    }
-    Err(internal("checkout_head_mismatch"))
-}
-
-/// Second parent of the checkout merge commit, if any.
-fn second_parent(root: &Path) -> Option<String> {
-    let output = GitRequest::rev_parse(vec![OsString::from("HEAD^2")])
-        .run_in(root)
-        .ok()?;
-    if !output.success {
-        return None;
-    }
-    let sha = output.stdout_text("git").ok()?.trim().to_owned();
-    validate_diff_rev(&sha, "bad_head").ok()?;
-    Some(sha)
 }
 
 /// Files changed between base and head via the allowlisted `diff` verb.
@@ -360,7 +308,7 @@ fn tree_diff_names(root: &Path, cached: bool) -> Result<BTreeSet<String>, String
 fn head_sha(root: &Path) -> Result<String, String> {
     let output = GitRequest::rev_parse(vec![OsString::from("HEAD")])
         .run_in(root)
-        .map_err(|err| err.to_string())?;
+        .map_err(|error| error.to_string())?;
     if !output.success {
         return Err("missing_head".to_owned());
     }
@@ -398,3 +346,7 @@ fn untracked_files(root: &Path) -> Result<BTreeSet<String>, String> {
 fn is_advisory_toolfile(path: &str) -> bool {
     path == ".mise.toml" || velnor_actions_rust::is_known_toolfile(path)
 }
+
+#[cfg(test)]
+#[path = "group_selection_tests.rs"]
+mod group_selection_tests;

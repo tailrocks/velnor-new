@@ -4,12 +4,13 @@ use super::*;
 
 #[test]
 fn nextest_payload_carries_run_ignored() -> Result<(), ContractError> {
-    let mut group = group(TaskKind::Nextest);
-    group.test_runner = TestRunner::CargoNextest;
-    group.run_ignored = Some("all".to_owned());
-    let argv = text(&group)?;
+    let mut ignored_group = group(TaskKind::Nextest);
+    ignored_group.test_runner = TestRunner::CargoNextest;
+    ignored_group.run_ignored = Some("all".to_owned());
+    let argv = text(&ignored_group)?;
     assert!(
-        argv.windows(2).any(|window| window == ["--run-ignored", "all"]),
+        argv.windows(2)
+            .any(|window| window == ["--run-ignored", "all"]),
         "must contain --run-ignored all: {argv:?}"
     );
 
