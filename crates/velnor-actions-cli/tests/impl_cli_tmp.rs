@@ -124,7 +124,18 @@ pub(crate) fn init_repo(dir: &Path) -> Result<(), Box<dyn Error>> {
     if code(&output) != 0 {
         return Err(format!("init failed with {}", code(&output)).into());
     }
-    pin_branch(dir)
+    pin_branch(dir)?;
+    install_consumer_manifest(dir)
+}
+
+/// Install the explicit schema fixture required by positive consumer tests.
+///
+/// This harness input has placeholder provenance and is not release evidence.
+pub(crate) fn install_consumer_manifest(dir: &Path) -> Result<(), Box<dyn Error>> {
+    let source =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/consumer-release-manifest.json");
+    std::fs::copy(source, dir.join(".velnor/release-manifest.json"))?;
+    Ok(())
 }
 
 /// Pin the push branch so plan works without origin/HEAD.

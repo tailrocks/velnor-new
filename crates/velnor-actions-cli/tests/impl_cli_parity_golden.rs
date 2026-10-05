@@ -17,7 +17,9 @@ use std::collections::BTreeMap;
 use std::error::Error;
 use std::path::{Path, PathBuf};
 
-use crate::impl_cli_tmp::{cleanup, code, commit_all, fresh_tempdir, git_init, spawn};
+use crate::impl_cli_tmp::{
+    cleanup, code, commit_all, fresh_tempdir, git_init, install_consumer_manifest, spawn,
+};
 
 /// Success cases: full artifact goldens.
 const CASES: [&str; 3] = ["minimal-cargo", "multi-crate", "ignored-stack"];
@@ -57,9 +59,7 @@ fn checkout(case: &str) -> Result<(PathBuf, String), Box<dyn Error>> {
     std::fs::create_dir_all(&repo)?;
     copy_dir(&corpus(case).join("input"), &repo)?;
     if case != "malformed" && case != "malformed-ignored" {
-        let manifest = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../fixtures/consumer-release-manifest.json");
-        std::fs::copy(manifest, repo.join(".velnor/release-manifest.json"))?;
+        install_consumer_manifest(&repo)?;
     }
     git_init(&repo)?;
     let head = commit_all(&repo)?;
