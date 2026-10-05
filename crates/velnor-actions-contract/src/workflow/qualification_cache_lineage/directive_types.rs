@@ -98,7 +98,10 @@ pub struct QualificationCacheLaneDirective {
     pub layers: Vec<QualificationCacheLayerDirective>,
 }
 
-/// Bounded, validated phase directive map written as one job output.
+/// Bounded phase directive map written as one job output.
+///
+/// Serialized maps are untrusted until they are reconstructed against their
+/// plan and admitted predecessor before runtime key binding.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct QualificationCacheDirective {

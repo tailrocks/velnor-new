@@ -91,9 +91,29 @@ impl QualificationCacheDirective {
             .find(|record| record.layer == layer)
     }
 
-    /// Bind one directive to actual runtime identity before cache access.
+    /// Rebuild this serialized directive from its plan and admission, then bind runtime identity.
+    ///
+    /// The serialized fields alone never authorize cache access. Any field
+    /// that differs from the plan-derived directive is rejected before keys
+    /// are returned.
     /// # Errors
     pub fn bind_runtime(
+        &self,
+        plan: &Plan,
+        admission: Option<&QualificationCacheAdmission>,
+        matrix_key: &str,
+        layer: QualificationCacheLayer,
+        evidence: &QualificationRuntimeIdentity,
+    ) -> Result<BoundQualificationCacheKeys, ContractError> {
+        let expected = Self::for_plan(plan, admission)?
+            .ok_or_else(|| invalid("directive_for_non_qualification_plan"))?;
+        if self != &expected {
+            return Err(invalid("serialized_directive_does_not_match_plan"));
+        }
+        self.bind_validated_runtime(matrix_key, layer, evidence)
+    }
+
+    fn bind_validated_runtime(
         &self,
         matrix_key: &str,
         layer: QualificationCacheLayer,

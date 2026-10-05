@@ -32,3 +32,11 @@ pub use receipt::{
 #[cfg(test)]
 #[path = "qualification_cache_lineage_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "qualification_cache_lineage_directive_tests.rs"]
+mod directive_tests;
+
+#[cfg(test)]
+#[path = "qualification_cache_lineage_admission_tests.rs"]
+mod admission_tests;
