@@ -246,11 +246,23 @@ fn acquire_step(
     )?)
 }
 
-/// Fixed acquisition argv over the staged path plus asset env references.
+/// Host path of the read-only generator seed. Not a job input.
+const GENERATOR_SEED_ROOT: &str = "/opt/velnor/seed";
+
+/// Fixed acquisition argv. A matching seed file is copied. Otherwise curl.
 ///
-/// Curl is pinned to HTTPS-only (`--proto '=https'`) over TLS 1.2+ and
-/// the staged path is defensively double-quoted (X12).
-fn acquire_argv(staged: &str, target: &str) -> Result<Vec<String>, OrchestratorError> {
+/// Curl stays HTTPS-only (`--proto '=https'`) over TLS 1.2+. Paths are
+/// double-quoted, and a seed with the wrong digest is never copied.
+///
+/// # Errors
+///
+/// Returns [`OrchestratorError::Contract`] for unsupported targets or unsafe
+/// seed and staged path tokens.
+pub fn acquire_script_argv(
+    staged: &str,
+    seed_root: &str,
+    target: &str,
+) -> Result<Vec<String>, OrchestratorError> {
     let digest = match target {
         "x86_64-unknown-linux-gnu" => "sha256sum -c -",
         "aarch64-apple-darwin" | "x86_64-apple-darwin" => "shasum -a 256 -c -",
@@ -260,11 +272,43 @@ fn acquire_argv(staged: &str, target: &str) -> Result<Vec<String>, OrchestratorE
             });
         }
     };
+    if !absolute_token(seed_root) {
+        return Err(OrchestratorError::Contract {
+            problem: format!("bad_seed_root:{seed_root}"),
+        });
+    }
     let dir = staged.rsplit_once('/').map_or(staged, |(head, _)| head);
+    let name = staged.rsplit_once('/').map_or(staged, |(_, tail)| tail);
+    if !file_token(name) {
+        return Err(OrchestratorError::Contract {
+            problem: format!("bad_staged_name:{name}"),
+        });
+    }
+    let seed = format!("{seed_root}/generator/{name}");
     let script = format!(
-        "mkdir -p \"{dir}\" && curl -fsSL --proto '=https' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"{staged}\" && echo \"$VELNOR_ASSET_SHA256  {staged}\" | {digest} && chmod +x \"{staged}\""
+        "mkdir -p \"{dir}\" && if [ -f \"{seed}\" ] && echo \"$VELNOR_ASSET_SHA256  {seed}\" | {digest}; then cp \"{seed}\" \"{staged}\"; else curl -fsSL --proto '=https' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"{staged}\" && echo \"$VELNOR_ASSET_SHA256  {staged}\" | {digest}; fi && chmod +x \"{staged}\""
     );
     Ok(vec!["sh".to_owned(), "-c".to_owned(), script])
+}
+
+fn acquire_argv(staged: &str, target: &str) -> Result<Vec<String>, OrchestratorError> {
+    acquire_script_argv(staged, GENERATOR_SEED_ROOT, target)
+}
+
+fn absolute_token(value: &str) -> bool {
+    value.starts_with('/')
+        && !value.contains("..")
+        && !value.contains("//")
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'/' | b'.' | b'_' | b'-'))
+}
+
+fn file_token(value: &str) -> bool {
+    !value.is_empty()
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
 }
 
 /// `cfg(test)`-only fixture manifest matching the workspace version.

@@ -383,8 +383,12 @@ fn render_merged(
     let text = marker::with_marker(&ctx.generator_version, &render_yaml(&document))?;
     crate::workflow_size::check_workflow_size(WORKFLOW_PATH, &text)?;
     steps::scan_for_private_subcommands(&text)?;
+    let mut files = shared.files;
+    if crate::tool_seed::any_job_has_seed(&jobs) {
+        files.push(crate::tool_seed::action_file(&ctx.generator_version)?);
+    }
     Ok(RenderedWorkflow {
         yaml: text,
-        shared: shared.files,
+        shared: files,
     })
 }
