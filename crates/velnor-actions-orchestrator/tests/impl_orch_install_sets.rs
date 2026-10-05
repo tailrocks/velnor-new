@@ -114,6 +114,30 @@ fn prepare_runs(yaml: &str) -> BTreeMap<String, String> {
     runs
 }
 
+/// One named shell step's rendered run line in a job.
+fn named_step_run(yaml: &str, job_id: &str, step_name: &str) -> Option<String> {
+    let mut current: Option<String> = None;
+    let mut lines = yaml.lines().peekable();
+    while let Some(line) = lines.next() {
+        if line.starts_with("  ") && !line.starts_with("   ") && line.ends_with(':') {
+            current = Some(line.trim().trim_end_matches(':').to_owned());
+        } else if current.as_deref() == Some(job_id)
+            && line.trim() == format!("- name: {step_name}")
+        {
+            for next in lines.by_ref() {
+                let trimmed = next.trim_start();
+                if let Some(run) = trimmed.strip_prefix("run: ") {
+                    return Some(run.to_owned());
+                }
+                if trimmed.starts_with("- name: ") || trimmed.starts_with("uses: ") {
+                    return None;
+                }
+            }
+        }
+    }
+    None
+}
+
 #[test]
 fn velnor_jobs_carry_trio_only_where_executed() -> TestResult {
     without_ambient_identity("velnor_jobs_carry_trio_only_where_executed", || {
@@ -129,6 +153,24 @@ fn velnor_jobs_carry_trio_only_where_executed() -> TestResult {
         let runs = prepare_runs(&yaml);
         let trio = ["actionlint@", "shellcheck@", "zizmor@"];
         let plan = runs.get("plan").ok_or("plan must prepare tools")?;
+        assert!(
+            !plan.contains("gh@"),
+            "optional trust lookup cannot block required tool setup: {plan}"
+        );
+        let gh = named_step_run(
+            &yaml,
+            "plan",
+            "Prepare GitHub CLI for trust lookup (best effort)",
+        )
+        .ok_or("plan must have an independent best-effort gh install")?;
+        assert!(
+            gh.contains("gh@"),
+            "the optional install remains pinned: {gh}"
+        );
+        assert!(
+            gh.contains("|| true"),
+            "install failure falls back cold: {gh}"
+        );
         for spec in trio {
             assert!(plan.contains(spec), "plan installs {spec}: {plan}");
         }
