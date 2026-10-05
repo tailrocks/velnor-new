@@ -305,9 +305,11 @@ fn uncertain_occupancy_does_not_mint_or_ack() {
 }
 
 #[test]
-fn name_taken_acks_only_a_scale_replay_with_no_live_assignment() {
-    assert!(should_ack(Idle::Scale, Some(0)));
-    assert!(!should_ack(Idle::Scale, Some(5)));
-    assert!(!should_ack(Idle::Launch, Some(0)));
-    assert!(!should_ack(Idle::Scale, None));
+fn name_taken_acks_a_mint_or_scale_name_collision() {
+    assert!(should_ack(Idle::Scale));
+    assert!(should_ack(Idle::Mint));
+    assert!(!should_ack(Idle::Launch));
+    assert!(!should_ack(Idle::Ack));
+    assert!(!should_ack(Idle::Empty));
+    assert!(!should_ack(Idle::Blocked));
 }

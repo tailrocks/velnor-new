@@ -1,7 +1,8 @@
-//! JIT HTTP 409 for runner `m{message_id}` when the session census has no assigned job.
+//! JIT HTTP 409 for runner `m{message_id}`.
 //!
-//! The name is already registered. A new mint loops. Acknowledge the replay and
-//! fail the unstarted row so that row does not keep a slot.
+//! The name is already registered. Another mint cannot succeed. Acknowledge the
+//! scale or assigned replay so the listener can read the next message. Fail only
+//! an unstarted row. A row that already has a container keeps that container.
 
 use velnor_runner_github::Poll;
 
@@ -12,10 +13,14 @@ use crate::scale_set::EnsureError;
 
 use super::steps::Idle;
 
-/// True when a scale replay may be acknowledged after JIT returns HTTP 409.
+/// True when a JIT name collision may be acknowledged.
+///
+/// `Idle::Mint` is a `JobAssigned` replay. `Idle::Scale` is any other assigned
+/// population. Both already have a runner name. The assigned count does not
+/// block the acknowledgement. A live container stays occupied.
 #[must_use]
-pub(crate) fn should_ack(idle: Idle, live_assigned: Option<i64>) -> bool {
-    live_assigned == Some(0) && idle == Idle::Scale
+pub(crate) fn should_ack(idle: Idle) -> bool {
+    matches!(idle, Idle::Scale | Idle::Mint)
 }
 
 /// Fail an unstarted `m{message_id}` row. Return true only when every match has no container id.

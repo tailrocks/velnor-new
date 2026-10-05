@@ -255,14 +255,11 @@ impl Turn<'_> {
                 )
                 .await;
                 if let Err(EnsureError::Conflict) = &launched
-                    && super::name_taken::should_ack(
-                        steps::idle(polled),
-                        self.session
-                            .statistics()
-                            .map(velnor_runner_github::Statistics::assigned_population),
-                    )
-                    && super::name_taken::fail_unstarted(self.journal, polled).await?
+                    && super::name_taken::should_ack(steps::idle(polled))
                 {
+                    // A container row stays. The message is still acknowledged.
+                    // A new mint of the same name cannot succeed.
+                    super::name_taken::fail_unstarted(self.journal, polled).await?;
                     ack_ready(self.link, self.session, path, queue, polled)?;
                     return Ok(false);
                 }
