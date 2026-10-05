@@ -1,20 +1,10 @@
 //! Create projection. No live Docker daemon.
 
-use std::path::PathBuf;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
-
 use bollard::models::MountType;
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tokio::net::UnixListener;
 
-use crate::worker::{
-    VerifiedWorkerVolume, WorkerVolumeRemoval, WorkerVolumeRole, WorkerVolumeVerification,
-    remove_verified_worker_volume, verify_worker_volume,
-};
 use crate::{
-    BollardCreate, CreateProjection, HostError, bollard_create, connect_unix, dind_create,
-    runner_create, runner_plan, start_pair,
+    BollardCreate, CreateProjection, HostError, bollard_create, dind_create, runner_create,
+    runner_plan,
 };
 
 fn projection(volume: &str) -> Result<CreateProjection, HostError> {
@@ -170,58 +160,11 @@ fn bollard_config_from_a_clean_plan_omits_canary() -> Result<(), HostError> {
     Ok(())
 }
 
-struct IdleDocker {
-    path: PathBuf,
-    docker: bollard::Docker,
-}
-
-impl IdleDocker {
-    fn open() -> Result<Self, HostError> {
-        static NEXT: AtomicU64 = AtomicU64::new(0);
-        let n = NEXT.fetch_add(1, Ordering::Relaxed);
-        let tick = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_err(|_| HostError::Docker)?
-            .as_nanos();
-        let path = PathBuf::from(format!(
-            "/tmp/velnor-w-{}-{n}-{tick}.sock",
-            std::process::id()
-        ));
-        let listener =
-            std::os::unix::net::UnixListener::bind(&path).map_err(|_| HostError::Docker)?;
-        let text = path.to_str().ok_or(HostError::Path)?;
-        let docker = connect_unix(text)?;
-        drop(listener);
-        Ok(Self { path, docker })
-    }
-}
-
-impl Drop for IdleDocker {
-    fn drop(&mut self) {
-        let removed = std::fs::remove_file(&self.path);
-        let _kept = removed.err().map(|err| err.kind());
-    }
-}
-
 #[test]
 fn bollard_create_rejects_a_host_bind() -> Result<(), HostError> {
     let mut spec = dind_create("worker_a")?;
     spec.mounts[0].source = "/var/run/docker.sock".to_owned();
     assert_eq!(bollard_create(&spec), Err(HostError::ForbiddenMount));
-    Ok(())
-}
-
-#[tokio::test]
-async fn empty_jit_does_not_create() -> Result<(), HostError> {
-    let idle = IdleDocker::open()?;
-    assert_eq!(
-        start_pair(&idle.docker, "a/b", b"").await,
-        Err(HostError::EmptyJit)
-    );
-    assert_eq!(
-        start_pair(&idle.docker, "worker_a", b"").await,
-        Err(HostError::EmptyJit)
-    );
     Ok(())
 }
 
@@ -232,168 +175,5 @@ fn malformed_ownership_label_is_rejected() -> Result<(), HostError> {
     assert_eq!(bollard_create(&spec), Err(HostError::ForbiddenMount));
     Ok(())
 }
-
-#[tokio::test]
-async fn exact_volume_removal_refuses_wrong_owner_or_role() -> Result<(), String> {
-    for (owner, role) in [("someone_else", "work"), (WORKER, "socket")] {
-        let name = format!("{WORKER}-work");
-        let stub = ScriptedDocker::open(vec![(200, volume_json(&name, owner, role))])?;
-        let result = verify_worker_volume(&stub.docker, WORKER, WorkerVolumeRole::Work).await;
-        let requests = stub.finish().await?;
-
-        assert_eq!(result, Ok(WorkerVolumeVerification::OwnershipMismatch));
-        assert_eq!(requests.len(), 1);
-        assert!(requests[0].starts_with("GET "));
-    }
-    Ok(())
-}
-
-#[tokio::test]
-async fn exact_volume_removal_treats_only_not_found_as_absent() -> Result<(), String> {
-    let absent = ScriptedDocker::open(vec![(404, r#"{"message":"missing"}"#.to_owned())])?;
-    let result = verify_worker_volume(&absent.docker, WORKER, WorkerVolumeRole::Socket).await;
-    assert_eq!(result, Ok(WorkerVolumeVerification::Absent));
-    assert_eq!(absent.finish().await?.len(), 1);
-
-    let failed = ScriptedDocker::open(vec![(500, r#"{"message":"busy"}"#.to_owned())])?;
-    let result = verify_worker_volume(&failed.docker, WORKER, WorkerVolumeRole::Socket).await;
-    assert_eq!(result, Err(HostError::Docker));
-    assert_eq!(failed.finish().await?.len(), 1);
-    Ok(())
-}
-
-#[tokio::test]
-async fn exact_volume_remove_error_and_success_is_exact() -> Result<(), String> {
-    let name = format!("{WORKER}-work");
-    let stub = ScriptedDocker::open(vec![
-        (200, volume_json(&name, WORKER, "work")),
-        (500, r#"{"message":"busy"}"#.to_owned()),
-        (200, volume_json(&name, WORKER, "work")),
-        (204, String::new()),
-        (404, r#"{"message":"missing"}"#.to_owned()),
-    ])?;
-    let failed = verified_work_volume(&stub.docker).await?;
-    assert_eq!(
-        remove_verified_worker_volume(&stub.docker, &failed).await,
-        Err(HostError::Docker)
-    );
-    let verified = verified_work_volume(&stub.docker).await?;
-    let result = remove_verified_worker_volume(&stub.docker, &verified).await;
-    let requests = stub.finish().await?;
-    assert_eq!(result, Ok(WorkerVolumeRemoval::Removed));
-    assert_eq!(requests.len(), 5);
-    let delete_count = requests
-        .iter()
-        .filter(|request| request.starts_with("DELETE "))
-        .count();
-    assert_eq!(delete_count, 2);
-    assert!(
-        requests
-            .iter()
-            .all(|request| request.contains("wtransport-work"))
-    );
-    Ok(())
-}
-
-async fn verified_work_volume(docker: &bollard::Docker) -> Result<VerifiedWorkerVolume, String> {
-    match verify_worker_volume(docker, WORKER, WorkerVolumeRole::Work)
-        .await
-        .map_err(|error| error.to_string())?
-    {
-        WorkerVolumeVerification::Verified(volume) => Ok(volume),
-        _ => Err("expected the matching volume to be verified".to_owned()),
-    }
-}
-
-const WORKER: &str = "wtransport";
-
-struct ScriptedDocker {
-    docker: bollard::Docker,
-    path: PathBuf,
-    task: Option<tokio::task::JoinHandle<Result<Vec<String>, String>>>,
-}
-
-impl ScriptedDocker {
-    fn open(responses: Vec<(u16, String)>) -> Result<Self, String> {
-        static NEXT: AtomicU64 = AtomicU64::new(0);
-        let n = NEXT.fetch_add(1, Ordering::Relaxed);
-        let path = PathBuf::from(format!(
-            "/tmp/velnor-exact-volume-{}-{n}.sock",
-            std::process::id()
-        ));
-        let listener = UnixListener::bind(&path).map_err(|error| error.to_string())?;
-        let task = tokio::spawn(serve_volume_stub(listener, responses));
-        let socket = path
-            .to_str()
-            .ok_or_else(|| "socket path is not UTF-8".to_owned())?;
-        let docker = bollard::Docker::connect_with_unix(socket, 120, bollard::API_DEFAULT_VERSION)
-            .map_err(|error| error.to_string())?;
-        Ok(Self {
-            docker,
-            path,
-            task: Some(task),
-        })
-    }
-
-    async fn finish(mut self) -> Result<Vec<String>, String> {
-        let mut task = self
-            .task
-            .take()
-            .ok_or_else(|| "stub already stopped".to_owned())?;
-        let result = match tokio::time::timeout(Duration::from_secs(2), &mut task).await {
-            Ok(result) => result.map_err(|error| error.to_string())??,
-            Err(_) => {
-                task.abort();
-                return Err("Docker stub timed out".to_owned());
-            }
-        };
-        std::fs::remove_file(&self.path).map_err(|error| error.to_string())?;
-        Ok(result)
-    }
-}
-
-impl Drop for ScriptedDocker {
-    fn drop(&mut self) {
-        let _aborted = self.task.take().map(|task| task.abort());
-        let _kept = std::fs::remove_file(&self.path).err();
-    }
-}
-
-async fn serve_volume_stub(
-    listener: UnixListener,
-    responses: Vec<(u16, String)>,
-) -> Result<Vec<String>, String> {
-    let mut requests = Vec::new();
-    for (status, body) in responses {
-        let (stream, _) = listener.accept().await.map_err(|error| error.to_string())?;
-        let mut stream = BufReader::new(stream);
-        let mut request = String::new();
-        stream
-            .read_line(&mut request)
-            .await
-            .map_err(|error| error.to_string())?;
-        requests.push(request.trim_end().to_owned());
-        let response = format!(
-            "HTTP/1.1 {status} OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
-            body.len()
-        );
-        stream
-            .get_mut()
-            .write_all(response.as_bytes())
-            .await
-            .map_err(|error| error.to_string())?;
-    }
-    Ok(requests)
-}
-
-fn volume_json(name: &str, worker: &str, role: &str) -> String {
-    serde_json::json!({
-        "Name": name,
-        "Driver": "local",
-        "Mountpoint": format!("/var/lib/docker/volumes/{name}/_data"),
-        "Labels": {"velnor.worker": worker, "velnor.role": role},
-        "Options": {},
-        "Scope": "local"
-    })
-    .to_string()
-}
+#[cfg(unix)]
+mod volumes;
