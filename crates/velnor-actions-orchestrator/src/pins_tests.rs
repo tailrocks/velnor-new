@@ -9,6 +9,8 @@ use velnor_actions_contract::{
 /// Config carrying exactly the given action-pin overrides.
 fn config_with(overrides: BTreeMap<String, ActionPinOverride>) -> VelnorConfig {
     VelnorConfig {
+        checks: Vec::new(),
+        qualified_tools: Vec::new(),
         schema: 1,
         workflow: WorkflowConfig {
             name: "CI".to_owned(),
@@ -250,6 +252,86 @@ fn mise_setup_rejects_non_linux_runners() {
             err.is_err_and(|err| err.to_string().contains("mise_setup_unsupported_target")),
             "{label}"
         );
+    }
+}
+
+#[test]
+fn macos_helper_asset_and_native_digest_match_runner() {
+    use velnor_actions_contract::config::{CheckExecutor, CheckPlatform, CheckRunner};
+    for (label, platform) in [
+        ("macos-15", CheckPlatform::MacosArm64),
+        ("macos-15-intel", CheckPlatform::MacosX64),
+    ] {
+        let runner = CheckRunner {
+            label: label.to_owned(),
+            platform,
+            executor: CheckExecutor::Hosted,
+            container: None,
+        };
+        let step = consumer_acquire_for_runner(
+            &runner,
+            env!("CARGO_PKG_VERSION"),
+            Some(&test_manifest_json()),
+        )
+        .expect("qualified helper");
+        let velnor_actions_contract::StepKind::Shell { run, env } = step.kind else {
+            panic!("acquisition must be shell");
+        };
+        assert!(run.iter().any(|arg| arg.contains("shasum -a 256 -c -")));
+        assert!(env.values().any(|value| value.ends_with(platform.target())));
+        assert!(!run.iter().any(|arg| arg.contains("sha256sum")));
+    }
+}
+
+#[test]
+fn acquisition_rejects_tampered_platform() {
+    use velnor_actions_contract::config::{CheckExecutor, CheckPlatform, CheckRunner};
+    let runner = CheckRunner {
+        label: "macos-15".to_owned(),
+        platform: CheckPlatform::LinuxX64,
+        executor: CheckExecutor::Hosted,
+        container: None,
+    };
+    assert!(
+        consumer_acquire_for_runner(
+            &runner,
+            env!("CARGO_PKG_VERSION"),
+            Some(&test_manifest_json())
+        )
+        .is_err()
+    );
+}
+
+#[test]
+fn acquisition_template_selects_native_checksum_by_typed_target() {
+    let staged = format!("{STAGED_BINARY_PREFIX}0.1.0");
+    for (target, expected) in [
+        (ReleaseTarget::LinuxX86_64, "sha256sum -c -"),
+        (ReleaseTarget::MacosArm64, "shasum -a 256 -c -"),
+        (ReleaseTarget::MacosX86_64, "shasum -a 256 -c -"),
+    ] {
+        let argv = acquire_script_argv(&staged, "/opt/velnor/seed", target)
+            .expect("supported typed target");
+        assert!(argv[2].contains(expected), "{target:?}: {}", argv[2]);
+        if target != ReleaseTarget::LinuxX86_64 {
+            assert!(!argv[2].contains("sha256sum"), "{target:?}: {}", argv[2]);
+        }
+    }
+}
+
+#[test]
+fn setup_uses_extracted_binary_digest_for_each_platform() {
+    use velnor_actions_workflow_renderer::setup::{
+        MISE_BINARY_SHA256_MACOS_ARM64, MISE_BINARY_SHA256_MACOS_X64,
+    };
+    let config = config_with(BTreeMap::new());
+    for (label, expected) in [
+        ("macos-15", MISE_BINARY_SHA256_MACOS_ARM64),
+        ("macos-15-intel", MISE_BINARY_SHA256_MACOS_X64),
+    ] {
+        let setup = resolve_mise_setup(&config, label).expect("verified setup");
+        assert_eq!(setup.sha256, expected);
+        assert_ne!(setup.sha256, MISE_BINARY_SHA256_LINUX_X64);
     }
 }
 

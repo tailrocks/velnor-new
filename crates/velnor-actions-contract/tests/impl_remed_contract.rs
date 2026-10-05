@@ -13,6 +13,8 @@ use velnor_actions_contract::{
 /// Valid config shared by remediation cases.
 pub(crate) fn valid_config() -> VelnorConfig {
     VelnorConfig {
+        checks: Vec::new(),
+        qualified_tools: Vec::new(),
         schema: 1,
         workflow: WorkflowConfig {
             name: "CI".to_owned(),

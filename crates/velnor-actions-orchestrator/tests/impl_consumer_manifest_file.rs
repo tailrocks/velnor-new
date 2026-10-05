@@ -3,7 +3,7 @@
 //! Generating and checking binaries read the same committed
 //! `.velnor/release-manifest.json`, so identical output follows by
 //! construction. Absent, invalid, or version-mismatched files fail
-//! closed; no bake or environment carries provenance.
+//! closed in every build mode; no bake or environment carries provenance.
 use std::fs;
 
 use velnor_actions_orchestrator::{prepare, render_staged_tree};
@@ -135,22 +135,28 @@ fn absent_manifest_fails_closed_without_provenance() {
 }
 
 #[test]
-fn debug_absent_file_keeps_standin() -> TestResult {
+fn absent_manifest_fails_prepare_in_all_build_modes() -> TestResult {
     let repo = make_repo(config_with_branch())?;
     fs::remove_file(repo.path().join(".velnor/release-manifest.json"))?;
-    let prep = prepare(repo.path())?;
-    let yaml = velnor_actions_workflow_renderer::render_workflow_ir(
-        &prep.workflow.ir,
-        prep.config.workflow.policy,
-        prep.workflow.support.as_ref(),
-        &prep.workflow.context,
-    )
-    .map_err(|err| format!("render: {err}"))?;
-    let version = env!("CARGO_PKG_VERSION");
-    let expect = format!(
-        "https://github.com/tailrocks/velnor-new/releases/download/v{version}/velnor-actions-{version}-x86_64-unknown-linux-gnu"
+    let err = prepare(repo.path()).expect_err("missing consumer provenance fails closed");
+    let text = err.to_string();
+    assert!(text.contains("consumer_requires_release_install"), "{text}");
+    assert!(text.contains("official"), "{text}");
+    Ok(())
+}
+
+#[test]
+fn golden_manifest_fixture_uses_the_canonical_release_schema() -> TestResult {
+    let manifest = velnor_actions_contract::ReleaseManifest::parse_json(
+        include_str!("../../../fixtures/consumer-release-manifest.json"),
+        "fixtures/consumer-release-manifest.json",
+    )?;
+    manifest.validate("fixtures/consumer-release-manifest.json")?;
+    assert_eq!(manifest.version, env!("CARGO_PKG_VERSION"));
+    assert_eq!(
+        manifest.targets.len(),
+        velnor_actions_contract::ReleaseTarget::ALL.len()
     );
-    assert!(yaml.contains(&expect), "debug stand-in preserved:\n{yaml}");
     Ok(())
 }
 
@@ -191,7 +197,6 @@ fn velnor_repository_generation_needs_no_consumer_manifest() -> TestResult {
 
             let prep = prepare(repo.path())?;
             assert_eq!(prep.discovery.consumer_manifest_json, None);
-            assert!(!prep.discovery.consumer_manifest_stand_in);
             let tree = render_staged_tree(&prep)?;
             let yaml = tree
                 .get(WORKFLOW_PATH)

@@ -10,6 +10,7 @@ use velnor_actions_contract::cachekey::{RUST_EXTENSION_SCHEMA, TOFU_EXTENSION_SC
 /// Minimal discovery with no workspaces or tool checks.
 fn empty_discovery() -> Discovery {
     Discovery {
+        mise_checks: Vec::new(),
         statuses: Vec::new(),
         workspaces: Vec::new(),
         proposals: Vec::new(),
@@ -21,7 +22,6 @@ fn empty_discovery() -> Discovery {
         },
         recommendations: Vec::new(),
         consumer_manifest_json: None,
-        consumer_manifest_stand_in: false,
         skipped_non_utf8: false,
         tofu_note: None,
         tofu_units: Vec::new(),

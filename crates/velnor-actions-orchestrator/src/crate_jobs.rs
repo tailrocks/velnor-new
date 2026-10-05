@@ -14,8 +14,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{
-    CrateJob, CrateObligation, Job, JobTimeout, ProposedTask, Step, VelnorConfig, WorkflowPolicy,
-    crate_display_name, matrix_id_for_task_group, matrix_key_for_id, tofu_display_name,
+    CrateJob, CrateObligation, Job, JobTimeout, ProposedTask, Stack, Step, VelnorConfig,
+    WorkflowPolicy, crate_display_name, matrix_id_for_task_group, matrix_key_for_id,
+    tofu_display_name,
 };
 use velnor_actions_mise::{PinnedTool, TaskCacheMode, ToolCatalog};
 use velnor_actions_workflow_renderer::render::PLAN_JOB_ID;
@@ -53,18 +54,12 @@ pub(crate) fn build_for_workflow(
     fetch_roots: &[String],
     acquire: Option<&Step>,
 ) -> Result<CrateBuild, OrchestratorError> {
-    let custom_tasks: &[String] = config
-        .stacks
-        .rust
-        .as_ref()
-        .map_or(&[], |rust| &rust.custom_tasks);
     build_crate_jobs(
         label,
         config.workflow.policy,
         discovery,
         catalog,
         fetch_roots,
-        custom_tasks,
         acquire,
         config.workflow.max_parallel_jobs,
     )
@@ -83,26 +78,17 @@ pub(crate) fn build_for_workflow(
 /// # Errors
 ///
 /// Returns contract, render-context, or tool-request errors.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "one call site threads job scope plus the concurrency cap"
-)]
 pub(crate) fn build_crate_jobs(
     label: &str,
     policy: WorkflowPolicy,
     discovery: &Discovery,
     catalog: &ToolCatalog,
     fetch_roots: &[String],
-    custom_tasks: &[String],
     acquire: Option<&Step>,
     max_parallel_jobs: u32,
 ) -> Result<CrateBuild, OrchestratorError> {
     let grouped = group_runnable(&discovery.proposals);
     let assigned = assign_group_ids(&grouped);
-    // Reject a non-empty allowlist before the loop: with zero runnable
-    // tasks the loop body (and its rejection) never runs, so the
-    // allowlist would be silently ignored instead of failing closed.
-    let custom_steps = crate::vectors::custom_task_steps(custom_tasks, catalog)?;
     let mut jobs = Vec::with_capacity(grouped.len());
     let mut drivers = BTreeMap::new();
     let mut tofu_ids = Vec::new();
@@ -139,7 +125,7 @@ pub(crate) fn build_crate_jobs(
         };
         model.validate()?;
         let repo_has_mbx = crate::workflow::plan_uses_mbx(discovery);
-        let mut job = render_job(
+        let job = render_job(
             label,
             policy,
             &model,
@@ -153,9 +139,6 @@ pub(crate) fn build_crate_jobs(
             acquire,
             max_parallel_jobs,
         )?;
-        // Allowlisted custom tasks run after the fixed obligations; the
-        // pre-loop rejection above guarantees this is empty today.
-        job.steps.extend(custom_steps.iter().cloned());
         drivers.insert(job_id.clone(), driver);
         if use_opentofu {
             tofu_ids.push(job_id.clone());
@@ -173,7 +156,9 @@ pub(crate) fn build_crate_jobs(
 /// belong to the plan job, so neither is emitted as an obligation.
 /// Shared with `plan` so its obligation list matches emission exactly.
 pub(crate) fn is_runnable(task: &ProposedTask) -> bool {
-    !task.no_targets && !task.identity.unit_id.is_empty()
+    !task.no_targets
+        && !task.identity.unit_id.is_empty()
+        && Stack::from_id(&task.stack_id) != Some(Stack::Mise)
 }
 
 /// Rank one proposal through the shared task-order key.
@@ -332,6 +317,7 @@ fn render_job(
     Ok(Job {
         display_name: model.display_name.clone(),
         runs_on: label.to_owned(),
+        check_runner: None,
         timeout_minutes: JobTimeout::CRATE,
         needs: vec![PLAN_JOB_ID.to_owned()],
         condition: None,
@@ -359,11 +345,11 @@ fn restore_step_for_crate(
     if !use_rust || fetch_roots.is_empty() {
         return Ok(None);
     }
-    let target = velnor_actions_contract::target_for_runner_label(label).ok_or_else(|| {
-        OrchestratorError::Contract {
+    let target = velnor_actions_contract::ReleaseTarget::for_runner_label(label)
+        .map(velnor_actions_contract::ReleaseTarget::triple)
+        .ok_or_else(|| OrchestratorError::Contract {
             problem: format!("bad_label:{label}"),
-        }
-    })?;
+        })?;
     let rust = catalog.version(PinnedTool::Rust);
     if !use_mbx && !repo_has_mbx {
         let shared = format!(

@@ -45,6 +45,7 @@ fn group(package: &str) -> ProposedTask {
 /// Discovery shell carrying only task proposals.
 fn discovery(groups: Vec<ProposedTask>) -> Discovery {
     Discovery {
+        mise_checks: Vec::new(),
         statuses: Vec::new(),
         workspaces: Vec::new(),
         proposals: groups,
@@ -56,7 +57,6 @@ fn discovery(groups: Vec<ProposedTask>) -> Discovery {
         },
         recommendations: Vec::new(),
         consumer_manifest_json: None,
-        consumer_manifest_stand_in: false,
         skipped_non_utf8: false,
         tofu_note: None,
         tofu_units: Vec::new(),
@@ -136,7 +136,6 @@ fn mise_crate_job_prepare_installs_opentofu() {
             group("velnor-actions-contract"),
         ]),
         &catalog,
-        &[],
         &[],
         None,
         2,

@@ -2,8 +2,7 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{
-    Concurrency, Job, JobTimeout, Permissions, SUPPORTED_TARGETS, Step, Trigger, WorkflowIr,
-    WorkflowPolicy,
+    Concurrency, Job, JobTimeout, Permissions, Step, Trigger, WorkflowIr, WorkflowPolicy,
 };
 use velnor_actions_mise::catalog::lock::{
     parse_generator_lock, parse_release_manifest, verify_lock_against_manifest,
@@ -24,7 +23,7 @@ fn binary_record(target: &str, sha: &str) -> String {
 }
 
 fn lock_text(sha: &str) -> String {
-    let bins = SUPPORTED_TARGETS
+    let bins = velnor_actions_contract::SUPPORTED_TARGETS
         .iter()
         .map(|target| binary_record(target, sha))
         .collect::<String>();
@@ -67,6 +66,7 @@ fn ir_with(steps: Vec<Step>) -> Result<WorkflowIr, Box<dyn std::error::Error>> {
     jobs.insert(
         "plan".to_owned(),
         Job {
+            check_runner: None,
             display_name: "P".to_owned(),
             runs_on: "ubuntu-26.04".to_owned(),
             timeout_minutes: JobTimeout::CRATE,
@@ -83,6 +83,7 @@ fn ir_with(steps: Vec<Step>) -> Result<WorkflowIr, Box<dyn std::error::Error>> {
     jobs.insert(
         "candidate".to_owned(),
         Job {
+            check_runner: None,
             display_name: "C".to_owned(),
             runs_on: "ubuntu-26.04".to_owned(),
             timeout_minutes: JobTimeout::CRATE,

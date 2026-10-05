@@ -1,19 +1,8 @@
-//! Event-time `write-task-report-v1`: typed crate-job report production.
+//! Event-time typed task-report production.
+//! Reports bind task and matrix identities through the staged plan. Named
+//! Mise success requires the qualified execution producer and final receipt proof.
 //!
-//! P05 grouped obligations into crate jobs but left no producer behind:
-//! legs-era reporting died with the matrix template, so hosted merges see
-//! zero artifacts and fail closed on `no_entry`/`source_missing`. This op
-//! closes the gap. Each obligation wrapper captures its exit code and
-//! invokes the staged helper here; the op resolves the obligation against
-//! the downloaded plan (digests stay plan-bound, never generator-baked)
-//! and writes the validated `TaskReport` plus its entry's single-task
-//! `MatrixReport` through the contract canonical JSON — report bytes are
-//! produced by Rust, never shell-composed.
-//!
-//! A failing obligation also reports every downstream same-crate
-//! obligation as `not_selected`/`upstream_failed` (task-execution
-//! contract: skipped obligations still report), because GitHub skips the
-//! later steps and nothing else could speak for them.
+//! Failed obligations also report downstream tasks as `upstream_failed`.
 
 use std::env;
 use std::path::{Path, PathBuf};
@@ -27,6 +16,11 @@ use velnor_actions_contract::{
 use crate::OrchestratorError;
 use crate::internal::{internal, internal_contract};
 use crate::internal_request::resolve_run_key;
+#[path = "task_report_timing.rs"]
+mod timing;
+#[cfg(test)]
+use timing::now_ms;
+use timing::{elapsed_ms, parse_exit_code, parse_start_ms};
 
 pub(crate) use crate::task_report_aggregate::single_task_aggregate;
 
@@ -128,6 +122,9 @@ pub(crate) fn write_task_report_to(
         return Ok(0);
     }
     let (entry, digest) = entry_and_digest(&plan, task_id)?;
+    if entry.stack_id == "mise" && exit_code == 0 {
+        return Err(internal("named_check_requires_qualified_execution"));
+    }
     let duration_ms = elapsed_ms(start_ms);
     let task = terminal_task_report(&plan, entry, digest, exit_code, duration_ms)
         .map_err(internal_contract)?;
@@ -144,42 +141,6 @@ pub(crate) fn write_task_report_to(
             crate::noop_report::write_skip_reports(&plan, task_id, &downstream_tasks, runner_temp)?;
     }
     Ok(reported)
-}
-
-/// Parse a captured `$?` value: an integer in the 8-bit exit range.
-fn parse_exit_code(raw: &str) -> Result<i32, OrchestratorError> {
-    raw.parse::<i32>()
-        .ok()
-        .filter(|code| (0..=255).contains(code))
-        .ok_or_else(|| internal("bad_exit_code"))
-}
-
-/// Parse a wrapper-captured unix-millis start; `None` when absent.
-///
-/// Garbage fails closed to unmeasured (`None`): a malformed stamp must
-/// never error the report nor fabricate a duration.
-fn parse_start_ms(raw: &str) -> Option<u64> {
-    raw.parse::<u64>().ok()
-}
-
-/// Wall-clock now in unix millis; `None` when the clock is unusable.
-fn now_ms() -> Option<u64> {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .ok()
-        .and_then(|elapsed| u64::try_from(elapsed.as_millis()).ok())
-}
-
-/// Measured elapsed millis, or `None` when telemetry is absent.
-///
-/// A present, non-future start always measures at least 1ms: absent,
-/// unparseable, future, or clockless telemetry stays unmeasured and
-/// is never labeled as measured.
-fn elapsed_ms(start_ms: Option<u64>) -> Option<u64> {
-    let (Some(start), Some(now)) = (start_ms, now_ms()) else {
-        return None;
-    };
-    now.checked_sub(start).map(|elapsed| elapsed.max(1))
 }
 
 /// Split downstream IDs on commas, dropping blanks and duplicates.
@@ -266,6 +227,36 @@ pub(crate) fn entry_and_digest<'a>(
     Ok((entry, digest))
 }
 
+/// Resolve one named-check report entry by its generated job identity.
+pub(crate) fn entry_and_digest_for_job<'a>(
+    plan: &'a Plan,
+    task_id: &str,
+    job_id: &str,
+) -> Result<(&'a MatrixEntry, &'a str), OrchestratorError> {
+    validate_task_id(task_id).map_err(internal_contract)?;
+    let mut found = None;
+    for entry in &plan.matrix.include {
+        if entry.job_id != job_id || !flattened(entry).contains(&task_id) {
+            continue;
+        }
+        if flattened(entry).len() != 1 {
+            return Err(internal("multi_task_entry"));
+        }
+        if found.is_some() {
+            return Err(internal("duplicate_task_entry"));
+        }
+        found = Some(entry);
+    }
+    let entry = found.ok_or_else(|| internal("task_not_in_plan_for_job"))?;
+    let digest = plan
+        .obligations
+        .iter()
+        .find(|obligation| obligation.task_id == task_id)
+        .map(|obligation| obligation.task_digest.as_str())
+        .ok_or_else(|| internal("task_without_obligation"))?;
+    Ok((entry, digest))
+}
+
 /// Declared task IDs of one matrix entry, sorted.
 fn flattened(entry: &MatrixEntry) -> Vec<&str> {
     let mut ids = Vec::new();
@@ -284,7 +275,7 @@ fn flattened(entry: &MatrixEntry) -> Vec<&str> {
 /// # Errors
 ///
 /// Returns [`ContractError`] for derivation or validation failures.
-fn terminal_task_report(
+pub(crate) fn terminal_task_report(
     plan: &Plan,
     entry: &MatrixEntry,
     task_digest: &str,
@@ -375,3 +366,7 @@ mod task_report_order_tests;
 #[cfg(test)]
 #[path = "task_report_tests.rs"]
 mod task_report_tests;
+
+#[cfg(test)]
+#[path = "check_gate_tests.rs"]
+mod check_gate_tests;

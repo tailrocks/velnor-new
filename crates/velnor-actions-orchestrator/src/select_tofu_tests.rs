@@ -20,6 +20,7 @@ fn selected(root: &str) -> DetectionStatus {
 /// Minimal discovery carrying tofu statuses plus selection records.
 fn discovery_with(statuses: Vec<DetectionStatus>, units: Vec<TofuSelectionUnit>) -> Discovery {
     Discovery {
+        mise_checks: Vec::new(),
         statuses,
         workspaces: Vec::new(),
         proposals: Vec::new(),
@@ -31,7 +32,6 @@ fn discovery_with(statuses: Vec<DetectionStatus>, units: Vec<TofuSelectionUnit>)
         },
         recommendations: Vec::new(),
         consumer_manifest_json: None,
-        consumer_manifest_stand_in: false,
         skipped_non_utf8: false,
         tofu_note: None,
         tofu_units: units,

@@ -89,7 +89,6 @@ fn pure_tofu_group_renders_without_rust_setup() {
         &crate_jobs_tests::discovery(tasks),
         &ToolCatalog::pinned(),
         &[String::new()],
-        &[],
         None,
         2,
     )
@@ -163,7 +162,6 @@ fn mixed_group_keeps_the_rust_union() {
         &crate_jobs_tests::discovery(vec![rust, tofu]),
         &ToolCatalog::pinned(),
         &[],
-        &[],
         None,
         2,
     )
@@ -236,7 +234,6 @@ fn tofu_root_jobs_stage_lanes_by_max_parallel() {
         &crate_jobs_tests::discovery(tasks),
         &ToolCatalog::pinned(),
         &[],
-        &[],
         None,
         2,
     )
@@ -261,7 +258,6 @@ fn wide_cap_stages_nothing() {
         &crate_jobs_tests::discovery(tasks),
         &ToolCatalog::pinned(),
         &[],
-        &[],
         None,
         5,
     )
@@ -281,7 +277,6 @@ fn rust_jobs_never_stage() {
         WorkflowPolicy::ConsumerV1,
         &crate_jobs_tests::discovery(vec![clippy, nested]),
         &ToolCatalog::pinned(),
-        &[],
         &[],
         None,
         1,
@@ -319,7 +314,6 @@ fn first_tofu_obligation_declares_the_cap() {
         WorkflowPolicy::ConsumerV1,
         &crate_jobs_tests::discovery(tasks),
         &ToolCatalog::pinned(),
-        &[],
         &[],
         None,
         3,
@@ -367,7 +361,6 @@ fn all_tofu_groups_take_tofu_ids_mixed_keep_rust() {
             tofu_group("stacks/b", TofuTaskKind::Validate),
         ]),
         &ToolCatalog::pinned(),
-        &[],
         &[],
         None,
         2,

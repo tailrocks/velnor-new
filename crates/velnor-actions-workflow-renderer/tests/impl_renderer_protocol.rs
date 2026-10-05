@@ -42,6 +42,7 @@ fn fixture_ir(steps: Vec<velnor_actions_contract::Step>) -> WorkflowIr {
         Job {
             display_name: "Plan".to_owned(),
             runs_on: LABEL.to_owned(),
+            check_runner: None,
             timeout_minutes: JobTimeout::PLAN,
             needs: Vec::new(),
             condition: None,

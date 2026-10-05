@@ -36,6 +36,13 @@ pub(crate) fn resolve_closure_at_root(
             toolchain_id,
             platform_id,
         ),
+        Stack::Mise => super::named_checks::resolve_closure(
+            root,
+            task,
+            graph_digest,
+            toolchain_id,
+            platform_id,
+        ),
         Stack::Tofu => velnor_actions_tofu::resolve_closure_at_root(
             root,
             task,

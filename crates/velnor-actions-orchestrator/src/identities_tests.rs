@@ -199,56 +199,6 @@ fn cache_format_identity_tracks_emitted_mbx_generation() {
     );
 }
 
-#[test]
-fn compiler_spec_versions_flip_the_digest() {
-    let inputs = |tools: Vec<String>| ToolchainInputs {
-        tools,
-        components: vec!["clippy".to_owned()],
-        compile_driver: "cargo".to_owned(),
-        test_runner: "cargo_test".to_owned(),
-    };
-    let pinned = inputs(vec!["rust@1.98.1".to_owned()]);
-    let bumped = inputs(vec!["rust@1.99.0".to_owned()]);
-    assert_ne!(
-        toolchain_id(&pinned).expect("digest"),
-        toolchain_id(&bumped).expect("digest")
-    );
-    // The toolchain builder feeds the same sorted specs into the same
-    // digest, so a catalog pin change propagates to every task digest.
-    let catalog = ToolCatalog::pinned();
-    let group = group(
-        TaskKind::Clippy,
-        "stack/rust/root/clippy/default",
-        CompileDriver::Cargo,
-        TestRunner::CargoTest,
-    );
-    let built = toolchain_inputs_for(&group, &catalog).expect("rust toolchain inputs");
-    assert_eq!(
-        toolchain_id(&built).expect("digest"),
-        toolchain_digest_for(&group, &catalog).expect("digest")
-    );
-    assert!(built.tools.iter().any(|spec| spec.starts_with("rust@")));
-    assert_eq!(
-        built.components,
-        vec!["clippy".to_owned(), "rustfmt".to_owned()]
-    );
-    let imaged = platform_id_for_group("ubuntu-26.04", &group).expect("platform");
-    let older = platform_id_for_group("ubuntu-24.04", &group).expect("platform");
-    assert_ne!(imaged, older);
-    assert!(validate_digest(&imaged).is_ok());
-    let mut alien = group.clone();
-    alien.identity.target = "riscv64-unknown-linux-gnu".to_owned();
-    let err = platform_id_for_group("ubuntu-26.04", &alien).expect_err("target");
-    assert!(err.to_string().contains("unsupported_target"), "{err}");
-    for label in ["ubuntu-26.04-arm", "macos-14", "windows-2025", ""] {
-        let err = platform_id_for_group(label, &group).expect_err("label");
-        assert!(
-            err.to_string().contains("unsupported_target_for_runner"),
-            "{err}"
-        );
-    }
-}
-
 /// Minimal tofu proposal with `kind` and driver spellings.
 fn tofu_task(kind: &str) -> ProposedTask {
     use std::collections::BTreeMap;
@@ -351,6 +301,7 @@ fn tofu_cache_format_is_distinct_and_valid() {
 /// Minimal discovery with no workspaces or tool checks.
 fn empty_discovery() -> crate::discover::Discovery {
     crate::discover::Discovery {
+        mise_checks: Vec::new(),
         statuses: Vec::new(),
         workspaces: Vec::new(),
         proposals: Vec::new(),
@@ -362,7 +313,6 @@ fn empty_discovery() -> crate::discover::Discovery {
         },
         recommendations: Vec::new(),
         consumer_manifest_json: None,
-        consumer_manifest_stand_in: false,
         skipped_non_utf8: false,
         tofu_note: None,
         tofu_units: Vec::new(),
@@ -394,3 +344,33 @@ fn tofu_bundles_skip_rust_checkout_probes() {
         velnor_actions_rust::tasks::DigestSlot::Unknown("tofu_adapter_owned".to_owned())
     );
 }
+
+#[test]
+fn ordinary_stack_runner_platform_cannot_expand_with_named_check_catalog() {
+    let rust = group(
+        TaskKind::Clippy,
+        "stack/rust/root/clippy/default",
+        CompileDriver::Cargo,
+        TestRunner::CargoTest,
+    );
+    let tofu = tofu_task("validate");
+    for task in [rust, tofu] {
+        for target in [
+            "host",
+            "x86_64-unknown-linux-gnu",
+            "aarch64-apple-darwin",
+            "x86_64-apple-darwin",
+        ] {
+            let mut task = task.clone();
+            task.identity.target = target.to_owned();
+            assert!(platform_id_for_group("macos-15", &task).is_err());
+            assert!(platform_id_for_group("ephemeral-linux", &task).is_err());
+        }
+        let mut mac_target = task;
+        mac_target.identity.target = "aarch64-apple-darwin".to_owned();
+        assert!(platform_id_for_group("ubuntu-24.04", &mac_target).is_err());
+    }
+}
+
+#[path = "identities_toolchain_tests.rs"]
+mod toolchain;
