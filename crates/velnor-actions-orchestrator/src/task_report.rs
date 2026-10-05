@@ -24,6 +24,9 @@ use timing::{elapsed_ms, parse_exit_code, parse_start_ms};
 
 pub(crate) use crate::task_report_aggregate::single_task_aggregate;
 
+#[path = "task_report_order.rs"]
+mod task_report_order;
+
 /// Report-production operation tag.
 pub const REPORT_OP: &str = "write-task-report-v1";
 /// Env key carrying the executed obligation's task ID.
@@ -130,7 +133,7 @@ pub(crate) fn write_task_report_to(
     let mut reported = 1usize;
     if exit_code != 0 {
         let downstream_tasks: Vec<String> = if downstream.is_empty() {
-            derive_downstream(&plan, task_id, &entry.job_id)
+            task_report_order::derive_downstream(&plan, task_id, &entry.job_id)
         } else {
             downstream.to_vec()
         };
@@ -138,24 +141,6 @@ pub(crate) fn write_task_report_to(
             crate::noop_report::write_skip_reports(&plan, task_id, &downstream_tasks, runner_temp)?;
     }
     Ok(reported)
-}
-
-/// Downstream obligation task IDs in the same job, in plan order.
-fn derive_downstream(plan: &Plan, task_id: &str, current_job_id: &str) -> Vec<String> {
-    let mut after = false;
-    let mut downstream = Vec::new();
-    for entry in &plan.matrix.include {
-        if entry.job_id == current_job_id {
-            for id in flattened(entry) {
-                if after {
-                    downstream.push(id.to_owned());
-                } else if id == task_id {
-                    after = true;
-                }
-            }
-        }
-    }
-    downstream
 }
 
 /// Split downstream IDs on commas, dropping blanks and duplicates.
@@ -375,6 +360,9 @@ mod task_report_cover_tests;
 #[cfg(test)]
 #[path = "task_report_merge_tests.rs"]
 mod task_report_merge_tests;
+#[cfg(test)]
+#[path = "task_report_order_tests.rs"]
+mod task_report_order_tests;
 #[cfg(test)]
 #[path = "task_report_tests.rs"]
 mod task_report_tests;
