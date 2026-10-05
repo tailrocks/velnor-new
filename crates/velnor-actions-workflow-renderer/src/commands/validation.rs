@@ -248,10 +248,7 @@ fn unsupported_shell_wrapper() -> RenderError {
 }
 
 fn is_env_assignment(value: &str) -> bool {
-    let Some((name, _)) = value.split_once('=') else {
-        return false;
-    };
-    !name.is_empty()
+    value.contains('=')
 }
 
 /// Validate a fixed env map: `A-Z0-9_` keys, single-line clean values.

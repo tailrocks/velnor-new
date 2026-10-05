@@ -24,7 +24,7 @@ fn generic_inline_shell_rejects_substitution_even_when_quoted() {
 
 #[test]
 fn env_separator_assignments_do_not_hide_shell_operators() {
-    for assignment in ["FOO=bar", "FOO-BAR=value"] {
+    for assignment in ["FOO=bar", "FOO-BAR=value", "=value"] {
         let err = validate_command_argv(&argv(&[
             "env",
             "--",
@@ -40,14 +40,19 @@ fn env_separator_assignments_do_not_hide_shell_operators() {
 
 #[test]
 fn env_separator_assignment_keeps_the_inline_script_quoted() -> Result<(), RenderError> {
-    let rendered = join_argv_for_run(&argv(&[
-        "env",
-        "--",
-        "FOO-BAR=value",
-        "bash",
-        "-c",
-        "echo $value",
-    ]))?;
-    assert_eq!(rendered, "env -- FOO-BAR=value bash -c 'echo $value'");
+    for assignment in ["FOO-BAR=value", "=value"] {
+        let rendered = join_argv_for_run(&argv(&[
+            "env",
+            "--",
+            assignment,
+            "bash",
+            "-c",
+            "echo $value",
+        ]))?;
+        assert_eq!(
+            rendered,
+            format!("env -- {assignment} bash -c 'echo $value'")
+        );
+    }
     Ok(())
 }
