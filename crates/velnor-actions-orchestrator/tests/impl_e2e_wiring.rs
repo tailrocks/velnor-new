@@ -116,10 +116,15 @@ fn check_setup_first(job: &JobText) -> Result<(), String> {
     }
 }
 
-/// Setup position is legal at 0-1 (right after Checkout; P08 has no
-/// manual tools restore ahead of it).
-fn setup_is_early(_job: &JobText, at: usize) -> bool {
+/// Setup position is legal at 0-1, or at 2 when the tool seed is the only
+/// step between Checkout and Setup Mise.
+fn setup_is_early(job: &JobText, at: usize) -> bool {
     at <= 1
+        || (at == 2
+            && job
+                .steps
+                .get(1)
+                .is_some_and(|step| step.name == "Restore Velnor tool seed"))
 }
 
 /// Setup Mise must enable the qualified built-in cache: `cache:true` with
@@ -160,7 +165,7 @@ fn check_verify_mbx(plan: &JobText, mbx: &str) -> Result<(), String> {
     for need in [
         "test -x target/release/velnor-actions".to_owned(),
         "mbx --version".to_owned(),
-        format!("grep -qxF \\\"mbx {mbx}\\\""),
+        format!("grep -qxF \\\"mbx {mbx}\\\" \\\"$RUNNER_TEMP/velnor/preseed-mbx-version\\\""),
     ] {
         if !verify.body.contains(&need) {
             return Err(format!("verify misses {need}"));

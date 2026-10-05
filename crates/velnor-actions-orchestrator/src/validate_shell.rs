@@ -1,15 +1,19 @@
-//! Shell linting for staged `run:` bodies with pinned shellcheck.
+//! Shell linting for staged workflow bodies and generated shared scripts.
 
 use std::ffi::OsString;
 use std::path::Path;
 
+use velnor_actions_contract::is_generated_marker_line;
 use velnor_actions_mise::{PinnedTool, ProcessOutput, ToolCatalog};
+use velnor_actions_workflow_renderer::render::RenderedTree;
 
 use crate::OrchestratorError;
 use crate::validate::{diagnose, pinned_output};
 
 #[path = "validate_shell_yaml.rs"]
 mod workflow;
+
+const SHARED_SCRIPT_PREFIX: &str = ".github/scripts/velnor-shared/";
 
 /// Prove the pinned shellcheck resolves, runs, and reports its pin.
 pub(crate) fn run_shellcheck_probe(
@@ -58,7 +62,7 @@ fn check_shellcheck_version(output: &str, pinned: &str) -> Result<(), Orchestrat
     }
 }
 
-/// Lint every staged `run:` body with one pinned shellcheck run; fail closed.
+/// Lint staged `run:` bodies and generated shared scripts with pinned shellcheck.
 ///
 /// Bodies ride one argv (shellcheck checks each file and reports per-file
 /// gcc diagnostics), so per-crate jobs add files, not subprocesses.
@@ -66,14 +70,20 @@ pub(crate) fn run_shellcheck_bodies(
     catalog: &ToolCatalog,
     staging: &Path,
     workflows: &[String],
+    tree: &RenderedTree,
 ) -> Result<(), OrchestratorError> {
-    let bodies = workflow::staged_runs(staging, workflows)?;
+    let mut bodies = workflow::staged_runs(staging, workflows)?;
+    bodies.extend(staged_shared_scripts(tree)?);
     let mut files: Vec<OsString> = Vec::new();
     for (index, run) in bodies.iter().enumerate() {
         if run.body.trim().is_empty() {
             continue;
         }
-        let path = staging.join(format!("shellcheck-{index}.sh"));
+        let extension = match run.shell {
+            workflow::ShellDialect::Bash => "bash",
+            workflow::ShellDialect::Sh => "sh",
+        };
+        let path = staging.join(format!("shellcheck-{index}.{extension}"));
         std::fs::write(&path, format!("{}\n{}\n", run.shell.shebang(), run.body))
             .map_err(|err| OrchestratorError::io(path.display().to_string(), err.to_string()))?;
         files.push(path.into_os_string());
@@ -113,6 +123,54 @@ pub(crate) fn run_shellcheck_bodies(
             problem: diagnose(&output),
         })
     }
+}
+
+/// Select exact content-addressed shared shell assets from the rendered tree.
+fn staged_shared_scripts(
+    tree: &RenderedTree,
+) -> Result<Vec<workflow::StagedRun>, OrchestratorError> {
+    let mut runs = Vec::new();
+    for file in &tree.files {
+        if !file.path.starts_with(SHARED_SCRIPT_PREFIX) {
+            continue;
+        }
+        let shell = shared_script_dialect(&file.path)
+            .ok_or_else(|| shellcheck_fail("shared_script_path_invalid"))?;
+        let Some((marker, body)) = file.bytes.split_once('\n') else {
+            return Err(shellcheck_fail("shared_script_marker_missing"));
+        };
+        if !is_generated_marker_line(marker) {
+            return Err(shellcheck_fail("shared_script_marker_missing"));
+        }
+        runs.push(workflow::StagedRun {
+            body: body.to_owned(),
+            shell,
+        });
+    }
+    Ok(runs)
+}
+
+/// Match only the renderer's two content-addressed shared-script path forms.
+fn shared_script_dialect(path: &str) -> Option<workflow::ShellDialect> {
+    let filename = path.strip_prefix(SHARED_SCRIPT_PREFIX)?;
+    let (digest, shell) = if let Some(digest) = filename
+        .strip_prefix("sh-b3-")
+        .and_then(|rest| rest.strip_suffix(".sh"))
+    {
+        (digest, workflow::ShellDialect::Sh)
+    } else if let Some(digest) = filename
+        .strip_prefix("bash-b3-")
+        .and_then(|rest| rest.strip_suffix(".bash"))
+    {
+        (digest, workflow::ShellDialect::Bash)
+    } else {
+        return None;
+    };
+    let valid_digest = digest.len() == 64
+        && digest
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte));
+    valid_digest.then_some(shell)
 }
 
 /// Unquote one single-line scalar: plain or double-quoted only.
@@ -160,6 +218,22 @@ fn shellcheck_fail(problem: &str) -> OrchestratorError {
 mod tests {
     use super::*;
 
+    fn lint_workflow_bodies(
+        catalog: &ToolCatalog,
+        staging: &Path,
+        workflows: &[String],
+    ) -> Result<(), OrchestratorError> {
+        run_shellcheck_bodies(
+            catalog,
+            staging,
+            workflows,
+            &RenderedTree {
+                files: Vec::new(),
+                symlinks: Vec::new(),
+            },
+        )
+    }
+
     /// One staged workflow carrying a single `run:` line, renderer-shaped.
     fn staged_run(run: &str) -> Result<(tempfile::TempDir, Vec<String>), String> {
         staged_runs(std::slice::from_ref(&run))
@@ -189,19 +263,19 @@ mod tests {
     fn shellcheck_clean_passes_violation_and_block_fail() -> Result<(), String> {
         let catalog = ToolCatalog::pinned();
         let (clean, workflows) = staged_run("echo \"hi\"")?;
-        run_shellcheck_bodies(&catalog, clean.path(), &workflows).map_err(|err| err.to_string())?;
+        lint_workflow_bodies(&catalog, clean.path(), &workflows).map_err(|err| err.to_string())?;
         // Error-level SC2070 trips the `-S warning` pass (see
         // `shellcheck_pure_sc2086_body_fails` for the targeted SC2086 pass).
         let (dirty, workflows) = staged_run("echo $FOO/bar && [ -n $BAZ ]")?;
         assert!(
-            run_shellcheck_bodies(&catalog, dirty.path(), &workflows).is_err_and(|err| {
+            lint_workflow_bodies(&catalog, dirty.path(), &workflows).is_err_and(|err| {
                 matches!(&err, OrchestratorError::Validation { tool, .. } if tool == "shellcheck")
                     && err.to_string().contains("SC2070")
             })
         );
         let (blocked, workflows) = staged_run("|")?;
         assert!(
-            run_shellcheck_bodies(&catalog, blocked.path(), &workflows)
+            lint_workflow_bodies(&catalog, blocked.path(), &workflows)
                 .is_err_and(|err| { err.to_string().contains("run_block_scalar_unlintable") })
         );
         Ok(())
@@ -215,7 +289,7 @@ mod tests {
         let catalog = ToolCatalog::pinned();
         let (dirty, workflows) = staged_run("echo $FOO/bar")?;
         assert!(
-            run_shellcheck_bodies(&catalog, dirty.path(), &workflows).is_err_and(|err| {
+            lint_workflow_bodies(&catalog, dirty.path(), &workflows).is_err_and(|err| {
                 matches!(&err, OrchestratorError::Validation { tool, .. } if tool == "shellcheck")
                     && err.to_string().contains("SC2086")
             })
@@ -227,18 +301,18 @@ mod tests {
     fn shellcheck_batch_lints_every_body() -> Result<(), String> {
         let catalog = ToolCatalog::pinned();
         let (clean, workflows) = staged_runs(&["echo \"one\"", "echo \"two\""])?;
-        run_shellcheck_bodies(&catalog, clean.path(), &workflows).map_err(|err| err.to_string())?;
+        lint_workflow_bodies(&catalog, clean.path(), &workflows).map_err(|err| err.to_string())?;
         // A violation in a later body still fails the single batched run.
         let (dirty, workflows) = staged_runs(&["echo \"one\"", "echo $FOO/bar && [ -n $BAZ ]"])?;
         assert!(
-            run_shellcheck_bodies(&catalog, dirty.path(), &workflows).is_err_and(|err| {
+            lint_workflow_bodies(&catalog, dirty.path(), &workflows).is_err_and(|err| {
                 matches!(&err, OrchestratorError::Validation { tool, .. } if tool == "shellcheck")
                     && err.to_string().contains("SC2070")
             })
         );
         // All-empty bodies lint nothing and pass.
         let (empty, workflows) = staged_runs(&["\"\""])?;
-        run_shellcheck_bodies(&catalog, empty.path(), &workflows).map_err(|err| err.to_string())?;
+        lint_workflow_bodies(&catalog, empty.path(), &workflows).map_err(|err| err.to_string())?;
         Ok(())
     }
 
@@ -251,13 +325,13 @@ mod tests {
             )
         };
         let (bash, workflows) = staged_workflow(&yaml("bash -e {0}"))?;
-        run_shellcheck_bodies(&catalog, bash.path(), &workflows).map_err(|err| err.to_string())?;
+        lint_workflow_bodies(&catalog, bash.path(), &workflows).map_err(|err| err.to_string())?;
         let (sh, workflows) = staged_workflow(&yaml("sh -e {0}"))?;
-        assert!(run_shellcheck_bodies(&catalog, sh.path(), &workflows).is_err());
+        assert!(lint_workflow_bodies(&catalog, sh.path(), &workflows).is_err());
 
         let container_yaml = "jobs:\n  scale-container:\n    runs-on: [self-hosted, runner]\n    steps:\n      - name: posix\n        run: test -n \"$HOME\" && printf '%s\\n' ready\n    container: alpine:3.22\n";
         let (container, workflows) = staged_workflow(container_yaml)?;
-        run_shellcheck_bodies(&catalog, container.path(), &workflows)
+        lint_workflow_bodies(&catalog, container.path(), &workflows)
             .map_err(|err| err.to_string())?;
         Ok(())
     }
@@ -275,3 +349,7 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "validate_shell_shared_tests.rs"]
+mod shared_script_tests;

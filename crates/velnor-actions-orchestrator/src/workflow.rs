@@ -1,10 +1,10 @@
 //! Workflow-IR, render-context, and actionlint-input construction.
 
-//! W1 emission wiring lives in the child module below.
+//! W1 emission wiring lives in the child module below (self-declared via
+//! `#[path]` so `lib.rs` stays untouched); the integrator only registers
+//! the companion test file.
 #[path = "wire_w1.rs"]
 pub(crate) mod wire_w1;
-#[path = "workflow_context.rs"]
-mod workflow_context;
 
 use std::collections::BTreeMap;
 
@@ -28,6 +28,9 @@ use crate::discover::Discovery;
 use crate::pins::consumer_acquire_step;
 use crate::utf8::{strings_of, strings_of_env};
 use crate::workflow_jobs::{final_job, lint_job, plan_job};
+
+#[path = "workflow_context.rs"]
+mod workflow_context;
 
 pub(crate) use crate::workflow_jobs::LINT_JOB_ID;
 
@@ -124,7 +127,7 @@ pub(crate) fn build_workflow(
     let use_nextest = plan_uses_nextest(discovery);
     let use_opentofu = plan_uses_opentofu(discovery);
     let use_rust = plan_uses_rust(discovery, policy);
-    let plan = build_plan_job(
+    let mut plan = build_plan_job(
         label,
         acquire.clone(),
         &catalog,
@@ -135,6 +138,9 @@ pub(crate) fn build_workflow(
         fetch_roots,
         discovery,
     )?;
+    if policy == WorkflowPolicy::VelnorRepositoryV1 {
+        plan.permissions = Some(crate::workflow_jobs::read_actions_permissions());
+    }
     jobs.insert(PLAN_JOB_ID.to_owned(), plan);
     let built = crate::crate_jobs::build_for_workflow(
         config,

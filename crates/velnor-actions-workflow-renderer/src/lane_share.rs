@@ -306,7 +306,15 @@ fn composite_file(
     let mut rendered = Vec::with_capacity(steps.len());
     let empty_job_env = BTreeMap::new();
     for step in steps {
-        rendered.push(step_to_yaml(logical, step, ctx, &[], true, &empty_job_env)?);
+        rendered.push(step_to_yaml(
+            logical,
+            step,
+            ctx,
+            &[],
+            true,
+            &empty_job_env,
+            false,
+        )?);
     }
     let body = composite_yaml(logical, rendered)?;
     let quoted = crate::yaml::quote_run_values_in_yaml(body);

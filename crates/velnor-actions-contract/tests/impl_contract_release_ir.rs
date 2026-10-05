@@ -80,10 +80,10 @@ fn dispatch_inputs(workflow: &mut WorkflowIr) -> Option<&mut Vec<DispatchInput>>
 }
 
 #[test]
-fn ir_default_permissions_preserve_read_read_ci() {
+fn ir_default_permissions_grant_contents_only() {
     let permissions = Permissions::default();
     assert_eq!(permissions.contents, PermissionLevel::Read);
-    assert_eq!(permissions.actions, PermissionLevel::Read);
+    assert_eq!(permissions.actions, PermissionLevel::None);
     assert_eq!(permissions.pull_requests, PermissionLevel::None);
     assert_eq!(permissions.id_token, PermissionLevel::None);
     assert!(!permissions.is_write_all());
