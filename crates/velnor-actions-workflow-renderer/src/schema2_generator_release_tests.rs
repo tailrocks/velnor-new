@@ -1,6 +1,4 @@
 use super::{assets, manifest};
-use crate::schema2::GeneratorReleasePins;
-use crate::setup::MiseSetup;
 use std::error::Error;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
@@ -10,6 +8,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 const REPOSITORY: &str = "tailrocks/velnor-new";
 const SOURCE_SHA: &str = "0123456789abcdef0123456789abcdef01234567";
+#[path = "schema2_generator_release_test_pins.rs"]
+mod pins;
+use pins::{PINNED_MISE_ARGUMENTS, test_pins};
 
 struct Scratch(PathBuf);
 
@@ -104,8 +105,11 @@ fn run_publish_case(case: Failure) -> Result<(), Box<dyn Error>> {
     install_mock_gh(&scratch.0)?;
     let script = scratch.0.join("publish.sh");
     fs::write(&script, manifest::publish_script(&test_pins()))?;
-    let output = Command::new("bash")
-        .arg(&script)
+    let gh_function = super::workflow_steps::gh_function(&test_pins().gh_argv)?;
+    let mut command = Command::new("bash");
+    command
+        .arg("-c")
+        .arg(format!("{gh_function}\n{}", fs::read_to_string(&script)?))
         .current_dir(&scratch.0)
         .env("PATH", path_with_mock_gh(&scratch.0)?)
         .env("GITHUB_REPOSITORY", REPOSITORY)
@@ -117,7 +121,12 @@ fn run_publish_case(case: Failure) -> Result<(), Box<dyn Error>> {
         .env("GH_RELEASE_JSON", scratch.0.join("release.json"))
         .env("GH_CREATE_TAG", scratch.0.join("created-tag"))
         .env("GH_ASSET_ARGS", scratch.0.join("asset-args"))
-        .output()?;
+        .env("GH_CALLS", scratch.0.join("gh-calls"))
+        .env("MISE_CALLS", scratch.0.join("mise-calls"))
+        .env("MOCK_GH", scratch.0.join("mock-bin/gh"));
+    cli_tests::isolate_gh_environment(&mut command, &scratch.0)?;
+    let output = command.output()?;
+    cli_tests::assert_pinned_publish_calls(&scratch.0, case)?;
     let should_succeed = case == Failure::None;
     assert_eq!(
         output.status.success(),
@@ -140,28 +149,6 @@ fn run_publish_case(case: Failure) -> Result<(), Box<dyn Error>> {
         assert_no_release_created(&scratch.0);
     }
     Ok(())
-}
-
-fn test_pins() -> GeneratorReleasePins {
-    let setup = MiseSetup {
-        uses: format!("jdx/mise-action@{}", "a".repeat(40)),
-        version: "2026.9.18".to_owned(),
-        sha256: "b".repeat(64),
-    };
-    GeneratorReleasePins {
-        linux_x86_64_setup: setup.clone(),
-        macos_arm64_setup: setup.clone(),
-        macos_x86_64_setup: setup,
-        install_gate_tools_argv: vec!["mise".to_owned(), "install".to_owned()],
-        install_build_tools_argv: vec!["mise".to_owned(), "install".to_owned()],
-        install_gh_argv: vec!["mise".to_owned(), "install".to_owned()],
-        build_argv: vec!["mise".to_owned(), "exec".to_owned()],
-        actionlint_argv: vec!["mise".to_owned(), "exec".to_owned()],
-        zizmor_argv: vec!["mise".to_owned(), "exec".to_owned()],
-        gh_argv: vec!["mise".to_owned(), "exec".to_owned(), "gh".to_owned()],
-        rust_version: "1.98.1".to_owned(),
-        mr_boxington_version: "1.21.1".to_owned(),
-    }
 }
 
 fn copy_release_helpers(root: &Path) -> Result<(), Box<dyn Error>> {
@@ -263,6 +250,8 @@ fn install_mock_gh(root: &Path) -> Result<(), Box<dyn Error>> {
         &mock,
         r#"#!/bin/sh
 set -eu
+printf '%s\n' "$*" >> "$GH_CALLS"
+if [ "$1" = attestation ] && [ "$2" = verify ]; then exit 0; fi
 if [ "$1" = api ]; then
   shift
   if [ "$1" = --paginate ] && [ "$2" = --slurp ]; then
@@ -294,6 +283,7 @@ if [ "$1" = api ]; then
   esac
   exit 0
 fi
+if [ "$1" = attestation ] && [ "$2" = verify ]; then exit 0; fi
 if [ "$1" = release ] && [ "$2" = create ]; then
   test "$3" = v0.1.1
   printf '%s\n' "$3" > "$GH_CREATE_TAG"
@@ -323,6 +313,7 @@ exit 46
     let mut permissions = fs::metadata(&git)?.permissions();
     permissions.set_mode(0o755);
     fs::set_permissions(git, permissions)?;
+    cli_tests::install_mock_mise(root)?;
     Ok(())
 }
 
@@ -362,3 +353,6 @@ fn sha256(path: &Path) -> Result<String, Box<dyn Error>> {
         .map(str::to_owned)
         .ok_or_else(|| "sha256sum returned no digest".into())
 }
+
+#[path = "schema2_generator_release_cli_tests.rs"]
+mod cli_tests;
