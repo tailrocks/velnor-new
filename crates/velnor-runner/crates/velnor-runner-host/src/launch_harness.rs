@@ -223,6 +223,7 @@ pub(crate) async fn open(label: &str) -> Result<(Scratch, Journal), String> {
 pub(crate) struct JitProbe {
     inner: Script,
     pub(crate) names: Vec<String>,
+    conflict: bool,
 }
 
 impl JitProbe {
@@ -233,6 +234,7 @@ impl JitProbe {
                 mode: Mode::Ok,
             },
             names: Vec::new(),
+            conflict: true,
         }
     }
 
@@ -249,8 +251,10 @@ impl Transport for JitProbe {
             {
                 self.names.push(name.to_owned());
             }
-            self.inner.calls.push("jit");
-            return Err(TransportFail::Http(409));
+            if self.conflict {
+                self.inner.calls.push("jit");
+                return Err(TransportFail::Http(409));
+            }
         }
         self.inner.exchange(request)
     }

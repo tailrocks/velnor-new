@@ -40,6 +40,21 @@ fn sample() -> String {
     "schema = 1\n[github]\nrepository = \"example/repo\"\nscale_set_name = \"ubuntu-26.04-scale-set\"\ncredential_ref = \"keychain:test/absent\"\n[host]\nmax_jobs = 1\n[docker]\ncontext = \"test\"\nplatform = \"linux/amd64\"\nendpoint = \"unix:///tmp/velnor-readiness-absent.sock\"\n".to_owned()
 }
 
+#[test]
+fn missing_state_remains_missing() -> Result<(), String> {
+    let scratch = Scratch::new("missing-state")?;
+    let missing = scratch.path().join("missing");
+    let state = super::controller_readiness(&missing, SERVICE, ACCOUNT);
+    if missing.exists() {
+        return Err("readiness created the missing state directory".to_owned());
+    }
+    if state == Readiness::WaitingForCredentials {
+        Ok(())
+    } else {
+        Err(state.as_str().to_owned())
+    }
+}
+
 #[tokio::test]
 async fn drain_file_reports_draining_without_config() -> Result<(), String> {
     let scratch = Scratch::new("drain")?;
