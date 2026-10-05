@@ -21,6 +21,9 @@ use crate::{
     preseed_closure, steps, support, workflow_policy, yaml::render_yaml,
 };
 
+#[path = "document_shared_scripts.rs"]
+mod document_shared_scripts;
+
 pub use crate::matrix::{
     COVERED_TASKS_OUTPUT, MATRIX_MAX_PARALLEL_ENV, MATRIX_NEEDS_JOB_ENV, MATRIX_OUTPUT_ENV,
     MatrixSource, PLAN_ID_OUTPUT, PLAN_STEP_ID, RUN_KEY_OUTPUT,
@@ -348,17 +351,26 @@ fn render_merged(
         jobs.clone()
     };
     let mbx_jobs = crate::mbx_gc_policy::jobs_with_mbx_objects(&jobs);
-    let shared = crate::lane_share::share_lanes(&jobs, ctx)?;
-    let mut document = document::workflow_to_yaml(ir, &shared, ctx, &mbx_jobs)?;
-    if let Some((source, max_parallel)) = &matrix {
-        matrix::attach_task_matrix(&mut document, source, *max_parallel)?;
-    } else {
-        matrix::attach_plan_outputs(&mut document)?;
-    }
-    matrix::attach_crate_job_caps(&mut document, &caps)?;
-    matrix::insert_publish_step_id(&mut document)?;
-    let document = crate::yaml::quote_run_values_in_yaml(document);
-    let text = marker::with_marker(&ctx.generator_version, &render_yaml(&document))?;
+    let mut shared = crate::lane_share::share_lanes(&jobs, ctx)?;
+    let render_text = |shared: &crate::lane_share::LaneShare| {
+        let mut document = document::workflow_to_yaml(ir, shared, ctx, &mbx_jobs)?;
+        if let Some((source, max_parallel)) = &matrix {
+            matrix::attach_task_matrix(&mut document, source, *max_parallel)?;
+        } else {
+            matrix::attach_plan_outputs(&mut document)?;
+        }
+        matrix::attach_crate_job_caps(&mut document, &caps)?;
+        matrix::insert_publish_step_id(&mut document)?;
+        let document = crate::yaml::quote_run_values_in_yaml(document);
+        marker::with_marker(&ctx.generator_version, &render_yaml(&document))
+    };
+    let initial_text = render_text(&shared)?;
+    let text = document_shared_scripts::compact_oversized_workflow(
+        &mut shared,
+        ctx,
+        initial_text,
+        render_text,
+    )?;
     crate::workflow_size::check_workflow_size(WORKFLOW_PATH, &text)?;
     steps::scan_for_private_subcommands(&text)?;
     let mut files = shared.files;
