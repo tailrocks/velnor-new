@@ -179,12 +179,12 @@ list_members() {
 }
 
 move_member() {
-  local actual="$1"
-  local intended="$2"
+  local actual="$1" intended="$2" parent
   if [ -d "$intended" ] && [ ! -L "$intended" ] && [ ! -d "$actual" ]; then
     die "destination is a directory: $intended"
   fi
-  mkdir -p -- "$(dirname -- "$intended")"
+  parent="${intended%/*}"
+  mkdir -p -- "${parent:-/}"
   if [ -d "$actual" ] && [ ! -L "$actual" ] && [ -d "$intended" ] && [ ! -L "$intended" ]; then
     local child
     for child in "$actual"/* "$actual"/.[!.]* "$actual"/..?*; do
@@ -263,6 +263,7 @@ reject_symlink_traversal() {
       if [ -n "${links[$prefix]:-}" ] || [ -L "$prefix" ]; then
         die "member traverses symlink: $name"
       fi
+      safe["$prefix"]=1
       [ "$prefix" = "$root" ] && break
       prefix="${prefix%/*}"
       [ -n "$prefix" ] || prefix="/"
