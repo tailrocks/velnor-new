@@ -5,9 +5,10 @@ use velnor_actions_contract::{
     StepRole, Trigger, VELNOR_LABEL, WorkflowIr,
 };
 
-use super::{HOSTED_SUFFIX, SCALE_SUFFIX, share_lanes};
+use super::{SCALE_SUFFIX, share_lanes};
 use crate::RenderError;
 use crate::render::{CONCURRENCY_CANCEL, CONCURRENCY_GROUP, RenderContext};
+use velnor_actions_contract::workflow::lanes::HOSTED_SUFFIX;
 
 const HOSTED_RUNS: &str = "ubuntu-26.04";
 const LOGICAL_JOBS: usize = 21;
