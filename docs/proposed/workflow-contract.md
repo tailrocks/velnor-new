@@ -6,9 +6,9 @@ This document fixes V1 defaults; unsupported configuration MUST be rejected.
 
 ## 1. Product boundary
 
-Velnor Actions is a stack-generic workflow generator and focused task executor. V1 registers only Rust/Cargo
-and runs locally or on GitHub-hosted runners. Self-hosted runners, Docker supervision, a workflow interpreter,
-and a distributed cache service are deferred.
+Velnor Actions is a stack-generic workflow generator. Registered Rust, OpenTofu and audited native domain
+adapters derive task proposals from repository evidence. Self-hosted runners, Docker supervision, a workflow
+interpreter and a distributed cache service are deferred.
 
 Each registered stack adapter owns its discovery and task proposals. The Mise adapter owns tool selection,
 command construction and execution, and cache integration. The actionlint crate owns actionlint configuration
@@ -16,14 +16,17 @@ and capabilities. The orchestrator composes stack/tool proposals, selection, cac
 The workflow renderer emits generic GitHub Actions YAML. V1 Rust work selects Cargo versus MBX and Cargo test
 versus Nextest independently from explicit repository evidence; it does not impose MBX or Nextest on consumers.
 
-The V1 workspace MUST contain these seven purpose-specific crates under `crates/`: `velnor-actions-contract`,
-`velnor-actions-rust`, `velnor-actions-mise`, `velnor-actions-actionlint`, `velnor-actions-workflow-renderer`,
-`velnor-actions-orchestrator`, and `velnor-actions-cli`. Generic package names such as `velnor-model`,
-`velnor-core`, `velnor-rust`, `velnor-util`, and `velnor-common` are forbidden.
+Product packages live under `crates/` with the ownership and dependency boundaries in
+[architecture §1](architecture.md). Common packages remain contract, Mise, actionlint, workflow renderer,
+orchestrator and CLI. Rust and OpenTofu retain stack packages; `velnor-actions-native` contains isolated
+named domain adapters behind typed façades and mandatory module boundary tests. Unrestricted generic
+packages such as `velnor-model`, `velnor-core`, `velnor-util` and `velnor-common` are forbidden.
 
 ```text
 velnor-actions-contract            Stack-neutral workflow and task contracts
 velnor-actions-rust                All Rust/Cargo scanning and task proposals
+velnor-actions-tofu                OpenTofu discovery and task proposals
+velnor-actions-native              Isolated audited native domain proposals and semantic helper sources
 velnor-actions-mise                Mise tool, command, and cache adapter
 velnor-actions-actionlint          actionlint config, pin metadata, and workflow validation
 velnor-actions-workflow-renderer   Generic GitHub Actions YAML renderer
@@ -51,7 +54,8 @@ directory and writes the sample `.velnor/config.toml` there. It MUST never creat
 directory. `plan` and `generate` resolve the same root and run the same
 analysis. `plan` prints the human summary without writes; `generate` writes the
 rendered `.github` tree.
-With no `--output-dir`, it stages all output and replaces the repository's entire `.github` tree from scratch.
+With no `--output-dir`, it stages generated output together with preserved repository-owned `.github` entries,
+then atomically replaces the directory under [generated-file §3](generated-file-contract.md).
 With `--output-dir PATH`, PATH is the exact fresh preview root; it MUST be absent or empty, and the command
 writes `PATH/.github` without modifying the repository. CI and local callers MUST choose a unique directory
 under `/tmp` or the runner temp directory.
@@ -88,7 +92,7 @@ The following files are authoritative:
 | `rust-toolchain.toml`, `mise.toml`, `mise.lock` | Optional repository-owned inspection inputs; Velnor never writes them |
 | `.velnor/config.toml` | Stack-neutral workflow policy, selected-stack exclusions, and explicit exceptions |
 | `.velnor/generator.lock` | Velnor repository bootstrap override and mirror of bundled action pins; not required or generated for consumers |
-| `.github/**` | Complete generated workflow tree |
+| `.github/workflows/**` and exact declared generated paths | Generator-owned outputs; other `.github` entries remain repository owned |
 
 The supported configuration boundary is:
 
@@ -116,9 +120,10 @@ task variants after detection. Unknown keys, duplicate configurations, unknown s
 MUST fail before workflow output is written.
 
 The generator MUST render deterministically, reject raw YAML fragments, and fail on invalid generated output.
-Tool-file findings are advisory; generation never writes them. Without `--output-dir`, it atomically replaces
-the entire `.github` tree; with `--output-dir PATH`, PATH is a fresh exact preview root containing the same
-tree and the repository is unchanged.
+Tool-file findings are advisory; generation never writes them. Generation preserves repository-owned
+nonworkflow `.github` entries under [generated-file §3](generated-file-contract.md), then atomically replaces
+the combined tree. With `--output-dir PATH`, PATH is a fresh exact preview root containing that same tree
+and the repository is unchanged.
 
 The generator MUST discover workspaces through Git file enumeration followed by Cargo metadata. It MUST handle
 nested workspaces, standalone packages, additions, deletions, renames, path dependencies, build scripts,
@@ -143,6 +148,43 @@ The default branch name MUST come from explicit repository configuration or the 
 `workflow.default_branch`; it never assumes `main` or fetches a remote. The generator MUST NOT combine broad
 branch pushes with pull-request path filters. A valid planning job MUST run even when no stack task is
 selected.
+
+Repositories may opt into main CI cadence and manual verification:
+
+```toml
+[workflow.verification]
+schedule = "17 3 * * *" # optional numeric five-field cron, UTC
+workflow_dispatch = true # optional; defaults to false
+alert = true # optional fixed failure issue observer; defaults to false
+```
+
+Omitting this table adds neither trigger. These triggers run the existing plan,
+obligation jobs, and Required gate in the same workflow; they MUST NOT dispatch
+another workflow or create a second task graph. Manual dispatch exposes string
+inputs `scope` (default `full`, accepted values `affected` and `full`) and optional
+`base_sha`. Missing dispatch scope at the event boundary means `affected`;
+ordinary events ignore dispatch inputs. Scheduled runs always use `full`.
+
+The request and plan record typed verification scope. Full verification MUST
+execute every applicable obligation, skip baseline lookup and coverage, and
+reject reuse decisions and baseline proofs. Affected verification retains the
+usual proof requirements. Schedule and dispatch bind their head to the runner's
+`GITHUB_SHA`; affected dispatch may compare its validated `base_sha`. The merge
+independently captures runner scope and rejects disagreement with the plan.
+Both events use read-only trust and caches; baseline publication remains limited
+to successful protected default-branch pushes. Failed, missing, or cancelled
+obligation evidence MUST fail the same Required gate.
+
+`alert = true` requires schedule or manual dispatch. The separate downstream
+observer has only `issues: write`, protected environment `verification-alerts`,
+and an exact generated origin/default-branch/protected-ref schedule-or-dispatch
+gate. Verification retains read-only trust. The fixed observer opens or updates
+`Nightly CI red` using only Required's actual result, run URL, and source SHA; it
+executes no repository program, checkout, or mutable template. When alerts and
+dispatch are enabled, a native Boolean `simulate_failure` input defaults false.
+Only explicit Boolean true runs a fixed failing step immediately before Plan;
+Required emits the actual `planning_failed` report. Ordinary runs allocate no
+extra runner. See [verification observer contract](verification-observer-contract.md).
 
 Every generated workflow MUST set:
 
@@ -317,81 +359,8 @@ unchanged. The generated `actionlint` job repeats actionlint in CI.
 
 ## 4. Generic matrix contract and V1 Rust payload
 
-`plan` MUST emit a JSON array named `matrix.include`. Each entry MUST contain the generic fields below;
-adapter metadata and task references are opaque to the planner and renderer. The example is V1's Rust payload;
-future stack adapters define their own versioned metadata:
-
-```json
-{
-  "id": "stack:rust|task:stack/rust/crates/velnor-actions-contract/validation/default",
-  "matrix_key": "m-<16 lowercase hex characters>",
-  "stack_id": "rust",
-  "task_id": "stack/rust/crates/velnor-actions-contract/validation/default",
-  "adapter_metadata": {
-    "package_id": "path+file:///repo#velnor-actions-contract@0.1.0",
-    "package_name": "velnor-actions-contract",
-    "manifest": "crates/velnor-actions-contract/Cargo.toml",
-    "workspace": ".",
-    "features": [],
-    "target": "host",
-    "cargo_profile": "test",
-    "compile_driver": "mbx",
-    "test_runner": "cargo_nextest",
-    "doctests": true
-  },
-  "execute_task_ids": {
-    "clippy": "stack/rust/crates/velnor-actions-contract/clippy/default",
-    "test_build": "stack/rust/crates/velnor-actions-contract/test-build/default",
-    "test_inventory": "stack/rust/crates/velnor-actions-contract/test-inventory/default",
-    "test_run": ["stack/rust/crates/velnor-actions-contract/test-run/default/shard-1-of-1"],
-    "doctest": "stack/rust/crates/velnor-actions-contract/doctest/default"
-  },
-  "input_digest": "b3-<64 lowercase hex characters>",
-  "report_id": "report-r123-a1-m-<16 lowercase hex characters>",
-  "artifact_id": "velnor-matrix-r123-a1-m-<16 lowercase hex characters>"
-}
-```
-
-The example's `mbx`/`cargo_nextest` values describe the Velnor repository's own
-dogfood profile. Every generated entry MUST carry the detected
-`compile_driver`, `test_runner`, and evidence IDs. For Cargo-test profiles,
-omit Nextest build/inventory/shard task IDs and emit one `test` obligation;
-the renderer MUST NOT invent Nextest work. Cargo-doctest remains separate in
-either profile.
-
-`id` MUST be stable for the same stack, task group, configuration, and adapter inputs. `stack_id` MUST be a
-registered detector ID. `task_id` is the stable matrix task-group ID; individual executable obligations remain
-in `execute_task_ids`. It MUST contain only lowercase ASCII letters, digits, `:`, `|`, `/`, `.`, `-`, and `_`.
-`matrix_key` is `m-` followed by the first 16 lowercase hexadecimal characters of BLAKE3 over the UTF-8 bytes
-of `id`. A collision is a planning error. Adapter metadata is owned by the selected stack adapter; the generic
-orchestrator MUST preserve it without interpreting stack-specific fields. Matrix entries MUST be sorted by
-`id`; duplicate IDs are a planning error.
-
-`report_id` is `report-<run-key>-<matrix-key>`. `artifact_id` is `velnor-matrix-<run-key>-<matrix-key>`. These
-values are derived, not chosen by repository input. The plan artifact is `velnor-plan-<run-key>`. The optional
-candidate artifact is `velnor-candidate-<run-key>-<target-key>`, where `target-key` is the lowercase target
-triple with non-alphanumeric runs replaced by `-`. Artifact names MUST be unique within the run and MUST use
-only the derived values above.
-
-The default matrix policy is one entry per selected stack task-group/configuration with at least one `execute`
-obligation. Its `execute_task_ids` contains only obligations that this matrix entry must run; `test_run` is an
-array of shard task IDs, including `shard-1-of-1` when not sharded. The complete plan retains covered/reused
-obligations separately. The V1 Rust adapter MUST NOT generate `--all-features` configurations. Cross-package
-or cross-component integration tasks MUST be represented by explicit matrix entries. An intentionally empty
-test target MUST remain visible in the plan.
-
-The plan file written by `plan` MUST be `$RUNNER_TEMP/velnor/<run-key>/plan.json` and MUST contain the
-same `matrix.include` array that is sent through `GITHUB_OUTPUT`. Its schema-1 shape is defined by the
-[architecture contract](architecture.md); baseline and obligation fields use the exact proof format in the
-[parallelism and affected-work contract](parallelism-and-selection-contract.md).
-
-`plan_id` is `plan-<run-key>`. `detections`, `obligations`, `matrix.include`, and `task_ids` MUST be sorted as
-defined by the architecture contract. `task_ids` contains every obligation; matrix `execute_task_ids` contains
-only `execute` decisions. A baseline miss MUST populate the reason and broaden execution. A baseline proof
-MUST identify the exact manifest/run/task/input digests. The plan job MUST publish `plan_id`, `run_key`, and
-compact `matrix` JSON as named step outputs; the task job MUST consume that exact JSON and MUST NOT rediscover
-stacks. The plan artifact MUST contain `plan.json` and `matrix.json`, where `matrix.json` is exactly
-`{"include": [...]}`; the final job MUST validate byte-for-byte agreement after canonical JSON encoding.
+Matrix entry shape, adapter metadata ownership, canonical output agreement and artifact
+identity rules are defined in [the workflow matrix contract](workflow-matrix-contract.md).
 
 ## 5. Task execution
 
