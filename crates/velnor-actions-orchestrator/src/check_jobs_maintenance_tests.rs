@@ -78,6 +78,17 @@ fn maintenance_check_declares_archive_and_freshness_policy_inputs() -> Result<()
             "archive-guard source manifest input is undeclared: {path}"
         );
     }
+    for package in [
+        "crates/velnor-actions-freshness",
+        "crates/velnor-archive-guard",
+    ] {
+        for path in files_below(&root, Path::new(package))? {
+            assert!(
+                declared.contains(&path.as_str()),
+                "maintenance package source or test input is undeclared: {path}"
+            );
+        }
+    }
     for path in [
         ".config/nextest.toml",
         ".velnor/version-policy.toml",
