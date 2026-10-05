@@ -13,113 +13,32 @@ mod modules;
 
 use std::collections::{BTreeSet, HashSet};
 use std::error::Error;
-use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use serde_json::Value;
 
-use crate::impl_repo_policy::{WORKSPACE_ROOTS, repo_root};
+use crate::impl_repo_policy::repo_root;
 
 type Outcome<T> = Result<T, Box<dyn Error>>;
 
 struct PackagePlan {
     id: String,
     root: PathBuf,
-    test_targets: Vec<PathBuf>,
+    test_targets: Vec<TestTarget>,
+}
+
+struct TestTarget {
+    source: PathBuf,
+    required_features: Vec<String>,
 }
 
 pub(super) struct WorkspacePlan {
     manifest: PathBuf,
     root: PathBuf,
+    target_directory: PathBuf,
+    vcs_metadata: Option<PathBuf>,
     packages: Vec<PackagePlan>,
-}
-
-fn cargo() -> OsString {
-    std::env::var_os("CARGO").unwrap_or_else(|| OsString::from("cargo"))
-}
-
-fn cargo_output(manifest: &Path, args: &[&str]) -> Outcome<std::process::Output> {
-    let current_dir = manifest
-        .parent()
-        .ok_or("workspace manifest has no parent")?;
-    let (command, options) = args.split_first().ok_or("empty cargo command")?;
-    let output = Command::new(cargo())
-        .arg(command)
-        .arg("--manifest-path")
-        .arg(manifest)
-        .args(options)
-        .env("CARGO_TARGET_DIR", cargo_config::cargo_target_dir()?)
-        .current_dir(current_dir)
-        .output()?;
-    if !output.status.success() {
-        return Err(format!(
-            "cargo {} failed for {}: {}{}",
-            args.first().copied().unwrap_or("command"),
-            manifest.display(),
-            String::from_utf8_lossy(&output.stderr),
-            String::from_utf8_lossy(&output.stdout),
-        )
-        .into());
-    }
-    Ok(output)
-}
-
-pub(super) fn workspace_plan(manifest: &Path) -> Outcome<WorkspacePlan> {
-    let metadata = cargo_output(
-        manifest,
-        &["metadata", "--no-deps", "--format-version", "1", "--locked"],
-    )?;
-    let document: Value = serde_json::from_slice(&metadata.stdout)?;
-    let packages = document["packages"].as_array().ok_or("metadata packages")?;
-    let mut plans = Vec::new();
-    for package in packages {
-        let id = package["id"].as_str().ok_or("package id")?.to_owned();
-        let package_manifest = PathBuf::from(
-            package["manifest_path"]
-                .as_str()
-                .ok_or("package manifest path")?,
-        );
-        let package_root = package_manifest
-            .parent()
-            .ok_or("package manifest has no parent")?
-            .canonicalize()?;
-        let mut test_targets = Vec::new();
-        for target in package["targets"].as_array().ok_or("package targets")? {
-            if target["test"].as_bool() == Some(true) {
-                test_targets.push(
-                    PathBuf::from(
-                        target["src_path"]
-                            .as_str()
-                            .ok_or("test target source path")?,
-                    )
-                    .canonicalize()?,
-                );
-            }
-        }
-        plans.push(PackagePlan {
-            id,
-            root: package_root,
-            test_targets,
-        });
-    }
-    let root = manifest
-        .parent()
-        .ok_or("workspace manifest has no parent")?
-        .canonicalize()?;
-    Ok(WorkspacePlan {
-        manifest: manifest.canonicalize()?,
-        root,
-        packages: plans,
-    })
-}
-
-fn workspace_plans(root: &Path) -> Outcome<Vec<WorkspacePlan>> {
-    WORKSPACE_ROOTS
-        .iter()
-        .map(|workspace| workspace_plan(&root.join(workspace).join("Cargo.toml")))
-        .collect()
 }
 
 fn registered_sources(workspaces: &[WorkspacePlan]) -> Outcome<HashSet<PathBuf>> {
@@ -131,7 +50,7 @@ fn registered_sources(workspaces: &[WorkspacePlan]) -> Outcome<HashSet<PathBuf>>
 }
 
 fn compiled_test_sources(workspace: &WorkspacePlan) -> Outcome<HashSet<PathBuf>> {
-    let output = cargo_output(
+    let output = cargo_config::cargo_output_at_target(
         &workspace.manifest,
         &[
             "test",
@@ -140,6 +59,7 @@ fn compiled_test_sources(workspace: &WorkspacePlan) -> Outcome<HashSet<PathBuf>>
             "--workspace",
             "--message-format=json",
         ],
+        &workspace.target_directory,
     )?;
     let package_ids: HashSet<&str> = workspace
         .packages
@@ -161,13 +81,17 @@ fn compiled_test_sources(workspace: &WorkspacePlan) -> Outcome<HashSet<PathBuf>>
     }
     for package in &workspace.packages {
         for target in &package.test_targets {
-            if !sources.contains(target) {
+            if sources.contains(&target.source) {
+                continue;
+            }
+            if target.required_features.is_empty() {
                 return Err(format!(
                     "Cargo metadata test target source is absent from rustc dependency files: {}",
-                    target.display()
+                    target.source.display()
                 )
                 .into());
             }
+            sources.extend(modules::declared_target_source_closure(&target.source)?);
         }
     }
     Ok(sources)
@@ -235,7 +159,11 @@ fn test_artifact(
     }))
 }
 
-fn rust_files(package_root: &Path) -> Outcome<Vec<PathBuf>> {
+fn rust_files(
+    package_root: &Path,
+    target_directory: &Path,
+    vcs_metadata: Option<&Path>,
+) -> Outcome<Vec<PathBuf>> {
     let mut files = Vec::new();
     let mut pending = vec![package_root.to_path_buf()];
     while let Some(directory) = pending.pop() {
@@ -244,7 +172,7 @@ fn rust_files(package_root: &Path) -> Outcome<Vec<PathBuf>> {
             let path = entry.path();
             let kind = entry.file_type()?;
             if kind.is_dir() {
-                if !excluded_directory(&path) {
+                if !excluded_directory(&path, target_directory, vcs_metadata)? {
                     pending.push(path);
                 }
             } else if kind.is_file() && path.extension().is_some_and(|ext| ext == "rs") {
@@ -256,10 +184,13 @@ fn rust_files(package_root: &Path) -> Outcome<Vec<PathBuf>> {
     Ok(files)
 }
 
-fn excluded_directory(path: &Path) -> bool {
-    path.file_name()
-        .and_then(|name| name.to_str())
-        .is_some_and(|name| matches!(name, "target" | ".git"))
+fn excluded_directory(
+    path: &Path,
+    target_directory: &Path,
+    vcs_metadata: Option<&Path>,
+) -> Outcome<bool> {
+    let canonical = path.canonicalize()?;
+    Ok(canonical == target_directory || Some(canonical.as_path()) == vcs_metadata)
 }
 
 pub(super) fn registration_audit(
@@ -267,8 +198,14 @@ pub(super) fn registration_audit(
 ) -> Outcome<(HashSet<PathBuf>, Vec<PathBuf>)> {
     let registered = registered_sources(workspaces)?;
     let mut pending = BTreeSet::new();
-    for package in workspaces.iter().flat_map(|workspace| &workspace.packages) {
-        pending.extend(rust_files(&package.root)?);
+    for workspace in workspaces {
+        for package in &workspace.packages {
+            pending.extend(rust_files(
+                &package.root,
+                &workspace.target_directory,
+                workspace.vcs_metadata.as_deref(),
+            )?);
+        }
     }
     let mut visited = HashSet::new();
     let mut candidates = HashSet::new();
@@ -339,7 +276,7 @@ pub(super) fn relative_paths(root: &Path, paths: &[PathBuf]) -> Outcome<Vec<Stri
 #[test]
 fn cargo_targets_register_every_test_bearing_source() -> Outcome<()> {
     let root = repo_root().canonicalize()?;
-    let workspaces = workspace_plans(&root)?;
+    let workspaces = cargo_config::workspace_plans(&root)?;
     let (registered, orphans) = registration_audit(&workspaces)?;
     for expected in [
         "crates/velnor-actions-orchestrator/tests/impl_generator_seed.rs",

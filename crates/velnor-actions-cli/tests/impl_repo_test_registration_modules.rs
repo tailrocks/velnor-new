@@ -89,6 +89,17 @@ pub(super) fn source_closure(
     root: &Path,
     compiler_dependencies: &HashSet<PathBuf>,
 ) -> Outcome<HashSet<PathBuf>> {
+    source_closure_with_evidence(root, Some(compiler_dependencies))
+}
+
+pub(super) fn declared_target_source_closure(root: &Path) -> Outcome<HashSet<PathBuf>> {
+    source_closure_with_evidence(root, None)
+}
+
+fn source_closure_with_evidence(
+    root: &Path,
+    compiler_dependencies: Option<&HashSet<PathBuf>>,
+) -> Outcome<HashSet<PathBuf>> {
     let root = root.canonicalize()?;
     let source_base = root
         .parent()
@@ -162,7 +173,7 @@ pub(super) fn source_closure(
 fn enqueue_compiled_include(
     include: &Path,
     condition: Possibility,
-    compiler_dependencies: &HashSet<PathBuf>,
+    compiler_dependencies: Option<&HashSet<PathBuf>>,
     parent: &ModuleFile,
     pending: &mut VecDeque<ModuleFile>,
 ) -> Outcome<()> {
@@ -175,7 +186,9 @@ fn enqueue_compiled_include(
         }
         return Ok(());
     };
-    if !compiler_dependencies.contains(&source) && condition == Possibility::Always {
+    if compiler_dependencies.is_some_and(|dependencies| !dependencies.contains(&source))
+        && condition == Possibility::Always
+    {
         return Err(format!(
             "active include! source is missing from rustc dep-info: {}",
             source.display()

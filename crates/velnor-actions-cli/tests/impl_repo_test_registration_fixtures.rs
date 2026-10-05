@@ -52,7 +52,7 @@ impl Drop for ScratchDir {
 fn write_workspace(scratch: &ScratchDir) -> Outcome<()> {
     scratch.write(
         "Cargo.toml",
-        "[workspace]\nmembers = [\".\", \"no-tests\"]\nresolver = \"3\"\n\n[package]\nname = \"registration-fixture\"\nversion = \"0.1.0\"\nedition = \"2024\"\nautotests = false\n\n[features]\ndisabled = []\n\n[[test]]\nname = \"registered\"\npath = \"tests/registered.rs\"\n",
+        "[workspace]\nmembers = [\".\", \"no-tests\"]\nresolver = \"3\"\n\n[package]\nname = \"registration-fixture\"\nversion = \"0.1.0\"\nedition = \"2024\"\nautotests = false\n\n[features]\ndisabled = []\n\n[[test]]\nname = \"registered\"\npath = \"tests/registered.rs\"\n\n[[test]]\nname = \"feature-registered\"\npath = \"tests/feature_registered.rs\"\nrequired-features = [\"disabled\"]\n",
     )?;
     scratch.write(
         "Cargo.lock",
@@ -70,10 +70,30 @@ fn write_workspace(scratch: &ScratchDir) -> Outcome<()> {
 }
 
 fn write_test_sources(scratch: &ScratchDir) -> Outcome<()> {
+    write_registered_test_roots(scratch)?;
+    write_registered_module_sources(scratch)?;
+    write_registered_include_sources(scratch)?;
+    write_orphan_test_sources(scratch)?;
+    write_package_source_candidates(scratch)
+}
+
+fn write_registered_test_roots(scratch: &ScratchDir) -> Outcome<()> {
     scratch.write(
         "tests/registered.rs",
-        "#[path = \"actual.rs\"] mod logical;\n#[path = \"alternate\"] mod inline { mod child; }\n#[path = \"fixtures/registered.rs\"] mod fixture;\n#[cfg(target_os = \"macos\")] mod macos_only;\n#[cfg_attr(feature = \"disabled\", cfg(any()))] mod cfg_attr_possible;\n#[cfg_attr(test, cfg(any()))] mod test_filtered;\n#[cfg(any())] mod impossible;\n#[cfg(target_os = \"macos\")] include!(\"macos_included.rs\");\ninclude!(\"included.rs\");\nmacro_rules! include_test { () => { include!(\"macro_included.rs\"); }; }\ninclude_test!();\nmacro_rules! unused_include { () => { include!(\"orphan_data.rs\"); }; }\nconst _: &str = include_str!(\"orphan_data.rs\");\nmacro_rules! generated { () => { #[test] fn macro_test() {} }; }\ngenerated!();\n",
+        "macro_rules! selected { () => {}; }\n#[path = \"actual.rs\"] mod logical;\n#[path = \"alternate\"] mod inline { mod child; }\n#[path = \"fixtures/registered.rs\"] mod fixture;\n#[cfg(target_os = \"macos\")] mod macos_only;\n#[cfg_attr(feature = \"disabled\", cfg(any()))] mod cfg_attr_possible;\n#[cfg_attr(test, cfg(any()))] mod test_filtered;\n#[cfg(any())] mod impossible;\n#[cfg(target_os = \"macos\")] include!(\"macos_included.rs\");\ninclude!(\"included.rs\");\nmacro_rules! include_test { () => { include!(\"macro_included.rs\"); }; }\ninclude_test!();\nmacro_rules! unused_include { () => { include!(\"orphan_data.rs\"); }; }\nmod shadowed_macro { selected!(); macro_rules! selected { () => { include!(\"orphan_data.rs\"); }; } }\nconst _: &str = include_str!(\"orphan_data.rs\");\nmacro_rules! generated { () => { #[test] fn macro_test() {} }; }\ngenerated!();\n",
     )?;
+    scratch.write(
+        "tests/feature_registered.rs",
+        "mod gated_child;\n#[test] fn feature_gated_target_test() {}\n",
+    )?;
+    scratch.write(
+        "tests/gated_child.rs",
+        "#[test] fn feature_gated_child_test() {}\n",
+    )?;
+    Ok(())
+}
+
+fn write_registered_module_sources(scratch: &ScratchDir) -> Outcome<()> {
     scratch.write("tests/actual.rs", "mod child;\n")?;
     scratch.write("tests/child.rs", "#[test] fn external_child() {}\n")?;
     scratch.write(
@@ -89,6 +109,10 @@ fn write_test_sources(scratch: &ScratchDir) -> Outcome<()> {
         "#[test] fn cfg_attr_possible_test() {}\n",
     )?;
     scratch.write("tests/test_filtered.rs", "#[test] fn filtered_test() {}\n")?;
+    Ok(())
+}
+
+fn write_registered_include_sources(scratch: &ScratchDir) -> Outcome<()> {
     scratch.write(
         "tests/macos_included.rs",
         "mod macos_child;\n#[test] fn target_include_test() {}\n",
@@ -108,6 +132,10 @@ fn write_test_sources(scratch: &ScratchDir) -> Outcome<()> {
         "tests/macro_included.rs",
         "#[test] fn macro_included_test() {}\n",
     )?;
+    Ok(())
+}
+
+fn write_orphan_test_sources(scratch: &ScratchDir) -> Outcome<()> {
     scratch.write(
         "tests/logical/child.rs",
         "#[test] fn wrong_external_path() {}\n",
@@ -138,6 +166,10 @@ fn write_test_sources(scratch: &ScratchDir) -> Outcome<()> {
         "tests/orphan_included.rs",
         "#[test] fn included_orphan() {}\n",
     )?;
+    Ok(())
+}
+
+fn write_package_source_candidates(scratch: &ScratchDir) -> Outcome<()> {
     scratch.write(
         "src/main.rs",
         "#[cfg(not(test))] mod ordinary_only;\nfn main() {}\n",
@@ -145,6 +177,14 @@ fn write_test_sources(scratch: &ScratchDir) -> Outcome<()> {
     scratch.write(
         "src/ordinary_only.rs",
         "#[test] fn ordinary_artifact_test() {}\n",
+    )?;
+    scratch.write(
+        "src/target/orphan.rs",
+        "#[test] fn source_directory_named_target_is_scanned() {}\n",
+    )?;
+    scratch.write(
+        "target/build_output.rs",
+        "#[test] fn actual_cargo_target_output_is_ignored() {}\n",
     )?;
     Ok(())
 }
@@ -168,14 +208,22 @@ fn compiler_closure_handles_paths_includes_macros_fixtures_and_orphans() -> Outc
     write_workspace(&scratch)?;
     write_test_sources(&scratch)?;
     let manifest = scratch.0.join("Cargo.toml");
-    let workspace = super::workspace_plan(&manifest)?;
+    let target_dir = scratch.0.join("target");
+    let workspace = super::cargo_config::workspace_plan_at_target(&manifest, &target_dir)?;
     let data_only = scratch.0.join("tests/orphan_data.rs").canonicalize()?;
     assert!(compiler_dependencies_contain(&workspace, &data_only)?);
-    assert!(
-        !scratch.0.join("target").exists(),
-        "nested Cargo test wrote artifacts into the scanned source tree"
-    );
+    let feature_target = scratch
+        .0
+        .join("tests/feature_registered.rs")
+        .canonicalize()?;
+    assert!(!compiler_dependencies_contain(&workspace, &feature_target)?);
     let (registered, orphans) = super::registration_audit(&[workspace])?;
+    assert!(
+        target_dir.is_dir(),
+        "fixture did not use Cargo's target dir"
+    );
+    assert!(!orphans.contains(&scratch.0.join("target/build_output.rs").canonicalize()?));
+    assert!(orphans.contains(&scratch.0.join("src/target/orphan.rs").canonicalize()?));
     let registered_root = scratch.0.join("tests/registered.rs").canonicalize()?;
     let root_findings = super::graph::source_findings(&registered_root)?;
     assert!(root_findings.includes.iter().any(|include| {
@@ -186,6 +234,8 @@ fn compiler_closure_handles_paths_includes_macros_fixtures_and_orphans() -> Outc
         "tests/registered.rs",
         "tests/child.rs",
         "tests/alternate/child.rs",
+        "tests/feature_registered.rs",
+        "tests/gated_child.rs",
         "tests/macos_only.rs",
         "tests/cfg_attr_possible.rs",
         "tests/macos_included.rs",
@@ -219,6 +269,7 @@ fn compiler_closure_handles_paths_includes_macros_fixtures_and_orphans() -> Outc
         "tests/orphan_macro.rs",
         "tests/orphan_macro_definition.rs",
         "tests/orphan_included.rs",
+        "src/target/orphan.rs",
     ];
     expected.sort_unstable();
     assert_eq!(actual, expected);
@@ -230,9 +281,10 @@ fn compiler_dependencies_contain(
     workspace: &super::WorkspacePlan,
     source: &std::path::Path,
 ) -> Outcome<bool> {
-    let output = super::cargo_output(
+    let output = super::cargo_config::cargo_output_at_target(
         &workspace.manifest,
         &["test", "--no-run", "--locked", "--message-format=json"],
+        &workspace.target_directory,
     )?;
     let package_ids = workspace
         .packages

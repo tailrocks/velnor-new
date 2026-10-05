@@ -75,7 +75,12 @@ fn active_includes(
     }
     let matching_calls = calls
         .iter()
-        .filter(|call| call.call.scope == definition.scope && call.call.name == definition.name)
+        .filter(|call| {
+            call.call.scope == definition.scope
+                && call.call.name == definition.name
+                && (call.source != source_definition.source
+                    || definition.source_order < call.call.source_order)
+        })
         .collect::<Vec<_>>();
     if matching_calls.is_empty() {
         return Ok(Vec::new());

@@ -62,6 +62,7 @@ struct SourceVisitor<'a> {
     findings: SourceFindings,
     condition: Possibility,
     scope: Vec<String>,
+    source_order: usize,
     error: Option<String>,
 }
 
@@ -102,6 +103,8 @@ impl<'ast> Visit<'ast> for SourceVisitor<'_> {
     }
 
     fn visit_item_macro(&mut self, node: &'ast syn::ItemMacro) {
+        let source_order = self.source_order;
+        self.source_order += 1;
         let item_condition = match cfg::attrs_possibility_in_test(&node.attrs) {
             Ok(condition) => combine(self.condition, condition),
             Err(error) => {
@@ -122,6 +125,7 @@ impl<'ast> Visit<'ast> for SourceVisitor<'_> {
                 name.to_string(),
                 item_condition,
                 scope_name(&self.scope),
+                source_order,
                 &node.mac.tokens,
                 self.source,
             ) {
@@ -143,6 +147,7 @@ impl<'ast> Visit<'ast> for SourceVisitor<'_> {
                 path,
                 item_condition,
                 scope_name(&self.scope),
+                source_order,
                 &node.mac.tokens,
             ) {
                 Ok(call) => self.findings.macro_calls.push(call),
@@ -176,6 +181,7 @@ pub(super) fn source_findings(path: &Path) -> Outcome<SourceFindings> {
         findings: SourceFindings::default(),
         condition,
         scope: Vec::new(),
+        source_order: 0,
         error: None,
     };
     visitor.visit_file(&syntax);
@@ -191,6 +197,7 @@ fn mark_emitted_tests(findings: &mut SourceFindings) {
         for definition in &findings.macro_definitions {
             if definition.name == call.name
                 && definition.scope == call.scope
+                && definition.source_order < call.source_order
                 && definition.test_bearing
                 && definition.condition != Possibility::Never
                 && call.condition != Possibility::Never
@@ -212,7 +219,11 @@ pub(super) fn active_macro_includes(
         let calls = findings
             .macro_calls
             .iter()
-            .filter(|call| call.name == definition.name && call.scope == definition.scope)
+            .filter(|call| {
+                call.name == definition.name
+                    && call.scope == definition.scope
+                    && definition.source_order < call.source_order
+            })
             .collect::<Vec<_>>();
         if calls.is_empty() {
             continue;

@@ -14,6 +14,7 @@ type Outcome<T> = Result<T, Box<dyn Error>>;
 pub(in crate::impl_repo_test_registration) struct Definition {
     pub(in crate::impl_repo_test_registration) name: String,
     pub(in crate::impl_repo_test_registration) scope: String,
+    pub(in crate::impl_repo_test_registration) source_order: usize,
     pub(in crate::impl_repo_test_registration) source: PathBuf,
     pub(in crate::impl_repo_test_registration) condition: Possibility,
     pub(in crate::impl_repo_test_registration) empty_matcher_only: bool,
@@ -24,6 +25,7 @@ pub(in crate::impl_repo_test_registration) struct Definition {
 pub(in crate::impl_repo_test_registration) struct Call {
     pub(in crate::impl_repo_test_registration) name: String,
     pub(in crate::impl_repo_test_registration) scope: String,
+    pub(in crate::impl_repo_test_registration) source_order: usize,
     pub(in crate::impl_repo_test_registration) condition: Possibility,
     pub(in crate::impl_repo_test_registration) empty_arguments: bool,
 }
@@ -32,6 +34,7 @@ pub(super) fn definition(
     name: String,
     condition: Possibility,
     scope: String,
+    source_order: usize,
     tokens: &TokenStream,
     source: &Path,
 ) -> Outcome<Definition> {
@@ -46,6 +49,7 @@ pub(super) fn definition(
     Ok(Definition {
         name,
         scope,
+        source_order,
         source: source.to_path_buf(),
         condition,
         empty_matcher_only,
@@ -58,6 +62,7 @@ pub(super) fn call(
     path: &syn::Path,
     condition: Possibility,
     scope: String,
+    source_order: usize,
     tokens: &TokenStream,
 ) -> Outcome<Call> {
     if path.segments.last().is_none() {
@@ -72,6 +77,7 @@ pub(super) fn call(
     Ok(Call {
         name,
         scope,
+        source_order,
         condition,
         empty_arguments: tokens.is_empty(),
     })
