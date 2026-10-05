@@ -211,19 +211,61 @@ fn acquire_step(
         sha256: sha.to_owned(),
         commit: commit.to_owned(),
     };
-    Ok(provision_acquire_step(&provenance, acquire_argv(staged))?)
+    Ok(provision_acquire_step(
+        &provenance,
+        acquire_script_argv(staged, GENERATOR_SEED_ROOT)?,
+    )?)
 }
 
-/// Fixed acquisition argv over the staged path plus asset env references.
+/// Host path of the read-only generator seed. Not a job input.
+const GENERATOR_SEED_ROOT: &str = "/opt/velnor/seed";
+
+/// Fixed acquisition argv. A matching seed file is copied. Otherwise curl.
 ///
-/// Curl is pinned to HTTPS-only (`--proto '=https'`) over TLS 1.2+ and
-/// the staged path is defensively double-quoted (X12).
-fn acquire_argv(staged: &str) -> Vec<String> {
+/// Curl stays HTTPS-only (`--proto '=https'`) over TLS 1.2+. The staged
+/// path stays double-quoted. A hash mismatch does not copy the seed.
+///
+/// # Errors
+///
+/// Returns [`OrchestratorError::Contract`] when `seed_root` or the staged
+/// file name is not a safe path token.
+pub fn acquire_script_argv(
+    staged: &str,
+    seed_root: &str,
+) -> Result<Vec<String>, OrchestratorError> {
+    if !absolute_token(seed_root) {
+        return Err(OrchestratorError::Contract {
+            problem: format!("bad_seed_root:{seed_root}"),
+        });
+    }
     let dir = staged.rsplit_once('/').map_or(staged, |(head, _)| head);
+    let name = staged.rsplit_once('/').map_or(staged, |(_, tail)| tail);
+    if !file_token(name) {
+        return Err(OrchestratorError::Contract {
+            problem: format!("bad_staged_name:{name}"),
+        });
+    }
+    let seed = format!("{seed_root}/generator/{name}");
     let script = format!(
-        "mkdir -p \"{dir}\" && curl -fsSL --proto '=https' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"{staged}\" && echo \"$VELNOR_ASSET_SHA256  {staged}\" | sha256sum -c - && chmod +x \"{staged}\""
+        "mkdir -p \"{dir}\" && s=\"{seed}\" d=\"{staged}\" && if [ -f \"$s\" ] && echo \"$VELNOR_ASSET_SHA256  $s\" | sha256sum -c -; then cp \"$s\" \"$d\"; else curl -fsSL --proto '=https' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\" && echo \"$VELNOR_ASSET_SHA256  $d\" | sha256sum -c -; fi && chmod +x \"$d\""
     );
-    vec!["sh".to_owned(), "-c".to_owned(), script]
+    Ok(vec!["sh".to_owned(), "-c".to_owned(), script])
+}
+
+fn absolute_token(value: &str) -> bool {
+    value.starts_with('/')
+        && !value.contains("..")
+        && !value.contains("//")
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'/' | b'.' | b'_' | b'-'))
+}
+
+fn file_token(value: &str) -> bool {
+    !value.is_empty()
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
 }
 
 /// `cfg(test)`-only fixture manifest matching the workspace version.
