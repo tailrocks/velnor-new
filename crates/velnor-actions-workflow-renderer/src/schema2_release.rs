@@ -13,6 +13,7 @@ use crate::yaml::Yaml;
 
 use super::Schema2WorkflowRequest;
 use super::features::{CHECKOUT_USES, base, finish, publish_step, run_step};
+use super::release_eligibility;
 
 /// GitHub-hosted macOS label. The binary is native; it is not built on Ubuntu.
 const MACOS_RUNS_ON: &str = "macos-15";
@@ -85,11 +86,13 @@ pub(super) fn image_release(request: &Schema2WorkflowRequest) -> Result<Yaml, Re
     Ok(document(
         "Image release",
         vec![
+            release_eligibility::job(hosted.clone(), super::IMAGE_RELEASE_WORKFLOW),
             build_job(
                 "build-images",
                 "Build runner images",
                 hosted.clone(),
                 60,
+                super::IMAGE_RELEASE_WORKFLOW,
                 vec![
                     run_step("Build images", IMAGE_BUILD),
                     run_step("Verify image architecture", IMAGE_VERIFY),
@@ -117,6 +120,8 @@ pub(super) fn image_release(request: &Schema2WorkflowRequest) -> Result<Yaml, Re
                     prefix: "runner",
                     notes: "Runner image assets built from ${GITHUB_SHA}.",
                     files: &files,
+                    workflow_path: super::IMAGE_RELEASE_WORKFLOW,
+                    needs: &["attest-images", release_eligibility::JOB_ID],
                 },
             ),
         ],
@@ -134,11 +139,13 @@ pub(super) fn macos_binary_release(_request: &Schema2WorkflowRequest) -> Result<
     Ok(document(
         "macOS binary release",
         vec![
+            release_eligibility::job(macos.clone(), super::MACOS_BINARY_RELEASE_WORKFLOW),
             build_job(
                 "build-binary",
                 "Build velnor-host",
                 macos.clone(),
                 120,
+                super::MACOS_BINARY_RELEASE_WORKFLOW,
                 vec![
                     mise_step(),
                     run_step("Install pinned Rust", RUST_INSTALL),
@@ -167,6 +174,8 @@ pub(super) fn macos_binary_release(_request: &Schema2WorkflowRequest) -> Result<
                     prefix: "binary",
                     notes: "velnor-host built from ${GITHUB_SHA}.",
                     files: &files,
+                    workflow_path: super::MACOS_BINARY_RELEASE_WORKFLOW,
+                    needs: &["attest-binary", release_eligibility::JOB_ID],
                 },
             ),
         ],
@@ -178,16 +187,22 @@ fn build_job(
     name: &str,
     runs_on: Yaml,
     timeout: i64,
+    workflow_path: &str,
     mut steps: Vec<Yaml>,
     upload_name: &str,
     files: &[&str],
 ) -> (String, Yaml) {
-    let mut prefixed = vec![checkout_step()];
+    let mut prefixed = vec![checkout_step(
+        "${{ needs['release-eligibility'].outputs.source_sha }}",
+    )];
     prefixed.append(&mut steps);
     prefixed.push(upload_step(upload_name, artifact_name(id), files));
     finish(
         id,
-        with_permissions(base(name, runs_on, timeout), build_permissions()),
+        with_needs(
+            with_permissions(base(name, runs_on, timeout), build_permissions()),
+            &[release_eligibility::JOB_ID],
+        ),
         prefixed,
     )
 }
@@ -206,18 +221,19 @@ fn attest_job(
             with_permissions(base(name, runs_on, 20), attest_permissions()),
             needs,
         ),
-        vec![download_step(artifact), attest_step(&subject_list(files))],
+            vec![download_step(artifact), attest_step(&subject_list(files))],
     )
 }
 
 struct Publish<'a> {
     id: &'a str,
     name: &'a str,
-    needs: &'a str,
+    needs: &'a [&'a str],
     artifact: &'a str,
     prefix: &'a str,
     notes: &'a str,
     files: &'a [&'a str],
+    workflow_path: &'a str,
 }
 
 fn publish_job(runs_on: Yaml, spec: &Publish<'_>) -> (String, Yaml) {
@@ -228,8 +244,14 @@ fn publish_job(runs_on: Yaml, spec: &Publish<'_>) -> (String, Yaml) {
             spec.needs,
         ),
         vec![
-            checkout_step(),
+            checkout_step("${{ needs['release-eligibility'].outputs.source_sha }}"),
+            release_eligibility::mise_step(),
+            run_step(
+                "Install pinned GitHub CLI",
+                &format!("mise --no-config --no-env --no-hooks install gh@{}", release_eligibility::GH_VERSION),
+            ),
             download_step(spec.artifact),
+            release_eligibility::check_step(spec.workflow_path),
             publish_step(&release_command(spec.prefix, spec.notes, spec.files)),
         ],
     )
@@ -259,7 +281,7 @@ fn mise_step() -> Yaml {
     ])
 }
 
-fn checkout_step() -> Yaml {
+fn checkout_step(ref_value: &str) -> Yaml {
     Yaml::Map(vec![
         ("name".to_owned(), Yaml::str("Check out")),
         ("uses".to_owned(), Yaml::str(CHECKOUT_USES)),
@@ -268,6 +290,7 @@ fn checkout_step() -> Yaml {
             Yaml::Map(vec![
                 ("fetch-depth".to_owned(), Yaml::str("1")),
                 ("persist-credentials".to_owned(), Yaml::str("false")),
+                ("ref".to_owned(), Yaml::str(ref_value)),
             ]),
         ),
     ])
@@ -319,10 +342,10 @@ fn with_permissions(mut fields: Vec<(String, Yaml)>, perms: Yaml) -> Vec<(String
     fields
 }
 
-fn with_needs(mut fields: Vec<(String, Yaml)>, needs: &str) -> Vec<(String, Yaml)> {
+fn with_needs(mut fields: Vec<(String, Yaml)>, needs: &[&str]) -> Vec<(String, Yaml)> {
     fields.push((
         "needs".to_owned(),
-        Yaml::Seq(vec![Yaml::str(needs.to_owned())]),
+        Yaml::Seq(needs.iter().map(|need| Yaml::str(*need)).collect()),
     ));
     fields
 }
@@ -381,7 +404,23 @@ fn document(name: &str, jobs: Vec<(String, Yaml)>) -> Yaml {
         ("name".to_owned(), Yaml::str(name)),
         (
             "on".to_owned(),
-            Yaml::Map(vec![("workflow_dispatch".to_owned(), Yaml::Map(vec![]))]),
+            Yaml::Map(vec![(
+                "workflow_dispatch".to_owned(),
+                Yaml::Map(vec![(
+                    "inputs".to_owned(),
+                    Yaml::Map(vec![(
+                        "source_sha".to_owned(),
+                        Yaml::Map(vec![
+                            (
+                                "description".to_owned(),
+                                Yaml::str("Exact tested main commit to build and publish"),
+                            ),
+                            ("required".to_owned(), Yaml::Bool(true)),
+                            ("type".to_owned(), Yaml::str("string")),
+                        ]),
+                    )]),
+                )]),
+            )]),
         ),
         (
             "permissions".to_owned(),
