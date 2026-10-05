@@ -271,7 +271,14 @@ pub fn finalize_jobs(
             velnor_actions_contract::target_for_runner_label(&ctx.runs_on).ok_or_else(|| {
                 RenderError::InvalidWorkflow(format!("tools_cache_unsupported_target:{id}"))
             })?;
-        cache_p08::ensure_tools_cache_v2(id, job, mise, always, target)?;
+        cache_p08::ensure_tools_cache_v2(
+            id,
+            job,
+            mise,
+            always,
+            target,
+            &ctx.checkout_uses,
+        )?;
         cache_p08::check_no_legacy_rust_cache(id, job)?;
         cache_p08::check_mbx_before_fetch(id, job)?;
         closure::check_internal_staged(id, job, ctx.preseed)?;
@@ -373,11 +380,14 @@ fn render_merged(
     let text = marker::with_marker(&ctx.generator_version, &render_yaml(&document))?;
     crate::workflow_size::check_workflow_size(WORKFLOW_PATH, &text)?;
     steps::scan_for_private_subcommands(&text)?;
-    let shared_files = crate::render_cache_files::with_runtime_identity_files(
+    let mut shared_files = crate::render_cache_files::with_runtime_identity_files(
         shared.files,
         &jobs,
         &ctx.generator_version,
     )?;
+    if crate::tool_seed::any_job_has_seed(&jobs) {
+        shared_files.push(crate::tool_seed::action_file(&ctx.generator_version)?);
+    }
     Ok(RenderedWorkflow {
         yaml: text,
         shared: shared_files,

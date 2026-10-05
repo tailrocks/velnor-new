@@ -3,6 +3,7 @@
 //! Validated IR plus fixed argv in, marked YAML out: no subprocesses, no
 //! stack or tool branching, quoting-only shell shaping.
 
+mod action_ref;
 pub mod agents_md;
 mod artifact_paths;
 pub mod cache_elect;
@@ -54,6 +55,7 @@ mod steps_plain;
 mod steps_shell;
 mod support;
 pub mod tofu_cache;
+mod tool_seed;
 pub mod toolchain_env;
 pub mod tree;
 mod verification_jobs;

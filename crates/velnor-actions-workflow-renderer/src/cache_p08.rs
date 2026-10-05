@@ -46,8 +46,9 @@ pub(crate) fn ensure_tools_cache_v2(
     setup: &MiseSetup,
     always: bool,
     target: &str,
+    checkout_uses: &str,
 ) -> Result<(), RenderError> {
-    setup_pipeline::ensure_tools_cache_v2(job_id, job, setup, always, target)
+    setup_pipeline::ensure_tools_cache_v2(job_id, job, setup, always, target, checkout_uses)
 }
 
 /// Reject the retired broad `rust-cache` archive in generated jobs.
@@ -139,6 +140,19 @@ pub(crate) fn is_tool_spec(value: &str) -> bool {
 /// Detect the current pinned Setup Mise shape, with cache delegated to V2.
 pub(crate) fn setup_step(setup: &MiseSetup) -> Result<Step, RenderError> {
     setup::mise_setup_step(setup)
+}
+
+/// True only for the canonical typed V2 cache-key expression.
+pub(crate) fn is_v2_cache_key_expression(value: &str) -> bool {
+    value
+        .strip_prefix("mise-tools-v2-")
+        .and_then(|key| key.strip_suffix("-${{steps.v2.outputs.identity}}"))
+        .is_some_and(|digest| {
+            digest.len() == 64
+                && digest
+                    .bytes()
+                    .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+        })
 }
 
 /// Validate the component-install payload against the resolved toolchain.

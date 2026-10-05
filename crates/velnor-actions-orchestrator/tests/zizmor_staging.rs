@@ -167,6 +167,7 @@ fn stage(preview: &Path, yaml: &str) -> Result<TempDir, Box<dyn std::error::Erro
     )?;
     for relative in [
         ".github/actions/u26/action.yml",
+        ".github/actions/velnor-tool-seed/action.yml",
         ".github/scripts/velnor-tools-cache-identity.sh",
     ] {
         let destination = root.join(relative);

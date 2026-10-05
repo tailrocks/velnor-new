@@ -169,14 +169,31 @@ fn strict_wires_runtime_qualified_tools_cache_before_setup_and_saves_once()
             )?,
         ],
     );
-    let text = strict(&fixture_ir(vec![lint]), &fixture_ctx())?;
+    let rendered = velnor_actions_workflow_renderer::render::render_workflow_ir_strict_shared(
+        &fixture_ir(vec![lint]),
+        velnor_actions_contract::WorkflowPolicy::ConsumerV1,
+        None,
+        &fixture_ctx(),
+        &mise(),
+    )?;
+    let text = &rendered.yaml;
     let names = step_names(&text, "actionlint");
     assert_eq!(names.iter().filter(|s| *s == TOOLS_RESTORE_NAME).count(), 1);
     assert_eq!(names.iter().filter(|s| *s == TOOLS_SAVE_NAME).count(), 1);
     assert_eq!(
         names.iter().position(|s| s == "Setup Mise"),
+        Some(4),
+        "checkout, runtime identity, tool seed, restore, then setup: {names:?}"
+    );
+    assert_eq!(
+        names.iter().position(|s| s == "Restore Velnor tool seed"),
+        Some(2),
+        "V2 seed follows identity: {names:?}"
+    );
+    assert_eq!(
+        names.iter().position(|s| s == TOOLS_RESTORE_NAME),
         Some(3),
-        "checkout, runtime identity, restore, then setup: {names:?}"
+        "archive restore follows seed admission: {names:?}"
     );
     for need in [
         "name: V2 identity",
@@ -197,9 +214,79 @@ fn strict_wires_runtime_qualified_tools_cache_before_setup_and_saves_once()
         );
     }
     assert!(
-        !text.contains("cache_key:"),
-        "legacy action cache key:\n{text}"
+        !text.contains("cache_key: mise-v1-"),
+        "legacy Mise cache key:\n{text}"
     );
+    let seed = rendered
+        .shared
+        .iter()
+        .find(|file| file.path == ".github/actions/velnor-tool-seed/action.yml")
+        .expect("renderer emits seed action for a matching checkout");
+    assert!(seed.bytes.contains("velnor-host-seed-v1"), "{}", seed.bytes);
+    assert!(text.contains("${{ steps.v2.outputs.identity }}"));
+    Ok(())
+}
+
+#[test]
+fn seed_and_tools_prelude_require_the_configured_unconditional_checkout()
+-> Result<(), velnor_actions_workflow_renderer::RenderError> {
+    use velnor_actions_workflow_renderer::checkout_step;
+    let shell_checkout = scrubbed_shell_step("Checkout", vec!["true".to_owned()])?;
+    let run = || {
+        let job = job(
+            "actionlint",
+            "Actionlint",
+            Vec::new(),
+            vec![
+                shell_checkout.clone(),
+                scrubbed_shell_step(
+                    "Run actionlint",
+                    mise_argv("actionlint@1.7.12", "actionlint", &[]),
+                )?,
+            ],
+        );
+        strict(&fixture_ir(vec![job]), &fixture_ctx())
+    };
+    let text = run()?;
+    assert!(!text.contains("name: V2 identity"), "{text}");
+    assert!(!text.contains(TOOLS_RESTORE_NAME), "{text}");
+    assert!(!text.contains("Restore Velnor tool seed"), "{text}");
+
+    let mut renamed = checkout_step(&checkout_pin())?;
+    renamed.name = "Source checkout".to_owned();
+    let real = job(
+        "actionlint",
+        "Actionlint",
+        Vec::new(),
+        vec![
+            renamed,
+            scrubbed_shell_step(
+                "Run actionlint",
+                mise_argv("actionlint@1.7.12", "actionlint", &[]),
+            )?,
+        ],
+    );
+    let text = strict(&fixture_ir(vec![real]), &fixture_ctx())?;
+    assert!(text.contains("name: V2 identity"), "renamed typed checkout: {text}");
+    assert!(text.contains("Restore Velnor tool seed"), "{text}");
+
+    let mut conditional = checkout_step(&checkout_pin())?;
+    conditional.condition = Some("false".to_owned());
+    let conditional = job(
+        "actionlint",
+        "Actionlint",
+        Vec::new(),
+        vec![
+            conditional,
+            scrubbed_shell_step(
+                "Run actionlint",
+                mise_argv("actionlint@1.7.12", "actionlint", &[]),
+            )?,
+        ],
+    );
+    let text = strict(&fixture_ir(vec![conditional]), &fixture_ctx())?;
+    assert!(!text.contains("name: V2 identity"), "{text}");
+    assert!(!text.contains("Restore Velnor tool seed"), "{text}");
     Ok(())
 }
 
