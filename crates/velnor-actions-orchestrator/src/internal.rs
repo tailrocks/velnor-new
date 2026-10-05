@@ -28,6 +28,8 @@ use crate::internal_plan::snapshot::ExecutionSnapshot;
 use crate::internal_plan::wire_w2::GroupWire;
 use crate::internal_plan::{default_generator, plan_packages};
 use crate::internal_request::resolve_run_key;
+
+pub use self::plan_response::validate_plan_response;
 use crate::merge::BaselineManifest;
 use crate::prepare::prepare;
 use crate::select::{classify_changed, select_universe, verify_checkout};

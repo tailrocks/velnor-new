@@ -26,6 +26,7 @@ pub use super::generate::{
     render_staged_tree, render_staged_tree_with,
 };
 pub use super::init::{InitReport, init_config};
+pub use super::internal::validate_plan_response;
 pub use super::internal::{
     MERGE_OP, PLAN_OP, PlanOutputs, REQUEST_FILE_ENV, WRITE_REQUEST_OP, merge_passed,
     plan_internal, plan_outputs, plan_outputs_from_staged_admission, plan_outputs_with_admission,
