@@ -74,10 +74,13 @@ mod classes;
 mod features;
 #[path = "schema2_generator_release.rs"]
 mod generator_release;
+#[path = "schema2_generator_release_pins.rs"]
+mod generator_release_pins;
 #[path = "schema2_mbx_qualification.rs"]
 mod mbx_qualification;
 #[path = "schema2_release.rs"]
 mod release;
+pub use generator_release_pins::GeneratorReleasePins;
 /// Exact-source gates for composed product-release workflows.
 #[path = "schema2_release_eligibility.rs"]
 pub mod release_eligibility;
@@ -99,6 +102,8 @@ pub struct Schema2WorkflowRequest {
     pub workflows: BTreeSet<RoutingWorkflow>,
     /// Pinned tool inputs, required only when qualification is emitted.
     pub mbx_qualification: Option<MbxQualificationPins>,
+    /// Orchestrator-resolved Mise setup and command vectors for generator release.
+    pub generator_release: Option<GeneratorReleasePins>,
 }
 
 /// Exact tools used by the hosted MBX cache qualification.
@@ -168,11 +173,15 @@ pub fn render_schema2_workflows(
         .workflows
         .contains(&RoutingWorkflow::GeneratorRelease)
     {
+        let generated = generator_release::generator_release(request)?;
         files.push(file(
             GENERATOR_RELEASE_WORKFLOW,
             &request.version,
-            &generator_release::generator_release(request)?,
+            &generated.workflow,
         )?);
+        for (path, action) in generated.actions {
+            files.push(file(&path, &request.version, &action)?);
+        }
     }
     if request.workflows.contains(&RoutingWorkflow::Monitoring) {
         files.push(file(
