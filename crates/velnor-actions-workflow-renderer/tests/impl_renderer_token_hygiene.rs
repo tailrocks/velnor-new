@@ -254,7 +254,7 @@ fn scrub_coverage_rejects_bare_and_partial_shell_env() -> Result<(), RenderError
 
 #[test]
 fn scrub_coverage_allows_ambient_auth_steps_and_release() -> Result<(), RenderError> {
-    use velnor_actions_workflow_renderer::steps::{DENY_STEP_NAME, MACHETE_STEP_NAME};
+    use velnor_actions_workflow_renderer::steps::DENY_STEP_NAME;
     // Ambient constructor (no scrub overlay): the gate must exempt by
     // allowlisted name, or these fail. A scrubbed step would pass
     // without touching the allowlist, proving nothing.
@@ -264,9 +264,6 @@ fn scrub_coverage_allows_ambient_auth_steps_and_release() -> Result<(), RenderEr
         "Fetch Cargo sources",
         "Fetch Cargo sources (nested/Cargo.toml)",
         DENY_STEP_NAME,
-        MACHETE_STEP_NAME,
-        "Run zizmor",
-        "Run actionlint",
     ] {
         let allowed = job(
             "plan",
@@ -301,6 +298,24 @@ fn scrub_coverage_allows_ambient_auth_steps_and_release() -> Result<(), RenderEr
         None,
         &fixture_ctx(),
     )?;
+    Ok(())
+}
+
+#[test]
+fn validator_execs_cannot_keep_ambient_credentials() -> Result<(), RenderError> {
+    for name in ["Run cargo-machete", "Run zizmor", "Run actionlint"] {
+        let exposed = job(
+            "plan",
+            "Plan",
+            Vec::new(),
+            vec![
+                checkout_step(&checkout_pin())?,
+                ambient_shell_step(name, vec!["true".to_owned()], BTreeMap::new())?,
+                plan_step(),
+            ],
+        );
+        render_fails_with(vec![exposed], "missing_scrub");
+    }
     Ok(())
 }
 

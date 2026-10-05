@@ -121,12 +121,8 @@ pub(crate) fn lint_job(label: &str, catalog: &ToolCatalog) -> Result<Job, Orches
         steps: vec![
             checkout_action()?,
             prepare,
-            velnor_actions_workflow_renderer::ambient_shell_step(
-                "Run actionlint",
-                argv,
-                BTreeMap::new(),
-            )
-            .map_err(|err| OrchestratorError::Contract {
+            velnor_actions_workflow_renderer::shell_step("Run actionlint", argv, BTreeMap::new())
+                .map_err(|err| OrchestratorError::Contract {
                 problem: err.to_string(),
             })?,
         ],

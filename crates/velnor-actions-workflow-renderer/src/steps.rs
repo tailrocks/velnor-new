@@ -254,10 +254,10 @@ pub fn shell_step(
 /// scrub overlay. Allowed only when the step executes no repository
 /// code and needs network auth to function: pinned-tool acquisition
 /// (`mise install`, where authenticated quota beats flaky anonymous
-/// limits), offline pinned analyzers over the checkout (deny, machete,
-/// zizmor, actionlint — scrubbing broke their tool bootstrap, CI run
-/// 36815180228), and `gh` release publishing. Anything compiling or
-/// running repository code must use [`shell_step`].
+/// limits), Cargo Deny's combined install-and-check vector (which removes
+/// credentials between those phases), and `gh` release publishing.
+/// Validators whose preparation runs separately use [`shell_step`]
+/// for execution.
 /// # Errors
 pub fn ambient_shell_step(
     name: &str,
