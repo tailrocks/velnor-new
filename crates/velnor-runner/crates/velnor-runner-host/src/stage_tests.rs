@@ -7,7 +7,8 @@ use super::HostError;
 use super::stage::{Forget, PairEngine, PairStop, decide, drive};
 use super::worker::CreateProjection;
 
-const FIRST_ID: &str = "0000000000000000000000000000000000000000000000000000000000000001";
+// join_dind_net accepts only a 64-hex container id.
+const FIRST_CONTAINER_ID: &str = "0000000000000000000000000000000000000000000000000000000000000001";
 
 struct Fake {
     events: Mutex<Vec<&'static str>>,
@@ -142,7 +143,7 @@ fn push(events: &Mutex<Vec<&'static str>>, event: &'static str) -> Result<(), Ho
 async fn dind_created_does_not_start() -> Result<(), HostError> {
     let engine = Fake::new();
     let partial = drive(&engine, "worker_a", b"jit", PairStop::DindCreated, &Forget).await?;
-    assert_eq!(partial.dind_id.as_deref(), Some(FIRST_ID));
+    assert_eq!(partial.dind_id.as_deref(), Some(FIRST_CONTAINER_ID));
     assert_eq!(partial.runner_id, None);
     assert_eq!(engine.events(), ["volumes", "create"]);
     Ok(())
@@ -203,7 +204,7 @@ async fn volumes_stop_creates_no_container() -> Result<(), HostError> {
 async fn dind_started_does_not_create_the_runner() -> Result<(), HostError> {
     let engine = Fake::new();
     let partial = drive(&engine, "worker_a", b"jit", PairStop::DindStarted, &Forget).await?;
-    assert_eq!(partial.dind_id.as_deref(), Some(FIRST_ID));
+    assert_eq!(partial.dind_id.as_deref(), Some(FIRST_CONTAINER_ID));
     assert_eq!(partial.runner_id, None);
     assert_eq!(engine.events(), ["volumes", "create", "start"]);
     Ok(())
@@ -257,7 +258,7 @@ async fn second_create_failure_removes_only_the_owned_dind() -> Result<(), HostE
         return Err(HostError::Docker);
     };
     assert_eq!(error, HostError::Docker);
-    assert_eq!(engine.removed(), [FIRST_ID.to_owned()]);
+    assert_eq!(engine.removed(), [FIRST_CONTAINER_ID.to_owned()]);
     assert_eq!(engine.events(), ["volumes", "create", "start", "remove"]);
     let names = engine.names.lock().map_err(|_| HostError::Docker)?;
     assert_eq!(
