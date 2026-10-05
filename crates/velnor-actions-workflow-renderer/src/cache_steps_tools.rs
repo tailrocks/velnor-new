@@ -3,7 +3,7 @@
 //! Declared via `#[path]` from `cache_steps.rs` (no `lib.rs` edit;
 //! split under the 400-line size gate, bodies byte-identical).
 
-use velnor_actions_contract::Step;
+use velnor_actions_contract::{Step, StepRole};
 
 use crate::RenderError;
 
@@ -97,7 +97,9 @@ pub fn tools_save_step(key: &str) -> Result<Step, RenderError> {
         &[],
         &[TOOLS_CACHE_PATH.to_owned()],
     )?;
-    rename_step(step, TOOLS_SAVE_NAME)
+    let mut step = rename_step(step, TOOLS_SAVE_NAME)?;
+    step.role = Some(StepRole::ToolsCacheSave);
+    Ok(step)
 }
 
 /// Rename a built step; names are fixed by the caller contract.

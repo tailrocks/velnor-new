@@ -3,7 +3,7 @@
 use super::*;
 use crate::config::{CheckExecutor, CheckPlatform, CheckRunner};
 use crate::workflow::{Concurrency, Job, JobTimeout, Permissions, Step, Trigger, WorkflowIr};
-use crate::{VelnorConfig, expand_workflow};
+use crate::{StepRole, VelnorConfig, expand_workflow};
 use std::collections::{BTreeMap, BTreeSet};
 
 fn runner(label: &str, platform: CheckPlatform) -> CheckRunner {
@@ -19,6 +19,8 @@ fn job(id: &str, check_runner: Option<CheckRunner>, needs: &[&str]) -> Job {
     let steps = if id == "plan" {
         vec![Step {
             name: "Write request".to_owned(),
+            id: None,
+            role: None,
             condition: None,
             kind: StepKind::Internal {
                 operation: "write-request-v1:plan-v1".to_owned(),
@@ -29,6 +31,8 @@ fn job(id: &str, check_runner: Option<CheckRunner>, needs: &[&str]) -> Job {
         vec![
             Step {
                 name: "Execute named check".to_owned(),
+                id: None,
+                role: None,
                 condition: None,
                 kind: StepKind::Shell {
                     run: vec!["velnor-actions".to_owned()],
@@ -40,6 +44,8 @@ fn job(id: &str, check_runner: Option<CheckRunner>, needs: &[&str]) -> Job {
             },
             Step {
                 name: "Upload reports".to_owned(),
+                id: None,
+                role: Some(StepRole::MatrixReportUpload),
                 condition: Some("always()".to_owned()),
                 kind: StepKind::Action {
                     uses: "actions/upload-artifact@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -57,6 +63,8 @@ fn job(id: &str, check_runner: Option<CheckRunner>, needs: &[&str]) -> Job {
     } else {
         vec![Step {
             name: "ordinary".to_owned(),
+            id: None,
+            role: None,
             condition: None,
             kind: StepKind::Shell {
                 run: vec!["true".to_owned()],
