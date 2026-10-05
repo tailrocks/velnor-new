@@ -29,7 +29,7 @@ pub use runs_on::{
 };
 pub use stacks::{
     DeclaredCompileDriver, DeclaredTestRunner, RustConfiguration, RustStackConfig, StacksConfig,
-    is_valid_custom_task_name, is_valid_feature_name, is_valid_rust_target,
+    is_valid_feature_name, is_valid_rust_target,
 };
 pub use tofu::{RootProblem, TofuStackConfig, Utf8RepoRelDir};
 pub use verification::{
