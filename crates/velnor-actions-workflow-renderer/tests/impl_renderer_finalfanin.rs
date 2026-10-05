@@ -1,5 +1,8 @@
 //! Final fan-in: fetch placement, publish, tolerant downloads, no wildcards.
-use velnor_actions_contract::{GeneratorValidation, NeedsConclusions, WorkflowPolicy};
+use velnor_actions_contract::{
+    GeneratorValidation, NeedsConclusions, Permissions, WorkflowPolicy,
+    workflow::permissions::PermissionLevel,
+};
 use velnor_actions_workflow_renderer::{
     RenderError, checkout_step, merge_step, plan_step, render_workflow_ir, write_request_step,
 };
@@ -18,6 +21,12 @@ fn final_job() -> Result<(String, velnor_actions_contract::Job), RenderError> {
         ],
     );
     job.condition = Some("always()".to_owned());
+    job.permissions = Some(Permissions {
+        contents: PermissionLevel::Read,
+        pull_requests: PermissionLevel::None,
+        id_token: PermissionLevel::None,
+        actions: PermissionLevel::Read,
+    });
     Ok((id, job))
 }
 
