@@ -256,6 +256,7 @@ fn walk_link(
     skipped_non_utf8: &mut bool,
     cache_admission: &CacheAdmission,
 ) -> Result<(), IndexError> {
+    cache_admission.ensure_cache_root_unchanged()?;
     let target = link
         .canonicalize()
         .map_err(|_| IndexError::SymlinkLoop(show(link)))?;
