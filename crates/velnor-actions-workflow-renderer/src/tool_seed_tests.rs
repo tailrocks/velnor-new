@@ -148,14 +148,20 @@ fn rejected_mount_and_mismatched_key_leave_destinations_untouched() {
 #[test]
 fn step_key_is_derived_from_pinned_job_tools_and_configured_checkout_payload() {
     let setup = setup_config();
-    let expected = cache_key();
+    assert_configured_checkout_prelude(&setup);
+    assert_full_history_checkout_is_seedable(&setup);
+    assert_display_name_does_not_authorize_seed(&setup);
+    assert_wrong_pinned_checkout_stays_cold(&setup);
+}
+
+fn assert_configured_checkout_prelude(setup: &crate::MiseSetup) {
     let mut checkout = crate::steps::checkout_step(CHECKOUT).expect("checkout");
     checkout.name = "Fetch source".to_owned();
     let mut rendered_job = job(vec![checkout, mise_shell()]);
     crate::cache_p08::ensure_tools_cache_v2(
         "fixture",
         &mut rendered_job,
-        &setup,
+        setup,
         false,
         TARGET,
         CHECKOUT,
@@ -189,9 +195,11 @@ fn step_key_is_derived_from_pinned_job_tools_and_configured_checkout_payload() {
     assert_eq!(rendered_job.steps[3].role, Some(StepRole::MiseSetup));
     let action = crate::cache_p08::runtime_prelude_action_file(TARGET_RUNS, "0.1.0")
         .expect("prelude action file");
-    assert!(action.bytes.contains(&expected));
+    assert!(action.bytes.contains(&cache_key()));
     assert!(action.bytes.contains("cache_key:"));
+}
 
+fn assert_full_history_checkout_is_seedable(setup: &crate::MiseSetup) {
     let mut full_history_checkout = crate::steps::checkout_step(CHECKOUT).expect("checkout");
     if let StepKind::Action { with, .. } = &mut full_history_checkout.kind {
         with.insert("fetch-depth".to_owned(), "0".to_owned());
@@ -200,14 +208,16 @@ fn step_key_is_derived_from_pinned_job_tools_and_configured_checkout_payload() {
     crate::cache_p08::ensure_tools_cache_v2(
         "full-history-checkout",
         &mut deep_job,
-        &setup,
+        setup,
         false,
         TARGET,
         CHECKOUT,
     )
     .expect("full-history checkout is an eligible seed owner");
     assert_eq!(deep_job.steps[1].role, Some(StepRole::ToolsCacheIdentity));
+}
 
+fn assert_display_name_does_not_authorize_seed(setup: &crate::MiseSetup) {
     let fake = Step {
         name: "Checkout".to_owned(),
         id: None,
@@ -222,7 +232,7 @@ fn step_key_is_derived_from_pinned_job_tools_and_configured_checkout_payload() {
     crate::cache_p08::ensure_tools_cache_v2(
         "fake-checkout",
         &mut fake_job,
-        &setup,
+        setup,
         false,
         TARGET,
         CHECKOUT,
@@ -234,8 +244,6 @@ fn step_key_is_derived_from_pinned_job_tools_and_configured_checkout_payload() {
             .iter()
             .all(|step| step.role != Some(StepRole::ToolsCacheIdentity))
     );
-
-    assert_wrong_pinned_checkout_stays_cold(&setup);
 }
 
 fn assert_wrong_pinned_checkout_stays_cold(setup: &crate::MiseSetup) {
