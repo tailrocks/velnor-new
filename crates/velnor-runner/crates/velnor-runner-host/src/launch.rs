@@ -21,6 +21,8 @@ use crate::scale_set::EnsureError;
 use crate::worker::Started;
 
 mod bind;
+#[cfg(all(test, unix))]
+mod busy_slot_tests;
 mod capacity;
 mod gate;
 mod inspect;

@@ -835,12 +835,12 @@ jobs:
       - name: Install pinned Rust toolchain
         run: "mise install rust@1.98.1 && printf '%s/bin\\n' \"$(mise exec rust@1.98.1 -- rustc --print sysroot)\" >> \"$GITHUB_PATH\""
       - name: Restore MBX objects
-        uses: jdx/mr-boxington-action@1687e54eb349cadf61fa38b5813a77875489e8e6
+        uses: jdx/mr-boxington-action@d0825fbaf3cc36ca2609aa38e71046265a1f1e37
         id: mbx_cache
         with:
           github-cache-mode: objects
           version: 1.21.1
-          cache-generation: velnor-qualification-mbx-1.21.1-action-1687e54eb349cadf61fa38b5813a77875489e8e6-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+          cache-generation: velnor-qualification-mbx-1.21.1-action-d0825fbaf3cc36ca2609aa38e71046265a1f1e37-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
           save-on-workflow-dispatch: "true"
       - name: Verify MBX action identity and write policy
         env:
@@ -892,12 +892,12 @@ jobs:
       - name: Install pinned Rust toolchain
         run: "mise install rust@1.98.1 && printf '%s/bin\\n' \"$(mise exec rust@1.98.1 -- rustc --print sysroot)\" >> \"$GITHUB_PATH\""
       - name: Restore MBX objects
-        uses: jdx/mr-boxington-action@1687e54eb349cadf61fa38b5813a77875489e8e6
+        uses: jdx/mr-boxington-action@d0825fbaf3cc36ca2609aa38e71046265a1f1e37
         id: mbx_cache
         with:
           github-cache-mode: objects
           version: 1.21.1
-          cache-generation: velnor-qualification-mbx-1.21.1-action-1687e54eb349cadf61fa38b5813a77875489e8e6-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+          cache-generation: velnor-qualification-mbx-1.21.1-action-d0825fbaf3cc36ca2609aa38e71046265a1f1e37-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
           save-on-workflow-dispatch: "false"
       - name: Verify MBX action identity and write policy
         env:
