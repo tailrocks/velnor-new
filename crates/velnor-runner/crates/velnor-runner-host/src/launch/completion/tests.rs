@@ -15,6 +15,8 @@ use crate::journal::{Journal, LaunchIdentity, LaunchReservation, Outcome};
 use crate::launch::completion;
 use crate::launch_harness::open;
 
+mod claim_fence;
+mod docker_transport;
 mod engine;
 mod fair;
 mod lease;
@@ -100,7 +102,7 @@ fn completion_poll(request_id: i64, runner_id: i64, runner_name: &str) -> Poll {
     })
 }
 
-async fn wait_for_lookup(api: &BlockingRunnerApi) -> Result<(), String> {
+async fn wait_for_blocked_request(api: &BlockingRunnerApi) -> Result<(), String> {
     tokio::time::timeout(Duration::from_secs(2), async {
         while !api.entered.load(Ordering::Acquire) {
             tokio::task::yield_now().await;
@@ -117,6 +119,8 @@ struct BlockingRunnerApi {
     runner_name: String,
     runner_id: i64,
     registered: Arc<AtomicBool>,
+    block_lookup: Arc<AtomicBool>,
+    block_delete: Arc<AtomicBool>,
     get_count: Arc<std::sync::atomic::AtomicUsize>,
     calls: Arc<Mutex<Vec<(String, String, Option<String>)>>>,
 }
@@ -129,6 +133,8 @@ impl BlockingRunnerApi {
             runner_name: runner_name.to_owned(),
             runner_id,
             registered: Arc::new(AtomicBool::new(true)),
+            block_lookup: Arc::new(AtomicBool::new(true)),
+            block_delete: Arc::new(AtomicBool::new(false)),
             get_count: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
             calls: Arc::new(Mutex::new(Vec::new())),
         }
@@ -137,6 +143,20 @@ impl BlockingRunnerApi {
     fn released(runner_name: &str, runner_id: i64) -> Self {
         let api = Self::new(runner_name, runner_id);
         api.release();
+        api
+    }
+
+    fn absent(runner_name: &str, runner_id: i64) -> Self {
+        let api = Self::new(runner_name, runner_id);
+        api.registered.store(false, Ordering::Release);
+        api.release();
+        api
+    }
+
+    fn blocking_delete(runner_name: &str, runner_id: i64) -> Self {
+        let api = Self::new(runner_name, runner_id);
+        api.block_lookup.store(false, Ordering::Release);
+        api.block_delete.store(true, Ordering::Release);
         api
     }
 
@@ -152,6 +172,15 @@ impl BlockingRunnerApi {
             .lock()
             .map(|calls| calls.clone())
             .map_err(|_| "runner API call log was poisoned".to_owned())
+    }
+
+    fn wait_for_release(&self) -> Result<(), TransportFail> {
+        let (lock, ready) = &*self.release;
+        let mut released = lock.lock().map_err(|_| TransportFail::Reset)?;
+        while !*released {
+            released = ready.wait(released).map_err(|_| TransportFail::Reset)?;
+        }
+        Ok(())
     }
 }
 
@@ -170,6 +199,10 @@ impl Transport for BlockingRunnerApi {
         ));
         if request.method == Method::Delete {
             self.registered.store(false, Ordering::Release);
+            if self.block_delete.swap(false, Ordering::AcqRel) {
+                self.entered.store(true, Ordering::Release);
+                self.wait_for_release()?;
+            }
             return Ok(Exchange {
                 status: 204,
                 body: Vec::new(),
@@ -179,13 +212,9 @@ impl Transport for BlockingRunnerApi {
             return Err(TransportFail::Http(500));
         }
         let request_number = self.get_count.fetch_add(1, Ordering::Relaxed);
-        if request_number == 0 {
+        if request_number == 0 && self.block_lookup.swap(false, Ordering::AcqRel) {
             self.entered.store(true, Ordering::Release);
-            let (lock, ready) = &*self.release;
-            let mut released = lock.lock().map_err(|_| TransportFail::Reset)?;
-            while !*released {
-                released = ready.wait(released).map_err(|_| TransportFail::Reset)?;
-            }
+            self.wait_for_release()?;
         }
         if self.registered.load(Ordering::Acquire) {
             let body = serde_json::json!({

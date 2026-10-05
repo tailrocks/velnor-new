@@ -29,7 +29,7 @@ async fn stalled_remote_cleanup_does_not_block_a_free_slot() -> Result<(), Strin
     .await
     .map_err(|error| error.to_string())?;
     assert!(started.elapsed() < Duration::from_secs(1));
-    wait_for_lookup(&api).await?;
+    wait_for_blocked_request(&api).await?;
 
     let admission = turn::admission(&journal, 7, 2, 2, 0, 0, &available(&[86]))
         .await

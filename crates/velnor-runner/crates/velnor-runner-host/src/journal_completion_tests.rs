@@ -204,6 +204,15 @@ async fn cleaned_failed_retry_can_complete_and_remain_idempotent() -> Result<(),
 #[path = "journal_completion_claim_tests.rs"]
 mod claim_tests;
 
+#[path = "journal_completion_effect_tests.rs"]
+mod effect_tests;
+
+#[path = "journal_completion_clock_tests.rs"]
+mod clock_tests;
+
+#[path = "journal_completion_lineage_tests.rs"]
+mod lineage_tests;
+
 async fn launch(journal: &crate::Journal, request_id: i64) -> Result<i64, String> {
     let reservation = journal
         .reserve_assignment(1, request_id, 100 + request_id, 1)

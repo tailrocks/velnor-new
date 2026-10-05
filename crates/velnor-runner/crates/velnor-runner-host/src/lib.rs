@@ -73,6 +73,8 @@ mod journal_completion_tests;
 #[cfg(test)]
 mod journal_effects_tests;
 #[cfg(test)]
+mod journal_identity_completion_tests;
+#[cfg(test)]
 mod journal_identity_tests;
 #[cfg(test)]
 mod journal_migration_tests;

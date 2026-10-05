@@ -1,18 +1,20 @@
 //! Local turso journal. Each step opens its own connection and commits
 //! before the caller runs an external effect.
 
-use std::collections::HashMap;
 use std::ops::AsyncFnOnce;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex, OnceLock, Weak};
+use std::sync::Arc;
 
 use crate::daemon_lock::canonical_journal_path;
 use crate::error::HostError;
 use crate::journal_assignment::{commit_assignment, commit_launch};
 use crate::journal_sql::{commit_live, intent_row, one_row, token_rejected};
 use crate::reconcile::IntentRow;
+use process::{JournalProcessState, process_state};
 
 pub use crate::launch_identity::LaunchIdentity;
+
+mod process;
 
 /// Durable intent row.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -77,12 +79,6 @@ pub(crate) enum LaunchReservation {
 pub struct Journal {
     path: PathBuf,
     process: Arc<JournalProcessState>,
-}
-
-#[derive(Debug)]
-struct JournalProcessState {
-    lineage_guard: Mutex<Option<crate::daemon_lock::EngineLineageGuard>>,
-    write_lock: tokio::sync::Mutex<()>,
 }
 
 impl Journal {
@@ -336,62 +332,4 @@ impl Journal {
             .map_err(|_| HostError::Journal)?;
         db.connect().map_err(|_| HostError::Journal)
     }
-
-    /// Attach the process-held engine lineage guard after startup validation.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`HostError::Lock`] when the shared guard slot is poisoned.
-    pub(crate) fn attach_lineage_guard(
-        &self,
-        guard: crate::daemon_lock::EngineLineageGuard,
-    ) -> Result<(), HostError> {
-        let mut current = self
-            .process
-            .lineage_guard
-            .lock()
-            .map_err(|_| HostError::Lock)?;
-        if current.is_none() {
-            *current = Some(guard);
-        }
-        Ok(())
-    }
-
-    pub(crate) async fn sync_lineage(&self) -> Result<(), HostError> {
-        let guard = self
-            .process
-            .lineage_guard
-            .lock()
-            .map_err(|_| HostError::Lock)?
-            .clone();
-        let Some(guard) = guard else {
-            return Ok(());
-        };
-        guard.advance_revision(self.revision().await?)
-    }
-
-    pub(crate) async fn write_guard(&self) -> tokio::sync::MutexGuard<'_, ()> {
-        self.process.write_lock.lock().await
-    }
-
-    pub(crate) async fn sync_after<T>(&self, result: Result<T, HostError>) -> Result<T, HostError> {
-        self.sync_lineage().await?;
-        result
-    }
-}
-
-fn process_state(path: &Path) -> Result<Arc<JournalProcessState>, HostError> {
-    static STATES: OnceLock<Mutex<HashMap<PathBuf, Weak<JournalProcessState>>>> = OnceLock::new();
-    let states = STATES.get_or_init(|| Mutex::new(HashMap::new()));
-    let mut states = states.lock().map_err(|_| HostError::Lock)?;
-    states.retain(|_, state| state.strong_count() > 0);
-    if let Some(state) = states.get(path).and_then(Weak::upgrade) {
-        return Ok(state);
-    }
-    let state = Arc::new(JournalProcessState {
-        lineage_guard: Mutex::new(None),
-        write_lock: tokio::sync::Mutex::new(()),
-    });
-    states.insert(path.to_path_buf(), Arc::downgrade(&state));
-    Ok(state)
 }

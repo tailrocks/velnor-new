@@ -12,10 +12,8 @@ use flate2::write::GzEncoder;
 use sha2::{Digest, Sha256};
 use tar::{Builder, Header};
 
-use super::{
-    ActionArchiveFetcher, ActionArchiveIdentity, ActionArchiveManifest, ActionArchiveSeedError,
-    ActionArchiveStore,
-};
+use super::preparation::{ActionArchiveFetcher, ActionArchiveManifest};
+use super::{ActionArchiveIdentity, ActionArchiveSeedError, ActionArchiveStore};
 
 static TEST_ID: AtomicU64 = AtomicU64::new(0);
 

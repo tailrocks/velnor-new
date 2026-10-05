@@ -6,6 +6,9 @@ use crate::journal::{Journal, LaunchIdentity};
 use crate::journal_schema;
 use crate::journal_sql::{one_row, token_rejected};
 
+#[path = "journal_identity_completion.rs"]
+mod completion;
+
 impl Journal {
     /// Bind this journal to one validated, engine-scoped external lineage.
     ///

@@ -3,7 +3,8 @@
 use crate::error::HostError;
 use crate::worker::{dind_create, runner_create_for_identity};
 
-use super::super::{budget, identity, inspect_projection, topology_matches};
+use super::super::topology_matches;
+use super::{budget, identity, inspect_projection};
 
 #[test]
 fn runner_topology_matches_inspected_projection() -> Result<(), HostError> {

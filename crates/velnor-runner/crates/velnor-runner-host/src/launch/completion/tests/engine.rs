@@ -25,6 +25,10 @@ pub(super) struct CompletionEngine {
     verify_sender: Option<mpsc::Sender<()>>,
     verify_barrier_used: Arc<AtomicBool>,
     volumes_sender: Option<mpsc::Sender<()>>,
+    block_volume_verify: Arc<AtomicBool>,
+    volume_verify_started: Arc<AtomicBool>,
+    volume_verify_release: Arc<tokio::sync::Notify>,
+    volume_verify_calls: Arc<AtomicUsize>,
 }
 
 impl CompletionEngine {
@@ -68,6 +72,23 @@ impl CompletionEngine {
         self
     }
 
+    pub(super) fn with_blocked_volume_verification(self) -> Self {
+        self.block_volume_verify.store(true, Ordering::Release);
+        self
+    }
+
+    pub(super) fn volume_verification_started(&self) -> bool {
+        self.volume_verify_started.load(Ordering::Acquire)
+    }
+
+    pub(super) fn volume_verification_calls(&self) -> usize {
+        self.volume_verify_calls.load(Ordering::Acquire)
+    }
+
+    pub(super) fn release_volume_verification(&self) {
+        self.volume_verify_release.notify_one();
+    }
+
     pub(super) fn removal_calls(&self) -> (usize, usize) {
         (
             self.container_remove_calls.load(Ordering::Acquire),
@@ -92,6 +113,10 @@ impl CompletionEngine {
             verify_sender: None,
             verify_barrier_used: Arc::new(AtomicBool::new(false)),
             volumes_sender: None,
+            block_volume_verify: Arc::new(AtomicBool::new(false)),
+            volume_verify_started: Arc::new(AtomicBool::new(false)),
+            volume_verify_release: Arc::new(tokio::sync::Notify::new()),
+            volume_verify_calls: Arc::new(AtomicUsize::new(0)),
         }
     }
 }
@@ -224,6 +249,11 @@ impl PairEngine for CompletionEngine {
         _identity: &LaunchIdentity,
         _volume: WorkerVolume,
     ) -> Result<(), HostError> {
+        self.volume_verify_calls.fetch_add(1, Ordering::AcqRel);
+        if self.block_volume_verify.swap(false, Ordering::AcqRel) {
+            self.volume_verify_started.store(true, Ordering::Release);
+            self.volume_verify_release.notified().await;
+        }
         Ok(())
     }
 

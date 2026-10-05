@@ -15,7 +15,7 @@ use crate::worker::{
 };
 
 mod cleanup;
-pub(crate) use cleanup::{cleanup_worker, cleanup_worker_container};
+pub(crate) use cleanup::cleanup_worker;
 mod engine;
 mod reconcile;
 pub(crate) use reconcile::{ObservedWorker, reconcile_worker, reconcile_worker_with_budget};
