@@ -246,7 +246,7 @@ fn release_wired_into_stack_validation_with_key_paths() {
         }],
         compile_driver: None,
         test_runner: None,
-
+        run_ignored: None,
         release: valid_release(),
     };
     assert_eq!(stack.validate(FILE), Ok(()));

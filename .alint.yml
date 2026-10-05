@@ -42,7 +42,10 @@ extends:
   - alint://bundled/oss-baseline@v1
   - alint://bundled/ci/github-actions@v1
   - alint://bundled/rust@v1
-  - alint://bundled/hygiene/lockfiles@v1
+  - url: alint://bundled/hygiene/lockfiles@v1
+    except:
+      - lockfiles-no-nested-cargo
+      - lockfiles-no-nested-npm
   - alint://bundled/hygiene/no-tracked-artifacts@v1
 
 rules:
@@ -101,6 +104,29 @@ rules:
     level: error
     message: "First-party Rust sources MUST live under crates/"
 
+  # The bundled nested-lock rules are excepted above. These replacements
+  # still forbid stray locks, and name the two locks the bundles cannot see:
+  # the nested runner workspace, and the npm lock zizmor's `npm ci` requires.
+  - id: velnor-no-stray-cargo-lock
+    kind: file_absent
+    paths:
+      include: ["**/Cargo.lock"]
+      exclude:
+        - Cargo.lock
+        - crates/velnor-runner/Cargo.lock
+    level: error
+    message: "Stray Cargo.lock. Only the root lock and crates/velnor-runner/Cargo.lock are resolved."
+
+  - id: velnor-no-stray-npm-lock
+    kind: file_absent
+    paths:
+      include: ["**/package-lock.json"]
+      exclude:
+        - package-lock.json
+        - qualification/testcontainers/package-lock.json
+    level: error
+    message: "Stray package-lock.json. Only the root lock and qualification/testcontainers/package-lock.json are allowed."
+
   # Hard size limits for new handwritten code, physical lines (RQ §5).
   # Scoped to Velnor-owned product paths; fixtures are test inputs and
   # lockfiles/vendored/generated output are classified elsewhere, so they
@@ -111,6 +137,8 @@ rules:
       include:
         - "crates/velnor-actions-*/src/**/*.rs"
         - "crates/velnor-actions-*/tests/**/*.rs"
+        - "crates/velnor-runner/crates/*/src/**/*.rs"
+        - "crates/velnor-runner/crates/*/tests/**/*.rs"
       exclude:
         - "**/fixtures/**"
         - "**/testdata/**"
@@ -124,6 +152,8 @@ rules:
       include:
         - "crates/velnor-actions-*/src/lib.rs"
         - "crates/velnor-actions-*/src/main.rs"
+        - "crates/velnor-runner/crates/*/src/lib.rs"
+        - "crates/velnor-runner/crates/*/src/main.rs"
     max_lines: 150
     level: error
     message: "src/lib.rs and src/main.rs MUST stay under 150 physical lines (§5)"

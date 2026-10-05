@@ -205,7 +205,7 @@ pub(crate) fn obligation_identity_env(
 pub(crate) fn obligation_step(
     obligation: &CrateObligation,
     catalog: &ToolCatalog,
-    downstream: &[String],
+    _downstream: &[String],
     matrix_cap: Option<u32>,
 ) -> Result<Step, OrchestratorError> {
     // Unknown segments keep the previous single-stack behavior: the
@@ -221,9 +221,6 @@ pub(crate) fn obligation_step(
         &obligation.matrix_key,
         matrix_cap,
     );
-    if !downstream.is_empty() {
-        identity.insert(DOWNSTREAM_IDS_ENV.to_owned(), downstream.join(","));
-    }
     for (key, value) in payload_env_for_obligation(&obligation.task_id, &obligation.kind) {
         identity.insert(
             key.to_string_lossy().into_owned(),

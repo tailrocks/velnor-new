@@ -13,6 +13,8 @@ mod impl_contract_conclusions;
 mod impl_contract_ids;
 #[path = "impl_contract_job_ids.rs"]
 mod impl_contract_job_ids;
+#[path = "impl_contract_manifest_targets.rs"]
+mod impl_contract_manifest_targets;
 #[path = "impl_contract_release.rs"]
 mod impl_contract_release;
 #[path = "impl_contract_release_ir.rs"]
@@ -37,3 +39,5 @@ mod impl_remed_contract_b;
 mod impl_remed_par;
 #[path = "impl_remed_policy.rs"]
 mod impl_remed_policy;
+#[path = "impl_schema2_routing.rs"]
+mod impl_schema2_routing;

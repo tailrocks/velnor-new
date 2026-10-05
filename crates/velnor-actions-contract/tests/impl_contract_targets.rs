@@ -4,13 +4,19 @@ use velnor_actions_contract::config::{
 };
 use velnor_actions_contract::{
     CandidateArtifactManifest, ContractError, RELEASE_MANIFEST_FILENAME, ReleaseManifest,
-    SUPPORTED_TARGETS, asset_filename, is_seed_tag_for_version, is_supported_target,
-    target_for_runner_label,
+    ReleaseTarget, SUPPORTED_TARGETS, asset_filename, is_seed_tag_for_version, is_supported_target,
 };
 
 #[test]
 fn supported_targets_and_naming() {
-    assert_eq!(SUPPORTED_TARGETS.len(), 3);
+    assert_eq!(
+        SUPPORTED_TARGETS,
+        [
+            "x86_64-unknown-linux-gnu",
+            "aarch64-apple-darwin",
+            "x86_64-apple-darwin",
+        ]
+    );
     assert!(is_supported_target("x86_64-unknown-linux-gnu"));
     assert!(!is_supported_target("wasm32-unknown-unknown"));
     assert_eq!(
@@ -22,22 +28,37 @@ fn supported_targets_and_naming() {
         "velnor-actions-0.1.0-x86_64-unknown-linux-gnu"
     );
     assert_eq!(
-        target_for_runner_label("ubuntu-26.04"),
-        Some(SUPPORTED_TARGETS[0])
+        ReleaseTarget::for_runner_label("ubuntu-26.04"),
+        Some(ReleaseTarget::LinuxX86_64)
     );
-    assert!(target_for_runner_label("ubuntu-26.04-arm").is_none());
+    assert!(ReleaseTarget::for_runner_label("ubuntu-26.04-arm").is_none());
+}
+
+#[test]
+fn target_ids_round_trip_without_ordinal_mapping() {
+    for target in ReleaseTarget::ALL {
+        assert_eq!(ReleaseTarget::parse_triple(target.triple()), Some(target));
+    }
+    assert_eq!(ReleaseTarget::ALL.len(), SUPPORTED_TARGETS.len());
+    assert!(ReleaseTarget::parse_triple("aarch64-unknown-linux-gnu").is_none());
 }
 
 #[test]
 fn versioned_macos_labels_bind_explicit_architecture() {
     for label in ["macos-14", "macos-15", "macos-26"] {
-        assert_eq!(target_for_runner_label(label), Some("aarch64-apple-darwin"));
+        assert_eq!(
+            ReleaseTarget::for_runner_label(label),
+            Some(ReleaseTarget::MacosArm64)
+        );
     }
     for label in ["macos-15-intel", "macos-26-intel"] {
-        assert_eq!(target_for_runner_label(label), Some("x86_64-apple-darwin"));
+        assert_eq!(
+            ReleaseTarget::for_runner_label(label),
+            Some(ReleaseTarget::MacosX86_64)
+        );
     }
     for label in ["macos-latest", "macos-13", "custom-macos", "macos-15-arm"] {
-        assert!(target_for_runner_label(label).is_none(), "{label}");
+        assert!(ReleaseTarget::for_runner_label(label).is_none(), "{label}");
     }
 }
 
@@ -50,11 +71,12 @@ fn runner_label_catalog_maps_or_fails_closed() {
     assert_eq!(RUNNER_LABEL_CATALOG.len(), 6);
     assert!(RUNNER_LABEL_CATALOG.contains(&LATEST_RUNNER_LABEL));
     for label in RUNNER_LABEL_CATALOG {
-        match target_for_runner_label(label) {
+        match ReleaseTarget::for_runner_label(label) {
             Some(target) => {
                 assert!(
-                    is_supported_target(target),
-                    "{label} maps to supported {target}"
+                    is_supported_target(target.triple()),
+                    "{label} maps to supported {}",
+                    target.triple()
                 );
                 assert!(!label.ends_with("-arm"), "{label} is an x64 label");
             }
@@ -65,7 +87,9 @@ fn runner_label_catalog_maps_or_fails_closed() {
         }
     }
     assert!(is_supported_target(
-        target_for_runner_label(LATEST_RUNNER_LABEL).expect("latest maps")
+        ReleaseTarget::for_runner_label(LATEST_RUNNER_LABEL)
+            .expect("latest maps")
+            .triple()
     ));
     // Rust execution targets are charset-validated, not allowlisted:
     // supported configs CAN carry non-release triples, so generation
@@ -88,9 +112,13 @@ fn runner_label_catalog_maps_or_fails_closed() {
 fn release_manifest_json_round_trip_and_tamper() -> Result<(), ContractError> {
     let sha = "ab".repeat(32);
     let commit = "ab".repeat(20);
-    let json = format!(
-        "{{\"schema\":1,\"version\":\"0.1.0\",\"repository\":\"tailrocks/velnor-new\",\"commit\":\"{commit}\",\"targets\":[{{\"target\":\"x86_64-unknown-linux-gnu\",\"artifact\":\"https://github.com/tailrocks/velnor-new/releases/download/v0.1.0/velnor-actions-0.1.0-x86_64-unknown-linux-gnu\",\"sha256\":\"{sha}\"}}]}}"
+    let json = manifest_json(
+        "0.1.0",
+        "tailrocks/velnor-new",
+        &bound_artifact("0.1.0", "x86_64-unknown-linux-gnu"),
     );
+    assert!(json.contains(&commit));
+    assert!(json.contains(&sha));
     let manifest = ReleaseManifest::parse_json(&json, "m.json")?;
     manifest.validate("m.json")?;
     assert!(ReleaseManifest::parse_json("not json", "m.json").is_err());
@@ -103,26 +131,62 @@ fn release_manifest_json_round_trip_and_tamper() -> Result<(), ContractError> {
     Ok(())
 }
 
-/// One-target manifest at `version` with `repository` and `artifact`.
+/// Complete manifest at `version` with a configurable Linux artifact URL.
 fn manifest_json(version: &str, repository: &str, artifact: &str) -> String {
+    let targets = SUPPORTED_TARGETS
+        .iter()
+        .map(|target| {
+            let target_artifact = if *target == "x86_64-unknown-linux-gnu" {
+                artifact.to_owned()
+            } else {
+                bound_artifact(version, target)
+            };
+            format!(
+                "{{\"target\":\"{target}\",\"artifact\":\"{target_artifact}\",\"sha256\":\"{}\"}}",
+                "ab".repeat(32)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",");
     format!(
-        "{{\"schema\":1,\"version\":\"{version}\",\"repository\":\"{repository}\",\"commit\":\"{}\",\"targets\":[{{\"target\":\"x86_64-unknown-linux-gnu\",\"artifact\":\"{artifact}\",\"sha256\":\"{}\"}}]}}",
-        "ab".repeat(20),
-        "ab".repeat(32)
+        "{{\"schema\":1,\"version\":\"{version}\",\"repository\":\"{repository}\",\"commit\":\"{}\",\"targets\":[{targets}]}}",
+        "ab".repeat(20)
     )
 }
 
-/// Bound official-asset URL for `version` and the Linux target.
-fn bound_artifact(version: &str) -> String {
+/// Bound official-asset URL for `version` and `target`.
+fn bound_artifact(version: &str, target: &str) -> String {
     format!(
         "https://github.com/tailrocks/velnor-new/releases/download/v{version}/{}",
-        asset_filename(version, "x86_64-unknown-linux-gnu")
+        asset_filename(version, target)
+    )
+}
+
+/// Complete test manifest at one release tag, with a shared digest.
+fn manifest_json_with_tag(version: &str, tag: &str, sha256: &str) -> String {
+    let targets = SUPPORTED_TARGETS
+        .iter()
+        .map(|target| {
+            format!(
+                "{{\"target\":\"{target}\",\"artifact\":\"https://github.com/tailrocks/velnor-new/releases/download/{tag}/{}\",\"sha256\":\"{sha256}\"}}",
+                asset_filename(version, target)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(",");
+    format!(
+        "{{\"schema\":1,\"version\":\"{version}\",\"repository\":\"tailrocks/velnor-new\",\"commit\":\"{}\",\"targets\":[{targets}]}}",
+        "ab".repeat(20)
     )
 }
 
 #[test]
 fn release_manifest_binds_repository_and_artifact_urls() -> Result<(), ContractError> {
-    let good = manifest_json("0.1.0", "tailrocks/velnor-new", &bound_artifact("0.1.0"));
+    let good = manifest_json(
+        "0.1.0",
+        "tailrocks/velnor-new",
+        &bound_artifact("0.1.0", "x86_64-unknown-linux-gnu"),
+    );
     ReleaseManifest::parse_json(&good, "m.json")?.validate("m.json")?;
     // Wrong repository, even a lookalike, fails closed.
     for repository in [
@@ -131,7 +195,11 @@ fn release_manifest_binds_repository_and_artifact_urls() -> Result<(), ContractE
         "tailrocks/velnor-new2",
         "evil/velnor-new",
     ] {
-        let json = manifest_json("0.1.0", repository, &bound_artifact("0.1.0"));
+        let json = manifest_json(
+            "0.1.0",
+            repository,
+            &bound_artifact("0.1.0", "x86_64-unknown-linux-gnu"),
+        );
         assert!(
             ReleaseManifest::parse_json(&json, "m.json")?
                 .validate("m.json")
@@ -161,7 +229,11 @@ fn release_manifest_binds_repository_and_artifact_urls() -> Result<(), ContractE
         );
     }
     // Downgrade URL shape: a 0.2.0 manifest pinning a 0.1.0 asset.
-    let downgrade = manifest_json("0.2.0", "tailrocks/velnor-new", &bound_artifact("0.1.0"));
+    let downgrade = manifest_json(
+        "0.2.0",
+        "tailrocks/velnor-new",
+        &bound_artifact("0.1.0", "x86_64-unknown-linux-gnu"),
+    );
     assert!(
         ReleaseManifest::parse_json(&downgrade, "m.json")?
             .validate("m.json")
@@ -185,7 +257,11 @@ fn release_manifest_binds_repository_and_artifact_urls() -> Result<(), ContractE
 
 #[test]
 fn release_manifest_requires_commit() -> Result<(), ContractError> {
-    let good = manifest_json("0.1.0", "tailrocks/velnor-new", &bound_artifact("0.1.0"));
+    let good = manifest_json(
+        "0.1.0",
+        "tailrocks/velnor-new",
+        &bound_artifact("0.1.0", "x86_64-unknown-linux-gnu"),
+    );
     let manifest = ReleaseManifest::parse_json(&good, "m.json")?;
     manifest.validate("m.json")?;
     assert_eq!(manifest.commit, "ab".repeat(20));
@@ -224,17 +300,17 @@ fn release_manifest_requires_commit() -> Result<(), ContractError> {
 /// version-mismatched or malformed seed tags must not.
 #[test]
 fn seed_tag_artifacts_bind_to_manifest_version() -> Result<(), ContractError> {
-    // Seed/velnor-actions-0.1.0-5 seed-release-manifest.json bytes, plus
-    // the now-required `commit` field (F3 breaks the historical shape:
-    // pre-commit manifests no longer validate).
-    let seed5 = "{\"schema\":1,\"version\":\"0.1.0\",\"repository\":\"tailrocks/velnor-new\",\"commit\":\"abababababababababababababababababababab\",\"targets\":[{\"target\":\"x86_64-unknown-linux-gnu\",\"artifact\":\"https://github.com/tailrocks/velnor-new/releases/download/seed/velnor-actions-0.1.0-5/velnor-actions-0.1.0-x86_64-unknown-linux-gnu\",\"sha256\":\"1fa12f9e5c06dcbb65b6dc9ebb4295e69606460b37c0a441a256d1b31276ff97\"}]}";
-    ReleaseManifest::parse_json(seed5, "m.json")?.validate("m.json")?;
-    // Uncountered seed tag of the same version also validates.
-    let uncountered = manifest_json(
+    // Historical one-target seed manifests are incomplete; seed tags still
+    // bind correctly when a manifest carries every supported target.
+    let seed5 = manifest_json_with_tag(
         "0.1.0",
-        "tailrocks/velnor-new",
-        "https://github.com/tailrocks/velnor-new/releases/download/seed/velnor-actions-0.1.0/velnor-actions-0.1.0-x86_64-unknown-linux-gnu",
+        "seed/velnor-actions-0.1.0-5",
+        "1fa12f9e5c06dcbb65b6dc9ebb4295e69606460b37c0a441a256d1b31276ff97",
     );
+    ReleaseManifest::parse_json(&seed5, "m.json")?.validate("m.json")?;
+    // Uncountered seed tag of the same version also validates.
+    let uncountered =
+        manifest_json_with_tag("0.1.0", "seed/velnor-actions-0.1.0", &"ab".repeat(32));
     ReleaseManifest::parse_json(&uncountered, "m.json")?.validate("m.json")?;
     // Seed grammar: exact predicate cases.
     for (tag, version, want) in [

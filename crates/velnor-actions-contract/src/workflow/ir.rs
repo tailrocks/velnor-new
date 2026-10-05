@@ -312,12 +312,8 @@ fn is_valid_environment(name: &str) -> bool {
         && !name.split('/').any(|seg| seg.is_empty() || seg == "..")
 }
 
-/// Check for a literal versioned label (no `latest` aliases or expressions).
+/// Check for a hosted label or a typed scale-set IR token.
 fn is_pinned_label(label: &str) -> bool {
-    !label.is_empty()
-        && !label.contains("${{")
-        && !label.contains("latest")
-        && label
-            .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'.' | b'_'))
+    crate::config::is_legacy_hosted_label(label)
+        || crate::config::ScaleSetSelector::parse_token(label).is_ok()
 }

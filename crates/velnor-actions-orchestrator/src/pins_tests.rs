@@ -37,6 +37,7 @@ fn config_with(overrides: BTreeMap<String, ActionPinOverride>) -> VelnorConfig {
             exclude: Vec::new(),
         },
         actions: ActionsConfig { overrides },
+        execution: None,
     }
 }
 

@@ -11,12 +11,23 @@ use crate::errors::ContractError;
 
 /// Cache-key schema id, always `v1`.
 pub const CACHE_SCHEMA_ID: &str = "v1";
+/// Prefix shared by the MBX action namespace and task cache identity.
+pub const MBX_CACHE_GENERATION_PREFIX: &str = "velnor-mbx-";
 pub use crate::extension_schemas::{
     KNOWN_STACK_EXTENSION_SCHEMAS, RUST_EXTENSION_SCHEMA, TOFU_EXTENSION_SCHEMA,
     is_known_stack_extension_schema,
 };
 /// Maximum GitHub cache-key bytes; longer keys fail generation.
 pub const MAX_CACHE_KEY_BYTES: usize = 512;
+
+/// Build the MBX action generation for one exact runtime version.
+///
+/// Callers validate the version through the pinned tool catalog or action
+/// input gate before constructing this identity component.
+#[must_use]
+pub fn mbx_cache_generation(version: &str) -> String {
+    format!("{MBX_CACHE_GENERATION_PREFIX}{version}")
+}
 
 /// The 13 allowed `miss_reason` values (cache §3).
 pub const MISS_REASONS: [&str; 13] = [

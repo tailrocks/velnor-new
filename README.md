@@ -32,7 +32,7 @@ git clone https://github.com/tailrocks/velnor-new.git
 cd velnor-new && git checkout docs/velnor-actions-spec
 mise install
 mise exec -- cargo --version   # cargo 1.98.1
-mise exec -- mbx --version      # mbx 1.21.0
+mise exec -- mbx --version      # mbx 1.21.1
 mise exec -- cargo build --locked -p velnor-actions-cli
 ./target/debug/velnor-actions --help
 ./target/debug/velnor-actions plan

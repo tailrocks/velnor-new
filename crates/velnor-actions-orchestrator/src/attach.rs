@@ -7,9 +7,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{
-    GeneratorLock, Step, WorkflowIr, is_crate_job_id, target_for_runner_label,
-};
+use velnor_actions_contract::{GeneratorLock, ReleaseTarget, Step, WorkflowIr, is_crate_job_id};
 use velnor_actions_mise::{PREPARE_PINNED_TOOLS_STEP, PinnedTool, ToolCatalog};
 use velnor_actions_workflow_renderer::cache_p08::{RESTORE_SOURCES_NAME, RUST_CACHE_NAME};
 use velnor_actions_workflow_renderer::render::{FINAL_JOB_ID, PLAN_JOB_ID, PUBLISH_JOB_ID};
@@ -100,9 +98,11 @@ pub(crate) fn attach_preseed(
     version: &str,
 ) -> Result<(), OrchestratorError> {
     let catalog = ToolCatalog::pinned();
-    let target = target_for_runner_label(label).ok_or_else(|| OrchestratorError::Contract {
-        problem: format!("unsupported_target_for_runner:{label}"),
-    })?;
+    let target = ReleaseTarget::for_runner_label(label)
+        .map(ReleaseTarget::triple)
+        .ok_or_else(|| OrchestratorError::Contract {
+            problem: format!("unsupported_target_for_runner:{label}"),
+        })?;
     for (id, job) in &workflow.ir.jobs {
         if let Some(runner) = &job.check_runner
             && runner.platform.target() != target
@@ -187,29 +187,18 @@ fn insert_plan_mbx_restore(
     catalog: &ToolCatalog,
     steps: &mut Vec<Step>,
 ) -> Result<(), OrchestratorError> {
-    use velnor_actions_actionlint::PinnedActionRef;
-    use velnor_actions_actionlint::actions::{
-        MR_BOXINGTON_ACTION_SHA, MR_BOXINGTON_ACTION_VERSION,
-    };
     let Some(restore_at) = steps
         .iter()
         .position(|step| step.name == RESTORE_SOURCES_NAME)
     else {
         return Ok(());
     };
-    let uses = PinnedActionRef::new(
-        "jdx/mr-boxington-action",
-        None,
-        MR_BOXINGTON_ACTION_SHA,
-        MR_BOXINGTON_ACTION_VERSION,
-    )?
-    .uses_value();
-    let restore = velnor_actions_workflow_renderer::steps::mbx_objects_step(
-        &uses,
-        false,
-        catalog.version(PinnedTool::MrBoxington),
-    )?;
-    steps.insert(restore_at + 1, restore);
+    for (offset, step) in crate::mbx_preflight::steps_for_catalog(catalog)?
+        .into_iter()
+        .enumerate()
+    {
+        steps.insert(restore_at + 1 + offset, step);
+    }
     Ok(())
 }
 

@@ -199,12 +199,12 @@ fn sources_subset_accepted_under_owned_home_only() {
 #[test]
 fn rust_cache_never_stacks_over_mbx() {
     let sha = "c".repeat(40);
-    let mbx = velnor_actions_workflow_renderer::steps::mbx_objects_step(
+    let [preflight, mbx] = mbx_tool_steps(
         &format!("jdx/mr-boxington-action@{sha}"),
-        false,
         "1.19.0",
+        "1.98.1",
     )
-    .expect("mbx");
+    .expect("mbx steps");
     let rust_cache = velnor_actions_contract::Step {
         name: "Restore Cargo registry".to_owned(),
         condition: None,
@@ -223,7 +223,7 @@ fn rust_cache_never_stacks_over_mbx() {
         condition: None,
         permissions: None,
         environment: None,
-        steps: vec![mbx.clone(), rust_cache.clone()],
+        steps: vec![preflight.clone(), mbx.clone(), rust_cache.clone()],
     };
     assert!(check_no_rust_cache_with_mbx("demo", &both).is_err());
     let cargo_only = Job {

@@ -127,8 +127,13 @@ pub(crate) fn write_task_report_to(
     write_entry_reports(runner_temp, &plan, entry, &task, &matrix)?;
     let mut reported = 1usize;
     if exit_code != 0 {
+        let downstream_tasks: Vec<String> = if downstream.is_empty() {
+            derive_downstream(&plan, task_id, &entry.job_id)
+        } else {
+            downstream.to_vec()
+        };
         reported +=
-            crate::noop_report::write_skip_reports(&plan, task_id, downstream, runner_temp)?;
+            crate::noop_report::write_skip_reports(&plan, task_id, &downstream_tasks, runner_temp)?;
     }
     Ok(reported)
 }
@@ -167,6 +172,24 @@ fn elapsed_ms(start_ms: Option<u64>) -> Option<u64> {
         return None;
     };
     now.checked_sub(start).map(|elapsed| elapsed.max(1))
+}
+
+/// Downstream obligation task IDs in the same job, in plan order.
+fn derive_downstream(plan: &Plan, task_id: &str, current_job_id: &str) -> Vec<String> {
+    let mut after = false;
+    let mut downstream = Vec::new();
+    for entry in &plan.matrix.include {
+        if entry.job_id == current_job_id {
+            for id in flattened(entry) {
+                if after {
+                    downstream.push(id.to_owned());
+                } else if id == task_id {
+                    after = true;
+                }
+            }
+        }
+    }
+    downstream
 }
 
 /// Split downstream IDs on commas, dropping blanks and duplicates.

@@ -9,6 +9,7 @@ members = [
     "crates/velnor-actions-cli",
     "crates/velnor-actions-tofu",
 ]
+exclude = ["crates/velnor-runner"]
 resolver = "3"
 
 [workspace.dependencies]

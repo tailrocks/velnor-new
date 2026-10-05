@@ -97,6 +97,7 @@ fn group_with_driver(driver: velnor_actions_rust::CompileDriver) -> ProposedTask
         uses_network: false,
         uses_clock: false,
         uses_random: false,
+        run_ignored: None,
         nextest_profile: velnor_actions_rust::NextestProfile::Default,
     };
     let task = velnor_actions_rust::propose_task(&group).expect("fixture proposes");

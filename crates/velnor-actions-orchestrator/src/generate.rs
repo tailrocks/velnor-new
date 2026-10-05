@@ -5,8 +5,9 @@
 use std::path::{Path, PathBuf};
 
 use velnor_actions_actionlint::render_actionlint_yaml;
+use velnor_actions_contract::{ExecutionMode, expand_workflow};
 use velnor_actions_workflow_renderer::guard::{self, SafeTreePath};
-use velnor_actions_workflow_renderer::render::{RenderedTree, render_workflow_ir_strict};
+use velnor_actions_workflow_renderer::render::RenderedTree;
 use velnor_actions_workflow_renderer::steps::rehead_actionlint_marker;
 use velnor_actions_workflow_renderer::tree::render_tree_with_extra;
 
@@ -61,11 +62,24 @@ pub fn generate(
     prep: &GenerationPreparation,
     opts: &GenerateOptions,
 ) -> Result<GenerateReport, OrchestratorError> {
+    generate_dispatched(prep, opts, None)
+}
+
+/// [`generate`] with an explicit dispatch mode overriding `execution.mode`.
+///
+/// # Errors
+///
+/// Same as [`generate`], plus routing errors.
+pub fn generate_dispatched(
+    prep: &GenerationPreparation,
+    opts: &GenerateOptions,
+    dispatch: Option<ExecutionMode>,
+) -> Result<GenerateReport, OrchestratorError> {
     fail_on_blocking_findings(prep)?;
     let tools = ToolSnapshot::capture(&prep.root);
     let tofu_roots = crate::select_tofu::tofu_selected_roots(&prep.discovery.statuses);
     let tofu_locks = velnor_actions_tofu::TofuLockSnapshot::capture(&prep.root, &tofu_roots);
-    let tree = render_staged_tree(prep)?;
+    let tree = render_staged_tree_with(prep, dispatch)?;
     let validated_by = validate_staged(&tree)?;
     tools.verify(&prep.root)?;
     tofu_locks
@@ -118,27 +132,50 @@ fn fail_on_blocking_findings(prep: &GenerationPreparation) -> Result<(), Orchest
 ///
 /// Returns lock, render, actionlint, or unsafe-path errors.
 pub fn render_staged_tree(prep: &GenerationPreparation) -> Result<RenderedTree, OrchestratorError> {
+    render_staged_tree_with(prep, None)
+}
+
+/// [`render_staged_tree`] with a dispatch-mode override.
+///
+/// # Errors
+///
+/// Same as [`render_staged_tree`].
+pub fn render_staged_tree_with(
+    prep: &GenerationPreparation,
+    dispatch: Option<ExecutionMode>,
+) -> Result<RenderedTree, OrchestratorError> {
     let owned = owned_preparation(prep)?;
-    let tree = render_all(&owned)?;
+    let tree = render_all(&owned, dispatch)?;
     check_tree_paths(&tree)?;
     Ok(tree)
 }
 
 /// Render base files plus release extras into the marker-checked tree, in memory only.
-fn render_all(prep: &GenerationPreparation) -> Result<RenderedTree, OrchestratorError> {
+fn render_all(
+    prep: &GenerationPreparation,
+    dispatch: Option<ExecutionMode>,
+) -> Result<RenderedTree, OrchestratorError> {
     let version = env!("CARGO_PKG_VERSION");
     let mise = resolve_mise_setup(&prep.config, &prep.runner_label)?;
-    let workflow = render_workflow_ir_strict(
-        &prep.workflow.ir,
+    let ir = expand_workflow(&prep.workflow.ir, &prep.config, dispatch).map_err(|err| {
+        OrchestratorError::Contract {
+            problem: err.to_string(),
+        }
+    })?;
+    let rendered = velnor_actions_workflow_renderer::render::render_workflow_ir_strict_shared(
+        &ir,
         prep.config.workflow.policy,
         prep.workflow.support.as_ref(),
         &prep.workflow.context,
         &mise,
     )?;
+    let workflow = rendered.yaml;
     let actionlint = render_actionlint_yaml(&prep.workflow.actionlint)?;
     let actionlint = rehead_actionlint_marker(&actionlint.yaml, version)?;
     let mut extra = crate::release_emit::release_files(prep, &mise)?;
     extra.extend(crate::freshness_emit::freshness_files(prep)?);
+    extra.extend(crate::routing::extra_files(&prep.config, version)?);
+    extra.extend(rendered.shared);
     let tree = render_tree_with_extra(&workflow, &actionlint, &extra, version)?;
     Ok(tree)
 }

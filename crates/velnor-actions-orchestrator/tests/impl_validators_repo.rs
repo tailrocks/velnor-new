@@ -1,5 +1,6 @@
 //! I/O hardening cases: config sample, MBX transport.
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 use std::process::Command;
@@ -9,7 +10,7 @@ use velnor_actions_contract::WorkflowPolicy;
 use velnor_actions_mise::cache::validate_sources_path;
 use velnor_actions_orchestrator::prepare;
 use velnor_actions_workflow_renderer::steps::{
-    TASK_ARTIFACTS_DIR, cache_action_step, mbx_objects_step,
+    CompileDriver, TASK_ARTIFACTS_DIR, cache_action_step, mbx_steps_for_driver,
 };
 
 use crate::impl_common::without_ambient_identity;
@@ -26,11 +27,7 @@ fn git(args: &[&str], cwd: &Path) -> TestResult {
 
 /// Release-manifest fixture so consumer `prepare` succeeds.
 fn fixture_manifest_json() -> String {
-    let targets = [
-        "x86_64-unknown-linux-gnu",
-        "aarch64-apple-darwin",
-        "x86_64-apple-darwin",
-    ]
+    let targets = velnor_actions_contract::SUPPORTED_TARGETS
     .iter()
     .map(|target| {
         format!(
@@ -103,7 +100,13 @@ fn repo_config_sample_parses_through_prepare() -> TestResult {
         let sample = repo_sample_text()?;
         let repo = make_sample_repo(&sample)?;
         let prep = prepare(repo.path())?;
-        assert_eq!(prep.config.schema, 1);
+        assert_eq!(prep.config.schema, 2);
+        let execution = prep
+            .config
+            .execution
+            .as_ref()
+            .ok_or("schema 2 sample has no execution")?;
+        assert_eq!(execution.default_profile, "hosted");
         assert_eq!(
             prep.config.workflow.policy,
             WorkflowPolicy::VelnorRepositoryV1
@@ -130,6 +133,7 @@ fn repo_config_sample_covers_schema_keys() -> TestResult {
                 "stacks",
                 "discovery",
                 "actions",
+                "execution",
             ]
             .contains(&key.as_str()),
             "sample key outside schema: {key}"
@@ -159,6 +163,28 @@ fn repo_config_sample_covers_schema_keys() -> TestResult {
     for key in section_keys("discovery") {
         assert_eq!(key, "exclude", "discovery key outside schema: {key}");
     }
+    for key in section_keys("execution") {
+        assert!(
+            [
+                "default_profile",
+                "mode",
+                "hosted_profile",
+                "scale_set_profile",
+                "profiles",
+                "parity",
+                "overrides",
+                "workflows",
+            ]
+            .contains(&key.as_str()),
+            "execution key outside schema: {key}"
+        );
+    }
+    assert_sample_mentions(&sample);
+    Ok(())
+}
+
+/// Tokens the live schema-2 sample must still spell.
+fn assert_sample_mentions(sample: &str) {
     for token in [
         "schema",
         "[workflow]",
@@ -167,7 +193,6 @@ fn repo_config_sample_covers_schema_keys() -> TestResult {
         "default_branch",
         "generator_validation",
         "max_parallel_jobs",
-        "runner_label",
         "[resources]",
         "compiler_process_budget",
         "test_process_budget",
@@ -181,13 +206,17 @@ fn repo_config_sample_covers_schema_keys() -> TestResult {
         "[discovery]",
         "exclude",
         "[actions.overrides]",
+        "[execution]",
+        "default_profile",
+        "hosted_profile",
+        "scale_set_profile",
+        "workflows",
     ] {
         assert!(
             sample.contains(token),
             "schema key missing from sample: {token}"
         );
     }
-    Ok(())
 }
 
 /// Pinned `uses:` ref fixture.
@@ -267,16 +296,37 @@ fn cache_action_transport_never_carries_mbx() {
 fn mbx_transport_stays_with_mr_boxington_action() {
     let mbx = uses("jdx/mr-boxington-action");
     let pin = velnor_actions_mise::MR_BOXINGTON_VERSION;
-    let step = mbx_objects_step(&mbx, false, pin).expect("objects step");
+    let rust = velnor_actions_mise::ToolCatalog::pinned()
+        .version(velnor_actions_mise::PinnedTool::Rust)
+        .to_owned();
+    let env = BTreeMap::from([
+        (
+            "MISE_RUSTUP_HOME".to_owned(),
+            "${{ runner.temp }}/velnor/rustup".to_owned(),
+        ),
+        (
+            "MISE_CARGO_HOME".to_owned(),
+            "${{ runner.temp }}/velnor/cargo".to_owned(),
+        ),
+        ("RUSTUP_TOOLCHAIN".to_owned(), rust.clone()),
+    ]);
+    let [preflight, step] = mbx_steps_for_driver(&mbx, CompileDriver::Mbx, pin, &rust, env.clone())
+        .expect("objects steps")
+        .expect("MBX profile");
+    assert_eq!(preflight.name, "Verify MBX and Rust toolchains");
     assert!(
         format!("{:?}", step.kind).contains("jdx/mr-boxington-action"),
         "mbx bytes move only through the external action"
     );
     assert!(
-        format!("{:?}", step.kind).contains(pin),
-        "action installs the catalog pin, never latest"
+        format!("{:?}", step.kind).contains("toolchain"),
+        "action uses the catalog Rust pin after an exact preflight"
     );
-    assert!(mbx_objects_step(&mbx, true, pin).is_err());
+    assert!(
+        mbx_steps_for_driver(&mbx, CompileDriver::Cargo, pin, &rust, env.clone())
+            .expect("Cargo profile")
+            .is_none()
+    );
     let other = uses("actions/cache/restore");
-    assert!(mbx_objects_step(&other, false, pin).is_err());
+    assert!(mbx_steps_for_driver(&other, CompileDriver::Mbx, pin, &rust, env).is_err());
 }

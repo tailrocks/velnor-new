@@ -3,7 +3,7 @@
 ## V1 generator boundaries
 
 - V1 is a workflow generator: `plan`/`generate` turn repository evidence into CI workflows. It is not a runner, interpreter, or second task graph.
-- Runner work (job messages, broker, expressions, credentials, run-service, timeline, `actions/runner` protocol) is deferred to `docs/deferred/self-hosted-runner.md`. Do not implement runner behavior in V1 crates. When runner work starts, `actions/runner` is the protocol source of truth: match its logic exactly, never guess.
+- Do not implement runner behavior in V1 generator crates. The active runner spec is `docs/proposed/macos-scaleset-runner.md` (nested `crates/velnor-runner`). Conflicting deferred clauses are superseded. `actions/runner` and `actions/scaleset` are the protocol sources of truth: match them, never guess.
 - No legacy code. Finish every migration: remove old paths completely—no compatibility shims, aliases, or deprecation periods. Breaking changes are preferred.
 - Research project: unsafe, breaking changes expected, never production-ready. Break things when needed; deliver fast.
 
@@ -20,7 +20,7 @@
 - `cargo clippy --locked --workspace --all-targets -- -D warnings`
 - `cargo nextest run --locked --workspace` (fallback: `cargo test --locked --workspace`)
 - `alint validate-config && alint check --fail-on-warning`
-- `cargo deny check --locked`
+- `cargo deny check`
 - `bash scripts/check-freshness.sh`
 
 ## Proof invariants
@@ -45,3 +45,10 @@
 - Accepted feedback: fix, verify, commit, push, and reply on GitHub with the fixing commit URL before resolving. Rejected feedback: reply with evidence and rationale before resolving. Address general comments in linked PR replies. Never delete feedback or resolve it without a justified disposition.
 - Re-fetch feedback at the final head SHA. Merge only with no unaddressed feedback or unresolved threads and all required checks and approvals satisfied. Only explicit, PR-specific human authorization waives identified feedback.
 - Keep agent instructions lean. Put explanations, plans, and progress in documentation, not here.
+
+## Subagent model policy
+
+- Implementation, execution, and implementation-oriented research use exactly `gpt-6-luna` with `max` reasoning effort.
+- Review, verification, and independent assessment use exactly `gpt-6.1-sol` with `medium` reasoning effort.
+- Do not use fallback, automatic routing, or model substitution. If the exact model and effort cannot be guaranteed, stop and report.
+- Keep implementation and review separate; substantive work requires independent review. Follow the full role, delegation, and compliance rules in [the mandatory subagent model policy](docs/implemented/subagent-model-policy.md).

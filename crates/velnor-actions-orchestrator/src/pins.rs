@@ -10,8 +10,7 @@ use velnor_actions_actionlint::overrides::{
     ActionPinOverride as ApprovedOverride, ApprovedPinCatalog,
 };
 use velnor_actions_contract::{
-    GeneratorLock, ReleaseManifest, Step, VelnorConfig, check_release_artifact,
-    target_for_runner_label,
+    GeneratorLock, ReleaseManifest, ReleaseTarget, Step, VelnorConfig, check_release_artifact,
 };
 use velnor_actions_mise::MISE_VERSION;
 use velnor_actions_workflow_renderer::{
@@ -37,9 +36,11 @@ pub(crate) fn resolve_mise_setup(
     config: &VelnorConfig,
     label: &str,
 ) -> Result<MiseSetup, OrchestratorError> {
-    let target = target_for_runner_label(label).ok_or_else(|| OrchestratorError::Contract {
-        problem: format!("mise_setup_unsupported_target:{label}"),
-    })?;
+    let target = ReleaseTarget::for_runner_label(label)
+        .map(ReleaseTarget::triple)
+        .ok_or_else(|| OrchestratorError::Contract {
+            problem: format!("mise_setup_unsupported_target:{label}"),
+        })?;
     Ok(MiseSetup {
         uses: mise_action_uses(config)?,
         version: MISE_VERSION.to_owned(),
@@ -100,9 +101,11 @@ fn consumer_acquire_from(
     version: &str,
     json: Option<&str>,
 ) -> Result<Step, OrchestratorError> {
-    let target = target_for_runner_label(label).ok_or_else(|| OrchestratorError::Contract {
-        problem: format!("unsupported_target_for_runner:{label}"),
-    })?;
+    let target = ReleaseTarget::for_runner_label(label)
+        .map(ReleaseTarget::triple)
+        .ok_or_else(|| OrchestratorError::Contract {
+            problem: format!("unsupported_target_for_runner:{label}"),
+        })?;
     consumer_acquire_for_target(target, version, json)
 }
 
@@ -168,9 +171,11 @@ pub(crate) fn lock_acquire_step(
     label: &str,
     staged: &str,
 ) -> Result<Step, OrchestratorError> {
-    let target = target_for_runner_label(label).ok_or_else(|| OrchestratorError::Contract {
-        problem: format!("unsupported_target_for_runner:{label}"),
-    })?;
+    let target = ReleaseTarget::for_runner_label(label)
+        .map(ReleaseTarget::triple)
+        .ok_or_else(|| OrchestratorError::Contract {
+            problem: format!("unsupported_target_for_runner:{label}"),
+        })?;
     lock_acquire_for_target(lock, target, staged)
 }
 
@@ -247,7 +252,7 @@ fn acquire_argv(staged: &str, target: &str) -> Result<Vec<String>, OrchestratorE
 #[cfg(test)]
 fn test_manifest_json() -> String {
     let version = env!("CARGO_PKG_VERSION");
-    let targets = ["x86_64-unknown-linux-gnu", "aarch64-apple-darwin", "x86_64-apple-darwin"]
+    let targets = velnor_actions_contract::SUPPORTED_TARGETS
         .iter()
         .map(|target| {
             format!(

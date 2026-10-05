@@ -42,6 +42,7 @@ mod inventory;
 mod inventory_reuse;
 mod lock_audit;
 mod matrix_step;
+mod mbx_preflight;
 mod merge;
 mod merge_request;
 mod noop_report;
@@ -64,6 +65,7 @@ mod retrieve_baseline;
 mod retrieve_reports;
 mod retrieve_retry;
 mod root;
+mod routing;
 pub mod run_select;
 mod safe_read;
 pub mod schedule;
@@ -109,7 +111,10 @@ pub use external_data::{
     external_data_kind, may_skip_external_data,
 };
 pub use finalized::finalized_jobs;
-pub use generate::{GenerateOptions, GenerateReport, ToolSnapshot, generate, render_staged_tree};
+pub use generate::{
+    GenerateOptions, GenerateReport, ToolSnapshot, generate, generate_dispatched,
+    render_staged_tree, render_staged_tree_with,
+};
 pub use init::{InitReport, init_config};
 pub use internal::{
     MERGE_OP, PLAN_OP, PlanOutputs, REQUEST_FILE_ENV, WRITE_REQUEST_OP, merge_passed,
@@ -126,6 +131,7 @@ pub use provenance::{EvidenceProvenance, ProfileProvenance};
 pub use qualify::qualify_argv_staged;
 pub use retrieve_reports::{FETCH_OP, retrieve_reports};
 pub use root::resolve_root;
+pub use routing::{migrate_config, parse_dispatch_mode};
 pub use task_report::{REPORT_OP, START_TIME_OP, write_start_time, write_task_report};
 pub use toolcheck::{TOOL_INPUT_PATHS, ToolInputCheck, ToolParse, check_tool_inputs};
 pub use toolfindings::{
@@ -135,6 +141,7 @@ pub use validators::{
     GitArgError, validate_diff_args, validate_diff_rev, validate_git_args, validate_rev,
     validate_select_diff_args, validate_select_show_args, validate_show_args, validate_show_path,
 };
+pub use velnor_actions_contract::ExecutionMode;
 pub use workflow::{CHECKOUT_USES, DEFAULT_RUNNER_LABEL, WorkflowPlan};
 
 /// Version marker for the orchestrator shell.

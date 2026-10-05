@@ -2,7 +2,8 @@
 use std::collections::BTreeMap;
 use velnor_actions_contract::{
     ActionPin, ContractError, GeneratorBinary, GeneratorLock, GeneratorValidation, LockedGenerator,
-    MiseBootstrap, ReleaseManifest, TargetRecord, WorkflowPolicy,
+    MiseBootstrap, ReleaseManifest, SUPPORTED_TARGETS, TargetRecord, WorkflowPolicy,
+    asset_filename,
 };
 
 #[test]
@@ -43,7 +44,7 @@ fn config_validation_reports_key_paths() {
                 }],
                 compile_driver: None,
                 test_runner: None,
-
+                run_ignored: None,
                 release: RustReleaseConfig::default(),
             }),
             tofu: None,
@@ -52,6 +53,7 @@ fn config_validation_reports_key_paths() {
             exclude: vec!["vendor/**".to_owned()],
         },
         actions: ActionsConfig::default(),
+        execution: None,
     };
     assert_eq!(valid.validate(".velnor/config.toml"), Ok(()));
     let support = WorkflowPolicy::ConsumerV1.support_workflow(GeneratorValidation::Bootstrap);
@@ -112,6 +114,7 @@ fn runner_label_uses_exact_catalog_match() {
         },
         discovery: DiscoveryConfig { exclude: vec![] },
         actions: ActionsConfig::default(),
+        execution: None,
     };
     assert!(RUNNER_LABEL_CATALOG.contains(&LATEST_RUNNER_LABEL));
     for label in RUNNER_LABEL_CATALOG {
@@ -179,13 +182,14 @@ fn uppercase_rust_config_name_rejected_with_key_path() {
                 }],
                 compile_driver: None,
                 test_runner: None,
-
+                run_ignored: None,
                 release: RustReleaseConfig::default(),
             }),
             tofu: None,
         },
         discovery: DiscoveryConfig { exclude: vec![] },
         actions: ActionsConfig::default(),
+        execution: None,
     };
     let Err(ContractError::Config {
         key_path, problem, ..
@@ -258,12 +262,17 @@ fn manifest_schemas_validate_and_lookup_targets() -> Result<(), ContractError> {
         version: "0.1.0".to_owned(),
         repository: "tailrocks/velnor-new".to_owned(),
         commit: "ab".repeat(20),
-        targets: vec![TargetRecord {
-            target: "x86_64-unknown-linux-gnu".to_owned(),
-            artifact: "https://github.com/tailrocks/velnor-new/releases/download/v0.1.0/velnor-actions-0.1.0-x86_64-unknown-linux-gnu"
-                .to_owned(),
-            sha256: sha.clone(),
-        }],
+        targets: SUPPORTED_TARGETS
+            .iter()
+            .map(|target| TargetRecord {
+                target: (*target).to_owned(),
+                artifact: format!(
+                    "https://github.com/tailrocks/velnor-new/releases/download/v0.1.0/{}",
+                    asset_filename("0.1.0", target)
+                ),
+                sha256: sha.clone(),
+            })
+            .collect(),
     };
     manifest.validate("release.toml")?;
     assert!(

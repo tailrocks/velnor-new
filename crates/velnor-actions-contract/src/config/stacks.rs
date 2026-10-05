@@ -55,6 +55,9 @@ pub struct RustStackConfig {
     /// Sticky declared test runner; conflicts with durable evidence fail closed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub test_runner: Option<DeclaredTestRunner>,
+    /// Ignored test execution mode ("all", "only", "ignored-only", "default").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub run_ignored: Option<String>,
     /// Rust release policy (`[stacks.rust.release]`); disabled by default.
     #[serde(default)]
     pub release: RustReleaseConfig,
@@ -122,6 +125,7 @@ impl RustStackConfig {
             configurations: default_configurations(),
             compile_driver: None,
             test_runner: None,
+            run_ignored: None,
             release: RustReleaseConfig::default(),
         }
     }
@@ -220,6 +224,15 @@ impl RustStackConfig {
                     ));
                 }
             }
+        }
+        if let Some(mode) = &self.run_ignored
+            && !matches!(mode.as_str(), "all" | "only" | "ignored-only" | "default")
+        {
+            return Err(ContractError::config(
+                file,
+                "stacks.rust.run_ignored",
+                format!("bad_run_ignored:{mode}"),
+            ));
         }
         self.release.validate(file)?;
         Ok(())

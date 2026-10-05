@@ -156,19 +156,19 @@ impl MiseCheck {
         let bad = |field: &str, problem: &str| {
             ContractError::config(file, format!("{key}.{field}"), problem)
         };
-        if !safe_component(&self.id) {
+        if !safe_component(&self.id) || self.id.len() > 128 {
             return Err(bad("id", "bad_check_id"));
         }
-        if !is_valid_mise_task_name(&self.task) {
+        if !is_valid_mise_task_name(&self.task) || self.task.len() > 128 {
             return Err(bad("task", "bad_mise_task"));
         }
-        if !safe_path(&self.directory, true) {
+        if !safe_path(&self.directory, true) || self.directory.len() > 1024 {
             return Err(bad("directory", "bad_check_directory"));
         }
         if self.inputs.is_empty() || !unique_values(&self.inputs, |value| safe_path(value, false)) {
             return Err(bad("inputs", "invalid_check_inputs"));
         }
-        if !unique_values(&self.tools, safe_component) {
+        if self.tools.len() > 128 || !unique_values(&self.tools, safe_component) {
             return Err(bad("tools", "invalid_check_tools"));
         }
         if !(1..=360).contains(&self.timeout_minutes) {
@@ -183,16 +183,19 @@ impl MiseCheck {
         )?;
         if let Some(evidence) = &self.evidence {
             if !safe_path(&evidence.path, false)
+                || evidence.path.len() > 1024
                 || std::path::Path::new(&evidence.path).extension()
                     != Some(std::ffi::OsStr::new("json"))
             {
                 return Err(bad("evidence.path", "bad_evidence_path"));
             }
             if evidence.expected_scenarios.is_empty()
+                || evidence.expected_scenarios.len() > 64
                 || evidence
                     .expected_scenarios
                     .windows(2)
                     .any(|pair| pair[0] >= pair[1])
+                || evidence.expected_scenarios.iter().any(|id| id.len() > 128)
                 || !unique_values(&evidence.expected_scenarios, is_valid_mise_task_name)
             {
                 return Err(bad(
@@ -214,7 +217,8 @@ impl CheckRunner {
         };
         match self.executor {
             CheckExecutor::Hosted
-                if crate::targets::target_for_runner_label(&self.label)
+                if crate::targets::ReleaseTarget::for_runner_label(&self.label)
+                    .map(crate::targets::ReleaseTarget::triple)
                     != Some(self.platform.target()) =>
             {
                 return Err(bad("label", "hosted_runner_platform_mismatch"));
@@ -224,7 +228,7 @@ impl CheckRunner {
                     || self.label == "self-hosted"
                     || self.label == "latest"
                     || self.label.ends_with("-latest")
-                    || crate::targets::target_for_runner_label(&self.label).is_some() =>
+                    || crate::targets::ReleaseTarget::for_runner_label(&self.label).is_some() =>
             {
                 return Err(bad("label", "bad_ephemeral_runner_label"));
             }

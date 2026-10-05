@@ -13,10 +13,6 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_actions_actionlint::{
-    PinnedActionRef,
-    actions::{MR_BOXINGTON_ACTION_SHA, MR_BOXINGTON_ACTION_VERSION},
-};
 use velnor_actions_contract::{
     CrateJob, CrateObligation, Job, JobTimeout, ProposedTask, Stack, Step, WorkflowPolicy,
     crate_display_name, matrix_id_for_task_group, matrix_key_for_id, tofu_display_name,
@@ -24,7 +20,7 @@ use velnor_actions_contract::{
 use velnor_actions_mise::{PinnedTool, TaskCacheMode, ToolCatalog};
 use velnor_actions_rust::task_kind_rank;
 use velnor_actions_workflow_renderer::render::PLAN_JOB_ID;
-use velnor_actions_workflow_renderer::steps::{CompileDriver as RenderDriver, mbx_step_for_driver};
+use velnor_actions_workflow_renderer::steps::CompileDriver as RenderDriver;
 
 use crate::OrchestratorError;
 use crate::crate_job_ids::{assign_group_ids, group_is_tofu, group_runnable};
@@ -267,7 +263,9 @@ fn render_job(
             label, catalog, &root,
         )?);
     }
-    steps.extend(mbx_objects_step(catalog, use_mbx)?);
+    if use_mbx {
+        steps.extend(crate::mbx_preflight::steps_for_catalog(catalog)?);
+    }
     if use_rust {
         steps.extend(crate::source_prep::fetch_steps_for_crate(
             catalog,
@@ -326,11 +324,11 @@ fn restore_step_for_crate(
     if !use_rust || fetch_roots.is_empty() {
         return Ok(None);
     }
-    let target = velnor_actions_contract::target_for_runner_label(label).ok_or_else(|| {
-        OrchestratorError::Contract {
+    let target = velnor_actions_contract::ReleaseTarget::for_runner_label(label)
+        .map(velnor_actions_contract::ReleaseTarget::triple)
+        .ok_or_else(|| OrchestratorError::Contract {
             problem: format!("bad_label:{label}"),
-        }
-    })?;
+        })?;
     let rust = catalog.version(PinnedTool::Rust);
     if !use_mbx && !repo_has_mbx {
         let shared = format!(
@@ -342,29 +340,6 @@ fn restore_step_for_crate(
     let key = crate::source_cache::sources_cache_key(target, rust, fetch_roots)?;
     let prefix = crate::source_cache::sources_restore_prefix(&key);
     crate::source_cache::sources_restore_step(&key, &[prefix]).map(Some)
-}
-
-/// MBX objects restore for MBX crates only (WF-3.52).
-///
-/// The action installs the catalog MBX pin through its `version` input,
-/// so action setup and the Mise-selected compiler share one proven
-/// identity instead of a floating `latest` executable.
-fn mbx_objects_step(
-    catalog: &ToolCatalog,
-    use_mbx: bool,
-) -> Result<Option<Step>, OrchestratorError> {
-    if !use_mbx {
-        return Ok(None);
-    }
-    let uses = PinnedActionRef::new(
-        "jdx/mr-boxington-action",
-        None,
-        MR_BOXINGTON_ACTION_SHA,
-        MR_BOXINGTON_ACTION_VERSION,
-    )?
-    .uses_value();
-    let mbx = catalog.version(PinnedTool::MrBoxington);
-    Ok(mbx_step_for_driver(&uses, RenderDriver::Mbx, mbx)?)
 }
 
 #[cfg(test)]

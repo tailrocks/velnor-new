@@ -187,7 +187,7 @@ fn action_mbx_reconcile_matches_pin_only() {
         Err(MiseError::InvalidToolVersion { tool, version })
             if tool == "mr-boxington" && version == "1.22.0"
     ));
-    for loose in ["latest", "v1.21.0", "1.19", ""] {
+    for loose in ["latest", "v1.21.1", "1.19", ""] {
         assert!(
             matches!(
                 catalog.reconcile_action_mbx(loose),

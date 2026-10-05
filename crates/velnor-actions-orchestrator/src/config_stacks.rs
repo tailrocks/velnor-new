@@ -37,6 +37,8 @@ pub(crate) struct PartialRustStack {
     compile_driver: Option<DeclaredCompileDriver>,
     /// Sticky declared test runner.
     test_runner: Option<DeclaredTestRunner>,
+    /// Ignored test execution mode.
+    run_ignored: Option<String>,
     /// Rust release policy; disabled by default.
     release: Option<RustReleaseConfig>,
 }
@@ -58,6 +60,7 @@ impl PartialStacks {
                 configurations: stack.configurations.unwrap_or(defaults.configurations),
                 compile_driver: stack.compile_driver,
                 test_runner: stack.test_runner,
+                run_ignored: stack.run_ignored,
                 release: stack.release.unwrap_or_default(),
             }
         });

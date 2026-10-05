@@ -33,6 +33,7 @@ pub(super) fn group(package: &str, kind: TaskKind, gated_by: &[&str]) -> Propose
         uses_network: false,
         uses_clock: false,
         uses_random: false,
+        run_ignored: None,
     };
     let task = velnor_actions_rust::propose_task(&group).expect("fixture proposes");
     task.validate().expect("fixture valid");
@@ -214,6 +215,9 @@ fn shards_name_their_index() {
         "Format"
     );
 }
+
+#[path = "crate_jobs_mbx_tests.rs"]
+mod mbx_tests;
 
 #[test]
 fn drivers_follow_per_crate_selection() {

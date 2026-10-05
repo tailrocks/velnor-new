@@ -99,13 +99,13 @@ pub fn candidate_manifest_verify_step(target: &str) -> Result<Step, RenderError>
 /// registry would need an explicit scoped binding here, never ambient.
 /// # Errors
 pub(crate) fn candidate_job(ctx: &RenderContext, spec: &CandidateSpec) -> Result<Job, RenderError> {
-    let target =
-        velnor_actions_contract::target_for_runner_label(&ctx.runs_on).ok_or_else(|| {
+    let target = velnor_actions_contract::ReleaseTarget::for_runner_label(&ctx.runs_on)
+        .ok_or_else(|| {
             RenderError::InvalidWorkflow(format!("unsupported_target_for_runner:{}", ctx.runs_on))
         })?;
     let toolchain = toolchain_identity(&spec.build)?;
-    let manifest = steps::candidate_manifest_script(target, &toolchain);
-    let artifact = candidate_artifact_name(target)?;
+    let manifest = steps::candidate_manifest_script(target.triple(), &toolchain);
+    let artifact = candidate_artifact_name(target.triple())?;
     let candidate_binary = format!("{}/velnor-actions", steps::CANDIDATE_STAGE_DIR);
     Ok(Job {
         display_name: "Candidate".to_owned(),
@@ -136,7 +136,7 @@ pub(crate) fn candidate_job(ctx: &RenderContext, spec: &CandidateSpec) -> Result
             )?,
             steps::upload_artifact_step(&artifact, CANDIDATE_OUTPUT_DIR_EXPR)?,
             steps::download_artifact_step(&artifact, CANDIDATE_STAGE_DIR_EXPR)?,
-            candidate_manifest_verify_step(target)?,
+            candidate_manifest_verify_step(target.triple())?,
             freshness_step(&candidate_binary, FRESHNESS_OUTDIR, &ctx.plan_consumer_env)?,
             steps::shell_step(
                 "Qualify candidate",
@@ -171,11 +171,11 @@ fn qualify_scrubbed_argv(argv: &[String]) -> Result<Vec<String>, RenderError> {
 /// separate reviewed change (bootstrap contract §4 step 6), never here.
 /// # Errors
 pub(crate) fn release_job(ctx: &RenderContext) -> Result<Job, RenderError> {
-    let target =
-        velnor_actions_contract::target_for_runner_label(&ctx.runs_on).ok_or_else(|| {
+    let target = velnor_actions_contract::ReleaseTarget::for_runner_label(&ctx.runs_on)
+        .ok_or_else(|| {
             RenderError::InvalidWorkflow(format!("unsupported_target_for_runner:{}", ctx.runs_on))
         })?;
-    let artifact = candidate_artifact_name(target)?;
+    let artifact = candidate_artifact_name(target.triple())?;
     Ok(Job {
         display_name: super::support::RELEASE_DISPLAY_NAME.to_owned(),
         runs_on: ctx.runs_on.clone(),

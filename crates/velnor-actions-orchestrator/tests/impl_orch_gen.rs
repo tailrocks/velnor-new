@@ -224,7 +224,7 @@ fn orch_gen_tool_snapshot_detects_drift() -> TestResult {
 
 #[test]
 fn orch_gen_invalid_config_preserves_existing_tree() -> TestResult {
-    let repo = make_repo("schema = 2\n")?;
+    let repo = make_repo("schema = 99\n")?;
     let root = repo.path();
     fs::create_dir_all(root.join(".github/workflows"))?;
     fs::write(root.join(".github/workflows/old.yml"), "old: true\n")?;

@@ -4,7 +4,7 @@
 # equal the compiled catalog in velnor-actions-mise/src/catalog.rs (checked
 # by `verify_version_policy` during dogfood generate); the [[actions]]
 # mirror MUST equal the action pins in .velnor/freshness-inventory.json
-# (qualified 2026-09-30; checked by scripts/check-freshness.sh).
+# (qualified 2026-10-03; checked by scripts/check-freshness.sh).
 # [validation-tools] pins repo-local verification tools activated for
 # manual risk-triggered runs (cargo-mutants; NOT wired into CI).
 # Consumer repositories do not need this file; the generator never
