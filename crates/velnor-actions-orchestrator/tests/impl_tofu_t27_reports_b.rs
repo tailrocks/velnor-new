@@ -14,7 +14,9 @@ use tempfile::TempDir;
 use velnor_actions_contract::{FinalStatus, Plan, Trust, WorkflowEvent};
 use velnor_actions_orchestrator::plan_internal;
 
-use super::impl_common::{TestResult, git, git_line, passing_reports};
+use super::impl_common::{
+    TestResult, git, git_line, install_fixture_release_manifest, passing_reports,
+};
 use super::impl_orch_core::{merge, merge_request, success_jobs};
 use super::impl_select::{commit, plan_pr, plan_push, reasons_for};
 
@@ -31,6 +33,7 @@ fn make_pure_tofu_repo(
     git(&["config", "commit.gpgsign", "false"], root)?;
     fs::create_dir_all(root.join(".velnor"))?;
     fs::write(root.join(".velnor/config.toml"), config)?;
+    install_fixture_release_manifest(root)?;
     for (relative, content) in files {
         let target = root.join(relative);
         if let Some(parent) = target.parent() {

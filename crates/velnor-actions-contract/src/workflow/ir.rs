@@ -3,7 +3,7 @@ use super::jobs::{ScheduleTrigger, is_safe_display_name};
 use super::permissions::{PermissionLevel, Permissions};
 #[path = "job_validation.rs"]
 mod job_validation;
-use super::step::Step;
+pub use super::step::{Step, StepKind};
 use super::timeout::JobTimeout;
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};

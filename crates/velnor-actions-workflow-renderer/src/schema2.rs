@@ -81,8 +81,6 @@ mod generator_candidate;
 mod generator_release;
 #[path = "schema2_generator_release_pins.rs"]
 mod generator_release_pins;
-#[path = "schema2_mbx_pr_qualification.rs"]
-mod mbx_pr_qualification;
 #[path = "schema2_mbx_qualification.rs"]
 mod mbx_qualification;
 #[path = "schema2_release.rs"]
@@ -116,20 +114,12 @@ pub struct Schema2WorkflowRequest {
 /// Exact tools used by the hosted MBX cache qualification.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MbxQualificationPins {
-    /// Protected-main candidate action/tool pair, kept separate from production.
-    pub protected_main: MbxQualificationTarget,
-    /// Same-repository pull-request candidate pair; emitted only on explicit opt-in.
-    pub same_repository_pr: Option<MbxQualificationTarget>,
-}
-
-/// Exact MBX action, binary, and Rust pins for one qualification target.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MbxQualificationTarget {
     /// Resolved Mise action and binary pins.
     pub mise_setup: MiseSetup,
-    /// Full-SHA `jdx/mr-boxington-action` ref.
-    pub action_uses: String,
-    /// Exact MBX binary release version.
+    /// Full-SHA candidate MBX Action ref for this unqualified experiment.
+    /// It is separate from the production pin and generation never qualifies it.
+    pub candidate_action_uses: String,
+    /// Exact MBX tool version.
     pub mbx_version: String,
     /// Exact Rust toolchain version used by the qualification lane.
     pub rust_version: String,
@@ -267,23 +257,14 @@ fn qualification(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> 
     jobs.extend(features::feature_jobs(&hosted, &scale));
     jobs.extend(features::negative_jobs(&hosted, &scale));
     jobs.extend(classes::class_jobs(&hosted, &scale));
-    let mut pull_request_candidate = false;
     if let Some(pins) = &request.mbx_qualification {
-        jobs.extend(mbx_qualification::jobs(&pins.protected_main, &hosted)?);
-        if let Some(target) = &pins.same_repository_pr {
-            jobs.extend(mbx_pr_qualification::jobs(target, &hosted)?);
-            pull_request_candidate = true;
-        }
+        jobs.extend(mbx_qualification::jobs(pins, &hosted)?);
     } else if request.workflows.contains(&RoutingWorkflow::Qualification) {
         return Err(RenderError::InvalidWorkflow(
             "missing_mbx_qualification_pins".to_owned(),
         ));
     }
-    Ok(document(
-        "Qualification",
-        qualification_trigger(pull_request_candidate),
-        jobs,
-    ))
+    Ok(document("Qualification", mode_trigger(), jobs))
 }
 
 fn with_if((id, body): (String, Yaml), when: &str) -> (String, Yaml) {
@@ -335,8 +316,8 @@ fn document(name: &str, on: Yaml, jobs: Vec<(String, Yaml)>) -> Yaml {
     ])
 }
 
-fn qualification_trigger(pull_request_candidate: bool) -> Yaml {
-    let mut triggers = vec![(
+fn mode_trigger() -> Yaml {
+    Yaml::Map(vec![(
         "workflow_dispatch".to_owned(),
         Yaml::Map(vec![(
             "inputs".to_owned(),
@@ -349,11 +330,7 @@ fn qualification_trigger(pull_request_candidate: bool) -> Yaml {
                 ]),
             )]),
         )]),
-    )];
-    if pull_request_candidate {
-        triggers.push(("pull_request".to_owned(), Yaml::Map(Vec::new())));
-    }
-    Yaml::Map(triggers)
+    )])
 }
 
 fn empty_dispatch() -> Yaml {

@@ -2,8 +2,8 @@ use super::*;
 use std::collections::BTreeMap;
 use velnor_actions_contract::config::{ActionPinOverride, ActionsConfig};
 use velnor_actions_contract::{
-    DiscoveryConfig, GeneratorValidation, PullRequestCachePolicy, ResourcesConfig, StacksConfig,
-    TestShardingConfig, VerificationRunner, WorkflowConfig, WorkflowPolicy,
+    DiscoveryConfig, GeneratorValidation, ResourcesConfig, StacksConfig, TestShardingConfig,
+    VerificationRunner, WorkflowConfig, WorkflowPolicy,
 };
 
 /// Config carrying exactly the given action-pin overrides.
@@ -18,7 +18,6 @@ fn config_with(overrides: BTreeMap<String, ActionPinOverride>) -> VelnorConfig {
             default_branch: None,
             generator_validation: GeneratorValidation::Bootstrap,
             max_parallel_jobs: 2,
-            pull_request_cache_policy: PullRequestCachePolicy::default(),
             runner_label: None,
             tasks: Vec::new(),
         },
@@ -147,25 +146,80 @@ fn fixture_manifest_embeds_runner_target_record() {
 }
 
 #[test]
-fn consumer_manifest_generator_tag_matches_source_commit() {
-    let version = env!("CARGO_PKG_VERSION");
-    let commit = "a".repeat(40);
-    let version_tag = format!("/download/v{version}/");
-    let generator_tag = format!("/download/generator-{commit}/");
-    let valid = test_manifest_json().replace(&version_tag, &generator_tag);
-    assert!(
-        valid.contains(&generator_tag),
-        "fixture must use generator tag"
-    );
-    assert!(consumer_acquire_from("ubuntu-26.04", version, Some(&valid)).is_ok());
+fn consumer_acquire_uses_native_checksum_utility_for_each_target() {
+    let manifest = test_manifest_json();
+    for (label, target) in [
+        ("ubuntu-26.04", ReleaseTarget::LinuxX86_64),
+        ("macos-15", ReleaseTarget::MacosArm64),
+        ("macos-15-intel", ReleaseTarget::MacosX86_64),
+    ] {
+        let step = consumer_acquire_from(label, env!("CARGO_PKG_VERSION"), Some(&manifest))
+            .expect("consumer acquire for supported target");
+        assert_native_checksum_utility(step, target);
+    }
+}
 
-    let wrong_commit = "b".repeat(40);
-    let wrong_tag = format!("/download/generator-{wrong_commit}/");
-    let mismatched = valid.replace(&generator_tag, &wrong_tag);
-    assert!(
-        consumer_acquire_from("ubuntu-26.04", version, Some(&mismatched)).is_err(),
-        "generator tag must bind to manifest source commit"
+#[test]
+fn lock_acquire_uses_native_checksum_utility_for_each_target() {
+    use velnor_actions_contract::{GeneratorBinary, LockedGenerator, MiseBootstrap};
+
+    let lock = GeneratorLock {
+        schema: 1,
+        generator: LockedGenerator {
+            binary: "velnor-actions".to_owned(),
+            version: env!("CARGO_PKG_VERSION").to_owned(),
+            commit: "a".repeat(40),
+            binaries: ReleaseTarget::ALL
+                .into_iter()
+                .map(|target| GeneratorBinary {
+                    target: target.triple().to_owned(),
+                    artifact: format!(
+                        "https://github.com/tailrocks/velnor-new/releases/download/v{}/velnor-actions-{}-{}",
+                        env!("CARGO_PKG_VERSION"),
+                        env!("CARGO_PKG_VERSION"),
+                        target.triple()
+                    ),
+                    sha256: "b".repeat(64),
+                })
+                .collect(),
+        },
+        mise_bootstrap: MiseBootstrap {
+            version: MISE_VERSION.to_owned(),
+            artifact: "https://example.invalid/mise".to_owned(),
+            sha256: "c".repeat(64),
+        },
+        actions: Vec::new(),
+    };
+    for (label, target) in [
+        ("ubuntu-26.04", ReleaseTarget::LinuxX86_64),
+        ("macos-15", ReleaseTarget::MacosArm64),
+        ("macos-15-intel", ReleaseTarget::MacosX86_64),
+    ] {
+        let step = lock_acquire_step(&lock, label, "$RUNNER_TEMP/velnor/bin/velnor-actions-test")
+            .expect("lock acquire for supported target");
+        assert_native_checksum_utility(step, target);
+    }
+}
+
+fn assert_native_checksum_utility(step: velnor_actions_contract::Step, target: ReleaseTarget) {
+    let velnor_actions_contract::StepKind::Shell { run, .. } = step.kind else {
+        panic!("Acquire must be a shell step");
+    };
+    let script = run.join(" ");
+    let expected = match target {
+        ReleaseTarget::LinuxX86_64 => "sha256sum",
+        ReleaseTarget::MacosArm64 | ReleaseTarget::MacosX86_64 => "shasum -a 256",
+    };
+    let other = match target {
+        ReleaseTarget::LinuxX86_64 => "shasum -a 256",
+        ReleaseTarget::MacosArm64 | ReleaseTarget::MacosX86_64 => "sha256sum",
+    };
+    assert_eq!(
+        script.matches(&format!("{expected} -c -")).count(),
+        2,
+        "{script}"
     );
+    assert!(!script.contains(other), "{script}");
 }
 
 #[test]
@@ -271,18 +325,52 @@ fn acquisition_rejects_tampered_platform() {
 }
 
 #[test]
+fn acquisition_template_selects_native_checksum_by_typed_target() {
+    let staged = format!("{STAGED_BINARY_PREFIX}0.1.0");
+    for (target, expected) in [
+        (ReleaseTarget::LinuxX86_64, "sha256sum -c -"),
+        (ReleaseTarget::MacosArm64, "shasum -a 256 -c -"),
+        (ReleaseTarget::MacosX86_64, "shasum -a 256 -c -"),
+    ] {
+        let argv = acquire_script_argv(&staged, "/opt/velnor/seed", target)
+            .expect("supported typed target");
+        assert!(argv[2].contains(expected), "{target:?}: {}", argv[2]);
+        if target != ReleaseTarget::LinuxX86_64 {
+            assert!(!argv[2].contains("sha256sum"), "{target:?}: {}", argv[2]);
+        }
+    }
+}
+
+#[test]
 fn setup_uses_extracted_binary_digest_for_each_platform() {
     use velnor_actions_workflow_renderer::setup::{
         MISE_BINARY_SHA256_MACOS_ARM64, MISE_BINARY_SHA256_MACOS_X64,
     };
     let config = config_with(BTreeMap::new());
-    for (target, expected) in [
-        (ReleaseTarget::MacosArm64, MISE_BINARY_SHA256_MACOS_ARM64),
-        (ReleaseTarget::MacosX86_64, MISE_BINARY_SHA256_MACOS_X64),
+    for (label, target, expected) in [
+        (
+            "ubuntu-26.04",
+            ReleaseTarget::LinuxX86_64,
+            MISE_BINARY_SHA256_LINUX_X64,
+        ),
+        (
+            "macos-15",
+            ReleaseTarget::MacosArm64,
+            MISE_BINARY_SHA256_MACOS_ARM64,
+        ),
+        (
+            "macos-15-intel",
+            ReleaseTarget::MacosX86_64,
+            MISE_BINARY_SHA256_MACOS_X64,
+        ),
     ] {
-        let setup = resolve_mise_setup_for_release_target(&config, target).expect("verified setup");
+        let setup =
+            resolve_mise_setup_for_release_target(&config, target).expect("verified target setup");
         assert_eq!(setup.sha256, expected);
-        assert_ne!(setup.sha256, MISE_BINARY_SHA256_LINUX_X64);
+        assert_eq!(
+            resolve_mise_setup(&config, label).expect("verified label setup"),
+            setup
+        );
     }
 }
 

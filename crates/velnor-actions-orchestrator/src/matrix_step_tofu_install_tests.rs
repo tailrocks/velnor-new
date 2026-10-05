@@ -56,7 +56,6 @@ fn discovery(groups: Vec<ProposedTask>) -> Discovery {
         },
         recommendations: Vec::new(),
         consumer_manifest_json: None,
-        consumer_manifest_stand_in: false,
         skipped_non_utf8: false,
         tofu_note: None,
         tofu_units: Vec::new(),
@@ -154,6 +153,59 @@ fn mise_crate_job_prepare_installs_opentofu() {
             run.contains(&opentofu),
             spawning,
             "{id} opentofu membership follows its executed suite: {run:?}"
+        );
+    }
+}
+/// Every workspace member is classified on the tofu axis too.
+///
+/// A new crate fails here by name until its suite is audited for
+/// `tofu_exec` executions (see `TOFU_EXEC_SUITES`) and classified.
+#[test]
+fn every_workspace_member_is_classified_for_tofu() {
+    let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let root = manifest_dir
+        .parent()
+        .and_then(std::path::Path::parent)
+        .expect("crate lives two levels under the workspace root");
+    let mut members = Vec::new();
+    let crates = std::fs::read_dir(root.join("crates")).expect("crates dir lists");
+    for entry in crates {
+        let manifest = entry.expect("dir entry reads").path().join("Cargo.toml");
+        let text = std::fs::read_to_string(&manifest).expect("member manifest reads");
+        let mut in_package = false;
+        for line in text.lines() {
+            if line.trim() == "[package]" {
+                in_package = true;
+            } else if line.starts_with('[') {
+                in_package = false;
+            } else if in_package && line.trim_start().starts_with("name = ") {
+                let name = line
+                    .trim_start()
+                    .trim_start_matches("name = ")
+                    .trim()
+                    .trim_matches('"');
+                members.push(name.to_owned());
+                break;
+            }
+        }
+    }
+    assert!(!members.is_empty(), "workspace scan must find members");
+    for member in &members {
+        let known = [
+            "velnor-actions-orchestrator",
+            "velnor-actions-cli",
+            "velnor-actions-contract",
+            "velnor-actions-mise",
+            "velnor-actions-rust",
+            "velnor-actions-tofu",
+            "velnor-actions-workflow-renderer",
+            "velnor-actions-actionlint",
+            "velnor-archive-guard",
+        ]
+        .contains(&member.as_str());
+        assert!(
+            known,
+            "{member} is unclassified: audit its suite for tofu_exec execution, then classify it"
         );
     }
 }

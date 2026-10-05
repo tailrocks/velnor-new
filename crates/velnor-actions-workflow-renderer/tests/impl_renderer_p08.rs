@@ -1,10 +1,10 @@
 //! P08 renderer cases: built-in Mise cache, sources paths, rust-cache gates.
 
 use std::collections::BTreeMap;
-use velnor_actions_contract::{Job, JobTimeout, StepKind};
+use velnor_actions_contract::{Job, JobTimeout, StepKind, StepRole};
 use velnor_actions_workflow_renderer::cache_p08::{
-    check_no_rust_cache_with_mbx, infer_job_tools, mise_cache_key_for_tools, mise_setup_step_p08,
-    tools_digest,
+    check_mbx_before_fetch, check_no_rust_cache_with_mbx, infer_job_tools,
+    mise_cache_key_for_tools, mise_setup_step_p08, tools_digest,
 };
 use velnor_actions_workflow_renderer::steps::cache_action_step;
 
@@ -246,6 +246,48 @@ fn rust_cache_never_stacks_over_mbx() {
 }
 
 #[test]
+fn mbx_restore_precedes_fetch() {
+    let fetch = velnor_actions_contract::Step {
+        name: "Fetch Cargo sources".to_owned(),
+        id: None,
+        role: Some(StepRole::CargoSourcesFetch),
+        condition: None,
+        kind: StepKind::Shell {
+            run: vec!["sh".to_owned()],
+            env: BTreeMap::new(),
+        },
+    };
+    let mbx = velnor_actions_contract::Step {
+        name: "Restore MBX objects".to_owned(),
+        id: None,
+        role: Some(StepRole::MbxCache),
+        condition: None,
+        kind: StepKind::Action {
+            uses: format!("jdx/mr-boxington-action@{}", "d".repeat(40)),
+            with: BTreeMap::new(),
+            env: BTreeMap::new(),
+        },
+    };
+    let good = Job {
+        display_name: "Good".to_owned(),
+        runs_on: LABEL.to_owned(),
+        check_runner: None,
+        timeout_minutes: JobTimeout::CRATE,
+        needs: Vec::new(),
+        condition: None,
+        permissions: None,
+        environment: None,
+        steps: vec![mbx.clone(), fetch.clone()],
+    };
+    assert!(check_mbx_before_fetch("demo", &good).is_ok());
+    let bad = Job {
+        steps: vec![fetch, mbx],
+        ..good.clone()
+    };
+    assert!(check_mbx_before_fetch("demo", &bad).is_err());
+}
+
+#[test]
 fn step_conditions_serialize_as_if_with_upload_default()
 -> Result<(), velnor_actions_workflow_renderer::RenderError> {
     use velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION;
@@ -298,66 +340,6 @@ fn step_conditions_serialize_as_if_with_upload_default()
     assert!(
         text[upload_at..].starts_with("Upload matrix report\n        if: always()"),
         "upload keeps always() default:\n{text}"
-    );
-    Ok(())
-}
-
-#[test]
-fn strict_render_elects_single_writer_per_shared_key()
--> Result<(), velnor_actions_workflow_renderer::RenderError> {
-    use velnor_actions_workflow_renderer::{plan_step, shell_step};
-    let prepare = || {
-        shell_step(
-            "Prepare pinned tools",
-            vec![
-                "mise".to_owned(),
-                "install".to_owned(),
-                "rust@1.98.1".to_owned(),
-            ],
-            BTreeMap::new(),
-        )
-    };
-    let text = strict(
-        &fixture_ir(vec![
-            job(
-                "plan",
-                "Plan",
-                Vec::new(),
-                vec![prepare()?, acquire_fixture()?, plan_step()],
-            ),
-            job(
-                "rust-demo",
-                "Rust / demo",
-                vec!["plan".to_owned()],
-                vec![prepare()?],
-            ),
-        ]),
-        &fixture_ctx(),
-    )?;
-    let plan_at = text.find("\n  plan:\n").expect("plan block");
-    let crate_at = text.find("\n  rust-demo:\n").expect("crate block");
-    let (plan_block, crate_block) = text.split_at(crate_at);
-    let plan_block = &plan_block[plan_at..];
-    assert!(
-        plan_block.contains("- name: Save Mise tools"),
-        "plan wins the shared key:\n{text}"
-    );
-    assert!(
-        plan_block.contains("if: success() && github.event_name == 'push'"),
-        "winner saves push-only:\n{text}"
-    );
-    assert!(
-        !crate_block.contains("Save Mise tools"),
-        "crate restores read-only:\n{text}"
-    );
-    assert_eq!(
-        text.matches("- name: Save Mise tools").count(),
-        1,
-        "exactly one saver per key:\n{text}"
-    );
-    assert!(
-        !text.contains("cache_save: ${{"),
-        "no setup promises a built-in save:\n{text}"
     );
     Ok(())
 }

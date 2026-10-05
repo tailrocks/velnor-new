@@ -13,7 +13,9 @@ use velnor_actions_orchestrator::{
     assemble_merge_request, finalized_jobs, merge_internal, plan_internal, prepare,
 };
 
-use super::impl_common::{TestResult, git, git_line, passing_reports, plan_for};
+use super::impl_common::{
+    TestResult, git, git_line, install_fixture_release_manifest, passing_reports, plan_for,
+};
 use super::impl_orch_core::{merge, merge_request, success_jobs};
 
 /// Git-initialized pure-tofu repo: `config` plus `files`, no Cargo.
@@ -29,6 +31,7 @@ fn make_pure_tofu_repo(
     git(&["config", "commit.gpgsign", "false"], root)?;
     fs::create_dir_all(root.join(".velnor"))?;
     fs::write(root.join(".velnor/config.toml"), config)?;
+    install_fixture_release_manifest(root)?;
     for (relative, content) in files {
         let target = root.join(relative);
         if let Some(parent) = target.parent() {

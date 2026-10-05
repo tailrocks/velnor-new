@@ -39,6 +39,7 @@ fn provider_job(key: &str, path: &str) -> Job {
     Job {
         display_name: "Provider".to_owned(),
         runs_on: LABEL.to_owned(),
+        check_runner: None,
         timeout_minutes: JobTimeout::CRATE,
         needs: Vec::new(),
         condition: None,
@@ -77,6 +78,7 @@ fn provider_writer_election_elects_lowest_id_per_key() -> Result<(), RenderError
     let bare = Job {
         display_name: "Plan".to_owned(),
         runs_on: LABEL.to_owned(),
+        check_runner: None,
         timeout_minutes: JobTimeout::CRATE,
         needs: Vec::new(),
         condition: None,
@@ -153,6 +155,7 @@ fn provider_writer_election_skips_keyless_and_reruns() -> Result<(), RenderError
     let bare = Job {
         display_name: "Bare".to_owned(),
         runs_on: LABEL.to_owned(),
+        check_runner: None,
         timeout_minutes: JobTimeout::CRATE,
         needs: Vec::new(),
         condition: None,
@@ -246,9 +249,16 @@ fn provider_writer_election_rejects_a_valid_save_on_a_losing_owner() -> Result<(
         ),
         ("tofu-b".to_owned(), losing),
     ]);
+    let original_steps: BTreeMap<String, Vec<Step>> = jobs
+        .iter()
+        .map(|(id, job)| (id.clone(), job.steps.clone()))
+        .collect();
     assert!(
         elect_tofu_provider_savers(&mut jobs).is_err(),
         "only the elected owner can carry the save"
     );
+    for (id, steps) in original_steps {
+        assert_eq!(jobs[&id].steps, steps, "rejected election mutated {id}");
+    }
     Ok(())
 }

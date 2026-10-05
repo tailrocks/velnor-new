@@ -116,7 +116,6 @@ fn velnor_manifest_skip_keeps_generator_lock_validation() -> TestResult {
 
             let prep = prepare(repo.path())?;
             assert_eq!(prep.discovery.consumer_manifest_json, None);
-            assert!(!prep.discovery.consumer_manifest_stand_in);
             let err = render_staged_tree(&prep)
                 .err()
                 .ok_or("malformed generator lock was accepted")?;

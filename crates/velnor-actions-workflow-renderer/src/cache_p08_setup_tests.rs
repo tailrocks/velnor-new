@@ -23,12 +23,12 @@ fn base_job(setup: &MiseSetup) -> Job {
     Job {
         display_name: "Seed mutation fixture".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
+        check_runner: None,
         timeout_minutes: JobTimeout::PLAN,
         needs: Vec::new(),
         condition: None,
         permissions: None,
         environment: None,
-        check_runner: None,
         steps: vec![
             crate::steps::checkout_step(CHECKOUT).expect("checkout"),
             setup_step,

@@ -155,7 +155,6 @@ fn repo_config_sample_covers_schema_keys() -> TestResult {
                 "default_branch",
                 "generator_validation",
                 "max_parallel_jobs",
-                "pull_request_cache_policy",
                 "runner_label",
             ]
             .contains(&key.as_str()),
@@ -195,7 +194,6 @@ fn assert_sample_mentions(sample: &str) {
         "default_branch",
         "generator_validation",
         "max_parallel_jobs",
-        "pull_request_cache_policy",
         "[resources]",
         "compiler_process_budget",
         "test_process_budget",

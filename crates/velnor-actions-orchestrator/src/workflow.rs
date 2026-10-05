@@ -328,8 +328,9 @@ pub(crate) fn plan_uses_opentofu(discovery: &Discovery) -> bool {
 
 /// True when the plan job needs the Rust toolchain.
 ///
-/// Consumers require Rust for selected Rust evidence. Velnor also builds
-/// its candidate-source helper in Plan.
+/// Consumers require Rust for selected Rust evidence. Rust inventory also
+/// uses Cargo metadata for every discovered workspace candidate, including
+/// ignored projects. Velnor builds its candidate-source helper in Plan.
 pub(crate) fn plan_uses_rust(discovery: &Discovery, policy: WorkflowPolicy) -> bool {
     policy == WorkflowPolicy::VelnorRepositoryV1
         || !discovery.workspaces.is_empty()

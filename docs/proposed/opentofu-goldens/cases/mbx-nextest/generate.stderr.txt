@@ -1,9 +1,9 @@
-velnor-actions: WARNING: .velnor/release-manifest.json is absent; generated workflows use a debug-only stand-in that MUST NOT ship
 Preview: <preview>
 Repository: <repo>
 .github/AGENTS.md
 .github/CLAUDE.md
 .github/actionlint.yaml
+.github/actions/acquire-b3-60246ea44a00648e0805e04b89a0d83b5e243c95fddaa2a18219dc93a95c0a06/action.yml
 .github/actions/velnor-tool-seed/action.yml
 .github/workflows/ci.yml
 mise.lock not found; Velnor will not create or refresh it

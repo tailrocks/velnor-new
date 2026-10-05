@@ -1,4 +1,6 @@
 //! Integration test entry point; cases live in the sibling files.
+#[path = "impl_archive_guard_builder.rs"]
+mod impl_archive_guard_builder;
 #[path = "impl_cli.rs"]
 mod impl_cli;
 #[path = "impl_cli_args.rs"]
@@ -17,6 +19,8 @@ mod impl_cli_parity_golden;
 mod impl_cli_parity_golden_normalize;
 #[path = "impl_cli_protocol.rs"]
 mod impl_cli_protocol;
+#[path = "impl_cli_release_manifest.rs"]
+mod impl_cli_release_manifest;
 #[path = "impl_cli_report.rs"]
 mod impl_cli_report;
 #[path = "impl_cli_schema2.rs"]
@@ -45,3 +49,5 @@ mod impl_repo_shape;
 mod impl_repo_strictness;
 #[path = "impl_repo_suppressions.rs"]
 mod impl_repo_suppressions;
+#[path = "impl_repo_test_registration.rs"]
+mod impl_repo_test_registration;

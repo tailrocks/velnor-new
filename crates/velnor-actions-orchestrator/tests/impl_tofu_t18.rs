@@ -11,7 +11,7 @@ use velnor_actions_workflow_renderer::render::{
     FINAL_JOB_ID, PLAN_JOB_ID, PUBLISH_JOB_ID, WORKFLOW_PATH,
 };
 
-use super::impl_common::{TestResult, git};
+use super::impl_common::{TestResult, git, install_fixture_release_manifest};
 
 /// True for generated crate jobs (neither plan, lint, gate, nor publish).
 fn is_crate_job(id: &str) -> bool {
@@ -78,6 +78,7 @@ fn make_pure_tofu_repo(
     git(&["config", "commit.gpgsign", "false"], root)?;
     fs::create_dir_all(root.join(".velnor"))?;
     fs::write(root.join(".velnor/config.toml"), config)?;
+    install_fixture_release_manifest(root)?;
     for (relative, content) in files {
         let target = root.join(relative);
         if let Some(parent) = target.parent() {

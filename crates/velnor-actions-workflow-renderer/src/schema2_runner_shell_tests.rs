@@ -3,8 +3,8 @@ use std::collections::BTreeSet;
 use velnor_actions_contract::{RoutingWorkflow, SCALE_SET_NAME, VELNOR_LABEL};
 
 use super::{
-    MbxQualificationPins, MbxQualificationTarget, Schema2WorkflowRequest, monitoring,
-    qualification, render_schema2_workflows,
+    MbxQualificationPins, Schema2WorkflowRequest, monitoring, qualification,
+    render_schema2_workflows,
 };
 use crate::setup::MiseSetup;
 use crate::yaml::Yaml;
@@ -16,17 +16,18 @@ fn request() -> Schema2WorkflowRequest {
         scale_set: Schema2WorkflowRequest::canonical_scale_set().expect("valid scale set"),
         workflows: BTreeSet::from([RoutingWorkflow::Qualification]),
         mbx_qualification: Some(MbxQualificationPins {
-            protected_main: MbxQualificationTarget {
-                mise_setup: MiseSetup {
-                    uses: format!("jdx/mise-action@{}", "a".repeat(40)),
-                    version: "2026.1.0".to_owned(),
-                    sha256: "a".repeat(64),
-                },
-                action_uses: format!("{}@{}", crate::cache_steps::MBX_ACTION_NAME, "b".repeat(40)),
-                mbx_version: "1.0.0".to_owned(),
-                rust_version: "1.98.1".to_owned(),
+            mise_setup: MiseSetup {
+                uses: format!("jdx/mise-action@{}", "a".repeat(40)),
+                version: "2026.1.0".to_owned(),
+                sha256: "a".repeat(64),
             },
-            same_repository_pr: None,
+            candidate_action_uses: format!(
+                "{}@{}",
+                crate::cache_steps::MBX_ACTION_NAME,
+                "b".repeat(40)
+            ),
+            mbx_version: "1.0.0".to_owned(),
+            rust_version: "1.98.1".to_owned(),
         }),
         generator_release: None,
     }

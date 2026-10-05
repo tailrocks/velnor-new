@@ -71,12 +71,18 @@ jobs:
       NODE_AUTH_TOKEN: ""
       NPM_TOKEN: ""
       RUSTUP_TOOLCHAIN: 1.98.1
-      VELNOR_ASSET_SHA256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-      VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.1/velnor-actions-0.1.1-x86_64-unknown-linux-gnu
-      VELNOR_RELEASE_COMMIT: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
     outputs:
       covered_tasks: ${{ steps.plan.outputs.covered_tasks }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: "0"
+          persist-credentials: "false"
+      - name: Restore Velnor tool seed
+        uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
+        with:
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-761a279144527661
       - name: Setup Mise
         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
@@ -87,11 +93,6 @@ jobs:
           install: "false"
           sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
           version: 2026.9.18
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          fetch-depth: "0"
-          persist-credentials: "false"
       - name: Prepare pinned tools
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
@@ -112,7 +113,7 @@ jobs:
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
         run: "sh -c 'mkdir -p \"$RUNNER_TEMP/velnor/cargo-clean\" && cd \"$RUNNER_TEMP/velnor/cargo-clean\" && if mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo metadata --locked --offline --manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\" >/dev/null 2>&1; then echo \"velnor: sources hit, skipping fetch\"; else echo \"velnor: sources miss (source_missing), fetching\"; mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo fetch --locked --manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\"; fi'"
       - name: Acquire Velnor
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \"$RUNNER_TEMP/velnor/bin\" && s=\"/opt/velnor/seed/generator/velnor-actions-0.1.1\" d=\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.1\" && if [ -f \"$s\" ] && echo \"$VELNOR_ASSET_SHA256  $s\" | sha256sum -c -; then cp \"$s\" \"$d\"; else curl -fsSL --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\" && echo \"$VELNOR_ASSET_SHA256  $d\" | sha256sum -c -; fi && chmod +x \"$d\"'"
+        uses: ./.github/actions/acquire-b3-60246ea44a00648e0805e04b89a0d83b5e243c95fddaa2a18219dc93a95c0a06 # zizmor: ignore[self-repository]
       - name: Write request
         env:
           VELNOR_INTERNAL_OP: write-request-v1
@@ -167,15 +168,12 @@ jobs:
       MISE_NO_HOOKS: "1"
       NODE_AUTH_TOKEN: ""
       NPM_TOKEN: ""
-      VELNOR_ASSET_SHA256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-      VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.1/velnor-actions-0.1.1-x86_64-unknown-linux-gnu
-      VELNOR_RELEASE_COMMIT: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
     needs:
       - required
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - name: Acquire Velnor
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \"$RUNNER_TEMP/velnor/bin\" && s=\"/opt/velnor/seed/generator/velnor-actions-0.1.1\" d=\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.1\" && if [ -f \"$s\" ] && echo \"$VELNOR_ASSET_SHA256  $s\" | sha256sum -c -; then cp \"$s\" \"$d\"; else curl -fsSL --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\" && echo \"$VELNOR_ASSET_SHA256  $d\" | sha256sum -c -; fi && chmod +x \"$d\"'"
+        uses: ./.github/actions/acquire-b3-60246ea44a00648e0805e04b89a0d83b5e243c95fddaa2a18219dc93a95c0a06 # zizmor: ignore[self-repository]
       - name: Download plan
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
@@ -223,9 +221,6 @@ jobs:
       NODE_AUTH_TOKEN: ""
       NPM_TOKEN: ""
       RUSTUP_TOOLCHAIN: 1.98.1
-      VELNOR_ASSET_SHA256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-      VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.1/velnor-actions-0.1.1-x86_64-unknown-linux-gnu
-      VELNOR_RELEASE_COMMIT: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
     permissions:
       contents: read
       actions: read
@@ -247,7 +242,7 @@ jobs:
           sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
           version: 2026.9.18
       - name: Acquire Velnor
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \"$RUNNER_TEMP/velnor/bin\" && s=\"/opt/velnor/seed/generator/velnor-actions-0.1.1\" d=\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.1\" && if [ -f \"$s\" ] && echo \"$VELNOR_ASSET_SHA256  $s\" | sha256sum -c -; then cp \"$s\" \"$d\"; else curl -fsSL --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\" && echo \"$VELNOR_ASSET_SHA256  $d\" | sha256sum -c -; fi && chmod +x \"$d\"'"
+        uses: ./.github/actions/acquire-b3-60246ea44a00648e0805e04b89a0d83b5e243c95fddaa2a18219dc93a95c0a06 # zizmor: ignore[self-repository]
       - name: Prepare pinned tools
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
@@ -316,9 +311,6 @@ jobs:
       NODE_AUTH_TOKEN: ""
       NPM_TOKEN: ""
       RUSTUP_TOOLCHAIN: 1.98.1
-      VELNOR_ASSET_SHA256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-      VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.1/velnor-actions-0.1.1-x86_64-unknown-linux-gnu
-      VELNOR_RELEASE_COMMIT: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
     needs:
       - plan
     steps:
@@ -341,7 +333,7 @@ jobs:
           sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
           version: 2026.9.18
       - name: Acquire Velnor
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \"$RUNNER_TEMP/velnor/bin\" && s=\"/opt/velnor/seed/generator/velnor-actions-0.1.1\" d=\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.1\" && if [ -f \"$s\" ] && echo \"$VELNOR_ASSET_SHA256  $s\" | sha256sum -c -; then cp \"$s\" \"$d\"; else curl -fsSL --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\" && echo \"$VELNOR_ASSET_SHA256  $d\" | sha256sum -c -; fi && chmod +x \"$d\"'"
+        uses: ./.github/actions/acquire-b3-60246ea44a00648e0805e04b89a0d83b5e243c95fddaa2a18219dc93a95c0a06 # zizmor: ignore[self-repository]
       - name: Download plan
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
@@ -445,9 +437,6 @@ jobs:
       NODE_AUTH_TOKEN: ""
       NPM_TOKEN: ""
       RUSTUP_TOOLCHAIN: 1.98.1
-      VELNOR_ASSET_SHA256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-      VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.1/velnor-actions-0.1.1-x86_64-unknown-linux-gnu
-      VELNOR_RELEASE_COMMIT: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
     needs:
       - plan
     steps:
@@ -470,7 +459,7 @@ jobs:
           sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
           version: 2026.9.18
       - name: Acquire Velnor
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \"$RUNNER_TEMP/velnor/bin\" && s=\"/opt/velnor/seed/generator/velnor-actions-0.1.1\" d=\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.1\" && if [ -f \"$s\" ] && echo \"$VELNOR_ASSET_SHA256  $s\" | sha256sum -c -; then cp \"$s\" \"$d\"; else curl -fsSL --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\" && echo \"$VELNOR_ASSET_SHA256  $d\" | sha256sum -c -; fi && chmod +x \"$d\"'"
+        uses: ./.github/actions/acquire-b3-60246ea44a00648e0805e04b89a0d83b5e243c95fddaa2a18219dc93a95c0a06 # zizmor: ignore[self-repository]
       - name: Download plan
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
