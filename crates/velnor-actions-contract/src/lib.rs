@@ -141,9 +141,9 @@ pub use workflow::{
     ValidatorKind, WORKFLOW_DISPLAY_NAME, WorkflowEvent, WorkflowIr, assign_crate_job_ids,
     check_matrix_agreement, crate_display_label, crate_display_name, expand_workflow,
     final_report_id_for_run, final_report_relpath, is_crate_job_id, is_safe_display_name,
-    join_runner_temp, matrix_json_bytes, matrix_report_relpath, named_check_lanes,
-    plan_json_bytes, slugify_segment, task_report_relpath, tofu_display_name,
-    trust_for_event, validate_final_report_id, validate_job_id, validate_matrix_run,
+    join_runner_temp, matrix_json_bytes, matrix_report_relpath, named_check_lanes, plan_json_bytes,
+    slugify_segment, task_report_relpath, tofu_display_name, trust_for_event,
+    validate_final_report_id, validate_job_id, validate_matrix_run,
 };
 
 /// Version marker for the contract schema shell.
