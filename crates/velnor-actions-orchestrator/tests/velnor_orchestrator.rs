@@ -8,6 +8,7 @@ mod impl_config_internal;
 mod impl_consumer_manifest_file;
 mod impl_cover_pipeline;
 mod impl_crate_graph;
+mod impl_discovery_cache;
 mod impl_e2e_scrub;
 mod impl_e2e_tools_save;
 mod impl_e2e_wiring;
