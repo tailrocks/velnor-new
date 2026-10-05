@@ -55,6 +55,7 @@ fn profile() -> RustExecutionProfile {
         nextest_profile: velnor_actions_rust::NextestProfile::Default,
         nextest_config: None,
         run_ignored: None,
+        no_tests: None,
     }
 }
 

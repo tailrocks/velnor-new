@@ -58,6 +58,9 @@ pub struct RustStackConfig {
     /// Ignored test execution mode ("all", "only", "ignored-only", "default").
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub run_ignored: Option<String>,
+    /// Nextest behavior when no tests are found ("fail", "warn", "pass").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub no_tests: Option<String>,
     /// Rust release policy (`[stacks.rust.release]`); disabled by default.
     #[serde(default)]
     pub release: RustReleaseConfig,
@@ -148,6 +151,7 @@ impl RustStackConfig {
             compile_driver: None,
             test_runner: None,
             run_ignored: None,
+            no_tests: None,
             release: RustReleaseConfig::default(),
             custom_tasks: Vec::new(),
         }
@@ -254,6 +258,15 @@ impl RustStackConfig {
                 format!("bad_run_ignored:{mode}"),
             ));
         }
+        if let Some(action) = &self.no_tests
+            && !matches!(action.as_str(), "fail" | "warn" | "pass")
+        {
+            return Err(ContractError::config(
+                file,
+                "stacks.rust.no_tests",
+                format!("bad_no_tests:{action}"),
+            ));
+        }
         self.release.validate(file)?;
         self.validate_custom_tasks(file)?;
         Ok(())
@@ -345,5 +358,19 @@ mod tests {
         stack.custom_tasks = vec!["audit".to_owned(), "evil task".to_owned()];
         let err = stack.validate("config.toml").expect_err("bad task fails");
         assert!(err.to_string().contains("bad_custom_task"), "{err}");
+    }
+
+    #[test]
+    fn no_tests_grammar_accepts_valid_actions() {
+        let mut stack = RustStackConfig::default_config();
+        for action in ["fail", "warn", "pass"] {
+            stack.no_tests = Some(action.to_owned());
+            assert!(stack.validate("config.toml").is_ok(), "{action}");
+        }
+        stack.no_tests = Some("invalid".to_owned());
+        let err = stack
+            .validate("config.toml")
+            .expect_err("invalid action fails");
+        assert!(err.to_string().contains("bad_no_tests"), "{err}");
     }
 }

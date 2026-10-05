@@ -193,6 +193,7 @@ mod tests {
             uses_random: false,
             nextest_profile: crate::profile::NextestProfile::Default,
             run_ignored: None,
+            no_tests: None,
         }
     }
 

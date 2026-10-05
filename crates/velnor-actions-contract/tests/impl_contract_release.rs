@@ -247,6 +247,7 @@ fn release_wired_into_stack_validation_with_key_paths() {
         compile_driver: None,
         test_runner: None,
         run_ignored: None,
+        no_tests: None,
         custom_tasks: Vec::new(),
         release: valid_release(),
     };
