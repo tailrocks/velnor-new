@@ -91,7 +91,7 @@ fn emitted_order(plan: &Plan) -> Vec<String> {
                 ExecuteTaskRef::Shards(ids) => {
                     ordered.extend(ids.iter().map(|id| {
                         crate::crate_jobs::obligation_order_key(&entry.stack_id, kind, id)
-                    }))
+                    }));
                 }
             }
         }
