@@ -14,6 +14,7 @@ use velnor_actions_contract::{Job, StepKind};
 
 use crate::{
     RenderError,
+    matrix_output_mode::mark_dynamic_matrix_output_mode,
     render::{PLAN_JOB_ID, PUBLISH_JOB_ID, TASK_JOB_ID},
     steps,
     yaml::Yaml,
@@ -347,13 +348,12 @@ fn insert_plan_step_id(
     id: &str,
     output: &str,
 ) -> Result<(), RenderError> {
-    if tag_op_step(jobs, id, steps::PLAN_OPERATION, PLAN_STEP_ID) {
-        Ok(())
-    } else {
-        Err(matrix_invalid(&format!(
+    if !tag_op_step(jobs, id, steps::PLAN_OPERATION, PLAN_STEP_ID) {
+        return Err(matrix_invalid(&format!(
             "matrix_without_plan_step:{output}"
-        )))
+        )));
     }
+    mark_dynamic_matrix_output_mode(jobs, id, PLAN_STEP_ID)
 }
 
 /// Tag one internal step with its step ID, after its name.

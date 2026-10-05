@@ -111,10 +111,14 @@ fn strategy_shape_exact_and_marker_stripped() -> Result<(), RenderError> {
         "      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}",
         "    outputs:",
         "      matrix: ${{ steps.plan.outputs.matrix }}",
+        "      plan_id: ${{ steps.plan.outputs.plan_id }}",
+        "      run_key: ${{ steps.plan.outputs.run_key }}",
+        "      covered_tasks: ${{ steps.plan.outputs.covered_tasks }}",
         "      qualification_campaign: ${{ steps.plan.outputs.qualification_campaign }}",
         "      qualification_phase: ${{ steps.plan.outputs.qualification_phase }}",
         "      qualification_cache_enabled: ${{ steps.plan.outputs.qualification_cache_enabled }}",
         "      qualification_cache_write: ${{ steps.plan.outputs.qualification_cache_write }}",
+        "VELNOR_PLAN_MATRIX_OUTPUT_MODE: dynamic_matrix",
         "        id: plan",
     ] {
         assert!(text.contains(line), "missing {line}:\n{text}");
@@ -133,6 +137,10 @@ fn max_parallel_honored() -> Result<(), RenderError> {
 #[test]
 fn static_task_renders_no_strategy() -> Result<(), RenderError> {
     let text = render(task_job(&BTreeMap::new(), vec!["plan".to_owned()])?)?;
+    assert!(
+        !text.contains("VELNOR_PLAN_MATRIX_OUTPUT_MODE"),
+        "static mode:\n{text}"
+    );
     // The plan job legitimately publishes `covered_tasks`; only the
     // static task job must stay free of matrix machinery.
     let start = text.find("velnor-task:").expect("task job renders");
