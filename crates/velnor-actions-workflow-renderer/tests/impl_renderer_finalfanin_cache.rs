@@ -60,5 +60,9 @@ fn checkoutless_required_job_does_not_call_local_cache_action() -> Result<(), Re
     );
     assert!(!names.contains(&"Save Mise tools".to_owned()), "{names:?}");
     assert!(!text.contains("uses: ./.github/actions/u26"), "{text}");
+    assert!(
+        !text.contains(velnor_actions_workflow_renderer::steps::TOOLS_RESTORE_USES),
+        "checkoutless Required must not call the local restore composite:\n{text}"
+    );
     Ok(())
 }

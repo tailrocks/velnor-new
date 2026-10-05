@@ -19,13 +19,13 @@ use crate::RenderError;
 /// Returns [`RenderError`] when a winner's save step fails to build
 /// (unreachable for keys read back from valid setups).
 pub fn elect_tools_cache_writers(jobs: &mut BTreeMap<String, Job>) -> Result<(), RenderError> {
-    let mut by_key: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    let mut by_identity: BTreeMap<(String, String), Vec<String>> = BTreeMap::new();
     for (id, job) in jobs.iter() {
-        if let Some(key) = tools_restore_key(id, job)? {
-            by_key.entry(key).or_default().push(id.clone());
+        if let Some(identity) = tools_restore_identity(id, job)? {
+            by_identity.entry(identity).or_default().push(id.clone());
         }
     }
-    for (key, owners) in &by_key {
+    for ((key, _static_digest), owners) in &by_identity {
         let winner = owners
             .iter()
             .find(|id| id.as_str() == crate::render::PLAN_JOB_ID)
@@ -185,7 +185,7 @@ fn has_provider_save(job: &Job) -> bool {
 }
 
 /// This job's V2 tools key after validating its identity-gated restore.
-fn tools_restore_key(id: &str, job: &Job) -> Result<Option<String>, RenderError> {
+fn tools_restore_identity(id: &str, job: &Job) -> Result<Option<(String, String)>, RenderError> {
     let restores = job
         .steps
         .iter()
@@ -194,40 +194,51 @@ fn tools_restore_key(id: &str, job: &Job) -> Result<Option<String>, RenderError>
     if restores.is_empty() {
         return Ok(None);
     }
-    if restores.len() != 1
-        || job
-            .steps
-            .iter()
-            .filter(|step| step.role == Some(StepRole::ToolsCacheIdentity))
-            .count()
-            != 1
-    {
+    let identities = job
+        .steps
+        .iter()
+        .filter(|step| step.role == Some(StepRole::ToolsCacheIdentity))
+        .collect::<Vec<_>>();
+    if restores.len() != 1 || identities.len() != 1 {
         return Err(RenderError::InvalidWorkflow(format!(
             "tools_cache_restore_shape:{id}"
         )));
     }
     let step = restores[0];
-    let StepKind::Action { uses, with, .. } = &step.kind else {
+    let key = crate::cache_steps::validate_tools_restore_call(step)
+        .map(str::to_owned)
+        .map_err(|_| RenderError::InvalidWorkflow(format!("tools_cache_restore_shape:{id}")))?;
+    let identity = identities[0];
+    let StepKind::Action {
+        uses,
+        with: identity_with,
+        env: identity_env,
+    } = &identity.kind
+    else {
         return Err(RenderError::InvalidWorkflow(format!(
-            "tools_cache_restore_shape:{id}"
+            "tools_cache_identity_shape:{id}"
         )));
     };
-    let key = with.get("key").cloned().ok_or_else(|| {
-        RenderError::InvalidWorkflow(format!("tools_cache_restore_key_missing:{id}"))
-    })?;
-    let expected_paths = crate::cache_steps::TOOLS_CACHE_PATHS.join("\n");
-    if step.role != Some(StepRole::ToolsCacheRestore)
-        || uses != crate::cache_steps::TOOLS_RESTORE_USES
-        || with.get("path").map(String::as_str) != Some(expected_paths.as_str())
-        || !key.starts_with("mise-tools-v2-")
-        || !key.contains("${{steps.v2.outputs.identity}}")
-        || step.condition.as_deref() != Some(crate::cache_p08::TOOLS_CACHE_RESTORE_CONDITION)
-    {
+    if identity.id.is_some() || identity.condition.is_some() {
         return Err(RenderError::InvalidWorkflow(format!(
-            "tools_cache_restore_shape:{id}"
+            "tools_cache_identity_shape:{id}"
         )));
     }
-    Ok(Some(key))
+    crate::cache_p08::validate_runtime_identity_action(
+        identity,
+        uses,
+        &job.runs_on,
+        identity_with,
+        identity_env,
+    )
+    .map_err(|_| RenderError::InvalidWorkflow(format!("tools_cache_identity_shape:{id}")))?;
+    let static_digest = identity_with
+        .get(velnor_actions_contract::workflow::step_identity::TOOLS_CACHE_IDENTITY_DIGEST_INPUT)
+        .cloned()
+        .ok_or_else(|| {
+            RenderError::InvalidWorkflow(format!("tools_cache_identity_digest_missing:{id}"))
+        })?;
+    Ok(Some((key, static_digest)))
 }
 
 /// Append the push-gated tools save over `key` to one writer job.

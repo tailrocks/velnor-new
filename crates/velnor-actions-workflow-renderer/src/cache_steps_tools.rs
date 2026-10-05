@@ -5,11 +5,17 @@
 
 use velnor_actions_contract::{Step, StepRole};
 
+#[path = "cache_steps_tools_restore.rs"]
+mod restore_action;
+
 use crate::RenderError;
 
 /// Pinned `actions/cache/restore` ref (v6.1.0, qualified 2026-09-28).
-pub const TOOLS_RESTORE_USES: &str =
+pub const TOOLS_RESTORE_ACTION_USES: &str =
     "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
+/// Fixed local composite that wraps the pinned V2 tools restore action.
+pub const TOOLS_RESTORE_USES: &str =
+    velnor_actions_contract::workflow::step_identity::TOOLS_CACHE_RESTORE_USES;
 /// Pinned `actions/cache/save` ref (v6.1.0, qualified 2026-09-28).
 pub const TOOLS_SAVE_USES: &str = "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
 /// Display name of the tools restore step.
@@ -31,6 +37,12 @@ pub(super) fn tools_cache_path_ok(path: &str) -> bool {
     TOOLS_CACHE_PATHS.contains(&path)
 }
 
+/// Validate the registered fixed-wrapper call and return its canonical key.
+/// # Errors
+pub(crate) fn validate_restore_call(step: &Step) -> Result<&str, RenderError> {
+    restore_action::validate_call(step)
+}
+
 /// V2 tools restore/save step over the exact typed payload paths.
 /// # Errors
 pub(super) fn cache_step(
@@ -38,18 +50,25 @@ pub(super) fn cache_step(
     key: &str,
     condition: Option<String>,
 ) -> Result<Step, RenderError> {
-    let name = if restore {
-        TOOLS_RESTORE_NAME
-    } else {
-        TOOLS_SAVE_NAME
-    };
-    let uses = if restore {
-        TOOLS_RESTORE_USES
-    } else {
-        TOOLS_SAVE_USES
-    };
+    if restore {
+        if !crate::cache_p08::is_v2_cache_key_expression(key) {
+            return Err(RenderError::InvalidWorkflow(
+                "bad_tools_cache_restore_key".to_owned(),
+            ));
+        }
+        let mut step = crate::steps::action_step(
+            TOOLS_RESTORE_NAME,
+            TOOLS_RESTORE_USES,
+            std::collections::BTreeMap::from([("key".to_owned(), key.to_owned())]),
+        )?;
+        step.condition = condition;
+        step.role = Some(StepRole::ToolsCacheRestore);
+        return Ok(step);
+    }
+    let name = TOOLS_SAVE_NAME;
+    let uses = TOOLS_SAVE_USES;
     let mut step = super::cache_action_step(
-        restore,
+        false,
         uses,
         "tools",
         key,
@@ -59,10 +78,10 @@ pub(super) fn cache_step(
     crate::steps::scan_for_private_subcommands(name)?;
     name.clone_into(&mut step.name);
     step.condition = condition;
-    step.role = Some(if restore {
-        StepRole::ToolsCacheRestore
-    } else {
-        StepRole::ToolsCacheSave
-    });
+    step.role = Some(StepRole::ToolsCacheSave);
     Ok(step)
+}
+
+pub(crate) fn restore_action_file(version: &str) -> Result<crate::tree::RenderedFile, RenderError> {
+    restore_action::action_file(version)
 }

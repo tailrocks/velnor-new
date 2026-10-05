@@ -276,7 +276,7 @@ fn elected_save_stays_on_the_winner_job() {
         .clone();
     let save = crate::cache_steps::tools_cache_step(
         false,
-        "mise-tools-v2-fixture-${{steps.v2.outputs.identity}}",
+        crate::cache_p08::TOOLS_CACHE_KEY_EXPRESSION,
         Some(crate::cache_p08::tools_cache_save_condition()),
     )
     .expect("save");

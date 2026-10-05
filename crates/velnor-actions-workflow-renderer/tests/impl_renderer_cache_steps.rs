@@ -92,7 +92,7 @@ fn cache_restore_accepts_only_owned_paths() {
 #[test]
 fn tools_layer_accepts_only_its_exact_v2_payload_paths() {
     let uses = format!("actions/cache/restore@{}", sha());
-    let key = "mise-tools-v2-typed-static-digest-${{steps.v2.outputs.identity}}";
+    let key = "mise-tools-v2-${{steps.v2.outputs.identity}}";
     let paths = TOOLS_CACHE_PATHS.map(str::to_owned);
     let restore = cache_action_step(true, &uses, "tools", key, &[], &paths).expect("restore");
     let StepKind::Action { with, .. } = restore.kind else {

@@ -9,6 +9,7 @@ use super::impl_renderer_fixtures::*;
 
 const IDENTITY_SCRIPT_PATH: &str = ".github/scripts/velnor-tools-cache-identity.sh";
 const IDENTITY_SCRIPT_NAME: &str = "velnor-tools-cache-identity.sh";
+const RESTORE_ACTION_PATH: &str = ".github/actions/velnor-tools-cache-restore/action.yml";
 const UBUNTU26_ACTION: &str = "./.github/actions/u26";
 const IDENTITY_STEP: &str = "V2 identity";
 const RESTORE_STEP: &str = "Restore Mise tools";
@@ -94,6 +95,39 @@ fn assert_one_marked_script(rendered: &RenderedWorkflow) -> Result<(), RenderErr
         );
     }
     assert_eq!(rendered.yaml.matches(UBUNTU26_ACTION).count(), 2);
+    let restore_action = rendered
+        .shared
+        .iter()
+        .find(|file| file.path == RESTORE_ACTION_PATH)
+        .expect("shared tools restore composite");
+    assert_eq!(
+        rendered
+            .shared
+            .iter()
+            .filter(|file| file.path == RESTORE_ACTION_PATH)
+            .count(),
+        1,
+        "the composite source is emitted once"
+    );
+    assert!(restore_action.bytes.contains("actions/cache/restore@"));
+    assert!(restore_action.bytes.contains("key: ${{ inputs.key }}"));
+    assert!(restore_action.bytes.starts_with(&format!("{marker}\n")));
+    assert!(
+        rendered
+            .yaml
+            .contains(velnor_actions_workflow_renderer::steps::TOOLS_RESTORE_USES)
+    );
+    assert_eq!(
+        rendered
+            .yaml
+            .matches(velnor_actions_workflow_renderer::steps::TOOLS_RESTORE_USES)
+            .count(),
+        2,
+        "paired and unpaired hosted callers reference one shared composite"
+    );
+    assert!(rendered.yaml.contains(
+        "uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]"
+    ));
     assert!(!rendered.yaml.contains(IDENTITY_SCRIPT_PATH));
     Ok(())
 }
@@ -136,5 +170,10 @@ fn cache_free_render_does_not_emit_runtime_identity_script() -> Result<(), Rende
     )?;
     assert!(rendered.shared.is_empty(), "{:?}", rendered.shared);
     assert!(!rendered.yaml.contains("velnor-tools-cache-identity"));
+    assert!(
+        !rendered
+            .yaml
+            .contains(velnor_actions_workflow_renderer::steps::TOOLS_RESTORE_USES)
+    );
     Ok(())
 }

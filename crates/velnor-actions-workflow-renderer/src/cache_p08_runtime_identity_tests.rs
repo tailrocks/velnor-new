@@ -61,6 +61,10 @@ impl Drop for Fixture {
 }
 
 fn payload(runs_on: &str) -> ToolsCachePayload {
+    payload_with_specs(runs_on, &["rust@1.98.1".to_owned()])
+}
+
+fn payload_with_specs(runs_on: &str, tool_specs: &[String]) -> ToolsCachePayload {
     let setup = MiseSetup {
         uses: "jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5".to_owned(),
         version: "2026.9.18".to_owned(),
@@ -70,7 +74,7 @@ fn payload(runs_on: &str) -> ToolsCachePayload {
         runs_on,
         target: "x86_64-unknown-linux-gnu",
         mise_setup: &setup,
-        tool_specs: &["rust@1.98.1".to_owned()],
+        tool_specs,
         rustup_toolchain: Some("1.98.1"),
         rustup_components: &[],
     })
@@ -243,6 +247,35 @@ fn hosted_identity_hashes_the_validated_image_and_owned_roots() -> Result<(), Bo
     assert!(
         text.lines()
             .any(|line| line == "reason=qualified_hosted_image")
+    );
+    Ok(())
+}
+
+#[test]
+fn static_tools_digest_is_bound_into_the_canonical_runtime_key() -> Result<(), Box<dyn Error>> {
+    let fixture = Fixture::new()?;
+    let base = payload("ubuntu-26.04");
+    let expanded = payload_with_specs(
+        "ubuntu-26.04",
+        &["rust@1.98.1".to_owned(), "shellcheck@0.11.0".to_owned()],
+    );
+    assert_ne!(base.static_digest(), expanded.static_digest());
+    assert_eq!(
+        base.key_expression(),
+        crate::cache_p08::TOOLS_CACHE_KEY_EXPRESSION
+    );
+    assert!(!base.key_expression().contains(base.static_digest()));
+
+    let (base_output, base_text) = run_and_read(&base, &fixture, &[]);
+    let (expanded_output, expanded_text) = run_and_read(&expanded, &fixture, &[]);
+    assert!(base_output.status.success(), "{base_output:?}");
+    assert!(expanded_output.status.success(), "{expanded_output:?}");
+    let base_identity = identity(&base_text);
+    let expanded_identity = identity(&expanded_text);
+    assert_ne!(base_identity, expanded_identity);
+    assert_ne!(
+        base.key_for_runtime_identity(base_identity)?,
+        expanded.key_for_runtime_identity(expanded_identity)?
     );
     Ok(())
 }

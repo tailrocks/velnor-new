@@ -9,6 +9,8 @@ use std::collections::BTreeSet;
 pub const TOFU_PROVIDER_ADMISSION_USES: &str = "./.github/actions/tofu-provider-admission";
 /// Fixed local action path for the exact-key host tool seed.
 pub const TOOL_SEED_USES: &str = "./.github/actions/velnor-tool-seed";
+/// Fixed local action path for the exact V2 tools-cache restore wrapper.
+pub const TOOLS_CACHE_RESTORE_USES: &str = "./.github/actions/velnor-tools-cache-restore";
 /// Static tool digest input for the runtime-qualified tools identity action.
 pub const TOOLS_CACHE_IDENTITY_DIGEST_INPUT: &str = "d";
 /// Expression path for the job-private `OpenTofu` plugin cache.
@@ -96,7 +98,7 @@ pub enum StepRole {
     ToolsCacheSave,
     /// Runtime identity action that gates the V2 tools-cache layer.
     ToolsCacheIdentity,
-    /// Read-only restore of the V2 tools-cache payload.
+    /// Read-only restore wrapper for the V2 tools-cache payload.
     ToolsCacheRestore,
     /// Restore of the shared Cargo registry and git sources snapshot.
     CargoSourcesRestore,
@@ -164,7 +166,10 @@ impl StepRole {
                 action_has_prefix_for_kind(kind, "actions/cache/save@")
             }
             Self::ToolsCacheIdentity => valid_tools_cache_identity(kind),
-            Self::ToolsCacheRestore => action_has_prefix_for_kind(kind, "actions/cache/restore@"),
+            Self::ToolsCacheRestore => matches!(
+                kind,
+                StepKind::Action { uses, .. } if uses == TOOLS_CACHE_RESTORE_USES
+            ),
             Self::CargoSourcesRestore => action_has_prefix_for_kind(kind, "actions/cache/restore@"),
             Self::TofuProvidersRestore => super::step_protocol::valid_provider_restore(kind),
             Self::TofuProvidersSave => super::step_protocol::valid_provider_save(kind),

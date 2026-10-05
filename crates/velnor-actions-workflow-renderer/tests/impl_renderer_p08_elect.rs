@@ -7,9 +7,7 @@ use velnor_actions_workflow_renderer::RenderError;
 use velnor_actions_workflow_renderer::cache_p08::{
     ToolsCacheInputs, ToolsCachePayload, elect_tofu_provider_savers, elect_tools_cache_writers,
 };
-use velnor_actions_workflow_renderer::steps::{
-    TOOLS_CACHE_PATHS, TOOLS_RESTORE_NAME, TOOLS_SAVE_NAME, TOOLS_SAVE_USES,
-};
+use velnor_actions_workflow_renderer::steps::{TOOLS_CACHE_PATHS, TOOLS_SAVE_USES};
 use velnor_actions_workflow_renderer::tofu_cache::{
     TOFU_PROVIDER_ADMISSION_USES, TOFU_PROVIDERS_SAVE_USES,
 };
@@ -20,7 +18,7 @@ use super::impl_renderer_fixtures::*;
 fn tools_saves(job: &Job) -> Vec<&Step> {
     job.steps
         .iter()
-        .filter(|step| step.name == TOOLS_SAVE_NAME)
+        .filter(|step| step.role == Some(StepRole::ToolsCacheSave))
         .collect()
 }
 
@@ -95,7 +93,7 @@ fn saved_key(job: &Job) -> Option<&str> {
 
 fn restore_key(job: &Job) -> Option<&str> {
     job.steps.iter().find_map(|step| {
-        if step.name != TOOLS_RESTORE_NAME {
+        if step.role != Some(StepRole::ToolsCacheRestore) {
             return None;
         }
         let StepKind::Action { with, .. } = &step.kind else {

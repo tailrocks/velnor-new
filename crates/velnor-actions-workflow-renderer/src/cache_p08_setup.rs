@@ -156,11 +156,14 @@ fn has_v2_cache_authority(step: &Step, job: &Job) -> bool {
     if cache_p08::runtime_identity_action_uses(&job.runs_on) == Some(uses.as_str()) {
         return true;
     }
+    if uses == crate::cache_steps::TOOLS_RESTORE_USES {
+        return true;
+    }
     let tools_paths = crate::cache_steps::TOOLS_CACHE_PATHS
         .map(str::to_owned)
         .join("\n");
-    uses == crate::cache_steps::TOOLS_RESTORE_USES
-        && with.get("path").is_some_and(|path| path == &tools_paths)
+    uses == crate::cache_steps::TOOLS_RESTORE_ACTION_USES
+        && with.get("path").map(String::as_str) == Some(tools_paths.as_str())
 }
 
 fn step_uses_mise(step: &Step) -> bool {

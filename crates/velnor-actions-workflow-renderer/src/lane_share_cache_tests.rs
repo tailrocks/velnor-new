@@ -16,7 +16,7 @@ fn elected_save_stays_on_the_winner_job() {
         .clone();
     let save = crate::cache_steps::tools_cache_step(
         false,
-        "mise-tools-v2-fixture-${{steps.v2.outputs.identity}}",
+        crate::cache_p08::TOOLS_CACHE_KEY_EXPRESSION,
         Some(crate::cache_p08::tools_cache_save_condition()),
     )
     .expect("save");
@@ -111,6 +111,11 @@ fn only_qualified_hosted_lane_keeps_a_tools_cache_prelude() {
         identity_uses,
         crate::cache_p08::runtime_identity_action_uses(HOSTED_RUNS)
     );
+    let restore_uses = match &hosted_prelude[2].kind {
+        StepKind::Action { uses, .. } => Some(uses.as_str()),
+        _ => None,
+    };
+    assert_eq!(restore_uses, Some(crate::cache_steps::TOOLS_RESTORE_USES));
 
     let composite = shared
         .files
@@ -121,6 +126,10 @@ fn only_qualified_hosted_lane_keeps_a_tools_cache_prelude() {
     assert!(!composite.bytes.contains("V2 identity"));
     assert!(!composite.bytes.contains("Restore Mise tools"));
     let yaml = render_jobs(&workflow_ir(), &shared, &ctx()).expect("shared workflow");
+    assert_eq!(
+        yaml.matches(crate::cache_steps::TOOLS_RESTORE_USES).count(),
+        1
+    );
     let checkout = yaml.find("name: Checkout").expect("checkout");
     let identity = yaml.find("name: V2 identity").expect("identity");
     let restore = yaml.find("name: Restore Mise tools").expect("restore");

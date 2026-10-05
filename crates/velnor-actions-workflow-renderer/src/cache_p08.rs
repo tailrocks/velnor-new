@@ -29,6 +29,8 @@ pub const SAVE_SOURCES_NAME: &str = "Save Cargo sources";
 pub const TOOLS_CACHE_IDENTITY_NAME: &str = "V2 identity";
 /// Step output owner used by both V2 restore and save expressions.
 pub const TOOLS_CACHE_IDENTITY_STEP_ID: &str = "v2";
+/// Canonical key expression; the output hashes both static tools and runtime identity.
+pub(crate) const TOOLS_CACHE_KEY_EXPRESSION: &str = "mise-tools-v2-${{steps.v2.outputs.identity}}";
 /// Composite-action input carrying the V2 static tools digest.
 pub(crate) const TOOLS_CACHE_IDENTITY_DIGEST_INPUT: &str =
     velnor_actions_contract::workflow::step_identity::TOOLS_CACHE_IDENTITY_DIGEST_INPUT;
@@ -146,15 +148,7 @@ pub(crate) fn setup_step(setup: &MiseSetup) -> Result<Step, RenderError> {
 
 /// True only for the canonical typed V2 cache-key expression.
 pub(crate) fn is_v2_cache_key_expression(value: &str) -> bool {
-    value
-        .strip_prefix("mise-tools-v2-")
-        .and_then(|key| key.strip_suffix("-${{steps.v2.outputs.identity}}"))
-        .is_some_and(|digest| {
-            digest.len() == 64
-                && digest
-                    .bytes()
-                    .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
-        })
+    value == TOOLS_CACHE_KEY_EXPRESSION
 }
 
 /// Validate the component-install payload against the resolved toolchain.
