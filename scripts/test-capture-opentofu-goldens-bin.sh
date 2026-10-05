@@ -147,6 +147,30 @@ expect_release_rejected() {
   echo "passed release manifest rejection: $label"
 }
 
+expect_release_rejected_without_message() {
+  local label="$1" manifest="$2" digest="$3" source="$4"
+  local status=0 log="$WORK/$label.log"
+  GITHUB_SHA="$source" GITHUB_REPOSITORY=tailrocks/velnor-new \
+    PATH="$STUB_BIN:$ORIGINAL_PATH" VELNOR_TEST_CARGO_MARKER="$MARKER" \
+    "$SCRIPT" check-release "$CLI_BIN" "$manifest" "$digest" >"$log" 2>&1 || status=$?
+  if [ "$status" -eq 0 ]; then
+    cat "$log" >&2
+    echo "FAIL: release manifest rejection $label unexpectedly succeeded" >&2
+    exit 1
+  fi
+  if [ -e "$MARKER" ]; then
+    echo "FAIL: release manifest rejection $label unexpectedly invoked cargo" >&2
+    exit 1
+  fi
+  local after
+  after="$(golden_fingerprint)" || exit 2
+  if [ "$after" != "$BEFORE" ]; then
+    echo "FAIL: release manifest rejection $label changed goldens" >&2
+    exit 1
+  fi
+  echo "passed release manifest rejection: $label"
+}
+
 expect_rejected() {
   local label="$1" expected="$2" status=0
   shift 2
@@ -178,6 +202,12 @@ expect_release_rejected missing-manifest 'candidate manifest must be a regular n
 mkdir "$WORK/directory manifest"
 expect_release_rejected directory-manifest 'candidate manifest must be a regular non-symlink file' \
   "$WORK/directory manifest" "$(printf '%064d' 0)" "$SOURCE_SHA"
+if ! mkfifo "$WORK/fifo manifest"; then
+  echo "FATAL: could not create FIFO manifest fixture" >&2
+  exit 2
+fi
+expect_release_rejected fifo-manifest 'candidate manifest must be a regular non-symlink file' \
+  "$WORK/fifo manifest" "$(printf '%064d' 0)" "$SOURCE_SHA"
 dd if=/dev/zero of="$WORK/oversized manifest.json" bs=8388609 count=1 2>/dev/null
 expect_release_rejected oversized-manifest 'candidate manifest must not exceed 8388608 bytes' \
   "$WORK/oversized manifest.json" "$(printf '%064d' 0)" "$SOURCE_SHA"
@@ -192,6 +222,10 @@ expect_release_rejected symlink-manifest 'candidate manifest must be a regular n
   "$WORK/symlink manifest.json" "$(test_file_sha256 "$WORK/valid manifest.json")" "$SOURCE_SHA"
 expect_release_rejected malformed-github-sha 'GITHUB_SHA must be a lowercase 40-character source SHA' \
   "$WORK/valid manifest.json" "$(test_file_sha256 "$WORK/valid manifest.json")" 'invalid-source-sha'
+sed 's/"schema": 1/"schema": 1, "schema": 1/' \
+  "$WORK/valid manifest.json" >"$WORK/duplicate keys.json"
+expect_release_rejected_without_message duplicate-manifest-keys \
+  "$WORK/duplicate keys.json" "$(test_file_sha256 "$WORK/duplicate keys.json")" "$SOURCE_SHA"
 expect_release_rejected wrong-manifest-sha 'candidate manifest bytes do not match expected SHA-256' \
   "$WORK/valid manifest.json" "$(printf '%064d' 0)" "$SOURCE_SHA"
 jq --argjson index "$HOST_TARGET_INDEX" \
