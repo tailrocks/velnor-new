@@ -1,31 +1,29 @@
 #!/bin/sh
-# Nested Rosetta crashes OTP 24 JIT (beam.smp signal 11). The arm64 image
-# of this tag runs natively and is what testcontainers finds on create.
+# Start the private daemon before publishing its socket to the runner.
 set -eu
 export PATH="/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 real=/run/docker.sock.real
 public=/run/docker.sock
 rm -f "$public"
+# Do not publish a socket unless the daemon creates it within about 10 seconds.
 dockerd --host="unix://${real}" "$@" &
 pid=$!
 trap 'kill "$pid" 2>/dev/null || true; wait "$pid" || true; exit 0' TERM INT
 i=0
 while [ ! -S "$real" ]; do
   if ! kill -0 "$pid" 2>/dev/null; then
-    wait "$pid"
-    exit $?
+    wait "$pid" 2>/dev/null || true
+    echo "velnor-dind: dockerd exited before socket appeared" >&2
+    exit 1
   fi
   i=$((i + 1))
   if [ "$i" -gt 100 ]; then
     echo "velnor-dind: dockerd socket did not appear" >&2
-    break
+    kill -KILL "$pid" 2>/dev/null || true
+    wait "$pid" 2>/dev/null || true
+    exit 1
   fi
   sleep 0.1
 done
-if docker --host "unix://${real}" pull --platform linux/arm64 rabbitmq:3.8.22-management >&2; then
-  echo "velnor-dind: seeded rabbitmq:3.8.22-management linux/arm64" >&2
-else
-  echo "velnor-dind: rabbitmq arm64 seed failed" >&2
-fi
 ln -sfn docker.sock.real "$public"
 wait "$pid"

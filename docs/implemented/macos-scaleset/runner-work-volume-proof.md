@@ -159,7 +159,7 @@ remained. The labeled volume was removed and a subsequent inspection confirmed
 it was absent. The transcript uses the exact immutable image IDs above and is
 stored at `/tmp/runner25-work-volume-proof-probe-final2.log`.
 
-## Merged PR25 + PR48 image receipt
+## Earlier merged PR25 + PR48 image receipt (superseded below)
 
 The `b3aec0818fadfcccafe7c4aaa6b0ea7474dd8e76` merge changed the runner
 entrypoint and image documentation. I rebuilt both combined images and
@@ -270,3 +270,120 @@ are retained at `/tmp/runner25-b3-image-build.log` and
 checks the `_work` mount, private `/tmp/velnor-jit.*` location, and absence of
 a runner mount at `/tmp`. Its source SHA-256 is
 `6e27926566362fb05ca792437ed8a148644c31589cfbdb56af77745620c3fe04`.
+## Final PR25 startup and resource-budget image receipt
+
+This build combines the runner-image correction reviewed against base
+`54a1f2e6033ab10c7d38b3cf51378b05b93920c2` (binary diff SHA-256
+`62e7cb28185192fdcfeb582fdcf81033bda47e854cc1d86f3ce679035f04d815`) with
+the separately reviewed tar fix `0fbc621f7da351d809466d25ad821569ded06c96`.
+The DinD entrypoint no longer pulls a mutable RabbitMQ workload image; it
+publishes the private Docker socket only after creation, and fails nonzero if
+the daemon exits before readiness or does not create the socket within about
+10 seconds. The runner image no longer sets `CARGO_BUILD_JOBS` from host
+`nproc`; workflow configuration owns compile parallelism. This receipt covers
+local image and volume behavior only, not a live Scale Set or Actions job.
+
+The combined build context includes all 23 regular files in the two image
+directories, excluding `.dockerignore`. The newline-terminated sorted
+`sha256sum` manifest is
+`/root/.cache/velnor-pr25-image-context-final.sha256` and hashes to
+`83544967e64300a68a4969c119e0d8353965e8cf9017d862375315692bd9e7ed`:
+
+```text
+9e6af678c45a8881d85327fce53e4a1d2549445f147d43214ebf3686b564cefc  images/dind/Dockerfile
+156d4353834a3e66ac09bd18162581dd6db8eabc59e5c76040881e6d6aeb64de  images/dind/README.md
+56adac08fbb9b7b522ea257a676e6cc5d5c53e54f60099199e719c3d039cdaa7  images/dind/entrypoint-test.sh
+9be9c89d96ba5feb69282d8aaf9e978cf2dba9aa117293ba394b44346875f3d5  images/dind/entrypoint.sh
+6fc16a1877d405c2afcd29875f5950f9ca0fad3648c30a63b9b7d74065525e49  images/runner/ubuntu-26.04/Dockerfile
+9b47040fbbde2e7bd56a76eb874f514cd0fa2318a597e77d2ccfebf64f828960  images/runner/ubuntu-26.04/README.md
+95746eb84e0896d408eea6afd4dd1eb0a9571b122445352f815fd2d3a98f1171  images/runner/ubuntu-26.04/clear-dockerenv-test.sh
+4e8fcacb646c4fe61b5ba4f1cf1e376e5a4a641f79e5097dd920e5e06d363f52  images/runner/ubuntu-26.04/clear-dockerenv.sh
+6f245b32f88164fa9390fbee5ba0c4a3c42932cb4fdd5be81fb9e4181fab855c  images/runner/ubuntu-26.04/entrypoint.sh
+a4ada6e2840a4c0a6305c7c9c891100b3c65e8471141eab4a9188e4dfe471000  images/runner/ubuntu-26.04/tar-absolute-test-extended.sh
+335a2cea5105ac6dc8a08d337f67d394274a23ecb371913f65d071bc0bddea18  images/runner/ubuntu-26.04/tar-absolute-test.sh
+28a654acaaa1cfd0df16229c908980be3c9a33c0c9c3ba664243c392394dd42d  images/runner/ubuntu-26.04/tar-absolute.sh
+9e3fe7b805b6f50b29a5e5e6edaf7373dc0e8e805885d4008c99d449ec9ad40d  images/runner/ubuntu-26.04/tar-extract-plan.sh
+c3b811fa95396723947eb170cd5b359af0b001b4bf2ff009f223f4095d46a5e2  images/runner/ubuntu-26.04/tar-extract.sh
+00c5649fc19c1479805e94d0e5d9991855f7b7630d822efbd57b99657cccbf12  images/runner/ubuntu-26.04/tar-member-rewrite.pl
+bf7a376b0e161c2cdf8c0065f2ae92542ec64b24470c367581308ff4c097de20  images/runner/ubuntu-26.04/tar-member-stream.pl
+eafebc28c0643148b7ca21b3037ce7f487db9444f6be7312a227a297aa064ccd  images/runner/ubuntu-26.04/tar-member.pl
+897516dbaf91a2413ee74ccde6f1b2b2e2fd90506aaa5cb750df2fb0e5e32915  images/runner/ubuntu-26.04/tar-pax.pl
+c31f6f74764ed80e2f0407fcb461e52b6562506b8b49bd81d4a203cc2dd8045f  images/runner/ubuntu-26.04/tar-semantics-planned-test.sh
+491d23bf80be47f497569ec4c77ee7b3f0ca71d2298fbab45e878f339b11a1e1  images/runner/ubuntu-26.04/tar-semantics-test.sh
+de9d08ab1cfe01021ca975286b42d2a2c648257066d7088b58c684c195623ab4  images/runner/ubuntu-26.04/tar-shim.sh
+37558be915ac85228df4789ce2a95486edd092af2a942b9dffd5a218228d34ab  images/runner/ubuntu-26.04/wait-docker-sock-test.sh
+78f55886c234691b6587a745e99e75ae6ded3666bb3c2a6184288ace65d45577  images/runner/ubuntu-26.04/wait-docker-sock.sh
+```
+
+Both builds used `ubuntu:26.04` at
+`sha256:f144425ff09be612d6d9ad965196e9cdc23dae1f42110a8a11a3e9a8198759f7`
+on Docker Engine `29.8.2`, Linux x86_64, engine ID
+`217d445c-e773-41da-b749-d0b32b0881e9`. The exact commands were:
+
+```sh
+docker build --pull --progress=plain --platform linux/amd64 \
+  -t velnor-dind:pr25-image-fix-20261005 images/dind
+docker build --pull --progress=plain --platform linux/amd64 \
+  -t velnor-runner:pr25-image-fix-20261005 images/runner/ubuntu-26.04
+```
+
+The final inspected image IDs and configuration are:
+
+| Image | Immutable ID | Configuration |
+|---|---|---|
+| DinD | `sha256:86c7f1e94f92db13f881bdca3cf1055cf329bc25a855dc43c7451c94d99c8274` | `linux/amd64`, entrypoint `/usr/local/bin/velnor-dind-entrypoint` |
+| Runner | `sha256:8c0e114a306c3bb85715007787514bb9adb4f133305f02c8808128ff23688f03` | `linux/amd64`, user `runner`, workdir `/home/runner`, entrypoint `/usr/local/bin/velnor-runner-entrypoint` |
+
+The installed DinD and runner entrypoints, socket-wait helper, and tar shim
+were hashed inside those exact images; all installed hashes match their source
+files. The DinD readiness harness ran with the image's current DIND source
+bind-mounted and a stub `dockerd`. It passed the ready case with no Docker
+command invocation, a `dockerd` exit-0-before-socket case that exited 1, and
+a no-socket case guarded by `timeout 15s`; neither failure case published the
+public socket. In the final runner image, `wait-docker-sock-test.sh`,
+`clear-dockerenv-test.sh`, and the DinD readiness harness passed. The
+Dockerfile's own tar probes also completed during the runner build. Separate
+tar shell suites passed 18/18 and 22/22 with logs under
+`/root/.cache/velnor-pr25-tar-strip-test-logs/`.
+
+A fresh-volume probe used the immutable IDs above and volume
+`velnor-pr25-work-imagefix-20261005-01`. The volume was confirmed absent before
+creation, then labeled `velnor.role=work` and
+`velnor.worker=runner25-imagefix`. DinD's first mount copied `/home/runner/_work`
+as `1000:1000 755`; its root process wrote a `0:0 644` marker. The default
+runner user `uid=1000(runner)` read that marker and wrote a `1000:1000 644`
+marker. A wrapper invoked the actual runner entrypoint with a dummy JIT body
+and one socket-wait attempt; it exited 1 with `docker socket missing`. An
+exported `mktemp` observer recorded a temporary path under `/tmp/velnor-jit.*`,
+verified that file was removed, and verified that no JIT file appeared in the
+work volume. Container inspection showed only the `_work` volume mount on
+every probe container, with no `/tmp` mount. All named containers and the
+volume were removed and then confirmed absent.
+
+The raw build logs, installed-file hash check, component-test transcript,
+probe script, and probe output are retained in `/root/.cache` as
+`velnor-pr25-imagefix-dind-build.log`,
+`velnor-pr25-imagefix-runner-build.log`,
+`runner25-imagefix-installed-files.log`,
+`runner25-imagefix-shell-tests.log`,
+`runner25-work-volume-probe-final.sh`,
+`runner25-work-volume-probe-inner.sh`, and
+`runner25-imagefix-work-volume-probe.log`. Their SHA-256 values are:
+
+| Receipt artifact | SHA-256 |
+|---|---|
+| Context manifest | `83544967e64300a68a4969c119e0d8353965e8cf9017d862375315692bd9e7ed` |
+| DinD build log | `79bf22bd19cb7c7965fd7eba2a5cbe1c8419ab18c4f93e947d859bdcaf4dac8a` |
+| Runner build log | `36e6303a2608fb285cd0e7c45b66e794017aa14c9a0ba779128527cfe08061b3` |
+| Installed-file hash log | `d51578d746bbfb487204a442cd262568ed69291ebc6a256c699b068e4e2c235d` |
+| Component-test log | `e5b1af174dbdb81a60fdb09e38039b8c55bae251cf3e9a38fa927b7dff58b682` |
+| Probe script | `fcc954966eb0005c4d574ab68cb2de46407960327a627ac8d804f76c61223353` |
+| Inner JIT probe | `db92bed654bbbf9ade06e277b0eb1e0a8669f79df43cc8ee36a287d673b90af2` |
+| Probe output log | `b167f6139573ebcc746f15fb0793c86155a93753f199b2202288e420d97e21f4` |
+
+The nested
+`runner_image_contract_tests` source is SHA-256
+`6c474faf2a3ef92dcd340c2efe444f3433db251e2db0086c89d369a5eadcece1`;
+the three focused tests passed, along with nested host Clippy and formatting,
+Shellcheck 0.11, `bash -n`, and `git diff --check`. This evidence does not
+qualify native macOS Keychain behavior, a live Scale Set, or a workflow job.

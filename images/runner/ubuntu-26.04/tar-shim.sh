@@ -12,7 +12,6 @@ files_from=""
 gzip=0
 zstd=0
 program=""
-strip=""
 absolute=0
 posix=0
 excludes=()
@@ -83,13 +82,6 @@ while [ "$i" -lt "${#args[@]}" ]; do
       ;;
     --use-compress-program=*)
       program="${arg#--use-compress-program=}"
-      ;;
-    --strip-components)
-      need
-      strip="${args[$i]}"
-      ;;
-    --strip-components=*)
-      strip="${arg#--strip-components=}"
       ;;
     -C)
       need
@@ -230,9 +222,6 @@ elif [ -n "$archive" ]; then
 fi
 if [ -n "$chdir" ]; then
   bb+=(-C "$chdir")
-fi
-if [ -n "$strip" ]; then
-  bb+=(--strip-components "$strip")
 fi
 # A --files-from list can exceed ARG_MAX. Do not put it on the BusyBox argv.
 # tar-absolute.sh reads that list from the file instead.
