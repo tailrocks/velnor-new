@@ -391,7 +391,7 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: g4-cache.txt
-          key: g4-empty-${{ github.run_id }}-${{ github.job }}
+          key: g4-empty-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
           fail-on-cache-miss: "false"
       - name: Require cache miss
         env:
@@ -403,7 +403,7 @@ jobs:
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: "g4 cache/note.txt"
-          key: g4-space-${{ github.run_id }}-${{ github.job }}
+          key: g4-space-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
       - name: Remove spaced path
         run: "rm -f \"g4 cache/note.txt\""
       - name: Restore spaced path
@@ -411,7 +411,7 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: "g4 cache/note.txt"
-          key: g4-space-${{ github.run_id }}-${{ github.job }}
+          key: g4-space-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
           fail-on-cache-miss: "true"
       - name: Require spaced restore
         env:
@@ -434,7 +434,7 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: g4-cache.txt
-          key: g4-empty-${{ github.run_id }}-${{ github.job }}
+          key: g4-empty-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
           fail-on-cache-miss: "false"
       - name: Require cache miss
         env:
@@ -446,7 +446,7 @@ jobs:
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: "g4 cache/note.txt"
-          key: g4-space-${{ github.run_id }}-${{ github.job }}
+          key: g4-space-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
       - name: Remove spaced path
         run: "rm -f \"g4 cache/note.txt\""
       - name: Restore spaced path
@@ -454,7 +454,7 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: "g4 cache/note.txt"
-          key: g4-space-${{ github.run_id }}-${{ github.job }}
+          key: g4-space-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
           fail-on-cache-miss: "true"
       - name: Require spaced restore
         env:

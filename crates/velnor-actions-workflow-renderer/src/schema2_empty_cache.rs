@@ -1,8 +1,8 @@
 //! Empty-cache qualification. Not part of `features`.
 //!
 //! Each lane restores a key that does not exist, then saves and restores a
-//! workspace path that contains a space. The key includes `github.job` so the
-//! two lanes do not share one cache entry.
+//! workspace path that contains a space. Keys include run, attempt, and job
+//! identity so retries and the two lanes use distinct immutable entries.
 
 use super::super::features::run_step;
 use super::steps::{mapping, run_env};
@@ -11,8 +11,8 @@ use crate::yaml::Yaml;
 
 const RESTORE: &str = "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
 const SAVE: &str = "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
-const EMPTY_KEY: &str = "g4-empty-${{ github.run_id }}-${{ github.job }}";
-const SPACE_KEY: &str = "g4-space-${{ github.run_id }}-${{ github.job }}";
+const EMPTY_KEY: &str = "g4-empty-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}";
+const SPACE_KEY: &str = "g4-space-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}";
 const SPACE_PATH: &str = "g4 cache/note.txt";
 const WRITE: &str = "mkdir -p \"g4 cache\" && printf '%s\n' cache-ok > \"g4 cache/note.txt\"";
 const REMOVE: &str = "rm -f \"g4 cache/note.txt\"";

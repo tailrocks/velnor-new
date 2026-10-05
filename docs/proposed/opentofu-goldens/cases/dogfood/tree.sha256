@@ -5,5 +5,5 @@ a63e6a4550e75e14c2dd2ebe6efefe1360a847967c0ee2f28803eb43949dc6e4  ./.github/AGEN
 d13645f1aa9667a1ce9fa0886ca5f4930c3a9a0e33c3dfe7df6b8942cad9962a  ./.github/workflows/generator-release.yml
 a103db30bc49166259cbb40e9948c2677fbc49d84164cc7f71c262ea5d3ecdab  ./.github/workflows/image-release.yml
 f3edd65a1dcc1de22b67e08446003e41d10c8fd4595ffcff72fb9e821a935846  ./.github/workflows/macos-binary-release.yml
-69324811110b0f46735bd9a692154da8d262e7246d3645f89b318ed169139625  ./.github/workflows/qualification.yml
+90ad78ce5d1457f89d21360331f22e8c4c3726cf49c8b3a485568903a33f80b4  ./.github/workflows/qualification.yml
 link ./.github/CLAUDE.md -> AGENTS.md
