@@ -158,6 +158,9 @@ fn kind_wait(message_id: i64, assigned: i64, kind: InnerKind) -> Poll {
             request_id: Some(0),
             job_id: None,
             labels: Vec::new(),
+            runner_id: None,
+            runner_name: None,
+            result: None,
             fields: Vec::new(),
         }],
     })
@@ -175,6 +178,9 @@ pub(crate) fn available(ids: &[i64]) -> Poll {
                 request_id: Some(id),
                 job_id: None,
                 labels: Vec::new(),
+                runner_id: None,
+                runner_name: None,
+                result: None,
                 fields: Vec::new(),
             })
             .collect(),
