@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use super::glob::{is_excluded, validate_pattern};
 
 /// Built-in exclusions applied before every detector runs.
-pub const BUILTIN_EXCLUSIONS: &[&str] = &[".git/**"];
+pub const BUILTIN_EXCLUSIONS: &[&str] = &[".git/**", ".velnor/cache/**"];
 
 /// Sorted repository-relative file paths plus the canonical root.
 #[derive(Debug, Clone)]
@@ -204,6 +204,12 @@ fn walk_dir(
     for entry in entries {
         let entry = entry.map_err(|err| IndexError::ReadFailed(err.to_string()))?;
         let path = entry.path();
+        if relative_posix(root, &path)?
+            .as_deref()
+            .is_some_and(is_reserved_cache_path)
+        {
+            continue;
+        }
         let kind = entry
             .file_type()
             .map_err(|err| IndexError::ReadFailed(err.to_string()))?;
@@ -234,6 +240,12 @@ fn walk_link(
         .map_err(|_| IndexError::SymlinkLoop(show(link)))?;
     if !target.starts_with(root) {
         return Err(IndexError::SymlinkEscape(show(link)));
+    }
+    if relative_posix(root, &target)?
+        .as_deref()
+        .is_some_and(is_reserved_cache_path)
+    {
+        return Ok(());
     }
     if target.is_dir() {
         if is_ancestor_or_self(&target, link) {
@@ -289,10 +301,22 @@ fn relative_posix(root: &Path, path: &Path) -> Result<Option<String>, IndexError
     Ok(Some(parts.join("/")))
 }
 
+/// Match the reserved cache root and descendants, not similarly named paths.
+fn is_reserved_cache_path(path: &str) -> bool {
+    path == ".velnor/cache"
+        || path
+            .strip_prefix(".velnor/cache")
+            .is_some_and(|suffix| suffix.starts_with('/'))
+}
+
 /// Lossy display form for diagnostics.
 fn show(path: &Path) -> String {
     path.to_string_lossy().into_owned()
 }
+
+#[cfg(test)]
+#[path = "index_cache_pruning_tests.rs"]
+mod cache_pruning_tests;
 
 #[cfg(test)]
 mod tests {
