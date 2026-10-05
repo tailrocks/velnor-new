@@ -68,15 +68,24 @@ if [[ -z "$ROOT" ]]; then
 fi
 INV="$ROOT/.velnor/freshness-inventory.json"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 if [[ ! -f "$INV" ]]; then
   echo "check-freshness: missing inventory: $INV" >&2
   exit 1
 fi
-if ! command -v python3 >/dev/null 2>&1; then
-  echo "check-freshness: python3 is required" >&2
+if ! command -v cargo >/dev/null 2>&1; then
+  echo "check-freshness: cargo is required" >&2
   exit 1
 fi
 
-python3 "$SCRIPT_DIR/check_freshness.py" "$ROOT" "$INV" \
-  "$CHECK_UPSTREAM" "$WITH_ADVISORIES" "$SCRIPT_DIR"
+NATIVE_ARGS=(freshness --root "$ROOT")
+if [[ "$CHECK_UPSTREAM" -eq 1 ]]; then
+  NATIVE_ARGS+=(--check-upstream)
+fi
+if [[ "$WITH_ADVISORIES" -eq 1 ]]; then
+  NATIVE_ARGS+=(--with-advisories)
+fi
+
+cargo run --locked --quiet --manifest-path "$REPO_ROOT/Cargo.toml" \
+  --package velnor-actions-cli -- "${NATIVE_ARGS[@]}"

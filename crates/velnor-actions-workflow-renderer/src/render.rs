@@ -17,15 +17,15 @@ use velnor_actions_contract::{
 };
 
 use crate::{
-    RenderError, cache_p08, closure, commands, document, final_steps, guard, marker, matrix, msrv,
-    preseed_closure, steps, support, yaml::render_yaml,
+    RenderError, cache_p08, closure, commands, document, final_steps, guard, job_runners, marker,
+    matrix, msrv, preseed_closure, steps, support, yaml::render_yaml,
 };
 
 pub use crate::matrix::{
     COVERED_TASKS_OUTPUT, MATRIX_MAX_PARALLEL_ENV, MATRIX_NEEDS_JOB_ENV, MATRIX_OUTPUT_ENV,
     MatrixSource, PLAN_ID_OUTPUT, PLAN_STEP_ID, RUN_KEY_OUTPUT,
 };
-pub use crate::setup::MiseSetup;
+pub use crate::setup::{MiseSetup, MiseSetupSet};
 
 /// Generated workflow path inside the repository.
 ///
@@ -204,7 +204,7 @@ pub fn render_workflow_ir_strict(
     policy: WorkflowPolicy,
     support: Option<&VelnorSupportWorkflow>,
     ctx: &RenderContext,
-    mise: &MiseSetup,
+    mise: &MiseSetupSet,
 ) -> Result<String, RenderError> {
     Ok(render_workflow_ir_strict_shared(ir, policy, support, ctx, mise)?.yaml)
 }
@@ -220,7 +220,7 @@ pub fn render_workflow_ir_strict_shared(
     policy: WorkflowPolicy,
     support: Option<&VelnorSupportWorkflow>,
     ctx: &RenderContext,
-    mise: &MiseSetup,
+    mise: &MiseSetupSet,
 ) -> Result<RenderedWorkflow, RenderError> {
     let jobs = finalize_jobs(ir, policy, support, ctx, mise)?;
     render_merged(ir, &jobs, ctx)
@@ -242,17 +242,16 @@ pub fn finalize_jobs(
     policy: WorkflowPolicy,
     support: Option<&VelnorSupportWorkflow>,
     ctx: &RenderContext,
-    mise: &MiseSetup,
+    mise: &MiseSetupSet,
 ) -> Result<BTreeMap<String, Job>, RenderError> {
-    mise.validate()?;
     let mut jobs = merged_jobs(ir, policy, support, ctx)?;
     for (id, job) in &mut jobs {
         let always = id == PLAN_JOB_ID || id == TASK_JOB_ID;
-        let target =
-            velnor_actions_contract::target_for_runner_label(&ctx.runs_on).ok_or_else(|| {
-                RenderError::InvalidWorkflow(format!("tools_cache_unsupported_target:{id}"))
-            })?;
-        cache_p08::ensure_setup_p08(id, job, mise, always, target)?;
+        let target = job_runners::cache_target_for_job(job, &ctx.runs_on).ok_or_else(|| {
+            RenderError::InvalidWorkflow(format!("tools_cache_unsupported_target:{id}"))
+        })?;
+        let setup = mise.for_target(target)?;
+        cache_p08::ensure_setup_p08(id, job, setup, always, target)?;
         cache_p08::check_no_rust_cache_with_mbx(id, job)?;
         cache_p08::check_mbx_before_fetch(id, job)?;
         closure::check_internal_staged(id, job, ctx.preseed)?;
@@ -302,7 +301,7 @@ fn merged_jobs(
     ir.validate().map_err(RenderError::Contract)?;
     check_triggers(&ir.triggers)?;
     check_concurrency(&ir.concurrency)?;
-    check_single_label(ir, &ctx.runs_on)?;
+    job_runners::validate_job_runners(ir, &ctx.runs_on)?;
     let mut jobs = ir.jobs.clone();
     match policy {
         WorkflowPolicy::ConsumerV1 => support::reject_consumer_support(&jobs, support)?,
@@ -313,8 +312,6 @@ fn merged_jobs(
     msrv::check_no_msrv(&jobs)?;
     support::check_candidate_invariants(&jobs)?;
     support::check_final_gate(&jobs)?;
-    support::check_token_hygiene(&jobs)?;
-    crate::mbx_bundle::append_single_bundle_saves(&mut jobs)?;
     support::check_token_hygiene(&jobs)?;
     Ok(jobs)
 }
@@ -332,7 +329,7 @@ fn render_merged(
     } else {
         jobs.clone()
     };
-    let mbx_gc_jobs = crate::mbx_gc_policy::jobs_with_hosted_mbx_objects(&jobs);
+    let mbx_gc_jobs = crate::mbx_gc_policy::jobs_with_hosted_mbx_objects(&jobs, &ctx.runs_on);
     let shared = crate::lane_share::share_lanes(&jobs, ctx)?;
     let mut document =
         document::workflow_to_yaml(ir, &shared.jobs, ctx, &shared.calls, &mbx_gc_jobs)?;
@@ -379,19 +376,6 @@ fn check_concurrency(concurrency: &Concurrency) -> Result<(), RenderError> {
         || concurrency.cancel_in_progress != CONCURRENCY_CANCEL
     {
         return Err(RenderError::InvalidWorkflow("bad_concurrency".to_owned()));
-    }
-    Ok(())
-}
-
-/// Require every job to use the single context label.
-fn check_single_label(ir: &WorkflowIr, label: &str) -> Result<(), RenderError> {
-    for (id, job) in &ir.jobs {
-        if job.runs_on != label
-            && !velnor_actions_contract::RunsOn::parse(&job.runs_on)
-                .is_ok_and(|selector| selector.is_scale_set())
-        {
-            return Err(RenderError::InvalidWorkflow(format!("label_mismatch:{id}")));
-        }
     }
     Ok(())
 }

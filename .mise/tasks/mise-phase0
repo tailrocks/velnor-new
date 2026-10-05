@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# Download exact official mise binaries, then run only the ignored real-binary suite.
+set -euo pipefail
+
+readonly LINUX_AFFECTED_SHA256=31e6859cf639ed4594906da3fcd0fe2055e9daddae75e9786dbe50b3fb3c0f4a
+readonly LINUX_FIXED_SHA256=8f5f6660336f572830e33cd9b378d3131e529a0d4c4f0c553776be90a1ba302a
+readonly MACOS_AFFECTED_SHA256=d225d1c8ef2934a86be93692a19365fb1df1cd6958a0af7b85909514e0c608a7
+readonly MACOS_FIXED_SHA256=66d49acecca413c8b334922584982a4907a10588912829873d6c55d0c6d42612
+
+: "${RUNNER_TEMP:?RUNNER_TEMP is required}"
+
+case "$(uname -s):$(uname -m)" in
+  Linux:x86_64)
+    asset_platform=linux-x64
+    affected_sha256=$LINUX_AFFECTED_SHA256
+    fixed_sha256=$LINUX_FIXED_SHA256
+    ;;
+  Darwin:arm64)
+    asset_platform=macos-arm64
+    affected_sha256=$MACOS_AFFECTED_SHA256
+    fixed_sha256=$MACOS_FIXED_SHA256
+    ;;
+  *)
+    printf 'unsupported Phase0 runner: %s/%s\n' "$(uname -s)" "$(uname -m)" >&2
+    exit 2
+    ;;
+esac
+
+fetch_mise() {
+  local version=$1
+  local asset=$2
+  local expected_sha256=$3
+  local destination=$4
+  local actual_sha256
+
+  mkdir -p "${destination%/*}"
+  curl --fail --location --silent --show-error \
+    "https://github.com/jdx/mise/releases/download/${version}/${asset}" \
+    --output "$destination"
+  actual_sha256="$(shasum -a 256 -- "$destination")"
+  actual_sha256=${actual_sha256%% *}
+  if [[ "$actual_sha256" != "$expected_sha256" ]]; then
+    printf 'SHA-256 mismatch for %s: expected %s, got %s\n' \
+      "$asset" "$expected_sha256" "$actual_sha256" >&2
+    exit 1
+  fi
+  chmod 0755 "$destination"
+}
+
+readonly mise_root="${RUNNER_TEMP}/mise-miserc"
+affected_binary="${mise_root}/affected/mise"
+fixed_binary="${mise_root}/fixed/mise"
+fetch_mise v2026.10.1 "mise-v2026.10.1-${asset_platform}" "$affected_sha256" "$affected_binary"
+fetch_mise v2026.10.2 "mise-v2026.10.2-${asset_platform}" "$fixed_sha256" "$fixed_binary"
+
+export VELNOR_MISE_AFFECTED_BINARY="$affected_binary"
+export VELNOR_MISE_FIXED_BINARY="$fixed_binary"
+exec cargo nextest run --locked --profile ci --jobs 2 -p velnor-actions-mise --test velnor_mise \
+  --run-ignored only -E 'test(impl_miserc_isolation::)' --no-tests fail

@@ -42,6 +42,17 @@ fn assert_freshness_shape(yaml: &str) {
         "exact pin:\n{yaml}"
     );
     assert!(
+        yaml.contains("version: 2026.10.2")
+            && yaml.contains(
+                "sha256: 8f5f6660336f572830e33cd9b378d3131e529a0d4c4f0c553776be90a1ba302a"
+            ),
+        "pinned Mise and installed binary:\n{yaml}"
+    );
+    assert!(
+        yaml.contains("mise --no-config --no-env --no-hooks exec rust@1.98.1"),
+        "pinned Rust setup for the native checker:\n{yaml}"
+    );
+    assert!(
         yaml.contains("scripts/check-freshness.sh --check-upstream"),
         "bounded probe:\n{yaml}"
     );

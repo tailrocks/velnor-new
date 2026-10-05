@@ -78,6 +78,20 @@ fn boot34_mise_version_matches_catalog() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
+fn freshness_shell_wrapper_dispatches_native_checker() -> Result<(), Box<dyn Error>> {
+    let fixture = p12_harness::passing("p12-wrapper-native")?;
+    let run = p12_harness::run_wrapper(&fixture.dir, &[])?;
+    p12_harness::assert_clean(&run);
+    assert!(
+        run.stdout.contains("\"check\":\"local-pin\""),
+        "missing native checker rows:\n{}",
+        run.stdout
+    );
+    p12_harness::cleanup(&fixture);
+    Ok(())
+}
+
+#[test]
 fn gape2_seed_rules_documented() -> Result<(), Box<dyn Error>> {
     let gates = read("docs/implemented/release-gates.md")?;
     assert!(gates.contains("BOOT-4.2"), "seed rule must be recorded");

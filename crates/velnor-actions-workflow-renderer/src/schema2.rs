@@ -9,7 +9,7 @@ use crate::RenderError;
 use crate::marker::with_marker;
 use crate::render::RenderedFile;
 use crate::runs_on::runs_on_yaml;
-use crate::setup::MiseSetup;
+use crate::setup::{MiseSetup, MiseSetupSet};
 use crate::yaml::{Yaml, render_yaml};
 
 /// Qualification workflow path.
@@ -45,8 +45,30 @@ pub struct Schema2WorkflowRequest {
     pub scale_set: ScaleSetSelector,
     /// Workflows to emit. Empty emits nothing.
     pub workflows: BTreeSet<RoutingWorkflow>,
+    /// Target-bound Mise setup pins, required by release workflows.
+    pub mise_setup_set: Option<MiseSetupSet>,
     /// Pinned tool inputs, required only when qualification is emitted.
     pub mbx_qualification: Option<MbxQualificationPins>,
+}
+
+/// Resolve the typed Mise pins for one hosted runner.
+///
+/// # Errors
+///
+/// Returns a render error when the runner has no supported target or
+/// the request does not contain that target's setup pins.
+pub(super) fn mise_setup_for_runner<'a>(
+    request: &'a Schema2WorkflowRequest,
+    runner_label: &str,
+) -> Result<&'a MiseSetup, RenderError> {
+    let target = crate::job_runners::target_for_runner_label(runner_label).ok_or_else(|| {
+        RenderError::InvalidWorkflow(format!("unsupported_mise_setup_target:{runner_label}"))
+    })?;
+    request
+        .mise_setup_set
+        .as_ref()
+        .ok_or_else(|| RenderError::InvalidWorkflow("missing_mise_setup_set".to_owned()))?
+        .for_target(target)
 }
 
 /// Exact tools used by the hosted MBX cache qualification.

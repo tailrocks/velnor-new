@@ -13,7 +13,7 @@ pub(crate) struct Cli {
     pub command: Command,
 }
 
-/// Public command tree: init, plan, generate, and config.
+/// Public command tree: init, plan, generate, freshness, and config.
 #[derive(Debug, Subcommand)]
 pub(crate) enum Command {
     /// Create `.velnor/config.toml` in the Git working tree.
@@ -33,6 +33,18 @@ pub(crate) enum Command {
         /// Requires canonical generator identity and an empty external destination.
         #[arg(long, requires = "output_dir", conflicts_with = "mode")]
         foundation_qualification_only: bool,
+    },
+    /// Check repository pins, policy mirrors, lock identity, and evidence.
+    Freshness {
+        /// Repository root to inspect.
+        #[arg(long = "root", value_name = "DIR", default_value = ".")]
+        root: PathBuf,
+        /// Include the bounded read-only upstream probe.
+        #[arg(long = "check-upstream")]
+        check_upstream: bool,
+        /// Run Cargo Deny advisories in addition to local policy checks.
+        #[arg(long = "with-advisories")]
+        with_advisories: bool,
     },
     /// Read or rewrite `.velnor/config.toml`.
     Config {

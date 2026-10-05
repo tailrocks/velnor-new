@@ -123,35 +123,74 @@ fn workflow_request(
             OrchestratorError::config(CONFIG_REL, "execution.profiles.hosted.label", "missing")
         })?;
     let scale_set = execution.scale_selector().map_err(config_error)?;
-    let mbx_qualification = if execution
-        .workflows
-        .contains(&RoutingWorkflow::Qualification)
-    {
-        let mbx_action = velnor_actions_actionlint::actions::PinnedActionRef::new(
-            "jdx/mr-boxington-action",
-            None,
-            velnor_actions_actionlint::actions::MR_BOXINGTON_ACTION_SHA,
-            velnor_actions_actionlint::actions::MR_BOXINGTON_ACTION_VERSION,
-        )?;
-        let tool_catalog = velnor_actions_mise::ToolCatalog::pinned();
-        Some(MbxQualificationPins {
-            mise_setup: crate::pins::resolve_mise_setup(config, &hosted)?,
-            mbx_action_uses: mbx_action.uses_value(),
-            mbx_version: tool_catalog
-                .version(velnor_actions_mise::PinnedTool::MrBoxington)
-                .to_owned(),
-            rust_version: tool_catalog
-                .version(velnor_actions_mise::PinnedTool::Rust)
-                .to_owned(),
-        })
+    let needs_setup_set = requires_mise_setup_set(execution);
+    let needs_mise = needs_setup_set
+        || execution
+            .workflows
+            .contains(&RoutingWorkflow::Qualification);
+    let mise_setup = if needs_mise {
+        Some(crate::pins::resolve_mise_setup(config, &hosted)?)
     } else {
         None
     };
+    let mise_setup_set = if needs_setup_set {
+        let setup = mise_setup
+            .as_ref()
+            .ok_or_else(|| OrchestratorError::Contract {
+                problem: "schema2_mise_setup_unavailable".to_owned(),
+            })?;
+        Some(crate::pins::resolve_mise_setup_set(config, &hosted, setup)?)
+    } else {
+        None
+    };
+    let mbx_qualification = qualification_pins(execution, mise_setup.as_ref())?;
     Ok(Schema2WorkflowRequest {
         version: version.to_owned(),
         hosted_label: hosted,
         scale_set,
         workflows: execution.workflows.clone(),
+        mise_setup_set,
         mbx_qualification,
     })
+}
+
+fn requires_mise_setup_set(execution: &ExecutionConfig) -> bool {
+    [
+        RoutingWorkflow::MacosBinaryRelease,
+        RoutingWorkflow::GeneratorRelease,
+    ]
+    .iter()
+    .any(|workflow| execution.workflows.contains(workflow))
+}
+
+fn qualification_pins(
+    execution: &ExecutionConfig,
+    mise_setup: Option<&velnor_actions_workflow_renderer::MiseSetup>,
+) -> Result<Option<MbxQualificationPins>, OrchestratorError> {
+    if !execution
+        .workflows
+        .contains(&RoutingWorkflow::Qualification)
+    {
+        return Ok(None);
+    }
+    let mise_setup = mise_setup.ok_or_else(|| OrchestratorError::Contract {
+        problem: "schema2_mise_setup_unavailable".to_owned(),
+    })?;
+    let mbx_action = velnor_actions_actionlint::actions::PinnedActionRef::new(
+        "jdx/mr-boxington-action",
+        None,
+        velnor_actions_actionlint::actions::MR_BOXINGTON_ACTION_SHA,
+        velnor_actions_actionlint::actions::MR_BOXINGTON_ACTION_VERSION,
+    )?;
+    let tool_catalog = velnor_actions_mise::ToolCatalog::pinned();
+    Ok(Some(MbxQualificationPins {
+        mise_setup: mise_setup.clone(),
+        mbx_action_uses: mbx_action.uses_value(),
+        mbx_version: tool_catalog
+            .version(velnor_actions_mise::PinnedTool::MrBoxington)
+            .to_owned(),
+        rust_version: tool_catalog
+            .version(velnor_actions_mise::PinnedTool::Rust)
+            .to_owned(),
+    }))
 }

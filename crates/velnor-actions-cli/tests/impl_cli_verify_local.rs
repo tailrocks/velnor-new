@@ -15,6 +15,8 @@ use std::path::PathBuf;
 use std::process::Command;
 
 use crate::impl_repo_policy::p12_harness as freshness;
+#[path = "../examples/verify_local_metadata.rs"]
+mod verify_local_metadata;
 
 /// Workspace root derived from this crate's manifest dir.
 fn workspace_root() -> PathBuf {
@@ -97,10 +99,10 @@ fn verify_local_entrypoint_lists_exact_stages() -> Result<(), Box<dyn Error>> {
         "fail() records the stage"
     );
     assert!(script.contains("exit 1"), "failures exit nonzero");
-    // The repo-policy stage body is the freshness script at default
-    // (offline) flags — the exact command the stage test executes.
+    // The repo-policy stage runs the freshness script under the same
+    // explicit pinned toolchain used by every other Cargo invocation.
     assert!(
-        script.contains("stage repo-policy scripts/check-freshness.sh"),
+        script.contains("stage repo-policy \"${MISE_EXEC[@]}\" scripts/check-freshness.sh"),
         "repo-policy stage body"
     );
     // Every locking cargo invocation passes `--locked` (`fmt` takes no
@@ -112,29 +114,114 @@ fn verify_local_entrypoint_lists_exact_stages() -> Result<(), Box<dyn Error>> {
         if line.trim_start().starts_with('#') {
             continue;
         }
-        let locks = ["cargo clippy ", "cargo test ", "cargo build ", "cargo doc "]
-            .iter()
-            .any(|probe| line.contains(probe));
+        let locks = [
+            "cargo clippy ",
+            "cargo test ",
+            "cargo build ",
+            "cargo doc ",
+            "cargo run ",
+        ]
+        .iter()
+        .any(|probe| line.contains(probe));
         if locks {
             assert!(line.contains("--locked"), "unlocked cargo: {line}");
         }
     }
-    // The crate-list probes embed `cargo metadata` in python; both stay
-    // locked.
-    let metadata_probes = script
-        .lines()
-        .filter(|line| line.contains("metadata"))
-        .count();
-    assert_eq!(metadata_probes, 2, "both metadata probes present");
-    for line in script.lines().filter(|line| line.contains("metadata")) {
-        assert!(line.contains("cargo"), "metadata probe runs cargo");
-        assert!(line.contains("--locked"), "metadata probe is locked");
-    }
+    assert!(
+        !script.contains("python"),
+        "no Python dependency or inline code"
+    );
+    assert!(
+        script.contains("mise config get --file mise.toml")
+            && script.contains("mise config get --file .velnor/version-policy.toml"),
+        "toolchain pins use Mise's native TOML reader"
+    );
+    assert_eq!(
+        script
+            .matches("cargo metadata --locked --no-deps --format-version 1 --offline")
+            .count(),
+        1,
+        "metadata helper keeps one locked, offline Cargo probe definition"
+    );
+    assert!(
+        script.contains("cargo run --locked --offline --quiet -p velnor-actions-cli")
+            && script.contains("--example verify_local_metadata"),
+        "metadata JSON is read by the locked, offline native helper"
+    );
+    assert!(
+        script.contains("cargo_package_names packages")
+            && script.contains("cargo_package_names libraries"),
+        "both package and library lists are read"
+    );
     assert!(
         script.contains("run --workspace --locked"),
         "nextest integration run is locked"
     );
     Ok(())
+}
+
+#[test]
+fn verify_local_metadata_selects_sorted_packages_and_libraries() -> Result<(), Box<dyn Error>> {
+    let metadata = r#"{
+        "packages": [
+            {"name":"zeta","targets":[{"kind":["bin"]}]},
+            {"name":"beta","targets":[{"kind":["cdylib","lib"]}]},
+            {"name":"alpha","targets":[{"kind":["bin"]},{"kind":["lib"]}]},
+            {"name":"gamma","targets":[{"kind":["proc-macro"]}]}
+        ]
+    }"#;
+    let packages =
+        verify_local_metadata::package_names(metadata, false).map_err(std::io::Error::other)?;
+    let libraries =
+        verify_local_metadata::package_names(metadata, true).map_err(std::io::Error::other)?;
+    assert_eq!(packages, ["alpha", "beta", "gamma", "zeta"]);
+    assert_eq!(libraries, ["alpha", "beta"]);
+    assert!(verify_local_metadata::package_names("{}", false).is_err());
+    Ok(())
+}
+
+#[test]
+fn verify_local_toolchain_pins_match_native_mise_values() -> Result<(), Box<dyn Error>> {
+    if Command::new("mise").arg("--version").output().is_err() {
+        return Ok(());
+    }
+    for (mise_key, policy_key) in [
+        ("tools.rust", "tools.rust"),
+        ("tools.mr-boxington", "tools.mr-boxington"),
+        (
+            "tools.aqua:nextest-rs/nextest/cargo-nextest",
+            "tools.nextest",
+        ),
+    ] {
+        let mise_pin = native_mise_value("mise.toml", mise_key)?;
+        let policy_pin = native_mise_value(".velnor/version-policy.toml", policy_key)?;
+        assert_eq!(mise_pin, policy_pin, "pin drift for {mise_key}");
+    }
+    assert!(!native_mise_value(".velnor/version-policy.toml", "tools.mise")?.is_empty());
+    Ok(())
+}
+
+/// Read a TOML value through the same native Mise command as the script.
+fn native_mise_value(file: &str, key: &str) -> Result<String, Box<dyn Error>> {
+    let output = Command::new("mise")
+        .args(["config", "get", "--file", file, key])
+        .current_dir(workspace_root())
+        .output()?;
+    if !output.status.success() {
+        return Err(std::io::Error::other(format!(
+            "mise config get failed for {file} {key}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        ))
+        .into());
+    }
+    let value = String::from_utf8(output.stdout)?.trim().to_owned();
+    if value.is_empty() {
+        return Err(std::io::Error::other(format!(
+            "mise config get returned an empty value for {file} {key}"
+        ))
+        .into());
+    }
+    Ok(value)
 }
 
 #[test]

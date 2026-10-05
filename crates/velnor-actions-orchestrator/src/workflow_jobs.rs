@@ -26,6 +26,14 @@ pub(crate) const LINT_JOB_ID: &str = "actionlint";
 /// Display name of the always-on workflow-lint job.
 pub(crate) const LINT_DISPLAY_NAME: &str = "Actionlint";
 
+/// Combine crate jobs and repository-specific Phase0 jobs for Required.
+#[must_use]
+pub(crate) fn required_job_ids(crate_job_ids: &[String], phase0_job_ids: &[String]) -> Vec<String> {
+    let mut ids = crate_job_ids.to_vec();
+    ids.extend(phase0_job_ids.iter().cloned());
+    ids
+}
+
 /// Planner job: checkout, pinned-tool install, optional Acquire, request, plan.
 ///
 /// `Prepare pinned tools` installs the exact catalog tools the later steps consume
@@ -133,10 +141,10 @@ pub(crate) fn lint_job(label: &str, catalog: &ToolCatalog) -> Result<Job, Orches
 /// Needs decision (workflow-contract §4 "depends on the base and enabled
 /// policy jobs" + "`Required` depends on the plan, every crate
 /// job ... and the candidate report when candidate mode is enabled"):
-/// plan + every crate job + lint always, plus alint/policy/candidate when
-/// those policy jobs exist. IR validation requires `needs` to name IR jobs
-/// only, so this builds the IR subset and the renderer appends the merged
-/// support IDs post-merge (see `support.rs`); the release job never gates.
+/// plan + every crate job + lint always, plus repository Phase0 jobs and
+/// alint/policy/candidate when those jobs exist. IR validation requires
+/// `needs` to name IR jobs only, so the renderer appends merged support IDs
+/// post-merge (see `support.rs`); the release job never gates.
 /// `Prepare pinned tools` installs only `gh`: the fetch step downloads
 /// each expected matrix artifact by exact name through it. The
 /// write-request step assembles the merge request from the downloaded
@@ -146,12 +154,12 @@ pub(crate) fn lint_job(label: &str, catalog: &ToolCatalog) -> Result<Job, Orches
 /// Returns a contract error when a typed step request is rejected.
 pub(crate) fn final_job(
     label: &str,
-    crate_job_ids: &[String],
+    required_job_ids: &[String],
     acquire: Option<Step>,
     catalog: &ToolCatalog,
 ) -> Result<Job, OrchestratorError> {
     let mut needs = vec![PLAN_JOB_ID.to_owned()];
-    needs.extend(crate_job_ids.iter().cloned());
+    needs.extend(required_job_ids.iter().cloned());
     needs.push(LINT_JOB_ID.to_owned());
     let mut steps = Vec::new();
     steps.extend(acquire);

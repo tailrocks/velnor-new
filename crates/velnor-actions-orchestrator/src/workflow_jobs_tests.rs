@@ -3,7 +3,9 @@
 //! Declared via `#[path]` from `workflow_jobs.rs` under `cfg(test)`.
 
 use super::*;
-use velnor_actions_contract::StepKind;
+use crate::cover::Signals;
+use crate::workflow::workflow_jobs_mise_phase0;
+use velnor_actions_contract::{JobConclusion, RequiredJobResult, StepKind};
 
 /// Internal operation of one step, if any.
 fn operation_of(step: &Step) -> Option<&str> {
@@ -287,22 +289,53 @@ fn final_job_writes_request_before_merge() {
 #[test]
 fn final_job_needs_plan_crates_and_lint() {
     let catalog = ToolCatalog::pinned();
-    let job = final_job(
-        "ubuntu-26.04",
-        &["rust-demo".to_owned(), "rust-nested".to_owned()],
-        None,
-        &catalog,
-    )
-    .expect("final job");
+    let crate_ids = ["rust-demo".to_owned(), "rust-nested".to_owned()];
+    let phase0_ids = [
+        workflow_jobs_mise_phase0::LINUX_X64_JOB_ID.to_owned(),
+        workflow_jobs_mise_phase0::MACOS_ARM64_JOB_ID.to_owned(),
+    ];
+    let required_ids = required_job_ids(&crate_ids, &phase0_ids);
+    assert_eq!(
+        required_ids,
+        [
+            crate_ids[0].clone(),
+            crate_ids[1].clone(),
+            phase0_ids[0].clone(),
+            phase0_ids[1].clone()
+        ]
+    );
+    let job = final_job("ubuntu-26.04", &required_ids, None, &catalog).expect("final job");
     assert_eq!(
         job.needs,
         [
             PLAN_JOB_ID.to_owned(),
             "rust-demo".to_owned(),
             "rust-nested".to_owned(),
+            workflow_jobs_mise_phase0::LINUX_X64_JOB_ID.to_owned(),
+            workflow_jobs_mise_phase0::MACOS_ARM64_JOB_ID.to_owned(),
             LINT_JOB_ID.to_owned(),
         ]
     );
     let job = final_job("ubuntu-26.04", &[], None, &catalog).expect("final job");
     assert_eq!(job.needs, [PLAN_JOB_ID.to_owned(), LINT_JOB_ID.to_owned()]);
+}
+
+#[test]
+fn required_aggregator_marks_phase0_failure_and_cancellation_red() {
+    let mut signals = Signals::default();
+    crate::merge::required_evidence::fold_jobs(
+        &[
+            RequiredJobResult {
+                job_id: workflow_jobs_mise_phase0::LINUX_X64_JOB_ID.to_owned(),
+                conclusion: JobConclusion::Failure,
+            },
+            RequiredJobResult {
+                job_id: workflow_jobs_mise_phase0::MACOS_ARM64_JOB_ID.to_owned(),
+                conclusion: JobConclusion::Cancelled,
+            },
+        ],
+        &mut signals,
+    );
+    assert!(signals.failed, "Phase0 failure makes Required red");
+    assert!(signals.cancelled, "Phase0 cancellation makes Required red");
 }

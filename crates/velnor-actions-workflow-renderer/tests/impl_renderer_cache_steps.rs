@@ -4,8 +4,8 @@ use velnor_actions_contract::cachekey::mbx_cache_generation;
 
 use velnor_actions_contract::{Step, StepKind};
 use velnor_actions_workflow_renderer::steps::{
-    CompileDriver, MBX_CACHE_MODE_ENV, TOOLS_CACHE_PATH, TOOLS_RESTORE_NAME, TOOLS_SAVE_NAME,
-    cache_action_step, mbx_objects_step, mbx_step_for_driver, target_dir_for_lane, tools_cache_key,
+    CompileDriver, TOOLS_CACHE_PATH, TOOLS_RESTORE_NAME, TOOLS_SAVE_NAME, cache_action_step,
+    mbx_objects_step, mbx_step_for_driver, target_dir_for_lane, tools_cache_key,
     tools_restore_step, tools_save_step,
 };
 
@@ -345,20 +345,22 @@ fn lane_target_dirs_stay_isolated() {
 }
 
 #[test]
-fn mbx_objects_step_gates_save_to_push_via_cache_mode() {
+fn mbx_objects_step_leaves_cache_lifecycle_to_action() {
     let uses = format!("jdx/mr-boxington-action@{}", sha());
     let direct = mbx_objects_step(&uses, false, "1.19.0").expect("mbx");
     let driven = mbx_step_for_driver(&uses, CompileDriver::Mbx, "1.19.0")
         .expect("driver mbx")
         .expect("mbx driver emits");
     for step in [&direct, &driven] {
-        let StepKind::Action { env, .. } = &step.kind else {
+        let StepKind::Action { with, env, .. } = &step.kind else {
             panic!("mbx must be an action step");
         };
-        assert_eq!(
-            env.get(MBX_CACHE_MODE_ENV).map(String::as_str),
-            Some("read"),
-            "the action stays restore-only so its post cannot triple the store"
+        assert!(env.is_empty(), "the action owns restore and post-save");
+        assert!(!with.contains_key("isolate-objects-cache"));
+        assert!(!with.contains_key("cache-key-suffix"));
+        assert!(
+            !with.keys().any(|key| key.starts_with("save-on-")),
+            "the action's default-branch push policy remains authoritative"
         );
     }
     assert!(

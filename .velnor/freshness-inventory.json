@@ -138,13 +138,6 @@
     {
       "expires": "2026-10-17",
       "granted": "2026-10-03",
-      "held_version": "2026.9.18",
-      "issue": "#6",
-      "key": "mise",
-      "owner": "@donbeave",
-      "reason": "probes 2026-10-03T07:08:17Z and 2026-10-03T07:09:17Z both saw latest v2026.10.0; pin stays until the #6 update set; official source observed latest v2026.10.1 at 2026-10-04T11:25:00Z"
-    },
-    {
       "expires": "2026-10-15",
       "granted": "2026-10-01",
       "held_version": "1.98.1",
@@ -174,14 +167,14 @@
   ],
   "tools": [
     {
-      "checked_at": "2026-10-04T11:25:00Z",
-      "latest": "v2026.10.1",
+      "checked_at": "2026-10-05T01:25:50Z",
+      "latest": "v2026.10.2",
       "name": "mise",
-      "pinned": "2026.9.18",
-      "qualified": "2026.9.18",
+      "pinned": "2026.10.2",
+      "qualified": "2026.10.2",
       "source": "https://api.github.com/repos/jdx/mise/releases/latest",
-      "status": "held",
-      "source_sha256": "c29a6e97d7bf935bf56abe2c470830f62329e450a1ab34089593305d8b4fce4c"
+      "status": "current",
+      "source_sha256": "137f73a86cbd416e8514d6f9d5adab7bf0071ab6bbe7810e6cc64efad452972a"
     },
     {
       "checked_at": "2026-10-04T11:25:20Z",

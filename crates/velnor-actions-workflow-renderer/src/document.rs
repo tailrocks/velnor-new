@@ -7,6 +7,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::{
     RenderError, commands,
     composite::{push_composite_shell, shared_call},
+    lane_share::SharedCall,
     render::{FINAL_JOB_ID, RenderContext},
     steps::{self, INTERNAL_OP_ENV, REQUEST_FILE_ENV},
     yaml::Yaml,
@@ -21,16 +22,16 @@ pub(crate) fn workflow_to_yaml(
     ir: &WorkflowIr,
     jobs: &BTreeMap<String, Job>,
     ctx: &RenderContext,
-    shared: &BTreeMap<String, String>,
+    shared: &BTreeMap<String, Vec<SharedCall>>,
     mbx_gc_jobs: &BTreeSet<String>,
 ) -> Result<Yaml, RenderError> {
     let needs_env = needs_channel_envs(jobs)?;
     let mut rendered_jobs = Vec::with_capacity(jobs.len());
     for (id, job) in jobs {
-        let call = shared.get(id).map(String::as_str);
+        let calls = shared.get(id).map_or(&[][..], Vec::as_slice);
         rendered_jobs.push((
             id.clone(),
-            job_to_yaml(id, job, ctx, &needs_env, call, mbx_gc_jobs.contains(id))?,
+            job_to_yaml(id, job, ctx, &needs_env, calls, mbx_gc_jobs.contains(id))?,
         ));
     }
     Ok(Yaml::Map(vec![
@@ -182,7 +183,7 @@ fn job_to_yaml(
     job: &Job,
     ctx: &RenderContext,
     needs_envs: &[(String, String)],
-    shared: Option<&str>,
+    shared: &[SharedCall],
     mbx_gc_auto: bool,
 ) -> Result<Yaml, RenderError> {
     steps::scan_for_private_subcommands(&job.display_name)?;
@@ -224,12 +225,45 @@ fn job_to_yaml(
         steps::scan_for_private_subcommands(condition)?;
         entries.push(("if".to_owned(), Yaml::str(condition.clone())));
     }
-    let mut rendered_steps = Vec::with_capacity(job.steps.len() + usize::from(shared.is_some()));
-    if let Some(uses) = shared {
-        rendered_steps.push(shared_call(uses)?);
+    let mut rendered_steps = Vec::with_capacity(job.steps.len() + shared.len());
+    let mut source_cursor = 0;
+    let mut previous_start = None;
+    for call in shared {
+        if call.before_step < source_cursor
+            || call.before_step > job.steps.len()
+            || previous_start.is_some_and(|previous| call.before_step <= previous)
+        {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "shared_call_order:{id}"
+            )));
+        }
+        while source_cursor < call.before_step {
+            rendered_steps.push(step_to_yaml(
+                id,
+                &job.steps[source_cursor],
+                ctx,
+                needs_envs,
+                false,
+            )?);
+            source_cursor += 1;
+        }
+        rendered_steps.push(shared_call(&call.uses)?);
+        source_cursor = call
+            .before_step
+            .checked_add(call.skip_steps)
+            .filter(|end| *end <= job.steps.len())
+            .ok_or_else(|| RenderError::InvalidWorkflow(format!("shared_call_range:{id}")))?;
+        previous_start = Some(call.before_step);
     }
-    for step in &job.steps {
-        rendered_steps.push(step_to_yaml(id, step, ctx, needs_envs, false)?);
+    while source_cursor < job.steps.len() {
+        rendered_steps.push(step_to_yaml(
+            id,
+            &job.steps[source_cursor],
+            ctx,
+            needs_envs,
+            false,
+        )?);
+        source_cursor += 1;
     }
     entries.push(("steps".to_owned(), Yaml::Seq(rendered_steps)));
     Ok(Yaml::Map(entries))
@@ -303,7 +337,6 @@ fn action_step_to_yaml(
     }
     commands::validate_env(env)?;
     let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
-    crate::mbx_bundle::push_step_id(&mut entries, &step.name);
     if let Some(condition) = &step.condition {
         steps::scan_for_private_subcommands(condition)?;
         entries.push(("if".to_owned(), Yaml::str(condition.clone())));
@@ -351,7 +384,6 @@ pub(crate) fn step_to_yaml(
             commands::validate_command_argv(run)?;
             commands::validate_env(env)?;
             let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
-            crate::mbx_bundle::push_step_id(&mut entries, &step.name);
             if let Some(condition) = &step.condition {
                 steps::scan_for_private_subcommands(condition)?;
                 entries.push(("if".to_owned(), Yaml::str(condition.clone())));

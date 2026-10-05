@@ -139,8 +139,17 @@ fn mise_setup_accepts_approved_override_only() {
             version: MISE_ACTION_VERSION.to_owned(),
         },
     )]);
-    let setup = resolve_mise_setup(&config_with(approved), "ubuntu-26.04");
-    assert!(setup.is_ok_and(|setup| setup.uses.ends_with(MISE_ACTION_SHA)));
+    let config = config_with(approved);
+    let setup = resolve_mise_setup(&config, "ubuntu-26.04").expect("approved action pin");
+    assert!(setup.uses.ends_with(MISE_ACTION_SHA));
+    let set = resolve_mise_setup_set(&config, "ubuntu-26.04", &setup)
+        .expect("approved pin on each runner");
+    for target in ["x86_64-unknown-linux-gnu", "aarch64-apple-darwin"] {
+        assert!(
+            set.for_target(target)
+                .is_ok_and(|pin| pin.uses.ends_with(MISE_ACTION_SHA))
+        );
+    }
     for pin in [
         ActionPinOverride {
             sha: "0".repeat(40),
@@ -161,8 +170,48 @@ fn mise_setup_accepts_approved_override_only() {
 }
 
 #[test]
-fn mise_setup_rejects_non_linux_runners() {
-    for label in ["ubuntu-26.04-arm", "windows-latest", "ubuntu-latest"] {
+fn mise_setup_resolves_linux_and_macos_pins_from_their_targets() {
+    let config = config_with(BTreeMap::new());
+    let linux = resolve_mise_setup(&config, "ubuntu-26.04").expect("Linux setup");
+    assert_eq!(
+        linux.sha256,
+        "8f5f6660336f572830e33cd9b378d3131e529a0d4c4f0c553776be90a1ba302a"
+    );
+    let macos = resolve_mise_setup(&config, "macos-15").expect("macOS setup");
+    assert_eq!(
+        macos.sha256,
+        "66d49acecca413c8b334922584982a4907a10588912829873d6c55d0c6d42612"
+    );
+    assert_eq!(macos.version, linux.version);
+    assert_eq!(macos.uses, linux.uses);
+
+    let setup_set = resolve_mise_setup_set(&config, "ubuntu-26.04", &linux)
+        .expect("both supported target pins");
+    assert_eq!(
+        setup_set
+            .for_target("x86_64-unknown-linux-gnu")
+            .expect("Linux pin")
+            .sha256,
+        linux.sha256
+    );
+    assert_eq!(
+        setup_set
+            .for_target("aarch64-apple-darwin")
+            .expect("macOS pin")
+            .sha256,
+        macos.sha256
+    );
+}
+
+#[test]
+fn mise_setup_rejects_unsupported_runners() {
+    for label in [
+        "ubuntu-26.04-arm",
+        "windows-latest",
+        "ubuntu-latest",
+        "macos-latest",
+        "macos-14",
+    ] {
         let err = resolve_mise_setup(&config_with(BTreeMap::new()), label);
         assert!(
             err.is_err_and(|err| err.to_string().contains("mise_setup_unsupported_target")),

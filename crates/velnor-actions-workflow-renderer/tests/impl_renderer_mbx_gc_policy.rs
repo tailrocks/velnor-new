@@ -3,14 +3,12 @@
 use velnor_actions_contract::WorkflowPolicy;
 use velnor_actions_contract::config::{SCALE_SET_NAME, ScaleSetSelector, VELNOR_LABEL};
 use velnor_actions_contract::workflow::lanes::{HOSTED_SUFFIX, SCALE_SUFFIX};
-use velnor_actions_workflow_renderer::steps::{
-    MBX_CACHE_MODE_ENV, checkout_step, mbx_objects_step,
-};
+use velnor_actions_workflow_renderer::steps::{checkout_step, mbx_objects_step};
 use velnor_actions_workflow_renderer::{RenderError, render_workflow_ir};
 
 use super::impl_renderer_fixtures::*;
 
-/// Rendered GC policy reaches MBX only and composes with push-only saves.
+/// Rendered GC policy reaches MBX only while the action owns its lifecycle.
 #[test]
 fn action_step_env_renders_only_when_present() -> Result<(), RenderError> {
     let uses = format!("jdx/mr-boxington-action@{}", "a".repeat(40));
@@ -22,14 +20,9 @@ fn action_step_env_renders_only_when_present() -> Result<(), RenderError> {
         None,
         &fixture_ctx(),
     )?;
-    assert!(
-        text.contains(&format!("{MBX_CACHE_MODE_ENV}: read")),
-        "action post stays restore-only:\n{text}"
-    );
-    assert!(
-        !text.contains("&& 'write'"),
-        "push writes must not come from the action post:\n{text}"
-    );
+    assert!(!text.contains("ACTIONS_CACHE_MODE"), "{text}");
+    assert!(!text.contains("save-on-"), "{text}");
+    assert!(text.contains("isolate-objects-cache: \"true\""), "{text}");
     assert!(
         text.contains("MBX_GC_AUTO: \"1\""),
         "MBX jobs enable GC:\n{text}"
@@ -51,10 +44,7 @@ fn action_step_env_renders_only_when_present() -> Result<(), RenderError> {
         !cargo_text.contains("MBX_GC_AUTO"),
         "Cargo-only jobs do not receive MBX policy:\n{cargo_text}"
     );
-    assert!(
-        !cargo_text.contains("Export MBX single bundle"),
-        "Cargo-only jobs do not export an MBX bundle:\n{cargo_text}"
-    );
+    assert!(!cargo_text.contains("Restore MBX objects"), "{cargo_text}");
     Ok(())
 }
 

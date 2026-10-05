@@ -19,8 +19,9 @@ use std::collections::BTreeMap;
 use velnor_actions_contract::{FRESHNESS_WORKFLOW_PATH, ScheduleTrigger, Step};
 
 use crate::{
-    RenderError, guard, marker,
+    MiseSetup, RenderError, guard, marker,
     render::RenderedFile,
+    setup::mise_setup_step,
     steps::{self, action_step, shell_step},
     yaml::{Yaml, render_yaml},
 };
@@ -49,6 +50,10 @@ pub struct FreshnessSpec {
     pub runs_on: String,
     /// Pinned `actions/checkout` ref.
     pub checkout_uses: String,
+    /// Pinned Mise bootstrap action and binary digest.
+    pub mise_setup: MiseSetup,
+    /// Exact Rust toolchain installed for the native checker.
+    pub rust_version: String,
     /// Exact generator version for the marker.
     pub generator_version: String,
 }
@@ -70,6 +75,13 @@ impl FreshnessSpec {
                 self.checkout_uses
             )));
         }
+        self.mise_setup.validate()?;
+        if !is_exact_version(&self.rust_version) {
+            return Err(RenderError::BadCommand(format!(
+                "bad_freshness_rust_version:{}",
+                self.rust_version
+            )));
+        }
         Ok(())
     }
 }
@@ -81,6 +93,7 @@ impl FreshnessSpec {
 /// Returns [`RenderError`] for invalid spec scalars or steps.
 pub fn render_freshness_workflow(spec: &FreshnessSpec) -> Result<RenderedFile, RenderError> {
     spec.validate()?;
+    let mise = mise_setup_step(&spec.mise_setup)?;
     let checkout = action_step(
         "Checkout",
         &spec.checkout_uses,
@@ -89,16 +102,24 @@ pub fn render_freshness_workflow(spec: &FreshnessSpec) -> Result<RenderedFile, R
             ("fetch-depth".to_owned(), "1".to_owned()),
         ]),
     )?;
+    let rust_spec = format!("rust@{}", spec.rust_version);
     let probe = shell_step(
         "Check upstream freshness",
         vec![
+            "mise".to_owned(),
+            "--no-config".to_owned(),
+            "--no-env".to_owned(),
+            "--no-hooks".to_owned(),
+            "exec".to_owned(),
+            rust_spec,
+            "--".to_owned(),
             "bash".to_owned(),
             FRESHNESS_SCRIPT.to_owned(),
             FRESHNESS_PROBE_FLAG.to_owned(),
         ],
         BTreeMap::new(),
     )?;
-    let document = freshness_document(spec, &checkout, &probe)?;
+    let document = freshness_document(spec, &mise, &checkout, &probe)?;
     let document = crate::yaml::quote_run_values_in_yaml(document);
     let text = marker::with_marker(&spec.generator_version, &render_yaml(&document))?;
     steps::scan_for_private_subcommands(&text)?;
@@ -111,6 +132,7 @@ pub fn render_freshness_workflow(spec: &FreshnessSpec) -> Result<RenderedFile, R
 /// Build the freshness document: name, schedule triggers, perms, job.
 fn freshness_document(
     spec: &FreshnessSpec,
+    mise: &Step,
     checkout: &Step,
     probe: &Step,
 ) -> Result<Yaml, RenderError> {
@@ -131,6 +153,7 @@ fn freshness_document(
         (
             "steps".to_owned(),
             Yaml::Seq(vec![
+                crate::steps_plain::plain_step_to_yaml(mise)?,
                 crate::steps_plain::plain_step_to_yaml(checkout)?,
                 crate::steps_plain::plain_step_to_yaml(probe)?,
             ]),
@@ -160,6 +183,16 @@ fn freshness_document(
     ]))
 }
 
+fn is_exact_version(version: &str) -> bool {
+    let mut components = version.split('.');
+    let three_numeric = (0..3).all(|_| {
+        components.next().is_some_and(|component| {
+            !component.is_empty() && component.bytes().all(|byte| byte.is_ascii_digit())
+        })
+    });
+    three_numeric && components.next().is_none()
+}
+
 /// Read-only top-level/job permissions: the probe only reads.
 fn read_only_permissions() -> Yaml {
     Yaml::Map(vec![("contents".to_owned(), Yaml::str("read"))])
@@ -179,6 +212,13 @@ mod tests {
             },
             runs_on: "ubuntu-26.04".to_owned(),
             checkout_uses: CHECKOUT.to_owned(),
+            mise_setup: MiseSetup {
+                uses: "jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5".to_owned(),
+                version: "2026.10.2".to_owned(),
+                sha256: "8f5f6660336f572830e33cd9b378d3131e529a0d4c4f0c553776be90a1ba302a"
+                    .to_owned(),
+            },
+            rust_version: "1.98.1".to_owned(),
             generator_version: "0.1.0".to_owned(),
         }
     }
@@ -210,6 +250,21 @@ mod tests {
         assert!(
             yaml.contains("uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"),
             "exact pin:\n{yaml}"
+        );
+        assert!(
+            yaml.contains("uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5"),
+            "pinned Mise bootstrap:\n{yaml}"
+        );
+        assert!(
+            yaml.contains("version: 2026.10.2")
+                && yaml.contains(
+                    "sha256: 8f5f6660336f572830e33cd9b378d3131e529a0d4c4f0c553776be90a1ba302a"
+                ),
+            "current Mise release and binary digest:\n{yaml}"
+        );
+        assert!(
+            yaml.contains("mise --no-config --no-env --no-hooks exec rust@1.98.1 -- bash scripts/check-freshness.sh --check-upstream"),
+            "pinned Rust execution:\n{yaml}"
         );
         assert!(
             yaml.contains("persist-credentials: \"false\""),

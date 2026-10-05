@@ -71,7 +71,7 @@ pub struct Concurrency {
 pub struct Job {
     /// Stable display name.
     pub display_name: String,
-    /// Literal versioned Ubuntu label.
+    /// Literal pinned hosted label or typed scale-set token.
     pub runs_on: String,
     /// Per-job timeout (required: no job inherits the 6 h default).
     pub timeout_minutes: JobTimeout,

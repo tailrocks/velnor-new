@@ -107,7 +107,8 @@ jobs:
           cache: "false"
           env: "false"
           install: "false"
-          version: 2026.9.18
+          version: 2026.10.2
+          sha256: 66d49acecca413c8b334922584982a4907a10588912829873d6c55d0c6d42612
       - name: Install pinned Rust
         run: "set -eu\nmise --no-config --no-env --no-hooks install rust@1.98.1"
       - name: Build velnor-host

@@ -15,6 +15,10 @@ use crate::render::RenderContext;
 use crate::tree::RenderedFile;
 use crate::{RenderError, marker, steps, yaml::render_yaml};
 
+#[path = "lane_share_lcs.rs"]
+mod pair_sharing;
+pub(crate) use pair_sharing::SharedCall;
+
 /// CI workflow plus composite actions for duplicated lanes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RenderedWorkflow {
@@ -29,9 +33,9 @@ pub struct RenderedWorkflow {
 pub(crate) struct LaneShare {
     /// Same jobs, with shared lanes keeping their headers and empty steps.
     pub jobs: BTreeMap<String, Job>,
-    /// Job id to local `uses` path.
-    pub calls: BTreeMap<String, String>,
-    /// Composite action files, one per logical job.
+    /// Job id to ordered local composite calls.
+    pub calls: BTreeMap<String, Vec<SharedCall>>,
+    /// Composite action files for shared step runs.
     pub files: Vec<RenderedFile>,
 }
 
@@ -50,30 +54,30 @@ pub(crate) fn share_lanes(
     let mut calls = BTreeMap::new();
     let mut files = Vec::new();
     let mut next = jobs.clone();
-    for hosted_id in hosted_ids(jobs) {
+    crate::cache_steps::isolate_hosted_mbx_object_caches(&mut next, &ctx.runs_on)?;
+    for hosted_id in hosted_ids(&next) {
         let Some(logical) = logical_id(&hosted_id) else {
             return Err(RenderError::InvalidWorkflow(format!(
                 "bad_lane_id:{hosted_id}"
             )));
         };
         let local_id = format!("{logical}{SCALE_SUFFIX}");
-        let Some(local) = jobs.get(&local_id) else {
+        let Some(local) = next.get(&local_id) else {
             continue;
         };
-        let Some(hosted) = jobs.get(&hosted_id) else {
+        let Some(hosted) = next.get(&hosted_id) else {
             continue;
         };
-        let Some((common, hosted_extra, local_extra)) = split_pair(hosted, local) else {
-            return Err(RenderError::InvalidWorkflow(format!(
-                "lane_body_differs:{logical}"
-            )));
-        };
-        let uses = format!("$/.github/actions/{logical}");
-        files.push(composite_file(logical, &common, ctx)?);
-        calls.insert(hosted_id.clone(), uses.clone());
-        calls.insert(local_id.clone(), uses);
-        set_steps(&mut next, &hosted_id, hosted_extra);
-        set_steps(&mut next, &local_id, local_extra);
+        let pair = pair_sharing::share_pair(logical, hosted, local, ctx)?;
+        if !pair.hosted_calls.is_empty() {
+            calls.insert(hosted_id.clone(), pair.hosted_calls);
+        }
+        if !pair.local_calls.is_empty() {
+            calls.insert(local_id.clone(), pair.local_calls);
+        }
+        files.extend(pair.files);
+        set_steps(&mut next, &hosted_id, pair.hosted_steps);
+        set_steps(&mut next, &local_id, pair.local_steps);
     }
     Ok(LaneShare {
         jobs: next,
@@ -98,37 +102,6 @@ fn logical_id(hosted_id: &str) -> Option<&str> {
     ok.then_some(logical)
 }
 
-fn split_pair(hosted: &Job, local: &Job) -> Option<(Vec<Step>, Vec<Step>, Vec<Step>)> {
-    if hosted.timeout_minutes != local.timeout_minutes
-        || hosted.condition != local.condition
-        || hosted.permissions != local.permissions
-        || hosted.environment != local.environment
-    {
-        return None;
-    }
-    let (hosted_common, hosted_extra) = peel_saves(&hosted.steps);
-    let (local_common, local_extra) = peel_saves(&local.steps);
-    (hosted_common == local_common).then_some((hosted_common, hosted_extra, local_extra))
-}
-
-fn peel_saves(steps: &[Step]) -> (Vec<Step>, Vec<Step>) {
-    let mut common = Vec::new();
-    let mut extra = Vec::new();
-    for step in steps {
-        if is_elected_save(step) {
-            extra.push(step.clone());
-        } else {
-            common.push(step.clone());
-        }
-    }
-    (common, extra)
-}
-
-fn is_elected_save(step: &Step) -> bool {
-    step.name == crate::cache_steps::TOOLS_SAVE_NAME
-        || step.name == crate::tofu_cache::TOFU_PROVIDERS_SAVE_NAME
-}
-
 fn set_steps(jobs: &mut BTreeMap<String, Job>, id: &str, steps: Vec<Step>) {
     if let Some(job) = jobs.get_mut(id) {
         job.steps = steps;
@@ -137,6 +110,15 @@ fn set_steps(jobs: &mut BTreeMap<String, Job>, id: &str, steps: Vec<Step>) {
 
 fn composite_file(
     logical: &str,
+    steps: &[Step],
+    ctx: &RenderContext,
+) -> Result<RenderedFile, RenderError> {
+    composite_file_at(logical, &format!(".github/actions/{logical}"), steps, ctx)
+}
+
+fn composite_file_at(
+    logical: &str,
+    action_path: &str,
     steps: &[Step],
     ctx: &RenderContext,
 ) -> Result<RenderedFile, RenderError> {
@@ -149,7 +131,7 @@ fn composite_file(
     let bytes = marker::with_marker(&ctx.generator_version, &render_yaml(&quoted))?;
     steps::scan_for_private_subcommands(&bytes)?;
     Ok(RenderedFile {
-        path: format!(".github/actions/{logical}/action.yml"),
+        path: format!("{action_path}/action.yml"),
         bytes,
     })
 }
@@ -245,7 +227,7 @@ mod tests {
         ir: &WorkflowIr,
         jobs: &BTreeMap<String, Job>,
         ctx: &RenderContext,
-        calls: &BTreeMap<String, String>,
+        calls: &BTreeMap<String, Vec<super::SharedCall>>,
     ) -> Result<String, crate::RenderError> {
         let document = crate::document::workflow_to_yaml(
             ir,

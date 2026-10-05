@@ -5,18 +5,15 @@
 
 use crate::RenderError;
 use crate::runs_on::runs_on_yaml;
+use crate::setup::MiseSetup;
 use crate::steps::{DOWNLOAD_ARTIFACT_USES, UPLOAD_ARTIFACT_USES};
 use crate::yaml::Yaml;
 
-use super::Schema2WorkflowRequest;
 use super::features::{CHECKOUT_USES, base, finish, publish_step, run_step};
+use super::{Schema2WorkflowRequest, mise_setup_for_runner};
 
 /// GitHub-hosted macOS label. The arm64 binary is not built on Ubuntu.
 const MACOS_RUNS_ON: &str = "macos-15";
-/// Same `jdx/mise-action` commit CI pins. Not a floating tag.
-const MISE_USES: &str = "jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5";
-/// Catalog version. Not a floating `latest`.
-const MISE_VERSION: &str = "2026.9.18";
 /// `actions/attest-build-provenance` tag `v4.2.2` (commit, not a floating tag).
 const ATTEST_USES: &str =
     "actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8";
@@ -42,13 +39,15 @@ mise --no-config --no-env --no-hooks install rust@1.98.1";
 pub(super) fn generator_release(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> {
     let hosted = runs_on_yaml(&request.hosted_label)?;
     let macos = runs_on_yaml(MACOS_RUNS_ON)?;
-    let mut jobs = linux_jobs(hosted.clone());
-    jobs.extend(macos_jobs(macos));
+    let linux_mise = mise_setup_for_runner(request, &request.hosted_label)?;
+    let macos_mise = mise_setup_for_runner(request, MACOS_RUNS_ON)?;
+    let mut jobs = linux_jobs(hosted.clone(), linux_mise);
+    jobs.extend(macos_jobs(macos, macos_mise));
     jobs.push(publish_job(hosted));
     Ok(document(jobs))
 }
 
-fn linux_jobs(hosted: Yaml) -> Vec<(String, Yaml)> {
+fn linux_jobs(hosted: Yaml, mise: &MiseSetup) -> Vec<(String, Yaml)> {
     let files = [LINUX_BIN, LINUX_SUM];
     let steps = build_steps(
         LINUX_BIN,
@@ -56,6 +55,7 @@ fn linux_jobs(hosted: Yaml) -> Vec<(String, Yaml)> {
         &linux_verify(LINUX_BIN),
         "sha256sum",
         LINUX_SUM,
+        mise,
     );
     vec![
         build_job(
@@ -78,7 +78,7 @@ fn linux_jobs(hosted: Yaml) -> Vec<(String, Yaml)> {
     ]
 }
 
-fn macos_jobs(macos: Yaml) -> Vec<(String, Yaml)> {
+fn macos_jobs(macos: Yaml, mise: &MiseSetup) -> Vec<(String, Yaml)> {
     let files = [MACOS_BIN, MACOS_SUM];
     let steps = build_steps(
         MACOS_BIN,
@@ -86,6 +86,7 @@ fn macos_jobs(macos: Yaml) -> Vec<(String, Yaml)> {
         &macos_verify(MACOS_BIN),
         "shasum -a 256",
         MACOS_SUM,
+        mise,
     );
     vec![
         build_job(
@@ -114,9 +115,10 @@ fn build_steps(
     verify: &str,
     sum_cmd: &str,
     sidecar: &str,
+    mise: &MiseSetup,
 ) -> Vec<Yaml> {
     vec![
-        mise_step(),
+        mise_step(mise),
         run_step("Install pinned Rust", RUST_INSTALL),
         run_step("Build velnor-actions", &build_script(asset)),
         run_step(verify_name, verify),
@@ -211,17 +213,18 @@ fn publish_job(hosted: Yaml) -> (String, Yaml) {
     )
 }
 
-fn mise_step() -> Yaml {
+fn mise_step(setup: &MiseSetup) -> Yaml {
     Yaml::Map(vec![
         ("name".to_owned(), Yaml::str("Setup Mise")),
-        ("uses".to_owned(), Yaml::str(MISE_USES)),
+        ("uses".to_owned(), Yaml::str(&setup.uses)),
         (
             "with".to_owned(),
             Yaml::Map(vec![
                 ("cache".to_owned(), Yaml::str("false")),
                 ("env".to_owned(), Yaml::str("false")),
                 ("install".to_owned(), Yaml::str("false")),
-                ("version".to_owned(), Yaml::str(MISE_VERSION)),
+                ("version".to_owned(), Yaml::str(&setup.version)),
+                ("sha256".to_owned(), Yaml::str(&setup.sha256)),
             ]),
         ),
     ])

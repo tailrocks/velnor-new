@@ -63,6 +63,18 @@ stage() {
   fi
 }
 
+cargo_package_names() {
+  local selection="$1"
+  local log="$2"
+  local metadata=""
+  if ! metadata="$("${MISE_EXEC[@]}" cargo metadata --locked --no-deps --format-version 1 --offline 2>>"$log")"; then
+    return 1
+  fi
+  printf '%s\n' "$metadata" |
+    "${MISE_EXEC[@]}" cargo run --locked --offline --quiet -p velnor-actions-cli \
+      --example verify_local_metadata -- "$selection" 2>>"$log"
+}
+
 if ! command -v mise >/dev/null 2>&1; then
   echo "verify-local: FAIL: mise not found on PATH (install mise, then re-run)"
   exit 1
@@ -73,46 +85,44 @@ fi
 # (.velnor/version-policy.toml [tools], itself checked against the compiled
 # catalog by dogfood generate), so local runs use CI's exact pins.
 echo "--- verify-local: toolchain"
-SPECS=""
-SPECS="$(python3 -c '
-import sys, tomllib
-mise = tomllib.load(open("mise.toml", "rb")).get("tools", {})
-policy = tomllib.load(open(".velnor/version-policy.toml", "rb")).get("tools", {})
-pairs = [
-    ("rust", "rust", "rust"),
-    ("mr-boxington", "mr-boxington", "mr-boxington"),
-    ("aqua:nextest-rs/nextest/cargo-nextest", "nextest", "nextest"),
-]
-specs = []
-for tool, mkey, pkey in pairs:
-    mv = mise.get(tool)
-    pv = policy.get(pkey)
-    if not mv or not pv or mv != pv:
-        print(f"pin drift: mise.toml[{mkey}]={mv!r} vs version-policy[{pkey}]={pv!r}", file=sys.stderr)
-        sys.exit(1)
-    specs.append(f"{tool}@{mv}")
-print(" ".join(specs))
-' 2>"/tmp/verify-local-toolchain.log")"
-if [ -z "$SPECS" ]; then
+TOOL_NAMES=("rust" "mr-boxington" "aqua:nextest-rs/nextest/cargo-nextest")
+POLICY_KEYS=("rust" "mr-boxington" "nextest")
+SPEC_ARR=()
+: >"/tmp/verify-local-toolchain.log"
+for index in "${!TOOL_NAMES[@]}"; do
+  tool="${TOOL_NAMES[$index]}"
+  policy_key="${POLICY_KEYS[$index]}"
+  mise_pin=""
+  policy_pin=""
+  if ! mise_pin="$(mise config get --file mise.toml "tools.$tool" 2>>"/tmp/verify-local-toolchain.log")" ||
+    ! policy_pin="$(mise config get --file .velnor/version-policy.toml "tools.$policy_key" 2>>"/tmp/verify-local-toolchain.log")"; then
+    echo "pin drift: could not read mise.toml[tools.$tool] or version-policy[tools.$policy_key]" \
+      >>"/tmp/verify-local-toolchain.log"
+    break
+  fi
+  if [ -z "$mise_pin" ] || [ -z "$policy_pin" ] || [ "$mise_pin" != "$policy_pin" ]; then
+    echo "pin drift: mise.toml[tools.$tool]=$mise_pin vs version-policy[tools.$policy_key]=$policy_pin" \
+      >>"/tmp/verify-local-toolchain.log"
+    break
+  fi
+  SPEC_ARR+=("$tool@$mise_pin")
+done
+if [ "${#SPEC_ARR[@]}" -ne "${#TOOL_NAMES[@]}" ]; then
   cat "/tmp/verify-local-toolchain.log" >&2 || true
   echo "verify-local: FAIL: toolchain (pin drift; log: /tmp/verify-local-toolchain.log)"
   exit 1
 fi
-echo "pinned specs: $SPECS"
+echo "pinned specs: ${SPEC_ARR[*]}"
 # Order is fixed by the pairs list above: rust, mr-boxington, nextest.
-# shellcheck disable=SC2206
-_PIN_PARTS=($SPECS)
-RUST_PIN="${_PIN_PARTS[0]#*@}"
-MBX_PIN="${_PIN_PARTS[1]#*@}"
-NEXTEST_PIN="${_PIN_PARTS[2]#*@}"
-POLICY_MISE="$(python3 -c 'import tomllib; print(tomllib.load(open(".velnor/version-policy.toml", "rb"))["tools"]["mise"])')"
+RUST_PIN="${SPEC_ARR[0]#*@}"
+MBX_PIN="${SPEC_ARR[1]#*@}"
+NEXTEST_PIN="${SPEC_ARR[2]#*@}"
+POLICY_MISE="$(mise config get --file .velnor/version-policy.toml tools.mise)" || POLICY_MISE=""
 LOCAL_MISE="$(mise --version 2>/dev/null | awk "{print \$1}")"
 echo "mise: local $LOCAL_MISE, policy $POLICY_MISE"
 if [ "$LOCAL_MISE" != "$POLICY_MISE" ]; then
   echo "WARNING: local mise $LOCAL_MISE differs from policy $POLICY_MISE; continuing with local mise and pinned tools"
 fi
-# shellcheck disable=SC2206
-SPEC_ARR=($SPECS)
 if ! mise install "${SPEC_ARR[@]}" >>"/tmp/verify-local-toolchain.log" 2>&1; then
   fail "toolchain (mise install failed; log: /tmp/verify-local-toolchain.log)"
   echo "verify-local: FAIL:$FAILURES"
@@ -167,7 +177,7 @@ if [ -f "$RUNNER_MANIFEST" ]; then
 fi
 
 # --- repo policy -----------------------------------------------------------
-stage repo-policy scripts/check-freshness.sh
+stage repo-policy "${MISE_EXEC[@]}" scripts/check-freshness.sh
 
 # --- generated-tree freshness ----------------------------------------------
 GEN_DIR=""
@@ -213,8 +223,7 @@ fi
 
 # --- per-crate clippy, tests, doctests, docs ---------------------------------
 MEMBERS=""
-MEMBERS="$("${MISE_EXEC[@]}" python3 -c 'import json,subprocess; print(" ".join(sorted(p["name"] for p in json.loads(subprocess.run(["cargo","metadata","--locked","--no-deps","--format-version","1","--offline"],capture_output=True,text=True,check=True).stdout)["packages"])))' 2>/tmp/verify-local-crate-list.log)"
-if [ -z "$MEMBERS" ]; then
+if ! MEMBERS="$(cargo_package_names packages /tmp/verify-local-crate-list.log)" || [ -z "$MEMBERS" ]; then
   fail "crate-list (log: /tmp/verify-local-crate-list.log)"
 else
   for member in $MEMBERS; do
@@ -226,8 +235,7 @@ else
     stage "test-$safe" "${MISE_EXEC[@]}" cargo test --locked -p "$member"
   done
   LIB_MEMBERS=""
-  LIB_MEMBERS="$("${MISE_EXEC[@]}" python3 -c 'import json,subprocess; print(" ".join(sorted(p["name"] for p in json.loads(subprocess.run(["cargo","metadata","--locked","--no-deps","--format-version","1","--offline"],capture_output=True,text=True,check=True).stdout)["packages"] if any("lib" in t.get("kind", []) for t in p["targets"]))))' 2>/tmp/verify-local-doctest-list.log)"
-  if [ -z "$LIB_MEMBERS" ]; then
+  if ! LIB_MEMBERS="$(cargo_package_names libraries /tmp/verify-local-doctest-list.log)" || [ -z "$LIB_MEMBERS" ]; then
     fail "doctest-list (log: /tmp/verify-local-doctest-list.log)"
   else
     for member in $MEMBERS; do

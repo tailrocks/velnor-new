@@ -5,6 +5,8 @@
 pub(crate) mod wire_w1;
 #[path = "workflow_context.rs"]
 mod workflow_context;
+#[path = "workflow_jobs_mise_phase0.rs"]
+pub(crate) mod workflow_jobs_mise_phase0;
 
 use std::collections::BTreeMap;
 
@@ -27,7 +29,7 @@ use crate::OrchestratorError;
 use crate::discover::Discovery;
 use crate::pins::consumer_acquire_step;
 use crate::utf8::{strings_of, strings_of_env};
-use crate::workflow_jobs::{final_job, lint_job, plan_job};
+use crate::workflow_jobs::{final_job, lint_job, plan_job, required_job_ids};
 
 pub(crate) use crate::workflow_jobs::LINT_JOB_ID;
 
@@ -140,27 +142,26 @@ pub(crate) fn build_workflow(
         discovery,
     )?;
     jobs.insert(PLAN_JOB_ID.to_owned(), plan);
-    let custom_tasks: &[String] = config
-        .stacks
-        .rust
-        .as_ref()
-        .map_or(&[], |rust| &rust.custom_tasks);
-    let built = crate::crate_jobs::build_crate_jobs(
+    let built = build_crate_jobs(
+        config,
         label,
         policy,
         discovery,
-        &catalog,
         fetch_roots,
-        custom_tasks,
         acquire.as_ref(),
-        config.workflow.max_parallel_jobs,
+        &catalog,
     )?;
-    let crate_ids: Vec<String> = built.jobs.iter().map(|(id, _)| id.clone()).collect();
-    for (id, job) in built.jobs {
-        jobs.insert(id, job);
-    }
-    insert_gate_jobs(&mut jobs, label, branch, &crate_ids, acquire, &catalog)?;
-    wire_w1::check_crate_mbx_gating(&jobs, &built.drivers)?;
+    let crate_ids = insert_crate_jobs(&mut jobs, built)?;
+    let phase0_ids = workflow_jobs_mise_phase0::insert_jobs(&mut jobs, policy, &catalog)?;
+    insert_gate_jobs(
+        &mut jobs,
+        label,
+        branch,
+        &crate_ids,
+        &phase0_ids,
+        acquire,
+        &catalog,
+    )?;
     let ir = WorkflowIr {
         name: config.workflow.name.clone(),
         triggers: Trigger {
@@ -187,6 +188,46 @@ pub(crate) fn build_workflow(
     })
 }
 
+/// Build every crate execution job from the shared discovery.
+fn build_crate_jobs(
+    config: &VelnorConfig,
+    label: &str,
+    policy: WorkflowPolicy,
+    discovery: &Discovery,
+    fetch_roots: &[String],
+    acquire: Option<&Step>,
+    catalog: &ToolCatalog,
+) -> Result<crate::crate_jobs::CrateBuild, OrchestratorError> {
+    let custom_tasks: &[String] = config
+        .stacks
+        .rust
+        .as_ref()
+        .map_or(&[], |rust| &rust.custom_tasks);
+    crate::crate_jobs::build_crate_jobs(
+        label,
+        policy,
+        discovery,
+        catalog,
+        fetch_roots,
+        custom_tasks,
+        acquire,
+        config.workflow.max_parallel_jobs,
+    )
+}
+
+/// Register and validate every built crate execution job.
+fn insert_crate_jobs(
+    jobs: &mut BTreeMap<String, Job>,
+    built: crate::crate_jobs::CrateBuild,
+) -> Result<Vec<String>, OrchestratorError> {
+    let ids = built.jobs.iter().map(|(id, _)| id.clone()).collect();
+    for (id, job) in built.jobs {
+        jobs.insert(id, job);
+    }
+    wire_w1::check_crate_mbx_gating(jobs, &built.drivers)?;
+    Ok(ids)
+}
+
 /// Insert the lint, final-gate, and baseline-publish jobs.
 ///
 /// The publish job closes the graph after the final gate: it needs
@@ -200,13 +241,15 @@ fn insert_gate_jobs(
     label: &str,
     branch: &str,
     crate_ids: &[String],
+    phase0_ids: &[String],
     acquire: Option<Step>,
     catalog: &ToolCatalog,
 ) -> Result<(), OrchestratorError> {
     jobs.insert(LINT_JOB_ID.to_owned(), lint_job(label, catalog)?);
+    let required_job_ids = required_job_ids(crate_ids, phase0_ids);
     jobs.insert(
         FINAL_JOB_ID.to_owned(),
-        final_job(label, crate_ids, acquire.clone(), catalog)?,
+        final_job(label, &required_job_ids, acquire.clone(), catalog)?,
     );
     jobs.insert(
         PUBLISH_JOB_ID.to_owned(),

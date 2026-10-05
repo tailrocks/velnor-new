@@ -7,8 +7,7 @@ use std::collections::BTreeMap;
 use velnor_actions_contract::{Job, WorkflowPolicy};
 use velnor_actions_workflow_renderer::{
     RenderError, action_step_with_env, ambient_shell_step, checkout_step, plan_step,
-    render_workflow_ir,
-    steps::{MBX_CACHE_MODE_ENV, mbx_objects_step},
+    render_workflow_ir, steps::mbx_objects_step,
 };
 
 use super::impl_renderer_fixtures::*;
@@ -37,7 +36,7 @@ fn token_in_action_env_fails_render() -> Result<(), RenderError> {
         &mbx_pin(),
         BTreeMap::from([("github-cache-mode".to_owned(), "objects".to_owned())]),
         BTreeMap::from([(
-            MBX_CACHE_MODE_ENV.to_owned(),
+            "CACHE_POLICY".to_owned(),
             "see GITHUB_TOKEN here".to_owned(),
         )]),
     )?;
@@ -46,10 +45,12 @@ fn token_in_action_env_fails_render() -> Result<(), RenderError> {
 }
 
 #[test]
-fn benign_mbx_cache_mode_env_passes() -> Result<(), RenderError> {
-    // The genuine MBX restore step pins its push-gated cache mode in
-    // step env; the extended gate must not flag that expression.
+fn mbx_action_uses_default_env_without_cache_mode_override() -> Result<(), RenderError> {
     let restore = mbx_objects_step(&mbx_pin(), false, "1.5.0")?;
+    let velnor_actions_contract::StepKind::Action { env, .. } = &restore.kind else {
+        panic!("MBX action step expected");
+    };
+    assert!(env.is_empty(), "the stock action owns its cache lifecycle");
     render_workflow_ir(
         &fixture_ir(vec![action_plan_job(restore)?]),
         WorkflowPolicy::ConsumerV1,

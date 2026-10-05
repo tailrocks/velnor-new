@@ -308,7 +308,7 @@ fn toml_strings(values: &[String]) -> String {
 
 /// Fixed `mise run --task-cache <mode> <task> --file <path>` argv.
 ///
-/// UNQUALIFIED (P04-10): pinned mise 2026.9.18 has no `mise run
+/// UNQUALIFIED (P04-10): the former 2026.9.18 pin had no `mise run
 /// --file` flag (probe 2026-10-01), so this shape cannot execute as
 /// rendered; modes, `--no-*` flags, and `task-artifacts/v2` verified.
 /// # Errors
