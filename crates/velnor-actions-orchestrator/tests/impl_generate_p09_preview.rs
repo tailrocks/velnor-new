@@ -115,9 +115,13 @@ fn rendered_crate_steps_carry_validated_contract() -> TestResult {
     let task = window(yaml, "  rust-demo:", "  required:")?;
     let run_at = task.find("- name: Clippy").ok_or("first obligation")?;
     let run_block = &task[run_at..];
-    for key in ["MISE_RUSTUP_HOME:", "MISE_CARGO_HOME:", "RUSTUP_TOOLCHAIN:"] {
+    for key in ["MISE_RUSTUP_HOME:", "MISE_CARGO_HOME:"] {
         assert!(run_block.contains(key), "Clippy misses {key}");
     }
+    assert!(
+        task.contains("RUSTUP_TOOLCHAIN: 1.98.1"),
+        "task misses toolchain"
+    );
     for key in [
         "MISE_NO_CONFIG:",
         "MISE_NO_ENV:",

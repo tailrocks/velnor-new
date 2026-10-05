@@ -8,7 +8,7 @@ f17860d10bc7578408abbb3a93ab1a488a70e4c24bfce60a9b7a2509bfb9ce65  ./.github/acti
 638e0dbd4727e46c98418384de2d7350c84230db2450b323e2d7b1ab38a09894  ./.github/actions/generator-release-publish/action.yml
 584d8733d1e0da7a1f555bcac0fa52b30e085af6c60c0a4e1aee6a888281ac64  ./.github/actions/generator-release-qualify-linux/action.yml
 780f44c8ef91eda112a936d202ad2928c4a9f5b5d2c27e541b00ef8ee7efd9ce  ./.github/actions/generator-release-qualify-macos/action.yml
-6205f29d522fd337170061486a68ac9fdb6ccacaa549bff611637894d39979ca  ./.github/workflows/ci.yml
+e6e4265f0fa91b61b7818cd4d25297a0374615bbb3a036b3efe6882ec336e6ff  ./.github/workflows/ci.yml
 c6873ba49e8c184dd71d7b80d55c9734ee4e491429a798f07d7e3c66285d729b  ./.github/workflows/freshness.yml
 19e2bd864927b8b277d79b75d672f6bf344c1530252061686bcaf3e7f05e809c  ./.github/workflows/generator-release.yml
 cdd06e788409b7aa9fed9018d255e28b921c751f2c59bd4536dc47d7af168094  ./.github/workflows/image-release.yml
