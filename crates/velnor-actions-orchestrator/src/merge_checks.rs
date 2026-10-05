@@ -50,24 +50,24 @@ pub(crate) fn check_plan_shape(
     }
 }
 
-/// Plan event/trust must match the merge-time actual event.
+/// Plan event/trust must agree with the merge event and known branch facts.
 ///
-/// Trust was stamped at plan time and only checked for self-consistency,
-/// so a forged plan artifact could claim `Push` with `Trusted` scope on
-/// PR content and pass. The plan's event must equal the actual event
-/// captured at merge assembly (same run, runner ground truth), and the
-/// plan's trust must equal the canonical scope for that actual event;
-/// every task file's event/trust pair must still equal the plan's.
-/// Anything else fails closed with a scope token, never silently.
+/// A trusted stamp is rejected when current run facts disprove a protected
+/// default-branch push. Unknown API facts do not invalidate ordinary checks:
+/// the plan could only stamp trusted after its own protected-branch lookup.
+/// Every task file's event/trust pair still matches the plan.
 pub(crate) fn check_trust_coherence(
     plan: &Plan,
     request: &MergeRequest,
+    writer_context: &velnor_actions_mise::CacheWriterContext,
     signals: &mut Signals,
     miss_reasons: &mut BTreeSet<String>,
 ) {
     let coherent = match request.actual_event {
         Some(actual) => {
-            plan.event == actual && plan.trust == velnor_actions_contract::trust_for_event(actual)
+            plan.event == actual
+                && (plan.trust != velnor_actions_contract::Trust::Trusted
+                    || !writer_context.disproves_trusted_write())
         }
         None => false,
     };

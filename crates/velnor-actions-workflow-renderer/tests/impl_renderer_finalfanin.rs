@@ -277,8 +277,8 @@ fn expected_inventory_excludes_post_gate_jobs() -> Result<(), RenderError> {
         ],
     );
     final_job.condition = Some(FINAL_CONDITION.to_owned());
-    // Downstream of the gate by construction: needs the gate, push-gated
-    // like the real baseline publisher, so PR runs always skip it.
+    // Downstream of the gate by construction: needs the gate and shares
+    // the protected-default writer predicate with cache saves.
     let (publish_id, mut publish) = job(
         PUBLISH_JOB_ID,
         "Publish baseline",
@@ -286,7 +286,7 @@ fn expected_inventory_excludes_post_gate_jobs() -> Result<(), RenderError> {
         vec![checkout_step(&checkout_pin())?],
     );
     publish.condition =
-        Some("github.event_name == 'push' && github.ref == 'refs/heads/main'".to_owned());
+        Some(velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION.to_owned());
     let ir = fixture_ir(vec![plan, (final_id, final_job), (publish_id, publish)]);
     // Acyclic by construction: the gate needs upstream only, the
     // downstream job needs the gate.

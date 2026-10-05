@@ -66,6 +66,28 @@ fn write_request_captures_repository_capability() -> TestResult {
 }
 
 #[test]
+fn write_request_captures_writer_facts_without_protection_claim() -> TestResult {
+    let dir = TempDir::new()?;
+    let head = "a".repeat(40);
+    let payload = format!(
+        r#"{{"before":null,"after":"{head}","ref":"refs/heads/main","repository":{{"full_name":"o/r","default_branch":"main"}}}}"#
+    );
+    let file = dir.path().join("plan-v1-request.json");
+    write_request_parts(&file, "push", &payload, None, Some("o/r"), dir.path())?;
+    let value: serde_json::Value = serde_json::from_str(&fs::read_to_string(&file)?)?;
+    assert_eq!(value["cache_writer"]["event"], "push");
+    assert_eq!(value["cache_writer"]["git_ref"], "refs/heads/main");
+    assert_eq!(value["cache_writer"]["default_branch"], "main");
+    assert_eq!(value["cache_writer"]["repository"], "o/r");
+    assert_eq!(value["cache_writer"]["event_repository"], "o/r");
+    assert!(
+        value["cache_writer"].get("ref_protected").is_none(),
+        "request payload cannot assert branch protection"
+    );
+    Ok(())
+}
+
+#[test]
 fn write_request_materializes_push_without_base() -> TestResult {
     let dir = TempDir::new()?;
     let head = "c".repeat(40);
