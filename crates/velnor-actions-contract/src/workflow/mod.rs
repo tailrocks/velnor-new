@@ -4,7 +4,6 @@ pub mod baseline;
 pub mod cache_ids;
 pub mod crate_job;
 pub mod execute;
-pub mod generator_release;
 pub mod ir;
 pub mod jobs;
 pub mod lanes;
@@ -24,7 +23,6 @@ pub use baseline::{BaselineProof, BaselineStatus, ManifestTaskProof, PlanBaselin
 pub use cache_ids::EntryCacheIds;
 pub use crate_job::{CrateJob, CrateObligation};
 pub use execute::{ExecuteTaskIds, ExecuteTaskRef};
-pub use generator_release::{GeneratorReleasePlan, GeneratorReleaseTarget};
 pub use ir::{Concurrency, Job, Step, StepKind, Trigger, WorkflowIr};
 pub use jobs::{
     CI_WORKFLOW_PATH, CRATE_JOB_ID_PREFIX, FRESHNESS_CRON_WEEKLY, FRESHNESS_WORKFLOW_PATH,
