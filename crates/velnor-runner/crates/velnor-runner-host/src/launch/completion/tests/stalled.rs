@@ -13,7 +13,7 @@ async fn stalled_remote_cleanup_does_not_block_a_free_slot() -> Result<(), Strin
     let (id, identity, runner_id, dind_id) = launch(&journal, 7, 85).await?;
     let runner_name = format!("v{}", identity.launch_id());
     let engine = CompletionEngine::with_stopped_pair(&identity, &runner_id, &dind_id)?;
-    let api = BlockingRunnerApi::new(&runner_name, 95);
+    let api = BlockingRunnerApi::new(&runner_name, 95, 7);
 
     completion::record_completion_events(&journal, 7, &completion_poll(85, 95, &runner_name))
         .await
