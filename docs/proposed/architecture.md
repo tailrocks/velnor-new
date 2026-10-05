@@ -45,12 +45,16 @@ and runs as a separate GitHub Actions job.
 
 The workspace also contains `velnor-actions-freshness` and
 `velnor-archive-guard` as repository-only maintenance members. Neither is a V1
-product crate; both MUST remain outside the orchestrator, product task graph,
-and workflow-generation path. Only the CLI's private maintenance gate consumes
-freshness. Repository scripts provision the archive guard, which has no local
-product dependencies. Both manifests declare the typed
-`repository-maintenance` task owner; package names and paths alone never grant
-the exclusion.
+product crate or enters V1 Rust task derivation. The orchestrator does not link
+either helper as a library. Only the CLI's private maintenance gate consumes
+freshness at runtime; repository scripts provision the archive guard. Under
+`VelnorRepositoryV1`, the existing named-Mise-check contract emits one
+independent `maintenance-helpers` Required check for both packages' Rust test
+suites. That repository-quality check stays outside the product crate matrix;
+ordinary ConsumerV1 configurations do not declare this repository-owned
+check. Both manifests declare
+the typed `repository-maintenance` task owner; package names and paths alone
+never grant the task-derivation exclusion.
 
 | Crate | Owns | Must not own |
 |---|---|---|

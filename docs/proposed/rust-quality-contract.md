@@ -55,8 +55,13 @@ and utility `velnor-archive-guard`. Cargo metadata defines membership; V1 adds
 no custom architecture linter; §5, Alint, Clippy, tests, and review govern boundaries.
 Within V1 product behavior, Rust/Cargo metadata and `rust-toolchain.toml` belong to `velnor-actions-rust`; Mise syntax, environment, and task metadata belong to `velnor-actions-mise`; actionlint metadata belongs to `velnor-actions-actionlint`.
 Freshness may inspect Velnor-owned Cargo/Mise sources for private maintenance;
-results MUST NOT feed V1 planning. Scripts provision archive guard; neither
-member enters V1 tasks or generated workflows. Alint enforces only configured generic file/path, required-file, and line-count rules.
+results MUST NOT feed V1 planning. Scripts provision archive guard. Neither
+helper enters V1 Rust task derivation or the product crate matrix. The
+canonical Velnor repository uses the existing named-Mise-check contract to
+run both helper packages' Rust test suites as one required
+`maintenance-helpers` repository-quality check; ordinary ConsumerV1
+configurations do not declare this repository-owned check. Alint enforces only configured
+generic file/path, required-file, and line-count rules.
 The CLI package MUST declare binary `velnor-actions`, the only target name without the package-purpose suffix. Non-Rust directories MAY remain in their own conventional locations.
 
 The eight V1 product crates have fixed boundaries; the two repository-only members are separately labeled in the table. Every V1 Cargo package MUST use the `velnor-actions-<purpose>` namespace. Generic names such as `velnor-model`, `velnor-core`, `velnor-rust`, `velnor-common`, and `velnor-utils` are forbidden.
@@ -75,7 +80,12 @@ The `velnor-actions` binary is owned by package `velnor-actions-cli`. Future sta
 | `velnor-actions-freshness` (repository-only support) | Read-only repository freshness/pin/lock/advisory checks and bounded bootstrap metadata operations behind the existing CLI private gate | V1 planning, task graph or selection, runner behavior, product evidence claims, public commands, or workflow generation |
 | `velnor-archive-guard` (repository-only security utility) | Bounded validation of owned candidate and Cargo package archive bytes through its explicit modes | V1 stack behavior, task derivation, workflow generation, or product dependencies |
 
-Both repository-only members are outside the eight-product V1 graph; only the CLI private gate consumes freshness, scripts provision archive guard, and the orchestrator consumes neither.
+Both repository-only members are outside the eight-product V1 task graph. The
+CLI private gate consumes freshness at runtime, repository scripts provision
+archive guard, and the orchestrator does not link either helper as a library.
+The canonical repository's `maintenance-helpers` named Mise check runs their
+package test suites independently of Rust task derivation and the product
+matrix; this repository's VelnorRepositoryV1 configuration makes it required.
 
 Each repository-only package declares its task owner with Cargo package metadata:
 

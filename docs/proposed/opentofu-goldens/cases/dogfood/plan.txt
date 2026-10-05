@@ -3,6 +3,7 @@ Repository: <repo>
 
 Detected stacks
   Rust: selected
+  Mise check maintenance-helpers: test-maintenance-helpers (runner: ubuntu-26.04, target: x86_64-unknown-linux-gnu)
   Workspace crates: 14
     - velnor-actions-actionlint (crates/velnor-actions-actionlint/Cargo.toml) [lib, test; depends on velnor-actions-contract]
     - velnor-actions-cli (crates/velnor-actions-cli/Cargo.toml) [bin, test; depends on velnor-actions-freshness, velnor-actions-orchestrator]
@@ -42,6 +43,7 @@ Workflow to generate
     - alint (2 steps)
     - cargo-deny (5 steps)
     - cargo-machete (5 steps)
+    - check-maintenance-helpers (10 steps)
     - plan (21 steps)
     - publish-baseline (7 steps)
     - required (11 steps)

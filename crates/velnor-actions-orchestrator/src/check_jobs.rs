@@ -101,3 +101,7 @@ fn execute_check_step(
 #[cfg(test)]
 #[path = "check_jobs_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "check_jobs_maintenance_tests.rs"]
+mod maintenance_tests;
