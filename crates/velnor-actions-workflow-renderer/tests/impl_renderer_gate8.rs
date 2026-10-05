@@ -148,10 +148,7 @@ fn rendered_action_inputs_carry_no_shell_expansions() -> Result<(), RenderError>
 
 #[test]
 fn manifest_script_carries_contract_keys_without_substitution() {
-    let script = candidate_manifest_script(
-        "x86_64-unknown-linux-gnu",
-        "rust@1.98.1+mr-boxington@1.19.0",
-    );
+    let script = candidate_manifest_script("x86_64-unknown-linux-gnu", "rust@1.98.1");
     for key in ["commit", "target", "toolchain", "sha256", "GITHUB_SHA"] {
         assert!(script.contains(key), "missing {key}");
     }

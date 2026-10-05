@@ -6,9 +6,12 @@
 //! closed; no bake or environment carries provenance.
 use std::fs;
 
-use velnor_actions_orchestrator::prepare;
+use velnor_actions_orchestrator::{prepare, render_staged_tree};
+use velnor_actions_workflow_renderer::WORKFLOW_PATH;
 
-use crate::impl_common::{TestResult, config_with_branch, make_repo};
+use crate::impl_common::{
+    TestResult, config_with_branch, git, make_repo, without_ambient_identity,
+};
 
 /// Realistic release manifest: GitHub asset URLs at the generator version.
 ///
@@ -59,7 +62,7 @@ fn render_consumer_yaml(manifest: &str) -> Result<String, Box<dyn std::error::Er
 fn expected_acquire_block() -> String {
     let version = env!("CARGO_PKG_VERSION");
     format!(
-        "- name: Acquire Velnor\n        run: \"sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \\\"$RUNNER_TEMP/velnor/bin\\\" && if [ -f \\\"/opt/velnor/seed/generator/velnor-actions-{version}\\\" ] && echo \\\"$VELNOR_ASSET_SHA256  /opt/velnor/seed/generator/velnor-actions-{version}\\\" | sha256sum -c -; then cp \\\"/opt/velnor/seed/generator/velnor-actions-{version}\\\" \\\"$RUNNER_TEMP/velnor/bin/velnor-actions-{version}\\\"; else curl -fsSL --proto '\\\\''=https'\\\\'' --tlsv1.2 \\\"$VELNOR_ASSET_URL\\\" -o \\\"$RUNNER_TEMP/velnor/bin/velnor-actions-{version}\\\" && echo \\\"$VELNOR_ASSET_SHA256  $RUNNER_TEMP/velnor/bin/velnor-actions-{version}\\\" | sha256sum -c -; fi && chmod +x \\\"$RUNNER_TEMP/velnor/bin/velnor-actions-{version}\\\"'\"",
+        "- name: Acquire Velnor\n        run: \"sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \\\"$RUNNER_TEMP/velnor/bin\\\" && s=\\\"/opt/velnor/seed/generator/velnor-actions-{version}\\\" d=\\\"$RUNNER_TEMP/velnor/bin/velnor-actions-{version}\\\" && if [ -f \\\"$s\\\" ] && echo \\\"$VELNOR_ASSET_SHA256  $s\\\" | sha256sum -c -; then cp \\\"$s\\\" \\\"$d\\\"; else curl -fsSL --proto '\\\\''=https'\\\\'' --tlsv1.2 \\\"$VELNOR_ASSET_URL\\\" -o \\\"$d\\\" && echo \\\"$VELNOR_ASSET_SHA256  $d\\\" | sha256sum -c -; fi && chmod +x \\\"$d\\\"'\"",
     )
 }
 
@@ -157,4 +160,38 @@ fn symlink_manifest_fails_closed() -> TestResult {
         "unexpected: {err}"
     );
     Ok(())
+}
+
+/// The producer policy does not consume or synthesize a consumer manifest.
+#[test]
+fn velnor_repository_generation_needs_no_consumer_manifest() -> TestResult {
+    without_ambient_identity(
+        "velnor_repository_generation_needs_no_consumer_manifest",
+        || {
+            let config = "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\npolicy = \"velnor-repository-v1\"\n";
+            let repo = make_repo(config)?;
+            fs::remove_file(repo.path().join(".velnor/release-manifest.json"))?;
+            git(
+                &[
+                    "remote",
+                    "add",
+                    "origin",
+                    "https://github.com/tailrocks/velnor-new.git",
+                ],
+                repo.path(),
+            )?;
+
+            let prep = prepare(repo.path())?;
+            assert_eq!(prep.discovery.consumer_manifest_json, None);
+            assert!(!prep.discovery.consumer_manifest_stand_in);
+            let tree = render_staged_tree(&prep)?;
+            let yaml = tree
+                .get(WORKFLOW_PATH)
+                .ok_or_else(|| std::io::Error::other("missing generated CI workflow"))?;
+            assert!(!yaml.contains("Acquire Velnor"), "{yaml}");
+            assert!(!yaml.contains(&"a".repeat(64)), "{yaml}");
+            assert!(!yaml.contains(&"b".repeat(40)), "{yaml}");
+            Ok(())
+        },
+    )
 }

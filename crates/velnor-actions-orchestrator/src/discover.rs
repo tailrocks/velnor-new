@@ -5,7 +5,7 @@ use std::path::Path;
 
 use velnor_actions_contract::{
     DETECTION_SCHEMA, DetectedProject, DetectionStatus, DetectorEntry, FileIndex, ProposedTask,
-    RustStackConfig, Stack, StackCandidate, VelnorConfig, apply_stack_ignores,
+    RustStackConfig, Stack, StackCandidate, VelnorConfig, WorkflowPolicy, apply_stack_ignores,
     check_candidate_outcomes, check_duplicates, selected_projects,
 };
 use velnor_actions_mise::ArchivePlan;
@@ -55,17 +55,20 @@ pub struct Discovery {
     pub clippy_memory: ClippyMemoryPlan,
     /// Sorted unique recommendations.
     pub recommendations: Vec<String>,
-    /// Release-manifest text from the committed repo file.
+    /// Consumer release-manifest text from the committed repo file.
     ///
-    /// Debug builds fall back to a stand-in when the file is absent
-    /// (flagged by [`Discovery::consumer_manifest_stand_in`], warned at
-    /// generation); release builds keep `None` so generation fails
-    /// closed with `consumer_requires_release_install`.
+    /// Only ConsumerV1 reads this file. Debug ConsumerV1 builds fall back
+    /// to a stand-in when it is absent (flagged by
+    /// [`Discovery::consumer_manifest_stand_in`], warned at generation);
+    /// release ConsumerV1 builds keep `None` so generation fails closed
+    /// with `consumer_requires_release_install`. VelnorRepositoryV1 never
+    /// reads this consumer-only file and keeps this field `None`.
     pub consumer_manifest_json: Option<String>,
     /// Whether the manifest text above is the debug-only stand-in.
     ///
-    /// Always false in release builds (no fallback exists there).
-    /// `generate` warns loudly when this is set; `plan` stays silent.
+    /// Always false for VelnorRepositoryV1 and for release builds (no
+    /// fallback exists there). `generate` warns loudly when this is set;
+    /// `plan` stays silent.
     pub consumer_manifest_stand_in: bool,
     /// Whether index enumeration skipped any non-UTF-8 name.
     ///
@@ -119,7 +122,14 @@ pub(crate) fn discover(root: &Path, config: &VelnorConfig) -> Result<Discovery, 
     let clippy_memory = clippy_memory_groups(&proposals);
     let recommendations =
         collect_recommendations(root, config, &index, &workspaces, &tool_checks, &mut reads);
-    let (consumer_manifest_json, consumer_manifest_stand_in) = consumer_manifest_text(root)?;
+    // The source repository bootstraps from source or its own generator
+    // lock; the consumer manifest is not an input under this policy.
+    let (consumer_manifest_json, consumer_manifest_stand_in) =
+        if config.workflow.policy == WorkflowPolicy::ConsumerV1 {
+            consumer_manifest_text(root)?
+        } else {
+            (None, false)
+        };
     Ok(Discovery {
         statuses,
         workspaces,
