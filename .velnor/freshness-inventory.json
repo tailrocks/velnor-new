@@ -132,7 +132,7 @@
       "issue": "#29",
       "key": "jdx/mr-boxington-action",
       "owner": "@donbeave",
-      "reason": "latest stable v1.7.1 resolves to released commit d0825fbaf3cc36ca2609aa38e71046265a1f1e37; #29 separately qualifies candidate commit ec3ebbfbc1fdaffa59d476e87e4f386fdc60d533 for current-source cache lifecycle, disk, and input behavior; retain the qualified v1.6.0 pin until that review confirms the immutable action source"
+      "reason": "latest stable v1.7.1 resolves to released commit d0825fbaf3cc36ca2609aa38e71046265a1f1e37; the protected-main roundtrip workflow may target that exact SHA only as an unqualified experiment; #29 separately qualifies candidate ec3ebbfbc1fdaffa59d476e87e4f386fdc60d533, which is not that release; retain the qualified v1.6.0 production pin until the exact released source passes cache lifecycle, disk, input, and cleanup qualification"
     },
     {
       "expires": "2026-10-17",

@@ -15,6 +15,9 @@ use crate::render::RenderContext;
 use crate::tree::RenderedFile;
 use crate::{RenderError, marker, steps, yaml::render_yaml};
 
+#[path = "lane_share_runtime.rs"]
+mod runtime;
+
 /// CI workflow plus composite actions for duplicated lanes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RenderedWorkflow {
@@ -33,19 +36,30 @@ pub(crate) struct LaneShare {
     pub calls: BTreeMap<String, String>,
     /// Job id to the original checkout step rendered before each shared call.
     pub checkouts: BTreeMap<String, Step>,
-    /// Lane-specific runtime cache steps rendered after checkout and before each shared call.
+    /// Original step lists used to derive job-level environment values.
+    pub env_steps: BTreeMap<String, Vec<Step>>,
+    /// Runner-specific V2 tools identity and restore steps, kept before setup.
+    pub runtime_preludes: BTreeMap<String, Vec<Step>>,
+    /// Common setup steps rendered before each lane's cache-specific prelude.
+    pub prefixes: BTreeMap<String, Vec<Step>>,
+    /// Lane-specific MBX setup, restore, and import steps.
     pub preludes: BTreeMap<String, Vec<Step>>,
+    /// Lane-specific cache exports and saves rendered after the shared call.
+    pub postludes: BTreeMap<String, Vec<Step>>,
     /// Composite action files, one per logical job.
     pub files: Vec<RenderedFile>,
 }
 
 struct SharedLaneParts {
     checkout: Step,
-    common: Vec<Step>,
+    hosted_runtime_prelude: Vec<Step>,
+    local_runtime_prelude: Vec<Step>,
+    prefix: Vec<Step>,
     hosted_prelude: Vec<Step>,
     local_prelude: Vec<Step>,
-    hosted_extra: Vec<Step>,
-    local_extra: Vec<Step>,
+    common: Vec<Step>,
+    hosted_postlude: Vec<Step>,
+    local_postlude: Vec<Step>,
 }
 
 /// Factor `__hosted` / `__local` pairs whose step lists match.
@@ -62,9 +76,13 @@ pub(crate) fn share_lanes(
 ) -> Result<LaneShare, RenderError> {
     let mut calls = BTreeMap::new();
     let mut checkouts = BTreeMap::new();
+    let mut runtime_preludes = BTreeMap::new();
+    let mut prefixes = BTreeMap::new();
     let mut preludes = BTreeMap::new();
+    let mut postludes = BTreeMap::new();
     let mut files = Vec::new();
     let mut next = jobs.clone();
+    let mut env_steps = BTreeMap::new();
     for hosted_id in hosted_ids(jobs) {
         let Some(logical) = logical_id(&hosted_id) else {
             return Err(RenderError::InvalidWorkflow(format!(
@@ -89,16 +107,28 @@ pub(crate) fn share_lanes(
         calls.insert(local_id.clone(), uses);
         checkouts.insert(hosted_id.clone(), parts.checkout.clone());
         checkouts.insert(local_id.clone(), parts.checkout);
+        runtime_preludes.insert(hosted_id.clone(), parts.hosted_runtime_prelude);
+        runtime_preludes.insert(local_id.clone(), parts.local_runtime_prelude);
+        prefixes.insert(hosted_id.clone(), parts.prefix.clone());
+        prefixes.insert(local_id.clone(), parts.prefix);
         preludes.insert(hosted_id.clone(), parts.hosted_prelude);
         preludes.insert(local_id.clone(), parts.local_prelude);
-        set_steps(&mut next, &hosted_id, parts.hosted_extra);
-        set_steps(&mut next, &local_id, parts.local_extra);
+        env_steps.insert(hosted_id.clone(), hosted.steps.clone());
+        env_steps.insert(local_id.clone(), local.steps.clone());
+        set_steps(&mut next, &hosted_id, parts.hosted_postlude.clone());
+        set_steps(&mut next, &local_id, parts.local_postlude.clone());
+        postludes.insert(hosted_id.clone(), parts.hosted_postlude);
+        postludes.insert(local_id.clone(), parts.local_postlude);
     }
     Ok(LaneShare {
         jobs: next,
         calls,
         checkouts,
+        env_steps,
+        runtime_preludes,
+        prefixes,
         preludes,
+        postludes,
         files,
     })
 }
@@ -132,128 +162,124 @@ fn split_pair(hosted: &Job, local: &Job, checkout_uses: &str) -> Option<SharedLa
     if hosted_checkout != local_checkout {
         return None;
     }
-    let (hosted_prelude, hosted_steps) = peel_tools_cache_prelude(hosted_steps)?;
-    let (local_prelude, local_steps) = peel_tools_cache_prelude(local_steps)?;
-    if !same_prelude_shape(&hosted_prelude, &local_prelude) {
+    let (hosted_runtime_prelude, hosted_steps) = runtime::peel_tools_cache_prelude(hosted_steps)?;
+    let (local_runtime_prelude, local_steps) = runtime::peel_tools_cache_prelude(local_steps)?;
+    if !runtime::same_tools_cache_prelude_shape(&hosted_runtime_prelude, &local_runtime_prelude) {
         return None;
     }
-    let (hosted_common, hosted_extra) = peel_saves(&hosted_steps);
-    let (local_common, local_extra) = peel_saves(&local_steps);
+    let mut parts = split_shared_steps(hosted_checkout, &hosted_steps, &local_steps)?;
+    parts.hosted_runtime_prelude = hosted_runtime_prelude;
+    parts.local_runtime_prelude = local_runtime_prelude;
+    Some(parts)
+}
+
+fn split_shared_steps(
+    checkout: &Step,
+    hosted_steps: &[Step],
+    local_steps: &[Step],
+) -> Option<SharedLaneParts> {
+    let hosted_action = hosted_steps.iter().any(crate::cache_steps::is_mbx_action);
+    let local_action = local_steps.iter().any(crate::cache_steps::is_mbx_action);
+    if hosted_action != local_action {
+        return None;
+    }
+    let (prefix, hosted_prelude, local_prelude, hosted_tail, local_tail) = if hosted_action {
+        let hosted_at = mbx_prelude_index(hosted_steps)?;
+        let local_at = mbx_prelude_index(local_steps)?;
+        let hosted_prefix = &hosted_steps[..hosted_at];
+        let local_prefix = &local_steps[..local_at];
+        if hosted_prefix != local_prefix {
+            return None;
+        }
+        let (hosted_prelude, hosted_tail) = peel_mbx_prelude(&hosted_steps[hosted_at..])?;
+        let (local_prelude, local_tail) = peel_mbx_prelude(&local_steps[local_at..])?;
+        (
+            hosted_prefix.to_vec(),
+            hosted_prelude,
+            local_prelude,
+            hosted_tail,
+            local_tail,
+        )
+    } else {
+        (
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            hosted_steps,
+            local_steps,
+        )
+    };
+    let (hosted_common, hosted_postlude) = peel_postlude(hosted_tail);
+    let (local_common, local_postlude) = peel_postlude(local_tail);
     (hosted_common == local_common).then_some(SharedLaneParts {
-        checkout: hosted_checkout.clone(),
-        common: hosted_common,
+        checkout: checkout.clone(),
+        hosted_runtime_prelude: Vec::new(),
+        local_runtime_prelude: Vec::new(),
+        prefix,
         hosted_prelude,
         local_prelude,
-        hosted_extra,
-        local_extra,
+        common: hosted_common,
+        hosted_postlude,
+        local_postlude,
     })
 }
 
-/// Keep runner-specific V2 identity and restore steps outside shared actions.
-fn peel_tools_cache_prelude(steps: &[Step]) -> Option<(Vec<Step>, Vec<Step>)> {
-    let mut prelude = Vec::new();
-    let mut common = Vec::new();
+fn mbx_prelude_index(steps: &[Step]) -> Option<usize> {
+    let preflight = steps
+        .iter()
+        .position(|step| step.name == crate::cache_steps::MBX_PREFLIGHT_NAME)?;
+    (preflight < steps.len()).then_some(preflight)
+}
+
+fn peel_mbx_prelude(steps: &[Step]) -> Option<(Vec<Step>, &[Step])> {
+    let mut end = 0;
     for step in steps {
-        if matches!(
-            step.name.as_str(),
-            crate::cache_p08::TOOLS_CACHE_IDENTITY_NAME | crate::cache_steps::TOOLS_RESTORE_NAME
-        ) {
-            prelude.push(step.clone());
+        if is_mbx_prelude_step(step) {
+            end += 1;
+        } else {
+            break;
+        }
+    }
+    let prelude = &steps[..end];
+    if prelude.first()?.name != crate::cache_steps::MBX_PREFLIGHT_NAME
+        || !prelude.iter().any(crate::cache_steps::is_mbx_action)
+    {
+        return None;
+    }
+    Some((prelude.to_vec(), &steps[end..]))
+}
+
+fn is_mbx_prelude_step(step: &Step) -> bool {
+    matches!(
+        step.name.as_str(),
+        crate::cache_steps::MBX_PREFLIGHT_NAME
+            | crate::cache_steps::MBX_RESTORE_NAME
+            | crate::mbx_bundle::MBX_CACHE_KEY_NAME
+            | crate::mbx_bundle::MBX_LOCAL_SETUP_NAME
+            | crate::mbx_bundle::MBX_BUNDLE_RESTORE_NAME
+            | crate::mbx_bundle::MBX_BUNDLE_IMPORT_NAME
+    )
+}
+
+fn peel_postlude(steps: &[Step]) -> (Vec<Step>, Vec<Step>) {
+    let mut common = Vec::new();
+    let mut postlude = Vec::new();
+    for step in steps {
+        if is_postlude_step(step) {
+            postlude.push(step.clone());
         } else {
             common.push(step.clone());
         }
     }
-    if !valid_tools_cache_prelude(&prelude) {
-        return None;
-    }
-    if let Some(setup) = steps
-        .iter()
-        .position(|step| step.name == crate::setup::SETUP_MISE_NAME)
-        && steps.iter().enumerate().any(|(index, step)| {
-            matches!(
-                step.name.as_str(),
-                crate::cache_p08::TOOLS_CACHE_IDENTITY_NAME
-                    | crate::cache_steps::TOOLS_RESTORE_NAME
-            ) && index > setup
-        })
-    {
-        return None;
-    }
-    Some((prelude, common))
+    (common, postlude)
 }
 
-fn valid_tools_cache_prelude(steps: &[Step]) -> bool {
-    match steps {
-        [] => true,
-        [identity, restore] => {
-            let identity_ok = identity.name == crate::cache_p08::TOOLS_CACHE_IDENTITY_NAME
-                && identity.condition.is_none()
-                && matches!(&identity.kind, StepKind::Shell { .. });
-            let expected_paths = crate::cache_steps::TOOLS_CACHE_PATHS.join("\n");
-            let restore_ok = matches!(
-                &restore.kind,
-                StepKind::Action { uses, with, env }
-                    if restore.name == crate::cache_steps::TOOLS_RESTORE_NAME
-                        && uses == crate::cache_steps::TOOLS_RESTORE_USES
-                        && env.is_empty()
-                        && with.get("path").map(String::as_str) == Some(expected_paths.as_str())
-                        && with.get("key").is_some_and(|key| {
-                            key.starts_with("mise-tools-v2-")
-                                && key.contains("${{steps.velnor-tool-cache-identity.outputs.identity}}")
-                        })
-            );
-            identity_ok
-                && restore_ok
-                && restore.condition.as_deref()
-                    == Some(crate::cache_p08::TOOLS_CACHE_RESTORE_CONDITION)
-        }
-        _ => false,
-    }
-}
-
-fn same_prelude_shape(hosted: &[Step], local: &[Step]) -> bool {
-    if !valid_tools_cache_prelude(hosted)
-        || !valid_tools_cache_prelude(local)
-        || hosted.len() != local.len()
-    {
-        return false;
-    }
-    hosted.iter().zip(local).all(|(hosted, local)| {
-        if hosted.name != local.name || hosted.condition != local.condition {
-            return false;
-        }
-        match (&hosted.kind, &local.kind) {
-            (
-                StepKind::Shell {
-                    run: hosted_run,
-                    env: hosted_env,
-                },
-                StepKind::Shell {
-                    run: local_run,
-                    env: local_env,
-                },
-            ) => hosted_run == local_run && hosted_env.keys().eq(local_env.keys()),
-            (
-                StepKind::Action {
-                    uses: hosted_uses,
-                    with: hosted_with,
-                    env: hosted_env,
-                },
-                StepKind::Action {
-                    uses: local_uses,
-                    with: local_with,
-                    env: local_env,
-                },
-            ) => {
-                hosted_uses == local_uses
-                    && hosted_env == local_env
-                    && hosted_with.keys().eq(local_with.keys())
-                    && hosted_with.get("path") == local_with.get("path")
-                    && hosted_with.get("restore-keys") == local_with.get("restore-keys")
-            }
-            _ => false,
-        }
-    })
+fn is_postlude_step(step: &Step) -> bool {
+    is_elected_save(step)
+        || matches!(
+            step.name.as_str(),
+            crate::mbx_bundle::MBX_BUNDLE_EXPORT_NAME | crate::mbx_bundle::MBX_BUNDLE_SAVE_NAME
+        )
 }
 
 fn peel_checkout<'a>(steps: &'a [Step], checkout_uses: &str) -> Option<(&'a Step, &'a [Step])> {
@@ -280,19 +306,6 @@ fn is_checkout_step(step: &Step) -> bool {
             StepKind::Action { uses, .. }
                 if uses.starts_with("actions/checkout@")
         )
-}
-
-fn peel_saves(steps: &[Step]) -> (Vec<Step>, Vec<Step>) {
-    let mut common = Vec::new();
-    let mut extra = Vec::new();
-    for step in steps {
-        if is_elected_save(step) {
-            extra.push(step.clone());
-        } else {
-            common.push(step.clone());
-        }
-    }
-    (common, extra)
 }
 
 fn is_elected_save(step: &Step) -> bool {
@@ -329,6 +342,10 @@ fn composite_file(
 #[cfg(test)]
 #[path = "lane_share_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "lane_share_render_tests.rs"]
+mod render_tests;
 
 #[cfg(test)]
 #[path = "lane_share_shell_tests.rs"]

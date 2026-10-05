@@ -15,6 +15,7 @@ mod closure_paths;
 mod commands;
 mod composite;
 mod document;
+mod document_lanes;
 mod document_steps;
 mod error;
 mod expressions;

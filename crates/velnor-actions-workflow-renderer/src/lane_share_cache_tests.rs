@@ -44,15 +44,7 @@ fn elected_save_stays_on_the_winner_job() {
         .find(|file| file.path == ".github/actions/rust-0/action.yml")
         .expect("composite");
     assert!(!action.bytes.contains("Save Mise tools"));
-    let yaml = render_jobs(
-        &workflow_ir(),
-        &shared.jobs,
-        &ctx(),
-        &shared.calls,
-        &shared.checkouts,
-        &shared.preludes,
-    )
-    .expect("yaml");
+    let yaml = render_jobs(&workflow_ir(), &shared, &ctx()).expect("yaml");
     assert_eq!(yaml.matches("Save Mise tools").count(), 1);
     let checkout_at = yaml.find("name: Checkout").expect("checkout");
     let call_at = yaml.find("uses: ./.github/actions/rust-0").expect("call");
@@ -99,12 +91,12 @@ fn tools_cache_runtime_preludes_stay_lane_specific_outside_shared_action() {
 
     let shared = share_lanes(&jobs, &ctx()).expect("lane-specific prelude factors");
     for id in [hosted_id, local_id] {
-        let prelude = &shared.preludes[id];
+        let prelude = &shared.runtime_preludes[id];
         assert_eq!(prelude.len(), 2);
         assert_eq!(prelude[0].name, crate::cache_p08::TOOLS_CACHE_IDENTITY_NAME);
         assert_eq!(prelude[1].name, crate::cache_steps::TOOLS_RESTORE_NAME);
     }
-    let identity_lane = |id: &str| match &shared.preludes[id][0].kind {
+    let identity_lane = |id: &str| match &shared.runtime_preludes[id][0].kind {
         StepKind::Shell { env, .. } => env.get("VELNOR_CACHE_LANE").map(String::as_str),
         _ => None,
     };
@@ -119,15 +111,7 @@ fn tools_cache_runtime_preludes_stay_lane_specific_outside_shared_action() {
     assert!(composite.bytes.contains("Setup Mise"));
     assert!(!composite.bytes.contains("Identify Mise cache runtime"));
     assert!(!composite.bytes.contains("Restore Mise tools"));
-    let yaml = render_jobs(
-        &workflow_ir(),
-        &shared.jobs,
-        &ctx(),
-        &shared.calls,
-        &shared.checkouts,
-        &shared.preludes,
-    )
-    .expect("shared workflow");
+    let yaml = render_jobs(&workflow_ir(), &shared, &ctx()).expect("shared workflow");
     let checkout = yaml.find("name: Checkout").expect("checkout");
     let identity = yaml
         .find("name: Identify Mise cache runtime")
