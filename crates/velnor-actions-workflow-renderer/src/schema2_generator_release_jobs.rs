@@ -123,11 +123,43 @@ pub(super) fn publish_job(
     pins: &GeneratorReleasePins,
     actions: &mut Vec<(String, Yaml)>,
 ) -> Result<(String, Yaml), RenderError> {
-    let mut steps = vec![workflow_steps::mise_step(
-        pins.setup_for(ReleaseTarget::LinuxX86_64),
-    )?];
-    steps.push(workflow_steps::install_gh_step(&pins.install_gh_argv)?);
-    let action_inputs = vec![
+    let steps = publish_steps(pins)?;
+    let call = local_action_with_inputs(
+        "generator-release-publish",
+        "Publish generator release",
+        steps,
+        publish_action_inputs(),
+        actions,
+    )?;
+    let mut fields = workflow_steps::with_needs(
+        workflow_steps::with_permissions(
+            base("Publish velnor-actions", hosted, 30),
+            workflow_steps::publish_permissions(),
+        ),
+        &[
+            "attest-linux",
+            "attest-macos",
+            "attest-macos-intel",
+            "attest-manifest",
+            "candidate-manifest",
+            "build-linux",
+            "build-macos",
+            "build-macos-intel",
+        ],
+    );
+    fields.push((
+        "environment".to_owned(),
+        Yaml::Map(vec![("name".to_owned(), Yaml::str("generator-release"))]),
+    ));
+    Ok(finish(
+        "publish-generator",
+        fields,
+        vec![workflow_steps::checkout_step(), call],
+    ))
+}
+
+fn publish_action_inputs() -> Vec<(&'static str, &'static str, &'static str)> {
+    vec![
         (
             "linux_artifact_id",
             "Artifact ID from the Linux x86_64 build job",
@@ -153,7 +185,14 @@ pub(super) fn publish_job(
             "SHA-256 of the canonical same-run manifest bytes",
             "${{ needs.candidate-manifest.outputs.manifest_sha256 }}",
         ),
-    ];
+    ]
+}
+
+fn publish_steps(pins: &GeneratorReleasePins) -> Result<Vec<Yaml>, RenderError> {
+    let mut steps = vec![workflow_steps::mise_step(
+        pins.setup_for(ReleaseTarget::LinuxX86_64),
+    )?];
+    steps.push(workflow_steps::install_gh_step(&pins.install_gh_argv)?);
     for asset in assets::ASSETS {
         let artifact_id = format!(
             "${{{{ inputs.{}_artifact_id }}}}",
@@ -199,38 +238,7 @@ pub(super) fn publish_job(
         &manifest::publish_script(pins),
         &pins.gh_argv,
     )?);
-    let call = local_action_with_inputs(
-        "generator-release-publish",
-        "Publish generator release",
-        steps,
-        action_inputs,
-        actions,
-    )?;
-    let mut fields = workflow_steps::with_needs(
-        workflow_steps::with_permissions(
-            base("Publish velnor-actions", hosted, 30),
-            workflow_steps::publish_permissions(),
-        ),
-        &[
-            "attest-linux",
-            "attest-macos",
-            "attest-macos-intel",
-            "attest-manifest",
-            "candidate-manifest",
-            "build-linux",
-            "build-macos",
-            "build-macos-intel",
-        ],
-    );
-    fields.push((
-        "environment".to_owned(),
-        Yaml::Map(vec![("name".to_owned(), Yaml::str("generator-release"))]),
-    ));
-    Ok(finish(
-        "publish-generator",
-        fields,
-        vec![workflow_steps::checkout_step(), call],
-    ))
+    Ok(steps)
 }
 
 pub(super) fn local_action(

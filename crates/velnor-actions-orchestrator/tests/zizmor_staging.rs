@@ -61,8 +61,7 @@ fn lock_text() -> String {
     let bins = velnor_actions_contract::SUPPORTED_TARGETS
         .iter()
         .map(|target| binary_record(target))
-        .collect::<Vec<_>>()
-        .join("");
+        .collect::<String>();
     format!(
         "schema = 1\n[generator]\nbinary = \"velnor-actions\"\nversion = \"{version}\"\ncommit = \"{}\"\n{bins}[mise-bootstrap]\nversion = \"2026.9.18\"\nartifact = \"https://example.invalid/mise\"\nsha256 = \"{}\"\n",
         "e".repeat(40),

@@ -37,6 +37,47 @@ pub(super) fn job(
         pins.setup_for(velnor_actions_contract::ReleaseTarget::LinuxX86_64),
     )?];
     steps.push(workflow_steps::install_gh_step(&pins.install_gh_argv)?);
+    steps.extend(product_download_steps(pins));
+    steps.extend(candidate_manifest_steps(pins)?);
+    let call = jobs::local_action_with_inputs(
+        "generator-release-attest-manifest",
+        "Attest generator release manifest",
+        steps,
+        manifest_action_inputs(),
+        actions,
+    )?;
+    let needs = [
+        "candidate-manifest",
+        "build-linux",
+        "build-macos",
+        "build-macos-intel",
+        "attest-linux",
+        "attest-macos",
+        "attest-macos-intel",
+    ];
+    let mut fields = with_needs(
+        with_permissions(
+            base("Attest generator release manifest", hosted, 30),
+            workflow_steps::perm(&[
+                ("actions", "write"),
+                ("artifact-metadata", "write"),
+                ("attestations", "write"),
+                ("contents", "read"),
+                ("id-token", "write"),
+            ]),
+        ),
+        &needs,
+    );
+    fields.retain(|(key, _)| key != "name");
+    Ok(finish(
+        "attest-manifest",
+        fields,
+        vec![workflow_steps::checkout_step(), call],
+    ))
+}
+
+fn product_download_steps(pins: &GeneratorReleasePins) -> Vec<Yaml> {
+    let mut steps = Vec::new();
     for asset in ASSETS {
         let artifact_id = format!(
             "${{{{ inputs.{}_artifact_id }}}}",
@@ -52,6 +93,11 @@ pub(super) fn job(
             &assets::verify_provenance_script(asset, pins),
         ));
     }
+    steps
+}
+
+fn candidate_manifest_steps(pins: &GeneratorReleasePins) -> Result<Vec<Yaml>, RenderError> {
+    let mut steps = Vec::new();
     steps.push(workflow_steps::download_step_by_id(
         "Download exact canonical candidate manifest",
         "${{ inputs.manifest_artifact_id }}",
@@ -83,7 +129,11 @@ pub(super) fn job(
             &[&bundle_path],
         ),
     ]);
-    let action_inputs = vec![
+    Ok(steps)
+}
+
+fn manifest_action_inputs() -> Vec<(&'static str, &'static str, &'static str)> {
+    vec![
         (
             "linux_artifact_id",
             "Artifact ID from the Linux x86_64 build job",
@@ -109,42 +159,7 @@ pub(super) fn job(
             "SHA-256 of the canonical same-run manifest bytes",
             "${{ needs.candidate-manifest.outputs.manifest_sha256 }}",
         ),
-    ];
-    let call = jobs::local_action_with_inputs(
-        "generator-release-attest-manifest",
-        "Attest generator release manifest",
-        steps,
-        action_inputs,
-        actions,
-    )?;
-    let needs = [
-        "candidate-manifest",
-        "build-linux",
-        "build-macos",
-        "build-macos-intel",
-        "attest-linux",
-        "attest-macos",
-        "attest-macos-intel",
-    ];
-    let mut fields = with_needs(
-        with_permissions(
-            base("Attest generator release manifest", hosted, 30),
-            workflow_steps::perm(&[
-                ("actions", "write"),
-                ("artifact-metadata", "write"),
-                ("attestations", "write"),
-                ("contents", "read"),
-                ("id-token", "write"),
-            ]),
-        ),
-        &needs,
-    );
-    fields.retain(|(key, _)| key != "name");
-    Ok(finish(
-        "attest-manifest",
-        fields,
-        vec![workflow_steps::checkout_step(), call],
-    ))
+    ]
 }
 
 /// Rebuild the expected manifest from verified downloaded binaries and records.

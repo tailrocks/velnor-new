@@ -66,6 +66,19 @@ fn run_publish_case(case: Failure) -> Result<(), Box<dyn Error>> {
     copy_release_helpers(&scratch.0)?;
     write_candidate_records(&scratch.0, case)?;
     write_attestation_files(&scratch.0)?;
+    create_candidate_manifest(&scratch.0, case)?;
+    let release_json = release_json(&scratch.0, case)?;
+    fs::write(scratch.0.join("release.json"), release_json)?;
+    install_mock_gh(&scratch.0)?;
+    let script = scratch.0.join("publish.sh");
+    fs::write(&script, manifest::publish_script(&test_pins()))?;
+    let gh_function = super::workflow_steps::gh_function(&test_pins().gh_argv)?;
+    let output = run_publish_command(&scratch.0, case, &script, &gh_function)?;
+    cli_tests::assert_pinned_publish_calls(&scratch.0, case)?;
+    assert_publish_result(&scratch.0, case, &output)
+}
+
+fn create_candidate_manifest(root: &Path, case: Failure) -> Result<(), Box<dyn Error>> {
     let manifest_status = Command::new("bash")
         .args([
             "scripts/generator-release/create-release-manifest.sh",
@@ -74,59 +87,68 @@ fn run_publish_case(case: Failure) -> Result<(), Box<dyn Error>> {
             "1.98.1",
             "1.21.1",
         ])
-        .current_dir(&scratch.0)
+        .current_dir(root)
         .env("GITHUB_REPOSITORY", REPOSITORY)
         .env("GITHUB_SHA", SOURCE_SHA)
         .status()?;
     let invalid_manifest = matches!(case, Failure::WrongSidecarName | Failure::MissingBinary);
     if invalid_manifest {
         assert!(!manifest_status.success(), "accepted {case:?}");
-        fs::create_dir_all(scratch.0.join("manifest-assets"))?;
+        fs::create_dir_all(root.join("manifest-assets"))?;
         fs::write(
-            scratch.0.join("manifest-assets/release-manifest.json"),
+            root.join("manifest-assets/release-manifest.json"),
             b"untrusted fixture\n",
         )?;
     } else {
         assert!(manifest_status.success(), "manifest failed for {case:?}");
-        fs::create_dir_all(scratch.0.join("manifest-assets"))?;
+        fs::create_dir_all(root.join("manifest-assets"))?;
         fs::copy(
-            scratch.0.join("release-manifest.json"),
-            scratch.0.join("manifest-assets/release-manifest.json"),
+            root.join("release-manifest.json"),
+            root.join("manifest-assets/release-manifest.json"),
         )?;
     }
     if case == Failure::StaleManifest {
         fs::write(
-            scratch.0.join("manifest-assets/release-manifest.json"),
+            root.join("manifest-assets/release-manifest.json"),
             b"stale manifest\n",
         )?;
     }
-    let release_json = release_json(&scratch.0, case)?;
-    fs::write(scratch.0.join("release.json"), release_json)?;
-    install_mock_gh(&scratch.0)?;
-    let script = scratch.0.join("publish.sh");
-    fs::write(&script, manifest::publish_script(&test_pins()))?;
-    let gh_function = super::workflow_steps::gh_function(&test_pins().gh_argv)?;
+    Ok(())
+}
+
+fn run_publish_command(
+    root: &Path,
+    case: Failure,
+    script: &Path,
+    gh_function: &str,
+) -> Result<std::process::Output, Box<dyn Error>> {
     let mut command = Command::new("bash");
     command
         .arg("-c")
-        .arg(format!("{gh_function}\n{}", fs::read_to_string(&script)?))
-        .current_dir(&scratch.0)
-        .env("PATH", path_with_mock_gh(&scratch.0)?)
+        .arg(format!("{gh_function}\n{}", fs::read_to_string(script)?))
+        .current_dir(root)
+        .env("PATH", path_with_mock_gh(root)?)
         .env("GITHUB_REPOSITORY", REPOSITORY)
         .env("GITHUB_SHA", SOURCE_SHA)
         .env("GITHUB_WORKFLOW_SHA", SOURCE_SHA)
         .env("GITHUB_REF", "refs/heads/main")
         .env("GITHUB_EVENT_NAME", "workflow_dispatch")
         .env("GH_PREFLIGHT", preflight_mode(case))
-        .env("GH_RELEASE_JSON", scratch.0.join("release.json"))
-        .env("GH_CREATE_TAG", scratch.0.join("created-tag"))
-        .env("GH_ASSET_ARGS", scratch.0.join("asset-args"))
-        .env("GH_CALLS", scratch.0.join("gh-calls"))
-        .env("MISE_CALLS", scratch.0.join("mise-calls"))
-        .env("MOCK_GH", scratch.0.join("mock-bin/gh"));
-    cli_tests::isolate_gh_environment(&mut command, &scratch.0)?;
-    let output = command.output()?;
-    cli_tests::assert_pinned_publish_calls(&scratch.0, case)?;
+        .env("GH_RELEASE_JSON", root.join("release.json"))
+        .env("GH_CREATE_TAG", root.join("created-tag"))
+        .env("GH_ASSET_ARGS", root.join("asset-args"))
+        .env("GH_CALLS", root.join("gh-calls"))
+        .env("MISE_CALLS", root.join("mise-calls"))
+        .env("MOCK_GH", root.join("mock-bin/gh"));
+    cli_tests::isolate_gh_environment(&mut command, root)?;
+    Ok(command.output()?)
+}
+
+fn assert_publish_result(
+    root: &Path,
+    case: Failure,
+    output: &std::process::Output,
+) -> Result<(), Box<dyn Error>> {
     let should_succeed = case == Failure::None;
     assert_eq!(
         output.status.success(),
@@ -137,16 +159,13 @@ fn run_publish_case(case: Failure) -> Result<(), Box<dyn Error>> {
     );
     let create_is_expected = matches!(case, Failure::None | Failure::WrongPublishedDigest);
     if create_is_expected {
+        assert_eq!(fs::read_to_string(root.join("created-tag"))?, "v0.1.1\n");
         assert_eq!(
-            fs::read_to_string(scratch.0.join("created-tag"))?,
-            "v0.1.1\n"
-        );
-        assert_eq!(
-            fs::read_to_string(scratch.0.join("asset-args"))?,
+            fs::read_to_string(root.join("asset-args"))?,
             expected_asset_args()
         );
     } else {
-        assert_no_release_created(&scratch.0);
+        assert_no_release_created(root);
     }
     Ok(())
 }

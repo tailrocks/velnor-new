@@ -126,6 +126,13 @@ pub(super) fn assert_manifest_job(
     body: &str,
     actions: &Actions,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    let candidate = assert_candidate_manifest_job(body)?;
+    assert_manifest_attestation_job(body, actions)?;
+    assert_manifest_builder_contract(candidate);
+    Ok(())
+}
+
+fn assert_candidate_manifest_job(body: &str) -> Result<&str, Box<dyn std::error::Error>> {
     let candidate = super::super::job_body(body, "candidate-manifest")?;
     assert!(candidate.contains("runs-on: ubuntu-26.04\n"), "{candidate}");
     assert!(candidate.contains("- verify-release-source"), "{candidate}");
@@ -141,7 +148,13 @@ pub(super) fn assert_manifest_job(
         candidate.contains("manifest-assets/release-manifest.json"),
         "{candidate}"
     );
+    Ok(candidate)
+}
 
+fn assert_manifest_attestation_job(
+    body: &str,
+    actions: &Actions,
+) -> Result<(), Box<dyn std::error::Error>> {
     let manifest_job = super::super::job_body(body, "attest-manifest")?;
     assert!(
         manifest_job.contains("runs-on: ubuntu-26.04\n"),
@@ -208,7 +221,10 @@ pub(super) fn assert_manifest_job(
         "{manifest_action}"
     );
     assert!(!manifest_action.contains("${{ needs."), "{manifest_action}");
-    let manifest = format!("{candidate}\n{manifest_action}");
+    Ok(())
+}
+
+fn assert_manifest_builder_contract(manifest: &str) {
     assert!(
         manifest.contains(
             "create-release-manifest.sh '0.1.1' 'tailrocks/velnor-new' '1.98.1' '1.21.1'"
@@ -238,7 +254,6 @@ pub(super) fn assert_manifest_job(
         manifest_builder.contains(r#".toolchain["mr-boxington"] == $mr_boxington"#),
         "{manifest_builder}"
     );
-    Ok(())
 }
 
 pub(super) fn assert_publish_job(

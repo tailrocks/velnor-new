@@ -8,21 +8,25 @@ use super::assets::ProductAsset;
 use super::workflow_steps::{self, with_permissions};
 use super::{GeneratorReleasePins, assets, jobs, manifest};
 
+pub(super) struct QualificationJob<'a> {
+    pub id: &'a str,
+    pub name: &'a str,
+    pub action: &'a str,
+    pub runs_on: Yaml,
+    pub build_job: &'a str,
+    pub product: ProductAsset,
+    pub source_action: &'a Yaml,
+}
+
 /// Qualify a build artifact in a job that has no write or attestation permissions.
 pub(super) fn job(
-    id: &str,
-    name: &str,
-    action: &str,
-    runs_on: Yaml,
-    build_job: &str,
-    product: ProductAsset,
+    job: QualificationJob<'_>,
     pins: &GeneratorReleasePins,
-    source_action: &Yaml,
     actions: &mut Vec<(String, Yaml)>,
 ) -> Result<(String, Yaml), RenderError> {
     let mut action_steps = Vec::new();
     action_steps.extend(assets::download_build_steps(
-        product,
+        job.product,
         "Download built asset archive",
     ));
     action_steps.push(workflow_steps::download_step_by_id(
@@ -33,18 +37,18 @@ pub(super) fn job(
     action_steps.extend([
         workflow_steps::bash_step(
             "Verify candidate provenance record",
-            &assets::verify_provenance_script(product, pins),
+            &assets::verify_provenance_script(job.product, pins),
         ),
         workflow_steps::bash_step(
             "Verify downloaded checksum sidecar",
             &format!(
                 "set -eu\ncd {}\n{} {}",
-                product.directory, product.checksum_command, product.sidecar
+                job.product.directory, job.product.checksum_command, job.product.sidecar
             ),
         ),
         workflow_steps::bash_step_with_env(
             "Qualify downloaded candidate",
-            &assets::qualification_script(product.binary, product.directory),
+            &assets::qualification_script(job.product.binary, job.product.directory),
             vec![(
                 "VELNOR_RELEASE_MANIFEST_SHA256",
                 "${{ inputs.manifest_sha256 }}",
@@ -52,14 +56,14 @@ pub(super) fn job(
         ),
     ]);
     let call = jobs::local_action_with_inputs(
-        action,
-        name,
+        job.action,
+        job.name,
         action_steps,
         vec![
             (
                 "artifact_id",
                 "Artifact ID from this target's build job",
-                &format!("${{{{ needs.{build_job}.outputs.artifact_id }}}}"),
+                &format!("${{{{ needs.{}.outputs.artifact_id }}}}", job.build_job),
             ),
             (
                 "manifest_artifact_id",
@@ -75,14 +79,14 @@ pub(super) fn job(
         actions,
     )?;
     Ok(finish(
-        id,
+        job.id,
         with_permissions(
             workflow_steps::with_needs(
-                base(name, runs_on, 120),
-                &[build_job, "candidate-manifest"],
+                base(job.name, job.runs_on, 120),
+                &[job.build_job, "candidate-manifest"],
             ),
             workflow_steps::qualification_permissions(),
         ),
-        vec![source_action.clone(), call],
+        vec![job.source_action.clone(), call],
     ))
 }
