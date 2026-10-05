@@ -127,6 +127,13 @@ compiler writers.
 
 The generated workflow MUST use these paths. `CARGO_TARGET_DIR` is never an archive path:
 
+The protected-main MBX roundtrip workflow is a qualification experiment, not
+the production cache route. Its action ref is an explicit immutable candidate
+from the freshness inventory, separate from the version-policy production
+pin. Emitting the workflow or passing generated-tree checks does not qualify
+that candidate; only the required exact-source hosted evidence and independent
+review may lift the active hold.
+
 ```text
 VELNOR_CACHE_ROOT     = $RUNNER_TEMP/velnor/cache
 CARGO_HOME            = $VELNOR_CACHE_ROOT/cargo

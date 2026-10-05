@@ -130,8 +130,8 @@ fn workflow_request(
         let mbx_action = velnor_actions_actionlint::actions::PinnedActionRef::new(
             "jdx/mr-boxington-action",
             None,
-            velnor_actions_actionlint::actions::MR_BOXINGTON_ACTION_SHA,
-            velnor_actions_actionlint::actions::MR_BOXINGTON_ACTION_VERSION,
+            velnor_actions_actionlint::actions::MR_BOXINGTON_ACTION_CANDIDATE_SHA,
+            velnor_actions_actionlint::actions::MR_BOXINGTON_ACTION_CANDIDATE_VERSION,
         )?;
         let tool_catalog = velnor_actions_mise::ToolCatalog::pinned();
         Some(MbxQualificationPins {

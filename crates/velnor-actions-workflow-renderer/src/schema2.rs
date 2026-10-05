@@ -106,7 +106,8 @@ pub struct Schema2WorkflowRequest {
 pub struct MbxQualificationPins {
     /// Resolved Mise action and binary pins.
     pub mise_setup: MiseSetup,
-    /// Full-SHA MBX GitHub Action ref.
+    /// Full-SHA MBX GitHub Action ref under qualification, independent from
+    /// the production pin and never implicitly qualified by generation.
     pub mbx_action_uses: String,
     /// Exact MBX tool version.
     pub mbx_version: String,

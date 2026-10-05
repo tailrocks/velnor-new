@@ -1,9 +1,11 @@
-//! Hosted-only MBX objects-cache qualification.
+//! Hosted-only MBX objects-cache qualification experiment.
 //!
 //! Write and read are separate jobs in one dispatch. The writer is restricted
 //! to protected main; the shared cache generation is bound to that run,
 //! attempt, source SHA, action pin, and MBX release. The dependent reader
 //! cannot publish a cache or pass on data from an earlier run.
+//! The action ref is an explicit candidate input separate from the production
+//! pin; emitting this probe does not assert that candidate qualification passed.
 //!
 //! Both jobs set `MBX_GC_AUTO=1` for this protected-main roundtrip probe.
 //! This probe does not exercise production's typed hosted action backend or
