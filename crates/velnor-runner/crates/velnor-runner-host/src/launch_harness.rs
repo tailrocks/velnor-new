@@ -140,6 +140,7 @@ pub(crate) fn ctx() -> Drive {
 pub(crate) fn assigned_wait(message_id: i64, assigned: i64) -> Poll {
     Poll::Batch(ParsedBatch {
         message_id,
+        raw_body: String::new(),
         statistics: Some(Statistics {
             total_available_jobs: 0,
             total_acquired_jobs: 0,
@@ -165,6 +166,7 @@ pub(crate) fn assigned_wait(message_id: i64, assigned: i64) -> Poll {
 pub(crate) fn available(ids: &[i64]) -> Poll {
     Poll::Batch(ParsedBatch {
         message_id: 4,
+        raw_body: String::new(),
         statistics: None,
         jobs: ids
             .iter()
