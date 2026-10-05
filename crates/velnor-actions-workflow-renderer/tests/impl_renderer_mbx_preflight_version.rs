@@ -13,28 +13,28 @@ fn native_action_version_guard_accepts_only_one_exact_complete_line()
     for (name, output, want_success) in [
         (
             "exact version",
-            Some("#!/bin/sh\nprintf '%s\\n' 'mbx 1.22.0'\n"),
+            Some("#!/bin/sh\nprintf '%s\\n' 'mbx 1.21.1'\n"),
             true,
         ),
         (
             "wrong version",
-            Some("#!/bin/sh\nprintf '%s\\n' 'mbx 1.21.1'\n"),
+            Some("#!/bin/sh\nprintf '%s\\n' 'mbx 1.22.0'\n"),
             false,
         ),
         ("empty output", Some("#!/bin/sh\nexit 0\n"), false),
         (
             "extra line",
-            Some("#!/bin/sh\nprintf '%s\\n' 'mbx 1.22.0' 'diagnostic'\n"),
+            Some("#!/bin/sh\nprintf '%s\\n' 'mbx 1.21.1' 'diagnostic'\n"),
             false,
         ),
         (
             "unterminated output",
-            Some("#!/bin/sh\nprintf '%s' 'mbx 1.22.0'\n"),
+            Some("#!/bin/sh\nprintf '%s' 'mbx 1.21.1'\n"),
             false,
         ),
         (
             "nonzero command",
-            Some("#!/bin/sh\nprintf '%s\\n' 'mbx 1.22.0'\nexit 2\n"),
+            Some("#!/bin/sh\nprintf '%s\\n' 'mbx 1.21.1'\nexit 2\n"),
             false,
         ),
         ("missing executable", None, false),
@@ -75,7 +75,7 @@ fn native_action_cache_dir_guard_rejects_wrong_or_ambiguous_output()
         )?;
         write_tool(
             &fake_bin.join("mbx"),
-            "#!/bin/sh\nprintf '%s\\n' 'mbx 1.22.0'\n",
+            "#!/bin/sh\nprintf '%s\\n' 'mbx 1.21.1'\n",
         )?;
         let result = run_version_check_with_cache_dir_mode(&root.0, &guard, mode)?;
         assert!(

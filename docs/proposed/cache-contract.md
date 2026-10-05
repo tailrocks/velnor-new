@@ -105,7 +105,7 @@ Each path has one owner:
 |---|---|---|
 | Mise tools and Rust components | Compiled-in generator catalog, executed by Mise | Embed and invoke exact versions; disable project config, env files, and hooks |
 | Cargo registry and Git sources | Velnor source layer | Exclude credentials; separate from MBX |
-| Compiler objects and scheduler state | `jdx/mr-boxington-action` when MBX is selected | The pinned action owns object format, cache transport, and post step. Ordinary jobs use the provider's Rust-identity key with generation bound to the action pin, actual runner environment, GitHub job ID, MBX version, `MBX_SHARE_OUT_DIR=0`, and `MBX_GC_AUTO=1`; the stable logical store path is `$RUNNER_TEMP/velnor/mbx`, isolated by each runner's private job namespace. Protected default-branch pushes are the ordinary writer. The current `1.22.0` MBX selection is not qualification evidence and remains subject to its pending pin correction. Velnor does not install MBX through Mise or implement the object format |
+| Compiler objects and scheduler state | `jdx/mr-boxington-action` when MBX is selected | Production remains pinned to action v1.6 and MBX `1.21.1`; the newer MBX `1.22.0` is candidate-only pending the #29 source, lifecycle, disk, and input qualification. The action owns object format, cache transport, and post step. The current experiment uses the provider's Rust-identity key with a generation bound to action pin, runner environment, GitHub job ID, and MBX version; its current source has not established an exact immutable runner-image identity or useful-delta admission. Do not treat the experiment as satisfying those cache requirements. The stable logical store path is `$RUNNER_TEMP/velnor/mbx`. Velnor does not install MBX through Mise or implement the object format |
 | Mutable target directory | Matrix job | Reuse sequentially; never share concurrently |
 | Successful task result | Mise task cache | Use only for qualified deterministic tasks and complete outputs |
 
@@ -140,11 +140,9 @@ only that directory.
 
 Velnor's cache steps MAY archive only `CARGO_SOURCE_PATHS` and qualified
 `MISE_TASK_ARTIFACTS`; they MUST NOT archive MBX objects or manual bundles.
-The protected-push writer rule applies to ordinary task workflows. On
-`workflow_dispatch`, generated cache restore/import and save operations remain
-disabled until a producer validates the exact selected cache object before use;
-plan outputs or a run-bound receipt alone do not grant cache access or
-`actions:write`.
+The protected-push writer rule applies to ordinary task workflows. A separately
+authorized `workflow_dispatch` qualification job grants `actions:write`, enables
+its action save, and uses a run/attempt/source-SHA-bound generation.
 
 Velnor MUST NOT configure Mise `task.cache.remote_url`, remote namespaces, remote tokens, or OIDC task-cache
 credentials in V1. There is no Velnor cache server. The selected task-result transport is an opaque GitHub

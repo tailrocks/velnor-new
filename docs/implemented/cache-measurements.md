@@ -206,8 +206,11 @@ must export and save the MBX objects before the dependent reader starts. The
 reader has only `actions: read`, requires an imported object set, and checks
 that MBX reuses a cached compilation. A run-and-attempt-specific generation
 prevents a cache from an earlier dispatch from satisfying this check. The
-reader's `cache-hit=true` assertion intentionally requires the action's
-run-specific writer key to be reached by its restore prefix.
+reader disables saving and restores from a prefix, so its primary lookup is
+not an exact match for the writer's run-specific save key. The action therefore
+reports `cache-hit=false` even when it imports that run-bound object set. The
+workflow requires the imported-object count and a cached-compilation reuse
+measurement instead of requiring an exact primary-key hit.
 
 Both jobs set `MBX_GC_AUTO=1` and `MBX_SHARE_OUT_DIR=0` for this
 protected-main round-trip probe. The historical production configuration

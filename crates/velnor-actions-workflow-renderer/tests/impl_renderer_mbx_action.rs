@@ -47,7 +47,7 @@ fn native_action_installs_exact_version_and_owns_object_cache() {
         panic!("version check must be a shell step");
     };
     assert!(run[2].contains("mbx --version"));
-    assert!(run[2].contains("mbx 1.22.0"));
+    assert!(run[2].contains("mbx 1.21.1"));
     assert!(run[2].contains("unterminated"));
     assert!(run[2].contains(&format!(
         "mise --no-config --no-env --no-hooks exec rust@{TEST_RUST_TOOLCHAIN} -- mbx --version"
@@ -129,7 +129,7 @@ fn action_construction_rejects_floating_refs_and_tool_versions() {
             "invalid action ref {uses}"
         );
     }
-    for version in ["latest", "v1.22.0", "1.21", "1.22.0.0", "1.21.x", ""] {
+    for version in ["latest", "v1.21.1", "1.21", "1.21.1.0", "1.21.x", ""] {
         assert!(
             steps(version, TEST_RUST_TOOLCHAIN).is_err(),
             "invalid MBX version {version:?}"

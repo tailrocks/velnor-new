@@ -46,7 +46,7 @@ fn preseed_restores_mbx_builds_after_sources_with_homes() {
         panic!("MBX restore must be an action");
     };
     assert_eq!(with.get("toolchain").map(String::as_str), Some("1.98.1"));
-    assert_eq!(with.get("version").map(String::as_str), Some("1.22.0"));
+    assert_eq!(with.get("version").map(String::as_str), Some("1.21.1"));
     assert_eq!(env.get("RUSTUP_HOME"), env.get("MISE_RUSTUP_HOME"));
     assert_eq!(env.get("CARGO_HOME"), env.get("MISE_CARGO_HOME"));
     assert_owned_homes(steps, PRESEED_BUILD_NAME);

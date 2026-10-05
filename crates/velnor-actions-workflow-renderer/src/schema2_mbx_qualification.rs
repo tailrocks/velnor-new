@@ -195,6 +195,14 @@ fn verify_action_step(request: &MbxQualificationPins, writer: bool) -> Yaml {
     } else {
         "workflow_dispatch; save-on-workflow-dispatch is off"
     };
+    // A dispatch writer saves under a run/attempt suffix. The dependent
+    // read-only job restores via the run-bound prefix, so exact equality is
+    // false even when the import and compilation-reuse probes pass.
+    let exact_cache_hit = if writer {
+        ""
+    } else {
+        r#" && test "$CACHE_HIT" = 'false'"#
+    };
     Yaml::Map(vec![
         (
             "name".to_owned(),
@@ -219,14 +227,7 @@ fn verify_action_step(request: &MbxQualificationPins, writer: bool) -> Yaml {
             "run".to_owned(),
             Yaml::str(format!(
                 "test \"$MBX_VERSION\" = '{}' && test \"$CACHE_SAVE_ELIGIBLE\" = '{}' && test \"$CACHE_SAVE_REASON\" = '{}'{}",
-                request.mbx_version,
-                save_eligible,
-                save_reason,
-                if writer {
-                    ""
-                } else {
-                    r#" && test "$CACHE_HIT" = 'true'"#
-                }
+                request.mbx_version, save_eligible, save_reason, exact_cache_hit
             )),
         ),
     ])

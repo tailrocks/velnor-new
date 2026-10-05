@@ -25,7 +25,7 @@ the pinned toolchain's own rustup, writing only Velnor-owned tool homes.
 
 For an MBX profile, a Rust-only preflight first verifies the exact selected
 Rustup shim and toolchain. The pinned v1.6 `jdx/mr-boxington-action` then
-installs and owns MBX at exact version `1.22.0`, with
+installs and owns production MBX at exact version `1.21.1`, with
 `github-cache-mode: objects`. Velnor keeps the action's default compiler
 identity key and binds cache generation to the action SHA, actual runner environment,
 GitHub job ID,
@@ -35,6 +35,12 @@ provide physical isolation. The workflow does not install MBX through Mise.
 A following guard checks both `mbx --version` and `mbx cache dir` through the
 selected Rust Mise environment, requiring the exact version and the expected
 action-owned store before the build.
+
+This generation does not yet bind the canonical `platform_id` from the exact
+runner label, runtime `ImageOS`/`ImageVersion`, and execution target required by
+the cache contract. Current MBX cache hits are therefore unqualified across
+image changes; a bounded runtime identity bridge and fail-cold behavior are
+still required before those hits can be treated as compatible.
 
 In ordinary task workflows, `ACTIONS_CACHE_MODE` is `write` only on a
 protected default-branch push and `read` otherwise. The separate authorized
