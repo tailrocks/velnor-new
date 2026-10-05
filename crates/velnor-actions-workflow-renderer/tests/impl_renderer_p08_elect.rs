@@ -119,7 +119,7 @@ fn tools_cache_writer_saves_exact_payload_and_is_push_gated() -> Result<(), Rend
     assert_eq!(
         save.condition.as_deref(),
         Some(
-            "success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.velnor-tool-cache-identity.outputs.enabled == 'true'"
+            "success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true'"
         )
     );
     let StepKind::Action { uses, with, .. } = &save.kind else {

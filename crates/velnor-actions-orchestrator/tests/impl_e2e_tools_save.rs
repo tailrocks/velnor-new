@@ -7,7 +7,7 @@ use crate::impl_e2e_wiring::{JobText, StepText};
 /// Tools-cache step display names, asserted as emitted text.
 const RESTORE_TOOLS_TEXT: &str = "Restore Mise tools";
 const SAVE_TOOLS_TEXT: &str = "Save Mise tools";
-const IDENTITY_TEXT: &str = "Identify Mise cache runtime";
+const IDENTITY_TEXT: &str = "V2 identity";
 const TOOLS_PATHS: [&str; 5] = [
     "~/.local/share/mise",
     "${{ runner.temp }}/velnor/rustup",

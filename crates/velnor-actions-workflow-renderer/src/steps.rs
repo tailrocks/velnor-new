@@ -201,12 +201,31 @@ pub fn shell_step(
     argv: Vec<String>,
     env: BTreeMap<String, String>,
 ) -> Result<Step, RenderError> {
+    shell_step_with_env_validation(name, argv, env, commands::validate_env)
+}
+
+/// Validated scrubbed shell step inside a generated composite action.
+/// # Errors
+pub(crate) fn composite_shell_step(
+    name: &str,
+    argv: Vec<String>,
+    env: BTreeMap<String, String>,
+) -> Result<Step, RenderError> {
+    shell_step_with_env_validation(name, argv, env, commands::validate_composite_env)
+}
+
+fn shell_step_with_env_validation(
+    name: &str,
+    argv: Vec<String>,
+    env: BTreeMap<String, String>,
+    validate_env: fn(&BTreeMap<String, String>) -> Result<(), RenderError>,
+) -> Result<Step, RenderError> {
     if name.trim().is_empty() {
         return Err(RenderError::BadCommand("empty_name".to_owned()));
     }
     crate::expressions::check_name_content(name)?;
     commands::validate_command_argv(&argv)?;
-    commands::validate_env(&env)?;
+    validate_env(&env)?;
     crate::toolchain_env::reject_denied_step_keys(&env)?;
     scan_for_private_subcommands(name)?;
     let run = if commands::is_inline_shell(&argv) {

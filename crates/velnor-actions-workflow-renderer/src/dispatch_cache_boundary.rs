@@ -50,6 +50,7 @@ fn is_cache_access(step: &Step) -> bool {
     uses.starts_with("actions/cache@")
         || uses.starts_with("actions/cache/")
         || uses.starts_with("jdx/mr-boxington-action@")
+        || uses == crate::tool_seed::TOOL_SEED_USES
 }
 
 fn is_mbx_bundle_shell(step: &Step) -> bool {
@@ -65,6 +66,9 @@ fn suppress_dispatch(step: &mut Step) {
     if step.name == crate::cache_steps::TOOLS_RESTORE_NAME
         && step.condition.as_deref() == Some(crate::cache_p08::TOOLS_CACHE_RESTORE_CONDITION)
     {
+        return;
+    }
+    if step.condition.as_deref() == Some(DISPATCH_DENY) {
         return;
     }
     let prior = step
@@ -87,7 +91,7 @@ mod tests {
         workflow::{DispatchInput, DispatchInputType, WorkflowDispatch},
     };
 
-    use super::suppress_unvalidated_cache_access;
+    use super::{DISPATCH_DENY, suppress_unvalidated_cache_access};
 
     fn cache_step(uses: &str, name: &str) -> Step {
         Step {
@@ -345,6 +349,29 @@ mod tests {
             Some(
                 "((github.event_name != 'workflow_dispatch' || always())) && github.event_name != 'workflow_dispatch'"
             )
+        );
+    }
+
+    #[test]
+    fn dispatch_denies_the_local_tool_seed_action() {
+        let seed = Step {
+            name: crate::tool_seed::TOOL_SEED_NAME.to_owned(),
+            condition: Some("always()".to_owned()),
+            kind: StepKind::Action {
+                uses: crate::tool_seed::TOOL_SEED_USES.to_owned(),
+                with: BTreeMap::new(),
+                env: BTreeMap::new(),
+            },
+        };
+        let mut jobs = BTreeMap::from([("plan".to_owned(), job(&[], seed))]);
+
+        suppress_unvalidated_cache_access(&mut jobs);
+
+        assert!(
+            jobs["plan"].steps[0]
+                .condition
+                .as_deref()
+                .is_some_and(|condition| condition.contains(DISPATCH_DENY))
         );
     }
 }

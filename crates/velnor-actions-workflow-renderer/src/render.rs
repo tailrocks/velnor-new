@@ -6,7 +6,7 @@
 //! helpers, and the plan anchor; the legacy entrypoint preserves the
 //! previous contract for in-flight callers.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{
     CI_WORKFLOW_PATH, Job, PLAN_JOB_ID as CONTRACT_PLAN_JOB_ID,
@@ -360,6 +360,15 @@ fn render_merged(
     };
     let mbx_gc_jobs = crate::mbx_gc_policy::jobs_with_hosted_linux_mbx_objects(&jobs);
     let mbx_share_out_jobs = crate::mbx_gc_policy::jobs_with_mbx_objects(&jobs);
+    let identity_lanes: BTreeSet<String> = jobs
+        .values()
+        .filter(|job| {
+            job.steps
+                .iter()
+                .any(|step| step.name == cache_p08::TOOLS_CACHE_IDENTITY_NAME)
+        })
+        .map(|job| job.runs_on.clone())
+        .collect();
     let shared = crate::lane_share::share_lanes(&jobs, ctx)?;
     let mut document =
         document::workflow_to_yaml(ir, &shared, ctx, &mbx_gc_jobs, &mbx_share_out_jobs)?;
@@ -375,6 +384,17 @@ fn render_merged(
     crate::workflow_size::check_workflow_size(WORKFLOW_PATH, &text)?;
     steps::scan_for_private_subcommands(&text)?;
     let mut files = shared.files;
+    for runs_on in &identity_lanes {
+        files.push(cache_p08::runtime_identity_action_file(
+            runs_on,
+            &ctx.generator_version,
+        )?);
+    }
+    if !identity_lanes.is_empty() {
+        files.push(cache_p08::runtime_identity_script_file(
+            &ctx.generator_version,
+        )?);
+    }
     if crate::tool_seed::any_job_has_seed(&jobs) {
         files.push(crate::tool_seed::action_file(&ctx.generator_version)?);
     }

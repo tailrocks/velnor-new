@@ -84,8 +84,22 @@ fn action_step_to_yaml(
     with: &BTreeMap<String, String>,
     env: &BTreeMap<String, String>,
     job_env: &BTreeMap<String, String>,
+    runs_on: Option<&str>,
 ) -> Result<Yaml, RenderError> {
-    steps::validate_uses(uses)?;
+    let runtime_identity = step.name == crate::cache_p08::TOOLS_CACHE_IDENTITY_NAME
+        || ["ubuntu-22.04", "ubuntu-24.04", "ubuntu-26.04"]
+            .iter()
+            .any(|lane| crate::cache_p08::runtime_identity_action_uses(lane) == Some(uses));
+    if runtime_identity {
+        let Some(lane) = runs_on else {
+            return Err(RenderError::InvalidWorkflow(
+                "tools_cache_identity_missing_runner".to_owned(),
+            ));
+        };
+        crate::cache_p08::validate_runtime_identity_action(&step.name, uses, lane, with, env)?;
+    } else {
+        steps::validate_uses(uses)?;
+    }
     for (key, value) in with {
         crate::expressions::check_with_key(key)?;
         crate::expressions::check_with_value(key, value)?;
@@ -107,7 +121,7 @@ fn action_step_to_yaml(
     if job_id == FINAL_JOB_ID && is_verdict_download(step) {
         entries.push(("continue-on-error".to_owned(), Yaml::Bool(true)));
     }
-    let uses_yaml = if uses == crate::tool_seed::TOOL_SEED_USES {
+    let uses_yaml = if uses == crate::tool_seed::TOOL_SEED_USES || runtime_identity {
         Yaml::annotated(uses, "zizmor: ignore[self-repository]")
     } else {
         Yaml::str(uses.to_owned())
@@ -146,15 +160,20 @@ pub(crate) fn step_to_yaml(
     composite: bool,
     job_env: &BTreeMap<String, String>,
     actions_read: bool,
+    runs_on: Option<&str>,
 ) -> Result<Yaml, RenderError> {
     steps::scan_for_private_subcommands(&step.name)?;
     match &step.kind {
         StepKind::Action { uses, with, env } => {
-            action_step_to_yaml(job_id, step, uses, with, env, job_env)
+            action_step_to_yaml(job_id, step, uses, with, env, job_env, runs_on)
         }
         StepKind::Shell { run, env } => {
             commands::validate_command_argv(run)?;
-            commands::validate_env(env)?;
+            if composite {
+                commands::validate_composite_env(env)?;
+            } else {
+                commands::validate_env(env)?;
+            }
             let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
             crate::step_ids::push_step_id(&mut entries, &step.name);
             if let Some(condition) = &step.condition {
