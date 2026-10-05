@@ -14,6 +14,7 @@ const SCALE_RUNS: &str = "runs-on: [velnor, ubuntu-26.04-scale-set, verification
 fn verification_tasks_follow_eligible_lanes_and_stay_required() -> TestResult {
     for mode in ["hosted", "scale-set", "both"] {
         let repo = make_repo(&config(mode))?;
+        write_verification_task_config(repo.path())?;
         let tree = render_staged_tree(&prepare(repo.path())?)?;
         let workflow = required_file(&tree, ".github/workflows/ci.yml")?;
         let required = job_body(workflow, "required")?;
@@ -82,6 +83,7 @@ fn macos_task_cannot_select_the_linux_scale_set_profile() -> TestResult {
         config("hosted")
     );
     let repo = make_repo(&config)?;
+    write_verification_task_config(repo.path())?;
     let prep = prepare(repo.path())?;
     let error = render_staged_tree(&prep).expect_err("macOS cannot target Linux Scale Set");
     assert!(
@@ -373,6 +375,20 @@ run = "cargo xtask desktop verify"
 rust = [{ version = "1.97.1", backend = "core:rust", options = { components = "clippy,rustfmt", targets = "aarch64-unknown-linux-gnu,x86_64-unknown-linux-gnu" } }]
 swiftlint = [{ version = "0.65.1", backend = "aqua:realm/SwiftLint", "platforms.macos-arm64" = { url = "https://github.com/realm/SwiftLint/releases/download/0.65.1/portable_swiftlint.zip", checksum = "sha256:c1e429b0599cf1b516f369a2d9ec04eaf0e436f3c12b637df8851fa52ff694d0" } }]
 xcodegen = [{ version = "2.46.0", backend = "aqua:yonaskolb/XcodeGen", "platforms.macos-arm64" = { url = "https://github.com/yonaskolb/XcodeGen/releases/download/2.46.0/xcodegen.zip", checksum = "sha256:4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806" } }]
+"#,
+    )?;
+    Ok(())
+}
+
+fn write_verification_task_config(root: &std::path::Path) -> TestResult {
+    fs::write(
+        root.join("mise.toml"),
+        r#"
+[tasks.lint-linux]
+run = "echo lint-linux"
+
+[tasks.desktop-format-check]
+run = "echo desktop-format-check"
 "#,
     )?;
     Ok(())

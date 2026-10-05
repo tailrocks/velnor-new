@@ -200,3 +200,76 @@ depends = ["verify"]
     let checks = check_tool_inputs(root.path());
     assert!(resolve_verification_tools(&checks, "verify", VerificationRunner::LinuxX64).is_err());
 }
+
+#[test]
+fn empty_tool_closure_still_rejects_unsupported_settings_and_wrappers() {
+    let root = tool_root();
+    fs::write(
+        root.path().join("mise.toml"),
+        r#"
+[settings]
+lockfile = true
+auto_install = true
+
+[tasks.verify]
+run = "echo verify"
+"#,
+    )
+    .expect("write unsupported Mise setting");
+    let checks = check_tool_inputs(root.path());
+    let error = resolve_verification_tools(&checks, "verify", VerificationRunner::LinuxX64)
+        .expect_err("unsupported settings fail closed without selected tools");
+    assert!(error.to_string().contains("verification_mise_settings"));
+
+    fs::write(
+        root.path().join("mise.toml"),
+        r#"
+[settings]
+lockfile = true
+idiomatic_version_file_enable_tools = "rust"
+
+[tasks.verify]
+run = "echo verify"
+"#,
+    )
+    .expect("write malformed recognized setting");
+    let checks = check_tool_inputs(root.path());
+    let error = resolve_verification_tools(&checks, "verify", VerificationRunner::LinuxX64)
+        .expect_err("malformed recognized settings fail closed");
+    assert!(error.to_string().contains("verification_mise_settings"));
+
+    for wrapper in [
+        "command = \"cargo\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }",
+        "command = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"0\" }",
+    ] {
+        let config = format!(
+            "[settings]\nlockfile = true\n\n[tasks.verify]\nrun = \"echo verify\"\n\n[wrappers.cargo]\n{wrapper}\n"
+        );
+        fs::write(root.path().join("mise.toml"), config).expect("write unsupported wrapper");
+        let checks = check_tool_inputs(root.path());
+        let error = resolve_verification_tools(&checks, "verify", VerificationRunner::LinuxX64)
+            .expect_err("unsupported wrapper fails closed without selected tools");
+        assert!(error.to_string().contains("verification_mise_wrappers"));
+    }
+}
+
+#[test]
+fn missing_root_mise_config_does_not_admit_unmodeled_task_files() {
+    let root = tool_root();
+    fs::remove_file(root.path().join("mise.toml")).expect("remove root task config");
+    fs::create_dir(root.path().join(".mise")).expect("create task directory");
+    fs::create_dir(root.path().join(".mise/tasks")).expect("create task directory");
+    fs::write(
+        root.path().join(".mise/tasks/verify"),
+        "#!/bin/sh\nmise install cargo:unsafe-tool\n",
+    )
+    .expect("write unmodeled file task with install command");
+    let checks = check_tool_inputs(root.path());
+    let error = resolve_verification_tools(&checks, "verify", VerificationRunner::LinuxX64)
+        .expect_err("unmodeled task files are not admitted without root mise.toml");
+    assert!(
+        error
+            .to_string()
+            .contains("verification_mise_config_missing")
+    );
+}

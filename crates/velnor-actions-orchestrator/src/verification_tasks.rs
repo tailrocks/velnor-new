@@ -68,25 +68,19 @@ fn resolve_verification_tools(
     let mise = optional_source(checks, "mise.toml")?;
     let lock = optional_source(checks, "mise.lock")?;
     let rust = optional_source(checks, "rust-toolchain.toml")?;
+    let mise = mise.ok_or_else(|| failure("verification_mise_config_missing"))?;
     let mut result = ResolvedVerificationTools {
         mise_config_sha256: mise.map(|input| input.sha256.clone()),
         mise_lock_sha256: lock.map(|input| input.sha256.clone()),
         rust_toolchain_sha256: rust.map(|input| input.sha256.clone()),
         ..ResolvedVerificationTools::default()
     };
-    let Some(mise) = mise else {
-        if let Some(lock) = lock {
-            let NativeToolSource::MiseLock(lock) = &lock.source else {
-                return Err(failure("verification_mise_lock"));
-            };
-            validate_lock_shape(lock)?;
-        }
-        return Ok(result);
-    };
     let NativeToolSource::MiseConfig(mise_config) = &mise.source else {
         return Err(failure("verification_mise_config"));
     };
     validate_config_shape(mise_config)?;
+    validate_settings(mise_config)?;
+    validate_wrappers(mise_config)?;
     let requested =
         crate::native_mise_tasks::selected_task_tools(mise_config, task_name).map_err(failure)?;
     if requested.is_empty() {
@@ -103,24 +97,6 @@ fn resolve_verification_tools(
         return Err(failure("verification_mise_lock"));
     };
     validate_lock_shape(mise_lock)?;
-    if let Some(settings) = mise_config
-        .root_keys
-        .iter()
-        .any(|key| key == "settings")
-        .then_some(&mise_config.settings)
-        && (!settings.present
-            || !settings.valid_shape
-            || settings.lockfile != Some(true)
-            || !settings.unsupported_fields.is_empty())
-    {
-        return Err(failure("verification_mise_settings"));
-    }
-    if mise_config.root_keys.iter().any(|key| key == "wrappers")
-        && (!mise_config.wrappers.valid_shape
-            || !mise_config.wrappers.unsupported_fields.is_empty())
-    {
-        return Err(failure("verification_mise_wrappers"));
-    }
     if requested.contains_key("rust") && mise_config.tools.contains_key("rust") {
         return Err(failure("verification_rust_must_use_idiomatic_file"));
     }
@@ -207,6 +183,44 @@ fn validate_config_shape(config: &NativeMiseConfig) -> Result<(), OrchestratorEr
         .any(|key| !allowed.contains(&key.as_str()))
     {
         return Err(failure("verification_mise_config_root"));
+    }
+    Ok(())
+}
+
+fn validate_settings(config: &NativeMiseConfig) -> Result<(), OrchestratorError> {
+    if !config.root_keys.iter().any(|key| key == "settings") {
+        return Ok(());
+    }
+    let settings = &config.settings;
+    if !settings.present
+        || !settings.valid_shape
+        || settings.lockfile != Some(true)
+        || settings
+            .idiomatic_version_file_enable_tools
+            .as_deref()
+            .is_some_and(|tools| tools.len() != 1 || tools[0] != "rust")
+        || settings.cargo_binstall == Some(false)
+        || settings.cargo_binstall_only == Some(false)
+        || (settings.cargo_binstall_only == Some(true) && settings.cargo_binstall != Some(true))
+        || !settings.unsupported_fields.is_empty()
+    {
+        return Err(failure("verification_mise_settings"));
+    }
+    Ok(())
+}
+
+fn validate_wrappers(config: &NativeMiseConfig) -> Result<(), OrchestratorError> {
+    if !config.root_keys.iter().any(|key| key == "wrappers") {
+        return Ok(());
+    }
+    let wrappers = &config.wrappers;
+    if !wrappers.present
+        || !wrappers.valid_shape
+        || wrappers.cargo_command.as_deref() != Some("mbx")
+        || wrappers.mbx_cargo_shim_mode.as_deref() != Some("1")
+        || !wrappers.unsupported_fields.is_empty()
+    {
+        return Err(failure("verification_mise_wrappers"));
     }
     Ok(())
 }

@@ -189,6 +189,26 @@ fn parse_native_settings(value: &toml::Value) -> NativeMiseSettings {
         })
         .cloned()
         .collect::<Vec<_>>();
+    let idiomatic_tools = table
+        .get("idiomatic_version_file_enable_tools")
+        .and_then(toml::Value::as_array)
+        .and_then(|items| {
+            items
+                .iter()
+                .map(|item| item.as_str().map(ToOwned::to_owned))
+                .collect::<Option<Vec<_>>>()
+        });
+    if table.contains_key("lockfile")
+        && table
+            .get("lockfile")
+            .and_then(toml::Value::as_bool)
+            .is_none()
+    {
+        unsupported_fields.push("lockfile.shape".to_owned());
+    }
+    if table.contains_key("idiomatic_version_file_enable_tools") && idiomatic_tools.is_none() {
+        unsupported_fields.push("idiomatic_version_file_enable_tools.shape".to_owned());
+    }
     if let Some(cargo) = cargo {
         unsupported_fields.extend(
             cargo
@@ -196,21 +216,18 @@ fn parse_native_settings(value: &toml::Value) -> NativeMiseSettings {
                 .filter(|key| !matches!(key.as_str(), "binstall" | "binstall_only"))
                 .map(|key| format!("cargo.{key}")),
         );
+        for key in ["binstall", "binstall_only"] {
+            if cargo.contains_key(key) && cargo.get(key).and_then(toml::Value::as_bool).is_none() {
+                unsupported_fields.push(format!("cargo.{key}.shape"));
+            }
+        }
     } else if table.contains_key("cargo") {
         unsupported_fields.push("cargo.shape".to_owned());
     }
     NativeMiseSettings {
         present: true,
         lockfile: table.get("lockfile").and_then(toml::Value::as_bool),
-        idiomatic_version_file_enable_tools: table
-            .get("idiomatic_version_file_enable_tools")
-            .and_then(toml::Value::as_array)
-            .and_then(|items| {
-                items
-                    .iter()
-                    .map(|item| item.as_str().map(ToOwned::to_owned))
-                    .collect()
-            }),
+        idiomatic_version_file_enable_tools: idiomatic_tools,
         cargo_binstall: cargo
             .and_then(|settings| settings.get("binstall"))
             .and_then(toml::Value::as_bool),
@@ -252,8 +269,20 @@ fn parse_native_wrappers(value: &toml::Value) -> NativeMiseWrappers {
                 .filter(|key| key.as_str() != "MBX_CARGO_SHIM_MODE")
                 .map(|key| format!("cargo.env.{key}")),
         );
+        if env.contains_key("MBX_CARGO_SHIM_MODE")
+            && env
+                .get("MBX_CARGO_SHIM_MODE")
+                .and_then(toml::Value::as_str)
+                .is_none()
+        {
+            unsupported.push("cargo.env.MBX_CARGO_SHIM_MODE.shape".to_owned());
+        }
     } else if cargo.contains_key("env") {
         unsupported.push("cargo.env.shape".to_owned());
+    }
+    if cargo.contains_key("command") && cargo.get("command").and_then(toml::Value::as_str).is_none()
+    {
+        unsupported.push("cargo.command.shape".to_owned());
     }
     NativeMiseWrappers {
         present: true,
