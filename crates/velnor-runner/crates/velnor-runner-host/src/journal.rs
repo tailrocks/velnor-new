@@ -13,7 +13,10 @@ mod launch;
 mod schema;
 mod worker_volume;
 
-pub(crate) use completion::{CompletedLaunch, CompletionIdentity};
+pub(crate) use completion::{
+    CleanupClaim, CompletedLaunch, CompletionIdentity, CompletionInboxEntry,
+    MAX_COMPLETION_BODY_BYTES, MAX_COMPLETION_INBOX_SCAN,
+};
 
 /// Durable intent row.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

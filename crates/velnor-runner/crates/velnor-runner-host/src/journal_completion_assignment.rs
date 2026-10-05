@@ -3,7 +3,7 @@
 use crate::error::HostError;
 use crate::journal::{IntentState, Journal, one_row, token_rejected};
 
-use super::{assigned_request, finish_transaction, is_session_name};
+use super::{assigned_request, finish_transaction, is_message_name, is_session_name};
 
 impl Journal {
     /// Persist launch identity before an external effect. Repeated identical binds are safe.
@@ -110,8 +110,8 @@ impl Journal {
         finish_transaction(&connection, result).await
     }
 
-    /// Persist the JIT attempt before making its HTTP request.
-    pub(crate) async fn claim_assigned_jit(&self, id: i64) -> Result<bool, HostError> {
+    /// Persist one JIT attempt before making its HTTP request.
+    pub(crate) async fn claim_launch_jit(&self, id: i64) -> Result<bool, HostError> {
         if id <= 0 {
             return Err(HostError::Journal);
         }
@@ -122,7 +122,7 @@ impl Journal {
             .map_err(|_| HostError::Journal)?;
         let result = connection
             .execute(
-                "UPDATE intents SET jit_requested = 1 WHERE id = ?1 AND kind = 'launch' AND state = 'pending' AND cleanup_proven = 0 AND acquire_attempted = 1 AND acquire_resolved = 1 AND acquired = 1 AND jit_requested = 0",
+                "UPDATE intents SET jit_requested = 1 WHERE id = ?1 AND kind = 'launch' AND state = 'pending' AND cleanup_proven = 0 AND runner_name IS NOT NULL AND jit_requested = 0 AND ((runner_request_id IS NULL AND acquire_attempted = 0 AND acquire_resolved = 0 AND acquired = 0) OR (runner_request_id IS NOT NULL AND acquire_attempted = 1 AND acquire_resolved = 1 AND acquired = 1))",
                 [id],
             )
             .await
@@ -340,6 +340,8 @@ fn valid_launch_identity(subject: &str, request_id: Option<i64>, runner_name: &s
     if let Some(subject_request) = assigned_request(subject) {
         request_id == Some(subject_request) && runner_name == format!("v{subject_request}")
     } else {
-        request_id.is_none() && is_session_name(subject) && subject == runner_name
+        request_id.is_none()
+            && (is_session_name(subject) || is_message_name(subject))
+            && subject == runner_name
     }
 }

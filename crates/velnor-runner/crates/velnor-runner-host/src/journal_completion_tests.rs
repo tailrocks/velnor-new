@@ -172,6 +172,44 @@ async fn session_completion_requires_persisted_set_and_exact_name() -> Result<()
 }
 
 #[tokio::test]
+async fn message_named_statistics_runner_can_bind_completion_identity() -> Result<(), HostError> {
+    let scratch = Scratch::new("message-runner")?;
+    let journal = Journal::open(&scratch.file()).await?;
+    let (id, _) = journal.begin_launch("m25").await?;
+    journal.bind_launch_identity(id, 77, None, "m25").await?;
+
+    assert_eq!(
+        journal.record_runner_completed(77, 601, 903, "m25").await?,
+        Some(id)
+    );
+    let due = journal.due_completed_launches(0, 10).await?;
+    assert_eq!(due.len(), 1);
+    assert_eq!(due[0].identity.runner_request_id, 601);
+    assert_eq!(due[0].identity.runner_name, "m25");
+    Ok(())
+}
+
+#[tokio::test]
+async fn quarantined_completion_can_match_a_failed_legacy_assignment() -> Result<(), HostError> {
+    let scratch = Scratch::new("legacy-failed-completion")?;
+    let path = scratch.file();
+    create_old_schema(&path).await?;
+    let journal = Journal::open(&path).await?;
+    let row = journal.rows().await?.first().ok_or(HostError::Journal)?.id;
+    journal.finish(row, Outcome::DefiniteFailure).await?;
+
+    assert_eq!(
+        journal.record_runner_completed(77, 600, 81, "v600").await?,
+        Some(row)
+    );
+    let reopened = Journal::open(&path).await?;
+    let due = reopened.due_completed_launches(i64::MAX, 10).await?;
+    assert_eq!(due.len(), 1);
+    assert_completion_identity(&due[0]);
+    Ok(())
+}
+
+#[tokio::test]
 async fn cleaned_failed_history_does_not_hide_the_current_request_generation()
 -> Result<(), HostError> {
     let scratch = Scratch::new("generation")?;
