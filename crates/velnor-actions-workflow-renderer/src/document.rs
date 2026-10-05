@@ -2,18 +2,18 @@
 //!
 //! Fixed key order: name, on, permissions, concurrency, jobs.
 
-use std::collections::BTreeMap;
-
-use velnor_actions_contract::{
-    Job, Permissions, Step, StepKind, Trigger, WorkflowIr,
-    workflow::{ir::DispatchInput, permissions::PermissionLevel},
-};
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
     RenderError, commands,
+    composite::{push_composite_shell, shared_call},
     render::{FINAL_JOB_ID, RenderContext},
     steps::{self, INTERNAL_OP_ENV, REQUEST_FILE_ENV},
     yaml::Yaml,
+};
+use velnor_actions_contract::{
+    Job, Permissions, Step, StepKind, Trigger, WorkflowIr,
+    workflow::{ir::DispatchInput, permissions::PermissionLevel},
 };
 
 /// Build the workflow document: name, on, permissions, concurrency, jobs.
@@ -21,11 +21,17 @@ pub(crate) fn workflow_to_yaml(
     ir: &WorkflowIr,
     jobs: &BTreeMap<String, Job>,
     ctx: &RenderContext,
+    shared: &BTreeMap<String, String>,
+    mbx_gc_jobs: &BTreeSet<String>,
 ) -> Result<Yaml, RenderError> {
     let needs_env = needs_channel_envs(jobs)?;
     let mut rendered_jobs = Vec::with_capacity(jobs.len());
     for (id, job) in jobs {
-        rendered_jobs.push((id.clone(), job_to_yaml(id, job, ctx, &needs_env)?));
+        let call = shared.get(id).map(String::as_str);
+        rendered_jobs.push((
+            id.clone(),
+            job_to_yaml(id, job, ctx, &needs_env, call, mbx_gc_jobs.contains(id))?,
+        ));
     }
     Ok(Yaml::Map(vec![
         ("name".to_owned(), Yaml::str(ir.name.clone())),
@@ -176,16 +182,30 @@ fn job_to_yaml(
     job: &Job,
     ctx: &RenderContext,
     needs_envs: &[(String, String)],
+    shared: Option<&str>,
+    mbx_gc_auto: bool,
 ) -> Result<Yaml, RenderError> {
     steps::scan_for_private_subcommands(&job.display_name)?;
     let mut entries = vec![
         ("name".to_owned(), Yaml::str(job.display_name.clone())),
-        ("runs-on".to_owned(), Yaml::str(job.runs_on.clone())),
+        (
+            "runs-on".to_owned(),
+            crate::runs_on::runs_on_yaml(&job.runs_on)?,
+        ),
         (
             "timeout-minutes".to_owned(),
             Yaml::Int(i64::from(job.timeout_minutes.minutes())),
         ),
     ];
+    if mbx_gc_auto {
+        entries.push((
+            "env".to_owned(),
+            Yaml::Map(vec![(
+                crate::cache_steps::MBX_GC_AUTO_ENV.to_owned(),
+                Yaml::str(crate::cache_steps::MBX_GC_AUTO_VALUE.to_owned()),
+            )]),
+        ));
+    }
     if let Some(environment) = &job.environment {
         entries.push(("environment".to_owned(), Yaml::str(environment.clone())));
     }
@@ -204,9 +224,12 @@ fn job_to_yaml(
         steps::scan_for_private_subcommands(condition)?;
         entries.push(("if".to_owned(), Yaml::str(condition.clone())));
     }
-    let mut rendered_steps = Vec::with_capacity(job.steps.len());
+    let mut rendered_steps = Vec::with_capacity(job.steps.len() + usize::from(shared.is_some()));
+    if let Some(uses) = shared {
+        rendered_steps.push(shared_call(uses)?);
+    }
     for step in &job.steps {
-        rendered_steps.push(step_to_yaml(id, step, ctx, needs_envs)?);
+        rendered_steps.push(step_to_yaml(id, step, ctx, needs_envs, false)?);
     }
     entries.push(("steps".to_owned(), Yaml::Seq(rendered_steps)));
     Ok(Yaml::Map(entries))
@@ -280,6 +303,7 @@ fn action_step_to_yaml(
     }
     commands::validate_env(env)?;
     let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
+    crate::mbx_bundle::push_step_id(&mut entries, &step.name);
     if let Some(condition) = &step.condition {
         steps::scan_for_private_subcommands(condition)?;
         entries.push(("if".to_owned(), Yaml::str(condition.clone())));
@@ -313,11 +337,12 @@ fn string_map_yaml(map: &BTreeMap<String, String>) -> Yaml {
 
 /// Render one step; internal ops become env plus request file, never argv.
 /// Every action ref (including the Alint pin) must be a full-SHA pin.
-fn step_to_yaml(
+pub(crate) fn step_to_yaml(
     job_id: &str,
     step: &Step,
     ctx: &RenderContext,
     needs_envs: &[(String, String)],
+    composite: bool,
 ) -> Result<Yaml, RenderError> {
     steps::scan_for_private_subcommands(&step.name)?;
     match &step.kind {
@@ -326,6 +351,7 @@ fn step_to_yaml(
             commands::validate_command_argv(run)?;
             commands::validate_env(env)?;
             let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
+            crate::mbx_bundle::push_step_id(&mut entries, &step.name);
             if let Some(condition) = &step.condition {
                 steps::scan_for_private_subcommands(condition)?;
                 entries.push(("if".to_owned(), Yaml::str(condition.clone())));
@@ -337,6 +363,7 @@ fn step_to_yaml(
                     .collect();
                 entries.push(("env".to_owned(), Yaml::Map(vars)));
             }
+            push_composite_shell(&mut entries, composite);
             entries.push((
                 "run".to_owned(),
                 Yaml::str(commands::join_argv_for_run(run)?),
@@ -360,6 +387,7 @@ fn step_to_yaml(
                 &[]
             };
             entries.push(("env".to_owned(), internal_env(op, target, ctx, channel)));
+            push_composite_shell(&mut entries, composite);
             entries.push((
                 "run".to_owned(),
                 Yaml::str(commands::quote_run_arg(&ctx.staged_binary)),

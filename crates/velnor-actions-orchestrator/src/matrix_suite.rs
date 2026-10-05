@@ -36,7 +36,11 @@ fn registered_suite_tools(package: &str) -> Option<SuiteTools> {
         | "velnor-actions-rust"
         | "velnor-actions-tofu"
         | "velnor-actions-workflow-renderer"
-        | "velnor-actions-actionlint" => Some(SuiteTools::NONE),
+        | "velnor-actions-actionlint"
+        | "velnor-runner-cli"
+        | "velnor-runner-core"
+        | "velnor-runner-github"
+        | "velnor-runner-host" => Some(SuiteTools::NONE),
         _ => None,
     }
 }

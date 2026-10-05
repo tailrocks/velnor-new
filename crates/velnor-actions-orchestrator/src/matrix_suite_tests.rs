@@ -15,11 +15,60 @@ fn native_owner_requires_neither_validator_nor_tofu_execution() {
 }
 
 #[test]
+fn runner_cli_suite_requires_no_v1_extra_tools() {
+    assert_eq!(
+        crate_suite_tools(
+            WorkflowPolicy::VelnorRepositoryV1,
+            Some("velnor-runner-cli")
+        )
+        .expect("registered runner CLI suite"),
+        SuiteTools::NONE
+    );
+}
+
+#[test]
+fn runner_core_suite_requires_no_v1_extra_tools() {
+    assert_eq!(
+        crate_suite_tools(
+            WorkflowPolicy::VelnorRepositoryV1,
+            Some("velnor-runner-core")
+        )
+        .expect("registered runner core suite"),
+        SuiteTools::NONE
+    );
+}
+
+#[test]
+fn runner_github_suite_requires_no_v1_extra_tools() {
+    assert_eq!(
+        crate_suite_tools(
+            WorkflowPolicy::VelnorRepositoryV1,
+            Some("velnor-runner-github")
+        )
+        .expect("registered runner GitHub suite"),
+        SuiteTools::NONE
+    );
+}
+
+#[test]
+fn runner_host_suite_requires_no_v1_extra_tools() {
+    assert_eq!(
+        crate_suite_tools(
+            WorkflowPolicy::VelnorRepositoryV1,
+            Some("velnor-runner-host")
+        )
+        .expect("registered runner host suite"),
+        SuiteTools::NONE
+    );
+}
+
+#[test]
 fn unregistered_repository_suite_is_rejected() {
     for package in [
         "demo",
         "velnor-actions-unknown",
         "velnor-actions-native-extra",
+        "velnor-runner-unknown",
     ] {
         assert!(
             crate_suite_tools(WorkflowPolicy::VelnorRepositoryV1, Some(package))
@@ -32,8 +81,8 @@ fn unregistered_repository_suite_is_rejected() {
 }
 
 #[test]
-fn opaque_consumer_suite_retains_validators() {
-    let tools = crate_suite_tools(WorkflowPolicy::ConsumerV1, Some("demo"))
+fn opaque_consumer_runner_named_suite_retains_validators() {
+    let tools = crate_suite_tools(WorkflowPolicy::ConsumerV1, Some("velnor-runner-cli"))
         .expect("consumer suites are opaque");
     assert!(tools.generate_validators);
     assert!(!tools.opentofu);

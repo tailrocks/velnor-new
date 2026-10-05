@@ -23,7 +23,7 @@ prints concise text instead of YAML, and writes no repository files.
 ## Local build from a clean checkout
 
 No ambient Cargo, Rust, or MBX is required: `mise.toml` pins every tool
-(Rust 1.98.1, MBX 1.21.0, Nextest 0.9.146) and `mise install` resolves them.
+(Rust 1.98.1, MBX 1.21.1, Nextest 0.9.146) and `mise install` resolves them.
 Proved 2026-10-01 at `34550e8` in a fresh clone with `cargo`/`mbx` absent
 from `PATH`:
 
@@ -32,7 +32,7 @@ git clone https://github.com/tailrocks/velnor-new.git
 cd velnor-new && git checkout docs/velnor-actions-spec
 mise install
 mise exec -- cargo --version   # cargo 1.98.1
-mise exec -- mbx --version      # mbx 1.21.0
+mise exec -- mbx --version      # mbx 1.21.1
 mise exec -- cargo build --locked -p velnor-actions-cli
 ./target/debug/velnor-actions --help
 ./target/debug/velnor-actions plan
