@@ -235,6 +235,8 @@ impl Turn<'_> {
                 step: "queue",
             }),
             Admit::Ack { stop } => {
+                // Fail only an unstarted `m{id}` row. A container row stays.
+                super::name_taken::fail_unstarted(self.journal, polled).await?;
                 ack_ready(self.link, self.session, path, queue, polled)?;
                 Ok(stop)
             }

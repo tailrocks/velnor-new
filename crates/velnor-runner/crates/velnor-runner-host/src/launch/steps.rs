@@ -26,7 +26,7 @@ pub(crate) enum Idle {
     Launch,
     /// Positive assigned population that is not `JobAssigned`.
     Scale,
-    /// `JobAssigned` that must be minted or held. Never acked from the count.
+    /// `JobAssigned` with no `JobStarted`. A started replay is [`Idle::Ack`].
     Mint,
     /// No offer and no assigned job. Delete the message so the next one can arrive.
     Ack,
@@ -34,8 +34,7 @@ pub(crate) enum Idle {
     Blocked,
 }
 
-/// Classify one poll. One available id is acquired. `JobAssigned` is minted or
-/// held. Any other assigned population can scale. A safe leftover is acked.
+/// Classify one poll. Acquire one id. Mint `JobAssigned`. Ack a started replay.
 #[must_use]
 pub(crate) fn idle(polled: &Poll) -> Idle {
     match polled {
@@ -45,7 +44,11 @@ pub(crate) fn idle(polled: &Poll) -> Idle {
             Offer::Wait
                 if needs_scale(batch) && assigned_message(batch) && may_ack(batch, true) =>
             {
-                Idle::Mint
+                if crate::assign::started_replay(batch) {
+                    Idle::Ack
+                } else {
+                    Idle::Mint
+                }
             }
             Offer::Wait if needs_scale(batch) && may_ack(batch, true) => Idle::Scale,
             Offer::Wait if may_ack(batch, true) => Idle::Ack,
@@ -157,8 +160,7 @@ where
     S: FnOnce(&str, &[u8], super::bind::Bind) -> F,
     F: Future<Output = Result<Started, HostError>>,
 {
-    // Subject is this session's runner name. A shared "scale" row stayed Done
-    // and blocked every later statistics mint, so an assigned job never got a runner.
+    // A shared Done "scale" row blocked later mints. The subject is this session.
     ensure_runner(lane, ctx, journal, name, name, None, start).await
 }
 

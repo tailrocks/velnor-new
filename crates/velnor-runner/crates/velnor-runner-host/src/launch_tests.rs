@@ -2,7 +2,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use velnor_runner_github::{ParsedBatch, Poll};
+use velnor_runner_github::{InnerJob, InnerKind, ParsedBatch, Poll, Statistics};
 
 use crate::journal::Outcome;
 use crate::launch::{Idle, drive_offer, fail_unstarted, idle};
@@ -26,6 +26,55 @@ fn statistics_advance_and_offers_stay() {
     assert_eq!(idle(&assigned_wait(7, 1)), Idle::Mint);
     assert_eq!(idle(&assigned_wait(7, 0)), Idle::Ack);
     assert_eq!(idle(&started_wait(7, 1)), Idle::Scale);
+    assert_eq!(idle(&assigned_started(7, 4)), Idle::Ack);
+}
+
+fn assigned_started(message_id: i64, assigned: i64) -> Poll {
+    let job = |kind| InnerJob {
+        kind,
+        request_id: Some(0),
+        job_id: None,
+        labels: Vec::new(),
+        fields: Vec::new(),
+    };
+    Poll::Batch(ParsedBatch {
+        message_id,
+        statistics: Some(Statistics {
+            total_available_jobs: 0,
+            total_acquired_jobs: 0,
+            total_assigned_jobs: assigned,
+            total_running_jobs: 0,
+            total_registered_runners: 0,
+            total_busy_runners: 0,
+            total_idle_runners: 0,
+        }),
+        jobs: vec![job(InnerKind::Assigned), job(InnerKind::Started)],
+    })
+}
+
+#[tokio::test]
+async fn started_replay_releases_the_unstarted_row() -> Result<(), String> {
+    let (scratch, journal) = open("started-replay").await?;
+    let id = journal
+        .begin("launch", "m100000776")
+        .await
+        .map_err(|err| err.to_string())?;
+    journal
+        .finish(id, Outcome::Uncertain)
+        .await
+        .map_err(|err| err.to_string())?;
+    let poll = assigned_started(100_000_776, 4);
+    let failed = fail_unstarted(&journal, &poll)
+        .await
+        .map_err(|err| err.to_string())?;
+    if !failed {
+        return Err("unstarted replay row was not failed".to_owned());
+    }
+    let state = journal.read(id).await.map_err(|err| err.to_string())?;
+    if state != IntentState::Failed {
+        return Err(format!("state {state:?}"));
+    }
+    absent(&scratch.file())
 }
 
 #[tokio::test]

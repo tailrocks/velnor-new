@@ -45,3 +45,18 @@ fn available_ids(batch: &ParsedBatch) -> Vec<i64> {
         .filter_map(|job| job.request_id)
         .collect()
 }
+
+/// `JobAssigned` together with `JobStarted` is a replay. Do not mint it again.
+#[must_use]
+pub(crate) fn started_replay(batch: &ParsedBatch) -> bool {
+    let mut assigned = false;
+    let mut started = false;
+    for job in &batch.jobs {
+        match job.kind {
+            InnerKind::Assigned => assigned = true,
+            InnerKind::Started => started = true,
+            InnerKind::Available | InnerKind::Completed | InnerKind::Unsupported(_) => {}
+        }
+    }
+    assigned && started
+}
