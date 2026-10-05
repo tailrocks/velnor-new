@@ -12,6 +12,97 @@ const POLL_MAX: usize = 8;
 const POLL_MAX_MULTI: usize = 24;
 const POLL_WIDE_DEFAULT: usize = 90;
 const POLL_WIDE_MAX: usize = 120;
+const RESOURCE_BASELINE: u32 = 1;
+const RESOURCE_GROWTH_SAMPLES: u8 = 2;
+
+/// Safe worker bounds from Docker guest CPU, memory, and data-disk limits; missing or zero is unknown.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(super) struct GuestResourceLimits {
+    /// Concurrent workers supported by guest CPU capacity.
+    pub(super) cpu_workers: Option<u32>,
+    /// Concurrent workers supported by guest memory capacity.
+    pub(super) memory_workers: Option<u32>,
+    /// Concurrent workers supported by guest data-disk capacity.
+    pub(super) storage_workers: Option<u32>,
+}
+
+impl GuestResourceLimits {
+    fn safe_workers(self) -> Option<u32> {
+        let workers = self
+            .cpu_workers?
+            .min(self.memory_workers?)
+            .min(self.storage_workers?);
+        (workers > 0).then_some(workers)
+    }
+}
+
+/// Stable resource-derived capacity for one launch session.
+pub(super) struct CapacityHysteresis {
+    stable: u32,
+    candidate: Option<u32>,
+    candidate_samples: u8,
+}
+
+/// A bounded capacity ceiling plus separate durable occupancy.
+pub(super) struct CapacityDecision {
+    /// Total capacity; never higher than the configured `max_jobs` ceiling.
+    pub(super) ceiling: u32,
+    /// Launch rows not yet proven clean, including uncertain reservations.
+    pub(super) occupied: u32,
+}
+
+impl CapacityHysteresis {
+    /// Start at the runner's conservative one-worker baseline.
+    pub(super) const fn new() -> Self {
+        Self {
+            stable: RESOURCE_BASELINE,
+            candidate: None,
+            candidate_samples: 0,
+        }
+    }
+
+    /// Bound by `configured_ceiling`; unknown resets to one, shrink is immediate, growth needs two samples.
+    #[must_use]
+    pub(super) fn update(
+        &mut self,
+        configured_ceiling: u32,
+        resources: GuestResourceLimits,
+        occupied: u32,
+    ) -> CapacityDecision {
+        let target = resources
+            .safe_workers()
+            .unwrap_or(RESOURCE_BASELINE)
+            .min(configured_ceiling);
+        if target <= self.stable {
+            self.stable = target;
+            self.clear_candidate();
+        } else {
+            self.consider_growth(target);
+        }
+        CapacityDecision {
+            ceiling: self.stable,
+            occupied,
+        }
+    }
+
+    fn consider_growth(&mut self, target: u32) {
+        if self.candidate == Some(target) {
+            self.candidate_samples = self.candidate_samples.saturating_add(1);
+        } else {
+            self.candidate = Some(target);
+            self.candidate_samples = 1;
+        }
+        if self.candidate_samples >= RESOURCE_GROWTH_SAMPLES {
+            self.stable = target;
+            self.clear_candidate();
+        }
+    }
+
+    fn clear_candidate(&mut self) {
+        self.candidate = None;
+        self.candidate_samples = 0;
+    }
+}
 
 /// What `poll_and_drive` does with one poll.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -259,4 +350,51 @@ pub(crate) fn poll_limit(capacity: u32, raw: Option<&str>) -> usize {
         return POLL_DEFAULT;
     };
     bound.clamp(1, max)
+}
+
+#[cfg(test)]
+mod resource_policy_tests {
+    use super::{CapacityHysteresis, GuestResourceLimits};
+
+    #[test]
+    fn policy_bounds_capacity_and_keeps_occupancy_separate() {
+        let mut policy = CapacityHysteresis::new();
+        let limits = |c: Option<u32>, m: Option<u32>, s: Option<u32>| GuestResourceLimits {
+            cpu_workers: c,
+            memory_workers: m,
+            storage_workers: s,
+        };
+        let full = limits(Some(8), Some(4), Some(6));
+        let wide = limits(Some(99), Some(99), Some(99));
+        let low = limits(Some(6), Some(6), Some(6));
+        let high = limits(Some(8), Some(8), Some(8));
+        let unknown = limits(None, None, None);
+        let smaller = limits(Some(2), Some(4), Some(5));
+        let zero = limits(Some(0), Some(0), Some(0));
+        let mut sample = |max, bounds| policy.update(max, bounds, 0).ceiling;
+        let observed = [
+            sample(8, full),
+            sample(8, unknown),
+            sample(8, full),
+            sample(8, full),
+            sample(8, low),
+            sample(8, high),
+            sample(8, low),
+            sample(8, low),
+            sample(8, smaller),
+            sample(2, wide),
+            sample(99, wide),
+            sample(99, wide),
+            sample(99, zero),
+            sample(8, full),
+            sample(8, full),
+        ];
+        assert_eq!(observed, [1, 1, 1, 4, 4, 4, 4, 6, 2, 2, 2, 99, 1, 1, 4]);
+        assert_eq!(super::parse_job_capacity(Some("0")), 1);
+
+        let occupied = policy.update(3, full, 4);
+        assert_eq!((occupied.ceiling, occupied.occupied), (3, 4));
+        let recovered = policy.update(3, full, 2);
+        assert!(recovered.occupied < recovered.ceiling);
+    }
 }
