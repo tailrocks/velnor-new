@@ -4,6 +4,11 @@
 //! minimum of those counts and the ceiling. A missing disk sample does not
 //! shrink the count. Mac host totals are not inputs.
 
+use bollard::Docker;
+
+use crate::docker_client::{DOCKER_OPERATION_TIMEOUT, docker_deadline_after};
+use crate::error::HostError;
+
 /// vCPU reserved for one job, after one core is left for the daemon.
 const CPU_PER_JOB: u32 = 4;
 /// Bytes of guest memory reserved for one job.
@@ -21,6 +26,39 @@ pub fn guest_slots(ncpu: u32, mem_bytes: u64, disk_free: Option<u64>, ceiling: u
     let mem = byte_slots(mem_bytes, MEM_PER_JOB);
     let disk = disk_free.map_or(ceiling, |bytes| byte_slots(bytes, DISK_PER_JOB));
     cpu.min(mem).min(disk).min(ceiling).max(1)
+}
+
+/// Discover guest capacity from the selected Docker engine.
+///
+/// # Errors
+///
+/// Returns [`HostError::Docker`] when the bounded info request fails or lacks
+/// valid CPU and memory totals. Callers must stop admission on this error.
+pub(crate) async fn discover_guest_capacity(
+    docker: &Docker,
+    ceiling: u32,
+) -> Result<u32, HostError> {
+    discover_guest_capacity_with_timeout(docker, ceiling, DOCKER_OPERATION_TIMEOUT).await
+}
+
+pub(crate) async fn discover_guest_capacity_with_timeout(
+    docker: &Docker,
+    ceiling: u32,
+    timeout: std::time::Duration,
+) -> Result<u32, HostError> {
+    let info = docker_deadline_after(docker.info(), timeout)
+        .await
+        .map_err(|_| HostError::Docker)?
+        .map_err(|_| HostError::Docker)?;
+    let ncpu = info
+        .ncpu
+        .and_then(|value| u32::try_from(value).ok())
+        .ok_or(HostError::Docker)?;
+    let memory = info
+        .mem_total
+        .and_then(|value| u64::try_from(value).ok())
+        .ok_or(HostError::Docker)?;
+    Ok(guest_slots(ncpu, memory, None, ceiling))
 }
 
 const fn cpu_slots(ncpu: u32) -> u32 {

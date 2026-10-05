@@ -11,7 +11,7 @@ use tokio::net::{UnixListener, UnixStream};
 
 use crate::launch::{gate, slot};
 use crate::launch_harness::Scratch;
-use crate::{IntentState, Journal};
+use crate::{EnsureError, HostError, IntentState, Journal, Outcome};
 
 const TIMEOUT: Duration = Duration::from_secs(2);
 
@@ -36,9 +36,9 @@ async fn non_not_found_inspect_error_blocks_admission_and_reconcile() -> Result<
     assert_eq!(busy, Ok(true));
     assert_eq!(
         reconcile,
-        Ok(crate::Reconcile::Hold {
-            adopt: Vec::new(),
-            occupied: 1,
+        Err(EnsureError::Unexpected {
+            status: 500,
+            step: "docker inspect",
         })
     );
     let errors = format!("{busy:?} {reconcile:?}");
@@ -51,6 +51,85 @@ async fn non_not_found_inspect_error_blocks_admission_and_reconcile() -> Result<
     assert_eq!(after[0].state, IntentState::Pending);
     assert_eq!(after[0].docker_id.as_deref(), Some("runner-id"));
     no_response_body_in_journal(&scratch.file())
+}
+
+#[tokio::test]
+async fn failed_done_row_inspect_cannot_advertise_capacity() -> Result<(), String> {
+    let (scratch, journal) = journal("done-inspect-error").await?;
+    let row_id = launch_row(&journal).await?;
+    journal
+        .finish(row_id, Outcome::Done)
+        .await
+        .map_err(|error| error.to_string())?;
+    let before = journal.rows().await.map_err(|error| error.to_string())?;
+    let stub = DockerStub::open(vec![http(500, r#"{"message":"private runner-id detail"}"#)])?;
+
+    let decision = within(
+        gate::reconcile_gate(&journal, &stub.docker),
+        "reconcile probe",
+    )
+    .await?;
+    stub.finish().await?;
+
+    assert_eq!(
+        decision,
+        Err(EnsureError::Unexpected {
+            status: 500,
+            step: "docker inspect",
+        })
+    );
+    let after = journal.rows().await.map_err(|error| error.to_string())?;
+    assert_eq!(after, before);
+    assert_eq!(after[0].state, IntentState::Done);
+    assert_eq!(after[0].docker_id.as_deref(), Some("runner-id"));
+    let result = format!("{decision:?}");
+    if result.contains("runner-id") || result.contains("private runner-id detail") {
+        return Err("reconcile error exposed Docker response data".to_owned());
+    }
+    no_response_body_in_journal(&scratch.file())
+}
+
+#[tokio::test]
+async fn guest_capacity_uses_the_selected_docker_engine_info() -> Result<(), String> {
+    let memory = 121_u64 * 1024 * 1024 * 1024;
+    let body = format!(r#"{{"NCPU":18,"MemTotal":{memory}}}"#);
+    let stub = DockerStub::open(vec![http(200, &body)])?;
+
+    let capacity =
+        crate::guest::discover_guest_capacity_with_timeout(&stub.docker, 8, Duration::from_secs(1))
+            .await;
+    stub.finish().await?;
+
+    assert_eq!(capacity, Ok(4));
+    Ok(())
+}
+
+#[tokio::test]
+async fn docker_info_failure_does_not_fall_back_to_the_configured_ceiling() -> Result<(), String> {
+    let stub = DockerStub::open(vec![http(500, r#"{"message":"private engine detail"}"#)])?;
+    let capacity =
+        crate::guest::discover_guest_capacity_with_timeout(&stub.docker, 8, Duration::from_secs(1))
+            .await;
+    stub.finish().await?;
+
+    assert_eq!(capacity, Err(HostError::Docker));
+    assert_eq!(format!("{capacity:?}"), "Err(Docker)");
+    Ok(())
+}
+
+#[tokio::test]
+async fn hanging_docker_info_stops_at_the_configured_deadline() -> Result<(), String> {
+    let stub = DockerStub::open(vec![hanging()])?;
+    let capacity = crate::guest::discover_guest_capacity_with_timeout(
+        &stub.docker,
+        8,
+        Duration::from_millis(20),
+    )
+    .await;
+
+    assert_eq!(capacity, Err(HostError::Docker));
+    drop(stub);
+    Ok(())
 }
 
 #[tokio::test]
@@ -84,9 +163,9 @@ async fn docker_api_observations_preserve_only_known_running_states() -> Result<
 
     assert_eq!(
         gate,
-        Ok(crate::Reconcile::Hold {
-            adopt: Vec::new(),
-            occupied: 1,
+        Err(EnsureError::Unexpected {
+            status: 200,
+            step: "docker inspect",
         })
     );
     let after = journal.rows().await.map_err(|error| error.to_string())?;
@@ -158,6 +237,7 @@ pub(super) fn no_response_body_in_journal(path: &std::path::Path) -> Result<(), 
 pub(super) struct DockerResponse {
     status: Option<u16>,
     body: String,
+    hang: bool,
 }
 
 pub(super) struct DockerStub {
@@ -231,6 +311,7 @@ pub(super) fn http(status: u16, body: &str) -> DockerResponse {
     DockerResponse {
         status: Some(status),
         body: body.to_owned(),
+        hang: false,
     }
 }
 
@@ -238,12 +319,24 @@ fn closed() -> DockerResponse {
     DockerResponse {
         status: None,
         body: String::new(),
+        hang: false,
+    }
+}
+
+pub(super) fn hanging() -> DockerResponse {
+    DockerResponse {
+        status: None,
+        body: String::new(),
+        hang: true,
     }
 }
 
 async fn send_response(listener: &UnixListener, response: &DockerResponse) -> Result<(), String> {
     let (mut stream, _) = listener.accept().await.map_err(|error| error.to_string())?;
     read_request(&mut stream).await?;
+    if response.hang {
+        std::future::pending::<()>().await;
+    }
     let Some(status) = response.status else {
         return Ok(());
     };

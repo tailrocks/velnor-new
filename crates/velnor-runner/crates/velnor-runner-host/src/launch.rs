@@ -76,6 +76,14 @@ pub async fn launch_once(
     docker: &bollard::Docker,
     journal: &Journal,
 ) -> Result<LaunchReport, EnsureError> {
+    let ceiling = job_capacity();
+    let capacity = crate::guest::discover_guest_capacity(docker, ceiling)
+        .await
+        .map_err(|_| EnsureError::Unexpected {
+            status: 0,
+            step: "docker budget",
+        })?;
+    let _capacity = install_job_capacity(capacity);
     let set = ensure_product_scale_set(pat, owner, repo)?;
     if std::env::var("VELNOR_RECONCILE").ok().as_deref() == Some("1") {
         let decision = gate::reconcile_gate(journal, docker).await?;

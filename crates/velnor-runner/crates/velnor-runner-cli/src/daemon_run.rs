@@ -99,14 +99,13 @@ fn drive(state: &Path, config: &HostConfig) {
         pause();
         return;
     };
-    let jobs = guest_jobs(config.host.max_jobs, &config.docker.endpoint);
     match launch_blocking(
         pat,
         owner,
         repo,
         &config.docker.endpoint,
         &state.join("launch.db"),
-        jobs,
+        config.host.max_jobs,
     ) {
         Ok(report) => finish_launch(&report),
         Err(error) => {
@@ -135,34 +134,6 @@ fn split_repo(repository: &str) -> Option<(&str, &str)> {
         return None;
     }
     Some((owner, repo))
-}
-
-fn guest_jobs(ceiling: u32, endpoint: &str) -> u32 {
-    match docker_budget(endpoint) {
-        Some((ncpu, mem)) => velnor_runner_host::guest_slots(ncpu, mem, None, ceiling),
-        None => ceiling.max(1),
-    }
-}
-
-fn docker_budget(endpoint: &str) -> Option<(u32, u64)> {
-    let output = std::process::Command::new("docker")
-        .args([
-            "-H",
-            endpoint,
-            "info",
-            "--format",
-            "{{.NCPU}} {{.MemTotal}}",
-        ])
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    let text = String::from_utf8(output.stdout).ok()?;
-    let mut fields = text.split_whitespace();
-    let ncpu = fields.next()?.parse::<u32>().ok()?;
-    let mem = fields.next()?.parse::<u64>().ok()?;
-    Some((ncpu, mem))
 }
 
 fn pause() {
