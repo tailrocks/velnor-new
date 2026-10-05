@@ -268,9 +268,8 @@ fn valid_checkout_payload(kind: &StepKind) -> bool {
 
 /// Require the simple generated checkout shape used before host-seed reads.
 fn valid_configured_checkout_payload(kind: &StepKind) -> bool {
-    matches!(kind, StepKind::Action { uses, with, env }
+    matches!(kind, StepKind::Action { with, env, .. }
         if valid_checkout_payload(kind)
-            && action_has_prefix(uses, "actions/checkout@")
             && with.len() == 1
             && env.is_empty())
 }
