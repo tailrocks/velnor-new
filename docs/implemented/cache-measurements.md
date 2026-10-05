@@ -258,7 +258,9 @@ production lane route. Dispatch once from protected `main` with mode
 This is a small end-to-end action and cache round-trip probe. The writer
 samples `df -B1 -P` and `df -i -P` on `$RUNNER_TEMP` after the probe build;
 the reader prints those same lines. `tee` writes each MBX stats JSON to both
-the step log and a file, and `jq -e` reads that file. These point-in-time
+the step log and a file, and `jq -e` reads that file. Both reader steps use
+`pipefail`, so a failing stats producer remains a failed probe even when `tee`
+writes valid JSON. These point-in-time
 samples do not measure disk or inode peaks and do not qualify the affected
 ChainArgos workload. That evidence must come from the consumer's affected
 crates after adoption; a green probe alone is not an ENOSPC repair verdict.
