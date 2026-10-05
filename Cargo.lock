@@ -883,6 +883,7 @@ name = "velnor-actions-freshness"
 version = "0.1.0"
 dependencies = [
  "flate2",
+ "rustix",
  "rustls",
  "rustls-native-certs",
  "serde_json",

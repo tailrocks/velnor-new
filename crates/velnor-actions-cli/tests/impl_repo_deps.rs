@@ -96,10 +96,14 @@ fn external_deps_allowlisted_used_and_narrow() -> Result<(), Box<dyn Error>> {
             if let Some(index) = line.find("features") {
                 let quoted: Vec<&str> = line[index..].split('"').collect();
                 for feature in quoted.into_iter().skip(1).step_by(2) {
-                    // Only `derive` globally, plus `fs` on rustix for the
-                    // P09 atomic directory exchange (no net/pty/terminal).
+                    // Only `derive` globally, plus the reviewed rustix
+                    // features used for atomic exchange and bounded process
+                    // capture (no network, pty, or terminal APIs).
                     let narrow = feature == "derive"
-                        || (key == "rustix" && feature == "fs")
+                        || (key == "rustix"
+                            && ((feature == "fs")
+                                || (dir == "crates/velnor-actions-freshness"
+                                    && feature == "process")))
                         || (dir == "crates/velnor-actions-freshness"
                             && ((key == "flate2" && feature == "rust_backend")
                                 || (key == "rustls" && feature == "ring")

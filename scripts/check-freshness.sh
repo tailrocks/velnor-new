@@ -64,7 +64,12 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$ROOT" ]]; then
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+  ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+elif [[ ! -d "$ROOT" ]]; then
+  echo "check-freshness: root is not a directory: $ROOT" >&2
+  exit 1
+else
+  ROOT="$(cd -- "$ROOT" && pwd -P)"
 fi
 INV="$ROOT/.velnor/freshness-inventory.json"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

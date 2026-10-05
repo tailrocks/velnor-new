@@ -143,10 +143,34 @@ fn literal_parser_enforces_utf8_and_source_cap() {
 #[test]
 fn strict_dates_and_timezone_timestamps_are_normalized() {
     assert!(parse_iso_date("2026-02-29").is_none());
+    assert!(parse_iso_date("+026-10-05").is_none());
     assert!(parse_iso_date("2024-02-29").is_some());
     assert_eq!(
         parse_timestamp("2026-10-05T12:00:00+02:00"),
         parse_timestamp("2026-10-05T10:00:00Z")
     );
+    assert_eq!(
+        parse_timestamp("2026-10-05T10:00:00.1234Z"),
+        parse_timestamp("2026-10-05T10:00:00z")
+    );
+    assert_eq!(
+        parse_timestamp("2026-10-05T10:00:00-0130"),
+        parse_timestamp("2026-10-05T11:30:00Z")
+    );
     assert!(parse_timestamp("2026-10-05T99:00:00Z").is_none());
+    for invalid in [
+        "2026-10-05T-1:00:00Z",
+        "2026-10-05T00:00:00.garbageZ",
+        "2026-10-05T00:00:00.Z",
+        "2026-10-05T00:00:00.1.2Z",
+        "2026-10-05T00:00:00+01:0x",
+        "2026-10-05T00:00:00+24:00",
+        "2026-10-05T00:00:00",
+        " 2026-10-05T00:00:00Z",
+        "2026-10-05T00:00:00.garbageZ",
+        "2026-10-05T-9223372036854775808:00:00Z",
+        "2026-10-05T00:00:00-9223372036854775808:00:00Z",
+    ] {
+        assert!(parse_timestamp(invalid).is_none(), "accepted {invalid:?}");
+    }
 }
