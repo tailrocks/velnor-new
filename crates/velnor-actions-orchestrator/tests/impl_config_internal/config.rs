@@ -156,7 +156,17 @@ fn uncommented_init_sample_parses_with_overrides() -> TestResult {
     fs::write(root.join(".velnor/config.toml"), &live)?;
     let prep = prepare(root)?;
     assert!(prep.config.checks.is_empty());
-    assert_eq!(prep.config.actions.overrides.len(), 8);
+    assert_eq!(
+        prep.config.actions.overrides.len(),
+        velnor_actions_contract::config::OVERRIDABLE_ACTIONS.len()
+    );
+    assert!(
+        !prep
+            .config
+            .actions
+            .overrides
+            .contains_key("Swatinem/rust-cache")
+    );
     assert_eq!(
         prep.config.actions.overrides["actions/checkout"].version,
         "v7.0.1"
