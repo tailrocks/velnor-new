@@ -1,6 +1,6 @@
 //! Render a typed [`RunsOn`] value. Hosted stays a scalar string.
 
-use velnor_actions_contract::RunsOn;
+use velnor_actions_contract::{ReleaseTarget, RunsOn, SCALE_SET_NAME};
 
 use crate::{RenderError, yaml::Yaml};
 
@@ -9,6 +9,17 @@ use crate::{RenderError, yaml::Yaml};
 pub(crate) const SCALE_SET_RUN_SHELL: &str = "bash -e {0}";
 /// GitHub Actions job containers default `run` steps to POSIX `sh`.
 pub(crate) const CONTAINER_RUN_SHELL: &str = "sh -e {0}";
+
+/// Release triple for a hosted label or the qualified linux scale set.
+pub(crate) fn target_for_runner(label: &str) -> Option<&'static str> {
+    match RunsOn::parse(label).ok()? {
+        RunsOn::Hosted(label) => ReleaseTarget::for_runner_label(&label).map(ReleaseTarget::triple),
+        RunsOn::ScaleSet(selector) if selector.name() == SCALE_SET_NAME => {
+            Some(ReleaseTarget::LinuxX86_64.triple())
+        }
+        RunsOn::ScaleSet(_) => None,
+    }
+}
 
 /// YAML for one job `runs-on` value.
 ///

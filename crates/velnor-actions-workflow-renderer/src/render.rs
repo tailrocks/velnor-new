@@ -12,8 +12,8 @@ use velnor_actions_contract::{
     CI_WORKFLOW_PATH, Job, PLAN_JOB_ID as CONTRACT_PLAN_JOB_ID,
     REQUIRED_CONDITION as CONTRACT_REQUIRED_CONDITION,
     REQUIRED_DISPLAY_NAME as CONTRACT_REQUIRED_DISPLAY_NAME,
-    REQUIRED_JOB_ID as CONTRACT_REQUIRED_JOB_ID, ReleaseTarget, RunsOn, SCALE_SET_NAME,
-    ValidatorKind, VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy,
+    REQUIRED_JOB_ID as CONTRACT_REQUIRED_JOB_ID, ValidatorKind, VelnorSupportWorkflow, WorkflowIr,
+    WorkflowPolicy,
 };
 
 use crate::{
@@ -268,7 +268,7 @@ pub fn finalize_jobs(
             .check_runner
             .as_ref()
             .map(|runner| runner.platform.target())
-            .or_else(|| target_for_runner(&job.runs_on))
+            .or_else(|| crate::runs_on::target_for_runner(&job.runs_on))
             .ok_or_else(|| {
                 RenderError::InvalidWorkflow(format!("tools_cache_unsupported_target:{id}"))
             })?;
@@ -302,17 +302,6 @@ fn validate_final_jobs(ir: &WorkflowIr, jobs: &BTreeMap<String, Job>) -> Result<
     let mut finalized = ir.clone();
     finalized.jobs.clone_from(jobs);
     finalized.validate().map_err(RenderError::Contract)
-}
-
-/// Resolve one runner label to its pinned release target.
-fn target_for_runner(label: &str) -> Option<&'static str> {
-    match RunsOn::parse(label).ok()? {
-        RunsOn::Hosted(label) => ReleaseTarget::for_runner_label(&label).map(ReleaseTarget::triple),
-        RunsOn::ScaleSet(selector) if selector.name() == SCALE_SET_NAME => {
-            Some(ReleaseTarget::LinuxX86_64.triple())
-        }
-        RunsOn::ScaleSet(_) => None,
-    }
 }
 
 /// Validate context/IR plus policy merge and support invariants.
