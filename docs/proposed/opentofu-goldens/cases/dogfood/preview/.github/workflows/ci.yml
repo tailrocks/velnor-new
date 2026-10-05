@@ -82,7 +82,7 @@ jobs:
           sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
           version: 2026.9.18
       - name: Run cargo-deny
-        run: "sh -c '{ mise --no-config --no-env --no-hooks install cargo-deny@0.20.2 && unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; } && mkdir -p \"$RUNNER_TEMP/velnor/cargo-clean\" && cd \"$RUNNER_TEMP/velnor/cargo-clean\" && mise --no-config --no-env --no-hooks exec cargo-deny@0.20.2 -- cargo deny --locked --manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\" check'"
+        run: "sh -c '{ mise --no-config --no-env --no-hooks install cargo-deny@0.20.2 && unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; } && mkdir -p \"$RUNNER_TEMP/velnor/cargo-clean\" && cd \"$RUNNER_TEMP/velnor/cargo-clean\" && mise --no-config --no-env --no-hooks exec cargo-deny@0.20.2 -- cargo deny --locked --manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\" --config \"$GITHUB_WORKSPACE/deny.toml\" check && mise --no-config --no-env --no-hooks exec cargo-deny@0.20.2 -- cargo deny --locked --manifest-path \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.toml\" --config \"$GITHUB_WORKSPACE/crates/velnor-runner/deny.toml\" check'"
       - name: Save Mise tools
         if: success() && github.event_name == 'push'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -192,7 +192,7 @@ jobs:
           isolate-objects-cache: ${{ runner.environment == 'github-hosted' && runner.os == 'Linux' }}
           toolchain: 1.98.1
         env:
-          ACTIONS_CACHE_MODE: ${{ runner.environment == 'github-hosted' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
+          ACTIONS_CACHE_MODE: ${{ runner.environment == 'github-hosted' && (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read') || 'none' }}
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
@@ -493,7 +493,6 @@ jobs:
       MISE_NO_HOOKS: "1"
       NODE_AUTH_TOKEN: ""
       NPM_TOKEN: ""
-      RUSTDOCFLAGS: "-D warnings"
       RUSTUP_TOOLCHAIN: 1.98.1
     needs:
       - plan
@@ -559,7 +558,7 @@ jobs:
           isolate-objects-cache: ${{ runner.environment == 'github-hosted' && runner.os == 'Linux' }}
           toolchain: 1.98.1
         env:
-          ACTIONS_CACHE_MODE: ${{ runner.environment == 'github-hosted' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
+          ACTIONS_CACHE_MODE: ${{ runner.environment == 'github-hosted' && (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read') || 'none' }}
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
@@ -648,6 +647,7 @@ jobs:
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          RUSTDOCFLAGS: "-D warnings"
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-actionlint/doc/default
           VELNOR_MATRIX_KEY: m-81305c234c22a275
           VELNOR_TASK_DIGEST: b3-ee02a131d5c2d6c00e8627880323563a86ad19a5626261bc7ec57a58a4b146a2
@@ -701,7 +701,6 @@ jobs:
       MISE_NO_HOOKS: "1"
       NODE_AUTH_TOKEN: ""
       NPM_TOKEN: ""
-      RUSTDOCFLAGS: "-D warnings"
       RUSTUP_TOOLCHAIN: 1.98.1
     needs:
       - plan
@@ -767,7 +766,7 @@ jobs:
           isolate-objects-cache: ${{ runner.environment == 'github-hosted' && runner.os == 'Linux' }}
           toolchain: 1.98.1
         env:
-          ACTIONS_CACHE_MODE: ${{ runner.environment == 'github-hosted' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
+          ACTIONS_CACHE_MODE: ${{ runner.environment == 'github-hosted' && (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read') || 'none' }}
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
@@ -846,6 +845,7 @@ jobs:
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          RUSTDOCFLAGS: "-D warnings"
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-cli/doc/default
           VELNOR_MATRIX_KEY: m-93a4593c9a3c3085
           VELNOR_TASK_DIGEST: b3-0bdfd44bd350a93cf75ee3487ba412be04b9df9660ad2439ae005409d1ffdbbb
@@ -893,7 +893,6 @@ jobs:
       MISE_NO_HOOKS: "1"
       NODE_AUTH_TOKEN: ""
       NPM_TOKEN: ""
-      RUSTDOCFLAGS: "-D warnings"
       RUSTUP_TOOLCHAIN: 1.98.1
     needs:
       - plan
@@ -959,7 +958,7 @@ jobs:
           isolate-objects-cache: ${{ runner.environment == 'github-hosted' && runner.os == 'Linux' }}
           toolchain: 1.98.1
         env:
-          ACTIONS_CACHE_MODE: ${{ runner.environment == 'github-hosted' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
+          ACTIONS_CACHE_MODE: ${{ runner.environment == 'github-hosted' && (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read') || 'none' }}
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
@@ -1048,6 +1047,7 @@ jobs:
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          RUSTDOCFLAGS: "-D warnings"
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-contract/doc/default
           VELNOR_MATRIX_KEY: m-5bfa1ac4c56189d6
           VELNOR_TASK_DIGEST: b3-2214b21d1d9ff88d05bb6019b1ba7173976b945c62aae504790283ee8b9b2708
@@ -1095,7 +1095,6 @@ jobs:
       MISE_NO_HOOKS: "1"
       NODE_AUTH_TOKEN: ""
       NPM_TOKEN: ""
-      RUSTDOCFLAGS: "-D warnings"
       RUSTUP_TOOLCHAIN: 1.98.1
     needs:
       - plan
@@ -1161,7 +1160,7 @@ jobs:
           isolate-objects-cache: ${{ runner.environment == 'github-hosted' && runner.os == 'Linux' }}
           toolchain: 1.98.1
         env:
-          ACTIONS_CACHE_MODE: ${{ runner.environment == 'github-hosted' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
+          ACTIONS_CACHE_MODE: ${{ runner.environment == 'github-hosted' && (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read') || 'none' }}
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
@@ -1250,6 +1249,7 @@ jobs:
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          RUSTDOCFLAGS: "-D warnings"
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-mise/doc/default
           VELNOR_MATRIX_KEY: m-8265037fd459347e
           VELNOR_TASK_DIGEST: b3-8273286b619dd5577e3a4d6ad67e1af3f5b0bc9766c6df5e2a25175d764bb2a5
@@ -1303,7 +1303,6 @@ jobs:
       MISE_NO_HOOKS: "1"
       NODE_AUTH_TOKEN: ""
       NPM_TOKEN: ""
-      RUSTDOCFLAGS: "-D warnings"
       RUSTUP_TOOLCHAIN: 1.98.1
     needs:
       - plan
@@ -1369,7 +1368,7 @@ jobs:
           isolate-objects-cache: ${{ runner.environment == 'github-hosted' && runner.os == 'Linux' }}
           toolchain: 1.98.1
         env:
-          ACTIONS_CACHE_MODE: ${{ runner.environment == 'github-hosted' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
+          ACTIONS_CACHE_MODE: ${{ runner.environment == 'github-hosted' && (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read') || 'none' }}
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
@@ -1458,6 +1457,7 @@ jobs:
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          RUSTDOCFLAGS: "-D warnings"
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-orchestrator/doc/default
           VELNOR_MATRIX_KEY: m-f31fcb1a405715c5
           VELNOR_TASK_DIGEST: b3-52a5dcc0fadd52e334240e606adba74316d29ae239c9f9bcfe556ec3a1072e78
@@ -1505,7 +1505,6 @@ jobs:
       MISE_NO_HOOKS: "1"
       NODE_AUTH_TOKEN: ""
       NPM_TOKEN: ""
-      RUSTDOCFLAGS: "-D warnings"
       RUSTUP_TOOLCHAIN: 1.98.1
     needs:
       - plan
@@ -1571,7 +1570,7 @@ jobs:
           isolate-objects-cache: ${{ runner.environment == 'github-hosted' && runner.os == 'Linux' }}
           toolchain: 1.98.1
         env:
-          ACTIONS_CACHE_MODE: ${{ runner.environment == 'github-hosted' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
+          ACTIONS_CACHE_MODE: ${{ runner.environment == 'github-hosted' && (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read') || 'none' }}
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
@@ -1660,6 +1659,7 @@ jobs:
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          RUSTDOCFLAGS: "-D warnings"
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-rust/doc/default
           VELNOR_MATRIX_KEY: m-b9195ee6ee4dd6e3
           VELNOR_TASK_DIGEST: b3-6020533b2d1937f407b5b19c46dec2a07f0f6aed5efb338629074f996d440f95
@@ -1707,7 +1707,6 @@ jobs:
       MISE_NO_HOOKS: "1"
       NODE_AUTH_TOKEN: ""
       NPM_TOKEN: ""
-      RUSTDOCFLAGS: "-D warnings"
       RUSTUP_TOOLCHAIN: 1.98.1
     needs:
       - plan
@@ -1773,7 +1772,7 @@ jobs:
           isolate-objects-cache: ${{ runner.environment == 'github-hosted' && runner.os == 'Linux' }}
           toolchain: 1.98.1
         env:
-          ACTIONS_CACHE_MODE: ${{ runner.environment == 'github-hosted' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
+          ACTIONS_CACHE_MODE: ${{ runner.environment == 'github-hosted' && (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read') || 'none' }}
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
@@ -1862,6 +1861,7 @@ jobs:
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          RUSTDOCFLAGS: "-D warnings"
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-tofu/doc/default
           VELNOR_MATRIX_KEY: m-6aff2f670ddaa697
           VELNOR_TASK_DIGEST: b3-ff23c3fa3acf29d9562d04e883d619e112d4083742cf36434056805a8529d53c
@@ -1909,7 +1909,6 @@ jobs:
       MISE_NO_HOOKS: "1"
       NODE_AUTH_TOKEN: ""
       NPM_TOKEN: ""
-      RUSTDOCFLAGS: "-D warnings"
       RUSTUP_TOOLCHAIN: 1.98.1
     needs:
       - plan
@@ -1975,7 +1974,7 @@ jobs:
           isolate-objects-cache: ${{ runner.environment == 'github-hosted' && runner.os == 'Linux' }}
           toolchain: 1.98.1
         env:
-          ACTIONS_CACHE_MODE: ${{ runner.environment == 'github-hosted' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
+          ACTIONS_CACHE_MODE: ${{ runner.environment == 'github-hosted' && (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read') || 'none' }}
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
@@ -2064,6 +2063,7 @@ jobs:
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          RUSTDOCFLAGS: "-D warnings"
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-workflow-renderer/doc/default
           VELNOR_MATRIX_KEY: m-d04b7f8f31103a5a
           VELNOR_TASK_DIGEST: b3-b9e5e227a492c6eb12ef56aa4e041798b3cfdc39f1c16d470ce8e98ddea626c3
@@ -2111,7 +2111,6 @@ jobs:
       MISE_NO_HOOKS: "1"
       NODE_AUTH_TOKEN: ""
       NPM_TOKEN: ""
-      RUSTDOCFLAGS: "-D warnings"
       RUSTUP_TOOLCHAIN: 1.98.1
     needs:
       - plan
@@ -2177,7 +2176,7 @@ jobs:
           isolate-objects-cache: ${{ runner.environment == 'github-hosted' && runner.os == 'Linux' }}
           toolchain: 1.98.1
         env:
-          ACTIONS_CACHE_MODE: ${{ runner.environment == 'github-hosted' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
+          ACTIONS_CACHE_MODE: ${{ runner.environment == 'github-hosted' && (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read') || 'none' }}
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
@@ -2266,6 +2265,7 @@ jobs:
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          RUSTDOCFLAGS: "-D warnings"
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-runner/crates/velnor-runner-cli/doc/default
           VELNOR_MATRIX_KEY: m-b717b98bc29a9439
           VELNOR_TASK_DIGEST: b3-3c0d1a6d2018c57e46923f05666faa5cbb08c9dd6033bec7dbcd3a2b55b308e7
@@ -2313,7 +2313,6 @@ jobs:
       MISE_NO_HOOKS: "1"
       NODE_AUTH_TOKEN: ""
       NPM_TOKEN: ""
-      RUSTDOCFLAGS: "-D warnings"
       RUSTUP_TOOLCHAIN: 1.98.1
     needs:
       - plan
@@ -2379,7 +2378,7 @@ jobs:
           isolate-objects-cache: ${{ runner.environment == 'github-hosted' && runner.os == 'Linux' }}
           toolchain: 1.98.1
         env:
-          ACTIONS_CACHE_MODE: ${{ runner.environment == 'github-hosted' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
+          ACTIONS_CACHE_MODE: ${{ runner.environment == 'github-hosted' && (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read') || 'none' }}
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
@@ -2468,6 +2467,7 @@ jobs:
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          RUSTDOCFLAGS: "-D warnings"
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-runner/crates/velnor-runner-core/doc/default
           VELNOR_MATRIX_KEY: m-11d2a2f5394bdff6
           VELNOR_TASK_DIGEST: b3-eae1ce05b717c487581b196ceca53a9ce372a1e29cbc1aadac3403e4ef476f4f
@@ -2515,7 +2515,6 @@ jobs:
       MISE_NO_HOOKS: "1"
       NODE_AUTH_TOKEN: ""
       NPM_TOKEN: ""
-      RUSTDOCFLAGS: "-D warnings"
       RUSTUP_TOOLCHAIN: 1.98.1
     needs:
       - plan
@@ -2581,7 +2580,7 @@ jobs:
           isolate-objects-cache: ${{ runner.environment == 'github-hosted' && runner.os == 'Linux' }}
           toolchain: 1.98.1
         env:
-          ACTIONS_CACHE_MODE: ${{ runner.environment == 'github-hosted' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
+          ACTIONS_CACHE_MODE: ${{ runner.environment == 'github-hosted' && (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read') || 'none' }}
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
@@ -2670,6 +2669,7 @@ jobs:
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          RUSTDOCFLAGS: "-D warnings"
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-runner/crates/velnor-runner-github/doc/default
           VELNOR_MATRIX_KEY: m-25ea841b74e98709
           VELNOR_TASK_DIGEST: b3-037f592cb2cf1b239c79127cb69cd69191fdc29d86e99b413bf98468865d460c
@@ -2717,7 +2717,6 @@ jobs:
       MISE_NO_HOOKS: "1"
       NODE_AUTH_TOKEN: ""
       NPM_TOKEN: ""
-      RUSTDOCFLAGS: "-D warnings"
       RUSTUP_TOOLCHAIN: 1.98.1
     needs:
       - plan
@@ -2783,7 +2782,7 @@ jobs:
           isolate-objects-cache: ${{ runner.environment == 'github-hosted' && runner.os == 'Linux' }}
           toolchain: 1.98.1
         env:
-          ACTIONS_CACHE_MODE: ${{ runner.environment == 'github-hosted' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
+          ACTIONS_CACHE_MODE: ${{ runner.environment == 'github-hosted' && (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read') || 'none' }}
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
@@ -2872,6 +2871,7 @@ jobs:
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          RUSTDOCFLAGS: "-D warnings"
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-runner/crates/velnor-runner-host/doc/default
           VELNOR_MATRIX_KEY: m-a5dbb5f0a62733b2
           VELNOR_TASK_DIGEST: b3-da98da0637e0c8d16d68d5652cbe242114d2ff0d53dba8bcb6916cc808877647
