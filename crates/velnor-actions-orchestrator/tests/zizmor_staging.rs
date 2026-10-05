@@ -1,9 +1,10 @@
 //! Staging-only zizmor config cases: zero-ignore staging config over full-SHA refs.
 
+use crate::git_fixture;
+
 use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use tempfile::TempDir;
 use velnor_actions_actionlint::actions::{
@@ -18,12 +19,18 @@ use velnor_actions_mise::{PinnedTool, PinnedToolExec, ProcessOutput, ToolCatalog
 use velnor_actions_orchestrator::{GenerateOptions, generate, prepare};
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
+#[path = "fixture_package.rs"]
+mod fixture_package;
+
 /// Test error shortcut.
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 /// Run git with inherited failure context.
 fn git(args: &[&str], cwd: &Path) -> TestResult {
-    let status = Command::new("git").args(args).current_dir(cwd).status()?;
+    let status = git_fixture::command(cwd)?
+        .args(args)
+        .current_dir(cwd)
+        .status()?;
     assert!(status.success(), "git {args:?} failed");
     Ok(())
 }
@@ -92,7 +99,7 @@ fn make_repo(config: &str) -> Result<TempDir, Box<dyn std::error::Error>> {
     fs::write(root.join(".velnor/release-manifest.json"), manifest_json())?;
     fs::write(
         root.join("Cargo.toml"),
-        "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        fixture_package::root_manifest(config),
     )?;
     fs::create_dir_all(root.join("src"))?;
     fs::write(root.join("src/lib.rs"), "pub fn f() {}\n")?;
