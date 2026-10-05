@@ -337,6 +337,7 @@ fn every_workspace_member_is_classified() {
             "velnor-actions-tofu",
             "velnor-actions-workflow-renderer",
             "velnor-actions-actionlint",
+            "velnor-archive-guard",
         ]
         .contains(&member.as_str());
         assert!(
