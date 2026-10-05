@@ -67,6 +67,8 @@ mod https_tests;
 #[cfg(test)]
 mod ipc_tests;
 #[cfg(test)]
+mod journal_schema_tests;
+#[cfg(test)]
 mod journal_tests;
 #[cfg(test)]
 mod journal_worker_volume_tests;
