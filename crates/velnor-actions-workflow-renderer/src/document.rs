@@ -6,8 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
     RenderError,
-    composite::shared_call,
-    document_steps::{step_to_yaml, string_map_yaml},
+    document_steps::string_map_yaml,
     render::{FINAL_JOB_ID, RenderContext},
     steps,
     yaml::Yaml,
@@ -28,9 +27,20 @@ pub(crate) fn workflow_to_yaml(
     ctx: &RenderContext,
     shared: &BTreeMap<String, String>,
     checkouts: &BTreeMap<String, Step>,
+    env_steps: &BTreeMap<String, Vec<Step>>,
+    prefixes: &BTreeMap<String, Vec<Step>>,
+    preludes: &BTreeMap<String, Vec<Step>>,
+    postludes: &BTreeMap<String, Vec<Step>>,
     mbx_gc_jobs: &BTreeSet<String>,
+    mbx_share_out_jobs: &BTreeSet<String>,
 ) -> Result<Yaml, RenderError> {
-    if shared.keys().ne(checkouts.keys()) || shared.keys().any(|id| !jobs.contains_key(id)) {
+    if shared.keys().ne(checkouts.keys())
+        || shared.keys().ne(env_steps.keys())
+        || shared.keys().ne(prefixes.keys())
+        || shared.keys().ne(preludes.keys())
+        || shared.keys().ne(postludes.keys())
+        || shared.keys().any(|id| !jobs.contains_key(id))
+    {
         return Err(RenderError::InvalidWorkflow(
             "shared_lane_checkout_map_mismatch".to_owned(),
         ));
@@ -48,7 +58,12 @@ pub(crate) fn workflow_to_yaml(
                 &needs_env,
                 call,
                 checkouts,
+                env_steps,
+                prefixes,
+                preludes,
+                postludes,
                 mbx_gc_jobs.contains(id),
+                mbx_share_out_jobs.contains(id),
             )?,
         ));
     }
@@ -203,7 +218,12 @@ fn job_to_yaml(
     needs_envs: &[(String, String)],
     shared: Option<&str>,
     checkouts: &BTreeMap<String, Step>,
+    env_steps: &BTreeMap<String, Vec<Step>>,
+    prefixes: &BTreeMap<String, Vec<Step>>,
+    preludes: &BTreeMap<String, Vec<Step>>,
+    postludes: &BTreeMap<String, Vec<Step>>,
     mbx_gc_auto: bool,
+    mbx_share_out_disabled: bool,
 ) -> Result<Yaml, RenderError> {
     steps::scan_for_private_subcommands(&job.display_name)?;
     let runner = RunsOn::parse(&job.runs_on).map_err(RenderError::Contract)?;
@@ -212,7 +232,8 @@ fn job_to_yaml(
         RunsOn::Hosted(label) => Yaml::str(label),
         RunsOn::ScaleSet(selector) => Yaml::Flow(selector.labels().to_vec()),
     };
-    let step_has_env = job.steps.iter().any(|step| match &step.kind {
+    let source_steps = env_steps.get(id).unwrap_or(&job.steps);
+    let step_has_env = source_steps.iter().any(|step| match &step.kind {
         StepKind::Shell { env, .. } | StepKind::Action { env, .. } => !env.is_empty(),
         StepKind::Internal { .. } => false,
     });
@@ -222,7 +243,7 @@ fn job_to_yaml(
         BTreeMap::new()
     };
     if step_has_env {
-        for step in &job.steps {
+        for step in source_steps {
             let step_env = match &step.kind {
                 StepKind::Shell { env, .. } | StepKind::Action { env, .. } => Some(env),
                 StepKind::Internal { .. } => None,
@@ -250,6 +271,8 @@ fn job_to_yaml(
             crate::cache_steps::MBX_GC_AUTO_ENV.to_owned(),
             crate::cache_steps::MBX_GC_AUTO_VALUE.to_owned(),
         );
+    }
+    if mbx_share_out_disabled {
         job_env.insert(
             crate::cache_steps::MBX_SHARE_OUT_DIR_ENV.to_owned(),
             crate::cache_steps::MBX_SHARE_OUT_DIR_VALUE.to_owned(),
@@ -257,7 +280,21 @@ fn job_to_yaml(
     }
     let mut entries = job_header_fields(job, runs_on);
     append_job_options(&mut entries, job, scale_set, &job_env)?;
-    let rendered_steps = render_job_steps(id, job, ctx, needs_envs, shared, checkouts, &job_env)?;
+    let lane_steps = crate::document_lanes::SharedLaneSteps {
+        checkouts,
+        prefixes,
+        preludes,
+        postludes,
+    };
+    let rendered_steps = crate::document_lanes::render_job_steps(
+        id,
+        job,
+        ctx,
+        needs_envs,
+        shared,
+        &lane_steps,
+        &job_env,
+    )?;
     entries.push(("steps".to_owned(), Yaml::Seq(rendered_steps)));
     Ok(Yaml::Map(entries))
 }
@@ -306,51 +343,4 @@ fn append_job_options(
         entries.push(("if".to_owned(), Yaml::str(condition.clone())));
     }
     Ok(())
-}
-
-fn render_job_steps(
-    id: &str,
-    job: &Job,
-    ctx: &RenderContext,
-    needs_envs: &[(String, String)],
-    shared: Option<&str>,
-    checkouts: &BTreeMap<String, Step>,
-    job_env: &BTreeMap<String, String>,
-) -> Result<Vec<Yaml>, RenderError> {
-    let mut rendered_steps =
-        Vec::with_capacity(job.steps.len() + 2 * usize::from(shared.is_some()));
-    if let Some(uses) = shared {
-        let Some(checkout) = checkouts.get(id) else {
-            return Err(RenderError::InvalidWorkflow(format!(
-                "shared_lane_missing_checkout:{id}"
-            )));
-        };
-        if !valid_shared_checkout(checkout, &ctx.checkout_uses) {
-            return Err(RenderError::InvalidWorkflow(format!(
-                "shared_lane_invalid_checkout:{id}"
-            )));
-        }
-        rendered_steps.push(step_to_yaml(id, checkout, ctx, needs_envs, false, job_env)?);
-        rendered_steps.push(shared_call(uses)?);
-    } else if checkouts.contains_key(id) {
-        return Err(RenderError::InvalidWorkflow(format!(
-            "checkout_without_shared_lane:{id}"
-        )));
-    }
-    for step in &job.steps {
-        rendered_steps.push(step_to_yaml(id, step, ctx, needs_envs, false, job_env)?);
-    }
-    Ok(rendered_steps)
-}
-
-fn valid_shared_checkout(checkout: &Step, expected_uses: &str) -> bool {
-    checkout.name == "Checkout"
-        && checkout.condition.is_none()
-        && matches!(
-            &checkout.kind,
-            StepKind::Action { uses, with, env }
-                if uses == expected_uses
-                    && with.get("persist-credentials").map(String::as_str) == Some("false")
-                    && env.is_empty()
-        )
 }

@@ -6,8 +6,8 @@
 //! cannot publish a cache or pass on data from an earlier run.
 //!
 //! Both jobs set `MBX_GC_AUTO=1` for this protected-main roundtrip probe.
-//! Production hosted Linux jobs set `MBX_GC_AUTO=0` and `MBX_SHARE_OUT_DIR=0`
-//! separately. This probe does not pass those production lane controls.
+//! This probe does not exercise production's typed hosted action backend or
+//! Scale Set local backend, nor the universal `MBX_SHARE_OUT_DIR=0` policy.
 
 use super::features::{checkout_step, finish, gated, lane_base, run_step};
 use super::{MbxQualificationPins, RunnerSpec};

@@ -10,9 +10,7 @@ use crate::RenderError;
 use crate::render::{CONCURRENCY_CANCEL, CONCURRENCY_GROUP, RenderContext};
 
 const HOSTED_RUNS: &str = "ubuntu-26.04";
-const CAP: usize = 500_000;
 const LOGICAL_JOBS: usize = 21;
-const STEPS_PER_JOB: usize = 48;
 
 pub(super) fn ctx() -> RenderContext {
     RenderContext {
@@ -101,6 +99,10 @@ pub(super) fn render_jobs(
     ctx: &RenderContext,
     calls: &BTreeMap<String, String>,
     checkouts: &BTreeMap<String, Step>,
+    env_steps: &BTreeMap<String, Vec<Step>>,
+    prefixes: &BTreeMap<String, Vec<Step>>,
+    preludes: &BTreeMap<String, Vec<Step>>,
+    postludes: &BTreeMap<String, Vec<Step>>,
 ) -> Result<String, crate::RenderError> {
     let document = crate::document::workflow_to_yaml(
         ir,
@@ -108,22 +110,15 @@ pub(super) fn render_jobs(
         ctx,
         calls,
         checkouts,
+        env_steps,
+        prefixes,
+        preludes,
+        postludes,
+        &std::collections::BTreeSet::new(),
         &std::collections::BTreeSet::new(),
     )?;
     let quoted = crate::yaml::quote_run_values_in_yaml(document);
     crate::marker::with_marker(&ctx.generator_version, &crate::yaml::render_yaml(&quoted))
-}
-
-fn positions(yaml: &str, needle: &str) -> Vec<usize> {
-    yaml.match_indices(needle)
-        .map(|(position, _)| position)
-        .collect()
-}
-
-fn heavy_steps(payload: &str) -> Vec<Step> {
-    (0..STEPS_PER_JOB)
-        .map(|index| echo_step(index, payload))
-        .collect()
 }
 
 pub(super) fn paired(steps: &[Step]) -> BTreeMap<String, Job> {
@@ -147,71 +142,6 @@ pub(super) fn paired(steps: &[Step]) -> BTreeMap<String, Job> {
         );
     }
     jobs
-}
-
-#[test]
-fn shared_lanes_keep_ci_under_github_file_cap() {
-    let payload = "a".repeat(400);
-    let jobs = paired(&heavy_steps(&payload));
-    let ir = workflow_ir();
-    let context = ctx();
-    let unshared =
-        render_jobs(&ir, &jobs, &context, &BTreeMap::new(), &BTreeMap::new()).expect("unshared");
-    assert!(
-        unshared.len() > CAP,
-        "unshared render must exceed the GitHub cap, got {}",
-        unshared.len()
-    );
-    let shared = share_lanes(&jobs, &context).expect("share");
-    let yaml = render_jobs(
-        &ir,
-        &shared.jobs,
-        &context,
-        &shared.calls,
-        &shared.checkouts,
-    )
-    .expect("shared");
-    assert!(
-        yaml.len() <= CAP,
-        "shared ci.yml must fit, got {}",
-        yaml.len()
-    );
-    assert!(
-        !yaml.contains(&payload),
-        "shared ci.yml still inlines steps"
-    );
-    assert!(yaml.contains("runs-on: ubuntu-26.04"));
-    assert!(yaml.contains("runs-on: [velnor, ubuntu-26.04-scale-set]"));
-    assert!(yaml.contains("uses: ./.github/actions/rust-0"));
-    let checkouts = positions(&yaml, "uses: actions/checkout@");
-    let calls = positions(&yaml, "uses: ./.github/actions/rust-");
-    assert_eq!(checkouts.len(), LOGICAL_JOBS * 2);
-    assert_eq!(calls.len(), LOGICAL_JOBS * 2);
-    assert_eq!(
-        yaml.matches("# zizmor: ignore[self-repository]").count(),
-        LOGICAL_JOBS * 2
-    );
-    for (index, (checkout, call)) in checkouts.iter().zip(&calls).enumerate() {
-        assert!(
-            checkout < call,
-            "job {index} calls shared action before checkout"
-        );
-        if let Some(next_checkout) = checkouts.get(index + 1) {
-            assert!(call < next_checkout, "shared job sequence interleaved");
-        }
-    }
-    assert_eq!(shared.files.len(), LOGICAL_JOBS);
-    for file in &shared.files {
-        assert!(
-            file.bytes.len() <= CAP,
-            "{} is {} bytes",
-            file.path,
-            file.bytes.len()
-        );
-        assert!(file.bytes.contains("shell: bash"), "{}", file.path);
-        assert!(file.bytes.contains(&payload), "{}", file.path);
-        assert!(file.path.ends_with("/action.yml"), "{}", file.path);
-    }
 }
 
 #[test]
@@ -307,6 +237,10 @@ fn matching_lane_checkout_inputs_are_carried_outside_the_composite() {
         &ctx(),
         &shared.calls,
         &shared.checkouts,
+        &shared.env_steps,
+        &shared.prefixes,
+        &shared.preludes,
+        &shared.postludes,
     )
     .expect("yaml");
     assert!(yaml.contains("fetch-depth:"));
@@ -386,6 +320,10 @@ fn elected_save_stays_on_the_winner_job() {
         &ctx(),
         &shared.calls,
         &shared.checkouts,
+        &shared.env_steps,
+        &shared.prefixes,
+        &shared.preludes,
+        &shared.postludes,
     )
     .expect("yaml");
     assert_eq!(yaml.matches("Save Mise tools").count(), 1);

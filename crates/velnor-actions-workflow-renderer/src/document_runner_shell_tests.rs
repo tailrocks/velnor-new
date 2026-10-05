@@ -82,6 +82,11 @@ fn typed_scale_set_jobs_declare_bash_while_hosted_jobs_keep_default() {
         &context(),
         &BTreeMap::new(),
         &BTreeMap::new(),
+        &BTreeMap::new(),
+        &BTreeMap::new(),
+        &BTreeMap::new(),
+        &BTreeMap::new(),
+        &BTreeSet::new(),
         &BTreeSet::new(),
     )
     .expect("workflow renders");
@@ -137,6 +142,11 @@ fn rustdocflags_remain_scoped_to_the_documentation_step() {
         &context(),
         &BTreeMap::new(),
         &BTreeMap::new(),
+        &BTreeMap::new(),
+        &BTreeMap::new(),
+        &BTreeMap::new(),
+        &BTreeMap::new(),
+        &BTreeSet::new(),
         &BTreeSet::new(),
     )
     .expect("workflow renders");

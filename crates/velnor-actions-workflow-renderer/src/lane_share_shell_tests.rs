@@ -11,6 +11,10 @@ fn paired_consumer_workflow_sets_shell_for_each_typed_scale_lane_only() {
         &ctx(),
         &shared.calls,
         &shared.checkouts,
+        &shared.env_steps,
+        &shared.prefixes,
+        &shared.preludes,
+        &shared.postludes,
     )
     .expect("consumer workflow renders");
 
