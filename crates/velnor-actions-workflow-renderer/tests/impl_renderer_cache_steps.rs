@@ -223,7 +223,7 @@ fn strict_wires_runtime_qualified_tools_cache_before_setup_and_saves_once()
         .find(|file| file.path == ".github/actions/velnor-tool-seed/action.yml")
         .expect("renderer emits seed action for a matching checkout");
     assert!(seed.bytes.contains("velnor-host-seed-v1"), "{}", seed.bytes);
-    assert!(text.contains("${{ steps.v2.outputs.identity }}"));
+    assert!(text.contains("${{steps.v2.outputs.identity}}"));
     Ok(())
 }
 
@@ -267,7 +267,10 @@ fn seed_and_tools_prelude_require_the_configured_unconditional_checkout()
         ],
     );
     let text = strict(&fixture_ir(vec![real]), &fixture_ctx())?;
-    assert!(text.contains("name: V2 identity"), "renamed typed checkout: {text}");
+    assert!(
+        text.contains("name: V2 identity"),
+        "renamed typed checkout: {text}"
+    );
     assert!(text.contains("Restore Velnor tool seed"), "{text}");
 
     let mut conditional = checkout_step(&checkout_pin())?;

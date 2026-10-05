@@ -120,8 +120,14 @@ fn check_setup_first(job: &JobText) -> Result<(), String> {
 fn setup_is_early(job: &JobText, at: usize) -> bool {
     at <= 1
         || (at == 4
-            && job.steps.first().is_some_and(|step| step.name == "Checkout")
-            && job.steps.get(1).is_some_and(|step| step.name == "V2 identity")
+            && job
+                .steps
+                .first()
+                .is_some_and(|step| step.name == "Checkout")
+            && job
+                .steps
+                .get(1)
+                .is_some_and(|step| step.name == "V2 identity")
             && job
                 .steps
                 .get(2)

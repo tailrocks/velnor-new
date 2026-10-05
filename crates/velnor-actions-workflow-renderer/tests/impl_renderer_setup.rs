@@ -102,7 +102,11 @@ fn strict_inserts_setup_before_mise_exec() -> Result<(), RenderError> {
     ] {
         assert!(text.contains(&line), "sole owner saves {line}:\n{text}");
     }
-    assert!(!text.contains("cache_key:"), "no action-owned key:\n{text}");
+    assert!(
+        text.contains("cache_key: mise-tools-v2-"),
+        "the image seed uses the exact V2 identity:\n{text}"
+    );
+    assert!(!text.contains("mise-v1-"), "no legacy tools key:\n{text}");
     Ok(())
 }
 

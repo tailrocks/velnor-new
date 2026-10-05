@@ -2,7 +2,7 @@
 
 use velnor_actions_contract::{RunsOn, Step, StepKind};
 
-/// Peel runtime identity and restore steps before the common lane prefix.
+/// Peel runtime identity, seed admission, and restore steps before the common lane prefix.
 pub(super) fn peel_tools_cache_prelude(
     steps: &[Step],
     runs_on: &str,
@@ -10,10 +10,7 @@ pub(super) fn peel_tools_cache_prelude(
     let mut prelude = Vec::new();
     let mut common = Vec::new();
     for step in steps {
-        if matches!(
-            step.name.as_str(),
-            crate::cache_p08::TOOLS_CACHE_IDENTITY_NAME | crate::cache_steps::TOOLS_RESTORE_NAME
-        ) {
+        if is_tools_cache_prelude_step(step) {
             prelude.push(step.clone());
         } else {
             common.push(step.clone());
@@ -25,23 +22,26 @@ pub(super) fn peel_tools_cache_prelude(
     if let Some(setup) = steps
         .iter()
         .position(|step| step.name == crate::setup::SETUP_MISE_NAME)
-        && steps.iter().enumerate().any(|(index, step)| {
-            matches!(
-                step.name.as_str(),
-                crate::cache_p08::TOOLS_CACHE_IDENTITY_NAME
-                    | crate::cache_steps::TOOLS_RESTORE_NAME
-            ) && index > setup
-        })
+        && steps
+            .iter()
+            .enumerate()
+            .any(|(index, step)| is_tools_cache_prelude_step(step) && index > setup)
     {
         return None;
     }
     Some((prelude, common))
 }
 
+fn is_tools_cache_prelude_step(step: &Step) -> bool {
+    step.name == crate::cache_p08::TOOLS_CACHE_IDENTITY_NAME
+        || step.name == crate::cache_steps::TOOLS_RESTORE_NAME
+        || crate::tool_seed::is_tool_seed_step(step)
+}
+
 fn valid_tools_cache_prelude(steps: &[Step], runs_on: &str) -> bool {
     match steps {
         [] => true,
-        [identity, restore] => {
+        [identity, seed, restore] => {
             let identity_ok = identity.name == crate::cache_p08::TOOLS_CACHE_IDENTITY_NAME
                 && identity.condition.is_none()
                 && matches!(
@@ -57,6 +57,7 @@ fn valid_tools_cache_prelude(steps: &[Step], runs_on: &str) -> bool {
                         .is_ok()
                 );
             let expected_paths = crate::cache_steps::TOOLS_CACHE_PATHS.join("\n");
+            let seed_ok = crate::tool_seed::is_tool_seed_step(seed);
             let restore_ok = matches!(
                 &restore.kind,
                 StepKind::Action { uses, with, env }
@@ -67,6 +68,7 @@ fn valid_tools_cache_prelude(steps: &[Step], runs_on: &str) -> bool {
                         && with.get("key").is_some_and(|key| tool_cache_key_digest(key).is_some())
             );
             identity_ok
+                && seed_ok
                 && restore_ok
                 && restore.condition.as_deref()
                     == Some(crate::cache_p08::TOOLS_CACHE_RESTORE_CONDITION)
@@ -134,12 +136,37 @@ pub(super) fn same_tools_cache_prelude_shape(
                 } else {
                     hosted_uses == local_uses
                         && hosted_env == local_env
-                        && same_cache_inputs(hosted_with, local_with)
+                        && if hosted_uses == crate::tool_seed::TOOL_SEED_USES {
+                            same_seed_inputs(hosted_with, local_with)
+                        } else {
+                            same_cache_inputs(hosted_with, local_with)
+                        }
                 }
             }
             _ => false,
         }
     })
+}
+
+fn same_seed_inputs(
+    hosted: &std::collections::BTreeMap<String, String>,
+    local: &std::collections::BTreeMap<String, String>,
+) -> bool {
+    let (Some(hosted_key), Some(local_key)) = (hosted.get("cache_key"), local.get("cache_key"))
+    else {
+        return false;
+    };
+    if !crate::cache_p08::is_v2_cache_key_expression(hosted_key)
+        || !crate::cache_p08::is_v2_cache_key_expression(local_key)
+    {
+        return false;
+    }
+    let mut hosted_shape = hosted.clone();
+    let mut local_shape = local.clone();
+    let normalized = "mise-tools-v2-{static-identity}-${{steps.v2.outputs.identity}}";
+    hosted_shape.insert("cache_key".to_owned(), normalized.to_owned());
+    local_shape.insert("cache_key".to_owned(), normalized.to_owned());
+    hosted_shape == local_shape
 }
 
 fn tool_cache_key_digest(key: &str) -> Option<&str> {
