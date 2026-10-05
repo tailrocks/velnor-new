@@ -75,6 +75,17 @@ pub(crate) fn run_public() -> ExitCode {
         Command::Plan => run_plan(),
         Command::Generate { output_dir, mode } => run_generate(output_dir, mode),
         Command::Config { command } => crate::dispatch_config::run_config(&command),
+        Command::VerifyReleaseManifest {
+            manifest,
+            expected_source_commit,
+            linux_x64_binary,
+            macos_arm64_binary,
+        } => crate::dispatch_local_release::run_verify_release_manifest(
+            &manifest,
+            &expected_source_commit,
+            &linux_x64_binary,
+            &macos_arm64_binary,
+        ),
     }
 }
 
