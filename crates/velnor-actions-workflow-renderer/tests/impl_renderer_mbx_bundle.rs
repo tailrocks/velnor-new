@@ -96,6 +96,7 @@ fn assert_cold_import(imported: &str) {
         "df -B1 -P",
         "df -i -P",
         "/opt/velnor/seed/mbx",
+        "mbx-seed-bundle",
         "steps.mbx-bundle-key.outputs.prefix",
     ] {
         assert!(

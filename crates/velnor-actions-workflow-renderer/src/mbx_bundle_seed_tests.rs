@@ -1,5 +1,6 @@
-//! The import script runs. A seed hit calls `mbx cache import` on the seed.
-//! A cache miss with no seed stays cold. The seed directory is never deleted.
+//! The import script runs. A seed hit imports a private copy.
+//! `mbx cache import` removes that copy. The shared seed stays.
+//! A cache miss with no seed stays cold.
 
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
@@ -29,7 +30,7 @@ fn fake_mbx(bin: &Path) {
     fake_tool(
         bin,
         "mbx",
-        "#!/bin/sh\necho \"$@\" >> \"$MBX_LOG\"\nexit \"${MBX_EXIT:-0}\"\n",
+        "#!/bin/sh\necho \"$@\" >> \"$MBX_LOG\"\nif [ \"${MBX_EXIT:-0}\" = 1 ]; then exit 1; fi\nif [ \"$1\" = cache ] && [ \"$2\" = import ]; then rm -rf \"$3\"; fi\nexit 0\n",
     );
     fake_tool(bin, "df", "#!/bin/sh\nexit 0\n");
 }
@@ -101,13 +102,27 @@ fn seed_hit_imports_the_seed_bundle_and_keeps_it() {
     fs::write(seed.join("mbx/bundle/marker"), "objects").expect("marker");
     let script = import_script(seed.to_str().expect("utf8")).expect("script");
     let (text, calls) = run(&script, &root, "", "tool-1.98.1-", "0");
+    let private = root.join("rt/mbx-seed-bundle");
     assert!(
-        calls.contains(&format!("cache import {}/mbx/bundle", seed.display())),
+        calls.contains(&format!("cache import {}", private.display())),
+        "{calls}"
+    );
+    assert!(
+        !calls.contains(&format!("cache import {}/mbx/bundle", seed.display())),
         "{calls}"
     );
     assert!(!text.contains("no mbx bundle matched"), "{text}");
+    assert!(!private.exists(), "private copy is removed");
     assert_eq!(
         fs::read_to_string(seed.join("mbx/bundle/marker")).expect("kept"),
+        "objects"
+    );
+    let (text, calls) = run(&script, &root, "", "tool-1.98.1-", "0");
+    let needle = format!("cache import {}", private.display());
+    assert_eq!(calls.matches(&needle).count(), 2, "{calls}");
+    assert!(!text.contains("no mbx bundle matched"), "{text}");
+    assert_eq!(
+        fs::read_to_string(seed.join("mbx/bundle/marker")).expect("second hit"),
         "objects"
     );
     fs::remove_dir_all(&root).ok();
@@ -132,6 +147,10 @@ fn wrong_prefix_absent_seed_and_failed_import_leave_the_seed() {
     assert!(
         text.contains("mbx bundle import failed; continuing cold"),
         "{text}"
+    );
+    assert!(
+        !root.join("rt/mbx-seed-bundle").exists(),
+        "failed import removes only the private copy"
     );
     assert_eq!(
         fs::read_to_string(seed.join("mbx/bundle/marker")).expect("kept"),
