@@ -330,9 +330,9 @@ fn delete_session_rejects_non_204() -> Result<(), &'static str> {
 }
 
 #[test]
-fn jit_request_matches_the_pinned_scaler() -> Result<(), WireError> {
+fn jit_request_uses_runner_image_work_folder() -> Result<(), WireError> {
     let body = jit_request("runner-ab")?;
-    assert_eq!(body, br#"{"name":"runner-ab","workFolder":""}"#);
+    assert_eq!(body, br#"{"name":"runner-ab","workFolder":"_work"}"#);
     assert_eq!(jit_request(""), Err(WireError::RegistrationRejected));
     assert_eq!(jit_request("a/b"), Err(WireError::RegistrationRejected));
     assert_eq!(jit_request("a b"), Err(WireError::RegistrationRejected));

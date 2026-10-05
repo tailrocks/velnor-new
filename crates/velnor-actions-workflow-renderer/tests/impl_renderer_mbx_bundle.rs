@@ -1,6 +1,7 @@
 //! Hosted MBX saves one bundle outside the store. The action post does not.
 
 use velnor_actions_contract::WorkflowPolicy;
+use velnor_actions_contract::cachekey::mbx_cache_generation;
 use velnor_actions_contract::config::{SCALE_SET_NAME, ScaleSetSelector, VELNOR_LABEL};
 use velnor_actions_workflow_renderer::steps::plan_step;
 use velnor_actions_workflow_renderer::{RenderError, render_workflow_ir};
@@ -29,6 +30,63 @@ fn render_mbx(id: &str, scale_set: bool) -> Result<String, RenderError> {
         None,
         &fixture_ctx(),
     )
+}
+
+fn expected_generation() -> String {
+    let action_sha = &mbx_uses()["jdx/mr-boxington-action@".len()..];
+    format!(
+        "cache-generation: {}${{{{ runner.environment == 'github-hosted' && runner.os == 'Linux' && '-share-out-dir-disabled-v1' || '' }}}}-action-{action_sha}",
+        mbx_cache_generation("1.21.1")
+    )
+}
+
+fn assert_hosted_cache_policy(text: &str, action: &str, restore: usize) {
+    assert!(action.contains("id: mbx"), "{action}");
+    assert!(
+        action.contains("ACTIONS_CACHE_MODE: ${{ runner.environment == 'github-hosted'"),
+        "cache writes stay runner-gated: {action}"
+    );
+    assert!(
+        action.contains("github.ref_protected == true && 'write' || 'read'"),
+        "only protected default-branch pushes write: {action}"
+    );
+    assert!(
+        action.contains(
+            "isolate-objects-cache: ${{ runner.environment == 'github-hosted' && runner.os == 'Linux' }}"
+        ),
+        "{action}"
+    );
+    assert!(
+        action.contains(
+            "cache-key-suffix: ${{ runner.environment == 'github-hosted' && github.job || '' }}"
+        ),
+        "{action}"
+    );
+    assert!(action.contains(&expected_generation()), "{action}");
+    let policy = text.find("MBX_SHARE_OUT_DIR: \"0\"").unwrap_or(usize::MAX);
+    assert!(policy < restore, "job env precedes restore:\n{text}");
+    assert!(text.contains("MBX_GC_AUTO: \"0\""), "{text}");
+}
+
+fn assert_bundle_save(saved: &str) {
+    assert!(
+        saved.contains("path: ${{ runner.temp }}/mbx-single-bundle"),
+        "{saved}"
+    );
+    assert!(
+        saved.contains("key: ${{ steps.mbx.outputs.cache-primary-key }}"),
+        "{saved}"
+    );
+    assert!(
+        saved.contains("steps.mbx-export.outputs.ready == 'true'"),
+        "{saved}"
+    );
+    assert!(saved.contains("github.event_name == 'push'"), "{saved}");
+    assert!(
+        saved.contains("if: runner.environment != 'github-hosted' && success()"),
+        "bundle save stays on the Scale Set route: {saved}"
+    );
+    assert!(!saved.contains("pull_request"), "{saved}");
 }
 
 fn assert_cold_import(imported: &str) {
@@ -67,6 +125,10 @@ fn hosted_export_samples_disk_around_store_delete() -> Result<(), RenderError> {
     assert!(bytes < inodes, "{script}");
     assert!(inodes < gc, "{script}");
     assert!(gc < exported, "{script}");
+    assert!(
+        script.contains("if: runner.environment != 'github-hosted'"),
+        "bundle export stays on the Scale Set route: {script}"
+    );
     assert!(exported < durable, "{script}");
     assert!(durable < deleted, "{script}");
     let after = &script[deleted..];
@@ -82,7 +144,7 @@ fn hosted_export_samples_disk_around_store_delete() -> Result<(), RenderError> {
 }
 
 #[test]
-fn hosted_save_is_one_bundle_outside_the_store() -> Result<(), RenderError> {
+fn hosted_isolation_keeps_scale_set_bundle_guarded() -> Result<(), RenderError> {
     let text = render_mbx("demo", false)?;
     let preflight = text
         .find("name: Verify MBX and Rust toolchains")
@@ -125,25 +187,8 @@ fn hosted_save_is_one_bundle_outside_the_store() -> Result<(), RenderError> {
         "{restored}"
     );
     assert_cold_import(&text[import..export]);
-    let action = &text[restore..export];
-    assert!(action.contains("id: mbx"), "{action}");
-    assert!(action.contains("ACTIONS_CACHE_MODE: read"), "{action}");
-    assert!(!action.contains("write"), "{action}");
-    let saved = &text[save..];
-    assert!(
-        saved.contains("path: ${{ runner.temp }}/mbx-single-bundle"),
-        "{saved}"
-    );
-    assert!(
-        saved.contains("key: ${{ steps.mbx.outputs.cache-primary-key }}"),
-        "{saved}"
-    );
-    assert!(
-        saved.contains("steps.mbx-export.outputs.ready == 'true'"),
-        "{saved}"
-    );
-    assert!(saved.contains("github.event_name == 'push'"), "{saved}");
-    assert!(!saved.contains("pull_request"), "{saved}");
+    assert_hosted_cache_policy(&text, &text[restore..export], restore);
+    assert_bundle_save(&text[save..]);
     assert!(!text.contains("continue-on-error"), "{text}");
     Ok(())
 }
@@ -152,8 +197,25 @@ fn hosted_save_is_one_bundle_outside_the_store() -> Result<(), RenderError> {
 fn scale_set_save_matches_and_skips_hosted_gc_env() -> Result<(), RenderError> {
     let text = render_mbx("rust-demo__local", true)?;
     assert!(text.contains("name: Export MBX single bundle"), "{text}");
-    assert!(text.contains("ACTIONS_CACHE_MODE: read"), "{text}");
+    let mode = text.find("ACTIONS_CACHE_MODE:").expect("cache mode");
+    let mode_line = text[mode..].lines().next().expect("mode line");
+    assert!(
+        mode_line.contains("|| 'none'"),
+        "non-hosted cache mode is none: {mode_line}"
+    );
+    let restore = text
+        .find("name: Restore MBX single bundle")
+        .expect("bundle restore");
+    let import = text
+        .find("name: Import MBX single bundle")
+        .expect("bundle import");
+    assert!(
+        text[restore..import].contains("if: runner.environment != 'github-hosted'"),
+        "bundle restore stays on the Scale Set route: {text}"
+    );
     assert!(!text.contains("MBX_GC_AUTO"), "{text}");
+    assert!(!text.contains("MBX_SHARE_OUT_DIR"), "{text}");
+    assert!(text.contains(&expected_generation()), "{text}");
     Ok(())
 }
 

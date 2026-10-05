@@ -85,6 +85,7 @@ mod validate_shell;
 mod validate_zizmor;
 mod validators;
 mod vectors;
+mod verification_tasks;
 mod workflow;
 mod workflow_jobs;
 mod workflow_jobs_cache;

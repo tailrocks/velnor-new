@@ -28,6 +28,10 @@ struct WorkflowStepContext<'a> {
     mbx_gc_jobs: &'a BTreeSet<String>,
 }
 
+#[cfg(test)]
+#[path = "document_verification_env_tests.rs"]
+mod verification_env_tests;
+
 /// Build the workflow document: name, on, permissions, concurrency, jobs.
 pub(crate) fn workflow_to_yaml(
     ir: &WorkflowIr,
@@ -229,7 +233,18 @@ fn job_to_yaml(
         StepKind::Internal { .. } => false,
     });
     let mut job_env = if step_has_env {
-        crate::toolchain_env::job_level_env()
+        if ctx
+            .verification_tasks
+            .iter()
+            .any(|task| task.owns_job_id(id))
+        {
+            // Verification jobs intentionally execute repository-declared
+            // Mise tasks, so they need Mise config while retaining the same
+            // credential scrub as every other repository-code step.
+            crate::toolchain_env::credential_scrub()
+        } else {
+            crate::toolchain_env::job_level_env()
+        }
     } else {
         BTreeMap::new()
     };
@@ -261,6 +276,10 @@ fn job_to_yaml(
         job_env.insert(
             crate::cache_steps::MBX_GC_AUTO_ENV.to_owned(),
             crate::cache_steps::MBX_GC_AUTO_VALUE.to_owned(),
+        );
+        job_env.insert(
+            crate::cache_steps::MBX_SHARE_OUT_DIR_ENV.to_owned(),
+            crate::cache_steps::MBX_SHARE_OUT_DIR_VALUE.to_owned(),
         );
     }
     let mut entries = job_header_fields(job, runs_on);
