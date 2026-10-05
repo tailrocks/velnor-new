@@ -334,4 +334,6 @@ mod tests {
 }
 
 #[cfg(all(test, unix))]
+mod start_idless_tests;
+#[cfg(all(test, unix))]
 mod start_tests;

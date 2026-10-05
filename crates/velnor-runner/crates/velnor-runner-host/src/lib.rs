@@ -85,7 +85,7 @@ mod launch_idless_tests;
 #[cfg(test)]
 mod launch_scale_conflict_tests;
 #[cfg(test)]
-mod launch_scale_idless_tests;
+mod launch_scale_redelivery_tests;
 #[cfg(test)]
 mod launch_scale_tests;
 #[cfg(test)]
