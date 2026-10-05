@@ -13,13 +13,17 @@ snapshotter returns `EINVAL` when this amd64 daemon runs under emulation.
 The Dockerfile does not copy or mount a host socket and the entrypoint does
 not prune.
 
-The entrypoint starts `dockerd` on a private socket, pulls
-`rabbitmq:3.8.22-management` for `linux/arm64`, then links
-`/run/docker.sock`. Nested Rosetta crashes that image's amd64 Erlang JIT
-before `Server startup complete; 4 plugins started.` The daemon and the
-runner stay `linux/amd64`. ARM64 is not the runner baseline. The data root
-stays `/var/lib/docker` on a DinD-only volume so vfs copies are not
-whiteouts on the container layer.
+The entrypoint starts `dockerd` on a private socket, pulls arm64 manifest
+`sha256:b4be7046918dbd657ffd632610c7b997bacdd33e70194d93f0dbb02d6df492e6`
+of `rabbitmq:3.8.22-management`, and tags that digest. It links
+`/run/docker.sock` only after `image inspect` reports `Architecture=arm64`.
+The amd64 image of that name is OTP 24 JIT. Nested Rosetta exits it before
+`Server startup complete; 4 plugins started.` An unscoped pull stores that
+JIT image, and a pull failure used to open the socket anyway. A failed or
+non-arm64 seed now exits before the link. The daemon and the runner stay
+`linux/amd64`. ARM64 is not the runner baseline. The data root stays
+`/var/lib/docker` on a DinD-only volume so vfs copies are not whiteouts on
+the container layer.
 
 The image does not set `privileged`. The controller must:
 
