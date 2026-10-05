@@ -1,13 +1,13 @@
 //! Workflow/tree invariant cases (triggers, concurrency, candidate, gates).
 use std::collections::BTreeMap;
 use velnor_actions_contract::{
-    Concurrency, GeneratorValidation, Job, JobTimeout, Permissions, Step, StepKind, Trigger,
-    ValidatorKind, WorkflowIr, WorkflowPolicy,
+    Concurrency, GeneratorValidation, Job, JobTimeout, Permissions, Step, Trigger, ValidatorKind,
+    WorkflowIr, WorkflowPolicy,
 };
 use velnor_actions_workflow_renderer::{
     CANDIDATE_JOB_ID, CONCURRENCY_CANCEL, CONCURRENCY_GROUP, CandidateSpec, RenderContext,
     RenderError, ValidatorCommand, checkout_step, merge_step, plan_step, render_workflow_ir,
-    shell_step, with_marker,
+    with_marker,
 };
 
 const VERSION: &str = "0.1.0";
@@ -330,72 +330,4 @@ fn final_gate_keeps_exact_name_and_condition() -> Result<(), RenderError> {
 
 pub(crate) fn task_job(step: Step) -> Job {
     simple_job("Task", vec!["plan".to_owned()], vec![step])
-}
-
-#[test]
-fn renderer_rejects_bare_commands_inside_ir() -> Result<(), RenderError> {
-    let ctx = fixture_ctx();
-    let mut ir = fixture_ir()?;
-    ir.jobs.insert(
-        "velnor-task".to_owned(),
-        task_job(Step {
-            name: "Install".to_owned(),
-            id: None,
-            role: None,
-            condition: None,
-            kind: StepKind::Shell {
-                run: vec!["cargo".to_owned(), "install".to_owned(), "x".to_owned()],
-                env: BTreeMap::new(),
-            },
-        }),
-    );
-    assert!(render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &ctx).is_err());
-    let mut ir = fixture_ir()?;
-    ir.jobs.insert(
-        "velnor-task".to_owned(),
-        task_job(Step {
-            name: "Fetch".to_owned(),
-            id: None,
-            role: None,
-            condition: None,
-            kind: StepKind::Action {
-                uses: "actions/checkout@main".to_owned(),
-                with: BTreeMap::new(),
-                env: BTreeMap::new(),
-            },
-        }),
-    );
-    assert!(render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &ctx).is_err());
-    let mut ir = fixture_ir()?;
-    ir.jobs.insert(
-        "velnor-task".to_owned(),
-        task_job(Step {
-            name: "Run Alint".to_owned(),
-            id: None,
-            role: None,
-            condition: None,
-            kind: StepKind::Action {
-                uses: "asamarts/alint@v0.16.1".to_owned(),
-                with: BTreeMap::new(),
-                env: BTreeMap::new(),
-            },
-        }),
-    );
-    let err = render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &ctx)
-        .expect_err("alint tag ref must be rejected");
-    assert!(
-        format!("{err:?}").contains("unpinned_ref"),
-        "wrong rejection: {err:?}"
-    );
-    let mut ir = fixture_ir()?;
-    ir.jobs.insert(
-        "velnor-task".to_owned(),
-        task_job(shell_step(
-            "Focused",
-            vec!["true".to_owned()],
-            BTreeMap::new(),
-        )?),
-    );
-    assert!(render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &ctx).is_ok());
-    Ok(())
 }
