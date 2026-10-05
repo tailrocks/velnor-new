@@ -229,9 +229,10 @@ fn velnor_policy_blessed_sha_validates_green() -> TestResult {
     Ok(())
 }
 
-/// The 1 suppressed finding is `undocumented-permissions` (low,
-/// auditor/pedantic-only); it must stay suppressed. Inline ignores are
-/// only `self-repository` on local actions. Zizmor must report that count.
+/// The two suppressed findings are `undocumented-permissions` (low,
+/// auditor/pedantic-only): Plan and Required each grant Actions read to their
+/// bounded internal baseline/artifact operation. Inline ignores are only
+/// `self-repository` on local actions. Zizmor must report that count.
 #[test]
 fn staging_suppressions_stable_no_new() -> TestResult {
     let (_repo, _parent, preview, yaml, _) = policy_preview()?;
@@ -245,7 +246,7 @@ fn staging_suppressions_stable_no_new() -> TestResult {
         text.contains(&format!("{ignores} ignored")),
         "ignore count must match the local-action annotations: {text}"
     );
-    assert!(text.contains("1 suppressed"), "no new suppressions: {text}");
+    assert!(text.contains("2 suppressed"), "no new suppressions: {text}");
     Ok(())
 }
 
