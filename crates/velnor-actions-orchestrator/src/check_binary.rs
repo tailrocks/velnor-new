@@ -7,7 +7,7 @@ use velnor_actions_workflow_renderer::setup::{
     MISE_BINARY_SHA256_LINUX_X64, MISE_BINARY_SHA256_MACOS_ARM64, MISE_BINARY_SHA256_MACOS_X64,
 };
 
-/// Installed-byte bounds measured from checksum-qualified Mise 2026.10.0 archives.
+/// Installed-byte bounds measured from checksum-qualified Mise 2026.9.18 archives.
 /// Each bound travels with the SHA selected for that same native platform.
 struct MiseBinaryPin {
     sha256: &'static str,
@@ -16,9 +16,9 @@ struct MiseBinaryPin {
 
 fn mise_binary_pin(platform: CheckPlatform) -> MiseBinaryPin {
     let (sha256, max_bytes) = match platform {
-        CheckPlatform::LinuxX64 => (MISE_BINARY_SHA256_LINUX_X64, 153_367_552),
-        CheckPlatform::MacosArm64 => (MISE_BINARY_SHA256_MACOS_ARM64, 121_938_704),
-        CheckPlatform::MacosX64 => (MISE_BINARY_SHA256_MACOS_X64, 149_245_120),
+        CheckPlatform::LinuxX64 => (MISE_BINARY_SHA256_LINUX_X64, 153_572_880),
+        CheckPlatform::MacosArm64 => (MISE_BINARY_SHA256_MACOS_ARM64, 122_907_616),
+        CheckPlatform::MacosX64 => (MISE_BINARY_SHA256_MACOS_X64, 149_027_840),
     };
     MiseBinaryPin { sha256, max_bytes }
 }

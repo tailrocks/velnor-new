@@ -9,7 +9,7 @@ use velnor_actions_mise::{
 
 #[test]
 fn pinned_catalog_matches_qualified_versions() {
-    assert_eq!(MISE_VERSION, "2026.10.0");
+    assert_eq!(MISE_VERSION, "2026.9.18");
     let catalog = ToolCatalog::pinned();
     assert_eq!(catalog.version(PinnedTool::Rust), "1.98.1");
     assert_eq!(catalog.version(PinnedTool::MrBoxington), "1.21.1");

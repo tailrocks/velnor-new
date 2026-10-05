@@ -226,7 +226,7 @@ fn policy_file_is_complete() -> Result<(), Box<dyn Error>> {
         "supported = [\"ubuntu-26.04\", \"ubuntu-24.04\", \"ubuntu-22.04\"]",
         "[validation-tools]",
         "cargo-mutants = \"27.1.0\"",
-        "mise = \"2026.10.0\"",
+        "mise = \"2026.9.18\"",
         "rust = \"1.98.1\"",
         "mr-boxington = \"1.21.1\"",
         "gh = \"2.102.0\"",

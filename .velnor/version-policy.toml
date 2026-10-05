@@ -16,7 +16,7 @@ check_interval_hours = 24
 max_exception_days = 14
 
 [tools]
-mise = "2026.10.0"
+mise = "2026.9.18"
 rust = "1.98.1"
 mr-boxington = "1.21.1"
 gh = "2.102.0"
@@ -71,7 +71,7 @@ reviewed = "2026-09-28"
 name = "jdx/mr-boxington-action"
 version = "v1.6.0"
 sha = "1687e54eb349cadf61fa38b5813a77875489e8e6"
-reviewed = "2026-10-02"
+reviewed = "2026-10-03"
 
 [[actions]]
 name = "asamarts/alint"

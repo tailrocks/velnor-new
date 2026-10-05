@@ -40,9 +40,10 @@ mise exec -- cargo build --locked -p velnor-actions-cli
 diff -r .github /private/tmp/velnor-preview/.github  # no output: preview matches
 ```
 
-Current pin qualification, 2026-10-02 UTC: Mise 2026.10.0 and MBX 1.21.1.
-The MBX macOS ARM64 binary passed an isolated Rust 1.98.1 build/test and
-cache export/import/rebuild fixture; the historical output above is unchanged.
+Retained tool pins on 2026-10-05: Mise 2026.9.18 under hold #6 and MBX
+1.21.1 under hold #29. The MBX macOS ARM64 binary passed an isolated Rust
+1.98.1 build/test and cache export/import/rebuild fixture; the historical
+output above is unchanged.
 
 Notes: `plan`/`generate` require the checkout's origin to be
 `tailrocks/velnor-new` (a local-path clone is identity-rejected until its
