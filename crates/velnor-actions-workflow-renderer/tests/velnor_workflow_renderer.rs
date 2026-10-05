@@ -79,6 +79,8 @@ mod impl_renderer_release_units;
 mod impl_renderer_release_version;
 #[path = "impl_renderer_setup.rs"]
 mod impl_renderer_setup;
+#[path = "impl_renderer_size.rs"]
+mod impl_renderer_size;
 #[path = "impl_renderer_steps.rs"]
 mod impl_renderer_steps;
 #[path = "impl_renderer_steps_env.rs"]

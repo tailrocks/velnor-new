@@ -7,6 +7,10 @@ use std::path::{Path, PathBuf};
 use crate::error::HostError;
 use crate::reconcile::IntentRow;
 
+mod launch;
+mod schema;
+mod worker_volume;
+
 /// Durable intent row.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IntentState {
@@ -183,6 +187,41 @@ impl Journal {
         one_row(changed)
     }
 
+    /// Store the runner id and the private `DinD` id. `None` keeps the column.
+    ///
+    /// Commit this before the container is started. Empty ids are rejected.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`HostError::Journal`] when the row is missing or an id is rejected.
+    pub async fn bind_worker(
+        &self,
+        id: i64,
+        runner_id: Option<&str>,
+        dind_id: Option<&str>,
+    ) -> Result<(), HostError> {
+        if runner_id.is_some_and(token_rejected) || dind_id.is_some_and(token_rejected) {
+            return Err(HostError::Journal);
+        }
+        let conn = self.connection().await?;
+        let changed = conn
+            .execute(
+                "UPDATE intents SET docker_id = COALESCE(docker_id, ?1), dind_id = COALESCE(dind_id, ?2) WHERE id = ?3 AND (?1 IS NULL OR docker_id IS NULL OR docker_id = ?1) AND (?2 IS NULL OR dind_id IS NULL OR dind_id = ?2)",
+                (
+                    runner_id.map(str::to_owned),
+                    dind_id.map(str::to_owned),
+                    id,
+                ),
+            )
+            .await
+            .map_err(|_| HostError::Journal)?;
+        match changed {
+            1 => Ok(()),
+            0 => same_ids(&conn, id, runner_id, dind_id).await,
+            _ => Err(HostError::Journal),
+        }
+    }
+
     /// Record that cleanup of this row's ids is proven.
     ///
     /// # Errors
@@ -206,7 +245,7 @@ impl Journal {
         let conn = self.connection().await?;
         let mut query = conn
             .query(
-                "SELECT id, kind, subject, state, docker_id, github_runner_id, cleanup_proven FROM intents ORDER BY id",
+                "SELECT id, kind, subject, state, docker_id, github_runner_id, cleanup_proven, dind_id, worker_volume FROM intents ORDER BY id",
                 (),
             )
             .await
@@ -221,12 +260,12 @@ impl Journal {
     async fn bootstrap(&self) -> Result<(), HostError> {
         let conn = self.connection().await?;
         conn.execute(
-            "CREATE TABLE IF NOT EXISTS intents (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, subject TEXT NOT NULL, state TEXT NOT NULL, docker_id TEXT, github_runner_id TEXT, cleanup_proven INTEGER NOT NULL DEFAULT 0)",
+            "CREATE TABLE IF NOT EXISTS intents (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, subject TEXT NOT NULL, state TEXT NOT NULL, docker_id TEXT, github_runner_id TEXT, cleanup_proven INTEGER NOT NULL DEFAULT 0, dind_id TEXT, worker_volume TEXT)",
             (),
         )
         .await
         .map_err(|_| HostError::Journal)?;
-        Ok(())
+        schema::ensure_columns(&conn).await
     }
 
     async fn connection(&self) -> Result<turso::Connection, HostError> {
@@ -281,7 +320,7 @@ async fn live_id(
 ) -> Result<Option<i64>, HostError> {
     let mut rows = conn
         .query(
-            "SELECT id FROM intents WHERE kind = ?1 AND subject = ?2 AND state != 'failed' ORDER BY id LIMIT 1",
+            "SELECT id FROM intents WHERE kind = ?1 AND subject = ?2 AND state != 'failed' AND cleanup_proven = 0 ORDER BY id DESC LIMIT 1",
             (kind.to_owned(), subject.to_owned()),
         )
         .await
@@ -301,9 +340,35 @@ fn intent_row(row: &turso::Row) -> Result<IntentRow, HostError> {
         subject: row.get(2).map_err(|_| HostError::Journal)?,
         state: IntentState::parse(&state_text)?,
         docker_id: row.get(4).map_err(|_| HostError::Journal)?,
+        dind_id: row.get(7).map_err(|_| HostError::Journal)?,
+        worker_volume: row.get(8).map_err(|_| HostError::Journal)?,
         github_runner_id: row.get(5).map_err(|_| HostError::Journal)?,
         cleanup_proven: row.get(6).map_err(|_| HostError::Journal)?,
     })
+}
+
+async fn same_ids(
+    conn: &turso::Connection,
+    id: i64,
+    runner_id: Option<&str>,
+    dind_id: Option<&str>,
+) -> Result<(), HostError> {
+    let mut rows = conn
+        .query("SELECT docker_id, dind_id FROM intents WHERE id = ?1", [id])
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let Some(row) = rows.next().await.map_err(|_| HostError::Journal)? else {
+        return Err(HostError::Journal);
+    };
+    let runner: Option<String> = row.get(0).map_err(|_| HostError::Journal)?;
+    let dind: Option<String> = row.get(1).map_err(|_| HostError::Journal)?;
+    let kept = runner_id.is_none_or(|want| runner.as_deref() == Some(want))
+        && dind_id.is_none_or(|want| dind.as_deref() == Some(want));
+    if kept {
+        Ok(())
+    } else {
+        Err(HostError::Journal)
+    }
 }
 
 fn one_row(changed: u64) -> Result<(), HostError> {
