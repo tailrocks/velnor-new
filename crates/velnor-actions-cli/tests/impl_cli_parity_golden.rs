@@ -17,7 +17,9 @@ use std::collections::BTreeMap;
 use std::error::Error;
 use std::path::{Path, PathBuf};
 
-use crate::impl_cli_tmp::{cleanup, code, commit_all, fresh_tempdir, git_init, spawn};
+use crate::impl_cli_tmp::{
+    cleanup, code, commit_all, fresh_tempdir, git_init, install_consumer_manifest, spawn,
+};
 
 /// Success cases: full artifact goldens.
 const CASES: [&str; 3] = ["minimal-cargo", "multi-crate", "ignored-stack"];
@@ -56,6 +58,9 @@ fn checkout(case: &str) -> Result<(PathBuf, String), Box<dyn Error>> {
     let repo = dir.join("repo");
     std::fs::create_dir_all(&repo)?;
     copy_dir(&corpus(case).join("input"), &repo)?;
+    if !FAIL_CASES.contains(&case) {
+        install_consumer_manifest(&repo)?;
+    }
     git_init(&repo)?;
     let head = commit_all(&repo)?;
     Ok((repo, head))
@@ -349,6 +354,23 @@ fn parity_artifacts_match_goldens() -> Result<(), Box<dyn Error>> {
 fn parity_malformed_fails_with_token() -> Result<(), Box<dyn Error>> {
     for case in FAIL_CASES {
         check_fail(case)?;
+    }
+    Ok(())
+}
+
+#[test]
+fn consumer_cli_rejects_a_missing_manifest() -> Result<(), Box<dyn Error>> {
+    let (repo, _) = checkout("minimal-cargo")?;
+    std::fs::remove_file(repo.join(".velnor/release-manifest.json"))?;
+    let plan = spawn(&["plan"], &[], &repo)?;
+    cleanup(repo.parent().ok_or("repo lacks parent")?);
+    let stderr = String::from_utf8_lossy(&plan.stderr);
+    if code(&plan) == 0 || !stderr.contains("consumer_requires_release_install") {
+        return Err(format!(
+            "missing manifest must fail through the actual CLI: exit={}, stderr={stderr:?}",
+            code(&plan)
+        )
+        .into());
     }
     Ok(())
 }
