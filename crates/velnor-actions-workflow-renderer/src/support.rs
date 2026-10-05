@@ -43,6 +43,9 @@ pub(crate) const RELEASE_DISPLAY_NAME: &str = "Release";
 /// Release ref gate: the job runs only on protected refs (tags/branches).
 pub(crate) const RELEASE_REF_CONDITION: &str = "github.ref_protected == true";
 
+/// Display name of the explicit cold-cache tool installation step.
+const PREPARE_PINNED_TOOLS_NAME: &str = "Prepare pinned tools";
+
 /// Consumer policy: reject support IR and Velnor-only job IDs.
 ///
 /// The lint job is a base IR job, not support IR, so it passes through.
@@ -227,6 +230,19 @@ pub(crate) fn validator_job(
     validator: ValidatorKind,
 ) -> Result<Job, RenderError> {
     let command = find_validator_command(&ctx.validator_commands, validator)?;
+    let mut steps = vec![steps::checkout_step(&ctx.checkout_uses)?];
+    if !command.prepare_argv.is_empty() {
+        steps.push(steps::ambient_shell_step(
+            PREPARE_PINNED_TOOLS_NAME,
+            command.prepare_argv.clone(),
+            BTreeMap::new(),
+        )?);
+    }
+    steps.push(steps::ambient_shell_step(
+        &command.name,
+        command.argv.clone(),
+        BTreeMap::new(),
+    )?);
     Ok(Job {
         display_name: validator.display_name().to_owned(),
         runs_on: ctx.runs_on.clone(),
@@ -235,10 +251,7 @@ pub(crate) fn validator_job(
         condition: None,
         permissions: None,
         environment: None,
-        steps: vec![
-            steps::checkout_step(&ctx.checkout_uses)?,
-            steps::ambient_shell_step(&command.name, command.argv.clone(), BTreeMap::new())?,
-        ],
+        steps,
     })
 }
 

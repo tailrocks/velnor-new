@@ -29,7 +29,7 @@ fn with_mbx(root: &std::path::Path) -> TestResult {
 }
 
 /// Rendered workflow text for a lockful fixture (MBX when `mbx`).
-fn yaml_for(mbx: bool) -> Result<String, Box<dyn std::error::Error>> {
+pub(super) fn yaml_for(mbx: bool) -> Result<String, Box<dyn std::error::Error>> {
     let prep = preparation_for(mbx)?;
     let tree = render_staged_tree(&prep)?;
     Ok(tree
@@ -39,7 +39,9 @@ fn yaml_for(mbx: bool) -> Result<String, Box<dyn std::error::Error>> {
 }
 
 /// Prepare the lockful fixture used by cache assertions.
-fn preparation_for(mbx: bool) -> Result<GenerationPreparation, Box<dyn std::error::Error>> {
+pub(super) fn preparation_for(
+    mbx: bool,
+) -> Result<GenerationPreparation, Box<dyn std::error::Error>> {
     let repo = make_repo(config_with_branch())?;
     let root = repo.path();
     fs::write(root.join("Cargo.lock"), demo_lock("demo"))?;
@@ -50,7 +52,7 @@ fn preparation_for(mbx: bool) -> Result<GenerationPreparation, Box<dyn std::erro
 }
 
 /// Step names of one IR job in a lockful fixture (MBX when `mbx`).
-fn job_names(job: &str, mbx: bool) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+pub(super) fn job_names(job: &str, mbx: bool) -> Result<Vec<String>, Box<dyn std::error::Error>> {
     let prep = preparation_for(mbx)?;
     let found = prep
         .workflow
@@ -98,74 +100,6 @@ fn c2_v2_mise_cache_restores_with_elected_tools_saves() -> TestResult {
         ] {
             assert!(yaml.contains(path), "V2 payload misses {path} (mbx={mbx})");
         }
-    }
-    Ok(())
-}
-
-#[test]
-fn c3_sources_subset_at_owned_home_single_writer() -> TestResult {
-    for mbx in [false, true] {
-        let yaml = yaml_for(mbx)?;
-        for need in [
-            "${{ runner.temp }}/velnor/cargo/registry/index",
-            "${{ runner.temp }}/velnor/cargo/registry/cache",
-            "${{ runner.temp }}/velnor/cargo/git/db",
-            "velnor-v1-sources-",
-            "hashFiles('Cargo.lock')",
-        ] {
-            assert!(
-                yaml.contains(need),
-                "sources snapshot misses {need} (mbx={mbx})"
-            );
-        }
-        for banned in ["credentials.toml", "registry/src", "Swatinem/rust-cache"] {
-            assert!(
-                !yaml.contains(banned),
-                "sources must exclude {banned} (mbx={mbx})"
-            );
-        }
-        let prep = preparation_for(mbx)?;
-        let expected_paths = [
-            "${{ runner.temp }}/velnor/cargo/registry/index",
-            "${{ runner.temp }}/velnor/cargo/registry/cache",
-            "${{ runner.temp }}/velnor/cargo/git/db",
-        ];
-        for job_id in ["plan", "rust-demo"] {
-            let job = prep
-                .workflow
-                .ir
-                .jobs
-                .get(job_id)
-                .ok_or_else(|| std::io::Error::other(format!("missing {job_id}")))?;
-            let source_steps = job.steps.iter().filter(|step| {
-                matches!(
-                    step.name.as_str(),
-                    "Restore Cargo sources" | "Save Cargo sources"
-                )
-            });
-            for step in source_steps {
-                let StepKind::Action { with, .. } = &step.kind else {
-                    return Err(format!("source cache is not an action: {}", step.name).into());
-                };
-                let paths = with
-                    .get("path")
-                    .ok_or_else(|| std::io::Error::other("source cache path"))?
-                    .lines()
-                    .collect::<Vec<_>>();
-                assert_eq!(paths, expected_paths, "exact source ownership: {job_id}");
-            }
-        }
-        let plan = job_names("plan", mbx)?;
-        assert!(plan.contains(&"Save Cargo sources".to_owned()), "{plan:?}");
-        let crates = job_names("rust-demo", mbx)?;
-        assert!(
-            crates.contains(&"Restore Cargo sources".to_owned()),
-            "{crates:?}"
-        );
-        assert!(
-            !crates.contains(&"Save Cargo sources".to_owned()),
-            "readers never save: {crates:?}"
-        );
     }
     Ok(())
 }
@@ -284,40 +218,6 @@ fn c8_crate_jobs_install_validators_for_test_spawns() -> TestResult {
             }
         }
     }
-    Ok(())
-}
-
-#[test]
-fn c10_only_plan_saves_producer_successful_deltas() -> TestResult {
-    use velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION;
-    // MBX repo: plan saves after fetch; crates restore only.
-    let plan = job_names("plan", true)?;
-    let fetch = plan
-        .iter()
-        .position(|name| name == "Fetch Cargo sources")
-        .ok_or("plan fetch")?;
-    let save = plan
-        .iter()
-        .position(|name| name == "Save Cargo sources")
-        .ok_or("plan save")?;
-    assert!(fetch < save, "save after the writer finishes: {plan:?}");
-    // Cargo-only source archives use the same single successful writer.
-    let prep = preparation_for(false)?;
-    let job = prep
-        .workflow
-        .ir
-        .jobs
-        .get("plan")
-        .ok_or_else(|| std::io::Error::other("missing plan"))?;
-    let save_step = job
-        .steps
-        .iter()
-        .find(|step| step.name == "Save Cargo sources")
-        .ok_or("plan source save")?;
-    assert_eq!(save_step.condition.as_deref(), Some(CACHE_SAVE_CONDITION));
-    let readers = job_names("rust-demo", false)?;
-    assert!(readers.contains(&"Restore Cargo sources".to_owned()));
-    assert!(!readers.contains(&"Save Cargo sources".to_owned()));
     Ok(())
 }
 
