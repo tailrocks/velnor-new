@@ -1,3 +1,0 @@
-output "o" {
-  value = "nested"
-}
