@@ -4,7 +4,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Step, StepKind};
+use velnor_actions_contract::{Step, StepKind, StepRole};
 
 use crate::{RenderError, commands, marker};
 
@@ -122,7 +122,9 @@ pub fn checkout_step(uses: &str) -> Result<Step, RenderError> {
         return Err(RenderError::BadActionRef(format!("not_checkout:{uses}")));
     }
     let with = BTreeMap::from([("persist-credentials".to_owned(), "false".to_owned())]);
-    action_step("Checkout", uses, with)
+    let mut step = action_step("Checkout", uses, with)?;
+    step.role = Some(StepRole::Checkout);
+    Ok(step)
 }
 
 /// Validated pinned-action step.
@@ -167,6 +169,8 @@ pub fn action_step_with_env(
     crate::commands::validate_env(&env)?;
     Ok(Step {
         name: name.to_owned(),
+        id: None,
+        role: None,
         condition: None,
         kind: StepKind::Action {
             uses: uses.to_owned(),
@@ -221,6 +225,8 @@ pub fn shell_step(
     env_map.extend(crate::toolchain_env::credential_scrub());
     Ok(Step {
         name: name.to_owned(),
+        id: None,
+        role: None,
         condition: None,
         kind: StepKind::Shell { run, env: env_map },
     })
@@ -251,6 +257,8 @@ pub fn ambient_shell_step(
     scan_for_private_subcommands(name)?;
     Ok(Step {
         name: name.to_owned(),
+        id: None,
+        role: None,
         condition: None,
         kind: StepKind::Shell { run: argv, env },
     })
@@ -349,7 +357,9 @@ pub fn acquire_velnor_step(
     if !downloads || !verifies {
         return Err(RenderError::BadCommand("acquire_without_verify".to_owned()));
     }
-    shell_step(ACQUIRE_NAME, argv, env.clone())
+    let mut step = shell_step(ACQUIRE_NAME, argv, env.clone())?;
+    step.role = Some(StepRole::AcquireVelnor);
+    Ok(step)
 }
 
 /// Target-directory prefix isolating one lane.

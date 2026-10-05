@@ -29,6 +29,8 @@ mod impl_cli_schema2;
 mod impl_cli_smoke;
 #[path = "impl_cli_tmp.rs"]
 mod impl_cli_tmp;
+#[path = "impl_cli_tofu_capacity.rs"]
+mod impl_cli_tofu_capacity;
 #[path = "impl_cli_verify_local.rs"]
 mod impl_cli_verify_local;
 #[path = "impl_repo_deps.rs"]

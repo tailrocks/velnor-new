@@ -302,7 +302,7 @@ fn retarget(
 fn retarget_check_identity(job: &mut Job, source_id: &str, output_id: &str, lane: EmitLane) {
     for step in &mut job.steps {
         match &mut step.kind {
-            super::ir::StepKind::Shell { env, .. } => {
+            super::step::StepKind::Shell { env, .. } => {
                 if let Some(job_id) = env.get_mut(NAMED_CHECK_JOB_ID_ENV)
                     && job_id == source_id
                 {
@@ -316,7 +316,7 @@ fn retarget_check_identity(job: &mut Job, source_id: &str, output_id: &str, lane
                     }
                 }
             }
-            super::ir::StepKind::Action { with, .. } => {
+            super::step::StepKind::Action { with, .. } => {
                 if let Some(name) = with.get_mut("name")
                     && name.starts_with("velnor-crate-")
                     && name.ends_with(&format!("-{source_id}"))
@@ -326,7 +326,7 @@ fn retarget_check_identity(job: &mut Job, source_id: &str, output_id: &str, lane
                     name.push_str(output_id);
                 }
             }
-            super::ir::StepKind::Internal { .. } => {}
+            super::step::StepKind::Internal { .. } => {}
         }
     }
 }
