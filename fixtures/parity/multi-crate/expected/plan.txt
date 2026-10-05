@@ -18,7 +18,7 @@ Workflow to generate
   Runner: ubuntu-26.04 (latest pinned default)
   Jobs:
     - actionlint (5 steps)
-    - plan (13 steps)
+    - plan (14 steps)
     - publish-baseline (5 steps)
     - required (9 steps)
     - rust-parity-app (19 steps)

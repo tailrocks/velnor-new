@@ -194,6 +194,10 @@ fn step_key_is_derived_from_pinned_job_tools_and_configured_checkout_payload() {
     .expect("cold setup");
     assert!(fake_job.steps.iter().all(|step| !is_tool_seed_action(step)));
 
+    assert_wrong_pinned_checkout_stays_cold(&setup);
+}
+
+fn assert_wrong_pinned_checkout_stays_cold(setup: &crate::MiseSetup) {
     let mut wrong_pin =
         crate::steps::checkout_step("actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
             .expect("pinned checkout shape");
@@ -202,7 +206,7 @@ fn step_key_is_derived_from_pinned_job_tools_and_configured_checkout_payload() {
     crate::cache_p08::ensure_setup_p08(
         "wrong-checkout-ref",
         &mut wrong_pin_job,
-        &setup,
+        setup,
         false,
         TARGET,
         CHECKOUT,
