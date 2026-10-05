@@ -63,6 +63,7 @@ const ENV_EXPRESSIONS: &[&str] = &[
     "secrets.CARGO_REGISTRY_TOKEN",
     "secrets.GITHUB_TOKEN",
     "github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.sha",
+    "inputs.cache_key",
 ];
 
 /// Exact `${{ }}` inners permitted in action `with:` values.
@@ -79,8 +80,6 @@ const WITH_EXPRESSIONS: &[&str] = &[
     "github.job",
     "github.event_name == 'push'",
     "steps.publish-baseline.outputs.artifact_name",
-    "steps.mbx-cache-key.outputs.key",
-    "steps.mbx-cache-key.outputs.prefix",
 ];
 
 /// True for a `matrix.*` field reference (both layers allow the family).

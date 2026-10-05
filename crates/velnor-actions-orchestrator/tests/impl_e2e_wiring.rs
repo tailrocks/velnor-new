@@ -118,10 +118,15 @@ fn check_setup_first(job: &JobText) -> Result<(), String> {
     }
 }
 
-/// Setup position is legal at 0-1 (right after Checkout; P08 has no
-/// manual tools restore ahead of it).
-fn setup_is_early(_job: &JobText, at: usize) -> bool {
+/// Setup position is legal at 0-1, or at 2 when the tool seed is the only
+/// step between Checkout and Setup Mise.
+fn setup_is_early(job: &JobText, at: usize) -> bool {
     at <= 1
+        || (at == 2
+            && job
+                .steps
+                .get(1)
+                .is_some_and(|step| step.name == "Restore Velnor tool seed"))
 }
 
 /// Setup Mise must enable the qualified built-in cache: `cache:true` with
