@@ -17,6 +17,12 @@ const SCRIPT: &str = ".github/scripts/save-mbx-single-bundle.sh";
 const ALLOWED: &[&str] = &[WORKFLOW, SCRIPT];
 const MAX_BYTES: u64 = 256 * 1024;
 
+/// Whether `path` is one of the two producer members.
+#[must_use]
+pub(crate) fn is_allowlisted_path(path: &str) -> bool {
+    ALLOWED.contains(&path)
+}
+
 /// Insert the allowlisted producer files when both are regular files.
 ///
 /// # Errors
@@ -210,6 +216,42 @@ mod tests {
         let err = append_allowlisted(&root, &mut tree).expect_err("parent symlink");
         assert!(err.to_string().contains("symlink_refused"), "{err}");
         assert!(tree.files.is_empty());
+    }
+
+    #[test]
+    fn producer_workflow_is_not_rust_profile_evidence() {
+        let root = scratch("evidence");
+        write_pair(
+            &root,
+            "name: MBX bundle producer\njobs:\n  produce:\n    steps:\n      - run: mbx build --locked\n      - run: mbx nextest run --profile ci\n",
+            "#!/usr/bin/env bash\necho ok\n",
+        );
+        let hand = ".github/workflows/hand.yml";
+        std::fs::write(
+            root.join(hand),
+            "name: hand\njobs:\n  t:\n    steps:\n      - run: mbx build --locked\n",
+        )
+        .expect("hand");
+        let files = vec![WORKFLOW.to_owned(), SCRIPT.to_owned(), hand.to_owned()];
+        let index =
+            velnor_actions_contract::build_index_from_list(&root, &files, &[]).expect("index");
+        let record = velnor_actions_rust::WorkspaceRecord {
+            workspace_root: String::new(),
+            members: Vec::new(),
+            packages: Vec::new(),
+            edges: Vec::new(),
+            skipped_edges: Vec::new(),
+        };
+        let outcome =
+            crate::evidence::profile_for_workspace(&root, &index, &record, None).expect("profile");
+        let paths: Vec<&str> = outcome
+            .profile
+            .evidence
+            .iter()
+            .map(|sighting| sighting.path.as_str())
+            .collect();
+        assert!(paths.iter().all(|path| *path != WORKFLOW), "{paths:?}");
+        assert!(paths.contains(&hand), "{paths:?}");
     }
 
     #[test]

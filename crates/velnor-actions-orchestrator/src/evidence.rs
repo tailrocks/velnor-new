@@ -201,10 +201,14 @@ fn collect_executables(root: &Path, index: &FileIndex) -> Vec<(String, String)> 
 }
 
 /// Collect handwritten workflow bytes, skipping generated output.
+///
+/// The allowlisted MBX producer workflow is not a Rust task input. Its
+/// `mbx` lines must not become profile evidence.
 fn collect_handwritten(root: &Path, index: &FileIndex) -> Vec<(String, String)> {
     let mut out = Vec::new();
     for path in index.files() {
         if is_workflow_path(path)
+            && !crate::mbx_producer_passthrough::is_allowlisted_path(path)
             && let Some(text) = read_optional(root, path)
             && !starts_generated(&text)
         {
