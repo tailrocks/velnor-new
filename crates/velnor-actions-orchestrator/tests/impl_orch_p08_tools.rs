@@ -48,14 +48,23 @@ fn assert_save_steps_are_push_gated(yaml: &str, tools_keys: usize) {
     assert_eq!(
         count_steps_with_gate(
             yaml,
-            &["Save Cargo sources", "Save Mise tools"],
+            &["Save Cargo sources"],
+            &["github.event_name == 'push'"]
+        ),
+        1,
+        "the sources save uses the canonical push-only gate:\n{yaml}"
+    );
+    assert_eq!(
+        count_steps_with_gate(
+            yaml,
+            &["Save Mise tools"],
             &[
                 "github.event_name == 'push'",
                 "github.event_name != 'workflow_dispatch'",
             ],
         ),
-        1 + tools_keys,
-        "cargo and tools saves are push-gated and denied before admission:\n{yaml}"
+        tools_keys,
+        "tools saves are push-gated and dispatch-denied:\n{yaml}"
     );
     assert_eq!(
         count_steps_with_gate(

@@ -191,6 +191,7 @@ fn preseed_attach_builds_once_and_sets_mode() {
     use velnor_actions_actionlint::ActionlintConfigInput;
     use velnor_actions_workflow_renderer::{
         MBX_PREFLIGHT_NAME, MBX_VERSION_CHECK_NAME, PRESEED_BUILD_NAME, PRESEED_STAGE_NAME,
+        steps::MBX_RESTORE_NAME,
     };
     let catalog = ToolCatalog::pinned();
     let mut plan = WorkflowPlan {
@@ -342,11 +343,11 @@ fn preseed_fixture(fetch_roots: &[String]) -> WorkflowPlan {
 }
 
 /// Assert one plan step runs under the owned fetch homes.
-fn assert_owned_homes(steps: &[Step], name: &str) {
+fn assert_owned_homes(steps: &[Step], role: velnor_actions_contract::StepRole, name: &str) {
     let step = steps
         .iter()
-        .find(|step| step.name == name)
-        .unwrap_or_else(|| panic!("missing {name}"));
+        .find(|step| step.role == Some(role))
+        .unwrap_or_else(|| panic!("missing {role:?} ({name})"));
     let velnor_actions_contract::StepKind::Shell { env, .. } = &step.kind else {
         panic!("{name} must be a shell step");
     };
@@ -357,5 +358,6 @@ fn assert_owned_homes(steps: &[Step], name: &str) {
 
 #[path = "attach_mbx_tests.rs"]
 mod mbx_tests;
+
 #[path = "attach_source_cache_tests.rs"]
 mod source_cache_tests;

@@ -6,7 +6,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Job, Step, StepKind};
+use velnor_actions_contract::{Job, Step, StepKind, StepRole};
 
 use crate::yaml::Yaml;
 use crate::{RenderError, cache_p08::MiseToolsCacheKey};
@@ -38,7 +38,7 @@ pub(crate) fn tool_seed_action_script(seed_root: &str) -> Result<String, RenderE
 
 fn copy_script(seed_root: &str, key_shell: &str, guard: &str) -> String {
     format!(
-        r#"set -euo pipefail; {guard}; seed="{seed_root}"; key={key_shell}; if [ ! -e "$seed" ]; then echo "tool seed absent"; exit 0; fi; if ! trusted_seed_is_trusted "$seed"; then echo "untrusted tool seed; continuing cold"; exit 0; fi; if [ -z "$key" ] || [ ! -f "$seed/mise/KEY" ]; then echo "tool seed key mismatch"; exit 0; fi; if ! trusted_seed_file_matches "$seed/mise/KEY" "$key"; then echo "tool seed key mismatch"; exit 0; fi; if [ -d "$seed/mise/tree" ]; then /bin/mkdir -p "$HOME/.local/share/mise"; /bin/cp -R "$seed/mise/tree/." "$HOME/.local/share/mise/"; echo "tool seed restored share-dir"; fi; if [ -d "$seed/rustup/tree" ]; then /bin/mkdir -p "$RUNNER_TEMP/velnor/rustup"; /bin/cp -R "$seed/rustup/tree/." "$RUNNER_TEMP/velnor/rustup/"; echo "tool seed restored toolchain-dir"; fi"#
+        r#"set -euo pipefail; seed="{seed_root}"; key={key_shell}; if [ -z "$key" ]; then echo "tool seed disabled"; exit 0; fi; {guard}; if [ ! -e "$seed" ]; then echo "tool seed absent"; exit 0; fi; if ! trusted_seed_is_trusted "$seed"; then echo "untrusted tool seed; continuing cold"; exit 0; fi; if [ ! -f "$seed/mise/KEY" ] || ! trusted_seed_file_matches "$seed/mise/KEY" "$key"; then echo "tool seed key mismatch"; exit 0; fi; if [ -d "$seed/mise/tree" ]; then /bin/mkdir -p "$HOME/.local/share/mise"; /bin/cp -R "$seed/mise/tree/." "$HOME/.local/share/mise/"; echo "tool seed restored share-dir"; fi; if [ -d "$seed/rustup/tree" ]; then /bin/mkdir -p "$RUNNER_TEMP/velnor/rustup"; /bin/cp -R "$seed/rustup/tree/." "$RUNNER_TEMP/velnor/rustup/"; echo "tool seed restored toolchain-dir"; fi"#
     )
 }
 
@@ -95,15 +95,7 @@ fn checkout_before(job: &Job, setup_index: usize, checkout_uses: &str) -> Option
 }
 
 pub(crate) fn is_configured_checkout(step: &Step, expected_uses: &str) -> bool {
-    step.condition.is_none()
-        && matches!(
-            &step.kind,
-            StepKind::Action { uses, with, env }
-                if uses == expected_uses
-                    && with.len() == 1
-                    && with.get("persist-credentials").is_some_and(|value| value == "false")
-                    && env.is_empty()
-        )
+    velnor_actions_contract::workflow::step_identity::is_configured_checkout(step, expected_uses)
 }
 
 pub(crate) fn reject_orphan_seed(job_id: &str, job: &Job) -> Result<(), RenderError> {
@@ -125,10 +117,8 @@ fn seed_indices(job: &Job) -> Vec<usize> {
 }
 
 fn is_tool_seed_action(step: &Step) -> bool {
-    matches!(
-        &step.kind,
-        StepKind::Action { uses, .. } if uses == TOOL_SEED_USES
-    )
+    step.role == Some(StepRole::ToolSeed)
+        && matches!(&step.kind, StepKind::Action { uses, .. } if uses == TOOL_SEED_USES)
 }
 
 pub(crate) fn validate_seed_action(
@@ -141,14 +131,16 @@ pub(crate) fn validate_seed_action(
         ));
     };
     let key = with.get("cache_key");
-    let condition_ok = step.condition.is_none()
-        || step.condition.as_deref() == Some(crate::dispatch_cache_boundary::DISPATCH_DENY);
+    let key_ok = key.is_some_and(|value| is_guarded_seed_key(value));
+    let expected_key_ok = expected_key
+        .is_none_or(|expected| key.is_some_and(|value| value == &guarded_seed_key(expected)));
     if uses != TOOL_SEED_USES
-        || !condition_ok
+        || step.role != Some(StepRole::ToolSeed)
+        || step.condition.is_some()
         || !env.is_empty()
         || with.len() != 1
-        || key.is_none_or(|value| !crate::cache_p08::is_cache_key(value))
-        || expected_key.is_some_and(|expected| key.map(String::as_str) != Some(expected))
+        || !key_ok
+        || !expected_key_ok
     {
         return Err(RenderError::InvalidWorkflow(
             "tool_seed_bad_payload".to_owned(),
@@ -158,11 +150,36 @@ pub(crate) fn validate_seed_action(
 }
 
 fn seed_step(cache_key: &MiseToolsCacheKey) -> Result<Step, RenderError> {
-    crate::steps::action_step(
+    let mut step = crate::steps::action_step(
         TOOL_SEED_NAME,
         TOOL_SEED_USES,
-        BTreeMap::from([("cache_key".to_owned(), cache_key.as_str().to_owned())]),
-    )
+        BTreeMap::from([("cache_key".to_owned(), guarded_seed_key(cache_key.as_str()))]),
+    )?;
+    step.role = Some(StepRole::ToolSeed);
+    Ok(step)
+}
+
+pub(crate) fn guarded_seed_key(key: &str) -> String {
+    format!("${{{{ github.event_name != 'workflow_dispatch' && '{key}' || '' }}}}")
+}
+
+pub(crate) fn is_guarded_seed_key(value: &str) -> bool {
+    const PREFIX: &str = "${{ github.event_name != 'workflow_dispatch' && '";
+    const SUFFIX: &str = "' || '' }}";
+    value
+        .strip_prefix(PREFIX)
+        .and_then(|value| value.strip_suffix(SUFFIX))
+        .is_some_and(crate::cache_p08::is_cache_key)
+}
+
+/// True only for the seed composite's single guarded key input.
+pub(crate) fn is_guarded_seed_key_input(
+    uses: &str,
+    with: &BTreeMap<String, String>,
+    key: &str,
+    value: &str,
+) -> bool {
+    uses == TOOL_SEED_USES && with.len() == 1 && key == "cache_key" && is_guarded_seed_key(value)
 }
 
 /// True when any job renders the tool-seed step.

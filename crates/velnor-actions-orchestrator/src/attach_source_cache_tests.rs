@@ -1,4 +1,5 @@
 use super::*;
+use velnor_actions_workflow_renderer::steps::MBX_RESTORE_NAME;
 
 #[test]
 fn cargo_only_preseed_replaces_registry_cache_and_uses_native_helper_owner() {
@@ -64,6 +65,14 @@ fn cargo_only_preseed_replaces_registry_cache_and_uses_native_helper_owner() {
         1,
         "the preseed helper installs MBX once"
     );
-    assert_owned_homes(steps, PRESEED_BUILD_NAME);
-    assert_owned_homes(steps, PRESEED_VERIFY_NAME);
+    assert_owned_homes(
+        steps,
+        velnor_actions_contract::StepRole::PreseedBuild,
+        PRESEED_BUILD_NAME,
+    );
+    assert_owned_homes(
+        steps,
+        velnor_actions_contract::StepRole::PreseedVerifyBuild,
+        PRESEED_VERIFY_NAME,
+    );
 }

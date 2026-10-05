@@ -2,14 +2,13 @@
 
 use std::collections::BTreeMap;
 use velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION;
-use velnor_actions_contract::{Job, JobTimeout, Step, StepKind};
+use velnor_actions_contract::{Job, JobTimeout, Step, StepId, StepKind, StepRole};
 use velnor_actions_workflow_renderer::RenderError;
 use velnor_actions_workflow_renderer::cache_p08::{
     ToolsCacheInputs, ToolsCachePayload, elect_tofu_provider_savers, elect_tools_cache_writers,
 };
 use velnor_actions_workflow_renderer::steps::{
-    TOOLS_CACHE_PATHS, TOOLS_RESTORE_NAME, TOOLS_RESTORE_USES, TOOLS_SAVE_NAME, TOOLS_SAVE_USES,
-    cache_action_step,
+    TOOLS_CACHE_PATHS, TOOLS_RESTORE_NAME, TOOLS_SAVE_NAME, TOOLS_SAVE_USES,
 };
 use velnor_actions_workflow_renderer::tofu_cache::{
     TOFU_PROVIDERS_SAVE_NAME, TOFU_PROVIDERS_SAVE_USES,
@@ -174,14 +173,21 @@ fn provider_saves(job: &Job) -> Vec<&Step> {
 
 /// One provider-restore job over an explicit key + path.
 fn provider_job(key: &str, path: &str) -> Result<Job, RenderError> {
-    let restore = cache_action_step(
-        true,
-        TOOLS_RESTORE_USES,
-        "tofu-providers",
-        key,
-        &[],
-        &[path.to_owned()],
-    )?;
+    let restore = Step {
+        name: "Provider cache admission".to_owned(),
+        id: Some(StepId::TofuProviders),
+        role: Some(StepRole::TofuProvidersRestore),
+        condition: None,
+        kind: StepKind::Action {
+            uses: velnor_actions_contract::workflow::step_identity::TOFU_PROVIDER_ADMISSION_USES
+                .to_owned(),
+            with: BTreeMap::from([
+                ("cache-key".to_owned(), key.to_owned()),
+                ("cache-path".to_owned(), path.to_owned()),
+            ]),
+            env: BTreeMap::new(),
+        },
+    };
     Ok(Job {
         display_name: "Provider".to_owned(),
         runs_on: LABEL.to_owned(),
@@ -241,13 +247,13 @@ fn provider_writer_election_elects_lowest_id_per_key() -> Result<(), RenderError
     elect_tofu_provider_savers(&mut jobs)?;
     assert_eq!(
         provider_saved_key(&jobs["tofu-a"]),
-        Some(PROVIDER_KEY_A),
+        Some(velnor_actions_contract::workflow::step_identity::TOFU_PROVIDERS_KEY_OUTPUT_EXPR),
         "lowest id wins the shared key"
     );
     assert!(provider_saves(&jobs["tofu-b"]).is_empty());
     assert_eq!(
         provider_saved_key(&jobs["tofu-c"]),
-        Some(PROVIDER_KEY_B),
+        Some(velnor_actions_contract::workflow::step_identity::TOFU_PROVIDERS_KEY_OUTPUT_EXPR),
         "sole owner keeps its writer"
     );
     assert!(
@@ -272,8 +278,14 @@ fn provider_writer_election_saves_push_gated_exact_entry() -> Result<(), RenderE
         panic!("save must be an action step");
     };
     assert_eq!(uses, TOFU_PROVIDERS_SAVE_USES);
-    assert_eq!(with.get("key").map(String::as_str), Some(PROVIDER_KEY_A));
-    assert_eq!(with.get("path").map(String::as_str), Some(PROVIDER_PATH_A));
+    assert_eq!(
+        with.get("key").map(String::as_str),
+        Some(velnor_actions_contract::workflow::step_identity::TOFU_PROVIDERS_KEY_OUTPUT_EXPR)
+    );
+    assert_eq!(
+        with.get("path").map(String::as_str),
+        Some(velnor_actions_contract::workflow::step_identity::TOFU_PROVIDERS_PATH_OUTPUT_EXPR)
+    );
     assert!(
         !with.contains_key("restore-keys"),
         "saves carry no restore keys"

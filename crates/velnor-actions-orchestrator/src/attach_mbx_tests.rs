@@ -1,4 +1,6 @@
 use super::*;
+use velnor_actions_workflow_renderer::cache_p08::RESTORE_SOURCES_NAME;
+use velnor_actions_workflow_renderer::steps::MBX_RESTORE_NAME;
 
 #[test]
 fn preseed_restores_mbx_builds_after_sources_with_homes() {
@@ -37,7 +39,11 @@ fn preseed_restores_mbx_builds_after_sources_with_homes() {
             && verify < save,
         "preseed order: {names:?}"
     );
-    assert_owned_homes(steps, MBX_PREFLIGHT_NAME);
+    assert_owned_homes(
+        steps,
+        velnor_actions_contract::StepRole::MbxPreflight,
+        MBX_PREFLIGHT_NAME,
+    );
     let mbx_action = steps
         .iter()
         .find(|step| step.name == MBX_RESTORE_NAME)
@@ -49,8 +55,16 @@ fn preseed_restores_mbx_builds_after_sources_with_homes() {
     assert_eq!(with.get("version").map(String::as_str), Some("1.21.1"));
     assert_eq!(env.get("RUSTUP_HOME"), env.get("MISE_RUSTUP_HOME"));
     assert_eq!(env.get("CARGO_HOME"), env.get("MISE_CARGO_HOME"));
-    assert_owned_homes(steps, PRESEED_BUILD_NAME);
-    assert_owned_homes(steps, PRESEED_VERIFY_NAME);
+    assert_owned_homes(
+        steps,
+        velnor_actions_contract::StepRole::PreseedBuild,
+        PRESEED_BUILD_NAME,
+    );
+    assert_owned_homes(
+        steps,
+        velnor_actions_contract::StepRole::PreseedVerifyBuild,
+        PRESEED_VERIFY_NAME,
+    );
 }
 
 #[test]
@@ -98,8 +112,16 @@ fn lockless_preseed_installs_mbx_before_the_build_without_a_restore() {
             .count(),
         1
     );
-    assert_owned_homes(steps, MBX_PREFLIGHT_NAME);
-    assert_owned_homes(steps, PRESEED_BUILD_NAME);
+    assert_owned_homes(
+        steps,
+        velnor_actions_contract::StepRole::MbxPreflight,
+        MBX_PREFLIGHT_NAME,
+    );
+    assert_owned_homes(
+        steps,
+        velnor_actions_contract::StepRole::PreseedBuild,
+        PRESEED_BUILD_NAME,
+    );
 }
 
 #[test]

@@ -317,9 +317,9 @@ fn render_merged(
     let identity_lanes: BTreeSet<String> = jobs
         .values()
         .filter(|job| {
-            job.steps
-                .iter()
-                .any(|step| step.name == cache_p08::TOOLS_CACHE_IDENTITY_NAME)
+            job.steps.iter().any(|step| {
+                step.role == Some(velnor_actions_contract::StepRole::ToolsCacheIdentity)
+            })
         })
         .map(|job| job.runs_on.clone())
         .collect();
@@ -331,7 +331,6 @@ fn render_merged(
         matrix::attach_plan_outputs(&mut document)?;
     }
     matrix::attach_crate_job_caps(&mut document, &caps)?;
-    matrix::insert_publish_step_id(&mut document)?;
     let document = crate::yaml::quote_run_values_in_yaml(document);
     let text = marker::with_marker(&ctx.generator_version, &render_yaml(&document))?;
     crate::workflow_size::check_workflow_size(WORKFLOW_PATH, &text)?;

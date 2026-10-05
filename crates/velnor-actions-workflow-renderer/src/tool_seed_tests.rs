@@ -150,7 +150,7 @@ fn step_key_is_derived_from_pinned_job_tools_and_configured_checkout_payload() {
     };
     assert_eq!(
         with.get("cache_key").map(String::as_str),
-        Some(expected.as_str())
+        Some(crate::tool_seed::guarded_seed_key(&expected).as_str())
     );
     assert_eq!(rendered_job.steps[2].name, "V2 identity");
     assert_eq!(rendered_job.steps[4].name, "Setup Mise");
@@ -161,6 +161,8 @@ fn step_key_is_derived_from_pinned_job_tools_and_configured_checkout_payload() {
 
     let fake = Step {
         name: "Checkout".to_owned(),
+        id: None,
+        role: None,
         condition: None,
         kind: StepKind::Shell {
             run: vec!["true".to_owned()],
@@ -191,6 +193,8 @@ fn setup_config() -> crate::MiseSetup {
 fn mise_shell() -> Step {
     Step {
         name: "Run Cargo".to_owned(),
+        id: None,
+        role: None,
         condition: None,
         kind: StepKind::Shell {
             run: vec![

@@ -81,6 +81,8 @@ const WITH_EXPRESSIONS: &[&str] = &[
     "github.event_name == 'push'",
     "steps.publish-baseline.outputs.artifact_name",
     "steps.v2.outputs.identity",
+    "steps.tofu-providers.outputs.cache-key",
+    "steps.tofu-providers.outputs.cache-path",
 ];
 
 /// True for a `matrix.*` field reference (both layers allow the family).

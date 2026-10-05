@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 use std::ffi::OsString;
 
 use velnor_actions_contract::workflow::permissions::PermissionLevel;
-use velnor_actions_contract::{Job, JobTimeout, Permissions, Step};
+use velnor_actions_contract::{Job, JobTimeout, Permissions, Step, StepRole};
 use velnor_actions_mise::{
     PREPARE_PINNED_TOOLS_STEP, PinnedTool, PinnedToolExec, PreparePinnedTools, ToolCatalog,
     ToolHomes,
@@ -255,10 +255,13 @@ fn prepare_pinned_tools_step(
         strings_of_env(&prepare.env_without_homes())
     }
     .map_err(|problem| OrchestratorError::Contract { problem })?;
-    velnor_actions_workflow_renderer::ambient_shell_step(PREPARE_PINNED_TOOLS_STEP, run, env)
-        .map_err(|err| OrchestratorError::Contract {
+    let mut step =
+        velnor_actions_workflow_renderer::ambient_shell_step(PREPARE_PINNED_TOOLS_STEP, run, env)
+            .map_err(|err| OrchestratorError::Contract {
             problem: err.to_string(),
-        })
+        })?;
+    step.role = Some(StepRole::PreparePinnedTools);
+    Ok(step)
 }
 
 /// Typed write-request step for one internal target, mapped to contract errors.

@@ -33,6 +33,8 @@ mod impl_renderer_mbx_action;
 mod impl_renderer_mbx_gc_policy;
 #[path = "impl_renderer_mbx_native_owner.rs"]
 mod impl_renderer_mbx_native_owner;
+#[path = "impl_renderer_mbx_order.rs"]
+mod impl_renderer_mbx_order;
 #[path = "impl_renderer_mbx_preflight.rs"]
 mod impl_renderer_mbx_preflight;
 #[path = "impl_renderer_mbx_selector.rs"]
@@ -47,6 +49,8 @@ mod impl_renderer_overlap;
 mod impl_renderer_p08;
 #[path = "impl_renderer_p08_elect.rs"]
 mod impl_renderer_p08_elect;
+#[path = "impl_renderer_p08_tofu_elect.rs"]
+mod impl_renderer_p08_tofu_elect;
 #[path = "impl_renderer_planclose.rs"]
 mod impl_renderer_planclose;
 #[path = "impl_renderer_planformat.rs"]

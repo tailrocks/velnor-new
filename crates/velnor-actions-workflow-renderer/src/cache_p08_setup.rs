@@ -104,25 +104,26 @@ fn insert_tools_cache(
     setup_index: usize,
 ) -> Result<(), RenderError> {
     let rust_version = specs.iter().find_map(|spec| spec.strip_prefix("rust@"));
-    let components = if let Some(version) = rust_version {
-        job.steps
-            .iter()
-            .find(|step| step.name == "Prepare Rust components")
-            .map(|step| cache_p08::rust_components(step, version, target))
-            .transpose()?
-            .unwrap_or_default()
-    } else {
-        if job
-            .steps
-            .iter()
-            .any(|step| step.name == "Prepare Rust components")
-        {
-            return Err(RenderError::InvalidWorkflow(format!(
-                "rust_components_without_toolchain:{job_id}"
-            )));
-        }
-        Vec::new()
-    };
+    let components =
+        if let Some(version) = rust_version {
+            job.steps
+                .iter()
+                .find(|step| {
+                    step.role == Some(velnor_actions_contract::StepRole::PrepareRustComponents)
+                })
+                .map(|step| cache_p08::rust_components(step, version, target))
+                .transpose()?
+                .unwrap_or_default()
+        } else {
+            if job.steps.iter().any(|step| {
+                step.role == Some(velnor_actions_contract::StepRole::PrepareRustComponents)
+            }) {
+                return Err(RenderError::InvalidWorkflow(format!(
+                    "rust_components_without_toolchain:{job_id}"
+                )));
+            }
+            Vec::new()
+        };
     let payload = cache_p08::ToolsCachePayload::new(ToolsCacheInputs {
         runs_on: &job.runs_on,
         target,
@@ -142,14 +143,14 @@ fn insert_tools_cache(
 }
 
 fn reject_v2_steps(job_id: &str, job: &Job) -> Result<(), RenderError> {
-    for name in [
-        cache_p08::TOOLS_CACHE_IDENTITY_NAME,
-        crate::cache_steps::TOOLS_RESTORE_NAME,
-        crate::cache_steps::TOOLS_SAVE_NAME,
+    for role in [
+        velnor_actions_contract::StepRole::ToolsCacheIdentity,
+        velnor_actions_contract::StepRole::ToolsCacheRestore,
+        velnor_actions_contract::StepRole::ToolsCacheSave,
     ] {
-        if job.steps.iter().any(|step| step.name == name) {
+        if job.steps.iter().any(|step| step.role == Some(role)) {
             return Err(RenderError::InvalidWorkflow(format!(
-                "renderer_owned_tools_cache_step:{job_id}:{name}"
+                "renderer_owned_tools_cache_step:{job_id}:{role:?}"
             )));
         }
     }

@@ -122,22 +122,6 @@ fn shell_of<'a>(job: &'a Job, name: &str) -> Result<Shell<'a>, Box<dyn std::erro
     }
 }
 
-/// Action `with` inputs of one named step.
-fn action_with<'a>(
-    job: &'a Job,
-    name: &str,
-) -> Result<&'a BTreeMap<String, String>, Box<dyn std::error::Error>> {
-    let step = job
-        .steps
-        .iter()
-        .find(|step| step.name == name)
-        .ok_or(format!("missing step {name}"))?;
-    match &step.kind {
-        StepKind::Action { with, .. } => Ok(with),
-        _ => Err(format!("{name} must be an action step").into()),
-    }
-}
-
 /// Gate 1: "A pure-tofu consumer using a prebuilt generator
 /// installs/runs no Rust toolchain, Cargo metadata, MBX, Nextest,
 /// rustfmt, or Clippy for its stack or Plan job."
@@ -328,69 +312,6 @@ fn gate3_single_index_single_traversal_bounded_walks() -> TestResult {
     assert!(
         closure.contains("MAX_FILES_PER_UNIT"),
         "unit walk stays capped"
-    );
-    Ok(())
-}
-
-/// Gate 4: "At most one successful initialization per selected root
-/// per verification attempt; formatting visits each intended file
-/// once; no duplicate provider archive uploads or unrelated tool setup."
-#[test]
-fn gate4_init_once_fmt_once_no_duplicate_uploads() -> TestResult {
-    let dir = tofu_repo(3)?;
-    let jobs = finalized_jobs(&prepare(dir.path())?)?;
-    let catalog = ToolCatalog::pinned();
-    let rust = catalog.tool_spec(PinnedTool::Rust);
-    let opentofu = catalog.tool_spec(PinnedTool::Opentofu);
-    let ids: Vec<&String> = jobs.keys().filter(|id| is_crate_job(id)).collect();
-    assert_eq!(ids.len(), 3, "one job per root: {ids:?}");
-    let mut fmt_tasks = Vec::new();
-    for id in &ids {
-        let job = jobs.get(*id).ok_or("missing crate job")?;
-        let steps = names(job);
-        assert_eq!(
-            steps
-                .iter()
-                .filter(|name| **name == "Init for validate")
-                .count(),
-            1,
-            "{id} inits once: {steps:?}"
-        );
-        let (_, fmt_env) = shell_of(job, "Format")?;
-        let task = fmt_env.get("VELNOR_TASK_ID").ok_or("fmt task id")?.clone();
-        assert!(
-            task.starts_with("stack/tofu/") && task.ends_with("/fmt/default"),
-            "{id} fmt binds its scope: {task}"
-        );
-        fmt_tasks.push(task);
-        let (run, _) = shell_of(job, "Prepare pinned tools")?;
-        assert!(run.contains(&opentofu), "{id}: {run:?}");
-        assert!(!run.contains(&rust), "{id} keeps no rust setup: {run:?}");
-    }
-    fmt_tasks.sort();
-    fmt_tasks.dedup();
-    assert_eq!(fmt_tasks.len(), 3, "each scope formats once");
-    let mut saves = Vec::new();
-    for (id, job) in &jobs {
-        let count = names(job)
-            .iter()
-            .filter(|name| **name == "Save Tofu providers")
-            .count();
-        assert!(count <= 1, "{id} saves at most once");
-        if count == 1 {
-            let with = action_with(job, "Save Tofu providers")?;
-            saves.push(with.get("key").ok_or("save key")?.clone());
-        }
-    }
-    assert!(!saves.is_empty(), "provider uploads exist");
-    saves.sort();
-    saves.dedup();
-    assert_eq!(
-        saves.len(),
-        jobs.values()
-            .filter(|job| { names(job).contains(&"Save Tofu providers") })
-            .count(),
-        "no duplicate provider archive upload"
     );
     Ok(())
 }

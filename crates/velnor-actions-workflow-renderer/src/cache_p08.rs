@@ -72,12 +72,15 @@ pub fn check_no_legacy_rust_cache(job_id: &str, job: &Job) -> Result<(), RenderE
 /// Require MBX object restore before every Cargo source fetch step.
 /// # Errors
 pub fn check_mbx_before_fetch(job_id: &str, job: &Job) -> Result<(), RenderError> {
-    let at = |name: &str| job.steps.iter().position(|step| step.name == name);
     let fetch = job
         .steps
         .iter()
-        .position(|step| step.name.starts_with("Fetch Cargo sources"));
-    if let (Some(mbx), Some(fetch_at)) = (at("Restore MBX objects"), fetch)
+        .position(|step| step.role == Some(velnor_actions_contract::StepRole::CargoSourcesFetch));
+    let mbx = job
+        .steps
+        .iter()
+        .position(|step| step.role == Some(velnor_actions_contract::StepRole::MbxCache));
+    if let (Some(mbx), Some(fetch_at)) = (mbx, fetch)
         && fetch_at < mbx
     {
         return Err(RenderError::InvalidWorkflow(format!(

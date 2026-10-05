@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::workflow::permissions::PermissionLevel;
-use velnor_actions_contract::{Permissions, WorkflowPolicy};
+use velnor_actions_contract::{Permissions, StepRole, WorkflowPolicy};
 use velnor_actions_workflow_renderer::{
     RenderError, ambient_shell_step, checkout_step, merge_step, plan_step, render_workflow_ir,
     shell_step,
@@ -38,6 +38,8 @@ fn token_hygiene_scopes_gh_token_to_plan() -> Result<(), RenderError> {
             checkout_step(&checkout_pin())?,
             Step {
                 name: "Plan".to_owned(),
+                id: None,
+                role: None,
                 condition: None,
                 kind: StepKind::Shell {
                     run: vec!["true".to_owned()],
@@ -69,6 +71,8 @@ fn token_hygiene_scopes_gh_token_to_plan() -> Result<(), RenderError> {
             checkout_step(&checkout_pin())?,
             Step {
                 name: "Leak".to_owned(),
+                id: None,
+                role: None,
                 condition: None,
                 kind: StepKind::Shell {
                     run: vec!["true".to_owned()],
@@ -135,6 +139,8 @@ fn token_hygiene_rejects_prints_and_task_tokens() -> Result<(), RenderError> {
         vec!["plan".to_owned()],
         vec![velnor_actions_contract::Step {
             name: "Run task".to_owned(),
+            id: None,
+            role: None,
             condition: None,
             kind: velnor_actions_contract::StepKind::Shell {
                 run: vec!["true".to_owned()],
@@ -198,6 +204,8 @@ fn token_hygiene_constructor_owns_overlay_and_rejects_all_nine_keys() -> Result<
             vec!["plan".to_owned()],
             vec![Step {
                 name: "Run task".to_owned(),
+                id: None,
+                role: None,
                 condition: None,
                 kind: StepKind::Shell {
                     run: vec!["true".to_owned()],
@@ -235,6 +243,8 @@ fn scrub_coverage_rejects_bare_and_partial_shell_env() -> Result<(), RenderError
                 checkout_step(&checkout_pin())?,
                 Step {
                     name: "Run task".to_owned(),
+                    id: None,
+                    role: None,
                     condition: None,
                     kind: StepKind::Shell {
                         run: vec!["true".to_owned()],
@@ -261,26 +271,22 @@ fn scrub_coverage_rejects_bare_and_partial_shell_env() -> Result<(), RenderError
 
 #[test]
 fn scrub_coverage_allows_ambient_auth_steps_and_release() -> Result<(), RenderError> {
-    use velnor_actions_workflow_renderer::steps::DENY_STEP_NAME;
-    // Ambient constructor (no scrub overlay): the gate must exempt by
-    // allowlisted name, or these fail. A scrubbed step would pass
-    // without touching the allowlist, proving nothing.
-    for name in [
-        "Prepare pinned tools",
-        "Prepare Rust components",
-        "Fetch Cargo sources",
-        "Fetch Cargo sources (nested/Cargo.toml)",
-        DENY_STEP_NAME,
+    // Ambient constructor (no scrub overlay): only the typed owner role
+    // grants its narrow network-auth exception; labels are presentation.
+    for (name, role) in [
+        ("Renamed pinned tools", StepRole::PreparePinnedTools),
+        ("Renamed Rust setup", StepRole::PrepareRustComponents),
+        ("Renamed MBX setup", StepRole::MbxPreflight),
+        ("Renamed source fetch", StepRole::CargoSourcesFetch),
+        ("Renamed cargo-deny", StepRole::CargoDeny),
     ] {
+        let mut ambient = ambient_shell_step(name, vec!["true".to_owned()], BTreeMap::new())?;
+        ambient.role = Some(role);
         let allowed = job(
             "plan",
             "Plan",
             Vec::new(),
-            vec![
-                checkout_step(&checkout_pin())?,
-                ambient_shell_step(name, vec!["true".to_owned()], BTreeMap::new())?,
-                plan_step(),
-            ],
+            vec![checkout_step(&checkout_pin())?, ambient, plan_step()],
         );
         render_workflow_ir(
             &fixture_ir(vec![allowed]),

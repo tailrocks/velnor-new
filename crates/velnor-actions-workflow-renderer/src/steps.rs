@@ -4,9 +4,13 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Step, StepKind};
+use velnor_actions_contract::{Step, StepKind, StepRole};
 
 use crate::{RenderError, commands, marker};
+
+#[path = "steps_action.rs"]
+mod action;
+pub use action::{action_step, action_step_with_env};
 
 pub(crate) use crate::cache_steps::tools_cache_step;
 pub use crate::cache_steps::{
@@ -124,58 +128,9 @@ pub fn checkout_step(uses: &str) -> Result<Step, RenderError> {
         return Err(RenderError::BadActionRef(format!("not_checkout:{uses}")));
     }
     let with = BTreeMap::from([("persist-credentials".to_owned(), "false".to_owned())]);
-    action_step("Checkout", uses, with)
-}
-
-/// Validated pinned-action step.
-///
-/// Names share the step-name gate (no expressions); `with:` keys never
-/// carry expressions and values only allowlisted runner spans.
-/// # Errors
-pub fn action_step(
-    name: &str,
-    uses: &str,
-    with: BTreeMap<String, String>,
-) -> Result<Step, RenderError> {
-    action_step_with_env(name, uses, with, BTreeMap::new())
-}
-
-/// Validated action step with step-level environment.
-///
-/// Same gates as [`action_step`]; `env` renders as the step's `env:`
-/// map and applies to the action's main and post phases alike, which
-/// is what lets a cache mode gate the post-step save while the
-/// restore still runs on every event.
-/// # Errors
-pub fn action_step_with_env(
-    name: &str,
-    uses: &str,
-    with: BTreeMap<String, String>,
-    env: BTreeMap<String, String>,
-) -> Result<Step, RenderError> {
-    if name.trim().is_empty() {
-        return Err(RenderError::BadActionRef("empty_name".to_owned()));
-    }
-    crate::expressions::check_name_content(name)?;
-    validate_uses(uses)?;
-    scan_for_private_subcommands(name)?;
-    scan_for_private_subcommands(uses)?;
-    for (key, value) in &with {
-        crate::expressions::check_with_key(key)?;
-        crate::expressions::check_with_value(key, value)?;
-        scan_for_private_subcommands(key)?;
-        scan_for_private_subcommands(value)?;
-    }
-    crate::commands::validate_env(&env)?;
-    Ok(Step {
-        name: name.to_owned(),
-        condition: None,
-        kind: StepKind::Action {
-            uses: uses.to_owned(),
-            with,
-            env,
-        },
-    })
+    let mut step = action_step("Checkout", uses, with)?;
+    step.role = Some(StepRole::Checkout);
+    Ok(step)
 }
 
 /// Validated fixed-argv shell step, scrubbed and unset by construction.
@@ -242,6 +197,8 @@ fn shell_step_with_env_validation(
     env_map.extend(crate::toolchain_env::credential_scrub());
     Ok(Step {
         name: name.to_owned(),
+        id: None,
+        role: None,
         condition: None,
         kind: StepKind::Shell { run, env: env_map },
     })
@@ -272,6 +229,8 @@ pub fn ambient_shell_step(
     scan_for_private_subcommands(name)?;
     Ok(Step {
         name: name.to_owned(),
+        id: None,
+        role: None,
         condition: None,
         kind: StepKind::Shell { run: argv, env },
     })
@@ -370,7 +329,9 @@ pub fn acquire_velnor_step(
     if !downloads || !verifies {
         return Err(RenderError::BadCommand("acquire_without_verify".to_owned()));
     }
-    shell_step(ACQUIRE_NAME, argv, env.clone())
+    let mut step = shell_step(ACQUIRE_NAME, argv, env.clone())?;
+    step.role = Some(StepRole::AcquireVelnor);
+    Ok(step)
 }
 
 /// Target-directory prefix isolating one lane.

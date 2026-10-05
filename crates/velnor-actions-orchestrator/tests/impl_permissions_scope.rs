@@ -2,7 +2,8 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::workflow::ir::{Job, StepKind};
+use velnor_actions_contract::workflow::StepKind;
+use velnor_actions_contract::workflow::ir::Job;
 use velnor_actions_contract::workflow::permissions::PermissionLevel;
 use velnor_actions_orchestrator::{
     GenerationPreparation, finalized_jobs, prepare, render_staged_tree,
