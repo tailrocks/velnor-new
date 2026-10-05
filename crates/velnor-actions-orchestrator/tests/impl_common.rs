@@ -113,26 +113,25 @@ pub(crate) type Snapshot = BTreeMap<String, (Vec<u8>, SystemTime)>;
 /// as consumer provenance. Every fixture repo carries it so consumer
 /// `prepare` succeeds.
 pub(crate) fn fixture_manifest_json() -> String {
+    let version = env!("CARGO_PKG_VERSION");
     let targets = velnor_actions_contract::SUPPORTED_TARGETS
     .iter()
     .map(|target| {
         format!(
-            "{{\"target\":\"{target}\",\"artifact\":\"https://github.com/tailrocks/velnor-new/releases/download/v0.1.0/velnor-actions-0.1.0-{target}\",\"sha256\":\"{}\"}}",
+            "{{\"target\":\"{target}\",\"artifact\":\"https://github.com/tailrocks/velnor-new/releases/download/v{version}/velnor-actions-{version}-{target}\",\"sha256\":\"{}\"}}",
             "a".repeat(64)
         )
     })
     .collect::<Vec<_>>()
     .join(",");
     format!(
-        "{{\"schema\":1,\"version\":\"0.1.0\",\"repository\":\"tailrocks/velnor-new\",\"commit\":\"{}\",\"targets\":[{targets}]}}",
+        "{{\"schema\":1,\"version\":\"{version}\",\"repository\":\"tailrocks/velnor-new\",\"commit\":\"{}\",\"targets\":[{targets}]}}",
         "a".repeat(40)
     )
 }
 
-/// Install the explicit test-only consumer manifest in a positive fixture.
-pub(crate) fn install_fixture_release_manifest(
-    root: &Path,
-) -> Result<(), Box<dyn std::error::Error>> {
+/// Install the explicit release-manifest fixture in a consumer test repo.
+pub(crate) fn install_fixture_release_manifest(root: &Path) -> TestResult {
     fs::write(
         root.join(".velnor/release-manifest.json"),
         fixture_manifest_json(),
@@ -150,10 +149,7 @@ pub(crate) fn make_repo(config: &str) -> Result<TempDir, Box<dyn std::error::Err
     git(&["config", "commit.gpgsign", "false"], root)?;
     fs::create_dir_all(root.join(".velnor"))?;
     fs::write(root.join(".velnor/config.toml"), config)?;
-    fs::write(
-        root.join(".velnor/release-manifest.json"),
-        fixture_manifest_json(),
-    )?;
+    install_fixture_release_manifest(root)?;
     fs::write(
         root.join("Cargo.toml"),
         "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",

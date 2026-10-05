@@ -27,7 +27,7 @@ fn generator_seed_hit_skips_curl_and_a_bad_hash_does_not_copy()
         acquire_script_argv(
             "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0",
             root_text,
-            ReleaseTarget::LinuxX86_64,
+            ReleaseTarget::LinuxX86_64
         )
         .is_ok()
     );
@@ -38,7 +38,7 @@ fn generator_seed_hit_skips_curl_and_a_bad_hash_does_not_copy()
     let staged = root.join("stage").join(name);
     let argv = acquire_script_argv(
         staged.to_str().ok_or("staged")?,
-        root.to_str().ok_or("root")?,
+        root_text,
         ReleaseTarget::LinuxX86_64,
     )?;
     let bin = root.join("bin");

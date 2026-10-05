@@ -38,7 +38,10 @@ fn tofu_obligations_order_fmt_init_validate() {
     assert!(obligation_rank(&fmt) < obligation_rank(&init));
     assert!(obligation_rank(&init) < obligation_rank(&validate));
     let clippy = crate_jobs_tests::group("demo", TaskKind::Clippy, &[]);
-    assert_eq!(obligation_rank(&clippy), task_kind_rank("clippy"));
+    assert_eq!(
+        obligation_rank(&clippy),
+        velnor_actions_rust::task_kind_rank("clippy")
+    );
     let tasks = vec![&validate, &fmt, &init];
     let obligations = obligations_for(&tasks, &ToolCatalog::pinned()).expect("obligations build");
     let kinds: Vec<&str> = obligations
