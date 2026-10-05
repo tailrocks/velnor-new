@@ -70,7 +70,7 @@ fn resolve_verification_tools(
     let rust = optional_source(checks, "rust-toolchain.toml")?;
     let mise = mise.ok_or_else(|| failure("verification_mise_config_missing"))?;
     let mut result = ResolvedVerificationTools {
-        mise_config_sha256: mise.map(|input| input.sha256.clone()),
+        mise_config_sha256: Some(mise.sha256.clone()),
         mise_lock_sha256: lock.map(|input| input.sha256.clone()),
         rust_toolchain_sha256: rust.map(|input| input.sha256.clone()),
         ..ResolvedVerificationTools::default()
