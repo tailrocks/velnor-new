@@ -60,6 +60,7 @@ async fn migrate_version_zero(conn: &turso::Connection) -> Result<(), HostError>
     .await
     .map_err(|_| HostError::Journal)?;
     ensure_legacy_columns(conn).await?;
+    validate_current_schema(conn).await?;
     conn.execute(
         "UPDATE intents SET state = CASE WHEN state = 'failed' THEN 'uncertain' ELSE state END, cleanup_proven = 0 WHERE kind = 'launch' AND state IN ('failed', 'pending', 'uncertain')",
         (),

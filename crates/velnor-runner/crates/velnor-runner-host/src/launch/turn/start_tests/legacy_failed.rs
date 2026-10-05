@@ -255,3 +255,71 @@ async fn failed_legacy_migration_rolls_back_schema_and_rows() -> Result<(), Stri
     );
     Ok(())
 }
+
+#[tokio::test]
+async fn malformed_unused_column_rolls_back_before_row_migration() -> Result<(), String> {
+    let scratch =
+        Scratch::new("legacy-missing-subject-column").map_err(|error| error.to_string())?;
+    let path = scratch.file();
+    let path_string = path
+        .to_str()
+        .ok_or_else(|| "malformed journal path is not UTF-8".to_owned())?;
+    let db = turso::Builder::new_local(path_string)
+        .build()
+        .await
+        .map_err(|error| error.to_string())?;
+    let connection = db.connect().map_err(|error| error.to_string())?;
+    connection
+        .execute(
+            "CREATE TABLE intents (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, state TEXT NOT NULL, docker_id TEXT, github_runner_id TEXT, cleanup_proven INTEGER NOT NULL DEFAULT 0)",
+            (),
+        )
+        .await
+        .map_err(|error| error.to_string())?;
+    connection
+        .execute(
+            "INSERT INTO intents (kind, state, cleanup_proven) VALUES ('launch', 'failed', 1)",
+            (),
+        )
+        .await
+        .map_err(|error| error.to_string())?;
+    drop(connection);
+    drop(db);
+
+    assert!(Journal::open(&path).await.is_err());
+    let db = turso::Builder::new_local(path_string)
+        .build()
+        .await
+        .map_err(|error| error.to_string())?;
+    let connection = db.connect().map_err(|error| error.to_string())?;
+    let mut columns = connection
+        .query("PRAGMA table_info(intents)", ())
+        .await
+        .map_err(|error| error.to_string())?;
+    let mut names = Vec::new();
+    while let Some(row) = columns.next().await.map_err(|error| error.to_string())? {
+        names.push(row.get::<String>(1).map_err(|error| error.to_string())?);
+    }
+    assert!(!names.iter().any(|name| name == "dind_id"));
+    assert!(!names.iter().any(|name| name == "worker_volume"));
+    assert!(!names.iter().any(|name| name == "subject"));
+    assert_eq!(read_user_version(&connection).await?, 0);
+    let mut rows = connection
+        .query(
+            "SELECT state, cleanup_proven FROM intents WHERE kind = 'launch'",
+            (),
+        )
+        .await
+        .map_err(|error| error.to_string())?;
+    let row = rows
+        .next()
+        .await
+        .map_err(|error| error.to_string())?
+        .ok_or_else(|| "malformed journal row disappeared".to_owned())?;
+    assert_eq!(
+        row.get::<String>(0).map_err(|error| error.to_string())?,
+        "failed"
+    );
+    assert_eq!(row.get::<i64>(1).map_err(|error| error.to_string())?, 1);
+    Ok(())
+}
