@@ -1,6 +1,6 @@
 use std::error::Error;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use super::super::GuestSampleSnapshot;
 use super::GuestSampleFailure;
@@ -70,6 +70,9 @@ async fn late_exit_inspection_cannot_overrun_the_probe_deadline() -> Result<(), 
 
 #[tokio::test]
 async fn total_attempt_deadline_bounds_multiple_slow_docker_calls() -> Result<(), Box<dyn Error>> {
+    let attempt_budget = Duration::from_millis(120);
+    let cleanup_reserve = Duration::from_millis(60);
+    let scheduling_tolerance = Duration::from_millis(50);
     let identity = identity()?;
     let client = Arc::new(FakeClient::new());
     client.state.lock().await.info_delay = Duration::from_millis(15);
@@ -78,15 +81,22 @@ async fn total_attempt_deadline_bounds_multiple_slow_docker_calls() -> Result<()
             operation: Duration::from_millis(25),
             probe_run: Duration::from_millis(50),
             cleanup: Duration::from_millis(25),
-            attempt: Duration::from_millis(120),
-            cleanup_reserve: Duration::from_millis(60),
+            attempt: attempt_budget,
+            cleanup_reserve,
             create_reconcile: Duration::from_millis(40),
             exit_poll: Duration::from_millis(1),
         });
 
+    let started = Instant::now();
     let snapshot = sampler.sample_once().await;
+    let elapsed = started.elapsed();
 
     assert!(unavailable(snapshot, GuestSampleFailure::Timeout));
+    // The attempt budget includes reserved cleanup time; allow only scheduler jitter.
+    assert!(
+        elapsed <= attempt_budget + scheduling_tolerance,
+        "sample attempt took {elapsed:?}, exceeding {attempt_budget:?} with {cleanup_reserve:?} cleanup reserve plus {scheduling_tolerance:?} scheduler tolerance"
+    );
     assert!(client.state.lock().await.container.is_none());
     Ok(())
 }
