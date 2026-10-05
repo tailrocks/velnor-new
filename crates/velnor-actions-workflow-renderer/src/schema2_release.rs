@@ -221,7 +221,7 @@ fn attest_job(
             with_permissions(base(name, runs_on, 20), attest_permissions()),
             needs,
         ),
-            vec![download_step(artifact), attest_step(&subject_list(files))],
+        vec![download_step(artifact), attest_step(&subject_list(files))],
     )
 }
 
@@ -248,7 +248,10 @@ fn publish_job(runs_on: Yaml, spec: &Publish<'_>) -> (String, Yaml) {
             release_eligibility::mise_step(),
             run_step(
                 "Install pinned GitHub CLI",
-                &format!("mise --no-config --no-env --no-hooks install gh@{}", release_eligibility::GH_VERSION),
+                &format!(
+                    "mise --no-config --no-env --no-hooks install gh@{}",
+                    release_eligibility::GH_VERSION
+                ),
             ),
             download_step(spec.artifact),
             release_eligibility::check_step(spec.workflow_path),

@@ -108,10 +108,8 @@ pub fn render_tofu_apply_workflow(spec: &TofuApplySpec) -> Result<RenderedFile, 
 fn tofu_apply_document(spec: &TofuApplySpec) -> Result<Yaml, RenderError> {
     let config = &spec.config;
     let checkout = checkout_yaml(&spec.checkout_uses)?;
-    let reject_stale = branch_head_guard_step(
-        "Reject stale default-branch revision",
-        &spec.default_branch,
-    )?;
+    let reject_stale =
+        branch_head_guard_step("Reject stale default-branch revision", &spec.default_branch)?;
     let mise = plain_step_to_yaml(&mise_setup_step(&spec.mise_setup)?)?;
     let check_tokens = required_tokens_step(config)?;
     let aws = aws_credentials_step(config)?;

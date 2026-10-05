@@ -269,10 +269,7 @@ pub(super) fn check_step(workflow_path: &str) -> Yaml {
         (
             "env".to_owned(),
             Yaml::Map(vec![
-                (
-                    "GH_TOKEN".to_owned(),
-                    Yaml::str("${{ github.token }}"),
-                ),
+                ("GH_TOKEN".to_owned(), Yaml::str("${{ github.token }}")),
                 (
                     "VELNOR_RELEASE_SOURCE_SHA".to_owned(),
                     Yaml::str("${{ inputs.source_sha }}"),
