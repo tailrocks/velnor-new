@@ -1,10 +1,10 @@
 a63e6a4550e75e14c2dd2ebe6efefe1360a847967c0ee2f28803eb43949dc6e4  ./.github/AGENTS.md
 0da1fbb188c99eb4cffe66befed975368b8b86ef7e375d2b8ac9a6540818fbff  ./.github/actionlint.yaml
-e3534c7655467ed1178f034d001a4f4837651e485ffda2ff94f93c389bcf9770  ./.github/workflows/ci.yml
+effa35ff9b03cb2dff1626a9df13000fa1ef170ac9704a86e4b8bde7ff4c4911  ./.github/workflows/ci.yml
 c777fb6c4837da2fd38fe4ac68b5235b759fb628de68a22c6adc14153ba086a3  ./.github/workflows/foundation-qualification.yml
 0d41b05d10d4da7b26a719f82908f2a47e7224ed93ef3383d81a6d45179fb5d8  ./.github/workflows/freshness.yml
 d13645f1aa9667a1ce9fa0886ca5f4930c3a9a0e33c3dfe7df6b8942cad9962a  ./.github/workflows/generator-release.yml
 a103db30bc49166259cbb40e9948c2677fbc49d84164cc7f71c262ea5d3ecdab  ./.github/workflows/image-release.yml
 f3edd65a1dcc1de22b67e08446003e41d10c8fd4595ffcff72fb9e821a935846  ./.github/workflows/macos-binary-release.yml
-34a2d1087aade9df4145579c5dffa643e26751d2b35d4cf0ca02960b0d1cae1d  ./.github/workflows/qualification.yml
+73baa85ecd7f4e187c0bcbd81526cda956c5aef60f3c354b0cd353accfd29158  ./.github/workflows/qualification.yml
 link ./.github/CLAUDE.md -> AGENTS.md

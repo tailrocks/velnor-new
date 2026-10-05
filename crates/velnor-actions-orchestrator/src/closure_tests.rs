@@ -31,6 +31,7 @@ fn group(declared: Vec<String>, reads: bool) -> ProposedTask {
         uses_network: false,
         uses_clock: false,
         uses_random: false,
+        run_ignored: None,
         nextest_profile: NextestProfile::Default,
     };
     let task = velnor_actions_rust::propose_task(&group).expect("fixture proposes");

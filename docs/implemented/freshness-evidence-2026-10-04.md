@@ -33,6 +33,10 @@ The four existing `#6` holds remain in force. The refreshed inventory now record
 
 The PR12 inventory also retains its separately checked `python`, `reuse`, and `uv` rows, which were outside this snapshot's 10-tool upstream probe. Their recorded latest values remain `3.14.8`, `6.2.0`, and `0.12.23`; row check times remain `2026-10-04T03:55:08Z`, `2026-10-04T03:55:07Z`, and `2026-10-04T05:31:47Z`, respectively. Those rows were current within the 24-hour check interval at this snapshot, and no newer upstream version is asserted here.
 
+## Subsequent Alint candidate evidence (2026-10-05)
+
+The later PR12 candidate uses Alint `v0.17.0` at action commit `d93c0283b19dd78afcd8a4b303f1556a7759ba81`. Paired local compatibility and immutable-source evidence are recorded in the [Alint v0.17.0 qualification](../reviews/alint-v0.17.0-qualification.md); they support this candidate and preserve the earlier held-pin observation above. The current source and generated workflow keep the action SHA and binary version aligned. The hosted Ubuntu composite installation path still requires a successful Alint CI job on the exact final source; local compatibility is not hosted qualification.
+
 ## Hosted runner evidence
 
 GitHub's [hosted-runner reference](https://docs.github.com/en/actions/reference/runners/github-hosted-runners) was rechecked on `2026-10-04`; its public and private Linux x64 tables still list `ubuntu-26.04`, `ubuntu-24.04`, and `ubuntu-22.04`. No supported label or default changed.

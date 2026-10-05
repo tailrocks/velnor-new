@@ -311,6 +311,7 @@ class FreshnessContext:
     supported: list = field(default_factory=list)
     locked: object = None
     member_names: set = field(default_factory=set)
+    workspace_roots: list = field(default_factory=list)
     holds: list = field(default_factory=list)
     hold_keys: set = field(default_factory=set)
 

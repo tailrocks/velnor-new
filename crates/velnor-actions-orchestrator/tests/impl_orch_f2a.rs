@@ -121,13 +121,27 @@ fn orch_spawns_no_processes_and_confines_shell_wrappers() -> TestResult {
         {
             continue;
         }
+        let name = path
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        if matches!(
+            name.as_str(),
+            "validate_shell_yaml.rs" | "validate_shell_yaml_shell.rs"
+        ) {
+            let text = std::fs::read_to_string(&path)?;
+            assert!(!text.contains("StepKind"));
+            assert!(!text.contains("argv"));
+            assert!(!text.contains("Vec<String>"));
+            assert!(!text.contains("Command::"));
+            assert!(!text.contains("std::process"));
+            assert!(!text.contains("\"-c\""));
+            assert!(!text.contains("\"-s\""));
+            continue;
+        }
         let text = std::fs::read_to_string(&path)?;
         if text.contains("\"sh\"") {
-            sh_files.insert(
-                path.file_name()
-                    .map(|name| name.to_string_lossy().into_owned())
-                    .unwrap_or_default(),
-            );
+            sh_files.insert(name);
         }
     }
     assert_eq!(

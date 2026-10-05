@@ -2,7 +2,6 @@
 
 use velnor_actions_contract::WorkflowPolicy;
 use velnor_actions_contract::config::{SCALE_SET_NAME, ScaleSetSelector, VELNOR_LABEL};
-use velnor_actions_workflow_renderer::steps::mbx_objects_step;
 use velnor_actions_workflow_renderer::{RenderError, render_workflow_ir};
 
 use super::impl_renderer_fixtures::*;
@@ -12,8 +11,8 @@ fn mbx_uses() -> String {
 }
 
 fn render_mbx(id: &str, scale_set: bool) -> Result<String, RenderError> {
-    let mbx = mbx_objects_step(&mbx_uses(), false, "1.21.1")?;
-    let mut built = job(id, "MBX job", Vec::new(), vec![mbx]);
+    let mbx = mbx_tool_steps(&mbx_uses(), "1.21.1", "1.98.1")?;
+    let mut built = job(id, "MBX job", Vec::new(), mbx.into());
     if scale_set {
         let selector = ScaleSetSelector::try_new(
             SCALE_SET_NAME,
@@ -83,6 +82,9 @@ fn hosted_export_samples_disk_around_store_delete() -> Result<(), RenderError> {
 #[test]
 fn hosted_save_is_one_bundle_outside_the_store() -> Result<(), RenderError> {
     let text = render_mbx("demo", false)?;
+    let preflight = text
+        .find("name: Verify MBX and Rust toolchains")
+        .expect("toolchain preflight");
     let restore = text
         .find("name: Restore MBX objects")
         .expect("restore step");
@@ -102,7 +104,8 @@ fn hosted_save_is_one_bundle_outside_the_store() -> Result<(), RenderError> {
         .find("name: Save MBX single bundle")
         .expect("save step");
     assert!(
-        restore < bundle_key
+        preflight < restore
+            && restore < bundle_key
             && bundle_key < bundle
             && bundle < import
             && import < export

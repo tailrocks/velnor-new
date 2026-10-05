@@ -41,23 +41,22 @@ fn package() -> PackageRecord {
 
 /// Package without test-bearing targets.
 fn empty_package() -> PackageRecord {
-    let mut package = package();
-    package.targets = vec![target("custom-build", "build-script-build", false, false)];
-    package
+    let mut p = package();
+    p.targets = vec![target("custom-build", "build-script-build", false, false)];
+    p
 }
 
 /// Binary-only package: testable bins but no doctest-able lib target.
 fn bin_only_package() -> PackageRecord {
-    let mut package = package();
-    package.targets = vec![
+    let mut p = package();
+    p.targets = vec![
         target("bin", "a-bin", true, false),
         target("test", "integration", true, false),
     ];
-    package.has_build_script = false;
-    package
+    p.has_build_script = false;
+    p
 }
 
-/// Profile selecting Cargo and plain `cargo test`.
 fn cargo_profile() -> RustExecutionProfile {
     RustExecutionProfile {
         compile_driver: CompileDriver::Cargo,
@@ -67,20 +66,17 @@ fn cargo_profile() -> RustExecutionProfile {
         runner_source: ProfileSource::Detected,
         nextest_profile: NextestProfile::Default,
         nextest_config: None,
+        run_ignored: None,
     }
 }
 
-/// Profile selecting MBX and Nextest.
 fn nextest_profile() -> RustExecutionProfile {
-    RustExecutionProfile {
-        compile_driver: CompileDriver::Mbx,
-        test_runner: TestRunner::CargoNextest,
-        evidence: Vec::new(),
-        driver_source: ProfileSource::Detected,
-        runner_source: ProfileSource::Detected,
-        nextest_profile: NextestProfile::Ci,
-        nextest_config: Some(".config/nextest.toml".to_owned()),
-    }
+    let mut p = cargo_profile();
+    p.compile_driver = CompileDriver::Mbx;
+    p.test_runner = TestRunner::CargoNextest;
+    p.nextest_profile = NextestProfile::Ci;
+    p.nextest_config = Some(".config/nextest.toml".to_owned());
+    p
 }
 
 /// Derivation inputs for `package` under `profile`.
@@ -115,9 +111,7 @@ fn derives_groups_with_clippy_gates() {
     let features = vec!["default".to_owned()];
     let inputs = inputs(&package, &profile, &features);
     let groups = derive_task_groups(&inputs);
-    let Ok(groups) = groups else {
-        panic!("derivation must succeed");
-    };
+    let groups = groups.expect("derivation ok");
     let kinds: Vec<TaskKind> = groups.iter().map(|group| group.kind).collect();
     assert_eq!(
         kinds,
@@ -160,9 +154,7 @@ fn nextest_adds_build_with_data_edge() {
     let profile = nextest_profile();
     let features = vec!["default".to_owned()];
     let inputs = inputs(&package, &profile, &features);
-    let Ok(groups) = derive_task_groups(&inputs) else {
-        panic!("derivation must succeed");
-    };
+    let groups = derive_task_groups(&inputs).expect("derivation ok");
     let kinds: Vec<TaskKind> = groups.iter().map(|group| group.kind).collect();
     assert_eq!(
         kinds,
@@ -192,9 +184,7 @@ fn cargo_test_emits_only_existing_target_flags() {
     let profile = cargo_profile();
     let features = vec!["default".to_owned()];
     let inputs = inputs(&package, &profile, &features);
-    let Ok(groups) = derive_task_groups(&inputs) else {
-        panic!("derivation must succeed");
-    };
+    let groups = derive_task_groups(&inputs).expect("derivation ok");
     let test: Vec<&velnor_actions_rust::TaskGroup> = groups
         .iter()
         .filter(|group| group.kind == TaskKind::Test)
@@ -219,9 +209,7 @@ fn no_targets_records_valid_no_test_targets() {
     let profile = cargo_profile();
     let features = vec!["default".to_owned()];
     let inputs = inputs(&package, &profile, &features);
-    let Ok(groups) = derive_task_groups(&inputs) else {
-        panic!("derivation must succeed");
-    };
+    let groups = derive_task_groups(&inputs).expect("derivation ok");
     let test: Vec<&velnor_actions_rust::TaskGroup> = groups
         .iter()
         .filter(|group| group.kind == TaskKind::Test)
@@ -241,9 +229,7 @@ fn bin_only_package_marks_doctest_valid_no_target() {
     let profile = cargo_profile();
     let features = vec!["default".to_owned()];
     let derived = inputs(&bin_only, &profile, &features);
-    let Ok(groups) = derive_task_groups(&derived) else {
-        panic!("derivation must succeed");
-    };
+    let groups = derive_task_groups(&derived).expect("derivation ok");
     let doctest: Vec<&velnor_actions_rust::TaskGroup> = groups
         .iter()
         .filter(|group| group.kind == TaskKind::Doctest)
@@ -259,9 +245,7 @@ fn bin_only_package_marks_doctest_valid_no_target() {
     assert_eq!(test[0].target_flags, vec!["--bins", "--tests"]);
     let with_lib = package();
     let derived = inputs(&with_lib, &profile, &features);
-    let Ok(groups) = derive_task_groups(&derived) else {
-        panic!("derivation must succeed");
-    };
+    let groups = derive_task_groups(&derived).expect("derivation ok");
     let doctest: Vec<&velnor_actions_rust::TaskGroup> = groups
         .iter()
         .filter(|group| group.kind == TaskKind::Doctest)
@@ -276,18 +260,14 @@ fn doctest_stays_separate_in_both_profiles() {
     let features = vec!["default".to_owned()];
     for profile in [cargo_profile(), nextest_profile()] {
         let inputs = inputs(&package, &profile, &features);
-        let Ok(groups) = derive_task_groups(&inputs) else {
-            panic!("derivation must succeed");
-        };
+        let groups = derive_task_groups(&inputs).expect("derivation ok");
         assert_eq!(ids_for(&groups, TaskKind::Doctest).len(), 1);
     }
     let cargo = cargo_profile();
     let inputs = inputs(&package, &cargo, &features);
-    let Ok(groups) = derive_task_groups(&inputs) else {
-        panic!("derivation must succeed");
-    };
-    assert_eq!(ids_for(&groups, TaskKind::Nextest), Vec::<&str>::new());
-    assert_eq!(ids_for(&groups, TaskKind::Build), Vec::<&str>::new());
+    let groups = derive_task_groups(&inputs).expect("derivation ok");
+    assert!(ids_for(&groups, TaskKind::Nextest).is_empty());
+    assert!(ids_for(&groups, TaskKind::Build).is_empty());
 }
 
 #[test]
@@ -296,9 +276,7 @@ fn clippy_names_exactly_one_package() {
     let profile = cargo_profile();
     let features = vec!["default".to_owned()];
     let inputs = inputs(&package, &profile, &features);
-    let Ok(groups) = derive_task_groups(&inputs) else {
-        panic!("derivation must succeed");
-    };
+    let groups = derive_task_groups(&inputs).expect("derivation ok");
     let clippy: Vec<&velnor_actions_rust::TaskGroup> = groups
         .iter()
         .filter(|group| group.kind == TaskKind::Clippy)
@@ -318,20 +296,14 @@ fn fmt_only_with_explicit_config() {
     let profile = cargo_profile();
     let features = vec!["default".to_owned()];
     let plain = inputs(&package, &profile, &features);
-    let Ok(groups) = derive_task_groups(&plain) else {
-        panic!("derivation must succeed");
-    };
-    assert_eq!(ids_for(&groups, TaskKind::Fmt), Vec::<&str>::new());
+    let groups = derive_task_groups(&plain).expect("derivation ok");
+    assert!(ids_for(&groups, TaskKind::Fmt).is_empty());
     let mut explicit = inputs(&package, &profile, &features);
     explicit.explicit_fmt = true;
-    let Ok(groups) = derive_task_groups(&explicit) else {
-        panic!("derivation must succeed");
-    };
+    let groups = derive_task_groups(&explicit).expect("derivation ok");
     assert_eq!(ids_for(&groups, TaskKind::Fmt).len(), 1);
     let workspace = derive_workspace_fmt("crates/a/Cargo.toml", &profile, "default", "host");
-    let Ok(workspace) = workspace else {
-        panic!("workspace fmt must succeed");
-    };
+    let workspace = workspace.expect("workspace fmt ok");
     assert_eq!(workspace.task_id, "stack/rust/crates/a/fmt/default");
     assert_eq!(workspace.package_id, "");
     assert_eq!(workspace.gated_by, Vec::<String>::new());
@@ -341,9 +313,7 @@ fn fmt_only_with_explicit_config() {
 fn workspace_fmt_carries_driver_runner() {
     let profile = nextest_profile();
     let workspace = derive_workspace_fmt("Cargo.toml", &profile, "default", "host");
-    let Ok(workspace) = workspace else {
-        panic!("workspace fmt must succeed");
-    };
+    let workspace = workspace.expect("workspace fmt ok");
     assert_eq!(workspace.compile_driver, CompileDriver::Mbx);
     assert_eq!(workspace.test_runner, TestRunner::CargoNextest);
     assert_eq!(workspace.declared_inputs, Vec::<String>::new());
@@ -355,9 +325,7 @@ fn declared_inputs_accept_non_rust_and_reject_bad() {
     let profile = cargo_profile();
     let features = vec!["default".to_owned()];
     let inputs = inputs(&package, &profile, &features);
-    let Ok(groups) = derive_task_groups(&inputs) else {
-        panic!("derivation must succeed");
-    };
+    let groups = derive_task_groups(&inputs).expect("derivation ok");
     assert!(groups.iter().all(|group| group.declared_inputs.is_empty()));
     let paths = vec![
         "tests/data/corpus.md".to_owned(),
@@ -365,9 +333,7 @@ fn declared_inputs_accept_non_rust_and_reject_bad() {
         "tests/data/corpus.md".to_owned(),
     ];
     let with = groups[1].clone().with_declared_inputs(&paths);
-    let Ok(with) = with else {
-        panic!("declared inputs must attach");
-    };
+    let with = with.expect("declared inputs ok");
     assert_eq!(
         with.declared_inputs,
         vec![
@@ -387,9 +353,7 @@ fn carries_driver_runner_and_sorted_features() {
     let profile = nextest_profile();
     let features = vec!["zeta".to_owned(), "alpha".to_owned()];
     let inputs = inputs(&package, &profile, &features);
-    let Ok(groups) = derive_task_groups(&inputs) else {
-        panic!("derivation must succeed");
-    };
+    let groups = derive_task_groups(&inputs).expect("derivation ok");
     for group in &groups {
         assert_eq!(group.compile_driver, CompileDriver::Mbx);
         assert_eq!(group.test_runner, TestRunner::CargoNextest);
@@ -397,4 +361,30 @@ fn carries_driver_runner_and_sorted_features() {
         assert_eq!(group.target, "host");
         assert_eq!(group.configuration, "default");
     }
+}
+
+#[test]
+fn conformance_and_visual_crates_auto_enable_run_ignored() {
+    let mut pkg = package();
+    pkg.name = "termrock-conformance".to_owned();
+    let profile = nextest_profile();
+    let features = vec!["default".to_owned()];
+    let groups = derive_task_groups(&inputs(&pkg, &profile, &features)).expect("derivation ok");
+    let nextest = groups
+        .iter()
+        .find(|g| g.kind == TaskKind::Nextest)
+        .expect("has nextest");
+    assert_eq!(nextest.run_ignored.as_deref(), Some("all"));
+
+    let mut configured_profile = nextest_profile();
+    configured_profile.run_ignored = Some("only".to_owned());
+    let mut plain_pkg = package();
+    plain_pkg.name = "regular-crate".to_owned();
+    let groups_cfg = derive_task_groups(&inputs(&plain_pkg, &configured_profile, &features))
+        .expect("derivation ok");
+    let nextest_cfg = groups_cfg
+        .iter()
+        .find(|g| g.kind == TaskKind::Nextest)
+        .expect("has nextest");
+    assert_eq!(nextest_cfg.run_ignored.as_deref(), Some("only"));
 }

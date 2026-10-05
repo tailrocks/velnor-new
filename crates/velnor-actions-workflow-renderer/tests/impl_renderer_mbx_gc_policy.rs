@@ -3,9 +3,7 @@
 use velnor_actions_contract::WorkflowPolicy;
 use velnor_actions_contract::config::{SCALE_SET_NAME, ScaleSetSelector, VELNOR_LABEL};
 use velnor_actions_contract::workflow::lanes::{HOSTED_SUFFIX, SCALE_SUFFIX};
-use velnor_actions_workflow_renderer::steps::{
-    MBX_CACHE_MODE_ENV, checkout_step, mbx_objects_step,
-};
+use velnor_actions_workflow_renderer::steps::{MBX_CACHE_MODE_ENV, checkout_step};
 use velnor_actions_workflow_renderer::{RenderError, render_workflow_ir};
 
 use super::impl_renderer_fixtures::*;
@@ -14,10 +12,15 @@ use super::impl_renderer_fixtures::*;
 #[test]
 fn action_step_env_renders_only_when_present() -> Result<(), RenderError> {
     let uses = format!("jdx/mr-boxington-action@{}", "a".repeat(40));
-    let mbx = mbx_objects_step(&uses, false, "1.21.1")?;
+    let [preflight, mbx] = mbx_tool_steps(&uses, "1.21.1", "1.98.1")?;
     let plain = checkout_step(&checkout_pin())?;
     let text = render_workflow_ir(
-        &fixture_ir(vec![job("demo", "Demo", Vec::new(), vec![plain, mbx])]),
+        &fixture_ir(vec![job(
+            "demo",
+            "Demo",
+            Vec::new(),
+            vec![plain, preflight, mbx],
+        )]),
         WorkflowPolicy::ConsumerV1,
         None,
         &fixture_ctx(),
@@ -62,18 +65,19 @@ fn action_step_env_renders_only_when_present() -> Result<(), RenderError> {
 #[test]
 fn mbx_gc_policy_is_scoped_to_hosted_mbx_jobs() -> Result<(), RenderError> {
     let uses = format!("jdx/mr-boxington-action@{}", "a".repeat(40));
-    let mbx = mbx_objects_step(&uses, false, "1.21.1")?;
+    let mbx = mbx_tool_steps(&uses, "1.21.1", "1.98.1")?;
+    let checkout = checkout_step(&checkout_pin())?;
     let hosted = job(
         &format!("rust-demo{HOSTED_SUFFIX}"),
         "Rust demo hosted",
         Vec::new(),
-        vec![mbx.clone()],
+        vec![checkout.clone(), mbx[0].clone(), mbx[1].clone()],
     );
     let mut local = job(
         &format!("rust-demo{SCALE_SUFFIX}"),
         "Rust demo scale set",
         Vec::new(),
-        vec![mbx],
+        vec![checkout, mbx[0].clone(), mbx[1].clone()],
     );
     local.1.runs_on = ScaleSetSelector::try_new(
         SCALE_SET_NAME,
