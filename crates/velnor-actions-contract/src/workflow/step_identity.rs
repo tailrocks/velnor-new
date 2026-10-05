@@ -167,8 +167,9 @@ impl StepRole {
                 action_has_prefix_for_kind(kind, "actions/cache/save@")
             }
             Self::ToolsCacheIdentity => valid_tools_cache_identity(kind),
-            Self::ToolsCacheRestore => action_has_prefix_for_kind(kind, "actions/cache/restore@"),
-            Self::CargoSourcesRestore => action_has_prefix_for_kind(kind, "actions/cache/restore@"),
+            Self::ToolsCacheRestore | Self::CargoSourcesRestore => {
+                action_has_prefix_for_kind(kind, "actions/cache/restore@")
+            }
             Self::TofuProvidersRestore => super::step_protocol::valid_provider_restore(kind),
             Self::TofuProvidersSave => super::step_protocol::valid_provider_save(kind),
             Self::CargoRegistryRestore => action_has_prefix_for_kind(kind, "Swatinem/rust-cache@"),

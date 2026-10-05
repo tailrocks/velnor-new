@@ -60,11 +60,13 @@ fn assert_save_steps_are_push_gated(yaml: &str, tools_keys: usize) {
             &["Save Mise tools"],
             &[
                 "github.event_name == 'push'",
-                "github.event_name != 'workflow_dispatch'",
+                "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)",
+                "github.ref_protected == true",
+                "steps.v2.outputs.enabled == 'true'",
             ],
         ),
         tools_keys,
-        "tools saves are push-gated and dispatch-denied:\n{yaml}"
+        "tools saves are limited to protected default-branch pushes with qualified identity:\n{yaml}"
     );
     assert_eq!(
         count_steps_with_gate(

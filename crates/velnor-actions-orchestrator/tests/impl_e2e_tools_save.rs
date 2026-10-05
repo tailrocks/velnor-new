@@ -57,15 +57,16 @@ pub(crate) fn check_tools_save_shape(job: &JobText) -> Result<(), String> {
     check_paths(restore, job)?;
     for save in saves {
         check_cache_action(save, "actions/cache/save@", job)?;
-        if !save
-            .body
-            .contains("success() && github.event_name == 'push'")
-            || !save
-                .body
-                .contains("github.event_name != 'workflow_dispatch'")
-        {
+        let required_gates = [
+            "success()",
+            "github.event_name == 'push'",
+            "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)",
+            "github.ref_protected == true",
+            "steps.v2.outputs.enabled == 'true'",
+        ];
+        if required_gates.iter().any(|gate| !save.body.contains(gate)) {
             return Err(format!(
-                "{}: tools save lacks push policy or dispatch denial",
+                "{}: tools save lacks protected default-branch push policy or qualified identity",
                 job.id
             ));
         }

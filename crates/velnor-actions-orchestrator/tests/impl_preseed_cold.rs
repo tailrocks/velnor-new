@@ -260,13 +260,15 @@ esac
         let events = fs::read_to_string(log)?;
         let lines = events.lines().collect::<Vec<_>>();
         let selector = format!("rust@{rust_version}");
+        let install_event = format!("install:{selector}");
+        let lookup_event = format!("where:{selector}");
         let install = lines
             .iter()
-            .position(|line| line == &&format!("install:{selector}"))
+            .position(|line| line == &install_event)
             .ok_or("pinned Rust install event")?;
         let lookup = lines
             .iter()
-            .rposition(|line| line == &&format!("where:{selector}"))
+            .rposition(|line| line == &lookup_event)
             .ok_or("final Rust lookup event")?;
         assert!(install < lookup, "install must precede lookup: {events}");
         Ok(())
