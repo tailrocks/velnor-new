@@ -3385,6 +3385,7 @@ version = "0.1.0"
 dependencies = [
  "bollard",
  "flate2",
+ "futures-util",
  "security-framework",
  "serde",
  "serde_json",

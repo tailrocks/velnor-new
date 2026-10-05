@@ -14,6 +14,9 @@ use bollard::query_parameters::CreateContainerOptions;
 
 use super::super::{DIND_IMAGE, PLATFORM};
 
+/// Bounded runtime sampling for the fixed guest probe.
+pub(crate) mod sampler;
+
 /// Maximum accepted stdout size from the fixed probe.
 const MAX_PROBE_OUTPUT_BYTES: usize = 512;
 const PROC_TARGET: &str = "/velnor/guest-proc";
