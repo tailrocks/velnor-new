@@ -6,6 +6,7 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::cachekey::mbx_cache_generation;
+use velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION;
 use velnor_actions_contract::{Job, Step, StepKind};
 
 use crate::{
@@ -161,8 +162,8 @@ pub(crate) const MBX_ACTION_CACHE_MODE: &str = "read";
 /// The step-level [`MBX_CACHE_MODE_ENV`] is the literal `read`. The
 /// action's post exports inside the live store and then archives that
 /// copy, and a default-branch push saves even when `save-on-*` is off.
-/// `read` is the switch that skips that post. Push saves are a later
-/// single-bundle step, still refused for pull requests.
+/// `read` is the switch that skips that post. Velnor's later single-bundle
+/// step uses the shared protected-default writer gate.
 /// The cache generation follows the exact MBX release, so upgrading its
 /// storage or collection behavior starts with an isolated cold namespace.
 /// # Errors
@@ -250,7 +251,11 @@ pub fn cache_action_step(
     } else {
         "Save cache"
     };
-    action_step(name, uses, with)
+    let mut step = action_step(name, uses, with)?;
+    if !restore {
+        step.condition = Some(CACHE_SAVE_CONDITION.to_owned());
+    }
+    Ok(step)
 }
 
 fn validate_cache_path(layer: &str, path: &str) -> Result<(), RenderError> {
@@ -286,6 +291,39 @@ fn sources_subset_ok(path: &str) -> bool {
         || suffix.starts_with("registry/cache/")
         || suffix.starts_with("git/db/")
         || suffix.starts_with("bin/")
+}
+
+/// Add the protected-default writer gate to every rendered cache-saving action.
+///
+/// A caller may add a stricter condition, but cannot replace this base gate.
+pub(crate) fn action_cache_condition(uses: &str, condition: Option<&str>) -> Option<String> {
+    let writes_cache =
+        uses.starts_with("actions/cache/save@") || uses.starts_with("actions/cache@");
+    if !writes_cache {
+        return condition.map(str::to_owned);
+    }
+    Some(with_cache_save_gate(condition))
+}
+
+/// Add the protected-default gate to direct MBX bundle-export shell steps.
+pub(crate) fn shell_cache_condition(argv: &[String], condition: Option<&str>) -> Option<String> {
+    let exports_mbx = argv
+        .windows(3)
+        .any(|parts| parts[0] == "mbx" && parts[1] == "cache" && parts[2] == "export")
+        || argv.iter().any(|arg| arg.contains("mbx cache export"));
+    exports_mbx
+        .then(|| with_cache_save_gate(condition))
+        .or_else(|| condition.map(str::to_owned))
+}
+
+/// Keep any caller predicate as an additional condition after shared trust.
+fn with_cache_save_gate(condition: Option<&str>) -> String {
+    let gate = CACHE_SAVE_CONDITION;
+    match condition {
+        Some(value) if value == gate => gate.to_owned(),
+        Some(value) => format!("{gate} && ({value})"),
+        None => gate.to_owned(),
+    }
 }
 
 /// Check restore-before/save-after ordering over cache action steps.

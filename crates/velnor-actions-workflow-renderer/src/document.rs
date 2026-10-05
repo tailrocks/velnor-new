@@ -16,6 +16,9 @@ use velnor_actions_contract::{
     workflow::{ir::DispatchInput, permissions::PermissionLevel},
 };
 
+#[path = "document_action.rs"]
+mod action;
+
 /// Build the workflow document: name, on, permissions, concurrency, jobs.
 pub(crate) fn workflow_to_yaml(
     ir: &WorkflowIr,
@@ -250,12 +253,12 @@ fn is_verdict_download(step: &Step) -> bool {
 ///
 /// The fetch op takes no request file; it reads the plan from the
 /// run directory and authenticates `gh` with the job token plus the
-/// repository slug (fixed literals, never caller input). Token hygiene
-/// still gates IR-level `GH_TOKEN` (see `support`); this render-time
-/// pair is fixed by construction for the fetch step only. Merge-family
-/// steps in the final job additionally carry the finalized `needs`
-/// conclusions channel plus the rendered expected inventory, so the
-/// merge binds required validators to the committed workflow.
+/// repository slug (fixed literals, never caller input). Plan, merge,
+/// and baseline-publish internal steps receive this token only for the
+/// pinned-gh protected-branch read. Token hygiene still gates IR-level `GH_TOKEN`
+/// (see `support`); these bindings are render-time and step-scoped.
+/// Merge-family steps additionally carry finalized `needs` conclusions
+/// plus the rendered expected inventory.
 fn internal_env(
     op: &str,
     target: &str,
@@ -275,64 +278,18 @@ fn internal_env(
         env.push((key.clone(), Yaml::str(value.clone())));
     }
     env.push((REQUEST_FILE_ENV.to_owned(), Yaml::str(request)));
+    if (op == steps::PLAN_OPERATION && target == steps::PLAN_OPERATION)
+        || (op == steps::MERGE_OPERATION && target == steps::MERGE_OPERATION)
+        || (op == steps::PUBLISH_OPERATION && target == steps::PUBLISH_OPERATION)
+    {
+        env.push(("GH_TOKEN".to_owned(), Yaml::str("${{ github.token }}")));
+    }
     if op == steps::PLAN_OPERATION && target == steps::PLAN_OPERATION {
         for (key, value) in &ctx.plan_consumer_env {
             env.push((key.clone(), Yaml::str(value.clone())));
         }
     }
     Yaml::Map(env)
-}
-
-/// Render one action step: name, condition, pin, inputs, step env.
-///
-/// Step env (cache modes) renders after `with:`; absent env renders
-/// nothing, so env-less steps keep their exact historical bytes.
-fn action_step_to_yaml(
-    job_id: &str,
-    step: &Step,
-    uses: &str,
-    with: &BTreeMap<String, String>,
-    env: &BTreeMap<String, String>,
-) -> Result<Yaml, RenderError> {
-    steps::validate_uses(uses)?;
-    for (key, value) in with {
-        crate::expressions::check_with_key(key)?;
-        crate::expressions::check_with_value(key, value)?;
-        steps::scan_for_private_subcommands(key)?;
-        steps::scan_for_private_subcommands(value)?;
-    }
-    commands::validate_env(env)?;
-    let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
-    crate::mbx_bundle::push_step_id(&mut entries, &step.name);
-    if let Some(condition) = &step.condition {
-        steps::scan_for_private_subcommands(condition)?;
-        entries.push(("if".to_owned(), Yaml::str(condition.clone())));
-    } else if uses == steps::UPLOAD_ARTIFACT_USES {
-        entries.push((
-            "if".to_owned(),
-            Yaml::str(crate::render::FINAL_CONDITION.to_owned()),
-        ));
-    }
-    if job_id == FINAL_JOB_ID && is_verdict_download(step) {
-        entries.push(("continue-on-error".to_owned(), Yaml::Bool(true)));
-    }
-    entries.push(("uses".to_owned(), Yaml::str(uses.to_owned())));
-    if !with.is_empty() {
-        entries.push(("with".to_owned(), string_map_yaml(with)));
-    }
-    if !env.is_empty() {
-        entries.push(("env".to_owned(), string_map_yaml(env)));
-    }
-    Ok(Yaml::Map(entries))
-}
-
-/// Sorted string map as YAML (shared by `with:` and `env:` emission).
-fn string_map_yaml(map: &BTreeMap<String, String>) -> Yaml {
-    Yaml::Map(
-        map.iter()
-            .map(|(key, value)| (key.clone(), Yaml::str(value.clone())))
-            .collect(),
-    )
 }
 
 /// Render one step; internal ops become env plus request file, never argv.
@@ -346,15 +303,19 @@ pub(crate) fn step_to_yaml(
 ) -> Result<Yaml, RenderError> {
     steps::scan_for_private_subcommands(&step.name)?;
     match &step.kind {
-        StepKind::Action { uses, with, env } => action_step_to_yaml(job_id, step, uses, with, env),
+        StepKind::Action { uses, with, env } => {
+            action::action_step_to_yaml(job_id, step, uses, with, env)
+        }
         StepKind::Shell { run, env } => {
             commands::validate_command_argv(run)?;
             commands::validate_env(env)?;
             let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
             crate::mbx_bundle::push_step_id(&mut entries, &step.name);
-            if let Some(condition) = &step.condition {
-                steps::scan_for_private_subcommands(condition)?;
-                entries.push(("if".to_owned(), Yaml::str(condition.clone())));
+            if let Some(condition) =
+                crate::cache_steps::shell_cache_condition(run, step.condition.as_deref())
+            {
+                steps::scan_for_private_subcommands(&condition)?;
+                entries.push(("if".to_owned(), Yaml::str(condition)));
             }
             if !env.is_empty() {
                 let vars: Vec<(String, Yaml)> = env

@@ -4,6 +4,7 @@
 
 use std::collections::BTreeMap;
 use std::fs;
+use std::path::Path;
 
 use super::*;
 use velnor_actions_contract::{
@@ -18,7 +19,7 @@ fn push_payload(head: &str) -> String {
         "ref": "refs/heads/testmain",
         "before": "b".repeat(40),
         "after": head,
-        "repository": {"default_branch": "testmain"},
+        "repository": {"full_name": "o/r", "default_branch": "testmain"},
     })
     .to_string()
 }
@@ -28,13 +29,26 @@ fn request_json(head: &str) -> String {
     serde_json::json!({
         "schema": 1,
         "op": PUBLISH_OP,
-        "event": "push",
         "head": head,
-        "repository": "o/r",
-        "git_ref": "refs/heads/testmain",
-        "default_branch": "testmain",
+        "cache_writer": {
+            "event": "push",
+            "git_ref": "refs/heads/testmain",
+            "default_branch": "testmain",
+            "repository": "o/r",
+            "event_repository": "o/r",
+        },
     })
     .to_string()
+}
+
+/// Run the publish core with test-only authorized context.
+fn publish_for_test(
+    request_json: &str,
+    run_key: &str,
+    runner_temp: &Path,
+) -> Result<PublishOutputs, OrchestratorError> {
+    let request = publish_request(request_json)?;
+    baseline_publish_for_test(request, run_key, runner_temp, true)
 }
 
 /// One `b3-` digest with every byte set to `byte`.
@@ -145,7 +159,7 @@ fn publish_stages_trusted_manifest_under_derived_name() {
     let head = "a".repeat(40);
     let plan = fixture_plan(&head, "r7-a1");
     let temp = staged_run(&plan, "r7-a1");
-    let outputs = baseline_publish_to(&request_json(&head), "r7-a1", temp.path()).expect("publish");
+    let outputs = publish_for_test(&request_json(&head), "r7-a1", temp.path()).expect("publish");
     let compat = crate::cover_compat::baseline_compat_for_plan(&plan).expect("compat");
     let expected = artifact_id_for_baseline(&head, &compat).expect("name");
     assert_eq!(outputs.artifact_name, expected);
@@ -189,7 +203,7 @@ fn publish_skips_covered_without_carry_forward() {
     plan.matrix.include.pop();
     plan.validate().expect("covered plan validates");
     let temp = staged_run(&plan, "r7-a1");
-    baseline_publish_to(&request_json(&head), "r7-a1", temp.path()).expect("publish");
+    publish_for_test(&request_json(&head), "r7-a1", temp.path()).expect("publish");
     let staged = staged_manifest(temp.path(), "r7-a1");
     let tasks = staged["tasks"].as_array().expect("tasks");
     assert_eq!(tasks.len(), 1, "covered tasks never carry forward");
@@ -204,7 +218,7 @@ fn publish_skips_covered_without_carry_forward() {
 /// after the refused call.
 fn refuse_problem(request: &str, plan: &Plan, run_key: &str) -> String {
     let temp = staged_run(plan, run_key);
-    let problem = baseline_publish_to(request, run_key, temp.path())
+    let problem = publish_for_test(request, run_key, temp.path())
         .expect_err("must refuse")
         .to_string();
     assert!(
@@ -227,33 +241,41 @@ fn publish_refuses_every_unsafe_case() {
         let mut base: serde_json::Value =
             serde_json::from_str(&request_json(&head)).expect("request");
         for (key, value) in patch.as_object().expect("patch") {
-            base[key] = value.clone();
+            if key == "cache_writer" {
+                for (fact, fact_value) in value.as_object().expect("writer patch") {
+                    base["cache_writer"][fact] = fact_value.clone();
+                }
+            } else {
+                base[key] = value.clone();
+            }
         }
         base.to_string()
     };
     let cases = [
         (
-            request(serde_json::json!({"event": "pull_request"})),
+            request(serde_json::json!({"cache_writer": {"event": "pull_request"}})),
             "wrong_event",
         ),
         (
-            request(serde_json::json!({"git_ref": "refs/heads/other"})),
+            request(serde_json::json!({"cache_writer": {"git_ref": "refs/heads/other"}})),
             "unprotected_ref",
         ),
         (
-            request(serde_json::json!({"default_branch": "other"})),
+            request(serde_json::json!({"cache_writer": {"default_branch": "other"}})),
             "unprotected_ref",
         ),
         (
-            request(serde_json::json!({"default_branch": serde_json::Value::Null})),
+            request(
+                serde_json::json!({"cache_writer": {"default_branch": serde_json::Value::Null}}),
+            ),
             "unprotected_ref",
         ),
         (
-            request(serde_json::json!({"repository": serde_json::Value::Null})),
+            request(serde_json::json!({"cache_writer": {"repository": serde_json::Value::Null}})),
             "repository_unanchored",
         ),
         (
-            request(serde_json::json!({"repository": "not-a-slug"})),
+            request(serde_json::json!({"cache_writer": {"repository": "not-a-slug"}})),
             "repository_unanchored",
         ),
         (
@@ -292,6 +314,13 @@ fn publish_refuses_every_unsafe_case() {
 }
 
 #[test]
+fn publish_gate_requires_known_current_protected_default() {
+    let head = "a".repeat(40);
+    let request = publish_request(&request_json(&head)).expect("request");
+    assert!(publish_gate(&request, &CacheWriterContext::default()).is_err());
+}
+
+#[test]
 fn publish_rejects_unknown_request_fields() {
     let head = "a".repeat(40);
     let plan = fixture_plan(&head, "r7-a1");
@@ -306,9 +335,9 @@ fn publish_never_overwrites_staged_evidence() {
     let head = "a".repeat(40);
     let plan = fixture_plan(&head, "r7-a1");
     let temp = staged_run(&plan, "r7-a1");
-    baseline_publish_to(&request_json(&head), "r7-a1", temp.path()).expect("first publish");
+    publish_for_test(&request_json(&head), "r7-a1", temp.path()).expect("first publish");
     assert!(
-        baseline_publish_to(&request_json(&head), "r7-a1", temp.path()).is_err(),
+        publish_for_test(&request_json(&head), "r7-a1", temp.path()).is_err(),
         "a second publish must fail instead of overwriting"
     );
 }
@@ -318,7 +347,7 @@ fn staged_manifest_passes_consumer_validation() {
     let head = "a".repeat(40);
     let plan = fixture_plan(&head, "r7-a1");
     let temp = staged_run(&plan, "r7-a1");
-    baseline_publish_to(&request_json(&head), "r7-a1", temp.path()).expect("publish");
+    publish_for_test(&request_json(&head), "r7-a1", temp.path()).expect("publish");
     let staged = staged_manifest(temp.path(), "r7-a1");
     let manifest: BaselineManifest = serde_json::from_value(staged).expect("manifest");
     let expected = ProvenanceExpectations {
@@ -355,11 +384,13 @@ fn publish_request_writer_records_push_refs() {
         serde_json::from_str(&fs::read_to_string(&path).expect("read")).expect("json");
     assert_eq!(written["schema"], 1);
     assert_eq!(written["op"], PUBLISH_OP);
-    assert_eq!(written["event"], "push");
     assert_eq!(written["head"], head);
-    assert_eq!(written["repository"], "o/r");
-    assert_eq!(written["git_ref"], "refs/heads/testmain");
-    assert_eq!(written["default_branch"], "testmain");
+    assert_eq!(written["cache_writer"]["event"], "push");
+    assert_eq!(written["cache_writer"]["repository"], "o/r");
+    assert_eq!(written["cache_writer"]["event_repository"], "o/r");
+    assert_eq!(written["cache_writer"]["git_ref"], "refs/heads/testmain");
+    assert_eq!(written["cache_writer"]["default_branch"], "testmain");
+    assert!(written["cache_writer"].get("ref_protected").is_none());
     let again = write_publish_request(
         &path,
         "push",
