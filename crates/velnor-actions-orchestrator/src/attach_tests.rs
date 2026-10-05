@@ -244,6 +244,7 @@ fn preseed_attach_builds_once_and_sets_mode() {
         [
             "Checkout",
             "Prepare pinned tools",
+            "Prepare pre-seed MBX",
             PRESEED_BUILD_NAME,
             "Verify MBX compile (pre-seed trust-on-review)",
             "Write helper manifest (pre-seed trust-on-review)",
@@ -347,16 +348,20 @@ fn assert_owned_homes(steps: &[Step], name: &str) {
 mod mbx_tests;
 
 #[test]
-fn preseed_skips_mbx_restore_for_cargo_only_plans() {
+fn preseed_restores_mbx_objects_after_cargo_sources() {
     use velnor_actions_workflow_renderer::{PRESEED_BUILD_NAME, PRESEED_VERIFY_NAME};
     let mut plan = preseed_fixture(false, &[String::new()]);
     attach_preseed(&mut plan, "ubuntu-26.04", "0.1.0").expect("attach");
     let steps = &plan.ir.jobs["plan"].steps;
     let names: Vec<&str> = steps.iter().map(|step| step.name.as_str()).collect();
-    assert!(
-        !names.contains(&MBX_RESTORE_NAME),
-        "cargo-only plans stay rust-cache-only: {names:?}"
-    );
+    let source = names
+        .iter()
+        .position(|step| *step == "Restore Cargo sources")
+        .expect("sources restore present");
+    let objects = names
+        .iter()
+        .position(|step| *step == MBX_RESTORE_NAME)
+        .expect("pre-seed build uses MBX objects");
     let probe = names
         .iter()
         .position(|step| *step == crate::source_prep::FETCH_SOURCES_STEP)
@@ -365,7 +370,10 @@ fn preseed_skips_mbx_restore_for_cargo_only_plans() {
         .iter()
         .position(|step| *step == PRESEED_BUILD_NAME)
         .expect("build step");
-    assert!(probe < build, "build anchors after sources: {names:?}");
+    assert!(
+        source < objects && objects < probe && probe < build,
+        "sources<objects<source-check<build: {names:?}"
+    );
     assert_owned_homes(steps, PRESEED_BUILD_NAME);
     assert_owned_homes(steps, PRESEED_VERIFY_NAME);
 }

@@ -19,8 +19,6 @@ pub use crate::cache_elect::{elect_tofu_provider_savers, elect_tools_cache_write
 
 /// Display name of the shared sources restore step.
 pub const RESTORE_SOURCES_NAME: &str = "Restore Cargo sources";
-/// Display name of the Cargo-only registry cache action.
-pub const RUST_CACHE_NAME: &str = "Restore Cargo registry";
 /// Display name of the shared sources save step.
 pub const SAVE_SOURCES_NAME: &str = "Save Cargo sources";
 /// Display name of the runtime identity step gating the tools cache.
@@ -47,18 +45,14 @@ pub(crate) fn ensure_tools_cache_v2(
     setup_pipeline::ensure_tools_cache_v2(job_id, job, setup, always, target)
 }
 
-/// Validate that MBX and the Cargo registry action do not both own caches.
+/// Reject the retired broad `rust-cache` archive in generated jobs.
 /// # Errors
-pub fn check_no_rust_cache_with_mbx(job_id: &str, job: &Job) -> Result<(), RenderError> {
-    let has_mbx = job.steps.iter().any(|step| {
-        matches!(&step.kind, StepKind::Action { uses, .. } if uses.starts_with("jdx/mr-boxington-action@"))
-    });
-    let has_rust_cache = job.steps.iter().any(|step| {
+pub fn check_no_legacy_rust_cache(job_id: &str, job: &Job) -> Result<(), RenderError> {
+    if job.steps.iter().any(|step| {
         matches!(&step.kind, StepKind::Action { uses, .. } if uses.starts_with("Swatinem/rust-cache@"))
-    });
-    if has_mbx && has_rust_cache {
+    }) {
         return Err(RenderError::InvalidWorkflow(format!(
-            "rust_cache_with_mbx:{job_id}"
+            "legacy_rust_cache:{job_id}"
         )));
     }
     Ok(())

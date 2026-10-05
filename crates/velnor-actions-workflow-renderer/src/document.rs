@@ -21,6 +21,13 @@ use velnor_actions_contract::{
 #[path = "document_runner_shell_tests.rs"]
 mod runner_shell_tests;
 
+struct WorkflowStepContext<'a> {
+    shared: &'a BTreeMap<String, String>,
+    checkouts: &'a BTreeMap<String, Step>,
+    preludes: &'a BTreeMap<String, Vec<Step>>,
+    mbx_gc_jobs: &'a BTreeSet<String>,
+}
+
 /// Build the workflow document: name, on, permissions, concurrency, jobs.
 pub(crate) fn workflow_to_yaml(
     ir: &WorkflowIr,
@@ -28,28 +35,29 @@ pub(crate) fn workflow_to_yaml(
     ctx: &RenderContext,
     shared: &BTreeMap<String, String>,
     checkouts: &BTreeMap<String, Step>,
+    preludes: &BTreeMap<String, Vec<Step>>,
     mbx_gc_jobs: &BTreeSet<String>,
 ) -> Result<Yaml, RenderError> {
-    if shared.keys().ne(checkouts.keys()) || shared.keys().any(|id| !jobs.contains_key(id)) {
+    if shared.keys().ne(checkouts.keys())
+        || shared.keys().ne(preludes.keys())
+        || shared.keys().any(|id| !jobs.contains_key(id))
+    {
         return Err(RenderError::InvalidWorkflow(
             "shared_lane_checkout_map_mismatch".to_owned(),
         ));
     }
     let needs_env = needs_channel_envs(jobs)?;
+    let step_context = WorkflowStepContext {
+        shared,
+        checkouts,
+        preludes,
+        mbx_gc_jobs,
+    };
     let mut rendered_jobs = Vec::with_capacity(jobs.len());
     for (id, job) in jobs {
-        let call = shared.get(id).map(String::as_str);
         rendered_jobs.push((
             id.clone(),
-            job_to_yaml(
-                id,
-                job,
-                ctx,
-                &needs_env,
-                call,
-                checkouts,
-                mbx_gc_jobs.contains(id),
-            )?,
+            job_to_yaml(id, job, ctx, &needs_env, &step_context)?,
         ));
     }
     Ok(Yaml::Map(vec![
@@ -201,9 +209,7 @@ fn job_to_yaml(
     job: &Job,
     ctx: &RenderContext,
     needs_envs: &[(String, String)],
-    shared: Option<&str>,
-    checkouts: &BTreeMap<String, Step>,
-    mbx_gc_auto: bool,
+    step_context: &WorkflowStepContext<'_>,
 ) -> Result<Yaml, RenderError> {
     steps::scan_for_private_subcommands(&job.display_name)?;
     let runner = RunsOn::parse(&job.runs_on).map_err(RenderError::Contract)?;
@@ -248,7 +254,7 @@ fn job_to_yaml(
             }
         }
     }
-    if mbx_gc_auto {
+    if step_context.mbx_gc_jobs.contains(id) {
         job_env.insert(
             crate::cache_steps::MBX_GC_AUTO_ENV.to_owned(),
             crate::cache_steps::MBX_GC_AUTO_VALUE.to_owned(),
@@ -256,7 +262,7 @@ fn job_to_yaml(
     }
     let mut entries = job_header_fields(job, runs_on);
     append_job_options(&mut entries, job, scale_set, &job_env)?;
-    let rendered_steps = render_job_steps(id, job, ctx, needs_envs, shared, checkouts, &job_env)?;
+    let rendered_steps = render_job_steps(id, job, ctx, needs_envs, step_context, &job_env)?;
     entries.push(("steps".to_owned(), Yaml::Seq(rendered_steps)));
     Ok(Yaml::Map(entries))
 }
@@ -312,14 +318,14 @@ fn render_job_steps(
     job: &Job,
     ctx: &RenderContext,
     needs_envs: &[(String, String)],
-    shared: Option<&str>,
-    checkouts: &BTreeMap<String, Step>,
+    step_context: &WorkflowStepContext<'_>,
     job_env: &BTreeMap<String, String>,
 ) -> Result<Vec<Yaml>, RenderError> {
+    let shared = step_context.shared.get(id).map(String::as_str);
     let mut rendered_steps =
         Vec::with_capacity(job.steps.len() + 2 * usize::from(shared.is_some()));
     if let Some(uses) = shared {
-        let Some(checkout) = checkouts.get(id) else {
+        let Some(checkout) = step_context.checkouts.get(id) else {
             return Err(RenderError::InvalidWorkflow(format!(
                 "shared_lane_missing_checkout:{id}"
             )));
@@ -330,8 +336,16 @@ fn render_job_steps(
             )));
         }
         rendered_steps.push(step_to_yaml(id, checkout, ctx, needs_envs, false, job_env)?);
+        let Some(prelude) = step_context.preludes.get(id) else {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "shared_lane_missing_prelude:{id}"
+            )));
+        };
+        for step in prelude {
+            rendered_steps.push(step_to_yaml(id, step, ctx, needs_envs, false, job_env)?);
+        }
         rendered_steps.push(shared_call(uses)?);
-    } else if checkouts.contains_key(id) {
+    } else if step_context.checkouts.contains_key(id) || step_context.preludes.contains_key(id) {
         return Err(RenderError::InvalidWorkflow(format!(
             "checkout_without_shared_lane:{id}"
         )));

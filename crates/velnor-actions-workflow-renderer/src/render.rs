@@ -253,7 +253,7 @@ pub fn finalize_jobs(
                 RenderError::InvalidWorkflow(format!("tools_cache_unsupported_target:{id}"))
             })?;
         cache_p08::ensure_tools_cache_v2(id, job, mise, always, target)?;
-        cache_p08::check_no_rust_cache_with_mbx(id, job)?;
+        cache_p08::check_no_legacy_rust_cache(id, job)?;
         cache_p08::check_mbx_before_fetch(id, job)?;
         closure::check_internal_staged(id, job, ctx.preseed)?;
     }
@@ -340,6 +340,7 @@ fn render_merged(
         ctx,
         &shared.calls,
         &shared.checkouts,
+        &shared.preludes,
         &mbx_gc_jobs,
     )?;
     if let Some((source, max_parallel)) = &matrix {

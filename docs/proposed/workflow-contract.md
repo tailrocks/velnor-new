@@ -289,7 +289,6 @@ actions/cache/save
 actions/upload-artifact
 actions/download-artifact
 asamarts/alint
-Swatinem/rust-cache
 ```
 
 Velnor's compiled-in action registry supplies the latest stable release, full
@@ -300,8 +299,8 @@ the [version policy](version-policy.md). The workflow renderer MUST emit
 `jdx/mise-action` for Mise setup, `actions/checkout` for source access,
 cache restore/save for their respective cache phases, and upload/download
 artifact actions for required reports or transferred outputs. It MUST emit
-`jdx/mr-boxington-action` only when the Rust detector selects MBX, and `Swatinem/rust-cache` only for
-Cargo-only repositories (registry-only, shared key, never over MBX-owned paths).
+`jdx/mr-boxington-action` only when the Rust detector selects MBX. Every Rust lane uses the shared
+exact-path Cargo sources archive; broad Cargo-home cache actions are forbidden.
 `asamarts/alint` is limited to Velnor's own repository-policy job. Branches,
 moving refs, `pull_request_target`, `actions/setup-*`, and
 `taiki-e/install-action` MUST NOT appear. `actionlint` and `zizmor` MUST

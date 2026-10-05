@@ -57,7 +57,7 @@ pub(super) fn cache_step(
         &TOOLS_CACHE_PATHS.map(str::to_owned),
     )?;
     crate::steps::scan_for_private_subcommands(name)?;
-    step.name = name.to_owned();
+    name.clone_into(&mut step.name);
     step.condition = condition;
     Ok(step)
 }

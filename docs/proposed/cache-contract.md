@@ -95,16 +95,15 @@ Cargo sources, and a unique run/matrix closure digest for MBX. The complete key 
 bytes; the generator MUST fail if it is longer. Restore prefixes MAY omit `snapshot_id` only for the same
 compatibility ID. A commit SHA alone MUST NOT be a cache identity.
 
-## 2. V1 Rust cache paths, transport, and fallback
+## 2. V1 Rust cache paths and transport
 
-The Cargo/MBX paths below map generic cache rules for V1 Rust. Future adapters define their own paths and
-compatibility fields under the same invariants.
+These V1 Rust Cargo/MBX paths map generic cache rules; future adapters define their own paths and compatibility fields under the same invariants.
 
 Each path has one owner:
 
 | Data | Owner | Rule |
 |---|---|---|
-| Mise tools and Rust components | Velnor V2 tools layer; exact pins come from the compiled-in catalog and Mise | Archive Mise installs, Rustup components, Cargo-installed binaries, and their manifests only under a runtime-qualified key; disable project config, env files, and hooks |
+| Mise tools and Rust components | [Velnor V2 tools layer](tools-cache-v2.md) | Archive only under an exact runtime-qualified key; disable project config, env files, and hooks |
 | Cargo registry and Git sources | Velnor source layer | Archive only `registry/index/`, `registry/cache/`, and `git/db/`; exclude credentials and keep tool binaries in the tools layer |
 | Compiler objects and scheduler state | `jdx/mr-boxington-action` when MBX is selected | The action owns the object format (`github-cache-mode: objects`). Generated jobs set `ACTIONS_CACHE_MODE=read` so its post does not export inside the live store. `mbx cache export` writes one directory at `$RUNNER_TEMP/mbx-single-bundle`; `actions/cache` archives only that directory; `mbx cache import` loads it. Velnor does not reimplement the object format |
 | Mutable target directory | Matrix job | Reuse sequentially; never share concurrently |
@@ -124,9 +123,8 @@ The generated workflow MUST use these paths. `CARGO_TARGET_DIR` is never an arch
 
 ```text
 VELNOR_CACHE_ROOT     = $RUNNER_TEMP/velnor/cache
-CARGO_HOME            = $VELNOR_CACHE_ROOT/cargo
+CARGO_HOME            = $RUNNER_TEMP/velnor/cargo
 CARGO_SOURCE_PATHS    = $CARGO_HOME/registry/index $CARGO_HOME/registry/cache $CARGO_HOME/git/db
-TOOLS_CACHE_PATHS     = ~/.local/share/mise $RUNNER_TEMP/velnor/rustup $CARGO_HOME/.crates.toml $CARGO_HOME/.crates2.json $CARGO_HOME/bin
 CARGO_TARGET_DIR      = $RUNNER_TEMP/velnor/target/<lane_id>
 MBX_TARGET_DIR        = $RUNNER_TEMP/velnor/target/<lane_id>
 MISE_TASK_CACHE_DIR   = $VELNOR_CACHE_ROOT/mise-task
@@ -134,15 +132,9 @@ MISE_TASK_ARTIFACTS   = $MISE_TASK_CACHE_DIR/task-artifacts/v2
 REPORT_DIR            = $RUNNER_TEMP/velnor/<run-key>/<matrix-key>
 ```
 
-`CARGO_HOME` is set to this isolated path for every generated task. The source archive MUST include only
-the listed registry and Git source paths, never Cargo binaries, Cargo install manifests, credentials, or other
-files under Cargo home. The tools archive carries the exact Cargo binary and manifest paths above alongside
-Mise installs and Rustup components. Its static identity binds the exact Mise action and binary pin, tool
-selectors, Rust components, target, runner lane, and owned paths; a hosted runtime identity binds the cache to
-the runner image and validated absolute roots. Unknown runtime identity disables restore and save while the
-workflow still performs normal pinned tool preparation. Mise stores task artifacts under
-`$MISE_TASK_CACHE_DIR/task-artifacts/v2`; CI sets that environment variable before Mise starts and archives
-only that directory.
+Generated tasks use this isolated `CARGO_HOME`; sources archive only the listed registry/Git paths and exclude other files and credentials.
+The [V2 tools-cache contract](tools-cache-v2.md) defines disjoint tool ownership, identity, and fallback.
+Mise stores task artifacts under `$MISE_TASK_CACHE_DIR/task-artifacts/v2`; CI sets the variable before Mise and archives only that directory.
 
 `actions/cache/restore` and `actions/cache/save` MAY archive `CARGO_SOURCE_PATHS`,
 qualified `MISE_TASK_ARTIFACTS`, and `$RUNNER_TEMP/mbx-single-bundle`. The action
