@@ -6,7 +6,8 @@
 use std::collections::BTreeMap;
 use std::ffi::OsString;
 
-use velnor_actions_contract::{Job, JobTimeout, Step};
+use velnor_actions_contract::workflow::permissions::PermissionLevel;
+use velnor_actions_contract::{Job, JobTimeout, Permissions, Step};
 use velnor_actions_mise::{
     PREPARE_PINNED_TOOLS_STEP, PinnedTool, PinnedToolExec, PreparePinnedTools, ToolCatalog,
     ToolHomes,
@@ -168,10 +169,20 @@ pub(crate) fn final_job(
         timeout_minutes: JobTimeout::REQUIRED,
         needs,
         condition: Some(FINAL_CONDITION.to_owned()),
-        permissions: None,
+        permissions: Some(read_actions_permissions()),
         environment: None,
         steps,
     })
+}
+
+/// Job-level permissions for the two authenticated Actions-artifact readers.
+pub(crate) fn read_actions_permissions() -> Permissions {
+    Permissions {
+        contents: PermissionLevel::Read,
+        pull_requests: PermissionLevel::None,
+        id_token: PermissionLevel::None,
+        actions: PermissionLevel::Read,
+    }
 }
 
 /// Plan-job install set per role: drivers, the `generate` validators, Nextest when used.
