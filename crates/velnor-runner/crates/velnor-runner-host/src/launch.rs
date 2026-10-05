@@ -77,6 +77,7 @@ pub async fn launch_once(
     docker: &bollard::Docker,
     journal: &Journal,
 ) -> Result<LaunchReport, EnsureError> {
+    slot::release_exited(journal, docker).await?;
     let set = ensure_product_scale_set(pat, owner, repo)?;
     if std::env::var("VELNOR_RECONCILE").ok().as_deref() == Some("1") {
         let decision = gate::reconcile_gate(journal, docker).await?;

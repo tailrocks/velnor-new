@@ -272,6 +272,10 @@ mod tests {
         polls: usize,
     }
 
+    #[expect(
+        clippy::unused_async_trait_impl,
+        reason = "test poll host implements the async interface without I/O"
+    )]
     impl PollHost for Fake {
         async fn poll(&mut self, workers: &mut Vec<Started>) -> Result<bool, EnsureError> {
             let _ = workers;

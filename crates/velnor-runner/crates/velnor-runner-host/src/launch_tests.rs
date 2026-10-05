@@ -6,6 +6,7 @@ use velnor_runner_github::{ParsedBatch, Poll};
 
 use crate::launch::{Idle, drive_offer, idle};
 use crate::launch_harness::{CANARY, Mode, Script, absent, assigned_wait, available, ctx, open};
+use crate::launch_test_support::valid_worker_volume;
 use crate::{EnsureError, HostError, IntentState, Started};
 
 #[test]
@@ -42,7 +43,7 @@ async fn launch_acks_only_after_start_and_hides_jit() -> Result<(), String> {
             let jit = jit.to_vec();
             let captured = Arc::clone(&captured);
             async move {
-                if volume != "v3" {
+                if !valid_worker_volume(&volume) {
                     return Err(HostError::ForbiddenMount);
                 }
                 let mut slot = captured.lock().map_err(|_| HostError::Docker)?;
@@ -92,6 +93,25 @@ async fn uncertain_acquire_does_not_ack() -> Result<(), String> {
     let rows = journal.rows().await.map_err(|err| err.to_string())?;
     assert_eq!(rows[0].state, IntentState::Uncertain);
     assert_eq!(rows[0].docker_id, None);
+    let id = rows[0].id;
+    let mut replay = Script {
+        calls: Vec::new(),
+        mode: Mode::Ok,
+    };
+    let replayed = drive_offer(
+        &mut replay,
+        &ctx(),
+        &available(&[3]),
+        &journal,
+        |_volume, _jit, _bind| async { Err(HostError::Docker) },
+    )
+    .await;
+    assert_eq!(replayed, Err(EnsureError::Uncertain));
+    assert!(replay.calls.is_empty());
+    let rows = journal.rows().await.map_err(|err| err.to_string())?;
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].id, id);
+    assert_eq!(rows[0].state, IntentState::Uncertain);
     absent(&scratch.file())
 }
 

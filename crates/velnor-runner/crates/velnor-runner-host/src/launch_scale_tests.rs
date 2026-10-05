@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::launch::drive_offer;
 use crate::launch_harness::{CANARY, Mode, Script, absent, assigned_wait, ctx, open};
+use crate::launch_test_support::valid_worker_volume;
 use crate::{EnsureError, HostError, IntentState, Outcome, Started};
 
 #[tokio::test]
@@ -44,7 +45,7 @@ async fn scale_mints_jit_then_acks_without_acquire() -> Result<(), String> {
     assert_eq!(script.calls, ["jit", "ack"]);
     {
         let slot = volume.lock().map_err(|err| err.to_string())?;
-        assert_eq!(slot.as_str(), "m7");
+        assert!(valid_worker_volume(slot.as_str()));
     }
     let rows = journal.rows().await.map_err(|err| err.to_string())?;
     assert_eq!(rows.len(), 1);

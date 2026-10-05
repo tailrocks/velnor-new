@@ -7,6 +7,10 @@ use std::path::{Path, PathBuf};
 use crate::error::HostError;
 use crate::reconcile::IntentRow;
 
+mod launch;
+mod schema;
+mod worker_volume;
+
 /// Durable intent row.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IntentState {
@@ -202,7 +206,7 @@ impl Journal {
         let conn = self.connection().await?;
         let changed = conn
             .execute(
-                "UPDATE intents SET docker_id = COALESCE(?1, docker_id), dind_id = COALESCE(?2, dind_id) WHERE id = ?3",
+                "UPDATE intents SET docker_id = COALESCE(docker_id, ?1), dind_id = COALESCE(dind_id, ?2) WHERE id = ?3 AND (?1 IS NULL OR docker_id IS NULL OR docker_id = ?1) AND (?2 IS NULL OR dind_id IS NULL OR dind_id = ?2)",
                 (
                     runner_id.map(str::to_owned),
                     dind_id.map(str::to_owned),
@@ -241,7 +245,7 @@ impl Journal {
         let conn = self.connection().await?;
         let mut query = conn
             .query(
-                "SELECT id, kind, subject, state, docker_id, github_runner_id, cleanup_proven, dind_id FROM intents ORDER BY id",
+                "SELECT id, kind, subject, state, docker_id, github_runner_id, cleanup_proven, dind_id, worker_volume FROM intents ORDER BY id",
                 (),
             )
             .await
@@ -256,12 +260,12 @@ impl Journal {
     async fn bootstrap(&self) -> Result<(), HostError> {
         let conn = self.connection().await?;
         conn.execute(
-            "CREATE TABLE IF NOT EXISTS intents (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, subject TEXT NOT NULL, state TEXT NOT NULL, docker_id TEXT, github_runner_id TEXT, cleanup_proven INTEGER NOT NULL DEFAULT 0, dind_id TEXT)",
+            "CREATE TABLE IF NOT EXISTS intents (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, subject TEXT NOT NULL, state TEXT NOT NULL, docker_id TEXT, github_runner_id TEXT, cleanup_proven INTEGER NOT NULL DEFAULT 0, dind_id TEXT, worker_volume TEXT)",
             (),
         )
         .await
         .map_err(|_| HostError::Journal)?;
-        ensure_dind_column(&conn).await
+        schema::ensure_columns(&conn).await
     }
 
     async fn connection(&self) -> Result<turso::Connection, HostError> {
@@ -316,7 +320,7 @@ async fn live_id(
 ) -> Result<Option<i64>, HostError> {
     let mut rows = conn
         .query(
-            "SELECT id FROM intents WHERE kind = ?1 AND subject = ?2 AND state != 'failed' ORDER BY id LIMIT 1",
+            "SELECT id FROM intents WHERE kind = ?1 AND subject = ?2 AND state != 'failed' AND cleanup_proven = 0 ORDER BY id DESC LIMIT 1",
             (kind.to_owned(), subject.to_owned()),
         )
         .await
@@ -337,26 +341,10 @@ fn intent_row(row: &turso::Row) -> Result<IntentRow, HostError> {
         state: IntentState::parse(&state_text)?,
         docker_id: row.get(4).map_err(|_| HostError::Journal)?,
         dind_id: row.get(7).map_err(|_| HostError::Journal)?,
+        worker_volume: row.get(8).map_err(|_| HostError::Journal)?,
         github_runner_id: row.get(5).map_err(|_| HostError::Journal)?,
         cleanup_proven: row.get(6).map_err(|_| HostError::Journal)?,
     })
-}
-
-async fn ensure_dind_column(conn: &turso::Connection) -> Result<(), HostError> {
-    let mut rows = conn
-        .query("PRAGMA table_info(intents)", ())
-        .await
-        .map_err(|_| HostError::Journal)?;
-    while let Some(row) = rows.next().await.map_err(|_| HostError::Journal)? {
-        let name: String = row.get(1).map_err(|_| HostError::Journal)?;
-        if name == "dind_id" {
-            return Ok(());
-        }
-    }
-    conn.execute("ALTER TABLE intents ADD COLUMN dind_id TEXT", ())
-        .await
-        .map_err(|_| HostError::Journal)?;
-    Ok(())
 }
 
 async fn same_ids(

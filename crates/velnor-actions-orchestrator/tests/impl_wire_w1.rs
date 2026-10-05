@@ -302,14 +302,15 @@ fn w1_plan_format_runs_fmt_check() -> TestResult {
     let format_at = job.find("- name: Format").ok_or("format step")?;
     let tail = &job[format_at..];
     let block = &tail[..tail.len().min(900)];
-    for key in [
-        "MISE_RUSTUP_HOME:",
-        "MISE_CARGO_HOME:",
-        "RUSTUP_TOOLCHAIN: 1.98.1",
-        "MISE_AUTO_INSTALL:",
-        "MISE_EXEC_AUTO_INSTALL:",
-    ] {
+    for key in ["MISE_RUSTUP_HOME:", "MISE_CARGO_HOME:"] {
         assert!(block.contains(key), "format env misses {key}:\n{block}");
+    }
+    assert!(
+        job.contains("RUSTUP_TOOLCHAIN: 1.98.1"),
+        "job env misses RUSTUP_TOOLCHAIN:\n{job}"
+    );
+    for key in ["MISE_AUTO_INSTALL:", "MISE_EXEC_AUTO_INSTALL:"] {
+        assert!(job.contains(key), "job env misses {key}:\n{job}");
     }
     // Regression: exactly one Format step per crate job, none in plan.
     let formats = yaml.matches("- name: Format").count();

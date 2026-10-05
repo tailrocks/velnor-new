@@ -80,6 +80,7 @@ fn intent(state: IntentState, kind: &str) -> IntentRow {
         state,
         docker_id: None,
         dind_id: None,
+        worker_volume: None,
         github_runner_id: None,
         cleanup_proven: false,
     }
