@@ -21,7 +21,7 @@ fn pinned_catalog_matches_qualified_versions() {
     assert_eq!(catalog.version(PinnedTool::Opentofu), "1.13.1");
     assert_eq!(catalog.version(PinnedTool::Reuse), "6.2.0");
     assert_eq!(catalog.version(PinnedTool::Python), "3.14.8");
-    assert_eq!(catalog.version(PinnedTool::Uv), "0.12.22");
+    assert_eq!(catalog.version(PinnedTool::Uv), "0.12.23");
     assert_eq!(RUST_VERSION, "1.98.1");
     assert_eq!(MR_BOXINGTON_VERSION, "1.21.1");
     assert_eq!(GH_VERSION, "2.102.0");
@@ -56,7 +56,7 @@ fn tool_specs_use_registry_names() {
     );
     assert_eq!(catalog.tool_spec(PinnedTool::Opentofu), "opentofu@1.13.1");
     assert_eq!(catalog.tool_spec(PinnedTool::Python), "python@3.14.8");
-    assert_eq!(catalog.tool_spec(PinnedTool::Uv), "uv@0.12.22");
+    assert_eq!(catalog.tool_spec(PinnedTool::Uv), "uv@0.12.23");
     assert_eq!(
         catalog.tool_spec(PinnedTool::Reuse),
         "pipx:reuse[extras=charset-normalizer,uvx_args=\"--python 3.14.8 --no-python-downloads\"]@6.2.0"

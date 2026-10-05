@@ -87,8 +87,8 @@ pub const REUSE_VERSION: &str = "6.2.0";
 /// Source: `https://www.python.org/downloads/`; checked 2026-10-02.
 pub const PYTHON_VERSION: &str = "3.14.8";
 /// uv runtime used by Mise's pipx backend for REUSE installation.
-/// Source: `https://api.github.com/repos/astral-sh/uv/releases/latest`; checked 2026-10-02.
-pub const UV_VERSION: &str = "0.12.22";
+/// Source: `https://api.github.com/repos/astral-sh/uv/releases/latest`; checked 2026-10-04.
+pub const UV_VERSION: &str = "0.12.23";
 
 // Nextest needs its backend-qualified aqua-registry path: no `nextest`
 // shorthand exists, `github:` tags carry a `cargo-nextest-` prefix, and
