@@ -6,7 +6,11 @@ use std::path::Path;
 use crate::impl_cli_tmp::{
     cleanup, code, commit_all, fresh_tempdir, git_init, head_sha, spawn_isolated, write_workspace,
 };
-use velnor_actions_orchestrator::{DYNAMIC_MATRIX_OUTPUT_MODE, PLAN_MATRIX_OUTPUT_MODE_ENV};
+
+/// Serialized workflow marker selecting dynamic matrix output accounting.
+const PLAN_MATRIX_OUTPUT_MODE_ENV: &str = "VELNOR_PLAN_MATRIX_OUTPUT_MODE";
+/// Exact serialized marker value emitted by the renderer.
+const DYNAMIC_MATRIX_OUTPUT_MODE: &str = "dynamic_matrix";
 
 /// Pin the push branch so plan works without origin/HEAD.
 fn pin_branch(repo: &Path) -> Result<(), Box<dyn Error>> {
