@@ -62,10 +62,10 @@ pub(crate) fn workflow_to_yaml(
                 &needs_env,
                 call,
                 &lane_steps,
-                &workflow_env,
-                MbxJobPolicy {
+                JobRenderPolicy {
                     native_mbx: mbx_jobs.contains(id),
                     actions_read,
+                    workflow_env: &workflow_env,
                 },
             )?,
         ));
@@ -239,9 +239,10 @@ fn dispatch_input_to_yaml(input: &DispatchInput) -> Yaml {
 }
 
 #[derive(Clone, Copy)]
-struct MbxJobPolicy {
+struct JobRenderPolicy<'a> {
     native_mbx: bool,
     actions_read: bool,
+    workflow_env: &'a BTreeMap<String, String>,
 }
 
 /// Render one job: name, runs-on, timeout, environment, permissions, needs, if, steps.
@@ -252,8 +253,7 @@ fn job_to_yaml(
     needs_envs: &[(String, String)],
     shared: Option<&str>,
     lanes: &crate::document_lanes::SharedLaneSteps<'_>,
-    workflow_env: &BTreeMap<String, String>,
-    mbx_policy: MbxJobPolicy,
+    policy: JobRenderPolicy<'_>,
 ) -> Result<Yaml, RenderError> {
     steps::scan_for_private_subcommands(&job.display_name)?;
     let runner = RunsOn::parse(&job.runs_on).map_err(RenderError::Contract)?;
@@ -310,7 +310,7 @@ fn job_to_yaml(
             }
         }
     }
-    if mbx_policy.native_mbx {
+    if policy.native_mbx {
         job_env.insert(
             crate::cache_steps::MBX_GC_AUTO_ENV.to_owned(),
             crate::cache_steps::MBX_GC_AUTO_VALUE.to_owned(),
@@ -321,7 +321,7 @@ fn job_to_yaml(
         );
     }
     let mut entries = job_header_fields(job, runs_on);
-    append_job_options(&mut entries, job, scale_set, &job_env, workflow_env)?;
+    append_job_options(&mut entries, job, scale_set, &job_env, policy.workflow_env)?;
     let rendered_steps = crate::document_lanes::render_job_steps(
         id,
         job,
@@ -331,7 +331,7 @@ fn job_to_yaml(
         lanes,
         &crate::document_lanes::JobStepContext {
             job_env: &job_env,
-            actions_read: mbx_policy.actions_read,
+            actions_read: policy.actions_read,
         },
     )?;
     entries.push(("steps".to_owned(), Yaml::Seq(rendered_steps)));

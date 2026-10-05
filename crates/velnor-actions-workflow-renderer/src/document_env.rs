@@ -25,9 +25,8 @@ pub(super) fn exclude_inherited(
     workflow: &BTreeMap<String, String>,
 ) -> BTreeMap<String, String> {
     job.iter()
-        .filter_map(|(key, value)| {
-            (workflow.get(key) != Some(value)).then(|| (key.clone(), value.clone()))
-        })
+        .filter(|(key, value)| workflow.get(*key) != Some(*value))
+        .map(|(key, value)| ((*key).clone(), (*value).clone()))
         .collect()
 }
 

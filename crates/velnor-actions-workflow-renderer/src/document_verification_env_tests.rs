@@ -69,10 +69,10 @@ fn emitted_verification_job_scrubs_credentials_without_disabling_mise_config() {
         &[],
         None,
         &lanes,
-        &BTreeMap::new(),
-        super::MbxJobPolicy {
+        super::JobRenderPolicy {
             native_mbx: false,
             actions_read: false,
+            workflow_env: &BTreeMap::new(),
         },
     )
     .expect("render verification job");
