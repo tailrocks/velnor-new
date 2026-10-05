@@ -21,7 +21,7 @@ mod lease;
 mod retry;
 mod stalled;
 
-pub(super) use engine::CompletionEngine;
+pub(in crate::launch) use engine::CompletionEngine;
 
 async fn launch(
     journal: &Journal,
