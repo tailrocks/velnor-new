@@ -1,9 +1,9 @@
 a63e6a4550e75e14c2dd2ebe6efefe1360a847967c0ee2f28803eb43949dc6e4  ./.github/AGENTS.md
 0da1fbb188c99eb4cffe66befed975368b8b86ef7e375d2b8ac9a6540818fbff  ./.github/actionlint.yaml
-a4e599eb13a9372b5566b24e28c211c71bfee922a21dd4828fe0781415be18c4  ./.github/workflows/ci.yml
+b21a760122f7aed21e65e40b8755fdcfb23e687e3ef167501a69d10e6c2e1059  ./.github/workflows/ci.yml
 0d41b05d10d4da7b26a719f82908f2a47e7224ed93ef3383d81a6d45179fb5d8  ./.github/workflows/freshness.yml
 d13645f1aa9667a1ce9fa0886ca5f4930c3a9a0e33c3dfe7df6b8942cad9962a  ./.github/workflows/generator-release.yml
 a103db30bc49166259cbb40e9948c2677fbc49d84164cc7f71c262ea5d3ecdab  ./.github/workflows/image-release.yml
 f3edd65a1dcc1de22b67e08446003e41d10c8fd4595ffcff72fb9e821a935846  ./.github/workflows/macos-binary-release.yml
-cb93d7486f58720d7ea3e3d3318ece99fe15a2dbce8a9193f21107c74078ae74  ./.github/workflows/qualification.yml
+e67c1853decead61e1e598a507c0292526d4eaea52803a1ef4884862d127a032  ./.github/workflows/qualification.yml
 link ./.github/CLAUDE.md -> AGENTS.md

@@ -50,7 +50,7 @@ pub(crate) fn workflow_to_yaml(
     for (id, job) in jobs {
         let call = shared.calls.get(id).map(String::as_str);
         let actions_read =
-            job.permissions.as_ref().unwrap_or(&ir.permissions).actions == PermissionLevel::Read;
+            grants_exact_actions_read(job.permissions.as_ref().unwrap_or(&ir.permissions).actions);
         rendered_jobs.push((
             id.clone(),
             job_to_yaml(
@@ -86,6 +86,13 @@ pub(crate) fn workflow_to_yaml(
         ),
         ("jobs".to_owned(), Yaml::Map(rendered_jobs)),
     ]))
+}
+
+/// Report download is intentionally limited to the least-privilege `read` grant.
+/// A broader `write` grant can access artifacts on GitHub, but does not satisfy
+/// this renderer policy; callers must model the dedicated reader scope.
+fn grants_exact_actions_read(level: PermissionLevel) -> bool {
+    level == PermissionLevel::Read
 }
 
 fn lane_steps(shared: &LaneShare) -> crate::document_lanes::SharedLaneSteps<'_> {

@@ -13,7 +13,6 @@ name: CI
   merge_group:
 permissions:
   contents: read
-  actions: read
 concurrency:
   group: velnor-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -141,6 +140,9 @@ jobs:
       NODE_AUTH_TOKEN: ""
       NPM_TOKEN: ""
       RUSTUP_TOOLCHAIN: 1.98.1
+    permissions:
+      contents: read
+      actions: read
     outputs:
       covered_tasks: ${{ steps.plan.outputs.covered_tasks }}
     steps:
@@ -228,7 +230,7 @@ jobs:
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; test -x target/release/velnor-actions && mise --no-config --no-env --no-hooks exec rust@1.98.1 -- mbx --version | grep -qxF \"mbx 1.22.0\"'"
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; test -x target/release/velnor-actions && mkdir -p \"$RUNNER_TEMP/velnor\" && mise --no-config --no-env --no-hooks exec rust@1.98.1 -- mbx --version > \"$RUNNER_TEMP/velnor/preseed-mbx-version\" && grep -qxF \"mbx 1.22.0\" \"$RUNNER_TEMP/velnor/preseed-mbx-version\"'"
       - name: Write helper manifest (pre-seed trust-on-review)
         env:
           VELNOR_INTERNAL_OP: write-preseed-manifest-v1
@@ -266,6 +268,8 @@ jobs:
       - name: Plan
         id: plan
         env:
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
           VELNOR_INTERNAL_OP: plan-v1
           VELNOR_REQUEST_FILE: ${{ runner.temp }}/velnor/request/plan-v1-request.json
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
@@ -367,6 +371,9 @@ jobs:
       NODE_AUTH_TOKEN: ""
       NPM_TOKEN: ""
       RUSTUP_TOOLCHAIN: 1.98.1
+    permissions:
+      contents: read
+      actions: read
     needs:
       - plan
       - rust-velnor-actions-actionlint

@@ -5,7 +5,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::os::unix::fs::symlink;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use velnor_actions_contract::StepKind;
 
@@ -20,12 +20,25 @@ struct TempRoot(PathBuf);
 
 impl TempRoot {
     fn new() -> std::io::Result<Self> {
-        let nonce = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_or(0, |duration| duration.as_nanos());
-        let path = std::env::temp_dir().join(format!("velnor-rust-preflight-{nonce}"));
-        fs::create_dir(&path)?;
-        Ok(Self(fs::canonicalize(path)?))
+        static NEXT_ROOT: AtomicU64 = AtomicU64::new(0);
+
+        for _ in 0..128 {
+            let sequence = NEXT_ROOT.fetch_add(1, Ordering::Relaxed);
+            let path = std::env::temp_dir().join(format!(
+                "velnor-rust-preflight-{}-{sequence}",
+                std::process::id()
+            ));
+            match fs::create_dir(&path) {
+                Ok(()) => return Ok(Self(fs::canonicalize(path)?)),
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+                Err(error) => return Err(error),
+            }
+        }
+
+        Err(std::io::Error::new(
+            std::io::ErrorKind::AlreadyExists,
+            "could not allocate a unique renderer test root",
+        ))
     }
 }
 
