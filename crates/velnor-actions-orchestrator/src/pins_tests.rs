@@ -223,17 +223,14 @@ fn acquisition_rejects_tampered_platform() {
 
 #[test]
 fn acquisition_template_selects_native_checksum_by_typed_target() {
+    let staged = format!("{STAGED_BINARY_PREFIX}0.1.0");
     for (target, expected) in [
         (ReleaseTarget::LinuxX86_64, "sha256sum -c -"),
         (ReleaseTarget::MacosArm64, "shasum -a 256 -c -"),
         (ReleaseTarget::MacosX86_64, "shasum -a 256 -c -"),
     ] {
-        let argv = acquire_script_argv(
-            "${{ runner.temp }}/velnor/bin/velnor-actions-0.1.0",
-            "/opt/velnor/seed",
-            target,
-        )
-        .expect("supported typed target");
+        let argv = acquire_script_argv(&staged, "/opt/velnor/seed", target)
+            .expect("supported typed target");
         assert!(argv[2].contains(expected), "{target:?}: {}", argv[2]);
         if target != ReleaseTarget::LinuxX86_64 {
             assert!(!argv[2].contains("sha256sum"), "{target:?}: {}", argv[2]);
