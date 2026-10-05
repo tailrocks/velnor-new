@@ -5,8 +5,10 @@ use crate::internal::{internal, internal_contract};
 use std::env;
 use std::ffi::OsString;
 use std::path::Path;
-use std::time::Instant;
+use std::time::{Duration, Instant};
+use velnor_actions_contract::config::MAX_CHECK_EXECUTION_RECEIPT_BYTES;
 use velnor_actions_contract::{MatrixEntry, ObligationDecision, Plan, canonical_json_bytes};
+use velnor_actions_mise::CheckDeadline;
 use velnor_actions_mise::{DiscoveredCheck, ToolCatalog, discover_checks};
 #[path = "check_prepare.rs"]
 pub(crate) mod preparation;
@@ -150,14 +152,17 @@ fn run_check(
     item: &DiscoveredCheck,
     plan: &Plan,
 ) -> Result<CheckOutcome, OrchestratorError> {
-    let started = Instant::now();
+    let deadline = CheckDeadline::after(Duration::from_secs(
+        u64::from(item.check.timeout_minutes) * 60,
+    ))
+    .map_err(|e| internal(&e.to_string()))?;
     if let Some(evidence) = &item.check.evidence {
         reject_link_components(root, &evidence.path)?;
         if std::fs::symlink_metadata(root.join(&evidence.path)).is_ok() {
             return Err(internal("check_evidence_preexisting"));
         }
     }
-    let owned = prepare_check(root, temp, item)?;
+    let owned = prepare_check(root, temp, item, deadline)?;
     let platform =
         serde_json::to_value(item.check.runner.platform).map_err(|_| internal("check_platform"))?;
     let pairs = [
@@ -175,18 +180,19 @@ fn run_check(
             ),
         ),
     ];
-    let before = preparation::container::probe(&item.check.runner, owned.container.as_ref())?;
-    let output = owned
-        .command()
+    let before =
+        preparation::container::probe(&item.check.runner, owned.container.as_ref(), deadline)?;
+    let command = owned
+        .command(deadline)
         .map_err(|e| internal(&e.to_string()))?
         .with_env(&pairs)
-        .map_err(|e| internal(&e.to_string()))?
-        .run_bounded(
-            8 * 1024 * 1024,
-            remaining_timeout(owned.timeout(), started)?,
-        )
         .map_err(|e| internal(&e.to_string()))?;
-    let after = preparation::container::probe(&item.check.runner, owned.container.as_ref())?;
+    let timeout = deadline.remaining().map_err(|e| internal(&e.to_string()))?;
+    let task_output = command.run_bounded(8 * 1024 * 1024, timeout);
+    let after_result =
+        preparation::container::probe(&item.check.runner, owned.container.as_ref(), deadline);
+    let output = task_output.map_err(|e| internal(&e.to_string()))?;
+    let after = after_result?;
     let container = preparation::container::receipt(
         &item.check.runner,
         owned.container.as_ref(),
@@ -236,6 +242,9 @@ fn write_execution_receipt(
     );
     execution.container.clone_from(&outcome.container);
     let bytes = canonical_json_bytes(&execution).map_err(internal_contract)?;
+    if bytes.len() > MAX_CHECK_EXECUTION_RECEIPT_BYTES {
+        return Err(internal("check_execution_receipt_size_limit"));
+    }
     let base = temp
         .join("velnor")
         .join(&plan.run_key)
@@ -246,16 +255,6 @@ fn write_execution_receipt(
         &bytes,
         "check_execution",
     )
-}
-
-fn remaining_timeout(
-    timeout: std::time::Duration,
-    started: Instant,
-) -> Result<std::time::Duration, OrchestratorError> {
-    timeout
-        .checked_sub(started.elapsed())
-        .filter(|remaining| !remaining.is_zero())
-        .ok_or_else(|| internal("check_timeout"))
 }
 
 fn save_evidence(

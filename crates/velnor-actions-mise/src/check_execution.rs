@@ -87,8 +87,8 @@ impl QualifiedCheck {
     /// Config-visible execution of the authorized named native task.
     /// # Errors
     /// Fails if the owned projection has changed.
-    pub fn command(&self) -> Result<IsolatedCommand, MiseError> {
-        IsolatedCommand::qualified_check_run(self)
+    pub fn command(&self, deadline: crate::CheckDeadline) -> Result<IsolatedCommand, MiseError> {
+        IsolatedCommand::qualified_check_run(self, deadline)
     }
     /// Per-check process deadline (includes the native task graph).
     #[must_use]

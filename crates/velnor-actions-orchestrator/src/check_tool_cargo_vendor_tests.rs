@@ -1,6 +1,7 @@
 //! Offline Cargo source closure admission; no compiler or network execution.
 use super::*;
 use std::fs;
+use std::time::Duration;
 use velnor_actions_contract::config::{
     QualifiedToolArtifact, QualifiedToolExecutable, QualifiedToolProbe,
 };
@@ -94,6 +95,7 @@ fn prepare(fixture: &Fixture) -> Result<(), OrchestratorError> {
         &fixture.home,
         std::slice::from_ref(&fixture.primary),
         std::slice::from_ref(&fixture.dependency),
+        velnor_actions_mise::CheckDeadline::after(Duration::from_secs(60)).expect("deadline"),
     )
 }
 

@@ -8,6 +8,7 @@ pub(crate) mod tools;
 
 use std::collections::BTreeSet;
 use std::path::Path;
+use velnor_actions_contract::config::MAX_CHECK_EXECUTION_RECEIPT_BYTES;
 use velnor_actions_contract::config::{CheckEvidence, CheckPlatform, CheckRunner};
 use velnor_actions_contract::{
     MatrixEntry, Plan, TaskReport, TaskStatus, digest_b3, parse_strict_json,
@@ -120,7 +121,7 @@ fn read_proof(entry: &MatrixEntry, dir: &Path) -> Result<serde_json::Value, &'st
         reject_link_components(dir, relative).map_err(|_| "symlink_check_execution")?;
         crate::retrieve_reports::read_staged_text(
             &dir.join(relative),
-            crate::retrieve_reports::MAX_STAGED_REPORT_BYTES,
+            MAX_CHECK_EXECUTION_RECEIPT_BYTES as u64,
         )
     };
     let (relative, text) = match read(&direct) {

@@ -10,6 +10,7 @@ pub mod cache_sources;
 pub mod cache_transport;
 pub mod cache_trust;
 pub mod catalog;
+pub mod check_deadline;
 pub mod checks;
 pub mod command;
 pub mod custom_run;
@@ -50,6 +51,7 @@ pub use catalog::{
     SHELLCHECK_VERSION, ToolCatalog, ZIZMOR_VERSION, check_freshness_requirements,
     validate_exact_version,
 };
+pub use check_deadline::CheckDeadline;
 pub use checks::{DiscoveredCheck, QualifiedCheck, discover_checks};
 pub use command::{
     ALLOWED_MISE_SUBCOMMANDS, CREDENTIAL_ENV_KEYS, ENDPOINT_ENV_KEYS, ISOLATION_ENV,

@@ -273,3 +273,13 @@ fn validate_sdk(
 #[cfg(test)]
 #[path = "check_container_gate_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+pub(crate) fn budget_test_profile() -> HostContainerProfile {
+    tests::profile()
+}
+
+#[cfg(test)]
+pub(crate) fn budget_test_receipt() -> ContainerReceipt {
+    tests::receipt()
+}

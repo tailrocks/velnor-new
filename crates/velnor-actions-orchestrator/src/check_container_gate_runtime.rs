@@ -5,7 +5,10 @@ use serde::Deserialize;
 use serde_json::{Map, Value};
 use std::collections::BTreeSet;
 use std::path::{Component, Path};
-use velnor_actions_contract::config::HostContainerProfile;
+use velnor_actions_contract::config::{
+    HostContainerProfile, MAX_CHECK_CONTAINER_PATH_BYTES, MAX_CHECK_CONTAINER_RUNTIME_ENTRIES,
+    MAX_CHECK_CONTAINER_RUNTIME_ENTRY_PATH_BYTES,
+};
 use velnor_actions_mise::checks::ContainerObservation;
 
 pub(crate) use crate::check_runtime::preparation::container::runtime::{
@@ -209,7 +212,7 @@ fn validate_entries(
     runtime_link: Option<&str>,
     home: &Path,
 ) -> Result<(), OrchestratorError> {
-    if entries.len() > 1_000 {
+    if entries.len() > MAX_CHECK_CONTAINER_RUNTIME_ENTRIES {
         return Err(internal("container_runtime_entry_limit"));
     }
     let expected_owner = profile.socket_uid();
@@ -217,6 +220,13 @@ fn validate_entries(
     for entry in entries {
         if entry.owner != expected_owner
             || entry.path.is_empty()
+            || entry.path.len()
+                > if matches!(profile, HostContainerProfile::Docker { .. }) {
+                    MAX_CHECK_CONTAINER_PATH_BYTES
+                } else {
+                    MAX_CHECK_CONTAINER_RUNTIME_ENTRY_PATH_BYTES
+                }
+            || entry.path.chars().any(char::is_control)
             || !paths.insert(entry.path.clone())
             || !matches!(
                 entry.kind.as_str(),
@@ -280,9 +290,10 @@ fn validate_orb_entries(
 
 fn is_relative_clean(path: &str) -> bool {
     !path.is_empty()
+        && path.len() <= MAX_CHECK_CONTAINER_RUNTIME_ENTRY_PATH_BYTES
         && !path.contains('\\')
         && !path.contains("//")
-        && !path.bytes().any(|byte| byte == 0)
+        && !path.chars().any(char::is_control)
         && path
             .split('/')
             .all(|part| !part.is_empty() && part != "." && part != "..")

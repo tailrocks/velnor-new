@@ -2,10 +2,12 @@ use crate::OrchestratorError;
 use crate::internal::internal;
 use std::fs::{self, Metadata};
 use std::path::{Component, Path};
+use velnor_actions_contract::config::{
+    MAX_CHECK_CONTAINER_RUNTIME_ENTRIES, MAX_CHECK_CONTAINER_RUNTIME_ENTRY_PATH_BYTES,
+};
 
 use super::{RuntimeEntryEvidence, RuntimeEntryKind};
 
-const MAX_RUNTIME_ENTRIES: usize = 1_000;
 const MAX_RUNTIME_METADATA_BYTES: u64 = 64 * 1024;
 
 /// Stable identity of the declared Unix socket endpoint.
@@ -127,7 +129,7 @@ fn walk_runtime(
     }
     paths.sort();
     for path in paths {
-        if entries.len() >= MAX_RUNTIME_ENTRIES {
+        if entries.len() >= MAX_CHECK_CONTAINER_RUNTIME_ENTRIES {
             return Err(internal("orbstack_runtime_entry_limit"));
         }
         let metadata = fs::symlink_metadata(&path).map_err(|e| io(&path, e))?;
@@ -179,13 +181,16 @@ fn relative_path(root: &Path, path: &Path) -> Result<String, OrchestratorError> 
         let part = part
             .to_str()
             .ok_or_else(|| internal("orbstack_runtime_utf8"))?;
-        if part.contains('/') || part.contains('\\') {
+        if part.contains('/') || part.contains('\\') || part.chars().any(char::is_control) {
             return Err(internal("orbstack_runtime_relative_path"));
         }
         if !output.is_empty() {
             output.push('/');
         }
         output.push_str(part);
+        if output.len() > MAX_CHECK_CONTAINER_RUNTIME_ENTRY_PATH_BYTES {
+            return Err(internal("orbstack_runtime_entry_path_limit"));
+        }
     }
     if output.is_empty() {
         Err(internal("orbstack_runtime_root_entry"))

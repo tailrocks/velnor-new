@@ -1,15 +1,13 @@
 //! Readonly qualified executable probes; the orchestrator hashes installed bytes.
-use crate::{IsolatedCommand, MiseError};
+use crate::{CheckDeadline, IsolatedCommand, MiseError};
 use serde::{Deserialize, Serialize};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use velnor_actions_contract::config::{
-    CheckPlatform, QualifiedTool, QualifiedToolExecutable, QualifiedToolProbe,
+    CheckPlatform, MAX_CHECK_CONTAINER_PATH_BYTES, MAX_CHECK_QUALIFIED_PROBE_CAPTURE_BYTES,
+    QualifiedTool, QualifiedToolExecutable, QualifiedToolProbe,
 };
 use velnor_actions_contract::{digest_b3, is_valid_digest};
-
-const PROBE_CAPTURE_BYTES: usize = 64 * 1024;
-const PROBE_TIMEOUT_SECONDS: u64 = 30;
 
 /// Actual executable identity computed from installed bytes by the runtime.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -72,6 +70,7 @@ pub fn verify_qualified_executable(
     declared: &QualifiedToolExecutable,
     observed: &QualifiedExecutableObservation,
     homes: &QualifiedProbeHomes,
+    deadline: CheckDeadline,
 ) -> Result<QualifiedExecutableProof, MiseError> {
     tool.validate("qualified_tools", &tool.id)
         .map_err(|e| invalid(e.to_string()))?;
@@ -98,8 +97,8 @@ pub fn verify_qualified_executable(
     let command =
         IsolatedCommand::qualified_check_probe(observed.path.as_os_str().to_owned(), args, env);
     let output = command.run_bounded(
-        PROBE_CAPTURE_BYTES,
-        std::time::Duration::from_secs(PROBE_TIMEOUT_SECONDS),
+        MAX_CHECK_QUALIFIED_PROBE_CAPTURE_BYTES,
+        deadline.remaining()?,
     )?;
     if !output.success {
         return Err(invalid("version_probe_failed"));
@@ -181,6 +180,9 @@ fn validate_observation(
     if observed.name != declared.name
         || observed.sha256 != declared.sha256
         || !observed.path.is_absolute()
+        || !observed.path.to_str().is_some_and(|path| {
+            path.len() <= MAX_CHECK_CONTAINER_PATH_BYTES && !path.chars().any(char::is_control)
+        })
         || !velnor_actions_contract::ids::is_lower_hex_len(&observed.sha256, 64)
     {
         return Err(invalid("executable_digest_or_identity_mismatch"));
@@ -262,7 +264,11 @@ fn validate_output(
     probe: &QualifiedToolProbe,
     stdout: &str,
 ) -> Result<(), MiseError> {
-    if stdout.len() > PROBE_CAPTURE_BYTES {
+    if stdout.len() > MAX_CHECK_QUALIFIED_PROBE_CAPTURE_BYTES
+        || stdout
+            .chars()
+            .any(|character| character.is_control() && !matches!(character, '\n' | '\r' | '\t'))
+    {
         return Err(invalid("version_stdout_exceeds_capture_limit"));
     }
     let expected = match probe {
@@ -279,7 +285,9 @@ fn validate_output(
             .next()
             .ok_or_else(|| invalid("empty_version_stdout"))?
     };
-    if actual != expected.trim_end_matches(['\r', '\n']) || actual.len() > PROBE_CAPTURE_BYTES {
+    if actual != expected.trim_end_matches(['\r', '\n'])
+        || actual.len() > MAX_CHECK_QUALIFIED_PROBE_CAPTURE_BYTES
+    {
         return Err(invalid("exact_version_output_mismatch"));
     }
     if matches!(probe, QualifiedToolProbe::RustcVerbose { .. }) {

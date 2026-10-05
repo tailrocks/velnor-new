@@ -141,6 +141,7 @@ fn exact_version_probe_clears_ambient_compiler_selector_and_credentials() -> Tes
         &tool.platforms[0].executables[0],
         &observed,
         &fixture.homes,
+        test_deadline(),
     )?;
     validate_executable_proofs(&tool, platform, std::slice::from_ref(&proof))?;
     let mut altered = proof;
@@ -170,7 +171,8 @@ fn wrong_observed_digest_refuses_before_any_executable_runs() -> TestResult {
             platform,
             &tool.platforms[0].executables[0],
             &observed,
-            &fixture.homes
+            &fixture.homes,
+            test_deadline()
         )
         .is_err()
     );
@@ -198,7 +200,8 @@ fn exact_first_line_rejects_prefix_or_patch_version_drift() -> TestResult {
                 platform,
                 &tool.platforms[0].executables[0],
                 &observed,
-                &fixture.homes
+                &fixture.homes,
+                test_deadline()
             )
             .is_err()
         );
@@ -228,6 +231,7 @@ fn version_subcommand_is_fixed_positional_and_not_caller_argv() -> TestResult {
         &tool.platforms[0].executables[0],
         &observed,
         &fixture.homes,
+        test_deadline(),
     )?;
     Ok(())
 }
@@ -259,6 +263,7 @@ fn rustc_verbose_requires_exact_declared_release_commit_and_platform() -> TestRe
         &tool.platforms[0].executables[0],
         &observed,
         &fixture.homes,
+        test_deadline(),
     )?;
     validate_executable_proofs(&tool, platform, &[proof])?;
     let mut homes = fixture.homes.clone();
@@ -270,6 +275,7 @@ fn rustc_verbose_requires_exact_declared_release_commit_and_platform() -> TestRe
             &tool.platforms[0].executables[0],
             &observed,
             &homes,
+            test_deadline()
         )
         .is_err()
     );
@@ -281,6 +287,7 @@ fn rustc_verbose_requires_exact_declared_release_commit_and_platform() -> TestRe
             &tool.platforms[0].executables[0],
             &observed,
             &homes,
+            test_deadline()
         )
         .is_err()
     );
@@ -292,7 +299,8 @@ fn rustc_verbose_requires_exact_declared_release_commit_and_platform() -> TestRe
             platform,
             &tool.platforms[0].executables[0],
             &drift,
-            &fixture.homes
+            &fixture.homes,
+            test_deadline()
         )
         .is_err()
     );
@@ -321,6 +329,7 @@ fn nextest_version_requires_its_owned_compiler_prefix() -> TestResult {
         &tool.platforms[0].executables[0],
         &observed,
         &fixture.homes,
+        test_deadline(),
     )?;
     let mut homes = fixture.homes.clone();
     homes.compiler_toolchain = None;
@@ -331,6 +340,7 @@ fn nextest_version_requires_its_owned_compiler_prefix() -> TestResult {
             &tool.platforms[0].executables[0],
             &observed,
             &homes,
+            test_deadline()
         )
         .is_err()
     );
@@ -354,12 +364,27 @@ fn stderr_version_and_foreign_owned_paths_are_rejected() -> TestResult {
     let declared = &tool.platforms[0].executables[0];
     let observed = fixture.observation("demo", "printf 'demo 1.2.3\\n' >&2")?;
     assert!(
-        verify_qualified_executable(&tool, platform, declared, &observed, &fixture.homes).is_err()
+        verify_qualified_executable(
+            &tool,
+            platform,
+            declared,
+            &observed,
+            &fixture.homes,
+            test_deadline()
+        )
+        .is_err()
     );
     let foreign_observed = foreign.observation("demo", "printf 'demo 1.2.3\\n'")?;
     assert!(
-        verify_qualified_executable(&tool, platform, declared, &foreign_observed, &fixture.homes)
-            .is_err()
+        verify_qualified_executable(
+            &tool,
+            platform,
+            declared,
+            &foreign_observed,
+            &fixture.homes,
+            test_deadline()
+        )
+        .is_err()
     );
     Ok(())
 }
@@ -393,7 +418,13 @@ fn bun_probe_ignores_an_uninstalled_future_rust_prefix() -> TestResult {
         &tool.platforms[0].executables[0],
         &observed,
         &homes,
+        test_deadline(),
     )?;
     validate_executable_proofs(&tool, platform, &[proof])?;
     Ok(())
+}
+
+fn test_deadline() -> velnor_actions_mise::CheckDeadline {
+    velnor_actions_mise::CheckDeadline::after(std::time::Duration::from_secs(60))
+        .expect("test deadline")
 }

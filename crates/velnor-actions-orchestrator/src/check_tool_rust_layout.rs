@@ -6,13 +6,16 @@ use std::path::{Component, Path, PathBuf};
 use velnor_actions_contract::config::{
     CheckPlatform, QualifiedTool, QualifiedToolBackend, QualifiedToolOptions,
 };
+use velnor_actions_mise::CheckDeadline;
 
 pub(crate) fn normalize_rust_payload(
     tool: &QualifiedTool,
     platform: CheckPlatform,
     roots: &[PathBuf],
     prefix: &Path,
+    deadline: CheckDeadline,
 ) -> Result<(), OrchestratorError> {
+    check_deadline(deadline)?;
     if !prefix.is_absolute() || roots.is_empty() {
         return Err(internal("rust_layout_requires_owned_absolute_paths"));
     }
@@ -24,14 +27,15 @@ pub(crate) fn normalize_rust_payload(
     {
         return Err(internal("invalid_rust_layout_binding"));
     }
-    let selected = selected_components(tool, platform)?;
-    let inventory = component_inventory(roots)?;
+    let selected = selected_components(tool, platform, deadline)?;
+    let inventory = component_inventory(roots, deadline)?;
     for component in &selected {
+        check_deadline(deadline)?;
         if !inventory.contains_key(component) {
             return Err(internal(&format!("rust_component_missing:{component}")));
         }
     }
-    ensure_directory(prefix)?;
+    ensure_directory(prefix, deadline)?;
     if fs::read_dir(prefix)
         .map_err(|e| io(prefix, e))?
         .next()
@@ -40,18 +44,20 @@ pub(crate) fn normalize_rust_payload(
         return Err(internal("rust_prefix_must_be_empty"));
     }
     for component in selected {
+        check_deadline(deadline)?;
         let root = inventory
             .get(&component)
             .ok_or_else(|| internal("rust_component_inventory_changed"))?;
-        merge_component(&root.join(component), prefix)?;
+        merge_component(&root.join(component), prefix, deadline)?;
     }
     let canonical_prefix = prefix.canonicalize().map_err(|e| io(prefix, e))?;
-    verify_links(prefix, &canonical_prefix)
+    verify_links(prefix, &canonical_prefix, deadline)
 }
 
 fn selected_components(
     tool: &QualifiedTool,
     platform: CheckPlatform,
+    deadline: CheckDeadline,
 ) -> Result<BTreeSet<String>, OrchestratorError> {
     let QualifiedToolOptions::Rust {
         components,
@@ -67,6 +73,7 @@ fn selected_components(
     ]);
     let mut declared = BTreeSet::new();
     for component in components {
+        check_deadline(deadline)?;
         let name = match component.as_str() {
             "rust-std" => format!("rust-std-{}", platform.target()),
             "rustfmt" => "rustfmt-preview".to_owned(),
@@ -81,19 +88,25 @@ fn selected_components(
         selected.insert(name);
     }
     for target in targets {
+        check_deadline(deadline)?;
         selected.insert(format!("rust-std-{target}"));
     }
     Ok(selected)
 }
 
-fn component_inventory(roots: &[PathBuf]) -> Result<BTreeMap<String, PathBuf>, OrchestratorError> {
+fn component_inventory(
+    roots: &[PathBuf],
+    deadline: CheckDeadline,
+) -> Result<BTreeMap<String, PathBuf>, OrchestratorError> {
     let mut inventory = BTreeMap::new();
     for root in roots {
-        let root = package_root(root)?;
+        check_deadline(deadline)?;
+        let root = package_root(root, deadline)?;
         let path = root.join("components");
-        let contents = read_manifest(&path)?;
+        let contents = read_manifest(&path, deadline)?;
         let mut names = BTreeSet::new();
         for name in contents.lines() {
+            check_deadline(deadline)?;
             if !safe_name(name) || !names.insert(name.to_owned()) {
                 return Err(internal("invalid_rust_components_manifest"));
             }
@@ -108,7 +121,8 @@ fn component_inventory(roots: &[PathBuf]) -> Result<BTreeMap<String, PathBuf>, O
     Ok(inventory)
 }
 
-fn package_root(root: &Path) -> Result<PathBuf, OrchestratorError> {
+fn package_root(root: &Path, deadline: CheckDeadline) -> Result<PathBuf, OrchestratorError> {
+    check_deadline(deadline)?;
     if !root.is_absolute() {
         return Err(internal("rust_archive_root_not_absolute"));
     }
@@ -118,6 +132,7 @@ fn package_root(root: &Path) -> Result<PathBuf, OrchestratorError> {
     }
     let mut packages = Vec::new();
     for entry in fs::read_dir(root).map_err(|e| io(root, e))? {
+        check_deadline(deadline)?;
         let path = entry.map_err(|e| io(root, e))?.path();
         if fs::symlink_metadata(&path)
             .map_err(|e| io(&path, e))?
@@ -135,11 +150,16 @@ fn package_root(root: &Path) -> Result<PathBuf, OrchestratorError> {
         .ok_or_else(|| internal("rust_archive_wrapper_missing"))
 }
 
-fn merge_component(root: &Path, prefix: &Path) -> Result<(), OrchestratorError> {
+fn merge_component(
+    root: &Path,
+    prefix: &Path,
+    deadline: CheckDeadline,
+) -> Result<(), OrchestratorError> {
     require_directory(root)?;
-    let manifest = read_manifest(&root.join("manifest.in"))?;
+    let manifest = read_manifest(&root.join("manifest.in"), deadline)?;
     let mut entries = BTreeSet::new();
     for line in manifest.lines() {
+        check_deadline(deadline)?;
         let (kind, relative) = line
             .split_once(':')
             .ok_or_else(|| internal("invalid_rust_payload_manifest"))?;
@@ -150,7 +170,7 @@ fn merge_component(root: &Path, prefix: &Path) -> Result<(), OrchestratorError> 
             return Err(internal("invalid_rust_payload_manifest"));
         }
         let source = root.join(relative);
-        validate_payload_ancestors(root, relative)?;
+        validate_payload_ancestors(root, relative, deadline)?;
         let metadata = fs::symlink_metadata(&source).map_err(|e| io(&source, e))?;
         if (kind == "dir" && !metadata.is_dir()) || (kind == "file" && metadata.is_dir()) {
             return Err(internal("rust_payload_manifest_type_mismatch"));
@@ -160,35 +180,58 @@ fn merge_component(root: &Path, prefix: &Path) -> Result<(), OrchestratorError> 
         return Err(internal("empty_rust_payload_manifest"));
     }
     for relative in entries {
-        move_payload(&root.join(&relative), &prefix.join(relative), prefix)?;
+        check_deadline(deadline)?;
+        move_payload(
+            &root.join(&relative),
+            &prefix.join(relative),
+            prefix,
+            deadline,
+        )?;
     }
     Ok(())
 }
 
-fn validate_payload_ancestors(root: &Path, relative: &str) -> Result<(), OrchestratorError> {
+fn validate_payload_ancestors(
+    root: &Path,
+    relative: &str,
+    deadline: CheckDeadline,
+) -> Result<(), OrchestratorError> {
     let mut current = root.to_owned();
     let parts: Vec<_> = Path::new(relative).components().collect();
     for part in parts.iter().take(parts.len().saturating_sub(1)) {
+        check_deadline(deadline)?;
         current.push(part.as_os_str());
         require_directory(&current)?;
     }
     Ok(())
 }
 
-fn move_payload(source: &Path, destination: &Path, prefix: &Path) -> Result<(), OrchestratorError> {
+fn move_payload(
+    source: &Path,
+    destination: &Path,
+    prefix: &Path,
+    deadline: CheckDeadline,
+) -> Result<(), OrchestratorError> {
+    check_deadline(deadline)?;
     let metadata = fs::symlink_metadata(source).map_err(|e| io(source, e))?;
     let parent = destination
         .parent()
         .ok_or_else(|| internal("rust_payload_parent_missing"))?;
-    ensure_payload_parent(parent, prefix)?;
+    ensure_payload_parent(parent, prefix, deadline)?;
     match fs::symlink_metadata(destination) {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
             fs::rename(source, destination).map_err(|e| io(destination, e))
         }
         Ok(existing) if existing.is_dir() && metadata.is_dir() => {
             for entry in fs::read_dir(source).map_err(|e| io(source, e))? {
+                check_deadline(deadline)?;
                 let entry = entry.map_err(|e| io(source, e))?;
-                move_payload(&entry.path(), &destination.join(entry.file_name()), prefix)?;
+                move_payload(
+                    &entry.path(),
+                    &destination.join(entry.file_name()),
+                    prefix,
+                    deadline,
+                )?;
             }
             fs::remove_dir(source).map_err(|e| io(source, e))
         }
@@ -197,23 +240,29 @@ fn move_payload(source: &Path, destination: &Path, prefix: &Path) -> Result<(), 
     }
 }
 
-fn ensure_payload_parent(parent: &Path, prefix: &Path) -> Result<(), OrchestratorError> {
+fn ensure_payload_parent(
+    parent: &Path,
+    prefix: &Path,
+    deadline: CheckDeadline,
+) -> Result<(), OrchestratorError> {
     let relative = parent
         .strip_prefix(prefix)
         .map_err(|_| internal("rust_payload_parent_escapes_prefix"))?;
     let mut current = prefix.to_owned();
     require_directory(&current)?;
     for component in relative.components() {
+        check_deadline(deadline)?;
         if !matches!(component, Component::Normal(_)) {
             return Err(internal("invalid_rust_payload_parent"));
         }
         current.push(component);
-        ensure_directory(&current)?;
+        ensure_directory(&current, deadline)?;
     }
     Ok(())
 }
 
-fn ensure_directory(path: &Path) -> Result<(), OrchestratorError> {
+fn ensure_directory(path: &Path, deadline: CheckDeadline) -> Result<(), OrchestratorError> {
+    check_deadline(deadline)?;
     match fs::symlink_metadata(path) {
         Ok(metadata) if metadata.is_dir() => Ok(()),
         Ok(_) => Err(internal("rust_payload_directory_collision")),
@@ -221,15 +270,20 @@ fn ensure_directory(path: &Path) -> Result<(), OrchestratorError> {
             let parent = path
                 .parent()
                 .ok_or_else(|| internal("rust_payload_parent_missing"))?;
-            ensure_directory(parent)?;
+            ensure_directory(parent, deadline)?;
             fs::create_dir(path).map_err(|e| io(path, e))
         }
         Err(error) => Err(io(path, error)),
     }
 }
 
-fn verify_links(path: &Path, prefix: &Path) -> Result<(), OrchestratorError> {
+fn verify_links(
+    path: &Path,
+    prefix: &Path,
+    deadline: CheckDeadline,
+) -> Result<(), OrchestratorError> {
     for entry in fs::read_dir(path).map_err(|e| io(path, e))? {
+        check_deadline(deadline)?;
         let path = entry.map_err(|e| io(path, e))?.path();
         let metadata = fs::symlink_metadata(&path).map_err(|e| io(&path, e))?;
         if metadata.is_symlink() {
@@ -244,7 +298,7 @@ fn verify_links(path: &Path, prefix: &Path) -> Result<(), OrchestratorError> {
                 return Err(internal("rust_payload_link_escapes_prefix"));
             }
         } else if metadata.is_dir() {
-            verify_links(&path, prefix)?;
+            verify_links(&path, prefix, deadline)?;
         } else if !metadata.is_file() {
             return Err(internal("rust_payload_special_file"));
         }
@@ -252,12 +306,15 @@ fn verify_links(path: &Path, prefix: &Path) -> Result<(), OrchestratorError> {
     Ok(())
 }
 
-fn read_manifest(path: &Path) -> Result<String, OrchestratorError> {
+fn read_manifest(path: &Path, deadline: CheckDeadline) -> Result<String, OrchestratorError> {
+    check_deadline(deadline)?;
     let metadata = fs::symlink_metadata(path).map_err(|e| io(path, e))?;
     if !metadata.is_file() || metadata.len() > 1024 * 1024 {
         return Err(internal("rust_manifest_not_bounded_regular_file"));
     }
-    fs::read_to_string(path).map_err(|e| io(path, e))
+    let content = fs::read_to_string(path).map_err(|e| io(path, e))?;
+    check_deadline(deadline)?;
+    Ok(content)
 }
 
 fn require_directory(path: &Path) -> Result<(), OrchestratorError> {
@@ -296,4 +353,11 @@ fn safe_relative(path: &str) -> bool {
 
 fn io(path: &Path, error: impl std::fmt::Display) -> OrchestratorError {
     OrchestratorError::io(path.display().to_string(), error.to_string())
+}
+
+fn check_deadline(deadline: CheckDeadline) -> Result<(), OrchestratorError> {
+    deadline
+        .remaining()
+        .map(|_| ())
+        .map_err(|error| internal(&error.to_string()))
 }

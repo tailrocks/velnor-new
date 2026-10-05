@@ -24,6 +24,7 @@ fn expected_modules() -> Vec<&'static str> {
         "check_command.rs",
         "check_container_observation.rs",
         "check_container_observation_tests.rs",
+        "check_deadline.rs",
         "check_discovery.rs",
         "check_execution.rs",
         "check_metadata.rs",

@@ -113,7 +113,7 @@ fn fixed_binary_rejects_ambient_path_replacement() -> TestResult {
         std::env::var_os("VELNOR_FIXED_BINARY_HOME"),
     ) {
         let handle = qualified(Path::new(&repo), Path::new(&home))?;
-        let command = handle.command()?;
+        let command = handle.command(test_deadline())?;
         assert_eq!(command.program(), handle.mise_program().as_os_str());
         assert!(!command.argv().iter().any(|arg| arg == "--tool"));
         let env = command.full_env();
@@ -190,7 +190,7 @@ fn owned_binary_wrong_version_fails_before_task_execution() -> TestResult {
         "touch \"$HOME/TASK_EXECUTED\"",
     )?;
     let handle = qualified(&repo, &home)?;
-    assert!(handle.command().is_err());
+    assert!(handle.command(test_deadline()).is_err());
     assert!(!home.join("TASK_EXECUTED").exists());
     Ok(())
 }
@@ -228,4 +228,9 @@ fn qualified_policies_are_closed_and_repo_task_preserves_proxy_contract() {
     }
     assert!(EnvPolicy::RepoTask.allows_proxy_passthrough());
     assert_eq!(EnvPolicy::RepoTask.child_env(&parent, &[]), parent);
+}
+
+fn test_deadline() -> velnor_actions_mise::CheckDeadline {
+    velnor_actions_mise::CheckDeadline::after(std::time::Duration::from_secs(60))
+        .expect("test deadline")
 }

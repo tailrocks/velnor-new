@@ -4,6 +4,7 @@ use flate2::write::GzEncoder;
 use std::fs;
 use std::io::{Cursor, Write};
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 use tar::{Builder, EntryType, Header};
 use zip::write::{SimpleFileOptions, ZipWriter};
 
@@ -45,6 +46,21 @@ fn tar_gz(path: &Path, entries: &[TarEntry]) {
         .expect("gzip finish");
 }
 
+fn tar_gz_extension_with_declared_size(path: &Path, kind: EntryType, size: u64) {
+    let file = fs::File::create(path).expect("archive");
+    let mut encoder = GzEncoder::new(file, Compression::default());
+    let mut header = Header::new_gnu();
+    header.set_path("metadata").expect("path");
+    header.set_entry_type(kind);
+    header.set_size(size);
+    header.set_cksum();
+    encoder.write_all(header.as_bytes()).expect("header");
+    encoder
+        .write_all(b"tiny")
+        .expect("truncated metadata payload");
+    encoder.finish().expect("gzip finish");
+}
+
 fn zip_file(path: &Path, entries: &[(&str, &[u8], u32)]) {
     let file = fs::File::create(path).expect("archive");
     let mut writer = ZipWriter::new(file);
@@ -68,7 +84,8 @@ fn scratch_root(temp: &tempfile::TempDir) -> PathBuf {
 
 fn extract(archive: &Path, destination: &Path, url: &str) -> Result<(), OrchestratorError> {
     let mut budget = ArchiveBudget::new();
-    extract_archive(archive, destination, url, &mut budget)
+    let deadline = CheckDeadline::after(Duration::from_secs(60)).expect("deadline");
+    extract_archive(archive, destination, url, &mut budget, deadline)
 }
 
 #[test]
@@ -295,6 +312,35 @@ fn declared_entry_size_limit_is_checked_before_writing() {
 }
 
 #[test]
+fn oversized_gnu_longname_metadata_is_rejected_before_tar_entry_parsing() {
+    assert_oversized_tar_extension_is_rejected(EntryType::GNULongName);
+}
+
+#[test]
+fn oversized_pax_metadata_is_rejected_before_tar_entry_parsing() {
+    assert_oversized_tar_extension_is_rejected(EntryType::XHeader);
+}
+
+fn assert_oversized_tar_extension_is_rejected(kind: EntryType) {
+    let temp = scratch("extension-limit");
+    let root = scratch_root(&temp);
+    let archive = root.join("metadata.tar.gz");
+    tar_gz_extension_with_declared_size(
+        &archive,
+        kind,
+        tar_preflight::MAX_TAR_EXTENSION_ENTRY_BYTES + 1,
+    );
+    let destination = root.join("prefix");
+    let error = extract(&archive, &destination, "https://example.test/tool.tgz")
+        .expect_err("oversized extension metadata is rejected");
+    assert!(
+        matches!(&error, OrchestratorError::Internal { problem } if problem == "tool_archive_metadata_entry_size_limit"),
+        "unexpected error: {error}"
+    );
+    assert!(!destination.exists());
+}
+
+#[test]
 fn global_budget_is_admitted_before_output_creation() {
     let temp = scratch("global-budget");
     let root = scratch_root(&temp);
@@ -320,6 +366,7 @@ fn global_budget_is_admitted_before_output_creation() {
             &destination,
             "https://example.test/tool.tgz",
             &mut budget,
+            CheckDeadline::after(Duration::from_secs(60)).expect("deadline"),
         )
         .is_err()
     );
@@ -339,4 +386,23 @@ fn archive_source_symlink_is_rejected() {
     std::os::unix::fs::symlink(&actual, &linked).expect("link");
     let destination = root.join("prefix");
     assert!(extract(&linked, &destination, "https://example.test/tool.zip").is_err());
+}
+
+#[test]
+fn tar_preflight_checks_the_shared_deadline_during_decoded_reads() {
+    struct SlowArchive;
+
+    impl std::io::Read for SlowArchive {
+        fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+            std::thread::sleep(Duration::from_millis(20));
+            buffer.fill(0);
+            Ok(buffer.len())
+        }
+    }
+
+    let deadline = CheckDeadline::after(Duration::from_millis(5)).expect("deadline");
+    let error = tar_preflight::preflight_tar(DeadlineIo::new(SlowArchive, deadline))
+        .expect_err("preflight cannot outlive the check");
+    assert!(matches!(error, OrchestratorError::Internal { .. }));
+    assert!(deadline.remaining().is_err());
 }

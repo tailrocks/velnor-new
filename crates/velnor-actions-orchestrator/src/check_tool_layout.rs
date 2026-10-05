@@ -3,6 +3,7 @@ use crate::OrchestratorError;
 use crate::internal::internal;
 use std::path::{Path, PathBuf};
 use velnor_actions_contract::config::{CheckPlatform, QualifiedTool, QualifiedToolBackend};
+use velnor_actions_mise::CheckDeadline;
 
 #[path = "check_tool_cargo_vendor.rs"]
 mod cargo;
@@ -15,10 +16,12 @@ pub(super) fn prepare_cargo_source(
     home: &Path,
     primary: &[PathBuf],
     dependencies: &[PathBuf],
+    deadline: CheckDeadline,
 ) -> Result<(), OrchestratorError> {
+    check_deadline(deadline)?;
     tool.validate("qualified_tools", &tool.id)
         .map_err(crate::internal::internal_contract)?;
-    cargo::prepare_cargo_source(tool, platform, home, primary, dependencies)
+    cargo::prepare_cargo_source(tool, platform, home, primary, dependencies, deadline)
 }
 
 pub(super) fn normalize_payload(
@@ -26,14 +29,16 @@ pub(super) fn normalize_payload(
     platform: CheckPlatform,
     roots: &[PathBuf],
     prefix: &Path,
+    deadline: CheckDeadline,
 ) -> Result<(), OrchestratorError> {
+    check_deadline(deadline)?;
     tool.validate("qualified_tools", &tool.id)
         .map_err(crate::internal::internal_contract)?;
     if !prefix.is_absolute() || roots.iter().any(|root| !root.is_absolute()) {
         return Err(internal("qualified_payload_requires_absolute_paths"));
     }
     if matches!(&tool.backend, QualifiedToolBackend::Core { tool } if tool == "rust") {
-        return rust::normalize_rust_payload(tool, platform, roots, prefix);
+        return rust::normalize_rust_payload(tool, platform, roots, prefix, deadline);
     }
     let qualified = tool
         .platforms
@@ -47,16 +52,17 @@ pub(super) fn normalize_payload(
     }
     let root = &roots[0];
     let mut candidates = Vec::new();
-    if matches_executables(root, qualified)? {
+    if matches_executables(root, qualified, deadline)? {
         candidates.push(root.clone());
     }
     for entry in std::fs::read_dir(root).map_err(|_| internal("qualified_payload_root"))? {
+        check_deadline(deadline)?;
         let entry = entry.map_err(|_| internal("qualified_payload_root"))?;
         if entry
             .file_type()
             .map_err(|_| internal("qualified_payload_root"))?
             .is_dir()
-            && matches_executables(&entry.path(), qualified)?
+            && matches_executables(&entry.path(), qualified, deadline)?
         {
             candidates.push(entry.path());
         }
@@ -73,6 +79,7 @@ pub(super) fn normalize_payload(
 fn matches_executables(
     root: &Path,
     qualified: &velnor_actions_contract::config::QualifiedToolPlatform,
+    deadline: CheckDeadline,
 ) -> Result<bool, OrchestratorError> {
     let metadata =
         std::fs::symlink_metadata(root).map_err(|_| internal("qualified_payload_root"))?;
@@ -80,6 +87,7 @@ fn matches_executables(
         return Err(internal("qualified_payload_root_symlink"));
     }
     for executable in &qualified.executables {
+        check_deadline(deadline)?;
         crate::check_evidence::reject_link_components(root, &executable.path)?;
         match std::fs::symlink_metadata(root.join(&executable.path)) {
             Ok(metadata) if metadata.is_file() => {}
@@ -89,6 +97,13 @@ fn matches_executables(
         }
     }
     Ok(!qualified.executables.is_empty())
+}
+
+fn check_deadline(deadline: CheckDeadline) -> Result<(), OrchestratorError> {
+    deadline
+        .remaining()
+        .map(|_| ())
+        .map_err(|error| internal(&error.to_string()))
 }
 
 #[cfg(test)]

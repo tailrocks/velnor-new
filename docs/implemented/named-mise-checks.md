@@ -235,9 +235,15 @@ digests. Mismatched pins, host architecture, or developer selection fail closed.
 Task code receives `VELNOR_CHECK_ID`, `VELNOR_CHECK_HEAD`,
 and `VELNOR_CHECK_PLATFORM` for evidence production. Repository task bodies
 still execute arbitrary repository code: this is an environment boundary,
-not a filesystem or daemon sandbox. The task timeout covers tool acquisition
-and task execution; output is bounded. Timings use the helper's Rust clock,
-not GNU-only `date` behavior.
+not a filesystem or daemon sandbox. One absolute task deadline starts before
+check preparation and covers container and system-tool probes, tool acquisition,
+the task, and the independent pre-task and post-task container observations.
+Archive decoding, extraction, installed-tree walks and hashes also check the
+same deadline as they process bounded chunks. TAR admission scans the decoded
+stream before the TAR library parses entries; GNU long-name/link and PAX
+metadata is limited to 64 KiB per entry, 64 entries, and 1 MiB in total. Every
+subprocess receives only the remaining budget; output is bounded. Timings use
+the helper's Rust clock, not GNU-only `date` behavior.
 
 ## Scenario evidence
 
@@ -270,6 +276,11 @@ The helper saves validated evidence bytes, a digest-bound evidence receipt,
 and a plan-bound `check-execution.json` receipt with the normal task/matrix
 reports. The execution receipt also carries observed native tool proofs and
 qualified acquisition/executable proofs.
+Configuration admission computes a worst-case serialized receipt from each
+check's selected qualified-tool closure, probe declarations, container profile,
+and evidence scenarios. Checks whose receipt could exceed the existing 1 MiB
+staged-report reader limit are rejected before execution, so an otherwise
+successful check always remains readable by final aggregation.
 Final aggregation independently verifies the downloaded bytes, receipt
 identities, native and qualified tool proofs against the exact declarations,
 the mandatory container capability receipt against its typed profile, the

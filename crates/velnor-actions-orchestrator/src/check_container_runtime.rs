@@ -5,7 +5,7 @@ use crate::exclusive_write;
 use crate::internal::internal;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
-use velnor_actions_contract::config::HostContainerProfile;
+use velnor_actions_contract::config::{HostContainerProfile, MAX_CHECK_CONTAINER_PATH_BYTES};
 
 #[path = "check_container_runtime_context.rs"]
 mod context;
@@ -318,7 +318,9 @@ fn canonical_directory(path: &Path, field: &str) -> Result<PathBuf, Orchestrator
 
 fn canonical_input(raw: &str, field: &str) -> Result<PathBuf, OrchestratorError> {
     let path = Path::new(raw);
-    if !path.is_absolute()
+    if raw.len() > MAX_CHECK_CONTAINER_PATH_BYTES
+        || raw.chars().any(char::is_control)
+        || !path.is_absolute()
         || path
             .components()
             .any(|component| !matches!(component, Component::RootDir | Component::Normal(_)))

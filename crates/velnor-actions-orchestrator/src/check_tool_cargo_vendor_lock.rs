@@ -2,9 +2,11 @@
 use crate::OrchestratorError;
 use crate::internal::internal;
 use serde::Deserialize;
+use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::path::Path;
 use velnor_actions_contract::config::QualifiedToolPlatform;
+use velnor_actions_mise::CheckDeadline;
 
 #[derive(Deserialize)]
 struct Manifest {
@@ -28,17 +30,30 @@ struct LockedPackage {
     checksum: Option<String>,
 }
 
-fn read(path: &Path) -> Result<Vec<u8>, OrchestratorError> {
-    crate::retrieve_reports::read_staged_bytes(path, 4 * 1024 * 1024)
-        .map_err(|_| internal("qualified_cargo_manifest_unreadable"))
+fn read(path: &Path, deadline: CheckDeadline) -> Result<Vec<u8>, OrchestratorError> {
+    crate::retrieve_reports::staged_reads::read_staged_bytes_until(path, 4 * 1024 * 1024, || {
+        deadline.remaining().map(|_| ()).map_err(|_| "deadline")
+    })
+    .map_err(|problem| {
+        if problem == "deadline" {
+            internal("check_timeout:deadline_exhausted")
+        } else {
+            internal("qualified_cargo_manifest_unreadable")
+        }
+    })
 }
 
-pub(super) fn package_identity(root: &Path) -> Result<(String, String), OrchestratorError> {
-    let bytes = read(&root.join("Cargo.toml"))?;
+pub(super) fn package_identity(
+    root: &Path,
+    deadline: CheckDeadline,
+) -> Result<(String, String), OrchestratorError> {
+    check_deadline(deadline)?;
+    let bytes = read(&root.join("Cargo.toml"), deadline)?;
     let text =
         std::str::from_utf8(&bytes).map_err(|_| internal("qualified_cargo_manifest_utf8"))?;
     let manifest: Manifest =
         toml::from_str(text).map_err(|_| internal("qualified_cargo_manifest_decode"))?;
+    check_deadline(deadline)?;
     Ok((manifest.package.name, manifest.package.version))
 }
 
@@ -70,9 +85,11 @@ pub(super) fn verify_closure(
     expected_sha: &str,
     platform: &QualifiedToolPlatform,
     primary: &(String, String),
+    deadline: CheckDeadline,
 ) -> Result<(), OrchestratorError> {
-    let bytes = read(&root.join("Cargo.lock"))?;
-    if crate::cover_identity::generator::sha256_hex(&bytes) != expected_sha {
+    check_deadline(deadline)?;
+    let bytes = read(&root.join("Cargo.lock"), deadline)?;
+    if sha256_with_deadline(&bytes, deadline)? != expected_sha {
         return Err(internal("qualified_cargo_lock_sha256"));
     }
     let text = std::str::from_utf8(&bytes).map_err(|_| internal("qualified_cargo_lock_utf8"))?;
@@ -83,6 +100,7 @@ pub(super) fn verify_closure(
     }
     let mut declared = BTreeMap::new();
     for artifact in &platform.dependency_artifacts {
+        check_deadline(deadline)?;
         let identity = archive_identity(&artifact.url)?;
         if declared.insert(identity, artifact.sha256.clone()).is_some() {
             return Err(internal("qualified_cargo_duplicate_archive"));
@@ -91,6 +109,7 @@ pub(super) fn verify_closure(
     let mut observed = BTreeMap::new();
     let mut root_found = false;
     for package in lock.package {
+        check_deadline(deadline)?;
         let identity = (package.name, package.version);
         match package.source.as_deref() {
             None if identity == *primary && package.checksum.is_none() && !root_found => {
@@ -113,5 +132,30 @@ pub(super) fn verify_closure(
     if !root_found || observed != declared {
         return Err(internal("qualified_cargo_dependency_closure"));
     }
-    Ok(())
+    check_deadline(deadline)
+}
+
+fn sha256_with_deadline(
+    bytes: &[u8],
+    deadline: CheckDeadline,
+) -> Result<String, OrchestratorError> {
+    let mut hash = Sha256::new();
+    for chunk in bytes.chunks(64 * 1024) {
+        check_deadline(deadline)?;
+        hash.update(chunk);
+    }
+    let digest = hash.finalize();
+    let mut hex = String::with_capacity(digest.len() * 2);
+    for byte in digest {
+        use std::fmt::Write as _;
+        write!(&mut hex, "{byte:02x}").map_err(|_| internal("qualified_cargo_sha256"))?;
+    }
+    Ok(hex)
+}
+
+fn check_deadline(deadline: CheckDeadline) -> Result<(), OrchestratorError> {
+    deadline
+        .remaining()
+        .map(|_| ())
+        .map_err(|error| internal(&error.to_string()))
 }

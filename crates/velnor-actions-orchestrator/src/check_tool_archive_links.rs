@@ -5,10 +5,16 @@ use std::path::{Component, Path, PathBuf};
 
 use crate::OrchestratorError;
 use crate::internal::internal;
+use velnor_actions_mise::CheckDeadline;
 
 use super::{io_error, unsafe_path_text};
 
-pub(super) fn discard_entry<R: Read>(reader: &mut R, size: u64) -> Result<(), OrchestratorError> {
+pub(super) fn discard_entry<R: Read>(
+    reader: &mut R,
+    size: u64,
+    deadline: CheckDeadline,
+) -> Result<(), OrchestratorError> {
+    super::check_deadline(deadline)?;
     let copied = io::copy(&mut reader.take(size), &mut io::sink())
         .map_err(|error| internal(&format!("tool_archive:{error}")))?;
     if copied == size {
@@ -31,7 +37,12 @@ pub(super) fn target_from_bytes(raw: &[u8]) -> Result<String, OrchestratorError>
     Ok(target.to_owned())
 }
 
-pub(super) fn read_target<R: Read>(reader: &mut R, size: u64) -> Result<String, OrchestratorError> {
+pub(super) fn read_target<R: Read>(
+    reader: &mut R,
+    size: u64,
+    deadline: CheckDeadline,
+) -> Result<String, OrchestratorError> {
+    super::check_deadline(deadline)?;
     if size > u64::try_from(super::MAX_PATH_BYTES).unwrap_or(u64::MAX) {
         return Err(internal("tool_archive_link_size_limit"));
     }
@@ -43,6 +54,7 @@ pub(super) fn read_target<R: Read>(reader: &mut R, size: u64) -> Result<String, 
     if u64::try_from(copied).unwrap_or(u64::MAX) != size {
         return Err(internal("tool_archive_truncated_link"));
     }
+    super::check_deadline(deadline)?;
     target_from_bytes(&bytes)
 }
 
@@ -68,7 +80,9 @@ fn validate_target(target: &str) -> Result<(), OrchestratorError> {
 pub(super) fn create_links(
     destination: &Path,
     links: Vec<PendingLink>,
+    deadline: CheckDeadline,
 ) -> Result<(), OrchestratorError> {
+    super::check_deadline(deadline)?;
     if links.is_empty() {
         return Ok(());
     }
@@ -82,9 +96,10 @@ pub(super) fn create_links(
     }
     #[cfg(unix)]
     {
-        let targets = normalized_targets(&links)?;
-        validate_links(destination, &targets)?;
+        let targets = normalized_targets(&links, deadline)?;
+        validate_links(destination, &targets, deadline)?;
         for link in links {
+            super::check_deadline(deadline)?;
             let parent = link.path.parent().unwrap_or_else(|| Path::new(""));
             super::paths::ensure_directory(destination, parent)?;
             let output = destination.join(&link.path);
@@ -103,9 +118,11 @@ pub(super) fn create_links(
 #[cfg(unix)]
 fn normalized_targets(
     links: &[PendingLink],
+    deadline: CheckDeadline,
 ) -> Result<HashMap<PathBuf, PathBuf>, OrchestratorError> {
     let mut targets = HashMap::new();
     for link in links {
+        super::check_deadline(deadline)?;
         let target = normalize_target(&link.path, &link.target)?;
         if targets.insert(link.path.clone(), target).is_some() {
             return Err(internal("tool_archive_duplicate_path"));
@@ -136,12 +153,14 @@ fn normalize_target(link: &Path, target: &str) -> Result<PathBuf, OrchestratorEr
 fn validate_links(
     destination: &Path,
     targets: &HashMap<PathBuf, PathBuf>,
+    deadline: CheckDeadline,
 ) -> Result<(), OrchestratorError> {
     for (path, target) in targets {
-        reject_link_parent(targets, path)?;
-        reject_link_component(targets, target)?;
+        super::check_deadline(deadline)?;
+        reject_link_parent(targets, path, deadline)?;
+        reject_link_component(targets, target, deadline)?;
         let mut states = HashMap::new();
-        resolve_target(destination, target, targets, &mut states, 0)?;
+        resolve_target(destination, target, targets, &mut states, 0, deadline)?;
     }
     Ok(())
 }
@@ -150,9 +169,11 @@ fn validate_links(
 fn reject_link_parent(
     links: &HashMap<PathBuf, PathBuf>,
     path: &Path,
+    deadline: CheckDeadline,
 ) -> Result<(), OrchestratorError> {
     let mut current = PathBuf::new();
     for component in path.parent().unwrap_or_else(|| Path::new("")).components() {
+        super::check_deadline(deadline)?;
         let Component::Normal(part) = component else {
             return Err(internal("tool_archive_link_path"));
         };
@@ -168,10 +189,12 @@ fn reject_link_parent(
 fn reject_link_component(
     links: &HashMap<PathBuf, PathBuf>,
     path: &Path,
+    deadline: CheckDeadline,
 ) -> Result<(), OrchestratorError> {
     let mut current = PathBuf::new();
     let components = path.components().collect::<Vec<_>>();
     for (index, component) in components.iter().enumerate() {
+        super::check_deadline(deadline)?;
         let Component::Normal(part) = component else {
             return Err(internal("tool_archive_link_target"));
         };
@@ -190,7 +213,9 @@ fn resolve_target(
     links: &HashMap<PathBuf, PathBuf>,
     states: &mut HashMap<PathBuf, LinkState>,
     depth: usize,
+    deadline: CheckDeadline,
 ) -> Result<(), OrchestratorError> {
+    super::check_deadline(deadline)?;
     if depth > super::MAX_PATH_COMPONENTS {
         return Err(internal("tool_archive_link_depth"));
     }
@@ -201,7 +226,7 @@ fn resolve_target(
     }
     states.insert(path.to_path_buf(), LinkState::Visiting);
     if let Some(next) = links.get(path) {
-        resolve_target(destination, next, links, states, depth + 1)?;
+        resolve_target(destination, next, links, states, depth + 1, deadline)?;
     } else {
         let output = destination.join(path);
         let metadata = fs::symlink_metadata(&output).map_err(|error| io_error(&output, error))?;

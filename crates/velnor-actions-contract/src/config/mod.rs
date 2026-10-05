@@ -3,6 +3,7 @@
 //! Unknown fields are rejected; validation reports file, key path, problem.
 
 mod actions;
+mod check_receipt_budget;
 mod discovery;
 mod execution;
 mod host_container;
@@ -16,6 +17,14 @@ mod tofu;
 mod workflow;
 
 pub use actions::{ActionPinOverride, ActionsConfig, OVERRIDABLE_ACTIONS};
+pub use check_receipt_budget::{
+    MAX_CHECK_CONTAINER_APP_INFO_CAPTURE_BYTES, MAX_CHECK_CONTAINER_APP_VERIFY_CAPTURE_BYTES,
+    MAX_CHECK_CONTAINER_DAEMON_CAPTURE_BYTES, MAX_CHECK_CONTAINER_IDENTITY_CAPTURE_BYTES,
+    MAX_CHECK_CONTAINER_PATH_BYTES, MAX_CHECK_CONTAINER_PROBE_CAPTURE_BYTES,
+    MAX_CHECK_CONTAINER_RUNTIME_ENTRIES, MAX_CHECK_CONTAINER_RUNTIME_ENTRY_PATH_BYTES,
+    MAX_CHECK_EXECUTION_RECEIPT_BYTES, MAX_CHECK_QUALIFIED_PROBE_CAPTURE_BYTES,
+    MAX_CHECK_QUALIFIED_PROBE_EXPECTED_BYTES, check_execution_receipt_upper_bound,
+};
 pub use discovery::DiscoveryConfig;
 pub use execution::{
     ExecutionConfig, ExecutionMode, ExecutionOverride, ExecutionParity, ExecutionProfile,
@@ -120,6 +129,12 @@ impl VelnorConfig {
                     ));
                 }
             }
+            check_receipt_budget::validate_check_budget(
+                check,
+                &self.qualified_tools,
+                file,
+                &format!("checks[{index}]"),
+            )?;
             if !check_ids.insert(check.id.as_str()) {
                 return Err(ContractError::config(file, "checks", "duplicate_check_id"));
             }

@@ -88,10 +88,32 @@ fn signed_app_and_nested_cli_require_exact_team_and_same_nested_identity()
 fn captured_stdout_and_stderr_must_match_their_byte_digests() {
     let mut stream = output("{}", "signed identity");
     stream.stdout.push(' ');
-    assert!(super::validate_streams(&stream).is_err());
+    assert!(
+        super::validate_streams(&stream, super::MAX_CHECK_CONTAINER_APP_INFO_CAPTURE_BYTES)
+            .is_err()
+    );
     let mut stream = output("{}", "signed identity");
     stream.stderr.push(' ');
-    assert!(super::validate_streams(&stream).is_err());
+    assert!(
+        super::validate_streams(&stream, super::MAX_CHECK_CONTAINER_APP_INFO_CAPTURE_BYTES)
+            .is_err()
+    );
+}
+
+#[test]
+fn container_probe_streams_respect_receipt_and_text_bounds() {
+    let mut stream = output("{}", "");
+    stream.stdout = "x".repeat(super::MAX_CHECK_CONTAINER_PROBE_CAPTURE_BYTES + 1);
+    stream.stdout_digest = velnor_actions_contract::digest_b3(stream.stdout.as_bytes());
+    assert!(
+        super::validate_streams(&stream, super::MAX_CHECK_CONTAINER_PROBE_CAPTURE_BYTES).is_err()
+    );
+    let mut stream = output("{}", "");
+    stream.stderr.push('\0');
+    stream.stderr_digest = velnor_actions_contract::digest_b3(stream.stderr.as_bytes());
+    assert!(
+        super::validate_streams(&stream, super::MAX_CHECK_CONTAINER_PROBE_CAPTURE_BYTES).is_err()
+    );
 }
 
 #[test]

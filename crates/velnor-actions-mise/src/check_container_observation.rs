@@ -3,7 +3,12 @@ use crate::MiseError;
 use crate::checks::invalid;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
-use velnor_actions_contract::config::{CheckRunner, ContainerPlatform, HostContainerProfile};
+use velnor_actions_contract::config::{
+    CheckRunner, ContainerPlatform, HostContainerProfile,
+    MAX_CHECK_CONTAINER_APP_INFO_CAPTURE_BYTES, MAX_CHECK_CONTAINER_APP_VERIFY_CAPTURE_BYTES,
+    MAX_CHECK_CONTAINER_DAEMON_CAPTURE_BYTES, MAX_CHECK_CONTAINER_IDENTITY_CAPTURE_BYTES,
+    MAX_CHECK_CONTAINER_PATH_BYTES, MAX_CHECK_CONTAINER_PROBE_CAPTURE_BYTES,
+};
 use velnor_actions_contract::{digest_b3, is_valid_digest};
 
 pub(super) const DAEMON_FORMAT: &str = r#"{"ID":{{json .ID}},"ServerVersion":{{json .ServerVersion}},"OSType":{{json .OSType}},"Architecture":{{json .Architecture}},"OperatingSystem":{{json .OperatingSystem}}}"#;
@@ -94,7 +99,7 @@ struct DockerJson {
 }
 impl DockerDaemonObservation {
     pub(super) fn parse(probe: ContainerProbeOutput) -> Result<Self, MiseError> {
-        validate_streams(&probe)?;
+        validate_streams(&probe, MAX_CHECK_CONTAINER_DAEMON_CAPTURE_BYTES)?;
         let json: DockerJson = serde_json::from_str(&probe.stdout)
             .map_err(|_| invalid("container_daemon", "invalid_fixed_json"))?;
         let platform = match (json.os.as_str(), json.architecture.as_str()) {
@@ -159,13 +164,21 @@ fn validate_observation(observed: &ContainerObservation) -> Result<(), MiseError
         .ok_or_else(|| invalid("container_endpoint", "local_socket_required"))?;
     if observed.endpoint != format!("unix://{}", observed.profile.socket_path())
         || !Path::new(socket).is_absolute()
+        || !bounded_path(&observed.docker_program)
+        || socket.len() > MAX_CHECK_CONTAINER_PATH_BYTES
         || !observed.docker_program.is_absolute()
         || observed.docker_sha256 != cli.sha256
     {
         return Err(invalid("container_proof", "binary_or_endpoint_mismatch"));
     }
-    validate_streams(&observed.docker_cli)?;
-    validate_streams(&observed.context_probe)?;
+    validate_streams(
+        &observed.docker_cli,
+        MAX_CHECK_CONTAINER_PROBE_CAPTURE_BYTES,
+    )?;
+    validate_streams(
+        &observed.context_probe,
+        MAX_CHECK_CONTAINER_PROBE_CAPTURE_BYTES,
+    )?;
     if exact(&observed.docker_cli.stdout)
         != format!("Docker version {}, build {}", cli.version, cli.build)
         || exact(&observed.context_probe.stdout) != observed.endpoint
@@ -185,8 +198,11 @@ fn validate_observation(observed: &ContainerObservation) -> Result<(), MiseError
     match (&observed.profile, &observed.orbctl) {
         (HostContainerProfile::Docker { .. }, None) => Ok(()),
         (HostContainerProfile::OrbStack { sdk, .. }, Some(orb)) => {
-            validate_streams(&orb.version)?;
-            validate_streams(&orb.status)?;
+            if !bounded_path(&orb.program) {
+                return Err(invalid("orbstack", "observation_path_limit"));
+            }
+            validate_streams(&orb.version, MAX_CHECK_CONTAINER_PROBE_CAPTURE_BYTES)?;
+            validate_streams(&orb.status, MAX_CHECK_CONTAINER_PROBE_CAPTURE_BYTES)?;
             orb.app.validate(sdk)?;
             let expected = format!(
                 "Version: {} ({})\nCommit: {} (v{})",
@@ -209,12 +225,14 @@ fn validate_observation(observed: &ContainerObservation) -> Result<(), MiseError
     }
 }
 
-fn validate_streams(probe: &ContainerProbeOutput) -> Result<(), MiseError> {
-    if probe.stdout.len() > 64 * 1024
-        || probe.stderr.len() > 64 * 1024
+fn validate_streams(probe: &ContainerProbeOutput, cap: usize) -> Result<(), MiseError> {
+    if probe.stdout.len() > cap
+        || probe.stderr.len() > cap
         || digest_b3(probe.stdout.as_bytes()) != probe.stdout_digest
         || digest_b3(probe.stderr.as_bytes()) != probe.stderr_digest
         || !is_valid_digest(&probe.stderr_digest)
+        || !printable_probe_text(&probe.stdout)
+        || !printable_probe_text(&probe.stderr)
     {
         return Err(invalid(
             "container_probe",
@@ -222,6 +240,18 @@ fn validate_streams(probe: &ContainerProbeOutput) -> Result<(), MiseError> {
         ));
     }
     Ok(())
+}
+
+fn printable_probe_text(value: &str) -> bool {
+    !value
+        .chars()
+        .any(|character| character.is_control() && !matches!(character, '\n' | '\r' | '\t'))
+}
+
+fn bounded_path(path: &Path) -> bool {
+    path.to_str().is_some_and(|value| {
+        value.len() <= MAX_CHECK_CONTAINER_PATH_BYTES && !value.chars().any(char::is_control)
+    })
 }
 fn exact(stdout: &str) -> &str {
     stdout.trim_end_matches(['\r', '\n'])
@@ -268,16 +298,16 @@ impl OrbStackAppObservation {
         source_cli_signature: ContainerProbeOutput,
         owned_cli_signature: ContainerProbeOutput,
     ) -> Result<Self, MiseError> {
+        validate_streams(&info, MAX_CHECK_CONTAINER_APP_INFO_CAPTURE_BYTES)?;
+        for output in [&signature, &source_cli_signature, &owned_cli_signature] {
+            validate_streams(output, MAX_CHECK_CONTAINER_IDENTITY_CAPTURE_BYTES)?;
+        }
         for output in [
-            &info,
-            &signature,
             &outer_integrity,
             &source_cli_integrity,
             &owned_cli_integrity,
-            &source_cli_signature,
-            &owned_cli_signature,
         ] {
-            validate_streams(output)?;
+            validate_streams(output, MAX_CHECK_CONTAINER_APP_VERIFY_CAPTURE_BYTES)?;
         }
         let json: serde_json::Value = serde_json::from_str(&info.stdout)
             .map_err(|_| invalid("orbstack_app", "invalid_plist_json"))?;

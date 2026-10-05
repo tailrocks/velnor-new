@@ -1,10 +1,11 @@
 //! Closed native tool probes: observation only, never installation.
 use super::invalid;
-use crate::{IsolatedCommand, MiseError, ProcessOutput};
+use crate::{CheckDeadline, IsolatedCommand, MiseError, ProcessOutput};
 use serde::{Deserialize, Serialize};
 use std::ffi::OsString;
 use std::path::Path;
 use velnor_actions_contract::canonical::{digest_b3, is_valid_digest};
+use velnor_actions_contract::config::MAX_CHECK_CONTAINER_PATH_BYTES;
 use velnor_actions_contract::config::{CheckPlatform, CheckSystemTool, CheckSystemToolKind};
 
 /// Native tool observation bound to its exact declared pin.
@@ -45,6 +46,7 @@ pub struct SystemToolProof {
 pub fn verify_check_system_tools(
     platform: CheckPlatform,
     pins: &[CheckSystemTool],
+    deadline: CheckDeadline,
 ) -> Result<Vec<SystemToolProof>, MiseError> {
     if pins.is_empty() {
         return Ok(Vec::new());
@@ -55,7 +57,7 @@ pub fn verify_check_system_tools(
     {
         return Err(invalid("system_tools", "native_host_platform_mismatch"));
     }
-    let selection = probe("/usr/bin/xcode-select", &["-p"], None)?;
+    let selection = probe("/usr/bin/xcode-select", &["-p"], None, deadline)?;
     let selected = strict_text(&selection.stdout)?;
     if selected.lines().count() != 1 || !absolute_identity(selected.trim()) {
         return Err(invalid("system_tools", "invalid_developer_selection"));
@@ -71,7 +73,7 @@ pub fn verify_check_system_tools(
         .ok_or_else(|| invalid("system_tools", "invalid_developer_utf8"))?;
     let proofs = pins
         .iter()
-        .map(|pin| observe(platform, pin, directory, &selection))
+        .map(|pin| observe(platform, pin, directory, &selection, deadline))
         .collect::<Result<Vec<_>, _>>()?;
     validate_system_tool_proofs(platform, pins, &proofs)?;
     Ok(proofs)
@@ -136,6 +138,7 @@ fn observe(
     pin: &CheckSystemTool,
     directory: &str,
     selection: &ProcessOutput,
+    deadline: CheckDeadline,
 ) -> Result<SystemToolProof, MiseError> {
     let swift = pin.kind == CheckSystemToolKind::Swift;
     let launcher = if swift {
@@ -144,7 +147,12 @@ fn observe(
         "/usr/bin/xcodebuild"
     };
     let discovery = if swift {
-        Some(probe(launcher, &["--find", "swift"], Some(directory))?)
+        Some(probe(
+            launcher,
+            &["--find", "swift"],
+            Some(directory),
+            deadline,
+        )?)
     } else {
         None
     };
@@ -163,7 +171,7 @@ fn observe(
     } else {
         &["-version"]
     };
-    let output = probe(launcher, args, Some(directory))?;
+    let output = probe(launcher, args, Some(directory), deadline)?;
     let (version, build) = parse_system_tool_version(pin.kind, &output.stdout, &output.stderr)?;
     let target = if swift {
         let text = strict_text(&output.stdout)?;
@@ -309,7 +317,8 @@ fn valid_build(kind: CheckSystemToolKind, value: &str) -> bool {
 }
 
 fn absolute_identity(value: &str) -> bool {
-    Path::new(value).is_absolute()
+    value.len() <= MAX_CHECK_CONTAINER_PATH_BYTES
+        && Path::new(value).is_absolute()
         && !value.contains(['\n', '\r', '\0'])
         && Path::new(value).components().all(|c| {
             matches!(
@@ -339,6 +348,7 @@ fn probe(
     program: &str,
     args: &[&str],
     directory: Option<&str>,
+    deadline: CheckDeadline,
 ) -> Result<ProcessOutput, MiseError> {
     let mut env: Vec<_> = [("PATH", "/usr/bin:/bin:/usr/sbin:/sbin"), ("LC_ALL", "C")]
         .into_iter()
@@ -352,7 +362,7 @@ fn probe(
         args.iter().map(OsString::from).collect(),
         env,
     )
-    .run_bounded(64 * 1024, std::time::Duration::from_secs(30))?;
+    .run_bounded(64 * 1024, deadline.remaining()?)?;
     strict_text(&result.stdout)?;
     if !strict_text(&result.stderr)?.is_empty() || !result.success {
         return Err(invalid("system_tools", "native_probe_failed"));

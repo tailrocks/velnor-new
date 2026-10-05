@@ -6,6 +6,7 @@ use std::io::{self, Read, Write};
 use std::path::{Component, Path, PathBuf};
 
 use crate::OrchestratorError;
+use velnor_actions_mise::CheckDeadline;
 
 use super::{internal, io_error, unsafe_path, unsafe_path_text};
 
@@ -125,7 +126,9 @@ pub(super) fn write_entry<R: Read>(
     reader: &mut R,
     size: u64,
     mode: u32,
+    deadline: CheckDeadline,
 ) -> Result<(), OrchestratorError> {
+    super::check_deadline(deadline)?;
     let parent = relative.parent().unwrap_or_else(|| Path::new(""));
     ensure_directory(destination, parent)?;
     let output = destination.join(relative);
@@ -135,6 +138,7 @@ pub(super) fn write_entry<R: Read>(
     if copied != size {
         return Err(internal("tool_archive_truncated_entry"));
     }
+    super::check_deadline(deadline)?;
     file.flush().map_err(|error| io_error(&output, error))?;
     set_mode(&output, mode, false)
 }
@@ -199,9 +203,11 @@ pub(super) fn set_mode(path: &Path, mode: u32, directory: bool) -> Result<(), Or
 pub(super) fn apply_directory_modes(
     destination: &Path,
     mut directories: Vec<(PathBuf, u32)>,
+    deadline: CheckDeadline,
 ) -> Result<(), OrchestratorError> {
     directories.sort_by_key(|(path, _)| std::cmp::Reverse(path.components().count()));
     for (path, mode) in directories {
+        super::check_deadline(deadline)?;
         set_mode(&destination.join(path), mode, true)?;
     }
     Ok(())

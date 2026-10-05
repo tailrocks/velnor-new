@@ -17,13 +17,16 @@ impl IsolatedCommand {
             policy: EnvPolicy::QualifiedProbe,
         }
     }
-    pub(crate) fn qualified_check_run(owned: &QualifiedCheck) -> Result<Self, MiseError> {
+    pub(crate) fn qualified_check_run(
+        owned: &QualifiedCheck,
+        deadline: crate::CheckDeadline,
+    ) -> Result<Self, MiseError> {
         let found = std::fs::read_to_string(&owned.config)
             .map_err(|e| invalid("check_config", e.to_string()))?;
         if found != owned.bound_projection()? {
             return Err(invalid("check_config", "projection_changed"));
         }
-        let program = verified_mise_program(owned)?;
+        let program = verified_mise_program(owned, deadline)?;
         let mut extra_env = owned.owned_env()?;
         extra_env.extend(pairs_of(&NO_AUTO_INSTALL_ENV));
         let mut args: Vec<OsString> = [
@@ -49,7 +52,10 @@ impl IsolatedCommand {
     }
 }
 
-fn verified_mise_program(owned: &QualifiedCheck) -> Result<OsString, MiseError> {
+fn verified_mise_program(
+    owned: &QualifiedCheck,
+    deadline: crate::CheckDeadline,
+) -> Result<OsString, MiseError> {
     let program = owned.mise_program().into_os_string();
     let probe = IsolatedCommand::qualified_check_probe(
         program.clone(),
@@ -59,7 +65,7 @@ fn verified_mise_program(owned: &QualifiedCheck) -> Result<OsString, MiseError> 
             .collect(),
         owned.owned_env()?,
     );
-    let output = probe.run_bounded(64 * 1024, std::time::Duration::from_secs(30))?;
+    let output = probe.run_bounded(64 * 1024, deadline.remaining()?)?;
     let version = String::from_utf8_lossy(&output.stdout);
     if !output.success || version.split_whitespace().next() != Some(crate::MISE_VERSION) {
         return Err(invalid(

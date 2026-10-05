@@ -6,22 +6,37 @@ use super::{
 use crate::check_evidence::{gate::execution_receipt, verify_evidence};
 use std::collections::BTreeMap;
 use std::fs;
-use velnor_actions_contract::config::{CheckEvidence, CheckPlatform};
+use velnor_actions_contract::config::{
+    CheckEvidence, CheckPlatform, HostContainerProfile, QualifiedTool,
+};
 use velnor_actions_contract::{
     ExecuteTaskIds, ExecuteTaskRef, FinalReport, FinalStatus, MatrixEntry, Plan,
     canonical_json_bytes,
 };
 
 const TASK: &str = "stack/mise/demo/check/default";
-fn plan() -> Plan {
+fn plan_with_tools(qualified_tools: &[QualifiedTool]) -> Plan {
     let mut plan = fixture_plan();
     let mut obligation = plan.obligations.remove(0);
     obligation.task_id = TASK.into();
+    let mut tool_specs: Vec<_> = qualified_tools
+        .iter()
+        .filter_map(|tool| match &tool.backend {
+            velnor_actions_contract::config::QualifiedToolBackend::Aqua { package } => {
+                Some(format!("aqua:{package}@{}", tool.version))
+            }
+            _ => None,
+        })
+        .collect();
+    tool_specs.sort();
     let qualification_digest =
-        velnor_actions_mise::checks::DiscoveredCheck::qualification_fingerprint(&[], &[])
-            .expect("fingerprint");
+        velnor_actions_mise::checks::DiscoveredCheck::qualification_fingerprint(
+            qualified_tools,
+            &tool_specs,
+        )
+        .expect("fingerprint");
     let mut entry = MatrixEntry::derive("mise", TASK, "true", &obligation.task_digest,
-        serde_json::json!({"check_id":"demo","system_tools":[],"qualified_tools":[],"tool_specs":[],"qualification_digest":qualification_digest,"evidence":{"path":"proof.json","expected_scenarios":["one"]},
+        serde_json::json!({"check_id":"demo","system_tools":[],"qualified_tools":qualified_tools,"tool_specs":tool_specs,"qualification_digest":qualification_digest,"evidence":{"path":"proof.json","expected_scenarios":["one"]},
             "runner":{"label":"ubuntu-24.04","platform":"linux_x64","executor":"hosted"}}),
         ExecuteTaskIds { tasks: BTreeMap::from([("check".into(), ExecuteTaskRef::Single(TASK.into()))]) },
         &obligation.input_digest, "local", "check-demo").expect("entry");
@@ -34,13 +49,58 @@ fn plan() -> Plan {
     plan.validate().expect("plan");
     plan
 }
+fn plan() -> Plan {
+    plan_with_tools(&[])
+}
 fn producer_json(plan: &Plan) -> String {
     serde_json::json!({"schema":1,"source":"mise-task-v1","head":plan.head,"check_id":"demo","platform":"linux_x64",
         "scenarios":[{"id":"one","executed":true,"status":"passed"}]}).to_string()
 }
 fn staged(with_proof: bool) -> (tempfile::TempDir, Plan) {
+    staged_with_tools(with_proof, Vec::new(), Vec::new())
+}
+fn staged_with_tools(
+    with_proof: bool,
+    declarations: Vec<QualifiedTool>,
+    qualified_tools: Vec<crate::check_evidence::gate::tools::QualifiedToolReceipt>,
+) -> (tempfile::TempDir, Plan) {
+    staged_with_envelope(with_proof, declarations, qualified_tools, None, None)
+}
+
+fn staged_with_container(
+    with_proof: bool,
+    declarations: Vec<QualifiedTool>,
+    qualified_tools: Vec<crate::check_evidence::gate::tools::QualifiedToolReceipt>,
+    profile: HostContainerProfile,
+    container: crate::check_evidence::gate::container::ContainerReceipt,
+) -> (tempfile::TempDir, Plan) {
+    staged_with_envelope(
+        with_proof,
+        declarations,
+        qualified_tools,
+        Some(profile),
+        Some(container),
+    )
+}
+
+fn staged_with_envelope(
+    with_proof: bool,
+    declarations: Vec<QualifiedTool>,
+    qualified_tools: Vec<crate::check_evidence::gate::tools::QualifiedToolReceipt>,
+    container_profile: Option<HostContainerProfile>,
+    container: Option<crate::check_evidence::gate::container::ContainerReceipt>,
+) -> (tempfile::TempDir, Plan) {
     let temp = tempfile::TempDir::new().expect("temp");
-    let plan = plan();
+    let mut plan = plan_with_tools(&declarations);
+    if let Some(profile) = &container_profile {
+        plan.matrix.include[0].adapter_metadata["runner"] = serde_json::json!({
+            "label":"native-scale",
+            "platform":"linux_x64",
+            "executor":"ephemeral_self_hosted",
+            "container":profile,
+        });
+        plan.validate().expect("container runner metadata");
+    }
     let entry = &plan.matrix.include[0];
     fs::write(temp.path().join("proof.json"), producer_json(&plan)).expect("producer evidence");
     let receipt = verify_evidence(
@@ -75,15 +135,16 @@ fn staged(with_proof: bool) -> (tempfile::TempDir, Plan) {
     if with_proof {
         fs::create_dir(home.join("evidence")).expect("evidence dir");
         fs::write(home.join("evidence/proof.json"), &receipt.bytes).expect("evidence artifact");
-        let execution = execution_receipt(
+        let mut execution = execution_receipt(
             &plan,
             entry,
             "demo",
             CheckPlatform::LinuxX64,
             Some(receipt),
             vec![],
-            vec![],
+            qualified_tools,
         );
+        execution.container = container;
         fs::write(
             home.join("check-execution.json"),
             canonical_json_bytes(&execution).expect("receipt bytes"),
@@ -258,3 +319,7 @@ fn container_declaration_without_receipt_fails_after_assembly_errors_cleared() {
     request["assembly_errors"] = serde_json::json!([]);
     assert_ne!(verdict(&request.to_string()).status, FinalStatus::Passed);
 }
+
+#[cfg(test)]
+#[path = "check_gate_receipt_budget_tests.rs"]
+mod receipt_budget_tests;

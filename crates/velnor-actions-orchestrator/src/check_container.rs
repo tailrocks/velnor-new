@@ -4,6 +4,7 @@ use crate::internal::internal;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use velnor_actions_contract::config::{CheckRunner, HostContainerProfile};
+use velnor_actions_mise::CheckDeadline;
 use velnor_actions_mise::checks::{CheckCapabilityProof, PreparedContainer};
 #[path = "check_container_bundle.rs"]
 pub(crate) mod bundle;
@@ -64,6 +65,7 @@ pub(crate) struct ObservedContainer {
 pub(crate) fn probe(
     runner: &CheckRunner,
     owned: Option<&OwnedContainer>,
+    deadline: CheckDeadline,
 ) -> Result<ObservedContainer, OrchestratorError> {
     if let Some(owned) = owned {
         runtime::revalidate_runtime(&owned.runtime)?;
@@ -84,9 +86,12 @@ pub(crate) fn probe(
             }
         }
     }
-    let proof =
-        velnor_actions_mise::checks::verify_check_capabilities(runner, owned.map(|o| &o.prepared))
-            .map_err(|e| internal(&e.to_string()))?;
+    let proof = velnor_actions_mise::checks::verify_check_capabilities(
+        runner,
+        owned.map(|o| &o.prepared),
+        deadline,
+    )
+    .map_err(|e| internal(&e.to_string()))?;
     let runtime = owned
         .map(|o| runtime::observe_runtime(&o.runtime))
         .transpose()?;

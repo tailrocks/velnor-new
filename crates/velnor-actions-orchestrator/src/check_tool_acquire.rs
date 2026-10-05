@@ -2,15 +2,15 @@
 use crate::OrchestratorError;
 use crate::check_evidence::gate::tools::{QualifiedToolReceipt, receipt};
 use crate::internal::internal;
+use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
-use std::time::Instant;
 use velnor_actions_contract::config::{
     QualifiedCargoInstallation, QualifiedTool, QualifiedToolBackend, QualifiedToolOptions,
 };
 use velnor_actions_mise::check_tool_probes::{
     QualifiedExecutableObservation, QualifiedProbeHomes, verify_qualified_executable,
 };
-use velnor_actions_mise::{DiscoveredCheck, QualifiedCheck};
+use velnor_actions_mise::{CheckDeadline, DiscoveredCheck, QualifiedCheck};
 
 #[path = "check_tool_archive.rs"]
 mod archive;
@@ -23,8 +23,8 @@ pub(super) fn acquire(
     handle: &QualifiedCheck,
     check: &DiscoveredCheck,
     home: &Path,
+    deadline: CheckDeadline,
 ) -> Result<Vec<QualifiedToolReceipt>, OrchestratorError> {
-    let started = Instant::now();
     let mut receipts = Vec::new();
     let mut expanded = archive::ArchiveBudget::new();
     for tool in &check.qualified_tools {
@@ -45,7 +45,7 @@ pub(super) fn acquire(
             false,
             &qualified.artifacts,
             &tool_home,
-            started,
+            deadline,
             &mut expanded,
         )?;
         let dependencies = fetch_extract(
@@ -54,24 +54,35 @@ pub(super) fn acquire(
             true,
             &qualified.dependency_artifacts,
             &tool_home,
-            started,
+            deadline,
             &mut expanded,
         )?;
         let prefix = tool_home.join("prefix");
         if source_mode(tool) {
+            check_deadline(deadline)?;
             layout::prepare_cargo_source(
                 tool,
                 check.check.runner.platform,
                 &tool_home,
                 &primary,
                 &dependencies,
+                deadline,
             )?;
-            run(handle, handle.qualified_source_command(&tool.id), started)?;
+            check_deadline(deadline)?;
+            run(handle.qualified_source_command(&tool.id), deadline)?;
         } else {
-            layout::normalize_payload(tool, check.check.runner.platform, &primary, &prefix)?;
+            check_deadline(deadline)?;
+            layout::normalize_payload(
+                tool,
+                check.check.runner.platform,
+                &primary,
+                &prefix,
+                deadline,
+            )?;
+            check_deadline(deadline)?;
         }
-        tree::freeze_tree(&prefix)?;
-        let actual_tree = tree::tree_sha256(&prefix)?;
+        tree::freeze_tree(&prefix, deadline)?;
+        let actual_tree = tree::tree_sha256(&prefix, deadline)?;
         if actual_tree != qualified.install_tree_sha256 {
             return Err(internal("qualified_tool_install_tree_sha256"));
         }
@@ -81,6 +92,7 @@ pub(super) fn acquire(
             home,
             &prefix,
             compiler_prefix(tool, &check.qualified_tools, home),
+            deadline,
         )?;
         receipts.push(receipt(
             tool,
@@ -90,7 +102,7 @@ pub(super) fn acquire(
             actual_tree,
             proofs,
         )?);
-        run(handle, handle.qualified_link_command(&tool.id), started)?;
+        run(handle.qualified_link_command(&tool.id), deadline)?;
     }
     Ok(receipts)
 }
@@ -111,20 +123,19 @@ fn fetch_extract(
     dependency: bool,
     artifacts: &[velnor_actions_contract::config::QualifiedToolArtifact],
     tool_home: &Path,
-    started: Instant,
+    deadline: CheckDeadline,
     expanded: &mut archive::ArchiveBudget,
 ) -> Result<Vec<PathBuf>, OrchestratorError> {
     let mut roots = Vec::new();
     for (index, artifact) in artifacts.iter().enumerate() {
         run(
-            handle,
             handle.qualified_fetch_command(&tool.id, dependency, index),
-            started,
+            deadline,
         )?;
         let downloaded = tool_home.join("downloads").join(&artifact.sha256);
-        let bytes = crate::retrieve_reports::read_staged_bytes(&downloaded, 1024 * 1024 * 1024)
-            .map_err(|_| internal("qualified_tool_artifact_unreadable"))?;
-        if crate::cover_identity::generator::sha256_hex(&bytes) != artifact.sha256 {
+        let bytes = read_with_deadline(&downloaded, 1024 * 1024 * 1024, deadline)
+            .map_err(|error| staged_read_error(error, "qualified_tool_artifact_unreadable"))?;
+        if sha256_with_deadline(&bytes, deadline)? != artifact.sha256 {
             return Err(internal("qualified_tool_artifact_sha256"));
         }
         let name = format!(
@@ -132,9 +143,14 @@ fn fetch_extract(
             if dependency { "dependency" } else { "primary" }
         );
         let verified = tool_home.join("verified").join(&name);
-        crate::exclusive_write::write_exclusive(&verified, &bytes, "qualified_tool_archive")?;
+        crate::exclusive_write::write_exclusive_until(
+            &verified,
+            &bytes,
+            "qualified_tool_archive",
+            || check_deadline(deadline),
+        )?;
         let root = tool_home.join("unpacked").join(name);
-        archive::extract_archive(&verified, &root, &artifact.url, expanded)?;
+        archive::extract_archive(&verified, &root, &artifact.url, expanded, deadline)?;
         std::fs::remove_file(&downloaded)
             .map_err(|_| internal("qualified_tool_archive_cleanup"))?;
         std::fs::remove_file(&verified).map_err(|_| internal("qualified_tool_archive_cleanup"))?;
@@ -161,6 +177,7 @@ fn observe_executables(
     home: &Path,
     prefix: &Path,
     compiler_toolchain: Option<PathBuf>,
+    deadline: CheckDeadline,
 ) -> Result<Vec<velnor_actions_mise::check_tool_probes::QualifiedExecutableProof>, OrchestratorError>
 {
     let qualified = tool
@@ -179,9 +196,9 @@ fn observe_executables(
     for executable in &qualified.executables {
         crate::check_evidence::reject_link_components(prefix, &executable.path)?;
         let path = prefix.join(&executable.path);
-        let bytes = crate::retrieve_reports::read_staged_bytes(&path, 256 * 1024 * 1024)
-            .map_err(|_| internal("qualified_tool_executable_unreadable"))?;
-        let sha256 = crate::cover_identity::generator::sha256_hex(&bytes);
+        let bytes = read_with_deadline(&path, 256 * 1024 * 1024, deadline)
+            .map_err(|error| staged_read_error(error, "qualified_tool_executable_unreadable"))?;
+        let sha256 = sha256_with_deadline(&bytes, deadline)?;
         if sha256 != executable.sha256 {
             return Err(internal("qualified_tool_executable_sha256"));
         }
@@ -196,6 +213,7 @@ fn observe_executables(
             executable,
             &observed,
             &homes,
+            deadline,
         )
         .map_err(|e| internal(&e.to_string()))?;
         super::link_program(path.as_os_str(), &home.join("bin").join(&executable.name))?;
@@ -205,15 +223,10 @@ fn observe_executables(
 }
 
 fn run(
-    handle: &QualifiedCheck,
     command: Result<velnor_actions_mise::IsolatedCommand, velnor_actions_mise::MiseError>,
-    started: Instant,
+    deadline: CheckDeadline,
 ) -> Result<(), OrchestratorError> {
-    let timeout = handle
-        .timeout()
-        .checked_sub(started.elapsed())
-        .filter(|d| !d.is_zero())
-        .ok_or_else(|| internal("check_timeout"))?;
+    let timeout = deadline.remaining().map_err(|e| internal(&e.to_string()))?;
     let output = command
         .map_err(|e| internal(&e.to_string()))?
         .run_bounded(8 * 1024 * 1024, timeout)
@@ -222,6 +235,50 @@ fn run(
         .require_success("qualified-tool-acquisition")
         .map_err(|e| internal(&e.to_string()))?;
     Ok(())
+}
+
+fn read_with_deadline(
+    path: &Path,
+    limit: u64,
+    deadline: CheckDeadline,
+) -> Result<Vec<u8>, &'static str> {
+    crate::retrieve_reports::staged_reads::read_staged_bytes_until(path, limit, || {
+        deadline.remaining().map(|_| ()).map_err(|_| "deadline")
+    })
+}
+
+fn sha256_with_deadline(
+    bytes: &[u8],
+    deadline: CheckDeadline,
+) -> Result<String, OrchestratorError> {
+    let mut hash = Sha256::new();
+    for chunk in bytes.chunks(64 * 1024) {
+        check_deadline(deadline)?;
+        hash.update(chunk);
+    }
+    check_deadline(deadline)?;
+    let digest = hash.finalize();
+    let mut hex = String::with_capacity(digest.len() * 2);
+    for byte in digest {
+        use std::fmt::Write as _;
+        write!(&mut hex, "{byte:02x}").map_err(|_| internal("qualified_tool_sha256"))?;
+    }
+    Ok(hex)
+}
+
+fn check_deadline(deadline: CheckDeadline) -> Result<(), OrchestratorError> {
+    deadline
+        .remaining()
+        .map(|_| ())
+        .map_err(|error| internal(&error.to_string()))
+}
+
+fn staged_read_error(problem: &'static str, context: &str) -> OrchestratorError {
+    if problem == "deadline" {
+        internal("check_timeout:deadline_exhausted")
+    } else {
+        internal(context)
+    }
 }
 
 #[cfg(test)]

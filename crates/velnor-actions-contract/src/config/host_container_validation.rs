@@ -148,7 +148,8 @@ fn relative_path(value: &str) -> bool {
         })
 }
 fn absolute_path(value: &str) -> bool {
-    value.strip_prefix('/').is_some_and(relative_path)
+    value.len() <= super::super::MAX_CHECK_CONTAINER_PATH_BYTES
+        && value.strip_prefix('/').is_some_and(relative_path)
 }
 
 fn app_extension(value: &str) -> bool {

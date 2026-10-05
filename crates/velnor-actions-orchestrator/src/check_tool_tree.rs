@@ -7,6 +7,7 @@ use std::path::{Component, Path, PathBuf};
 use serde_json::json;
 use sha2::{Digest, Sha256};
 use velnor_actions_contract::canonical_json_bytes;
+use velnor_actions_mise::CheckDeadline;
 
 use crate::OrchestratorError;
 
@@ -54,14 +55,18 @@ impl Walk {
     }
 }
 /// Compute canonical SHA-256 over every relative entry in an installation tree.
-pub(super) fn tree_sha256(root: &Path) -> Result<String, OrchestratorError> {
+pub(super) fn tree_sha256(
+    root: &Path,
+    deadline: CheckDeadline,
+) -> Result<String, OrchestratorError> {
     let root = validate_root(root)?;
-    tree_digest(&collect(&root)?)
+    tree_digest(&collect(&root, deadline)?, deadline)
 }
 /// Validate a tree and make every regular file owner-readonly, preserving execute state.
-pub(super) fn freeze_tree(root: &Path) -> Result<(), OrchestratorError> {
+pub(super) fn freeze_tree(root: &Path, deadline: CheckDeadline) -> Result<(), OrchestratorError> {
     let root = validate_root(root)?;
-    for entry in collect(&root)? {
+    for entry in collect(&root, deadline)? {
+        super::check_deadline(deadline)?;
         match entry {
             Entry::File(file) => readonly_file(&root.join(&file.path), file.mode)?,
             Entry::Directory(_) | Entry::Symlink(_, _) => {}
@@ -79,18 +84,26 @@ fn validate_root(root: &Path) -> Result<PathBuf, OrchestratorError> {
     }
     root.canonicalize().map_err(|error| io_error(root, error))
 }
-fn collect(root: &Path) -> Result<Vec<Entry>, OrchestratorError> {
+fn collect(root: &Path, deadline: CheckDeadline) -> Result<Vec<Entry>, OrchestratorError> {
     let mut walk = Walk {
         entries: Vec::new(),
         bytes: 0,
     };
-    walk_directory(root, root, &mut walk)?;
+    walk_directory(root, root, &mut walk, deadline)?;
+    super::check_deadline(deadline)?;
     walk.entries
         .sort_by(|left, right| left.path().cmp(right.path()));
+    super::check_deadline(deadline)?;
     Ok(walk.entries)
 }
-fn walk_directory(root: &Path, directory: &Path, walk: &mut Walk) -> Result<(), OrchestratorError> {
+fn walk_directory(
+    root: &Path,
+    directory: &Path,
+    walk: &mut Walk,
+    deadline: CheckDeadline,
+) -> Result<(), OrchestratorError> {
     for item in fs::read_dir(directory).map_err(|error| io_error(directory, error))? {
+        super::check_deadline(deadline)?;
         let path = item.map_err(|error| io_error(directory, error))?.path();
         let relative = relative_path(root, &path)?;
         let metadata = fs::symlink_metadata(&path).map_err(|error| io_error(&path, error))?;
@@ -104,9 +117,9 @@ fn walk_directory(root: &Path, directory: &Path, walk: &mut Walk) -> Result<(), 
                 return Err(unsafe_path(&path, "root_escape"));
             }
             walk.add(Entry::Directory(relative))?;
-            walk_directory(root, &path, walk)?;
+            walk_directory(root, &path, walk, deadline)?;
         } else if metadata.is_file() {
-            let file = read_file(&path, MAX_TREE_BYTES - walk.bytes)?;
+            let file = read_file(&path, MAX_TREE_BYTES - walk.bytes, deadline)?;
             walk.bytes = walk.bytes.saturating_add(file.length);
             walk.add(Entry::File(FileEntry {
                 path: relative,
@@ -120,7 +133,11 @@ fn walk_directory(root: &Path, directory: &Path, walk: &mut Walk) -> Result<(), 
     }
     Ok(())
 }
-fn read_file(path: &Path, tree_remaining: u64) -> Result<ReadFile, OrchestratorError> {
+fn read_file(
+    path: &Path,
+    tree_remaining: u64,
+    deadline: CheckDeadline,
+) -> Result<ReadFile, OrchestratorError> {
     let limit = MAX_FILE_BYTES.min(tree_remaining);
     let fd = rustix::fs::open(
         path,
@@ -145,9 +162,11 @@ fn read_file(path: &Path, tree_remaining: u64) -> Result<ReadFile, OrchestratorE
     let mut length = 0_u64;
     let mut buffer = vec![0_u8; READ_CHUNK];
     loop {
+        super::check_deadline(deadline)?;
         let count = file
             .read(&mut buffer)
             .map_err(|error| io_error(path, error))?;
+        super::check_deadline(deadline)?;
         if count == 0 {
             break;
         }
@@ -229,10 +248,12 @@ fn relative_path(root: &Path, path: &Path) -> Result<String, OrchestratorError> 
     }
 }
 
-fn tree_digest(entries: &[Entry]) -> Result<String, OrchestratorError> {
-    let manifest = entries
-        .iter()
-        .map(|entry| match entry {
+fn tree_digest(entries: &[Entry], deadline: CheckDeadline) -> Result<String, OrchestratorError> {
+    let mut hash = Sha256::new();
+    hash.update(b"[");
+    for (index, entry) in entries.iter().enumerate() {
+        super::check_deadline(deadline)?;
+        let value = match entry {
             Entry::File(file) => {
                 json!({"path": &file.path, "kind": "file", "sha256": &file.sha256, "executable": file.executable})
             }
@@ -240,11 +261,17 @@ fn tree_digest(entries: &[Entry]) -> Result<String, OrchestratorError> {
                 json!({"path": path, "kind": "symlink", "target": target})
             }
             Entry::Directory(path) => json!({"path": path, "kind": "directory"}),
-        })
-        .collect::<Vec<_>>();
-    let bytes = canonical_json_bytes(&manifest)
-        .map_err(|_| crate::internal::internal("tool_tree_manifest"))?;
-    Ok(crate::cover_identity::generator::sha256_hex(&bytes))
+        };
+        if index != 0 {
+            hash.update(b",");
+        }
+        let bytes = canonical_json_bytes(&value)
+            .map_err(|_| crate::internal::internal("tool_tree_manifest"))?;
+        hash.update(&bytes);
+    }
+    super::check_deadline(deadline)?;
+    hash.update(b"]");
+    Ok(digest_hex(&hash.finalize()))
 }
 
 fn readonly_file(path: &Path, mode: u32) -> Result<(), OrchestratorError> {
@@ -288,6 +315,12 @@ fn unsafe_path(path: &Path, reason: &str) -> OrchestratorError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Duration;
+
+    fn deadline() -> CheckDeadline {
+        CheckDeadline::after(Duration::from_secs(60)).expect("deadline")
+    }
+
     fn source() -> tempfile::TempDir {
         let root = tempfile::tempdir().expect("temp");
         fs::create_dir(root.path().join("bin")).expect("bin");
@@ -298,9 +331,27 @@ mod tests {
     #[test]
     fn positive_hash_and_freeze() {
         let root = source();
-        let expected = tree_sha256(root.path()).expect("hash");
-        freeze_tree(root.path()).expect("freeze");
-        assert_eq!(tree_sha256(root.path()).expect("frozen hash"), expected);
+        let expected = tree_sha256(root.path(), deadline()).expect("hash");
+        let entries = collect(root.path(), deadline()).expect("entries");
+        let manifest = entries
+            .iter()
+            .map(|entry| match entry {
+                Entry::File(file) => json!({"path": &file.path, "kind": "file", "sha256": &file.sha256, "executable": file.executable}),
+                Entry::Symlink(path, target) => json!({"path": path, "kind": "symlink", "target": target}),
+                Entry::Directory(path) => json!({"path": path, "kind": "directory"}),
+            })
+            .collect::<Vec<_>>();
+        let previous_bytes = canonical_json_bytes(&manifest).expect("manifest");
+        let previous = digest_hex(&Sha256::digest(previous_bytes));
+        assert_eq!(
+            expected, previous,
+            "streaming preserves the locked tree recipe"
+        );
+        freeze_tree(root.path(), deadline()).expect("freeze");
+        assert_eq!(
+            tree_sha256(root.path(), deadline()).expect("frozen hash"),
+            expected
+        );
         assert_eq!(
             fs::read(root.path().join("bin/tool")).expect("tool"),
             b"tool"
@@ -309,9 +360,12 @@ mod tests {
     #[test]
     fn tamper_changes_identity() {
         let root = source();
-        let expected = tree_sha256(root.path()).expect("hash");
+        let expected = tree_sha256(root.path(), deadline()).expect("hash");
         fs::write(root.path().join("README"), b"tampered").expect("tamper");
-        assert_ne!(tree_sha256(root.path()).expect("tampered hash"), expected);
+        assert_ne!(
+            tree_sha256(root.path(), deadline()).expect("tampered hash"),
+            expected
+        );
     }
 
     #[cfg(unix)]
@@ -319,13 +373,13 @@ mod tests {
     fn links_require_in_root_targets_and_survive_copy() {
         let root = source();
         std::os::unix::fs::symlink("tool", root.path().join("bin/link")).expect("link");
-        freeze_tree(root.path()).expect("freeze");
+        freeze_tree(root.path(), deadline()).expect("freeze");
         assert_eq!(
             fs::read_link(root.path().join("bin/link")).expect("link"),
             Path::new("tool")
         );
         let bad = source();
         std::os::unix::fs::symlink("../../outside", bad.path().join("escape")).expect("escape");
-        assert!(tree_sha256(bad.path()).is_err());
+        assert!(tree_sha256(bad.path(), deadline()).is_err());
     }
 }

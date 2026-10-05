@@ -8,6 +8,7 @@ use velnor_actions_contract::config::{
     CheckPlatform, QualifiedCargoInstallation, QualifiedTool, QualifiedToolBackend,
     QualifiedToolOptions, QualifiedToolPlatform,
 };
+use velnor_actions_mise::CheckDeadline;
 
 #[path = "check_tool_cargo_vendor_fs.rs"]
 mod custody;
@@ -20,7 +21,9 @@ pub(super) fn prepare_cargo_source(
     tool_home: &Path,
     primary_roots: &[PathBuf],
     dependency_roots: &[PathBuf],
+    deadline: CheckDeadline,
 ) -> Result<(), OrchestratorError> {
+    check_deadline(deadline)?;
     let (crate_name, lock_sha, qualification) = admission(tool, platform)?;
     if primary_roots.len() != 1
         || qualification.artifacts.len() != 1
@@ -32,24 +35,25 @@ pub(super) fn prepare_cargo_source(
     require_cargo_home(tool_home)?;
     let primary = custody::crate_root(&primary_roots[0])?;
     custody::verify_owned_root(tool_home, &primary)?;
-    custody::inspect_tree(&primary)?;
-    let identity = lock::package_identity(&primary)?;
+    custody::inspect_tree(&primary, deadline)?;
+    let identity = lock::package_identity(&primary, deadline)?;
     if identity != (crate_name.to_owned(), tool.version.clone())
         || lock::archive_identity(&qualification.artifacts[0].url)? != identity
     {
         return Err(internal("qualified_cargo_primary_identity"));
     }
-    lock::verify_closure(&primary, lock_sha, qualification, &identity)?;
+    lock::verify_closure(&primary, lock_sha, qualification, &identity, deadline)?;
     let mut dependencies = Vec::new();
     let mut identities = BTreeSet::new();
     for (extracted, artifact) in dependency_roots
         .iter()
         .zip(&qualification.dependency_artifacts)
     {
+        check_deadline(deadline)?;
         let root = custody::crate_root(extracted)?;
         custody::verify_owned_root(tool_home, &root)?;
-        custody::inspect_tree(&root)?;
-        let identity = lock::package_identity(&root)?;
+        custody::inspect_tree(&root, deadline)?;
+        let identity = lock::package_identity(&root, deadline)?;
         if identity != lock::archive_identity(&artifact.url)?
             || !identities.insert(identity.clone())
         {
@@ -66,15 +70,24 @@ pub(super) fn prepare_cargo_source(
     fs::rename(&primary, &source)
         .map_err(|error| OrchestratorError::io(source.display().to_string(), error.to_string()))?;
     for (root, identity, checksum) in dependencies {
+        check_deadline(deadline)?;
         let destination = vendor.join(format!("{}-{}", identity.0, identity.1));
         custody::require_absent(&destination)?;
         fs::rename(root, &destination).map_err(|error| {
             OrchestratorError::io(destination.display().to_string(), error.to_string())
         })?;
-        custody::write_checksum(&destination, checksum)?;
+        custody::write_checksum(&destination, checksum, deadline)?;
     }
     custody::reject_ancestor_configs(&source)?;
+    check_deadline(deadline)?;
     write_source_config(tool_home, &vendor)
+}
+
+fn check_deadline(deadline: CheckDeadline) -> Result<(), OrchestratorError> {
+    deadline
+        .remaining()
+        .map(|_| ())
+        .map_err(|error| internal(&error.to_string()))
 }
 
 fn admission(

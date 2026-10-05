@@ -1,5 +1,8 @@
 //! Bounded readonly probe identity admission; output is data, never shell code.
-use crate::config::{CheckPlatform, QualifiedTool, QualifiedToolExecutable, QualifiedToolProbe};
+use crate::config::{
+    CheckPlatform, MAX_CHECK_QUALIFIED_PROBE_EXPECTED_BYTES, QualifiedTool,
+    QualifiedToolExecutable, QualifiedToolProbe,
+};
 use crate::errors::ContractError;
 
 fn exact_version_token(output: &str, version: &str) -> bool {
@@ -34,7 +37,7 @@ pub(super) fn validate_probe(
         _ => return Err(bad()),
     };
     if expected.is_empty()
-        || expected.len() > 8192
+        || expected.len() > MAX_CHECK_QUALIFIED_PROBE_EXPECTED_BYTES
         || expected.ends_with('\n')
         || !expected
             .bytes()

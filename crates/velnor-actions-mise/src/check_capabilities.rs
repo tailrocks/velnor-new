@@ -1,9 +1,14 @@
 //! Readonly container observations over orchestrator-verified owned binaries.
 use super::invalid;
-use crate::{IsolatedCommand, MiseError};
+use crate::{CheckDeadline, IsolatedCommand, MiseError};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
-use velnor_actions_contract::config::{CheckRunner, HostContainerProfile};
+use velnor_actions_contract::config::{
+    CheckRunner, HostContainerProfile, MAX_CHECK_CONTAINER_APP_INFO_CAPTURE_BYTES,
+    MAX_CHECK_CONTAINER_APP_VERIFY_CAPTURE_BYTES, MAX_CHECK_CONTAINER_DAEMON_CAPTURE_BYTES,
+    MAX_CHECK_CONTAINER_IDENTITY_CAPTURE_BYTES, MAX_CHECK_CONTAINER_PATH_BYTES,
+    MAX_CHECK_CONTAINER_PROBE_CAPTURE_BYTES,
+};
 #[path = "check_container_observation.rs"]
 mod observation;
 pub use observation::{
@@ -45,6 +50,7 @@ pub struct CheckCapabilityProof {
 pub fn verify_check_capabilities(
     runner: &CheckRunner,
     prepared: Option<&PreparedContainer>,
+    deadline: CheckDeadline,
 ) -> Result<CheckCapabilityProof, MiseError> {
     let Some(profile) = &runner.container else {
         if prepared.is_some() {
@@ -63,7 +69,13 @@ pub fn verify_check_capabilities(
         .map_err(|error| invalid("container", error.to_string()))?;
     validate_prepared(profile, prepared)?;
     let env = capability_environment(prepared);
-    let docker_cli = probe(&prepared.docker_program, &["--version"], &env)?;
+    let docker_cli = probe(
+        &prepared.docker_program,
+        &["--version"],
+        &env,
+        deadline,
+        MAX_CHECK_CONTAINER_PROBE_CAPTURE_BYTES,
+    )?;
     let context = match profile {
         HostContainerProfile::Docker { context, .. }
         | HostContainerProfile::OrbStack { context, .. } => context,
@@ -78,6 +90,8 @@ pub fn verify_check_capabilities(
             "{{.Endpoints.docker.Host}}",
         ],
         &env,
+        deadline,
+        MAX_CHECK_CONTAINER_PROBE_CAPTURE_BYTES,
     )?;
     if inspected.stdout.trim_end_matches(['\r', '\n']) != prepared.endpoint {
         return Err(invalid("container_context", "prepared_endpoint_mismatch"));
@@ -92,10 +106,14 @@ pub fn verify_check_capabilities(
             observation::DAEMON_FORMAT,
         ],
         &env,
+        deadline,
+        MAX_CHECK_CONTAINER_DAEMON_CAPTURE_BYTES,
     )?;
     let daemon = DockerDaemonObservation::parse(daemon)?;
     let orbctl = match profile {
-        HostContainerProfile::OrbStack { sdk, .. } => Some(probe_orbstack(sdk, prepared, &env)?),
+        HostContainerProfile::OrbStack { sdk, .. } => {
+            Some(probe_orbstack(sdk, prepared, &env, deadline)?)
+        }
         HostContainerProfile::Docker { .. } => None,
     };
     let proof = CheckCapabilityProof {
@@ -119,6 +137,7 @@ fn validate_prepared(
     prepared: &PreparedContainer,
 ) -> Result<(), MiseError> {
     if !prepared.home.is_absolute()
+        || !bounded_path(&prepared.home)
         || prepared
             .home
             .canonicalize()
@@ -131,7 +150,8 @@ fn validate_prepared(
         .into_iter()
         .chain(prepared.orbctl_program.as_ref())
     {
-        if !path.starts_with(&prepared.home)
+        if !bounded_path(path)
+            || !path.starts_with(&prepared.home)
             || path
                 .canonicalize()
                 .map_err(|e| invalid("container_path", e.to_string()))?
@@ -168,10 +188,17 @@ fn validate_prepared(
         .ok_or_else(|| invalid("container_endpoint", "local_unix_socket_required"))?;
     if prepared.endpoint != format!("unix://{}", profile.socket_path())
         || !Path::new(socket).is_absolute()
+        || socket.len() > MAX_CHECK_CONTAINER_PATH_BYTES
     {
         return Err(invalid("container_endpoint", "absolute_socket_required"));
     }
     Ok(())
+}
+
+fn bounded_path(path: &Path) -> bool {
+    path.to_str().is_some_and(|value| {
+        value.len() <= MAX_CHECK_CONTAINER_PATH_BYTES && !value.chars().any(char::is_control)
+    })
 }
 
 fn capability_environment(prepared: &PreparedContainer) -> Vec<(OsString, OsString)> {
@@ -194,13 +221,15 @@ fn probe(
     program: &Path,
     args: &[&str],
     env: &[(OsString, OsString)],
+    deadline: CheckDeadline,
+    capture_limit: usize,
 ) -> Result<ContainerProbeOutput, MiseError> {
     let command = IsolatedCommand::qualified_check_probe(
         program.as_os_str().to_owned(),
         args.iter().map(OsString::from).collect(),
         env.to_vec(),
     );
-    let result = command.run_bounded(64 * 1024, std::time::Duration::from_secs(30))?;
+    let result = command.run_bounded(capture_limit, deadline.remaining()?)?;
     if !result.success {
         return Err(probe_failure(program, args, &result));
     }
@@ -240,6 +269,7 @@ fn probe_orbstack(
     sdk: &velnor_actions_contract::config::HostOrbStackSdk,
     prepared: &PreparedContainer,
     env: &[(OsString, OsString)],
+    deadline: CheckDeadline,
 ) -> Result<OrbStackObservation, MiseError> {
     let program = prepared
         .orbctl_program
@@ -253,23 +283,53 @@ fn probe_orbstack(
         Path::new("/usr/bin/plutil"),
         &["-convert", "json", "-o", "-", info_path],
         env,
+        deadline,
+        MAX_CHECK_CONTAINER_APP_INFO_CAPTURE_BYTES,
     )?;
     let codesign = Path::new("/usr/bin/codesign");
-    let signature = probe(codesign, &["-dv", "--verbose=4", &sdk.app_bundle_path], env)?;
+    let signature = probe(
+        codesign,
+        &["-dv", "--verbose=4", &sdk.app_bundle_path],
+        env,
+        deadline,
+        MAX_CHECK_CONTAINER_IDENTITY_CAPTURE_BYTES,
+    )?;
     let owned_bundle = owned_cli_bundle(program)?;
     let outer_integrity = probe(
         codesign,
         &["--verify", "--strict", &sdk.app_bundle_path],
         env,
+        deadline,
+        MAX_CHECK_CONTAINER_APP_VERIFY_CAPTURE_BYTES,
     )?;
     let source_cli_integrity = probe(
         codesign,
         &["--verify", "--strict", &sdk.cli_bundle_path],
         env,
+        deadline,
+        MAX_CHECK_CONTAINER_APP_VERIFY_CAPTURE_BYTES,
     )?;
-    let owned_cli_integrity = probe(codesign, &["--verify", "--strict", owned_bundle], env)?;
-    let source_cli_signature = probe(codesign, &["-dv", "--verbose=4", &sdk.cli_bundle_path], env)?;
-    let owned_cli_signature = probe(codesign, &["-dv", "--verbose=4", owned_bundle], env)?;
+    let owned_cli_integrity = probe(
+        codesign,
+        &["--verify", "--strict", owned_bundle],
+        env,
+        deadline,
+        MAX_CHECK_CONTAINER_APP_VERIFY_CAPTURE_BYTES,
+    )?;
+    let source_cli_signature = probe(
+        codesign,
+        &["-dv", "--verbose=4", &sdk.cli_bundle_path],
+        env,
+        deadline,
+        MAX_CHECK_CONTAINER_IDENTITY_CAPTURE_BYTES,
+    )?;
+    let owned_cli_signature = probe(
+        codesign,
+        &["-dv", "--verbose=4", owned_bundle],
+        env,
+        deadline,
+        MAX_CHECK_CONTAINER_IDENTITY_CAPTURE_BYTES,
+    )?;
     let app = OrbStackAppObservation::parse(
         info,
         signature,
@@ -286,8 +346,20 @@ fn probe_orbstack(
             .clone()
             .ok_or_else(|| invalid("orbstack", "cli_hash_missing"))?,
         app,
-        version: probe(program, &["version"], env)?,
-        status: probe(program, &["status"], env)?,
+        version: probe(
+            program,
+            &["version"],
+            env,
+            deadline,
+            MAX_CHECK_CONTAINER_PROBE_CAPTURE_BYTES,
+        )?,
+        status: probe(
+            program,
+            &["status"],
+            env,
+            deadline,
+            MAX_CHECK_CONTAINER_PROBE_CAPTURE_BYTES,
+        )?,
     })
 }
 

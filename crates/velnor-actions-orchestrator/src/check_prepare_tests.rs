@@ -30,7 +30,9 @@ fn owned_homes_cannot_live_inside_repository() {
     let item = discovered(root.path());
     let temp = root.path().join("temp");
     std::fs::create_dir(&temp).expect("temp");
-    let error = prepare_check(root.path(), &temp, &item).expect_err("reject");
+    let deadline = velnor_actions_mise::CheckDeadline::after(std::time::Duration::from_secs(60))
+        .expect("deadline");
+    let error = prepare_check(root.path(), &temp, &item, deadline).expect_err("reject");
     assert!(error.to_string().contains("check_temp_inside_repository"));
     assert_eq!(std::fs::read_dir(temp).expect("entries").count(), 0);
 }

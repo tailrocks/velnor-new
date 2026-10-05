@@ -4,7 +4,7 @@ use std::collections::HashSet;
 #[cfg(not(unix))]
 use std::fs::OpenOptions;
 use std::fs::{self, File};
-use std::io::{Read, Seek, SeekFrom};
+use std::io::{self, Read, Seek, SeekFrom};
 use std::path::Path;
 
 use flate2::read::GzDecoder;
@@ -14,11 +14,16 @@ use zip::ZipArchive;
 
 use crate::OrchestratorError;
 use crate::internal::internal;
+use velnor_actions_mise::CheckDeadline;
 
 #[path = "check_tool_archive_links.rs"]
 mod links;
 #[path = "check_tool_archive_paths.rs"]
 mod paths;
+#[path = "check_tool_archive_tar_preflight.rs"]
+mod tar_preflight;
+#[path = "check_tool_archive_zip.rs"]
+mod zip_checks;
 
 const MAX_ARCHIVE_BYTES: u64 = 1024 * 1024 * 1024;
 const MAX_ENTRIES: usize = 100_000;
@@ -83,18 +88,50 @@ pub(crate) fn extract_archive(
     destination: &Path,
     url: &str,
     budget: &mut ArchiveBudget,
+    deadline: CheckDeadline,
 ) -> Result<(), OrchestratorError> {
+    check_deadline(deadline)?;
     let format = paths::archive_format(url)?;
+    let extension_entries = match format {
+        ArchiveFormat::TarGzip => tar_preflight::preflight_tar(GzDecoder::new(DeadlineIo::new(
+            open_archive(archive)?,
+            deadline,
+        )))?,
+        ArchiveFormat::TarXz => tar_preflight::preflight_tar(XzReader::new_mem_limit(
+            DeadlineIo::new(open_archive(archive)?, deadline),
+            false,
+            XZ_MEMORY_LIMIT_KIB,
+        ))?,
+        ArchiveFormat::Zip => {
+            let mut source = open_archive(archive)?;
+            zip_checks::preflight_zip_entries(&mut source, deadline)?;
+            0
+        }
+    };
+    for _ in 0..extension_entries {
+        budget.admit_entry()?;
+    }
+    check_deadline(deadline)?;
     let source = open_archive(archive)?;
     paths::create_destination(destination)?;
     let result = match format {
-        ArchiveFormat::TarGzip => extract_tar(GzDecoder::new(source), destination, budget),
-        ArchiveFormat::TarXz => extract_tar(
-            XzReader::new_mem_limit(source, false, XZ_MEMORY_LIMIT_KIB),
+        ArchiveFormat::TarGzip => extract_tar(
+            GzDecoder::new(DeadlineIo::new(source, deadline)),
             destination,
             budget,
+            deadline,
         ),
-        ArchiveFormat::Zip => extract_zip(source, destination, budget),
+        ArchiveFormat::TarXz => extract_tar(
+            XzReader::new_mem_limit(
+                DeadlineIo::new(source, deadline),
+                false,
+                XZ_MEMORY_LIMIT_KIB,
+            ),
+            destination,
+            budget,
+            deadline,
+        ),
+        ArchiveFormat::Zip => extract_zip(source, destination, budget, deadline),
     };
     if let Err(error) = result {
         fs::remove_dir_all(destination).map_err(|cleanup| {
@@ -105,6 +142,7 @@ pub(crate) fn extract_archive(
         })?;
         return Err(error);
     }
+    check_deadline(deadline)?;
     Ok(())
 }
 
@@ -149,6 +187,7 @@ fn extract_tar<R: Read>(
     reader: R,
     destination: &Path,
     budget: &mut ArchiveBudget,
+    deadline: CheckDeadline,
 ) -> Result<(), OrchestratorError> {
     let mut archive = tar::Archive::new(reader);
     let entries = archive
@@ -160,6 +199,7 @@ fn extract_tar<R: Read>(
     let mut count = 0_usize;
     let mut total = 0_u64;
     for entry in entries {
+        check_deadline(deadline)?;
         count = count.saturating_add(1);
         if count > MAX_ENTRIES {
             return Err(internal("tool_archive_entry_limit"));
@@ -185,7 +225,7 @@ fn extract_tar<R: Read>(
                 }
                 let size = entry.size();
                 reserve_size(size, &mut total, budget)?;
-                paths::write_entry(destination, &safe.path, &mut entry, size, mode)?;
+                paths::write_entry(destination, &safe.path, &mut entry, size, mode, deadline)?;
             }
             EntryType::Symlink => {
                 let target = entry
@@ -194,7 +234,7 @@ fn extract_tar<R: Read>(
                 let target = links::target_from_bytes(target.as_ref())?;
                 let size = entry.size();
                 reserve_size(size, &mut total, budget)?;
-                links::discard_entry(&mut entry, size)?;
+                links::discard_entry(&mut entry, size, deadline)?;
                 symlinks.push(links::PendingLink {
                     path: safe.path,
                     target,
@@ -203,16 +243,18 @@ fn extract_tar<R: Read>(
             _ => return Err(internal("tool_archive_link_or_special")),
         }
     }
-    links::create_links(destination, symlinks)?;
-    paths::apply_directory_modes(destination, directories)?;
+    links::create_links(destination, symlinks, deadline)?;
+    paths::apply_directory_modes(destination, directories, deadline)?;
     Ok(())
 }
 fn extract_zip(
-    mut source: File,
+    source: File,
     destination: &Path,
     budget: &mut ArchiveBudget,
+    deadline: CheckDeadline,
 ) -> Result<(), OrchestratorError> {
-    preflight_zip_entries(&mut source)?;
+    check_deadline(deadline)?;
+    let mut source = DeadlineIo::new(source, deadline);
     let mut archive =
         ZipArchive::new(&mut source).map_err(|error| archive_error(&error.to_string()))?;
     if archive.len() > MAX_ENTRIES {
@@ -223,6 +265,7 @@ fn extract_zip(
     let mut symlinks = Vec::new();
     let mut total = 0_u64;
     for index in 0..archive.len() {
+        check_deadline(deadline)?;
         budget.admit_entry()?;
         let mut entry = archive
             .by_index(index)
@@ -238,14 +281,14 @@ fn extract_zip(
         if entry.is_symlink() {
             let size = entry.size();
             reserve_size(size, &mut total, budget)?;
-            let target = links::read_target(&mut entry, size)?;
+            let target = links::read_target(&mut entry, size, deadline)?;
             symlinks.push(links::PendingLink {
                 path: safe.path,
                 target,
             });
             continue;
         }
-        reject_zip_special(mode, entry.is_dir())?;
+        zip_checks::reject_zip_special(mode, entry.is_dir())?;
         if entry.is_dir() {
             paths::ensure_directory(destination, &safe.path)?;
             directories.push((safe.path, mode));
@@ -255,82 +298,11 @@ fn extract_zip(
             }
             let size = entry.size();
             reserve_size(size, &mut total, budget)?;
-            paths::write_entry(destination, &safe.path, &mut entry, size, mode)?;
+            paths::write_entry(destination, &safe.path, &mut entry, size, mode, deadline)?;
         }
     }
-    links::create_links(destination, symlinks)?;
-    paths::apply_directory_modes(destination, directories)?;
-    Ok(())
-}
-fn preflight_zip_entries(source: &mut File) -> Result<(), OrchestratorError> {
-    const EOCD_BYTES: u64 = 22 + 65_535 + 20 + 56;
-    let length = source
-        .metadata()
-        .map_err(|error| io_error(Path::new("zip"), error))?
-        .len();
-    let start = length.saturating_sub(EOCD_BYTES);
-    source
-        .seek(SeekFrom::Start(start))
-        .map_err(|error| io_error(Path::new("zip"), error))?;
-    let mut tail = Vec::new();
-    source
-        .read_to_end(&mut tail)
-        .map_err(|error| io_error(Path::new("zip"), error))?;
-    let marker = b"PK\x05\x06";
-    let eocd = tail
-        .windows(marker.len())
-        .rposition(|window| window == marker)
-        .ok_or_else(|| internal("tool_archive_zip_eocd"))?;
-    if tail.len().saturating_sub(eocd) < 22 {
-        return Err(internal("tool_archive_zip_eocd"));
-    }
-    let count = u16::from_le_bytes([tail[eocd + 10], tail[eocd + 11]]);
-    let count = if count == u16::MAX {
-        zip64_entry_count(&tail, start, eocd)?
-    } else {
-        u64::from(count)
-    };
-    source
-        .seek(SeekFrom::Start(0))
-        .map_err(|error| io_error(Path::new("zip"), error))?;
-    if count > MAX_ENTRIES as u64 {
-        return Err(internal("tool_archive_entry_limit"));
-    }
-    Ok(())
-}
-fn zip64_entry_count(tail: &[u8], start: u64, eocd: usize) -> Result<u64, OrchestratorError> {
-    let marker = b"PK\x06\x07";
-    let locator = tail[..eocd]
-        .windows(marker.len())
-        .rposition(|window| window == marker)
-        .ok_or_else(|| internal("tool_archive_zip64_entries"))?;
-    if locator.saturating_add(20) > eocd {
-        return Err(internal("tool_archive_zip64_entries"));
-    }
-    let absolute = u64::from_le_bytes(
-        tail[locator + 8..locator + 16]
-            .try_into()
-            .map_err(|_| internal("tool_archive_zip64_entries"))?,
-    );
-    let relative = absolute
-        .checked_sub(start)
-        .and_then(|value| usize::try_from(value).ok())
-        .ok_or_else(|| internal("tool_archive_zip64_entries"))?;
-    if relative.saturating_add(40) > tail.len() || &tail[relative..relative + 4] != b"PK\x06\x06" {
-        return Err(internal("tool_archive_zip64_entries"));
-    }
-    Ok(u64::from_le_bytes(
-        tail[relative + 32..relative + 40]
-            .try_into()
-            .map_err(|_| internal("tool_archive_zip64_entries"))?,
-    ))
-}
-fn reject_zip_special(mode: u32, directory: bool) -> Result<(), OrchestratorError> {
-    let kind = mode & 0o170_000;
-    let expected = if directory { 0o040_000 } else { 0o100_000 };
-    if kind != 0 && kind != expected {
-        return Err(internal("tool_archive_special_entry"));
-    }
+    links::create_links(destination, symlinks, deadline)?;
+    paths::apply_directory_modes(destination, directories, deadline)?;
     Ok(())
 }
 fn reserve_size(
@@ -350,6 +322,49 @@ fn reserve_size(
     budget.admit_bytes(size)?;
     *total = next;
     Ok(())
+}
+
+fn check_deadline(deadline: CheckDeadline) -> Result<(), OrchestratorError> {
+    deadline
+        .remaining()
+        .map(|_| ())
+        .map_err(|error| internal(&error.to_string()))
+}
+
+struct DeadlineIo<R> {
+    inner: R,
+    deadline: CheckDeadline,
+}
+
+impl<R> DeadlineIo<R> {
+    fn new(inner: R, deadline: CheckDeadline) -> Self {
+        Self { inner, deadline }
+    }
+
+    fn checkpoint(&self) -> io::Result<()> {
+        self.deadline
+            .remaining()
+            .map(|_| ())
+            .map_err(|error| io::Error::new(io::ErrorKind::TimedOut, error.to_string()))
+    }
+}
+
+impl<R: Read> Read for DeadlineIo<R> {
+    fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+        self.checkpoint()?;
+        let count = self.inner.read(buffer)?;
+        self.checkpoint()?;
+        Ok(count)
+    }
+}
+
+impl<R: Seek> Seek for DeadlineIo<R> {
+    fn seek(&mut self, position: SeekFrom) -> io::Result<u64> {
+        self.checkpoint()?;
+        let position = self.inner.seek(position)?;
+        self.checkpoint()?;
+        Ok(position)
+    }
 }
 fn archive_error(problem: &str) -> OrchestratorError {
     internal(&format!("tool_archive:{problem}"))

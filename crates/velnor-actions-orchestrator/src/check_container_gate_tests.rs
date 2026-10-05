@@ -10,7 +10,7 @@ use velnor_actions_mise::checks::{
     CheckCapabilityProof, ContainerObservation, ContainerProbeOutput, DockerDaemonObservation,
 };
 
-fn profile() -> HostContainerProfile {
+pub(super) fn profile() -> HostContainerProfile {
     HostContainerProfile::Docker {
         context: "ci".into(),
         socket_path: "/run/docker.sock".into(),
@@ -189,7 +189,7 @@ fn orb_runtime() -> (Value, runtime::RuntimeObservation) {
     (value, observation)
 }
 
-fn receipt() -> ContainerReceipt {
+pub(super) fn receipt() -> ContainerReceipt {
     let proof = CheckCapabilityProof {
         container: Some(observation()),
     };

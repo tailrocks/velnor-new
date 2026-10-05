@@ -7,7 +7,7 @@ use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use velnor_actions_mise::checks::SystemToolProof;
-use velnor_actions_mise::{DiscoveredCheck, QualifiedCheck};
+use velnor_actions_mise::{CheckDeadline, DiscoveredCheck, QualifiedCheck};
 
 #[path = "check_tool_acquire.rs"]
 mod acquisition;
@@ -52,6 +52,7 @@ pub(super) fn prepare_check(
     root: &Path,
     temp: &Path,
     check: &DiscoveredCheck,
+    deadline: CheckDeadline,
 ) -> Result<OwnedCheck, OrchestratorError> {
     verify_source(root, check)?;
     let cwd = velnor_actions_mise::checks::repository_path(root, &check.check.directory)
@@ -64,7 +65,7 @@ pub(super) fn prepare_check(
     let n = NEXT_HOME.fetch_add(1, Ordering::Relaxed);
     let home = temp.join(format!("velnor-check-{}-{n}", std::process::id()));
     std::fs::create_dir(&home).map_err(|_| internal("check_home_creation"))?;
-    let prepared = materialize(&home, cwd, check);
+    let prepared = materialize(&home, cwd, check, deadline);
     match prepared {
         Ok(parts) => Ok(OwnedCheck {
             qualified: parts.qualified,
@@ -95,6 +96,7 @@ fn materialize(
     home: &Path,
     cwd: PathBuf,
     check: &DiscoveredCheck,
+    deadline: CheckDeadline,
 ) -> Result<PreparedParts, OrchestratorError> {
     for name in [
         "data",
@@ -111,10 +113,11 @@ fn materialize(
     binary::project_mise_binary(home, check.check.runner.platform)?;
     crate::exclusive_write::write_exclusive(&home.join("empty.toml"), b"", "check_config")?;
     let container = container::prepare(home, &check.check.runner)?;
-    let proof = container::probe(&check.check.runner, container.as_ref())?;
+    let proof = container::probe(&check.check.runner, container.as_ref(), deadline)?;
     let system_tools = velnor_actions_mise::checks::verify_check_system_tools(
         check.check.runner.platform,
         &check.check.system_tools,
+        deadline,
     )
     .map_err(|e| internal(&e.to_string()))?;
     for proof in &system_tools {
@@ -140,7 +143,7 @@ fn materialize(
         projection.as_bytes(),
         "check_config",
     )?;
-    let qualified_tools = acquisition::acquire(&qualified, check, home)?;
+    let qualified_tools = acquisition::acquire(&qualified, check, home, deadline)?;
     Ok(PreparedParts {
         qualified,
         container,
