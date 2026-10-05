@@ -119,6 +119,21 @@ def _make_executor(sim, args, failure, observer_failure, libraries, observer_cal
 
 
 class PipelineTests(unittest.TestCase):
+    def test_standalone_workspace_is_materialized_exactly_and_privately(self):
+        sim = HELPERS.SameRootTests(methodName="test_retention_failure_preserves_original_state")
+        sim.setUp()
+        self.addCleanup(sim.doCleanups)
+        manifest = json.loads((ROOT / "manifest.json").read_bytes())
+        private = sim.root / "private-tmp"
+        private.mkdir(mode=0o700)
+        workspace = private / "workspace"
+        RUN.BASE.BIND.materialize_fixture(workspace, manifest, private_root=private)
+        self.assertEqual(RUN.BASE.BIND.inventory(workspace), manifest["fixture"]["files"])
+        self.assertEqual(workspace.stat().st_mode & 0o777, 0o700)
+        self.assertTrue(all(path.stat().st_mode & 0o777 == 0o600
+                            for path in workspace.rglob("*") if path.is_file()))
+        self.assertFalse((ROOT / "registry-fixture").exists())
+
     def setup_pipeline(self, failure):
         sim = HELPERS.SameRootTests(methodName="test_retention_failure_preserves_original_state")
         sim.setUp()
@@ -131,7 +146,8 @@ class PipelineTests(unittest.TestCase):
         sdk = RUN.INPUTS.context_inventory(args.sdk_root)
         args.expected_sdk_inventory_sha256 = RUN.BASE.write_json(sim.root / "sdk.json", sdk)["sha256"]
         baseline = sim.root / "baseline"
-        shutil.copytree(ROOT / "registry-fixture", baseline)
+        positive_manifest = json.loads((ROOT / "manifest.json").read_bytes())
+        RUN.BASE.BIND.materialize_fixture(baseline, positive_manifest)
         successor = sim.root / "successor"
         shutil.copytree(baseline, successor)
         (successor / "src/lib.rs").write_text("compile_error!(\"T06_EXPECTED_FAILURE\");" if failure else "pub fn observed() -> usize { 10 }")
@@ -140,7 +156,7 @@ class PipelineTests(unittest.TestCase):
             return dict(root=str(root), files=files, inventory_sha256=RUN.BASE.BIND.inventory_sha(files))
         observer = sim.root / "observer.rs"
         observer.write_bytes(b"synthetic observer source")
-        argv = json.loads((ROOT / "manifest.json").read_bytes())["commands"][0]
+        argv = positive_manifest["commands"][0]
         case = dict(id="T06-compile-error" if failure else "T06-B", baseline="a", successor="b", argv=argv,
                     baseline_stdout="9\n", successor_stdout="10\n")
         if failure:

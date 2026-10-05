@@ -15,6 +15,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{Job, Step, StepKind};
+use velnor_actions_mise::{PinnedTool, ToolCatalog};
 
 use crate::{
     MiseSetup, RenderError, cache_p08_detect::detector_words, setup::MISE_ACTION_NAME,
@@ -169,6 +170,9 @@ fn is_tool_spec(value: &str) -> bool {
     let Some((tool, version)) = value.split_once('@') else {
         return false;
     };
+    if tool.starts_with("http:") {
+        return value == ToolCatalog::pinned().tool_spec(PinnedTool::Python);
+    }
     !tool.is_empty()
         && !version.is_empty()
         && !value.contains(' ')

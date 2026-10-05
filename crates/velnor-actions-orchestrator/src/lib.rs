@@ -53,6 +53,7 @@ mod prepare;
 mod preseed_manifest;
 mod provenance;
 mod publish_job;
+mod python_source_units;
 mod qualify;
 mod recommendations;
 mod release_checkouts;
