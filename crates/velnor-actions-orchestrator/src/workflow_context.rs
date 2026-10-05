@@ -5,14 +5,14 @@ use velnor_actions_mise::ToolCatalog;
 use velnor_actions_workflow_renderer::VerificationTaskPolicy;
 use velnor_actions_workflow_renderer::render::{RenderContext, ValidatorCommand};
 use velnor_actions_workflow_renderer::steps::{
-    DENY_STEP_NAME, MACHETE_STEP_NAME, REQUEST_DIR_PREFIX,
+    DENY_STEP_NAME, MACHETE_STEP_NAME, REQUEST_DIR_PREFIX, STAGED_BINARY_PREFIX,
 };
 
 use crate::OrchestratorError;
 use crate::discover::Discovery;
 use crate::vectors::{ZIZMOR_STEP_NAME, candidate_spec, deny_argv, machete_argv, zizmor_argv};
 
-use super::{CHECKOUT_USES, REQUEST_DIR, STAGED_BINARY_PREFIX};
+use super::{CHECKOUT_USES, REQUEST_DIR};
 
 /// Renderer scalars: version, label, staged path, request dir, pins.
 ///
