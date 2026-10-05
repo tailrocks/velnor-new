@@ -175,10 +175,7 @@ fn default_permissions_block_omits_ungranted_actions() -> Result<(), RenderError
     )?;
     let start = text.find("permissions:").expect("permissions");
     let end = text.find("concurrency:").expect("concurrency");
-    assert_eq!(
-        &text[start..end],
-        "permissions:\n  contents: read\n"
-    );
+    assert_eq!(&text[start..end], "permissions:\n  contents: read\n");
     Ok(())
 }
 
