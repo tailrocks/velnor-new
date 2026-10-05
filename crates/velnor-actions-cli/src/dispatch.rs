@@ -16,12 +16,12 @@ use std::process::ExitCode;
 
 use clap::Parser;
 use velnor_actions_orchestrator::{
-    DYNAMIC_MATRIX_OUTPUT_MODE, FETCH_OP, GenerateOptions, MERGE_OP, OrchestratorError,
+    DYNAMIC_MATRIX_OUTPUT_MODE, EXECUTE_CHECK_OP, FETCH_OP, MERGE_OP, OrchestratorError,
     PLAN_MATRIX_OUTPUT_MODE_ENV, PLAN_OP, PRESEED_MANIFEST_OP, PUBLISH_OP, PlanOutputMode,
-    REPORT_OP, REQUEST_FILE_ENV, WRITE_REQUEST_OP, generate_dispatched, init_config,
-    merge_internal, merge_passed, parse_dispatch_mode, plan_internal, plan_outputs,
-    plan_text_checked, prepare, publish_final_report, publish_plan_files, resolve_root,
-    response_path_for, retrieve_reports, write_preseed_manifest, write_request, write_task_report,
+    REPORT_OP, REQUEST_FILE_ENV, WRITE_REQUEST_OP, execute_check, init_config, merge_internal,
+    merge_passed, plan_internal, plan_outputs, plan_text_checked, prepare, publish_final_report,
+    publish_plan_files, resolve_root, response_path_for, retrieve_reports, write_preseed_manifest,
+    write_request, write_task_report,
 };
 
 use crate::args::{Cli, Command};
@@ -43,6 +43,8 @@ const GITHUB_EVENT_PATH_ENV: &str = "GITHUB_EVENT_PATH";
 enum InternalOp {
     /// Materialize the request file from the GitHub environment.
     WriteRequest,
+    /// Execute one named hosted platform check.
+    ExecuteCheck,
     /// Plan operation.
     Plan,
     /// Merge operation.
@@ -75,7 +77,9 @@ pub(crate) fn run_public() -> ExitCode {
     match Cli::parse().command {
         Command::Init => run_init(),
         Command::Plan => run_plan(),
-        Command::Generate { output_dir, mode } => run_generate(output_dir, mode),
+        Command::Generate { output_dir, mode } => {
+            crate::dispatch_generate::run_generate(output_dir, mode)
+        }
         Command::Config { command } => crate::dispatch_config::run_config(&command),
     }
 }
@@ -97,6 +101,7 @@ pub(crate) fn try_internal() -> Option<ExitCode> {
 /// takes no request file either: runner temp scopes its output.
 fn gate_request() -> Option<InternalRequest> {
     let op = match env::var(OP_ENV).as_deref() {
+        Ok(tag) if tag == EXECUTE_CHECK_OP => InternalOp::ExecuteCheck,
         Ok(tag) if tag == WRITE_REQUEST_OP => InternalOp::WriteRequest,
         Ok(tag) if tag == PLAN_OP => InternalOp::Plan,
         Ok(tag) if tag == MERGE_OP => InternalOp::Merge,
@@ -107,7 +112,7 @@ fn gate_request() -> Option<InternalRequest> {
         Ok("repo-policy-v1") => InternalOp::RepoPolicy,
         _ => return None,
     };
-    if op == InternalOp::Fetch || op == InternalOp::Report {
+    if op == InternalOp::Fetch || op == InternalOp::Report || op == InternalOp::ExecuteCheck {
         if env::var("GITHUB_RUN_ID").is_ok_and(|id| !id.is_empty()) {
             return runner_velnor_dir().map(|path| InternalRequest { op, path });
         }
@@ -143,7 +148,8 @@ fn gate_request() -> Option<InternalRequest> {
         InternalOp::Fetch
         | InternalOp::Report
         | InternalOp::PreseedManifest
-        | InternalOp::RepoPolicy => {}
+        | InternalOp::RepoPolicy
+        | InternalOp::ExecuteCheck => {}
     }
     Some(InternalRequest { op, path })
 }
@@ -162,6 +168,10 @@ fn runner_velnor_dir() -> Option<PathBuf> {
 /// Run one validated private operation.
 fn run_internal(request: &InternalRequest) -> ExitCode {
     match request.op {
+        InternalOp::ExecuteCheck => match execute_check() {
+            Ok(_) => ExitCode::SUCCESS,
+            Err(error) => fail_internal(&error.to_string()),
+        },
         InternalOp::WriteRequest => match write_request() {
             Ok(_) => ExitCode::SUCCESS,
             Err(error) => fail_internal(&error.to_string()),
@@ -316,60 +326,6 @@ fn run_plan() -> ExitCode {
         println!();
     }
     ExitCode::SUCCESS
-}
-
-/// Dispatch `generate`: files written and recommendations go to stderr.
-fn run_generate(output_dir: Option<PathBuf>, mode: Option<String>) -> ExitCode {
-    let Some(cwd) = working_dir() else {
-        return ExitCode::from(1);
-    };
-    let options = GenerateOptions { output_dir };
-    let root = match resolve_root(&cwd) {
-        Ok(root) => root,
-        Err(error) => return fail_public(&error),
-    };
-    let preparation = match prepare(&root) {
-        Ok(preparation) => preparation,
-        Err(error) => return fail_public(&error),
-    };
-    let dispatch = match mode {
-        Some(text) => match parse_dispatch_mode(&text) {
-            Ok(mode) => Some(mode),
-            Err(error) => return fail_public(&error),
-        },
-        None => None,
-    };
-    match generate_dispatched(&preparation, &options, dispatch) {
-        Ok(report) => {
-            if preparation.discovery.consumer_manifest_stand_in {
-                eprintln!(
-                    "velnor-actions: WARNING: .velnor/release-manifest.json is absent; generated workflows use a debug-only stand-in that MUST NOT ship"
-                );
-            }
-            if let Some(dir) = &options.output_dir {
-                eprintln!("Preview: {}", absolute_preview(&cwd, dir).display());
-                eprintln!("Repository: {}", root.display());
-            }
-            for path in &report.files_written {
-                eprintln!("{path}");
-            }
-            for recommendation in &report.recommendations {
-                eprintln!("{recommendation}");
-            }
-            ExitCode::SUCCESS
-        }
-        Err(error) => fail_public(&error),
-    }
-}
-
-/// Absolute preview path for the stderr report; canonical when possible.
-fn absolute_preview(cwd: &Path, dir: &Path) -> PathBuf {
-    let joined = if dir.is_absolute() {
-        dir.to_path_buf()
-    } else {
-        cwd.join(dir)
-    };
-    joined.canonicalize().unwrap_or(joined)
 }
 
 /// Read the working directory, reporting failures as exit 1.

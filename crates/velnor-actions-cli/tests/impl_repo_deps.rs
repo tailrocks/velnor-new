@@ -3,6 +3,10 @@
 use std::collections::BTreeMap;
 use std::error::Error;
 
+#[path = "impl_repo_archive_deps.rs"]
+mod archive_deps;
+use archive_deps::reviewed_archive_dependency;
+
 use crate::impl_repo_policy::{
     MEMBERS, dep_key, dep_lines, dep_referenced, manifest, p11_toml, read, repo_root, test_markers,
     tree_files,
@@ -65,8 +69,9 @@ fn external_deps_allowlisted_used_and_narrow() -> Result<(), Box<dyn Error>> {
         "anyhow",
         "tracing",
         "tempfile",
-        // Reviewed OS shim for the P09 atomic directory exchange; already
-        // in the lockfile via tempfile, zero new crates.
+        // Reviewed OS shim already in the lockfile via tempfile, zero new
+        // crates. `fs` supports the P09 atomic directory exchange; `process`
+        // supports PR20 deadline-bound Unix process-group termination.
         "rustix",
         // Reviewed hash impl for the pre-seed manifest writer (SHA-256 of
         // the fresh helper) and generator SHA-256 identity (replaces
@@ -92,18 +97,25 @@ fn external_deps_allowlisted_used_and_narrow() -> Result<(), Box<dyn Error>> {
             if key.starts_with("velnor-actions") {
                 continue;
             }
-            assert!(allowed.contains(&key), "{dir} uses {key}");
-            if let Some(index) = line.find("features") {
+            let archive_decoder = reviewed_archive_dependency(dir, key, line);
+            assert!(
+                allowed.contains(&key) || archive_decoder,
+                "{dir} uses {key}"
+            );
+            if let Some(index) = line.find("features").filter(|_| !archive_decoder) {
                 let quoted: Vec<&str> = line[index..].split('"').collect();
                 for feature in quoted.into_iter().skip(1).step_by(2) {
-                    // Only `derive` globally, plus the reviewed rustix
-                    // features used for atomic exchange and bounded process
-                    // capture (no network, pty, or terminal APIs).
+                    // Only `derive` globally, plus narrowly used rustix and
+                    // freshness transport/parser features. No network, pty,
+                    // or terminal rustix APIs are enabled.
                     let narrow = feature == "derive"
+                        || (key == "rustix" && feature == "fs")
                         || (key == "rustix"
-                            && ((feature == "fs")
-                                || (dir == "crates/velnor-actions-freshness"
-                                    && feature == "process")))
+                            && feature == "process"
+                            && matches!(
+                                dir,
+                                "crates/velnor-actions-freshness" | "crates/velnor-actions-mise"
+                            ))
                         || (dir == "crates/velnor-actions-freshness"
                             && ((key == "flate2" && feature == "rust_backend")
                                 || (key == "rustls" && feature == "ring")
@@ -112,7 +124,11 @@ fn external_deps_allowlisted_used_and_narrow() -> Result<(), Box<dyn Error>> {
                     assert!(narrow, "{dir}/{key} feature {feature}");
                 }
             }
-            assert!(dep_referenced(dir, key)?, "{dir} never uses {key}");
+            // Cargo maps dependency hyphens to underscores in Rust identifiers.
+            assert!(
+                dep_referenced(dir, &key.replace('-', "_"))?,
+                "{dir} never uses {key}"
+            );
         }
     }
     Ok(())
@@ -207,44 +223,6 @@ fn cli_tests_assert_through_binary_only() -> Result<(), Box<dyn Error>> {
             "{} uses implementation",
             path.display()
         );
-    }
-    Ok(())
-}
-
-/// Physical lines: newline count, matching `wc -l`.
-pub(crate) fn physical_lines(body: &str) -> usize {
-    body.bytes().filter(|byte| *byte == b'\n').count()
-}
-
-#[test]
-fn size_limits_hold() -> Result<(), Box<dyn Error>> {
-    let mut over = Vec::new();
-    for (dir, _) in MEMBERS {
-        for area in ["src", "tests"] {
-            for path in tree_files(&format!("{dir}/{area}"), "rs")? {
-                let lines = physical_lines(&std::fs::read_to_string(&path)?);
-                if lines > 400 {
-                    over.push(format!("{} ({lines})", path.display()));
-                }
-                let name = path
-                    .file_name()
-                    .and_then(|stem| stem.to_str())
-                    .unwrap_or("");
-                if (name == "lib.rs" || name == "main.rs") && lines > 150 {
-                    over.push(format!("{} lib/main ({lines})", path.display()));
-                }
-            }
-        }
-    }
-    assert!(over.is_empty(), "over 400 lines: {}", over.join(", "));
-    assert!(read("clippy.toml")?.contains("too-many-lines-threshold = 80"));
-    assert!(read("Cargo.toml")?.contains("too_many_lines = \"deny\""));
-    let mut docs = tree_files("docs", "md")?;
-    docs.extend(tree_files(".velnor", "toml")?);
-    docs.extend(tree_files(".velnor", "json")?);
-    for path in docs {
-        let lines = physical_lines(&std::fs::read_to_string(&path)?);
-        assert!(lines <= 400, "{} has {lines} lines", path.display());
     }
     Ok(())
 }

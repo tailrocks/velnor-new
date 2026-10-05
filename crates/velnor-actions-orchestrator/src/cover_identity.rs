@@ -1,8 +1,6 @@
 //! Baseline coverage application over verified task identities.
 //!
-//! Coverage grants only when the obligation's digests match, the task
-//! proposal is discovered, its extension bytes validate, and its input
-//! closure resolves completely against the checkout.
+//! Coverage requires exact discovered identities and complete input closures.
 
 // Wired here so generator resolution compiles without touching `lib.rs`.
 #[path = "generator.rs"]
@@ -19,6 +17,10 @@ mod cover_proof_tests;
 #[cfg(test)]
 #[path = "cover_identity_fixtures.rs"]
 mod cover_identity_fixtures;
+
+#[cfg(test)]
+#[path = "cover_named_checks_tests.rs"]
+mod cover_named_checks_tests;
 
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -45,16 +47,6 @@ use crate::merge::BaselineManifest;
 
 pub(crate) use self::generator::{SOURCE_BUILD_REASON, is_source_build};
 
-/// Cover-time closure digest for one task, or the refusal reason.
-///
-/// Undeclared reads and conservative execution refuse as before;
-/// extension bytes must validate (schema plus slots, not just the
-/// task-ID prefix); and the input closure must resolve completely
-/// against the checkout, with unknown inputs forbidding coverage.
-/// Graph digests come from the once-built snapshot index, never a
-/// per-task rescan. The caller compares the returned live digest
-/// against the baseline entry: only an exact match covers, so a source
-/// edit refuses even when the changed-work hint misses it.
 fn cover_closure_digest(
     snapshot: &ExecutionSnapshot,
     discovery: &Discovery,
@@ -101,18 +93,18 @@ fn cover_closure_digest(
     canonical_digest(&closure).map_err(|_| "closure_digest_failed".to_owned())
 }
 
-/// Cover-time extension revalidation, dispatched per stack.
-///
-/// Rust tasks revalidate through the rust bridge; tofu tasks through
-/// the shared tofu constructor plus the tofu slot validator. Spelling
-/// drift or undeclared/unknown inputs refuse coverage either way.
 fn verify_cover_extension(
     task: &ProposedTask,
     root: &Path,
     bundle: &crate::internal_plan::identities::ExtensionBundle,
     reads: &mut velnor_actions_tofu::FileCache,
 ) -> Result<(), String> {
-    if Stack::from_id(&task.stack_id) == Some(Stack::Tofu) {
+    let stack =
+        Stack::require_known(&task.stack_id).map_err(|e| format!("extension_unverified:{e}"))?;
+    if stack == Stack::Mise {
+        return Err("undeclared_inputs".to_owned());
+    }
+    if stack == Stack::Tofu {
         let ext = crate::internal_plan::tofu_extension_for(task, root, bundle, reads)
             .map_err(|_| "extension_unverified:unparsable_spelling".to_owned())?;
         if ext.coverage_eligible().is_err() || ext.conservative_execution_required() {
@@ -130,18 +122,11 @@ fn verify_cover_extension(
         .map_err(|err| format!("extension_unverified:{err}"))
 }
 
-/// Live mbx dimension for one task: the compile driver plus the
-/// catalog's mbx pin when the driver runs through mbx.
-///
-/// Cargo-driven tasks bind no mbx pin, so a pin bump never invalidates
-/// their proofs; mbx-driven tasks bind the exact pin, so a proof from
-/// another mbx version refuses. Tofu tasks bind no mbx pin through an
-/// explicit arm, never the rust unknown-spelling fallthrough.
 fn live_mbx_digest(task: &ProposedTask, catalog: &velnor_actions_mise::ToolCatalog) -> String {
-    let mbx = if Stack::from_id(&task.stack_id) == Some(Stack::Tofu) {
-        false
-    } else {
+    let mbx = if Stack::from_id(&task.stack_id) == Some(Stack::Rust) {
         tool_needs(&task.identity.compile_driver, &task.identity.test_runner).mbx
+    } else {
+        false
     };
     let pin = mbx.then(|| catalog.version(velnor_actions_mise::PinnedTool::MrBoxington));
     canonical_digest(&serde_json::json!({
@@ -151,11 +136,6 @@ fn live_mbx_digest(task: &ProposedTask, catalog: &velnor_actions_mise::ToolCatal
     .unwrap_or_else(|_| digest_b3(b"mbx_error"))
 }
 
-/// Structured proof verified against live task identity.
-///
-/// Compares all five carried dimensions against the values resolved
-/// live for this task: graph, toolchain, platform, execution profile,
-/// and mbx. Any drift refuses coverage; nothing compares-and-notes.
 fn verify_proof_live(
     snapshot: &ExecutionSnapshot,
     discovery: &Discovery,
@@ -194,10 +174,6 @@ fn verify_proof_live(
     Ok(())
 }
 
-/// Live closure digest verified against the baseline entry.
-///
-/// Resolves the cover-time closure (refusing unknown inputs, undeclared
-/// reads, and unverified extensions) and requires an exact match with
 /// the recorded entry digest; any drift executes instead of covering.
 fn verified_closure_digest(
     snapshot: &ExecutionSnapshot,
@@ -218,9 +194,6 @@ fn verified_closure_digest(
 
 /// Mark one obligation covered from validated provenance only.
 ///
-/// Returns false when the proof constructor rejects its inputs; the
-/// caller keeps the obligation executing instead of storing a forged
-/// or partial proof.
 fn mark_covered(
     obligation: &mut PlanObligation,
     task: &crate::merge::required_evidence::BaselineTaskEntry,
@@ -245,7 +218,6 @@ fn mark_covered(
 ///
 /// A carried proof compares all five dimensions against live identity;
 /// drift refuses with its miss warning, and a match passes silently.
-/// Entries without a proof pass through untouched.
 fn gate_proof(
     warnings: &mut Vec<String>,
     label: &str,
@@ -299,6 +271,15 @@ fn gate_guards(
     true
 }
 
+/// Opaque adapter tasks never qualify for baseline coverage.
+fn gate_opaque(warnings: &mut Vec<String>, task: &ProposedTask) -> bool {
+    if task.identity.undeclared_reads || Stack::from_id(&task.stack_id) == Some(Stack::Mise) {
+        warnings.push(format!("baseline_miss:{}:undeclared_inputs", task.task_id));
+        return false;
+    }
+    true
+}
+
 /// Mark covered obligations and prune the matrix; returns covered count.
 ///
 /// Coverage needs an exact closure-digest match against the checkout:
@@ -313,9 +294,8 @@ pub(crate) fn apply_coverage(
     changed: Option<&BTreeSet<String>>,
     inputs: &BaselineInputs<'_>,
 ) -> u32 {
-    let universe: Vec<_> = discovery.proposals.iter().collect();
     let keys = changed
-        .map(|set| changed_keys(&universe, set))
+        .map(|set| changed_keys(&discovery.proposals.iter().collect::<Vec<_>>(), set))
         .unwrap_or_default();
     let snapshot = ExecutionSnapshot::build(discovery);
     let mut covered = 0u32;
@@ -341,6 +321,9 @@ pub(crate) fn apply_coverage(
             ));
             continue;
         };
+        if !gate_opaque(&mut plan.warnings, proposal) {
+            continue;
+        }
         if !gate_proof(
             &mut plan.warnings,
             &plan.runner.label,

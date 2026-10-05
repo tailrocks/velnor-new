@@ -9,8 +9,8 @@
 
 use std::error::Error;
 
-use crate::impl_repo_deps::physical_lines;
 use crate::impl_repo_policy::read;
+use crate::impl_repo_size::physical_lines;
 
 /// QC anchors added by the T26 integration, one per integrated clause.
 const INTEGRATION_ANCHORS: [&str; 9] = [

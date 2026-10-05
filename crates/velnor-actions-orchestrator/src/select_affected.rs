@@ -131,6 +131,7 @@ mod tests {
             v1_task_owner: velnor_actions_rust::VelnorV1TaskOwner::Project,
         };
         Discovery {
+            mise_checks: Vec::new(),
             statuses: Vec::new(),
             feature_fallbacks: Vec::new(),
             workspaces: vec![PlannedWorkspace {

@@ -1,11 +1,59 @@
 //! Supported release targets and release-asset naming.
 //!
 //! Bootstrap/release contract §2-§3: one immutable asset per target plus a
-//! versioned release manifest. Runner labels map to the single Linux target;
-//! macOS targets exist for local release installs only.
+//! versioned release manifest. Explicit versioned hosted labels map to targets.
 
-/// Every supported release target triple, in manifest order.
-pub const SUPPORTED_TARGETS: [&str; 2] = ["x86_64-unknown-linux-gnu", "aarch64-apple-darwin"];
+/// One release target in the canonical three-target inventory.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum ReleaseTarget {
+    /// Linux x86-64.
+    LinuxX86_64,
+    /// macOS arm64.
+    MacosArm64,
+    /// macOS x86-64.
+    MacosX86_64,
+}
+
+impl ReleaseTarget {
+    /// Every supported release target in deterministic manifest order.
+    pub const ALL: [Self; 3] = [Self::LinuxX86_64, Self::MacosArm64, Self::MacosX86_64];
+
+    /// Canonical target triple.
+    #[must_use]
+    pub const fn triple(self) -> &'static str {
+        match self {
+            Self::LinuxX86_64 => "x86_64-unknown-linux-gnu",
+            Self::MacosArm64 => "aarch64-apple-darwin",
+            Self::MacosX86_64 => "x86_64-apple-darwin",
+        }
+    }
+
+    /// Parse a supported target triple without positional inventory coupling.
+    #[must_use]
+    pub fn parse_triple(triple: &str) -> Option<Self> {
+        Self::ALL
+            .into_iter()
+            .find(|target| target.triple() == triple)
+    }
+
+    /// Map one explicit versioned hosted label to its native release target.
+    #[must_use]
+    pub fn for_runner_label(label: &str) -> Option<Self> {
+        match label {
+            "ubuntu-22.04" | "ubuntu-24.04" | "ubuntu-26.04" => Some(Self::LinuxX86_64),
+            "macos-14" | "macos-15" | "macos-26" => Some(Self::MacosArm64),
+            "macos-15-intel" | "macos-26-intel" => Some(Self::MacosX86_64),
+            _ => None,
+        }
+    }
+}
+
+/// String projection of [`ReleaseTarget::ALL`] for manifest serde contracts.
+pub const SUPPORTED_TARGETS: [&str; 3] = [
+    ReleaseTarget::LinuxX86_64.triple(),
+    ReleaseTarget::MacosArm64.triple(),
+    ReleaseTarget::MacosX86_64.triple(),
+];
 
 /// Release-manifest JSON asset filename (version is inside the JSON).
 pub const RELEASE_MANIFEST_FILENAME: &str = "velnor-actions-release-manifest.json";
@@ -13,27 +61,13 @@ pub const RELEASE_MANIFEST_FILENAME: &str = "velnor-actions-release-manifest.jso
 /// Whether `target` is a supported release triple.
 #[must_use]
 pub fn is_supported_target(target: &str) -> bool {
-    SUPPORTED_TARGETS.contains(&target)
+    ReleaseTarget::parse_triple(target).is_some()
 }
 
 /// Release-asset filename for one version and target triple.
 #[must_use]
 pub fn asset_filename(version: &str, target: &str) -> String {
     format!("velnor-actions-{version}-{target}")
-}
-
-/// Runner-label to release-target mapping.
-///
-/// Versioned `ubuntu-*` x64 labels resolve to Linux x86-64. `-arm` labels
-/// have no supported target yet and return `None` (consumer generation
-/// fails with `unsupported_target_for_runner` rather than embedding a
-/// wrong-architecture asset).
-#[must_use]
-pub fn target_for_runner_label(label: &str) -> Option<&'static str> {
-    match label {
-        "ubuntu-22.04" | "ubuntu-24.04" | "ubuntu-26.04" => Some(SUPPORTED_TARGETS[0]),
-        _ => None,
-    }
 }
 
 /// Canonical repository identity every release manifest MUST carry.
