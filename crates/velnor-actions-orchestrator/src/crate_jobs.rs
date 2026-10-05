@@ -59,12 +59,6 @@ pub(crate) fn build_for_workflow(
     fetch_roots: &[String],
     acquire: Option<&Step>,
 ) -> Result<CrateBuild, OrchestratorError> {
-    let custom_tasks: &[String] = config
-        .stacks
-        .rust
-        .as_ref()
-        .map_or(&[], |rust| &rust.custom_tasks);
-    crate::vectors::custom_task_steps(custom_tasks, catalog)?;
     build_crate_jobs(
         label,
         config.workflow.policy,

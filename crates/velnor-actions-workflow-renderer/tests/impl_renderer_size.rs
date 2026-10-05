@@ -141,6 +141,7 @@ fn direct_schema2_renderer_rejects_an_oversized_workflow() -> Result<(), RenderE
             },
             same_repository_pr: None,
         }),
+        generator_release: None,
     };
     let error =
         render_schema2_workflows(&request).expect_err("direct routing render must enforce the cap");

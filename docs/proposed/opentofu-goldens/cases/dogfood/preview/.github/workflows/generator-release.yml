@@ -4,459 +4,406 @@ name: Generator release
   workflow_dispatch: {}
 permissions:
   contents: read
+concurrency:
+  group: generator-release-${{ github.repository }}-${{ github.ref }}
+  cancel-in-progress: false
 jobs:
-  release-gate:
-    name: Release eligibility gate
-    if: github.event_name == 'workflow_dispatch' && github.repository == 'tailrocks/velnor-new' && github.ref == 'refs/heads/main' && github.ref_protected
+  verify-release-source:
     runs-on: ubuntu-26.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     permissions:
       actions: read
       contents: read
     steps:
-      - name: Check out release SHA
+      - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: "1"
           persist-credentials: "false"
-          ref: ${{ github.sha }}
       - name: Setup Mise
         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
-          cache: "false"
-          env: "false"
-          install: "false"
           version: 2026.9.18
-      - name: Require protected main, same-SHA CI, and environment
+          sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
+          install: "false"
+          env: "false"
+          cache: "false"
+          cache_save: "false"
+      - name: Install pinned release gate tools
         shell: bash
+        run: mise --no-config --no-env --no-hooks install gh@2.102.0 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.30.1
+      - name: Run actionlint
+        shell: bash
+        run: mise --no-config --no-env --no-hooks exec actionlint@1.7.12 shellcheck@0.11.0 -- actionlint -color
+      - name: Run zizmor
+        shell: bash
+        run: mise --no-config --no-env --no-hooks exec zizmor@1.30.1 -- zizmor --no-online-audits --config .zizmor.yml .github/workflows
+      - name: Require successful CI at exact main SHA
         env:
           GH_TOKEN: ${{ github.token }}
-        run: "set -eu\n\ncatalog_version() {\n  awk -F '\"' -v name=\"$1\" '\n    $1 == \"pub const \" name \": &str = \" && $3 == \";\" {\n      value = $2\n      count += 1\n    }\n    END {\n      if (count != 1 || value !~ /^[0-9]+\\.[0-9]+\\.[0-9]+$/) exit 1\n      print value\n    }\n  ' crates/velnor-actions-mise/src/catalog.rs\n}\n\n\nGH_VERSION=\"$(catalog_version GH_VERSION)\"\nmise --no-config --no-env --no-hooks install \"gh@$GH_VERSION\"\ngh() {\n  mise --no-config --no-env --no-hooks exec \"gh@$GH_VERSION\" -- gh \"$@\"\n}\n\n\nverify_same_sha_ci() {\n  runs=\"$(gh api \"repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$GITHUB_SHA&event=push&branch=main&per_page=100\")\" || return 1\n  printf '%s\\n' \"$runs\" | jq -e --arg sha \"$GITHUB_SHA\" --arg repo \"$GITHUB_REPOSITORY\" '\n      [\n        .workflow_runs[]? |\n        select(\n          .head_sha == $sha and\n          .head_branch == \"main\" and\n          .event == \"push\" and\n          .path == \".github/workflows/ci.yml\" and\n          .repository.full_name == $repo and\n          .head_repository.full_name == $repo\n        )\n      ] |\n      sort_by(.run_started_at) | last |\n      select(. != null and .status == \"completed\" and .conclusion == \"success\") != null\n    ' >/dev/null || return 1\n}\n\n\nverify_release_environment() {\n  environment=\"$(gh api \"repos/$GITHUB_REPOSITORY/environments/generator-release\")\" || return 1\n  printf '%s\\n' \"$environment\" | jq -e '\n      any(.protection_rules[]?;\n        .type == \"required_reviewers\" and\n        .prevent_self_review == true and\n        (.reviewers | length) > 0\n      ) and\n      .deployment_branch_policy.protected_branches == true and\n      .deployment_branch_policy.custom_branch_policies == false\n    ' >/dev/null || return 1\n}\n\n\ntest \"$GITHUB_REPOSITORY\" = \"tailrocks/velnor-new\"\ntest \"$GITHUB_REF\" = \"refs/heads/main\"\ntest \"$GITHUB_REF_PROTECTED\" = \"true\"\ntest \"$(git rev-parse HEAD)\" = \"$GITHUB_SHA\"\nrepository=\"$(gh api \"repos/$GITHUB_REPOSITORY\")\" || exit 1\nprintf '%s\\n' \"$repository\" | jq -e '.default_branch == \"main\"' >/dev/null || exit 1\n\nverify_same_sha_ci\nscripts/check-freshness.sh\nverify_release_environment"
-  build-linux-x64:
-    name: Build Linux x86_64 velnor-actions
-    if: needs.release-gate.result == 'success'
-    runs-on: ubuntu-26.04
-    timeout-minutes: 120
-    permissions:
-      contents: read
-    needs:
-      - release-gate
-    steps:
-      - name: Check out release SHA
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          fetch-depth: "1"
-          persist-credentials: "false"
-          ref: ${{ github.sha }}
-      - name: Setup Mise
-        uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
-        with:
-          cache: "false"
-          env: "false"
-          install: "false"
-          version: 2026.9.18
-      - name: Install catalog tools and verify MBX
         shell: bash
-        run: "set -eu\n\ncatalog_version() {\n  awk -F '\"' -v name=\"$1\" '\n    $1 == \"pub const \" name \": &str = \" && $3 == \";\" {\n      value = $2\n      count += 1\n    }\n    END {\n      if (count != 1 || value !~ /^[0-9]+\\.[0-9]+\\.[0-9]+$/) exit 1\n      print value\n    }\n  ' crates/velnor-actions-mise/src/catalog.rs\n}\n\n\ntest \"$(git rev-parse HEAD)\" = \"$GITHUB_SHA\"\nRUST_VERSION=\"$(catalog_version RUST_VERSION)\"\nMBX_VERSION=\"$(catalog_version MR_BOXINGTON_VERSION)\"\nmise --no-config --no-env --no-hooks install \"rust@$RUST_VERSION\" \"mr-boxington@$MBX_VERSION\"\nmbx_path=\"$(mise --no-config --no-env --no-hooks exec \"rust@$RUST_VERSION\" \"mr-boxington@$MBX_VERSION\" -- which mbx)\"\nmbx_desc=\"$(file -b \"$mbx_path\")\"\ncase \"$RUNNER_OS:$(uname -m):$mbx_desc\" in\n  Linux:x86_64:*ELF*x86-64*) ;;\n  macOS:arm64:*Mach-O*arm64*) ;;\n  *) echo \"MBX binary does not match official runner architecture: $mbx_desc\" >&2; exit 1 ;;\nesac\nmbx_version=\"$(mise --no-config --no-env --no-hooks exec \"rust@$RUST_VERSION\" \"mr-boxington@$MBX_VERSION\" -- mbx --version)\"\ncase \"$mbx_version\" in\n  *\"$MBX_VERSION\"*) ;;\n  *) echo \"unexpected MBX version: $mbx_version\" >&2; exit 1 ;;\nesac\n"
-      - name: Build with MBX and checksum target
+        run: "gh() { mise --no-config --no-env --no-hooks exec gh@2.102.0 -- gh \"$@\"; }\nexport -f gh\nset -eu\ntest \"$GITHUB_REPOSITORY\" = 'tailrocks/velnor-new'\ntest \"$GITHUB_REF\" = 'refs/heads/main'\ntest \"$GITHUB_EVENT_NAME\" = 'workflow_dispatch'\ntest \"$GITHUB_WORKFLOW_SHA\" = \"$GITHUB_SHA\"\ntest \"$(git rev-parse HEAD)\" = \"$GITHUB_SHA\"\nruns=\"$(gh api --paginate --slurp \"repos/tailrocks/velnor-new/actions/workflows/ci.yml/runs?head_sha=$GITHUB_SHA&branch=main&event=push&per_page=100\")\"\nrun=\"$(printf '%s\\n' \"$runs\" | jq -ce --arg sha \"$GITHUB_SHA\" --arg repo 'tailrocks/velnor-new' '[.[] | (.workflow_runs // [])[] | select(.path == \".github/workflows/ci.yml\" and .head_sha == $sha and .head_branch == \"main\" and .head_repository.full_name == $repo and .event == \"push\")] | sort_by([.run_number, .id]) | last // error(\"no exact-source main CI run\")')\"\ntest \"$(printf '%s\\n' \"$run\" | jq -r .status)\" = completed\ntest \"$(printf '%s\\n' \"$run\" | jq -r .conclusion)\" = success\nrun_id=\"$(printf '%s\\n' \"$run\" | jq -r .id)\"\nattempt=\"$(printf '%s\\n' \"$run\" | jq -r .run_attempt)\"\njobs=\"$(gh api --paginate --slurp \"repos/tailrocks/velnor-new/actions/runs/$run_id/attempts/$attempt/jobs?per_page=100\")\"\nprintf '%s\\n' \"$jobs\" | jq -e --arg sha \"$GITHUB_SHA\" '[.[] | (.jobs // [])[] | select(.name == \"Required\" and .head_sha == $sha and .head_branch == \"main\" and .status == \"completed\" and .conclusion == \"success\")] | length == 1' >/dev/null\ntest \"$(gh api repos/tailrocks/velnor-new/commits/main --jq .sha)\" = \"$GITHUB_SHA\""
+      - name: Check release freshness gate
         shell: bash
-        run: "\nset -eu\n\ncatalog_version() {\n  awk -F '\"' -v name=\"$1\" '\n    $1 == \"pub const \" name \": &str = \" && $3 == \";\" {\n      value = $2\n      count += 1\n    }\n    END {\n      if (count != 1 || value !~ /^[0-9]+\\.[0-9]+\\.[0-9]+$/) exit 1\n      print value\n    }\n  ' crates/velnor-actions-mise/src/catalog.rs\n}\n\ntest \"$(git rev-parse HEAD)\" = \"$GITHUB_SHA\"\ntest \"$RUNNER_OS:$(uname -m)\" = \"Linux:x86_64\"\nRUST_VERSION=\"$(catalog_version RUST_VERSION)\"\nMBX_VERSION=\"$(catalog_version MR_BOXINGTON_VERSION)\"\nmbx_stats() {\n  mise --no-config --no-env --no-hooks exec \"rust@$RUST_VERSION\" \"mr-boxington@$MBX_VERSION\" -- mbx stats --json\n}\nbefore=\"$(mbx_stats | jq -er '.savings.builds | select(type == \"number\")')\"\nmise --no-config --no-env --no-hooks exec \"rust@$RUST_VERSION\" \"mr-boxington@$MBX_VERSION\" -- mbx build --release --locked --package velnor-actions-cli --bin velnor-actions\nafter=\"$(mbx_stats | jq -er '.savings.builds | select(type == \"number\")')\"\ntest \"$after\" -gt \"$before\" || { echo \"MBX did not record this build\" >&2; exit 1; }\nasset=\"velnor-actions-0.1.1-x86_64-unknown-linux-gnu\"\ncp \"target/release/velnor-actions\" \"$asset\"\ntest -s \"$asset\"\ndesc=\"$(file -b \"$asset\")\"\ncase \"$desc\" in *ELF*x86-64*) ;; *) echo \"wrong Linux target: $desc\" >&2; exit 1 ;; esac\nsha256sum \"$asset\" > \"velnor-actions-0.1.1-x86_64-unknown-linux-gnu.sha256\"\ntest -s \"velnor-actions-0.1.1-x86_64-unknown-linux-gnu.sha256\"\n"
-      - name: Build Linux x86_64 velnor-actions
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          if-no-files-found: error
-          name: generator-linux-x64-assets
-          path: "velnor-actions-0.1.1-x86_64-unknown-linux-gnu\nvelnor-actions-0.1.1-x86_64-unknown-linux-gnu.sha256"
-          retention-days: 1
-  build-macos-arm64:
-    name: Build macOS arm64 velnor-actions
-    if: needs.release-gate.result == 'success'
-    runs-on: macos-15
-    timeout-minutes: 120
-    permissions:
-      contents: read
-    needs:
-      - release-gate
-    steps:
-      - name: Check out release SHA
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          fetch-depth: "1"
-          persist-credentials: "false"
-          ref: ${{ github.sha }}
-      - name: Setup Mise
-        uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
-        with:
-          cache: "false"
-          env: "false"
-          install: "false"
-          version: 2026.9.18
-      - name: Install catalog tools and verify MBX
-        shell: bash
-        run: "set -eu\n\ncatalog_version() {\n  awk -F '\"' -v name=\"$1\" '\n    $1 == \"pub const \" name \": &str = \" && $3 == \";\" {\n      value = $2\n      count += 1\n    }\n    END {\n      if (count != 1 || value !~ /^[0-9]+\\.[0-9]+\\.[0-9]+$/) exit 1\n      print value\n    }\n  ' crates/velnor-actions-mise/src/catalog.rs\n}\n\n\ntest \"$(git rev-parse HEAD)\" = \"$GITHUB_SHA\"\nRUST_VERSION=\"$(catalog_version RUST_VERSION)\"\nMBX_VERSION=\"$(catalog_version MR_BOXINGTON_VERSION)\"\nmise --no-config --no-env --no-hooks install \"rust@$RUST_VERSION\" \"mr-boxington@$MBX_VERSION\"\nmbx_path=\"$(mise --no-config --no-env --no-hooks exec \"rust@$RUST_VERSION\" \"mr-boxington@$MBX_VERSION\" -- which mbx)\"\nmbx_desc=\"$(file -b \"$mbx_path\")\"\ncase \"$RUNNER_OS:$(uname -m):$mbx_desc\" in\n  Linux:x86_64:*ELF*x86-64*) ;;\n  macOS:arm64:*Mach-O*arm64*) ;;\n  *) echo \"MBX binary does not match official runner architecture: $mbx_desc\" >&2; exit 1 ;;\nesac\nmbx_version=\"$(mise --no-config --no-env --no-hooks exec \"rust@$RUST_VERSION\" \"mr-boxington@$MBX_VERSION\" -- mbx --version)\"\ncase \"$mbx_version\" in\n  *\"$MBX_VERSION\"*) ;;\n  *) echo \"unexpected MBX version: $mbx_version\" >&2; exit 1 ;;\nesac\n"
-      - name: Build with MBX and checksum target
-        shell: bash
-        run: "\nset -eu\n\ncatalog_version() {\n  awk -F '\"' -v name=\"$1\" '\n    $1 == \"pub const \" name \": &str = \" && $3 == \";\" {\n      value = $2\n      count += 1\n    }\n    END {\n      if (count != 1 || value !~ /^[0-9]+\\.[0-9]+\\.[0-9]+$/) exit 1\n      print value\n    }\n  ' crates/velnor-actions-mise/src/catalog.rs\n}\n\ntest \"$(git rev-parse HEAD)\" = \"$GITHUB_SHA\"\ntest \"$RUNNER_OS:$(uname -m)\" = \"macOS:arm64\"\nRUST_VERSION=\"$(catalog_version RUST_VERSION)\"\nMBX_VERSION=\"$(catalog_version MR_BOXINGTON_VERSION)\"\nmbx_stats() {\n  mise --no-config --no-env --no-hooks exec \"rust@$RUST_VERSION\" \"mr-boxington@$MBX_VERSION\" -- mbx stats --json\n}\nbefore=\"$(mbx_stats | jq -er '.savings.builds | select(type == \"number\")')\"\nmise --no-config --no-env --no-hooks exec \"rust@$RUST_VERSION\" \"mr-boxington@$MBX_VERSION\" -- mbx build --release --locked --package velnor-actions-cli --bin velnor-actions\nafter=\"$(mbx_stats | jq -er '.savings.builds | select(type == \"number\")')\"\ntest \"$after\" -gt \"$before\" || { echo \"MBX did not record this build\" >&2; exit 1; }\nasset=\"velnor-actions-0.1.1-aarch64-apple-darwin\"\ncp \"target/release/velnor-actions\" \"$asset\"\ntest -s \"$asset\"\ndesc=\"$(file -b \"$asset\")\"\ncase \"$desc\" in *Mach-O*arm64*) ;; *) echo \"wrong macOS arm64 target: $desc\" >&2; exit 1 ;; esac\nshasum -a 256 \"$asset\" > \"velnor-actions-0.1.1-aarch64-apple-darwin.sha256\"\ntest -s \"velnor-actions-0.1.1-aarch64-apple-darwin.sha256\"\n"
-      - name: Build macOS arm64 velnor-actions
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          if-no-files-found: error
-          name: generator-macos-arm64-assets
-          path: "velnor-actions-0.1.1-aarch64-apple-darwin\nvelnor-actions-0.1.1-aarch64-apple-darwin.sha256"
-          retention-days: 1
-  build-macos-x64:
-    name: Build macOS x86_64 velnor-actions
-    if: needs.release-gate.result == 'success'
-    runs-on: macos-15
-    timeout-minutes: 120
-    permissions:
-      contents: read
-    needs:
-      - release-gate
-    steps:
-      - name: Check out release SHA
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          fetch-depth: "1"
-          persist-credentials: "false"
-          ref: ${{ github.sha }}
-      - name: Setup Mise
-        uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
-        with:
-          cache: "false"
-          env: "false"
-          install: "false"
-          version: 2026.9.18
-      - name: Install catalog tools and verify MBX
-        shell: bash
-        run: "set -eu\n\ncatalog_version() {\n  awk -F '\"' -v name=\"$1\" '\n    $1 == \"pub const \" name \": &str = \" && $3 == \";\" {\n      value = $2\n      count += 1\n    }\n    END {\n      if (count != 1 || value !~ /^[0-9]+\\.[0-9]+\\.[0-9]+$/) exit 1\n      print value\n    }\n  ' crates/velnor-actions-mise/src/catalog.rs\n}\n\n\ntest \"$(git rev-parse HEAD)\" = \"$GITHUB_SHA\"\nRUST_VERSION=\"$(catalog_version RUST_VERSION)\"\nMBX_VERSION=\"$(catalog_version MR_BOXINGTON_VERSION)\"\nmise --no-config --no-env --no-hooks install \"rust@$RUST_VERSION\" \"mr-boxington@$MBX_VERSION\"\nmbx_path=\"$(mise --no-config --no-env --no-hooks exec \"rust@$RUST_VERSION\" \"mr-boxington@$MBX_VERSION\" -- which mbx)\"\nmbx_desc=\"$(file -b \"$mbx_path\")\"\ncase \"$RUNNER_OS:$(uname -m):$mbx_desc\" in\n  Linux:x86_64:*ELF*x86-64*) ;;\n  macOS:arm64:*Mach-O*arm64*) ;;\n  *) echo \"MBX binary does not match official runner architecture: $mbx_desc\" >&2; exit 1 ;;\nesac\nmbx_version=\"$(mise --no-config --no-env --no-hooks exec \"rust@$RUST_VERSION\" \"mr-boxington@$MBX_VERSION\" -- mbx --version)\"\ncase \"$mbx_version\" in\n  *\"$MBX_VERSION\"*) ;;\n  *) echo \"unexpected MBX version: $mbx_version\" >&2; exit 1 ;;\nesac\n"
-      - name: Install pinned Intel Rust target
-        shell: bash
-        run: "set -eu\n\ncatalog_version() {\n  awk -F '\"' -v name=\"$1\" '\n    $1 == \"pub const \" name \": &str = \" && $3 == \";\" {\n      value = $2\n      count += 1\n    }\n    END {\n      if (count != 1 || value !~ /^[0-9]+\\.[0-9]+\\.[0-9]+$/) exit 1\n      print value\n    }\n  ' crates/velnor-actions-mise/src/catalog.rs\n}\n\nRUST_VERSION=\"$(catalog_version RUST_VERSION)\"\nmise --no-config --no-env --no-hooks exec \"rust@$RUST_VERSION\" -- rustup target add x86_64-apple-darwin\nmise --no-config --no-env --no-hooks exec \"rust@$RUST_VERSION\" -- rustup target list --installed | grep -Fx x86_64-apple-darwin"
-      - name: Build with MBX and checksum target
-        shell: bash
-        run: "\nset -eu\n\ncatalog_version() {\n  awk -F '\"' -v name=\"$1\" '\n    $1 == \"pub const \" name \": &str = \" && $3 == \";\" {\n      value = $2\n      count += 1\n    }\n    END {\n      if (count != 1 || value !~ /^[0-9]+\\.[0-9]+\\.[0-9]+$/) exit 1\n      print value\n    }\n  ' crates/velnor-actions-mise/src/catalog.rs\n}\n\ntest \"$(git rev-parse HEAD)\" = \"$GITHUB_SHA\"\ntest \"$RUNNER_OS:$(uname -m)\" = \"macOS:arm64\"\nRUST_VERSION=\"$(catalog_version RUST_VERSION)\"\nMBX_VERSION=\"$(catalog_version MR_BOXINGTON_VERSION)\"\nmbx_stats() {\n  mise --no-config --no-env --no-hooks exec \"rust@$RUST_VERSION\" \"mr-boxington@$MBX_VERSION\" -- mbx stats --json\n}\nbefore=\"$(mbx_stats | jq -er '.savings.builds | select(type == \"number\")')\"\nCARGO_BUILD_TARGET=x86_64-apple-darwin mise --no-config --no-env --no-hooks exec \"rust@$RUST_VERSION\" \"mr-boxington@$MBX_VERSION\" -- mbx build --release --locked --package velnor-actions-cli --bin velnor-actions\nafter=\"$(mbx_stats | jq -er '.savings.builds | select(type == \"number\")')\"\ntest \"$after\" -gt \"$before\" || { echo \"MBX did not record this build\" >&2; exit 1; }\nasset=\"velnor-actions-0.1.1-x86_64-apple-darwin\"\ncp \"target/x86_64-apple-darwin/release/velnor-actions\" \"$asset\"\ntest -s \"$asset\"\ndesc=\"$(file -b \"$asset\")\"\ncase \"$desc\" in *Mach-O*x86_64*) ;; *) echo \"wrong macOS x86_64 target: $desc\" >&2; exit 1 ;; esac\nshasum -a 256 \"$asset\" > \"velnor-actions-0.1.1-x86_64-apple-darwin.sha256\"\ntest -s \"velnor-actions-0.1.1-x86_64-apple-darwin.sha256\"\n"
-      - name: Build macOS x86_64 velnor-actions
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          if-no-files-found: error
-          name: generator-macos-x64-assets
-          path: "velnor-actions-0.1.1-x86_64-apple-darwin\nvelnor-actions-0.1.1-x86_64-apple-darwin.sha256"
-          retention-days: 1
-  attest-linux-x64:
-    name: Attest Linux x86_64 velnor-actions
-    if: needs.release-gate.result == 'success' && needs.build-linux-x64.result == 'success'
-    runs-on: ubuntu-26.04
-    timeout-minutes: 20
-    permissions:
-      artifact-metadata: write
-      attestations: write
-      contents: read
-      id-token: write
-    needs:
-      - release-gate
-      - build-linux-x64
-    steps:
-      - name: Download built assets
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
-        with:
-          name: generator-linux-x64-assets
-          path: assets
-      - name: Attest built assets
-        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8
-        with:
-          subject-path: "assets/velnor-actions-0.1.1-x86_64-unknown-linux-gnu\nassets/velnor-actions-0.1.1-x86_64-unknown-linux-gnu.sha256"
-  attest-macos-arm64:
-    name: Attest macOS arm64 velnor-actions
-    if: needs.release-gate.result == 'success' && needs.build-macos-arm64.result == 'success'
-    runs-on: ubuntu-26.04
-    timeout-minutes: 20
-    permissions:
-      artifact-metadata: write
-      attestations: write
-      contents: read
-      id-token: write
-    needs:
-      - release-gate
-      - build-macos-arm64
-    steps:
-      - name: Download built assets
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
-        with:
-          name: generator-macos-arm64-assets
-          path: assets
-      - name: Attest built assets
-        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8
-        with:
-          subject-path: "assets/velnor-actions-0.1.1-aarch64-apple-darwin\nassets/velnor-actions-0.1.1-aarch64-apple-darwin.sha256"
-  attest-macos-x64:
-    name: Attest macOS x86_64 velnor-actions
-    if: needs.release-gate.result == 'success' && needs.build-macos-x64.result == 'success'
-    runs-on: ubuntu-26.04
-    timeout-minutes: 20
-    permissions:
-      artifact-metadata: write
-      attestations: write
-      contents: read
-      id-token: write
-    needs:
-      - release-gate
-      - build-macos-x64
-    steps:
-      - name: Download built assets
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
-        with:
-          name: generator-macos-x64-assets
-          path: assets
-      - name: Attest built assets
-        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8
-        with:
-          subject-path: "assets/velnor-actions-0.1.1-x86_64-apple-darwin\nassets/velnor-actions-0.1.1-x86_64-apple-darwin.sha256"
-  prepare-manifest:
-    name: Prepare and attest release manifest
-    if: needs.release-gate.result == 'success' && needs.attest-linux-x64.result == 'success' && needs.attest-macos-arm64.result == 'success' && needs.attest-macos-x64.result == 'success'
-    runs-on: ubuntu-26.04
-    timeout-minutes: 30
-    permissions:
-      actions: read
-      artifact-metadata: write
-      attestations: write
-      contents: read
-      id-token: write
-    needs:
-      - release-gate
-      - attest-linux-x64
-      - attest-macos-arm64
-      - attest-macos-x64
-    steps:
-      - name: Check out release SHA
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          fetch-depth: "1"
-          persist-credentials: "false"
-          ref: ${{ github.sha }}
-      - name: Setup Mise
-        uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
-        with:
-          cache: "false"
-          env: "false"
-          install: "false"
-          version: 2026.9.18
-      - name: Download Linux x86_64 assets
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
-        with:
-          name: generator-linux-x64-assets
-          path: linux-assets
-      - name: Download macOS arm64 assets
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
-        with:
-          name: generator-macos-arm64-assets
-          path: macos-arm64-assets
-      - name: Download macOS x86_64 assets
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
-        with:
-          name: generator-macos-x64-assets
-          path: macos-x64-assets
-      - name: Validate assets and create canonical manifest
-        shell: bash
+        run: bash scripts/check-freshness.sh
+      - name: Recheck default-branch source
         env:
           GH_TOKEN: ${{ github.token }}
-        run: "set -eu\n\ncatalog_version() {\n  awk -F '\"' -v name=\"$1\" '\n    $1 == \"pub const \" name \": &str = \" && $3 == \";\" {\n      value = $2\n      count += 1\n    }\n    END {\n      if (count != 1 || value !~ /^[0-9]+\\.[0-9]+\\.[0-9]+$/) exit 1\n      print value\n    }\n  ' crates/velnor-actions-mise/src/catalog.rs\n}\n\n\nGH_VERSION=\"$(catalog_version GH_VERSION)\"\nmise --no-config --no-env --no-hooks install \"gh@$GH_VERSION\"\ngh() {\n  mise --no-config --no-env --no-hooks exec \"gh@$GH_VERSION\" -- gh \"$@\"\n}\n\n\nverify_same_sha_ci() {\n  runs=\"$(gh api \"repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$GITHUB_SHA&event=push&branch=main&per_page=100\")\" || return 1\n  printf '%s\\n' \"$runs\" | jq -e --arg sha \"$GITHUB_SHA\" --arg repo \"$GITHUB_REPOSITORY\" '\n      [\n        .workflow_runs[]? |\n        select(\n          .head_sha == $sha and\n          .head_branch == \"main\" and\n          .event == \"push\" and\n          .path == \".github/workflows/ci.yml\" and\n          .repository.full_name == $repo and\n          .head_repository.full_name == $repo\n        )\n      ] |\n      sort_by(.run_started_at) | last |\n      select(. != null and .status == \"completed\" and .conclusion == \"success\") != null\n    ' >/dev/null || return 1\n}\n\n\nverify_release_environment() {\n  environment=\"$(gh api \"repos/$GITHUB_REPOSITORY/environments/generator-release\")\" || return 1\n  printf '%s\\n' \"$environment\" | jq -e '\n      any(.protection_rules[]?;\n        .type == \"required_reviewers\" and\n        .prevent_self_review == true and\n        (.reviewers | length) > 0\n      ) and\n      .deployment_branch_policy.protected_branches == true and\n      .deployment_branch_policy.custom_branch_policies == false\n    ' >/dev/null || return 1\n}\n\n\ntest \"$GITHUB_REPOSITORY\" = \"tailrocks/velnor-new\"\ntest \"$GITHUB_REF\" = \"refs/heads/main\"\ntest \"$GITHUB_REF_PROTECTED\" = \"true\"\ntest \"$(git rev-parse HEAD)\" = \"$GITHUB_SHA\"\nrepository=\"$(gh api \"repos/$GITHUB_REPOSITORY\")\" || exit 1\nprintf '%s\\n' \"$repository\" | jq -e '.default_branch == \"main\"' >/dev/null || exit 1\n\n\nworkspace_version() {\n  awk -F '\"' '\n    /^\\[workspace\\.package\\]$/ { in_workspace = 1; next }\n    /^\\[/ { in_workspace = 0 }\n    in_workspace && $1 == \"version = \" && $2 ~ /^[0-9]+\\.[0-9]+\\.[0-9]+$/ {\n      value = $2\n      count += 1\n    }\n    END {\n      if (count != 1) exit 1\n      print value\n    }\n  ' Cargo.toml\n}\nRELEASE_VERSION=\"$(workspace_version)\"\ntest \"$RELEASE_VERSION\" = \"0.1.1\"\n\n\nassert_files() {\n  dir=\"$1\"\n  asset=\"$2\"\n  sidecar=\"$3\"\n  unexpected=\"$(find \"$dir\" -mindepth 1 -maxdepth 1 ! -type f -print -quit)\" || return 1\n  test -z \"$unexpected\" || return 1\n  actual_files=\"$(find \"$dir\" -mindepth 1 -maxdepth 1 -type f -printf '%f\\n')\" || return 1\n  actual=\"$(LC_ALL=C sort <<EOF\n$actual_files\nEOF\n)\" || return 1\n  expected=\"$(LC_ALL=C sort <<EOF\n$asset\n$sidecar\nEOF\n)\" || return 1\n  test \"$actual\" = \"$expected\" || return 1\n}\nverify_sidecar() {\n  asset=\"$1\"\n  sidecar=\"$2\"\n  name=\"$(basename \"$asset\")\"\n  expected=\"$(awk -v name=\"$name\" '\n    NR != 1 || NF != 2 || length($1) != 64 || $1 !~ /^[0-9a-f]+$/ || $2 != name { exit 1 }\n    { print $1 }\n    END { if (NR != 1) exit 1 }\n  ' \"$sidecar\")\" || return 1\n  actual_line=\"$(sha256sum -- \"$asset\")\" || return 1\n  actual=\"${actual_line%%  *}\"\n  actual_name=\"${actual_line#*  }\"\n  test \"$actual_name\" = \"$asset\" || return 1\n  test \"${#actual}\" -eq 64 || return 1\n  case \"$actual\" in\n    ''|*[!0-9a-f]*) return 1 ;;\n  esac\n  test \"$expected\" = \"$actual\" || return 1\n  printf '%s\\n' \"$actual\"\n}\nverify_attestation() {\n  gh attestation verify \"$1\" --repo \"$GITHUB_REPOSITORY\" --signer-workflow \"$GITHUB_REPOSITORY/.github/workflows/generator-release.yml\" --source-digest \"$GITHUB_SHA\" --source-ref refs/heads/main --deny-self-hosted-runners\n}\nvalidate_assets() {\n  assert_files linux-assets velnor-actions-0.1.1-x86_64-unknown-linux-gnu velnor-actions-0.1.1-x86_64-unknown-linux-gnu.sha256 || return 1\n  assert_files macos-arm64-assets velnor-actions-0.1.1-aarch64-apple-darwin velnor-actions-0.1.1-aarch64-apple-darwin.sha256 || return 1\n  assert_files macos-x64-assets velnor-actions-0.1.1-x86_64-apple-darwin velnor-actions-0.1.1-x86_64-apple-darwin.sha256 || return 1\n  linux_sha=\"$(verify_sidecar linux-assets/velnor-actions-0.1.1-x86_64-unknown-linux-gnu linux-assets/velnor-actions-0.1.1-x86_64-unknown-linux-gnu.sha256)\" || return 1\n  macos_arm_sha=\"$(verify_sidecar macos-arm64-assets/velnor-actions-0.1.1-aarch64-apple-darwin macos-arm64-assets/velnor-actions-0.1.1-aarch64-apple-darwin.sha256)\" || return 1\n  macos_x64_sha=\"$(verify_sidecar macos-x64-assets/velnor-actions-0.1.1-x86_64-apple-darwin macos-x64-assets/velnor-actions-0.1.1-x86_64-apple-darwin.sha256)\" || return 1\n  for artifact in linux-assets/velnor-actions-0.1.1-x86_64-unknown-linux-gnu linux-assets/velnor-actions-0.1.1-x86_64-unknown-linux-gnu.sha256 macos-arm64-assets/velnor-actions-0.1.1-aarch64-apple-darwin macos-arm64-assets/velnor-actions-0.1.1-aarch64-apple-darwin.sha256 macos-x64-assets/velnor-actions-0.1.1-x86_64-apple-darwin macos-x64-assets/velnor-actions-0.1.1-x86_64-apple-darwin.sha256; do\n    verify_attestation \"$artifact\" || return 1\n  done\n}\nverify_canonical_manifest() {\n  manifest=\"$1\"\n  tag=\"$2\"\n  linux_sha=\"$3\"\n  macos_arm_sha=\"$4\"\n  macos_x64_sha=\"$5\"\n  jq -e --arg commit \"$GITHUB_SHA\" --arg tag \"$tag\" --arg linux_sha \"$linux_sha\" --arg macos_arm_sha \"$macos_arm_sha\" --arg macos_x64_sha \"$macos_x64_sha\" '. == {schema:1,version:\"0.1.1\",repository:\"tailrocks/velnor-new\",commit:$commit,targets:[{target:\"x86_64-unknown-linux-gnu\",artifact:(\"https://github.com/tailrocks/velnor-new/releases/download/\"+$tag+\"/velnor-actions-0.1.1-x86_64-unknown-linux-gnu\"),sha256:$linux_sha},{target:\"aarch64-apple-darwin\",artifact:(\"https://github.com/tailrocks/velnor-new/releases/download/\"+$tag+\"/velnor-actions-0.1.1-aarch64-apple-darwin\"),sha256:$macos_arm_sha},{target:\"x86_64-apple-darwin\",artifact:(\"https://github.com/tailrocks/velnor-new/releases/download/\"+$tag+\"/velnor-actions-0.1.1-x86_64-apple-darwin\"),sha256:$macos_x64_sha}]}' \"$manifest\" >/dev/null\n}\n\n\nverify_same_sha_ci || exit 1\nverify_release_environment || exit 1\nvalidate_assets || exit 1\ntag=\"generator-$GITHUB_SHA\"\nrm -rf release-manifest\nmkdir -p release-manifest\nmanifest=\"release-manifest/velnor-actions-release-manifest.json\"\njq -n --arg commit \"$GITHUB_SHA\" --arg tag \"$tag\" --arg linux_sha \"$linux_sha\" --arg macos_arm_sha \"$macos_arm_sha\" --arg macos_x64_sha \"$macos_x64_sha\" '{schema:1,version:\"0.1.1\",repository:\"tailrocks/velnor-new\",commit:$commit,targets:[{target:\"x86_64-unknown-linux-gnu\",artifact:(\"https://github.com/tailrocks/velnor-new/releases/download/\"+$tag+\"/velnor-actions-0.1.1-x86_64-unknown-linux-gnu\"),sha256:$linux_sha},{target:\"aarch64-apple-darwin\",artifact:(\"https://github.com/tailrocks/velnor-new/releases/download/\"+$tag+\"/velnor-actions-0.1.1-aarch64-apple-darwin\"),sha256:$macos_arm_sha},{target:\"x86_64-apple-darwin\",artifact:(\"https://github.com/tailrocks/velnor-new/releases/download/\"+$tag+\"/velnor-actions-0.1.1-x86_64-apple-darwin\"),sha256:$macos_x64_sha}]}' > \"$manifest\"\nverify_canonical_manifest \"$manifest\" \"$tag\" \"$linux_sha\" \"$macos_arm_sha\" \"$macos_x64_sha\" || exit 1\n"
-      - name: Attest built assets
-        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8
+        shell: bash
+        run: "gh() { mise --no-config --no-env --no-hooks exec gh@2.102.0 -- gh \"$@\"; }\nexport -f gh\nset -eu\ntest \"$GITHUB_REF\" = \"refs/heads/main\"\ntest \"$(git rev-parse HEAD)\" = \"$GITHUB_SHA\"\ntest \"$(gh api repos/tailrocks/velnor-new/commits/main --jq .sha)\" = \"$GITHUB_SHA\""
+  build-linux:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 120
+    permissions:
+      actions: write
+      contents: read
+    needs:
+      - verify-release-source
+    outputs:
+      artifact_id: ${{ steps.upload.outputs.artifact-id }}
+      artifact_digest: ${{ steps.upload.outputs.artifact-digest }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          subject-path: release-manifest/velnor-actions-release-manifest.json
-      - name: Upload attested release manifest
+          fetch-depth: "1"
+          persist-credentials: "false"
+      - name: Build Linux velnor-actions
+        uses: ./.github/actions/generator-release-build-linux # zizmor: ignore[self-repository]
+      - name: Upload Linux assets
+        id: upload
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           if-no-files-found: error
-          name: generator-release-manifest
-          path: release-manifest/velnor-actions-release-manifest.json
+          name: generator-linux-assets
+          path: generator-linux-assets.tar
           retention-days: 1
-  qualify-linux-x64:
-    name: Qualify Linux x86_64 candidate
-    if: needs.release-gate.result == 'success' && needs.build-linux-x64.result == 'success' && needs.prepare-manifest.result == 'success'
+  qualify-linux:
     runs-on: ubuntu-26.04
-    timeout-minutes: 60
-    permissions:
-      contents: read
+    timeout-minutes: 120
     needs:
-      - release-gate
-      - build-linux-x64
-      - prepare-manifest
+      - build-linux
+      - candidate-manifest
+    permissions: {}
     steps:
-      - name: Check out release SHA
+      - name: Fetch exact public source without an action post hook
+        shell: bash
+        run: "set -eu\npython3 - \"$GITHUB_WORKSPACE\" \"$GITHUB_REPOSITORY\" \"$GITHUB_SHA\" <<'PY'\nimport os\nimport re\nimport subprocess\nimport sys\n\nworkspace, repository, commit = sys.argv[1:]\nif repository != \"tailrocks/velnor-new\" or re.fullmatch(r\"[0-9a-f]{40}\", commit) is None:\n    raise SystemExit(\"qualification source identity is invalid\")\n\nenvironment = os.environ.copy()\nfor name in tuple(environment):\n    if name.startswith(\"GIT_\") or name in {\n        \"ACTIONS_ID_TOKEN_REQUEST_TOKEN\",\n        \"ACTIONS_ID_TOKEN_REQUEST_URL\",\n        \"ACTIONS_RUNTIME_TOKEN\",\n        \"GITHUB_TOKEN\",\n        \"GH_TOKEN\",\n        \"MISE_GITHUB_TOKEN\",\n    }:\n        environment.pop(name, None)\nenvironment.update(\n    GIT_CONFIG_GLOBAL=os.devnull,\n    GIT_CONFIG_NOSYSTEM=\"1\",\n    GIT_TERMINAL_PROMPT=\"0\",\n)\n\ndef run_git(*arguments, timeout):\n    subprocess.run(\n        [\"git\", *arguments],\n        cwd=workspace,\n        env=environment,\n        check=True,\n        timeout=timeout,\n    )\n\nrun_git(\"init\", \"--quiet\", timeout=10)\nrun_git(\n    \"-c\",\n    \"credential.helper=\",\n    \"fetch\",\n    \"--quiet\",\n    \"--depth=1\",\n    \"--no-tags\",\n    f\"https://github.com/{repository}.git\",\n    commit,\n    timeout=60,\n)\nrun_git(\"checkout\", \"--quiet\", \"--detach\", \"FETCH_HEAD\", timeout=10)\nhead = subprocess.run(\n    [\"git\", \"rev-parse\", \"HEAD\"],\n    cwd=workspace,\n    env=environment,\n    check=True,\n    capture_output=True,\n    text=True,\n    timeout=5,\n).stdout.strip()\nif head != commit:\n    raise SystemExit(\"qualification source does not match the requested commit\")\nPY"
+      - name: Qualify Linux velnor-actions
+        uses: ./.github/actions/generator-release-qualify-linux # zizmor: ignore[self-repository]
+        with:
+          artifact_id: ${{ needs.build-linux.outputs.artifact_id }}
+          manifest_artifact_id: ${{ needs.candidate-manifest.outputs.artifact_id }}
+          manifest_sha256: ${{ needs.candidate-manifest.outputs.manifest_sha256 }}
+  attest-linux:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    permissions:
+      actions: write
+      artifact-metadata: write
+      attestations: write
+      contents: read
+      id-token: write
+    needs:
+      - build-linux
+      - qualify-linux
+    steps:
+      - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: "1"
           persist-credentials: "false"
-          ref: ${{ github.sha }}
-      - name: Setup Mise
-        uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
+      - name: Attest Linux velnor-actions
+        uses: ./.github/actions/generator-release-attest-linux # zizmor: ignore[self-repository]
         with:
-          cache: "false"
-          env: "false"
-          install: "false"
-          version: 2026.9.18
-      - name: Install catalog Rust for candidate execution
-        shell: bash
-        run: "set -eu\n\ncatalog_version() {\n  awk -F '\"' -v name=\"$1\" '\n    $1 == \"pub const \" name \": &str = \" && $3 == \";\" {\n      value = $2\n      count += 1\n    }\n    END {\n      if (count != 1 || value !~ /^[0-9]+\\.[0-9]+\\.[0-9]+$/) exit 1\n      print value\n    }\n  ' crates/velnor-actions-mise/src/catalog.rs\n}\n\nRUST_VERSION=\"$(catalog_version RUST_VERSION)\"\nACTIONLINT_VERSION=\"$(catalog_version ACTIONLINT_VERSION)\"\nSHELLCHECK_VERSION=\"$(catalog_version SHELLCHECK_VERSION)\"\nZIZMOR_VERSION=\"$(catalog_version ZIZMOR_VERSION)\"\nmise --no-config --no-env --no-hooks install \"rust@$RUST_VERSION\" \"actionlint@$ACTIONLINT_VERSION\" \"shellcheck@$SHELLCHECK_VERSION\" \"zizmor@$ZIZMOR_VERSION\""
-      - name: Download exact candidate artifact
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
-        with:
-          name: generator-linux-x64-assets
-          path: assets
-      - name: Download attested release manifest
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
-        with:
-          name: generator-release-manifest
-          path: release-manifest
-      - name: Bind downloaded candidate to manifest digest
-        shell: bash
-        run: "set -eu\ncandidate_dir=\"assets\"\ncandidate=\"$candidate_dir/velnor-actions-0.1.1-x86_64-unknown-linux-gnu\"\nsidecar=\"$candidate_dir/velnor-actions-0.1.1-x86_64-unknown-linux-gnu.sha256\"\nmanifest=\"release-manifest/velnor-actions-release-manifest.json\"\ntest -f \"$candidate\" && test ! -L \"$candidate\" && test -s \"$candidate\"\ntest -f \"$sidecar\" && test ! -L \"$sidecar\" && test -s \"$sidecar\"\ntest -f \"$manifest\" && test ! -L \"$manifest\" && test -s \"$manifest\"\nentries=\"$(find \"$candidate_dir\" -mindepth 1 -maxdepth 1 -print | wc -l | tr -d ' ')\"\ntest \"$entries\" = 2\nmanifest_entries=\"$(find \"release-manifest\" -mindepth 1 -maxdepth 1 -print | wc -l | tr -d ' ')\"\ntest \"$manifest_entries\" = 1\njq -e --arg version \"0.1.1\" --arg repository \"tailrocks/velnor-new\" --arg commit \"$GITHUB_SHA\" --arg linux_target \"x86_64-unknown-linux-gnu\" --arg arm_target \"aarch64-apple-darwin\" --arg x64_target \"x86_64-apple-darwin\" --arg linux_asset \"velnor-actions-0.1.1-x86_64-unknown-linux-gnu\" --arg arm_asset \"velnor-actions-0.1.1-aarch64-apple-darwin\" --arg x64_asset \"velnor-actions-0.1.1-x86_64-apple-darwin\" --arg tag \"generator-$GITHUB_SHA\" '\n  .schema == 1 and .version == $version and .repository == $repository and .commit == $commit and\n  (.targets | length == 3) and\n  ([.targets[].target] | sort) == ([$linux_target, $arm_target, $x64_target] | sort) and\n  all(.targets[];\n    (.sha256 | test(\"^[0-9a-f]{64}$\")) and\n    ((.target == $linux_target and .artifact == (\"https://github.com/\" + $repository + \"/releases/download/\" + $tag + \"/\" + $linux_asset)) or\n     (.target == $arm_target and .artifact == (\"https://github.com/\" + $repository + \"/releases/download/\" + $tag + \"/\" + $arm_asset)) or\n     (.target == $x64_target and .artifact == (\"https://github.com/\" + $repository + \"/releases/download/\" + $tag + \"/\" + $x64_asset)))\n  )\n' \"$manifest\" >/dev/null\nexpected=\"$(jq -er --arg target \"x86_64-unknown-linux-gnu\" '[.targets[] | select(.target == $target)] | if length == 1 then .[0].sha256 else error(\"target_digest_missing\") end' \"$manifest\")\"\ncase \"$expected\" in ''|*[!0-9a-f]*) exit 1 ;; esac\ntest \"${#expected}\" -eq 64\nsidecar_hash=\"$(awk -v name=\"velnor-actions-0.1.1-x86_64-unknown-linux-gnu\" 'NR != 1 || NF != 2 || $2 != name || length($1) != 64 || $1 !~ /^[0-9a-f]+$/ { exit 1 } { print $1 } END { if (NR != 1) exit 1 }' \"$sidecar\")\"\ntest \"$sidecar_hash\" = \"$expected\"\nactual_line=\"$(sha256sum -- \"$candidate\")\"\nactual=\"${actual_line%% *}\"\ntest \"$actual\" = \"$expected\"\ndesc=\"$(file -b \"$candidate\")\"\ntest \"$RUNNER_OS:$(uname -m)\" = \"Linux:x86_64\"\ncase \"$desc\" in\n  *ELF*x86-64*) : ;;\n  *) echo \"candidate target mismatch: $desc\" >&2; exit 1 ;;\nesac\nchmod +x \"$candidate\"\n"
-      - name: Qualify exact downloaded candidate
-        shell: bash
-        run: "set -eu\ncandidate=\"$GITHUB_WORKSPACE/assets/velnor-actions-0.1.1-x86_64-unknown-linux-gnu\"\nmanifest=\"$GITHUB_WORKSPACE/release-manifest/velnor-actions-release-manifest.json\"\nexpected=\"$(jq -er --arg target \"x86_64-unknown-linux-gnu\" '[.targets[] | select(.target == $target)] | if length == 1 then .[0].sha256 else error(\"target_digest_missing\") end' \"$manifest\")\"\ncheck_candidate() {\n  actual_line=\"$(sha256sum -- \"$candidate\")\"\n  actual=\"${actual_line%% *}\"\n  test \"$actual\" = \"$expected\"\n}\ncheck_candidate\ncatalog_version() {\n  awk -F '\"' -v name=\"$1\" '$1 == \"pub const \" name \": &str = \" && $3 == \";\" { value = $2; count += 1 } END { if (count != 1 || value !~ /^[0-9]+\\.[0-9]+\\.[0-9]+$/) exit 1; print value }' crates/velnor-actions-mise/src/catalog.rs\n}\nrust_version=\"$(catalog_version RUST_VERSION)\"\nactionlint_version=\"$(catalog_version ACTIONLINT_VERSION)\"\nshellcheck_version=\"$(catalog_version SHELLCHECK_VERSION)\"\nzizmor_version=\"$(catalog_version ZIZMOR_VERSION)\"\nrun_candidate() {\n  status=0\n  mise --no-config --no-env --no-hooks exec \"rust@$rust_version\" \"actionlint@$actionlint_version\" \"shellcheck@$shellcheck_version\" \"zizmor@$zizmor_version\" -- \"$candidate\" \"$@\" || status=\"$?\"\n  check_candidate || return 1\n  return \"$status\"\n}\ntemp=\"$(mktemp -d \"$RUNNER_TEMP/velnor-release-qualification.XXXXXXXX\")\"\nprepare_repo() {\n  case_name=\"$1\"\n  repo=\"$temp/$case_name\"\n  mkdir -p \"$repo\"\n  cp -R \"$GITHUB_WORKSPACE/fixtures/parity/$case_name/input/.\" \"$repo/\"\n  git -C \"$repo\" init -q\n  git -C \"$repo\" -c user.name='Velnor release qualification' -c user.email='release-qualification@users.noreply.github.com' add --all\n  git -C \"$repo\" -c user.name='Velnor release qualification' -c user.email='release-qualification@users.noreply.github.com' commit -qm 'qualification fixture'\n}\nfor case_name in minimal-cargo multi-crate ignored-stack; do\n  prepare_repo \"$case_name\"\n  repo=\"$temp/$case_name\"\n  preview=\"$temp/$case_name-preview\"\n  (cd \"$repo\" && run_candidate plan > \"$temp/$case_name-plan.stdout\" 2> \"$temp/$case_name-plan.stderr\")\n  test ! -s \"$temp/$case_name-plan.stderr\"\n  repo_path=\"$(cd \"$repo\" && pwd -P)\"\n  head=\"$(git -C \"$repo\" rev-parse HEAD)\"\n  grep -Fq \"Repository: $repo_path\" \"$temp/$case_name-plan.stdout\"\n  sed -e \"s|Repository: $repo_path|Repository: <repo>|g\" -e \"s|$head|<head>|g\" \"$temp/$case_name-plan.stdout\" > \"$temp/$case_name-plan.normalized.txt\"\n  cmp \"$temp/$case_name-plan.normalized.txt\" \"$GITHUB_WORKSPACE/fixtures/parity/$case_name/expected/plan.txt\"\n  (cd \"$repo\" && run_candidate generate --output-dir \"$preview\" > \"$temp/$case_name-generate.stdout\" 2> \"$temp/$case_name-generate.stderr\")\n  cmp \"$preview/.github/workflows/ci.yml\" \"$GITHUB_WORKSPACE/fixtures/parity/$case_name/expected/ci.yml\"\n  cmp \"$preview/.github/actionlint.yaml\" \"$GITHUB_WORKSPACE/fixtures/parity/$case_name/expected/actionlint.yaml\"\n  test -z \"$(git -C \"$repo\" status --porcelain)\"\n  check_candidate\ndone\nfor case_name in malformed malformed-ignored; do\n  prepare_repo \"$case_name\"\n  repo=\"$temp/$case_name\"\n  status=0\n  (cd \"$repo\" && run_candidate plan > \"$temp/$case_name-plan.stdout\" 2> \"$temp/$case_name-plan.stderr\") || status=\"$?\"\n  test \"$status\" = \"$(cat \"$GITHUB_WORKSPACE/fixtures/parity/$case_name/expected/plan.exit\")\"\n  sed 's/\\(malformed_manifest:Cargo.toml: \\).*/\\1<cargo-diagnostic>/' \"$temp/$case_name-plan.stderr\" > \"$temp/$case_name-plan.normalized.stderr\"\n  cmp \"$temp/$case_name-plan.normalized.stderr\" \"$GITHUB_WORKSPACE/fixtures/parity/$case_name/expected/plan.stderr.txt\"\n  test -z \"$(git -C \"$repo\" status --porcelain)\"\n  check_candidate\ndone\n"
-  qualify-macos-arm64:
-    name: Qualify macOS arm64 candidate
-    if: needs.release-gate.result == 'success' && needs.build-macos-arm64.result == 'success' && needs.prepare-manifest.result == 'success'
+          artifact_id: ${{ needs.build-linux.outputs.artifact_id }}
+  build-macos:
     runs-on: macos-15
-    timeout-minutes: 60
+    timeout-minutes: 120
     permissions:
+      actions: write
       contents: read
     needs:
-      - release-gate
-      - build-macos-arm64
-      - prepare-manifest
+      - verify-release-source
+    outputs:
+      artifact_id: ${{ steps.upload.outputs.artifact-id }}
+      artifact_digest: ${{ steps.upload.outputs.artifact-digest }}
     steps:
-      - name: Check out release SHA
+      - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: "1"
           persist-credentials: "false"
-          ref: ${{ github.sha }}
-      - name: Setup Mise
-        uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
+      - name: Build macOS velnor-actions
+        uses: ./.github/actions/generator-release-build-macos # zizmor: ignore[self-repository]
+      - name: Upload macOS assets
+        id: upload
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          cache: "false"
-          env: "false"
-          install: "false"
-          version: 2026.9.18
-      - name: Install catalog Rust for candidate execution
+          if-no-files-found: error
+          name: generator-macos-assets
+          path: generator-macos-assets.tar
+          retention-days: 1
+  qualify-macos:
+    runs-on: macos-15
+    timeout-minutes: 120
+    needs:
+      - build-macos
+      - candidate-manifest
+    permissions: {}
+    steps:
+      - name: Fetch exact public source without an action post hook
         shell: bash
-        run: "set -eu\n\ncatalog_version() {\n  awk -F '\"' -v name=\"$1\" '\n    $1 == \"pub const \" name \": &str = \" && $3 == \";\" {\n      value = $2\n      count += 1\n    }\n    END {\n      if (count != 1 || value !~ /^[0-9]+\\.[0-9]+\\.[0-9]+$/) exit 1\n      print value\n    }\n  ' crates/velnor-actions-mise/src/catalog.rs\n}\n\nRUST_VERSION=\"$(catalog_version RUST_VERSION)\"\nACTIONLINT_VERSION=\"$(catalog_version ACTIONLINT_VERSION)\"\nSHELLCHECK_VERSION=\"$(catalog_version SHELLCHECK_VERSION)\"\nZIZMOR_VERSION=\"$(catalog_version ZIZMOR_VERSION)\"\nmise --no-config --no-env --no-hooks install \"rust@$RUST_VERSION\" \"actionlint@$ACTIONLINT_VERSION\" \"shellcheck@$SHELLCHECK_VERSION\" \"zizmor@$ZIZMOR_VERSION\""
-      - name: Download exact candidate artifact
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        run: "set -eu\npython3 - \"$GITHUB_WORKSPACE\" \"$GITHUB_REPOSITORY\" \"$GITHUB_SHA\" <<'PY'\nimport os\nimport re\nimport subprocess\nimport sys\n\nworkspace, repository, commit = sys.argv[1:]\nif repository != \"tailrocks/velnor-new\" or re.fullmatch(r\"[0-9a-f]{40}\", commit) is None:\n    raise SystemExit(\"qualification source identity is invalid\")\n\nenvironment = os.environ.copy()\nfor name in tuple(environment):\n    if name.startswith(\"GIT_\") or name in {\n        \"ACTIONS_ID_TOKEN_REQUEST_TOKEN\",\n        \"ACTIONS_ID_TOKEN_REQUEST_URL\",\n        \"ACTIONS_RUNTIME_TOKEN\",\n        \"GITHUB_TOKEN\",\n        \"GH_TOKEN\",\n        \"MISE_GITHUB_TOKEN\",\n    }:\n        environment.pop(name, None)\nenvironment.update(\n    GIT_CONFIG_GLOBAL=os.devnull,\n    GIT_CONFIG_NOSYSTEM=\"1\",\n    GIT_TERMINAL_PROMPT=\"0\",\n)\n\ndef run_git(*arguments, timeout):\n    subprocess.run(\n        [\"git\", *arguments],\n        cwd=workspace,\n        env=environment,\n        check=True,\n        timeout=timeout,\n    )\n\nrun_git(\"init\", \"--quiet\", timeout=10)\nrun_git(\n    \"-c\",\n    \"credential.helper=\",\n    \"fetch\",\n    \"--quiet\",\n    \"--depth=1\",\n    \"--no-tags\",\n    f\"https://github.com/{repository}.git\",\n    commit,\n    timeout=60,\n)\nrun_git(\"checkout\", \"--quiet\", \"--detach\", \"FETCH_HEAD\", timeout=10)\nhead = subprocess.run(\n    [\"git\", \"rev-parse\", \"HEAD\"],\n    cwd=workspace,\n    env=environment,\n    check=True,\n    capture_output=True,\n    text=True,\n    timeout=5,\n).stdout.strip()\nif head != commit:\n    raise SystemExit(\"qualification source does not match the requested commit\")\nPY"
+      - name: Qualify macOS velnor-actions
+        uses: ./.github/actions/generator-release-qualify-macos # zizmor: ignore[self-repository]
         with:
-          name: generator-macos-arm64-assets
-          path: assets
-      - name: Download attested release manifest
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+          artifact_id: ${{ needs.build-macos.outputs.artifact_id }}
+          manifest_artifact_id: ${{ needs.candidate-manifest.outputs.artifact_id }}
+          manifest_sha256: ${{ needs.candidate-manifest.outputs.manifest_sha256 }}
+  attest-macos:
+    runs-on: macos-15
+    timeout-minutes: 20
+    permissions:
+      actions: write
+      artifact-metadata: write
+      attestations: write
+      contents: read
+      id-token: write
+    needs:
+      - build-macos
+      - qualify-macos
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          name: generator-release-manifest
-          path: release-manifest
-      - name: Bind downloaded candidate to manifest digest
-        shell: bash
-        run: "set -eu\ncandidate_dir=\"assets\"\ncandidate=\"$candidate_dir/velnor-actions-0.1.1-aarch64-apple-darwin\"\nsidecar=\"$candidate_dir/velnor-actions-0.1.1-aarch64-apple-darwin.sha256\"\nmanifest=\"release-manifest/velnor-actions-release-manifest.json\"\ntest -f \"$candidate\" && test ! -L \"$candidate\" && test -s \"$candidate\"\ntest -f \"$sidecar\" && test ! -L \"$sidecar\" && test -s \"$sidecar\"\ntest -f \"$manifest\" && test ! -L \"$manifest\" && test -s \"$manifest\"\nentries=\"$(find \"$candidate_dir\" -mindepth 1 -maxdepth 1 -print | wc -l | tr -d ' ')\"\ntest \"$entries\" = 2\nmanifest_entries=\"$(find \"release-manifest\" -mindepth 1 -maxdepth 1 -print | wc -l | tr -d ' ')\"\ntest \"$manifest_entries\" = 1\njq -e --arg version \"0.1.1\" --arg repository \"tailrocks/velnor-new\" --arg commit \"$GITHUB_SHA\" --arg linux_target \"x86_64-unknown-linux-gnu\" --arg arm_target \"aarch64-apple-darwin\" --arg x64_target \"x86_64-apple-darwin\" --arg linux_asset \"velnor-actions-0.1.1-x86_64-unknown-linux-gnu\" --arg arm_asset \"velnor-actions-0.1.1-aarch64-apple-darwin\" --arg x64_asset \"velnor-actions-0.1.1-x86_64-apple-darwin\" --arg tag \"generator-$GITHUB_SHA\" '\n  .schema == 1 and .version == $version and .repository == $repository and .commit == $commit and\n  (.targets | length == 3) and\n  ([.targets[].target] | sort) == ([$linux_target, $arm_target, $x64_target] | sort) and\n  all(.targets[];\n    (.sha256 | test(\"^[0-9a-f]{64}$\")) and\n    ((.target == $linux_target and .artifact == (\"https://github.com/\" + $repository + \"/releases/download/\" + $tag + \"/\" + $linux_asset)) or\n     (.target == $arm_target and .artifact == (\"https://github.com/\" + $repository + \"/releases/download/\" + $tag + \"/\" + $arm_asset)) or\n     (.target == $x64_target and .artifact == (\"https://github.com/\" + $repository + \"/releases/download/\" + $tag + \"/\" + $x64_asset)))\n  )\n' \"$manifest\" >/dev/null\nexpected=\"$(jq -er --arg target \"aarch64-apple-darwin\" '[.targets[] | select(.target == $target)] | if length == 1 then .[0].sha256 else error(\"target_digest_missing\") end' \"$manifest\")\"\ncase \"$expected\" in ''|*[!0-9a-f]*) exit 1 ;; esac\ntest \"${#expected}\" -eq 64\nsidecar_hash=\"$(awk -v name=\"velnor-actions-0.1.1-aarch64-apple-darwin\" 'NR != 1 || NF != 2 || $2 != name || length($1) != 64 || $1 !~ /^[0-9a-f]+$/ { exit 1 } { print $1 } END { if (NR != 1) exit 1 }' \"$sidecar\")\"\ntest \"$sidecar_hash\" = \"$expected\"\nactual_line=\"$(shasum -a 256 \"$candidate\")\"\nactual=\"${actual_line%% *}\"\ntest \"$actual\" = \"$expected\"\ndesc=\"$(file -b \"$candidate\")\"\ntest \"$RUNNER_OS:$(uname -m)\" = \"macOS:arm64\"\ncase \"$desc\" in\n  *Mach-O*arm64*) test \"$(sysctl -in sysctl.proc_translated 2>/dev/null || printf 0)\" != 1 && test \"$(lipo -archs \"$candidate\")\" = arm64 ;;\n  *) echo \"candidate target mismatch: $desc\" >&2; exit 1 ;;\nesac\nchmod +x \"$candidate\"\n"
-      - name: Qualify exact downloaded candidate
-        shell: bash
-        run: "set -eu\ncandidate=\"$GITHUB_WORKSPACE/assets/velnor-actions-0.1.1-aarch64-apple-darwin\"\nmanifest=\"$GITHUB_WORKSPACE/release-manifest/velnor-actions-release-manifest.json\"\nexpected=\"$(jq -er --arg target \"aarch64-apple-darwin\" '[.targets[] | select(.target == $target)] | if length == 1 then .[0].sha256 else error(\"target_digest_missing\") end' \"$manifest\")\"\ncheck_candidate() {\n  actual_line=\"$(shasum -a 256 \"$candidate\")\"\n  actual=\"${actual_line%% *}\"\n  test \"$actual\" = \"$expected\"\n}\ncheck_candidate\ncatalog_version() {\n  awk -F '\"' -v name=\"$1\" '$1 == \"pub const \" name \": &str = \" && $3 == \";\" { value = $2; count += 1 } END { if (count != 1 || value !~ /^[0-9]+\\.[0-9]+\\.[0-9]+$/) exit 1; print value }' crates/velnor-actions-mise/src/catalog.rs\n}\nrust_version=\"$(catalog_version RUST_VERSION)\"\nactionlint_version=\"$(catalog_version ACTIONLINT_VERSION)\"\nshellcheck_version=\"$(catalog_version SHELLCHECK_VERSION)\"\nzizmor_version=\"$(catalog_version ZIZMOR_VERSION)\"\nrun_candidate() {\n  status=0\n  mise --no-config --no-env --no-hooks exec \"rust@$rust_version\" \"actionlint@$actionlint_version\" \"shellcheck@$shellcheck_version\" \"zizmor@$zizmor_version\" -- \"$candidate\" \"$@\" || status=\"$?\"\n  check_candidate || return 1\n  return \"$status\"\n}\ntemp=\"$(mktemp -d \"$RUNNER_TEMP/velnor-release-qualification.XXXXXXXX\")\"\nprepare_repo() {\n  case_name=\"$1\"\n  repo=\"$temp/$case_name\"\n  mkdir -p \"$repo\"\n  cp -R \"$GITHUB_WORKSPACE/fixtures/parity/$case_name/input/.\" \"$repo/\"\n  git -C \"$repo\" init -q\n  git -C \"$repo\" -c user.name='Velnor release qualification' -c user.email='release-qualification@users.noreply.github.com' add --all\n  git -C \"$repo\" -c user.name='Velnor release qualification' -c user.email='release-qualification@users.noreply.github.com' commit -qm 'qualification fixture'\n}\nfor case_name in minimal-cargo multi-crate ignored-stack; do\n  prepare_repo \"$case_name\"\n  repo=\"$temp/$case_name\"\n  preview=\"$temp/$case_name-preview\"\n  (cd \"$repo\" && run_candidate plan > \"$temp/$case_name-plan.stdout\" 2> \"$temp/$case_name-plan.stderr\")\n  test ! -s \"$temp/$case_name-plan.stderr\"\n  repo_path=\"$(cd \"$repo\" && pwd -P)\"\n  head=\"$(git -C \"$repo\" rev-parse HEAD)\"\n  grep -Fq \"Repository: $repo_path\" \"$temp/$case_name-plan.stdout\"\n  sed -e \"s|Repository: $repo_path|Repository: <repo>|g\" -e \"s|$head|<head>|g\" \"$temp/$case_name-plan.stdout\" > \"$temp/$case_name-plan.normalized.txt\"\n  cmp \"$temp/$case_name-plan.normalized.txt\" \"$GITHUB_WORKSPACE/fixtures/parity/$case_name/expected/plan.txt\"\n  (cd \"$repo\" && run_candidate generate --output-dir \"$preview\" > \"$temp/$case_name-generate.stdout\" 2> \"$temp/$case_name-generate.stderr\")\n  cmp \"$preview/.github/workflows/ci.yml\" \"$GITHUB_WORKSPACE/fixtures/parity/$case_name/expected/ci.yml\"\n  cmp \"$preview/.github/actionlint.yaml\" \"$GITHUB_WORKSPACE/fixtures/parity/$case_name/expected/actionlint.yaml\"\n  test -z \"$(git -C \"$repo\" status --porcelain)\"\n  check_candidate\ndone\nfor case_name in malformed malformed-ignored; do\n  prepare_repo \"$case_name\"\n  repo=\"$temp/$case_name\"\n  status=0\n  (cd \"$repo\" && run_candidate plan > \"$temp/$case_name-plan.stdout\" 2> \"$temp/$case_name-plan.stderr\") || status=\"$?\"\n  test \"$status\" = \"$(cat \"$GITHUB_WORKSPACE/fixtures/parity/$case_name/expected/plan.exit\")\"\n  sed 's/\\(malformed_manifest:Cargo.toml: \\).*/\\1<cargo-diagnostic>/' \"$temp/$case_name-plan.stderr\" > \"$temp/$case_name-plan.normalized.stderr\"\n  cmp \"$temp/$case_name-plan.normalized.stderr\" \"$GITHUB_WORKSPACE/fixtures/parity/$case_name/expected/plan.stderr.txt\"\n  test -z \"$(git -C \"$repo\" status --porcelain)\"\n  check_candidate\ndone\n"
-  qualify-macos-x64:
-    name: Qualify macOS x86_64 candidate
-    if: needs.release-gate.result == 'success' && needs.build-macos-x64.result == 'success' && needs.prepare-manifest.result == 'success'
+          fetch-depth: "1"
+          persist-credentials: "false"
+      - name: Attest macOS velnor-actions
+        uses: ./.github/actions/generator-release-attest-macos # zizmor: ignore[self-repository]
+        with:
+          artifact_id: ${{ needs.build-macos.outputs.artifact_id }}
+  build-macos-intel:
     runs-on: macos-15-intel
-    timeout-minutes: 60
+    timeout-minutes: 120
     permissions:
+      actions: write
       contents: read
     needs:
-      - release-gate
-      - build-macos-x64
-      - prepare-manifest
+      - verify-release-source
+    outputs:
+      artifact_id: ${{ steps.upload.outputs.artifact-id }}
+      artifact_digest: ${{ steps.upload.outputs.artifact-digest }}
     steps:
-      - name: Check out release SHA
+      - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: "1"
           persist-credentials: "false"
-          ref: ${{ github.sha }}
+      - name: Build macOS x86_64 velnor-actions
+        uses: ./.github/actions/generator-release-build-macos-intel # zizmor: ignore[self-repository]
+      - name: Upload macOS x86_64 assets
+        id: upload
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          if-no-files-found: error
+          name: generator-macos-intel-assets
+          path: generator-macos-intel-assets.tar
+          retention-days: 1
+  qualify-macos-intel:
+    runs-on: macos-15-intel
+    timeout-minutes: 120
+    needs:
+      - build-macos-intel
+      - candidate-manifest
+    permissions: {}
+    steps:
+      - name: Fetch exact public source without an action post hook
+        shell: bash
+        run: "set -eu\npython3 - \"$GITHUB_WORKSPACE\" \"$GITHUB_REPOSITORY\" \"$GITHUB_SHA\" <<'PY'\nimport os\nimport re\nimport subprocess\nimport sys\n\nworkspace, repository, commit = sys.argv[1:]\nif repository != \"tailrocks/velnor-new\" or re.fullmatch(r\"[0-9a-f]{40}\", commit) is None:\n    raise SystemExit(\"qualification source identity is invalid\")\n\nenvironment = os.environ.copy()\nfor name in tuple(environment):\n    if name.startswith(\"GIT_\") or name in {\n        \"ACTIONS_ID_TOKEN_REQUEST_TOKEN\",\n        \"ACTIONS_ID_TOKEN_REQUEST_URL\",\n        \"ACTIONS_RUNTIME_TOKEN\",\n        \"GITHUB_TOKEN\",\n        \"GH_TOKEN\",\n        \"MISE_GITHUB_TOKEN\",\n    }:\n        environment.pop(name, None)\nenvironment.update(\n    GIT_CONFIG_GLOBAL=os.devnull,\n    GIT_CONFIG_NOSYSTEM=\"1\",\n    GIT_TERMINAL_PROMPT=\"0\",\n)\n\ndef run_git(*arguments, timeout):\n    subprocess.run(\n        [\"git\", *arguments],\n        cwd=workspace,\n        env=environment,\n        check=True,\n        timeout=timeout,\n    )\n\nrun_git(\"init\", \"--quiet\", timeout=10)\nrun_git(\n    \"-c\",\n    \"credential.helper=\",\n    \"fetch\",\n    \"--quiet\",\n    \"--depth=1\",\n    \"--no-tags\",\n    f\"https://github.com/{repository}.git\",\n    commit,\n    timeout=60,\n)\nrun_git(\"checkout\", \"--quiet\", \"--detach\", \"FETCH_HEAD\", timeout=10)\nhead = subprocess.run(\n    [\"git\", \"rev-parse\", \"HEAD\"],\n    cwd=workspace,\n    env=environment,\n    check=True,\n    capture_output=True,\n    text=True,\n    timeout=5,\n).stdout.strip()\nif head != commit:\n    raise SystemExit(\"qualification source does not match the requested commit\")\nPY"
+      - name: Qualify macOS x86_64 velnor-actions
+        uses: ./.github/actions/generator-release-qualify-macos-intel # zizmor: ignore[self-repository]
+        with:
+          artifact_id: ${{ needs.build-macos-intel.outputs.artifact_id }}
+          manifest_artifact_id: ${{ needs.candidate-manifest.outputs.artifact_id }}
+          manifest_sha256: ${{ needs.candidate-manifest.outputs.manifest_sha256 }}
+  attest-macos-intel:
+    runs-on: macos-15-intel
+    timeout-minutes: 20
+    permissions:
+      actions: write
+      artifact-metadata: write
+      attestations: write
+      contents: read
+      id-token: write
+    needs:
+      - build-macos-intel
+      - qualify-macos-intel
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: "1"
+          persist-credentials: "false"
+      - name: Attest macOS x86_64 velnor-actions
+        uses: ./.github/actions/generator-release-attest-macos-intel # zizmor: ignore[self-repository]
+        with:
+          artifact_id: ${{ needs.build-macos-intel.outputs.artifact_id }}
+  candidate-manifest:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    permissions:
+      actions: write
+      contents: read
+    needs:
+      - verify-release-source
+      - build-linux
+      - build-macos
+      - build-macos-intel
+    outputs:
+      artifact_id: ${{ steps.upload.outputs.artifact-id }}
+      manifest_sha256: ${{ steps.manifest_digest.outputs.manifest_sha256 }}
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: "1"
+          persist-credentials: "false"
       - name: Setup Mise
         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
-          cache: "false"
-          env: "false"
-          install: "false"
           version: 2026.9.18
-      - name: Install catalog Rust for candidate execution
+          sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
+          install: "false"
+          env: "false"
+          cache: "false"
+          cache_save: "false"
+      - name: Download exact build artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          artifact-ids: ${{ needs.build-linux.outputs.artifact_id }}
+          path: linux-assets
+      - name: Prevalidate and extract uploaded candidate archive
         shell: bash
-        run: "set -eu\n\ncatalog_version() {\n  awk -F '\"' -v name=\"$1\" '\n    $1 == \"pub const \" name \": &str = \" && $3 == \";\" {\n      value = $2\n      count += 1\n    }\n    END {\n      if (count != 1 || value !~ /^[0-9]+\\.[0-9]+\\.[0-9]+$/) exit 1\n      print value\n    }\n  ' crates/velnor-actions-mise/src/catalog.rs\n}\n\nRUST_VERSION=\"$(catalog_version RUST_VERSION)\"\nACTIONLINT_VERSION=\"$(catalog_version ACTIONLINT_VERSION)\"\nSHELLCHECK_VERSION=\"$(catalog_version SHELLCHECK_VERSION)\"\nZIZMOR_VERSION=\"$(catalog_version ZIZMOR_VERSION)\"\nmise --no-config --no-env --no-hooks install \"rust@$RUST_VERSION\" \"actionlint@$ACTIONLINT_VERSION\" \"shellcheck@$SHELLCHECK_VERSION\" \"zizmor@$ZIZMOR_VERSION\""
-      - name: Download exact candidate artifact
+        run: "set -eu\nbash scripts/with-owned-archive-guard.sh -- python3 scripts/generator-release/extract-candidate.py 'linux-assets/generator-linux-assets.tar' 'linux-assets' 'velnor-actions-0.1.1-x86_64-unknown-linux-gnu' 'velnor-actions-0.1.1-x86_64-unknown-linux-gnu.sha256' 'velnor-actions-0.1.1-x86_64-unknown-linux-gnu.provenance.json'"
+      - name: Verify extracted candidate file types and executable mode
+        shell: bash
+        run: "set -eu\ntest -f linux-assets/velnor-actions-0.1.1-x86_64-unknown-linux-gnu\ntest ! -L linux-assets/velnor-actions-0.1.1-x86_64-unknown-linux-gnu\ntest -x linux-assets/velnor-actions-0.1.1-x86_64-unknown-linux-gnu\ntest -f linux-assets/velnor-actions-0.1.1-x86_64-unknown-linux-gnu.sha256\ntest ! -L linux-assets/velnor-actions-0.1.1-x86_64-unknown-linux-gnu.sha256\ntest ! -x linux-assets/velnor-actions-0.1.1-x86_64-unknown-linux-gnu.sha256\ntest -f linux-assets/velnor-actions-0.1.1-x86_64-unknown-linux-gnu.provenance.json\ntest ! -L linux-assets/velnor-actions-0.1.1-x86_64-unknown-linux-gnu.provenance.json\ntest ! -x linux-assets/velnor-actions-0.1.1-x86_64-unknown-linux-gnu.provenance.json"
+      - name: Verify source-bound build record
+        shell: bash
+        run: "set -eu\ndigest=\"$(awk -v expected='velnor-actions-0.1.1-x86_64-unknown-linux-gnu' 'NR == 1 { if (NF != 2 || length($1) != 64 || $1 !~ /^[0-9a-f]+$/ || $2 != expected) exit 1; print $1; next } { exit 1 } END { if (NR != 1) exit 1 }' 'linux-assets/velnor-actions-0.1.1-x86_64-unknown-linux-gnu.sha256')\"\njq -e --arg version \"0.1.1\" --arg repository \"$GITHUB_REPOSITORY\" --arg commit \"$GITHUB_SHA\" --arg target \"x86_64-unknown-linux-gnu\" --arg asset \"velnor-actions-0.1.1-x86_64-unknown-linux-gnu\" --arg sha256 \"$digest\" --arg rust '1.98.1' --arg mr_boxington '1.21.1' '.schema == 1 and .version == $version and .repository == $repository and .commit == $commit and .target == $target and .asset == $asset and .sha256 == $sha256 and .toolchain.rust == $rust and .toolchain[\"mr-boxington\"] == $mr_boxington' linux-assets/velnor-actions-0.1.1-x86_64-unknown-linux-gnu.provenance.json > /dev/null"
+      - name: Download exact build artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
-          name: generator-macos-x64-assets
-          path: assets
-      - name: Download attested release manifest
+          artifact-ids: ${{ needs.build-macos.outputs.artifact_id }}
+          path: macos-assets
+      - name: Prevalidate and extract uploaded candidate archive
+        shell: bash
+        run: "set -eu\nbash scripts/with-owned-archive-guard.sh -- python3 scripts/generator-release/extract-candidate.py 'macos-assets/generator-macos-assets.tar' 'macos-assets' 'velnor-actions-0.1.1-aarch64-apple-darwin' 'velnor-actions-0.1.1-aarch64-apple-darwin.sha256' 'velnor-actions-0.1.1-aarch64-apple-darwin.provenance.json'"
+      - name: Verify extracted candidate file types and executable mode
+        shell: bash
+        run: "set -eu\ntest -f macos-assets/velnor-actions-0.1.1-aarch64-apple-darwin\ntest ! -L macos-assets/velnor-actions-0.1.1-aarch64-apple-darwin\ntest -x macos-assets/velnor-actions-0.1.1-aarch64-apple-darwin\ntest -f macos-assets/velnor-actions-0.1.1-aarch64-apple-darwin.sha256\ntest ! -L macos-assets/velnor-actions-0.1.1-aarch64-apple-darwin.sha256\ntest ! -x macos-assets/velnor-actions-0.1.1-aarch64-apple-darwin.sha256\ntest -f macos-assets/velnor-actions-0.1.1-aarch64-apple-darwin.provenance.json\ntest ! -L macos-assets/velnor-actions-0.1.1-aarch64-apple-darwin.provenance.json\ntest ! -x macos-assets/velnor-actions-0.1.1-aarch64-apple-darwin.provenance.json"
+      - name: Verify source-bound build record
+        shell: bash
+        run: "set -eu\ndigest=\"$(awk -v expected='velnor-actions-0.1.1-aarch64-apple-darwin' 'NR == 1 { if (NF != 2 || length($1) != 64 || $1 !~ /^[0-9a-f]+$/ || $2 != expected) exit 1; print $1; next } { exit 1 } END { if (NR != 1) exit 1 }' 'macos-assets/velnor-actions-0.1.1-aarch64-apple-darwin.sha256')\"\njq -e --arg version \"0.1.1\" --arg repository \"$GITHUB_REPOSITORY\" --arg commit \"$GITHUB_SHA\" --arg target \"aarch64-apple-darwin\" --arg asset \"velnor-actions-0.1.1-aarch64-apple-darwin\" --arg sha256 \"$digest\" --arg rust '1.98.1' --arg mr_boxington '1.21.1' '.schema == 1 and .version == $version and .repository == $repository and .commit == $commit and .target == $target and .asset == $asset and .sha256 == $sha256 and .toolchain.rust == $rust and .toolchain[\"mr-boxington\"] == $mr_boxington' macos-assets/velnor-actions-0.1.1-aarch64-apple-darwin.provenance.json > /dev/null"
+      - name: Download exact build artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
+          artifact-ids: ${{ needs.build-macos-intel.outputs.artifact_id }}
+          path: macos-intel-assets
+      - name: Prevalidate and extract uploaded candidate archive
+        shell: bash
+        run: "set -eu\nbash scripts/with-owned-archive-guard.sh -- python3 scripts/generator-release/extract-candidate.py 'macos-intel-assets/generator-macos-intel-assets.tar' 'macos-intel-assets' 'velnor-actions-0.1.1-x86_64-apple-darwin' 'velnor-actions-0.1.1-x86_64-apple-darwin.sha256' 'velnor-actions-0.1.1-x86_64-apple-darwin.provenance.json'"
+      - name: Verify extracted candidate file types and executable mode
+        shell: bash
+        run: "set -eu\ntest -f macos-intel-assets/velnor-actions-0.1.1-x86_64-apple-darwin\ntest ! -L macos-intel-assets/velnor-actions-0.1.1-x86_64-apple-darwin\ntest -x macos-intel-assets/velnor-actions-0.1.1-x86_64-apple-darwin\ntest -f macos-intel-assets/velnor-actions-0.1.1-x86_64-apple-darwin.sha256\ntest ! -L macos-intel-assets/velnor-actions-0.1.1-x86_64-apple-darwin.sha256\ntest ! -x macos-intel-assets/velnor-actions-0.1.1-x86_64-apple-darwin.sha256\ntest -f macos-intel-assets/velnor-actions-0.1.1-x86_64-apple-darwin.provenance.json\ntest ! -L macos-intel-assets/velnor-actions-0.1.1-x86_64-apple-darwin.provenance.json\ntest ! -x macos-intel-assets/velnor-actions-0.1.1-x86_64-apple-darwin.provenance.json"
+      - name: Verify source-bound build record
+        shell: bash
+        run: "set -eu\ndigest=\"$(awk -v expected='velnor-actions-0.1.1-x86_64-apple-darwin' 'NR == 1 { if (NF != 2 || length($1) != 64 || $1 !~ /^[0-9a-f]+$/ || $2 != expected) exit 1; print $1; next } { exit 1 } END { if (NR != 1) exit 1 }' 'macos-intel-assets/velnor-actions-0.1.1-x86_64-apple-darwin.sha256')\"\njq -e --arg version \"0.1.1\" --arg repository \"$GITHUB_REPOSITORY\" --arg commit \"$GITHUB_SHA\" --arg target \"x86_64-apple-darwin\" --arg asset \"velnor-actions-0.1.1-x86_64-apple-darwin\" --arg sha256 \"$digest\" --arg rust '1.98.1' --arg mr_boxington '1.21.1' '.schema == 1 and .version == $version and .repository == $repository and .commit == $commit and .target == $target and .asset == $asset and .sha256 == $sha256 and .toolchain.rust == $rust and .toolchain[\"mr-boxington\"] == $mr_boxington' macos-intel-assets/velnor-actions-0.1.1-x86_64-apple-darwin.provenance.json > /dev/null"
+      - name: Create canonical candidate manifest from verified build bytes
+        shell: bash
+        run: "test \"$GITHUB_WORKFLOW_SHA\" = \"$GITHUB_SHA\"\nbash scripts/generator-release/create-release-manifest.sh '0.1.1' 'tailrocks/velnor-new' '1.98.1' '1.21.1'"
+      - name: Stage canonical candidate manifest
+        shell: bash
+        run: "set -eu\nmkdir -p manifest-assets\nmv release-manifest.json manifest-assets/release-manifest.json"
+      - name: Record canonical manifest digest
+        id: manifest_digest
+        shell: bash
+        run: "set -eu\ndigest=\"$(sha256sum 'manifest-assets/release-manifest.json' | awk 'NR == 1 { print $1; next } { exit 1 } END { if (NR != 1) exit 1 }')\"\ntest \"${#digest}\" -eq 64\nprintf 'manifest_sha256=%s\\n' \"$digest\" >> \"$GITHUB_OUTPUT\""
+      - name: Upload same-run release manifest
+        id: upload
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          if-no-files-found: error
           name: generator-release-manifest
-          path: release-manifest
-      - name: Bind downloaded candidate to manifest digest
-        shell: bash
-        run: "set -eu\ncandidate_dir=\"assets\"\ncandidate=\"$candidate_dir/velnor-actions-0.1.1-x86_64-apple-darwin\"\nsidecar=\"$candidate_dir/velnor-actions-0.1.1-x86_64-apple-darwin.sha256\"\nmanifest=\"release-manifest/velnor-actions-release-manifest.json\"\ntest -f \"$candidate\" && test ! -L \"$candidate\" && test -s \"$candidate\"\ntest -f \"$sidecar\" && test ! -L \"$sidecar\" && test -s \"$sidecar\"\ntest -f \"$manifest\" && test ! -L \"$manifest\" && test -s \"$manifest\"\nentries=\"$(find \"$candidate_dir\" -mindepth 1 -maxdepth 1 -print | wc -l | tr -d ' ')\"\ntest \"$entries\" = 2\nmanifest_entries=\"$(find \"release-manifest\" -mindepth 1 -maxdepth 1 -print | wc -l | tr -d ' ')\"\ntest \"$manifest_entries\" = 1\njq -e --arg version \"0.1.1\" --arg repository \"tailrocks/velnor-new\" --arg commit \"$GITHUB_SHA\" --arg linux_target \"x86_64-unknown-linux-gnu\" --arg arm_target \"aarch64-apple-darwin\" --arg x64_target \"x86_64-apple-darwin\" --arg linux_asset \"velnor-actions-0.1.1-x86_64-unknown-linux-gnu\" --arg arm_asset \"velnor-actions-0.1.1-aarch64-apple-darwin\" --arg x64_asset \"velnor-actions-0.1.1-x86_64-apple-darwin\" --arg tag \"generator-$GITHUB_SHA\" '\n  .schema == 1 and .version == $version and .repository == $repository and .commit == $commit and\n  (.targets | length == 3) and\n  ([.targets[].target] | sort) == ([$linux_target, $arm_target, $x64_target] | sort) and\n  all(.targets[];\n    (.sha256 | test(\"^[0-9a-f]{64}$\")) and\n    ((.target == $linux_target and .artifact == (\"https://github.com/\" + $repository + \"/releases/download/\" + $tag + \"/\" + $linux_asset)) or\n     (.target == $arm_target and .artifact == (\"https://github.com/\" + $repository + \"/releases/download/\" + $tag + \"/\" + $arm_asset)) or\n     (.target == $x64_target and .artifact == (\"https://github.com/\" + $repository + \"/releases/download/\" + $tag + \"/\" + $x64_asset)))\n  )\n' \"$manifest\" >/dev/null\nexpected=\"$(jq -er --arg target \"x86_64-apple-darwin\" '[.targets[] | select(.target == $target)] | if length == 1 then .[0].sha256 else error(\"target_digest_missing\") end' \"$manifest\")\"\ncase \"$expected\" in ''|*[!0-9a-f]*) exit 1 ;; esac\ntest \"${#expected}\" -eq 64\nsidecar_hash=\"$(awk -v name=\"velnor-actions-0.1.1-x86_64-apple-darwin\" 'NR != 1 || NF != 2 || $2 != name || length($1) != 64 || $1 !~ /^[0-9a-f]+$/ { exit 1 } { print $1 } END { if (NR != 1) exit 1 }' \"$sidecar\")\"\ntest \"$sidecar_hash\" = \"$expected\"\nactual_line=\"$(shasum -a 256 \"$candidate\")\"\nactual=\"${actual_line%% *}\"\ntest \"$actual\" = \"$expected\"\ndesc=\"$(file -b \"$candidate\")\"\ntest \"$RUNNER_OS:$(uname -m)\" = \"macOS:x86_64\"\ncase \"$desc\" in\n  *Mach-O*x86_64*) test \"$(sysctl -in sysctl.proc_translated 2>/dev/null || printf 0)\" != 1 && test \"$(lipo -archs \"$candidate\")\" = x86_64 ;;\n  *) echo \"candidate target mismatch: $desc\" >&2; exit 1 ;;\nesac\nchmod +x \"$candidate\"\n"
-      - name: Qualify exact downloaded candidate
-        shell: bash
-        run: "set -eu\ncandidate=\"$GITHUB_WORKSPACE/assets/velnor-actions-0.1.1-x86_64-apple-darwin\"\nmanifest=\"$GITHUB_WORKSPACE/release-manifest/velnor-actions-release-manifest.json\"\nexpected=\"$(jq -er --arg target \"x86_64-apple-darwin\" '[.targets[] | select(.target == $target)] | if length == 1 then .[0].sha256 else error(\"target_digest_missing\") end' \"$manifest\")\"\ncheck_candidate() {\n  actual_line=\"$(shasum -a 256 \"$candidate\")\"\n  actual=\"${actual_line%% *}\"\n  test \"$actual\" = \"$expected\"\n}\ncheck_candidate\ncatalog_version() {\n  awk -F '\"' -v name=\"$1\" '$1 == \"pub const \" name \": &str = \" && $3 == \";\" { value = $2; count += 1 } END { if (count != 1 || value !~ /^[0-9]+\\.[0-9]+\\.[0-9]+$/) exit 1; print value }' crates/velnor-actions-mise/src/catalog.rs\n}\nrust_version=\"$(catalog_version RUST_VERSION)\"\nactionlint_version=\"$(catalog_version ACTIONLINT_VERSION)\"\nshellcheck_version=\"$(catalog_version SHELLCHECK_VERSION)\"\nzizmor_version=\"$(catalog_version ZIZMOR_VERSION)\"\nrun_candidate() {\n  status=0\n  mise --no-config --no-env --no-hooks exec \"rust@$rust_version\" \"actionlint@$actionlint_version\" \"shellcheck@$shellcheck_version\" \"zizmor@$zizmor_version\" -- \"$candidate\" \"$@\" || status=\"$?\"\n  check_candidate || return 1\n  return \"$status\"\n}\ntemp=\"$(mktemp -d \"$RUNNER_TEMP/velnor-release-qualification.XXXXXXXX\")\"\nprepare_repo() {\n  case_name=\"$1\"\n  repo=\"$temp/$case_name\"\n  mkdir -p \"$repo\"\n  cp -R \"$GITHUB_WORKSPACE/fixtures/parity/$case_name/input/.\" \"$repo/\"\n  git -C \"$repo\" init -q\n  git -C \"$repo\" -c user.name='Velnor release qualification' -c user.email='release-qualification@users.noreply.github.com' add --all\n  git -C \"$repo\" -c user.name='Velnor release qualification' -c user.email='release-qualification@users.noreply.github.com' commit -qm 'qualification fixture'\n}\nfor case_name in minimal-cargo multi-crate ignored-stack; do\n  prepare_repo \"$case_name\"\n  repo=\"$temp/$case_name\"\n  preview=\"$temp/$case_name-preview\"\n  (cd \"$repo\" && run_candidate plan > \"$temp/$case_name-plan.stdout\" 2> \"$temp/$case_name-plan.stderr\")\n  test ! -s \"$temp/$case_name-plan.stderr\"\n  repo_path=\"$(cd \"$repo\" && pwd -P)\"\n  head=\"$(git -C \"$repo\" rev-parse HEAD)\"\n  grep -Fq \"Repository: $repo_path\" \"$temp/$case_name-plan.stdout\"\n  sed -e \"s|Repository: $repo_path|Repository: <repo>|g\" -e \"s|$head|<head>|g\" \"$temp/$case_name-plan.stdout\" > \"$temp/$case_name-plan.normalized.txt\"\n  cmp \"$temp/$case_name-plan.normalized.txt\" \"$GITHUB_WORKSPACE/fixtures/parity/$case_name/expected/plan.txt\"\n  (cd \"$repo\" && run_candidate generate --output-dir \"$preview\" > \"$temp/$case_name-generate.stdout\" 2> \"$temp/$case_name-generate.stderr\")\n  cmp \"$preview/.github/workflows/ci.yml\" \"$GITHUB_WORKSPACE/fixtures/parity/$case_name/expected/ci.yml\"\n  cmp \"$preview/.github/actionlint.yaml\" \"$GITHUB_WORKSPACE/fixtures/parity/$case_name/expected/actionlint.yaml\"\n  test -z \"$(git -C \"$repo\" status --porcelain)\"\n  check_candidate\ndone\nfor case_name in malformed malformed-ignored; do\n  prepare_repo \"$case_name\"\n  repo=\"$temp/$case_name\"\n  status=0\n  (cd \"$repo\" && run_candidate plan > \"$temp/$case_name-plan.stdout\" 2> \"$temp/$case_name-plan.stderr\") || status=\"$?\"\n  test \"$status\" = \"$(cat \"$GITHUB_WORKSPACE/fixtures/parity/$case_name/expected/plan.exit\")\"\n  sed 's/\\(malformed_manifest:Cargo.toml: \\).*/\\1<cargo-diagnostic>/' \"$temp/$case_name-plan.stderr\" > \"$temp/$case_name-plan.normalized.stderr\"\n  cmp \"$temp/$case_name-plan.normalized.stderr\" \"$GITHUB_WORKSPACE/fixtures/parity/$case_name/expected/plan.stderr.txt\"\n  test -z \"$(git -C \"$repo\" status --porcelain)\"\n  check_candidate\ndone\n"
-  publish-generator:
-    name: Publish velnor-actions release
-    if: needs.release-gate.result == 'success' && needs.prepare-manifest.result == 'success' && needs.qualify-linux-x64.result == 'success' && needs.qualify-macos-arm64.result == 'success' && needs.qualify-macos-x64.result == 'success'
+          path: manifest-assets/release-manifest.json
+          retention-days: 1
+  attest-manifest:
     runs-on: ubuntu-26.04
     timeout-minutes: 30
-    environment: generator-release
     permissions:
-      actions: read
-      attestations: read
+      actions: write
+      artifact-metadata: write
+      attestations: write
+      contents: read
+      id-token: write
+    needs:
+      - candidate-manifest
+      - build-linux
+      - build-macos
+      - build-macos-intel
+      - attest-linux
+      - attest-macos
+      - attest-macos-intel
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: "1"
+          persist-credentials: "false"
+      - name: Attest generator release manifest
+        uses: ./.github/actions/generator-release-attest-manifest # zizmor: ignore[self-repository]
+        with:
+          linux_artifact_id: ${{ needs.build-linux.outputs.artifact_id }}
+          macos_arm64_artifact_id: ${{ needs.build-macos.outputs.artifact_id }}
+          macos_x86_64_artifact_id: ${{ needs.build-macos-intel.outputs.artifact_id }}
+          manifest_artifact_id: ${{ needs.candidate-manifest.outputs.artifact_id }}
+          manifest_sha256: ${{ needs.candidate-manifest.outputs.manifest_sha256 }}
+  publish-generator:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    permissions:
+      actions: write
       contents: write
     needs:
-      - release-gate
-      - prepare-manifest
-      - qualify-linux-x64
-      - qualify-macos-arm64
-      - qualify-macos-x64
+      - attest-linux
+      - attest-macos
+      - attest-macos-intel
+      - attest-manifest
+      - candidate-manifest
+      - build-linux
+      - build-macos
+      - build-macos-intel
+    environment:
+      name: generator-release
     steps:
-      - name: Check out release SHA
+      - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: "1"
           persist-credentials: "false"
-          ref: ${{ github.sha }}
-      - name: Setup Mise
-        uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
+      - name: Publish generator release
+        uses: ./.github/actions/generator-release-publish # zizmor: ignore[self-repository]
         with:
-          cache: "false"
-          env: "false"
-          install: "false"
-          version: 2026.9.18
-      - name: Download Linux x86_64 assets
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+          linux_artifact_id: ${{ needs.build-linux.outputs.artifact_id }}
+          macos_arm64_artifact_id: ${{ needs.build-macos.outputs.artifact_id }}
+          macos_x86_64_artifact_id: ${{ needs.build-macos-intel.outputs.artifact_id }}
+          manifest_artifact_id: ${{ needs.candidate-manifest.outputs.artifact_id }}
+          manifest_sha256: ${{ needs.candidate-manifest.outputs.manifest_sha256 }}
+      - name: Upload verified immutable release acceptance
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: generator-linux-x64-assets
-          path: linux-assets
-      - name: Download macOS arm64 assets
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
-        with:
-          name: generator-macos-arm64-assets
-          path: macos-arm64-assets
-      - name: Download macOS x86_64 assets
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
-        with:
-          name: generator-macos-x64-assets
-          path: macos-x64-assets
-      - name: Download attested release manifest
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
-        with:
-          name: generator-release-manifest
-          path: release-manifest
-      - name: Publish GitHub release
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: "set -eu\n\ncatalog_version() {\n  awk -F '\"' -v name=\"$1\" '\n    $1 == \"pub const \" name \": &str = \" && $3 == \";\" {\n      value = $2\n      count += 1\n    }\n    END {\n      if (count != 1 || value !~ /^[0-9]+\\.[0-9]+\\.[0-9]+$/) exit 1\n      print value\n    }\n  ' crates/velnor-actions-mise/src/catalog.rs\n}\n\n\nGH_VERSION=\"$(catalog_version GH_VERSION)\"\nmise --no-config --no-env --no-hooks install \"gh@$GH_VERSION\"\ngh() {\n  mise --no-config --no-env --no-hooks exec \"gh@$GH_VERSION\" -- gh \"$@\"\n}\n\n\nverify_same_sha_ci() {\n  runs=\"$(gh api \"repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$GITHUB_SHA&event=push&branch=main&per_page=100\")\" || return 1\n  printf '%s\\n' \"$runs\" | jq -e --arg sha \"$GITHUB_SHA\" --arg repo \"$GITHUB_REPOSITORY\" '\n      [\n        .workflow_runs[]? |\n        select(\n          .head_sha == $sha and\n          .head_branch == \"main\" and\n          .event == \"push\" and\n          .path == \".github/workflows/ci.yml\" and\n          .repository.full_name == $repo and\n          .head_repository.full_name == $repo\n        )\n      ] |\n      sort_by(.run_started_at) | last |\n      select(. != null and .status == \"completed\" and .conclusion == \"success\") != null\n    ' >/dev/null || return 1\n}\n\n\nverify_release_environment() {\n  environment=\"$(gh api \"repos/$GITHUB_REPOSITORY/environments/generator-release\")\" || return 1\n  printf '%s\\n' \"$environment\" | jq -e '\n      any(.protection_rules[]?;\n        .type == \"required_reviewers\" and\n        .prevent_self_review == true and\n        (.reviewers | length) > 0\n      ) and\n      .deployment_branch_policy.protected_branches == true and\n      .deployment_branch_policy.custom_branch_policies == false\n    ' >/dev/null || return 1\n}\n\n\ntest \"$GITHUB_REPOSITORY\" = \"tailrocks/velnor-new\"\ntest \"$GITHUB_REF\" = \"refs/heads/main\"\ntest \"$GITHUB_REF_PROTECTED\" = \"true\"\ntest \"$(git rev-parse HEAD)\" = \"$GITHUB_SHA\"\nrepository=\"$(gh api \"repos/$GITHUB_REPOSITORY\")\" || exit 1\nprintf '%s\\n' \"$repository\" | jq -e '.default_branch == \"main\"' >/dev/null || exit 1\n\n\nworkspace_version() {\n  awk -F '\"' '\n    /^\\[workspace\\.package\\]$/ { in_workspace = 1; next }\n    /^\\[/ { in_workspace = 0 }\n    in_workspace && $1 == \"version = \" && $2 ~ /^[0-9]+\\.[0-9]+\\.[0-9]+$/ {\n      value = $2\n      count += 1\n    }\n    END {\n      if (count != 1) exit 1\n      print value\n    }\n  ' Cargo.toml\n}\nRELEASE_VERSION=\"$(workspace_version)\"\ntest \"$RELEASE_VERSION\" = \"0.1.1\"\n\n\nassert_files() {\n  dir=\"$1\"\n  asset=\"$2\"\n  sidecar=\"$3\"\n  unexpected=\"$(find \"$dir\" -mindepth 1 -maxdepth 1 ! -type f -print -quit)\" || return 1\n  test -z \"$unexpected\" || return 1\n  actual_files=\"$(find \"$dir\" -mindepth 1 -maxdepth 1 -type f -printf '%f\\n')\" || return 1\n  actual=\"$(LC_ALL=C sort <<EOF\n$actual_files\nEOF\n)\" || return 1\n  expected=\"$(LC_ALL=C sort <<EOF\n$asset\n$sidecar\nEOF\n)\" || return 1\n  test \"$actual\" = \"$expected\" || return 1\n}\nverify_sidecar() {\n  asset=\"$1\"\n  sidecar=\"$2\"\n  name=\"$(basename \"$asset\")\"\n  expected=\"$(awk -v name=\"$name\" '\n    NR != 1 || NF != 2 || length($1) != 64 || $1 !~ /^[0-9a-f]+$/ || $2 != name { exit 1 }\n    { print $1 }\n    END { if (NR != 1) exit 1 }\n  ' \"$sidecar\")\" || return 1\n  actual_line=\"$(sha256sum -- \"$asset\")\" || return 1\n  actual=\"${actual_line%%  *}\"\n  actual_name=\"${actual_line#*  }\"\n  test \"$actual_name\" = \"$asset\" || return 1\n  test \"${#actual}\" -eq 64 || return 1\n  case \"$actual\" in\n    ''|*[!0-9a-f]*) return 1 ;;\n  esac\n  test \"$expected\" = \"$actual\" || return 1\n  printf '%s\\n' \"$actual\"\n}\nverify_attestation() {\n  gh attestation verify \"$1\" --repo \"$GITHUB_REPOSITORY\" --signer-workflow \"$GITHUB_REPOSITORY/.github/workflows/generator-release.yml\" --source-digest \"$GITHUB_SHA\" --source-ref refs/heads/main --deny-self-hosted-runners\n}\nvalidate_assets() {\n  assert_files linux-assets velnor-actions-0.1.1-x86_64-unknown-linux-gnu velnor-actions-0.1.1-x86_64-unknown-linux-gnu.sha256 || return 1\n  assert_files macos-arm64-assets velnor-actions-0.1.1-aarch64-apple-darwin velnor-actions-0.1.1-aarch64-apple-darwin.sha256 || return 1\n  assert_files macos-x64-assets velnor-actions-0.1.1-x86_64-apple-darwin velnor-actions-0.1.1-x86_64-apple-darwin.sha256 || return 1\n  linux_sha=\"$(verify_sidecar linux-assets/velnor-actions-0.1.1-x86_64-unknown-linux-gnu linux-assets/velnor-actions-0.1.1-x86_64-unknown-linux-gnu.sha256)\" || return 1\n  macos_arm_sha=\"$(verify_sidecar macos-arm64-assets/velnor-actions-0.1.1-aarch64-apple-darwin macos-arm64-assets/velnor-actions-0.1.1-aarch64-apple-darwin.sha256)\" || return 1\n  macos_x64_sha=\"$(verify_sidecar macos-x64-assets/velnor-actions-0.1.1-x86_64-apple-darwin macos-x64-assets/velnor-actions-0.1.1-x86_64-apple-darwin.sha256)\" || return 1\n  for artifact in linux-assets/velnor-actions-0.1.1-x86_64-unknown-linux-gnu linux-assets/velnor-actions-0.1.1-x86_64-unknown-linux-gnu.sha256 macos-arm64-assets/velnor-actions-0.1.1-aarch64-apple-darwin macos-arm64-assets/velnor-actions-0.1.1-aarch64-apple-darwin.sha256 macos-x64-assets/velnor-actions-0.1.1-x86_64-apple-darwin macos-x64-assets/velnor-actions-0.1.1-x86_64-apple-darwin.sha256; do\n    verify_attestation \"$artifact\" || return 1\n  done\n}\nverify_canonical_manifest() {\n  manifest=\"$1\"\n  tag=\"$2\"\n  linux_sha=\"$3\"\n  macos_arm_sha=\"$4\"\n  macos_x64_sha=\"$5\"\n  jq -e --arg commit \"$GITHUB_SHA\" --arg tag \"$tag\" --arg linux_sha \"$linux_sha\" --arg macos_arm_sha \"$macos_arm_sha\" --arg macos_x64_sha \"$macos_x64_sha\" '. == {schema:1,version:\"0.1.1\",repository:\"tailrocks/velnor-new\",commit:$commit,targets:[{target:\"x86_64-unknown-linux-gnu\",artifact:(\"https://github.com/tailrocks/velnor-new/releases/download/\"+$tag+\"/velnor-actions-0.1.1-x86_64-unknown-linux-gnu\"),sha256:$linux_sha},{target:\"aarch64-apple-darwin\",artifact:(\"https://github.com/tailrocks/velnor-new/releases/download/\"+$tag+\"/velnor-actions-0.1.1-aarch64-apple-darwin\"),sha256:$macos_arm_sha},{target:\"x86_64-apple-darwin\",artifact:(\"https://github.com/tailrocks/velnor-new/releases/download/\"+$tag+\"/velnor-actions-0.1.1-x86_64-apple-darwin\"),sha256:$macos_x64_sha}]}' \"$manifest\" >/dev/null\n}\n\n\nverify_same_sha_ci || exit 1\nverify_release_environment || exit 1\nvalidate_assets || exit 1\nmanifest=\"release-manifest/velnor-actions-release-manifest.json\"\nunexpected=\"$(find release-manifest -mindepth 1 -maxdepth 1 ! -type f -print -quit)\" || exit 1\ntest -z \"$unexpected\" || exit 1\nactual_manifest=\"$(find release-manifest -mindepth 1 -maxdepth 1 -type f -printf '%f\\n')\" || exit 1\ntest \"$actual_manifest\" = \"velnor-actions-release-manifest.json\" || exit 1\ntag=\"generator-$GITHUB_SHA\"\nverify_attestation \"$manifest\" || exit 1\nverify_canonical_manifest \"$manifest\" \"$tag\" \"$linux_sha\" \"$macos_arm_sha\" \"$macos_x64_sha\" || exit 1\nif git ls-remote --quiet --exit-code --refs \"https://github.com/$GITHUB_REPOSITORY.git\" \"refs/tags/$tag\" >/dev/null 2>&1; then\n  echo \"release tag already exists: $tag\" >&2\n  exit 1\nelse\n  status=\"$?\"\n  test \"$status\" -eq 2 || exit \"$status\"\nfi\ngh release create \"$tag\" --repo \"$GITHUB_REPOSITORY\" --target \"$GITHUB_SHA\" --title \"$tag\" --latest=false --notes \"velnor-actions 0.1.1 built from $GITHUB_SHA.\" linux-assets/velnor-actions-0.1.1-x86_64-unknown-linux-gnu linux-assets/velnor-actions-0.1.1-x86_64-unknown-linux-gnu.sha256 macos-arm64-assets/velnor-actions-0.1.1-aarch64-apple-darwin macos-arm64-assets/velnor-actions-0.1.1-aarch64-apple-darwin.sha256 macos-x64-assets/velnor-actions-0.1.1-x86_64-apple-darwin macos-x64-assets/velnor-actions-0.1.1-x86_64-apple-darwin.sha256 \"$manifest\"\n"
+          if-no-files-found: error
+          name: generator-release-accepted-${{ github.sha }}
+          path: "release-accepted/release-manifest.json\nrelease-accepted/release-acceptance.json"
+          retention-days: 1

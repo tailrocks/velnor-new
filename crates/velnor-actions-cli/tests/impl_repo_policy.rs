@@ -161,14 +161,18 @@ pub(crate) fn dep_referenced(dir: &str, dep: &str) -> Result<bool, Box<dyn Error
 }
 
 #[test]
-fn workspace_lists_exactly_eight_members() -> Result<(), Box<dyn Error>> {
+fn workspace_lists_eight_product_crates_and_archive_guard() -> Result<(), Box<dyn Error>> {
     let root = read("Cargo.toml")?;
     let start = root.find("members = [").ok_or("members block")?;
     let block = root[start..].split(']').next().ok_or("members end")?;
-    assert_eq!(block.matches("crates/").count(), 8, "{block}");
+    assert_eq!(block.matches("crates/").count(), 9, "{block}");
     for (dir, _) in MEMBERS {
         assert!(block.contains(&format!("\"{dir}\"")), "{dir} not listed");
     }
+    assert!(
+        block.contains("\"crates/velnor-archive-guard\""),
+        "archive guard workspace member missing"
+    );
     Ok(())
 }
 
@@ -270,7 +274,11 @@ fn rust_version_tracks_toolchain() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn members_inherit_workspace_settings() -> Result<(), Box<dyn Error>> {
-    for (dir, _) in MEMBERS.into_iter().chain(p11_metadata::RUNNER_MEMBERS) {
+    for (dir, _) in MEMBERS
+        .into_iter()
+        .chain(p11_metadata::RUNNER_MEMBERS)
+        .chain([("crates/velnor-archive-guard", "velnor-archive-guard")])
+    {
         let body = manifest(dir)?;
         let package = manifest_section(&body, "package");
         assert!(

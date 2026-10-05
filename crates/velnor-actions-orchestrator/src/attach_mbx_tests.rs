@@ -117,11 +117,12 @@ fn preseed_attach_builds_once_and_sets_mode() {
                     "ubuntu-26.04",
                     None,
                     &catalog,
-                    true,
-                    false,
-                    false,
-                    false,
-                    false,
+                    PlanJobToolNeeds {
+                        rust: PlanRustNeed::CompilerAndComponents,
+                        mbx: false,
+                        nextest: false,
+                        opentofu: false,
+                    },
                     &[],
                 )
                 .expect("plan job"),

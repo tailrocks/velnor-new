@@ -27,6 +27,39 @@ pub(crate) const LINT_JOB_ID: &str = "actionlint";
 /// Display name of the always-on workflow-lint job.
 pub(crate) const LINT_DISPLAY_NAME: &str = "Actionlint";
 
+/// Pinned tool roles used by the planner job.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PlanRustNeed {
+    /// No Rust toolchain is used by the plan job.
+    None,
+    /// Rust is used without requiring the formatting components.
+    Compiler,
+    /// Rust and the formatting components are used by the plan job.
+    CompilerAndComponents,
+}
+
+impl PlanRustNeed {
+    fn is_required(self) -> bool {
+        !matches!(self, Self::None)
+    }
+
+    fn needs_components(self) -> bool {
+        matches!(self, Self::CompilerAndComponents)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct PlanJobToolNeeds {
+    /// Rust is used by the selected plan workload or repository helper.
+    pub(crate) rust: PlanRustNeed,
+    /// MBX is used by at least one selected compile workload.
+    pub(crate) mbx: bool,
+    /// Nextest is selected by at least one workload.
+    pub(crate) nextest: bool,
+    /// `OpenTofu` is selected by at least one workload.
+    pub(crate) opentofu: bool,
+}
+
 /// Planner job: checkout, pinned-tool install, optional Acquire, request, plan.
 ///
 /// `Prepare pinned tools` installs the exact catalog tools the later steps consume
@@ -49,34 +82,25 @@ pub(crate) const LINT_DISPLAY_NAME: &str = "Actionlint";
 /// # Errors
 ///
 /// Returns a contract error when a typed step request is rejected.
-#[expect(
-    clippy::too_many_arguments,
-    clippy::fn_params_excessive_bools,
-    reason = "one call site threads job scope plus role selection"
-)]
 pub(crate) fn plan_job(
     label: &str,
     acquire: Option<Step>,
     catalog: &ToolCatalog,
-    use_rust: bool,
-    use_rust_components: bool,
-    use_mbx: bool,
-    use_nextest: bool,
-    use_opentofu: bool,
+    needs: PlanJobToolNeeds,
     fetch_roots: &[String],
 ) -> Result<Job, OrchestratorError> {
     let mut steps = vec![checkout_history_action()?];
     let prepare = prepare_pinned_tools_step(
         catalog,
-        plan_tools(use_rust, use_nextest, use_opentofu),
-        use_rust,
+        plan_tools(needs.rust.is_required(), needs.nextest, needs.opentofu),
+        needs.rust.is_required(),
     )?;
     steps.push(prepare);
-    if use_rust_components {
+    if needs.rust.needs_components() {
         steps.push(crate::workflow::prepare_rust_components_step(catalog)?);
     }
     let cached =
-        crate::workflow_jobs_cache::cache_steps_for_plan(label, catalog, use_mbx, fetch_roots)?;
+        crate::workflow_jobs_cache::cache_steps_for_plan(label, catalog, needs.mbx, fetch_roots)?;
     steps.extend(cached.restore);
     steps.extend(fetch_steps_for_plan(catalog, fetch_roots)?);
     steps.extend(cached.save);

@@ -1,4 +1,4 @@
-Velnor Actions plan 0.1.0
+Velnor Actions plan 0.1.1
 Repository: <repo>
 
 Detected stacks
@@ -18,7 +18,7 @@ Workflow to generate
   Runner: ubuntu-26.04 (latest pinned default)
   Jobs:
     - actionlint (5 steps)
-    - plan (10 steps)
+    - plan (9 steps)
     - publish-baseline (5 steps)
     - required (9 steps)
     - rust-app (16 steps)

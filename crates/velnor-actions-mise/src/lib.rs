@@ -13,7 +13,6 @@ pub mod catalog;
 pub mod check_deadline;
 pub mod checks;
 pub mod command;
-pub mod custom_run;
 pub mod error;
 pub mod gate6;
 pub mod gh;

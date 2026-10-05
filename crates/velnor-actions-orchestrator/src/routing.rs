@@ -14,6 +14,9 @@ use velnor_actions_workflow_renderer::{
     render_schema2_workflows,
 };
 
+#[path = "generator_release_pins.rs"]
+mod generator_release_pins;
+
 use crate::OrchestratorError;
 use crate::config::{CONFIG_REL, config_error, load_config};
 
@@ -164,11 +167,17 @@ fn workflow_request(
     } else {
         None
     };
+    let generator_release = execution
+        .workflows
+        .contains(&RoutingWorkflow::GeneratorRelease)
+        .then(|| generator_release_pins::resolve(config))
+        .transpose()?;
     Ok(Schema2WorkflowRequest {
         version: version.to_owned(),
         hosted_label: hosted,
         scale_set,
         workflows: execution.workflows.clone(),
         mbx_qualification,
+        generator_release,
     })
 }

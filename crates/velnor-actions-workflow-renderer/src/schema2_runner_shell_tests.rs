@@ -28,6 +28,7 @@ fn request() -> Schema2WorkflowRequest {
             },
             same_repository_pr: None,
         }),
+        generator_release: None,
     }
 }
 

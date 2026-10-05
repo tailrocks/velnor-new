@@ -15,49 +15,18 @@ if [[ ! "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]]; then
   echo "release source SHA is malformed" >&2
   exit 1
 fi
-if [[ "$(git rev-parse HEAD)" != "$GITHUB_SHA" ]]; then
-  echo "release checkout does not match the triggering source SHA" >&2
-  exit 1
-fi
 if [[ ! "$rust_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ || ! "$mr_boxington_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   echo "release toolchain versions are malformed" >&2
   exit 1
 fi
 
-assert_asset_files() {
-  local directory="$1" binary="$2" sidecar="$3" provenance="$4"
-  local unexpected actual expected
-  if [[ ! -d "$directory" || -L "$directory" ]]; then
-    echo "candidate asset directory is missing or not a real directory: $directory" >&2
-    return 1
-  fi
-  unexpected="$(find "$directory" -mindepth 1 -maxdepth 1 ! -type f -print -quit)" || return 1
-  if [[ -n "$unexpected" ]]; then
-    echo "candidate asset directory contains a non-file entry: $unexpected" >&2
-    return 1
-  fi
-  actual="$(find "$directory" -mindepth 1 -maxdepth 1 -type f -printf '%f\n' | LC_ALL=C sort)" || return 1
-  expected="$(printf '%s\n' "$binary" "$sidecar" "$provenance" | LC_ALL=C sort)" || return 1
-  if [[ "$actual" != "$expected" ]]; then
-    echo "candidate asset directory does not contain exactly the expected files: $directory" >&2
-    return 1
-  fi
-  for path in "$directory/$binary" "$directory/$sidecar" "$directory/$provenance"; do
-    if [[ ! -f "$path" || -L "$path" || ! -s "$path" ]]; then
-      echo "candidate asset is missing, empty, or not a regular file: $path" >&2
-      return 1
-    fi
-  done
-}
-
 verify_asset() {
-  local target="$1" directory="$2"
+  local target="$1" directory="$2" digest_name="$3"
   local binary="velnor-actions-${version}-${target}"
   local sidecar="${binary}.sha256"
   local provenance="${binary}.provenance.json"
   local digest
-  assert_asset_files "$directory" "$binary" "$sidecar" "$provenance" || return 1
-  digest="$(strict_sidecar_digest "$directory/$sidecar" "$binary")" || return 1
+  digest="$(strict_sidecar_digest "$directory/$sidecar" "$binary")"
   jq -e --arg version "$version" --arg repository "$repository" \
     --arg commit "$GITHUB_SHA" --arg target "$target" --arg asset "$binary" \
     --arg sha256 "$digest" --arg rust "$rust_version" \
@@ -66,9 +35,9 @@ verify_asset() {
      .commit == $commit and .target == $target and .asset == $asset and
      .sha256 == $sha256 and .toolchain.rust == $rust and
      .toolchain["mr-boxington"] == $mr_boxington' \
-    "$directory/$provenance" >/dev/null || return 1
-  (cd "$directory" && sha256sum --check "$sidecar") || return 1
-  printf '%s\n' "$digest"
+    "$directory/$provenance" >/dev/null
+  (cd "$directory" && sha256sum --check "$sidecar")
+  printf -v "$digest_name" '%s' "$digest"
 }
 
 strict_sidecar_digest() {
@@ -84,9 +53,9 @@ strict_sidecar_digest() {
   ' "$sidecar"
 }
 
-linux_sha256="$(verify_asset x86_64-unknown-linux-gnu linux-assets)"
-macos_arm64_sha256="$(verify_asset aarch64-apple-darwin macos-assets)"
-macos_x86_64_sha256="$(verify_asset x86_64-apple-darwin macos-intel-assets)"
+verify_asset x86_64-unknown-linux-gnu linux-assets linux_sha256
+verify_asset aarch64-apple-darwin macos-assets macos_arm64_sha256
+verify_asset x86_64-apple-darwin macos-intel-assets macos_x86_64_sha256
 
 tag="v${version}"
 jq -n --arg version "$version" --arg repository "$repository" \

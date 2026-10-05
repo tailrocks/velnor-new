@@ -212,12 +212,12 @@ impl ReleaseManifest {
             )?;
             check_sha256(&record.sha256, file, "targets.sha256")?;
         }
-        for target in crate::targets::SUPPORTED_TARGETS {
-            if !seen.contains(target) {
+        for target in crate::targets::ReleaseTarget::ALL {
+            if !seen.contains(target.triple()) {
                 return Err(ContractError::config(
                     file,
                     "targets",
-                    format!("missing_target:{target}"),
+                    format!("missing_target:{}", target.triple()),
                 ));
             }
         }
@@ -232,12 +232,12 @@ impl GeneratorLock {
     /// Require exactly one binary record per supported target, no extras.
     /// # Errors
     pub fn check_supported_targets(&self, file: &str) -> Result<(), ContractError> {
-        for target in crate::targets::SUPPORTED_TARGETS {
-            if self.binary_for_target(target).is_none() {
+        for target in crate::targets::ReleaseTarget::ALL {
+            if self.binary_for_target(target.triple()).is_none() {
                 return Err(ContractError::config(
                     file,
                     "generator.binaries",
-                    format!("missing_target:{target}"),
+                    format!("missing_target:{}", target.triple()),
                 ));
             }
         }

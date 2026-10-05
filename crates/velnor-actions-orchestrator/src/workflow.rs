@@ -30,7 +30,7 @@ use crate::OrchestratorError;
 use crate::discover::Discovery;
 use crate::pins::consumer_acquire_step;
 use crate::utf8::{strings_of, strings_of_env};
-use crate::workflow_jobs::{final_job, lint_job, plan_job};
+use crate::workflow_jobs::{PlanJobToolNeeds, PlanRustNeed, final_job, lint_job, plan_job};
 
 pub(crate) use crate::workflow_jobs::LINT_JOB_ID;
 
@@ -84,15 +84,26 @@ fn build_plan_job(
     // The helper/inventory may need Rust without invoking Clippy or rustfmt.
     // Install those components only when Plan owns a Format step.
     let use_rust_components = format.is_some();
+    let rust = match (use_rust, use_rust_components) {
+        (false, false) => PlanRustNeed::None,
+        (true, false) => PlanRustNeed::Compiler,
+        (true, true) => PlanRustNeed::CompilerAndComponents,
+        (false, true) => {
+            return Err(OrchestratorError::Contract {
+                problem: "rust_components_without_rust".to_owned(),
+            });
+        }
+    };
     let mut plan = plan_job(
         label,
         acquire,
         catalog,
-        use_rust,
-        use_rust_components,
-        use_mbx,
-        use_nextest,
-        use_opentofu,
+        PlanJobToolNeeds {
+            rust,
+            mbx: use_mbx,
+            nextest: use_nextest,
+            opentofu: use_opentofu,
+        },
         fetch_roots,
     )?;
     if let Some(format) = format {
