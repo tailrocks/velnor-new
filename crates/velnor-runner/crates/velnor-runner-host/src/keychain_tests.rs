@@ -56,6 +56,21 @@ impl Drop for TestItem {
 
 #[cfg(target_os = "macos")]
 #[test]
+fn missing_item_returns_without_leaving_prompts_disabled() -> Result<(), HostError> {
+    let missing = load_secret("com.tailrocks.velnor.host.test.missing", "absent");
+    if missing.is_ok() {
+        return Err(HostError::Keychain);
+    }
+    let allowed = security_framework::os::macos::keychain::SecKeychain::user_interaction_allowed()
+        .map_err(|_| HostError::Keychain)?;
+    if !allowed {
+        return Err(HostError::Keychain);
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+#[test]
 fn import_secret_round_trips_the_test_service() -> Result<(), HostError> {
     let service = "com.tailrocks.velnor.host.test";
     let account = "velnor-host-test";

@@ -68,6 +68,9 @@ fn store(service: &str, account: &str, secret: &[u8]) -> Result<(), HostError> {
 
 #[cfg(target_os = "macos")]
 fn fetch(service: &str, account: &str) -> Result<Vec<u8>, HostError> {
+    // An ACL mismatch must return. Launchd has no window for a prompt.
+    let _no_prompt = security_framework::os::macos::keychain::SecKeychain::disable_user_interaction()
+        .map_err(|_| HostError::Keychain)?;
     security_framework::passwords::generic_password(
         security_framework::passwords::PasswordOptions::new_generic_password(service, account),
     )
