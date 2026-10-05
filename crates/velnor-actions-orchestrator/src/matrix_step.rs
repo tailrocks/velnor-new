@@ -234,8 +234,7 @@ pub(crate) fn obligation_step(
                 problem: err.to_string(),
             }
         })?;
-    let start = start_path_for_key(&obligation.matrix_key);
-    let run = report_wrapper_argv(&joined, &helper_path_for_version(), &start);
+    let run = report_wrapper_argv(&joined, &helper_path_for_version());
     let mut step = velnor_actions_workflow_renderer::shell_step(&obligation.step_name, run, env)
         .map_err(OrchestratorError::from)?;
     // Skip when the plan covered this obligation: unknown coverage
@@ -289,12 +288,12 @@ pub(crate) fn helper_path_for_version() -> String {
 /// prefixes argv-wide `env -u`), not a script prelude's: obligations
 /// execute repository code (build scripts), and the step env cannot
 /// shadow runner-injected credentials (D3).
-pub(crate) fn report_wrapper_argv(joined: &str, helper: &str, start_path: &str) -> Vec<String> {
+pub(crate) fn report_wrapper_argv(joined: &str, helper: &str) -> Vec<String> {
     vec![
         "sh".to_owned(),
         "-c".to_owned(),
         format!(
-            "date +%s%3N > \"{start_path}\"; {joined}; code=$?; read -r start_ms rest < \"{start_path}\"; {EXIT_CODE_ENV}=\"$code\" {START_MS_ENV}=\"$start_ms\" {INTERNAL_OP_ENV}={REPORT_OP} \"{helper}\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\""
+            "s=$(date +%s%3N); {joined}; code=$?; {EXIT_CODE_ENV}=\"$code\" {START_MS_ENV}=\"$s\" {INTERNAL_OP_ENV}={REPORT_OP} \"{helper}\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\""
         ),
     ]
 }
