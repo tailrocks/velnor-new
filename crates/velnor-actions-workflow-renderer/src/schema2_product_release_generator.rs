@@ -72,7 +72,8 @@ fn merge_needs(fields: &[(String, Yaml)], role: JobRole) -> Yaml {
 fn condition(role: JobRole) -> String {
     match role {
         JobRole::Publish => "always() && inputs.release_action == 'build' && needs.attest-linux.result == 'success' && needs.attest-macos.result == 'success' && needs.attest-macos-intel.result == 'success' && needs.attest-manifest.result == 'success'".to_owned(),
-        JobRole::Build(_)
+        JobRole::SourceGate
+        | JobRole::Build(_)
         | JobRole::CandidateManifest
         | JobRole::Qualify(_)
         | JobRole::Attest(_)
@@ -108,7 +109,8 @@ fn merge_env(fields: &[(String, Yaml)], role: JobRole) -> Result<Yaml, RenderErr
 fn target_for_role(role: JobRole) -> Option<ReleaseTarget> {
     match role {
         JobRole::Build(target) | JobRole::Qualify(target) => Some(target),
-        JobRole::Attest(_)
+        JobRole::SourceGate
+        | JobRole::Attest(_)
         | JobRole::CandidateManifest
         | JobRole::AttestManifest
         | JobRole::Publish => None,

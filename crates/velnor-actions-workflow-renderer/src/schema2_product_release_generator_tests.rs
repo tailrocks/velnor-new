@@ -81,6 +81,10 @@ fn attestation_job(id: &str, build: &str, qualify: &str) -> Yaml {
 
 #[test]
 fn roles_bind_each_target_to_its_build_qualification_and_attestation_nodes() {
+    assert_eq!(
+        generator_release::job_role("verify-release-source"),
+        Some(generator_release::JobRole::SourceGate)
+    );
     for (target, build, qualify, attest) in [
         (
             ReleaseTarget::LinuxX86_64,
@@ -128,6 +132,23 @@ fn roles_bind_each_target_to_its_build_qualification_and_attestation_nodes() {
     );
     assert_eq!(generator_release::job_role("attest-generator-assets"), None);
     assert_eq!(generator_release::job_role("publish-unknown"), None);
+}
+
+#[test]
+fn source_gate_remains_in_the_called_family_before_candidate_builds() {
+    let (id, Yaml::Map(fields)) = compose_job("verify-release-source".to_owned(), job(&[]))
+        .expect("source gate has a typed role")
+    else {
+        panic!("source gate is a job map");
+    };
+    assert_eq!(id, "verify-release-source");
+    assert!(fields.iter().any(|(key, value)| {
+        key == "needs"
+            && matches!(value, Yaml::Seq(needs) if needs.contains(&Yaml::str("verify-release-caller")))
+    }));
+    assert!(fields.iter().any(|(key, value)| {
+        key == "if" && value == &Yaml::str("inputs.release_action == 'build'")
+    }));
 }
 
 #[test]

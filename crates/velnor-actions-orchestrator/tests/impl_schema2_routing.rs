@@ -6,7 +6,12 @@ use velnor_actions_orchestrator::{
 use velnor_actions_workflow_renderer::RenderedTree;
 
 use crate::impl_common::{TestResult, config_with_branch, git, make_repo};
+use monitoring_fixture::MONITORING;
 
+#[path = "schema2_monitoring_fixture.rs"]
+mod monitoring_fixture;
+#[path = "schema2_named_check_lanes_tests.rs"]
+mod named_check_lanes_tests;
 #[path = "schema2_feature_snapshots.rs"]
 mod schema2_feature_snapshots;
 #[path = "schema2_product_release_snapshots.rs"]
@@ -357,28 +362,3 @@ fn assert_release_permissions(body: &str, attest: &str, publish: &str) -> TestRe
     assert!(!publish_body.contains("id-token:"), "{publish_body}");
     Ok(())
 }
-
-const MONITORING: &str = r#"name: Scale set monitoring
-"on":
-  workflow_dispatch: {}
-permissions:
-  contents: read
-jobs:
-  scale-set-lane:
-    name: Scale set lane
-    runs-on: [velnor, ubuntu-26.04-scale-set]
-    timeout-minutes: 30
-    defaults:
-      run:
-        shell: bash -e {0}
-    steps:
-      - name: Run scale-set lane
-        run: echo scale-set-lane
-  queue-monitor:
-    name: Queue monitor
-    runs-on: ubuntu-26.04
-    timeout-minutes: 10
-    steps:
-      - name: Watch admission
-        run: echo queue-monitor
-"#;

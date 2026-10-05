@@ -67,6 +67,7 @@ fn ir_with(steps: Vec<Step>) -> Result<WorkflowIr, Box<dyn std::error::Error>> {
     jobs.insert(
         "plan".to_owned(),
         Job {
+            check_runner: None,
             display_name: "P".to_owned(),
             runs_on: "ubuntu-26.04".to_owned(),
             timeout_minutes: JobTimeout::CRATE,
@@ -83,6 +84,7 @@ fn ir_with(steps: Vec<Step>) -> Result<WorkflowIr, Box<dyn std::error::Error>> {
     jobs.insert(
         "candidate".to_owned(),
         Job {
+            check_runner: None,
             display_name: "C".to_owned(),
             runs_on: "ubuntu-26.04".to_owned(),
             timeout_minutes: JobTimeout::CRATE,

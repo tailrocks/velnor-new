@@ -2,12 +2,14 @@
 
 use velnor_actions_contract::ReleaseTarget;
 
+use super::super::features::{base, finish};
 use super::archive;
-use super::workflow_steps;
+use super::workflow_steps::{self, checkout_step, with_permissions};
 use crate::yaml::Yaml;
 
 pub(super) const VERSION: &str = "0.1.1";
 pub(super) const REPOSITORY: &str = "tailrocks/velnor-new";
+const CI_WORKFLOW: &str = "ci.yml";
 
 /// One target binary, checksum sidecar, and source-bound build record.
 #[derive(Clone, Copy)]
@@ -257,6 +259,69 @@ fn verify_provenance_in_directory(
 pub(super) fn qualification_script(binary: &str, directory: &str) -> String {
     format!(
         "set -eu\nunset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN GH_TOKEN MISE_GITHUB_TOKEN GH_HOST GH_CONFIG_DIR\ntest \"$GITHUB_WORKFLOW_SHA\" = \"$GITHUB_SHA\"\ntest \"$(git rev-parse HEAD)\" = \"$GITHUB_SHA\"\ntest \"$(./{directory}/{binary} --version)\" = \"velnor-actions {VERSION}\"\nscripts/capture-opentofu-goldens.sh check-release \"$GITHUB_WORKSPACE/{directory}/{binary}\" \"$GITHUB_WORKSPACE/manifest-assets/release-manifest.json\" \"$VELNOR_RELEASE_MANIFEST_SHA256\""
+    )
+}
+
+/// Check the dispatched source and its required CI before native builds.
+pub(super) fn source_gate_job(
+    hosted: Yaml,
+    pins: &crate::schema2::ProductReleasePins,
+) -> Result<(String, Yaml), crate::RenderError> {
+    let steps = vec![
+        checkout_step(),
+        workflow_steps::mise_step(pins.setup_for(ReleaseTarget::LinuxX86_64))?,
+        workflow_steps::command_step(
+            "Install pinned release gate tools",
+            &pins.install_gate_tools_argv,
+        )?,
+        workflow_steps::command_step("Run actionlint", &pins.actionlint_argv)?,
+        workflow_steps::command_step("Run zizmor", &pins.zizmor_argv)?,
+        ci_check_step(pins)?,
+        workflow_steps::bash_step(
+            "Check release freshness gate",
+            "bash scripts/check-freshness.sh",
+        ),
+        workflow_steps::bash_step_with_token(
+            "Recheck default-branch source",
+            &format!(
+                "set -eu\ntest \"$GITHUB_REF\" = \"refs/heads/main\"\ntest \"$(git rev-parse HEAD)\" = \"$GITHUB_SHA\"\ntest \"$(gh api repos/{REPOSITORY}/commits/main --jq .sha)\" = \"$GITHUB_SHA\""
+            ),
+            &pins.gh_argv,
+        )?,
+    ];
+    let mut fields = with_permissions(
+        base("Verify generator release source", hosted, 20),
+        workflow_steps::perm(&[("actions", "read"), ("contents", "read")]),
+    );
+    fields.retain(|(key, _)| key != "name");
+    Ok(finish("verify-release-source", fields, steps))
+}
+
+fn ci_check_step(pins: &crate::schema2::ProductReleasePins) -> Result<Yaml, crate::RenderError> {
+    workflow_steps::bash_step_with_token(
+        "Require successful CI at exact main SHA",
+        &ci_check_script(),
+        &pins.gh_argv,
+    )
+}
+
+pub(super) fn ci_check_script() -> String {
+    format!(
+        r#"set -eu
+test "$GITHUB_REPOSITORY" = '{REPOSITORY}'
+test "$GITHUB_REF" = 'refs/heads/main'
+test "$GITHUB_EVENT_NAME" = 'workflow_dispatch'
+test "$GITHUB_WORKFLOW_SHA" = "$GITHUB_SHA"
+test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+runs="$(gh api --paginate --slurp "repos/{REPOSITORY}/actions/workflows/{CI_WORKFLOW}/runs?head_sha=$GITHUB_SHA&branch=main&event=push&per_page=100")"
+run="$(printf '%s\n' "$runs" | jq -ce --arg sha "$GITHUB_SHA" --arg repo '{REPOSITORY}' '[.[] | (.workflow_runs // [])[] | select(.path == ".github/workflows/{CI_WORKFLOW}" and .head_sha == $sha and .head_branch == "main" and .head_repository.full_name == $repo and .event == "push")] | sort_by([.run_number, .id]) | last // error("no exact-source main CI run")')"
+test "$(printf '%s\n' "$run" | jq -r .status)" = completed
+test "$(printf '%s\n' "$run" | jq -r .conclusion)" = success
+run_id="$(printf '%s\n' "$run" | jq -r .id)"
+attempt="$(printf '%s\n' "$run" | jq -r .run_attempt)"
+jobs="$(gh api --paginate --slurp "repos/{REPOSITORY}/actions/runs/$run_id/attempts/$attempt/jobs?per_page=100")"
+printf '%s\n' "$jobs" | jq -e --arg sha "$GITHUB_SHA" '[.[] | (.jobs // [])[] | select(.name == "Required" and .head_sha == $sha and .head_branch == "main" and .status == "completed" and .conclusion == "success")] | length == 1' >/dev/null
+test "$(gh api repos/{REPOSITORY}/commits/main --jq .sha)" = "$GITHUB_SHA""#
     )
 }
 

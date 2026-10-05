@@ -85,20 +85,12 @@ fn emitted_order(plan: &Plan) -> Vec<String> {
         }
         for (kind, task_ref) in &entry.execute_task_ids.tasks {
             match task_ref {
-                ExecuteTaskRef::Single(id) => {
-                    ordered.push(crate::task_report::task_report_order::obligation_order_key(
-                        &entry.stack_id,
-                        kind,
-                        id,
-                    ));
-                }
+                ExecuteTaskRef::Single(id) => ordered.push(
+                    crate::obligation_order::obligation_order_key(&entry.stack_id, kind, id),
+                ),
                 ExecuteTaskRef::Shards(ids) => {
                     ordered.extend(ids.iter().map(|id| {
-                        crate::task_report::task_report_order::obligation_order_key(
-                            &entry.stack_id,
-                            kind,
-                            id,
-                        )
+                        crate::obligation_order::obligation_order_key(&entry.stack_id, kind, id)
                     }));
                 }
             }

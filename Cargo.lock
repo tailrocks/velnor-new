@@ -227,6 +227,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "da7c62ceae207dd37ea5b845da6a0696c799f85e97da1ab5b7910be3c1c80223"
 
 [[package]]
+name = "filetime"
+version = "0.2.29"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5c287a33c7f0a620c38e641e7f60827713987b3c0f26e8ddc9462cc69cf75759"
+dependencies = [
+ "cfg-if",
+ "libc",
+]
+
+[[package]]
 name = "find-msvc-tools"
 version = "0.1.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -365,6 +375,15 @@ name = "linux-raw-sys"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32a66949e030da00e8c7d4434b251670a91556f4144941d37452769c25d58a53"
+
+[[package]]
+name = "lzma-rust2"
+version = "0.21.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fde178a3caf126c440fa15628147772d8ee590a39477d711353fbe2e58a73a5b"
+dependencies = [
+ "sha2",
+]
 
 [[package]]
 name = "memchr"
@@ -542,6 +561,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "tar"
+version = "0.4.46"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f6221d9a6003c78398e3b239969f352578258df48c8eb051caadae0015bc840"
+dependencies = [
+ "filetime",
+ "libc",
+]
+
+[[package]]
 name = "tempfile"
 version = "3.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -614,6 +643,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7d56353a2a665ad0f41a421187180aab746c8c325620617ad883a99a1cbe66d2"
 
 [[package]]
+name = "typed-path"
+version = "0.12.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8e28f89b80c87b8fb0cf04ab448d5dd0dd0ade2f8891bae878de66a75a28600e"
+
+[[package]]
 name = "typenum"
 version = "1.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -652,7 +687,9 @@ name = "velnor-actions-cli"
 version = "0.1.1"
 dependencies = [
  "clap",
+ "proc-macro2",
  "serde_json",
+ "syn",
  "velnor-actions-orchestrator",
 ]
 
@@ -670,7 +707,9 @@ dependencies = [
 name = "velnor-actions-mise"
 version = "0.1.1"
 dependencies = [
+ "rustix",
  "serde",
+ "serde_json",
  "velnor-actions-contract",
  "velnor-actions-tofu",
 ]
@@ -679,10 +718,13 @@ dependencies = [
 name = "velnor-actions-orchestrator"
 version = "0.1.1"
 dependencies = [
+ "flate2",
+ "lzma-rust2",
  "rustix",
  "serde",
  "serde_json",
  "sha2",
+ "tar",
  "tempfile",
  "thiserror",
  "toml",
@@ -692,6 +734,7 @@ dependencies = [
  "velnor-actions-rust",
  "velnor-actions-tofu",
  "velnor-actions-workflow-renderer",
+ "zip",
 ]
 
 [[package]]
@@ -757,6 +800,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "23b97319f7b8343df12cc98938e5c3eb436064524c8d2b4e30a1d3a36eecdf81"
 dependencies = [
  "memchr",
+]
+
+[[package]]
+name = "zip"
+version = "8.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2d04a6b5381502aa6087c94c669499eb1602eb9c5e8198e534de571f7154809b"
+dependencies = [
+ "crc32fast",
+ "flate2",
+ "indexmap",
+ "memchr",
+ "typed-path",
 ]
 
 [[package]]

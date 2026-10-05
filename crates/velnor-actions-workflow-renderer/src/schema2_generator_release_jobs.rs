@@ -25,6 +25,7 @@ pub(super) fn build_job(
         workflow_steps::build_permissions(),
     );
     fields.retain(|(key, _)| key != "name");
+    fields = workflow_steps::with_needs(fields, &["verify-release-source"]);
     fields.push((
         "outputs".to_owned(),
         Yaml::Map(vec![

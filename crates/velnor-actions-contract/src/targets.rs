@@ -42,8 +42,8 @@ impl ReleaseTarget {
     pub fn for_runner_label(label: &str) -> Option<Self> {
         match label {
             "ubuntu-22.04" | "ubuntu-24.04" | "ubuntu-26.04" => Some(Self::LinuxX86_64),
-            "macos-15" | "macos-15-arm64" => Some(Self::MacosArm64),
-            "macos-15-intel" => Some(Self::MacosX86_64),
+            "macos-14" | "macos-15" | "macos-15-arm64" | "macos-26" => Some(Self::MacosArm64),
+            "macos-15-intel" | "macos-26-intel" => Some(Self::MacosX86_64),
             _ => None,
         }
     }
@@ -69,17 +69,6 @@ pub fn is_supported_target(target: &str) -> bool {
 #[must_use]
 pub fn asset_filename(version: &str, target: &str) -> String {
     format!("velnor-actions-{version}-{target}")
-}
-
-/// Runner-label to release-target mapping.
-///
-/// Versioned `ubuntu-*` x64 labels resolve to Linux x86-64. `-arm` labels
-/// have no supported target yet and return `None` (consumer generation
-/// fails with `unsupported_target_for_runner` rather than embedding a
-/// wrong-architecture asset).
-#[must_use]
-pub fn target_for_runner_label(label: &str) -> Option<&'static str> {
-    ReleaseTarget::for_runner_label(label).map(ReleaseTarget::triple)
 }
 
 /// Canonical repository identity every release manifest MUST carry.

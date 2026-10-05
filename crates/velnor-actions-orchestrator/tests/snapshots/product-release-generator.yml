@@ -44,6 +44,53 @@ jobs:
       - name: Verify delegated release authority
         shell: bash
         run: "set -euo pipefail\n[[ \"$GITHUB_REPOSITORY\" == 'tailrocks/velnor-new' ]]\n[[ \"$GITHUB_REF\" == 'refs/heads/main' ]]\n[[ \"$GITHUB_WORKFLOW_REF\" == 'tailrocks/velnor-new/.github/workflows/product-release.yml@refs/heads/main' ]]\n[[ \"$GITHUB_EVENT_NAME\" == 'workflow_dispatch' ]]\n[[ \"$GITHUB_SHA\" == \"$VELNOR_SOURCE_SHA\" && \"$GITHUB_WORKFLOW_SHA\" == \"$VELNOR_WORKFLOW_AUTHORITY_SHA\" ]]\n[[ \"$GITHUB_RUN_ID\" == \"$VELNOR_CALLER_RUN_ID\" && \"$GITHUB_RUN_ATTEMPT\" == \"$VELNOR_CALLER_ATTEMPT\" ]]\n[[ \"$VELNOR_SOURCE_SHA\" =~ ^[0-9a-f]{40}$ && \"$VELNOR_WORKFLOW_AUTHORITY_SHA\" =~ ^[0-9a-f]{40}$ ]]\n[[ \"$VELNOR_CI_RUN_ID\" =~ ^[0-9]+$ && \"$VELNOR_CI_ATTEMPT\" =~ ^[0-9]+$ ]]\n[[ \"$VELNOR_RELEASE_ACTION\" == build || \"$VELNOR_RELEASE_ACTION\" == complete ]]"
+  verify-release-source:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    permissions:
+      actions: read
+      contents: read
+    needs:
+      - verify-release-caller
+    if: inputs.release_action == 'build'
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: "1"
+          persist-credentials: "false"
+          ref: ${{ inputs.source_sha }}
+      - name: Setup Mise
+        uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
+        with:
+          version: 2026.9.18
+          sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
+          install: "false"
+          env: "false"
+          cache: "false"
+          cache_save: "false"
+      - name: Install pinned release gate tools
+        shell: bash
+        run: mise --no-config --no-env --no-hooks install gh@2.102.0 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.30.1
+      - name: Run actionlint
+        shell: bash
+        run: mise --no-config --no-env --no-hooks exec actionlint@1.7.12 shellcheck@0.11.0 -- actionlint -color
+      - name: Run zizmor
+        shell: bash
+        run: mise --no-config --no-env --no-hooks exec zizmor@1.30.1 -- zizmor --no-online-audits --config .zizmor.yml .github/workflows
+      - name: Require successful CI at exact main SHA
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: "gh() { mise --no-config --no-env --no-hooks exec gh@2.102.0 -- gh \"$@\"; }\nexport -f gh\nset -eu\ntest \"$GITHUB_REPOSITORY\" = 'tailrocks/velnor-new'\ntest \"$GITHUB_REF\" = 'refs/heads/main'\ntest \"$GITHUB_EVENT_NAME\" = 'workflow_dispatch'\ntest \"$GITHUB_WORKFLOW_SHA\" = \"$GITHUB_SHA\"\ntest \"$(git rev-parse HEAD)\" = \"$GITHUB_SHA\"\nruns=\"$(gh api --paginate --slurp \"repos/tailrocks/velnor-new/actions/workflows/ci.yml/runs?head_sha=$GITHUB_SHA&branch=main&event=push&per_page=100\")\"\nrun=\"$(printf '%s\\n' \"$runs\" | jq -ce --arg sha \"$GITHUB_SHA\" --arg repo 'tailrocks/velnor-new' '[.[] | (.workflow_runs // [])[] | select(.path == \".github/workflows/ci.yml\" and .head_sha == $sha and .head_branch == \"main\" and .head_repository.full_name == $repo and .event == \"push\")] | sort_by([.run_number, .id]) | last // error(\"no exact-source main CI run\")')\"\ntest \"$(printf '%s\\n' \"$run\" | jq -r .status)\" = completed\ntest \"$(printf '%s\\n' \"$run\" | jq -r .conclusion)\" = success\nrun_id=\"$(printf '%s\\n' \"$run\" | jq -r .id)\"\nattempt=\"$(printf '%s\\n' \"$run\" | jq -r .run_attempt)\"\njobs=\"$(gh api --paginate --slurp \"repos/tailrocks/velnor-new/actions/runs/$run_id/attempts/$attempt/jobs?per_page=100\")\"\nprintf '%s\\n' \"$jobs\" | jq -e --arg sha \"$GITHUB_SHA\" '[.[] | (.jobs // [])[] | select(.name == \"Required\" and .head_sha == $sha and .head_branch == \"main\" and .status == \"completed\" and .conclusion == \"success\")] | length == 1' >/dev/null\ntest \"$(gh api repos/tailrocks/velnor-new/commits/main --jq .sha)\" = \"$GITHUB_SHA\""
+      - name: Check release freshness gate
+        shell: bash
+        run: bash scripts/check-freshness.sh
+      - name: Recheck default-branch source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: "gh() { mise --no-config --no-env --no-hooks exec gh@2.102.0 -- gh \"$@\"; }\nexport -f gh\nset -eu\ntest \"$GITHUB_REF\" = \"refs/heads/main\"\ntest \"$(git rev-parse HEAD)\" = \"$GITHUB_SHA\"\ntest \"$(gh api repos/tailrocks/velnor-new/commits/main --jq .sha)\" = \"$GITHUB_SHA\""
   build-linux:
     runs-on: ubuntu-26.04
     timeout-minutes: 120
@@ -55,6 +102,7 @@ jobs:
       artifact_digest: ${{ steps.upload.outputs.artifact-digest }}
     needs:
       - verify-release-caller
+      - verify-release-source
     if: inputs.release_action == 'build'
     env:
       VELNOR_RELEASE_TARGET: x86_64-unknown-linux-gnu
@@ -132,6 +180,7 @@ jobs:
       artifact_digest: ${{ steps.upload.outputs.artifact-digest }}
     needs:
       - verify-release-caller
+      - verify-release-source
     if: inputs.release_action == 'build'
     env:
       VELNOR_RELEASE_TARGET: aarch64-apple-darwin
@@ -209,6 +258,7 @@ jobs:
       artifact_digest: ${{ steps.upload.outputs.artifact-digest }}
     needs:
       - verify-release-caller
+      - verify-release-source
     if: inputs.release_action == 'build'
     env:
       VELNOR_RELEASE_TARGET: x86_64-apple-darwin
@@ -286,6 +336,7 @@ jobs:
       manifest_sha256: ${{ steps.manifest_digest.outputs.manifest_sha256 }}
     needs:
       - verify-release-caller
+      - verify-release-source
       - build-linux
       - build-macos
       - build-macos-intel

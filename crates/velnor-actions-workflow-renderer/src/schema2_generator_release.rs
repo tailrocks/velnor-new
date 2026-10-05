@@ -39,6 +39,7 @@ pub(super) struct GeneratorRelease {
 /// Typed role for one node in the generator release graph.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum JobRole {
+    SourceGate,
     Build(ReleaseTarget),
     CandidateManifest,
     Qualify(ReleaseTarget),
@@ -50,6 +51,7 @@ pub(super) enum JobRole {
 /// Resolve a job ID through the explicit asset/target inventory.
 pub(super) fn job_role(id: &str) -> Option<JobRole> {
     match id {
+        "verify-release-source" => return Some(JobRole::SourceGate),
         "candidate-manifest" => return Some(JobRole::CandidateManifest),
         "attest-manifest" => return Some(JobRole::AttestManifest),
         "publish-generator" => return Some(JobRole::Publish),
@@ -141,7 +143,7 @@ pub(super) fn generator_release(
     let macos_intel = runs_on_yaml(MACOS_INTEL_RUNS_ON)?;
     let mut actions = Vec::new();
     let source_step = source::qualification_step();
-    let mut jobs = Vec::new();
+    let mut jobs = vec![assets::source_gate_job(hosted.clone(), pins)?];
     jobs.extend(linux_jobs(
         hosted.clone(),
         pins,

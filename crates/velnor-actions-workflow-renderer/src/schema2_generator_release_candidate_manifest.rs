@@ -59,7 +59,12 @@ pub(super) fn job(
             &[&candidate_path],
         ),
     ]);
-    let needs = ["build-linux", "build-macos", "build-macos-intel"];
+    let needs = [
+        "verify-release-source",
+        "build-linux",
+        "build-macos",
+        "build-macos-intel",
+    ];
     let mut fields = workflow_steps::with_permissions(
         base("Create candidate release manifest", hosted, 20),
         workflow_steps::perm(&[("actions", "write"), ("contents", "read")]),
