@@ -135,17 +135,12 @@ MISE_TASK_ARTIFACTS   = $MISE_TASK_CACHE_DIR/task-artifacts/v2
 REPORT_DIR            = $RUNNER_TEMP/velnor/<run-key>/<matrix-key>
 ```
 
-Generated tasks use this isolated `CARGO_HOME`; the source archive MUST include only the listed registry and
-Git paths, never credentials or other files under Cargo home. Mise stores task artifacts under
-`$MISE_TASK_CACHE_DIR/task-artifacts/v2`; CI sets that environment variable before Mise starts and archives
-only that directory.
+Generated tasks use isolated `CARGO_HOME`; the source archive MUST include only the listed registry and Git paths,
+excluding credentials and other Cargo-home files. Mise stores task artifacts under `$MISE_TASK_CACHE_DIR/task-artifacts/v2`; CI sets that variable before Mise starts and archives that directory.
 
-`actions/cache/restore` and `/save` MAY archive `CARGO_SOURCE_PATHS`, qualified `MISE_TASK_ARTIFACTS`, and the
-exported MBX bundle. Hosted MBX action writes are gated to protected default-branch pushes; other hosted runs
-are read-only. Scale Set's local backend skips the action's GitHub transport and uses the separate one-directory
-bundle route. Every typed MBX consumer sets `MBX_SHARE_OUT_DIR=0`; hosted Linux also disables automatic MBX
-collection. Misses/import failures stay cold. Velnor MUST NOT reimplement MBX serialization/import;
-Cargo-profile jobs omit the action.
+`actions/cache/restore` and `/save` MAY archive `CARGO_SOURCE_PATHS`, qualified `MISE_TASK_ARTIFACTS`, and the exported MBX bundle. Hosted MBX writes are gated to protected default-branch pushes; other runs are read-only.
+Scale Set uses the separate one-directory bundle route; every typed MBX consumer sets `MBX_SHARE_OUT_DIR=0`, and hosted Linux also disables automatic MBX collection. Misses/import failures stay cold.
+Velnor MUST NOT reimplement MBX serialization/import; Cargo-profile jobs omit the action.
 
 Velnor MUST NOT configure Mise `task.cache.remote_url`, remote namespaces, remote tokens, or OIDC task-cache
 credentials in V1. There is no Velnor cache server. The selected task-result transport is an opaque GitHub
