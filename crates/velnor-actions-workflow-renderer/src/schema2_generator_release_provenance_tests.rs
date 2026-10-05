@@ -359,7 +359,7 @@ fn asset_record(name: &str, size: u64, digest: &str, url: Option<&str>) -> Strin
 
 fn release_json(draft: bool, immutable: bool, tag: &str, assets: &[String]) -> String {
     format!(
-        "{{\"tag_name\":\"{tag}\",\"target_commitish\":\"main\",\"draft\":{draft},\"prerelease\":false,\"immutable\":{immutable},\"assets\":[{}]}}",
+        "{{\"id\":741852963,\"tag_name\":\"{tag}\",\"target_commitish\":\"main\",\"draft\":{draft},\"prerelease\":false,\"immutable\":{immutable},\"assets\":[{}]}}",
         assets.join(",")
     )
 }

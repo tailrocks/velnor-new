@@ -52,21 +52,32 @@ def run_command(
     return result.stdout.strip()
 
 
-def mise(arguments: list[str], install: bool = False) -> str:
-    prefix = ["mise", "--no-config", "--no-env", "--no-hooks"]
+def mise(
+    arguments: list[str],
+    install: bool = False,
+    failure_reason: str | None = None,
+) -> str:
+    prefix = mise_prefix()
     if install:
         return run_command([*prefix, "install", f"gh@{GH_VERSION}"], install=True)
-    return run_command([*prefix, "exec", f"gh@{GH_VERSION}", "--", "gh", *arguments])
+    return run_command(
+        [*prefix, "exec", f"gh@{GH_VERSION}", "--", "gh", *arguments],
+        failure_reason=failure_reason,
+    )
 
 
-def gh_json(endpoint: str) -> dict[str, object]:
+def gh_json(endpoint: str, failure_reason: str | None = None) -> dict[str, object]:
     try:
-        value = json.loads(mise(["api", endpoint]))
+        value = json.loads(mise(["api", endpoint], failure_reason=failure_reason))
     except json.JSONDecodeError as error:
         fail(f"github_api_json_invalid:{error}")
     if not isinstance(value, dict):
         fail("github_api_object_missing")
     return value
+
+
+def mise_prefix() -> list[str]:
+    return ["mise", "--no-config", "--no-env", "--no-hooks"]
 
 
 def current_main() -> str:
@@ -108,10 +119,74 @@ def write_exclusive(path: Path, value: bytes) -> None:
 
 
 def release_json(directory: Path, tag: str, name: str) -> Path:
-    value = gh_json(f"repos/{REPOSITORY}/releases/tags/{tag}")
+    identifier = release_id(tag)
+    value = gh_json(f"repos/{REPOSITORY}/releases/{identifier}")
+    if value.get("id") != identifier or value.get("tag_name") != tag:
+        fail("github_release_api_identity_mismatch")
     path = directory / name
     write_exclusive(path, (json.dumps(value, separators=(",", ":")) + "\n").encode())
     return path
+
+
+def release_id(tag: str) -> int:
+    """Resolve a draft through the pinned GH client, which supports draft tags."""
+    try:
+        value = json.loads(
+            mise([
+                "release", "view", tag, "--repo", REPOSITORY,
+                "--json", "databaseId,tagName,isDraft",
+            ])
+        )
+    except json.JSONDecodeError as error:
+        fail(f"github_release_view_json_invalid:{error}")
+    if not isinstance(value, dict):
+        fail("github_release_view_invalid")
+    identifier = value.get("databaseId")
+    if (
+        type(identifier) is not int
+        or identifier <= 0
+        or value.get("tagName") != tag
+        or type(value.get("isDraft")) is not bool
+    ):
+        fail("github_release_view_identity_mismatch")
+    return identifier
+
+
+def verify_immutable_release_policy() -> None:
+    """Require an enabled immutable policy before creating or publishing a release.
+
+    GitHub requires repository Administration:read access for this check.
+    Missing access is a hard failure before the source tag or draft exists.
+    """
+    value = gh_json(
+        f"repos/{REPOSITORY}/immutable-releases",
+        failure_reason="immutable_release_policy_unavailable",
+    )
+    if value.get("enabled") is not True:
+        fail("immutable_release_policy_disabled")
+
+
+def create_source_tag(tag: str, commit: str) -> None:
+    """Create and verify a lightweight source tag before making a draft release."""
+    try:
+        value = json.loads(
+            mise([
+                "api", f"repos/{REPOSITORY}/git/refs", "--method", "POST",
+                "-f", f"ref=refs/tags/{tag}", "-f", f"sha={commit}",
+            ])
+        )
+    except json.JSONDecodeError as error:
+        fail(f"github_tag_create_json_invalid:{error}")
+    if not isinstance(value, dict) or value.get("ref") != f"refs/tags/{tag}":
+        fail("github_tag_create_reference_mismatch")
+    created = value.get("object")
+    if (
+        not isinstance(created, dict)
+        or created.get("type") != "commit"
+        or created.get("sha") != commit
+        or tag_commit(tag) != commit
+    ):
+        fail("github_tag_create_source_mismatch")
 
 
 def stage_assets(version: str, directory: Path) -> None:
@@ -190,6 +265,7 @@ def publish(version: str) -> None:
     verify_event(commit)
     mise([], install=True)
     verify_source(commit)
+    verify_immutable_release_policy()
     tag = f"generator-{commit}"
     runner_temp = Path(os.environ.get("RUNNER_TEMP", ""))
     if not runner_temp.is_absolute() or not runner_temp.is_dir():
@@ -199,6 +275,7 @@ def publish(version: str) -> None:
     ) as scratch:
         directory = Path(scratch)
         stage_assets(version, directory)
+        create_source_tag(tag, commit)
         mise([
             "release", "create", tag, "--repo", REPOSITORY,
             "--target", commit, "--title", tag, "--latest=false", "--draft",
@@ -220,6 +297,7 @@ def publish(version: str) -> None:
         manifest_command(
             "verify-draft", draft, directory, manifest, version, commit, tag, source_tag,
         )
+        verify_immutable_release_policy()
         if current_main() != commit:
             fail("source_commit_no_longer_current_main")
         mise(["release", "edit", tag, "--repo", REPOSITORY, "--draft=false"])

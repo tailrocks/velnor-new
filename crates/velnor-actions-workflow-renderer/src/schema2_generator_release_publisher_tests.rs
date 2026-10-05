@@ -39,13 +39,35 @@ if os.environ.get("GH_FAKE_MISE_EXECUTED") != "1":
 with open(os.environ["GH_FAKE_CALLS"], "a", encoding="utf-8") as log:
     log.write(json.dumps(args) + "\n")
 if args[0] == "api":
-    endpoint = args[-1]
+    endpoint_index = args.index("api") + 1
+    endpoint = args[endpoint_index]
     if endpoint == "repos/tailrocks/velnor-new/commits/main":
         result = {"sha": os.environ["GH_FAKE_MAIN_SHA"]}
+    elif endpoint == "repos/tailrocks/velnor-new/immutable-releases":
+        policy = os.environ["GH_FAKE_IMMUTABLE"]
+        if policy == "unavailable":
+            raise SystemExit(77)
+        result = {"enabled": policy == "enabled", "enforced_by_owner": False}
+    elif endpoint == "repos/tailrocks/velnor-new/git/refs" and args[args.index("--method") + 1] == "POST":
+        fields = [args[index + 1] for index, value in enumerate(args) if value == "-f"]
+        values = dict(value.split("=", 1) for value in fields)
+        if values.get("sha") != os.environ["GITHUB_SHA"]:
+            raise SystemExit(86)
+        reference = values.get("ref", "")
+        tag = reference.rsplit("/", 1)[-1]
+        Path(os.environ["GH_FAKE_TAG_PATH"]).write_text(tag, encoding="utf-8")
+        result = {"ref": reference, "object": {"type": "commit", "sha": values["sha"]}}
     elif "/git/ref/tags/" in endpoint:
         tag = endpoint.rsplit("/", 1)[1]
+        tag_path = Path(os.environ["GH_FAKE_TAG_PATH"])
+        if not tag_path.exists() or tag_path.read_text(encoding="utf-8") != tag:
+            raise SystemExit(95)
         result = {"ref": f"refs/tags/{tag}", "object": {"type": "commit", "sha": os.environ["GH_FAKE_TAG_SHA"]}}
     elif "/releases/tags/" in endpoint:
+        raise SystemExit(96)
+    elif endpoint == "repos/tailrocks/velnor-new/releases/741852963":
+        if not Path(os.environ["GH_FAKE_RELEASE_CREATED"]).exists():
+            raise SystemExit(96)
         index_file = Path(os.environ["GH_FAKE_RELEASE_INDEX"])
         index = int(index_file.read_text()) if index_file.exists() else 0
         index_file.write_text(str(index + 1))
@@ -77,11 +99,22 @@ elif args[0] == "release" and args[1] in ("create", "edit"):
             raise SystemExit(93)
         if "--draft" not in args or "--latest=false" not in args:
             raise SystemExit(92)
+        tag_path = Path(os.environ["GH_FAKE_TAG_PATH"])
+        if not tag_path.exists() or tag_path.read_text(encoding="utf-8") != args[2]:
+            raise SystemExit(87)
+        Path(os.environ["GH_FAKE_RELEASE_CREATED"]).write_text(args[2], encoding="utf-8")
     else:
         if args[args.index("--repo") + 1] != "tailrocks/velnor-new":
             raise SystemExit(90)
         if "--draft=false" not in args:
             raise SystemExit(91)
+        Path(os.environ["GH_FAKE_RELEASE_PUBLISHED"]).write_text("true", encoding="utf-8")
+elif args[0] == "release" and args[1] == "view":
+    tag = args[2]
+    created = Path(os.environ["GH_FAKE_RELEASE_CREATED"])
+    if not created.exists() or created.read_text(encoding="utf-8") != tag:
+        raise SystemExit(84)
+    print(json.dumps({"databaseId": 741852963, "tagName": tag, "isDraft": not Path(os.environ["GH_FAKE_RELEASE_PUBLISHED"]).exists()}))
 else:
     raise SystemExit(94)
 "##;
@@ -96,6 +129,9 @@ struct PublisherFixture {
     calls: PathBuf,
     mise_calls: PathBuf,
     release_index: PathBuf,
+    tag_path: PathBuf,
+    release_created: PathBuf,
+    release_published: PathBuf,
     manifest_copy: PathBuf,
     commit: String,
     tag: String,
@@ -115,6 +151,9 @@ impl PublisherFixture {
         let calls = scratch.path().join("gh-calls.jsonl");
         let mise_calls = scratch.path().join("mise-calls.jsonl");
         let release_index = scratch.path().join("release-index");
+        let tag_path = scratch.path().join("tag-ref");
+        let release_created = scratch.path().join("release-created");
+        let release_published = scratch.path().join("release-published");
         let manifest_copy = scratch.path().join("uploaded-manifest.json");
         let output = Command::new("git")
             .args(["init", "-b", "main"])
@@ -161,6 +200,9 @@ impl PublisherFixture {
             calls,
             mise_calls,
             release_index,
+            tag_path,
+            release_created,
+            release_published,
             manifest_copy,
             commit,
             tag,
@@ -173,6 +215,7 @@ impl PublisherFixture {
         responses: &[String],
         tag_commit: &str,
         event_commit: &str,
+        immutable_status: &str,
     ) -> Result<Output, Box<dyn Error>> {
         for (index, response) in responses.iter().enumerate() {
             fs::write(self.api.join(format!("release-{index}.json")), response)?;
@@ -200,6 +243,10 @@ impl PublisherFixture {
             .env("GH_FAKE_TAG_SHA", tag_commit)
             .env("GH_FAKE_API_DIR", &self.api)
             .env("GH_FAKE_RELEASE_INDEX", &self.release_index)
+            .env("GH_FAKE_TAG_PATH", &self.tag_path)
+            .env("GH_FAKE_RELEASE_CREATED", &self.release_created)
+            .env("GH_FAKE_RELEASE_PUBLISHED", &self.release_published)
+            .env("GH_FAKE_IMMUTABLE", immutable_status)
             .env("GH_FAKE_CALLS", &self.calls)
             .env("GH_FAKE_MISE_CALLS", &self.mise_calls)
             .env("GH_FAKE_MANIFEST_COPY", &self.manifest_copy)
@@ -296,7 +343,12 @@ fn publisher_uses_observed_urls_and_publishes_only_after_full_api_verification()
     let final_records = fixture.manifest_expected()?;
     let draft = release_json(true, false, &fixture.tag, &final_records);
     let published = release_json(false, true, &fixture.tag, &final_records);
-    let output = fixture.run(&[first, draft, published], &fixture.commit, &fixture.commit)?;
+    let output = fixture.run(
+        &[first, draft, published],
+        &fixture.commit,
+        &fixture.commit,
+        "enabled",
+    )?;
     assert_success(&output);
     let manifest = fs::read_to_string(&fixture.manifest_copy)?;
     for target in [LINUX_TARGET, MACOS_TARGET] {
@@ -311,6 +363,11 @@ fn publisher_uses_observed_urls_and_publishes_only_after_full_api_verification()
     let gh_calls = fs::read_to_string(&fixture.calls)?;
     assert!(gh_calls.contains("release"));
     assert!(gh_calls.contains("--draft=false"));
+    assert!(gh_calls.contains("immutable-releases"));
+    assert!(gh_calls.contains("releases/741852963"));
+    assert!(!gh_calls.contains("releases/tags/"));
+    assert!(fixture.tag_path.exists());
+    assert!(fixture.release_published.exists());
     Ok(())
 }
 
@@ -342,7 +399,7 @@ fn publisher_fails_closed_for_invalid_api_metadata_and_source() -> Result<(), Bo
             }
             "wrong-source" => {
                 tag_sha = "cd".repeat(20);
-                "manifest_validation_failed"
+                "github_tag_create_source_mismatch"
             }
             "wrong-event-source" => {
                 event_sha = "ef".repeat(20);
@@ -374,11 +431,36 @@ fn publisher_fails_closed_for_invalid_api_metadata_and_source() -> Result<(), Bo
             &[response.clone(), response.clone(), response],
             &tag_sha,
             &event_sha,
+            "enabled",
         )?;
         assert_failure(&output, reason);
         assert!(!fixture.manifest_copy.exists());
         let calls = fs::read_to_string(&fixture.calls).unwrap_or_default();
         assert!(!calls.contains("--draft=false"));
     }
+    Ok(())
+}
+
+#[test]
+fn publisher_refuses_mutable_release_policy_before_creating_source_tag()
+-> Result<(), Box<dyn Error>> {
+    let fixture = PublisherFixture::new("mutable-release-policy")?;
+    let output = fixture.run(&[], &fixture.commit, &fixture.commit, "disabled")?;
+    assert_failure(&output, "immutable_release_policy_disabled");
+    assert!(!fixture.tag_path.exists());
+    assert!(!fixture.release_created.exists());
+    assert!(!fixture.release_published.exists());
+    Ok(())
+}
+
+#[test]
+fn publisher_refuses_unverifiable_immutability_before_creating_source_tag()
+-> Result<(), Box<dyn Error>> {
+    let fixture = PublisherFixture::new("unverifiable-release-policy")?;
+    let output = fixture.run(&[], &fixture.commit, &fixture.commit, "unavailable")?;
+    assert_failure(&output, "immutable_release_policy_unavailable");
+    assert!(!fixture.tag_path.exists());
+    assert!(!fixture.release_created.exists());
+    assert!(!fixture.release_published.exists());
     Ok(())
 }
