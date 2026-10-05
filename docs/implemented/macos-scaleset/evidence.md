@@ -279,7 +279,7 @@ Tag `binary-19a43f57566c1179febb4a1c3967bfcde4f032aa` (published `2026-10-03T06:
 
 Scratch: `release-assets.log`. These assets do not include the later stage-stop commit.
 
-A new generator release cannot be cut from `macos-scaleset`. `docs/proposed/bootstrap-and-release-contract.md` §2.1 cuts a release only from a known-good default-branch commit, and ruleset `protect-tags` (`24397132`) forbids moving `v0.1.0`. Tag `v0.1.0` remains `c57c700459bbe1549fe7eedcb7d8689585c38986`. That commit has no release workflow; the tag was uploaded outside Actions. Current `origin/main` is `b9fdb1bc27b7aeeb71264cd2195328b4c5387627` and includes `generator-release.yml` from PR 16. The published tag and the ChainArgos pin are in the section below. `docs/implemented/release-gates.md` BOOT-4.7 says the protected release job is not implemented. The `19a43f5` runner and host release tags are not that pin. G7 stays `NOT_RUN`.
+A new generator release cannot be cut from `macos-scaleset`. `docs/proposed/bootstrap-and-release-contract.md` §2.1 cuts a release only from a known-good default-branch commit, and ruleset `protect-tags` (`24397132`) forbids moving `v0.1.0`. Tag `v0.1.0` remains `c57c700459bbe1549fe7eedcb7d8689585c38986`. That commit has no release workflow; the tag was uploaded outside Actions. At the 2026-10-03 evidence snapshot, `origin/main` was `b9fdb1bc27b7aeeb71264cd2195328b4c5387627` and included `generator-release.yml` from PR 16. The published tag and the ChainArgos pin are in the section below. `docs/implemented/release-gates.md` BOOT-4.7 says the protected release job is not implemented. The `19a43f5` runner and host release tags are not that pin. G7 stays `NOT_RUN`.
 
 ## Composite `_actions` while the runner was up
 
