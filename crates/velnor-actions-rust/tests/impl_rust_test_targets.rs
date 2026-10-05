@@ -1,7 +1,8 @@
 //! `test = false` target handling: no test commands for test-less crates.
+use velnor_actions_rust::tasks::cargo_payload_argv;
 use velnor_actions_rust::{
     CompileDriver, DeriveInputs, NextestProfile, PackageRecord, ProfileSource,
-    RustExecutionProfile, TargetRecord, TaskKind, TestRunner, derive_task_groups,
+    RustExecutionProfile, TargetRecord, TaskKind, TestRunner, derive_task_groups, propose_task,
 };
 
 /// Target entry for fixtures.
@@ -51,7 +52,6 @@ fn cargo_profile() -> RustExecutionProfile {
         nextest_profile: NextestProfile::Default,
         nextest_config: None,
         run_ignored: None,
-        no_tests: None,
     }
 }
 
@@ -66,7 +66,6 @@ fn nextest_profile() -> RustExecutionProfile {
         nextest_profile: NextestProfile::Ci,
         nextest_config: Some(".config/nextest.toml".to_owned()),
         run_ignored: None,
-        no_tests: None,
     }
 }
 
@@ -113,7 +112,36 @@ fn untestable_bin_omits_both_test_runners() {
             .find(|group| matches!(group.kind, TaskKind::Test | TaskKind::Nextest))
             .expect("one test group");
         assert!(test.target_flags.is_empty());
+        assert!(propose_task(test).expect("proposal").no_targets);
     }
+}
+
+#[test]
+fn nextest_empty_filtered_selection_stays_fatal_when_target_exists() {
+    let package = mixed_package();
+    let mut profile = nextest_profile();
+    profile.run_ignored = Some("only".to_owned());
+    let features = vec!["default".to_owned()];
+    let groups = derive_task_groups(&inputs(&package, &profile, &features)).expect("derivation");
+    let nextest = groups
+        .iter()
+        .find(|group| group.kind == TaskKind::Nextest)
+        .expect("nextest group");
+    assert!(
+        !nextest.no_test_targets,
+        "the lib target remains applicable"
+    );
+    assert!(!propose_task(nextest).expect("proposal").no_targets);
+    let payload = cargo_payload_argv(nextest).expect("payload");
+    let args: Vec<String> = payload
+        .iter()
+        .map(|arg| arg.to_string_lossy().into_owned())
+        .collect();
+    assert!(
+        args.windows(2)
+            .any(|pair| pair == ["--run-ignored", "only"])
+    );
+    assert!(args.windows(2).any(|pair| pair == ["--no-tests", "fail"]));
 }
 
 #[test]

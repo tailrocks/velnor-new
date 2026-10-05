@@ -89,8 +89,6 @@ pub struct TaskGroup {
     pub nextest_profile: NextestProfile,
     /// Whether nextest should run ignored tests.
     pub run_ignored: Option<String>,
-    /// Nextest behavior when no tests are found.
-    pub no_tests: Option<String>,
     /// Declared non-Rust task inputs (sorted, deduped).
     pub declared_inputs: Vec<String>,
     /// Build script may read undeclared inputs (conservative at derive).
@@ -155,7 +153,6 @@ struct GroupBase<'a> {
     runner: TestRunner,
     nextest_profile: NextestProfile,
     run_ignored: Option<String>,
-    no_tests: Option<String>,
     package: &'a PackageRecord,
 }
 
@@ -181,7 +178,6 @@ pub fn derive_task_groups(inputs: &DeriveInputs<'_>) -> Result<Vec<TaskGroup>, C
         runner: inputs.profile.test_runner,
         nextest_profile: inputs.profile.nextest_profile,
         run_ignored: inputs.profile.run_ignored.clone(),
-        no_tests: inputs.profile.no_tests.clone(),
         package: inputs.package,
     };
     let clippy_id = task_id(&base, TaskKind::Clippy)?;
@@ -256,7 +252,6 @@ pub fn derive_workspace_fmt(
         test_runner: profile.test_runner,
         nextest_profile: profile.nextest_profile,
         run_ignored: None,
-        no_tests: None,
         declared_inputs: Vec::new(),
         undeclared_reads: false,
         uses_network: false,
@@ -324,7 +319,6 @@ fn plain_group(
         test_runner: base.runner,
         nextest_profile: base.nextest_profile,
         run_ignored: None,
-        no_tests: None,
         declared_inputs: Vec::new(),
         undeclared_reads: base.package.has_build_script,
         uses_network: false,
@@ -357,7 +351,6 @@ fn test_group(
             (base.package.name.contains("conformance") || base.package.name.contains("visual"))
                 .then(|| "all".to_owned())
         });
-        group.no_tests.clone_from(&base.no_tests);
     }
     group.no_test_targets = !has_test_targets(base.package);
     group.depends_on = build_id.map(str::to_owned).into_iter().collect();

@@ -29,7 +29,6 @@ fn group(kind: TaskKind) -> TaskGroup {
         uses_clock: false,
         uses_random: false,
         run_ignored: None,
-        no_tests: None,
         nextest_profile: NextestProfile::Default,
     }
 }
@@ -381,17 +380,5 @@ fn nextest_payload_carries_run_ignored() -> Result<(), ContractError> {
         "default mode must not emit --run-ignored: {argv_default:?}"
     );
 
-    Ok(())
-}
-
-#[test]
-fn nextest_payload_honors_no_tests() -> Result<(), ContractError> {
-    let mut g = group(TaskKind::Nextest);
-    g.test_runner = TestRunner::CargoNextest;
-    assert!(text(&g)?.windows(2).any(|w| w == ["--no-tests", "fail"]));
-    g.no_tests = Some("warn".to_owned());
-    assert!(text(&g)?.windows(2).any(|w| w == ["--no-tests", "warn"]));
-    g.no_tests = Some("pass".to_owned());
-    assert!(text(&g)?.windows(2).any(|w| w == ["--no-tests", "pass"]));
     Ok(())
 }

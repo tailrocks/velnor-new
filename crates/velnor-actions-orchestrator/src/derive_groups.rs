@@ -318,7 +318,6 @@ mod tests {
             uses_clock: false,
             uses_random: false,
             run_ignored: None,
-            no_tests: None,
             nextest_profile: NextestProfile::Default,
         }
     }
@@ -334,7 +333,6 @@ mod tests {
             nextest_profile: NextestProfile::Default,
             nextest_config: None,
             run_ignored: None,
-            no_tests: None,
         }
     }
 
