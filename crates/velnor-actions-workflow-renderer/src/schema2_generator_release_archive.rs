@@ -19,19 +19,20 @@ pub(super) fn extraction_script(
     provenance: &str,
 ) -> String {
     format!(
-        "set -eu\npython3 scripts/generator-release/extract-candidate.py '{directory}/{archive}' '{directory}' '{binary}' '{sidecar}' '{provenance}'"
+        "set -eu\nbash scripts/with-owned-archive-guard.sh -- python3 scripts/generator-release/extract-candidate.py '{directory}/{archive}' '{directory}' '{binary}' '{sidecar}' '{provenance}'"
     )
 }
 
 #[cfg(test)]
 mod tests {
     use super::SIDECAR_AWK;
-    use super::{EXTRACTOR, sidecar_digest_command};
+    use super::{EXTRACTOR, extraction_script, sidecar_digest_command};
     use std::error::Error;
     use std::fs;
     use std::io::Write;
     use std::path::{Path, PathBuf};
     use std::process::{Command, Stdio};
+    use std::sync::OnceLock;
     use std::time::{SystemTime, UNIX_EPOCH};
 
     const BINARY: &str = "velnor-actions-0.1.1-x86_64-unknown-linux-gnu";
@@ -151,16 +152,84 @@ elif case == "archive-oversized":
         Err(format!("archive fixture creation failed for {case}").into())
     }
 
+    fn repository_root() -> Result<PathBuf, Box<dyn Error>> {
+        Ok(Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../..")
+            .canonicalize()?)
+    }
+
+    fn ensure_archive_guard() -> Result<(), Box<dyn Error>> {
+        static GUARD: OnceLock<Result<(), String>> = OnceLock::new();
+        let result = GUARD.get_or_init(|| {
+            let repository = repository_root().map_err(|error| error.to_string())?;
+            let status = Command::new("bash")
+                .arg(repository.join("scripts/with-owned-archive-guard.sh"))
+                .arg("--")
+                .arg("true")
+                .current_dir(repository)
+                .status()
+                .map_err(|error| format!("could not provision native archive guard: {error}"))?;
+            if status.success() {
+                Ok(())
+            } else {
+                Err(format!(
+                    "native archive guard provisioning failed: {status}"
+                ))
+            }
+        });
+        result
+            .as_ref()
+            .map(|_| ())
+            .map_err(|error| Box::new(std::io::Error::other(error.clone())) as Box<dyn Error>)
+    }
+
     fn run_extractor(directory: &Path, archive: &Path) -> Result<bool, Box<dyn Error>> {
-        Ok(Command::new("python3")
-            .args(["-c", EXTRACTOR])
+        ensure_archive_guard()?;
+        let repository = repository_root()?;
+        let status = Command::new("python3")
+            .arg(repository.join("scripts/generator-release/extract-candidate.py"))
             .arg(archive)
             .arg(directory)
             .arg(BINARY)
             .arg(CHECKSUM)
             .arg(PROVENANCE)
-            .status()?
-            .success())
+            .current_dir(repository)
+            .status()?;
+        Ok(status.success())
+    }
+
+    #[test]
+    fn extraction_preflights_the_same_immutable_bytes_before_tar_parsing() {
+        let preflight = EXTRACTOR
+            .find("preflight_archive(archive_bytes, \"candidate\")")
+            .expect("candidate bytes must reach native preflight");
+        let parser = EXTRACTOR
+            .find("tarfile.open(fileobj=io.BytesIO(archive_bytes), mode=\"r:\")")
+            .expect("tarfile must parse the preflighted byte snapshot");
+        assert!(
+            preflight < parser,
+            "native preflight must precede tar parsing"
+        );
+        assert!(EXTRACTOR.contains("archive_bytes = source.read(maximum_archive_bytes + 1)"));
+        assert!(!EXTRACTOR.contains("tarfile.open(archive,"));
+    }
+
+    #[test]
+    fn generated_extraction_provisions_the_trusted_guard_first() {
+        let script = extraction_script(
+            "linux-assets",
+            "generator-linux-assets.tar",
+            BINARY,
+            CHECKSUM,
+            PROVENANCE,
+        );
+        let provision = script
+            .find("bash scripts/with-owned-archive-guard.sh --")
+            .expect("generated consumer must provision the checkout-owned guard");
+        let parser = script
+            .find("python3 scripts/generator-release/extract-candidate.py")
+            .expect("generated consumer must invoke the retained extractor");
+        assert!(provision < parser);
     }
 
     #[test]

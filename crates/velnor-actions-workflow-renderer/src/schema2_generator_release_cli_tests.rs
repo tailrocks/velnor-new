@@ -46,12 +46,6 @@ pub(super) fn assert_pinned_publish_calls(
     } else {
         String::new()
     };
-    let expected_count = match case {
-        Failure::None | Failure::WrongPublishedDigest => 8,
-        Failure::UnauthorizedTag | Failure::ForbiddenTag | Failure::TransientTag => 1,
-        _ => 0,
-    };
-    assert_eq!(calls.lines().count(), expected_count, "{calls}");
     let prefix = format!("{PINNED_MISE_ARGUMENTS} gh ");
     for call in calls.lines() {
         assert!(
@@ -59,24 +53,51 @@ pub(super) fn assert_pinned_publish_calls(
             "unpinned Mise invocation: {call}"
         );
     }
-    let api_prefix = format!("{prefix}api ");
-    let api_count = calls
-        .lines()
-        .filter(|call| call.starts_with(&api_prefix))
-        .count();
-    let expected_api_count = match expected_count {
-        8 => 7,
-        1 => 1,
-        _ => 0,
-    };
-    assert_eq!(api_count, expected_api_count);
-    if expected_count == 8 {
+    let external_calls = calls.lines().count();
+    let has_local_input_failure = matches!(
+        case,
+        Failure::WrongSidecarName | Failure::MissingBinary | Failure::StaleManifest
+    );
+    let has_preflight_failure = matches!(
+        case,
+        Failure::UnauthorizedTag | Failure::ForbiddenTag | Failure::TransientTag
+    );
+    if has_local_input_failure {
+        assert_eq!(external_calls, 0, "{calls}");
+    } else if has_preflight_failure {
+        assert_eq!(external_calls, 1, "{calls}");
+    } else {
         assert!(
             calls
                 .lines()
                 .any(|call| call.starts_with(&format!("{prefix}release create "))),
-            "pinned release command missing: {calls}"
+            "pinned draft creation missing: {calls}"
         );
+        assert!(
+            calls
+                .lines()
+                .any(|call| call.starts_with(&format!("{prefix}release view "))),
+            "pinned release ID resolution missing: {calls}"
+        );
+        assert!(
+            calls
+                .lines()
+                .any(|call| call.starts_with(&format!("{prefix}release upload "))),
+            "pinned asset upload missing: {calls}"
+        );
+        let release_reads = calls
+            .lines()
+            .filter(|call| call.contains("api repos/tailrocks/velnor-new/releases/123"))
+            .count();
+        let expected_reads = match case {
+            Failure::WrongDraftReleaseId
+            | Failure::WrongDraftDigest
+            | Failure::WrongDraftUrl
+            | Failure::WrongDraftSize
+            | Failure::WrongDraftInventory => 1,
+            _ => 3,
+        };
+        assert_eq!(release_reads, expected_reads, "{calls}");
     }
     Ok(())
 }

@@ -151,10 +151,29 @@ pub(super) fn publish_job(
         "environment".to_owned(),
         Yaml::Map(vec![("name".to_owned(), Yaml::str("generator-release"))]),
     ));
+    fields.push((
+        "outputs".to_owned(),
+        Yaml::Map(vec![(
+            "acceptance_artifact_id".to_owned(),
+            Yaml::str("${{ steps.accepted.outputs.artifact-id }}"),
+        )]),
+    ));
+    let acceptance_paths = manifest::acceptance_artifact_paths();
+    let acceptance_path_refs = acceptance_paths.iter().copied().collect::<Vec<_>>();
+    let acceptance_name = manifest::acceptance_artifact_name();
     Ok(finish(
         "publish-generator",
         fields,
-        vec![workflow_steps::checkout_step(), call],
+        vec![
+            workflow_steps::checkout_step(),
+            call,
+            workflow_steps::upload_step_with_id(
+                "accepted",
+                "Upload verified immutable release acceptance",
+                &acceptance_name,
+                &acceptance_path_refs,
+            ),
+        ],
     ))
 }
 

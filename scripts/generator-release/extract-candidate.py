@@ -1,8 +1,13 @@
+import io
 import os
 import stat
 import sys
 import tarfile
 import tempfile
+
+scripts_directory = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, scripts_directory)
+from owned_archive_preflight import preflight_archive
 
 archive, destination, executable, checksum, provenance = sys.argv[1:]
 expected = [executable, checksum, provenance]
@@ -18,17 +23,40 @@ def reject(reason):
 
 
 try:
-    if not stat.S_ISREG(os.lstat(archive).st_mode):
-        reject("candidate archive is not a regular file")
     if not stat.S_ISDIR(os.lstat(destination).st_mode):
         reject("candidate output is not a directory")
     if any(os.path.lexists(os.path.join(destination, name)) for name in expected):
         reject("candidate output already exists")
-    archive_size = os.path.getsize(archive)
+    if not hasattr(os, "O_NOFOLLOW"):
+        reject("candidate archive requires no-follow file support")
+    descriptor = os.open(archive, os.O_RDONLY | os.O_NOFOLLOW)
+    try:
+        before = os.fstat(descriptor)
+        if not stat.S_ISREG(before.st_mode):
+            reject("candidate archive is not a regular file")
+        archive_size = before.st_size
+        if archive_size > maximum_archive_bytes or archive_size % 512:
+            reject("candidate archive exceeds size limit or is truncated")
+        with os.fdopen(descriptor, "rb", closefd=False) as source:
+            archive_bytes = source.read(maximum_archive_bytes + 1)
+        after = os.fstat(descriptor)
+        named = os.stat(archive, follow_symlinks=False)
+        identity_before = (before.st_dev, before.st_ino, before.st_size, before.st_mtime_ns,
+                           before.st_ctime_ns, before.st_mode, before.st_nlink)
+        identity_after = (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns,
+                          after.st_ctime_ns, after.st_mode, after.st_nlink)
+        if identity_before != identity_after or (before.st_dev, before.st_ino) != (
+                named.st_dev, named.st_ino):
+            reject("candidate archive changed while reading")
+    finally:
+        os.close(descriptor)
+    if len(archive_bytes) != archive_size:
+        reject("candidate archive changed while reading")
     if archive_size > maximum_archive_bytes or archive_size % 512:
         reject("candidate archive exceeds size limit or is truncated")
+    preflight_archive(archive_bytes, "candidate")
 
-    with tarfile.open(archive, "r:") as bundle:
+    with tarfile.open(fileobj=io.BytesIO(archive_bytes), mode="r:") as bundle:
         members = []
         while len(members) <= len(expected):
             member = bundle.next()
@@ -62,9 +90,7 @@ try:
         trailer_size = archive_size - offset
         if trailer_size < 1024 or trailer_size > maximum_trailer_bytes or trailer_size % 512:
             reject("candidate archive has an invalid end marker")
-        with open(archive, "rb") as raw:
-            raw.seek(offset)
-            trailer = raw.read(maximum_trailer_bytes + 1)
+        trailer = archive_bytes[offset:]
         if len(trailer) != trailer_size or any(trailer):
             reject("candidate archive has an invalid end marker")
 
