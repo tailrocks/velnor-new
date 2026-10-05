@@ -82,10 +82,36 @@ fn plan_validates_sorting_and_matrix() -> Result<(), ContractError> {
 
 #[test]
 fn qualification_plan_binds_source_run_and_forbids_coverage() -> Result<(), ContractError> {
+    let mut plan = sample_qualification_plan()?;
+    plan.validate()?;
+
+    plan.qualification
+        .as_mut()
+        .expect("qualification context")
+        .source_sha = "cd".repeat(20);
+    assert!(plan.validate().is_err());
+    plan.qualification
+        .as_mut()
+        .expect("qualification context")
+        .source_sha = plan.head.clone();
+    plan.qualification
+        .as_mut()
+        .expect("qualification context")
+        .run_attempt = 2;
+    assert!(plan.validate().is_err());
+
+    let mut reused = plan.clone();
+    reused.qualification.as_mut().expect("context").run_attempt = 1;
+    reused.obligations[0].decision = ObligationDecision::ReusedFromTaskCache;
+    assert!(reused.validate().is_err());
+    Ok(())
+}
+
+fn sample_qualification_plan() -> Result<Plan, ContractError> {
     let run_key = run_key_for_ci(3, 1);
     let entry = sample_entry(&run_key)?;
     let head = "ab".repeat(20);
-    let mut plan = Plan {
+    Ok(Plan {
         schema: 1,
         run_key,
         plan_id: plan_id_for_run(&run_key_for_ci(3, 1))?,
@@ -104,6 +130,10 @@ fn qualification_plan_binds_source_run_and_forbids_coverage() -> Result<(), Cont
             source_sha: head,
             run_id: 3,
             run_attempt: 1,
+            predecessor: Some(velnor_actions_contract::QualificationRunRef {
+                run_id: 2,
+                run_attempt: 1,
+            }),
         }),
         runner: PlanRunner {
             label: "ubuntu-26.04".to_owned(),
@@ -139,29 +169,7 @@ fn qualification_plan_binds_source_run_and_forbids_coverage() -> Result<(), Cont
         task_ids: vec![TASK.to_owned()],
         warnings: vec![],
         edges: vec![],
-    };
-    plan.validate()?;
-
-    plan.qualification
-        .as_mut()
-        .expect("qualification context")
-        .source_sha = "cd".repeat(20);
-    assert!(plan.validate().is_err());
-    plan.qualification
-        .as_mut()
-        .expect("qualification context")
-        .source_sha = plan.head.clone();
-    plan.qualification
-        .as_mut()
-        .expect("qualification context")
-        .run_attempt = 2;
-    assert!(plan.validate().is_err());
-
-    let mut reused = plan.clone();
-    reused.qualification.as_mut().expect("context").run_attempt = 1;
-    reused.obligations[0].decision = ObligationDecision::ReusedFromTaskCache;
-    assert!(reused.validate().is_err());
-    Ok(())
+    })
 }
 
 #[test]

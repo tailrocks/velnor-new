@@ -87,6 +87,36 @@ pub struct QualificationDispatch {
     pub run_id: u64,
     /// Actual `GITHUB_RUN_ATTEMPT`, retained for attempt binding.
     pub run_attempt: u32,
+    /// Run and attempt that produced the required predecessor receipt.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub predecessor: Option<QualificationRunRef>,
+}
+
+/// Lookup coordinates for a previous run; they grant no cache access.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct QualificationRunRef {
+    /// GitHub Actions run ID.
+    pub run_id: u64,
+    /// Exact run attempt whose receipt must be admitted.
+    pub run_attempt: u32,
+}
+
+impl QualificationRunRef {
+    /// Validate nonzero run and attempt coordinates.
+    /// # Errors
+    pub fn validate(&self) -> Result<(), ContractError> {
+        if self.run_id == 0 || self.run_attempt == 0 {
+            return Err(ContractError::identity(
+                "qualification.predecessor",
+                "invalid_run_reference",
+            ));
+        }
+        let run_key = crate::ids::run_key_for_ci(self.run_id, u64::from(self.run_attempt));
+        crate::ids::validate_run_key(&run_key)?;
+        crate::ids::plan_id_for_run(&run_key)?;
+        Ok(())
+    }
 }
 
 impl QualificationDispatch {
@@ -151,7 +181,23 @@ impl QualificationDispatch {
         validate_repository(&self.repository)?;
         validate_source_binding(self)?;
         validate_ref_binding(self)?;
-        validate_run_identity(self)
+        validate_run_identity(self)?;
+        validate_predecessor(self)
+    }
+}
+
+fn validate_predecessor(context: &QualificationDispatch) -> Result<(), ContractError> {
+    match (context.phase.predecessor(), context.predecessor) {
+        (None, None) => Ok(()),
+        (None, Some(_)) => Err(ContractError::identity(
+            "qualification.predecessor",
+            "unexpected_run_reference",
+        )),
+        (Some(_), None) => Err(ContractError::identity(
+            "qualification.predecessor",
+            "missing_run_reference",
+        )),
+        (Some(_), Some(reference)) => reference.validate(),
     }
 }
 
@@ -271,79 +317,5 @@ fn is_lower_hex_sha(value: &str) -> bool {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{QualificationDispatch, QualificationPhase};
-
-    const SHA: &str = "0123456789abcdef0123456789abcdef01234567";
-
-    fn dispatch() -> QualificationDispatch {
-        QualificationDispatch {
-            campaign: "pr18-validation".to_owned(),
-            phase: QualificationPhase::Cold,
-            repository: "owner/project".to_owned(),
-            default_branch: "main".to_owned(),
-            git_ref: "refs/heads/main".to_owned(),
-            ref_protected: true,
-            workflow_ref: "owner/project/.github/workflows/ci.yml@refs/heads/main".to_owned(),
-            workflow_sha: SHA.to_owned(),
-            source_sha: SHA.to_owned(),
-            run_id: 123,
-            run_attempt: 1,
-        }
-    }
-
-    #[test]
-    fn accepts_exact_protected_default_dispatch() {
-        assert!(
-            dispatch()
-                .validate_for("main", "owner/project", SHA)
-                .is_ok()
-        );
-    }
-
-    #[test]
-    fn rejects_each_unbound_dispatch_identity() {
-        let mut value = dispatch();
-        value.repository = "attacker/project".to_owned();
-        assert!(value.validate_for("main", "owner/project", SHA).is_err());
-
-        let mut value = dispatch();
-        value.git_ref = "refs/heads/feature".to_owned();
-        assert!(value.validate_for("main", "owner/project", SHA).is_err());
-
-        let mut value = dispatch();
-        value.ref_protected = false;
-        assert!(value.validate_for("main", "owner/project", SHA).is_err());
-
-        let mut value = dispatch();
-        value.workflow_ref = "owner/project/.github/workflows/other.yml@refs/heads/main".to_owned();
-        assert!(value.validate_for("main", "owner/project", SHA).is_err());
-
-        let mut value = dispatch();
-        value.workflow_sha = "1123456789abcdef0123456789abcdef01234567".to_owned();
-        assert!(value.validate_for("main", "owner/project", SHA).is_err());
-    }
-
-    #[test]
-    fn rejects_unscoped_campaign_and_run_identity() {
-        let mut value = dispatch();
-        value.campaign = "../shared".to_owned();
-        assert!(value.validate_shape().is_err());
-
-        let mut value = dispatch();
-        value.run_attempt = 0;
-        assert!(value.validate_shape().is_err());
-    }
-
-    #[test]
-    fn phase_policy_keeps_third_read_only_and_control_disabled() {
-        assert!(QualificationPhase::Cold.cache_enabled());
-        assert!(QualificationPhase::Cold.cache_write_allowed());
-        assert!(QualificationPhase::Warm.cache_write_allowed());
-        assert!(QualificationPhase::Third.cache_enabled());
-        assert!(!QualificationPhase::Third.cache_write_allowed());
-        assert!(QualificationPhase::UsefulDelta.cache_write_allowed());
-        assert!(!QualificationPhase::Control.cache_enabled());
-        assert!(!QualificationPhase::Control.cache_write_allowed());
-    }
-}
+#[path = "qualification_dispatch_tests.rs"]
+mod tests;
