@@ -1,5 +1,14 @@
 # Commit trailer evidence
 
-PR #68 was squash-merged as `ac3ab6a3d5ba3701c1300bbdd8114390093c5c29`. Its protected commit has the correct Codex co-author trailer, but its sign-off says `Signed-off-by: Alexey <alexey@zhokhov.com>` instead of the required `Signed-off-by: Alexey Zhokhov <alexey@zhokhov.com>`. The merge-message input omitted “Zhokhov”; GitHub preserved that input. The protected history is not rewritten, and this metadata deviation does not change the reviewed source or test result.
+The audit found three short-name sign-offs in the published PR #68 branch history and one in its protected squash commit. The three branch commits are not ancestors of the squash commit; only the squash commit is part of protected main history.
 
-Before creating a local commit or submitting a squash message, run `python3 scripts/validate-commit-trailers.py MESSAGE_FILE`; for a local commit, add `--check-local-identities`. The validator reads the exact terminal block from `docs/implemented/codex-agent-configuration.md` and rejects missing, malformed, reversed, duplicated, or nonterminal required trailers. After publication, inspect the actual commit message and author metadata from GitHub; the validator cannot repair a protected commit.
+| Commit | Recorded identity | Cause or evidence limit |
+| --- | --- | --- |
+| `62efc0985e7cfdfba1c2f7177b0cb6b0ae799b9a` | Author, committer, and sign-off use `Alexey <alexey@zhokhov.com>` | The commit records the abbreviated identity. It does not prove whether that came from local Git configuration or an explicitly supplied message. |
+| `790b859842a04c5efb41ec87e80ad5a0e479bdaa` | Author, committer, and sign-off use `Alexey <alexey@zhokhov.com>` | Same evidence limit. |
+| `fafaa87430bf9ffa0b454198a2b09aaff835d664` | Author, committer, and sign-off use `Alexey <alexey@zhokhov.com>` | Same evidence limit. |
+| `ac3ab6a3d5ba3701c1300bbdd8114390093c5c29` | Full-name author; sign-off uses `Alexey <alexey@zhokhov.com>` | The submitted squash message omitted “Zhokhov”; GitHub preserved that text. |
+
+The current repository-local Git identity is `Alexey Zhokhov <alexey@zhokhov.com>`. The validator checks local author and committer identities before owned commits and validates the exact terminal trailer block before commit or squash submission. The published branch and protected history are not rewritten. After publication, inspect the actual remote commit message and identity; validation cannot repair an already published commit.
+
+Run `python3 scripts/validate-commit-trailers.py MESSAGE_FILE` before submitting a commit or squash message. For a local commit, add `--check-local-identities`. The validator reads the exact terminal block from `docs/implemented/codex-agent-configuration.md` and rejects missing, malformed, reversed, duplicated, nonterminal, or body-decoy required trailers.
