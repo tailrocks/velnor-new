@@ -72,7 +72,12 @@ fn cross_checkout_determinism() -> TestResult {
     );
     let left_bytes = preview_bytes(left.path())?;
     let right_bytes = preview_bytes(right.path())?;
-    assert_eq!(left_bytes.keys().len(), 5, "five generated files");
+    assert_eq!(
+        left_bytes.keys().len(),
+        7,
+        "generated files include V2 support assets: {:?}",
+        left_bytes.keys().collect::<Vec<_>>()
+    );
     assert_eq!(
         left_bytes, right_bytes,
         "identical inputs at different absolute paths stage identical bytes"

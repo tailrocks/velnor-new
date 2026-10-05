@@ -45,7 +45,6 @@ fn plan_job_writes_request_before_plan() {
             false,
             false,
             false,
-            false,
             &[],
         )
         .expect("plan job");
@@ -70,7 +69,6 @@ fn qualification_resolver_is_scoped_between_request_and_plan() {
         true,
         false,
         false,
-        false,
         true,
         &[],
     )
@@ -93,7 +91,7 @@ fn qualification_resolver_is_scoped_between_request_and_plan() {
         job.steps[resolver].condition.as_deref(),
         Some("github.event_name == 'workflow_dispatch'")
     );
-    let tools = plan_tools(true, false, false, false, true);
+    let tools = plan_tools(true, false, false, true);
     assert!(
         tools.contains(&PinnedTool::Gh),
         "resolver installs pinned gh"
@@ -108,7 +106,6 @@ fn plan_job_checks_out_full_history_for_archaeology() {
         None,
         &catalog,
         true,
-        false,
         false,
         false,
         false,
@@ -136,7 +133,7 @@ fn plan_job_checks_out_full_history_for_archaeology() {
 #[test]
 fn plan_tools_follow_role_in_all_order() {
     assert_eq!(
-        plan_tools(true, false, false, false, false),
+        plan_tools(true, false, false, false),
         vec![
             PinnedTool::Rust,
             PinnedTool::Actionlint,
@@ -145,7 +142,7 @@ fn plan_tools_follow_role_in_all_order() {
         ]
     );
     assert_eq!(
-        plan_tools(false, false, false, true, false),
+        plan_tools(false, false, true, false),
         vec![
             PinnedTool::Actionlint,
             PinnedTool::Shellcheck,
@@ -155,10 +152,9 @@ fn plan_tools_follow_role_in_all_order() {
         "pure-tofu plans carry opentofu plus the validators, no Rust"
     );
     assert_eq!(
-        plan_tools(true, true, true, true, false),
+        plan_tools(true, true, true, false),
         vec![
             PinnedTool::Rust,
-            PinnedTool::MrBoxington,
             PinnedTool::Actionlint,
             PinnedTool::Shellcheck,
             PinnedTool::Zizmor,
@@ -168,9 +164,9 @@ fn plan_tools_follow_role_in_all_order() {
         "mixed plans carry the union"
     );
     for tools in [
-        plan_tools(true, false, false, false, false),
-        plan_tools(false, false, false, true, false),
-        plan_tools(true, true, true, true, false),
+        plan_tools(true, false, false, false),
+        plan_tools(false, false, true, false),
+        plan_tools(true, true, true, false),
     ] {
         let order: Vec<usize> = tools
             .iter()
@@ -190,13 +186,12 @@ fn plan_tools_follow_role_in_all_order() {
 #[test]
 fn plan_job_prepares_pinned_tools_before_generate_consumers() {
     let catalog = ToolCatalog::pinned();
-    for (use_mbx, use_nextest) in [(false, false), (false, true), (true, true)] {
+    for use_nextest in [false, true] {
         let job = plan_job(
             "ubuntu-26.04",
             None,
             &catalog,
             true,
-            use_mbx,
             use_nextest,
             false,
             false,
@@ -230,9 +225,6 @@ fn plan_job_prepares_pinned_tools_before_generate_consumers() {
             catalog.tool_spec(PinnedTool::Shellcheck),
             catalog.tool_spec(PinnedTool::Zizmor),
         ];
-        if use_mbx {
-            specs.insert(1, catalog.tool_spec(PinnedTool::MrBoxington));
-        }
         if use_nextest {
             specs.push(catalog.tool_spec(PinnedTool::Nextest));
         }
@@ -240,6 +232,10 @@ fn plan_job_prepares_pinned_tools_before_generate_consumers() {
             install_at.map(|at| &run[at + 1..]),
             Some(specs.as_slice()),
             "install specs: {run:?}"
+        );
+        assert!(
+            !run.iter().any(|spec| spec.starts_with("mr-boxington@")),
+            "the native action owns MBX installation: {run:?}"
         );
         let keys = [
             "MISE_NO_CONFIG",
@@ -292,7 +288,6 @@ fn pure_tofu_plan_drops_all_rust_setup() {
         "ubuntu-26.04",
         None,
         &catalog,
-        false,
         false,
         false,
         true,

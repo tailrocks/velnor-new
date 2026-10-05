@@ -157,7 +157,7 @@ fn sources_subset_accepted_under_owned_home_only() {
 #[test]
 fn retired_rust_cache_is_rejected_for_every_lane() {
     let sha = "c".repeat(40);
-    let [preflight, mbx] = mbx_tool_steps(
+    let [preflight, mbx, version_check] = mbx_tool_steps(
         &format!("jdx/mr-boxington-action@{sha}"),
         "1.19.0",
         "1.98.1",
@@ -183,7 +183,7 @@ fn retired_rust_cache_is_rejected_for_every_lane() {
         steps: vec![rust_cache.clone()],
     };
     let both = Job {
-        steps: vec![preflight, mbx, rust_cache],
+        steps: vec![preflight, mbx, version_check, rust_cache],
         ..cargo_only.clone()
     };
     assert!(check_no_legacy_rust_cache("cargo-only", &cargo_only).is_err());
