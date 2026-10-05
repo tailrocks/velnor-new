@@ -87,13 +87,19 @@ fn generated_workflow_scopes_actions_read_to_required() -> TestResult {
     );
 
     for (id, job) in &jobs {
-        let effective = job.permissions.as_ref().unwrap_or(&prep.workflow.ir.permissions);
+        let effective = job
+            .permissions
+            .as_ref()
+            .unwrap_or(&prep.workflow.ir.permissions);
         let expected = if id == "required" {
             PermissionLevel::Read
         } else {
             PermissionLevel::None
         };
-        assert_eq!(effective.actions, expected, "effective actions scope for {id}");
+        assert_eq!(
+            effective.actions, expected,
+            "effective actions scope for {id}"
+        );
     }
     assert_eq!(prep.workflow.ir.permissions.contents, PermissionLevel::Read);
     assert_eq!(prep.workflow.ir.permissions.actions, PermissionLevel::None);
@@ -134,7 +140,10 @@ fn generated_workflow_scopes_actions_read_to_required() -> TestResult {
     assert_eq!(required.get("actions").map(String::as_str), Some("read"));
     for (id, permissions) in &rendered_job_permissions {
         if id != "required" {
-            assert!(!permissions.contains_key("actions"), "actions scope on {id}");
+            assert!(
+                !permissions.contains_key("actions"),
+                "actions scope on {id}"
+            );
         }
     }
     Ok(())
