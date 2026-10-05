@@ -131,7 +131,7 @@ async fn stub_catches_late_request_before_finish_signal() -> Result<(), String> 
     tokio::time::sleep(Duration::from_millis(75)).await;
     assert!(!stopped.load(Ordering::SeqCst));
 
-    let mut connection = UnixStream::connect(path)
+    let mut connection = UnixStream::connect(&path)
         .await
         .map_err(|error| error.to_string())?;
     connection
