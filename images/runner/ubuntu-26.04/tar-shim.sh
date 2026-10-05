@@ -14,7 +14,7 @@ zstd=0
 program=""
 absolute=0
 posix=0
-legacy_cluster=0
+legacy_first_arg=0
 excludes=()
 positionals=()
 args=("$@")
@@ -24,7 +24,7 @@ i=0
 if [ "${#args[@]}" -gt 0 ]; then
   first="${args[0]}"
   if [[ "$first" != -* && "$first" =~ ^[A-Za-z]+$ ]]; then
-    legacy_cluster=1
+    legacy_first_arg=1
     args=("-${first}" "${args[@]:1}")
   fi
 fi
@@ -43,6 +43,11 @@ need() {
 
 while [ "$i" -lt "${#args[@]}" ]; do
   arg="${args[$i]}"
+  arg_legacy=0
+  if [ "$i" -eq 0 ] && [ "$legacy_first_arg" -eq 1 ]; then
+    arg_legacy=1
+    legacy_first_arg=0
+  fi
   case "$arg" in
     --absolute-names | -P)
       absolute=1
@@ -115,8 +120,7 @@ while [ "$i" -lt "${#args[@]}" ]; do
       ;;
     -[^-]*)
       cluster="${arg#-}"
-      cluster_legacy="$legacy_cluster"
-      legacy_cluster=0
+      cluster_legacy="$arg_legacy"
       k=0
       while [ "$k" -lt "${#cluster}" ]; do
         flag="${cluster:$k:1}"
@@ -136,15 +140,8 @@ while [ "$i" -lt "${#args[@]}" ]; do
             # In dashed GNU clusters, -f/-C consume the complete remainder.
             rest="${cluster:$((k + 1))}"
             attached=0
-            if [ -n "$rest" ]; then
-              if [ "$cluster_legacy" -eq 0 ]; then
-                attached=1
-              else
-                case "${rest:0:1}" in
-                  c | x | t | z | P | j | J | Z | v | h | m | o | k | O | a | f | C) ;;
-                  *) attached=1 ;;
-                esac
-              fi
+            if [ -n "$rest" ] && [ "$cluster_legacy" -eq 0 ]; then
+              attached=1
             fi
             if [ "$attached" -eq 1 ]; then
               value="$rest"

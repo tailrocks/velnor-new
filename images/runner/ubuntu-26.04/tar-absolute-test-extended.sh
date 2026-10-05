@@ -47,7 +47,7 @@ case_dash_positional() {
 }
 
 case_dash_attached_values() {
-  local root="$work/dash-attached" plain gnu_plain old gnu_old old_cluster gnu_old_cluster
+  local root="$work/dash-attached" plain gnu_plain old old_cluster gnu_old_cluster
   rm -rf -- "$root"
   mkdir -p "$root/cache" "$root/out"
   printf 'attached-ok\n' >"$root/cache/payload"
@@ -55,12 +55,16 @@ case_dash_attached_values() {
     cd "$root" || return 1
     bash "$shim" -cfarchive.tar -Ccache payload || return 1
     tar.gnu -cfgnu-attached.tar -Ccache payload || return 1
+    bash "$shim" c -fafter-c.tar -Ccache payload || return 1
+    tar.gnu c -fgnu-after-c.tar -Ccache payload || return 1
     bash "$shim" cfz oldstyle.tar -Ccache payload || return 1
     bash "$shim" cfCz oldstyle-cluster.tar cache payload || return 1
     tar.gnu cfCz gnu-oldstyle-cluster.tar cache payload || return 1
   ) || return 1
   [ -f "$root/archive.tar" ] || return 1
   [ -f "$root/gnu-attached.tar" ] || return 1
+  [ -f "$root/after-c.tar" ] || return 1
+  [ -f "$root/gnu-after-c.tar" ] || return 1
   [ -f "$root/oldstyle.tar" ] || return 1
   [ -f "$root/oldstyle-cluster.tar" ] || return 1
   [ -f "$root/gnu-oldstyle-cluster.tar" ] || return 1
@@ -70,10 +74,45 @@ case_dash_attached_values() {
   old_cluster="$(tar.gnu -tzf "$root/oldstyle-cluster.tar")"
   gnu_old_cluster="$(tar.gnu -tzf "$root/gnu-oldstyle-cluster.tar")"
   [ "$plain" = "$gnu_plain" ] && [ "$plain" = payload ] || return 1
+  [ "$(tar.gnu -tf "$root/after-c.tar")" = "$(tar.gnu -tf "$root/gnu-after-c.tar")" ] || return 1
+  [ "$(tar.gnu -tf "$root/after-c.tar")" = payload ] || return 1
   [ "$old" = payload ] || return 1
   [ "$old_cluster" = "$gnu_old_cluster" ] && [ "$old_cluster" = payload ] || return 1
   bash "$shim" -xf "$root/archive.tar" -C "$root/out" || return 1
-  cmp -s "$root/cache/payload" "$root/out/payload"
+  mkdir -p "$root/out-x" "$root/out-gnu-x"
+  bash "$shim" x -f"$root/archive.tar" -C"$root/out-x" || return 1
+  tar.gnu x -f"$root/archive.tar" -C"$root/out-gnu-x" || return 1
+  cmp -s "$root/cache/payload" "$root/out/payload" || return 1
+  cmp -s "$root/cache/payload" "$root/out-x/payload" || return 1
+  cmp -s "$root/out-x/payload" "$root/out-gnu-x/payload"
+}
+
+case_legacy_unknown_after_value_flags() {
+  local root="$work/legacy-unknown" shim_f_status=0 gnu_f_status=0
+  local shim_c_status=0 gnu_c_status=0
+  rm -rf -- "$root"
+  mkdir -p "$root/cache"
+  printf 'legacy-ok\n' >"$root/cache/payload"
+  (
+    cd "$root" || return 1
+    bash "$shim" cfq shim-f.tar -C cache payload >shim-f.out 2>&1
+  ) || shim_f_status=$?
+  (
+    cd "$root" || return 1
+    tar.gnu cfq gnu-f.tar -C cache payload >gnu-f.out 2>&1
+  ) || gnu_f_status=$?
+  (
+    cd "$root" || return 1
+    bash "$shim" cCfy cache shim-c.tar payload >shim-c.out 2>&1
+  ) || shim_c_status=$?
+  (
+    cd "$root" || return 1
+    tar.gnu cCfy cache gnu-c.tar payload >gnu-c.out 2>&1
+  ) || gnu_c_status=$?
+  [ "$shim_f_status" -ne 0 ] && [ "$gnu_f_status" -ne 0 ] || return 1
+  [ "$shim_c_status" -ne 0 ] && [ "$gnu_c_status" -ne 0 ] || return 1
+  [ ! -e "$root/q" ] && [ ! -e "$root/y" ] || return 1
+  [ ! -e "$root/shim-f.tar" ] && [ ! -e "$root/shim-c.tar" ]
 }
 
 # Fail if a compressed -P extract writes an uncompressed archive under TMPDIR.
@@ -145,6 +184,7 @@ run_case safe-hardlink-with-unsafe case_safe_hardlink
 run_case unsafe-hardlink-fails case_unsafe_hardlink
 run_case plain-extract case_plain
 run_case absolute-file case_absolute_file
+run_case legacy-unknown-after-value-flags case_legacy_unknown_after_value_flags
 
 # List twice, then the extract decompress fails. The producer becomes a
 # zombie while BusyBox is blocked on the fifo. That must fail, not hang.
