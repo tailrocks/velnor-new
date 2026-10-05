@@ -162,7 +162,7 @@ pub fn build_index_from_list(
     let canonical = root
         .canonicalize()
         .map_err(|err| IndexError::RootUnreadable(err.to_string()))?;
-    let mut cache_admission = CacheAdmission::new(&canonical);
+    let cache_admission = CacheAdmission::new(&canonical);
     let mut admitted = BTreeSet::new();
     for entry in apply_exclusions(files.iter().cloned().collect(), exclusions) {
         if !cache_admission.listed_path_is_reserved(&canonical, &entry)? {

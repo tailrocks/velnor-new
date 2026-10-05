@@ -184,7 +184,7 @@ fn large_cache_tree_is_excluded_without_hiding_siblings() -> TestResult {
     Ok(())
 }
 
-/// A changed ancestor invalidates its cached path resolution between entries.
+/// A changed ancestor is resolved again between listed entries.
 #[test]
 #[cfg(unix)]
 fn listed_path_rechecks_replaced_directory_ancestry() -> TestResult {
@@ -198,7 +198,7 @@ fn listed_path_rechecks_replaced_directory_ancestry() -> TestResult {
     fs::write(alias.join("a"), b"ordinary file")?;
     write_file(repo, ".velnor/cache-extra/payload.crate")?;
 
-    let mut admission = CacheAdmission::new(repo);
+    let admission = CacheAdmission::new(repo);
     assert!(!admission.listed_path_is_reserved(repo, "alias/a")?);
 
     fs::remove_dir_all(&alias)?;
