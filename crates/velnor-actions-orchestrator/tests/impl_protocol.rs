@@ -238,6 +238,69 @@ fn plan_outputs_encode_covered_tasks() -> TestResult {
     Ok(())
 }
 
+#[test]
+fn plan_outputs_bind_qualification_phase_and_cache_policy() -> TestResult {
+    let (repo, _) = plan_for_source_change()?;
+    let root = repo.path();
+    let head = git_line(&["rev-parse", "HEAD"], root)?;
+    let context = serde_json::json!({
+        "campaign": "protocol-test",
+        "phase": "third",
+        "repository": "owner/project",
+        "default_branch": "testmain",
+        "git_ref": "refs/heads/testmain",
+        "ref_protected": true,
+        "workflow_ref": "owner/project/.github/workflows/ci.yml@refs/heads/testmain",
+        "workflow_sha": head,
+        "source_sha": head,
+        "run_id": 7,
+        "run_attempt": 2,
+    });
+    let request = serde_json::json!({
+        "schema": 1,
+        "run_key": "r7-a2",
+        "base": null,
+        "head": head,
+        "event": "qualification",
+        "qualification": context,
+        "root": root.display().to_string(),
+        "repository": "owner/project",
+    });
+    let response = plan_internal(&request.to_string())?;
+    let outputs = plan_outputs(&response, PlanOutputMode::Static)?;
+    assert_eq!(outputs.qualification_campaign, "protocol-test");
+    assert_eq!(outputs.qualification_phase, "third");
+    assert!(outputs.qualification_cache_enabled);
+    assert!(!outputs.qualification_cache_write);
+    let step_names: Vec<&str> = outputs
+        .step_outputs()
+        .iter()
+        .map(|(name, _)| *name)
+        .collect();
+    assert_eq!(
+        step_names,
+        [
+            "matrix",
+            "plan_id",
+            "run_key",
+            "covered_tasks",
+            "qualification_campaign",
+            "qualification_phase",
+            "qualification_cache_enabled",
+            "qualification_cache_write",
+        ]
+    );
+    let promoted = outputs.promoted_job_outputs(PlanOutputMode::Static);
+    let expected_bytes = promoted
+        .iter()
+        .map(|(name, value)| {
+            (name.encode_utf16().count() + value.encode_utf16().count() + 2) * 2
+        })
+        .sum::<usize>();
+    assert_eq!(outputs.job_outputs_utf16_bytes, expected_bytes);
+    Ok(())
+}
+
 /// Producer/consumer agreement: assembled files feed the merge unchanged.
 #[test]
 fn merge_assembled_request_roundtrips_to_passed() -> TestResult {

@@ -14,7 +14,7 @@ use crate::{
 };
 use velnor_actions_contract::{
     Job, Permissions, RunsOn, Step, StepKind, Trigger, WorkflowIr,
-    workflow::{ir::DispatchInput, permissions::PermissionLevel},
+    workflow::{DispatchInput, permissions::PermissionLevel},
 };
 
 #[cfg(test)]
@@ -180,15 +180,21 @@ fn needs_channel_envs(jobs: &BTreeMap<String, Job>) -> Result<Vec<(String, Strin
     Ok(vec![conclusions.channel_env(), conclusions.expected_env()])
 }
 
-/// Render one typed dispatch input: fixed string type, required, default.
+/// Render one typed dispatch input.
 fn dispatch_input_to_yaml(input: &DispatchInput) -> Yaml {
     let mut fields = vec![
         (
             "type".to_owned(),
-            Yaml::str(DispatchInput::INPUT_TYPE.to_owned()),
+            Yaml::str(input.input_type.as_str().to_owned()),
         ),
         ("required".to_owned(), Yaml::Bool(input.required)),
     ];
+    if !input.choices.is_empty() {
+        fields.push((
+            "options".to_owned(),
+            Yaml::Seq(input.choices.iter().cloned().map(Yaml::str).collect()),
+        ));
+    }
     if let Some(default) = &input.default {
         fields.push(("default".to_owned(), Yaml::str(default.clone())));
     }

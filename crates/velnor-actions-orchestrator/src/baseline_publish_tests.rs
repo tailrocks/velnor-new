@@ -93,6 +93,7 @@ fn fixture_plan(head: &str, run_key: &str) -> Plan {
         base: Some("b".repeat(40)),
         head: head.to_owned(),
         event: WorkflowEvent::Push,
+        qualification: None,
         runner: PlanRunner {
             label: "ubuntu-26.04".to_owned(),
             selection: RunnerSelection::LatestDefault,

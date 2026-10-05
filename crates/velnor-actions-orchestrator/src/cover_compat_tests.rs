@@ -32,6 +32,7 @@ fn plan_with(label: &str, obligations: Vec<PlanObligation>) -> Plan {
         base: None,
         head: "head".to_owned(),
         event: WorkflowEvent::Push,
+        qualification: None,
         runner: PlanRunner {
             label: label.to_owned(),
             selection: RunnerSelection::LatestDefault,

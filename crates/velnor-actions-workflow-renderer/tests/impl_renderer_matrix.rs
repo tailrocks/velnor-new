@@ -111,6 +111,13 @@ fn strategy_shape_exact_and_marker_stripped() -> Result<(), RenderError> {
         "      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}",
         "    outputs:",
         "      matrix: ${{ steps.plan.outputs.matrix }}",
+        "      plan_id: ${{ steps.plan.outputs.plan_id }}",
+        "      run_key: ${{ steps.plan.outputs.run_key }}",
+        "      covered_tasks: ${{ steps.plan.outputs.covered_tasks }}",
+        "      qualification_campaign: ${{ steps.plan.outputs.qualification_campaign }}",
+        "      qualification_phase: ${{ steps.plan.outputs.qualification_phase }}",
+        "      qualification_cache_enabled: ${{ steps.plan.outputs.qualification_cache_enabled }}",
+        "      qualification_cache_write: ${{ steps.plan.outputs.qualification_cache_write }}",
         "VELNOR_PLAN_MATRIX_OUTPUT_MODE: dynamic_matrix",
         "        id: plan",
     ] {

@@ -5,9 +5,9 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use velnor_actions_contract::{
-    FINAL_JSON_FILENAME, FinalStatus, MATRIX_JSON_FILENAME, PLAN_JSON_FILENAME, WorkflowEvent,
-    canonical_json_bytes, canonical_json_str, matrix_json_bytes, plan_json_bytes, run_key_for_ci,
-    validate_run_key,
+    FINAL_JSON_FILENAME, FinalStatus, MATRIX_JSON_FILENAME, PLAN_JSON_FILENAME,
+    QualificationDispatch, WorkflowEvent, canonical_json_bytes, canonical_json_str,
+    matrix_json_bytes, plan_json_bytes, run_key_for_ci, validate_run_key,
 };
 
 use crate::OrchestratorError;
@@ -16,6 +16,7 @@ use crate::internal::{
     MERGE_OP, PLAN_OP, PlanResponse, SCHEMA, check_schema, internal, internal_contract,
 };
 use crate::plan_output_limits::{PlanOutputMode, check_plan_outputs};
+use crate::request_event::qualification_dispatch_for_parts;
 use crate::request_event::{request_refs, workflow_event_for};
 
 /// Plan-time request: `{schema, op, event, base, head, root}` (schema 1).
@@ -40,9 +41,12 @@ struct EventRequest {
     /// Omitted when unset (local runs fall back to the git origin).
     #[serde(skip_serializing_if = "Option::is_none")]
     repository: Option<String>,
+    /// Source-bound context for protected hosted qualification dispatches.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    qualification: Option<QualificationDispatch>,
 }
 
-/// Canonical `plan`/`matrix` outputs for `$GITHUB_OUTPUT`.
+/// Validated plan values emitted to `$GITHUB_OUTPUT` and promoted to the job.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlanOutputs {
     /// Canonical matrix JSON (single line).
@@ -53,6 +57,14 @@ pub struct PlanOutputs {
     pub run_key: String,
     /// Comma-wrapped covered task IDs (empty when none covered).
     pub covered_tasks: String,
+    /// Validated qualification namespace, empty outside Qualification.
+    pub qualification_campaign: String,
+    /// Validated qualification phase, empty outside Qualification.
+    pub qualification_phase: String,
+    /// Whether this run may restore isolated qualification caches.
+    pub qualification_cache_enabled: bool,
+    /// Whether this run may write isolated qualification cache successors.
+    pub qualification_cache_write: bool,
     /// Aggregate UTF-16 byte size of values promoted by this output mode.
     pub job_outputs_utf16_bytes: usize,
 }
@@ -143,6 +155,18 @@ pub fn write_request_parts(
     let payload: serde_json::Value =
         serde_json::from_str(payload_json).map_err(|_| internal("malformed_event_payload"))?;
     let event = workflow_event_for(event_name, &payload)?;
+    let qualification = qualification_dispatch_for_parts(
+        event_name,
+        &payload,
+        repository,
+        env::var("GITHUB_REF").ok().as_deref(),
+        env::var("GITHUB_REF_PROTECTED").ok().as_deref(),
+        env::var("GITHUB_WORKFLOW_REF").ok().as_deref(),
+        env::var("GITHUB_WORKFLOW_SHA").ok().as_deref(),
+        github_sha,
+        env::var("GITHUB_RUN_ID").ok().as_deref(),
+        env::var("GITHUB_RUN_ATTEMPT").ok().as_deref(),
+    )?;
     let (base, head) = request_refs(event, &payload, github_sha)?;
     let request = EventRequest {
         schema: SCHEMA,
@@ -154,6 +178,7 @@ pub fn write_request_parts(
         repository: repository
             .filter(|slug| !slug.is_empty())
             .map(str::to_owned),
+        qualification,
     };
     let bytes = canonical_json_bytes(&request).map_err(internal_contract)?;
     if let Some(parent) = path.parent() {
@@ -196,11 +221,20 @@ pub fn plan_outputs(
     let response: PlanResponse =
         serde_json::from_str(response_json).map_err(|_| internal("malformed_response"))?;
     check_schema(response.schema)?;
+    response.plan.validate().map_err(internal_contract)?;
+    let qualification = response.plan.qualification.as_ref();
     let mut outputs = PlanOutputs {
         matrix: canonical_json_str(&response.matrix).map_err(internal_contract)?,
         plan_id: response.plan.plan_id.clone(),
         run_key: response.plan.run_key.clone(),
         covered_tasks: crate::covered_tasks::CoveredTasks::for_plan(&response.plan).encode(),
+        qualification_campaign: qualification
+            .map_or_else(String::new, |value| value.campaign.clone()),
+        qualification_phase: qualification
+            .map_or_else(String::new, |value| value.phase.as_str().to_owned()),
+        qualification_cache_enabled: qualification.is_some_and(|value| value.phase.cache_enabled()),
+        qualification_cache_write: qualification
+            .is_some_and(|value| value.phase.cache_write_allowed()),
         job_outputs_utf16_bytes: 0,
     };
     outputs.job_outputs_utf16_bytes = check_plan_outputs(
@@ -209,30 +243,6 @@ pub fn plan_outputs(
         &outputs.promoted_job_outputs(mode),
     )?;
     Ok(outputs)
-}
-
-impl PlanOutputs {
-    /// Required named outputs written by the plan step, in stable order.
-    #[must_use]
-    pub fn step_outputs(&self) -> Vec<(&'static str, &str)> {
-        vec![
-            ("matrix", &self.matrix),
-            ("plan_id", &self.plan_id),
-            ("run_key", &self.run_key),
-            (crate::COVERED_TASKS_OUTPUT, &self.covered_tasks),
-        ]
-    }
-
-    /// Output records promoted to job outputs by this workflow path.
-    #[must_use]
-    pub fn promoted_job_outputs(&self, mode: PlanOutputMode) -> Vec<(&'static str, &str)> {
-        match mode {
-            PlanOutputMode::Static => {
-                vec![(crate::COVERED_TASKS_OUTPUT, &self.covered_tasks)]
-            }
-            PlanOutputMode::DynamicMatrix => self.step_outputs(),
-        }
-    }
 }
 
 /// Publish `plan.json` + `matrix.json` for the plan artifact.

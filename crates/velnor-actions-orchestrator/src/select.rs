@@ -59,6 +59,15 @@ pub(crate) fn classify_changed(
     discovery: &Discovery,
     warnings: &mut Vec<String>,
 ) -> Option<BTreeSet<String>> {
+    if event == WorkflowEvent::Qualification {
+        return Some(
+            discovery
+                .proposals
+                .iter()
+                .map(|task| task.identity.unit_id.clone())
+                .collect(),
+        );
+    }
     if discovery.skipped_non_utf8 {
         warnings.push(format!(
             "comparison_unavailable:{NON_UTF8_PATH}:all_changed"

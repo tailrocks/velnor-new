@@ -1,6 +1,7 @@
 //! Fail-closed limits for plan artifacts and job outputs.
 
 use crate::{OrchestratorError, internal::internal};
+use crate::internal_request::PlanOutputs;
 
 /// GitHub's maximum jobs created by one matrix strategy.
 pub(crate) const MATRIX_JOB_LIMIT: usize = 256;
@@ -14,10 +15,58 @@ pub const JOB_OUTPUTS_BUDGET_UTF16_BYTES: usize = 900_000;
 /// Which outputs the plan job promotes to downstream jobs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PlanOutputMode {
-    /// Static crate jobs consume only the coverage output.
+    /// Static crate jobs promote coverage and qualification policy outputs.
     Static,
-    /// A task job expands the plan matrix and also consumes plan identity.
+    /// A task job promotes every plan-step output for matrix consumers.
     DynamicMatrix,
+}
+
+impl PlanOutputs {
+    /// Required named outputs written by the plan step, in stable order.
+    #[must_use]
+    pub fn step_outputs(&self) -> Vec<(&'static str, &str)> {
+        vec![
+            ("matrix", &self.matrix),
+            ("plan_id", &self.plan_id),
+            ("run_key", &self.run_key),
+            (crate::COVERED_TASKS_OUTPUT, &self.covered_tasks),
+            (crate::QUALIFICATION_CAMPAIGN_OUTPUT, &self.qualification_campaign),
+            (crate::QUALIFICATION_PHASE_OUTPUT, &self.qualification_phase),
+            (
+                crate::QUALIFICATION_CACHE_ENABLED_OUTPUT,
+                bool_output(self.qualification_cache_enabled),
+            ),
+            (
+                crate::QUALIFICATION_CACHE_WRITE_OUTPUT,
+                bool_output(self.qualification_cache_write),
+            ),
+        ]
+    }
+
+    /// Output records actually promoted to job outputs by this workflow path.
+    #[must_use]
+    pub fn promoted_job_outputs(&self, mode: PlanOutputMode) -> Vec<(&'static str, &str)> {
+        match mode {
+            PlanOutputMode::Static => vec![
+                (crate::COVERED_TASKS_OUTPUT, &self.covered_tasks),
+                (crate::QUALIFICATION_CAMPAIGN_OUTPUT, &self.qualification_campaign),
+                (crate::QUALIFICATION_PHASE_OUTPUT, &self.qualification_phase),
+                (
+                    crate::QUALIFICATION_CACHE_ENABLED_OUTPUT,
+                    bool_output(self.qualification_cache_enabled),
+                ),
+                (
+                    crate::QUALIFICATION_CACHE_WRITE_OUTPUT,
+                    bool_output(self.qualification_cache_write),
+                ),
+            ],
+            PlanOutputMode::DynamicMatrix => self.step_outputs(),
+        }
+    }
+}
+
+fn bool_output(value: bool) -> &'static str {
+    if value { "true" } else { "false" }
 }
 
 /// Check expanded matrix cardinality and the aggregate promoted outputs.

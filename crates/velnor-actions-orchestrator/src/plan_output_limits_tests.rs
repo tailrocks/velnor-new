@@ -55,6 +55,10 @@ fn step_outputs_remain_complete_while_static_job_promotion_is_narrow() {
         plan_id: "plan-r1-a1".to_owned(),
         run_key: "r1-a1".to_owned(),
         covered_tasks: String::new(),
+        qualification_campaign: "release-1".to_owned(),
+        qualification_phase: "cold".to_owned(),
+        qualification_cache_enabled: true,
+        qualification_cache_write: true,
         job_outputs_utf16_bytes: 0,
     };
     let step_names: Vec<&str> = outputs
@@ -64,14 +68,34 @@ fn step_outputs_remain_complete_while_static_job_promotion_is_narrow() {
         .collect();
     assert_eq!(
         step_names,
-        ["matrix", "plan_id", "run_key", "covered_tasks"]
+        [
+            "matrix",
+            "plan_id",
+            "run_key",
+            "covered_tasks",
+            "qualification_campaign",
+            "qualification_phase",
+            "qualification_cache_enabled",
+            "qualification_cache_write",
+        ]
     );
+    assert_eq!(outputs.step_outputs()[6].1, "true");
+    assert_eq!(outputs.step_outputs()[7].1, "true");
     let static_job_names: Vec<&str> = outputs
         .promoted_job_outputs(PlanOutputMode::Static)
         .iter()
         .map(|(name, _)| *name)
         .collect();
-    assert_eq!(static_job_names, ["covered_tasks"]);
+    assert_eq!(
+        static_job_names,
+        [
+            "covered_tasks",
+            "qualification_campaign",
+            "qualification_phase",
+            "qualification_cache_enabled",
+            "qualification_cache_write",
+        ]
+    );
     let dynamic_job_names: Vec<&str> = outputs
         .promoted_job_outputs(PlanOutputMode::DynamicMatrix)
         .iter()
@@ -96,6 +120,9 @@ fn matrix_and_coverage_outputs_share_one_aggregate_budget() {
                 ("run_key", "r1-a1"),
                 ("covered_tasks", &covered),
                 ("qualification_campaign", "qualification-campaign-token"),
+                ("qualification_phase", "useful_delta"),
+                ("qualification_cache_enabled", "true"),
+                ("qualification_cache_write", "true"),
             ],
         )
         .is_err_and(|error| error.to_string().contains("job_outputs_budget_exceeded"))

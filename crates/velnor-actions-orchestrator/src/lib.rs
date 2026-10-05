@@ -142,6 +142,10 @@ pub use validators::{
 };
 pub use velnor_actions_contract::ExecutionMode;
 pub use velnor_actions_contract::{DYNAMIC_MATRIX_OUTPUT_MODE, PLAN_MATRIX_OUTPUT_MODE_ENV};
+pub use velnor_actions_contract::workflow::{
+    QUALIFICATION_CACHE_ENABLED_OUTPUT, QUALIFICATION_CACHE_WRITE_OUTPUT,
+    QUALIFICATION_CAMPAIGN_OUTPUT, QUALIFICATION_PHASE_OUTPUT,
+};
 pub use workflow::{CHECKOUT_USES, DEFAULT_RUNNER_LABEL, WorkflowPlan};
 
 /// Version marker for the orchestrator shell.
