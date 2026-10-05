@@ -701,6 +701,25 @@ def evidence_age_hours(entry):
     return ((NOW - moment).total_seconds() / 3600, stamp)
 
 
+def future_evidence(stamp):
+    """True when evidence is after now.
+
+    A date-only stamp is future when its UTC day is after today. A stamp
+    with a clock keeps a 0.1 hour skew grace.
+    """
+    text = stamp.strip() if isinstance(stamp, str) else ""
+    moment = parse_timestamp(text)
+    if moment is None:
+        return False
+    date_only = (
+        len(text) == 10 and text[4:5] == "-" and text[7:8] == "-"
+        and "T" not in text and ":" not in text
+    )
+    if date_only:
+        return moment.date() > NOW.date()
+    return (NOW - moment).total_seconds() / 3600 < -0.1
+
+
 def freshness_row(subject, entry, pinned, qualified, latest=None,
                   pin_for_latest=None):
     source = entry.get("source", "")
@@ -716,7 +735,7 @@ def freshness_row(subject, entry, pinned, qualified, latest=None,
         fail_row("upstream-freshness", subject,
                  f"missing or malformed check timestamp {stamp!r}")
         return
-    if age < -0.1:
+    if future_evidence(stamp):
         fail_row("upstream-freshness", subject,
                  f"check timestamp {stamp} is in the future")
         return
