@@ -20,7 +20,7 @@ Workflow to generate
     - actionlint (5 steps)
     - plan (14 steps)
     - publish-baseline (5 steps)
-    - required (10 steps)
+    - required (9 steps)
     - rust-parity-app (19 steps)
     - rust-parity-tool (18 steps)
     - 2 Rust crate jobs

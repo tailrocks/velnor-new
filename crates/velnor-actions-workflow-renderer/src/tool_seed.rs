@@ -59,7 +59,9 @@ fn copy_script(seed_root: &str, key_shell: &str) -> String {
 
 /// Insert the seed step immediately before the setup at `setup_index`.
 ///
-/// A second call leaves the existing seed step in place.
+/// A second call leaves the existing seed step in place. A job with no
+/// checkout before the setup stays without the local action. GitHub
+/// cannot load `./.github/actions/velnor-tool-seed` until checkout runs.
 ///
 /// # Errors
 ///
@@ -68,9 +70,22 @@ pub(crate) fn insert_before_setup(job: &mut Job, setup_index: usize) -> Result<u
     if setup_index > 0 && job.steps[setup_index - 1].name == TOOL_SEED_NAME {
         return Ok(setup_index);
     }
+    if !checkout_before(job, setup_index) {
+        return Ok(setup_index);
+    }
     let key = cache_key_at(job, setup_index)?;
     job.steps.insert(setup_index, seed_step(&key)?);
     Ok(setup_index + 1)
+}
+
+fn checkout_before(job: &Job, setup_index: usize) -> bool {
+    job.steps[..setup_index].iter().any(|step| {
+        step.name == "Checkout"
+            || matches!(
+                &step.kind,
+                StepKind::Action { uses, .. } if uses.starts_with("actions/checkout@")
+            )
+    })
 }
 
 fn seed_step(cache_key: &str) -> Result<Step, RenderError> {
@@ -298,5 +313,46 @@ mod tests {
         assert!(file.bytes.contains("unset "), "{}", file.bytes);
         assert!(!file.bytes.contains("rm "), "{}", file.bytes);
         std::fs::remove_dir_all(&root).ok();
+    }
+
+    fn job(steps: Vec<Step>) -> Job {
+        Job {
+            display_name: "Required".to_owned(),
+            runs_on: "ubuntu-26.04".to_owned(),
+            timeout_minutes: velnor_actions_contract::JobTimeout::PLAN,
+            needs: Vec::new(),
+            condition: None,
+            permissions: None,
+            environment: None,
+            steps,
+        }
+    }
+
+    fn setup(cache_key: &str) -> Step {
+        crate::steps::action_step(
+            "Setup Mise",
+            "jdx/mise-action@0123456789abcdef0123456789abcdef01234567",
+            BTreeMap::from([("cache_key".to_owned(), cache_key.to_owned())]),
+        )
+        .expect("setup")
+    }
+
+    #[test]
+    fn local_seed_requires_a_prior_checkout() {
+        let cache_key = key();
+        let mut bare = job(vec![setup(&cache_key)]);
+        let index = insert_before_setup(&mut bare, 0).expect("bare");
+        assert_eq!(index, 0);
+        assert!(bare.steps.iter().all(|step| step.name != TOOL_SEED_NAME));
+        let checkout = crate::steps::checkout_step(
+            "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+        )
+        .expect("checkout");
+        let mut checked = job(vec![checkout, setup(&cache_key)]);
+        let index = insert_before_setup(&mut checked, 1).expect("checked");
+        assert_eq!(index, 2);
+        assert_eq!(checked.steps[1].name, TOOL_SEED_NAME);
+        let again = insert_before_setup(&mut checked, 2).expect("again");
+        assert_eq!(again, 2);
     }
 }

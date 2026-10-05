@@ -16,7 +16,7 @@ Workflow to generate
     - actionlint (5 steps)
     - plan (11 steps)
     - publish-baseline (5 steps)
-    - required (10 steps)
+    - required (9 steps)
     - no matrix entries (no-work workflow)
   Parallel: single job; no matrix fan-out
   Critical path: none (no obligations)

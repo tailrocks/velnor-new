@@ -42,7 +42,7 @@ Workflow to generate
     - cargo-machete (5 steps)
     - plan (22 steps)
     - publish-baseline (7 steps)
-    - required (12 steps)
+    - required (11 steps)
     - rust-velnor-actions-actionlint (23 steps)
     - rust-velnor-actions-cli (21 steps)
     - rust-velnor-actions-contract (22 steps)

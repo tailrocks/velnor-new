@@ -18,7 +18,7 @@ Workflow to generate
     - actionlint (5 steps)
     - plan (13 steps)
     - publish-baseline (5 steps)
-    - required (10 steps)
+    - required (9 steps)
     - rust-a (14 steps)
     - rust-lib (14 steps)
     - 2 Rust crate jobs

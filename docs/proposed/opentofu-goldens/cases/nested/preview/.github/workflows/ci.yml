@@ -245,10 +245,6 @@ jobs:
       - actionlint
     if: always()
     steps:
-      - name: Restore Velnor tool seed
-        uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
-        with:
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-14ee3a9bbb90604c
       - name: Setup Mise
         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
