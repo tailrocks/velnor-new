@@ -36,13 +36,14 @@ Conflicting or unsupported values produce findings and recommendations.
 Generated Cargo commands set `RUSTUP_TOOLCHAIN` to Velnor's exact pinned Rust
 version; Rustup gives that environment override precedence over a directory's
 `rust-toolchain.toml`. The file remains useful for editor and non-Velnor use.
-These files are not task inputs by default: changing them refreshes inspection
-findings, but does not rerun crate checks when Velnor's actual tool pins and
-task inputs are unchanged.
+These files are not inputs to Velnor's generated Rust lanes by default:
+changing them refreshes inspection findings, but does not alter Rust checks
+when Velnor's actual tool pins and task inputs are unchanged. Explicit
+`workflow.tasks` declarations are the separate exception described below.
 
 ## 1.1. Install isolation everywhere; lock hygiene for local dev (F6, G2)
 
-Every generated install step (`Prepare pinned tools`) carries
+Every generator-owned Rust-lane install step (`Prepare pinned tools`) carries
 `--no-config` plus `MISE_NO_CONFIG=1`, so mise loads no repository
 config during install — none of the paths mise reads (`mise.toml`,
 `.mise.toml`, `.mise/config.toml`, `mise/config.toml`, `*.local.toml`
@@ -51,21 +52,21 @@ variants, `mise/conf.d/*.toml`, `.mise/conf.d/*.toml`,
 loaded, no `[plugins]` backend shadowing, no `bin/install` execution,
 no `postinstall`, no `[hooks]`, no `[tasks]`, and no env loading can
 fire: there is nothing to read them from. `generate` proves no
-executable surface because isolation leaves no surface to prove —
-there is no config gate to bypass when no config is loaded.
+executable surface in these lanes because isolation leaves no surface
+to prove — there is no config gate to bypass when no config is loaded.
 
 Download bytes in CI trust upstream TLS plus exact catalog pins:
 explicit `tool@exact` specs from Velnor's locked version policy are
-the sole version authority. The committed `mise.lock` is never
-consulted at install time — a lone lock is not enforced by mise
+the sole version authority. Generator-owned Rust-lane installs do not
+consult the committed `mise.lock` — a lone lock is not enforced by mise
 (tampering is ignored), and config-visible verification would re-arm
-the code-execution paths isolation exists to close. The lock audit is
-instead lockfile hygiene for local development: `generate` verifies
-the committed `mise.lock` is present, complete, and well-formed so a
-maintainer's local `mise install` (which does load repo config)
-verifies bytes it already trusts. Version drift, missing entries,
-and missing or malformed locks stay advisory — versions remain
-authoritative and the lock remains an optional input.
+the code-execution paths those lanes avoid. The lock audit remains
+advisory hygiene for local development. Explicit verification-task jobs
+load repository Mise configuration only after credential variables are
+removed. They run `mise install --locked` before the declared task, so
+the project lock defines their tool closure and must be maintained with
+each task's change coverage. These jobs remain unconditional and
+uncached; they do not change the Rust lane's install path.
 
 Repository-owned Mise execution uses explicit top-level `[[checks]]` declarations,
 independent of Rust task generation. Each declaration binds a task name,
@@ -76,6 +77,33 @@ The removed Rust custom-task option is rejected as an unknown field. See the
 [implemented named-check contract](../implemented/named-mise-checks.md) for the
 execution boundary, trust admission, and Required evidence rules.
 
+## 1.2. Isolated verification tasks
+
+Each `workflow.tasks` entry declares `id`, `kind = "verification"`, an exact
+`mise_task`, `runner`, and bounded `timeout_minutes`. IDs must be sorted,
+unique, and safe as job keys; the generated base ID is `task-{id}`. The only
+V1 runners are `linux-x64` (`ubuntu-26.04`) and `macos-arm64` (`macos-15`),
+with separate pinned Mise binary digests. Task jobs are unconditional on pull
+requests, pushes, and merge groups, have no dependencies of their own, and
+join the `Required` fan-in. In schema 2, Linux tasks follow `hosted`,
+`scale-set`, or `both` mode; `both` emits a hosted and a Scale Set job, and
+both IDs are required. macOS ARM64 tasks stay hosted in all modes because the
+current Scale Set is Linux/amd64; they remain required but do not qualify as
+paired execution. Missing, failed, skipped, or cancelled tasks fail that
+required check.
+
+Task jobs grant only `contents: read`; other workflow permission scopes are
+explicitly `none`. Checkout disables persisted credentials. The pinned Mise
+setup action does not install project tools, activate repository env, or use
+cache inputs. The job unsets the credential denylist before both
+`mise install --locked` and `mise run <mise_task>`. It creates no task cache,
+artifact, or downstream output. The verification kind is for platform and
+other non-Rust checks only. Keeping task scripts free of Rust compilation is
+an authoring and review invariant; V1 does not inspect or enforce task bodies.
+Rust compilation remains in the existing MBX-backed lane pending a separate
+reviewed capability.
+Protected release/signing is separate and is not provided by this kind.
+
 Checksums are TOFU (trust on first use): the first download that
 records a checksum trusts the bytes it received. Accepted residual,
 stated explicitly: if an upstream artifact mutates after the lock
@@ -85,8 +113,9 @@ hygiene audit nor CI installs detect it — CI installs the mutated
 bytes under the same exact pin. Out of scope for V1 (independent
 shasum channel, artifact transparency).
 
-Determinism follows per class: fixed steps from exact catalog pins,
-custom steps from the committed project configuration. See
+Determinism follows per class: fixed Rust-lane steps from exact catalog
+pins, and verification jobs from the sorted committed task declarations.
+See
 [task-execution §2](task-execution-contract.md) for the fixed vectors
 and [workflow §3](workflow-contract.md) for the prepare step.
 

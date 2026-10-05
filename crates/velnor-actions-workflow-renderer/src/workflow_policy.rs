@@ -2,7 +2,9 @@
 
 use velnor_actions_contract::{Concurrency, Trigger, WorkflowIr};
 
-use crate::{CONCURRENCY_CANCEL, CONCURRENCY_GROUP, EXPECTED_PR_TYPES, RenderError};
+use crate::{
+    CONCURRENCY_CANCEL, CONCURRENCY_GROUP, EXPECTED_PR_TYPES, RenderError, VerificationTaskPolicy,
+};
 
 /// Require the exact trigger shape: 4 PR types, one push branch, merge group.
 pub(crate) fn check_triggers(triggers: &Trigger) -> Result<(), RenderError> {
@@ -36,7 +38,11 @@ pub(crate) fn check_concurrency(concurrency: &Concurrency) -> Result<(), RenderE
 }
 
 /// Require every job to use the single context label.
-pub(crate) fn check_single_label(ir: &WorkflowIr, label: &str) -> Result<(), RenderError> {
+pub(crate) fn check_single_label(
+    ir: &WorkflowIr,
+    label: &str,
+    verification_tasks: &[VerificationTaskPolicy],
+) -> Result<(), RenderError> {
     for (id, job) in &ir.jobs {
         if let Some(runner) = &job.check_runner {
             if !id.starts_with("check-") || runner.label != job.runs_on {
@@ -44,11 +50,18 @@ pub(crate) fn check_single_label(ir: &WorkflowIr, label: &str) -> Result<(), Ren
                     "check_runner_mismatch:{id}"
                 )));
             }
-        } else if job.runs_on != label
-            && !velnor_actions_contract::RunsOn::parse(&job.runs_on)
-                .is_ok_and(|selector| selector.is_scale_set())
-        {
-            return Err(RenderError::InvalidWorkflow(format!("label_mismatch:{id}")));
+        } else {
+            let task_label = verification_tasks
+                .iter()
+                .find(|task| task.owns_job_id(id))
+                .map(|task| task.runner_label.as_str());
+            if job.runs_on != label
+                && task_label != Some(job.runs_on.as_str())
+                && !velnor_actions_contract::RunsOn::parse(&job.runs_on)
+                    .is_ok_and(|selector| selector.is_scale_set())
+            {
+                return Err(RenderError::InvalidWorkflow(format!("label_mismatch:{id}")));
+            }
         }
     }
     Ok(())

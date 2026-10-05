@@ -2,16 +2,17 @@
 
 use velnor_actions_contract::{GeneratorValidation, ValidatorKind, VelnorConfig, WorkflowPolicy};
 use velnor_actions_mise::ToolCatalog;
+use velnor_actions_workflow_renderer::VerificationTaskPolicy;
 use velnor_actions_workflow_renderer::render::{RenderContext, ValidatorCommand};
 use velnor_actions_workflow_renderer::steps::{
-    DENY_STEP_NAME, MACHETE_STEP_NAME, REQUEST_DIR_PREFIX,
+    DENY_STEP_NAME, MACHETE_STEP_NAME, REQUEST_DIR_PREFIX, STAGED_BINARY_PREFIX,
 };
 
 use crate::OrchestratorError;
 use crate::discover::Discovery;
 use crate::vectors::{ZIZMOR_STEP_NAME, candidate_spec, deny_argv, machete_argv, zizmor_argv};
 
-use super::{CHECKOUT_USES, REQUEST_DIR, STAGED_BINARY_PREFIX};
+use super::{CHECKOUT_USES, REQUEST_DIR};
 
 /// Renderer scalars: version, label, staged path, request dir, pins.
 ///
@@ -25,6 +26,7 @@ pub(super) fn render_context(
     catalog: &ToolCatalog,
     discovery: &Discovery,
     plan_needs_rust: bool,
+    verification_tasks: Vec<VerificationTaskPolicy>,
 ) -> Result<RenderContext, OrchestratorError> {
     debug_assert!(REQUEST_DIR.starts_with(REQUEST_DIR_PREFIX));
     let velnor = config.workflow.policy == WorkflowPolicy::VelnorRepositoryV1;
@@ -70,6 +72,7 @@ pub(super) fn render_context(
         validator_commands,
         candidate,
         preseed: false,
+        verification_tasks,
         plan_consumer_env: crate::matrix_step::task_step_env(
             catalog,
             &std::collections::BTreeMap::new(),

@@ -1,7 +1,7 @@
 //! Compiled pin resolution: Mise setup plus helper provenance.
 //!
 //! Resolves `[actions.overrides]` against the compiled approved-pair catalog,
-//! selects the installed Mise digest for each qualified runner target, and
+//! selects the installed Mise digest for each supported runner target, and
 //! builds digest-verified helper acquisition from release or lock provenance.
 //! Anything without provenance fails closed; no digest is ever invented.
 
@@ -10,7 +10,8 @@ use velnor_actions_actionlint::overrides::{
     ActionPinOverride as ApprovedOverride, ApprovedPinCatalog,
 };
 use velnor_actions_contract::{
-    GeneratorLock, ReleaseManifest, ReleaseTarget, Step, VelnorConfig, check_release_artifact,
+    GeneratorLock, ReleaseManifest, ReleaseTarget, Step, VelnorConfig, VerificationRunner,
+    check_release_artifact,
 };
 use velnor_actions_mise::MISE_VERSION;
 use velnor_actions_workflow_renderer::{
@@ -23,7 +24,9 @@ use crate::discover::Discovery;
 /// Override key selecting the Mise setup action pin.
 const MISE_ACTION_KEY: &str = "jdx/mise-action";
 
-use velnor_actions_workflow_renderer::setup::MISE_BINARY_SHA256_LINUX_X64;
+use velnor_actions_workflow_renderer::setup::{
+    MISE_BINARY_SHA256_LINUX_X64, MISE_BINARY_SHA256_MACOS_ARM64,
+};
 
 /// Resolve typed Mise setup pins: overrides plus the compiled catalog.
 ///
@@ -47,6 +50,22 @@ pub(crate) fn resolve_mise_setup(
         sha256: MISE_BINARY_SHA256_LINUX_X64.to_owned(),
     }
     .for_target(target)?)
+}
+
+/// Resolve cache-off Mise setup for an isolated verification runner.
+pub(crate) fn resolve_verification_mise_setup(
+    config: &VelnorConfig,
+    runner: VerificationRunner,
+) -> Result<MiseSetup, OrchestratorError> {
+    let sha256 = match runner {
+        VerificationRunner::LinuxX64 => MISE_BINARY_SHA256_LINUX_X64,
+        VerificationRunner::MacosArm64 => MISE_BINARY_SHA256_MACOS_ARM64,
+    };
+    Ok(MiseSetup {
+        uses: mise_action_uses(config)?,
+        version: MISE_VERSION.to_owned(),
+        sha256: sha256.to_owned(),
+    })
 }
 
 /// Resolve the Mise action ref: an approved override or the compiled default.

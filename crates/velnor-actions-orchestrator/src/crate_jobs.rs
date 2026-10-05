@@ -14,8 +14,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{
-    CrateJob, CrateObligation, Job, JobTimeout, ProposedTask, Stack, Step, WorkflowPolicy,
-    crate_display_name, matrix_id_for_task_group, matrix_key_for_id, tofu_display_name,
+    CrateJob, CrateObligation, Job, JobTimeout, ProposedTask, Stack, Step, VelnorConfig,
+    WorkflowPolicy, crate_display_name, matrix_id_for_task_group, matrix_key_for_id,
+    tofu_display_name,
 };
 use velnor_actions_mise::{PinnedTool, TaskCacheMode, ToolCatalog};
 use velnor_actions_rust::task_kind_rank;
@@ -41,6 +42,27 @@ pub(crate) struct CrateBuild {
     pub(crate) jobs: Vec<(String, Job)>,
     /// Render-driver selection per crate job ID.
     pub(crate) drivers: BTreeMap<String, RenderDriver>,
+}
+
+/// Build crate jobs with the repository's workflow and Rust-stack config.
+/// # Errors
+pub(crate) fn build_for_workflow(
+    config: &VelnorConfig,
+    label: &str,
+    discovery: &Discovery,
+    catalog: &ToolCatalog,
+    fetch_roots: &[String],
+    acquire: Option<&Step>,
+) -> Result<CrateBuild, OrchestratorError> {
+    build_crate_jobs(
+        label,
+        config.workflow.policy,
+        discovery,
+        catalog,
+        fetch_roots,
+        acquire,
+        config.workflow.max_parallel_jobs,
+    )
 }
 
 /// Build one ordered IR job per runnable crate from discovery proposals.

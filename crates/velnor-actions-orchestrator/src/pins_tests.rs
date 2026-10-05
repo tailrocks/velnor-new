@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use velnor_actions_contract::config::{ActionPinOverride, ActionsConfig};
 use velnor_actions_contract::{
     DiscoveryConfig, GeneratorValidation, ResourcesConfig, StacksConfig, TestShardingConfig,
-    WorkflowConfig, WorkflowPolicy,
+    VerificationRunner, WorkflowConfig, WorkflowPolicy,
 };
 
 /// Config carrying exactly the given action-pin overrides.
@@ -19,6 +19,7 @@ fn config_with(overrides: BTreeMap<String, ActionPinOverride>) -> VelnorConfig {
             generator_validation: GeneratorValidation::Bootstrap,
             max_parallel_jobs: 2,
             runner_label: None,
+            tasks: Vec::new(),
         },
         resources: ResourcesConfig {
             compiler_process_budget: 2,
@@ -241,4 +242,17 @@ fn setup_uses_extracted_binary_digest_for_each_platform() {
         assert_eq!(setup.sha256, expected);
         assert_ne!(setup.sha256, MISE_BINARY_SHA256_LINUX_X64);
     }
+#[test]
+fn verification_mise_setup_pins_each_runner_architecture() {
+    let config = config_with(BTreeMap::new());
+    let linux = resolve_verification_mise_setup(&config, VerificationRunner::LinuxX64)
+        .expect("Linux Mise pin");
+    let macos = resolve_verification_mise_setup(&config, VerificationRunner::MacosArm64)
+        .expect("Apple ARM64 Mise pin");
+
+    assert_eq!(linux.version, MISE_VERSION);
+    assert_eq!(linux.sha256, MISE_BINARY_SHA256_LINUX_X64);
+    assert_eq!(macos.version, MISE_VERSION);
+    assert_eq!(macos.sha256, MISE_BINARY_SHA256_MACOS_ARM64);
+    assert_ne!(linux.sha256, macos.sha256);
 }
