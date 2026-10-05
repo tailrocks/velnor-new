@@ -232,6 +232,22 @@ fn acquisition_template_selects_native_checksum_by_typed_target() {
         let argv = acquire_script_argv(&staged, "/opt/velnor/seed", target)
             .expect("supported typed target");
         assert!(argv[2].contains(expected), "{target:?}: {}", argv[2]);
+        assert!(
+            argv[2].contains("--proto '=https' --tlsv1.2"),
+            "{target:?}: {}",
+            argv[2]
+        );
+        assert!(
+            argv[2].contains("s=\"/opt/velnor/seed/generator/${d##*/}\""),
+            "{target:?}: {}",
+            argv[2]
+        );
+        assert!(argv[2].contains(&staged), "{target:?}: {}", argv[2]);
+        assert!(
+            argv[2].contains("cp \"$s\" \"$d\""),
+            "{target:?}: {}",
+            argv[2]
+        );
         if target != ReleaseTarget::LinuxX86_64 {
             assert!(!argv[2].contains("sha256sum"), "{target:?}: {}", argv[2]);
         }
