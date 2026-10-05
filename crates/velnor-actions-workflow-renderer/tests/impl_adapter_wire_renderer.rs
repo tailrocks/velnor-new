@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 
 use velnor_actions_contract::WorkflowPolicy;
 use velnor_actions_workflow_renderer::steps::{
-    TOOLS_CACHE_PATH, TOOLS_RESTORE_USES, TOOLS_SAVE_USES, cache_action_step,
+    tools_cache_key_for_tools, tools_restore_step, tools_save_step,
 };
 use velnor_actions_workflow_renderer::toolchain_env::{
     TOOLCHAIN_HOME_KEYS, check_toolchain_homes, with_toolchain_homes,
@@ -14,7 +14,9 @@ use velnor_actions_workflow_renderer::{
     lane_cargo_target_env, render_workflow_ir,
 };
 
-use super::impl_renderer_fixtures::{fixture_ctx, fixture_ir, job, mise_argv, scrubbed_shell_step};
+use super::impl_renderer_fixtures::{
+    MISE_SHA256, fixture_ctx, fixture_ir, job, mise_argv, scrubbed_shell_step,
+};
 
 #[test]
 fn toolchain_homes_merge_and_validate() {
@@ -81,22 +83,14 @@ fn lane_env_isolates_target_dir() {
 
 #[test]
 fn cache_steps_restore_before_save() -> Result<(), RenderError> {
-    let restore = cache_action_step(
-        true,
-        TOOLS_RESTORE_USES,
-        "tools",
-        "k",
-        &["rk".to_owned()],
-        &[TOOLS_CACHE_PATH.to_owned()],
+    let key = tools_cache_key_for_tools(
+        "x86_64-unknown-linux-gnu",
+        "2026.9.16",
+        MISE_SHA256,
+        &["rust@1.98.1".to_owned()],
     )?;
-    let save = cache_action_step(
-        false,
-        TOOLS_SAVE_USES,
-        "tools",
-        "k",
-        &[],
-        &[TOOLS_CACHE_PATH.to_owned()],
-    )?;
+    let restore = tools_restore_step(&key)?;
+    let save = tools_save_step(&key)?;
     assert_eq!(
         check_cache_step_order(&[restore.clone(), save.clone()]),
         Ok(())

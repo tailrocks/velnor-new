@@ -345,6 +345,10 @@ fn merge_group_classifies_like_pull_request() -> TestResult {
         "speculative merge content stays PR-scoped"
     );
     let push = plan_for("push")?;
-    assert_eq!(push.trust, velnor_actions_contract::Trust::Trusted);
+    assert_eq!(
+        push.trust,
+        velnor_actions_contract::Trust::Pr,
+        "push event without branch API facts stays untrusted"
+    );
     Ok(())
 }
