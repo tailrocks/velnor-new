@@ -144,8 +144,8 @@ fn private_environment() -> String {
         "export MISE_AUTO_INSTALL=false\n",
         "export MISE_EXEC_AUTO_INSTALL=false\n",
         "export MISE_TASK_RUN_AUTO_INSTALL=false\n",
-        "export MISE_AUTO_ENV=false",
-        "export MISE_NO_ENV=1",
+        "export MISE_AUTO_ENV=false\n",
+        "export MISE_NO_ENV=1\n",
     )
     .to_owned()
 }
@@ -173,6 +173,89 @@ fn config_chain_check(expected: &[&str]) -> String {
     format!(
         "expected_configs=\"$(printf '%s\\n' {expected_lines} | LC_ALL=C /usr/bin/sort)\"\nactual_configs=\"$({MISE_CONFIG_LIST_COMMAND} | \"$jq_path\" -r '.[].path' | LC_ALL=C /usr/bin/sort)\"\ntest \"$actual_configs\" = \"$expected_configs\""
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use std::process::Command;
+
+    use super::private_environment;
+
+    #[test]
+    fn generated_private_environment_assigns_exact_values() {
+        const VARIABLES: [&str; 18] = [
+            "HOME",
+            "XDG_CONFIG_HOME",
+            "XDG_DATA_HOME",
+            "XDG_CACHE_HOME",
+            "XDG_STATE_HOME",
+            "MISE_CONFIG_DIR",
+            "MISE_DATA_DIR",
+            "MISE_CACHE_DIR",
+            "MISE_STATE_DIR",
+            "CARGO_HOME",
+            "RUSTUP_HOME",
+            "MISE_GLOBAL_CONFIG_FILE",
+            "MISE_SYSTEM_CONFIG_FILE",
+            "MISE_AUTO_INSTALL",
+            "MISE_EXEC_AUTO_INSTALL",
+            "MISE_TASK_RUN_AUTO_INSTALL",
+            "MISE_AUTO_ENV",
+            "MISE_NO_ENV",
+        ];
+        const EXPECTED: [&str; 18] = [
+            "/task-root/home",
+            "/task-root/home/config",
+            "/task-root/home/data",
+            "/task-root/home/cache",
+            "/task-root/home/state",
+            "/task-root/config",
+            "/task-root/data",
+            "/task-root/cache",
+            "/task-root/state",
+            "/task-root/cargo",
+            "/task-root/rustup",
+            "/task-root/global.toml",
+            "/task-root/system.toml",
+            "false",
+            "false",
+            "false",
+            "false",
+            "1",
+        ];
+        let values = VARIABLES
+            .iter()
+            .map(|name| format!("\"${name}\""))
+            .collect::<Vec<_>>()
+            .join(" ");
+        let script = format!(
+            "set -euo pipefail\ntask_root=/task-root\n{}\nprintf '%s\\0' {values}\n",
+            private_environment()
+        );
+        let output = Command::new("/bin/bash")
+            .args(["--noprofile", "--norc", "-c"])
+            .arg(script)
+            .env_clear()
+            .env("PATH", "/usr/bin:/bin")
+            .output()
+            .expect("run isolated environment fixture");
+        assert!(
+            output.status.success(),
+            "shell fixture failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let actual = output
+            .stdout
+            .split(|byte| *byte == 0)
+            .filter(|value| !value.is_empty())
+            .map(|value| String::from_utf8(value.to_vec()).expect("UTF-8 env value"))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            actual,
+            EXPECTED.map(str::to_owned),
+            "every isolated tool and Mise setting has its exact value"
+        );
+    }
 }
 
 fn source_hash_check(path: &str, sha256: &str) -> String {
