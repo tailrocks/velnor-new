@@ -5,8 +5,8 @@ use velnor_actions_contract::{
     VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy, workflow::permissions::PermissionLevel,
 };
 use velnor_actions_workflow_renderer::{
-    ALINT_USES, CONCURRENCY_CANCEL, CONCURRENCY_GROUP, RenderContext, RenderError,
-    ValidatorCommand, checkout_step, merge_step, render_workflow_ir, shell_step,
+    CONCURRENCY_CANCEL, CONCURRENCY_GROUP, RenderContext, RenderError, ValidatorCommand,
+    checkout_step, merge_step, render_workflow_ir, shell_step,
 };
 
 use super::impl_renderer_fixtures::mise_argv;
@@ -312,57 +312,6 @@ fn zizmor_support_unsets_empty_tokens_after_pinned_install() -> Result<(), Rende
 }
 
 #[test]
-fn bad_lint_display_rejected_on_both_policies() -> Result<(), RenderError> {
-    let mut ir = fixture_ir()?;
-    if let Some(lint) = ir.jobs.get_mut(LINT_ID) {
-        lint.display_name = "Wrong".to_owned();
-    }
-    let err = render_workflow_ir(&ir, WorkflowPolicy::ConsumerV1, None, &fixture_ctx())
-        .err()
-        .ok_or_else(|| RenderError::InvalidWorkflow("consumer accepted".to_owned()))?;
-    assert!(err.to_string().contains("bad_lint_name"), "got {err}");
-    let support = velnor_support();
-    let err = render_workflow_ir(
-        &ir,
-        WorkflowPolicy::VelnorRepositoryV1,
-        Some(&support),
-        &fixture_ctx(),
-    )
-    .err()
-    .ok_or_else(|| RenderError::InvalidWorkflow("velnor accepted".to_owned()))?;
-    assert!(err.to_string().contains("bad_lint_name"), "got {err}");
-    Ok(())
-}
-
-#[test]
-fn velnor_policy_emits_full_sha_alint_pin() -> Result<(), RenderError> {
-    let mut ctx = fixture_ctx();
-    ctx.validator_commands = validator_commands();
-    let support =
-        WorkflowPolicy::VelnorRepositoryV1.support_workflow(GeneratorValidation::Bootstrap);
-    let text = render_workflow_ir(
-        &fixture_ir()?,
-        WorkflowPolicy::VelnorRepositoryV1,
-        Some(&support),
-        &ctx,
-    )?;
-    assert_eq!(
-        ALINT_USES,
-        "asamarts/alint@9f9d34ba0eae3888299b9e570f43338b0e7f2cdb"
-    );
-    assert!(text.contains("  alint:"), "alint job missing:\n{text}");
-    assert!(
-        text.contains("uses: asamarts/alint@9f9d34ba0eae3888299b9e570f43338b0e7f2cdb"),
-        "full-SHA pin missing:\n{text}"
-    );
-    assert!(
-        !text.contains("asamarts/alint@v"),
-        "tag ref emitted:\n{text}"
-    );
-    Ok(())
-}
-
-#[test]
 fn zizmor_preparation_keeps_job_env_and_exec_unsets_it() -> Result<(), RenderError> {
     let mut ctx = fixture_ctx();
     ctx.validator_commands = validator_commands();
@@ -399,3 +348,6 @@ fn zizmor_preparation_keeps_job_env_and_exec_unsets_it() -> Result<(), RenderErr
     );
     Ok(())
 }
+
+#[path = "impl_renderer_lint_policy.rs"]
+mod policy;

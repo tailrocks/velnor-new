@@ -105,20 +105,77 @@ fn payload_paths_and_restore_save_inputs_are_identical() {
     let save = payload.save_step().expect("save");
     let restore_with = action_inputs(&restore);
     let save_with = action_inputs(&save);
+    let StepKind::Action { uses, env, .. } = &restore.kind else {
+        panic!("tools restore wrapper is an action");
+    };
+    assert_eq!(uses, crate::cache_steps::TOOLS_RESTORE_USES);
+    assert!(env.is_empty());
+    assert_eq!(
+        crate::cache_steps::validate_tools_restore_call(&restore).expect("registered wrapper call"),
+        payload.key_expression()
+    );
+    velnor_actions_contract::workflow::step_identity::validate_step_sequence(
+        std::slice::from_ref(&restore),
+        "tools-cache-test",
+    )
+    .expect("fixed wrapper is the tools restore authority");
+    let mut wrong_wrapper = restore.clone();
+    let StepKind::Action { uses, .. } = &mut wrong_wrapper.kind else {
+        panic!("tools restore wrapper is an action");
+    };
+    *uses = "./.github/actions/unregistered-tools-restore".to_owned();
+    assert!(
+        velnor_actions_contract::workflow::step_identity::validate_step_sequence(
+            &[wrong_wrapper],
+            "tools-cache-test",
+        )
+        .is_err()
+    );
+    let mut wrong_key = restore.clone();
+    let StepKind::Action { with, .. } = &mut wrong_key.kind else {
+        panic!("tools restore wrapper is an action");
+    };
+    with.insert("key".to_owned(), "caller-key".to_owned());
+    assert!(crate::cache_steps::validate_tools_restore_call(&wrong_key).is_err());
+    let mut extra_input = restore.clone();
+    let StepKind::Action { with, .. } = &mut extra_input.kind else {
+        panic!("tools restore wrapper is an action");
+    };
+    with.insert("path".to_owned(), "caller-path".to_owned());
+    assert!(crate::cache_steps::validate_tools_restore_call(&extra_input).is_err());
+    let mut conditional = restore.clone();
+    conditional.condition = Some("always()".to_owned());
+    assert!(crate::cache_steps::validate_tools_restore_call(&conditional).is_err());
+    let mut untyped = restore.clone();
+    untyped.role = None;
+    assert!(crate::cache_steps::validate_tools_restore_call(&untyped).is_err());
     assert_eq!(
         restore.condition.as_deref(),
         Some(crate::cache_p08::TOOLS_CACHE_RESTORE_CONDITION)
     );
     let save_condition = crate::cache_p08::save_policy::condition();
     assert_eq!(save.condition.as_deref(), Some(save_condition.as_str()));
-    assert_eq!(restore_with.get("path"), save_with.get("path"));
+    assert_eq!(restore_with.len(), 1);
     assert_eq!(restore_with.get("key"), save_with.get("key"));
     assert_eq!(restore_with.get("key"), Some(&payload.key_expression()));
-    assert!(
-        restore_with
-            .get("restore-keys")
-            .is_none_or(String::is_empty)
+    assert_eq!(save_with.get("path"), Some(&payload.paths().join("\n")));
+    let restore_action = crate::cache_steps::tools_restore_action_file("0.1.0")
+        .expect("generated tools restore action");
+    let marker = crate::marker::marker_for_version("0.1.0").expect("generator marker");
+    assert!(restore_action.bytes.starts_with(&format!("{marker}\n")));
+    assert_eq!(
+        restore_action.path,
+        ".github/actions/velnor-tools-cache-restore/action.yml"
     );
+    assert!(restore_action.bytes.contains(&format!(
+        "uses: {}",
+        crate::cache_steps::TOOLS_RESTORE_ACTION_USES
+    )));
+    assert!(restore_action.bytes.contains("key: ${{ inputs.key }}"));
+    for path in payload.paths() {
+        assert!(restore_action.bytes.contains(path), "missing {path}");
+    }
+    assert!(restore_action.bytes.contains("restore-keys: \"\""));
 }
 
 #[test]
@@ -198,11 +255,16 @@ fn runtime_identity_is_required_and_changes_the_final_key() {
             .key_for_runtime_identity("A".repeat(64).as_str())
             .is_err()
     );
-    assert!(
-        payload
-            .key_expression()
-            .contains("steps.v2.outputs.identity")
+    assert_eq!(
+        payload.key_expression(),
+        crate::cache_p08::TOOLS_CACHE_KEY_EXPRESSION
     );
+    assert!(crate::cache_p08::is_v2_cache_key_expression(
+        crate::cache_p08::TOOLS_CACHE_KEY_EXPRESSION
+    ));
+    assert!(!crate::cache_p08::is_v2_cache_key_expression(
+        "mise-tools-v2-static-digest-${{steps.v2.outputs.identity}}"
+    ));
 }
 
 #[test]

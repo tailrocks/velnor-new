@@ -77,11 +77,10 @@ fn valid_seed(step: &Step) -> bool {
     crate::tool_seed::validate_action_call(step, uses, with, env).is_ok()
         && with
             .get("cache_key")
-            .is_some_and(|key| tool_cache_key_digest(key).is_some())
+            .is_some_and(|key| is_tools_cache_key(key))
 }
 
 fn valid_restore(step: &Step) -> bool {
-    let expected_paths = crate::cache_steps::TOOLS_CACHE_PATHS.join("\n");
     step.role == Some(StepRole::ToolsCacheRestore)
         && step.condition.as_deref() == Some(crate::cache_p08::TOOLS_CACHE_RESTORE_CONDITION)
         && matches!(
@@ -89,10 +88,8 @@ fn valid_restore(step: &Step) -> bool {
             StepKind::Action { uses, with, env }
                 if uses == crate::cache_steps::TOOLS_RESTORE_USES
                     && env.is_empty()
-                    && with.len() == 3
-                    && with.get("path").map(String::as_str) == Some(expected_paths.as_str())
-                    && with.get("restore-keys").is_some_and(String::is_empty)
-                    && with.get("key").is_some_and(|key| tool_cache_key_digest(key).is_some())
+                    && with.len() == 1
+                    && with.get("key").is_some_and(|key| is_tools_cache_key(key))
         )
 }
 
@@ -189,15 +186,8 @@ fn same_tools_step(hosted: &Step, local: &Step, hosted_runs_on: &str, local_runs
     }
 }
 
-fn tool_cache_key_digest(key: &str) -> Option<&str> {
-    let suffix = "${{steps.v2.outputs.identity}}";
-    let body = key.strip_prefix("mise-tools-v2-")?.strip_suffix(suffix)?;
-    let digest = body.strip_suffix('-')?;
-    (digest.len() == 64
-        && digest
-            .bytes()
-            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase()))
-    .then_some(digest)
+fn is_tools_cache_key(key: &str) -> bool {
+    crate::cache_p08::is_v2_cache_key_expression(key)
 }
 
 fn same_keyed_inputs(
@@ -208,12 +198,12 @@ fn same_keyed_inputs(
     let (Some(hosted_key), Some(local_key)) = (hosted.get(field), local.get(field)) else {
         return false;
     };
-    if tool_cache_key_digest(hosted_key).is_none() || tool_cache_key_digest(local_key).is_none() {
+    if !is_tools_cache_key(hosted_key) || !is_tools_cache_key(local_key) {
         return false;
     }
     let mut hosted_shape = hosted.clone();
     let mut local_shape = local.clone();
-    let normalized = "mise-tools-v2-{static-identity}-${{steps.v2.outputs.identity}}";
+    let normalized = crate::cache_p08::TOOLS_CACHE_KEY_EXPRESSION;
     hosted_shape.insert(field.to_owned(), normalized.to_owned());
     local_shape.insert(field.to_owned(), normalized.to_owned());
     hosted_shape == local_shape

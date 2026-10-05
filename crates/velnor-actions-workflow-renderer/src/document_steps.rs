@@ -97,6 +97,8 @@ fn action_step_to_yaml(
         crate::cache_p08::validate_runtime_identity_action(step, uses, lane, with, env)?;
     } else if uses == crate::tool_seed::TOOL_SEED_USES {
         crate::tool_seed::validate_action_call(step, uses, with, env)?;
+    } else if uses == crate::cache_steps::TOOLS_RESTORE_USES {
+        crate::cache_steps::validate_tools_restore_call(step)?;
     } else {
         steps::validate_uses(uses)?;
     }
@@ -129,6 +131,7 @@ fn action_step_to_yaml(
     }
     let uses_value = if runtime_identity
         || uses == crate::tool_seed::TOOL_SEED_USES
+        || uses == crate::cache_steps::TOOLS_RESTORE_USES
         || uses == crate::tofu_cache::TOFU_PROVIDER_ADMISSION_USES
     {
         Yaml::annotated(uses, "zizmor: ignore[self-repository]")

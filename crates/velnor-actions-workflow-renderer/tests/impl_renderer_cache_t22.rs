@@ -1,7 +1,7 @@
 //! T22 never-archive exclusions in rendered cache steps.
 use velnor_actions_workflow_renderer::RenderError;
 use velnor_actions_workflow_renderer::steps::{
-    NEVER_ARCHIVE_MARKERS, TOOLS_RESTORE_USES, cache_action_step, is_never_archive_path,
+    NEVER_ARCHIVE_MARKERS, TOOLS_RESTORE_ACTION_USES, cache_action_step, is_never_archive_path,
 };
 use velnor_actions_workflow_renderer::tofu_cache::{
     TOFU_PROVIDER_CACHE_BASE_EXPR, tofu_providers_path_ok,
@@ -31,7 +31,14 @@ fn never_archive_mirror_lists_state_plans_and_credentials() {
 #[test]
 fn sources_steps_reject_never_archive_paths() -> Result<(), RenderError> {
     let good = format!("{HOME}/registry/cache");
-    cache_action_step(true, TOOLS_RESTORE_USES, "sources", KEY, &[], &[good])?;
+    cache_action_step(
+        true,
+        TOOLS_RESTORE_ACTION_USES,
+        "sources",
+        KEY,
+        &[],
+        &[good],
+    )?;
     for bad in [
         format!("{HOME}/registry/cache/state.tfstate"),
         format!("{HOME}/registry/cache/state.tfstate.backup"),
@@ -42,7 +49,7 @@ fn sources_steps_reject_never_archive_paths() -> Result<(), RenderError> {
         assert!(
             cache_action_step(
                 true,
-                TOOLS_RESTORE_USES,
+                TOOLS_RESTORE_ACTION_USES,
                 "sources",
                 KEY,
                 &[],

@@ -32,9 +32,11 @@ use crate::{
 mod tools;
 
 pub use tools::{
-    TOOLS_CACHE_PATH, TOOLS_CACHE_PATHS, TOOLS_RESTORE_NAME, TOOLS_RESTORE_USES, TOOLS_SAVE_NAME,
-    TOOLS_SAVE_USES,
+    TOOLS_CACHE_PATH, TOOLS_CACHE_PATHS, TOOLS_RESTORE_ACTION_USES, TOOLS_RESTORE_NAME,
+    TOOLS_RESTORE_USES, TOOLS_SAVE_NAME, TOOLS_SAVE_USES,
 };
+
+pub(crate) use tools::restore_action_file as tools_restore_action_file;
 
 /// Build one V2 tools-cache action over the fixed path set.
 /// # Errors
@@ -44,6 +46,10 @@ pub(crate) fn tools_cache_step(
     condition: Option<String>,
 ) -> Result<Step, RenderError> {
     tools::cache_step(restore, key, condition)
+}
+
+pub(crate) fn validate_tools_restore_call(step: &Step) -> Result<&str, RenderError> {
+    tools::validate_restore_call(step)
 }
 
 /// Pinned mr-boxington action name (objects mode).
@@ -170,7 +176,8 @@ pub fn check_cache_step_order(steps: &[Step]) -> Result<(), RenderError> {
         let StepKind::Action { uses, .. } = &step.kind else {
             continue;
         };
-        if uses.starts_with("actions/cache/restore@")
+        if uses == TOOLS_RESTORE_USES
+            || uses.starts_with("actions/cache/restore@")
             || uses.starts_with(&format!("{MBX_ACTION_NAME}@"))
         {
             last_restore = Some(index);

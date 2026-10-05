@@ -118,11 +118,7 @@ impl ToolsCachePayload {
     /// Cache key expression bound to the renderer-owned runtime identity step.
     #[must_use]
     pub fn key_expression(&self) -> String {
-        format!(
-            "mise-tools-v2-{}-${{{{steps.{}.outputs.identity}}}}",
-            self.static_digest,
-            cache_p08::TOOLS_CACHE_IDENTITY_STEP_ID,
-        )
+        cache_p08::TOOLS_CACHE_KEY_EXPRESSION.to_owned()
     }
 
     /// Runtime image/root identity step; unknown identities take a cold path.
@@ -143,10 +139,7 @@ impl ToolsCachePayload {
                 "bad_tools_cache_runtime_identity".to_owned(),
             ));
         }
-        Ok(format!(
-            "mise-tools-v2-{}-{fingerprint}",
-            self.static_digest
-        ))
+        Ok(format!("mise-tools-v2-{fingerprint}"))
     }
 
     /// Read-only restore over the payload's key expression and exact paths.

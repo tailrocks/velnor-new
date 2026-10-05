@@ -2,7 +2,7 @@
 use std::collections::BTreeMap;
 use velnor_actions_contract::{GeneratorValidation, WorkflowPolicy};
 use velnor_actions_workflow_renderer::cache_p08::{ToolsCacheInputs, ToolsCachePayload};
-use velnor_actions_workflow_renderer::steps::{TOOLS_RESTORE_USES, cache_action_step};
+use velnor_actions_workflow_renderer::steps::{TOOLS_RESTORE_ACTION_USES, cache_action_step};
 use velnor_actions_workflow_renderer::{
     ALINT_BINARY_VERSION, PUBLISH_PLAN_NAME, RenderError, merge_step, render_workflow_ir,
     shell_step,
@@ -13,19 +13,29 @@ use super::impl_renderer_fixtures::*;
 #[test]
 fn cache_action_rejects_empty_paths_and_keys() {
     assert!(
-        cache_action_step(true, TOOLS_RESTORE_USES, "sources", "k", &[], &[])
+        cache_action_step(true, TOOLS_RESTORE_ACTION_USES, "sources", "k", &[], &[])
             .is_err_and(|err| format!("{err:?}").contains("empty_cache_paths")),
         "empty paths must fail"
     );
-    assert!(cache_action_step(true, TOOLS_RESTORE_USES, "sources", "", &[], &[]).is_err());
-    assert!(cache_action_step(true, TOOLS_RESTORE_USES, "sources", "has space", &[], &[]).is_err());
+    assert!(cache_action_step(true, TOOLS_RESTORE_ACTION_USES, "sources", "", &[], &[]).is_err());
+    assert!(
+        cache_action_step(
+            true,
+            TOOLS_RESTORE_ACTION_USES,
+            "sources",
+            "has space",
+            &[],
+            &[]
+        )
+        .is_err()
+    );
 }
 
 #[test]
 fn cache_layers_restore_independently() -> Result<(), RenderError> {
     let sources = cache_action_step(
         true,
-        TOOLS_RESTORE_USES,
+        TOOLS_RESTORE_ACTION_USES,
         "sources",
         "k",
         &[],
@@ -33,7 +43,7 @@ fn cache_layers_restore_independently() -> Result<(), RenderError> {
     )?;
     let task = cache_action_step(
         true,
-        TOOLS_RESTORE_USES,
+        TOOLS_RESTORE_ACTION_USES,
         "task",
         "k",
         &[],
@@ -60,12 +70,19 @@ fn cache_layers_restore_independently() -> Result<(), RenderError> {
             "${{ runner.temp }}/velnor/cargo/bin",
         ]
     );
-    for step in [&sources, &task, &tools] {
+    for step in [&sources, &task] {
         let velnor_actions_contract::StepKind::Action { uses, .. } = &step.kind else {
             panic!("restore must be an action step");
         };
         assert!(uses.starts_with("actions/cache/restore@"), "{uses}");
     }
+    let velnor_actions_contract::StepKind::Action { uses, .. } = &tools.kind else {
+        panic!("tools restore is an action step");
+    };
+    assert_eq!(
+        uses,
+        velnor_actions_workflow_renderer::steps::TOOLS_RESTORE_USES
+    );
     assert_eq!(identity.name, "V2 identity");
     assert_eq!(
         tools.condition.as_deref(),
@@ -74,7 +91,7 @@ fn cache_layers_restore_independently() -> Result<(), RenderError> {
     assert!(
         cache_action_step(
             true,
-            TOOLS_RESTORE_USES,
+            TOOLS_RESTORE_ACTION_USES,
             "sources",
             "k",
             &[],

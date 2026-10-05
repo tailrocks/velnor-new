@@ -21,15 +21,19 @@ ${{ runner.temp }}/velnor/cargo/bin
 sources, credentials, Cargo targets, MBX objects, or task artifacts. The source layer owns only Cargo's
 `registry/index`, `registry/cache`, and `git/db` paths.
 
-The generator derives the static key digest from exact Mise action and binary pins, selected tool versions,
-Rust toolchain and components, target, runner lane, and the owned paths. The workflow computes a runtime
-identity from the qualified hosted image and validated absolute cache roots. A missing, unsupported, or
-mismatched runtime identity disables both restore and save; pinned tool setup continues cold.
+The generator derives the static digest from exact Mise action and binary pins, selected tool versions, Rust
+toolchain and components, target, runner lane, and the owned paths. The workflow hashes that digest together
+with the qualified hosted image and validated absolute cache roots. The canonical key is
+`mise-tools-v2-${{steps.v2.outputs.identity}}`; the output already binds both static and runtime dimensions,
+so the static digest is not repeated in the key. A missing, unsupported, or mismatched runtime identity
+disables both restore and save; pinned tool setup continues cold.
 
 ## Workflow lifecycle
 
 Supported hosted jobs with a source checkout run the renderer-owned identity step and read-only restore before
-Setup Mise. The composite identity action requires the workflow checkout, so checkout-less jobs such as the
+Setup Mise. The workflow restore call uses one fixed generated composite that binds the pinned
+`actions/cache/restore` action to the exact paths above; its caller supplies only the canonical runtime key.
+The composite identity action requires the workflow checkout, so checkout-less jobs such as the
 `required` report fan-in retain pinned Setup Mise and tool installation but take the cold path without a V2
 restore or save. Mise's built-in cache is disabled so only the V2 archive owns these paths. Save uses the same
 key and path set and runs only after success on a protected default-branch push when runtime identity passed.
