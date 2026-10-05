@@ -10,7 +10,7 @@ use velnor_actions_contract::{
     canonical_json_str, validate_digest,
 };
 use velnor_actions_orchestrator::{
-    baseline_artifact_numeric_id, merge_internal, plan_internal, plan_outputs,
+    PlanOutputMode, baseline_artifact_numeric_id, merge_internal, plan_internal, plan_outputs,
 };
 
 use crate::impl_common::{
@@ -317,14 +317,12 @@ fn orch_core_plan_matrix_outputs_byte_identical() -> TestResult {
     let (repo, head) = committed_repo()?;
     let request = push_request(repo.path(), &head);
     let response = plan_internal(&request.to_string())?;
-    let outputs = plan_outputs(&response)?;
+    let outputs = plan_outputs(&response, PlanOutputMode::Static)?;
     let value: serde_json::Value = serde_json::from_str(&response)?;
     let plan: Plan = serde_json::from_value(value["plan"].clone())?;
     assert_eq!(value["matrix"], value["plan"]["matrix"]);
     assert_eq!(outputs.matrix, canonical_json_str(&plan.matrix)?);
-    assert_eq!(outputs.plan, canonical_json_str(&plan)?);
     assert!(!outputs.matrix.contains('\n'), "single-line output");
-    assert!(!outputs.plan.contains('\n'), "single-line output");
     Ok(())
 }
 

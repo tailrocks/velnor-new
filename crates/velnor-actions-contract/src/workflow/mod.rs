@@ -38,8 +38,9 @@ pub use needs::{
 };
 pub use permissions::{PermissionLevel, Permissions};
 pub use plan::{
-    MatrixEntry, ObligationDecision, Plan, PlanGenerator, PlanMatrix, PlanObligation, PlanPackage,
-    PlanRunner, WorkflowEvent, validate_matrix_run,
+    DYNAMIC_MATRIX_OUTPUT_MODE, MatrixEntry, ObligationDecision, PLAN_MATRIX_OUTPUT_MODE_ENV, Plan,
+    PlanGenerator, PlanMatrix, PlanObligation, PlanPackage, PlanRunner, WorkflowEvent,
+    validate_matrix_run,
 };
 pub use qualification::{
     FinalCounts, FinalReport, FinalStatus, JobConclusion, RequiredJobResult,
