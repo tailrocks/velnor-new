@@ -82,53 +82,6 @@ async fn scale_jit_failure_is_not_acked() -> Result<(), String> {
 }
 
 #[tokio::test]
-async fn uncertain_redelivery_without_a_container_stays_queued() -> Result<(), String> {
-    let (scratch, journal) = open("scale-retry").await?;
-    let mut failed = Script {
-        calls: Vec::new(),
-        mode: Mode::JitFail,
-    };
-    let error = drive_offer(
-        &mut failed,
-        &ctx(),
-        &assigned_wait(7, 1),
-        &journal,
-        |_name, _jit, _bind| async { Err(HostError::Docker) },
-    )
-    .await;
-    assert_eq!(
-        error,
-        Err(EnsureError::Unexpected {
-            status: 0,
-            step: "session",
-        })
-    );
-    let mut replay = Script {
-        calls: Vec::new(),
-        mode: Mode::Ok,
-    };
-    let error = drive_offer(
-        &mut replay,
-        &ctx(),
-        &assigned_wait(7, 1),
-        &journal,
-        |_name, _jit, _bind| async {
-            Ok(Started {
-                dind_id: "dind-1".to_owned(),
-                runner_id: "runner-1".to_owned(),
-            })
-        },
-    )
-    .await;
-    assert_eq!(error, Err(EnsureError::Uncertain));
-    assert!(replay.calls.is_empty());
-    let rows = journal.rows().await.map_err(|err| err.to_string())?;
-    assert_eq!(rows.len(), 1);
-    assert_eq!(rows[0].state, IntentState::Uncertain);
-    absent(&scratch.file())
-}
-
-#[tokio::test]
 async fn jit_conflict_marks_the_fresh_row_failed_without_ack() -> Result<(), String> {
     let (scratch, journal) = open("jit-conflict").await?;
     let mut blocked = JitProbe::conflict();

@@ -137,6 +137,31 @@ pub(crate) fn ctx() -> Drive {
     }
 }
 
+pub(crate) fn started_progress(message_id: i64, assigned: i64) -> Poll {
+    let mut poll = assigned_wait(message_id, assigned);
+    let Poll::Batch(batch) = &mut poll else {
+        return poll;
+    };
+    batch.jobs = vec![
+        progress_job(InnerKind::Started),
+        progress_job(InnerKind::Started),
+    ];
+    poll
+}
+
+fn progress_job(kind: InnerKind) -> InnerJob {
+    InnerJob {
+        kind,
+        request_id: Some(0),
+        job_id: None,
+        labels: Vec::new(),
+        runner_id: None,
+        runner_name: None,
+        result: None,
+        fields: Vec::new(),
+    }
+}
+
 pub(crate) fn assigned_wait(message_id: i64, assigned: i64) -> Poll {
     kind_wait(message_id, assigned, InnerKind::Assigned)
 }
@@ -158,6 +183,9 @@ fn kind_wait(message_id: i64, assigned: i64, kind: InnerKind) -> Poll {
             request_id: Some(0),
             job_id: None,
             labels: Vec::new(),
+            runner_id: None,
+            runner_name: None,
+            result: None,
             fields: Vec::new(),
         }],
     })
@@ -175,6 +203,9 @@ pub(crate) fn available(ids: &[i64]) -> Poll {
                 request_id: Some(id),
                 job_id: None,
                 labels: Vec::new(),
+                runner_id: None,
+                runner_name: None,
+                result: None,
                 fields: Vec::new(),
             })
             .collect(),
@@ -192,16 +223,26 @@ pub(crate) async fn open(label: &str) -> Result<(Scratch, Journal), String> {
 pub(crate) struct JitProbe {
     inner: Script,
     pub(crate) names: Vec<String>,
+    conflict: bool,
 }
 
 impl JitProbe {
+    pub(crate) fn ok() -> Self {
+        Self::new(Mode::Ok, false)
+    }
+
     pub(crate) fn conflict() -> Self {
+        Self::new(Mode::Ok, true)
+    }
+
+    fn new(mode: Mode, conflict: bool) -> Self {
         Self {
             inner: Script {
                 calls: Vec::new(),
-                mode: Mode::Ok,
+                mode,
             },
             names: Vec::new(),
+            conflict,
         }
     }
 
@@ -218,8 +259,10 @@ impl Transport for JitProbe {
             {
                 self.names.push(name.to_owned());
             }
-            self.inner.calls.push("jit");
-            return Err(TransportFail::Http(409));
+            if self.conflict {
+                self.inner.calls.push("jit");
+                return Err(TransportFail::Http(409));
+            }
         }
         self.inner.exchange(request)
     }
