@@ -14,7 +14,7 @@ use crate::impl_tofu_t24_gates::tofu_perf_fixtures_t24::{
 
 /// Plan wall plus obligation counts on 1/10/40-root fixtures.
 ///
-/// 40 stays under the 320 KiB matrix budget (the P13 40-crate
+/// 40 stays under the 512 KiB matrix-artifact budget (the P13 40-crate
 /// precedent); wider plans fail closed on the budget instead.
 #[test]
 fn tofu_plan_scales_with_root_count() -> TestResult {
