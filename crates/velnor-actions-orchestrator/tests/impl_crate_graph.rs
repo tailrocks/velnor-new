@@ -161,7 +161,7 @@ fn w1_crate_prepare_and_obligations_share_toolchain_union() -> TestResult {
             "crate jobs install {spec} for test-spawned generate:\n{task}"
         );
     }
-    for key in ["MISE_RUSTUP_HOME:", "MISE_CARGO_HOME:", "RUSTUP_TOOLCHAIN:"] {
+    for key in ["MISE_RUSTUP_HOME:", "MISE_CARGO_HOME:"] {
         let line = env_line(&task[run_at..], key)?;
         assert_eq!(
             env_line(&task[prepare_at..run_at], key)?,
@@ -169,6 +169,10 @@ fn w1_crate_prepare_and_obligations_share_toolchain_union() -> TestResult {
             "{key}:\n{task}"
         );
     }
+    assert!(
+        task.contains("RUSTUP_TOOLCHAIN: 1.98.1"),
+        "job carries toolchain:\n{task}"
+    );
     Ok(())
 }
 
