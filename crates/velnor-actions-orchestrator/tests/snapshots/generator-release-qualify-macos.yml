@@ -13,6 +13,15 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Setup Mise
+      uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
+      with:
+        version: 2026.9.18
+        sha256: 484c135bd4329975d608d3f77e26c2ece5d2f5590f18ca71f44440294f8cfa6f
+        install: "false"
+        env: "false"
+        cache: "false"
+        cache_save: "false"
     - name: Download built asset archive
       uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
       with:

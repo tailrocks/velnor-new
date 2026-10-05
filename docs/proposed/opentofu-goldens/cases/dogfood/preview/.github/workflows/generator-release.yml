@@ -269,6 +269,15 @@ jobs:
         with:
           fetch-depth: "1"
           persist-credentials: "false"
+      - name: Setup Mise
+        uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
+        with:
+          version: 2026.9.18
+          sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
+          install: "false"
+          env: "false"
+          cache: "false"
+          cache_save: "false"
       - name: Download exact build artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:

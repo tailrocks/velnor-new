@@ -155,10 +155,9 @@ fn assert_qualifier_action_boundary(qualifier_body: &str) -> Result<(), Box<dyn 
     assert!(!qualifier_body.contains("${{ needs."), "{qualifier_body}");
     assert!(!qualifier_body.contains("post:"), "{qualifier_body}");
     assert!(!qualifier_body.contains("github_token"), "{qualifier_body}");
-    assert!(!qualifier_body.contains("Setup Mise"), "{qualifier_body}");
     assert_eq!(
         qualifier_body.matches("uses:").count(),
-        2,
+        3,
         "{qualifier_body}"
     );
     assert!(

@@ -24,7 +24,9 @@ pub(super) fn job(
     pins: &GeneratorReleasePins,
     actions: &mut Vec<(String, Yaml)>,
 ) -> Result<(String, Yaml), RenderError> {
-    let mut action_steps = Vec::new();
+    let mut action_steps = vec![workflow_steps::mise_step(
+        pins.setup_for(job.product.target),
+    )?];
     action_steps.extend(assets::download_build_steps(
         job.product,
         "Download built asset archive",

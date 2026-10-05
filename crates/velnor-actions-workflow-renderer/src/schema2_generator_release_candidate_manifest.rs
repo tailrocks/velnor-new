@@ -5,9 +5,13 @@ use crate::yaml::Yaml;
 use super::super::features::{base, finish};
 use super::GeneratorReleasePins;
 use super::{assets, manifest, workflow_steps};
+use velnor_actions_contract::ReleaseTarget;
 
 /// Build and upload the canonical manifest consumed by qualification and attestation.
-pub(super) fn job(hosted: Yaml, pins: &GeneratorReleasePins) -> (String, Yaml) {
+pub(super) fn job(
+    hosted: Yaml,
+    pins: &GeneratorReleasePins,
+) -> Result<(String, Yaml), crate::RenderError> {
     let candidate_path = manifest::candidate_path();
     let mut steps = Vec::new();
     for product in assets::ASSETS {
@@ -80,9 +84,12 @@ pub(super) fn job(hosted: Yaml, pins: &GeneratorReleasePins) -> (String, Yaml) {
             ),
         ]),
     ));
-    let mut workflow = vec![workflow_steps::checkout_step()];
+    let mut workflow = vec![
+        workflow_steps::checkout_step(),
+        workflow_steps::mise_step(pins.setup_for(ReleaseTarget::LinuxX86_64))?,
+    ];
     workflow.extend(steps);
-    finish("candidate-manifest", fields, workflow)
+    Ok(finish("candidate-manifest", fields, workflow))
 }
 
 fn manifest_digest_script() -> String {
