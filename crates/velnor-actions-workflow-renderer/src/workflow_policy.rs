@@ -38,7 +38,13 @@ pub(crate) fn check_concurrency(concurrency: &Concurrency) -> Result<(), RenderE
 /// Require every job to use the single context label.
 pub(crate) fn check_single_label(ir: &WorkflowIr, label: &str) -> Result<(), RenderError> {
     for (id, job) in &ir.jobs {
-        if job.runs_on != label
+        if let Some(runner) = &job.check_runner {
+            if !id.starts_with("check-") || runner.label != job.runs_on {
+                return Err(RenderError::InvalidWorkflow(format!(
+                    "check_runner_mismatch:{id}"
+                )));
+            }
+        } else if job.runs_on != label
             && !velnor_actions_contract::RunsOn::parse(&job.runs_on)
                 .is_ok_and(|selector| selector.is_scale_set())
         {
