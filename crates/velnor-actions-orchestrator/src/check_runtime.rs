@@ -62,18 +62,20 @@ pub(crate) fn execute_check_to(
     job_id: &str,
     lane: &str,
 ) -> Result<usize, OrchestratorError> {
+    let started = Instant::now();
     let plan = crate::task_report::load_plan(run_key, temp)?;
-    crate::select::verify_checkout(root, plan.event, &plan.head)?;
     let config = crate::config::load_config(root)?;
     let definition = config
         .checks
         .iter()
         .find(|check| check.id == id)
         .ok_or_else(|| internal("check_not_configured"))?;
-    let deadline = CheckDeadline::after(Duration::from_secs(
-        u64::from(definition.timeout_minutes) * 60,
-    ))
+    let deadline = CheckDeadline::from_start(
+        started,
+        Duration::from_secs(u64::from(definition.timeout_minutes) * 60),
+    )
     .map_err(|e| internal(&e.to_string()))?;
+    crate::select::verify_checkout_until(root, plan.event, &plan.head, deadline)?;
     let catalog = ToolCatalog::pinned();
     let mut discovered = discover_checks_until(
         root,
@@ -91,7 +93,6 @@ pub(crate) fn execute_check_to(
         return Err(internal("check_lane_variant_mismatch"));
     }
     bind_check(root, &item, &plan, entry, task_id, &catalog, deadline)?;
-    let started = Instant::now();
     let outcome = run_check(root, temp, &item, &plan, deadline);
     let (code, receipt) = match &outcome {
         Ok(success) => (0, success.evidence.as_ref()),

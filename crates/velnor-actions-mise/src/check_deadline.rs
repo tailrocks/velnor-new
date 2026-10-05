@@ -8,13 +8,21 @@ use std::time::{Duration, Instant};
 pub struct CheckDeadline(Instant);
 
 impl CheckDeadline {
-    /// Start a deadline from the check's admitted timeout.
-    #[must_use]
-    pub fn after(timeout: Duration) -> Result<Self, MiseError> {
-        Instant::now()
+    /// Derive the check deadline from the instant its execution boundary began.
+    /// # Errors
+    /// Returns a timeout error when the absolute instant overflows.
+    pub fn from_start(start: Instant, timeout: Duration) -> Result<Self, MiseError> {
+        start
             .checked_add(timeout)
             .map(Self)
             .ok_or_else(|| invalid("check_timeout", "deadline_overflow"))
+    }
+
+    /// Start a deadline from the check's admitted timeout.
+    /// # Errors
+    /// Returns a timeout error when the absolute instant overflows.
+    pub fn after(timeout: Duration) -> Result<Self, MiseError> {
+        Self::from_start(Instant::now(), timeout)
     }
 
     /// Return the remaining budget or fail once the shared deadline expires.
@@ -46,6 +54,16 @@ mod tests {
         );
         let result = command.run_until(1024, deadline);
         assert!(result.is_err());
+        assert!(deadline.remaining().is_err());
+    }
+
+    #[test]
+    fn deadline_from_operation_start_includes_elapsed_setup_time() {
+        let started = std::time::Instant::now()
+            .checked_sub(Duration::from_millis(20))
+            .expect("past instant");
+        let deadline =
+            CheckDeadline::from_start(started, Duration::from_millis(10)).expect("deadline");
         assert!(deadline.remaining().is_err());
     }
 }
