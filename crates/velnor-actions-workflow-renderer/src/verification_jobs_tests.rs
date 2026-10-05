@@ -128,6 +128,7 @@ fn all_declared_tasks_join_required_fan_in() {
             Job {
                 display_name: "Required".to_owned(),
                 runs_on: "ubuntu-26.04".to_owned(),
+                check_runner: None,
                 timeout_minutes: JobTimeout::PLAN,
                 needs: vec!["plan".to_owned()],
                 condition: None,
@@ -179,6 +180,7 @@ fn paired_task_lanes_are_complete_and_join_required_together() {
             Job {
                 display_name: "Required".to_owned(),
                 runs_on: "ubuntu-26.04".to_owned(),
+                check_runner: None,
                 timeout_minutes: JobTimeout::PLAN,
                 needs: vec!["plan".to_owned()],
                 condition: None,

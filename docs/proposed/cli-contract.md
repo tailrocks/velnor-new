@@ -156,6 +156,10 @@ sample MUST document these sections:
 ```toml
 schema = 1
 
+# Optional repository-owned named Mise checks, independent of language stacks.
+# checks = []
+# See docs/implemented/named-mise-checks.md for task, platform, tool, and evidence pins.
+
 # Optional workflow display and policy settings. Omitted values use Velnor defaults.
 # [workflow]
 # name = "CI"                         # Workflow display name.

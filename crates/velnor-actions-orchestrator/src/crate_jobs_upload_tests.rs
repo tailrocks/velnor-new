@@ -62,7 +62,6 @@ fn two_obligation_job() -> (String, Job, String, String) {
         &discovery(vec![test, clippy]),
         &ToolCatalog::pinned(),
         &[],
-        &[],
         None,
         2,
     )

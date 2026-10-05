@@ -12,8 +12,8 @@ use velnor_actions_contract::{
     CI_WORKFLOW_PATH, Job, PLAN_JOB_ID as CONTRACT_PLAN_JOB_ID,
     REQUIRED_CONDITION as CONTRACT_REQUIRED_CONDITION,
     REQUIRED_DISPLAY_NAME as CONTRACT_REQUIRED_DISPLAY_NAME,
-    REQUIRED_JOB_ID as CONTRACT_REQUIRED_JOB_ID, ValidatorKind, VelnorSupportWorkflow, WorkflowIr,
-    WorkflowPolicy,
+    REQUIRED_JOB_ID as CONTRACT_REQUIRED_JOB_ID, ReleaseTarget, RunsOn, SCALE_SET_NAME,
+    ValidatorKind, VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy,
 };
 
 use crate::{
@@ -258,12 +258,21 @@ pub fn finalize_jobs(
             closure::check_internal_staged(id, job, ctx.preseed)?;
             continue;
         }
-        let always = id == PLAN_JOB_ID || id == TASK_JOB_ID;
-        let target =
-            velnor_actions_contract::target_for_runner_label(&ctx.runs_on).ok_or_else(|| {
+        let always = id == PLAN_JOB_ID || id == TASK_JOB_ID || job.check_runner.is_some();
+        let target = job
+            .check_runner
+            .as_ref()
+            .map(|runner| runner.platform.target())
+            .or_else(|| target_for_runner(&job.runs_on))
+            .ok_or_else(|| {
                 RenderError::InvalidWorkflow(format!("tools_cache_unsupported_target:{id}"))
             })?;
-        cache_p08::ensure_setup_p08(id, job, mise, always, target, &ctx.checkout_uses)?;
+        let setup = if job.check_runner.is_some() {
+            mise.for_target(target)?
+        } else {
+            mise.clone()
+        };
+        cache_p08::ensure_setup_p08(id, job, &setup, always, target, &ctx.checkout_uses)?;
         cache_p08::check_no_rust_cache_with_mbx(id, job)?;
         cache_p08::check_mbx_before_fetch(id, job)?;
         closure::check_internal_staged(id, job, ctx.preseed)?;
@@ -280,6 +289,16 @@ pub fn finalize_jobs(
     closure::insert_final_closure(&mut jobs)?;
     final_steps::insert_final_fanin(&mut jobs, ctx)?;
     Ok(jobs)
+}
+
+fn target_for_runner(label: &str) -> Option<&'static str> {
+    match RunsOn::parse(label).ok()? {
+        RunsOn::Hosted(label) => ReleaseTarget::for_runner_label(&label).map(ReleaseTarget::triple),
+        RunsOn::ScaleSet(selector) if selector.name() == SCALE_SET_NAME => {
+            Some(ReleaseTarget::LinuxX86_64.triple())
+        }
+        RunsOn::ScaleSet(_) => None,
+    }
 }
 
 /// Sorted unique `uses:` refs across every action step (plan display).
