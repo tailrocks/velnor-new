@@ -57,6 +57,7 @@ fn plan_job() -> Result<Job, RenderError> {
     Ok(Job {
         display_name: "Plan".to_owned(),
         runs_on: LABEL.to_owned(),
+        check_runner: None,
         timeout_minutes: JobTimeout::PLAN,
         needs: Vec::new(),
         condition: None,

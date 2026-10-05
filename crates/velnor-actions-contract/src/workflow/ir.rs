@@ -2,7 +2,9 @@
 use super::dispatch::WorkflowDispatch;
 use super::jobs::{ScheduleTrigger, is_safe_display_name};
 use super::permissions::{PermissionLevel, Permissions};
-use super::step::Step;
+pub use super::step::{Step, StepKind};
+#[path = "job_validation.rs"]
+mod job_validation;
 use super::timeout::JobTimeout;
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
@@ -30,7 +32,7 @@ pub struct Trigger {
     pub push_branches: Vec<String>,
     /// Whether `merge_group` is enabled.
     pub merge_group: bool,
-    /// Optional typed `workflow_dispatch` inputs.
+    /// Optional `workflow_dispatch` inputs (exact-plan bootstrap dispatch).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub workflow_dispatch: Option<WorkflowDispatch>,
     /// Optional cron schedule.
@@ -50,8 +52,11 @@ pub struct Concurrency {
 pub struct Job {
     /// Stable display name.
     pub display_name: String,
-    /// Literal versioned Ubuntu label.
+    /// Literal hosted or typed ephemeral runner label.
     pub runs_on: String,
+    /// Explicit platform and capability policy for repository-owned check jobs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub check_runner: Option<crate::config::CheckRunner>,
     /// Per-job timeout (required: no job inherits the 6 h default).
     pub timeout_minutes: JobTimeout,
     /// Job dependencies.
@@ -132,80 +137,6 @@ impl Trigger {
         if let Some(schedule) = &self.schedule {
             schedule.validate()?;
         }
-        Ok(())
-    }
-}
-impl Job {
-    /// Validate one job: labels, refs, effective permissions, steps.
-    fn validate(
-        &self,
-        id: &str,
-        ids: &BTreeSet<&str>,
-        workflow: &Permissions,
-        pr_triggered: bool,
-    ) -> Result<(), ContractError> {
-        if self.display_name.trim().is_empty() {
-            return Err(ContractError::identity("job.display_name", "empty_name"));
-        }
-        if !is_safe_display_name(&self.display_name) {
-            return Err(ContractError::identity(
-                "job.display_name",
-                format!("bad_display_name:{id}"),
-            ));
-        }
-        if !is_pinned_label(&self.runs_on) {
-            return Err(ContractError::identity(
-                "job.runs_on",
-                format!("unpinned_label:{id}"),
-            ));
-        }
-        self.timeout_minutes.validate()?;
-        for need in &self.needs {
-            if !ids.contains(need.as_str()) {
-                return Err(ContractError::identity(
-                    "job.needs",
-                    format!("unknown_job:{need}"),
-                ));
-            }
-        }
-        if self
-            .permissions
-            .as_ref()
-            .is_some_and(Permissions::is_write_all)
-        {
-            return Err(ContractError::identity(
-                "job.permissions",
-                format!("write_all:{id}"),
-            ));
-        }
-        if let Some(environment) = &self.environment
-            && !is_valid_environment(environment)
-        {
-            return Err(ContractError::identity(
-                "job.environment",
-                format!("bad_environment:{id}"),
-            ));
-        }
-        let effective = self.permissions.as_ref().unwrap_or(workflow);
-        if matches!(effective.id_token, PermissionLevel::Write) && self.environment.is_none() {
-            return Err(ContractError::identity(
-                "job.environment",
-                format!("id_token_write_needs_environment:{id}"),
-            ));
-        }
-        if pr_triggered && matches!(effective.contents, PermissionLevel::Write) {
-            return Err(ContractError::identity(
-                "job.permissions",
-                format!("contents_write_on_pr:{id}"),
-            ));
-        }
-        if self.steps.is_empty() {
-            return Err(ContractError::identity(
-                "job.steps",
-                format!("empty_steps:{id}"),
-            ));
-        }
-        super::step_identity::validate_step_sequence(&self.steps, id)?;
         Ok(())
     }
 }

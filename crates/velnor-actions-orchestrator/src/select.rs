@@ -13,17 +13,18 @@ use velnor_actions_contract::{ProposedTask, WorkflowEvent};
 use velnor_actions_mise::GitRequest;
 use velnor_actions_rust::SelectionBroadening;
 
-use crate::OrchestratorError;
 use crate::decisions::{broadening_for_path, selection_broadens_for_path};
 use crate::discover::Discovery;
 use crate::git_paths::{NON_UTF8_PATH, split_nul_paths};
-use crate::internal::internal;
 use crate::select_affected::{affected_packages, has_unowned_file};
 use crate::select_edges::{base_edges, head_edges};
 use crate::validators::{validate_diff_rev, validate_select_diff_args};
 
+#[path = "select_checkout.rs"]
+mod checkout;
 #[path = "select_paths.rs"]
 mod paths;
+pub(crate) use checkout::{verify_checkout, verify_checkout_until};
 
 use paths::{head_sha, is_advisory_toolfile, tree_diff_names, untracked_files};
 
@@ -205,52 +206,6 @@ pub(crate) fn group_changed(
         || (task.identity.unit_id.is_empty() && changed_keys.contains(&task.identity.unit_key))
 }
 
-/// Verify the analyzed checkout matches the intended head.
-///
-/// Identities describe the working tree; a checkout at any other commit
-/// would validate the wrong tree. Push and merge-group runs resolve
-/// `HEAD` exactly; PR and fork runs additionally accept the merge
-/// checkout (`HEAD^2`), which is what would land. Local runs analyze
-/// the working tree itself and skip this check.
-///
-/// # Errors
-///
-/// Returns [`OrchestratorError::Internal`] for checkout/head mismatch or
-/// unresolvable `HEAD`.
-pub(crate) fn verify_checkout(
-    root: &Path,
-    event: WorkflowEvent,
-    head: &str,
-) -> Result<(), OrchestratorError> {
-    if event == WorkflowEvent::Local {
-        return Ok(());
-    }
-    validate_diff_rev(head, "bad_head").map_err(|problem| internal(&problem))?;
-    let checkout = head_sha(root).map_err(|p| internal(&format!("bad_checkout:{p}")))?;
-    if checkout == head {
-        return Ok(());
-    }
-    if matches!(event, WorkflowEvent::PullRequest | WorkflowEvent::Fork)
-        && second_parent(root).as_deref() == Some(head)
-    {
-        return Ok(());
-    }
-    Err(internal("checkout_head_mismatch"))
-}
-
-/// Second parent of the checkout merge commit, if any.
-fn second_parent(root: &Path) -> Option<String> {
-    let output = GitRequest::rev_parse(vec![OsString::from("HEAD^2")])
-        .run_in(root)
-        .ok()?;
-    if !output.success {
-        return None;
-    }
-    let sha = output.stdout_text("git").ok()?.trim().to_owned();
-    validate_diff_rev(&sha, "bad_head").ok()?;
-    Some(sha)
-}
-
 /// Files changed between base and head via the allowlisted `diff` verb.
 ///
 /// Validation gates the untrusted range (flag-injection defense); `-z` is
@@ -350,3 +305,7 @@ fn local_change_set(root: &Path, warnings: &mut Vec<String>) -> Option<(BTreeSet
         .collect();
     Some((changed, toolfiles))
 }
+
+#[cfg(test)]
+#[path = "group_selection_tests.rs"]
+mod group_selection_tests;

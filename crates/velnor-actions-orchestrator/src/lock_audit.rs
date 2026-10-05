@@ -1,26 +1,31 @@
 //! Install lockfile audit glue (G2): lock-file hygiene for local installs.
 //!
-//! The audit verifies that each local `mise install` spec resolves to
-//! a well-formed lock entry; CI-platform holes and corrupt entries
-//! block `generate`, while `plan` reports findings without failing.
+//! The audit verifies the committed `mise.lock` is complete and
+//! well-formed for local `mise install`: every emitted install spec
+//! resolves to a lock entry, and a CI-platform hole or a corrupt
+//! checksum blocks `generate` with a precise remediation. `plan`
+//! prints both channels and never fails; only `generate` gates on
+//! blocking.
 //!
 //! Both install-class emissions are audited: `Prepare pinned tools`
 //! steps from the IR (catalog specs) and validator install commands
 //! from the typed render context (validator pins). Validator steps
 //! materialize at render time, so scraping the IR alone would leave
-//! validator ambient installs invisible; the typed commands close that
+//! the deny ambient install invisible; the typed commands close that
 //! gap without string-matching rendered YAML.
 //!
-//! Hygiene only, not runtime verification: isolated CI installs trust
-//! upstream TLS and exact pins. Checksums are TOFU; the audit verifies
-//! lock coverage and shape but cannot recompute bytes or detect a
-//! malicious self-consistent lock.
+//! Hygiene only, not runtime verification: CI installs run
+//! `--no-config` isolated, so they never load repository config and
+//! trust upstream TLS plus exact pinned versions. Lock checksums are
+//! TOFU (trust on first use): the audit checks that the lock covers
+//! the install set with well-formed entries — it cannot recompute
+//! upstream bytes, and a self-consistent malicious lock (attacker
+//! URL plus matching checksum) is a malicious commit, out of scope.
 
-use std::collections::BTreeSet;
 use std::io::Read;
 use std::path::Path;
 
-use velnor_actions_contract::{Step, StepKind, StepRole, WorkflowIr, target_for_runner_label};
+use velnor_actions_contract::{ReleaseTarget, Step, StepKind, StepRole, WorkflowIr};
 use velnor_actions_mise::toolfiles::lockfile::{
     InstallCoverage, InstallSubject, audit_install_coverage, mise_platform_for_target,
     parse_mise_lockfile, subject_for_install_spec,
@@ -29,6 +34,9 @@ use velnor_actions_mise::{MISE_LOCK_FILE, ToolCatalog};
 use velnor_actions_workflow_renderer::render::ValidatorCommand;
 
 use crate::vectors::validator_install_pin;
+#[path = "lock_audit_names.rs"]
+mod names;
+use names::subject_names;
 
 /// Audit outcome: one advisory summary plus fail-closed diagnostics.
 pub(crate) struct LockAuditOutcome {
@@ -114,7 +122,8 @@ pub(crate) fn audit_prepare_installs(
             blocking,
         };
     }
-    let Some(platform) = target_for_runner_label(label)
+    let Some(platform) = ReleaseTarget::for_runner_label(label)
+        .map(ReleaseTarget::triple)
         .and_then(mise_platform_for_target)
         .map(str::to_owned)
     else {
@@ -170,25 +179,21 @@ fn audit_validator_command(
     subjects: &mut Vec<InstallSubject>,
     blocking: &mut Vec<String>,
 ) {
-    for argv in [&command.prepare_argv, &command.argv] {
-        match validator_argv_specs(argv) {
-            CommandInstalls::NotInstall => {}
-            CommandInstalls::Unclassifiable(detail) => {
-                blocking.push(format!(
-                    "unauditable_validator_argv:{}:{detail}",
-                    command.name
-                ));
+    match validator_command_specs(command) {
+        CommandInstalls::NotInstall => {}
+        CommandInstalls::Unclassifiable(detail) => {
+            let diagnostic = format!("unauditable_validator_argv:{}:{detail}", command.name);
+            blocking.push(diagnostic);
+        }
+        CommandInstalls::Specs(specs) => {
+            if specs.is_empty() {
+                blocking.push(bare_install(&command.name));
+                return;
             }
-            CommandInstalls::Specs(specs) => {
-                if specs.is_empty() {
-                    blocking.push(bare_install(&command.name));
-                    continue;
-                }
-                for spec in specs {
-                    match validator_subject(&spec) {
-                        Some(subject) => subjects.push(subject),
-                        None => blocking.push(format!("unauditable_install_spec:{spec}")),
-                    }
+            for spec in specs {
+                match validator_subject(&spec) {
+                    Some(subject) => subjects.push(subject),
+                    None => blocking.push(format!("unauditable_install_spec:{spec}")),
                 }
             }
         }
@@ -200,9 +205,9 @@ fn audit_validator_command(
 /// Scans the typed argv (plain vectors and `sh -c` scripts alike) and
 /// classifies each `mise` vector: `install` extracts, isolated `exec`
 /// contributes nothing, anything else blocks as unclassifiable.
-fn validator_argv_specs(argv: &[String]) -> CommandInstalls {
+fn validator_command_specs(command: &ValidatorCommand) -> CommandInstalls {
     let mut tokens = Vec::new();
-    for arg in argv {
+    for arg in &command.argv {
         if looks_like_script(arg) {
             tokens.extend(arg.split_whitespace());
         } else {
@@ -387,12 +392,3 @@ fn audit_against_lock(
 #[cfg(test)]
 #[path = "lock_audit_tests.rs"]
 mod lock_audit_tests;
-
-/// Sorted `tool@pin` display names for findings.
-fn subject_names(subjects: &[InstallSubject]) -> String {
-    let names: BTreeSet<&str> = subjects
-        .iter()
-        .map(|subject| subject.display.as_str())
-        .collect();
-    names.into_iter().collect::<Vec<_>>().join(", ")
-}

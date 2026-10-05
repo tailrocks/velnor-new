@@ -6,7 +6,13 @@
 
 use std::collections::BTreeMap;
 
+use velnor_actions_contract::config::{
+    CheckExecutor, CheckPlatform, EPHEMERAL_CHECK_ADMISSION_CONDITION,
+};
 use velnor_actions_contract::workflow::lanes::{HOSTED_SUFFIX, SCALE_SUFFIX};
+use velnor_actions_contract::workflow::lanes::{
+    NAMED_CHECK_JOB_ID_ENV, NAMED_CHECK_LANE_VARIANT_ENV,
+};
 use velnor_actions_contract::{Job, Step, StepKind, StepRole};
 
 use crate::composite::composite_yaml;
@@ -68,8 +74,9 @@ struct SharedLaneParts {
 ///
 /// A pair whose timeout, condition, permissions, environment, or steps
 /// differ fails closed. Elected cache saves (`Save Mise tools`, `Save Tofu
-/// providers`) stay on the job that owns them and are not part of that
-/// comparison. An unsafe logical id fails closed.
+/// providers`), report uploads, and named-check identity stay on the job
+/// that owns them and are not part of the shared comparison. An unsafe
+/// logical id fails closed.
 pub(crate) fn share_lanes(
     jobs: &BTreeMap<String, Job>,
     ctx: &RenderContext,
@@ -163,6 +170,9 @@ fn validate_serialized_scopes(shared: &LaneShare) -> Result<(), RenderError> {
             continue;
         };
         let mut steps = vec![checkout.clone()];
+        if let Some(runtime) = shared.runtime_preludes.get(id) {
+            steps.extend(runtime.iter().cloned());
+        }
         if let Some(prefix) = shared.prefixes.get(id) {
             steps.extend(prefix.iter().cloned());
         }
@@ -196,7 +206,7 @@ fn logical_id(hosted_id: &str) -> Option<&str> {
 
 fn split_pair(hosted: &Job, local: &Job, checkout_uses: &str) -> Option<SharedLaneParts> {
     if hosted.timeout_minutes != local.timeout_minutes
-        || hosted.condition != local.condition
+        || !same_or_admitted_check_condition(hosted, local)
         || hosted.permissions != local.permissions
         || hosted.environment != local.environment
     {
@@ -274,8 +284,16 @@ fn split_shared_steps(
     let mut local_prelude = local_prelude;
     hosted_prelude.extend(hosted_provider_prefix);
     local_prelude.extend(local_provider_prefix);
-    let (hosted_common, hosted_postlude) = crate::lane_share_sections::peel_postlude(hosted_tail);
-    let (local_common, local_postlude) = crate::lane_share_sections::peel_postlude(local_tail);
+    let (hosted_common, hosted_cache_postlude) =
+        crate::lane_share_sections::peel_postlude(hosted_tail);
+    let (local_common, local_cache_postlude) =
+        crate::lane_share_sections::peel_postlude(local_tail);
+    let (hosted_common, hosted_lane_specific) = peel_lane_specific(&hosted_common);
+    let (local_common, local_lane_specific) = peel_lane_specific(&local_common);
+    let mut hosted_postlude = hosted_lane_specific;
+    hosted_postlude.extend(hosted_cache_postlude);
+    let mut local_postlude = local_lane_specific;
+    local_postlude.extend(local_cache_postlude);
     (hosted_common == local_common).then_some(SharedLaneParts {
         checkout: checkout.clone(),
         hosted_runtime_prelude: Vec::new(),
@@ -287,6 +305,44 @@ fn split_shared_steps(
         hosted_postlude,
         local_postlude,
     })
+}
+
+fn same_or_admitted_check_condition(hosted: &Job, local: &Job) -> bool {
+    if hosted.condition == local.condition {
+        return true;
+    }
+    hosted.condition.is_none()
+        && local.condition.as_deref() == Some(EPHEMERAL_CHECK_ADMISSION_CONDITION)
+        && matches!(
+            (&hosted.check_runner, &local.check_runner),
+            (Some(hosted_runner), Some(local_runner))
+                if hosted_runner == local_runner
+                    && hosted_runner.platform == CheckPlatform::LinuxX64
+                    && hosted_runner.executor == CheckExecutor::Hosted
+        )
+}
+
+fn peel_lane_specific(steps: &[Step]) -> (Vec<Step>, Vec<Step>) {
+    let mut common = Vec::new();
+    let mut lane_specific = Vec::new();
+    for step in steps {
+        if is_lane_specific(step) {
+            lane_specific.push(step.clone());
+        } else {
+            common.push(step.clone());
+        }
+    }
+    (common, lane_specific)
+}
+
+fn is_lane_specific(step: &Step) -> bool {
+    match &step.kind {
+        StepKind::Action { uses, .. } => uses == crate::steps::UPLOAD_ARTIFACT_USES,
+        StepKind::Shell { env, .. } | StepKind::Internal { env, .. } => {
+            env.contains_key(NAMED_CHECK_JOB_ID_ENV)
+                || env.contains_key(NAMED_CHECK_LANE_VARIANT_ENV)
+        }
+    }
 }
 
 fn peel_checkout<'a>(steps: &'a [Step], checkout_uses: &str) -> Option<(&'a Step, &'a [Step])> {

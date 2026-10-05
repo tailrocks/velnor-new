@@ -61,6 +61,9 @@ pub(crate) struct MergeRequest {
     /// Per-task report files backing every aggregate entry.
     #[serde(default)]
     pub(crate) task_reports: Vec<TaskReport>,
+    /// Named-check receipt plus exact downloaded scenario bytes.
+    #[serde(default)]
+    pub(crate) check_proofs: Vec<serde_json::Value>,
     /// Declared validator inventory from the workflow `needs` channel.
     pub(crate) required_job_ids: Vec<String>,
     /// Observed validator conclusions covering the inventory exactly.
@@ -174,17 +177,7 @@ fn evidence_failure(request: &MergeRequest) -> Option<String> {
 fn build_final(request: &MergeRequest, plan: &Plan) -> Result<FinalReport, OrchestratorError> {
     let mut signals = Signals::default();
     let mut miss_reasons = BTreeSet::new();
-    check_agreement(
-        request.matrix.as_ref(),
-        plan,
-        &mut signals,
-        &mut miss_reasons,
-    )?;
-    check_plan_shape(plan, &mut signals, &mut miss_reasons);
-    check_trust_coherence(plan, request, &mut signals, &mut miss_reasons);
-    check_candidate_binding(plan, request, &mut signals, &mut miss_reasons);
-    check_plan_evidence(plan, request, &mut signals, &mut miss_reasons);
-    check_execute_inventory(plan, &mut signals, &mut miss_reasons);
+    check_final_inputs(request, plan, &mut signals, &mut miss_reasons)?;
     let entries = plan_entries(plan);
     let obligations = plan_digests(plan);
     let partition = partition_reports(request, &entries, &mut signals, &mut miss_reasons);
@@ -251,6 +244,30 @@ fn build_final(request: &MergeRequest, plan: &Plan) -> Result<FinalReport, Orche
         },
         miss_reasons: miss_reasons.into_iter().collect(),
     })
+}
+
+/// Validate final-fold inputs before collecting obligation evidence.
+fn check_final_inputs(
+    request: &MergeRequest,
+    plan: &Plan,
+    signals: &mut Signals,
+    miss_reasons: &mut BTreeSet<String>,
+) -> Result<(), OrchestratorError> {
+    check_agreement(request.matrix.as_ref(), plan, signals, miss_reasons)?;
+    check_plan_shape(plan, signals, miss_reasons);
+    check_trust_coherence(plan, request, signals, miss_reasons);
+    check_candidate_binding(plan, request, signals, miss_reasons);
+    check_plan_evidence(plan, request, signals, miss_reasons);
+    check_execute_inventory(plan, signals, miss_reasons);
+    if !crate::check_evidence::gate::validate_proofs(
+        plan,
+        &request.task_reports,
+        &request.check_proofs,
+    ) {
+        signals.planning_failed = true;
+        miss_reasons.insert("cache_corrupt".to_owned());
+    }
+    Ok(())
 }
 
 /// Check 5: precedence over collected signals, then pass or no-work.

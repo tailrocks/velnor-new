@@ -143,8 +143,12 @@ fn golden_manifest_fixture_uses_the_canonical_release_schema() -> TestResult {
     manifest.validate("fixtures/consumer-release-manifest.json")?;
     assert_eq!(manifest.version, env!("CARGO_PKG_VERSION"));
     assert_eq!(
-        manifest.targets.len(),
-        velnor_actions_contract::SUPPORTED_TARGETS.len()
+        manifest
+            .targets
+            .iter()
+            .map(|record| record.target.as_str())
+            .collect::<Vec<_>>(),
+        velnor_actions_contract::SUPPORTED_TARGETS.as_slice()
     );
     Ok(())
 }

@@ -195,6 +195,7 @@ pub(crate) fn alint_job(ctx: &RenderContext) -> Result<Job, RenderError> {
     Ok(Job {
         display_name: ValidatorKind::Alint.display_name().to_owned(),
         runs_on: ctx.runs_on.clone(),
+        check_runner: None,
         timeout_minutes: JobTimeout::VALIDATOR,
         needs: Vec::new(),
         condition: None,
@@ -268,6 +269,7 @@ pub(crate) fn validator_job(
     Ok(Job {
         display_name: validator.display_name().to_owned(),
         runs_on: ctx.runs_on.clone(),
+        check_runner: None,
         timeout_minutes: JobTimeout::VALIDATOR,
         needs: Vec::new(),
         condition: None,
@@ -311,7 +313,7 @@ pub(crate) fn check_candidate_invariants(jobs: &BTreeMap<String, Job>) -> Result
             ));
         }
         for step in &candidate.steps {
-            if let StepKind::Internal { operation } = &step.kind
+            if let StepKind::Internal { operation, .. } = &step.kind
                 && operation == steps::PLAN_OPERATION
             {
                 return Err(RenderError::InvalidWorkflow(

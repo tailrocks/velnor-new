@@ -42,6 +42,7 @@ fn ci_job() -> Job {
     Job {
         display_name: "demo check".to_owned(),
         runs_on: "ubuntu-24.04".to_owned(),
+        check_runner: None,
         timeout_minutes: JobTimeout::CRATE,
         needs: vec![],
         condition: None,
@@ -54,6 +55,7 @@ fn ci_job() -> Job {
             condition: None,
             kind: StepKind::Internal {
                 operation: "demo".to_owned(),
+                env: std::collections::BTreeMap::new(),
             },
         }],
     }

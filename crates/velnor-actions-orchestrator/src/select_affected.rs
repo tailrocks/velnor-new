@@ -130,6 +130,7 @@ mod tests {
             has_build_script: false,
         };
         Discovery {
+            mise_checks: Vec::new(),
             statuses: Vec::new(),
             feature_fallbacks: Vec::new(),
             workspaces: vec![PlannedWorkspace {

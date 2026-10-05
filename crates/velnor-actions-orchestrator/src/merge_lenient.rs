@@ -49,6 +49,9 @@ struct LenientRequest {
     /// Per-task report files backing every aggregate entry.
     #[serde(default)]
     task_reports: Vec<serde_json::Value>,
+    /// Named-check artifact proof bytes validated independently at fold.
+    #[serde(default)]
+    check_proofs: Vec<serde_json::Value>,
     /// Declared validator inventory from the workflow `needs` channel.
     required_job_ids: Vec<String>,
     /// Observed validator conclusions covering the inventory exactly.
@@ -110,6 +113,7 @@ pub(crate) fn lenient_request(envelope: &serde_json::Value) -> Option<MergeReque
         matrix,
         matrix_reports,
         task_reports,
+        check_proofs: raw.check_proofs,
         required_job_ids: raw.required_job_ids,
         required_jobs: raw.required_jobs,
         assembly_errors,

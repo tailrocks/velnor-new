@@ -1,13 +1,14 @@
 //! Request-file materialization and response splitting for internal ops.
 
+use std::collections::BTreeMap;
 use std::env;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use velnor_actions_contract::{
-    FINAL_JSON_FILENAME, FinalStatus, MATRIX_JSON_FILENAME, PLAN_JSON_FILENAME,
-    QualificationDispatch, WorkflowEvent, canonical_json_bytes, matrix_json_bytes, plan_json_bytes,
-    run_key_for_ci, validate_run_key,
+    FINAL_JSON_FILENAME, FinalStatus, MATRIX_JSON_FILENAME, NAMED_CHECK_LANES_ENV, NamedCheckLane,
+    PLAN_JSON_FILENAME, QualificationDispatch, WorkflowEvent, canonical_json_bytes,
+    matrix_json_bytes, plan_json_bytes, run_key_for_ci, validate_run_key,
 };
 
 use crate::OrchestratorError;
@@ -44,6 +45,9 @@ struct EventRequest {
     /// Source-bound context for protected hosted qualification dispatches.
     #[serde(skip_serializing_if = "Option::is_none")]
     qualification: Option<QualificationDispatch>,
+    /// Exact named-check job identities for lane expansion.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    named_check_lanes: Option<BTreeMap<String, Vec<NamedCheckLane>>>,
 }
 
 /// Materialize the canonical request file from the GitHub environment.
@@ -81,13 +85,20 @@ pub fn write_request() -> Result<PathBuf, OrchestratorError> {
     let repository = env::var(crate::origin::GITHUB_REPOSITORY_ENV)
         .ok()
         .filter(|slug| !slug.is_empty());
-    write_request_parts(
+    let named_check_lanes = env::var(NAMED_CHECK_LANES_ENV)
+        .ok()
+        .map(|value| {
+            serde_json::from_str(&value).map_err(|_| internal("malformed_named_check_lanes"))
+        })
+        .transpose()?;
+    write_request_parts_with_lanes(
         &path,
         &event_name,
         &payload_json,
         sha.as_deref(),
         repository.as_deref(),
         &anchor,
+        named_check_lanes,
     )
 }
 
@@ -113,6 +124,26 @@ pub fn write_request_parts(
     github_sha: Option<&str>,
     repository: Option<&str>,
     anchor: &Path,
+) -> Result<PathBuf, OrchestratorError> {
+    write_request_parts_with_lanes(
+        request_path,
+        event_name,
+        payload_json,
+        github_sha,
+        repository,
+        anchor,
+        None,
+    )
+}
+
+fn write_request_parts_with_lanes(
+    request_path: &Path,
+    event_name: &str,
+    payload_json: &str,
+    github_sha: Option<&str>,
+    repository: Option<&str>,
+    anchor: &Path,
+    named_check_lanes: Option<BTreeMap<String, Vec<NamedCheckLane>>>,
 ) -> Result<PathBuf, OrchestratorError> {
     let path = request_path.to_path_buf();
     let op = request_op(&path)?;
@@ -158,6 +189,7 @@ pub fn write_request_parts(
             .filter(|slug| !slug.is_empty())
             .map(str::to_owned),
         qualification,
+        named_check_lanes,
     };
     let bytes = canonical_json_bytes(&request).map_err(internal_contract)?;
     if let Some(parent) = path.parent() {

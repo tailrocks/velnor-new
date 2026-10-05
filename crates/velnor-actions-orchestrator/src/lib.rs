@@ -1,8 +1,11 @@
 //! Generation coordination: discovery, planning, workflow IR, and writes.
 //! Execution belongs to Mise, vector requests to vectors, and YAML to the renderer.
 
+mod api;
 mod attach;
 mod baseline_publish;
+mod check_evidence;
+mod check_runtime;
 mod clippy_groups;
 mod config;
 mod config_stacks;
@@ -48,7 +51,6 @@ mod plan_stacks;
 mod prepare;
 mod preseed_manifest;
 mod provenance;
-mod public_api;
 mod publish_job;
 mod qualification_resolver;
 mod qualify;
@@ -88,7 +90,7 @@ mod workflow;
 mod workflow_jobs;
 mod workflow_jobs_cache;
 
-pub use public_api::*;
+pub use api::*;
 
 /// Version marker for the orchestrator shell.
 pub const ORCHESTRATOR_VERSION: u32 = 0;
