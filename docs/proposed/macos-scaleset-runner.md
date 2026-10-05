@@ -164,6 +164,12 @@ control jobs and single-writer publish, deploy, release, and baseline promotion
 stay single and hosted. A hosted catalog label cannot appear on a scale-set
 selector.
 
+Typed `[[workflow.tasks]]` jobs follow the same eligibility rule. Linux x64
+tasks emit both hosted and Scale Set jobs in `both`, and `Required` waits for
+both. In `hosted` or `scale-set`, each Linux task emits only its selected lane.
+macOS ARM64 tasks remain hosted in all modes because the Scale Set contract is
+Linux/amd64; they stay in `Required` but do not provide paired qualification.
+
 Paired qualification does not treat one lane's cached success as execution of
 the other. Comparison fails or returns `NOT_PROVEN` for a missing lane,
 duplicate or conflicting result, skipped, cancelled, timed-out, or failed job,
