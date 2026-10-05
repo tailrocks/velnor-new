@@ -16,6 +16,7 @@ use crate::journal::LaunchIdentity;
 use crate::stage::{ContainerRecord, DindProbe};
 
 mod containers;
+pub(crate) mod guest;
 pub(super) use containers::refuse_existing;
 
 const DOCKER_CALL_TIMEOUT: Duration = Duration::from_secs(5);
