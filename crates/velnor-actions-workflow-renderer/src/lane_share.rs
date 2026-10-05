@@ -195,8 +195,7 @@ fn composite_file(
         rendered.push(step_to_yaml(logical, step, ctx, &[], true, &empty_job_env)?);
     }
     let body = composite_yaml(logical, rendered)?;
-    let quoted = crate::yaml::quote_run_values_in_yaml(body);
-    let bytes = marker::with_marker(&ctx.generator_version, &render_yaml(&quoted))?;
+    let bytes = marker::with_marker(&ctx.generator_version, &render_yaml(&body))?;
     steps::scan_for_private_subcommands(&bytes)?;
     Ok(RenderedFile {
         path: format!(".github/actions/{logical}/action.yml"),

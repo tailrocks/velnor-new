@@ -25,6 +25,7 @@ fn request() -> Schema2WorkflowRequest {
             mbx_version: "1.0.0".to_owned(),
             rust_version: "1.98.1".to_owned(),
         }),
+        generator_release: None,
     }
 }
 

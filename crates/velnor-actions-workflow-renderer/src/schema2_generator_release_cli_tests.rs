@@ -1,8 +1,9 @@
 //! Isolated Mise and GitHub CLI dispatch tests for generated release scripts.
 
-use super::{Failure, PINNED_MISE_ARGUMENTS, Scratch, install_mock_gh, manifest};
+use super::{Failure, PINNED_MISE_ARGUMENTS, Scratch, assets, install_mock_gh, manifest};
 use std::error::Error;
 use std::fs;
+use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::process::Command;
 
@@ -23,6 +24,18 @@ pub(super) fn isolate_gh_environment(
     Ok(())
 }
 
+pub(super) fn install_mock_mise(root: &Path) -> Result<(), Box<dyn Error>> {
+    let path = root.join("mock-bin/mise");
+    fs::write(
+        &path,
+        "#!/bin/sh\nset -eu\nprintf '%s\\n' \"$*\" >> \"$MISE_CALLS\"\n[ \"$1 $2 $3 $4 $5 $6 $7\" = '--no-config --no-env --no-hooks exec gh@2.102.0 -- gh' ] || exit 70\nshift 7\ntest -x \"$MOCK_GH\"\nexec \"$MOCK_GH\" \"$@\"\n",
+    )?;
+    let mut permissions = fs::metadata(&path)?.permissions();
+    permissions.set_mode(0o755);
+    fs::set_permissions(path, permissions)?;
+    Ok(())
+}
+
 pub(super) fn assert_pinned_publish_calls(
     root: &Path,
     case: Failure,
@@ -34,7 +47,7 @@ pub(super) fn assert_pinned_publish_calls(
         String::new()
     };
     let expected_count = match case {
-        Failure::None | Failure::WrongPublishedDigest => 5,
+        Failure::None | Failure::WrongPublishedDigest => 8,
         Failure::UnauthorizedTag | Failure::ForbiddenTag | Failure::TransientTag => 1,
         _ => 0,
     };
@@ -52,12 +65,12 @@ pub(super) fn assert_pinned_publish_calls(
         .filter(|call| call.starts_with(&api_prefix))
         .count();
     let expected_api_count = match expected_count {
-        5 => 4,
+        8 => 7,
         1 => 1,
         _ => 0,
     };
     assert_eq!(api_count, expected_api_count);
-    if expected_count == 5 {
+    if expected_count == 8 {
         assert!(
             calls
                 .lines()
@@ -73,7 +86,8 @@ fn attestation_verification_uses_only_the_pinned_mock_cli() -> Result<(), Box<dy
     let scratch = Scratch::new()?;
     super::write_attestation_files(&scratch.0)?;
     install_mock_gh(&scratch.0)?;
-    let script = manifest::attestation_bundle_script();
+    let gh_function = super::super::workflow_steps::gh_function(&super::test_pins().gh_argv)?;
+    let script = format!("{gh_function}\n{}", manifest::attestation_bundle_script());
     let mut command = Command::new("bash");
     command
         .arg("-c")
@@ -82,6 +96,7 @@ fn attestation_verification_uses_only_the_pinned_mock_cli() -> Result<(), Box<dy
         .env("PATH", super::path_with_mock_gh(&scratch.0)?)
         .env("GITHUB_REPOSITORY", super::REPOSITORY)
         .env("GITHUB_SHA", super::SOURCE_SHA)
+        .env("GITHUB_WORKFLOW_SHA", super::SOURCE_SHA)
         .env("GH_CALLS", scratch.0.join("gh-calls"))
         .env("MISE_CALLS", scratch.0.join("mise-calls"))
         .env("MOCK_GH", scratch.0.join("mock-bin/gh"));
@@ -99,15 +114,40 @@ fn attestation_verification_uses_only_the_pinned_mock_cli() -> Result<(), Box<dy
 fn assert_pinned_attestation_calls(root: &Path) -> Result<(), Box<dyn Error>> {
     let mise = fs::read_to_string(root.join("mise-calls"))?;
     let gh = fs::read_to_string(root.join("gh-calls"))?;
-    assert_eq!(mise.lines().count(), 7, "{mise}");
-    assert_eq!(gh.lines().count(), 7, "{gh}");
-    let prefix = format!("{PINNED_MISE_ARGUMENTS} gh attestation verify ");
-    assert!(mise.lines().all(|call| call.starts_with(&prefix)), "{mise}");
-    assert!(
-        gh.lines()
-            .all(|call| call.starts_with("attestation verify ")),
-        "{gh}"
-    );
+    let mut subjects = assets::ASSETS
+        .iter()
+        .flat_map(|asset| {
+            [
+                format!("{}/{}", asset.directory, asset.binary),
+                format!("{}/{}", asset.directory, asset.sidecar),
+                format!("{}/{}", asset.directory, asset.provenance),
+            ]
+        })
+        .collect::<Vec<_>>();
+    subjects.push(format!("{}/{}", manifest::DIR, manifest::FILE));
+    let expected_gh = subjects
+        .iter()
+        .map(|subject| {
+            let name = subject.rsplit('/').next().unwrap_or_default();
+            format!(
+                "attestation verify {subject} --repo {} --bundle {}/{}.intoto.jsonl --source-digest {} --source-ref refs/heads/main --signer-workflow {}/.github/workflows/generator-release.yml --signer-digest {}",
+                super::REPOSITORY,
+                manifest::ATTESTATION_DIR,
+                name,
+                super::SOURCE_SHA,
+                super::REPOSITORY,
+                super::SOURCE_SHA
+            )
+        })
+        .collect::<Vec<_>>();
+    let actual_gh = gh.lines().map(str::to_owned).collect::<Vec<_>>();
+    assert_eq!(actual_gh, expected_gh, "{gh}");
+    let expected_mise = expected_gh
+        .iter()
+        .map(|call| format!("{PINNED_MISE_ARGUMENTS} gh {call}"))
+        .collect::<Vec<_>>();
+    let actual_mise = mise.lines().map(str::to_owned).collect::<Vec<_>>();
+    assert_eq!(actual_mise, expected_mise, "{mise}");
     Ok(())
 }
 

@@ -3,9 +3,9 @@ set -euo pipefail
 
 version="${1:?version is required}"
 repository="${2:?repository is required}"
+rust_version="${3:?Rust toolchain version is required}"
+mr_boxington_version="${4:?MBX tool version is required}"
 readonly expected_repository="tailrocks/velnor-new"
-readonly rust_version="1.98.1"
-readonly mr_boxington_version="1.21.1"
 
 if [[ "$repository" != "$expected_repository" || "$GITHUB_REPOSITORY" != "$expected_repository" ]]; then
   echo "unexpected release repository" >&2
@@ -13,6 +13,10 @@ if [[ "$repository" != "$expected_repository" || "$GITHUB_REPOSITORY" != "$expec
 fi
 if [[ ! "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]]; then
   echo "release source SHA is malformed" >&2
+  exit 1
+fi
+if [[ ! "$rust_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ || ! "$mr_boxington_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "release toolchain versions are malformed" >&2
   exit 1
 fi
 

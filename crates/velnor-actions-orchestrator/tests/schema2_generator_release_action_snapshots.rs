@@ -5,6 +5,10 @@ pub(super) type Actions = BTreeMap<&'static str, String>;
 
 const ACTION_SNAPSHOTS: [(&str, &str); 8] = [
     (
+        "generator-release-attest-manifest",
+        include_str!("snapshots/generator-release-attest-manifest.yml"),
+    ),
+    (
         "generator-release-build-linux",
         include_str!("snapshots/generator-release-build-linux.yml"),
     ),
@@ -27,10 +31,6 @@ const ACTION_SNAPSHOTS: [(&str, &str); 8] = [
     (
         "generator-release-qualify-macos",
         include_str!("snapshots/generator-release-qualify-macos.yml"),
-    ),
-    (
-        "generator-release-manifest",
-        include_str!("snapshots/generator-release-manifest.yml"),
     ),
     (
         "generator-release-publish",

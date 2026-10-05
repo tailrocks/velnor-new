@@ -110,8 +110,7 @@ pub(super) fn render_jobs(
         checkouts,
         &std::collections::BTreeSet::new(),
     )?;
-    let quoted = crate::yaml::quote_run_values_in_yaml(document);
-    crate::marker::with_marker(&ctx.generator_version, &crate::yaml::render_yaml(&quoted))
+    crate::marker::with_marker(&ctx.generator_version, &crate::yaml::render_yaml(&document))
 }
 
 fn positions(yaml: &str, needle: &str) -> Vec<usize> {

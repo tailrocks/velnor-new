@@ -8,7 +8,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 const REPOSITORY: &str = "tailrocks/velnor-new";
 const SOURCE_SHA: &str = "0123456789abcdef0123456789abcdef01234567";
-const PINNED_MISE_ARGUMENTS: &str = "--no-config --no-env --no-hooks exec gh@2.102.0 --";
+#[path = "schema2_generator_release_test_pins.rs"]
+mod pins;
+use pins::{PINNED_MISE_ARGUMENTS, test_pins};
 
 struct Scratch(PathBuf);
 
@@ -63,67 +65,32 @@ fn run_publish_case(case: Failure) -> Result<(), Box<dyn Error>> {
     let scratch = Scratch::new()?;
     copy_release_helpers(&scratch.0)?;
     write_candidate_records(&scratch.0, case)?;
-    prepare_release_manifest(&scratch.0, case)?;
+    write_attestation_files(&scratch.0)?;
+    create_candidate_manifest(&scratch.0, case)?;
     let release_json = release_json(&scratch.0, case)?;
     fs::write(scratch.0.join("release.json"), release_json)?;
     install_mock_gh(&scratch.0)?;
     let script = scratch.0.join("publish.sh");
-    fs::write(&script, manifest::publish_script())?;
-    let mut command = Command::new("bash");
-    command
-        .arg(&script)
-        .current_dir(&scratch.0)
-        .env("PATH", path_with_mock_gh(&scratch.0)?)
-        .env("GITHUB_REPOSITORY", REPOSITORY)
-        .env("GITHUB_SHA", SOURCE_SHA)
-        .env("GH_PREFLIGHT", preflight_mode(case))
-        .env("GH_RELEASE_JSON", scratch.0.join("release.json"))
-        .env("GH_CREATE_TAG", scratch.0.join("created-tag"))
-        .env("GH_ASSET_ARGS", scratch.0.join("asset-args"))
-        .env("GH_CALLS", scratch.0.join("gh-calls"))
-        .env("MISE_CALLS", scratch.0.join("mise-calls"))
-        .env("MOCK_GH", scratch.0.join("mock-bin/gh"));
-    cli_tests::isolate_gh_environment(&mut command, &scratch.0)?;
-    let output = command.output()?;
+    fs::write(&script, manifest::publish_script(&test_pins()))?;
+    let gh_function = super::workflow_steps::gh_function(&test_pins().gh_argv)?;
+    let output = run_publish_command(&scratch.0, case, &script, &gh_function)?;
     cli_tests::assert_pinned_publish_calls(&scratch.0, case)?;
-    let should_succeed = case == Failure::None;
-    assert_eq!(
-        output.status.success(),
-        should_succeed,
-        "case {case:?}: {}{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let create_is_expected = matches!(case, Failure::None | Failure::WrongPublishedDigest);
-    if create_is_expected {
-        assert_eq!(
-            fs::read_to_string(scratch.0.join("created-tag"))?,
-            "v0.1.1\n"
-        );
-        assert_eq!(
-            fs::read_to_string(scratch.0.join("asset-args"))?,
-            expected_asset_args()
-        );
-    } else {
-        assert_no_release_created(&scratch.0);
-    }
-    Ok(())
+    assert_publish_result(&scratch.0, case, &output)
 }
 
-fn prepare_release_manifest(root: &Path, case: Failure) -> Result<(), Box<dyn Error>> {
-    write_attestation_files(root)?;
-    let mut manifest_command = Command::new("bash");
-    manifest_command
+fn create_candidate_manifest(root: &Path, case: Failure) -> Result<(), Box<dyn Error>> {
+    let manifest_status = Command::new("bash")
         .args([
             "scripts/generator-release/create-release-manifest.sh",
             "0.1.1",
             REPOSITORY,
+            "1.98.1",
+            "1.21.1",
         ])
         .current_dir(root)
         .env("GITHUB_REPOSITORY", REPOSITORY)
-        .env("GITHUB_SHA", SOURCE_SHA);
-    cli_tests::isolate_gh_environment(&mut manifest_command, root)?;
-    let manifest_status = manifest_command.status()?;
+        .env("GITHUB_SHA", SOURCE_SHA)
+        .status()?;
     let invalid_manifest = matches!(case, Failure::WrongSidecarName | Failure::MissingBinary);
     if invalid_manifest {
         assert!(!manifest_status.success(), "accepted {case:?}");
@@ -149,6 +116,60 @@ fn prepare_release_manifest(root: &Path, case: Failure) -> Result<(), Box<dyn Er
     Ok(())
 }
 
+fn run_publish_command(
+    root: &Path,
+    case: Failure,
+    script: &Path,
+    gh_function: &str,
+) -> Result<std::process::Output, Box<dyn Error>> {
+    let mut command = Command::new("bash");
+    command
+        .arg("-c")
+        .arg(format!("{gh_function}\n{}", fs::read_to_string(script)?))
+        .current_dir(root)
+        .env("PATH", path_with_mock_gh(root)?)
+        .env("GITHUB_REPOSITORY", REPOSITORY)
+        .env("GITHUB_SHA", SOURCE_SHA)
+        .env("GITHUB_WORKFLOW_SHA", SOURCE_SHA)
+        .env("GITHUB_REF", "refs/heads/main")
+        .env("GITHUB_EVENT_NAME", "workflow_dispatch")
+        .env("GH_PREFLIGHT", preflight_mode(case))
+        .env("GH_RELEASE_JSON", root.join("release.json"))
+        .env("GH_CREATE_TAG", root.join("created-tag"))
+        .env("GH_ASSET_ARGS", root.join("asset-args"))
+        .env("GH_CALLS", root.join("gh-calls"))
+        .env("MISE_CALLS", root.join("mise-calls"))
+        .env("MOCK_GH", root.join("mock-bin/gh"));
+    cli_tests::isolate_gh_environment(&mut command, root)?;
+    Ok(command.output()?)
+}
+
+fn assert_publish_result(
+    root: &Path,
+    case: Failure,
+    output: &std::process::Output,
+) -> Result<(), Box<dyn Error>> {
+    let should_succeed = case == Failure::None;
+    assert_eq!(
+        output.status.success(),
+        should_succeed,
+        "case {case:?}: {}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let create_is_expected = matches!(case, Failure::None | Failure::WrongPublishedDigest);
+    if create_is_expected {
+        assert_eq!(fs::read_to_string(root.join("created-tag"))?, "v0.1.1\n");
+        assert_eq!(
+            fs::read_to_string(root.join("asset-args"))?,
+            expected_asset_args()
+        );
+    } else {
+        assert_no_release_created(root);
+    }
+    Ok(())
+}
+
 fn copy_release_helpers(root: &Path) -> Result<(), Box<dyn Error>> {
     let repo = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     let target = root.join("scripts/generator-release");
@@ -163,13 +184,16 @@ fn copy_release_helpers(root: &Path) -> Result<(), Box<dyn Error>> {
 }
 
 fn write_candidate_records(root: &Path, case: Failure) -> Result<(), Box<dyn Error>> {
-    let products = assets::ASSETS;
+    let products = [assets::LINUX, assets::MACOS_ARM64];
     for (index, product) in products.into_iter().enumerate() {
         let directory = root.join(product.directory);
         fs::create_dir_all(&directory)?;
         let binary = directory.join(product.binary);
         if !(case == Failure::MissingBinary && index == 1) {
-            fs::write(&binary, format!("candidate bytes for {}\n", product.target))?;
+            fs::write(
+                &binary,
+                format!("candidate bytes for {}\n", product.target.triple()),
+            )?;
         }
         let digest = if binary.exists() {
             sha256(&binary)?
@@ -189,7 +213,8 @@ fn write_candidate_records(root: &Path, case: Failure) -> Result<(), Box<dyn Err
             directory.join(product.provenance),
             format!(
                 "{{\"schema\":1,\"version\":\"0.1.1\",\"repository\":\"{REPOSITORY}\",\"commit\":\"{SOURCE_SHA}\",\"target\":\"{}\",\"asset\":\"{}\",\"sha256\":\"{digest}\",\"toolchain\":{{\"rust\":\"1.98.1\",\"mr-boxington\":\"1.21.1\"}}}}\n",
-                product.target, product.binary
+                product.target.triple(),
+                product.binary
             ),
         )?;
     }
@@ -248,6 +273,16 @@ printf '%s\n' "$*" >> "$GH_CALLS"
 if [ "$1" = attestation ] && [ "$2" = verify ]; then exit 0; fi
 if [ "$1" = api ]; then
   shift
+  if [ "$1" = --paginate ] && [ "$2" = --slurp ]; then
+    case "$3" in
+      *actions/workflows/ci.yml/runs*)
+        printf '[{"workflow_runs":[{"id":91,"run_number":9,"run_attempt":1,"path":".github/workflows/ci.yml","head_sha":"%s","head_branch":"main","head_repository":{"full_name":"tailrocks/velnor-new"},"event":"push","status":"completed","conclusion":"success"}]}]\n' "$GITHUB_SHA" ;;
+      *actions/runs/91/attempts/1/jobs*)
+        printf '[{"jobs":[{"name":"Required","head_sha":"%s","head_branch":"main","status":"completed","conclusion":"success"}]}]\n' "$GITHUB_SHA" ;;
+      *) exit 43 ;;
+    esac
+    exit 0
+  fi
   if [ "$1" = --include ]; then
     case "$GH_PREFLIGHT" in
       404) printf 'HTTP/2 404\r\n\r\n{"message":"Not Found","status":"404"}\n'; exit 1 ;;
@@ -257,6 +292,8 @@ if [ "$1" = api ]; then
     esac
   fi
   case "$1" in
+    repos/tailrocks/velnor-new/commits/main)
+      if [ "$2" = --jq ] && [ "$3" = .sha ]; then printf '%s\n' "$GITHUB_SHA"; else printf '{"sha":"%s"}\n' "$GITHUB_SHA"; fi ;;
     repos/tailrocks/velnor-new/git/ref/tags/v0.1.1)
       printf '{"object":{"type":"commit","sha":"%s"}}\n' "$GITHUB_SHA" ;;
     repos/tailrocks/velnor-new/releases/tags/v0.1.1)
@@ -265,6 +302,7 @@ if [ "$1" = api ]; then
   esac
   exit 0
 fi
+if [ "$1" = attestation ] && [ "$2" = verify ]; then exit 0; fi
 if [ "$1" = release ] && [ "$2" = create ]; then
   test "$3" = v0.1.1
   printf '%s\n' "$3" > "$GH_CREATE_TAG"
@@ -286,26 +324,15 @@ exit 46
     let mut permissions = fs::metadata(&mock)?.permissions();
     permissions.set_mode(0o755);
     fs::set_permissions(mock, permissions)?;
-    install_mock_mise(&bin)?;
-    Ok(())
-}
-
-fn install_mock_mise(bin: &Path) -> Result<(), Box<dyn Error>> {
-    let mise = bin.join("mise");
+    let git = bin.join("git");
     fs::write(
-        &mise,
-        r#"#!/bin/sh
-set -eu
-printf '%s\n' "$*" >> "$MISE_CALLS"
-if [ "$#" -lt 8 ] || [ "$1" != "--no-config" ] || [ "$2" != "--no-env" ] || [ "$3" != "--no-hooks" ] || [ "$4" != "exec" ] || [ "$5" != "gh@2.102.0" ] || [ "$6" != "--" ] || [ "$7" != "gh" ]; then exit 70; fi
-shift 7
-test -x "$MOCK_GH"
-exec "$MOCK_GH" "$@"
-"#,
+        &git,
+        "#!/bin/sh\nset -eu\nif [ \"$1\" = rev-parse ] && [ \"$2\" = HEAD ]; then printf '%s\\n' \"$GITHUB_SHA\"; exit 0; fi\nexec /usr/bin/git \"$@\"\n",
     )?;
-    let mut permissions = fs::metadata(&mise)?.permissions();
+    let mut permissions = fs::metadata(&git)?.permissions();
     permissions.set_mode(0o755);
-    fs::set_permissions(mise, permissions)?;
+    fs::set_permissions(git, permissions)?;
+    cli_tests::install_mock_mise(root)?;
     Ok(())
 }
 

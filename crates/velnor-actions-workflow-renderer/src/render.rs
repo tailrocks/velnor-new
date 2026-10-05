@@ -349,7 +349,6 @@ fn render_merged(
     }
     matrix::attach_crate_job_caps(&mut document, &caps)?;
     matrix::insert_publish_step_id(&mut document)?;
-    let document = crate::yaml::quote_run_values_in_yaml(document);
     let text = marker::with_marker(&ctx.generator_version, &render_yaml(&document))?;
     steps::scan_for_private_subcommands(&text)?;
     Ok(RenderedWorkflow {

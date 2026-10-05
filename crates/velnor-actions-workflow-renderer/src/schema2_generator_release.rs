@@ -3,11 +3,10 @@
 //! The next immutable release is `v0.1.1`. Attest jobs never receive
 //! `contents: write`. Only publish does.
 
+use super::{GeneratorReleasePins, Schema2WorkflowRequest};
 use crate::RenderError;
 use crate::runs_on::runs_on_yaml;
 use crate::yaml::Yaml;
-
-use super::Schema2WorkflowRequest;
 
 /// GitHub-hosted macOS label. The arm64 binary is not built on Ubuntu.
 const MACOS_RUNS_ON: &str = "macos-15";
@@ -15,6 +14,8 @@ const MACOS_RUNS_ON: &str = "macos-15";
 mod archive;
 #[path = "schema2_generator_release_assets.rs"]
 mod assets;
+#[path = "schema2_generator_release_candidate_manifest.rs"]
+mod candidate_manifest;
 #[path = "schema2_generator_release_jobs.rs"]
 mod jobs;
 #[path = "schema2_generator_release_manifest.rs"]
@@ -40,14 +41,25 @@ pub(super) struct GeneratorRelease {
 pub(super) fn generator_release(
     request: &Schema2WorkflowRequest,
 ) -> Result<GeneratorRelease, RenderError> {
+    let pins = request
+        .generator_release
+        .as_ref()
+        .ok_or_else(|| RenderError::InvalidWorkflow("generator_release_pins_missing".to_owned()))?;
     let hosted = runs_on_yaml(&request.hosted_label)?;
     let macos = runs_on_yaml(MACOS_RUNS_ON)?;
     let mut actions = Vec::new();
-    let mut jobs = vec![assets::source_gate_job(hosted.clone())];
-    jobs.extend(linux_jobs(hosted.clone(), &mut actions)?);
-    jobs.extend(macos_arm64_jobs(macos, &mut actions)?);
-    jobs.push(manifest::job(hosted.clone(), &mut actions)?);
-    jobs.push(jobs::publish_job(hosted, &mut actions)?);
+    let source_step = source::qualification_step();
+    let mut jobs = vec![assets::source_gate_job(hosted.clone(), pins)?];
+    jobs.extend(linux_jobs(
+        hosted.clone(),
+        pins,
+        &source_step,
+        &mut actions,
+    )?);
+    jobs.extend(macos_arm64_jobs(macos, pins, &source_step, &mut actions)?);
+    jobs.push(candidate_manifest::job(hosted.clone(), pins));
+    jobs.push(manifest::job(hosted.clone(), pins, &mut actions)?);
+    jobs.push(jobs::publish_job(hosted, pins, &mut actions)?);
     Ok(GeneratorRelease {
         workflow: document(jobs),
         actions,
@@ -56,13 +68,16 @@ pub(super) fn generator_release(
 
 fn linux_jobs(
     hosted: Yaml,
+    pins: &GeneratorReleasePins,
+    source_step: &Yaml,
     actions: &mut Vec<(String, Yaml)>,
 ) -> Result<Vec<(String, Yaml)>, RenderError> {
     let steps = assets::build_steps(
         assets::LINUX,
         "Verify ELF architecture",
         &assets::linux_verify(assets::LINUX.binary),
-    );
+        pins,
+    )?;
     Ok(vec![
         jobs::build_job(
             "build-linux",
@@ -74,12 +89,16 @@ fn linux_jobs(
             actions,
         )?,
         qualification::job(
-            "qualify-linux",
-            "Qualify Linux velnor-actions",
-            "generator-release-qualify-linux",
-            hosted.clone(),
-            "build-linux",
-            assets::LINUX,
+            qualification::QualificationJob {
+                id: "qualify-linux",
+                name: "Qualify Linux velnor-actions",
+                action: "generator-release-qualify-linux",
+                runs_on: hosted.clone(),
+                build_job: "build-linux",
+                product: assets::LINUX,
+                source_step,
+            },
+            pins,
             actions,
         )?,
         jobs::attest_job(
@@ -88,6 +107,7 @@ fn linux_jobs(
             "generator-release-attest-linux",
             hosted,
             assets::LINUX,
+            pins,
             actions,
         )?,
     ])
@@ -95,13 +115,16 @@ fn linux_jobs(
 
 fn macos_arm64_jobs(
     macos: Yaml,
+    pins: &GeneratorReleasePins,
+    source_step: &Yaml,
     actions: &mut Vec<(String, Yaml)>,
 ) -> Result<Vec<(String, Yaml)>, RenderError> {
     let steps = assets::build_steps(
         assets::MACOS_ARM64,
         "Verify Mach-O architecture",
         &assets::macos_verify(assets::MACOS_ARM64.binary, "arm64"),
-    );
+        pins,
+    )?;
     Ok(vec![
         jobs::build_job(
             "build-macos",
@@ -113,12 +136,16 @@ fn macos_arm64_jobs(
             actions,
         )?,
         qualification::job(
-            "qualify-macos",
-            "Qualify macOS velnor-actions",
-            "generator-release-qualify-macos",
-            macos.clone(),
-            "build-macos",
-            assets::MACOS_ARM64,
+            qualification::QualificationJob {
+                id: "qualify-macos",
+                name: "Qualify macOS velnor-actions",
+                action: "generator-release-qualify-macos",
+                runs_on: macos.clone(),
+                build_job: "build-macos",
+                product: assets::MACOS_ARM64,
+                source_step,
+            },
+            pins,
             actions,
         )?,
         jobs::attest_job(
@@ -127,6 +154,7 @@ fn macos_arm64_jobs(
             "generator-release-attest-macos",
             macos,
             assets::MACOS_ARM64,
+            pins,
             actions,
         )?,
     ])
@@ -142,6 +170,16 @@ fn document(jobs: Vec<(String, Yaml)>) -> Yaml {
         (
             "permissions".to_owned(),
             Yaml::Map(vec![("contents".to_owned(), Yaml::str("read"))]),
+        ),
+        (
+            "concurrency".to_owned(),
+            Yaml::Map(vec![
+                (
+                    "group".to_owned(),
+                    Yaml::str("generator-release-${{ github.repository }}-${{ github.ref }}"),
+                ),
+                ("cancel-in-progress".to_owned(), Yaml::Bool(false)),
+            ]),
         ),
         ("jobs".to_owned(), Yaml::Map(jobs)),
     ])

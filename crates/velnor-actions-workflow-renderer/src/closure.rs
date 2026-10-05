@@ -59,8 +59,8 @@ pub enum HelperProvenance {
 /// Acquire step from typed provenance; the seed path fails closed.
 ///
 /// Release provenance builds the digest-verified staging step over
-/// caller-supplied fixed argv (download plus `sha256sum -c`); the seed
-/// path emits nothing and reports the documented manual remediation.
+/// caller-supplied fixed argv (download plus a supported SHA-256 verifier);
+/// the seed path emits nothing and reports the documented remediation.
 /// # Errors
 pub fn provision_acquire_step(
     provenance: &HelperProvenance,

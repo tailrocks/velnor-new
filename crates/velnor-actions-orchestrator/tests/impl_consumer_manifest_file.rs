@@ -59,7 +59,7 @@ fn render_consumer_yaml(manifest: &str) -> Result<String, Box<dyn std::error::Er
 fn expected_acquire_block() -> String {
     let version = env!("CARGO_PKG_VERSION");
     format!(
-        "- name: Acquire Velnor\n        run: \"sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \\\"$RUNNER_TEMP/velnor/bin\\\" && curl -fsSL --proto '\\\\''=https'\\\\'' --tlsv1.2 \\\"$VELNOR_ASSET_URL\\\" -o \\\"$RUNNER_TEMP/velnor/bin/velnor-actions-{version}\\\" && echo \\\"$VELNOR_ASSET_SHA256  $RUNNER_TEMP/velnor/bin/velnor-actions-{version}\\\" | sha256sum -c - && chmod +x \\\"$RUNNER_TEMP/velnor/bin/velnor-actions-{version}\\\"'\"",
+        "- name: Acquire Velnor\n        run: \"sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \\\"$RUNNER_TEMP/velnor/bin\\\" && curl -fsSL --proto '\\\\''=https'\\\\'' --tlsv1.2 \\\"$VELNOR_ASSET_URL\\\" -o \\\"$RUNNER_TEMP/velnor/bin/velnor-actions-{version}\\\" && {{ if command -v sha256sum >/dev/null 2>&1; then printf '\\\\''%s  %s\\\\n'\\\\'' \\\"$VELNOR_ASSET_SHA256\\\" \\\"$RUNNER_TEMP/velnor/bin/velnor-actions-{version}\\\" | sha256sum -c -; elif command -v shasum >/dev/null 2>&1; then printf '\\\\''%s  %s\\\\n'\\\\'' \\\"$VELNOR_ASSET_SHA256\\\" \\\"$RUNNER_TEMP/velnor/bin/velnor-actions-{version}\\\" | shasum -a 256 -c -; else echo '\\\\''no SHA-256 utility is available'\\\\'' >&2; exit 1; fi; }} && chmod +x \\\"$RUNNER_TEMP/velnor/bin/velnor-actions-{version}\\\"'\"",
     )
 }
 
@@ -116,7 +116,7 @@ fn absent_manifest_fails_closed_without_provenance() {
     use velnor_actions_orchestrator::consumer_acquire_step_with_manifest;
     // The release twin returns `None` for an absent file; the pure gate
     // must fail closed with the contract error (no URL, no digest).
-    let err = consumer_acquire_step_with_manifest("ubuntu-26.04", "0.1.0", None)
+    let err = consumer_acquire_step_with_manifest("ubuntu-26.04", env!("CARGO_PKG_VERSION"), None)
         .expect_err("absent manifest fails");
     let text = err.to_string();
     assert!(text.contains("consumer_requires_release_install"), "{text}");

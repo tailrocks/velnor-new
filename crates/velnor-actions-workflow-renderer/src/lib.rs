@@ -13,6 +13,7 @@ mod candidate;
 pub mod closure;
 mod closure_paths;
 mod commands;
+mod commands_scan;
 mod composite;
 mod document;
 mod document_steps;
@@ -68,8 +69,7 @@ pub use closure::{
     download_plan_step, freshness_step, provision_acquire_step, publish_plan_step,
 };
 pub use commands::{
-    check_no_bare_cargo, has_bare_env_expansion, join_argv_for_run, quote_env_path_for_run,
-    quote_run_arg, quote_run_line_env_paths, validate_command_argv, validate_env,
+    check_no_bare_cargo, join_argv_for_run, quote_run_arg, validate_command_argv, validate_env,
 };
 pub use guard::{SafeTreePath, check_no_symlink, join_within_root, validate_tree_path};
 pub use marker::{
@@ -94,7 +94,9 @@ pub use render::{
     RenderedFile, RenderedSymlink, RenderedTree, TASK_JOB_ID, ValidatorCommand, WORKFLOW_PATH,
     action_pins, finalize_jobs, render_workflow_ir, render_workflow_ir_strict,
 };
-pub use schema2::{MbxQualificationPins, Schema2WorkflowRequest, render_schema2_workflows};
+pub use schema2::{
+    GeneratorReleasePins, MbxQualificationPins, Schema2WorkflowRequest, render_schema2_workflows,
+};
 pub use setup::{MISE_ACTION_NAME, SETUP_MISE_NAME, mise_setup_step};
 pub use steps::{
     ACQUIRE_NAME, ASSET_SHA_ENV, ASSET_URL_ENV, BASELINE_PUBLISH_UPLOAD_NAME,

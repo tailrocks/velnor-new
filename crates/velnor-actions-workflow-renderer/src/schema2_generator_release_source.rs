@@ -1,5 +1,17 @@
 //! Credential-free source preparation for candidate qualification.
 
+use crate::Yaml;
+
+use super::workflow_steps;
+
+/// Prepare the exact candidate source inline before local composite resolution.
+pub(super) fn qualification_step() -> Yaml {
+    workflow_steps::bash_step(
+        "Fetch exact public source without an action post hook",
+        QUALIFICATION_SOURCE_PREPARE,
+    )
+}
+
 /// Fetch this public repository at the exact run commit without an action post hook.
 pub(super) const QUALIFICATION_SOURCE_PREPARE: &str = r#"set -eu
 python3 - "$GITHUB_WORKSPACE" "$GITHUB_REPOSITORY" "$GITHUB_SHA" <<'PY'

@@ -93,7 +93,6 @@ pub fn render_release_workflow(
     };
     check_release_jobs(spec, &binding)?;
     let document = release_document(spec)?;
-    let document = crate::yaml::quote_run_values_in_yaml(document);
     let text = marker::with_marker(&ctx.generator_version, &render_yaml(&document))?;
     steps::scan_for_private_subcommands(&text)?;
     Ok(text)

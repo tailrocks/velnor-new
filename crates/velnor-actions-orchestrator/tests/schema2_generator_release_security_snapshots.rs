@@ -112,6 +112,19 @@ fn assert_qualifier_job_inputs(qualifier: &str, target: TargetJobs) -> Result<()
         "{qualifier}"
     );
     assert_eq!(qualifier.matches("- name:").count(), 2, "{qualifier}");
+    let first_step = qualifier
+        .split("- name:")
+        .nth(1)
+        .ok_or("qualifier has no first step")?
+        .split("- name:")
+        .next()
+        .ok_or("qualifier first step is missing")?;
+    assert!(first_step.contains("shell: bash"), "{first_step}");
+    assert!(first_step.contains("run:"), "{first_step}");
+    assert!(first_step.contains("python3"), "{first_step}");
+    assert!(first_step.contains("credential.helper="), "{first_step}");
+    assert!(first_step.contains("GITHUB_SHA"), "{first_step}");
+    assert!(!first_step.contains("uses:"), "{first_step}");
     let source_prepare = qualifier
         .find("Fetch exact public source without an action post hook")
         .ok_or("missing token-free source preparation")?;
@@ -137,11 +150,15 @@ fn assert_qualifier_action_boundary(qualifier_body: &str) -> Result<(), Box<dyn 
     assert!(!qualifier_body.contains("Setup Mise"), "{qualifier_body}");
     assert_eq!(
         qualifier_body.matches("uses:").count(),
-        1,
+        2,
         "{qualifier_body}"
     );
     assert!(
         qualifier_body.contains("actions/download-artifact@"),
+        "{qualifier_body}"
+    );
+    assert!(
+        qualifier_body.contains("artifact-ids: ${{ inputs.manifest_artifact_id }}"),
         "{qualifier_body}"
     );
     assert!(

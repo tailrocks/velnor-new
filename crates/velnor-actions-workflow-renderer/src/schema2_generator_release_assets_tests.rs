@@ -47,7 +47,7 @@ fn wrong_checksum_filename_stops_before_candidate_execution() -> Result<(), Box<
     let source_sha = String::from_utf8(sha.stdout)?.trim().to_owned();
     let command = format!(
         "{}\n{}",
-        verify_provenance_in_directory(LINUX, &directory_name),
+        verify_provenance_in_directory(LINUX, &directory_name, "1.98.1", "1.21.1"),
         qualification_script(LINUX.binary, &directory_name)
     );
     let status = Command::new("bash")
