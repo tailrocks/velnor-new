@@ -121,7 +121,8 @@ hosted workflow log. Keep a normal CI runtime observation separate from a
 formal `Qualification` workflow result: a newer CI observation refreshes
 image identity only and does not claim the qualification matrix ran again.
 The [2026-10-04 evidence snapshot](freshness-evidence-2026-10-04.md)
-records this distinction.
+records this distinction. The [2026-10-05 evidence snapshot](freshness-evidence-2026-10-05.md)
+refreshes the same stamps after the `2026-10-05T11:47:13Z` probe.
 
 ## Exceptions (≤14 days)
 
