@@ -117,9 +117,9 @@ pub const MBX_RESTORE_NAME: &str = "Restore MBX objects";
 pub(crate) const MBX_GC_AUTO_ENV: &str = "MBX_GC_AUTO";
 /// MBX 1.21.1+ honors this value. Hosted Linux jobs keep collection off.
 pub(crate) const MBX_GC_AUTO_VALUE: &str = "0";
-/// Hosted Linux jobs must not materialize a shared read-only `OUT_DIR`.
+/// Generated MBX jobs must not materialize a shared read-only `OUT_DIR`.
 pub(crate) const MBX_SHARE_OUT_DIR_ENV: &str = "MBX_SHARE_OUT_DIR";
-/// Disable shared `OUT_DIR` materialization on hosted Linux MBX jobs.
+/// Disable shared `OUT_DIR` materialization on every generated MBX job.
 pub(crate) const MBX_SHARE_OUT_DIR_VALUE: &str = "0";
 /// Mode that skips the action post. `read` does not permit writes.
 pub(crate) const MBX_ACTION_CACHE_MODE: &str = "read";
@@ -237,20 +237,21 @@ fn mbx_objects_action_step(
         ("toolchain".to_owned(), rust_toolchain.to_owned()),
         (
             "cache-generation".to_owned(),
-            hosted_linux_cache_generation(mbx_version, action_sha),
+            cache_generation(mbx_version, action_sha),
         ),
     ]);
     env.insert(
         MBX_CACHE_MODE_ENV.to_owned(),
         MBX_ACTION_CACHE_MODE.to_owned(),
     );
+    env.insert("VELNOR_MBX_VERSION".to_owned(), mbx_version.to_owned());
     action_step_with_env(MBX_RESTORE_NAME, uses, with, env)
 }
 
-/// Base generation, then the hosted-Linux share token, then the action SHA.
-fn hosted_linux_cache_generation(mbx_version: &str, action_sha: &str) -> String {
+/// Generation binds the runner-independent `OUT_DIR` policy and action SHA.
+fn cache_generation(mbx_version: &str, action_sha: &str) -> String {
     format!(
-        "{}${{{{ runner.environment == 'github-hosted' && runner.os == 'Linux' && '-share-out-dir-disabled-v1' || '' }}}}-action-{action_sha}",
+        "{}-share-out-dir-disabled-v1-action-{action_sha}",
         mbx_cache_generation(mbx_version)
     )
 }
