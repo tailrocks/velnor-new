@@ -1,21 +1,89 @@
 //! Versioned journal initialization and conservative legacy-row migration.
 
-use std::collections::HashSet;
-
 use crate::error::HostError;
 
 const JOURNAL_VERSION: i64 = 1;
-const CURRENT_COLUMNS: [&str; 9] = [
-    "id",
-    "kind",
-    "subject",
-    "state",
-    "docker_id",
-    "github_runner_id",
-    "cleanup_proven",
-    "dind_id",
-    "worker_volume",
+const CURRENT_COLUMNS: [ColumnSpec; 9] = [
+    ColumnSpec {
+        name: "id",
+        declared_type: "INTEGER",
+        not_null: 0,
+        default_value: None,
+        primary_key: 1,
+    },
+    ColumnSpec {
+        name: "kind",
+        declared_type: "TEXT",
+        not_null: 1,
+        default_value: None,
+        primary_key: 0,
+    },
+    ColumnSpec {
+        name: "subject",
+        declared_type: "TEXT",
+        not_null: 1,
+        default_value: None,
+        primary_key: 0,
+    },
+    ColumnSpec {
+        name: "state",
+        declared_type: "TEXT",
+        not_null: 1,
+        default_value: None,
+        primary_key: 0,
+    },
+    ColumnSpec {
+        name: "docker_id",
+        declared_type: "TEXT",
+        not_null: 0,
+        default_value: None,
+        primary_key: 0,
+    },
+    ColumnSpec {
+        name: "github_runner_id",
+        declared_type: "TEXT",
+        not_null: 0,
+        default_value: None,
+        primary_key: 0,
+    },
+    ColumnSpec {
+        name: "cleanup_proven",
+        declared_type: "INTEGER",
+        not_null: 1,
+        default_value: Some("0"),
+        primary_key: 0,
+    },
+    ColumnSpec {
+        name: "dind_id",
+        declared_type: "TEXT",
+        not_null: 0,
+        default_value: None,
+        primary_key: 0,
+    },
+    ColumnSpec {
+        name: "worker_volume",
+        declared_type: "TEXT",
+        not_null: 0,
+        default_value: None,
+        primary_key: 0,
+    },
 ];
+
+struct ColumnSpec {
+    name: &'static str,
+    declared_type: &'static str,
+    not_null: i64,
+    default_value: Option<&'static str>,
+    primary_key: i64,
+}
+
+struct ColumnInfo {
+    name: String,
+    declared_type: String,
+    not_null: i64,
+    default_value: Option<String>,
+    primary_key: i64,
+}
 
 pub(super) async fn bootstrap(conn: &turso::Connection) -> Result<(), HostError> {
     conn.execute("BEGIN IMMEDIATE", ())
@@ -76,7 +144,10 @@ async fn migrate_version_zero(conn: &turso::Connection) -> Result<(), HostError>
 async fn ensure_legacy_columns(conn: &turso::Connection) -> Result<(), HostError> {
     let columns = read_columns(conn).await?;
     for (column, definition) in [("dind_id", "TEXT"), ("worker_volume", "TEXT")] {
-        if !columns.contains(column) {
+        if !columns
+            .iter()
+            .any(|existing| existing.name.eq_ignore_ascii_case(column))
+        {
             conn.execute(
                 &format!("ALTER TABLE intents ADD COLUMN {column} {definition}"),
                 (),
@@ -90,24 +161,69 @@ async fn ensure_legacy_columns(conn: &turso::Connection) -> Result<(), HostError
 
 async fn validate_current_schema(conn: &turso::Connection) -> Result<(), HostError> {
     let columns = read_columns(conn).await?;
-    if CURRENT_COLUMNS
-        .iter()
-        .all(|column| columns.contains(*column))
-    {
-        Ok(())
-    } else {
-        Err(HostError::Journal)
+    if columns.len() != CURRENT_COLUMNS.len() {
+        return Err(HostError::Journal);
     }
+
+    for expected in CURRENT_COLUMNS {
+        let Some(actual) = columns
+            .iter()
+            .find(|column| column.name.eq_ignore_ascii_case(expected.name))
+        else {
+            return Err(HostError::Journal);
+        };
+        if !actual
+            .declared_type
+            .trim()
+            .eq_ignore_ascii_case(expected.declared_type)
+            || actual.not_null != expected.not_null
+            || actual.default_value.as_deref() != expected.default_value
+            || actual.primary_key != expected.primary_key
+        {
+            return Err(HostError::Journal);
+        }
+    }
+
+    if has_separate_primary_key_index(conn).await? {
+        return Err(HostError::Journal);
+    }
+
+    Ok(())
 }
 
-async fn read_columns(conn: &turso::Connection) -> Result<HashSet<String>, HostError> {
-    let mut columns = HashSet::new();
+async fn has_separate_primary_key_index(conn: &turso::Connection) -> Result<bool, HostError> {
+    let mut rows = conn
+        .query("PRAGMA index_list(intents)", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    while let Some(row) = rows.next().await.map_err(|_| HostError::Journal)? {
+        if row
+            .get::<String>(3)
+            .map_err(|_| HostError::Journal)?
+            .eq_ignore_ascii_case("pk")
+        {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+async fn read_columns(conn: &turso::Connection) -> Result<Vec<ColumnInfo>, HostError> {
+    let mut columns = Vec::new();
     let mut rows = conn
         .query("PRAGMA table_info(intents)", ())
         .await
         .map_err(|_| HostError::Journal)?;
     while let Some(row) = rows.next().await.map_err(|_| HostError::Journal)? {
-        columns.insert(row.get::<String>(1).map_err(|_| HostError::Journal)?);
+        columns.push(ColumnInfo {
+            name: row.get::<String>(1).map_err(|_| HostError::Journal)?,
+            declared_type: row.get::<String>(2).map_err(|_| HostError::Journal)?,
+            not_null: row.get::<i64>(3).map_err(|_| HostError::Journal)?,
+            default_value: row
+                .get::<Option<String>>(4)
+                .map_err(|_| HostError::Journal)?,
+            primary_key: row.get::<i64>(5).map_err(|_| HostError::Journal)?,
+        });
     }
     Ok(columns)
 }
