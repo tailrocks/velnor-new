@@ -26,7 +26,7 @@ pub const MAX_CACHE_KEY_BYTES: usize = 512;
 /// input gate before constructing this identity component.
 #[must_use]
 pub fn mbx_cache_generation(version: &str) -> String {
-    format!("{MBX_CACHE_GENERATION_PREFIX}{version}")
+    format!("{MBX_CACHE_GENERATION_PREFIX}{version}-share-out-dir-disabled-v1")
 }
 
 /// The 13 allowed `miss_reason` values (cache §3).

@@ -106,14 +106,15 @@ Each path has one owner:
 |---|---|---|
 | Mise tools and Rust components | Compiled-in generator catalog, executed by Mise | Embed and invoke exact versions; disable project config, env files, and hooks |
 | Cargo registry and Git sources | Velnor source layer | Exclude credentials; separate from MBX |
-| Compiler objects and scheduler state | MBX CLI owns the object format; the typed runner lane owns transport | Hosted Linux jobs use the action's `github` objects backend and allow writes only on protected default-branch pushes. Scale Set jobs use the pinned action's `local` setup path, which skips its GitHub restore, then restore/import and export/save one MBX directory through `actions/cache`. That route owns its own run-scoped `MBX_CACHE_EXPORT_GROUP` and key; it does not consume action outputs. Every generated MBX job sets `MBX_SHARE_OUT_DIR=0`; only hosted Linux disables automatic MBX collection. Neither lane reimplements the MBX object format |
+| Compiler objects and scheduler state | `jdx/mr-boxington-action` when MBX is selected | Production remains pinned to action v1.6 and MBX `1.21.1`; the newer MBX `1.22.0` is candidate-only pending the #29 source, lifecycle, disk, and input qualification. The action owns object format, cache transport, and post step. The current experiment uses the provider's Rust-identity key with a generation bound to action pin, runner environment, GitHub job ID, and MBX version; its current source has not established an exact immutable runner-image identity or useful-delta admission. Do not treat the experiment as satisfying those cache requirements. The stable logical store path is `$RUNNER_TEMP/velnor/mbx`. Velnor does not install MBX through Mise or implement the object format |
 | Mutable target directory | Matrix job | Reuse sequentially; never share concurrently |
 | Successful task result | Mise task cache | Use only for qualified deterministic tasks and complete outputs |
 
-The orchestrator records eligibility in the plan; the renderer serializes typed restore/save operations.
-Hosted Linux uses action `github`; typed Scale Set uses `local` plus `actions/cache`, with a separate key/export
-group bound to action SHA, MBX generation, OS/architecture, Rust identity, revision, run, and attempt. This
-route archives only the exported directory and is selected by typed runner identity.
+The orchestrator decides whether each cache operation is allowed and records that decision in the plan. The
+workflow renderer serializes approved GitHub cache operations from typed workflow IR; it does not choose
+keys, trust, eligibility, or save timing. For an MBX profile, the pinned Mr. Boxington action installs the
+exact MBX binary and owns the object format, cache transport, and post step. Velnor's GitHub cache steps do
+not transport MBX objects.
 
 Cache save is allowed only after its producer succeeded, the current run is trusted for that namespace, and
 the export has a useful delta. A task-result cache hit, failed/cancelled task, untrusted PR, empty export, or
@@ -122,14 +123,12 @@ compiler writers.
 
 The generated workflow MUST use these paths. `CARGO_TARGET_DIR` is never an archive path:
 
-Protected-main roundtrip is candidate-only, with an immutable action ref from freshness inventory distinct from the production pin; only exact-source hosted evidence and independent review can lift the hold.
-
 ```text
 VELNOR_CACHE_ROOT     = $RUNNER_TEMP/velnor/cache
 CARGO_HOME            = $VELNOR_CACHE_ROOT/cargo
 CARGO_SOURCE_PATHS    = $CARGO_HOME/registry $CARGO_HOME/git
 CARGO_TARGET_DIR      = $RUNNER_TEMP/velnor/target/<lane_id>
-MBX_TARGET_DIR        = $RUNNER_TEMP/velnor/target/<lane_id>
+MBX_CACHE_DIR         = $RUNNER_TEMP/velnor/mbx (preflight exports through GITHUB_ENV; the action main and post receive it explicitly)
 MISE_TASK_CACHE_DIR   = $VELNOR_CACHE_ROOT/mise-task
 MISE_TASK_ARTIFACTS   = $MISE_TASK_CACHE_DIR/task-artifacts/v2
 REPORT_DIR            = $RUNNER_TEMP/velnor/<run-key>/<matrix-key>
@@ -140,10 +139,11 @@ REPORT_DIR            = $RUNNER_TEMP/velnor/<run-key>/<matrix-key>
 `$MISE_TASK_CACHE_DIR/task-artifacts/v2`; CI sets that environment variable before Mise starts and archives
 only that directory.
 
-`actions/cache/restore` and `/save` MAY archive `CARGO_SOURCE_PATHS`, qualified `MISE_TASK_ARTIFACTS`, and the
-exported MBX bundle. Hosted `ACTIONS_CACHE_MODE=read` skips the disk-exhausting post (run `37114238559`); Scale
-Set's local backend skips GitHub restore/post. Misses/import failures stay cold. Velnor MUST NOT reimplement
-MBX serialization/import; Cargo-profile jobs omit the action.
+Velnor's cache steps MAY archive only `CARGO_SOURCE_PATHS` and qualified
+`MISE_TASK_ARTIFACTS`; they MUST NOT archive MBX objects or manual bundles.
+The protected-push writer rule applies to ordinary task workflows. A separately
+authorized `workflow_dispatch` qualification job grants `actions:write`, enables
+its action save, and uses a run/attempt/source-SHA-bound generation.
 
 Velnor MUST NOT configure Mise `task.cache.remote_url`, remote namespaces, remote tokens, or OIDC task-cache
 credentials in V1. There is no Velnor cache server. The selected task-result transport is an opaque GitHub
