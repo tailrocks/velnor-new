@@ -81,13 +81,25 @@ async fn idless_uncertain_rows_keep_both_slots() -> Result<(), String> {
     absent(&scratch.file())
 }
 #[tokio::test]
-async fn own_idless_uncertain_row_does_not_block_its_mint() -> Result<(), String> {
+async fn own_idless_uncertain_row_keeps_its_reservation() -> Result<(), String> {
     let (scratch, journal) = open("idless-self").await?;
-    uncertain_without_ids(&journal, "m9").await?;
+    let id = journal
+        .begin("launch", "m9")
+        .await
+        .map_err(|err| err.to_string())?;
+    journal
+        .finish(id, Outcome::Uncertain)
+        .await
+        .map_err(|err| err.to_string())?;
     let decision = admission(&Idle, &journal, 1, 1, 0, &assigned_wait(9, 1))
         .await
         .map_err(|err| err.to_string())?;
-    assert_eq!(decision, Admit::Start { stop: true });
+    assert_eq!(decision, Admit::Hold);
+    let rows = journal.rows().await.map_err(|err| err.to_string())?;
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].id, id);
+    assert_eq!(rows[0].state, crate::IntentState::Uncertain);
+    assert!(!rows[0].cleanup_proven);
     absent(&scratch.file())
 }
 
