@@ -85,6 +85,10 @@ fn external_deps_allowlisted_used_and_narrow() -> Result<(), Box<dyn Error>> {
         // is enabled so artifacts can be validated without extracting paths.
         "flate2",
         "zip",
+        // Reviewed proc-macro token tree for the test-source scanner.
+        "proc-macro2",
+        // Reviewed Rust AST (`full`, `visit`) for the test-source closure guard.
+        "syn",
     ];
     for (dir, _) in MEMBERS {
         let body = manifest(dir)?;
@@ -102,10 +106,10 @@ fn external_deps_allowlisted_used_and_narrow() -> Result<(), Box<dyn Error>> {
             if let Some(index) = line.find("features").filter(|_| !archive_decoder) {
                 let quoted: Vec<&str> = line[index..].split('"').collect();
                 for feature in quoted.into_iter().skip(1).step_by(2) {
-                    // Only `derive` globally, plus the narrowly used `fs`
-                    // and `process` rustix features (no net/pty/terminal).
+                    // `derive` globally; rustix `fs`/`process`; syn `full`/`visit`.
                     let narrow = feature == "derive"
-                        || (key == "rustix" && matches!(feature, "fs" | "process"));
+                        || (key == "rustix" && matches!(feature, "fs" | "process"))
+                        || (key == "syn" && matches!(feature, "full" | "visit"));
                     assert!(narrow, "{dir}/{key} feature {feature}");
                 }
             }
