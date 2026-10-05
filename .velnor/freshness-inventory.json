@@ -166,11 +166,11 @@
     {
       "expires": "2026-10-18",
       "granted": "2026-10-04",
-      "held_version": "1.22.0",
+      "held_version": "1.21.1",
       "issue": "#29",
       "key": "mr-boxington",
       "owner": "@donbeave",
-      "reason": "The selected catalog pin is official mr-boxington v1.22.0; exact tag v1.22.0 resolves to 10474d43342ad65df3b02323dd8092d18ab38101 and source/local stock identity is verified. #29 production hosted qualification remains PARTIAL for current-source cache lifecycle, disk, and input behavior. Keep the selected v1.22.0 source while that hosted proof remains open; do not claim the candidate is formally qualified. Reassess by 2026-10-18."
+      "reason": "Keep the qualified mr-boxington 1.21.1 production pin while the 1.22.0 same-repository candidate qualification remains PARTIAL for current-source cache lifecycle, disk, and input behavior. The candidate is opt-in only and does not change the production catalog. Reassess by 2026-10-18."
     },
     {
       "expires": "2026-10-15",
@@ -205,8 +205,8 @@
       "checked_at": "2026-10-04T11:28:54Z",
       "latest": "v1.22.0",
       "name": "mr-boxington",
-      "pinned": "1.22.0",
-      "qualified": "1.22.0",
+      "pinned": "1.21.1",
+      "qualified": "1.21.1",
       "source": "https://api.github.com/repos/jdx/mr-boxington/releases/latest",
       "status": "held",
       "latest_sha": "10474d43342ad65df3b02323dd8092d18ab38101"
