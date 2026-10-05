@@ -7,7 +7,7 @@ use crate::publish_job::baseline_publish_job;
 use crate::workflow::{CHECKOUT_USES, REQUEST_DIR};
 use crate::workflow_jobs::{final_job, plan_job};
 use std::collections::BTreeMap;
-use velnor_actions_contract::{Concurrency, Job, JobTimeout, Permissions, Trigger};
+use velnor_actions_contract::{Concurrency, Job, JobTimeout, Permissions, Trigger, WorkflowPolicy};
 use velnor_actions_workflow_renderer::render::{RenderContext, WORKFLOW_PATH};
 
 /// Minimal crate job covering the crate attach branch.
@@ -78,6 +78,7 @@ fn lock_acquire_inserts_digest_verified_stage() {
                 false,
                 false,
                 false,
+                WorkflowPolicy::ConsumerV1,
                 &[],
             )
             .expect("plan job"),
@@ -160,6 +161,7 @@ fn lock_acquire_records_source_commit() {
             false,
             false,
             false,
+            WorkflowPolicy::ConsumerV1,
             &[],
         )
         .expect("plan job"),
@@ -203,6 +205,7 @@ fn preseed_attach_builds_once_and_sets_mode() {
                     false,
                     false,
                     false,
+                    WorkflowPolicy::ConsumerV1,
                     &[],
                 )
                 .expect("plan job"),
@@ -305,6 +308,7 @@ fn preseed_fixture(use_mbx: bool, fetch_roots: &[String]) -> WorkflowPlan {
                     use_mbx,
                     false,
                     false,
+                    WorkflowPolicy::ConsumerV1,
                     fetch_roots,
                 )
                 .expect("plan job"),

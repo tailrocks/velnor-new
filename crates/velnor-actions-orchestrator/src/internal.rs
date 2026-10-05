@@ -46,6 +46,8 @@ pub const REQUEST_FILE_ENV: &str = "VELNOR_REQUEST_FILE";
 pub const WRITE_REQUEST_OP: &str = "write-request-v1";
 /// Plan operation tag.
 pub const PLAN_OP: &str = "plan-v1";
+/// Qualification predecessor verification operation tag.
+pub const RESOLVE_QUALIFICATION_ADMISSION_OP: &str = "resolve-qualification-admission-v1";
 /// Merge operation tag.
 pub const MERGE_OP: &str = "merge-v1";
 
@@ -57,30 +59,30 @@ pub const MERGE_OP: &str = "merge-v1";
 /// reject via `deny_unknown_fields`.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct PlanRequest {
+pub(crate) struct PlanRequest {
     /// Request schema; must be 1.
-    schema: u32,
+    pub(crate) schema: u32,
     /// Consuming operation; must be `plan-v1` when present.
     #[serde(default)]
-    op: Option<String>,
+    pub(crate) op: Option<String>,
     /// Run key; empty derives from the GitHub environment.
     #[serde(default)]
-    run_key: String,
+    pub(crate) run_key: String,
     /// Base commit or null.
-    base: Option<String>,
+    pub(crate) base: Option<String>,
     /// Head commit.
-    head: String,
+    pub(crate) head: String,
     /// Triggering event.
-    event: WorkflowEvent,
+    pub(crate) event: WorkflowEvent,
     /// Runner context for a protected hosted qualification dispatch.
     #[serde(default)]
-    qualification: Option<QualificationDispatch>,
+    pub(crate) qualification: Option<QualificationDispatch>,
     /// Repository root override; defaults to the resolved root.
     #[serde(default)]
-    root: Option<PathBuf>,
+    pub(crate) root: Option<PathBuf>,
     /// Trusted baseline evidence for coverage classification.
     #[serde(default)]
-    baseline_manifest: Option<serde_json::Value>,
+    pub(crate) baseline_manifest: Option<serde_json::Value>,
     /// Runner-owned repository slug (`owner/repo`) for provenance.
     ///
     /// The request writer captures this from `GITHUB_REPOSITORY`; the
@@ -88,7 +90,7 @@ struct PlanRequest {
     /// a pure function of request plus checkout. Absent means a local
     /// run: the git origin is the fallback.
     #[serde(default)]
-    repository: Option<String>,
+    pub(crate) repository: Option<String>,
 }
 
 /// `plan-v1` response: schema plus plan and matrix copies.

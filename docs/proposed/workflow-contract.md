@@ -152,9 +152,76 @@ permissions:
   actions: read
 ```
 
-All other permissions MUST be absent or `none`. `actions: read` is only for the exact trusted baseline
-artifact. Release publication uses a separate workflow with explicit permissions; fork pull requests receive
-no write access. `[stacks.rust.release]` adds `release.yml` (see [release contract](release-contract.md)) with per-job permissions that MUST NOT weaken this default.
+All other permissions MUST be absent or `none`. `actions: read` is limited to exact baseline and hosted
+qualification run, artifact, and cache metadata lookups. Release publication uses a separate workflow with
+explicit permissions; fork pull requests receive no write access. `[stacks.rust.release]` adds `release.yml`
+(see [release contract](release-contract.md)) with per-job permissions that MUST NOT weaken this default.
+
+### Velnor hosted qualification dispatch
+
+Only `velnor-repository-v1` adds `workflow_dispatch` to `ci.yml`. It accepts the required `campaign` and
+`phase` inputs, where `phase` is exactly one of `cold`, `warm`, `third`, `useful_delta`, or `control`. The
+optional string inputs `predecessor_run_id` and `predecessor_run_attempt` are a pair: both are absent for
+`cold` and `control`, and both are positive decimal identifiers for `warm`, `third`, and `useful_delta`.
+The identifiers locate a prior run; they confer no authority until the run, attempt, artifact, and complete
+receipt chain have been fetched and validated. Consumers receive no qualification inputs, resolver step, or
+resolver-only tool requirements.
+
+The dispatcher MUST run the actual `workflow_dispatch` on the configured protected default branch of the
+canonical Velnor repository. Request materialization records the runner's event, repository, ref, protection
+status, workflow ref and SHA, source SHA, and run/attempt. The planner and final admission MUST compare those
+values with the protected default branch and the exact `.github/workflows/ci.yml` source. Dispatches MUST
+remain the distinct untrusted `Qualification` event: they MUST NOT be converted into `push`, MUST NOT acquire
+general `Trusted` status, and MUST NOT satisfy release, baseline-publish, infrastructure-apply, or unrelated
+write gates.
+
+Qualification plans retain the ordinary discovered universe and plan graph. Every selected applicable
+obligation and required validator executes; baseline coverage and task-result promotion are unavailable.
+Before the plan has validated the event context and predecessor admission, the planner job MUST disable every
+cache restore and save. Raw dispatch fields can deny access only. The plan emits a canonical, validated
+`qualification_cache_directives` value bound to the plan, run, campaign, phase, and sorted lane/layer map;
+every value promoted through `$GITHUB_OUTPUT` or job outputs MUST be included in the aggregate UTF-16 budget.
+Downstream cache producers MUST consume that typed directive and bind the actual runner image, image version,
+toolchain, cache format, target, and layer identity before they derive any cache key. Phase strings and raw
+input values MUST NOT independently authorize cache access.
+
+The phase lineage is fixed:
+
+| Phase | Required predecessor | Cache behavior |
+|---|---|---|
+| `cold` | None | On a unique campaign namespace, prove every active layer missed before execution; write the K1 snapshot only after successful work. |
+| `warm` | Admitted `cold` run and attempt | On a fresh hosted runner and identical source/workload, restore only the exact admitted K1 entries. Useful new completed state may be written as successor K2. |
+| `third` | Admitted `warm` run and attempt | Keep source and workload unchanged, restore the exact K2 entries, prove the late closure is reused, and disable all saves. |
+| `useful_delta` | Admitted `third` run and attempt | Preserve the same obligation set and campaign lineage, require a checked-out source diff from the admitted predecessor, restore its exact compatible snapshot, and record any useful successor state only from observed evidence. |
+| `control` | None | Keep the same source and workload configuration while disabling every cache and task-result reuse layer. |
+
+The receipt artifact `velnor-qualification-cache-receipt-v1` MUST contain exactly one bounded
+`qualification-cache-receipt.json` file. The dispatcher obtains run, attempt, repository, branch, workflow,
+artifact ID, expiry, size, and SHA-256 metadata independently from the GitHub Actions API. It verifies the
+downloaded immutable ZIP against that API digest before parsing its sole expected file; caller-supplied JSON,
+artifact names, run IDs, or receipt fields are never metadata authority. Admission follows immutable run and
+attempt references to the phase's full predecessor chain, with a fixed maximum depth and byte bound. Each
+phase receipt records actual cache IDs/keys, restore and save outcomes after producer post-job hooks, completed
+obligations, and useful-state/closure digests. A save action's success output alone does not prove cache
+creation. The control receipt records each cache layer as disabled and unqueried.
+
+Cache restore selection MUST be exact for the admitted immutable cache entry before any restored bytes are
+used. A full key in `restore-keys` remains a prefix match. The pinned `actions/cache` restore action also
+tries a prefix match on its primary key after an exact miss, even when `restore-keys` is omitted; it downloads
+and extracts that selection before exposing `cache-matched-key`. Therefore, a full key or the absence of
+`restore-keys` does not prove an exact restore, and checking the output after restoring into a live consumer
+directory is too late. A producer using that action MUST restore into an isolated staging path with the same
+path list used when saving that cache version, clear the stage before restore, and keep all consumers pointed
+away from it until the selected cache identity is admitted. It MUST compare the actual matched key and
+available cache object/ref/version metadata with the directive and compatibility identity before importing
+the staged data; a mismatched partial restore MUST be discarded and MUST NOT be reported as a cold miss.
+Lookup-only followed by a separate restore is not selection binding because the two calls may select different
+entries. If the selected object cannot be bound before use, that cache layer MUST remain disabled. The
+restore implementation MUST also enforce bounded download and extraction sizes before accepting cache data.
+Each layer's writer is limited to the validated qualification namespace and generated key; ordinary CI
+readers and baseline consumers MUST never read qualification entries. Required-check, artifact, report, and
+job order remain the normal generated workflow graph; qualification is an event policy, not a second task
+graph.
 
 The workflow concurrency group MUST be:
 
