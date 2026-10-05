@@ -1,9 +1,8 @@
 //! Committed-manifest file-read plus closed-dispatch tests.
 //!
-//! Declared via `#[path]` from `discover.rs` under `cfg(test)` so the
-//! discovery module keeps the file size gate. The helper is
-//! cfg-independent, so these debug-mode tests cover the exact read the
-//! release twin relies on.
+//! Declared via `#[path]` from `discover.rs` under `cfg(test)` because it
+//! tests private detector conversion. Manifest admission uses the shared
+//! consumer-manifest reader so debug tests cover the release twin's read.
 
 use std::fs;
 use std::path::Path;
@@ -11,8 +10,10 @@ use std::path::Path;
 use tempfile::TempDir;
 use velnor_actions_contract::{StackCandidate, WorkflowPolicy};
 
-use super::detected_projects;
-use crate::discover_manifest::{for_policy, read_manifest_file};
+use super::{
+    consumer_manifest::{for_policy, read_manifest_file},
+    detected_projects,
+};
 use crate::safe_read::MAX_REPO_FILE_BYTES;
 
 /// Present file returns its exact text.

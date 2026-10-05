@@ -25,7 +25,6 @@ pub mod decisions;
 mod derive_groups;
 mod discover;
 mod discover_index;
-mod discover_manifest;
 mod discover_tofu;
 mod error;
 mod evidence;
