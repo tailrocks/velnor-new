@@ -1,0 +1,1049 @@
+{
+  "status": "PARTIAL_RESEARCH_NOT_A_DELETION_CERTIFICATE",
+  "review_date_singapore": "2026-10-04",
+  "initial_probe_utc": "2026-10-03T20:09:11Z",
+  "artifact_created_utc": "2026-10-03T20:42:31.755170+00:00",
+  "repository": "tailrocks/velnor-new",
+  "main_sha": "5a946c33cf005777feab2bc91fa4aa8e01dd58f4",
+  "pr_number": 12,
+  "pr_head": "d94fe9cefa6a0b97f00d235191c2d3142d1af6ff",
+  "pr_head_branch": "perf/cache-selection-qualification",
+  "pr_body_stale_sha": "fb9963a45cce9259203c0d435766e6ae0ad76b89",
+  "ref_proof": "GitHub GET API; no fresh git clone/cat-file",
+  "network_limitation": "Container DNS/Git network unavailable; API text reads worked",
+  "executed_tests": [],
+  "remote_mutations": [],
+  "refs": [
+    {
+      "branch": "capacity-pressure",
+      "initial_sha": "5ab06042fa171889650b2bfca164d59926448ddc",
+      "second_probe_sha": "5ab06042fa171889650b2bfca164d59926448ddc",
+      "changed_during_review": false,
+      "coverage": "ref-only"
+    },
+    {
+      "branch": "fix/mbx-hosted-cache-space",
+      "initial_sha": "8480ddb5ee655dfc3f6c6c04360ad6c073980f0b",
+      "second_probe_sha": "1ecd84d1f6320e9a0209968c2057952b9363c8a4",
+      "changed_during_review": true,
+      "coverage": "latest commit + MBX renderer module inspected; full branch search pending"
+    },
+    {
+      "branch": "fix/qualified-platform-checks",
+      "initial_sha": "f53081d700d18e5f42723d5237679c4bccf72a78",
+      "second_probe_sha": "f53081d700d18e5f42723d5237679c4bccf72a78",
+      "changed_during_review": false,
+      "coverage": "ref-only"
+    },
+    {
+      "branch": "g4-submodule-fixture",
+      "initial_sha": "85e202a9446b105a9c8b8e9589b54bc1e513a808",
+      "second_probe_sha": "85e202a9446b105a9c8b8e9589b54bc1e513a808",
+      "changed_during_review": false,
+      "coverage": "ref-only"
+    },
+    {
+      "branch": "main",
+      "initial_sha": "5a946c33cf005777feab2bc91fa4aa8e01dd58f4",
+      "second_probe_sha": "5a946c33cf005777feab2bc91fa4aa8e01dd58f4",
+      "changed_during_review": false,
+      "coverage": "selected config, scripts, source and indexed searches; full tree-content search pending"
+    },
+    {
+      "branch": "perf/cache-selection-qualification",
+      "initial_sha": "d94fe9cefa6a0b97f00d235191c2d3142d1af6ff",
+      "second_probe_sha": "d94fe9cefa6a0b97f00d235191c2d3142d1af6ff",
+      "changed_during_review": false,
+      "coverage": "PR changed-file inventory, selected source, ci.yml and Foundation workflow"
+    },
+    {
+      "branch": "scaleset-evidence",
+      "initial_sha": "f2b9ef2ab0396f2b892c260818e472685ed1f367",
+      "second_probe_sha": "f2b9ef2ab0396f2b892c260818e472685ed1f367",
+      "changed_during_review": false,
+      "coverage": "ref-only"
+    },
+    {
+      "branch": "tar-absolute",
+      "initial_sha": "3aa72b54fe0e822171df9e64e23a6baa6e7e25cd",
+      "second_probe_sha": "5b309009599ce11173830045e237fef6900d6b42",
+      "changed_during_review": true,
+      "coverage": "initial recursive path inventory; latest Dockerfile patch; full branch content pending"
+    },
+    {
+      "branch": "owned-source/cache-action/8758d976a1b25eb387f48aa04ea86f57739b84cf",
+      "initial_sha": "8758d976a1b25eb387f48aa04ea86f57739b84cf",
+      "second_probe_sha": "8758d976a1b25eb387f48aa04ea86f57739b84cf",
+      "changed_during_review": false,
+      "coverage": "custom ancestry and selected diff/source inspection; clone proof and full tests pending"
+    },
+    {
+      "branch": "owned-source/mbx/ac6ceed10df0c6cb0af1bc6d1a69d0de4d392f81",
+      "initial_sha": "ac6ceed10df0c6cb0af1bc6d1a69d0de4d392f81",
+      "second_probe_sha": "ac6ceed10df0c6cb0af1bc6d1a69d0de4d392f81",
+      "changed_during_review": false,
+      "coverage": "custom ancestry and selected diff/source inspection; clone proof and full tests pending"
+    },
+    {
+      "branch": "owned-source/mbx-action/c3cbe8e56ccb4727624df45022357f49d2953075",
+      "initial_sha": "c3cbe8e56ccb4727624df45022357f49d2953075",
+      "second_probe_sha": "c3cbe8e56ccb4727624df45022357f49d2953075",
+      "changed_during_review": false,
+      "coverage": "custom ancestry and selected diff/source inspection; clone proof and full tests pending"
+    },
+    {
+      "branch": "owned-source/mbx-action/62ec0713473dffeab46884b7c03906042794e696",
+      "initial_sha": "62ec0713473dffeab46884b7c03906042794e696",
+      "second_probe_sha": "62ec0713473dffeab46884b7c03906042794e696",
+      "changed_during_review": false,
+      "coverage": "custom ancestry and selected diff/source inspection; clone proof and full tests pending"
+    },
+    {
+      "branch": "owned-source/mise/dbbf5b0d8f9c7edc5d0111e17ebaf781ecc97a96",
+      "initial_sha": "dbbf5b0d8f9c7edc5d0111e17ebaf781ecc97a96",
+      "second_probe_sha": "dbbf5b0d8f9c7edc5d0111e17ebaf781ecc97a96",
+      "changed_during_review": false,
+      "coverage": "custom ancestry and selected diff/source inspection; clone proof and full tests pending"
+    },
+    {
+      "branch": "owned-source/semver-checker/583dddce84706786fc54c41a2c768c28a09c65fd",
+      "initial_sha": "583dddce84706786fc54c41a2c768c28a09c65fd",
+      "second_probe_sha": "583dddce84706786fc54c41a2c768c28a09c65fd",
+      "changed_during_review": false,
+      "coverage": "custom ancestry and selected diff/source inspection; clone proof and full tests pending"
+    }
+  ],
+  "custom_commits": [
+    {
+      "id": "MISE-1",
+      "group": "mise",
+      "sha": "dbbf5b0d8f9c7edc5d0111e17ebaf781ecc97a96",
+      "date_utc": "2026-10-02T22:13:05Z",
+      "subject": "fix: isolate owned Cargo wrapper dispatch",
+      "additions": 403,
+      "deletions": 1,
+      "parents": [
+        "bc11f90c74eba23bf0d7350efb540e62fb7d9ffd"
+      ],
+      "source": "https://github.com/tailrocks/velnor-new/commit/dbbf5b0d8f9c7edc5d0111e17ebaf781ecc97a96",
+      "stats_source": "https://api.github.com/repos/tailrocks/velnor-new/commits/dbbf5b0d8f9c7edc5d0111e17ebaf781ecc97a96?per_page=1&page=1000",
+      "decision": "Split: adopt already-merged no-config core through official distribution; drop owned Cargo-wrapper/banner/shim additions after G0."
+    },
+    {
+      "id": "MBX-1",
+      "group": "mbx",
+      "sha": "1ca12eb48391061a75e97d32e5b06fedf8a6253d",
+      "date_utc": "2026-10-02T20:29:58Z",
+      "subject": "feat(cache): expose useful snapshot comparison and retention",
+      "additions": 2477,
+      "deletions": 105,
+      "parents": [
+        "201b9df3d18e8e96831bee631035f6b7c7ae20e0"
+      ],
+      "source": "https://github.com/tailrocks/velnor-new/commit/1ca12eb48391061a75e97d32e5b06fedf8a6253d",
+      "stats_source": "https://api.github.com/repos/tailrocks/velnor-new/commits/1ca12eb48391061a75e97d32e5b06fedf8a6253d?per_page=1&page=1000",
+      "decision": "Provisional DROP: semantic comparison/retention has no demonstrated production caller. Ordinary cache save policy is not equivalent semantic usefulness."
+    },
+    {
+      "id": "MBX-2",
+      "group": "mbx",
+      "sha": "2f324e89af509a1c61d802cf23741a04d7510b57",
+      "date_utc": "2026-10-02T20:32:56Z",
+      "subject": "chore: merge official MBX 1.21.1 for cache qualification",
+      "additions": 19,
+      "deletions": 8,
+      "parents": [
+        "1ca12eb48391061a75e97d32e5b06fedf8a6253d",
+        "a0a44c61ca6aaa8da41d59deeebdfc46fc9d3313"
+      ],
+      "source": "https://github.com/tailrocks/velnor-new/commit/2f324e89af509a1c61d802cf23741a04d7510b57",
+      "stats_source": "https://api.github.com/repos/tailrocks/velnor-new/commits/2f324e89af509a1c61d802cf23741a04d7510b57?per_page=1&page=1000",
+      "decision": "DROP private merge as delivery mechanism; preserve official v1.21.1 upgrade independently via PR #26."
+    },
+    {
+      "id": "MBX-3",
+      "group": "mbx",
+      "sha": "ee250ac37654a4cfbb55b6cd470f2a257204bbe9",
+      "date_utc": "2026-10-02T22:12:37Z",
+      "subject": "fix: restore immutable Cargo root pairs",
+      "additions": 1650,
+      "deletions": 83,
+      "parents": [
+        "2f324e89af509a1c61d802cf23741a04d7510b57"
+      ],
+      "source": "https://github.com/tailrocks/velnor-new/commit/ee250ac37654a4cfbb55b6cd470f2a257204bbe9",
+      "stats_source": "https://api.github.com/repos/tailrocks/velnor-new/commits/ee250ac37654a4cfbb55b6cd470f2a257204bbe9?per_page=1&page=1000",
+      "decision": "Provisional DROP: no demonstrated owned root-pair consumer; do not claim ordinary target caching reproduces these semantics."
+    },
+    {
+      "id": "MBX-4",
+      "group": "mbx",
+      "sha": "e07c07cfec773897e5c439043901e661ad3f7b45",
+      "date_utc": "2026-10-02T23:20:47Z",
+      "subject": "feat: verify native cache ownership and measure compiler events",
+      "additions": 1929,
+      "deletions": 473,
+      "parents": [
+        "ee250ac37654a4cfbb55b6cd470f2a257204bbe9"
+      ],
+      "source": "https://github.com/tailrocks/velnor-new/commit/e07c07cfec773897e5c439043901e661ad3f7b45",
+      "stats_source": "https://api.github.com/repos/tailrocks/velnor-new/commits/e07c07cfec773897e5c439043901e661ad3f7b45?per_page=1&page=1000",
+      "decision": "Provisional DROP: native ownership/compiler-event protocol not required by sampled stock consumers; retain reproducible defect evidence, not this fork."
+    },
+    {
+      "id": "MBX-5",
+      "group": "mbx",
+      "sha": "29865b5a18e3414084ff5db27d1da455772b4c34",
+      "date_utc": "2026-10-03T00:59:08Z",
+      "subject": "chore: close pinned behavioral test sources",
+      "additions": 27533,
+      "deletions": 20,
+      "parents": [
+        "e07c07cfec773897e5c439043901e661ad3f7b45"
+      ],
+      "source": "https://github.com/tailrocks/velnor-new/commit/29865b5a18e3414084ff5db27d1da455772b4c34",
+      "stats_source": "https://api.github.com/repos/tailrocks/velnor-new/commits/29865b5a18e3414084ff5db27d1da455772b4c34?per_page=1&page=1000",
+      "decision": "Provisional DROP with abandoned fork; vendored Bats closure is not evidence its tests ran or passed."
+    },
+    {
+      "id": "MBX-6",
+      "group": "mbx",
+      "sha": "ac6ceed10df0c6cb0af1bc6d1a69d0de4d392f81",
+      "date_utc": "2026-10-03T16:12:30Z",
+      "subject": "feat: preserve MBX lineage and durable execution state",
+      "additions": 7600,
+      "deletions": 242,
+      "parents": [
+        "29865b5a18e3414084ff5db27d1da455772b4c34"
+      ],
+      "source": "https://github.com/tailrocks/velnor-new/commit/ac6ceed10df0c6cb0af1bc6d1a69d0de4d392f81",
+      "stats_source": "https://api.github.com/repos/tailrocks/velnor-new/commits/ac6ceed10df0c6cb0af1bc6d1a69d0de4d392f81?per_page=1&page=1000",
+      "decision": "Provisional DROP; explicitly incompatible with reviewed action comparison-report v1 parser; IPC 13/export v2 need coordinated consumers."
+    },
+    {
+      "id": "ACT-1",
+      "group": "mbx-action",
+      "sha": "f053f215866af0ddb6d2f32ecc19d45a5d25edc2",
+      "date_utc": "2026-10-02T19:58:31Z",
+      "subject": "feat: support verified executable and useful cache snapshots",
+      "additions": 740,
+      "deletions": 113,
+      "parents": [
+        "9df1d4b18b2147788a7ee7a2c7b84ecf62fd89d3"
+      ],
+      "source": "https://github.com/tailrocks/velnor-new/commit/f053f215866af0ddb6d2f32ecc19d45a5d25edc2",
+      "stats_source": "https://api.github.com/repos/tailrocks/velnor-new/commits/f053f215866af0ddb6d2f32ecc19d45a5d25edc2?per_page=1&page=1000",
+      "decision": "Provisional DROP: caller-bound executable and comparison state have no demonstrated production caller; Velnor can own verification and CLI invocation."
+    },
+    {
+      "id": "ACT-2",
+      "group": "mbx-action",
+      "sha": "198f0d1a538d34a91d7692f8f302259643c0f737",
+      "date_utc": "2026-10-02T20:01:14Z",
+      "subject": "merge: retain reviewed v1.6 cache trust policy",
+      "additions": 1091,
+      "deletions": 217,
+      "parents": [
+        "f053f215866af0ddb6d2f32ecc19d45a5d25edc2",
+        "1687e54eb349cadf61fa38b5813a77875489e8e6"
+      ],
+      "source": "https://github.com/tailrocks/velnor-new/commit/198f0d1a538d34a91d7692f8f302259643c0f737",
+      "stats_source": "https://api.github.com/repos/tailrocks/velnor-new/commits/198f0d1a538d34a91d7692f8f302259643c0f737?per_page=1&page=1000",
+      "decision": "DROP private merge as distribution; stock action v1.6.0 is independently available."
+    },
+    {
+      "id": "ACT-3",
+      "group": "mbx-action",
+      "sha": "06f353d41002af758d27490164f53c82e2165637",
+      "date_utc": "2026-10-02T20:44:57Z",
+      "subject": "security: verify caller-bound MBX binary digest before execution",
+      "additions": 158,
+      "deletions": 102,
+      "parents": [
+        "198f0d1a538d34a91d7692f8f302259643c0f737"
+      ],
+      "source": "https://github.com/tailrocks/velnor-new/commit/06f353d41002af758d27490164f53c82e2165637",
+      "stats_source": "https://api.github.com/repos/tailrocks/velnor-new/commits/06f353d41002af758d27490164f53c82e2165637?per_page=1&page=1000",
+      "decision": "Provisional DROP foreign patch; verify absolute binary/hash at Velnor process boundary if that requirement becomes live."
+    },
+    {
+      "id": "ACT-4",
+      "group": "mbx-action",
+      "sha": "c3cbe8e56ccb4727624df45022357f49d2953075",
+      "date_utc": "2026-10-02T23:14:37Z",
+      "subject": "fix: require protected default branch for cache saves",
+      "additions": 21,
+      "deletions": 12,
+      "parents": [
+        "06f353d41002af758d27490164f53c82e2165637"
+      ],
+      "source": "https://github.com/tailrocks/velnor-new/commit/c3cbe8e56ccb4727624df45022357f49d2953075",
+      "stats_source": "https://api.github.com/repos/tailrocks/velnor-new/commits/c3cbe8e56ccb4727624df45022357f49d2953075?per_page=1&page=1000",
+      "decision": "DROP as foreign dependency; enforce protected/default/event conditions in renderer-owned explicit save steps."
+    },
+    {
+      "id": "ACT-5",
+      "group": "mbx-action",
+      "sha": "62ec0713473dffeab46884b7c03906042794e696",
+      "date_utc": "2026-10-03T02:44:56Z",
+      "subject": "feat(action): bind late export baseline and group",
+      "additions": 142,
+      "deletions": 77,
+      "parents": [
+        "c3cbe8e56ccb4727624df45022357f49d2953075"
+      ],
+      "source": "https://github.com/tailrocks/velnor-new/commit/62ec0713473dffeab46884b7c03906042794e696",
+      "stats_source": "https://api.github.com/repos/tailrocks/velnor-new/commits/62ec0713473dffeab46884b7c03906042794e696?per_page=1&page=1000",
+      "decision": "Provisional DROP: late baseline/export-group path is not activated in sampled consumers; strict report parser rejects MBX v2."
+    },
+    {
+      "id": "SEM-1",
+      "group": "semver",
+      "sha": "d73a5d2469f3cf2a8e77cb3259ae4da15a7c9d0a",
+      "date_utc": "2026-10-03T01:05:22Z",
+      "subject": "feat: add native supplied-document metadata checks",
+      "additions": 867,
+      "deletions": 3,
+      "parents": [
+        "4297e8b5f6306531375ba2ba332171e5792b4c38"
+      ],
+      "source": "https://github.com/tailrocks/velnor-new/commit/d73a5d2469f3cf2a8e77cb3259ae4da15a7c9d0a",
+      "stats_source": "https://api.github.com/repos/tailrocks/velnor-new/commits/d73a5d2469f3cf2a8e77cb3259ae4da15a7c9d0a?per_page=1&page=1000",
+      "decision": "Provisional DROP; real-binary test driver exists, but no proved live Velnor supplied-document requirement. No claim a wrapper reproduces private lint semantics."
+    },
+    {
+      "id": "SEM-2",
+      "group": "semver",
+      "sha": "583dddce84706786fc54c41a2c768c28a09c65fd",
+      "date_utc": "2026-10-03T01:43:53Z",
+      "subject": "ci: restrict workflow lint push to main",
+      "additions": 2,
+      "deletions": 0,
+      "parents": [
+        "d73a5d2469f3cf2a8e77cb3259ae4da15a7c9d0a"
+      ],
+      "source": "https://github.com/tailrocks/velnor-new/commit/583dddce84706786fc54c41a2c768c28a09c65fd",
+      "stats_source": "https://api.github.com/repos/tailrocks/velnor-new/commits/583dddce84706786fc54c41a2c768c28a09c65fd?per_page=1&page=1000",
+      "decision": "DROP with snapshot branch; this is fork CI policy, not a runtime upstream dependency."
+    },
+    {
+      "id": "CACHE-1",
+      "group": "cache",
+      "sha": "8758d976a1b25eb387f48aa04ea86f57739b84cf",
+      "date_utc": "2026-10-03T04:04:13Z",
+      "subject": "feat: own cache archives and foundation qualification",
+      "additions": 120449,
+      "deletions": 93453,
+      "parents": [
+        "55cc8345863c7cc4c66a329aec7e433d2d1c52a9"
+      ],
+      "source": "https://github.com/tailrocks/velnor-new/commit/8758d976a1b25eb387f48aa04ea86f57739b84cf",
+      "stats_source": "https://api.github.com/repos/tailrocks/velnor-new/commits/8758d976a1b25eb387f48aa04ea86f57739b84cf?per_page=1&page=1000",
+      "decision": "Split: provisional DROP archive/SDK framework; Foundation remains STAGED-HOLD until its generated/compiled pin closure is removed or a real owner accepts a separately scoped Velnor implementation."
+    }
+  ],
+  "consumers": [
+    {
+      "repo": "jackin-project/jackin",
+      "head_sha": "0aa821a088e1bacf3d4d85a4c9faaa67faa85132",
+      "coverage": "ci.yml and .velnor/config.toml fetched; not every workflow",
+      "policy_source": "explicit consumer-v1",
+      "negative_search": "no indexed owned-source result; not exhaustive or freshness-guaranteed",
+      "workflow_source": "https://github.com/jackin-project/jackin/blob/0aa821a088e1bacf3d4d85a4c9faaa67faa85132/.github/workflows/ci.yml"
+    },
+    {
+      "repo": "jackin-project/jackin-agent-smith",
+      "head_sha": null,
+      "coverage": "only included in 46-repo indexed default-branch owned-source search",
+      "policy_source": "not fetched",
+      "negative_search": "no indexed owned-source result; not exhaustive or freshness-guaranteed",
+      "workflow_source": null
+    },
+    {
+      "repo": "jackin-project/homebrew-tap",
+      "head_sha": null,
+      "coverage": "only included in 46-repo indexed default-branch owned-source search",
+      "policy_source": "not fetched",
+      "negative_search": "no indexed owned-source result; not exhaustive or freshness-guaranteed",
+      "workflow_source": null
+    },
+    {
+      "repo": "jackin-project/jackin-role-action",
+      "head_sha": null,
+      "coverage": "only included in 46-repo indexed default-branch owned-source search",
+      "policy_source": "not fetched",
+      "negative_search": "no indexed owned-source result; not exhaustive or freshness-guaranteed",
+      "workflow_source": null
+    },
+    {
+      "repo": "jackin-project/jackin-sentinel",
+      "head_sha": null,
+      "coverage": "only included in 46-repo indexed default-branch owned-source search",
+      "policy_source": "not fetched",
+      "negative_search": "no indexed owned-source result; not exhaustive or freshness-guaranteed",
+      "workflow_source": null
+    },
+    {
+      "repo": "jackin-project/jackin-dev",
+      "head_sha": null,
+      "coverage": "only included in 46-repo indexed default-branch owned-source search",
+      "policy_source": "not fetched",
+      "negative_search": "no indexed owned-source result; not exhaustive or freshness-guaranteed",
+      "workflow_source": null
+    },
+    {
+      "repo": "jackin-project/jackin-github-terraform",
+      "head_sha": null,
+      "coverage": "only included in 46-repo indexed default-branch owned-source search",
+      "policy_source": "not fetched",
+      "negative_search": "no indexed owned-source result; not exhaustive or freshness-guaranteed",
+      "workflow_source": null
+    },
+    {
+      "repo": "jackin-project/jackin-the-architect",
+      "head_sha": null,
+      "coverage": "only included in 46-repo indexed default-branch owned-source search",
+      "policy_source": "not fetched",
+      "negative_search": "no indexed owned-source result; not exhaustive or freshness-guaranteed",
+      "workflow_source": null
+    },
+    {
+      "repo": "tailrocks/github-terraform",
+      "head_sha": "667eae4d8ecedde5153eb486fefe07a9d00cc3ad",
+      "coverage": "ci.yml and .velnor/config.toml fetched; not every workflow",
+      "policy_source": "policy omitted; comment describes default consumer-v1; Tofu root",
+      "negative_search": "no indexed owned-source result; not exhaustive or freshness-guaranteed",
+      "workflow_source": "https://github.com/tailrocks/github-terraform/blob/667eae4d8ecedde5153eb486fefe07a9d00cc3ad/.github/workflows/ci.yml"
+    },
+    {
+      "repo": "tailrocks/termpane",
+      "head_sha": null,
+      "coverage": "only included in 46-repo indexed default-branch owned-source search",
+      "policy_source": "not fetched",
+      "negative_search": "no indexed owned-source result; not exhaustive or freshness-guaranteed",
+      "workflow_source": null
+    },
+    {
+      "repo": "tailrocks/tui-snap",
+      "head_sha": null,
+      "coverage": "only included in 46-repo indexed default-branch owned-source search",
+      "policy_source": "not fetched",
+      "negative_search": "no indexed owned-source result; not exhaustive or freshness-guaranteed",
+      "workflow_source": null
+    },
+    {
+      "repo": "tailrocks/velnor",
+      "head_sha": "3f6633252963efef0d71244aadae36516a11601e",
+      "coverage": "ci.yml and .velnor/config.toml fetched; not every workflow",
+      "policy_source": "policy omitted",
+      "negative_search": "no indexed owned-source result; not exhaustive or freshness-guaranteed",
+      "workflow_source": "https://github.com/tailrocks/velnor/blob/3f6633252963efef0d71244aadae36516a11601e/.github/workflows/ci.yml"
+    },
+    {
+      "repo": "tailrocks/termrock",
+      "head_sha": null,
+      "coverage": "only included in 46-repo indexed default-branch owned-source search",
+      "policy_source": "not fetched",
+      "negative_search": "no indexed owned-source result; not exhaustive or freshness-guaranteed",
+      "workflow_source": null
+    },
+    {
+      "repo": "tailrocks/parallax",
+      "head_sha": "90d901c9d12477e93a56a9e021077ced7c78f9df",
+      "coverage": "ci.yml and .velnor/config.toml fetched; not every workflow",
+      "policy_source": "explicit consumer-v1",
+      "negative_search": "no indexed owned-source result; not exhaustive or freshness-guaranteed",
+      "workflow_source": "https://github.com/tailrocks/parallax/blob/90d901c9d12477e93a56a9e021077ced7c78f9df/.github/workflows/ci.yml"
+    },
+    {
+      "repo": "tailrocks/terminal-components-claude",
+      "head_sha": null,
+      "coverage": "only included in 46-repo indexed default-branch owned-source search",
+      "policy_source": "not fetched",
+      "negative_search": "no indexed owned-source result; not exhaustive or freshness-guaranteed",
+      "workflow_source": null
+    },
+    {
+      "repo": "tailrocks/tailrocks-repository-skills",
+      "head_sha": null,
+      "coverage": "only included in 46-repo indexed default-branch owned-source search",
+      "policy_source": "not fetched",
+      "negative_search": "no indexed owned-source result; not exhaustive or freshness-guaranteed",
+      "workflow_source": null
+    },
+    {
+      "repo": "tailrocks/tailrocks-skills",
+      "head_sha": null,
+      "coverage": "only included in 46-repo indexed default-branch owned-source search",
+      "policy_source": "not fetched",
+      "negative_search": "no indexed owned-source result; not exhaustive or freshness-guaranteed",
+      "workflow_source": null
+    },
+    {
+      "repo": "tailrocks/tailrocks-pull-request-skills",
+      "head_sha": null,
+      "coverage": "only included in 46-repo indexed default-branch owned-source search",
+      "policy_source": "not fetched",
+      "negative_search": "no indexed owned-source result; not exhaustive or freshness-guaranteed",
+      "workflow_source": null
+    },
+    {
+      "repo": "tailrocks/homebrew-velnor",
+      "head_sha": null,
+      "coverage": "only included in 46-repo indexed default-branch owned-source search",
+      "policy_source": "not fetched",
+      "negative_search": "no indexed owned-source result; not exhaustive or freshness-guaranteed",
+      "workflow_source": null
+    },
+    {
+      "repo": "tailrocks/velnor-apt",
+      "head_sha": null,
+      "coverage": "only included in 46-repo indexed default-branch owned-source search",
+      "policy_source": "not fetched",
+      "negative_search": "no indexed owned-source result; not exhaustive or freshness-guaranteed",
+      "workflow_source": null
+    },
+    {
+      "repo": "tailrocks/parallax-telemetry-playground",
+      "head_sha": null,
+      "coverage": "only included in 46-repo indexed default-branch owned-source search",
+      "policy_source": "not fetched",
+      "negative_search": "no indexed owned-source result; not exhaustive or freshness-guaranteed",
+      "workflow_source": null
+    },
+    {
+      "repo": "tailrocks/velnor-actions-fixture",
+      "head_sha": "1c076c5b5828fb6ba04887885c567da26fe01a69",
+      "coverage": "ci.yml and .velnor/config.toml fetched; not every workflow",
+      "policy_source": "policy omitted",
+      "negative_search": "no indexed owned-source result; not exhaustive or freshness-guaranteed",
+      "workflow_source": "https://github.com/tailrocks/velnor-actions-fixture/blob/1c076c5b5828fb6ba04887885c567da26fe01a69/.github/workflows/ci.yml"
+    },
+    {
+      "repo": "tailrocks/holla",
+      "head_sha": null,
+      "coverage": "only included in 46-repo indexed default-branch owned-source search",
+      "policy_source": "not fetched",
+      "negative_search": "no indexed owned-source result; not exhaustive or freshness-guaranteed",
+      "workflow_source": null
+    },
+    {
+      "repo": "tailrocks/tracing-request-level",
+      "head_sha": null,
+      "coverage": "only included in 46-repo indexed default-branch owned-source search",
+      "policy_source": "not fetched",
+      "negative_search": "no indexed owned-source result; not exhaustive or freshness-guaranteed",
+      "workflow_source": null
+    },
+    {
+      "repo": "tailrocks/pg-bigdecimal",
+      "head_sha": null,
+      "coverage": "only included in 46-repo indexed default-branch owned-source search",
+      "policy_source": "not fetched",
+      "negative_search": "no indexed owned-source result; not exhaustive or freshness-guaranteed",
+      "workflow_source": null
+    },
+    {
+      "repo": "tailrocks/ruxel",
+      "head_sha": null,
+      "coverage": "only included in 46-repo indexed default-branch owned-source search",
+      "policy_source": "not fetched",
+      "negative_search": "no indexed owned-source result; not exhaustive or freshness-guaranteed",
+      "workflow_source": null
+    },
+    {
+      "repo": "tailrocks/schemalane",
+      "head_sha": null,
+      "coverage": "only included in 46-repo indexed default-branch owned-source search",
+      "policy_source": "not fetched",
+      "negative_search": "no indexed owned-source result; not exhaustive or freshness-guaranteed",
+      "workflow_source": null
+    },
+    {
+      "repo": "tailrocks/holla-apt",
+      "head_sha": null,
+      "coverage": "only included in 46-repo indexed default-branch owned-source search",
+      "policy_source": "not fetched",
+      "negative_search": "no indexed owned-source result; not exhaustive or freshness-guaranteed",
+      "workflow_source": null
+    },
+    {
+      "repo": "tailrocks/homebrew-parallax",
+      "head_sha": null,
+      "coverage": "only included in 46-repo indexed default-branch owned-source search",
+      "policy_source": "not fetched",
+      "negative_search": "no indexed owned-source result; not exhaustive or freshness-guaranteed",
+      "workflow_source": null
+    },
+    {
+      "repo": "tailrocks/homebrew-ruxel",
+      "head_sha": null,
+      "coverage": "only included in 46-repo indexed default-branch owned-source search",
+      "policy_source": "not fetched",
+      "negative_search": "no indexed owned-source result; not exhaustive or freshness-guaranteed",
+      "workflow_source": null
+    },
+    {
+      "repo": "tailrocks/homebrew-tablerock",
+      "head_sha": null,
+      "coverage": "only included in 46-repo indexed default-branch owned-source search",
+      "policy_source": "not fetched",
+      "negative_search": "no indexed owned-source result; not exhaustive or freshness-guaranteed",
+      "workflow_source": null
+    },
+    {
+      "repo": "tailrocks/homebrew-holla",
+      "head_sha": null,
+      "coverage": "only included in 46-repo indexed default-branch owned-source search",
+      "policy_source": "not fetched",
+      "negative_search": "no indexed owned-source result; not exhaustive or freshness-guaranteed",
+      "workflow_source": null
+    },
+    {
+      "repo": "tailrocks/tablerock",
+      "head_sha": null,
+      "coverage": "only included in 46-repo indexed default-branch owned-source search",
+      "policy_source": "not fetched",
+      "negative_search": "no indexed owned-source result; not exhaustive or freshness-guaranteed",
+      "workflow_source": null
+    },
+    {
+      "repo": "tailrocks/cloudflare-tofu",
+      "head_sha": null,
+      "coverage": "only included in 46-repo indexed default-branch owned-source search",
+      "policy_source": "not fetched",
+      "negative_search": "no indexed owned-source result; not exhaustive or freshness-guaranteed",
+      "workflow_source": null
+    },
+    {
+      "repo": "tailrocks/tailrocks-typescript-skills",
+      "head_sha": null,
+      "coverage": "only included in 46-repo indexed default-branch owned-source search",
+      "policy_source": "not fetched",
+      "negative_search": "no indexed owned-source result; not exhaustive or freshness-guaranteed",
+      "workflow_source": null
+    },
+    {
+      "repo": "tailrocks/tailrocks-skill-authoring-skills",
+      "head_sha": null,
+      "coverage": "only included in 46-repo indexed default-branch owned-source search",
+      "policy_source": "not fetched",
+      "negative_search": "no indexed owned-source result; not exhaustive or freshness-guaranteed",
+      "workflow_source": null
+    },
+    {
+      "repo": "tailrocks/tailrocks-rust-skills",
+      "head_sha": null,
+      "coverage": "only included in 46-repo indexed default-branch owned-source search",
+      "policy_source": "not fetched",
+      "negative_search": "no indexed owned-source result; not exhaustive or freshness-guaranteed",
+      "workflow_source": null
+    },
+    {
+      "repo": "tailrocks/tailrocks-roadmap-skills",
+      "head_sha": null,
+      "coverage": "only included in 46-repo indexed default-branch owned-source search",
+      "policy_source": "not fetched",
+      "negative_search": "no indexed owned-source result; not exhaustive or freshness-guaranteed",
+      "workflow_source": null
+    },
+    {
+      "repo": "tailrocks/tailrocks-open-source-skills",
+      "head_sha": null,
+      "coverage": "only included in 46-repo indexed default-branch owned-source search",
+      "policy_source": "not fetched",
+      "negative_search": "no indexed owned-source result; not exhaustive or freshness-guaranteed",
+      "workflow_source": null
+    },
+    {
+      "repo": "tailrocks/tailrocks-macos-skills",
+      "head_sha": null,
+      "coverage": "only included in 46-repo indexed default-branch owned-source search",
+      "policy_source": "not fetched",
+      "negative_search": "no indexed owned-source result; not exhaustive or freshness-guaranteed",
+      "workflow_source": null
+    },
+    {
+      "repo": "tailrocks/tailrocks-code-quality-skills",
+      "head_sha": null,
+      "coverage": "only included in 46-repo indexed default-branch owned-source search",
+      "policy_source": "not fetched",
+      "negative_search": "no indexed owned-source result; not exhaustive or freshness-guaranteed",
+      "workflow_source": null
+    },
+    {
+      "repo": "ChainArgos/blockchain-nodes",
+      "head_sha": null,
+      "coverage": "only included in 46-repo indexed default-branch owned-source search",
+      "policy_source": "not fetched",
+      "negative_search": "no indexed owned-source result; not exhaustive or freshness-guaranteed",
+      "workflow_source": null
+    },
+    {
+      "repo": "ChainArgos/java-monorepo",
+      "head_sha": "0a937e0c0442782bfb88c43cfdf67c1fc3f3b4f0",
+      "coverage": "ci.yml and .velnor/config.toml fetched; not every workflow",
+      "policy_source": "policy omitted; schema 2 hosted/scale-set configuration",
+      "negative_search": "no indexed owned-source result; not exhaustive or freshness-guaranteed",
+      "workflow_source": "https://github.com/ChainArgos/java-monorepo/blob/0a937e0c0442782bfb88c43cfdf67c1fc3f3b4f0/.github/workflows/ci.yml"
+    },
+    {
+      "repo": "ChainArgos/jackin-agent-brown",
+      "head_sha": null,
+      "coverage": "only included in 46-repo indexed default-branch owned-source search",
+      "policy_source": "not fetched",
+      "negative_search": "no indexed owned-source result; not exhaustive or freshness-guaranteed",
+      "workflow_source": null
+    },
+    {
+      "repo": "ChainArgos/cloudflare-tofu",
+      "head_sha": null,
+      "coverage": "only included in 46-repo indexed default-branch owned-source search",
+      "policy_source": "not fetched",
+      "negative_search": "no indexed owned-source result; not exhaustive or freshness-guaranteed",
+      "workflow_source": null
+    },
+    {
+      "repo": "ChainArgos/github-terraform",
+      "head_sha": null,
+      "coverage": "only included in 46-repo indexed default-branch owned-source search",
+      "policy_source": "not fetched",
+      "negative_search": "no indexed owned-source result; not exhaustive or freshness-guaranteed",
+      "workflow_source": null
+    }
+  ],
+  "python_items": [
+    {
+      "path": "scripts/analyze-ci-performance.py",
+      "purpose": "Analyze collected job/step/timeline evidence.",
+      "verdict": "DELETE",
+      "reason": "Freeze historical JSON/Markdown results first. No retained automation caller proved; do not translate one-off analysis merely because Rust is preferred.",
+      "source": "https://github.com/tailrocks/velnor-new/blob/d94fe9cefa6a0b97f00d235191c2d3142d1af6ff/scripts/analyze-ci-performance.py",
+      "inspection": "file or bounded initial range inspected; complete caller graph not proved",
+      "python_exception": "none demonstrated"
+    },
+    {
+      "path": "scripts/collect-ci-performance.py",
+      "purpose": "Read GitHub runs/jobs with gh and collect scoped evidence.",
+      "verdict": "DELETE",
+      "reason": "Use read-only gh evidence export for this cleanup; a reusable runtime collector is not established. Reopen only with a named retained caller.",
+      "source": "https://github.com/tailrocks/velnor-new/blob/d94fe9cefa6a0b97f00d235191c2d3142d1af6ff/scripts/collect-ci-performance.py",
+      "inspection": "file or bounded initial range inspected; complete caller graph not proved",
+      "python_exception": "none demonstrated"
+    },
+    {
+      "path": "scripts/bootstrap-owned-tool-builder.py",
+      "purpose": "Download/validate a pinned Rust toolchain for native owned-tool builds.",
+      "verdict": "DELETE",
+      "reason": "The private tool publication pipeline is not retained. Existing CI already provisions Rust; no new bootstrap service is required.",
+      "source": "https://github.com/tailrocks/velnor-new/blob/d94fe9cefa6a0b97f00d235191c2d3142d1af6ff/scripts/bootstrap-owned-tool-builder.py",
+      "inspection": "file or bounded initial range inspected; complete caller graph not proved",
+      "python_exception": "none demonstrated"
+    },
+    {
+      "path": "scripts/build-owned-tool.py",
+      "purpose": "Build receipt-bound mise/MBX candidate binaries.",
+      "verdict": "DELETE",
+      "reason": "No retained owned candidate release. Do not port a fork builder that is being retired.",
+      "source": "https://github.com/tailrocks/velnor-new/blob/d94fe9cefa6a0b97f00d235191c2d3142d1af6ff/scripts/build-owned-tool.py",
+      "inspection": "file or bounded initial range inspected; complete caller graph not proved",
+      "python_exception": "none demonstrated"
+    },
+    {
+      "path": "scripts/download-owned-tool-candidate.py",
+      "purpose": "Download and admit bounded candidate ZIP artifacts.",
+      "verdict": "DELETE",
+      "reason": "Candidate publication/qualification is not activated; no retained download protocol.",
+      "source": "https://github.com/tailrocks/velnor-new/blob/d94fe9cefa6a0b97f00d235191c2d3142d1af6ff/scripts/download-owned-tool-candidate.py",
+      "inspection": "file or bounded initial range inspected; complete caller graph not proved",
+      "python_exception": "none demonstrated"
+    },
+    {
+      "path": "scripts/immutable_publication.py",
+      "purpose": "Validate immutable release/source equivalence.",
+      "verdict": "DELETE",
+      "reason": "Preserve existing immutable releases as historical evidence; do not retain a mutator framework solely to retire it.",
+      "source": "https://github.com/tailrocks/velnor-new/blob/d94fe9cefa6a0b97f00d235191c2d3142d1af6ff/scripts/immutable_publication.py",
+      "inspection": "file or bounded initial range inspected; complete caller graph not proved",
+      "python_exception": "none demonstrated"
+    },
+    {
+      "path": "scripts/owned_mise_qualification.py",
+      "purpose": "Execute no-config and owned-wrapper candidate behavior cases.",
+      "verdict": "PORT-TO-RUST",
+      "reason": "Extract ONLY stock-mise no-config/miserc regression cases into velnor-actions-mise integration tests as Phase 0. Delete owned-wrapper, fake-MBX, candidate-receipt and publication cases.",
+      "source": "https://github.com/tailrocks/velnor-new/blob/d94fe9cefa6a0b97f00d235191c2d3142d1af6ff/scripts/owned_mise_qualification.py",
+      "inspection": "file or bounded initial range inspected; complete caller graph not proved",
+      "python_exception": "none demonstrated"
+    },
+    {
+      "path": "scripts/owned_tool_behavior.py",
+      "purpose": "Define tool/platform behavior cases and receipt verdicts.",
+      "verdict": "DELETE",
+      "reason": "Private candidate behavior schema retires; selected no-config expectations become typed Rust test cases, not a receipt engine.",
+      "source": "https://github.com/tailrocks/velnor-new/blob/d94fe9cefa6a0b97f00d235191c2d3142d1af6ff/scripts/owned_tool_behavior.py",
+      "inspection": "file or bounded initial range inspected; complete caller graph not proved",
+      "python_exception": "none demonstrated"
+    },
+    {
+      "path": "scripts/owned_tool_qualification_evidence.py",
+      "purpose": "Bind candidate qualification to exact hosted evidence.",
+      "verdict": "DELETE",
+      "reason": "No retained candidate promotion path. Do not weaken unrelated existing provenance checks.",
+      "source": "https://github.com/tailrocks/velnor-new/blob/d94fe9cefa6a0b97f00d235191c2d3142d1af6ff/scripts/owned_tool_qualification_evidence.py",
+      "inspection": "file or bounded initial range inspected; complete caller graph not proved",
+      "python_exception": "none demonstrated"
+    },
+    {
+      "path": "scripts/owned_tool_source.py",
+      "purpose": "Define pinned foreign-source closure and source-receipt helpers.",
+      "verdict": "DELETE",
+      "reason": "Replace executable source framework with passive audit manifest and preserved bundles.",
+      "source": "https://github.com/tailrocks/velnor-new/blob/d94fe9cefa6a0b97f00d235191c2d3142d1af6ff/scripts/owned_tool_source.py",
+      "inspection": "file or bounded initial range inspected; complete caller graph not proved",
+      "python_exception": "none demonstrated"
+    },
+    {
+      "path": "scripts/publish-owned-tool-artifacts.py",
+      "purpose": "Publish admitted owned binary/source artifacts.",
+      "verdict": "DELETE",
+      "reason": "No owned binary distribution remains in the target scope.",
+      "source": "https://github.com/tailrocks/velnor-new/blob/d94fe9cefa6a0b97f00d235191c2d3142d1af6ff/scripts/publish-owned-tool-artifacts.py",
+      "inspection": "file or bounded initial range inspected; complete caller graph not proved",
+      "python_exception": "none demonstrated"
+    },
+    {
+      "path": "scripts/publish_owned_source.py",
+      "purpose": "Publish exact source refs/objects/assets with mutation guards.",
+      "verdict": "DELETE",
+      "reason": "Historical publications remain immutable; retirement does not require a general publisher.",
+      "source": "https://github.com/tailrocks/velnor-new/blob/d94fe9cefa6a0b97f00d235191c2d3142d1af6ff/scripts/publish_owned_source.py",
+      "inspection": "file or bounded initial range inspected; complete caller graph not proved",
+      "python_exception": "none demonstrated"
+    },
+    {
+      "path": "scripts/qualify-owned-tool.py",
+      "purpose": "Orchestrate candidate acquisition/build evidence and mise behavior.",
+      "verdict": "DELETE",
+      "reason": "Only mise is admitted; MBX qualification explicitly unavailable. Selected regression tests move without porting this orchestrator.",
+      "source": "https://github.com/tailrocks/velnor-new/blob/d94fe9cefa6a0b97f00d235191c2d3142d1af6ff/scripts/qualify-owned-tool.py",
+      "inspection": "file or bounded initial range inspected; complete caller graph not proved",
+      "python_exception": "none demonstrated"
+    },
+    {
+      "path": "scripts/source_proof_capsule.py",
+      "purpose": "Construct and validate source-only proof capsules.",
+      "verdict": "DELETE",
+      "reason": "Passive evidence is retained, not executable authority or a new proof-capsule service.",
+      "source": "https://github.com/tailrocks/velnor-new/blob/d94fe9cefa6a0b97f00d235191c2d3142d1af6ff/scripts/source_proof_capsule.py",
+      "inspection": "file or bounded initial range inspected; complete caller graph not proved",
+      "python_exception": "none demonstrated"
+    },
+    {
+      "path": "scripts/source_publication.py",
+      "purpose": "Maintain closed approved source/publication catalog.",
+      "verdict": "DELETE",
+      "reason": "Replace with the passive inventory in this package; do not keep a compiler/runtime dependency on retired snapshots.",
+      "source": "https://github.com/tailrocks/velnor-new/blob/d94fe9cefa6a0b97f00d235191c2d3142d1af6ff/scripts/source_publication.py",
+      "inspection": "file or bounded initial range inspected; complete caller graph not proved",
+      "python_exception": "none demonstrated"
+    },
+    {
+      "path": "scripts/source_publication_records.py",
+      "purpose": "Generate canonical source publication records.",
+      "verdict": "DELETE",
+      "reason": "Freeze outputs with provenance; regeneration is not an ongoing runtime need.",
+      "source": "https://github.com/tailrocks/velnor-new/blob/d94fe9cefa6a0b97f00d235191c2d3142d1af6ff/scripts/source_publication_records.py",
+      "inspection": "file or bounded initial range inspected; complete caller graph not proved",
+      "python_exception": "none demonstrated"
+    },
+    {
+      "path": "scripts/source_qualification_execution.py",
+      "purpose": "Admit specific workflow/event/branch/job/attempt combinations.",
+      "verdict": "DELETE",
+      "reason": "owned-tools.yml on main and owned-tool-candidates route are not established; delete with the retired pipeline, not independently of any newly found caller.",
+      "source": "https://github.com/tailrocks/velnor-new/blob/d94fe9cefa6a0b97f00d235191c2d3142d1af6ff/scripts/source_qualification_execution.py",
+      "inspection": "file or bounded initial range inspected; complete caller graph not proved",
+      "python_exception": "none demonstrated"
+    },
+    {
+      "path": "scripts/source_release_policy.py",
+      "purpose": "Validate remote release immutability and repository policy.",
+      "verdict": "DELETE",
+      "reason": "No new private source releases are planned; retain preexisting generic release safety outside this module.",
+      "source": "https://github.com/tailrocks/velnor-new/blob/d94fe9cefa6a0b97f00d235191c2d3142d1af6ff/scripts/source_release_policy.py",
+      "inspection": "file or bounded initial range inspected; complete caller graph not proved",
+      "python_exception": "none demonstrated"
+    },
+    {
+      "path": "scripts/source_semver_capsule.py",
+      "purpose": "Bind supplied-document semver source fixtures/capsule.",
+      "verdict": "DELETE",
+      "reason": "No retained Velnor supplied-document caller; real semver behavioral fixture remains archived, not mislabeled as mock-only.",
+      "source": "https://github.com/tailrocks/velnor-new/blob/d94fe9cefa6a0b97f00d235191c2d3142d1af6ff/scripts/source_semver_capsule.py",
+      "inspection": "file or bounded initial range inspected; complete caller graph not proved",
+      "python_exception": "none demonstrated"
+    },
+    {
+      "path": "scripts/stage-owned-tool-source.py",
+      "purpose": "Stage foreign Git source trees/archives and receipts.",
+      "verdict": "DELETE",
+      "reason": "No retained owned-source build pipeline.",
+      "source": "https://github.com/tailrocks/velnor-new/blob/d94fe9cefa6a0b97f00d235191c2d3142d1af6ff/scripts/stage-owned-tool-source.py",
+      "inspection": "file or bounded initial range inspected; complete caller graph not proved",
+      "python_exception": "none demonstrated"
+    },
+    {
+      "path": "scripts/owned_tool_execution_test_fixtures.py",
+      "purpose": "support fixture",
+      "verdict": "DELETE",
+      "reason": "Delete only with retired imports/callers after G0. test_git_optional_locks.py additionally requires proving no surviving Git-policy caller; retain or extract any such regression before deletion.",
+      "source": "https://github.com/tailrocks/velnor-new/blob/d94fe9cefa6a0b97f00d235191c2d3142d1af6ff/scripts/owned_tool_execution_test_fixtures.py",
+      "inspection": "changed-file inventory, not complete per-test execution audit",
+      "python_exception": "none demonstrated"
+    },
+    {
+      "path": "scripts/owned_tool_publication_test_fixtures.py",
+      "purpose": "support fixture",
+      "verdict": "DELETE",
+      "reason": "Delete only with retired imports/callers after G0. test_git_optional_locks.py additionally requires proving no surviving Git-policy caller; retain or extract any such regression before deletion.",
+      "source": "https://github.com/tailrocks/velnor-new/blob/d94fe9cefa6a0b97f00d235191c2d3142d1af6ff/scripts/owned_tool_publication_test_fixtures.py",
+      "inspection": "changed-file inventory, not complete per-test execution audit",
+      "python_exception": "none demonstrated"
+    },
+    {
+      "path": "scripts/test_ci_performance_analysis.py",
+      "purpose": "pipeline/test support (individual test bodies not fully audited)",
+      "verdict": "DELETE",
+      "reason": "Delete only with retired imports/callers after G0. test_git_optional_locks.py additionally requires proving no surviving Git-policy caller; retain or extract any such regression before deletion.",
+      "source": "https://github.com/tailrocks/velnor-new/blob/d94fe9cefa6a0b97f00d235191c2d3142d1af6ff/scripts/test_ci_performance_analysis.py",
+      "inspection": "changed-file inventory, not complete per-test execution audit",
+      "python_exception": "none demonstrated"
+    },
+    {
+      "path": "scripts/test_download_owned_tool_candidate.py",
+      "purpose": "pipeline/test support (individual test bodies not fully audited)",
+      "verdict": "DELETE",
+      "reason": "Delete only with retired imports/callers after G0. test_git_optional_locks.py additionally requires proving no surviving Git-policy caller; retain or extract any such regression before deletion.",
+      "source": "https://github.com/tailrocks/velnor-new/blob/d94fe9cefa6a0b97f00d235191c2d3142d1af6ff/scripts/test_download_owned_tool_candidate.py",
+      "inspection": "changed-file inventory, not complete per-test execution audit",
+      "python_exception": "none demonstrated"
+    },
+    {
+      "path": "scripts/test_git_optional_locks.py",
+      "purpose": "pipeline/test support (individual test bodies not fully audited)",
+      "verdict": "DELETE",
+      "reason": "Delete only with retired imports/callers after G0. test_git_optional_locks.py additionally requires proving no surviving Git-policy caller; retain or extract any such regression before deletion.",
+      "source": "https://github.com/tailrocks/velnor-new/blob/d94fe9cefa6a0b97f00d235191c2d3142d1af6ff/scripts/test_git_optional_locks.py",
+      "inspection": "changed-file inventory, not complete per-test execution audit",
+      "python_exception": "none demonstrated"
+    },
+    {
+      "path": "scripts/test_owned_tool_build.py",
+      "purpose": "pipeline/test support (individual test bodies not fully audited)",
+      "verdict": "DELETE",
+      "reason": "Delete only with retired imports/callers after G0. test_git_optional_locks.py additionally requires proving no surviving Git-policy caller; retain or extract any such regression before deletion.",
+      "source": "https://github.com/tailrocks/velnor-new/blob/d94fe9cefa6a0b97f00d235191c2d3142d1af6ff/scripts/test_owned_tool_build.py",
+      "inspection": "changed-file inventory, not complete per-test execution audit",
+      "python_exception": "none demonstrated"
+    },
+    {
+      "path": "scripts/test_owned_tool_execution_evidence.py",
+      "purpose": "pipeline/test support (individual test bodies not fully audited)",
+      "verdict": "DELETE",
+      "reason": "Delete only with retired imports/callers after G0. test_git_optional_locks.py additionally requires proving no surviving Git-policy caller; retain or extract any such regression before deletion.",
+      "source": "https://github.com/tailrocks/velnor-new/blob/d94fe9cefa6a0b97f00d235191c2d3142d1af6ff/scripts/test_owned_tool_execution_evidence.py",
+      "inspection": "changed-file inventory, not complete per-test execution audit",
+      "python_exception": "none demonstrated"
+    },
+    {
+      "path": "scripts/test_owned_tool_qualification_evidence.py",
+      "purpose": "pipeline/test support (individual test bodies not fully audited)",
+      "verdict": "DELETE",
+      "reason": "Delete only with retired imports/callers after G0. test_git_optional_locks.py additionally requires proving no surviving Git-policy caller; retain or extract any such regression before deletion.",
+      "source": "https://github.com/tailrocks/velnor-new/blob/d94fe9cefa6a0b97f00d235191c2d3142d1af6ff/scripts/test_owned_tool_qualification_evidence.py",
+      "inspection": "changed-file inventory, not complete per-test execution audit",
+      "python_exception": "none demonstrated"
+    },
+    {
+      "path": "scripts/test_publish_owned_tool_artifacts.py",
+      "purpose": "pipeline/test support (individual test bodies not fully audited)",
+      "verdict": "DELETE",
+      "reason": "Delete only with retired imports/callers after G0. test_git_optional_locks.py additionally requires proving no surviving Git-policy caller; retain or extract any such regression before deletion.",
+      "source": "https://github.com/tailrocks/velnor-new/blob/d94fe9cefa6a0b97f00d235191c2d3142d1af6ff/scripts/test_publish_owned_tool_artifacts.py",
+      "inspection": "changed-file inventory, not complete per-test execution audit",
+      "python_exception": "none demonstrated"
+    },
+    {
+      "path": "scripts/test_qualify_owned_tool.py",
+      "purpose": "pipeline/test support (individual test bodies not fully audited)",
+      "verdict": "DELETE",
+      "reason": "Delete only with retired imports/callers after G0. test_git_optional_locks.py additionally requires proving no surviving Git-policy caller; retain or extract any such regression before deletion.",
+      "source": "https://github.com/tailrocks/velnor-new/blob/d94fe9cefa6a0b97f00d235191c2d3142d1af6ff/scripts/test_qualify_owned_tool.py",
+      "inspection": "changed-file inventory, not complete per-test execution audit",
+      "python_exception": "none demonstrated"
+    },
+    {
+      "path": "scripts/test_source_proof_capsule.py",
+      "purpose": "pipeline/test support (individual test bodies not fully audited)",
+      "verdict": "DELETE",
+      "reason": "Delete only with retired imports/callers after G0. test_git_optional_locks.py additionally requires proving no surviving Git-policy caller; retain or extract any such regression before deletion.",
+      "source": "https://github.com/tailrocks/velnor-new/blob/d94fe9cefa6a0b97f00d235191c2d3142d1af6ff/scripts/test_source_proof_capsule.py",
+      "inspection": "changed-file inventory, not complete per-test execution audit",
+      "python_exception": "none demonstrated"
+    },
+    {
+      "path": "scripts/test_source_publication.py",
+      "purpose": "pipeline/test support (individual test bodies not fully audited)",
+      "verdict": "DELETE",
+      "reason": "Delete only with retired imports/callers after G0. test_git_optional_locks.py additionally requires proving no surviving Git-policy caller; retain or extract any such regression before deletion.",
+      "source": "https://github.com/tailrocks/velnor-new/blob/d94fe9cefa6a0b97f00d235191c2d3142d1af6ff/scripts/test_source_publication.py",
+      "inspection": "changed-file inventory, not complete per-test execution audit",
+      "python_exception": "none demonstrated"
+    },
+    {
+      "path": "scripts/test_source_publication_records.py",
+      "purpose": "pipeline/test support (individual test bodies not fully audited)",
+      "verdict": "DELETE",
+      "reason": "Delete only with retired imports/callers after G0. test_git_optional_locks.py additionally requires proving no surviving Git-policy caller; retain or extract any such regression before deletion.",
+      "source": "https://github.com/tailrocks/velnor-new/blob/d94fe9cefa6a0b97f00d235191c2d3142d1af6ff/scripts/test_source_publication_records.py",
+      "inspection": "changed-file inventory, not complete per-test execution audit",
+      "python_exception": "none demonstrated"
+    },
+    {
+      "path": "scripts/test_source_qualification_execution.py",
+      "purpose": "pipeline/test support (individual test bodies not fully audited)",
+      "verdict": "DELETE",
+      "reason": "Delete only with retired imports/callers after G0. test_git_optional_locks.py additionally requires proving no surviving Git-policy caller; retain or extract any such regression before deletion.",
+      "source": "https://github.com/tailrocks/velnor-new/blob/d94fe9cefa6a0b97f00d235191c2d3142d1af6ff/scripts/test_source_qualification_execution.py",
+      "inspection": "changed-file inventory, not complete per-test execution audit",
+      "python_exception": "none demonstrated"
+    },
+    {
+      "path": "scripts/test_source_release_transaction.py",
+      "purpose": "pipeline/test support (individual test bodies not fully audited)",
+      "verdict": "DELETE",
+      "reason": "Delete only with retired imports/callers after G0. test_git_optional_locks.py additionally requires proving no surviving Git-policy caller; retain or extract any such regression before deletion.",
+      "source": "https://github.com/tailrocks/velnor-new/blob/d94fe9cefa6a0b97f00d235191c2d3142d1af6ff/scripts/test_source_release_transaction.py",
+      "inspection": "changed-file inventory, not complete per-test execution audit",
+      "python_exception": "none demonstrated"
+    },
+    {
+      "path": "scripts/test_source_semver_capsule.py",
+      "purpose": "pipeline/test support (individual test bodies not fully audited)",
+      "verdict": "DELETE",
+      "reason": "Delete only with retired imports/callers after G0. test_git_optional_locks.py additionally requires proving no surviving Git-policy caller; retain or extract any such regression before deletion.",
+      "source": "https://github.com/tailrocks/velnor-new/blob/d94fe9cefa6a0b97f00d235191c2d3142d1af6ff/scripts/test_source_semver_capsule.py",
+      "inspection": "changed-file inventory, not complete per-test execution audit",
+      "python_exception": "none demonstrated"
+    }
+  ],
+  "unresolved": [
+    "fresh-clone cat-file proof",
+    "all-ref and all-46 full workflow/content closure",
+    "real hosted execution and action bundle/source equivalence",
+    "release tag reachability and archival Git bundle restore",
+    "all Python test/caller bodies",
+    "consumer generator-version-specific policy default evaluation"
+  ]
+}
