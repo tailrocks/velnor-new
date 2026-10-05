@@ -5,8 +5,22 @@
 
 use std::collections::BTreeMap;
 
+<<<<<<< HEAD
 use velnor_actions_contract::cachekey::mbx_cache_generation;
 use velnor_actions_contract::{Job, Step, StepKind, target_for_runner_label};
+=======
+use velnor_actions_contract::{Step, StepKind};
+
+#[path = "cache_steps_mbx_preflight.rs"]
+mod mbx_preflight;
+pub(crate) use mbx_preflight::{
+    MBX_ACTION_CACHE_MODE, MBX_GC_AUTO_ENV, MBX_GC_AUTO_VALUE, is_mbx_action,
+};
+pub use mbx_preflight::{
+    MBX_CACHE_MODE_ENV, MBX_PREFLIGHT_NAME, MBX_RESTORE_NAME, check_mbx_gating,
+    mbx_steps_for_driver,
+};
+>>>>>>> origin/main
 
 use crate::{
     RenderError,
@@ -57,6 +71,7 @@ pub enum CompileDriver {
     Mbx,
 }
 
+<<<<<<< HEAD
 /// MBX objects step only for MBX-selected profiles; Cargo yields none.
 ///
 /// Workflow contract §3 emits `jdx/mr-boxington-action` only when the
@@ -220,6 +235,8 @@ fn is_exact_mbx_version(version: &str) -> bool {
             .all(|part| !part.is_empty() && part.bytes().all(|b| b.is_ascii_digit()))
 }
 
+=======
+>>>>>>> origin/main
 /// Cache restore/save step over `actions/cache`; MBX never archives here.
 /// # Errors
 pub fn cache_action_step(

@@ -207,7 +207,7 @@ fn acquire_argv(staged: &str) -> Vec<String> {
 #[cfg(test)]
 fn test_manifest_json() -> String {
     let version = env!("CARGO_PKG_VERSION");
-    let targets = ["x86_64-unknown-linux-gnu", "aarch64-apple-darwin", "x86_64-apple-darwin"]
+    let targets = velnor_actions_contract::SUPPORTED_TARGETS
         .iter()
         .map(|target| {
             format!(

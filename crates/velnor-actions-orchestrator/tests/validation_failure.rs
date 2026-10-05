@@ -183,11 +183,7 @@ exec \"$VELNOR_REAL_MISE\" \"$@\"
 
     /// Debug-only consumer-manifest fixture for the scrubbed repo.
     fn manifest_fixture() -> String {
-        let targets = [
-            "x86_64-unknown-linux-gnu",
-            "aarch64-apple-darwin",
-            "x86_64-apple-darwin",
-        ]
+        let targets = velnor_actions_contract::SUPPORTED_TARGETS
         .iter()
         .map(|target| {
             format!(

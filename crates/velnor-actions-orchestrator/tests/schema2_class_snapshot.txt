@@ -15,6 +15,9 @@
     if: inputs.mode == 'composite'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -37,6 +40,9 @@
     if: inputs.mode == 'js-pin'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
     steps:
       - name: Pinned script
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
@@ -59,6 +65,9 @@
     if: inputs.mode == 'docker-action'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -71,6 +80,9 @@
     if: inputs.mode == 'container'
     runs-on: ubuntu-26.04
     timeout-minutes: 20
+    defaults:
+      run:
+        shell: sh -e {0}
     container: alpine:3.22
     services:
       redis:
@@ -87,6 +99,9 @@
     if: inputs.mode == 'container'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 20
+    defaults:
+      run:
+        shell: sh -e {0}
     container: alpine:3.22
     services:
       redis:
@@ -103,6 +118,9 @@
     if: inputs.mode == 'outputs'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
     outputs:
       proof: ${{ steps.emit.outputs.proof }}
     steps:
@@ -136,6 +154,9 @@
     if: inputs.mode == 'mask'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
     steps:
       - name: Mask canary
         run: "echo \"::add-mask::g4-mask-canary\" && echo g4-mask-canary"
@@ -144,6 +165,9 @@
     if: inputs.mode == 'cache'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
     permissions:
       contents: read
       actions: write
@@ -190,6 +214,9 @@
     if: inputs.mode == 'oidc'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
     permissions:
       id-token: write
       contents: read
@@ -213,6 +240,9 @@
     if: inputs.mode == 'post-fail'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -233,6 +263,9 @@
     if: inputs.mode == 'cancel'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
     steps:
       - name: Sleep until cancelled
         run: sleep 180
@@ -259,6 +292,9 @@
     if: inputs.mode == 'compose'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -285,9 +321,13 @@
     if: inputs.mode == 'bind'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
     steps:
       - name: Bind workspace file
         run: "printf '%s\\n' bind-ok > \"$GITHUB_WORKSPACE/g4-bind.txt\" && docker run --rm -v \"$GITHUB_WORKSPACE/g4-bind.txt:/g4-bind.txt:ro\" alpine:3.22 cat /g4-bind.txt > \"$RUNNER_TEMP/g4-bind-out\" && grep -qx bind-ok \"$RUNNER_TEMP/g4-bind-out\""
+<<<<<<< HEAD
   cancel-service-hosted:
     name: Cancel service / GitHub hosted
     if: inputs.mode == 'cancel-service'
@@ -584,3 +624,5 @@
         run: "set -eu\nroot=\"$GITHUB_WORKSPACE/.velnor-mbx-cache-qualification\"\nmkdir -p \"$root/src\"\ncat > \"$root/Cargo.toml\" <<'EOF'\n[package]\nname = \"mbx-cache-qualification\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[workspace]\nmembers = [\".\"]\nresolver = \"3\"\n\n[lib]\npath = \"src/lib.rs\"\nEOF\ncat > \"$root/src/lib.rs\" <<'EOF'\npub fn cache_probe() -> u64 { 42 }\nEOF\nmbx build --manifest-path \"$root/Cargo.toml\"\n"
       - name: Require reused compilation
         run: mbx stats --json | jq -e '.savings.cached_compilations > 0' >/dev/null
+=======
+>>>>>>> origin/main

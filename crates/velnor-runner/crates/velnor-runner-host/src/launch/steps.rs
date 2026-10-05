@@ -9,7 +9,7 @@ use velnor_runner_github::{
 
 use crate::Offer;
 use crate::error::HostError;
-use crate::journal::{IntentState, Journal, Outcome};
+use crate::journal::{Journal, Outcome};
 use crate::listen::map_listen;
 use crate::offer;
 use crate::scale_set::EnsureError;
@@ -203,12 +203,9 @@ where
     F: Future<Output = Result<Started, HostError>>,
 {
     lane.on_admin()?;
-    if let Some(live) = live_runner(journal).await? {
-        return finish_live(lane, ctx, journal, live, batch).await;
-    }
     let id = journal.begin(KIND, subject).await.map_err(map_journal)?;
     if docker_of(journal, id).await?.is_some() {
-        return finish_live(lane, ctx, journal, Live { id }, batch).await;
+        return finish_live(lane, ctx, journal, id, batch).await;
     }
     mint(lane, ctx, batch, journal, id, name, start).await
 }
@@ -255,29 +252,11 @@ where
     jit(lane, ctx.set_id, &ctx.admin_token, &body)
 }
 
-struct Live {
-    id: i64,
-}
-
-async fn live_runner(journal: &Journal) -> Result<Option<Live>, EnsureError> {
-    let rows = journal.rows().await.map_err(map_journal)?;
-    Ok(rows.into_iter().find_map(|row| {
-        if row.kind == KIND
-            && matches!(row.state, IntentState::Pending | IntentState::Uncertain)
-            && row.docker_id.is_some()
-        {
-            Some(Live { id: row.id })
-        } else {
-            None
-        }
-    }))
-}
-
 async fn finish_live<T>(
     lane: &mut T,
     ctx: &Drive,
     journal: &Journal,
-    live: Live,
+    id: i64,
     batch: Option<&velnor_runner_github::ParsedBatch>,
 ) -> Result<Option<Started>, EnsureError>
 where
@@ -286,9 +265,9 @@ where
     if let Some(batch) = batch
         && let Err(error) = acknowledge(lane, ctx, batch)
     {
-        return hold(journal, live.id, error).await;
+        return hold(journal, id, error).await;
     }
-    mark_done(journal, live.id).await?;
+    mark_done(journal, id).await?;
     // Already recorded. Counting it fills `started` and the session stops
     // before a later JobAvailable. A live container still occupies its slot.
     Ok(None)
