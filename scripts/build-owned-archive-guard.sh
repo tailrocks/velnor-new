@@ -14,7 +14,11 @@ guard_state="$state_root/archive-guard"
 guard_bin_dir="$guard_state/bin"
 cache_root="$home_root/.cache"
 build_root="$cache_root/velnor/archive-guard"
-guard_target="$build_root/target"
+guard_target_root="$build_root/target"
+guard_target=''
+build_tmp_root="$build_root/tmp"
+run_tmp=''
+temporary=''
 cargo_home="$build_root/cargo-home"
 mise_data="$home_root/.local/share/mise"
 mise_cache="$build_root/mise-cache"
@@ -23,6 +27,15 @@ rustup_home="$build_root/rustup-home"
 fail() {
   printf 'archive guard build: %s\n' "$1" >&2
   exit 1
+}
+
+cleanup() {
+  if [[ -n "$temporary" ]]; then
+    rm -f -- "$temporary"
+  fi
+  if [[ -n "$run_tmp" ]]; then
+    rm -rf -- "$run_tmp"
+  fi
 }
 
 [[ "$script_path" == "$repository/scripts/build-owned-archive-guard.sh" ]] \
@@ -134,6 +147,8 @@ check_source_checker
 # shellcheck source=scripts/check-owned-archive-guard-sources.sh
 source "$repository/scripts/check-owned-archive-guard-sources.sh"
 validate_source_manifest
+# shellcheck source=scripts/archive-guard-build-namespace.sh
+source "$repository/scripts/archive-guard-build-namespace.sh"
 
 check_config_file() {
   local path="$1" identity owner mode
@@ -222,16 +237,17 @@ if [[ -L "$state_root" ]]; then
   fail 'checkout .velnor directory is a symlink'
 fi
 for path in "$guard_state" "$guard_bin_dir" "$cache_root" "$cache_root/velnor" \
-  "$build_root" "$guard_target" "$cargo_home" "$mise_data" "$mise_cache" "$rustup_home"; do
+  "$build_root" "$guard_target_root" "$build_tmp_root" "$cargo_home" "$mise_data" \
+  "$mise_cache" "$rustup_home"; do
   [[ ! -L "$path" ]] || fail "build path is a symlink: $path"
 done
 for path in "$home_root/.local" "$home_root/.local/share"; do
   [[ ! -L "$path" ]] || fail "Mise path is a symlink: $path"
 done
-mkdir -p -- "$guard_bin_dir" "$guard_target" "$cargo_home" "$mise_data" "$mise_cache" \
-  "$rustup_home"
-chmod 700 "$guard_state" "$guard_bin_dir" "$build_root" "$guard_target" "$cargo_home" \
-  "$mise_cache" "$rustup_home"
+mkdir -p -- "$guard_bin_dir" "$guard_target_root" "$build_tmp_root" "$cargo_home" \
+  "$mise_data" "$mise_cache" "$rustup_home"
+chmod 700 "$guard_state" "$guard_bin_dir" "$build_root" "$guard_target_root" \
+  "$build_tmp_root" "$cargo_home" "$mise_cache" "$rustup_home"
 check_directory "$state_root"
 check_directory "$guard_state"
 check_directory "$guard_bin_dir"
@@ -241,16 +257,12 @@ check_directory "$home_root/.local/share"
 check_directory "$cache_root"
 check_directory "$cache_root/velnor"
 check_directory "$build_root"
-check_directory "$guard_target"
+check_directory "$guard_target_root"
+check_directory "$build_tmp_root"
 check_directory "$cargo_home"
 check_directory "$mise_data"
 check_directory "$mise_cache"
 check_directory "$rustup_home"
-for profile in "$guard_target/debug" "$guard_target/release"; do
-  if [[ -e "$profile" || -L "$profile" ]]; then
-    check_directory "$profile"
-  fi
-done
 for config in "$cargo_home/config" "$cargo_home/config.toml"; do
   if [[ -L "$config" || -e "$config" ]]; then
     fail "isolated Cargo configuration is forbidden: $config"
@@ -267,7 +279,7 @@ run_mise() {
     CARGO_HOME="$cargo_home" \
     CARGO_TARGET_DIR="$guard_target" \
     RUSTUP_HOME="$rustup_home" \
-    TMPDIR=/tmp \
+    TMPDIR="$run_tmp" \
     "$mise_bin" --no-config --no-env --no-hooks "$@"
 }
 
@@ -336,6 +348,22 @@ rustc_version="$(run_mise exec rust@1.98.1 -- rustc --version)"
 cargo_version="$(run_mise exec rust@1.98.1 -- cargo --version)"
 [[ "$rustc_version" == 'rustc 1.98.1 '* ]] || fail "unexpected compiler: $rustc_version"
 [[ "$cargo_version" == 'cargo 1.98.1 '* ]] || fail "unexpected Cargo: $cargo_version"
+run_tmp="$(mktemp -d "$build_tmp_root/archive-guard.XXXXXX")"
+chmod 700 "$run_tmp"
+check_directory "$run_tmp"
+trap cleanup EXIT
+source_fingerprint="$(archive_guard_source_fingerprint)"
+target_identity="$(archive_guard_target_identity)"
+guard_target="$guard_target_root/$source_fingerprint-$target_identity"
+[[ ! -L "$guard_target" ]] || fail 'archive guard target namespace is a symlink'
+mkdir -p -- "$guard_target"
+chmod 700 "$guard_target"
+check_directory "$guard_target"
+for profile in "$guard_target/debug" "$guard_target/release"; do
+  if [[ -e "$profile" || -L "$profile" ]]; then
+    check_directory "$profile"
+  fi
+done
 validate_local_cargo_closure
 run_mise exec rust@1.98.1 -- cargo build --release --locked \
   --manifest-path "$repository/Cargo.toml" \
@@ -343,19 +371,20 @@ run_mise exec rust@1.98.1 -- cargo build --release --locked \
 guard_cargo_output="$guard_target/release/velnor-archive-guard"
 check_directory "$guard_target/release"
 check_cargo_output "$guard_cargo_output"
+archive_guard_check_fingerprint "$guard_cargo_output" "$source_fingerprint"
+after_build_fingerprint="$(archive_guard_source_fingerprint)"
+[[ "$after_build_fingerprint" == "$source_fingerprint" ]] \
+  || fail 'archive guard sources changed during compilation'
 guard_executable="$guard_bin_dir/velnor-archive-guard"
 temporary="$(mktemp "$guard_bin_dir/.archive-guard.XXXXXX")"
-cleanup() {
-  if [[ -n "$temporary" ]]; then
-    rm -f "$temporary"
-  fi
-}
-trap cleanup EXIT
 cp "$guard_cargo_output" "$temporary"
 chmod 755 "$temporary"
 check_executable "$temporary"
+archive_guard_check_fingerprint "$temporary" "$source_fingerprint"
+before_install_fingerprint="$(archive_guard_source_fingerprint)"
+[[ "$before_install_fingerprint" == "$source_fingerprint" ]] \
+  || fail 'archive guard sources changed before installation'
 mv -f "$temporary" "$guard_executable"
 temporary=''
-trap - EXIT
 check_executable "$guard_executable"
-"$guard_executable" --fingerprint
+archive_guard_check_fingerprint "$guard_executable" "$source_fingerprint"
