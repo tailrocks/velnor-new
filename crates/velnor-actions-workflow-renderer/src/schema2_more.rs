@@ -2,10 +2,10 @@
 //! own `inputs.mode` and is not selected by `features`.
 
 use super::super::features::{
-    CHECKOUT_USES, base, checkout_step, finish, gated, redis_service, run_step,
+    CHECKOUT_USES, checkout_step, finish, gated, lane_base, redis_service, run_step,
 };
 use super::steps::uses_with;
-use super::{Extras, both};
+use super::{Extras, RunnerSpec, both};
 use crate::yaml::Yaml;
 
 const COMPOSE_UP: &str = "docker compose -f qualification/compose/stack.yml up -d --wait";
@@ -20,7 +20,7 @@ const PORT_HOLD: &str = "docker run -d --name g4-hold -p 8080:80 alpine:3.22 sle
 const PRESSURE_RUN: &str = "echo pressure-start && sleep 150 && echo pressure-ok";
 
 /// Compose, bind, cancel-service, testcontainers, submodule, ports, and pressure.
-pub(super) fn jobs(hosted: &Yaml, scale: &Yaml) -> Vec<(String, Yaml)> {
+pub(super) fn jobs(hosted: &RunnerSpec, scale: &RunnerSpec) -> Vec<(String, Yaml)> {
     let mut out = paired(hosted, scale);
     out.extend(testcontainers_jobs(hosted, scale));
     out.extend(submodule_jobs(hosted, scale));
@@ -32,7 +32,7 @@ pub(super) fn jobs(hosted: &Yaml, scale: &Yaml) -> Vec<(String, Yaml)> {
 
 /// Holds a GitHub Actions secret in the step environment. The run script
 /// checks that it is non-empty and does not print it.
-fn secret_jobs(hosted: &Yaml, scale: &Yaml) -> Vec<(String, Yaml)> {
+fn secret_jobs(hosted: &RunnerSpec, scale: &RunnerSpec) -> Vec<(String, Yaml)> {
     both(
         "secret",
         "Secret",
@@ -51,7 +51,7 @@ fn secret_steps() -> Vec<Yaml> {
     )]
 }
 
-fn paired(hosted: &Yaml, scale: &Yaml) -> Vec<(String, Yaml)> {
+fn paired(hosted: &RunnerSpec, scale: &RunnerSpec) -> Vec<(String, Yaml)> {
     let mut out = Vec::new();
     out.extend(both(
         "compose",
@@ -80,7 +80,7 @@ fn paired(hosted: &Yaml, scale: &Yaml) -> Vec<(String, Yaml)> {
     out
 }
 
-fn submodule_jobs(hosted: &Yaml, scale: &Yaml) -> Vec<(String, Yaml)> {
+fn submodule_jobs(hosted: &RunnerSpec, scale: &RunnerSpec) -> Vec<(String, Yaml)> {
     both(
         "submodule",
         "Submodule",
@@ -91,7 +91,7 @@ fn submodule_jobs(hosted: &Yaml, scale: &Yaml) -> Vec<(String, Yaml)> {
     )
 }
 
-fn testcontainers_jobs(hosted: &Yaml, scale: &Yaml) -> Vec<(String, Yaml)> {
+fn testcontainers_jobs(hosted: &RunnerSpec, scale: &RunnerSpec) -> Vec<(String, Yaml)> {
     let steps = testcontainers_steps();
     vec![
         timed(
@@ -111,7 +111,7 @@ fn testcontainers_jobs(hosted: &Yaml, scale: &Yaml) -> Vec<(String, Yaml)> {
     ]
 }
 
-fn ports_jobs(hosted: &Yaml, scale: &Yaml) -> Vec<(String, Yaml)> {
+fn ports_jobs(hosted: &RunnerSpec, scale: &RunnerSpec) -> Vec<(String, Yaml)> {
     let steps = ports_steps();
     vec![
         timed(
@@ -145,7 +145,7 @@ fn ports_jobs(hosted: &Yaml, scale: &Yaml) -> Vec<(String, Yaml)> {
     ]
 }
 
-fn pressure_jobs(hosted: &Yaml, scale: &Yaml) -> Vec<(String, Yaml)> {
+fn pressure_jobs(hosted: &RunnerSpec, scale: &RunnerSpec) -> Vec<(String, Yaml)> {
     let steps = pressure_steps();
     vec![
         timed(
@@ -193,9 +193,15 @@ fn pressure_jobs(hosted: &Yaml, scale: &Yaml) -> Vec<(String, Yaml)> {
     ]
 }
 
-fn timed(id: &str, name: &str, mode: &str, runs_on: &Yaml, steps: Vec<Yaml>) -> (String, Yaml) {
+fn timed(
+    id: &str,
+    name: &str,
+    mode: &str,
+    runner: &RunnerSpec,
+    steps: Vec<Yaml>,
+) -> (String, Yaml) {
     let when = format!("inputs.mode == '{mode}'");
-    gated(finish(id, base(name, runs_on.clone(), 30), steps), &when)
+    gated(finish(id, lane_base(name, runner, 30), steps), &when)
 }
 
 fn service_extras() -> Extras {

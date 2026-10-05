@@ -8,8 +8,8 @@
 //! Both jobs set `MBX_GC_AUTO=1` to exercise the hosted policy emitted for
 //! production MBX jobs, not the action's hosted default.
 
-use super::MbxQualificationPins;
-use super::features::{base, checkout_step, finish, gated, run_step};
+use super::features::{checkout_step, finish, gated, lane_base, run_step};
+use super::{MbxQualificationPins, RunnerSpec};
 use crate::cache_steps::MBX_ACTION_NAME;
 use crate::yaml::Yaml;
 use crate::{RenderError, steps::validate_uses};
@@ -45,7 +45,7 @@ const REUSE_PROBE: &str = "mbx stats --json | jq -e '.savings.cached_compilation
 /// Invalid action, Mise, MBX, or Rust pins fail closed.
 pub(super) fn jobs(
     request: &MbxQualificationPins,
-    hosted: &Yaml,
+    hosted: &RunnerSpec,
 ) -> Result<Vec<(String, Yaml)>, RenderError> {
     request.mise_setup.validate()?;
     validate_uses(&request.mbx_action_uses)?;
@@ -65,7 +65,7 @@ pub(super) fn jobs(
     ])
 }
 
-fn job(request: &MbxQualificationPins, hosted: &Yaml, writer: bool) -> (String, Yaml) {
+fn job(request: &MbxQualificationPins, hosted: &RunnerSpec, writer: bool) -> (String, Yaml) {
     let (id, title, mode) = if writer {
         (
             "mbx-cache-write-hosted",
@@ -79,7 +79,7 @@ fn job(request: &MbxQualificationPins, hosted: &Yaml, writer: bool) -> (String, 
             "mbx-cache-roundtrip",
         )
     };
-    let mut fields = base(title, hosted.clone(), 45);
+    let mut fields = lane_base(title, hosted, 45);
     if !writer {
         fields.push((
             "needs".to_owned(),

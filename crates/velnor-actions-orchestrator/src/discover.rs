@@ -238,11 +238,7 @@ fn consumer_manifest_text(root: &Path) -> Result<(Option<String>, bool), Orchest
     let sha = "a".repeat(64);
     let version = env!("CARGO_PKG_VERSION");
     let mut targets = Vec::new();
-    for target in [
-        "x86_64-unknown-linux-gnu",
-        "aarch64-apple-darwin",
-        "x86_64-apple-darwin",
-    ] {
+    for target in velnor_actions_contract::SUPPORTED_TARGETS {
         targets.push(format!(
             "{{\"target\":\"{target}\",\"artifact\":\"https://github.com/tailrocks/velnor-new/releases/download/v{version}/velnor-actions-{version}-{target}\",\"sha256\":\"{sha}\"}}"
         ));

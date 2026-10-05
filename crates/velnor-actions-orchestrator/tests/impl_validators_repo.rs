@@ -27,11 +27,7 @@ fn git(args: &[&str], cwd: &Path) -> TestResult {
 
 /// Release-manifest fixture so consumer `prepare` succeeds.
 fn fixture_manifest_json() -> String {
-    let targets = [
-        "x86_64-unknown-linux-gnu",
-        "aarch64-apple-darwin",
-        "x86_64-apple-darwin",
-    ]
+    let targets = velnor_actions_contract::SUPPORTED_TARGETS
     .iter()
     .map(|target| {
         format!(
