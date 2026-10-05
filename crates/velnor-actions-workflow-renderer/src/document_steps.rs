@@ -23,22 +23,24 @@ fn is_verdict_download(step: &Step) -> bool {
     ) && step.name == crate::closure::DOWNLOAD_PLAN_NAME
 }
 
-/// Env for one internal step: op plus request file, fetch carries auth.
+/// Env for one internal step: op plus request file, authorized reads carry auth.
 ///
-/// The fetch op takes no request file; it reads the plan from the
-/// run directory and authenticates `gh` with the job token plus the
-/// repository slug (fixed literals, never caller input). Token hygiene
-/// still gates IR-level `GH_TOKEN` (see `support`); this render-time
-/// pair is fixed by construction for the fetch step only. Merge-family
-/// steps in the final job additionally carry the finalized `needs`
-/// conclusions channel plus the rendered expected inventory, so the
-/// merge binds required validators to the committed workflow.
+/// When authorized by typed job permissions, the plan op authenticates only
+/// its internal baseline lookup. The fetch
+/// op takes no request file; it reads the plan from the run directory and
+/// authenticates `gh` with the job token plus the repository slug (fixed
+/// literals, never caller input). This render-time pair is emitted only on
+/// those two exact internal steps. Merge-family steps in the final job
+/// additionally carry the finalized `needs` conclusions channel plus the
+/// rendered expected inventory, so the merge binds required validators to
+/// the committed workflow.
 fn internal_env(
     op: &str,
     target: &str,
     ctx: &RenderContext,
     needs_envs: &[(String, String)],
     job_env: &BTreeMap<String, String>,
+    actions_read: bool,
 ) -> Yaml {
     if op == steps::FETCH_OPERATION {
         return Yaml::Map(vec![
@@ -48,7 +50,12 @@ fn internal_env(
         ]);
     }
     let request = format!("{}/{target}-request.json", ctx.request_dir);
-    let mut env = vec![(INTERNAL_OP_ENV.to_owned(), Yaml::str(op.to_owned()))];
+    let mut env = Vec::new();
+    if actions_read && op == steps::PLAN_OPERATION && target == steps::PLAN_OPERATION {
+        env.push(("GH_REPO".to_owned(), Yaml::str("${{ github.repository }}")));
+        env.push(("GH_TOKEN".to_owned(), Yaml::str("${{ github.token }}")));
+    }
+    env.push((INTERNAL_OP_ENV.to_owned(), Yaml::str(op.to_owned())));
     for (key, value) in needs_envs {
         env.push((key.clone(), Yaml::str(value.clone())));
     }
@@ -150,6 +157,7 @@ pub(crate) fn step_to_yaml(
     composite: bool,
     job_env: &BTreeMap<String, String>,
     runs_on: Option<&str>,
+    actions_read: bool,
 ) -> Result<Yaml, RenderError> {
     steps::scan_for_private_subcommands(&step.name)?;
     match &step.kind {
@@ -186,6 +194,11 @@ pub(crate) fn step_to_yaml(
         }
         StepKind::Internal { operation } => {
             let (op, target) = steps::split_internal_operation(operation)?;
+            if op == steps::FETCH_OPERATION && !actions_read {
+                return Err(RenderError::InvalidWorkflow(
+                    "report_fetch_requires_actions_read".to_owned(),
+                ));
+            }
             let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
             if let Some(condition) = &step.condition {
                 steps::scan_for_private_subcommands(condition)?;
@@ -202,7 +215,7 @@ pub(crate) fn step_to_yaml(
             };
             entries.push((
                 "env".to_owned(),
-                internal_env(op, target, ctx, channel, job_env),
+                internal_env(op, target, ctx, channel, job_env, actions_read),
             ));
             push_composite_shell(&mut entries, composite);
             entries.push((

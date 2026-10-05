@@ -2,7 +2,8 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::WorkflowPolicy;
+use velnor_actions_contract::workflow::permissions::PermissionLevel;
+use velnor_actions_contract::{Permissions, WorkflowPolicy};
 use velnor_actions_workflow_renderer::{
     RenderError, ambient_shell_step, checkout_step, merge_step, plan_step, render_workflow_ir,
     shell_step,
@@ -97,6 +98,12 @@ fn token_hygiene_allows_final_fetch_token() -> Result<(), RenderError> {
         ],
     );
     final_job.condition = Some("always()".to_owned());
+    final_job.permissions = Some(Permissions {
+        contents: PermissionLevel::Read,
+        pull_requests: PermissionLevel::None,
+        id_token: PermissionLevel::None,
+        actions: PermissionLevel::Read,
+    });
     let text = render_workflow_ir(
         &fixture_ir(vec![minimal_plan_job()?, (id, final_job)]),
         WorkflowPolicy::ConsumerV1,

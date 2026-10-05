@@ -17,6 +17,11 @@ pub(crate) struct SharedLaneSteps<'a> {
     pub postludes: &'a BTreeMap<String, Vec<Step>>,
 }
 
+pub(crate) struct JobStepContext<'a> {
+    pub job_env: &'a BTreeMap<String, String>,
+    pub actions_read: bool,
+}
+
 /// Render a normal job body or a paired lane's cache prelude/composite/postlude.
 pub(crate) fn render_job_steps(
     id: &str,
@@ -25,7 +30,7 @@ pub(crate) fn render_job_steps(
     needs_envs: &[(String, String)],
     shared: Option<&str>,
     lanes: &SharedLaneSteps<'_>,
-    job_env: &BTreeMap<String, String>,
+    step_context: &JobStepContext<'_>,
 ) -> Result<Vec<Yaml>, RenderError> {
     let mut rendered = Vec::with_capacity(job.steps.len() + 2 * usize::from(shared.is_some()));
     if let Some(uses) = shared {
@@ -36,7 +41,7 @@ pub(crate) fn render_job_steps(
             ctx,
             needs_envs,
             lanes,
-            job_env,
+            step_context,
             &mut rendered,
         )?;
     } else {
@@ -52,8 +57,9 @@ pub(crate) fn render_job_steps(
                 ctx,
                 needs_envs,
                 false,
-                job_env,
+                step_context.job_env,
                 Some(&job.runs_on),
+                step_context.actions_read,
             )?);
         }
     }
@@ -67,7 +73,7 @@ fn append_shared_lane_steps(
     ctx: &RenderContext,
     needs_envs: &[(String, String)],
     lanes: &SharedLaneSteps<'_>,
-    job_env: &BTreeMap<String, String>,
+    step_context: &JobStepContext<'_>,
     rendered: &mut Vec<Yaml>,
 ) -> Result<(), RenderError> {
     let Some(checkout) = lanes.checkouts.get(id) else {
@@ -86,8 +92,9 @@ fn append_shared_lane_steps(
         ctx,
         needs_envs,
         false,
-        job_env,
+        step_context.job_env,
         Some(runs_on),
+        step_context.actions_read,
     )?);
     append_steps(
         id,
@@ -95,7 +102,7 @@ fn append_shared_lane_steps(
         ctx,
         needs_envs,
         runs_on,
-        job_env,
+        step_context,
         rendered,
         "runtime_prelude",
     )?;
@@ -105,7 +112,7 @@ fn append_shared_lane_steps(
         ctx,
         needs_envs,
         runs_on,
-        job_env,
+        step_context,
         rendered,
         "prefix",
     )?;
@@ -115,7 +122,7 @@ fn append_shared_lane_steps(
         ctx,
         needs_envs,
         runs_on,
-        job_env,
+        step_context,
         rendered,
         "prelude",
     )?;
@@ -126,7 +133,7 @@ fn append_shared_lane_steps(
         ctx,
         needs_envs,
         runs_on,
-        job_env,
+        step_context,
         rendered,
         "postlude",
     )
@@ -138,7 +145,7 @@ fn append_steps(
     ctx: &RenderContext,
     needs_envs: &[(String, String)],
     runs_on: &str,
-    job_env: &BTreeMap<String, String>,
+    step_context: &JobStepContext<'_>,
     rendered: &mut Vec<Yaml>,
     label: &str,
 ) -> Result<(), RenderError> {
@@ -152,8 +159,9 @@ fn append_steps(
             ctx,
             needs_envs,
             false,
-            job_env,
+            step_context.job_env,
             Some(runs_on),
+            step_context.actions_read,
         )?);
     }
     Ok(())

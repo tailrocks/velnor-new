@@ -2,7 +2,7 @@
 use std::collections::BTreeMap;
 use velnor_actions_contract::{
     Concurrency, Job, JobTimeout, Permissions, Step, Trigger, ValidatorKind, WorkflowIr,
-    WorkflowPolicy,
+    WorkflowPolicy, workflow::permissions::PermissionLevel,
 };
 use velnor_actions_workflow_renderer::steps::{CompileDriver, mbx_steps_for_driver};
 use velnor_actions_workflow_renderer::{
@@ -127,7 +127,14 @@ pub(crate) fn job(id: &str, display: &str, needs: Vec<String>, steps: Vec<Step>)
             timeout_minutes: JobTimeout::CRATE,
             needs,
             condition: None,
-            permissions: None,
+            permissions: (id == velnor_actions_workflow_renderer::render::FINAL_JOB_ID).then_some(
+                Permissions {
+                    contents: PermissionLevel::Read,
+                    actions: PermissionLevel::Read,
+                    pull_requests: PermissionLevel::None,
+                    id_token: PermissionLevel::None,
+                },
+            ),
             environment: None,
             steps,
         },

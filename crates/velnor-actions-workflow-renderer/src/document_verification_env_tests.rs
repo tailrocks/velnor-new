@@ -64,6 +64,7 @@ fn emitted_verification_job_scrubs_credentials_without_disabling_mise_config() {
         super::MbxJobPolicy {
             gc_auto_disabled: false,
             share_out_dir_disabled: false,
+            actions_read: false,
         },
     )
     .expect("render verification job");
