@@ -79,22 +79,46 @@ fn check_policy_runner(ctx: &mut FreshnessContext, policy: &TomlValue) {
             &format!("policy={default:?} inventory={inventory_default:?}"),
         );
     }
-    let policy_supported = images
+    let Some(supported) = images
         .and_then(|value| value.get("supported"))
         .and_then(TomlValue::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(TomlValue::as_str)
-        .map(str::to_owned)
-        .collect::<BTreeSet<_>>();
+    else {
+        ctx.fail_row(
+            "policy-mirror",
+            "runner supported",
+            "must be an array of string labels",
+        );
+        return;
+    };
+    let mut policy_supported = BTreeSet::new();
+    let mut valid = true;
+    for (index, label) in supported.iter().enumerate() {
+        let Some(label) = label.as_str() else {
+            ctx.fail_row(
+                "policy-mirror",
+                "runner supported",
+                &format!("entry {index} must be a string, got {label}"),
+            );
+            valid = false;
+            continue;
+        };
+        if !policy_supported.insert(label.to_owned()) {
+            ctx.fail_row(
+                "policy-mirror",
+                "runner supported",
+                &format!("duplicate label: {label}"),
+            );
+            valid = false;
+        }
+    }
     let inventory_supported = ctx.supported.iter().cloned().collect::<BTreeSet<_>>();
-    if policy_supported == inventory_supported {
+    if valid && policy_supported == inventory_supported {
         ctx.pass_row(
             "policy-mirror",
             "runner supported",
             &ctx.supported.join(","),
         );
-    } else {
+    } else if valid {
         ctx.fail_row(
             "policy-mirror",
             "runner supported",

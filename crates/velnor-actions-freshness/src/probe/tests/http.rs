@@ -149,6 +149,7 @@ fn file_sources_require_absolute_regular_utf8_files() -> Result<(), Box<dyn Erro
         let device = PathBuf::from("/dev/null");
         assert!(file_fetch_watchdog(file_url(&device)).is_ok_and(|result| result.is_err()));
     }
+    directory.cleanup()?;
     Ok(())
 }
 

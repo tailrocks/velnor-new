@@ -72,6 +72,31 @@ fn policy_mirror_drift_fails() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
+fn policy_runner_supported_rejects_non_string_and_duplicate_labels() -> Result<(), Box<dyn Error>> {
+    let anchor = "supported = [\"ubuntu-26.04\", \"ubuntu-24.04\", \"ubuntu-22.04\"]";
+    for (suffix, replacement, expected) in [
+        (
+            "non-string",
+            "supported = [\"ubuntu-26.04\", \"ubuntu-24.04\", \"ubuntu-22.04\", 123]",
+            "entry 3 must be a string",
+        ),
+        (
+            "duplicate",
+            "supported = [\"ubuntu-26.04\", \"ubuntu-24.04\", \"ubuntu-22.04\", \"ubuntu-26.04\"]",
+            "duplicate label: ubuntu-26.04",
+        ),
+    ] {
+        let fixture = harness::passing(&format!("p12-runner-policy-{suffix}"))?;
+        harness::mutate(&fixture.dir, POLICY, anchor, replacement)?;
+        let run = harness::run_script(&fixture.dir, &[])?;
+        harness::assert_fail(&run, "policy-mirror");
+        harness::assert_fail(&run, expected);
+        harness::cleanup(&fixture);
+    }
+    Ok(())
+}
+
+#[test]
 fn mutant_pin_drift_fails() -> Result<(), Box<dyn Error>> {
     let fixture = harness::passing("p12-mutant-pin")?;
     harness::mutate(

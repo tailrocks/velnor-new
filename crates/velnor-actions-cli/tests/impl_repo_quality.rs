@@ -84,7 +84,7 @@ fn qc_states_eight_member_workspace() -> Result<(), Box<dyn Error>> {
     let qc = read("docs/proposed/rust-quality-contract.md")?;
     for anchor in [
         "exactly the eight product package names",
-        "The eight V1 crates",
+        "The eight V1 product crates",
     ] {
         assert!(qc.contains(anchor), "QC misses eight-crate fix {anchor}");
     }

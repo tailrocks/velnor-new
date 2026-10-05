@@ -26,7 +26,13 @@ fn check_source(source: &[u8]) -> (Option<String>, Vec<String>) {
     };
     let value = context.rust_const("pins.rs", "PIN");
     let failures = context.failures.clone();
-    drop(fs::remove_dir_all(root));
+    let mut failures = failures;
+    if let Err(error) = fs::remove_dir_all(&root) {
+        failures.push(format!(
+            "fixture cleanup failed for {}: {error}",
+            root.display()
+        ));
+    }
     (value, failures)
 }
 

@@ -31,9 +31,21 @@ struct TestServer {
 
 struct TestDir(PathBuf);
 
+impl TestDir {
+    fn cleanup(mut self) -> std::io::Result<()> {
+        fs::remove_dir_all(&self.0)?;
+        self.0 = PathBuf::new();
+        Ok(())
+    }
+}
+
 impl Drop for TestDir {
     fn drop(&mut self) {
-        drop(fs::remove_dir_all(&self.0));
+        if !self.0.as_os_str().is_empty()
+            && let Err(error) = fs::remove_dir_all(&self.0)
+        {
+            eprintln!("failed to clean test fixture {}: {error}", self.0.display());
+        }
     }
 }
 

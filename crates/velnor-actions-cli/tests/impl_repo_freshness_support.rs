@@ -17,8 +17,12 @@ fn freshness_support_is_private_and_separately_classified() -> Result<(), Box<dy
     let quality = read("docs/proposed/rust-quality-contract.md")?;
     for contract in [architecture, quality] {
         assert!(contract.contains("velnor-actions-freshness"));
-        assert!(contract.contains("repository-only support"));
-        assert!(contract.contains("product task graph") || contract.contains("product graph"));
+        assert!(contract.contains("velnor-archive-guard"));
+        assert!(contract.contains("repository-only"));
+        assert!(
+            contract.contains("outside the eight-product V1 graph")
+                || contract.contains("outside the orchestrator, product task graph")
+        );
     }
     let cli_contract = read("docs/proposed/cli-contract.md")?;
     assert!(cli_contract.contains("repo-policy-v1"));

@@ -16,7 +16,16 @@ use crate::discover::PlannedWorkspace;
 
 use super::{declared_union, derive_for_config};
 
-const SUPPORT_MANIFEST: &str = "crates/velnor-actions-freshness/Cargo.toml";
+const SUPPORT_MEMBERS: [(&str, &str); 2] = [
+    (
+        "crates/velnor-actions-freshness/Cargo.toml",
+        "velnor-actions-freshness",
+    ),
+    (
+        "crates/velnor-archive-guard/Cargo.toml",
+        "velnor-archive-guard",
+    ),
+];
 
 fn repository_root() -> Result<PathBuf, Box<dyn Error>> {
     let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
@@ -30,36 +39,45 @@ fn repository_root() -> Result<PathBuf, Box<dyn Error>> {
 }
 
 fn index(root: &Path) -> Result<FileIndex, Box<dyn Error>> {
-    Ok(build_index_from_list(
-        root,
-        &[SUPPORT_MANIFEST.to_owned()],
-        &[],
-    )?)
+    let files = SUPPORT_MEMBERS
+        .iter()
+        .map(|(manifest, _)| (*manifest).to_owned())
+        .collect::<Vec<_>>();
+    Ok(build_index_from_list(root, &files, &[])?)
+}
+
+fn support_package(manifest: &str, name: &str, owner: VelnorV1TaskOwner) -> PackageRecord {
+    PackageRecord {
+        id: format!("{name} 0.1.0"),
+        name: name.to_owned(),
+        version: "0.1.0".to_owned(),
+        manifest: manifest.to_owned(),
+        external: false,
+        in_workspace: true,
+        targets: vec![TargetRecord {
+            kind: "lib".to_owned(),
+            name: name.replace('-', "_"),
+            test: true,
+            doctest: true,
+            required_features: Vec::new(),
+        }],
+        features: vec!["repository-only-feature".to_owned()],
+        has_build_script: false,
+        v1_task_owner: owner,
+    }
 }
 
 fn workspace(owner: VelnorV1TaskOwner) -> PlannedWorkspace {
+    let packages = SUPPORT_MEMBERS
+        .iter()
+        .map(|(manifest, name)| support_package(manifest, name, owner))
+        .collect::<Vec<_>>();
+    let members = packages.iter().map(|package| package.id.clone()).collect();
     PlannedWorkspace {
         record: WorkspaceRecord {
             workspace_root: String::new(),
-            members: vec!["velnor-actions-freshness 0.1.0".to_owned()],
-            packages: vec![PackageRecord {
-                id: "velnor-actions-freshness 0.1.0".to_owned(),
-                name: "velnor-actions-freshness".to_owned(),
-                version: "0.1.0".to_owned(),
-                manifest: SUPPORT_MANIFEST.to_owned(),
-                external: false,
-                in_workspace: true,
-                targets: vec![TargetRecord {
-                    kind: "lib".to_owned(),
-                    name: "velnor_actions_freshness".to_owned(),
-                    test: true,
-                    doctest: true,
-                    required_features: Vec::new(),
-                }],
-                features: vec!["repository-only-feature".to_owned()],
-                has_build_script: false,
-                v1_task_owner: owner,
-            }],
+            members,
+            packages,
             edges: Vec::new(),
             skipped_edges: Vec::new(),
         },

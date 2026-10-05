@@ -33,6 +33,7 @@ CODEOWNERS                  # repo root; Velnor never emits, reads, or validates
 .velnor/config.toml
 .velnor/version-policy.toml
 crates/
+  velnor-archive-guard/       # repository-only archive security utility
   velnor-actions-contract/
   velnor-actions-rust/
   velnor-actions-mise/
@@ -40,6 +41,7 @@ crates/
   velnor-actions-workflow-renderer/
   velnor-actions-orchestrator/
   velnor-actions-cli/
+  velnor-actions-freshness/   # repository-only freshness maintenance
   velnor-actions-tofu/
 # Optional, repository-owned, read-only Velnor inputs:
 rust-toolchain.toml
@@ -47,16 +49,17 @@ mise.toml
 mise.lock
 ```
 
-All first-party Rust packages MUST be under `crates/`. The root manifest MUST be a virtual workspace with exactly the eight product package names listed in
-the table below plus one separately classified repository-only support member,
-`velnor-actions-freshness`. Cargo metadata defines package membership and
-dependency relationships. V1 adds no custom architecture linter; its §5
-mechanism allowlist, Alint, Clippy, tests, and review govern those decisions.
+All first-party Rust packages MUST be under `crates/`; root MUST be virtual with
+exactly the eight product package names below plus repository-only member `velnor-actions-freshness`
+and utility `velnor-archive-guard`. Cargo metadata defines membership; V1 adds
+no custom architecture linter; §5, Alint, Clippy, tests, and review govern boundaries.
 Within V1 product behavior, Rust/Cargo metadata and `rust-toolchain.toml` belong to `velnor-actions-rust`; Mise syntax, environment, and task metadata belong to `velnor-actions-mise`; actionlint metadata belongs to `velnor-actions-actionlint`.
-Repository-only support may inspect Velnor-owned Cargo/Mise sources only for private maintenance operations; those results MUST NOT feed V1 planning. Alint enforces only its configured generic file/path, required-file, and line-count rules.
+Freshness may inspect Velnor-owned Cargo/Mise sources for private maintenance;
+results MUST NOT feed V1 planning. Scripts provision archive guard; neither
+member enters V1 tasks or generated workflows. Alint enforces only configured generic file/path, required-file, and line-count rules.
 The CLI package MUST declare binary `velnor-actions`, the only target name without the package-purpose suffix. Non-Rust directories MAY remain in their own conventional locations.
 
-The eight V1 crates have fixed boundaries. Every V1 Cargo package MUST use the `velnor-actions-<purpose>` namespace. Generic names such as `velnor-model`, `velnor-core`, `velnor-rust`, `velnor-common`, and `velnor-utils` are forbidden.
+The eight V1 product crates have fixed boundaries; the two repository-only members are separately labeled in the table. Every V1 Cargo package MUST use the `velnor-actions-<purpose>` namespace. Generic names such as `velnor-model`, `velnor-core`, `velnor-rust`, `velnor-common`, and `velnor-utils` are forbidden.
 The `velnor-actions` binary is owned by package `velnor-actions-cli`. Future stacks use dedicated names such as `velnor-actions-node`; they remain independent of other stack crates.
 
 | Crate | MUST own | MUST NOT own |
@@ -70,10 +73,11 @@ The `velnor-actions` binary is owned by package `velnor-actions-cli`. Future sta
 | `velnor-actions-cli` | Clap parser, typed dispatch, concise deterministic human plan renderer, generation output, and exit-code formatting; emits binary `velnor-actions` | Orchestration algorithms or Rust, Mise, and renderer domain rules |
 | `velnor-actions-tofu` | All OpenToFu/HCL discovery, root/module interpretation, task payloads, affected selection, identity extensions | Rust/Cargo, Mise execution, workflow YAML, process details, non-tofu stacks |
 | `velnor-actions-freshness` (repository-only support) | Read-only repository freshness/pin/lock/advisory checks and bounded bootstrap metadata operations behind the existing CLI private gate | V1 planning, task graph or selection, runner behavior, product evidence claims, public commands, or workflow generation |
+| `velnor-archive-guard` (repository-only security utility) | Bounded validation of owned candidate and Cargo package archive bytes through its explicit modes | V1 stack behavior, task derivation, workflow generation, or product dependencies |
 
-The support member is separate from the eight product crates and outside the V1 product graph. Only the CLI private maintenance gate depends on it; the orchestrator MUST NOT consume it.
+Both repository-only members are outside the eight-product V1 graph; only the CLI private gate consumes freshness, scripts provision archive guard, and the orchestrator consumes neither.
 
-The support package declares its task owner with Cargo package metadata:
+Each repository-only package declares its task owner with Cargo package metadata:
 
 ```toml
 [package.metadata.velnor]
@@ -118,7 +122,7 @@ snapshot is Rust 1.98.1 with MSRV 1.98. Never use a placeholder MSRV.
 
 ```toml
 [workspace]
-members = ["crates/velnor-actions-contract", "crates/velnor-actions-rust", "crates/velnor-actions-mise", "crates/velnor-actions-actionlint", "crates/velnor-actions-workflow-renderer", "crates/velnor-actions-orchestrator", "crates/velnor-actions-cli", "crates/velnor-actions-freshness", "crates/velnor-actions-tofu"]
+members = ["crates/velnor-actions-contract", "crates/velnor-archive-guard", "crates/velnor-actions-rust", "crates/velnor-actions-mise", "crates/velnor-actions-actionlint", "crates/velnor-actions-workflow-renderer", "crates/velnor-actions-orchestrator", "crates/velnor-actions-cli", "crates/velnor-actions-freshness", "crates/velnor-actions-tofu"]
 resolver = "3"
 
 [workspace.package]

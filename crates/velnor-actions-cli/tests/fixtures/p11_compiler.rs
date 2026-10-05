@@ -55,7 +55,7 @@ fn compile(driver: &str, name: &str, flags: &[&str]) -> Result<Output, Box<dyn E
         .args(flags)
         .arg(&file);
     let output = command.output()?;
-    drop(std::fs::remove_dir_all(&dir));
+    std::fs::remove_dir_all(&dir)?;
     Ok(output)
 }
 
@@ -76,7 +76,7 @@ fn document(name: &str, flags: &[&str]) -> Result<Output, Box<dyn Error>> {
         .args(flags)
         .arg(&file);
     let output = command.output()?;
-    drop(std::fs::remove_dir_all(&dir));
+    std::fs::remove_dir_all(&dir)?;
     Ok(output)
 }
 

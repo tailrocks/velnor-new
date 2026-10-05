@@ -43,10 +43,14 @@ MUST use explicit stack names such as `velnor-actions-node`; each adapter
 contains only its named stack. Alint is the sole repository-structure linter
 and runs as a separate GitHub Actions job.
 
-The workspace also contains `velnor-actions-freshness` as repository-only
-support for maintenance checks. It is not a V1 product crate and MUST remain outside the
-orchestrator, product task graph, and workflow-generation path. The existing
-CLI's private maintenance gate is its only workspace consumer.
+The workspace also contains `velnor-actions-freshness` and
+`velnor-archive-guard` as repository-only maintenance members. Neither is a V1
+product crate; both MUST remain outside the orchestrator, product task graph,
+and workflow-generation path. Only the CLI's private maintenance gate consumes
+freshness. Repository scripts provision the archive guard, which has no local
+product dependencies. Both manifests declare the typed
+`repository-maintenance` task owner; package names and paths alone never grant
+the exclusion.
 
 | Crate | Owns | Must not own |
 |---|---|---|

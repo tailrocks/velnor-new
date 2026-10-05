@@ -10,6 +10,23 @@ use super::p12_harness as harness;
 
 const INVENTORY: &str = ".velnor/freshness-inventory.json";
 
+#[test]
+fn repository_only_members_declare_the_typed_maintenance_owner() -> Result<(), Box<dyn Error>> {
+    for dir in [
+        "crates/velnor-actions-freshness",
+        "crates/velnor-archive-guard",
+    ] {
+        let manifest = super::manifest(dir)?;
+        let owner = super::manifest_section(&manifest, "package.metadata.velnor");
+        assert_eq!(
+            owner,
+            ["v1-task-owner = \"repository-maintenance\""],
+            "{dir} must declare the typed repository-only task owner"
+        );
+    }
+    Ok(())
+}
+
 /// Blessed standing record for `asamarts/alint` with `tag`.
 fn blessed(tag: &str) -> String {
     format!(
