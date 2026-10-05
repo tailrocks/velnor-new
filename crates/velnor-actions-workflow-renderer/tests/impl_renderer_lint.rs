@@ -2,7 +2,7 @@
 use std::collections::BTreeMap;
 use velnor_actions_contract::{
     Concurrency, GeneratorValidation, Job, JobTimeout, Permissions, Trigger, ValidatorKind,
-    VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy,
+    VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy, workflow::permissions::PermissionLevel,
 };
 use velnor_actions_workflow_renderer::{
     ALINT_USES, CONCURRENCY_CANCEL, CONCURRENCY_GROUP, RenderContext, RenderError,
@@ -88,7 +88,12 @@ fn fixture_ir() -> Result<WorkflowIr, RenderError> {
             timeout_minutes: JobTimeout::REQUIRED,
             needs: vec!["plan".to_owned(), LINT_ID.to_owned()],
             condition: Some("always()".to_owned()),
-            permissions: None,
+            permissions: Some(Permissions {
+                contents: PermissionLevel::Read,
+                actions: PermissionLevel::Read,
+                pull_requests: PermissionLevel::None,
+                id_token: PermissionLevel::None,
+            }),
             environment: None,
             steps: vec![merge_step()],
         },
