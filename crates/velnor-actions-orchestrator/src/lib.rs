@@ -31,7 +31,6 @@ mod external_data;
 mod finalized;
 mod freshness_emit;
 mod generate;
-mod generator_release_pins;
 mod git_paths;
 mod init;
 mod internal;
