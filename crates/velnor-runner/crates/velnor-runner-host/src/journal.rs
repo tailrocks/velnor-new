@@ -259,13 +259,7 @@ impl Journal {
 
     async fn bootstrap(&self) -> Result<(), HostError> {
         let conn = self.connection().await?;
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS intents (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, subject TEXT NOT NULL, state TEXT NOT NULL, docker_id TEXT, github_runner_id TEXT, cleanup_proven INTEGER NOT NULL DEFAULT 0, dind_id TEXT, worker_volume TEXT)",
-            (),
-        )
-        .await
-        .map_err(|_| HostError::Journal)?;
-        schema::ensure_columns(&conn).await
+        schema::bootstrap(&conn).await
     }
 
     async fn connection(&self) -> Result<turso::Connection, HostError> {

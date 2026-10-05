@@ -11,6 +11,8 @@ use crate::launch_harness::{Mode, Script, absent, assigned_wait, ctx, open, star
 use crate::worker::Started;
 use crate::{EnsureError, IntentState};
 
+mod legacy_failed;
+
 const INITIAL_SESSION: &[u8] = br#"{"sessionId":"session","messageQueueUrl":"https://queue.example/messages","messageQueueAccessToken":"queue-token","statistics":{"totalAvailableJobs":0,"totalAcquiredJobs":0,"totalAssignedJobs":0,"totalRunningJobs":0,"totalRegisteredRunners":0,"totalBusyRunners":0,"totalIdleRunners":0}}"#;
 
 struct InitialSession;
