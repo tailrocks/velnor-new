@@ -2,6 +2,7 @@
 
 use velnor_actions_contract::WorkflowPolicy;
 use velnor_actions_contract::config::{SCALE_SET_NAME, ScaleSetSelector, VELNOR_LABEL};
+use velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION;
 use velnor_actions_workflow_renderer::steps::mbx_objects_step;
 use velnor_actions_workflow_renderer::{RenderError, render_workflow_ir};
 
@@ -137,7 +138,12 @@ fn hosted_save_is_one_bundle_outside_the_store() -> Result<(), RenderError> {
         saved.contains("steps.mbx-export.outputs.ready == 'true'"),
         "{saved}"
     );
-    assert!(saved.contains("github.event_name == 'push'"), "{saved}");
+    assert!(saved.contains(CACHE_SAVE_CONDITION), "{saved}");
+    let export_step = &text[export..save];
+    assert!(
+        export_step.contains(CACHE_SAVE_CONDITION),
+        "export also requires protected default push:\n{export_step}"
+    );
     assert!(!saved.contains("pull_request"), "{saved}");
     assert!(!text.contains("continue-on-error"), "{text}");
     Ok(())

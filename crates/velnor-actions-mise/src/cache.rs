@@ -384,13 +384,16 @@ fn ineligible(task: &str, reason: &str) -> MiseError {
     }
 }
 
-/// Save allowlist: producer-successful pushes only, for every layer.
+/// Save allowlist: successful protected-default pushes into the trusted layer only.
 ///
-/// A save needs its producer to have passed and a protected-push event;
-/// failed runs never save, and PR, fork, merge-group, release, local,
-/// and unknown events never save through this path (PR task caches are
-/// read-only; release caching is off). Unknown trust scopes deny closed.
+/// Event kind alone cannot prove a trusted writer: the typed context must
+/// match the event repository, current default, exact ref, and branch API
+/// protection result. Failed runs and every incomplete context deny.
 #[must_use]
-pub fn save_allowed(layer_trust: &str, event: &str, passed: bool) -> bool {
-    passed && event == "push" && matches!(layer_trust, "trusted" | "pr")
+pub fn save_allowed(
+    layer_trust: &str,
+    context: &crate::cache_writer::CacheWriterContext,
+    passed: bool,
+) -> bool {
+    passed && layer_trust == "trusted" && context.permits_trusted_write()
 }
