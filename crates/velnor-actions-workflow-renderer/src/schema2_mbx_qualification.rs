@@ -7,9 +7,10 @@
 //! The action ref is an explicit candidate input separate from the production
 //! pin; emitting this probe does not assert that candidate qualification passed.
 //!
-//! Both jobs set `MBX_GC_AUTO=1` for this protected-main roundtrip probe.
+//! Both jobs set `MBX_GC_AUTO=1` and `MBX_SHARE_OUT_DIR=0` for this
+//! protected-main roundtrip probe.
 //! This probe does not exercise production's typed hosted action backend or
-//! Scale Set local backend, nor the universal `MBX_SHARE_OUT_DIR=0` policy.
+//! Scale Set local backend; it remains a separate candidate experiment.
 
 use super::features::{checkout_step, finish, gated, lane_base, run_step};
 use super::{MbxQualificationTarget, RunnerSpec};
@@ -164,7 +165,7 @@ pub(super) fn mise_install_step(request: &MbxQualificationTarget) -> Yaml {
 
 fn mbx_action_step(request: &MbxQualificationTarget, writer: bool) -> Yaml {
     let generation = format!(
-        "velnor-qualification-mbx-{}-action-{}-run-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}-${{{{ github.sha }}}}",
+        "velnor-qualification-mbx-{}-share-out-dir-disabled-v1-action-{}-run-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}-${{{{ github.sha }}}}",
         request.mbx_version,
         &request.action_uses[format!("{MBX_ACTION_NAME}@").len()..]
     );
@@ -177,6 +178,7 @@ fn mbx_action_step(request: &MbxQualificationTarget, writer: bool) -> Yaml {
             mapping(&[
                 ("github-cache-mode", "objects"),
                 ("version", &request.mbx_version),
+                ("toolchain", &request.rust_version),
                 ("isolate-objects-cache", "true"),
                 ("cache-generation", &generation),
                 (
@@ -243,6 +245,7 @@ fn qualification_env(request: &MbxQualificationTarget, writer: bool) -> Yaml {
     let home = "${{ github.workspace }}/.velnor-mbx-cache-qualification";
     mapping(&[
         ("MBX_GC_AUTO", "1"),
+        ("MBX_SHARE_OUT_DIR", "0"),
         ("ACTIONS_CACHE_MODE", if writer { "write" } else { "read" }),
         ("CARGO_HOME", &format!("{home}/cargo")),
         ("MISE_AUTO_INSTALL", "false"),

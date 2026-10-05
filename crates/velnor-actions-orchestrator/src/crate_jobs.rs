@@ -28,9 +28,6 @@ use crate::internal::internal;
 #[cfg(test)]
 use crate::matrix_step::step_name_for;
 
-#[path = "crate_jobs_mbx_setup.rs"]
-pub(crate) mod mbx_setup;
-
 #[path = "crate_jobs_obligations.rs"]
 mod obligations;
 
@@ -62,6 +59,12 @@ pub(crate) fn build_for_workflow(
     fetch_roots: &[String],
     acquire: Option<&Step>,
 ) -> Result<CrateBuild, OrchestratorError> {
+    let custom_tasks: &[String] = config
+        .stacks
+        .rust
+        .as_ref()
+        .map_or(&[], |rust| &rust.custom_tasks);
+    crate::vectors::custom_task_steps(custom_tasks, catalog)?;
     build_crate_jobs(
         label,
         config.workflow.policy,
@@ -207,7 +210,6 @@ fn render_job(
     steps.push(crate::matrix_step::prepare_crate_tools_step(
         catalog,
         use_rust,
-        use_mbx,
         use_nextest,
         crate::matrix_step::prepare_install_opentofu(policy, suite, use_opentofu),
         needs_validators,
@@ -230,7 +232,7 @@ fn render_job(
         )?);
     }
     if use_mbx {
-        steps.extend(mbx_setup::steps(catalog)?);
+        steps.extend(crate::mbx_preflight::steps_for_catalog(catalog)?);
     }
     if use_rust {
         steps.extend(crate::source_prep::fetch_steps_for_crate(

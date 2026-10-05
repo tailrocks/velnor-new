@@ -1,10 +1,9 @@
-//! Preflight route proofs: the effective tool route per workspace.
+//! Preflight route selections: the requested tool route per workspace.
 //!
-//! For MBX profiles the proof reports the selected Mise tool, its exact
-//! version, and the compiler invocation handled by MBX; for Cargo profiles
-//! it proves the exact Cargo toolchain with no MBX wrapper. Both carry the
-//! cache-format identity, and an unreportable MBX format fails the proof
-//! instead of guessing compatibility.
+//! For MBX profiles, selected identity includes action-owned MBX while the
+//! actual Mise probe selects only Rust and resolves `mbx` from the native
+//! action's PATH contribution. A route selection does not prove that action
+//! ran; workflow composition owns that prerequisite.
 
 use std::ffi::{OsStr, OsString};
 
@@ -15,7 +14,7 @@ use crate::command::IsolatedCommand;
 use crate::error::MiseError;
 use crate::requests::PinnedToolExec;
 
-/// Effective compile route proven for one workspace.
+/// Requested compile route for one workspace.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RouteDriver {
     /// Plain Cargo profile: exact Cargo toolchain, no MBX wrapper.
@@ -47,7 +46,7 @@ impl RouteDriver {
         }
     }
 
-    /// Payload program proving this route.
+    /// Payload program selected for this route.
     #[must_use]
     pub const fn program(self) -> &'static str {
         match self {
@@ -56,9 +55,17 @@ impl RouteDriver {
         }
     }
 
-    /// Pinned tools selecting this route.
+    /// Pinned Mise tools selected by the route probe.
     #[must_use]
-    pub fn tools(self) -> Vec<PinnedTool> {
+    pub fn probe_tools(self) -> Vec<PinnedTool> {
+        match self {
+            Self::Cargo | Self::Mbx => vec![PinnedTool::Rust],
+        }
+    }
+
+    /// Full selected tool identity, including action-owned MBX where required.
+    #[must_use]
+    pub fn identity_tools(self) -> Vec<PinnedTool> {
         match self {
             Self::Cargo => vec![PinnedTool::Rust],
             Self::Mbx => vec![PinnedTool::Rust, PinnedTool::MrBoxington],
@@ -66,34 +73,42 @@ impl RouteDriver {
     }
 }
 
-/// Proven effective route: exact specs, probe invocation, format identity.
+/// Selected route inputs, exact probe invocation, and format identity.
 ///
-/// The invocation is an identity probe (`<program> --version`) through the
-/// route's exact tool selectors, not a build. A lockfile mention alone
-/// never proves a route.
+/// Identity specs may include tools provided by another workflow owner; the
+/// probe selectors contain only tools installed through Mise. The value
+/// describes a requested route and never claims that an external action ran.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RouteProof {
-    /// Proven route.
+pub struct RouteSelection {
+    /// Selected route.
     driver: RouteDriver,
-    /// Identity probe through the route's exact selectors.
+    /// Identity probe through the route's Mise selectors.
     probe: PinnedToolExec,
-    /// Exact `<tool>@<version>` selectors proving the route.
-    specs: Vec<String>,
+    /// Selected exact tool identities, including externally owned tools.
+    identity_specs: Vec<String>,
+    /// Exact tool selectors actually included in the Mise probe.
+    probe_specs: Vec<String>,
     /// Cache-format identity over the reported format and generation.
     cache_format_id: String,
 }
 
-impl RouteProof {
-    /// Proven route.
+impl RouteSelection {
+    /// Selected route.
     #[must_use]
     pub const fn driver(&self) -> RouteDriver {
         self.driver
     }
 
-    /// Exact `<tool>@<version>` selectors proving the route.
+    /// Selected exact tool identities, including external prerequisites.
     #[must_use]
-    pub fn specs(&self) -> &[String] {
-        &self.specs
+    pub fn identity_specs(&self) -> &[String] {
+        &self.identity_specs
+    }
+
+    /// Exact tool selectors passed to `mise exec` for this probe.
+    #[must_use]
+    pub fn probe_specs(&self) -> &[String] {
+        &self.probe_specs
     }
 
     /// Cache-format identity over the reported format and generation.
@@ -119,7 +134,7 @@ impl RouteProof {
     }
 }
 
-/// Prove the effective route for one workspace.
+/// Select the effective route and exact identity probe for one workspace.
 ///
 /// `format` and `generation` are the adapter-reported compiler/cache format
 /// and generation supplied by the caller; empty values fail, never guess.
@@ -129,12 +144,12 @@ impl RouteProof {
 /// Returns [`MiseError::Contract`] when the format is unreportable, and
 /// [`MiseError::ForbiddenPayload`] only if the fixed probe were forbidden,
 /// which construction rules out.
-pub fn prove_route(
+pub fn select_route(
     catalog: &ToolCatalog,
     driver: RouteDriver,
     format: &str,
     generation: &str,
-) -> Result<RouteProof, MiseError> {
+) -> Result<RouteSelection, MiseError> {
     let inputs = FormatInputs {
         adapter: driver.adapter().to_owned(),
         format: format.to_owned(),
@@ -143,17 +158,19 @@ pub fn prove_route(
     let cache_format_id = cache_format_id(&inputs).map_err(|err| MiseError::Contract {
         problem: err.to_string(),
     })?;
-    let tools = driver.tools();
-    let specs = catalog.tool_specs(&tools);
+    let tools = driver.probe_tools();
+    let identity_specs = catalog.tool_specs(&driver.identity_tools());
+    let probe_specs = catalog.tool_specs(&tools);
     let probe = PinnedToolExec::new(
         tools,
         OsStr::new(driver.program()),
         vec![OsString::from("--version")],
     )?;
-    Ok(RouteProof {
+    Ok(RouteSelection {
         driver,
         probe,
-        specs,
+        identity_specs,
+        probe_specs,
         cache_format_id,
     })
 }

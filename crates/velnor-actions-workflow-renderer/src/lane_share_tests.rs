@@ -22,7 +22,6 @@ pub(super) fn ctx() -> RenderContext {
         validator_commands: Vec::new(),
         candidate: None,
         preseed: false,
-        pull_request_cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
         verification_tasks: Vec::new(),
         plan_consumer_env: BTreeMap::new(),
     }
@@ -101,13 +100,8 @@ pub(super) fn render_jobs(
     shared: &super::LaneShare,
     ctx: &RenderContext,
 ) -> Result<String, crate::RenderError> {
-    let document = crate::document::workflow_to_yaml(
-        ir,
-        shared,
-        ctx,
-        &std::collections::BTreeSet::new(),
-        &std::collections::BTreeSet::new(),
-    )?;
+    let document =
+        crate::document::workflow_to_yaml(ir, shared, ctx, &std::collections::BTreeSet::new())?;
     let quoted = crate::yaml::quote_run_values_in_yaml(document);
     crate::marker::with_marker(&ctx.generator_version, &crate::yaml::render_yaml(&quoted))
 }

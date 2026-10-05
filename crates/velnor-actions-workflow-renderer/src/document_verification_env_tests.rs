@@ -2,11 +2,19 @@
 
 use std::collections::BTreeMap;
 
+use velnor_actions_contract::workflow::permissions::PermissionLevel;
 use velnor_actions_contract::{VerificationRunner, VerificationTask, VerificationTaskKind};
 
 use crate::{MiseSetup, RenderContext, VerificationTaskPolicy, build_verification_task_job};
 
 use super::job_to_yaml;
+
+#[test]
+fn report_fetch_requires_the_exact_read_permission() {
+    assert!(super::grants_exact_actions_read(PermissionLevel::Read));
+    assert!(!super::grants_exact_actions_read(PermissionLevel::Write));
+    assert!(!super::grants_exact_actions_read(PermissionLevel::None));
+}
 
 #[test]
 fn emitted_verification_job_scrubs_credentials_without_disabling_mise_config() {
@@ -41,7 +49,6 @@ fn emitted_verification_job_scrubs_credentials_without_disabling_mise_config() {
         validator_commands: Vec::new(),
         candidate: None,
         preseed: false,
-        pull_request_cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
         verification_tasks: vec![policy],
         plan_consumer_env: BTreeMap::new(),
     };
@@ -62,8 +69,7 @@ fn emitted_verification_job_scrubs_credentials_without_disabling_mise_config() {
         None,
         &lanes,
         super::MbxJobPolicy {
-            gc_auto_disabled: false,
-            share_out_dir_disabled: false,
+            native_mbx: false,
             actions_read: false,
         },
     )

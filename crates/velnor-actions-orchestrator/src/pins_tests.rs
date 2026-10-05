@@ -252,7 +252,7 @@ fn macos_helper_asset_and_native_digest_match_runner() {
 }
 
 #[test]
-fn acquisition_rejects_tampered_platform_and_unsupported_target() {
+fn acquisition_rejects_tampered_platform() {
     use velnor_actions_contract::config::{CheckExecutor, CheckPlatform, CheckRunner};
     let runner = CheckRunner {
         label: "macos-15".to_owned(),
@@ -265,13 +265,6 @@ fn acquisition_rejects_tampered_platform_and_unsupported_target() {
             &runner,
             env!("CARGO_PKG_VERSION"),
             Some(&test_manifest_json())
-        )
-        .is_err()
-    );
-    assert!(
-        acquire_argv(
-            "${{ runner.temp }}/velnor/bin/velnor-actions-0.1.0",
-            "aarch64-unknown-linux-gnu"
         )
         .is_err()
     );

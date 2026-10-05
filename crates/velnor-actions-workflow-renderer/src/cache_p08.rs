@@ -17,9 +17,13 @@ use std::collections::{BTreeMap, BTreeSet};
 use velnor_actions_contract::{Job, Step, StepKind};
 
 use crate::{
-    MiseSetup, RenderError, cache_p08_detect::detector_words, cache_steps::is_mbx_action,
-    setup::MISE_ACTION_NAME, steps::validate_uses,
+    MiseSetup, RenderError, cache_p08_detect::detector_words, setup::MISE_ACTION_NAME,
+    steps::validate_uses,
 };
+
+#[path = "cache_p08_seed_key.rs"]
+mod seed_key;
+pub(crate) use seed_key::MiseToolsCacheKey;
 
 pub use crate::cache_elect::elect_mise_cache_writers;
 pub use crate::cache_elect::elect_tofu_provider_savers;
@@ -57,28 +61,7 @@ pub fn mise_cache_key_for_tools(
     mise_version: &str,
     specs: &[String],
 ) -> Result<String, RenderError> {
-    if !velnor_actions_contract::is_supported_target(target) {
-        return Err(RenderError::BadCommand(format!(
-            "bad_cache_target:{target}"
-        )));
-    }
-    if !is_catalog_version(mise_version) {
-        return Err(RenderError::BadCommand(format!(
-            "bad_mise_version:{mise_version}"
-        )));
-    }
-    if specs.is_empty() {
-        return Err(RenderError::BadCommand("empty_tool_specs".to_owned()));
-    }
-    for spec in specs {
-        if !is_tool_spec(spec) {
-            return Err(RenderError::BadCommand(format!("bad_tool_spec:{spec}")));
-        }
-    }
-    Ok(format!(
-        "{MISE_KEY_PREFIX}-{target}-{mise_version}-{}",
-        tools_digest(specs)
-    ))
+    MiseToolsCacheKey::derive(target, mise_version, specs).map(|key| key.as_str().to_owned())
 }
 
 /// Union of `mise install`/`exec` specs across a job's shell steps.
@@ -173,13 +156,9 @@ fn is_tool_spec(value: &str) -> bool {
         && !version.is_empty()
         && !value.contains(' ')
         && !value.contains('\n')
-        && tool.bytes().all(|b| {
-            b.is_ascii_alphanumeric()
-                || matches!(
-                    b,
-                    b':' | b'/' | b'-' | b'_' | b'.' | b'[' | b']' | b'=' | b','
-                )
-        })
+        && tool
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b':' | b'/' | b'-' | b'_' | b'.'))
         && version
             .bytes()
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b'_' | b'+'))
@@ -203,7 +182,7 @@ pub(crate) fn is_cache_key(value: &str) -> bool {
 ///
 /// Infers the job's tool union from its fixed argv, keys the built-in
 /// cache on that union (same tools share; roles never fork), and inserts
-/// the setup after Checkout (or upgrades a legacy `cache:false` setup in
+/// the setup after the configured Checkout (or upgrades a legacy `cache:false` setup in
 /// place). Jobs without `mise` use (and `always=false`) stay untouched.
 ///
 /// # Errors
@@ -216,6 +195,7 @@ pub fn ensure_setup_p08(
     setup: &MiseSetup,
     always: bool,
     target: &str,
+    checkout_uses: &str,
 ) -> Result<(), RenderError> {
     setup.validate()?;
     let present: Vec<usize> = job
@@ -231,27 +211,43 @@ pub fn ensure_setup_p08(
         )));
     }
     if let Some(&index) = present.first() {
-        upgrade_setup(job_id, job, index, setup, target)?;
-        let setup_at = crate::tool_seed::insert_before_setup(job, index)?;
+        let key = expected_job_key(job, setup, always, target)?.ok_or_else(|| {
+            RenderError::InvalidWorkflow(format!("setup_mise_malformed:{job_id}"))
+        })?;
+        upgrade_setup(job_id, job, index, setup, &key)?;
+        let setup_at = crate::tool_seed::insert_before_setup(job, index, checkout_uses, &key)?;
         check_setup_before_mise(job_id, job, setup_at)?;
         return Ok(());
     }
     if always || job_uses_mise(job) {
-        let specs = infer_job_tools(job);
-        let specs = if specs.is_empty() && always {
-            vec!["mise@bootstrap".to_owned()]
-        } else if specs.is_empty() {
+        let Some(key) = expected_job_key(job, setup, always, target)? else {
             return Ok(());
-        } else {
-            specs
         };
-        let key = mise_cache_key_for_tools(target, &setup.version, &specs)?;
-        let at = insert_at(job).min(job.steps.len());
-        job.steps.insert(at, mise_setup_step_p08(setup, &key)?);
-        let setup_at = crate::tool_seed::insert_before_setup(job, at)?;
+        let at = insert_at(job, checkout_uses).min(job.steps.len());
+        job.steps
+            .insert(at, mise_setup_step_p08(setup, key.as_str())?);
+        let setup_at = crate::tool_seed::insert_before_setup(job, at, checkout_uses, &key)?;
         check_setup_before_mise(job_id, job, setup_at)?;
+    } else {
+        crate::tool_seed::reject_orphan_seed(job_id, job)?;
     }
     Ok(())
+}
+
+fn expected_job_key(
+    job: &Job,
+    setup: &MiseSetup,
+    always: bool,
+    target: &str,
+) -> Result<Option<MiseToolsCacheKey>, RenderError> {
+    let mut specs = infer_job_tools(job);
+    if specs.is_empty() {
+        if !always {
+            return Ok(None);
+        }
+        specs.push("mise@bootstrap".to_owned());
+    }
+    MiseToolsCacheKey::derive(target, &setup.version, &specs).map(Some)
 }
 
 /// Upgrade one present setup to the qualified shape (or validate it).
@@ -260,37 +256,17 @@ fn upgrade_setup(
     job: &mut Job,
     index: usize,
     setup: &MiseSetup,
-    target: &str,
+    key: &MiseToolsCacheKey,
 ) -> Result<(), RenderError> {
-    if setup_shape_ok(&job.steps[index], true) {
-        let specs = infer_job_tools(job);
-        let specs = if specs.is_empty() {
-            vec!["mise@bootstrap".to_owned()]
-        } else {
-            specs
-        };
-        let key = mise_cache_key_for_tools(target, &setup.version, &specs)?;
-        let expected = mise_setup_step_p08(setup, &key)?;
-        if job.steps[index].kind != expected.kind {
-            return Err(RenderError::InvalidWorkflow(format!(
-                "setup_mise_pin_mismatch:{job_id}"
-            )));
-        }
+    if setup_shape_ok(&job.steps[index], setup, true, key) {
         return Ok(());
     }
-    if !setup_shape_ok(&job.steps[index], false) {
+    if !setup_shape_ok(&job.steps[index], setup, false, key) {
         return Err(RenderError::InvalidWorkflow(format!(
             "setup_mise_malformed:{job_id}"
         )));
     }
-    let specs = infer_job_tools(job);
-    if specs.is_empty() {
-        return Err(RenderError::InvalidWorkflow(format!(
-            "setup_mise_malformed:{job_id}"
-        )));
-    }
-    let key = mise_cache_key_for_tools(target, &setup.version, &specs)?;
-    job.steps[index] = mise_setup_step_p08(setup, &key)?;
+    job.steps[index] = mise_setup_step_p08(setup, key.as_str())?;
     Ok(())
 }
 
@@ -323,16 +299,21 @@ fn first_mise_index(job: &Job) -> Option<usize> {
     })
 }
 
-/// Insert after a leading Checkout step, else at the front.
-fn insert_at(job: &Job) -> usize {
+/// Insert after the configured Checkout, else at the front.
+fn insert_at(job: &Job, checkout_uses: &str) -> usize {
     job.steps
-        .first()
-        .filter(|step| step.name == "Checkout")
-        .map_or(0, |_| 1)
+        .iter()
+        .position(|step| crate::tool_seed::is_configured_checkout(step, checkout_uses))
+        .map_or(0, |index| index + 1)
 }
 
 /// True for qualified (`cache:true`+key) or legacy (`cache:false`) shapes.
-fn setup_shape_ok(step: &Step, qualified: bool) -> bool {
+fn setup_shape_ok(
+    step: &Step,
+    setup: &MiseSetup,
+    qualified: bool,
+    key: &MiseToolsCacheKey,
+) -> bool {
     let StepKind::Action { uses, with, env } = &step.kind else {
         return false;
     };
@@ -340,21 +321,21 @@ fn setup_shape_ok(step: &Step, qualified: bool) -> bool {
         return false;
     }
     // Setup steps carry no step env; anything attached is foreign shape.
-    let base = env.is_empty()
+    let base = step.condition.is_none()
+        && uses == &setup.uses
+        && env.is_empty()
         && with.len() == usize::from(qualified) + 6
         && with.get("install").is_some_and(|v| v == "false")
         && with.get("env").is_some_and(|v| v == "false")
-        && with.get("version").is_some_and(|v| is_catalog_version(v))
-        && with
-            .get("sha256")
-            .is_some_and(|v| v.len() == 64 && v.bytes().all(|b| b.is_ascii_hexdigit()));
+        && with.get("version").is_some_and(|v| v == &setup.version)
+        && with.get("sha256").is_some_and(|v| v == &setup.sha256);
     if !base {
         return false;
     }
     if qualified {
         with.get("cache").is_some_and(|v| v == "true")
             && with.get("cache_save").is_some_and(|v| v == "false")
-            && with.get("cache_key").is_some_and(|v| is_cache_key(v))
+            && with.get("cache_key").is_some_and(|v| v == key.as_str())
     } else {
         with.get("cache").is_some_and(|v| v == "false")
             && with.get("cache_save").is_some_and(|v| v == "false")
@@ -381,18 +362,18 @@ pub fn check_no_rust_cache_with_mbx(job_id: &str, job: &Job) -> Result<(), Rende
     Ok(())
 }
 
-/// Require the MBX action setup before every fetch step (P08-4).
+/// Require MBX objects restore before every fetch step (P08-4).
 ///
 /// # Errors
 ///
 /// Returns [`RenderError::InvalidWorkflow`] when fetch precedes MBX.
 pub fn check_mbx_before_fetch(job_id: &str, job: &Job) -> Result<(), RenderError> {
+    let at = |name: &str| job.steps.iter().position(|s| s.name == name);
     let fetch = job
         .steps
         .iter()
         .position(|s| s.name.starts_with("Fetch Cargo sources"));
-    let mbx = job.steps.iter().position(is_mbx_action);
-    if let (Some(mbx), Some(fetch_at)) = (mbx, fetch)
+    if let (Some(mbx), Some(fetch_at)) = (at("Restore MBX objects"), fetch)
         && fetch_at < mbx
     {
         return Err(RenderError::InvalidWorkflow(format!(
@@ -401,3 +382,7 @@ pub fn check_mbx_before_fetch(job_id: &str, job: &Job) -> Result<(), RenderError
     }
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "cache_p08_setup_tests.rs"]
+mod setup_tests;

@@ -199,7 +199,7 @@ fn sources_subset_accepted_under_owned_home_only() {
 #[test]
 fn rust_cache_never_stacks_over_mbx() {
     let sha = "c".repeat(40);
-    let [preflight, mbx] = mbx_tool_steps(
+    let [preflight, mbx, version_check] = mbx_tool_steps(
         &format!("jdx/mr-boxington-action@{sha}"),
         "1.19.0",
         "1.98.1",
@@ -223,7 +223,12 @@ fn rust_cache_never_stacks_over_mbx() {
         condition: None,
         permissions: None,
         environment: None,
-        steps: vec![preflight.clone(), mbx.clone(), rust_cache.clone()],
+        steps: vec![
+            preflight.clone(),
+            mbx.clone(),
+            version_check.clone(),
+            rust_cache.clone(),
+        ],
     };
     assert!(check_no_rust_cache_with_mbx("demo", &both).is_err());
     let cargo_only = Job {
@@ -232,7 +237,7 @@ fn rust_cache_never_stacks_over_mbx() {
     };
     assert!(check_no_rust_cache_with_mbx("demo", &cargo_only).is_ok());
     let mbx_only = Job {
-        steps: vec![mbx],
+        steps: vec![mbx, version_check],
         ..both.clone()
     };
     assert!(check_no_rust_cache_with_mbx("demo", &mbx_only).is_ok());
@@ -249,7 +254,7 @@ fn mbx_action_precedes_fetch() {
         },
     };
     let mbx = velnor_actions_contract::Step {
-        name: "Install pinned MBX locally".to_owned(),
+        name: "Restore MBX objects".to_owned(),
         condition: None,
         kind: StepKind::Action {
             uses: format!("jdx/mr-boxington-action@{}", "d".repeat(40)),

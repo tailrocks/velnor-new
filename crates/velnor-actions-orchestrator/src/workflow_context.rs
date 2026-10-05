@@ -72,7 +72,6 @@ pub(super) fn render_context(
         validator_commands,
         candidate,
         preseed: false,
-        pull_request_cache_policy: config.workflow.pull_request_cache_policy,
         verification_tasks,
         plan_consumer_env: crate::matrix_step::task_step_env(
             catalog,

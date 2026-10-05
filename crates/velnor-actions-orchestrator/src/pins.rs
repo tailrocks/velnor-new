@@ -1,9 +1,9 @@
 //! Compiled pin resolution: Mise setup plus helper provenance.
 //!
 //! Resolves `[actions.overrides]` against the compiled approved-pair catalog,
-//! selects the installed Mise digest for each supported runner target, and
-//! builds digest-verified helper acquisition from release or lock provenance.
-//! Anything without provenance fails closed; no digest is ever invented.
+//! gates normal setup to the x64-Linux target and verification setup to its
+//! platform-specific digest, then builds digest-verified helper acquisition
+//! from release or lock provenance. Missing provenance fails closed.
 
 use velnor_actions_actionlint::actions::{MISE_ACTION_SHA, MISE_ACTION_VERSION};
 use velnor_actions_actionlint::overrides::{
@@ -24,32 +24,47 @@ use crate::discover::Discovery;
 /// Override key selecting the Mise setup action pin.
 const MISE_ACTION_KEY: &str = "jdx/mise-action";
 
-use velnor_actions_workflow_renderer::setup::{
-    MISE_BINARY_SHA256_LINUX_X64, MISE_BINARY_SHA256_MACOS_ARM64,
-};
+/// Installed `mise` binary digest for mise 2026.9.18 on Linux x86-64.
+///
+/// Source: `SHASUMS256.txt` of the jdx/mise `v2026.9.18` release, verified
+/// 2026-09-30 by downloading `mise-v2026.9.18-linux-x64.tar.zst`, extracting
+/// `mise/bin/mise`, and hashing the extracted binary. The setup action
+/// compares its `sha256` input against the installed binary, not the archive,
+/// so only this digest is emitted, and only for x64-Linux runners.
+const MISE_BINARY_SHA256_LINUX_X64: &str =
+    "d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4";
+
+/// Installed `mise` binary digest for mise 2026.9.18 on Apple ARM64.
+///
+/// Source: the `mise-v2026.9.18-macos-arm64` entry in the official
+/// `SHASUMS256.txt`, fetched over HTTPS on 2026-10-05.
+const MISE_BINARY_SHA256_MACOS_ARM64: &str =
+    "484c135bd4329975d608d3f77e26c2ece5d2f5590f18ca71f44440294f8cfa6f";
+
+/// Runner target the compiled mise digest covers.
+const LINUX_X64_TARGET: &str = "x86_64-unknown-linux-gnu";
 
 /// Resolve typed Mise setup pins: overrides plus the compiled catalog.
 ///
 /// The `uses` ref comes from `[actions.overrides]` when present (approved
 /// pairs only; anything else fails closed) or the compiled default pin.
 /// `version` is the compiled Mise release; `sha256` is the verified
-/// installed-binary digest selected for the runner architecture. Unsupported
-/// targets fail closed.
+/// installed-binary digest, so this general-purpose setup path rejects labels
+/// outside x64 Linux rather than emitting a digest for the wrong architecture.
 pub(crate) fn resolve_mise_setup(
     config: &VelnorConfig,
     label: &str,
 ) -> Result<MiseSetup, OrchestratorError> {
-    let target = ReleaseTarget::for_runner_label(label)
-        .map(ReleaseTarget::triple)
-        .ok_or_else(|| OrchestratorError::Contract {
+    if ReleaseTarget::for_runner_label(label).map(ReleaseTarget::triple) != Some(LINUX_X64_TARGET) {
+        return Err(OrchestratorError::Contract {
             problem: format!("mise_setup_unsupported_target:{label}"),
-        })?;
+        });
+    }
     Ok(MiseSetup {
         uses: mise_action_uses(config)?,
         version: MISE_VERSION.to_owned(),
         sha256: MISE_BINARY_SHA256_LINUX_X64.to_owned(),
-    }
-    .for_target(target)?)
+    })
 }
 
 /// Resolve cache-off Mise setup for an isolated verification runner.
@@ -97,6 +112,20 @@ pub(crate) fn consumer_acquire_step(
     consumer_acquire_from(label, version, discovery.consumer_manifest_json.as_deref())
 }
 
+/// Acquire the helper target selected by a typed named-check runner.
+///
+/// The runner's platform is validated before its manifest record is read, so
+/// a check hosted on another architecture cannot reuse the repository job's
+/// binary.
+pub(crate) fn consumer_acquire_for_runner(
+    runner: &velnor_actions_contract::config::CheckRunner,
+    version: &str,
+    json: Option<&str>,
+) -> Result<Step, OrchestratorError> {
+    runner.validate("workflow", "check.runner")?;
+    consumer_acquire_for_target(runner.platform.target(), version, json)
+}
+
 /// Consumer Acquire step from an explicit manifest (pure; `None` fails).
 ///
 /// A repo without the committed manifest file fails consumer generation
@@ -126,18 +155,6 @@ fn consumer_acquire_from(
             problem: format!("unsupported_target_for_runner:{label}"),
         })?;
     consumer_acquire_for_target(target, version, json)
-}
-
-/// Acquire the exact helper asset for a validated check runner.
-/// # Errors
-/// Rejects invalid runner profiles or missing artifact provenance.
-pub(crate) fn consumer_acquire_for_runner(
-    runner: &velnor_actions_contract::config::CheckRunner,
-    version: &str,
-    json: Option<&str>,
-) -> Result<Step, OrchestratorError> {
-    runner.validate("workflow", "check.runner")?;
-    consumer_acquire_for_target(runner.platform.target(), version, json)
 }
 
 fn consumer_acquire_for_target(
@@ -181,7 +198,6 @@ fn consumer_acquire_for_target(
         &record.sha256,
         &manifest.commit,
         &format!("{STAGED_BINARY_PREFIX}{version}"),
-        target,
     )
 }
 
@@ -199,6 +215,7 @@ pub(crate) fn lock_acquire_step(
     lock_acquire_for_target(lock, target, staged)
 }
 
+/// Lock-backed Acquire step for one typed named-check runner.
 pub(crate) fn lock_acquire_for_runner(
     lock: &GeneratorLock,
     runner: &velnor_actions_contract::config::CheckRunner,
@@ -223,7 +240,6 @@ fn lock_acquire_for_target(
         &record.sha256,
         &lock.generator.commit,
         staged,
-        target,
     )
 }
 
@@ -234,7 +250,6 @@ fn acquire_step(
     sha: &str,
     commit: &str,
     staged: &str,
-    target: &str,
 ) -> Result<Step, OrchestratorError> {
     let provenance = HelperProvenance::ReleaseAsset {
         url: url.to_owned(),
@@ -243,7 +258,7 @@ fn acquire_step(
     };
     Ok(provision_acquire_step(
         &provenance,
-        acquire_argv(staged, target)?,
+        acquire_script_argv(staged, GENERATOR_SEED_ROOT)?,
     )?)
 }
 
@@ -252,30 +267,25 @@ const GENERATOR_SEED_ROOT: &str = "/opt/velnor/seed";
 
 /// Fixed acquisition argv. A matching seed file is copied. Otherwise curl.
 ///
-/// Curl stays HTTPS-only (`--proto '=https'`) over TLS 1.2+. Paths are
-/// double-quoted, and a seed with the wrong digest is never copied.
+/// Curl stays HTTPS-only (`--proto '=https'`) over TLS 1.2+. The staged
+/// path stays double-quoted. A hash mismatch does not copy the seed.
 ///
 /// # Errors
 ///
-/// Returns [`OrchestratorError::Contract`] for unsupported targets or unsafe
-/// seed and staged path tokens.
+/// Returns [`OrchestratorError::Contract`] when the seed root or staged
+/// path is outside its closed safe-path grammar.
 pub fn acquire_script_argv(
     staged: &str,
     seed_root: &str,
-    target: &str,
 ) -> Result<Vec<String>, OrchestratorError> {
-    let digest = match target {
-        "x86_64-unknown-linux-gnu" => "sha256sum -c -",
-        "aarch64-apple-darwin" | "x86_64-apple-darwin" => "shasum -a 256 -c -",
-        _ => {
-            return Err(OrchestratorError::Contract {
-                problem: format!("acquire_unsupported_target:{target}"),
-            });
-        }
-    };
     if !absolute_token(seed_root) {
         return Err(OrchestratorError::Contract {
             problem: format!("bad_seed_root:{seed_root}"),
+        });
+    }
+    if !staged_path_token(staged) {
+        return Err(OrchestratorError::Contract {
+            problem: format!("bad_staged_path:{staged}"),
         });
     }
     let dir = staged.rsplit_once('/').map_or(staged, |(head, _)| head);
@@ -287,13 +297,9 @@ pub fn acquire_script_argv(
     }
     let seed = format!("{seed_root}/generator/{name}");
     let script = format!(
-        "mkdir -p \"{dir}\" && if [ -f \"{seed}\" ] && echo \"$VELNOR_ASSET_SHA256  {seed}\" | {digest}; then cp \"{seed}\" \"{staged}\"; else curl -fsSL --proto '=https' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"{staged}\" && echo \"$VELNOR_ASSET_SHA256  {staged}\" | {digest}; fi && chmod +x \"{staged}\""
+        "mkdir -p \"{dir}\" && s=\"{seed}\" d=\"{staged}\" && if [ -f \"$s\" ] && echo \"$VELNOR_ASSET_SHA256  $s\" | sha256sum -c -; then cp \"$s\" \"$d\"; else curl -fsSL --proto '=https' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\" && echo \"$VELNOR_ASSET_SHA256  $d\" | sha256sum -c -; fi && chmod +x \"$d\""
     );
     Ok(vec!["sh".to_owned(), "-c".to_owned(), script])
-}
-
-fn acquire_argv(staged: &str, target: &str) -> Result<Vec<String>, OrchestratorError> {
-    acquire_script_argv(staged, GENERATOR_SEED_ROOT, target)
 }
 
 fn absolute_token(value: &str) -> bool {
@@ -303,6 +309,13 @@ fn absolute_token(value: &str) -> bool {
         && value
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'/' | b'.' | b'_' | b'-'))
+}
+
+/// Allow static absolute test paths or the one emitted runner-temp prefix.
+fn staged_path_token(value: &str) -> bool {
+    value
+        .strip_prefix(STAGED_BINARY_PREFIX)
+        .map_or_else(|| absolute_token(value), file_token)
 }
 
 fn file_token(value: &str) -> bool {

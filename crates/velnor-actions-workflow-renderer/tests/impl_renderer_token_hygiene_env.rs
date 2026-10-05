@@ -70,7 +70,7 @@ fn token_in_action_env_fails_render() -> Result<(), RenderError> {
 
 #[test]
 fn typed_mbx_preflight_and_objects_cache_pass() -> Result<(), RenderError> {
-    let [preflight, restore] = mbx_steps_for_driver(
+    let [preflight, restore, version_check] = mbx_steps_for_driver(
         &mbx_pin(),
         CompileDriver::Mbx,
         "1.21.1",
@@ -80,6 +80,7 @@ fn typed_mbx_preflight_and_objects_cache_pass() -> Result<(), RenderError> {
     .ok_or_else(|| RenderError::InvalidWorkflow("missing_mbx_steps".to_owned()))?;
     let mut plan = action_plan_job(restore)?.1;
     plan.steps.insert(2, preflight);
+    plan.steps.insert(4, version_check);
     render_workflow_ir(
         &fixture_ir(vec![("plan".to_owned(), plan)]),
         WorkflowPolicy::ConsumerV1,
@@ -90,42 +91,27 @@ fn typed_mbx_preflight_and_objects_cache_pass() -> Result<(), RenderError> {
 }
 
 #[test]
-fn qualification_restore_outputs_allow_only_exact_guard_bindings() -> Result<(), RenderError> {
+fn retired_mbx_bundle_outputs_fail_env_validation() -> Result<(), RenderError> {
     shell_step(
-        "Qualification cache guard",
+        "Tool seed cache key",
         vec!["true".to_owned()],
-        BTreeMap::from([
-            (
-                "MATCHED".to_owned(),
-                "${{ steps.mbx-bundle.outputs.cache-matched-key }}".to_owned(),
-            ),
-            (
-                "PREFIX".to_owned(),
-                "${{ steps.mbx-cache-key.outputs.prefix }}".to_owned(),
-            ),
-        ]),
+        BTreeMap::from([("CACHE_KEY".to_owned(), "${{ inputs.cache_key }}".to_owned())]),
     )?;
 
     for denied in [
-        (
-            "MATCHED",
-            "${{ steps.mbx-bundle.outputs.cache-matched-key-extra }}",
-        ),
-        (
-            "PREFIX",
-            "${{ steps.mbx-cache-key.outputs.restore-prefix }}",
-        ),
-        ("PREFIX", "${{ steps.mbx-cache-key.outputs.prefix-extra }}"),
+        "${{ steps.mbx-bundle.outputs.cache-matched-key }}",
+        "${{ steps.mbx-bundle.outputs.cache-matched-key-extra }}",
+        "${{ steps.mbx-cache-key.outputs.restore-prefix }}",
+        "${{ steps.mbx-cache-key.outputs.prefix-extra }}",
     ] {
         let result = shell_step(
-            "Qualification cache guard",
+            "Retired MBX bundle output",
             vec!["true".to_owned()],
-            BTreeMap::from([(denied.0.to_owned(), denied.1.to_owned())]),
+            BTreeMap::from([("CACHE_KEY".to_owned(), denied.to_owned())]),
         );
         assert!(
             result.is_err(),
-            "unexpectedly accepted env expression: {}",
-            denied.1
+            "unexpectedly accepted retired cache expression: {denied}"
         );
     }
     Ok(())

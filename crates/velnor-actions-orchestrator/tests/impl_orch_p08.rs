@@ -1,9 +1,8 @@
 //! P08 generator integration: qualified caches in emitted workflows.
 //!
 //! Cargo-only fixtures use pinned `rust-cache` (registry-only, shared key);
-//! MBX fixtures use a local backend and explicit directory bundle, while Cargo
-//! sources use one shared `actions/cache` snapshot (plan writes, crates read).
-//! Tools use the built-in Mise cache only.
+//! MBX fixtures use the native objects action plus one shared Cargo sources
+//! snapshot (plan writes, crates read). Tools use the built-in Mise cache.
 
 use std::fs;
 
@@ -13,15 +12,13 @@ use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
 use super::impl_common::{TestResult, config_with_branch, make_repo};
 
-const SCALE_SET_CONFIG: &str = "schema = 2\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n[execution]\ndefault_profile = \"hosted\"\nhosted_profile = \"hosted\"\nscale_set_profile = \"local\"\nmode = \"scale-set\"\n[execution.profiles.hosted]\nkind = \"github-hosted\"\nlabel = \"ubuntu-26.04\"\nplatform = \"linux/amd64\"\n[execution.profiles.local]\nkind = \"github-scale-set\"\nname = \"ubuntu-26.04-scale-set\"\nlabels = [\"ubuntu-26.04-scale-set\", \"velnor\"]\nplatform = \"linux/amd64\"\n";
-
 /// Hand-written lock for a no-deps fixture package: hermetic, no network.
-pub(super) fn demo_lock(name: &str) -> String {
+fn demo_lock(name: &str) -> String {
     format!("version = 4\n\n[[package]]\nname = \"{name}\"\nversion = \"0.1.0\"\n")
 }
 
 /// Select MBX for the fixture crate via `rustc-wrapper` evidence.
-pub(super) fn with_mbx(root: &std::path::Path) -> TestResult {
+fn with_mbx(root: &std::path::Path) -> TestResult {
     let cargo_dir = root.join(".cargo");
     fs::create_dir_all(&cargo_dir)?;
     fs::write(
@@ -32,7 +29,7 @@ pub(super) fn with_mbx(root: &std::path::Path) -> TestResult {
 }
 
 /// Rendered workflow text for a lockful fixture (MBX when `mbx`).
-pub(super) fn yaml_for(mbx: bool) -> Result<String, Box<dyn std::error::Error>> {
+fn yaml_for(mbx: bool) -> Result<String, Box<dyn std::error::Error>> {
     let repo = make_repo(config_with_branch())?;
     let root = repo.path();
     fs::write(root.join("Cargo.lock"), demo_lock("demo"))?;
@@ -63,19 +60,6 @@ fn job_names(job: &str, mbx: bool) -> Result<Vec<String>, Box<dyn std::error::Er
         .get(job)
         .ok_or_else(|| std::io::Error::other(format!("missing {job}")))?;
     Ok(found.steps.iter().map(|step| step.name.clone()).collect())
-}
-
-fn scale_set_mbx_yaml() -> Result<String, Box<dyn std::error::Error>> {
-    let repo = make_repo(SCALE_SET_CONFIG)?;
-    let root = repo.path();
-    fs::write(root.join("Cargo.lock"), demo_lock("demo"))?;
-    with_mbx(root)?;
-    let prep = prepare(root)?;
-    let tree = render_staged_tree(&prep)?;
-    Ok(tree
-        .get(WORKFLOW_PATH)
-        .ok_or_else(|| std::io::Error::other("missing workflow"))?
-        .to_owned())
 }
 
 #[test]
@@ -132,103 +116,33 @@ fn c3_sources_subset_at_owned_home_single_writer() -> TestResult {
     Ok(())
 }
 
-fn rust_demo_job(yaml: &str) -> Result<&str, &'static str> {
-    let start = yaml.find("  rust-demo:").ok_or("missing rust-demo job")?;
-    let tail = &yaml[start..];
-    Ok(&tail[..tail.find("\n  required:").unwrap_or(tail.len())])
-}
-
-fn assert_source_fetch_contract(task: &str) {
+#[test]
+fn c4_mbx_and_restore_precede_fetch_with_offline_skip() -> TestResult {
+    let names = job_names("rust-demo", true)?;
+    let at = |name: &str| names.iter().position(|seen| seen == name);
+    let (Some(restore), Some(mbx), Some(fetch), Some(clippy)) = (
+        at("Restore Cargo sources"),
+        at("Restore MBX objects"),
+        at("Fetch Cargo sources"),
+        at("Clippy"),
+    ) else {
+        return Err(format!("order missing: {names:?}").into());
+    };
+    assert!(
+        restore < mbx && mbx < fetch && fetch < clippy,
+        "restore<mbx<fetch<clippy: {names:?}"
+    );
+    let yaml = yaml_for(true)?;
     for need in [
         "metadata --locked --offline",
         "sources hit, skipping fetch",
         "sources miss (source_missing)",
         "cargo fetch --locked",
+        "github-cache-mode: objects",
     ] {
-        assert!(task.contains(need), "rust-demo fetch/mbx misses {need}");
+        assert!(yaml.contains(need), "fetch/mbx misses {need}");
     }
-    assert!(
-        !task.contains("github-cache-mode"),
-        "retired MBX cache mode field:\n{task}"
-    );
-}
-
-fn step_at(task: &str, name: &str, missing: &'static str) -> Result<usize, &'static str> {
-    task.find(&format!("- name: {name}")).ok_or(missing)
-}
-
-fn assert_local_mbx_backend(task: &str) -> TestResult {
-    assert!(
-        task.contains("runs-on: [velnor, ubuntu-26.04-scale-set]"),
-        "external MBX bundles are limited to the configured Scale Set lane:\n{task}"
-    );
-    let key = step_at(task, "Prepare MBX cache identity", "MBX cache identity")?;
-    let setup = step_at(task, "Prepare MBX local cache store", "MBX setup")?;
-    let restore = step_at(task, "Restore MBX single bundle", "bundle restore")?;
-    assert!(key < setup && setup < restore, "cache setup order:\n{task}");
-    assert!(
-        task[setup..restore].contains("backend: local"),
-        "local backend"
-    );
-    Ok(())
-}
-
-fn assert_mbx_bundle_lifecycle(task: &str) -> TestResult {
-    let restore = step_at(task, "Restore MBX single bundle", "bundle restore")?;
-    let import = step_at(task, "Import MBX single bundle", "bundle import")?;
-    let fetch = step_at(task, "Fetch Cargo sources", "Cargo fetch")?;
-    let clippy = step_at(task, "Clippy", "Cargo build")?;
-    let export = step_at(task, "Export MBX single bundle", "bundle export")?;
-    let save = step_at(task, "Save MBX single bundle", "bundle save")?;
-    assert!(
-        restore < import && import < fetch && fetch < clippy && clippy < export && export < save,
-        "bundle restore/import precede Cargo work; export/save follow it:\n{task}"
-    );
-    for (start, end, expected, label) in [
-        (restore, import, "uses: actions/cache/restore@", "restore"),
-        (import, fetch, "mbx cache import", "import"),
-        (export, save, "mbx cache export --group", "export"),
-        (save, task.len(), "uses: actions/cache/save@", "save"),
-    ] {
-        assert!(
-            task[start..end].contains(expected),
-            "explicit bundle {label}:\n{}",
-            &task[start..end]
-        );
-    }
-    Ok(())
-}
-
-#[test]
-fn c4_mbx_and_restore_precede_fetch_with_offline_skip() -> TestResult {
-    let yaml = scale_set_mbx_yaml()?;
-    let task = rust_demo_job(&yaml)?;
-    let at = |name: &str| step_at(task, name, "ordered MBX step");
-    let (restore, preflight, key, store, setup, bundle, import, fetch, clippy) = (
-        at("Restore Cargo sources")?,
-        at("Verify MBX and Rust toolchains")?,
-        at("Prepare MBX cache identity")?,
-        at("Prepare private MBX store")?,
-        at("Prepare MBX local cache store")?,
-        at("Restore MBX single bundle")?,
-        at("Import MBX single bundle")?,
-        at("Fetch Cargo sources")?,
-        at("Clippy")?,
-    );
-    assert!(
-        restore < preflight
-            && preflight < key
-            && key < store
-            && store < setup
-            && setup < bundle
-            && bundle < import
-            && import < fetch
-            && fetch < clippy,
-        "restore<preflight<key<store<local setup<bundle<import<fetch<clippy:\n{task}"
-    );
-    assert_source_fetch_contract(task);
-    assert_local_mbx_backend(task)?;
-    assert_mbx_bundle_lifecycle(task)?;
+    assert!(!yaml.contains("github-cache-mode: target"), "objects only");
     Ok(())
 }
 
@@ -325,4 +239,121 @@ fn c10_only_plan_saves_producer_successful_deltas() -> TestResult {
     assert!(yaml.contains("save-if: \"true\""), "writer saves");
     assert!(yaml.contains("save-if: \"false\""), "readers restore-only");
     Ok(())
+}
+
+#[test]
+fn c11_cache_saves_push_only_prs_and_forks_read_only() -> TestResult {
+    use velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION;
+    // IR: exactly one save step (plan writer), carrying the push-only gate;
+    // every other plan step (restores, fetch, obligations) stays ungated.
+    let repo = make_repo(config_with_branch())?;
+    let root = repo.path();
+    fs::write(root.join("Cargo.lock"), demo_lock("demo"))?;
+    with_mbx(root)?;
+    let prep = prepare(root)?;
+    let plan = prep
+        .workflow
+        .ir
+        .jobs
+        .get("plan")
+        .ok_or_else(|| std::io::Error::other("missing plan"))?;
+    let mut saves = 0;
+    for step in &plan.steps {
+        if step.name == "Save Cargo sources" {
+            saves += 1;
+            assert_eq!(
+                step.condition.as_deref(),
+                Some(CACHE_SAVE_CONDITION),
+                "save must be push-gated"
+            );
+        } else {
+            assert!(
+                step.condition.is_none(),
+                "only the save step is gated: {}",
+                step.name
+            );
+        }
+    }
+    assert_eq!(saves, 1, "single plan writer");
+    // YAML: the gate renders as the save step's `if:`, and only there; no
+    // unconditional `actions/cache/save` may exist (fork read-only).
+    let yaml = yaml_for(true)?;
+    let save_at = yaml.find("- name: Save Cargo sources").ok_or("save step")?;
+    assert!(
+        yaml[save_at..].starts_with(
+            "- name: Save Cargo sources\n        if: success() && github.event_name == 'push'",
+        ),
+        "save renders push-only if:\n{yaml}"
+    );
+    assert_tools_saves_push_gated_per_key(&yaml);
+    Ok(())
+}
+
+/// YAML: one push-gated tools save per restored `mise-v1-` key (plus the
+/// sources save); MBX object persistence belongs only to the native action.
+fn assert_tools_saves_push_gated_per_key(yaml: &str) {
+    let mut keys = std::collections::BTreeSet::new();
+    for line in yaml.lines() {
+        if let Some(key) = line.trim().strip_prefix("cache_key: ") {
+            keys.insert(key.to_owned());
+        }
+    }
+    assert!(!keys.is_empty(), "at least one restored tools key:\n{yaml}");
+    assert_eq!(
+        yaml.matches("actions/cache/save@").count(),
+        1 + keys.len(),
+        "sources plus one tools save per key; MBX uses its native action:\n{yaml}"
+    );
+    assert_eq!(
+        yaml.matches("if: success() && github.event_name == 'push'")
+            .count(),
+        1 + keys.len(),
+        "cargo and tools saves stay push-gated:\n{yaml}"
+    );
+    assert_eq!(
+        yaml.matches(
+            "if: runner.environment != 'github-hosted' && success() && github.event_name == 'push'"
+        )
+        .count(),
+        0,
+        "only source and tools saves use the push gate:\n{yaml}"
+    );
+    assert!(
+        !yaml.contains("- name: Restore Cargo sources\n        if:"),
+        "restores stay unconditional:\n{yaml}"
+    );
+    assert_eq!(
+        yaml.matches("- name: Save Mise tools").count(),
+        keys.len(),
+        "exactly one tools saver per key:\n{yaml}"
+    );
+    for line in yaml.lines() {
+        if let Some(key) = line.trim().strip_prefix("key: ")
+            && key.starts_with("mise-v1-")
+        {
+            assert!(
+                keys.contains(key),
+                "tools save archives a restored key:\n{yaml}"
+            );
+        }
+    }
+    assert!(
+        !yaml.contains("cache_save: \"true\""),
+        "no unconditional mise save:\n{yaml}"
+    );
+    assert!(
+        !yaml.contains("cache_save: ${{"),
+        "no promised built-in save:\n{yaml}"
+    );
+    for legacy in [
+        "Save MBX single bundle",
+        "Export MBX single bundle",
+        "MBX_BUNDLE",
+        "mbx-bundle",
+    ] {
+        assert!(!yaml.contains(legacy), "legacy MBX saver {legacy}:\n{yaml}");
+    }
+    let setups = yaml.matches("- name: Setup Mise").count();
+    let demoted = yaml.matches("cache_save: \"false\"").count();
+    assert_eq!(setups, demoted, "every setup restore-only:\n{yaml}");
 }

@@ -305,16 +305,17 @@ fn restore_mbx_fetch_order_every_crate_job() -> TestResult {
         )
         .expect("order");
         let at = |want: &str| names.iter().position(|n| n == want);
-        let (Some(restore), Some(preflight), Some(objects), Some(fetch)) = (
+        let (Some(restore), Some(preflight), Some(objects), Some(version), Some(fetch)) = (
             at("Restore Cargo sources"),
-            at("Verify MBX and Rust toolchains"),
+            at("Verify Rust before MBX action"),
             at("Restore MBX objects"),
+            at("Verify native MBX version"),
             at("Fetch Cargo sources"),
         ) else {
             return Err(format!("{job} misses cache steps: {names:?}").into());
         };
         assert!(
-            restore < preflight && preflight < objects && objects < fetch,
+            restore < preflight && preflight < objects && objects < version && version < fetch,
             "{job}: {names:?}"
         );
     }
