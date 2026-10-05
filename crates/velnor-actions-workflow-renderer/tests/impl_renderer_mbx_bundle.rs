@@ -307,3 +307,6 @@ fn must_find(text: &str, needle: &str) -> usize {
     assert!(found.is_some(), "{needle} missing from {text}");
     found.unwrap_or_default()
 }
+
+#[path = "impl_renderer_mbx_bundle_export_test.rs"]
+mod export_failure_tests;

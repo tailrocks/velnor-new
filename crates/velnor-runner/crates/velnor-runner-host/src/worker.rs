@@ -125,7 +125,7 @@ pub fn runner_create(plan: &ContainerPlan) -> Result<CreateProjection, HostError
 ///
 /// # Errors
 ///
-/// Returns [`HostError::ForbiddenMount`] when `dind_id` is not a hex container id.
+/// Returns [`HostError::ForbiddenMount`] when `dind_id` is not 64 hex digits.
 pub(crate) fn join_dind_net(
     mut spec: CreateProjection,
     dind_id: &str,
@@ -138,7 +138,7 @@ pub(crate) fn join_dind_net(
 }
 
 fn dind_container_id(id: &str) -> bool {
-    (12..=64).contains(&id.len()) && id.bytes().all(|byte| byte.is_ascii_hexdigit())
+    id.len() == 64 && id.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
 /// Private `DinD` create. Privilege is not a flag on the runner plan.

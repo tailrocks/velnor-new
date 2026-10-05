@@ -221,10 +221,9 @@ case_long_and_deep() {
   printf '%s\n%s\n' "$long" "$deep" >"$root/manifest"
   bash "$shim" -cf "$root/arc.tar" -P -C "$root/src" --files-from "$root/manifest" || return 1
   bash "$shim" -xf "$root/arc.tar" -P -C "$root/dest" || return 1
-  # GNU tar -x calls openat2, which qemu-user rejects. -t does not open members.
-  listed="$(tar.gnu -t --quoting-style=literal -f "$root/arc.tar")" || return 1
-  printf '%s\n' "$listed" | grep -Fxq -- "$long" || return 1
-  printf '%s\n' "$listed" | grep -Fxq -- "$deep" || return 1
+  perl "$rundir/tar-member.pl" --list <"$root/arc.tar" >"$root/list" || return 1
+  grep -Fxq -- "$long" "$root/list" || return 1
+  grep -Fxq -- "$deep" "$root/list" || return 1
   grep -qx 'long-ok' "$root/dest/$long" || return 1
   grep -qx 'deep-ok' "$root/dest/$deep" || return 1
 }
@@ -372,6 +371,7 @@ run_case rewritten-pax-member case_rewritten_pax_member
 run_case grouped-external-restore case_grouped_external_restore
 run_case empty-dir case_empty_dir
 run_case long-and-deep case_long_and_deep
+run_case gnu-enosys-still-extracts case_gnu_enosys_still_extracts
 run_case space-name case_space_name
 run_case corrupt-header case_corrupt_header
 run_case list-drains-tail case_list_drains_tail
