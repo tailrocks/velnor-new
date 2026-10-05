@@ -32,7 +32,7 @@ fn statistics_advance_and_offers_stay() {
 fn assigned_started(message_id: i64, assigned: i64) -> Poll {
     let job = |kind| InnerJob {
         kind,
-        request_id: Some(0),
+        request_id: Some(4),
         job_id: None,
         labels: Vec::new(),
         fields: Vec::new(),

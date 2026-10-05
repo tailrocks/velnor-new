@@ -25,7 +25,7 @@ pub(crate) fn should_ack(idle: Idle) -> bool {
 
 /// Fail an unstarted `m{message_id}` row. Return true only when every match has no container id.
 ///
-/// A container id means this conflict is not a JIT name collision. The caller must not ack.
+/// A runner id or a `DinD` id means a container exists. Do not fail that row.
 ///
 /// # Errors
 ///
@@ -41,7 +41,7 @@ pub(crate) async fn fail_unstarted(journal: &Journal, polled: &Poll) -> Result<b
         if row.kind != "launch" || row.subject != subject {
             continue;
         }
-        if row.docker_id.is_some() {
+        if row.docker_id.is_some() || row.dind_id.is_some() {
             return Ok(false);
         }
         matched = true;
@@ -68,5 +68,48 @@ fn map_journal(error: HostError) -> EnsureError {
             status: 0,
             step: "journal",
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use velnor_runner_github::{ParsedBatch, Poll};
+
+    use super::*;
+    use crate::journal::IntentState;
+    use crate::journal::Outcome;
+    use crate::launch_harness::{absent, open};
+
+    #[tokio::test]
+    async fn dind_row_is_not_failed() -> Result<(), String> {
+        let (scratch, journal) = open("dind-kept").await?;
+        let id = journal
+            .begin("launch", "m100000776")
+            .await
+            .map_err(|err| err.to_string())?;
+        journal
+            .bind_worker(id, None, Some("dind-1"))
+            .await
+            .map_err(|err| err.to_string())?;
+        journal
+            .finish(id, Outcome::Uncertain)
+            .await
+            .map_err(|err| err.to_string())?;
+        let poll = Poll::Batch(ParsedBatch {
+            message_id: 100_000_776,
+            statistics: None,
+            jobs: Vec::new(),
+        });
+        let failed = fail_unstarted(&journal, &poll)
+            .await
+            .map_err(|err| err.to_string())?;
+        if failed {
+            return Err("dind row was failed".to_owned());
+        }
+        let state = journal.read(id).await.map_err(|err| err.to_string())?;
+        if state != IntentState::Uncertain {
+            return Err(format!("state {state:?}"));
+        }
+        absent(&scratch.file())
     }
 }
