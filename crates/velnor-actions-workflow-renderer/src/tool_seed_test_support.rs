@@ -54,7 +54,7 @@ esac
 owner_scan=0
 for arg do [ "$arg" = -uid ] && owner_scan=1; done
 if [ "${SEED_TEST_SKIP_OWNER_SCAN:-0}" = 1 ] && [ "$owner_scan" = 1 ]; then
-    exec /usr/bin/find "$1" -xdev -type l -print0
+    exec /usr/bin/find "$1" -xdev \( ! -type d -a ! -type f \) -print0
 fi
 exec /usr/bin/find "$@"
 "#;

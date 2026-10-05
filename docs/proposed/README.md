@@ -61,18 +61,19 @@ The generator crates MUST NOT implement a runner, a Scale Set client, or an Acti
 5. [Workflow contract](workflow-contract.md) defines triggers, jobs, and matrix data.
 6. [Task execution contract](task-execution-contract.md) defines task steps, Mise invocation, execution, and reports.
 7. [Cache and report contract](cache-contract.md) defines task identities, cache ownership/trust, reports, and final status aggregation.
-8. [Parallelism and affected-work contract](parallelism-and-selection-contract.md) defines dependency-aware selection, trusted baseline coverage, native background/wait steps, bounded concurrency, and complete test partitioning.
-9. [Rust quality contract](rust-quality-contract.md) defines tests, lints, file limits, dependencies, verification and policy protection.
-10. [Agent and performance contract](agent-and-performance-contract.md) defines agent instructions, performance measurements, acceptance budgets, and readiness evidence.
-11. [Tooling input contract](tooling-input-contract.md) defines read-only inspection and human recommendations for Rust/Mise tool files.
-12. [Version policy](version-policy.md) defines latest-stable tool pins, freshness checks, exception expiry, and V2 version inventory.
-13. [Implementation plan](implementation-plan.md) defines the ordered work packages and merge gates.
-14. [Release contract](release-contract.md) defines consumer release-plz preparation, validation, protected publishing, and reconciliation.
-15. [Release config schema](release-config-schema.md) defines the exact `[stacks.rust.release]` fields, defaults, and validation errors.
-16. [Release coverage](release-coverage.md) maps release behaviors to their tests and snapshots.
-17. [OpenTofu contract](opentofu-contract.md) defines the native `tofu` stack extension, tracked in `../reviews/opentofu-evidence.md`.
-18. [Rust dependency policy](rust-dependency-policy.md) defines dependency narrowness, the initial crate set, and deny/machete supply-chain gates (companion to the quality contract §7).
-19. [Rust test policy](rust-test-policy.md) defines test layout, integration entry points, doctest separation, fixture independence, and snapshot review (companion to the quality contract §4).
+8. [Host-image seed admission contract](host-seed-contract.md) defines trusted preinstalled seed inputs and fail-cold admission.
+9. [Parallelism and affected-work contract](parallelism-and-selection-contract.md) defines dependency-aware selection, trusted baseline coverage, native background/wait steps, bounded concurrency, and complete test partitioning.
+10. [Rust quality contract](rust-quality-contract.md) defines tests, lints, file limits, dependencies, verification and policy protection.
+11. [Agent and performance contract](agent-and-performance-contract.md) defines agent instructions, performance measurements, acceptance budgets, and readiness evidence.
+12. [Tooling input contract](tooling-input-contract.md) defines read-only inspection and human recommendations for Rust/Mise tool files.
+13. [Version policy](version-policy.md) defines latest-stable tool pins, freshness checks, exception expiry, and V2 version inventory.
+14. [Implementation plan](implementation-plan.md) defines the ordered work packages and merge gates.
+15. [Release contract](release-contract.md) defines consumer release-plz preparation, validation, protected publishing, and reconciliation.
+16. [Release config schema](release-config-schema.md) defines the exact `[stacks.rust.release]` fields, defaults, and validation errors.
+17. [Release coverage](release-coverage.md) maps release behaviors to their tests and snapshots.
+18. [OpenTofu contract](opentofu-contract.md) defines the native `tofu` stack extension, tracked in `../reviews/opentofu-evidence.md`.
+19. [Rust dependency policy](rust-dependency-policy.md) defines dependency narrowness, the initial crate set, and deny/machete supply-chain gates (companion to the quality contract §7).
+20. [Rust test policy](rust-test-policy.md) defines test layout, integration entry points, doctest separation, fixture independence, and snapshot review (companion to the quality contract §4).
 20. [macOS Scale Set runner](macos-scaleset-runner.md) is the active runner specification. It supersedes conflicting deferred roadmap clauses.
 
 The listed documents are intended to be implementable without inventing behavior. If a behavior is not specified, fail with a clear error and add a decision to the spec before implementing it. Do not silently broaden V1.

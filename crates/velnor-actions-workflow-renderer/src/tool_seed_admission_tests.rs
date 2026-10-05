@@ -21,6 +21,10 @@ fn seed(root: &Path) {
 }
 
 fn run(script: &str, root: &Path, mounts: &str) -> Output {
+    run_with_file_size(script, root, mounts, "64")
+}
+
+fn run_with_file_size(script: &str, root: &Path, mounts: &str, file_size: &str) -> Output {
     let command_script = format!("set -euo pipefail\n{script}");
     Command::new("bash")
         .arg("-c")
@@ -28,6 +32,7 @@ fn run(script: &str, root: &Path, mounts: &str) -> Output {
         .env("RUNNER_OS", "Linux")
         .env("SEED_TEST_ROOT", root)
         .env("SEED_TEST_MOUNTS", mounts)
+        .env("SEED_TEST_FILE_SIZE", file_size)
         .env("SEED_TEST_SKIP_OWNER_SCAN", "1")
         .output()
         .expect("run seed guard")
@@ -64,6 +69,29 @@ fn only_one_exact_read_only_non_overlay_mount_is_admitted() {
         assert!(!output.status.success(), "accepted mounts: {mounts}");
     }
     fs::remove_dir_all(test_dir).ok();
+}
+
+#[test]
+fn provenance_marker_rejects_oversize_nul_and_extra_lines() {
+    let test_dir = scratch("provenance");
+    let seed_root = test_dir.join("seed");
+    seed(&seed_root);
+    let script = trust_script(&test_dir);
+    let mounts = format!("{} ext4 0:77 ro", seed_root.display());
+    assert!(run(&script, &seed_root, &mounts).status.success());
+
+    fs::write(seed_root.join("PROVENANCE"), b"velnor-host-seed-v1\0").expect("NUL marker");
+    assert!(!run(&script, &seed_root, &mounts).status.success());
+    fs::write(seed_root.join("PROVENANCE"), "velnor-host-seed-v1\nextra\n")
+        .expect("multi-line marker");
+    assert!(!run(&script, &seed_root, &mounts).status.success());
+    fs::write(seed_root.join("PROVENANCE"), "velnor-host-seed-v1\n").expect("marker");
+    assert!(
+        !run_with_file_size(&script, &seed_root, &mounts, "513")
+            .status
+            .success()
+    );
+    fs::remove_dir_all(test_dir).expect("cleanup");
 }
 
 #[test]
@@ -127,11 +155,29 @@ fn symlinks_and_non_root_entries_fail_tree_admission() {
         .arg(format!("set -euo pipefail\n{script}"))
         .env("RUNNER_OS", "Linux")
         .env("SEED_TEST_ROOT", &seed_root)
-        .env("SEED_TEST_MOUNTS", mounts)
+        .env("SEED_TEST_MOUNTS", &mounts)
         .env("SEED_TEST_SKIP_OWNER_SCAN", "1")
         .output()
         .expect("run symlink admission");
     assert!(!output.status.success(), "accepted symlink");
+    fs::remove_file(seed_root.join("mise/tree/link")).expect("remove link");
+    let fifo = seed_root.join("mise/tree/fifo");
+    let status = Command::new("mkfifo").arg(&fifo).status().expect("mkfifo");
+    assert!(status.success(), "could not prepare FIFO fixture");
+    let script = mock_trust_commands(
+        &format!("{guard}\ntrusted_seed_is_trusted \"$SEED_TEST_ROOT\""),
+        &test_dir,
+    );
+    let output = Command::new("bash")
+        .arg("-c")
+        .arg(format!("set -euo pipefail\n{script}"))
+        .env("RUNNER_OS", "Linux")
+        .env("SEED_TEST_ROOT", &seed_root)
+        .env("SEED_TEST_MOUNTS", &mounts)
+        .env("SEED_TEST_SKIP_OWNER_SCAN", "1")
+        .output()
+        .expect("run special-file admission");
+    assert!(!output.status.success(), "accepted FIFO");
     fs::remove_dir_all(test_dir).ok();
 }
 

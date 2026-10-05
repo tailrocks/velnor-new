@@ -382,3 +382,7 @@ pub fn check_mbx_before_fetch(job_id: &str, job: &Job) -> Result<(), RenderError
     }
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "cache_p08_setup_tests.rs"]
+mod setup_tests;

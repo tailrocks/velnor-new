@@ -1,7 +1,6 @@
 # Velnor V1 Cache and Report Contract
 
-Status: proposed; no implementation is claimed. Defines task identity, cache ownership/trust, reports, and
-final result aggregation.
+Status: proposed; defines task identity, cache ownership/trust, reports, and final status; not an implementation claim.
 
 ## 1. Task identity and canonical digests
 
@@ -95,7 +94,7 @@ Cargo sources, and a unique run/matrix closure digest for MBX. The complete key 
 bytes; the generator MUST fail if it is longer. Restore prefixes MAY omit `snapshot_id` only for the same
 compatibility ID. A commit SHA alone MUST NOT be a cache identity.
 
-## 2. V1 Rust cache paths, transport, and fallback
+## 2. V1 Rust cache paths, transport, fallback, and [host seeds](host-seed-contract.md)
 
 The Cargo/MBX paths below map generic cache rules for V1 Rust. Future adapters define their own paths and
 compatibility fields under the same invariants.
@@ -134,23 +133,6 @@ MISE_TASK_CACHE_DIR   = $VELNOR_CACHE_ROOT/mise-task
 MISE_TASK_ARTIFACTS   = $MISE_TASK_CACHE_DIR/task-artifacts/v2
 REPORT_DIR            = $RUNNER_TEMP/velnor/<run-key>/<matrix-key>
 ```
-
-An optional host-image seed at `/opt/velnor/seed` is a separate bootstrap input, not another cache
-archive or a replacement for the action/cache transport. The only permitted importer copies from it;
-seed import never deletes or writes into the seed. Mise seed admission requires its stored key to equal
-the key derived from that job's complete pinned Mise tool set. MBX admission requires an exact stored
-restore-prefix match. Missing, malformed, or mismatched seed data MUST take the cold path before any
-restore destination is created or modified.
-
-The seed boundary requires an external provisioner assumption: image provisioning completes before
-repository-controlled workflow code runs, controls the root-owned seed and its exact read-only mount,
-and prevents that code from changing the mount table or backing state. A `PROVENANCE` marker is only a
-format check; it cannot establish this trust by itself. The importer admits only a root-owned, exact
-read-only, non-overlay mount with no nested mounts or writable same-device aliases. It rejects symlinks,
-special files, non-root-owned entries, traversal errors, trees deeper than 16 levels, or trees above
-100,000 entries. The full tree is checked before copying. If the external provisioner cannot guarantee
-that no writable backing alias or lower layer exists, the seed MUST be absent and jobs MUST run cold.
-No in-repository seed producer or hosted seed qualification is claimed by this contract.
 
 `CARGO_HOME` is set to this isolated path for every generated task. The source archive MUST include only
 `registry/` and `git/`, never credentials or other files under Cargo home. Mise stores task artifacts under
