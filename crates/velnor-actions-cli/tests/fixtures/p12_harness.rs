@@ -169,6 +169,37 @@ pub(crate) fn passing(prefix: &str) -> Result<Fixture, Box<dyn Error>> {
     Ok(Fixture { dir })
 }
 
+/// Add an excluded nested workspace with a dependency unique to its lock.
+pub(crate) fn add_nested_workspace(fixture: &Fixture) -> Result<(), Box<dyn Error>> {
+    mutate(
+        &fixture.dir,
+        "Cargo.toml",
+        "[workspace]\n",
+        "[workspace]\nexclude = [\"crates/runner\"]\n",
+    )?;
+    write(
+        &fixture.dir,
+        "crates/runner/Cargo.toml",
+        "[workspace]\nmembers = [\"crates/worker\"]\nresolver = \"3\"\n",
+    )?;
+    write(
+        &fixture.dir,
+        "crates/runner/crates/worker/Cargo.toml",
+        "[package]\nname = \"worker\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[dependencies]\nrunneronly = \"=1.2.3\"\n",
+    )?;
+    write(
+        &fixture.dir,
+        "crates/runner/Cargo.lock",
+        "version = 4\n\n[[package]]\nname = \"worker\"\nversion = \"0.1.0\"\ndependencies = [\"runneronly\"]\n\n[[package]]\nname = \"runneronly\"\nversion = \"1.2.3\"\nsource = \"registry+https://github.com/rust-lang/crates.io-index\"\n",
+    )?;
+    write(
+        &fixture.dir,
+        "crates/runner/deny.toml",
+        "[advisories]\nignore = []\n",
+    )?;
+    Ok(())
+}
+
 /// Remove a fixture tree; cleanup must never fail a test.
 pub(crate) fn cleanup(fixture: &Fixture) {
     crate::impl_cli_tmp::cleanup(&fixture.dir);
