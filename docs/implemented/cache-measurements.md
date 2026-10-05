@@ -209,10 +209,11 @@ prevents a cache from an earlier dispatch from satisfying this check. The
 reader's `cache-hit=false` assertion intentionally expects the action's
 run-specific writer key to be reached by its restore prefix.
 
-Both jobs set `MBX_GC_AUTO=1` intentionally: this exercises the same hosted
-policy that Velnor emits for production MBX object-cache jobs, overriding the
-action's hosted default. Dispatch once from protected `main` with mode
-`mbx-cache-roundtrip`; the writer and reader run in order at the same SHA.
+Both jobs set `MBX_GC_AUTO=1` for this protected-main round-trip probe.
+Production hosted Linux jobs set `MBX_GC_AUTO=0` and `MBX_SHARE_OUT_DIR=0`.
+This probe does not pass those production lane controls. Dispatch once from
+protected `main` with mode `mbx-cache-roundtrip`; the writer and reader run
+in order at the same SHA.
 
 This is a small end-to-end action and cache round-trip probe. It does not
 measure disk or inode peaks and does not qualify the affected ChainArgos

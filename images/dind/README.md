@@ -19,6 +19,10 @@ The image does not set `privileged`. The controller must:
   private dockerd needs. Do not publish a TCP port.
 - Mount a private named volume at `/run` so the socket is
   `/var/run/docker.sock`, and another at `/var/lib/docker`.
+- Mount the worker's work volume at `/home/runner/_work`. The image creates
+  that target with uid/gid `1000:1000` and mode `0755` before Docker copies it
+  into a new empty named volume, so the runner user can write its checkout,
+  tool cache, and temporary JIT payload there.
 - Never mount the host or outer engine socket.
 - Share that socket (and the runner work paths) with the matching runner
   container so both resolve `/var/run/docker.sock` to this worker only.

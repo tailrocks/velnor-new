@@ -17,7 +17,7 @@ fi
 
 mkdir -p "$work"
 umask 077
-jit_file="$(mktemp "${work}/jit.XXXXXX")"
+jit_file="$(mktemp /tmp/velnor-jit.XXXXXX)"
 chmod 0600 "$jit_file"
 trap 'rm -f "$jit_file"' EXIT
 

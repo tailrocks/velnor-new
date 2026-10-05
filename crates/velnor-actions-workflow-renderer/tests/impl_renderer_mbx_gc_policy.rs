@@ -8,7 +8,7 @@ use velnor_actions_workflow_renderer::{RenderError, render_workflow_ir};
 
 use super::impl_renderer_fixtures::*;
 
-/// Rendered GC policy reaches MBX only and composes with push-only saves.
+/// Hosted Linux MBX jobs disable collection and shared `OUT_DIR`.
 #[test]
 fn action_step_env_renders_only_when_present() -> Result<(), RenderError> {
     let uses = format!("jdx/mr-boxington-action@{}", "a".repeat(40));
@@ -26,17 +26,40 @@ fn action_step_env_renders_only_when_present() -> Result<(), RenderError> {
         &fixture_ctx(),
     )?;
     assert!(
-        text.contains(&format!("{MBX_CACHE_MODE_ENV}: read")),
-        "action post stays restore-only:\n{text}"
+        text.contains(&format!(
+            "{MBX_CACHE_MODE_ENV}: ${{{{ runner.environment == 'github-hosted' && (github.event_name == 'push'"
+        )),
+        "hosted cache mode is event-gated:\n{text}"
     );
     assert!(
-        !text.contains("&& 'write'"),
-        "push writes must not come from the action post:\n{text}"
+        text.contains("github.ref_protected == true && 'write' || 'read'"),
+        "untrusted events stay read-only:\n{text}"
     );
     assert!(
-        text.contains("MBX_GC_AUTO: \"1\""),
-        "MBX jobs enable GC:\n{text}"
+        text.contains("|| 'none' }}"),
+        "non-hosted mode is none:\n{text}"
     );
+    assert!(
+        text.contains("isolate-objects-cache: ${{ runner.environment == 'github-hosted' && runner.os == 'Linux' }}"),
+        "isolation activates only on hosted Linux runners:\n{text}"
+    );
+    assert!(
+        text.contains(
+            "cache-key-suffix: ${{ runner.environment == 'github-hosted' && github.job || '' }}"
+        ),
+        "hosted jobs use private primary keys:\n{text}"
+    );
+    assert!(
+        text.contains("MBX_GC_AUTO: \"0\""),
+        "hosted Linux MBX jobs disable asynchronous collection:\n{text}"
+    );
+    assert!(
+        text.contains("MBX_SHARE_OUT_DIR: \"0\""),
+        "hosted Linux MBX jobs disable shared OUT_DIR:\n{text}"
+    );
+    let policy = text.find("MBX_SHARE_OUT_DIR: \"0\"").expect("share env");
+    let restore = text.find("name: Restore MBX objects").expect("restore");
+    assert!(policy < restore, "job env precedes restore:\n{text}");
 
     let plain = checkout_step(&checkout_pin())?;
     let cargo_text = render_workflow_ir(
@@ -55,13 +78,17 @@ fn action_step_env_renders_only_when_present() -> Result<(), RenderError> {
         "Cargo-only jobs do not receive MBX policy:\n{cargo_text}"
     );
     assert!(
+        !cargo_text.contains("MBX_SHARE_OUT_DIR"),
+        "Cargo-only jobs do not receive MBX environment:\n{cargo_text}"
+    );
+    assert!(
         !cargo_text.contains("Export MBX single bundle"),
         "Cargo-only jobs do not export an MBX bundle:\n{cargo_text}"
     );
     Ok(())
 }
 
-/// Lane extraction keeps hosted GC enabled and leaves scale-set policy intact.
+/// Hosted Linux receives both env keys. Scale Set receives neither.
 #[test]
 fn mbx_gc_policy_is_scoped_to_hosted_mbx_jobs() -> Result<(), RenderError> {
     let uses = format!("jdx/mr-boxington-action@{}", "a".repeat(40));
@@ -91,6 +118,20 @@ fn mbx_gc_policy_is_scoped_to_hosted_mbx_jobs() -> Result<(), RenderError> {
         None,
         &fixture_ctx(),
     )?;
-    assert_eq!(text.matches("MBX_GC_AUTO: \"1\"").count(), 1, "{text}");
+    assert_eq!(text.matches("MBX_GC_AUTO: \"0\"").count(), 1, "{text}");
+    assert_eq!(
+        text.matches("MBX_SHARE_OUT_DIR: \"0\"").count(),
+        1,
+        "{text}"
+    );
+    let local_start = text.find("rust-demo__local:").expect("scale-set job");
+    assert!(
+        !text[local_start..].contains("MBX_GC_AUTO"),
+        "Scale Set keeps its existing collection policy:\n{text}"
+    );
+    assert!(
+        !text[local_start..].contains("MBX_SHARE_OUT_DIR"),
+        "Scale Set keeps its existing OUT_DIR policy:\n{text}"
+    );
     Ok(())
 }

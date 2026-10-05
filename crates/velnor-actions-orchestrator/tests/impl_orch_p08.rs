@@ -394,8 +394,16 @@ fn assert_tools_saves_push_gated_per_key(yaml: &str) {
     assert_eq!(
         yaml.matches("if: success() && github.event_name == 'push'")
             .count(),
-        1 + keys.len() + mbx_saves + mbx_exports,
-        "every save push-gated:\n{yaml}"
+        1 + keys.len(),
+        "cargo and tools saves stay push-gated:\n{yaml}"
+    );
+    assert_eq!(
+        yaml.matches(
+            "if: runner.environment != 'github-hosted' && success() && github.event_name == 'push'"
+        )
+        .count(),
+        mbx_saves + mbx_exports,
+        "MBX bundle export and save stay on Scale Set and push-gated:\n{yaml}"
     );
     assert!(
         !yaml.contains("- name: Restore Cargo sources\n        if:"),

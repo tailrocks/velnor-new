@@ -1,16 +1,16 @@
 //! Compiled pin resolution: Mise setup plus helper provenance.
 //!
 //! Resolves `[actions.overrides]` against the compiled approved-pair catalog,
-//! gates the installed-mise digest to the single x64-Linux runner target, and
-//! builds digest-verified helper acquisition from release or lock provenance.
-//! Anything without provenance fails closed; no digest is ever invented.
+//! gates normal setup to the x64-Linux target and verification setup to its
+//! platform-specific digest, then builds digest-verified helper acquisition
+//! from release or lock provenance. Missing provenance fails closed.
 
 use velnor_actions_actionlint::actions::{MISE_ACTION_SHA, MISE_ACTION_VERSION};
 use velnor_actions_actionlint::overrides::{
     ActionPinOverride as ApprovedOverride, ApprovedPinCatalog,
 };
 use velnor_actions_contract::{
-    GeneratorLock, ReleaseManifest, Step, VelnorConfig, check_release_artifact,
+    GeneratorLock, ReleaseManifest, Step, VelnorConfig, VerificationRunner, check_release_artifact,
     target_for_runner_label,
 };
 use velnor_actions_mise::MISE_VERSION;
@@ -34,6 +34,13 @@ const MISE_ACTION_KEY: &str = "jdx/mise-action";
 const MISE_BINARY_SHA256_LINUX_X64: &str =
     "d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4";
 
+/// Installed `mise` binary digest for mise 2026.9.18 on Apple ARM64.
+///
+/// Source: the `mise-v2026.9.18-macos-arm64` entry in the official
+/// `SHASUMS256.txt`, fetched over HTTPS on 2026-10-05.
+const MISE_BINARY_SHA256_MACOS_ARM64: &str =
+    "484c135bd4329975d608d3f77e26c2ece5d2f5590f18ca71f44440294f8cfa6f";
+
 /// Runner target the compiled mise digest covers.
 const LINUX_X64_TARGET: &str = "x86_64-unknown-linux-gnu";
 
@@ -42,8 +49,8 @@ const LINUX_X64_TARGET: &str = "x86_64-unknown-linux-gnu";
 /// The `uses` ref comes from `[actions.overrides]` when present (approved
 /// pairs only; anything else fails closed) or the compiled default pin.
 /// `version` is the compiled Mise release; `sha256` is the verified
-/// installed-binary digest, so non-x64-Linux labels fail closed rather than
-/// emitting a digest for the wrong architecture.
+/// installed-binary digest, so this general-purpose setup path rejects labels
+/// outside x64 Linux rather than emitting a digest for the wrong architecture.
 pub(crate) fn resolve_mise_setup(
     config: &VelnorConfig,
     label: &str,
@@ -57,6 +64,22 @@ pub(crate) fn resolve_mise_setup(
         uses: mise_action_uses(config)?,
         version: MISE_VERSION.to_owned(),
         sha256: MISE_BINARY_SHA256_LINUX_X64.to_owned(),
+    })
+}
+
+/// Resolve cache-off Mise setup for an isolated verification runner.
+pub(crate) fn resolve_verification_mise_setup(
+    config: &VelnorConfig,
+    runner: VerificationRunner,
+) -> Result<MiseSetup, OrchestratorError> {
+    let sha256 = match runner {
+        VerificationRunner::LinuxX64 => MISE_BINARY_SHA256_LINUX_X64,
+        VerificationRunner::MacosArm64 => MISE_BINARY_SHA256_MACOS_ARM64,
+    };
+    Ok(MiseSetup {
+        uses: mise_action_uses(config)?,
+        version: MISE_VERSION.to_owned(),
+        sha256: sha256.to_owned(),
     })
 }
 

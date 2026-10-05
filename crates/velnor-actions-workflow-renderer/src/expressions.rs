@@ -51,16 +51,17 @@ fn expression_spans(text: &str) -> Option<Vec<&str>> {
 /// Runner paths, the release tag, plan-matrix coordinates, the two
 /// fixed secret bindings (bootstrap registry plus the release forge
 /// token, whose placements the release gates still police separately),
-/// and the push-gated cache-mode selector (a pure function of the
-/// event name over string literals; the generator pins it on MBX
-/// restore steps so PR runs can never become cache writers).
+/// and the runner-scoped MBX cache-mode selector. Hosted writes require a
+/// protected push to the default branch; every other hosted run stays
+/// read-only. A non-hosted runner resolves to none.
 /// Notably absent: `github.token` (render-time fetch binding only)
 /// and run IDs (never in env).
-const ENV_EXPRESSIONS: [&str; 8] = [
+const ENV_EXPRESSIONS: [&str; 9] = [
     "runner.temp",
     "github.ref_name",
     "github.event_name",
     "github.event_name == 'push' && 'write' || 'read'",
+    "runner.environment == 'github-hosted' && (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read') || 'none'",
     "secrets.CARGO_REGISTRY_TOKEN",
     "secrets.GITHUB_TOKEN",
     "steps.mbx.outputs.cache-primary-key",
@@ -75,10 +76,15 @@ const ENV_EXPRESSIONS: [&str; 8] = [
 /// fingerprint for the exact runtime image and home roots. Notably
 /// absent: every `secrets.*` handle (rejected separately as
 /// `secret_in_action_input`).
-const WITH_EXPRESSIONS: [&str; 9] = [
+/// The workflow-dispatch cache deny condition is kept in the allowlist
+/// so the plan-job cache boundary cannot be bypassed by other events.
+const WITH_EXPRESSIONS: [&str; 12] = [
     "runner.temp",
     "github.run_id",
     "github.run_attempt",
+    "runner.environment == 'github-hosted' && runner.os == 'Linux'",
+    "runner.environment == 'github-hosted' && github.job || ''",
+    "runner.environment == 'github-hosted' && runner.os == 'Linux' && '-share-out-dir-disabled-v1' || ''",
     "github.event_name == 'push'",
     "steps.publish-baseline.outputs.artifact_name",
     "steps.mbx.outputs.cache-primary-key",

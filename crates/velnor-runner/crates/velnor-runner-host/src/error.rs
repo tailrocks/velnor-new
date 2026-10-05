@@ -27,6 +27,9 @@ pub enum HostError {
     /// Docker client could not open the configured socket.
     #[error("docker socket")]
     Docker,
+    /// A collision-resistant worker ownership token could not be generated.
+    #[error("worker identity")]
+    Identity,
     /// JIT payload was empty. No container was created.
     #[error("empty jit")]
     EmptyJit,

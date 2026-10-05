@@ -5,8 +5,9 @@
 //! attempt, source SHA, action pin, and MBX release. The dependent reader
 //! cannot publish a cache or pass on data from an earlier run.
 //!
-//! Both jobs set `MBX_GC_AUTO=1` to exercise the hosted policy emitted for
-//! production MBX jobs, not the action's hosted default.
+//! Both jobs set `MBX_GC_AUTO=1` for this protected-main roundtrip probe.
+//! Production hosted Linux jobs set `MBX_GC_AUTO=0` and `MBX_SHARE_OUT_DIR=0`
+//! separately. This probe does not pass those production lane controls.
 
 use super::features::{checkout_step, finish, gated, lane_base, run_step};
 use super::{MbxQualificationPins, RunnerSpec};

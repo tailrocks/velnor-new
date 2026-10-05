@@ -1,6 +1,6 @@
 //! P08 trust, save, and quota policy: PR scoping, deltas, service data.
 //!
-//! The pinned MBX v1.6.0 action supports opt-in same-repo PR saving, but
+//! The pinned MBX v1.7.1 action supports opt-in same-repo PR saving, but
 //! Velnor keeps that option off: PRs restore the default-branch cache
 //! read-only; any PR-branch save never promotes to trusted.
 //! Fork PRs stay read-only. PR outputs never become trusted/release
