@@ -127,6 +127,8 @@ pub(crate) struct Drive {
     pub(crate) queue_token: String,
     /// Admin bearer.
     pub(crate) admin_token: String,
+    /// Selected Docker engine identity, captured before a launch row is prepared.
+    pub(crate) docker_engine_id: Option<String>,
 }
 
 impl fmt::Debug for Drive {
@@ -232,6 +234,7 @@ async fn scale_session(
         queue_path: String::new(),
         queue_token: session.token().to_owned(),
         admin_token: admin_token.to_owned(),
+        docker_engine_id: Some(engine_identity(docker).await?),
     };
     let admin = link.base().to_owned();
     let mut lane = HostLane {
@@ -288,6 +291,7 @@ where
         queue_path: ready.path,
         queue_token: ready.session.token().to_owned(),
         admin_token: ready.admin_token.to_owned(),
+        docker_engine_id: Some(engine_identity(docker).await?),
     };
     drive_offer(lane, &ctx, ready.polled, journal, |volume, jit, bind| {
         let volume = volume.to_owned();
@@ -312,10 +316,28 @@ fn ack_ready(
         queue_path: path,
         queue_token: session.token().to_owned(),
         admin_token: String::new(),
+        docker_engine_id: None,
     };
     let admin = link.base().to_owned();
     let mut lane = HostLane { link, admin, queue };
     steps::acknowledge(&mut lane, &ctx, batch)
+}
+
+async fn engine_identity(docker: &bollard::Docker) -> Result<String, EnsureError> {
+    let info = crate::docker_client::docker_deadline(docker.info())
+        .await
+        .map_err(|_| docker_identity_error())?
+        .map_err(|_| docker_identity_error())?;
+    info.id
+        .filter(|id| !id.trim().is_empty())
+        .ok_or_else(docker_identity_error)
+}
+
+fn docker_identity_error() -> EnsureError {
+    EnsureError::Unexpected {
+        status: 0,
+        step: "docker identity",
+    }
 }
 
 struct HostLane<'a> {

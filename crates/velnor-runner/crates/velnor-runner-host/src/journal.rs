@@ -8,8 +8,12 @@ use crate::error::HostError;
 use crate::reconcile::IntentRow;
 
 mod launch;
+mod launch_identity;
+mod launch_phase;
 mod schema;
 mod worker_volume;
+
+pub(crate) use launch_identity::LaunchIdentity;
 
 /// Durable intent row.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -245,7 +249,7 @@ impl Journal {
         let conn = self.connection().await?;
         let mut query = conn
             .query(
-                "SELECT id, kind, subject, state, docker_id, github_runner_id, cleanup_proven, dind_id, worker_volume FROM intents ORDER BY id",
+                "SELECT id, kind, subject, state, docker_id, github_runner_id, cleanup_proven, dind_id, worker_volume, scale_set_id, request_id, runner_name, docker_engine_id, launch_phase FROM intents ORDER BY id",
                 (),
             )
             .await
@@ -260,7 +264,7 @@ impl Journal {
     async fn bootstrap(&self) -> Result<(), HostError> {
         let conn = self.connection().await?;
         conn.execute(
-            "CREATE TABLE IF NOT EXISTS intents (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, subject TEXT NOT NULL, state TEXT NOT NULL, docker_id TEXT, github_runner_id TEXT, cleanup_proven INTEGER NOT NULL DEFAULT 0, dind_id TEXT, worker_volume TEXT)",
+            "CREATE TABLE IF NOT EXISTS intents (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, subject TEXT NOT NULL, state TEXT NOT NULL, docker_id TEXT, github_runner_id TEXT, cleanup_proven INTEGER NOT NULL DEFAULT 0, dind_id TEXT, worker_volume TEXT, scale_set_id INTEGER, request_id INTEGER, runner_name TEXT, docker_engine_id TEXT, launch_phase TEXT)",
             (),
         )
         .await
@@ -342,6 +346,16 @@ fn intent_row(row: &turso::Row) -> Result<IntentRow, HostError> {
         docker_id: row.get(4).map_err(|_| HostError::Journal)?,
         dind_id: row.get(7).map_err(|_| HostError::Journal)?,
         worker_volume: row.get(8).map_err(|_| HostError::Journal)?,
+        scale_set_id: row.get(9).map_err(|_| HostError::Journal)?,
+        request_id: row.get(10).map_err(|_| HostError::Journal)?,
+        runner_name: row.get(11).map_err(|_| HostError::Journal)?,
+        docker_engine_id: row.get(12).map_err(|_| HostError::Journal)?,
+        launch_phase: row
+            .get::<Option<String>>(13)
+            .map_err(|_| HostError::Journal)?
+            .as_deref()
+            .map(crate::reconcile::LaunchPhase::parse)
+            .transpose()?,
         github_runner_id: row.get(5).map_err(|_| HostError::Journal)?,
         cleanup_proven: row.get(6).map_err(|_| HostError::Journal)?,
     })

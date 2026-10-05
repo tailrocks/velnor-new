@@ -45,7 +45,8 @@ pub use listen::{SessionCensus, SessionProbe, probe_once, queue_path, session_ce
 pub use plist::{keychain_import_argv, launch_agent_plist};
 pub use readiness::{Readiness, doctor_json, readiness_for_empty, status_json};
 pub use reconcile::{
-    IntentRow, Reconcile, ReleaseFact, before_advertise, occupies, release_permitted,
+    IntentRow, LaunchPhase, Reconcile, ReleaseFact, before_advertise, occupies,
+    release_permitted,
 };
 pub use scale_set::{EnsureError, EnsuredSet, ensure_product_scale_set, product_runner_groups};
 pub use stage::{PairStop, PartialPair, remove_recorded, start_pair_until};
@@ -68,6 +69,8 @@ mod https_tests;
 mod ipc_tests;
 #[cfg(test)]
 mod journal_tests;
+#[cfg(test)]
+mod journal_launch_phase_tests;
 #[cfg(test)]
 mod journal_worker_volume_tests;
 #[cfg(test)]
