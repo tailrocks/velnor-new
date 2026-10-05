@@ -78,7 +78,7 @@ fn provider_restore_precedes_init_obligation() {
     assert!(restore_at < init_at, "restore before init: {names:?}");
     assert!(init_at < validate_at, "init gates validate: {names:?}");
     let with = step_inputs(job, "Restore Tofu providers");
-    let key = with.get("key").expect("restore key");
+    let key = with.get("cache-key").expect("restore key");
     assert!(
         key.starts_with("velnor-v1-tofu-providers-x86_64-unknown-linux-gnu-1.13.1-stacks-a-"),
         "{key}"
@@ -107,7 +107,7 @@ fn provider_restore_keys_are_per_root() {
         .iter()
         .map(|(_, job)| {
             step_inputs(job, "Restore Tofu providers")
-                .get("key")
+                .get("cache-key")
                 .expect("restore key")
                 .as_str()
         })
