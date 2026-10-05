@@ -38,6 +38,7 @@ fn seat(
         running,
         assigned,
         idle,
+        progress: false,
     })
 }
 
@@ -105,6 +106,7 @@ fn scale_does_not_mint_again_once_assigned_is_covered() {
             running: 1,
             assigned: 1,
             idle: Idle::Scale,
+            progress: false,
         }),
         Admit::Ack { stop: false }
     );
@@ -117,6 +119,7 @@ fn scale_does_not_mint_again_once_assigned_is_covered() {
             running: 1,
             assigned: 3,
             idle: Idle::Scale,
+            progress: false,
         }),
         Admit::Start { stop: true }
     );
@@ -129,6 +132,7 @@ fn scale_does_not_mint_again_once_assigned_is_covered() {
             running: 0,
             assigned: 1,
             idle: Idle::Scale,
+            progress: false,
         }),
         Admit::Start { stop: false }
     );
@@ -141,6 +145,7 @@ fn scale_does_not_mint_again_once_assigned_is_covered() {
             running: 0,
             assigned: 1,
             idle: Idle::Scale,
+            progress: false,
         }),
         Admit::Start { stop: true }
     );
@@ -282,8 +287,26 @@ fn historical_starts_do_not_cover_a_free_slot() {
             running: 1,
             assigned: 2,
             idle: Idle::Scale,
+            progress: false,
         }),
         Admit::Start { stop: true }
+    );
+}
+
+#[test]
+fn full_progress_notice_is_acknowledged() {
+    assert_eq!(
+        admit(Seat {
+            capacity: 1,
+            target: 1,
+            started: 0,
+            occupied: 1,
+            running: 0,
+            assigned: 5,
+            idle: Idle::Scale,
+            progress: true,
+        }),
+        Admit::Ack { stop: false }
     );
 }
 
@@ -298,6 +321,7 @@ fn uncertain_occupancy_does_not_mint_or_ack() {
             running: 0,
             assigned: 1,
             idle: Idle::Scale,
+            progress: false,
         }),
         Admit::Hold
     );
