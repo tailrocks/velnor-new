@@ -156,11 +156,23 @@ fn uncommented_init_sample_parses_with_overrides() -> TestResult {
     fs::write(root.join(".velnor/config.toml"), &live)?;
     let prep = prepare(root)?;
     assert!(prep.config.checks.is_empty());
-    assert_eq!(prep.config.actions.overrides.len(), 7);
+    // Retired `Swatinem/rust-cache` is not an overridable sample pin.
+    let overrides = &prep.config.actions.overrides;
+    let keys: Vec<&str> = overrides.keys().map(String::as_str).collect();
+    assert_eq!(overrides.len(), 7);
     assert_eq!(
-        prep.config.actions.overrides["actions/checkout"].version,
-        "v7.0.1"
+        keys,
+        [
+            "actions/cache/restore",
+            "actions/cache/save",
+            "actions/checkout",
+            "actions/download-artifact",
+            "actions/upload-artifact",
+            "jdx/mise-action",
+            "jdx/mr-boxington-action",
+        ]
     );
+    assert_eq!(overrides["actions/checkout"].version, "v7.0.1");
     assert_eq!(prep.runner_label, "ubuntu-24.04");
     assert_eq!(prep.runner_selection, RunnerSelection::ConfigOverride);
     Ok(())
