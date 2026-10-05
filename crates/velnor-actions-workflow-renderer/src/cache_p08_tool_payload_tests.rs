@@ -199,6 +199,7 @@ fn restore_composite_binds_marker_pin_key_and_paths() {
             .bytes
             .contains("TOOLS_MATCHED_KEY\\\" = \\\"$TOOLS_EXPECTED_KEY\\\"")
     );
+    crate::cache_steps::assert_rendered_admission_parses(&restore_action.bytes);
 }
 
 #[test]
