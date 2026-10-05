@@ -3,7 +3,7 @@
 use crate::refresh::StatusClass;
 use crate::{Certainty, WireError};
 
-/// A session call failed, or its effect is not known.
+/// A session call failed, or its effect is not known from the response.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 #[must_use]
 pub enum SessionError {
@@ -13,18 +13,25 @@ pub enum SessionError {
     /// HTTP 409. Do not delete the other session.
     #[error("session conflict")]
     Conflict,
-    /// Timeout or reset. Not a definite failure.
+    /// Unknown or unusable remote outcome. Not a definite failure.
     #[error("effect uncertain")]
     Uncertain,
 }
 
 impl SessionError {
-    /// Timeout and reset are uncertain. Every other error is definite.
+    /// Only local rejection and explicit service rejection are definite.
     #[must_use]
     pub const fn certainty(self) -> Certainty {
         match self {
             Self::Uncertain => Certainty::Uncertain,
-            Self::Wire(_) | Self::Conflict => Certainty::Definite,
+            Self::Conflict
+            | Self::Wire(
+                WireError::Encode
+                | WireError::Forbidden
+                | WireError::RefreshExhausted
+                | WireError::RegistrationRejected,
+            ) => Certainty::Definite,
+            Self::Wire(_) => Certainty::Uncertain,
         }
     }
 }
