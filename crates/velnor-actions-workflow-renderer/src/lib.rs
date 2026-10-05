@@ -50,6 +50,7 @@ mod support;
 pub mod tofu_cache;
 pub mod toolchain_env;
 pub mod tree;
+mod validator_command;
 pub mod yaml;
 
 pub use artifact_paths::{
@@ -88,9 +89,11 @@ pub use render::{
     CLAUDE_MD_PATH, CLAUDE_MD_TARGET, CONCURRENCY_CANCEL, CONCURRENCY_GROUP, COVERED_TASKS_OUTPUT,
     CandidateSpec, EXPECTED_PR_TYPES, FINAL_CONDITION, FINAL_DISPLAY_NAME, FINAL_JOB_ID,
     MATRIX_MAX_PARALLEL_ENV, MATRIX_NEEDS_JOB_ENV, MATRIX_OUTPUT_ENV, MatrixSource, MiseSetup,
-    PLAN_ID_OUTPUT, PLAN_JOB_ID, PLAN_STEP_ID, PUBLISH_JOB_ID, RUN_KEY_OUTPUT, RenderContext,
-    RenderedFile, RenderedSymlink, RenderedTree, TASK_JOB_ID, ValidatorCommand, WORKFLOW_PATH,
-    action_pins, finalize_jobs, render_workflow_ir, render_workflow_ir_strict,
+    PLAN_ID_OUTPUT, PLAN_JOB_ID, PLAN_STEP_ID, PUBLISH_JOB_ID, PYTHON_SOURCE_PREPARE_NAME,
+    PYTHON_SOURCE_RUN_NAME, RUN_KEY_OUTPUT, RenderContext, RenderedFile, RenderedSymlink,
+    RenderedTree, TASK_JOB_ID, ValidatorCommand, ValidatorSourceInput, ValidatorSourceInputKind,
+    ValidatorSourceUnit, WORKFLOW_PATH, action_pins, finalize_jobs, render_workflow_ir,
+    render_workflow_ir_strict,
 };
 pub use schema2::{MbxQualificationPins, Schema2WorkflowRequest, render_schema2_workflows};
 pub use setup::{MISE_ACTION_NAME, SETUP_MISE_NAME, mise_setup_step};

@@ -15,6 +15,18 @@ fn native_owner_requires_neither_validator_nor_tofu_execution() {
 }
 
 #[test]
+fn synchronous_registry_fixture_is_a_compiled_rust_suite() {
+    assert_eq!(
+        crate_suite_tools(
+            WorkflowPolicy::VelnorRepositoryV1,
+            Some("mbx-synchronous-registry-fixture")
+        )
+        .expect("registered compilation fixture"),
+        SuiteTools::NONE
+    );
+}
+
+#[test]
 fn runner_cli_suite_requires_no_v1_extra_tools() {
     assert_eq!(
         crate_suite_tools(

@@ -275,7 +275,13 @@ fn parity_velnor_policy_lists_validators() -> TestResult {
         let plan = plan_for(&prep)?;
         let yaml = workflow_yaml(&prep)?;
         assert_parity(&prep, &plan, &yaml)?;
-        for id in ["alint", "cargo-deny", "cargo-machete", "zizmor"] {
+        for id in [
+            "alint",
+            "cargo-deny",
+            "cargo-machete",
+            "zizmor",
+            "python-source-tests",
+        ] {
             assert!(
                 plan.contains(&format!("- {id} (")),
                 "plan lists {id}:\n{plan}"

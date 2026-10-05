@@ -83,7 +83,13 @@ fn velnor_candidate_render_path_includes_release() -> TestResult {
         ] {
             assert!(yaml.contains(want), "missing {want}");
         }
-        for want in ["alint:", "cargo-deny:", "cargo-machete:", "zizmor:"] {
+        for want in [
+            "alint:",
+            "cargo-deny:",
+            "cargo-machete:",
+            "zizmor:",
+            "python-source-tests:",
+        ] {
             assert!(yaml.contains(want), "validator {want}");
         }
         Ok(())

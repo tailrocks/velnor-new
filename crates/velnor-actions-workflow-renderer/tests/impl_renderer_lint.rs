@@ -1,8 +1,8 @@
 //! Always-on lint job cases: emitted from typed IR for both policies.
 use std::collections::BTreeMap;
 use velnor_actions_contract::{
-    Concurrency, GeneratorValidation, Job, JobTimeout, Permissions, Trigger, ValidatorKind,
-    VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy,
+    Concurrency, GeneratorValidation, Job, JobTimeout, Permissions, Trigger, VelnorSupportWorkflow,
+    WorkflowIr, WorkflowPolicy,
 };
 use velnor_actions_workflow_renderer::{
     ALINT_USES, CONCURRENCY_CANCEL, CONCURRENCY_GROUP, RenderContext, RenderError,
@@ -121,19 +121,7 @@ fn velnor_support() -> VelnorSupportWorkflow {
 }
 
 fn validator_commands() -> Vec<ValidatorCommand> {
-    // Production names: the scrub gate allowlists these exactly.
-    [
-        (ValidatorKind::CargoDeny, "Run cargo-deny"),
-        (ValidatorKind::CargoMachete, "Run cargo-machete"),
-        (ValidatorKind::Zizmor, "Run zizmor"),
-    ]
-    .iter()
-    .map(|(validator, name)| ValidatorCommand {
-        validator: *validator,
-        name: (*name).to_owned(),
-        argv: vec!["deny".to_owned()],
-    })
-    .collect()
+    super::impl_renderer_fixtures::validator_commands()
 }
 
 #[test]

@@ -36,7 +36,11 @@
       }
     ],
     "inventory_sha256": "854b93ae76056668a1a35f59f17a9f2c5db45131c2000819bcace64f79663a10",
-    "root": "registry-fixture"
+    "material": {
+      "path": "crates/mbx-synchronous-registry-fixture/tests/fixtures/standalone-workspace-v1.json",
+      "sha256": "12c0e26e16be55d4dbaabc785aaf648ab896dd1d8c11b31be484ce26f5e83008",
+      "size": 1960
+    }
   },
   "limitations": [
     "No execution has occurred in this manifest.",
