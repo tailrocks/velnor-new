@@ -184,6 +184,7 @@ fn render_workflow_parts(
     closure::insert_task_closure(&mut jobs)?;
     closure::insert_final_closure(&mut jobs)?;
     final_steps::insert_final_fanin(&mut jobs, ctx)?;
+    dispatch_cache_boundary::suppress_unvalidated_cache_access(&mut jobs);
     render_merged(ir, &jobs, ctx)
 }
 

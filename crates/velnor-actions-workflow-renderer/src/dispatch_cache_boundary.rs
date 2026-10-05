@@ -6,6 +6,8 @@ use velnor_actions_contract::{Job, Step, StepKind};
 
 use crate::render::PLAN_JOB_ID;
 
+const DISPATCH_DENY: &str = "github.event_name != 'workflow_dispatch'";
+
 /// Suppress every cache action in jobs that cannot consume validated plan outputs.
 ///
 /// Raw event metadata can deny access before planning, but it never grants a
@@ -19,33 +21,66 @@ pub(crate) fn suppress_unvalidated_cache_access(jobs: &mut BTreeMap<String, Job>
             continue;
         }
         for step in &mut job.steps {
-            if is_cache_access(step) {
+            if is_mise_setup_cache(step) {
+                disable_mise_cache(step);
+            } else if is_cache_access(step) {
                 suppress_dispatch(step);
             }
         }
     }
 }
 
+fn is_mise_setup_cache(step: &Step) -> bool {
+    matches!(&step.kind, StepKind::Action { uses, with, .. }
+        if uses.starts_with("jdx/mise-action@")
+            && with.get("cache").is_some_and(|value| value == "true"))
+}
+
+fn disable_mise_cache(step: &mut Step) {
+    let StepKind::Action { with, .. } = &mut step.kind else {
+        return;
+    };
+    with.insert(
+        "cache".to_owned(),
+        "${{ github.event_name != 'workflow_dispatch' && 'true' || 'false' }}".to_owned(),
+    );
+}
+
 fn is_cache_access(step: &Step) -> bool {
-    let StepKind::Action { uses, with, .. } = &step.kind else {
+    if is_mbx_bundle_shell(step) {
+        return true;
+    }
+    let StepKind::Action { uses, .. } = &step.kind else {
         return false;
     };
     uses.starts_with("actions/cache@")
         || uses.starts_with("actions/cache/")
         || uses.starts_with("Swatinem/rust-cache@")
         || uses.starts_with("jdx/mr-boxington-action@")
-        || (uses.starts_with("jdx/mise-action@")
-            && with.get("cache").is_some_and(|value| value == "true"))
+}
+
+fn is_mbx_bundle_shell(step: &Step) -> bool {
+    matches!(
+        step.name.as_str(),
+        crate::mbx_bundle::MBX_BUNDLE_KEY_NAME
+            | crate::mbx_bundle::MBX_BUNDLE_IMPORT_NAME
+            | crate::mbx_bundle::MBX_BUNDLE_EXPORT_NAME
+    )
 }
 
 fn suppress_dispatch(step: &mut Step) {
+    if step
+        .condition
+        .as_deref()
+        .is_some_and(|prior| prior.contains(DISPATCH_DENY))
+    {
+        return;
+    }
     let prior = step
         .condition
         .take()
         .unwrap_or_else(|| "success()".to_owned());
-    step.condition = Some(format!(
-        "({prior}) && github.event_name != 'workflow_dispatch'"
-    ));
+    step.condition = Some(format!("({prior}) && {DISPATCH_DENY}"));
 }
 
 #[cfg(test)]
@@ -63,6 +98,17 @@ mod tests {
             kind: StepKind::Action {
                 uses: uses.to_owned(),
                 with: BTreeMap::from([("cache".to_owned(), "true".to_owned())]),
+                env: BTreeMap::new(),
+            },
+        }
+    }
+
+    fn shell_cache_step(name: &str) -> Step {
+        Step {
+            name: name.to_owned(),
+            condition: None,
+            kind: StepKind::Shell {
+                run: vec!["sh".to_owned(), "-c".to_owned(), "true".to_owned()],
                 env: BTreeMap::new(),
             },
         }
@@ -93,6 +139,13 @@ mod tests {
                 job(&[], cache_step("jdx/mise-action@sha", "tools")),
             ),
             (
+                "mbx-plan".to_owned(),
+                job(
+                    &[],
+                    shell_cache_step(crate::mbx_bundle::MBX_BUNDLE_KEY_NAME),
+                ),
+            ),
+            (
                 "crate".to_owned(),
                 job(&["plan"], cache_step("Swatinem/rust-cache@sha", "cargo")),
             ),
@@ -100,13 +153,22 @@ mod tests {
 
         suppress_unvalidated_cache_access(&mut jobs);
 
-        for id in ["plan", "actionlint"] {
+        for id in ["plan", "mbx-plan"] {
             let condition = jobs[id].steps[0]
                 .condition
                 .as_deref()
                 .expect("pre-plan cache condition");
             assert!(condition.contains("github.event_name != 'workflow_dispatch'"));
         }
+        let StepKind::Action { with, .. } = &jobs["actionlint"].steps[0].kind else {
+            panic!("mise setup remains an action");
+        };
+        assert!(jobs["actionlint"].steps[0].condition.is_none());
+        assert_eq!(
+            with.get("cache").map(String::as_str),
+            Some("${{ github.event_name != 'workflow_dispatch' && 'true' || 'false' }}"),
+            "setup still runs but cache access is denied on dispatch"
+        );
         assert!(jobs["crate"].steps[0].condition.is_none());
     }
 

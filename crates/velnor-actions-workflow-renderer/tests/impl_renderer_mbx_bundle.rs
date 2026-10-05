@@ -2,9 +2,11 @@
 
 use velnor_actions_contract::WorkflowPolicy;
 use velnor_actions_contract::config::{SCALE_SET_NAME, ScaleSetSelector, VELNOR_LABEL};
+use velnor_actions_workflow_renderer::steps::plan_step;
 use velnor_actions_workflow_renderer::{RenderError, render_workflow_ir};
 
 use super::impl_renderer_fixtures::*;
+use super::impl_renderer_fixtures::{acquire_fixture, strict};
 
 fn mbx_uses() -> String {
     format!("jdx/mr-boxington-action@{}", "a".repeat(40))
@@ -152,5 +154,53 @@ fn scale_set_save_matches_and_skips_hosted_gc_env() -> Result<(), RenderError> {
     assert!(text.contains("name: Export MBX single bundle"), "{text}");
     assert!(text.contains("ACTIONS_CACHE_MODE: read"), "{text}");
     assert!(!text.contains("MBX_GC_AUTO"), "{text}");
+    Ok(())
+}
+
+#[test]
+fn generated_plan_suppresses_mbx_bundle_work_on_dispatch() -> Result<(), RenderError> {
+    let mut steps = vec![
+        velnor_actions_workflow_renderer::steps::checkout_step(&checkout_pin())?,
+        acquire_fixture()?,
+        velnor_actions_workflow_renderer::cache_p08::mise_setup_step_p08(
+            &mise(),
+            "mise-v1-x86_64-unknown-linux-gnu-2026.9.18-0123456789abcdef",
+        )?,
+    ];
+    steps.extend(mbx_tool_steps(
+        &mbx_uses(),
+        TEST_MBX_VERSION,
+        TEST_RUST_TOOLCHAIN,
+    )?);
+    steps.push(plan_step());
+    let text = strict(
+        &fixture_ir(vec![job("plan", "Plan", Vec::new(), steps)]),
+        &fixture_ctx(),
+    )?;
+
+    for name in [
+        "Restore MBX objects",
+        "Prepare MBX bundle key",
+        "Restore MBX single bundle",
+        "Import MBX single bundle",
+        "Export MBX single bundle",
+        "Save MBX single bundle",
+    ] {
+        let start = text
+            .find(&format!("name: {name}"))
+            .unwrap_or_else(|| panic!("missing plan cache step {name}: {text}"));
+        let tail = &text[start..];
+        let step = tail.split("      - name:").next().unwrap_or(tail);
+        assert!(
+            step.contains("github.event_name != 'workflow_dispatch'"),
+            "{name} remains active before plan validation: {step}"
+        );
+    }
+    assert!(
+        text.contains(
+            "cache: ${{ github.event_name != 'workflow_dispatch' && 'true' || 'false' }}"
+        ),
+        "Mise setup remains active with dispatch cache reads disabled: {text}"
+    );
     Ok(())
 }
