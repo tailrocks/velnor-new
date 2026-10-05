@@ -4,9 +4,11 @@ use velnor_actions_mise::catalog::lock::{
     LockError, parse_generator_lock, parse_release_manifest, verify_lock_against_manifest,
 };
 
+const GENERATOR_VERSION: &str = env!("CARGO_PKG_VERSION");
+
 fn binary_record(target: &str, sha: &str) -> String {
     format!(
-        "[[generator.binaries]]\ntarget = \"{target}\"\nartifact = \"https://github.com/tailrocks/velnor-new/releases/download/v0.1.0/velnor-actions-0.1.0-{target}\"\nsha256 = \"{sha}\"\n"
+        "[[generator.binaries]]\ntarget = \"{target}\"\nartifact = \"https://github.com/tailrocks/velnor-new/releases/download/v{GENERATOR_VERSION}/velnor-actions-{GENERATOR_VERSION}-{target}\"\nsha256 = \"{sha}\"\n"
     )
 }
 
@@ -16,7 +18,7 @@ fn lock_text(sha: &str) -> String {
         .map(|target| binary_record(target, sha))
         .collect::<String>();
     format!(
-        "schema = 1\n[generator]\nbinary = \"velnor-actions\"\nversion = \"0.1.0\"\ncommit = \"{}\"\n{bins}[mise-bootstrap]\nversion = \"2026.9.18\"\nartifact = \"https://example.invalid/mise\"\nsha256 = \"{}\"\n[[actions]]\nname = \"actions/checkout\"\nversion = \"v7.0.1\"\nsha = \"{}\"\nreviewed = \"2026-09-28\"\n",
+        "schema = 1\n[generator]\nbinary = \"velnor-actions\"\nversion = \"{GENERATOR_VERSION}\"\ncommit = \"{}\"\n{bins}[mise-bootstrap]\nversion = \"2026.9.18\"\nartifact = \"https://example.invalid/mise\"\nsha256 = \"{}\"\n[[actions]]\nname = \"actions/checkout\"\nversion = \"v7.0.1\"\nsha = \"{}\"\nreviewed = \"2026-09-28\"\n",
         "a".repeat(40),
         "c".repeat(64),
         "d".repeat(40)
@@ -26,11 +28,11 @@ fn lock_text(sha: &str) -> String {
 fn manifest_text(sha: &str) -> String {
     let targets = SUPPORTED_TARGETS
         .iter()
-        .map(|target| format!("{{\"target\":\"{target}\",\"artifact\":\"https://github.com/tailrocks/velnor-new/releases/download/v0.1.0/velnor-actions-0.1.0-{target}\",\"sha256\":\"{sha}\"}}"))
+        .map(|target| format!("{{\"target\":\"{target}\",\"artifact\":\"https://github.com/tailrocks/velnor-new/releases/download/v{GENERATOR_VERSION}/velnor-actions-{GENERATOR_VERSION}-{target}\",\"sha256\":\"{sha}\"}}"))
         .collect::<Vec<_>>()
         .join(",");
     format!(
-        "{{\"schema\":1,\"version\":\"0.1.0\",\"repository\":\"tailrocks/velnor-new\",\"commit\":\"{}\",\"targets\":[{targets}]}}",
+        "{{\"schema\":1,\"version\":\"{GENERATOR_VERSION}\",\"repository\":\"tailrocks/velnor-new\",\"commit\":\"{}\",\"targets\":[{targets}]}}",
         "a".repeat(40)
     )
 }
