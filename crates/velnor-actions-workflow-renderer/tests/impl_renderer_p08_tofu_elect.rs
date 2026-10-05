@@ -249,9 +249,16 @@ fn provider_writer_election_rejects_a_valid_save_on_a_losing_owner() -> Result<(
         ),
         ("tofu-b".to_owned(), losing),
     ]);
+    let original_steps: BTreeMap<String, Vec<Step>> = jobs
+        .iter()
+        .map(|(id, job)| (id.clone(), job.steps.clone()))
+        .collect();
     assert!(
         elect_tofu_provider_savers(&mut jobs).is_err(),
         "only the elected owner can carry the save"
     );
+    for (id, steps) in original_steps {
+        assert_eq!(jobs[&id].steps, steps, "rejected election mutated {id}");
+    }
     Ok(())
 }

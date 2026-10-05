@@ -19,9 +19,6 @@ use crate::{
 
 pub use crate::render_constants::*;
 
-#[path = "validator_tools.rs"]
-mod validator_tools;
-
 #[path = "render_action_pins.rs"]
 mod action_pins_impl;
 pub use action_pins_impl::action_pins;
@@ -75,8 +72,6 @@ pub struct ValidatorCommand {
     pub name: String,
     /// Fixed argument vector.
     pub argv: Vec<String>,
-    /// Explicit pinned-tool installation argv executed before `argv`.
-    pub prepare_argv: Vec<String>,
 }
 
 /// Fixed candidate-job vectors (Velnor policy only).
@@ -110,10 +105,6 @@ impl RenderContext {
             }
             if command.name.trim().is_empty() {
                 return Err(RenderError::BadCommand("empty_validator_name".to_owned()));
-            }
-            validator_tools::validate_validator_tool_closure(command)?;
-            if !command.prepare_argv.is_empty() {
-                commands::validate_command_argv(&command.prepare_argv)?;
             }
             commands::validate_command_argv(&command.argv)?;
         }

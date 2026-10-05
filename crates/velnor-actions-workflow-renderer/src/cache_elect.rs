@@ -60,13 +60,27 @@ pub fn elect_tofu_provider_savers(jobs: &mut BTreeMap<String, Job>) -> Result<()
         velnor_actions_contract::workflow::step_identity::validate_step_sequence(&job.steps, id)
             .map_err(RenderError::Contract)?;
         if let Some((key, path)) = provider_restore_entry(job) {
-            if path_for.get(&key).is_some_and(|existing| existing != &path) {
+            if let Some(existing) = path_for.get(&key)
+                && existing != &path
+            {
                 return Err(RenderError::InvalidWorkflow(format!(
                     "tofu_cache_key_path_mismatch:{id}"
                 )));
             }
             path_for.entry(key.clone()).or_insert(path);
             by_key.entry(key).or_default().push(id.clone());
+        }
+    }
+    for owners in by_key.values() {
+        let Some(winner) = owners.iter().min() else {
+            continue;
+        };
+        for owner in owners {
+            if owner != winner && jobs.get(owner).is_some_and(has_provider_save) {
+                return Err(RenderError::InvalidWorkflow(format!(
+                    "tofu_provider_save_not_elected:{owner}"
+                )));
+            }
         }
     }
     for (key, owners) in &by_key {
@@ -76,17 +90,8 @@ pub fn elect_tofu_provider_savers(jobs: &mut BTreeMap<String, Job>) -> Result<()
         let Some(path) = path_for.get(key) else {
             continue;
         };
-        for owner in owners {
-            let Some(job) = jobs.get_mut(owner) else {
-                continue;
-            };
-            if owner == winner {
-                append_provider_save(job, key, path)?;
-            } else if has_provider_save(job) {
-                return Err(RenderError::InvalidWorkflow(format!(
-                    "tofu_provider_save_not_elected:{owner}"
-                )));
-            }
+        if let Some(job) = jobs.get_mut(winner) {
+            append_provider_save(job, key, path)?;
         }
     }
     Ok(())
@@ -127,7 +132,9 @@ fn provider_restore_entry(job: &Job) -> Option<(String, String)> {
 /// reads, so a push-seeded entry warms every later restore of the
 /// key. Jobs that already carry the save keep exactly one.
 fn append_provider_save(job: &mut Job, key: &str, path: &str) -> Result<(), RenderError> {
-    if provider_restore_entry(job)
+    let restore_entry = provider_restore_entry(job);
+    if restore_entry
+        .as_ref()
         .is_none_or(|(restore_key, restore_path)| restore_key != key || restore_path != path)
     {
         return Err(RenderError::InvalidWorkflow(

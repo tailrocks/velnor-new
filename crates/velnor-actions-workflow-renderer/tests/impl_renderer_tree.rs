@@ -201,7 +201,6 @@ fn validator_commands() -> Vec<ValidatorCommand> {
         validator: *validator,
         name: (*name).to_owned(),
         argv: vec!["deny".to_owned()],
-        prepare_argv: Vec::new(),
     })
     .collect()
 }
@@ -224,8 +223,7 @@ fn velnor_policy_renders_validators_only() -> Result<(), RenderError> {
     }
     assert!(text.contains(ALINT_USES));
     assert!(text.contains("fail-on-warning"));
-    assert!(!text.contains("\n  qualification:\n"));
-    assert!(!text.contains("name: Qualification\n"));
+    assert!(!text.contains("workflow_dispatch:"));
     assert!(!text.contains("toolchain"));
     assert!(!text.contains(CANDIDATE_JOB_ID));
     let mut dup_ctx = fixture_ctx();

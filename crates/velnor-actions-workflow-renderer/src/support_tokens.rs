@@ -34,17 +34,18 @@ pub(crate) fn check_token_hygiene(jobs: &BTreeMap<String, Job>) -> Result<(), Re
     Ok(())
 }
 
-/// Roles allowed ambient auth for exact install, cache population, or
-/// isolated Cargo Deny setup. Presentation names carry no permission.
-fn is_ambient_auth_step(step: &Step) -> bool {
+/// True when a typed step role carries ambient-auth permission.
+fn is_ambient_auth_role(role: Option<StepRole>) -> bool {
     matches!(
-        step.role,
+        role,
         Some(
             StepRole::PreparePinnedTools
                 | StepRole::PrepareRustComponents
-                | StepRole::MbxPreflight
                 | StepRole::CargoSourcesFetch
                 | StepRole::CargoDeny
+                | StepRole::CargoMachete
+                | StepRole::Actionlint
+                | StepRole::Zizmor
         )
     )
 }
@@ -65,7 +66,7 @@ fn check_step_tokens(id: &str, step: &Step) -> Result<(), RenderError> {
                     )));
                 }
             }
-            check_scrub_coverage(id, step, env)?;
+            check_scrub_coverage(id, &step.name, step.role, env)?;
         }
         StepKind::Action { with, env, .. } => {
             for value in with.values() {
@@ -85,18 +86,17 @@ fn check_step_tokens(id: &str, step: &Step) -> Result<(), RenderError> {
                 }
             }
         }
-        StepKind::Internal { operation, .. }
-            if operation == crate::steps::RESOLVE_QUALIFICATION_OPERATION
-                && (id != PLAN_JOB_ID
-                    || step.condition.as_deref()
-                        != Some("github.event_name == 'workflow_dispatch'")) =>
-        {
-            return Err(RenderError::InvalidWorkflow(format!(
-                "qualification_resolver_scope:{id}:{}",
-                step.name
-            )));
-        }
         StepKind::Internal { .. } => {}
+    }
+    if matches!(&step.kind, StepKind::Internal { operation, .. }
+        if operation == crate::steps::RESOLVE_QUALIFICATION_OPERATION)
+        && (id != PLAN_JOB_ID
+            || step.condition.as_deref() != Some("github.event_name == 'workflow_dispatch'"))
+    {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "qualification_resolver_scope:{id}:{}",
+            step.name
+        )));
     }
     Ok(())
 }
@@ -152,11 +152,12 @@ fn check_env_tokens(id: &str, env: &BTreeMap<String, String>) -> Result<(), Rend
 /// or explicitly allowlisted, nothing else renders.
 fn check_scrub_coverage(
     id: &str,
-    step: &Step,
+    name: &str,
+    role: Option<StepRole>,
     env: &BTreeMap<String, String>,
 ) -> Result<(), RenderError> {
     use crate::toolchain_env::STEP_CREDENTIAL_DENYLIST;
-    if id == super::RELEASE_JOB_ID || is_ambient_auth_step(step) {
+    if id == super::RELEASE_JOB_ID || is_ambient_auth_role(role) {
         return Ok(());
     }
     let scoped = is_scoped_gh_token(id, env);
@@ -167,8 +168,7 @@ fn check_scrub_coverage(
         Ok(())
     } else {
         Err(RenderError::InvalidWorkflow(format!(
-            "missing_scrub:{id}:{}",
-            step.name
+            "missing_scrub:{id}:{name}"
         )))
     }
 }

@@ -277,22 +277,15 @@ fn lint_job_installs_exact_actionlint_tools_before_exec() -> Result<(), Box<dyn 
 {
     let job = lint_job("ubuntu-26.04", &ToolCatalog::pinned())?;
     let names: Vec<&str> = job.steps.iter().map(|step| step.name.as_str()).collect();
-    assert_eq!(
-        names,
-        ["Checkout", PREPARE_PINNED_TOOLS_STEP, "Run actionlint"]
-    );
+    assert_eq!(names, ["Checkout", "Run actionlint"]);
     let StepKind::Shell { run, .. } = &job.steps[1].kind else {
-        return Err("pinned preparation must be a shell step".into());
+        return Err("actionlint must execute through pinned Mise".into());
     };
-    let install_at = run.iter().position(|argument| argument == "install");
-    let installed = install_at.map(|at| run[at + 1..].to_vec());
-    assert_eq!(
-        installed,
-        Some(vec![
-            "actionlint@1.7.12".to_owned(),
-            "shellcheck@0.11.0".to_owned()
-        ])
-    );
+    assert!(run.iter().any(|argument| argument == "exec"));
+    assert!(run.iter().any(|argument| argument == "actionlint@1.7.12"));
+    assert!(run.iter().any(|argument| argument == "shellcheck@0.11.0"));
+    assert!(!run.iter().any(|argument| argument == "install"));
+    assert_eq!(job.steps[1].role, Some(StepRole::Actionlint));
     Ok(())
 }
 

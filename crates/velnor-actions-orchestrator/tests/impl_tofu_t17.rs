@@ -178,9 +178,10 @@ fn mixed_repo_plan_carries_union_with_pure_tofu_group() -> TestResult {
         env.contains_key("RUSTUP_TOOLCHAIN"),
         "mixed plan keeps the triple"
     );
-    assert!(
+    assert_eq!(
         names(plan).contains(&"Prepare Rust components"),
-        "mixed plan keeps components"
+        names(plan).contains(&"Format"),
+        "mixed plan provisions components only for its selected Format step"
     );
     let mut saw_rust = false;
     let mut saw_tofu = false;

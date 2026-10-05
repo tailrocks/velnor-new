@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::workflow::permissions::PermissionLevel;
-use velnor_actions_contract::{Permissions, StepRole, WorkflowPolicy};
+use velnor_actions_contract::{Permissions, WorkflowPolicy};
 use velnor_actions_workflow_renderer::{
     RenderError, ambient_shell_step, checkout_step, merge_step, plan_step, render_workflow_ir,
     shell_step,
@@ -271,14 +271,19 @@ fn scrub_coverage_rejects_bare_and_partial_shell_env() -> Result<(), RenderError
 
 #[test]
 fn scrub_coverage_allows_ambient_auth_steps_and_release() -> Result<(), RenderError> {
-    // Ambient constructor (no scrub overlay): only the typed owner role
-    // grants its narrow network-auth exception; labels are presentation.
+    use velnor_actions_contract::StepRole;
+    use velnor_actions_workflow_renderer::steps::{DENY_STEP_NAME, MACHETE_STEP_NAME};
+    // Ambient constructor (no scrub overlay): the typed role is the
+    // authority, independent of the presentation name.
     for (name, role) in [
-        ("Renamed pinned tools", StepRole::PreparePinnedTools),
-        ("Renamed Rust setup", StepRole::PrepareRustComponents),
-        ("Renamed MBX setup", StepRole::MbxPreflight),
-        ("Renamed source fetch", StepRole::CargoSourcesFetch),
-        ("Renamed cargo-deny", StepRole::CargoDeny),
+        ("Pinned tools", StepRole::PreparePinnedTools),
+        ("Rust components", StepRole::PrepareRustComponents),
+        ("Cargo source fetch", StepRole::CargoSourcesFetch),
+        ("Nested source fetch", StepRole::CargoSourcesFetch),
+        (DENY_STEP_NAME, StepRole::CargoDeny),
+        (MACHETE_STEP_NAME, StepRole::CargoMachete),
+        ("Run zizmor", StepRole::Zizmor),
+        ("Run actionlint", StepRole::Actionlint),
     ] {
         let mut ambient = ambient_shell_step(name, vec!["true".to_owned()], BTreeMap::new())?;
         ambient.role = Some(role);
@@ -295,6 +300,31 @@ fn scrub_coverage_allows_ambient_auth_steps_and_release() -> Result<(), RenderEr
             &fixture_ctx(),
         )?;
     }
+    let mislabeled = ambient_shell_step(
+        "Prepare pinned tools",
+        vec!["true".to_owned()],
+        BTreeMap::new(),
+    )?;
+    let denied = job(
+        "plan",
+        "Plan",
+        Vec::new(),
+        vec![checkout_step(&checkout_pin())?, mislabeled, plan_step()],
+    );
+    assert!(
+        format!(
+            "{:?}",
+            render_workflow_ir(
+                &fixture_ir(vec![denied]),
+                WorkflowPolicy::ConsumerV1,
+                None,
+                &fixture_ctx(),
+            )
+            .expect_err("display names carry no ambient-auth authority")
+        )
+        .contains("missing_scrub"),
+        "renamed or forged presentation names do not grant auth"
+    );
     let release = job(
         "release",
         "Release",
@@ -311,24 +341,6 @@ fn scrub_coverage_allows_ambient_auth_steps_and_release() -> Result<(), RenderEr
         None,
         &fixture_ctx(),
     )?;
-    Ok(())
-}
-
-#[test]
-fn validator_execs_cannot_keep_ambient_credentials() -> Result<(), RenderError> {
-    for name in ["Run cargo-machete", "Run zizmor", "Run actionlint"] {
-        let exposed = job(
-            "plan",
-            "Plan",
-            Vec::new(),
-            vec![
-                checkout_step(&checkout_pin())?,
-                ambient_shell_step(name, vec!["true".to_owned()], BTreeMap::new())?,
-                plan_step(),
-            ],
-        );
-        render_fails_with(vec![exposed], "missing_scrub");
-    }
     Ok(())
 }
 
