@@ -117,6 +117,9 @@ where
     R: FnMut() -> Result<(), WireError>,
 {
     let mut exchange = execute(transport, request)?;
+    if exchange.status >= 500 {
+        return Err(SessionError::Uncertain);
+    }
     match classify_status(exchange.status, gate) {
         Ok(StatusClass::RefreshOnce) => refresh_once(transport, request, gate, refresh),
         Ok(class) => Ok(taken(class, &mut exchange)),
@@ -147,6 +150,9 @@ where
     T: Transport + ?Sized,
 {
     let mut exchange = execute(transport, request)?;
+    if exchange.status >= 500 {
+        return Err(SessionError::Uncertain);
+    }
     match classify_status(exchange.status, gate) {
         Ok(StatusClass::RefreshOnce) => Err(SessionError::Wire(WireError::RefreshExhausted)),
         Ok(class) => Ok(taken(class, &mut exchange)),

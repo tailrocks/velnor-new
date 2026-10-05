@@ -107,6 +107,10 @@ fn partial_acquire_outside_ids_and_noop() -> Result<(), &'static str> {
         effect_certainty(TransportFail::Http(403)),
         Certainty::Definite
     );
+    assert_eq!(
+        effect_certainty(TransportFail::Http(500)),
+        Certainty::Uncertain
+    );
     Ok(())
 }
 
