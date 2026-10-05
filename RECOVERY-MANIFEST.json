@@ -1,0 +1,80 @@
+{
+  "commit_metadata": {
+    "author": "Alexey Zhokhov <alexey@zhokhov.com>",
+    "committer": "Alexey Zhokhov <alexey@zhokhov.com>",
+    "ordered_trailers": [
+      "Co-authored-by: Codex <codex@openai.com>",
+      "Signed-off-by: Alexey Zhokhov <alexey@zhokhov.com>"
+    ]
+  },
+  "format": "unmapped-project-rust-blob-envelope-v1",
+  "items": [
+    {
+      "content_classification": "Rust generation and rollback source/test logic",
+      "generated_envelope_path": "recovered-unmapped-rust-blobs/9f0168b05f041dc81e4c62a92db595a6733d76ea.rs",
+      "git_type": "blob",
+      "original_mode": "unrecoverable",
+      "original_path": "unrecoverable: no tree in captured object graph names this blob",
+      "present_in_source_ids": [
+        "SRC-V5-SUBFAMILY-001",
+        "SRC-V5-SUBFAMILY-002",
+        "SRC-V5-SUBFAMILY-003",
+        "SRC-V5-SUBFAMILY-004",
+        "SRC-V5-SUBFAMILY-005",
+        "SRC-V5-SUBFAMILY-006",
+        "SRC-V5-SUBFAMILY-007",
+        "SRC-V5-SUBFAMILY-008"
+      ],
+      "sha256": "cc7a1a0ae0f5cc9c98e2ae1a0de4ac2dc40481667d0fb03481b79fefc50df8bc",
+      "size_bytes": 15479,
+      "source_git_blob_oid": "9f0168b05f041dc81e4c62a92db595a6733d76ea"
+    },
+    {
+      "content_classification": "Rust module registry and workflow orchestration declarations",
+      "generated_envelope_path": "recovered-unmapped-rust-blobs/2c047d6476ee9e565a7c5b75690a9d0f495fbd75.rs",
+      "git_type": "blob",
+      "original_mode": "unrecoverable",
+      "original_path": "unrecoverable: no tree in captured object graph names this blob",
+      "present_in_source_ids": [
+        "SRC-V5-SUBFAMILY-001",
+        "SRC-V5-SUBFAMILY-002",
+        "SRC-V5-SUBFAMILY-003",
+        "SRC-V5-SUBFAMILY-004",
+        "SRC-V5-SUBFAMILY-005",
+        "SRC-V5-SUBFAMILY-006",
+        "SRC-V5-SUBFAMILY-007",
+        "SRC-V5-SUBFAMILY-008"
+      ],
+      "sha256": "22bd90d0d167d73f341dcfc67914b756ade7fbc16af8815b50eabdf7ee3423b3",
+      "size_bytes": 4410,
+      "source_git_blob_oid": "2c047d6476ee9e565a7c5b75690a9d0f495fbd75"
+    },
+    {
+      "content_classification": "Rust CLI and foundation qualification tests",
+      "generated_envelope_path": "recovered-unmapped-rust-blobs/28cc29fc2a1f070047630c452bcd0270c65fa1d4.rs",
+      "git_type": "blob",
+      "original_mode": "unrecoverable",
+      "original_path": "unrecoverable: no tree in captured object graph names this blob",
+      "present_in_source_ids": [
+        "SRC-V5-SUBFAMILY-001",
+        "SRC-V5-SUBFAMILY-002",
+        "SRC-V5-SUBFAMILY-003",
+        "SRC-V5-SUBFAMILY-004",
+        "SRC-V5-SUBFAMILY-005",
+        "SRC-V5-SUBFAMILY-006",
+        "SRC-V5-SUBFAMILY-007",
+        "SRC-V5-SUBFAMILY-008"
+      ],
+      "sha256": "9d7048808217fd37deda3db01b54c844cb1b54cdb235bd7f0b97c2e541a48ef7",
+      "size_bytes": 3839,
+      "source_git_blob_oid": "28cc29fc2a1f070047630c452bcd0270c65fa1d4"
+    }
+  ],
+  "mapping_notice": "Each generated path is a deterministic envelope path derived from the full immutable Git blob OID. It is not a reconstruction or assertion of the original source path. Exact original bytes are retained.",
+  "publication_screen": "Author scan of the exact three blob payloads with Gitleaks 8.30.1 and 100% redaction: no findings. The two absolute-path string literals in 28cc29\u2026 are generic test fixtures and do not include this host account or temporary root.",
+  "purpose": "Preserve three project Rust source blobs found dangling in the captured source object stores, without claiming their unknown original paths or modes.",
+  "run_id": "20261005T212315Z-31c8af98",
+  "source_partition": "SRC-V5-SUBFAMILY-001 through SRC-V5-SUBFAMILY-008",
+  "source_tip_context": "The three blob OIDs were present in each of the eight independently inventoried source object stores; their original path and mode could not be recovered from any reachable or unreachable tree examined.",
+  "status": "unpublished; requires independent Sol publication review and exact remote-only restoration before source deletion"
+}
