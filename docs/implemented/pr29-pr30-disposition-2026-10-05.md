@@ -16,7 +16,7 @@ to later branch movement.
 | PR | Remote state at snapshot | Unique behavior | Disposition |
 | --- | --- | --- | --- |
 | [#29](https://github.com/tailrocks/velnor-new/pull/29) | Open, ready for review; head `4ad1e34a1e20589386ddefdc25eaceb067341f0b`, base `47815c83b9eeadbaf84b741918fffa7ea550da89`, 99 changed paths; a fresh GitHub API check on 2026-10-05 reports merge state `DIRTY`. [Run `37183113924`](https://github.com/tailrocks/velnor-new/actions/runs/37183113924) passes Plan, Required, all Rust/static checks, and DCO; Publish baseline is skipped. No exact-head protected MBX writer/fresh-reader dispatch is recorded. | Moves hosted MBX object-cache save/restore and post lifecycle to the action with per-job cache-key separation; keeps the Scale Set single-bundle path; adds LCS factoring for shared hosted/Scale Set job steps. | Keep open pending normal current-main sync, exact-source/action-pin reconciliation, and actual cache qualification. Green generator CI is not a protected writer/consumer round trip. |
-| [#30](https://github.com/tailrocks/velnor-new/pull/30) | Open, ready for review; head `fe0064cbb82d861653439faaf4a088186571dec6`, base `96b08aa236a6b5afcbd6c768bfdc83e6fa7b7fe8`, 46 changed paths; a fresh GitHub API check on 2026-10-05 reports merge state `DIRTY`. Current-head [run `37227552789`](https://github.com/tailrocks/velnor-new/actions/runs/37227552789) fails Plan, Alint, and Required; Rust jobs are skipped. Actionlint, Cargo Deny, Cargo Machete, Zizmor, and DCO pass; Publish baseline is skipped. | Keeps MBX at `1.21.1` while selecting action `v1.7.1`/`d082` and separates job keys. Hosted Linux sets `MBX_GC_AUTO=0` so the action owns its post-export object lifecycle; explicit `mbx gc` before bundle export is confined to the Scale Set route. It retains that single-bundle route and adds an action-store cleanup workaround plus the separate hosted Cargo-source-pruning algorithm described below. | Do not merge this head. Plan reports that generated `.github/workflows/ci.yml` differs from the checked-in file; Alint reports Rust source over the §5 400-line limit, and Required then lacks its Plan artifact. The earlier green [run `37202815647`](https://github.com/tailrocks/velnor-new/actions/runs/37202815647) was for old SHA `0d8912dc`, not this head. Keep the Cargo-prune algorithm as unimplemented design evidence for a future adopted non-V1 runtime owner. |
+| [#30](https://github.com/tailrocks/velnor-new/pull/30) | Open, ready for review; head `fe0064cbb82d861653439faaf4a088186571dec6`, base `96b08aa236a6b5afcbd6c768bfdc83e6fa7b7fe8`, 46 changed paths; a fresh GitHub API check on 2026-10-05 reports merge state `DIRTY`. Current-head [run `37227552789`](https://github.com/tailrocks/velnor-new/actions/runs/37227552789) fails Plan, Alint, and Required; Rust jobs are skipped. Actionlint, Cargo Deny, Cargo Machete, Zizmor, and DCO pass; Publish baseline is skipped. | Keeps MBX at `1.21.1` while selecting action `v1.7.1`/`d082` and separates job keys. Hosted Linux sets `MBX_GC_AUTO=0` so the action owns its post-export object lifecycle; explicit `mbx gc` before bundle export is confined to the Scale Set route. It retains that single-bundle route and adds the separate hosted Cargo-source-pruning algorithm described below. An earlier action-store cleanup workaround and its rendered-command regression were introduced by [commit `b8de2fb`](https://github.com/tailrocks/velnor-new/commit/b8de2fb2b875bd1c67ec7b44b1153e2401566efb) and removed by [commit `422fcd4`](https://github.com/tailrocks/velnor-new/commit/422fcd405325d4a0e60b53e8984bde5dac0ec0e8); neither is behavior of this final head. | Do not merge this head. Plan reports that generated `.github/workflows/ci.yml` differs from the checked-in file; Alint reports Rust source over the §5 400-line limit, and Required then lacks its Plan artifact. The earlier green [run `37202815647`](https://github.com/tailrocks/velnor-new/actions/runs/37202815647) was for old SHA `0d8912dc`, not this head. Keep the Cargo-prune algorithm as unimplemented design evidence for a future adopted non-V1 runtime owner. |
 
 The PR29 base and PR30 base reported by GitHub are older than the comparison
 `main` SHA above. Their status checks therefore describe their recorded source
@@ -37,16 +37,16 @@ v1.6 pending source, lifecycle, disk, and input qualification. Resolve this
 source/body/authority mismatch and bind any qualification to the exact source
 and action bytes before describing the candidate as qualified.
 
-PR30's action-store workaround and Cargo-source pruning are separate effects.
-The PR body describes making real read-only directories in the isolated
-action-owned `store/out-dirs` removable before the action's post step; it
-explicitly notes the same-UID concurrent-rename limitation and an upstream
-action defect. Its rendered-command regression creates 101 nested read-only
-directories under a 64-file-descriptor limit and checks that symlink targets,
-the sibling bundle, files, and `MBX_CACHE_DIR` remain untouched. The
-[Cargo-source pruning script](https://github.com/tailrocks/velnor-new/blob/fe0064cbb82d861653439faaf4a088186571dec6/scripts/prune_hosted_cargo_sources.py)
-instead removes Cargo registry and Git source trees after task and cache-save
-work. The PR30 [cache contract at its exact head](https://github.com/tailrocks/velnor-new/blob/fe0064cbb82d861653439faaf4a088186571dec6/docs/proposed/cache-contract.md#L141)
+PR30's action-store cleanup workaround and Cargo-source pruning are separate
+historical effects. Commit [`b8de2fb`](https://github.com/tailrocks/velnor-new/commit/b8de2fb2b875bd1c67ec7b44b1153e2401566efb) introduced the workaround for making
+real read-only directories in isolated action-owned `store/out-dirs` removable
+before the action's post step; its regression created 101 nested read-only directories
+under a 64-file-descriptor limit and checked that symlink targets, the sibling bundle,
+files, and `MBX_CACHE_DIR` remained untouched. Commit [`422fcd4`](https://github.com/tailrocks/velnor-new/commit/422fcd405325d4a0e60b53e8984bde5dac0ec0e8) removed both the workaround and
+its regression and changed hosted configuration to `MBX_SHARE_OUT_DIR=0`. The final PR30 head
+does not contain that cleanup behavior or test. Its separate
+[Cargo-source pruning script](https://github.com/tailrocks/velnor-new/blob/fe0064cbb82d861653439faaf4a088186571dec6/scripts/prune_hosted_cargo_sources.py) removes Cargo registry and Git source trees
+after task and cache-save work. The PR30 [cache contract at its exact head](https://github.com/tailrocks/velnor-new/blob/fe0064cbb82d861653439faaf4a088186571dec6/docs/proposed/cache-contract.md#L141)
 sets hosted `MBX_GC_AUTO=0` and leaves hosted object lifecycle to the pinned
 action's post export. The `mbx gc` command before external-bundle export is
 Scale Set-only. Neither source change establishes a protected cache round trip
@@ -57,12 +57,12 @@ or an ENOSPC fix.
 The exact PR30 tree contains the cleanup script and the
 [focused regression suite](https://github.com/tailrocks/velnor-new/blob/fe0064cbb82d861653439faaf4a088186571dec6/scripts/test_prune_hosted_cargo_sources.py).
 Its generated-workflow hook is
-`crates/velnor-actions-workflow-renderer/src/mbx_bundle.rs`, guarded to run only
-after success on a protected default-branch push on a GitHub-hosted Linux
-runner. It targets exactly `$RUNNER_TEMP/velnor/cargo`; current `main` has no
-such script or renderer module. The current source-cache owner in
-`crates/velnor-actions-mise/src/cache_sources.rs` constructs source restore/save
-paths but does not delete them.
+`crates/velnor-actions-workflow-renderer/src/mbx_bundle.rs`; it runs only after
+success on a protected default-branch push on GitHub-hosted Linux and targets
+`$RUNNER_TEMP/velnor/cargo`. Current `main` has no pruning script or cleanup
+hook; generated jobs still set `CARGO_HOME` to that path, as the [Mise ToolHomes constructor and env](https://github.com/tailrocks/velnor-new/blob/ccd4642ec382c7f67ec0ea7247f42de840e4cf2e/crates/velnor-actions-mise/src/steps.rs#L34-L44) and the [crate-job tool-step constructor](https://github.com/tailrocks/velnor-new/blob/ccd4642ec382c7f67ec0ea7247f42de840e4cf2e/crates/velnor-actions-orchestrator/src/matrix_tools.rs#L117-L137) and [obligation-step environment](https://github.com/tailrocks/velnor-new/blob/ccd4642ec382c7f67ec0ea7247f42de840e4cf2e/crates/velnor-actions-orchestrator/src/matrix_step.rs#L130-L139)
+and [orchestrator source-cache owner](https://github.com/tailrocks/velnor-new/blob/ccd4642ec382c7f67ec0ea7247f42de840e4cf2e/crates/velnor-actions-orchestrator/src/source_cache.rs) show; the latter builds
+source restore/save paths but does not delete the live trees.
 
 The algorithm's safety properties are worth preserving for a future, explicitly
 adopted runtime owner:
@@ -98,15 +98,15 @@ both trees prevents known mount/symlink hazards from being entered, but deletion
 is not transactional if a later operation fails. The algorithm is Linux-only.
 A future owner must retain the descriptor-relative/no-follow/mount-aware
 properties and prove a safe implementation under the repository's `unsafe`
-ban; a path-based recursive delete is not an equivalent port. The old helper
-hard-codes `$RUNNER_TEMP/velnor/cargo`; the current
-[cache contract](../proposed/cache-contract.md) sets
-`CARGO_HOME=$VELNOR_CACHE_ROOT/cargo` with
-`VELNOR_CACHE_ROOT=$RUNNER_TEMP/velnor/cache`. A future owner must bind to the
-actual job's current Cargo home, not carry the old path forward. The old
-recursive inventory also lacks explicit depth, entry-count, and total-work
-bounds; a future owner must set and test finite limits before retaining or
-porting the algorithm.
+ban; a path-based recursive delete is not an equivalent port. The old helper hard-codes `$RUNNER_TEMP/velnor/cargo`; the proposed
+[cache contract](../proposed/cache-contract.md) defines `VELNOR_CACHE_ROOT=$RUNNER_TEMP/velnor/cache`
+and `CARGO_HOME=$VELNOR_CACHE_ROOT/cargo`, while current generated jobs still set
+`CARGO_HOME` to `$RUNNER_TEMP/velnor/cargo` ([Mise ToolHomes constructor and env](https://github.com/tailrocks/velnor-new/blob/ccd4642ec382c7f67ec0ea7247f42de840e4cf2e/crates/velnor-actions-mise/src/steps.rs#L34-L44),
+[orchestrator source-cache owner](https://github.com/tailrocks/velnor-new/blob/ccd4642ec382c7f67ec0ea7247f42de840e4cf2e/crates/velnor-actions-orchestrator/src/source_cache.rs)). A future owner must reconcile
+this proposed/effective path mismatch before adoption and bind pruning to
+actual `CARGO_HOME`. The old inventory also lacks explicit depth, entry-count,
+and total-work bounds; a future owner must set and test finite limits before
+retaining or porting the algorithm.
 
 ## Why V1 does not own this runtime deletion
 
@@ -145,8 +145,8 @@ The narrow PR65 behavior is represented in the pending canonical PR46 source
 at `48bd8406e541729d48ae04c9e48afc0206fd0024`, principally in
 [`schema2_generator_release_manifest_publish.rs`](https://github.com/tailrocks/velnor-new/blob/48bd8406e541729d48ae04c9e48afc0206fd0024/crates/velnor-actions-workflow-renderer/src/schema2_generator_release_manifest_publish.rs)
 and its publish tests/fake GitHub commands. The compared PR65 source SHA is
-`bc7f784a51233bd29676353392c9fc07c0ad01a7`; runner25's read-only PR65/PR46
-comparison is preserved in `/root/.local/share/velnor/pr65-replacement-evidence.md`.
+`bc7f784a51233bd29676353392c9fc07c0ad01a7`; a read-only comparison of PR65
+and PR46 is summarized here; its supporting review packet is retained off-repository.
 This is a selective replacement in the typed three-target release graph; it
 does not make PR65's separate legacy publisher authoritative, and it is not
 yet part of `main` at the snapshot SHA.
