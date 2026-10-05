@@ -64,6 +64,9 @@ platform = "linux/amd64"
 id = "maintenance-helpers"
 task = "test-maintenance-helpers"
 inputs = [
+  ".config/nextest.toml",
+  ".mise-version",
+  ".velnor/version-policy.toml",
   "Cargo.lock",
   "Cargo.toml",
   "crates/velnor-actions-freshness/Cargo.toml",
@@ -108,6 +111,11 @@ inputs = [
   "crates/velnor-archive-guard/src/owned_archive_guard/stream.rs",
   "crates/velnor-archive-guard/src/owned_archive_guard/tests.rs",
   "crates/velnor-archive-guard/tests/archive_guard_cli.rs",
+  "scripts/archive-guard-build-namespace.sh",
+  "scripts/archive-guard-inputs.txt",
+  "scripts/build-owned-archive-guard.sh",
+  "scripts/check-owned-archive-guard-sources.sh",
+  "scripts/owned_archive_preflight.py",
   "mise.toml",
 ]
 tools = ["cargo-nextest", "rust"]
