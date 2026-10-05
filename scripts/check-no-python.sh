@@ -97,7 +97,7 @@ scan_file() {
 }
 
 inspect() {
-  local root="$1" rel="$2" file="$root/$2" first="" parent="" part="" index=0
+  local root="$1" rel="$2" file="$root/$2" first="" parent="" part="" index=0 ignore_status=0
   local -a parts=()
   case "/$rel/" in *"/../"*|*"/./"*) report_error "$rel" "invalid candidate path"; return;; esac
   case "$rel" in ""|/*) report_error "$rel" "empty or absolute candidate path"; return;; esac
@@ -108,6 +108,14 @@ inspect() {
     part="${parts[index]}"; parent="${parent:+$parent/}$part"
     [[ -L "$root/$parent" ]] && { report_error "$rel" "candidate traverses a symlinked directory"; return; }
   done
+  case "$rel" in
+    target|crates/velnor-runner/target)
+      if [[ -L "$file" && -d "$file" ]]; then
+        if git -C "$root" check-ignore -q -- "$rel"; then return 0; else ignore_status=$?; fi
+        ((ignore_status==1)) || { report_error "$rel" "could not classify ignored Cargo output symlink"; return; }
+      fi
+      ;;
+  esac
   if is_automation_py "$rel"; then report_violation "$rel" "interpreter source is not allowed in the automation scripts namespace"; return; fi
   if [[ -L "$file" ]]; then
     if is_py_source "$rel" || [[ -x "$file" ]] || is_shell_name "$rel" || is_text_config "$rel" || is_process_source "$rel"; then report_violation "$rel" "active source symlink cannot be inspected safely"; fi
@@ -173,7 +181,7 @@ self_test() {
   mkdir -p "$tree/fixtures/alint-ignored" "$tree/fixtures/git-ignored" "$tree/fixtures/target" "$tree/crates/oci/tests" "$tree/scripts" "$tree/bin" "$tree/nested" "$tree/images/build" "$tree/.github/workflows" || return 1
   git init -q -- "$tree" || { printf 'check-no-python: could not initialize temporary Git fixture\n' >&2; return 1; }
   printf 'ignore:\n  - "fixtures/**"\n' > "$tree/.alint.yml"
-  printf 'fixtures/git-ignored/**\n' > "$tree/.gitignore"
+  printf 'fixtures/git-ignored/**\n/target\n' > "$tree/.gitignore"
   printf 'opaque inert fixture bytes\n' > "$tree/crates/oci/tests/static_input.py"
   git -C "$tree" add -- .alint.yml .gitignore crates/oci/tests/static_input.py || return 1
   expect_clean "passive source outside the automation namespace" "$tree" || return 1
@@ -198,6 +206,19 @@ self_test() {
   if ! listed="$(git -C "$tree" ls-files --others --ignored --exclude-standard --no-directory -- fixtures/git-ignored/launch.sh)" || [[ "$listed" != fixtures/git-ignored/launch.sh ]]; then printf 'check-no-python: Git enumeration missed ignored candidate\n' >&2; return 1; fi
   expect_rejected "Git-ignored fixture launcher" "$tree" "launch.sh" || return 1
   rm -f -- "$tree/fixtures/git-ignored/launch.sh"
+
+  mkdir -p "$SELF_TEST_ROOT/cargo-output" || return 1
+  printf 'opaque inert Cargo artifact\n' > "$SELF_TEST_ROOT/cargo-output/artifact.bin"
+  ln -s "$SELF_TEST_ROOT/cargo-output" "$tree/target" || return 1
+  if ! git -C "$tree" check-ignore -q -- target; then printf 'check-no-python: Cargo output fixture was not Git-ignored\n' >&2; return 1; fi
+  if ! listed="$(git -C "$tree" ls-files --others --ignored --exclude-standard --no-directory -- target)" || [[ "$listed" != target ]]; then printf 'check-no-python: Git enumeration missed ignored Cargo output symlink\n' >&2; return 1; fi
+  expect_clean "ignored Cargo output directory symlink" "$tree" || return 1
+  rm -f -- "$tree/target"
+  printf 'exec %s -c :\n' "$runner" > "$SELF_TEST_ROOT/launcher"
+  chmod +x "$SELF_TEST_ROOT/launcher" || return 1
+  ln -s "$SELF_TEST_ROOT/launcher" "$tree/target" || return 1
+  expect_rejected "ignored target launcher symlink" "$tree" "target" || return 1
+  rm -f -- "$tree/target"
 
   : > "$tree/scripts/future.py"
   expect_rejected "new source in automation namespace" "$tree" "future.py" || return 1
