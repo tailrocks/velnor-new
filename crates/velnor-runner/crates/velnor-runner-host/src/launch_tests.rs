@@ -2,7 +2,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use velnor_runner_github::{ParsedBatch, Poll};
+use velnor_runner_github::{InnerJob, InnerKind, ParsedBatch, Poll, Statistics};
 
 use crate::launch::{Idle, drive_offer, idle};
 use crate::launch_harness::{
@@ -18,7 +18,7 @@ fn statistics_advance_and_offers_stay() {
         statistics: None,
         jobs: Vec::new(),
     });
-    assert_eq!(idle(&stats), Idle::Blocked);
+    assert_eq!(idle(&stats), Idle::Ack);
     assert_eq!(idle(&available(&[3])), Idle::Launch);
     assert_eq!(idle(&Poll::Empty), Idle::Empty);
     assert_eq!(idle(&available(&[3, 4])), Idle::Blocked);
@@ -26,6 +26,89 @@ fn statistics_advance_and_offers_stay() {
     assert_eq!(idle(&assigned_wait(7, 0)), Idle::Ack);
     assert_eq!(idle(&assigned_wait(8, -1)), Idle::Blocked);
     assert_eq!(idle(&started_progress(11, 5)), Idle::Scale);
+
+    assert_eq!(idle(&no_stats(vec![job(InnerKind::Started)])), Idle::Ack);
+    assert_eq!(idle(&no_stats(vec![job(InnerKind::Completed)])), Idle::Ack);
+    assert_eq!(
+        idle(&no_stats(vec![
+            job(InnerKind::Started),
+            job(InnerKind::Completed),
+        ])),
+        Idle::Ack
+    );
+    assert_eq!(
+        idle(&no_stats(vec![job(InnerKind::Assigned)])),
+        Idle::Blocked
+    );
+    assert_eq!(
+        idle(&no_stats(vec![job(InnerKind::Available)])),
+        Idle::Blocked
+    );
+    assert_eq!(
+        idle(&no_stats(vec![
+            job(InnerKind::Started),
+            job(InnerKind::Available),
+        ])),
+        Idle::Blocked
+    );
+    let mut available_with_id = job(InnerKind::Available);
+    available_with_id.request_id = Some(9);
+    assert_eq!(
+        idle(&no_stats(vec![job(InnerKind::Started), available_with_id])),
+        Idle::Launch
+    );
+    assert_eq!(
+        idle(&no_stats(vec![job(InnerKind::Unsupported(
+            "FutureKind".to_owned(),
+        ))])),
+        Idle::Blocked
+    );
+    assert_eq!(
+        idle(&batch(
+            Some(Statistics {
+                total_available_jobs: 0,
+                total_acquired_jobs: 0,
+                total_assigned_jobs: -1,
+                total_running_jobs: 0,
+                total_registered_runners: 0,
+                total_busy_runners: 0,
+                total_idle_runners: 0,
+            }),
+            vec![job(InnerKind::Started)],
+        )),
+        Idle::Blocked
+    );
+    let synthetic = ParsedBatch {
+        message_id: -1,
+        statistics: None,
+        jobs: Vec::new(),
+    };
+    assert_eq!(idle(&Poll::Batch(synthetic)), Idle::Blocked);
+}
+
+fn no_stats(jobs: Vec<InnerJob>) -> Poll {
+    batch(None, jobs)
+}
+
+fn batch(statistics: Option<Statistics>, jobs: Vec<InnerJob>) -> Poll {
+    Poll::Batch(ParsedBatch {
+        message_id: 77,
+        statistics,
+        jobs,
+    })
+}
+
+fn job(kind: InnerKind) -> InnerJob {
+    InnerJob {
+        kind,
+        request_id: None,
+        job_id: None,
+        labels: Vec::new(),
+        runner_id: None,
+        runner_name: None,
+        result: None,
+        fields: Vec::new(),
+    }
 }
 
 #[tokio::test]
