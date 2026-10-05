@@ -50,7 +50,8 @@ pub(crate) trait PairEngine {
 
 impl PairEngine for Docker {
     async fn prepare_volumes(&self, volume: &str) -> Result<(), HostError> {
-        create_named_volumes(self, &runner_plan(volume)?).await
+        create_named_volumes(self, &runner_plan(volume)?).await?;
+        crate::work_owner::own_work_volume(self, &format!("{volume}-work")).await
     }
 
     async fn create(&self, spec: &CreateProjection) -> Result<String, HostError> {

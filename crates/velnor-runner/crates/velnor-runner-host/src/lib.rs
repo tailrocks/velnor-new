@@ -23,6 +23,7 @@ mod readiness;
 mod reconcile;
 mod scale_set;
 mod stage;
+mod work_owner;
 mod worker;
 
 pub use assign::{Offer, offer};
