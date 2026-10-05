@@ -4,7 +4,10 @@ use flate2::Compression;
 use flate2::write::GzEncoder;
 use sha2::{Digest, Sha256};
 use std::io::Cursor;
+use std::path::PathBuf;
 use tar::{Builder, Header};
+
+use crate::action_archive_seed::{ActionArchiveIdentity, ActionArchiveLease, ActionArchiveStore};
 
 #[tokio::test]
 async fn missing_archive_lease_keeps_completed_worker_occupied() -> Result<(), String> {
@@ -49,99 +52,95 @@ async fn missing_archive_lease_keeps_completed_worker_occupied() -> Result<(), S
 }
 
 #[tokio::test]
-async fn restart_finishes_archive_retirement_after_worker_cleanup_proof() -> Result<(), String> {
-    let (scratch, journal) = open("completion-lease-retirement-restart").await?;
-    let LaunchReservation::New(id) = journal
-        .reserve_assignment(7, 90, 190, 8)
-        .await
-        .map_err(|error| error.to_string())?
-    else {
-        return Err("expected a new seeded launch".to_owned());
-    };
-    let identity = journal
-        .launch_identity(id)
-        .await
-        .map_err(|error| error.to_string())?;
-    let archive_root = journal
-        .path()
-        .parent()
-        .ok_or_else(|| "journal has no parent".to_owned())?
-        .join("action-archives");
-    let store = crate::action_archive_seed::ActionArchiveStore::open(&archive_root)
-        .map_err(|error| error.to_string())?;
-    let bytes = archive_bytes()?;
-    let archive = crate::action_archive_seed::ActionArchiveIdentity {
-        repository_id: 101,
-        name_with_owner: "ChainArgos/test-action".to_owned(),
-        commit_sha: "0123456789abcdef0123456789abcdef01234567".to_owned(),
-        sha256: Sha256::digest(&bytes).into(),
-        size: u64::try_from(bytes.len()).map_err(|error| error.to_string())?,
-    };
-    store
-        .publish(&archive, Cursor::new(&bytes))
-        .map_err(|error| error.to_string())?;
-    let lease = store
-        .lease(
-            identity.launch_id(),
-            202,
-            std::slice::from_ref(&archive),
-            None,
-        )
-        .map_err(|error| error.to_string())?;
-    journal
-        .bind_seed_generation(id, lease.generation_id())
-        .await
-        .map_err(|error| error.to_string())?;
-    if !journal
-        .claim_acquire(id)
-        .await
-        .map_err(|error| error.to_string())?
-    {
-        return Err("expected the acquire claim".to_owned());
-    }
-    journal
-        .resolve_acquire(id, true)
-        .await
-        .map_err(|error| error.to_string())?;
-    if !journal
-        .claim_jit(id)
-        .await
-        .map_err(|error| error.to_string())?
-    {
-        return Err("expected the JIT claim".to_owned());
-    }
+async fn seeded_worker_cleanup_retires_existing_archive_lease() -> Result<(), String> {
+    let (_scratch, journal) = open("completion-seeded-lease-cleanup").await?;
+    let (id, identity, runner_id, dind_id) = launch(&journal, 7, 89).await?;
+    let (_archive_root, store, lease) = seed_archive_lease(&journal, id, &identity).await?;
     let runner_name = format!("v{}", identity.launch_id());
-    journal
-        .bind_github_runner(id, "100")
-        .await
-        .map_err(|error| error.to_string())?;
-    journal
-        .bind_pair(id, &format!("{:064x}", 90), &format!("{:064x}", 91))
-        .await
-        .map_err(|error| error.to_string())?;
-    journal
-        .finish(id, crate::Outcome::Done)
-        .await
-        .map_err(|error| error.to_string())?;
-    journal
-        .record_runner_completed(7, 90, 100, &runner_name)
-        .await
-        .map_err(|error| error.to_string())?;
+    let engine = CompletionEngine::with_stopped_pair(&identity, &runner_id, &dind_id)?;
+    let removed_volumes = engine.removed_volumes.clone();
+    let api = BlockingRunnerApi::released(&runner_name, 99);
 
-    // Simulate a crash after exact GitHub and Docker cleanup, then after archive retirement.
+    completion::record_completion_events(&journal, 7, &completion_poll(89, 99, &runner_name))
+        .await
+        .map_err(|error| error.to_string())?;
+    let tasks = completion::schedule_completed_isolated(
+        api.clone(),
+        7,
+        "admin-token",
+        journal.clone(),
+        engine,
+    )
+    .await
+    .map_err(|error| error.to_string())?;
+    assert_eq!(tasks.len(), 1);
+    for task in tasks {
+        task.await.map_err(|error| error.to_string())?;
+    }
+
+    let calls = api.calls()?;
+    assert_eq!(calls.len(), 3);
+    assert_eq!(calls[1].0, "DELETE");
+    assert!(removed_volumes.load(Ordering::Acquire));
+    assert!(
+        journal
+            .intent(id)
+            .await
+            .map_err(|error| error.to_string())?
+            .cleanup_proven
+    );
+    assert_eq!(journal.occupied_launches().await, Ok(0));
+    assert!(
+        store
+            .open_existing_lease(identity.launch_id(), lease.generation_id())
+            .is_err()
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn restart_retires_archive_lease_after_durable_worker_cleanup_proof() -> Result<(), String> {
+    let (scratch, journal) = open("completion-lease-retirement-restart").await?;
+    let (id, identity, _runner_id, _dind_id) = launch(&journal, 7, 90).await?;
+    let (archive_root, store, lease) = seed_archive_lease(&journal, id, &identity).await?;
+    let runner_name = format!("v{}", identity.launch_id());
+    completion::record_completion_events(&journal, 7, &completion_poll(90, 100, &runner_name))
+        .await
+        .map_err(|error| error.to_string())?;
     journal
         .mark_completion_worker_cleanup_proven(id)
         .await
         .map_err(|error| error.to_string())?;
-    store
-        .release_after_confirmed_cleanup(lease.launch_id(), lease.generation_id())
-        .map_err(|error| error.to_string())?;
+    assert!(
+        journal
+            .completion_worker_cleanup_proven(id)
+            .await
+            .map_err(|error| error.to_string())?
+    );
+    assert!(
+        store
+            .open_existing_lease(identity.launch_id(), lease.generation_id())
+            .is_ok()
+    );
     drop(store);
     drop(journal);
 
     let journal = crate::Journal::open(&scratch.file())
         .await
         .map_err(|error| error.to_string())?;
+    assert!(
+        journal
+            .completion_worker_cleanup_proven(id)
+            .await
+            .map_err(|error| error.to_string())?
+    );
+    let store =
+        ActionArchiveStore::open_existing(&archive_root).map_err(|error| error.to_string())?;
+    assert!(
+        store
+            .open_existing_lease(identity.launch_id(), lease.generation_id())
+            .is_ok()
+    );
     let api = BlockingRunnerApi::released(&runner_name, 100);
     let tasks = completion::schedule_completed_isolated(
         api.clone(),
@@ -168,7 +167,55 @@ async fn restart_finishes_archive_retirement_after_worker_cleanup_proof() -> Res
             .cleanup_proven
     );
     assert_eq!(journal.occupied_launches().await, Ok(0));
+    assert!(
+        store
+            .open_existing_lease(identity.launch_id(), lease.generation_id())
+            .is_err()
+    );
     Ok(())
+}
+
+async fn seed_archive_lease(
+    journal: &crate::journal::Journal,
+    intent_id: i64,
+    identity: &crate::journal::LaunchIdentity,
+) -> Result<(PathBuf, ActionArchiveStore, ActionArchiveLease), String> {
+    let archive_root = journal
+        .path()
+        .parent()
+        .ok_or_else(|| "journal has no parent".to_owned())?
+        .join("action-archives");
+    let publisher = ActionArchiveStore::open(&archive_root).map_err(|error| error.to_string())?;
+    let bytes = archive_bytes()?;
+    let archive = ActionArchiveIdentity {
+        repository_id: 101,
+        name_with_owner: "ChainArgos/test-action".to_owned(),
+        commit_sha: "0123456789abcdef0123456789abcdef01234567".to_owned(),
+        sha256: Sha256::digest(&bytes).into(),
+        size: u64::try_from(bytes.len()).map_err(|error| error.to_string())?,
+    };
+    publisher
+        .publish(&archive, Cursor::new(&bytes))
+        .map_err(|error| error.to_string())?;
+    let published_lease = publisher
+        .lease(
+            identity.launch_id(),
+            202,
+            std::slice::from_ref(&archive),
+            None,
+        )
+        .map_err(|error| error.to_string())?;
+    journal
+        .bind_seed_generation(intent_id, published_lease.generation_id())
+        .await
+        .map_err(|error| error.to_string())?;
+    drop(publisher);
+    let store =
+        ActionArchiveStore::open_existing(&archive_root).map_err(|error| error.to_string())?;
+    let lease = store
+        .open_existing_lease(identity.launch_id(), published_lease.generation_id())
+        .map_err(|error| error.to_string())?;
+    Ok((archive_root, store, lease))
 }
 
 fn archive_bytes() -> Result<Vec<u8>, String> {
