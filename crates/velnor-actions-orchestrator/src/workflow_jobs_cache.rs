@@ -11,8 +11,7 @@ use crate::OrchestratorError;
 /// Plan-job cache steps: restore before fetch, save after (writer only).
 ///
 /// Lockless emits nothing. MBX repos restore/save the shared `actions/cache`
-/// snapshot; Cargo-only repos emit one `rust-cache` writer step (its post
-/// action saves; no separate save step).
+/// snapshot; Cargo-only repos emit no source-cache steps.
 pub(crate) struct PlanCache {
     /// Restore steps (before fetch).
     pub(crate) restore: Vec<Step>,
@@ -52,13 +51,5 @@ pub(crate) fn cache_steps_for_plan(
             save: vec![save],
         });
     }
-    let shared = format!(
-        "{}-{target}-{rust}",
-        crate::source_cache::RUST_CACHE_SHARED_PREFIX
-    );
-    let writer = crate::source_cache::rust_cache_step(&shared, true)?;
-    Ok(PlanCache {
-        restore: vec![writer],
-        save: Vec::new(),
-    })
+    Ok(PlanCache { restore: Vec::new(), save: Vec::new() })
 }

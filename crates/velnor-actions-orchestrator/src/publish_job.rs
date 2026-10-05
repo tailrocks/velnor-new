@@ -2,13 +2,14 @@
 //!
 //! Split from `workflow_jobs` so that module keeps the 400-line gate.
 //! The job needs the final gate (so it runs only when Required
-//! passed), carries a push-plus-protected-ref gate, downloads the
-//! plan artifact, stages `baseline.json` through the publish op, and
-//! uploads it under the derived artifact name. Publication lives
+//! passed), carries the shared protected-default writer gate, downloads
+//! the plan artifact, stages `baseline.json` through the publish op,
+//! and uploads it under the derived artifact name. Publication lives
 //! outside merge consumption: the merge never publishes, and this job
 //! never judges evidence.
 
 use velnor_actions_contract::{Job, JobTimeout, Step};
+use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_workflow_renderer::render::FINAL_JOB_ID;
 use velnor_actions_workflow_renderer::steps::{
     PUBLISH_OPERATION, publish_step, write_request_step,
@@ -23,10 +24,11 @@ pub(crate) const PUBLISH_DISPLAY_NAME: &str = "Publish baseline";
 ///
 /// The job runs only when the final gate passed (`needs` without an
 /// `always()` condition) and only for protected-branch pushes (the
-/// generated `if:` pins the event plus the generation-time branch).
+/// generated `if:` requires a protected default-branch push).
 /// The publish op re-verifies every gate at runtime, so a hand-edited
-/// workflow still fails closed. No tool install: the op stages bytes
-/// from the downloaded plan with no external commands.
+/// workflow still fails closed. It installs pinned `gh` only for the
+/// current repository branch API check; the token reaches that internal
+/// step only. The op stages bytes from the downloaded plan.
 ///
 /// # Errors
 ///
@@ -38,6 +40,11 @@ pub(crate) fn baseline_publish_job(
 ) -> Result<Job, OrchestratorError> {
     let mut steps = Vec::new();
     steps.extend(acquire);
+    steps.push(crate::workflow_jobs::prepare_pinned_tools_step(
+        &ToolCatalog::pinned(),
+        vec![PinnedTool::Gh],
+        false,
+    )?);
     steps.push(crate::matrix_step::download_plan_step()?);
     steps.push(request_step(PUBLISH_OPERATION)?);
     steps.push(publish_step());
@@ -60,7 +67,7 @@ pub(crate) fn baseline_publish_job(
     })
 }
 
-/// Push-plus-protected-ref gate over the generation-time branch.
+/// Shared protected-default writer predicate.
 ///
 /// # Errors
 ///
@@ -71,9 +78,7 @@ fn publish_gate_condition(branch: &str) -> Result<String, OrchestratorError> {
             problem: format!("bad_publish_branch:{branch}"),
         });
     }
-    Ok(format!(
-        "github.event_name == 'push' && github.ref == 'refs/heads/{branch}'"
-    ))
+    Ok(velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION.to_owned())
 }
 
 /// Typed write-request step for the publish target.

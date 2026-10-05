@@ -1,4 +1,4 @@
-//! Event trust scopes: canonical `Trust` per `WorkflowEvent`.
+//! Cache writer intent and conservative event classification.
 use super::plan::WorkflowEvent;
 use serde::{Deserialize, Serialize};
 
@@ -12,22 +12,50 @@ pub enum Trust {
     Pr,
 }
 
-/// Canonical trust scope for one triggering event.
+/// Immutable run facts from the GitHub event payload and workflow identity.
 ///
-/// Only branch pushes run protected-branch content; pull requests,
-/// forks, local runs, and merge-group runs all execute unreviewed or
-/// speculative content under PR scope. Merge-group runs in particular
-/// test speculative merges of unreviewed PRs, so `Trusted` there would
-/// let PR content pollute trusted caches (consistent with baseline
-/// publish staying push-only). Single source for plan stamping and
-/// merge-time coherence.
+/// This request type deliberately contains no protection assertion and is not
+/// itself authority. Mise rechecks it against the runner event source and the
+/// current repository branch API before issuing an opaque writer context.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CacheWriterFacts {
+    /// Resolved event kind.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub event: Option<WorkflowEvent>,
+    /// Event payload ref, such as `refs/heads/main`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub git_ref: Option<String>,
+    /// Event payload's repository default branch.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_branch: Option<String>,
+    /// Current run repository (`owner/repo`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub repository: Option<String>,
+    /// Repository slug carried by the event payload.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub event_repository: Option<String>,
+}
+
+impl CacheWriterFacts {
+    /// True when no event or repository facts were captured.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.event.is_none()
+            && self.git_ref.is_none()
+            && self.default_branch.is_none()
+            && self.repository.is_none()
+            && self.event_repository.is_none()
+    }
+}
+
+/// Conservative trust scope when only the event type is available.
+///
+/// A push may target a feature branch, tag, or unprotected default branch.
+/// Code that needs the trusted namespace must obtain an opaque Mise-owned
+/// context after joining these payload facts to current GitHub API evidence.
 #[must_use]
 pub const fn trust_for_event(event: WorkflowEvent) -> Trust {
-    match event {
-        WorkflowEvent::Push => Trust::Trusted,
-        WorkflowEvent::PullRequest
-        | WorkflowEvent::Fork
-        | WorkflowEvent::Local
-        | WorkflowEvent::MergeGroup => Trust::Pr,
-    }
+    let _ = event;
+    Trust::Pr
 }

@@ -210,29 +210,15 @@ fn restore_classification_uses_precise_reasons() {
     check("malformed recorded digest", &obs, "input_digest_mismatch");
 }
 
-/// Every layer saves only producer-successful pushes.
-///
-/// Failed runs never save on any layer, and non-push events never save
-/// through this path; unknown trust scopes deny closed.
+/// Only a protected current-default push saves to the trusted namespace.
 #[test]
-fn saves_gate_on_push_and_pass_for_all_layers() {
-    for layer in ["trusted", "pr"] {
-        assert!(save_allowed(layer, "push", true), "{layer} push saves");
-        assert!(!save_allowed(layer, "push", false), "{layer} failed run");
-        for event in [
-            "pull_request",
-            "merge_group",
-            "fork",
-            "release",
-            "local",
-            "schedule",
-        ] {
-            assert!(!save_allowed(layer, event, true), "{layer} {event}");
-            assert!(!save_allowed(layer, event, false), "{layer} {event}");
-        }
-    }
-    assert!(!save_allowed("unknown", "push", true));
-    assert!(!save_allowed("", "push", true));
+fn public_default_writer_context_is_untrusted() {
+    let context = velnor_actions_mise::CacheWriterContext::default();
+    assert!(!save_allowed("trusted", &context, true));
+    assert!(!save_allowed("trusted", &context, false));
+    assert!(!save_allowed("pr", &context, true));
+    assert!(!save_allowed("unknown", &context, true));
+    assert!(!save_allowed("", &context, true));
 }
 
 /// Reuse requires every declared output present with a matching digest.
