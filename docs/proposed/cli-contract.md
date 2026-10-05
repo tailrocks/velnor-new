@@ -43,6 +43,11 @@ with `VELNOR_INTERNAL_OP` naming a versioned typed operation
 read schema-1 JSON from the existing request file at
 `VELNOR_REQUEST_FILE` and write the schema-1 JSON result to the sibling
 `<op>-response.json` derived from the `<op>-request.json` file name;
+`plan-v1` preserves a valid planner result there before checking whether
+its matrix and identity fit the selected workflow output policy. A rejected
+output policy fails before plan artifacts or `$GITHUB_OUTPUT` are written;
+an unknown output-mode marker is rejected before planning and produces no
+result file.
 `write-request-v1` requires that path to be absent plus the GitHub event
 environment and the runner-temp anchor (`RUNNER_TEMP`, which the request
 path must sit under), and materializes the request file; `fetch-reports-v1`
