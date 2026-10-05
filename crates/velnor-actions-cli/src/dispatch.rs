@@ -21,7 +21,8 @@ use velnor_actions_orchestrator::{
     QUALIFICATION_RESOLVER_OP, REPORT_OP, REQUEST_FILE_ENV, WRITE_REQUEST_OP, execute_check,
     merge_internal, merge_passed, plan_internal, plan_outputs_from_staged_admission,
     publish_final_report, publish_plan_files, resolve_qualification_admission, response_path_for,
-    retrieve_reports, write_preseed_manifest, write_request, write_task_report,
+    retrieve_reports, validate_plan_response, write_preseed_manifest, write_request,
+    write_task_report,
 };
 
 use crate::args::{Cli, Command};
@@ -215,6 +216,16 @@ fn run_plan_internal(path: &Path) -> ExitCode {
         Ok(response) => response,
         Err(error) => return fail_internal(&error.to_string()),
     };
+    if let Err(error) = validate_plan_response(&response) {
+        return fail_internal(&error.to_string());
+    }
+    let sibling = match response_path_for(path) {
+        Ok(sibling) => sibling,
+        Err(error) => return fail_internal(&error.to_string()),
+    };
+    if let Err(error) = fs::write(&sibling, &response) {
+        return fail_internal(&format!("write response: {error}"));
+    }
     let Some(runner_temp) = env::var_os(RUNNER_TEMP_ENV).filter(|value| !value.is_empty()) else {
         return fail_internal("missing runner temp");
     };
@@ -223,13 +234,6 @@ fn run_plan_internal(path: &Path) -> ExitCode {
         Ok(outputs) => outputs,
         Err(error) => return fail_internal(&error.to_string()),
     };
-    let sibling = match response_path_for(path) {
-        Ok(sibling) => sibling,
-        Err(error) => return fail_internal(&error.to_string()),
-    };
-    if let Err(error) = fs::write(&sibling, &response) {
-        return fail_internal(&format!("write response: {error}"));
-    }
     let Some(output_path) = env::var_os(GITHUB_OUTPUT_ENV).filter(|value| !value.is_empty()) else {
         return fail_internal("missing github output");
     };

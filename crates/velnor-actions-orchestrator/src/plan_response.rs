@@ -28,3 +28,9 @@ impl PlanResponse {
         Ok(())
     }
 }
+
+/// Validate a serialized response before the CLI publishes its sibling file.
+/// # Errors
+pub fn validate_plan_response(response_json: &str) -> Result<(), OrchestratorError> {
+    PlanResponse::parse(response_json).map(|_| ())
+}
