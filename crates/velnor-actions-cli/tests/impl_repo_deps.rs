@@ -67,8 +67,9 @@ fn external_deps_allowlisted_used_and_narrow() -> Result<(), Box<dyn Error>> {
         "anyhow",
         "tracing",
         "tempfile",
-        // Reviewed OS shim for the P09 atomic directory exchange; already
-        // in the lockfile via tempfile, zero new crates.
+        // Reviewed OS shim already in the lockfile via tempfile, zero new
+        // crates. `fs` supports the P09 atomic directory exchange; `process`
+        // supports PR20 deadline-bound Unix process-group termination.
         "rustix",
         // Reviewed hash impl for the pre-seed manifest writer (SHA-256 of
         // the fresh helper) and generator SHA-256 identity (replaces
@@ -97,9 +98,10 @@ fn external_deps_allowlisted_used_and_narrow() -> Result<(), Box<dyn Error>> {
             if let Some(index) = line.find("features").filter(|_| !archive_decoder) {
                 let quoted: Vec<&str> = line[index..].split('"').collect();
                 for feature in quoted.into_iter().skip(1).step_by(2) {
-                    // Only `derive` globally, plus `fs` on rustix for the
-                    // P09 atomic directory exchange (no net/pty/terminal).
-                    let narrow = feature == "derive" || (key == "rustix" && feature == "fs");
+                    // Only `derive` globally, plus the narrowly used `fs`
+                    // and `process` rustix features (no net/pty/terminal).
+                    let narrow = feature == "derive"
+                        || (key == "rustix" && matches!(feature, "fs" | "process"));
                     assert!(narrow, "{dir}/{key} feature {feature}");
                 }
             }
