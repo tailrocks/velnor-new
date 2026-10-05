@@ -7,7 +7,7 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::workflow::step_identity::{
-    is_configured_checkout, is_tool_seed_step, TOOL_SEED_USES,
+    TOOL_SEED_USES, is_configured_checkout, is_tool_seed_step,
 };
 use velnor_actions_contract::{Job, Step, StepKind, StepRole};
 

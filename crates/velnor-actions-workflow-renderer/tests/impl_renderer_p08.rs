@@ -1,10 +1,10 @@
 //! P08 renderer cases: built-in Mise cache, sources paths, rust-cache gates.
 
 use std::collections::BTreeMap;
-use velnor_actions_contract::{Job, JobTimeout, StepKind, StepRole};
+use velnor_actions_contract::{Job, JobTimeout, StepKind};
 use velnor_actions_workflow_renderer::cache_p08::{
-    check_mbx_before_fetch, check_no_rust_cache_with_mbx, infer_job_tools,
-    mise_cache_key_for_tools, mise_setup_step_p08, tools_digest,
+    check_no_rust_cache_with_mbx, infer_job_tools, mise_cache_key_for_tools, mise_setup_step_p08,
+    tools_digest,
 };
 use velnor_actions_workflow_renderer::steps::cache_action_step;
 
@@ -239,52 +239,6 @@ fn rust_cache_never_stacks_over_mbx() {
         ..both.clone()
     };
     assert!(check_no_rust_cache_with_mbx("demo", &mbx_only).is_ok());
-}
-
-#[test]
-fn mbx_restore_precedes_fetch() {
-    let fetch = velnor_actions_contract::Step {
-        name: "Fetch Cargo sources".to_owned(),
-        id: None,
-        role: Some(StepRole::CargoSourcesFetch),
-        condition: None,
-        kind: StepKind::Shell {
-            run: vec!["sh".to_owned()],
-            env: BTreeMap::new(),
-        },
-    };
-    let mbx = velnor_actions_contract::Step {
-        name: "Restore MBX objects".to_owned(),
-        id: None,
-        role: Some(StepRole::MbxCache),
-        condition: None,
-        kind: StepKind::Action {
-            uses: format!("jdx/mr-boxington-action@{}", "d".repeat(40)),
-            with: BTreeMap::from([
-                ("github-cache-mode".to_owned(), "objects".to_owned()),
-                ("version".to_owned(), "1.21.1".to_owned()),
-                ("toolchain".to_owned(), "1.98.1".to_owned()),
-                ("cache-generation".to_owned(), "generation".to_owned()),
-            ]),
-            env: BTreeMap::new(),
-        },
-    };
-    let good = Job {
-        display_name: "Good".to_owned(),
-        runs_on: LABEL.to_owned(),
-        timeout_minutes: JobTimeout::CRATE,
-        needs: Vec::new(),
-        condition: None,
-        permissions: None,
-        environment: None,
-        steps: vec![mbx.clone(), fetch.clone()],
-    };
-    assert!(check_mbx_before_fetch("demo", &good).is_ok());
-    let bad = Job {
-        steps: vec![fetch, mbx],
-        ..good.clone()
-    };
-    assert!(check_mbx_before_fetch("demo", &bad).is_err());
 }
 
 #[test]

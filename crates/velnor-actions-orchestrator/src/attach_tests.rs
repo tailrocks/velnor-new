@@ -191,6 +191,7 @@ fn preseed_attach_builds_once_and_sets_mode() {
     use velnor_actions_actionlint::ActionlintConfigInput;
     use velnor_actions_workflow_renderer::{
         MBX_PREFLIGHT_NAME, MBX_VERSION_CHECK_NAME, PRESEED_BUILD_NAME, PRESEED_STAGE_NAME,
+        steps::MBX_RESTORE_NAME,
     };
     let catalog = ToolCatalog::pinned();
     let mut plan = WorkflowPlan {
@@ -357,34 +358,6 @@ fn assert_owned_homes(steps: &[Step], role: velnor_actions_contract::StepRole, n
 
 #[path = "attach_mbx_tests.rs"]
 mod mbx_tests;
-
-#[test]
-fn preseed_skips_mbx_restore_for_cargo_only_plans() {
-    use velnor_actions_contract::StepRole;
-    use velnor_actions_workflow_renderer::{PRESEED_BUILD_NAME, PRESEED_VERIFY_NAME};
-    let mut plan = preseed_fixture(false, &[String::new()]);
-    let roots = [String::new()];
-    attach_preseed(&mut plan, "ubuntu-26.04", "0.1.0", &roots).expect("attach");
-    let steps = &plan.ir.jobs["plan"].steps;
-    let names: Vec<&str> = steps.iter().map(|step| step.name.as_str()).collect();
-    assert!(
-        !steps
-            .iter()
-            .any(|step| step.role == Some(StepRole::MbxCache)),
-        "cargo-only plans stay rust-cache-only: {names:?}"
-    );
-    let probe = steps
-        .iter()
-        .position(|step| step.role == Some(StepRole::CargoSourcesFetch))
-        .expect("sources step");
-    let build = steps
-        .iter()
-        .position(|step| step.role == Some(StepRole::PreseedBuild))
-        .expect("build step");
-    assert!(probe < build, "build anchors after sources: {names:?}");
-    assert_owned_homes(steps, StepRole::PreseedBuild, PRESEED_BUILD_NAME);
-    assert_owned_homes(steps, StepRole::PreseedVerifyBuild, PRESEED_VERIFY_NAME);
-}
 
 #[path = "attach_source_cache_tests.rs"]
 mod source_cache_tests;

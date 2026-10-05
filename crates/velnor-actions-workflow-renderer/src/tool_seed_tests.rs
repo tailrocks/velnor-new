@@ -194,10 +194,9 @@ fn step_key_is_derived_from_pinned_job_tools_and_configured_checkout_payload() {
     .expect("cold setup");
     assert!(fake_job.steps.iter().all(|step| !is_tool_seed_action(step)));
 
-    let mut wrong_pin = crate::steps::checkout_step(
-        "actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-    )
-    .expect("pinned checkout shape");
+    let mut wrong_pin =
+        crate::steps::checkout_step("actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+            .expect("pinned checkout shape");
     wrong_pin.name = "Checkout".to_owned();
     let mut wrong_pin_job = job(vec![wrong_pin, mise_shell()]);
     crate::cache_p08::ensure_setup_p08(
@@ -209,10 +208,12 @@ fn step_key_is_derived_from_pinned_job_tools_and_configured_checkout_payload() {
         CHECKOUT,
     )
     .expect("mismatched checkout remains cold");
-    assert!(wrong_pin_job
-        .steps
-        .iter()
-        .all(|step| !is_tool_seed_action(step)));
+    assert!(
+        wrong_pin_job
+            .steps
+            .iter()
+            .all(|step| !is_tool_seed_action(step))
+    );
 }
 
 fn setup_config() -> crate::MiseSetup {

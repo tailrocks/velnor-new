@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::workflow::step_identity::{
-    StepRole, TOOL_SEED_USES, TOFU_PROVIDER_ADMISSION_USES,
+    StepRole, TOFU_PROVIDER_ADMISSION_USES, TOOL_SEED_USES,
 };
 use velnor_actions_contract::{Step, StepKind};
 

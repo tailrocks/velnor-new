@@ -10,9 +10,7 @@ use std::collections::BTreeMap;
 use velnor_actions_contract::{
     GeneratorLock, Step, StepRole, WorkflowIr, is_crate_job_id, target_for_runner_label,
 };
-use velnor_actions_mise::{
-    PinnedTool, ToolCatalog,
-};
+use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_workflow_renderer::render::{FINAL_JOB_ID, PLAN_JOB_ID, PUBLISH_JOB_ID};
 use velnor_actions_workflow_renderer::steps::STAGED_BINARY_PREFIX;
 use velnor_actions_workflow_renderer::{
@@ -292,11 +290,7 @@ fn preseed_anchor(steps: &[Step]) -> usize {
 fn is_plan_restore(step: &Step) -> bool {
     matches!(
         step.role,
-        Some(
-            StepRole::CargoSourcesRestore
-                | StepRole::CargoRegistryRestore
-                | StepRole::MbxCache
-        )
+        Some(StepRole::CargoSourcesRestore | StepRole::CargoRegistryRestore | StepRole::MbxCache)
     )
 }
 
