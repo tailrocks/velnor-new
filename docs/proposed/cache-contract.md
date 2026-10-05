@@ -1,7 +1,6 @@
 # Velnor V1 Cache and Report Contract
 
-Status: proposed; no implementation is claimed. Defines task identity, cache ownership/trust, reports, and
-final result aggregation.
+Status: proposed; defines task identity, cache ownership/trust, reports, and final status; not an implementation claim.
 
 ## 1. Task identity and canonical digests
 
@@ -95,7 +94,7 @@ Cargo sources, and a unique run/matrix closure digest for MBX. The complete key 
 bytes; the generator MUST fail if it is longer. Restore prefixes MAY omit `snapshot_id` only for the same
 compatibility ID. A commit SHA alone MUST NOT be a cache identity.
 
-## 2. V1 Rust cache paths, transport, and fallback
+## 2. V1 Rust cache paths, transport, fallback, and [host seeds](host-seed-contract.md)
 
 The Cargo/MBX paths below map generic cache rules for V1 Rust. Future adapters define their own paths and
 compatibility fields under the same invariants.

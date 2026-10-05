@@ -11,10 +11,9 @@ published while preparing this change.
 
 This release integration checkpoint does not constitute whole-tree source
 acceptance. The merged catalog keeps production MBX at 1.21.1 and retains the
-hold on the unqualified 1.22.0 promotion. This branch snapshot predates the
-merged PR73 seed-authority correction and still needs normal synchronization.
-No hosted cache or seed qualification is established by the release-source
-checks below.
+hold on the unqualified 1.22.0 promotion. The merged PR73 seed-authority
+correction is present in this source tree, but no hosted cache or seed
+qualification is established by the release-source checks below.
 
 ## Seed and first release (BOOT)
 
