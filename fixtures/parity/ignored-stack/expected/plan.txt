@@ -23,9 +23,7 @@ Workflow to generate
   Clippy memory groups: 0; barriers: 0
   Cache layers: Mise tools
   Actionlint: 1.7.12 pinned
-  Action pins: 8
-    - ./.github/actions/u26
-    - ./.github/actions/velnor-tool-seed
+  Action pins: 6
     - actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
     - actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
     - actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1

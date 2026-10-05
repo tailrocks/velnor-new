@@ -150,11 +150,17 @@ fn validate_kind(kind: &StepKind, job: &str) -> Result<(), ContractError> {
                 ));
             }
         }
-        StepKind::Internal { operation, .. } => {
+        StepKind::Internal { operation, env } => {
             if operation.trim().is_empty() {
                 return Err(ContractError::identity(
                     "step.operation",
                     format!("empty_operation:{job}"),
+                ));
+            }
+            if env.keys().any(|key| key.trim().is_empty()) {
+                return Err(ContractError::identity(
+                    "step.env",
+                    format!("bad_internal_env:{job}"),
                 ));
             }
         }

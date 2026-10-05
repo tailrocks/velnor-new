@@ -10,9 +10,6 @@ use velnor_actions_contract::config::{
     CheckExecutor, CheckPlatform, EPHEMERAL_CHECK_ADMISSION_CONDITION,
 };
 use velnor_actions_contract::workflow::lanes::{HOSTED_SUFFIX, SCALE_SUFFIX};
-use velnor_actions_contract::workflow::lanes::{
-    NAMED_CHECK_JOB_ID_ENV, NAMED_CHECK_LANE_VARIANT_ENV,
-};
 use velnor_actions_contract::{Job, Step, StepKind, StepRole};
 
 use crate::composite::composite_yaml;
@@ -288,8 +285,10 @@ fn split_shared_steps(
         crate::lane_share_sections::peel_postlude(hosted_tail);
     let (local_common, local_cache_postlude) =
         crate::lane_share_sections::peel_postlude(local_tail);
-    let (hosted_common, hosted_lane_specific) = peel_lane_specific(&hosted_common);
-    let (local_common, local_lane_specific) = peel_lane_specific(&local_common);
+    let (hosted_common, hosted_lane_specific) =
+        crate::lane_share_sections::peel_lane_specific(&hosted_common);
+    let (local_common, local_lane_specific) =
+        crate::lane_share_sections::peel_lane_specific(&local_common);
     let mut hosted_postlude = hosted_lane_specific;
     hosted_postlude.extend(hosted_cache_postlude);
     let mut local_postlude = local_lane_specific;
@@ -322,35 +321,15 @@ fn same_or_admitted_check_condition(hosted: &Job, local: &Job) -> bool {
         )
 }
 
-fn peel_lane_specific(steps: &[Step]) -> (Vec<Step>, Vec<Step>) {
-    let mut common = Vec::new();
-    let mut lane_specific = Vec::new();
-    for step in steps {
-        if is_lane_specific(step) {
-            lane_specific.push(step.clone());
-        } else {
-            common.push(step.clone());
-        }
-    }
-    (common, lane_specific)
-}
-
-fn is_lane_specific(step: &Step) -> bool {
-    match &step.kind {
-        StepKind::Action { uses, .. } => uses == crate::steps::UPLOAD_ARTIFACT_USES,
-        StepKind::Shell { env, .. } | StepKind::Internal { env, .. } => {
-            env.contains_key(NAMED_CHECK_JOB_ID_ENV)
-                || env.contains_key(NAMED_CHECK_LANE_VARIANT_ENV)
-        }
-    }
-}
-
 fn peel_checkout<'a>(steps: &'a [Step], checkout_uses: &str) -> Option<(&'a Step, &'a [Step])> {
     let (checkout, remaining) = steps.split_first()?;
-    let is_expected_checkout =
-        velnor_actions_contract::workflow::step_identity::is_configured_checkout(
-            checkout,
-            checkout_uses,
+    let is_expected_checkout = checkout.role == Some(StepRole::Checkout)
+        && checkout.condition.is_none()
+        && matches!(
+            &checkout.kind,
+            StepKind::Action { uses, with, .. }
+                if uses == checkout_uses
+                    && with.get("persist-credentials").map(String::as_str) == Some("false")
         );
     if !is_expected_checkout || remaining.iter().any(is_checkout_step) {
         return None;
