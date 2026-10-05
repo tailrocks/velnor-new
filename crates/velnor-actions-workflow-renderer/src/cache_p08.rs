@@ -146,6 +146,14 @@ pub(crate) fn setup_step(setup: &MiseSetup) -> Result<Step, RenderError> {
     setup::mise_setup_step(setup)
 }
 
+/// Compare semantic step fields while leaving the display-only name mutable.
+pub(crate) fn same_step_semantics(left: &Step, right: &Step) -> bool {
+    left.id == right.id
+        && left.role == right.role
+        && left.condition == right.condition
+        && left.kind == right.kind
+}
+
 /// True only for the canonical typed V2 cache-key expression.
 pub(crate) fn is_v2_cache_key_expression(value: &str) -> bool {
     value == TOOLS_CACHE_KEY_EXPRESSION

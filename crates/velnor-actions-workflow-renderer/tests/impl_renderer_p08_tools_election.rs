@@ -136,6 +136,31 @@ fn tools_cache_election_rejects_mutated_winner_key_path_and_gate() -> Result<(),
 }
 
 #[test]
+fn tools_cache_election_ignores_winner_save_presentation_name() -> Result<(), RenderError> {
+    let mut jobs = BTreeMap::from([("plan".to_owned(), keyed_job()?)]);
+    let mut save = canonical_save()?;
+    save.name = "Store tools".to_owned();
+    jobs.get_mut("plan")
+        .ok_or_else(|| RenderError::InvalidWorkflow("test_winner_missing".to_owned()))?
+        .steps
+        .push(save);
+
+    elect_cache_writers(&mut jobs)?;
+    let saves = jobs
+        .get("plan")
+        .ok_or_else(|| RenderError::InvalidWorkflow("test_winner_missing".to_owned()))?
+        .steps
+        .iter()
+        .filter(|step| step.role == Some(StepRole::ToolsCacheSave))
+        .count();
+    assert_eq!(
+        saves, 1,
+        "a renamed canonical save remains the single writer"
+    );
+    Ok(())
+}
+
+#[test]
 fn tools_cache_election_rejects_orphan_and_duplicate_winner_saves() -> Result<(), RenderError> {
     let canonical = canonical_save()?;
     let orphan = Job {

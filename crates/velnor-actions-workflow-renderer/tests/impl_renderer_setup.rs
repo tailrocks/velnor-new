@@ -163,6 +163,28 @@ fn strict_keeps_single_wellformed_setup() -> Result<(), RenderError> {
 }
 
 #[test]
+fn strict_setup_role_ignores_presentation_name() -> Result<(), RenderError> {
+    let mut setup = mise_setup_step(&mise())?;
+    setup.name = "Mise installation".to_owned();
+    let lint = job(
+        "actionlint",
+        "Actionlint",
+        Vec::new(),
+        vec![
+            checkout_step(&checkout_pin())?,
+            setup,
+            scrubbed_shell_step(
+                "Run actionlint",
+                mise_argv("actionlint@1.7.12", "actionlint", &["-color"]),
+            )?,
+        ],
+    );
+    let text = strict(&fixture_ir(vec![lint]), &fixture_ctx())?;
+    assert!(text.contains("name: Mise installation"), "{text}");
+    Ok(())
+}
+
+#[test]
 fn strict_rejects_setup_misuse() -> Result<(), RenderError> {
     let lint_steps = || -> Result<Vec<Step>, RenderError> {
         Ok(vec![
