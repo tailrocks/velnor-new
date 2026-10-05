@@ -52,7 +52,7 @@ impl<R: Read> Capture<R> {
                     self.bytes.extend_from_slice(&buffer[..count]);
                 }
                 Err(error) if error.kind() == io::ErrorKind::WouldBlock => return Ok(()),
-                Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
+                Err(error) if error.kind() == io::ErrorKind::Interrupted => {}
                 Err(error) => {
                     self.reader = None;
                     return Err(format!("output read failed ({error})"));

@@ -14,7 +14,7 @@ fn bounded_capture_accepts_exact_output_and_rejects_one_extra_byte() {
     let mut oversized = Command::new("sh");
     oversized.args(["-c", "printf xy"]);
     let output = run_bounded(&mut oversized, 1, Duration::from_secs(1));
-    let error = output.err().expect("one byte beyond the limit must fail");
+    let error = output.expect_err("one byte beyond the limit must fail");
     assert!(error.contains("exceeds 1 bytes"), "{error}");
 }
 

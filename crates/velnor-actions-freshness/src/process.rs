@@ -140,15 +140,11 @@ mod unix {
                     }
                 }
             }
-            if stdout.is_closed() && stderr.is_closed() {
-                if let Some(status) = status.take() {
-                    if Instant::now() < work_deadline {
-                        return Ok(ProcessOutput {
-                            status,
-                            stdout: std::mem::take(&mut stdout.bytes),
-                            stderr: std::mem::take(&mut stderr.bytes),
-                        });
-                    }
+            if stdout.is_closed()
+                && stderr.is_closed()
+                && let Some(status) = status.take()
+            {
+                if Instant::now() >= work_deadline {
                     return Err(abort(
                         child,
                         group,
@@ -158,6 +154,11 @@ mod unix {
                         "process timed out before capture completed".to_owned(),
                     ));
                 }
+                return Ok(ProcessOutput {
+                    status,
+                    stdout: std::mem::take(&mut stdout.bytes),
+                    stderr: std::mem::take(&mut stderr.bytes),
+                });
             }
             if Instant::now() >= work_deadline {
                 return Err(abort(
@@ -211,7 +212,7 @@ mod unix {
                 }
             }
             if reaped && stdout.is_closed() && stderr.is_closed() {
-                return failures_to_result(failures);
+                return failures_to_result(&failures);
             }
             pause_until(deadline);
         }
@@ -225,7 +226,7 @@ mod unix {
         if !stdout.is_closed() || !stderr.is_closed() {
             failures.push("process output pipes remained open at the deadline".to_owned());
         }
-        failures_to_result(failures)
+        failures_to_result(&failures)
     }
 
     fn record_drain<R: Read>(capture: &mut Capture<R>, stream: &str, failures: &mut Vec<String>) {
@@ -297,7 +298,7 @@ mod unix {
         }
     }
 
-    fn failures_to_result(failures: Vec<String>) -> Result<(), String> {
+    fn failures_to_result(failures: &[String]) -> Result<(), String> {
         if failures.is_empty() {
             Ok(())
         } else {
@@ -306,7 +307,7 @@ mod unix {
     }
 
     fn combine_failure(cause: String, failures: Vec<String>) -> String {
-        match failures_to_result(failures) {
+        match failures_to_result(&failures) {
             Ok(()) => cause,
             Err(cleanup) => format!("{cause}; cleanup also failed: {cleanup}"),
         }

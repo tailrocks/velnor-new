@@ -43,7 +43,7 @@ pub(crate) fn parse_timestamp(text: &str) -> Option<i64> {
 
 fn parse_utc_offset(value: &str) -> Option<i64> {
     let bytes = value.as_bytes();
-    if !matches!(bytes.first(), Some(b'+') | Some(b'-')) {
+    if !matches!(bytes.first(), Some(b'+' | b'-')) {
         return None;
     }
     let (hours, minutes) = match value.len() {
