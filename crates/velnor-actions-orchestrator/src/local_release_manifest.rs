@@ -20,6 +20,11 @@ const MANIFEST_LABEL: &str = "local-release-manifest.json";
 const MAX_MANIFEST_BYTES: usize = 8 * 1024 * 1024;
 const MAX_MANIFEST_BYTES_U64: u64 = 8 * 1024 * 1024;
 const MAX_BINARY_BYTES: u64 = 512 * 1024 * 1024;
+/// Typed producer pair. Not the three-target consumer release inventory.
+const PRODUCER_TARGETS: [&str; 2] = [
+    GeneratorReleaseTarget::LinuxX86_64.triple(),
+    GeneratorReleaseTarget::MacosArm64.triple(),
+];
 
 /// Verify a release manifest against two local target binaries.
 ///
@@ -44,7 +49,7 @@ pub fn verify_local_generator_release_manifest(
     let manifest_text = read_manifest(manifest_path)?;
     let manifest =
         ReleaseManifest::parse_json_with_limit(&manifest_text, MANIFEST_LABEL, MAX_MANIFEST_BYTES)?;
-    manifest.validate(MANIFEST_LABEL)?;
+    manifest.validate_exact_targets(MANIFEST_LABEL, &PRODUCER_TARGETS)?;
     if manifest.commit != expected_source_commit {
         return Err(local_contract("release_manifest_source_mismatch"));
     }

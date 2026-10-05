@@ -150,7 +150,7 @@ impl ReleaseManifest {
         self.targets.iter().find(|record| record.target == target)
     }
 
-    /// Validate schema, version, repository, and every target record.
+    /// Validate schema, version, repository, and the consumer target inventory.
     ///
     /// The repository is pinned to the canonical identity and every
     /// artifact URL is bound to this exact version and target (X1); a
@@ -158,6 +158,21 @@ impl ReleaseManifest {
     /// Acquire step at attacker infrastructure.
     /// # Errors
     pub fn validate(&self, file: &str) -> Result<(), ContractError> {
+        self.validate_exact_targets(file, &crate::targets::SUPPORTED_TARGETS)
+    }
+
+    /// Validate schema, identity, and one exact target inventory.
+    ///
+    /// `required` is the complete allowed set. Every record must name one
+    /// of its entries, and every entry must appear once. Consumer manifests
+    /// pass [`crate::targets::SUPPORTED_TARGETS`]. Local producer checks pass
+    /// the typed two-target build set instead of that consumer inventory.
+    /// # Errors
+    pub fn validate_exact_targets(
+        &self,
+        file: &str,
+        required: &[&str],
+    ) -> Result<(), ContractError> {
         check_schema(self.schema)?;
         check_semver(&self.version, file, "version")?;
         if self.repository != crate::targets::EXPECTED_REPOSITORY {
@@ -174,7 +189,7 @@ impl ReleaseManifest {
         let mut seen = BTreeSet::new();
         for record in &self.targets {
             check_target(&record.target, file, "targets.target")?;
-            if !crate::targets::is_supported_target(&record.target) {
+            if !required.contains(&record.target.as_str()) {
                 return Err(ContractError::config(
                     file,
                     "targets",
@@ -197,7 +212,7 @@ impl ReleaseManifest {
                 ));
             }
         }
-        for target in crate::targets::SUPPORTED_TARGETS {
+        for target in required {
             if !seen.contains(target) {
                 return Err(ContractError::config(
                     file,

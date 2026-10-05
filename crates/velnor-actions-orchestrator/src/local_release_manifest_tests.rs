@@ -120,6 +120,16 @@ fn contract_rejects_invalid_manifest_identity_inventory_and_assets() -> Result<(
     document["targets"]
         .as_array_mut()
         .ok_or("targets is an array")?
+        .push(json!({
+            "target": "x86_64-apple-darwin",
+            "artifact": "https://github.com/tailrocks/velnor-new/releases/download/v1.2.3/velnor-actions-1.2.3-x86_64-apple-darwin",
+            "sha256": LINUX_SHA256
+        }));
+    cases.push(document);
+    let mut document = valid_document();
+    document["targets"]
+        .as_array_mut()
+        .ok_or("targets is an array")?
         .pop();
     cases.push(document);
     let mut document = valid_document();
