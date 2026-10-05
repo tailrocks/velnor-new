@@ -213,6 +213,7 @@ pub fn plan_outputs(
 
 impl PlanOutputs {
     /// Required named outputs written by the plan step, in stable order.
+    #[must_use]
     pub fn step_outputs(&self) -> Vec<(&'static str, &str)> {
         vec![
             ("matrix", &self.matrix),
@@ -223,6 +224,7 @@ impl PlanOutputs {
     }
 
     /// Output records promoted to job outputs by this workflow path.
+    #[must_use]
     pub fn promoted_job_outputs(&self, mode: PlanOutputMode) -> Vec<(&'static str, &str)> {
         match mode {
             PlanOutputMode::Static => {

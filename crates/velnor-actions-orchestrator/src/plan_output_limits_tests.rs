@@ -54,7 +54,7 @@ fn step_outputs_remain_complete_while_static_job_promotion_is_narrow() {
         matrix: "{\"include\":[]}".to_owned(),
         plan_id: "plan-r1-a1".to_owned(),
         run_key: "r1-a1".to_owned(),
-        covered_tasks: "".to_owned(),
+        covered_tasks: String::new(),
         job_outputs_utf16_bytes: 0,
     };
     let step_names: Vec<&str> = outputs
