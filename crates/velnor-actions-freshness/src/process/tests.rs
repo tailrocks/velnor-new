@@ -1,5 +1,5 @@
 use std::process::Command;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use super::run_bounded;
 
@@ -39,4 +39,55 @@ fn timeout_kills_a_running_process_without_waiting_for_its_natural_exit() {
     let elapsed = started.elapsed();
     assert!(result.is_err());
     assert!(elapsed < Duration::from_millis(350), "elapsed: {elapsed:?}");
+}
+
+#[test]
+fn timeout_reaps_direct_child() -> Result<(), Box<dyn std::error::Error>> {
+    let pid_file = temp_path("pid");
+    let mut command = Command::new("sh");
+    command
+        .args(["-c", "printf '%s' \"$$\" > \"$1\"; exec sleep 10", "sh"])
+        .arg(&pid_file);
+    let result = run_bounded(&mut command, 1_024, Duration::from_millis(200));
+    assert!(result.is_err());
+    let pid = std::fs::read_to_string(&pid_file)?;
+    assert!(
+        !process_alive(pid.trim())?,
+        "timed-out child {pid} still exists"
+    );
+    std::fs::remove_file(pid_file)?;
+    Ok(())
+}
+
+#[test]
+fn timeout_kills_descendants_holding_the_capture_pipe() {
+    let marker = temp_path("descendant");
+    let mut command = Command::new("sh");
+    command
+        .args(["-c", "(sleep 0.4; printf survived > \"$1\") & exit 0", "sh"])
+        .arg(marker.as_os_str());
+    let result = run_bounded(&mut command, 1_024, Duration::from_millis(200));
+    assert!(result.is_err());
+    std::thread::sleep(Duration::from_millis(500));
+    assert!(
+        !marker.exists(),
+        "descendant survived the process-group kill"
+    );
+}
+
+fn process_alive(pid: &str) -> Result<bool, std::io::Error> {
+    let status = Command::new("sh")
+        .args(["-c", "kill -0 \"$1\" >/dev/null 2>&1", "sh", pid])
+        .status()?;
+    Ok(status.success())
+}
+
+fn temp_path(label: &str) -> std::path::PathBuf {
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |duration| duration.as_nanos());
+    std::env::temp_dir().join(format!(
+        "velnor-bounded-{label}-{}-{nonce}",
+        std::process::id()
+    ))
 }

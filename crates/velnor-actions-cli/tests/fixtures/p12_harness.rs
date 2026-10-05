@@ -116,6 +116,7 @@ fn relative_root_is_resolved_before_the_script_changes_directory() -> Result<(),
         .arg(script)
         .arg("--root")
         .arg(relative_root)
+        .env("CDPATH", caller_dir)
         .current_dir(caller_dir)
         .output()?;
     let run = Run {

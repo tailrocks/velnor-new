@@ -242,7 +242,9 @@ mod unix {
             Ok(()) => Ok(()),
             Err(error) if error == Errno::SRCH => Ok(()),
             Err(group_error) => match child.kill() {
-                Ok(()) => Ok(()),
+                Ok(()) => Err(format!(
+                    "process group kill failed ({group_error}); direct child kill succeeded but descendant termination is unconfirmed"
+                )),
                 Err(child_error) => match child.try_wait() {
                     Ok(Some(_)) => Err(format!(
                         "process group kill failed ({group_error}); direct child already exited ({child_error})"
