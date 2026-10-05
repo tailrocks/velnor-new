@@ -190,7 +190,7 @@ mod unix {
         if let Err(error) = cleanup {
             failures.push(error);
         }
-        combine_failure(cause, failures)
+        combine_failure(cause, &failures)
     }
 
     fn drain_until_closed<R1: Read, R2: Read>(
@@ -275,7 +275,7 @@ mod unix {
         }
         while Instant::now() < deadline {
             match child.try_wait() {
-                Ok(Some(_)) => return combine_failure(cause, failures),
+                Ok(Some(_)) => return combine_failure(cause, &failures),
                 Ok(None) => pause_until(deadline),
                 Err(error) => {
                     failures.push(format!("process reaping failed ({error})"));
@@ -284,7 +284,7 @@ mod unix {
             }
         }
         failures.push("child was not reaped before the deadline".to_owned());
-        combine_failure(cause, failures)
+        combine_failure(cause, &failures)
     }
 
     fn cleanup_reserve(timeout: Duration) -> Duration {
@@ -306,8 +306,8 @@ mod unix {
         }
     }
 
-    fn combine_failure(cause: String, failures: Vec<String>) -> String {
-        match failures_to_result(&failures) {
+    fn combine_failure(cause: String, failures: &[String]) -> String {
+        match failures_to_result(failures) {
             Ok(()) => cause,
             Err(cleanup) => format!("{cause}; cleanup also failed: {cleanup}"),
         }
