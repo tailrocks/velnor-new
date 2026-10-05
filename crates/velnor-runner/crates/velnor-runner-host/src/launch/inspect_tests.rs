@@ -24,11 +24,7 @@ async fn non_not_found_inspect_error_blocks_admission_and_reconcile() -> Result<
         http(500, r#"{"message":"private runner-id detail"}"#),
     ])?;
 
-    let busy = within(
-        slot::busy_except(&journal, &stub.docker, 2, None),
-        "capacity probe",
-    )
-    .await?;
+    let busy = within(slot::busy(&journal, &stub.docker, 2), "capacity probe").await?;
     let reconcile = within(
         gate::reconcile_gate(&journal, &stub.docker),
         "reconcile probe",

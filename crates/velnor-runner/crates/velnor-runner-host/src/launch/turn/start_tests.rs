@@ -24,12 +24,12 @@ impl Transport for InitialSession {
     }
 }
 
-fn zero_assignment_session() -> Result<QueueSession, String> {
+pub(super) fn zero_assignment_session() -> Result<QueueSession, String> {
     create_session(&mut InitialSession, 1, "owner", "admin-token")
         .map_err(|error| error.to_string())
 }
 
-fn ready<'a>(session: &'a QueueSession, polled: &'a Poll) -> Ready<'a> {
+pub(super) fn ready<'a>(session: &'a QueueSession, polled: &'a Poll) -> Ready<'a> {
     Ready {
         set_id: 1,
         session,

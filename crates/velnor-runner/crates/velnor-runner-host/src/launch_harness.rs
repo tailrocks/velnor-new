@@ -227,10 +227,6 @@ pub(crate) struct JitProbe {
 }
 
 impl JitProbe {
-    pub(crate) fn ok() -> Self {
-        Self::new(Mode::Ok, false)
-    }
-
     pub(crate) fn conflict() -> Self {
         Self::new(Mode::Ok, true)
     }
