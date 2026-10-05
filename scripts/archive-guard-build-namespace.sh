@@ -2,12 +2,47 @@
 
 archive_guard_source_fingerprint() {
   local fingerprint
-  fingerprint="$(PYTHONDONTWRITEBYTECODE=1 python3 -c '
-import sys
+  fingerprint="$(python3 -I -B -c '
+import os
 from pathlib import Path
-sys.path.insert(0, str(Path(sys.argv[1]) / "scripts"))
-from owned_archive_preflight import _source_fingerprint
-print(_source_fingerprint(Path(sys.argv[1])))
+import stat
+import sys
+
+repository = Path(sys.argv[1])
+directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+file_flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK
+root_fd = os.open(repository, directory_flags)
+scripts_fd = os.open("scripts", directory_flags, dir_fd=root_fd)
+descriptor = os.open("owned_archive_preflight.py", file_flags, dir_fd=scripts_fd)
+try:
+    before = os.fstat(descriptor)
+    if (not stat.S_ISREG(before.st_mode) or before.st_nlink != 1
+            or before.st_uid != os.getuid() or before.st_mode & 0o022
+            or before.st_size > 16 * 1024 * 1024):
+        raise ValueError("archive preflight source has untrusted provenance")
+    with os.fdopen(descriptor, "rb", closefd=False) as stream:
+        source = stream.read(16 * 1024 * 1024 + 1)
+    after = os.fstat(descriptor)
+    named = os.stat("owned_archive_preflight.py", dir_fd=scripts_fd,
+                    follow_symlinks=False)
+    before_identity = (before.st_dev, before.st_ino, before.st_size,
+                       before.st_mtime_ns, before.st_ctime_ns, before.st_mode,
+                       before.st_nlink, before.st_uid)
+    after_identity = (after.st_dev, after.st_ino, after.st_size,
+                      after.st_mtime_ns, after.st_ctime_ns, after.st_mode,
+                      after.st_nlink, after.st_uid)
+    if (len(source) > 16 * 1024 * 1024 or before_identity != after_identity
+            or (before.st_dev, before.st_ino) != (named.st_dev, named.st_ino)):
+        raise ValueError("archive preflight source changed during verification")
+finally:
+    os.close(descriptor)
+    os.close(scripts_fd)
+    os.close(root_fd)
+
+namespace = {"__file__": str(repository / "scripts" / "owned_archive_preflight.py"),
+             "__name__": "owned_archive_preflight"}
+exec(compile(source, namespace["__file__"], "exec"), namespace)
+print(namespace["_source_fingerprint"](repository))
 ' "$repository")" || fail 'cannot compute admitted archive guard source fingerprint'
   [[ "$fingerprint" =~ ^[0-9a-f]{64}$ ]] \
     || fail 'archive guard source fingerprint is malformed'

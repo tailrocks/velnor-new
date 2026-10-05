@@ -22,7 +22,7 @@ fn shared_target_isolated_by_source_bytes_when_mtime_is_preserved() -> Result<()
     );
     assert!(
         String::from_utf8_lossy(&output.stdout)
-            .contains("archive guard two-checkout target regression passed")
+            .contains("archive guard target and bytecode regression passed")
     );
     Ok(())
 }

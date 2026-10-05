@@ -51,6 +51,38 @@ if os.stat(sys.argv[1]).st_mtime_ns != os.stat(sys.argv[2]).st_mtime_ns:
 print(first.st_mtime_ns)
 PY
 )"
+trap_fingerprint='ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'
+python3 - "$case_root/checkout-b/scripts/owned_archive_preflight.py" \
+  "$trap_fingerprint" <<'PY'
+import importlib.util
+import marshal
+import os
+from pathlib import Path
+import struct
+import sys
+
+source = Path(sys.argv[1])
+metadata = source.stat()
+cache = Path(importlib.util.cache_from_source(str(source)))
+cache.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+code = compile(
+    "def _source_fingerprint(repository):\n    return " + repr(sys.argv[2]) + "\n",
+    str(source), "exec")
+cache_bytes = (importlib.util.MAGIC_NUMBER + struct.pack("<I", 0)
+               + struct.pack("<II", metadata.st_mtime_ns // 1_000_000_000,
+                             metadata.st_size)
+               + marshal.dumps(code))
+cache.write_bytes(cache_bytes)
+os.chmod(cache, 0o600)
+PY
+imported_fingerprint="$(python3 -B -c '
+import sys
+sys.path.insert(0, sys.argv[1])
+from owned_archive_preflight import _source_fingerprint
+print(_source_fingerprint(None))
+' "$case_root/checkout-b/scripts")"
+[[ "$imported_fingerprint" == "$trap_fingerprint" ]] \
+  || { printf 'trap bytecode was not valid for the source fixture\n' >&2; exit 1; }
 
 cat >"$tool_bin/mise" <<'FAKE_MISE'
 #!/usr/bin/env bash
@@ -162,9 +194,14 @@ fingerprint_for() (
 )
 
 fingerprint_a="$(fingerprint_for "$case_root/checkout-a")"
-[[ "$fingerprint_a" == "$(fingerprint_for "$case_root/checkout-b")" ]] \
-  || { printf 'unchanged checkout copies have different fingerprints\n' >&2; exit 1; }
+fingerprint_b="$(fingerprint_for "$case_root/checkout-b")"
+[[ "$fingerprint_a" == "$fingerprint_b" && "$fingerprint_b" != "$trap_fingerprint" ]] \
+  || { printf 'identical source prehash disagrees or executed trap bytecode\n' >&2; exit 1; }
 run_builder "$case_root/checkout-a"
+run_builder "$case_root/checkout-b"
+guard_b="$case_root/checkout-b/.velnor/archive-guard/bin/velnor-archive-guard"
+[[ "$("$guard_b" --fingerprint)" == "$fingerprint_a" ]] \
+  || { printf 'builder prehash executed or trusted trap bytecode\n' >&2; exit 1; }
 original_times="$(python3 - "$source_b" <<'PY'
 import os
 import sys
@@ -189,7 +226,6 @@ fingerprint_b="$(fingerprint_for "$case_root/checkout-b")"
 run_builder "$case_root/checkout-b"
 
 guard_a="$case_root/checkout-a/.velnor/archive-guard/bin/velnor-archive-guard"
-guard_b="$case_root/checkout-b/.velnor/archive-guard/bin/velnor-archive-guard"
 [[ "$("$guard_a" --fingerprint)" == "$fingerprint_a" ]] \
   || { printf 'checkout A binary changed or mismatched\n' >&2; exit 1; }
 [[ "$("$guard_b" --fingerprint)" == "$fingerprint_b" ]] \
@@ -197,13 +233,22 @@ guard_b="$case_root/checkout-b/.velnor/archive-guard/bin/velnor-archive-guard"
 
 targets_file="$tool_bin/build-targets"
 target_a=''
-target_b=''
+target_same=''
+target_changed=''
+target_count=0
 while IFS= read -r target; do
-  if [[ -z "$target_a" ]]; then target_a="$target"; else target_b="$target"; fi
+  case "$target_count" in
+    0) target_a="$target" ;;
+    1) target_same="$target" ;;
+    2) target_changed="$target" ;;
+    *) printf 'unexpected fake Cargo build count\n' >&2; exit 1 ;;
+  esac
+  target_count=$((target_count + 1))
 done <"$targets_file"
-[[ -n "$target_a" && -n "$target_b" && "$target_a" != "$target_b" ]] \
+[[ "$target_count" == 3 && -n "$target_a" && "$target_a" == "$target_same" \
+  && -n "$target_changed" && "$target_a" != "$target_changed" ]] \
   || { printf 'Cargo target namespace was shared across changed source bytes\n' >&2; exit 1; }
 [[ "$target_a" == "$case_home/.cache/velnor/archive-guard/target/$fingerprint_a-"* \
-  && "$target_b" == "$case_home/.cache/velnor/archive-guard/target/$fingerprint_b-"* ]] \
+  && "$target_changed" == "$case_home/.cache/velnor/archive-guard/target/$fingerprint_b-"* ]] \
   || { printf 'Cargo target namespace is not keyed by the verified source fingerprint\n' >&2; exit 1; }
-printf 'archive guard two-checkout target regression passed\n'
+printf 'archive guard target and bytecode regression passed\n'
