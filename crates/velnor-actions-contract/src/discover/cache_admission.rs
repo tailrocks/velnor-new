@@ -4,6 +4,9 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+#[cfg(unix)]
+use std::os::unix::fs::MetadataExt;
+
 use super::index::IndexError;
 
 const RESERVED_CACHE_PATH: &str = ".velnor/cache";
@@ -26,7 +29,18 @@ pub fn is_reserved_cache_path_bytes(path: &[u8]) -> bool {
 /// Cache-root identity shared by listed and walked repository indexes.
 pub(crate) struct CacheAdmission {
     canonical_cache_root: Option<PathBuf>,
-    resolved_directories: BTreeMap<PathBuf, PathBuf>,
+    resolved_directories: BTreeMap<PathBuf, CachedDirectory>,
+}
+
+struct CachedDirectory {
+    identity: FileIdentity,
+    resolved: PathBuf,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct FileIdentity {
+    device: u64,
+    inode: u64,
 }
 
 impl CacheAdmission {
@@ -50,8 +64,8 @@ impl CacheAdmission {
 
     /// Whether an enumerated path resolves through any symlink into the cache.
     ///
-    /// Ordinary directories are memoized so Git-backed indexing does not
-    /// repeatedly inspect the same parent path for every listed file.
+    /// Cached directory resolutions are reused only while every path prefix
+    /// still has the same filesystem identity and no prefix is a symlink.
     pub(crate) fn listed_path_is_reserved(
         &mut self,
         repository_root: &Path,
@@ -68,33 +82,66 @@ impl CacheAdmission {
         let components: Vec<_> = Path::new(relative).components().collect();
         let mut current = repository_root.to_path_buf();
         let mut resolved = repository_root.to_path_buf();
+        let mut traversed_symlink = false;
         for (index, component) in components.iter().enumerate() {
             current.push(component.as_os_str());
             let final_component = index + 1 == components.len();
-            if let Some(cached) = self.resolved_directories.get(&current) {
-                resolved.clone_from(cached);
-                continue;
-            }
             let metadata = match fs::symlink_metadata(&current) {
                 Ok(metadata) => metadata,
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
                 Err(error) => return Err(IndexError::ReadFailed(error.to_string())),
             };
             if metadata.file_type().is_symlink() {
+                traversed_symlink = true;
                 resolved = current.canonicalize().map_err(|error| {
                     IndexError::SymlinkLoop(format!("{}: {error}", current.display()))
                 })?;
             } else {
-                resolved.push(component.as_os_str());
+                let identity = file_identity(&metadata);
+                let cached = if traversed_symlink {
+                    None
+                } else {
+                    identity.and_then(|identity| {
+                        self.resolved_directories
+                            .get(&current)
+                            .filter(|cached| cached.identity == identity)
+                    })
+                };
+                if let Some(cached) = cached {
+                    resolved.clone_from(&cached.resolved);
+                } else {
+                    resolved.push(component.as_os_str());
+                }
             }
             if self.target_is_reserved(&resolved) {
                 return Ok(true);
             }
-            if !final_component {
-                self.resolved_directories
-                    .insert(current.clone(), resolved.clone());
+            if !final_component && !traversed_symlink {
+                if let Some(identity) = file_identity(&metadata) {
+                    self.resolved_directories.insert(
+                        current.clone(),
+                        CachedDirectory {
+                            identity,
+                            resolved: resolved.clone(),
+                        },
+                    );
+                }
             }
         }
         Ok(false)
     }
+}
+
+#[cfg(unix)]
+fn file_identity(metadata: &fs::Metadata) -> Option<FileIdentity> {
+    let inode = metadata.ino();
+    (inode != 0).then_some(FileIdentity {
+        device: metadata.dev(),
+        inode,
+    })
+}
+
+#[cfg(not(unix))]
+fn file_identity(_metadata: &fs::Metadata) -> Option<FileIdentity> {
+    None
 }

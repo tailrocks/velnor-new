@@ -5,6 +5,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use super::super::cache_admission::CacheAdmission;
 use super::{build_index_from_list, build_index_walk};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -180,6 +181,31 @@ fn large_cache_tree_is_excluded_without_hiding_siblings() -> TestResult {
             .any(|path| path.starts_with(".velnor/cache/"))
     );
     assert!(index.contains(".velnor/cache2/source.toml"));
+    Ok(())
+}
+
+/// A changed ancestor invalidates its cached path resolution between entries.
+#[test]
+#[cfg(unix)]
+fn listed_path_rechecks_replaced_directory_ancestry() -> TestResult {
+    let root = TempDir::new()?;
+    let repo = root.path();
+    let cache = repo.join(".velnor/cache/z");
+    fs::create_dir_all(&cache)?;
+    fs::write(cache.join("Cargo.toml"), b"private cache")?;
+    let alias = repo.join("alias");
+    fs::create_dir(&alias)?;
+    fs::write(alias.join("a"), b"ordinary file")?;
+    write_file(repo, ".velnor/cache-extra/payload.crate")?;
+
+    let mut admission = CacheAdmission::new(repo);
+    assert!(!admission.listed_path_is_reserved(repo, "alias/a")?);
+
+    fs::remove_dir_all(&alias)?;
+    std::os::unix::fs::symlink(".velnor/cache", &alias)?;
+
+    assert!(admission.listed_path_is_reserved(repo, "alias/z/Cargo.toml")?);
+    assert!(!admission.listed_path_is_reserved(repo, ".velnor/cache-extra/payload.crate")?);
     Ok(())
 }
 
