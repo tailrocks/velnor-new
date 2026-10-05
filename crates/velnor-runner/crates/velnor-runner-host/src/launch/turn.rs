@@ -12,10 +12,13 @@ use crate::worker::Started;
 use super::capacity::{self, Admit};
 use super::capacity::{CapacityHysteresis, GuestResourceLimits};
 use super::completion;
+use super::scale_session;
 use super::slot;
 use super::steps;
 use super::trace;
-use super::{Ready, ack_ready, drive_ready, scale_session};
+
+mod poll;
+mod production;
 
 #[cfg(test)]
 mod admission_tests;
@@ -286,17 +289,26 @@ impl Turn<'_> {
         let idle = steps::idle(&polled);
         let started = u32::try_from(workers.len()).unwrap_or(u32::MAX);
         let running = self.running(started, idle).await?;
-        let admission = admission(
+        let mut dispatcher = production::LinkDispatcher {
+            link: self.link,
+            set_id: self.set_id,
+            session: self.session,
+            admin_token: self.admin_token,
+            docker: self.docker,
+        };
+        poll::apply(
             self.journal,
             self.set_id,
             self.capacity,
             self.target,
-            started,
+            workers,
             running,
             &polled,
+            path,
+            queue,
+            &mut dispatcher,
         )
-        .await?;
-        self.apply(admission, workers, path, queue, &polled).await
+        .await
     }
 
     async fn running(&self, started: u32, idle: steps::Idle) -> Result<u32, EnsureError> {
@@ -306,66 +318,5 @@ impl Turn<'_> {
             return Ok(0);
         }
         slot::running_count(self.journal, self.docker).await
-    }
-
-    async fn apply(
-        &mut self,
-        admission: PollAdmission,
-        workers: &mut Vec<Started>,
-        path: String,
-        queue: Option<String>,
-        polled: &Poll,
-    ) -> Result<bool, EnsureError> {
-        match admission.decision {
-            // HTTP 202 keeps the session open. A job can arrive on a later poll.
-            Admit::Stay => self.stay(workers).await,
-            Admit::Hold => self.hold().await,
-            Admit::Stop => Ok(true),
-            Admit::Error => Err(EnsureError::Unexpected {
-                status: 0,
-                step: "queue",
-            }),
-            Admit::Ack { stop } => {
-                ack_ready(self.link, self.session, path, queue, polled)?;
-                Ok(stop)
-            }
-            Admit::Start { stop } => {
-                let launched = drive_ready(
-                    self.link,
-                    Ready {
-                        set_id: self.set_id,
-                        session: self.session,
-                        admin_token: self.admin_token,
-                        path,
-                        queue,
-                        polled,
-                    },
-                    self.journal,
-                    self.docker,
-                    admission.reservation,
-                )
-                .await?;
-                let Some(worker) = launched else {
-                    return Ok(false);
-                };
-                workers.push(worker);
-                Ok(stop)
-            }
-        }
-    }
-
-    async fn stay(&self, workers: &[Started]) -> Result<bool, EnsureError> {
-        if self.target > self.capacity && workers.len() >= self.capacity as usize {
-            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-        }
-        Ok(false)
-    }
-
-    async fn hold(&self) -> Result<bool, EnsureError> {
-        if self.target > self.capacity {
-            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-            return Ok(false);
-        }
-        Ok(true)
     }
 }
