@@ -67,6 +67,12 @@ async fn release_row<E: PairEngine + ?Sized>(
     if !holds(row) {
         return Ok(());
     }
+    // Pending and uncertain rows can represent an acquire or JIT request that
+    // reached GitHub before the process stopped. Local Docker absence cannot
+    // settle that remote effect, so keep both its reservation and owned files.
+    if matches!(row.state, IntentState::Pending | IntentState::Uncertain) {
+        return Ok(());
+    }
     let Some(volume) = row.worker_volume.as_deref() else {
         return Ok(());
     };

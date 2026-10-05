@@ -18,9 +18,9 @@ use super::retry::{API_QUERY, Answer, attempt, bearer, json_content, user_agent}
 ///
 /// # Errors
 ///
-/// Returns [`WireError::OutsideRequest`] when a returned id was not requested,
-/// [`WireError::Malformed`] when `{count, value}` does not match, and the same
-/// refresh and transport errors as [`crate::session::poll`].
+/// Returns [`SessionError::Uncertain`] when an HTTP 200 response cannot be
+/// decoded or admitted, because the service may already have acquired a job,
+/// and the same refresh and transport errors as [`crate::session::poll`].
 pub fn acquire<T, R>(
     transport: &mut T,
     scale_set_id: i64,
@@ -51,10 +51,13 @@ fn accepted(
     requested: &[i64],
     already: &[i64],
 ) -> Result<AcquireOutcome, SessionError> {
+    if (200..300).contains(&answer.status) && answer.class != StatusClass::Ok {
+        return Err(SessionError::Uncertain);
+    }
     match answer.class {
         StatusClass::Ok => {
-            let returned = decode_ids(answer.body())?;
-            classify_acquire(requested, &returned, already).map_err(SessionError::from)
+            let returned = decode_ids(answer.body()).map_err(|_| SessionError::Uncertain)?;
+            classify_acquire(requested, &returned, already).map_err(|_| SessionError::Uncertain)
         }
         other => Err(reject(other)),
     }
