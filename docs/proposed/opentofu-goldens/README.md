@@ -10,13 +10,10 @@ synthesizes a consumer release manifest. No authentic same-run three-target
 candidate manifest is present, so `check-release`, hosted qualification,
 immutable publication, and infrastructure protection remain unverified.
 
-The capture at `a12efd7` (behavior-identical to `origin/main` 106bfd7;
-docs-only delta) is the historical pre-refactor baseline. The V2 tools-cache
-migration intentionally changes generated cache steps and files, so its output
-is not expected to match that older capture. The checked-in `cases/` below are
-the current producer baseline; every later ownership move must rerun these
-brackets against the current CLI. Never re-bless blindly: a mismatch is a
-behavior change until proven otherwise.
+Pre-refactor capture at `a12efd7` (behavior-identical to `origin/main`
+106bfd7; docs-only delta). Every T06 ownership move must re-run the
+brackets below with byte-identical results. Never re-bless blindly:
+a mismatch is a behavior change until proven otherwise.
 
 ## Bracket 1 (primary): parity corpus suite
 
@@ -55,27 +52,35 @@ normalization.
 | minimal-cargo | 0 | same |
 | dogfood (this repo) | 0 | plan.txt, complete generated tree, `dogfood.verdict=identical`, tree.sha256 |
 
-The current case trees were regenerated after the V2 tools-cache migration
-using the actual `velnor-actions` CLI. Each preview now includes the generated
-V2 tools-cache restore composite and identity helper where the workload uses
-the cache; the old `mise-v1-*` key and built-in Mise cache route are absent.
-The dogfood tree compares byte-for-byte with the checked-in `.github` tree.
-`MANIFEST.sha256` was regenerated with the case trees. This is generated-source
-evidence only, not a claim of a hosted cache hit or persistent-cache round trip.
+These case trees were regenerated from the current source after the V2 tools-cache
+migration using the actual `velnor-actions` CLI. Hosted cache previews include the
+generated identity-and-seed prelude, tools-cache restore composite, and identity
+helper where the workload uses V2; the V1 `mise-v1-*` key and built-in Mise cache
+route are absent. The dogfood tree is byte-equal to the checked-in `.github` tree.
+This is generated-source evidence only; it does not claim a hosted cache hit or
+persistent-cache round trip.
 
-Historical pre-V2 producer note: the checked-in producer workflow was then
-regenerated from the reviewed source with the locked release candidate
-(`mbx build --release --locked --package velnor-actions-cli --bin
-velnor-actions`). Its complete `.github` output was reproduced by a second
-`generate --output-dir` run; the only difference from that shipping tree was
-`.github/workflows/ci.yml`. The historical CI workflow SHA-256 was
-`613eeba58b49f4b6f28da06c97fadeb6567d7f2b521dece53149631643e839b9`. At that
-capture the local golden collector's `identical` verdict matched the checked-in
-tree; the debug binary was not the producer artifact. The workflow's required
-`Check generated files` gate remains in place. This producer self-dogfood does
-not qualify hosted cache persistence; ChainArgos consumer regeneration and
-deployment still require a verified immutable Velnor product and its matching
-manifest.
+The four consumer fixtures receive the checked-in
+`fixtures/consumer-release-manifest.json` in their scratch repositories.
+Its placeholder commit and target digests only exercise the canonical
+three-target schema. They are not a source-bound candidate manifest, native
+qualification, or release evidence. The dogfood producer repo stays on its
+VelnorRepositoryV1 path and receives no consumer manifest. The actual CLI
+parity suite also removes the fixture and verifies that `plan` fails closed.
+
+Historical pre-V2 producer capture: the checked-in workflow was regenerated from the reviewed source with
+the locked release candidate (`mbx build --release --locked --package
+velnor-actions-cli --bin velnor-actions`). Its complete `.github` output was
+reproduced by a second `generate --output-dir` run; the only difference from
+the preceding shipping tree was `.github/workflows/ci.yml`. That historical CI
+workflow SHA-256 was `613eeba58b49f4b6f28da06c97fadeb6567d7f2b521dece53149631643e839b9`.
+The local golden collector still builds `target/debug/velnor-actions`; its
+`identical` dogfood verdict confirms that this source preview matches the
+checked-in tree, but the debug binary is not the producer artifact. The
+workflow's required `Check generated files` gate remains in place and must pass
+on the PR head before merge. This is producer self-dogfooding only; ChainArgos
+consumer regeneration and deployment still require a verified immutable
+Velnor product and its matching manifest.
 
 `MANIFEST.sha256` pins every golden file.
 
