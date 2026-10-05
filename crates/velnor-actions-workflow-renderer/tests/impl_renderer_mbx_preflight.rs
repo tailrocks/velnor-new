@@ -142,7 +142,7 @@ fn assert_preflight_step_shapes(
     };
     let version_script = run.get(2).ok_or("version-check script missing")?;
     assert!(version_script.contains("mbx --version"));
-    assert!(version_script.contains("mbx 1.22.0"));
+    assert!(version_script.contains("mbx 1.21.1"));
     Ok(())
 }
 

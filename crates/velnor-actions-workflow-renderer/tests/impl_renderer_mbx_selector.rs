@@ -38,7 +38,7 @@ fn mise_exec(specs: &[&str], payload: &[&str]) -> Vec<String> {
 #[test]
 fn duplicate_mbx_selector_in_exec_fails_for_both_drivers() -> Result<(), RenderError> {
     for payload in ["cargo", "mbx"] {
-        let run = mise_exec(&["rust@1.98.1", "mr-boxington@1.22.0"], &[payload, "build"]);
+        let run = mise_exec(&["rust@1.98.1", "mr-boxington@1.21.1"], &[payload, "build"]);
         selector_error(run.clone(), Some(CompileDriver::Cargo))?;
         selector_error(run, Some(CompileDriver::Mbx))?;
     }
@@ -55,7 +55,7 @@ fn external_install_is_rejected_but_mise_decoy_text_is_not() -> Result<(), Rende
             "--no-hooks",
             "install",
             "rust@1.98.1",
-            "mr-boxington@1.22.0",
+            "mr-boxington@1.21.1",
         ]
         .into_iter()
         .map(str::to_owned)
@@ -64,7 +64,7 @@ fn external_install_is_rejected_but_mise_decoy_text_is_not() -> Result<(), Rende
     )?;
     for literal in [";", "&&", "||", "|", "then", "if"] {
         let script = format!(
-            "printf '%s\\n' '{literal}' mise --no-config --no-env --no-hooks install mr-boxington@1.22.0"
+            "printf '%s\\n' '{literal}' mise --no-config --no-env --no-hooks install mr-boxington@1.21.1"
         );
         let decoy = shell_step(
             "Print a command example",
@@ -79,7 +79,7 @@ fn external_install_is_rejected_but_mise_decoy_text_is_not() -> Result<(), Rende
         vec![
             "sh".to_owned(),
             "-c".to_owned(),
-            "printf '%s\\n' safe\\;\\ mise --no-config --no-env --no-hooks install mr-boxington@1.22.0".to_owned(),
+            "printf '%s\\n' safe\\;\\ mise --no-config --no-env --no-hooks install mr-boxington@1.21.1".to_owned(),
         ],
         BTreeMap::new(),
     )?;
@@ -94,7 +94,7 @@ fn malformed_inline_quote_fails_closed_for_selector_scanning() -> Result<(), Ren
         vec![
             "sh".to_owned(),
             "-c".to_owned(),
-            "printf '%s\\n' 'mise --no-config --no-env --no-hooks install mr-boxington@1.22.0"
+            "printf '%s\\n' 'mise --no-config --no-env --no-hooks install mr-boxington@1.21.1"
                 .to_owned(),
         ],
         BTreeMap::new(),
@@ -150,7 +150,7 @@ fn mise_action_tool_declaration_cannot_select_mbx() -> Result<(), RenderError> {
     };
     with.insert(
         "tool_versions".to_owned(),
-        "rust@1.98.1 mr-boxington@1.22.0".to_owned(),
+        "rust@1.98.1 mr-boxington@1.21.1".to_owned(),
     );
     assert!(
         check_mbx_gating(&BTreeMap::from([job]), &BTreeMap::new())

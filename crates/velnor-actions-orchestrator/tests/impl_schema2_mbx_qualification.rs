@@ -28,7 +28,7 @@ fn assert_candidate_ref(writer: &str) {
 
 fn assert_candidate_owner(job: &str) {
     for fragment in [
-        "version: 1.22.0",
+        "version: 1.21.1",
         "toolchain: 1.98.1",
         "isolate-objects-cache: \"true\"",
         "RUSTUP_TOOLCHAIN: 1.98.1",
@@ -66,10 +66,10 @@ fn assert_writer(writer: &str) {
         "{writer}"
     );
     assert!(
-        writer.contains("velnor-qualification-mbx-1.22.0-share-out-dir-disabled-v1-action-d0825fbaf3cc36ca2609aa38e71046265a1f1e37-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}"),
+        writer.contains("velnor-qualification-mbx-1.21.1-share-out-dir-disabled-v1-action-d0825fbaf3cc36ca2609aa38e71046265a1f1e37-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}"),
         "{writer}"
     );
-    assert!(writer.contains("version: 1.22.0"), "{writer}");
+    assert!(writer.contains("version: 1.21.1"), "{writer}");
     assert!(writer.contains("RUSTUP_TOOLCHAIN: 1.98.1"), "{writer}");
     assert!(
         writer
@@ -102,11 +102,11 @@ fn assert_reader(reader: &str) {
         "{reader}"
     );
     assert!(
-        reader.contains("velnor-qualification-mbx-1.22.0-share-out-dir-disabled-v1-action-d0825fbaf3cc36ca2609aa38e71046265a1f1e37-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}"),
+        reader.contains("velnor-qualification-mbx-1.21.1-share-out-dir-disabled-v1-action-d0825fbaf3cc36ca2609aa38e71046265a1f1e37-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}"),
         "{reader}"
     );
     assert!(
-        reader.contains("test \\\"$CACHE_HIT\\\" = 'true'"),
+        reader.contains("test \\\"$CACHE_HIT\\\" = 'false'"),
         "{reader}"
     );
     assert!(
@@ -120,7 +120,7 @@ fn assert_reader(reader: &str) {
         reader.contains(".savings.cached_compilations > 0"),
         "{reader}"
     );
-    assert!(reader.contains("version: 1.22.0"), "{reader}");
+    assert!(reader.contains("version: 1.21.1"), "{reader}");
     assert!(
         reader.contains("df -B1 -P \\\"$RUNNER_TEMP\\\""),
         "{reader}"

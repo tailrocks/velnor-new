@@ -12,7 +12,7 @@ use super::impl_renderer_fixtures::*;
 #[test]
 fn action_step_env_renders_only_when_present() -> Result<(), RenderError> {
     let uses = format!("jdx/mr-boxington-action@{}", "a".repeat(40));
-    let [preflight, mbx, version_check] = mbx_tool_steps(&uses, "1.22.0", "1.98.1")?;
+    let [preflight, mbx, version_check] = mbx_tool_steps(&uses, "1.21.1", "1.98.1")?;
     let plain = checkout_step(&checkout_pin())?;
     let text = render_workflow_ir(
         &fixture_ir(vec![job(
@@ -64,7 +64,7 @@ fn action_step_env_renders_only_when_present() -> Result<(), RenderError> {
 #[test]
 fn mbx_job_policy_applies_to_hosted_and_scale_set_lanes() -> Result<(), RenderError> {
     let uses = format!("jdx/mr-boxington-action@{}", "a".repeat(40));
-    let mbx = mbx_tool_steps(&uses, "1.22.0", "1.98.1")?;
+    let mbx = mbx_tool_steps(&uses, "1.21.1", "1.98.1")?;
     let checkout = checkout_step(&checkout_pin())?;
     let hosted = job(
         &format!("rust-demo{HOSTED_SUFFIX}"),
