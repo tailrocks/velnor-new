@@ -10,6 +10,6 @@ Do not rewrite pushed commits to change trailers; make a follow-up commit and de
 
 [agents]
 enabled = true
-max_concurrent_threads_per_session = 3
+max_concurrent_threads_per_session = 15
 default_subagent_model = "gpt-6-luna"
 default_subagent_reasoning_effort = "max"

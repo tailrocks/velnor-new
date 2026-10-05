@@ -7,16 +7,17 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::{
     RenderError,
     composite::shared_call,
-    document_steps::step_to_yaml,
+    document_steps::{step_to_yaml, string_map_yaml},
     render::{FINAL_JOB_ID, RenderContext},
     steps,
     yaml::Yaml,
 };
 use velnor_actions_contract::{
-    Job, Permissions, Step, StepKind, Trigger, WorkflowIr,
+    Job, Permissions, RunsOn, Step, StepKind, Trigger, WorkflowIr,
     workflow::{ir::DispatchInput, permissions::PermissionLevel},
 };
 
+<<<<<<< HEAD
 struct JobRenderInputs<'a> {
     ctx: &'a RenderContext,
     needs_envs: &'a [(String, String)],
@@ -25,6 +26,11 @@ struct JobRenderInputs<'a> {
     mbx_job: bool,
     hosted_linux_mbx_job: bool,
 }
+=======
+#[cfg(test)]
+#[path = "document_runner_shell_tests.rs"]
+mod runner_shell_tests;
+>>>>>>> origin/main
 
 /// Build the workflow document: name, on, permissions, concurrency, jobs.
 pub(crate) fn workflow_to_yaml(
@@ -201,21 +207,90 @@ fn dispatch_input_to_yaml(input: &DispatchInput) -> Yaml {
 /// Render one job: name, runs-on, timeout, environment, permissions, needs, if, steps.
 fn job_to_yaml(id: &str, job: &Job, inputs: &JobRenderInputs<'_>) -> Result<Yaml, RenderError> {
     steps::scan_for_private_subcommands(&job.display_name)?;
-    let mut entries = vec![
+    let runner = RunsOn::parse(&job.runs_on).map_err(RenderError::Contract)?;
+    let scale_set = matches!(&runner, RunsOn::ScaleSet(_));
+    let runs_on = match runner {
+        RunsOn::Hosted(label) => Yaml::str(label),
+        RunsOn::ScaleSet(selector) => Yaml::Flow(selector.labels().to_vec()),
+    };
+    let step_has_env = job.steps.iter().any(|step| match &step.kind {
+        StepKind::Shell { env, .. } | StepKind::Action { env, .. } => !env.is_empty(),
+        StepKind::Internal { .. } => false,
+    });
+    let mut job_env = if step_has_env {
+        crate::toolchain_env::job_level_env()
+    } else {
+        BTreeMap::new()
+    };
+    if step_has_env {
+        for step in &job.steps {
+            let step_env = match &step.kind {
+                StepKind::Shell { env, .. } | StepKind::Action { env, .. } => Some(env),
+                StepKind::Internal { .. } => None,
+            };
+            if let Some(env) = step_env {
+                if let Some(toolchain) = env.get("RUSTUP_TOOLCHAIN") {
+                    job_env.insert("RUSTUP_TOOLCHAIN".to_owned(), toolchain.clone());
+                }
+                if step.name == crate::steps::ACQUIRE_NAME {
+                    for key in [
+                        crate::steps::ASSET_SHA_ENV,
+                        crate::steps::ASSET_URL_ENV,
+                        crate::steps::RELEASE_COMMIT_ENV,
+                    ] {
+                        if let Some(val) = env.get(key) {
+                            job_env.insert(key.to_owned(), val.clone());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if mbx_gc_auto {
+        job_env.insert(
+            crate::cache_steps::MBX_GC_AUTO_ENV.to_owned(),
+            crate::cache_steps::MBX_GC_AUTO_VALUE.to_owned(),
+        );
+    }
+    let mut entries = job_header_fields(job, runs_on);
+    append_job_options(&mut entries, job, scale_set, &job_env)?;
+    let rendered_steps = render_job_steps(id, job, ctx, needs_envs, shared, checkouts, &job_env)?;
+    entries.push(("steps".to_owned(), Yaml::Seq(rendered_steps)));
+    Ok(Yaml::Map(entries))
+}
+
+fn job_header_fields(job: &Job, runs_on: Yaml) -> Vec<(String, Yaml)> {
+    vec![
         ("name".to_owned(), Yaml::str(job.display_name.clone())),
-        (
-            "runs-on".to_owned(),
-            crate::runs_on::runs_on_yaml(&job.runs_on)?,
-        ),
+        ("runs-on".to_owned(), runs_on),
         (
             "timeout-minutes".to_owned(),
             Yaml::Int(i64::from(job.timeout_minutes.minutes())),
         ),
+<<<<<<< HEAD
     ];
     if let Some(job_env) =
         crate::mbx_gc_policy::job_env(inputs.mbx_job, inputs.hosted_linux_mbx_job)
     {
         entries.push(("env".to_owned(), job_env));
+=======
+    ]
+}
+
+fn append_job_options(
+    entries: &mut Vec<(String, Yaml)>,
+    job: &Job,
+    scale_set: bool,
+    job_env: &BTreeMap<String, String>,
+) -> Result<(), RenderError> {
+    if scale_set {
+        entries.push(crate::runs_on::run_shell_defaults_field(
+            crate::runs_on::SCALE_SET_RUN_SHELL,
+        ));
+>>>>>>> origin/main
+    }
+    if !job_env.is_empty() {
+        entries.push(("env".to_owned(), string_map_yaml(job_env)));
     }
     if let Some(environment) = &job.environment {
         entries.push(("environment".to_owned(), Yaml::str(environment.clone())));
@@ -235,6 +310,18 @@ fn job_to_yaml(id: &str, job: &Job, inputs: &JobRenderInputs<'_>) -> Result<Yaml
         steps::scan_for_private_subcommands(condition)?;
         entries.push(("if".to_owned(), Yaml::str(condition.clone())));
     }
+    Ok(())
+}
+
+fn render_job_steps(
+    id: &str,
+    job: &Job,
+    ctx: &RenderContext,
+    needs_envs: &[(String, String)],
+    shared: Option<&str>,
+    checkouts: &BTreeMap<String, Step>,
+    job_env: &BTreeMap<String, String>,
+) -> Result<Vec<Yaml>, RenderError> {
     let mut rendered_steps =
         Vec::with_capacity(job.steps.len() + 2 * usize::from(inputs.shared.is_some()));
     if let Some(uses) = inputs.shared {
@@ -248,6 +335,7 @@ fn job_to_yaml(id: &str, job: &Job, inputs: &JobRenderInputs<'_>) -> Result<Yaml
                 "shared_lane_invalid_checkout:{id}"
             )));
         }
+<<<<<<< HEAD
         rendered_steps.push(step_to_yaml(
             id,
             checkout,
@@ -255,6 +343,9 @@ fn job_to_yaml(id: &str, job: &Job, inputs: &JobRenderInputs<'_>) -> Result<Yaml
             inputs.needs_envs,
             false,
         )?);
+=======
+        rendered_steps.push(step_to_yaml(id, checkout, ctx, needs_envs, false, job_env)?);
+>>>>>>> origin/main
         rendered_steps.push(shared_call(uses)?);
     } else if inputs.checkouts.contains_key(id) {
         return Err(RenderError::InvalidWorkflow(format!(
@@ -262,6 +353,7 @@ fn job_to_yaml(id: &str, job: &Job, inputs: &JobRenderInputs<'_>) -> Result<Yaml
         )));
     }
     for step in &job.steps {
+<<<<<<< HEAD
         rendered_steps.push(step_to_yaml(
             id,
             step,
@@ -269,9 +361,11 @@ fn job_to_yaml(id: &str, job: &Job, inputs: &JobRenderInputs<'_>) -> Result<Yaml
             inputs.needs_envs,
             false,
         )?);
+=======
+        rendered_steps.push(step_to_yaml(id, step, ctx, needs_envs, false, job_env)?);
+>>>>>>> origin/main
     }
-    entries.push(("steps".to_owned(), Yaml::Seq(rendered_steps)));
-    Ok(Yaml::Map(entries))
+    Ok(rendered_steps)
 }
 
 fn valid_shared_checkout(checkout: &Step, expected_uses: &str) -> bool {

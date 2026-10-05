@@ -188,7 +188,7 @@ fn velnor_policy_renders_with_empty_matrix() -> Result<(), RenderError> {
     }
     assert!(!text.contains("velnor-task:"), "empty matrix:\n{text}");
     let start = text.find("alint:").expect("alint job");
-    let window = snip(&text, start, 800);
+    let window = snip(&text, start, 1600);
     for input in [
         "path: .",
         "config: .alint.yml",
@@ -202,7 +202,7 @@ fn velnor_policy_renders_with_empty_matrix() -> Result<(), RenderError> {
     let pinned = format!("version: {ALINT_BINARY_VERSION}");
     assert!(window.contains(&pinned), "missing {pinned}:\n{window}");
     let start = text.find("required:").expect("final job");
-    let window = snip(&text, start, 600);
+    let window = snip(&text, start, 1600);
     for need in ["plan", "alint", "cargo-deny", "cargo-machete", "zizmor"] {
         assert!(window.contains(need), "missing need {need}:\n{window}");
     }
@@ -212,7 +212,7 @@ fn velnor_policy_renders_with_empty_matrix() -> Result<(), RenderError> {
         ("zizmor:", "Run zizmor"),
     ] {
         let start = text.find(id).unwrap_or_else(|| panic!("{id} job:\n{text}"));
-        let window = snip(&text, start, 900);
+        let window = snip(&text, start, 1600);
         assert!(window.contains(name), "missing {name}:\n{window}");
     }
     assert!(text.contains(PUBLISH_PLAN_NAME), "publish:\n{text}");

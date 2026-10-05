@@ -148,6 +148,7 @@ mod tests {
                     runner_source: ProfileSource::Detected,
                     nextest_profile: NextestProfile::Default,
                     nextest_config: None,
+                    run_ignored: None,
                 },
                 recommendations: Vec::new(),
                 findings: Vec::new(),
@@ -253,6 +254,7 @@ mod tests {
             uses_network: false,
             uses_clock: false,
             uses_random: false,
+            run_ignored: None,
             nextest_profile: NextestProfile::Default,
         };
         let mut proposals = Vec::new();
@@ -316,6 +318,7 @@ mod tests {
             uses_network: false,
             uses_clock: false,
             uses_random: false,
+            run_ignored: None,
             nextest_profile: NextestProfile::Default,
         };
         let task = velnor_actions_rust::propose_task(&group).expect("fixture proposes");

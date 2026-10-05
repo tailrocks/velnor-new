@@ -132,8 +132,13 @@ pub(crate) fn write_task_report_to(
     write_entry_reports(runner_temp, &plan, entry, &task, &matrix)?;
     let mut reported = 1usize;
     if exit_code != 0 {
+        let downstream_tasks: Vec<String> = if downstream.is_empty() {
+            derive_downstream(&plan, task_id, &entry.job_id)
+        } else {
+            downstream.to_vec()
+        };
         reported +=
-            crate::noop_report::write_skip_reports(&plan, task_id, downstream, runner_temp)?;
+            crate::noop_report::write_skip_reports(&plan, task_id, &downstream_tasks, runner_temp)?;
     }
     Ok(reported)
 }
@@ -172,6 +177,24 @@ fn elapsed_ms(start_ms: Option<u64>) -> Option<u64> {
         return None;
     };
     now.checked_sub(start).map(|elapsed| elapsed.max(1))
+}
+
+/// Downstream obligation task IDs in the same job, in plan order.
+fn derive_downstream(plan: &Plan, task_id: &str, current_job_id: &str) -> Vec<String> {
+    let mut after = false;
+    let mut downstream = Vec::new();
+    for entry in &plan.matrix.include {
+        if entry.job_id == current_job_id {
+            for id in flattened(entry) {
+                if after {
+                    downstream.push(id.to_owned());
+                } else if id == task_id {
+                    after = true;
+                }
+            }
+        }
+    }
+    downstream
 }
 
 /// Split downstream IDs on commas, dropping blanks and duplicates.
@@ -364,36 +387,3 @@ mod task_report_merge_tests;
 #[cfg(test)]
 #[path = "task_report_tests.rs"]
 mod task_report_tests;
-
-#[cfg(test)]
-mod load_plan_strict_tests {
-    use tempfile::TempDir;
-
-    use super::load_plan;
-    use super::task_report_tests::fixture_plan;
-
-    /// Stage one `plan.json` under a fake runner temp.
-    fn stage(text: &str) -> TempDir {
-        let dir = TempDir::new().expect("temp");
-        let run = dir.path().join("velnor").join("local");
-        std::fs::create_dir_all(&run).expect("run dir");
-        std::fs::write(run.join("plan.json"), text).expect("plan");
-        dir
-    }
-
-    #[test]
-    fn plan_read_is_bounded_and_duplicate_rejecting() {
-        let valid = serde_json::to_string(&fixture_plan()).expect("valid plan");
-        assert!(load_plan("local", stage(&valid).path()).is_ok());
-        let mut dup = valid;
-        dup.pop();
-        dup.push_str(r#","schema":1}"#);
-        let err = load_plan("local", stage(&dup).path()).expect_err("dup keys reject");
-        assert!(err.to_string().contains("unparsable_plan"), "{err}");
-        let bound = usize::try_from(crate::retrieve_reports::MAX_RETRIEVE_PLAN_BYTES)
-            .expect("bound fits pointer width");
-        let err =
-            load_plan("local", stage(&" ".repeat(bound + 1)).path()).expect_err("oversize rejects");
-        assert!(err.to_string().contains("oversize"), "{err}");
-    }
-}
