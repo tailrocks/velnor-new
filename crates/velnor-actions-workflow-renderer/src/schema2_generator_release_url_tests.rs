@@ -64,16 +64,18 @@ fn candidate_must_be_draft_and_published_release_must_be_immutable() -> Result<(
     let draft = release_json(true, false, &fixture.tag, &fixture.records);
     let output = run_helper(&fixture, "create", &draft, RELEASE_VERSION, &fixture.commit);
     assert_success(&output);
-    let manifest_digest = output_text(&output)?
+    let helper_output = output_text(&output)?;
+    let manifest_digest = helper_output
         .lines()
         .find_map(|line| line.strip_prefix("release_manifest_sha256="))
-        .ok_or("missing manifest digest")?;
+        .ok_or("missing manifest digest")?
+        .to_owned();
     let manifest_size = fs::metadata(fixture.manifest())?.len();
     let mut records = fixture.records.clone();
     records.push(asset_record(
         MANIFEST_NAME,
         manifest_size,
-        manifest_digest,
+        &manifest_digest,
         Some(&asset_url(&fixture.tag, MANIFEST_NAME)),
     ));
     let release = release_json(false, false, &fixture.tag, &records);
@@ -115,10 +117,12 @@ fn reject_bad_sidecar_and_tampered_manifest() -> Result<(), Box<dyn Error>> {
     let draft = release_json(true, false, &fixture.tag, &fixture.records);
     let output = run_helper(&fixture, "create", &draft, RELEASE_VERSION, &fixture.commit);
     assert_success(&output);
-    let checksum_digest = output_text(&output)?
+    let helper_output = output_text(&output)?;
+    let checksum_digest = helper_output
         .lines()
         .find_map(|line| line.strip_prefix("release_manifest_checksum_sha256="))
-        .ok_or("missing manifest checksum digest")?;
+        .ok_or("missing manifest checksum digest")?
+        .to_owned();
     let checksum_size = fs::metadata(fixture.asset_dir.join(MANIFEST_CHECKSUM_NAME))?.len();
     fs::write(fixture.manifest(), b"{}\n")?;
     let mut records = fixture.records.clone();
@@ -131,7 +135,7 @@ fn reject_bad_sidecar_and_tampered_manifest() -> Result<(), Box<dyn Error>> {
     records.push(asset_record(
         MANIFEST_CHECKSUM_NAME,
         checksum_size,
-        checksum_digest,
+        &checksum_digest,
         Some(&asset_url(&fixture.tag, MANIFEST_CHECKSUM_NAME)),
     ));
     let release = release_json(true, false, &fixture.tag, &records);

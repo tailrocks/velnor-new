@@ -96,27 +96,30 @@ fn manifest_uses_actual_api_urls_and_verifies_the_published_release() -> Result<
     assert!(manifest.contains(&format!("\"version\":\"{RELEASE_VERSION}\"")));
     assert!(manifest.contains(&format!("\"repository\":\"{REPOSITORY}\"")));
 
-    let digest = output_text(&output)?
+    let helper_output = output_text(&output)?;
+    let digest = helper_output
         .lines()
         .find_map(|line| line.strip_prefix("release_manifest_sha256="))
-        .ok_or("missing manifest digest")?;
-    let checksum_digest = output_text(&output)?
+        .ok_or("missing manifest digest")?
+        .to_owned();
+    let checksum_digest = helper_output
         .lines()
         .find_map(|line| line.strip_prefix("release_manifest_checksum_sha256="))
-        .ok_or("missing manifest checksum digest")?;
+        .ok_or("missing manifest checksum digest")?
+        .to_owned();
     let manifest_size = fs::metadata(fixture.manifest())?.len();
     let checksum_size = fs::metadata(fixture.asset_dir.join(MANIFEST_CHECKSUM_NAME))?.len();
     let mut final_records = fixture.records.clone();
     final_records.push(asset_record(
         MANIFEST_NAME,
         manifest_size,
-        digest,
+        &digest,
         Some(&asset_url(&fixture.tag, MANIFEST_NAME)),
     ));
     final_records.push(asset_record(
         MANIFEST_CHECKSUM_NAME,
         checksum_size,
-        checksum_digest,
+        &checksum_digest,
         Some(&asset_url(&fixture.tag, MANIFEST_CHECKSUM_NAME)),
     ));
     let draft = release_json(true, false, &fixture.tag, &final_records);
