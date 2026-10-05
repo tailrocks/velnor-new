@@ -3,7 +3,7 @@
 use std::error::Error;
 
 use crate::impl_cli_tmp::{
-    add_crate_pair, cleanup, code, fresh_tempdir, git_init, init_repo, spawn,
+    add_crate_pair, cleanup, code, fresh_tempdir, git_fixture, git_init, init_repo, spawn,
 };
 
 #[test]
@@ -166,6 +166,42 @@ fn generate_keeps_recommendations_on_stderr() -> Result<(), Box<dyn Error>> {
     assert!(preview.join(".github/workflows/ci.yml").is_file());
     cleanup(&tmp);
     cleanup(&outer);
+    Ok(())
+}
+
+#[test]
+fn generate_warns_for_consumer_standin_only() -> Result<(), Box<dyn Error>> {
+    let consumer = fresh_tempdir("smoke-consumer-standin")?;
+    init_repo(&consumer)?;
+    let consumer_output = spawn(&["generate"], &[], &consumer)?;
+    assert_eq!(code(&consumer_output), 0, "{:?}", consumer_output.stderr);
+    let consumer_stderr = String::from_utf8_lossy(&consumer_output.stderr);
+    assert!(consumer_stderr.contains("debug-only stand-in that MUST NOT ship"));
+
+    let velnor = fresh_tempdir("smoke-velnor-standin")?;
+    init_repo(&velnor)?;
+    let config = velnor.join(".velnor/config.toml");
+    let body = std::fs::read_to_string(&config)?.replace(
+        "default_branch = \"main\"",
+        "default_branch = \"main\"\npolicy = \"velnor-repository-v1\"",
+    );
+    std::fs::write(&config, body)?;
+    let remote = git_fixture::command(&velnor)?
+        .args([
+            "remote",
+            "add",
+            "origin",
+            "https://github.com/tailrocks/velnor-new.git",
+        ])
+        .output()?;
+    assert!(remote.status.success(), "{:?}", remote.stderr);
+    let velnor_output = spawn(&["generate"], &[], &velnor)?;
+    assert_eq!(code(&velnor_output), 0, "{:?}", velnor_output.stderr);
+    let velnor_stderr = String::from_utf8_lossy(&velnor_output.stderr);
+    assert!(!velnor_stderr.contains("debug-only stand-in"));
+
+    cleanup(&consumer);
+    cleanup(&velnor);
     Ok(())
 }
 

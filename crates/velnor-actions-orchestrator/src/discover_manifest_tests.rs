@@ -10,8 +10,10 @@ use std::fs;
 use tempfile::TempDir;
 use velnor_actions_contract::StackCandidate;
 
-use super::{detected_projects, read_manifest_file};
+use super::detected_projects;
+use crate::discover_manifest::{for_policy, read_manifest_file};
 use crate::safe_read::MAX_REPO_FILE_BYTES;
+use velnor_actions_contract::WorkflowPolicy;
 
 /// Present file returns its exact text.
 #[test]
@@ -33,6 +35,18 @@ fn absent_file_returns_none() {
     assert_eq!(read_manifest_file(root.path()).expect("absent"), None);
     fs::create_dir_all(root.path().join(".velnor")).expect("velnor dir");
     assert_eq!(read_manifest_file(root.path()).expect("absent"), None);
+}
+
+/// Velnor generation never reads the unrelated consumer manifest.
+#[test]
+fn velnor_policy_skips_consumer_manifest_input() {
+    let root = TempDir::new().expect("temp root");
+    let path = root.path().join(".velnor/release-manifest.json");
+    fs::create_dir_all(&path).expect("directory at manifest path");
+    assert_eq!(
+        for_policy(root.path(), WorkflowPolicy::VelnorRepositoryV1).expect("not consumed"),
+        (None, false)
+    );
 }
 
 /// Non-UTF-8 file errors instead of masking as absent (X6).

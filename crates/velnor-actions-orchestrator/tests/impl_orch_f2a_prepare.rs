@@ -26,21 +26,20 @@ fn plan_and_generate_share_one_prepare_path() -> TestResult {
         discover_calls[0].starts_with("prepare.rs"),
         "{discover_calls:?}"
     );
-    // Plan and generate load only inside `prepare`. `migrate` loads once
-    // in `routing` so a schema-1 file can be rewritten before discovery.
-    assert_eq!(config_calls.len(), 2, "{config_calls:?}");
-    assert!(
-        config_calls
-            .iter()
-            .any(|call| call.starts_with("prepare.rs")),
-        "{config_calls:?}"
-    );
-    assert!(
-        config_calls
-            .iter()
-            .all(|call| call.starts_with("prepare.rs") || call.starts_with("routing.rs")),
-        "{config_calls:?}"
-    );
+    // Plan and generate share `prepare`; migration and the typed Foundation
+    // source preview load config once in their own operation paths.
+    assert_eq!(config_calls.len(), 3, "{config_calls:?}");
+    for owner in ["prepare.rs", "routing.rs", "foundation_qualification.rs"] {
+        let prefix = format!("{owner}:");
+        assert_eq!(
+            config_calls
+                .iter()
+                .filter(|call| call.starts_with(&prefix))
+                .count(),
+            1,
+            "{config_calls:?}"
+        );
+    }
     let internal = std::fs::read_to_string(orch_src().join("internal.rs"))?;
     assert!(internal.contains("prepare(&root)"), "plan runs prepare");
     let generate = std::fs::read_to_string(orch_src().join("generate.rs"))?;
