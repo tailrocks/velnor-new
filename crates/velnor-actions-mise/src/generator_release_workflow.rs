@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 use std::ffi::{OsStr, OsString};
 
-use velnor_actions_contract::{GeneratorReleaseTarget, Step, StepKind};
+use velnor_actions_contract::{GeneratorReleaseTarget, Step, StepKind, StepRole};
 
 use crate::catalog::{MISE_VERSION, PinnedTool, ToolCatalog};
 use crate::error::MiseError;
@@ -59,6 +59,8 @@ pub fn setup_rust_steps(
     }
     let action = Step {
         name: SETUP_MISE_STEP.to_owned(),
+        id: None,
+        role: Some(StepRole::MiseSetup),
         condition: None,
         kind: StepKind::Action {
             uses: mise_action_uses.to_owned(),
@@ -74,11 +76,12 @@ pub fn setup_rust_steps(
         },
     };
     let install = PreparePinnedTools::new(vec![PinnedTool::Rust], homes.clone())?;
-    let install = shell_step(
+    let mut install = shell_step(
         INSTALL_RUST_STEP,
         install.argv(catalog),
         install.env(catalog),
     )?;
+    install.role = Some(StepRole::PreparePinnedTools);
     Ok(vec![action, install])
 }
 
@@ -144,6 +147,8 @@ fn shell_step(
     }
     Ok(Step {
         name: name.to_owned(),
+        id: None,
+        role: None,
         condition: None,
         kind: StepKind::Shell { run, env: env_map },
     })
