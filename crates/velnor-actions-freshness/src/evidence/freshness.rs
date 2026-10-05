@@ -72,7 +72,7 @@ fn freshness_row(
     let Some((stamp, moment)) = evidence_time(ctx, subject, entry) else {
         return;
     };
-    if held_row(ctx, subject, entry, &stamp) {
+    if held_row(ctx, subject, entry, &stamp, pin_for_latest.or(pinned)) {
         return;
     }
     if entry.get("status").and_then(Value::as_str) != Some("current") {
@@ -203,7 +203,13 @@ fn future_evidence(now: i64, stamp: &str, moment: i64) -> bool {
     moment.saturating_sub(now) > 360
 }
 
-fn held_row(ctx: &mut FreshnessContext, subject: &str, entry: &Value, stamp: &str) -> bool {
+fn held_row(
+    ctx: &mut FreshnessContext,
+    subject: &str,
+    entry: &Value,
+    stamp: &str,
+    pin: Option<&Value>,
+) -> bool {
     if entry.get("status").and_then(Value::as_str) != Some("held") {
         return false;
     }
@@ -214,13 +220,38 @@ fn held_row(ctx: &mut FreshnessContext, subject: &str, entry: &Value, stamp: &st
             subject,
             "status=held without a covering temporary hold",
         );
-    } else {
-        ctx.pass_row(
+        return true;
+    }
+    let version = pin.and_then(Value::as_str).unwrap_or("");
+    let covering_hold = ctx.holds.iter().find(|hold| {
+        let hold_key = hold.get("key").and_then(Value::as_str);
+        hold_key.is_some_and(|hold_key| hold_key == subject || hold_key == key)
+    });
+    let Some(hold) = covering_hold else {
+        ctx.fail_row(
             "upstream-freshness",
             subject,
-            &format!("held, evidence {stamp}"),
+            "status=held without a covering temporary hold",
         );
+        return true;
+    };
+    let held_version = hold.get("held_version").and_then(Value::as_str);
+    if held_version != Some(version) {
+        ctx.fail_row(
+            "upstream-freshness",
+            subject,
+            &format!(
+                "temporary hold covers held_version={}, but pinned version is {version:?}",
+                display(hold.get("held_version"))
+            ),
+        );
+        return true;
     }
+    ctx.pass_row(
+        "upstream-freshness",
+        subject,
+        &format!("held, evidence {stamp}"),
+    );
     true
 }
 
@@ -258,7 +289,10 @@ fn check_latest(
 
 #[cfg(test)]
 mod tests {
-    use super::future_evidence;
+    use serde_json::json;
+
+    use super::{freshness_row, future_evidence};
+    use crate::context::FreshnessContext;
 
     #[test]
     fn future_timestamps_apply_date_and_clock_rules() {
@@ -266,5 +300,75 @@ mod tests {
         assert!(!future_evidence(now, "2026-10-05", now));
         assert!(future_evidence(now, "2099-01-01", 4_070_908_800));
         assert!(future_evidence(now, "2099-01-01T00:00:00Z", 4_070_908_800));
+    }
+
+    #[test]
+    fn held_status_requires_an_exact_pin_version_match() {
+        let mut context = FreshnessContext::new(std::path::PathBuf::new(), false, false);
+        context.holds = vec![json!({"key": "cli/cli", "held_version": "9.9.9"})];
+        context.hold_keys.insert("cli/cli".to_owned());
+        let entry = json!({
+            "key": "cli/cli",
+            "status": "held",
+            "source": "https://example.test/releases",
+            "checked_at": "2026-10-05T00:00:00Z"
+        });
+        let wrong_pin = json!("2.101.0");
+        let matching_pin = json!("9.9.9");
+
+        freshness_row(
+            &mut context,
+            "cli/cli",
+            &entry,
+            Some(&wrong_pin),
+            Some(&wrong_pin),
+            Some(&wrong_pin),
+            None,
+        );
+        assert!(context.failures.iter().any(|failure| {
+            failure.contains("held_version=\"9.9.9\"")
+                && failure.contains("pinned version is \"2.101.0\"")
+        }));
+
+        let mut matching_context = FreshnessContext::new(std::path::PathBuf::new(), false, false);
+        matching_context.holds = context.holds.clone();
+        matching_context.hold_keys = context.hold_keys.clone();
+        freshness_row(
+            &mut matching_context,
+            "cli/cli",
+            &entry,
+            Some(&matching_pin),
+            Some(&matching_pin),
+            Some(&matching_pin),
+            None,
+        );
+        assert!(matching_context.failures.is_empty());
+
+        let mut action_context = FreshnessContext::new(std::path::PathBuf::new(), false, false);
+        action_context.holds = vec![json!({
+            "key": "jdx/mr-boxington-action",
+            "held_version": "v1.6.0"
+        })];
+        action_context
+            .hold_keys
+            .insert("jdx/mr-boxington-action".to_owned());
+        let action_entry = json!({
+            "key": "jdx/mr-boxington-action",
+            "status": "held",
+            "source": "https://example.test/releases",
+            "checked_at": "2026-10-05T00:00:00Z"
+        });
+        let composite_pin = json!(["v1.6.0", "a".repeat(40)]);
+        let version_pin = json!("v1.6.0");
+        freshness_row(
+            &mut action_context,
+            "jdx/mr-boxington-action",
+            &action_entry,
+            Some(&composite_pin),
+            Some(&composite_pin),
+            Some(&version_pin),
+            Some(&version_pin),
+        );
+        assert!(action_context.failures.is_empty());
     }
 }
