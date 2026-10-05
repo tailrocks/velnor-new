@@ -70,6 +70,23 @@ fn assigned_population_is_not_the_batch_length() -> Result<(), &'static str> {
 }
 
 #[test]
+fn completed_message_decodes_runner_identity_and_keeps_job_fields() -> Result<(), &'static str> {
+    let raw = r#"{"messageId":2,"messageType":"RunnerScaleSetJobMessages","body":"[{\"messageType\":\"JobCompleted\",\"runnerRequestId\":19,\"jobId\":\"111\",\"requestLabels\":[\"velnor\"],\"runnerId\":31,\"runnerName\":\"runner-31\",\"result\":\"succeeded\"}]"}"#;
+    let Poll::Batch(batch) = parse_poll(200, raw).map_err(|_| "batch")? else {
+        return Err("batch");
+    };
+    let job = batch.jobs.first().ok_or("job")?;
+    assert_eq!(job.kind, InnerKind::Completed);
+    assert_eq!(job.request_id, Some(19));
+    assert_eq!(job.job_id.as_deref(), Some("111"));
+    assert_eq!(job.labels, ["velnor"]);
+    assert_eq!(job.runner_id, Some(31));
+    assert_eq!(job.runner_name.as_deref(), Some("runner-31"));
+    assert_eq!(job.result.as_deref(), Some("succeeded"));
+    Ok(())
+}
+
+#[test]
 fn partial_acquire_outside_ids_and_noop() -> Result<(), &'static str> {
     let partial = classify_acquire(&[1, 2, 3], &[1, 3], &[]).map_err(|_| "partial")?;
     assert_eq!(partial, AcquireOutcome::Acquired(vec![1, 3]));
