@@ -22,7 +22,7 @@ pub(crate) const TOFU_PROVIDER_CACHE_BASE_EXPR: &str = "${{ runner.temp }}/velno
 /// the trailing `hashFiles` over the root lockfile churns the key
 /// when provider pins change. No spaces: the cache action rejects
 /// them. The root slug mirrors the isolated data-dir scheme
-/// (H3-hashed, never interpolated). Depth budget: roots carry no
+/// (full domain digest, never interpolated). Depth budget: roots carry no
 /// separate depth cap; the 512-byte key cap bounds them instead — a
 /// root nested deep enough to overflow the key fails `key_too_long`.
 /// # Errors
@@ -52,7 +52,7 @@ pub(crate) fn tofu_providers_cache_key(
     } else {
         format!("{root}/.terraform.lock.hcl")
     };
-    let slug = provider_root_slug(root);
+    let slug = velnor_actions_tofu::tofu_root_locator(root)?;
     let key = format!(
         "{TOFU_PROVIDERS_KEY_PREFIX}-{target}-{tofu_version}-{slug}-${{{{hashFiles('{lock}')}}}}"
     );
@@ -60,11 +60,6 @@ pub(crate) fn tofu_providers_cache_key(
         return Err(bad_key("key_too_long".to_owned()));
     }
     Ok(key)
-}
-
-/// H3-hashed root slug through the tofu adapter's shared derivation.
-fn provider_root_slug(root: &str) -> String {
-    velnor_actions_tofu::tofu_root_slug(root)
 }
 
 /// Job-private plugin-cache path for one root (never the data dir).
@@ -115,21 +110,33 @@ pub(crate) fn tofu_providers_restore_step(
 
 /// Normalized tofu root backing one job's obligations.
 ///
-/// Groups key by unit, so every member shares the root; the first
-/// member's key segment names it.
+/// Tofu members must share one exact root. Mixed Rust members carry
+/// independent keys and cannot supply the Tofu cache root.
 /// # Errors
 ///
-/// Returns an internal error for empty obligations or an unparsable
-/// key segment (both unreachable past validation).
+/// Returns internal errors for missing Tofu obligations, unparsable keys,
+/// or mixed roots; contract errors reject noncanonical root keys.
 pub(crate) fn tofu_root_for_obligations(
     obligations: &[CrateObligation],
 ) -> Result<String, OrchestratorError> {
-    let first = obligations
-        .first()
+    let mut roots = obligations.iter().filter(|obligation| {
+        crate::extension_schemas::task_stack_segment(&obligation.task_id)
+            == Some(velnor_actions_tofu::STACK_ID)
+    });
+    let first = roots
+        .next()
         .ok_or_else(|| internal("tofu_empty_obligations"))?;
     let key = crate::extension_schemas::task_key_segment(&first.task_id)
         .ok_or_else(|| internal("tofu_unparsable_key"))?;
-    Ok(velnor_actions_tofu::root_for_key(&key))
+    let root = velnor_actions_tofu::root_for_key(&key)?;
+    for obligation in roots {
+        let key = crate::extension_schemas::task_key_segment(&obligation.task_id)
+            .ok_or_else(|| internal("tofu_unparsable_key"))?;
+        if velnor_actions_tofu::root_for_key(&key)? != root {
+            return Err(internal("tofu_mixed_roots"));
+        }
+    }
+    Ok(root)
 }
 
 /// Restore step for one tofu root: key plus job-private path.
@@ -174,7 +181,7 @@ mod tests {
             "one base across crates"
         );
         assert!(
-            path.starts_with(&format!("{TOFU_PROVIDER_CACHE_BASE_EXPR}/stacks-vpc-")),
+            path.starts_with(&format!("{TOFU_PROVIDER_CACHE_BASE_EXPR}/b3-")),
             "{path}"
         );
         let step = tofu_providers_restore_step(&key, &path).expect("restore builds");
@@ -197,7 +204,7 @@ mod tests {
         let key = tofu_providers_cache_key("x86_64-unknown-linux-gnu", "1.13.1", "")
             .expect("provider key builds");
         assert!(
-            key.starts_with("velnor-v1-tofu-providers-x86_64-unknown-linux-gnu-1.13.1-root-"),
+            key.starts_with("velnor-v1-tofu-providers-x86_64-unknown-linux-gnu-1.13.1-b3-"),
             "{key}"
         );
         assert!(
