@@ -37,7 +37,7 @@ pub fn elect_cache_writers(jobs: &mut BTreeMap<String, Job>) -> Result<(), Rende
 /// Construct, but do not append, validated V2 tools saves.
 fn plan_tools_saves(jobs: &BTreeMap<String, Job>) -> Result<Vec<(String, Step)>, RenderError> {
     let mut by_identity: BTreeMap<(String, String), Vec<String>> = BTreeMap::new();
-    for (id, job) in jobs.iter() {
+    for (id, job) in jobs {
         let identity = tools_restore_identity(id, job)?;
         if identity.is_none() && has_tools_save(job) {
             return Err(RenderError::InvalidWorkflow(format!(
@@ -58,7 +58,7 @@ fn plan_tools_saves(jobs: &BTreeMap<String, Job>) -> Result<Vec<(String, Step)>,
             .unwrap_or_default();
         elected_keys.insert(winner.to_owned(), key.clone());
     }
-    for (id, job) in jobs.iter() {
+    for (id, job) in jobs {
         let saves = tools_save_steps(job);
         if let Some(key) = elected_keys.get(id) {
             validate_existing_tools_save(job, key)?;
@@ -129,9 +129,9 @@ fn validate_existing_tools_save(job: &Job, key: &str) -> Result<(), RenderError>
     Ok(())
 }
 
-/// Construct, but do not append, validated ToFu provider saves.
+/// Construct, but do not append, validated `OpenTofu` provider saves.
 ///
-/// Every tofu job restores its own root key read-only; exactly one
+/// Every `OpenTofu` job restores its own root key read-only; exactly one
 /// job per key gets a push-gated `Save Tofu providers` step over
 /// that key. Keys are per-root so the winner is usually the sole
 /// owner; a shared key (one root under another configuration) goes
@@ -146,7 +146,7 @@ fn validate_existing_tools_save(job: &Job, key: &str) -> Result<(), RenderError>
 fn plan_provider_saves(jobs: &BTreeMap<String, Job>) -> Result<Vec<(String, Step)>, RenderError> {
     let mut by_key: BTreeMap<String, Vec<String>> = BTreeMap::new();
     let mut path_for: BTreeMap<String, String> = BTreeMap::new();
-    for (id, job) in jobs.iter() {
+    for (id, job) in jobs {
         velnor_actions_contract::workflow::step_identity::validate_step_sequence(&job.steps, id)
             .map_err(RenderError::Contract)?;
         if let Some((key, path)) = provider_restore_entry(job) {
