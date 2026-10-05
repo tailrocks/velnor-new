@@ -27,6 +27,9 @@ fn strict_plan_job_gets_full_prelude_in_order() -> Result<(), RenderError> {
         step_names(&text, "plan"),
         [
             "Checkout",
+            "Resolve tool-cache image",
+            "Restore Mise tools",
+            "Verify restored Mise bootstrap",
             SETUP_MISE_NAME,
             ACQUIRE_NAME,
             CHECK_GENERATED_NAME,
@@ -37,8 +40,8 @@ fn strict_plan_job_gets_full_prelude_in_order() -> Result<(), RenderError> {
         ]
     );
     assert!(
-        !text.contains("Restore Mise tools"),
-        "P08: restores stay built-in:\n{text}"
+        text.contains("Restore Mise tools"),
+        "tools restore precedes setup:\n{text}"
     );
     Ok(())
 }

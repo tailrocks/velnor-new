@@ -120,11 +120,12 @@ fn action_inputs<'a>(
     Err(std::io::Error::other(format!("missing {name}")).into())
 }
 
-/// (`job`, `cache_key`) pairs in render order (setup is render-inserted).
+/// (`job`, explicit restore key) pairs in render order.
 fn mise_keys_by_job(yaml: &str) -> Vec<(String, String)> {
     let mut out = Vec::new();
     let mut job = String::new();
     let mut in_jobs = false;
+    let mut in_restore = false;
     for line in yaml.lines() {
         if line == "jobs:" {
             in_jobs = true;
@@ -133,8 +134,12 @@ fn mise_keys_by_job(yaml: &str) -> Vec<(String, String)> {
         if in_jobs && line.starts_with("  ") && !line.starts_with("   ") && line.ends_with(':') {
             line.trim().trim_end_matches(':').clone_into(&mut job);
         }
-        if let Some(value) = line.trim().strip_prefix("cache_key: ") {
+        if let Some(name) = line.trim().strip_prefix("- name: ") {
+            in_restore = name == "Restore Mise tools";
+        }
+        if in_restore && let Some(value) = line.trim().strip_prefix("key: ") {
             out.push((job.clone(), value.trim_matches('"').to_owned()));
+            in_restore = false;
         }
     }
     out
@@ -194,7 +199,7 @@ fn per_job_mise_keys_qualified_without_job_suffix() -> TestResult {
         assert!(pairs.len() >= 3, "plan plus crates (mbx={mbx}): {pairs:?}");
         for (job, key) in &pairs {
             assert!(!job.is_empty(), "key inside a job: {key}");
-            assert!(key.starts_with("mise-v1-"), "qualified: {key}");
+            assert!(key.starts_with("mise-v3-"), "qualified: {key}");
             assert!(!key.contains("latest"), "pinned: {key}");
             for role in ["-plan", "rust-", "-a-", "-b-"] {
                 assert!(!key.contains(role), "no role suffix: {key}");
@@ -344,7 +349,7 @@ fn cargo_only_shared_registry_single_shape() -> TestResult {
 fn service_report_parses_live_shape_for_sequential_runs() {
     // Fixed format sample (live `gh cache list --json` shape); the numbers
     // it carries are illustrative — real totals live in performance.md.
-    let body = r#"[{"key":"velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-aa","sizeInBytes":17568922},{"key":"mise-v1-x86_64-unknown-linux-gnu-2026.9.16-bb","sizeInBytes":65857248}]"#;
+    let body = r#"[{"key":"velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-aa","sizeInBytes":17568922},{"key":"mise-v2-x86_64-unknown-linux-gnu-2026.9.16-bb","sizeInBytes":65857248}]"#;
     let report =
         cache_trust::summarize_cache_usage(body, 10_737_418_240, 17_568_922, 3).expect("report");
     assert_eq!(report.active_bytes, 17_568_922 + 65_857_248);
