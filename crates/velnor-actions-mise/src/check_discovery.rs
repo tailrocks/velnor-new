@@ -50,6 +50,8 @@ pub fn discover_checks(
 }
 
 /// Discover checks while consuming the caller's shared execution deadline.
+/// # Errors
+/// Rejects expired deadlines and the same invalid task/source states as `discover_checks`.
 pub fn discover_checks_until(
     root: &Path,
     checks: &[MiseCheck],

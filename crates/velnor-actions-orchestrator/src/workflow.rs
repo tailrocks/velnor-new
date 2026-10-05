@@ -162,22 +162,7 @@ pub(crate) fn build_workflow(
     crate::verification_tasks::insert_jobs(&mut jobs, &verification_tasks)?;
     insert_gate_jobs(&mut jobs, label, branch, &required_ids, acquire, &catalog)?;
     wire_w1::check_crate_mbx_gating(&jobs, &built.drivers)?;
-    let ir = WorkflowIr {
-        name: config.workflow.name.clone(),
-        triggers: Trigger {
-            pull_request_types: EXPECTED_PR_TYPES.iter().map(ToString::to_string).collect(),
-            push_branches: vec![branch.to_owned()],
-            merge_group: true,
-            workflow_dispatch: None,
-            schedule: None,
-        },
-        permissions: Permissions::default(),
-        concurrency: Concurrency {
-            group: CONCURRENCY_GROUP.to_owned(),
-            cancel_in_progress: CONCURRENCY_CANCEL.to_owned(),
-        },
-        jobs,
-    };
+    let ir = workflow_ir(config, branch, jobs);
     let context = workflow_context::render_context(
         config,
         label,
@@ -194,6 +179,25 @@ pub(crate) fn build_workflow(
         context,
         actionlint,
     })
+}
+
+fn workflow_ir(config: &VelnorConfig, branch: &str, jobs: BTreeMap<String, Job>) -> WorkflowIr {
+    WorkflowIr {
+        name: config.workflow.name.clone(),
+        triggers: Trigger {
+            pull_request_types: EXPECTED_PR_TYPES.iter().map(ToString::to_string).collect(),
+            push_branches: vec![branch.to_owned()],
+            merge_group: true,
+            workflow_dispatch: None,
+            schedule: None,
+        },
+        permissions: Permissions::default(),
+        concurrency: Concurrency {
+            group: CONCURRENCY_GROUP.to_owned(),
+            cancel_in_progress: CONCURRENCY_CANCEL.to_owned(),
+        },
+        jobs,
+    }
 }
 
 fn support_workflow(

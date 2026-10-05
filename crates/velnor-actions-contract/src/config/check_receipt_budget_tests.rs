@@ -84,7 +84,7 @@ fn admitted_tool_closure_has_a_truthful_worst_case_receipt_budget() {
     let mut maximum_admitted = 0;
     for count in 1..=64 {
         let tool = tool(count);
-        let bound = check_execution_receipt_upper_bound(&check, &[tool.clone()])
+        let bound = check_execution_receipt_upper_bound(&check, std::slice::from_ref(&tool))
             .expect("bounded receipt estimate");
         if bound > MAX_CHECK_EXECUTION_RECEIPT_BYTES {
             break;
@@ -95,7 +95,7 @@ fn admitted_tool_closure_has_a_truthful_worst_case_receipt_budget() {
     }
     assert!(maximum_admitted > 1, "small closures remain usable");
     let allowed = tool(maximum_admitted);
-    let bound = check_execution_receipt_upper_bound(&check, &[allowed.clone()])
+    let bound = check_execution_receipt_upper_bound(&check, std::slice::from_ref(&allowed))
         .expect("max admitted estimate");
     assert!(bound <= MAX_CHECK_EXECUTION_RECEIPT_BYTES);
     let rejected = tool(maximum_admitted + 1);
@@ -126,7 +126,7 @@ fn large_container_profile_reduces_admitted_probes_before_the_receipt_gate() {
     let mut maximum_admitted = 0;
     for count in 1..=64 {
         let tool = tool(count);
-        let bound = check_execution_receipt_upper_bound(&check, &[tool.clone()])
+        let bound = check_execution_receipt_upper_bound(&check, std::slice::from_ref(&tool))
             .expect("bounded container receipt estimate");
         if bound > MAX_CHECK_EXECUTION_RECEIPT_BYTES {
             break;
@@ -141,7 +141,7 @@ fn large_container_profile_reduces_admitted_probes_before_the_receipt_gate() {
     );
     let allowed = tool(maximum_admitted);
     assert!(
-        check_execution_receipt_upper_bound(&check, &[allowed.clone()])
+        check_execution_receipt_upper_bound(&check, std::slice::from_ref(&allowed))
             .expect("max admitted bound")
             <= MAX_CHECK_EXECUTION_RECEIPT_BYTES
     );

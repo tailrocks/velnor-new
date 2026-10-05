@@ -194,7 +194,7 @@ fn owned_probe_accepts_linux_x64_daemon_on_macos_arm_and_scrubs_ambient_inputs()
     }
     let fixture = Fixture::new()?;
     let proof =
-        verify_check_capabilities(&fixture.runner, Some(&fixture.prepared), test_deadline())?;
+        verify_check_capabilities(&fixture.runner, Some(&fixture.prepared), test_deadline()?)?;
     let Some(container) = proof.container.as_ref() else {
         return Err("container proof missing".into());
     };
@@ -209,7 +209,7 @@ fn mismatched_binary_sha_stops_before_process() -> TestResult {
     let fixture = Fixture::new()?;
     let mut prepared = fixture.prepared.clone();
     prepared.docker_sha256 = "b".repeat(64);
-    assert!(verify_check_capabilities(&fixture.runner, Some(&prepared), test_deadline()).is_err());
+    assert!(verify_check_capabilities(&fixture.runner, Some(&prepared), test_deadline()?).is_err());
     assert!(!fixture.marker.exists());
     Ok(())
 }
@@ -225,7 +225,7 @@ fn wrong_cli_version_or_build_is_rejected() -> TestResult {
         cli.version = version.to_owned();
         cli.build = build.to_owned();
         assert!(
-            verify_check_capabilities(&runner, Some(&fixture.prepared), test_deadline()).is_err()
+            verify_check_capabilities(&runner, Some(&fixture.prepared), test_deadline()?).is_err()
         );
     }
     Ok(())
@@ -243,7 +243,7 @@ fn wrong_context_endpoint_is_rejected() -> TestResult {
         &daemon,
     )?;
     assert!(
-        verify_check_capabilities(&fixture.runner, Some(&fixture.prepared), test_deadline())
+        verify_check_capabilities(&fixture.runner, Some(&fixture.prepared), test_deadline()?)
             .is_err()
     );
     Ok(())
@@ -264,7 +264,7 @@ fn daemon_identity_platform_and_version_drift_are_rejected() -> TestResult {
             &daemon,
         )?;
         assert!(
-            verify_check_capabilities(&fixture.runner, Some(&fixture.prepared), test_deadline())
+            verify_check_capabilities(&fixture.runner, Some(&fixture.prepared), test_deadline()?)
                 .is_err(),
             "daemon drift must fail: {id}/{version}/{os}/{architecture}"
         );
@@ -275,9 +275,9 @@ fn daemon_identity_platform_and_version_drift_are_rejected() -> TestResult {
 #[test]
 fn required_preparation_and_tampered_daemon_receipt_are_rejected() -> TestResult {
     let fixture = Fixture::new()?;
-    assert!(verify_check_capabilities(&fixture.runner, None, test_deadline()).is_err());
+    assert!(verify_check_capabilities(&fixture.runner, None, test_deadline()?).is_err());
     let mut proof =
-        verify_check_capabilities(&fixture.runner, Some(&fixture.prepared), test_deadline())?;
+        verify_check_capabilities(&fixture.runner, Some(&fixture.prepared), test_deadline()?)?;
     let Some(container) = proof.container.as_mut() else {
         return Err("container proof missing".into());
     };
@@ -289,7 +289,7 @@ fn required_preparation_and_tampered_daemon_receipt_are_rejected() -> TestResult
 fn failed_probe(script: &str) -> TestResult<(Fixture, String)> {
     let fixture = Fixture::new()?;
     std::fs::write(&fixture.docker_program, format!("#!/bin/sh\n{script}\n"))?;
-    match verify_check_capabilities(&fixture.runner, Some(&fixture.prepared), test_deadline()) {
+    match verify_check_capabilities(&fixture.runner, Some(&fixture.prepared), test_deadline()?) {
         Err(velnor_actions_mise::MiseError::InvalidStepInput { field, value })
             if field == "container_probe" =>
         {
@@ -356,19 +356,17 @@ fn owned_program_bytes_are_escaped_without_loss() -> TestResult {
     std::fs::rename(&fixture.docker_program, &program)?;
     std::fs::write(&program, "#!/bin/sh\nexit 23\n")?;
     fixture.prepared.docker_program = program.clone();
-    let diagnostic = match verify_check_capabilities(
-        &fixture.runner,
-        Some(&fixture.prepared),
-        test_deadline(),
-    ) {
-        Err(velnor_actions_mise::MiseError::InvalidStepInput { field, value })
-            if field == "container_probe" =>
+    let diagnostic =
+        match verify_check_capabilities(&fixture.runner, Some(&fixture.prepared), test_deadline()?)
         {
-            value
-        }
-        Err(error) => return Err(format!("unexpected refusal: {error:?}").into()),
-        Ok(_) => return Err("synthetic failure unexpectedly passed".into()),
-    };
+            Err(velnor_actions_mise::MiseError::InvalidStepInput { field, value })
+                if field == "container_probe" =>
+            {
+                value
+            }
+            Err(error) => return Err(format!("unexpected refusal: {error:?}").into()),
+            Ok(_) => return Err("synthetic failure unexpectedly passed".into()),
+        };
     assert!(diagnostic.contains(&format!(
         "program=\"{}\"",
         program.as_os_str().as_encoded_bytes().escape_ascii()
@@ -378,7 +376,8 @@ fn owned_program_bytes_are_escaped_without_loss() -> TestResult {
     Ok(())
 }
 
-fn test_deadline() -> velnor_actions_mise::CheckDeadline {
-    velnor_actions_mise::CheckDeadline::after(std::time::Duration::from_secs(60))
-        .expect("test deadline")
+fn test_deadline() -> TestResult<velnor_actions_mise::CheckDeadline> {
+    Ok(velnor_actions_mise::CheckDeadline::after(
+        std::time::Duration::from_secs(60),
+    )?)
 }

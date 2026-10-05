@@ -200,8 +200,8 @@ fn zip64_fallback_directory_over_limit_is_rejected_before_parser_allocation() {
     let mut bytes = prefix;
     bytes.extend_from_slice(&base);
     let end = bytes.len() - base.len() + original_end;
-    let extension_length = 56 + 20 + 22;
-    bytes[end + 20..end + 22].copy_from_slice(&(extension_length as u16).to_le_bytes());
+    let extension_length: u16 = 56 + 20 + 22;
+    bytes[end + 20..end + 22].copy_from_slice(&extension_length.to_le_bytes());
     bytes.extend_from_slice(b"PK\x06\x06");
     bytes.extend_from_slice(&44_u64.to_le_bytes());
     bytes.extend_from_slice(&45_u16.to_le_bytes());

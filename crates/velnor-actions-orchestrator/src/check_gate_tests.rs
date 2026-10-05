@@ -57,22 +57,22 @@ fn producer_json(plan: &Plan) -> String {
         "scenarios":[{"id":"one","executed":true,"status":"passed"}]}).to_string()
 }
 fn staged(with_proof: bool) -> (tempfile::TempDir, Plan) {
-    staged_with_tools(with_proof, Vec::new(), Vec::new())
+    staged_with_envelope(with_proof, &[], &[], None, None)
 }
 fn staged_with_tools(
     with_proof: bool,
-    declarations: Vec<QualifiedTool>,
-    qualified_tools: Vec<crate::check_evidence::gate::tools::QualifiedToolReceipt>,
+    declarations: &[QualifiedTool],
+    qualified_tools: &[crate::check_evidence::gate::tools::QualifiedToolReceipt],
 ) -> (tempfile::TempDir, Plan) {
     staged_with_envelope(with_proof, declarations, qualified_tools, None, None)
 }
 
 fn staged_with_container(
     with_proof: bool,
-    declarations: Vec<QualifiedTool>,
-    qualified_tools: Vec<crate::check_evidence::gate::tools::QualifiedToolReceipt>,
-    profile: HostContainerProfile,
-    container: crate::check_evidence::gate::container::ContainerReceipt,
+    declarations: &[QualifiedTool],
+    qualified_tools: &[crate::check_evidence::gate::tools::QualifiedToolReceipt],
+    profile: &HostContainerProfile,
+    container: &crate::check_evidence::gate::container::ContainerReceipt,
 ) -> (tempfile::TempDir, Plan) {
     staged_with_envelope(
         with_proof,
@@ -85,14 +85,14 @@ fn staged_with_container(
 
 fn staged_with_envelope(
     with_proof: bool,
-    declarations: Vec<QualifiedTool>,
-    qualified_tools: Vec<crate::check_evidence::gate::tools::QualifiedToolReceipt>,
-    container_profile: Option<HostContainerProfile>,
-    container: Option<crate::check_evidence::gate::container::ContainerReceipt>,
+    declarations: &[QualifiedTool],
+    qualified_tools: &[crate::check_evidence::gate::tools::QualifiedToolReceipt],
+    container_profile: Option<&HostContainerProfile>,
+    container: Option<&crate::check_evidence::gate::container::ContainerReceipt>,
 ) -> (tempfile::TempDir, Plan) {
     let temp = tempfile::TempDir::new().expect("temp");
-    let mut plan = plan_with_tools(&declarations);
-    if let Some(profile) = &container_profile {
+    let mut plan = plan_with_tools(declarations);
+    if let Some(profile) = container_profile {
         plan.matrix.include[0].adapter_metadata["runner"] = serde_json::json!({
             "label":"native-scale",
             "platform":"linux_x64",
@@ -142,9 +142,9 @@ fn staged_with_envelope(
             CheckPlatform::LinuxX64,
             Some(receipt),
             vec![],
-            qualified_tools,
+            qualified_tools.to_vec(),
         );
-        execution.container = container;
+        execution.container = container.cloned();
         fs::write(
             home.join("check-execution.json"),
             canonical_json_bytes(&execution).expect("receipt bytes"),

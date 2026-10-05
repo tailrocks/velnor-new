@@ -31,7 +31,7 @@ pub(super) fn probe_failure(
     )
 }
 
-/// Collect fixed Docker, codesign, plutil, and OrbStack CLI observations.
+/// Collect fixed Docker, codesign, plutil, and `OrbStack` CLI observations.
 pub(super) fn probe_orbstack(
     sdk: &HostOrbStackSdk,
     prepared: &PreparedContainer,
@@ -42,6 +42,37 @@ pub(super) fn probe_orbstack(
         .orbctl_program
         .as_ref()
         .ok_or_else(|| invalid("orbstack", "prepared_cli_missing"))?;
+    let app = probe_orbstack_app(sdk, program, env, deadline)?;
+    Ok(OrbStackObservation {
+        program: program.clone(),
+        sha256: prepared
+            .orbctl_sha256
+            .clone()
+            .ok_or_else(|| invalid("orbstack", "cli_hash_missing"))?,
+        app,
+        version: probe(
+            program,
+            &["version"],
+            env,
+            deadline,
+            MAX_CHECK_CONTAINER_PROBE_CAPTURE_BYTES,
+        )?,
+        status: probe(
+            program,
+            &["status"],
+            env,
+            deadline,
+            MAX_CHECK_CONTAINER_PROBE_CAPTURE_BYTES,
+        )?,
+    })
+}
+
+fn probe_orbstack_app(
+    sdk: &HostOrbStackSdk,
+    program: &Path,
+    env: &[(OsString, OsString)],
+    deadline: CheckDeadline,
+) -> Result<OrbStackAppObservation, MiseError> {
     let info_path = Path::new(&sdk.app_bundle_path).join("Contents/Info.plist");
     let info_path = info_path
         .to_str()
@@ -106,28 +137,7 @@ pub(super) fn probe_orbstack(
         source_cli_signature,
         owned_cli_signature,
     )?;
-    Ok(OrbStackObservation {
-        program: program.clone(),
-        sha256: prepared
-            .orbctl_sha256
-            .clone()
-            .ok_or_else(|| invalid("orbstack", "cli_hash_missing"))?,
-        app,
-        version: probe(
-            program,
-            &["version"],
-            env,
-            deadline,
-            MAX_CHECK_CONTAINER_PROBE_CAPTURE_BYTES,
-        )?,
-        status: probe(
-            program,
-            &["status"],
-            env,
-            deadline,
-            MAX_CHECK_CONTAINER_PROBE_CAPTURE_BYTES,
-        )?,
-    })
+    Ok(app)
 }
 
 fn owned_cli_bundle(program: &Path) -> Result<&str, MiseError> {

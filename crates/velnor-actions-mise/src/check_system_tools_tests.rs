@@ -32,8 +32,12 @@ fn maximum_valid_swift_observation_fits_the_declared_receipt_bound() {
         discovery_stdout_digest: Some(digest.clone()),
         discovery_stderr_digest: Some(digest),
     };
-    validate_system_tool_proofs(CheckPlatform::MacosArm64, &[pin.clone()], &[proof.clone()])
-        .expect("maximal proof remains valid");
+    validate_system_tool_proofs(
+        CheckPlatform::MacosArm64,
+        std::slice::from_ref(&pin),
+        std::slice::from_ref(&proof),
+    )
+    .expect("maximal proof remains valid");
     let check = MiseCheck {
         id: "native".into(),
         task: "verify".into(),

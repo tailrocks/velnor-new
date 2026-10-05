@@ -326,7 +326,7 @@ fn retarget_check_identity(job: &mut Job, source_id: &str, output_id: &str, lane
                     name.push_str(output_id);
                 }
             }
-            _ => {}
+            super::ir::StepKind::Internal { .. } => {}
         }
     }
 }

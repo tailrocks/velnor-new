@@ -59,7 +59,7 @@ pub(crate) fn read_staged_bytes_until(
     }
     let mut file = fs::File::from(fd).take(bound.saturating_add(1));
     let mut bytes = Vec::new();
-    let mut buffer = [0_u8; 64 * 1024];
+    let mut buffer = vec![0_u8; 64 * 1024].into_boxed_slice();
     loop {
         checkpoint()?;
         let remaining = bound

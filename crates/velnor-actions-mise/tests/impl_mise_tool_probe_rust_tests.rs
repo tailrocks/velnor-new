@@ -29,7 +29,7 @@ fn rustc_verbose_requires_exact_declared_release_commit_and_platform() -> TestRe
         &tool.platforms[0].executables[0],
         &observed,
         &fixture.homes,
-        test_deadline(),
+        test_deadline()?,
     )?;
     validate_executable_proofs(&tool, platform, &[proof])?;
     let mut homes = fixture.homes.clone();
@@ -41,7 +41,7 @@ fn rustc_verbose_requires_exact_declared_release_commit_and_platform() -> TestRe
             &tool.platforms[0].executables[0],
             &observed,
             &homes,
-            test_deadline()
+            test_deadline()?
         )
         .is_err()
     );
@@ -53,7 +53,7 @@ fn rustc_verbose_requires_exact_declared_release_commit_and_platform() -> TestRe
             &tool.platforms[0].executables[0],
             &observed,
             &homes,
-            test_deadline()
+            test_deadline()?
         )
         .is_err()
     );
@@ -66,7 +66,7 @@ fn rustc_verbose_requires_exact_declared_release_commit_and_platform() -> TestRe
             &tool.platforms[0].executables[0],
             &drift,
             &fixture.homes,
-            test_deadline()
+            test_deadline()?
         )
         .is_err()
     );
@@ -95,7 +95,7 @@ fn nextest_version_requires_its_owned_compiler_prefix() -> TestResult {
         &tool.platforms[0].executables[0],
         &observed,
         &fixture.homes,
-        test_deadline(),
+        test_deadline()?,
     )?;
     let mut homes = fixture.homes.clone();
     homes.compiler_toolchain = None;
@@ -106,7 +106,7 @@ fn nextest_version_requires_its_owned_compiler_prefix() -> TestResult {
             &tool.platforms[0].executables[0],
             &observed,
             &homes,
-            test_deadline()
+            test_deadline()?
         )
         .is_err()
     );

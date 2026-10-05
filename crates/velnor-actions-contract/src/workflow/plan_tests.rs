@@ -26,9 +26,9 @@ fn paired_checks_require_exactly_one_entry_for_each_lane() {
     let hosted = lane(NamedCheckLaneVariant::Hosted, "check-demo__hosted");
     let local = lane(NamedCheckLaneVariant::ScaleSet, "check-demo__local");
     assert!(validate_named_check_lane_pairs(&[hosted.clone(), local.clone()]).is_ok());
-    assert!(validate_named_check_lane_pairs(&[hosted.clone()]).is_err());
+    assert!(validate_named_check_lane_pairs(std::slice::from_ref(&hosted)).is_err());
     assert!(validate_named_check_lane_pairs(&[hosted.clone(), hosted]).is_err());
-    assert!(validate_named_check_lane_pairs(&[local.clone()]).is_err());
+    assert!(validate_named_check_lane_pairs(std::slice::from_ref(&local)).is_err());
     assert!(validate_named_check_lane_pairs(&[local.clone(), local]).is_err());
 }
 

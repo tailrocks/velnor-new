@@ -152,8 +152,8 @@ fn maximum_admitted_receipt_survives_the_staged_gate_reader() {
     let bound = velnor_actions_contract::check_execution_receipt_upper_bound(&check, &declarations)
         .expect("receipt estimate");
     assert!(bound <= MAX_CHECK_EXECUTION_RECEIPT_BYTES);
-    let qualified_tools = declarations.iter().map(proof).collect();
-    let (temp, plan) = staged_with_tools(true, declarations, qualified_tools);
+    let qualified_tools = declarations.iter().map(proof).collect::<Vec<_>>();
+    let (temp, plan) = staged_with_tools(true, &declarations, &qualified_tools);
     let bytes = fs::read(artifact(&temp, &plan, "check-execution.json")).expect("receipt");
     assert!(
         bytes.len() > 128 * 1024,
@@ -172,10 +172,10 @@ fn maximum_container_admitted_receipt_survives_the_staged_gate_reader() {
     let bound = velnor_actions_contract::check_execution_receipt_upper_bound(&check, &declarations)
         .expect("container receipt estimate");
     assert!(bound <= MAX_CHECK_EXECUTION_RECEIPT_BYTES);
-    let qualified_tools = declarations.iter().map(proof).collect();
+    let qualified_tools = declarations.iter().map(proof).collect::<Vec<_>>();
     let container = crate::check_evidence::gate::container::budget_test_receipt();
     let (temp, plan) =
-        staged_with_container(true, declarations, qualified_tools, profile, container);
+        staged_with_container(true, &declarations, &qualified_tools, &profile, &container);
     let bytes = fs::read(artifact(&temp, &plan, "check-execution.json")).expect("receipt");
     assert!(
         bytes.len() > 128 * 1024,

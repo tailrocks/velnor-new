@@ -218,7 +218,7 @@ fn read_capped_bytes_until(
     }
     let mut file = fs::File::from(fd);
     let mut bytes = Vec::new();
-    let mut buffer = [0_u8; 64 * 1024];
+    let mut buffer = vec![0_u8; 64 * 1024].into_boxed_slice();
     loop {
         check_deadline(deadline)?;
         let remaining = max_bytes

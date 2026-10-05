@@ -1,4 +1,4 @@
-//! Signed OrbStack app and nested CLI identity validation.
+//! Signed `OrbStack` app and nested CLI identity validation.
 
 use serde::{Deserialize, Serialize};
 use velnor_actions_contract::config::{

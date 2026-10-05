@@ -45,7 +45,7 @@ fn scan_markers(
     source
         .seek(SeekFrom::Start(0))
         .map_err(|error| io_error(Path::new("zip"), error))?;
-    let mut bytes = [0_u8; SCAN_BYTES + 3];
+    let mut bytes = vec![0_u8; SCAN_BYTES + 3].into_boxed_slice();
     let mut carry = 0_usize;
     let mut consumed = 0_u64;
     let mut markers = ZipMarkers {

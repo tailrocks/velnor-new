@@ -116,11 +116,18 @@ fn receipts_require_exact_pins_paths_digests_and_platform() {
         }
         assert!(validate_system_tool_proofs(platform, &[pin()], &[invalid]).is_err());
     }
-    assert!(verify_check_system_tools(CheckPlatform::LinuxX64, &[pin()], test_deadline()).is_err());
+    let deadline = velnor_actions_mise::CheckDeadline::after(std::time::Duration::from_secs(60))
+        .expect("test deadline");
+    assert!(verify_check_system_tools(CheckPlatform::LinuxX64, &[pin()], deadline).is_err());
     assert!(
-        verify_check_system_tools(CheckPlatform::LinuxX64, &[], test_deadline())
-            .expect("empty")
-            .is_empty()
+        verify_check_system_tools(
+            CheckPlatform::LinuxX64,
+            &[],
+            velnor_actions_mise::CheckDeadline::after(std::time::Duration::from_secs(60))
+                .expect("test deadline"),
+        )
+        .expect("empty")
+        .is_empty()
     );
 }
 
@@ -136,9 +143,4 @@ fn closed_proof_wire_rejects_unknown_fields_and_undeclared_tools() {
     let mut value = serde_json::to_value(pin()).expect("pin");
     value["kind"] = serde_json::json!("unknown");
     assert!(serde_json::from_value::<CheckSystemTool>(value).is_err());
-}
-
-fn test_deadline() -> velnor_actions_mise::CheckDeadline {
-    velnor_actions_mise::CheckDeadline::after(std::time::Duration::from_secs(60))
-        .expect("test deadline")
 }
