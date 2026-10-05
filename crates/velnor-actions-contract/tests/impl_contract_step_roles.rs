@@ -19,6 +19,7 @@ fn plan_step(name: &str) -> Step {
         condition: None,
         kind: StepKind::Internal {
             operation: "plan-v1".to_owned(),
+            env: BTreeMap::new(),
         },
     }
 }
@@ -87,6 +88,26 @@ fn acquire_action_role_requires_content_digest_and_no_caller_inputs() {
             .to_string()
             .contains("role_kind_mismatch")
     );
+}
+
+#[test]
+fn acquire_role_rejects_conditions_outside_its_generated_action_scope() {
+    let mut step = Step {
+        name: "Acquire Velnor".to_owned(),
+        id: None,
+        role: Some(StepRole::AcquireVelnor),
+        condition: Some("steps.plan.outputs.release == 'true'".to_owned()),
+        kind: StepKind::Shell {
+            run: vec!["sh".to_owned(), "-c".to_owned(), "true".to_owned()],
+            env: BTreeMap::new(),
+        },
+    };
+    let error = validate_step_sequence(std::slice::from_ref(&step), "plan")
+        .expect_err("acquire conditions cannot cross into the local composite scope");
+    assert!(error.to_string().contains("acquire_conditional:plan"));
+
+    step.condition = None;
+    validate_step_sequence(&[step], "plan").expect("unconditional acquire source");
 }
 
 fn tofu_restore() -> Step {

@@ -3,6 +3,7 @@
 use super::step_identity::{StepId, StepRole, TOFU_PROVIDER_ADMISSION_USES};
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 /// One workflow step.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -50,6 +51,9 @@ pub enum StepKind {
     Internal {
         /// Internal operation name.
         operation: String,
+        /// Fixed environment values attached during workflow expansion.
+        #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+        env: BTreeMap<String, String>,
     },
 }
 
@@ -78,6 +82,12 @@ impl Step {
                     format!("tool_seed_conditional:{job}"),
                 ));
             }
+            if role == StepRole::AcquireVelnor && self.condition.is_some() {
+                return Err(ContractError::identity(
+                    "step.role",
+                    format!("acquire_conditional:{job}"),
+                ));
+            }
             if let Some(expected) = role.required_id()
                 && self.id != Some(expected)
             {
@@ -103,9 +113,11 @@ impl Step {
 fn validate_id_kind(id: Option<StepId>, kind: &StepKind, job: &str) -> Result<(), ContractError> {
     let Some(id) = id else { return Ok(()) };
     let valid = match id {
-        StepId::Plan => matches!(kind, StepKind::Internal { operation } if operation == "plan-v1"),
+        StepId::Plan => {
+            matches!(kind, StepKind::Internal { operation, .. } if operation == "plan-v1")
+        }
         StepId::PublishBaseline => {
-            matches!(kind, StepKind::Internal { operation } if operation == "publish-baseline-v1")
+            matches!(kind, StepKind::Internal { operation, .. } if operation == "publish-baseline-v1")
         }
         StepId::TofuProviders => {
             matches!(kind, StepKind::Action { uses, .. } if uses == TOFU_PROVIDER_ADMISSION_USES)
@@ -140,11 +152,17 @@ fn validate_kind(kind: &StepKind, job: &str) -> Result<(), ContractError> {
                 ));
             }
         }
-        StepKind::Internal { operation } => {
+        StepKind::Internal { operation, env } => {
             if operation.trim().is_empty() {
                 return Err(ContractError::identity(
                     "step.operation",
                     format!("empty_operation:{job}"),
+                ));
+            }
+            if env.keys().any(|key| key.trim().is_empty()) {
+                return Err(ContractError::identity(
+                    "step.env",
+                    format!("bad_internal_env:{job}"),
                 ));
             }
         }
