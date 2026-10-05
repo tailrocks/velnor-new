@@ -10,6 +10,7 @@ struct Target<'a> {
     artifact: &'a str,
     binary: String,
     sidecar: String,
+    provenance: String,
 }
 
 /// Require exact artifact binding, behavior qualification, and fail-closed fan-in.
@@ -24,6 +25,9 @@ pub(super) fn assert_qualification_jobs(body: &str) -> Result<(), Box<dyn Error>
             artifact: "generator-linux-x64-assets",
             binary: format!("velnor-actions-{version}-x86_64-unknown-linux-gnu"),
             sidecar: format!("velnor-actions-{version}-x86_64-unknown-linux-gnu.sha256"),
+            provenance: format!(
+                "velnor-actions-{version}-x86_64-unknown-linux-gnu.provenance.json"
+            ),
         },
         Target {
             job: "qualify-macos-arm64",
@@ -33,6 +37,7 @@ pub(super) fn assert_qualification_jobs(body: &str) -> Result<(), Box<dyn Error>
             artifact: "generator-macos-arm64-assets",
             binary: format!("velnor-actions-{version}-aarch64-apple-darwin"),
             sidecar: format!("velnor-actions-{version}-aarch64-apple-darwin.sha256"),
+            provenance: format!("velnor-actions-{version}-aarch64-apple-darwin.provenance.json"),
         },
         Target {
             job: "qualify-macos-x64",
@@ -42,6 +47,7 @@ pub(super) fn assert_qualification_jobs(body: &str) -> Result<(), Box<dyn Error>
             artifact: "generator-macos-x64-assets",
             binary: format!("velnor-actions-{version}-x86_64-apple-darwin"),
             sidecar: format!("velnor-actions-{version}-x86_64-apple-darwin.sha256"),
+            provenance: format!("velnor-actions-{version}-x86_64-apple-darwin.provenance.json"),
         },
     ];
     for target in &targets {
@@ -96,15 +102,22 @@ fn assert_artifact_binding(job: &str, target: &Target<'_>) {
     assert!(job.contains("path: release-manifest"), "{job}");
     assert!(job.contains(&target.binary), "{job}");
     assert!(job.contains(&target.sidecar), "{job}");
+    assert!(job.contains(&target.provenance), "{job}");
 }
 
 fn assert_manifest_binding(job: &str, target: &Target<'_>) {
+    let version = env!("CARGO_PKG_VERSION");
     assert!(
         job.contains(&format!("--arg target \\\"{}\\\"", target.triple)),
         "{job}"
     );
     assert!(job.contains(".targets | length == 3"), "{job}");
     assert!(job.contains("test(\\\"^[0-9a-f]{64}$\\\")"), "{job}");
+    assert!(job.contains("releases/download/"), "{job}");
+    assert!(
+        job.contains(&format!("--arg tag \\\"v{version}\\\"")),
+        "{job}"
+    );
     assert!(
         job.contains("test \\\"$actual\\\" = \\\"$expected\\\""),
         "{job}"
@@ -114,7 +127,10 @@ fn assert_manifest_binding(job: &str, target: &Target<'_>) {
     assert!(job.contains(".repository == $repository"), "{job}");
     assert!(job.contains(".commit == $commit"), "{job}");
     assert!(job.contains("tailrocks/velnor-new"), "{job}");
-    assert!(job.contains("generator-$GITHUB_SHA"), "{job}");
+    assert!(job.contains("VELNOR_RELEASE_MANIFEST_SHA256"), "{job}");
+    assert!(job.contains("GITHUB_WORKFLOW_SHA"), "{job}");
+    assert!(job.contains("provenance"), "{job}");
+    assert!(!job.contains("generator-$GITHUB_SHA"), "{job}");
 }
 
 fn assert_native_runner(job: &str, target: &Target<'_>) -> Result<(), Box<dyn Error>> {
@@ -157,6 +173,11 @@ fn assert_behavior_corpus(job: &str) {
     assert!(job.contains("expected/actionlint.yaml"), "{job}");
     assert!(job.contains("expected/plan.txt"), "{job}");
     assert!(job.contains("expected/plan.stderr.txt"), "{job}");
+    assert!(
+        job.contains("scripts/capture-opentofu-goldens.sh check-release"),
+        "{job}"
+    );
+    assert!(job.contains("generate --output-dir"), "{job}");
     assert!(job.contains("malformed_manifest:Cargo.toml:"), "{job}");
     assert!(!job.contains("cargo build"), "{job}");
     assert!(!job.contains("mbx build"), "{job}");
