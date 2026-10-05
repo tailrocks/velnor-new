@@ -7,7 +7,8 @@
 # (plan-v1 response, expected-set, task report); this script pins the
 # user-facing plan text and generated YAML bytes around it.
 #
-# Usage: scripts/capture-opentofu-goldens.sh [capture|check|check-release [CLI_BINARY]]
+# Usage: scripts/capture-opentofu-goldens.sh [capture|check [CLI_BINARY]]
+#        scripts/capture-opentofu-goldens.sh check-release CLI_BINARY CANDIDATE_MANIFEST MANIFEST_SHA256
 #   capture  regenerate docs/proposed/opentofu-goldens/ (only at known-good)
 #   check    regenerate to temp and byte-diff (default; never writes goldens)
 #   CLI_BINARY uses that exact executable and skips the default debug build.
@@ -19,10 +20,6 @@ WORK=""
 MODE="${1:-check}"
 BIN_EXPLICIT=0
 
-if [ "$#" -gt 2 ]; then
-  echo "FATAL: usage: $0 [capture|check [CLI_BINARY]]"
-  exit 2
-fi
 case "$MODE" in
   capture|check|check-release) ;;
   *)
@@ -30,11 +27,37 @@ case "$MODE" in
     exit 2
     ;;
 esac
+if [ "$MODE" = "check-release" ]; then
+  if [ "$#" -ne 4 ]; then
+    echo "FATAL: usage: $0 check-release CLI_BINARY CANDIDATE_MANIFEST MANIFEST_SHA256"
+    exit 2
+  fi
+elif [ "$#" -gt 2 ]; then
+  echo "FATAL: usage: $0 [capture|check [CLI_BINARY]]"
+  exit 2
+fi
 if ! CALLER_DIR="$(pwd -P)"; then
   echo "FATAL: could not resolve caller directory"
   exit 2
 fi
-if [ "$#" -eq 2 ]; then
+if [ "$MODE" = "check-release" ]; then
+  BIN_EXPLICIT=1
+  BIN_ARG="$2"
+  MANIFEST_ARG="$3"
+  CANDIDATE_MANIFEST_SHA256="$4"
+  if [ -z "$BIN_ARG" ] || [ -z "$MANIFEST_ARG" ] || [ -z "$CANDIDATE_MANIFEST_SHA256" ]; then
+    echo "FATAL: explicit candidate binary, manifest path, and manifest SHA-256 are required"
+    exit 2
+  fi
+  case "$BIN_ARG" in
+    /*) BIN="$BIN_ARG" ;;
+    *) BIN="$CALLER_DIR/$BIN_ARG" ;;
+  esac
+  case "$MANIFEST_ARG" in
+    /*) CANDIDATE_MANIFEST="$MANIFEST_ARG" ;;
+    *) CANDIDATE_MANIFEST="$CALLER_DIR/$MANIFEST_ARG" ;;
+  esac
+elif [ "$#" -eq 2 ]; then
   BIN_EXPLICIT=1
   BIN_ARG="$2"
   if [ -z "$BIN_ARG" ]; then
@@ -54,6 +77,8 @@ FIXTURES="nested mbx-nextest empty-suite minimal-cargo"
 fail=0
 note() { echo "$1"; }
 die() { echo "FAIL: $1"; fail=1; }
+
+source "$ROOT/scripts/generator-release/qualification-goldens.sh"
 
 # Portable link-preserving recursive copy. Plain `cp -r` dereferences
 # symlinks (BSD: -r is -RL; GNU: -r on links is non-portable), which
@@ -83,7 +108,10 @@ normalize_generate_stderr() {
 # `find -type f` alone skips links, leaving targets unpinned.
 hash_tree() {
   (cd "$1" && {
-    find . -type f | sort | xargs sha256sum
+    find . -type f | LC_ALL=C sort | while IFS= read -r file; do
+      local_digest="$(file_sha256 "$file")" || exit 1
+      printf '%s  %s\n' "$local_digest" "$file"
+    done
     find . -type l | sort | while IFS= read -r link; do
       printf 'link %s -> %s\n' "$link" "$(readlink "$link")"
     done
@@ -118,12 +146,12 @@ setup_case() {
   repo="$WORK/$case"
   mkdir -p "$repo"
   copy_tree "$ROOT/fixtures/$case/." "$repo/"
+  mkdir -p "$repo/.velnor"
   if [ ! -f "$repo/.velnor/config.toml" ]; then
-    mkdir -p "$repo/.velnor"
     printf 'schema = 1\n\n[workflow]\ndefault_branch = "main"\n' > "$repo/.velnor/config.toml"
   fi
   if [ "$MODE" = "check-release" ]; then
-    write_release_fixture_manifest "$repo"
+    stage_candidate_manifest "$repo" "$case"
   fi
   (cd "$repo" \
     && git init -q \
@@ -134,24 +162,6 @@ setup_case() {
   ) >/dev/null 2>&1 || { echo "FATAL: git setup failed for $case"; exit 2; }
   head=$(git -C "$repo" rev-parse HEAD)
   echo "$head"
-}
-
-write_release_fixture_manifest() {
-  local repo="$1" version commit digest
-  version=$("$BIN" --version | awk 'NR == 1 && NF == 2 && $1 == "velnor-actions" { print $2; next } { exit 1 } END { if (NR != 1) exit 1 }')
-  case "$version" in
-    ''|*[!0-9.]*|.*|*.) echo "FATAL: invalid candidate version: $version" >&2; exit 2 ;;
-  esac
-  commit=$(printf '%040d' 0 | tr '0' 'b')
-  digest=$(printf '%064d' 0 | tr '0' 'a')
-  mkdir -p "$repo/.velnor"
-  jq -n --arg version "$version" --arg commit "$commit" --arg digest "$digest" '
-    {schema:1, version:$version, repository:"tailrocks/velnor-new", commit:$commit,
-     targets:["x86_64-unknown-linux-gnu","aarch64-apple-darwin","x86_64-apple-darwin"]
-       | map(. as $target | {target:$target,
-         artifact:("https://github.com/tailrocks/velnor-new/releases/download/v" + $version + "/velnor-actions-" + $version + "-" + $target),
-         sha256:$digest})}
-  ' > "$repo/.velnor/release-manifest.json"
 }
 
 capture_case() {
@@ -173,18 +183,6 @@ capture_case() {
   fi
   if [ "$(cat "$out/generate.exit")" != "0" ] || [ ! -d "$preview/.github" ]; then
     echo "FATAL: generate failed for $case"
-    exit 2
-  fi
-  hash_tree "$preview" "$out/tree.sha256"
-}
-
-capture_release_case() {
-  local case="$1" repo="$2" out="$3" preview="$3/preview"
-  mkdir -p "$out" "$preview"
-  (cd "$repo" && "$BIN" generate --output-dir "$preview" >"$out/stdout.txt" 2>"$out/stderr.txt") \
-    || { echo "FATAL: release candidate generate failed for $case"; exit 2; }
-  if [ ! -d "$preview/.github" ]; then
-    echo "FATAL: release candidate emitted no workflows for $case"
     exit 2
   fi
   hash_tree "$preview" "$out/tree.sha256"
@@ -250,6 +248,9 @@ capture_dogfood() {
 }
 
 build_bin
+if [ "$MODE" = "check-release" ]; then
+  validate_candidate_manifest
+fi
 if ! WORK="$(mktemp -d "${TMPDIR:-/tmp}/velnor-goldens-work.XXXXXX")"; then
   echo "FATAL: could not create a private golden workspace"
   exit 2
@@ -292,7 +293,8 @@ if [ "$MODE" = "check-release" ]; then
     fi
   done
   check_release_policy_negative
-  [ "$fail" = "0" ] && note "ALL RELEASE FIXTURE GOLDENS MATCH"
+  capture_release_dogfood "$stage/dogfood"
+  [ "$fail" = "0" ] && note "ALL RELEASE FIXTURE GOLDENS AND DOGFOOD PARITY MATCH"
   exit "$fail"
 fi
 for case in $FIXTURES; do

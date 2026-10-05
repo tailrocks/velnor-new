@@ -145,11 +145,15 @@ fn assert_qualifier_action_boundary(qualifier_body: &str) -> Result<(), Box<dyn 
     assert!(!qualifier_body.contains("Setup Mise"), "{qualifier_body}");
     assert_eq!(
         qualifier_body.matches("uses:").count(),
-        1,
+        2,
         "{qualifier_body}"
     );
     assert!(
         qualifier_body.contains("actions/download-artifact@"),
+        "{qualifier_body}"
+    );
+    assert!(
+        qualifier_body.contains("artifact-ids: ${{ inputs.manifest_artifact_id }}"),
         "{qualifier_body}"
     );
     assert!(

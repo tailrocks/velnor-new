@@ -1,5 +1,24 @@
 //! Credential-free source preparation for candidate qualification.
 
+use crate::RenderError;
+use crate::Yaml;
+
+use super::jobs;
+use super::workflow_steps;
+
+/// Generate the shared source-preparation action used before every qualifier.
+pub(super) fn action(actions: &mut Vec<(String, Yaml)>) -> Result<Yaml, RenderError> {
+    jobs::local_action(
+        "generator-release-source",
+        "Fetch exact public source without an action post hook",
+        vec![workflow_steps::bash_step(
+            "Fetch exact public source without an action post hook",
+            QUALIFICATION_SOURCE_PREPARE,
+        )],
+        actions,
+    )
+}
+
 /// Fetch this public repository at the exact run commit without an action post hook.
 pub(super) const QUALIFICATION_SOURCE_PREPARE: &str = r#"set -eu
 python3 - "$GITHUB_WORKSPACE" "$GITHUB_REPOSITORY" "$GITHUB_SHA" <<'PY'

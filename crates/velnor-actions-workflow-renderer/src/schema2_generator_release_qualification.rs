@@ -6,7 +6,7 @@ use crate::yaml::Yaml;
 use super::super::features::{base, finish};
 use super::assets::ProductAsset;
 use super::workflow_steps::{self, with_permissions};
-use super::{assets, jobs};
+use super::{GeneratorReleasePins, assets, jobs, manifest};
 
 /// Qualify a build artifact in a job that has no write or attestation permissions.
 pub(super) fn job(
@@ -16,6 +16,8 @@ pub(super) fn job(
     runs_on: Yaml,
     build_job: &str,
     product: ProductAsset,
+    pins: &GeneratorReleasePins,
+    source_action: &Yaml,
     actions: &mut Vec<(String, Yaml)>,
 ) -> Result<(String, Yaml), RenderError> {
     let mut action_steps = Vec::new();
@@ -23,10 +25,15 @@ pub(super) fn job(
         product,
         "Download built asset archive",
     ));
+    action_steps.push(workflow_steps::download_step_by_id(
+        "Download canonical same-run candidate manifest",
+        "${{ inputs.manifest_artifact_id }}",
+        manifest::DIR,
+    ));
     action_steps.extend([
         workflow_steps::bash_step(
             "Verify candidate provenance record",
-            &assets::verify_provenance_script(product),
+            &assets::verify_provenance_script(product, pins),
         ),
         workflow_steps::bash_step(
             "Verify downloaded checksum sidecar",
@@ -35,32 +42,47 @@ pub(super) fn job(
                 product.directory, product.checksum_command, product.sidecar
             ),
         ),
-        workflow_steps::bash_step(
+        workflow_steps::bash_step_with_env(
             "Qualify downloaded candidate",
             &assets::qualification_script(product.binary, product.directory),
+            vec![(
+                "VELNOR_RELEASE_MANIFEST_SHA256",
+                "${{ inputs.manifest_sha256 }}",
+            )],
         ),
     ]);
-    let call = jobs::local_action_with_input(
+    let call = jobs::local_action_with_inputs(
         action,
         name,
         action_steps,
-        "artifact_id",
-        "Artifact ID from this target's build job",
-        &format!("${{{{ needs.{build_job}.outputs.artifact_id }}}}"),
+        vec![
+            (
+                "artifact_id",
+                "Artifact ID from this target's build job",
+                &format!("${{{{ needs.{build_job}.outputs.artifact_id }}}}"),
+            ),
+            (
+                "manifest_artifact_id",
+                "Artifact ID of the canonical candidate manifest",
+                "${{ needs.candidate-manifest.outputs.artifact_id }}",
+            ),
+            (
+                "manifest_sha256",
+                "SHA-256 of the canonical candidate manifest bytes",
+                "${{ needs.candidate-manifest.outputs.manifest_sha256 }}",
+            ),
+        ],
         actions,
     )?;
     Ok(finish(
         id,
         with_permissions(
-            workflow_steps::with_needs(base(name, runs_on, 120), &[build_job]),
+            workflow_steps::with_needs(
+                base(name, runs_on, 120),
+                &[build_job, "candidate-manifest"],
+            ),
             workflow_steps::qualification_permissions(),
         ),
-        vec![
-            workflow_steps::bash_step(
-                "Fetch exact public source without an action post hook",
-                super::source::QUALIFICATION_SOURCE_PREPARE,
-            ),
-            call,
-        ],
+        vec![source_action.clone(), call],
     ))
 }

@@ -52,6 +52,26 @@ def add_file(bundle, name, content, mode):
     member.mode = mode
     bundle.addfile(member, io.BytesIO(content))
 
+def add_sparse_oversized_archive():
+    member = tarfile.TarInfo(binary)
+    member.size = 268435457
+    member.mode = 0o755
+    with open(path, "wb") as archive:
+        archive.write(member.tobuf(tarfile.USTAR_FORMAT))
+        archive.seek(512 + ((member.size + 511) // 512) * 512)
+        for name, content, mode in entries[1:]:
+            row = tarfile.TarInfo(name)
+            row.size = len(content)
+            row.mode = mode
+            archive.write(row.tobuf(tarfile.USTAR_FORMAT))
+            archive.write(content)
+            archive.write(b"\0" * ((-len(content)) % 512))
+        archive.write(b"\0" * 1024)
+
+if case == "oversized":
+    add_sparse_oversized_archive()
+    sys.exit(0)
+
 with tarfile.open(path, "w", format=tarfile.USTAR_FORMAT) as bundle:
     if case == "symlink":
         member = tarfile.TarInfo(binary)
@@ -75,13 +95,6 @@ with tarfile.open(path, "w", format=tarfile.USTAR_FORMAT) as bundle:
             add_file(bundle, *row)
     elif case == "setuid":
         add_file(bundle, binary, b"candidate", 0o4755)
-        for row in entries[1:]:
-            add_file(bundle, *row)
-    elif case == "oversized":
-        member = tarfile.TarInfo(binary)
-        member.size = 268435457
-        member.mode = 0o755
-        bundle.addfile(member)
         for row in entries[1:]:
             add_file(bundle, *row)
     elif case == "reordered":

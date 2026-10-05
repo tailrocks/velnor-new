@@ -37,11 +37,22 @@ pub(super) fn assert_candidate_qualification(
     );
     assert!(job.contains(&caller_artifact_id), "{job}");
     assert!(
+        job.contains("manifest_sha256: ${{ needs.candidate-manifest.outputs.manifest_sha256 }}"),
+        "{job}"
+    );
+    assert!(
         action_body.contains("artifact-ids: ${{ inputs.artifact_id }}"),
         "{action_body}"
     );
     assert!(
         action_body.contains("inputs:\n  artifact_id:"),
+        "{action_body}"
+    );
+    assert!(
+        action_body.contains("  manifest_artifact_id:")
+            && action_body.contains("  manifest_sha256:")
+            && action_body
+                .contains("VELNOR_RELEASE_MANIFEST_SHA256: ${{ inputs.manifest_sha256 }}"),
         "{action_body}"
     );
     assert!(action_body.contains("required: true"), "{action_body}");
@@ -64,7 +75,7 @@ pub(super) fn assert_candidate_qualification(
     assert!(action_body.contains("--version"), "{action_body}");
     assert!(
         action_body.contains(&format!(
-            "scripts/capture-opentofu-goldens.sh check-release \\\"$GITHUB_WORKSPACE/{directory}/{binary}\\\""
+            "scripts/capture-opentofu-goldens.sh check-release \\\"$GITHUB_WORKSPACE/{directory}/{binary}\\\" \\\"$GITHUB_WORKSPACE/manifest-assets/release-manifest.json\\\" \\\"$VELNOR_RELEASE_MANIFEST_SHA256\\\""
         )),
         "{action_body}"
     );
@@ -84,15 +95,46 @@ fn assert_release_fixture_generation_requirements() {
         "{fixture_check}"
     );
     assert!(
-        fixture_check.contains(r#"version=$("$BIN" --version"#),
-        "{fixture_check}"
-    );
-    assert!(
         fixture_check.contains(r#"capture_release_case "$case" "$repo""#),
         "{fixture_check}"
     );
     assert!(
-        fixture_check.contains(r#"write_release_fixture_manifest "$repo""#),
+        fixture_check.contains(r#"stage_candidate_manifest "$repo" "$case""#),
         "{fixture_check}"
+    );
+    assert!(
+        fixture_check.contains("capture_release_dogfood"),
+        "{fixture_check}"
+    );
+    assert!(
+        !fixture_check.contains("write_release_fixture_manifest"),
+        "{fixture_check}"
+    );
+    let qualification_helpers =
+        include_str!("../../../scripts/generator-release/qualification-goldens.sh");
+    assert!(
+        qualification_helpers.contains(r#"stage_candidate_manifest "$repo" dogfood"#),
+        "{qualification_helpers}"
+    );
+    assert!(
+        qualification_helpers
+            .contains(r#"cmp -s "$CANDIDATE_MANIFEST" "$repo/.velnor/release-manifest.json""#),
+        "{qualification_helpers}"
+    );
+    assert!(
+        qualification_helpers.contains("staged_sha\" != \"$CANDIDATE_MANIFEST_SHA256\""),
+        "{qualification_helpers}"
+    );
+    assert!(
+        qualification_helpers.contains("GITHUB_SHA"),
+        "{qualification_helpers}"
+    );
+    assert!(
+        qualification_helpers.contains("host_target"),
+        "{qualification_helpers}"
+    );
+    assert!(
+        qualification_helpers.contains("candidate manifest digest does not match candidate CLI"),
+        "{qualification_helpers}"
     );
 }

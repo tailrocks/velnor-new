@@ -4,7 +4,7 @@ use velnor_actions_contract::config::{
 };
 use velnor_actions_contract::{
     CandidateArtifactManifest, ContractError, RELEASE_MANIFEST_FILENAME, ReleaseManifest,
-    SUPPORTED_TARGETS, asset_filename, is_seed_tag_for_version, is_supported_target,
+    ReleaseTarget, SUPPORTED_TARGETS, asset_filename, is_seed_tag_for_version, is_supported_target,
     target_for_runner_label,
 };
 
@@ -12,7 +12,11 @@ use velnor_actions_contract::{
 fn supported_targets_and_naming() {
     assert_eq!(
         SUPPORTED_TARGETS,
-        ["x86_64-unknown-linux-gnu", "aarch64-apple-darwin",]
+        [
+            "x86_64-unknown-linux-gnu",
+            "aarch64-apple-darwin",
+            "x86_64-apple-darwin",
+        ]
     );
     assert!(is_supported_target("x86_64-unknown-linux-gnu"));
     assert!(!is_supported_target("wasm32-unknown-unknown"));
@@ -26,9 +30,17 @@ fn supported_targets_and_naming() {
     );
     assert_eq!(
         target_for_runner_label("ubuntu-26.04"),
-        Some(SUPPORTED_TARGETS[0])
+        Some(ReleaseTarget::LinuxX86_64.triple())
     );
     assert!(target_for_runner_label("ubuntu-26.04-arm").is_none());
+    assert_eq!(
+        ReleaseTarget::for_runner_label("macos-15"),
+        Some(ReleaseTarget::MacosArm64)
+    );
+    assert_eq!(
+        ReleaseTarget::for_runner_label("macos-15-intel"),
+        Some(ReleaseTarget::MacosX86_64)
+    );
 }
 
 #[test]
@@ -81,7 +93,7 @@ fn release_manifest_json_round_trip_and_tamper() -> Result<(), ContractError> {
     let json = manifest_json(
         "0.1.0",
         "tailrocks/velnor-new",
-        &bound_artifact("0.1.0", SUPPORTED_TARGETS[0]),
+        &bound_artifact("0.1.0", ReleaseTarget::LinuxX86_64.triple()),
     );
     assert!(json.contains(&commit));
     assert!(json.contains(&sha));
@@ -102,7 +114,7 @@ fn manifest_json(version: &str, repository: &str, artifact: &str) -> String {
     let targets = SUPPORTED_TARGETS
         .iter()
         .map(|target| {
-            let target_artifact = if *target == SUPPORTED_TARGETS[0] {
+            let target_artifact = if *target == ReleaseTarget::LinuxX86_64.triple() {
                 artifact.to_owned()
             } else {
                 bound_artifact(version, target)
@@ -151,7 +163,7 @@ fn release_manifest_binds_repository_and_artifact_urls() -> Result<(), ContractE
     let good = manifest_json(
         "0.1.0",
         "tailrocks/velnor-new",
-        &bound_artifact("0.1.0", SUPPORTED_TARGETS[0]),
+        &bound_artifact("0.1.0", ReleaseTarget::LinuxX86_64.triple()),
     );
     ReleaseManifest::parse_json(&good, "m.json")?.validate("m.json")?;
     // Wrong repository, even a lookalike, fails closed.
@@ -164,7 +176,7 @@ fn release_manifest_binds_repository_and_artifact_urls() -> Result<(), ContractE
         let json = manifest_json(
             "0.1.0",
             repository,
-            &bound_artifact("0.1.0", SUPPORTED_TARGETS[0]),
+            &bound_artifact("0.1.0", ReleaseTarget::LinuxX86_64.triple()),
         );
         assert!(
             ReleaseManifest::parse_json(&json, "m.json")?
@@ -198,7 +210,7 @@ fn release_manifest_binds_repository_and_artifact_urls() -> Result<(), ContractE
     let downgrade = manifest_json(
         "0.2.0",
         "tailrocks/velnor-new",
-        &bound_artifact("0.1.0", SUPPORTED_TARGETS[0]),
+        &bound_artifact("0.1.0", ReleaseTarget::LinuxX86_64.triple()),
     );
     assert!(
         ReleaseManifest::parse_json(&downgrade, "m.json")?
@@ -226,7 +238,7 @@ fn release_manifest_requires_commit() -> Result<(), ContractError> {
     let good = manifest_json(
         "0.1.0",
         "tailrocks/velnor-new",
-        &bound_artifact("0.1.0", SUPPORTED_TARGETS[0]),
+        &bound_artifact("0.1.0", ReleaseTarget::LinuxX86_64.triple()),
     );
     let manifest = ReleaseManifest::parse_json(&good, "m.json")?;
     manifest.validate("m.json")?;

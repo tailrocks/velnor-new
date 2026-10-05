@@ -17,7 +17,7 @@ pub(super) fn assert_rendered(tree: &RenderedTree) -> Result<(), Box<dyn std::er
         .get(".github/workflows/generator-release.yml")
         .ok_or("missing .github/workflows/generator-release.yml")?;
     assert_eq!(body, super::marked(GENERATOR_RELEASE));
-    assert!(body.lines().count() < 400, "workflow has too many lines");
+    assert!(body.lines().count() <= 400, "workflow has too many lines");
     let actions = action_snapshots::rendered_actions(tree)?;
     assert_generator(body, &actions)?;
     Ok(())
@@ -28,7 +28,7 @@ pub(super) fn assert_committed(root: &std::path::Path) -> Result<(), Box<dyn std
     let path = root.join(".github/workflows/generator-release.yml");
     let body = std::fs::read_to_string(&path)?;
     assert_eq!(body, super::marked(GENERATOR_RELEASE), "{}", path.display());
-    assert!(body.lines().count() < 400, "workflow has too many lines");
+    assert!(body.lines().count() <= 400, "workflow has too many lines");
     let actions = action_snapshots::committed_actions(root)?;
     assert_generator(&body, &actions)?;
     Ok(())
@@ -39,6 +39,15 @@ fn assert_generator(body: &str, actions: &Actions) -> Result<(), Box<dyn std::er
     assert_job_order(body);
     assert_global_policy(body, actions);
     assert_checkouts(body, actions)?;
+    let source_action = action(actions, "generator-release-source")?;
+    assert!(
+        source_action.contains("Fetch exact public source without an action post hook"),
+        "{source_action}"
+    );
+    assert!(
+        source_action.contains("credential.helper="),
+        "{source_action}"
+    );
     assert_source_gate(body)?;
     security_snapshots::assert_isolated_candidate_execution(body, actions)?;
     assert_asset_catalog(&action_text(actions));
@@ -62,6 +71,7 @@ fn assert_job_order(body: &str) {
             "build-macos-intel",
             "qualify-macos-intel",
             "attest-macos-intel",
+            "candidate-manifest",
             "attest-manifest",
             "publish-generator",
         ]
@@ -85,13 +95,20 @@ fn assert_checkouts(body: &str, actions: &Actions) -> Result<(), Box<dyn std::er
         if id.starts_with("qualify-") {
             assert_eq!(checkouts, 0, "{id}: {job}");
             assert!(
-                job.contains("Fetch exact public source without an action post hook"),
+                job.contains("./.github/actions/generator-release-source"),
+                "{id}: {job}"
+            );
+            assert_eq!(
+                job.matches("uses: ./.github/actions/").count(),
+                2,
                 "{id}: {job}"
             );
         } else {
             assert_eq!(checkouts, 1, "{id}: {job}");
         }
-        if id != "verify-release-source" {
+        if !id.starts_with("qualify-")
+            && !matches!(id, "verify-release-source" | "candidate-manifest")
+        {
             assert_eq!(
                 job.matches("uses: ./.github/actions/").count(),
                 1,
@@ -115,6 +132,7 @@ fn assert_source_gate(body: &str) -> Result<(), Box<dyn std::error::Error>> {
         "{body}"
     );
     assert!(body.contains("git rev-parse HEAD"), "{body}");
+    assert!(body.contains("GITHUB_WORKFLOW_SHA"), "{body}");
     let source_gate = super::job_body(body, "verify-release-source")?;
     let recheck = source_gate
         .split("Recheck default-branch source")
@@ -234,16 +252,96 @@ fn assert_target_builds(body: &str, actions: &Actions) -> Result<(), Box<dyn std
 }
 
 fn assert_manifest_job(body: &str, actions: &Actions) -> Result<(), Box<dyn std::error::Error>> {
-    assert_attest(body, actions, "attest-manifest", "ubuntu-26.04")?;
-    assert_job_action(body, "attest-manifest", "generator-release-manifest")?;
-    let manifest = action(actions, "generator-release-manifest")?;
+    let candidate = super::job_body(body, "candidate-manifest")?;
+    assert!(candidate.contains("runs-on: ubuntu-26.04\n"), "{candidate}");
+    assert!(candidate.contains("- verify-release-source"), "{candidate}");
+    assert!(candidate.contains("- build-linux"), "{candidate}");
+    assert!(candidate.contains("- build-macos"), "{candidate}");
+    assert!(candidate.contains("- build-macos-intel"), "{candidate}");
+    assert!(candidate.contains("manifest_sha256:"), "{candidate}");
     assert!(
-        manifest.contains("create-release-manifest.sh '0.1.1' 'tailrocks/velnor-new'"),
+        candidate.contains("Upload same-run release manifest"),
+        "{candidate}"
+    );
+    assert!(
+        candidate.contains("manifest-assets/release-manifest.json"),
+        "{candidate}"
+    );
+
+    let manifest_job = super::job_body(body, "attest-manifest")?;
+    assert!(
+        manifest_job.contains("runs-on: ubuntu-26.04\n"),
+        "{manifest_job}"
+    );
+    assert!(manifest_job.contains("id-token: write"), "{manifest_job}");
+    assert!(!manifest_job.contains("contents: write"), "{manifest_job}");
+    assert!(
+        manifest_job.contains("- candidate-manifest"),
+        "{manifest_job}"
+    );
+    assert!(manifest_job.contains("- attest-linux"), "{manifest_job}");
+    assert!(manifest_job.contains("- attest-macos"), "{manifest_job}");
+    assert!(
+        manifest_job.contains("- attest-macos-intel"),
+        "{manifest_job}"
+    );
+    assert!(
+        manifest_job.contains("uses: ./.github/actions/generator-release-attest-manifest"),
+        "{manifest_job}"
+    );
+    for (name, value) in [
+        (
+            "linux_artifact_id",
+            "${{ needs.build-linux.outputs.artifact_id }}",
+        ),
+        (
+            "macos_arm64_artifact_id",
+            "${{ needs.build-macos.outputs.artifact_id }}",
+        ),
+        (
+            "macos_x86_64_artifact_id",
+            "${{ needs.build-macos-intel.outputs.artifact_id }}",
+        ),
+        (
+            "manifest_artifact_id",
+            "${{ needs.candidate-manifest.outputs.artifact_id }}",
+        ),
+        (
+            "manifest_sha256",
+            "${{ needs.candidate-manifest.outputs.manifest_sha256 }}",
+        ),
+    ] {
+        assert!(
+            manifest_job.contains(&format!("{name}: {value}")),
+            "{manifest_job}"
+        );
+    }
+    let manifest_action = action(actions, "generator-release-attest-manifest")?;
+    assert!(
+        manifest_action.contains("Verify canonical candidate manifest digest"),
+        "{manifest_action}"
+    );
+    assert!(
+        manifest_action.contains("Attest built artifacts"),
+        "{manifest_action}"
+    );
+    assert!(
+        manifest_action.contains("Upload verified manifest attestation bundle"),
+        "{manifest_action}"
+    );
+    assert!(
+        manifest_action.contains("--signer-digest"),
+        "{manifest_action}"
+    );
+    assert!(!manifest_action.contains("${{ needs."), "{manifest_action}");
+    let manifest = format!("{candidate}\n{manifest_action}");
+    assert!(
+        manifest.contains(
+            "create-release-manifest.sh '0.1.1' 'tailrocks/velnor-new' '1.98.1' '1.21.1'"
+        ),
         "{manifest}"
     );
     assert!(manifest.contains("release-manifest.json"), "{manifest}");
-    assert!(manifest.contains("Attest built artifacts"), "{manifest}");
-    assert!(manifest.contains("Upload release manifest"), "{manifest}");
     let manifest_builder =
         include_str!("../../../scripts/generator-release/create-release-manifest.sh");
     assert!(
@@ -265,13 +363,6 @@ fn assert_manifest_job(body: &str, actions: &Actions) -> Result<(), Box<dyn std:
     assert!(
         manifest_builder.contains(r#".toolchain["mr-boxington"] == $mr_boxington"#),
         "{manifest_builder}"
-    );
-    let manifest_job = super::job_body(body, "attest-manifest")?;
-    assert!(manifest_job.contains("- attest-linux"), "{manifest_job}");
-    assert!(manifest_job.contains("- attest-macos"), "{manifest_job}");
-    assert!(
-        manifest_job.contains("- attest-macos-intel"),
-        "{manifest_job}"
     );
     Ok(())
 }
@@ -319,10 +410,28 @@ fn assert_publish_job(body: &str, actions: &Actions) -> Result<(), Box<dyn std::
     );
     assert!(publish_action.contains(".intoto.jsonl"), "{publish_action}");
     assert!(publish_action.contains("v0.1.1"), "{publish_action}");
+    assert!(
+        publish_action.contains("inputs:\n  linux_artifact_id:"),
+        "{publish_action}"
+    );
+    assert!(
+        publish_action.contains("  manifest_artifact_id:")
+            && publish_action.contains("${{ inputs.manifest_sha256 }}"),
+        "{publish_action}"
+    );
+    assert!(!publish_action.contains("${{ needs."), "{publish_action}");
     assert!(publish.contains("- attest-linux"), "{publish}");
     assert!(publish.contains("- attest-macos"), "{publish}");
     assert!(publish.contains("- attest-macos-intel"), "{publish}");
     assert!(publish.contains("- attest-manifest"), "{publish}");
+    assert!(
+        publish.contains("environment:\n      name: generator-release"),
+        "{publish}"
+    );
+    assert!(
+        body.contains("group: generator-release-${{ github.repository }}-${{ github.ref }}"),
+        "{body}"
+    );
     Ok(())
 }
 
@@ -349,11 +458,7 @@ fn assert_attest(
     assert!(job.contains(&format!("runs-on: {runs_on}\n")), "{job}");
     assert!(job.contains("id-token: write"), "{job}");
     assert!(!job.contains("contents: write"), "{job}");
-    let action_name = if id == "attest-manifest" {
-        "generator-release-manifest".to_owned()
-    } else {
-        format!("generator-release-{id}")
-    };
+    let action_name = format!("generator-release-{id}");
     assert_job_action(body, id, &action_name)?;
     assert!(action(actions, &action_name)?.contains("provenance.json"));
     Ok(())

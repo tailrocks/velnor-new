@@ -1,14 +1,47 @@
 //! Reusable workflow steps and permission sets for the generator release.
 
+use crate::commands::join_argv_for_run;
+use crate::setup::SETUP_MISE_NAME;
 use crate::steps::{DOWNLOAD_ARTIFACT_USES, UPLOAD_ARTIFACT_USES};
 use crate::yaml::Yaml;
+use crate::{MiseSetup, RenderError};
 
 use super::super::features::CHECKOUT_USES;
 
-const MISE_USES: &str = "jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5";
-const MISE_VERSION: &str = "2026.9.18";
 const ATTEST_USES: &str =
     "actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8";
+
+pub(super) fn command_step(name: &str, argv: &[String]) -> Result<Yaml, RenderError> {
+    Ok(bash_step(name, &join_argv_for_run(argv)?))
+}
+
+pub(super) fn mise_step(setup: &MiseSetup) -> Result<Yaml, RenderError> {
+    setup.validate()?;
+    Ok(Yaml::Map(vec![
+        ("name".to_owned(), Yaml::str(SETUP_MISE_NAME)),
+        ("uses".to_owned(), Yaml::str(setup.uses.clone())),
+        (
+            "with".to_owned(),
+            Yaml::Map(vec![
+                ("version".to_owned(), Yaml::str(setup.version.clone())),
+                ("sha256".to_owned(), Yaml::str(setup.sha256.clone())),
+                ("install".to_owned(), Yaml::str("false")),
+                ("env".to_owned(), Yaml::str("false")),
+                ("cache".to_owned(), Yaml::str("false")),
+                ("cache_save".to_owned(), Yaml::str("false")),
+            ]),
+        ),
+    ]))
+}
+
+pub(super) fn gh_function(argv: &[String]) -> Result<String, RenderError> {
+    let executable = join_argv_for_run(argv)?;
+    Ok(format!("gh() {{ {executable} \"$@\"; }}\nexport -f gh"))
+}
+
+pub(super) fn install_gh_step(install_argv: &[String]) -> Result<Yaml, RenderError> {
+    command_step("Install pinned GitHub CLI", install_argv)
+}
 pub(super) fn bash_step(name: &str, run: &str) -> Yaml {
     Yaml::Map(vec![
         ("name".to_owned(), Yaml::str(name)),
@@ -17,51 +50,52 @@ pub(super) fn bash_step(name: &str, run: &str) -> Yaml {
     ])
 }
 
+pub(super) fn bash_step_with_id(id: &str, name: &str, run: &str) -> Yaml {
+    Yaml::Map(vec![
+        ("name".to_owned(), Yaml::str(name)),
+        ("id".to_owned(), Yaml::str(id)),
+        ("shell".to_owned(), Yaml::str("bash")),
+        ("run".to_owned(), Yaml::str(run)),
+    ])
+}
+
 /// Run one API step with only the repository's read-scoped token.
-pub(super) fn bash_step_with_token(name: &str, run: &str) -> Yaml {
+pub(super) fn bash_step_with_env(name: &str, run: &str, env: Vec<(&str, &str)>) -> Yaml {
     Yaml::Map(vec![
         ("name".to_owned(), Yaml::str(name)),
         (
             "env".to_owned(),
-            Yaml::Map(vec![(
-                "GH_TOKEN".to_owned(),
-                Yaml::str("${{ github.token }}"),
-            )]),
+            Yaml::Map(
+                env.into_iter()
+                    .map(|(key, value)| (key.to_owned(), Yaml::str(value)))
+                    .collect(),
+            ),
         ),
         ("shell".to_owned(), Yaml::str("bash")),
         ("run".to_owned(), Yaml::str(run)),
     ])
 }
 
-pub(super) fn publish_step(run: &str) -> Yaml {
-    Yaml::Map(vec![
-        ("name".to_owned(), Yaml::str("Publish GitHub release")),
-        (
-            "env".to_owned(),
-            Yaml::Map(vec![(
-                "GH_TOKEN".to_owned(),
-                Yaml::str("${{ github.token }}"),
-            )]),
-        ),
-        ("shell".to_owned(), Yaml::str("bash")),
-        ("run".to_owned(), Yaml::str(run)),
-    ])
+pub(super) fn bash_step_with_token(
+    name: &str,
+    run: &str,
+    gh_argv: &[String],
+) -> Result<Yaml, RenderError> {
+    let full_run = format!("{}\n{run}", gh_function(gh_argv)?);
+    Ok(bash_step_with_env(
+        name,
+        &full_run,
+        vec![("GH_TOKEN", "${{ github.token }}")],
+    ))
 }
 
-pub(super) fn mise_step() -> Yaml {
-    Yaml::Map(vec![
-        ("name".to_owned(), Yaml::str("Setup Mise")),
-        ("uses".to_owned(), Yaml::str(MISE_USES)),
-        (
-            "with".to_owned(),
-            Yaml::Map(vec![
-                ("cache".to_owned(), Yaml::str("false")),
-                ("env".to_owned(), Yaml::str("false")),
-                ("install".to_owned(), Yaml::str("false")),
-                ("version".to_owned(), Yaml::str(MISE_VERSION)),
-            ]),
-        ),
-    ])
+pub(super) fn publish_step(run: &str, gh_argv: &[String]) -> Result<Yaml, RenderError> {
+    let full_run = format!("{}\n{run}", gh_function(gh_argv)?);
+    Ok(bash_step_with_env(
+        "Publish GitHub release",
+        &full_run,
+        vec![("GH_TOKEN", "${{ github.token }}")],
+    ))
 }
 
 pub(super) fn checkout_step() -> Yaml {
@@ -207,3 +241,7 @@ pub(super) fn subject_list(files: &[&str], directory: &str) -> String {
 fn newline_list(files: &[&str]) -> String {
     files.join("\n")
 }
+
+#[cfg(test)]
+#[path = "schema2_generator_release_workflow_steps_tests.rs"]
+mod tests;

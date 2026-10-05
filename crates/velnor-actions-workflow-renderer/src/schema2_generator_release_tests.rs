@@ -1,4 +1,6 @@
 use super::{assets, manifest};
+use crate::schema2::GeneratorReleasePins;
+use crate::setup::MiseSetup;
 use std::error::Error;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
@@ -68,6 +70,8 @@ fn run_publish_case(case: Failure) -> Result<(), Box<dyn Error>> {
             "scripts/generator-release/create-release-manifest.sh",
             "0.1.1",
             REPOSITORY,
+            "1.98.1",
+            "1.21.1",
         ])
         .current_dir(&scratch.0)
         .env("GITHUB_REPOSITORY", REPOSITORY)
@@ -99,13 +103,16 @@ fn run_publish_case(case: Failure) -> Result<(), Box<dyn Error>> {
     fs::write(scratch.0.join("release.json"), release_json)?;
     install_mock_gh(&scratch.0)?;
     let script = scratch.0.join("publish.sh");
-    fs::write(&script, manifest::publish_script())?;
+    fs::write(&script, manifest::publish_script(&test_pins()))?;
     let output = Command::new("bash")
         .arg(&script)
         .current_dir(&scratch.0)
         .env("PATH", path_with_mock_gh(&scratch.0)?)
         .env("GITHUB_REPOSITORY", REPOSITORY)
         .env("GITHUB_SHA", SOURCE_SHA)
+        .env("GITHUB_WORKFLOW_SHA", SOURCE_SHA)
+        .env("GITHUB_REF", "refs/heads/main")
+        .env("GITHUB_EVENT_NAME", "workflow_dispatch")
         .env("GH_PREFLIGHT", preflight_mode(case))
         .env("GH_RELEASE_JSON", scratch.0.join("release.json"))
         .env("GH_CREATE_TAG", scratch.0.join("created-tag"))
@@ -135,6 +142,28 @@ fn run_publish_case(case: Failure) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
+fn test_pins() -> GeneratorReleasePins {
+    let setup = MiseSetup {
+        uses: format!("jdx/mise-action@{}", "a".repeat(40)),
+        version: "2026.9.18".to_owned(),
+        sha256: "b".repeat(64),
+    };
+    GeneratorReleasePins {
+        linux_x86_64_setup: setup.clone(),
+        macos_arm64_setup: setup.clone(),
+        macos_x86_64_setup: setup,
+        install_gate_tools_argv: vec!["mise".to_owned(), "install".to_owned()],
+        install_build_tools_argv: vec!["mise".to_owned(), "install".to_owned()],
+        install_gh_argv: vec!["mise".to_owned(), "install".to_owned()],
+        build_argv: vec!["mise".to_owned(), "exec".to_owned()],
+        actionlint_argv: vec!["mise".to_owned(), "exec".to_owned()],
+        zizmor_argv: vec!["mise".to_owned(), "exec".to_owned()],
+        gh_argv: vec!["mise".to_owned(), "exec".to_owned(), "gh".to_owned()],
+        rust_version: "1.98.1".to_owned(),
+        mr_boxington_version: "1.21.1".to_owned(),
+    }
+}
+
 fn copy_release_helpers(root: &Path) -> Result<(), Box<dyn Error>> {
     let repo = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     let target = root.join("scripts/generator-release");
@@ -155,7 +184,10 @@ fn write_candidate_records(root: &Path, case: Failure) -> Result<(), Box<dyn Err
         fs::create_dir_all(&directory)?;
         let binary = directory.join(product.binary);
         if !(case == Failure::MissingBinary && index == 2) {
-            fs::write(&binary, format!("candidate bytes for {}\n", product.target))?;
+            fs::write(
+                &binary,
+                format!("candidate bytes for {}\n", product.target.triple()),
+            )?;
         }
         let digest = if binary.exists() {
             sha256(&binary)?
@@ -175,7 +207,8 @@ fn write_candidate_records(root: &Path, case: Failure) -> Result<(), Box<dyn Err
             directory.join(product.provenance),
             format!(
                 "{{\"schema\":1,\"version\":\"0.1.1\",\"repository\":\"{REPOSITORY}\",\"commit\":\"{SOURCE_SHA}\",\"target\":\"{}\",\"asset\":\"{}\",\"sha256\":\"{digest}\",\"toolchain\":{{\"rust\":\"1.98.1\",\"mr-boxington\":\"1.21.1\"}}}}\n",
-                product.target, product.binary
+                product.target.triple(),
+                product.binary
             ),
         )?;
     }
@@ -232,6 +265,16 @@ fn install_mock_gh(root: &Path) -> Result<(), Box<dyn Error>> {
 set -eu
 if [ "$1" = api ]; then
   shift
+  if [ "$1" = --paginate ] && [ "$2" = --slurp ]; then
+    case "$3" in
+      *actions/workflows/ci.yml/runs*)
+        printf '[{"workflow_runs":[{"id":91,"run_number":9,"run_attempt":1,"path":".github/workflows/ci.yml","head_sha":"%s","head_branch":"main","head_repository":{"full_name":"tailrocks/velnor-new"},"event":"push","status":"completed","conclusion":"success"}]}]\n' "$GITHUB_SHA" ;;
+      *actions/runs/91/attempts/1/jobs*)
+        printf '[{"jobs":[{"name":"Required","head_sha":"%s","head_branch":"main","status":"completed","conclusion":"success"}]}]\n' "$GITHUB_SHA" ;;
+      *) exit 43 ;;
+    esac
+    exit 0
+  fi
   if [ "$1" = --include ]; then
     case "$GH_PREFLIGHT" in
       404) printf 'HTTP/2 404\r\n\r\n{"message":"Not Found","status":"404"}\n'; exit 1 ;;
@@ -241,6 +284,8 @@ if [ "$1" = api ]; then
     esac
   fi
   case "$1" in
+    repos/tailrocks/velnor-new/commits/main)
+      if [ "$2" = --jq ] && [ "$3" = .sha ]; then printf '%s\n' "$GITHUB_SHA"; else printf '{"sha":"%s"}\n' "$GITHUB_SHA"; fi ;;
     repos/tailrocks/velnor-new/git/ref/tags/v0.1.1)
       printf '{"object":{"type":"commit","sha":"%s"}}\n' "$GITHUB_SHA" ;;
     repos/tailrocks/velnor-new/releases/tags/v0.1.1)
@@ -270,6 +315,14 @@ exit 46
     let mut permissions = fs::metadata(&mock)?.permissions();
     permissions.set_mode(0o755);
     fs::set_permissions(mock, permissions)?;
+    let git = bin.join("git");
+    fs::write(
+        &git,
+        "#!/bin/sh\nset -eu\nif [ \"$1\" = rev-parse ] && [ \"$2\" = HEAD ]; then printf '%s\\n' \"$GITHUB_SHA\"; exit 0; fi\nexec /usr/bin/git \"$@\"\n",
+    )?;
+    let mut permissions = fs::metadata(&git)?.permissions();
+    permissions.set_mode(0o755);
+    fs::set_permissions(git, permissions)?;
     Ok(())
 }
 

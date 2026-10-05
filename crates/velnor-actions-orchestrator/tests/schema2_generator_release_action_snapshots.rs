@@ -3,7 +3,15 @@ use velnor_actions_workflow_renderer::RenderedTree;
 
 pub(super) type Actions = BTreeMap<&'static str, String>;
 
-const ACTION_SNAPSHOTS: [(&str, &str); 11] = [
+const ACTION_SNAPSHOTS: [(&str, &str); 12] = [
+    (
+        "generator-release-source",
+        include_str!("snapshots/generator-release-source.yml"),
+    ),
+    (
+        "generator-release-attest-manifest",
+        include_str!("snapshots/generator-release-attest-manifest.yml"),
+    ),
     (
         "generator-release-build-linux",
         include_str!("snapshots/generator-release-build-linux.yml"),
@@ -39,10 +47,6 @@ const ACTION_SNAPSHOTS: [(&str, &str); 11] = [
     (
         "generator-release-qualify-macos-intel",
         include_str!("snapshots/generator-release-qualify-macos-intel.yml"),
-    ),
-    (
-        "generator-release-manifest",
-        include_str!("snapshots/generator-release-manifest.yml"),
     ),
     (
         "generator-release-publish",
