@@ -2,6 +2,8 @@
 //!
 //! Declared via `#[path]` from `crate_jobs.rs` under `cfg(test)`.
 
+use std::collections::BTreeSet;
+
 use super::*;
 use crate::clippy_groups::ClippyMemoryPlan;
 use crate::crate_job_ids::job_id_for_member;
