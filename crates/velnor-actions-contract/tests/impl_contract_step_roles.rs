@@ -265,6 +265,17 @@ fn tofu_provider_save_must_match_restore_gate_and_order() {
 }
 
 #[test]
+fn tofu_provider_save_must_follow_restore_without_consumers() {
+    let error = validate_step_sequence(&[tofu_save(), tofu_restore()], "tofu-job")
+        .expect_err("save outputs cannot be consumed before their restore step runs");
+    assert!(
+        error
+            .to_string()
+            .contains("tofu_provider_save_before_restore")
+    );
+}
+
+#[test]
 fn configured_checkout_authority_is_typed_exact_and_name_independent() {
     use velnor_actions_contract::workflow::step_identity::is_configured_checkout;
 
