@@ -1,9 +1,10 @@
 a63e6a4550e75e14c2dd2ebe6efefe1360a847967c0ee2f28803eb43949dc6e4  ./.github/AGENTS.md
 0da1fbb188c99eb4cffe66befed975368b8b86ef7e375d2b8ac9a6540818fbff  ./.github/actionlint.yaml
-37220d1bacd0e8ecf409bbd38923a0e708ba3e89829069c1138a8698743d53ca  ./.github/workflows/ci.yml
+6af64e54bfa164a3a3983daca601d104776490c4ccc81908c97817fa5a57f89b  ./.github/actions/velnor-tool-seed/action.yml
+13bd8b14e34e2e97c661082556e9d9295ba4840c00cf7542ec41c7910a632f4b  ./.github/workflows/ci.yml
 0d41b05d10d4da7b26a719f82908f2a47e7224ed93ef3383d81a6d45179fb5d8  ./.github/workflows/freshness.yml
 d13645f1aa9667a1ce9fa0886ca5f4930c3a9a0e33c3dfe7df6b8942cad9962a  ./.github/workflows/generator-release.yml
 a103db30bc49166259cbb40e9948c2677fbc49d84164cc7f71c262ea5d3ecdab  ./.github/workflows/image-release.yml
 f3edd65a1dcc1de22b67e08446003e41d10c8fd4595ffcff72fb9e821a935846  ./.github/workflows/macos-binary-release.yml
-c984a7586172233ab9fdbb503684e8f2eb6c0d6548ccba21dd499e03badc95ce  ./.github/workflows/qualification.yml
+1ed3c391c89534bb91860b522f582f60743fb8f26e83348c925800cdfae7d0a9  ./.github/workflows/qualification.yml
 link ./.github/CLAUDE.md -> AGENTS.md
