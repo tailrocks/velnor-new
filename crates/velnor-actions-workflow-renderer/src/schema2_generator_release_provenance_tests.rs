@@ -385,3 +385,11 @@ fn assert_failure(output: &Output, reason: &str) {
 fn output_text(output: &Output) -> Result<String, Box<dyn Error>> {
     Ok(String::from_utf8(output.stdout.clone())?)
 }
+
+#[cfg(test)]
+#[path = "schema2_generator_release_url_tests.rs"]
+mod url_tests;
+
+#[cfg(unix)]
+#[path = "schema2_generator_release_publisher_tests.rs"]
+mod publisher_tests;

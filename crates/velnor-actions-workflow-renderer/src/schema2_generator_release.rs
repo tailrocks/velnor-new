@@ -20,6 +20,7 @@ const MISE_VERSION: &str = "2026.9.18";
 /// `actions/attest-build-provenance` tag `v4.2.2` (commit, not a floating tag).
 const ATTEST_USES: &str =
     "actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8";
+const RELEASE_VERSION: &str = "0.1.0";
 const LINUX_BIN: &str = "velnor-actions-0.1.0-x86_64-unknown-linux-gnu";
 const MACOS_BIN: &str = "velnor-actions-0.1.0-aarch64-apple-darwin";
 const LINUX_SUM: &str = "velnor-actions-0.1.0-x86_64-unknown-linux-gnu.sha256";
@@ -32,7 +33,7 @@ const ASSET_DIR: &str = "assets";
 
 const RUST_INSTALL: &str = "\
 set -eu
-mise --no-config --no-env --no-hooks install rust@1.98.1";
+mise install rust@1.98.1 mr-boxington@1.21.1";
 
 /// Linux x64 and macOS arm64 builds, two attestations, then one publish.
 ///
@@ -126,7 +127,7 @@ fn build_steps(
 
 fn build_script(asset: &str) -> String {
     format!(
-        "set -eu\nmise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo build --locked --release -p velnor-actions-cli\ncp target/release/velnor-actions {asset}\ntest -s {asset}"
+        "set -eu\nsource_sha=\"$(git rev-parse HEAD)\"\ntest \"$source_sha\" = \"$GITHUB_SHA\"\nmise exec -- mbx build --locked --release -p velnor-actions-cli\nbinary_version=\"$(target/release/velnor-actions --version)\"\ntest \"$binary_version\" = \"velnor-actions {RELEASE_VERSION}\"\ncp target/release/velnor-actions {asset}\ntest -s {asset}"
     )
 }
 
@@ -148,7 +149,7 @@ fn sum_script(command: &str, asset: &str, sidecar: &str) -> String {
 
 fn publish_script() -> String {
     format!(
-        "set -eu\ntag=\"generator-${{GITHUB_SHA}}\"\ngh release create \"$tag\" -R \"${{GITHUB_REPOSITORY}}\" --target \"$GITHUB_SHA\" --title \"$tag\" --latest=false --notes \"velnor-actions 0.1.0 built from ${{GITHUB_SHA}}.\" {LINUX_DIR}/{LINUX_BIN} {LINUX_DIR}/{LINUX_SUM} {MACOS_DIR}/{MACOS_BIN} {MACOS_DIR}/{MACOS_SUM}"
+        "set -eu\npython3 scripts/generator-release/publish_generator_release.py --version {RELEASE_VERSION}"
     )
 }
 
@@ -204,6 +205,7 @@ fn publish_job(hosted: Yaml) -> (String, Yaml) {
         ),
         vec![
             checkout_step(),
+            mise_step(),
             download_step("Download Linux assets", LINUX_ARTIFACT, LINUX_DIR),
             download_step("Download macOS assets", MACOS_ARTIFACT, MACOS_DIR),
             publish_step(&publish_script()),
@@ -236,6 +238,7 @@ fn checkout_step() -> Yaml {
             Yaml::Map(vec![
                 ("fetch-depth".to_owned(), Yaml::str("1")),
                 ("persist-credentials".to_owned(), Yaml::str("false")),
+                ("ref".to_owned(), Yaml::str("${{ github.sha }}")),
             ]),
         ),
     ])
