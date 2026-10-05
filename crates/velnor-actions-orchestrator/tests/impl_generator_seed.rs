@@ -47,7 +47,9 @@ fn generator_seed_hit_skips_curl_and_a_bad_hash_does_not_copy()
 }
 
 fn file_sha256(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
-    let output = Command::new("/sbin/sha256sum").arg(path).output()?;
+    // Ubuntu keeps sha256sum in /usr/bin. macOS coreutils can put it in /sbin.
+    // The acquire script also resolves sha256sum from PATH.
+    let output = Command::new("sha256sum").arg(path).output()?;
     if !output.status.success() {
         return Err(format!("sha256sum:{output:?}").into());
     }
