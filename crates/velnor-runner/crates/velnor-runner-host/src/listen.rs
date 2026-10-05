@@ -236,7 +236,7 @@ pub(crate) fn admin_link(pat: &str, owner: &str, repo: &str) -> Result<Link, Ens
 
 fn poll_available(link: &mut Link, session: &QueueSession) -> Result<bool, EnsureError> {
     let (saved, path) = point_at_queue(link, &session.message_queue_url)?;
-    let polled = poll_path(link, session, &path, crate::launch::job_capacity());
+    let polled = poll_path(link, session, &path, crate::launch::job_capacity(), 0);
     restore_base(link, saved)?;
     let polled = polled?;
     Ok(matches!(offer(&polled), Offer::Acquire { .. }))
@@ -269,6 +269,7 @@ pub(crate) fn point_at_queue(
 /// One poll on the current origin.
 ///
 /// `total_capacity` is the `X-ScaleSetMaxCapacity` header, not free slots.
+/// `cursor` is `lastMessageId`. Zero reads the queue head.
 ///
 /// # Errors
 ///
@@ -278,13 +279,14 @@ pub(crate) fn poll_path(
     session: &QueueSession,
     path: &str,
     total_capacity: u32,
+    cursor: i64,
 ) -> Result<Poll, EnsureError> {
     let gate = RefreshGate::new();
     let refresh = || Ok::<(), WireError>(());
     poll(
         &mut link.transport,
         path,
-        0,
+        cursor,
         total_capacity,
         session.token(),
         &gate,

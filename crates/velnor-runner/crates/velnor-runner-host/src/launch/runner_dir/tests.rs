@@ -224,7 +224,6 @@ async fn empty_row_keeps_a_mint_retry_after_delete() -> Result<(), String> {
             "runner-delete",
             "jit",
             "runners-list",
-            "runner-delete",
             "jit",
             "ack"
         ]
@@ -239,7 +238,7 @@ async fn empty_row_keeps_a_mint_retry_after_delete() -> Result<(), String> {
 async fn exhausted_name_clear_does_not_ack() -> Result<(), String> {
     let (scratch, journal) = open("name-taken").await?;
     let (calls, started) = drive(Mode::NameTaken, &journal).await;
-    assert_eq!(started, Err("effect uncertain".to_owned()));
+    assert_eq!(started, Err("runner name unchanged".to_owned()));
     assert_eq!(
         calls,
         [
@@ -247,10 +246,33 @@ async fn exhausted_name_clear_does_not_ack() -> Result<(), String> {
             "runners-list",
             "runner-delete",
             "jit",
-            "runners-list",
-            "runner-delete"
+            "runners-list"
         ]
     );
+    let rows = journal.rows().await.map_err(|err| err.to_string())?;
+    let occupied = rows
+        .iter()
+        .filter(|row| super::super::slot::holds(row))
+        .count();
+    assert_eq!(occupied, 0);
+    absent(&scratch.file())
+}
+
+#[tokio::test]
+async fn same_offline_id_is_not_deleted_on_the_next_poll() -> Result<(), String> {
+    let (scratch, journal) = open("name-again").await?;
+    let (first, started) = drive(Mode::NameTaken, &journal).await;
+    assert_eq!(started, Err("runner name unchanged".to_owned()));
+    assert_eq!(
+        first
+            .iter()
+            .filter(|call| **call == "runner-delete")
+            .count(),
+        1
+    );
+    let (second, again) = drive(Mode::NameTaken, &journal).await;
+    assert_eq!(again, Err("runner name unchanged".to_owned()));
+    assert_eq!(second, ["jit", "runners-list", "jit", "runners-list"]);
     let rows = journal.rows().await.map_err(|err| err.to_string())?;
     let occupied = rows
         .iter()

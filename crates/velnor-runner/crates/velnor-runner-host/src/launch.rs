@@ -31,6 +31,7 @@ pub(crate) use drive::{Drive, Lane, Rest};
 pub(crate) use inspect::classify_inspect;
 mod session;
 mod slot;
+mod steady;
 mod steps;
 #[cfg(test)]
 mod subject_tests;

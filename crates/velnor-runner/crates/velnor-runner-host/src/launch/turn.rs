@@ -60,6 +60,8 @@ pub(super) async fn poll_and_drive(
         owner: rest.owner,
         repo: rest.repo,
         pat: rest.pat,
+        cursor: 0,
+        steady_retry: None,
     };
     let bound = if target > capacity {
         capacity::poll_bound_wide()
@@ -201,13 +203,17 @@ struct Turn<'a> {
     owner: &'a str,
     repo: &'a str,
     pat: &'a str,
+    cursor: i64,
+    steady_retry: Option<std::time::Instant>,
 }
 
 impl Turn<'_> {
     async fn drive_poll(&mut self, workers: &mut Vec<Started>) -> Result<bool, EnsureError> {
         let (saved, path) = point_at_queue(self.link, &self.session.message_queue_url)?;
         let queue = saved.as_ref().map(|_| self.link.base().to_owned());
-        let polled = poll_path(self.link, self.session, &path, self.capacity);
+        let now = std::time::Instant::now();
+        self.cursor = super::steady::poll_cursor(self.cursor, self.steady_retry, now);
+        let polled = poll_path(self.link, self.session, &path, self.capacity, self.cursor);
         restore_base(self.link, saved)?;
         let polled = polled?;
         trace::batch(&polled);
@@ -268,6 +274,17 @@ impl Turn<'_> {
                     },
                 )
                 .await;
+                if let Err(EnsureError::NameSteady) = &launched {
+                    // Skip this message id. Do not delete that runner again and do not ack.
+                    let id = super::steady::message_id(polled);
+                    if let Some(next) = super::steady::steady_cursor(self.cursor, id) {
+                        self.cursor = next;
+                        self.steady_retry = Some(std::time::Instant::now() + super::steady::RETRY);
+                        return Ok(false);
+                    }
+                    tokio::time::sleep(super::steady::RETRY).await;
+                    return Ok(false);
+                }
                 if let Err(EnsureError::Conflict) = &launched
                     && super::name_taken::should_ack(steps::idle(polled))
                 {
@@ -287,6 +304,9 @@ impl Turn<'_> {
     }
 
     async fn stay(&self, workers: &[Started]) -> Result<bool, EnsureError> {
+        if super::steady::pause_empty(self.cursor) {
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        }
         if self.target > self.capacity && workers.len() >= self.capacity as usize {
             tokio::time::sleep(std::time::Duration::from_secs(5)).await;
         }

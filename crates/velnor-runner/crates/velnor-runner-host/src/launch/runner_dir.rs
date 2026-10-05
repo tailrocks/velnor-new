@@ -27,6 +27,8 @@ enum Decision {
     Live,
     /// The directory did not answer. Do not fail the row.
     Unknown,
+    /// This offline id was already removed for this subject. Do not delete it.
+    Repeat,
 }
 
 /// Mint `name` once. One empty uncertain row may be failed and retried once.
@@ -60,17 +62,20 @@ where
             return steps::finish_live(lane, ctx, journal, id, batch).await;
         }
         if !fresh {
-            if extra == 0 || !release_empty(lane, ctx, journal, id, name).await? {
-                return steps::hold(journal, id, EnsureError::Uncertain).await;
+            match release_empty(lane, ctx, journal, id, name).await? {
+                // The cleared row was not a mint. The next mint keeps its one retry.
+                Decision::Free if extra > 0 => continue,
+                // The row is already failed. A repeat must not hold the slot.
+                Decision::Free | Decision::Repeat => return Err(EnsureError::NameSteady),
+                _ => return steps::hold(journal, id, EnsureError::Uncertain).await,
             }
-            // The cleared row was not a mint. The next mint keeps its one retry.
-            continue;
         }
         match steps::mint(lane, ctx, batch, journal, id, name, &start).await {
             Err(EnsureError::NameCleared) if extra > 0 => {
                 extra -= 1;
             }
-            Err(EnsureError::NameCleared) => return Err(EnsureError::Uncertain),
+            // The delete already ran. Another poll must not delete that id again.
+            Err(EnsureError::NameCleared) => return Err(EnsureError::NameSteady),
             other => return other,
         }
     }
@@ -98,8 +103,8 @@ where
     if !credentials(ctx) || !row_is_empty(journal, id).await? {
         return steps::hold(journal, id, EnsureError::Uncertain).await;
     }
-    match decide(lane, ctx, name)? {
-        Decision::Free => {
+    match decide(lane, ctx, journal, id, name).await? {
+        Decision::Free | Decision::Repeat => {
             journal
                 .finish(id, Outcome::DefiniteFailure)
                 .await
@@ -123,21 +128,30 @@ async fn release_empty<T>(
     journal: &Journal,
     id: i64,
     name: &str,
-) -> Result<bool, EnsureError>
+) -> Result<Decision, EnsureError>
 where
     T: Transport + Lane,
 {
     if !credentials(ctx) || !row_is_empty(journal, id).await? {
-        return Ok(false);
+        return Ok(Decision::Unknown);
     }
-    if !matches!(decide(lane, ctx, name)?, Decision::Free) {
-        return Ok(false);
+    match decide(lane, ctx, journal, id, name).await? {
+        Decision::Free => {
+            journal
+                .finish(id, Outcome::DefiniteFailure)
+                .await
+                .map_err(steps::map_journal)?;
+            Ok(Decision::Free)
+        }
+        Decision::Repeat => {
+            journal
+                .finish(id, Outcome::DefiniteFailure)
+                .await
+                .map_err(steps::map_journal)?;
+            Ok(Decision::Repeat)
+        }
+        other => Ok(other),
     }
-    journal
-        .finish(id, Outcome::DefiniteFailure)
-        .await
-        .map_err(steps::map_journal)?;
-    Ok(true)
 }
 
 fn credentials(ctx: &Drive) -> bool {
@@ -155,7 +169,13 @@ async fn row_is_empty(journal: &Journal, id: i64) -> Result<bool, EnsureError> {
     Ok(row.worker_volume.as_deref().is_none_or(str::is_empty))
 }
 
-fn decide<T>(lane: &mut T, ctx: &Drive, name: &str) -> Result<Decision, EnsureError>
+async fn decide<T>(
+    lane: &mut T,
+    ctx: &Drive,
+    journal: &Journal,
+    row: i64,
+    name: &str,
+) -> Result<Decision, EnsureError>
 where
     T: Transport + Lane,
 {
@@ -169,7 +189,32 @@ where
     let Listed::Offline(id) = listed else {
         return Ok(listed_decision(listed));
     };
-    delete_offline(lane, &path, id, &ctx.pat)
+    if recorded(journal, name, id).await? {
+        return Ok(Decision::Repeat);
+    }
+    let decision = delete_offline(lane, &path, id, &ctx.pat)?;
+    if decision == Decision::Free {
+        remember(journal, row, id).await?;
+    }
+    Ok(decision)
+}
+
+async fn recorded(journal: &Journal, name: &str, id: i64) -> Result<bool, EnsureError> {
+    let needle = id.to_string();
+    let rows = journal.rows().await.map_err(steps::map_journal)?;
+    Ok(rows.iter().any(|row| {
+        row.kind == "launch"
+            && row.subject == name
+            && row.github_runner_id.as_deref() == Some(needle.as_str())
+    }))
+}
+
+async fn remember(journal: &Journal, row: i64, id: i64) -> Result<(), EnsureError> {
+    let text = id.to_string();
+    journal
+        .bind(row, None, Some(&text))
+        .await
+        .map_err(steps::map_journal)
 }
 
 const fn listed_decision(listed: Listed) -> Decision {
