@@ -47,6 +47,7 @@ pub use lanes::{
 pub use matrix_entry::MatrixEntry;
 pub use needs::{
     NEEDS_CHANNEL_ENV, NEEDS_CHANNEL_EXPRESSION, NEEDS_EXPECTED_ENV, NeedsConclusions,
+    needs_inventory_digest,
 };
 pub use permissions::{PermissionLevel, Permissions};
 pub use plan::{

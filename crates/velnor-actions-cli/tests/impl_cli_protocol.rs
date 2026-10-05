@@ -4,7 +4,8 @@ use std::error::Error;
 use std::path::Path;
 
 use crate::impl_cli_tmp::{
-    cleanup, code, commit_all, fresh_tempdir, git_init, head_sha, spawn_isolated, write_workspace,
+    cleanup, code, commit_all, fresh_tempdir, git_init, head_sha, spawn_isolated,
+    write_consumer_manifest, write_workspace,
 };
 
 /// Serialized workflow marker selecting dynamic matrix output accounting.
@@ -97,6 +98,7 @@ fn empty_repo() -> Result<std::path::PathBuf, Box<dyn Error>> {
     let tmp = fresh_tempdir("proto-repo")?;
     git_init(&tmp)?;
     assert_eq!(code(&spawn_isolated(&["init"], &[], &tmp)?), 0);
+    write_consumer_manifest(&tmp)?;
     pin_branch(&tmp)?;
     commit_all(&tmp)?;
     Ok(tmp)

@@ -9,7 +9,7 @@
 use std::process::Command as StdCommand;
 
 use tempfile::TempDir;
-use velnor_actions_contract::{FinalStatus, digest_b3};
+use velnor_actions_contract::{FinalStatus, digest_b3, needs_inventory_digest};
 use velnor_actions_orchestrator::assemble_merge_request;
 
 use crate::impl_common::{TestResult, plan_for_source_change};
@@ -51,7 +51,10 @@ fn with_merge_channels(test: &str, inner: impl FnOnce() -> TestResult) -> TestRe
         }
         command
             .env("VELNOR_NEEDS_JSON", r#"{"plan":"success"}"#)
-            .env("VELNOR_NEEDS_EXPECTED", r#"["plan"]"#)
+            .env(
+                "VELNOR_NEEDS_EXPECTED",
+                needs_inventory_digest(&["plan".to_owned()]),
+            )
             .env("GITHUB_EVENT_NAME", "pull_request")
             .env("GITHUB_EVENT_PATH", &payload);
         let output = command.output()?;

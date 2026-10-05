@@ -54,7 +54,7 @@ fn tofu_prepare_scales_to_100_roots() -> TestResult {
     Ok(())
 }
 
-/// Generate below the workflow-file limit and fail closed above it.
+/// Generate through 60 roots below the workflow-file limit and fail closed at 100.
 #[test]
 fn tofu_generate_scales_with_root_count() -> TestResult {
     for roots in [1_usize, 10, 40, 60, 100] {
@@ -67,7 +67,7 @@ fn tofu_generate_scales_with_root_count() -> TestResult {
         let preserved_workflow = target.join(".github/workflows/ci.yml");
         let previous_workflow =
             b"name: Existing preview\n'on':\n  workflow_dispatch: {}\njobs: {}\n";
-        if roots == 60 {
+        if roots == 100 {
             std::fs::create_dir_all(
                 preserved_workflow
                     .parent()
@@ -80,7 +80,7 @@ fn tofu_generate_scales_with_root_count() -> TestResult {
             output_dir: Some(target.clone()),
         };
         let (result, gen_ms) = timed(|| generate(&prep, &opts));
-        if roots >= 60 {
+        if roots == 100 {
             let Err(error) = result else {
                 return Err(std::io::Error::other(
                     "oversized workflow generation unexpectedly succeeded",
@@ -99,23 +99,16 @@ fn tofu_generate_scales_with_root_count() -> TestResult {
                 actual_bytes > MAX_WORKFLOW_BYTES,
                 "diagnostic reported {actual_bytes} bytes"
             );
-            if roots == 60 {
-                assert_eq!(
-                    std::fs::read(&preserved_workflow)?,
-                    previous_workflow,
-                    "oversized generation preserves the existing preview workflow"
-                );
-                assert_eq!(
-                    std::fs::read(target.join(".github/policy.txt"))?,
-                    b"keep this file\n",
-                    "oversized generation preserves sibling preview files"
-                );
-            } else {
-                assert!(
-                    !target.exists(),
-                    "fresh oversized preview leaves no partial output tree"
-                );
-            }
+            assert_eq!(
+                std::fs::read(&preserved_workflow)?,
+                previous_workflow,
+                "oversized generation preserves the existing preview workflow"
+            );
+            assert_eq!(
+                std::fs::read(target.join(".github/policy.txt"))?,
+                b"keep this file\n",
+                "oversized generation preserves sibling preview files"
+            );
             eprintln!(
                 "perf: op=generate roots={roots} prepare_ms={prep_ms} generate_ms={gen_ms} failed_closed_bytes={actual_bytes} limit_bytes={MAX_WORKFLOW_BYTES}"
             );

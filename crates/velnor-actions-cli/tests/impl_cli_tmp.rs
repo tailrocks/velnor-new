@@ -117,14 +117,24 @@ pub(crate) fn head_sha(dir: &Path) -> Result<String, Box<dyn Error>> {
     Ok(String::from_utf8(output.stdout)?.trim().to_owned())
 }
 
-/// Git-init plus `init` plus branch pinning: a plannable empty repo.
+/// Git-init plus `init`, explicit provenance fixture, and branch pinning.
 pub(crate) fn init_repo(dir: &Path) -> Result<(), Box<dyn Error>> {
     git_init(dir)?;
     let output = spawn(&["init"], &[], dir)?;
     if code(&output) != 0 {
         return Err(format!("init failed with {}", code(&output)).into());
     }
+    write_consumer_manifest(dir)?;
     pin_branch(dir)
+}
+
+/// Add the deterministic consumer fixture required for planning.
+pub(crate) fn write_consumer_manifest(dir: &Path) -> Result<(), Box<dyn Error>> {
+    std::fs::write(
+        dir.join(".velnor/release-manifest.json"),
+        include_str!("../../../fixtures/consumer-release-manifest.json"),
+    )?;
+    Ok(())
 }
 
 /// Pin the push branch so plan works without origin/HEAD.

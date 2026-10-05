@@ -11,7 +11,7 @@ use velnor_actions_contract::config::{
 };
 use velnor_actions_contract::{
     ExecuteTaskIds, ExecuteTaskRef, FinalReport, FinalStatus, MatrixEntry, Plan,
-    canonical_json_bytes,
+    canonical_json_bytes, needs_inventory_digest,
 };
 
 const TASK: &str = "stack/mise/demo/check/default";
@@ -161,7 +161,10 @@ fn assembled(temp: &tempfile::TempDir) -> String {
         "local",
         &temp.path().join("velnor/local"),
         Some(r#"{"plan":"success","check-demo":"success"}"#),
-        Some(r#"["check-demo","plan"]"#),
+        Some(&needs_inventory_digest(&[
+            "check-demo".to_owned(),
+            "plan".to_owned(),
+        ])),
         Some("pull_request"),
         Some(r#"{"pull_request":{"head":{"repo":{"fork":false}}}}"#),
     )

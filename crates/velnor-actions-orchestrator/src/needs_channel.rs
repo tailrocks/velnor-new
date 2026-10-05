@@ -1,11 +1,10 @@
 //! Final-gate `needs` channel: validator inventory plus conclusions.
 //!
-//! The renderer emits the finalized `needs` set twice: the runtime
-//! conclusions as JSON plus the static expected inventory. Assembly
-//! declares the expected set (minus the matrix-driver job) as the
-//! required validator inventory and fails closed when observed
-//! conclusions diverge from it. No hardcoded job list lives here:
-//! whatever the committed workflow needs, the merge requires.
+//! The renderer emits the finalized `needs` set twice: runtime
+//! conclusions as JSON plus a static digest of the expected IDs.
+//! Assembly declares the observed set (minus the matrix-driver job) as
+//! required validators and fails closed when its digest differs from
+//! the committed workflow. No hardcoded job list lives here.
 //!
 //! D7 process control: the expected inventory is generated YAML, and
 //! the freshness gate that would catch hand edits lives in the same
@@ -17,7 +16,7 @@
 //! The merge cannot distinguish legit regeneration from tampering;
 //! review is the trust root for the committed `needs` set.
 
-use velnor_actions_contract::JobConclusion;
+use velnor_actions_contract::{JobConclusion, is_valid_digest, needs_inventory_digest};
 use velnor_actions_workflow_renderer::render::TASK_JOB_ID;
 
 /// Environment channel carrying the final gate's `needs` conclusions.
@@ -28,14 +27,11 @@ pub(crate) const NEEDS_ENV: &str = "VELNOR_NEEDS_JSON";
 
 /// Required inventory plus observed results from the needs channel.
 ///
-/// Accepts direct conclusions and `toJSON(needs)` objects; the
-/// matrix-driver job is excluded because per-leg reports prove its legs.
-/// The inventory binds to the rendered expected set, never to whatever
-/// the run observed: a dropped validator (missing from conclusions) or
-/// an unexpected one fails closed with `needs_inventory_mismatch`
-/// instead of silently shrinking the required set. A missing or
-/// unparsable channel yields an empty inventory plus an explicit error,
-/// failing the verdict closed, never silent.
+/// Accepts direct conclusions and `toJSON(needs)` objects. It hashes
+/// every observed key, including the matrix-driver job, against the
+/// renderer's static digest before excluding the driver from required
+/// validator results. A dropped or unexpected job therefore fails
+/// closed without repeating the full inventory in generated YAML.
 pub(crate) fn parse_needs(
     needs: Option<&str>,
     expected: Option<&str>,
@@ -57,9 +53,10 @@ pub(crate) fn parse_needs(
         errors.push("empty_needs".to_owned());
         return (Vec::new(), Vec::new());
     }
-    let Some(want) = parse_expected(expected, errors) else {
+    let Some(want_digest) = parse_expected(expected, errors) else {
         return (Vec::new(), Vec::new());
     };
+    let mut observed_keys = Vec::with_capacity(map.len());
     let mut observed = Vec::new();
     let mut results = Vec::new();
     for (job_id, entry) in map {
@@ -67,50 +64,40 @@ pub(crate) fn parse_needs(
             errors.push("bad_needs_job".to_owned());
             continue;
         }
+        observed_keys.push(job_id.clone());
         if job_id == TASK_JOB_ID {
             continue;
         }
+        observed.push(job_id.clone());
         let Some(conclusion) = needs_conclusion(entry) else {
             errors.push(format!("bad_needs_result:{job_id}"));
             continue;
         };
-        observed.push(job_id.clone());
         results.push(serde_json::json!({"job_id": job_id, "conclusion": conclusion.as_str()}));
     }
+    observed_keys.sort();
     observed.sort();
     results.sort_by(|left, right| report_job(left).cmp(report_job(right)));
-    if observed != want {
+    if needs_inventory_digest(&observed_keys) != want_digest {
         errors.push("needs_inventory_mismatch".to_owned());
     }
-    (want, results)
+    (observed, results)
 }
 
-/// Rendered expected inventory minus the matrix-driver job.
+/// Valid rendered digest of the complete `needs` key set.
 ///
-/// The renderer lists the gate's `needs`; the driver job needs
-/// no conclusion because per-leg reports prove its legs. Missing,
-/// unparsable, or empty expectations fail closed: without them the
-/// inventory would again derive from observation alone.
-fn parse_expected(expected: Option<&str>, errors: &mut Vec<String>) -> Option<Vec<String>> {
+/// Missing or malformed expectations fail closed: without them the
+/// workflow inventory would again derive from observation alone.
+fn parse_expected(expected: Option<&str>, errors: &mut Vec<String>) -> Option<String> {
     let Some(text) = expected.filter(|text| !text.trim().is_empty()) else {
         errors.push("missing_needs_expected".to_owned());
         return None;
     };
-    let Ok(parsed) = serde_json::from_str::<Vec<String>>(text) else {
-        errors.push("missing_needs_expected".to_owned());
-        return None;
-    };
-    let mut want: Vec<String> = parsed
-        .into_iter()
-        .filter(|job_id| job_id != TASK_JOB_ID)
-        .collect();
-    want.sort();
-    want.dedup();
-    if want.is_empty() {
+    if !is_valid_digest(text) {
         errors.push("missing_needs_expected".to_owned());
         return None;
     }
-    Some(want)
+    Some(text.to_owned())
 }
 
 /// One needs conclusion: direct string or `{result}` object shape.
@@ -154,11 +141,13 @@ mod tests {
 
     #[test]
     fn direct_and_to_json_shapes_parse_and_sort() {
+        let expected =
+            needs_inventory_digest(&["alpha".to_owned(), "plan".to_owned(), "zeta".to_owned()]);
         let (inventory, results, errors) = parsed(
             Some(r#"{"zeta":"success","plan":{"result":"failure"},"alpha":{"result":"bogus"}}"#),
-            Some(r#"["plan","zeta"]"#),
+            Some(&expected),
         );
-        assert_eq!(inventory, ["plan", "zeta"]);
+        assert_eq!(inventory, ["alpha", "plan", "zeta"]);
         assert_eq!(results.len(), 2);
         assert_eq!(results[0]["job_id"], "plan");
         assert_eq!(results[0]["conclusion"], "failure");
@@ -167,10 +156,9 @@ mod tests {
             ["bad_needs_result:alpha"],
             "unknown conclusions corrupt the channel"
         );
-        let (inventory, _, errors) = parsed(
-            Some(r#"{"a":"cancelled","b":"skipped"}"#),
-            Some(r#"["a","b"]"#),
-        );
+        let expected = needs_inventory_digest(&["a".to_owned(), "b".to_owned()]);
+        let (inventory, _, errors) =
+            parsed(Some(r#"{"a":"cancelled","b":"skipped"}"#), Some(&expected));
         assert_eq!(inventory, ["a", "b"]);
         assert!(errors.is_empty());
     }
@@ -178,10 +166,29 @@ mod tests {
     #[test]
     fn matrix_driver_job_is_excluded() {
         let channel = format!(r#"{{"plan":"success","{TASK_JOB_ID}":"success"}}"#);
-        let (inventory, results, errors) = parsed(Some(&channel), Some(r#"["plan"]"#));
+        let expected = needs_inventory_digest(&["plan".to_owned(), TASK_JOB_ID.to_owned()]);
+        let (inventory, results, errors) = parsed(Some(&channel), Some(&expected));
         assert_eq!(inventory, ["plan"]);
         assert_eq!(results.len(), 1);
         assert!(errors.is_empty());
+    }
+
+    #[test]
+    fn matrix_driver_key_is_bound_before_its_result_is_excluded() {
+        let with_driver = needs_inventory_digest(&["plan".to_owned(), TASK_JOB_ID.to_owned()]);
+        let without_driver = needs_inventory_digest(&["plan".to_owned()]);
+        let with_driver_channel = format!(r#"{{"plan":"success","{TASK_JOB_ID}":"success"}}"#);
+        for (channel, expected) in [
+            (r#"{"plan":"success"}"#, with_driver.as_str()),
+            (with_driver_channel.as_str(), without_driver.as_str()),
+        ] {
+            let (_, results, errors) = parsed(Some(channel), Some(expected));
+            assert_eq!(results.len(), 1, "the driver remains excluded from reports");
+            assert!(
+                errors.contains(&"needs_inventory_mismatch".to_owned()),
+                "driver key presence must match the committed full-key digest: {channel}"
+            );
+        }
     }
 
     #[test]
@@ -202,18 +209,27 @@ mod tests {
         assert!(inventory.is_empty());
         assert!(results.is_empty());
         assert_eq!(errors, ["empty_needs"]);
+        let expected = needs_inventory_digest(&["ok".to_owned()]);
         let (inventory, _, errors) =
-            parsed(Some(r#"{"":"success","ok":"success"}"#), Some(r#"["ok"]"#));
+            parsed(Some(r#"{"":"success","ok":"success"}"#), Some(&expected));
         assert_eq!(inventory, ["ok"]);
         assert_eq!(errors, ["bad_needs_job"]);
-        let (_, _, errors) = parsed(Some(r#"{"a":{},"b":{"result":7}}"#), Some(r#"["a","b"]"#));
-        assert_eq!(
-            errors,
-            [
-                "bad_needs_result:a",
-                "bad_needs_result:b",
-                "needs_inventory_mismatch"
-            ]
-        );
+        let expected = needs_inventory_digest(&["a".to_owned(), "b".to_owned()]);
+        let (_, _, errors) = parsed(Some(r#"{"a":{},"b":{"result":7}}"#), Some(&expected));
+        assert_eq!(errors, ["bad_needs_result:a", "bad_needs_result:b"]);
+    }
+
+    #[test]
+    fn expected_digest_binds_missing_extra_and_malformed_needs_keys() {
+        let expected = needs_inventory_digest(&["plan".to_owned(), "lint".to_owned()]);
+        for channel in [
+            r#"{"plan":"success"}"#,
+            r#"{"plan":"success","lint":"success","extra":"success"}"#,
+        ] {
+            let (_, _, errors) = parsed(Some(channel), Some(&expected));
+            assert!(errors.contains(&"needs_inventory_mismatch".to_owned()));
+        }
+        let (_, _, errors) = parsed(Some(r#"{"plan":"success"}"#), Some("[\"plan\"]"));
+        assert_eq!(errors, ["missing_needs_expected"]);
     }
 }

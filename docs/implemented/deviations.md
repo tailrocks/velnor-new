@@ -78,7 +78,7 @@ docs, `preseed` docs, merge-request docs) agree on the split.
 
 ## D7 — needs-inventory integrity rests on workflow review (residual, not a deviation)
 
-`VELNOR_NEEDS_EXPECTED` is generated YAML consumed as the merge's
+`VELNOR_NEEDS_EXPECTED` is a generated BLAKE3 digest consumed as the merge's
 required-inventory ground truth. The freshness gate that would catch a
 hand edit lives in the same file it verifies, so an edit that shrinks
 the inventory and neuters the freshness check is self-consistent

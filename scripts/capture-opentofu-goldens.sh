@@ -128,6 +128,22 @@ link_identity() {
   done)
 }
 
+# Successful consumer fixtures need explicit provenance input. This schema
+# fixture is deterministic test data, never candidate qualification evidence.
+write_fixture_release_manifest() {
+  local repo="$1"
+  local manifest="$repo/.velnor/release-manifest.json"
+  if [ -e "$manifest" ] || [ -L "$manifest" ]; then
+    [ -f "$manifest" ] && [ ! -L "$manifest" ]
+    return $?
+  fi
+  if [ -L "$repo/.velnor" ] || { [ -e "$repo/.velnor" ] && [ ! -d "$repo/.velnor" ]; }; then
+    return 1
+  fi
+  mkdir -p "$repo/.velnor" || return 1
+  cp "$ROOT/fixtures/consumer-release-manifest.json" "$manifest"
+}
+
 build_bin() {
   if [ "$BIN_EXPLICIT" -eq 1 ]; then
     if [ ! -f "$BIN" ] || [ ! -x "$BIN" ]; then
@@ -152,6 +168,10 @@ setup_case() {
   fi
   if [ "$MODE" = "check-release" ]; then
     stage_candidate_manifest "$repo" "$case"
+  fi
+  if ! write_fixture_release_manifest "$repo"; then
+    echo "FATAL: could not prepare deterministic release manifest for $case"
+    exit 2
   fi
   (cd "$repo" \
     && git init -q \

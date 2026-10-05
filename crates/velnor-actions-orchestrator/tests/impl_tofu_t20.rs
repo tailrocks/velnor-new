@@ -14,6 +14,7 @@ use velnor_actions_workflow_renderer::WORKFLOW_PATH;
 use velnor_actions_workflow_renderer::render::{CONCURRENCY_CANCEL, CONCURRENCY_GROUP};
 
 use super::impl_common::{TestResult, fixture_manifest_json, git};
+use velnor_actions_contract::needs_inventory_digest;
 
 /// Git-initialized pure-tofu repo: `roots` plus `extra` files, no Cargo.
 pub(crate) fn pure_tofu_repo(
@@ -117,7 +118,7 @@ fn job_needs(yaml: &str, job: &str) -> Vec<String> {
     needs
 }
 
-/// `VELNOR_NEEDS_EXPECTED` inventory parsed from rendered YAML.
+/// Verify the rendered digest and return Required validators excluding the matrix driver.
 fn needs_inventory(yaml: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
     let line = yaml
         .lines()
@@ -131,9 +132,13 @@ fn needs_inventory(yaml: &str) -> Result<Vec<String>, Box<dyn std::error::Error>
     let unquoted = scalar
         .strip_prefix('"')
         .and_then(|inner| inner.strip_suffix('"'))
-        .ok_or("needs-expected quoting")?;
-    let mut inventory: Vec<String> = serde_json::from_str(&unquoted.replace("\\\"", "\""))?;
+        .unwrap_or(scalar);
+    let mut inventory = job_needs(yaml, "required");
     inventory.sort();
+    if unquoted != needs_inventory_digest(&inventory) {
+        return Err("needs digest does not match Required.needs".into());
+    }
+    inventory.retain(|id| id != velnor_actions_workflow_renderer::render::TASK_JOB_ID);
     Ok(inventory)
 }
 

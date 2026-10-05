@@ -279,10 +279,12 @@ fn plan_queries_no_caches_and_exposes_no_plan_json() -> Result<(), Box<dyn Error
     // PAR-10.2: inventory only — no cache query materializes files, and no
     // internal plan.json/baseline/matrix artifact is written or named.
     assert_eq!(snapshot(&tmp)?, before, "plan modified the repo");
+    assert!(before.contains_key(Path::new(".velnor/release-manifest.json")));
     for path in before.keys() {
         assert!(
-            path.extension().is_none_or(|ext| ext != "json"),
-            "json artifact present: {}",
+            path.extension().is_none_or(|ext| ext != "json")
+                || path == Path::new(".velnor/release-manifest.json"),
+            "unexpected json artifact present: {}",
             path.display()
         );
     }

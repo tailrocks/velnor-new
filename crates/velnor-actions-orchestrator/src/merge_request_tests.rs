@@ -4,6 +4,12 @@
 
 use super::*;
 use crate::merge::required_evidence::MAX_BASELINE_MANIFEST_BYTES;
+use velnor_actions_contract::needs_inventory_digest;
+
+/// Static renderer expectation for one complete `needs` key set.
+pub(crate) fn expected_needs(ids: &[&str]) -> String {
+    needs_inventory_digest(&ids.iter().map(|id| (*id).to_owned()).collect::<Vec<_>>())
+}
 
 /// Minimal plan JSON naming `(artifact-id, matrix-key)` entries.
 pub(crate) fn plan_with(entries: &[(&str, &str)]) -> String {
@@ -54,12 +60,12 @@ fn assembly_shape_carries_no_base() {
         )],
     );
     let needs = r#"{"plan":"success","rust-demo":"success"}"#;
-    let expected = r#"["plan","rust-demo"]"#;
+    let expected = expected_needs(&["plan", "rust-demo"]);
     let request = assemble_with_needs(
         "local",
         dir.path(),
         Some(needs),
-        Some(expected),
+        Some(&expected),
         Some("push"),
         Some("{}"),
     )
@@ -100,7 +106,7 @@ fn assembly_reads_expected_only_and_sorts_reports() {
         "local",
         dir.path(),
         Some(needs),
-        Some(r#"["plan"]"#),
+        Some(&expected_needs(&["plan"])),
         Some("push"),
         Some("{}"),
     )
@@ -141,7 +147,7 @@ fn assembly_records_gaps_and_rejects_bad_report() {
         "local",
         bad.path(),
         Some(r#"{"a":"b"}"#),
-        Some(r#"["a"]"#),
+        Some(&expected_needs(&["a"])),
         Some("push"),
         Some("{}"),
     )
@@ -168,7 +174,7 @@ fn assembly_records_gaps_and_rejects_bad_report() {
         "local",
         missing.path(),
         Some(r#"{"plan":"success"}"#),
-        Some(r#"["plan"]"#),
+        Some(&expected_needs(&["plan"])),
         Some("push"),
         Some("{}"),
     )
@@ -198,7 +204,7 @@ fn assembly_rejects_links_oversize_and_unreadable_inputs() {
             "local",
             dir.path(),
             Some(r#"{"plan":"success"}"#),
-            Some(r#"["plan"]"#),
+            Some(&expected_needs(&["plan"])),
             Some("push"),
             Some("{}"),
         )
@@ -219,7 +225,7 @@ fn assembly_rejects_links_oversize_and_unreadable_inputs() {
         "local",
         dir.path(),
         Some(r#"{"plan":"success"}"#),
-        Some(r#"["plan"]"#),
+        Some(&expected_needs(&["plan"])),
         Some("push"),
         Some("{}"),
     )
@@ -232,7 +238,7 @@ fn assembly_rejects_links_oversize_and_unreadable_inputs() {
         "local",
         dir.path(),
         Some(r#"{"plan":"success"}"#),
-        Some(r#"["plan"]"#),
+        Some(&expected_needs(&["plan"])),
         Some("push"),
         Some("{}"),
     )
@@ -255,7 +261,7 @@ fn baseline_raw_limit_covers_nested_parents_and_padding() {
         "local",
         dir.path(),
         Some(r#"{"plan":"success"}"#),
-        Some(r#"["plan"]"#),
+        Some(&expected_needs(&["plan"])),
         Some("push"),
         Some("{}"),
     )
@@ -275,7 +281,7 @@ fn baseline_raw_limit_covers_nested_parents_and_padding() {
         "local",
         dir.path(),
         Some(r#"{"plan":"success"}"#),
-        Some(r#"["plan"]"#),
+        Some(&expected_needs(&["plan"])),
         Some("push"),
         Some("{}"),
     )
@@ -293,7 +299,7 @@ fn dropped_or_missing_expected_inventory_fails_closed() {
         "local",
         dir.path(),
         Some(r#"{"plan":"success"}"#),
-        Some(r#"["lint","plan"]"#),
+        Some(&expected_needs(&["lint", "plan"])),
         Some("push"),
         Some("{}"),
     )
@@ -306,8 +312,8 @@ fn dropped_or_missing_expected_inventory_fails_closed() {
     let value: serde_json::Value = serde_json::from_str(&dropped).expect("json");
     assert_eq!(
         value["required_job_ids"],
-        serde_json::json!(["lint", "plan"]),
-        "inventory binds to expected, not observed"
+        serde_json::json!(["plan"]),
+        "observed inventory is retained while digest mismatch fails closed"
     );
     let missing = assemble_with_needs(
         "local",
@@ -337,7 +343,7 @@ fn assembly_rejects_duplicate_keys_in_staged_json() {
         "local",
         dir.path(),
         Some(r#"{"plan":"success"}"#),
-        Some(r#"["plan"]"#),
+        Some(&expected_needs(&["plan"])),
         Some("push"),
         Some("{}"),
     )
@@ -358,7 +364,7 @@ fn assembly_rejects_duplicate_keys_in_staged_json() {
         "local",
         dir.path(),
         Some(r#"{"plan":"success"}"#),
-        Some(r#"["plan"]"#),
+        Some(&expected_needs(&["plan"])),
         Some("push"),
         Some("{}"),
     )

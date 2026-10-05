@@ -29,7 +29,7 @@ fn present_file_returns_its_text() {
     );
     assert_eq!(
         for_policy(root.path(), WorkflowPolicy::ConsumerV1).expect("consumer reads manifest"),
-        (Some("{\"schema\":1}".to_owned()), false)
+        Some("{\"schema\":1}".to_owned())
     );
 }
 
@@ -118,10 +118,9 @@ fn velnor_policy_skips_consumer_manifest_input() {
 
 /// Assert Velnor discovery carries no consumer manifest or stand-in.
 fn assert_velnor_policy_skips(root: &Path) {
-    let (manifest, stand_in) = for_policy(root, WorkflowPolicy::VelnorRepositoryV1)
+    let manifest = for_policy(root, WorkflowPolicy::VelnorRepositoryV1)
         .expect("Velnor policy ignores consumer manifest input");
     assert_eq!(manifest, None);
-    assert!(!stand_in);
 }
 
 /// M6 spike: candidates from unregistered stacks fail closed at dispatch.

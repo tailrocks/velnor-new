@@ -61,20 +61,9 @@ pub struct Discovery {
     /// Non-fatal generation recommendations.
     pub recommendations: Vec<String>,
     /// Consumer release-manifest text from the committed repo file.
-    ///
-    /// Only `ConsumerV1` reads this file. Debug `ConsumerV1` builds fall back
-    /// to a stand-in when it is absent (flagged by
-    /// [`Discovery::consumer_manifest_stand_in`], warned at generation);
-    /// release `ConsumerV1` builds keep `None` so generation fails closed
-    /// with `consumer_requires_release_install`. `VelnorRepositoryV1` never
-    /// reads this consumer-only file and keeps this field `None`.
+    /// Absent files remain `None` in every build mode so consumer generation
+    /// fails closed with `consumer_requires_release_install`.
     pub consumer_manifest_json: Option<String>,
-    /// Whether the manifest text above is the debug-only stand-in.
-    ///
-    /// Always false for `VelnorRepositoryV1` and for release builds (no
-    /// fallback exists there). `generate` warns loudly when this is set;
-    /// `plan` stays silent.
-    pub consumer_manifest_stand_in: bool,
     /// Whether non-UTF-8 names require broad selection.
     pub skipped_non_utf8: bool,
     /// Tofu plan note: ignore marker or table-less evidence advisory.
@@ -131,8 +120,7 @@ pub(crate) fn discover(root: &Path, config: &VelnorConfig) -> Result<Discovery, 
     let clippy_memory = clippy_memory_groups(&proposals);
     let recommendations =
         collect_recommendations(root, config, &index, &workspaces, &tool_checks, &mut reads);
-    let (consumer_manifest_json, consumer_manifest_stand_in) =
-        consumer_manifest::for_policy(root, config.workflow.policy)?;
+    let consumer_manifest_json = consumer_manifest::for_policy(root, config.workflow.policy)?;
     Ok(Discovery {
         mise_checks,
         statuses,
@@ -143,7 +131,6 @@ pub(crate) fn discover(root: &Path, config: &VelnorConfig) -> Result<Discovery, 
         clippy_memory,
         recommendations,
         consumer_manifest_json,
-        consumer_manifest_stand_in,
         skipped_non_utf8,
         tofu_note: tofu_step.note,
         tofu_units,

@@ -1,6 +1,6 @@
 //! F1 end to end: the merge inventory equals the gate's `needs`.
 //!
-//! `VELNOR_NEEDS_EXPECTED` must list exactly the jobs `toJSON(needs)`
+//! `VELNOR_NEEDS_EXPECTED` must digest exactly the jobs `toJSON(needs)`
 //! can observe at runtime — the `required` job's `needs`. Deriving it
 //! from the finalized job set admitted the downstream
 //! `publish-baseline` job (which needs `required` and so can never be
@@ -10,6 +10,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 
 use tempfile::TempDir;
+use velnor_actions_contract::needs_inventory_digest;
 use velnor_actions_orchestrator::{GenerateOptions, generate, prepare};
 
 use crate::impl_common::{TestResult, config_with_branch, make_repo};
@@ -54,8 +55,8 @@ fn job_needs(yaml: &str) -> BTreeMap<String, Vec<String>> {
     jobs
 }
 
-/// `VELNOR_NEEDS_EXPECTED` payloads parsed from one rendered workflow.
-fn expected_inventories(yaml: &str) -> Result<Vec<Vec<String>>, Box<dyn std::error::Error>> {
+/// `VELNOR_NEEDS_EXPECTED` digests parsed from one rendered workflow.
+fn expected_digests(yaml: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
     let mut inventories = Vec::new();
     for line in yaml
         .lines()
@@ -64,13 +65,12 @@ fn expected_inventories(yaml: &str) -> Result<Vec<Vec<String>>, Box<dyn std::err
         let (_, scalar) = line
             .split_once("VELNOR_NEEDS_EXPECTED:")
             .ok_or("expected scalar")?;
-        let quoted = scalar
-            .trim()
+        let scalar = scalar.trim();
+        let value = scalar
             .strip_prefix('"')
             .and_then(|inner| inner.strip_suffix('"'))
-            .ok_or("expected quoted scalar")?;
-        let inventory: Vec<String> = serde_json::from_str(&quoted.replace("\\\"", "\""))?;
-        inventories.push(inventory);
+            .unwrap_or(scalar);
+        inventories.push(value.to_owned());
     }
     Ok(inventories)
 }
@@ -89,12 +89,13 @@ fn generated_ci_gate_matches_needs_and_excludes_downstream() -> TestResult {
     )?;
     let yaml = fs::read_to_string(preview.join(".github/workflows/ci.yml"))?;
     let needs = job_needs(&yaml);
-    let gate: BTreeSet<String> = needs
-        .get("required")
-        .cloned()
-        .unwrap_or_default()
-        .into_iter()
-        .collect();
+    let gate_ids = needs.get("required").cloned().unwrap_or_default();
+    let gate: BTreeSet<String> = gate_ids.iter().cloned().collect();
+    assert_eq!(
+        gate.len(),
+        gate_ids.len(),
+        "required.needs has no duplicate IDs"
+    );
     assert!(!gate.is_empty(), "required must need jobs: {needs:?}");
     assert!(
         !gate.contains("publish-baseline"),
@@ -105,14 +106,17 @@ fn generated_ci_gate_matches_needs_and_excludes_downstream() -> TestResult {
         publish.contains(&"required".to_owned()),
         "publish-baseline stays downstream of required: {publish:?}"
     );
-    let expected = expected_inventories(&yaml)?;
+    let expected = expected_digests(&yaml)?;
     assert_eq!(expected.len(), 2, "write-request plus merge carry it");
-    for inventory in &expected {
-        let seen: BTreeSet<String> = inventory.iter().cloned().collect();
-        assert_eq!(seen, gate, "EXPECTED must equal required.needs");
+    let expected_digest = needs_inventory_digest(&gate_ids);
+    for digest in &expected {
+        assert_eq!(
+            digest, &expected_digest,
+            "EXPECTED digest binds required.needs"
+        );
         assert!(
-            !inventory.contains(&"publish-baseline".to_owned()),
-            "EXPECTED excludes downstream: {inventory:?}"
+            !gate.contains("publish-baseline"),
+            "required.needs excludes downstream: {gate:?}"
         );
     }
     Ok(())
