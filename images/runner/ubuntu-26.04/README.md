@@ -36,7 +36,8 @@ Controller must:
 - Mount a named volume at `/home/runner/_work` writable by uid `1000`.
 - Register the JIT runner with `workFolder: "_work"`; the Actions runner
   resolves this relative to `/home/runner`, so its job work directory matches
-  the named volume and the entrypoint's temporary JIT file.
+  the named volume. The entrypoint stages the JIT payload in the container's
+  ephemeral `/tmp`, outside that durable work volume.
   That tree holds work, `_temp`, `_actions`, and `_tool`. Share the same
   absolute paths into this worker's DinD container. `externals` is
   `/home/runner/externals`.

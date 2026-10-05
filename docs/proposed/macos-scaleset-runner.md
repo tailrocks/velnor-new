@@ -141,8 +141,10 @@ JIT `workFolder` is `_work`, relative to the official runner root at
 Mount the same per-worker named work volume there in both containers. The
 runner and DinD images create that path as uid/gid `1000:1000`, mode `0755`,
 before the first empty-volume mount; DinD starts first and Docker initializes
-the volume from its image path. This keeps the JIT temp file, checkout, tools,
-and job workspace on the same writable volume for the runner user.
+the volume from its image path. The entrypoint stages JIT only in its
+container-local `/tmp` and removes the file before starting the listener; it
+must not persist JIT under the named work volume. Checkout, tools, and job
+workspace use the shared writable volume for the runner user.
 
 Delete only objects whose immutable id matches the journal. Names are not
 delete authority. Foreign objects survive. A missing delete response is not
