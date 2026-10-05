@@ -1,15 +1,22 @@
 //! Cache and lane step templates over validated action refs.
 //!
-//! Covers MBX local setup, `actions/cache` restore/save, and
+//! Covers MBX objects-mode restore, `actions/cache` restore/save, and
 //! per-lane target directories; pins arrive validated.
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Job, Step, StepKind};
+use velnor_actions_contract::{Step, StepKind};
 
 #[path = "cache_steps_mbx_preflight.rs"]
 mod mbx_preflight;
-pub use mbx_preflight::{MBX_PREFLIGHT_NAME, mbx_path_preflight_step};
+pub use mbx_preflight::{
+    MBX_CACHE_MODE_ENV, MBX_PREFLIGHT_NAME, MBX_RESTORE_NAME, check_mbx_gating,
+    mbx_steps_for_driver,
+};
+pub(crate) use mbx_preflight::{
+    MBX_GC_AUTO_ENV, MBX_GC_AUTO_VALUE, MBX_SHARE_OUT_DIR_ENV, MBX_SHARE_OUT_DIR_VALUE,
+    is_mbx_action,
+};
 
 use crate::{
     RenderError,
@@ -24,7 +31,7 @@ pub use tools::{
     TOOLS_SAVE_USES, tools_cache_key, tools_restore_step, tools_save_step,
 };
 
-/// Pinned mr-boxington action name (local setup backend).
+/// Pinned mr-boxington action name (objects mode).
 pub const MBX_ACTION_NAME: &str = "jdx/mr-boxington-action";
 /// Cache restore/save action names.
 pub const CACHE_RESTORE_NAME: &str = "actions/cache/restore";
@@ -56,142 +63,8 @@ pub fn is_never_archive_path(path: &str) -> bool {
 pub enum CompileDriver {
     /// Cargo profile: MBX action and installation are absent.
     Cargo,
-    /// MBX profile: the local action installs MBX before explicit import.
+    /// MBX profile: the objects-mode action restores compiler objects.
     Mbx,
-}
-
-/// MBX setup step only for MBX-selected profiles; Cargo yields none.
-///
-/// Workflow contract §3 emits `jdx/mr-boxington-action` only when the
-/// Rust detector selects MBX; Cargo legs carry neither the action nor
-/// the tool (task-execution contract prelude). `mbx_version` is the
-/// catalog pin the action installs (P07 effective-version closure).
-/// # Errors
-pub fn mbx_step_for_driver(
-    uses: &str,
-    driver: CompileDriver,
-    mbx_version: &str,
-) -> Result<Option<Step>, RenderError> {
-    match driver {
-        CompileDriver::Cargo => Ok(None),
-        CompileDriver::Mbx => mbx_objects_step(uses, false, mbx_version).map(Some),
-    }
-}
-
-/// Gate MBX action/tool presence against per-job driver selections.
-///
-/// Jobs without a declared driver are skipped (plan/final/lint carry
-/// none); declared Cargo jobs must be MBX-free while MBX jobs carry
-/// exactly one local MBX setup step.
-/// # Errors
-pub fn check_mbx_gating(
-    jobs: &BTreeMap<String, Job>,
-    drivers: &BTreeMap<String, CompileDriver>,
-) -> Result<(), RenderError> {
-    for (id, driver) in drivers {
-        let Some(job) = jobs.get(id.as_str()) else {
-            return Err(RenderError::InvalidWorkflow(format!(
-                "mbx_gating_unknown_job:{id}"
-            )));
-        };
-        check_job_mbx(id, job, *driver)?;
-    }
-    Ok(())
-}
-
-/// Enforce one job's MBX presence against its declared driver.
-fn check_job_mbx(id: &str, job: &Job, driver: CompileDriver) -> Result<(), RenderError> {
-    let actions = job.steps.iter().filter(|step| is_mbx_action(step)).count();
-    let tools = job
-        .steps
-        .iter()
-        .any(|step| uses_mbx_tool(step) && !is_mbx_action(step));
-    match driver {
-        CompileDriver::Cargo => {
-            if actions > 0 {
-                return Err(RenderError::InvalidWorkflow(format!(
-                    "mbx_action_without_selection:{id}"
-                )));
-            }
-            if tools {
-                return Err(RenderError::InvalidWorkflow(format!(
-                    "mbx_tool_without_selection:{id}"
-                )));
-            }
-        }
-        CompileDriver::Mbx => {
-            if actions == 0 {
-                return Err(RenderError::InvalidWorkflow(format!(
-                    "mbx_missing_for_selection:{id}"
-                )));
-            }
-            if actions > 1 {
-                return Err(RenderError::InvalidWorkflow(format!("mbx_duplicated:{id}")));
-            }
-        }
-    }
-    Ok(())
-}
-
-/// True for `jdx/mr-boxington-action` steps.
-pub(crate) fn is_mbx_action(step: &Step) -> bool {
-    matches!(&step.kind, velnor_actions_contract::StepKind::Action { uses, .. } if uses.starts_with(&format!("{MBX_ACTION_NAME}@")))
-}
-
-/// True when shell argv invokes the `mbx` program or tool spec.
-fn uses_mbx_tool(step: &Step) -> bool {
-    matches!(&step.kind, velnor_actions_contract::StepKind::Shell { run, .. } if run.iter().any(|arg| arg == "mbx" || arg.contains("mr-boxington")))
-}
-
-/// Display name of the pinned MBX local setup step.
-pub const MBX_SETUP_NAME: &str = "Setup MBX";
-/// MBX automatic collection must stay enabled so low-disk builds can recover.
-pub(crate) const MBX_GC_AUTO_ENV: &str = "MBX_GC_AUTO";
-/// MBX 1.21.1+ honors this value and protects active build consumers.
-pub(crate) const MBX_GC_AUTO_VALUE: &str = "1";
-/// Local-backend MBX step; cargo profiles must never emit or install MBX.
-///
-/// The action installs exactly `mbx_version` (the catalog pin): without
-/// the `version` input the action resolves `latest`, and an action-SHA
-/// pin never proves the installed executable (P07 effective-version
-/// defect; the action documents that setting `version` always installs
-/// that release: `https://github.com/jdx/mr-boxington-action`).
-/// The official action uses its supported local backend for setup only.
-/// Velnor restores and saves its stable directory bundle through pinned
-/// `actions/cache` steps so the action's GitHub backend cannot do a second,
-/// implicit restore/import/save against a different path.
-/// # Errors
-pub fn mbx_objects_step(
-    uses: &str,
-    cargo_profile: bool,
-    mbx_version: &str,
-) -> Result<Step, RenderError> {
-    if cargo_profile {
-        return Err(RenderError::BadCommand("cargo_profile_no_mbx".to_owned()));
-    }
-    validate_uses(uses)?;
-    if !uses.starts_with(&format!("{MBX_ACTION_NAME}@")) {
-        return Err(RenderError::BadActionRef(format!("not_mbx_action:{uses}")));
-    }
-    if !is_exact_mbx_version(mbx_version) {
-        return Err(RenderError::BadCommand(format!(
-            "bad_mbx_version:{mbx_version}"
-        )));
-    }
-    let with = BTreeMap::from([
-        ("backend".to_owned(), "local".to_owned()),
-        ("version".to_owned(), mbx_version.to_owned()),
-    ]);
-    action_step(MBX_SETUP_NAME, uses, with)
-}
-
-/// Exact MBX versions: three nonempty numeric dot parts, nothing else.
-fn is_exact_mbx_version(version: &str) -> bool {
-    let parts: Vec<&str> = version.split('.').collect();
-    parts.len() == 3
-        && parts
-            .iter()
-            .all(|part| !part.is_empty() && part.bytes().all(|b| b.is_ascii_digit()))
 }
 
 /// Cache restore/save step over `actions/cache`; MBX never archives here.
@@ -277,7 +150,7 @@ fn sources_subset_ok(path: &str) -> bool {
 
 /// Check restore-before/save-after ordering over cache action steps.
 ///
-/// Every `actions/cache/restore` step (plus MBX local setup) must
+/// Every `actions/cache/restore` step (plus MBX objects restore) must
 /// precede every `actions/cache/save` step within one job.
 /// # Errors
 pub fn check_cache_step_order(steps: &[Step]) -> Result<(), RenderError> {
