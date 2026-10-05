@@ -102,7 +102,9 @@ fn orch_gen_plan_matches_generated_tree() -> TestResult {
         assert!(preview.join(rel).is_file(), "preview has {rel}");
     }
     assert_eq!(
-        report.files_written,
+        crate::impl_common::paths_without_acquire_action(
+            report.files_written.iter().map(String::as_str)
+        ),
         [
             ".github/AGENTS.md",
             ".github/CLAUDE.md",
@@ -142,7 +144,13 @@ fn orch_gen_zero_candidate_repo_plans_no_work() -> TestResult {
     assert!(plan.contains("no-work workflow"), "no-work:\n{plan}");
     let parent = TempDir::new()?;
     let report = preview_into(&prep, parent.path().join("preview"))?;
-    assert_eq!(report.files_written.len(), 5);
+    assert_eq!(
+        crate::impl_common::paths_without_acquire_action(
+            report.files_written.iter().map(String::as_str)
+        )
+        .len(),
+        5
+    );
     Ok(())
 }
 

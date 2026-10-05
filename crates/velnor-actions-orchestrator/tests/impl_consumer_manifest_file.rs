@@ -41,29 +41,22 @@ fn manifest_with_version(version: &str) -> String {
     )
 }
 
-/// Render the consumer workflow YAML for a repo carrying `manifest`.
-fn render_consumer_yaml(manifest: &str) -> Result<String, Box<dyn std::error::Error>> {
+/// Render the consumer tree for a repo carrying `manifest`.
+fn render_consumer_tree(
+    manifest: &str,
+) -> Result<velnor_actions_workflow_renderer::RenderedTree, Box<dyn std::error::Error>> {
     let repo = make_repo(config_with_branch())?;
     fs::write(repo.path().join(".velnor/release-manifest.json"), manifest)?;
     let prep = prepare(repo.path())?;
-    velnor_actions_workflow_renderer::render_workflow_ir(
-        &prep.workflow.ir,
-        prep.config.workflow.policy,
-        prep.workflow.support.as_ref(),
-        &prep.workflow.context,
-    )
-    .map_err(|err| format!("render: {err}").into())
+    Ok(render_staged_tree(&prep)?)
 }
 
-/// Golden Acquire step: URL plus digest copied from the committed file.
-///
-/// The scrub overlay renders its nine empty keys ahead of the asset
-/// env (sorted map order); the download itself stays unchanged.
-fn expected_acquire_block() -> String {
-    let version = env!("CARGO_PKG_VERSION");
-    format!(
-        "- name: Acquire Velnor\n        run: \"sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \\\"$RUNNER_TEMP/velnor/bin\\\" && s=\\\"/opt/velnor/seed/generator/velnor-actions-{version}\\\" d=\\\"$RUNNER_TEMP/velnor/bin/velnor-actions-{version}\\\" && if [ -f \\\"$s\\\" ] && echo \\\"$VELNOR_ASSET_SHA256  $s\\\" | sha256sum -c -; then cp \\\"$s\\\" \\\"$d\\\"; else curl -fsSL --proto '\\\\''=https'\\\\'' --tlsv1.2 \\\"$VELNOR_ASSET_URL\\\" -o \\\"$d\\\" && echo \\\"$VELNOR_ASSET_SHA256  $d\\\" | sha256sum -c -; fi && chmod +x \\\"$d\\\"'\"",
-    )
+/// Render the consumer workflow YAML for a repo carrying `manifest`.
+fn render_consumer_yaml(manifest: &str) -> Result<String, Box<dyn std::error::Error>> {
+    let tree = render_consumer_tree(manifest)?;
+    tree.get(WORKFLOW_PATH)
+        .map(ToOwned::to_owned)
+        .ok_or_else(|| "missing consumer workflow".into())
 }
 
 /// Extract the full `- name: Acquire Velnor` step block from `yaml`.
@@ -80,9 +73,30 @@ fn acquire_block(yaml: &str) -> Result<&str, Box<dyn std::error::Error>> {
 
 #[test]
 fn acquire_url_and_sha_come_from_committed_file() -> TestResult {
-    let yaml = render_consumer_yaml(&release_manifest_json())?;
+    let tree = render_consumer_tree(&release_manifest_json())?;
+    let yaml = tree.get(WORKFLOW_PATH).ok_or("missing consumer workflow")?;
     assert!(yaml.contains("ACTIONS_ID_TOKEN_REQUEST_TOKEN: \"\""));
-    assert_eq!(acquire_block(&yaml)?, expected_acquire_block());
+    assert!(acquire_block(yaml)?.contains("uses: ./.github/actions/acquire-b3-"));
+    let action = tree
+        .files
+        .iter()
+        .find(|file| file.path.starts_with(".github/actions/acquire-b3-"))
+        .ok_or("missing source-bound acquire action")?;
+    let version = env!("CARGO_PKG_VERSION");
+    let target = velnor_actions_contract::ReleaseTarget::LinuxX86_64.triple();
+    assert!(action.bytes.contains(&format!(
+        "https://github.com/tailrocks/velnor-new/releases/download/v{version}/velnor-actions-{version}-{target}"
+    )));
+    assert!(
+        action
+            .bytes
+            .contains(&format!("VELNOR_ASSET_SHA256: {}", "c".repeat(64)))
+    );
+    assert!(
+        action
+            .bytes
+            .contains(&format!("VELNOR_RELEASE_COMMIT: {}", "d".repeat(40)))
+    );
     Ok(())
 }
 

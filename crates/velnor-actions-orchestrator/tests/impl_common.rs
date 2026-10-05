@@ -15,6 +15,30 @@ use velnor_actions_orchestrator::{
 /// Test error shortcut.
 pub(crate) type TestResult = Result<(), Box<dyn std::error::Error>>;
 
+/// Remove the generated source-bound Acquire composite path from an exact file list.
+pub(crate) fn paths_without_acquire_action<'a>(
+    paths: impl IntoIterator<Item = &'a str>,
+) -> Vec<&'a str> {
+    let mut retained = Vec::new();
+    let mut acquire_actions = 0;
+    for path in paths {
+        let Some(digest) = path.strip_prefix(".github/actions/acquire-b3-") else {
+            retained.push(path);
+            continue;
+        };
+        let Some(digest) = digest.strip_suffix("/action.yml") else {
+            panic!("malformed generated acquire-action path: {path}");
+        };
+        assert!(
+            velnor_actions_contract::ids::is_lower_hex_len(digest, 64),
+            "malformed generated acquire-action digest: {path}"
+        );
+        acquire_actions += 1;
+    }
+    assert_eq!(acquire_actions, 1, "exactly one acquire action is emitted");
+    retained
+}
+
 /// Plan text over the same finalized jobs `generate` writes.
 ///
 /// Tests asserting plan content go through this helper so they cover

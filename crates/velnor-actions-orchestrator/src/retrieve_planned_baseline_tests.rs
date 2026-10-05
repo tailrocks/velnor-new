@@ -49,33 +49,46 @@ fn resolve_mock(
     plan: &Plan,
     parent: &BaselineManifest,
     metadata: &serde_json::Value,
-) -> (Option<BaselineManifest>, Vec<Vec<String>>) {
+) -> (Option<BaselineManifest>, Vec<Vec<String>>, Vec<Vec<String>>) {
+    let manifest = canonical_json_bytes(parent).expect("canonical parent");
+    let archive = crate::baseline_archive::test_archive("baseline.json", &manifest);
+    let digest = format!(
+        "sha256:{}",
+        crate::cover_identity::generator::sha256_hex(&archive)
+    );
+    let listed = serde_json::json!({"total_count": 1, "artifacts": [{
+        "id": 99, "name": parent.artifact_name, "expired": false,
+        "size_in_bytes": archive.len(), "digest": digest
+    }]})
+    .to_string();
     let mut calls = Vec::new();
-    let found = resolve_planned(plan, "o/r", "testmain", |args| {
-        let args: Vec<String> = args
-            .iter()
-            .map(|a| a.to_string_lossy().into_owned())
-            .collect();
-        calls.push(args.clone());
-        if args[0] == "run" {
-            let destination = args.iter().position(|a| a == "--dir").expect("destination") + 1;
-            let dir = Path::new(&args[destination]);
-            std::fs::create_dir(dir).expect("artifact dir");
-            std::fs::write(
-                dir.join("baseline.json"),
-                canonical_json_bytes(parent).expect("canonical parent"),
-            )
-            .expect("downloaded parent");
-            Ok(String::new())
-        } else if args[1].ends_with("/artifacts") {
-            Ok(serde_json::json!({"artifacts": [{"id": 99,
-                "name": parent.artifact_name, "expired": false}]})
-            .to_string())
-        } else {
-            Ok(metadata.to_string())
-        }
-    });
-    (found, calls)
+    let mut archive_calls = Vec::new();
+    let found = resolve_planned(
+        plan,
+        "o/r",
+        "testmain",
+        |args| {
+            let args: Vec<String> = args
+                .iter()
+                .map(|a| a.to_string_lossy().into_owned())
+                .collect();
+            calls.push(args.clone());
+            if args[1].contains("/artifacts?name=") {
+                Ok(listed.clone())
+            } else {
+                Ok(metadata.to_string())
+            }
+        },
+        |args| {
+            archive_calls.push(
+                args.iter()
+                    .map(|arg| arg.to_string_lossy().into_owned())
+                    .collect(),
+            );
+            Ok(archive.clone())
+        },
+    );
+    (found, calls, archive_calls)
 }
 
 #[test]
@@ -83,11 +96,28 @@ fn selected_parent_survives_newer_same_base_run_and_attempt() {
     let (plan, parent) = fixture();
     // Latest same-base run/attempt may now be run 8 or attempt 2. The
     // resolver never lists latest runs: it authenticates run 7 attempt 1.
-    let (found, calls) = resolve_mock(&plan, &parent, &attempt_record(&parent));
+    let (found, calls, archive_calls) = resolve_mock(&plan, &parent, &attempt_record(&parent));
     assert!(found.is_some());
-    assert_eq!(calls[0], ["api", "repos/o/r/actions/runs/7/artifacts"]);
-    assert_eq!(calls[1][..3], ["run", "download", "7"]);
-    assert_eq!(calls[2], ["api", "repos/o/r/actions/runs/7/attempts/1"]);
+    assert_eq!(
+        calls[0],
+        vec![
+            "api".to_owned(),
+            format!(
+                "repos/o/r/actions/runs/7/artifacts?name={}&per_page=100&page=1",
+                parent.artifact_name
+            )
+        ]
+    );
+    assert_eq!(
+        calls[1],
+        ["api", "repos/o/r/actions/runs/7/attempts/1"],
+        "the exact attempt is authenticated after ZIP admission"
+    );
+    assert!(
+        archive_calls
+            .iter()
+            .any(|args| args == &["api", "repos/o/r/actions/artifacts/99/zip"])
+    );
     assert!(
         !calls
             .iter()
@@ -122,13 +152,14 @@ fn wrong_service_attempt_or_provenance_never_authenticates() {
 fn replacement_manifest_digest_never_downloads_as_selected_parent() {
     let (plan, mut parent) = fixture();
     parent.run_attempt = 2;
-    let (found, calls) = resolve_mock(&plan, &parent, &attempt_record(&parent));
+    let (found, calls, archive_calls) = resolve_mock(&plan, &parent, &attempt_record(&parent));
     assert!(found.is_none());
     assert_eq!(
         calls.len(),
-        2,
+        1,
         "digest rejection before attempt authentication"
     );
+    assert_eq!(archive_calls.len(), 1, "the selected ZIP was checked first");
 }
 
 #[test]

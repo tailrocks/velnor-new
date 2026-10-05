@@ -74,7 +74,8 @@ fn tofu_cross_checkout_determinism() -> TestResult {
         for rel in &report.files_written {
             files.insert(rel.clone(), fs::read(preview_root.join(rel))?);
         }
-        let names: Vec<&str> = files.keys().map(String::as_str).collect();
+        let names =
+            crate::impl_common::paths_without_acquire_action(files.keys().map(String::as_str));
         assert_eq!(
             names,
             [

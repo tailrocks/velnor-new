@@ -274,16 +274,13 @@ fn validator_installs_follow_executed_suite_per_policy() {
         "demo",
     ] {
         assert!(
-            crate_needs_generate_validators(WorkflowPolicy::ConsumerV1, suite_for_package(package)),
+            crate_needs_generate_validators(WorkflowPolicy::ConsumerV1, package),
             "consumer suites are opaque: {package} keeps the trio"
         );
     }
     for package in ["velnor-actions-orchestrator", "velnor-actions-cli"] {
         assert!(
-            crate_needs_generate_validators(
-                WorkflowPolicy::VelnorRepositoryV1,
-                suite_for_package(package)
-            ),
+            crate_needs_generate_validators(WorkflowPolicy::VelnorRepositoryV1, package),
             "{package} spawns validators and must install them"
         );
     }
@@ -297,10 +294,7 @@ fn validator_installs_follow_executed_suite_per_policy() {
         "demo",
     ] {
         assert!(
-            !crate_needs_generate_validators(
-                WorkflowPolicy::VelnorRepositoryV1,
-                suite_for_package(package)
-            ),
+            !crate_needs_generate_validators(WorkflowPolicy::VelnorRepositoryV1, package),
             "{package} never spawns validators and must trim the trio"
         );
     }

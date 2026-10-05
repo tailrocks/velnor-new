@@ -6,11 +6,12 @@
 
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use velnor_actions_mise::{PinnedTool, PinnedToolExec, ToolCatalog};
 
 use crate::merge::BaselineManifest;
-use crate::run_select::{select_baseline_artifact, select_exact_base_candidates};
+use crate::run_select::select_exact_base_candidates;
 
 /// Exact-base baseline lookup through pinned `gh` (par §5).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -98,44 +99,19 @@ impl BaselineLookup {
         .collect()
     }
 
-    /// Fixed `gh api` args listing one run's artifacts.
-    ///
-    /// The path names the expected repository explicitly: no
-    /// `{owner}`/`{repo}` template ever resolves from the mutable git
-    /// origin. The response proves the exact baseline artifact exists
-    /// unexpired before any download is attempted.
+    /// Fixed `gh api` args for one exact service artifact ZIP endpoint.
     #[must_use]
-    pub(crate) fn artifacts_args(&self, run_id: u64) -> Vec<OsString> {
-        [
-            "api",
-            &format!("repos/{}/actions/runs/{run_id}/artifacts", self.repo),
-        ]
-        .iter()
-        .map(OsString::from)
-        .collect()
-    }
-
-    /// Single named artifacts extract directly into `--dir`; place that
-    /// directory under the name expected by the manifest reader.
-    /// # Errors
-    /// Rejects artifact names that could escape the staging directory.
-    pub(crate) fn download_args(
-        &self,
-        artifact: &str,
-        run_id: u64,
-        staging: &Path,
-    ) -> Result<Vec<OsString>, String> {
-        velnor_actions_contract::validate_artifact_id(artifact)
-            .map_err(|_| "baseline_no_exact_artifact".to_owned())?;
-        Ok(crate::cover_baseline::baseline_download_args(
-            &self.base_sha,
-            &self.workflow,
-            &self.branch,
-            Some(artifact),
-            run_id,
-            &staging.join(artifact),
-            &self.repo,
-        ))
+    pub(crate) fn artifact_zip_args(&self, artifact_id: u64) -> Result<Vec<OsString>, String> {
+        if artifact_id == 0 {
+            return Err("baseline_unavailable".to_owned());
+        }
+        Ok(vec![
+            OsString::from("api"),
+            OsString::from(format!(
+                "repos/{}/actions/artifacts/{artifact_id}/zip",
+                self.repo
+            )),
+        ])
     }
 
     /// Run fixed `gh` args under the pinned catalog in `root`.
@@ -156,6 +132,33 @@ impl BaselineLookup {
             return Err("baseline_unavailable".to_owned());
         }
         gh_stdout_checked(&output)
+    }
+
+    /// Run fixed `gh api` args whose response is bounded binary ZIP data.
+    ///
+    /// # Errors
+    /// Returns a baseline miss for any command or service failure.
+    pub(crate) fn run_archive(
+        catalog: &ToolCatalog,
+        root: &Path,
+        args: Vec<OsString>,
+    ) -> Result<Vec<u8>, String> {
+        let exec = PinnedToolExec::new(vec![PinnedTool::Gh], OsStr::new("gh"), args)
+            .map_err(|_| "baseline_unavailable".to_owned())?;
+        let output = exec
+            .command(catalog)
+            .map_err(|_| "baseline_unavailable".to_owned())?
+            .with_cwd(PathBuf::from(root))
+            .run_bounded(
+                crate::baseline_archive::MAX_BASELINE_ARCHIVE_BYTES,
+                Duration::from_secs(velnor_actions_mise::command::RUN_TIMEOUT_SECS),
+            )
+            .map_err(|_| "baseline_unavailable".to_owned())?;
+        if output.success {
+            Ok(output.stdout)
+        } else {
+            Err("baseline_unavailable".to_owned())
+        }
     }
 }
 
@@ -206,9 +209,12 @@ pub(crate) fn resolve_manifests(
     };
     let repo = resolve_lookup_repo(root, repository)?;
     let lookup = BaselineLookup::new(base, workflow, branch, &repo)?;
-    resolve_with(&lookup, artifact, |args| {
-        BaselineLookup::run(catalog, root, args)
-    })
+    resolve_with(
+        &lookup,
+        artifact,
+        |args| BaselineLookup::run(catalog, root, args),
+        |args| BaselineLookup::run_archive(catalog, root, args),
+    )
 }
 
 /// One transport-injected normal lookup, retaining original publication proof.
@@ -216,16 +222,26 @@ fn resolve_with(
     lookup: &BaselineLookup,
     artifact: &str,
     mut run: impl FnMut(Vec<OsString>) -> Result<String, String>,
+    mut run_archive: impl FnMut(Vec<OsString>) -> Result<Vec<u8>, String>,
 ) -> Result<Vec<BaselineManifest>, String> {
     let text = run(lookup.list_args())?;
     for run_id in select_exact_base_candidates(&text, &lookup.base_sha, &lookup.branch)? {
-        let Ok(listed) = run(lookup.artifacts_args(run_id)) else {
+        let Ok(metadata) = crate::baseline_artifact_listing::select_metadata(
+            &lookup.repo,
+            run_id,
+            artifact,
+            &mut run,
+        ) else {
             continue;
         };
-        if select_baseline_artifact(&listed, artifact).is_err() {
-            continue;
-        }
-        if let Ok(parent) = download_authenticated(lookup, artifact, run_id, &mut run) {
+        if let Ok(parent) = download_authenticated(
+            lookup,
+            artifact,
+            &metadata,
+            run_id,
+            &mut run,
+            &mut run_archive,
+        ) {
             return Ok(vec![parent]);
         }
     }
@@ -236,11 +252,14 @@ fn resolve_with(
 fn download_authenticated(
     lookup: &BaselineLookup,
     artifact: &str,
+    metadata: &crate::baseline_artifact_listing::BaselineArtifactMetadata,
     run_id: u64,
     run: &mut impl FnMut(Vec<OsString>) -> Result<String, String>,
+    run_archive: &mut impl FnMut(Vec<OsString>) -> Result<Vec<u8>, String>,
 ) -> Result<BaselineManifest, String> {
     let temp = tempfile::tempdir().map_err(|_| "baseline_unavailable".to_owned())?;
-    run(lookup.download_args(artifact, run_id, temp.path())?)?;
+    let bytes = run_archive(lookup.artifact_zip_args(metadata.id)?)?;
+    crate::baseline_archive::stage_baseline_archive(temp.path(), artifact, metadata, &bytes)?;
     let path = temp.path().join(artifact).join("baseline.json");
     let text = crate::retrieve_reports::read_staged_text(
         &path,

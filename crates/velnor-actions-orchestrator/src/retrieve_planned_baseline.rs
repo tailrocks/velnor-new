@@ -38,9 +38,13 @@ pub(super) fn retrieve_typed_baseline_to(
     let Some(branch) = super::default_branch_for(catalog, run_dir, repo) else {
         return false;
     };
-    let Some(parent) = resolve_planned(plan, repo, &branch, |args| {
-        BaselineLookup::run(catalog, run_dir, args)
-    }) else {
+    let Some(parent) = resolve_planned(
+        plan,
+        repo,
+        &branch,
+        |args| BaselineLookup::run(catalog, run_dir, args),
+        |args| BaselineLookup::run_archive(catalog, run_dir, args),
+    ) else {
         return false;
     };
     super::stage_manifest(run_dir, &parent)
@@ -90,17 +94,22 @@ pub(super) fn resolve_planned(
     repo: &str,
     branch: &str,
     mut run: impl FnMut(Vec<OsString>) -> Result<String, String>,
+    mut run_archive: impl FnMut(Vec<OsString>) -> Result<Vec<u8>, String>,
 ) -> Option<BaselineManifest> {
     let claim = ParentClaim::from_plan(plan)?;
     let workflow = velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
     let lookup = BaselineLookup::new(&claim.base, workflow, branch, repo).ok()?;
-    let listed = run(lookup.artifacts_args(claim.run_id)).ok()?;
-    crate::run_select::select_baseline_artifact(&listed, &claim.name).ok()?;
-    let temp = tempfile::tempdir().ok()?;
-    run(lookup
-        .download_args(&claim.name, claim.run_id, temp.path())
-        .ok()?)
+    let metadata = crate::baseline_artifact_listing::select_metadata(
+        &lookup.repo,
+        claim.run_id,
+        &claim.name,
+        &mut run,
+    )
     .ok()?;
+    let temp = tempfile::tempdir().ok()?;
+    let bytes = run_archive(lookup.artifact_zip_args(metadata.id).ok()?).ok()?;
+    crate::baseline_archive::stage_baseline_archive(temp.path(), &claim.name, &metadata, &bytes)
+        .ok()?;
     let payload = read_parent(temp.path(), &claim)?;
     let endpoint = format!(
         "repos/{repo}/actions/runs/{}/attempts/{}",

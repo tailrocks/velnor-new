@@ -137,12 +137,15 @@ fn dispatch_switch_preserves_custom_actions_and_removes_shared_outputs() -> Test
         &GenerateOptions::default(),
         Some(ExecutionMode::Hosted),
     )?;
+    let hosted_paths = crate::impl_common::paths_without_acquire_action(
+        hosted.files_written.iter().map(String::as_str),
+    );
     assert!(
-        hosted.files_written.iter().all(|path| {
+        hosted_paths.iter().all(|path| {
             !path.starts_with(".github/actions/")
-                || path == ".github/actions/velnor-tool-seed/action.yml"
+                || *path == ".github/actions/velnor-tool-seed/action.yml"
         }),
-        "hosted output has no lane action beyond the generator tool seed: {:?}",
+        "hosted output has no lane action beyond generator setup composites: {:?}",
         hosted.files_written
     );
     assert!(!github.join("actions/rust-demo/action.yml").exists());

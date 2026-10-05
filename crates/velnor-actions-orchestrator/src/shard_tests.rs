@@ -46,11 +46,12 @@ fn lookup_args_are_fixed_and_validated() {
     );
     assert!(select_exact_base_run(&runs.to_string(), &"c".repeat(40), "t").is_err());
     let args: Vec<String> = lookup
-        .artifacts_args(7)
+        .artifact_zip_args(7)
+        .expect("zip endpoint args")
         .iter()
         .map(|a| a.to_string_lossy().into_owned())
         .collect();
-    assert_eq!(args, ["api", "repos/o/r/actions/runs/7/artifacts"]);
+    assert_eq!(args, ["api", "repos/o/r/actions/artifacts/7/zip"]);
 }
 
 #[test]

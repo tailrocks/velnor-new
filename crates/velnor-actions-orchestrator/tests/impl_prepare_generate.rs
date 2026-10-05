@@ -61,7 +61,12 @@ fn generate_preview_matches_in_place_and_preserves_repo() -> TestResult {
         ".github/actions/velnor-tool-seed/action.yml",
         ".github/workflows/ci.yml",
     ];
-    assert_eq!(preview_report.files_written, expected_files);
+    assert_eq!(
+        crate::impl_common::paths_without_acquire_action(
+            preview_report.files_written.iter().map(String::as_str)
+        ),
+        expected_files
+    );
     for rel in &inplace_report.files_written {
         let preview_bytes = fs::read(preview_root.join(rel))?;
         let inplace_bytes = fs::read(root.join(rel))?;
@@ -361,7 +366,13 @@ fn ignored_rust_plans_no_work() -> TestResult {
     assert!(text.contains("Rust: ignored"), "ignored:\n{text}");
     assert!(text.contains("no-work workflow"), "no-work:\n{text}");
     let report = generate(&prep, &GenerateOptions { output_dir: None })?;
-    assert_eq!(report.files_written.len(), 5);
+    assert_eq!(
+        crate::impl_common::paths_without_acquire_action(
+            report.files_written.iter().map(String::as_str)
+        )
+        .len(),
+        5
+    );
     Ok(())
 }
 

@@ -330,9 +330,10 @@ mod tests {
     }
     #[test]
     fn positive_hash_and_freeze() {
-        let root = source();
-        let expected = tree_sha256(root.path(), deadline()).expect("hash");
-        let entries = collect(root.path(), deadline()).expect("entries");
+        let held = source();
+        let root = held.path().canonicalize().expect("canonical root");
+        let expected = tree_sha256(&root, deadline()).expect("hash");
+        let entries = collect(&root, deadline()).expect("entries");
         let manifest = entries
             .iter()
             .map(|entry| match entry {
@@ -347,15 +348,12 @@ mod tests {
             expected, previous,
             "streaming preserves the locked tree recipe"
         );
-        freeze_tree(root.path(), deadline()).expect("freeze");
+        freeze_tree(&root, deadline()).expect("freeze");
         assert_eq!(
-            tree_sha256(root.path(), deadline()).expect("frozen hash"),
+            tree_sha256(&root, deadline()).expect("frozen hash"),
             expected
         );
-        assert_eq!(
-            fs::read(root.path().join("bin/tool")).expect("tool"),
-            b"tool"
-        );
+        assert_eq!(fs::read(root.join("bin/tool")).expect("tool"), b"tool");
     }
     #[test]
     fn tamper_changes_identity() {

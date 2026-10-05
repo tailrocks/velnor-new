@@ -131,27 +131,33 @@ fn exact_single_artifact_extracts_into_manifest_collection_directory() {
     let lookup =
         BaselineLookup::new(&base, ".github/workflows/ci.yml", "testmain", "o/r").expect("lookup");
     let temp = tempfile::tempdir().expect("staging");
-    let args = lookup
-        .download_args(&parent.artifact_name, 7, temp.path())
-        .expect("argv");
-    let position = args
-        .iter()
-        .position(|arg| arg == "--dir")
-        .expect("directory flag")
-        + 1;
-    let extraction = std::path::Path::new(&args[position]);
-    assert_eq!(extraction, temp.path().join(&parent.artifact_name));
-    // Model gh's single-artifact extraction: the payload is directly under
-    // `--dir`, with no automatically added artifact-name directory.
-    std::fs::create_dir(extraction).expect("extraction directory");
-    std::fs::write(
-        extraction.join("baseline.json"),
-        velnor_actions_contract::canonical_json_bytes(&parent).expect("canonical"),
+    let manifest = velnor_actions_contract::canonical_json_bytes(&parent).expect("canonical");
+    let archive = crate::baseline_archive::test_archive("baseline.json", &manifest);
+    let metadata = crate::baseline_artifact_listing::BaselineArtifactMetadata {
+        id: 7,
+        size_in_bytes: u64::try_from(archive.len()).expect("archive size"),
+        digest: format!(
+            "sha256:{}",
+            crate::cover_identity::generator::sha256_hex(&archive)
+        ),
+    };
+    let path = crate::baseline_archive::stage_baseline_archive(
+        temp.path(),
+        &parent.artifact_name,
+        &metadata,
+        &archive,
     )
-    .expect("downloaded manifest");
+    .expect("bounded archive staged");
+    assert_eq!(
+        path,
+        temp.path()
+            .join(&parent.artifact_name)
+            .join("baseline.json")
+    );
+    assert_eq!(std::fs::read(&path).expect("manifest bytes"), manifest);
     let found = collect_manifests(temp.path(), &base, 7, 1, &parent.artifact_name)
         .expect("manifest collected");
     assert_eq!(found.len(), 1);
     assert_eq!(found[0].artifact_name, parent.artifact_name);
-    assert!(lookup.download_args("../escape", 7, temp.path()).is_err());
+    assert!(lookup.artifact_zip_args(0).is_err());
 }

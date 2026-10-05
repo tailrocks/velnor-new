@@ -46,8 +46,8 @@ fn release_repo(config: &str) -> Result<TempDir, Box<dyn std::error::Error>> {
 }
 
 /// Expected family as owned strings for report comparison.
-fn family_vec() -> Vec<String> {
-    RELEASE_FAMILY.iter().map(ToString::to_string).collect()
+fn family_vec() -> Vec<&'static str> {
+    RELEASE_FAMILY.to_vec()
 }
 
 /// Forge bindings, omitted default registry, and checkout split (OIDC mode).
@@ -94,7 +94,7 @@ fn release_disabled_emits_base_tree_only() -> TestResult {
         let tree = render_staged_tree(&prepare(repo.path())?)?;
         let paths: Vec<&str> = tree.files.iter().map(|file| file.path.as_str()).collect();
         assert_eq!(
-            paths,
+            crate::impl_common::paths_without_acquire_action(paths),
             [
                 ".github/AGENTS.md",
                 ".github/actionlint.yaml",
@@ -141,7 +141,12 @@ fn release_enabled_emits_family_oidc() -> TestResult {
             output_dir: Some(preview.clone()),
         },
     )?;
-    assert_eq!(report.files_written, family_vec());
+    assert_eq!(
+        crate::impl_common::paths_without_acquire_action(
+            report.files_written.iter().map(String::as_str)
+        ),
+        family_vec()
+    );
     let yaml = fs::read_to_string(preview.join(".github/workflows/release.yml"))?;
     assert!(
         yaml.contains("github.repository == 'acme/widgets'"),
@@ -227,7 +232,12 @@ fn release_bootstrap_mode_adds_token_job() -> TestResult {
             output_dir: Some(preview.clone()),
         },
     )?;
-    assert_eq!(report.files_written, family_vec());
+    assert_eq!(
+        crate::impl_common::paths_without_acquire_action(
+            report.files_written.iter().map(String::as_str)
+        ),
+        family_vec()
+    );
     let yaml = fs::read_to_string(preview.join(".github/workflows/release.yml"))?;
     assert!(
         yaml.contains("release-publish-bootstrap"),

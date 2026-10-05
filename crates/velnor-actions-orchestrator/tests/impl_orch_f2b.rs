@@ -211,9 +211,7 @@ fn baselines_expire_on_schedule() {
 
 #[test]
 fn exact_base_run_filter_pins_provenance() {
-    use velnor_actions_orchestrator::run_select::{
-        SelectedBaseRun, select_baseline_artifact, select_exact_base_run,
-    };
+    use velnor_actions_orchestrator::run_select::{SelectedBaseRun, select_exact_base_run};
     let base = "a".repeat(40);
     let other = "b".repeat(40);
     let runs = serde_json::json!([
@@ -241,19 +239,6 @@ fn exact_base_run_filter_pins_provenance() {
         select_exact_base_run(&unattested.to_string(), &base, "t").is_err(),
         "runs without attempt evidence never select"
     );
-    let listed = serde_json::json!({"artifacts": [
-        {"id": 8, "name": "other", "expired": false},
-        {"id": 9, "name": "velnor-baseline-x", "expired": true},
-        {"id": 10, "name": "velnor-baseline-x", "expired": false},
-    ]});
-    assert_eq!(
-        select_baseline_artifact(&listed.to_string(), "velnor-baseline-x"),
-        Ok(10)
-    );
-    assert!(select_baseline_artifact(&listed.to_string(), "missing").is_err());
-    assert!(select_baseline_artifact("not json", "velnor-baseline-x").is_err());
-    let array = serde_json::json!([{"databaseId": 11, "name": "n", "expired": false}]);
-    assert_eq!(select_baseline_artifact(&array.to_string(), "n"), Ok(11));
 }
 
 #[test]

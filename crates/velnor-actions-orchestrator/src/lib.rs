@@ -7,6 +7,8 @@
 
 mod api;
 mod attach;
+mod baseline_archive;
+mod baseline_artifact_listing;
 mod baseline_publish;
 mod check_evidence;
 mod check_runtime;

@@ -13,7 +13,7 @@ use crate::{
     yaml::Yaml,
 };
 use velnor_actions_contract::{
-    Job, Permissions, RunsOn, StepKind, StepRole, Trigger, WorkflowIr,
+    Job, Permissions, RunsOn, StepKind, Trigger, WorkflowIr,
     workflow::{ir::DispatchInput, permissions::PermissionLevel},
 };
 
@@ -53,21 +53,25 @@ pub(crate) fn workflow_to_yaml(
     let mut rendered_jobs = Vec::with_capacity(jobs.len());
     for (id, job) in jobs {
         let call = shared.calls.get(id).map(String::as_str);
-        let mbx_policy = MbxJobPolicy {
-            native_mbx: mbx_jobs.contains(id),
-            actions_read: grants_exact_actions_read(
-                job.permissions.as_ref().unwrap_or(&ir.permissions).actions,
-            ),
-        };
-        let render_context = JobRenderContext {
-            needs_envs: &needs_env,
-            shared: call,
-            lanes: &lane_steps,
-            mbx_policy,
-        };
-        rendered_jobs.push((id.clone(), job_to_yaml(id, job, ctx, &render_context)?));
+        let actions_read =
+            grants_exact_actions_read(job.permissions.as_ref().unwrap_or(&ir.permissions).actions);
+        rendered_jobs.push((
+            id.clone(),
+            job_to_yaml(
+                id,
+                job,
+                ctx,
+                &needs_env,
+                call,
+                &lane_steps,
+                MbxJobPolicy {
+                    native_mbx: mbx_jobs.contains(id),
+                    actions_read,
+                },
+            )?,
+        ));
     }
-    let mut document = vec![
+    Ok(Yaml::Map(vec![
         ("name".to_owned(), Yaml::str(ir.name.clone())),
         ("on".to_owned(), triggers_to_yaml(&ir.triggers)),
         (
@@ -84,9 +88,8 @@ pub(crate) fn workflow_to_yaml(
                 ),
             ]),
         ),
-    ];
-    document.push(("jobs".to_owned(), Yaml::Map(rendered_jobs)));
-    Ok(Yaml::Map(document))
+        ("jobs".to_owned(), Yaml::Map(rendered_jobs)),
+    ]))
 }
 
 /// Report download is intentionally limited to the least-privilege `read` grant.
@@ -234,19 +237,15 @@ struct MbxJobPolicy {
     actions_read: bool,
 }
 
-struct JobRenderContext<'a> {
-    needs_envs: &'a [(String, String)],
-    shared: Option<&'a str>,
-    lanes: &'a crate::document_lanes::SharedLaneSteps<'a>,
-    mbx_policy: MbxJobPolicy,
-}
-
 /// Render one job: name, runs-on, timeout, environment, permissions, needs, if, steps.
 fn job_to_yaml(
     id: &str,
     job: &Job,
     ctx: &RenderContext,
-    render_context: &JobRenderContext<'_>,
+    needs_envs: &[(String, String)],
+    shared: Option<&str>,
+    lanes: &crate::document_lanes::SharedLaneSteps<'_>,
+    mbx_policy: MbxJobPolicy,
 ) -> Result<Yaml, RenderError> {
     steps::scan_for_private_subcommands(&job.display_name)?;
     let runner = RunsOn::parse(&job.runs_on).map_err(RenderError::Contract)?;
@@ -255,17 +254,13 @@ fn job_to_yaml(
         RunsOn::Hosted(label) => Yaml::str(label),
         RunsOn::ScaleSet(selector) => Yaml::Flow(selector.labels().to_vec()),
     };
-    let source_steps = render_context
-        .lanes
+    let source_steps = lanes
         .env_steps
         .get(id)
         .map_or(job.steps.as_slice(), Vec::as_slice);
-    let step_has_env = source_steps.iter().any(|step| {
-        step.role == Some(StepRole::AcquireVelnor)
-            || match &step.kind {
-                StepKind::Shell { env, .. } | StepKind::Action { env, .. } => !env.is_empty(),
-                StepKind::Internal { .. } => false,
-            }
+    let step_has_env = source_steps.iter().any(|step| match &step.kind {
+        StepKind::Shell { env, .. } | StepKind::Action { env, .. } => !env.is_empty(),
+        StepKind::Internal { .. } => false,
     });
     let mut job_env = if step_has_env {
         if ctx
@@ -289,14 +284,14 @@ fn job_to_yaml(
                 StepKind::Shell { env, .. } | StepKind::Action { env, .. } => Some(env),
                 StepKind::Internal { .. } => None,
             };
-            if let Some(env) = step_env
-                && let Some(toolchain) = env.get("RUSTUP_TOOLCHAIN")
-            {
-                job_env.insert("RUSTUP_TOOLCHAIN".to_owned(), toolchain.clone());
+            if let Some(env) = step_env {
+                if let Some(toolchain) = env.get("RUSTUP_TOOLCHAIN") {
+                    job_env.insert("RUSTUP_TOOLCHAIN".to_owned(), toolchain.clone());
+                }
             }
         }
     }
-    if render_context.mbx_policy.native_mbx {
+    if mbx_policy.native_mbx {
         job_env.insert(
             crate::cache_steps::MBX_GC_AUTO_ENV.to_owned(),
             crate::cache_steps::MBX_GC_AUTO_VALUE.to_owned(),
@@ -312,12 +307,12 @@ fn job_to_yaml(
         id,
         job,
         ctx,
-        render_context.needs_envs,
-        render_context.shared,
-        render_context.lanes,
+        needs_envs,
+        shared,
+        lanes,
         &crate::document_lanes::JobStepContext {
             job_env: &job_env,
-            actions_read: render_context.mbx_policy.actions_read,
+            actions_read: mbx_policy.actions_read,
         },
     )?;
     entries.push(("steps".to_owned(), Yaml::Seq(rendered_steps)));

@@ -135,7 +135,11 @@ fn policy_preview() -> Result<PolicyPreview, Box<dyn std::error::Error>> {
             output_dir: Some(preview.clone()),
         },
     )?;
-    assert_eq!(report.files_written.len(), 6, "six generated files");
+    assert_eq!(
+        report.files_written.len(),
+        7,
+        "six base files plus the source-bound acquire action"
+    );
     assert!(
         report
             .files_written
@@ -163,6 +167,16 @@ fn stage(preview: &Path, yaml: &str) -> Result<TempDir, Box<dyn std::error::Erro
     let action = ".github/actions/velnor-tool-seed/action.yml";
     fs::create_dir_all(root.join(".github/actions/velnor-tool-seed"))?;
     fs::copy(preview.join(action), root.join(action))?;
+    for entry in fs::read_dir(preview.join(".github/actions"))? {
+        let entry = entry?;
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if name.starts_with("acquire-b3-") {
+            let source = entry.path().join("action.yml");
+            let destination = root.join(".github/actions").join(name).join("action.yml");
+            fs::create_dir_all(destination.parent().ok_or("acquire action parent")?)?;
+            fs::copy(source, destination)?;
+        }
+    }
     let input = ZizmorConfigInput {
         generator_version: env!("CARGO_PKG_VERSION").to_owned(),
         workflows: vec![
@@ -246,7 +260,10 @@ fn staging_suppressions_stable_no_new() -> TestResult {
     let output = run_zizmor(staged.path())?;
     let text = streams(&output);
     assert!(output.success, "staged config greens zizmor: {text}");
-    assert!(ignores > 0, "the tool-seed action needs one ignore");
+    assert!(
+        ignores > 0,
+        "generated local actions need ignore annotations"
+    );
     assert!(
         text.contains(&format!("{ignores} ignored")),
         "ignore count must match the local-action annotations: {text}"
@@ -259,11 +276,18 @@ fn staging_suppressions_stable_no_new() -> TestResult {
 fn self_repository_ignores(root: &Path) -> Result<usize, Box<dyn std::error::Error>> {
     let mut matched = 0;
     let mut any = 0;
-    for relative in [
-        WORKFLOW_PATH,
-        FRESHNESS_WORKFLOW_PATH,
-        ".github/actions/velnor-tool-seed/action.yml",
-    ] {
+    let mut paths = vec![
+        WORKFLOW_PATH.to_owned(),
+        FRESHNESS_WORKFLOW_PATH.to_owned(),
+        ".github/actions/velnor-tool-seed/action.yml".to_owned(),
+    ];
+    for entry in fs::read_dir(root.join(".github/actions"))? {
+        let name = entry?.file_name().to_string_lossy().into_owned();
+        if name.starts_with("acquire-b3-") {
+            paths.push(format!(".github/actions/{name}/action.yml"));
+        }
+    }
+    for relative in paths {
         let text = fs::read_to_string(root.join(relative))?;
         matched += text.matches("# zizmor: ignore[self-repository]").count();
         any += text.matches("zizmor: ignore[").count();

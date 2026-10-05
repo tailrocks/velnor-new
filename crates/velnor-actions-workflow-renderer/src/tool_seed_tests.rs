@@ -16,7 +16,7 @@ fn scratch(name: &str) -> PathBuf {
     let path = std::env::temp_dir().join(format!("velnor-tool-seed-{name}-{}", std::process::id()));
     fs::remove_dir_all(&path).ok();
     fs::create_dir_all(&path).expect("scratch");
-    path
+    path.canonicalize().expect("canonical scratch")
 }
 
 fn cache_key() -> String {

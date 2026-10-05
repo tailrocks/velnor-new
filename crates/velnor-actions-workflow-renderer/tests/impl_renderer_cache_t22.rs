@@ -9,7 +9,6 @@ use velnor_actions_workflow_renderer::tofu_cache::{
 
 const HOME: &str = "${{ runner.temp }}/velnor/cargo";
 const KEY: &str = "velnor-v1-sources-trusted-compat-snapshot";
-const ROOT_LOCATOR: &str = "b3-0000000000000000000000000000000000000000000000000000000000000000";
 
 #[test]
 fn never_archive_mirror_lists_state_plans_and_credentials() {
@@ -58,12 +57,12 @@ fn sources_steps_reject_never_archive_paths() -> Result<(), RenderError> {
 
 #[test]
 fn provider_paths_reject_never_archive_paths() {
-    let good = format!("{TOFU_PROVIDER_CACHE_BASE_EXPR}/{ROOT_LOCATOR}");
+    let good = format!("{TOFU_PROVIDER_CACHE_BASE_EXPR}/root-0123456789ab");
     assert!(tofu_providers_path_ok(&good));
     for bad in [
-        format!("{TOFU_PROVIDER_CACHE_BASE_EXPR}/{ROOT_LOCATOR}.tfstate"),
+        format!("{TOFU_PROVIDER_CACHE_BASE_EXPR}/root-0123456789ab.tfstate"),
         format!("{TOFU_PROVIDER_CACHE_BASE_EXPR}/plan.tfplan"),
-        format!("{TOFU_PROVIDER_CACHE_BASE_EXPR}/credentials-{ROOT_LOCATOR}"),
+        format!("{TOFU_PROVIDER_CACHE_BASE_EXPR}/credentials-root-0123456789ab"),
     ] {
         assert!(!tofu_providers_path_ok(&bad), "must reject {bad}");
     }

@@ -13,6 +13,7 @@ pub use velnor_actions_contract::workflow::step_identity::{
 use velnor_actions_contract::{Step, StepRole};
 
 use crate::{RenderError, marker, steps, yaml};
+
 /// Display name of the provider restore step.
 pub const TOFU_PROVIDERS_RESTORE_NAME: &str = "Restore Tofu providers";
 /// Display name of the provider save step.
@@ -221,7 +222,7 @@ fn rename_step(mut step: Step, name: &str) -> Result<Step, RenderError> {
 
 /// True for exactly one owned plugin-cache dir under the base.
 ///
-/// Single path segment, ASCII locator charset only, no traversal, no
+/// Single path segment, slug charset only, no traversal, no
 /// never-archive names (state, plans, credentials), never the bare
 /// base: the data dir beside it (`tofu-data`) and every foreign tree
 /// stay out.

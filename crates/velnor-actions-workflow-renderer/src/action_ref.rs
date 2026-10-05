@@ -4,9 +4,13 @@
 use crate::RenderError;
 use velnor_actions_contract::workflow::step_identity::TOOL_SEED_USES;
 
+/// Prefix for renderer-generated shared `ToFu` setup composites.
+pub(crate) const TOFU_PROVIDER_PRELUDE_ACTION_PREFIX: &str =
+    "./.github/actions/tofu-provider-prelude-";
+
 /// Validate an `owner/repo@<40 hex>` action ref. Branch names are rejected.
 ///
-/// Tool seed, provider admission, and content-addressed acquisition actions
+/// Tool seed, provider admission, provider prelude, and content-addressed acquisition actions
 /// are the only local paths this renderer emits. Every other local path is
 /// rejected.
 ///
@@ -19,6 +23,7 @@ pub fn validate_uses(uses: &str) -> Result<(), RenderError> {
         uses,
         TOOL_SEED_USES | crate::tofu_cache::TOFU_PROVIDER_ADMISSION_USES
     ) || crate::acquire_action::is_acquire_action_uses(uses)
+        || is_generated_provider_prelude(uses)
     {
         return Ok(());
     }
@@ -42,10 +47,43 @@ pub fn validate_uses(uses: &str) -> Result<(), RenderError> {
     Ok(())
 }
 
+pub(crate) fn is_generated_provider_prelude(uses: &str) -> bool {
+    uses.strip_prefix(TOFU_PROVIDER_PRELUDE_ACTION_PREFIX)
+        .is_some_and(|suffix| {
+            !suffix.is_empty()
+                && suffix.bytes().all(|byte| byte.is_ascii_digit())
+                && suffix
+                    .parse::<usize>()
+                    .is_ok_and(|index| index.to_string() == suffix)
+        })
+}
+
 /// True for `owner/repo` over alphanumerics plus `.-_`.
 fn is_action_name(name: &str) -> bool {
     !name.is_empty()
         && name
             .bytes()
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'/' | b'.' | b'-' | b'_'))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_uses;
+
+    #[test]
+    fn only_canonical_generated_provider_prelude_paths_are_local() {
+        assert!(validate_uses("./.github/actions/tofu-provider-prelude-0").is_ok());
+        assert!(validate_uses("./.github/actions/tofu-provider-prelude-12").is_ok());
+        for uses in [
+            "./.github/actions/tofu-provider-prelude-",
+            "./.github/actions/tofu-provider-prelude-01",
+            "./.github/actions/tofu-provider-prelude-1-extra",
+            "./.github/actions/untrusted-local-action",
+        ] {
+            assert!(
+                validate_uses(uses).is_err(),
+                "unexpected local action {uses}"
+            );
+        }
+    }
 }

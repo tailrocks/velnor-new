@@ -54,7 +54,7 @@ fn tofu_prepare_scales_to_100_roots() -> TestResult {
     Ok(())
 }
 
-/// Generate below the workflow-file limit and fail closed above it.
+/// Retain useful positive scale points and fail closed at the workflow-file limit.
 #[test]
 fn tofu_generate_scales_with_root_count() -> TestResult {
     for roots in [1_usize, 10, 40, 60, 100] {
@@ -64,23 +64,41 @@ fn tofu_generate_scales_with_root_count() -> TestResult {
         let prep = prep?;
         let out = tempfile::TempDir::new()?;
         let target = out.path().join(format!("gen-{roots}"));
-        let preserved_workflow = target.join(".github/workflows/ci.yml");
-        let previous_workflow =
-            b"name: Existing preview\n'on':\n  workflow_dispatch: {}\njobs: {}\n";
-        if roots == 60 {
-            std::fs::create_dir_all(
-                preserved_workflow
-                    .parent()
-                    .ok_or("preview workflow parent")?,
+        if roots == 100 {
+            let preserved = out.path().join("preserved-preview");
+            let small_repo = tofu_repo(1)?;
+            let small = prepare(small_repo.path())?;
+            generate(
+                &small,
+                &GenerateOptions {
+                    output_dir: Some(preserved.clone()),
+                },
             )?;
-            std::fs::write(&preserved_workflow, previous_workflow)?;
-            std::fs::write(target.join(".github/policy.txt"), b"keep this file\n")?;
+            let before = crate::impl_common::snapshot(&preserved)?;
+            let refused = generate(
+                &prep,
+                &GenerateOptions {
+                    output_dir: Some(preserved.clone()),
+                },
+            )
+            .expect_err("oversized input cannot replace an existing preview");
+            assert!(
+                refused.to_string().starts_with(
+                    "render: invalid workflow: workflow_too_large:.github/workflows/ci.yml:"
+                ),
+                "existing preview oversize refusal: {refused}"
+            );
+            assert_eq!(
+                before,
+                crate::impl_common::snapshot(&preserved)?,
+                "existing valid preview tree remains byte-identical"
+            );
         }
         let opts = GenerateOptions {
             output_dir: Some(target.clone()),
         };
         let (result, gen_ms) = timed(|| generate(&prep, &opts));
-        if roots >= 60 {
+        if roots == 100 {
             let Err(error) = result else {
                 return Err(std::io::Error::other(
                     "oversized workflow generation unexpectedly succeeded",
@@ -99,23 +117,10 @@ fn tofu_generate_scales_with_root_count() -> TestResult {
                 actual_bytes > MAX_WORKFLOW_BYTES,
                 "diagnostic reported {actual_bytes} bytes"
             );
-            if roots == 60 {
-                assert_eq!(
-                    std::fs::read(&preserved_workflow)?,
-                    previous_workflow,
-                    "oversized generation preserves the existing preview workflow"
-                );
-                assert_eq!(
-                    std::fs::read(target.join(".github/policy.txt"))?,
-                    b"keep this file\n",
-                    "oversized generation preserves sibling preview files"
-                );
-            } else {
-                assert!(
-                    !target.exists(),
-                    "fresh oversized preview leaves no partial output tree"
-                );
-            }
+            assert!(
+                !target.exists(),
+                "fresh oversized preview leaves no partial output tree"
+            );
             eprintln!(
                 "perf: op=generate roots={roots} prepare_ms={prep_ms} generate_ms={gen_ms} failed_closed_bytes={actual_bytes} limit_bytes={MAX_WORKFLOW_BYTES}"
             );

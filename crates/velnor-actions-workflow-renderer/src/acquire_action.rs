@@ -41,9 +41,10 @@ impl AcquireActions {
     /// Replace a validated Acquire step with a fixed local action call.
     ///
     /// The action identity hashes the complete typed step, including its
-    /// literal release tuple and fixed command vector. Its caller has no
-    /// `with` or `env` inputs, so workflow environment mutations cannot
-    /// replace the source tuple.
+    /// literal release tuple and fixed command vector, with the display name
+    /// normalized because it is presentation only. Its caller has no `with`
+    /// or `env` inputs, so workflow environment mutations cannot replace the
+    /// source tuple.
     /// # Errors
     pub(crate) fn call_step(
         &mut self,
@@ -51,7 +52,9 @@ impl AcquireActions {
         ctx: &RenderContext,
     ) -> Result<Step, RenderError> {
         validate_source(source)?;
-        let identity = canonical_json_bytes(source).map_err(RenderError::Contract)?;
+        let mut canonical_source = source.clone();
+        canonical_source.name = "<presentation>".to_owned();
+        let identity = canonical_json_bytes(&canonical_source).map_err(RenderError::Contract)?;
         let digest = velnor_actions_contract::digest_b3(&identity);
         let digest = digest
             .strip_prefix("b3-")
@@ -62,7 +65,7 @@ impl AcquireActions {
             "{}{digest}",
             velnor_actions_contract::workflow::step_identity::ACQUIRE_VELNOR_ACTION_PREFIX
         );
-        let candidate = action_file(&name, source, ctx)?;
+        let candidate = action_file(&name, &canonical_source, ctx)?;
         if let Some(existing) = self.files.get(&name) {
             if existing.bytes != candidate.bytes {
                 return Err(RenderError::InvalidWorkflow(
