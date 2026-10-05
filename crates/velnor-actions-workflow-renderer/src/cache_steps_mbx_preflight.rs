@@ -5,8 +5,8 @@ use std::collections::BTreeMap;
 use super::{CompileDriver, MBX_ACTION_NAME};
 use crate::RenderError;
 use crate::steps::{action_step_with_env, shell_step, validate_uses};
-use velnor_actions_contract::Step;
 use velnor_actions_contract::cachekey::mbx_cache_generation;
+use velnor_actions_contract::{Step, StepRole};
 
 /// Display name for the strict Rust check before the action installs MBX.
 pub const MBX_PREFLIGHT_NAME: &str = "Verify Rust before MBX action";
@@ -102,11 +102,13 @@ fn rust_path_preflight_step(
         "printf '%s\\n' \"$rust_root\" >> \"$GITHUB_PATH\"".to_owned(),
     ]
     .join("; ");
-    shell_step(
+    let mut step = shell_step(
         MBX_PREFLIGHT_NAME,
         vec!["sh".to_owned(), "-c".to_owned(), script],
         env,
-    )
+    )?;
+    step.role = Some(StepRole::MbxPreflight);
+    Ok(step)
 }
 
 pub(super) fn mbx_version_check_step(
@@ -150,11 +152,13 @@ pub(super) fn mbx_version_check_step(
         "[ \"$cache_dir\" = \"$MBX_CACHE_DIR/actions\" ] || { printf '%s\\n' 'MBX reported an unexpected object store path' >&2; exit 1; }".to_owned(),
     ]
     .join("; ");
-    shell_step(
+    let mut step = shell_step(
         MBX_VERSION_CHECK_NAME,
         vec!["sh".to_owned(), "-c".to_owned(), script],
         env,
-    )
+    )?;
+    step.role = Some(StepRole::MbxVersionCheck);
+    Ok(step)
 }
 
 fn mbx_objects_action_step(
@@ -194,7 +198,9 @@ fn mbx_objects_action_step(
         ("save-on-pull-request".to_owned(), "false".to_owned()),
         ("save-on-protected-branch".to_owned(), "false".to_owned()),
     ]);
-    action_step_with_env(MBX_RESTORE_NAME, uses, with, env)
+    let mut step = action_step_with_env(MBX_RESTORE_NAME, uses, with, env)?;
+    step.role = Some(StepRole::MbxCache);
+    Ok(step)
 }
 
 fn cache_generation(mbx_version: &str, action_sha: &str) -> String {

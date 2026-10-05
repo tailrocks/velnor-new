@@ -14,7 +14,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_actions_contract::{Job, Step, StepKind};
+use velnor_actions_contract::workflow::step_identity::is_configured_checkout;
+use velnor_actions_contract::{Job, Step, StepKind, StepRole};
 
 use crate::{MiseSetup, RenderError, cache_p08_detect::detector_words, setup::MISE_ACTION_NAME};
 
@@ -121,7 +122,7 @@ pub fn mise_setup_step_p08(setup: &MiseSetup, cache_key: &str) -> Result<Step, R
             "bad_cache_key:{cache_key}"
         )));
     }
-    crate::steps::action_step(
+    let mut step = crate::steps::action_step(
         crate::setup::SETUP_MISE_NAME,
         &setup.uses,
         BTreeMap::from([
@@ -133,7 +134,9 @@ pub fn mise_setup_step_p08(setup: &MiseSetup, cache_key: &str) -> Result<Step, R
             ("cache_save".to_owned(), "false".to_owned()),
             ("cache_key".to_owned(), cache_key.to_owned()),
         ]),
-    )
+    )?;
+    step.role = Some(StepRole::MiseSetup);
+    Ok(step)
 }
 
 /// True for catalog version spellings (`2026.9.18`); never `latest`.
@@ -259,7 +262,16 @@ fn upgrade_setup(
     setup: &MiseSetup,
     key: &MiseToolsCacheKey,
 ) -> Result<(), RenderError> {
+    if job.steps[index]
+        .role
+        .is_some_and(|role| role != StepRole::MiseSetup)
+    {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "setup_mise_role_mismatch:{job_id}"
+        )));
+    }
     if setup_shape_ok(&job.steps[index], setup, true, Some(key)) {
+        job.steps[index].role = Some(StepRole::MiseSetup);
         return Ok(());
     }
     if setup_shape_ok(&job.steps[index], setup, true, None) {
@@ -309,7 +321,7 @@ fn first_mise_index(job: &Job) -> Option<usize> {
 fn insert_at(job: &Job, checkout_uses: &str) -> usize {
     job.steps
         .iter()
-        .position(|step| crate::tool_seed::is_configured_checkout(step, checkout_uses))
+        .position(|step| is_configured_checkout(step, checkout_uses))
         .map_or(0, |index| index + 1)
 }
 
@@ -339,12 +351,10 @@ pub fn check_no_rust_cache_with_mbx(job_id: &str, job: &Job) -> Result<(), Rende
 ///
 /// Returns [`RenderError::InvalidWorkflow`] when fetch precedes MBX.
 pub fn check_mbx_before_fetch(job_id: &str, job: &Job) -> Result<(), RenderError> {
-    let at = |name: &str| job.steps.iter().position(|s| s.name == name);
-    let fetch = job
-        .steps
-        .iter()
-        .position(|s| s.name.starts_with("Fetch Cargo sources"));
-    if let (Some(mbx), Some(fetch_at)) = (at("Restore MBX objects"), fetch)
+    let at = |role| job.steps.iter().position(|step| step.role == Some(role));
+    let mbx = at(StepRole::MbxCache);
+    let fetch = at(StepRole::CargoSourcesFetch);
+    if let (Some(mbx), Some(fetch_at)) = (mbx, fetch)
         && fetch_at < mbx
     {
         return Err(RenderError::InvalidWorkflow(format!(

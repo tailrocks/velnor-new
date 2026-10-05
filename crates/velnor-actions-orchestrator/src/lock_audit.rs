@@ -25,12 +25,12 @@
 use std::io::Read;
 use std::path::Path;
 
-use velnor_actions_contract::{ReleaseTarget, Step, StepKind, WorkflowIr};
+use velnor_actions_contract::{ReleaseTarget, Step, StepKind, StepRole, WorkflowIr};
 use velnor_actions_mise::toolfiles::lockfile::{
     InstallCoverage, InstallSubject, audit_install_coverage, mise_platform_for_target,
     parse_mise_lockfile, subject_for_install_spec,
 };
-use velnor_actions_mise::{MISE_LOCK_FILE, PREPARE_PINNED_TOOLS_STEP, ToolCatalog};
+use velnor_actions_mise::{MISE_LOCK_FILE, ToolCatalog};
 use velnor_actions_workflow_renderer::render::ValidatorCommand;
 
 use crate::vectors::validator_install_pin;
@@ -93,7 +93,7 @@ pub(crate) fn audit_prepare_installs(
     let mut subjects: Vec<InstallSubject> = Vec::new();
     for (id, job) in &ir.jobs {
         for step in &job.steps {
-            if step.name != PREPARE_PINNED_TOOLS_STEP {
+            if step.role != Some(StepRole::PreparePinnedTools) {
                 continue;
             }
             let Some(specs) = prepare_specs(id, step, &mut blocking) else {
