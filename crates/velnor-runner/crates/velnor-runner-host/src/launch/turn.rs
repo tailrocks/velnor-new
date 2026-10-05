@@ -252,8 +252,8 @@ impl Turn<'_> {
                     .statistics()
                     .map(velnor_runner_github::Statistics::assigned_population),
             )
+            && super::name_taken::fail_unstarted(self.journal, polled).await?
         {
-            super::name_taken::fail_unstarted(self.journal, polled).await?;
             ack_ready(self.link, self.session, path, queue, polled)?;
             return Ok(false);
         }
@@ -318,5 +318,3 @@ mod tests {
         Ok(())
     }
 }
-
-

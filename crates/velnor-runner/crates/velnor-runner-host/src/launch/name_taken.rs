@@ -6,8 +6,8 @@
 use velnor_runner_github::Poll;
 
 use crate::error::HostError;
-use crate::journal::{Journal, Outcome};
 use crate::journal::IntentState;
+use crate::journal::{Journal, Outcome};
 use crate::scale_set::EnsureError;
 
 use super::steps::Idle;
@@ -18,22 +18,34 @@ pub(crate) fn should_ack(idle: Idle, live_assigned: Option<i64>) -> bool {
     live_assigned == Some(0) && idle == Idle::Scale
 }
 
-/// Mark an unstarted `m{message_id}` row failed. A row with a container id stays.
+/// Fail an unstarted `m{message_id}` row. Return true only when every match has no container id.
+///
+/// A container id means this conflict is not a JIT name collision. The caller must not ack.
 ///
 /// # Errors
 ///
 /// Returns [`EnsureError`] when the journal read or the state write fails.
-pub(crate) async fn fail_unstarted(journal: &Journal, polled: &Poll) -> Result<(), EnsureError> {
+pub(crate) async fn fail_unstarted(journal: &Journal, polled: &Poll) -> Result<bool, EnsureError> {
     let Poll::Batch(batch) = polled else {
-        return Ok(());
+        return Ok(false);
     };
     let subject = format!("m{}", batch.message_id);
     let rows = journal.rows().await.map_err(map_journal)?;
-    for row in rows {
-        if row.kind != "launch" || row.subject != subject || row.docker_id.is_some() {
+    let mut matched = false;
+    for row in &rows {
+        if row.kind != "launch" || row.subject != subject {
             continue;
         }
-        if row.state != IntentState::Uncertain {
+        if row.docker_id.is_some() {
+            return Ok(false);
+        }
+        matched = true;
+    }
+    if !matched {
+        return Ok(false);
+    }
+    for row in rows {
+        if row.kind != "launch" || row.subject != subject || row.state != IntentState::Uncertain {
             continue;
         }
         journal
@@ -41,7 +53,7 @@ pub(crate) async fn fail_unstarted(journal: &Journal, polled: &Poll) -> Result<(
             .await
             .map_err(map_journal)?;
     }
-    Ok(())
+    Ok(true)
 }
 
 fn map_journal(error: HostError) -> EnsureError {
