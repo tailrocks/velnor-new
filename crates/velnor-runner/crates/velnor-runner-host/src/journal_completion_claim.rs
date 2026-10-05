@@ -242,7 +242,7 @@ impl Journal {
                 .ok_or(HostError::Journal)?;
             let changed = connection
                 .execute(
-                    "UPDATE completion_cleanup SET lease_until = ?1 WHERE intent_id = ?2 AND claim_generation = ?3 AND lease_until > ?4 AND EXISTS (SELECT 1 FROM intents WHERE id = ?2 AND kind = 'launch' AND cleanup_proven = 0)",
+                    "UPDATE completion_cleanup SET lease_until = MAX(lease_until, ?1) WHERE intent_id = ?2 AND claim_generation = ?3 AND lease_until > ?4 AND EXISTS (SELECT 1 FROM intents WHERE id = ?2 AND kind = 'launch' AND cleanup_proven = 0)",
                     (lease_until, id, generation, now),
                 )
                 .await

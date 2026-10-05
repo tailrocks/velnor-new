@@ -13,7 +13,7 @@ mod launch;
 mod schema;
 mod worker_volume;
 
-pub(crate) use completion::{CleanupClaim, CompletedLaunch, CompletionIdentity};
+pub(crate) use completion::{CompletedLaunch, CompletionIdentity};
 
 /// Durable intent row.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -228,13 +228,19 @@ impl Journal {
 
     /// Record that cleanup of this row's ids is proven.
     ///
+    /// Completion rows require a live completion claim and verified runner absence.
+    /// Use the completion-specific proof method for those rows.
+    ///
     /// # Errors
     ///
     /// Returns [`HostError::Journal`] when the row is missing.
     pub async fn record_cleanup(&self, id: i64) -> Result<(), HostError> {
         let conn = self.connection().await?;
         let changed = conn
-            .execute("UPDATE intents SET cleanup_proven = 1 WHERE id = ?1", [id])
+            .execute(
+                "UPDATE intents SET cleanup_proven = 1 WHERE id = ?1 AND NOT EXISTS (SELECT 1 FROM completion_cleanup WHERE intent_id = ?1)",
+                [id],
+            )
             .await
             .map_err(|_| HostError::Journal)?;
         one_row(changed)
