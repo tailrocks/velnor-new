@@ -4,7 +4,8 @@ use std::sync::{Arc, Mutex};
 
 use velnor_runner_github::{ParsedBatch, Poll};
 
-use crate::launch::{Idle, drive_offer, idle};
+use crate::journal::Outcome;
+use crate::launch::{Idle, drive_offer, fail_unstarted, idle};
 use crate::launch_harness::{
     CANARY, Mode, Script, absent, assigned_wait, available, ctx, open, started_wait,
 };
@@ -25,6 +26,58 @@ fn statistics_advance_and_offers_stay() {
     assert_eq!(idle(&assigned_wait(7, 1)), Idle::Mint);
     assert_eq!(idle(&assigned_wait(7, 0)), Idle::Ack);
     assert_eq!(idle(&started_wait(7, 1)), Idle::Scale);
+}
+
+#[tokio::test]
+async fn name_taken_failure_releases_the_unstarted_scale_row() -> Result<(), String> {
+    let (scratch, journal) = open("name-taken").await?;
+    let id = journal
+        .begin("launch", "m100000769")
+        .await
+        .map_err(|err| err.to_string())?;
+    journal
+        .finish(id, Outcome::Uncertain)
+        .await
+        .map_err(|err| err.to_string())?;
+    let failed = fail_unstarted(&journal, &assigned_wait(100_000_769, 5))
+        .await
+        .map_err(|err| err.to_string())?;
+    if !failed {
+        return Err("unstarted row was not failed".to_owned());
+    }
+    let state = journal.read(id).await.map_err(|err| err.to_string())?;
+    if state != IntentState::Failed {
+        return Err(format!("state {state:?}"));
+    }
+    absent(&scratch.file())
+}
+
+#[tokio::test]
+async fn name_taken_keeps_a_row_that_has_a_container() -> Result<(), String> {
+    let (scratch, journal) = open("name-taken-live").await?;
+    let id = journal
+        .begin("launch", "m100000769")
+        .await
+        .map_err(|err| err.to_string())?;
+    journal
+        .finish(id, Outcome::Uncertain)
+        .await
+        .map_err(|err| err.to_string())?;
+    journal
+        .bind_worker(id, Some("runner-container"), None)
+        .await
+        .map_err(|err| err.to_string())?;
+    let failed = fail_unstarted(&journal, &assigned_wait(100_000_769, 5))
+        .await
+        .map_err(|err| err.to_string())?;
+    if failed {
+        return Err("container row was treated as a name collision".to_owned());
+    }
+    let state = journal.read(id).await.map_err(|err| err.to_string())?;
+    if state != IntentState::Uncertain {
+        return Err(format!("state {state:?}"));
+    }
+    absent(&scratch.file())
 }
 
 #[tokio::test]

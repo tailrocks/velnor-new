@@ -245,16 +245,28 @@ impl Turn<'_> {
                         set_id: self.set_id,
                         session: self.session,
                         admin_token: self.admin_token,
-                        path,
-                        queue,
+                        path: path.clone(),
+                        queue: queue.clone(),
                         polled,
                     },
                     self.journal,
                     self.docker,
                     self.capacity,
                 )
-                .await?;
-                let Some(worker) = launched else {
+                .await;
+                if let Err(EnsureError::Conflict) = &launched
+                    && super::name_taken::should_ack(
+                        steps::idle(polled),
+                        self.session
+                            .statistics()
+                            .map(velnor_runner_github::Statistics::assigned_population),
+                    )
+                    && super::name_taken::fail_unstarted(self.journal, polled).await?
+                {
+                    ack_ready(self.link, self.session, path, queue, polled)?;
+                    return Ok(false);
+                }
+                let Some(worker) = launched? else {
                     return Ok(false);
                 };
                 workers.push(worker);

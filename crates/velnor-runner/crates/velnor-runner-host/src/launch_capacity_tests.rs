@@ -2,7 +2,7 @@
 
 use crate::launch::{
     Admit, Idle, Seat, admit, install_job_capacity, job_capacity, needs_running,
-    parse_admit_target, parse_job_capacity, poll_limit, wide_poll_limit,
+    parse_admit_target, parse_job_capacity, poll_limit, should_ack, wide_poll_limit,
 };
 
 fn decide(capacity: u32, started: u32, running: u32, idle: Idle) -> Admit {
@@ -302,4 +302,12 @@ fn uncertain_occupancy_does_not_mint_or_ack() {
         }),
         Admit::Hold
     );
+}
+
+#[test]
+fn name_taken_acks_only_a_scale_replay_with_no_live_assignment() {
+    assert!(should_ack(Idle::Scale, Some(0)));
+    assert!(!should_ack(Idle::Scale, Some(5)));
+    assert!(!should_ack(Idle::Launch, Some(0)));
+    assert!(!should_ack(Idle::Scale, None));
 }
