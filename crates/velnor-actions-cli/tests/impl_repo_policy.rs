@@ -14,8 +14,10 @@ mod p11_compiler;
 mod p11_metadata;
 #[path = "fixtures/p11_toml.rs"]
 pub(crate) mod p11_toml;
+#[path = "fixtures/p12_action_wiring.rs"]
+mod p12_action_wiring;
 #[path = "fixtures/p12_harness.rs"]
-mod p12_harness;
+pub(crate) mod p12_harness;
 #[path = "fixtures/p12_live.rs"]
 mod p12_live;
 #[path = "fixtures/p12_manifest.rs"]
@@ -30,7 +32,7 @@ mod p12_policy_b;
 mod p12_upstream;
 
 /// Expected members as (directory, package name).
-pub(crate) const MEMBERS: [(&str, &str); 8] = [
+pub(crate) const MEMBERS: [(&str, &str); 9] = [
     (
         "crates/velnor-actions-actionlint",
         "velnor-actions-actionlint",
@@ -38,6 +40,7 @@ pub(crate) const MEMBERS: [(&str, &str); 8] = [
     ("crates/velnor-actions-cli", "velnor-actions-cli"),
     ("crates/velnor-actions-contract", "velnor-actions-contract"),
     ("crates/velnor-actions-mise", "velnor-actions-mise"),
+    ("crates/velnor-actions-native", "velnor-actions-native"),
     (
         "crates/velnor-actions-orchestrator",
         "velnor-actions-orchestrator",
@@ -159,11 +162,11 @@ pub(crate) fn dep_referenced(dir: &str, dep: &str) -> Result<bool, Box<dyn Error
 }
 
 #[test]
-fn workspace_lists_exactly_eight_members() -> Result<(), Box<dyn Error>> {
+fn workspace_lists_registered_owner_members() -> Result<(), Box<dyn Error>> {
     let root = read("Cargo.toml")?;
     let start = root.find("members = [").ok_or("members block")?;
     let block = root[start..].split(']').next().ok_or("members end")?;
-    assert_eq!(block.matches("crates/").count(), 8, "{block}");
+    assert_eq!(block.matches("crates/").count(), MEMBERS.len(), "{block}");
     for (dir, _) in MEMBERS {
         assert!(block.contains(&format!("\"{dir}\"")), "{dir} not listed");
     }

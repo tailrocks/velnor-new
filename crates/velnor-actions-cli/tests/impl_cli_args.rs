@@ -115,3 +115,66 @@ fn generate_output_dir_flag_parses() -> Result<(), Box<dyn Error>> {
     cleanup(&tmp);
     Ok(())
 }
+
+#[test]
+fn foundation_preview_requires_output_and_rejects_overrides() -> Result<(), Box<dyn Error>> {
+    let tmp = fresh_tempdir("foundation-args")?;
+    let missing = spawn(&["generate", "--foundation-qualification-only"], &[], &tmp)?;
+    assert_eq!(code(&missing), 2, "output directory is required");
+
+    let preview = tmp.join("foundation-preview");
+    let preview_path = preview.to_str().ok_or("UTF-8 preview path")?;
+    let valid = spawn(
+        &[
+            "generate",
+            "--foundation-qualification-only",
+            "--output-dir",
+            preview_path,
+        ],
+        &[],
+        &tmp,
+    )?;
+    assert_ne!(code(&valid), 2, "fixed source preview arguments parse");
+
+    let mode_conflict = spawn(
+        &[
+            "generate",
+            "--foundation-qualification-only",
+            "--output-dir",
+            preview_path,
+            "--mode",
+            "both",
+        ],
+        &[],
+        &tmp,
+    )?;
+    assert_eq!(code(&mode_conflict), 2, "preview rejects dispatch modes");
+
+    let action_ref = spawn(
+        &[
+            "generate",
+            "--foundation-qualification-only",
+            "--output-dir",
+            preview_path,
+            "--foundation-action-ref",
+            "caller/repository/action@main",
+        ],
+        &[],
+        &tmp,
+    )?;
+    assert_eq!(
+        code(&action_ref),
+        2,
+        "caller action reference is unavailable"
+    );
+
+    let help = spawn(&["generate", "--help"], &[], &tmp)?;
+    assert_eq!(code(&help), 0);
+    let text = String::from_utf8_lossy(&help.stdout);
+    assert!(text.contains("--foundation-qualification-only"), "{text}");
+    assert!(text.contains("--output-dir <PATH>"), "{text}");
+    assert!(!text.contains("--foundation-action-ref"), "{text}");
+
+    cleanup(&tmp);
+    Ok(())
+}

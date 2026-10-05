@@ -2,7 +2,7 @@
 //!
 //! Each builder returns a self-contained tree under a fresh tempdir that
 //! `scripts/check-freshness.sh --root` validates. The passing root uses
-//! the real reviewed pin values as fixture data; failing roots mutate one
+//! frozen, internally consistent fixture pins; failing roots mutate one
 //! aspect each. Date helpers derive "today" from the system clock so
 //! evidence windows stay deterministic without external crates.
 
@@ -231,6 +231,21 @@ pub(crate) fn cleanup(fixture: &Fixture) {
 
 const TOOL_PROBE_ROWS: &[(&str, &str, &str)] = &[
     (
+        "https://pypi.org/pypi/reuse/json",
+        "reuse.json",
+        "{\"info\":{\"version\":\"6.2.0\"}}",
+    ),
+    (
+        "https://www.python.org/downloads/",
+        "python.html",
+        "<a>Download Python 3.14.8</a>",
+    ),
+    (
+        "https://api.github.com/repos/astral-sh/uv/releases/latest",
+        "uv.json",
+        "{\"tag_name\":\"0.12.22\"}",
+    ),
+    (
         "https://api.github.com/repos/jdx/mise/releases/latest",
         "mise.json",
         "{\"tag_name\": \"v2026.9.16\"}",
@@ -316,7 +331,7 @@ const ACTION_PROBE_ROWS: &[(&str, &str, &str)] = &[
     (
         "https://api.github.com/repos/asamarts/alint/releases/latest",
         "alint.json",
-        "{\"tag_name\": \"v0.16.1\"}",
+        "{\"tag_name\": \"v0.17.0\"}",
     ),
 ];
 

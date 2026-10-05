@@ -1,7 +1,7 @@
 {
   "actions": [
     {
-      "checked_at": "2026-10-04T11:28:54Z",
+      "checked_at": "2026-10-04T11:25:04Z",
       "key": "jdx/mise-action",
       "latest": "v5.1.0",
       "pinned_sha": "9149ea85001c7435d5a66bb127d6a1b6227cb0a5",
@@ -9,10 +9,11 @@
       "qualified_sha": "9149ea85001c7435d5a66bb127d6a1b6227cb0a5",
       "qualified_version": "v5.0.0",
       "source": "https://api.github.com/repos/jdx/mise-action/releases/latest",
-      "status": "held"
+      "status": "held",
+      "source_sha256": "69e5926f4ff0e084a4a9660172518c83828ef02245c48b67a02f553c8ec4d2e0"
     },
     {
-      "checked_at": "2026-10-04T11:28:54Z",
+      "checked_at": "2026-10-04T11:24:49Z",
       "key": "actions/checkout",
       "latest": "v7.0.1",
       "pinned_sha": "3d3c42e5aac5ba805825da76410c181273ba90b1",
@@ -20,10 +21,11 @@
       "qualified_sha": "3d3c42e5aac5ba805825da76410c181273ba90b1",
       "qualified_version": "v7.0.1",
       "source": "https://api.github.com/repos/actions/checkout/releases/latest",
-      "status": "current"
+      "status": "current",
+      "source_sha256": "15acdede088b17023cdbbcea4ede7e6ed93c6f3be85202506e545a7f4da1d834"
     },
     {
-      "checked_at": "2026-10-04T11:28:54Z",
+      "checked_at": "2026-10-04T11:24:51Z",
       "key": "actions/download-artifact",
       "latest": "v8.0.1",
       "pinned_sha": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
@@ -31,10 +33,11 @@
       "qualified_sha": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
       "qualified_version": "v8.0.1",
       "source": "https://api.github.com/repos/actions/download-artifact/releases/latest",
-      "status": "current"
+      "status": "current",
+      "source_sha256": "5160878f01ca82c77d2b4fd652d73ef150024accbf58fc1f165af165bbae6875"
     },
     {
-      "checked_at": "2026-10-04T11:28:54Z",
+      "checked_at": "2026-10-04T11:24:53Z",
       "key": "actions/upload-artifact",
       "latest": "v7.0.1",
       "pinned_sha": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
@@ -42,10 +45,11 @@
       "qualified_sha": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
       "qualified_version": "v7.0.1",
       "source": "https://api.github.com/repos/actions/upload-artifact/releases/latest",
-      "status": "current"
+      "status": "current",
+      "source_sha256": "86c5f1ac21ba0a4e7648ebd4ab82b1fe11f14c70aef5d7531e235d152088b03f"
     },
     {
-      "checked_at": "2026-10-04T11:28:54Z",
+      "checked_at": "2026-10-04T11:24:47Z",
       "key": "actions/cache/restore",
       "latest": "v6.1.0",
       "pinned_sha": "55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
@@ -53,10 +57,11 @@
       "qualified_sha": "55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
       "qualified_version": "v6.1.0",
       "source": "https://api.github.com/repos/actions/cache/releases/latest",
-      "status": "current"
+      "status": "current",
+      "source_sha256": "fab1cd173714779bcd8cf67c96c3a29f04323b5a5389ad404afcd17abfb36e53"
     },
     {
-      "checked_at": "2026-10-04T11:28:54Z",
+      "checked_at": "2026-10-04T11:24:47Z",
       "key": "actions/cache/save",
       "latest": "v6.1.0",
       "pinned_sha": "55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
@@ -64,7 +69,8 @@
       "qualified_sha": "55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
       "qualified_version": "v6.1.0",
       "source": "https://api.github.com/repos/actions/cache/releases/latest",
-      "status": "current"
+      "status": "current",
+      "source_sha256": "fab1cd173714779bcd8cf67c96c3a29f04323b5a5389ad404afcd17abfb36e53"
     },
     {
       "checked_at": "2026-10-04T11:28:54Z",
@@ -79,18 +85,19 @@
       "latest_sha": "d0825fbaf3cc36ca2609aa38e71046265a1f1e37"
     },
     {
-      "checked_at": "2026-10-04T11:28:54Z",
+      "checked_at": "2026-10-04T17:50:50Z",
       "key": "asamarts/alint",
       "latest": "v0.17.0",
-      "pinned_sha": "9f9d34ba0eae3888299b9e570f43338b0e7f2cdb",
-      "pinned_version": "v0.16.1",
-      "qualified_sha": "9f9d34ba0eae3888299b9e570f43338b0e7f2cdb",
-      "qualified_version": "v0.16.1",
+      "pinned_sha": "d93c0283b19dd78afcd8a4b303f1556a7759ba81",
+      "pinned_version": "v0.17.0",
+      "qualified_sha": "d93c0283b19dd78afcd8a4b303f1556a7759ba81",
+      "qualified_version": "v0.17.0",
       "source": "https://api.github.com/repos/asamarts/alint/releases/latest",
-      "status": "held"
+      "status": "current",
+      "source_sha256": "80a0eab492dff0471e57cd64f08e8fe947162b2de5aa07ed6f5d87ab0bcb9c5a"
     },
     {
-      "checked_at": "2026-10-04T11:28:54Z",
+      "checked_at": "2026-10-04T11:25:15Z",
       "key": "Swatinem/rust-cache",
       "latest": "v2.9.2",
       "pinned_sha": "6323deb102c322ba6fcbdcafc7e3dddab59af2b6",
@@ -98,11 +105,12 @@
       "qualified_sha": "6323deb102c322ba6fcbdcafc7e3dddab59af2b6",
       "qualified_version": "v2.9.2",
       "source": "https://api.github.com/repos/Swatinem/rust-cache/tags",
-      "status": "current"
+      "status": "current",
+      "source_sha256": "a681eb616300acd242a9761a821e43838e13746cddf65aaf7a1d5dfcf5191b43"
     }
   ],
   "check_interval_hours": 24,
-  "checked_at": "2026-10-04T11:28:54Z",
+  "checked_at": "2026-10-04T12:12:20Z",
   "exceptions": [],
   "max_exception_days": 14,
   "runner": {
@@ -121,20 +129,29 @@
     {
       "expires": "2026-10-15",
       "granted": "2026-10-01",
-      "held_version": "v0.16.1",
-      "issue": "#6",
-      "key": "asamarts/alint",
-      "owner": "@donbeave",
-      "reason": "upstream moved mid-consolidation; VER-3.2 update set tracked in #6, rust bump needs maintainer qualification decision"
-    },
-    {
-      "expires": "2026-10-15",
-      "granted": "2026-10-01",
       "held_version": "v5.0.0",
       "issue": "#6",
       "key": "jdx/mise-action",
       "owner": "@donbeave",
-      "reason": "upstream moved mid-consolidation; VER-3.2 update set tracked in #6, rust bump needs maintainer qualification decision"
+      "reason": "upstream moved mid-consolidation; VER-3.2 update set tracked in #6, rust bump needs maintainer qualification decision; official source observed latest v5.1.0 at 2026-10-04T11:25:04Z"
+    },
+    {
+      "expires": "2026-10-17",
+      "granted": "2026-10-03",
+      "held_version": "2026.9.18",
+      "issue": "#6",
+      "key": "mise",
+      "owner": "@donbeave",
+      "reason": "probes 2026-10-03T07:08:17Z and 2026-10-03T07:09:17Z both saw latest v2026.10.0; pin stays until the #6 update set; official source observed latest v2026.10.1 at 2026-10-04T11:25:00Z"
+    },
+    {
+      "expires": "2026-10-15",
+      "granted": "2026-10-01",
+      "held_version": "1.98.1",
+      "issue": "#6",
+      "key": "rust",
+      "owner": "@donbeave",
+      "reason": "upstream moved mid-consolidation; VER-3.2 update set tracked in #6, rust bump needs maintainer qualification decision; official source observed latest 1.99.0 at 2026-10-04T11:25:20Z"
     },
     {
       "expires": "2026-10-18",
@@ -146,15 +163,6 @@
       "reason": "latest stable v1.7.1 resolves to released commit d0825fbaf3cc36ca2609aa38e71046265a1f1e37; #29 separately qualifies candidate commit ec3ebbfbc1fdaffa59d476e87e4f386fdc60d533 for current-source cache lifecycle, disk, and input behavior; retain the qualified v1.6.0 pin until that review confirms the immutable action source"
     },
     {
-      "expires": "2026-10-17",
-      "granted": "2026-10-03",
-      "held_version": "2026.9.18",
-      "issue": "#6",
-      "key": "mise",
-      "owner": "@donbeave",
-      "reason": "probe 2026-10-04T11:28:54Z found latest v2026.10.1 at the recorded release source; keep 2026.9.18 until the #6 update set"
-    },
-    {
       "expires": "2026-10-18",
       "granted": "2026-10-04",
       "held_version": "1.21.1",
@@ -162,35 +170,28 @@
       "key": "mr-boxington",
       "owner": "@donbeave",
       "reason": "latest v1.22.0 resolves to commit 10474d43342ad65df3b02323dd8092d18ab38101; keep the qualified 1.21.1 pin pending #29 current-source cache lifecycle, disk, and input qualification"
-    },
-    {
-      "expires": "2026-10-15",
-      "granted": "2026-10-01",
-      "held_version": "1.98.1",
-      "issue": "#6",
-      "key": "rust",
-      "owner": "@donbeave",
-      "reason": "upstream moved mid-consolidation; VER-3.2 update set tracked in #6, rust bump needs maintainer qualification decision"
     }
   ],
   "tools": [
     {
-      "checked_at": "2026-10-04T11:28:54Z",
+      "checked_at": "2026-10-04T11:25:00Z",
       "latest": "v2026.10.1",
       "name": "mise",
       "pinned": "2026.9.18",
       "qualified": "2026.9.18",
       "source": "https://api.github.com/repos/jdx/mise/releases/latest",
-      "status": "held"
+      "status": "held",
+      "source_sha256": "c29a6e97d7bf935bf56abe2c470830f62329e450a1ab34089593305d8b4fce4c"
     },
     {
-      "checked_at": "2026-10-04T11:28:54Z",
+      "checked_at": "2026-10-04T11:25:20Z",
       "latest": "1.99.0",
       "name": "rust",
       "pinned": "1.98.1",
       "qualified": "1.98.1",
       "source": "https://static.rust-lang.org/dist/channel-rust-stable.toml",
-      "status": "held"
+      "status": "held",
+      "source_sha256": "ce6dddc886364f8d786514771212cebe9b731ba82d6b859951c6b0ccc516b6a2"
     },
     {
       "checked_at": "2026-10-04T11:28:54Z",
@@ -203,67 +204,132 @@
       "latest_sha": "10474d43342ad65df3b02323dd8092d18ab38101"
     },
     {
-      "checked_at": "2026-10-04T11:28:54Z",
+      "checked_at": "2026-10-04T11:24:58Z",
       "latest": "v2.102.0",
       "name": "gh",
       "pinned": "2.102.0",
       "qualified": "2.102.0",
       "source": "https://api.github.com/repos/cli/cli/releases/latest",
-      "status": "current"
+      "status": "current",
+      "source_sha256": "01b1797db8d047a8049f27292ef03207c57d7da471219283f59717f29e38d50b"
     },
     {
-      "checked_at": "2026-10-04T11:28:54Z",
+      "checked_at": "2026-10-04T11:25:11Z",
       "latest": "v1.7.12",
       "name": "actionlint",
       "pinned": "1.7.12",
       "qualified": "1.7.12",
       "source": "https://api.github.com/repos/rhysd/actionlint/releases/latest",
-      "status": "current"
+      "status": "current",
+      "source_sha256": "10ec2cefeaf4ace9f91c440a3f0a6b5db8c9854b9992e250ebe8acfd719b58a6"
     },
     {
-      "checked_at": "2026-10-04T11:28:54Z",
+      "checked_at": "2026-10-04T11:25:07Z",
       "latest": "v0.11.0",
       "name": "shellcheck",
       "pinned": "0.11.0",
       "qualified": "0.11.0",
       "source": "https://api.github.com/repos/koalaman/shellcheck/releases/latest",
-      "status": "current"
+      "status": "current",
+      "source_sha256": "428fa09b7f8cbc9a37eec325f69cd803918e1d44c110878e26aeca9cf335a864"
     },
     {
-      "checked_at": "2026-10-04T11:28:54Z",
+      "checked_at": "2026-10-04T11:25:13Z",
       "latest": "v1.30.1",
       "name": "zizmor",
       "pinned": "1.30.1",
       "qualified": "1.30.1",
       "source": "https://api.github.com/repos/zizmorcore/zizmor/releases/latest",
-      "status": "current"
+      "status": "current",
+      "source_sha256": "6481cd33c651ff353ed1b5ec1f3793e5b8e7a9edf51d73973e925ac09ede5dcb"
     },
     {
-      "checked_at": "2026-10-04T11:28:54Z",
+      "checked_at": "2026-10-04T11:25:16Z",
       "latest": "0.9.146",
       "name": "nextest",
       "pinned": "0.9.146",
       "qualified": "0.9.146",
       "source": "https://crates.io/api/v1/crates/cargo-nextest",
-      "status": "current"
+      "status": "current",
+      "source_sha256": "f7d48db2a696b7e6852b03cbf618d78fb57aff05105ab0f3f31e17c13d0cfe8d"
     },
     {
-      "checked_at": "2026-10-04T11:28:54Z",
+      "checked_at": "2026-10-04T11:25:08Z",
       "latest": "v1.13.1",
       "name": "opentofu",
       "pinned": "1.13.1",
       "qualified": "1.13.1",
       "source": "https://api.github.com/repos/opentofu/opentofu/releases/latest",
-      "status": "current"
+      "status": "current",
+      "source_sha256": "50afe5bbe8484069e50e4640da2a0cbb5837a1e8609f1b6a2b0dd7a4d2d110b3"
     },
     {
-      "checked_at": "2026-10-04T11:28:54Z",
+      "checked_at": "2026-10-04T11:25:19Z",
       "latest": "0.3.169",
       "name": "release-plz",
       "pinned": "0.3.169",
       "qualified": "0.3.169",
       "source": "https://crates.io/api/v1/crates/release-plz",
-      "status": "current"
+      "status": "current",
+      "source_sha256": "5ba0fe81b1b473cd4a17b439d681650d573db830b054b655861cc494b3fc3159"
+    },
+    {
+      "name": "reuse",
+      "checked_at": "2026-10-04T03:55:07Z",
+      "pinned": "6.2.0",
+      "latest": "6.2.0",
+      "source": "https://api.github.com/repos/fsfe/reuse-tool/releases/latest",
+      "pin_tag": "v6.2.0",
+      "pin_commit_sha": "a1bb792acda6fd0724936b4ebbdbc8eceb9c0459",
+      "qualified": "6.2.0",
+      "status": "current",
+      "qualification_scope": "official source and PyPI source archive identity plus local macOS ARM64 REUSE 6.2.0 install on exact Python 3.14.8/uv 0.12.23 and immutable jackin-role-action reuse lint compatibility; Linux runtime and hosted performance unqualified",
+      "qualification_report": "docs/reviews/uv-0.12.23-qualification-evidence.json",
+      "qualification_source": "https://pypi.org/pypi/reuse/6.2.0/json",
+      "distribution_archive_sha256": "4feae057a2334c9a513e6933cdb9be819d8b822f3b5b435a36138bd218897d23"
+    },
+    {
+      "name": "python",
+      "checked_at": "2026-10-04T03:55:08Z",
+      "pinned": "3.14.8",
+      "latest": "3.14.8",
+      "source": "https://www.python.org/downloads/",
+      "pin_tag": "v3.14.8",
+      "pin_commit_sha": "8e6e75d9102e39bed2a2b279203a396741180f12",
+      "qualified": "3.14.8",
+      "status": "current",
+      "qualification_scope": "official source/archive identity plus local macOS ARM64 pinned-Mise REUSE6.2 runtime and immutable jackin-role-action reuse lint compatibility; Linux and hosted performance unqualified",
+      "source_sha256": "f3d8e975c236e3aa9a11ef70d1250700cc0055371b20217cd4cb68a9d4e0d03b",
+      "distribution_repository": "https://github.com/astral-sh/python-build-standalone",
+      "distribution_tag": "20261001",
+      "distribution_commit_sha": "63249f9a31f23542d5a58754aed0b93cc432e761",
+      "distribution_asset_url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261001/cpython-3.14.8%2B20261001-aarch64-apple-darwin-install_only_stripped.tar.gz",
+      "distribution_archive_sha256": "69e48cd7f54261df5b6abbd374f69fe6e496fa781d271592aeef49cd5ffbea6c",
+      "installed_binary_sha256": "02f23beea109ccb3ad0f4b211bbea0810b912a94840de34374ad4a8c04f32222",
+      "qualification_report": "docs/reviews/python-uv-upgrade-evidence.json",
+      "pin_tree_sha": "5c846838d075d0d44c37549e11cdc334fbef2054",
+      "qualification_source": "https://www.python.org/downloads/release/python-3148/",
+      "qualification_source_sha256": "499eeb6a56939047144d26ce725bf822343044adeddedce925c5fe54072b8679",
+      "distribution_tree_sha": "94b604e87a621ef4559d5908787165fa93607788"
+    },
+    {
+      "name": "uv",
+      "checked_at": "2026-10-04T05:31:47Z",
+      "pinned": "0.12.23",
+      "latest": "0.12.23",
+      "source": "https://api.github.com/repos/astral-sh/uv/releases/latest",
+      "pin_tag": "0.12.23",
+      "pin_commit_sha": "46b84fd0bfec23b72f29e8e2185ba68a65052f48",
+      "qualified": "0.12.23",
+      "status": "current",
+      "qualification_scope": "official uv source/archive identity plus local macOS ARM64 pinned-Mise REUSE 6.2.0 workload on exact Python 3.14.8 and immutable jackin-role-action commit; Linux and hosted performance unqualified",
+      "source_sha256": "cce783f70a398a4673fbda8ffe5e442b67efa1226780990943ff6e3fb8cfcbba",
+      "published_at": "2026-10-03T17:34:11Z",
+      "distribution_asset_url": "https://github.com/astral-sh/uv/releases/download/0.12.23/uv-aarch64-apple-darwin.tar.gz",
+      "distribution_archive_sha256": "50487ae565ccd96e499056b4674d438f4c53170202617b4c759defe0c6a1b544",
+      "installed_binary_sha256": "2f7be1879e3337eef20875c0f80ef033337305d0405efc5d72642d6292f66b3b",
+      "qualification_report": "docs/reviews/uv-0.12.23-qualification-evidence.json",
+      "pin_tree_sha": "d40edd9dc8f4046599bc894bf3ee587a14d84681"
     }
   ]
 }

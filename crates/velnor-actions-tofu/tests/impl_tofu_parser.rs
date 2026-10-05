@@ -6,8 +6,11 @@ use velnor_actions_tofu::parser::{
 #[test]
 fn empty_native_parses_to_empty_model() {
     let model = parse_native("").expect("empty parses");
-    assert!(model.blocks.is_empty());
-    assert!(model.required_versions.is_empty());
+    assert_eq!(
+        model.blocks,
+        Vec::<velnor_actions_tofu::parser::BlockModel>::new()
+    );
+    assert_eq!(model.required_versions, Vec::<String>::new());
     assert!(!model.has_legacy_ref);
 }
 

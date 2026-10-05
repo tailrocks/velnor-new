@@ -147,7 +147,7 @@ fn bench_tofu_root_change() -> TestResult {
     assert!(
         affected
             .iter()
-            .all(|(task, _)| task.contains("stacks/r003")),
+            .all(|(task, _)| task.contains(&velnor_actions_tofu::key_for_root("stacks/r003"))),
         "{affected:?}"
     );
     let metadata_ms = index_baseline_ms(root)?;

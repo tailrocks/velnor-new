@@ -40,9 +40,9 @@ fn velnor_workspace() -> Result<TempDir, Box<dyn std::error::Error>> {
     fs::write(root.join(".velnor/generator.lock"), lock_text()?)?;
     fs::write(
         root.join("Cargo.toml"),
-        "[workspace]\nmembers = [\n  \"crates/velnor-actions-cli\",\n  \"crates/demo\",\n]\n",
+        "[workspace]\nmembers = [\n  \"crates/velnor-actions-cli\",\n  \"crates/velnor-actions-contract\",\n]\n",
     )?;
-    for name in ["velnor-actions-cli", "demo"] {
+    for name in ["velnor-actions-cli", "velnor-actions-contract"] {
         let dir = root.join("crates").join(name);
         fs::create_dir_all(dir.join("src"))?;
         fs::write(
@@ -138,11 +138,19 @@ fn velnor_jobs_carry_trio_only_where_executed() -> TestResult {
         for spec in trio {
             assert!(cli.contains(spec), "cli suite spawns validators: {cli}");
         }
-        let demo = runs.get("rust-demo").ok_or("demo crate job missing")?;
+        let contract = runs
+            .get("rust-velnor-actions-contract")
+            .ok_or("contract crate job missing")?;
         for spec in trio {
-            assert!(!demo.contains(spec), "demo must trim {spec}: {demo}");
+            assert!(
+                !contract.contains(spec),
+                "contract must trim {spec}: {contract}"
+            );
         }
-        assert!(demo.contains("rust@"), "demo keeps its driver: {demo}");
+        assert!(
+            contract.contains("rust@"),
+            "contract keeps its driver: {contract}"
+        );
         let required = runs.get("required").ok_or("required missing")?;
         assert!(required.contains("gh@"), "required installs gh: {required}");
         for spec in trio {
@@ -250,7 +258,7 @@ fn deny_install_is_audited() -> TestResult {
     without_ambient_identity("deny_install_is_audited", || {
         let repo = velnor_workspace()?;
         let prep = prepare(repo.path())?;
-        assert!(prep.lock_audit_blocking.is_empty());
+        assert_eq!(prep.lock_audit_blocking, [] as [String; 0]);
         let summary = prep
             .discovery
             .recommendations

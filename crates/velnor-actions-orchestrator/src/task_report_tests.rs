@@ -33,8 +33,8 @@ fn exit_codes_accept_the_eight_bit_range() {
 
 #[test]
 fn downstream_ids_split_dedupe_and_drop_blanks() {
-    assert!(parse_downstream(None).is_empty());
-    assert!(parse_downstream(Some("")).is_empty());
+    assert_eq!(parse_downstream(None), [] as [String; 0]);
+    assert_eq!(parse_downstream(Some("")), [] as [String; 0]);
     assert_eq!(parse_downstream(Some("b,a,b,, a ,")), ["b", "a"]);
 }
 
@@ -255,7 +255,7 @@ fn failed_report_marks_entry_failed() {
 }
 
 /// Tofu task ID for the timing-carrying execution case.
-const TOFU_VALIDATE: &str = "stack/tofu/stacks/a/validate/default";
+const TOFU_VALIDATE: &str = "stack/tofu/dir-737461636b732f61/validate/default";
 
 #[test]
 fn tofu_executed_report_carries_measured_timing() {

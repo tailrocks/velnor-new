@@ -37,7 +37,10 @@ fn lanes_isolate_cargo_writers() {
 fn shared_lanes_get_exclusions() {
     let pairs = resource_exclusions(&[("a", 0), ("b", 0), ("c", 1)]);
     assert_eq!(pairs, [("a".to_owned(), "b".to_owned())]);
-    assert!(resource_exclusions(&[("a", 0), ("b", 1)]).is_empty());
+    assert_eq!(
+        resource_exclusions(&[("a", 0), ("b", 1)]),
+        [] as [(String, String); 0]
+    );
 }
 
 #[test]
@@ -75,7 +78,7 @@ fn fanout_needs(saving: u64, setup: u64, transfer: u64) -> bool {
 fn sequential_reference_is_sorted_set() {
     let ids = ["b".to_owned(), "a".to_owned(), "c".to_owned()];
     assert_eq!(sequential_reference(&ids), ["a", "b", "c"]);
-    assert!(sequential_reference(&[]).is_empty());
+    assert_eq!(sequential_reference(&[]), [] as [String; 0]);
 }
 
 #[test]

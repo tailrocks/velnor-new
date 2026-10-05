@@ -4,7 +4,7 @@
 //! lookup module keeps the file size gate.
 
 use super::*;
-use crate::run_select::select_exact_base_run;
+use crate::run_select::select_exact_base_candidates;
 use velnor_actions_mise::ToolCatalog;
 
 #[test]
@@ -29,21 +29,29 @@ fn lookup_args_are_fixed_and_validated() {
     let runs = serde_json::json!([
         {"databaseId": 1, "headSha": other, "headBranch": "t", "event": "push", "conclusion": "success", "attempt": 1},
         {"databaseId": 2, "headSha": base, "headBranch": "t", "event": "push", "conclusion": "success", "attempt": 2},
+        {"databaseId": 3, "headSha": base, "headBranch": "t", "event": "push", "conclusion": "failure", "attempt": 3},
     ]);
     assert_eq!(
-        select_exact_base_run(&runs.to_string(), &base, "t"),
-        Ok(crate::run_select::SelectedBaseRun {
-            run_id: 2,
-            attempt: 2
-        })
+        select_exact_base_candidates(&runs.to_string(), &base, "t"),
+        Ok(vec![2])
     );
-    assert!(select_exact_base_run(&runs.to_string(), &"c".repeat(40), "t").is_err());
-    let args: Vec<String> = lookup
-        .artifacts_args(7)
-        .iter()
-        .map(|a| a.to_string_lossy().into_owned())
-        .collect();
-    assert_eq!(args, ["api", "repos/o/r/actions/runs/7/artifacts"]);
+    assert!(select_exact_base_candidates(&runs.to_string(), &"c".repeat(40), "t").is_err());
+    let artifact = velnor_actions_contract::artifact_id_for_baseline(
+        &base,
+        &velnor_actions_contract::digest_b3(b"compat"),
+    )
+    .expect("artifact name");
+    let args: Vec<String> =
+        crate::baseline_artifact_listing::artifacts_page_args(&lookup.repo, 7, &artifact, 1)
+            .expect("page args")
+            .iter()
+            .map(|a| a.to_string_lossy().into_owned())
+            .collect();
+    assert_eq!(args[0], "api");
+    assert_eq!(
+        args[1],
+        format!("repos/o/r/actions/runs/7/artifacts?name={artifact}&per_page=100&page=1")
+    );
 }
 
 #[test]

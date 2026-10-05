@@ -1,5 +1,8 @@
 //! Shared fixtures and helpers for orchestrator integration tests.
 
+#[path = "../../test_support/git_fixture.rs"]
+pub(crate) mod git_fixture;
+
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -11,6 +14,10 @@ use velnor_actions_contract::{MatrixReport, Plan};
 use velnor_actions_orchestrator::{
     GenerationPreparation, OrchestratorError, finalized_jobs, plan_internal, plan_text,
 };
+
+#[path = "fixture_package.rs"]
+mod fixture_package;
+pub(crate) use fixture_package::root_manifest;
 
 /// Test error shortcut.
 pub(crate) type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -143,10 +150,7 @@ pub(crate) fn make_repo(config: &str) -> Result<TempDir, Box<dyn std::error::Err
         root.join(".velnor/release-manifest.json"),
         fixture_manifest_json(),
     )?;
-    fs::write(
-        root.join("Cargo.toml"),
-        "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
-    )?;
+    fs::write(root.join("Cargo.toml"), root_manifest(config))?;
     fs::create_dir_all(root.join("src"))?;
     fs::write(root.join("src/lib.rs"), "pub fn f() {}\n")?;
     Ok(dir)
@@ -173,7 +177,7 @@ pub(crate) fn write_nextest_task(root: &Path) -> TestResult {
 
 /// Run git with inherited failure context.
 pub(crate) fn git(args: &[&str], cwd: &Path) -> TestResult {
-    let status = StdCommand::new("git")
+    let status = git_fixture::command(cwd)?
         .args(args)
         .current_dir(cwd)
         .status()?;
@@ -196,7 +200,7 @@ pub(crate) fn anchor_id() -> String {
 
 /// Single git stdout line.
 pub(crate) fn git_line(args: &[&str], cwd: &Path) -> Result<String, Box<dyn std::error::Error>> {
-    let output = StdCommand::new("git")
+    let output = git_fixture::command(cwd)?
         .args(args)
         .current_dir(cwd)
         .output()?;

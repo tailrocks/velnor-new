@@ -4,7 +4,7 @@ This record documents the evidence refresh in `.velnor/freshness-inventory.json`
 
 ## Tool and action sources
 
-The bounded read-only `bash scripts/check-freshness.sh --check-upstream` probe completed at `2026-10-04T11:28:54Z` using Python 3.14.7 (`tomllib` is required by the script). Its per-row source URLs are recorded in the inventory. The probe found no lookup failures. It returned nonzero for six newer upstream releases whose current pins remain held; that result is expected and is not represented as a passing latest-version check.
+The bounded read-only `bash scripts/check-freshness.sh --check-upstream` probe completed at `2026-10-04T11:28:54Z` using Python 3.14.7 (`tomllib` is required by the script). It found no lookup failures and later corroborated the latest values for the 17 action and tool rows whose `source_sha256` values are recorded in the inventory. Those hashes came from earlier responses, with their original row `checked_at` times between `2026-10-04T11:24:47Z` and `2026-10-04T11:25:20Z`; the 11:28 probe produced different raw response hashes, so the earlier hashes remain paired only with those earlier timestamps. The probe returned nonzero for six newer upstream releases whose current pins remain held; that result is expected and is not represented as a passing latest-version check.
 
 | Subject | Current pin | Latest stable observed | Disposition |
 | --- | --- | --- | --- |
@@ -30,6 +30,12 @@ The bounded read-only `bash scripts/check-freshness.sh --check-upstream` probe c
 The `mr-boxington` `v1.22.0` tag resolved to commit `10474d43342ad65df3b02323dd8092d18ab38101` when checked at `2026-10-04T11:30:21Z`. The released action tag `v1.7.1` resolved to commit `d0825fbaf3cc36ca2609aa38e71046265a1f1e37` at the same time. [Velnor PR #29](https://github.com/tailrocks/velnor-new/pull/29) carries a separate integration candidate, `commit-ec3ebbf` at `ec3ebbfbc1fdaffa59d476e87e4f386fdc60d533`, from [upstream action PR #62](https://github.com/jdx/mr-boxington-action/pull/62). That candidate is not the published `v1.7.1` tag SHA; PR #29 marks the candidate for replacement with a released SHA before merge. The two 14-day holds granted `2026-10-04` retain the existing `1.21.1` and `v1.6.0` pins while PR #29 completes current-source cache lifecycle, disk, and input qualification and resolves the immutable action source.
 
 The four existing `#6` holds remain in force. The refreshed inventory now records the observed latest values, including `mise v2026.10.1`, without converting those pins to current or extending their existing expiries.
+
+The PR12 inventory also retains its separately checked `python`, `reuse`, and `uv` rows, which were outside this snapshot's 10-tool upstream probe. Their recorded latest values remain `3.14.8`, `6.2.0`, and `0.12.23`; row check times remain `2026-10-04T03:55:08Z`, `2026-10-04T03:55:07Z`, and `2026-10-04T05:31:47Z`, respectively. Those rows were current within the 24-hour check interval at this snapshot, and no newer upstream version is asserted here.
+
+## Subsequent Alint candidate evidence (2026-10-05)
+
+The later PR12 candidate uses Alint `v0.17.0` at action commit `d93c0283b19dd78afcd8a4b303f1556a7759ba81`. Paired local compatibility and immutable-source evidence are recorded in the [Alint v0.17.0 qualification](../reviews/alint-v0.17.0-qualification.md); they support this candidate and preserve the earlier held-pin observation above. The current source and generated workflow keep the action SHA and binary version aligned. The hosted Ubuntu composite installation path still requires a successful Alint CI job on the exact final source; local compatibility is not hosted qualification.
 
 ## Hosted runner evidence
 

@@ -356,7 +356,7 @@ fn renderer_rejects_bare_commands_inside_ir() -> Result<(), RenderError> {
             name: "Run Alint".to_owned(),
             condition: None,
             kind: StepKind::Action {
-                uses: "asamarts/alint@v0.16.1".to_owned(),
+                uses: "asamarts/alint@v0.17.0".to_owned(),
                 with: BTreeMap::new(),
                 env: BTreeMap::new(),
             },

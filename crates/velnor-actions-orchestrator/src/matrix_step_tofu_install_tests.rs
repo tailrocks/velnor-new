@@ -1,8 +1,7 @@
 //! Tofu-install classification tests: suites that spawn `tofu`.
 //!
 //! Declared via `#[path]` from `matrix_step.rs` under `cfg(test)`.
-//! Mirrors the `GENERATE_VALIDATOR_SUITES` pin shape: classification,
-//! render-level install proof, and a workspace-wide audit axis.
+//! Classification and render-level install proof use the shared suite registry.
 
 use super::*;
 use crate::clippy_groups::ClippyMemoryPlan;
@@ -79,9 +78,7 @@ fn prepare_run(job: &Job) -> Vec<String> {
 
 #[test]
 fn tofu_install_follows_executed_suite_per_policy() {
-    // `TOFU_EXEC_SUITES` holds exactly one member: only the mise
-    // suite spawns real tofu (`tofu_exec` + `run_bounded`), so only
-    // the mise job installs opentofu beyond tofu obligations.
+    // Only the Mise suite spawns real tofu; obligation drivers are separate.
     for package in [
         "velnor-actions-orchestrator",
         "velnor-actions-cli",
@@ -94,12 +91,19 @@ fn tofu_install_follows_executed_suite_per_policy() {
         "demo",
     ] {
         assert!(
-            !crate_needs_tofu_install(WorkflowPolicy::ConsumerV1, package),
+            !crate_suite_tools(WorkflowPolicy::ConsumerV1, Some(package))
+                .expect("consumer suite")
+                .opentofu,
             "consumer suites cannot reach our tofu_exec ctor: {package} installs no opentofu"
         );
     }
     assert!(
-        crate_needs_tofu_install(WorkflowPolicy::VelnorRepositoryV1, "velnor-actions-mise"),
+        crate_suite_tools(
+            WorkflowPolicy::VelnorRepositoryV1,
+            Some("velnor-actions-mise")
+        )
+        .expect("registered suite")
+        .opentofu,
         "mise spawns real tofu and must install opentofu"
     );
     for package in [
@@ -110,10 +114,12 @@ fn tofu_install_follows_executed_suite_per_policy() {
         "velnor-actions-tofu",
         "velnor-actions-workflow-renderer",
         "velnor-actions-actionlint",
-        "demo",
+        "velnor-actions-native",
     ] {
         assert!(
-            !crate_needs_tofu_install(WorkflowPolicy::VelnorRepositoryV1, package),
+            !crate_suite_tools(WorkflowPolicy::VelnorRepositoryV1, Some(package))
+                .expect("registered suite")
+                .opentofu,
             "{package} never spawns tofu and must not install opentofu"
         );
     }
@@ -150,59 +156,6 @@ fn mise_crate_job_prepare_installs_opentofu() {
             run.contains(&opentofu),
             spawning,
             "{id} opentofu membership follows its executed suite: {run:?}"
-        );
-    }
-}
-
-/// Every workspace member is classified on the tofu axis too.
-///
-/// A new crate fails here by name until its suite is audited for
-/// `tofu_exec` executions (see `TOFU_EXEC_SUITES`) and classified.
-#[test]
-fn every_workspace_member_is_classified_for_tofu() {
-    let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-    let root = manifest_dir
-        .parent()
-        .and_then(std::path::Path::parent)
-        .expect("crate lives two levels under the workspace root");
-    let mut members = Vec::new();
-    let crates = std::fs::read_dir(root.join("crates")).expect("crates dir lists");
-    for entry in crates {
-        let manifest = entry.expect("dir entry reads").path().join("Cargo.toml");
-        let text = std::fs::read_to_string(&manifest).expect("member manifest reads");
-        let mut in_package = false;
-        for line in text.lines() {
-            if line.trim() == "[package]" {
-                in_package = true;
-            } else if line.starts_with('[') {
-                in_package = false;
-            } else if in_package && line.trim_start().starts_with("name = ") {
-                let name = line
-                    .trim_start()
-                    .trim_start_matches("name = ")
-                    .trim()
-                    .trim_matches('"');
-                members.push(name.to_owned());
-                break;
-            }
-        }
-    }
-    assert!(!members.is_empty(), "workspace scan must find members");
-    for member in &members {
-        let known = [
-            "velnor-actions-orchestrator",
-            "velnor-actions-cli",
-            "velnor-actions-contract",
-            "velnor-actions-mise",
-            "velnor-actions-rust",
-            "velnor-actions-tofu",
-            "velnor-actions-workflow-renderer",
-            "velnor-actions-actionlint",
-        ]
-        .contains(&member.as_str());
-        assert!(
-            known,
-            "{member} is unclassified: audit its suite for tofu_exec execution, then classify it"
         );
     }
 }

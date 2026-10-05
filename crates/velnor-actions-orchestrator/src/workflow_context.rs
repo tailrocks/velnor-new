@@ -1,23 +1,24 @@
-//! Renderer context construction from discovered repository evidence.
+//! Renderer-specific context assembly for workflow plans.
 
+use velnor_actions_actionlint::{ActionlintConfigInput, IgnorePolicy};
 use velnor_actions_contract::{GeneratorValidation, ValidatorKind, VelnorConfig, WorkflowPolicy};
 use velnor_actions_mise::ToolCatalog;
-use velnor_actions_workflow_renderer::render::{RenderContext, ValidatorCommand};
+use velnor_actions_workflow_renderer::render::{RenderContext, ValidatorCommand, WORKFLOW_PATH};
 use velnor_actions_workflow_renderer::steps::{
-    DENY_STEP_NAME, MACHETE_STEP_NAME, REQUEST_DIR_PREFIX,
+    DENY_STEP_NAME, MACHETE_STEP_NAME, REQUEST_DIR_PREFIX, STAGED_BINARY_PREFIX,
 };
 
 use crate::OrchestratorError;
 use crate::discover::Discovery;
 use crate::vectors::{ZIZMOR_STEP_NAME, candidate_spec, deny_argv, machete_argv, zizmor_argv};
 
-use super::{CHECKOUT_USES, REQUEST_DIR, STAGED_BINARY_PREFIX};
+use super::{CHECKOUT_USES, REQUEST_DIR, wire_w1};
 
 /// Renderer scalars: version, label, staged path, request dir, pins.
 ///
-/// The plan-consumer env follows the plan role: pure-tofu plans run
-/// the plan-op and freshness steps triple-less, every other role
-/// keeps the owned-homes triple.
+/// The plan-consumer env follows the plan role: plans without Rust run
+/// the plan-op and freshness steps triple-less, every other role keeps
+/// the owned-homes triple.
 pub(super) fn render_context(
     config: &VelnorConfig,
     label: &str,
@@ -28,33 +29,11 @@ pub(super) fn render_context(
 ) -> Result<RenderContext, OrchestratorError> {
     debug_assert!(REQUEST_DIR.starts_with(REQUEST_DIR_PREFIX));
     let velnor = config.workflow.policy == WorkflowPolicy::VelnorRepositoryV1;
-    let mut validator_commands = Vec::new();
-    if velnor {
-        let workspaces = discovery
-            .workspaces
-            .iter()
-            .map(|workspace| workspace.record.workspace_root.clone())
-            .collect::<Vec<_>>();
-        if !workspaces.is_empty() {
-            validator_commands.push(ValidatorCommand {
-                validator: ValidatorKind::CargoDeny,
-                name: DENY_STEP_NAME.to_owned(),
-                argv: deny_argv(&workspaces)?,
-            });
-        }
-        validator_commands.extend([
-            ValidatorCommand {
-                validator: ValidatorKind::CargoMachete,
-                name: MACHETE_STEP_NAME.to_owned(),
-                argv: machete_argv()?,
-            },
-            ValidatorCommand {
-                validator: ValidatorKind::Zizmor,
-                name: ZIZMOR_STEP_NAME.to_owned(),
-                argv: zizmor_argv(catalog)?,
-            },
-        ]);
-    }
+    let validator_commands = if velnor {
+        repository_validator_commands(discovery, catalog)?
+    } else {
+        Vec::new()
+    };
     let candidate =
         if velnor && config.workflow.generator_validation == GeneratorValidation::Candidate {
             Some(candidate_spec(catalog)?)
@@ -76,4 +55,60 @@ pub(super) fn render_context(
             plan_needs_rust,
         )?,
     })
+}
+
+fn repository_validator_commands(
+    discovery: &Discovery,
+    catalog: &ToolCatalog,
+) -> Result<Vec<ValidatorCommand>, OrchestratorError> {
+    let mut commands = Vec::new();
+    let workspaces = discovery
+        .workspaces
+        .iter()
+        .map(|workspace| workspace.record.workspace_root.clone())
+        .collect::<Vec<_>>();
+    if !workspaces.is_empty() {
+        commands.push(ValidatorCommand {
+            validator: ValidatorKind::CargoDeny,
+            name: DENY_STEP_NAME.to_owned(),
+            argv: deny_argv(&workspaces)?,
+        });
+    }
+    commands.extend([
+        ValidatorCommand {
+            validator: ValidatorKind::CargoMachete,
+            name: MACHETE_STEP_NAME.to_owned(),
+            argv: machete_argv()?,
+        },
+        ValidatorCommand {
+            validator: ValidatorKind::Zizmor,
+            name: ZIZMOR_STEP_NAME.to_owned(),
+            argv: zizmor_argv(catalog)?,
+        },
+    ]);
+    Ok(commands)
+}
+
+/// Actionlint input: workflow path, declared variables, and policy ignores.
+///
+/// The bridge label is the effective configured runner label: its
+/// `self-hosted-runner` entry must match `runs-on`, never a hardcoded distro.
+pub(super) fn actionlint_input(
+    config: &VelnorConfig,
+    version: &str,
+    label: &str,
+) -> ActionlintConfigInput {
+    let policy = config.workflow.policy;
+    let mut input = ActionlintConfigInput::new(version)
+        .with_workflow_path(WORKFLOW_PATH)
+        .with_config_variables(wire_w1::declared_config_variables())
+        .with_runner_label(label);
+    if let Some(execution) = &config.execution {
+        input.extra_runner_labels = execution.actionlint_labels();
+    }
+    input.policy = match policy {
+        WorkflowPolicy::ConsumerV1 => IgnorePolicy::Consumer,
+        WorkflowPolicy::VelnorRepositoryV1 => IgnorePolicy::VelnorProtected,
+    };
+    input
 }

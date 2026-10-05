@@ -230,17 +230,18 @@ fn committed_drift_warns_never_fails() -> TestResult {
     let value = plan_value(root, "push", None, &head, None)?;
     assert!(has_warning(&value, "committed_profile_drift"));
     assert!(has_warning(&value, "runner_family_changed"));
-    assert!(
-        !value["plan"]["task_ids"]
+    assert_ne!(
+        value["plan"]["task_ids"]
             .as_array()
             .expect("task ids")
-            .is_empty()
+            .as_slice(),
+        [] as [serde_json::Value; 0]
     );
     let prep = prepare(root)?;
     assert!(prep.runner_image.is_unobserved());
     assert_eq!(prep.runner_image.image_os.as_str(), "unknown");
     assert_eq!(prep.runner_image.image_version.as_str(), "unknown");
-    assert!(!prep.runner_label.is_empty());
+    assert_ne!(prep.runner_label, "");
     Ok(())
 }
 
@@ -266,7 +267,7 @@ fn local_select_uses_working_tree() -> TestResult {
     fs::write(root.join("b/src/lib.rs"), "pub fn f() {}\npub fn g() {}\n")?;
     let value = plan_value(root, "local", None, &head, None)?;
     let ids = value["plan"]["task_ids"].as_array().expect("task ids");
-    assert!(!ids.is_empty());
+    assert_ne!(ids.as_slice(), [] as [serde_json::Value; 0]);
     for member in ["/a/", "/b/"] {
         assert!(
             ids.iter()
@@ -289,11 +290,12 @@ fn local_select_uses_working_tree() -> TestResult {
     );
     git(&["checkout", "--", "."], root)?;
     let value = plan_value(root, "local", None, &head, None)?;
-    assert!(
-        !value["plan"]["task_ids"]
+    assert_ne!(
+        value["plan"]["task_ids"]
             .as_array()
             .expect("task ids")
-            .is_empty()
+            .as_slice(),
+        [] as [serde_json::Value; 0]
     );
     assert!(has_warning(&value, "no_affected_files"));
     Ok(())

@@ -88,7 +88,7 @@ fn valid_toolchain_extracts_spec_without_findings() {
     let Ok(inspection) = inspection else {
         panic!("valid tool file must inspect cleanly");
     };
-    assert!(inspection.findings.is_empty());
+    assert_eq!(inspection.findings, Vec::new());
     let Some(spec) = inspection.spec else {
         panic!("valid tool file must yield a spec");
     };
@@ -133,11 +133,11 @@ fn every_finding_names_supplying_file() {
         let Ok(inspection) = inspection else {
             panic!("inspection must not fail for {path}");
         };
-        assert!(!inspection.findings.is_empty(), "{path} must report");
+        assert_ne!(inspection.findings, Vec::new(), "{path} must report");
         for finding in &inspection.findings {
             assert_eq!(finding.file, path);
-            assert!(!finding.code.is_empty());
-            assert!(!finding.recommendation.is_empty());
+            assert_ne!(finding.code, "");
+            assert_ne!(finding.recommendation, "");
         }
     }
 }

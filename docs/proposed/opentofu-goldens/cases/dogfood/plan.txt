@@ -3,11 +3,12 @@ Repository: <repo>
 
 Detected stacks
   Rust: selected
-  Workspace crates: 12
+  Workspace crates: 13
     - velnor-actions-actionlint (crates/velnor-actions-actionlint/Cargo.toml) [lib, test; depends on velnor-actions-contract]
     - velnor-actions-cli (crates/velnor-actions-cli/Cargo.toml) [bin, test; depends on velnor-actions-orchestrator]
     - velnor-actions-contract (crates/velnor-actions-contract/Cargo.toml) [lib, test]
     - velnor-actions-mise (crates/velnor-actions-mise/Cargo.toml) [lib, test; depends on velnor-actions-contract, velnor-actions-tofu]
+    - velnor-actions-native (crates/velnor-actions-native/Cargo.toml) [lib, test; depends on velnor-actions-contract]
     - velnor-actions-orchestrator (crates/velnor-actions-orchestrator/Cargo.toml) [lib, test; depends on velnor-actions-actionlint, velnor-actions-contract, velnor-actions-mise, velnor-actions-rust, velnor-actions-tofu, velnor-actions-workflow-renderer]
     - velnor-actions-rust (crates/velnor-actions-rust/Cargo.toml) [lib, test; depends on velnor-actions-contract]
     - velnor-actions-tofu (crates/velnor-actions-tofu/Cargo.toml) [lib, test; depends on velnor-actions-contract]
@@ -32,6 +33,7 @@ Workflow to generate
   .github/actionlint.yaml
   .github/workflows/ci.yml
   .github/workflows/freshness.yml
+  .github/workflows/foundation-qualification.yml
   Workflow: CI (velnor-repository-v1)
   Push branch: main
   Runner: ubuntu-26.04 (latest pinned default)
@@ -47,6 +49,7 @@ Workflow to generate
     - rust-velnor-actions-cli (24 steps)
     - rust-velnor-actions-contract (25 steps)
     - rust-velnor-actions-mise (26 steps)
+    - rust-velnor-actions-native (25 steps)
     - rust-velnor-actions-orchestrator (25 steps)
     - rust-velnor-actions-rust (25 steps)
     - rust-velnor-actions-tofu (25 steps)
@@ -56,13 +59,14 @@ Workflow to generate
     - rust-velnor-runner-github (25 steps)
     - rust-velnor-runner-host (25 steps)
     - zizmor (4 steps)
-    - 12 Rust crate jobs
+    - 13 Rust crate jobs
       Each: Clippy -> build -> run tests -> doctests -> doc build -> format check
       Entries:
         - rust-velnor-actions-actionlint
         - rust-velnor-actions-cli
         - rust-velnor-actions-contract
         - rust-velnor-actions-mise
+        - rust-velnor-actions-native
         - rust-velnor-actions-orchestrator
         - rust-velnor-actions-rust
         - rust-velnor-actions-tofu
@@ -95,6 +99,12 @@ Workflow to generate
         - stack/rust/crates/velnor-actions-mise/doctest/default
         - stack/rust/crates/velnor-actions-mise/fmt/default
         - stack/rust/crates/velnor-actions-mise/nextest/default
+        - stack/rust/crates/velnor-actions-native/build/default
+        - stack/rust/crates/velnor-actions-native/clippy/default
+        - stack/rust/crates/velnor-actions-native/doc/default
+        - stack/rust/crates/velnor-actions-native/doctest/default
+        - stack/rust/crates/velnor-actions-native/fmt/default
+        - stack/rust/crates/velnor-actions-native/nextest/default
         - stack/rust/crates/velnor-actions-orchestrator/build/default
         - stack/rust/crates/velnor-actions-orchestrator/clippy/default
         - stack/rust/crates/velnor-actions-orchestrator/doc/default
@@ -143,7 +153,7 @@ Workflow to generate
         - stack/rust/crates/velnor-runner/crates/velnor-runner-host/doctest/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-host/fmt/default
         - stack/rust/crates/velnor-runner/crates/velnor-runner-host/nextest/default
-  Parallel: 12 independent crate jobs; no matrix fan-out
+  Parallel: 13 independent crate jobs; no matrix fan-out
   Critical path: stack/rust/crates/velnor-actions-actionlint/clippy/default -> stack/rust/crates/velnor-actions-actionlint/build/default -> stack/rust/crates/velnor-actions-actionlint/nextest/default (3 tasks)
   Clippy memory groups: 1; barriers: 0
   Cache layers: Mise tools, Cargo sources, MBX compilation objects
@@ -154,7 +164,7 @@ Workflow to generate
     - actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
     - actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
     - actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-    - asamarts/alint@9f9d34ba0eae3888299b9e570f43338b0e7f2cdb
+    - asamarts/alint@d93c0283b19dd78afcd8a4b303f1556a7759ba81
     - jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
     - jdx/mr-boxington-action@1687e54eb349cadf61fa38b5813a77875489e8e6
   Ineligible: stack/rust/crates/velnor-actions-cli/doctest/default has no test targets; no test command emitted

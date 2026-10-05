@@ -94,7 +94,7 @@ pub(crate) fn manifest_for(
         "generator_sha256": plan.generator.sha256,
         "compatibility_id": compat,
         "artifact_id": baseline_artifact_numeric_id(&name),
-        "artifact_name": name,
+        "parent": null, "artifact_name": name,
         "tasks": tasks,
     })
 }
@@ -111,7 +111,7 @@ pub(crate) fn entries_for(plan: &Plan) -> serde_json::Value {
                 "input_digest": ob.input_digest,
                 "closure_digest": ob.closure_digest,
                 "proof_run_id": 7,
-                "observed_run_id": 7,
+                "carried_from": null, "observed_run_id": 7,
             })
         })
         .collect();
@@ -121,7 +121,7 @@ pub(crate) fn entries_for(plan: &Plan) -> serde_json::Value {
 #[test]
 fn wrong_base_manifest_schedules_everything() -> TestResult {
     let (_repo, seed) = plan_for_source_change()?;
-    assert!(!seed.task_ids.is_empty());
+    assert_ne!(seed.task_ids, [] as [String; 0]);
     let base = seed.base.clone().expect("base");
     let wrong = "b".repeat(40);
     assert_ne!(wrong, base);

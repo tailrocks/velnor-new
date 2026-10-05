@@ -3,7 +3,7 @@
 use std::error::Error;
 
 use crate::impl_cli_tmp::{
-    add_crate_pair, cleanup, code, fresh_tempdir, git_init, init_repo, spawn,
+    add_crate_pair, cleanup, code, fresh_tempdir, git_fixture, git_init, init_repo, spawn,
 };
 
 #[test]
@@ -123,7 +123,7 @@ fn plan_emits_recommendations_once_to_stdout_only() -> Result<(), Box<dyn Error>
         "recommendations follow workflow:\n{stdout}"
     );
     let recs = plan_recommendations(&stdout);
-    assert!(!recs.is_empty());
+    assert_ne!(recs, Vec::<String>::new());
     for rec in &recs {
         assert!(
             stdout.lines().any(|line| line == format!("  {rec}")),
@@ -146,7 +146,7 @@ fn generate_keeps_recommendations_on_stderr() -> Result<(), Box<dyn Error>> {
     let plan = spawn(&["plan"], &[], &tmp)?;
     assert_eq!(code(&plan), 0);
     let expected = plan_recommendations(&String::from_utf8_lossy(&plan.stdout));
-    assert!(!expected.is_empty());
+    assert_ne!(expected, Vec::<String>::new());
     let outer = fresh_tempdir("smoke-gen-preview")?;
     let preview = outer.join("preview");
     let generated = spawn(
@@ -155,7 +155,7 @@ fn generate_keeps_recommendations_on_stderr() -> Result<(), Box<dyn Error>> {
         &tmp,
     )?;
     assert_eq!(code(&generated), 0);
-    assert!(generated.stdout.is_empty());
+    assert_eq!(generated.stdout, [] as [u8; 0]);
     let stderr = String::from_utf8_lossy(&generated.stderr).into_owned();
     for rec in &expected {
         assert!(
@@ -166,6 +166,42 @@ fn generate_keeps_recommendations_on_stderr() -> Result<(), Box<dyn Error>> {
     assert!(preview.join(".github/workflows/ci.yml").is_file());
     cleanup(&tmp);
     cleanup(&outer);
+    Ok(())
+}
+
+#[test]
+fn generate_warns_for_consumer_standin_only() -> Result<(), Box<dyn Error>> {
+    let consumer = fresh_tempdir("smoke-consumer-standin")?;
+    init_repo(&consumer)?;
+    let consumer_output = spawn(&["generate"], &[], &consumer)?;
+    assert_eq!(code(&consumer_output), 0, "{:?}", consumer_output.stderr);
+    let consumer_stderr = String::from_utf8_lossy(&consumer_output.stderr);
+    assert!(consumer_stderr.contains("debug-only stand-in that MUST NOT ship"));
+
+    let velnor = fresh_tempdir("smoke-velnor-standin")?;
+    init_repo(&velnor)?;
+    let config = velnor.join(".velnor/config.toml");
+    let body = std::fs::read_to_string(&config)?.replace(
+        "default_branch = \"main\"",
+        "default_branch = \"main\"\npolicy = \"velnor-repository-v1\"",
+    );
+    std::fs::write(&config, body)?;
+    let remote = git_fixture::command(&velnor)?
+        .args([
+            "remote",
+            "add",
+            "origin",
+            "https://github.com/tailrocks/velnor-new.git",
+        ])
+        .output()?;
+    assert!(remote.status.success(), "{:?}", remote.stderr);
+    let velnor_output = spawn(&["generate"], &[], &velnor)?;
+    assert_eq!(code(&velnor_output), 0, "{:?}", velnor_output.stderr);
+    let velnor_stderr = String::from_utf8_lossy(&velnor_output.stderr);
+    assert!(!velnor_stderr.contains("debug-only stand-in"));
+
+    cleanup(&consumer);
+    cleanup(&velnor);
     Ok(())
 }
 
@@ -183,7 +219,7 @@ fn generate_writes_manual_change_suggestions_for_malformed_tools() -> Result<(),
     let toolchain_before = std::fs::read(tmp.join("rust-toolchain.toml"))?;
     let plan = spawn(&["plan"], &[], &tmp)?;
     assert_eq!(code(&plan), 0, "stderr: {:?}", plan.stderr);
-    assert!(plan.stderr.is_empty());
+    assert_eq!(plan.stderr, [] as [u8; 0]);
     let stdout = String::from_utf8_lossy(&plan.stdout).into_owned();
     let invalid: Vec<String> = plan_recommendations(&stdout)
         .into_iter()
@@ -207,7 +243,7 @@ fn generate_writes_manual_change_suggestions_for_malformed_tools() -> Result<(),
         &tmp,
     )?;
     assert_eq!(code(&generated), 0, "stderr: {:?}", generated.stderr);
-    assert!(generated.stdout.is_empty());
+    assert_eq!(generated.stdout, [] as [u8; 0]);
     let stderr = String::from_utf8_lossy(&generated.stderr).into_owned();
     for rec in &invalid {
         assert!(
@@ -262,7 +298,7 @@ fn preview_prints_absolute_paths_and_files() -> Result<(), Box<dyn Error>> {
         &tmp,
     )?;
     assert_eq!(code(&output), 0, "stderr: {:?}", output.stderr);
-    assert!(output.stdout.is_empty());
+    assert_eq!(output.stdout, [] as [u8; 0]);
     let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
     let want_preview = preview.canonicalize().unwrap_or_else(|_| preview.clone());
     let want_root = tmp.canonicalize().unwrap_or_else(|_| tmp.clone());

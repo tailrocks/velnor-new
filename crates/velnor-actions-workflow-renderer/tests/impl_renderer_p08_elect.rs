@@ -59,7 +59,11 @@ fn mise_cache_writer_election_prefers_plan_then_lowest_id() -> Result<(), Render
     ]);
     elect_mise_cache_writers(&mut jobs)?;
     assert_eq!(saved_key(&jobs["plan"]), Some(shared), "plan wins shared");
-    assert!(tools_saves(&jobs["rust-b"]).is_empty(), "sharer saves none");
+    assert_eq!(
+        tools_saves(&jobs["rust-b"]),
+        Vec::<&Step>::new(),
+        "sharer saves none"
+    );
     assert_eq!(
         saved_key(&jobs["rust-c"]),
         Some(unique),
@@ -76,7 +80,7 @@ fn mise_cache_writer_election_prefers_plan_then_lowest_id() -> Result<(), Render
         Some(shared),
         "lowest id wins without plan"
     );
-    assert!(tools_saves(&jobs["rust-b"]).is_empty());
+    assert_eq!(tools_saves(&jobs["rust-b"]), Vec::<&Step>::new());
     Ok(())
 }
 
@@ -228,7 +232,7 @@ fn provider_writer_election_elects_lowest_id_per_key() -> Result<(), RenderError
         Some(PROVIDER_KEY_A),
         "lowest id wins the shared key"
     );
-    assert!(provider_saves(&jobs["tofu-b"]).is_empty());
+    assert_eq!(provider_saves(&jobs["tofu-b"]), Vec::<&Step>::new());
     assert_eq!(
         provider_saved_key(&jobs["tofu-c"]),
         Some(PROVIDER_KEY_B),

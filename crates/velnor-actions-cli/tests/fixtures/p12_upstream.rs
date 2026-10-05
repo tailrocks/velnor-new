@@ -19,6 +19,23 @@ type ProbeRow = (&'static str, &'static str, &'static str);
 /// (inventory source URL, canned file, canned body) for every probe row.
 fn probe_rows() -> Vec<ProbeRow> {
     let mut rows = probe_tool_rows();
+    rows.extend([
+        (
+            "https://pypi.org/pypi/reuse/json",
+            "reuse.json",
+            "{\"info\":{\"version\":\"6.2.0\"}}",
+        ),
+        (
+            "https://www.python.org/downloads/",
+            "python.html",
+            "<a>Download Python 3.14.8</a>",
+        ),
+        (
+            "https://api.github.com/repos/astral-sh/uv/releases/latest",
+            "uv.json",
+            "{\"tag_name\":\"0.12.22\"}",
+        ),
+    ]);
     rows.extend(probe_action_rows());
     rows
 }
@@ -115,7 +132,7 @@ fn probe_action_rows() -> Vec<ProbeRow> {
         (
             "https://api.github.com/repos/asamarts/alint/releases/latest",
             "alint.json",
-            "{\"tag_name\": \"v0.16.1\"}",
+            "{\"tag_name\": \"v0.17.0\"}",
         ),
         (
             "https://api.github.com/repos/Swatinem/rust-cache/tags",
@@ -205,7 +222,7 @@ fn probe_rows_carry_source_and_check_time() -> Result<(), Box<dyn Error>> {
         .iter()
         .filter(|line| line.contains("\"check\":\"upstream-probe\""))
         .collect();
-    assert_eq!(probe.len(), 20, "19 rows + runner note:\n{}", run.stdout);
+    assert_eq!(probe.len(), 23, "22 rows + runner note:\n{}", run.stdout);
     for line in probe {
         if line.contains("\"subject\":\"runner\"") {
             assert!(

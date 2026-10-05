@@ -219,8 +219,14 @@ fn payload_env_for_kind_maps_all_spellings() {
     for spelling in ["fmt", "init", "validate"] {
         assert_eq!(payload_env_for_kind(spelling).len(), 2, "{spelling}");
     }
-    assert!(payload_env_for_kind("bogus").is_empty());
-    assert!(payload_env_for_kind("plan").is_empty());
+    assert_eq!(
+        payload_env_for_kind("bogus"),
+        Vec::<(std::ffi::OsString, std::ffi::OsString)>::new()
+    );
+    assert_eq!(
+        payload_env_for_kind("plan"),
+        Vec::<(std::ffi::OsString, std::ffi::OsString)>::new()
+    );
 }
 
 /// Proposals attach the direct payload bytes plus the automation-pair env.

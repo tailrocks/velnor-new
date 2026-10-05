@@ -1,14 +1,14 @@
 //! Workflow-IR, render-context, and actionlint-input construction.
 
-//! W1 emission wiring lives in the child module below (self-declared via
-//! `#[path]` so `lib.rs` stays untouched); the integrator only registers
-//! the companion test file.
+//! W1 emission wiring lives in the child module below.
 #[path = "wire_w1.rs"]
 pub(crate) mod wire_w1;
+#[path = "workflow_context.rs"]
+mod workflow_context;
 
 use std::collections::BTreeMap;
 
-use velnor_actions_actionlint::{ActionlintConfigInput, IgnorePolicy, StepSyntax};
+use velnor_actions_actionlint::{ActionlintConfigInput, StepSyntax};
 use velnor_actions_contract::{
     Concurrency, GeneratorValidation, Job, Permissions, Stack, Step, StepKind, Trigger,
     ValidatorKind, VelnorConfig, VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy,
@@ -19,18 +19,15 @@ use velnor_actions_mise::{
 use velnor_actions_rust::{CompileDriver, TestRunner};
 use velnor_actions_workflow_renderer::render::{
     CONCURRENCY_CANCEL, CONCURRENCY_GROUP, EXPECTED_PR_TYPES, FINAL_JOB_ID, PLAN_JOB_ID,
-    PUBLISH_JOB_ID, RenderContext, WORKFLOW_PATH,
+    PUBLISH_JOB_ID, RenderContext,
 };
-use velnor_actions_workflow_renderer::steps::{PLAN_OPERATION, STAGED_BINARY_PREFIX};
+use velnor_actions_workflow_renderer::steps::PLAN_OPERATION;
 
 use crate::OrchestratorError;
 use crate::discover::Discovery;
 use crate::pins::consumer_acquire_step;
 use crate::utf8::{strings_of, strings_of_env};
 use crate::workflow_jobs::{final_job, lint_job, plan_job};
-
-#[path = "workflow_context.rs"]
-mod workflow_context;
 
 pub(crate) use crate::workflow_jobs::LINT_JOB_ID;
 
@@ -125,7 +122,7 @@ pub(crate) fn build_workflow(
     };
     let use_nextest = plan_uses_nextest(discovery);
     let use_opentofu = plan_uses_opentofu(discovery);
-    let use_rust = plan_uses_rust(discovery);
+    let use_rust = plan_uses_rust(discovery, policy);
     let plan = build_plan_job(
         label,
         acquire.clone(),
@@ -177,7 +174,7 @@ pub(crate) fn build_workflow(
     };
     let context =
         workflow_context::render_context(config, label, &version, &catalog, discovery, use_rust)?;
-    let actionlint = actionlint_input(config, &version, label);
+    let actionlint = workflow_context::actionlint_input(config, &version, label);
     Ok(WorkflowPlan {
         ir,
         support,
@@ -304,12 +301,15 @@ pub(crate) fn plan_uses_opentofu(discovery: &Discovery) -> bool {
 
 /// True when the plan job needs the Rust toolchain.
 ///
-/// Every repo keeps it except pure-tofu ones: tofu work with zero
-/// rust workspaces. Repos with neither keep it too (fail-safe: an
-/// unneeded install costs seconds, a missing toolchain fails the
-/// format/build steps).
-fn plan_uses_rust(discovery: &Discovery) -> bool {
-    !(plan_uses_opentofu(discovery) && discovery.workspaces.is_empty())
+/// Consumers require Rust only for selected Rust evidence. The generator
+/// repository additionally builds its candidate-source helper in Plan.
+fn plan_uses_rust(discovery: &Discovery, policy: WorkflowPolicy) -> bool {
+    policy == WorkflowPolicy::VelnorRepositoryV1
+        || !discovery.workspaces.is_empty()
+        || discovery
+            .proposals
+            .iter()
+            .any(|task| Stack::from_id(&task.stack_id) == Some(Stack::Rust))
 }
 
 /// Typed `Prepare Rust components` step, shared by plan and task jobs.
@@ -333,23 +333,6 @@ pub(crate) fn prepare_rust_components_step(
         .map_err(OrchestratorError::from)
 }
 
-/// Actionlint input: generated workflow path plus policy-graded ignores.
-///
-/// The bridge label is the effective configured runner label (F2):
-/// the emitted `self-hosted-runner` entry must match `runs-on`, never
-/// a hardcoded distro.
-fn actionlint_input(config: &VelnorConfig, version: &str, label: &str) -> ActionlintConfigInput {
-    let policy = config.workflow.policy;
-    let mut input = ActionlintConfigInput::new(version)
-        .with_workflow_path(WORKFLOW_PATH)
-        .with_config_variables(wire_w1::declared_config_variables())
-        .with_runner_label(label);
-    if let Some(execution) = &config.execution {
-        input.extra_runner_labels = execution.actionlint_labels();
-    }
-    input.policy = match policy {
-        WorkflowPolicy::ConsumerV1 => IgnorePolicy::Consumer,
-        WorkflowPolicy::VelnorRepositoryV1 => IgnorePolicy::VelnorProtected,
-    };
-    input
-}
+#[cfg(test)]
+#[path = "workflow_tools_tests.rs"]
+mod workflow_tools_tests;
