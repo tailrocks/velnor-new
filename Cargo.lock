@@ -687,7 +687,9 @@ name = "velnor-actions-cli"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "proc-macro2",
  "serde_json",
+ "syn",
  "velnor-actions-orchestrator",
 ]
 
