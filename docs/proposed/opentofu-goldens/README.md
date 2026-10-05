@@ -1,5 +1,15 @@
 # T04 Rust-only golden evidence (Phase A behavior bracket)
 
+## Current release integration checkpoint (2026-10-05)
+
+After syncing main `2d9bca8` and scoping consumer-manifest discovery to
+`ConsumerV1`, the pinned debug CLI regenerated the shipping `.github` tree
+and all five fixture trees. The golden check reports all five match, and the
+dogfood verdict is `identical`; the producer repository no longer reads or
+synthesizes a consumer release manifest. No authentic same-run three-target
+candidate manifest is present, so `check-release`, hosted qualification,
+immutable publication, and infrastructure protection remain unverified.
+
 The capture at `a12efd7` (behavior-identical to `origin/main` 106bfd7;
 docs-only delta) is the historical pre-refactor baseline. The V2 tools-cache
 migration intentionally changes generated cache steps and files, so its output

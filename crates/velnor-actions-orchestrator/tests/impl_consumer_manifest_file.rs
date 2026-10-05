@@ -6,9 +6,12 @@
 //! closed; no bake or environment carries provenance.
 use std::fs;
 
-use velnor_actions_orchestrator::prepare;
+use velnor_actions_orchestrator::{prepare, render_staged_tree};
+use velnor_actions_workflow_renderer::WORKFLOW_PATH;
 
-use crate::impl_common::{TestResult, config_with_branch, make_repo};
+use crate::impl_common::{
+    TestResult, config_with_branch, git, make_repo, without_ambient_identity,
+};
 
 /// Realistic release manifest: GitHub asset URLs at the generator version.
 ///
@@ -115,7 +118,7 @@ fn absent_manifest_fails_closed_without_provenance() {
     use velnor_actions_orchestrator::consumer_acquire_step_with_manifest;
     // The release twin returns `None` for an absent file; the pure gate
     // must fail closed with the contract error (no URL, no digest).
-    let err = consumer_acquire_step_with_manifest("ubuntu-26.04", "0.1.0", None)
+    let err = consumer_acquire_step_with_manifest("ubuntu-26.04", env!("CARGO_PKG_VERSION"), None)
         .expect_err("absent manifest fails");
     let text = err.to_string();
     assert!(text.contains("consumer_requires_release_install"), "{text}");
@@ -156,4 +159,38 @@ fn symlink_manifest_fails_closed() -> TestResult {
         "unexpected: {err}"
     );
     Ok(())
+}
+
+/// The producer policy does not consume or synthesize a consumer manifest.
+#[test]
+fn velnor_repository_generation_needs_no_consumer_manifest() -> TestResult {
+    without_ambient_identity(
+        "velnor_repository_generation_needs_no_consumer_manifest",
+        || {
+            let config = "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\npolicy = \"velnor-repository-v1\"\n";
+            let repo = make_repo(config)?;
+            fs::remove_file(repo.path().join(".velnor/release-manifest.json"))?;
+            git(
+                &[
+                    "remote",
+                    "add",
+                    "origin",
+                    "https://github.com/tailrocks/velnor-new.git",
+                ],
+                repo.path(),
+            )?;
+
+            let prep = prepare(repo.path())?;
+            assert_eq!(prep.discovery.consumer_manifest_json, None);
+            assert!(!prep.discovery.consumer_manifest_stand_in);
+            let tree = render_staged_tree(&prep)?;
+            let yaml = tree
+                .get(WORKFLOW_PATH)
+                .ok_or_else(|| std::io::Error::other("missing generated CI workflow"))?;
+            assert!(!yaml.contains("Acquire Velnor"), "{yaml}");
+            assert!(!yaml.contains(&"a".repeat(64)), "{yaml}");
+            assert!(!yaml.contains(&"b".repeat(40)), "{yaml}");
+            Ok(())
+        },
+    )
 }

@@ -55,9 +55,13 @@ fn source_build_consumer_generation_fails_with_provenance() {
 fn consumer_manifest_mismatch_and_bad_target_fail() {
     let err = consumer_acquire_from("ubuntu-26.04", "9.9.9", Some(&test_manifest_json()));
     assert!(err.is_err_and(|err| err.to_string().contains("version_mismatch")));
-    let err = consumer_acquire_from("ubuntu-26.04-arm", "0.1.0", Some(&test_manifest_json()));
+    let err = consumer_acquire_from(
+        "ubuntu-26.04-arm",
+        env!("CARGO_PKG_VERSION"),
+        Some(&test_manifest_json()),
+    );
     assert!(err.is_err_and(|err| err.to_string().contains("unsupported_target_for_runner")));
-    let err = consumer_acquire_from("ubuntu-26.04", "0.1.0", Some("not json"));
+    let err = consumer_acquire_from("ubuntu-26.04", env!("CARGO_PKG_VERSION"), Some("not json"));
     assert!(err.is_err());
 }
 
@@ -117,6 +121,83 @@ fn fixture_manifest_embeds_runner_target_record() {
         step.map_err(|err| err.to_string()),
         Ok("Acquire Velnor".to_owned())
     );
+}
+
+#[test]
+fn consumer_acquire_uses_native_checksum_utility_for_each_target() {
+    let manifest = test_manifest_json();
+    for (label, target) in [
+        ("ubuntu-26.04", ReleaseTarget::LinuxX86_64),
+        ("macos-15", ReleaseTarget::MacosArm64),
+        ("macos-15-intel", ReleaseTarget::MacosX86_64),
+    ] {
+        let step = consumer_acquire_from(label, env!("CARGO_PKG_VERSION"), Some(&manifest))
+            .expect("consumer acquire for supported target");
+        assert_native_checksum_utility(step, target);
+    }
+}
+
+#[test]
+fn lock_acquire_uses_native_checksum_utility_for_each_target() {
+    use velnor_actions_contract::{GeneratorBinary, LockedGenerator, MiseBootstrap};
+
+    let lock = GeneratorLock {
+        schema: 1,
+        generator: LockedGenerator {
+            binary: "velnor-actions".to_owned(),
+            version: env!("CARGO_PKG_VERSION").to_owned(),
+            commit: "a".repeat(40),
+            binaries: ReleaseTarget::ALL
+                .into_iter()
+                .map(|target| GeneratorBinary {
+                    target: target.triple().to_owned(),
+                    artifact: format!(
+                        "https://github.com/tailrocks/velnor-new/releases/download/v{}/velnor-actions-{}-{}",
+                        env!("CARGO_PKG_VERSION"),
+                        env!("CARGO_PKG_VERSION"),
+                        target.triple()
+                    ),
+                    sha256: "b".repeat(64),
+                })
+                .collect(),
+        },
+        mise_bootstrap: MiseBootstrap {
+            version: MISE_VERSION.to_owned(),
+            artifact: "https://example.invalid/mise".to_owned(),
+            sha256: "c".repeat(64),
+        },
+        actions: Vec::new(),
+    };
+    for (label, target) in [
+        ("ubuntu-26.04", ReleaseTarget::LinuxX86_64),
+        ("macos-15", ReleaseTarget::MacosArm64),
+        ("macos-15-intel", ReleaseTarget::MacosX86_64),
+    ] {
+        let step = lock_acquire_step(&lock, label, "$RUNNER_TEMP/velnor/bin/velnor-actions-test")
+            .expect("lock acquire for supported target");
+        assert_native_checksum_utility(step, target);
+    }
+}
+
+fn assert_native_checksum_utility(step: velnor_actions_contract::Step, target: ReleaseTarget) {
+    let velnor_actions_contract::StepKind::Shell { run, .. } = step.kind else {
+        panic!("Acquire must be a shell step");
+    };
+    let script = run.join(" ");
+    let expected = match target {
+        ReleaseTarget::LinuxX86_64 => "sha256sum",
+        ReleaseTarget::MacosArm64 | ReleaseTarget::MacosX86_64 => "shasum -a 256",
+    };
+    let other = match target {
+        ReleaseTarget::LinuxX86_64 => "shasum -a 256",
+        ReleaseTarget::MacosArm64 | ReleaseTarget::MacosX86_64 => "sha256sum",
+    };
+    assert_eq!(
+        script.matches(&format!("{expected} -c -")).count(),
+        2,
+        "{script}"
+    );
+    assert!(!script.contains(other), "{script}");
 }
 
 #[test]

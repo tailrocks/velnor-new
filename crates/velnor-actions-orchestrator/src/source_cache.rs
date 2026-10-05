@@ -150,8 +150,8 @@ mod tests {
             let err = sources_cache_key(target, "1.98.1", &[]).expect_err("target");
             assert!(err.to_string().contains("bad_target"), "{target}: {err}");
         }
-        for target in velnor_actions_contract::SUPPORTED_TARGETS {
-            let key = sources_cache_key(target, "1.98.1", &[]).expect("supported");
+        for target in velnor_actions_contract::ReleaseTarget::ALL {
+            let key = sources_cache_key(target.triple(), "1.98.1", &[]).expect("supported");
             assert!(key.starts_with(SOURCES_KEY_PREFIX), "{key}");
         }
         assert!(sources_cache_key("x86_64-unknown-linux-gnu", "1.98", &[]).is_err());
