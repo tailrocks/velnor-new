@@ -51,7 +51,7 @@ fn dispatch(cli: &Cli) -> ExitCode {
         ),
         Command::Service { action } => crate::service::service(*action),
         Command::Daemon { action } => daemon(&state, *action),
-        Command::Compare { .. } => not_proven(),
+        Command::Compare { evidence, .. } => compare_command(evidence.as_deref()),
         Command::Disconnect { drain, .. } => disconnect(*drain),
     }
 }
@@ -182,6 +182,13 @@ fn hold(lock: &DaemonLock) -> ExitCode {
     }
     std::thread::park();
     ExitCode::SUCCESS
+}
+
+fn compare_command(evidence: Option<&Path>) -> ExitCode {
+    match evidence {
+        Some(path) => crate::compare::compare_dir(path),
+        None => not_proven(),
+    }
 }
 
 fn not_proven() -> ExitCode {

@@ -74,6 +74,7 @@ mod impl_protocol_render_gate;
 mod impl_required_evidence;
 mod impl_required_reports;
 mod impl_required_validators;
+mod impl_schema2_routing;
 mod impl_select;
 mod impl_select_base;
 mod impl_select_removed;

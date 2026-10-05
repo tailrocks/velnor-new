@@ -262,6 +262,7 @@ mod tests {
                 exclude: Vec::new(),
             },
             actions: ActionsConfig { overrides },
+            execution: None,
         }
     }
 

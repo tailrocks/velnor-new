@@ -89,6 +89,9 @@ pub enum Command {
         /// Run attempt.
         #[arg(long)]
         attempt: u64,
+        /// Directory of expected, observed, and census JSON.
+        #[arg(long, value_name = "DIR")]
+        evidence: Option<PathBuf>,
     },
     /// Drain and delete only a set this controller created.
     Disconnect {

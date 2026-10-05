@@ -1,6 +1,7 @@
 //! Clap parsing and presentation for `velnor-host`.
 
 mod args;
+mod compare;
 mod dispatch;
 mod service;
 

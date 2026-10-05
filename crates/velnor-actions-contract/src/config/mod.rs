@@ -4,17 +4,27 @@
 
 mod actions;
 mod discovery;
+mod execution;
 mod release;
 mod resources;
+mod runs_on;
 mod stacks;
 mod tofu;
 mod workflow;
 
 pub use actions::{ActionPinOverride, ActionsConfig, OVERRIDABLE_ACTIONS};
 pub use discovery::DiscoveryConfig;
+pub use execution::{
+    ExecutionConfig, ExecutionMode, ExecutionOverride, ExecutionParity, ExecutionProfile,
+    ExecutionRole, HOSTED_PROFILE_ID, ProfileKind, RoutingWorkflow, SCALE_SET_PROFILE_ID,
+};
 pub use release::{BootstrapRelease, ReleaseAuthentication, RustReleaseConfig};
 pub use resources::{
     ResourcesConfig, ShardTimingEvidence, TestShardingConfig, validate_shard_changes_need_evidence,
+};
+pub use runs_on::{
+    LINUX_AMD64, RunsOn, SCALE_SET_NAME, ScaleSetSelector, VELNOR_LABEL, is_hosted_catalog,
+    is_legacy_hosted_label,
 };
 pub use stacks::{
     DeclaredCompileDriver, DeclaredTestRunner, RustConfiguration, RustStackConfig, StacksConfig,
@@ -33,7 +43,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct VelnorConfig {
-    /// Config schema version; must be 1.
+    /// Config schema version. `1` is hosted-only. `2` is routing.
     pub schema: u32,
     /// Workflow policy and naming.
     pub workflow: WorkflowConfig,
@@ -48,23 +58,22 @@ pub struct VelnorConfig {
     /// Action-pin overrides; absent means bundled latest pins.
     #[serde(default)]
     pub actions: ActionsConfig,
+    /// Schema 2 routing. Absent on schema 1.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution: Option<ExecutionConfig>,
 }
 
 impl VelnorConfig {
-    /// Schema version this contract accepts.
+    /// Schema 1: hosted-only generation. Schema 2 is routing.
     pub const SCHEMA: u32 = 1;
+    /// Routing schema.
+    pub const SCHEMA_V2: u32 = 2;
     /// Stack IDs registered in V1.
     pub const REGISTERED_STACKS: &'static [&'static str] = &["rust", "tofu"];
     /// Validate every field; failures name file, key path, and problem.
     /// # Errors
     pub fn validate(&self, file: &str) -> Result<(), ContractError> {
-        if self.schema != Self::SCHEMA {
-            return Err(ContractError::UnsupportedSchema {
-                field: "schema",
-                found: self.schema.to_string(),
-                expected: "1",
-            });
-        }
+        self.check_schema(file)?;
         self.workflow.validate(file)?;
         self.resources.validate(file)?;
         self.test_sharding.validate(file)?;
@@ -73,6 +82,34 @@ impl VelnorConfig {
         self.actions.validate(file)?;
         self.check_shard_budgets(file)?;
         Ok(())
+    }
+
+    /// Schema 1 rejects routing. Schema 2 requires `[execution]`.
+    fn check_schema(&self, file: &str) -> Result<(), ContractError> {
+        match self.schema {
+            1 => {
+                if self.execution.is_some() {
+                    return Err(ContractError::config(
+                        file,
+                        "execution",
+                        "schema1_rejects_execution",
+                    ));
+                }
+                Ok(())
+            }
+            2 => {
+                let execution = self
+                    .execution
+                    .as_ref()
+                    .ok_or_else(|| ContractError::config(file, "execution", "missing_execution"))?;
+                execution.validate(file)
+            }
+            _ => Err(ContractError::UnsupportedSchema {
+                field: "schema",
+                found: self.schema.to_string(),
+                expected: "1",
+            }),
+        }
     }
 
     /// Reject shard counts beyond the test-process budget (par §8).
