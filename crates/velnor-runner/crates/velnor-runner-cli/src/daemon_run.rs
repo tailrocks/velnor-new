@@ -38,8 +38,9 @@ pub(crate) fn daemon_intent(toml_text: Option<&str>) -> DaemonIntent {
 
 /// Hold `daemon.lock` and launch until the lock is lost.
 ///
-/// `VELNOR_RELEASE_EXITED=1` only proves exited rows, then returns. No lock,
-/// no keychain, and no session.
+/// `VELNOR_RELEASE_EXITED=1` proves exited rows, then returns. It holds the
+/// daemon lock so it cannot delete a container the live daemon just created.
+/// No keychain and no session.
 pub(crate) fn run_daemon(state: &Path) -> ExitCode {
     if std::env::var("VELNOR_RELEASE_EXITED").ok().as_deref() == Some("1") {
         return release_exited_rows(state);
@@ -52,6 +53,10 @@ pub(crate) fn run_daemon(state: &Path) -> ExitCode {
 }
 
 fn release_exited_rows(state: &Path) -> ExitCode {
+    let Ok(_lock) = DaemonLock::try_acquire(&state.join("daemon.lock")) else {
+        eprintln!("daemon already running");
+        return ExitCode::from(1);
+    };
     let raw = std::fs::read_to_string(state.join("host.toml")).ok();
     let text = match daemon_intent(raw.as_deref()) {
         DaemonIntent::Listen => raw.as_deref(),
