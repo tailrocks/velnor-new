@@ -265,6 +265,45 @@ EOF
   [ -z "$(find "$root/stage" -mindepth 1 -print -quit)" ] || return 1
 }
 
+case_grouped_extract_failure_keeps_prior_mode() {
+  local root="$work/grouped-fail" real_busybox status=0 mode mtime
+  rm -rf -- "$root"
+  mkdir -p "$root/dest/workspace/repo" "$root/dest/workspace/external/cache" \
+    "$root/stage" "$root/bin"
+  chmod 0755 "$root/dest/workspace/external" "$root/dest/workspace/external/cache"
+  touch -d @1500000000 "$root/dest/workspace/external" \
+    "$root/dest/workspace/external/cache"
+  write_ustar "$root/arc.tar" \
+    d "../external/" 0750 1600000000 \
+    d "../external/cache/" 0710 1600000001 \
+    f "../external/cache/file-00001" "payload-1" || return 1
+  real_busybox="$(command -v busybox)"
+  cat >"$root/bin/busybox" <<'EOF'
+#!/bin/sh
+if [ "${1:-}" = tar ]; then
+  cat >/dev/null
+  exit 1
+fi
+exec "$VELNOR_REAL_BUSYBOX" "$@"
+EOF
+  chmod 0755 "$root/bin/busybox"
+  PATH="$root/bin:$PATH" \
+    VELNOR_REAL_BUSYBOX="$real_busybox" \
+    TMPDIR="$root/stage" \
+    bash "$shim" -xf "$root/arc.tar" -P -C "$root/dest/workspace/repo" \
+    >"$root/out" 2>"$root/err" || status=$?
+  [ "$status" -ne 0 ] || return 1
+  grep -F -q 'member extract failed' "$root/err" || return 1
+  mode="$(stat -c %a "$root/dest/workspace/external")"
+  mtime="$(stat -c %Y "$root/dest/workspace/external")"
+  [ "$mode" = 755 ] && [ "$mtime" = 1500000000 ] || return 1
+  mode="$(stat -c %a "$root/dest/workspace/external/cache")"
+  mtime="$(stat -c %Y "$root/dest/workspace/external/cache")"
+  [ "$mode" = 755 ] && [ "$mtime" = 1500000000 ] || return 1
+  [ ! -e "$root/dest/workspace/external/cache/file-00001" ] || return 1
+  [ -z "$(find "$root/stage" -name 'velnor-dir-meta.*' -print -quit)" ] || return 1
+}
+
 case_record_failure_keeps_mode() {
   local root="$work/record-full" dir mode
   rm -rf -- "$root"

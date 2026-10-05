@@ -369,12 +369,16 @@ shared_external_base() {
   [ "$joined" = "$intended" ]
 }
 
+fail_shared_extract() {
+  rm -f -- "$1"
+  die "member extract failed"
+}
+
 extract_shared_external() {
   local meta
   meta="$(mktemp "${TMPDIR:-/tmp}/velnor-dir-meta.XXXXXX")"
-  dir_meta_file="$meta"
   mkdir -p -- "$shared_base"
-  stream_archive | perl /dev/fd/3 "$member_pl" "$shared_base" "$shared_prefix_count" "$meta" 3<<'PERL' | busybox tar -xf - -C "$shared_base" || die "member extract failed"
+  stream_archive | perl /dev/fd/3 "$member_pl" "$shared_base" "$shared_prefix_count" "$meta" 3<<'PERL' | busybox tar -xf - -C "$shared_base" || fail_shared_extract "$meta"
 use strict;
 use warnings;
 use bytes;
@@ -470,6 +474,7 @@ walk(
 print STDOUT ("\0" x 1024) or die "velnor-tar-member: write: $!\n";
 close $mf or die "velnor-tar-member: $meta_path: $!\n";
 PERL
+  dir_meta_file="$meta"
   restore_directory_metadata || die "cannot restore directory metadata"
   dir_metadata_restored=1
 }

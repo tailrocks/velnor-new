@@ -374,6 +374,7 @@ run_case restrictive-parent-metadata case_restrictive_parent_metadata
 run_case rewritten-long-paths case_rewritten_long_paths
 run_case rewritten-pax-member case_rewritten_pax_member
 run_case grouped-external-restore case_grouped_external_restore
+run_case grouped-extract-failure-keeps-prior-mode case_grouped_extract_failure_keeps_prior_mode
 run_case empty-dir case_empty_dir
 run_case long-and-deep case_long_and_deep
 run_case space-name case_space_name
