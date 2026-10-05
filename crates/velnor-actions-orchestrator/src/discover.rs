@@ -25,6 +25,9 @@ use crate::recommendations::collect_recommendations;
 use crate::toolcheck::{ToolInputCheck, check_tool_inputs};
 use crate::{discover_tofu::qualify_tofu_step, evidence::profile_for_workspace};
 
+#[path = "consumer_manifest.rs"]
+mod consumer_manifest;
+
 /// One workspace with its inventory, profile, and recommendations.
 #[derive(Debug, Clone)]
 pub struct PlannedWorkspace {
@@ -57,17 +60,20 @@ pub struct Discovery {
     pub clippy_memory: ClippyMemoryPlan,
     /// Non-fatal generation recommendations.
     pub recommendations: Vec<String>,
-    /// Release-manifest text from the committed repo file.
+    /// Consumer release-manifest text from the committed repo file.
     ///
-    /// Debug builds fall back to a stand-in when the file is absent
-    /// (flagged by [`Discovery::consumer_manifest_stand_in`], warned at
-    /// generation); release builds keep `None` so generation fails
-    /// closed with `consumer_requires_release_install`.
+    /// Only `ConsumerV1` reads this file. Debug `ConsumerV1` builds fall back
+    /// to a stand-in when it is absent (flagged by
+    /// [`Discovery::consumer_manifest_stand_in`], warned at generation);
+    /// release `ConsumerV1` builds keep `None` so generation fails closed
+    /// with `consumer_requires_release_install`. `VelnorRepositoryV1` never
+    /// reads this consumer-only file and keeps this field `None`.
     pub consumer_manifest_json: Option<String>,
     /// Whether the manifest text above is the debug-only stand-in.
     ///
-    /// Always false in release builds (no fallback exists there).
-    /// `generate` warns loudly when this is set; `plan` stays silent.
+    /// Always false for `VelnorRepositoryV1` and for release builds (no
+    /// fallback exists there). `generate` warns loudly when this is set;
+    /// `plan` stays silent.
     pub consumer_manifest_stand_in: bool,
     /// Whether non-UTF-8 names require broad selection.
     pub skipped_non_utf8: bool,
@@ -126,7 +132,7 @@ pub(crate) fn discover(root: &Path, config: &VelnorConfig) -> Result<Discovery, 
     let recommendations =
         collect_recommendations(root, config, &index, &workspaces, &tool_checks, &mut reads);
     let (consumer_manifest_json, consumer_manifest_stand_in) =
-        crate::discover_manifest::for_policy(root, config.workflow.policy)?;
+        consumer_manifest::for_policy(root, config.workflow.policy)?;
     Ok(Discovery {
         mise_checks,
         statuses,

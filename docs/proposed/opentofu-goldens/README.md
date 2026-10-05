@@ -1,7 +1,22 @@
 # T04 Rust-only golden evidence (Phase A behavior bracket)
 
-Pre-refactor capture at `a12efd7` (behavior-identical to `origin/main`
-106bfd7; docs-only delta). Every T06 ownership move must re-run the
+## Current release integration checkpoint (2026-10-05)
+
+After scoping consumer-manifest discovery to `ConsumerV1`, the pinned debug
+CLI regenerated the five fixture captures, including the dogfood preview. The
+golden check matches those captured fixtures. Dogfood itself is `DIFFERS`:
+the checked-in producer workflow has a repository-only `Prepare Rust
+components` step, and its tool-step environments differ from the generated
+preview. This source-tree parity difference is not an identical dogfood result
+and remains visible in `cases/dogfood/dogfood.diff`. The producer repository
+no longer reads or synthesizes a consumer release manifest. No authentic
+same-run three-target candidate manifest is present, so `check-release`,
+hosted qualification, immutable publication, and infrastructure protection
+remain unverified.
+
+The following earlier capture record is historical and does not supersede the
+current checkpoint above. Pre-refactor capture at `a12efd7`
+(behavior-identical to `origin/main` 106bfd7; docs-only delta). Every T06 ownership move must re-run the
 brackets below with byte-identical results. Never re-bless blindly:
 a mismatch is a behavior change until proven otherwise.
 
@@ -40,7 +55,7 @@ normalization.
 | mbx-nextest | 0 | same |
 | empty-suite | 0 | same |
 | minimal-cargo | 0 | same |
-| dogfood (this repo) | 0 | plan.txt, generate tree, `dogfood.verdict=identical`, tree.sha256 |
+| dogfood (this repo) | 0 | plan.txt, generate tree, `dogfood.verdict=identical` at the historical capture, tree.sha256 |
 
 The checked-in producer workflow was regenerated from the reviewed source with
 the locked release candidate (`mbx build --release --locked --package

@@ -60,6 +60,13 @@ a binary cannot embed a manifest containing its own SHA-256, so a
 compile-time bake can never cover the seed binary, and seed and
 release assets need no bake.
 
+This consumer-manifest requirement applies to `ConsumerV1`. The Velnor source
+repository uses `VelnorRepositoryV1`, which does not emit consumer `Acquire`
+steps and instead bootstraps its own jobs from source or `.velnor/generator.lock`.
+That policy MUST NOT read or synthesize `.velnor/release-manifest.json`; debug
+consumer stand-ins MUST never participate in the checked-in Velnor workflow
+tree.
+
 ## 2.1. Release process: immutable tags and attestations (F3)
 
 Code enforces the manifest shape (`commit` required, 40 lowercase

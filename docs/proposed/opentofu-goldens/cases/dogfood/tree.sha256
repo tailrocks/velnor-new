@@ -12,7 +12,7 @@ c221a634ad4265bafc8f829778f7838dd03d84b511cb368206a708271b03e30a  ./.github/acti
 3ad4f91e954d3f82f9d5fb61894509f1260288e14d11ec39b31a9a5fc39bdb90  ./.github/actions/generator-release-qualify-macos-intel/action.yml
 3519ea6961edd336a5e4ba71ea65a2c57c4bc3aba62cb5173c4c3448413cd02f  ./.github/actions/generator-release-qualify-macos/action.yml
 6139179ce61ff5097625f4ea76159d97de3ea4275e0aeea4ab0b86e3272c61e8  ./.github/actions/velnor-tool-seed/action.yml
-a58ec59d190cfb5f70865e0921f06d9e7ec0b891211e5f11b12e9a626ad436f2  ./.github/workflows/ci.yml
+6883351cd631daa133db0c21fd7b21b1f518ef9dd86d88a0ef660d74012e79c6  ./.github/workflows/ci.yml
 c6873ba49e8c184dd71d7b80d55c9734ee4e491429a798f07d7e3c66285d729b  ./.github/workflows/freshness.yml
 835031dacda29ce61dc6868aac643dddd366fe1f0088cd02bc1462881ab06ce3  ./.github/workflows/generator-candidate-qualification.yml
 dbff6862eb260f2236b8dda49f740c57c76cb68f62fbcf14d4cf596787158811  ./.github/workflows/generator-release.yml
