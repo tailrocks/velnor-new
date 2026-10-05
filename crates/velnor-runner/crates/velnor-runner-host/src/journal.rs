@@ -245,7 +245,7 @@ impl Journal {
         let conn = self.connection().await?;
         let mut query = conn
             .query(
-                "SELECT id, kind, subject, state, docker_id, github_runner_id, cleanup_proven, dind_id, worker_volume FROM intents ORDER BY id",
+                "SELECT id, kind, subject, state, docker_id, github_runner_id, cleanup_proven, dind_id, worker_volume, acquire_reserved FROM intents ORDER BY id",
                 (),
             )
             .await
@@ -344,6 +344,7 @@ fn intent_row(row: &turso::Row) -> Result<IntentRow, HostError> {
         worker_volume: row.get(8).map_err(|_| HostError::Journal)?,
         github_runner_id: row.get(5).map_err(|_| HostError::Journal)?,
         cleanup_proven: row.get(6).map_err(|_| HostError::Journal)?,
+        acquire_reserved: row.get(9).map_err(|_| HostError::Journal)?,
     })
 }
 

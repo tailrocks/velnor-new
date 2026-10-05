@@ -23,6 +23,8 @@ pub struct IntentRow {
     pub github_runner_id: Option<String>,
     /// Cleanup of the recorded ids was proven.
     pub cleanup_proven: bool,
+    /// Acquire may already exist on GitHub. An idless row stays occupied.
+    pub acquire_reserved: bool,
 }
 
 /// Whether the host may advertise free capacity.

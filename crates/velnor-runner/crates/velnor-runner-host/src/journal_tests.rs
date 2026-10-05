@@ -83,6 +83,7 @@ fn intent(state: IntentState, kind: &str) -> IntentRow {
         worker_volume: None,
         github_runner_id: None,
         cleanup_proven: false,
+        acquire_reserved: false,
     }
 }
 

@@ -1,8 +1,12 @@
 //! A launch row with no ids and no worker volume releases its slot.
 //! A row that still has a `DinD` id stays occupied.
+//! An idless row that reserved an acquire stays occupied.
 
-use crate::launch::{Admit, admission};
-use crate::launch_harness::{absent, assigned_wait, open, started_progress};
+use crate::EnsureError;
+use crate::launch::{Admit, admission, drive_offer};
+use crate::launch_harness::{
+    Mode, Script, absent, assigned_wait, available, ctx, open, started_progress,
+};
 use crate::stage::PairEngine;
 use crate::worker::CreateProjection;
 use crate::{HostError, Journal, Outcome};
@@ -190,6 +194,110 @@ async fn full_slot_acks_started_progress() -> Result<(), String> {
     assert_eq!(rows.len(), 1);
     assert!(!rows[0].cleanup_proven);
     assert_eq!(rows[0].dind_id.as_deref(), Some(hex(1).as_str()));
+    assert!(rows[0].worker_volume.is_none());
+    absent(&scratch.file())
+}
+
+#[tokio::test]
+async fn uncertain_acquire_keeps_the_idless_slot() -> Result<(), String> {
+    let (scratch, journal) = open("idless-acquire").await?;
+    let mut script = Script {
+        calls: Vec::new(),
+        mode: Mode::Timeout,
+    };
+    let error = drive_offer(
+        &mut script,
+        &ctx(),
+        &available(&[3]),
+        &journal,
+        |_volume, _jit, _bind| async { Err(HostError::Docker) },
+    )
+    .await;
+    assert_eq!(error, Err(EnsureError::Uncertain));
+    assert_eq!(script.calls, ["acquire"]);
+    let decision = admission(&Idle, &journal, 1, 1, 0, &available(&[3]))
+        .await
+        .map_err(|err| err.to_string())?;
+    assert_eq!(decision, Admit::Hold);
+    let rows = journal.rows().await.map_err(|err| err.to_string())?;
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].state, crate::IntentState::Uncertain);
+    assert!(rows[0].acquire_reserved);
+    assert!(!rows[0].cleanup_proven);
+    assert!(rows[0].docker_id.is_none());
+    assert!(rows[0].dind_id.is_none());
+    assert!(rows[0].worker_volume.is_none());
+    absent(&scratch.file())
+}
+
+#[tokio::test]
+async fn acquired_jit_failure_keeps_the_idless_slot() -> Result<(), String> {
+    let (scratch, journal) = open("idless-jit").await?;
+    let mut script = Script {
+        calls: Vec::new(),
+        mode: Mode::JitFail,
+    };
+    let error = drive_offer(
+        &mut script,
+        &ctx(),
+        &available(&[3]),
+        &journal,
+        |_volume, _jit, _bind| async { Err(HostError::Docker) },
+    )
+    .await;
+    assert_eq!(
+        error,
+        Err(EnsureError::Unexpected {
+            status: 0,
+            step: "session",
+        })
+    );
+    assert_eq!(script.calls, ["acquire", "jit"]);
+    let decision = admission(&Idle, &journal, 1, 1, 0, &available(&[3]))
+        .await
+        .map_err(|err| err.to_string())?;
+    assert_eq!(decision, Admit::Hold);
+    let rows = journal.rows().await.map_err(|err| err.to_string())?;
+    assert_eq!(rows.len(), 1);
+    assert!(rows[0].acquire_reserved);
+    assert!(!rows[0].cleanup_proven);
+    assert!(rows[0].docker_id.is_none());
+    assert!(rows[0].worker_volume.is_none());
+    absent(&scratch.file())
+}
+
+#[tokio::test]
+async fn scale_jit_failure_still_releases_the_idless_slot() -> Result<(), String> {
+    let (scratch, journal) = open("idless-scale-jit").await?;
+    let mut script = Script {
+        calls: Vec::new(),
+        mode: Mode::JitFail,
+    };
+    let error = drive_offer(
+        &mut script,
+        &ctx(),
+        &assigned_wait(7, 1),
+        &journal,
+        |_volume, _jit, _bind| async { Err(HostError::Docker) },
+    )
+    .await;
+    assert_eq!(
+        error,
+        Err(EnsureError::Unexpected {
+            status: 0,
+            step: "session",
+        })
+    );
+    assert_eq!(script.calls, ["jit"]);
+    let decision = admission(&Idle, &journal, 1, 1, 0, &assigned_wait(7, 1))
+        .await
+        .map_err(|err| err.to_string())?;
+    assert_eq!(decision, Admit::Start { stop: true });
+    let rows = journal.rows().await.map_err(|err| err.to_string())?;
+    assert_eq!(rows.len(), 1);
+    assert!(!rows[0].acquire_reserved);
+    assert!(rows[0].cleanup_proven);
+    assert!(rows[0].docker_id.is_none());
     assert!(rows[0].worker_volume.is_none());
     absent(&scratch.file())
 }

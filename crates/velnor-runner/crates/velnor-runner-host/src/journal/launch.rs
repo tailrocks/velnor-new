@@ -29,6 +29,23 @@ impl Journal {
         end.map_err(|_| HostError::Journal)?;
         result
     }
+
+    /// Record that GitHub may already own this launch acquire.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`HostError::Journal`] when the row is missing.
+    pub async fn reserve_acquire(&self, id: i64) -> Result<(), HostError> {
+        let conn = self.connection().await?;
+        let changed = conn
+            .execute(
+                "UPDATE intents SET acquire_reserved = 1 WHERE id = ?1",
+                [id],
+            )
+            .await
+            .map_err(|_| HostError::Journal)?;
+        super::one_row(changed)
+    }
 }
 
 async fn launch_id(conn: &turso::Connection, subject: &str) -> Result<(i64, bool), HostError> {

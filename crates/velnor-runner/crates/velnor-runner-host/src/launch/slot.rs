@@ -69,7 +69,11 @@ async fn release_row<E: PairEngine + ?Sized>(
     }
     // Create journals the worker volume before any container exists.
     // A row with no ids and no volume cannot own a container.
+    // An acquire reservation can still exist. Keep that slot until proof.
     if blank_identity(row) {
+        if row.acquire_reserved {
+            return Ok(());
+        }
         journal.record_cleanup(row.id).await.map_err(map_journal)?;
         return Ok(());
     }

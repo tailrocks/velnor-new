@@ -109,6 +109,7 @@ where
     match taken(lane, ctx, request_id) {
         Ok(AcquireOutcome::Acquired(ids)) if ids.is_empty() => reject_empty(journal, id).await,
         Ok(_) => {
+            journal.reserve_acquire(id).await.map_err(map_journal)?;
             let name = format!("v{request_id}");
             mint(lane, ctx, Some(batch), journal, id, &name, start).await
         }
@@ -174,6 +175,9 @@ async fn fail_acquire(
     id: i64,
     error: SessionError,
 ) -> Result<Option<Started>, EnsureError> {
+    if matches!(error.certainty(), Certainty::Uncertain) {
+        journal.reserve_acquire(id).await.map_err(map_journal)?;
+    }
     let outcome = match error.certainty() {
         Certainty::Uncertain => Outcome::Uncertain,
         Certainty::Definite => Outcome::DefiniteFailure,
