@@ -28,6 +28,7 @@ pub(super) fn jobs(
                 artifact: LINUX_ARTIFACT,
                 asset: &assets.linux_bin,
                 sidecar: &assets.linux_sum,
+                provenance: &assets.linux_provenance,
                 os: "linux",
             },
             linux,
@@ -43,6 +44,7 @@ pub(super) fn jobs(
                 artifact: MACOS_ARM_ARTIFACT,
                 asset: &assets.macos_arm_bin,
                 sidecar: &assets.macos_arm_sum,
+                provenance: &assets.macos_arm_provenance,
                 os: "macos-arm64",
             },
             macos_arm,
@@ -58,6 +60,7 @@ pub(super) fn jobs(
                 artifact: MACOS_X64_ARTIFACT,
                 asset: &assets.macos_x64_bin,
                 sidecar: &assets.macos_x64_sum,
+                provenance: &assets.macos_x64_provenance,
                 os: "macos-x64",
             },
             macos_x64,
@@ -76,6 +79,7 @@ struct TargetSpec<'a> {
     artifact: &'a str,
     asset: &'a str,
     sidecar: &'a str,
+    provenance: &'a str,
     os: &'a str,
 }
 
@@ -91,9 +95,9 @@ fn target_job(
         .map(|job| format!("needs.{job}.result == 'success'"))
         .collect::<Vec<_>>()
         .join(" && ");
-    let fields = super::with_if(
-        super::with_needs(
-            super::with_permissions(
+    let fields = super::promotion::with_if(
+        super::promotion::with_needs(
+            super::promotion::with_permissions(
                 super::base(spec.name, runs_on, 60),
                 release_steps::build_permissions(),
             ),
@@ -116,28 +120,34 @@ fn target_job(
         MANIFEST_ARTIFACT,
         MANIFEST_DIR,
     ));
-    steps.push(release_steps::bash_run_step(
+    steps.push(release_steps::bash_run_step_with_env(
         "Bind downloaded candidate to manifest digest",
         &verify_candidate_script(
             spec.target,
             spec.asset,
             spec.sidecar,
+            spec.provenance,
             version,
             spec.os,
             assets,
         ),
+        "VELNOR_RELEASE_MANIFEST_SHA256",
+        "${{ needs.prepare-manifest.outputs.manifest_sha256 }}",
     ));
-    steps.push(release_steps::bash_run_step(
+    steps.push(release_steps::bash_run_step_with_env(
         "Qualify exact downloaded candidate",
         &qualify_candidate_script(spec.target, spec.asset, spec.os),
+        "VELNOR_RELEASE_MANIFEST_SHA256",
+        "${{ needs.prepare-manifest.outputs.manifest_sha256 }}",
     ));
     super::finish(spec.id, fields, steps)
 }
 
-fn verify_candidate_script(
+pub(super) fn verify_candidate_script(
     target: &str,
     asset: &str,
     sidecar: &str,
+    provenance: &str,
     version: &str,
     os: &str,
     assets: &AssetNames,
@@ -163,18 +173,29 @@ fn verify_candidate_script(
 candidate_dir="{ASSET_DIR}"
 candidate="$candidate_dir/{asset}"
 sidecar="$candidate_dir/{sidecar}"
+provenance="$candidate_dir/{provenance}"
 manifest="{MANIFEST_DIR}/{RELEASE_MANIFEST_FILENAME}"
 test -f "$candidate" && test ! -L "$candidate" && test -s "$candidate"
 test -f "$sidecar" && test ! -L "$sidecar" && test -s "$sidecar"
+test -f "$provenance" && test ! -L "$provenance" && test -s "$provenance"
 test -f "$manifest" && test ! -L "$manifest" && test -s "$manifest"
+chmod +x "$candidate"
 entries="$(find "$candidate_dir" -mindepth 1 -maxdepth 1 -print | wc -l | tr -d ' ')"
-test "$entries" = 2
+test "$entries" = 3
 manifest_entries="$(find "{MANIFEST_DIR}" -mindepth 1 -maxdepth 1 -print | wc -l | tr -d ' ')"
 test "$manifest_entries" = 1
-jq -e --arg version "{version}" --arg repository "tailrocks/velnor-new" --arg commit "$GITHUB_SHA" --arg linux_target "{LINUX_TARGET}" --arg arm_target "{MACOS_ARM_TARGET}" --arg x64_target "{MACOS_X64_TARGET}" --arg linux_asset "{linux_asset}" --arg arm_asset "{arm_asset}" --arg x64_asset "{x64_asset}" --arg tag "generator-$GITHUB_SHA" '
+catalog_version() {{
+  awk -F '"' -v name="$1" '$1 == "pub const " name ": &str = " && $3 == ";" {{ value = $2; count += 1 }} END {{ if (count != 1 || value !~ /^[0-9]+\.[0-9]+\.[0-9]+$/) exit 1; print value }}' crates/velnor-actions-mise/src/catalog.rs
+}}
+test "$GITHUB_WORKFLOW_SHA" = "$GITHUB_SHA"
+test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+manifest_line="$({sum} "$manifest")"
+manifest_sha="${{manifest_line%% *}}"
+test "$manifest_sha" = "$VELNOR_RELEASE_MANIFEST_SHA256"
+jq -e --arg version "{version}" --arg repository "tailrocks/velnor-new" --arg commit "$GITHUB_SHA" --arg linux_target "{LINUX_TARGET}" --arg arm_target "{MACOS_ARM_TARGET}" --arg x64_target "{MACOS_X64_TARGET}" --arg linux_asset "{linux_asset}" --arg arm_asset "{arm_asset}" --arg x64_asset "{x64_asset}" --arg tag "v{version}" '
   .schema == 1 and .version == $version and .repository == $repository and .commit == $commit and
   (.targets | length == 3) and
-  ([.targets[].target] | sort) == ([$linux_target, $arm_target, $x64_target] | sort) and
+  [.targets[].target] == [$linux_target, $arm_target, $x64_target] and
   all(.targets[];
     (.sha256 | test("^[0-9a-f]{{64}}$")) and
     ((.target == $linux_target and .artifact == ("https://github.com/" + $repository + "/releases/download/" + $tag + "/" + $linux_asset)) or
@@ -190,32 +211,52 @@ test "$sidecar_hash" = "$expected"
 actual_line="$({sum} "$candidate")"
 actual="${{actual_line%% *}}"
 test "$actual" = "$expected"
+jq -e --arg version "{version}" --arg repository "$GITHUB_REPOSITORY" --arg commit "$GITHUB_SHA" --arg target "{target}" --arg asset "{asset}" --arg sha256 "$expected" --arg rust "$(catalog_version RUST_VERSION)" --arg mbx "$(catalog_version MR_BOXINGTON_VERSION)" '.schema == 1 and .version == $version and .repository == $repository and .commit == $commit and .target == $target and .asset == $asset and .sha256 == $sha256 and .toolchain.rust == $rust and .toolchain["mr-boxington"] == $mbx' "$provenance" >/dev/null
+test "$(./"$candidate" --version)" = "velnor-actions {version}"
 desc="$(file -b "$candidate")"
 test "$RUNNER_OS:$(uname -m)" = "{host}"
 case "$desc" in
   {file_pattern}) {native_check} ;;
   *) echo "candidate target mismatch: $desc" >&2; exit 1 ;;
 esac
-chmod +x "$candidate"
 "#,
         linux_asset = assets.linux_bin,
         arm_asset = assets.macos_arm_bin,
         x64_asset = assets.macos_x64_bin,
+        provenance = provenance,
     )
 }
 
-fn qualify_candidate_script(target: &str, asset: &str, os: &str) -> String {
+pub(super) fn qualify_candidate_script(target: &str, asset: &str, os: &str) -> String {
     let sum = match os {
         "linux" => "sha256sum --",
         "macos-arm64" | "macos-x64" => "shasum -a 256",
         _ => "false",
     };
+    let mut script = qualification_preamble(target, asset, sum);
+    script.push_str(&qualification_parity_steps(sum));
+    script.push_str(
+        "mise --no-config --no-env --no-hooks exec \"rust@$rust_version\" -- scripts/capture-opentofu-goldens.sh check-release \"$candidate\" \"$manifest\" \"$VELNOR_RELEASE_MANIFEST_SHA256\"\ncheck_candidate\n",
+    );
+    script
+}
+
+fn qualification_preamble(target: &str, asset: &str, sum: &str) -> String {
     format!(
         r#"set -eu
 candidate="$GITHUB_WORKSPACE/{ASSET_DIR}/{asset}"
 manifest="$GITHUB_WORKSPACE/{MANIFEST_DIR}/{RELEASE_MANIFEST_FILENAME}"
+manifest_line="$({sum} "$manifest")"
+manifest_sha="${{manifest_line%% *}}"
+test "$manifest_sha" = "$VELNOR_RELEASE_MANIFEST_SHA256"
 expected="$(jq -er --arg target "{target}" '[.targets[] | select(.target == $target)] | if length == 1 then .[0].sha256 else error("target_digest_missing") end' "$manifest")"
-check_candidate() {{
+"#
+    )
+}
+
+fn qualification_parity_steps(sum: &str) -> String {
+    format!(
+        r#"check_candidate() {{
   actual_line="$({sum} "$candidate")"
   actual="${{actual_line%% *}}"
   test "$actual" = "$expected"
@@ -235,6 +276,7 @@ run_candidate() {{
   return "$status"
 }}
 temp="$(mktemp -d "$RUNNER_TEMP/velnor-release-qualification.XXXXXXXX")"
+trap 'rm -rf "$temp"' EXIT
 prepare_repo() {{
   case_name="$1"
   repo="$temp/$case_name"
@@ -272,6 +314,6 @@ for case_name in malformed malformed-ignored; do
   test -z "$(git -C "$repo" status --porcelain)"
   check_candidate
 done
-"#,
+"#
     )
 }

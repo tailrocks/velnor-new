@@ -25,6 +25,7 @@ use crate::OrchestratorError;
 use crate::crate_job_ids::{assign_group_ids, group_is_tofu, group_runnable};
 use crate::discover::Discovery;
 use crate::internal::internal;
+#[cfg(test)]
 use crate::matrix_step::step_name_for;
 
 #[path = "crate_jobs_mbx_setup.rs"]
@@ -36,10 +37,12 @@ mod obligations;
 #[path = "crate_jobs_stage.rs"]
 mod stage;
 
+pub(crate) use obligations::obligations_for;
+#[cfg(test)]
+pub(crate) use obligations::{gates_for, obligation_rank};
 #[cfg(test)]
 pub(crate) use stage::needs;
 pub(crate) use stage::{is_mbx, is_nextest, is_opentofu, is_rust};
-pub(crate) use obligations::{gates_for, obligation_rank, obligations_for};
 
 /// Built crate jobs plus their driver selections for MBX gating.
 pub(crate) struct CrateBuild {
