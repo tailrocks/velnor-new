@@ -1,0 +1,1 @@
+0000000000000000000000000000000000000000 5b7b145993a63cffd93bc8f3b10ea99e59ee5f48 Alexey Zhokhov <alexey@zhokhov.com> 1791067667 +0700	fetch --no-tags canonical +refs/heads/main:refs/remotes/canonical/main +refs/heads/perf/cache-selection-qualification:refs/remotes/canonical/perf/cache-selection-qualification: storing head
