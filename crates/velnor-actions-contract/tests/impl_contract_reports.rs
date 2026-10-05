@@ -118,7 +118,7 @@ fn task_and_matrix_reports_validate() -> Result<(), ContractError> {
         timing: None,
     };
     report.validate()?;
-    rejects_task_report_v2(&report);
+    rejects_task_report_v1(&report);
     let skipped = TaskReport {
         status: TaskStatus::NotSelected,
         not_selected_reason: Some(NotSelectedReason::UpstreamFailed),
@@ -158,16 +158,16 @@ fn task_and_matrix_reports_validate() -> Result<(), ContractError> {
     Ok(())
 }
 
-fn rejects_task_report_v2(report: &TaskReport) {
+fn rejects_task_report_v1(report: &TaskReport) {
     let mut legacy_report = report.clone();
-    legacy_report.schema = 2;
+    legacy_report.schema = 1;
     assert!(matches!(
         legacy_report.validate(),
         Err(ContractError::UnsupportedSchema {
             field: "schema",
             found,
-            expected: "3"
-        }) if found == "2"
+            expected: "2"
+        }) if found == "1"
     ));
 }
 
@@ -218,6 +218,7 @@ fn workflow_ir_validates_pins_and_refs() -> Result<(), ContractError> {
     let job = Job {
         display_name: "Plan".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
+        check_runner: None,
         timeout_minutes: JobTimeout::PLAN,
         needs: vec![],
         condition: None,

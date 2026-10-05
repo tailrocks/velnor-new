@@ -11,7 +11,7 @@ use crate::workflow::report::{CacheResult, MatrixReport, TaskReport, TaskStatus}
 
 impl TaskReport {
     /// Report schema version.
-    pub const SCHEMA: u32 = 3;
+    pub const SCHEMA: u32 = 2;
 
     /// Validate schema, derived ID, digests, binding, and status coherence.
     /// # Errors
@@ -165,7 +165,7 @@ fn check_schema(schema: u32, expected: u32) -> Result<(), ContractError> {
             field: "schema",
             found: schema.to_string(),
             expected: if expected == TaskReport::SCHEMA {
-                "3"
+                "2"
             } else {
                 "1"
             },

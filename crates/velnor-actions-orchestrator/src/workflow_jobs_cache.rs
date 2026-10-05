@@ -36,11 +36,11 @@ pub(crate) fn cache_steps_for_plan(
             save: Vec::new(),
         });
     }
-    let target = velnor_actions_contract::target_for_runner_label(label).ok_or_else(|| {
-        OrchestratorError::Contract {
+    let target = velnor_actions_contract::ReleaseTarget::for_runner_label(label)
+        .map(velnor_actions_contract::ReleaseTarget::triple)
+        .ok_or_else(|| OrchestratorError::Contract {
             problem: format!("bad_label:{label}"),
-        }
-    })?;
+        })?;
     let rust = catalog.version(PinnedTool::Rust);
     if use_mbx {
         let key = crate::source_cache::sources_cache_key(target, rust, fetch_roots)?;

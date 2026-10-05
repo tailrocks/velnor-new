@@ -9,6 +9,7 @@ pub mod ir;
 pub mod jobs;
 pub mod lanes;
 pub mod matrix_entry;
+pub mod named_check_lanes;
 pub mod needs;
 pub mod permissions;
 pub mod plan;
@@ -37,7 +38,11 @@ pub use jobs::{
     crate_display_label, crate_display_name, is_crate_job_id, is_safe_display_name,
     slugify_segment, tofu_display_name, validate_job_id,
 };
-pub use lanes::{HOSTED_SUFFIX, LaneClass, SCALE_SUFFIX, expand_workflow, lane_class};
+pub use lanes::{
+    HOSTED_SUFFIX, LaneClass, NAMED_CHECK_JOB_ID_ENV, NAMED_CHECK_LANE_VARIANT_ENV,
+    NAMED_CHECK_LANES_ENV, NamedCheckLane, NamedCheckLaneVariant, SCALE_SUFFIX, expand_workflow,
+    lane_class, named_check_lanes,
+};
 pub use matrix_entry::MatrixEntry;
 pub use needs::{
     NEEDS_CHANNEL_ENV, NEEDS_CHANNEL_EXPRESSION, NEEDS_EXPECTED_ENV, NeedsConclusions,
@@ -49,8 +54,8 @@ pub use plan::{
     validate_matrix_run,
 };
 pub use platform::{
-    PlannedPlatform, PlannedRunnerEnvironment, PlatformBinding, PlatformRunnerEnvironment,
-    PlatformUnavailableReason,
+    PlatformBinding, PlatformRunnerEnvironment, PlatformUnavailableReason, PlannedPlatform,
+    PlannedRunnerEnvironment,
 };
 pub use qualification::{
     FinalCounts, FinalReport, FinalStatus, JobConclusion, RequiredJobResult,

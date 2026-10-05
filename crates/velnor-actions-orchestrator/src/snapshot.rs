@@ -11,7 +11,7 @@
 
 use serde::Serialize;
 use velnor_actions_contract::{
-    ContractError, PlannedPlatform, canonical_json_bytes, digest_b3, parse_strict_json,
+    ContractError, canonical_json_bytes, digest_b3, parse_strict_json,
 };
 
 /// Explicit unknown marker for unverifiable archive sources.
@@ -83,8 +83,9 @@ pub(crate) fn check_canonical_version(found: u32) -> Result<(), ContractError> {
 ///
 /// Returns [`ContractError`] for unsupported targets and invalid
 /// platform inputs; no fallback digest is ever substituted.
+#[cfg(test)]
 pub(crate) fn platform_id_for(label: &str, target: &str) -> Result<String, ContractError> {
-    Ok(PlannedPlatform::new(label, target)?.platform_id)
+    Ok(velnor_actions_contract::PlannedPlatform::new(label, target)?.platform_id)
 }
 
 /// One immutable execution snapshot per analysis (P03-1).
@@ -161,7 +162,7 @@ impl ExecutionSnapshot {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use velnor_actions_contract::cachekey::PlatformInputs;
+    use velnor_actions_contract::{PlannedPlatform, cachekey::PlatformInputs};
 
     #[test]
     fn canonical_bytes_ignore_key_order() {

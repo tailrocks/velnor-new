@@ -7,19 +7,18 @@ use velnor_actions_contract::cachekey::{
     toolchain_id,
 };
 use velnor_actions_contract::{
-    ContractError, ProposedTask, Stack, component_id_for_unit, digest_b3,
+    ContractError, PlannedPlatform, ProposedTask, ReleaseTarget, Stack, component_id_for_unit,
+    digest_b3,
 };
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_rust::{CompileDriver, DepKind, WorkspaceRecord, tool_needs};
 
-use super::snapshot::{ExecutionSnapshot, canonical_digest, platform_id_for};
+use super::snapshot::{ExecutionSnapshot, canonical_digest};
 use crate::discover::Discovery;
 use crate::toolcheck::ToolInputCheck;
 
-/// Cache-format label for the single Velnor cache payload version.
 const CACHE_FORMAT_LABEL: &str = "velnor-cache-v1";
 
-/// Canonical package/workspace graph over normalized manifests.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct SnapshotGraph {
     /// Normalized member component identities, sorted.
@@ -28,7 +27,6 @@ pub(crate) struct SnapshotGraph {
     pub(crate) edges: Vec<SnapshotEdge>,
 }
 
-/// One normalized local-path dependency edge.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct SnapshotEdge {
     /// Normalized dependent component.
@@ -43,7 +41,6 @@ pub(crate) struct SnapshotEdge {
     pub(crate) target: String,
 }
 
-/// Canonical graph over normalized manifests, never raw Cargo IDs.
 pub(crate) fn snapshot_graph_for(record: &WorkspaceRecord) -> SnapshotGraph {
     let manifest_of = |id: &str| {
         record
@@ -78,15 +75,10 @@ pub(crate) fn snapshot_graph_for(record: &WorkspaceRecord) -> SnapshotGraph {
     SnapshotGraph { members, edges }
 }
 
-/// Sort key for one normalized dependency edge.
 fn edge_key(edge: &SnapshotEdge) -> (&String, &String, &String, &String) {
     (&edge.from, &edge.to, &edge.kind, &edge.target)
 }
 
-/// Config digest over `(path, digest)` tool-input pairs.
-///
-/// Consumed tool files are semantic inputs; parse values, finding codes,
-/// and advisory text stay out.
 pub(crate) fn tool_config_digest(checks: &[ToolInputCheck]) -> String {
     let mut pairs: Vec<(&str, &str)> = checks
         .iter()
@@ -101,7 +93,6 @@ pub(crate) fn tool_config_digest(checks: &[ToolInputCheck]) -> String {
     canonical_digest(&pairs).unwrap_or_else(|_| digest_b3(b"config_error"))
 }
 
-/// Owned identity-extension inputs for one task (PAR-3.4, PAR-4.8).
 #[derive(Debug, Clone)]
 pub(crate) struct ExtensionBundle {
     /// Cargo package ID.
@@ -163,13 +154,6 @@ impl ExtensionBundle {
     }
 }
 
-/// Snapshot-indexed bundle from a prebuilt [`ExecutionSnapshot`].
-///
-/// Graph and workspace digests come from the snapshot's once-built
-/// index, never a per-group workspace rescan: every plan and coverage
-/// path threads the one snapshot built per analysis. Package targets
-/// and build-script facts still resolve from discovery. Lock and
-/// Nextest digests bind checkout content when `root` is set.
 pub(crate) fn extension_bundle_with_snapshot(
     snapshot: &ExecutionSnapshot,
     discovery: &Discovery,
@@ -211,7 +195,7 @@ pub(crate) fn extension_bundle_with_snapshot(
     if !bundle.has_build_script {
         bundle.rerun_inputs = Some(Vec::new());
     }
-    if Stack::from_id(&task.stack_id) == Some(Stack::Tofu) {
+    if Stack::from_id(&task.stack_id) != Some(Stack::Rust) {
         // Tofu slots resolve through the tofu bridge (root lockfile);
         // the rust probes below would bind Cargo content instead.
         bundle.lock_digest =
@@ -225,45 +209,61 @@ pub(crate) fn extension_bundle_with_snapshot(
     bundle
 }
 
-/// Platform identity for one task via [`platform_id_for`].
-///
 /// # Errors
-///
-/// Returns [`ContractError`] for unsupported runner labels and
-/// unsupported execution targets; neither ever defaults silently.
 pub(crate) fn platform_id_for_group(
     label: &str,
     task: &ProposedTask,
 ) -> Result<String, ContractError> {
-    let target = platform_target_for_group(label, task)?;
-    platform_id_for(label, &target)
+    Ok(planned_platform_for_group(label, task)?.platform_id)
 }
 
-/// Resolve a task's concrete target without inferring facts from host state.
+/// Derive the planned platform from the selected runner and concrete target.
 /// # Errors
-pub(crate) fn platform_target_for_group(
+pub(crate) fn planned_platform_for_group(
     label: &str,
     task: &ProposedTask,
-) -> Result<String, ContractError> {
-    if task.identity.target == "host" {
-        velnor_actions_contract::target_for_runner_label(label)
-            .map(str::to_owned)
-            .ok_or_else(|| {
-                ContractError::identity(
-                    "runner_label",
-                    format!("unsupported_target_for_runner:{label}"),
-                )
-            })
-    } else {
-        Ok(task.identity.target.clone())
-    }
+) -> Result<PlannedPlatform, ContractError> {
+    let (runs_on, target) = match Stack::require_known(&task.stack_id)? {
+        Stack::Mise => (task.runner_profile.clone(), task.identity.target.clone()),
+        _ => (label.to_owned(), platform_target_for_group(label, task)?),
+    };
+    PlannedPlatform::new(&runs_on, &target)
 }
 
-/// Writer lane from responsibility: shard suffix when sharded, else primary.
-///
-/// Ordinals never enter the identity: the same responsibility in any
-/// schedule position yields the same lane, and distinct responsibilities
-/// (including sibling shards) never share one.
+/// Resolve the concrete target represented by a task's runner selector.
+/// # Errors
+fn platform_target_for_group(label: &str, task: &ProposedTask) -> Result<String, ContractError> {
+    let stack = Stack::require_known(&task.stack_id)?;
+    if stack == Stack::Mise {
+        let label = task.runner_profile.as_str();
+        if let Some(host) = ReleaseTarget::for_runner_label(label).map(ReleaseTarget::triple)
+            && host != task.identity.target
+        {
+            return Err(ContractError::identity(
+                "runner_label",
+                "runner_target_mismatch",
+            ));
+        }
+        return Ok(task.identity.target.clone());
+    }
+    let host = ReleaseTarget::for_runner_label(label)
+        .filter(|target| *target == ReleaseTarget::LinuxX86_64)
+        .map(ReleaseTarget::triple)
+        .ok_or_else(|| ContractError::identity(
+            "runner_label",
+            format!("unsupported_target_for_runner:{label}"),
+        ))?;
+    let target = if task.identity.target == "host" {
+        host
+    } else {
+        task.identity.target.as_str()
+    };
+    if target != host {
+        return Err(ContractError::identity("target", "runner_target_mismatch"));
+    }
+    Ok(target.to_owned())
+}
+
 pub(crate) fn writer_lane_for(task_id: &str) -> String {
     if let Some((_, index, count)) = velnor_actions_contract::split_shard_suffix(task_id) {
         return format!("shard-{index}-of-{count}");
@@ -271,7 +271,6 @@ pub(crate) fn writer_lane_for(task_id: &str) -> String {
     "primary".to_owned()
 }
 
-/// Configuration digest for lane identity: config plus target and flags.
 fn lane_config_digest(task: &ProposedTask) -> String {
     let mut features = task.identity.features.clone();
     features.sort();
@@ -328,6 +327,7 @@ pub(crate) fn toolchain_inputs_for(
     catalog: &ToolCatalog,
 ) -> Result<ToolchainInputs, ContractError> {
     match Stack::require_known(&task.stack_id)? {
+        Stack::Mise => return super::named_checks::toolchain_inputs(task, catalog),
         Stack::Rust => {}
         Stack::Tofu => {
             let specs = catalog.tool_specs(&[PinnedTool::Opentofu]);

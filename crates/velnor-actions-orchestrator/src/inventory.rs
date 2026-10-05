@@ -50,6 +50,7 @@ pub(crate) fn run_inventories(
         match Stack::require_known(&candidate.stack_id) {
             Ok(Stack::Rust) => rust_manifests.push(manifest.clone()),
             Ok(Stack::Tofu) => tofu_units.push(candidate.unit_root.as_str()),
+            Ok(Stack::Mise) => return Err(explicit_check_candidate_error()),
             Err(err) => {
                 return Err(OrchestratorError::Detection {
                     problem: err.to_string(),
@@ -91,6 +92,7 @@ pub(crate) fn run_inventories(
                         }),
                 );
             }
+            Ok(Stack::Mise) => return Err(explicit_check_candidate_error()),
             Err(err) => {
                 return Err(OrchestratorError::Detection {
                     problem: err.to_string(),
@@ -108,9 +110,17 @@ fn manifest_for_candidate(candidate: &StackCandidate) -> Result<String, Orchestr
         Ok(Stack::Tofu) => Ok(velnor_actions_tofu::manifest_for_unit_root(
             &candidate.unit_root,
         )),
+        Ok(Stack::Mise) => Err(explicit_check_candidate_error()),
         Err(err) => Err(OrchestratorError::Detection {
             problem: err.to_string(),
         }),
+    }
+}
+
+/// Explicit checks use their discovered task records, never detector inventories.
+fn explicit_check_candidate_error() -> OrchestratorError {
+    OrchestratorError::Detection {
+        problem: "mise_checks_are_explicit".to_owned(),
     }
 }
 

@@ -170,7 +170,7 @@ fn cache_entry_records_five_identity_digests() -> Result<(), ContractError> {
     entry.cache_ids = Some(EntryCacheIds::new(
         &digest_b3(b"w"),
         &digest_b3(b"lane"),
-        &digest_b3(b"plat"),
+        &entry.planned_platform.platform_id,
         &digest_b3(b"tool"),
         &digest_b3(b"fmt"),
     )?);
@@ -180,7 +180,7 @@ fn cache_entry_records_five_identity_digests() -> Result<(), ContractError> {
     let bad = EntryCacheIds::new(
         &digest_b3(b"w"),
         "nope",
-        &digest_b3(b"plat"),
+        &entry.planned_platform.platform_id,
         &digest_b3(b"tool"),
         &digest_b3(b"fmt"),
     );
