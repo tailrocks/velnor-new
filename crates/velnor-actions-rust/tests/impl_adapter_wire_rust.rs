@@ -46,7 +46,6 @@ fn profile() -> RustExecutionProfile {
         nextest_profile: NextestProfile::Default,
         nextest_config: None,
         run_ignored: None,
-        no_tests: None,
     }
 }
 
@@ -87,7 +86,6 @@ fn group(kind: TaskKind) -> TaskGroup {
         uses_clock: false,
         uses_random: false,
         run_ignored: None,
-        no_tests: None,
         nextest_profile: NextestProfile::Default,
     }
 }

@@ -37,7 +37,6 @@ fn digest_full(
         uses_clock: false,
         uses_random: false,
         run_ignored: None,
-        no_tests: None,
         nextest_profile: NextestProfile::Default,
     };
     let task = velnor_actions_rust::propose_task(&group).expect("fixture proposes");

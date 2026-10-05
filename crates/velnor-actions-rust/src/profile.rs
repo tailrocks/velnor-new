@@ -182,8 +182,6 @@ pub struct RustExecutionProfile {
     pub nextest_config: Option<String>,
     /// Ignored test execution mode ("all", "only", "ignored-only", "default").
     pub run_ignored: Option<String>,
-    /// Nextest behavior when no tests are found ("fail", "warn", "pass").
-    pub no_tests: Option<String>,
 }
 
 /// Blocking finding: transient-only evidence needs an explicit declaration.
@@ -234,8 +232,6 @@ pub struct ProfileInputs<'a> {
     pub declared_runner: Option<TestRunner>,
     /// Declared `[stacks.rust] run_ignored`, if any.
     pub run_ignored: Option<String>,
-    /// Declared `[stacks.rust] no_tests`, if any.
-    pub no_tests: Option<String>,
     /// Structurally resolved Mise Cargo wrappers (all inspected files).
     pub mise_wrappers: Vec<MiseWrapperInput>,
     /// Structurally resolved Nextest configs, nearest first.
@@ -335,7 +331,6 @@ pub fn detect_profile(inputs: &ProfileInputs<'_>) -> Result<ProfileOutcome, Prof
             nextest_profile,
             nextest_config,
             run_ignored: inputs.run_ignored.clone(),
-            no_tests: inputs.no_tests.clone(),
         },
         recommendations,
         findings,

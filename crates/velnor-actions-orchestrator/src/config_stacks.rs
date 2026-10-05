@@ -39,8 +39,6 @@ pub(crate) struct PartialRustStack {
     test_runner: Option<DeclaredTestRunner>,
     /// Ignored test execution mode.
     run_ignored: Option<String>,
-    /// Nextest behavior when no tests are found.
-    no_tests: Option<String>,
     /// Rust release policy; disabled by default.
     release: Option<RustReleaseConfig>,
     /// Allowlisted Mise custom-task names; empty by default.
@@ -65,7 +63,6 @@ impl PartialStacks {
                 compile_driver: stack.compile_driver,
                 test_runner: stack.test_runner,
                 run_ignored: stack.run_ignored,
-                no_tests: stack.no_tests,
                 release: stack.release.unwrap_or_default(),
                 custom_tasks: stack.custom_tasks.unwrap_or_default(),
             }
@@ -181,15 +178,6 @@ mod tests {
     }
 
     #[test]
-    fn no_tests_section_parses() {
-        let load = load_config;
-        let root = rooted("schema = 1\n[stacks.rust]\nno_tests = \"warn\"\n");
-        let config = load(root.path()).expect("no_tests config");
-        let rust = config.stacks.rust.expect("rust stack");
-        assert_eq!(rust.no_tests.as_deref(), Some("warn"));
-    }
-
-    #[test]
     fn unknown_rust_keys_are_rejected() {
         let load = load_config;
         for body in [
@@ -199,6 +187,19 @@ mod tests {
             let root = rooted(body);
             let err = load(root.path()).expect_err("unknown key must fail");
             assert!(err.to_string().contains(CONFIG_REL), "got {err}");
+        }
+    }
+
+    #[test]
+    fn nextest_no_tests_overrides_are_rejected() {
+        let load = load_config;
+        for action in ["warn", "pass"] {
+            let root = rooted(&format!(
+                "schema = 1\n[stacks.rust]\nno_tests = \"{action}\"\n"
+            ));
+            let err = load(root.path()).expect_err("empty-suite override must fail closed");
+            assert!(err.to_string().contains("unknown_config_field"), "{err}");
+            assert!(err.to_string().contains("no_tests"), "{err}");
         }
     }
 
