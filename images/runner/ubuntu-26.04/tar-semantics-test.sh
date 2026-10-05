@@ -46,12 +46,13 @@ my $out = shift @ARGV;
 open my $fh, ">:raw", $out or die $!;
 select $fh;
 sub header {
-    my ($name, $type, $size, $link) = @_;
+    my ($name, $type, $size, $link, $mode) = @_;
     $link //= "";
+    $mode //= 0644;
     my $buf = "\0" x 512;
     die "name too long\n" if length($name) > 100;
     substr($buf, 0, length($name)) = $name;
-    substr($buf, 100, 7) = sprintf("%07o", 0644);
+    substr($buf, 100, 7) = sprintf("%07o", $mode);
     substr($buf, 108, 7) = sprintf("%07o", 0);
     substr($buf, 116, 7) = sprintf("%07o", 0);
     substr($buf, 124, 11) = sprintf("%011o", $size);
@@ -80,6 +81,9 @@ while (@ARGV) {
         my $name = shift @ARGV;
         my $target = shift @ARGV;
         header($name, "2", 0, $target);
+    } elsif ($kind eq "d") {
+        my $name = shift @ARGV;
+        header($name, "5", 0, "", 0755);
     } else {
         die "bad record $kind\n";
     }
@@ -320,14 +324,16 @@ case_cargo_bulk_parents() {
   repo=/home/runner/work/repo/repo
   rm -rf -- /home/runner/work
   mkdir -p "$repo"
-  args=("$work/bulk.tar")
+  args=("$work/bulk.tar" d ../../_temp/velnor/cargo/bin d ../../_temp/velnor/cargo/reg)
   for ((i = 1; i <= 40; i++)); do
     args+=(f "../../_temp/velnor/cargo/reg/$i" "body-$i")
   done
+  args+=(f ../../_temp/velnor/cargo/bin/rustup rustup-body)
   args+=(s ../../_temp/velnor/cargo/bin/rls rustup)
   write_ustar "${args[@]}" || return 1
   bash "$shim" -xf "$work/bulk.tar" -P -C "$repo" || return 1
   [ "$(readlink /home/runner/work/_temp/velnor/cargo/bin/rls)" = rustup ] || return 1
+  [ "$(cat /home/runner/work/_temp/velnor/cargo/bin/rustup)" = rustup-body ] || return 1
   for ((i = 1; i <= 40; i++)); do
     [ "$(cat "/home/runner/work/_temp/velnor/cargo/reg/$i")" = "body-$i" ] || return 1
   done
