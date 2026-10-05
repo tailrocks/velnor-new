@@ -253,6 +253,10 @@ fn job_to_yaml(
             crate::cache_steps::MBX_GC_AUTO_ENV.to_owned(),
             crate::cache_steps::MBX_GC_AUTO_VALUE.to_owned(),
         );
+        job_env.insert(
+            crate::cache_steps::MBX_SHARE_OUT_DIR_ENV.to_owned(),
+            crate::cache_steps::MBX_SHARE_OUT_DIR_VALUE.to_owned(),
+        );
     }
     let mut entries = job_header_fields(job, runs_on);
     append_job_options(&mut entries, job, scale_set, &job_env)?;

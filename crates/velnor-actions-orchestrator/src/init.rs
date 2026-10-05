@@ -128,7 +128,7 @@ const SAMPLE_BODY: &str = r#"schema = 1
 # "actions/cache/save" = { version = "v6.1.0", sha = "55cc8345863c7cc4c66a329aec7e433d2d1c52a9" }
 # "actions/upload-artifact" = { version = "v7.0.1", sha = "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a" }
 # "actions/download-artifact" = { version = "v8.0.1", sha = "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c" }
-# "jdx/mr-boxington-action" = { version = "v1.6.0", sha = "1687e54eb349cadf61fa38b5813a77875489e8e6" }
+# "jdx/mr-boxington-action" = { version = "v1.7.1", sha = "d0825fbaf3cc36ca2609aa38e71046265a1f1e37" }
 # "Swatinem/rust-cache" = { version = "v2.9.2", sha = "6323deb102c322ba6fcbdcafc7e3dddab59af2b6" }
 # Values must be an allowlisted action's matching release version and full SHA.
 "#;

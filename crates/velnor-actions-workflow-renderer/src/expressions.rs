@@ -51,16 +51,16 @@ fn expression_spans(text: &str) -> Option<Vec<&str>> {
 /// Runner paths, the release tag, plan-matrix coordinates, the two
 /// fixed secret bindings (bootstrap registry plus the release forge
 /// token, whose placements the release gates still police separately),
-/// and the push-gated cache-mode selector (a pure function of the
-/// event name over string literals; the generator pins it on MBX
-/// restore steps so PR runs can never become cache writers).
+/// and the runner-scoped MBX cache-mode selector. Hosted writes require a
+/// protected push to the default branch; every other run stays read-only.
 /// Notably absent: `github.token` (render-time fetch binding only)
 /// and run IDs (never in env).
-const ENV_EXPRESSIONS: [&str; 8] = [
+const ENV_EXPRESSIONS: [&str; 9] = [
     "runner.temp",
     "github.ref_name",
     "github.event_name",
     "github.event_name == 'push' && 'write' || 'read'",
+    "runner.environment == 'github-hosted' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read'",
     "secrets.CARGO_REGISTRY_TOKEN",
     "secrets.GITHUB_TOKEN",
     "steps.mbx.outputs.cache-primary-key",
@@ -73,10 +73,13 @@ const ENV_EXPRESSIONS: [&str; 8] = [
 /// push-gated cache-save flag, and the publish step's derived
 /// artifact name. Notably absent: every `secrets.*` handle (rejected
 /// separately as `secret_in_action_input`).
-const WITH_EXPRESSIONS: [&str; 7] = [
+const WITH_EXPRESSIONS: [&str; 10] = [
     "runner.temp",
     "github.run_id",
     "github.run_attempt",
+    "runner.environment == 'github-hosted' && runner.os == 'Linux'",
+    "runner.environment == 'github-hosted' && github.job || ''",
+    "runner.environment == 'github-hosted' && runner.os == 'Linux' && '-share-out-dir-disabled-v1' || ''",
     "github.event_name == 'push'",
     "steps.publish-baseline.outputs.artifact_name",
     "steps.mbx.outputs.cache-primary-key",
