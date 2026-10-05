@@ -95,7 +95,10 @@ member_rejected() {
 reject_untrusted() {
   local list member
   list="$(mktemp "${TMPDIR:-/tmp}/velnor-tar-names.XXXXXX")"
-  list_members "$list"
+  if ! list_members "$list"; then
+    rm -f -- "$list"
+    die "member list failed"
+  fi
   while IFS= read -r member || [ -n "$member" ]; do
     [ -n "$member" ] || continue
     if member_rejected "$member"; then
@@ -133,7 +136,7 @@ read_gnu_names() {
   local list line
   gnu_names=()
   list="$(mktemp "${TMPDIR:-/tmp}/velnor-tar-gnu.XXXXXX")"
-  # Same listing as list_members: GNU tar -t, never BusyBox, never -P.
+  # Same listing as list_members: perl stored names, never BusyBox, never GNU tar.
   if ! list_members "$list"; then
     rm -f -- "$list"
     die "member list failed"

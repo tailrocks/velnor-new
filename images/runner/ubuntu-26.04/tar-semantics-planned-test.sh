@@ -50,13 +50,11 @@ case_restrictive_parent_metadata() {
   parent="../external/parent/"
   child="../external/parent/child/"
   existing="../external/existing/"
-  mkdir -p "$root/dest/workspace/repo" "$root/gnu/workspace/repo" \
-    "$root/dest/workspace/external/existing" "$root/gnu/workspace/external/existing" \
+  mkdir -p "$root/dest/workspace/repo" \
+    "$root/dest/workspace/external/existing" \
     "$root/stage"
-  chmod 0750 "$root/dest/workspace/external/existing" \
-    "$root/gnu/workspace/external/existing"
-  touch -d @1111111111 "$root/dest/workspace/external/existing" \
-    "$root/gnu/workspace/external/existing"
+  chmod 0750 "$root/dest/workspace/external/existing"
+  touch -d @1111111111 "$root/dest/workspace/external/existing"
   write_ustar "$root/arc.tar" \
     d "$parent" 0500 1234567890 \
     d "$child" 0300 1234567891 \
@@ -65,70 +63,55 @@ case_restrictive_parent_metadata() {
     f ../external/existing/payload existing || return 1
   chmod 0755 "$work" "$rundir"
   chown -R nobody:nogroup "$root"
-  runuser -u nobody -- tar.gnu -xf "$root/arc.tar" -P \
-    -C "$root/gnu/workspace/repo" || {
-      printf 'GNU restrictive-parent extract failed\n' >&2
-      return 1
-    }
   runuser -u nobody -- env TMPDIR="$root/stage" \
     bash "$shim" -xf "$root/arc.tar" -P \
       -C "$root/dest/workspace/repo" || {
         printf 'shim restrictive-parent extract failed\n' >&2
         return 1
       }
-  for path in \
-    "$root/gnu/workspace/external/parent" \
-    "$root/dest/workspace/external/parent"; do
-    mode="$(stat -c %a "$path")"
-    mtime="$(stat -c %Y "$path")"
-    [ "$mode" = 500 ] && [ "$mtime" = 1234567890 ] || {
-      printf 'parent metadata mismatch path=%s mode=%s mtime=%s\n' "$path" "$mode" "$mtime" >&2
-      return 1
-    }
-    grep -qx preserved "$path/child/payload" || {
-      printf 'parent child payload missing path=%s\n' "$path" >&2
-      return 1
-    }
-  done
-  for path in \
-    "$root/gnu/workspace/external/parent/child" \
-    "$root/dest/workspace/external/parent/child"; do
-    mode="$(stat -c %a "$path")"
-    mtime="$(stat -c %Y "$path")"
-    [ "$mode" = 300 ] && [ "$mtime" = 1234567891 ] || {
-      printf 'child directory metadata mismatch path=%s mode=%s mtime=%s\n' "$path" "$mode" "$mtime" >&2
-      return 1
-    }
-  done
-  for path in \
-    "$root/gnu/workspace/external/existing" \
-    "$root/dest/workspace/external/existing"; do
-    mode="$(stat -c %a "$path")"
-    mtime="$(stat -c %Y "$path")"
-    [ "$mode" = 500 ] && [ "$mtime" = 1234567880 ] || {
-      printf 'existing directory metadata mismatch path=%s mode=%s mtime=%s\n' "$path" "$mode" "$mtime" >&2
-      return 1
-    }
-    grep -qx existing "$path/payload" || {
-      printf 'existing directory payload missing path=%s\n' "$path" >&2
-      return 1
-    }
-  done
+  path="$root/dest/workspace/external/parent"
+  mode="$(stat -c %a "$path")"
+  mtime="$(stat -c %Y "$path")"
+  [ "$mode" = 500 ] && [ "$mtime" = 1234567890 ] || {
+    printf 'parent metadata mismatch path=%s mode=%s mtime=%s\n' "$path" "$mode" "$mtime" >&2
+    return 1
+  }
+  grep -qx preserved "$path/child/payload" || {
+    printf 'parent child payload missing path=%s\n' "$path" >&2
+    return 1
+  }
+  path="$root/dest/workspace/external/parent/child"
+  mode="$(stat -c %a "$path")"
+  mtime="$(stat -c %Y "$path")"
+  [ "$mode" = 300 ] && [ "$mtime" = 1234567891 ] || {
+    printf 'child directory metadata mismatch path=%s mode=%s mtime=%s\n' "$path" "$mode" "$mtime" >&2
+    return 1
+  }
+  path="$root/dest/workspace/external/existing"
+  mode="$(stat -c %a "$path")"
+  mtime="$(stat -c %Y "$path")"
+  [ "$mode" = 500 ] && [ "$mtime" = 1234567880 ] || {
+    printf 'existing directory metadata mismatch path=%s mode=%s mtime=%s\n' "$path" "$mode" "$mtime" >&2
+    return 1
+  }
+  grep -qx existing "$path/payload" || {
+    printf 'existing directory payload missing path=%s\n' "$path" >&2
+    return 1
+  }
 }
 
 case_rewritten_long_paths() {
-  local root="$work/rewritten-long" component archive i
+  local root="$work/rewritten-long" component i
   local prefix_source prefix_archive pax_source pax_archive
   rm -rf -- "$root"
-  mkdir -p "$root"
+  mkdir -p "$root/dest"
   component="$(printf '%080d' 0 | tr '0' 'x')"
 
   prefix_source="$root/prefix/$component/$component/payload"
   prefix_archive="$root/prefix.tar"
-  mkdir -p "${prefix_source%/*}"
-  printf 'prefix-path\n' >"$prefix_source"
-  (cd / && tar.gnu -P --format=pax -cf "$prefix_archive" "$prefix_source") || return 1
-  rm -rf -- "$root/prefix"
+  write_ustar "$prefix_archive" \
+    x PaxHeaders/payload "$prefix_source" \
+    f ignored prefix-path || return 1
   bash "$shim" -xf "$prefix_archive" -P -C "$root/dest" || return 1
   grep -qx prefix-path "$prefix_source" || return 1
 
@@ -138,10 +121,9 @@ case_rewritten_long_paths() {
   done
   pax_source="$pax_source/payload"
   pax_archive="$root/pax.tar"
-  mkdir -p "${pax_source%/*}"
-  printf 'pax-path\n' >"$pax_source"
-  (cd / && tar.gnu -P --format=pax -cf "$pax_archive" "$pax_source") || return 1
-  rm -rf -- "$root/pax"
+  write_ustar "$pax_archive" \
+    x PaxHeaders/payload "$pax_source" \
+    f ignored pax-path || return 1
   bash "$shim" -xf "$pax_archive" -P -C "$root/dest" || return 1
   grep -qx pax-path "$pax_source" || return 1
 }
@@ -210,4 +192,24 @@ EOF
   done
   [ "$(find "$root/dest/workspace/external/cache" -type f | wc -l | tr -d ' ')" = "$count" ] || return 1
   [ -z "$(find "$root/stage" -mindepth 1 -print -quit)" ] || return 1
+}
+
+case_gnu_enosys_still_extracts() {
+  local root="$work/gnu-enosys" status=0
+  rm -rf -- "$root"
+  mkdir -p "$root/dest" "$root/bin"
+  write_ustar "$root/arc.tar" f note.txt stub-ok || return 1
+  cat >"$root/bin/tar.gnu" <<'EOF'
+#!/bin/sh
+printf 'Function not implemented\n' >&2
+exit 99
+EOF
+  chmod 0755 "$root/bin/tar.gnu"
+  PATH="$root/bin:$PATH" \
+    bash "$shim" -xf "$root/arc.tar" -C "$root/dest" >"$root/err" 2>&1 || status=$?
+  [ "$status" -eq 0 ] || return 1
+  grep -qx stub-ok "$root/dest/note.txt" || return 1
+  if grep -F -q 'Function not implemented' "$root/err"; then
+    return 1
+  fi
 }

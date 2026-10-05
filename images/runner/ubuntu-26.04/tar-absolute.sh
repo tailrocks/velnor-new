@@ -158,11 +158,24 @@ stream_archive() {
 
 list_members() {
   local out="$1"
-  # BusyBox tar -t strips "../" before it prints the name. GNU tar lists the
-  # stored name and does not open the member, so openat2 is not involved.
-  # Same stream as extract: the decompressor is not written to a file.
-  # A POSIX locale escapes non-ASCII bytes. Literal quoting keeps the stored name.
-  stream_archive | tar.gnu -t --quoting-style=literal -f - >"$out"
+  local raw index type link name mode
+  # qemu-user returns ENOSYS for GNU tar openat2/statx. The perl walker
+  # reads headers only and prints the stored name. BusyBox tar -t rewrites
+  # "../", so it is not the list source.
+  raw="$(mktemp "${TMPDIR:-/tmp}/velnor-tar-list.XXXXXX")"
+  if ! stream_archive | perl "${_velnor_tar_here}/tar-member.pl" --list >"$raw"; then
+    rm -f -- "$raw"
+    return 1
+  fi
+  : >"$out"
+  while IFS= read -r index && IFS= read -r type && IFS= read -r link && \
+    IFS= read -r name && IFS= read -r mode; do
+    printf '%s\n' "$name" >>"$out" || {
+      rm -f -- "$raw"
+      return 1
+    }
+  done <"$raw"
+  rm -f -- "$raw"
 }
 
 move_member() {
