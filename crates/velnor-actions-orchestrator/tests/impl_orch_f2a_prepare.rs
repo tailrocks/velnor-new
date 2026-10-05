@@ -26,10 +26,9 @@ fn plan_and_generate_share_one_prepare_path() -> TestResult {
         discover_calls[0].starts_with("prepare.rs"),
         "{discover_calls:?}"
     );
-    // Plan and generate share `prepare`; migration and the typed Foundation
-    // source preview load config once in their own operation paths.
-    assert_eq!(config_calls.len(), 3, "{config_calls:?}");
-    for owner in ["prepare.rs", "routing.rs", "foundation_qualification.rs"] {
+    // Plan and generate share `prepare`; migration loads config in its own path.
+    assert_eq!(config_calls.len(), 2, "{config_calls:?}");
+    for owner in ["prepare.rs", "routing.rs"] {
         let prefix = format!("{owner}:");
         assert_eq!(
             config_calls

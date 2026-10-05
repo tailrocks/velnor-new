@@ -2,12 +2,20 @@
 
 Status: source-bound baseline timeline measured; new controlled hosted runs pending.
 This supplements [qualification](ci-performance-qualification.md), not a passing
-T01–T26 verdict. Scope remains the exact 47 repositories in `scope.json`.
+T01–T26 verdict. The reconstructed `scope.json` contains 47 rows, but its
+provenance is unknown and direct/indirect consumer closure remains partial.
 
-## Source-bound timeline
+The one-off collector and analyzer were retired on 2026-10-05 after the current
+in-repository caller and ref audit. The external direct/indirect consumer audit
+remains partial. This page preserves the historical failed-run timeline and its
+limits; no retired-script command remains supported. The adopted cleanup
+specification retains read-only `gh`/GitHub API evidence export for this work; it
+does not require a reusable runtime collector.
 
-`scripts/analyze-ci-performance.py` consumes the existing collector's private
-`run.json`, all `jobs.json` pages and `summary.json`. It currently admits only
+## Historical source-bound timeline
+
+The retired analyzer consumed the collector's private `run.json`, all `jobs.json`
+pages and `summary.json`. It admitted only
 `push` events and requires the summary/run event identities to match. For those
 events it authenticates workflow bytes through the GitHub contents API at that
 run's immutable head SHA, checks the
@@ -15,7 +23,7 @@ Git blob digest and records SHA-256. Dependencies come from those workflow bytes
 never a caller's claimed DAG. Duplicate keys, unknown dependencies, cycles,
 incomplete jobs and mismatched run/attempt/source fail analysis. Static job names
 must match API names exactly. Dynamic matrices/reusable workflows need a qualified
-expansion mapping and are currently rejected rather than guessed.
+expansion mapping and were rejected rather than guessed.
 Job-level `uses` is rejected explicitly: matching API names cannot reveal the
 called workflow's dependency graph. Step-level actions remain ordinary job steps.
 
@@ -26,23 +34,14 @@ even when its job names match. PR, merge-group, dispatch, schedule and other
 events remain unsupported until their executed immutable workflow revision is
 authenticated. They fail before the workflow API lookup with
 `Timeline unavailable: ExecutedWorkflowRevisionUnavailable`; their timeline is
-unknown. The analyzer never guesses a merge SHA or reads a mutable merge ref.
+unknown. The retired analyzer did not guess a merge SHA or read a mutable merge ref.
 Previously saved PR analyses remain historical, unqualified evidence; their
 files are preserved and their DAG calculations cannot supply qualification proof.
 
-```sh
-rtk proxy /usr/bin/python3 scripts/analyze-ci-performance.py \
-  /absolute/private/evidence/OWNER-REPO/rRUN-aATTEMPT
-```
-
-The analysis environment requires exact PyYAML 6.0.3. Install
-[the hashed requirements](../../scripts/ci-performance-analysis-requirements.txt)
-in an isolated environment using `pip install --require-hashes --only-binary=:all:`;
-the analyzer rejects another version. See
-[dependency source evidence](ci-performance-analysis-dependencies.md).
-This is an offline reporting dependency, not a generated workflow dependency.
-The analyzer performs a read-only source lookup and writes private evidence;
-it never dispatches runs or interprets task commands. Keep raw files outside Git.
+The retired analysis dependency and its source evidence remain in
+[dependency provenance](ci-performance-analysis-dependencies.md). The analysis
+was read-only and did not qualify hosted performance; its setup and command
+instructions were removed with the utility.
 
 For failed baseline run
 [37012391691](https://github.com/tailrocks/velnor-new/actions/runs/37012391691),
@@ -62,11 +61,12 @@ overlaps are separately recorded and subtracted. Pure queue and provision time
 remain unknown. These API intervals differ from timestamped log intervals and
 must retain their measurement origin. This failed run never qualifies a baseline.
 
-## Private collector acquisition
+## Historical private collector behavior
 
-Fresh collection requires an unused evidence directory. The collector admits all
-job pages against the exact run, attempt, head SHA and completed terminal status
-before fetching logs. It retains `original-acquisition.json` once, with source, job inventory, availability,
+Fresh collection previously required an unused evidence directory. The retired
+collector admitted all job pages against the exact run, attempt, head SHA and
+completed terminal status before fetching logs. It retained
+`original-acquisition.json` once, with source, job inventory, availability,
 original log digests and hashes of all acquired `run.json`, `jobs.json` and
 `artifacts.json` response bytes. `--reuse` verifies every original response and log
 digest before reading API evidence or rewriting a summary; it never rewrites the
@@ -82,7 +82,7 @@ including time between attempts; it is not attempt queue or provision time.
 Those metrics remain null. Regex log counters remain unauthenticated observations,
 separate from supported owning-tool session reports and native authority.
 
-## Executable unchanged-run sequence
+## Required unchanged-run qualification sequence (pending)
 
 1. Freeze independently reviewed generator source, generated validation workflow,
    tool/action/runtime identities, all required obligations and a new isolated cache
@@ -104,10 +104,12 @@ separate from supported owning-tool session reports and native authority.
    still change; compare the actual complete executed obligation domains across
    every attempt, not just immutable inputs. Confirm fresh hosted runner allocation
    for every attempt from actual logs. Reject unequal/omitted qualification domains.
-5. Collect each completed attempt, supported MBX completed-session reports,
-   task reports, tool-availability/repair observations, cache actions and owning-tool
-   identities. Bind artifact names/digests to source/run/attempt; run-wide artifact
-   listing alone does not prove an attempt. Independently recompute the DAG timeline.
+5. Use the existing read-only `gh`/GitHub API evidence export for run-attempt
+   metadata, every job page, logs, and artifact pages. Preserve their original
+   repository, source, run, and attempt identities and retain the raw bytes and
+   their digests. The retired utilities are not required for export. Keep each
+   T01–T26 row pending until its listed evidence proves the required outcome; do
+   not infer missing timing or recompute unsupported DAG values.
 6. Trace the late T01/T02 validation snapshot into T03's restored snapshot and
    actually executed workload. Compare real process work and Cargo-fresh evidence,
    not merely MBX miss counters. Unchanged snapshots must have no upload attempt.

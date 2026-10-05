@@ -1,11 +1,15 @@
-# Owned tool publication execution
+# Owned tool publication: historical evidence
 
-Status: source staging, typed candidate generation, and publisher checks implemented;
-reviewed source refs and immutable source assets published; hosted binary qualification pending.
-No upstream repository writes or qualified tool/generator binary promotion occurred. Source-only
-receipts and refs are not qualified distribution records.
+Status: candidate staging, generation, qualification, and publisher utilities
+were retired on 2026-10-05. Reviewed source refs and immutable source assets
+remain published; hosted binary qualification and qualified tool/generator
+binary promotion never occurred. Source-only receipts and refs are not
+qualified distribution records.
 
 ## Observed infrastructure
+
+The infrastructure and policy details in this section are historical
+observations from the recorded reviews, not current release instructions.
 
 Authenticated GitHub inspection on 2026-10-03 establishes admin/push access to
 `tailrocks/velnor-new`, Actions enabled, and no configured protected environments.
@@ -28,20 +32,21 @@ measured false-to-true immutability transition for `v0.1.0`. Exact receipts live
 `docs/reviews/ci-performance-protection-execution.json`. Existing main Required
 checks remain failed; these settings do not qualify a generator runtime.
 
-The current candidate publisher is unsuitable: it uploads one generator target,
-uses `--clobber`, and does not attach signed build provenance. Independent threat
-review confirmed these gaps against `candidate.rs`. Reuse the typed release
-admission and noncanceling publication lock, not that upload implementation.
+The then-current candidate publisher was unsuitable: it uploaded one generator
+target, used `--clobber`, and did not attach signed build provenance. Independent
+threat review confirmed these gaps against `candidate.rs`. The historical review
+recommended the typed release admission and noncanceling publication lock; the
+owned candidate pipeline was retired and this recommendation is not an active
+publisher procedure.
 
-## Source staging
+## Historical source staging evidence
 
-`scripts/stage-owned-tool-source.py` requires a clean committed repository root
-and the exact current upstream base as an ancestor. It emits a source tar, binary
-full-tree base patch, and receipt containing measured source commit/tree,
-archive/patch/lock/license hashes. Action receipts additionally hash the committed
-executable bundle. Raw Git blobs build the archive: Git export attributes cannot
-omit locks/licenses or substitute source text. Gitlinks and escaping symlinks
-fail. Existing stage directories fail rather than replace files.
+The retired staging utility required a clean committed repository root and the
+exact upstream base as an ancestor. It emitted source archives, base patches,
+and receipts with source/tree and archive/patch/lock/license hashes. The hashes,
+source refs, and test outcomes below document completed source-only work; no
+staging command remains supported. Raw Git blobs, export attributes, gitlinks,
+symlink checks, and destination protections were tested for that utility only.
 
 Historical action source staging succeeded at `06f353d41002af758d27490164f53c82e2165637`,
 tree `810f992dc95bd1efe3db25e925d7b2b727c1bc27`. The exact committed executable
@@ -67,19 +72,7 @@ found export-attribute, subdirectory, and chained-link proof gaps; each received
 a structural fix and an independent rerun. No remaining finding in tested
 source-staging scope; no shared Cargo build was run.
 
-```sh
-rtk proxy python3 scripts/stage-owned-tool-source.py mise \
-  --source /tmp/velnor-mise-owned-sourcefix-2026.10.0 \
-  --output /tmp/velnor-publication-mise-source-stage
-rtk proxy python3 scripts/stage-owned-tool-source.py mbx \
-  --source /tmp/velnor-mbx-source-1.21.0 \
-  --output /tmp/velnor-publication-mbx-source-stage
-rtk proxy python3 scripts/stage-owned-tool-source.py mbx-action \
-  --source /tmp/velnor-mbx-action-work \
-  --output /tmp/velnor-publication-action-source-stage
-```
-
-Current upstream bases:
+Upstream bases at staging time:
 
 | Source | Exact upstream base |
 |---|---|
@@ -98,21 +91,23 @@ Its debug binary reports
 qualification. Exact source-owner-approved release features are
 `--release --locked --no-default-features --features native-tls,vfox/vendored-lua,owned-cargo-wrapper`;
 the optimized banner must be `2026.10.0-owned-cargo-wrapper`.
-MBX source owner is finishing relocation
-corner-case fixes; its intermediate commit cannot identify final artifacts.
-The source owner reported an initial native Mise qualification with 31 passed
+At that time, the MBX source owner reported relocation corner-case fixes in
+progress; its intermediate commit could not identify final artifacts. The source
+owner reported an initial native Mise qualification with 31 passed
 cases and four failed positive routes (35 total). Reviewed replacement passed
 57 local macOS ARM64 cases. Retain the failed evidence; neither local result
 qualifies an optimized hosted release.
 
-Both final source refs are reachable in the owned generator repository. Mise uses
+At the recorded API check, both final source refs were reachable in the owned
+generator repository. Mise used
 `refs/heads/owned-source/mise/dbbf5b0d8f9c7edc5d0111e17ebaf781ecc97a96`.
 Independent full-tree event review and post-push API observations found no
 workflow run triggered by either source-ref push. Their raw Git commit objects
-contain DCO signoffs, no cryptographic signatures. Source release tags must point
-to reviewed generator commit `c57c700459bbe1549fe7eedcb7d8689585c38986`,
-never the foreign source trees with imported release triggers. Source-only
-releases retain source archives, patches, receipts, and raw commit objects;
+contain DCO signoffs, no cryptographic signatures. The publication rule for
+those source-only releases required their tags to point to reviewed generator
+commit `c57c700459bbe1549fe7eedcb7d8689585c38986`, never the foreign source trees
+with imported release triggers. The releases retain source archives, patches,
+receipts, and raw commit objects;
 behavioral qualification and signed build provenance remain absent.
 The first actual Mise source transaction retained draft release `402229309`
 with all five measured assets. GitHub's published-release-by-tag endpoint returned
@@ -135,87 +130,26 @@ isolated tests. Preserve the original historical API observation; the backend
 mechanism of the older release's state transition is unknown. Retain the
 failed transaction evidence; never silently adopt a collision.
 
-## Implemented generator infrastructure
+## Retired candidate-generation design
 
-`generate --owned-tool-candidates-only --output-dir <external-empty-directory>`
-requires canonical generator identity and reviewed
-`.velnor/owned-tool-sources.json`. No approval file or published URL is fabricated.
-The Mise adapter admits exact source evidence; the renderer receives opaque
-bindings. This pure preview route avoids the main installation planner's need
-for the owned artifacts it must first build.
+The PR implemented a candidate-only generator route, event and artifact
+admission, build receipts, and publisher checks. The route was not activated:
+the default-branch workflow and candidate branch were not found, no candidate
+binary received hosted qualification, and MBX native qualification was
+unavailable. No signer or publisher credentials were used. The generator route,
+owned build/qualification tools, and their dedicated tests were retired as one
+feature closure.
 
-The emitted workflow supports default-branch dispatch or the closed
-`owned-tool-candidates` infrastructure push category. Both bind the exact
-repository, event/ref, and workflow source SHA. Current-run API admission now
-runs before artifact download; qualification replays the retained repository,
-run and workflow API bytes before candidate execution. Publisher evidence
-integration remains pending. It builds all three native tool hosts with
-explicit read-only permissions, verifies source tree/base patch/lock/licenses,
-retains actual compiler output and MBX summaries, measures archive and binary
-hashes, and uploads candidates once. Fresh native qualification jobs check out
-policy independently and admit exact same-run artifact IDs and ZIP hashes before
-executing those bytes. Candidate and failed qualification receipts upload once.
-MBX qualification rejects unavailable suites.
-There are no signer or publisher credentials in these jobs.
+An isolated helper revision passed 58/58 tests, and the source-publisher
+revision passed 15 focused isolated tests. Those results are historical code
+evidence only; they do not establish a hosted run, qualified binary, or signed
+build provenance. The published source-only releases and their measured asset
+hashes above remain passive evidence.
 
-`scripts/publish-owned-tool-artifacts.py` independently checks all three host
-receipts, fixed recipes, exact signed qualification predicates, downloaded
-attestation bundles, immutable repository policy, fresh tag/release identities,
-and re-downloaded asset bytes. It has no generated invocation until protected
-signing and complete hosted evidence exist. Isolated helper tests prove admission
-and rejection paths; they are not GitHub publication evidence.
-Final signing binds the measured behavior ABI/report, candidate receipt, and
-Actions artifact ID/ZIP digest. Full per-host qualified receipts remain durable
-release evidence; a signed `passed=true` alone cannot establish that chain.
-The standalone helper unit committed at `e2e6ff99a38de0e51c550eb9880d313c59990180`
-passed 58/58 isolated tests independently. Its sole index correction removed one
-trailing newline; AST equality and exact remaining file bytes were verified.
-Committed patch passed strict apply and whitespace checks. Rust compilation and
-real hosted qualification remain separate uncompleted gates.
+## Qualification status at retirement
 
-## Build and promotion order
-
-1. Source owners finish independent review, DCO sign off and commit each owned source.
-   Stage those exact revisions. Publish source identities in an owned repository
-   or source release with its full-tree source evidence; never claim a local SHA
-   exists in an official upstream repository.
-2. Generator infrastructure produces a bounded source-only qualification
-   workflow. Build native Linux AMD64, Linux ARM64, and macOS ARM64 tool artifacts
-   from the same exact staged source, through verified pinned bootstrap tooling.
-   Build jobs receive no release/OIDC credentials. Preserve effective compiler,
-   linker, image, exact arguments, source/lock, run/attempt/workflow, and artifact
-   IDs. Create each candidate once and retain both archive and executable SHA256.
-3. Independent jobs consume those exact artifacts without rebuilding. Prove
-   Mise NoConfig excludes every `.miserc` discovery phase; wrapper dispatch
-   admits only the canonical absolute SHA-verified MBX and invokes native Cargo.
-   Prove MBX native transport/domain/useful-state and relocation behavior through
-   fresh hosted runners. Qualified action bundle consumes the measured executable
-   and rejects altered paths/digests before execution.
-4. Protected publisher verifies complete same-source receipts and signed
-   source/workflow-bound attestations. Serialize by release identity; reject
-   existing tags/releases/assets. Upload without replacement, download and hash
-   every uploaded asset, then verify provenance before publishing. Never hand
-   build a consumer workflow to obtain this evidence.
-5. Descriptor owner records only actual qualified published URLs, reported owned
-   versions, archive/executable hashes, source commit/tree, and behavior ABI.
-   Typed owned Mise acquisition must land first: pinned Mise action hardcodes
-   upstream URLs and has no custom artifact input. Passing an owned banner to it
-   cannot establish a cold bootstrap path.
-6. Freeze qualified generator source after tool records land. Build all generator
-   targets: Linux AMD64, macOS ARM64, macOS AMD64. Assemble its manifest from
-   measured final bytes after building, qualify exact artifacts, publish through
-   protected release flow, then adopt byte-identical manifest and generator lock
-   in separate reviewed changes. This ordering avoids the binary digest cycle.
-
-## Remaining execution gates
-
-The staged sources do not constitute hosted evidence or signed provenance.
-Required next units are final MBX source commit/publication, compiled source
-preview generation, hosted candidate runs, protected signing/publication
-jobs, and typed owned Mise acquisition. Official MBX source-builder bootstrap
-requires actual per-host archive and installed-byte qualification; a version-only
-`mr-boxington@1.21.1` request does not complete that evidence. Upstream rows for
-this bounded builder cannot satisfy the owned native transport runtime contract.
-`catalog_qualification_records.rs` intentionally fails until all required owned
-host artifacts are actually published and qualified. No catalog placeholder or
-official-to-owned alias may bypass that failure.
+The source-only stages did not complete native candidate builds, hosted
+qualification, protected signing, or typed owned-Mise acquisition. No build,
+promotion, or consumer rollout procedure remains in force. The existing source
+releases do not qualify binaries, and this cleanup does not change their refs,
+tags, receipts, or assets.

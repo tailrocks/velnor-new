@@ -4,7 +4,6 @@ Repository: <repo>
 .github/CLAUDE.md
 .github/actionlint.yaml
 .github/workflows/ci.yml
-.github/workflows/foundation-qualification.yml
 .github/workflows/freshness.yml
 .github/workflows/generator-release.yml
 .github/workflows/image-release.yml

@@ -1,9 +1,11 @@
-# CI analysis dependency qualification
+# Historical CI analysis dependency qualification
 
-Qualified on 2026-10-03: reporting-only PyYAML **6.0.3**, MIT license,
-Python >=3.8. The generator and generated workflows do not depend on Python or
-PyYAML. [Requirements](../../scripts/ci-performance-analysis-requirements.txt)
-pin the exact version and all 72 wheel SHA-256 hashes published in the official
+Historical qualification on 2026-10-03: reporting-only PyYAML **6.0.3**, MIT
+license, Python >=3.8. The one-off analyzer and its hashed requirements were
+retired on 2026-10-05. This file preserves dependency provenance only; it is not
+an installation or execution guide. The generator and generated workflows do
+not depend on Python or PyYAML. The removed requirements file pinned the exact
+version and all 72 wheel SHA-256 hashes published in the official
 [version metadata](https://pypi.org/pypi/PyYAML/6.0.3/json). No source distribution
 is authorized; installation requires a published compatible wheel.
 
@@ -31,23 +33,9 @@ mode-0700 private directory, recorded in `source-evidence.json`. Evidence root:
 | `source-commit-LICENSE` | Commit license linked above | `8d3928f9dc4490fd635707cb88eb26bd764102a7282954307d3e5167a577e8a4` |
 | `pyyaml-6.0.3-cp39-cp39-macosx_11_0_arm64.whl` | [Official wheel](https://files.pythonhosted.org/packages/ae/92/861f152ce87c452b11b9d0977952259aa7df792d71c1053365cc7b09cc08/pyyaml-6.0.3-cp39-cp39-macosx_11_0_arm64.whl) | `c3355370a2c156cffb25e876646f149d5d68f5e0a3ce86a5084dd0b64a994917` |
 
-## Isolated execution
+## Historical isolated execution results
 
-Create the environment outside every checkout; install from the hashed wheel
-allowlist without modifying the global interpreter:
-
-```sh
-rtk proxy /usr/bin/python3 -m venv /absolute/private/analysis-venv
-rtk proxy /absolute/private/analysis-venv/bin/python -m pip install \
-  --require-hashes --only-binary=:all: \
-  -r scripts/ci-performance-analysis-requirements.txt
-rtk proxy /absolute/private/analysis-venv/bin/python \
-  scripts/test_ci_performance_analysis.py
-rtk proxy /absolute/private/analysis-venv/bin/python \
-  scripts/analyze-ci-performance.py /absolute/private/evidence/rRUN-aATTEMPT
-```
-
-For the verified downloaded wheel, installation used `--no-index` and
+For the verified downloaded wheel, historical installation used `--no-index` and
 `--find-links` pointing to the private evidence root in addition to
 `--require-hashes --only-binary=:all:`. The observed host was CPython 3.9.6,
 Darwin arm64; the compatible wheel was 174,319 bytes and its downloaded SHA-256

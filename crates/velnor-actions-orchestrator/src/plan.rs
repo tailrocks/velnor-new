@@ -73,9 +73,6 @@ fn workflow_section(out: &mut String, prep: &GenerationPreparation, jobs: &BTree
     push(out, &format!("  {WORKFLOW_PATH}"));
     release_file_lines(out, prep);
     freshness_file_lines(out, prep);
-    if let Some(path) = crate::foundation_qualification::planned_path(prep.config.workflow.policy) {
-        push(out, &format!("  {path}"));
-    }
     push(
         out,
         &format!(
