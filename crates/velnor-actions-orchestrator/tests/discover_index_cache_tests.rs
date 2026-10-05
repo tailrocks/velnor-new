@@ -119,6 +119,29 @@ fn git_backed_stale_path_through_cache_symlink_is_pruned() -> TestResult {
     Ok(())
 }
 
+/// Git paths through an alias to the cache's parent are checked at each depth.
+#[test]
+#[cfg(unix)]
+fn git_backed_parent_alias_into_cache_is_pruned_but_sibling_survives() -> TestResult {
+    let root = TempDir::new()?;
+    init_git(root.path())?;
+    write_file(root.path(), "alias/private/Cargo.toml")?;
+    write_file(root.path(), "alias/public/Cargo.toml")?;
+    git(root.path(), &["add", "alias"])?;
+
+    fs::remove_dir_all(root.path().join("alias"))?;
+    write_file(root.path(), "data/private/Cargo.toml")?;
+    write_file(root.path(), "data/public/Cargo.toml")?;
+    fs::create_dir_all(root.path().join(".velnor"))?;
+    std::os::unix::fs::symlink("../data/private", root.path().join(".velnor/cache"))?;
+    std::os::unix::fs::symlink("data", root.path().join("alias"))?;
+
+    let (index, _) = build_file_index(root.path(), &[])?;
+    assert!(!index.contains("alias/private/Cargo.toml"));
+    assert!(index.contains("alias/public/Cargo.toml"));
+    Ok(())
+}
+
 /// Untracked cache payload is excluded, while similarly named source remains.
 #[test]
 fn cache_siblings_and_outside_source_remain_indexed() -> TestResult {

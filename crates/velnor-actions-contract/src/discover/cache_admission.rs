@@ -1,6 +1,6 @@
 //! Shared admission for the repository-private discovery cache.
 
-use std::collections::BTreeSet;
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -26,7 +26,7 @@ pub fn is_reserved_cache_path_bytes(path: &[u8]) -> bool {
 /// Cache-root identity shared by listed and walked repository indexes.
 pub(crate) struct CacheAdmission {
     canonical_cache_root: Option<PathBuf>,
-    checked_directories: BTreeSet<PathBuf>,
+    resolved_directories: BTreeMap<PathBuf, PathBuf>,
 }
 
 impl CacheAdmission {
@@ -37,7 +37,7 @@ impl CacheAdmission {
                 .join(RESERVED_CACHE_PATH)
                 .canonicalize()
                 .ok(),
-            checked_directories: BTreeSet::new(),
+            resolved_directories: BTreeMap::new(),
         }
     }
 
@@ -67,10 +67,12 @@ impl CacheAdmission {
         }
         let components: Vec<_> = Path::new(relative).components().collect();
         let mut current = repository_root.to_path_buf();
+        let mut resolved = repository_root.to_path_buf();
         for (index, component) in components.iter().enumerate() {
             current.push(component.as_os_str());
             let final_component = index + 1 == components.len();
-            if !final_component && self.checked_directories.contains(&current) {
+            if let Some(cached) = self.resolved_directories.get(&current) {
+                resolved.clone_from(cached);
                 continue;
             }
             let metadata = match fs::symlink_metadata(&current) {
@@ -79,15 +81,18 @@ impl CacheAdmission {
                 Err(error) => return Err(IndexError::ReadFailed(error.to_string())),
             };
             if metadata.file_type().is_symlink() {
-                let target = current.canonicalize().map_err(|error| {
+                resolved = current.canonicalize().map_err(|error| {
                     IndexError::SymlinkLoop(format!("{}: {error}", current.display()))
                 })?;
-                if self.target_is_reserved(&target) {
-                    return Ok(true);
-                }
+            } else {
+                resolved.push(component.as_os_str());
+            }
+            if self.target_is_reserved(&resolved) {
+                return Ok(true);
             }
             if !final_component {
-                self.checked_directories.insert(current.clone());
+                self.resolved_directories
+                    .insert(current.clone(), resolved.clone());
             }
         }
         Ok(false)
