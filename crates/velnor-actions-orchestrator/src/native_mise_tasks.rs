@@ -83,7 +83,10 @@ fn visit(
     if !task.valid_shape || !task.unsupported_fields.is_empty() {
         return Err("verification_task_shape");
     }
-    if task.run_field_present && task.run_commands.is_none() {
+    if !task.run_field_present {
+        return Err("verification_task_inline_run_required");
+    }
+    if task.run_commands.is_none() {
         return Err("verification_task_run_shape");
     }
     for (key, version) in &task.task_tools {
@@ -120,9 +123,6 @@ fn visit(
             }
             children.insert(words[2].to_owned());
         }
-    }
-    if !task.run_field_present && children.is_empty() {
-        return Err("verification_task_empty");
     }
     for child in children {
         visit(config, &child, active, complete, tools, count)?;

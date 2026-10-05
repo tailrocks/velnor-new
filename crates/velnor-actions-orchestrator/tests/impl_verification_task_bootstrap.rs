@@ -273,3 +273,116 @@ fn missing_root_mise_config_does_not_admit_unmodeled_task_files() {
             .contains("verification_mise_config_missing")
     );
 }
+
+#[test]
+fn commandless_task_metadata_cannot_overlay_any_default_task_file() {
+    // Mise v2026.9.18 discovers file tasks from each of these default roots.
+    // A metadata-only TOML task may overlay a same-named file task, retaining
+    // its executable body, so every admitted node must provide its own run.
+    for task_dir in [
+        "mise-tasks",
+        ".mise-tasks",
+        ".mise/tasks",
+        ".config/mise/tasks",
+        "mise/tasks",
+    ] {
+        let root = tool_root();
+        fs::write(
+            root.path().join("mise.toml"),
+            r#"
+[settings]
+lockfile = true
+
+[tasks.verify]
+depends = ["lint"]
+
+[tasks.lint]
+run = "echo lint"
+"#,
+        )
+        .expect("write commandless selected task metadata");
+        let task_file = root.path().join(task_dir).join("verify");
+        fs::create_dir_all(task_file.parent().expect("task directory"))
+            .expect("create task source directory");
+        fs::write(&task_file, "#!/bin/sh\nmise install cargo:unsafe-tool\n")
+            .expect("write unmodeled task body");
+
+        let checks = check_tool_inputs(root.path());
+        let error = resolve_verification_tools(&checks, "verify", VerificationRunner::LinuxX64)
+            .expect_err("metadata-only task must not inherit a file task body");
+        assert!(
+            error
+                .to_string()
+                .contains("verification_task_inline_run_required"),
+            "unexpected rejection for {task_dir}: {error}"
+        );
+    }
+}
+
+#[test]
+fn nested_commandless_task_metadata_cannot_overlay_a_file_task() {
+    let root = tool_root();
+    fs::write(
+        root.path().join("mise.toml"),
+        r#"
+[settings]
+lockfile = true
+
+[tasks.verify]
+run = "mise run aggregate"
+
+[tasks.aggregate]
+depends = ["lint"]
+
+[tasks.lint]
+run = "echo lint"
+"#,
+    )
+    .expect("write task graph with commandless nested task");
+    let task_file = root.path().join(".config/mise/tasks/aggregate");
+    fs::create_dir_all(task_file.parent().expect("task directory"))
+        .expect("create task source directory");
+    fs::write(&task_file, "#!/bin/sh\nmise install cargo:unsafe-tool\n")
+        .expect("write unmodeled nested task body");
+
+    let checks = check_tool_inputs(root.path());
+    let error = resolve_verification_tools(&checks, "verify", VerificationRunner::LinuxX64)
+        .expect_err("nested metadata-only task must not inherit a file task body");
+    assert!(
+        error
+            .to_string()
+            .contains("verification_task_inline_run_required")
+    );
+}
+
+#[test]
+fn configured_task_directory_is_not_admitted() {
+    let root = tool_root();
+    fs::write(
+        root.path().join("mise.toml"),
+        r#"
+[settings]
+lockfile = true
+
+[task_config]
+dir = "custom-tasks"
+
+[tasks.verify]
+depends = ["lint"]
+
+[tasks.lint]
+run = "echo lint"
+"#,
+    )
+    .expect("write unsupported custom task directory");
+    let task_file = root.path().join("custom-tasks/verify");
+    fs::create_dir_all(task_file.parent().expect("task directory"))
+        .expect("create custom task source directory");
+    fs::write(&task_file, "#!/bin/sh\nmise install cargo:unsafe-tool\n")
+        .expect("write unmodeled custom task body");
+
+    let checks = check_tool_inputs(root.path());
+    let error = resolve_verification_tools(&checks, "verify", VerificationRunner::LinuxX64)
+        .expect_err("custom task directory config must fail closed");
+    assert!(error.to_string().contains("verification_mise_config_root"));
+}

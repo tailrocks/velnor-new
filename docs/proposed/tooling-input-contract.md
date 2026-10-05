@@ -62,11 +62,13 @@ consult the committed `mise.lock` — a lone lock is not enforced by mise
 (tampering is ignored), and config-visible verification would re-arm
 the code-execution paths those lanes avoid. The lock audit remains
 advisory hygiene for local development. Explicit verification-task jobs
-load repository Mise configuration only after credential variables are
-removed. They run `mise install --locked` before the declared task, so
-the project lock defines their tool closure and must be maintained with
-each task's change coverage. These jobs remain unconditional and
-uncached; they do not change the Rust lane's install path.
+inspect the repository Mise configuration only after credential variables are
+removed. They resolve only the selected task's declared tool closure, then
+install from a private configuration containing those exact source-bound lock
+rows; they do not install the project-wide tool inventory. The repository
+lock still needs maintenance whenever a selected task's tools change. These
+jobs remain unconditional and uncached; they do not change the Rust lane's
+install path.
 
 Non-empty `[stacks.rust].custom_tasks` remains rejected with
 `custom_tasks_unqualified`; arbitrary Mise commands never run inside
@@ -94,9 +96,12 @@ explicitly `none`. Checkout disables persisted credentials. The pinned Mise
 setup action does not install project tools, activate repository env, or use
 cache inputs. The job resolves only the selected task's `tools` maps from root
 `mise.toml`, including tasks reached through declared dependencies and simple
-nested `mise run` calls. External `.mise/tasks` scripts and dependencies
-without an inline root task definition fail closed because their tool closure
-is not represented in the checked input. If that closure is nonempty, every
+nested `mise run` calls. Every task in that closure must have a nonempty inline
+`run` body. File-task-only dependencies and metadata-only TOML tasks fail
+closed: pinned Mise can merge command-less TOML metadata onto a same-named
+task-file script while retaining the script body, which is not represented in
+the checked task closure. Unsupported custom task directories and task-file
+includes also fail closed. If the selected closure is nonempty, every
 selected tool must have an exact version and a source-bound current-platform
 lock row with an accepted prebuilt backend, HTTPS release URL, and SHA-256.
 Cargo registry and Git source
