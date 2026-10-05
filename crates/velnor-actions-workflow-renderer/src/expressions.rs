@@ -63,6 +63,7 @@ const ENV_EXPRESSIONS: &[&str] = &[
     "secrets.CARGO_REGISTRY_TOKEN",
     "secrets.GITHUB_TOKEN",
     "github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.sha",
+    "inputs.cache_key",
 ];
 
 /// Exact `${{ }}` inners permitted in action `with:` values.

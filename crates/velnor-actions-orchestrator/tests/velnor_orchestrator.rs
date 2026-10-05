@@ -25,6 +25,7 @@ mod impl_generate_p09_concurrent;
 mod impl_generate_p09_preview;
 mod impl_generate_size_guard;
 mod impl_generate_tofu_env;
+mod impl_generator_seed;
 mod impl_git_authority_p10;
 mod impl_git_paths_p10;
 mod impl_lane_isolation;

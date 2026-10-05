@@ -221,8 +221,15 @@ fn strict_restores_builtin_and_saves_on_elected_writer()
             )?,
         ],
     );
-    let text = strict(&fixture_ir(vec![lint]), &fixture_ctx())?;
-    let names = step_names(&text, "actionlint");
+    let rendered = velnor_actions_workflow_renderer::render::render_workflow_ir_strict_shared(
+        &fixture_ir(vec![lint]),
+        velnor_actions_contract::WorkflowPolicy::ConsumerV1,
+        None,
+        &fixture_ctx(),
+        &mise(),
+    )?;
+    let text = &rendered.yaml;
+    let names = step_names(text, "actionlint");
     assert!(
         !names.iter().any(|s| s == TOOLS_RESTORE_NAME),
         "P08: restores stay built-in: {names:?}"
@@ -233,10 +240,31 @@ fn strict_restores_builtin_and_saves_on_elected_writer()
         "P08: sole owner saves once: {names:?}"
     );
     assert_eq!(
-        names.iter().position(|s| s == "Setup Mise"),
+        names.iter().position(|s| s == "Restore Velnor tool seed"),
         Some(1),
-        "setup right after checkout: {names:?}"
+        "tool seed after checkout: {names:?}"
     );
+    assert_eq!(
+        names.iter().position(|s| s == "Setup Mise"),
+        Some(2),
+        "setup after the tool seed: {names:?}"
+    );
+    assert!(
+        text.contains("uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]"),
+        "tool seed is one local action: {text}"
+    );
+    assert!(
+        !text.contains("cp -R"),
+        "the copy script stays in the action file: {text}"
+    );
+    let seed = rendered
+        .shared
+        .iter()
+        .find(|file| file.path == ".github/actions/velnor-tool-seed/action.yml")
+        .expect("tool seed action");
+    assert!(seed.bytes.contains("/opt/velnor/seed"), "{}", seed.bytes);
+    assert!(seed.bytes.contains("$SEED_KEY"), "{}", seed.bytes);
+    assert!(!seed.bytes.contains("rm "), "{}", seed.bytes);
     for need in ["cache: \"true\"", "cache_key: mise-v1-"] {
         assert!(text.contains(need), "built-in cache {need}:\n{text}");
     }
