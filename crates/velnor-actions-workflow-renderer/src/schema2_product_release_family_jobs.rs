@@ -168,8 +168,19 @@ pub(super) fn compose_job(
         .ok_or_else(|| {
             RenderError::InvalidWorkflow(format!("release_family_steps_missing:{id}"))
         })?;
+    let publish_steps = steps
+        .iter()
+        .filter(|step| identified_step_role(step).is_some())
+        .count();
+    let expected_publish_steps = usize::from(matches!(role, JobRole::Publish));
+    if publish_steps != expected_publish_steps {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "release_publish_step_count:{id}:{publish_steps}"
+        )));
+    }
     for step in &mut steps {
-        *step = compose_step(step.clone(), &id, role, family, pins)?;
+        let step_role = identified_step_role(step);
+        *step = compose_step(step.clone(), &id, role, step_role, family, pins)?;
     }
     if matches!(role, JobRole::Publish) {
         steps.splice(
@@ -265,28 +276,32 @@ fn job_condition(family: Family, role: JobRole) -> Result<String, RenderError> {
     })
 }
 
-/// Pin source checkout and replace only the existing family release command.
+fn identified_step_role(step: &Yaml) -> Option<family::StepRole> {
+    let Yaml::Map(fields) = step else {
+        return None;
+    };
+    fields.iter().find_map(|(key, value)| {
+        if key == "id"
+            && let Yaml::Str(id) = value
+        {
+            return family::step_role(id);
+        }
+        None
+    })
+}
+
+/// Pin source checkout and replace the step bound to the typed family role.
 fn compose_step(
     step: Yaml,
     job_id: &str,
     role: JobRole,
+    step_role: Option<family::StepRole>,
     family: Family,
     pins: &ProductReleasePins,
 ) -> Result<Yaml, RenderError> {
     let Yaml::Map(mut fields) = step else {
         return Ok(step);
     };
-    let name = fields
-        .iter()
-        .find_map(|(key, value)| {
-            (key == "name").then_some(match value {
-                Yaml::Str(name) => Some(name.as_str()),
-                _ => None,
-            })
-        })
-        .flatten()
-        .unwrap_or_default()
-        .to_owned();
     if fields.iter().any(|(key, value)| {
         key == "uses" && matches!(value, Yaml::Str(uses) if uses == CHECKOUT_USES)
     }) {
@@ -309,7 +324,12 @@ fn compose_step(
             Yaml::str("inputs.release_action == 'build'"),
         ));
     }
-    if matches!(role, JobRole::Publish) && name == "Publish GitHub release" {
+    if matches!(step_role, Some(family::StepRole::Publish)) {
+        if !matches!(role, JobRole::Publish) {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "release_publish_step_outside_publish_job:{job_id}"
+            )));
+        }
         let Some((_, run)) = fields.iter_mut().find(|(key, _)| key == "run") else {
             return Err(RenderError::InvalidWorkflow(format!(
                 "release_publish_command_missing:{job_id}"
@@ -328,3 +348,7 @@ fn compose_step(
     }
     Ok(Yaml::Map(fields))
 }
+
+#[cfg(test)]
+#[path = "schema2_product_release_family_jobs_tests.rs"]
+mod tests;

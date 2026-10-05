@@ -139,6 +139,7 @@ jobs:
           path: assets
         if: inputs.release_action == 'build'
       - name: Publish GitHub release
+        id: publish-family-release
         env:
           GH_TOKEN: ${{ github.token }}
           VELNOR_RELEASE_ACTION: ${{ inputs.release_action }}

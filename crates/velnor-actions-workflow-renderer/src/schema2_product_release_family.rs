@@ -11,6 +11,18 @@ use super::release_eligibility as eligibility;
 const PREPARE_TEMPLATE: &str = include_str!("schema2_release_prepare.sh");
 const PUBLISH_TEMPLATE: &str = include_str!("schema2_release_publish.sh");
 
+/// Stable ID for the legacy family publisher before typed composition.
+pub(super) const PUBLISH_STEP_ID: &str = "publish-family-release";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum StepRole {
+    Publish,
+}
+
+pub(super) fn step_role(id: &str) -> Option<StepRole> {
+    (id == PUBLISH_STEP_ID).then_some(StepRole::Publish)
+}
+
 /// One independently published family inside the composed release workflow.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum Family {

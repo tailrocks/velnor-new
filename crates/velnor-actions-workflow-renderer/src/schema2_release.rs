@@ -12,8 +12,8 @@ use crate::runs_on::runs_on_yaml;
 use crate::steps::{DOWNLOAD_ARTIFACT_USES, UPLOAD_ARTIFACT_USES};
 use crate::yaml::Yaml;
 
-use super::features::{CHECKOUT_USES, base, finish, publish_step, run_step};
-use super::{Schema2WorkflowRequest, generator_release};
+use super::features::{CHECKOUT_USES, base, finish, identified_publish_step, run_step};
+use super::{Schema2WorkflowRequest, generator_release, product_release_family};
 use velnor_actions_contract::ReleaseTarget;
 
 /// GitHub-hosted macOS label. The binary is native; it is not built on Ubuntu.
@@ -227,7 +227,10 @@ fn publish_job(runs_on: Yaml, spec: &Publish<'_>) -> (String, Yaml) {
         vec![
             checkout_step(),
             download_step(spec.artifact),
-            publish_step(&release_command(spec.prefix, spec.notes, spec.files)),
+            identified_publish_step(
+                product_release_family::PUBLISH_STEP_ID,
+                &release_command(spec.prefix, spec.notes, spec.files),
+            ),
         ],
     )
 }
