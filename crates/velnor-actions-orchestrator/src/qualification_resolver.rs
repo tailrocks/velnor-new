@@ -40,7 +40,7 @@ pub fn resolve_qualification_admission(request_path: &Path) -> Result<(), Orches
     let Some(predecessor) = request.context.predecessor else {
         return Ok(());
     };
-    let previous = api::fetch_chain(&client, predecessor, 1, None)?;
+    let previous = api::resolve_chain(&client, predecessor, 1, None)?;
     let source_delta = if request.context.phase == QualificationPhase::UsefulDelta {
         let base = previous.receipt.source_sha.as_str();
         Some(delta::derive(&root, base, &request.context.source_sha)?)

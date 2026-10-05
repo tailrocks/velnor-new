@@ -65,6 +65,7 @@ fn rendered_condition(step: &Step) -> String {
         &[],
         false,
         &BTreeMap::new(),
+        false,
     )
     .expect("render consumer step") else {
         panic!("a rendered step is a mapping");

@@ -4,18 +4,15 @@ use crate::yaml::Yaml;
 
 /// Append the fixed output ID for one renderer-owned step name.
 pub(crate) fn push_step_id(entries: &mut Vec<(String, Yaml)>, name: &str) {
-    let Some(id) = step_id(name) else {
-        return;
-    };
-    entries.push(("id".to_owned(), Yaml::str(id.to_owned())));
+    if let Some(id) = step_id(name) {
+        entries.push(("id".to_owned(), Yaml::str(id.to_owned())));
+    } else {
+        crate::mbx_bundle::push_step_id(entries, name);
+    }
 }
 
 fn step_id(name: &str) -> Option<&'static str> {
     match name {
-        crate::cache_steps::MBX_RESTORE_NAME => Some("mbx"),
-        crate::mbx_bundle::MBX_CACHE_KEY_NAME => Some("mbx-cache-key"),
-        crate::mbx_bundle::MBX_BUNDLE_RESTORE_NAME => Some("mbx-bundle"),
-        crate::mbx_bundle::MBX_BUNDLE_EXPORT_NAME => Some("mbx-export"),
         crate::cache_p08::TOOLS_CACHE_IDENTITY_NAME => {
             Some(crate::cache_p08::TOOLS_CACHE_IDENTITY_STEP_ID)
         }

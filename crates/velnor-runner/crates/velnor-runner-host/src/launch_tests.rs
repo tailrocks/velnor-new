@@ -16,12 +16,13 @@ fn statistics_advance_and_offers_stay() {
         statistics: None,
         jobs: Vec::new(),
     });
-    assert_eq!(idle(&stats), Idle::Ack);
+    assert_eq!(idle(&stats), Idle::Blocked);
     assert_eq!(idle(&available(&[3])), Idle::Launch);
     assert_eq!(idle(&Poll::Empty), Idle::Empty);
     assert_eq!(idle(&available(&[3, 4])), Idle::Blocked);
     assert_eq!(idle(&assigned_wait(7, 1)), Idle::Scale);
     assert_eq!(idle(&assigned_wait(7, 0)), Idle::Ack);
+    assert_eq!(idle(&assigned_wait(8, -1)), Idle::Blocked);
 }
 
 #[tokio::test]

@@ -69,7 +69,7 @@ fn cache_layers_restore_independently() -> Result<(), RenderError> {
     assert_eq!(identity.name, "Identify Mise cache runtime");
     assert_eq!(
         tools.condition.as_deref(),
-        Some("steps.velnor-tool-cache-identity.outputs.enabled == 'true'")
+        Some(velnor_actions_workflow_renderer::cache_p08::TOOLS_CACHE_RESTORE_CONDITION)
     );
     assert!(
         cache_action_step(

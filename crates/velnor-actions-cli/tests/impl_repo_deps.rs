@@ -76,6 +76,10 @@ fn external_deps_allowlisted_used_and_narrow() -> Result<(), Box<dyn Error>> {
         // compile-gated at 1.98.1); default features only, facade-owned
         // byte/count/depth caps, no expression evaluation.
         "hcl",
+        // Bounded GitHub receipt ZIP reader; only pure-Rust deflate decoding
+        // is enabled so artifacts can be validated without extracting paths.
+        "flate2",
+        "zip",
     ];
     for (dir, _) in MEMBERS {
         let body = manifest(dir)?;
@@ -91,11 +95,19 @@ fn external_deps_allowlisted_used_and_narrow() -> Result<(), Box<dyn Error>> {
                 for feature in quoted.into_iter().skip(1).step_by(2) {
                     // Only `derive` globally, plus `fs` on rustix for the
                     // P09 atomic directory exchange (no net/pty/terminal).
-                    let narrow = feature == "derive" || (key == "rustix" && feature == "fs");
+                    let narrow = feature == "derive"
+                        || (key == "rustix" && feature == "fs")
+                        || (key == "flate2" && feature == "rust_backend")
+                        || (key == "zip" && feature == "deflate-flate2");
                     assert!(narrow, "{dir}/{key} feature {feature}");
                 }
             }
-            assert!(dep_referenced(dir, key)?, "{dir} never uses {key}");
+            let feature_backend =
+                key == "flate2" && body.contains("zip = ") && body.contains("deflate-flate2");
+            assert!(
+                dep_referenced(dir, key)? || feature_backend,
+                "{dir} never uses {key}"
+            );
         }
     }
     Ok(())
