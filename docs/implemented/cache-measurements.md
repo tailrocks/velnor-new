@@ -147,7 +147,9 @@ restored home → exit 0, `velnor: sources hit, skipping fetch`, in
 downloads**; rerun **0.03 s** (no recompile); `test --locked
 --offline` **0.57 s, 1 passed**. Reference (machine-shared, NOT the CI
 subset): `~/.cargo` holds cache 281.37 MB + index 86.51 MB + git/db
-274.42 MB with 4.26 GB of excluded `registry/src`.
+274.42 MB with 4.26 GB of excluded `registry/src`. This full-home
+inventory is not the archived payload: the Velnor source archive contains
+only `registry/index`, `registry/cache`, and `git/db`.
 
 ## 4. Reporting path (quota helpers are live, render stays hermetic)
 
@@ -191,9 +193,10 @@ leg (`src/index.ts:run()` gates `saveCache` on the `install` input;
 `pull_request` handling), which Velnor disables (`install: false`),
 so the push-gated `cache_save` expression never saved on any event
 (all 134 runs to date are `pull_request` per the 2026-10-01 API
-census; push triggers only on `main`, unmerged). Setups are now restore-only and elected writers
-carry explicit push-gated `Save Mise tools` steps; warmth still needs
-one post-merge `main` push to seed the `mise-v1-*` entries. Full
+census; push triggers only on `main`, unmerged). Historical V1 setups
+were restore-only and had no elected tool-cache save; that path has been
+retired. Active V2 uses renderer-owned runtime-qualified identity and
+explicit elected writers, as described in the V2 sections above. Full
 per-action PR-save verdict: gate-4 doc R13 bullet.
 
 ## Hosted MBX object-cache round-trip

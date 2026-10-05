@@ -248,6 +248,33 @@ fn job_to_yaml(
         RunsOn::Hosted(label) => Yaml::str(label),
         RunsOn::ScaleSet(selector) => Yaml::Flow(selector.labels().to_vec()),
     };
+    let job_env = job_environment(id, job, ctx, lanes, mbx_policy);
+    let mut entries = job_header_fields(job, runs_on);
+    append_job_options(&mut entries, job, scale_set, &job_env)?;
+    let rendered_steps = crate::document_lanes::render_job_steps(
+        id,
+        job,
+        ctx,
+        needs_envs,
+        shared,
+        lanes,
+        &crate::document_lanes::JobStepContext {
+            job_env: &job_env,
+            runs_on: Some(&job.runs_on),
+            actions_read: mbx_policy.actions_read,
+        },
+    )?;
+    entries.push(("steps".to_owned(), Yaml::Seq(rendered_steps)));
+    Ok(Yaml::Map(entries))
+}
+
+fn job_environment(
+    id: &str,
+    job: &Job,
+    ctx: &RenderContext,
+    lanes: &crate::document_lanes::SharedLaneSteps<'_>,
+    mbx_policy: MbxJobPolicy,
+) -> BTreeMap<String, String> {
     let source_steps = lanes
         .env_steps
         .get(id)
@@ -308,22 +335,7 @@ fn job_to_yaml(
             crate::cache_steps::MBX_SHARE_OUT_DIR_VALUE.to_owned(),
         );
     }
-    let mut entries = job_header_fields(job, runs_on);
-    append_job_options(&mut entries, job, scale_set, &job_env)?;
-    let rendered_steps = crate::document_lanes::render_job_steps(
-        id,
-        job,
-        ctx,
-        needs_envs,
-        shared,
-        lanes,
-        &crate::document_lanes::JobStepContext {
-            job_env: &job_env,
-            actions_read: mbx_policy.actions_read,
-        },
-    )?;
-    entries.push(("steps".to_owned(), Yaml::Seq(rendered_steps)));
-    Ok(Yaml::Map(entries))
+    job_env
 }
 
 fn job_header_fields(job: &Job, runs_on: Yaml) -> Vec<(String, Yaml)> {

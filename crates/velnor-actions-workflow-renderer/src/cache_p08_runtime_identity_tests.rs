@@ -2,7 +2,6 @@ use std::{
     collections::BTreeMap,
     error::Error,
     fs,
-    os::unix::fs::symlink,
     path::PathBuf,
     process::{Command, Output},
     sync::atomic::{AtomicUsize, Ordering},
@@ -97,6 +96,49 @@ fn run_identity_with(
         .expect("run identity shell")
 }
 
+fn emitted_identity_environment(payload: &ToolsCachePayload) -> BTreeMap<String, String> {
+    let inner = super::inner_step(&payload.runs_on).expect("composite identity shell step");
+    let StepKind::Shell { env: shell_env, .. } = inner.kind else {
+        panic!("composite identity body is a shell step");
+    };
+    if !payload.runtime_identity_supported() {
+        let mut shell_env = shell_env;
+        shell_env.remove("VELNOR_CACHE_STATIC_DIGEST");
+        return shell_env;
+    }
+
+    let step = payload.runtime_identity_step().expect("identity action");
+    let StepKind::Action {
+        uses,
+        with,
+        env: action_env,
+    } = step.kind
+    else {
+        panic!("identity is a composite action step");
+    };
+    assert_eq!(Some(uses.as_str()), super::action_uses(&payload.runs_on));
+    assert!(action_env.is_empty());
+    let input = crate::cache_p08::TOOLS_CACHE_IDENTITY_DIGEST_INPUT;
+    let input_value = with.get(input).expect("emitted digest input");
+    assert_eq!(input_value, payload.static_digest());
+
+    let file = super::action_file(&payload.runs_on, env!("CARGO_PKG_VERSION"))
+        .expect("generated identity action");
+    assert!(file.bytes.contains(&format!("  {input}:\n")));
+    let expected_expression = format!("${{{{ inputs.{input} }}}}");
+    assert!(file.bytes.contains(&format!(
+        "VELNOR_CACHE_STATIC_DIGEST: {expected_expression}"
+    )));
+    assert_eq!(
+        shell_env.get("VELNOR_CACHE_STATIC_DIGEST"),
+        Some(&expected_expression)
+    );
+
+    let mut resolved = shell_env;
+    resolved.insert("VELNOR_CACHE_STATIC_DIGEST".to_owned(), input_value.clone());
+    resolved
+}
+
 fn identity_command(
     payload: &ToolsCachePayload,
     fixture: &Fixture,
@@ -104,30 +146,20 @@ fn identity_command(
     removed: &[&str],
 ) -> Command {
     fs::write(&fixture.github_output, "").expect("clear outputs");
-    if payload.runtime_identity_supported() {
-        let step = payload.runtime_identity_step().expect("identity action");
-        let StepKind::Action { uses, with, env } = step.kind else {
-            panic!("identity is a composite action step");
-        };
-        assert_eq!(Some(uses.as_str()), super::action_uses(&payload.runs_on));
-        assert!(env.is_empty());
-        assert_eq!(
-            with.get("d").map(String::as_str),
-            Some(payload.static_digest())
-        );
-    }
     let inner = super::inner_step(&payload.runs_on).expect("composite identity shell step");
-    let StepKind::Shell { run, env } = inner.kind else {
+    let StepKind::Shell { run, .. } = inner.kind else {
         panic!("composite identity body is a shell step");
     };
+    let env = emitted_identity_environment(payload);
     let script_file = super::script_file(env!("CARGO_PKG_VERSION")).expect("identity script file");
     let script_path = fixture.root.join(&script_file.path);
     fs::create_dir_all(script_path.parent().expect("script parent"))
         .expect("create script directory");
     fs::write(&script_path, script_file.bytes).expect("write generated script");
-    let action_path = super::action_uses(&payload.runs_on)
-        .map(|uses| fixture.root.join(uses.trim_start_matches("./")))
-        .unwrap_or_else(|| fixture.root.join(".github/actions/test"));
+    let action_path = super::action_uses(&payload.runs_on).map_or_else(
+        || fixture.root.join(".github/actions/test"),
+        |uses| fixture.root.join(uses.trim_start_matches("./")),
+    );
     fs::create_dir_all(&action_path).expect("create action directory");
     let mut command = Command::new("env");
     command
@@ -150,7 +182,6 @@ fn identity_command(
         .env("ImageVersion", "20261004.1")
         .env("GITHUB_ACTION_PATH", &action_path)
         .env("VELNOR_CACHE_LANE", &payload.runs_on)
-        .env("VELNOR_CACHE_STATIC_DIGEST", payload.static_digest())
         .env("GITHUB_OUTPUT", &fixture.github_output);
     for (key, value) in overrides {
         command.env(key, value);
@@ -167,7 +198,10 @@ fn assert_disabled(output: &Output, text: &str, reason: &str) {
         text.lines().find(|line| line.starts_with("enabled=")),
         Some("enabled=false")
     );
-    assert!(text.lines().any(|line| line == format!("reason={reason}")));
+    assert!(
+        text.lines().any(|line| line == format!("reason={reason}")),
+        "expected {reason} in identity output: {text}"
+    );
     assert!(!text.lines().any(|line| line.starts_with("identity=")));
 }
 
@@ -235,103 +269,12 @@ fn generated_identity_actions_bind_each_supported_hosted_lane() -> Result<(), Bo
         let file = super::action_file(lane, env!("CARGO_PKG_VERSION"))?;
         assert_eq!(file.path, path);
         assert!(file.bytes.contains(&format!("VELNOR_CACHE_LANE: {lane}")));
+        let input = crate::cache_p08::TOOLS_CACHE_IDENTITY_DIGEST_INPUT;
+        assert!(file.bytes.contains(&format!("  {input}:\n")));
+        assert!(file.bytes.contains(&format!(
+            "VELNOR_CACHE_STATIC_DIGEST: ${{{{ inputs.{input} }}}}"
+        )));
         assert_eq!(super::action_uses(lane), Some(uses));
-    }
-    Ok(())
-}
-
-#[test]
-fn hosted_identity_disables_on_image_arch_or_version_mismatch() -> Result<(), Box<dyn Error>> {
-    let fixture = Fixture::new()?;
-    let hosted = payload("ubuntu-26.04");
-    let cases = [
-        ("ImageOS", "ubuntu24", "image_os_mismatch"),
-        ("RUNNER_ARCH", "ARM64", "runner_arch_mismatch"),
-        ("ImageVersion", "", "image_version_missing"),
-    ];
-    for (key, value, reason) in cases {
-        let (output, text) = run_and_read(&hosted, &fixture, &[(key, value.to_owned())]);
-        assert_disabled(&output, &text, reason);
-    }
-    for (variable, reason) in [
-        ("RUNNER_OS", "runner_os_missing"),
-        ("RUNNER_ARCH", "runner_arch_missing"),
-        ("ImageOS", "image_os_missing"),
-        ("ImageVersion", "image_version_missing"),
-    ] {
-        let (output, text) = run_and_read_removed(&hosted, &fixture, &[variable]);
-        assert_disabled(&output, &text, reason);
-    }
-    let (output, text) = run_and_read(&payload("ubuntu-26.04-arm"), &fixture, &[]);
-    assert_disabled(&output, &text, "image_os_mismatch");
-    Ok(())
-}
-
-#[test]
-fn hosted_identity_disables_for_unarchived_or_aliased_mise_roots() -> Result<(), Box<dyn Error>> {
-    let fixture = Fixture::new()?;
-    let payload = payload("ubuntu-26.04");
-    let alternative = fixture.root.join("mise elsewhere");
-    fs::create_dir_all(&alternative)?;
-    let (output, text) = run_and_read(
-        &payload,
-        &fixture,
-        &[("MISE_DATA_DIR", alternative.to_string_lossy().into_owned())],
-    );
-    assert_disabled(&output, &text, "mise_root_not_archived");
-
-    let xdg = fixture.root.join("xdg data");
-    fs::create_dir_all(&xdg)?;
-    let (output, text) = run_and_read(
-        &payload,
-        &fixture,
-        &[("XDG_DATA_HOME", xdg.to_string_lossy().into_owned())],
-    );
-    assert_disabled(&output, &text, "mise_root_not_archived");
-
-    let actual = fixture.home.join("mise-store");
-    fs::create_dir_all(&actual)?;
-    let mise = fixture.home.join(".local/share/mise");
-    symlink(&actual, &mise)?;
-    let (output, text) = run_and_read(&payload, &fixture, &[]);
-    assert_disabled(&output, &text, "mise_root_aliased");
-    Ok(())
-}
-
-#[test]
-fn hosted_identity_disables_for_invalid_native_or_mise_homes() -> Result<(), Box<dyn Error>> {
-    let fixture = Fixture::new()?;
-    let payload = payload("ubuntu-26.04");
-    let mismatch = fixture.root.join("other cargo");
-    let (output, text) = run_and_read(
-        &payload,
-        &fixture,
-        &[("CARGO_HOME", mismatch.to_string_lossy().into_owned())],
-    );
-    assert_disabled(&output, &text, "cargo_home_mismatch");
-
-    let (output, text) = run_and_read(
-        &payload,
-        &fixture,
-        &[("RUSTUP_HOME", "relative/rustup".to_owned())],
-    );
-    assert_disabled(&output, &text, "rustup_home_mismatch");
-
-    let (output, text) = run_and_read_removed(&payload, &fixture, &["MISE_RUSTUP_HOME"]);
-    assert_disabled(&output, &text, "mise_rustup_home_mismatch");
-    Ok(())
-}
-
-#[test]
-fn hosted_identity_disables_for_root_home_or_runner_temp() -> Result<(), Box<dyn Error>> {
-    let fixture = Fixture::new()?;
-    let hosted = payload("ubuntu-26.04");
-    for (key, reason) in [
-        ("HOME", "home_aliased"),
-        ("RUNNER_TEMP", "runner_temp_aliased"),
-    ] {
-        let (output, text) = run_and_read(&hosted, &fixture, &[(key, "/".to_owned())]);
-        assert_disabled(&output, &text, reason);
     }
     Ok(())
 }
@@ -356,7 +299,8 @@ fn identity_step_binds_fixed_tool_home_environment() {
     assert_eq!(Some(uses.as_str()), super::action_uses("ubuntu-26.04"));
     assert!(env.is_empty());
     assert_eq!(
-        with.get("d").map(String::as_str),
+        with.get(crate::cache_p08::TOOLS_CACHE_IDENTITY_DIGEST_INPUT)
+            .map(String::as_str),
         Some(payload.static_digest())
     );
     let inner = super::inner_step("ubuntu-26.04").expect("composite identity shell step");
@@ -380,3 +324,6 @@ mod fingerprint_tests;
 
 #[path = "cache_p08_runtime_identity_scratch_tests.rs"]
 mod scratch_tests;
+
+#[path = "cache_p08_runtime_identity_validation_tests.rs"]
+mod validation_tests;

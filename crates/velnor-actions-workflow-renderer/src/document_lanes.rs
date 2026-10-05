@@ -19,6 +19,7 @@ pub(crate) struct SharedLaneSteps<'a> {
 
 pub(crate) struct JobStepContext<'a> {
     pub job_env: &'a BTreeMap<String, String>,
+    pub runs_on: Option<&'a str>,
     pub actions_read: bool,
 }
 
@@ -37,7 +38,6 @@ pub(crate) fn render_job_steps(
         append_shared_lane_steps(
             id,
             uses,
-            &job.runs_on,
             ctx,
             needs_envs,
             lanes,
@@ -57,9 +57,7 @@ pub(crate) fn render_job_steps(
                 ctx,
                 needs_envs,
                 false,
-                step_context.job_env,
-                Some(&job.runs_on),
-                step_context.actions_read,
+                step_context,
             )?);
         }
     }
@@ -69,7 +67,6 @@ pub(crate) fn render_job_steps(
 fn append_shared_lane_steps(
     id: &str,
     uses: &str,
-    runs_on: &str,
     ctx: &RenderContext,
     needs_envs: &[(String, String)],
     lanes: &SharedLaneSteps<'_>,
@@ -92,16 +89,13 @@ fn append_shared_lane_steps(
         ctx,
         needs_envs,
         false,
-        step_context.job_env,
-        Some(runs_on),
-        step_context.actions_read,
+        step_context,
     )?);
     append_steps(
         id,
         lanes.runtime_preludes,
         ctx,
         needs_envs,
-        runs_on,
         step_context,
         rendered,
         "runtime_prelude",
@@ -111,7 +105,6 @@ fn append_shared_lane_steps(
         lanes.prefixes,
         ctx,
         needs_envs,
-        runs_on,
         step_context,
         rendered,
         "prefix",
@@ -121,7 +114,6 @@ fn append_shared_lane_steps(
         lanes.preludes,
         ctx,
         needs_envs,
-        runs_on,
         step_context,
         rendered,
         "prelude",
@@ -132,7 +124,6 @@ fn append_shared_lane_steps(
         lanes.postludes,
         ctx,
         needs_envs,
-        runs_on,
         step_context,
         rendered,
         "postlude",
@@ -144,7 +135,6 @@ fn append_steps(
     source: &BTreeMap<String, Vec<Step>>,
     ctx: &RenderContext,
     needs_envs: &[(String, String)],
-    runs_on: &str,
     step_context: &JobStepContext<'_>,
     rendered: &mut Vec<Yaml>,
     label: &str,
@@ -159,9 +149,7 @@ fn append_steps(
             ctx,
             needs_envs,
             false,
-            step_context.job_env,
-            Some(runs_on),
-            step_context.actions_read,
+            step_context,
         )?);
     }
     Ok(())

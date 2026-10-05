@@ -35,6 +35,6 @@ runs:
         RUNNER_TEMP: ${{ runner.temp }}
         RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
         VELNOR_CACHE_LANE: ubuntu-26.04
-        VELNOR_CACHE_STATIC_DIGEST: ${{ inputs.digest }}
+        VELNOR_CACHE_STATIC_DIGEST: ${{ inputs.d }}
       shell: bash
       run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; bash \"$GITHUB_ACTION_PATH/../../scripts/velnor-tools-cache-identity.sh\"'"

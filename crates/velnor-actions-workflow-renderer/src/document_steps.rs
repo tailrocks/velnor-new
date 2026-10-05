@@ -155,15 +155,19 @@ pub(crate) fn step_to_yaml(
     ctx: &RenderContext,
     needs_envs: &[(String, String)],
     composite: bool,
-    job_env: &BTreeMap<String, String>,
-    runs_on: Option<&str>,
-    actions_read: bool,
+    step_context: &crate::document_lanes::JobStepContext<'_>,
 ) -> Result<Yaml, RenderError> {
     steps::scan_for_private_subcommands(&step.name)?;
     match &step.kind {
-        StepKind::Action { uses, with, env } => {
-            action_step_to_yaml(job_id, step, uses, with, env, job_env, runs_on)
-        }
+        StepKind::Action { uses, with, env } => action_step_to_yaml(
+            job_id,
+            step,
+            uses,
+            with,
+            env,
+            step_context.job_env,
+            step_context.runs_on,
+        ),
         StepKind::Shell { run, env } => {
             commands::validate_command_argv(run)?;
             if composite {
@@ -179,7 +183,9 @@ pub(crate) fn step_to_yaml(
             }
             let filtered_env: BTreeMap<String, String> = env
                 .iter()
-                .filter(|(k, v)| job_env.get(*k).map(String::as_str) != Some(v.as_str()))
+                .filter(|(k, v)| {
+                    step_context.job_env.get(*k).map(String::as_str) != Some(v.as_str())
+                })
                 .map(|(k, v)| (k.clone(), v.clone()))
                 .collect();
             if !filtered_env.is_empty() {
@@ -194,7 +200,7 @@ pub(crate) fn step_to_yaml(
         }
         StepKind::Internal { operation } => {
             let (op, target) = steps::split_internal_operation(operation)?;
-            if op == steps::FETCH_OPERATION && !actions_read {
+            if op == steps::FETCH_OPERATION && !step_context.actions_read {
                 return Err(RenderError::InvalidWorkflow(
                     "report_fetch_requires_actions_read".to_owned(),
                 ));
@@ -215,7 +221,14 @@ pub(crate) fn step_to_yaml(
             };
             entries.push((
                 "env".to_owned(),
-                internal_env(op, target, ctx, channel, job_env, actions_read),
+                internal_env(
+                    op,
+                    target,
+                    ctx,
+                    channel,
+                    step_context.job_env,
+                    step_context.actions_read,
+                ),
             ));
             push_composite_shell(&mut entries, composite);
             entries.push((

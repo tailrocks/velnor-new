@@ -126,7 +126,9 @@ fn check_env_value_with_scope(key: &str, value: &str, composite: bool) -> Result
         return Err(RenderError::BadCommand(format!("bad_env_expression:{key}")));
     };
     for inner in spans {
-        let composite_input = composite && inner == "inputs.digest";
+        let composite_input = composite
+            && inner.strip_prefix("inputs.")
+                == Some(crate::cache_p08::TOOLS_CACHE_IDENTITY_DIGEST_INPUT);
         if !ENV_EXPRESSIONS.contains(&inner) && !is_matrix_field(inner) && !composite_input {
             return Err(RenderError::BadCommand(format!("bad_env_expression:{key}")));
         }
