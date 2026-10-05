@@ -22,6 +22,7 @@ fn bollard(volume: &str) -> Result<BollardCreate, HostError> {
 #[test]
 fn runner_create_opens_stdin_and_is_not_privileged() -> Result<(), HostError> {
     let spec = projection("worker_a")?;
+    assert_eq!(spec.name, "worker_a-runner");
     assert!(spec.open_stdin);
     assert!(!spec.privileged);
     assert_eq!(spec.platform, "linux/amd64");
@@ -58,6 +59,9 @@ fn dind_is_privileged_and_shares_the_runner_volumes() -> Result<(), HostError> {
         assert_eq!(dind_create(name).err(), runner_plan(name).err(), "{name}");
     }
     let spec = dind_create("worker_a")?;
+    assert_eq!(spec.name, "worker_a-dind");
+    assert!(spec.labels.contains(&"velnor.worker=worker_a".to_owned()));
+    assert!(spec.labels.contains(&"velnor.role=dind".to_owned()));
     assert!(spec.privileged);
     assert!(!spec.open_stdin);
     assert_eq!(spec.env, Vec::<String>::new());
@@ -122,6 +126,7 @@ fn runner_joins_only_its_dind_netns() -> Result<(), HostError> {
 #[test]
 fn bollard_config_from_a_clean_plan_omits_canary() -> Result<(), HostError> {
     let created = bollard("worker_a")?;
+    assert_eq!(created.options.name.as_deref(), Some("worker_a-runner"));
     assert_eq!(created.options.platform, "linux/amd64");
     assert_eq!(created.config.open_stdin, Some(true));
     let host = created
@@ -135,6 +140,7 @@ fn bollard_config_from_a_clean_plan_omits_canary() -> Result<(), HostError> {
     assert!(!text.to_ascii_lowercase().contains("jitconfig"));
 
     let dind = bollard_create(&dind_create("worker_a")?)?;
+    assert_eq!(dind.options.name.as_deref(), Some("worker_a-dind"));
     assert_eq!(dind.options.platform, "linux/amd64");
     assert_eq!(dind.config.open_stdin, Some(false));
     assert!(dind.config.env.is_none());

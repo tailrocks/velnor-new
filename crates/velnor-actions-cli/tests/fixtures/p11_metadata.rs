@@ -8,6 +8,26 @@
 
 use std::error::Error;
 
+const WORKSPACE_MANIFESTS: [&str; 2] = ["Cargo.toml", "crates/velnor-runner/Cargo.toml"];
+pub(super) const RUNNER_MEMBERS: [(&str, &str); 4] = [
+    (
+        "crates/velnor-runner/crates/velnor-runner-cli",
+        "velnor-runner-cli",
+    ),
+    (
+        "crates/velnor-runner/crates/velnor-runner-core",
+        "velnor-runner-core",
+    ),
+    (
+        "crates/velnor-runner/crates/velnor-runner-github",
+        "velnor-runner-github",
+    ),
+    (
+        "crates/velnor-runner/crates/velnor-runner-host",
+        "velnor-runner-host",
+    ),
+];
+
 /// Minimal JSON value: enough for `cargo metadata` documents.
 #[derive(Debug)]
 pub(crate) enum Json {
@@ -203,8 +223,21 @@ impl Json {
 
 /// Run locked offline metadata; offline proves the lockfile is complete.
 pub(crate) fn metadata() -> Result<Json, Box<dyn Error>> {
+    metadata_for("Cargo.toml")
+}
+
+/// Run locked offline metadata for one workspace manifest.
+fn metadata_for(manifest: &str) -> Result<Json, Box<dyn Error>> {
     let output = std::process::Command::new("cargo")
-        .args(["metadata", "--locked", "--format-version", "1", "--offline"])
+        .args([
+            "metadata",
+            "--manifest-path",
+            manifest,
+            "--locked",
+            "--format-version",
+            "1",
+            "--offline",
+        ])
         .current_dir(super::repo_root())
         .output()?;
     if !output.status.success() {
@@ -265,42 +298,74 @@ fn metadata_members_match_eight() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
+fn metadata_runner_members_match_four() -> Result<(), Box<dyn Error>> {
+    let doc = metadata_for("crates/velnor-runner/Cargo.toml")?;
+    let mut names: Vec<&str> = workspace_packages(&doc)?
+        .iter()
+        .filter_map(|pkg| pkg.get("name").and_then(Json::as_str))
+        .collect();
+    names.sort_unstable();
+    let mut want: Vec<&str> = RUNNER_MEMBERS.iter().map(|(_, name)| *name).collect();
+    want.sort_unstable();
+    assert_eq!(names, want, "runner resolver member set drift");
+    Ok(())
+}
+
+#[test]
 fn metadata_effective_edition_is_2024() -> Result<(), Box<dyn Error>> {
-    for package in workspace_packages(&metadata()?)? {
-        let name = package.get("name").and_then(Json::as_str).unwrap_or("?");
-        let edition = package.get("edition").and_then(Json::as_str);
-        assert_eq!(edition, Some("2024"), "{name} effective edition");
+    for manifest in WORKSPACE_MANIFESTS {
+        for package in workspace_packages(&metadata_for(manifest)?)? {
+            let name = package.get("name").and_then(Json::as_str).unwrap_or("?");
+            let edition = package.get("edition").and_then(Json::as_str);
+            assert_eq!(
+                edition,
+                Some("2024"),
+                "{manifest}: {name} effective edition"
+            );
+        }
     }
     Ok(())
 }
 
 #[test]
 fn metadata_msrv_resolves() -> Result<(), Box<dyn Error>> {
-    for package in workspace_packages(&metadata()?)? {
-        let name = package.get("name").and_then(Json::as_str).unwrap_or("?");
-        let rust_version = package.get("rust_version").and_then(Json::as_str);
-        assert_eq!(rust_version, Some("1.98"), "{name} effective rust-version");
+    for manifest in WORKSPACE_MANIFESTS {
+        for package in workspace_packages(&metadata_for(manifest)?)? {
+            let name = package.get("name").and_then(Json::as_str).unwrap_or("?");
+            let rust_version = package.get("rust_version").and_then(Json::as_str);
+            assert_eq!(
+                rust_version,
+                Some("1.98"),
+                "{manifest}: {name} effective rust-version"
+            );
+        }
     }
     Ok(())
 }
 
 #[test]
 fn metadata_locked_graph_is_registry_only() -> Result<(), Box<dyn Error>> {
+    for manifest in WORKSPACE_MANIFESTS {
+        assert_locked_graph_is_registry_only(&metadata_for(manifest)?, manifest)?;
+    }
+    Ok(())
+}
+
+fn assert_locked_graph_is_registry_only(doc: &Json, manifest: &str) -> Result<(), Box<dyn Error>> {
     const REGISTRY: &str = "registry+https://github.com/rust-lang/crates.io-index";
-    let doc = metadata()?;
     let resolve = doc
         .get("resolve")
-        .ok_or_else(|| format!("no resolve graph in {doc:?}"))?;
+        .ok_or_else(|| format!("no resolve graph in {manifest}: {doc:?}"))?;
     let nodes = resolve
         .get("nodes")
         .and_then(Json::as_arr)
         .ok_or("no nodes")?;
-    assert!(!nodes.is_empty(), "empty locked graph");
+    assert!(!nodes.is_empty(), "{manifest}: empty locked graph");
     for node in nodes {
         let id = node.get("id").and_then(Json::as_str).unwrap_or("?");
-        assert!(!id.contains("git+"), "{id} resolves from git");
+        assert!(!id.contains("git+"), "{manifest}: {id} resolves from git");
     }
-    for package in workspace_packages(&doc)? {
+    for package in workspace_packages(doc)? {
         let name = package.get("name").and_then(Json::as_str).unwrap_or("?");
         let deps = package
             .get("dependencies")
@@ -308,10 +373,10 @@ fn metadata_locked_graph_is_registry_only() -> Result<(), Box<dyn Error>> {
             .ok_or("no dependencies")?;
         for dep in deps {
             let source = dep.get("source").and_then(Json::as_str);
+            let req = dep.get("req").and_then(Json::as_str).unwrap_or("?");
+            assert!(req.starts_with('='), "{manifest}: {name} inexact req {req}");
             if let Some(source) = source {
-                assert_eq!(source, REGISTRY, "{name} non-registry source");
-                let req = dep.get("req").and_then(Json::as_str).unwrap_or("?");
-                assert!(req.starts_with('='), "{name} inexact req {req}");
+                assert_eq!(source, REGISTRY, "{manifest}: {name} non-registry source");
             }
         }
     }

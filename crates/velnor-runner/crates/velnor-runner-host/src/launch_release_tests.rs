@@ -41,6 +41,19 @@ impl PairEngine for Seen {
         Ok(None)
     }
 
+    async fn worker_id_for_name(
+        &self,
+        _name: &str,
+        _volume: &str,
+        _role: &str,
+    ) -> Result<Option<String>, HostError> {
+        Ok(None)
+    }
+
+    async fn remove_worker_volumes(&self, _volume: &str) -> Result<bool, HostError> {
+        Ok(true)
+    }
+
     async fn running(&self, id: &str) -> Result<bool, HostError> {
         Ok(self.running.contains(id))
     }

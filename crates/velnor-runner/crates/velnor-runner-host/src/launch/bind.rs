@@ -22,6 +22,10 @@ impl Bind {
 }
 
 impl PairSink for Bind {
+    async fn volume(&self, volume: &str) -> Result<(), HostError> {
+        self.journal.bind_worker_volume(self.row, volume).await
+    }
+
     async fn dind(&self, id: &str) -> Result<(), HostError> {
         self.journal.bind_worker(self.row, None, Some(id)).await
     }
@@ -37,7 +41,7 @@ pub(super) async fn start_bound(
     jit: &[u8],
     bind: &Bind,
 ) -> Result<Started, HostError> {
-    let partial = drive(docker, volume, jit, PairStop::Jit, bind).await?;
+    let partial = Box::pin(drive(docker, volume, jit, PairStop::Jit, bind)).await?;
     Ok(Started {
         dind_id: partial.dind_id.ok_or(HostError::Docker)?,
         runner_id: partial.runner_id.ok_or(HostError::Docker)?,

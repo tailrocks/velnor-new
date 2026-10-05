@@ -6,7 +6,7 @@
 
 use super::super::features::run_step;
 use super::steps::{mapping, run_env};
-use super::{Extras, both};
+use super::{Extras, RunnerSpec, both};
 use crate::yaml::Yaml;
 
 const RESTORE: &str = "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
@@ -20,7 +20,7 @@ const MISS: &str = "test -z \"$HIT\" || test \"$HIT\" = false";
 const HIT: &str = "grep -qx cache-ok \"g4 cache/note.txt\" && test \"$HIT\" = true";
 
 /// Hosted and scale-set jobs for `inputs.mode == 'empty-cache'`.
-pub(super) fn jobs(hosted: &Yaml, scale: &Yaml) -> Vec<(String, Yaml)> {
+pub(super) fn jobs(hosted: &RunnerSpec, scale: &RunnerSpec) -> Vec<(String, Yaml)> {
     both(
         "empty-cache",
         "Empty cache",

@@ -66,6 +66,7 @@ pub(crate) fn profile_for_workspace(
         handwritten_workflows: flows,
         declared_driver: rust.and_then(|stack| stack.compile_driver.map(map_driver)),
         declared_runner: rust.and_then(|stack| stack.test_runner.map(map_runner)),
+        run_ignored: rust.and_then(|stack| stack.run_ignored.clone()),
         mise_wrappers: wrapper_inputs(root, &record.workspace_root)?,
         nextest_configs: nextest_inputs(root, &record.workspace_root)?,
     };

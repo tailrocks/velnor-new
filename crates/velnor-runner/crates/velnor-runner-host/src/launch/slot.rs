@@ -2,11 +2,10 @@
 //! Busy means occupancy or the running count has reached capacity.
 
 use crate::IntentState;
-use crate::docker_spec::DeleteDecision;
 use crate::journal::Journal;
 use crate::reconcile::IntentRow;
 use crate::scale_set::EnsureError;
-use crate::stage::{PairEngine, decide};
+use crate::stage::PairEngine;
 
 pub(super) async fn busy<E: PairEngine + ?Sized>(
     journal: &Journal,
@@ -48,9 +47,7 @@ pub(super) async fn running_count<E: PairEngine + ?Sized>(
     Ok(count)
 }
 
-/// Drop exited runners. A 404 on a recorded id is proven gone. No recorded
-/// runner or `DinD` id is not a live slot. A running runner stays occupied;
-/// its `DinD` is removed once that runner is gone.
+/// Recover and clean exact worker resources after the runner exits.
 pub(super) async fn release_exited<E: PairEngine + ?Sized>(
     journal: &Journal,
     engine: &E,
@@ -70,17 +67,45 @@ async fn release_row<E: PairEngine + ?Sized>(
     if !holds(row) {
         return Ok(());
     }
-    let Some(runner) = row.docker_id.as_deref() else {
-        if row.dind_id.is_none() {
-            journal.record_cleanup(row.id).await.map_err(map_journal)?;
-        }
+    let Some(volume) = row.worker_volume.as_deref() else {
+        return release_unscoped(journal, engine, row).await;
+    };
+    let (runner, dind) = recover_pair(journal, engine, row).await?;
+    if let Some(runner) = runner.as_deref()
+        && (engine.running(runner).await.map_err(map_docker)?
+            || !delete_owned(engine, runner, volume, "runner").await?)
+    {
+        return Ok(());
+    }
+    if let Some(dind) = dind.as_deref()
+        && !delete_owned(engine, dind, volume, "dind").await?
+    {
+        return Ok(());
+    }
+    if !engine
+        .remove_worker_volumes(volume)
+        .await
+        .map_err(map_docker)?
+    {
+        return Ok(());
+    }
+    journal.record_cleanup(row.id).await.map_err(map_journal)?;
+    Ok(())
+}
+
+async fn release_unscoped<E: PairEngine + ?Sized>(
+    journal: &Journal,
+    engine: &E,
+    row: &IntentRow,
+) -> Result<(), EnsureError> {
+    let Some(runner) = row.docker_id.as_deref().filter(|id| !id.is_empty()) else {
         return Ok(());
     };
     if engine.running(runner).await.map_err(map_docker)? || !delete_recorded(engine, runner).await?
     {
         return Ok(());
     }
-    if let Some(dind) = row.dind_id.as_deref()
+    if let Some(dind) = row.dind_id.as_deref().filter(|id| !id.is_empty())
         && !delete_recorded(engine, dind).await?
     {
         return Ok(());
@@ -96,8 +121,102 @@ async fn delete_recorded<E: PairEngine + ?Sized>(
     match engine.id_for_name(id).await.map_err(map_docker)? {
         None => Ok(true),
         Some(found) if found == id => {
-            let decision = decide(engine, id, id).await.map_err(map_docker)?;
-            Ok(decision == DeleteDecision::Delete)
+            engine.remove(id).await.map_err(map_docker)?;
+            Ok(true)
+        }
+        Some(_) => Ok(false),
+    }
+}
+
+async fn recover_pair<E: PairEngine + ?Sized>(
+    journal: &Journal,
+    engine: &E,
+    row: &IntentRow,
+) -> Result<(Option<String>, Option<String>), EnsureError> {
+    let Some(volume) = row.worker_volume.as_deref() else {
+        return Ok((row.docker_id.clone(), row.dind_id.clone()));
+    };
+    let runner = recover_id(journal, engine, row, volume, "runner").await?;
+    let dind = recover_id(journal, engine, row, volume, "dind").await?;
+    Ok((runner, dind))
+}
+
+async fn recover_id<E: PairEngine + ?Sized>(
+    journal: &Journal,
+    engine: &E,
+    row: &IntentRow,
+    volume: &str,
+    role: &str,
+) -> Result<Option<String>, EnsureError> {
+    let recorded = match role {
+        "runner" => row.docker_id.as_deref(),
+        "dind" => row.dind_id.as_deref(),
+        _ => {
+            return Err(EnsureError::Unexpected {
+                status: 0,
+                step: "docker",
+            });
+        }
+    };
+    let name = format!("{volume}-{role}");
+    let observed = engine
+        .worker_id_for_name(&name, volume, role)
+        .await
+        .map_err(map_docker)?;
+    if let Some(id) = recorded {
+        return match observed {
+            Some(found) if found == id => Ok(Some(id.to_owned())),
+            Some(_) => Err(EnsureError::Unexpected {
+                status: 0,
+                step: "docker ownership",
+            }),
+            None => match engine.id_for_name(id).await.map_err(map_docker)? {
+                None => Ok(None),
+                Some(_) => Err(EnsureError::Unexpected {
+                    status: 0,
+                    step: "docker ownership",
+                }),
+            },
+        };
+    }
+    let Some(id) = observed else {
+        return Ok(None);
+    };
+    let (runner, dind) = if role == "runner" {
+        (Some(id.as_str()), None)
+    } else {
+        (None, Some(id.as_str()))
+    };
+    journal
+        .bind_worker(row.id, runner, dind)
+        .await
+        .map_err(map_journal)?;
+    Ok(Some(id))
+}
+
+async fn delete_owned<E: PairEngine + ?Sized>(
+    engine: &E,
+    id: &str,
+    volume: &str,
+    role: &str,
+) -> Result<bool, EnsureError> {
+    let name = format!("{volume}-{role}");
+    match engine
+        .worker_id_for_name(&name, volume, role)
+        .await
+        .map_err(map_docker)?
+    {
+        None => match engine.id_for_name(id).await.map_err(map_docker)? {
+            None => Ok(true),
+            Some(_) => Ok(false),
+        },
+        Some(found) if found == id => {
+            engine.remove(id).await.map_err(map_docker)?;
+            Ok(engine
+                .worker_id_for_name(&name, volume, role)
+                .await
+                .map_err(map_docker)?
+                .is_none())
         }
         Some(_) => Ok(false),
     }

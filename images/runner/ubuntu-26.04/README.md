@@ -10,11 +10,12 @@ Official `actions/runner` `2.337.0` linux-x64, SHA256
 `70920811a4f8ad4328818682bca5c6469c1c942fab52448868071d0063816613`.
 Unmodified. No `/proc` spoof, no fake `os-release`. `/usr/bin/tar` is
 `tar-shim.sh` runs BusyBox tar. Unimplemented semantic GNU flags fail
-closed. A newline in a member name fails closed. A symlink target outside
-the extract root, a member that walks through an archive symlink, and a
-member that walks through a symlink already on disk fail closed. Modes,
-executable bits, timestamps, empty directories, and pax paths longer than
-the ustar name field round-trip. `--zstd`, `--files-from`, and `-P` are implemented. `-v` does not
+closed. A newline in a member name fails closed. Without `-P`, a symlink
+target outside the extract root fails closed. With `-P`, relative symlink
+targets may resolve outside `-C`; an archive member that walks through an
+archive symlink or a symlink already on disk still fails closed. Modes,
+executable bits, directory timestamps, empty directories, and pax paths
+longer than the ustar name field round-trip. `--zstd`, `--files-from`, and `-P` are implemented. `-v` does not
 change archive bytes. Ubuntu 26.04 GNU tar calls `openat2`, and qemu-user fails
 that with `ENOSYS`, so GNU tar stays at `/usr/bin/tar.gnu` and is not the
 `tar` on `PATH`. `zstd` is installed so cache archives match hosted runners.

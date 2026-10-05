@@ -1,176 +1,12 @@
 //! Exited runners free one slot. The next assigned job is minted in this session.
 
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use crate::launch::{Admit, admission, drive_offer};
-use crate::launch_harness::{Mode, Script, absent, assigned_wait, ctx, open};
-use crate::stage::{PairEngine, PairStop, drive};
-use crate::worker::CreateProjection;
-use crate::{EnsureError, HostError, IntentState, Journal, Outcome, Started};
-
-fn hex(n: u64) -> String {
-    format!("{n:064x}")
-}
-
-struct Engine {
-    ids: Mutex<Vec<String>>,
-    running: Mutex<HashMap<String, bool>>,
-    names: Mutex<HashMap<String, String>>,
-    removed: Mutex<Vec<String>>,
-    next: Mutex<u64>,
-}
-
-impl Engine {
-    fn new() -> Self {
-        Self {
-            ids: Mutex::new(Vec::new()),
-            running: Mutex::new(HashMap::new()),
-            names: Mutex::new(HashMap::new()),
-            removed: Mutex::new(Vec::new()),
-            next: Mutex::new(1),
-        }
-    }
-
-    fn plant(&self, id: &str, up: bool) -> Result<(), HostError> {
-        self.ids
-            .lock()
-            .map_err(|_| HostError::Docker)?
-            .push(id.to_owned());
-        self.running
-            .lock()
-            .map_err(|_| HostError::Docker)?
-            .insert(id.to_owned(), up);
-        Ok(())
-    }
-
-    fn foreign(&self, id: &str) -> Result<(), HostError> {
-        self.names
-            .lock()
-            .map_err(|_| HostError::Docker)?
-            .insert(id.to_owned(), id.to_owned());
-        self.plant(id, true)
-    }
-
-    fn removed(&self) -> Result<Vec<String>, HostError> {
-        self.removed
-            .lock()
-            .map(|guard| guard.clone())
-            .map_err(|_| HostError::Docker)
-    }
-
-    fn alive(&self, id: &str) -> Result<bool, HostError> {
-        Ok(self
-            .ids
-            .lock()
-            .map_err(|_| HostError::Docker)?
-            .iter()
-            .any(|kept| kept == id))
-    }
-}
-
-#[expect(
-    clippy::unused_async_trait_impl,
-    reason = "fake engine matches the async trait and does not await"
-)]
-impl PairEngine for Engine {
-    async fn prepare_volumes(&self, _volume: &str) -> Result<(), HostError> {
-        Ok(())
-    }
-
-    async fn create(&self, _spec: &CreateProjection) -> Result<String, HostError> {
-        let mut next = self.next.lock().map_err(|_| HostError::Docker)?;
-        let id = hex(*next);
-        *next = next.saturating_add(1);
-        drop(next);
-        self.plant(&id, false)?;
-        Ok(id)
-    }
-
-    async fn start(&self, id: &str) -> Result<(), HostError> {
-        self.running
-            .lock()
-            .map_err(|_| HostError::Docker)?
-            .insert(id.to_owned(), true);
-        Ok(())
-    }
-
-    async fn write_jit(&self, _id: &str, _jit: &[u8]) -> Result<(), HostError> {
-        Ok(())
-    }
-
-    async fn remove(&self, id: &str) -> Result<(), HostError> {
-        self.removed
-            .lock()
-            .map_err(|_| HostError::Docker)?
-            .push(id.to_owned());
-        self.ids
-            .lock()
-            .map_err(|_| HostError::Docker)?
-            .retain(|kept| kept != id);
-        self.running
-            .lock()
-            .map_err(|_| HostError::Docker)?
-            .remove(id);
-        Ok(())
-    }
-
-    async fn id_for_name(&self, name: &str) -> Result<Option<String>, HostError> {
-        let known = self
-            .ids
-            .lock()
-            .map_err(|_| HostError::Docker)?
-            .iter()
-            .any(|id| id == name);
-        if known {
-            return Ok(Some(name.to_owned()));
-        }
-        let names = self.names.lock().map_err(|_| HostError::Docker)?;
-        Ok(names.get(name).cloned())
-    }
-
-    async fn running(&self, id: &str) -> Result<bool, HostError> {
-        Ok(self
-            .running
-            .lock()
-            .map_err(|_| HostError::Docker)?
-            .get(id)
-            .copied()
-            .unwrap_or(false))
-    }
-}
-
-async fn seed_done(
-    journal: &Journal,
-    subject: &str,
-    runner: &str,
-    dind: &str,
-) -> Result<(), String> {
-    let id = journal
-        .begin("launch", subject)
-        .await
-        .map_err(|err| err.to_string())?;
-    journal
-        .bind_worker(id, Some(runner), Some(dind))
-        .await
-        .map_err(|err| err.to_string())?;
-    journal
-        .bind_worker(id, Some(runner), Some(dind))
-        .await
-        .map_err(|err| err.to_string())?;
-    journal
-        .finish(id, Outcome::Done)
-        .await
-        .map_err(|err| err.to_string())?;
-    Ok(())
-}
-
-fn script() -> Script {
-    Script {
-        calls: Vec::new(),
-        mode: Mode::Ok,
-    }
-}
+use crate::launch_harness::{absent, assigned_wait, ctx, open};
+use crate::launch_test_support::{Engine, hex, script, seed_done};
+use crate::stage::{PairStop, drive};
+use crate::{EnsureError, HostError, IntentState, Outcome, Started};
 
 #[tokio::test]
 async fn capacity_two_mints_when_one_runner_exits() -> Result<(), String> {
@@ -180,16 +16,26 @@ async fn capacity_two_mints_when_one_runner_exits() -> Result<(), String> {
     let dind_a = hex(2);
     let runner_b = hex(3);
     let dind_b = hex(4);
-    seed_done(&journal, "m1", &runner_a, &dind_a).await?;
-    seed_done(&journal, "m2", &runner_b, &dind_b).await?;
+    let volume_a = seed_done(&journal, "m1", &runner_a, &dind_a).await?;
+    let volume_b = seed_done(&journal, "m2", &runner_b, &dind_b).await?;
     engine
-        .plant(&runner_a, false)
+        .plant_worker_volumes(&volume_a)
         .map_err(|err| err.to_string())?;
-    engine.plant(&dind_a, true).map_err(|err| err.to_string())?;
     engine
-        .plant(&runner_b, true)
+        .plant_worker_volumes(&volume_b)
         .map_err(|err| err.to_string())?;
-    engine.plant(&dind_b, true).map_err(|err| err.to_string())?;
+    engine
+        .plant_owned(&volume_a, "runner", &runner_a, false)
+        .map_err(|err| err.to_string())?;
+    engine
+        .plant_owned(&volume_a, "dind", &dind_a, true)
+        .map_err(|err| err.to_string())?;
+    engine
+        .plant_owned(&volume_b, "runner", &runner_b, true)
+        .map_err(|err| err.to_string())?;
+    engine
+        .plant_owned(&volume_b, "dind", &dind_b, true)
+        .map_err(|err| err.to_string())?;
     let decision = admission(&engine, &journal, 2, 2, 2, &assigned_wait(9, 2))
         .await
         .map_err(|err| err.to_string())?;
@@ -235,9 +81,15 @@ async fn gone_runner_without_dind_frees_the_slot() -> Result<(), String> {
     let engine = Engine::new();
     let gone = hex(31);
     let live = hex(32);
+    let mut live_volume = String::new();
     for (subject, runner) in [("m1", gone.as_str()), ("m2", live.as_str())] {
-        let id = journal
-            .begin("launch", subject)
+        let (id, _) = journal
+            .begin_launch(subject)
+            .await
+            .map_err(|err| err.to_string())?;
+        let volume = format!("w{id}");
+        journal
+            .bind_worker_volume(id, &volume)
             .await
             .map_err(|err| err.to_string())?;
         journal
@@ -248,8 +100,16 @@ async fn gone_runner_without_dind_frees_the_slot() -> Result<(), String> {
             .finish(id, Outcome::Done)
             .await
             .map_err(|err| err.to_string())?;
+        engine
+            .plant_worker_volumes(&volume)
+            .map_err(|err| err.to_string())?;
+        if runner == live {
+            live_volume = volume;
+        }
     }
-    engine.plant(&live, true).map_err(|err| err.to_string())?;
+    engine
+        .plant_owned(&live_volume, "runner", &live, true)
+        .map_err(|err| err.to_string())?;
     let decision = admission(&engine, &journal, 2, 2, 0, &assigned_wait(9, 2))
         .await
         .map_err(|err| err.to_string())?;
@@ -270,11 +130,16 @@ async fn capacity_one_mints_after_the_pair_is_removed() -> Result<(), String> {
     let engine = Engine::new();
     let runner = hex(11);
     let dind = hex(12);
-    seed_done(&journal, "m1", &runner, &dind).await?;
+    let volume = seed_done(&journal, "m1", &runner, &dind).await?;
     engine
-        .plant(&runner, false)
+        .plant_worker_volumes(&volume)
         .map_err(|err| err.to_string())?;
-    engine.plant(&dind, true).map_err(|err| err.to_string())?;
+    engine
+        .plant_owned(&volume, "runner", &runner, false)
+        .map_err(|err| err.to_string())?;
+    engine
+        .plant_owned(&volume, "dind", &dind, true)
+        .map_err(|err| err.to_string())?;
     let decision = admission(&engine, &journal, 1, 1, 1, &assigned_wait(2, 1))
         .await
         .map_err(|err| err.to_string())?;
@@ -306,7 +171,7 @@ async fn capacity_one_mints_after_the_pair_is_removed() -> Result<(), String> {
 }
 
 #[tokio::test]
-async fn uncertain_dind_keeps_the_slot_and_the_foreign_container() -> Result<(), String> {
+async fn dind_only_recovery_removes_owned_container_and_volumes() -> Result<(), String> {
     let (scratch, journal) = open("backfill-c").await?;
     let engine = Arc::new(Engine::new());
     let foreign = hex(99);
@@ -317,11 +182,12 @@ async fn uncertain_dind_keeps_the_slot_and_the_foreign_container() -> Result<(),
         &ctx(),
         &assigned_wait(4, 1),
         &journal,
-        |_name, jit, bind| {
+        |volume, jit, bind| {
             let engine = Arc::clone(&engine);
+            let volume = volume.to_owned();
             let jit = jit.to_vec();
             async move {
-                let partial = drive(&*engine, "m4", &jit, PairStop::DindCreated, &bind).await?;
+                let partial = drive(&*engine, &volume, &jit, PairStop::DindCreated, &bind).await?;
                 assert!(partial.runner_id.is_none());
                 assert!(partial.dind_id.is_some());
                 Err(HostError::Docker)
@@ -336,16 +202,29 @@ async fn uncertain_dind_keeps_the_slot_and_the_foreign_container() -> Result<(),
     assert!(rows[0].dind_id.is_some());
     assert_eq!(rows[0].docker_id, None);
     let dind = rows[0].dind_id.clone().ok_or_else(|| "dind".to_owned())?;
+    let volume = rows[0]
+        .worker_volume
+        .clone()
+        .ok_or_else(|| "worker volume".to_owned())?;
     let decision = admission(&*engine, &journal, 1, 1, 0, &assigned_wait(5, 1))
         .await
         .map_err(|err| err.to_string())?;
-    assert_eq!(decision, Admit::Hold);
+    assert_eq!(decision, Admit::Start { stop: true });
     let removed = engine.removed().map_err(|err| err.to_string())?;
-    assert!(removed.is_empty());
+    assert_eq!(removed.len(), 1);
+    assert_eq!(removed.first().map(String::as_str), Some(dind.as_str()));
+    assert_eq!(
+        engine.removed_volumes().map_err(|err| err.to_string())?,
+        [
+            volume.clone(),
+            format!("{volume}-work"),
+            format!("{volume}-docker")
+        ]
+    );
     assert!(engine.alive(&foreign).map_err(|err| err.to_string())?);
-    assert!(engine.alive(&dind).map_err(|err| err.to_string())?);
+    assert!(!engine.alive(&dind).map_err(|err| err.to_string())?);
     let rows = journal.rows().await.map_err(|err| err.to_string())?;
-    assert!(!rows[0].cleanup_proven);
+    assert!(rows[0].cleanup_proven);
     assert_eq!(rows[0].state, IntentState::Uncertain);
     absent(&scratch.file())
 }
@@ -356,9 +235,16 @@ async fn replay_of_a_running_worker_does_not_mint_again() -> Result<(), String> 
     let engine = Engine::new();
     let runner = hex(21);
     let dind = hex(22);
-    seed_done(&journal, "m7", &runner, &dind).await?;
-    engine.plant(&runner, true).map_err(|err| err.to_string())?;
-    engine.plant(&dind, true).map_err(|err| err.to_string())?;
+    let volume = seed_done(&journal, "m7", &runner, &dind).await?;
+    engine
+        .plant_worker_volumes(&volume)
+        .map_err(|err| err.to_string())?;
+    engine
+        .plant_owned(&volume, "runner", &runner, true)
+        .map_err(|err| err.to_string())?;
+    engine
+        .plant_owned(&volume, "dind", &dind, true)
+        .map_err(|err| err.to_string())?;
     let fresh = admission(&engine, &journal, 2, 2, 0, &assigned_wait(8, 1))
         .await
         .map_err(|err| err.to_string())?;
@@ -371,6 +257,7 @@ async fn replay_of_a_running_worker_does_not_mint_again() -> Result<(), String> 
         .await
         .map_err(|err| err.to_string())?;
     assert_eq!(replay, Admit::Ack { stop: true });
+    assert!(engine.removed().map_err(|err| err.to_string())?.is_empty());
     let mut calls = script();
     let again = drive_offer(
         &mut calls,

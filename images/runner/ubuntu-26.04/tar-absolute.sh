@@ -5,6 +5,7 @@
 
 strip_unsafe() {
   local s="$1"
+  local output_var="${2:-}"
   while true; do
     if [[ "$s" == /* ]]; then
       s="${s#/}"
@@ -22,11 +23,16 @@ strip_unsafe() {
     esac
     break
   done
-  printf '%s' "$s"
+  if [ -n "$output_var" ]; then
+    printf -v "$output_var" '%s' "$s"
+  else
+    printf '%s' "$s"
+  fi
 }
 
 norm_path() {
   local input="$1"
+  local output_var="${2:-}"
   local abs=0
   local -a stack=()
   local rest="$input"
@@ -51,34 +57,36 @@ norm_path() {
       *) stack+=("$part") ;;
     esac
   done
+  local result="" p
   if [ "$abs" -eq 1 ]; then
     if [ "${#stack[@]}" -eq 0 ]; then
-      printf '/'
-      return
+      result="/"
+    else
+      for p in "${stack[@]}"; do
+        result="$result/$p"
+      done
     fi
-    local out="" p
-    for p in "${stack[@]}"; do
-      out="$out/$p"
-    done
-    printf '%s' "$out"
-    return
+  elif [ "${#stack[@]}" -eq 0 ]; then
+    result="."
+  else
+    local IFS=/
+    result="${stack[*]}"
   fi
-  if [ "${#stack[@]}" -eq 0 ]; then
-    printf '.'
-    return
+  if [ -n "$output_var" ]; then
+    printf -v "$output_var" '%s' "$result"
+  else
+    printf '%s' "$result"
   fi
-  local IFS=/
-  printf '%s' "${stack[*]}"
 }
 
 member_intended() {
-  local base
+  local base output_var="${2:-}"
   if [[ "$1" == /* ]]; then
-    norm_path "$1"
+    norm_path "$1" "$output_var"
     return
   fi
   base="${chdir:-$PWD}"
-  norm_path "$base/$1"
+  norm_path "$base/$1" "$output_var"
 }
 
 run_busybox() {
@@ -180,13 +188,15 @@ move_member() {
 # not walk through an archive symlink or a symlink already on disk.
 reject_symlink_traversal() {
   local -A links=()
-  local i name target dir intended root key prefix
+  local -A checked_prefixes=()
+  local -A checked_member_parents=()
+  local i name target dir intended root key prefix parent_name
   root="$(norm_path "${chdir:-$PWD}")"
   for i in "${!mem_name[@]}"; do
     [ "${mem_wanted[$i]}" -eq 1 ] || continue
     [ "${mem_type[$i]}" = 2 ] || continue
     name="${mem_name[$i]}"
-    key="$(member_intended "$name")"
+    member_intended "$name" key
     links["$key"]=1
     target="${mem_link[$i]}"
     [ -n "$target" ] || die "symlink escapes destination: $name"
@@ -196,21 +206,42 @@ reject_symlink_traversal() {
       dir="$(dirname -- "$key")"
       intended="$(norm_path "$dir/$target")"
     fi
-    path_under "$root" "$intended" || die "symlink escapes destination: $name"
+    if ! path_under "$root" "$intended"; then
+      if [ "$absolute" -eq 1 ] && [[ "$target" != /* ]]; then
+        continue
+      fi
+      die "symlink escapes destination: $name"
+    fi
   done
   for i in "${!mem_name[@]}"; do
     [ "${mem_wanted[$i]}" -eq 1 ] || continue
     name="${mem_name[$i]}"
-    prefix="$(member_intended "$name")"
-    while [ "$prefix" != "/" ] && [ "$prefix" != "." ] && [ "$prefix" != "$root" ]; do
-      prefix="$(dirname -- "$prefix")"
-      [ "$prefix" != "/" ] && [ "$prefix" != "." ] || break
+    parent_name="$name"
+    while [[ "$parent_name" == */ ]]; do
+      parent_name="${parent_name%/}"
+    done
+    if [[ "$parent_name" == */* ]]; then
+      parent_name="${parent_name%/*}"
+      [ -n "$parent_name" ] || parent_name="/"
+    else
+      parent_name="."
+    fi
+    [ -z "${checked_member_parents[$parent_name]:-}" ] || continue
+    checked_member_parents["$parent_name"]=1
+    member_intended "$parent_name" intended
+    prefix="$intended"
+    while [ "$prefix" != "/" ] && [ "$prefix" != "." ]; do
+      [ -z "${checked_prefixes[$prefix]:-}" ] || break
+      checked_prefixes["$prefix"]=1
       if [ -n "${links[$prefix]:-}" ] || [ -L "$prefix" ]; then
         die "member traverses symlink: $name"
       fi
       [ "$prefix" = "$root" ] && break
+      prefix="${prefix%/*}"
+      [ -n "$prefix" ] || prefix="/"
     done
   done
+  return 0
 }
 
 # shellcheck disable=SC1091

@@ -69,12 +69,17 @@ impl PairEngine for Fake {
         push(&self.events, "volumes")
     }
 
-    async fn create(&self, _spec: &CreateProjection) -> Result<String, HostError> {
+    async fn create(&self, spec: &CreateProjection) -> Result<String, HostError> {
         self.hit("create")?;
         push(&self.events, "create")?;
         let mut ids = self.ids.lock().map_err(|_| HostError::Docker)?;
         let id = format!("{:012x}", ids.len() + 1);
         ids.push(id.clone());
+        drop(ids);
+        self.names
+            .lock()
+            .map_err(|_| HostError::Docker)?
+            .insert(spec.name.clone(), id.clone());
         Ok(id)
     }
 
@@ -105,6 +110,20 @@ impl PairEngine for Fake {
         }
         let names = self.names.lock().map_err(|_| HostError::Docker)?;
         Ok(names.get(name).cloned())
+    }
+
+    async fn worker_id_for_name(
+        &self,
+        name: &str,
+        _volume: &str,
+        _role: &str,
+    ) -> Result<Option<String>, HostError> {
+        let names = self.names.lock().map_err(|_| HostError::Docker)?;
+        Ok(names.get(name).cloned())
+    }
+
+    async fn remove_worker_volumes(&self, _volume: &str) -> Result<bool, HostError> {
+        Ok(true)
     }
 
     async fn running(&self, _id: &str) -> Result<bool, HostError> {
