@@ -32,6 +32,7 @@ fn group() -> TaskGroup {
         uses_clock: false,
         uses_random: false,
         run_ignored: None,
+        no_tests: None,
         nextest_profile: NextestProfile::Default,
     }
 }

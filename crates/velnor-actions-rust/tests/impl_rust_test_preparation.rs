@@ -27,6 +27,7 @@ fn group(kind: TaskKind) -> TaskGroup {
         uses_clock: false,
         uses_random: false,
         run_ignored: None,
+        no_tests: None,
     }
 }
 

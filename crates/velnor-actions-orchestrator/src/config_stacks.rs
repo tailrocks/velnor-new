@@ -39,6 +39,8 @@ pub(crate) struct PartialRustStack {
     test_runner: Option<DeclaredTestRunner>,
     /// Ignored test execution mode.
     run_ignored: Option<String>,
+    /// Nextest behavior when no tests are found.
+    no_tests: Option<String>,
     /// Rust release policy; disabled by default.
     release: Option<RustReleaseConfig>,
     /// Allowlisted Mise custom-task names; empty by default.
@@ -63,6 +65,7 @@ impl PartialStacks {
                 compile_driver: stack.compile_driver,
                 test_runner: stack.test_runner,
                 run_ignored: stack.run_ignored,
+                no_tests: stack.no_tests,
                 release: stack.release.unwrap_or_default(),
                 custom_tasks: stack.custom_tasks.unwrap_or_default(),
             }
@@ -175,6 +178,15 @@ mod tests {
             rust.custom_tasks,
             ["audit".to_owned(), "lint:strict".to_owned()]
         );
+    }
+
+    #[test]
+    fn no_tests_section_parses() {
+        let load = load_config;
+        let root = rooted("schema = 1\n[stacks.rust]\nno_tests = \"warn\"\n");
+        let config = load(root.path()).expect("no_tests config");
+        let rust = config.stacks.rust.expect("rust stack");
+        assert_eq!(rust.no_tests.as_deref(), Some("warn"));
     }
 
     #[test]

@@ -34,6 +34,7 @@ pub(super) fn group(package: &str, kind: TaskKind, gated_by: &[&str]) -> Propose
         uses_clock: false,
         uses_random: false,
         run_ignored: None,
+        no_tests: None,
     };
     let task = velnor_actions_rust::propose_task(&group).expect("fixture proposes");
     task.validate().expect("fixture valid");

@@ -209,7 +209,8 @@ fn push_kind_args(
             {
                 args.extend([flag("--run-ignored"), flag(mode)]);
             }
-            args.extend([flag("--no-tests"), flag("fail")]);
+            let no_tests_action = group.no_tests.as_deref().unwrap_or("fail");
+            args.extend([flag("--no-tests"), flag(no_tests_action)]);
         }
         TaskKind::Doctest => {
             args.extend([flag("test"), flag("--locked"), flag("--offline")]);

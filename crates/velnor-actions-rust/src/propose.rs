@@ -238,6 +238,7 @@ mod tests {
             test_runner: TestRunner::CargoTest,
             nextest_profile: NextestProfile::Default,
             run_ignored: None,
+            no_tests: None,
             declared_inputs: Vec::new(),
             undeclared_reads: false,
             uses_network: false,

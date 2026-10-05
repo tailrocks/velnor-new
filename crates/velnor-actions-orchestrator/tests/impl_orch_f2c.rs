@@ -221,6 +221,7 @@ fn clippy_task() -> Result<velnor_actions_contract::ProposedTask, Box<dyn std::e
         uses_clock: false,
         uses_random: false,
         run_ignored: None,
+        no_tests: None,
         nextest_profile: velnor_actions_rust::NextestProfile::Default,
     };
     let task = velnor_actions_rust::propose_task(&group)?;
