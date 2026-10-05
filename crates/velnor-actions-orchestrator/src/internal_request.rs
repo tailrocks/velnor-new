@@ -204,6 +204,7 @@ pub fn publish_plan_files(
     let response: PlanResponse =
         serde_json::from_str(response_json).map_err(|_| internal("malformed_response"))?;
     check_schema(response.schema)?;
+    response.validate()?;
     let dir = plan_artifact_dir(velnor_dir, &response.plan.run_key)?;
     write_plan_files(&response, velnor_dir, &dir)?;
     Ok(dir)
