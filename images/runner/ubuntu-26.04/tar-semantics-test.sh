@@ -353,6 +353,25 @@ case_cargo_work_symlink() {
   [ ! -e /etc/outside-link ] && [ ! -L /etc/outside-link ] || return 1
 }
 
+case_cargo_bulk_parents() {
+  local repo i
+  local -a args=()
+  repo=/home/runner/work/repo/repo
+  rm -rf -- /home/runner/work
+  mkdir -p "$repo"
+  args=("$work/bulk.tar")
+  for ((i = 1; i <= 40; i++)); do
+    args+=(f "../../_temp/velnor/cargo/reg/$i" "body-$i")
+  done
+  args+=(s ../../_temp/velnor/cargo/bin/rls rustup)
+  write_ustar "${args[@]}" || return 1
+  bash "$shim" -xf "$work/bulk.tar" -P -C "$repo" || return 1
+  [ "$(readlink /home/runner/work/_temp/velnor/cargo/bin/rls)" = rustup ] || return 1
+  for ((i = 1; i <= 40; i++)); do
+    [ "$(cat "/home/runner/work/_temp/velnor/cargo/reg/$i")" = "body-$i" ] || return 1
+  done
+}
+
 case_disk_full() {
   local root="$work/diskfull" err status=0 bytes
   [ -d /lowdisk ] || return 1
@@ -387,6 +406,7 @@ run_case preexisting-symlink case_preexisting_symlink
 run_case symlink-inside case_symlink_inside
 run_case external-relative-symlink case_external_relative_symlink
 run_case cargo-work-symlink case_cargo_work_symlink
+run_case cargo-bulk-parents case_cargo_bulk_parents
 run_case mode-and-mtime case_mode_and_mtime
 run_case directory-metadata case_directory_metadata
 run_case restrictive-parent-metadata case_restrictive_parent_metadata
