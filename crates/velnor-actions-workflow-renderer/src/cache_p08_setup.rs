@@ -12,6 +12,7 @@ pub(crate) fn ensure_tools_cache_v2(
     setup: &MiseSetup,
     always: bool,
     target: &str,
+    checkout_uses: &str,
 ) -> Result<(), RenderError> {
     setup.validate()?;
     let setup_indices = job
@@ -40,7 +41,7 @@ pub(crate) fn ensure_tools_cache_v2(
         }
         index
     } else {
-        let at = insert_at(job).min(job.steps.len());
+        let at = insert_at(job, checkout_uses).min(job.steps.len());
         job.steps.insert(at, expected_setup);
         at
     };
@@ -52,7 +53,7 @@ pub(crate) fn ensure_tools_cache_v2(
         )));
     }
     reject_v2_steps(job_id, job)?;
-    if !checkout_precedes_setup(job, setup_index) {
+    if !checkout_precedes_setup(job, setup_index, checkout_uses) {
         return Ok(());
     }
     insert_tools_prelude(job_id, job, setup, target, setup_index)
@@ -101,17 +102,32 @@ fn insert_tools_prelude(
         return Ok(());
     }
     let identity = payload.runtime_identity_step()?;
+    let seed = crate::tool_seed::seed_step(&payload)?;
     let restore = payload.restore_step()?;
     job.steps
-        .splice(setup_index..setup_index, [identity, restore]);
+        .splice(setup_index..setup_index, [identity, seed, restore]);
     Ok(())
 }
 
-fn checkout_precedes_setup(job: &Job, setup_index: usize) -> bool {
+fn checkout_precedes_setup(job: &Job, setup_index: usize, expected_uses: &str) -> bool {
     job.steps
         .iter()
-        .position(|step| step.name == "Checkout")
+        .position(|step| is_typed_checkout(step, expected_uses))
         .is_some_and(|checkout_index| checkout_index < setup_index)
+}
+
+fn is_typed_checkout(step: &Step, expected_uses: &str) -> bool {
+    step.condition.is_none()
+        && matches!(
+            &step.kind,
+            StepKind::Action { uses, with, env }
+                if uses == expected_uses
+                    && uses.starts_with("actions/checkout@")
+                    && crate::steps::validate_uses(uses).is_ok()
+                    && with.len() == 1
+                    && with.get("persist-credentials").map(String::as_str) == Some("false")
+                    && env.is_empty()
+        )
 }
 
 fn reject_v2_steps(job_id: &str, job: &Job) -> Result<(), RenderError> {
@@ -147,11 +163,11 @@ fn is_setup_step(step: &Step) -> bool {
         if uses.starts_with(&format!("{}@", crate::setup::MISE_ACTION_NAME)))
 }
 
-fn insert_at(job: &Job) -> usize {
+fn insert_at(job: &Job, checkout_uses: &str) -> usize {
     job.steps
-        .first()
-        .filter(|step| step.name == "Checkout")
-        .map_or(0, |_| 1)
+        .iter()
+        .position(|step| is_typed_checkout(step, checkout_uses))
+        .map_or(0, |index| index + 1)
 }
 
 /// Parse the exact pinned components step that populated this tool payload.

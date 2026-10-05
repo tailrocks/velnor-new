@@ -101,7 +101,7 @@ fn uses_staged_helper(step: &StepText) -> bool {
         && step.body.contains("$RUNNER_TEMP/velnor/bin")
 }
 
-/// Setup Mise must follow Checkout, runtime identity, and tools restore and precede each `mise` use.
+/// Setup Mise follows Checkout, runtime identity, tool seed, and tools restore.
 fn check_setup_first(job: &JobText) -> Result<(), String> {
     let setup = job.steps.iter().position(|s| s.name == "Setup Mise");
     let first_mise = job.steps.iter().position(uses_mise);
@@ -116,9 +116,19 @@ fn check_setup_first(job: &JobText) -> Result<(), String> {
     }
 }
 
-/// Setup position is legal at 0-3 (Checkout, identity, and V2 restore).
-fn setup_is_early(_job: &JobText, at: usize) -> bool {
-    at <= 3
+/// Setup position is legal at the V2 prelude length, or on the cold path.
+fn setup_is_early(job: &JobText, at: usize) -> bool {
+    at <= 1
+        || (at == 4
+            && job.steps.first().is_some_and(|step| step.name == "Checkout")
+            && job.steps.get(1).is_some_and(|step| step.name == "V2 identity")
+            && job
+                .steps
+                .get(2)
+                .is_some_and(|step| step.name == "Restore Velnor tool seed")
+            && job.steps.get(3).is_some_and(|step| {
+                step.name == velnor_actions_workflow_renderer::steps::TOOLS_RESTORE_NAME
+            }))
 }
 
 /// Setup Mise must leave restore and save ownership to the explicit V2 layer.
