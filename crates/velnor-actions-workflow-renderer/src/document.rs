@@ -51,6 +51,8 @@ pub(crate) fn workflow_to_yaml(
     let mut rendered_jobs = Vec::with_capacity(jobs.len());
     for (id, job) in jobs {
         let call = shared.calls.get(id).map(String::as_str);
+        let actions_read =
+            job.permissions.as_ref().unwrap_or(&ir.permissions).actions == PermissionLevel::Read;
         rendered_jobs.push((
             id.clone(),
             job_to_yaml(
@@ -63,6 +65,7 @@ pub(crate) fn workflow_to_yaml(
                 MbxJobPolicy {
                     gc_auto_disabled: mbx_gc_jobs.contains(id),
                     share_out_dir_disabled: mbx_share_out_jobs.contains(id),
+                    actions_read,
                 },
             )?,
         ));
@@ -108,22 +111,22 @@ fn level_str(level: PermissionLevel) -> &'static str {
     }
 }
 
-/// Render permissions: contents/actions always, grants beyond none explicit.
+/// Render permissions: contents is explicit; other scopes appear only when granted.
 ///
-/// The CI default stays exactly `contents: read` plus `actions: read`;
-/// wider scopes render only when the IR grants them, so validated
+/// An omitted scope is denied by GitHub when a permissions map exists.
+/// Wider scopes render only when the IR grants them, so validated
 /// overrides are never silently dropped.
 fn permissions_to_yaml(permissions: &Permissions) -> Yaml {
-    let mut entries = vec![
-        (
-            "contents".to_owned(),
-            Yaml::str(level_str(permissions.contents).to_owned()),
-        ),
-        (
+    let mut entries = vec![(
+        "contents".to_owned(),
+        Yaml::str(level_str(permissions.contents).to_owned()),
+    )];
+    if !matches!(permissions.actions, PermissionLevel::None) {
+        entries.push((
             "actions".to_owned(),
             Yaml::str(level_str(permissions.actions).to_owned()),
-        ),
-    ];
+        ));
+    }
     if !matches!(permissions.pull_requests, PermissionLevel::None) {
         entries.push((
             "pull-requests".to_owned(),
@@ -231,6 +234,7 @@ fn dispatch_input_to_yaml(input: &DispatchInput) -> Yaml {
 struct MbxJobPolicy {
     gc_auto_disabled: bool,
     share_out_dir_disabled: bool,
+    actions_read: bool,
 }
 
 /// Render one job: name, runs-on, timeout, environment, permissions, needs, if, steps.
@@ -312,8 +316,18 @@ fn job_to_yaml(
     }
     let mut entries = job_header_fields(job, runs_on);
     append_job_options(&mut entries, job, scale_set, &job_env)?;
-    let rendered_steps =
-        crate::document_lanes::render_job_steps(id, job, ctx, needs_envs, shared, lanes, &job_env)?;
+    let rendered_steps = crate::document_lanes::render_job_steps(
+        id,
+        job,
+        ctx,
+        needs_envs,
+        shared,
+        lanes,
+        &crate::document_lanes::JobStepContext {
+            job_env: &job_env,
+            actions_read: mbx_policy.actions_read,
+        },
+    )?;
     entries.push(("steps".to_owned(), Yaml::Seq(rendered_steps)));
     Ok(Yaml::Map(entries))
 }

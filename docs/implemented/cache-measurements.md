@@ -184,14 +184,14 @@ runs, so fork read-only has unit evidence only:
 `pr_save_allowed`/`is_read_only`/`mode_for_event`); simultaneous-writer
 attempts (PARTIAL: warm-run sources save hit backend reservation
 refusal, but no controlled two-writer race on one key was run).
-Historical V1 measurement conclusion: the Mise built-in cache never saved — the pinned
+ANSWERED: why the Mise built-in cache never saved — the pinned
 `jdx/mise-action@v5.0.0` (`9149ea8`) saves only inside its `install`
 leg (`src/index.ts:run()` gates `saveCache` on the `install` input;
 `action.yml` offers no PR-scoped save input and the source has zero
 `pull_request` handling), which Velnor disables (`install: false`),
 so the push-gated `cache_save` expression never saved on any event
 (all 134 runs to date are `pull_request` per the 2026-10-01 API
-census; push triggers only on `main`, unmerged). That V1 built-in-cache
+census; push triggers only on `main`, unmerged). The V1 built-in-cache
 design is superseded: generated workflows now turn off the action-owned
 cache and use the V2 runtime-qualified tools archive documented in the
 cache contract. These historical measurements do not qualify a V2 cold
@@ -216,10 +216,12 @@ collection behavior before export. This probe does not exercise either
 production lane route. Dispatch once from protected `main` with mode
 `mbx-cache-roundtrip`; the writer and reader run in order at the same SHA.
 
-This is a small end-to-end action and cache round-trip probe. It does not
-measure disk or inode peaks and does not qualify the affected ChainArgos
-workload. That evidence must come from the consumer's affected crates after
-adoption; a green probe alone is not an ENOSPC repair verdict.
+This is a small end-to-end action and cache round-trip probe. The writer
+samples `df -B1 -P` and `df -i -P` on `$RUNNER_TEMP` after the probe build.
+The reader prints those same lines. `tee` writes each MBX stats JSON to the
+step log and to a file, and `jq -e` reads that file. It does not qualify the
+affected ChainArgos workload. A green probe alone is not an ENOSPC repair
+verdict.
 
 ## Generated workflow-size envelope with V2 cache identities
 

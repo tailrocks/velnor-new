@@ -25,7 +25,7 @@ struct HeadRepository {
     full_name: Option<String>,
 }
 
-pub(super) fn fetch_run(
+pub(super) fn load_run_metadata(
     client: &GitHub<'_>,
     run: QualificationRunRef,
 ) -> Result<QualificationCacheRunMetadata, OrchestratorError> {

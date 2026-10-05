@@ -80,7 +80,7 @@ impl Drop for DockerStub {
     }
 }
 
-pub(super) fn http(status: u16, body: &str) -> DockerResponse {
+pub(in crate::launch) fn http(status: u16, body: &str) -> DockerResponse {
     DockerResponse {
         status: Some(status),
         body: body.to_owned(),

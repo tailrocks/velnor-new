@@ -11,7 +11,7 @@ use crate::OrchestratorError;
 use crate::internal::internal;
 
 use super::client::GitHub;
-use super::run::fetch_run;
+use super::run::load_run_metadata;
 
 const MAX_LINEAGE_NODES: usize = 3;
 
@@ -47,7 +47,7 @@ struct ArtifactRun {
     head_sha: Option<String>,
 }
 
-pub(in crate::qualification_resolver) fn fetch_chain(
+pub(in crate::qualification_resolver) fn resolve_chain(
     client: &GitHub<'_>,
     run: QualificationRunRef,
     depth: usize,
@@ -56,13 +56,13 @@ pub(in crate::qualification_resolver) fn fetch_chain(
     if depth == 0 || depth > MAX_LINEAGE_NODES {
         return Err(internal("qualification_lineage_depth"));
     }
-    let metadata = fetch_run(client, run)?;
+    let metadata = load_run_metadata(client, run)?;
     let artifact = select_artifact(client, run)?;
     verify_expected_artifact(&artifact, expected_artifact)?;
     verify_artifact_run(&artifact, &metadata)?;
     let document = download_document(client, &artifact)?;
     validate_document(&document, run)?;
-    let previous = fetch_previous(client, &document.receipt, depth)?;
+    let previous = load_predecessor(client, &document.receipt, depth)?;
     Ok(FetchedNode {
         metadata,
         artifact,
@@ -201,7 +201,7 @@ fn validate_document(
     Ok(())
 }
 
-fn fetch_previous(
+fn load_predecessor(
     client: &GitHub<'_>,
     receipt: &QualificationCacheReceipt,
     depth: usize,
@@ -212,7 +212,7 @@ fn fetch_previous(
     if depth >= MAX_LINEAGE_NODES {
         return Err(internal("qualification_lineage_depth"));
     }
-    let previous = fetch_chain(
+    let previous = resolve_chain(
         client,
         link.run,
         depth + 1,

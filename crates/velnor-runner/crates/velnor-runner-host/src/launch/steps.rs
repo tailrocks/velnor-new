@@ -32,26 +32,30 @@ pub(crate) enum Idle {
     Blocked,
 }
 
-/// Classify one poll. One available id is acquired. An assigned population
-/// starts one runner before ack. Anything else that is safe to delete is acked.
+/// Classify one poll. One available id is acquired. A positive current assigned
+/// population starts one runner before ack. Missing or invalid census stays queued.
 #[must_use]
 pub(crate) fn idle(polled: &Poll) -> Idle {
     match polled {
         Poll::Empty => Idle::Empty,
         Poll::Batch(batch) => match offer(polled) {
             Offer::Acquire { ids, .. } if ids.len() == 1 => Idle::Launch,
-            Offer::Wait if needs_scale(batch) && may_ack(batch, true) => Idle::Scale,
-            Offer::Wait if may_ack(batch, true) => Idle::Ack,
+            Offer::Wait if may_ack(batch, true) => match assigned_population(batch) {
+                Some(population) if population > 0 => Idle::Scale,
+                Some(0) => Idle::Ack,
+                Some(_) | None => Idle::Blocked,
+            },
             Offer::Acquire { .. } | Offer::Wait => Idle::Blocked,
         },
     }
 }
 
-fn needs_scale(batch: &velnor_runner_github::ParsedBatch) -> bool {
+fn assigned_population(batch: &velnor_runner_github::ParsedBatch) -> Option<i64> {
     batch
         .statistics
         .as_ref()
-        .is_some_and(|stats| stats.assigned_population() > 0)
+        .map(velnor_runner_github::Statistics::assigned_population)
+        .filter(|population| *population >= 0)
 }
 
 pub(super) fn assignment(
@@ -230,7 +234,17 @@ where
 {
     let encoded = match fetch_jit(lane, ctx, name) {
         Ok(encoded) => encoded,
-        Err(error) => return hold(journal, id, map_listen(error)).await,
+        Err(error) => {
+            let mapped = map_listen(error);
+            if matches!(mapped, EnsureError::Conflict) {
+                journal
+                    .finish(id, Outcome::DefiniteFailure)
+                    .await
+                    .map_err(map_journal)?;
+                return Err(mapped);
+            }
+            return hold(journal, id, mapped).await;
+        }
     };
     let bound = super::bind::Bind::new(journal, id);
     let Ok(volume) = crate::worker::new_worker_volume() else {
