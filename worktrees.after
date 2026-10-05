@@ -1,0 +1,12 @@
+worktree /root/Projects/tailrocks/velnor-project/velnor-new
+HEAD 4f6def90e7b1008626db18675d1cac129b8f2ad7
+branch refs/heads/main
+
+worktree /root/Projects/tailrocks/velnor-project/velnor-actions-permission-fix
+HEAD dccf0fbe04a43cd0b04791663a6c9fe619687a62
+branch refs/heads/fix/required-actions-read-scope
+
+worktree /root/Projects/tailrocks/velnor-project/velnor-workflow-capability
+HEAD f17ebbc992da8549197f63d2aaaf1c317ed57426
+branch refs/heads/codex/typed-workflow-capability
+

@@ -48,6 +48,7 @@
 1cec1bb2bc759f66c6a4349cb16ec88efa43641e	preservation/stop-20261005/additional/af1a6a35ef7b/reflog/1cec1bb2bc759f66c6a4349cb16ec88efa43641e	/root/Projects/tailrocks/velnor-project/velnor-new-pr-12/.git
 1e7224d1708872348fcbb7b7ca8db16e202d8ad9	preservation/stop-20261005/additional/6c730373c9f3/reflog/1e7224d1708872348fcbb7b7ca8db16e202d8ad9	/tmp/velnor-git-steward-retirement-20261005/.git
 1f82e6b77b925a3bd742190f5b4e6186434d5816	preservation/stop-20261005/additional/af1a6a35ef7b/reflog/1f82e6b77b925a3bd742190f5b4e6186434d5816	/root/Projects/tailrocks/velnor-project/velnor-new-pr-12/.git
+201b9df3d18e8e96831bee631035f6b7c7ae20e0	preservation/stop-20261005/mbx-fixture	/root/.velnor-work/mbx-review.uXg3BZsJ/source-mbx-v1.21.0
 2020795455b37a261fbe3d78dabd62ae8f0ebb20	preservation/stop-20261005/additional/af1a6a35ef7b/reflog/2020795455b37a261fbe3d78dabd62ae8f0ebb20	/root/Projects/tailrocks/velnor-project/velnor-new-pr-12/.git
 2127e7856d0f9307e74463ab96b66cb26c9b3d7e	preservation/stop-20261005/additional/af1a6a35ef7b/reflog/2127e7856d0f9307e74463ab96b66cb26c9b3d7e	/root/Projects/tailrocks/velnor-project/velnor-new-pr-12/.git
 2154b801eba6353d0a19a0f91668a203a9ac105b	preservation/stop-20261005/additional/af1a6a35ef7b/reflog/2154b801eba6353d0a19a0f91668a203a9ac105b	/root/Projects/tailrocks/velnor-project/velnor-new-pr-12/.git
@@ -85,6 +86,7 @@
 31c79de2c03c24a985e3b1649cdfadf7bcd015c2	preservation/stop-20261005/additional/af1a6a35ef7b/reflog/31c79de2c03c24a985e3b1649cdfadf7bcd015c2	/root/Projects/tailrocks/velnor-project/velnor-new-pr-12/.git
 31deefb70119aa2efbc3f567c5316afa4ba2c069	preservation/stop-20261005/additional/af1a6a35ef7b/reflog/31deefb70119aa2efbc3f567c5316afa4ba2c069	/root/Projects/tailrocks/velnor-project/velnor-new-pr-12/.git
 31ee106c1663740737d47df3cf786b907b2ad50a	preservation/stop-20261005/stash/04	stash
+3255ff5bbe242923665b7dd422a8e8f4e3f95d0b	preservation/stop-20261005/pr59-clone/reflog/3255ff5bbe242923665b7dd422a8e8f4e3f95d0b	/root/.velnor-pr59-refresh-5a3f5348-81e65fee-20261005/repo
 3359237590520fb4f4e083435af0fa6e89746534	preservation/stop-20261005/detached/06198a91f5ce	/tmp/velnor-pr12-process-check-20261005
 33f9572958b06bb5077b1e33333392d7b90a2ddf	preservation/stop-20261005/additional/c294c7cc4e6e/reflog/33f9572958b06bb5077b1e33333392d7b90a2ddf	/root/.velnor-generator-preview-20261005/pr65-source/.git
 33f9572958b06bb5077b1e33333392d7b90a2ddf	preservation/stop-20261005/additional/c294c7cc4e6e/worktrees/e35225931784	/root/.velnor-generator-preview-20261005/main-source
@@ -157,6 +159,8 @@
 587e336df20eebbc91f9b0e9272ffe344098f403	preservation/stop-20261005/detached/e0a9e2dd1919	/root/.cache/velnor-pr46-check-587e336
 5901fc34cd458418d434a72c16402957af5b07e3	preservation/stop-20261005/additional/af1a6a35ef7b/reflog/5901fc34cd458418d434a72c16402957af5b07e3	/root/Projects/tailrocks/velnor-project/velnor-new-pr-12/.git
 59d4ecbe01fe14395a05712855fa74e8edd89b79	preservation/stop-20261005/additional/af1a6a35ef7b/reflog/59d4ecbe01fe14395a05712855fa74e8edd89b79	/root/Projects/tailrocks/velnor-project/velnor-new-pr-12/.git
+5a3f5348c86d733d8705dadd7c2b36420a2fc0bd	preservation/stop-20261005/pr59-clone/heads/main	/root/.velnor-pr59-refresh-5a3f5348-81e65fee-20261005/repo
+5a3f5348c86d733d8705dadd7c2b36420a2fc0bd	preservation/stop-20261005/pr59-clone/reflog/5a3f5348c86d733d8705dadd7c2b36420a2fc0bd	/root/.velnor-pr59-refresh-5a3f5348-81e65fee-20261005/repo
 5abfc0558493fc5413a30a8cfa8ae54904124164	preservation/stop-20261005/additional/af1a6a35ef7b/reflog/5abfc0558493fc5413a30a8cfa8ae54904124164	/root/Projects/tailrocks/velnor-project/velnor-new-pr-12/.git
 5b2a50c6487d183c75d614ae1f1d318a88410202	preservation/stop-20261005/additional/af1a6a35ef7b/reflog/5b2a50c6487d183c75d614ae1f1d318a88410202	/root/Projects/tailrocks/velnor-project/velnor-new-pr-12/.git
 5e34e432a4f6cea0d09ac3b55fb680ba722848b4	preservation/stop-20261005/additional/af1a6a35ef7b/reflog/5e34e432a4f6cea0d09ac3b55fb680ba722848b4	/root/Projects/tailrocks/velnor-project/velnor-new-pr-12/.git
@@ -218,6 +222,7 @@
 7bc42297d3c7677bcde22b263e8d4aedbb8e9f34	preservation/stop-20261005/additional/af1a6a35ef7b/reflog/7bc42297d3c7677bcde22b263e8d4aedbb8e9f34	/root/Projects/tailrocks/velnor-project/velnor-new-pr-12/.git
 7be34b741e7b5d0e2dbe1a1577240a8717fdfc9c	preservation/stop-20261005/heads/fix/uncertain-remote-cleanup-guard	refs/heads/fix/uncertain-remote-cleanup-guard
 7ca4da687384cee8d0589b6782d674986fb4f44d	preservation/stop-20261005/additional/af1a6a35ef7b/reflog/7ca4da687384cee8d0589b6782d674986fb4f44d	/root/Projects/tailrocks/velnor-project/velnor-new-pr-12/.git
+7ccc7617253343d6e59feb1727b068a0cc0e937e	preservation/stop-20261005/pr59-clone/reflog/7ccc7617253343d6e59feb1727b068a0cc0e937e	/root/.velnor-pr59-refresh-5a3f5348-81e65fee-20261005/repo
 7dd70f73ab2bf067e978c7e874bdc87d16f2519d	preservation/stop-20261005/additional/af1a6a35ef7b/reflog/7dd70f73ab2bf067e978c7e874bdc87d16f2519d	/root/Projects/tailrocks/velnor-project/velnor-new-pr-12/.git
 7ea84443d8fb32c995c1b1ca36f324d9664f4138	preservation/stop-20261005/additional/af1a6a35ef7b/reflog/7ea84443d8fb32c995c1b1ca36f324d9664f4138	/root/Projects/tailrocks/velnor-project/velnor-new-pr-12/.git
 7fb8367d7daa67f13ccaa7c76caae47d55d6262b	preservation/stop-20261005/additional/af1a6a35ef7b/reflog/7fb8367d7daa67f13ccaa7c76caae47d55d6262b	/root/Projects/tailrocks/velnor-project/velnor-new-pr-12/.git
@@ -225,12 +230,14 @@
 8066ba53510ecfc1d0f1bd49500660f6d7c51c24	preservation/stop-20261005/heads/impl/generator-pr28	refs/heads/impl/generator-pr28
 80e9a6d55d3e37ba1b6bc9dde72d3397f74f491b	preservation/stop-20261005/additional/af1a6a35ef7b/reflog/80e9a6d55d3e37ba1b6bc9dde72d3397f74f491b	/root/Projects/tailrocks/velnor-project/velnor-new-pr-12/.git
 81e65fee08edc3b73839d9ff810cb7da6a170a65	preservation/stop-20261005/detached/3d32a7e9bcd4	/tmp/velnor-review-permissions-81e65
+81e65fee08edc3b73839d9ff810cb7da6a170a65	preservation/stop-20261005/pr59-clone/reflog/81e65fee08edc3b73839d9ff810cb7da6a170a65	/root/.velnor-pr59-refresh-5a3f5348-81e65fee-20261005/repo
 824cbbb5d09d3b75000f76445a53694e03e8a973	preservation/stop-20261005/additional/6c730373c9f3/reflog/824cbbb5d09d3b75000f76445a53694e03e8a973	/tmp/velnor-git-steward-retirement-20261005/.git
 834759bbcb5328a592f130113c344e3a88891cab	preservation/stop-20261005/additional/af1a6a35ef7b/reflog/834759bbcb5328a592f130113c344e3a88891cab	/root/Projects/tailrocks/velnor-project/velnor-new-pr-12/.git
 8380eaf7962257ffc94827a7d7ca2e50d84e3221	preservation/stop-20261005/additional/af1a6a35ef7b/reflog/8380eaf7962257ffc94827a7d7ca2e50d84e3221	/root/Projects/tailrocks/velnor-project/velnor-new-pr-12/.git
 83fe8c203fb00a757b122633068f53104ef04d86	preservation/stop-20261005/heads/pr64-sync-098be-20261005	refs/heads/pr64-sync-098be-20261005
 8439c896fa81d3eca7f4d2f577a55aabcaaca9bb	preservation/stop-20261005/additional/af1a6a35ef7b/reflog/8439c896fa81d3eca7f4d2f577a55aabcaaca9bb	/root/Projects/tailrocks/velnor-project/velnor-new-pr-12/.git
 84ac92320c23c0b58dcb42f9d784ba55336477a0	preservation/stop-20261005/additional/af1a6a35ef7b/reflog/84ac92320c23c0b58dcb42f9d784ba55336477a0	/root/Projects/tailrocks/velnor-project/velnor-new-pr-12/.git
+84d31c49a4eac8038ca036e83f3f3b1a8adc0650	preservation/stop-20261005/pr59-clone/reflog/84d31c49a4eac8038ca036e83f3f3b1a8adc0650	/root/.velnor-pr59-refresh-5a3f5348-81e65fee-20261005/repo
 84f1227deb833d07755c00b0b189ddfe7622e87e	preservation/stop-20261005/additional/af1a6a35ef7b/reflog/84f1227deb833d07755c00b0b189ddfe7622e87e	/root/Projects/tailrocks/velnor-project/velnor-new-pr-12/.git
 8607f4a0e7d0ca8aca75e0514c733a5db18fcac2	preservation/stop-20261005/additional/af1a6a35ef7b/reflog/8607f4a0e7d0ca8aca75e0514c733a5db18fcac2	/root/Projects/tailrocks/velnor-project/velnor-new-pr-12/.git
 8625f5d191bffc807f7b80a607ad1fc51cbc171b	preservation/stop-20261005/additional/6c730373c9f3/reflog/8625f5d191bffc807f7b80a607ad1fc51cbc171b	/tmp/velnor-git-steward-retirement-20261005/.git
@@ -265,11 +272,13 @@
 9942a0e4921ecd3cb8e42fafab46f8dd949dca96	preservation/stop-20261005/additional/af1a6a35ef7b/reflog/9942a0e4921ecd3cb8e42fafab46f8dd949dca96	/root/Projects/tailrocks/velnor-project/velnor-new-pr-12/.git
 997229740f5835168bca7ae49f03947a84448a1f	preservation/stop-20261005/detached/5be0fb3f5e06	/root/.cache/velnor-pr25-incoming-997
 99cc1e33172864ecee800f7b031797061691c790	preservation/stop-20261005/additional/af1a6a35ef7b/reflog/99cc1e33172864ecee800f7b031797061691c790	/root/Projects/tailrocks/velnor-project/velnor-new-pr-12/.git
+9a77bb9235768e41dc2430caf7f3dace84af5dad	preservation/stop-20261005/pr59-clone/reflog/9a77bb9235768e41dc2430caf7f3dace84af5dad	/root/.velnor-pr59-refresh-5a3f5348-81e65fee-20261005/repo
 9a912c8a805c5e2e30006909568baf4f587ddd3d	preservation/stop-20261005/heads/impl/generator-pr20	refs/heads/impl/generator-pr20
 9af84ee796181130e698e748df89243669139e70	preservation/stop-20261005/additional/af1a6a35ef7b/reflog/9af84ee796181130e698e748df89243669139e70	/root/Projects/tailrocks/velnor-project/velnor-new-pr-12/.git
 9c83692a1c9e2624b7277ca7d01a691ceda9d1b1	preservation/stop-20261005/additional/af1a6a35ef7b/reflog/9c83692a1c9e2624b7277ca7d01a691ceda9d1b1	/root/Projects/tailrocks/velnor-project/velnor-new-pr-12/.git
 9ccb1d43f6ca385086f8f73fe5091af214bc3988	preservation/stop-20261005/additional/6c730373c9f3/reflog/9ccb1d43f6ca385086f8f73fe5091af214bc3988	/tmp/velnor-git-steward-retirement-20261005/.git
 9e3ab783d23d7db54ce64d20bd6b38a6a6666db1	preservation/stop-20261005/additional/af1a6a35ef7b/reflog/9e3ab783d23d7db54ce64d20bd6b38a6a6666db1	/root/Projects/tailrocks/velnor-project/velnor-new-pr-12/.git
+9e81570efc535b7dd776ed0362482f0b93dfc8b7	preservation/stop-20261005/pr59-clone/reflog/9e81570efc535b7dd776ed0362482f0b93dfc8b7	/root/.velnor-pr59-refresh-5a3f5348-81e65fee-20261005/repo
 9f32001565d9f2029c4c6e7893f7dadf475ca8aa	preservation/stop-20261005/heads/fix/uncertain-slot-preservation	refs/heads/fix/uncertain-slot-preservation
 a0ba076b79c14251e1af10af21da3f8dac718219	preservation/stop-20261005/additional/af1a6a35ef7b/reflog/a0ba076b79c14251e1af10af21da3f8dac718219	/root/Projects/tailrocks/velnor-project/velnor-new-pr-12/.git
 a0dc3ad56b84fe1be5994741e2efe45b1653d41a	preservation/stop-20261005/additional/af1a6a35ef7b/reflog/a0dc3ad56b84fe1be5994741e2efe45b1653d41a	/root/Projects/tailrocks/velnor-project/velnor-new-pr-12/.git
@@ -286,6 +295,7 @@ a60e2412dd80ceb0cb05e429b7021111d7bf72c5	preservation/stop-20261005/additional/a
 a629c513d6cf68449d5fe24d2e4005c58ef8174e	preservation/stop-20261005/additional/af1a6a35ef7b/reflog/a629c513d6cf68449d5fe24d2e4005c58ef8174e	/root/Projects/tailrocks/velnor-project/velnor-new-pr-12/.git
 a657f6d110b407c9a26694ed1625d462254c7289	preservation/stop-20261005/heads/impl/generator-pr68-followup	refs/heads/impl/generator-pr68-followup
 a7984460e313f85950d181a3cd4e2ac56b49c9e6	preservation/stop-20261005/additional/af1a6a35ef7b/reflog/a7984460e313f85950d181a3cd4e2ac56b49c9e6	/root/Projects/tailrocks/velnor-project/velnor-new-pr-12/.git
+a7f6234d261e741f8ecc4f5fbc0c365a546d5c47	preservation/stop-20261005/pr59-clone/reflog/a7f6234d261e741f8ecc4f5fbc0c365a546d5c47	/root/.velnor-pr59-refresh-5a3f5348-81e65fee-20261005/repo
 a8302478aad0992a075fe9e591b089be5be3b592	preservation/stop-20261005/additional/af1a6a35ef7b/reflog/a8302478aad0992a075fe9e591b089be5be3b592	/root/Projects/tailrocks/velnor-project/velnor-new-pr-12/.git
 a897013447886663edf30e3f5b9f8972dffc1979	preservation/stop-20261005/heads/codex/pr25-archive-fixes	refs/heads/codex/pr25-archive-fixes
 a8f677d2e972c87ca6156057e0dfd10f55bf67fe	preservation/stop-20261005/detached/45c9c10c44ba	/root/.cache/velnor-release-pr41-alint-098
@@ -293,6 +303,7 @@ a927503530d12ec6587f342ae8088d817f7fbf26	preservation/stop-20261005/additional/a
 a949662c58e4b411387218fb48ccfdc7b94ebc40	preservation/stop-20261005/additional/6c730373c9f3/reflog/a949662c58e4b411387218fb48ccfdc7b94ebc40	/tmp/velnor-git-steward-retirement-20261005/.git
 a949662c58e4b411387218fb48ccfdc7b94ebc40	preservation/stop-20261005/additional/6c730373c9f3/worktrees/bd2c9b85cdbf	/tmp/velnor-mbx-retirement-review-20261005
 aa9f372e8a0a4eaef071f46205abf2d075f2f0fc	preservation/stop-20261005/heads/fix/qualification-output-budget-integration	refs/heads/fix/qualification-output-budget-integration
+aa9f372e8a0a4eaef071f46205abf2d075f2f0fc	preservation/stop-20261005/pr59-clone/reflog/aa9f372e8a0a4eaef071f46205abf2d075f2f0fc	/root/.velnor-pr59-refresh-5a3f5348-81e65fee-20261005/repo
 aae1ff63b492d33b7faee218c51799257664b4b1	preservation/stop-20261005/additional/6c730373c9f3/reflog/aae1ff63b492d33b7faee218c51799257664b4b1	/tmp/velnor-git-steward-retirement-20261005/.git
 aae1ff63b492d33b7faee218c51799257664b4b1	preservation/stop-20261005/clones/b798ec51f490/heads/codex/preserve-wip-20261005	/tmp/velnor-git-steward-retirement-20261005
 aaef9053f05eb05f1239599015940e4d33f4a278	preservation/stop-20261005/heads/codex/p13-size-guard-fixture-20261005	refs/heads/codex/p13-size-guard-fixture-20261005
@@ -329,6 +340,9 @@ b35bfaada996c03c734d12b406cba9ed168b12b6	preservation/stop-20261005/heads/impl/r
 b44d30c03343b9059e4904acc1075ab7e917a443	preservation/stop-20261005/additional/af1a6a35ef7b/reflog/b44d30c03343b9059e4904acc1075ab7e917a443	/root/Projects/tailrocks/velnor-project/velnor-new-pr-12/.git
 b4a4a6a47956c31544d7b690c56111322aa65a69	preservation/stop-20261005/additional/af1a6a35ef7b/reflog/b4a4a6a47956c31544d7b690c56111322aa65a69	/root/Projects/tailrocks/velnor-project/velnor-new-pr-12/.git
 b4bf03d655c828c8f073448a20eb89efe081f9fc	preservation/stop-20261005/detached/dd3d1086f5f1	/tmp/velnor-review-41
+b55b4e9e97470a8c162a7714bfed78dc87d34984	preservation/stop-20261005/pr59-clone/HEAD	/root/.velnor-pr59-refresh-5a3f5348-81e65fee-20261005/repo
+b55b4e9e97470a8c162a7714bfed78dc87d34984	preservation/stop-20261005/pr59-clone/heads/codex/pr59-current-main	/root/.velnor-pr59-refresh-5a3f5348-81e65fee-20261005/repo
+b55b4e9e97470a8c162a7714bfed78dc87d34984	preservation/stop-20261005/pr59-clone/reflog/b55b4e9e97470a8c162a7714bfed78dc87d34984	/root/.velnor-pr59-refresh-5a3f5348-81e65fee-20261005/repo
 b5d6e7a89d136ffab07d4ac9d4199d03a1d1dec7	preservation/stop-20261005/additional/6c730373c9f3/reflog/b5d6e7a89d136ffab07d4ac9d4199d03a1d1dec7	/tmp/velnor-git-steward-retirement-20261005/.git
 b7258b794f8b47f7371beda5048013a20aa24fc0	preservation/stop-20261005/heads/pr83-sync-20261005	refs/heads/pr83-sync-20261005
 b825f9370cfd5e3bb6df369f7881d1f678378331	preservation/stop-20261005/detached/d132867be4f5	/root/.local/share/velnor/pr12-hold-duplicates-test
@@ -336,6 +350,8 @@ b8632100e7475c2fafa8b0528ef7b63cfd9563a8	preservation/stop-20261005/additional/a
 bb40451f02e364802950cfe752b8f8c80e5eda68	preservation/stop-20261005/additional/af1a6a35ef7b/reflog/bb40451f02e364802950cfe752b8f8c80e5eda68	/root/Projects/tailrocks/velnor-project/velnor-new-pr-12/.git
 bc4514f6c2acc231e36eb58d723c56b4488b1c3e	preservation/stop-20261005/additional/6c730373c9f3/reflog/bc4514f6c2acc231e36eb58d723c56b4488b1c3e	/tmp/velnor-git-steward-retirement-20261005/.git
 bcd2fd3ef612dc7e22a7e21d6eed3504bebc1642	preservation/stop-20261005/additional/39f298c66c1c/worktrees/10ab6ca9c55d	/tmp/velnor-native-bcd2-candidate-20261005
+bcd2fd3ef612dc7e22a7e21d6eed3504bebc1642	preservation/stop-20261005/pr59-clone/reflog/bcd2fd3ef612dc7e22a7e21d6eed3504bebc1642	/root/.velnor-pr59-refresh-5a3f5348-81e65fee-20261005/repo
+bcf72242ac5fb22b572577afc9774743abe08909	preservation/stop-20261005/pr59-clone/reflog/bcf72242ac5fb22b572577afc9774743abe08909	/root/.velnor-pr59-refresh-5a3f5348-81e65fee-20261005/repo
 bd60d5add0985667d1ca4c5da8da39c0bfa1b1d1	preservation/stop-20261005/additional/af1a6a35ef7b/reflog/bd60d5add0985667d1ca4c5da8da39c0bfa1b1d1	/root/Projects/tailrocks/velnor-project/velnor-new-pr-12/.git
 bdb1e14509225d18b4d8ee180731825d0826c16f	preservation/stop-20261005/additional/6c730373c9f3/reflog/bdb1e14509225d18b4d8ee180731825d0826c16f	/tmp/velnor-git-steward-retirement-20261005/.git
 be139faceb5e17485a42a15fbd03cc87467173dd	preservation/stop-20261005/additional/af1a6a35ef7b/reflog/be139faceb5e17485a42a15fbd03cc87467173dd	/root/Projects/tailrocks/velnor-project/velnor-new-pr-12/.git
@@ -354,6 +370,7 @@ c8446c946d95dc6abb6eeb3178ae3efacdda6d8c	preservation/stop-20261005/additional/a
 c895e3d777124f88e2d8bf6a1eac7293f969c690	preservation/stop-20261005/additional/af1a6a35ef7b/reflog/c895e3d777124f88e2d8bf6a1eac7293f969c690	/root/Projects/tailrocks/velnor-project/velnor-new-pr-12/.git
 c8a891bfb9e9a692e328732dc950e918c182fc78	preservation/stop-20261005/additional/39f298c66c1c/heads/main	/tmp/velnor-native-bcd2-repo-20261005.git
 c8a891bfb9e9a692e328732dc950e918c182fc78	preservation/stop-20261005/additional/6c730373c9f3/reflog/c8a891bfb9e9a692e328732dc950e918c182fc78	/tmp/velnor-git-steward-retirement-20261005/.git
+c8a891bfb9e9a692e328732dc950e918c182fc78	preservation/stop-20261005/pr59-clone/reflog/c8a891bfb9e9a692e328732dc950e918c182fc78	/root/.velnor-pr59-refresh-5a3f5348-81e65fee-20261005/repo
 c94b0186ade9f9adeeb611bae6612e6c400330c7	preservation/stop-20261005/reflog/c94b0186ade9f9adeeb611bae6612e6c400330c7	reflog
 ca7b6ed4ed594cf0eeb8770cdce532095d1d853e	preservation/stop-20261005/additional/af1a6a35ef7b/reflog/ca7b6ed4ed594cf0eeb8770cdce532095d1d853e	/root/Projects/tailrocks/velnor-project/velnor-new-pr-12/.git
 cb6855bc0ac0beb20091a57ae33e5b006b2ee80b	preservation/stop-20261005/stash/08	stash
@@ -407,6 +424,7 @@ e9e974acd78a9d8720175e66510411cd03548c26	preservation/stop-20261005/additional/a
 eaf6372d78a553eef6ba6e4b2b6d56eb4f4695da	preservation/stop-20261005/heads/fix/uncertain-slot-preservation-sync	refs/heads/fix/uncertain-slot-preservation-sync
 eb14ac94f9276caa485694332b2c5327a680545d	preservation/stop-20261005/reflog/eb14ac94f9276caa485694332b2c5327a680545d	reflog
 ec03831ee85f8630678014e8ca6685c0891630f8	preservation/stop-20261005/additional/af1a6a35ef7b/reflog/ec03831ee85f8630678014e8ca6685c0891630f8	/root/Projects/tailrocks/velnor-project/velnor-new-pr-12/.git
+ececed021aac561c4fca90c638bb74318bdae437	preservation/stop-20261005/pr59-clone/reflog/ececed021aac561c4fca90c638bb74318bdae437	/root/.velnor-pr59-refresh-5a3f5348-81e65fee-20261005/repo
 ecf54b771c0db11e03e54fa2c98cf531e5912585	preservation/stop-20261005/clones/61a04a516800/heads/main	/root/.velnor-generator-preview-20261005/main-source-clean
 ecf54b771c0db11e03e54fa2c98cf531e5912585	preservation/stop-20261005/clones/ba39534bf391/HEAD	/root/.velnor-generator-preview-20261005/main-source-full
 ecf54b771c0db11e03e54fa2c98cf531e5912585	preservation/stop-20261005/clones/ba39534bf391/heads/main	/root/.velnor-generator-preview-20261005/main-source-full

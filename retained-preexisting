@@ -10,3 +10,5 @@ Retained pre-existing/undated branch refs/heads/impl/release-pr41
 Retained pre-existing/undated branch refs/heads/impl/release-pr46
 Retained pre-existing/undated branch refs/heads/scaleset-evidence
 User project checkouts under /root/Projects retained; ownership of their creation was not established. Their goal-related WIP and refs were preserved.
+Retained branch still used by retained checkout: refs/heads/codex/typed-workflow-capability
+Retained branch still used by retained checkout: refs/heads/fix/required-actions-read-scope

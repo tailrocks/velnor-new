@@ -24,3 +24,4 @@ The original PR finalization goal was stopped at the user's explicit instruction
 All new commits use Alexey Zhokhov <alexey@zhokhov.com> and ordered Codex co-author / Alexey signoff trailers. Existing historical commits are preserved without rewriting their original metadata.
 
 Additional repo worktrees contributed 7 checkpoints (27 total at preparation), including old PR12 source/probes/retirement, native candidate and /var/tmp integration. Additional local refs/reflogs were pushed under additional/. Public/downloaded dependency caches and compiled outputs are generated state; authored source and existing receipts are preserved in split archives.
+PR59 clone initially failed commit API verification (404), so its local heads/reflogs were explicitly pushed and verified under pr59-clone/. MBX action source commit was verified on its upstream; the earlier exception attribution was corrected.
