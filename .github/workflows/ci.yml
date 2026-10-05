@@ -82,7 +82,7 @@ jobs:
           sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
           version: 2026.9.18
       - name: Run cargo-deny
-        run: "sh -c '{ mise --no-config --no-env --no-hooks install cargo-deny@0.20.2 && unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; } && mkdir -p \"$RUNNER_TEMP/velnor/cargo-clean\" && cd \"$RUNNER_TEMP/velnor/cargo-clean\" && mise --no-config --no-env --no-hooks exec cargo-deny@0.20.2 -- cargo deny --locked --manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\" check'"
+        run: "sh -c '{ mise --no-config --no-env --no-hooks install cargo-deny@0.20.2 && unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; } && mkdir -p \"$RUNNER_TEMP/velnor/cargo-clean\" && cd \"$RUNNER_TEMP/velnor/cargo-clean\" && mise --no-config --no-env --no-hooks exec cargo-deny@0.20.2 -- cargo deny --locked --manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\" --config \"$GITHUB_WORKSPACE/deny.toml\" check && mise --no-config --no-env --no-hooks exec cargo-deny@0.20.2 -- cargo deny --locked --manifest-path \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.toml\" --config \"$GITHUB_WORKSPACE/crates/velnor-runner/deny.toml\" check'"
       - name: Save Mise tools
         if: success() && github.event_name == 'push'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9

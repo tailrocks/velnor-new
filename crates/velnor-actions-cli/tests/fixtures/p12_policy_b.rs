@@ -67,11 +67,12 @@ fn future_evidence_fails() -> Result<(), Box<dyn Error>> {
     let fixture = harness::passing("p12-future-evidence")?;
     let today = harness::days_iso(0)?;
     let tomorrow = harness::days_iso(1)?;
+    let future = format!("{tomorrow}T23:59:59Z");
     harness::mutate(
         &fixture.dir,
         INVENTORY,
         &format!("\"checked_at\":\"{today}\""),
-        &format!("\"checked_at\":\"{tomorrow}\""),
+        &format!("\"checked_at\":\"{future}\""),
     )?;
     let run = harness::run_script(&fixture.dir, &[])?;
     harness::assert_fail(&run, "is in the future");
