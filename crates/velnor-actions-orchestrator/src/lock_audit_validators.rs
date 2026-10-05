@@ -86,9 +86,12 @@ fn audit_validator_argv(
     match validator_command_specs(argv) {
         CommandInstalls::NotInstall => {}
         CommandInstalls::Unclassifiable(detail) => {
-            blocking.push(format!(
-                "unauditable_validator_{phase}_argv:{name}:{detail}"
-            ));
+            let scope = if phase == "run" {
+                "validator_argv"
+            } else {
+                "validator_prepare_argv"
+            };
+            blocking.push(format!("unauditable_{scope}:{name}:{detail}"));
         }
         CommandInstalls::Specs(specs) => {
             if specs.is_empty() {
