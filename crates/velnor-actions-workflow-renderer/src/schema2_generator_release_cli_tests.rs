@@ -51,16 +51,12 @@ pub(super) fn assert_pinned_publish_calls(
         .lines()
         .filter(|call| call.starts_with(&api_prefix))
         .count();
-    assert_eq!(
-        api_count,
-        if expected_count == 5 {
-            4
-        } else if expected_count == 1 {
-            1
-        } else {
-            0
-        }
-    );
+    let expected_api_count = match expected_count {
+        5 => 4,
+        1 => 1,
+        _ => 0,
+    };
+    assert_eq!(api_count, expected_api_count);
     if expected_count == 5 {
         assert!(
             calls

@@ -172,6 +172,19 @@ fn release_github_cli_commands_select_the_exact_pinned_mise_tool() {
 }
 
 #[test]
+fn attestation_fetch_uses_the_shell_repository_environment() {
+    let expected =
+        "--signer-workflow \"${GITHUB_REPOSITORY}/.github/workflows/generator-release.yml\"";
+    for script in [
+        asset_attestation_bundle_script(LINUX),
+        manifest_attestation_bundle_script(),
+    ] {
+        assert!(script.contains(expected), "{script}");
+        assert!(!script.contains("${{GITHUB_REPOSITORY}}"), "{script}");
+    }
+}
+
+#[test]
 fn tag_preflight_accepts_only_confirmed_not_found_responses() -> Result<(), Box<dyn Error>> {
     for (case, accepted) in [
         ("confirmed-404", true),

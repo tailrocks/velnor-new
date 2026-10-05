@@ -63,41 +63,7 @@ fn run_publish_case(case: Failure) -> Result<(), Box<dyn Error>> {
     let scratch = Scratch::new()?;
     copy_release_helpers(&scratch.0)?;
     write_candidate_records(&scratch.0, case)?;
-    write_attestation_files(&scratch.0)?;
-    let mut manifest_command = Command::new("bash");
-    manifest_command
-        .args([
-            "scripts/generator-release/create-release-manifest.sh",
-            "0.1.1",
-            REPOSITORY,
-        ])
-        .current_dir(&scratch.0)
-        .env("GITHUB_REPOSITORY", REPOSITORY)
-        .env("GITHUB_SHA", SOURCE_SHA);
-    cli_tests::isolate_gh_environment(&mut manifest_command, &scratch.0)?;
-    let manifest_status = manifest_command.status()?;
-    let invalid_manifest = matches!(case, Failure::WrongSidecarName | Failure::MissingBinary);
-    if invalid_manifest {
-        assert!(!manifest_status.success(), "accepted {case:?}");
-        fs::create_dir_all(scratch.0.join("manifest-assets"))?;
-        fs::write(
-            scratch.0.join("manifest-assets/release-manifest.json"),
-            b"untrusted fixture\n",
-        )?;
-    } else {
-        assert!(manifest_status.success(), "manifest failed for {case:?}");
-        fs::create_dir_all(scratch.0.join("manifest-assets"))?;
-        fs::copy(
-            scratch.0.join("release-manifest.json"),
-            scratch.0.join("manifest-assets/release-manifest.json"),
-        )?;
-    }
-    if case == Failure::StaleManifest {
-        fs::write(
-            scratch.0.join("manifest-assets/release-manifest.json"),
-            b"stale manifest\n",
-        )?;
-    }
+    prepare_release_manifest(&scratch.0, case)?;
     let release_json = release_json(&scratch.0, case)?;
     fs::write(scratch.0.join("release.json"), release_json)?;
     install_mock_gh(&scratch.0)?;
@@ -140,6 +106,45 @@ fn run_publish_case(case: Failure) -> Result<(), Box<dyn Error>> {
         );
     } else {
         assert_no_release_created(&scratch.0);
+    }
+    Ok(())
+}
+
+fn prepare_release_manifest(root: &Path, case: Failure) -> Result<(), Box<dyn Error>> {
+    write_attestation_files(root)?;
+    let mut manifest_command = Command::new("bash");
+    manifest_command
+        .args([
+            "scripts/generator-release/create-release-manifest.sh",
+            "0.1.1",
+            REPOSITORY,
+        ])
+        .current_dir(root)
+        .env("GITHUB_REPOSITORY", REPOSITORY)
+        .env("GITHUB_SHA", SOURCE_SHA);
+    cli_tests::isolate_gh_environment(&mut manifest_command, root)?;
+    let manifest_status = manifest_command.status()?;
+    let invalid_manifest = matches!(case, Failure::WrongSidecarName | Failure::MissingBinary);
+    if invalid_manifest {
+        assert!(!manifest_status.success(), "accepted {case:?}");
+        fs::create_dir_all(root.join("manifest-assets"))?;
+        fs::write(
+            root.join("manifest-assets/release-manifest.json"),
+            b"untrusted fixture\n",
+        )?;
+    } else {
+        assert!(manifest_status.success(), "manifest failed for {case:?}");
+        fs::create_dir_all(root.join("manifest-assets"))?;
+        fs::copy(
+            root.join("release-manifest.json"),
+            root.join("manifest-assets/release-manifest.json"),
+        )?;
+    }
+    if case == Failure::StaleManifest {
+        fs::write(
+            root.join("manifest-assets/release-manifest.json"),
+            b"stale manifest\n",
+        )?;
     }
     Ok(())
 }

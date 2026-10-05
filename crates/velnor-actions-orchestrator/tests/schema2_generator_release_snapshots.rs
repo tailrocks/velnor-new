@@ -252,12 +252,9 @@ fn assert_manifest_job(body: &str, actions: &Actions) -> Result<(), Box<dyn std:
 fn assert_pinned_gh_invocations(actions: &str) {
     const PREFIX: &str = "mise --no-config --no-env --no-hooks exec gh@2.102.0 -- ";
     for (offset, _) in actions.match_indices("gh ") {
-        let prefix_start = offset
-            .checked_sub(PREFIX.len())
-            .expect("gh invocation prefix");
         assert_eq!(
-            &actions[prefix_start..offset],
-            PREFIX,
+            actions.get(offset.saturating_sub(PREFIX.len())..offset),
+            Some(PREFIX),
             "all generated release GitHub CLI commands must select the exact Mise pin"
         );
     }
