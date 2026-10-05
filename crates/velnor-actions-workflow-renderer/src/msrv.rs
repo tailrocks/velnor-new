@@ -9,7 +9,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Job, JobTimeout, Step};
+use velnor_actions_contract::{Job, JobTimeout, Step, StepRole};
 
 use crate::{RenderError, steps};
 
@@ -81,7 +81,9 @@ pub fn msrv_step(
     if !argv.iter().any(|arg| arg == "--locked") {
         return Err(RenderError::BadCommand("msrv_without_locked".to_owned()));
     }
-    steps::shell_step(&msrv_step_name(&spec.package), argv, env)
+    let mut step = steps::shell_step(&msrv_step_name(&spec.package), argv, env)?;
+    step.role = Some(StepRole::MsrvQualification);
+    Ok(step)
 }
 
 /// Per-crate MSRV job: checkout plus the MSRV step, no matrix fan-in.
@@ -122,11 +124,10 @@ pub fn msrv_job(
 pub fn check_no_msrv(jobs: &BTreeMap<String, Job>) -> Result<(), RenderError> {
     for (id, job) in jobs {
         let leaking = id.to_lowercase().contains("msrv")
-            || job.display_name.to_lowercase().contains("msrv")
             || job
                 .steps
                 .iter()
-                .any(|step| step.name.to_lowercase().contains("msrv"));
+                .any(|step| step.role == Some(StepRole::MsrvQualification));
         if leaking {
             return Err(RenderError::InvalidWorkflow(format!(
                 "msrv_in_pr_workflow:{id}"

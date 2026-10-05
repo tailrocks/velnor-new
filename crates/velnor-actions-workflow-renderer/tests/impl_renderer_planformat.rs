@@ -1,7 +1,7 @@
 //! Plan `Format` step: insertion between staging and freshness.
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::StepKind;
+use velnor_actions_contract::{StepKind, StepRole};
 use velnor_actions_workflow_renderer::plan_format::{FORMAT_STEP_NAME, ensure_plan_format};
 use velnor_actions_workflow_renderer::{
     CHECK_GENERATED_NAME, RenderError, checkout_step, plan_step,
@@ -129,7 +129,8 @@ fn plan_format_is_idempotent_and_validates_shape() -> Result<(), RenderError> {
 #[test]
 fn plan_format_rejects_non_shell_format() -> Result<(), RenderError> {
     let mut renamed = checkout_step(&checkout_pin())?;
-    renamed.name = FORMAT_STEP_NAME.to_owned();
+    renamed.name = "Presentation-only checkout label".to_owned();
+    renamed.role = Some(StepRole::PlanFormat);
     let plan = job(
         "plan",
         "Plan",

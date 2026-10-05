@@ -34,6 +34,8 @@ fn base_job(setup: &MiseSetup) -> Job {
             setup_step,
             Step {
                 name: "Run Cargo".to_owned(),
+                id: None,
+                role: None,
                 condition: None,
                 kind: StepKind::Shell {
                     run: vec![

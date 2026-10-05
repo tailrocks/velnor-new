@@ -12,14 +12,18 @@ use velnor_actions_contract::{
     CI_WORKFLOW_PATH, Job, PLAN_JOB_ID as CONTRACT_PLAN_JOB_ID,
     REQUIRED_CONDITION as CONTRACT_REQUIRED_CONDITION,
     REQUIRED_DISPLAY_NAME as CONTRACT_REQUIRED_DISPLAY_NAME,
-    REQUIRED_JOB_ID as CONTRACT_REQUIRED_JOB_ID, ReleaseTarget, RunsOn, SCALE_SET_NAME,
-    ValidatorKind, VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy,
+    REQUIRED_JOB_ID as CONTRACT_REQUIRED_JOB_ID, ValidatorKind, VelnorSupportWorkflow, WorkflowIr,
+    WorkflowPolicy,
 };
 
 use crate::{
     RenderError, cache_p08, closure, commands, document, final_steps, guard, marker, matrix, msrv,
     preseed_closure, steps, support, workflow_policy, yaml::render_yaml,
 };
+
+#[path = "render_action_pins.rs"]
+mod action_pins_impl;
+pub use action_pins_impl::action_pins;
 
 pub use crate::matrix::{
     COVERED_TASKS_OUTPUT, MATRIX_MAX_PARALLEL_ENV, MATRIX_NEEDS_JOB_ENV, MATRIX_OUTPUT_ENV,
@@ -185,6 +189,7 @@ fn render_workflow_parts(
     closure::insert_task_closure(&mut jobs)?;
     closure::insert_final_closure(&mut jobs)?;
     final_steps::insert_final_fanin(&mut jobs, ctx)?;
+    validate_final_jobs(ir, &jobs)?;
     render_merged(ir, &jobs, ctx)
 }
 
@@ -263,7 +268,7 @@ pub fn finalize_jobs(
             .check_runner
             .as_ref()
             .map(|runner| runner.platform.target())
-            .or_else(|| target_for_runner(&job.runs_on))
+            .or_else(|| crate::runs_on::target_for_runner(&job.runs_on))
             .ok_or_else(|| {
                 RenderError::InvalidWorkflow(format!("tools_cache_unsupported_target:{id}"))
             })?;
@@ -288,31 +293,15 @@ pub fn finalize_jobs(
     closure::insert_task_closure(&mut jobs)?;
     closure::insert_final_closure(&mut jobs)?;
     final_steps::insert_final_fanin(&mut jobs, ctx)?;
+    validate_final_jobs(ir, &jobs)?;
     Ok(jobs)
 }
 
-fn target_for_runner(label: &str) -> Option<&'static str> {
-    match RunsOn::parse(label).ok()? {
-        RunsOn::Hosted(label) => ReleaseTarget::for_runner_label(&label).map(ReleaseTarget::triple),
-        RunsOn::ScaleSet(selector) if selector.name() == SCALE_SET_NAME => {
-            Some(ReleaseTarget::LinuxX86_64.triple())
-        }
-        RunsOn::ScaleSet(_) => None,
-    }
-}
-
-/// Sorted unique `uses:` refs across every action step (plan display).
-#[must_use]
-pub fn action_pins(jobs: &BTreeMap<String, Job>) -> Vec<String> {
-    let mut pins = std::collections::BTreeSet::new();
-    for job in jobs.values() {
-        for step in &job.steps {
-            if let velnor_actions_contract::StepKind::Action { uses, .. } = &step.kind {
-                pins.insert(uses.clone());
-            }
-        }
-    }
-    pins.into_iter().collect()
+/// Revalidate each complete job after policy merge and all internal expansion.
+fn validate_final_jobs(ir: &WorkflowIr, jobs: &BTreeMap<String, Job>) -> Result<(), RenderError> {
+    let mut finalized = ir.clone();
+    finalized.jobs.clone_from(jobs);
+    finalized.validate().map_err(RenderError::Contract)
 }
 
 /// Validate context/IR plus policy merge and support invariants.
@@ -375,7 +364,6 @@ fn render_merged(
         matrix::attach_plan_outputs(&mut document)?;
     }
     matrix::attach_crate_job_caps(&mut document, &caps)?;
-    matrix::insert_publish_step_id(&mut document)?;
     let document = crate::yaml::quote_run_values_in_yaml(document);
     let text = marker::with_marker(&ctx.generator_version, &render_yaml(&document))?;
     crate::workflow_size::check_workflow_size(WORKFLOW_PATH, &text)?;

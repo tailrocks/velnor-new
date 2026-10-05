@@ -6,7 +6,7 @@
 //! the pin type, its validation, and the legacy `cache:false` template
 //! for fixtures and upgrade inputs.
 
-use velnor_actions_contract::Step;
+use velnor_actions_contract::{Step, StepRole};
 
 use crate::{RenderError, steps};
 
@@ -105,7 +105,7 @@ impl MiseSetup {
 /// # Errors
 pub fn mise_setup_step(setup: &MiseSetup) -> Result<Step, RenderError> {
     setup.validate()?;
-    steps::action_step(
+    let mut step = steps::action_step(
         SETUP_MISE_NAME,
         &setup.uses,
         std::collections::BTreeMap::from([
@@ -116,7 +116,9 @@ pub fn mise_setup_step(setup: &MiseSetup) -> Result<Step, RenderError> {
             ("cache".to_owned(), "false".to_owned()),
             ("cache_save".to_owned(), "false".to_owned()),
         ]),
-    )
+    )?;
+    step.role = Some(StepRole::MiseSetup);
+    Ok(step)
 }
 
 /// True for catalog version spellings (`2026.9.18`); never `latest`.
