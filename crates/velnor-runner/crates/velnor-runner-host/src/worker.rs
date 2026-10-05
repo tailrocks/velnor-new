@@ -127,7 +127,7 @@ pub(crate) fn dind_data_volume(private_volume: &str) -> Result<String, HostError
 /// Private `DinD` create. Privilege is not a flag on the runner plan.
 ///
 /// Mounts are the runner plan's socket volume at `/run`, the work volume at
-/// `/home/runner/_work`, and [`dind_data_volume`] at `/var/lib/docker`.
+/// `/home/runner/_work`, and the private data volume at `/var/lib/docker`.
 /// The data volume is not on the runner.
 ///
 /// # Errors
