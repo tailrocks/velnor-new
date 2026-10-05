@@ -50,6 +50,15 @@ pub(crate) fn idle(polled: &Poll) -> Idle {
     }
 }
 
+/// Subject of a redelivered scale message. Other polls have no exception.
+#[must_use]
+pub(super) fn mint_subject(polled: &Poll) -> Option<String> {
+    let Poll::Batch(batch) = polled else {
+        return None;
+    };
+    (idle(polled) == Idle::Scale).then(|| format!("m{}", batch.message_id))
+}
+
 fn assigned_population(batch: &velnor_runner_github::ParsedBatch) -> Option<i64> {
     batch
         .statistics

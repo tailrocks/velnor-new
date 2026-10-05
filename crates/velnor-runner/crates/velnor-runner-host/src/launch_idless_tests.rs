@@ -80,3 +80,50 @@ async fn idless_uncertain_rows_keep_both_slots() -> Result<(), String> {
     assert!(rows.iter().all(|row| !row.cleanup_proven));
     absent(&scratch.file())
 }
+#[tokio::test]
+async fn own_idless_uncertain_row_does_not_block_its_mint() -> Result<(), String> {
+    let (scratch, journal) = open("idless-self").await?;
+    uncertain_without_ids(&journal, "m9").await?;
+    let decision = admission(&Idle, &journal, 2, 2, 0, &assigned_wait(9, 1))
+        .await
+        .map_err(|err| err.to_string())?;
+    assert_eq!(decision, Admit::Start { stop: false });
+    absent(&scratch.file())
+}
+
+#[tokio::test]
+async fn other_idless_uncertain_row_still_blocks_mint() -> Result<(), String> {
+    let (scratch, journal) = open("idless-other").await?;
+    uncertain_without_ids(&journal, "m8").await?;
+    let decision = admission(&Idle, &journal, 1, 1, 0, &assigned_wait(9, 1))
+        .await
+        .map_err(|err| err.to_string())?;
+    assert_eq!(decision, Admit::Hold);
+    absent(&scratch.file())
+}
+
+#[tokio::test]
+async fn partial_uncertain_row_still_blocks_its_mint() -> Result<(), String> {
+    let (scratch, journal) = open("partial-self").await?;
+    let id = journal
+        .begin("launch", "m9")
+        .await
+        .map_err(|err| err.to_string())?;
+    journal
+        .bind_worker(id, None, Some(&hex(1)))
+        .await
+        .map_err(|err| err.to_string())?;
+    journal
+        .finish(id, Outcome::Uncertain)
+        .await
+        .map_err(|err| err.to_string())?;
+    let decision = admission(&Idle, &journal, 1, 1, 0, &assigned_wait(9, 1))
+        .await
+        .map_err(|err| err.to_string())?;
+    assert_eq!(decision, Admit::Hold);
+    absent(&scratch.file())
+}
+
+fn hex(n: u64) -> String {
+    format!("{n:064x}")
+}
