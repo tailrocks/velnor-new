@@ -339,7 +339,8 @@ fn strict_render_elects_single_writer_per_shared_key()
         .expect("tools save step boundary");
     assert!(
         save_step.contains("github.event_name == 'push'")
-            && save_step.contains("github.event_name != 'workflow_dispatch'"),
+            && save_step.contains("github.ref_protected == true")
+            && save_step.contains("steps.v2.outputs.enabled == 'true'"),
         "winner saves only on push and not on unvalidated dispatch:\n{save_step}"
     );
     assert!(

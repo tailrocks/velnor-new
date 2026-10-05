@@ -172,7 +172,7 @@ fn provider_saves(job: &Job) -> Vec<&Step> {
 }
 
 /// One provider-restore job over an explicit key + path.
-fn provider_job(key: &str, path: &str) -> Result<Job, RenderError> {
+fn provider_job(key: &str, path: &str) -> Job {
     let restore = Step {
         name: "Provider cache admission".to_owned(),
         id: Some(StepId::TofuProviders),
@@ -188,7 +188,7 @@ fn provider_job(key: &str, path: &str) -> Result<Job, RenderError> {
             env: BTreeMap::new(),
         },
     };
-    Ok(Job {
+    Job {
         display_name: "Provider".to_owned(),
         runs_on: LABEL.to_owned(),
         timeout_minutes: JobTimeout::CRATE,
@@ -197,7 +197,7 @@ fn provider_job(key: &str, path: &str) -> Result<Job, RenderError> {
         permissions: None,
         environment: None,
         steps: vec![restore],
-    })
+    }
 }
 
 /// The provider key one job's single save step archives, when exactly one.
@@ -233,15 +233,15 @@ fn provider_writer_election_elects_lowest_id_per_key() -> Result<(), RenderError
         ("plan".to_owned(), bare),
         (
             "tofu-b".to_owned(),
-            provider_job(PROVIDER_KEY_A, PROVIDER_PATH_A)?,
+            provider_job(PROVIDER_KEY_A, PROVIDER_PATH_A),
         ),
         (
             "tofu-a".to_owned(),
-            provider_job(PROVIDER_KEY_A, PROVIDER_PATH_A)?,
+            provider_job(PROVIDER_KEY_A, PROVIDER_PATH_A),
         ),
         (
             "tofu-c".to_owned(),
-            provider_job(PROVIDER_KEY_B, PROVIDER_PATH_B)?,
+            provider_job(PROVIDER_KEY_B, PROVIDER_PATH_B),
         ),
     ]);
     elect_tofu_provider_savers(&mut jobs)?;
@@ -267,7 +267,7 @@ fn provider_writer_election_elects_lowest_id_per_key() -> Result<(), RenderError
 fn provider_writer_election_saves_push_gated_exact_entry() -> Result<(), RenderError> {
     let mut jobs = BTreeMap::from([(
         "tofu-a".to_owned(),
-        provider_job(PROVIDER_KEY_A, PROVIDER_PATH_A)?,
+        provider_job(PROVIDER_KEY_A, PROVIDER_PATH_A),
     )]);
     elect_tofu_provider_savers(&mut jobs)?;
     let saves = provider_saves(&jobs["tofu-a"]);
@@ -309,7 +309,7 @@ fn provider_writer_election_skips_keyless_and_reruns() -> Result<(), RenderError
         ("bare".to_owned(), bare),
         (
             "tofu-a".to_owned(),
-            provider_job(PROVIDER_KEY_A, PROVIDER_PATH_A)?,
+            provider_job(PROVIDER_KEY_A, PROVIDER_PATH_A),
         ),
     ]);
     elect_tofu_provider_savers(&mut jobs)?;

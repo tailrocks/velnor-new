@@ -102,10 +102,16 @@ fn suppress_dispatch(step: &mut Step) {
 /// Preserve the contract's canonical push-only writer gate.
 ///
 /// This exact condition already excludes workflow dispatch. Conjoining the
-/// general dispatch deny would change the typed ToFu save protocol while
+/// general dispatch deny would change the typed `ToFu` save protocol while
 /// adding no further protection.
 fn is_push_only_cache_save(step: &Step) -> bool {
-    step.condition.as_deref() == Some(velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION)
+    let condition = step.condition.as_deref();
+    let tools_save_condition = crate::cache_p08::tools_cache_save_condition();
+    let condition_is_push_only = condition
+        == Some(velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION)
+        || (step.role == Some(velnor_actions_contract::StepRole::ToolsCacheSave)
+            && condition == Some(tools_save_condition.as_str()));
+    condition_is_push_only
         && matches!(&step.kind, StepKind::Action { uses, .. }
             if uses.starts_with("actions/cache/save@"))
 }

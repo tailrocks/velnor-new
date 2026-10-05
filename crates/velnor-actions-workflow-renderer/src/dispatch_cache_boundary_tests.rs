@@ -203,6 +203,13 @@ fn generated_dispatch_plan_gates_native_mbx_and_tools_cache_steps() -> Result<()
         &dispatch_mise(),
     )?;
     let plan = jobs.get(PLAN_JOB_ID).expect("finalized plan job");
+    assert_native_mbx_step(plan);
+    assert_seed_and_mise_steps(plan)?;
+    assert_rendered_dispatch_guard(&ir, &context)?;
+    Ok(())
+}
+
+fn assert_native_mbx_step(plan: &Job) {
     let mbx = plan
         .steps
         .iter()
@@ -224,6 +231,9 @@ fn generated_dispatch_plan_gates_native_mbx_and_tools_cache_steps() -> Result<()
         ),
         "native object writes remain limited to protected default-branch pushes"
     );
+}
+
+fn assert_seed_and_mise_steps(plan: &Job) -> Result<(), crate::RenderError> {
     let seed = plan
         .steps
         .iter()
@@ -262,11 +272,18 @@ fn generated_dispatch_plan_gates_native_mbx_and_tools_cache_steps() -> Result<()
         ));
     };
     assert_eq!(with.get("cache").map(String::as_str), Some("false"));
+    Ok(())
+}
+
+fn assert_rendered_dispatch_guard(
+    ir: &WorkflowIr,
+    context: &RenderContext,
+) -> Result<(), crate::RenderError> {
     let rendered = crate::render::render_workflow_ir_strict_shared(
-        &ir,
+        ir,
         WorkflowPolicy::ConsumerV1,
         None,
-        &context,
+        context,
         &dispatch_mise(),
     )?;
     assert!(rendered.yaml.contains("Restore Velnor tool seed"));
@@ -326,6 +343,22 @@ fn dispatch_suppression_preserves_canonical_push_only_save_gate() {
         jobs["plan"].steps[0].condition.as_deref(),
         Some(velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION),
         "the exact push-only gate already denies workflow_dispatch"
+    );
+}
+
+#[test]
+fn dispatch_suppression_preserves_qualified_tools_save_gate() {
+    let mut save = cache_step("actions/cache/save@sha", "Save Mise tools");
+    save.role = Some(velnor_actions_contract::StepRole::ToolsCacheSave);
+    save.condition = Some(crate::cache_p08::tools_cache_save_condition());
+    let mut jobs = BTreeMap::from([("plan".to_owned(), job(&[], save))]);
+
+    suppress_unvalidated_cache_access(&mut jobs);
+
+    assert_eq!(
+        jobs["plan"].steps[0].condition.as_deref(),
+        Some(crate::cache_p08::tools_cache_save_condition().as_str()),
+        "the validated tool-cache save policy already restricts writers to protected default-branch pushes"
     );
 }
 

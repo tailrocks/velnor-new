@@ -115,8 +115,9 @@ fn strict_inserts_setup_before_mise_exec() -> Result<(), RenderError> {
         .expect("tools save step boundary");
     assert!(
         save_step.contains("github.event_name == 'push'")
-            && save_step.contains("github.event_name != 'workflow_dispatch'"),
-        "sole owner saves on push and blocks unvalidated dispatch:\n{save_step}"
+            && save_step.contains("github.ref_protected == true")
+            && save_step.contains("steps.v2.outputs.enabled == 'true'"),
+        "sole owner saves only on protected default-branch pushes with enabled identity:\n{save_step}"
     );
     let setup = text
         .split("      - name: Setup Mise")

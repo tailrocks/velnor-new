@@ -45,10 +45,9 @@ jobs:
         with:
           persist-credentials: "false"
       - name: Restore Velnor tool seed
-        if: github.event_name != 'workflow_dispatch'
         uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
         with:
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-75c77caa4018556f
+          cache_key: ${{ github.event_name != 'workflow_dispatch' && 'mise-v1-x86_64-unknown-linux-gnu-2026.9.18-75c77caa4018556f' || '' }}
       - name: V2 identity
         id: v2
         uses: ./.github/actions/u26 # zizmor: ignore[self-repository]
@@ -120,10 +119,9 @@ jobs:
           fetch-depth: "0"
           persist-credentials: "false"
       - name: Restore Velnor tool seed
-        if: github.event_name != 'workflow_dispatch'
         uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
         with:
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-761a279144527661
+          cache_key: ${{ github.event_name != 'workflow_dispatch' && 'mise-v1-x86_64-unknown-linux-gnu-2026.9.18-761a279144527661' || '' }}
       - name: V2 identity
         id: v2
         uses: ./.github/actions/u26 # zizmor: ignore[self-repository]
