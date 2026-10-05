@@ -51,19 +51,17 @@ fn expression_spans(text: &str) -> Option<Vec<&str>> {
 /// Runner paths, the release tag, plan-matrix coordinates, the two
 /// fixed secret bindings (bootstrap registry plus the release forge
 /// token, whose placements the release gates still police separately),
-/// and the MBX cache-mode selector. Hosted writes require a protected push
-/// to the default branch; Scale Set routes do not invoke action restore.
+/// and the protected-default-branch cache-mode selector (the generator
+/// pins it on the native MBX action so other events stay read-only).
 /// Notably absent: `github.token` (render-time fetch binding only)
 /// and run IDs (never in env).
-const ENV_EXPRESSIONS: [&str; 10] = [
+const ENV_EXPRESSIONS: &[&str] = &[
     "runner.temp",
     "github.ref_name",
     "github.event_name",
     "github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read'",
     "secrets.CARGO_REGISTRY_TOKEN",
     "secrets.GITHUB_TOKEN",
-    "steps.mbx-bundle.outputs.cache-matched-key",
-    "steps.mbx-cache-key.outputs.prefix",
     "github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.sha",
     "inputs.cache_key",
 ];
@@ -74,14 +72,14 @@ const ENV_EXPRESSIONS: [&str; 10] = [
 /// push-gated cache-save flag, and the publish step's derived
 /// artifact name. Notably absent: every `secrets.*` handle (rejected
 /// separately as `secret_in_action_input`).
-const WITH_EXPRESSIONS: [&str; 9] = [
+const WITH_EXPRESSIONS: &[&str] = &[
     "runner.temp",
     "github.run_id",
     "github.run_attempt",
+    "runner.environment",
+    "github.job",
     "github.event_name == 'push'",
     "steps.publish-baseline.outputs.artifact_name",
-    "steps.mbx-cache-key.outputs.key",
-    "steps.mbx-cache-key.outputs.prefix",
     "steps.tofu-providers.outputs.cache-key",
     "steps.tofu-providers.outputs.cache-path",
 ];
@@ -120,7 +118,7 @@ pub(crate) fn check_env_value(key: &str, value: &str) -> Result<(), RenderError>
         return Err(RenderError::BadCommand(format!("bad_env_expression:{key}")));
     };
     for inner in spans {
-        if !(ENV_EXPRESSIONS.contains(&inner) || is_matrix_field(inner)) {
+        if !ENV_EXPRESSIONS.contains(&inner) && !is_matrix_field(inner) {
             return Err(RenderError::BadCommand(format!("bad_env_expression:{key}")));
         }
     }

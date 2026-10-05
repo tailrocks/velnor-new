@@ -6,7 +6,10 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Job, Step, StepKind};
+use velnor_actions_contract::workflow::step_identity::{
+    is_configured_checkout, is_tool_seed_step, TOOL_SEED_USES,
+};
+use velnor_actions_contract::{Job, Step, StepKind, StepRole};
 
 use crate::RenderError;
 use crate::yaml::Yaml;
@@ -15,8 +18,6 @@ use crate::yaml::Yaml;
 pub(crate) const SEED_ROOT: &str = "/opt/velnor/seed";
 /// Display name of the copy step ahead of `Setup Mise`.
 pub(crate) const TOOL_SEED_NAME: &str = "Restore Velnor tool seed";
-/// Workflow `uses` of the one local tool-seed composite.
-pub(crate) const TOOL_SEED_USES: &str = "./.github/actions/velnor-tool-seed";
 /// Repository path of that composite.
 const TOOL_SEED_ACTION_PATH: &str = ".github/actions/velnor-tool-seed/action.yml";
 
@@ -66,11 +67,15 @@ fn copy_script(seed_root: &str, key_shell: &str) -> String {
 /// # Errors
 ///
 /// Returns [`RenderError`] when the setup step has no qualified cache key.
-pub(crate) fn insert_before_setup(job: &mut Job, setup_index: usize) -> Result<usize, RenderError> {
-    if setup_index > 0 && job.steps[setup_index - 1].name == TOOL_SEED_NAME {
+pub(crate) fn insert_before_setup(
+    job: &mut Job,
+    setup_index: usize,
+    checkout_uses: &str,
+) -> Result<usize, RenderError> {
+    if setup_index > 0 && is_tool_seed_step(&job.steps[setup_index - 1]) {
         return Ok(setup_index);
     }
-    if !checkout_before(job, setup_index) {
+    if !checkout_before(job, setup_index, checkout_uses) {
         return Ok(setup_index);
     }
     let key = cache_key_at(job, setup_index)?;
@@ -78,14 +83,10 @@ pub(crate) fn insert_before_setup(job: &mut Job, setup_index: usize) -> Result<u
     Ok(setup_index + 1)
 }
 
-fn checkout_before(job: &Job, setup_index: usize) -> bool {
-    job.steps[..setup_index].iter().any(|step| {
-        step.name == "Checkout"
-            || matches!(
-                &step.kind,
-                StepKind::Action { uses, .. } if uses.starts_with("actions/checkout@")
-            )
-    })
+fn checkout_before(job: &Job, setup_index: usize, checkout_uses: &str) -> bool {
+    job.steps[..setup_index]
+        .iter()
+        .any(|step| is_configured_checkout(step, checkout_uses))
 }
 
 fn seed_step(cache_key: &str) -> Result<Step, RenderError> {
@@ -94,17 +95,19 @@ fn seed_step(cache_key: &str) -> Result<Step, RenderError> {
             "bad_cache_key:{cache_key}"
         )));
     }
-    crate::steps::action_step(
+    let mut step = crate::steps::action_step(
         TOOL_SEED_NAME,
         TOOL_SEED_USES,
         BTreeMap::from([("cache_key".to_owned(), cache_key.to_owned())]),
-    )
+    )?;
+    step.role = Some(StepRole::ToolSeed);
+    Ok(step)
 }
 
 /// True when any job renders the tool-seed step.
 pub(crate) fn any_job_has_seed(jobs: &std::collections::BTreeMap<String, Job>) -> bool {
     jobs.values()
-        .any(|job| job.steps.iter().any(|step| step.name == TOOL_SEED_NAME))
+        .any(|job| job.steps.iter().any(is_tool_seed_step))
 }
 
 /// One composite action for every tool-seed step.
@@ -183,6 +186,9 @@ fn cache_key_at(job: &Job, index: usize) -> Result<String, RenderError> {
     let StepKind::Action { with, .. } = &step.kind else {
         return Err(RenderError::InvalidWorkflow("setup_missing".to_owned()));
     };
+    if step.role != Some(StepRole::MiseSetup) {
+        return Err(RenderError::InvalidWorkflow("setup_missing_role".to_owned()));
+    }
     with.get("cache_key")
         .filter(|key| crate::cache_p08::is_cache_key(key))
         .cloned()
@@ -329,30 +335,52 @@ mod tests {
     }
 
     fn setup(cache_key: &str) -> Step {
-        crate::steps::action_step(
-            "Setup Mise",
-            "jdx/mise-action@0123456789abcdef0123456789abcdef01234567",
-            BTreeMap::from([("cache_key".to_owned(), cache_key.to_owned())]),
-        )
-        .expect("setup")
+        Step {
+            name: "Setup Mise".to_owned(),
+            id: None,
+            role: Some(StepRole::MiseSetup),
+            condition: None,
+            kind: StepKind::Action {
+                uses: "jdx/mise-action@0123456789abcdef0123456789abcdef01234567".to_owned(),
+                with: BTreeMap::from([
+                    ("version".to_owned(), "2026.9.18".to_owned()),
+                    ("sha256".to_owned(), "a".repeat(64)),
+                    ("install".to_owned(), "false".to_owned()),
+                    ("env".to_owned(), "false".to_owned()),
+                    ("cache".to_owned(), "true".to_owned()),
+                    ("cache_save".to_owned(), "false".to_owned()),
+                    ("cache_key".to_owned(), cache_key.to_owned()),
+                ]),
+                env: BTreeMap::new(),
+            },
+        }
     }
 
     #[test]
     fn local_seed_requires_a_prior_checkout() {
         let cache_key = key();
         let mut bare = job(vec![setup(&cache_key)]);
-        let index = insert_before_setup(&mut bare, 0).expect("bare");
+        let checkout_uses = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
+        let index = insert_before_setup(&mut bare, 0, checkout_uses).expect("bare");
         assert_eq!(index, 0);
         assert!(bare.steps.iter().all(|step| step.name != TOOL_SEED_NAME));
-        let checkout = crate::steps::checkout_step(
-            "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
-        )
-        .expect("checkout");
+        let mut checkout = crate::steps::checkout_step(checkout_uses).expect("checkout");
+        checkout.name = "presentation-only checkout label".to_owned();
         let mut checked = job(vec![checkout, setup(&cache_key)]);
-        let index = insert_before_setup(&mut checked, 1).expect("checked");
+        let index = insert_before_setup(&mut checked, 1, checkout_uses).expect("checked");
         assert_eq!(index, 2);
-        assert_eq!(checked.steps[1].name, TOOL_SEED_NAME);
-        let again = insert_before_setup(&mut checked, 2).expect("again");
+        assert!(is_tool_seed_step(&checked.steps[1]));
+        let again = insert_before_setup(&mut checked, 2, checkout_uses).expect("again");
         assert_eq!(again, 2);
+
+        let mut mismatched = crate::steps::checkout_step(
+            "actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        )
+        .expect("mismatched checkout");
+        mismatched.name = "Checkout".to_owned();
+        let mut job = job(vec![mismatched, setup(&cache_key)]);
+        let index = insert_before_setup(&mut job, 1, checkout_uses).expect("mismatched");
+        assert_eq!(index, 1, "a display label cannot authorize a mismatched ref");
+        assert!(job.steps.iter().all(|step| !is_tool_seed_step(step)));
     }
 }

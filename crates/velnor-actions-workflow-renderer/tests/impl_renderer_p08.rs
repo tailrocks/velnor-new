@@ -1,7 +1,7 @@
 //! P08 renderer cases: built-in Mise cache, sources paths, rust-cache gates.
 
 use std::collections::BTreeMap;
-use velnor_actions_contract::{Job, JobTimeout, StepId, StepKind, StepRole};
+use velnor_actions_contract::{Job, JobTimeout, StepKind, StepRole};
 use velnor_actions_workflow_renderer::cache_p08::{
     check_mbx_before_fetch, check_no_rust_cache_with_mbx, infer_job_tools,
     mise_cache_key_for_tools, mise_setup_step_p08, tools_digest,
@@ -196,7 +196,7 @@ fn sources_subset_accepted_under_owned_home_only() {
 #[test]
 fn rust_cache_never_stacks_over_mbx() {
     let sha = "c".repeat(40);
-    let [preflight, mbx] = mbx_tool_steps(
+    let [preflight, mbx, version_check] = mbx_tool_steps(
         &format!("jdx/mr-boxington-action@{sha}"),
         "1.19.0",
         "1.98.1",
@@ -221,7 +221,12 @@ fn rust_cache_never_stacks_over_mbx() {
         condition: None,
         permissions: None,
         environment: None,
-        steps: vec![preflight.clone(), mbx.clone(), rust_cache.clone()],
+        steps: vec![
+            preflight.clone(),
+            mbx.clone(),
+            version_check.clone(),
+            rust_cache.clone(),
+        ],
     };
     assert!(check_no_rust_cache_with_mbx("demo", &both).is_err());
     let cargo_only = Job {
@@ -230,7 +235,7 @@ fn rust_cache_never_stacks_over_mbx() {
     };
     assert!(check_no_rust_cache_with_mbx("demo", &cargo_only).is_ok());
     let mbx_only = Job {
-        steps: vec![mbx],
+        steps: vec![mbx, version_check],
         ..both.clone()
     };
     assert!(check_no_rust_cache_with_mbx("demo", &mbx_only).is_ok());
@@ -250,12 +255,16 @@ fn mbx_restore_precedes_fetch() {
     };
     let mbx = velnor_actions_contract::Step {
         name: "Restore MBX objects".to_owned(),
-        id: Some(StepId::MbxCacheRestore),
         role: Some(StepRole::MbxCache),
         condition: None,
         kind: StepKind::Action {
             uses: format!("jdx/mr-boxington-action@{}", "d".repeat(40)),
-            with: BTreeMap::new(),
+            with: BTreeMap::from([
+                ("github-cache-mode".to_owned(), "objects".to_owned()),
+                ("version".to_owned(), "1.21.1".to_owned()),
+                ("toolchain".to_owned(), "1.98.1".to_owned()),
+                ("cache-generation".to_owned(), "generation".to_owned()),
+            ]),
             env: BTreeMap::new(),
         },
     };

@@ -2,6 +2,7 @@
 //! are allowed; every other ref must be `owner/repo` at a 40-hex commit.
 
 use crate::RenderError;
+use velnor_actions_contract::workflow::step_identity::TOOL_SEED_USES;
 
 /// Validate an `owner/repo@<40 hex>` action ref. Branch names are rejected.
 ///
@@ -15,7 +16,7 @@ use crate::RenderError;
 pub fn validate_uses(uses: &str) -> Result<(), RenderError> {
     if matches!(
         uses,
-        crate::tool_seed::TOOL_SEED_USES | crate::tofu_cache::TOFU_PROVIDER_ADMISSION_USES
+        TOOL_SEED_USES | crate::tofu_cache::TOFU_PROVIDER_ADMISSION_USES
     ) {
         return Ok(());
     }

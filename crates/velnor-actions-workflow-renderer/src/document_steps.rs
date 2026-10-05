@@ -3,6 +3,7 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{Step, StepKind, StepRole};
+use velnor_actions_contract::workflow::step_identity::TOOL_SEED_USES;
 
 use crate::{
     RenderError, commands,
@@ -113,7 +114,7 @@ fn action_step_to_yaml(
     }
     let uses_yaml = if matches!(
         uses,
-        crate::tofu_cache::TOFU_PROVIDER_ADMISSION_USES | crate::tool_seed::TOOL_SEED_USES
+        crate::tofu_cache::TOFU_PROVIDER_ADMISSION_USES | TOOL_SEED_USES
     ) {
         Yaml::annotated(uses, "zizmor: ignore[self-repository]")
     } else {

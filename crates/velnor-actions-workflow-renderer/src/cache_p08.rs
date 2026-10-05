@@ -214,6 +214,7 @@ pub fn ensure_setup_p08(
     setup: &MiseSetup,
     always: bool,
     target: &str,
+    checkout_uses: &str,
 ) -> Result<(), RenderError> {
     setup.validate()?;
     let present: Vec<usize> = job
@@ -230,7 +231,7 @@ pub fn ensure_setup_p08(
     }
     if let Some(&index) = present.first() {
         upgrade_setup(job_id, job, index, setup, target)?;
-        let setup_at = crate::tool_seed::insert_before_setup(job, index)?;
+        let setup_at = crate::tool_seed::insert_before_setup(job, index, checkout_uses)?;
         check_setup_before_mise(job_id, job, setup_at)?;
         return Ok(());
     }
@@ -246,7 +247,7 @@ pub fn ensure_setup_p08(
         let key = mise_cache_key_for_tools(target, &setup.version, &specs)?;
         let at = insert_at(job).min(job.steps.len());
         job.steps.insert(at, mise_setup_step_p08(setup, &key)?);
-        let setup_at = crate::tool_seed::insert_before_setup(job, at)?;
+        let setup_at = crate::tool_seed::insert_before_setup(job, at, checkout_uses)?;
         check_setup_before_mise(job_id, job, setup_at)?;
     }
     Ok(())

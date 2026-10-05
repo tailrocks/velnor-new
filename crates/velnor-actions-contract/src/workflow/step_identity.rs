@@ -26,14 +26,6 @@ pub enum StepId {
     Plan,
     /// Baseline publisher output consumed by the release uploader.
     PublishBaseline,
-    /// MBX cache identity outputs consumed by the bundle restore.
-    MbxBundleKey,
-    /// MBX action cache restore outputs exposed to later workflow steps.
-    MbxCacheRestore,
-    /// MBX bundle restore output consumed by its import step.
-    MbxBundle,
-    /// MBX export output consumed by its save gate.
-    MbxExport,
     /// `OpenTofu` provider-cache composite outputs consumed by the save step.
     TofuProviders,
 }
@@ -45,10 +37,6 @@ impl StepId {
         match self {
             Self::Plan => "plan",
             Self::PublishBaseline => "publish-baseline",
-            Self::MbxBundleKey => "mbx-cache-key",
-            Self::MbxCacheRestore => "mbx",
-            Self::MbxBundle => "mbx-bundle",
-            Self::MbxExport => "mbx-export",
             Self::TofuProviders => "tofu-providers",
         }
     }
@@ -130,22 +118,12 @@ pub enum StepRole {
     PreseedDownload,
     /// Pre-seed manifest verification.
     PreseedVerifyManifest,
-    /// MBX provider-cache import from its bundle.
-    MbxBundleImport,
-    /// MBX bundle export from the live object store.
-    MbxBundleExport,
-    /// MBX single-bundle cache save.
-    MbxBundleSave,
-    /// MBX action cache restore.
+    /// Native MBX action owns hosted and local object-cache lifecycle.
     MbxCache,
-    /// MBX local backend setup for Scale Set jobs.
-    MbxLocalSetup,
+    /// Exact MBX binary and object-store verification after the native action.
+    MbxVersionCheck,
     /// Exact MBX and Rust toolchain preflight.
     MbxPreflight,
-    /// MBX cache-primary-key prefix producer.
-    MbxBundleKey,
-    /// MBX bundle cache restore.
-    MbxBundleRestore,
 }
 
 impl StepRole {
@@ -178,17 +156,17 @@ impl StepRole {
             | Self::MatrixReportUpload
             | Self::PublishFinal
             | Self::PreseedUpload => action_has_prefix_for_kind(kind, "actions/upload-artifact@"),
-            Self::ToolsCacheSave | Self::MbxBundleSave | Self::CargoSourcesSave => {
+            Self::ToolsCacheSave | Self::CargoSourcesSave => {
                 action_has_prefix_for_kind(kind, "actions/cache/save@")
             }
-            Self::CargoSourcesRestore | Self::MbxBundleRestore => {
+            Self::CargoSourcesRestore => {
                 action_has_prefix_for_kind(kind, "actions/cache/restore@")
             }
             Self::TofuProvidersRestore => super::step_protocol::valid_provider_restore(kind),
             Self::TofuProvidersSave => super::step_protocol::valid_provider_save(kind),
             Self::CargoRegistryRestore => action_has_prefix_for_kind(kind, "Swatinem/rust-cache@"),
-            Self::MbxCache => valid_mbx_cache(kind, false),
-            Self::MbxLocalSetup => valid_mbx_cache(kind, true),
+            Self::MbxCache => valid_mbx_cache(kind),
+            Self::MbxVersionCheck => matches!(kind, StepKind::Shell { .. }),
             Self::PreparePinnedTools
             | Self::PrepareRustComponents
             | Self::CargoDeny
@@ -205,10 +183,8 @@ impl StepRole {
             | Self::PreseedManifest
             | Self::PreseedVerifyBuild
             | Self::PreseedVerifyManifest
-            | Self::MbxBundleExport
-            | Self::MbxBundleImport
-            | Self::MbxBundleKey
-            | Self::MbxPreflight => matches!(kind, StepKind::Shell { .. }),
+            | Self::MbxPreflight
+            => matches!(kind, StepKind::Shell { .. }),
         }
     }
 
@@ -217,10 +193,6 @@ impl StepRole {
         match self {
             Self::PlanProducer => Some(StepId::Plan),
             Self::BaselinePublisher => Some(StepId::PublishBaseline),
-            Self::MbxBundleKey => Some(StepId::MbxBundleKey),
-            Self::MbxCache => Some(StepId::MbxCacheRestore),
-            Self::MbxBundleRestore => Some(StepId::MbxBundle),
-            Self::MbxBundleExport => Some(StepId::MbxExport),
             Self::TofuProvidersRestore => Some(StepId::TofuProviders),
             _ => None,
         }
@@ -231,10 +203,6 @@ impl StepRole {
         match id {
             StepId::Plan => Self::PlanProducer,
             StepId::PublishBaseline => Self::BaselinePublisher,
-            StepId::MbxBundleKey => Self::MbxBundleKey,
-            StepId::MbxCacheRestore => Self::MbxCache,
-            StepId::MbxBundle => Self::MbxBundleRestore,
-            StepId::MbxExport => Self::MbxBundleExport,
             StepId::TofuProviders => Self::TofuProvidersRestore,
         }
     }
@@ -312,15 +280,14 @@ fn valid_mise_setup(kind: &StepKind) -> bool {
 }
 
 /// Validate the local provider admission call and exact same-restore outputs.
-/// Validate MBX action backend mode for hosted cache and local setup roles.
-fn valid_mbx_cache(kind: &StepKind, local: bool) -> bool {
+/// Validate the native MBX action that owns the object-cache lifecycle.
+fn valid_mbx_cache(kind: &StepKind) -> bool {
     matches!(kind, StepKind::Action { uses, with, .. }
-    if action_has_prefix(uses, "jdx/mr-boxington-action@")
-        && if local {
-            with.get("backend").is_some_and(|backend| backend == "local")
-        } else {
-            with.get("backend").is_none_or(|backend| backend == "github")
-        })
+        if action_has_prefix(uses, "jdx/mr-boxington-action@")
+            && with.get("github-cache-mode").is_some_and(|mode| mode == "objects")
+            && with.get("version").is_some_and(|version| !version.is_empty())
+            && with.get("toolchain").is_some_and(|toolchain| !toolchain.is_empty())
+            && with.get("cache-generation").is_some_and(|generation| !generation.is_empty()))
 }
 /// Validate one serialized step scope, including role payloads and unique output IDs.
 ///

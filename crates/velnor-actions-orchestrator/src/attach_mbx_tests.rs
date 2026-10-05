@@ -3,11 +3,10 @@ use super::*;
 #[test]
 fn preseed_restores_mbx_builds_after_sources_with_homes() {
     use velnor_actions_contract::StepRole;
-    use velnor_actions_workflow_renderer::{
-        MBX_PREFLIGHT_NAME, PRESEED_BUILD_NAME, PRESEED_VERIFY_NAME,
-    };
-    let mut plan = preseed_fixture(true, &[String::new()]);
-    attach_preseed(&mut plan, "ubuntu-26.04", "0.1.0").expect("attach");
+    use velnor_actions_workflow_renderer::{PRESEED_BUILD_NAME, PRESEED_VERIFY_NAME};
+    let roots = [String::new()];
+    let mut plan = preseed_fixture(true, &roots);
+    attach_preseed(&mut plan, "ubuntu-26.04", "0.1.0", &roots).expect("attach");
     let steps = &plan.ir.jobs["plan"].steps;
     let names: Vec<&str> = steps.iter().map(|step| step.name.as_str()).collect();
     let roles: Vec<Option<StepRole>> = steps.iter().map(|step| step.role).collect();
@@ -17,10 +16,11 @@ fn preseed_restores_mbx_builds_after_sources_with_homes() {
             .position(|seen| *seen == Some(role))
             .unwrap_or_else(|| panic!("missing {role:?}: {roles:?}"))
     };
-    let (restore, preflight, mbx, probe, build, verify, save) = (
+    let (restore, preflight, mbx, version_check, probe, build, verify, save) = (
         at(StepRole::CargoSourcesRestore),
         at(StepRole::MbxPreflight),
         at(StepRole::MbxCache),
+        at(StepRole::MbxVersionCheck),
         at(StepRole::CargoSourcesFetch),
         at(StepRole::PreseedBuild),
         at(StepRole::PreseedVerifyBuild),
@@ -29,13 +29,14 @@ fn preseed_restores_mbx_builds_after_sources_with_homes() {
     assert!(
         restore < preflight
             && preflight < mbx
-            && mbx < probe
+            && mbx < version_check
+            && version_check < probe
             && probe < build
             && build < verify
             && verify < save,
         "preseed order: {names:?}"
     );
-    assert_owned_homes(steps, MBX_PREFLIGHT_NAME);
+    assert_owned_homes(steps, StepRole::MbxPreflight, "MBX preflight");
     let mbx_action = steps
         .iter()
         .find(|step| step.role == Some(StepRole::MbxCache))
@@ -50,6 +51,6 @@ fn preseed_restores_mbx_builds_after_sources_with_homes() {
     );
     assert_eq!(env.get("RUSTUP_HOME"), env.get("MISE_RUSTUP_HOME"));
     assert_eq!(env.get("CARGO_HOME"), env.get("MISE_CARGO_HOME"));
-    assert_owned_homes(steps, PRESEED_BUILD_NAME);
-    assert_owned_homes(steps, PRESEED_VERIFY_NAME);
+    assert_owned_homes(steps, StepRole::PreseedBuild, PRESEED_BUILD_NAME);
+    assert_owned_homes(steps, StepRole::PreseedVerifyBuild, PRESEED_VERIFY_NAME);
 }

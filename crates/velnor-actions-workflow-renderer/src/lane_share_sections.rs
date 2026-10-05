@@ -59,10 +59,7 @@ fn is_mbx_prelude_step(step: &Step) -> bool {
         Some(
             StepRole::MbxPreflight
                 | StepRole::MbxCache
-                | StepRole::MbxBundleKey
-                | StepRole::MbxLocalSetup
-                | StepRole::MbxBundleRestore
-                | StepRole::MbxBundleImport
+                | StepRole::MbxVersionCheck
         )
     )
 }
@@ -73,8 +70,6 @@ fn is_postlude_step(step: &Step) -> bool {
         Some(
             StepRole::ToolsCacheSave
                 | StepRole::TofuProvidersSave
-                | StepRole::MbxBundleExport
-                | StepRole::MbxBundleSave
         )
     )
 }
