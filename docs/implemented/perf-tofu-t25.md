@@ -76,8 +76,8 @@ parallelism, here runs serial.
 | 100 | 75, 77, 77, 80, 80 (77) | budget (unrun past 40) | 1903, 1910, 2009, 2041, 2145 (2009) |
 
 Base A/B at the top points: prepare-100 med 76 (T25 77),
-plan-40 med 620 (T25 618) — identical within noise. Plan still
-fails closed past 40 roots on the 320 KiB matrix budget (the
+plan-40 med 620 (T25 618) — identical within noise. At the measured
+head, plan failed closed past 40 roots on the then-current 320 KiB matrix budget (the
 1/10/40 plan shape stands; prepare/generate scale 1/10/100).
 
 ## 3. Budget verdicts
