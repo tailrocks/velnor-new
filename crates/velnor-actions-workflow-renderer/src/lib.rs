@@ -43,6 +43,7 @@ pub mod render;
 mod runs_on;
 pub mod schema2;
 pub mod setup;
+mod step_ids;
 pub mod steps;
 mod steps_artifact;
 mod steps_internal;

@@ -235,11 +235,10 @@ fn plan_job_fetches_lockful_sources_before_generate_consumers() -> TestResult {
         .ok_or_else(|| std::io::Error::other("missing plan job"))?;
     let names: Vec<&str> = plan.steps.iter().map(|step| step.name.as_str()).collect();
     let at = |name: &str| names.iter().position(|seen| *seen == name);
-    // Cargo-only fixture: the writer is one `rust-cache` step (its post
-    // action saves; no separate save step). MBX repos use restore/save.
+    // Cargo-only fixture uses the explicit shared sources restore/save pair.
     let (Some(prepare_at), Some(cache_at), Some(fetch_at), Some(write_at)) = (
         at("Prepare pinned tools"),
-        at("Restore Cargo registry"),
+        at("Restore Cargo sources"),
         at("Fetch Cargo sources"),
         at("Write request"),
     ) else {

@@ -298,7 +298,7 @@ fn rust_components_install_unconditionally_after_restore() -> TestResult {
 #[test]
 fn lockfile_delta_changes_cache_identity() -> TestResult {
     let lock = lock_for(&["a", "b"]);
-    // Driver delta: MBX and Cargo-only repos use disjoint cache shapes.
+    // Compiler driver does not change the exact Cargo sources archive.
     let mbx_keys = cache_keys(&yaml_for(&lock, true)?);
     let cargo_keys = cache_keys(&yaml_for(&lock, false)?);
     assert!(
@@ -310,12 +310,17 @@ fn lockfile_delta_changes_cache_identity() -> TestResult {
     assert!(
         cargo_keys
             .iter()
-            .any(|key| key.starts_with("velnor-cargo-")),
-        "cargo shared key: {cargo_keys:?}"
+            .any(|key| key.contains("velnor-v1-sources-")),
+        "cargo sources key: {cargo_keys:?}"
     );
-    assert!(
-        !mbx_keys.iter().any(|key| key.starts_with("velnor-cargo-")),
-        "mbx never stacks rust-cache: {mbx_keys:?}"
+    assert_eq!(
+        mbx_keys
+            .iter()
+            .find(|key| key.contains("velnor-v1-sources-")),
+        cargo_keys
+            .iter()
+            .find(|key| key.contains("velnor-v1-sources-")),
+        "same source identity in both driver modes"
     );
     // Lock CONTENT deltas re-key at runtime through `hashFiles`: the
     // template is stable across renders, the resolved key is not.

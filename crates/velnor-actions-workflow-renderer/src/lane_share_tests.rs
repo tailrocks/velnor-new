@@ -14,6 +14,9 @@ const CAP: usize = 500_000;
 const LOGICAL_JOBS: usize = 21;
 const STEPS_PER_JOB: usize = 48;
 
+#[path = "lane_share_cache_tests.rs"]
+mod cache_tests;
+
 pub(super) fn ctx() -> RenderContext {
     RenderContext {
         generator_version: "0.1.0".to_owned(),
@@ -101,6 +104,7 @@ pub(super) fn render_jobs(
     ctx: &RenderContext,
     calls: &BTreeMap<String, String>,
     checkouts: &BTreeMap<String, Step>,
+    preludes: &BTreeMap<String, Vec<Step>>,
 ) -> Result<String, crate::RenderError> {
     let document = crate::document::workflow_to_yaml(
         ir,
@@ -108,6 +112,7 @@ pub(super) fn render_jobs(
         ctx,
         calls,
         checkouts,
+        preludes,
         &std::collections::BTreeSet::new(),
     )?;
     let quoted = crate::yaml::quote_run_values_in_yaml(document);
@@ -155,8 +160,15 @@ fn shared_lanes_keep_ci_under_github_file_cap() {
     let jobs = paired(&heavy_steps(&payload));
     let ir = workflow_ir();
     let context = ctx();
-    let unshared =
-        render_jobs(&ir, &jobs, &context, &BTreeMap::new(), &BTreeMap::new()).expect("unshared");
+    let unshared = render_jobs(
+        &ir,
+        &jobs,
+        &context,
+        &BTreeMap::new(),
+        &BTreeMap::new(),
+        &BTreeMap::new(),
+    )
+    .expect("unshared");
     assert!(
         unshared.len() > CAP,
         "unshared render must exceed the GitHub cap, got {}",
@@ -169,6 +181,7 @@ fn shared_lanes_keep_ci_under_github_file_cap() {
         &context,
         &shared.calls,
         &shared.checkouts,
+        &shared.preludes,
     )
     .expect("shared");
     assert!(
@@ -307,6 +320,7 @@ fn matching_lane_checkout_inputs_are_carried_outside_the_composite() {
         &ctx(),
         &shared.calls,
         &shared.checkouts,
+        &shared.preludes,
     )
     .expect("yaml");
     assert!(yaml.contains("fetch-depth:"));
@@ -343,54 +357,4 @@ fn unpaired_jobs_stay_inline() {
     assert!(shared.files.is_empty());
     let kept = shared.jobs.get("actionlint").expect("actionlint");
     assert_eq!(kept.steps.len(), 1);
-}
-
-#[test]
-fn elected_save_stays_on_the_winner_job() {
-    let mut jobs = paired(&[echo_step(0, "one")]);
-    let expected_checkout = jobs
-        .get("rust-0__hosted")
-        .expect("hosted")
-        .steps
-        .first()
-        .expect("checkout")
-        .clone();
-    let save = crate::cache_steps::tools_save_step("mise-v1").expect("save");
-    jobs.get_mut("rust-0__hosted")
-        .expect("hosted")
-        .steps
-        .push(save);
-    let shared = share_lanes(&jobs, &ctx()).expect("share");
-    let hosted = shared.jobs.get("rust-0__hosted").expect("hosted");
-    let local = shared.jobs.get("rust-0__local").expect("local");
-    assert_eq!(
-        shared.checkouts.get("rust-0__hosted"),
-        Some(&expected_checkout)
-    );
-    assert_eq!(
-        shared.checkouts.get("rust-0__local"),
-        Some(&expected_checkout)
-    );
-    assert_eq!(hosted.steps.len(), 1);
-    assert_eq!(hosted.steps.first().expect("save").name, "Save Mise tools");
-    assert!(local.steps.is_empty());
-    let action = shared
-        .files
-        .iter()
-        .find(|file| file.path == ".github/actions/rust-0/action.yml")
-        .expect("composite");
-    assert!(!action.bytes.contains("Save Mise tools"));
-    let yaml = render_jobs(
-        &workflow_ir(),
-        &shared.jobs,
-        &ctx(),
-        &shared.calls,
-        &shared.checkouts,
-    )
-    .expect("yaml");
-    assert_eq!(yaml.matches("Save Mise tools").count(), 1);
-    let checkout_at = yaml.find("name: Checkout").expect("checkout");
-    let call_at = yaml.find("uses: ./.github/actions/rust-0").expect("call");
-    let save_at = yaml.find("name: Save Mise tools").expect("save");
-    assert!(checkout_at < call_at && call_at < save_at);
 }

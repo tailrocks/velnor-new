@@ -1,4 +1,4 @@
-//! Plan closure: freshness gate, publish upload, anchor, legacy path.
+//! Plan closure: freshness gate, publish upload, anchor, strict render path.
 use velnor_actions_contract::WorkflowPolicy;
 use velnor_actions_workflow_renderer::{
     ACQUIRE_NAME, CHECK_GENERATED_NAME, CRATE_REPORT_UPLOAD_NAME, DOWNLOAD_PLAN_NAME,
@@ -33,12 +33,11 @@ fn strict_plan_job_gets_full_prelude_in_order() -> Result<(), RenderError> {
             "Write request",
             "Plan",
             PUBLISH_PLAN_NAME,
-            "Save Mise tools",
         ]
     );
     assert!(
         !text.contains("Restore Mise tools"),
-        "P08: restores stay built-in:\n{text}"
+        "jobs without tool obligations do not restore:\n{text}"
     );
     Ok(())
 }

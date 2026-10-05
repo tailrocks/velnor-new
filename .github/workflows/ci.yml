@@ -22,16 +22,54 @@ jobs:
     name: Actionlint
     runs-on: ubuntu-26.04
     timeout-minutes: 10
+    env:
+      ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+      ACTIONS_ID_TOKEN_REQUEST_URL: ""
+      ACTIONS_RUNTIME_TOKEN: ""
+      CARGO_REGISTRY_TOKEN: ""
+      GH_CONFIG_DIR: ""
+      GH_HOST: ""
+      GH_TOKEN: ""
+      GITHUB_TOKEN: ""
+      MISE_AUTO_INSTALL: "false"
+      MISE_EXEC_AUTO_INSTALL: "false"
+      MISE_GITHUB_TOKEN: ""
+      MISE_LOCKFILE: "0"
+      MISE_NO_CONFIG: "1"
+      MISE_NO_ENV: "1"
+      MISE_NO_HOOKS: "1"
+      NODE_AUTH_TOKEN: ""
+      NPM_TOKEN: ""
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
+      - name: Identify Mise cache runtime
+        id: velnor-tool-cache-identity
+        env:
+          CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          RUNNER_TEMP: ${{ runner.temp }}
+          RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          VELNOR_CACHE_EXPECTED_ARCH: X64
+          VELNOR_CACHE_EXPECTED_IMAGE_OS: ubuntu26
+          VELNOR_CACHE_LANE: ubuntu-26.04
+          VELNOR_CACHE_STATIC_DIGEST: 97190eef167066fff58bef17bf9186ae7514e35f27bbc39417666efed2076810
+          VELNOR_CACHE_TARGET: x86_64-unknown-linux-gnu
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; export LC_ALL=C; set -eu; umask 077; : \"${GITHUB_OUTPUT:?missing GITHUB_OUTPUT}\"; scratch_root=; scratch_dir=; runner_os=${RUNNER_OS-}; runner_arch=${RUNNER_ARCH-}; image_os=${ImageOS-}; image_version=${ImageVersion-}; home=${HOME-}; runner_temp=${RUNNER_TEMP-}; mise_rustup=${MISE_RUSTUP_HOME-}; rustup_home=${RUSTUP_HOME-}; mise_cargo=${MISE_CARGO_HOME-}; cargo_home=${CARGO_HOME-}; valid_path() { value=$1; case \"$value\" in /*) ;; *) return 1 ;; esac; [ \"$value\" != / ] || return 1; case \"$value\" in *[![:print:]]*|*//*|*/./*|*/../*|*/.|*/..) return 1 ;; esac; remaining=${value#/}; prefix=; while [ -n \"$remaining\" ]; do case \"$remaining\" in */*) part=${remaining%%/*}; remaining=${remaining#*/} ;; *) part=$remaining; remaining= ;; esac; [ -n \"$part\" ] || return 1; prefix=\"$prefix/$part\"; [ ! -L \"$prefix\" ] || return 1; done; }; cleanup_scratch() { [ -n \"$scratch_dir\" ] || return 0; case \"$scratch_dir\" in \"$scratch_root\"/runtime-identity.*) ;; *) return 1 ;; esac; [ -d \"$scratch_dir\" ] && [ ! -L \"$scratch_dir\" ] || return 1; rm -rf -- \"$scratch_dir\" || return 1; scratch_dir=; }; on_exit() { status=$1; trap - EXIT; if ! cleanup_scratch; then status=1; fi; exit \"$status\"; }; trap '\\''status=$?; on_exit \"$status\"'\\'' EXIT; trap '\\''exit 129'\\'' HUP; trap '\\''exit 130'\\'' INT; trap '\\''exit 143'\\'' TERM; disable() { reason=$1; if ! cleanup_scratch; then printf '\\''enabled=false\\nreason=identity_scratch_cleanup_failed\\n'\\'' >> \"$GITHUB_OUTPUT\"; exit 1; fi; printf '\\''enabled=false\\nreason=%s\\n'\\'' \"$reason\" >> \"$GITHUB_OUTPUT\"; exit 0; }; case \"$VELNOR_CACHE_LANE\" in scale-set:*) disable scale_set_image_unqualified ;; esac; [ -n \"$runner_os\" ] || disable runner_os_missing; [ \"$runner_os\" = Linux ] || disable runner_os_mismatch; [ -n \"$runner_arch\" ] || disable runner_arch_missing; [ \"$runner_arch\" = \"$VELNOR_CACHE_EXPECTED_ARCH\" ] || disable runner_arch_mismatch; [ -n \"$image_os\" ] || disable image_os_missing; [ \"$image_os\" = \"$VELNOR_CACHE_EXPECTED_IMAGE_OS\" ] || disable image_os_mismatch; [ -n \"$image_version\" ] || disable image_version_missing; case \"$image_version\" in *[!0-9.]*) disable image_version_invalid ;; esac; case \"$image_version\" in *[0-9]*) ;; *) disable image_version_invalid ;; esac; [ -n \"$home\" ] && [ -d \"$home\" ] || disable home_missing; [ -n \"$runner_temp\" ] && [ -d \"$runner_temp\" ] || disable runner_temp_missing; valid_path \"$home\" || disable home_aliased; valid_path \"$runner_temp\" || disable runner_temp_aliased; expected_mise=\"$home/.local/share/mise\"; effective_mise=${MISE_DATA_DIR-}; if [ -z \"$effective_mise\" ]; then if [ -n \"${XDG_DATA_HOME-}\" ]; then effective_mise=\"$XDG_DATA_HOME/mise\"; else effective_mise=$expected_mise; fi; fi; valid_path \"$expected_mise\" || disable mise_root_aliased; valid_path \"$effective_mise\" || disable mise_root_invalid; [ \"$effective_mise\" = \"$expected_mise\" ] || disable mise_root_not_archived; expected_rustup=\"$runner_temp/velnor/rustup\"; expected_cargo=\"$runner_temp/velnor/cargo\"; [ \"$mise_rustup\" = \"$expected_rustup\" ] || disable mise_rustup_home_mismatch; [ \"$rustup_home\" = \"$expected_rustup\" ] || disable rustup_home_mismatch; [ \"$mise_cargo\" = \"$expected_cargo\" ] || disable mise_cargo_home_mismatch; [ \"$cargo_home\" = \"$expected_cargo\" ] || disable cargo_home_mismatch; valid_path \"$expected_rustup\" || disable rustup_root_invalid; valid_path \"$expected_cargo\" || disable cargo_root_invalid; scratch_root=\"$runner_temp/velnor\"; valid_path \"$scratch_root\" || disable cache_scratch_aliased; mkdir -p \"$scratch_root\" || disable cache_scratch_unavailable; [ -d \"$scratch_root\" ] && [ ! -L \"$scratch_root\" ] || disable cache_scratch_invalid; scratch_dir=\"$scratch_root/runtime-identity.$$\"; if ! mkdir -m 700 \"$scratch_dir\"; then scratch_dir=; disable identity_scratch_unavailable; fi; case \"$scratch_dir\" in \"$scratch_root\"/runtime-identity.*) ;; *) disable cache_scratch_invalid ;; esac; valid_path \"$scratch_dir\" && [ -d \"$scratch_dir\" ] && [ ! -L \"$scratch_dir\" ] || disable cache_scratch_invalid; identity_file=\"$scratch_dir/preimage\"; sum_file=\"$scratch_dir/digest\"; set -C; if ! : > \"$identity_file\"; then set +C; disable identity_file_unavailable; fi; if ! : > \"$sum_file\"; then set +C; disable identity_file_unavailable; fi; set +C; valid_path \"$identity_file\" && [ -f \"$identity_file\" ] && [ ! -L \"$identity_file\" ] || disable identity_file_invalid; valid_path \"$sum_file\" && [ -f \"$sum_file\" ] && [ ! -L \"$sum_file\" ] || disable identity_file_invalid; for value in \"velnor-tools-runtime-v2\" \"$VELNOR_CACHE_STATIC_DIGEST\" \"$VELNOR_CACHE_LANE\" \"$VELNOR_CACHE_TARGET\" \"$runner_os\" \"$runner_arch\" \"$image_os\" \"$image_version\" \"$home\" \"$runner_temp\" \"$effective_mise\" \"$expected_rustup\" \"$expected_cargo\"; do if ! printf '\\''%s:%s\\n'\\'' \"${#value}\" \"$value\" >> \"$identity_file\"; then disable identity_file_write_failed; fi; done; if command -v sha256sum >/dev/null 2>&1; then if ! sha256sum < \"$identity_file\" > \"$sum_file\"; then disable identity_hash_failed; fi; elif command -v shasum >/dev/null 2>&1; then if ! shasum -a 256 < \"$identity_file\" > \"$sum_file\"; then disable identity_hash_failed; fi; else disable sha256_tool_missing; fi; if ! IFS='\\'' '\\'' read -r fingerprint _ < \"$sum_file\"; then disable fingerprint_missing; fi; [ ${#fingerprint} -eq 64 ] || disable fingerprint_invalid; case \"$fingerprint\" in *[!0-9a-f]*) disable fingerprint_invalid ;; esac; if ! cleanup_scratch; then disable identity_scratch_cleanup_failed; fi; printf '\\''identity=%s\\nenabled=true\\nreason=qualified_hosted_image\\n'\\'' \"$fingerprint\" >> \"$GITHUB_OUTPUT\"'"
+      - name: Restore Mise tools
+        if: steps.velnor-tool-cache-identity.outputs.enabled == 'true'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: mise-tools-v2-97190eef167066fff58bef17bf9186ae7514e35f27bbc39417666efed2076810-${{steps.velnor-tool-cache-identity.outputs.identity}}
+          path: "~/.local/share/mise\n${{ runner.temp }}/velnor/rustup\n${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin"
+          restore-keys: ""
       - name: Setup Mise
         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
-          cache: "true"
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-75c77caa4018556f
+          cache: "false"
           cache_save: "false"
           env: "false"
           install: "false"
@@ -40,11 +78,11 @@ jobs:
       - name: Run actionlint
         run: mise --no-config --no-env --no-hooks exec actionlint@1.7.12 shellcheck@0.11.0 -- actionlint -color
       - name: Save Mise tools
-        if: success() && github.event_name == 'push'
+        if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.velnor-tool-cache-identity.outputs.enabled == 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
-          key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-75c77caa4018556f
-          path: ~/.local/share/mise
+          key: mise-tools-v2-97190eef167066fff58bef17bf9186ae7514e35f27bbc39417666efed2076810-${{steps.velnor-tool-cache-identity.outputs.identity}}
+          path: "~/.local/share/mise\n${{ runner.temp }}/velnor/rustup\n${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin"
   alint:
     name: Alint
     runs-on: ubuntu-26.04
@@ -66,16 +104,54 @@ jobs:
     name: Cargo Deny
     runs-on: ubuntu-26.04
     timeout-minutes: 10
+    env:
+      ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+      ACTIONS_ID_TOKEN_REQUEST_URL: ""
+      ACTIONS_RUNTIME_TOKEN: ""
+      CARGO_REGISTRY_TOKEN: ""
+      GH_CONFIG_DIR: ""
+      GH_HOST: ""
+      GH_TOKEN: ""
+      GITHUB_TOKEN: ""
+      MISE_AUTO_INSTALL: "false"
+      MISE_EXEC_AUTO_INSTALL: "false"
+      MISE_GITHUB_TOKEN: ""
+      MISE_LOCKFILE: "0"
+      MISE_NO_CONFIG: "1"
+      MISE_NO_ENV: "1"
+      MISE_NO_HOOKS: "1"
+      NODE_AUTH_TOKEN: ""
+      NPM_TOKEN: ""
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
+      - name: Identify Mise cache runtime
+        id: velnor-tool-cache-identity
+        env:
+          CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          RUNNER_TEMP: ${{ runner.temp }}
+          RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          VELNOR_CACHE_EXPECTED_ARCH: X64
+          VELNOR_CACHE_EXPECTED_IMAGE_OS: ubuntu26
+          VELNOR_CACHE_LANE: ubuntu-26.04
+          VELNOR_CACHE_STATIC_DIGEST: 7c8e857f67b6a50cc9222700686bd1eddbb45c09942b9f3f2600df32666b13b9
+          VELNOR_CACHE_TARGET: x86_64-unknown-linux-gnu
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; export LC_ALL=C; set -eu; umask 077; : \"${GITHUB_OUTPUT:?missing GITHUB_OUTPUT}\"; scratch_root=; scratch_dir=; runner_os=${RUNNER_OS-}; runner_arch=${RUNNER_ARCH-}; image_os=${ImageOS-}; image_version=${ImageVersion-}; home=${HOME-}; runner_temp=${RUNNER_TEMP-}; mise_rustup=${MISE_RUSTUP_HOME-}; rustup_home=${RUSTUP_HOME-}; mise_cargo=${MISE_CARGO_HOME-}; cargo_home=${CARGO_HOME-}; valid_path() { value=$1; case \"$value\" in /*) ;; *) return 1 ;; esac; [ \"$value\" != / ] || return 1; case \"$value\" in *[![:print:]]*|*//*|*/./*|*/../*|*/.|*/..) return 1 ;; esac; remaining=${value#/}; prefix=; while [ -n \"$remaining\" ]; do case \"$remaining\" in */*) part=${remaining%%/*}; remaining=${remaining#*/} ;; *) part=$remaining; remaining= ;; esac; [ -n \"$part\" ] || return 1; prefix=\"$prefix/$part\"; [ ! -L \"$prefix\" ] || return 1; done; }; cleanup_scratch() { [ -n \"$scratch_dir\" ] || return 0; case \"$scratch_dir\" in \"$scratch_root\"/runtime-identity.*) ;; *) return 1 ;; esac; [ -d \"$scratch_dir\" ] && [ ! -L \"$scratch_dir\" ] || return 1; rm -rf -- \"$scratch_dir\" || return 1; scratch_dir=; }; on_exit() { status=$1; trap - EXIT; if ! cleanup_scratch; then status=1; fi; exit \"$status\"; }; trap '\\''status=$?; on_exit \"$status\"'\\'' EXIT; trap '\\''exit 129'\\'' HUP; trap '\\''exit 130'\\'' INT; trap '\\''exit 143'\\'' TERM; disable() { reason=$1; if ! cleanup_scratch; then printf '\\''enabled=false\\nreason=identity_scratch_cleanup_failed\\n'\\'' >> \"$GITHUB_OUTPUT\"; exit 1; fi; printf '\\''enabled=false\\nreason=%s\\n'\\'' \"$reason\" >> \"$GITHUB_OUTPUT\"; exit 0; }; case \"$VELNOR_CACHE_LANE\" in scale-set:*) disable scale_set_image_unqualified ;; esac; [ -n \"$runner_os\" ] || disable runner_os_missing; [ \"$runner_os\" = Linux ] || disable runner_os_mismatch; [ -n \"$runner_arch\" ] || disable runner_arch_missing; [ \"$runner_arch\" = \"$VELNOR_CACHE_EXPECTED_ARCH\" ] || disable runner_arch_mismatch; [ -n \"$image_os\" ] || disable image_os_missing; [ \"$image_os\" = \"$VELNOR_CACHE_EXPECTED_IMAGE_OS\" ] || disable image_os_mismatch; [ -n \"$image_version\" ] || disable image_version_missing; case \"$image_version\" in *[!0-9.]*) disable image_version_invalid ;; esac; case \"$image_version\" in *[0-9]*) ;; *) disable image_version_invalid ;; esac; [ -n \"$home\" ] && [ -d \"$home\" ] || disable home_missing; [ -n \"$runner_temp\" ] && [ -d \"$runner_temp\" ] || disable runner_temp_missing; valid_path \"$home\" || disable home_aliased; valid_path \"$runner_temp\" || disable runner_temp_aliased; expected_mise=\"$home/.local/share/mise\"; effective_mise=${MISE_DATA_DIR-}; if [ -z \"$effective_mise\" ]; then if [ -n \"${XDG_DATA_HOME-}\" ]; then effective_mise=\"$XDG_DATA_HOME/mise\"; else effective_mise=$expected_mise; fi; fi; valid_path \"$expected_mise\" || disable mise_root_aliased; valid_path \"$effective_mise\" || disable mise_root_invalid; [ \"$effective_mise\" = \"$expected_mise\" ] || disable mise_root_not_archived; expected_rustup=\"$runner_temp/velnor/rustup\"; expected_cargo=\"$runner_temp/velnor/cargo\"; [ \"$mise_rustup\" = \"$expected_rustup\" ] || disable mise_rustup_home_mismatch; [ \"$rustup_home\" = \"$expected_rustup\" ] || disable rustup_home_mismatch; [ \"$mise_cargo\" = \"$expected_cargo\" ] || disable mise_cargo_home_mismatch; [ \"$cargo_home\" = \"$expected_cargo\" ] || disable cargo_home_mismatch; valid_path \"$expected_rustup\" || disable rustup_root_invalid; valid_path \"$expected_cargo\" || disable cargo_root_invalid; scratch_root=\"$runner_temp/velnor\"; valid_path \"$scratch_root\" || disable cache_scratch_aliased; mkdir -p \"$scratch_root\" || disable cache_scratch_unavailable; [ -d \"$scratch_root\" ] && [ ! -L \"$scratch_root\" ] || disable cache_scratch_invalid; scratch_dir=\"$scratch_root/runtime-identity.$$\"; if ! mkdir -m 700 \"$scratch_dir\"; then scratch_dir=; disable identity_scratch_unavailable; fi; case \"$scratch_dir\" in \"$scratch_root\"/runtime-identity.*) ;; *) disable cache_scratch_invalid ;; esac; valid_path \"$scratch_dir\" && [ -d \"$scratch_dir\" ] && [ ! -L \"$scratch_dir\" ] || disable cache_scratch_invalid; identity_file=\"$scratch_dir/preimage\"; sum_file=\"$scratch_dir/digest\"; set -C; if ! : > \"$identity_file\"; then set +C; disable identity_file_unavailable; fi; if ! : > \"$sum_file\"; then set +C; disable identity_file_unavailable; fi; set +C; valid_path \"$identity_file\" && [ -f \"$identity_file\" ] && [ ! -L \"$identity_file\" ] || disable identity_file_invalid; valid_path \"$sum_file\" && [ -f \"$sum_file\" ] && [ ! -L \"$sum_file\" ] || disable identity_file_invalid; for value in \"velnor-tools-runtime-v2\" \"$VELNOR_CACHE_STATIC_DIGEST\" \"$VELNOR_CACHE_LANE\" \"$VELNOR_CACHE_TARGET\" \"$runner_os\" \"$runner_arch\" \"$image_os\" \"$image_version\" \"$home\" \"$runner_temp\" \"$effective_mise\" \"$expected_rustup\" \"$expected_cargo\"; do if ! printf '\\''%s:%s\\n'\\'' \"${#value}\" \"$value\" >> \"$identity_file\"; then disable identity_file_write_failed; fi; done; if command -v sha256sum >/dev/null 2>&1; then if ! sha256sum < \"$identity_file\" > \"$sum_file\"; then disable identity_hash_failed; fi; elif command -v shasum >/dev/null 2>&1; then if ! shasum -a 256 < \"$identity_file\" > \"$sum_file\"; then disable identity_hash_failed; fi; else disable sha256_tool_missing; fi; if ! IFS='\\'' '\\'' read -r fingerprint _ < \"$sum_file\"; then disable fingerprint_missing; fi; [ ${#fingerprint} -eq 64 ] || disable fingerprint_invalid; case \"$fingerprint\" in *[!0-9a-f]*) disable fingerprint_invalid ;; esac; if ! cleanup_scratch; then disable identity_scratch_cleanup_failed; fi; printf '\\''identity=%s\\nenabled=true\\nreason=qualified_hosted_image\\n'\\'' \"$fingerprint\" >> \"$GITHUB_OUTPUT\"'"
+      - name: Restore Mise tools
+        if: steps.velnor-tool-cache-identity.outputs.enabled == 'true'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: mise-tools-v2-7c8e857f67b6a50cc9222700686bd1eddbb45c09942b9f3f2600df32666b13b9-${{steps.velnor-tool-cache-identity.outputs.identity}}
+          path: "~/.local/share/mise\n${{ runner.temp }}/velnor/rustup\n${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin"
+          restore-keys: ""
       - name: Setup Mise
         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
-          cache: "true"
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-1e88d9dde00a53da
+          cache: "false"
           cache_save: "false"
           env: "false"
           install: "false"
@@ -84,25 +160,63 @@ jobs:
       - name: Run cargo-deny
         run: "sh -c '{ mise --no-config --no-env --no-hooks install cargo-deny@0.20.2 && unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; } && mkdir -p \"$RUNNER_TEMP/velnor/cargo-clean\" && cd \"$RUNNER_TEMP/velnor/cargo-clean\" && mise --no-config --no-env --no-hooks exec cargo-deny@0.20.2 -- cargo deny --locked --manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\" --config \"$GITHUB_WORKSPACE/deny.toml\" check && mise --no-config --no-env --no-hooks exec cargo-deny@0.20.2 -- cargo deny --locked --manifest-path \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.toml\" --config \"$GITHUB_WORKSPACE/crates/velnor-runner/deny.toml\" check'"
       - name: Save Mise tools
-        if: success() && github.event_name == 'push'
+        if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.velnor-tool-cache-identity.outputs.enabled == 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
-          key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-1e88d9dde00a53da
-          path: ~/.local/share/mise
+          key: mise-tools-v2-7c8e857f67b6a50cc9222700686bd1eddbb45c09942b9f3f2600df32666b13b9-${{steps.velnor-tool-cache-identity.outputs.identity}}
+          path: "~/.local/share/mise\n${{ runner.temp }}/velnor/rustup\n${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin"
   cargo-machete:
     name: Cargo Machete
     runs-on: ubuntu-26.04
     timeout-minutes: 10
+    env:
+      ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+      ACTIONS_ID_TOKEN_REQUEST_URL: ""
+      ACTIONS_RUNTIME_TOKEN: ""
+      CARGO_REGISTRY_TOKEN: ""
+      GH_CONFIG_DIR: ""
+      GH_HOST: ""
+      GH_TOKEN: ""
+      GITHUB_TOKEN: ""
+      MISE_AUTO_INSTALL: "false"
+      MISE_EXEC_AUTO_INSTALL: "false"
+      MISE_GITHUB_TOKEN: ""
+      MISE_LOCKFILE: "0"
+      MISE_NO_CONFIG: "1"
+      MISE_NO_ENV: "1"
+      MISE_NO_HOOKS: "1"
+      NODE_AUTH_TOKEN: ""
+      NPM_TOKEN: ""
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
+      - name: Identify Mise cache runtime
+        id: velnor-tool-cache-identity
+        env:
+          CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          RUNNER_TEMP: ${{ runner.temp }}
+          RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          VELNOR_CACHE_EXPECTED_ARCH: X64
+          VELNOR_CACHE_EXPECTED_IMAGE_OS: ubuntu26
+          VELNOR_CACHE_LANE: ubuntu-26.04
+          VELNOR_CACHE_STATIC_DIGEST: 4afedde0a3fa3dd2ea95f73e43100d08b5baddf1f2f684d70746c2832b0a52b2
+          VELNOR_CACHE_TARGET: x86_64-unknown-linux-gnu
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; export LC_ALL=C; set -eu; umask 077; : \"${GITHUB_OUTPUT:?missing GITHUB_OUTPUT}\"; scratch_root=; scratch_dir=; runner_os=${RUNNER_OS-}; runner_arch=${RUNNER_ARCH-}; image_os=${ImageOS-}; image_version=${ImageVersion-}; home=${HOME-}; runner_temp=${RUNNER_TEMP-}; mise_rustup=${MISE_RUSTUP_HOME-}; rustup_home=${RUSTUP_HOME-}; mise_cargo=${MISE_CARGO_HOME-}; cargo_home=${CARGO_HOME-}; valid_path() { value=$1; case \"$value\" in /*) ;; *) return 1 ;; esac; [ \"$value\" != / ] || return 1; case \"$value\" in *[![:print:]]*|*//*|*/./*|*/../*|*/.|*/..) return 1 ;; esac; remaining=${value#/}; prefix=; while [ -n \"$remaining\" ]; do case \"$remaining\" in */*) part=${remaining%%/*}; remaining=${remaining#*/} ;; *) part=$remaining; remaining= ;; esac; [ -n \"$part\" ] || return 1; prefix=\"$prefix/$part\"; [ ! -L \"$prefix\" ] || return 1; done; }; cleanup_scratch() { [ -n \"$scratch_dir\" ] || return 0; case \"$scratch_dir\" in \"$scratch_root\"/runtime-identity.*) ;; *) return 1 ;; esac; [ -d \"$scratch_dir\" ] && [ ! -L \"$scratch_dir\" ] || return 1; rm -rf -- \"$scratch_dir\" || return 1; scratch_dir=; }; on_exit() { status=$1; trap - EXIT; if ! cleanup_scratch; then status=1; fi; exit \"$status\"; }; trap '\\''status=$?; on_exit \"$status\"'\\'' EXIT; trap '\\''exit 129'\\'' HUP; trap '\\''exit 130'\\'' INT; trap '\\''exit 143'\\'' TERM; disable() { reason=$1; if ! cleanup_scratch; then printf '\\''enabled=false\\nreason=identity_scratch_cleanup_failed\\n'\\'' >> \"$GITHUB_OUTPUT\"; exit 1; fi; printf '\\''enabled=false\\nreason=%s\\n'\\'' \"$reason\" >> \"$GITHUB_OUTPUT\"; exit 0; }; case \"$VELNOR_CACHE_LANE\" in scale-set:*) disable scale_set_image_unqualified ;; esac; [ -n \"$runner_os\" ] || disable runner_os_missing; [ \"$runner_os\" = Linux ] || disable runner_os_mismatch; [ -n \"$runner_arch\" ] || disable runner_arch_missing; [ \"$runner_arch\" = \"$VELNOR_CACHE_EXPECTED_ARCH\" ] || disable runner_arch_mismatch; [ -n \"$image_os\" ] || disable image_os_missing; [ \"$image_os\" = \"$VELNOR_CACHE_EXPECTED_IMAGE_OS\" ] || disable image_os_mismatch; [ -n \"$image_version\" ] || disable image_version_missing; case \"$image_version\" in *[!0-9.]*) disable image_version_invalid ;; esac; case \"$image_version\" in *[0-9]*) ;; *) disable image_version_invalid ;; esac; [ -n \"$home\" ] && [ -d \"$home\" ] || disable home_missing; [ -n \"$runner_temp\" ] && [ -d \"$runner_temp\" ] || disable runner_temp_missing; valid_path \"$home\" || disable home_aliased; valid_path \"$runner_temp\" || disable runner_temp_aliased; expected_mise=\"$home/.local/share/mise\"; effective_mise=${MISE_DATA_DIR-}; if [ -z \"$effective_mise\" ]; then if [ -n \"${XDG_DATA_HOME-}\" ]; then effective_mise=\"$XDG_DATA_HOME/mise\"; else effective_mise=$expected_mise; fi; fi; valid_path \"$expected_mise\" || disable mise_root_aliased; valid_path \"$effective_mise\" || disable mise_root_invalid; [ \"$effective_mise\" = \"$expected_mise\" ] || disable mise_root_not_archived; expected_rustup=\"$runner_temp/velnor/rustup\"; expected_cargo=\"$runner_temp/velnor/cargo\"; [ \"$mise_rustup\" = \"$expected_rustup\" ] || disable mise_rustup_home_mismatch; [ \"$rustup_home\" = \"$expected_rustup\" ] || disable rustup_home_mismatch; [ \"$mise_cargo\" = \"$expected_cargo\" ] || disable mise_cargo_home_mismatch; [ \"$cargo_home\" = \"$expected_cargo\" ] || disable cargo_home_mismatch; valid_path \"$expected_rustup\" || disable rustup_root_invalid; valid_path \"$expected_cargo\" || disable cargo_root_invalid; scratch_root=\"$runner_temp/velnor\"; valid_path \"$scratch_root\" || disable cache_scratch_aliased; mkdir -p \"$scratch_root\" || disable cache_scratch_unavailable; [ -d \"$scratch_root\" ] && [ ! -L \"$scratch_root\" ] || disable cache_scratch_invalid; scratch_dir=\"$scratch_root/runtime-identity.$$\"; if ! mkdir -m 700 \"$scratch_dir\"; then scratch_dir=; disable identity_scratch_unavailable; fi; case \"$scratch_dir\" in \"$scratch_root\"/runtime-identity.*) ;; *) disable cache_scratch_invalid ;; esac; valid_path \"$scratch_dir\" && [ -d \"$scratch_dir\" ] && [ ! -L \"$scratch_dir\" ] || disable cache_scratch_invalid; identity_file=\"$scratch_dir/preimage\"; sum_file=\"$scratch_dir/digest\"; set -C; if ! : > \"$identity_file\"; then set +C; disable identity_file_unavailable; fi; if ! : > \"$sum_file\"; then set +C; disable identity_file_unavailable; fi; set +C; valid_path \"$identity_file\" && [ -f \"$identity_file\" ] && [ ! -L \"$identity_file\" ] || disable identity_file_invalid; valid_path \"$sum_file\" && [ -f \"$sum_file\" ] && [ ! -L \"$sum_file\" ] || disable identity_file_invalid; for value in \"velnor-tools-runtime-v2\" \"$VELNOR_CACHE_STATIC_DIGEST\" \"$VELNOR_CACHE_LANE\" \"$VELNOR_CACHE_TARGET\" \"$runner_os\" \"$runner_arch\" \"$image_os\" \"$image_version\" \"$home\" \"$runner_temp\" \"$effective_mise\" \"$expected_rustup\" \"$expected_cargo\"; do if ! printf '\\''%s:%s\\n'\\'' \"${#value}\" \"$value\" >> \"$identity_file\"; then disable identity_file_write_failed; fi; done; if command -v sha256sum >/dev/null 2>&1; then if ! sha256sum < \"$identity_file\" > \"$sum_file\"; then disable identity_hash_failed; fi; elif command -v shasum >/dev/null 2>&1; then if ! shasum -a 256 < \"$identity_file\" > \"$sum_file\"; then disable identity_hash_failed; fi; else disable sha256_tool_missing; fi; if ! IFS='\\'' '\\'' read -r fingerprint _ < \"$sum_file\"; then disable fingerprint_missing; fi; [ ${#fingerprint} -eq 64 ] || disable fingerprint_invalid; case \"$fingerprint\" in *[!0-9a-f]*) disable fingerprint_invalid ;; esac; if ! cleanup_scratch; then disable identity_scratch_cleanup_failed; fi; printf '\\''identity=%s\\nenabled=true\\nreason=qualified_hosted_image\\n'\\'' \"$fingerprint\" >> \"$GITHUB_OUTPUT\"'"
+      - name: Restore Mise tools
+        if: steps.velnor-tool-cache-identity.outputs.enabled == 'true'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: mise-tools-v2-4afedde0a3fa3dd2ea95f73e43100d08b5baddf1f2f684d70746c2832b0a52b2-${{steps.velnor-tool-cache-identity.outputs.identity}}
+          path: "~/.local/share/mise\n${{ runner.temp }}/velnor/rustup\n${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin"
+          restore-keys: ""
       - name: Setup Mise
         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
-          cache: "true"
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-507563a85b3135e7
+          cache: "false"
           cache_save: "false"
           env: "false"
           install: "false"
@@ -111,11 +225,11 @@ jobs:
       - name: Run cargo-machete
         run: mise --no-config --no-env --no-hooks exec ubi:bnjbvr/cargo-machete@0.9.2 -- cargo machete crates/velnor-actions-contract crates/velnor-actions-rust crates/velnor-actions-tofu crates/velnor-actions-mise crates/velnor-actions-actionlint crates/velnor-actions-workflow-renderer crates/velnor-actions-orchestrator crates/velnor-actions-cli
       - name: Save Mise tools
-        if: success() && github.event_name == 'push'
+        if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.velnor-tool-cache-identity.outputs.enabled == 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
-          key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-507563a85b3135e7
-          path: ~/.local/share/mise
+          key: mise-tools-v2-4afedde0a3fa3dd2ea95f73e43100d08b5baddf1f2f684d70746c2832b0a52b2-${{steps.velnor-tool-cache-identity.outputs.identity}}
+          path: "~/.local/share/mise\n${{ runner.temp }}/velnor/rustup\n${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin"
   plan:
     name: Plan
     runs-on: ubuntu-26.04
@@ -148,11 +262,31 @@ jobs:
         with:
           fetch-depth: "0"
           persist-credentials: "false"
+      - name: Identify Mise cache runtime
+        id: velnor-tool-cache-identity
+        env:
+          CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          RUNNER_TEMP: ${{ runner.temp }}
+          RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          VELNOR_CACHE_EXPECTED_ARCH: X64
+          VELNOR_CACHE_EXPECTED_IMAGE_OS: ubuntu26
+          VELNOR_CACHE_LANE: ubuntu-26.04
+          VELNOR_CACHE_STATIC_DIGEST: 5e6ebd611bc7cc5b66544cc5cee7c3c5fb5bb3c05e811ce742184fefe7d40a11
+          VELNOR_CACHE_TARGET: x86_64-unknown-linux-gnu
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; export LC_ALL=C; set -eu; umask 077; : \"${GITHUB_OUTPUT:?missing GITHUB_OUTPUT}\"; scratch_root=; scratch_dir=; runner_os=${RUNNER_OS-}; runner_arch=${RUNNER_ARCH-}; image_os=${ImageOS-}; image_version=${ImageVersion-}; home=${HOME-}; runner_temp=${RUNNER_TEMP-}; mise_rustup=${MISE_RUSTUP_HOME-}; rustup_home=${RUSTUP_HOME-}; mise_cargo=${MISE_CARGO_HOME-}; cargo_home=${CARGO_HOME-}; valid_path() { value=$1; case \"$value\" in /*) ;; *) return 1 ;; esac; [ \"$value\" != / ] || return 1; case \"$value\" in *[![:print:]]*|*//*|*/./*|*/../*|*/.|*/..) return 1 ;; esac; remaining=${value#/}; prefix=; while [ -n \"$remaining\" ]; do case \"$remaining\" in */*) part=${remaining%%/*}; remaining=${remaining#*/} ;; *) part=$remaining; remaining= ;; esac; [ -n \"$part\" ] || return 1; prefix=\"$prefix/$part\"; [ ! -L \"$prefix\" ] || return 1; done; }; cleanup_scratch() { [ -n \"$scratch_dir\" ] || return 0; case \"$scratch_dir\" in \"$scratch_root\"/runtime-identity.*) ;; *) return 1 ;; esac; [ -d \"$scratch_dir\" ] && [ ! -L \"$scratch_dir\" ] || return 1; rm -rf -- \"$scratch_dir\" || return 1; scratch_dir=; }; on_exit() { status=$1; trap - EXIT; if ! cleanup_scratch; then status=1; fi; exit \"$status\"; }; trap '\\''status=$?; on_exit \"$status\"'\\'' EXIT; trap '\\''exit 129'\\'' HUP; trap '\\''exit 130'\\'' INT; trap '\\''exit 143'\\'' TERM; disable() { reason=$1; if ! cleanup_scratch; then printf '\\''enabled=false\\nreason=identity_scratch_cleanup_failed\\n'\\'' >> \"$GITHUB_OUTPUT\"; exit 1; fi; printf '\\''enabled=false\\nreason=%s\\n'\\'' \"$reason\" >> \"$GITHUB_OUTPUT\"; exit 0; }; case \"$VELNOR_CACHE_LANE\" in scale-set:*) disable scale_set_image_unqualified ;; esac; [ -n \"$runner_os\" ] || disable runner_os_missing; [ \"$runner_os\" = Linux ] || disable runner_os_mismatch; [ -n \"$runner_arch\" ] || disable runner_arch_missing; [ \"$runner_arch\" = \"$VELNOR_CACHE_EXPECTED_ARCH\" ] || disable runner_arch_mismatch; [ -n \"$image_os\" ] || disable image_os_missing; [ \"$image_os\" = \"$VELNOR_CACHE_EXPECTED_IMAGE_OS\" ] || disable image_os_mismatch; [ -n \"$image_version\" ] || disable image_version_missing; case \"$image_version\" in *[!0-9.]*) disable image_version_invalid ;; esac; case \"$image_version\" in *[0-9]*) ;; *) disable image_version_invalid ;; esac; [ -n \"$home\" ] && [ -d \"$home\" ] || disable home_missing; [ -n \"$runner_temp\" ] && [ -d \"$runner_temp\" ] || disable runner_temp_missing; valid_path \"$home\" || disable home_aliased; valid_path \"$runner_temp\" || disable runner_temp_aliased; expected_mise=\"$home/.local/share/mise\"; effective_mise=${MISE_DATA_DIR-}; if [ -z \"$effective_mise\" ]; then if [ -n \"${XDG_DATA_HOME-}\" ]; then effective_mise=\"$XDG_DATA_HOME/mise\"; else effective_mise=$expected_mise; fi; fi; valid_path \"$expected_mise\" || disable mise_root_aliased; valid_path \"$effective_mise\" || disable mise_root_invalid; [ \"$effective_mise\" = \"$expected_mise\" ] || disable mise_root_not_archived; expected_rustup=\"$runner_temp/velnor/rustup\"; expected_cargo=\"$runner_temp/velnor/cargo\"; [ \"$mise_rustup\" = \"$expected_rustup\" ] || disable mise_rustup_home_mismatch; [ \"$rustup_home\" = \"$expected_rustup\" ] || disable rustup_home_mismatch; [ \"$mise_cargo\" = \"$expected_cargo\" ] || disable mise_cargo_home_mismatch; [ \"$cargo_home\" = \"$expected_cargo\" ] || disable cargo_home_mismatch; valid_path \"$expected_rustup\" || disable rustup_root_invalid; valid_path \"$expected_cargo\" || disable cargo_root_invalid; scratch_root=\"$runner_temp/velnor\"; valid_path \"$scratch_root\" || disable cache_scratch_aliased; mkdir -p \"$scratch_root\" || disable cache_scratch_unavailable; [ -d \"$scratch_root\" ] && [ ! -L \"$scratch_root\" ] || disable cache_scratch_invalid; scratch_dir=\"$scratch_root/runtime-identity.$$\"; if ! mkdir -m 700 \"$scratch_dir\"; then scratch_dir=; disable identity_scratch_unavailable; fi; case \"$scratch_dir\" in \"$scratch_root\"/runtime-identity.*) ;; *) disable cache_scratch_invalid ;; esac; valid_path \"$scratch_dir\" && [ -d \"$scratch_dir\" ] && [ ! -L \"$scratch_dir\" ] || disable cache_scratch_invalid; identity_file=\"$scratch_dir/preimage\"; sum_file=\"$scratch_dir/digest\"; set -C; if ! : > \"$identity_file\"; then set +C; disable identity_file_unavailable; fi; if ! : > \"$sum_file\"; then set +C; disable identity_file_unavailable; fi; set +C; valid_path \"$identity_file\" && [ -f \"$identity_file\" ] && [ ! -L \"$identity_file\" ] || disable identity_file_invalid; valid_path \"$sum_file\" && [ -f \"$sum_file\" ] && [ ! -L \"$sum_file\" ] || disable identity_file_invalid; for value in \"velnor-tools-runtime-v2\" \"$VELNOR_CACHE_STATIC_DIGEST\" \"$VELNOR_CACHE_LANE\" \"$VELNOR_CACHE_TARGET\" \"$runner_os\" \"$runner_arch\" \"$image_os\" \"$image_version\" \"$home\" \"$runner_temp\" \"$effective_mise\" \"$expected_rustup\" \"$expected_cargo\"; do if ! printf '\\''%s:%s\\n'\\'' \"${#value}\" \"$value\" >> \"$identity_file\"; then disable identity_file_write_failed; fi; done; if command -v sha256sum >/dev/null 2>&1; then if ! sha256sum < \"$identity_file\" > \"$sum_file\"; then disable identity_hash_failed; fi; elif command -v shasum >/dev/null 2>&1; then if ! shasum -a 256 < \"$identity_file\" > \"$sum_file\"; then disable identity_hash_failed; fi; else disable sha256_tool_missing; fi; if ! IFS='\\'' '\\'' read -r fingerprint _ < \"$sum_file\"; then disable fingerprint_missing; fi; [ ${#fingerprint} -eq 64 ] || disable fingerprint_invalid; case \"$fingerprint\" in *[!0-9a-f]*) disable fingerprint_invalid ;; esac; if ! cleanup_scratch; then disable identity_scratch_cleanup_failed; fi; printf '\\''identity=%s\\nenabled=true\\nreason=qualified_hosted_image\\n'\\'' \"$fingerprint\" >> \"$GITHUB_OUTPUT\"'"
+      - name: Restore Mise tools
+        if: steps.velnor-tool-cache-identity.outputs.enabled == 'true'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: mise-tools-v2-5e6ebd611bc7cc5b66544cc5cee7c3c5fb5bb3c05e811ce742184fefe7d40a11-${{steps.velnor-tool-cache-identity.outputs.identity}}
+          path: "~/.local/share/mise\n${{ runner.temp }}/velnor/rustup\n${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin"
+          restore-keys: ""
       - name: Setup Mise
         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
-          cache: "true"
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-cd6926493099032f
+          cache: "false"
           cache_save: "false"
           env: "false"
           install: "false"
@@ -172,7 +306,7 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           key: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-${{hashFiles('Cargo.lock','crates/velnor-runner/Cargo.lock')}}
-          path: "${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin\n${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
+          path: "${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
           restore-keys: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-
       - name: Verify MBX and Rust toolchains
         env:
@@ -253,7 +387,7 @@ jobs:
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           key: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-${{hashFiles('Cargo.lock','crates/velnor-runner/Cargo.lock')}}
-          path: "${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin\n${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
+          path: "${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
       - name: Write request
         env:
           VELNOR_INTERNAL_OP: write-request-v1
@@ -291,11 +425,11 @@ jobs:
           key: ${{ steps.mbx.outputs.cache-primary-key }}
           path: ${{ runner.temp }}/mbx-single-bundle
       - name: Save Mise tools
-        if: success() && github.event_name == 'push'
+        if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.velnor-tool-cache-identity.outputs.enabled == 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
-          key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-cd6926493099032f
-          path: ~/.local/share/mise
+          key: mise-tools-v2-5e6ebd611bc7cc5b66544cc5cee7c3c5fb5bb3c05e811ce742184fefe7d40a11-${{steps.velnor-tool-cache-identity.outputs.identity}}
+          path: "~/.local/share/mise\n${{ runner.temp }}/velnor/rustup\n${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin"
   publish-baseline:
     name: Publish baseline
     runs-on: ubuntu-26.04
@@ -399,11 +533,31 @@ jobs:
       - zizmor
     if: always()
     steps:
+      - name: Identify Mise cache runtime
+        id: velnor-tool-cache-identity
+        env:
+          CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          RUNNER_TEMP: ${{ runner.temp }}
+          RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          VELNOR_CACHE_EXPECTED_ARCH: X64
+          VELNOR_CACHE_EXPECTED_IMAGE_OS: ubuntu26
+          VELNOR_CACHE_LANE: ubuntu-26.04
+          VELNOR_CACHE_STATIC_DIGEST: 7e3d4db8a565e5bbdd358ccdd5b80c13f6d352fd3dcf39d3a81d9470689a7d24
+          VELNOR_CACHE_TARGET: x86_64-unknown-linux-gnu
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; export LC_ALL=C; set -eu; umask 077; : \"${GITHUB_OUTPUT:?missing GITHUB_OUTPUT}\"; scratch_root=; scratch_dir=; runner_os=${RUNNER_OS-}; runner_arch=${RUNNER_ARCH-}; image_os=${ImageOS-}; image_version=${ImageVersion-}; home=${HOME-}; runner_temp=${RUNNER_TEMP-}; mise_rustup=${MISE_RUSTUP_HOME-}; rustup_home=${RUSTUP_HOME-}; mise_cargo=${MISE_CARGO_HOME-}; cargo_home=${CARGO_HOME-}; valid_path() { value=$1; case \"$value\" in /*) ;; *) return 1 ;; esac; [ \"$value\" != / ] || return 1; case \"$value\" in *[![:print:]]*|*//*|*/./*|*/../*|*/.|*/..) return 1 ;; esac; remaining=${value#/}; prefix=; while [ -n \"$remaining\" ]; do case \"$remaining\" in */*) part=${remaining%%/*}; remaining=${remaining#*/} ;; *) part=$remaining; remaining= ;; esac; [ -n \"$part\" ] || return 1; prefix=\"$prefix/$part\"; [ ! -L \"$prefix\" ] || return 1; done; }; cleanup_scratch() { [ -n \"$scratch_dir\" ] || return 0; case \"$scratch_dir\" in \"$scratch_root\"/runtime-identity.*) ;; *) return 1 ;; esac; [ -d \"$scratch_dir\" ] && [ ! -L \"$scratch_dir\" ] || return 1; rm -rf -- \"$scratch_dir\" || return 1; scratch_dir=; }; on_exit() { status=$1; trap - EXIT; if ! cleanup_scratch; then status=1; fi; exit \"$status\"; }; trap '\\''status=$?; on_exit \"$status\"'\\'' EXIT; trap '\\''exit 129'\\'' HUP; trap '\\''exit 130'\\'' INT; trap '\\''exit 143'\\'' TERM; disable() { reason=$1; if ! cleanup_scratch; then printf '\\''enabled=false\\nreason=identity_scratch_cleanup_failed\\n'\\'' >> \"$GITHUB_OUTPUT\"; exit 1; fi; printf '\\''enabled=false\\nreason=%s\\n'\\'' \"$reason\" >> \"$GITHUB_OUTPUT\"; exit 0; }; case \"$VELNOR_CACHE_LANE\" in scale-set:*) disable scale_set_image_unqualified ;; esac; [ -n \"$runner_os\" ] || disable runner_os_missing; [ \"$runner_os\" = Linux ] || disable runner_os_mismatch; [ -n \"$runner_arch\" ] || disable runner_arch_missing; [ \"$runner_arch\" = \"$VELNOR_CACHE_EXPECTED_ARCH\" ] || disable runner_arch_mismatch; [ -n \"$image_os\" ] || disable image_os_missing; [ \"$image_os\" = \"$VELNOR_CACHE_EXPECTED_IMAGE_OS\" ] || disable image_os_mismatch; [ -n \"$image_version\" ] || disable image_version_missing; case \"$image_version\" in *[!0-9.]*) disable image_version_invalid ;; esac; case \"$image_version\" in *[0-9]*) ;; *) disable image_version_invalid ;; esac; [ -n \"$home\" ] && [ -d \"$home\" ] || disable home_missing; [ -n \"$runner_temp\" ] && [ -d \"$runner_temp\" ] || disable runner_temp_missing; valid_path \"$home\" || disable home_aliased; valid_path \"$runner_temp\" || disable runner_temp_aliased; expected_mise=\"$home/.local/share/mise\"; effective_mise=${MISE_DATA_DIR-}; if [ -z \"$effective_mise\" ]; then if [ -n \"${XDG_DATA_HOME-}\" ]; then effective_mise=\"$XDG_DATA_HOME/mise\"; else effective_mise=$expected_mise; fi; fi; valid_path \"$expected_mise\" || disable mise_root_aliased; valid_path \"$effective_mise\" || disable mise_root_invalid; [ \"$effective_mise\" = \"$expected_mise\" ] || disable mise_root_not_archived; expected_rustup=\"$runner_temp/velnor/rustup\"; expected_cargo=\"$runner_temp/velnor/cargo\"; [ \"$mise_rustup\" = \"$expected_rustup\" ] || disable mise_rustup_home_mismatch; [ \"$rustup_home\" = \"$expected_rustup\" ] || disable rustup_home_mismatch; [ \"$mise_cargo\" = \"$expected_cargo\" ] || disable mise_cargo_home_mismatch; [ \"$cargo_home\" = \"$expected_cargo\" ] || disable cargo_home_mismatch; valid_path \"$expected_rustup\" || disable rustup_root_invalid; valid_path \"$expected_cargo\" || disable cargo_root_invalid; scratch_root=\"$runner_temp/velnor\"; valid_path \"$scratch_root\" || disable cache_scratch_aliased; mkdir -p \"$scratch_root\" || disable cache_scratch_unavailable; [ -d \"$scratch_root\" ] && [ ! -L \"$scratch_root\" ] || disable cache_scratch_invalid; scratch_dir=\"$scratch_root/runtime-identity.$$\"; if ! mkdir -m 700 \"$scratch_dir\"; then scratch_dir=; disable identity_scratch_unavailable; fi; case \"$scratch_dir\" in \"$scratch_root\"/runtime-identity.*) ;; *) disable cache_scratch_invalid ;; esac; valid_path \"$scratch_dir\" && [ -d \"$scratch_dir\" ] && [ ! -L \"$scratch_dir\" ] || disable cache_scratch_invalid; identity_file=\"$scratch_dir/preimage\"; sum_file=\"$scratch_dir/digest\"; set -C; if ! : > \"$identity_file\"; then set +C; disable identity_file_unavailable; fi; if ! : > \"$sum_file\"; then set +C; disable identity_file_unavailable; fi; set +C; valid_path \"$identity_file\" && [ -f \"$identity_file\" ] && [ ! -L \"$identity_file\" ] || disable identity_file_invalid; valid_path \"$sum_file\" && [ -f \"$sum_file\" ] && [ ! -L \"$sum_file\" ] || disable identity_file_invalid; for value in \"velnor-tools-runtime-v2\" \"$VELNOR_CACHE_STATIC_DIGEST\" \"$VELNOR_CACHE_LANE\" \"$VELNOR_CACHE_TARGET\" \"$runner_os\" \"$runner_arch\" \"$image_os\" \"$image_version\" \"$home\" \"$runner_temp\" \"$effective_mise\" \"$expected_rustup\" \"$expected_cargo\"; do if ! printf '\\''%s:%s\\n'\\'' \"${#value}\" \"$value\" >> \"$identity_file\"; then disable identity_file_write_failed; fi; done; if command -v sha256sum >/dev/null 2>&1; then if ! sha256sum < \"$identity_file\" > \"$sum_file\"; then disable identity_hash_failed; fi; elif command -v shasum >/dev/null 2>&1; then if ! shasum -a 256 < \"$identity_file\" > \"$sum_file\"; then disable identity_hash_failed; fi; else disable sha256_tool_missing; fi; if ! IFS='\\'' '\\'' read -r fingerprint _ < \"$sum_file\"; then disable fingerprint_missing; fi; [ ${#fingerprint} -eq 64 ] || disable fingerprint_invalid; case \"$fingerprint\" in *[!0-9a-f]*) disable fingerprint_invalid ;; esac; if ! cleanup_scratch; then disable identity_scratch_cleanup_failed; fi; printf '\\''identity=%s\\nenabled=true\\nreason=qualified_hosted_image\\n'\\'' \"$fingerprint\" >> \"$GITHUB_OUTPUT\"'"
+      - name: Restore Mise tools
+        if: steps.velnor-tool-cache-identity.outputs.enabled == 'true'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: mise-tools-v2-7e3d4db8a565e5bbdd358ccdd5b80c13f6d352fd3dcf39d3a81d9470689a7d24-${{steps.velnor-tool-cache-identity.outputs.identity}}
+          path: "~/.local/share/mise\n${{ runner.temp }}/velnor/rustup\n${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin"
+          restore-keys: ""
       - name: Setup Mise
         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
-          cache: "true"
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-14ee3a9bbb90604c
+          cache: "false"
           cache_save: "false"
           env: "false"
           install: "false"
@@ -450,11 +604,11 @@ jobs:
           VELNOR_REQUEST_FILE: ${{ runner.temp }}/velnor/request/merge-v1-request.json
         run: "\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\""
       - name: Save Mise tools
-        if: success() && github.event_name == 'push'
+        if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.velnor-tool-cache-identity.outputs.enabled == 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
-          key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-14ee3a9bbb90604c
-          path: ~/.local/share/mise
+          key: mise-tools-v2-7e3d4db8a565e5bbdd358ccdd5b80c13f6d352fd3dcf39d3a81d9470689a7d24-${{steps.velnor-tool-cache-identity.outputs.identity}}
+          path: "~/.local/share/mise\n${{ runner.temp }}/velnor/rustup\n${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin"
       - name: Publish final report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -494,11 +648,31 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
+      - name: Identify Mise cache runtime
+        id: velnor-tool-cache-identity
+        env:
+          CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          RUNNER_TEMP: ${{ runner.temp }}
+          RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          VELNOR_CACHE_EXPECTED_ARCH: X64
+          VELNOR_CACHE_EXPECTED_IMAGE_OS: ubuntu26
+          VELNOR_CACHE_LANE: ubuntu-26.04
+          VELNOR_CACHE_STATIC_DIGEST: cb6154172aef71407cfc4cea6423696284901069a5210559a4a53724be1317aa
+          VELNOR_CACHE_TARGET: x86_64-unknown-linux-gnu
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; export LC_ALL=C; set -eu; umask 077; : \"${GITHUB_OUTPUT:?missing GITHUB_OUTPUT}\"; scratch_root=; scratch_dir=; runner_os=${RUNNER_OS-}; runner_arch=${RUNNER_ARCH-}; image_os=${ImageOS-}; image_version=${ImageVersion-}; home=${HOME-}; runner_temp=${RUNNER_TEMP-}; mise_rustup=${MISE_RUSTUP_HOME-}; rustup_home=${RUSTUP_HOME-}; mise_cargo=${MISE_CARGO_HOME-}; cargo_home=${CARGO_HOME-}; valid_path() { value=$1; case \"$value\" in /*) ;; *) return 1 ;; esac; [ \"$value\" != / ] || return 1; case \"$value\" in *[![:print:]]*|*//*|*/./*|*/../*|*/.|*/..) return 1 ;; esac; remaining=${value#/}; prefix=; while [ -n \"$remaining\" ]; do case \"$remaining\" in */*) part=${remaining%%/*}; remaining=${remaining#*/} ;; *) part=$remaining; remaining= ;; esac; [ -n \"$part\" ] || return 1; prefix=\"$prefix/$part\"; [ ! -L \"$prefix\" ] || return 1; done; }; cleanup_scratch() { [ -n \"$scratch_dir\" ] || return 0; case \"$scratch_dir\" in \"$scratch_root\"/runtime-identity.*) ;; *) return 1 ;; esac; [ -d \"$scratch_dir\" ] && [ ! -L \"$scratch_dir\" ] || return 1; rm -rf -- \"$scratch_dir\" || return 1; scratch_dir=; }; on_exit() { status=$1; trap - EXIT; if ! cleanup_scratch; then status=1; fi; exit \"$status\"; }; trap '\\''status=$?; on_exit \"$status\"'\\'' EXIT; trap '\\''exit 129'\\'' HUP; trap '\\''exit 130'\\'' INT; trap '\\''exit 143'\\'' TERM; disable() { reason=$1; if ! cleanup_scratch; then printf '\\''enabled=false\\nreason=identity_scratch_cleanup_failed\\n'\\'' >> \"$GITHUB_OUTPUT\"; exit 1; fi; printf '\\''enabled=false\\nreason=%s\\n'\\'' \"$reason\" >> \"$GITHUB_OUTPUT\"; exit 0; }; case \"$VELNOR_CACHE_LANE\" in scale-set:*) disable scale_set_image_unqualified ;; esac; [ -n \"$runner_os\" ] || disable runner_os_missing; [ \"$runner_os\" = Linux ] || disable runner_os_mismatch; [ -n \"$runner_arch\" ] || disable runner_arch_missing; [ \"$runner_arch\" = \"$VELNOR_CACHE_EXPECTED_ARCH\" ] || disable runner_arch_mismatch; [ -n \"$image_os\" ] || disable image_os_missing; [ \"$image_os\" = \"$VELNOR_CACHE_EXPECTED_IMAGE_OS\" ] || disable image_os_mismatch; [ -n \"$image_version\" ] || disable image_version_missing; case \"$image_version\" in *[!0-9.]*) disable image_version_invalid ;; esac; case \"$image_version\" in *[0-9]*) ;; *) disable image_version_invalid ;; esac; [ -n \"$home\" ] && [ -d \"$home\" ] || disable home_missing; [ -n \"$runner_temp\" ] && [ -d \"$runner_temp\" ] || disable runner_temp_missing; valid_path \"$home\" || disable home_aliased; valid_path \"$runner_temp\" || disable runner_temp_aliased; expected_mise=\"$home/.local/share/mise\"; effective_mise=${MISE_DATA_DIR-}; if [ -z \"$effective_mise\" ]; then if [ -n \"${XDG_DATA_HOME-}\" ]; then effective_mise=\"$XDG_DATA_HOME/mise\"; else effective_mise=$expected_mise; fi; fi; valid_path \"$expected_mise\" || disable mise_root_aliased; valid_path \"$effective_mise\" || disable mise_root_invalid; [ \"$effective_mise\" = \"$expected_mise\" ] || disable mise_root_not_archived; expected_rustup=\"$runner_temp/velnor/rustup\"; expected_cargo=\"$runner_temp/velnor/cargo\"; [ \"$mise_rustup\" = \"$expected_rustup\" ] || disable mise_rustup_home_mismatch; [ \"$rustup_home\" = \"$expected_rustup\" ] || disable rustup_home_mismatch; [ \"$mise_cargo\" = \"$expected_cargo\" ] || disable mise_cargo_home_mismatch; [ \"$cargo_home\" = \"$expected_cargo\" ] || disable cargo_home_mismatch; valid_path \"$expected_rustup\" || disable rustup_root_invalid; valid_path \"$expected_cargo\" || disable cargo_root_invalid; scratch_root=\"$runner_temp/velnor\"; valid_path \"$scratch_root\" || disable cache_scratch_aliased; mkdir -p \"$scratch_root\" || disable cache_scratch_unavailable; [ -d \"$scratch_root\" ] && [ ! -L \"$scratch_root\" ] || disable cache_scratch_invalid; scratch_dir=\"$scratch_root/runtime-identity.$$\"; if ! mkdir -m 700 \"$scratch_dir\"; then scratch_dir=; disable identity_scratch_unavailable; fi; case \"$scratch_dir\" in \"$scratch_root\"/runtime-identity.*) ;; *) disable cache_scratch_invalid ;; esac; valid_path \"$scratch_dir\" && [ -d \"$scratch_dir\" ] && [ ! -L \"$scratch_dir\" ] || disable cache_scratch_invalid; identity_file=\"$scratch_dir/preimage\"; sum_file=\"$scratch_dir/digest\"; set -C; if ! : > \"$identity_file\"; then set +C; disable identity_file_unavailable; fi; if ! : > \"$sum_file\"; then set +C; disable identity_file_unavailable; fi; set +C; valid_path \"$identity_file\" && [ -f \"$identity_file\" ] && [ ! -L \"$identity_file\" ] || disable identity_file_invalid; valid_path \"$sum_file\" && [ -f \"$sum_file\" ] && [ ! -L \"$sum_file\" ] || disable identity_file_invalid; for value in \"velnor-tools-runtime-v2\" \"$VELNOR_CACHE_STATIC_DIGEST\" \"$VELNOR_CACHE_LANE\" \"$VELNOR_CACHE_TARGET\" \"$runner_os\" \"$runner_arch\" \"$image_os\" \"$image_version\" \"$home\" \"$runner_temp\" \"$effective_mise\" \"$expected_rustup\" \"$expected_cargo\"; do if ! printf '\\''%s:%s\\n'\\'' \"${#value}\" \"$value\" >> \"$identity_file\"; then disable identity_file_write_failed; fi; done; if command -v sha256sum >/dev/null 2>&1; then if ! sha256sum < \"$identity_file\" > \"$sum_file\"; then disable identity_hash_failed; fi; elif command -v shasum >/dev/null 2>&1; then if ! shasum -a 256 < \"$identity_file\" > \"$sum_file\"; then disable identity_hash_failed; fi; else disable sha256_tool_missing; fi; if ! IFS='\\'' '\\'' read -r fingerprint _ < \"$sum_file\"; then disable fingerprint_missing; fi; [ ${#fingerprint} -eq 64 ] || disable fingerprint_invalid; case \"$fingerprint\" in *[!0-9a-f]*) disable fingerprint_invalid ;; esac; if ! cleanup_scratch; then disable identity_scratch_cleanup_failed; fi; printf '\\''identity=%s\\nenabled=true\\nreason=qualified_hosted_image\\n'\\'' \"$fingerprint\" >> \"$GITHUB_OUTPUT\"'"
+      - name: Restore Mise tools
+        if: steps.velnor-tool-cache-identity.outputs.enabled == 'true'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: mise-tools-v2-cb6154172aef71407cfc4cea6423696284901069a5210559a4a53724be1317aa-${{steps.velnor-tool-cache-identity.outputs.identity}}
+          path: "~/.local/share/mise\n${{ runner.temp }}/velnor/rustup\n${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin"
+          restore-keys: ""
       - name: Setup Mise
         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
-          cache: "true"
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-ac88a89731444aab
+          cache: "false"
           cache_save: "false"
           env: "false"
           install: "false"
@@ -532,7 +706,7 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           key: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-${{hashFiles('Cargo.lock','crates/velnor-runner/Cargo.lock')}}
-          path: "${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin\n${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
+          path: "${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
           restore-keys: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-
       - name: Verify MBX and Rust toolchains
         env:
@@ -660,11 +834,11 @@ jobs:
           key: ${{ steps.mbx.outputs.cache-primary-key }}
           path: ${{ runner.temp }}/mbx-single-bundle
       - name: Save Mise tools
-        if: success() && github.event_name == 'push'
+        if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.velnor-tool-cache-identity.outputs.enabled == 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
-          key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-ac88a89731444aab
-          path: ~/.local/share/mise
+          key: mise-tools-v2-cb6154172aef71407cfc4cea6423696284901069a5210559a4a53724be1317aa-${{steps.velnor-tool-cache-identity.outputs.identity}}
+          path: "~/.local/share/mise\n${{ runner.temp }}/velnor/rustup\n${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin"
   rust-velnor-actions-cli:
     name: Rust / velnor-actions-cli
     runs-on: ubuntu-26.04
@@ -696,11 +870,31 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
+      - name: Identify Mise cache runtime
+        id: velnor-tool-cache-identity
+        env:
+          CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          RUNNER_TEMP: ${{ runner.temp }}
+          RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          VELNOR_CACHE_EXPECTED_ARCH: X64
+          VELNOR_CACHE_EXPECTED_IMAGE_OS: ubuntu26
+          VELNOR_CACHE_LANE: ubuntu-26.04
+          VELNOR_CACHE_STATIC_DIGEST: 5e6ebd611bc7cc5b66544cc5cee7c3c5fb5bb3c05e811ce742184fefe7d40a11
+          VELNOR_CACHE_TARGET: x86_64-unknown-linux-gnu
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; export LC_ALL=C; set -eu; umask 077; : \"${GITHUB_OUTPUT:?missing GITHUB_OUTPUT}\"; scratch_root=; scratch_dir=; runner_os=${RUNNER_OS-}; runner_arch=${RUNNER_ARCH-}; image_os=${ImageOS-}; image_version=${ImageVersion-}; home=${HOME-}; runner_temp=${RUNNER_TEMP-}; mise_rustup=${MISE_RUSTUP_HOME-}; rustup_home=${RUSTUP_HOME-}; mise_cargo=${MISE_CARGO_HOME-}; cargo_home=${CARGO_HOME-}; valid_path() { value=$1; case \"$value\" in /*) ;; *) return 1 ;; esac; [ \"$value\" != / ] || return 1; case \"$value\" in *[![:print:]]*|*//*|*/./*|*/../*|*/.|*/..) return 1 ;; esac; remaining=${value#/}; prefix=; while [ -n \"$remaining\" ]; do case \"$remaining\" in */*) part=${remaining%%/*}; remaining=${remaining#*/} ;; *) part=$remaining; remaining= ;; esac; [ -n \"$part\" ] || return 1; prefix=\"$prefix/$part\"; [ ! -L \"$prefix\" ] || return 1; done; }; cleanup_scratch() { [ -n \"$scratch_dir\" ] || return 0; case \"$scratch_dir\" in \"$scratch_root\"/runtime-identity.*) ;; *) return 1 ;; esac; [ -d \"$scratch_dir\" ] && [ ! -L \"$scratch_dir\" ] || return 1; rm -rf -- \"$scratch_dir\" || return 1; scratch_dir=; }; on_exit() { status=$1; trap - EXIT; if ! cleanup_scratch; then status=1; fi; exit \"$status\"; }; trap '\\''status=$?; on_exit \"$status\"'\\'' EXIT; trap '\\''exit 129'\\'' HUP; trap '\\''exit 130'\\'' INT; trap '\\''exit 143'\\'' TERM; disable() { reason=$1; if ! cleanup_scratch; then printf '\\''enabled=false\\nreason=identity_scratch_cleanup_failed\\n'\\'' >> \"$GITHUB_OUTPUT\"; exit 1; fi; printf '\\''enabled=false\\nreason=%s\\n'\\'' \"$reason\" >> \"$GITHUB_OUTPUT\"; exit 0; }; case \"$VELNOR_CACHE_LANE\" in scale-set:*) disable scale_set_image_unqualified ;; esac; [ -n \"$runner_os\" ] || disable runner_os_missing; [ \"$runner_os\" = Linux ] || disable runner_os_mismatch; [ -n \"$runner_arch\" ] || disable runner_arch_missing; [ \"$runner_arch\" = \"$VELNOR_CACHE_EXPECTED_ARCH\" ] || disable runner_arch_mismatch; [ -n \"$image_os\" ] || disable image_os_missing; [ \"$image_os\" = \"$VELNOR_CACHE_EXPECTED_IMAGE_OS\" ] || disable image_os_mismatch; [ -n \"$image_version\" ] || disable image_version_missing; case \"$image_version\" in *[!0-9.]*) disable image_version_invalid ;; esac; case \"$image_version\" in *[0-9]*) ;; *) disable image_version_invalid ;; esac; [ -n \"$home\" ] && [ -d \"$home\" ] || disable home_missing; [ -n \"$runner_temp\" ] && [ -d \"$runner_temp\" ] || disable runner_temp_missing; valid_path \"$home\" || disable home_aliased; valid_path \"$runner_temp\" || disable runner_temp_aliased; expected_mise=\"$home/.local/share/mise\"; effective_mise=${MISE_DATA_DIR-}; if [ -z \"$effective_mise\" ]; then if [ -n \"${XDG_DATA_HOME-}\" ]; then effective_mise=\"$XDG_DATA_HOME/mise\"; else effective_mise=$expected_mise; fi; fi; valid_path \"$expected_mise\" || disable mise_root_aliased; valid_path \"$effective_mise\" || disable mise_root_invalid; [ \"$effective_mise\" = \"$expected_mise\" ] || disable mise_root_not_archived; expected_rustup=\"$runner_temp/velnor/rustup\"; expected_cargo=\"$runner_temp/velnor/cargo\"; [ \"$mise_rustup\" = \"$expected_rustup\" ] || disable mise_rustup_home_mismatch; [ \"$rustup_home\" = \"$expected_rustup\" ] || disable rustup_home_mismatch; [ \"$mise_cargo\" = \"$expected_cargo\" ] || disable mise_cargo_home_mismatch; [ \"$cargo_home\" = \"$expected_cargo\" ] || disable cargo_home_mismatch; valid_path \"$expected_rustup\" || disable rustup_root_invalid; valid_path \"$expected_cargo\" || disable cargo_root_invalid; scratch_root=\"$runner_temp/velnor\"; valid_path \"$scratch_root\" || disable cache_scratch_aliased; mkdir -p \"$scratch_root\" || disable cache_scratch_unavailable; [ -d \"$scratch_root\" ] && [ ! -L \"$scratch_root\" ] || disable cache_scratch_invalid; scratch_dir=\"$scratch_root/runtime-identity.$$\"; if ! mkdir -m 700 \"$scratch_dir\"; then scratch_dir=; disable identity_scratch_unavailable; fi; case \"$scratch_dir\" in \"$scratch_root\"/runtime-identity.*) ;; *) disable cache_scratch_invalid ;; esac; valid_path \"$scratch_dir\" && [ -d \"$scratch_dir\" ] && [ ! -L \"$scratch_dir\" ] || disable cache_scratch_invalid; identity_file=\"$scratch_dir/preimage\"; sum_file=\"$scratch_dir/digest\"; set -C; if ! : > \"$identity_file\"; then set +C; disable identity_file_unavailable; fi; if ! : > \"$sum_file\"; then set +C; disable identity_file_unavailable; fi; set +C; valid_path \"$identity_file\" && [ -f \"$identity_file\" ] && [ ! -L \"$identity_file\" ] || disable identity_file_invalid; valid_path \"$sum_file\" && [ -f \"$sum_file\" ] && [ ! -L \"$sum_file\" ] || disable identity_file_invalid; for value in \"velnor-tools-runtime-v2\" \"$VELNOR_CACHE_STATIC_DIGEST\" \"$VELNOR_CACHE_LANE\" \"$VELNOR_CACHE_TARGET\" \"$runner_os\" \"$runner_arch\" \"$image_os\" \"$image_version\" \"$home\" \"$runner_temp\" \"$effective_mise\" \"$expected_rustup\" \"$expected_cargo\"; do if ! printf '\\''%s:%s\\n'\\'' \"${#value}\" \"$value\" >> \"$identity_file\"; then disable identity_file_write_failed; fi; done; if command -v sha256sum >/dev/null 2>&1; then if ! sha256sum < \"$identity_file\" > \"$sum_file\"; then disable identity_hash_failed; fi; elif command -v shasum >/dev/null 2>&1; then if ! shasum -a 256 < \"$identity_file\" > \"$sum_file\"; then disable identity_hash_failed; fi; else disable sha256_tool_missing; fi; if ! IFS='\\'' '\\'' read -r fingerprint _ < \"$sum_file\"; then disable fingerprint_missing; fi; [ ${#fingerprint} -eq 64 ] || disable fingerprint_invalid; case \"$fingerprint\" in *[!0-9a-f]*) disable fingerprint_invalid ;; esac; if ! cleanup_scratch; then disable identity_scratch_cleanup_failed; fi; printf '\\''identity=%s\\nenabled=true\\nreason=qualified_hosted_image\\n'\\'' \"$fingerprint\" >> \"$GITHUB_OUTPUT\"'"
+      - name: Restore Mise tools
+        if: steps.velnor-tool-cache-identity.outputs.enabled == 'true'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: mise-tools-v2-5e6ebd611bc7cc5b66544cc5cee7c3c5fb5bb3c05e811ce742184fefe7d40a11-${{steps.velnor-tool-cache-identity.outputs.identity}}
+          path: "~/.local/share/mise\n${{ runner.temp }}/velnor/rustup\n${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin"
+          restore-keys: ""
       - name: Setup Mise
         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
-          cache: "true"
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-cd6926493099032f
+          cache: "false"
           cache_save: "false"
           env: "false"
           install: "false"
@@ -734,7 +928,7 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           key: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-${{hashFiles('Cargo.lock','crates/velnor-runner/Cargo.lock')}}
-          path: "${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin\n${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
+          path: "${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
           restore-keys: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-
       - name: Verify MBX and Rust toolchains
         env:
@@ -882,11 +1076,31 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
+      - name: Identify Mise cache runtime
+        id: velnor-tool-cache-identity
+        env:
+          CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          RUNNER_TEMP: ${{ runner.temp }}
+          RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          VELNOR_CACHE_EXPECTED_ARCH: X64
+          VELNOR_CACHE_EXPECTED_IMAGE_OS: ubuntu26
+          VELNOR_CACHE_LANE: ubuntu-26.04
+          VELNOR_CACHE_STATIC_DIGEST: cb6154172aef71407cfc4cea6423696284901069a5210559a4a53724be1317aa
+          VELNOR_CACHE_TARGET: x86_64-unknown-linux-gnu
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; export LC_ALL=C; set -eu; umask 077; : \"${GITHUB_OUTPUT:?missing GITHUB_OUTPUT}\"; scratch_root=; scratch_dir=; runner_os=${RUNNER_OS-}; runner_arch=${RUNNER_ARCH-}; image_os=${ImageOS-}; image_version=${ImageVersion-}; home=${HOME-}; runner_temp=${RUNNER_TEMP-}; mise_rustup=${MISE_RUSTUP_HOME-}; rustup_home=${RUSTUP_HOME-}; mise_cargo=${MISE_CARGO_HOME-}; cargo_home=${CARGO_HOME-}; valid_path() { value=$1; case \"$value\" in /*) ;; *) return 1 ;; esac; [ \"$value\" != / ] || return 1; case \"$value\" in *[![:print:]]*|*//*|*/./*|*/../*|*/.|*/..) return 1 ;; esac; remaining=${value#/}; prefix=; while [ -n \"$remaining\" ]; do case \"$remaining\" in */*) part=${remaining%%/*}; remaining=${remaining#*/} ;; *) part=$remaining; remaining= ;; esac; [ -n \"$part\" ] || return 1; prefix=\"$prefix/$part\"; [ ! -L \"$prefix\" ] || return 1; done; }; cleanup_scratch() { [ -n \"$scratch_dir\" ] || return 0; case \"$scratch_dir\" in \"$scratch_root\"/runtime-identity.*) ;; *) return 1 ;; esac; [ -d \"$scratch_dir\" ] && [ ! -L \"$scratch_dir\" ] || return 1; rm -rf -- \"$scratch_dir\" || return 1; scratch_dir=; }; on_exit() { status=$1; trap - EXIT; if ! cleanup_scratch; then status=1; fi; exit \"$status\"; }; trap '\\''status=$?; on_exit \"$status\"'\\'' EXIT; trap '\\''exit 129'\\'' HUP; trap '\\''exit 130'\\'' INT; trap '\\''exit 143'\\'' TERM; disable() { reason=$1; if ! cleanup_scratch; then printf '\\''enabled=false\\nreason=identity_scratch_cleanup_failed\\n'\\'' >> \"$GITHUB_OUTPUT\"; exit 1; fi; printf '\\''enabled=false\\nreason=%s\\n'\\'' \"$reason\" >> \"$GITHUB_OUTPUT\"; exit 0; }; case \"$VELNOR_CACHE_LANE\" in scale-set:*) disable scale_set_image_unqualified ;; esac; [ -n \"$runner_os\" ] || disable runner_os_missing; [ \"$runner_os\" = Linux ] || disable runner_os_mismatch; [ -n \"$runner_arch\" ] || disable runner_arch_missing; [ \"$runner_arch\" = \"$VELNOR_CACHE_EXPECTED_ARCH\" ] || disable runner_arch_mismatch; [ -n \"$image_os\" ] || disable image_os_missing; [ \"$image_os\" = \"$VELNOR_CACHE_EXPECTED_IMAGE_OS\" ] || disable image_os_mismatch; [ -n \"$image_version\" ] || disable image_version_missing; case \"$image_version\" in *[!0-9.]*) disable image_version_invalid ;; esac; case \"$image_version\" in *[0-9]*) ;; *) disable image_version_invalid ;; esac; [ -n \"$home\" ] && [ -d \"$home\" ] || disable home_missing; [ -n \"$runner_temp\" ] && [ -d \"$runner_temp\" ] || disable runner_temp_missing; valid_path \"$home\" || disable home_aliased; valid_path \"$runner_temp\" || disable runner_temp_aliased; expected_mise=\"$home/.local/share/mise\"; effective_mise=${MISE_DATA_DIR-}; if [ -z \"$effective_mise\" ]; then if [ -n \"${XDG_DATA_HOME-}\" ]; then effective_mise=\"$XDG_DATA_HOME/mise\"; else effective_mise=$expected_mise; fi; fi; valid_path \"$expected_mise\" || disable mise_root_aliased; valid_path \"$effective_mise\" || disable mise_root_invalid; [ \"$effective_mise\" = \"$expected_mise\" ] || disable mise_root_not_archived; expected_rustup=\"$runner_temp/velnor/rustup\"; expected_cargo=\"$runner_temp/velnor/cargo\"; [ \"$mise_rustup\" = \"$expected_rustup\" ] || disable mise_rustup_home_mismatch; [ \"$rustup_home\" = \"$expected_rustup\" ] || disable rustup_home_mismatch; [ \"$mise_cargo\" = \"$expected_cargo\" ] || disable mise_cargo_home_mismatch; [ \"$cargo_home\" = \"$expected_cargo\" ] || disable cargo_home_mismatch; valid_path \"$expected_rustup\" || disable rustup_root_invalid; valid_path \"$expected_cargo\" || disable cargo_root_invalid; scratch_root=\"$runner_temp/velnor\"; valid_path \"$scratch_root\" || disable cache_scratch_aliased; mkdir -p \"$scratch_root\" || disable cache_scratch_unavailable; [ -d \"$scratch_root\" ] && [ ! -L \"$scratch_root\" ] || disable cache_scratch_invalid; scratch_dir=\"$scratch_root/runtime-identity.$$\"; if ! mkdir -m 700 \"$scratch_dir\"; then scratch_dir=; disable identity_scratch_unavailable; fi; case \"$scratch_dir\" in \"$scratch_root\"/runtime-identity.*) ;; *) disable cache_scratch_invalid ;; esac; valid_path \"$scratch_dir\" && [ -d \"$scratch_dir\" ] && [ ! -L \"$scratch_dir\" ] || disable cache_scratch_invalid; identity_file=\"$scratch_dir/preimage\"; sum_file=\"$scratch_dir/digest\"; set -C; if ! : > \"$identity_file\"; then set +C; disable identity_file_unavailable; fi; if ! : > \"$sum_file\"; then set +C; disable identity_file_unavailable; fi; set +C; valid_path \"$identity_file\" && [ -f \"$identity_file\" ] && [ ! -L \"$identity_file\" ] || disable identity_file_invalid; valid_path \"$sum_file\" && [ -f \"$sum_file\" ] && [ ! -L \"$sum_file\" ] || disable identity_file_invalid; for value in \"velnor-tools-runtime-v2\" \"$VELNOR_CACHE_STATIC_DIGEST\" \"$VELNOR_CACHE_LANE\" \"$VELNOR_CACHE_TARGET\" \"$runner_os\" \"$runner_arch\" \"$image_os\" \"$image_version\" \"$home\" \"$runner_temp\" \"$effective_mise\" \"$expected_rustup\" \"$expected_cargo\"; do if ! printf '\\''%s:%s\\n'\\'' \"${#value}\" \"$value\" >> \"$identity_file\"; then disable identity_file_write_failed; fi; done; if command -v sha256sum >/dev/null 2>&1; then if ! sha256sum < \"$identity_file\" > \"$sum_file\"; then disable identity_hash_failed; fi; elif command -v shasum >/dev/null 2>&1; then if ! shasum -a 256 < \"$identity_file\" > \"$sum_file\"; then disable identity_hash_failed; fi; else disable sha256_tool_missing; fi; if ! IFS='\\'' '\\'' read -r fingerprint _ < \"$sum_file\"; then disable fingerprint_missing; fi; [ ${#fingerprint} -eq 64 ] || disable fingerprint_invalid; case \"$fingerprint\" in *[!0-9a-f]*) disable fingerprint_invalid ;; esac; if ! cleanup_scratch; then disable identity_scratch_cleanup_failed; fi; printf '\\''identity=%s\\nenabled=true\\nreason=qualified_hosted_image\\n'\\'' \"$fingerprint\" >> \"$GITHUB_OUTPUT\"'"
+      - name: Restore Mise tools
+        if: steps.velnor-tool-cache-identity.outputs.enabled == 'true'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: mise-tools-v2-cb6154172aef71407cfc4cea6423696284901069a5210559a4a53724be1317aa-${{steps.velnor-tool-cache-identity.outputs.identity}}
+          path: "~/.local/share/mise\n${{ runner.temp }}/velnor/rustup\n${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin"
+          restore-keys: ""
       - name: Setup Mise
         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
-          cache: "true"
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-ac88a89731444aab
+          cache: "false"
           cache_save: "false"
           env: "false"
           install: "false"
@@ -920,7 +1134,7 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           key: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-${{hashFiles('Cargo.lock','crates/velnor-runner/Cargo.lock')}}
-          path: "${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin\n${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
+          path: "${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
           restore-keys: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-
       - name: Verify MBX and Rust toolchains
         env:
@@ -1078,11 +1292,31 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
+      - name: Identify Mise cache runtime
+        id: velnor-tool-cache-identity
+        env:
+          CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          RUNNER_TEMP: ${{ runner.temp }}
+          RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          VELNOR_CACHE_EXPECTED_ARCH: X64
+          VELNOR_CACHE_EXPECTED_IMAGE_OS: ubuntu26
+          VELNOR_CACHE_LANE: ubuntu-26.04
+          VELNOR_CACHE_STATIC_DIGEST: 6ec997273d191d69409da580e2a4fc035f930f4ebc8e72c1b9937220b0f57257
+          VELNOR_CACHE_TARGET: x86_64-unknown-linux-gnu
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; export LC_ALL=C; set -eu; umask 077; : \"${GITHUB_OUTPUT:?missing GITHUB_OUTPUT}\"; scratch_root=; scratch_dir=; runner_os=${RUNNER_OS-}; runner_arch=${RUNNER_ARCH-}; image_os=${ImageOS-}; image_version=${ImageVersion-}; home=${HOME-}; runner_temp=${RUNNER_TEMP-}; mise_rustup=${MISE_RUSTUP_HOME-}; rustup_home=${RUSTUP_HOME-}; mise_cargo=${MISE_CARGO_HOME-}; cargo_home=${CARGO_HOME-}; valid_path() { value=$1; case \"$value\" in /*) ;; *) return 1 ;; esac; [ \"$value\" != / ] || return 1; case \"$value\" in *[![:print:]]*|*//*|*/./*|*/../*|*/.|*/..) return 1 ;; esac; remaining=${value#/}; prefix=; while [ -n \"$remaining\" ]; do case \"$remaining\" in */*) part=${remaining%%/*}; remaining=${remaining#*/} ;; *) part=$remaining; remaining= ;; esac; [ -n \"$part\" ] || return 1; prefix=\"$prefix/$part\"; [ ! -L \"$prefix\" ] || return 1; done; }; cleanup_scratch() { [ -n \"$scratch_dir\" ] || return 0; case \"$scratch_dir\" in \"$scratch_root\"/runtime-identity.*) ;; *) return 1 ;; esac; [ -d \"$scratch_dir\" ] && [ ! -L \"$scratch_dir\" ] || return 1; rm -rf -- \"$scratch_dir\" || return 1; scratch_dir=; }; on_exit() { status=$1; trap - EXIT; if ! cleanup_scratch; then status=1; fi; exit \"$status\"; }; trap '\\''status=$?; on_exit \"$status\"'\\'' EXIT; trap '\\''exit 129'\\'' HUP; trap '\\''exit 130'\\'' INT; trap '\\''exit 143'\\'' TERM; disable() { reason=$1; if ! cleanup_scratch; then printf '\\''enabled=false\\nreason=identity_scratch_cleanup_failed\\n'\\'' >> \"$GITHUB_OUTPUT\"; exit 1; fi; printf '\\''enabled=false\\nreason=%s\\n'\\'' \"$reason\" >> \"$GITHUB_OUTPUT\"; exit 0; }; case \"$VELNOR_CACHE_LANE\" in scale-set:*) disable scale_set_image_unqualified ;; esac; [ -n \"$runner_os\" ] || disable runner_os_missing; [ \"$runner_os\" = Linux ] || disable runner_os_mismatch; [ -n \"$runner_arch\" ] || disable runner_arch_missing; [ \"$runner_arch\" = \"$VELNOR_CACHE_EXPECTED_ARCH\" ] || disable runner_arch_mismatch; [ -n \"$image_os\" ] || disable image_os_missing; [ \"$image_os\" = \"$VELNOR_CACHE_EXPECTED_IMAGE_OS\" ] || disable image_os_mismatch; [ -n \"$image_version\" ] || disable image_version_missing; case \"$image_version\" in *[!0-9.]*) disable image_version_invalid ;; esac; case \"$image_version\" in *[0-9]*) ;; *) disable image_version_invalid ;; esac; [ -n \"$home\" ] && [ -d \"$home\" ] || disable home_missing; [ -n \"$runner_temp\" ] && [ -d \"$runner_temp\" ] || disable runner_temp_missing; valid_path \"$home\" || disable home_aliased; valid_path \"$runner_temp\" || disable runner_temp_aliased; expected_mise=\"$home/.local/share/mise\"; effective_mise=${MISE_DATA_DIR-}; if [ -z \"$effective_mise\" ]; then if [ -n \"${XDG_DATA_HOME-}\" ]; then effective_mise=\"$XDG_DATA_HOME/mise\"; else effective_mise=$expected_mise; fi; fi; valid_path \"$expected_mise\" || disable mise_root_aliased; valid_path \"$effective_mise\" || disable mise_root_invalid; [ \"$effective_mise\" = \"$expected_mise\" ] || disable mise_root_not_archived; expected_rustup=\"$runner_temp/velnor/rustup\"; expected_cargo=\"$runner_temp/velnor/cargo\"; [ \"$mise_rustup\" = \"$expected_rustup\" ] || disable mise_rustup_home_mismatch; [ \"$rustup_home\" = \"$expected_rustup\" ] || disable rustup_home_mismatch; [ \"$mise_cargo\" = \"$expected_cargo\" ] || disable mise_cargo_home_mismatch; [ \"$cargo_home\" = \"$expected_cargo\" ] || disable cargo_home_mismatch; valid_path \"$expected_rustup\" || disable rustup_root_invalid; valid_path \"$expected_cargo\" || disable cargo_root_invalid; scratch_root=\"$runner_temp/velnor\"; valid_path \"$scratch_root\" || disable cache_scratch_aliased; mkdir -p \"$scratch_root\" || disable cache_scratch_unavailable; [ -d \"$scratch_root\" ] && [ ! -L \"$scratch_root\" ] || disable cache_scratch_invalid; scratch_dir=\"$scratch_root/runtime-identity.$$\"; if ! mkdir -m 700 \"$scratch_dir\"; then scratch_dir=; disable identity_scratch_unavailable; fi; case \"$scratch_dir\" in \"$scratch_root\"/runtime-identity.*) ;; *) disable cache_scratch_invalid ;; esac; valid_path \"$scratch_dir\" && [ -d \"$scratch_dir\" ] && [ ! -L \"$scratch_dir\" ] || disable cache_scratch_invalid; identity_file=\"$scratch_dir/preimage\"; sum_file=\"$scratch_dir/digest\"; set -C; if ! : > \"$identity_file\"; then set +C; disable identity_file_unavailable; fi; if ! : > \"$sum_file\"; then set +C; disable identity_file_unavailable; fi; set +C; valid_path \"$identity_file\" && [ -f \"$identity_file\" ] && [ ! -L \"$identity_file\" ] || disable identity_file_invalid; valid_path \"$sum_file\" && [ -f \"$sum_file\" ] && [ ! -L \"$sum_file\" ] || disable identity_file_invalid; for value in \"velnor-tools-runtime-v2\" \"$VELNOR_CACHE_STATIC_DIGEST\" \"$VELNOR_CACHE_LANE\" \"$VELNOR_CACHE_TARGET\" \"$runner_os\" \"$runner_arch\" \"$image_os\" \"$image_version\" \"$home\" \"$runner_temp\" \"$effective_mise\" \"$expected_rustup\" \"$expected_cargo\"; do if ! printf '\\''%s:%s\\n'\\'' \"${#value}\" \"$value\" >> \"$identity_file\"; then disable identity_file_write_failed; fi; done; if command -v sha256sum >/dev/null 2>&1; then if ! sha256sum < \"$identity_file\" > \"$sum_file\"; then disable identity_hash_failed; fi; elif command -v shasum >/dev/null 2>&1; then if ! shasum -a 256 < \"$identity_file\" > \"$sum_file\"; then disable identity_hash_failed; fi; else disable sha256_tool_missing; fi; if ! IFS='\\'' '\\'' read -r fingerprint _ < \"$sum_file\"; then disable fingerprint_missing; fi; [ ${#fingerprint} -eq 64 ] || disable fingerprint_invalid; case \"$fingerprint\" in *[!0-9a-f]*) disable fingerprint_invalid ;; esac; if ! cleanup_scratch; then disable identity_scratch_cleanup_failed; fi; printf '\\''identity=%s\\nenabled=true\\nreason=qualified_hosted_image\\n'\\'' \"$fingerprint\" >> \"$GITHUB_OUTPUT\"'"
+      - name: Restore Mise tools
+        if: steps.velnor-tool-cache-identity.outputs.enabled == 'true'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: mise-tools-v2-6ec997273d191d69409da580e2a4fc035f930f4ebc8e72c1b9937220b0f57257-${{steps.velnor-tool-cache-identity.outputs.identity}}
+          path: "~/.local/share/mise\n${{ runner.temp }}/velnor/rustup\n${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin"
+          restore-keys: ""
       - name: Setup Mise
         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
-          cache: "true"
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-82e6ea144dfe6a19
+          cache: "false"
           cache_save: "false"
           env: "false"
           install: "false"
@@ -1116,7 +1350,7 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           key: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-${{hashFiles('Cargo.lock','crates/velnor-runner/Cargo.lock')}}
-          path: "${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin\n${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
+          path: "${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
           restore-keys: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-
       - name: Verify MBX and Rust toolchains
         env:
@@ -1244,11 +1478,11 @@ jobs:
           key: ${{ steps.mbx.outputs.cache-primary-key }}
           path: ${{ runner.temp }}/mbx-single-bundle
       - name: Save Mise tools
-        if: success() && github.event_name == 'push'
+        if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.velnor-tool-cache-identity.outputs.enabled == 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
-          key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-82e6ea144dfe6a19
-          path: ~/.local/share/mise
+          key: mise-tools-v2-6ec997273d191d69409da580e2a4fc035f930f4ebc8e72c1b9937220b0f57257-${{steps.velnor-tool-cache-identity.outputs.identity}}
+          path: "~/.local/share/mise\n${{ runner.temp }}/velnor/rustup\n${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin"
   rust-velnor-actions-orchestrator:
     name: Rust / velnor-actions-orchestrator
     runs-on: ubuntu-26.04
@@ -1280,11 +1514,31 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
+      - name: Identify Mise cache runtime
+        id: velnor-tool-cache-identity
+        env:
+          CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          RUNNER_TEMP: ${{ runner.temp }}
+          RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          VELNOR_CACHE_EXPECTED_ARCH: X64
+          VELNOR_CACHE_EXPECTED_IMAGE_OS: ubuntu26
+          VELNOR_CACHE_LANE: ubuntu-26.04
+          VELNOR_CACHE_STATIC_DIGEST: 5e6ebd611bc7cc5b66544cc5cee7c3c5fb5bb3c05e811ce742184fefe7d40a11
+          VELNOR_CACHE_TARGET: x86_64-unknown-linux-gnu
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; export LC_ALL=C; set -eu; umask 077; : \"${GITHUB_OUTPUT:?missing GITHUB_OUTPUT}\"; scratch_root=; scratch_dir=; runner_os=${RUNNER_OS-}; runner_arch=${RUNNER_ARCH-}; image_os=${ImageOS-}; image_version=${ImageVersion-}; home=${HOME-}; runner_temp=${RUNNER_TEMP-}; mise_rustup=${MISE_RUSTUP_HOME-}; rustup_home=${RUSTUP_HOME-}; mise_cargo=${MISE_CARGO_HOME-}; cargo_home=${CARGO_HOME-}; valid_path() { value=$1; case \"$value\" in /*) ;; *) return 1 ;; esac; [ \"$value\" != / ] || return 1; case \"$value\" in *[![:print:]]*|*//*|*/./*|*/../*|*/.|*/..) return 1 ;; esac; remaining=${value#/}; prefix=; while [ -n \"$remaining\" ]; do case \"$remaining\" in */*) part=${remaining%%/*}; remaining=${remaining#*/} ;; *) part=$remaining; remaining= ;; esac; [ -n \"$part\" ] || return 1; prefix=\"$prefix/$part\"; [ ! -L \"$prefix\" ] || return 1; done; }; cleanup_scratch() { [ -n \"$scratch_dir\" ] || return 0; case \"$scratch_dir\" in \"$scratch_root\"/runtime-identity.*) ;; *) return 1 ;; esac; [ -d \"$scratch_dir\" ] && [ ! -L \"$scratch_dir\" ] || return 1; rm -rf -- \"$scratch_dir\" || return 1; scratch_dir=; }; on_exit() { status=$1; trap - EXIT; if ! cleanup_scratch; then status=1; fi; exit \"$status\"; }; trap '\\''status=$?; on_exit \"$status\"'\\'' EXIT; trap '\\''exit 129'\\'' HUP; trap '\\''exit 130'\\'' INT; trap '\\''exit 143'\\'' TERM; disable() { reason=$1; if ! cleanup_scratch; then printf '\\''enabled=false\\nreason=identity_scratch_cleanup_failed\\n'\\'' >> \"$GITHUB_OUTPUT\"; exit 1; fi; printf '\\''enabled=false\\nreason=%s\\n'\\'' \"$reason\" >> \"$GITHUB_OUTPUT\"; exit 0; }; case \"$VELNOR_CACHE_LANE\" in scale-set:*) disable scale_set_image_unqualified ;; esac; [ -n \"$runner_os\" ] || disable runner_os_missing; [ \"$runner_os\" = Linux ] || disable runner_os_mismatch; [ -n \"$runner_arch\" ] || disable runner_arch_missing; [ \"$runner_arch\" = \"$VELNOR_CACHE_EXPECTED_ARCH\" ] || disable runner_arch_mismatch; [ -n \"$image_os\" ] || disable image_os_missing; [ \"$image_os\" = \"$VELNOR_CACHE_EXPECTED_IMAGE_OS\" ] || disable image_os_mismatch; [ -n \"$image_version\" ] || disable image_version_missing; case \"$image_version\" in *[!0-9.]*) disable image_version_invalid ;; esac; case \"$image_version\" in *[0-9]*) ;; *) disable image_version_invalid ;; esac; [ -n \"$home\" ] && [ -d \"$home\" ] || disable home_missing; [ -n \"$runner_temp\" ] && [ -d \"$runner_temp\" ] || disable runner_temp_missing; valid_path \"$home\" || disable home_aliased; valid_path \"$runner_temp\" || disable runner_temp_aliased; expected_mise=\"$home/.local/share/mise\"; effective_mise=${MISE_DATA_DIR-}; if [ -z \"$effective_mise\" ]; then if [ -n \"${XDG_DATA_HOME-}\" ]; then effective_mise=\"$XDG_DATA_HOME/mise\"; else effective_mise=$expected_mise; fi; fi; valid_path \"$expected_mise\" || disable mise_root_aliased; valid_path \"$effective_mise\" || disable mise_root_invalid; [ \"$effective_mise\" = \"$expected_mise\" ] || disable mise_root_not_archived; expected_rustup=\"$runner_temp/velnor/rustup\"; expected_cargo=\"$runner_temp/velnor/cargo\"; [ \"$mise_rustup\" = \"$expected_rustup\" ] || disable mise_rustup_home_mismatch; [ \"$rustup_home\" = \"$expected_rustup\" ] || disable rustup_home_mismatch; [ \"$mise_cargo\" = \"$expected_cargo\" ] || disable mise_cargo_home_mismatch; [ \"$cargo_home\" = \"$expected_cargo\" ] || disable cargo_home_mismatch; valid_path \"$expected_rustup\" || disable rustup_root_invalid; valid_path \"$expected_cargo\" || disable cargo_root_invalid; scratch_root=\"$runner_temp/velnor\"; valid_path \"$scratch_root\" || disable cache_scratch_aliased; mkdir -p \"$scratch_root\" || disable cache_scratch_unavailable; [ -d \"$scratch_root\" ] && [ ! -L \"$scratch_root\" ] || disable cache_scratch_invalid; scratch_dir=\"$scratch_root/runtime-identity.$$\"; if ! mkdir -m 700 \"$scratch_dir\"; then scratch_dir=; disable identity_scratch_unavailable; fi; case \"$scratch_dir\" in \"$scratch_root\"/runtime-identity.*) ;; *) disable cache_scratch_invalid ;; esac; valid_path \"$scratch_dir\" && [ -d \"$scratch_dir\" ] && [ ! -L \"$scratch_dir\" ] || disable cache_scratch_invalid; identity_file=\"$scratch_dir/preimage\"; sum_file=\"$scratch_dir/digest\"; set -C; if ! : > \"$identity_file\"; then set +C; disable identity_file_unavailable; fi; if ! : > \"$sum_file\"; then set +C; disable identity_file_unavailable; fi; set +C; valid_path \"$identity_file\" && [ -f \"$identity_file\" ] && [ ! -L \"$identity_file\" ] || disable identity_file_invalid; valid_path \"$sum_file\" && [ -f \"$sum_file\" ] && [ ! -L \"$sum_file\" ] || disable identity_file_invalid; for value in \"velnor-tools-runtime-v2\" \"$VELNOR_CACHE_STATIC_DIGEST\" \"$VELNOR_CACHE_LANE\" \"$VELNOR_CACHE_TARGET\" \"$runner_os\" \"$runner_arch\" \"$image_os\" \"$image_version\" \"$home\" \"$runner_temp\" \"$effective_mise\" \"$expected_rustup\" \"$expected_cargo\"; do if ! printf '\\''%s:%s\\n'\\'' \"${#value}\" \"$value\" >> \"$identity_file\"; then disable identity_file_write_failed; fi; done; if command -v sha256sum >/dev/null 2>&1; then if ! sha256sum < \"$identity_file\" > \"$sum_file\"; then disable identity_hash_failed; fi; elif command -v shasum >/dev/null 2>&1; then if ! shasum -a 256 < \"$identity_file\" > \"$sum_file\"; then disable identity_hash_failed; fi; else disable sha256_tool_missing; fi; if ! IFS='\\'' '\\'' read -r fingerprint _ < \"$sum_file\"; then disable fingerprint_missing; fi; [ ${#fingerprint} -eq 64 ] || disable fingerprint_invalid; case \"$fingerprint\" in *[!0-9a-f]*) disable fingerprint_invalid ;; esac; if ! cleanup_scratch; then disable identity_scratch_cleanup_failed; fi; printf '\\''identity=%s\\nenabled=true\\nreason=qualified_hosted_image\\n'\\'' \"$fingerprint\" >> \"$GITHUB_OUTPUT\"'"
+      - name: Restore Mise tools
+        if: steps.velnor-tool-cache-identity.outputs.enabled == 'true'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: mise-tools-v2-5e6ebd611bc7cc5b66544cc5cee7c3c5fb5bb3c05e811ce742184fefe7d40a11-${{steps.velnor-tool-cache-identity.outputs.identity}}
+          path: "~/.local/share/mise\n${{ runner.temp }}/velnor/rustup\n${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin"
+          restore-keys: ""
       - name: Setup Mise
         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
-          cache: "true"
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-cd6926493099032f
+          cache: "false"
           cache_save: "false"
           env: "false"
           install: "false"
@@ -1318,7 +1572,7 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           key: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-${{hashFiles('Cargo.lock','crates/velnor-runner/Cargo.lock')}}
-          path: "${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin\n${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
+          path: "${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
           restore-keys: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-
       - name: Verify MBX and Rust toolchains
         env:
@@ -1476,11 +1730,31 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
+      - name: Identify Mise cache runtime
+        id: velnor-tool-cache-identity
+        env:
+          CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          RUNNER_TEMP: ${{ runner.temp }}
+          RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          VELNOR_CACHE_EXPECTED_ARCH: X64
+          VELNOR_CACHE_EXPECTED_IMAGE_OS: ubuntu26
+          VELNOR_CACHE_LANE: ubuntu-26.04
+          VELNOR_CACHE_STATIC_DIGEST: cb6154172aef71407cfc4cea6423696284901069a5210559a4a53724be1317aa
+          VELNOR_CACHE_TARGET: x86_64-unknown-linux-gnu
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; export LC_ALL=C; set -eu; umask 077; : \"${GITHUB_OUTPUT:?missing GITHUB_OUTPUT}\"; scratch_root=; scratch_dir=; runner_os=${RUNNER_OS-}; runner_arch=${RUNNER_ARCH-}; image_os=${ImageOS-}; image_version=${ImageVersion-}; home=${HOME-}; runner_temp=${RUNNER_TEMP-}; mise_rustup=${MISE_RUSTUP_HOME-}; rustup_home=${RUSTUP_HOME-}; mise_cargo=${MISE_CARGO_HOME-}; cargo_home=${CARGO_HOME-}; valid_path() { value=$1; case \"$value\" in /*) ;; *) return 1 ;; esac; [ \"$value\" != / ] || return 1; case \"$value\" in *[![:print:]]*|*//*|*/./*|*/../*|*/.|*/..) return 1 ;; esac; remaining=${value#/}; prefix=; while [ -n \"$remaining\" ]; do case \"$remaining\" in */*) part=${remaining%%/*}; remaining=${remaining#*/} ;; *) part=$remaining; remaining= ;; esac; [ -n \"$part\" ] || return 1; prefix=\"$prefix/$part\"; [ ! -L \"$prefix\" ] || return 1; done; }; cleanup_scratch() { [ -n \"$scratch_dir\" ] || return 0; case \"$scratch_dir\" in \"$scratch_root\"/runtime-identity.*) ;; *) return 1 ;; esac; [ -d \"$scratch_dir\" ] && [ ! -L \"$scratch_dir\" ] || return 1; rm -rf -- \"$scratch_dir\" || return 1; scratch_dir=; }; on_exit() { status=$1; trap - EXIT; if ! cleanup_scratch; then status=1; fi; exit \"$status\"; }; trap '\\''status=$?; on_exit \"$status\"'\\'' EXIT; trap '\\''exit 129'\\'' HUP; trap '\\''exit 130'\\'' INT; trap '\\''exit 143'\\'' TERM; disable() { reason=$1; if ! cleanup_scratch; then printf '\\''enabled=false\\nreason=identity_scratch_cleanup_failed\\n'\\'' >> \"$GITHUB_OUTPUT\"; exit 1; fi; printf '\\''enabled=false\\nreason=%s\\n'\\'' \"$reason\" >> \"$GITHUB_OUTPUT\"; exit 0; }; case \"$VELNOR_CACHE_LANE\" in scale-set:*) disable scale_set_image_unqualified ;; esac; [ -n \"$runner_os\" ] || disable runner_os_missing; [ \"$runner_os\" = Linux ] || disable runner_os_mismatch; [ -n \"$runner_arch\" ] || disable runner_arch_missing; [ \"$runner_arch\" = \"$VELNOR_CACHE_EXPECTED_ARCH\" ] || disable runner_arch_mismatch; [ -n \"$image_os\" ] || disable image_os_missing; [ \"$image_os\" = \"$VELNOR_CACHE_EXPECTED_IMAGE_OS\" ] || disable image_os_mismatch; [ -n \"$image_version\" ] || disable image_version_missing; case \"$image_version\" in *[!0-9.]*) disable image_version_invalid ;; esac; case \"$image_version\" in *[0-9]*) ;; *) disable image_version_invalid ;; esac; [ -n \"$home\" ] && [ -d \"$home\" ] || disable home_missing; [ -n \"$runner_temp\" ] && [ -d \"$runner_temp\" ] || disable runner_temp_missing; valid_path \"$home\" || disable home_aliased; valid_path \"$runner_temp\" || disable runner_temp_aliased; expected_mise=\"$home/.local/share/mise\"; effective_mise=${MISE_DATA_DIR-}; if [ -z \"$effective_mise\" ]; then if [ -n \"${XDG_DATA_HOME-}\" ]; then effective_mise=\"$XDG_DATA_HOME/mise\"; else effective_mise=$expected_mise; fi; fi; valid_path \"$expected_mise\" || disable mise_root_aliased; valid_path \"$effective_mise\" || disable mise_root_invalid; [ \"$effective_mise\" = \"$expected_mise\" ] || disable mise_root_not_archived; expected_rustup=\"$runner_temp/velnor/rustup\"; expected_cargo=\"$runner_temp/velnor/cargo\"; [ \"$mise_rustup\" = \"$expected_rustup\" ] || disable mise_rustup_home_mismatch; [ \"$rustup_home\" = \"$expected_rustup\" ] || disable rustup_home_mismatch; [ \"$mise_cargo\" = \"$expected_cargo\" ] || disable mise_cargo_home_mismatch; [ \"$cargo_home\" = \"$expected_cargo\" ] || disable cargo_home_mismatch; valid_path \"$expected_rustup\" || disable rustup_root_invalid; valid_path \"$expected_cargo\" || disable cargo_root_invalid; scratch_root=\"$runner_temp/velnor\"; valid_path \"$scratch_root\" || disable cache_scratch_aliased; mkdir -p \"$scratch_root\" || disable cache_scratch_unavailable; [ -d \"$scratch_root\" ] && [ ! -L \"$scratch_root\" ] || disable cache_scratch_invalid; scratch_dir=\"$scratch_root/runtime-identity.$$\"; if ! mkdir -m 700 \"$scratch_dir\"; then scratch_dir=; disable identity_scratch_unavailable; fi; case \"$scratch_dir\" in \"$scratch_root\"/runtime-identity.*) ;; *) disable cache_scratch_invalid ;; esac; valid_path \"$scratch_dir\" && [ -d \"$scratch_dir\" ] && [ ! -L \"$scratch_dir\" ] || disable cache_scratch_invalid; identity_file=\"$scratch_dir/preimage\"; sum_file=\"$scratch_dir/digest\"; set -C; if ! : > \"$identity_file\"; then set +C; disable identity_file_unavailable; fi; if ! : > \"$sum_file\"; then set +C; disable identity_file_unavailable; fi; set +C; valid_path \"$identity_file\" && [ -f \"$identity_file\" ] && [ ! -L \"$identity_file\" ] || disable identity_file_invalid; valid_path \"$sum_file\" && [ -f \"$sum_file\" ] && [ ! -L \"$sum_file\" ] || disable identity_file_invalid; for value in \"velnor-tools-runtime-v2\" \"$VELNOR_CACHE_STATIC_DIGEST\" \"$VELNOR_CACHE_LANE\" \"$VELNOR_CACHE_TARGET\" \"$runner_os\" \"$runner_arch\" \"$image_os\" \"$image_version\" \"$home\" \"$runner_temp\" \"$effective_mise\" \"$expected_rustup\" \"$expected_cargo\"; do if ! printf '\\''%s:%s\\n'\\'' \"${#value}\" \"$value\" >> \"$identity_file\"; then disable identity_file_write_failed; fi; done; if command -v sha256sum >/dev/null 2>&1; then if ! sha256sum < \"$identity_file\" > \"$sum_file\"; then disable identity_hash_failed; fi; elif command -v shasum >/dev/null 2>&1; then if ! shasum -a 256 < \"$identity_file\" > \"$sum_file\"; then disable identity_hash_failed; fi; else disable sha256_tool_missing; fi; if ! IFS='\\'' '\\'' read -r fingerprint _ < \"$sum_file\"; then disable fingerprint_missing; fi; [ ${#fingerprint} -eq 64 ] || disable fingerprint_invalid; case \"$fingerprint\" in *[!0-9a-f]*) disable fingerprint_invalid ;; esac; if ! cleanup_scratch; then disable identity_scratch_cleanup_failed; fi; printf '\\''identity=%s\\nenabled=true\\nreason=qualified_hosted_image\\n'\\'' \"$fingerprint\" >> \"$GITHUB_OUTPUT\"'"
+      - name: Restore Mise tools
+        if: steps.velnor-tool-cache-identity.outputs.enabled == 'true'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: mise-tools-v2-cb6154172aef71407cfc4cea6423696284901069a5210559a4a53724be1317aa-${{steps.velnor-tool-cache-identity.outputs.identity}}
+          path: "~/.local/share/mise\n${{ runner.temp }}/velnor/rustup\n${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin"
+          restore-keys: ""
       - name: Setup Mise
         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
-          cache: "true"
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-ac88a89731444aab
+          cache: "false"
           cache_save: "false"
           env: "false"
           install: "false"
@@ -1514,7 +1788,7 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           key: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-${{hashFiles('Cargo.lock','crates/velnor-runner/Cargo.lock')}}
-          path: "${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin\n${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
+          path: "${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
           restore-keys: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-
       - name: Verify MBX and Rust toolchains
         env:
@@ -1672,11 +1946,31 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
+      - name: Identify Mise cache runtime
+        id: velnor-tool-cache-identity
+        env:
+          CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          RUNNER_TEMP: ${{ runner.temp }}
+          RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          VELNOR_CACHE_EXPECTED_ARCH: X64
+          VELNOR_CACHE_EXPECTED_IMAGE_OS: ubuntu26
+          VELNOR_CACHE_LANE: ubuntu-26.04
+          VELNOR_CACHE_STATIC_DIGEST: cb6154172aef71407cfc4cea6423696284901069a5210559a4a53724be1317aa
+          VELNOR_CACHE_TARGET: x86_64-unknown-linux-gnu
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; export LC_ALL=C; set -eu; umask 077; : \"${GITHUB_OUTPUT:?missing GITHUB_OUTPUT}\"; scratch_root=; scratch_dir=; runner_os=${RUNNER_OS-}; runner_arch=${RUNNER_ARCH-}; image_os=${ImageOS-}; image_version=${ImageVersion-}; home=${HOME-}; runner_temp=${RUNNER_TEMP-}; mise_rustup=${MISE_RUSTUP_HOME-}; rustup_home=${RUSTUP_HOME-}; mise_cargo=${MISE_CARGO_HOME-}; cargo_home=${CARGO_HOME-}; valid_path() { value=$1; case \"$value\" in /*) ;; *) return 1 ;; esac; [ \"$value\" != / ] || return 1; case \"$value\" in *[![:print:]]*|*//*|*/./*|*/../*|*/.|*/..) return 1 ;; esac; remaining=${value#/}; prefix=; while [ -n \"$remaining\" ]; do case \"$remaining\" in */*) part=${remaining%%/*}; remaining=${remaining#*/} ;; *) part=$remaining; remaining= ;; esac; [ -n \"$part\" ] || return 1; prefix=\"$prefix/$part\"; [ ! -L \"$prefix\" ] || return 1; done; }; cleanup_scratch() { [ -n \"$scratch_dir\" ] || return 0; case \"$scratch_dir\" in \"$scratch_root\"/runtime-identity.*) ;; *) return 1 ;; esac; [ -d \"$scratch_dir\" ] && [ ! -L \"$scratch_dir\" ] || return 1; rm -rf -- \"$scratch_dir\" || return 1; scratch_dir=; }; on_exit() { status=$1; trap - EXIT; if ! cleanup_scratch; then status=1; fi; exit \"$status\"; }; trap '\\''status=$?; on_exit \"$status\"'\\'' EXIT; trap '\\''exit 129'\\'' HUP; trap '\\''exit 130'\\'' INT; trap '\\''exit 143'\\'' TERM; disable() { reason=$1; if ! cleanup_scratch; then printf '\\''enabled=false\\nreason=identity_scratch_cleanup_failed\\n'\\'' >> \"$GITHUB_OUTPUT\"; exit 1; fi; printf '\\''enabled=false\\nreason=%s\\n'\\'' \"$reason\" >> \"$GITHUB_OUTPUT\"; exit 0; }; case \"$VELNOR_CACHE_LANE\" in scale-set:*) disable scale_set_image_unqualified ;; esac; [ -n \"$runner_os\" ] || disable runner_os_missing; [ \"$runner_os\" = Linux ] || disable runner_os_mismatch; [ -n \"$runner_arch\" ] || disable runner_arch_missing; [ \"$runner_arch\" = \"$VELNOR_CACHE_EXPECTED_ARCH\" ] || disable runner_arch_mismatch; [ -n \"$image_os\" ] || disable image_os_missing; [ \"$image_os\" = \"$VELNOR_CACHE_EXPECTED_IMAGE_OS\" ] || disable image_os_mismatch; [ -n \"$image_version\" ] || disable image_version_missing; case \"$image_version\" in *[!0-9.]*) disable image_version_invalid ;; esac; case \"$image_version\" in *[0-9]*) ;; *) disable image_version_invalid ;; esac; [ -n \"$home\" ] && [ -d \"$home\" ] || disable home_missing; [ -n \"$runner_temp\" ] && [ -d \"$runner_temp\" ] || disable runner_temp_missing; valid_path \"$home\" || disable home_aliased; valid_path \"$runner_temp\" || disable runner_temp_aliased; expected_mise=\"$home/.local/share/mise\"; effective_mise=${MISE_DATA_DIR-}; if [ -z \"$effective_mise\" ]; then if [ -n \"${XDG_DATA_HOME-}\" ]; then effective_mise=\"$XDG_DATA_HOME/mise\"; else effective_mise=$expected_mise; fi; fi; valid_path \"$expected_mise\" || disable mise_root_aliased; valid_path \"$effective_mise\" || disable mise_root_invalid; [ \"$effective_mise\" = \"$expected_mise\" ] || disable mise_root_not_archived; expected_rustup=\"$runner_temp/velnor/rustup\"; expected_cargo=\"$runner_temp/velnor/cargo\"; [ \"$mise_rustup\" = \"$expected_rustup\" ] || disable mise_rustup_home_mismatch; [ \"$rustup_home\" = \"$expected_rustup\" ] || disable rustup_home_mismatch; [ \"$mise_cargo\" = \"$expected_cargo\" ] || disable mise_cargo_home_mismatch; [ \"$cargo_home\" = \"$expected_cargo\" ] || disable cargo_home_mismatch; valid_path \"$expected_rustup\" || disable rustup_root_invalid; valid_path \"$expected_cargo\" || disable cargo_root_invalid; scratch_root=\"$runner_temp/velnor\"; valid_path \"$scratch_root\" || disable cache_scratch_aliased; mkdir -p \"$scratch_root\" || disable cache_scratch_unavailable; [ -d \"$scratch_root\" ] && [ ! -L \"$scratch_root\" ] || disable cache_scratch_invalid; scratch_dir=\"$scratch_root/runtime-identity.$$\"; if ! mkdir -m 700 \"$scratch_dir\"; then scratch_dir=; disable identity_scratch_unavailable; fi; case \"$scratch_dir\" in \"$scratch_root\"/runtime-identity.*) ;; *) disable cache_scratch_invalid ;; esac; valid_path \"$scratch_dir\" && [ -d \"$scratch_dir\" ] && [ ! -L \"$scratch_dir\" ] || disable cache_scratch_invalid; identity_file=\"$scratch_dir/preimage\"; sum_file=\"$scratch_dir/digest\"; set -C; if ! : > \"$identity_file\"; then set +C; disable identity_file_unavailable; fi; if ! : > \"$sum_file\"; then set +C; disable identity_file_unavailable; fi; set +C; valid_path \"$identity_file\" && [ -f \"$identity_file\" ] && [ ! -L \"$identity_file\" ] || disable identity_file_invalid; valid_path \"$sum_file\" && [ -f \"$sum_file\" ] && [ ! -L \"$sum_file\" ] || disable identity_file_invalid; for value in \"velnor-tools-runtime-v2\" \"$VELNOR_CACHE_STATIC_DIGEST\" \"$VELNOR_CACHE_LANE\" \"$VELNOR_CACHE_TARGET\" \"$runner_os\" \"$runner_arch\" \"$image_os\" \"$image_version\" \"$home\" \"$runner_temp\" \"$effective_mise\" \"$expected_rustup\" \"$expected_cargo\"; do if ! printf '\\''%s:%s\\n'\\'' \"${#value}\" \"$value\" >> \"$identity_file\"; then disable identity_file_write_failed; fi; done; if command -v sha256sum >/dev/null 2>&1; then if ! sha256sum < \"$identity_file\" > \"$sum_file\"; then disable identity_hash_failed; fi; elif command -v shasum >/dev/null 2>&1; then if ! shasum -a 256 < \"$identity_file\" > \"$sum_file\"; then disable identity_hash_failed; fi; else disable sha256_tool_missing; fi; if ! IFS='\\'' '\\'' read -r fingerprint _ < \"$sum_file\"; then disable fingerprint_missing; fi; [ ${#fingerprint} -eq 64 ] || disable fingerprint_invalid; case \"$fingerprint\" in *[!0-9a-f]*) disable fingerprint_invalid ;; esac; if ! cleanup_scratch; then disable identity_scratch_cleanup_failed; fi; printf '\\''identity=%s\\nenabled=true\\nreason=qualified_hosted_image\\n'\\'' \"$fingerprint\" >> \"$GITHUB_OUTPUT\"'"
+      - name: Restore Mise tools
+        if: steps.velnor-tool-cache-identity.outputs.enabled == 'true'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: mise-tools-v2-cb6154172aef71407cfc4cea6423696284901069a5210559a4a53724be1317aa-${{steps.velnor-tool-cache-identity.outputs.identity}}
+          path: "~/.local/share/mise\n${{ runner.temp }}/velnor/rustup\n${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin"
+          restore-keys: ""
       - name: Setup Mise
         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
-          cache: "true"
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-ac88a89731444aab
+          cache: "false"
           cache_save: "false"
           env: "false"
           install: "false"
@@ -1710,7 +2004,7 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           key: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-${{hashFiles('Cargo.lock','crates/velnor-runner/Cargo.lock')}}
-          path: "${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin\n${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
+          path: "${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
           restore-keys: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-
       - name: Verify MBX and Rust toolchains
         env:
@@ -1868,11 +2162,31 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
+      - name: Identify Mise cache runtime
+        id: velnor-tool-cache-identity
+        env:
+          CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          RUNNER_TEMP: ${{ runner.temp }}
+          RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          VELNOR_CACHE_EXPECTED_ARCH: X64
+          VELNOR_CACHE_EXPECTED_IMAGE_OS: ubuntu26
+          VELNOR_CACHE_LANE: ubuntu-26.04
+          VELNOR_CACHE_STATIC_DIGEST: cb6154172aef71407cfc4cea6423696284901069a5210559a4a53724be1317aa
+          VELNOR_CACHE_TARGET: x86_64-unknown-linux-gnu
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; export LC_ALL=C; set -eu; umask 077; : \"${GITHUB_OUTPUT:?missing GITHUB_OUTPUT}\"; scratch_root=; scratch_dir=; runner_os=${RUNNER_OS-}; runner_arch=${RUNNER_ARCH-}; image_os=${ImageOS-}; image_version=${ImageVersion-}; home=${HOME-}; runner_temp=${RUNNER_TEMP-}; mise_rustup=${MISE_RUSTUP_HOME-}; rustup_home=${RUSTUP_HOME-}; mise_cargo=${MISE_CARGO_HOME-}; cargo_home=${CARGO_HOME-}; valid_path() { value=$1; case \"$value\" in /*) ;; *) return 1 ;; esac; [ \"$value\" != / ] || return 1; case \"$value\" in *[![:print:]]*|*//*|*/./*|*/../*|*/.|*/..) return 1 ;; esac; remaining=${value#/}; prefix=; while [ -n \"$remaining\" ]; do case \"$remaining\" in */*) part=${remaining%%/*}; remaining=${remaining#*/} ;; *) part=$remaining; remaining= ;; esac; [ -n \"$part\" ] || return 1; prefix=\"$prefix/$part\"; [ ! -L \"$prefix\" ] || return 1; done; }; cleanup_scratch() { [ -n \"$scratch_dir\" ] || return 0; case \"$scratch_dir\" in \"$scratch_root\"/runtime-identity.*) ;; *) return 1 ;; esac; [ -d \"$scratch_dir\" ] && [ ! -L \"$scratch_dir\" ] || return 1; rm -rf -- \"$scratch_dir\" || return 1; scratch_dir=; }; on_exit() { status=$1; trap - EXIT; if ! cleanup_scratch; then status=1; fi; exit \"$status\"; }; trap '\\''status=$?; on_exit \"$status\"'\\'' EXIT; trap '\\''exit 129'\\'' HUP; trap '\\''exit 130'\\'' INT; trap '\\''exit 143'\\'' TERM; disable() { reason=$1; if ! cleanup_scratch; then printf '\\''enabled=false\\nreason=identity_scratch_cleanup_failed\\n'\\'' >> \"$GITHUB_OUTPUT\"; exit 1; fi; printf '\\''enabled=false\\nreason=%s\\n'\\'' \"$reason\" >> \"$GITHUB_OUTPUT\"; exit 0; }; case \"$VELNOR_CACHE_LANE\" in scale-set:*) disable scale_set_image_unqualified ;; esac; [ -n \"$runner_os\" ] || disable runner_os_missing; [ \"$runner_os\" = Linux ] || disable runner_os_mismatch; [ -n \"$runner_arch\" ] || disable runner_arch_missing; [ \"$runner_arch\" = \"$VELNOR_CACHE_EXPECTED_ARCH\" ] || disable runner_arch_mismatch; [ -n \"$image_os\" ] || disable image_os_missing; [ \"$image_os\" = \"$VELNOR_CACHE_EXPECTED_IMAGE_OS\" ] || disable image_os_mismatch; [ -n \"$image_version\" ] || disable image_version_missing; case \"$image_version\" in *[!0-9.]*) disable image_version_invalid ;; esac; case \"$image_version\" in *[0-9]*) ;; *) disable image_version_invalid ;; esac; [ -n \"$home\" ] && [ -d \"$home\" ] || disable home_missing; [ -n \"$runner_temp\" ] && [ -d \"$runner_temp\" ] || disable runner_temp_missing; valid_path \"$home\" || disable home_aliased; valid_path \"$runner_temp\" || disable runner_temp_aliased; expected_mise=\"$home/.local/share/mise\"; effective_mise=${MISE_DATA_DIR-}; if [ -z \"$effective_mise\" ]; then if [ -n \"${XDG_DATA_HOME-}\" ]; then effective_mise=\"$XDG_DATA_HOME/mise\"; else effective_mise=$expected_mise; fi; fi; valid_path \"$expected_mise\" || disable mise_root_aliased; valid_path \"$effective_mise\" || disable mise_root_invalid; [ \"$effective_mise\" = \"$expected_mise\" ] || disable mise_root_not_archived; expected_rustup=\"$runner_temp/velnor/rustup\"; expected_cargo=\"$runner_temp/velnor/cargo\"; [ \"$mise_rustup\" = \"$expected_rustup\" ] || disable mise_rustup_home_mismatch; [ \"$rustup_home\" = \"$expected_rustup\" ] || disable rustup_home_mismatch; [ \"$mise_cargo\" = \"$expected_cargo\" ] || disable mise_cargo_home_mismatch; [ \"$cargo_home\" = \"$expected_cargo\" ] || disable cargo_home_mismatch; valid_path \"$expected_rustup\" || disable rustup_root_invalid; valid_path \"$expected_cargo\" || disable cargo_root_invalid; scratch_root=\"$runner_temp/velnor\"; valid_path \"$scratch_root\" || disable cache_scratch_aliased; mkdir -p \"$scratch_root\" || disable cache_scratch_unavailable; [ -d \"$scratch_root\" ] && [ ! -L \"$scratch_root\" ] || disable cache_scratch_invalid; scratch_dir=\"$scratch_root/runtime-identity.$$\"; if ! mkdir -m 700 \"$scratch_dir\"; then scratch_dir=; disable identity_scratch_unavailable; fi; case \"$scratch_dir\" in \"$scratch_root\"/runtime-identity.*) ;; *) disable cache_scratch_invalid ;; esac; valid_path \"$scratch_dir\" && [ -d \"$scratch_dir\" ] && [ ! -L \"$scratch_dir\" ] || disable cache_scratch_invalid; identity_file=\"$scratch_dir/preimage\"; sum_file=\"$scratch_dir/digest\"; set -C; if ! : > \"$identity_file\"; then set +C; disable identity_file_unavailable; fi; if ! : > \"$sum_file\"; then set +C; disable identity_file_unavailable; fi; set +C; valid_path \"$identity_file\" && [ -f \"$identity_file\" ] && [ ! -L \"$identity_file\" ] || disable identity_file_invalid; valid_path \"$sum_file\" && [ -f \"$sum_file\" ] && [ ! -L \"$sum_file\" ] || disable identity_file_invalid; for value in \"velnor-tools-runtime-v2\" \"$VELNOR_CACHE_STATIC_DIGEST\" \"$VELNOR_CACHE_LANE\" \"$VELNOR_CACHE_TARGET\" \"$runner_os\" \"$runner_arch\" \"$image_os\" \"$image_version\" \"$home\" \"$runner_temp\" \"$effective_mise\" \"$expected_rustup\" \"$expected_cargo\"; do if ! printf '\\''%s:%s\\n'\\'' \"${#value}\" \"$value\" >> \"$identity_file\"; then disable identity_file_write_failed; fi; done; if command -v sha256sum >/dev/null 2>&1; then if ! sha256sum < \"$identity_file\" > \"$sum_file\"; then disable identity_hash_failed; fi; elif command -v shasum >/dev/null 2>&1; then if ! shasum -a 256 < \"$identity_file\" > \"$sum_file\"; then disable identity_hash_failed; fi; else disable sha256_tool_missing; fi; if ! IFS='\\'' '\\'' read -r fingerprint _ < \"$sum_file\"; then disable fingerprint_missing; fi; [ ${#fingerprint} -eq 64 ] || disable fingerprint_invalid; case \"$fingerprint\" in *[!0-9a-f]*) disable fingerprint_invalid ;; esac; if ! cleanup_scratch; then disable identity_scratch_cleanup_failed; fi; printf '\\''identity=%s\\nenabled=true\\nreason=qualified_hosted_image\\n'\\'' \"$fingerprint\" >> \"$GITHUB_OUTPUT\"'"
+      - name: Restore Mise tools
+        if: steps.velnor-tool-cache-identity.outputs.enabled == 'true'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: mise-tools-v2-cb6154172aef71407cfc4cea6423696284901069a5210559a4a53724be1317aa-${{steps.velnor-tool-cache-identity.outputs.identity}}
+          path: "~/.local/share/mise\n${{ runner.temp }}/velnor/rustup\n${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin"
+          restore-keys: ""
       - name: Setup Mise
         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
-          cache: "true"
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-ac88a89731444aab
+          cache: "false"
           cache_save: "false"
           env: "false"
           install: "false"
@@ -1906,7 +2220,7 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           key: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-${{hashFiles('Cargo.lock','crates/velnor-runner/Cargo.lock')}}
-          path: "${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin\n${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
+          path: "${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
           restore-keys: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-
       - name: Verify MBX and Rust toolchains
         env:
@@ -2064,11 +2378,31 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
+      - name: Identify Mise cache runtime
+        id: velnor-tool-cache-identity
+        env:
+          CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          RUNNER_TEMP: ${{ runner.temp }}
+          RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          VELNOR_CACHE_EXPECTED_ARCH: X64
+          VELNOR_CACHE_EXPECTED_IMAGE_OS: ubuntu26
+          VELNOR_CACHE_LANE: ubuntu-26.04
+          VELNOR_CACHE_STATIC_DIGEST: cb6154172aef71407cfc4cea6423696284901069a5210559a4a53724be1317aa
+          VELNOR_CACHE_TARGET: x86_64-unknown-linux-gnu
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; export LC_ALL=C; set -eu; umask 077; : \"${GITHUB_OUTPUT:?missing GITHUB_OUTPUT}\"; scratch_root=; scratch_dir=; runner_os=${RUNNER_OS-}; runner_arch=${RUNNER_ARCH-}; image_os=${ImageOS-}; image_version=${ImageVersion-}; home=${HOME-}; runner_temp=${RUNNER_TEMP-}; mise_rustup=${MISE_RUSTUP_HOME-}; rustup_home=${RUSTUP_HOME-}; mise_cargo=${MISE_CARGO_HOME-}; cargo_home=${CARGO_HOME-}; valid_path() { value=$1; case \"$value\" in /*) ;; *) return 1 ;; esac; [ \"$value\" != / ] || return 1; case \"$value\" in *[![:print:]]*|*//*|*/./*|*/../*|*/.|*/..) return 1 ;; esac; remaining=${value#/}; prefix=; while [ -n \"$remaining\" ]; do case \"$remaining\" in */*) part=${remaining%%/*}; remaining=${remaining#*/} ;; *) part=$remaining; remaining= ;; esac; [ -n \"$part\" ] || return 1; prefix=\"$prefix/$part\"; [ ! -L \"$prefix\" ] || return 1; done; }; cleanup_scratch() { [ -n \"$scratch_dir\" ] || return 0; case \"$scratch_dir\" in \"$scratch_root\"/runtime-identity.*) ;; *) return 1 ;; esac; [ -d \"$scratch_dir\" ] && [ ! -L \"$scratch_dir\" ] || return 1; rm -rf -- \"$scratch_dir\" || return 1; scratch_dir=; }; on_exit() { status=$1; trap - EXIT; if ! cleanup_scratch; then status=1; fi; exit \"$status\"; }; trap '\\''status=$?; on_exit \"$status\"'\\'' EXIT; trap '\\''exit 129'\\'' HUP; trap '\\''exit 130'\\'' INT; trap '\\''exit 143'\\'' TERM; disable() { reason=$1; if ! cleanup_scratch; then printf '\\''enabled=false\\nreason=identity_scratch_cleanup_failed\\n'\\'' >> \"$GITHUB_OUTPUT\"; exit 1; fi; printf '\\''enabled=false\\nreason=%s\\n'\\'' \"$reason\" >> \"$GITHUB_OUTPUT\"; exit 0; }; case \"$VELNOR_CACHE_LANE\" in scale-set:*) disable scale_set_image_unqualified ;; esac; [ -n \"$runner_os\" ] || disable runner_os_missing; [ \"$runner_os\" = Linux ] || disable runner_os_mismatch; [ -n \"$runner_arch\" ] || disable runner_arch_missing; [ \"$runner_arch\" = \"$VELNOR_CACHE_EXPECTED_ARCH\" ] || disable runner_arch_mismatch; [ -n \"$image_os\" ] || disable image_os_missing; [ \"$image_os\" = \"$VELNOR_CACHE_EXPECTED_IMAGE_OS\" ] || disable image_os_mismatch; [ -n \"$image_version\" ] || disable image_version_missing; case \"$image_version\" in *[!0-9.]*) disable image_version_invalid ;; esac; case \"$image_version\" in *[0-9]*) ;; *) disable image_version_invalid ;; esac; [ -n \"$home\" ] && [ -d \"$home\" ] || disable home_missing; [ -n \"$runner_temp\" ] && [ -d \"$runner_temp\" ] || disable runner_temp_missing; valid_path \"$home\" || disable home_aliased; valid_path \"$runner_temp\" || disable runner_temp_aliased; expected_mise=\"$home/.local/share/mise\"; effective_mise=${MISE_DATA_DIR-}; if [ -z \"$effective_mise\" ]; then if [ -n \"${XDG_DATA_HOME-}\" ]; then effective_mise=\"$XDG_DATA_HOME/mise\"; else effective_mise=$expected_mise; fi; fi; valid_path \"$expected_mise\" || disable mise_root_aliased; valid_path \"$effective_mise\" || disable mise_root_invalid; [ \"$effective_mise\" = \"$expected_mise\" ] || disable mise_root_not_archived; expected_rustup=\"$runner_temp/velnor/rustup\"; expected_cargo=\"$runner_temp/velnor/cargo\"; [ \"$mise_rustup\" = \"$expected_rustup\" ] || disable mise_rustup_home_mismatch; [ \"$rustup_home\" = \"$expected_rustup\" ] || disable rustup_home_mismatch; [ \"$mise_cargo\" = \"$expected_cargo\" ] || disable mise_cargo_home_mismatch; [ \"$cargo_home\" = \"$expected_cargo\" ] || disable cargo_home_mismatch; valid_path \"$expected_rustup\" || disable rustup_root_invalid; valid_path \"$expected_cargo\" || disable cargo_root_invalid; scratch_root=\"$runner_temp/velnor\"; valid_path \"$scratch_root\" || disable cache_scratch_aliased; mkdir -p \"$scratch_root\" || disable cache_scratch_unavailable; [ -d \"$scratch_root\" ] && [ ! -L \"$scratch_root\" ] || disable cache_scratch_invalid; scratch_dir=\"$scratch_root/runtime-identity.$$\"; if ! mkdir -m 700 \"$scratch_dir\"; then scratch_dir=; disable identity_scratch_unavailable; fi; case \"$scratch_dir\" in \"$scratch_root\"/runtime-identity.*) ;; *) disable cache_scratch_invalid ;; esac; valid_path \"$scratch_dir\" && [ -d \"$scratch_dir\" ] && [ ! -L \"$scratch_dir\" ] || disable cache_scratch_invalid; identity_file=\"$scratch_dir/preimage\"; sum_file=\"$scratch_dir/digest\"; set -C; if ! : > \"$identity_file\"; then set +C; disable identity_file_unavailable; fi; if ! : > \"$sum_file\"; then set +C; disable identity_file_unavailable; fi; set +C; valid_path \"$identity_file\" && [ -f \"$identity_file\" ] && [ ! -L \"$identity_file\" ] || disable identity_file_invalid; valid_path \"$sum_file\" && [ -f \"$sum_file\" ] && [ ! -L \"$sum_file\" ] || disable identity_file_invalid; for value in \"velnor-tools-runtime-v2\" \"$VELNOR_CACHE_STATIC_DIGEST\" \"$VELNOR_CACHE_LANE\" \"$VELNOR_CACHE_TARGET\" \"$runner_os\" \"$runner_arch\" \"$image_os\" \"$image_version\" \"$home\" \"$runner_temp\" \"$effective_mise\" \"$expected_rustup\" \"$expected_cargo\"; do if ! printf '\\''%s:%s\\n'\\'' \"${#value}\" \"$value\" >> \"$identity_file\"; then disable identity_file_write_failed; fi; done; if command -v sha256sum >/dev/null 2>&1; then if ! sha256sum < \"$identity_file\" > \"$sum_file\"; then disable identity_hash_failed; fi; elif command -v shasum >/dev/null 2>&1; then if ! shasum -a 256 < \"$identity_file\" > \"$sum_file\"; then disable identity_hash_failed; fi; else disable sha256_tool_missing; fi; if ! IFS='\\'' '\\'' read -r fingerprint _ < \"$sum_file\"; then disable fingerprint_missing; fi; [ ${#fingerprint} -eq 64 ] || disable fingerprint_invalid; case \"$fingerprint\" in *[!0-9a-f]*) disable fingerprint_invalid ;; esac; if ! cleanup_scratch; then disable identity_scratch_cleanup_failed; fi; printf '\\''identity=%s\\nenabled=true\\nreason=qualified_hosted_image\\n'\\'' \"$fingerprint\" >> \"$GITHUB_OUTPUT\"'"
+      - name: Restore Mise tools
+        if: steps.velnor-tool-cache-identity.outputs.enabled == 'true'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: mise-tools-v2-cb6154172aef71407cfc4cea6423696284901069a5210559a4a53724be1317aa-${{steps.velnor-tool-cache-identity.outputs.identity}}
+          path: "~/.local/share/mise\n${{ runner.temp }}/velnor/rustup\n${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin"
+          restore-keys: ""
       - name: Setup Mise
         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
-          cache: "true"
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-ac88a89731444aab
+          cache: "false"
           cache_save: "false"
           env: "false"
           install: "false"
@@ -2102,7 +2436,7 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           key: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-${{hashFiles('Cargo.lock','crates/velnor-runner/Cargo.lock')}}
-          path: "${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin\n${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
+          path: "${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
           restore-keys: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-
       - name: Verify MBX and Rust toolchains
         env:
@@ -2260,11 +2594,31 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
+      - name: Identify Mise cache runtime
+        id: velnor-tool-cache-identity
+        env:
+          CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          RUNNER_TEMP: ${{ runner.temp }}
+          RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          VELNOR_CACHE_EXPECTED_ARCH: X64
+          VELNOR_CACHE_EXPECTED_IMAGE_OS: ubuntu26
+          VELNOR_CACHE_LANE: ubuntu-26.04
+          VELNOR_CACHE_STATIC_DIGEST: cb6154172aef71407cfc4cea6423696284901069a5210559a4a53724be1317aa
+          VELNOR_CACHE_TARGET: x86_64-unknown-linux-gnu
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; export LC_ALL=C; set -eu; umask 077; : \"${GITHUB_OUTPUT:?missing GITHUB_OUTPUT}\"; scratch_root=; scratch_dir=; runner_os=${RUNNER_OS-}; runner_arch=${RUNNER_ARCH-}; image_os=${ImageOS-}; image_version=${ImageVersion-}; home=${HOME-}; runner_temp=${RUNNER_TEMP-}; mise_rustup=${MISE_RUSTUP_HOME-}; rustup_home=${RUSTUP_HOME-}; mise_cargo=${MISE_CARGO_HOME-}; cargo_home=${CARGO_HOME-}; valid_path() { value=$1; case \"$value\" in /*) ;; *) return 1 ;; esac; [ \"$value\" != / ] || return 1; case \"$value\" in *[![:print:]]*|*//*|*/./*|*/../*|*/.|*/..) return 1 ;; esac; remaining=${value#/}; prefix=; while [ -n \"$remaining\" ]; do case \"$remaining\" in */*) part=${remaining%%/*}; remaining=${remaining#*/} ;; *) part=$remaining; remaining= ;; esac; [ -n \"$part\" ] || return 1; prefix=\"$prefix/$part\"; [ ! -L \"$prefix\" ] || return 1; done; }; cleanup_scratch() { [ -n \"$scratch_dir\" ] || return 0; case \"$scratch_dir\" in \"$scratch_root\"/runtime-identity.*) ;; *) return 1 ;; esac; [ -d \"$scratch_dir\" ] && [ ! -L \"$scratch_dir\" ] || return 1; rm -rf -- \"$scratch_dir\" || return 1; scratch_dir=; }; on_exit() { status=$1; trap - EXIT; if ! cleanup_scratch; then status=1; fi; exit \"$status\"; }; trap '\\''status=$?; on_exit \"$status\"'\\'' EXIT; trap '\\''exit 129'\\'' HUP; trap '\\''exit 130'\\'' INT; trap '\\''exit 143'\\'' TERM; disable() { reason=$1; if ! cleanup_scratch; then printf '\\''enabled=false\\nreason=identity_scratch_cleanup_failed\\n'\\'' >> \"$GITHUB_OUTPUT\"; exit 1; fi; printf '\\''enabled=false\\nreason=%s\\n'\\'' \"$reason\" >> \"$GITHUB_OUTPUT\"; exit 0; }; case \"$VELNOR_CACHE_LANE\" in scale-set:*) disable scale_set_image_unqualified ;; esac; [ -n \"$runner_os\" ] || disable runner_os_missing; [ \"$runner_os\" = Linux ] || disable runner_os_mismatch; [ -n \"$runner_arch\" ] || disable runner_arch_missing; [ \"$runner_arch\" = \"$VELNOR_CACHE_EXPECTED_ARCH\" ] || disable runner_arch_mismatch; [ -n \"$image_os\" ] || disable image_os_missing; [ \"$image_os\" = \"$VELNOR_CACHE_EXPECTED_IMAGE_OS\" ] || disable image_os_mismatch; [ -n \"$image_version\" ] || disable image_version_missing; case \"$image_version\" in *[!0-9.]*) disable image_version_invalid ;; esac; case \"$image_version\" in *[0-9]*) ;; *) disable image_version_invalid ;; esac; [ -n \"$home\" ] && [ -d \"$home\" ] || disable home_missing; [ -n \"$runner_temp\" ] && [ -d \"$runner_temp\" ] || disable runner_temp_missing; valid_path \"$home\" || disable home_aliased; valid_path \"$runner_temp\" || disable runner_temp_aliased; expected_mise=\"$home/.local/share/mise\"; effective_mise=${MISE_DATA_DIR-}; if [ -z \"$effective_mise\" ]; then if [ -n \"${XDG_DATA_HOME-}\" ]; then effective_mise=\"$XDG_DATA_HOME/mise\"; else effective_mise=$expected_mise; fi; fi; valid_path \"$expected_mise\" || disable mise_root_aliased; valid_path \"$effective_mise\" || disable mise_root_invalid; [ \"$effective_mise\" = \"$expected_mise\" ] || disable mise_root_not_archived; expected_rustup=\"$runner_temp/velnor/rustup\"; expected_cargo=\"$runner_temp/velnor/cargo\"; [ \"$mise_rustup\" = \"$expected_rustup\" ] || disable mise_rustup_home_mismatch; [ \"$rustup_home\" = \"$expected_rustup\" ] || disable rustup_home_mismatch; [ \"$mise_cargo\" = \"$expected_cargo\" ] || disable mise_cargo_home_mismatch; [ \"$cargo_home\" = \"$expected_cargo\" ] || disable cargo_home_mismatch; valid_path \"$expected_rustup\" || disable rustup_root_invalid; valid_path \"$expected_cargo\" || disable cargo_root_invalid; scratch_root=\"$runner_temp/velnor\"; valid_path \"$scratch_root\" || disable cache_scratch_aliased; mkdir -p \"$scratch_root\" || disable cache_scratch_unavailable; [ -d \"$scratch_root\" ] && [ ! -L \"$scratch_root\" ] || disable cache_scratch_invalid; scratch_dir=\"$scratch_root/runtime-identity.$$\"; if ! mkdir -m 700 \"$scratch_dir\"; then scratch_dir=; disable identity_scratch_unavailable; fi; case \"$scratch_dir\" in \"$scratch_root\"/runtime-identity.*) ;; *) disable cache_scratch_invalid ;; esac; valid_path \"$scratch_dir\" && [ -d \"$scratch_dir\" ] && [ ! -L \"$scratch_dir\" ] || disable cache_scratch_invalid; identity_file=\"$scratch_dir/preimage\"; sum_file=\"$scratch_dir/digest\"; set -C; if ! : > \"$identity_file\"; then set +C; disable identity_file_unavailable; fi; if ! : > \"$sum_file\"; then set +C; disable identity_file_unavailable; fi; set +C; valid_path \"$identity_file\" && [ -f \"$identity_file\" ] && [ ! -L \"$identity_file\" ] || disable identity_file_invalid; valid_path \"$sum_file\" && [ -f \"$sum_file\" ] && [ ! -L \"$sum_file\" ] || disable identity_file_invalid; for value in \"velnor-tools-runtime-v2\" \"$VELNOR_CACHE_STATIC_DIGEST\" \"$VELNOR_CACHE_LANE\" \"$VELNOR_CACHE_TARGET\" \"$runner_os\" \"$runner_arch\" \"$image_os\" \"$image_version\" \"$home\" \"$runner_temp\" \"$effective_mise\" \"$expected_rustup\" \"$expected_cargo\"; do if ! printf '\\''%s:%s\\n'\\'' \"${#value}\" \"$value\" >> \"$identity_file\"; then disable identity_file_write_failed; fi; done; if command -v sha256sum >/dev/null 2>&1; then if ! sha256sum < \"$identity_file\" > \"$sum_file\"; then disable identity_hash_failed; fi; elif command -v shasum >/dev/null 2>&1; then if ! shasum -a 256 < \"$identity_file\" > \"$sum_file\"; then disable identity_hash_failed; fi; else disable sha256_tool_missing; fi; if ! IFS='\\'' '\\'' read -r fingerprint _ < \"$sum_file\"; then disable fingerprint_missing; fi; [ ${#fingerprint} -eq 64 ] || disable fingerprint_invalid; case \"$fingerprint\" in *[!0-9a-f]*) disable fingerprint_invalid ;; esac; if ! cleanup_scratch; then disable identity_scratch_cleanup_failed; fi; printf '\\''identity=%s\\nenabled=true\\nreason=qualified_hosted_image\\n'\\'' \"$fingerprint\" >> \"$GITHUB_OUTPUT\"'"
+      - name: Restore Mise tools
+        if: steps.velnor-tool-cache-identity.outputs.enabled == 'true'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: mise-tools-v2-cb6154172aef71407cfc4cea6423696284901069a5210559a4a53724be1317aa-${{steps.velnor-tool-cache-identity.outputs.identity}}
+          path: "~/.local/share/mise\n${{ runner.temp }}/velnor/rustup\n${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin"
+          restore-keys: ""
       - name: Setup Mise
         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
-          cache: "true"
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-ac88a89731444aab
+          cache: "false"
           cache_save: "false"
           env: "false"
           install: "false"
@@ -2298,7 +2652,7 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           key: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-${{hashFiles('Cargo.lock','crates/velnor-runner/Cargo.lock')}}
-          path: "${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin\n${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
+          path: "${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
           restore-keys: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-
       - name: Verify MBX and Rust toolchains
         env:
@@ -2456,11 +2810,31 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
+      - name: Identify Mise cache runtime
+        id: velnor-tool-cache-identity
+        env:
+          CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          RUNNER_TEMP: ${{ runner.temp }}
+          RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          VELNOR_CACHE_EXPECTED_ARCH: X64
+          VELNOR_CACHE_EXPECTED_IMAGE_OS: ubuntu26
+          VELNOR_CACHE_LANE: ubuntu-26.04
+          VELNOR_CACHE_STATIC_DIGEST: cb6154172aef71407cfc4cea6423696284901069a5210559a4a53724be1317aa
+          VELNOR_CACHE_TARGET: x86_64-unknown-linux-gnu
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; export LC_ALL=C; set -eu; umask 077; : \"${GITHUB_OUTPUT:?missing GITHUB_OUTPUT}\"; scratch_root=; scratch_dir=; runner_os=${RUNNER_OS-}; runner_arch=${RUNNER_ARCH-}; image_os=${ImageOS-}; image_version=${ImageVersion-}; home=${HOME-}; runner_temp=${RUNNER_TEMP-}; mise_rustup=${MISE_RUSTUP_HOME-}; rustup_home=${RUSTUP_HOME-}; mise_cargo=${MISE_CARGO_HOME-}; cargo_home=${CARGO_HOME-}; valid_path() { value=$1; case \"$value\" in /*) ;; *) return 1 ;; esac; [ \"$value\" != / ] || return 1; case \"$value\" in *[![:print:]]*|*//*|*/./*|*/../*|*/.|*/..) return 1 ;; esac; remaining=${value#/}; prefix=; while [ -n \"$remaining\" ]; do case \"$remaining\" in */*) part=${remaining%%/*}; remaining=${remaining#*/} ;; *) part=$remaining; remaining= ;; esac; [ -n \"$part\" ] || return 1; prefix=\"$prefix/$part\"; [ ! -L \"$prefix\" ] || return 1; done; }; cleanup_scratch() { [ -n \"$scratch_dir\" ] || return 0; case \"$scratch_dir\" in \"$scratch_root\"/runtime-identity.*) ;; *) return 1 ;; esac; [ -d \"$scratch_dir\" ] && [ ! -L \"$scratch_dir\" ] || return 1; rm -rf -- \"$scratch_dir\" || return 1; scratch_dir=; }; on_exit() { status=$1; trap - EXIT; if ! cleanup_scratch; then status=1; fi; exit \"$status\"; }; trap '\\''status=$?; on_exit \"$status\"'\\'' EXIT; trap '\\''exit 129'\\'' HUP; trap '\\''exit 130'\\'' INT; trap '\\''exit 143'\\'' TERM; disable() { reason=$1; if ! cleanup_scratch; then printf '\\''enabled=false\\nreason=identity_scratch_cleanup_failed\\n'\\'' >> \"$GITHUB_OUTPUT\"; exit 1; fi; printf '\\''enabled=false\\nreason=%s\\n'\\'' \"$reason\" >> \"$GITHUB_OUTPUT\"; exit 0; }; case \"$VELNOR_CACHE_LANE\" in scale-set:*) disable scale_set_image_unqualified ;; esac; [ -n \"$runner_os\" ] || disable runner_os_missing; [ \"$runner_os\" = Linux ] || disable runner_os_mismatch; [ -n \"$runner_arch\" ] || disable runner_arch_missing; [ \"$runner_arch\" = \"$VELNOR_CACHE_EXPECTED_ARCH\" ] || disable runner_arch_mismatch; [ -n \"$image_os\" ] || disable image_os_missing; [ \"$image_os\" = \"$VELNOR_CACHE_EXPECTED_IMAGE_OS\" ] || disable image_os_mismatch; [ -n \"$image_version\" ] || disable image_version_missing; case \"$image_version\" in *[!0-9.]*) disable image_version_invalid ;; esac; case \"$image_version\" in *[0-9]*) ;; *) disable image_version_invalid ;; esac; [ -n \"$home\" ] && [ -d \"$home\" ] || disable home_missing; [ -n \"$runner_temp\" ] && [ -d \"$runner_temp\" ] || disable runner_temp_missing; valid_path \"$home\" || disable home_aliased; valid_path \"$runner_temp\" || disable runner_temp_aliased; expected_mise=\"$home/.local/share/mise\"; effective_mise=${MISE_DATA_DIR-}; if [ -z \"$effective_mise\" ]; then if [ -n \"${XDG_DATA_HOME-}\" ]; then effective_mise=\"$XDG_DATA_HOME/mise\"; else effective_mise=$expected_mise; fi; fi; valid_path \"$expected_mise\" || disable mise_root_aliased; valid_path \"$effective_mise\" || disable mise_root_invalid; [ \"$effective_mise\" = \"$expected_mise\" ] || disable mise_root_not_archived; expected_rustup=\"$runner_temp/velnor/rustup\"; expected_cargo=\"$runner_temp/velnor/cargo\"; [ \"$mise_rustup\" = \"$expected_rustup\" ] || disable mise_rustup_home_mismatch; [ \"$rustup_home\" = \"$expected_rustup\" ] || disable rustup_home_mismatch; [ \"$mise_cargo\" = \"$expected_cargo\" ] || disable mise_cargo_home_mismatch; [ \"$cargo_home\" = \"$expected_cargo\" ] || disable cargo_home_mismatch; valid_path \"$expected_rustup\" || disable rustup_root_invalid; valid_path \"$expected_cargo\" || disable cargo_root_invalid; scratch_root=\"$runner_temp/velnor\"; valid_path \"$scratch_root\" || disable cache_scratch_aliased; mkdir -p \"$scratch_root\" || disable cache_scratch_unavailable; [ -d \"$scratch_root\" ] && [ ! -L \"$scratch_root\" ] || disable cache_scratch_invalid; scratch_dir=\"$scratch_root/runtime-identity.$$\"; if ! mkdir -m 700 \"$scratch_dir\"; then scratch_dir=; disable identity_scratch_unavailable; fi; case \"$scratch_dir\" in \"$scratch_root\"/runtime-identity.*) ;; *) disable cache_scratch_invalid ;; esac; valid_path \"$scratch_dir\" && [ -d \"$scratch_dir\" ] && [ ! -L \"$scratch_dir\" ] || disable cache_scratch_invalid; identity_file=\"$scratch_dir/preimage\"; sum_file=\"$scratch_dir/digest\"; set -C; if ! : > \"$identity_file\"; then set +C; disable identity_file_unavailable; fi; if ! : > \"$sum_file\"; then set +C; disable identity_file_unavailable; fi; set +C; valid_path \"$identity_file\" && [ -f \"$identity_file\" ] && [ ! -L \"$identity_file\" ] || disable identity_file_invalid; valid_path \"$sum_file\" && [ -f \"$sum_file\" ] && [ ! -L \"$sum_file\" ] || disable identity_file_invalid; for value in \"velnor-tools-runtime-v2\" \"$VELNOR_CACHE_STATIC_DIGEST\" \"$VELNOR_CACHE_LANE\" \"$VELNOR_CACHE_TARGET\" \"$runner_os\" \"$runner_arch\" \"$image_os\" \"$image_version\" \"$home\" \"$runner_temp\" \"$effective_mise\" \"$expected_rustup\" \"$expected_cargo\"; do if ! printf '\\''%s:%s\\n'\\'' \"${#value}\" \"$value\" >> \"$identity_file\"; then disable identity_file_write_failed; fi; done; if command -v sha256sum >/dev/null 2>&1; then if ! sha256sum < \"$identity_file\" > \"$sum_file\"; then disable identity_hash_failed; fi; elif command -v shasum >/dev/null 2>&1; then if ! shasum -a 256 < \"$identity_file\" > \"$sum_file\"; then disable identity_hash_failed; fi; else disable sha256_tool_missing; fi; if ! IFS='\\'' '\\'' read -r fingerprint _ < \"$sum_file\"; then disable fingerprint_missing; fi; [ ${#fingerprint} -eq 64 ] || disable fingerprint_invalid; case \"$fingerprint\" in *[!0-9a-f]*) disable fingerprint_invalid ;; esac; if ! cleanup_scratch; then disable identity_scratch_cleanup_failed; fi; printf '\\''identity=%s\\nenabled=true\\nreason=qualified_hosted_image\\n'\\'' \"$fingerprint\" >> \"$GITHUB_OUTPUT\"'"
+      - name: Restore Mise tools
+        if: steps.velnor-tool-cache-identity.outputs.enabled == 'true'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: mise-tools-v2-cb6154172aef71407cfc4cea6423696284901069a5210559a4a53724be1317aa-${{steps.velnor-tool-cache-identity.outputs.identity}}
+          path: "~/.local/share/mise\n${{ runner.temp }}/velnor/rustup\n${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin"
+          restore-keys: ""
       - name: Setup Mise
         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
-          cache: "true"
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-ac88a89731444aab
+          cache: "false"
           cache_save: "false"
           env: "false"
           install: "false"
@@ -2494,7 +2868,7 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           key: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-${{hashFiles('Cargo.lock','crates/velnor-runner/Cargo.lock')}}
-          path: "${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin\n${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
+          path: "${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
           restore-keys: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-
       - name: Verify MBX and Rust toolchains
         env:
@@ -2652,11 +3026,31 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
+      - name: Identify Mise cache runtime
+        id: velnor-tool-cache-identity
+        env:
+          CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          RUNNER_TEMP: ${{ runner.temp }}
+          RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          VELNOR_CACHE_EXPECTED_ARCH: X64
+          VELNOR_CACHE_EXPECTED_IMAGE_OS: ubuntu26
+          VELNOR_CACHE_LANE: ubuntu-26.04
+          VELNOR_CACHE_STATIC_DIGEST: cb6154172aef71407cfc4cea6423696284901069a5210559a4a53724be1317aa
+          VELNOR_CACHE_TARGET: x86_64-unknown-linux-gnu
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; export LC_ALL=C; set -eu; umask 077; : \"${GITHUB_OUTPUT:?missing GITHUB_OUTPUT}\"; scratch_root=; scratch_dir=; runner_os=${RUNNER_OS-}; runner_arch=${RUNNER_ARCH-}; image_os=${ImageOS-}; image_version=${ImageVersion-}; home=${HOME-}; runner_temp=${RUNNER_TEMP-}; mise_rustup=${MISE_RUSTUP_HOME-}; rustup_home=${RUSTUP_HOME-}; mise_cargo=${MISE_CARGO_HOME-}; cargo_home=${CARGO_HOME-}; valid_path() { value=$1; case \"$value\" in /*) ;; *) return 1 ;; esac; [ \"$value\" != / ] || return 1; case \"$value\" in *[![:print:]]*|*//*|*/./*|*/../*|*/.|*/..) return 1 ;; esac; remaining=${value#/}; prefix=; while [ -n \"$remaining\" ]; do case \"$remaining\" in */*) part=${remaining%%/*}; remaining=${remaining#*/} ;; *) part=$remaining; remaining= ;; esac; [ -n \"$part\" ] || return 1; prefix=\"$prefix/$part\"; [ ! -L \"$prefix\" ] || return 1; done; }; cleanup_scratch() { [ -n \"$scratch_dir\" ] || return 0; case \"$scratch_dir\" in \"$scratch_root\"/runtime-identity.*) ;; *) return 1 ;; esac; [ -d \"$scratch_dir\" ] && [ ! -L \"$scratch_dir\" ] || return 1; rm -rf -- \"$scratch_dir\" || return 1; scratch_dir=; }; on_exit() { status=$1; trap - EXIT; if ! cleanup_scratch; then status=1; fi; exit \"$status\"; }; trap '\\''status=$?; on_exit \"$status\"'\\'' EXIT; trap '\\''exit 129'\\'' HUP; trap '\\''exit 130'\\'' INT; trap '\\''exit 143'\\'' TERM; disable() { reason=$1; if ! cleanup_scratch; then printf '\\''enabled=false\\nreason=identity_scratch_cleanup_failed\\n'\\'' >> \"$GITHUB_OUTPUT\"; exit 1; fi; printf '\\''enabled=false\\nreason=%s\\n'\\'' \"$reason\" >> \"$GITHUB_OUTPUT\"; exit 0; }; case \"$VELNOR_CACHE_LANE\" in scale-set:*) disable scale_set_image_unqualified ;; esac; [ -n \"$runner_os\" ] || disable runner_os_missing; [ \"$runner_os\" = Linux ] || disable runner_os_mismatch; [ -n \"$runner_arch\" ] || disable runner_arch_missing; [ \"$runner_arch\" = \"$VELNOR_CACHE_EXPECTED_ARCH\" ] || disable runner_arch_mismatch; [ -n \"$image_os\" ] || disable image_os_missing; [ \"$image_os\" = \"$VELNOR_CACHE_EXPECTED_IMAGE_OS\" ] || disable image_os_mismatch; [ -n \"$image_version\" ] || disable image_version_missing; case \"$image_version\" in *[!0-9.]*) disable image_version_invalid ;; esac; case \"$image_version\" in *[0-9]*) ;; *) disable image_version_invalid ;; esac; [ -n \"$home\" ] && [ -d \"$home\" ] || disable home_missing; [ -n \"$runner_temp\" ] && [ -d \"$runner_temp\" ] || disable runner_temp_missing; valid_path \"$home\" || disable home_aliased; valid_path \"$runner_temp\" || disable runner_temp_aliased; expected_mise=\"$home/.local/share/mise\"; effective_mise=${MISE_DATA_DIR-}; if [ -z \"$effective_mise\" ]; then if [ -n \"${XDG_DATA_HOME-}\" ]; then effective_mise=\"$XDG_DATA_HOME/mise\"; else effective_mise=$expected_mise; fi; fi; valid_path \"$expected_mise\" || disable mise_root_aliased; valid_path \"$effective_mise\" || disable mise_root_invalid; [ \"$effective_mise\" = \"$expected_mise\" ] || disable mise_root_not_archived; expected_rustup=\"$runner_temp/velnor/rustup\"; expected_cargo=\"$runner_temp/velnor/cargo\"; [ \"$mise_rustup\" = \"$expected_rustup\" ] || disable mise_rustup_home_mismatch; [ \"$rustup_home\" = \"$expected_rustup\" ] || disable rustup_home_mismatch; [ \"$mise_cargo\" = \"$expected_cargo\" ] || disable mise_cargo_home_mismatch; [ \"$cargo_home\" = \"$expected_cargo\" ] || disable cargo_home_mismatch; valid_path \"$expected_rustup\" || disable rustup_root_invalid; valid_path \"$expected_cargo\" || disable cargo_root_invalid; scratch_root=\"$runner_temp/velnor\"; valid_path \"$scratch_root\" || disable cache_scratch_aliased; mkdir -p \"$scratch_root\" || disable cache_scratch_unavailable; [ -d \"$scratch_root\" ] && [ ! -L \"$scratch_root\" ] || disable cache_scratch_invalid; scratch_dir=\"$scratch_root/runtime-identity.$$\"; if ! mkdir -m 700 \"$scratch_dir\"; then scratch_dir=; disable identity_scratch_unavailable; fi; case \"$scratch_dir\" in \"$scratch_root\"/runtime-identity.*) ;; *) disable cache_scratch_invalid ;; esac; valid_path \"$scratch_dir\" && [ -d \"$scratch_dir\" ] && [ ! -L \"$scratch_dir\" ] || disable cache_scratch_invalid; identity_file=\"$scratch_dir/preimage\"; sum_file=\"$scratch_dir/digest\"; set -C; if ! : > \"$identity_file\"; then set +C; disable identity_file_unavailable; fi; if ! : > \"$sum_file\"; then set +C; disable identity_file_unavailable; fi; set +C; valid_path \"$identity_file\" && [ -f \"$identity_file\" ] && [ ! -L \"$identity_file\" ] || disable identity_file_invalid; valid_path \"$sum_file\" && [ -f \"$sum_file\" ] && [ ! -L \"$sum_file\" ] || disable identity_file_invalid; for value in \"velnor-tools-runtime-v2\" \"$VELNOR_CACHE_STATIC_DIGEST\" \"$VELNOR_CACHE_LANE\" \"$VELNOR_CACHE_TARGET\" \"$runner_os\" \"$runner_arch\" \"$image_os\" \"$image_version\" \"$home\" \"$runner_temp\" \"$effective_mise\" \"$expected_rustup\" \"$expected_cargo\"; do if ! printf '\\''%s:%s\\n'\\'' \"${#value}\" \"$value\" >> \"$identity_file\"; then disable identity_file_write_failed; fi; done; if command -v sha256sum >/dev/null 2>&1; then if ! sha256sum < \"$identity_file\" > \"$sum_file\"; then disable identity_hash_failed; fi; elif command -v shasum >/dev/null 2>&1; then if ! shasum -a 256 < \"$identity_file\" > \"$sum_file\"; then disable identity_hash_failed; fi; else disable sha256_tool_missing; fi; if ! IFS='\\'' '\\'' read -r fingerprint _ < \"$sum_file\"; then disable fingerprint_missing; fi; [ ${#fingerprint} -eq 64 ] || disable fingerprint_invalid; case \"$fingerprint\" in *[!0-9a-f]*) disable fingerprint_invalid ;; esac; if ! cleanup_scratch; then disable identity_scratch_cleanup_failed; fi; printf '\\''identity=%s\\nenabled=true\\nreason=qualified_hosted_image\\n'\\'' \"$fingerprint\" >> \"$GITHUB_OUTPUT\"'"
+      - name: Restore Mise tools
+        if: steps.velnor-tool-cache-identity.outputs.enabled == 'true'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: mise-tools-v2-cb6154172aef71407cfc4cea6423696284901069a5210559a4a53724be1317aa-${{steps.velnor-tool-cache-identity.outputs.identity}}
+          path: "~/.local/share/mise\n${{ runner.temp }}/velnor/rustup\n${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin"
+          restore-keys: ""
       - name: Setup Mise
         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
-          cache: "true"
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-ac88a89731444aab
+          cache: "false"
           cache_save: "false"
           env: "false"
           install: "false"
@@ -2690,7 +3084,7 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           key: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-${{hashFiles('Cargo.lock','crates/velnor-runner/Cargo.lock')}}
-          path: "${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin\n${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
+          path: "${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
           restore-keys: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-
       - name: Verify MBX and Rust toolchains
         env:
@@ -2821,16 +3215,54 @@ jobs:
     name: Zizmor
     runs-on: ubuntu-26.04
     timeout-minutes: 10
+    env:
+      ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+      ACTIONS_ID_TOKEN_REQUEST_URL: ""
+      ACTIONS_RUNTIME_TOKEN: ""
+      CARGO_REGISTRY_TOKEN: ""
+      GH_CONFIG_DIR: ""
+      GH_HOST: ""
+      GH_TOKEN: ""
+      GITHUB_TOKEN: ""
+      MISE_AUTO_INSTALL: "false"
+      MISE_EXEC_AUTO_INSTALL: "false"
+      MISE_GITHUB_TOKEN: ""
+      MISE_LOCKFILE: "0"
+      MISE_NO_CONFIG: "1"
+      MISE_NO_ENV: "1"
+      MISE_NO_HOOKS: "1"
+      NODE_AUTH_TOKEN: ""
+      NPM_TOKEN: ""
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
+      - name: Identify Mise cache runtime
+        id: velnor-tool-cache-identity
+        env:
+          CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          RUNNER_TEMP: ${{ runner.temp }}
+          RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          VELNOR_CACHE_EXPECTED_ARCH: X64
+          VELNOR_CACHE_EXPECTED_IMAGE_OS: ubuntu26
+          VELNOR_CACHE_LANE: ubuntu-26.04
+          VELNOR_CACHE_STATIC_DIGEST: a21dbe84396fab45169a04832176ae9cb399b640e80b09ebdd84dee6496a1266
+          VELNOR_CACHE_TARGET: x86_64-unknown-linux-gnu
+        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; export LC_ALL=C; set -eu; umask 077; : \"${GITHUB_OUTPUT:?missing GITHUB_OUTPUT}\"; scratch_root=; scratch_dir=; runner_os=${RUNNER_OS-}; runner_arch=${RUNNER_ARCH-}; image_os=${ImageOS-}; image_version=${ImageVersion-}; home=${HOME-}; runner_temp=${RUNNER_TEMP-}; mise_rustup=${MISE_RUSTUP_HOME-}; rustup_home=${RUSTUP_HOME-}; mise_cargo=${MISE_CARGO_HOME-}; cargo_home=${CARGO_HOME-}; valid_path() { value=$1; case \"$value\" in /*) ;; *) return 1 ;; esac; [ \"$value\" != / ] || return 1; case \"$value\" in *[![:print:]]*|*//*|*/./*|*/../*|*/.|*/..) return 1 ;; esac; remaining=${value#/}; prefix=; while [ -n \"$remaining\" ]; do case \"$remaining\" in */*) part=${remaining%%/*}; remaining=${remaining#*/} ;; *) part=$remaining; remaining= ;; esac; [ -n \"$part\" ] || return 1; prefix=\"$prefix/$part\"; [ ! -L \"$prefix\" ] || return 1; done; }; cleanup_scratch() { [ -n \"$scratch_dir\" ] || return 0; case \"$scratch_dir\" in \"$scratch_root\"/runtime-identity.*) ;; *) return 1 ;; esac; [ -d \"$scratch_dir\" ] && [ ! -L \"$scratch_dir\" ] || return 1; rm -rf -- \"$scratch_dir\" || return 1; scratch_dir=; }; on_exit() { status=$1; trap - EXIT; if ! cleanup_scratch; then status=1; fi; exit \"$status\"; }; trap '\\''status=$?; on_exit \"$status\"'\\'' EXIT; trap '\\''exit 129'\\'' HUP; trap '\\''exit 130'\\'' INT; trap '\\''exit 143'\\'' TERM; disable() { reason=$1; if ! cleanup_scratch; then printf '\\''enabled=false\\nreason=identity_scratch_cleanup_failed\\n'\\'' >> \"$GITHUB_OUTPUT\"; exit 1; fi; printf '\\''enabled=false\\nreason=%s\\n'\\'' \"$reason\" >> \"$GITHUB_OUTPUT\"; exit 0; }; case \"$VELNOR_CACHE_LANE\" in scale-set:*) disable scale_set_image_unqualified ;; esac; [ -n \"$runner_os\" ] || disable runner_os_missing; [ \"$runner_os\" = Linux ] || disable runner_os_mismatch; [ -n \"$runner_arch\" ] || disable runner_arch_missing; [ \"$runner_arch\" = \"$VELNOR_CACHE_EXPECTED_ARCH\" ] || disable runner_arch_mismatch; [ -n \"$image_os\" ] || disable image_os_missing; [ \"$image_os\" = \"$VELNOR_CACHE_EXPECTED_IMAGE_OS\" ] || disable image_os_mismatch; [ -n \"$image_version\" ] || disable image_version_missing; case \"$image_version\" in *[!0-9.]*) disable image_version_invalid ;; esac; case \"$image_version\" in *[0-9]*) ;; *) disable image_version_invalid ;; esac; [ -n \"$home\" ] && [ -d \"$home\" ] || disable home_missing; [ -n \"$runner_temp\" ] && [ -d \"$runner_temp\" ] || disable runner_temp_missing; valid_path \"$home\" || disable home_aliased; valid_path \"$runner_temp\" || disable runner_temp_aliased; expected_mise=\"$home/.local/share/mise\"; effective_mise=${MISE_DATA_DIR-}; if [ -z \"$effective_mise\" ]; then if [ -n \"${XDG_DATA_HOME-}\" ]; then effective_mise=\"$XDG_DATA_HOME/mise\"; else effective_mise=$expected_mise; fi; fi; valid_path \"$expected_mise\" || disable mise_root_aliased; valid_path \"$effective_mise\" || disable mise_root_invalid; [ \"$effective_mise\" = \"$expected_mise\" ] || disable mise_root_not_archived; expected_rustup=\"$runner_temp/velnor/rustup\"; expected_cargo=\"$runner_temp/velnor/cargo\"; [ \"$mise_rustup\" = \"$expected_rustup\" ] || disable mise_rustup_home_mismatch; [ \"$rustup_home\" = \"$expected_rustup\" ] || disable rustup_home_mismatch; [ \"$mise_cargo\" = \"$expected_cargo\" ] || disable mise_cargo_home_mismatch; [ \"$cargo_home\" = \"$expected_cargo\" ] || disable cargo_home_mismatch; valid_path \"$expected_rustup\" || disable rustup_root_invalid; valid_path \"$expected_cargo\" || disable cargo_root_invalid; scratch_root=\"$runner_temp/velnor\"; valid_path \"$scratch_root\" || disable cache_scratch_aliased; mkdir -p \"$scratch_root\" || disable cache_scratch_unavailable; [ -d \"$scratch_root\" ] && [ ! -L \"$scratch_root\" ] || disable cache_scratch_invalid; scratch_dir=\"$scratch_root/runtime-identity.$$\"; if ! mkdir -m 700 \"$scratch_dir\"; then scratch_dir=; disable identity_scratch_unavailable; fi; case \"$scratch_dir\" in \"$scratch_root\"/runtime-identity.*) ;; *) disable cache_scratch_invalid ;; esac; valid_path \"$scratch_dir\" && [ -d \"$scratch_dir\" ] && [ ! -L \"$scratch_dir\" ] || disable cache_scratch_invalid; identity_file=\"$scratch_dir/preimage\"; sum_file=\"$scratch_dir/digest\"; set -C; if ! : > \"$identity_file\"; then set +C; disable identity_file_unavailable; fi; if ! : > \"$sum_file\"; then set +C; disable identity_file_unavailable; fi; set +C; valid_path \"$identity_file\" && [ -f \"$identity_file\" ] && [ ! -L \"$identity_file\" ] || disable identity_file_invalid; valid_path \"$sum_file\" && [ -f \"$sum_file\" ] && [ ! -L \"$sum_file\" ] || disable identity_file_invalid; for value in \"velnor-tools-runtime-v2\" \"$VELNOR_CACHE_STATIC_DIGEST\" \"$VELNOR_CACHE_LANE\" \"$VELNOR_CACHE_TARGET\" \"$runner_os\" \"$runner_arch\" \"$image_os\" \"$image_version\" \"$home\" \"$runner_temp\" \"$effective_mise\" \"$expected_rustup\" \"$expected_cargo\"; do if ! printf '\\''%s:%s\\n'\\'' \"${#value}\" \"$value\" >> \"$identity_file\"; then disable identity_file_write_failed; fi; done; if command -v sha256sum >/dev/null 2>&1; then if ! sha256sum < \"$identity_file\" > \"$sum_file\"; then disable identity_hash_failed; fi; elif command -v shasum >/dev/null 2>&1; then if ! shasum -a 256 < \"$identity_file\" > \"$sum_file\"; then disable identity_hash_failed; fi; else disable sha256_tool_missing; fi; if ! IFS='\\'' '\\'' read -r fingerprint _ < \"$sum_file\"; then disable fingerprint_missing; fi; [ ${#fingerprint} -eq 64 ] || disable fingerprint_invalid; case \"$fingerprint\" in *[!0-9a-f]*) disable fingerprint_invalid ;; esac; if ! cleanup_scratch; then disable identity_scratch_cleanup_failed; fi; printf '\\''identity=%s\\nenabled=true\\nreason=qualified_hosted_image\\n'\\'' \"$fingerprint\" >> \"$GITHUB_OUTPUT\"'"
+      - name: Restore Mise tools
+        if: steps.velnor-tool-cache-identity.outputs.enabled == 'true'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          key: mise-tools-v2-a21dbe84396fab45169a04832176ae9cb399b640e80b09ebdd84dee6496a1266-${{steps.velnor-tool-cache-identity.outputs.identity}}
+          path: "~/.local/share/mise\n${{ runner.temp }}/velnor/rustup\n${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin"
+          restore-keys: ""
       - name: Setup Mise
         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
-          cache: "true"
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-8f52c1fc1d8f90d8
+          cache: "false"
           cache_save: "false"
           env: "false"
           install: "false"
@@ -2839,8 +3271,8 @@ jobs:
       - name: Run zizmor
         run: mise --no-config --no-env --no-hooks exec zizmor@1.30.1 -- zizmor --no-online-audits --config .zizmor.yml .github/workflows
       - name: Save Mise tools
-        if: success() && github.event_name == 'push'
+        if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.velnor-tool-cache-identity.outputs.enabled == 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
-          key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-8f52c1fc1d8f90d8
-          path: ~/.local/share/mise
+          key: mise-tools-v2-a21dbe84396fab45169a04832176ae9cb399b640e80b09ebdd84dee6496a1266-${{steps.velnor-tool-cache-identity.outputs.identity}}
+          path: "~/.local/share/mise\n${{ runner.temp }}/velnor/rustup\n${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin"

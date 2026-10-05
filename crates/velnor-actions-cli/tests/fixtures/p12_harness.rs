@@ -279,11 +279,6 @@ const TOOL_PROBE_ROWS: &[(&str, &str, &str)] = &[
 
 const ACTION_PROBE_ROWS: &[(&str, &str, &str)] = &[
     (
-        "https://api.github.com/repos/Swatinem/rust-cache/tags",
-        "rust-cache.json",
-        "[{\"name\": \"v2.9.2\"}]",
-    ),
-    (
         "https://api.github.com/repos/jdx/mise-action/releases/latest",
         "mise-action.json",
         "{\"tag_name\": \"v4.3.0\"}",

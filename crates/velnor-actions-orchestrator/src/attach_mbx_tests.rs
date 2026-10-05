@@ -1,4 +1,5 @@
 use super::*;
+use velnor_actions_mise::PREPARE_PINNED_TOOLS_STEP;
 
 #[test]
 fn preseed_restores_mbx_builds_after_sources_with_homes() {
@@ -6,7 +7,7 @@ fn preseed_restores_mbx_builds_after_sources_with_homes() {
     use velnor_actions_workflow_renderer::{
         MBX_PREFLIGHT_NAME, PRESEED_BUILD_NAME, PRESEED_VERIFY_NAME,
     };
-    let mut plan = preseed_fixture(true, &[String::new()]);
+    let mut plan = preseed_fixture(false, &[String::new()]);
     attach_preseed(&mut plan, "ubuntu-26.04", "0.1.0").expect("attach");
     let steps = &plan.ir.jobs["plan"].steps;
     let names: Vec<&str> = steps.iter().map(|step| step.name.as_str()).collect();
@@ -16,7 +17,9 @@ fn preseed_restores_mbx_builds_after_sources_with_homes() {
             .position(|step| *step == name)
             .unwrap_or_else(|| panic!("missing {name}: {names:?}"))
     };
-    let (restore, preflight, mbx, probe, build, verify, save) = (
+    let (prepare, mbx_prepare, restore, preflight, mbx, probe, build, verify, save) = (
+        at(PREPARE_PINNED_TOOLS_STEP),
+        at("Prepare pre-seed MBX"),
         at(RESTORE_SOURCES_NAME),
         at(MBX_PREFLIGHT_NAME),
         at(MBX_RESTORE_NAME),
@@ -26,7 +29,9 @@ fn preseed_restores_mbx_builds_after_sources_with_homes() {
         at(SAVE_SOURCES_NAME),
     );
     assert!(
-        restore < preflight
+        prepare < mbx_prepare
+            && mbx_prepare < restore
+            && restore < preflight
             && preflight < mbx
             && mbx < probe
             && probe < build
@@ -35,6 +40,24 @@ fn preseed_restores_mbx_builds_after_sources_with_homes() {
         "preseed order: {names:?}"
     );
     assert_owned_homes(steps, MBX_PREFLIGHT_NAME);
+    let prepare = steps
+        .iter()
+        .find(|step| step.name == "Prepare pre-seed MBX")
+        .expect("explicit MBX install");
+    let velnor_actions_contract::StepKind::Shell { run, env } = &prepare.kind else {
+        panic!("MBX prepare must be a shell step");
+    };
+    let typed = PreparePinnedTools::new(vec![PinnedTool::MrBoxington], ToolHomes::runner_temp())
+        .expect("typed MBX install");
+    let catalog = ToolCatalog::pinned();
+    assert_eq!(
+        run,
+        &strings_of(typed.argv(&catalog)).expect("UTF-8 install argv")
+    );
+    assert_eq!(
+        env,
+        &strings_of_env(&typed.env(&catalog)).expect("UTF-8 install env")
+    );
     let mbx_action = steps
         .iter()
         .find(|step| step.name == MBX_RESTORE_NAME)

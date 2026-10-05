@@ -39,16 +39,18 @@ pub(crate) fn check_token_hygiene(jobs: &BTreeMap<String, Job>) -> Result<(), Re
 /// The renderer must not depend on the Mise adapter, so externally
 /// owned names mirror as literals; end-to-end generation tests render
 /// the real steps through this gate, so a drifted literal fails there,
-/// not here. Fetch and prepare download tools and sources (registry
-/// auth is their purpose); nested fetch names carry a manifest suffix.
+/// not here. Both pinned-tool install steps and source fetch download
+/// tools and sources with registry auth; nested fetch names carry a
+/// manifest suffix.
 /// The pinned offline analyzers (deny, machete, zizmor, actionlint)
 /// execute no repository code and cold-install their tools, so they
 /// run ambient: scrubbing broke `ubi:` installs (API 401) and zizmor
 /// (empty-token abort), CI run 36815180228. Plan and fetch-reports are
 /// internal steps with no shell env to gate, and release publishes
 /// through `gh` (allowlisted by job ID below).
-const AMBIENT_AUTH_STEPS: [&str; 7] = [
+const AMBIENT_AUTH_STEPS: [&str; 8] = [
     "Prepare pinned tools",
+    "Prepare pre-seed MBX",
     "Prepare Rust components",
     "Fetch Cargo sources",
     crate::steps::DENY_STEP_NAME,

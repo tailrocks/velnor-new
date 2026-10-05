@@ -162,10 +162,7 @@ fn generated_plan_suppresses_mbx_bundle_work_on_dispatch() -> Result<(), RenderE
     let mut steps = vec![
         velnor_actions_workflow_renderer::steps::checkout_step(&checkout_pin())?,
         acquire_fixture()?,
-        velnor_actions_workflow_renderer::cache_p08::mise_setup_step_p08(
-            &mise(),
-            "mise-v1-x86_64-unknown-linux-gnu-2026.9.18-0123456789abcdef",
-        )?,
+        velnor_actions_workflow_renderer::mise_setup_step(&mise())?,
     ];
     steps.extend(mbx_tool_steps(
         &mbx_uses(),
@@ -196,11 +193,12 @@ fn generated_plan_suppresses_mbx_bundle_work_on_dispatch() -> Result<(), RenderE
             "{name} remains active before plan validation: {step}"
         );
     }
-    assert!(
-        text.contains(
-            "cache: ${{ github.event_name != 'workflow_dispatch' && 'true' || 'false' }}"
-        ),
-        "Mise setup remains active with dispatch cache reads disabled: {text}"
-    );
+    let setup = text
+        .find("name: Setup Mise")
+        .map(|start| &text[start..])
+        .and_then(|tail| tail.split("      - name:").next())
+        .expect("Mise setup remains active");
+    assert!(setup.contains("cache: \"false\""), "{setup}");
+    assert!(setup.contains("cache_save: \"false\""), "{setup}");
     Ok(())
 }
