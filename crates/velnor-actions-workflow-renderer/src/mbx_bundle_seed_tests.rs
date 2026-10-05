@@ -9,7 +9,7 @@ use std::process::Command;
 
 use velnor_actions_contract::StepKind;
 
-use super::{export_step, import_script, import_step, save_step};
+use super::{KEY_SCRIPT, export_step, import_script, import_step, key_step, save_step};
 
 fn scratch(name: &str) -> PathBuf {
     let path = std::env::temp_dir().join(format!("velnor-mbx-seed-{name}-{}", std::process::id()));
@@ -69,6 +69,58 @@ fn run(script: &str, root: &Path, matched: &str, prefix: &str, exit: &str) -> (S
     assert!(output.status.success(), "{text}");
     let calls = fs::read_to_string(&log).unwrap_or_default();
     (text, calls)
+}
+
+#[test]
+fn scale_set_key_publishes_one_export_group() {
+    let step = key_step().expect("key");
+    let StepKind::Shell { run, .. } = &step.kind else {
+        panic!("key step must be a shell step");
+    };
+    assert!(run[2].contains(KEY_SCRIPT), "{}", run[2]);
+    assert_eq!(
+        step.condition.as_deref(),
+        Some("runner.environment != 'github-hosted'")
+    );
+    let root = scratch("group");
+    let env_file = root.join("github.env");
+    let out_file = root.join("github.out");
+    let output = Command::new("bash")
+        .arg("-c")
+        .arg(KEY_SCRIPT)
+        .env("MBX_KEY", "mbx-v1-1.98.1-abc")
+        .env("GITHUB_ENV", &env_file)
+        .env("GITHUB_OUTPUT", &out_file)
+        .output()
+        .expect("bash");
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(output.status.success(), "{text}");
+    assert_eq!(
+        fs::read_to_string(&env_file).expect("env"),
+        "MBX_CACHE_EXPORT_GROUP=velnor-scale-set\n"
+    );
+    let export = export_step().expect("export");
+    let StepKind::Shell { run, .. } = &export.kind else {
+        panic!("export step must be a shell step");
+    };
+    assert!(
+        run[2].contains("--group \"$MBX_CACHE_EXPORT_GROUP\""),
+        "{}",
+        run[2]
+    );
+    assert!(
+        export
+            .condition
+            .as_deref()
+            .is_some_and(|gate| gate.contains("runner.environment != 'github-hosted'")),
+        "{:?}",
+        export.condition
+    );
+    fs::remove_dir_all(&root).ok();
 }
 
 #[test]
