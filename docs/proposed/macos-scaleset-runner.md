@@ -93,7 +93,9 @@ Go module.
   classic repository `generate-jitconfig` route.
 - Acquire is `POST .../{id}/acquirejobs` with a JSON array of int64 request ids.
   Response is `{count, value}`. Partial success keeps only returned ids that
-  were requested. Uncertain transport keeps the reservation.
+  were requested. An unusable success response or server failure keeps the
+  reservation. After a requested id is acquired, a later JIT conflict does not
+  settle that acquisition; keep the reservation uncertain and do not retry it.
 - Poll header `X-ScaleSetMaxCapacity` is total capacity, not free slots.
 - HTTP 202 is an empty poll, not an error, and is not acknowledged.
 - Queue envelope `messageType` must be `RunnerScaleSetJobMessages`. `body` is a
@@ -117,7 +119,17 @@ Persist intent, then perform the external call, then record success or
 uncertainty. Do not hold a database transaction across HTTP or Docker. `Drop`
 does not free a durable slot. Restart reconciles journal, exact Docker objects,
 and GitHub state before advertising capacity, and adopts still-running owned
-workers. An engine identity change stops automatic mutation.
+workers. Pending or uncertain rows lack enough durable stage and remote-operation
+identity to settle an interrupted acquire or JIT request from Docker state alone;
+retain their slot and owned volumes until an authoritative settlement mechanism
+exists. On first open, the journal validates its version before schema mutation,
+then migrates version-zero rows transactionally. Failed launch rows become
+uncertain; pending and uncertain launch rows also have local cleanup proof
+cleared. The old schema cannot distinguish a rejected request from a remote
+effect with an unusable response, and Docker cleanup does not settle GitHub
+state. This may conservatively retain an old definite rejection. Unknown journal
+versions and malformed migrations fail closed without partial schema changes.
+An engine identity change stops automatic mutation.
 
 Disabled runner self-update is a registration invariant. Do not patch the
 official runner. Do not spoof `/proc` to bypass `AssertCompatibleOS`.
