@@ -9,11 +9,11 @@ use super::{HOSTED_SUFFIX, SCALE_SUFFIX, share_lanes};
 use crate::RenderError;
 use crate::render::{CONCURRENCY_CANCEL, CONCURRENCY_GROUP, RenderContext};
 
-const HOSTED_RUNS: &str = "ubuntu-26.04";
-const LOGICAL_JOBS: usize = 21;
-
 #[path = "lane_share_cache_tests.rs"]
 mod cache_tests;
+
+const HOSTED_RUNS: &str = "ubuntu-26.04";
+const LOGICAL_JOBS: usize = 21;
 
 pub(super) fn ctx() -> RenderContext {
     RenderContext {
@@ -270,7 +270,12 @@ fn elected_save_stays_on_the_winner_job() {
         .first()
         .expect("checkout")
         .clone();
-    let save = crate::cache_steps::tools_save_step("mise-v1").expect("save");
+    let save = crate::cache_steps::tools_cache_step(
+        false,
+        "mise-tools-v2-fixture-${{steps.velnor-tool-cache-identity.outputs.identity}}",
+        Some(crate::cache_p08::tools_cache_save_condition()),
+    )
+    .expect("save");
     jobs.get_mut("rust-0__hosted")
         .expect("hosted")
         .steps

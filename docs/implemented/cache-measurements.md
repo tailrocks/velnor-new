@@ -220,3 +220,50 @@ This is a small end-to-end action and cache round-trip probe. It does not
 measure disk or inode peaks and does not qualify the affected ChainArgos
 workload. That evidence must come from the consumer's affected crates after
 adoption; a green probe alone is not an ENOSPC repair verdict.
+
+## Generated workflow-size envelope with V2 cache identities
+
+The workflow contract remains an exact 500,000-byte ceiling. The deterministic
+P13 workspace fixture measured:
+
+| `workspace_repo` members | Rendered `ci.yml` bytes | Result |
+| ---: | ---: | --- |
+| 1 | 66,164 | accepted |
+| 10 | 201,443 | accepted |
+| 29 | 487,032 | accepted |
+| 30 | 502,063 | rejected by the byte cap |
+| 40 | 652,373 | rejected by the byte cap |
+| 100 | 1,554,233 | rejected by the byte cap |
+
+The separate T24 ToFu-root fixture has a lower measured boundary:
+
+| ToFu roots | Rendered `ci.yml` bytes | Result |
+| ---: | ---: | --- |
+| 1 | 49,978 | accepted |
+| 10 | 180,616 | accepted |
+| 31 | 485,536 | accepted |
+| 32 | 500,056 | rejected by the byte cap |
+| 40 | 616,216 | rejected by the byte cap |
+| 60 | 906,616 | rejected by the byte cap |
+| 100 | 1,487,416 | rejected by the byte cap |
+
+The 30-, 40-, and 100-member renders and the 32-, 40-, 60-, and 100-root
+renders fail with `workflow_too_large` before writing a partial tree. These
+are local generator measurements, not hosted workflow or cache-performance
+evidence.
+
+The increase is produced by the V2 cache contract: the 40-member fixture has 44
+independent jobs with one runtime identity step and one Mise-tools restore per
+job, plus three elected Mise-tools saves. Each identity step is 6,620 rendered
+bytes because it validates the observed runner, image, home, and owned cache
+paths before constructing that job's restore key. The 44 identity steps account
+for 291,280 bytes. At clean comparison commit `3ec6f32b`, the generator source
+omitted the V2 cache consumers, while its checked-in `.github/workflows/ci.yml`
+still contained the older V2 output; generating that same 40-member fixture
+from the source produced 337,372 bytes. PR38 completes the V2 producer
+migration and regenerates the repository workflow so producer and checked-in
+output agree. Workflow bytes depend on the generated job and task shape, so
+member count is a measured fixture boundary, not a separate contract; the
+renderer's 500,000-byte check is authoritative. These sizes document
+generated-output coherence under the existing cap, not a general capacity or
+performance improvement.

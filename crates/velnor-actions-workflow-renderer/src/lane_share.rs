@@ -15,6 +15,9 @@ use crate::render::RenderContext;
 use crate::tree::RenderedFile;
 use crate::{RenderError, marker, steps, yaml::render_yaml};
 
+#[path = "lane_share_runtime.rs"]
+mod runtime;
+
 /// CI workflow plus composite actions for duplicated lanes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RenderedWorkflow {
@@ -35,6 +38,8 @@ pub(crate) struct LaneShare {
     pub checkouts: BTreeMap<String, Step>,
     /// Original step lists used to derive job-level environment values.
     pub env_steps: BTreeMap<String, Vec<Step>>,
+    /// Runner-specific V2 tools identity and restore steps, kept before setup.
+    pub runtime_preludes: BTreeMap<String, Vec<Step>>,
     /// Common setup steps rendered before each lane's cache-specific prelude.
     pub prefixes: BTreeMap<String, Vec<Step>>,
     /// Lane-specific MBX setup, restore, and import steps.
@@ -47,6 +52,8 @@ pub(crate) struct LaneShare {
 
 struct SharedLaneParts {
     checkout: Step,
+    hosted_runtime_prelude: Vec<Step>,
+    local_runtime_prelude: Vec<Step>,
     prefix: Vec<Step>,
     hosted_prelude: Vec<Step>,
     local_prelude: Vec<Step>,
@@ -69,6 +76,7 @@ pub(crate) fn share_lanes(
 ) -> Result<LaneShare, RenderError> {
     let mut calls = BTreeMap::new();
     let mut checkouts = BTreeMap::new();
+    let mut runtime_preludes = BTreeMap::new();
     let mut prefixes = BTreeMap::new();
     let mut preludes = BTreeMap::new();
     let mut postludes = BTreeMap::new();
@@ -99,6 +107,8 @@ pub(crate) fn share_lanes(
         calls.insert(local_id.clone(), uses);
         checkouts.insert(hosted_id.clone(), parts.checkout.clone());
         checkouts.insert(local_id.clone(), parts.checkout);
+        runtime_preludes.insert(hosted_id.clone(), parts.hosted_runtime_prelude);
+        runtime_preludes.insert(local_id.clone(), parts.local_runtime_prelude);
         prefixes.insert(hosted_id.clone(), parts.prefix.clone());
         prefixes.insert(local_id.clone(), parts.prefix);
         preludes.insert(hosted_id.clone(), parts.hosted_prelude);
@@ -115,6 +125,7 @@ pub(crate) fn share_lanes(
         calls,
         checkouts,
         env_steps,
+        runtime_preludes,
         prefixes,
         preludes,
         postludes,
@@ -151,7 +162,15 @@ fn split_pair(hosted: &Job, local: &Job, checkout_uses: &str) -> Option<SharedLa
     if hosted_checkout != local_checkout {
         return None;
     }
-    split_shared_steps(hosted_checkout, hosted_steps, local_steps)
+    let (hosted_runtime_prelude, hosted_steps) = runtime::peel_tools_cache_prelude(hosted_steps)?;
+    let (local_runtime_prelude, local_steps) = runtime::peel_tools_cache_prelude(local_steps)?;
+    if !runtime::same_tools_cache_prelude_shape(&hosted_runtime_prelude, &local_runtime_prelude) {
+        return None;
+    }
+    let mut parts = split_shared_steps(hosted_checkout, &hosted_steps, &local_steps)?;
+    parts.hosted_runtime_prelude = hosted_runtime_prelude;
+    parts.local_runtime_prelude = local_runtime_prelude;
+    Some(parts)
 }
 
 fn split_shared_steps(
@@ -194,6 +213,8 @@ fn split_shared_steps(
     let (local_common, local_postlude) = peel_postlude(local_tail);
     (hosted_common == local_common).then_some(SharedLaneParts {
         checkout: checkout.clone(),
+        hosted_runtime_prelude: Vec::new(),
+        local_runtime_prelude: Vec::new(),
         prefix,
         hosted_prelude,
         local_prelude,

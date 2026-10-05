@@ -11,6 +11,7 @@ use crate::yaml::Yaml;
 pub(crate) struct SharedLaneSteps<'a> {
     pub checkouts: &'a BTreeMap<String, Step>,
     pub env_steps: &'a BTreeMap<String, Vec<Step>>,
+    pub runtime_preludes: &'a BTreeMap<String, Vec<Step>>,
     pub prefixes: &'a BTreeMap<String, Vec<Step>>,
     pub preludes: &'a BTreeMap<String, Vec<Step>>,
     pub postludes: &'a BTreeMap<String, Vec<Step>>,
@@ -62,6 +63,15 @@ fn append_shared_lane_steps(
         )));
     }
     rendered.push(step_to_yaml(id, checkout, ctx, needs_envs, false, job_env)?);
+    append_steps(
+        id,
+        lanes.runtime_preludes,
+        ctx,
+        needs_envs,
+        job_env,
+        rendered,
+        "runtime_prelude",
+    )?;
     append_steps(
         id,
         lanes.prefixes,

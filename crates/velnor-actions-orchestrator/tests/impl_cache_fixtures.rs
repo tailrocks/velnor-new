@@ -64,14 +64,16 @@ fn make_workspace(mbx: bool) -> Result<TempDir, Box<dyn std::error::Error>> {
 }
 
 /// Prepared workspace plus its live tempdir (MBX when `mbx`).
-fn prep_for(mbx: bool) -> Result<(TempDir, GenerationPreparation), Box<dyn std::error::Error>> {
+pub(super) fn prep_for(
+    mbx: bool,
+) -> Result<(TempDir, GenerationPreparation), Box<dyn std::error::Error>> {
     let repo = make_workspace(mbx)?;
     let prep = prepare(repo.path())?;
     Ok((repo, prep))
 }
 
 /// Rendered workflow text for the workspace (MBX when `mbx`).
-fn yaml_for(mbx: bool) -> Result<String, Box<dyn std::error::Error>> {
+pub(super) fn yaml_for(mbx: bool) -> Result<String, Box<dyn std::error::Error>> {
     let (_repo, prep) = prep_for(mbx)?;
     let tree = render_staged_tree(&prep)?;
     Ok(tree
@@ -81,7 +83,7 @@ fn yaml_for(mbx: bool) -> Result<String, Box<dyn std::error::Error>> {
 }
 
 /// Steps of one IR job by id.
-fn job_steps<'a>(
+pub(super) fn job_steps<'a>(
     prep: &'a GenerationPreparation,
     job: &str,
 ) -> Result<&'a Vec<Step>, Box<dyn std::error::Error>> {
@@ -94,7 +96,7 @@ fn job_steps<'a>(
 }
 
 /// Crate-job ids in render order (every `rust-*` job).
-fn crate_jobs(prep: &GenerationPreparation) -> Vec<String> {
+pub(super) fn crate_jobs(prep: &GenerationPreparation) -> Vec<String> {
     prep.workflow
         .ir
         .jobs
@@ -105,7 +107,7 @@ fn crate_jobs(prep: &GenerationPreparation) -> Vec<String> {
 }
 
 /// `with` inputs of one action step by display name.
-fn action_inputs<'a>(
+pub(super) fn action_inputs<'a>(
     steps: &'a [Step],
     name: &str,
 ) -> Result<&'a BTreeMap<String, String>, Box<dyn std::error::Error>> {
@@ -326,65 +328,6 @@ fn restore_mbx_fetch_order_every_crate_job() -> TestResult {
         };
         assert!(restore < mbx && mbx < fetch, "{job}: {names:?}");
     }
-    Ok(())
-}
-
-#[test]
-fn cargo_only_uses_same_exact_sources_archive() -> TestResult {
-    let (_repo, prep) = prep_for(false)?;
-    let mut jobs = vec!["plan".to_owned()];
-    jobs.extend(crate_jobs(&prep));
-    let mut shared = String::new();
-    for job in &jobs {
-        let steps = job_steps(&prep, job)?;
-        let with = action_inputs(steps, "Restore Cargo sources")?;
-        let key = with.get("key").cloned().ok_or("key")?;
-        assert!(
-            key.starts_with("velnor-v1-sources-"),
-            "shared prefix: {key}"
-        );
-        if shared.is_empty() {
-            shared.clone_from(&key);
-        }
-        assert_eq!(key, shared, "{job} shares the sources key");
-        let path = with.get("path").cloned().ok_or("path")?;
-        for owned in [
-            "${{ runner.temp }}/velnor/cargo/registry/index",
-            "${{ runner.temp }}/velnor/cargo/registry/cache",
-            "${{ runner.temp }}/velnor/cargo/git/db",
-        ] {
-            assert!(
-                path.contains(owned),
-                "{job} sources path omits {owned}: {path}"
-            );
-        }
-        for excluded in [
-            "${{ runner.temp }}/velnor/cargo/bin",
-            ".crates.toml",
-            ".crates2.json",
-        ] {
-            assert!(
-                !path.contains(excluded),
-                "{job} sources path includes {excluded}: {path}"
-            );
-        }
-        if job == "plan" {
-            let save = action_inputs(steps, "Save Cargo sources")?;
-            assert_eq!(save.get("key"), Some(&key));
-        } else {
-            assert!(!steps.iter().any(|step| step.name == "Save Cargo sources"));
-        }
-    }
-    let yaml = yaml_for(false)?;
-    assert!(!yaml.contains("mr-boxington-action"), "no MBX stacked");
-    assert!(
-        yaml.contains("Save Cargo sources"),
-        "plan seeds one snapshot"
-    );
-    assert!(
-        !yaml.contains("Swatinem/rust-cache"),
-        "broad archive removed"
-    );
     Ok(())
 }
 
