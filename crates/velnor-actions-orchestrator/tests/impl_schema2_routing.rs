@@ -9,6 +9,8 @@ use crate::impl_common::{TestResult, config_with_branch, git, make_repo};
 
 #[path = "schema2_feature_snapshots.rs"]
 mod schema2_feature_snapshots;
+#[path = "schema2_generator_candidate_snapshots.rs"]
+mod schema2_generator_candidate_snapshots;
 #[path = "schema2_generator_release_snapshots.rs"]
 mod schema2_generator_release_snapshots;
 #[path = "schema2_release_snapshots.rs"]
@@ -132,6 +134,7 @@ fn committed_release_files_match_schema2_bytes() -> TestResult {
         assert_eq!(body, marked(expected), "{}", path.display());
     }
     schema2_generator_release_snapshots::assert_committed(&root)?;
+    schema2_generator_candidate_snapshots::assert_committed(&root)?;
     Ok(())
 }
 

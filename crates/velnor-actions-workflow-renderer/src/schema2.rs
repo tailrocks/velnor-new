@@ -65,6 +65,9 @@ pub const IMAGE_RELEASE_WORKFLOW: &str = ".github/workflows/image-release.yml";
 pub const MACOS_BINARY_RELEASE_WORKFLOW: &str = ".github/workflows/macos-binary-release.yml";
 /// Generator-release workflow path.
 pub const GENERATOR_RELEASE_WORKFLOW: &str = ".github/workflows/generator-release.yml";
+/// Read-only pull-request generator-candidate workflow path.
+pub const GENERATOR_CANDIDATE_QUALIFICATION_WORKFLOW: &str =
+    ".github/workflows/generator-candidate-qualification.yml";
 /// Queue-monitoring workflow path.
 pub const MONITORING_WORKFLOW: &str = ".github/workflows/monitoring.yml";
 
@@ -172,6 +175,11 @@ pub fn render_schema2_workflows(
             GENERATOR_RELEASE_WORKFLOW,
             &request.version,
             &generator_release::generator_release(request)?,
+        )?);
+        files.push(file(
+            GENERATOR_CANDIDATE_QUALIFICATION_WORKFLOW,
+            &request.version,
+            &generator_release::candidate_qualification(request)?,
         )?);
     }
     if request.workflows.contains(&RoutingWorkflow::Monitoring) {
