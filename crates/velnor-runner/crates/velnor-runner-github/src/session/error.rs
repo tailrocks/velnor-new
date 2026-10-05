@@ -23,7 +23,6 @@ impl SessionError {
     #[must_use]
     pub const fn certainty(self) -> Certainty {
         match self {
-            Self::Uncertain => Certainty::Uncertain,
             Self::Conflict
             | Self::Wire(
                 WireError::Encode
@@ -31,7 +30,7 @@ impl SessionError {
                 | WireError::RefreshExhausted
                 | WireError::RegistrationRejected,
             ) => Certainty::Definite,
-            Self::Wire(_) => Certainty::Uncertain,
+            _ => Certainty::Uncertain,
         }
     }
 }

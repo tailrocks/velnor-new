@@ -115,12 +115,14 @@ where
             let name = format!("v{request_id}");
             mint::run(
                 lane,
-                ctx,
-                Some(batch),
-                journal,
-                id,
-                &name,
-                MintOrigin::AcquiredJob,
+                mint::Request {
+                    ctx,
+                    batch: Some(batch),
+                    journal,
+                    id,
+                    name: &name,
+                    origin: MintOrigin::AcquiredJob,
+                },
                 start,
             )
             .await
@@ -230,12 +232,14 @@ where
     }
     mint::run(
         lane,
-        ctx,
-        batch,
-        journal,
-        id,
-        name,
-        MintOrigin::AssignedPopulation,
+        mint::Request {
+            ctx,
+            batch,
+            journal,
+            id,
+            name,
+            origin: MintOrigin::AssignedPopulation,
+        },
         start,
     )
     .await

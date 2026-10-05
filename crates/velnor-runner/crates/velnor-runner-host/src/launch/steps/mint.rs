@@ -14,14 +14,25 @@ use super::super::mint_origin::MintOrigin;
 use super::super::{Drive, Lane};
 use super::{acknowledge, hold, map_journal, mark_done};
 
+/// Inputs for the JIT and worker effects after intent was recorded.
+pub(super) struct Request<'a> {
+    /// Current session tokens and scale-set identity.
+    pub(super) ctx: &'a Drive,
+    /// Queue batch to acknowledge after the worker starts, if any.
+    pub(super) batch: Option<&'a velnor_runner_github::ParsedBatch>,
+    /// Durable launch journal.
+    pub(super) journal: &'a Journal,
+    /// Existing intent row identifier.
+    pub(super) id: i64,
+    /// Runner name submitted to the JIT endpoint.
+    pub(super) name: &'a str,
+    /// Whether `AcquireJobs` already accepted this offered job.
+    pub(super) origin: MintOrigin,
+}
+
 pub(super) async fn run<T, S, F>(
     lane: &mut T,
-    ctx: &Drive,
-    batch: Option<&velnor_runner_github::ParsedBatch>,
-    journal: &Journal,
-    id: i64,
-    name: &str,
-    origin: MintOrigin,
+    request: Request<'_>,
     start: S,
 ) -> Result<Option<Started>, EnsureError>
 where
@@ -29,6 +40,14 @@ where
     S: FnOnce(&str, &[u8], super::super::bind::Bind) -> F,
     F: Future<Output = Result<Started, HostError>>,
 {
+    let Request {
+        ctx,
+        batch,
+        journal,
+        id,
+        name,
+        origin,
+    } = request;
     let encoded = match fetch_jit(lane, ctx, name) {
         Ok(encoded) => encoded,
         Err(error) => return fail_jit(journal, id, origin, error).await,
