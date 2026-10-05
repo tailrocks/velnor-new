@@ -38,6 +38,13 @@ printed bytes; the original is retained as
 `/tmp/runner25-work-volume-proof-initial-capture.log`, and the corrected final
 receipt records the reproducible digest. Important source SHA-256 values:
 
+After the `6180ccebc` main sync and normal PR25 merge of `4e843d6e`, a rehash
+matched all 25 captured inputs and reproduced this manifest digest. The later
+`pins.rs` retry change and qualification/evidence updates are outside both
+image build contexts. The recorded immutable image IDs and fresh-volume probe
+therefore remain bound to the same runner and DinD bytes; no image rebuild or
+probe rerun was needed.
+
 | Input | SHA-256 |
 |---|---|
 | `images/dind/Dockerfile` | `9e6af678c45a8881d85327fce53e4a1d2549445f147d43214ebf3686b564cefc` |
