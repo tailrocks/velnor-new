@@ -11,10 +11,47 @@ use super::{
 };
 
 pub(crate) fn check_local_pins(ctx: &mut FreshnessContext) {
+    if reject_duplicate_inventory_rows(ctx) {
+        // A malformed inventory must not let duplicate rows overwrite a pin
+        // or cause repeated upstream requests later in the run.
+        ctx.tools.clear();
+        ctx.action_pinned.clear();
+        ctx.tool_pinned.clear();
+        check_runner_pins(ctx);
+        return;
+    }
     check_tool_pins(ctx);
     check_action_pins(ctx);
     check_local_mirrors(ctx);
     check_runner_pins(ctx);
+}
+
+fn reject_duplicate_inventory_rows(ctx: &mut FreshnessContext) -> bool {
+    let mut duplicate = false;
+    for (section, field) in [("tools", "name"), ("actions", "key")] {
+        let entries = ctx
+            .inv
+            .get(section)
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        let mut seen = BTreeSet::new();
+        for entry in entries {
+            let Some(key) = entry.get(field).and_then(Value::as_str) else {
+                continue;
+            };
+            if seen.insert(key.to_owned()) {
+                continue;
+            }
+            duplicate = true;
+            ctx.fail_row(
+                "inventory-shape",
+                &format!("(inventory {section})"),
+                &format!("duplicate {field} {key:?}"),
+            );
+        }
+    }
+    duplicate
 }
 
 fn check_tool_pins(ctx: &mut FreshnessContext) {
@@ -258,5 +295,51 @@ fn check_runner_pins(ctx: &mut FreshnessContext) {
                 default.as_deref().unwrap_or("<missing>")
             ),
         );
+    }
+}
+
+#[cfg(test)]
+mod duplicate_tests {
+    use serde_json::json;
+
+    use super::check_local_pins;
+    use crate::context::FreshnessContext;
+
+    #[test]
+    fn duplicate_tool_and_action_rows_fail_before_probe_state_is_populated() {
+        for inventory in [
+            json!({
+                "tools": [
+                    {"name": "gh", "pinned": "2.102.0"},
+                    {"name": "gh", "pinned": "9.9.9"}
+                ],
+                "actions": [{"key": "actions/checkout", "pinned_version": "v7.0.1"}],
+                "runner": {"default": "ubuntu-26.04", "supported": ["ubuntu-26.04"]}
+            }),
+            json!({
+                "tools": [{"name": "gh", "pinned": "2.102.0"}],
+                "actions": [
+                    {"key": "actions/checkout", "pinned_version": "v7.0.1"},
+                    {"key": "actions/checkout", "pinned_version": "v9.9.9"}
+                ],
+                "runner": {"default": "ubuntu-26.04", "supported": ["ubuntu-26.04"]}
+            }),
+        ] {
+            let mut context = FreshnessContext::new(std::path::PathBuf::new(), true, false);
+            context.inv = inventory;
+
+            check_local_pins(&mut context);
+
+            assert!(context.tools.is_empty());
+            assert!(context.action_pinned.is_empty());
+            assert_eq!(
+                context
+                    .failures
+                    .iter()
+                    .filter(|failure| failure.contains("duplicate"))
+                    .count(),
+                1
+            );
+        }
     }
 }
