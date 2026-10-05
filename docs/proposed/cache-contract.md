@@ -109,6 +109,13 @@ Each path has one owner:
 | Mutable target directory | Matrix job | Reuse sequentially; never share concurrently |
 | Successful task result | Mise task cache | Use only for qualified deterministic tasks and complete outputs |
 
+An immutable host image may provide a read-only seed at `/opt/velnor/seed` as a pre-provisioned baseline,
+not as a cache transport or writer. A consumer MUST take the cold path unless the seed root and every entry are
+root-owned and symlink-free, the containing mount is read-only, and the root-owned `PROVENANCE` file contains
+exactly `velnor-host-seed-v1`. Mise seed keys MUST equal the complete V2 tools key, including runtime identity;
+MBX seed prefixes MUST match the generated compatibility prefix. The image provisioner MUST create the marker
+only for a reviewed seed. Missing or failed provenance checks MUST never fail the task or permit a copy/import.
+
 The orchestrator records eligibility in the plan; the renderer serializes typed restore/save operations.
 Hosted Linux uses action `github`; typed Scale Set uses `local` plus `actions/cache`, with a separate key/export
 group bound to action SHA, MBX generation, OS/architecture, Rust identity, revision, run, and attempt. This
@@ -172,7 +179,8 @@ Protected default-branch pushes MAY write trusted archives only after the task p
 complete. Release jobs MUST reject PR archives and MUST NOT restore or save MBX or task-result archives;
 release outputs use a clean or trusted-source-only path.
 
-Cache restore MUST verify compatibility and ownership before use. A missing archive is `no_entry`; a GitHub
+Cache restore MUST verify compatibility and ownership before use. Image-seed admission MUST verify the
+provisioner marker, root ownership, and read-only mount before checking layer identity. A missing archive is `no_entry`; a GitHub
 restore/save failure is `cache_unavailable`; failed MBX import is `cache_corrupt`; a failed task-cache
 read/write is a Mise-reported miss. Corrupt, incomplete, or mismatched data MUST be discarded and the task
 MUST execute when otherwise eligible. A cache miss MUST never fail a task by itself. A cache save failure MUST

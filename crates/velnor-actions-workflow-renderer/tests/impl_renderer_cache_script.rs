@@ -11,6 +11,7 @@ const IDENTITY_SCRIPT_PATH: &str = ".github/scripts/velnor-tools-cache-identity.
 const IDENTITY_SCRIPT_NAME: &str = "velnor-tools-cache-identity.sh";
 const UBUNTU26_ACTION: &str = "./.github/actions/u26";
 const IDENTITY_STEP: &str = "V2 identity";
+const SEED_STEP: &str = "Restore Velnor tool seed";
 const RESTORE_STEP: &str = "Restore Mise tools";
 
 fn render_cache_fixture() -> Result<RenderedWorkflow, RenderError> {
@@ -58,9 +59,10 @@ fn assert_job_order(yaml: &str, id: &str) {
     let names = step_names(yaml, id);
     let checkout = names.iter().position(|name| name == "Checkout");
     let identity = names.iter().position(|name| name == IDENTITY_STEP);
+    let seed = names.iter().position(|name| name == SEED_STEP);
     let restore = names.iter().position(|name| name == RESTORE_STEP);
     assert!(
-        matches!((checkout, identity, restore), (Some(a), Some(b), Some(c)) if a < b && b < c),
+        matches!((checkout, identity, seed, restore), (Some(a), Some(b), Some(c), Some(d)) if a < b && b < c && c < d),
         "cache prelude order for {id}: {names:?}"
     );
 }
@@ -103,6 +105,13 @@ fn shared_runtime_identity_script_covers_hosted_and_unpaired_jobs_once() -> Resu
 {
     let rendered = render_cache_fixture()?;
     assert_one_marked_script(&rendered)?;
+    let seed_actions: Vec<_> = rendered
+        .shared
+        .iter()
+        .filter(|file| file.path == ".github/actions/velnor-tool-seed/action.yml")
+        .collect();
+    assert_eq!(seed_actions.len(), 1, "one emitted tool-seed composite");
+    assert!(seed_actions[0].bytes.contains("velnor-host-seed-v1"));
     for id in ["rust-0__hosted", "unpaired"] {
         assert_job_order(&rendered.yaml, id);
     }
@@ -110,7 +119,15 @@ fn shared_runtime_identity_script_covers_hosted_and_unpaired_jobs_once() -> Resu
     assert!(
         !local
             .iter()
-            .any(|name| name == IDENTITY_STEP || name == RESTORE_STEP)
+            .any(|name| name == IDENTITY_STEP || name == SEED_STEP || name == RESTORE_STEP)
+    );
+    assert_eq!(
+        rendered
+            .yaml
+            .matches("./.github/actions/velnor-tool-seed")
+            .count(),
+        2,
+        "hosted and unpaired jobs call the emitted seed composite"
     );
     Ok(())
 }

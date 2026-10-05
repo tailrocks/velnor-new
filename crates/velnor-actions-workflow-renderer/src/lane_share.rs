@@ -291,15 +291,7 @@ fn is_postlude_step(step: &Step) -> bool {
 
 fn peel_checkout<'a>(steps: &'a [Step], checkout_uses: &str) -> Option<(&'a Step, &'a [Step])> {
     let (checkout, remaining) = steps.split_first()?;
-    let is_expected_checkout = checkout.name == "Checkout"
-        && checkout.condition.is_none()
-        && matches!(
-            &checkout.kind,
-            StepKind::Action { uses, with, env }
-                if uses == checkout_uses
-                    && with.get("persist-credentials").map(String::as_str) == Some("false")
-                    && env.is_empty()
-        );
+    let is_expected_checkout = crate::action_ref::is_checkout_action(checkout, checkout_uses);
     if !is_expected_checkout || remaining.iter().any(is_checkout_step) {
         return None;
     }
@@ -307,12 +299,10 @@ fn peel_checkout<'a>(steps: &'a [Step], checkout_uses: &str) -> Option<(&'a Step
 }
 
 fn is_checkout_step(step: &Step) -> bool {
-    step.name == "Checkout"
-        || matches!(
-            &step.kind,
-            StepKind::Action { uses, .. }
-                if uses.starts_with("actions/checkout@")
-        )
+    matches!(
+        &step.kind,
+        StepKind::Action { uses, .. } if uses.starts_with("actions/checkout@")
+    )
 }
 
 fn is_elected_save(step: &Step) -> bool {

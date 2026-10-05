@@ -112,22 +112,8 @@ fn insert_tools_prelude(
 fn checkout_precedes_setup(job: &Job, setup_index: usize, expected_uses: &str) -> bool {
     job.steps
         .iter()
-        .position(|step| is_typed_checkout(step, expected_uses))
+        .position(|step| crate::action_ref::is_configured_checkout(step, expected_uses))
         .is_some_and(|checkout_index| checkout_index < setup_index)
-}
-
-fn is_typed_checkout(step: &Step, expected_uses: &str) -> bool {
-    step.condition.is_none()
-        && matches!(
-            &step.kind,
-            StepKind::Action { uses, with, env }
-                if uses == expected_uses
-                    && uses.starts_with("actions/checkout@")
-                    && crate::steps::validate_uses(uses).is_ok()
-                    && with.len() == 1
-                    && with.get("persist-credentials").map(String::as_str) == Some("false")
-                    && env.is_empty()
-        )
 }
 
 fn reject_v2_steps(job_id: &str, job: &Job) -> Result<(), RenderError> {
@@ -166,7 +152,7 @@ fn is_setup_step(step: &Step) -> bool {
 fn insert_at(job: &Job, checkout_uses: &str) -> usize {
     job.steps
         .iter()
-        .position(|step| is_typed_checkout(step, checkout_uses))
+        .position(|step| crate::action_ref::is_configured_checkout(step, checkout_uses))
         .map_or(0, |index| index + 1)
 }
 

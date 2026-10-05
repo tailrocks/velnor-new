@@ -55,7 +55,7 @@ pub(crate) fn tool_seed_action_script(seed_root: &str) -> Result<String, RenderE
 fn copy_script(seed_root: &str, key_shell: &str) -> Result<String, RenderError> {
     let trust = trusted_seed_guard(seed_root)?;
     Ok(format!(
-        r#"set -eu; {trust}; seed="$trusted_seed_root"; key={key_shell}; if [ -z "$key" ]; then echo "tool seed key mismatch"; exit 0; fi; if [ ! -d "$trusted_seed_root" ]; then echo "tool seed absent"; exit 0; fi; if ! seed_trusted "$trusted_seed_root"; then echo "tool seed untrusted; continuing cold"; exit 0; fi; if [ ! -f "$seed/mise/KEY" ]; then echo "tool seed absent"; exit 0; fi; IFS= read -r seed_key < "$seed/mise/KEY" || true; if [ "$seed_key" != "$key" ]; then echo "tool seed key mismatch"; exit 0; fi; if [ -d "$seed/mise/tree" ]; then mkdir -p "$HOME/.local/share/mise"; cp -R "$seed/mise/tree/." "$HOME/.local/share/mise/"; echo "tool seed restored share-dir"; fi; if [ -d "$seed/rustup/tree" ]; then mkdir -p "$RUNNER_TEMP/velnor/rustup"; cp -R "$seed/rustup/tree/." "$RUNNER_TEMP/velnor/rustup/"; echo "tool seed restored toolchain-dir"; fi"#
+        r#"set -eu; set -o pipefail; {trust}; seed="$trusted_seed_root"; key={key_shell}; if [ -z "$key" ]; then echo "tool seed key mismatch"; exit 0; fi; if [ ! -d "$trusted_seed_root" ]; then echo "tool seed absent"; exit 0; fi; if ! seed_trusted "$trusted_seed_root"; then echo "tool seed untrusted; continuing cold"; exit 0; fi; if [ ! -f "$seed/mise/KEY" ]; then echo "tool seed absent"; exit 0; fi; IFS= read -r seed_key < "$seed/mise/KEY" || true; if [ "$seed_key" != "$key" ]; then echo "tool seed key mismatch"; exit 0; fi; if [ -d "$seed/mise/tree" ]; then mkdir -p "$HOME/.local/share/mise"; cp -R "$seed/mise/tree/." "$HOME/.local/share/mise/"; echo "tool seed restored share-dir"; fi; if [ -d "$seed/rustup/tree" ]; then mkdir -p "$RUNNER_TEMP/velnor/rustup"; cp -R "$seed/rustup/tree/." "$RUNNER_TEMP/velnor/rustup/"; echo "tool seed restored toolchain-dir"; fi"#
     ))
 }
 
@@ -65,7 +65,7 @@ fn copy_script(seed_root: &str, key_shell: &str) -> Result<String, RenderError> 
 pub(crate) fn trusted_seed_guard(seed_root: &str) -> Result<String, RenderError> {
     require_seed_root(seed_root)?;
     Ok(format!(
-        r#"trusted_seed_root="{seed_root}"; seed_owner() {{ if [ "$(uname -s)" = Darwin ]; then stat -f %u "$1"; else stat -c %u -- "$1"; fi; }}; seed_trusted() {{ [ -d "$1" ] && [ ! -L "$1" ] || return 1; [ -f "$1/PROVENANCE" ] && [ ! -L "$1/PROVENANCE" ] || return 1; [ "$(seed_owner "$1")" = 0 ] || return 1; [ "$(seed_owner "$1/PROVENANCE")" = 0 ] || return 1; IFS= read -r provenance < "$1/PROVENANCE" || return 1; [ "$provenance" = "{SEED_PROVENANCE}" ] || return 1; if [ "$(uname -s)" = Darwin ]; then mount | grep -F " on $1 (" | grep -E '(^|, )read-only(,|\))' >/dev/null 2>&1 || return 1; else options=$(findmnt -rn -T "$1" -o OPTIONS 2>/dev/null) || return 1; case ",$options," in *,ro,*) ;; *) return 1 ;; esac; fi; unsafe=$(find "$1" -xdev \( -type l -o ! -user 0 \) -print -quit 2>/dev/null) || return 1; [ -z "$unsafe" ]; }}"#
+        r#"trusted_seed_root="{seed_root}"; seed_owner_root() {{ if [ "${{RUNNER_OS-}}" = macOS ]; then stat -f %u "$1" | grep -qx 0; else stat -c %u -- "$1" | grep -qx 0; fi; }}; seed_trusted() {{ [ -d "$1" ] && [ ! -L "$1" ] || return 1; [ -f "$1/PROVENANCE" ] && [ ! -L "$1/PROVENANCE" ] || return 1; seed_owner_root "$1" || return 1; seed_owner_root "$1/PROVENANCE" || return 1; IFS= read -r provenance < "$1/PROVENANCE" || return 1; [ "$provenance" = "{SEED_PROVENANCE}" ] || return 1; if [ "${{RUNNER_OS-}}" = macOS ]; then mount | grep -F " on $1 (" | grep -E '(^|, )read-only(,|\))' >/dev/null 2>&1 || return 1; else findmnt -rn -T "$1" -o OPTIONS | grep -Eq '(^|,)ro(,|$)' || return 1; fi; if find "$1" -xdev \( -type l -o ! -user 0 \) -print -quit 2>/dev/null | grep -q .; then return 1; fi; return 0; }}"#
     ))
 }
 
@@ -101,8 +101,7 @@ pub(crate) fn validate_action_call(
     let valid_key = with
         .get("cache_key")
         .is_some_and(|key| crate::cache_p08::is_v2_cache_key_expression(key));
-    if step.name != TOOL_SEED_NAME
-        || step.condition.is_some()
+    if step.condition.is_some()
         || uses != TOOL_SEED_USES
         || with.len() != 1
         || !valid_key
@@ -115,18 +114,21 @@ pub(crate) fn validate_action_call(
     Ok(())
 }
 
+/// Identify the renderer-owned seed composite call.
+#[must_use]
+pub(crate) fn is_tool_seed_step(step: &Step) -> bool {
+    let StepKind::Action { uses, with, env } = &step.kind else {
+        return false;
+    };
+    validate_action_call(step, uses, with, env).is_ok()
+}
+
 /// True when any job renders the tool-seed step.
 pub(crate) fn any_job_has_seed(
     jobs: &std::collections::BTreeMap<String, velnor_actions_contract::Job>,
 ) -> bool {
-    jobs.values().any(|job| {
-        job.steps.iter().any(|step| {
-            let StepKind::Action { uses, with, env } = &step.kind else {
-                return false;
-            };
-            validate_action_call(step, uses, with, env).is_ok()
-        })
-    })
+    jobs.values()
+        .any(|job| job.steps.iter().any(is_tool_seed_step))
 }
 
 /// One composite action for every tool-seed step.
@@ -171,7 +173,7 @@ fn action_yaml(step_name: &str, env: &BTreeMap<String, String>, run: &str) -> Ya
                 Yaml::Map(vec![
                     (
                         "description".to_owned(),
-                    Yaml::str("Exact V2 tools-cache identity.".to_owned()),
+                        Yaml::str("Exact V2 tools-cache identity.".to_owned()),
                     ),
                     ("required".to_owned(), Yaml::Bool(true)),
                 ]),
@@ -196,19 +198,6 @@ fn action_yaml(step_name: &str, env: &BTreeMap<String, String>, run: &str) -> Ya
             ]),
         ),
     ])
-}
-
-fn cache_key_at(job: &Job, index: usize) -> Result<String, RenderError> {
-    let Some(step) = job.steps.get(index) else {
-        return Err(RenderError::InvalidWorkflow("setup_missing".to_owned()));
-    };
-    let StepKind::Action { with, .. } = &step.kind else {
-        return Err(RenderError::InvalidWorkflow("setup_missing".to_owned()));
-    };
-    with.get("cache_key")
-        .filter(|key| crate::cache_p08::is_cache_key(key))
-        .cloned()
-        .ok_or_else(|| RenderError::InvalidWorkflow("setup_missing_key".to_owned()))
 }
 
 #[cfg(test)]
@@ -271,7 +260,8 @@ mod tests {
 
     fn write_provenance(seed: &std::path::Path) {
         std::fs::create_dir_all(seed).expect("seed root");
-        std::fs::write(seed.join("PROVENANCE"), SEED_PROVENANCE).expect("provenance");
+        std::fs::write(seed.join("PROVENANCE"), format!("{SEED_PROVENANCE}\n"))
+            .expect("provenance");
     }
 
     fn run_key(script: &str, home: &std::path::Path, seed_key: Option<&str>) -> String {
@@ -391,7 +381,10 @@ mod tests {
                 mount,
                 unsafe_tree,
             );
-            assert!(output.contains("tool seed untrusted; continuing cold"), "{output}");
+            assert!(
+                output.contains("tool seed untrusted; continuing cold"),
+                "{output}"
+            );
             assert!(!home.join(".local/share/mise/marker").exists());
         }
         assert_eq!(
@@ -434,5 +427,4 @@ mod tests {
         assert!(!file.bytes.contains("rm "), "{}", file.bytes);
         std::fs::remove_dir_all(&root).ok();
     }
-
 }

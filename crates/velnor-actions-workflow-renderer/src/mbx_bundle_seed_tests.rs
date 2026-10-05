@@ -34,11 +34,7 @@ fn fake_mbx(bin: &Path) {
     );
     fake_tool(bin, "df", "#!/bin/sh\nexit 0\n");
     fake_tool(bin, "uname", "#!/bin/sh\necho Linux\n");
-    fake_tool(
-        bin,
-        "stat",
-        "#!/bin/sh\necho \"${SEED_OWNER_UID:-0}\"\n",
-    );
+    fake_tool(bin, "stat", "#!/bin/sh\necho \"${SEED_OWNER_UID:-0}\"\n");
     fake_tool(
         bin,
         "findmnt",
@@ -130,7 +126,7 @@ fn seed_hit_imports_the_seed_bundle_and_keeps_it() {
     let root = scratch("hit");
     let seed = root.join("seed");
     fs::create_dir_all(&seed).expect("seed root");
-    fs::write(seed.join("PROVENANCE"), "velnor-host-seed-v1").expect("provenance");
+    fs::write(seed.join("PROVENANCE"), "velnor-host-seed-v1\n").expect("provenance");
     fs::create_dir_all(seed.join("mbx/bundle")).expect("bundle");
     fs::write(seed.join("mbx/PREFIX"), "tool-1.98.1-").expect("prefix");
     fs::write(seed.join("mbx/bundle/marker"), "objects").expect("marker");
@@ -167,7 +163,7 @@ fn wrong_prefix_absent_seed_and_failed_import_leave_the_seed() {
     let root = scratch("miss");
     let seed = root.join("seed");
     fs::create_dir_all(&seed).expect("seed root");
-    fs::write(seed.join("PROVENANCE"), "velnor-host-seed-v1").expect("provenance");
+    fs::write(seed.join("PROVENANCE"), "velnor-host-seed-v1\n").expect("provenance");
     fs::create_dir_all(seed.join("mbx/bundle")).expect("bundle");
     fs::write(seed.join("mbx/PREFIX"), "other-").expect("prefix");
     fs::write(seed.join("mbx/bundle/marker"), "objects").expect("marker");
@@ -177,7 +173,10 @@ fn wrong_prefix_absent_seed_and_failed_import_leave_the_seed() {
     assert!(calls.is_empty(), "{calls}");
     let absent = import_script(root.join("none").to_str().expect("utf8")).expect("script");
     let (text, calls) = run(&absent, &root, "", "tool-1.98.1-", "0");
-    assert!(text.contains("no mbx bundle matched"), "{text}");
+    assert!(
+        text.contains("MBX seed untrusted; continuing cold"),
+        "{text}"
+    );
     assert!(calls.is_empty(), "{calls}");
     let (text, _calls) = run(&script, &root, "", "other-", "1");
     assert!(
@@ -210,7 +209,7 @@ fn mbx_seed_requires_root_owned_read_only_provisioned_tree() {
     let root = scratch("untrusted");
     let seed = root.join("seed");
     fs::create_dir_all(seed.join("mbx/bundle")).expect("bundle");
-    fs::write(seed.join("PROVENANCE"), "velnor-host-seed-v1").expect("provenance");
+    fs::write(seed.join("PROVENANCE"), "velnor-host-seed-v1\n").expect("provenance");
     fs::write(seed.join("mbx/PREFIX"), "tool-1.98.1-").expect("prefix");
     fs::write(seed.join("mbx/bundle/marker"), "objects").expect("marker");
     let script = import_script(seed.to_str().expect("utf8")).expect("script");
@@ -230,7 +229,10 @@ fn mbx_seed_requires_root_owned_read_only_provisioned_tree() {
             mount,
             unsafe_tree,
         );
-        assert!(text.contains("MBX seed untrusted; continuing cold"), "{text}");
+        assert!(
+            text.contains("MBX seed untrusted; continuing cold"),
+            "{text}"
+        );
         assert!(calls.is_empty(), "{calls}");
     }
     assert_eq!(

@@ -73,6 +73,7 @@ fn only_qualified_hosted_lane_keeps_a_tools_cache_prelude() {
         })?;
         Ok::<_, crate::RenderError>(vec![
             payload.runtime_identity_step()?,
+            crate::tool_seed::seed_step(&payload)?,
             payload.restore_step()?,
         ])
     };
@@ -91,13 +92,14 @@ fn only_qualified_hosted_lane_keeps_a_tools_cache_prelude() {
 
     let shared = share_lanes(&jobs, &ctx()).expect("lane-specific prelude factors");
     let hosted_prelude = &shared.runtime_preludes[hosted_id];
-    assert_eq!(hosted_prelude.len(), 2);
+    assert_eq!(hosted_prelude.len(), 3);
     assert_eq!(
         hosted_prelude[0].name,
         crate::cache_p08::TOOLS_CACHE_IDENTITY_NAME
     );
+    assert_eq!(hosted_prelude[1].name, crate::tool_seed::TOOL_SEED_NAME);
     assert_eq!(
-        hosted_prelude[1].name,
+        hosted_prelude[2].name,
         crate::cache_steps::TOOLS_RESTORE_NAME
     );
     assert!(shared.runtime_preludes[local_id].is_empty());
@@ -117,16 +119,21 @@ fn only_qualified_hosted_lane_keeps_a_tools_cache_prelude() {
         .expect("shared action");
     assert!(composite.bytes.contains("Setup Mise"));
     assert!(!composite.bytes.contains("V2 identity"));
+    assert!(!composite.bytes.contains("Restore Velnor tool seed"));
     assert!(!composite.bytes.contains("Restore Mise tools"));
     let yaml = render_jobs(&workflow_ir(), &shared, &ctx()).expect("shared workflow");
     let checkout = yaml.find("name: Checkout").expect("checkout");
     let identity = yaml.find("name: V2 identity").expect("identity");
+    let seed = yaml
+        .find("name: Restore Velnor tool seed")
+        .expect("tool seed");
     let restore = yaml.find("name: Restore Mise tools").expect("restore");
     let call = yaml.find("uses: ./.github/actions/rust-0").expect("call");
-    assert!(checkout < identity && identity < restore && restore < call);
+    assert!(checkout < identity && identity < seed && seed < restore && restore < call);
     let local_start = yaml.find("rust-0__local:").expect("Scale Set job");
     let local = &yaml[local_start..];
     assert!(!local.contains("V2 identity"), "{local}");
+    assert!(!local.contains("Restore Velnor tool seed"), "{local}");
     assert!(!local.contains("Restore Mise tools"), "{local}");
 }
 
