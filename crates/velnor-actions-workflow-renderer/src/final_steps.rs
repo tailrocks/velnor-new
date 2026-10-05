@@ -118,11 +118,11 @@ pub(crate) const ATTESTATION_DOWNLOAD_NAME: &str = "Download candidate attestati
 /// makes the artifact name derivable from the context runs-on.
 /// # Errors
 fn download_attestation_step(ctx: &RenderContext) -> Result<Step, RenderError> {
-    let target =
-        velnor_actions_contract::target_for_runner_label(&ctx.runs_on).ok_or_else(|| {
+    let target = velnor_actions_contract::ReleaseTarget::for_runner_label(&ctx.runs_on)
+        .ok_or_else(|| {
             RenderError::InvalidWorkflow(format!("unsupported_target_for_runner:{}", ctx.runs_on))
         })?;
-    let artifact = crate::candidate_artifact_name(target)?;
+    let artifact = crate::candidate_artifact_name(target.triple())?;
     let path = format!(
         "{}/{}",
         crate::closure::PLAN_ARTIFACT_PATH,
@@ -146,7 +146,7 @@ fn fetch_insert_at(job: &Job) -> usize {
     let want = [steps::WRITE_REQUEST_OPERATION, steps::MERGE_OPERATION].join(":");
     let at = |op: &str| {
         job.steps.iter().position(
-            |step| matches!(&step.kind, StepKind::Internal { operation } if operation == op),
+            |step| matches!(&step.kind, StepKind::Internal { operation, .. } if operation == op),
         )
     };
     at(&want)

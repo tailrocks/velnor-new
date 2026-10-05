@@ -3,6 +3,10 @@
 use std::collections::BTreeMap;
 use std::error::Error;
 
+#[path = "impl_repo_archive_deps.rs"]
+mod archive_deps;
+use archive_deps::reviewed_archive_dependency;
+
 use crate::impl_repo_policy::{
     MEMBERS, dep_key, dep_lines, dep_referenced, manifest, p11_toml, read, repo_root, test_markers,
     tree_files,
@@ -63,8 +67,9 @@ fn external_deps_allowlisted_used_and_narrow() -> Result<(), Box<dyn Error>> {
         "anyhow",
         "tracing",
         "tempfile",
-        // Reviewed OS shim for the P09 atomic directory exchange; already
-        // in the lockfile via tempfile, zero new crates.
+        // Reviewed OS shim already in the lockfile via tempfile, zero new
+        // crates. `fs` supports the P09 atomic directory exchange; `process`
+        // supports PR20 deadline-bound Unix process-group termination.
         "rustix",
         // Reviewed hash impl for the pre-seed manifest writer (SHA-256 of
         // the fresh helper) and generator SHA-256 identity (replaces
@@ -76,11 +81,9 @@ fn external_deps_allowlisted_used_and_narrow() -> Result<(), Box<dyn Error>> {
         // compile-gated at 1.98.1); default features only, facade-owned
         // byte/count/depth caps, no expression evaluation.
         "hcl",
-        // Reviewed proc-macro token-tree support for the test-source scanner.
+        // Reviewed proc-macro token tree for the test-source scanner.
         "proc-macro2",
-        // Reviewed Rust syntax tree for the Cargo test-target source-closure
-        // guard; `full` parses complete source files and `visit` resolves
-        // module declarations without text-pattern heuristics.
+        // Reviewed Rust AST (`full`, `visit`) for the test-source closure guard.
         "syn",
     ];
     for (dir, _) in MEMBERS {
@@ -91,20 +94,26 @@ fn external_deps_allowlisted_used_and_narrow() -> Result<(), Box<dyn Error>> {
             if key.starts_with("velnor-actions") {
                 continue;
             }
-            assert!(allowed.contains(&key), "{dir} uses {key}");
-            if let Some(index) = line.find("features") {
+            let archive_decoder = reviewed_archive_dependency(dir, key, line);
+            assert!(
+                allowed.contains(&key) || archive_decoder,
+                "{dir} uses {key}"
+            );
+            if let Some(index) = line.find("features").filter(|_| !archive_decoder) {
                 let quoted: Vec<&str> = line[index..].split('"').collect();
                 for feature in quoted.into_iter().skip(1).step_by(2) {
-                    // Only `derive` globally, `fs` on rustix for the P09
-                    // atomic directory exchange, and `full`/`visit` on syn
-                    // for complete Rust AST traversal.
+                    // `derive` globally; rustix `fs`/`process`; syn `full`/`visit`.
                     let narrow = feature == "derive"
-                        || (key == "rustix" && feature == "fs")
+                        || (key == "rustix" && matches!(feature, "fs" | "process"))
                         || (key == "syn" && matches!(feature, "full" | "visit"));
                     assert!(narrow, "{dir}/{key} feature {feature}");
                 }
             }
-            assert!(dep_referenced(dir, key)?, "{dir} never uses {key}");
+            // Cargo maps dependency hyphens to underscores in Rust identifiers.
+            assert!(
+                dep_referenced(dir, &key.replace('-', "_"))?,
+                "{dir} never uses {key}"
+            );
         }
     }
     Ok(())
