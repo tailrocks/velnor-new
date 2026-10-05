@@ -316,6 +316,7 @@ fn reconcile_is_credential_free_and_internal_ops_rejected() -> Result<(), Render
         condition: None,
         kind: StepKind::Internal {
             operation: "plan-v1".to_owned(),
+            env: std::collections::BTreeMap::new(),
         },
     };
     let mut steps = job_steps(&gated_spec()?, "release-preflight").expect("job");

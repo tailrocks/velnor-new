@@ -152,7 +152,7 @@ fn install_explicit_plan_download(
         .position(|step| {
             matches!(
                 &step.kind,
-                StepKind::Internal { operation }
+                StepKind::Internal { operation, .. }
                     if operation == WRITE_REQUEST_OPERATION || operation == MERGE_OPERATION
             )
         })

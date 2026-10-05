@@ -74,9 +74,13 @@ fn format_insert_at(plan: &Job) -> usize {
         .iter()
         .position(|step| step.role == Some(StepRole::CheckGenerated))
         .or_else(|| {
-            plan.steps
-                .iter()
-                .position(|step| step.role == Some(StepRole::PlanProducer))
+            plan.steps.iter().position(|step| {
+                step.role == Some(StepRole::PlanProducer)
+                    || matches!(
+                        &step.kind,
+                        StepKind::Internal { operation, .. } if operation == steps::PLAN_OPERATION
+                    )
+            })
         })
         .or_else(|| {
             plan.steps

@@ -132,6 +132,7 @@ mod tests {
         Job {
             display_name: "Test".to_owned(),
             runs_on: "ubuntu-26.04".to_owned(),
+            check_runner: None,
             timeout_minutes: crate::workflow::timeout::JobTimeout::VALIDATOR,
             needs: needs.iter().map(ToString::to_string).collect(),
             condition: None,

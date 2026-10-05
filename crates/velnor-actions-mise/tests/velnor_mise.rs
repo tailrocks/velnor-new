@@ -57,6 +57,8 @@ mod impl_mise_p08;
 mod impl_mise_policy;
 #[path = "impl_mise_preflight.rs"]
 mod impl_mise_preflight;
+#[path = "impl_mise_process_group.rs"]
+mod impl_mise_process_group;
 #[path = "impl_mise_redaction.rs"]
 mod impl_mise_redaction;
 #[path = "impl_mise_release_modes.rs"]
@@ -83,3 +85,17 @@ mod impl_mise_tofu_t27;
 mod impl_mise_tofu_t27_realbin;
 #[path = "impl_mise_verify.rs"]
 mod impl_mise_verify;
+
+#[path = "impl_mise_checks.rs"]
+mod impl_mise_checks;
+#[path = "impl_mise_fixed_binary.rs"]
+mod impl_mise_fixed_binary;
+
+#[path = "impl_check_system_tools.rs"]
+mod impl_check_system_tools;
+#[path = "impl_mise_containers.rs"]
+mod impl_mise_containers;
+#[path = "impl_mise_tool_probes.rs"]
+mod impl_mise_tool_probes;
+#[path = "impl_qualified_acquisition.rs"]
+mod impl_qualified_acquisition;

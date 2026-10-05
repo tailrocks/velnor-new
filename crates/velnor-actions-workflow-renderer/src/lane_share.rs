@@ -6,6 +6,9 @@
 
 use std::collections::BTreeMap;
 
+use velnor_actions_contract::config::{
+    CheckExecutor, CheckPlatform, EPHEMERAL_CHECK_ADMISSION_CONDITION,
+};
 use velnor_actions_contract::workflow::lanes::{HOSTED_SUFFIX, SCALE_SUFFIX};
 use velnor_actions_contract::{Job, Step, StepKind, StepRole};
 
@@ -59,10 +62,10 @@ struct SharedLaneParts {
 ///
 /// # Errors
 ///
-/// A pair whose timeout, condition, permissions, environment, or steps
-/// differ fails closed. Elected cache saves (`Save Mise tools`, `Save Tofu
-/// providers`) stay on the job that owns them and are not part of that
-/// comparison. An unsafe logical id fails closed.
+/// A pair whose timeout, condition, permissions, environment, or shared
+/// steps differ fails closed. Report uploads, named-check execution identity,
+/// and elected cache saves stay on the lane that owns them. An unsafe logical
+/// id fails closed.
 pub(crate) fn share_lanes(
     jobs: &BTreeMap<String, Job>,
     ctx: &RenderContext,
@@ -185,7 +188,7 @@ fn logical_id(hosted_id: &str) -> Option<&str> {
 
 fn split_pair(hosted: &Job, local: &Job, checkout_uses: &str) -> Option<SharedLaneParts> {
     if hosted.timeout_minutes != local.timeout_minutes
-        || hosted.condition != local.condition
+        || !same_or_admitted_check_condition(hosted, local)
         || hosted.permissions != local.permissions
         || hosted.environment != local.environment
     {
@@ -248,8 +251,18 @@ fn split_shared_steps(
     let mut local_prelude = local_prelude;
     hosted_prelude.extend(hosted_provider_prefix);
     local_prelude.extend(local_provider_prefix);
-    let (hosted_common, hosted_postlude) = crate::lane_share_sections::peel_postlude(hosted_tail);
-    let (local_common, local_postlude) = crate::lane_share_sections::peel_postlude(local_tail);
+    let (hosted_common, hosted_cache_postlude) =
+        crate::lane_share_sections::peel_postlude(hosted_tail);
+    let (local_common, local_cache_postlude) =
+        crate::lane_share_sections::peel_postlude(local_tail);
+    let (hosted_common, hosted_lane_specific) =
+        crate::lane_share_sections::peel_lane_specific(&hosted_common);
+    let (local_common, local_lane_specific) =
+        crate::lane_share_sections::peel_lane_specific(&local_common);
+    let mut hosted_postlude = hosted_lane_specific;
+    hosted_postlude.extend(hosted_cache_postlude);
+    let mut local_postlude = local_lane_specific;
+    local_postlude.extend(local_cache_postlude);
     (hosted_common == local_common).then_some(SharedLaneParts {
         checkout: checkout.clone(),
         prefix,
@@ -259,6 +272,21 @@ fn split_shared_steps(
         hosted_postlude,
         local_postlude,
     })
+}
+
+fn same_or_admitted_check_condition(hosted: &Job, local: &Job) -> bool {
+    if hosted.condition == local.condition {
+        return true;
+    }
+    hosted.condition.is_none()
+        && local.condition.as_deref() == Some(EPHEMERAL_CHECK_ADMISSION_CONDITION)
+        && matches!(
+            (&hosted.check_runner, &local.check_runner),
+            (Some(hosted_runner), Some(local_runner))
+                if hosted_runner == local_runner
+                    && hosted_runner.platform == CheckPlatform::LinuxX64
+                    && hosted_runner.executor == CheckExecutor::Hosted
+        )
 }
 
 fn peel_checkout<'a>(steps: &'a [Step], checkout_uses: &str) -> Option<(&'a Step, &'a [Step])> {
@@ -341,3 +369,7 @@ mod shell_tests;
 #[cfg(test)]
 #[path = "lane_share_unpinned_tests.rs"]
 mod unpinned_tests;
+
+#[cfg(test)]
+#[path = "lane_share_named_check_tests.rs"]
+mod named_check_tests;
