@@ -175,6 +175,9 @@ fi
 if [ "${1:-}" = "cache" ] && [ "${2:-}" = "export" ]; then
   bundle=
   for arg in "$@"; do bundle=$arg; done
+  if [ "$MBX_STUB_MODE" = "nodir" ]; then
+    exit 0
+  fi
   mkdir -p "$bundle"
   if [ "$MBX_STUB_MODE" = "enospc" ]; then
     printf 'No space left on device\n'
@@ -342,6 +345,20 @@ fn assert_enospc(ran: &RunOut) -> Result<(), String> {
     Ok(())
 }
 
+fn assert_export_without_directory(ran: &RunOut) -> Result<(), String> {
+    let stdout = String::from_utf8_lossy(&ran.output.stdout);
+    let stderr = String::from_utf8_lossy(&ran.output.stderr);
+    let bundle = ran.case.root.join("mbx-single-bundle");
+    let store = ran.case.root.join("mbx-store");
+    assert!(!ran.output.status.success(), "{stdout}\n{stderr}");
+    assert!(!bundle.exists(), "bundle still present");
+    assert!(store.is_dir(), "store missing");
+    assert!(store.join("keep").is_file(), "store marker missing");
+    let text = io(fs::read_to_string(ran.case.root.join("github-output")))?;
+    assert!(!text.contains("ready=true"), "ready output present");
+    Ok(())
+}
+
 fn assert_saved(ran: &RunOut) -> Result<(), String> {
     let stdout = String::from_utf8_lossy(&ran.output.stdout);
     let stderr = String::from_utf8_lossy(&ran.output.stderr);
@@ -363,6 +380,7 @@ fn hosted_export_enospc_removes_bundle_and_success_deletes_store() -> Result<(),
     let rendered = render_mbx("demo", false).map_err(|err| err.to_string())?;
     let script = export_consumer_script(&rendered)?;
     assert_enospc(&run_rendered(&script, "enospc")?)?;
+    assert_export_without_directory(&run_rendered(&script, "nodir")?)?;
     assert_saved(&run_rendered(&script, "ok")?)?;
     Ok(())
 }
