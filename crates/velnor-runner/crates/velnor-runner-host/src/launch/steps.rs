@@ -216,9 +216,22 @@ where
     if docker_of(journal, id).await?.is_some() {
         return finish_live(lane, ctx, journal, id, batch).await;
     }
+    // A volume or DinD id is already owned. Failing the row hides it from
+    // cleanup. Leave it uncertain until release proves the pair is gone.
+    if reserved(journal, id).await? {
+        return hold(journal, id, EnsureError::Uncertain).await;
+    }
     // No recorded container. Retry provisioning on this row. Returning
     // uncertain here redelivers the same message forever and admits nothing.
     mint(lane, ctx, batch, journal, id, name, start).await
+}
+
+async fn reserved(journal: &Journal, id: i64) -> Result<bool, EnsureError> {
+    let rows = journal.rows().await.map_err(map_journal)?;
+    let Some(row) = rows.iter().find(|row| row.id == id) else {
+        return Ok(false);
+    };
+    Ok(row.worker_volume.is_some() || row.dind_id.is_some())
 }
 
 async fn mint<T, S, F>(
