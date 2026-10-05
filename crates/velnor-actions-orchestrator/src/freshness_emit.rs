@@ -41,6 +41,7 @@ pub(crate) fn freshness_files(
         },
         runs_on: prep.runner_label.clone(),
         checkout_uses: CHECKOUT_USES.to_owned(),
+        mise_setup: crate::pins::resolve_mise_setup(&prep.config, &prep.runner_label)?,
         generator_version: env!("CARGO_PKG_VERSION").to_owned(),
     };
     Ok(vec![render_freshness_workflow(&spec)?])

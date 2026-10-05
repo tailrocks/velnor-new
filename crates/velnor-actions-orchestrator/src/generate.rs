@@ -251,7 +251,7 @@ fn replace_in_place(
     } else {
         staging.path().join(".github")
     };
-    let directories = preserve::copy_repository_content(&target, &staged)?;
+    let directories = preserve::copy_repository_content(&target, &staged, tree)?;
     preserve::check_generated_collisions(&staged, tree)?;
     write_tree(&staged, tree)?;
     preserve::restore_directory_permissions(directories)?;
@@ -276,7 +276,7 @@ fn write_preview(
     }
     let github = canonical.join(".github");
     let permissions = preserve::root_permissions(&prep.root.join(".github"))?;
-    let directories = preserve::copy_repository_content(&prep.root.join(".github"), &github)?;
+    let directories = preserve::copy_repository_content(&prep.root.join(".github"), &github, tree)?;
     preserve::check_generated_collisions(&github, tree)?;
     write_tree(&github, tree)?;
     preserve::restore_directory_permissions(directories)?;

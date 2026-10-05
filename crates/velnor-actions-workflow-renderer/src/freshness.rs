@@ -21,6 +21,7 @@ use velnor_actions_contract::{FRESHNESS_WORKFLOW_PATH, ScheduleTrigger, Step};
 use crate::{
     RenderError, guard, marker,
     render::RenderedFile,
+    setup::{MiseSetup, mise_setup_step},
     steps::{self, action_step, shell_step},
     yaml::{Yaml, render_yaml},
 };
@@ -49,6 +50,8 @@ pub struct FreshnessSpec {
     pub runs_on: String,
     /// Pinned `actions/checkout` ref.
     pub checkout_uses: String,
+    /// Resolved Mise action and binary pins for installing the Rust toolchain.
+    pub mise_setup: MiseSetup,
     /// Exact generator version for the marker.
     pub generator_version: String,
 }
@@ -64,6 +67,7 @@ impl FreshnessSpec {
         marker::validate_version(&self.generator_version)?;
         guard::validate_runs_on(&self.runs_on)?;
         steps::validate_uses(&self.checkout_uses)?;
+        self.mise_setup.validate()?;
         if !self.checkout_uses.starts_with("actions/checkout@") {
             return Err(RenderError::BadActionRef(format!(
                 "not_checkout:{}",
@@ -89,6 +93,16 @@ pub fn render_freshness_workflow(spec: &FreshnessSpec) -> Result<RenderedFile, R
             ("fetch-depth".to_owned(), "1".to_owned()),
         ]),
     )?;
+    let mise = mise_setup_step(&spec.mise_setup)?;
+    let install = shell_step(
+        "Install pinned toolchain",
+        vec![
+            "mise".to_owned(),
+            "install".to_owned(),
+            "--locked".to_owned(),
+        ],
+        BTreeMap::new(),
+    )?;
     let probe = shell_step(
         "Check upstream freshness",
         vec![
@@ -98,7 +112,7 @@ pub fn render_freshness_workflow(spec: &FreshnessSpec) -> Result<RenderedFile, R
         ],
         BTreeMap::new(),
     )?;
-    let document = freshness_document(spec, &checkout, &probe)?;
+    let document = freshness_document(spec, &checkout, &mise, &install, &probe)?;
     let document = crate::yaml::quote_run_values_in_yaml(document);
     let text = marker::with_marker(&spec.generator_version, &render_yaml(&document))?;
     crate::workflow_size::check_workflow_size(FRESHNESS_WORKFLOW_PATH, &text)?;
@@ -113,6 +127,8 @@ pub fn render_freshness_workflow(spec: &FreshnessSpec) -> Result<RenderedFile, R
 fn freshness_document(
     spec: &FreshnessSpec,
     checkout: &Step,
+    mise: &Step,
+    install: &Step,
     probe: &Step,
 ) -> Result<Yaml, RenderError> {
     let crons: Vec<Yaml> = spec
@@ -133,6 +149,8 @@ fn freshness_document(
             "steps".to_owned(),
             Yaml::Seq(vec![
                 crate::steps_plain::plain_step_to_yaml(checkout)?,
+                crate::steps_plain::plain_step_to_yaml(mise)?,
+                crate::steps_plain::plain_step_to_yaml(install)?,
                 crate::steps_plain::plain_step_to_yaml(probe)?,
             ]),
         ),
@@ -180,6 +198,11 @@ mod tests {
             },
             runs_on: "ubuntu-26.04".to_owned(),
             checkout_uses: CHECKOUT.to_owned(),
+            mise_setup: MiseSetup {
+                uses: "jdx/mise-action@0123456789abcdef0123456789abcdef01234567".to_owned(),
+                version: "2026.9.18".to_owned(),
+                sha256: "a".repeat(64),
+            },
             generator_version: "0.1.0".to_owned(),
         }
     }
@@ -215,6 +238,14 @@ mod tests {
         assert!(
             yaml.contains("persist-credentials: \"false\""),
             "no credentials:\n{yaml}"
+        );
+        assert!(
+            yaml.contains("uses: jdx/mise-action@0123456789abcdef0123456789abcdef01234567"),
+            "pinned Mise action:\n{yaml}"
+        );
+        assert!(
+            yaml.contains("mise install --locked"),
+            "pinned toolchain install:\n{yaml}"
         );
         assert!(
             yaml.contains("scripts/check-freshness.sh --check-upstream"),

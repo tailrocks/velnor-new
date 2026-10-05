@@ -8,6 +8,19 @@ automation that is not wired.
 
 ## Roles
 
+The gate implementation is Rust library package
+`velnor-actions-freshness`, reached through the existing CLI binary's private
+`repo-policy-v1` operation. It is repository-only support outside the V1
+product graph; `plan`, `generate`, and orchestrator task selection do not use
+it. `scripts/check-freshness.sh` transports its options through that gate,
+and no Python checker or compatibility command remains.
+
+- `cargo metadata` member discovery bounds stdout and stderr independently to
+  512 KiB and times out after 30 seconds. The live Cargo Deny process uses the
+  same per-stream cap and a 180-second timeout. Upstream HTTP responses remain
+  bounded to 512 KiB both encoded and decoded, with a 10-second request
+  timeout.
+
 - Maintainer (see `CODEOWNERS`): reviews update sets, grants exceptions,
   merges pins after qualification.
 - Renovate: proposes version changes only; never merges (see `renovate.json`).
@@ -209,10 +222,11 @@ the full update-set list above:
    fresh evidence for every row) and
    `bash scripts/check-freshness.sh --check-upstream` as the bounded
    non-gating signal for the next update set.
-3. `cargo nextest run --locked -p velnor-actions-cli -E 'test(p12_)'`
-   (CLI policy suites; narrow to `test(p12_property)` for the seeded
-   property path alone), plus `cargo fmt` and `cargo clippy` for any
-   touched Rust files.
+3. `cargo nextest run --locked -p velnor-actions-freshness` plus
+   `cargo nextest run --locked -p velnor-actions-cli -E
+   'test(p12_) | test(verify_local) | test(repo_policy_)'` (Rust freshness,
+   CLI policy, private dispatch, bootstrap-key, and local-script suites), plus
+   `cargo fmt` and `cargo clippy` for touched Rust files.
 
 Formatting posture (X11): the CI gate is whole-tree (`cargo fmt --all
 -- --check`), and rustfmt is deterministic, so contributors working

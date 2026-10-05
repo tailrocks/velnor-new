@@ -1,9 +1,8 @@
 //! Generation coordination: root, config, discovery, IR, and writes.
 //!
 //! Composes the contract, Rust, Mise, actionlint, and workflow-renderer
-//! adapters. This crate launches no child invocations, builds no fixed
-//! vectors itself, and assembles no workflow text: execution belongs to
-//! Mise, vectors to `vectors` via Mise requests, text to the renderer.
+//! adapters. It launches no child invocations or builds vectors. Mise owns
+//! execution; the `vectors` adapter owns arguments, and the renderer owns text.
 
 mod attach;
 mod baseline_artifact_listing;
@@ -124,7 +123,7 @@ pub use internal::{
 };
 pub use merge::merge_internal;
 pub use merge_request::assemble_merge_request;
-pub use pins::consumer_acquire_step_with_manifest;
+pub use pins::{acquire_script_argv, consumer_acquire_step_with_manifest};
 pub use plan::{plan_text, plan_text_checked};
 pub use plan_output_limits::{JOB_OUTPUTS_BUDGET_UTF16_BYTES, PlanOutputMode};
 pub use prepare::{GenerationPreparation, prepare};

@@ -100,7 +100,7 @@ fn verify_local_entrypoint_lists_exact_stages() -> Result<(), Box<dyn Error>> {
     // The repo-policy stage body is the freshness script at default
     // (offline) flags — the exact command the stage test executes.
     assert!(
-        script.contains("stage repo-policy scripts/check-freshness.sh"),
+        script.contains("stage repo-policy \"${MISE_EXEC[@]}\" bash scripts/check-freshness.sh"),
         "repo-policy stage body"
     );
     // Every locking cargo invocation passes `--locked` (`fmt` takes no
@@ -119,21 +119,41 @@ fn verify_local_entrypoint_lists_exact_stages() -> Result<(), Box<dyn Error>> {
             assert!(line.contains("--locked"), "unlocked cargo: {line}");
         }
     }
-    // The crate-list probes embed `cargo metadata` in python; both stay
-    // locked.
-    let metadata_probes = script
-        .lines()
-        .filter(|line| line.contains("metadata"))
-        .count();
-    assert_eq!(metadata_probes, 2, "both metadata probes present");
-    for line in script.lines().filter(|line| line.contains("metadata")) {
-        assert!(line.contains("cargo"), "metadata probe runs cargo");
-        assert!(line.contains("--locked"), "metadata probe is locked");
-    }
+    assert!(
+        script.contains("repo_policy workspace-members"),
+        "workspace list uses the private Rust operation"
+    );
+    assert!(
+        script.contains("repo_policy library-members"),
+        "library list uses the private Rust operation"
+    );
+    assert!(
+        !script.contains("python3 -c") && !script.contains("python -c"),
+        "no inline Python metadata probe remains"
+    );
     assert!(
         script.contains("run --workspace --locked"),
         "nextest integration run is locked"
     );
+    Ok(())
+}
+
+#[test]
+fn verify_local_bootstrap_reads_quoted_mise_tool_key() -> Result<(), Box<dyn Error>> {
+    let root = workspace_root();
+    let output = Command::new("awk")
+        .arg("-v")
+        .arg("key=aqua:nextest-rs/nextest/cargo-nextest")
+        .arg("-f")
+        .arg(root.join("scripts/toml-tool-pin.awk"))
+        .arg(root.join("mise.toml"))
+        .output()?;
+    assert!(
+        output.status.success(),
+        "quoted Aqua key rejected: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(String::from_utf8(output.stdout)?.trim(), "0.9.146");
     Ok(())
 }
 

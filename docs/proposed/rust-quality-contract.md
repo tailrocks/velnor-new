@@ -35,6 +35,7 @@ CODEOWNERS                  # repo root; Velnor never emits, reads, or validates
 crates/
   velnor-actions-contract/
   velnor-actions-rust/
+  velnor-actions-native/
   velnor-actions-mise/
   velnor-actions-actionlint/
   velnor-actions-workflow-renderer/
@@ -48,10 +49,12 @@ mise.lock
 ```
 
 All first-party Rust packages MUST be under `crates/`. The root manifest MUST
-be a virtual workspace with exactly the eight product package names listed in
-the table below. Cargo metadata is authoritative for package membership and
-dependency relationships. V1 does not add a custom linter to reject package
-renames or validate the architecture dependency matrix; those decisions are reviewed only through the §5
+be a virtual workspace with exactly the V1 product members listed in the table
+below plus the separately classified repository-only support member
+`velnor-actions-freshness`. Cargo metadata is authoritative for package
+membership and dependency relationships. The support member is not part of
+the V1 product dependency graph. V1 does not add a custom linter to reject
+package renames or validate the architecture dependency matrix; those decisions are reviewed only through the §5
 mechanism allowlist (committed policy tests, generic Alint, Clippy, human-reviewed snapshots). Rust/Cargo-specific symbols, Cargo
 metadata, and `rust-toolchain.toml` inspection are restricted to
 `velnor-actions-rust`; Mise syntax, environment, `mise.toml`/`mise.lock`
@@ -63,7 +66,7 @@ declare binary `velnor-actions`, the only target name without the
 package-purpose suffix. Non-Rust directories MAY remain in their own
 conventional locations.
 
-The eight V1 crates have fixed boundaries. Every V1 Cargo package MUST use the
+The nine V1 product crates have fixed boundaries. Every V1 Cargo package MUST use the
 `velnor-actions-<purpose>` namespace. Generic names such as `velnor-model`,
 `velnor-core`, `velnor-rust`, `velnor-common`, and `velnor-utils` are forbidden. The
 `velnor-actions` binary is owned by package `velnor-actions-cli`. Future
@@ -74,12 +77,18 @@ independent of other stack crates.
 | --- | --- | --- |
 | `velnor-actions-contract` | Stack-neutral workflow/task contracts, task graph, identities, reports, recommendations | Rust/Cargo, Mise, process, filesystem, YAML implementation, CLI, generic application models |
 | `velnor-actions-rust` | All Rust/Cargo discovery, metadata conversion, targets, graph, affected selection, Rust task proposals, `rust-toolchain.toml` inspection | Mise config/commands, workflow YAML, process execution, or non-Rust stack behavior |
+| `velnor-actions-native` | Closed isolated Swift, Node, Java, OCI, APT, Homebrew, Ruby, Shell and REUSE domain proposals and fixed semantic helper sources | Other domains, Rust/Cargo semantics, Mise syntax/catalog, subprocesses, workflow topology, or YAML |
 | `velnor-actions-mise` | Mise tool selection, pinned command construction, fixed subprocess/environment wrapper, `mise.toml`/`mise.lock` inspection, Mise cache integration | Cargo metadata, Rust graph/selection rules, `rust-toolchain.toml`, GitHub YAML, stack discovery |
 | `velnor-actions-actionlint` | actionlint pin/capability metadata, generated config, action-schema validation | Mise process execution, stack scanning, generic workflow rendering |
 | `velnor-actions-workflow-renderer` | Generic GitHub Actions workflow YAML from typed workflow IR | Rust/Cargo, Mise syntax, repository scanning, subprocesses, stack policy |
 | `velnor-actions-orchestrator` | Composition, obligation selection, cache evidence, scheduling, generation coordination, typed process-request coordination | Parsing Cargo/Mise files, direct YAML templates, CLI parsing, OS process details, process creation |
-| `velnor-actions-cli` | Clap parser, typed dispatch, concise deterministic human plan renderer, generation output, and exit-code formatting; emits binary `velnor-actions` | Orchestration algorithms or Rust, Mise, and renderer domain rules |
+| `velnor-actions-cli` | Public generator CLI and private transport-only dispatch; emits the sole binary `velnor-actions` | Orchestration algorithms, repository-policy rules, or Rust, Mise, and renderer domain rules |
 | `velnor-actions-tofu` | All OpenToFu/HCL discovery, root/module interpretation, task payloads, affected selection, identity extensions | Rust/Cargo, Mise execution, workflow YAML, process details, non-tofu stacks |
+| `velnor-actions-freshness` (repository-only support) | Read-only repository freshness/pin/lock/advisory checks and bootstrap metadata operations behind the existing CLI's private gate | V1 planning, task graph or selection, runner behavior, product evidence claims, public commands, or workflow generation |
+
+The repository-only freshness package is separately owned support, not a V1
+product crate. Only the CLI's private maintenance gate depends on it; the
+orchestrator and product task graph MUST NOT consume it.
 
 
 Hard invariants 10–12 (spec §3.3) are normative throughout. 10 — One owner per

@@ -36,6 +36,13 @@ velnor-actions-actionlint -> velnor-actions-contract
 velnor-actions-workflow-renderer -> velnor-actions-contract
 ```
 
+Repository-maintenance support has a separate, non-product dependency edge:
+the existing CLI binary's private `repo-policy-v1` gate calls
+`velnor-actions-freshness`. That library checks repository-owned freshness,
+pin, lock identity, advisory, and toolchain metadata. It is excluded from the
+V1 generator dependency graph and task graph; the orchestrator MUST NOT depend
+on it or use its checks as workflow tasks.
+
 The common product crates are contract, Mise, actionlint, workflow renderer,
 orchestrator and CLI. Rust and OpenTofu retain explicit stack packages. Audited
 native semantics belong to `velnor-actions-native`, a closed container of
@@ -65,13 +72,16 @@ the sole repository-structure linter and runs as a separate Actions job.
 | `velnor-actions-actionlint` | Pinned actionlint capability/version metadata, generated `.github/actionlint.yaml`, invocation, and actionlint-specific pre-write validation | Rust/Cargo, Mise execution, generic YAML rendering, or workflow planning |
 | `velnor-actions-workflow-renderer` | Stack-neutral GitHub Actions YAML from workflow IR: jobs, matrices, steps, triggers, permissions, and syntax supported by pinned actionlint | Rust/Cargo, Mise syntax, repository scanning, subprocesses, or stack-specific policy |
 | `velnor-actions-orchestrator` | Compose stack adapter, Mise adapter, contract, and renderer; plan obligations, apply selection/cache evidence, schedule resource-safe tasks, coordinate generation and writes | Parsing Cargo/Mise inputs, YAML templates, CLI parsing, building shell commands, or launching processes |
-| `velnor-actions-cli` | Clap parser, typed dispatch, concise human plan report, generation output, exit codes; declares binary `velnor-actions` | Planning rules, Cargo/Mise policies, YAML/Mise rendering, or orchestration algorithms |
+| `velnor-actions-cli` | Public generator CLI and private transport-only dispatch; declares the sole binary `velnor-actions` | Planning rules, repository-policy algorithms, YAML/Mise rendering, or orchestration algorithms |
+| `velnor-actions-freshness` (repository-only support) | Read-only repository pin/freshness/lock/advisory checks and bootstrap metadata operations reached only through the CLI's private gate | V1 workflow planning, task graph or task selection, runtime evidence claims, runner behavior, public CLI commands, or workflow generation |
 
 
-`velnor-actions` is the executable declared by package `velnor-actions-cli`.
+`velnor-actions` is the sole executable declared by package `velnor-actions-cli`.
 Clap help MUST describe a stack-generic GitHub Actions workflow generator.
 The CLI converts arguments to typed requests and calls the orchestrator; it
-contains no product planning or stack logic. The orchestrator asks the Rust
+contains no product planning or stack logic. Its separate private repository
+gate only transports maintenance operations to `velnor-actions-freshness`;
+the public command tree remains the generator API. The orchestrator asks the Rust
 adapter for Rust inventory, `rust-toolchain.toml` findings, and stack-neutral
 task proposals; asks the Mise adapter to resolve tool requests and inspect Mise
 files; and asks the workflow renderer to render generic workflow IR. It asks
@@ -122,6 +132,7 @@ crates/velnor-actions-actionlint/
 crates/velnor-actions-workflow-renderer/
 crates/velnor-actions-orchestrator/
 crates/velnor-actions-cli/
+crates/velnor-actions-freshness/  # repository-only support, outside V1 product graph
 fixtures/rust-workspaces/
 .github/actionlint.yaml
 .github/workflows/ci.yml

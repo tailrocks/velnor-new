@@ -1,6 +1,7 @@
 # Velnor Actions CLI Contract
 
-**Status:** Proposed. The `velnor-actions` binary is not implemented yet.
+**Status:** Proposed public command contract. Repository-maintenance operations
+use the separate private gate described below.
 
 This document defines the complete public command line for Velnor Actions V1.
 It has three commands. `plan` exposes a concise human summary from the same
@@ -70,6 +71,21 @@ likewise falls through to Clap and fails with the usage diagnostic
 (exit 2). A satisfied gate that fails operationally exits 1 with empty
 stdout and a one-line stderr diagnostic. Helper staging and version
 rules are in §6 and [workflow §3](workflow-contract.md).
+
+The separate repository-maintenance gate uses
+`VELNOR_INTERNAL_OP=repo-policy-v1` with an allowlisted
+`VELNOR_REPO_POLICY_ACTION`: `freshness`, `toolchain-specs`, `mise-version`,
+`workspace-members`, `library-members`, or `trailer-policy`. It requires
+`VELNOR_REPO_POLICY_ROOT` to name a directory and adds no public argument,
+command, executable, or product task. The gate dispatches repository-only
+checks to `velnor-actions-freshness`; the orchestrator MUST NOT call that
+support crate. The optional freshness flags
+`VELNOR_REPO_POLICY_CHECK_UPSTREAM` and
+`VELNOR_REPO_POLICY_WITH_ADVISORIES` accept only absent, `0`, or `1` values.
+The trailer action requires `VELNOR_REPO_POLICY_MESSAGE_PATH` to be an
+absolute existing file and accepts the same strict values for optional
+`VELNOR_REPO_POLICY_CHECK_LOCAL_IDENTITIES`. Unknown actions and malformed
+flags fail closed. Public Clap help and version output remain unchanged.
 
 ## 2. Repository root
 

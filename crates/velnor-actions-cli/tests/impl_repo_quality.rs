@@ -3,7 +3,7 @@
 //! T26 keeps `docs/proposed/rust-quality-contract.md` (QC) as the detailed
 //! owner of the spec §3 policy and reconciles the `opentofu-contract.md`
 //! (OC) §§4.4–4.5 tofu mirrors by reference. These tests pin the §-level
-//! integration map, the eight-crate fix, the homonym notes, the two
+//! integration map, the crate classification, the homonym notes, the two
 //! divergence resolutions, and the no-orphan rule (every original QC
 //! normative anchor survives).
 
@@ -80,17 +80,21 @@ fn qc_integrates_spec_section3() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
-fn qc_states_eight_member_workspace() -> Result<(), Box<dyn Error>> {
+fn qc_distinguishes_product_workspace_from_repository_support() -> Result<(), Box<dyn Error>> {
     let qc = read("docs/proposed/rust-quality-contract.md")?;
     for anchor in [
-        "exactly the eight product package names",
-        "The eight V1 crates",
+        "exactly the V1 product members",
+        "The nine V1 product crates",
+        "repository-only support member",
     ] {
-        assert!(qc.contains(anchor), "QC misses eight-crate fix {anchor}");
+        assert!(
+            qc.contains(anchor),
+            "QC misses crate classification {anchor}"
+        );
     }
     assert!(
-        !qc.contains("seven"),
-        "stale seven-crate claim survives in QC"
+        !qc.contains("eight product package names"),
+        "stale eight-crate claim survives in QC"
     );
     let tofu = qc.matches("velnor-actions-tofu").count();
     assert!(

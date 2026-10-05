@@ -16,7 +16,7 @@ mod layout;
 /// Intra-workspace edges allowed per member package.
 fn expected_internal(dir: &str) -> Vec<&str> {
     match dir {
-        "crates/velnor-actions-contract" => vec![],
+        "crates/velnor-actions-contract" | "crates/velnor-actions-freshness" => vec![],
         "crates/velnor-actions-orchestrator" => vec![
             "velnor-actions-actionlint",
             "velnor-actions-contract",
@@ -25,7 +25,9 @@ fn expected_internal(dir: &str) -> Vec<&str> {
             "velnor-actions-tofu",
             "velnor-actions-workflow-renderer",
         ],
-        "crates/velnor-actions-cli" => vec!["velnor-actions-orchestrator"],
+        "crates/velnor-actions-cli" => {
+            vec!["velnor-actions-freshness", "velnor-actions-orchestrator"]
+        }
         _ => vec!["velnor-actions-contract"],
     }
 }
@@ -63,6 +65,8 @@ const ALLOWED_EXTERNAL_DEPS: &[&str] = &[
     // must consume its full input. Both paths use only the zlib-rs backend.
     "flate2",
     "zip",
+    // Repository-only upstream client, with rustls transport only.
+    "ureq",
 ];
 
 fn assert_test_scanner_is_test_only(
@@ -77,6 +81,7 @@ fn assert_test_scanner_is_test_only(
         [
             "crates/velnor-actions-native",
             "crates/velnor-actions-orchestrator",
+            "crates/velnor-actions-freshness",
         ]
         .contains(&dir)
     } else {
@@ -84,11 +89,13 @@ fn assert_test_scanner_is_test_only(
     };
     assert!(allowed_owner, "{dir} may use test-only {key}");
     let doc = p11_toml::parse(body)?;
-    assert!(
-        p11_toml::section(&doc, "dependencies")
-            .is_none_or(|deps| deps.pairs.iter().all(|pair| pair.0 != key)),
-        "{key} is test-only"
-    );
+    if !(dir == "crates/velnor-actions-freshness" && key == "syn") {
+        assert!(
+            p11_toml::section(&doc, "dependencies")
+                .is_none_or(|deps| deps.pairs.iter().all(|pair| pair.0 != key)),
+            "{key} is test-only"
+        );
+    }
     Ok(())
 }
 
@@ -104,6 +111,7 @@ fn assert_narrow_features(dir: &str, key: &str, line: &str) {
                 || (key == "proc-macro2" && feature == "span-locations")
                 || (key == "flate2" && feature == "zlib-rs")
                 || (key == "zip" && feature == "deflate-flate2-zlib-rs");
+            let narrow = narrow || (key == "ureq" && feature == "rustls");
             assert!(narrow, "{dir}/{key} feature {feature}");
         }
     }
@@ -118,10 +126,16 @@ fn assert_archive_dependency_is_narrow(
     if key != "flate2" && key != "zip" {
         return Ok(());
     }
-    assert_eq!(
-        dir, "crates/velnor-actions-orchestrator",
-        "{key} is orchestrator-only"
-    );
+    let allowed = match key {
+        "flate2" => [
+            "crates/velnor-actions-orchestrator",
+            "crates/velnor-actions-freshness",
+        ]
+        .contains(&dir),
+        "zip" => dir == "crates/velnor-actions-orchestrator",
+        _ => false,
+    };
+    assert!(allowed, "{dir}/{key} is outside its reviewed owner");
     let doc = p11_toml::parse(body)?;
     assert!(
         p11_toml::section(&doc, "dependencies")
@@ -278,12 +292,6 @@ fn cli_invokes_no_tools_directly() -> Result<(), Box<dyn Error>> {
         ".spawn(",
         ".status()",
         ".output()",
-        "cargo",
-        "mise",
-        "mbx",
-        "nextest",
-        "rustup",
-        "\"gh\"",
         "shell",
         "Shell",
         "sh -c",

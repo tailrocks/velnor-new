@@ -182,7 +182,7 @@ fn is_tool_spec(value: &str) -> bool {
 }
 
 /// True for qualified `mise-v1-<target>-<mise>-<16hex>` keys.
-fn is_cache_key(value: &str) -> bool {
+pub(crate) fn is_cache_key(value: &str) -> bool {
     let parts: Vec<&str> = value.split('-').collect();
     value.starts_with(&format!("{MISE_KEY_PREFIX}-"))
         && !value.contains(' ')
@@ -228,7 +228,8 @@ pub fn ensure_setup_p08(
     }
     if let Some(&index) = present.first() {
         upgrade_setup(job_id, job, index, setup, target)?;
-        check_setup_before_mise(job_id, job, index)?;
+        let setup_at = crate::tool_seed::insert_before_setup(job, index)?;
+        check_setup_before_mise(job_id, job, setup_at)?;
         return Ok(());
     }
     if always || job_uses_mise(job) {
@@ -243,6 +244,8 @@ pub fn ensure_setup_p08(
         let key = mise_cache_key_for_tools(target, &setup.version, &specs)?;
         let at = insert_at(job).min(job.steps.len());
         job.steps.insert(at, mise_setup_step_p08(setup, &key)?);
+        let setup_at = crate::tool_seed::insert_before_setup(job, at)?;
+        check_setup_before_mise(job_id, job, setup_at)?;
     }
     Ok(())
 }

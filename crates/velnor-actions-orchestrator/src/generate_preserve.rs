@@ -1,8 +1,8 @@
 //! Preserve repository-owned `.github` content within the staged transaction.
 //!
-//! Workflows and declared generated formats are generator-owned; all other
-//! entries are copied without following symbolic links. Unsupported file types
-//! fail before the existing tree is replaced.
+//! Workflows, declared generated formats, and paths in the active rendered
+//! tree are generator-owned; all other entries are copied without following
+//! symbolic links. Unsupported file types fail before replacement.
 
 use std::path::{Path, PathBuf};
 
@@ -101,6 +101,7 @@ pub(super) fn check_generated_collisions(
 pub(super) fn copy_repository_content(
     source: &Path,
     destination: &Path,
+    tree: &velnor_actions_workflow_renderer::RenderedTree,
 ) -> Result<Vec<(PathBuf, std::fs::Permissions)>, OrchestratorError> {
     if std::fs::symlink_metadata(source).is_ok_and(|metadata| metadata.is_symlink()) {
         return Err(OrchestratorError::UnsafePath {
@@ -121,6 +122,7 @@ pub(super) fn copy_repository_content(
             &entry.path(),
             &destination.join(entry.file_name()),
             Path::new(&entry.file_name()),
+            tree,
             &mut directories,
         )?;
     }
@@ -128,7 +130,7 @@ pub(super) fn copy_repository_content(
 }
 
 /// Ownership derives from output inventories, including disabled release paths.
-fn generator_owned(relative: &Path) -> bool {
+fn generator_owned(relative: &Path, tree: &velnor_actions_workflow_renderer::RenderedTree) -> bool {
     relative.starts_with("workflows")
         || DECLARED_GITHUB_FORMATS
             .iter()
@@ -139,6 +141,16 @@ fn generator_owned(relative: &Path) -> bool {
                     .strip_prefix(".github")
                     .is_ok_and(|rel| rel == relative)
             })
+        || tree
+            .files
+            .iter()
+            .map(|file| &file.path)
+            .chain(tree.symlinks.iter().map(|link| &link.path))
+            .any(|path| {
+                Path::new(path)
+                    .strip_prefix(".github")
+                    .is_ok_and(|generated| generated == relative)
+            })
 }
 
 /// Preserve files, directory permissions, and links as entries, never targets.
@@ -146,9 +158,10 @@ fn copy_entry(
     source: &Path,
     destination: &Path,
     relative: &Path,
+    tree: &velnor_actions_workflow_renderer::RenderedTree,
     directories: &mut Vec<(PathBuf, std::fs::Permissions)>,
 ) -> Result<(), OrchestratorError> {
-    if generator_owned(relative) {
+    if generator_owned(relative, tree) {
         return Ok(());
     }
     let metadata = std::fs::symlink_metadata(source).map_err(|err| io(source, &err))?;
@@ -164,6 +177,7 @@ fn copy_entry(
                 &entry.path(),
                 &destination.join(entry.file_name()),
                 &relative.join(entry.file_name()),
+                tree,
                 directories,
             )?;
         }

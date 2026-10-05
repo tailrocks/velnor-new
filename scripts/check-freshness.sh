@@ -19,7 +19,7 @@
 #                                   [--with-advisories]
 #   --root DIR         validate a fixture tree instead of this repository.
 #   --check-upstream   bounded read-only probe: latest stable release lookup
-#                      with a 10 s timeout and 512 KiB response cap per request.
+#                      with a 10 s timeout and 512 KiB encoded/decoded cap.
 #                      Writes nothing; CI runs it weekly, outside build gates.
 #   --with-advisories  run the live Cargo Deny scan for every workspace
 #                      (180 s timeout each) plus the local deny-policy checks.
@@ -64,19 +64,26 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$ROOT" ]]; then
-  ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 fi
 INV="$ROOT/.velnor/freshness-inventory.json"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 if [[ ! -f "$INV" ]]; then
   echo "check-freshness: missing inventory: $INV" >&2
   exit 1
 fi
-if ! command -v python3 >/dev/null 2>&1; then
-  echo "check-freshness: python3 is required" >&2
+if ! command -v mise >/dev/null 2>&1; then
+  echo "check-freshness: mise is required (install the pinned repository toolchain first)" >&2
   exit 1
 fi
 
-python3 "$SCRIPT_DIR/check_freshness.py" "$ROOT" "$INV" \
-  "$CHECK_UPSTREAM" "$WITH_ADVISORIES" "$SCRIPT_DIR"
+cd "$PROJECT_ROOT"
+env \
+  VELNOR_INTERNAL_OP=repo-policy-v1 \
+  VELNOR_REPO_POLICY_ACTION=freshness \
+  VELNOR_REPO_POLICY_ROOT="$ROOT" \
+  VELNOR_REPO_POLICY_CHECK_UPSTREAM="$CHECK_UPSTREAM" \
+  VELNOR_REPO_POLICY_WITH_ADVISORIES="$WITH_ADVISORIES" \
+  mise exec -- cargo run --quiet --locked -p velnor-actions-cli --bin velnor-actions

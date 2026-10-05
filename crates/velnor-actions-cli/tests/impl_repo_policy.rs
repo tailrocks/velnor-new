@@ -32,13 +32,17 @@ mod p12_policy_b;
 mod p12_upstream;
 
 /// Expected members as (directory, package name).
-pub(crate) const MEMBERS: [(&str, &str); 9] = [
+pub(crate) const MEMBERS: [(&str, &str); 10] = [
     (
         "crates/velnor-actions-actionlint",
         "velnor-actions-actionlint",
     ),
     ("crates/velnor-actions-cli", "velnor-actions-cli"),
     ("crates/velnor-actions-contract", "velnor-actions-contract"),
+    (
+        "crates/velnor-actions-freshness",
+        "velnor-actions-freshness",
+    ),
     ("crates/velnor-actions-mise", "velnor-actions-mise"),
     ("crates/velnor-actions-native", "velnor-actions-native"),
     (
@@ -137,11 +141,13 @@ pub(crate) fn dep_key(line: &str) -> &str {
     line.split('=').next().unwrap_or(line).trim()
 }
 
-/// Count `#[test]` markers across a member's test files.
+/// Count unit and integration test markers across one member's Rust files.
 pub(crate) fn test_markers(dir: &str) -> Result<usize, Box<dyn Error>> {
     let mut count = 0;
-    for path in tree_files(&format!("{dir}/tests"), "rs")? {
-        count += std::fs::read_to_string(&path)?.matches("#[test]").count();
+    for area in ["src", "tests"] {
+        for path in tree_files(&format!("{dir}/{area}"), "rs")? {
+            count += std::fs::read_to_string(&path)?.matches("#[test]").count();
+        }
     }
     Ok(count)
 }
@@ -192,6 +198,26 @@ fn package_names_use_purpose_suffix() -> Result<(), Box<dyn Error>> {
         assert!(body.contains(&format!("name = \"{package}\"")), "{dir}");
         let purpose = package.strip_prefix("velnor-actions-").ok_or(package)?;
         assert!(!purpose.is_empty(), "{dir}");
+    }
+    Ok(())
+}
+
+#[test]
+fn freshness_support_stays_outside_the_v1_product_graph() -> Result<(), Box<dyn Error>> {
+    let cli = manifest("crates/velnor-actions-cli")?;
+    let orchestrator = manifest("crates/velnor-actions-orchestrator")?;
+    let freshness = manifest("crates/velnor-actions-freshness")?;
+    assert!(cli.contains("velnor-actions-freshness"));
+    assert!(
+        !orchestrator.contains("velnor-actions-freshness"),
+        "repository support must not enter planning"
+    );
+    assert!(!freshness.contains("[[bin]]"));
+    let architecture = read("docs/proposed/architecture.md")?;
+    let quality = read("docs/proposed/rust-quality-contract.md")?;
+    for contract in [architecture, quality] {
+        assert!(contract.contains("velnor-actions-freshness"));
+        assert!(contract.contains("repository-only"));
     }
     Ok(())
 }

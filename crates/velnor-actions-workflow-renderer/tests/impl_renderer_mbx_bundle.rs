@@ -46,6 +46,9 @@ fn assert_cold_import(imported: &str) {
         "mbx bundle import failed; continuing cold",
         "df -B1 -P",
         "df -i -P",
+        "/opt/velnor/seed/mbx",
+        "mbx-seed-bundle",
+        "steps.mbx-cache-key.outputs.prefix",
     ] {
         assert!(
             imported.contains(needle),
