@@ -11,6 +11,12 @@ pub const TOFU_PROVIDER_ADMISSION_USES: &str = "./.github/actions/tofu-provider-
 pub const TOOL_SEED_USES: &str = "./.github/actions/velnor-tool-seed";
 /// Fixed local action path for the exact V2 tools-cache restore wrapper.
 pub const TOOLS_CACHE_RESTORE_USES: &str = "./.github/actions/velnor-tools-cache-restore";
+/// Fixed generated V2 identity-and-seed composites, one per hosted Ubuntu lane.
+pub const TOOLS_CACHE_PRELUDE_USES: [&str; 3] = [
+    "./.github/actions/velnor-tools-prelude-u22",
+    "./.github/actions/velnor-tools-prelude-u24",
+    "./.github/actions/velnor-tools-prelude-u26",
+];
 /// Static tool digest input for the runtime-qualified tools identity action.
 pub const TOOLS_CACHE_IDENTITY_DIGEST_INPUT: &str = "d";
 /// Expression path for the job-private `OpenTofu` plugin cache.
@@ -30,6 +36,8 @@ pub enum StepId {
     Plan,
     /// Baseline publisher output consumed by the release uploader.
     PublishBaseline,
+    /// V2 hosted tools-cache output consumed by restore and save.
+    ToolsCacheIdentity,
     /// `OpenTofu` provider-cache composite outputs consumed by the save step.
     TofuProviders,
 }
@@ -41,6 +49,7 @@ impl StepId {
         match self {
             Self::Plan => "plan",
             Self::PublishBaseline => "publish-baseline",
+            Self::ToolsCacheIdentity => "v2",
             Self::TofuProviders => "tofu-providers",
         }
     }
@@ -200,6 +209,7 @@ impl StepRole {
         match self {
             Self::PlanProducer => Some(StepId::Plan),
             Self::BaselinePublisher => Some(StepId::PublishBaseline),
+            Self::ToolsCacheIdentity => Some(StepId::ToolsCacheIdentity),
             Self::TofuProvidersRestore => Some(StepId::TofuProviders),
             _ => None,
         }
@@ -210,6 +220,7 @@ impl StepRole {
         match id {
             StepId::Plan => Self::PlanProducer,
             StepId::PublishBaseline => Self::BaselinePublisher,
+            StepId::ToolsCacheIdentity => Self::ToolsCacheIdentity,
             StepId::TofuProviders => Self::TofuProvidersRestore,
         }
     }
@@ -261,10 +272,10 @@ fn valid_tool_seed_payload(kind: &StepKind) -> bool {
             && env.is_empty())
 }
 
-/// Require the fixed generated hosted identity composite and static digest.
-fn valid_tools_cache_identity(kind: &StepKind) -> bool {
+/// Require the fixed generated hosted identity-and-seed composite and digest.
+pub(super) fn valid_tools_cache_identity(kind: &StepKind) -> bool {
     matches!(kind, StepKind::Action { uses, with, env }
-        if matches!(uses.as_str(), "./.github/actions/u22" | "./.github/actions/u24" | "./.github/actions/u26")
+        if TOOLS_CACHE_PRELUDE_USES.contains(&uses.as_str())
             && with.len() == 1
             && with.get(TOOLS_CACHE_IDENTITY_DIGEST_INPUT).is_some_and(|digest|
                 digest.len() == 64

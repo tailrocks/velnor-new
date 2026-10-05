@@ -14,8 +14,9 @@ c221a634ad4265bafc8f829778f7838dd03d84b511cb368206a708271b03e30a  ./.github/acti
 59555c5e443881912c515d54d1c48ae90f86b7bb0a4ecf85e6483a055b52507f  ./.github/actions/u26/action.yml
 6139179ce61ff5097625f4ea76159d97de3ea4275e0aeea4ab0b86e3272c61e8  ./.github/actions/velnor-tool-seed/action.yml
 dc881cf73a843ecee2227e7b0687ca4dfafedac0f071f2ff8a5d75610595d41c  ./.github/actions/velnor-tools-cache-restore/action.yml
+c854b10113e5bbb39bb34e69a11a730f655e7a2cab9526dcf1b0823c71a47110  ./.github/actions/velnor-tools-prelude-u26/action.yml
 9a9fbc1c5c49dc05bfc5bf5ff857e4b8f3b92613cc95c37fec1643b88e8dee4e  ./.github/scripts/velnor-tools-cache-identity.sh
-5f7056217d7e2bf67b2da66f3b2267034f79c39c26a7d17aae4e4e37c8d7ee83  ./.github/workflows/ci.yml
+6ca74e494fb000641f5c350bc5c1827a79191b6240741b344b3ba86ec56b3136  ./.github/workflows/ci.yml
 c6873ba49e8c184dd71d7b80d55c9734ee4e491429a798f07d7e3c66285d729b  ./.github/workflows/freshness.yml
 dbff6862eb260f2236b8dda49f740c57c76cb68f62fbcf14d4cf596787158811  ./.github/workflows/generator-release.yml
 cdd06e788409b7aa9fed9018d255e28b921c751f2c59bd4536dc47d7af168094  ./.github/workflows/image-release.yml

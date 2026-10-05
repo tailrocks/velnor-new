@@ -58,7 +58,7 @@ fn cache_layers_restore_independently() -> Result<(), RenderError> {
         rustup_toolchain: None,
         rustup_components: &[],
     })?;
-    let identity = payload.runtime_identity_step()?;
+    let identity = payload.runtime_prelude_step()?;
     let tools = payload.restore_step()?;
     assert_eq!(
         payload.paths(),

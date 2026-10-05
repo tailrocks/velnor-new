@@ -43,9 +43,7 @@ fn is_tools_prelude_step(role: Option<StepRole>) -> bool {
 fn valid_tools_cache_prelude(steps: &[Step], runs_on: &str) -> bool {
     match steps {
         [] => true,
-        [identity, seed, restore] => {
-            valid_identity(identity, runs_on) && valid_seed(seed) && valid_restore(restore)
-        }
+        [identity, restore] => valid_identity(identity, runs_on) && valid_restore(restore),
         _ => false,
     }
 }
@@ -65,19 +63,6 @@ fn valid_identity(step: &Step, runs_on: &str) -> bool {
                 )
                 .is_ok()
         )
-}
-
-fn valid_seed(step: &Step) -> bool {
-    if step.role != Some(StepRole::ToolSeed) {
-        return false;
-    }
-    let StepKind::Action { uses, with, env } = &step.kind else {
-        return false;
-    };
-    crate::tool_seed::validate_action_call(step, uses, with, env).is_ok()
-        && with
-            .get("cache_key")
-            .is_some_and(|key| is_tools_cache_key(key))
 }
 
 fn valid_restore(step: &Step) -> bool {
@@ -140,29 +125,11 @@ fn same_tools_step(hosted: &Step, local: &Step, hosted_runs_on: &str, local_runs
             },
         ) => {
             Some(hosted_uses.as_str())
-                == crate::cache_p08::runtime_identity_action_uses(hosted_runs_on)
+                == crate::cache_p08::runtime_prelude_action_uses(hosted_runs_on)
                 && Some(local_uses.as_str())
-                    == crate::cache_p08::runtime_identity_action_uses(local_runs_on)
+                    == crate::cache_p08::runtime_prelude_action_uses(local_runs_on)
                 && hosted_env == local_env
                 && hosted_with.keys().eq(local_with.keys())
-        }
-        (
-            Some(StepRole::ToolSeed),
-            StepKind::Action {
-                uses: hosted_uses,
-                with: hosted_with,
-                env: hosted_env,
-            },
-            StepKind::Action {
-                uses: local_uses,
-                with: local_with,
-                env: local_env,
-            },
-        ) => {
-            hosted_uses == crate::tool_seed::TOOL_SEED_USES
-                && local_uses == crate::tool_seed::TOOL_SEED_USES
-                && hosted_env == local_env
-                && same_keyed_inputs(hosted_with, local_with, "cache_key")
         }
         (
             Some(StepRole::ToolsCacheRestore),

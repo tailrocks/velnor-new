@@ -286,7 +286,9 @@ fn tools_restore_identity(id: &str, job: &Job) -> Result<Option<(String, String)
             "tools_cache_identity_shape:{id}"
         )));
     };
-    if identity.id.is_some() || identity.condition.is_some() {
+    if identity.id != Some(velnor_actions_contract::StepId::ToolsCacheIdentity)
+        || identity.condition.is_some()
+    {
         return Err(RenderError::InvalidWorkflow(format!(
             "tools_cache_identity_shape:{id}"
         )));

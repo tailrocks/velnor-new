@@ -12,7 +12,7 @@ mod tool_payload;
 pub use tool_payload::{ToolsCacheInputs, ToolsCachePayload};
 pub(crate) use tool_payload::{
     runtime_identity_action_file, runtime_identity_action_uses, runtime_identity_script_file,
-    validate_runtime_identity_action,
+    runtime_prelude_action_file, runtime_prelude_action_uses, validate_runtime_identity_action,
 };
 #[path = "cache_p08_save_policy.rs"]
 mod save_policy;

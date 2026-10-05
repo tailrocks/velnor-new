@@ -182,19 +182,15 @@ fn strict_wires_runtime_qualified_tools_cache_before_setup_and_saves_once()
     assert_eq!(names.iter().filter(|s| *s == TOOLS_SAVE_NAME).count(), 1);
     assert_eq!(
         names.iter().position(|s| s == "Setup Mise"),
-        Some(4),
-        "checkout, runtime identity, tool seed, restore, then setup: {names:?}"
-    );
-    assert_eq!(
-        names.iter().position(|s| s == "Restore Velnor tool seed"),
-        Some(2),
-        "V2 seed follows identity: {names:?}"
+        Some(3),
+        "checkout, combined runtime identity and seed, restore, then setup: {names:?}"
     );
     assert_eq!(
         names.iter().position(|s| s == TOOLS_RESTORE_NAME),
-        Some(3),
+        Some(2),
         "archive restore follows seed admission: {names:?}"
     );
+    assert!(!text.contains("name: Restore Velnor tool seed"), "{text}");
     for need in [
         "name: V2 identity",
         "id: v2",
@@ -271,7 +267,10 @@ fn seed_and_tools_prelude_require_the_configured_unconditional_checkout()
         text.contains("name: V2 identity"),
         "renamed typed checkout: {text}"
     );
-    assert!(text.contains("Restore Velnor tool seed"), "{text}");
+    assert!(
+        text.contains("uses: ./.github/actions/velnor-tools-prelude-u26"),
+        "renamed typed checkout: {text}"
+    );
 
     let mut conditional = checkout_step(&checkout_pin())?;
     conditional.condition = Some("false".to_owned());

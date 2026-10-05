@@ -10,6 +10,8 @@ use crate::{MiseSetup, RenderError, cache_p08, steps};
 
 #[path = "cache_p08_runtime_identity.rs"]
 mod runtime_identity;
+#[path = "cache_p08_runtime_prelude.rs"]
+mod runtime_prelude;
 
 pub(crate) fn runtime_identity_script_file(
     version: &str,
@@ -24,6 +26,13 @@ pub(crate) fn runtime_identity_action_file(
     runtime_identity::action_file(runs_on, version)
 }
 
+pub(crate) fn runtime_prelude_action_file(
+    runs_on: &str,
+    version: &str,
+) -> Result<crate::tree::RenderedFile, RenderError> {
+    runtime_prelude::action_file(runs_on, version)
+}
+
 pub(crate) fn validate_runtime_identity_action(
     step: &Step,
     uses: &str,
@@ -31,11 +40,15 @@ pub(crate) fn validate_runtime_identity_action(
     with: &std::collections::BTreeMap<String, String>,
     env: &std::collections::BTreeMap<String, String>,
 ) -> Result<(), RenderError> {
-    runtime_identity::validate_action_call(step, uses, runs_on, with, env)
+    runtime_prelude::validate_action_call(step, uses, runs_on, with, env)
 }
 
 pub(crate) fn runtime_identity_action_uses(runs_on: &str) -> Option<&'static str> {
     runtime_identity::action_uses(runs_on)
+}
+
+pub(crate) fn runtime_prelude_action_uses(runs_on: &str) -> Option<&'static str> {
+    runtime_prelude::action_uses(runs_on)
 }
 
 /// Inputs resolved from a job's typed preparation/catalog obligations.
@@ -121,10 +134,10 @@ impl ToolsCachePayload {
         cache_p08::TOOLS_CACHE_KEY_EXPRESSION.to_owned()
     }
 
-    /// Runtime image/root identity step; unknown identities take a cold path.
+    /// Runtime identity and matching tool-seed step; unknown identities take a cold path.
     /// # Errors
-    pub fn runtime_identity_step(&self) -> Result<Step, RenderError> {
-        runtime_identity::step(self)
+    pub fn runtime_prelude_step(&self) -> Result<Step, RenderError> {
+        runtime_prelude::step(self)
     }
 
     /// Concrete key builder for an exact lower-case SHA-256 runtime identity.

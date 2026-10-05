@@ -46,13 +46,9 @@ jobs:
           persist-credentials: "false"
       - name: V2 identity
         id: v2
-        uses: ./.github/actions/u26 # zizmor: ignore[self-repository]
+        uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
           d: 97190eef167066fff58bef17bf9186ae7514e35f27bbc39417666efed2076810
-      - name: Restore Velnor tool seed
-        uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
-        with:
-          cache_key: mise-tools-v2-${{steps.v2.outputs.identity}}
       - name: Restore Mise tools
         if: steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
@@ -105,13 +101,9 @@ jobs:
           persist-credentials: "false"
       - name: V2 identity
         id: v2
-        uses: ./.github/actions/u26 # zizmor: ignore[self-repository]
+        uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
           d: 7c8e857f67b6a50cc9222700686bd1eddbb45c09942b9f3f2600df32666b13b9
-      - name: Restore Velnor tool seed
-        uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
-        with:
-          cache_key: mise-tools-v2-${{steps.v2.outputs.identity}}
       - name: Restore Mise tools
         if: steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
@@ -145,13 +137,9 @@ jobs:
           persist-credentials: "false"
       - name: V2 identity
         id: v2
-        uses: ./.github/actions/u26 # zizmor: ignore[self-repository]
+        uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
           d: 4afedde0a3fa3dd2ea95f73e43100d08b5baddf1f2f684d70746c2832b0a52b2
-      - name: Restore Velnor tool seed
-        uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
-        with:
-          cache_key: mise-tools-v2-${{steps.v2.outputs.identity}}
       - name: Restore Mise tools
         if: steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
@@ -214,13 +202,9 @@ jobs:
           persist-credentials: "false"
       - name: V2 identity
         id: v2
-        uses: ./.github/actions/u26 # zizmor: ignore[self-repository]
+        uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
           d: e02727de703d5fb4061a0f7091a0f770e6b83d7a6d7b841532dfe4033df37ff5
-      - name: Restore Velnor tool seed
-        uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
-        with:
-          cache_key: mise-tools-v2-${{steps.v2.outputs.identity}}
       - name: Restore Mise tools
         if: steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
@@ -563,13 +547,9 @@ jobs:
           persist-credentials: "false"
       - name: V2 identity
         id: v2
-        uses: ./.github/actions/u26 # zizmor: ignore[self-repository]
+        uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
           d: 01750789fb96f8e2cc28e1c7aa90ce960c8ec356a33db8df5fa374ed71095a58
-      - name: Restore Velnor tool seed
-        uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
-        with:
-          cache_key: mise-tools-v2-${{steps.v2.outputs.identity}}
       - name: Restore Mise tools
         if: steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
@@ -769,13 +749,9 @@ jobs:
           persist-credentials: "false"
       - name: V2 identity
         id: v2
-        uses: ./.github/actions/u26 # zizmor: ignore[self-repository]
+        uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
           d: e02727de703d5fb4061a0f7091a0f770e6b83d7a6d7b841532dfe4033df37ff5
-      - name: Restore Velnor tool seed
-        uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
-        with:
-          cache_key: mise-tools-v2-${{steps.v2.outputs.identity}}
       - name: Restore Mise tools
         if: steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
@@ -959,13 +935,9 @@ jobs:
           persist-credentials: "false"
       - name: V2 identity
         id: v2
-        uses: ./.github/actions/u26 # zizmor: ignore[self-repository]
+        uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
           d: 01750789fb96f8e2cc28e1c7aa90ce960c8ec356a33db8df5fa374ed71095a58
-      - name: Restore Velnor tool seed
-        uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
-        with:
-          cache_key: mise-tools-v2-${{steps.v2.outputs.identity}}
       - name: Restore Mise tools
         if: steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
@@ -1159,13 +1131,9 @@ jobs:
           persist-credentials: "false"
       - name: V2 identity
         id: v2
-        uses: ./.github/actions/u26 # zizmor: ignore[self-repository]
+        uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
           d: 7cf88bd59d5dbaa8ba5e3f8ea60447756a19729fafe72e055ff914ee89025fe8
-      - name: Restore Velnor tool seed
-        uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
-        with:
-          cache_key: mise-tools-v2-${{steps.v2.outputs.identity}}
       - name: Restore Mise tools
         if: steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
@@ -1365,13 +1333,9 @@ jobs:
           persist-credentials: "false"
       - name: V2 identity
         id: v2
-        uses: ./.github/actions/u26 # zizmor: ignore[self-repository]
+        uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
           d: e02727de703d5fb4061a0f7091a0f770e6b83d7a6d7b841532dfe4033df37ff5
-      - name: Restore Velnor tool seed
-        uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
-        with:
-          cache_key: mise-tools-v2-${{steps.v2.outputs.identity}}
       - name: Restore Mise tools
         if: steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
@@ -1565,13 +1529,9 @@ jobs:
           persist-credentials: "false"
       - name: V2 identity
         id: v2
-        uses: ./.github/actions/u26 # zizmor: ignore[self-repository]
+        uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
           d: 01750789fb96f8e2cc28e1c7aa90ce960c8ec356a33db8df5fa374ed71095a58
-      - name: Restore Velnor tool seed
-        uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
-        with:
-          cache_key: mise-tools-v2-${{steps.v2.outputs.identity}}
       - name: Restore Mise tools
         if: steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
@@ -1765,13 +1725,9 @@ jobs:
           persist-credentials: "false"
       - name: V2 identity
         id: v2
-        uses: ./.github/actions/u26 # zizmor: ignore[self-repository]
+        uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
           d: 01750789fb96f8e2cc28e1c7aa90ce960c8ec356a33db8df5fa374ed71095a58
-      - name: Restore Velnor tool seed
-        uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
-        with:
-          cache_key: mise-tools-v2-${{steps.v2.outputs.identity}}
       - name: Restore Mise tools
         if: steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
@@ -1965,13 +1921,9 @@ jobs:
           persist-credentials: "false"
       - name: V2 identity
         id: v2
-        uses: ./.github/actions/u26 # zizmor: ignore[self-repository]
+        uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
           d: 01750789fb96f8e2cc28e1c7aa90ce960c8ec356a33db8df5fa374ed71095a58
-      - name: Restore Velnor tool seed
-        uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
-        with:
-          cache_key: mise-tools-v2-${{steps.v2.outputs.identity}}
       - name: Restore Mise tools
         if: steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
@@ -2165,13 +2117,9 @@ jobs:
           persist-credentials: "false"
       - name: V2 identity
         id: v2
-        uses: ./.github/actions/u26 # zizmor: ignore[self-repository]
+        uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
           d: 01750789fb96f8e2cc28e1c7aa90ce960c8ec356a33db8df5fa374ed71095a58
-      - name: Restore Velnor tool seed
-        uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
-        with:
-          cache_key: mise-tools-v2-${{steps.v2.outputs.identity}}
       - name: Restore Mise tools
         if: steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
@@ -2365,13 +2313,9 @@ jobs:
           persist-credentials: "false"
       - name: V2 identity
         id: v2
-        uses: ./.github/actions/u26 # zizmor: ignore[self-repository]
+        uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
           d: 01750789fb96f8e2cc28e1c7aa90ce960c8ec356a33db8df5fa374ed71095a58
-      - name: Restore Velnor tool seed
-        uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
-        with:
-          cache_key: mise-tools-v2-${{steps.v2.outputs.identity}}
       - name: Restore Mise tools
         if: steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
@@ -2565,13 +2509,9 @@ jobs:
           persist-credentials: "false"
       - name: V2 identity
         id: v2
-        uses: ./.github/actions/u26 # zizmor: ignore[self-repository]
+        uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
           d: 01750789fb96f8e2cc28e1c7aa90ce960c8ec356a33db8df5fa374ed71095a58
-      - name: Restore Velnor tool seed
-        uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
-        with:
-          cache_key: mise-tools-v2-${{steps.v2.outputs.identity}}
       - name: Restore Mise tools
         if: steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
@@ -2765,13 +2705,9 @@ jobs:
           persist-credentials: "false"
       - name: V2 identity
         id: v2
-        uses: ./.github/actions/u26 # zizmor: ignore[self-repository]
+        uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
           d: 01750789fb96f8e2cc28e1c7aa90ce960c8ec356a33db8df5fa374ed71095a58
-      - name: Restore Velnor tool seed
-        uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
-        with:
-          cache_key: mise-tools-v2-${{steps.v2.outputs.identity}}
       - name: Restore Mise tools
         if: steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
@@ -2965,13 +2901,9 @@ jobs:
           persist-credentials: "false"
       - name: V2 identity
         id: v2
-        uses: ./.github/actions/u26 # zizmor: ignore[self-repository]
+        uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
           d: 01750789fb96f8e2cc28e1c7aa90ce960c8ec356a33db8df5fa374ed71095a58
-      - name: Restore Velnor tool seed
-        uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
-        with:
-          cache_key: mise-tools-v2-${{steps.v2.outputs.identity}}
       - name: Restore Mise tools
         if: steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
@@ -3142,13 +3074,9 @@ jobs:
           persist-credentials: "false"
       - name: V2 identity
         id: v2
-        uses: ./.github/actions/u26 # zizmor: ignore[self-repository]
+        uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
           d: a21dbe84396fab45169a04832176ae9cb399b640e80b09ebdd84dee6496a1266
-      - name: Restore Velnor tool seed
-        uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
-        with:
-          cache_key: mise-tools-v2-${{steps.v2.outputs.identity}}
       - name: Restore Mise tools
         if: steps.v2.outputs.enabled == 'true'
         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]

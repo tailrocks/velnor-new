@@ -103,11 +103,10 @@ fn insert_tools_prelude(
     if !payload.runtime_identity_supported() {
         return Ok(());
     }
-    let identity = payload.runtime_identity_step()?;
-    let seed = crate::tool_seed::seed_step(&payload)?;
+    let prelude = payload.runtime_prelude_step()?;
     let restore = payload.restore_step()?;
     job.steps
-        .splice(setup_index..setup_index, [identity, seed, restore]);
+        .splice(setup_index..setup_index, [prelude, restore]);
     Ok(())
 }
 
@@ -153,7 +152,9 @@ fn has_v2_cache_authority(step: &Step, job: &Job) -> bool {
     if uses == velnor_actions_contract::workflow::step_identity::TOOL_SEED_USES {
         return true;
     }
-    if cache_p08::runtime_identity_action_uses(&job.runs_on) == Some(uses.as_str()) {
+    if cache_p08::runtime_identity_action_uses(&job.runs_on) == Some(uses.as_str())
+        || cache_p08::runtime_prelude_action_uses(&job.runs_on) == Some(uses.as_str())
+    {
         return true;
     }
     if uses == crate::cache_steps::TOOLS_RESTORE_USES {

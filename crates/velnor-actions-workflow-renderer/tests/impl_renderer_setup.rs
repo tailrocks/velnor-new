@@ -103,8 +103,8 @@ fn strict_inserts_setup_before_mise_exec() -> Result<(), RenderError> {
         assert!(text.contains(&line), "sole owner saves {line}:\n{text}");
     }
     assert!(
-        text.contains("cache_key: mise-tools-v2-"),
-        "host seed key is explicit:\n{text}"
+        text.contains("uses: ./.github/actions/velnor-tools-prelude-u26"),
+        "registered V2 prelude is explicit:\n{text}"
     );
     Ok(())
 }

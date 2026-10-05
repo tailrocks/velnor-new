@@ -7,10 +7,10 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::workflow::step_identity::is_tool_seed_step;
-use velnor_actions_contract::{Job, Step, StepKind, StepRole};
+use velnor_actions_contract::{Job, Step, StepKind};
 
+use crate::RenderError;
 use crate::yaml::Yaml;
-use crate::{RenderError, cache_p08::ToolsCachePayload};
 
 use crate::tool_seed_admission::trusted_seed_guard;
 pub(crate) use crate::tool_seed_admission::{SEED_ROOT, require_seed_root};
@@ -39,15 +39,6 @@ pub(crate) fn tool_seed_action_script(seed_root: &str) -> Result<String, RenderE
 fn copy_script(seed_root: &str, key_shell: &str, guard: &str) -> String {
     format!(
         r#"set -euo pipefail; {guard}; seed="{seed_root}"; key={key_shell}; if [ ! -e "$seed" ]; then echo "tool seed absent"; exit 0; fi; if ! trusted_seed_is_trusted "$seed"; then echo "untrusted tool seed; continuing cold"; exit 0; fi; if [ -z "$key" ] || [ ! -f "$seed/mise/KEY" ]; then echo "tool seed key mismatch"; exit 0; fi; if ! trusted_seed_file_matches "$seed/mise/KEY" "$key"; then echo "tool seed key mismatch"; exit 0; fi; if [ -d "$seed/mise/tree" ]; then /bin/mkdir -p "$HOME/.local/share/mise"; /bin/cp -R "$seed/mise/tree/." "$HOME/.local/share/mise/"; echo "tool seed restored share-dir"; fi; if [ -d "$seed/rustup/tree" ]; then /bin/mkdir -p "$RUNNER_TEMP/velnor/rustup"; /bin/cp -R "$seed/rustup/tree/." "$RUNNER_TEMP/velnor/rustup/"; echo "tool seed restored toolchain-dir"; fi"#
-    )
-}
-
-#[cfg(test)]
-fn is_tool_seed_action(step: &Step) -> bool {
-    matches!(
-        &step.kind,
-        StepKind::Action { uses, .. }
-            if uses == TOOL_SEED_USES && is_tool_seed_step(step)
     )
 }
 
@@ -94,22 +85,6 @@ pub(crate) fn validate_action_call(
         ));
     }
     validate_seed_action(step)
-}
-
-pub(crate) fn seed_step(payload: &ToolsCachePayload) -> Result<Step, RenderError> {
-    let cache_key = payload.key_expression();
-    if !crate::cache_p08::is_v2_cache_key_expression(&cache_key) {
-        return Err(RenderError::InvalidWorkflow(
-            "bad_tools_seed_key_expression".to_owned(),
-        ));
-    }
-    let mut step = crate::steps::action_step(
-        TOOL_SEED_NAME,
-        TOOL_SEED_USES,
-        BTreeMap::from([("cache_key".to_owned(), cache_key)]),
-    )?;
-    step.role = Some(StepRole::ToolSeed);
-    Ok(step)
 }
 
 /// True when any job renders the tool-seed step.
