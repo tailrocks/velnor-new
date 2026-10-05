@@ -184,17 +184,19 @@ runs, so fork read-only has unit evidence only:
 `pr_save_allowed`/`is_read_only`/`mode_for_event`); simultaneous-writer
 attempts (PARTIAL: warm-run sources save hit backend reservation
 refusal, but no controlled two-writer race on one key was run).
-ANSWERED: why the Mise built-in cache never saved — the pinned
+Historical V1 measurement conclusion: the Mise built-in cache never saved — the pinned
 `jdx/mise-action@v5.0.0` (`9149ea8`) saves only inside its `install`
 leg (`src/index.ts:run()` gates `saveCache` on the `install` input;
 `action.yml` offers no PR-scoped save input and the source has zero
 `pull_request` handling), which Velnor disables (`install: false`),
 so the push-gated `cache_save` expression never saved on any event
 (all 134 runs to date are `pull_request` per the 2026-10-01 API
-census; push triggers only on `main`, unmerged). Setups are now restore-only and elected writers
-carry explicit push-gated `Save Mise tools` steps; warmth still needs
-one post-merge `main` push to seed the `mise-v1-*` entries. Full
-per-action PR-save verdict: gate-4 doc R13 bullet.
+census; push triggers only on `main`, unmerged). That V1 built-in-cache
+design is superseded: generated workflows now turn off the action-owned
+cache and use the V2 runtime-qualified tools archive documented in the
+cache contract. These historical measurements do not qualify a V2 cold
+writer, warm restore, or performance result. Full per-action PR-save
+verdict: gate-4 doc R13 bullet.
 
 ## Hosted MBX object-cache round-trip
 

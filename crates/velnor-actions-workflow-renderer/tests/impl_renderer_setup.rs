@@ -86,23 +86,23 @@ fn strict_inserts_setup_before_mise_exec() -> Result<(), RenderError> {
         format!("sha256: {MISE_SHA256}"),
         "install: \"false\"".to_owned(),
         "env: \"false\"".to_owned(),
-        "cache: \"true\"".to_owned(),
+        "cache: \"false\"".to_owned(),
         "cache_save: \"false\"".to_owned(),
-        "cache_key: mise-v1-".to_owned(),
     ] {
         assert!(text.contains(&line), "missing {line}:\n{text}");
     }
     assert!(
-        !text.contains("Restore Mise tools"),
-        "P08: restores stay built-in:\n{text}"
+        text.contains("- name: Restore Mise tools"),
+        "V2 tools cache restores explicitly:\n{text}"
     );
     for line in [
         "- name: Save Mise tools".to_owned(),
-        "key: mise-v1-".to_owned(),
+        "key: mise-tools-v2-".to_owned(),
         "if: success() && github.event_name == 'push'".to_owned(),
     ] {
         assert!(text.contains(&line), "sole owner saves {line}:\n{text}");
     }
+    assert!(!text.contains("cache_key:"), "no action-owned key:\n{text}");
     Ok(())
 }
 

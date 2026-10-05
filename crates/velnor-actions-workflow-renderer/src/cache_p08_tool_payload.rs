@@ -119,31 +119,21 @@ impl ToolsCachePayload {
     /// Read-only restore over the payload's key expression and exact paths.
     /// # Errors
     pub fn restore_step(&self) -> Result<Step, RenderError> {
-        let mut step = steps::cache_action_step(
+        steps::tools_cache_step(
             true,
-            steps::TOOLS_RESTORE_USES,
-            "tools",
             &self.key_expression(),
-            &[],
-            &self.paths,
-        )?;
-        step.condition = Some(cache_p08::TOOLS_CACHE_RESTORE_CONDITION.to_owned());
-        Ok(step)
+            Some(cache_p08::TOOLS_CACHE_RESTORE_CONDITION.to_owned()),
+        )
     }
 
     /// Save over the identical key expression and exact paths.
     /// # Errors
     pub fn save_step(&self) -> Result<Step, RenderError> {
-        let mut step = steps::cache_action_step(
+        steps::tools_cache_step(
             false,
-            steps::TOOLS_SAVE_USES,
-            "tools",
             &self.key_expression(),
-            &[],
-            &self.paths,
-        )?;
-        step.condition = Some(super::save_policy::condition());
-        Ok(step)
+            Some(super::save_policy::condition()),
+        )
     }
 }
 

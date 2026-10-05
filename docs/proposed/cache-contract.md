@@ -104,8 +104,8 @@ Each path has one owner:
 
 | Data | Owner | Rule |
 |---|---|---|
-| Mise tools and Rust components | Compiled-in generator catalog, executed by Mise | Embed and invoke exact versions; disable project config, env files, and hooks |
-| Cargo registry and Git sources | Velnor source layer | Exclude credentials; separate from MBX |
+| Mise tools and Rust components | Velnor V2 tools layer; exact pins come from the compiled-in catalog and Mise | Archive Mise installs, Rustup components, Cargo-installed binaries, and their manifests only under a runtime-qualified key; disable project config, env files, and hooks |
+| Cargo registry and Git sources | Velnor source layer | Archive only `registry/index/`, `registry/cache/`, and `git/db/`; exclude credentials and keep tool binaries in the tools layer |
 | Compiler objects and scheduler state | `jdx/mr-boxington-action` when MBX is selected | The action owns the object format (`github-cache-mode: objects`). Generated jobs set `ACTIONS_CACHE_MODE=read` so its post does not export inside the live store. `mbx cache export` writes one directory at `$RUNNER_TEMP/mbx-single-bundle`; `actions/cache` archives only that directory; `mbx cache import` loads it. Velnor does not reimplement the object format |
 | Mutable target directory | Matrix job | Reuse sequentially; never share concurrently |
 | Successful task result | Mise task cache | Use only for qualified deterministic tasks and complete outputs |
@@ -125,7 +125,8 @@ The generated workflow MUST use these paths. `CARGO_TARGET_DIR` is never an arch
 ```text
 VELNOR_CACHE_ROOT     = $RUNNER_TEMP/velnor/cache
 CARGO_HOME            = $VELNOR_CACHE_ROOT/cargo
-CARGO_SOURCE_PATHS    = $CARGO_HOME/registry $CARGO_HOME/git
+CARGO_SOURCE_PATHS    = $CARGO_HOME/registry/index $CARGO_HOME/registry/cache $CARGO_HOME/git/db
+TOOLS_CACHE_PATHS     = ~/.local/share/mise $RUNNER_TEMP/velnor/rustup $CARGO_HOME/.crates.toml $CARGO_HOME/.crates2.json $CARGO_HOME/bin
 CARGO_TARGET_DIR      = $RUNNER_TEMP/velnor/target/<lane_id>
 MBX_TARGET_DIR        = $RUNNER_TEMP/velnor/target/<lane_id>
 MISE_TASK_CACHE_DIR   = $VELNOR_CACHE_ROOT/mise-task
@@ -134,7 +135,12 @@ REPORT_DIR            = $RUNNER_TEMP/velnor/<run-key>/<matrix-key>
 ```
 
 `CARGO_HOME` is set to this isolated path for every generated task. The source archive MUST include only
-`registry/` and `git/`, never credentials or other files under Cargo home. Mise stores task artifacts under
+the listed registry and Git source paths, never Cargo binaries, Cargo install manifests, credentials, or other
+files under Cargo home. The tools archive carries the exact Cargo binary and manifest paths above alongside
+Mise installs and Rustup components. Its static identity binds the exact Mise action and binary pin, tool
+selectors, Rust components, target, runner lane, and owned paths; a hosted runtime identity binds the cache to
+the runner image and validated absolute roots. Unknown runtime identity disables restore and save while the
+workflow still performs normal pinned tool preparation. Mise stores task artifacts under
 `$MISE_TASK_CACHE_DIR/task-artifacts/v2`; CI sets that environment variable before Mise starts and archives
 only that directory.
 

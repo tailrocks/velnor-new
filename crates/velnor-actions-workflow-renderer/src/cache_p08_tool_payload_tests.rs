@@ -57,10 +57,15 @@ fn rendered_condition(step: &Step) -> String {
         preseed: false,
         plan_consumer_env: BTreeMap::new(),
     };
-    let Yaml::Map(entries) =
-        crate::document_steps::step_to_yaml("rust-amq", step, &context, &[], false)
-            .expect("render consumer step")
-    else {
+    let Yaml::Map(entries) = crate::document_steps::step_to_yaml(
+        "rust-amq",
+        step,
+        &context,
+        &[],
+        false,
+        &BTreeMap::new(),
+    )
+    .expect("render consumer step") else {
         panic!("a rendered step is a mapping");
     };
     entries
@@ -89,6 +94,8 @@ fn payload_paths_and_restore_save_inputs_are_identical() {
         [
             "~/.local/share/mise",
             "${{ runner.temp }}/velnor/rustup",
+            "${{ runner.temp }}/velnor/cargo/.crates.toml",
+            "${{ runner.temp }}/velnor/cargo/.crates2.json",
             "${{ runner.temp }}/velnor/cargo/bin",
         ]
     );
