@@ -34,7 +34,8 @@ collector /private/tmp/velnor-capture-upstream-d435-v2.py has SHA-256
 6f5cbd14bee1a6a1a6842c6d7bb19be840e53f7614bb0e72a1d161be45fbeac0. It
 made unauthenticated, sequential HTTPS requests with the repository probe's
 10-second timeout and 512-KiB body cap. It retained status, final URL, selected
-response headers, request time, persisted body length/hash, truncation status,
+response headers, the manifest requested_at value recorded after body read and
+parse (not a request-start time), persisted body length/hash, truncation status,
 and parsed latest version for each source. The capture directory and raw
 responses remain at /private/tmp/velnor-pr75-captures-d435-20261005-r2/.
 
