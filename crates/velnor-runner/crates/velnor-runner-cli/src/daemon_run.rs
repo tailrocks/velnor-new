@@ -5,7 +5,9 @@ use std::process::ExitCode;
 use std::thread;
 use std::time::Duration;
 
-use velnor_runner_host::{DaemonLock, HostConfig, LaunchReport, launch_blocking, load_secret};
+use velnor_runner_host::{
+    DaemonLock, HostConfig, LaunchReport, launch_blocking, load_secret, release_blocking,
+};
 
 use crate::dispatch::{KEYCHAIN_ACCOUNT, KEYCHAIN_SERVICE};
 
@@ -35,12 +37,44 @@ pub(crate) fn daemon_intent(toml_text: Option<&str>) -> DaemonIntent {
 }
 
 /// Hold `daemon.lock` and launch until the lock is lost.
+///
+/// `VELNOR_RELEASE_EXITED=1` only proves exited rows, then returns. No lock,
+/// no keychain, and no session.
 pub(crate) fn run_daemon(state: &Path) -> ExitCode {
+    if std::env::var("VELNOR_RELEASE_EXITED").ok().as_deref() == Some("1") {
+        return release_exited_rows(state);
+    }
     let Ok(lock) = DaemonLock::try_acquire(&state.join("daemon.lock")) else {
         eprintln!("daemon already running");
         return ExitCode::from(1);
     };
     serve(state, &lock)
+}
+
+fn release_exited_rows(state: &Path) -> ExitCode {
+    let raw = std::fs::read_to_string(state.join("host.toml")).ok();
+    let text = match daemon_intent(raw.as_deref()) {
+        DaemonIntent::Listen => raw.as_deref(),
+        DaemonIntent::Wait | DaemonIntent::Err => None,
+    };
+    let Some(text) = text else {
+        eprintln!("invalid config");
+        return ExitCode::from(1);
+    };
+    let Ok(config) = HostConfig::parse(text) else {
+        eprintln!("invalid config");
+        return ExitCode::from(1);
+    };
+    match release_blocking(&config.docker.endpoint, &state.join("launch.db")) {
+        Ok(()) => {
+            println!("released");
+            ExitCode::SUCCESS
+        }
+        Err(error) => {
+            eprintln!("{error}");
+            ExitCode::from(1)
+        }
+    }
 }
 
 fn serve(state: &Path, lock: &DaemonLock) -> ExitCode {

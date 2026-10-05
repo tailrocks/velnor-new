@@ -38,7 +38,7 @@ pub use ipc::{MAX_FRAME, SOCKET_DIR_MODE, decode_frame, encode_frame};
 pub use journal::{IntentState, Journal, Outcome};
 pub use keychain::{import_secret, load_secret, read_secret};
 pub use launch::{LaunchReport, launch_once};
-pub use launch_blocking::{ListenFault, launch_blocking};
+pub use launch_blocking::{ListenFault, launch_blocking, release_blocking};
 pub use listen::{SessionCensus, SessionProbe, probe_once, queue_path, session_census};
 pub use plist::{keychain_import_argv, launch_agent_plist};
 pub use readiness::{Readiness, doctor_json, readiness_for_empty, status_json};
@@ -76,6 +76,8 @@ mod launch_capacity_tests;
 mod launch_harness;
 #[cfg(test)]
 mod launch_idless_tests;
+#[cfg(test)]
+mod launch_release_tests;
 #[cfg(test)]
 mod launch_scale_tests;
 #[cfg(test)]

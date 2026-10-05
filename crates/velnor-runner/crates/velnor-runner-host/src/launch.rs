@@ -59,6 +59,18 @@ pub struct LaunchReport {
     pub workers: Vec<Started>,
 }
 
+/// Prove exited runners are gone and free their slots.
+///
+/// # Errors
+///
+/// Returns [`EnsureError`] when the journal or Docker lookup fails.
+pub(crate) async fn release_slots<E: crate::stage::PairEngine + ?Sized>(
+    journal: &Journal,
+    docker: &E,
+) -> Result<(), EnsureError> {
+    slot::release_exited(journal, docker).await
+}
+
 /// Open one session, start the admitted workers, then delete that session.
 ///
 /// # Errors
@@ -77,6 +89,7 @@ pub async fn launch_once(
     docker: &bollard::Docker,
     journal: &Journal,
 ) -> Result<LaunchReport, EnsureError> {
+    slot::release_exited(journal, docker).await?;
     let set = ensure_product_scale_set(pat, owner, repo)?;
     if std::env::var("VELNOR_RECONCILE").ok().as_deref() == Some("1") {
         let decision = gate::reconcile_gate(journal, docker).await?;
