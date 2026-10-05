@@ -276,12 +276,11 @@ pub(crate) fn helper_path_for_version() -> String {
 
 /// `sh -c` argv wrapping one joined command with report capture.
 ///
-/// Stamps the wall-clock start to a per-entry file first (argv
-/// validation forbids `$(...)`, so the stamp travels via file, never
-/// substitution), runs the obligation, captures `$?`, reads the stamp
-/// back, reports through the staged helper's [`REPORT_OP`], then exits
-/// with the obligation code (helper failure surfaces only on an
-/// otherwise passing obligation, so failures never mask each other).
+/// Captures the wall-clock start with the one permitted fixed
+/// `$(date +%s%3N)` substitution, runs the obligation, captures `$?`,
+/// reports through the staged helper's [`REPORT_OP`], then exits with
+/// the obligation code (helper failure surfaces only on an otherwise
+/// passing obligation, so failures never mask each other).
 /// Credential removal is the step constructor's job (`shell_step`
 /// prefixes argv-wide `env -u`), not a script prelude's: obligations
 /// execute repository code (build scripts), and the step env cannot
