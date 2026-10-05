@@ -14,9 +14,9 @@ use velnor_actions_rust::{GeneratorBinaryCheck, GeneratorBinaryVerification, Gen
 use crate::yaml::Yaml;
 
 use super::{
-    ASSET_DIR, LINUX_ARTIFACT, MACOS_ARTIFACT, MISE_USES, attest_permissions, attest_step,
-    build_permissions, checkout_step, finish, run_step, subject_list, trusted_main_dispatch,
-    upload_step, with_needs, with_permissions,
+    ASSET_DIR, MISE_USES, attest_permissions, attest_step, build_permissions, checkout_step,
+    finish, run_step, subject_list, target_workflow, trusted_main_dispatch, upload_step,
+    with_needs, with_permissions,
 };
 
 #[cfg(test)]
@@ -31,50 +31,35 @@ pub(super) fn target_jobs(
     let binary = target.binary_filename(binding.version());
     let checksum = target.sidecar_filename(binding.version());
     let files = [binary.as_str(), checksum.as_str()];
-    let (job_id, job_name, artifact, attest_id, attest_name) = match target {
-        GeneratorReleaseTarget::LinuxX86_64 => (
-            "build-linux",
-            "Build Linux velnor-actions",
-            LINUX_ARTIFACT,
-            "attest-linux",
-            "Attest Linux velnor-actions",
-        ),
-        GeneratorReleaseTarget::MacosArm64 => (
-            "build-macos",
-            "Build macOS velnor-actions",
-            MACOS_ARTIFACT,
-            "attest-macos",
-            "Attest macOS velnor-actions",
-        ),
-    };
+    let workflow = target_workflow(target);
     let runner = crate::runs_on::runs_on_yaml(target.runner_label())?;
     let steps = build_steps(target, binding, &binary, &checksum)?;
     let build = finish(
-        job_id,
+        workflow.build_job_id,
         with_permissions(
-            trusted_main_dispatch(super::base(job_name, runner.clone(), 120)),
+            trusted_main_dispatch(super::base(workflow.build_job_name, runner.clone(), 120)),
             build_permissions(),
         ),
         std::iter::once(checkout_step())
             .chain(steps)
             .chain(std::iter::once(upload_step(
                 &format!("Upload {} assets", target.triple()),
-                artifact,
+                workflow.artifact_name,
                 &files,
             )))
             .collect(),
     );
     let attest = finish(
-        attest_id,
+        workflow.attest_job_id,
         with_needs(
             with_permissions(
-                trusted_main_dispatch(super::base(attest_name, runner, 20)),
+                trusted_main_dispatch(super::base(workflow.attest_job_name, runner, 20)),
                 attest_permissions(),
             ),
-            &[job_id],
+            &[workflow.build_job_id],
         ),
         vec![
-            super::download_step("Download built assets", artifact, ASSET_DIR),
+            super::download_step("Download built assets", workflow.artifact_name, ASSET_DIR),
             attest_step(&subject_list(&files)),
         ],
     );
@@ -220,7 +205,7 @@ fn stage_binary_script(verification: &GeneratorBinaryVerification, asset: &str) 
 fn checksum_script(target: GeneratorReleaseTarget, binary: &str, checksum: &str) -> String {
     let command = match target {
         GeneratorReleaseTarget::LinuxX86_64 => "sha256sum",
-        GeneratorReleaseTarget::MacosArm64 => "shasum -a 256",
+        GeneratorReleaseTarget::MacosArm64 | GeneratorReleaseTarget::MacosX86_64 => "shasum -a 256",
     };
     format!(
         "set -euo pipefail\n{command} -- {} > {}",

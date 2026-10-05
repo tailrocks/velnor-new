@@ -1,4 +1,4 @@
-//! Generator release: Linux x64 and macOS arm64 `velnor-actions` assets.
+//! Generator release: the canonical Linux and macOS `velnor-actions` assets.
 //!
 //! The tag is `generator-<sha>` with `--latest=false`. It does not move
 //! `v0.1.0`. Attest jobs never receive `contents: write`. Only publish does.
@@ -22,8 +22,10 @@ const ATTEST_USES: &str =
     "actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8";
 const LINUX_ARTIFACT: &str = "generator-linux-assets";
 const MACOS_ARTIFACT: &str = "generator-macos-assets";
+const MACOS_X86_64_ARTIFACT: &str = "generator-macos-x86_64-assets";
 const LINUX_DIR: &str = "linux-assets";
 const MACOS_DIR: &str = "macos-assets";
+const MACOS_X86_64_DIR: &str = "macos-x86_64-assets";
 const ASSET_DIR: &str = "assets";
 const ACCEPTED_MANIFEST: &str =
     "${{ runner.temp }}/velnor-generator-accepted/velnor-actions-release-manifest.json";
@@ -35,7 +37,7 @@ const ACCEPTANCE_RECEIPT: &str =
 const PUBLISHER_WORKFLOW_REF: &str =
     "tailrocks/velnor-new/.github/workflows/generator-release.yml@refs/heads/main";
 
-/// Linux x64 and macOS arm64 builds, two attestations, then one publish.
+/// One native build and attestation per canonical target, then one publish.
 ///
 /// # Errors
 ///
@@ -60,6 +62,30 @@ fn publish_script(binding: &GeneratorReleaseSourceBinding) -> String {
 }
 
 fn publish_job(hosted: Yaml, binding: &GeneratorReleaseSourceBinding) -> (String, Yaml) {
+    let needs = binding
+        .targets()
+        .flat_map(|target| {
+            let workflow = target_workflow(target);
+            [workflow.build_job_id, workflow.attest_job_id]
+        })
+        .collect::<Vec<_>>();
+    let downloads = binding
+        .targets()
+        .map(|target| {
+            let workflow = target_workflow(target);
+            download_step(
+                workflow.download_step_name,
+                workflow.artifact_name,
+                workflow.artifact_dir,
+            )
+        })
+        .collect::<Vec<_>>();
+    let mut steps = vec![checkout_step(), mise_step()];
+    steps.extend(downloads);
+    steps.extend([
+        publish_step(&publish_script(binding)),
+        upload_accepted_metadata_step(),
+    ]);
     finish(
         "publish-generator",
         with_needs(
@@ -67,17 +93,57 @@ fn publish_job(hosted: Yaml, binding: &GeneratorReleaseSourceBinding) -> (String
                 trusted_main_dispatch(base("Publish velnor-actions", hosted, 30)),
                 publish_permissions(),
             ),
-            &["attest-linux", "attest-macos"],
+            &needs,
         ),
-        vec![
-            checkout_step(),
-            mise_step(),
-            download_step("Download Linux assets", LINUX_ARTIFACT, LINUX_DIR),
-            download_step("Download macOS assets", MACOS_ARTIFACT, MACOS_DIR),
-            publish_step(&publish_script(binding)),
-            upload_accepted_metadata_step(),
-        ],
+        steps,
     )
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(super) struct TargetWorkflow {
+    pub build_job_id: &'static str,
+    pub build_job_name: &'static str,
+    pub attest_job_id: &'static str,
+    pub attest_job_name: &'static str,
+    pub artifact_name: &'static str,
+    pub artifact_dir: &'static str,
+    pub download_step_name: &'static str,
+}
+
+pub(super) const fn target_workflow(
+    target: velnor_actions_contract::GeneratorReleaseTarget,
+) -> TargetWorkflow {
+    use velnor_actions_contract::GeneratorReleaseTarget;
+
+    match target {
+        GeneratorReleaseTarget::LinuxX86_64 => TargetWorkflow {
+            build_job_id: "build-linux",
+            build_job_name: "Build Linux velnor-actions",
+            attest_job_id: "attest-linux",
+            attest_job_name: "Attest Linux velnor-actions",
+            artifact_name: LINUX_ARTIFACT,
+            artifact_dir: LINUX_DIR,
+            download_step_name: "Download Linux assets",
+        },
+        GeneratorReleaseTarget::MacosArm64 => TargetWorkflow {
+            build_job_id: "build-macos",
+            build_job_name: "Build macOS arm64 velnor-actions",
+            attest_job_id: "attest-macos",
+            attest_job_name: "Attest macOS arm64 velnor-actions",
+            artifact_name: MACOS_ARTIFACT,
+            artifact_dir: MACOS_DIR,
+            download_step_name: "Download macOS arm64 assets",
+        },
+        GeneratorReleaseTarget::MacosX86_64 => TargetWorkflow {
+            build_job_id: "build-macos-x86_64",
+            build_job_name: "Build macOS x86_64 velnor-actions",
+            attest_job_id: "attest-macos-x86_64",
+            attest_job_name: "Attest macOS x86_64 velnor-actions",
+            artifact_name: MACOS_X86_64_ARTIFACT,
+            artifact_dir: MACOS_X86_64_DIR,
+            download_step_name: "Download macOS x86_64 assets",
+        },
+    }
 }
 
 fn mise_step() -> Yaml {

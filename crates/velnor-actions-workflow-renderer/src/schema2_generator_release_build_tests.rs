@@ -44,6 +44,13 @@ fn renderer_uses_typed_target_builds_and_every_native_proof() -> Result<(), Box<
             "target/aarch64-apple-darwin/release/velnor-actions",
             "velnor-actions-0.2.7-aarch64-apple-darwin",
         ),
+        (
+            "build-macos-x86_64",
+            "macos-15-intel",
+            "x86_64-apple-darwin",
+            "target/x86_64-apple-darwin/release/velnor-actions",
+            "velnor-actions-0.2.7-x86_64-apple-darwin",
+        ),
     ] {
         let job_body = job_section(&workflow, job)?;
         assert!(job_body.contains(&format!("runs-on: {runner}")));
@@ -65,6 +72,11 @@ fn renderer_uses_typed_target_builds_and_every_native_proof() -> Result<(), Box<
 
     assert!(workflow.contains("velnor-actions-0.2.7-x86_64-unknown-linux-gnu.sha256"));
     assert!(workflow.contains("velnor-actions-0.2.7-aarch64-apple-darwin.sha256"));
+    assert!(workflow.contains("velnor-actions-0.2.7-x86_64-apple-darwin.sha256"));
+    let publish = job_section(&workflow, "publish-generator")?;
+    assert!(publish.contains("attest-macos-x86_64"));
+    assert!(publish.contains("generator-macos-x86_64-assets"));
+    assert!(publish.contains("macos-x86_64-assets"));
     assert!(workflow.contains("--version '0.2.7'"));
     assert!(workflow.contains("generator-release.yml@refs/heads/main"));
     let bound = binding.bind(SOURCE_SHA)?;
@@ -92,6 +104,8 @@ fn build_attest_and_publish_jobs_reject_untrusted_workflow_contexts() -> Result<
         "attest-linux",
         "build-macos",
         "attest-macos",
+        "build-macos-x86_64",
+        "attest-macos-x86_64",
         "publish-generator",
     ];
     for job in guarded_jobs {
