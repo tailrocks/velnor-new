@@ -15,17 +15,20 @@ the `full` and `visit` `syn` features needed to inspect complete Rust syntax
 and module/test attribute declarations.
 
 The test-registration check starts from Cargo compiler artifacts whose
-profiles actually enable `cfg(test)`, then follows Rust modules and expanded
-literal `include!` sources. It scans package Rust sources for test attributes,
-including attributes emitted in macro bodies, and reports test-bearing files
-outside those source closures. Rustc dep-info confirms that an `include!` was
-expanded; dep-info entries alone MUST NOT register sources because they also
-include `include_str!` and `include_bytes!` data. The check evaluates
-test-profile conditions (`cfg(test)`, `cfg(not(test))`, and constant `cfg`)
-and conservatively treats target, feature, and custom cfg predicates as
-possible. Its registration result therefore means syntactically reachable in
-a test-profile configuration, not that every target-specific branch was
-compiled on the host running the check.
+profiles actually enable `cfg(test)`, then follows Rust modules, direct literal
+`include!` sources, and invoked `macro_rules!` includes that have one empty
+matcher and empty calls in the same source module. Other invoked macros that
+contain `include!` fail closed. It scans package Rust sources for test
+attributes, including test items emitted by invoked macro bodies, and reports
+test-bearing files outside those source closures. Rustc dep-info corroborates
+unconditional `include!` edges; it is not source authority because it also
+includes `include_str!` and `include_bytes!` data. Conditional source edges
+remain possible even when the host dep-info omits them. The check evaluates
+test-profile conditions (`cfg(test)`, `cfg(not(test))`, `cfg_attr`, and
+constant `cfg`) and conservatively treats target, feature, and custom cfg
+predicates as possible. Its registration result therefore means syntactically
+reachable under the evaluated test-profile conditions, not that every
+target-specific branch was compiled on the host running the check.
 
 Tokio requires a demonstrated asynchronous-I/O need. Prefer the standard
 library for one-use facilities. Shared versions belong in

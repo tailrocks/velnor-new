@@ -52,7 +52,7 @@ impl Drop for ScratchDir {
 fn write_workspace(scratch: &ScratchDir) -> Outcome<()> {
     scratch.write(
         "Cargo.toml",
-        "[workspace]\nmembers = [\".\", \"no-tests\"]\nresolver = \"3\"\n\n[package]\nname = \"registration-fixture\"\nversion = \"0.1.0\"\nedition = \"2024\"\nautotests = false\n\n[[test]]\nname = \"registered\"\npath = \"tests/registered.rs\"\n",
+        "[workspace]\nmembers = [\".\", \"no-tests\"]\nresolver = \"3\"\n\n[package]\nname = \"registration-fixture\"\nversion = \"0.1.0\"\nedition = \"2024\"\nautotests = false\n\n[features]\ndisabled = []\n\n[[test]]\nname = \"registered\"\npath = \"tests/registered.rs\"\n",
     )?;
     scratch.write(
         "Cargo.lock",
@@ -72,7 +72,7 @@ fn write_workspace(scratch: &ScratchDir) -> Outcome<()> {
 fn write_test_sources(scratch: &ScratchDir) -> Outcome<()> {
     scratch.write(
         "tests/registered.rs",
-        "#[path = \"actual.rs\"] mod logical;\n#[path = \"alternate\"] mod inline { mod child; }\n#[path = \"fixtures/registered.rs\"] mod fixture;\n#[cfg(target_os = \"macos\")] mod macos_only;\n#[cfg(any())] mod impossible;\ninclude!(\"included.rs\");\nmacro_rules! include_test { () => { include!(\"macro_included.rs\"); }; }\ninclude_test!();\nmacro_rules! unused_include { () => { include!(\"orphan_unused_macro_include.rs\"); }; }\nconst _: &str = include_str!(\"orphan_data.rs\");\nmacro_rules! generated { () => { #[test] fn macro_test() {} }; }\ngenerated!();\n",
+        "#[path = \"actual.rs\"] mod logical;\n#[path = \"alternate\"] mod inline { mod child; }\n#[path = \"fixtures/registered.rs\"] mod fixture;\n#[cfg(target_os = \"macos\")] mod macos_only;\n#[cfg_attr(feature = \"disabled\", cfg(any()))] mod cfg_attr_possible;\n#[cfg_attr(test, cfg(any()))] mod test_filtered;\n#[cfg(any())] mod impossible;\n#[cfg(target_os = \"macos\")] include!(\"macos_included.rs\");\ninclude!(\"included.rs\");\nmacro_rules! include_test { () => { include!(\"macro_included.rs\"); }; }\ninclude_test!();\nmacro_rules! unused_include { () => { include!(\"orphan_data.rs\"); }; }\nconst _: &str = include_str!(\"orphan_data.rs\");\nmacro_rules! generated { () => { #[test] fn macro_test() {} }; }\ngenerated!();\n",
     )?;
     scratch.write("tests/actual.rs", "mod child;\n")?;
     scratch.write("tests/child.rs", "#[test] fn external_child() {}\n")?;
@@ -84,16 +84,25 @@ fn write_test_sources(scratch: &ScratchDir) -> Outcome<()> {
         "tests/macos_only.rs",
         "#[test] fn platform_registered_test() {}\n",
     )?;
+    scratch.write(
+        "tests/cfg_attr_possible.rs",
+        "#[test] fn cfg_attr_possible_test() {}\n",
+    )?;
+    scratch.write("tests/test_filtered.rs", "#[test] fn filtered_test() {}\n")?;
+    scratch.write(
+        "tests/macos_included.rs",
+        "mod macos_child;\n#[test] fn target_include_test() {}\n",
+    )?;
+    scratch.write(
+        "tests/macos_child.rs",
+        "#[test] fn target_include_child() {}\n",
+    )?;
     scratch.write("tests/impossible.rs", "#[test] fn impossible_test() {}\n")?;
     scratch.write(
         "tests/fixtures/registered.rs",
         "#[test] fn registered_fixture() {}\n",
     )?;
     scratch.write("tests/orphan_data.rs", "#[test] fn data_only_test() {}\n")?;
-    scratch.write(
-        "tests/orphan_unused_macro_include.rs",
-        "#[test] fn unused_macro_data() {}\n",
-    )?;
     scratch.write("tests/included.rs", "#[test] fn included_test() {}\n")?;
     scratch.write(
         "tests/macro_included.rs",
@@ -110,8 +119,13 @@ fn write_test_sources(scratch: &ScratchDir) -> Outcome<()> {
     scratch.write("tests/orphan.rs", "#[test] fn orphan_test() {}\n")?;
     scratch.write(
         "tests/orphan_macro.rs",
-        "macro_rules! emitted_test { () => { #[test] fn emitted() {} }; }\nemitted_test!();\n",
+        "macro_rules! emitted_test { ($name:ident) => { #[test] fn $name() {} }; }\nemitted_test!(emitted);\n",
     )?;
+    scratch.write(
+        "tests/orphan_macro_definition.rs",
+        "macro_rules! emitted_elsewhere { () => { #[test] fn emitted() {} }; }\n",
+    )?;
+    scratch.write("tests/orphan_macro_call.rs", "emitted_elsewhere!();\n")?;
     scratch.write(
         "tests/fixtures/orphan.rs",
         "#[test] fn fixture_orphan() {}\n",
@@ -136,18 +150,42 @@ fn write_test_sources(scratch: &ScratchDir) -> Outcome<()> {
 }
 
 #[test]
+fn unproven_invoked_macro_includes_fail_closed() -> Outcome<()> {
+    let scratch = ScratchDir::create()?;
+    let source = scratch.write(
+        "ambiguous.rs",
+        "macro_rules! include_by_shape { () => { include!(\"one.rs\") }; ($value:tt) => { include!(\"two.rs\") }; }\ninclude_by_shape!();\n",
+    )?;
+    let findings = super::graph::source_findings(&source)?;
+    assert!(super::graph::active_macro_includes(&findings).is_err());
+    scratch.cleanup()?;
+    Ok(())
+}
+
+#[test]
 fn compiler_closure_handles_paths_includes_macros_fixtures_and_orphans() -> Outcome<()> {
     let scratch = ScratchDir::create()?;
     write_workspace(&scratch)?;
     write_test_sources(&scratch)?;
     let manifest = scratch.0.join("Cargo.toml");
     let workspace = super::workspace_plan(&manifest)?;
+    let data_only = scratch.0.join("tests/orphan_data.rs").canonicalize()?;
+    assert!(compiler_dependencies_contain(&workspace, &data_only)?);
     let (registered, orphans) = super::registration_audit(&[workspace])?;
+    let registered_root = scratch.0.join("tests/registered.rs").canonicalize()?;
+    let root_findings = super::graph::source_findings(&registered_root)?;
+    assert!(root_findings.includes.iter().any(|include| {
+        include.path == scratch.0.join("tests/macos_included.rs")
+            && include.condition == super::graph::Possibility::Sometimes
+    }));
     for source in [
         "tests/registered.rs",
         "tests/child.rs",
         "tests/alternate/child.rs",
         "tests/macos_only.rs",
+        "tests/cfg_attr_possible.rs",
+        "tests/macos_included.rs",
+        "tests/macos_child.rs",
         "tests/fixtures/registered.rs",
         "tests/included.rs",
         "tests/macro_included.rs",
@@ -162,22 +200,51 @@ fn compiler_closure_handles_paths_includes_macros_fixtures_and_orphans() -> Outc
             "test syntax was not found in {source}"
         );
     }
+    assert!(!registered.contains(&data_only));
     let actual = super::relative_paths(&scratch.0, &orphans)?;
     let mut expected = vec![
         "no-tests/src/lib.rs",
         "src/ordinary_only.rs",
         "tests/impossible.rs",
         "tests/orphan_data.rs",
-        "tests/orphan_unused_macro_include.rs",
+        "tests/test_filtered.rs",
         "tests/fixtures/orphan.rs",
         "tests/inline/child.rs",
         "tests/logical/child.rs",
         "tests/orphan.rs",
         "tests/orphan_macro.rs",
+        "tests/orphan_macro_definition.rs",
         "tests/orphan_included.rs",
     ];
     expected.sort_unstable();
     assert_eq!(actual, expected);
     scratch.cleanup()?;
     Ok(())
+}
+
+fn compiler_dependencies_contain(
+    workspace: &super::WorkspacePlan,
+    source: &std::path::Path,
+) -> Outcome<bool> {
+    let output = super::cargo_output(
+        &workspace.manifest,
+        &["test", "--no-run", "--locked", "--message-format=json"],
+    )?;
+    let package_ids = workspace
+        .packages
+        .iter()
+        .map(|package| package.id.as_str())
+        .collect::<std::collections::HashSet<_>>();
+    for line in output.stdout.split(|byte| *byte == b'\n') {
+        if line.is_empty() {
+            continue;
+        }
+        let message: serde_json::Value = serde_json::from_slice(line)?;
+        if let Some(artifact) = super::test_artifact(&message, &package_ids, workspace)?
+            && artifact.dependencies.contains(source)
+        {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
