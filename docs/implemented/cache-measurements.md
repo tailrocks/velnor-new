@@ -255,12 +255,15 @@ collection behavior before export. This probe does not exercise either
 production lane route. Dispatch once from protected `main` with mode
 `mbx-cache-roundtrip`; the writer and reader run in order at the same SHA.
 
-This is a small end-to-end action and cache round-trip probe. It does not
-measure disk or inode peaks and does not qualify the affected ChainArgos
-workload. That evidence must come from the consumer's affected crates after
-adoption; a green probe alone is not an ENOSPC repair verdict. The hosted
-round-trip still needs to run against GitHub Actions after the generated
-workflow is adopted.
+This is a small end-to-end action and cache round-trip probe. The writer
+samples `df -B1 -P` and `df -i -P` on `$RUNNER_TEMP` after the probe build;
+the reader prints those same lines. `tee` writes each MBX stats JSON to both
+the step log and a file, and `jq -e` reads that file. These point-in-time
+samples do not measure disk or inode peaks and do not qualify the affected
+ChainArgos workload. That evidence must come from the consumer's affected
+crates after adoption; a green probe alone is not an ENOSPC repair verdict.
+The hosted round-trip still needs to run against GitHub Actions after the
+generated workflow is adopted.
 
 ## Cache-save cancellation progress semantics
 
