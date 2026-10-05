@@ -115,6 +115,13 @@ fn rendered_crate_steps_carry_validated_contract() -> TestResult {
     let task = window(yaml, "  rust-demo:", "  required:")?;
     let run_at = task.find("- name: Clippy").ok_or("first obligation")?;
     let run_block = &task[run_at..];
+    for key in ["MISE_RUSTUP_HOME:", "MISE_CARGO_HOME:"] {
+        assert!(run_block.contains(key), "Clippy misses {key}");
+    }
+    assert!(
+        task.contains("RUSTUP_TOOLCHAIN: 1.98.1"),
+        "task misses toolchain"
+    );
     for key in [
         "MISE_NO_CONFIG:",
         "MISE_NO_ENV:",
@@ -122,11 +129,8 @@ fn rendered_crate_steps_carry_validated_contract() -> TestResult {
         "MISE_LOCKFILE:",
         "MISE_AUTO_INSTALL:",
         "MISE_EXEC_AUTO_INSTALL:",
-        "MISE_RUSTUP_HOME:",
-        "MISE_CARGO_HOME:",
-        "RUSTUP_TOOLCHAIN:",
     ] {
-        assert!(run_block.contains(key), "Clippy misses {key}");
+        assert!(task.contains(key), "task misses {key}");
     }
     for key in [
         "MISE_GITHUB_TOKEN",
@@ -138,8 +142,8 @@ fn rendered_crate_steps_carry_validated_contract() -> TestResult {
         "CARGO_REGISTRY_TOKEN",
     ] {
         assert!(
-            run_block.contains(&format!("{key}: \"\"")),
-            "Clippy must scrub {key} empty"
+            task.contains(&format!("{key}: \"\"")),
+            "task must scrub {key} empty"
         );
     }
     Ok(())

@@ -12,7 +12,10 @@ use super::retry::{API_QUERY, bearer, execute, fresh_gate, json_content};
 /// Delete each listed session id, then `POST` one new session.
 ///
 /// An empty list only creates. HTTP 404 on a listed id means it is already
-/// gone. HTTP 409 does not delete any id that was not listed. No Docker.
+/// gone. HTTP 400 whose body names `RunnerScaleSetSessionExpiredException`
+/// means the same thing: GitHub rejects an expired id instead of returning
+/// 404. Any other HTTP 400 still fails, and the body is not copied into the
+/// error. HTTP 409 does not delete any id that was not listed. No Docker.
 ///
 /// # Errors
 ///
@@ -54,10 +57,27 @@ where
         body: Vec::new(),
     };
     let exchange = execute(transport, &request)?;
-    match exchange.status {
-        204 | 404 => Ok(()),
-        status => Err(status_error(status)),
+    if session_gone(exchange.status, &exchange.body) {
+        return Ok(());
     }
+    Err(status_error(exchange.status))
+}
+
+/// GitHub returns 400, not 404, once a scale-set session id has expired.
+const SESSION_EXPIRED: &[u8] = b"RunnerScaleSetSessionExpiredException";
+
+fn session_gone(status: u16, body: &[u8]) -> bool {
+    match status {
+        204 | 404 => true,
+        400 => contains_slice(body, SESSION_EXPIRED),
+        _ => false,
+    }
+}
+
+fn contains_slice(haystack: &[u8], needle: &[u8]) -> bool {
+    haystack
+        .windows(needle.len())
+        .any(|window| window == needle)
 }
 
 fn status_error(status: u16) -> SessionError {

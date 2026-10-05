@@ -135,12 +135,16 @@ fn rendered_crate_fetch_precedes_obligations_with_toolchain_triple() -> TestResu
         "rendered fetch argv:\n{window}"
     );
     let fetch_window = &window[fetch_pos..run_pos];
-    for key in ["MISE_RUSTUP_HOME:", "MISE_CARGO_HOME:", "RUSTUP_TOOLCHAIN:"] {
+    for key in ["MISE_RUSTUP_HOME:", "MISE_CARGO_HOME:"] {
         assert!(
             fetch_window.contains(key),
             "rendered fetch must carry {key}:\n{window}"
         );
     }
+    assert!(
+        window.contains("RUSTUP_TOOLCHAIN: 1.98.1"),
+        "rendered job must carry toolchain:\n{window}"
+    );
     Ok(())
 }
 

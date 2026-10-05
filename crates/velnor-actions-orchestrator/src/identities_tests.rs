@@ -3,7 +3,9 @@
 //! Declared via `#[path]` from `internal_plan.rs` under `cfg(test)`.
 
 use super::identities::*;
-use velnor_actions_contract::cachekey::{ToolchainInputs, toolchain_id};
+use velnor_actions_contract::cachekey::{
+    FormatInputs, ToolchainInputs, cache_format_id, mbx_cache_generation, toolchain_id,
+};
 use velnor_actions_contract::component_id_for_unit;
 use velnor_actions_contract::{ProposedTask, digest_b3, validate_digest};
 use velnor_actions_mise::ToolCatalog;
@@ -34,6 +36,7 @@ fn group(kind: TaskKind, task_id: &str, driver: CompileDriver, runner: TestRunne
         uses_network: false,
         uses_clock: false,
         uses_random: false,
+        run_ignored: None,
         nextest_profile: NextestProfile::Default,
     };
     let task = velnor_actions_rust::propose_task(&group).expect("fixture proposes");
@@ -170,6 +173,30 @@ fn formats_stay_single_and_graphs_relocate() {
         digest_of("path+file:///new#a@0.1.0")
     );
     assert_eq!(component_id_for_unit("a-id", "a/Cargo.toml"), "a-id");
+}
+
+#[test]
+fn cache_format_identity_tracks_emitted_mbx_generation() {
+    let version = velnor_actions_mise::catalog::MR_BOXINGTON_VERSION;
+    let generation = mbx_cache_generation(version);
+    let current = cache_format_id(&FormatInputs {
+        adapter: "mbx".to_owned(),
+        format: "velnor-cache-v1".to_owned(),
+        generation,
+    })
+    .expect("current MBX format identity");
+    let stale = cache_format_id(&FormatInputs {
+        adapter: "mbx".to_owned(),
+        format: "velnor-cache-v1".to_owned(),
+        generation: mbx_cache_generation("1.21.0"),
+    })
+    .expect("stale MBX format identity");
+
+    assert_eq!(cache_format_id_for(CompileDriver::Mbx), current);
+    assert_ne!(
+        current, stale,
+        "a cache generation change must re-key identity"
+    );
 }
 
 #[test]

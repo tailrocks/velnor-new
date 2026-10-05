@@ -146,6 +146,7 @@ fn rust_tasks_keep_the_rust_envelope() {
         uses_network: false,
         uses_clock: false,
         uses_random: false,
+        run_ignored: None,
     };
     let task = velnor_actions_rust::propose_task(&group).expect("fixture proposes");
     task.validate().expect("fixture valid");

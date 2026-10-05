@@ -13,6 +13,8 @@ mod schema2_feature_snapshots;
 mod schema2_generator_release_snapshots;
 #[path = "schema2_release_snapshots.rs"]
 mod schema2_release_snapshots;
+#[path = "impl_schema2_routing_shell.rs"]
+mod shell_tests;
 
 const HOSTED_RUNS: &str = "runs-on: ubuntu-26.04";
 const SCALE_RUNS: &str = "runs-on: [velnor, ubuntu-26.04-scale-set]";
@@ -88,6 +90,9 @@ fn both_mode_splits_verification_and_keeps_release_hosted() -> TestResult {
     let tree = render_staged_tree(&prepare(repo.path())?)?;
     let ci = required_file(&tree, ".github/workflows/ci.yml")?;
     let release = required_file(&tree, ".github/workflows/release.yml")?;
+    let shared = required_file(&tree, ".github/actions/rust-demo/action.yml")?;
+    assert!(shared.contains("shell: bash"), "{shared}");
+    assert!(shared.contains("using: composite"), "{shared}");
     assert_both_ci(ci)?;
     assert_hosted_release(release);
     Ok(())
@@ -111,8 +116,9 @@ fn dispatch_mode_overrides_configured_mode() -> TestResult {
 fn schema2_workflows_match_expected_bytes() -> TestResult {
     let repo = make_repo(&workflow_config())?;
     let tree = render_staged_tree(&prepare(repo.path())?)?;
+    let qualification = required_file(&tree, ".github/workflows/qualification.yml")?;
     assert_eq!(
-        required_file(&tree, ".github/workflows/qualification.yml")?,
+        qualification,
         &marked(schema2_feature_snapshots::QUALIFICATION)
     );
     let image = required_file(&tree, ".github/workflows/image-release.yml")?;
@@ -165,7 +171,7 @@ fn assert_both_ci(ci: &str) -> TestResult {
     assert!(local.contains(SCALE_RUNS), "{local}");
     assert!(!local.contains(SCALE_REVERSED), "{local}");
     assert!(!local.contains("runs-on: ubuntu-26.04\n"), "{local}");
-    assert_eq!(tool_lines(hosted), tool_lines(local));
+    shell_tests::assert_scale_set_shell_and_same_steps(hosted, local);
     let plan = job_body(ci, "plan")?;
     assert!(plan.contains(HOSTED_RUNS), "{plan}");
     assert!(!plan.contains("ubuntu-26.04-scale-set"), "{plan}");
@@ -192,7 +198,7 @@ fn job_ids(yaml: &str) -> Vec<&str> {
         .collect()
 }
 
-fn job_body<'a>(yaml: &'a str, id: &str) -> Result<&'a str, Box<dyn std::error::Error>> {
+pub(super) fn job_body<'a>(yaml: &'a str, id: &str) -> Result<&'a str, Box<dyn std::error::Error>> {
     let section = jobs_section(yaml);
     let header = format!("  {id}:");
     let mut offset = 0;
@@ -218,15 +224,6 @@ fn jobs_section(yaml: &str) -> &str {
     yaml.split_once("jobs:\n").map_or("", |(_, rest)| rest)
 }
 
-fn tool_lines(body: &str) -> Vec<&str> {
-    body.lines()
-        .filter(|line| {
-            let trimmed = line.trim();
-            trimmed.starts_with("run:") || trimmed.starts_with("uses:")
-        })
-        .collect()
-}
-
 fn join_files(tree: &RenderedTree) -> String {
     tree.files
         .iter()
@@ -235,7 +232,7 @@ fn join_files(tree: &RenderedTree) -> String {
         .join("\n")
 }
 
-fn required_file<'a>(
+pub(super) fn required_file<'a>(
     tree: &'a RenderedTree,
     path: &str,
 ) -> Result<&'a str, Box<dyn std::error::Error>> {
@@ -272,7 +269,7 @@ fn hosted_schema2() -> String {
     format!("{}\nmode = \"hosted\"\n{}", execution_head(), profiles())
 }
 
-fn workflow_config() -> String {
+pub(super) fn workflow_config() -> String {
     format!(
         "{}\nmode = \"hosted\"\nworkflows = [\"qualification\", \"image_release\", \"macos_binary_release\", \"generator_release\", \"monitoring\"]\n{}",
         execution_head(),
@@ -386,6 +383,9 @@ jobs:
     name: Scale set lane
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash -e {0}
     steps:
       - name: Run scale-set lane
         run: echo scale-set-lane

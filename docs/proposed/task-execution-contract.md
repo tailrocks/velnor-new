@@ -24,10 +24,32 @@ rustup component add --toolchain <exact>-<triple> clippy rustfmt`):
 the pinned toolchain's own rustup, deterministic, writing only
 Velnor-owned tool homes — Mise installing components, not an ad hoc
 installer. For an MBX profile only, it then invokes the pinned
-`jdx/mr-boxington-action` in `github-cache-mode: objects`; this action owns MBX
-object restore/save. For a Cargo profile, that action and MBX installation are
-absent. `actions/cache/restore` and `actions/cache/save` handle Cargo source
-archives and qualified Mise task artifacts, never MBX data.
+`jdx/mr-boxington-action` in `github-cache-mode: objects` with
+`ACTIONS_CACHE_MODE=read`. The action owns the MBX object format. Read mode skips
+its post export, which wrote inside the live store and exhausted runner disk
+(run `37114238559`). The workflow exports one directory with `mbx cache export`
+to `$RUNNER_TEMP/mbx-single-bundle`, and `actions/cache` transports that opaque
+directory. `mbx cache import` loads it. A miss, a missing directory, or a failed
+import continues the job cold. For a Cargo profile, that action and MBX
+installation are absent. The same cache actions also transport Cargo source
+archives and qualified Mise task artifacts. They do not archive the live MBX
+store. In selected crate jobs and the plan-job pre-seed restore path, the
+generator places a strict MBX and Rust toolchain preflight immediately before
+the MBX objects action. The preflight resolves only the exact catalog installs
+through Mise with project config, environment, and hooks disabled, requires
+the MBX executable to report the exact catalog version, and proves the
+selected rustc toolchain-qualified version command reports that exact
+release. It exposes the two validated install roots through `GITHUB_PATH`;
+the action receives the same Rust toolchain and omits its version input so
+its PATH lookup reuses the checked MBX executable. The upstream action still
+installs `latest` if its own PATH lookup misses. The preflight blocks a
+missing, non-executable, or mismatched catalog install before the action is
+invoked, but does not remove that upstream fallback. An unavailable or
+mismatched Rust toolchain also fails before the action can run. This
+identity preflight leaves the read-only action post and manual single-bundle
+export/import ownership unchanged. Separately generated qualification
+workflows retain their existing action setup and are outside this preflight
+change.
 
 1. `Prepare pinned tools`: install exact Velnor policy tools through a fixed
    Mise invocation that loads no project config (`--no-config` plus

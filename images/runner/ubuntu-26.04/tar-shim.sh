@@ -9,12 +9,21 @@ archive=""
 chdir=""
 files_from=""
 gzip=0
+zstd=0
 program=""
 strip=""
 excludes=()
 positionals=()
 args=("$@")
 i=0
+
+# GNU tar accepts a leading dashless cluster: `tar xz -C dir -f archive`.
+if [ "${#args[@]}" -gt 0 ]; then
+  first="${args[0]}"
+  if [[ "$first" != -* && "$first" =~ ^[A-Za-z]+$ ]]; then
+    args=("-${first}" "${args[@]:1}")
+  fi
+fi
 
 die() {
   printf 'velnor-tar: %s\n' "$1" >&2
@@ -31,7 +40,14 @@ need() {
 while [ "$i" -lt "${#args[@]}" ]; do
   arg="${args[$i]}"
   case "$arg" in
-    --posix | -P | --delay-directory-restore | --force-local | --no-same-owner | --no-same-permissions | --numeric-owner | --overwrite)
+    --posix | -P | --delay-directory-restore | --force-local | --no-same-owner | --no-same-permissions | --numeric-owner | --overwrite | --zstd)
+      if [ "$arg" = "--zstd" ]; then
+        zstd=1
+      fi
+      ;;
+    --version)
+      printf 'velnor-tar busybox\n'
+      exit 0
       ;;
     --warning | --warning=*)
       ;;
@@ -170,6 +186,14 @@ bb=(busybox tar "$mode")
 if [ "$gzip" -eq 1 ]; then
   bb+=(-z)
 fi
+if [ "$zstd" -eq 1 ] && [ -z "$program" ]; then
+  if [ "$mode" = c ]; then
+    program="zstd -c"
+  else
+    program="zstd -d -c"
+  fi
+fi
+
 if [ -n "$program" ]; then
   bb+=(-f -)
 elif [ -n "$archive" ]; then
