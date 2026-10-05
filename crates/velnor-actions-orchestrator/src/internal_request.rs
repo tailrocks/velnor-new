@@ -6,8 +6,8 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use velnor_actions_contract::{
     FINAL_JSON_FILENAME, FinalStatus, MATRIX_JSON_FILENAME, PLAN_JSON_FILENAME,
-    QualificationDispatch, WorkflowEvent, canonical_json_bytes, canonical_json_str,
-    matrix_json_bytes, plan_json_bytes, run_key_for_ci, validate_run_key,
+    QualificationDispatch, WorkflowEvent, canonical_json_bytes, matrix_json_bytes, plan_json_bytes,
+    run_key_for_ci, validate_run_key,
 };
 
 use crate::OrchestratorError;
@@ -15,7 +15,6 @@ use crate::decisions::plan_artifact_dir;
 use crate::internal::{
     MERGE_OP, PLAN_OP, PlanResponse, SCHEMA, check_schema, internal, internal_contract,
 };
-use crate::plan_output_limits::{PlanOutputMode, check_plan_outputs};
 use crate::request_event::qualification_dispatch_for_parts;
 use crate::request_event::{request_refs, workflow_event_for};
 
@@ -44,29 +43,6 @@ struct EventRequest {
     /// Source-bound context for protected hosted qualification dispatches.
     #[serde(skip_serializing_if = "Option::is_none")]
     qualification: Option<QualificationDispatch>,
-}
-
-/// Validated plan values emitted to `$GITHUB_OUTPUT` and promoted to the job.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PlanOutputs {
-    /// Canonical matrix JSON (single line).
-    pub matrix: String,
-    /// Plan ID for step outputs (WF-4.15).
-    pub plan_id: String,
-    /// Run key for step outputs (WF-4.15).
-    pub run_key: String,
-    /// Comma-wrapped covered task IDs (empty when none covered).
-    pub covered_tasks: String,
-    /// Validated qualification namespace, empty outside Qualification.
-    pub qualification_campaign: String,
-    /// Validated qualification phase, empty outside Qualification.
-    pub qualification_phase: String,
-    /// Whether this run may restore isolated qualification caches.
-    pub qualification_cache_enabled: bool,
-    /// Whether this run may write isolated qualification cache successors.
-    pub qualification_cache_write: bool,
-    /// Aggregate UTF-16 byte size of values promoted by this output mode.
-    pub job_outputs_utf16_bytes: usize,
 }
 
 /// Materialize the canonical request file from the GitHub environment.
@@ -207,42 +183,6 @@ pub fn response_path_for(request_path: &Path) -> Result<PathBuf, OrchestratorErr
     };
     let parent = request_path.parent().unwrap_or_else(|| Path::new("."));
     Ok(parent.join(format!("{op}-response.json")))
-}
-
-/// Split one `plan-v1` response into canonical `$GITHUB_OUTPUT` values.
-///
-/// # Errors
-///
-/// Returns [`OrchestratorError::Internal`] for malformed responses.
-pub fn plan_outputs(
-    response_json: &str,
-    mode: PlanOutputMode,
-) -> Result<PlanOutputs, OrchestratorError> {
-    let response: PlanResponse =
-        serde_json::from_str(response_json).map_err(|_| internal("malformed_response"))?;
-    check_schema(response.schema)?;
-    response.plan.validate().map_err(internal_contract)?;
-    let qualification = response.plan.qualification.as_ref();
-    let mut outputs = PlanOutputs {
-        matrix: canonical_json_str(&response.matrix).map_err(internal_contract)?,
-        plan_id: response.plan.plan_id.clone(),
-        run_key: response.plan.run_key.clone(),
-        covered_tasks: crate::covered_tasks::CoveredTasks::for_plan(&response.plan).encode(),
-        qualification_campaign: qualification
-            .map_or_else(String::new, |value| value.campaign.clone()),
-        qualification_phase: qualification
-            .map_or_else(String::new, |value| value.phase.as_str().to_owned()),
-        qualification_cache_enabled: qualification.is_some_and(|value| value.phase.cache_enabled()),
-        qualification_cache_write: qualification
-            .is_some_and(|value| value.phase.cache_write_allowed()),
-        job_outputs_utf16_bytes: 0,
-    };
-    outputs.job_outputs_utf16_bytes = check_plan_outputs(
-        mode,
-        response.matrix.include.len(),
-        &outputs.promoted_job_outputs(mode),
-    )?;
-    Ok(outputs)
 }
 
 /// Publish `plan.json` + `matrix.json` for the plan artifact.

@@ -51,4 +51,15 @@ impl QualificationPhase {
     pub const fn cache_write_allowed(self) -> bool {
         matches!(self, Self::Cold | Self::Warm | Self::UsefulDelta)
     }
+
+    /// The immediately preceding phase required to advance this lineage.
+    #[must_use]
+    pub const fn predecessor(self) -> Option<Self> {
+        match self {
+            Self::Cold | Self::Control => None,
+            Self::Warm => Some(Self::Cold),
+            Self::Third => Some(Self::Warm),
+            Self::UsefulDelta => Some(Self::Third),
+        }
+    }
 }

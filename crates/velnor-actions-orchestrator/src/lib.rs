@@ -116,8 +116,8 @@ pub use generate::{
 pub use init::{InitReport, init_config};
 pub use internal::{
     MERGE_OP, PLAN_OP, PlanOutputs, REQUEST_FILE_ENV, WRITE_REQUEST_OP, merge_passed,
-    plan_internal, plan_outputs, publish_final_report, publish_plan_files, response_path_for,
-    write_request, write_request_parts,
+    plan_internal, plan_outputs, plan_outputs_with_admission, publish_final_report,
+    publish_plan_files, response_path_for, write_request, write_request_parts,
 };
 pub use merge::merge_internal;
 pub use merge_request::assemble_merge_request;
