@@ -40,7 +40,7 @@ Workflow to generate
     - alint (2 steps)
     - cargo-deny (5 steps)
     - cargo-machete (5 steps)
-    - plan (22 steps)
+    - plan (21 steps)
     - publish-baseline (7 steps)
     - required (11 steps)
     - rust-velnor-actions-actionlint (23 steps)
