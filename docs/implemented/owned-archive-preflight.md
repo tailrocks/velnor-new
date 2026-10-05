@@ -4,9 +4,12 @@ Repository tools that inspect candidate or Cargo package archives must run the
 native guard against the exact immutable bytes before opening them with a tar
 parser. The guard reads standard input, enforces profile-specific encoding,
 member, payload, and metadata bounds, and exits nonzero on malformed or
-unsupported input. Release candidates are the raw TAR emitted by `tar -cf`;
-Cargo package archives are gzip-compressed TAR. Each mode accepts only its
-declared encoding.
+unsupported input. Release candidates use raw USTAR; producers must use
+`tar --format=ustar -cf`. On macOS, set `COPYFILE_DISABLE=1` so bsdtar does not
+add AppleDouble files or PAX metadata. The guard rejects PAX and other extended
+candidate formats. Cargo package archives use Cargo's gzip-compressed TAR
+format. Each mode accepts only its declared encoding. The accepted format does
+not establish that an external producer currently uses this command.
 
 Provision the locked native executable from a clean checkout with:
 

@@ -13,6 +13,9 @@ use flate2::Compression;
 use flate2::write::GzEncoder;
 
 const GUARD: &str = env!("CARGO_BIN_EXE_velnor-archive-guard");
+const CARGO_PACKAGE_FIXTURE: &[u8] = include_bytes!(
+    "fixtures/cargo-package-1.98.1/velnor-archive-guard-fixture-0.0.0.crate"
+);
 static NEXT_FIXTURE: AtomicU64 = AtomicU64::new(0);
 
 fn invoke(arguments: &[&str], input: &[u8]) -> Result<std::process::Output, Box<dyn Error>> {
@@ -33,8 +36,8 @@ fn invoke(arguments: &[&str], input: &[u8]) -> Result<std::process::Output, Box<
 }
 
 #[test]
-fn accepts_release_producer_raw_tar_from_stdin_without_environment() -> Result<(), Box<dyn Error>> {
-    let input = producer_tar()?;
+fn accepts_canonical_ustar_candidate_from_stdin_without_environment() -> Result<(), Box<dyn Error>> {
+    let input = canonical_candidate_tar()?;
     let output = invoke(&["candidate"], &input)?;
     assert!(
         output.status.success(),
@@ -48,7 +51,7 @@ fn accepts_release_producer_raw_tar_from_stdin_without_environment() -> Result<(
 #[test]
 fn rejects_gzip_candidate_and_raw_cargo_package_without_format_sniffing()
 -> Result<(), Box<dyn Error>> {
-    let raw = producer_tar()?;
+    let raw = canonical_candidate_tar()?;
     let compressed = gzip(&raw)?;
 
     let candidate = invoke(&["candidate"], &compressed)?;
@@ -63,9 +66,12 @@ fn rejects_gzip_candidate_and_raw_cargo_package_without_format_sniffing()
 
 #[test]
 fn accepts_cargo_package_gzip_tar_from_stdin_without_environment() -> Result<(), Box<dyn Error>> {
-    let input = gzip(&producer_tar()?)?;
-    let output = invoke(&["cargo-package"], &input)?;
-    assert!(output.status.success());
+    let output = invoke(&["cargo-package"], CARGO_PACKAGE_FIXTURE)?;
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     assert!(output.stdout.is_empty());
     Ok(())
 }
@@ -149,7 +155,7 @@ fn fixture_root() -> Result<PathBuf, Box<dyn Error>> {
     Ok(root)
 }
 
-fn producer_tar() -> Result<Vec<u8>, Box<dyn Error>> {
+fn canonical_candidate_tar() -> Result<Vec<u8>, Box<dyn Error>> {
     let root = fixture_root()?;
     fs::write(root.join("binary"), b"release binary")?;
     fs::write(root.join("checksum"), b"sha256:fixture")?;
@@ -157,12 +163,14 @@ fn producer_tar() -> Result<Vec<u8>, Box<dyn Error>> {
     let archive = root.join("generator-assets.tar");
     let output = Command::new("tar")
         .args([
+            "--format=ustar",
             "-cf",
             "generator-assets.tar",
             "binary",
             "checksum",
             "provenance",
         ])
+        .env("COPYFILE_DISABLE", "1")
         .current_dir(&root)
         .output()?;
     if !output.status.success() {
