@@ -9,7 +9,7 @@ use velnor_actions_workflow_renderer::cache_p08::{
 };
 use velnor_actions_workflow_renderer::steps::{TOOLS_CACHE_PATHS, TOOLS_SAVE_USES};
 use velnor_actions_workflow_renderer::tofu_cache::{
-    TOFU_PROVIDER_ADMISSION_USES, TOFU_PROVIDERS_SAVE_USES,
+    TOFU_PROVIDER_ADMISSION_USES, TOFU_PROVIDERS_SAVE_USES, tofu_providers_save_step,
 };
 
 use super::impl_renderer_fixtures::*;
@@ -200,6 +200,12 @@ fn provider_job(key: &str, path: &str) -> Job {
     }
 }
 
+fn provider_save() -> Result<Step, RenderError> {
+    let mut save = tofu_providers_save_step()?;
+    save.condition = Some(CACHE_SAVE_CONDITION.to_owned());
+    Ok(save)
+}
+
 /// The provider key one job's single save step archives, when exactly one.
 fn provider_saved_key(job: &Job) -> Option<&str> {
     let saves = provider_saves(job);
@@ -322,6 +328,32 @@ fn provider_writer_election_skips_keyless_and_reruns() -> Result<(), RenderError
         1,
         "reruns add no second save"
     );
+    Ok(())
+}
+
+#[test]
+fn combined_election_rejects_provider_conflict_before_appending_tools_save()
+-> Result<(), RenderError> {
+    let mut losing_provider = provider_job(PROVIDER_KEY_A, PROVIDER_PATH_A);
+    losing_provider.steps.push(provider_save()?);
+    let mut jobs = BTreeMap::from([
+        ("plan".to_owned(), keyed_job("actionlint@1.7.12")?),
+        (
+            "tofu-a".to_owned(),
+            provider_job(PROVIDER_KEY_A, PROVIDER_PATH_A),
+        ),
+        ("tofu-b".to_owned(), losing_provider),
+    ]);
+    let original_steps = jobs
+        .iter()
+        .map(|(id, job)| (id.clone(), job.steps.clone()))
+        .collect::<BTreeMap<_, _>>();
+
+    assert!(elect_cache_writers(&mut jobs).is_err());
+    for (id, steps) in original_steps {
+        assert_eq!(jobs[&id].steps, steps, "failed election mutated {id}");
+    }
+    assert!(tools_saves(&jobs["plan"]).is_empty());
     Ok(())
 }
 
