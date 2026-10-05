@@ -20,7 +20,7 @@ runs:
         path: macos-intel-assets
     - name: Prevalidate and extract uploaded candidate archive
       shell: bash
-      run: "set -eu\npython3 scripts/generator-release/extract-candidate.py 'macos-intel-assets/generator-macos-intel-assets.tar' 'macos-intel-assets' 'velnor-actions-0.1.1-x86_64-apple-darwin' 'velnor-actions-0.1.1-x86_64-apple-darwin.sha256' 'velnor-actions-0.1.1-x86_64-apple-darwin.provenance.json'"
+      run: "set -eu\nbash scripts/with-owned-archive-guard.sh -- python3 scripts/generator-release/extract-candidate.py 'macos-intel-assets/generator-macos-intel-assets.tar' 'macos-intel-assets' 'velnor-actions-0.1.1-x86_64-apple-darwin' 'velnor-actions-0.1.1-x86_64-apple-darwin.sha256' 'velnor-actions-0.1.1-x86_64-apple-darwin.provenance.json'"
     - name: Verify extracted candidate file types and executable mode
       shell: bash
       run: "set -eu\ntest -f macos-intel-assets/velnor-actions-0.1.1-x86_64-apple-darwin\ntest ! -L macos-intel-assets/velnor-actions-0.1.1-x86_64-apple-darwin\ntest -x macos-intel-assets/velnor-actions-0.1.1-x86_64-apple-darwin\ntest -f macos-intel-assets/velnor-actions-0.1.1-x86_64-apple-darwin.sha256\ntest ! -L macos-intel-assets/velnor-actions-0.1.1-x86_64-apple-darwin.sha256\ntest ! -x macos-intel-assets/velnor-actions-0.1.1-x86_64-apple-darwin.sha256\ntest -f macos-intel-assets/velnor-actions-0.1.1-x86_64-apple-darwin.provenance.json\ntest ! -L macos-intel-assets/velnor-actions-0.1.1-x86_64-apple-darwin.provenance.json\ntest ! -x macos-intel-assets/velnor-actions-0.1.1-x86_64-apple-darwin.provenance.json"

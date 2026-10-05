@@ -24,6 +24,7 @@ pub(super) fn build_job(
         base(name, runs_on, 120),
         workflow_steps::build_permissions(),
     );
+    fields.retain(|(key, _)| key != "name");
     fields = workflow_steps::with_needs(fields, &["verify-release-source"]);
     fields.push((
         "outputs".to_owned(),
@@ -105,15 +106,17 @@ pub(super) fn attest_job(
         &format!("${{{{ needs.{}.outputs.artifact_id }}}}", product.build_job),
         actions,
     )?;
+    let mut fields = workflow_steps::with_needs(
+        workflow_steps::with_permissions(
+            base(name, runs_on, 20),
+            workflow_steps::attest_permissions(),
+        ),
+        &[product.build_job, product.qualify_job],
+    );
+    fields.retain(|(key, _)| key != "name");
     Ok(finish(
         id,
-        workflow_steps::with_needs(
-            workflow_steps::with_permissions(
-                base(name, runs_on, 20),
-                workflow_steps::attest_permissions(),
-            ),
-            &[product.build_job, product.qualify_job],
-        ),
+        fields,
         vec![workflow_steps::checkout_step(), call],
     ))
 }
@@ -147,14 +150,26 @@ pub(super) fn publish_job(
             "build-macos-intel",
         ],
     );
+    fields.retain(|(key, _)| key != "name");
     fields.push((
         "environment".to_owned(),
         Yaml::Map(vec![("name".to_owned(), Yaml::str("generator-release"))]),
     ));
+    let acceptance_paths = manifest::acceptance_artifact_paths();
+    let acceptance_path_refs = acceptance_paths.iter().copied().collect::<Vec<_>>();
+    let acceptance_name = manifest::acceptance_artifact_name();
     Ok(finish(
         "publish-generator",
         fields,
-        vec![workflow_steps::checkout_step(), call],
+        vec![
+            workflow_steps::checkout_step(),
+            call,
+            workflow_steps::upload_step(
+                "Upload verified immutable release acceptance",
+                &acceptance_name,
+                &acceptance_path_refs,
+            ),
+        ],
     ))
 }
 

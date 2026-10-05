@@ -11,8 +11,7 @@ use velnor_actions_actionlint::overrides::{
 };
 use velnor_actions_contract::{
     GeneratorLock, ReleaseManifest, ReleaseTarget, Step, VelnorConfig, VerificationRunner,
-    check_release_artifact,
-    target_for_runner_label,
+    check_release_artifact, target_for_runner_label,
 };
 use velnor_actions_mise::MISE_VERSION;
 use velnor_actions_workflow_renderer::{

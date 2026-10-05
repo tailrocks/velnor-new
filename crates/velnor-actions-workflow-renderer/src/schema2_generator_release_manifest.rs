@@ -184,33 +184,25 @@ pub(super) fn manifest_digest_check_script() -> String {
 
 /// Assemble release verification and creation in one parent shell.
 pub(super) fn publish_script(pins: &GeneratorReleasePins) -> String {
-    let verify = publication_verify_script(pins);
-    let assets = release_asset_paths();
-    let preflight = tag_preflight_script();
-    let postflight = published_release_verify_script();
-    let ci_recheck = assets::ci_check_script();
-    format!(
-        "set -eu\ntag=\"v{VERSION}\"\n{verify}\n{preflight}\n{ci_recheck}\ngh release create \"$tag\" -R \"${{GITHUB_REPOSITORY}}\" --target \"$GITHUB_SHA\" --title \"velnor-actions $tag\" --latest=false --notes \"velnor-actions {VERSION} built from ${{GITHUB_SHA}}.\" {assets}\n{postflight}"
-    )
+    publish::publish_script(pins)
 }
 
-/// Require confirmed 404 responses for both immutable tag and release lookups.
+pub(super) fn acceptance_artifact_name() -> String {
+    publish::acceptance_artifact_name()
+}
+
+pub(super) fn acceptance_artifact_paths() -> [&'static str; 2] {
+    publish::acceptance_artifact_paths()
+}
+
+#[cfg(test)]
+pub(super) fn release_asset_paths() -> String {
+    publish::release_asset_paths()
+}
+
+#[cfg(test)]
 pub(super) fn tag_preflight_script() -> String {
-    format!("bash scripts/generator-release/preflight-release-tag.sh '{VERSION}' '{REPOSITORY}'")
-}
-
-/// Verify immutable release metadata, target commit, exact asset set, and digests.
-pub(super) fn published_release_verify_script() -> String {
-    let paths = release_asset_path_list();
-    let bash_paths = paths
-        .iter()
-        .map(|path| format!("  '{path}'"))
-        .collect::<Vec<_>>()
-        .join("\n");
-    format!(
-        "set -eu\ntest \"$GITHUB_WORKFLOW_SHA\" = \"$GITHUB_SHA\"\ntag=\"v{VERSION}\"\nref=\"$(gh api \"repos/$GITHUB_REPOSITORY/git/ref/tags/$tag\")\"\nref_type=\"$(printf '%s\\n' \"$ref\" | jq -er .object.type)\"\nref_sha=\"$(printf '%s\\n' \"$ref\" | jq -er .object.sha)\"\ncase \"$ref_type\" in\n  commit) tag_commit=\"$ref_sha\" ;;\n  tag) tag_commit=\"$(gh api \"repos/$GITHUB_REPOSITORY/git/tags/$ref_sha\" --jq .object.sha)\" ;;\n  *) echo \"release tag has unexpected object type: $ref_type\" >&2; exit 1 ;;\nesac\ntest \"$tag_commit\" = \"$GITHUB_SHA\"\nrelease=\"$(gh api \"repos/$GITHUB_REPOSITORY/releases/tags/$tag\")\"\nprintf '%s\\n' \"$release\" | jq -e --arg tag \"$tag\" '.tag_name == $tag and .draft == false and .prerelease == false and .immutable == true' > /dev/null\npaths=(\n{bash_paths}\n)\ntest \"$(printf '%s\\n' \"$release\" | jq -r '.assets | length')\" -eq {}\nfor path in \"${{paths[@]}}\"; do\n  name=\"${{path##*/}}\"\n  digest=\"$(sha256sum \"$path\" | awk 'NR == 1 {{ print $1; next }} {{ exit 1 }} END {{ if (NR != 1) exit 1 }}')\"\n  expected=\"sha256:$digest\"\n  actual=\"$(printf '%s\\n' \"$release\" | jq -er --arg name \"$name\" '[.assets[] | select(.name == $name)] | if length == 1 then .[0].digest else error(\"missing or duplicate release asset\") end')\"\n  test \"$actual\" = \"$expected\"\ndone",
-        paths.len()
-    )
+    publish::tag_preflight_script()
 }
 
 /// Cryptographically verify every bundle carried through the attest jobs.
@@ -286,32 +278,9 @@ fn attestation_verify_script(subject: &str, name: &str) -> String {
     )
 }
 
-/// Release assets published in stable target order, followed by the manifest.
-pub(super) fn release_asset_paths() -> String {
-    release_asset_path_list().join(" ")
-}
-
-fn release_asset_path_list() -> Vec<String> {
-    let mut paths = ASSETS
-        .iter()
-        .flat_map(|asset| {
-            [
-                format!("{}/{}", asset.directory, asset.binary),
-                format!("{}/{}", asset.directory, asset.sidecar),
-                format!("{}/{}", asset.directory, asset.provenance),
-            ]
-        })
-        .collect::<Vec<_>>();
-    paths.push(format!("{DIR}/{FILE}"));
-    for asset in ASSETS {
-        for name in [asset.binary, asset.sidecar, asset.provenance] {
-            paths.push(format!("{ATTESTATION_DIR}/{name}.intoto.jsonl"));
-        }
-    }
-    paths.push(format!("{ATTESTATION_DIR}/{FILE}.intoto.jsonl"));
-    paths
-}
-
 #[cfg(test)]
 #[path = "schema2_generator_release_manifest_tests.rs"]
 mod tests;
+
+#[path = "schema2_generator_release_manifest_publish.rs"]
+mod publish;

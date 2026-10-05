@@ -1,7 +1,6 @@
 use super::{assets, manifest};
 use std::error::Error;
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -41,7 +40,14 @@ enum Failure {
     UnauthorizedTag,
     ForbiddenTag,
     TransientTag,
+    WrongDraftReleaseId,
+    WrongDraftDigest,
+    WrongDraftUrl,
+    WrongDraftSize,
+    WrongDraftInventory,
+    ChangedReleaseId,
     WrongPublishedDigest,
+    MutablePublished,
 }
 
 #[test]
@@ -54,7 +60,14 @@ fn complete_publish_script_uses_parent_tag_and_checks_all_assets() -> Result<(),
         Failure::UnauthorizedTag,
         Failure::ForbiddenTag,
         Failure::TransientTag,
+        Failure::WrongDraftReleaseId,
+        Failure::WrongDraftDigest,
+        Failure::WrongDraftUrl,
+        Failure::WrongDraftSize,
+        Failure::WrongDraftInventory,
+        Failure::ChangedReleaseId,
         Failure::WrongPublishedDigest,
+        Failure::MutablePublished,
     ] {
         run_publish_case(case)?;
     }
@@ -67,15 +80,17 @@ fn run_publish_case(case: Failure) -> Result<(), Box<dyn Error>> {
     write_candidate_records(&scratch.0, case)?;
     write_attestation_files(&scratch.0)?;
     create_candidate_manifest(&scratch.0, case)?;
-    let release_json = release_json(&scratch.0, case)?;
-    fs::write(scratch.0.join("release.json"), release_json)?;
+    let draft_json = release_json(&scratch.0, case, true)?;
+    fs::write(scratch.0.join("draft-release.json"), draft_json)?;
+    let published_json = release_json(&scratch.0, case, false)?;
+    fs::write(scratch.0.join("published-release.json"), published_json)?;
     install_mock_gh(&scratch.0)?;
     let script = scratch.0.join("publish.sh");
     fs::write(&script, manifest::publish_script(&test_pins()))?;
     let gh_function = super::workflow_steps::gh_function(&test_pins().gh_argv)?;
     let output = run_publish_command(&scratch.0, case, &script, &gh_function)?;
-    cli_tests::assert_pinned_publish_calls(&scratch.0, case)?;
-    assert_publish_result(&scratch.0, case, &output)
+    assert_publish_result(&scratch.0, case, &output)?;
+    cli_tests::assert_pinned_publish_calls(&scratch.0, case)
 }
 
 fn create_candidate_manifest(root: &Path, case: Failure) -> Result<(), Box<dyn Error>> {
@@ -131,12 +146,18 @@ fn run_publish_command(
         .env("GITHUB_REPOSITORY", REPOSITORY)
         .env("GITHUB_SHA", SOURCE_SHA)
         .env("GITHUB_WORKFLOW_SHA", SOURCE_SHA)
+        .env("GITHUB_RUN_ID", "987654321")
+        .env("GITHUB_RUN_ATTEMPT", "2")
         .env("GITHUB_REF", "refs/heads/main")
         .env("GITHUB_EVENT_NAME", "workflow_dispatch")
         .env("GH_PREFLIGHT", preflight_mode(case))
-        .env("GH_RELEASE_JSON", root.join("release.json"))
+        .env("GH_CASE", format!("{case:?}"))
+        .env("GH_DRAFT_JSON", root.join("draft-release.json"))
+        .env("GH_RELEASE_JSON", root.join("published-release.json"))
+        .env("GH_STATE", root.join("release-state"))
         .env("GH_CREATE_TAG", root.join("created-tag"))
         .env("GH_ASSET_ARGS", root.join("asset-args"))
+        .env("GH_PATCH_LOG", root.join("patch-log"))
         .env("GH_CALLS", root.join("gh-calls"))
         .env("MISE_CALLS", root.join("mise-calls"))
         .env("MOCK_GH", root.join("mock-bin/gh"));
@@ -150,20 +171,46 @@ fn assert_publish_result(
     output: &std::process::Output,
 ) -> Result<(), Box<dyn Error>> {
     let should_succeed = case == Failure::None;
+    let calls = fs::read_to_string(root.join("gh-calls")).unwrap_or_default();
+    let mise_calls = fs::read_to_string(root.join("mise-calls")).unwrap_or_default();
     assert_eq!(
         output.status.success(),
         should_succeed,
-        "case {case:?}: {}{}",
+        "case {case:?}: {}{}\nGitHub calls:\n{calls}\nMise calls:\n{mise_calls}",
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
-    let create_is_expected = matches!(case, Failure::None | Failure::WrongPublishedDigest);
+    let create_is_expected = matches!(
+        case,
+        Failure::None
+            | Failure::WrongDraftReleaseId
+            | Failure::WrongDraftDigest
+            | Failure::WrongDraftUrl
+            | Failure::WrongDraftSize
+            | Failure::WrongDraftInventory
+            | Failure::ChangedReleaseId
+            | Failure::WrongPublishedDigest
+            | Failure::MutablePublished
+    );
     if create_is_expected {
         assert_eq!(fs::read_to_string(root.join("created-tag"))?, "v0.1.1\n");
         assert_eq!(
             fs::read_to_string(root.join("asset-args"))?,
             expected_asset_args()
         );
+        if case == Failure::None {
+            assert!(
+                root.join("release-accepted/release-manifest.json")
+                    .is_file()
+            );
+            assert!(
+                root.join("release-accepted/release-acceptance.json")
+                    .is_file()
+            );
+            publisher_receipt_tests::assert_success_receipt(root)?;
+        } else {
+            assert!(!root.join("release-accepted").exists());
+        }
     } else {
         assert_no_release_created(root);
     }
@@ -232,18 +279,23 @@ fn write_attestation_files(root: &Path) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn release_json(root: &Path, case: Failure) -> Result<String, Box<dyn Error>> {
+fn release_json(root: &Path, case: Failure, draft: bool) -> Result<String, Box<dyn Error>> {
     let mut rows = Vec::new();
     for (index, path) in manifest::release_asset_paths()
         .split_whitespace()
         .enumerate()
     {
+        if draft && case == Failure::WrongDraftInventory && index == 19 {
+            continue;
+        }
         let asset = root.join(path);
         if !asset.exists() {
             continue;
         }
         let mut digest = sha256(&asset)?;
-        if case == Failure::WrongPublishedDigest && index == 0 {
+        if (draft && case == Failure::WrongDraftDigest && index == 0)
+            || (!draft && case == Failure::WrongPublishedDigest && index == 0)
+        {
             digest = "0".repeat(64);
         }
         let name = Path::new(path)
@@ -251,89 +303,37 @@ fn release_json(root: &Path, case: Failure) -> Result<String, Box<dyn Error>> {
             .ok_or("release asset has no basename")?
             .to_str()
             .ok_or("release asset basename is not UTF-8")?;
+        let size = fs::metadata(&asset)?.len()
+            + if draft && case == Failure::WrongDraftSize && index == 0 {
+                1
+            } else {
+                0
+            };
+        let url = if draft && case == Failure::WrongDraftUrl && index == 0 {
+            "https://github.com/untrusted/releases/download/v0.1.1/asset".to_owned()
+        } else {
+            format!("https://github.com/{REPOSITORY}/releases/download/v0.1.1/{name}")
+        };
         rows.push(format!(
-            "{{\"name\":\"{name}\",\"digest\":\"sha256:{digest}\"}}"
+            "{{\"name\":\"{name}\",\"state\":\"uploaded\",\"browser_download_url\":\"{url}\",\"digest\":\"sha256:{digest}\",\"size\":{size}}}"
         ));
     }
+    let release_id = if (draft && case == Failure::WrongDraftReleaseId)
+        || (!draft && case == Failure::ChangedReleaseId)
+    {
+        124
+    } else {
+        123
+    };
+    let immutable = !draft && case != Failure::MutablePublished;
     Ok(format!(
-        "{{\"tag_name\":\"v0.1.1\",\"draft\":false,\"prerelease\":false,\"immutable\":true,\"assets\":[{}]}}\n",
-        rows.join(",")
+        "{{\"id\":{release_id},\"tag_name\":\"v0.1.1\",\"url\":\"https://api.github.com/repos/{REPOSITORY}/releases/{release_id}\",\"html_url\":\"https://github.com/{REPOSITORY}/releases/tag/v0.1.1\",\"draft\":{draft},\"prerelease\":false,\"immutable\":{immutable},\"assets\":[{}]}}\n",
+        rows.join(","),
     ))
 }
 
 fn install_mock_gh(root: &Path) -> Result<(), Box<dyn Error>> {
-    let bin = root.join("mock-bin");
-    fs::create_dir_all(&bin)?;
-    let mock = bin.join("gh");
-    fs::write(
-        &mock,
-        r#"#!/bin/sh
-set -eu
-printf '%s\n' "$*" >> "$GH_CALLS"
-if [ "$1" = attestation ] && [ "$2" = verify ]; then exit 0; fi
-if [ "$1" = api ]; then
-  shift
-  if [ "$1" = --paginate ] && [ "$2" = --slurp ]; then
-    case "$3" in
-      *actions/workflows/ci.yml/runs*)
-        printf '[{"workflow_runs":[{"id":91,"run_number":9,"run_attempt":1,"path":".github/workflows/ci.yml","head_sha":"%s","head_branch":"main","head_repository":{"full_name":"tailrocks/velnor-new"},"event":"push","status":"completed","conclusion":"success"}]}]\n' "$GITHUB_SHA" ;;
-      *actions/runs/91/attempts/1/jobs*)
-        printf '[{"jobs":[{"name":"Required","head_sha":"%s","head_branch":"main","status":"completed","conclusion":"success"}]}]\n' "$GITHUB_SHA" ;;
-      *) exit 43 ;;
-    esac
-    exit 0
-  fi
-  if [ "$1" = --include ]; then
-    case "$GH_PREFLIGHT" in
-      404) printf 'HTTP/2 404\r\n\r\n{"message":"Not Found","status":"404"}\n'; exit 1 ;;
-      401) printf 'HTTP/2 401\r\n\r\n{"message":"Bad credentials","status":"401"}\n'; exit 1 ;;
-      403) printf 'HTTP/2 403\r\n\r\n{"message":"Forbidden","status":"403"}\n'; exit 1 ;;
-      transient) exit 22 ;;
-    esac
-  fi
-  case "$1" in
-    repos/tailrocks/velnor-new/commits/main)
-      if [ "$2" = --jq ] && [ "$3" = .sha ]; then printf '%s\n' "$GITHUB_SHA"; else printf '{"sha":"%s"}\n' "$GITHUB_SHA"; fi ;;
-    repos/tailrocks/velnor-new/git/ref/tags/v0.1.1)
-      printf '{"object":{"type":"commit","sha":"%s"}}\n' "$GITHUB_SHA" ;;
-    repos/tailrocks/velnor-new/releases/tags/v0.1.1)
-      cat "$GH_RELEASE_JSON" ;;
-    *) exit 44 ;;
-  esac
-  exit 0
-fi
-if [ "$1" = attestation ] && [ "$2" = verify ]; then exit 0; fi
-if [ "$1" = release ] && [ "$2" = create ]; then
-  test "$3" = v0.1.1
-  printf '%s\n' "$3" > "$GH_CREATE_TAG"
-  shift 3
-  while [ "$#" -gt 0 ]; do
-    case "$1" in
-      -R) test "$2" = tailrocks/velnor-new; shift 2 ;;
-      --target) test "$2" = "$GITHUB_SHA"; shift 2 ;;
-      --title) test "$2" = 'velnor-actions v0.1.1'; shift 2 ;;
-      --latest=false) shift ;;
-      --notes) shift 2; printf '%s\n' "$@" > "$GH_ASSET_ARGS"; exit 0 ;;
-      *) exit 45 ;;
-    esac
-  done
-fi
-exit 46
-"#,
-    )?;
-    let mut permissions = fs::metadata(&mock)?.permissions();
-    permissions.set_mode(0o755);
-    fs::set_permissions(mock, permissions)?;
-    let git = bin.join("git");
-    fs::write(
-        &git,
-        "#!/bin/sh\nset -eu\nif [ \"$1\" = rev-parse ] && [ \"$2\" = HEAD ]; then printf '%s\\n' \"$GITHUB_SHA\"; exit 0; fi\nexec /usr/bin/git \"$@\"\n",
-    )?;
-    let mut permissions = fs::metadata(&git)?.permissions();
-    permissions.set_mode(0o755);
-    fs::set_permissions(git, permissions)?;
-    cli_tests::install_mock_mise(root)?;
-    Ok(())
+    fake_commands::install_mock_gh(root)
 }
 
 fn path_with_mock_gh(root: &Path) -> Result<std::ffi::OsString, Box<dyn Error>> {
@@ -375,3 +375,9 @@ fn sha256(path: &Path) -> Result<String, Box<dyn Error>> {
 
 #[path = "schema2_generator_release_cli_tests.rs"]
 mod cli_tests;
+
+#[path = "schema2_generator_release_fake_commands.rs"]
+mod fake_commands;
+
+#[path = "schema2_generator_release_manifest_publish_tests.rs"]
+mod publisher_receipt_tests;

@@ -216,9 +216,9 @@ pub(super) fn qualification_permissions() -> Yaml {
     Yaml::Map(Vec::new())
 }
 
-/// Only the release-upload job may write repository contents.
+/// The publisher uploads one accepted-metadata artifact and writes the release.
 pub(super) fn publish_permissions() -> Yaml {
-    perm(&[("actions", "read"), ("contents", "write")])
+    perm(&[("actions", "write"), ("contents", "write")])
 }
 
 pub(super) fn perm(pairs: &[(&str, &str)]) -> Yaml {
