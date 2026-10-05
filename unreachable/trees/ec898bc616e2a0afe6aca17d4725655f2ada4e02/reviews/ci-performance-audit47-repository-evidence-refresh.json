@@ -1,0 +1,769 @@
+{
+  "schema": 1,
+  "copy_manifest_sha256": "b7719c740229f03d8b49b070444a9d091ca9192197fdd10c4b9c0f58043498e2",
+  "audit_scope": "bounded immutable W0 source/diff and representative executed-job raw-log audit",
+  "independent_copy_status": "PASS",
+  "repositories": [
+    {
+      "number": 0,
+      "wave": "G",
+      "repository": "tailrocks/velnor-new",
+      "observed_source_sha": "5a946c33cf005777feab2bc91fa4aa8e01dd58f4",
+      "audit_status": "AUDITED_PAST_LOGS",
+      "performance_status": "INCOMPLETE",
+      "waiver_applied": false,
+      "durable_evidence_roots": [
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/scope",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/refresh-c-generator",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/generator-prior",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/runtime"
+      ],
+      "source_packet_original_path": "/tmp/velnor-audit-gap-c-generator-20261004/rows.json"
+    },
+    {
+      "number": 1,
+      "wave": "A",
+      "repository": "jackin-project/jackin",
+      "observed_source_sha": "0aa821a088e1bacf3d4d85a4c9faaa67faa85132",
+      "audit_status": "AUDITED_PAST_LOGS",
+      "performance_status": "INCOMPLETE",
+      "waiver_applied": false,
+      "durable_evidence_roots": [
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/scope",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/refresh-wave-a",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/baseline-wave-a",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/runtime"
+      ],
+      "source_packet_original_path": "/tmp/velnor-audit-gap-wave-a-20261004/rows.json"
+    },
+    {
+      "number": 2,
+      "wave": "A",
+      "repository": "jackin-project/jackin-agent-smith",
+      "observed_source_sha": "2e7119b9c668ca7a9c55218b20049885299d198f",
+      "audit_status": "AUDITED_PAST_LOGS",
+      "performance_status": "INCOMPLETE",
+      "waiver_applied": false,
+      "durable_evidence_roots": [
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/scope",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/refresh-wave-a",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/baseline-wave-a",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/runtime"
+      ],
+      "source_packet_original_path": "/tmp/velnor-audit-gap-wave-a-20261004/rows.json"
+    },
+    {
+      "number": 3,
+      "wave": "A",
+      "repository": "jackin-project/homebrew-tap",
+      "observed_source_sha": "cd05a0ea2cf68fd6c2753ee938247b2dcd4c7551",
+      "audit_status": "AUDITED_PAST_LOGS",
+      "performance_status": "INCOMPLETE",
+      "waiver_applied": false,
+      "durable_evidence_roots": [
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/scope",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/refresh-wave-a",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/baseline-wave-a",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/runtime"
+      ],
+      "source_packet_original_path": "/tmp/velnor-audit-gap-wave-a-20261004/rows.json"
+    },
+    {
+      "number": 4,
+      "wave": "A",
+      "repository": "jackin-project/jackin-role-action",
+      "observed_source_sha": "59e538704b8c119f3b6668cea0154909a6158ff6",
+      "audit_status": "AUDITED_PAST_LOGS",
+      "performance_status": "INCOMPLETE",
+      "waiver_applied": false,
+      "durable_evidence_roots": [
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/scope",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/refresh-wave-a",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/baseline-wave-a",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/runtime"
+      ],
+      "source_packet_original_path": "/tmp/velnor-audit-gap-wave-a-20261004/rows.json"
+    },
+    {
+      "number": 5,
+      "wave": "A",
+      "repository": "jackin-project/jackin-sentinel",
+      "observed_source_sha": "587a0d1a8eef96108c9d9d530bdaa13df91edd2b",
+      "audit_status": "AUDITED_PAST_LOGS",
+      "performance_status": "INCOMPLETE",
+      "waiver_applied": false,
+      "durable_evidence_roots": [
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/scope",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/refresh-wave-a",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/baseline-wave-a",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/runtime"
+      ],
+      "source_packet_original_path": "/tmp/velnor-audit-gap-wave-a-20261004/rows.json"
+    },
+    {
+      "number": 6,
+      "wave": "A",
+      "repository": "jackin-project/jackin-dev",
+      "observed_source_sha": "a01b342162bc56cdf1e8bbaab793e73d31c1d621",
+      "audit_status": "AUDITED_PAST_LOGS",
+      "performance_status": "INCOMPLETE",
+      "waiver_applied": false,
+      "durable_evidence_roots": [
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/scope",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/refresh-wave-a",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/baseline-wave-a",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/runtime"
+      ],
+      "source_packet_original_path": "/tmp/velnor-audit-gap-wave-a-20261004/rows.json"
+    },
+    {
+      "number": 7,
+      "wave": "A",
+      "repository": "jackin-project/jackin-github-terraform",
+      "observed_source_sha": "b43a2314c6b58906d52828115d3b3973026f6a2a",
+      "audit_status": "AUDITED_PAST_LOGS",
+      "performance_status": "INCOMPLETE",
+      "waiver_applied": false,
+      "durable_evidence_roots": [
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/scope",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/refresh-wave-a",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/baseline-wave-a",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/runtime"
+      ],
+      "source_packet_original_path": "/tmp/velnor-audit-gap-wave-a-20261004/rows.json"
+    },
+    {
+      "number": 8,
+      "wave": "A",
+      "repository": "jackin-project/jackin-the-architect",
+      "observed_source_sha": "2cf461e2fed1b95d9fd1e7ba74c10d4d8b1c685d",
+      "audit_status": "AUDITED_PAST_LOGS",
+      "performance_status": "INCOMPLETE",
+      "waiver_applied": false,
+      "durable_evidence_roots": [
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/scope",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/refresh-wave-a",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/baseline-wave-a",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/runtime"
+      ],
+      "source_packet_original_path": "/tmp/velnor-audit-gap-wave-a-20261004/rows.json"
+    },
+    {
+      "number": 9,
+      "wave": "B",
+      "repository": "tailrocks/github-terraform",
+      "observed_source_sha": "667eae4d8ecedde5153eb486fefe07a9d00cc3ad",
+      "audit_status": "AUDITED_PAST_LOGS",
+      "performance_status": "INCOMPLETE",
+      "waiver_applied": false,
+      "durable_evidence_roots": [
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/scope",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/refresh-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/baseline-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/runtime"
+      ],
+      "source_packet_original_path": "/tmp/velnor-audit-gap-wave-b-core-20261004/report.json"
+    },
+    {
+      "number": 10,
+      "wave": "B",
+      "repository": "tailrocks/termpane",
+      "observed_source_sha": "7cf2f9981ef9a3f7c8fc295a7501a261fba955a8",
+      "audit_status": "AUDITED_PAST_LOGS",
+      "performance_status": "INCOMPLETE",
+      "waiver_applied": false,
+      "durable_evidence_roots": [
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/scope",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/refresh-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/baseline-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/runtime"
+      ],
+      "source_packet_original_path": "/tmp/velnor-audit-gap-wave-b-core-20261004/report.json"
+    },
+    {
+      "number": 11,
+      "wave": "B",
+      "repository": "tailrocks/tui-snap",
+      "observed_source_sha": "a47c9aaefb34e4c00026f99d8a8dd7ee5916b274",
+      "audit_status": "AUDITED_PAST_LOGS",
+      "performance_status": "INCOMPLETE",
+      "waiver_applied": false,
+      "durable_evidence_roots": [
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/scope",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/refresh-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/baseline-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/runtime"
+      ],
+      "source_packet_original_path": "/tmp/velnor-audit-gap-wave-b-core-20261004/report.json"
+    },
+    {
+      "number": 12,
+      "wave": "B",
+      "repository": "tailrocks/velnor",
+      "observed_source_sha": "3f6633252963efef0d71244aadae36516a11601e",
+      "audit_status": "AUDITED_PAST_LOGS",
+      "performance_status": "INCOMPLETE",
+      "waiver_applied": false,
+      "durable_evidence_roots": [
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/scope",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/refresh-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/baseline-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/runtime"
+      ],
+      "source_packet_original_path": "/tmp/velnor-audit-gap-wave-b-core-20261004/report.json"
+    },
+    {
+      "number": 13,
+      "wave": "B",
+      "repository": "tailrocks/termrock",
+      "observed_source_sha": "e2515bac765f440b11843a25d36ed8f720ae6435",
+      "audit_status": "AUDITED_PAST_LOGS",
+      "performance_status": "INCOMPLETE",
+      "waiver_applied": false,
+      "durable_evidence_roots": [
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/scope",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/refresh-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/baseline-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/runtime"
+      ],
+      "source_packet_original_path": "/tmp/velnor-audit-gap-wave-b-core-20261004/report.json"
+    },
+    {
+      "number": 14,
+      "wave": "B",
+      "repository": "tailrocks/parallax",
+      "observed_source_sha": "90d901c9d12477e93a56a9e021077ced7c78f9df",
+      "audit_status": "AUDITED_PAST_LOGS",
+      "performance_status": "INCOMPLETE",
+      "waiver_applied": false,
+      "durable_evidence_roots": [
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/scope",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/refresh-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/baseline-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/runtime"
+      ],
+      "source_packet_original_path": "/tmp/velnor-audit-gap-wave-b-core-20261004/report.json"
+    },
+    {
+      "number": 15,
+      "wave": "B",
+      "repository": "tailrocks/terminal-components-claude",
+      "observed_source_sha": "84482d066c5f0bc531f875f7f9d7716929c1b9c6",
+      "audit_status": "AUDITED_PAST_LOGS",
+      "performance_status": "INCOMPLETE",
+      "waiver_applied": false,
+      "durable_evidence_roots": [
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/scope",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/refresh-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/baseline-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/runtime"
+      ],
+      "source_packet_original_path": "/tmp/velnor-audit-gap-wave-b-core-20261004/report.json"
+    },
+    {
+      "number": 16,
+      "wave": "B",
+      "repository": "tailrocks/tailrocks-repository-skills",
+      "observed_source_sha": "036063edc58d88cd88f57e4e3a9721ebadf3ad62",
+      "audit_status": "AUDITED_PAST_LOGS",
+      "performance_status": "INCOMPLETE",
+      "waiver_applied": false,
+      "durable_evidence_roots": [
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/scope",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/refresh-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/baseline-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/runtime"
+      ],
+      "source_packet_original_path": "/tmp/velnor-audit-gap-wave-b-core-20261004/report.json"
+    },
+    {
+      "number": 17,
+      "wave": "B",
+      "repository": "tailrocks/tailrocks-skills",
+      "observed_source_sha": "1e9a23a63e0a44abf6a5ef17b69711011316cd9f",
+      "audit_status": "AUDITED_PAST_LOGS",
+      "performance_status": "INCOMPLETE",
+      "waiver_applied": false,
+      "durable_evidence_roots": [
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/scope",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/refresh-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/baseline-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/runtime"
+      ],
+      "source_packet_original_path": "/tmp/velnor-audit-gap-wave-b-core-20261004/report.json"
+    },
+    {
+      "number": 18,
+      "wave": "B",
+      "repository": "tailrocks/tailrocks-pull-request-skills",
+      "observed_source_sha": "1b260bab1e356b1123fbbbdcdb17bb7bbf8ae83a",
+      "audit_status": "AUDITED_PAST_LOGS",
+      "performance_status": "INCOMPLETE",
+      "waiver_applied": false,
+      "durable_evidence_roots": [
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/scope",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/refresh-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/baseline-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/runtime"
+      ],
+      "source_packet_original_path": "/tmp/velnor-audit-gap-wave-b-core-20261004/report.json"
+    },
+    {
+      "number": 19,
+      "wave": "B",
+      "repository": "tailrocks/homebrew-velnor",
+      "observed_source_sha": "a0db8c185b76e1bfab3508124504d0f6361e83b6",
+      "audit_status": "AUDITED_PAST_LOGS",
+      "performance_status": "INCOMPLETE",
+      "waiver_applied": false,
+      "durable_evidence_roots": [
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/scope",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/refresh-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/baseline-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/runtime"
+      ],
+      "source_packet_original_path": "/tmp/velnor-audit-gap-wave-b-core-20261004/report.json"
+    },
+    {
+      "number": 20,
+      "wave": "B",
+      "repository": "tailrocks/velnor-apt",
+      "observed_source_sha": "115b5c42d7ad5659c8496600fabf6cd8061b64b1",
+      "audit_status": "AUDITED_PAST_LOGS",
+      "performance_status": "INCOMPLETE",
+      "waiver_applied": false,
+      "durable_evidence_roots": [
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/scope",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/refresh-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/baseline-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/runtime"
+      ],
+      "source_packet_original_path": "/tmp/velnor-audit-gap-wave-b-core-20261004/report.json"
+    },
+    {
+      "number": 21,
+      "wave": "B",
+      "repository": "tailrocks/parallax-telemetry-playground",
+      "observed_source_sha": "763518791d60d4197d36119a47311e008ae3f5bf",
+      "audit_status": "AUDITED_PAST_LOGS",
+      "performance_status": "INCOMPLETE",
+      "waiver_applied": false,
+      "durable_evidence_roots": [
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/scope",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/refresh-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/baseline-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/runtime"
+      ],
+      "source_packet_original_path": "/tmp/velnor-audit-gap-wave-b-core-20261004/report.json"
+    },
+    {
+      "number": 22,
+      "wave": "B",
+      "repository": "tailrocks/velnor-actions-fixture",
+      "observed_source_sha": "1c076c5b5828fb6ba04887885c567da26fe01a69",
+      "audit_status": "AUDITED_PAST_LOGS",
+      "performance_status": "INCOMPLETE",
+      "waiver_applied": false,
+      "durable_evidence_roots": [
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/scope",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/refresh-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/baseline-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/runtime"
+      ],
+      "source_packet_original_path": "/tmp/velnor-audit-gap-wave-b-core-20261004/report.json"
+    },
+    {
+      "number": 23,
+      "wave": "B",
+      "repository": "tailrocks/holla",
+      "observed_source_sha": "c756189538c776eaa563ff83a5488e1ac96600c9",
+      "audit_status": "AUDITED_PAST_LOGS",
+      "performance_status": "INCOMPLETE",
+      "waiver_applied": false,
+      "durable_evidence_roots": [
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/scope",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/refresh-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/baseline-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/runtime"
+      ],
+      "source_packet_original_path": "/tmp/velnor-audit-gap-wave-b-core-20261004/report.json"
+    },
+    {
+      "number": 24,
+      "wave": "B",
+      "repository": "tailrocks/tracing-request-level",
+      "observed_source_sha": "2675c867fa2f8af78c2bf2543482add847eec713",
+      "audit_status": "AUDITED_PAST_LOGS",
+      "performance_status": "INCOMPLETE",
+      "waiver_applied": false,
+      "durable_evidence_roots": [
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/scope",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/refresh-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/baseline-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/runtime"
+      ],
+      "source_packet_original_path": "/tmp/velnor-audit-gap-wave-b-core-20261004/report.json"
+    },
+    {
+      "number": 25,
+      "wave": "B",
+      "repository": "tailrocks/pg-bigdecimal",
+      "observed_source_sha": "0a06226df6ec5f4e1a70a853d14368ebf2e69a80",
+      "audit_status": "AUDITED_PAST_LOGS",
+      "performance_status": "INCOMPLETE",
+      "waiver_applied": false,
+      "durable_evidence_roots": [
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/scope",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/refresh-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/baseline-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/runtime"
+      ],
+      "source_packet_original_path": "/tmp/velnor-audit-gap-wave-b-core-20261004/report.json"
+    },
+    {
+      "number": 26,
+      "wave": "B",
+      "repository": "tailrocks/ruxel",
+      "observed_source_sha": "304da9f21271be81964459f5c7e6f51f41e5fdcf",
+      "audit_status": "AUDITED_PAST_LOGS",
+      "performance_status": "INCOMPLETE",
+      "waiver_applied": false,
+      "durable_evidence_roots": [
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/scope",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/refresh-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/baseline-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/runtime"
+      ],
+      "source_packet_original_path": "/tmp/velnor-audit-gap-wave-b-core-20261004/tail/report.json"
+    },
+    {
+      "number": 27,
+      "wave": "B",
+      "repository": "tailrocks/schemalane",
+      "observed_source_sha": "94a58dad0fe6714312373fd5dac69f2ced75d194",
+      "audit_status": "AUDITED_PAST_LOGS",
+      "performance_status": "INCOMPLETE",
+      "waiver_applied": false,
+      "durable_evidence_roots": [
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/scope",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/refresh-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/baseline-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/runtime"
+      ],
+      "source_packet_original_path": "/tmp/velnor-audit-gap-wave-b-core-20261004/tail/report.json"
+    },
+    {
+      "number": 28,
+      "wave": "B",
+      "repository": "tailrocks/holla-apt",
+      "observed_source_sha": "405239a2ffec34bca5eb14d95915fb0cdaae0453",
+      "audit_status": "AUDITED_PAST_LOGS",
+      "performance_status": "INCOMPLETE",
+      "waiver_applied": false,
+      "durable_evidence_roots": [
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/scope",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/refresh-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/baseline-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/runtime"
+      ],
+      "source_packet_original_path": "/tmp/velnor-audit-gap-wave-b-core-20261004/tail/report.json"
+    },
+    {
+      "number": 29,
+      "wave": "B",
+      "repository": "tailrocks/homebrew-parallax",
+      "observed_source_sha": "70af3b38e051abfa5a14c08ed5cd5388219ffc40",
+      "audit_status": "AUDITED_PAST_LOGS",
+      "performance_status": "INCOMPLETE",
+      "waiver_applied": false,
+      "durable_evidence_roots": [
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/scope",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/refresh-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/baseline-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/runtime"
+      ],
+      "source_packet_original_path": "/tmp/velnor-audit-gap-wave-b-core-20261004/tail/report.json"
+    },
+    {
+      "number": 30,
+      "wave": "B",
+      "repository": "tailrocks/homebrew-ruxel",
+      "observed_source_sha": "1db9876988e9912bafb6ea9333eea116853dc31f",
+      "audit_status": "AUDITED_PAST_LOGS",
+      "performance_status": "INCOMPLETE",
+      "waiver_applied": false,
+      "durable_evidence_roots": [
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/scope",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/refresh-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/baseline-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/runtime"
+      ],
+      "source_packet_original_path": "/tmp/velnor-audit-gap-wave-b-core-20261004/tail/report.json"
+    },
+    {
+      "number": 31,
+      "wave": "B",
+      "repository": "tailrocks/homebrew-tablerock",
+      "observed_source_sha": "20428a6d85086aa8454e3dd693e575541e714df2",
+      "audit_status": "AUDITED_PAST_LOGS",
+      "performance_status": "INCOMPLETE",
+      "waiver_applied": false,
+      "durable_evidence_roots": [
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/scope",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/refresh-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/baseline-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/runtime"
+      ],
+      "source_packet_original_path": "/tmp/velnor-audit-gap-wave-b-core-20261004/tail/report.json"
+    },
+    {
+      "number": 32,
+      "wave": "B",
+      "repository": "tailrocks/homebrew-holla",
+      "observed_source_sha": "5b7c0f27b570de6ef07f17f593cf96737b0de3ce",
+      "audit_status": "AUDITED_PAST_LOGS",
+      "performance_status": "INCOMPLETE",
+      "waiver_applied": false,
+      "durable_evidence_roots": [
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/scope",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/refresh-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/baseline-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/runtime"
+      ],
+      "source_packet_original_path": "/tmp/velnor-audit-gap-wave-b-core-20261004/tail/report.json"
+    },
+    {
+      "number": 33,
+      "wave": "B",
+      "repository": "tailrocks/tablerock",
+      "observed_source_sha": "a9771cab32271b1b3fca40f536d9112970989623",
+      "audit_status": "AUDITED_PAST_LOGS",
+      "performance_status": "INCOMPLETE",
+      "waiver_applied": false,
+      "durable_evidence_roots": [
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/scope",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/refresh-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/baseline-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/runtime"
+      ],
+      "source_packet_original_path": "/tmp/velnor-audit-gap-wave-b-core-20261004/tail/report.json"
+    },
+    {
+      "number": 34,
+      "wave": "B",
+      "repository": "tailrocks/cloudflare-tofu",
+      "observed_source_sha": "03fb253cc0f352c3f57ff7dff9d35e4ea95eec4e",
+      "audit_status": "AUDITED_PAST_LOGS",
+      "performance_status": "INCOMPLETE",
+      "waiver_applied": false,
+      "durable_evidence_roots": [
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/scope",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/refresh-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/baseline-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/runtime"
+      ],
+      "source_packet_original_path": "/tmp/velnor-audit-gap-wave-b-core-20261004/tail/report.json"
+    },
+    {
+      "number": 35,
+      "wave": "B",
+      "repository": "tailrocks/tailrocks-typescript-skills",
+      "observed_source_sha": "0652a50fce67c4a11f01ebb960a50fd5e283e0a9",
+      "audit_status": "AUDITED_PAST_LOGS",
+      "performance_status": "INCOMPLETE",
+      "waiver_applied": false,
+      "durable_evidence_roots": [
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/scope",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/refresh-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/baseline-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/runtime"
+      ],
+      "source_packet_original_path": "/tmp/velnor-audit-gap-wave-b-core-20261004/tail/report.json"
+    },
+    {
+      "number": 36,
+      "wave": "B",
+      "repository": "tailrocks/tailrocks-skill-authoring-skills",
+      "observed_source_sha": "93fa4d609f348c04869a94d0dc7a10751e31bf1d",
+      "audit_status": "AUDITED_PAST_LOGS",
+      "performance_status": "INCOMPLETE",
+      "waiver_applied": false,
+      "durable_evidence_roots": [
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/scope",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/refresh-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/baseline-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/runtime"
+      ],
+      "source_packet_original_path": "/tmp/velnor-audit-gap-wave-b-core-20261004/tail/report.json"
+    },
+    {
+      "number": 37,
+      "wave": "B",
+      "repository": "tailrocks/tailrocks-rust-skills",
+      "observed_source_sha": "0317f100714dc66285c01c24f7967134375b5ac5",
+      "audit_status": "AUDITED_PAST_LOGS",
+      "performance_status": "INCOMPLETE",
+      "waiver_applied": false,
+      "durable_evidence_roots": [
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/scope",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/refresh-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/baseline-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/runtime"
+      ],
+      "source_packet_original_path": "/tmp/velnor-audit-gap-wave-b-core-20261004/tail/report.json"
+    },
+    {
+      "number": 38,
+      "wave": "B",
+      "repository": "tailrocks/tailrocks-roadmap-skills",
+      "observed_source_sha": "98d23280cd562c9298ce13ae40bd0eb73a3e376a",
+      "audit_status": "AUDITED_PAST_LOGS",
+      "performance_status": "INCOMPLETE",
+      "waiver_applied": false,
+      "durable_evidence_roots": [
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/scope",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/refresh-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/baseline-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/runtime"
+      ],
+      "source_packet_original_path": "/tmp/velnor-audit-gap-wave-b-core-20261004/tail/report.json"
+    },
+    {
+      "number": 39,
+      "wave": "B",
+      "repository": "tailrocks/tailrocks-open-source-skills",
+      "observed_source_sha": "3e51bc5c91949f361ed926d8f760bcb16edef111",
+      "audit_status": "AUDITED_PAST_LOGS",
+      "performance_status": "INCOMPLETE",
+      "waiver_applied": false,
+      "durable_evidence_roots": [
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/scope",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/refresh-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/baseline-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/runtime"
+      ],
+      "source_packet_original_path": "/tmp/velnor-audit-gap-wave-b-core-20261004/tail/report.json"
+    },
+    {
+      "number": 40,
+      "wave": "B",
+      "repository": "tailrocks/tailrocks-macos-skills",
+      "observed_source_sha": "eb0be5522fe0c1c9c74d41ee354446a011b10c74",
+      "audit_status": "AUDITED_PAST_LOGS",
+      "performance_status": "INCOMPLETE",
+      "waiver_applied": false,
+      "durable_evidence_roots": [
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/scope",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/refresh-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/baseline-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/runtime"
+      ],
+      "source_packet_original_path": "/tmp/velnor-audit-gap-wave-b-core-20261004/tail/report.json"
+    },
+    {
+      "number": 41,
+      "wave": "B",
+      "repository": "tailrocks/tailrocks-code-quality-skills",
+      "observed_source_sha": "e63a82f28b688a7fada418e615aa9ec0eeec4c04",
+      "audit_status": "AUDITED_PAST_LOGS",
+      "performance_status": "INCOMPLETE",
+      "waiver_applied": false,
+      "durable_evidence_roots": [
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/scope",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/refresh-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/baseline-wave-b",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/runtime"
+      ],
+      "source_packet_original_path": "/tmp/velnor-audit-gap-wave-b-core-20261004/tail/report.json"
+    },
+    {
+      "number": 42,
+      "wave": "C",
+      "repository": "ChainArgos/blockchain-nodes",
+      "observed_source_sha": "0881638712a837bdcb90b3cd811a8a9be3aa8d83",
+      "audit_status": "AUDITED_PAST_LOGS",
+      "performance_status": "INCOMPLETE",
+      "waiver_applied": false,
+      "durable_evidence_roots": [
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/scope",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/refresh-c-generator",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/baseline-wave-c",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/runtime"
+      ],
+      "source_packet_original_path": "/tmp/velnor-audit-gap-c-generator-20261004/rows.json"
+    },
+    {
+      "number": 43,
+      "wave": "C",
+      "repository": "ChainArgos/java-monorepo",
+      "observed_source_sha": "0a937e0c0442782bfb88c43cfdf67c1fc3f3b4f0",
+      "audit_status": "AUDITED_PAST_LOGS",
+      "performance_status": "INCOMPLETE",
+      "waiver_applied": false,
+      "durable_evidence_roots": [
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/scope",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/refresh-c-generator",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/baseline-wave-c",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/runtime"
+      ],
+      "source_packet_original_path": "/tmp/velnor-audit-gap-c-generator-20261004/rows.json",
+      "unavailable_executed_job_log": {
+        "job_id": 111187804163,
+        "run_id": 37117704643,
+        "attempt": 1,
+        "api_steps": 19,
+        "log_endpoint": "HTTP404"
+      }
+    },
+    {
+      "number": 44,
+      "wave": "C",
+      "repository": "ChainArgos/jackin-agent-brown",
+      "observed_source_sha": "6b2ac2277103a22b9ae155bc92415ca5ddf05f95",
+      "audit_status": "AUDITED_PAST_LOGS",
+      "performance_status": "INCOMPLETE",
+      "waiver_applied": false,
+      "durable_evidence_roots": [
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/scope",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/refresh-c-generator",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/baseline-wave-c",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/runtime"
+      ],
+      "source_packet_original_path": "/tmp/velnor-audit-gap-c-generator-20261004/rows.json"
+    },
+    {
+      "number": 45,
+      "wave": "C",
+      "repository": "ChainArgos/cloudflare-tofu",
+      "observed_source_sha": "cc0e2b687dc6c1a9943b0ae9f5911f1e782c1a20",
+      "audit_status": "AUDITED_PAST_LOGS",
+      "performance_status": "INCOMPLETE",
+      "waiver_applied": false,
+      "durable_evidence_roots": [
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/scope",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/refresh-c-generator",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/baseline-wave-c",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/runtime"
+      ],
+      "source_packet_original_path": "/tmp/velnor-audit-gap-c-generator-20261004/rows.json"
+    },
+    {
+      "number": 46,
+      "wave": "C",
+      "repository": "ChainArgos/github-terraform",
+      "observed_source_sha": "c8d47ea87a611251f965555dafbd8015f29f303b",
+      "audit_status": "AUDITED_PAST_LOGS",
+      "performance_status": "INCOMPLETE",
+      "waiver_applied": false,
+      "durable_evidence_roots": [
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/scope",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/refresh-c-generator",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/baseline-wave-c",
+        "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/collections/runtime"
+      ],
+      "source_packet_original_path": "/tmp/velnor-audit-gap-c-generator-20261004/rows.json"
+    }
+  ],
+  "independent_copy_receipt_path": "/Users/donbeave/.codex-chainargos2/evidence/velnor-pr12/audit-47-20261004/verification/independent-copy-verification.json",
+  "independent_copy_receipt_sha256": "f4b4d6b8a045243d34b8c189bf32978e5228969dc2a453b84bc8da9815fe9822"
+}

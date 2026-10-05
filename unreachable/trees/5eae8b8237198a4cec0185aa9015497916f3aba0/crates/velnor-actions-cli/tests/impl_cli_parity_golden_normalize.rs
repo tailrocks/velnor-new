@@ -1,0 +1,105 @@
+//! Parity-golden `plan-v1` response normalization (split from
+//! `impl_cli_parity_golden.rs` to satisfy the 400-line gate).
+use std::error::Error;
+use std::path::Path;
+
+/// `plan-v1` response with volatile generator/head fields normalized.
+///
+/// The generator target triple and executable SHA are environment facts,
+/// not planning behavior; both must be present and well-formed, then are
+/// replaced so the remaining bytes (obligations, digests, matrix entries,
+/// cache IDs, metadata, run vectors) compare exactly. The per-task
+/// `input_digest` embeds that same host triple (the running binary names
+/// itself; no request override by design), so its value is normalized too
+/// after a shape check — task, closure, platform, toolchain, lane, and
+/// workspace digests stay byte-exact.
+pub(crate) fn normalized_response(
+    repo: &Path,
+    head: &str,
+    bytes: &[u8],
+) -> Result<Vec<u8>, Box<dyn Error>> {
+    let value: serde_json::Value = serde_json::from_slice(bytes)?;
+    let generator = value
+        .pointer("/plan/generator")
+        .ok_or("response lacks plan.generator")?;
+    let target = generator
+        .get("target")
+        .and_then(serde_json::Value::as_str)
+        .ok_or("response lacks generator.target")?;
+    let sha = generator
+        .get("sha256")
+        .and_then(serde_json::Value::as_str)
+        .ok_or("response lacks generator.sha256")?;
+    if target.is_empty() || sha.len() != 64 || !sha.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return Err("generator identity malformed".into());
+    }
+    for digest in input_digests(&value)? {
+        if digest.len() != 67
+            || !digest.starts_with("b3-")
+            || !digest.bytes().skip(3).all(|byte| byte.is_ascii_hexdigit())
+        {
+            return Err("input_digest malformed".into());
+        }
+    }
+    let text = String::from_utf8(bytes.to_vec())?;
+    if !text.contains(head) {
+        return Err("response lacks the head SHA".into());
+    }
+    // Raw Cargo package IDs embed the checkout path (both the temp path
+    // as passed and its canonicalization); digests never do. Normalize
+    // both spellings so package records compare exactly.
+    let canonical = repo.canonicalize().unwrap_or_else(|_| repo.to_path_buf());
+    let mut text = text
+        .replace(sha, "<generator-sha>")
+        .replace(target, "<target>")
+        .replace(head, "<head>")
+        .replace(&canonical.display().to_string(), "<repo>")
+        .replace(&repo.display().to_string(), "<repo>");
+    // Scoped to `"input_digest":"<value>"` pairs so no other digest field
+    // can match; every distinct value must occur or the response shape
+    // drifted from the parser. Obligations and matrix entries share
+    // values, and `replace` removes all occurrences, so dedupe first.
+    let mut seen = std::collections::BTreeSet::new();
+    for digest in input_digests(&value)? {
+        if !seen.insert(digest) {
+            continue;
+        }
+        let pair = format!("\"input_digest\":\"{digest}\"");
+        if !text.contains(&pair) {
+            return Err("input_digest pair missing from response text".into());
+        }
+        text = text.replace(&pair, "\"input_digest\":\"<input-digest>\"");
+    }
+    Ok(text.into_bytes())
+}
+
+/// Every `input_digest` value in obligations plus matrix entries.
+fn input_digests(value: &serde_json::Value) -> Result<Vec<&str>, Box<dyn Error>> {
+    let mut digests = Vec::new();
+    let obligations = value
+        .pointer("/plan/obligations")
+        .and_then(serde_json::Value::as_array)
+        .ok_or("plan lacks obligations")?;
+    for obligation in obligations {
+        digests.push(
+            obligation
+                .get("input_digest")
+                .and_then(serde_json::Value::as_str)
+                .ok_or("obligation lacks input_digest")?,
+        );
+    }
+    let entries = value
+        .pointer("/plan/matrix/include")
+        .and_then(serde_json::Value::as_array)
+        .ok_or("plan lacks matrix.include")?;
+    for entry in entries {
+        digests.push(
+            entry
+                .get("input_digest")
+                .and_then(serde_json::Value::as_str)
+                .ok_or("entry lacks input_digest")?,
+        );
+    }
+    // Empty is legitimate: ignored-stack plans carry no obligations.
+    Ok(digests)
+}
