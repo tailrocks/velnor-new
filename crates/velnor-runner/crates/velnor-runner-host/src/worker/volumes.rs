@@ -55,7 +55,9 @@ pub(crate) async fn remove_worker_volumes(
         let Some(observed) = inspect_volume(docker, &volume.name).await? else {
             continue;
         };
-        if !owns(worker, &volume, &observed) {
+        if observed.name != volume.name
+            || (!owns(worker, &volume, &observed) && !observed.labels.is_empty())
+        {
             return Ok(false);
         }
         docker_deadline(docker.remove_volume(&volume.name, None::<RemoveVolumeOptions>))

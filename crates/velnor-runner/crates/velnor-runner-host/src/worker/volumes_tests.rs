@@ -46,6 +46,25 @@ async fn only_exactly_owned_volumes_are_removed() -> Result<(), String> {
             .count(),
         3
     );
+    let bare = DockerStub::open(vec![
+        http(
+            200,
+            r#"{"Name":"wtransport","Driver":"local","Mountpoint":"/v","Labels":{},"Options":{},"Scope":"local"}"#,
+        ),
+        http(204, ""),
+        http(404, "{}"),
+        http(404, "{}"),
+        http(404, "{}"),
+    ])?;
+    assert_eq!(remove_worker_volumes(&bare.docker, WORKER).await, Ok(true));
+    assert_eq!(
+        bare.finish()
+            .await?
+            .iter()
+            .filter(|line| line.starts_with("DELETE "))
+            .count(),
+        1
+    );
     Ok(())
 }
 
@@ -368,7 +387,7 @@ async fn send_response(stream: &mut UnixStream, response: Response) -> Result<()
     let message = format!(
         "HTTP/1.1 {} {}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
         response.status,
-        reason(response.status),
+        "OK",
         response.body.len(),
         response.body
     );
@@ -376,15 +395,4 @@ async fn send_response(stream: &mut UnixStream, response: Response) -> Result<()
         .write_all(message.as_bytes())
         .await
         .map_err(|error| error.to_string())
-}
-
-fn reason(status: u16) -> &'static str {
-    match status {
-        201 => "Created",
-        200 => "OK",
-        204 => "No Content",
-        404 => "Not Found",
-        500 => "Internal Server Error",
-        _ => "Unknown",
-    }
 }
