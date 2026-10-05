@@ -36,26 +36,26 @@ Workflow to generate
   Push branch: main
   Runner: ubuntu-26.04 (latest pinned default)
   Jobs:
-    - actionlint (7 steps)
+    - actionlint (8 steps)
     - alint (2 steps)
-    - cargo-deny (6 steps)
-    - cargo-machete (7 steps)
-    - plan (24 steps)
+    - cargo-deny (7 steps)
+    - cargo-machete (8 steps)
+    - plan (25 steps)
     - publish-baseline (7 steps)
     - required (13 steps)
-    - rust-velnor-actions-actionlint (24 steps)
-    - rust-velnor-actions-cli (23 steps)
-    - rust-velnor-actions-contract (23 steps)
-    - rust-velnor-actions-mise (24 steps)
-    - rust-velnor-actions-orchestrator (23 steps)
-    - rust-velnor-actions-rust (23 steps)
-    - rust-velnor-actions-tofu (23 steps)
-    - rust-velnor-actions-workflow-renderer (23 steps)
-    - rust-velnor-runner-cli (23 steps)
-    - rust-velnor-runner-core (23 steps)
-    - rust-velnor-runner-github (23 steps)
-    - rust-velnor-runner-host (23 steps)
-    - zizmor (7 steps)
+    - rust-velnor-actions-actionlint (25 steps)
+    - rust-velnor-actions-cli (24 steps)
+    - rust-velnor-actions-contract (24 steps)
+    - rust-velnor-actions-mise (25 steps)
+    - rust-velnor-actions-orchestrator (24 steps)
+    - rust-velnor-actions-rust (24 steps)
+    - rust-velnor-actions-tofu (24 steps)
+    - rust-velnor-actions-workflow-renderer (24 steps)
+    - rust-velnor-runner-cli (24 steps)
+    - rust-velnor-runner-core (24 steps)
+    - rust-velnor-runner-github (24 steps)
+    - rust-velnor-runner-host (24 steps)
+    - zizmor (8 steps)
     - 12 Rust crate jobs
       Each: Clippy -> build -> run tests -> doctests -> doc build -> format check
       Entries:
@@ -148,7 +148,8 @@ Workflow to generate
   Clippy memory groups: 1; barriers: 0
   Cache layers: Mise tools, Cargo sources, MBX compilation objects
   Actionlint: 1.7.12 pinned
-  Action pins: 8
+  Action pins: 9
+    - ./.github/actions/velnor-tool-seed
     - actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
     - actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
     - actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1

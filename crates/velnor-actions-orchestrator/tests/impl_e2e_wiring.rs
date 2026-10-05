@@ -116,9 +116,14 @@ fn check_setup_first(job: &JobText) -> Result<(), String> {
     }
 }
 
-/// Setup position is legal at 0-3 (Checkout, identity, and V2 restore).
-fn setup_is_early(_job: &JobText, at: usize) -> bool {
+/// Setup follows checkout, optional host seed, runtime identity, and V2 restore.
+fn setup_is_early(job: &JobText, at: usize) -> bool {
     at <= 3
+        || (at == 4
+            && job
+                .steps
+                .get(1)
+                .is_some_and(|step| step.name == "Restore Velnor tool seed"))
 }
 
 /// Setup Mise must leave restore and save ownership to the explicit V2 layer.

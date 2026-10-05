@@ -175,15 +175,22 @@ fn strict_wires_runtime_qualified_tools_cache_before_setup_and_saves_once()
     assert_eq!(names.iter().filter(|s| *s == TOOLS_RESTORE_NAME).count(), 1);
     assert_eq!(names.iter().filter(|s| *s == TOOLS_SAVE_NAME).count(), 1);
     assert_eq!(
+        names.iter().position(|s| s == "Restore Velnor tool seed"),
+        Some(1),
+        "the immutable seed follows checkout"
+    );
+    assert_eq!(
         names.iter().position(|s| s == "Setup Mise"),
-        Some(3),
-        "checkout, runtime identity, restore, then setup: {names:?}"
+        Some(4),
+        "seed, runtime identity, and V2 restore precede setup: {names:?}"
     );
     for need in [
         "name: Identify Mise cache runtime",
         "id: velnor-tool-cache-identity",
         "outputs.enabled == 'true'",
         "mise-tools-v2-",
+        "mise-v1-x86_64-unknown-linux-gnu-2026.9.18-",
+        "github.event_name != 'workflow_dispatch'",
         "cache: \"false\"",
         "cache_save: \"false\"",
         "path:",
@@ -197,9 +204,18 @@ fn strict_wires_runtime_qualified_tools_cache_before_setup_and_saves_once()
             "V2 tools cache missing {need}:\n{text}"
         );
     }
+    let setup = text
+        .split("      - name: Setup Mise")
+        .nth(1)
+        .unwrap_or_default();
+    let setup = setup.split("      - name:").next().unwrap_or_default();
     assert!(
-        !text.contains("cache_key:"),
-        "legacy action cache key:\n{text}"
+        !setup.contains("cache_key:"),
+        "Mise does not own an archive key"
+    );
+    assert!(
+        text.contains("uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]"),
+        "the fixed host seed action is emitted once:\n{text}"
     );
     Ok(())
 }

@@ -38,8 +38,21 @@ const SAVE_IF: &str = "success() && github.event_name == 'push' && github.ref ==
 const EXPORT_SCRIPT: &str = r#"set -eu; df -B1 -P "$RUNNER_TEMP"; df -i -P "$RUNNER_TEMP"; mbx gc; mbx cache dir > "$RUNNER_TEMP/mbx-store-path"; IFS= read -r store < "$RUNNER_TEMP/mbx-store-path"; test -n "$store"; bundle="$RUNNER_TEMP/mbx-single-bundle"; case "$bundle" in "$store"|"$store"/*) exit 1 ;; esac; case "$store" in /|.) exit 1 ;; *mbx*) ;; *) exit 1 ;; esac; rm -rf "$bundle"; if mbx cache export --group "$MBX_CACHE_EXPORT_GROUP" --format directory "$bundle" >"$RUNNER_TEMP/mbx-export.out" 2>&1; then test -d "$bundle"; rm -rf "$store"; df -B1 -P "$RUNNER_TEMP"; df -i -P "$RUNNER_TEMP"; echo "ready=true" >> "$GITHUB_OUTPUT"; else rm -rf "$bundle"; if grep -q "no completed mbx builds are recorded for export group" "$RUNNER_TEMP/mbx-export.out"; then echo "ready=false" >> "$GITHUB_OUTPUT"; exit 0; fi; cat "$RUNNER_TEMP/mbx-export.out"; exit 1; fi"#;
 /// Drop the commit suffix so an older bundle for this toolchain still restores.
 const KEY_SCRIPT: &str = r#"set -eu; case "$RUNNER_OS:$RUNNER_ARCH" in Linux:X64) os=linux; arch=x64 ;; Linux:ARM64) os=linux; arch=arm64 ;; macOS:X64) os=darwin; arch=x64 ;; macOS:ARM64) os=darwin; arch=arm64 ;; Windows:X64) os=win32; arch=x64 ;; Windows:ARM64) os=win32; arch=arm64 ;; *) printf 'unsupported MBX runner %s/%s\n' "$RUNNER_OS" "$RUNNER_ARCH" >&2; exit 1 ;; esac; test -n "$CACHE_REVISION"; rust_file="$RUNNER_TEMP/mbx-rustc-identity-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_JOB}"; digest_file="${rust_file}-sha256"; rustc "+$RUST_TOOLCHAIN" -vV > "$rust_file"; if [ "$os" = darwin ]; then shasum -a 256 "$rust_file" > "$digest_file"; else sha256sum "$rust_file" > "$digest_file"; fi; IFS=' ' read -r identity _ < "$digest_file"; rm -f "$rust_file" "$digest_file"; identity="${identity:0:12}"; test -n "$identity"; toolchain="rust-${identity}"; key="${os}-${arch}-mbx-${CACHE_GENERATION}-dir-${toolchain}-${GITHUB_JOB}-${CACHE_REVISION}"; case "$key" in ''|*-) exit 1 ;; esac; prefix="${key%-*}-"; printf 'key=%s\nprefix=%s\n' "$key" "$prefix" >> "$GITHUB_OUTPUT"; if [ "$CREATE_EXPORT_GROUP" = true ]; then test -r /proc/sys/kernel/random/uuid; IFS= read -r group_id < /proc/sys/kernel/random/uuid; test -n "$group_id"; group="github-actions-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${group_id}"; printf 'MBX_CACHE_EXPORT_GROUP=%s\n' "$group" >> "$GITHUB_ENV"; fi"#;
-/// Import when the restore matched. A miss, a missing directory, or a failed import stays cold.
-const IMPORT_SCRIPT: &str = r#"set -eu; bundle="$RUNNER_TEMP/mbx-single-bundle"; df -B1 -P "$RUNNER_TEMP"; df -i -P "$RUNNER_TEMP"; if [ -z "$MATCHED" ]; then echo "no mbx bundle matched"; exit 0; fi; if [ ! -d "$bundle" ]; then echo "mbx bundle missing; continuing cold"; exit 0; fi; if ! mbx cache import "$bundle"; then echo "mbx bundle import failed; continuing cold"; rm -rf "$bundle"; exit 0; fi"#;
+/// Import the actions-cache hit, or a private copy of the authorized seed.
+///
+/// `mbx cache import` removes its input directory. The seed copy is the
+/// only directory that command may remove. A miss stays cold.
+///
+/// # Errors
+///
+/// Returns [`RenderError::BadCommand`] when `seed_root` is not a safe
+/// absolute path.
+pub(crate) fn import_script(seed_root: &str) -> Result<String, RenderError> {
+    crate::tool_seed::require_seed_root(seed_root)?;
+    Ok(format!(
+        r#"set -eu; bundle="$RUNNER_TEMP/mbx-single-bundle"; seed="{seed_root}/mbx"; copy="$RUNNER_TEMP/mbx-seed-bundle"; df -B1 -P "$RUNNER_TEMP"; df -i -P "$RUNNER_TEMP"; if [ -n "$MATCHED" ]; then if [ ! -d "$bundle" ]; then echo "mbx bundle missing; continuing cold"; exit 0; fi; if ! mbx cache import "$bundle"; then echo "mbx bundle import failed; continuing cold"; rm -rf "$bundle"; exit 0; fi; exit 0; fi; if [ -z "$PREFIX" ] || [ ! -f "$seed/PREFIX" ] || [ ! -d "$seed/bundle" ]; then echo "no mbx bundle matched"; exit 0; fi; IFS= read -r seed_prefix < "$seed/PREFIX" || true; if [ "$seed_prefix" != "$PREFIX" ]; then echo "no mbx bundle matched"; exit 0; fi; rm -rf "$copy"; if ! cp -R "$seed/bundle" "$copy"; then echo "mbx bundle import failed; continuing cold"; rm -rf "$copy"; exit 0; fi; if ! mbx cache import "$copy"; then echo "mbx bundle import failed; continuing cold"; rm -rf "$copy"; exit 0; fi; rm -rf "$copy""#
+    ))
+}
 
 /// YAML step id for the MBX restore and export steps, when they have one.
 pub(crate) fn step_yaml_id(name: &str) -> Option<&'static str> {
@@ -228,13 +241,23 @@ fn restore_step() -> Result<Step, RenderError> {
 }
 
 fn import_step() -> Result<Step, RenderError> {
-    let env = BTreeMap::from([(
-        "MATCHED".to_owned(),
-        "${{ steps.mbx-bundle.outputs.cache-matched-key }}".to_owned(),
-    )]);
+    let env = BTreeMap::from([
+        (
+            "MATCHED".to_owned(),
+            "${{ steps.mbx-bundle.outputs.cache-matched-key }}".to_owned(),
+        ),
+        (
+            "PREFIX".to_owned(),
+            "${{ steps.mbx-cache-key.outputs.prefix }}".to_owned(),
+        ),
+    ]);
     let step = crate::steps::shell_step(
         MBX_BUNDLE_IMPORT_NAME,
-        vec!["bash".to_owned(), "-c".to_owned(), IMPORT_SCRIPT.to_owned()],
+        vec![
+            "bash".to_owned(),
+            "-c".to_owned(),
+            import_script(crate::tool_seed::SEED_ROOT)?,
+        ],
         env,
     )?;
     Ok(step)
@@ -265,3 +288,7 @@ fn save_step() -> Result<Step, RenderError> {
     step.condition = Some(SAVE_IF.to_owned());
     Ok(step)
 }
+
+#[cfg(test)]
+#[path = "mbx_bundle_seed_tests.rs"]
+mod seed_tests;
