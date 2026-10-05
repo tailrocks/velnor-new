@@ -58,6 +58,7 @@ fn generate_preview_matches_in_place_and_preserves_repo() -> TestResult {
         ".github/AGENTS.md",
         ".github/CLAUDE.md",
         ".github/actionlint.yaml",
+        ".github/actions/velnor-tool-seed/action.yml",
         ".github/workflows/ci.yml",
     ];
     assert_eq!(preview_report.files_written, expected_files);
@@ -359,7 +360,7 @@ fn ignored_rust_plans_no_work() -> TestResult {
     assert!(text.contains("Rust: ignored"), "ignored:\n{text}");
     assert!(text.contains("no-work workflow"), "no-work:\n{text}");
     let report = generate(&prep, &GenerateOptions { output_dir: None })?;
-    assert_eq!(report.files_written.len(), 4);
+    assert_eq!(report.files_written.len(), 5);
     Ok(())
 }
 

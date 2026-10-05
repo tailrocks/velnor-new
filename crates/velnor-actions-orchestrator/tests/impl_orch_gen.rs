@@ -107,6 +107,7 @@ fn orch_gen_plan_matches_generated_tree() -> TestResult {
             ".github/AGENTS.md",
             ".github/CLAUDE.md",
             ".github/actionlint.yaml",
+            ".github/actions/velnor-tool-seed/action.yml",
             ".github/workflows/ci.yml"
         ]
     );
@@ -141,7 +142,7 @@ fn orch_gen_zero_candidate_repo_plans_no_work() -> TestResult {
     assert!(plan.contains("no-work workflow"), "no-work:\n{plan}");
     let parent = TempDir::new()?;
     let report = preview_into(&prep, parent.path().join("preview"))?;
-    assert_eq!(report.files_written.len(), 4);
+    assert_eq!(report.files_written.len(), 5);
     Ok(())
 }
 

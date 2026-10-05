@@ -17,6 +17,7 @@ pub use crate::cache_steps::{
     is_never_archive_path, mbx_steps_for_driver,
 };
 
+pub use crate::action_ref::validate_uses;
 pub use crate::steps_artifact::{
     ARTIFACT_NAME_OUTPUT, BASELINE_PUBLISH_UPLOAD_NAME, BASELINE_RETENTION_DAYS, PUBLISH_STEP_ID,
     baseline_publish_upload_step, crate_job_report_upload_step, download_artifact_step,
@@ -111,29 +112,6 @@ pub fn scan_for_private_subcommands(text: &str) -> Result<(), RenderError> {
         if text.contains(token) {
             return Err(RenderError::PrivateSubcommand((*token).to_owned()));
         }
-    }
-    Ok(())
-}
-
-/// Validate an `owner/repo@<40 hex>` action ref; branches are rejected.
-/// # Errors
-pub fn validate_uses(uses: &str) -> Result<(), RenderError> {
-    let Some((name, sha)) = uses.split_once('@') else {
-        return Err(RenderError::BadActionRef(format!("missing_sha:{uses}")));
-    };
-    let Some((owner, repo)) = name.split_once('/') else {
-        return Err(RenderError::BadActionRef(format!("malformed_name:{uses}")));
-    };
-    if owner.is_empty() || repo.is_empty() || !is_action_name(name) {
-        return Err(RenderError::BadActionRef(format!("malformed_name:{uses}")));
-    }
-    if name.starts_with("actions/setup-") || name == "taiki-e/install-action" {
-        return Err(RenderError::BadActionRef(format!(
-            "forbidden_action:{uses}"
-        )));
-    }
-    if !velnor_actions_contract::ids::is_lower_hex_len(sha, 40) {
-        return Err(RenderError::BadActionRef(format!("unpinned_ref:{uses}")));
     }
     Ok(())
 }
@@ -374,14 +352,6 @@ pub fn acquire_velnor_step(
         return Err(RenderError::BadCommand("acquire_without_verify".to_owned()));
     }
     shell_step(ACQUIRE_NAME, argv, env.clone())
-}
-
-/// True for `owner/repo` over alphanumerics plus `.-_`.
-fn is_action_name(name: &str) -> bool {
-    !name.is_empty()
-        && name
-            .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'/' | b'.' | b'-' | b'_'))
 }
 
 /// Target-directory prefix isolating one lane.

@@ -9,7 +9,7 @@ use super::client::GitHub;
 
 #[derive(serde::Deserialize)]
 pub(super) struct RunResponse {
-    run_id: Option<u64>,
+    id: Option<u64>,
     run_attempt: Option<u32>,
     event: Option<String>,
     status: Option<String>,
@@ -54,8 +54,7 @@ fn validate_run(
         .as_ref()
         .and_then(|repo| repo.full_name.as_deref())
         .ok_or_else(|| internal("qualification_run_repository"))?;
-    if value.run_id != Some(run.run_id)
-        || value.run_attempt != Some(run.run_attempt)
+    if !requested_attempt_matches(value, run)
         || value.status.as_deref() != Some("completed")
         || event != "workflow_dispatch"
         || conclusion != "success"
@@ -88,6 +87,10 @@ fn validate_run(
         conclusion: conclusion.to_owned(),
         run,
     })
+}
+
+fn requested_attempt_matches(value: &RunResponse, run: QualificationRunRef) -> bool {
+    value.id == Some(run.run_id) && value.run_attempt == Some(run.run_attempt)
 }
 
 fn required<'a>(value: Option<&'a str>, error: &'static str) -> Result<&'a str, OrchestratorError> {

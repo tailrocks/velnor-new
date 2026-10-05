@@ -95,6 +95,11 @@ fn strict_inserts_setup_before_mise_exec() -> Result<(), RenderError> {
         text.contains("- name: Restore Mise tools"),
         "V2 tools cache restores explicitly:\n{text}"
     );
+    assert!(
+        text.contains("name: Restore Velnor tool seed")
+            && text.contains("github.event_name != 'workflow_dispatch'"),
+        "host seed is skipped for qualification dispatch:\n{text}"
+    );
     for line in [
         "- name: Save Mise tools".to_owned(),
         "key: mise-tools-v2-".to_owned(),
@@ -113,7 +118,15 @@ fn strict_inserts_setup_before_mise_exec() -> Result<(), RenderError> {
             && save_step.contains("github.event_name != 'workflow_dispatch'"),
         "sole owner saves on push and blocks unvalidated dispatch:\n{save_step}"
     );
-    assert!(!text.contains("cache_key:"), "no action-owned key:\n{text}");
+    let setup = text
+        .split("      - name: Setup Mise")
+        .nth(1)
+        .unwrap_or_default();
+    let setup = setup.split("      - name:").next().unwrap_or_default();
+    assert!(
+        !setup.contains("cache_key:"),
+        "Mise has no archive key:\n{setup}"
+    );
     Ok(())
 }
 

@@ -54,9 +54,44 @@ pub(crate) fn ensure_tools_cache_v2(
     reject_v2_steps(job_id, job)?;
 
     let specs = cache_p08::infer_job_tools(job);
+    let Some(setup_index) = insert_tool_seed(job, setup_index, setup, always, target, &specs)?
+    else {
+        return Ok(());
+    };
     if specs.is_empty() {
         return Ok(());
     }
+    insert_tools_cache(job_id, job, setup, target, &specs, setup_index)
+}
+
+fn insert_tool_seed(
+    job: &mut Job,
+    setup_index: usize,
+    setup: &MiseSetup,
+    always: bool,
+    target: &str,
+    specs: &[String],
+) -> Result<Option<usize>, RenderError> {
+    let seed_specs = if specs.is_empty() && always {
+        vec!["mise@bootstrap".to_owned()]
+    } else {
+        specs.to_vec()
+    };
+    if seed_specs.is_empty() {
+        return Ok(None);
+    }
+    let seed_key = crate::tool_seed::seed_key_for_tools(target, &setup.version, &seed_specs)?;
+    crate::tool_seed::insert_before_setup(job, setup_index, &seed_key).map(Some)
+}
+
+fn insert_tools_cache(
+    job_id: &str,
+    job: &mut Job,
+    setup: &MiseSetup,
+    target: &str,
+    specs: &[String],
+    setup_index: usize,
+) -> Result<(), RenderError> {
     let rust_version = specs.iter().find_map(|spec| spec.strip_prefix("rust@"));
     let components = if let Some(version) = rust_version {
         job.steps
@@ -81,7 +116,7 @@ pub(crate) fn ensure_tools_cache_v2(
         runs_on: &job.runs_on,
         target,
         mise_setup: setup,
-        tool_specs: &specs,
+        tool_specs: specs,
         rustup_toolchain: rust_version,
         rustup_components: &components,
     })?;

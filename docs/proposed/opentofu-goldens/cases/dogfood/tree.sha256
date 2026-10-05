@@ -1,6 +1,7 @@
 a63e6a4550e75e14c2dd2ebe6efefe1360a847967c0ee2f28803eb43949dc6e4  ./.github/AGENTS.md
 0da1fbb188c99eb4cffe66befed975368b8b86ef7e375d2b8ac9a6540818fbff  ./.github/actionlint.yaml
-ca6f298259b9a0bd8815997254747a6727a6686f00ed7e9812e5eb240035e15a  ./.github/workflows/ci.yml
+b075d41bf807745a6e07476fab99c0a7420c996ebfb109cab10f6fe87c8f70df  ./.github/actions/velnor-tool-seed/action.yml
+a7dc1e0144094bd92952c5517ce1875064c95dfc4acffd6754be7878462290da  ./.github/workflows/ci.yml
 0d41b05d10d4da7b26a719f82908f2a47e7224ed93ef3383d81a6d45179fb5d8  ./.github/workflows/freshness.yml
 d13645f1aa9667a1ce9fa0886ca5f4930c3a9a0e33c3dfe7df6b8942cad9962a  ./.github/workflows/generator-release.yml
 a103db30bc49166259cbb40e9948c2677fbc49d84164cc7f71c262ea5d3ecdab  ./.github/workflows/image-release.yml

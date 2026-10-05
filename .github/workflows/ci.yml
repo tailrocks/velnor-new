@@ -64,6 +64,11 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
+      - name: Restore Velnor tool seed
+        if: github.event_name != 'workflow_dispatch'
+        uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
+        with:
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-75c77caa4018556f
       - name: Identify Mise cache runtime
         id: velnor-tool-cache-identity
         env:
@@ -148,6 +153,11 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
+      - name: Restore Velnor tool seed
+        if: github.event_name != 'workflow_dispatch'
+        uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
+        with:
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-1e88d9dde00a53da
       - name: Identify Mise cache runtime
         id: velnor-tool-cache-identity
         env:
@@ -213,6 +223,11 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
+      - name: Restore Velnor tool seed
+        if: github.event_name != 'workflow_dispatch'
+        uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
+        with:
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-507563a85b3135e7
       - name: Identify Mise cache runtime
         id: velnor-tool-cache-identity
         env:
@@ -294,6 +309,11 @@ jobs:
         with:
           fetch-depth: "0"
           persist-credentials: "false"
+      - name: Restore Velnor tool seed
+        if: github.event_name != 'workflow_dispatch'
+        uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
+        with:
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-fff1f2c29eca28de
       - name: Identify Mise cache runtime
         id: velnor-tool-cache-identity
         env:
@@ -682,6 +702,11 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
+      - name: Restore Velnor tool seed
+        if: github.event_name != 'workflow_dispatch'
+        uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
+        with:
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-ac88a89731444aab
       - name: Identify Mise cache runtime
         id: velnor-tool-cache-identity
         env:
@@ -894,6 +919,11 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
+      - name: Restore Velnor tool seed
+        if: github.event_name != 'workflow_dispatch'
+        uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
+        with:
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-cd6926493099032f
       - name: Identify Mise cache runtime
         id: velnor-tool-cache-identity
         env:
@@ -1096,6 +1126,11 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
+      - name: Restore Velnor tool seed
+        if: github.event_name != 'workflow_dispatch'
+        uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
+        with:
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-ac88a89731444aab
       - name: Identify Mise cache runtime
         id: velnor-tool-cache-identity
         env:
@@ -1302,6 +1337,11 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
+      - name: Restore Velnor tool seed
+        if: github.event_name != 'workflow_dispatch'
+        uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
+        with:
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-82e6ea144dfe6a19
       - name: Identify Mise cache runtime
         id: velnor-tool-cache-identity
         env:
@@ -1514,6 +1554,11 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
+      - name: Restore Velnor tool seed
+        if: github.event_name != 'workflow_dispatch'
+        uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
+        with:
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-cd6926493099032f
       - name: Identify Mise cache runtime
         id: velnor-tool-cache-identity
         env:
@@ -1720,6 +1765,11 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
+      - name: Restore Velnor tool seed
+        if: github.event_name != 'workflow_dispatch'
+        uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
+        with:
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-ac88a89731444aab
       - name: Identify Mise cache runtime
         id: velnor-tool-cache-identity
         env:
@@ -1926,6 +1976,11 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
+      - name: Restore Velnor tool seed
+        if: github.event_name != 'workflow_dispatch'
+        uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
+        with:
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-ac88a89731444aab
       - name: Identify Mise cache runtime
         id: velnor-tool-cache-identity
         env:
@@ -2132,6 +2187,11 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
+      - name: Restore Velnor tool seed
+        if: github.event_name != 'workflow_dispatch'
+        uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
+        with:
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-ac88a89731444aab
       - name: Identify Mise cache runtime
         id: velnor-tool-cache-identity
         env:
@@ -2338,6 +2398,11 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
+      - name: Restore Velnor tool seed
+        if: github.event_name != 'workflow_dispatch'
+        uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
+        with:
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-ac88a89731444aab
       - name: Identify Mise cache runtime
         id: velnor-tool-cache-identity
         env:
@@ -2544,6 +2609,11 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
+      - name: Restore Velnor tool seed
+        if: github.event_name != 'workflow_dispatch'
+        uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
+        with:
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-ac88a89731444aab
       - name: Identify Mise cache runtime
         id: velnor-tool-cache-identity
         env:
@@ -2750,6 +2820,11 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
+      - name: Restore Velnor tool seed
+        if: github.event_name != 'workflow_dispatch'
+        uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
+        with:
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-ac88a89731444aab
       - name: Identify Mise cache runtime
         id: velnor-tool-cache-identity
         env:
@@ -2956,6 +3031,11 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
+      - name: Restore Velnor tool seed
+        if: github.event_name != 'workflow_dispatch'
+        uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
+        with:
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-ac88a89731444aab
       - name: Identify Mise cache runtime
         id: velnor-tool-cache-identity
         env:
@@ -3157,6 +3237,11 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
+      - name: Restore Velnor tool seed
+        if: github.event_name != 'workflow_dispatch'
+        uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
+        with:
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-8f52c1fc1d8f90d8
       - name: Identify Mise cache runtime
         id: velnor-tool-cache-identity
         env:

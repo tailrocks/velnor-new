@@ -33,7 +33,7 @@ pub use crate::internal::{
 };
 pub use crate::merge::merge_internal;
 pub use crate::merge_request::assemble_merge_request;
-pub use crate::pins::consumer_acquire_step_with_manifest;
+pub use crate::pins::{acquire_script_argv, consumer_acquire_step_with_manifest};
 pub use crate::plan::{plan_text, plan_text_checked};
 pub use crate::plan_output_limits::{JOB_OUTPUTS_BUDGET_UTF16_BYTES, PlanOutputMode};
 pub use crate::prepare::{GenerationPreparation, prepare};

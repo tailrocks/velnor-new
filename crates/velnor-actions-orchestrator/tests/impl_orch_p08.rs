@@ -92,8 +92,23 @@ fn c2_v2_mise_cache_restores_with_elected_tools_saves() -> TestResult {
             "action cache disabled (mbx={mbx})"
         );
         assert!(
-            !yaml.contains("cache_key:"),
-            "no action-owned cache key (mbx={mbx})"
+            yaml.contains("- name: Restore Velnor tool seed")
+                && yaml.contains("cache_key: mise-v1-")
+                && yaml.contains("if: github.event_name != 'workflow_dispatch'"),
+            "static host seed is separate and disabled for dispatch (mbx={mbx})"
+        );
+        let setup = yaml
+            .split("- name: Setup Mise")
+            .nth(1)
+            .ok_or("missing Setup Mise")?;
+        let setup = setup
+            .lines()
+            .take_while(|line| !line.starts_with("      - name: "))
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(
+            !setup.contains("cache_key:"),
+            "runtime action cache remains disabled (mbx={mbx})"
         );
         for path in [
             "${{ runner.temp }}/velnor/rustup",
