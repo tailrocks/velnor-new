@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 mod archive_paths;
 mod identity;
 mod lease;
+mod open_existing;
 mod preparation;
 mod projection;
 mod storage;

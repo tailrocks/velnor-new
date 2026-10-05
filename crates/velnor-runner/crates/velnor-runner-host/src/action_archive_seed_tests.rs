@@ -22,6 +22,8 @@ mod archive_validation_tests;
 mod durability_tests;
 #[path = "action_archive_seed_tests/lease_fault_tests.rs"]
 mod lease_fault_tests;
+#[path = "action_archive_seed_tests/open_existing_tests.rs"]
+mod open_existing_tests;
 
 static TEST_ID: AtomicU64 = AtomicU64::new(0);
 
