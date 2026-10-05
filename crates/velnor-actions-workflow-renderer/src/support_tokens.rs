@@ -4,7 +4,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Job, Step, StepKind};
+use velnor_actions_contract::{Job, Step, StepKind, StepRole};
 
 use crate::{
     RenderError,
@@ -34,58 +34,19 @@ pub(crate) fn check_token_hygiene(jobs: &BTreeMap<String, Job>) -> Result<(), Re
     Ok(())
 }
 
-/// Shell steps allowed ambient auth, by step name.
-///
-/// The renderer must not depend on the Mise adapter, so externally
-/// owned names mirror as literals; end-to-end generation tests render
-/// the real steps through this gate, so a drifted literal fails there,
-/// not here. Both pinned-tool install steps and source fetch download
-/// tools and sources with registry auth; nested fetch names carry a
-/// manifest suffix.
-/// Tool-install preparation and source fetch need ambient network auth.
-/// Cargo Deny's combined install-and-check vector removes credentials
-/// after install and before its isolated Cargo payload. Other validator
-/// executions use the standard scrubbed shell step. Plan and
-/// fetch-reports are internal steps; release publishes through `gh`
-/// (allowlisted by job ID below).
-const AMBIENT_AUTH_STEPS: [&str; 5] = [
-    "Prepare pinned tools",
-    "Prepare pre-seed MBX",
-    "Prepare Rust components",
-    "Fetch Cargo sources",
-    crate::steps::DENY_STEP_NAME,
-];
-
-/// True when a step name carries ambient-auth permission.
-///
-/// Exact match, except genuine generator nested-fetch names, which
-/// share the root fetch purpose.
-fn is_ambient_auth_step(name: &str) -> bool {
-    AMBIENT_AUTH_STEPS.contains(&name) || is_generator_nested_fetch(name)
-}
-
-/// Prefix of generator nested-fetch names (`Fetch Cargo sources (<root>/Cargo.toml)`).
-const FETCH_SOURCES_PREFIX: &str = "Fetch Cargo sources (";
-
-/// True for genuine generator nested-fetch names only.
-///
-/// The generator emits `Fetch Cargo sources (<root>/Cargo.toml)` for
-/// roots passing [`velnor_actions_contract::validate_fetch_root`]; the
-/// exemption requires the exact shape — prefix, `/Cargo.toml)`
-/// suffix, and a validated root — so a crafted lookalike (unclosed
-/// paren, trailing text, `..`, `$`, quotes) never inherits ambient
-/// auth through a bare prefix match.
-fn is_generator_nested_fetch(name: &str) -> bool {
-    let Some(inner) = name
-        .strip_prefix(FETCH_SOURCES_PREFIX)
-        .and_then(|rest| rest.strip_suffix(')'))
-    else {
-        return false;
-    };
-    let Some(root) = inner.strip_suffix("/Cargo.toml") else {
-        return false;
-    };
-    !root.is_empty() && velnor_actions_contract::validate_fetch_root(root).is_ok()
+/// Roles allowed ambient auth for exact install, cache population, or
+/// isolated Cargo Deny setup. Presentation names carry no permission.
+fn is_ambient_auth_step(step: &Step) -> bool {
+    matches!(
+        step.role,
+        Some(
+            StepRole::PreparePinnedTools
+                | StepRole::PrepareRustComponents
+                | StepRole::MbxPreflight
+                | StepRole::CargoSourcesFetch
+                | StepRole::CargoDeny
+        )
+    )
 }
 
 /// Reject credential leaks in one step's env, argv, and action inputs.
@@ -104,7 +65,7 @@ fn check_step_tokens(id: &str, step: &Step) -> Result<(), RenderError> {
                     )));
                 }
             }
-            check_scrub_coverage(id, &step.name, env)?;
+            check_scrub_coverage(id, step, env)?;
         }
         StepKind::Action { with, env, .. } => {
             for value in with.values() {
@@ -191,11 +152,11 @@ fn check_env_tokens(id: &str, env: &BTreeMap<String, String>) -> Result<(), Rend
 /// or explicitly allowlisted, nothing else renders.
 fn check_scrub_coverage(
     id: &str,
-    name: &str,
+    step: &Step,
     env: &BTreeMap<String, String>,
 ) -> Result<(), RenderError> {
     use crate::toolchain_env::STEP_CREDENTIAL_DENYLIST;
-    if id == super::RELEASE_JOB_ID || is_ambient_auth_step(name) {
+    if id == super::RELEASE_JOB_ID || is_ambient_auth_step(step) {
         return Ok(());
     }
     let scoped = is_scoped_gh_token(id, env);
@@ -206,7 +167,8 @@ fn check_scrub_coverage(
         Ok(())
     } else {
         Err(RenderError::InvalidWorkflow(format!(
-            "missing_scrub:{id}:{name}"
+            "missing_scrub:{id}:{}",
+            step.name
         )))
     }
 }

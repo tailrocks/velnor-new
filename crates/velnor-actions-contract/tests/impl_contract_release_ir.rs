@@ -49,6 +49,8 @@ fn ci_job() -> Job {
         environment: None,
         steps: vec![Step {
             name: "run".to_owned(),
+            id: None,
+            role: None,
             condition: None,
             kind: StepKind::Internal {
                 operation: "demo".to_owned(),

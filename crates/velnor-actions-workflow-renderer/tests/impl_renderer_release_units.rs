@@ -99,6 +99,8 @@ fn scalar_validators_accept_and_reject() -> Result<(), RenderError> {
 fn release_job_shape_roundtrip() -> Result<(), RenderError> {
     let shell = Step {
         name: "Check out".to_owned(),
+        id: None,
+        role: None,
         condition: None,
         kind: StepKind::Shell {
             run: vec!["sh".to_owned()],
@@ -120,6 +122,8 @@ fn release_job_shape_roundtrip() -> Result<(), RenderError> {
     let internal = ReleaseJobSpec {
         steps: vec![Step {
             name: "Plan".to_owned(),
+            id: None,
+            role: None,
             condition: None,
             kind: StepKind::Internal {
                 operation: "plan-v1".to_owned(),

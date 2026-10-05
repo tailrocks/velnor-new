@@ -93,8 +93,10 @@ fn c2_v2_mise_cache_restores_with_elected_tools_saves() -> TestResult {
         );
         assert!(
             yaml.contains("- name: Restore Velnor tool seed")
-                && yaml.contains("cache_key: mise-v1-")
-                && yaml.contains("if: github.event_name != 'workflow_dispatch'"),
+                && yaml.contains(
+                    "cache_key: ${{ github.event_name != 'workflow_dispatch' && 'mise-v1-"
+                )
+                && yaml.contains("|| '' }}"),
             "static host seed is separate and disabled for dispatch (mbx={mbx})"
         );
         let setup = yaml
@@ -279,9 +281,8 @@ fn c11_cache_saves_push_only_prs_and_forks_read_only() -> TestResult {
     let save_at = yaml.find("- name: Save Cargo sources").ok_or("save step")?;
     let save_condition = yaml[save_at..].lines().nth(1).ok_or("save condition")?;
     assert!(
-        save_condition.contains("success() && github.event_name == 'push'")
-            && save_condition.contains("github.event_name != 'workflow_dispatch'"),
-        "save renders push-only and dispatch-denied if:\n{yaml}"
+        save_condition.contains("success() && github.event_name == 'push'"),
+        "the canonical push-only save gate already denies dispatch:\n{yaml}"
     );
     tools::assert_tools_saves_push_gated_per_key(&yaml);
     Ok(())

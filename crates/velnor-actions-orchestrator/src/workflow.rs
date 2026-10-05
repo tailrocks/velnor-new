@@ -12,7 +12,7 @@ use std::collections::BTreeMap;
 
 use velnor_actions_actionlint::{ActionlintConfigInput, IgnorePolicy, StepSyntax};
 use velnor_actions_contract::{
-    Concurrency, GeneratorValidation, Job, Permissions, Stack, Step, StepKind, Trigger,
+    Concurrency, GeneratorValidation, Job, Permissions, Stack, Step, StepKind, StepRole, Trigger,
     ValidatorKind, VelnorConfig, VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy,
 };
 use velnor_actions_mise::{
@@ -320,8 +320,14 @@ pub(crate) fn prepare_rust_components_step(
         .map_err(|problem| OrchestratorError::Contract { problem })?;
     let env = strings_of_env(&request.env(catalog))
         .map_err(|problem| OrchestratorError::Contract { problem })?;
-    velnor_actions_workflow_renderer::ambient_shell_step(PREPARE_RUST_COMPONENTS_STEP, run, env)
-        .map_err(OrchestratorError::from)
+    let mut step = velnor_actions_workflow_renderer::ambient_shell_step(
+        PREPARE_RUST_COMPONENTS_STEP,
+        run,
+        env,
+    )
+    .map_err(OrchestratorError::from)?;
+    step.role = Some(StepRole::PrepareRustComponents);
+    Ok(step)
 }
 
 /// Actionlint input: generated workflow path plus policy-graded ignores.

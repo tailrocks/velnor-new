@@ -215,6 +215,8 @@ fn strict_rejects_setup_misuse() -> Result<(), RenderError> {
     );
     let malformed = velnor_actions_contract::Step {
         name: SETUP_MISE_NAME.to_owned(),
+        id: None,
+        role: None,
         condition: None,
         kind: velnor_actions_contract::StepKind::Action {
             uses: MISE_USES.to_owned(),

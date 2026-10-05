@@ -9,7 +9,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Job, Step, StepKind};
+use velnor_actions_contract::{Job, Step, StepKind, StepRole};
 
 use crate::{
     RenderError,
@@ -91,7 +91,7 @@ pub fn provision_acquire_step(
 /// Acquire the path does not exist and CI fails with exit 127, so
 /// generation fails closed here instead of emitting the dead call.
 /// In pre-seed mode the fixed pre-seed stage step stages instead, and
-/// only there: the stage name outside pre-seed mode fails closed.
+/// only there: the stage role outside pre-seed mode fails closed.
 /// # Errors
 pub(crate) fn check_internal_staged(
     job_id: &str,
@@ -103,11 +103,7 @@ pub(crate) fn check_internal_staged(
         if is_acquire_step(step) {
             check_acquire_shape(job_id, step)?;
             staged = true;
-        } else if step.name == steps::ACQUIRE_NAME {
-            return Err(RenderError::InvalidWorkflow(format!(
-                "acquire_malformed:{job_id}"
-            )));
-        } else if step.name == preseed::PRESEED_STAGE_NAME {
+        } else if step.role == Some(StepRole::PreseedStage) {
             if !preseed {
                 return Err(RenderError::InvalidWorkflow(format!(
                     "preseed_stage_without_mode:{job_id}"
@@ -124,7 +120,7 @@ pub(crate) fn check_internal_staged(
     Ok(())
 }
 
-/// Reject stage-named steps that do not copy a fixed origin to staging.
+/// Reject role-tagged stage steps that do not copy a fixed origin to staging.
 fn check_preseed_stage_shape(job_id: &str, step: &Step) -> Result<(), RenderError> {
     let StepKind::Shell { run, .. } = &step.kind else {
         return Err(RenderError::InvalidWorkflow(format!(
@@ -148,13 +144,13 @@ fn check_preseed_stage_shape(job_id: &str, step: &Step) -> Result<(), RenderErro
     }
 }
 
-/// True for digest-verified Acquire steps (name plus asset env keys).
+/// True for digest-verified Acquire steps (typed role plus asset env keys).
 pub(crate) fn is_acquire_step(step: &Step) -> bool {
-    step.name == steps::ACQUIRE_NAME
+    step.role == Some(StepRole::AcquireVelnor)
         && matches!(&step.kind, StepKind::Shell { env, .. } if env.contains_key(steps::ASSET_SHA_ENV) && env.contains_key(steps::ASSET_URL_ENV))
 }
 
-/// Reject Acquire-named steps whose staging shape is incomplete.
+/// Reject Acquire-role steps whose staging shape is incomplete.
 fn check_acquire_shape(job_id: &str, step: &Step) -> Result<(), RenderError> {
     let StepKind::Shell { run, env } = &step.kind else {
         return Err(RenderError::InvalidWorkflow(format!(
@@ -196,7 +192,9 @@ pub fn freshness_step(
         "{binary} generate --output-dir \"{output_dir}\" && diff -r --brief .github \"{output_dir}/.github\""
     );
     let argv = vec!["sh".to_owned(), "-c".to_owned(), script];
-    steps::shell_step(CHECK_GENERATED_NAME, argv, env.clone())
+    let mut step = steps::shell_step(CHECK_GENERATED_NAME, argv, env.clone())?;
+    step.role = Some(StepRole::CheckGenerated);
+    Ok(step)
 }
 
 /// Fixed plan-report upload step (`velnor-plan-<run-key>`, fails loud).
@@ -206,7 +204,7 @@ pub fn freshness_step(
 /// planner wrote nothing. `if: always()` is attached at render.
 /// # Errors
 pub fn publish_plan_step() -> Result<Step, RenderError> {
-    steps::action_step(
+    let mut step = steps::action_step(
         PUBLISH_PLAN_NAME,
         steps::UPLOAD_ARTIFACT_USES,
         std::collections::BTreeMap::from([
@@ -218,7 +216,9 @@ pub fn publish_plan_step() -> Result<Step, RenderError> {
                 steps::ARTIFACT_RETENTION_DAYS.to_string(),
             ),
         ]),
-    )
+    )?;
+    step.role = Some(StepRole::PublishPlan);
+    Ok(step)
 }
 
 /// Fixed plan-artifact download step (fails loud when absent).
@@ -227,14 +227,16 @@ pub fn publish_plan_step() -> Result<Step, RenderError> {
 /// agrees by construction. No `if:`: the job-level `always()` governs.
 /// # Errors
 pub fn download_plan_step() -> Result<Step, RenderError> {
-    steps::action_step(
+    let mut step = steps::action_step(
         DOWNLOAD_PLAN_NAME,
         steps::DOWNLOAD_ARTIFACT_USES,
         std::collections::BTreeMap::from([
             ("name".to_owned(), PLAN_ARTIFACT_NAME.to_owned()),
             ("path".to_owned(), PLAN_ARTIFACT_PATH.to_owned()),
         ]),
-    )
+    )?;
+    step.role = Some(StepRole::DownloadPlan);
+    Ok(step)
 }
 
 /// Insert `Download plan` before the merge write-request, once.
@@ -251,7 +253,7 @@ pub(crate) fn insert_final_closure(
     let present = final_job
         .steps
         .iter()
-        .any(|step| step.name == DOWNLOAD_PLAN_NAME);
+        .any(|step| step.role == Some(StepRole::DownloadPlan));
     if !present {
         let at = final_download_at(final_job);
         final_job.steps.insert(at, download_plan_step()?);
@@ -293,7 +295,7 @@ pub(crate) fn insert_plan_closure(
     if !plan
         .steps
         .iter()
-        .any(|step| step.name == CHECK_GENERATED_NAME)
+        .any(|step| step.role == Some(StepRole::CheckGenerated))
     {
         let check = freshness_step(&ctx.staged_binary, FRESHNESS_OUTDIR, &ctx.plan_consumer_env)?;
         plan.steps.insert(at, check);
@@ -303,7 +305,11 @@ pub(crate) fn insert_plan_closure(
     }) else {
         return Ok(());
     };
-    if !plan.steps.iter().any(|step| step.name == PUBLISH_PLAN_NAME) {
+    if !plan
+        .steps
+        .iter()
+        .any(|step| step.role == Some(StepRole::PublishPlan))
+    {
         plan.steps.insert(at + 1, publish_plan_step()?);
     }
     Ok(())
@@ -359,7 +365,7 @@ pub(crate) fn insert_task_closure(
     let present = task
         .steps
         .iter()
-        .any(|step| step.name == steps::MATRIX_REPORT_UPLOAD_NAME);
+        .any(|step| step.role == Some(StepRole::MatrixReportUpload));
     if !present {
         task.steps.push(steps::matrix_report_upload_step()?);
     }

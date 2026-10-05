@@ -12,7 +12,7 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use velnor_actions_contract::Step;
+use velnor_actions_contract::{Step, StepRole};
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
 
 use crate::OrchestratorError;
@@ -144,16 +144,16 @@ fn fetch_steps_with(
         } else {
             format!("{FETCH_SOURCES_STEP} ({manifest})")
         };
-        steps.push(
-            velnor_actions_workflow_renderer::ambient_shell_step(
-                &name,
-                vec!["sh".to_owned(), "-c".to_owned(), script],
-                env.clone(),
-            )
-            .map_err(|err| OrchestratorError::Contract {
-                problem: err.to_string(),
-            })?,
-        );
+        let mut step = velnor_actions_workflow_renderer::ambient_shell_step(
+            &name,
+            vec!["sh".to_owned(), "-c".to_owned(), script],
+            env.clone(),
+        )
+        .map_err(|err| OrchestratorError::Contract {
+            problem: err.to_string(),
+        })?;
+        step.role = Some(StepRole::CargoSourcesFetch);
+        steps.push(step);
     }
     Ok(steps)
 }

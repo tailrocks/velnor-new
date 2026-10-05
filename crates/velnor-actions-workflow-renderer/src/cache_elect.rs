@@ -5,7 +5,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Job, StepKind};
+use velnor_actions_contract::{Job, Step, StepKind, StepRole};
 
 use crate::RenderError;
 
@@ -57,7 +57,14 @@ pub fn elect_tofu_provider_savers(jobs: &mut BTreeMap<String, Job>) -> Result<()
     let mut by_key: BTreeMap<String, Vec<String>> = BTreeMap::new();
     let mut path_for: BTreeMap<String, String> = BTreeMap::new();
     for (id, job) in jobs.iter() {
+        velnor_actions_contract::workflow::step_identity::validate_step_sequence(&job.steps, id)
+            .map_err(RenderError::Contract)?;
         if let Some((key, path)) = provider_restore_entry(job) {
+            if path_for.get(&key).is_some_and(|existing| existing != &path) {
+                return Err(RenderError::InvalidWorkflow(format!(
+                    "tofu_cache_key_path_mismatch:{id}"
+                )));
+            }
             path_for.entry(key.clone()).or_insert(path);
             by_key.entry(key).or_default().push(id.clone());
         }
@@ -69,8 +76,17 @@ pub fn elect_tofu_provider_savers(jobs: &mut BTreeMap<String, Job>) -> Result<()
         let Some(path) = path_for.get(key) else {
             continue;
         };
-        if let Some(job) = jobs.get_mut(winner) {
-            append_provider_save(job, key, path)?;
+        for owner in owners {
+            let Some(job) = jobs.get_mut(owner) else {
+                continue;
+            };
+            if owner == winner {
+                append_provider_save(job, key, path)?;
+            } else if has_provider_save(job) {
+                return Err(RenderError::InvalidWorkflow(format!(
+                    "tofu_provider_save_not_elected:{owner}"
+                )));
+            }
         }
     }
     Ok(())
@@ -83,17 +99,20 @@ pub fn elect_tofu_provider_savers(jobs: &mut BTreeMap<String, Job>) -> Result<()
 /// move an election.
 fn provider_restore_entry(job: &Job) -> Option<(String, String)> {
     job.steps.iter().find_map(|step| {
-        let StepKind::Action { uses, with, .. } = &step.kind else {
-            return None;
-        };
-        if !uses.starts_with("actions/cache/restore@") {
+        if step.role != Some(StepRole::TofuProvidersRestore) {
             return None;
         }
-        let key = with.get("key")?;
+        let StepKind::Action { uses, with, env } = &step.kind else {
+            return None;
+        };
+        if uses != crate::tofu_cache::TOFU_PROVIDER_ADMISSION_USES || !env.is_empty() {
+            return None;
+        }
+        let key = with.get("cache-key")?;
         if key.trim().is_empty() {
             return None;
         }
-        let path = with.get("path")?;
+        let path = with.get("cache-path")?;
         if !crate::tofu_cache::tofu_providers_path_ok(path) {
             return None;
         }
@@ -108,17 +127,55 @@ fn provider_restore_entry(job: &Job) -> Option<(String, String)> {
 /// reads, so a push-seeded entry warms every later restore of the
 /// key. Jobs that already carry the save keep exactly one.
 fn append_provider_save(job: &mut Job, key: &str, path: &str) -> Result<(), RenderError> {
-    if job
+    if provider_restore_entry(job)
+        .is_none_or(|(restore_key, restore_path)| restore_key != key || restore_path != path)
+    {
+        return Err(RenderError::InvalidWorkflow(
+            "tofu_provider_save_restore_mismatch".to_owned(),
+        ));
+    }
+    let saves: Vec<&Step> = job
         .steps
         .iter()
-        .any(|step| step.name == crate::tofu_cache::TOFU_PROVIDERS_SAVE_NAME)
-    {
+        .filter(|step| step.role == Some(StepRole::TofuProvidersSave))
+        .collect();
+    if saves.len() > 1 {
+        return Err(RenderError::InvalidWorkflow(
+            "tofu_provider_save_duplicate".to_owned(),
+        ));
+    }
+    if let Some(save) = saves.first() {
+        let StepKind::Action { uses, with, env } = &save.kind else {
+            return Err(RenderError::InvalidWorkflow(
+                "tofu_provider_save_shape".to_owned(),
+            ));
+        };
+        if !uses.starts_with("actions/cache/save@")
+            || !env.is_empty()
+            || with.len() != 2
+            || with.get("key").map(String::as_str)
+                != Some(velnor_actions_contract::workflow::step_identity::TOFU_PROVIDERS_KEY_OUTPUT_EXPR)
+            || with.get("path").map(String::as_str)
+                != Some(velnor_actions_contract::workflow::step_identity::TOFU_PROVIDERS_PATH_OUTPUT_EXPR)
+            || save.condition.as_deref()
+                != Some(velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION)
+        {
+            return Err(RenderError::InvalidWorkflow(
+                "tofu_provider_save_restore_mismatch".to_owned(),
+            ));
+        }
         return Ok(());
     }
-    let mut save = crate::tofu_cache::tofu_providers_save_step(key, path)?;
+    let mut save = crate::tofu_cache::tofu_providers_save_step()?;
     save.condition = Some(velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION.to_owned());
     job.steps.push(save);
     Ok(())
+}
+
+fn has_provider_save(job: &Job) -> bool {
+    job.steps
+        .iter()
+        .any(|step| step.role == Some(StepRole::TofuProvidersSave))
 }
 
 /// This job's V2 tools key after validating its identity-gated restore.
@@ -126,7 +183,7 @@ fn tools_restore_key(id: &str, job: &Job) -> Result<Option<String>, RenderError>
     let restores = job
         .steps
         .iter()
-        .filter(|step| step.name == crate::cache_steps::TOOLS_RESTORE_NAME)
+        .filter(|step| step.role == Some(StepRole::ToolsCacheRestore))
         .collect::<Vec<_>>();
     if restores.is_empty() {
         return Ok(None);
@@ -135,7 +192,7 @@ fn tools_restore_key(id: &str, job: &Job) -> Result<Option<String>, RenderError>
         || job
             .steps
             .iter()
-            .filter(|step| step.name == crate::cache_p08::TOOLS_CACHE_IDENTITY_NAME)
+            .filter(|step| step.role == Some(StepRole::ToolsCacheIdentity))
             .count()
             != 1
     {
@@ -182,7 +239,7 @@ fn append_tools_save(job: &mut Job, key: &str) -> Result<(), RenderError> {
     let existing = job
         .steps
         .iter()
-        .filter(|step| step.name == crate::cache_steps::TOOLS_SAVE_NAME)
+        .filter(|step| step.role == Some(StepRole::ToolsCacheSave))
         .collect::<Vec<_>>();
     if existing.len() > 1 || existing.first().is_some_and(|step| *step != &expected) {
         return Err(RenderError::InvalidWorkflow(

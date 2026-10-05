@@ -3,7 +3,7 @@
 //! Declared via `#[path]` from `cache_steps.rs` (no `lib.rs` edit;
 //! split under the 400-line size gate, bodies byte-identical).
 
-use velnor_actions_contract::Step;
+use velnor_actions_contract::{Step, StepRole};
 
 use crate::RenderError;
 
@@ -58,6 +58,11 @@ pub(super) fn cache_step(
     )?;
     crate::steps::scan_for_private_subcommands(name)?;
     name.clone_into(&mut step.name);
+    step.role = Some(if restore {
+        StepRole::ToolsCacheRestore
+    } else {
+        StepRole::ToolsCacheSave
+    });
     step.condition = condition;
     Ok(step)
 }

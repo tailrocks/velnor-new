@@ -2,6 +2,7 @@
 use super::dispatch::WorkflowDispatch;
 use super::jobs::{ScheduleTrigger, is_safe_display_name};
 use super::permissions::{PermissionLevel, Permissions};
+use super::step::Step;
 use super::timeout::JobTimeout;
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
@@ -89,47 +90,6 @@ pub const CACHE_SAVE_CONDITION: &str = "success() && github.event_name == 'push'
 pub const CACHE_MODE_PUSH_WRITE_EXPR: &str =
     "${{ github.event_name == 'push' && 'write' || 'read' }}";
 
-/// One workflow step.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Step {
-    /// Step name.
-    pub name: String,
-    /// Run condition (`if`), serialized by the workflow renderer.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub condition: Option<String>,
-    /// Step payload.
-    #[serde(flatten)]
-    pub kind: StepKind,
-}
-/// Step payload variants.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-pub enum StepKind {
-    /// Pinned GitHub Action step.
-    Action {
-        /// Full-SHA `uses` reference.
-        uses: String,
-        /// Action inputs.
-        #[serde(default)]
-        with: BTreeMap<String, String>,
-        /// Step environment (applies to main and post phases alike).
-        #[serde(default)]
-        env: BTreeMap<String, String>,
-    },
-    /// Fixed shell argv step.
-    Shell {
-        /// Fixed argument vector.
-        run: Vec<String>,
-        /// Fixed environment.
-        #[serde(default)]
-        env: BTreeMap<String, String>,
-    },
-    /// Fixed internal planner/aggregation step.
-    Internal {
-        /// Internal operation name.
-        operation: String,
-    },
-}
 impl WorkflowIr {
     /// Validate names, permissions, triggers, jobs, and step payloads.
     ///
@@ -245,55 +205,7 @@ impl Job {
                 format!("empty_steps:{id}"),
             ));
         }
-        for step in &self.steps {
-            step.validate(id)?;
-        }
-        Ok(())
-    }
-}
-impl Step {
-    /// Validate one step payload.
-    fn validate(&self, job: &str) -> Result<(), ContractError> {
-        if self.name.trim().is_empty() {
-            return Err(ContractError::identity(
-                "step.name",
-                format!("empty_name:{job}"),
-            ));
-        }
-        if let Some(condition) = &self.condition
-            && (condition.trim().is_empty() || condition.bytes().any(|b| b == b'\n' || b == b'\r'))
-        {
-            return Err(ContractError::identity(
-                "step.condition",
-                format!("bad_condition:{job}"),
-            ));
-        }
-        match &self.kind {
-            StepKind::Action { uses, .. } => {
-                if uses.trim().is_empty() {
-                    return Err(ContractError::identity(
-                        "step.uses",
-                        format!("empty_uses:{job}"),
-                    ));
-                }
-            }
-            StepKind::Shell { run, .. } => {
-                if run.is_empty() || run.iter().any(|arg| arg.trim().is_empty()) {
-                    return Err(ContractError::identity(
-                        "step.run",
-                        format!("bad_argv:{job}"),
-                    ));
-                }
-            }
-            StepKind::Internal { operation } => {
-                if operation.trim().is_empty() {
-                    return Err(ContractError::identity(
-                        "step.operation",
-                        format!("empty_operation:{job}"),
-                    ));
-                }
-            }
-        }
+        super::step_identity::validate_step_sequence(&self.steps, id)?;
         Ok(())
     }
 }

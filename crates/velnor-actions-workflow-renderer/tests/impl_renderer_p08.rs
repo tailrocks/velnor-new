@@ -165,6 +165,8 @@ fn retired_rust_cache_is_rejected_for_every_lane() {
     .expect("mbx steps");
     let rust_cache = velnor_actions_contract::Step {
         name: "Restore Cargo registry".to_owned(),
+        id: None,
+        role: None,
         condition: None,
         kind: StepKind::Action {
             uses: format!("Swatinem/rust-cache@{sha}"),
@@ -192,16 +194,20 @@ fn retired_rust_cache_is_rejected_for_every_lane() {
 
 #[test]
 fn mbx_restore_precedes_fetch() {
-    let fetch = velnor_actions_contract::Step {
+    let mut fetch = velnor_actions_contract::Step {
         name: "Fetch Cargo sources".to_owned(),
+        id: None,
+        role: Some(velnor_actions_contract::StepRole::CargoSourcesFetch),
         condition: None,
         kind: StepKind::Shell {
             run: vec!["sh".to_owned()],
             env: BTreeMap::new(),
         },
     };
-    let mbx = velnor_actions_contract::Step {
+    let mut mbx = velnor_actions_contract::Step {
         name: "Restore MBX objects".to_owned(),
+        id: None,
+        role: Some(velnor_actions_contract::StepRole::MbxCache),
         condition: None,
         kind: StepKind::Action {
             uses: format!("jdx/mr-boxington-action@{}", "d".repeat(40)),
@@ -209,6 +215,8 @@ fn mbx_restore_precedes_fetch() {
             env: BTreeMap::new(),
         },
     };
+    fetch.name = "Renamed source-fetch presentation".to_owned();
+    mbx.name = "Renamed MBX presentation".to_owned();
     let good = Job {
         display_name: "Good".to_owned(),
         runs_on: LABEL.to_owned(),
@@ -261,9 +269,9 @@ fn step_conditions_serialize_as_if_with_upload_default()
     let save_at = text.find("Save Cargo sources").expect("save step");
     assert!(
         text[save_at..].starts_with(
-            "Save Cargo sources\n        if: (success() && github.event_name == 'push') && github.event_name != 'workflow_dispatch'",
+            "Save Cargo sources\n        if: success() && github.event_name == 'push'",
         ),
-        "save carries push-only if plus dispatch denial:\n{text}"
+        "the canonical push-only save gate already denies dispatch:\n{text}"
     );
     let check_at = text.find("- name: Check\n").expect("check step");
     assert!(

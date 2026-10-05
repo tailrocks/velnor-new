@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Job, Step, StepKind};
+use velnor_actions_contract::{Job, Step};
 
 use crate::RenderError;
 use crate::composite::shared_call;
@@ -128,13 +128,8 @@ fn append_one(
 }
 
 fn valid_shared_checkout(checkout: &Step, expected_uses: &str) -> bool {
-    checkout.name == "Checkout"
-        && checkout.condition.is_none()
-        && matches!(
-            &checkout.kind,
-            StepKind::Action { uses, with, env }
-                if uses == expected_uses
-                    && with.get("persist-credentials").map(String::as_str) == Some("false")
-                    && env.is_empty()
-        )
+    velnor_actions_contract::workflow::step_identity::is_configured_checkout(
+        checkout,
+        expected_uses,
+    )
 }

@@ -284,6 +284,8 @@ fn nonempty_custom_tasks_reject_with_zero_groups() {
 fn acquire_stages_before_report_wrappers() {
     let acquire = Step {
         name: "Acquire Velnor".to_owned(),
+        id: None,
+        role: None,
         condition: None,
         kind: velnor_actions_contract::StepKind::Shell {
             run: vec![String::from("true")],

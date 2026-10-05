@@ -204,6 +204,8 @@ pub(crate) fn alint_job(ctx: &RenderContext) -> Result<Job, RenderError> {
             checkout,
             Step {
                 name: "Run Alint".to_owned(),
+                id: None,
+                role: None,
                 condition: None,
                 kind: StepKind::Action {
                     uses: ALINT_USES.to_owned(),
@@ -229,13 +231,15 @@ pub(crate) fn validator_job(
     let command = find_validator_command(&ctx.validator_commands, validator)?;
     let mut steps = vec![steps::checkout_step(&ctx.checkout_uses)?];
     if !command.prepare_argv.is_empty() {
-        steps.push(steps::ambient_shell_step(
+        let mut prepare = steps::ambient_shell_step(
             PREPARE_PINNED_TOOLS_NAME,
             command.prepare_argv.clone(),
             BTreeMap::new(),
-        )?);
+        )?;
+        prepare.role = Some(velnor_actions_contract::StepRole::PreparePinnedTools);
+        steps.push(prepare);
     }
-    let run_step = match validator {
+    let mut run_step = match validator {
         ValidatorKind::CargoDeny => {
             steps::ambient_shell_step(&command.name, command.argv.clone(), BTreeMap::new())?
         }
@@ -249,6 +253,17 @@ pub(crate) fn validator_job(
             });
         }
     };
+    run_step.role = Some(match validator {
+        ValidatorKind::CargoDeny => velnor_actions_contract::StepRole::CargoDeny,
+        ValidatorKind::CargoMachete => velnor_actions_contract::StepRole::CargoMachete,
+        ValidatorKind::Zizmor => velnor_actions_contract::StepRole::Zizmor,
+        _ => {
+            return Err(RenderError::PolicyRejected {
+                policy: "velnor-repository-v1".to_owned(),
+                problem: format!("unsupported_validator_job:{}", validator.job_id()),
+            });
+        }
+    });
     steps.push(run_step);
     Ok(Job {
         display_name: validator.display_name().to_owned(),

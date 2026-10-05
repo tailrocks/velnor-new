@@ -76,6 +76,8 @@ pub(crate) fn shell(name: &str, argv: &[&str], env: &[(&str, &str)]) -> Step {
     // layer, so construction bypasses the constructor gates.
     Step {
         name: name.to_owned(),
+        id: None,
+        role: None,
         condition: None,
         kind: StepKind::Shell {
             run: argv.iter().map(ToString::to_string).collect(),

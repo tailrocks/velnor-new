@@ -13,7 +13,7 @@ use crate::{
     yaml::Yaml,
 };
 use velnor_actions_contract::{
-    Job, Permissions, RunsOn, StepKind, Trigger, WorkflowIr,
+    Job, Permissions, RunsOn, StepKind, StepRole, Trigger, WorkflowIr,
     workflow::{DispatchInput, DispatchInputType, permissions::PermissionLevel},
 };
 
@@ -292,7 +292,7 @@ fn job_to_yaml(
                 if let Some(toolchain) = env.get("RUSTUP_TOOLCHAIN") {
                     job_env.insert("RUSTUP_TOOLCHAIN".to_owned(), toolchain.clone());
                 }
-                if step.name == crate::steps::ACQUIRE_NAME {
+                if step.role == Some(StepRole::AcquireVelnor) {
                     for key in [
                         crate::steps::ASSET_SHA_ENV,
                         crate::steps::ASSET_URL_ENV,

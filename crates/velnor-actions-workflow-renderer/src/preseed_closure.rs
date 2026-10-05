@@ -2,14 +2,10 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Job, is_crate_job_id};
+use velnor_actions_contract::{Job, StepRole, is_crate_job_id};
 
 use crate::{
     RenderError,
-    preseed::{
-        PRESEED_BUILD_NAME, PRESEED_DOWNLOAD_NAME, PRESEED_MANIFEST_NAME, PRESEED_STAGE_NAME,
-        PRESEED_UPLOAD_NAME, PRESEED_VERIFY_MANIFEST_NAME,
-    },
     render::{FINAL_JOB_ID, PLAN_JOB_ID, PUBLISH_JOB_ID},
 };
 
@@ -31,13 +27,13 @@ pub(crate) fn check_preseed_closure(
     let Some(plan) = jobs.get(PLAN_JOB_ID) else {
         return Ok(());
     };
-    for (name, kind) in [
-        (PRESEED_BUILD_NAME, "build"),
-        (PRESEED_MANIFEST_NAME, "manifest"),
-        (PRESEED_UPLOAD_NAME, "upload"),
-        (PRESEED_STAGE_NAME, "stage"),
+    for (role, kind) in [
+        (StepRole::PreseedBuild, "build"),
+        (StepRole::PreseedManifest, "manifest"),
+        (StepRole::PreseedUpload, "upload"),
+        (StepRole::PreseedStage, "stage"),
     ] {
-        if !plan.steps.iter().any(|step| step.name == name) {
+        if !plan.steps.iter().any(|step| step.role == Some(role)) {
             return Err(RenderError::InvalidWorkflow(format!(
                 "preseed_incomplete:{PLAN_JOB_ID}:{kind}"
             )));
@@ -47,15 +43,15 @@ pub(crate) fn check_preseed_closure(
         if id != FINAL_JOB_ID && id != PUBLISH_JOB_ID && !is_crate_job_id(id) {
             continue;
         }
-        let position = |name: &str| job.steps.iter().position(|step| step.name == name);
+        let position = |role| job.steps.iter().position(|step| step.role == Some(role));
         let (Some(download_at), Some(verify_at), Some(stage_at)) = (
-            position(PRESEED_DOWNLOAD_NAME),
-            position(PRESEED_VERIFY_MANIFEST_NAME),
-            position(PRESEED_STAGE_NAME),
+            position(StepRole::PreseedDownload),
+            position(StepRole::PreseedVerifyManifest),
+            position(StepRole::PreseedStage),
         ) else {
-            let kind = if position(PRESEED_DOWNLOAD_NAME).is_none() {
+            let kind = if position(StepRole::PreseedDownload).is_none() {
                 "download"
-            } else if position(PRESEED_VERIFY_MANIFEST_NAME).is_none() {
+            } else if position(StepRole::PreseedVerifyManifest).is_none() {
                 "verify"
             } else {
                 "stage"

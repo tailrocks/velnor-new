@@ -5,7 +5,7 @@
 //! this same archive so no action can overlap V2 tools-owned Cargo paths.
 
 use velnor_actions_actionlint::actions::{CACHE_ACTION_SHA, CACHE_ACTION_VERSION};
-use velnor_actions_contract::Step;
+use velnor_actions_contract::{Step, StepRole};
 
 use crate::OrchestratorError;
 
@@ -120,6 +120,11 @@ fn sources_step(
         let gate = velnor_actions_mise::cache_trust::authorize_trusted_save().map_err(wrap)?;
         step.condition = Some(gate.to_owned());
     }
+    step.role = Some(if restore {
+        StepRole::CargoSourcesRestore
+    } else {
+        StepRole::CargoSourcesSave
+    });
     Ok(step)
 }
 

@@ -13,6 +13,8 @@ use super::{DISPATCH_DENY, suppress_unvalidated_cache_access};
 fn cache_step(uses: &str, name: &str) -> Step {
     Step {
         name: name.to_owned(),
+        id: None,
+        role: None,
         condition: None,
         kind: StepKind::Action {
             uses: uses.to_owned(),
@@ -67,9 +69,10 @@ fn cache_access_stays_disabled_until_a_plan_admits_its_directive() {
     assert!(jobs["actionlint"].steps[0].condition.is_none());
     assert_eq!(
         with.get("cache").map(String::as_str),
-        Some("${{ github.event_name != 'workflow_dispatch' && 'true' || 'false' }}"),
+        Some("false"),
         "setup still runs but cache access is denied on dispatch"
     );
+    assert_eq!(with.get("cache_save").map(String::as_str), Some("false"));
 }
 
 fn acquire_step(staged: &str) -> Result<Step, crate::RenderError> {
@@ -94,8 +97,10 @@ fn acquire_step(staged: &str) -> Result<Step, crate::RenderError> {
 
 fn dispatch_plan_job(staged: &str) -> Result<Job, crate::RenderError> {
     let action = Step {
-            name: "Restore MBX objects".to_owned(),
-            condition: None,
+        name: "Restore MBX objects".to_owned(),
+        id: None,
+        role: None,
+        condition: None,
             kind: StepKind::Action {
                 uses: format!("jdx/mr-boxington-action@{}", "a".repeat(40)),
                 with: BTreeMap::from([("toolchain".to_owned(), "1.98.1".to_owned())]),
@@ -227,10 +232,18 @@ fn generated_dispatch_plan_gates_native_mbx_and_tools_cache_steps() -> Result<()
                     if uses == crate::tool_seed::TOOL_SEED_USES)
         })
         .expect("local tool seed action");
-    assert_eq!(
-        seed.condition.as_deref(),
-        Some(DISPATCH_DENY),
-        "host seed import stays disabled on all workflow dispatches"
+    let StepKind::Action { with, .. } = &seed.kind else {
+        return Err(crate::RenderError::InvalidWorkflow(
+            "tool_seed_not_action".to_owned(),
+        ));
+    };
+    let seed_key = with
+        .get("cache_key")
+        .map(String::as_str)
+        .unwrap_or_default();
+    assert!(
+        crate::tool_seed::is_guarded_seed_key(seed_key) && seed_key.contains(DISPATCH_DENY),
+        "host seed copy receives an empty key on workflow dispatch"
     );
     assert!(
         plan.steps
@@ -275,9 +288,44 @@ fn suppression_preserves_existing_cache_step_condition() {
 
     assert_eq!(
         jobs["plan"].steps[0].condition.as_deref(),
-        Some(
-            "(success() && github.event_name == 'push') && github.event_name != 'workflow_dispatch'"
-        )
+        Some("success() && github.event_name == 'push'")
+    );
+}
+
+#[test]
+fn dispatch_suppression_preserves_canonical_push_only_save_gate() {
+    let save = Step {
+        name: "Save Tofu providers".to_owned(),
+        id: None,
+        role: Some(velnor_actions_contract::StepRole::TofuProvidersSave),
+        condition: Some(
+            velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION.to_owned(),
+        ),
+        kind: StepKind::Action {
+            uses: "actions/cache/save@sha".to_owned(),
+            with: BTreeMap::from([
+                (
+                    "key".to_owned(),
+                    velnor_actions_contract::workflow::step_identity::TOFU_PROVIDERS_KEY_OUTPUT_EXPR
+                        .to_owned(),
+                ),
+                (
+                    "path".to_owned(),
+                    velnor_actions_contract::workflow::step_identity::TOFU_PROVIDERS_PATH_OUTPUT_EXPR
+                        .to_owned(),
+                ),
+            ]),
+            env: BTreeMap::new(),
+        },
+    };
+    let mut jobs = BTreeMap::from([("plan".to_owned(), job(&[], save))]);
+
+    suppress_unvalidated_cache_access(&mut jobs);
+
+    assert_eq!(
+        jobs["plan"].steps[0].condition.as_deref(),
+        Some(velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION),
+        "the exact push-only gate already denies workflow_dispatch"
     );
 }
 
@@ -298,41 +346,15 @@ fn dispatch_deny_remains_outermost_for_existing_disjunctions() {
 }
 
 #[test]
-fn dispatch_denies_the_local_tool_seed_action() {
-    let seed = Step {
-        name: crate::tool_seed::TOOL_SEED_NAME.to_owned(),
-        condition: Some("always()".to_owned()),
-        kind: StepKind::Action {
-            uses: crate::tool_seed::TOOL_SEED_USES.to_owned(),
-            with: BTreeMap::new(),
-            env: BTreeMap::new(),
-        },
-    };
-    let mut jobs = BTreeMap::from([("plan".to_owned(), job(&[], seed))]);
-
-    suppress_unvalidated_cache_access(&mut jobs);
-
-    assert!(
-        jobs["plan"].steps[0]
-            .condition
-            .as_deref()
-            .is_some_and(|condition| condition.contains(DISPATCH_DENY))
-    );
+fn empty_seed_key_exits_before_the_trusted_image_tree_is_inspected() {
+    let script = crate::tool_seed::tool_seed_action_script(crate::tool_seed::SEED_ROOT)
+        .expect("fixed seed script");
+    let disabled = script.find("if [ -z \"$key\" ]").expect("empty key gate");
+    let trust = script
+        .find("trusted_seed_is_trusted")
+        .expect("trusted tree check");
+    assert!(disabled < trust, "empty key must exit before seed access");
 }
 
-#[test]
-fn dispatch_denies_native_mbx_object_restore_before_use() {
-    let native = cache_step(
-        &format!("{}@{}", crate::cache_steps::MBX_ACTION_NAME, "a".repeat(40)),
-        "Restore MBX objects",
-    );
-    let mut jobs = BTreeMap::from([("plan".to_owned(), job(&[], native))]);
-
-    suppress_unvalidated_cache_access(&mut jobs);
-
-    assert_eq!(
-        jobs["plan"].steps[0].condition.as_deref(),
-        Some(DISPATCH_DENY),
-        "native MBX restore is skipped on every workflow dispatch"
-    );
-}
+#[path = "dispatch_cache_boundary_seed_tests.rs"]
+mod seed_tests;
