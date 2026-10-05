@@ -29,6 +29,7 @@ mod exclusive_write;
 mod extension_schemas;
 mod external_data;
 mod finalized;
+mod foundation_qualification;
 mod freshness_emit;
 mod generate;
 mod git_paths;
@@ -111,6 +112,7 @@ pub use generate::{
     GenerateOptions, GenerateReport, ToolSnapshot, generate, generate_dispatched,
     render_staged_tree, render_staged_tree_with,
 };
+pub use foundation_qualification::preview_foundation_qualification;
 pub use init::{InitReport, init_config};
 pub use internal::{
     MERGE_OP, PLAN_OP, PlanOutputs, REQUEST_FILE_ENV, WRITE_REQUEST_OP, merge_passed,

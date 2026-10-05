@@ -635,6 +635,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "velnor-actions-native"
+version = "0.1.0"
+dependencies = [
+ "syn",
+ "velnor-actions-contract",
+]
+
+[[package]]
 name = "velnor-actions-orchestrator"
 version = "0.1.0"
 dependencies = [
@@ -677,6 +685,7 @@ dependencies = [
 name = "velnor-actions-workflow-renderer"
 version = "0.1.0"
 dependencies = [
+ "sha2",
  "velnor-actions-contract",
 ]
 

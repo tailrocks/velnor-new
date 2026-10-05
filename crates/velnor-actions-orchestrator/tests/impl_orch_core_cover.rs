@@ -24,7 +24,7 @@ pub(crate) fn covered_plan(
                 "input_digest": ob.input_digest,
                 "closure_digest": ob.closure_digest,
                 "proof_run_id": 7,
-                "observed_run_id": 7,
+                "carried_from": null, "observed_run_id": 7,
             })
         })
         .collect();
@@ -43,7 +43,7 @@ pub(crate) fn covered_plan(
         "generator_sha256": plan.generator.sha256,
         "compatibility_id": compat,
         "artifact_id": baseline_artifact_numeric_id(&artifact_name),
-        "artifact_name": artifact_name,
+        "parent": null, "artifact_name": artifact_name,
         "tasks": tasks,
     });
     let manifest_digest = digest_b3(&canonical_json_bytes(&manifest)?);

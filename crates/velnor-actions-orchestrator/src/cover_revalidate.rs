@@ -10,8 +10,8 @@ use velnor_actions_contract::{
 
 use crate::cover::Signals;
 use crate::cover_baseline::provenance_check::{
-    baseline_artifact_name, is_unverifiable_generator_sha, parse_workflow_ref, task_run_ids_bound,
-    validate_task_entry,
+    baseline_artifact_name, is_unverifiable_generator_sha, parse_workflow_ref,
+    validate_manifest_lineage_at,
 };
 use crate::cover_baseline::unix_now;
 use crate::decisions::baseline_expired;
@@ -269,14 +269,7 @@ fn manifest_provenance_matches_plan(
         .is_ok_and(|expect| manifest.artifact_name == expect);
     let derived_id = manifest.artifact_id
         == crate::cover_compat::baseline_artifact_numeric_id(&manifest.artifact_name);
-    let run_bound = manifest
-        .tasks
-        .iter()
-        .all(|task| task_run_ids_bound(task, manifest.run_id));
-    let entries_ok = manifest
-        .tasks
-        .iter()
-        .all(|task| validate_task_entry(task, manifest.run_id).is_ok());
+    let lineage_ok = validate_manifest_lineage_at(manifest, now_unix).is_ok();
     manifest.source_commit == base
         && manifest.generator_version == plan.generator.version
         && manifest.generator_sha256 == plan.generator.sha256
@@ -286,8 +279,7 @@ fn manifest_provenance_matches_plan(
         && identified
         && derived_name
         && derived_id
-        && run_bound
-        && entries_ok
+        && lineage_ok
         && validate_digest(&manifest.repository_id).is_ok()
         && ref_shape_ok(&manifest.ref_)
         && workflow_ref_consistent(manifest)
