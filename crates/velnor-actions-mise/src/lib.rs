@@ -9,6 +9,7 @@ pub mod cache;
 pub mod cache_sources;
 pub mod cache_transport;
 pub mod cache_trust;
+pub mod cache_writer;
 pub mod catalog;
 pub mod command;
 pub mod custom_run;
@@ -42,6 +43,7 @@ pub use cache::{
     read_artifact_bytes, resolve_task_artifact_dir, task_artifact_dir_from_env,
     verify_artifact_digest,
 };
+pub use cache_writer::CacheWriterContext;
 pub use catalog::{
     ACTIONLINT_VERSION, GH_VERSION, MISE_VERSION, MR_BOXINGTON_VERSION,
     OPENTOFU_SHA256_DARWIN_AMD64, OPENTOFU_SHA256_DARWIN_ARM64, OPENTOFU_SHA256_LINUX_AMD64,
