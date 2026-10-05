@@ -89,7 +89,7 @@ fn gate6_limits_bound_fanout_and_subprocess_budgets() -> TestResult {
         8 * 1024 * 1024,
         "capture fails closed past 8 MiB"
     );
-    assert_eq!(JobTimeout::PLAN.minutes(), 10);
+    assert_eq!(JobTimeout::PLAN.minutes(), 20);
     assert_eq!(JobTimeout::CRATE.minutes(), 30);
     assert_eq!(JobTimeout::REQUIRED.minutes(), 10);
     assert_eq!(JobTimeout::VALIDATOR.minutes(), 10);

@@ -48,7 +48,7 @@ jobs:
   plan:
     name: Plan
     runs-on: ubuntu-26.04
-    timeout-minutes: 10
+    timeout-minutes: 20
     outputs:
       covered_tasks: ${{ steps.plan.outputs.covered_tasks }}
     steps:
