@@ -46,10 +46,7 @@ fn still_live(state: &bollard::models::ContainerState) -> Result<bool, EnsureErr
             | Status::STOPPING,
         ) => Ok(true),
         Some(Status::EXITED | Status::DEAD) => Ok(false),
-        Some(Status::EMPTY) | None => match state.running {
-            Some(running) => Ok(running),
-            None => Err(inspect_error(200)),
-        },
+        Some(Status::EMPTY) | None => Err(inspect_error(200)),
     }
 }
 
@@ -85,22 +82,16 @@ mod tests {
     }
 
     #[test]
-    fn running_state_must_be_present() -> Result<(), String> {
-        for body in ["{}", r#"{"State":{}}"#] {
-            let info = serde_json::from_str(body).map_err(|error| error.to_string())?;
-            assert_eq!(classify_inspect(Ok(info)), Err(inspect_error(200)));
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn explicit_running_value_is_preserved() -> Result<(), String> {
-        for (body, expected) in [
-            (r#"{"State":{"Running":false}}"#, false),
-            (r#"{"State":{"Running":true}}"#, true),
+    fn status_must_prove_a_terminal_or_live_lifecycle() -> Result<(), String> {
+        for body in [
+            "{}",
+            r#"{"State":{}}"#,
+            r#"{"State":{"Running":false}}"#,
+            r#"{"State":{"Running":true}}"#,
+            r#"{"State":{"Status":""}}"#,
         ] {
             let info = serde_json::from_str(body).map_err(|error| error.to_string())?;
-            assert_eq!(classify_inspect(Ok(info)), Ok(expected));
+            assert_eq!(classify_inspect(Ok(info)), Err(inspect_error(200)));
         }
         Ok(())
     }

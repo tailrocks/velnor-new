@@ -80,6 +80,10 @@ Default `max_jobs` is 1. Qualification must prove `N>1`. One host-wide capacity
 authority. A permit covers the top-level job lifecycle until cleanup is proven.
 Reserved, acquiring, uncertain, provisioning, idle, running, finishing,
 cleaning, and quarantined states all occupy a slot.
+A Docker 404 or explicit `exited`/`dead` status is required before a recorded
+container can be treated as absent or stopped. A missing or empty `Status` is
+uncertain even when `Running` is false; the permit stays occupied until pair
+cleanup is proven.
 
 ## 4. Protocol
 
