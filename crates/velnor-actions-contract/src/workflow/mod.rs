@@ -32,10 +32,10 @@ pub use ir::{Concurrency, Job, Trigger, WorkflowIr};
 pub use jobs::{
     CI_WORKFLOW_PATH, CRATE_JOB_ID_PREFIX, FRESHNESS_CRON_WEEKLY, FRESHNESS_WORKFLOW_PATH,
     PLAN_DISPLAY_NAME, PLAN_JOB_ID, REQUIRED_CONDITION, REQUIRED_DISPLAY_NAME, REQUIRED_JOB_ID,
-    RequiredCheckMigration, STALE_WORKFLOW_PATHS, ScheduleTrigger, TOFU_DISPLAY_PREFIX,
-    TOFU_JOB_ID_PREFIX, ValidatorKind, WORKFLOW_DISPLAY_NAME, assign_crate_job_ids,
-    crate_display_label, crate_display_name, is_crate_job_id, is_safe_display_name,
-    slugify_segment, tofu_display_name, validate_job_id,
+    RequiredCheckMigration, STALE_WORKFLOW_PATHS, ScheduleTrigger, TOFU_APPLY_WORKFLOW_PATH,
+    TOFU_DISPLAY_PREFIX, TOFU_JOB_ID_PREFIX, ValidatorKind, WORKFLOW_DISPLAY_NAME,
+    assign_crate_job_ids, crate_display_label, crate_display_name, is_crate_job_id,
+    is_safe_display_name, slugify_segment, tofu_display_name, validate_job_id,
 };
 pub use lanes::{
     HOSTED_SUFFIX, LaneClass, NAMED_CHECK_JOB_ID_ENV, NAMED_CHECK_LANE_VARIANT_ENV,

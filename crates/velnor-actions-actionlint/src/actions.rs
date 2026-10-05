@@ -1,4 +1,4 @@
-//! Pinned action refs against the 9-entry allowlist.
+//! Pinned action refs against the 10-entry allowlist.
 //!
 //! Every ref pins `repo[/path]@sha` plus a `# vX.Y.Z` comment; no
 //! mutable-tag exceptions exist.
@@ -6,7 +6,7 @@
 use crate::ActionlintError;
 
 /// Exhaustive allowlist of `owner/repo[/path]` action keys.
-pub const ALLOWED_ACTIONS: [&str; 9] = [
+pub const ALLOWED_ACTIONS: [&str; 10] = [
     "jdx/mise-action",
     "actions/checkout",
     "actions/download-artifact",
@@ -16,6 +16,7 @@ pub const ALLOWED_ACTIONS: [&str; 9] = [
     "jdx/mr-boxington-action",
     "asamarts/alint",
     "Swatinem/rust-cache",
+    "aws-actions/configure-aws-credentials",
 ];
 
 /// Action key for the repository-policy Alint job's pinned ref.
@@ -23,6 +24,13 @@ pub const ALINT_ACTION: &str = "asamarts/alint";
 
 /// Action key for the no-credentials checkout every job embeds.
 pub const CHECKOUT_ACTION: &str = "actions/checkout";
+
+/// Policy-owned action used to obtain short-lived AWS credentials through OIDC.
+pub const AWS_CREDENTIALS_ACTION: &str = "aws-actions/configure-aws-credentials";
+/// Latest reviewed immutable AWS credentials action release.
+pub const AWS_CREDENTIALS_ACTION_VERSION: &str = "v6.3.0";
+/// Full commit SHA for [`AWS_CREDENTIALS_ACTION_VERSION`].
+pub const AWS_CREDENTIALS_ACTION_SHA: &str = "e1253824e5c10ff9df46874f81ed3ec929e19cfd";
 
 /// Qualified `asamarts/alint` release.
 /// Source: `https://api.github.com/repos/asamarts/alint/releases/latest`; checked 2026-09-28.
@@ -96,6 +104,17 @@ pub struct PinnedActionRef {
 }
 
 impl PinnedActionRef {
+    /// Canonical OIDC credentials action pin.
+    #[must_use]
+    pub fn aws_credentials() -> Self {
+        Self {
+            repo: AWS_CREDENTIALS_ACTION.to_owned(),
+            path: None,
+            sha: AWS_CREDENTIALS_ACTION_SHA.to_owned(),
+            version_comment: AWS_CREDENTIALS_ACTION_VERSION.to_owned(),
+        }
+    }
+
     /// Build and validate an ordinary SHA-pinned ref.
     ///
     /// # Errors

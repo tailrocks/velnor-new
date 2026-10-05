@@ -14,6 +14,7 @@ mod resources;
 mod runs_on;
 mod stacks;
 mod tofu;
+mod tofu_apply;
 mod verification;
 mod workflow;
 
@@ -58,6 +59,7 @@ pub use stacks::{
     is_valid_feature_name, is_valid_rust_target,
 };
 pub use tofu::{RootProblem, TofuStackConfig, Utf8RepoRelDir};
+pub use tofu_apply::{GitHubTokenSecret, S3BackendConfig, TofuApplyConfig};
 pub use verification::{
     VERIFICATION_TASK_JOB_PREFIX, VerificationRunner, VerificationTask, VerificationTaskKind,
     is_valid_verification_task_id,
@@ -120,6 +122,22 @@ impl VelnorConfig {
         self.resources.validate(file)?;
         self.test_sharding.validate(file)?;
         self.stacks.validate(file)?;
+        if let Some(apply) = &self.workflow.tofu_apply {
+            let roots = self.stacks.tofu.as_ref().ok_or_else(|| {
+                ContractError::config(
+                    file,
+                    "workflow.tofu_apply.root",
+                    "requires_stacks_tofu_roots",
+                )
+            })?;
+            if !roots.roots.contains(&apply.root) {
+                return Err(ContractError::config(
+                    file,
+                    "workflow.tofu_apply.root",
+                    "must_match_declared_tofu_root",
+                ));
+            }
+        }
         self.discovery.validate(file)?;
         self.actions.validate(file)?;
         validate_qualified_tools(&self.qualified_tools, file)?;

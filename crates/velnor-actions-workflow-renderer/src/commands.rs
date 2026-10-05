@@ -64,9 +64,10 @@ pub fn validate_command_argv(argv: &[String]) -> Result<(), RenderError> {
 pub fn validate_env(env: &BTreeMap<String, String>) -> Result<(), RenderError> {
     for (key, value) in env {
         if key.is_empty()
-            || !key
-                .bytes()
-                .all(|b| b.is_ascii_uppercase() || b.is_ascii_digit() || b == b'_')
+            || (key != "TF_VAR_github_tokens"
+                && !key
+                    .bytes()
+                    .all(|b| b.is_ascii_uppercase() || b.is_ascii_digit() || b == b'_'))
         {
             return Err(RenderError::BadCommand(format!("bad_env_key:{key}")));
         }

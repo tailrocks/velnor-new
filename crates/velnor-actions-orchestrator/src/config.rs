@@ -141,6 +141,8 @@ struct PartialWorkflow {
     /// Explicit isolated verification tasks.
     #[serde(default)]
     tasks: Vec<VerificationTask>,
+    /// Optional protected post-merge OpenTofu apply declaration.
+    tofu_apply: Option<velnor_actions_contract::TofuApplyConfig>,
 }
 
 /// Resources section with every value optional.
@@ -216,6 +218,7 @@ impl PartialWorkflow {
             max_parallel_jobs: self.max_parallel_jobs.unwrap_or(2),
             runner_label: self.runner_label,
             tasks: self.tasks,
+            tofu_apply: self.tofu_apply,
         }
     }
 }

@@ -20,6 +20,7 @@ fn config_with(overrides: BTreeMap<String, ActionPinOverride>) -> VelnorConfig {
             max_parallel_jobs: 2,
             runner_label: None,
             tasks: Vec::new(),
+            tofu_apply: None,
         },
         resources: ResourcesConfig {
             compiler_process_budget: 2,
