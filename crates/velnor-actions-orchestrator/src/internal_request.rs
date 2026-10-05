@@ -15,6 +15,7 @@ use crate::decisions::plan_artifact_dir;
 use crate::internal::{
     MERGE_OP, PLAN_OP, PlanResponse, SCHEMA, check_schema, internal, internal_contract,
 };
+use crate::plan_output_limits::{PlanOutputMode, check_plan_outputs};
 use crate::request_event::{request_refs, workflow_event_for};
 
 /// Plan-time request: `{schema, op, event, base, head, root}` (schema 1).
@@ -44,8 +45,6 @@ struct EventRequest {
 /// Canonical `plan`/`matrix` outputs for `$GITHUB_OUTPUT`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlanOutputs {
-    /// Canonical plan JSON (single line).
-    pub plan: String,
     /// Canonical matrix JSON (single line).
     pub matrix: String,
     /// Plan ID for step outputs (WF-4.15).
@@ -54,6 +53,8 @@ pub struct PlanOutputs {
     pub run_key: String,
     /// Comma-wrapped covered task IDs (empty when none covered).
     pub covered_tasks: String,
+    /// Aggregate UTF-16 byte size of values promoted by this output mode.
+    pub job_outputs_utf16_bytes: usize,
 }
 
 /// Materialize the canonical request file from the GitHub environment.
@@ -188,17 +189,50 @@ pub fn response_path_for(request_path: &Path) -> Result<PathBuf, OrchestratorErr
 /// # Errors
 ///
 /// Returns [`OrchestratorError::Internal`] for malformed responses.
-pub fn plan_outputs(response_json: &str) -> Result<PlanOutputs, OrchestratorError> {
+pub fn plan_outputs(
+    response_json: &str,
+    mode: PlanOutputMode,
+) -> Result<PlanOutputs, OrchestratorError> {
     let response: PlanResponse =
         serde_json::from_str(response_json).map_err(|_| internal("malformed_response"))?;
     check_schema(response.schema)?;
-    Ok(PlanOutputs {
-        plan: canonical_json_str(&response.plan).map_err(internal_contract)?,
+    let mut outputs = PlanOutputs {
         matrix: canonical_json_str(&response.matrix).map_err(internal_contract)?,
         plan_id: response.plan.plan_id.clone(),
         run_key: response.plan.run_key.clone(),
         covered_tasks: crate::covered_tasks::CoveredTasks::for_plan(&response.plan).encode(),
-    })
+        job_outputs_utf16_bytes: 0,
+    };
+    outputs.job_outputs_utf16_bytes = check_plan_outputs(
+        mode,
+        response.matrix.include.len(),
+        &outputs.promoted_job_outputs(mode),
+    )?;
+    Ok(outputs)
+}
+
+impl PlanOutputs {
+    /// Required named outputs written by the plan step, in stable order.
+    #[must_use]
+    pub fn step_outputs(&self) -> Vec<(&'static str, &str)> {
+        vec![
+            ("matrix", &self.matrix),
+            ("plan_id", &self.plan_id),
+            ("run_key", &self.run_key),
+            (crate::COVERED_TASKS_OUTPUT, &self.covered_tasks),
+        ]
+    }
+
+    /// Output records promoted to job outputs by this workflow path.
+    #[must_use]
+    pub fn promoted_job_outputs(&self, mode: PlanOutputMode) -> Vec<(&'static str, &str)> {
+        match mode {
+            PlanOutputMode::Static => {
+                vec![(crate::COVERED_TASKS_OUTPUT, &self.covered_tasks)]
+            }
+            PlanOutputMode::DynamicMatrix => self.step_outputs(),
+        }
+    }
 }
 
 /// Publish `plan.json` + `matrix.json` for the plan artifact.

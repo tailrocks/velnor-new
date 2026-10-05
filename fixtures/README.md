@@ -19,7 +19,7 @@ consumed directly (via `include_str!` in
 | handwritten-workflow/ | hand-written ci.yml w/ mbx | mbx pre-generation + warning |
 | hostile-config/ | unknown keys, bad types, traversal | REJECT validation |
 | conflicting-runners/ | cargo test AND nextest scripts | REJECT ambiguous_test_runner |
-| empty-suite/ | crate, no tests | valid_no_test_targets |
+| empty-suite/ | Nextest library with `test = false` and `doctest = false` | valid_no_test_targets |
 
 ## Parity corpus (`parity/`)
 
