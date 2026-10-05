@@ -289,11 +289,18 @@ pub(crate) fn execute_ids(task: &ProposedTask) -> ExecuteTaskIds {
 /// bytes are readable, else the explicit unresolved marker (never
 /// all-zero, never a `b3-` hash: native hashes are incomparable with
 /// release pins and fail closed).
+#[cfg(test)]
 pub(crate) fn default_generator() -> PlanGenerator {
+    default_generator_with_phase_timings(None)
+}
+
+pub(crate) fn default_generator_with_phase_timings(
+    phases: Option<&mut crate::internal::phase_timing::PlanPhaseTimings>,
+) -> PlanGenerator {
     PlanGenerator {
         version: env!("CARGO_PKG_VERSION").to_owned(),
         target: snapshot::map_release_triple(std::env::consts::ARCH, std::env::consts::OS),
-        sha256: crate::cover_identity::generator::current_exe_sha256()
+        sha256: crate::cover_identity::generator::current_exe_sha256_with_phase_timings(phases)
             .unwrap_or_else(|| snapshot::UNRESOLVED_GENERATOR_SHA.to_owned()),
     }
 }

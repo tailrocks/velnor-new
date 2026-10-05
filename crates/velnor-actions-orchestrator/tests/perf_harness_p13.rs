@@ -8,7 +8,9 @@ use std::path::Path;
 use std::time::Instant;
 
 use velnor_actions_contract::Plan;
-use velnor_actions_orchestrator::plan_internal;
+use velnor_actions_orchestrator::{
+    PlanPhaseTimings, plan_internal, plan_internal_with_phase_timings,
+};
 
 use crate::impl_common::{git, git_line};
 
@@ -44,15 +46,35 @@ pub(crate) fn plan_at(
     base: &str,
     head: &str,
 ) -> Result<(Plan, String), Box<dyn std::error::Error>> {
-    let request = serde_json::json!({
+    let request = plan_request(root, base, head);
+    decode_plan(plan_internal(&request)?)
+}
+
+/// Plan through the same entrypoint while collecting invocation-local phases.
+pub(crate) fn plan_at_with_phase_timings(
+    root: &Path,
+    base: &str,
+    head: &str,
+) -> Result<(Plan, String, PlanPhaseTimings), Box<dyn std::error::Error>> {
+    let request = plan_request(root, base, head);
+    let (response, phases) = plan_internal_with_phase_timings(&request)?;
+    let (plan, response) = decode_plan(response)?;
+    Ok((plan, response, phases))
+}
+
+fn plan_request(root: &Path, base: &str, head: &str) -> String {
+    serde_json::json!({
         "schema": 1,
         "run_key": "local",
         "base": base,
         "head": head,
         "event": "pull_request",
         "root": root.display().to_string(),
-    });
-    let response = plan_internal(&request.to_string())?;
+    })
+    .to_string()
+}
+
+fn decode_plan(response: String) -> Result<(Plan, String), Box<dyn std::error::Error>> {
     let value: serde_json::Value = serde_json::from_str(&response)?;
     let plan: Plan = serde_json::from_value(value["plan"].clone())?;
     plan.validate()?;
@@ -228,9 +250,30 @@ pub(crate) struct BenchSample<'a> {
 /// Machine-readable benchmark line: queue/transfer are local no-ops
 /// (recorded `na`/`0`), compiler is the direct-metadata proxy.
 pub(crate) fn bench_line(sample: &BenchSample<'_>) {
+    bench_line_inner(sample, None);
+}
+
+/// Emit the existing benchmark line plus named per-call phase fields.
+pub(crate) fn bench_line_with_phase_timings(sample: &BenchSample<'_>, phases: PlanPhaseTimings) {
+    bench_line_inner(sample, Some(phases));
+}
+
+fn bench_line_inner(sample: &BenchSample<'_>, phases: Option<PlanPhaseTimings>) {
+    let phases = phases.map_or_else(String::new, |phases| {
+        format!(
+            " plan_internal_us={} prepare_us={} metadata_commands={} metadata_run_us={} metadata_parse_us={} generator_sha_calls={} generator_sha_us={}",
+            phases.plan_internal_us,
+            phases.prepare_us,
+            phases.metadata_commands,
+            phases.metadata_run_us,
+            phases.metadata_parse_us,
+            phases.generator_sha_calls,
+            phases.generator_sha_us,
+        )
+    });
     eprintln!(
         "bench: case={} crates={} setup_ms={} plan_ms={} metadata_ms={} rss_kb={} \
-         obligations={} selected={} digest={} queue=na transfer_b=0 note={}",
+         obligations={} selected={} digest={}{} queue=na transfer_b=0 note={}",
         sample.case,
         sample.crates,
         sample.setup_ms,
@@ -240,6 +283,47 @@ pub(crate) fn bench_line(sample: &BenchSample<'_>) {
         sample.plan.obligations.len(),
         sample.plan.task_ids.len(),
         obligation_digest(sample.plan),
+        phases,
         sample.note,
     );
+}
+
+#[cfg(test)]
+mod phase_timing_tests {
+    use super::{
+        commit_two, obligation_digest, obligation_task_ids, plan_at, plan_at_with_phase_timings,
+    };
+    use crate::impl_common::TestResult;
+    use crate::impl_perf_p13::perf_fixtures_p13::workspace_repo;
+
+    #[test]
+    fn phase_timing_preserves_plan_and_workspace_inventory_reuse() -> TestResult {
+        let repo = workspace_repo(1)?;
+        let root = repo.path();
+        let (base, head) = commit_two(root, "src/lib.rs")?;
+        let (plain, plain_response) = plan_at(root, &base, &head)?;
+        let (profiled, profiled_response, phases) = plan_at_with_phase_timings(root, &base, &head)?;
+
+        assert_eq!(
+            profiled_response, plain_response,
+            "response bytes are unchanged"
+        );
+        assert_eq!(
+            profiled.plan_id, plain.plan_id,
+            "plan identity is unchanged"
+        );
+        assert_eq!(
+            obligation_task_ids(&profiled),
+            obligation_task_ids(&plain),
+            "obligation identities are unchanged"
+        );
+        assert_eq!(obligation_digest(&profiled), obligation_digest(&plain));
+        assert_eq!(profiled.packages.len(), 2, "root and member are discovered");
+        assert_eq!(
+            phases.metadata_commands, 1,
+            "the root inventory is reused for its member"
+        );
+        assert_eq!(phases.generator_sha_calls, 1, "identity is hashed once");
+        Ok(())
+    }
 }

@@ -9,7 +9,8 @@ use velnor_actions_mise::GitRequest;
 use crate::OrchestratorError;
 use crate::config::load_config;
 use crate::decisions::runner_image_evidence;
-use crate::discover::{Discovery, discover};
+use crate::discover::{Discovery, discover, discover_with_phase_timings};
+use crate::internal::phase_timing::PlanPhaseTimings;
 use crate::source_prep::lockful_roots;
 use crate::workflow::{DEFAULT_RUNNER_LABEL, WorkflowPlan, build_workflow};
 
@@ -48,6 +49,20 @@ pub struct GenerationPreparation {
 ///
 /// Returns root, config, branch, identity, discovery, or workflow errors.
 pub fn prepare(root: &Path) -> Result<GenerationPreparation, OrchestratorError> {
+    prepare_inner(root, None)
+}
+
+pub(crate) fn prepare_with_phase_timings(
+    root: &Path,
+    phases: &mut PlanPhaseTimings,
+) -> Result<GenerationPreparation, OrchestratorError> {
+    prepare_inner(root, Some(phases))
+}
+
+fn prepare_inner(
+    root: &Path,
+    phases: Option<&mut PlanPhaseTimings>,
+) -> Result<GenerationPreparation, OrchestratorError> {
     let canonical = root
         .canonicalize()
         .map_err(|err| OrchestratorError::io(root.display().to_string(), err.to_string()))?;
@@ -59,7 +74,10 @@ pub fn prepare(root: &Path) -> Result<GenerationPreparation, OrchestratorError> 
     let config = load_config(&canonical)?;
     let default_branch = resolve_default_branch(&canonical, &config)?;
     check_velnor_identity(&canonical, &config)?;
-    let mut discovery = discover(&canonical, &config)?;
+    let mut discovery = match phases {
+        Some(phases) => discover_with_phase_timings(&canonical, &config, phases)?,
+        None => discover(&canonical, &config)?,
+    };
     let fetch_roots = lockful_roots(&canonical, &discovery.workspaces);
     let (runner_label, runner_selection) = runner_label_for(&config);
     let workflow = build_workflow(

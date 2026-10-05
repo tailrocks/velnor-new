@@ -26,6 +26,8 @@ pub use super::generate::{
     render_staged_tree, render_staged_tree_with,
 };
 pub use super::init::{InitReport, init_config};
+#[doc(hidden)]
+pub use super::internal::phase_timing::{PlanPhaseTimings, plan_internal_with_phase_timings};
 pub use super::internal::{
     MERGE_OP, PLAN_OP, PlanOutputs, REQUEST_FILE_ENV, WRITE_REQUEST_OP, merge_passed,
     plan_internal, plan_outputs, publish_final_report, publish_plan_files, response_path_for,
