@@ -56,6 +56,22 @@ fn generated_hosted_scale_set_and_both_modes_bind_all_named_check_proofs() -> Te
     Ok(())
 }
 
+#[test]
+fn intel_named_check_is_qualified_but_full_generation_fails_before_asset_selection() -> TestResult {
+    let intel_config = config("hosted", "")
+        .replace("macos-15", "macos-15-intel")
+        .replace("macos_arm64", "macos_x64");
+    let repo = fixture(&intel_config)?;
+    let prepared = prepare(repo.path())?;
+    let error = render_staged_tree(&prepared)
+        .expect_err("there is no Intel generator asset or URL fallback");
+    assert_eq!(
+        error.to_string(),
+        "contract: unsupported_generator_target_for_check_platform:x86_64-apple-darwin"
+    );
+    Ok(())
+}
+
 fn assert_mode(mode: &str, linux_ids: &[&str], linux_runner: &str) -> TestResult {
     let repo = fixture(&config(mode, ""))?;
     let root = repo.path();
@@ -72,6 +88,18 @@ fn assert_workflow(
     linux_runner: &str,
 ) -> TestResult {
     let ci = required_file(tree, ".github/workflows/ci.yml")?;
+    assert!(
+        ci.contains("x86_64-unknown-linux-gnu"),
+        "Linux helper asset missing: {ci}"
+    );
+    assert!(
+        ci.contains("aarch64-apple-darwin"),
+        "ARM helper asset missing: {ci}"
+    );
+    assert!(
+        !ci.contains("x86_64-apple-darwin"),
+        "Intel helper asset must not be synthesized: {ci}"
+    );
     let required = job_body(ci, "required")?;
     for id in linux_ids.iter().copied().filter(|id| !id.is_empty()) {
         assert!(

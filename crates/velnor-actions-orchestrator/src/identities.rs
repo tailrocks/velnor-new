@@ -216,8 +216,8 @@ pub(crate) fn platform_id_for_group(
     let stack = Stack::require_known(&task.stack_id)?;
     if stack == Stack::Mise {
         let label = task.runner_profile.as_str();
-        if let Some(host) = velnor_actions_contract::ReleaseTarget::for_runner_label(label)
-            .map(velnor_actions_contract::ReleaseTarget::triple)
+        if let Some(host) = velnor_actions_contract::CheckPlatform::for_runner_label(label)
+            .map(velnor_actions_contract::CheckPlatform::target)
             && host != task.identity.target
         {
             return Err(ContractError::identity(
@@ -227,9 +227,9 @@ pub(crate) fn platform_id_for_group(
         }
         return platform_id_for(label, &task.identity.target);
     }
-    let host = velnor_actions_contract::ReleaseTarget::for_runner_label(label)
-        .filter(|target| *target == velnor_actions_contract::ReleaseTarget::LinuxX86_64)
-        .map(velnor_actions_contract::ReleaseTarget::triple)
+    let host = velnor_actions_contract::CheckPlatform::for_runner_label(label)
+        .filter(|platform| *platform == velnor_actions_contract::CheckPlatform::LinuxX64)
+        .map(velnor_actions_contract::CheckPlatform::target)
         .ok_or_else(|| {
             ContractError::identity(
                 "runner_label",

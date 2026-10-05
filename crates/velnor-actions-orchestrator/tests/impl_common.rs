@@ -113,7 +113,7 @@ pub(crate) type Snapshot = BTreeMap<String, (Vec<u8>, SystemTime)>;
 /// as consumer provenance. Every fixture repo carries it so consumer
 /// `prepare` succeeds.
 pub(crate) fn fixture_manifest_json() -> String {
-    let targets = velnor_actions_contract::SUPPORTED_TARGETS
+    let targets = velnor_actions_contract::SUPPORTED_GENERATOR_TARGETS
     .iter()
     .map(|target| {
         format!(

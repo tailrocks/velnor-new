@@ -10,8 +10,8 @@ use velnor_actions_actionlint::overrides::{
     ActionPinOverride as ApprovedOverride, ApprovedPinCatalog,
 };
 use velnor_actions_contract::{
-    GeneratorLock, ReleaseManifest, ReleaseTarget, Step, VelnorConfig, VerificationRunner,
-    check_release_artifact,
+    CheckPlatform, GeneratorLock, ReleaseManifest, ReleaseTarget, Step, VelnorConfig,
+    VerificationRunner, check_release_artifact,
 };
 use velnor_actions_mise::MISE_VERSION;
 use velnor_actions_workflow_renderer::{
@@ -39,8 +39,8 @@ pub(crate) fn resolve_mise_setup(
     config: &VelnorConfig,
     label: &str,
 ) -> Result<MiseSetup, OrchestratorError> {
-    let target = ReleaseTarget::for_runner_label(label)
-        .map(ReleaseTarget::triple)
+    let target = CheckPlatform::for_runner_label(label)
+        .map(CheckPlatform::target)
         .ok_or_else(|| OrchestratorError::Contract {
             problem: format!("mise_setup_unsupported_target:{label}"),
         })?;
@@ -120,10 +120,7 @@ fn consumer_acquire_from(
     version: &str,
     json: Option<&str>,
 ) -> Result<Step, OrchestratorError> {
-    let target =
-        ReleaseTarget::for_runner_label(label).ok_or_else(|| OrchestratorError::Contract {
-            problem: format!("unsupported_target_for_runner:{label}"),
-        })?;
+    let target = generator_target_for_label(label)?;
     consumer_acquire_for_target(target, version, json)
 }
 
@@ -136,7 +133,31 @@ pub(crate) fn consumer_acquire_for_runner(
     json: Option<&str>,
 ) -> Result<Step, OrchestratorError> {
     runner.validate("workflow", "check.runner")?;
-    consumer_acquire_for_target(runner.platform.release_target(), version, json)
+    let target = generator_target_for_platform(runner.platform)?;
+    consumer_acquire_for_target(target, version, json)
+}
+
+/// Convert a qualified host platform to an available generator product.
+fn generator_target_for_platform(
+    platform: CheckPlatform,
+) -> Result<ReleaseTarget, OrchestratorError> {
+    platform
+        .generator_release_target()
+        .ok_or_else(|| OrchestratorError::Contract {
+            problem: format!(
+                "unsupported_generator_target_for_check_platform:{}",
+                platform.target()
+            ),
+        })
+}
+
+/// Resolve a runner label only when a matching generator product exists.
+pub(crate) fn generator_target_for_label(label: &str) -> Result<ReleaseTarget, OrchestratorError> {
+    let platform =
+        CheckPlatform::for_runner_label(label).ok_or_else(|| OrchestratorError::Contract {
+            problem: format!("unsupported_target_for_runner:{label}"),
+        })?;
+    generator_target_for_platform(platform)
 }
 
 fn consumer_acquire_for_target(
@@ -190,10 +211,7 @@ pub(crate) fn lock_acquire_step(
     label: &str,
     staged: &str,
 ) -> Result<Step, OrchestratorError> {
-    let target =
-        ReleaseTarget::for_runner_label(label).ok_or_else(|| OrchestratorError::Contract {
-            problem: format!("unsupported_target_for_runner:{label}"),
-        })?;
+    let target = generator_target_for_label(label)?;
     lock_acquire_for_target(lock, target, staged)
 }
 
@@ -203,7 +221,8 @@ pub(crate) fn lock_acquire_for_runner(
     staged: &str,
 ) -> Result<Step, OrchestratorError> {
     runner.validate("workflow", "check.runner")?;
-    lock_acquire_for_target(lock, runner.platform.release_target(), staged)
+    let target = generator_target_for_platform(runner.platform)?;
+    lock_acquire_for_target(lock, target, staged)
 }
 
 fn lock_acquire_for_target(
@@ -264,7 +283,7 @@ pub fn acquire_script_argv(
 ) -> Result<Vec<String>, OrchestratorError> {
     let digest = match target {
         ReleaseTarget::LinuxX86_64 => "sha256sum -c -",
-        ReleaseTarget::MacosArm64 | ReleaseTarget::MacosX86_64 => "shasum -a 256 -c -",
+        ReleaseTarget::MacosArm64 => "shasum -a 256 -c -",
     };
     if !absolute_token(seed_root) {
         return Err(OrchestratorError::Contract {
@@ -321,7 +340,7 @@ fn file_token(value: &str) -> bool {
 #[cfg(test)]
 fn test_manifest_json() -> String {
     let version = env!("CARGO_PKG_VERSION");
-    let targets = velnor_actions_contract::SUPPORTED_TARGETS
+    let targets = velnor_actions_contract::SUPPORTED_GENERATOR_TARGETS
         .iter()
         .map(|target| {
             format!(

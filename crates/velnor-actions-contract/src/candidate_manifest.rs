@@ -49,7 +49,7 @@ impl CandidateArtifactManifest {
         check_schema(self.schema)?;
         check_commit(&self.commit, file, "commit")?;
         check_target(&self.target, file, "target")?;
-        if !crate::targets::is_supported_target(&self.target) {
+        if !crate::targets::is_supported_generator_target(&self.target) {
             return Err(ContractError::config(
                 file,
                 "target",

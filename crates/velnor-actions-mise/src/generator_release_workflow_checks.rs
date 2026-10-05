@@ -3,7 +3,7 @@
 use std::ffi::{OsStr, OsString};
 use std::path::Path;
 
-use velnor_actions_contract::{GeneratorReleaseTarget, Step};
+use velnor_actions_contract::{ReleaseTarget, Step};
 
 use crate::catalog::ToolCatalog;
 use crate::error::MiseError;
@@ -69,13 +69,13 @@ END {
 ///
 /// Returns [`MiseError`] if the runner identity cannot be represented.
 pub fn native_host_check_step(
-    target: GeneratorReleaseTarget,
+    target: ReleaseTarget,
     homes: &ToolHomes,
     catalog: &ToolCatalog,
 ) -> Result<Step, MiseError> {
     let expected = match target {
-        GeneratorReleaseTarget::LinuxX86_64 => "Linux x86_64",
-        GeneratorReleaseTarget::MacosArm64 => "Darwin arm64",
+        ReleaseTarget::LinuxX86_64 => "Linux x86_64",
+        ReleaseTarget::MacosArm64 => "Darwin arm64",
     };
     let body = format!(
         "actual=\"$(uname -sm)\"\nprintf 'Native host: %s\\n' \"$actual\"\ntest \"$actual\" = {}",
@@ -90,7 +90,7 @@ pub fn native_host_check_step(
 ///
 /// Returns [`MiseError`] for an unsupported version or invalid step input.
 pub fn rust_toolchain_check_step(
-    target: GeneratorReleaseTarget,
+    target: ReleaseTarget,
     rust_toolchain_version: &str,
     homes: &ToolHomes,
     catalog: &ToolCatalog,
@@ -110,19 +110,19 @@ pub fn rust_toolchain_check_step(
 ///
 /// Returns [`MiseError`] for a mismatched target/path or invalid workflow input.
 pub fn binary_format_architecture_check_step(
-    target: GeneratorReleaseTarget,
+    target: ReleaseTarget,
     binary_relative_path: &Path,
     homes: &ToolHomes,
     catalog: &ToolCatalog,
 ) -> Result<Step, MiseError> {
     let binary = checked_binary_path(binary_relative_path)?;
     let body = match target {
-        GeneratorReleaseTarget::LinuxX86_64 => format!(
+        ReleaseTarget::LinuxX86_64 => format!(
             "header=\"$(readelf -hW {})\"\nprintf '%s\\n' \"$header\" | awk {}",
             shell_quote(&binary),
             shell_quote(ELF_HEADER_GUARD_AWK)
         ),
-        GeneratorReleaseTarget::MacosArm64 => apple_format_script(&binary, "arm64"),
+        ReleaseTarget::MacosArm64 => apple_format_script(&binary, "arm64"),
     };
     guarded_step(
         "Verify binary format and exact architecture",
@@ -138,12 +138,12 @@ pub fn binary_format_architecture_check_step(
 ///
 /// Returns [`MiseError`] for a non-Linux target or mismatched binary path.
 pub fn gnu_runtime_abi_check_step(
-    target: GeneratorReleaseTarget,
+    target: ReleaseTarget,
     binary_relative_path: &Path,
     homes: &ToolHomes,
     catalog: &ToolCatalog,
 ) -> Result<Step, MiseError> {
-    require_target(target, GeneratorReleaseTarget::LinuxX86_64)?;
+    require_target(target, ReleaseTarget::LinuxX86_64)?;
     let binary = checked_binary_path(binary_relative_path)?;
     let body = format!(
         "needs=\"$(readelf --version-info --wide {})\"\nprintf '%s\\n' \"$needs\" | awk {}\nresolved=\"$(ldd -v {})\"\nprintf '%s\\n' \"$resolved\"\nif grep -Fq -- 'not found' <<<\"$resolved\"; then exit 1; fi",
@@ -165,7 +165,7 @@ pub fn gnu_runtime_abi_check_step(
 ///
 /// Returns [`MiseError`] for a non-Apple target.
 pub fn apple_sdk_check_step(
-    target: GeneratorReleaseTarget,
+    target: ReleaseTarget,
     homes: &ToolHomes,
     catalog: &ToolCatalog,
 ) -> Result<Step, MiseError> {
@@ -181,7 +181,7 @@ pub fn apple_sdk_check_step(
 ///
 /// Returns [`MiseError`] for a non-Apple target.
 pub fn apple_linker_check_step(
-    target: GeneratorReleaseTarget,
+    target: ReleaseTarget,
     homes: &ToolHomes,
     catalog: &ToolCatalog,
 ) -> Result<Step, MiseError> {
@@ -277,10 +277,7 @@ fn validate_exact_version(field: &str, version: &str) -> Result<(), MiseError> {
         .map_err(|_| invalid_step_input(field, version))
 }
 
-fn require_target(
-    actual: GeneratorReleaseTarget,
-    expected: GeneratorReleaseTarget,
-) -> Result<(), MiseError> {
+fn require_target(actual: ReleaseTarget, expected: ReleaseTarget) -> Result<(), MiseError> {
     if actual == expected {
         Ok(())
     } else {
@@ -288,10 +285,10 @@ fn require_target(
     }
 }
 
-fn require_apple_target(target: GeneratorReleaseTarget) -> Result<(), MiseError> {
+fn require_apple_target(target: ReleaseTarget) -> Result<(), MiseError> {
     match target {
-        GeneratorReleaseTarget::MacosArm64 => Ok(()),
-        GeneratorReleaseTarget::LinuxX86_64 => Err(invalid_step_input("target", target.triple())),
+        ReleaseTarget::MacosArm64 => Ok(()),
+        ReleaseTarget::LinuxX86_64 => Err(invalid_step_input("target", target.triple())),
     }
 }
 

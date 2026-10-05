@@ -177,29 +177,55 @@ fn mise_setup_rejects_non_linux_runners() {
 #[test]
 fn macos_helper_asset_and_native_digest_match_runner() {
     use velnor_actions_contract::config::{CheckExecutor, CheckPlatform, CheckRunner};
-    for (label, platform) in [
-        ("macos-15", CheckPlatform::MacosArm64),
-        ("macos-15-intel", CheckPlatform::MacosX64),
-    ] {
-        let runner = CheckRunner {
-            label: label.to_owned(),
-            platform,
-            executor: CheckExecutor::Hosted,
-            container: None,
-        };
-        let step = consumer_acquire_for_runner(
-            &runner,
-            env!("CARGO_PKG_VERSION"),
-            Some(&test_manifest_json()),
-        )
-        .expect("qualified helper");
-        let velnor_actions_contract::StepKind::Shell { run, env } = step.kind else {
-            panic!("acquisition must be shell");
-        };
-        assert!(run.iter().any(|arg| arg.contains("shasum -a 256 -c -")));
-        assert!(env.values().any(|value| value.ends_with(platform.target())));
-        assert!(!run.iter().any(|arg| arg.contains("sha256sum")));
-    }
+    let runner = CheckRunner {
+        label: "macos-15".to_owned(),
+        platform: CheckPlatform::MacosArm64,
+        executor: CheckExecutor::Hosted,
+        container: None,
+    };
+    let step = consumer_acquire_for_runner(
+        &runner,
+        env!("CARGO_PKG_VERSION"),
+        Some(&test_manifest_json()),
+    )
+    .expect("qualified ARM helper");
+    let velnor_actions_contract::StepKind::Shell { run, env } = step.kind else {
+        panic!("acquisition must be shell");
+    };
+    assert!(run.iter().any(|arg| arg.contains("shasum -a 256 -c -")));
+    assert!(
+        env.values()
+            .any(|value| value.ends_with(runner.platform.target()))
+    );
+    assert!(!run.iter().any(|arg| arg.contains("sha256sum")));
+}
+
+#[test]
+fn qualified_intel_host_cannot_acquire_a_missing_generator_product() {
+    use velnor_actions_contract::config::{CheckExecutor, CheckPlatform, CheckRunner};
+    let runner = CheckRunner {
+        label: "macos-15-intel".to_owned(),
+        platform: CheckPlatform::MacosX64,
+        executor: CheckExecutor::Hosted,
+        container: None,
+    };
+    let error = consumer_acquire_for_runner(
+        &runner,
+        env!("CARGO_PKG_VERSION"),
+        Some(&test_manifest_json()),
+    )
+    .expect_err("Intel qualification must not invent a generator asset");
+    assert_eq!(
+        error.to_string(),
+        "contract: unsupported_generator_target_for_check_platform:x86_64-apple-darwin"
+    );
+    let label_error = consumer_acquire_from(
+        "macos-15-intel",
+        env!("CARGO_PKG_VERSION"),
+        Some(&test_manifest_json()),
+    )
+    .expect_err("label acquisition must fail before manifest selection");
+    assert_eq!(label_error.to_string(), error.to_string());
 }
 
 #[test]
@@ -227,7 +253,6 @@ fn acquisition_template_selects_native_checksum_by_typed_target() {
     for (target, expected) in [
         (ReleaseTarget::LinuxX86_64, "sha256sum -c -"),
         (ReleaseTarget::MacosArm64, "shasum -a 256 -c -"),
-        (ReleaseTarget::MacosX86_64, "shasum -a 256 -c -"),
     ] {
         let argv = acquire_script_argv(&staged, "/opt/velnor/seed", target)
             .expect("supported typed target");

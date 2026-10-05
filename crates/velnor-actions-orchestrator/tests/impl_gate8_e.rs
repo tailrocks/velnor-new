@@ -21,7 +21,7 @@ fn binary_record(target: &str, sha: &str) -> String {
 }
 
 fn lock_text(sha: &str) -> String {
-    let bins = velnor_actions_contract::SUPPORTED_TARGETS
+    let bins = velnor_actions_contract::SUPPORTED_GENERATOR_TARGETS
         .iter()
         .map(|target| binary_record(target, sha))
         .collect::<String>();
@@ -33,7 +33,7 @@ fn lock_text(sha: &str) -> String {
 }
 
 fn manifest_text(sha: &str) -> String {
-    let targets = velnor_actions_contract::SUPPORTED_TARGETS
+    let targets = velnor_actions_contract::SUPPORTED_GENERATOR_TARGETS
         .iter()
         .map(|t| format!("{{\"target\":\"{t}\",\"artifact\":\"https://github.com/tailrocks/velnor-new/releases/download/v0.1.0/velnor-actions-0.1.0-{t}\",\"sha256\":\"{sha}\"}}"))
         .collect::<Vec<_>>()

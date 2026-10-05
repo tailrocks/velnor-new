@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 use std::ffi::{OsStr, OsString};
 
-use velnor_actions_contract::{GeneratorReleaseTarget, Step, StepKind};
+use velnor_actions_contract::{ReleaseTarget, Step, StepKind};
 
 use crate::catalog::{MISE_VERSION, PinnedTool, ToolCatalog};
 use crate::error::MiseError;
@@ -42,7 +42,7 @@ pub use checks::{
 /// Returns [`MiseError`] for a malformed action pin or invalid pinned install.
 pub fn setup_rust_steps(
     mise_action_uses: &str,
-    target: GeneratorReleaseTarget,
+    target: ReleaseTarget,
     mise_sha256: &str,
     homes: &ToolHomes,
     catalog: &ToolCatalog,
@@ -84,10 +84,10 @@ pub fn setup_rust_steps(
 
 /// Exact installed-binary SHA-256 for the pinned Mise release on one target.
 #[must_use]
-pub const fn generator_release_mise_binary_sha256(target: GeneratorReleaseTarget) -> &'static str {
+pub const fn generator_release_mise_binary_sha256(target: ReleaseTarget) -> &'static str {
     match target {
-        GeneratorReleaseTarget::LinuxX86_64 => MISE_BINARY_SHA256_LINUX_X64,
-        GeneratorReleaseTarget::MacosArm64 => MISE_BINARY_SHA256_MACOS_ARM64,
+        ReleaseTarget::LinuxX86_64 => MISE_BINARY_SHA256_LINUX_X64,
+        ReleaseTarget::MacosArm64 => MISE_BINARY_SHA256_MACOS_ARM64,
     }
 }
 

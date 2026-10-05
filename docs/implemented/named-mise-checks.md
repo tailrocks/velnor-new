@@ -183,11 +183,16 @@ and post-task observations and receipt. This avoids declaring one fixed daemon
 ID for every member of an ephemeral fleet while detecting daemon replacement
 during a check.
 
-Consumer jobs acquire the versioned helper for their explicit platform from
-the pinned release manifest, verify SHA-256, and stage the helper. Linux uses
-`sha256sum`; Darwin uses `shasum -a 256`. Mise setup uses the platform-specific
-pinned binary checksum. Missing platform assets fail generation. These paths
-do not prove that matching release assets have already been published.
+Consumer jobs acquire the versioned helper only when their explicit platform
+has a generator product in the pinned release manifest, verify SHA-256, and
+stage the helper. Linux uses `sha256sum`; Darwin uses `shasum -a 256`. Mise
+setup uses the platform-specific pinned binary checksum. The named-check host
+catalog includes Intel macOS for qualified native tools and runtime
+observations, while the current generator release contains only Linux x86-64
+and macOS ARM64 products. A Velnor-assisted Intel check therefore fails
+generation before asset selection; it must not reuse another architecture's
+helper. These paths do not prove that matching release assets have already
+been published.
 
 ## Task discovery and execution
 

@@ -75,8 +75,6 @@ pub fn parse_generator_lock(text: &str) -> Result<GeneratorLock, LockError> {
     let lock = lock_from_doc(&doc)?;
     lock.validate("generator.lock")
         .map_err(|err| invalid(err.to_string()))?;
-    lock.check_supported_targets("generator.lock")
-        .map_err(|err| invalid(err.to_string()))?;
     Ok(lock)
 }
 

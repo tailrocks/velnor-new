@@ -345,8 +345,8 @@ fn restore_step_for_crate(
     if !use_rust || fetch_roots.is_empty() {
         return Ok(None);
     }
-    let target = velnor_actions_contract::ReleaseTarget::for_runner_label(label)
-        .map(velnor_actions_contract::ReleaseTarget::triple)
+    let target = velnor_actions_contract::CheckPlatform::for_runner_label(label)
+        .map(velnor_actions_contract::CheckPlatform::target)
         .ok_or_else(|| OrchestratorError::Contract {
             problem: format!("bad_label:{label}"),
         })?;

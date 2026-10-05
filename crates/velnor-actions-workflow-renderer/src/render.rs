@@ -9,7 +9,7 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{
-    CI_WORKFLOW_PATH, Job, PLAN_JOB_ID as CONTRACT_PLAN_JOB_ID,
+    CI_WORKFLOW_PATH, CheckPlatform, Job, PLAN_JOB_ID as CONTRACT_PLAN_JOB_ID,
     REQUIRED_CONDITION as CONTRACT_REQUIRED_CONDITION,
     REQUIRED_DISPLAY_NAME as CONTRACT_REQUIRED_DISPLAY_NAME,
     REQUIRED_JOB_ID as CONTRACT_REQUIRED_JOB_ID, ReleaseTarget, RunsOn, SCALE_SET_NAME,
@@ -293,7 +293,7 @@ pub fn finalize_jobs(
 
 fn target_for_runner(label: &str) -> Option<&'static str> {
     match RunsOn::parse(label).ok()? {
-        RunsOn::Hosted(label) => ReleaseTarget::for_runner_label(&label).map(ReleaseTarget::triple),
+        RunsOn::Hosted(label) => CheckPlatform::for_runner_label(&label).map(CheckPlatform::target),
         RunsOn::ScaleSet(selector) if selector.name() == SCALE_SET_NAME => {
             Some(ReleaseTarget::LinuxX86_64.triple())
         }

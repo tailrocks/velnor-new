@@ -25,7 +25,7 @@
 use std::io::Read;
 use std::path::Path;
 
-use velnor_actions_contract::{ReleaseTarget, Step, StepKind, WorkflowIr};
+use velnor_actions_contract::{CheckPlatform, Step, StepKind, WorkflowIr};
 use velnor_actions_mise::toolfiles::lockfile::{
     InstallCoverage, InstallSubject, audit_install_coverage, mise_platform_for_target,
     parse_mise_lockfile, subject_for_install_spec,
@@ -122,8 +122,8 @@ pub(crate) fn audit_prepare_installs(
             blocking,
         };
     }
-    let Some(platform) = ReleaseTarget::for_runner_label(label)
-        .map(ReleaseTarget::triple)
+    let Some(platform) = CheckPlatform::for_runner_label(label)
+        .map(CheckPlatform::target)
         .and_then(mise_platform_for_target)
         .map(str::to_owned)
     else {

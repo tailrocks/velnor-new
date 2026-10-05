@@ -1,5 +1,5 @@
 //! Bootstrap lock parse and lock-vs-manifest verify cases.
-use velnor_actions_contract::SUPPORTED_TARGETS;
+use velnor_actions_contract::SUPPORTED_GENERATOR_TARGETS;
 use velnor_actions_mise::catalog::lock::{
     LockError, parse_generator_lock, parse_release_manifest, verify_lock_against_manifest,
 };
@@ -11,7 +11,7 @@ fn binary_record(target: &str, sha: &str) -> String {
 }
 
 fn lock_text(sha: &str) -> String {
-    let bins = SUPPORTED_TARGETS
+    let bins = SUPPORTED_GENERATOR_TARGETS
         .iter()
         .map(|target| binary_record(target, sha))
         .collect::<String>();
@@ -24,7 +24,7 @@ fn lock_text(sha: &str) -> String {
 }
 
 fn manifest_text(sha: &str) -> String {
-    let targets = SUPPORTED_TARGETS
+    let targets = SUPPORTED_GENERATOR_TARGETS
         .iter()
         .map(|target| format!("{{\"target\":\"{target}\",\"artifact\":\"https://github.com/tailrocks/velnor-new/releases/download/v0.1.0/velnor-actions-0.1.0-{target}\",\"sha256\":\"{sha}\"}}"))
         .collect::<Vec<_>>()
@@ -54,6 +54,40 @@ fn lock_mismatch_mutable_and_missing_target_fail() -> Result<(), LockError> {
     assert!(parse_generator_lock(&dropped).is_err());
     assert!(parse_generator_lock("schema = 1\n[bogus\n").is_err());
     Ok(())
+}
+
+#[test]
+fn lock_rejects_intel_product_and_duplicate_target() {
+    let full = lock_text(&"a".repeat(64));
+    let intel = full.replace(
+        "[mise-bootstrap]",
+        &format!(
+            "{}[mise-bootstrap]",
+            binary_record("x86_64-apple-darwin", &"a".repeat(64))
+        ),
+    );
+    let error = parse_generator_lock(&intel).expect_err("no Intel helper asset exists");
+    assert!(
+        error
+            .to_string()
+            .contains("unsupported_target:x86_64-apple-darwin"),
+        "{error}"
+    );
+
+    let duplicate = full.replace(
+        "[mise-bootstrap]",
+        &format!(
+            "{}[mise-bootstrap]",
+            binary_record("x86_64-unknown-linux-gnu", &"a".repeat(64))
+        ),
+    );
+    let error = parse_generator_lock(&duplicate).expect_err("duplicate target is invalid");
+    assert!(
+        error
+            .to_string()
+            .contains("duplicate_target:x86_64-unknown-linux-gnu"),
+        "{error}"
+    );
 }
 
 #[test]

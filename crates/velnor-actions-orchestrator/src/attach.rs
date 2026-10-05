@@ -7,7 +7,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{GeneratorLock, ReleaseTarget, Step, WorkflowIr, is_crate_job_id};
+use velnor_actions_contract::{GeneratorLock, Step, WorkflowIr, is_crate_job_id};
 use velnor_actions_mise::{
     PREPARE_PINNED_TOOLS_STEP, PREPARE_RUST_COMPONENTS_STEP, PinnedTool, ToolCatalog,
 };
@@ -20,7 +20,7 @@ use velnor_actions_workflow_renderer::{
 };
 
 use crate::OrchestratorError;
-use crate::pins::{lock_acquire_for_runner, lock_acquire_step};
+use crate::pins::{generator_target_for_label, lock_acquire_for_runner, lock_acquire_step};
 use crate::vectors::{candidate_build_argv, mbx_probe_argv};
 use crate::workflow::WorkflowPlan;
 
@@ -101,15 +101,19 @@ pub(crate) fn attach_preseed(
     fetch_roots: &[String],
 ) -> Result<(), OrchestratorError> {
     let catalog = ToolCatalog::pinned();
-    let target = ReleaseTarget::for_runner_label(label)
-        .map(ReleaseTarget::triple)
-        .ok_or_else(|| OrchestratorError::Contract {
-            problem: format!("unsupported_target_for_runner:{label}"),
-        })?;
+    let target = generator_target_for_label(label)?.triple();
     for (id, job) in &workflow.ir.jobs {
         if let Some(runner) = &job.check_runner
             && runner.platform.target() != target
         {
+            if runner.platform.generator_release_target().is_none() {
+                return Err(OrchestratorError::Contract {
+                    problem: format!(
+                        "unsupported_generator_target_for_check_platform:{}",
+                        runner.platform.target()
+                    ),
+                });
+            }
             return Err(OrchestratorError::Contract {
                 problem: format!("mixed_platform_preseed_requires_release_lock:{id}"),
             });
@@ -233,8 +237,8 @@ fn replace_plan_registry_cache(
             problem: "preseed_registry_cache_without_locked_sources".to_owned(),
         });
     }
-    let target = ReleaseTarget::for_runner_label(label)
-        .map(ReleaseTarget::triple)
+    let target = velnor_actions_contract::CheckPlatform::for_runner_label(label)
+        .map(velnor_actions_contract::CheckPlatform::target)
         .ok_or_else(|| OrchestratorError::Contract {
             problem: format!("unsupported_target_for_runner:{label}"),
         })?;

@@ -2,7 +2,7 @@
 use std::collections::BTreeMap;
 use velnor_actions_contract::{
     ActionPin, ContractError, GeneratorBinary, GeneratorLock, GeneratorValidation, LockedGenerator,
-    MiseBootstrap, ReleaseManifest, SUPPORTED_TARGETS, TargetRecord, WorkflowPolicy,
+    MiseBootstrap, ReleaseManifest, SUPPORTED_GENERATOR_TARGETS, TargetRecord, WorkflowPolicy,
     asset_filename,
 };
 
@@ -265,7 +265,7 @@ fn manifest_schemas_validate_and_lookup_targets() -> Result<(), ContractError> {
         version: "0.1.0".to_owned(),
         repository: "tailrocks/velnor-new".to_owned(),
         commit: "ab".repeat(20),
-        targets: SUPPORTED_TARGETS
+        targets: SUPPORTED_GENERATOR_TARGETS
             .iter()
             .map(|target| TargetRecord {
                 target: (*target).to_owned(),

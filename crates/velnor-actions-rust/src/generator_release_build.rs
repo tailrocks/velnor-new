@@ -4,13 +4,13 @@ use std::ffi::OsString;
 use std::path::PathBuf;
 
 use velnor_actions_contract::{
-    ContractError, GeneratorReleasePlan, GeneratorReleaseTarget, require_release_version,
+    ContractError, GeneratorReleasePlan, ReleaseTarget, require_release_version,
 };
 
 /// One locked Cargo build request for the generator executable.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GeneratorCargoBuild {
-    target: GeneratorReleaseTarget,
+    target: ReleaseTarget,
 }
 
 /// Closed native checks derived from one matching Cargo build request.
@@ -37,7 +37,7 @@ pub enum GeneratorBinaryCheck {
 /// Expected native proof facts derived from the release plan and Cargo request.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GeneratorBinaryVerification {
-    target: GeneratorReleaseTarget,
+    target: ReleaseTarget,
     version: String,
     rust_toolchain_version: String,
     binary_relative_path: PathBuf,
@@ -47,7 +47,7 @@ pub struct GeneratorBinaryVerification {
 impl GeneratorCargoBuild {
     /// Request a release build for one canonical target.
     #[must_use]
-    pub const fn new(target: GeneratorReleaseTarget) -> Self {
+    pub const fn new(target: ReleaseTarget) -> Self {
         Self { target }
     }
 
@@ -107,8 +107,8 @@ impl GeneratorCargoBuild {
             GeneratorBinaryCheck::BinaryFormatArchitecture,
         ];
         match self.target {
-            GeneratorReleaseTarget::LinuxX86_64 => checks.push(GeneratorBinaryCheck::GnuRuntimeAbi),
-            GeneratorReleaseTarget::MacosArm64 => {
+            ReleaseTarget::LinuxX86_64 => checks.push(GeneratorBinaryCheck::GnuRuntimeAbi),
+            ReleaseTarget::MacosArm64 => {
                 checks.push(GeneratorBinaryCheck::AppleSdk);
                 checks.push(GeneratorBinaryCheck::AppleLinker);
             }
@@ -128,7 +128,7 @@ impl GeneratorCargoBuild {
 
     /// Target whose bytes the request produces.
     #[must_use]
-    pub const fn target(self) -> GeneratorReleaseTarget {
+    pub const fn target(self) -> ReleaseTarget {
         self.target
     }
 }
@@ -136,7 +136,7 @@ impl GeneratorCargoBuild {
 impl GeneratorBinaryVerification {
     /// Target whose binary this request qualifies.
     #[must_use]
-    pub const fn target(&self) -> GeneratorReleaseTarget {
+    pub const fn target(&self) -> ReleaseTarget {
         self.target
     }
 

@@ -1,4 +1,4 @@
-use velnor_actions_contract::{GeneratorReleaseTarget, Step, StepKind};
+use velnor_actions_contract::{ReleaseTarget, Step, StepKind};
 
 use velnor_actions_mise::{
     MISE_VERSION, ToolCatalog, ToolHomes, generator_release_mise_binary_sha256, rust_exec_step,
@@ -13,11 +13,11 @@ fn setup_lowers_target_matched_action_checksum_and_rust_tool_install() {
     let homes = ToolHomes::runner_temp();
     let expected = [
         (
-            GeneratorReleaseTarget::LinuxX86_64,
+            ReleaseTarget::LinuxX86_64,
             "d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4",
         ),
         (
-            GeneratorReleaseTarget::MacosArm64,
+            ReleaseTarget::MacosArm64,
             "484c135bd4329975d608d3f77e26c2ece5d2f5590f18ca71f44440294f8cfa6f",
         ),
     ];
@@ -36,11 +36,7 @@ fn setup_lowers_target_matched_action_checksum_and_rust_tool_install() {
     }
 }
 
-fn assert_setup_steps(
-    steps: &[Step],
-    target: GeneratorReleaseTarget,
-    expected_digest: &str,
-) -> bool {
+fn assert_setup_steps(steps: &[Step], target: ReleaseTarget, expected_digest: &str) -> bool {
     assert_eq!(steps.len(), 2);
     let StepKind::Action { uses, with, .. } = &steps[0].kind else {
         return false;
@@ -125,7 +121,7 @@ fn rust_exec_lowers_pinned_cargo_args_and_owned_environment() {
 fn setup_rejects_wrong_mise_action_pin_and_target_checksum() {
     let catalog = ToolCatalog::pinned();
     let homes = ToolHomes::runner_temp();
-    let target = GeneratorReleaseTarget::LinuxX86_64;
+    let target = ReleaseTarget::LinuxX86_64;
     let digest = generator_release_mise_binary_sha256(target);
     assert!(setup_rust_steps("jdx/mise-action@v5", target, digest, &homes, &catalog).is_err());
     assert!(setup_rust_steps(MISE_USES, target, "", &homes, &catalog).is_err());

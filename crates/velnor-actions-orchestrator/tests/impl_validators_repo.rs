@@ -27,7 +27,7 @@ fn git(args: &[&str], cwd: &Path) -> TestResult {
 
 /// Release-manifest fixture so consumer `prepare` succeeds.
 fn fixture_manifest_json() -> String {
-    let targets = velnor_actions_contract::SUPPORTED_TARGETS
+    let targets = velnor_actions_contract::SUPPORTED_GENERATOR_TARGETS
     .iter()
     .map(|target| {
         format!(

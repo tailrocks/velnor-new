@@ -38,7 +38,7 @@ pub use host_container::{
 };
 pub use mise::{
     CheckEvidence, CheckExecutor, CheckPlatform, CheckRunner, CheckSystemTool, CheckSystemToolKind,
-    MiseCheck, is_valid_mise_task_name,
+    MiseCheck, is_supported_check_target, is_valid_mise_task_name,
 };
 pub use qualified_tools::{
     QualifiedCargoInstallation, QualifiedTool, QualifiedToolArtifact, QualifiedToolBackend,

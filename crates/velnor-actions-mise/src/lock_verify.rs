@@ -1,6 +1,6 @@
 //! Lock-against-manifest verification (split from `lock`: size gate).
 
-use velnor_actions_contract::{GeneratorLock, ReleaseManifest, SUPPORTED_TARGETS};
+use velnor_actions_contract::{GeneratorLock, ReleaseManifest, SUPPORTED_GENERATOR_TARGETS};
 
 use super::{
     MISE_VERSION,
@@ -28,7 +28,7 @@ pub fn verify_lock_against_manifest(
             lock.generator.commit, manifest.commit
         )));
     }
-    for target in SUPPORTED_TARGETS {
+    for target in SUPPORTED_GENERATOR_TARGETS {
         let locked = lock
             .binary_for_target(target)
             .ok_or_else(|| mismatch(format!("missing_target:{target}")))?;

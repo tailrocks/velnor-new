@@ -1,22 +1,21 @@
-//! Supported release targets and release-asset naming.
+//! Generator product targets and release-asset naming.
 //!
-//! Bootstrap/release contract §2-§3: one immutable asset per target plus a
-//! versioned release manifest. Explicit versioned hosted labels map to targets.
+//! These two targets describe Velnor executable products. Runner/check
+//! platforms are a separate three-platform inventory in `config::CheckPlatform`;
+//! a qualified host platform does not imply an available Velnor binary.
 
-/// One release target in the canonical three-target inventory.
+/// One Velnor executable product target in canonical release order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ReleaseTarget {
     /// Linux x86-64.
     LinuxX86_64,
     /// macOS arm64.
     MacosArm64,
-    /// macOS x86-64.
-    MacosX86_64,
 }
 
 impl ReleaseTarget {
-    /// Every supported release target in deterministic manifest order.
-    pub const ALL: [Self; 3] = [Self::LinuxX86_64, Self::MacosArm64, Self::MacosX86_64];
+    /// Every supported generator product target in manifest order.
+    pub const ALL: [Self; 2] = [Self::LinuxX86_64, Self::MacosArm64];
 
     /// Canonical target triple.
     #[must_use]
@@ -24,7 +23,6 @@ impl ReleaseTarget {
         match self {
             Self::LinuxX86_64 => "x86_64-unknown-linux-gnu",
             Self::MacosArm64 => "aarch64-apple-darwin",
-            Self::MacosX86_64 => "x86_64-apple-darwin",
         }
     }
 
@@ -36,23 +34,42 @@ impl ReleaseTarget {
             .find(|target| target.triple() == triple)
     }
 
-    /// Map one explicit versioned hosted label to its native release target.
+    /// Map an explicit hosted label to a target with a published product.
     #[must_use]
     pub fn for_runner_label(label: &str) -> Option<Self> {
         match label {
             "ubuntu-22.04" | "ubuntu-24.04" | "ubuntu-26.04" => Some(Self::LinuxX86_64),
             "macos-14" | "macos-15" | "macos-26" => Some(Self::MacosArm64),
-            "macos-15-intel" | "macos-26-intel" => Some(Self::MacosX86_64),
             _ => None,
         }
     }
+
+    /// Native runner selector used to build this product.
+    #[must_use]
+    pub const fn runner_label(self) -> &'static str {
+        match self {
+            Self::LinuxX86_64 => "ubuntu-22.04",
+            Self::MacosArm64 => "macos-15",
+        }
+    }
+
+    /// Versioned binary asset filename.
+    #[must_use]
+    pub fn binary_filename(self, version: &str) -> String {
+        asset_filename(version, self.triple())
+    }
+
+    /// SHA-256 sidecar filename for the binary asset.
+    #[must_use]
+    pub fn sidecar_filename(self, version: &str) -> String {
+        format!("{}.sha256", self.binary_filename(version))
+    }
 }
 
-/// String projection of [`ReleaseTarget::ALL`] for manifest serde contracts.
-pub const SUPPORTED_TARGETS: [&str; 3] = [
+/// Generator product triples accepted by release manifests and locks.
+pub const SUPPORTED_GENERATOR_TARGETS: [&str; 2] = [
     ReleaseTarget::LinuxX86_64.triple(),
     ReleaseTarget::MacosArm64.triple(),
-    ReleaseTarget::MacosX86_64.triple(),
 ];
 
 /// Release-manifest JSON asset filename (version is inside the JSON).
@@ -60,7 +77,7 @@ pub const RELEASE_MANIFEST_FILENAME: &str = "velnor-actions-release-manifest.jso
 
 /// Whether `target` is a supported release triple.
 #[must_use]
-pub fn is_supported_target(target: &str) -> bool {
+pub fn is_supported_generator_target(target: &str) -> bool {
     ReleaseTarget::parse_triple(target).is_some()
 }
 

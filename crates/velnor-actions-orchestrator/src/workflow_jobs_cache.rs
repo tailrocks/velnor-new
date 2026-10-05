@@ -36,8 +36,8 @@ pub(crate) fn cache_steps_for_plan(
             save: Vec::new(),
         });
     }
-    let target = velnor_actions_contract::ReleaseTarget::for_runner_label(label)
-        .map(velnor_actions_contract::ReleaseTarget::triple)
+    let target = velnor_actions_contract::CheckPlatform::for_runner_label(label)
+        .map(velnor_actions_contract::CheckPlatform::target)
         .ok_or_else(|| OrchestratorError::Contract {
             problem: format!("bad_label:{label}"),
         })?;

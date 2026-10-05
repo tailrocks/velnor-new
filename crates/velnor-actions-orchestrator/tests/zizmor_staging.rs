@@ -30,7 +30,7 @@ fn git(args: &[&str], cwd: &Path) -> TestResult {
 
 /// Release-manifest fixture for `prepare`.
 fn manifest_json() -> String {
-    let targets = velnor_actions_contract::SUPPORTED_TARGETS
+    let targets = velnor_actions_contract::SUPPORTED_GENERATOR_TARGETS
     .iter()
     .map(|target| {
         format!(
@@ -56,7 +56,7 @@ fn binary_record(target: &str) -> String {
 
 /// Generator-lock fixture for Velnor-policy `prepare`.
 fn lock_text() -> String {
-    let bins = velnor_actions_contract::SUPPORTED_TARGETS
+    let bins = velnor_actions_contract::SUPPORTED_GENERATOR_TARGETS
         .iter()
         .map(|target| binary_record(target))
         .collect::<String>();

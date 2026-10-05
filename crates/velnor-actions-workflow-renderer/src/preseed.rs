@@ -205,7 +205,7 @@ fn is_exact_version(version: &str) -> bool {
 /// # Errors
 pub fn preseed_manifest_step(build: &[String], target: &str) -> Result<Step, RenderError> {
     debug_assert!(PRESEED_MANIFEST_NAME.ends_with(TRUST_MARK));
-    if !velnor_actions_contract::is_supported_target(target) {
+    if !velnor_actions_contract::is_supported_generator_target(target) {
         return Err(RenderError::BadCommand(format!(
             "preseed_unsupported_target:{target}"
         )));
@@ -298,7 +298,7 @@ pub fn preseed_manifest_verify_script(target: &str) -> String {
 /// # Errors
 pub fn preseed_manifest_verify_step(target: &str) -> Result<Step, RenderError> {
     debug_assert!(PRESEED_VERIFY_MANIFEST_NAME.ends_with(TRUST_MARK));
-    if !velnor_actions_contract::is_supported_target(target) {
+    if !velnor_actions_contract::is_supported_generator_target(target) {
         return Err(RenderError::BadCommand(format!(
             "preseed_unsupported_target:{target}"
         )));

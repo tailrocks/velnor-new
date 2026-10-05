@@ -73,15 +73,26 @@ fn platform_and_executor_are_independent() {
 }
 
 #[test]
-fn check_platform_maps_to_canonical_release_target() {
-    for (platform, target) in [
-        (CheckPlatform::LinuxX64, crate::ReleaseTarget::LinuxX86_64),
-        (CheckPlatform::MacosArm64, crate::ReleaseTarget::MacosArm64),
-        (CheckPlatform::MacosX64, crate::ReleaseTarget::MacosX86_64),
+fn check_platform_preserves_three_host_platforms_and_two_products() {
+    for (platform, target, product) in [
+        (
+            CheckPlatform::LinuxX64,
+            "x86_64-unknown-linux-gnu",
+            Some(crate::ReleaseTarget::LinuxX86_64),
+        ),
+        (
+            CheckPlatform::MacosArm64,
+            "aarch64-apple-darwin",
+            Some(crate::ReleaseTarget::MacosArm64),
+        ),
+        (CheckPlatform::MacosX64, "x86_64-apple-darwin", None),
     ] {
-        assert_eq!(platform.release_target(), target);
-        assert_eq!(platform.target(), target.triple());
+        assert_eq!(CheckPlatform::for_target(target), Some(platform));
+        assert_eq!(platform.target(), target);
+        assert_eq!(platform.generator_release_target(), product);
     }
+    assert_eq!(CheckPlatform::ALL.len(), 3);
+    assert_eq!(crate::ReleaseTarget::ALL.len(), 2);
 }
 
 #[test]

@@ -34,7 +34,7 @@ pub(crate) fn sources_cache_key(
     roots: &[String],
 ) -> Result<String, OrchestratorError> {
     use velnor_actions_contract::cachekey::MAX_CACHE_KEY_BYTES;
-    if !velnor_actions_contract::is_supported_target(target) {
+    if !velnor_actions_contract::is_supported_check_target(target) {
         return Err(bad_key(format!("bad_target:{target}")));
     }
     velnor_actions_mise::validate_exact_version("rust", rust_version).map_err(|err| {
@@ -203,7 +203,8 @@ mod tests {
             let err = sources_cache_key(target, "1.98.1", &[]).expect_err("target");
             assert!(err.to_string().contains("bad_target"), "{target}: {err}");
         }
-        for target in velnor_actions_contract::SUPPORTED_TARGETS {
+        for platform in velnor_actions_contract::CheckPlatform::ALL {
+            let target = platform.target();
             let key = sources_cache_key(target, "1.98.1", &[]).expect("supported");
             assert!(key.starts_with(SOURCES_KEY_PREFIX), "{key}");
         }

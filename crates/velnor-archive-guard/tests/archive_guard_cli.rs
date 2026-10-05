@@ -13,9 +13,8 @@ use flate2::Compression;
 use flate2::write::GzEncoder;
 
 const GUARD: &str = env!("CARGO_BIN_EXE_velnor-archive-guard");
-const CARGO_PACKAGE_FIXTURE: &[u8] = include_bytes!(
-    "fixtures/cargo-package-1.98.1/velnor-archive-guard-fixture-0.0.0.crate"
-);
+const CARGO_PACKAGE_FIXTURE: &[u8] =
+    include_bytes!("fixtures/cargo-package-1.98.1/velnor-archive-guard-fixture-0.0.0.crate");
 static NEXT_FIXTURE: AtomicU64 = AtomicU64::new(0);
 
 fn invoke(arguments: &[&str], input: &[u8]) -> Result<std::process::Output, Box<dyn Error>> {
@@ -36,7 +35,8 @@ fn invoke(arguments: &[&str], input: &[u8]) -> Result<std::process::Output, Box<
 }
 
 #[test]
-fn accepts_canonical_ustar_candidate_from_stdin_without_environment() -> Result<(), Box<dyn Error>> {
+fn accepts_canonical_ustar_candidate_from_stdin_without_environment() -> Result<(), Box<dyn Error>>
+{
     let input = canonical_candidate_tar()?;
     let output = invoke(&["candidate"], &input)?;
     assert!(

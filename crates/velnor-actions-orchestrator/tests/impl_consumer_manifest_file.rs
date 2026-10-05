@@ -23,7 +23,7 @@ fn release_manifest_json() -> String {
 fn manifest_with_version(version: &str) -> String {
     // Distinctive digest proving the Acquire step copies the committed file.
     let sha = "c".repeat(64);
-    let targets = velnor_actions_contract::SUPPORTED_TARGETS
+    let targets = velnor_actions_contract::SUPPORTED_GENERATOR_TARGETS
     .iter()
     .map(|target| {
         format!(

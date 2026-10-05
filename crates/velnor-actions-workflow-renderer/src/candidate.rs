@@ -66,7 +66,7 @@ pub fn candidate_manifest_verify_script(target: &str) -> String {
 /// fixed `test`/`sha256sum` only, no auth needed.
 /// # Errors
 pub fn candidate_manifest_verify_step(target: &str) -> Result<Step, RenderError> {
-    if !velnor_actions_contract::is_supported_target(target) {
+    if !velnor_actions_contract::is_supported_generator_target(target) {
         return Err(RenderError::BadCommand(format!(
             "candidate_unsupported_target:{target}"
         )));

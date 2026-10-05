@@ -183,7 +183,7 @@ exec \"$VELNOR_REAL_MISE\" \"$@\"
 
     /// Debug-only consumer-manifest fixture for the scrubbed repo.
     fn manifest_fixture() -> String {
-        let targets = velnor_actions_contract::SUPPORTED_TARGETS
+        let targets = velnor_actions_contract::SUPPORTED_GENERATOR_TARGETS
         .iter()
         .map(|target| {
             format!(

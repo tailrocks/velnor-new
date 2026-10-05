@@ -57,7 +57,7 @@ pub struct CheckRunner {
     pub container: Option<HostContainerProfile>,
 }
 
-/// Supported binary platform.
+/// Qualified host platform for named checks and native tool observations.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CheckPlatform {
@@ -70,22 +70,49 @@ pub enum CheckPlatform {
 }
 
 impl CheckPlatform {
-    /// Canonical release target for this declared runner platform.
+    /// All host platforms currently represented by qualification data.
+    pub const ALL: [Self; 3] = [Self::LinuxX64, Self::MacosArm64, Self::MacosX64];
+
+    /// Map a versioned hosted label to its host architecture.
     #[must_use]
-    pub const fn release_target(self) -> crate::ReleaseTarget {
-        match self {
-            Self::LinuxX64 => crate::ReleaseTarget::LinuxX86_64,
-            Self::MacosArm64 => crate::ReleaseTarget::MacosArm64,
-            Self::MacosX64 => crate::ReleaseTarget::MacosX86_64,
+    pub fn for_runner_label(label: &str) -> Option<Self> {
+        match label {
+            "ubuntu-22.04" | "ubuntu-24.04" | "ubuntu-26.04" => Some(Self::LinuxX64),
+            "macos-14" | "macos-15" | "macos-26" => Some(Self::MacosArm64),
+            "macos-15-intel" | "macos-26-intel" => Some(Self::MacosX64),
+            _ => None,
         }
     }
 
-    /// Exact supported release target.
+    /// Map an exact host target triple to its qualified platform.
+    #[must_use]
+    pub fn for_target(target: &str) -> Option<Self> {
+        Self::ALL
+            .into_iter()
+            .find(|platform| platform.target() == target)
+    }
+
+    /// Host target triple represented by this qualification platform.
     #[must_use]
     pub const fn target(self) -> &'static str {
-        self.release_target().triple()
+        match self {
+            Self::LinuxX64 => "x86_64-unknown-linux-gnu",
+            Self::MacosArm64 => "aarch64-apple-darwin",
+            Self::MacosX64 => "x86_64-apple-darwin",
+        }
     }
-    /// Host operating system expected by runtime validation.
+
+    /// Matching Velnor executable target, if a product exists for this host.
+    #[must_use]
+    pub const fn generator_release_target(self) -> Option<crate::ReleaseTarget> {
+        match self {
+            Self::LinuxX64 => Some(crate::ReleaseTarget::LinuxX86_64),
+            Self::MacosArm64 => Some(crate::ReleaseTarget::MacosArm64),
+            Self::MacosX64 => None,
+        }
+    }
+
+    /// Exact host operating system expected by runtime validation.
     #[must_use]
     pub const fn os(self) -> &'static str {
         match self {
@@ -93,6 +120,7 @@ impl CheckPlatform {
             Self::MacosArm64 | Self::MacosX64 => "macos",
         }
     }
+
     /// Host architecture expected by runtime validation.
     #[must_use]
     pub const fn arch(self) -> &'static str {
@@ -101,6 +129,12 @@ impl CheckPlatform {
             Self::LinuxX64 | Self::MacosX64 => "x86_64",
         }
     }
+}
+
+/// Whether `target` names a qualified host platform (including Intel macOS).
+#[must_use]
+pub fn is_supported_check_target(target: &str) -> bool {
+    CheckPlatform::for_target(target).is_some()
 }
 
 /// Runner execution policy.
@@ -223,9 +257,7 @@ impl CheckRunner {
         };
         match self.executor {
             CheckExecutor::Hosted
-                if crate::targets::ReleaseTarget::for_runner_label(&self.label)
-                    .map(crate::targets::ReleaseTarget::triple)
-                    != Some(self.platform.target()) =>
+                if CheckPlatform::for_runner_label(&self.label) != Some(self.platform) =>
             {
                 return Err(bad("label", "hosted_runner_platform_mismatch"));
             }
@@ -234,7 +266,7 @@ impl CheckRunner {
                     || self.label == "self-hosted"
                     || self.label == "latest"
                     || self.label.ends_with("-latest")
-                    || crate::targets::ReleaseTarget::for_runner_label(&self.label).is_some() =>
+                    || CheckPlatform::for_runner_label(&self.label).is_some() =>
             {
                 return Err(bad("label", "bad_ephemeral_runner_label"));
             }

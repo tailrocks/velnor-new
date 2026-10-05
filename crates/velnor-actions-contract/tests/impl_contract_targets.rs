@@ -1,24 +1,21 @@
 //! Release-target and candidate-manifest cases.
 use velnor_actions_contract::config::{
-    LATEST_RUNNER_LABEL, RUNNER_LABEL_CATALOG, is_valid_rust_target,
+    CheckPlatform, LATEST_RUNNER_LABEL, RUNNER_LABEL_CATALOG, is_valid_rust_target,
 };
 use velnor_actions_contract::{
     CandidateArtifactManifest, ContractError, RELEASE_MANIFEST_FILENAME, ReleaseManifest,
-    ReleaseTarget, SUPPORTED_TARGETS, asset_filename, is_seed_tag_for_version, is_supported_target,
+    ReleaseTarget, SUPPORTED_GENERATOR_TARGETS, asset_filename, is_seed_tag_for_version,
+    is_supported_generator_target,
 };
 
 #[test]
 fn supported_targets_and_naming() {
     assert_eq!(
-        SUPPORTED_TARGETS,
-        [
-            "x86_64-unknown-linux-gnu",
-            "aarch64-apple-darwin",
-            "x86_64-apple-darwin",
-        ]
+        SUPPORTED_GENERATOR_TARGETS,
+        ["x86_64-unknown-linux-gnu", "aarch64-apple-darwin"]
     );
-    assert!(is_supported_target("x86_64-unknown-linux-gnu"));
-    assert!(!is_supported_target("wasm32-unknown-unknown"));
+    assert!(is_supported_generator_target("x86_64-unknown-linux-gnu"));
+    assert!(!is_supported_generator_target("wasm32-unknown-unknown"));
     assert_eq!(
         RELEASE_MANIFEST_FILENAME,
         "velnor-actions-release-manifest.json"
@@ -39,7 +36,7 @@ fn target_ids_round_trip_without_ordinal_mapping() {
     for target in ReleaseTarget::ALL {
         assert_eq!(ReleaseTarget::parse_triple(target.triple()), Some(target));
     }
-    assert_eq!(ReleaseTarget::ALL.len(), SUPPORTED_TARGETS.len());
+    assert_eq!(ReleaseTarget::ALL.len(), SUPPORTED_GENERATOR_TARGETS.len());
     assert!(ReleaseTarget::parse_triple("aarch64-unknown-linux-gnu").is_none());
 }
 
@@ -52,10 +49,7 @@ fn versioned_macos_labels_bind_explicit_architecture() {
         );
     }
     for label in ["macos-15-intel", "macos-26-intel"] {
-        assert_eq!(
-            ReleaseTarget::for_runner_label(label),
-            Some(ReleaseTarget::MacosX86_64)
-        );
+        assert!(ReleaseTarget::for_runner_label(label).is_none());
     }
     for label in ["macos-latest", "macos-13", "custom-macos", "macos-15-arm"] {
         assert!(ReleaseTarget::for_runner_label(label).is_none(), "{label}");
@@ -63,30 +57,48 @@ fn versioned_macos_labels_bind_explicit_architecture() {
 }
 
 #[test]
-fn runner_label_catalog_maps_or_fails_closed() {
-    // Every config-accepted label either maps to a supported release
-    // target or maps to nothing; `None` labels hard-fail generation
-    // (`bad_label`, `unsupported_target_for_runner`) instead of
-    // silently taking the build host's arch/OS.
+fn qualified_host_platforms_are_separate_from_generator_products() {
+    assert_eq!(CheckPlatform::ALL.len(), 3);
+    assert_eq!(ReleaseTarget::ALL.len(), 2);
+    for (label, platform, product) in [
+        (
+            "ubuntu-26.04",
+            CheckPlatform::LinuxX64,
+            Some(ReleaseTarget::LinuxX86_64),
+        ),
+        (
+            "macos-15",
+            CheckPlatform::MacosArm64,
+            Some(ReleaseTarget::MacosArm64),
+        ),
+        ("macos-15-intel", CheckPlatform::MacosX64, None),
+    ] {
+        assert_eq!(CheckPlatform::for_runner_label(label), Some(platform));
+        assert_eq!(platform.generator_release_target(), product);
+        assert_eq!(ReleaseTarget::for_runner_label(label), product);
+    }
+}
+
+#[test]
+fn runner_label_catalog_keeps_host_and_generator_platforms_separate() {
+    // Ubuntu ARM labels remain valid workflow runner choices without a
+    // generator binary. The named-check host catalog is tested separately.
     assert_eq!(RUNNER_LABEL_CATALOG.len(), 6);
     assert!(RUNNER_LABEL_CATALOG.contains(&LATEST_RUNNER_LABEL));
     for label in RUNNER_LABEL_CATALOG {
         match ReleaseTarget::for_runner_label(label) {
             Some(target) => {
                 assert!(
-                    is_supported_target(target.triple()),
+                    is_supported_generator_target(target.triple()),
                     "{label} maps to supported {}",
                     target.triple()
                 );
                 assert!(!label.ends_with("-arm"), "{label} is an x64 label");
             }
-            None => assert!(
-                label.ends_with("-arm"),
-                "only -arm catalog labels fail mapping: {label}"
-            ),
+            None => assert!(label.ends_with("-arm"), "unmapped catalog label: {label}"),
         }
     }
-    assert!(is_supported_target(
+    assert!(is_supported_generator_target(
         ReleaseTarget::for_runner_label(LATEST_RUNNER_LABEL)
             .expect("latest maps")
             .triple()
@@ -103,7 +115,7 @@ fn runner_label_catalog_maps_or_fails_closed() {
     ] {
         assert!(is_valid_rust_target(other), "{other} is config-accepted");
     }
-    assert!(!is_supported_target("aarch64-unknown-linux-gnu"));
+    assert!(!is_supported_generator_target("aarch64-unknown-linux-gnu"));
     assert!(!is_valid_rust_target("x86_64 unknown"));
     assert!(!is_valid_rust_target("aarch64-${{ x }}"));
 }
@@ -133,7 +145,7 @@ fn release_manifest_json_round_trip_and_tamper() -> Result<(), ContractError> {
 
 /// Complete manifest at `version` with a configurable Linux artifact URL.
 fn manifest_json(version: &str, repository: &str, artifact: &str) -> String {
-    let targets = SUPPORTED_TARGETS
+    let targets = SUPPORTED_GENERATOR_TARGETS
         .iter()
         .map(|target| {
             let target_artifact = if *target == "x86_64-unknown-linux-gnu" {
@@ -164,7 +176,7 @@ fn bound_artifact(version: &str, target: &str) -> String {
 
 /// Complete test manifest at one release tag, with a shared digest.
 fn manifest_json_with_tag(version: &str, tag: &str, sha256: &str) -> String {
-    let targets = SUPPORTED_TARGETS
+    let targets = SUPPORTED_GENERATOR_TARGETS
         .iter()
         .map(|target| {
             format!(

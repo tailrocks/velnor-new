@@ -24,6 +24,15 @@ consumer generation.
 
 ## 2. Consumer workflow bootstrap identity
 
+The current generator product inventory is exactly two native products:
+`x86_64-unknown-linux-gnu` and `aarch64-apple-darwin`. The three-platform
+named-check host catalog is separate: it also qualifies `x86_64-apple-darwin`
+for native tools and runtime observations, but no Velnor helper product exists
+for that Intel host. Generation that needs to install the helper on Intel MUST
+fail before selecting an asset URL. Adding an Intel generator product requires
+a separately reviewed inventory change and real qualification; the host
+platform record alone does not add one.
+
 Every official Velnor release MUST publish:
 
 1. One immutable `velnor-actions` binary asset per supported target.
@@ -141,11 +150,6 @@ target = "aarch64-apple-darwin"
 artifact = "<immutable-release-asset-url>"
 sha256 = "<64-lowercase-hex>"
 
-[[generator.binaries]]
-target = "x86_64-apple-darwin"
-artifact = "<immutable-release-asset-url>"
-sha256 = "<64-lowercase-hex>"
-
 [mise-bootstrap]
 version = "<exact-semver>"
 artifact = "<immutable-release-asset-url>"
@@ -158,8 +162,10 @@ sha = "<40-lowercase-hex-commit>"
 reviewed = "YYYY-MM-DD"
 ```
 
-There MUST be one binary record per supported target. Targets, immutable URLs,
-digests, action names, and pins MUST match the compiled release catalog. The
+There MUST be exactly two binary records, one for each generator product
+target. Targets, immutable URLs, digests, action names, and pins MUST match the
+compiled generator-product catalog. This exact two-product inventory is
+independent of the three-platform named-check host catalog. The
 `[generator]` `commit` is required with the same 40-lowercase-hex strictness as
 the release manifest (F3): the lock-backed `Acquire Velnor` records it as
 `VELNOR_RELEASE_COMMIT` exactly like the manifest path. CI verifies the lock

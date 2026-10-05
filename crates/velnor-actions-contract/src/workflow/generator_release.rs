@@ -2,57 +2,7 @@
 
 use crate::errors::ContractError;
 use crate::require_release_version;
-use crate::targets::{RELEASE_MANIFEST_FILENAME, ReleaseTarget, asset_filename};
-
-/// One platform-specific generator release target in canonical order.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum GeneratorReleaseTarget {
-    /// GNU/Linux x86-64, built on the oldest supported Ubuntu release.
-    LinuxX86_64,
-    /// macOS ARM64, built on a native Apple Silicon runner.
-    MacosArm64,
-}
-
-impl GeneratorReleaseTarget {
-    /// Every supported target, in release-manifest order.
-    pub const ALL: [Self; 2] = [Self::LinuxX86_64, Self::MacosArm64];
-
-    /// Canonical release target represented by this producer target.
-    #[must_use]
-    pub const fn release_target(self) -> ReleaseTarget {
-        match self {
-            Self::LinuxX86_64 => ReleaseTarget::LinuxX86_64,
-            Self::MacosArm64 => ReleaseTarget::MacosArm64,
-        }
-    }
-
-    /// Rust target triple recorded in the canonical release manifest.
-    #[must_use]
-    pub const fn triple(self) -> &'static str {
-        self.release_target().triple()
-    }
-
-    /// Native runner selector used to build this target.
-    #[must_use]
-    pub const fn runner_label(self) -> &'static str {
-        match self {
-            Self::LinuxX86_64 => "ubuntu-22.04",
-            Self::MacosArm64 => "macos-15",
-        }
-    }
-
-    /// Versioned binary asset filename.
-    #[must_use]
-    pub fn binary_filename(self, version: &str) -> String {
-        asset_filename(version, self.triple())
-    }
-
-    /// SHA-256 sidecar filename for the binary asset.
-    #[must_use]
-    pub fn sidecar_filename(self, version: &str) -> String {
-        format!("{}.sha256", self.binary_filename(version))
-    }
-}
+use crate::targets::{RELEASE_MANIFEST_FILENAME, ReleaseTarget};
 
 /// Validated, stack-neutral release version and exact two-target inventory.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -93,8 +43,8 @@ impl GeneratorReleasePlan {
 
     /// Exact two-target inventory, in canonical manifest order.
     #[must_use]
-    pub const fn targets(&self) -> [GeneratorReleaseTarget; 2] {
-        GeneratorReleaseTarget::ALL
+    pub const fn targets(&self) -> [ReleaseTarget; 2] {
+        ReleaseTarget::ALL
     }
 
     /// All five publication assets: each binary and sidecar, then manifest.

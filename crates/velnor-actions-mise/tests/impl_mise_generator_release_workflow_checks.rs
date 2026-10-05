@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use velnor_actions_contract::{GeneratorReleaseTarget, Step, StepKind};
+use velnor_actions_contract::{ReleaseTarget, Step, StepKind};
 
 use velnor_actions_mise::{
     ToolCatalog, ToolHomes, apple_linker_check_step, apple_sdk_check_step,
@@ -22,8 +22,8 @@ fn check_steps_bind_native_runner_and_toolchain_identity() -> Result<(), Box<dyn
     let homes = ToolHomes::runner_temp();
     let catalog = ToolCatalog::pinned();
     for (target, expected) in [
-        (GeneratorReleaseTarget::LinuxX86_64, "Linux x86_64"),
-        (GeneratorReleaseTarget::MacosArm64, "Darwin arm64"),
+        (ReleaseTarget::LinuxX86_64, "Linux x86_64"),
+        (ReleaseTarget::MacosArm64, "Darwin arm64"),
     ] {
         let host = native_host_check_step(target, &homes, &catalog)?;
         let host_script = script(&host)?;
@@ -36,13 +36,7 @@ fn check_steps_bind_native_runner_and_toolchain_identity() -> Result<(), Box<dyn
         assert!(rust_script.contains(target.triple()));
     }
     assert!(
-        rust_toolchain_check_step(
-            GeneratorReleaseTarget::LinuxX86_64,
-            "stable",
-            &homes,
-            &catalog,
-        )
-        .is_err()
+        rust_toolchain_check_step(ReleaseTarget::LinuxX86_64, "stable", &homes, &catalog,).is_err()
     );
     Ok(())
 }
@@ -51,7 +45,7 @@ fn check_steps_bind_native_runner_and_toolchain_identity() -> Result<(), Box<dyn
 fn binary_checks_reject_wrong_target_paths_and_runner_families() {
     let homes = ToolHomes::runner_temp();
     let catalog = ToolCatalog::pinned();
-    let linux = GeneratorReleaseTarget::LinuxX86_64;
+    let linux = ReleaseTarget::LinuxX86_64;
     let linux_binary = binary_path(linux);
     assert!(binary_format_architecture_check_step(linux, &linux_binary, &homes, &catalog).is_ok());
     for unsafe_path in [
@@ -71,8 +65,8 @@ fn binary_checks_reject_wrong_target_paths_and_runner_families() {
     assert!(binary_format_architecture_check_step(linux, &non_utf8, &homes, &catalog).is_err());
     assert!(
         gnu_runtime_abi_check_step(
-            GeneratorReleaseTarget::MacosArm64,
-            &binary_path(GeneratorReleaseTarget::MacosArm64),
+            ReleaseTarget::MacosArm64,
+            &binary_path(ReleaseTarget::MacosArm64),
             &homes,
             &catalog,
         )
@@ -90,8 +84,8 @@ fn linux_elf_header_parser_normalizes_spacing_and_requires_exact_fields()
     let homes = ToolHomes::runner_temp();
     let catalog = ToolCatalog::pinned();
     let step = binary_format_architecture_check_step(
-        GeneratorReleaseTarget::LinuxX86_64,
-        &binary_path(GeneratorReleaseTarget::LinuxX86_64),
+        ReleaseTarget::LinuxX86_64,
+        &binary_path(ReleaseTarget::LinuxX86_64),
         &homes,
         &catalog,
     )?;
@@ -123,7 +117,7 @@ fn macos_binary_check_rejects_universal_and_wrong_architectures()
     let mut root = TempDir::new()?;
     let homes = ToolHomes::runner_temp();
     let catalog = ToolCatalog::pinned();
-    let target = GeneratorReleaseTarget::MacosArm64;
+    let target = ReleaseTarget::MacosArm64;
     let step =
         binary_format_architecture_check_step(target, &binary_path(target), &homes, &catalog)?;
     write_output_command(root.path(), "file", "Mach-O 64-bit executable arm64\n")?;
@@ -143,7 +137,7 @@ fn gnu_abi_parser_accepts_ubuntu_2204_and_fails_closed_on_unknown_or_new_tokens(
     let mut root = TempDir::new()?;
     let homes = ToolHomes::runner_temp();
     let catalog = ToolCatalog::pinned();
-    let target = GeneratorReleaseTarget::LinuxX86_64;
+    let target = ReleaseTarget::LinuxX86_64;
     let step = gnu_runtime_abi_check_step(target, &binary_path(target), &homes, &catalog)?;
     write_output_command(root.path(), "ldd", "libc.so.6 => /lib/libc.so.6\n")?;
     for version in ["GLIBC_2.2.5", "GLIBC_2.34", "GLIBC_2.35", "GLIBC_1.9"] {
@@ -172,7 +166,7 @@ fn gnu_abi_check_rejects_missing_dependencies_and_failed_readelf()
     let mut root = TempDir::new()?;
     let homes = ToolHomes::runner_temp();
     let catalog = ToolCatalog::pinned();
-    let target = GeneratorReleaseTarget::LinuxX86_64;
+    let target = ReleaseTarget::LinuxX86_64;
     let step = gnu_runtime_abi_check_step(target, &binary_path(target), &homes, &catalog)?;
     write_readelf_needs(root.path(), "GLIBC_2.35")?;
     write_output_command(root.path(), "ldd", "libmissing.so => not found\n")?;
@@ -189,7 +183,7 @@ fn apple_sdk_and_linker_checks_observe_real_executable_paths()
     let mut root = TempDir::new()?;
     let homes = ToolHomes::runner_temp();
     let catalog = ToolCatalog::pinned();
-    let target = GeneratorReleaseTarget::MacosArm64;
+    let target = ReleaseTarget::MacosArm64;
     let sdk = root.path().join("sdk");
     let clang = root.path().join("clang");
     let linker = root.path().join("ld");
@@ -221,7 +215,7 @@ fn apple_sdk_and_linker_checks_observe_real_executable_paths()
 fn candidate_version_and_help_smokes_execute_the_expected_public_cli()
 -> Result<(), Box<dyn std::error::Error>> {
     let mut root = TempDir::new()?;
-    let target = GeneratorReleaseTarget::LinuxX86_64;
+    let target = ReleaseTarget::LinuxX86_64;
     let binary = binary_path(target);
     let absolute = root.path().join(binary);
     let binary_parent = absolute
@@ -251,7 +245,7 @@ fn candidate_version_and_help_smokes_execute_the_expected_public_cli()
     Ok(())
 }
 
-fn binary_path(target: GeneratorReleaseTarget) -> PathBuf {
+fn binary_path(target: ReleaseTarget) -> PathBuf {
     PathBuf::from("target")
         .join(target.triple())
         .join("release")

@@ -1,7 +1,7 @@
 //! Exact supported-target membership for release manifests.
 
 use velnor_actions_contract::{
-    ContractError, ReleaseManifest, SUPPORTED_TARGETS, TargetRecord, asset_filename,
+    ContractError, ReleaseManifest, SUPPORTED_GENERATOR_TARGETS, TargetRecord, asset_filename,
 };
 
 #[test]
@@ -35,6 +35,18 @@ fn release_manifest_requires_exact_supported_target_membership() -> Result<(), C
             .is_err_and(|error| error.to_string().contains("unsupported_target"))
     );
 
+    let mut intel_extra = ReleaseManifest::parse_json(&good, "m.json")?;
+    intel_extra.targets.push(TargetRecord {
+        target: "x86_64-apple-darwin".to_owned(),
+        artifact: "https://github.com/tailrocks/velnor-new/releases/download/v0.1.0/velnor-actions-0.1.0-x86_64-apple-darwin".to_owned(),
+        sha256: "ab".repeat(32),
+    });
+    assert!(intel_extra.validate("m.json").is_err_and(|error| {
+        error
+            .to_string()
+            .contains("unsupported_target:x86_64-apple-darwin")
+    }));
+
     let mut reordered = ReleaseManifest::parse_json(&good, "m.json")?;
     reordered.targets.swap(0, 1);
     reordered.validate("m.json")?;
@@ -59,7 +71,7 @@ fn release_manifest_requires_exact_supported_target_membership() -> Result<(), C
 }
 
 fn manifest_json() -> String {
-    let targets = SUPPORTED_TARGETS
+    let targets = SUPPORTED_GENERATOR_TARGETS
         .iter()
         .map(|target| {
             format!(

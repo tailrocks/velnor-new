@@ -1,4 +1,4 @@
-use super::{GeneratorReleasePlan, GeneratorReleaseTarget};
+use super::GeneratorReleasePlan;
 use crate::{RELEASE_MANIFEST_FILENAME, ReleaseTarget};
 
 #[test]
@@ -8,14 +8,14 @@ fn release_plan_binds_version_tag_targets_and_all_assets() {
     assert_eq!(plan.tag(), "v0.1.1");
     assert_eq!(plan.repository(), "tailrocks/velnor-new");
     assert_eq!(
-        plan.targets().map(GeneratorReleaseTarget::triple),
+        plan.targets().map(ReleaseTarget::triple),
         [
             ReleaseTarget::LinuxX86_64.triple(),
             ReleaseTarget::MacosArm64.triple(),
         ]
     );
     assert_eq!(
-        plan.targets().map(GeneratorReleaseTarget::runner_label),
+        plan.targets().map(ReleaseTarget::runner_label),
         ["ubuntu-22.04", "macos-15"]
     );
     assert_eq!(

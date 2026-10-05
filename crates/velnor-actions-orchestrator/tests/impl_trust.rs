@@ -254,7 +254,7 @@ fn release_lock_never_resolves_generator_identity() -> TestResult {
     let sha = "e".repeat(64);
     let version = env!("CARGO_PKG_VERSION");
     let mut bins = String::new();
-    for target in velnor_actions_contract::SUPPORTED_TARGETS {
+    for target in velnor_actions_contract::SUPPORTED_GENERATOR_TARGETS {
         use std::fmt::Write as _;
         write!(bins, "[[generator.binaries]]\ntarget = \"{target}\"\nartifact = \"https://example.invalid/r/{version}/{target}\"\nsha256 = \"{sha}\"\n").expect("write to String");
     }

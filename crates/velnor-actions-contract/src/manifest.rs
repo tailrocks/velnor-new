@@ -174,7 +174,7 @@ impl ReleaseManifest {
         let mut seen = BTreeSet::new();
         for record in &self.targets {
             check_target(&record.target, file, "targets.target")?;
-            if !crate::targets::is_supported_target(&record.target) {
+            if !crate::targets::is_supported_generator_target(&record.target) {
                 return Err(ContractError::config(
                     file,
                     "targets",
@@ -197,7 +197,7 @@ impl ReleaseManifest {
                 ));
             }
         }
-        for target in crate::targets::SUPPORTED_TARGETS {
+        for target in crate::targets::SUPPORTED_GENERATOR_TARGETS {
             if !seen.contains(target) {
                 return Err(ContractError::config(
                     file,
@@ -217,7 +217,7 @@ impl GeneratorLock {
     /// Require exactly one binary record per supported target, no extras.
     /// # Errors
     pub fn check_supported_targets(&self, file: &str) -> Result<(), ContractError> {
-        for target in crate::targets::SUPPORTED_TARGETS {
+        for target in crate::targets::SUPPORTED_GENERATOR_TARGETS {
             if self.binary_for_target(target).is_none() {
                 return Err(ContractError::config(
                     file,
@@ -226,12 +226,20 @@ impl GeneratorLock {
                 ));
             }
         }
+        let mut seen = BTreeSet::new();
         for record in &self.generator.binaries {
-            if !crate::targets::is_supported_target(&record.target) {
+            if !crate::targets::is_supported_generator_target(&record.target) {
                 return Err(ContractError::config(
                     file,
                     "generator.binaries",
                     format!("unsupported_target:{}", record.target),
+                ));
+            }
+            if !seen.insert(record.target.as_str()) {
+                return Err(ContractError::config(
+                    file,
+                    "generator.binaries",
+                    format!("duplicate_target:{}", record.target),
                 ));
             }
         }
@@ -321,7 +329,7 @@ impl GeneratorLock {
                 ));
             }
         }
-        Ok(())
+        self.check_supported_targets(file)
     }
 }
 
