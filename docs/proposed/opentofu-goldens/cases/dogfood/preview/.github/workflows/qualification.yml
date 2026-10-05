@@ -826,8 +826,8 @@ jobs:
           CACHE_HIT: ${{ steps.mbx_cache.outputs.cache-hit }}
         run: "test \"$MBX_VERSION\" = '1.21.1' && test \"$CACHE_SAVE_ELIGIBLE\" = 'false' && test \"$CACHE_SAVE_REASON\" = 'workflow_dispatch; save-on-workflow-dispatch is off' && test \"$CACHE_HIT\" = 'false'"
       - name: Require imported MBX objects
-        run: "df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; mbx cache stats --json | tee \"$RUNNER_TEMP/mbx-object-stats.json\" | jq -e '.objects > 0' >/dev/null"
+        run: "df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; mbx cache stats --json | tee \"$RUNNER_TEMP/mbx-object-stats.json\"; jq -e '.objects > 0' \"$RUNNER_TEMP/mbx-object-stats.json\""
       - name: Compile MBX cache probe
         run: "set -eu\nroot=\"$GITHUB_WORKSPACE/.velnor-mbx-cache-qualification\"\nmkdir -p \"$root/src\"\ncat > \"$root/Cargo.toml\" <<'EOF'\n[package]\nname = \"mbx-cache-qualification\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[workspace]\nmembers = [\".\"]\nresolver = \"3\"\n\n[lib]\npath = \"src/lib.rs\"\nEOF\ncat > \"$root/src/lib.rs\" <<'EOF'\npub fn cache_probe() -> u64 { 42 }\nEOF\nmbx build --manifest-path \"$root/Cargo.toml\"\n"
       - name: Require reused compilation
-        run: "df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; mbx stats --json | tee \"$RUNNER_TEMP/mbx-reuse-stats.json\" | jq -e '.savings.cached_compilations > 0' >/dev/null"
+        run: "df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; mbx stats --json | tee \"$RUNNER_TEMP/mbx-reuse-stats.json\"; jq -e '.savings.cached_compilations > 0' \"$RUNNER_TEMP/mbx-reuse-stats.json\""
