@@ -111,7 +111,7 @@ async fn wait_for_lookup(api: &BlockingRunnerApi) -> Result<(), String> {
 }
 
 #[derive(Clone)]
-pub(super) struct BlockingRunnerApi {
+pub(in crate::launch) struct BlockingRunnerApi {
     entered: Arc<AtomicBool>,
     release: Arc<(Mutex<bool>, Condvar)>,
     runner_name: String,

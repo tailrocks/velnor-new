@@ -181,12 +181,13 @@ async fn schedule_completion(
     let request_id = batch.jobs[index]
         .request_id
         .ok_or_else(test_journal_error)?;
+    let assignment_key = format!("{SET_ID}:{request_id}");
     let row = journal
         .rows()
         .await
         .map_err(|_| test_journal_error())?
         .into_iter()
-        .find(|row| row.request_id == Some(request_id))
+        .find(|row| row.assignment_key.as_deref() == Some(&assignment_key))
         .ok_or_else(test_journal_error)?;
     let identity = journal
         .launch_identity(row.id)

@@ -13,7 +13,7 @@ use crate::stage::{ContainerRecord, DindProbe, PairEngine};
 use crate::worker::{CreateProjection, container_labels, container_name};
 
 #[derive(Clone)]
-pub(super) struct CompletionEngine {
+pub(in crate::launch) struct CompletionEngine {
     identity: Option<LaunchIdentity>,
     records: Arc<Mutex<HashMap<String, ContainerRecord>>>,
     names: Arc<Mutex<HashMap<String, String>>>,
