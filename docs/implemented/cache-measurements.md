@@ -202,103 +202,32 @@ per-action PR-save verdict: gate-4 doc R13 bullet.
 dispatch. The protected-main writer builds a probe crate and its post step
 must export and save the MBX objects before the dependent reader starts. The
 reader has only `actions: read`, requires an imported object set, and checks
-that MBX reuses a cached compilation. The renderer recognizes qualification
-mode from the reserved `qualification-mbx-v1/` scope plus its explicit
-writer/reader roles. It adds trusted `GITHUB_RUN_ID` and
-`GITHUB_RUN_ATTEMPT` to both the cache primary and restore prefix; ordinary
-production MBX keys and reuse behavior keep their existing dimensions.
+that MBX reuses a cached compilation. A run-and-attempt-specific generation
+prevents a cache from an earlier dispatch from satisfying this check. The
+reader disables saving and restores from a prefix, so its primary lookup is
+not an exact match for the writer's run-specific save key. The action therefore
+reports `cache-hit=false` even when it imports that run-bound object set. The
+workflow requires the imported-object count and a cached-compilation reuse
+measurement instead of requiring an exact primary-key hit.
 
-The writer checks that restore returned no exact hit and no matched key before
-export. Its save still requires a successful export/GC receipt. The reader
-requires `cache-hit=true` and `cache-matched-key` equal to the primary before
-import; imported-object and cached-compilation checks run after import. A prior
-dispatch or retry therefore cannot exact-hit or prefix-restore bytes into the
-qualification reader.
-
-Local pinned-Rust orchestrator tests compare shared StepIR with the rendered
-workflow shell, execute the generated key shell for distinct run/attempt
-pairs, and execute writer/reader guards; they do not contact GitHub's cache
-service. Phase C evidence remains candidate-local. Stock restore helper
-`028a7c2` received source-only
-security/correctness GO (74 security checks, 33 correctness cases); it has no
-cache-service path. Its ephemeral security receipt is
-`/private/tmp/v28-stock-single-object-fixtures-1yrkpa7v/review-receipt.json`
-(SHA-256 `c93effb0b72dbaae6a47ee2596ff0f5a9878a8b3e69545bda1c402573b957a76`).
-Resource-safety candidate `97be1f1` plus registered test `13e0bf0` received
-source/native Sol GO: 4/4 registered tests passed in 83.02 s on native ARM
-Ubuntu 24.04 with the official runner
-image `ghcr.io/actions/actions-runner@sha256:e5496277be5d09bc968b3d64911b74e219ac4a3f2edce956a3ecf9271bea1ef4`;
-explicit `--platform linux/arm64` overrode inherited `DOCKER_DEFAULT_PLATFORM=linux/amd64`.
-The suite rejects failed `ps` captures with empty or partial output, invalid
-leader argv, and false completion;
-the total stop deadline is enforced, while graceful expiry leaves its receipt
-incomplete. Ephemeral local log `/private/tmp/mbx-resource-safety-97be1f14-exacthead-native.log`
-has SHA-256 `343221c822c73f962551881e90fa36419d18e6a4fcaae1259752b48960235cdc`.
-
-Parallel candidate `dc199f0` received source GO for mode-0700 receipt
-directories; its 16 composite cases remain WIP, and its foreign R13 Clippy
-blocker means it has no final coupled verdict. Terminal prepare `2ae9c4a`
-received source GO; independent native preparation harnesses reported security 12/12 and
-correctness 7/7, but no actual artifact action was extracted or exercised.
-Its ephemeral security receipt is
-`/private/tmp/v28-terminal-prepare-review-2vkz3_vo/review-receipt.json`
-(SHA-256 `4cd120793b0512cfc6288cefe2ca79ce3faeec1703031345b1058ecd2628f9fa`).
-These local results do not qualify hosted behavior or capacity: Phase C hosted
-restore/save, cancellation, parallel, and terminal qualification remain
-`UNRUN`; no peak disk/inode sample or affected ChainArgos workload is recorded.
-ChainArgos workload, release, and consumer adoption remain `PARTIAL`.
-
-Both jobs set `MBX_GC_AUTO=1` for this protected-main round-trip probe.
-Production MBX jobs set `MBX_SHARE_OUT_DIR=0` on every typed runner lane;
-only hosted Linux jobs set `MBX_GC_AUTO=0`. Scale Set jobs keep MBX's normal
-collection behavior before export. This probe does not exercise either
-production lane route. Dispatch once from protected `main` with mode
-`mbx-cache-roundtrip`; the writer and reader run in order at the same SHA.
+Both jobs set `MBX_GC_AUTO=1` and `MBX_SHARE_OUT_DIR=0` for this
+protected-main round-trip probe. The historical production configuration
+measured above used `MBX_GC_AUTO=0` on hosted Linux and the Scale Set local
+backend with a manual bundle. Current repository source instead emits the
+pinned v1.6 native action with `MBX_GC_AUTO=1` and
+`MBX_SHARE_OUT_DIR=0` on both typed production lanes; that source change has
+not established deployed writer/reader parity or qualified production
+behavior. The probe uses a separate candidate action ref, so its result
+does not qualify the production action pin or either typed lane. Dispatch
+once from protected `main` with mode `mbx-cache-roundtrip`; the writer and
+reader run in order at the same SHA.
 
 This is a small end-to-end action and cache round-trip probe. The writer
-samples `df -B1 -P` and `df -i -P` on `$RUNNER_TEMP` after the probe build;
-the reader prints those same lines. `tee` writes each MBX stats JSON to both
-the step log and a file, and `jq -e` reads that file. Both reader steps use
-`pipefail`, so a failing stats producer remains a failed probe even when `tee`
-writes valid JSON. These point-in-time
-samples do not measure disk or inode peaks and do not qualify the affected
-ChainArgos workload. That evidence must come from the consumer's affected
-crates after adoption; a green probe alone is not an ENOSPC repair verdict.
-The hosted round-trip still needs to run against GitHub Actions after the
-generated workflow is adopted.
-
-## Cache-save cancellation progress semantics
-
-Source review: pinned
-[`actions/cache` save-only bundle](https://github.com/actions/cache/blob/55cc8345863c7cc4c66a329aec7e433d2d1c52a9/dist/save-only/index.js)
-has blob `b3a8aa37f9f7a608d7d5a63a8990b1fd4c043759`. Its V2 save path forces
-the Azure SDK, 64 MiB blocks, and concurrency 8; the SDK uses a 128 MiB
-single-shot threshold. The legacy `Uploading chunk ...` marker is in the V1
-uploader and is unavailable on this V2 path. V2's ordinary `Sent N of TOTAL`
-progress line needs no debug setting; it uses a one-second display timer, with
-a final display attempt on cleanup unless completion was already displayed.
-
-Count a cancellation probe only when the final `Save` step is live and its log
-contains `Sent N of TOTAL` with `0 < N < TOTAL` before cancellation. For an
-archive at or below 128 MiB, this shows partial request-body progress observed
-by the SDK; it does not prove server acknowledgement or cache finalization.
-For a larger archive, progress advances after successful `stageBlock` calls
-for blocks of at most 64 MiB; the final block may be smaller. This does not
-prove all blocks completed or V2 `FinalizeCacheEntryUpload` succeeded.
-
-A fast small upload may produce only a final `Sent TOTAL of TOTAL` line. That
-does not qualify a cancellation probe: record `NOT_RUN`. Do not add archive
-padding or artificial delay to manufacture a partial sample. Controller
-`122c79a1` has source-only GO for enum validation and terminal output across
-18 mocked states. A successful live step-log `GET` (exact HTTP 200), positive
-timestamped progress fixtures, and registered integration execution remain
-pending. Once obtained, the timing claim is limited to a positive partial SDK
-progress row with a lower log ordinal than the runner cancellation error in
-`cancelledSave`; it does not show progress before POST or the initial cancel
-receipt, interrupted payload bytes, cache commit/rollback, or reservation
-cleanup. `MISS` records observed exact-key absence; reservation state remains
-`UNKNOWN`. Only enum mocks have local cancellation coverage; no service-backed
-upload/cancellation test has run. Local enum receipt
-`/private/tmp/velnor-v22-122c79-enum-receipt.json`
-has SHA-256 `717626ad7643e344e0fb67411c4671d19fc2399dd6f00f2a405986112bda961c`.
-This does not qualify hosted cancellation: status remains `UNRUN`.
+samples `df -B1 -P` and `df -i -P` on `$RUNNER_TEMP` after the probe build.
+The reader prints those same lines. `tee` writes each MBX stats JSON to
+the step log and a file. `jq -e` reads the file. It still does not qualify the
+affected ChainArgos workload.
+A failing stats producer also fails the probe even if `tee` writes valid JSON:
+both reader steps enable `pipefail` explicitly because the hosted default shell
+does not.
+A green probe alone is not an ENOSPC repair verdict.

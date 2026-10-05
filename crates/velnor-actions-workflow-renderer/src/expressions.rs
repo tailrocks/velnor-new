@@ -51,28 +51,19 @@ fn expression_spans(text: &str) -> Option<Vec<&str>> {
 /// Runner paths, the release tag, plan-matrix coordinates, the two
 /// fixed secret bindings (bootstrap registry plus the release forge
 /// token, whose placements the release gates still police separately),
-/// and the MBX cache-mode selector. Hosted writes require a protected push
-/// to the default branch; Scale Set routes do not invoke action restore.
+/// and the protected-default-branch cache-mode selector (the generator
+/// pins it on the native MBX action so other events stay read-only).
 /// Notably absent: `github.token` (render-time fetch binding only)
 /// and run IDs (never in env).
-const ENV_EXPRESSIONS: [&str; 17] = [
+const ENV_EXPRESSIONS: &[&str] = &[
     "runner.temp",
     "github.ref_name",
     "github.event_name",
     "github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read'",
     "secrets.CARGO_REGISTRY_TOKEN",
     "secrets.GITHUB_TOKEN",
-    "steps.mbx-bundle.outputs.cache-matched-key",
-    "steps.mbx-cache-key.outputs.prefix",
     "github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.sha",
     "inputs.cache_key",
-    "github.repository",
-    "github.event.pull_request.head.repo.full_name",
-    "github.event.pull_request.base.repo.full_name",
-    "toJSON(github.event.pull_request.head.repo.fork)",
-    "github.event.pull_request.number",
-    "github.event.pull_request.head.sha",
-    "((github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true) || (github.event_name == 'pull_request' && steps.mbx-cache-key.outputs.pr-cache-allowed == 'true')) && 'write' || 'read'",
 ];
 
 /// Exact `${{ }}` inners permitted in action `with:` values.
@@ -81,14 +72,14 @@ const ENV_EXPRESSIONS: [&str; 17] = [
 /// push-gated cache-save flag, and the publish step's derived
 /// artifact name. Notably absent: every `secrets.*` handle (rejected
 /// separately as `secret_in_action_input`).
-const WITH_EXPRESSIONS: [&str; 7] = [
+const WITH_EXPRESSIONS: &[&str] = &[
     "runner.temp",
     "github.run_id",
     "github.run_attempt",
+    "runner.environment",
+    "github.job",
     "github.event_name == 'push'",
     "steps.publish-baseline.outputs.artifact_name",
-    "steps.mbx-cache-key.outputs.key",
-    "steps.mbx-cache-key.outputs.prefix",
 ];
 
 /// True for a `matrix.*` field reference (both layers allow the family).

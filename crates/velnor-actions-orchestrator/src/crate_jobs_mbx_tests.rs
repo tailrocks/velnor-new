@@ -1,5 +1,4 @@
 use super::*;
-use velnor_actions_workflow_renderer::steps::{MBX_PREFLIGHT_NAME, MBX_RESTORE_NAME};
 
 #[test]
 fn drivers_follow_per_crate_selection() {
@@ -21,34 +20,32 @@ fn drivers_follow_per_crate_selection() {
     let steps = names(&found.jobs[0].1);
     let preflight = steps
         .iter()
-        .position(|name| *name == MBX_PREFLIGHT_NAME)
+        .position(|name| *name == "Verify Rust before MBX action")
         .expect("MBX preflight");
-    let setup = steps
+    let restore = steps
         .iter()
-        .position(|name| *name == MBX_RESTORE_NAME)
-        .expect("MBX objects restore");
+        .position(|name| *name == "Restore MBX objects")
+        .expect("MBX restore");
+    let version_check = steps
+        .iter()
+        .position(|name| *name == "Verify native MBX version")
+        .expect("exact native MBX version check");
     assert!(
-        preflight < setup,
-        "preflight precedes MBX action: {steps:?}"
+        preflight < restore && restore < version_check,
+        "Rust is checked before the action and MBX is checked after it: {steps:?}"
     );
     assert_eq!(
         steps
             .iter()
-            .filter(|name| **name == MBX_RESTORE_NAME)
+            .filter(|name| **name == "Verify Rust before MBX action")
             .count(),
         1,
-        "MBX selection emits exactly one objects action"
+        "every MBX action has one strict preflight"
     );
-    let action = &found.jobs[0].1.steps[setup];
-    let velnor_actions_contract::StepKind::Action { with, env, .. } = &action.kind else {
-        panic!("MBX setup must be an action");
-    };
-    assert_eq!(
-        env.get("VELNOR_MBX_VERSION").map(String::as_str),
-        Some(velnor_actions_mise::MR_BOXINGTON_VERSION)
-    );
-    assert!(!with.contains_key("version"));
     let steps = names(&found.jobs[1].1);
-    assert!(!steps.contains(&MBX_PREFLIGHT_NAME), "{steps:?}");
-    assert!(!steps.contains(&MBX_RESTORE_NAME), "{steps:?}");
+    assert!(!steps.contains(&"Restore MBX objects"), "{steps:?}");
+    assert!(
+        !steps.contains(&"Verify Rust before MBX action"),
+        "Cargo jobs have no MBX preflight: {steps:?}"
+    );
 }

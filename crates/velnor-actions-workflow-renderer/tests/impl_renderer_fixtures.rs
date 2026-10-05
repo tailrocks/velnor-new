@@ -47,7 +47,7 @@ pub(crate) fn mbx_tool_steps(
     uses: &str,
     mbx_version: &str,
     rust_toolchain: &str,
-) -> Result<[Step; 2], RenderError> {
+) -> Result<[Step; 3], RenderError> {
     mbx_steps_for_driver(
         uses,
         CompileDriver::Mbx,
@@ -56,30 +56,6 @@ pub(crate) fn mbx_tool_steps(
         mbx_tool_env(rust_toolchain),
     )?
     .ok_or_else(|| RenderError::InvalidWorkflow("mbx_steps_missing".to_owned()))
-}
-
-/// One action-backed MBX job before its cache route is attached.
-pub(crate) fn mbx_job(id: &str, mbx_version: &str) -> Result<(String, Job), RenderError> {
-    let steps = mbx_tool_steps(
-        &format!("jdx/mr-boxington-action@{}", "a".repeat(40)),
-        mbx_version,
-        TEST_RUST_TOOLCHAIN,
-    )?;
-    Ok(job(id, "MBX job", Vec::new(), steps.into()))
-}
-
-/// One action-backed MBX job whose checkout may be hoisted with its task.
-pub(crate) fn mbx_job_with_checkout(
-    id: &str,
-    mbx_version: &str,
-) -> Result<(String, Job), RenderError> {
-    let mut steps = vec![checkout_step(&checkout_pin())?];
-    steps.extend(mbx_tool_steps(
-        &format!("jdx/mr-boxington-action@{}", "a".repeat(40)),
-        mbx_version,
-        TEST_RUST_TOOLCHAIN,
-    )?);
-    Ok(job(id, "MBX job", Vec::new(), steps))
 }
 
 pub(crate) fn checkout_pin() -> String {
@@ -104,7 +80,6 @@ pub(crate) fn fixture_ctx() -> RenderContext {
         validator_commands: Vec::new(),
         candidate: None,
         preseed: false,
-        pull_request_cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
         verification_tasks: Vec::new(),
         plan_consumer_env: std::collections::BTreeMap::new(),
     }

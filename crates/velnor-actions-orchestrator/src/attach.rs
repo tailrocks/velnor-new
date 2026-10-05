@@ -8,10 +8,12 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{GeneratorLock, ReleaseTarget, Step, WorkflowIr, is_crate_job_id};
-use velnor_actions_mise::{PREPARE_PINNED_TOOLS_STEP, PinnedTool, ToolCatalog};
+use velnor_actions_mise::{
+    PREPARE_PINNED_TOOLS_STEP, PREPARE_RUST_COMPONENTS_STEP, PinnedTool, ToolCatalog,
+};
 use velnor_actions_workflow_renderer::cache_p08::{RESTORE_SOURCES_NAME, RUST_CACHE_NAME};
 use velnor_actions_workflow_renderer::render::{FINAL_JOB_ID, PLAN_JOB_ID, PUBLISH_JOB_ID};
-use velnor_actions_workflow_renderer::steps::{MBX_ACTION_NAME, STAGED_BINARY_PREFIX};
+use velnor_actions_workflow_renderer::steps::{MBX_RESTORE_NAME, STAGED_BINARY_PREFIX};
 use velnor_actions_workflow_renderer::{
     PreseedStageSource, preseed_build_step, preseed_download_step, preseed_manifest_step,
     preseed_manifest_verify_step, preseed_stage_step, preseed_upload_step, preseed_verify_step,
@@ -67,8 +69,10 @@ pub(crate) fn attach_lock_acquire(
                 job.steps.insert(1.min(job.steps.len()), step);
             }
         } else if is_crate_job_id(id) {
-            let step = lock_acquire_step(lock, label, &staged)?;
-            job.steps.insert(1, step);
+            job.steps.insert(
+                1.min(job.steps.len()),
+                lock_acquire_step(lock, label, &staged)?,
+            );
         }
     }
     Ok(())
@@ -96,6 +100,7 @@ pub(crate) fn attach_preseed(
     workflow: &mut WorkflowPlan,
     label: &str,
     version: &str,
+    fetch_roots: &[String],
 ) -> Result<(), OrchestratorError> {
     let catalog = ToolCatalog::pinned();
     let target = ReleaseTarget::for_runner_label(label)
@@ -128,7 +133,7 @@ pub(crate) fn attach_preseed(
             problem: "plan_job_missing".to_owned(),
         });
     };
-    insert_plan_mbx_setup(&catalog, &mut plan.steps)?;
+    insert_plan_mbx_restore(&catalog, label, fetch_roots, &mut plan.steps)?;
     let at = preseed_anchor(&plan.steps);
     plan.steps.splice(at..at, plan_steps);
     let Some(final_gate) = workflow.ir.jobs.get_mut(FINAL_JOB_ID) else {
@@ -136,13 +141,26 @@ pub(crate) fn attach_preseed(
             problem: "final_job_missing".to_owned(),
         });
     };
-    final_gate
-        .steps
-        .splice(0..0, preseed_consumers(target, &staged)?);
+    final_gate.steps.splice(
+        0..0,
+        [
+            preseed_download_step()?,
+            preseed_manifest_verify_step(target)?,
+            preseed_stage_step(PreseedStageSource::DownloadedArtifact, &staged)?,
+        ],
+    );
+    // The publish job invokes the staged helper too; without the
+    // triple its internal steps fail the staged gate. Absent jobs
+    // stay untouched like zero-crate plans.
     if let Some(publish) = workflow.ir.jobs.get_mut(PUBLISH_JOB_ID) {
-        publish
-            .steps
-            .splice(0..0, preseed_consumers(target, &staged)?);
+        publish.steps.splice(
+            0..0,
+            [
+                preseed_download_step()?,
+                preseed_manifest_verify_step(target)?,
+                preseed_stage_step(PreseedStageSource::DownloadedArtifact, &staged)?,
+            ],
+        );
     }
     for (id, job) in &mut workflow.ir.jobs {
         if is_crate_job_id(id) || job.check_runner.is_some() {
@@ -155,7 +173,6 @@ pub(crate) fn attach_preseed(
     Ok(())
 }
 
-/// Same-target consumers verify the artifact before staging its bytes.
 fn preseed_consumers(target: &str, staged: &str) -> Result<Vec<Step>, OrchestratorError> {
     Ok(vec![
         preseed_download_step()?,
@@ -175,61 +192,135 @@ fn after_prepare(steps: &[Step]) -> usize {
         .map_or(1, |index| index + 1)
 }
 
-/// Insert the plan-job MBX setup ahead of fetch (pre-seed only).
+/// Insert the native MBX owner before the pre-seed build.
 ///
-/// The pre-seed build compiles through MBX on every repo, so the plan
-/// job warms the object store exactly like an MBX crate job: right after
-/// the shared-sources restore, ahead of fetch. Plans without a shared
-/// restore (cargo-only rust-cache writers, lockless) stay untouched: an
-/// MBX step beside a rust-cache writer would trip the P08 one-owner
-/// gate, and there is nothing to warm without sources.
-fn insert_plan_mbx_setup(
+/// Lockful Cargo-only plans replace their registry-only fallback with the
+/// canonical shared-sources cache, then restore MBX after that action.
+/// Lockless plans have no source cache and install MBX after Rust setup.
+fn insert_plan_mbx_restore(
     catalog: &ToolCatalog,
+    label: &str,
+    fetch_roots: &[String],
     steps: &mut Vec<Step>,
 ) -> Result<(), OrchestratorError> {
-    let Some(restore_at) = steps
+    if steps.iter().any(is_mbx_action) {
+        return Err(OrchestratorError::Contract {
+            problem: "preseed_mbx_action_duplicated".to_owned(),
+        });
+    }
+    replace_plan_registry_cache(catalog, label, fetch_roots, steps)?;
+    let restore_at = steps
         .iter()
         .position(|step| step.name == RESTORE_SOURCES_NAME)
-    else {
-        return Ok(());
-    };
-    let setup = crate::crate_jobs::mbx_setup::steps(catalog)?;
-    steps.splice((restore_at + 1)..=restore_at, setup);
+        .map_or_else(|| after_rust_setup(steps), |index| index + 1);
+    for (offset, step) in crate::mbx_preflight::steps_for_catalog(catalog)?
+        .into_iter()
+        .enumerate()
+    {
+        steps.insert(restore_at + offset, step);
+    }
     Ok(())
+}
+
+/// Replace Swatinem's Cargo-only plan cache with the shared registry snapshot.
+///
+/// MBX object storage and the source subset remain separate owners. The
+/// registry-only fallback cannot coexist with the MBX action in one job,
+/// so lockful pre-seed plans use the same source cache as MBX workflows.
+fn replace_plan_registry_cache(
+    catalog: &ToolCatalog,
+    label: &str,
+    fetch_roots: &[String],
+    steps: &mut Vec<Step>,
+) -> Result<(), OrchestratorError> {
+    let registry: Vec<usize> = steps
+        .iter()
+        .enumerate()
+        .filter(|(_, step)| is_rust_cache_action(step))
+        .map(|(index, _)| index)
+        .collect();
+    if registry.is_empty() {
+        return Ok(());
+    }
+    if registry.len() != 1 || fetch_roots.is_empty() {
+        return Err(OrchestratorError::Contract {
+            problem: "preseed_registry_cache_without_locked_sources".to_owned(),
+        });
+    }
+    let target = ReleaseTarget::for_runner_label(label)
+        .map(ReleaseTarget::triple)
+        .ok_or_else(|| OrchestratorError::Contract {
+            problem: format!("unsupported_target_for_runner:{label}"),
+        })?;
+    let key = crate::source_cache::sources_cache_key(
+        target,
+        catalog.version(PinnedTool::Rust),
+        fetch_roots,
+    )?;
+    let prefix = crate::source_cache::sources_restore_prefix(&key);
+    steps[registry[0]] = crate::source_cache::sources_restore_step(&key, &[prefix])?;
+    let save = crate::source_cache::sources_save_step(&key)?;
+    let after_source_collection = steps
+        .iter()
+        .rposition(|step| {
+            step.name
+                .starts_with(crate::source_prep::FETCH_SOURCES_STEP)
+        })
+        .map(|index| index + 1)
+        .ok_or_else(|| OrchestratorError::Contract {
+            problem: "preseed_registry_cache_missing_source_step".to_owned(),
+        })?;
+    steps.insert(after_source_collection, save);
+    Ok(())
+}
+
+/// Insert after the pinned Rust setup and any separate component selection.
+fn after_rust_setup(steps: &[Step]) -> usize {
+    steps
+        .iter()
+        .position(|step| step.name == PREPARE_RUST_COMPONENTS_STEP)
+        .or_else(|| {
+            steps
+                .iter()
+                .position(|step| step.name == PREPARE_PINNED_TOOLS_STEP)
+        })
+        .map_or(1, |index| index + 1)
+}
+
+fn is_mbx_action(step: &Step) -> bool {
+    matches!(&step.kind, velnor_actions_contract::StepKind::Action { uses, .. } if uses.starts_with("jdx/mr-boxington-action@"))
+}
+
+fn is_rust_cache_action(step: &Step) -> bool {
+    matches!(&step.kind, velnor_actions_contract::StepKind::Action { uses, .. } if uses.starts_with("Swatinem/rust-cache@"))
 }
 
 /// Insert index for the plan-job pre-seed build block.
 ///
 /// The build compiles code, so it runs after the source-probing steps
-/// that guarantee sources present; without them it anchors after the
-/// last cache prelude, and the fallback
+/// that guarantee sources present (which is after every restore);
+/// without them it anchors after the last restore, and the fallback
 /// covers lockless plans and hand-built fixtures without cache steps.
 fn preseed_anchor(steps: &[Step]) -> usize {
-    if let Some(last) = steps.iter().rposition(|step| {
-        step.name
-            .starts_with(crate::source_prep::FETCH_SOURCES_STEP)
-    }) {
-        return last + 1;
-    }
-    if let Some(last) = steps.iter().rposition(is_plan_cache_prelude) {
-        return last + 1;
-    }
-    after_prepare(steps)
+    let last_required = steps
+        .iter()
+        .enumerate()
+        .filter(|(_, step)| {
+            step.name
+                .starts_with(crate::source_prep::FETCH_SOURCES_STEP)
+                || is_plan_restore(&step.name)
+                || step.name == velnor_actions_workflow_renderer::MBX_VERSION_CHECK_NAME
+        })
+        .map(|(index, _)| index)
+        .max();
+    last_required.map_or_else(|| after_prepare(steps), |index| index + 1)
 }
 
-/// True for plan-job cache prep (shared, registry, MBX setup).
-fn is_plan_cache_prelude(step: &Step) -> bool {
-    let is_mbx = matches!(
-        &step.kind,
-        velnor_actions_contract::StepKind::Action { uses, .. }
-            if uses.starts_with(&format!("{MBX_ACTION_NAME}@"))
-    );
-    is_mbx || step.name == RESTORE_SOURCES_NAME || step.name == RUST_CACHE_NAME
+/// True for plan-job restore steps (shared, registry, MBX objects).
+fn is_plan_restore(name: &str) -> bool {
+    name == RESTORE_SOURCES_NAME || name == RUST_CACHE_NAME || name == MBX_RESTORE_NAME
 }
 
-#[cfg(test)]
-#[path = "attach_preseed_tests.rs"]
-mod attach_preseed_tests;
 #[cfg(test)]
 #[path = "attach_tests.rs"]
 mod attach_tests;

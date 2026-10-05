@@ -279,7 +279,10 @@ fn qualified_linux_setup_cannot_bypass_macos_artifact_selection() -> Result<(), 
         container: None,
     });
     let error = strict(&fixture_ir(vec![check]), &fixture_ctx()).expect_err("wrong target pins");
-    assert!(error.to_string().contains("setup_mise_pin_mismatch"));
+    assert!(
+        error.to_string().contains("setup_mise_malformed"),
+        "unexpected rejection: {error}"
+    );
     Ok(())
 }
 

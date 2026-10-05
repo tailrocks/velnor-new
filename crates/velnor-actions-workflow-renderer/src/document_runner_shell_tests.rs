@@ -48,7 +48,6 @@ fn context() -> RenderContext {
         validator_commands: Vec::new(),
         candidate: None,
         preseed: false,
-        pull_request_cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
         verification_tasks: Vec::new(),
         plan_consumer_env: BTreeMap::new(),
     }
@@ -81,14 +80,8 @@ fn typed_scale_set_jobs_declare_bash_while_hosted_jobs_keep_default() {
     ]);
     let ctx = context();
     let shared = crate::lane_share::share_lanes(&jobs, &ctx).expect("lane sharing validates");
-    let rendered = workflow_to_yaml(
-        &workflow(jobs),
-        &shared,
-        &ctx,
-        &BTreeSet::new(),
-        &BTreeSet::new(),
-    )
-    .expect("workflow renders");
+    let rendered = workflow_to_yaml(&workflow(jobs), &shared, &ctx, &BTreeSet::new())
+        .expect("workflow renders");
     let yaml = crate::yaml::render_yaml(&rendered);
     assert!(
         yaml.contains("- name: Run probe\n        run: echo probe"),
@@ -137,14 +130,8 @@ fn rustdocflags_remain_scoped_to_the_documentation_step() {
     let jobs = BTreeMap::from([("task".to_owned(), task_job)]);
     let ctx = context();
     let shared = crate::lane_share::share_lanes(&jobs, &ctx).expect("lane sharing validates");
-    let rendered = workflow_to_yaml(
-        &workflow(jobs),
-        &shared,
-        &ctx,
-        &BTreeSet::new(),
-        &BTreeSet::new(),
-    )
-    .expect("workflow renders");
+    let rendered = workflow_to_yaml(&workflow(jobs), &shared, &ctx, &BTreeSet::new())
+        .expect("workflow renders");
     let jobs = field(&rendered, "jobs").expect("jobs map");
     let task = field(jobs, "task").expect("task job");
     let job_env = field(task, "env").expect("job environment");

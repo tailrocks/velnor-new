@@ -11,19 +11,14 @@ use velnor_actions_mise::{
 use crate::OrchestratorError;
 use crate::utf8::{strings_of, strings_of_env};
 
-/// Crate-job driver tools per role: Rust only when the job carries
-/// rust obligations, plus MBX only on MBX evidence, plus Opentofu
+/// Crate-job Mise tools per role: Rust only when the job carries
+/// rust obligations, plus Opentofu
 /// when the job carries tofu obligations. Pure-tofu jobs install the
 /// opentofu driver with no Rust setup; mixed jobs install the union.
 #[must_use]
-pub(crate) fn task_driver_tools(
-    use_rust: bool,
-    use_mbx: bool,
-    use_opentofu: bool,
-) -> Vec<PinnedTool> {
+pub(crate) fn task_driver_tools(use_rust: bool, use_opentofu: bool) -> Vec<PinnedTool> {
     let mut tools = Vec::new();
     tools.extend(use_rust.then_some(PinnedTool::Rust));
-    tools.extend(use_mbx.then_some(PinnedTool::MrBoxington));
     tools.extend(use_opentofu.then_some(PinnedTool::Opentofu));
     tools
 }
@@ -207,12 +202,11 @@ pub(crate) fn prepare_install_opentofu(
 pub(crate) fn prepare_crate_tools_step(
     catalog: &ToolCatalog,
     use_rust: bool,
-    use_mbx: bool,
     use_nextest: bool,
     use_opentofu: bool,
     needs_validators: bool,
 ) -> Result<Step, OrchestratorError> {
-    let mut tools = task_driver_tools(use_rust, use_mbx, use_opentofu);
+    let mut tools = task_driver_tools(use_rust, use_opentofu);
     if needs_validators {
         tools.extend([
             PinnedTool::Actionlint,

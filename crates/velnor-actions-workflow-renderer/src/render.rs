@@ -9,7 +9,7 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{
-    CI_WORKFLOW_PATH, Job, PLAN_JOB_ID as CONTRACT_PLAN_JOB_ID, PullRequestCachePolicy,
+    CI_WORKFLOW_PATH, Job, PLAN_JOB_ID as CONTRACT_PLAN_JOB_ID,
     REQUIRED_CONDITION as CONTRACT_REQUIRED_CONDITION,
     REQUIRED_DISPLAY_NAME as CONTRACT_REQUIRED_DISPLAY_NAME,
     REQUIRED_JOB_ID as CONTRACT_REQUIRED_JOB_ID, ReleaseTarget, RunsOn, SCALE_SET_NAME,
@@ -89,8 +89,6 @@ pub struct RenderContext {
     /// review). Accepts fixed pre-seed staging for internal steps and
     /// requires the build-once artifact closure; never set for consumers.
     pub preseed: bool,
-    /// Whether same-repository pull requests may write a scoped MBX bundle.
-    pub pull_request_cache_policy: PullRequestCachePolicy,
     /// Sorted isolated verification jobs with per-runner Mise pins.
     pub verification_tasks: Vec<crate::VerificationTaskPolicy>,
     /// Caller-validated env for plan-job helper consumers: the freshness
@@ -256,6 +254,7 @@ pub fn finalize_jobs(
             .iter()
             .any(|task| task.owns_job_id(id))
         {
+            crate::tool_seed::reject_orphan_seed(id, job)?;
             closure::check_internal_staged(id, job, ctx.preseed)?;
             continue;
         }
@@ -273,7 +272,7 @@ pub fn finalize_jobs(
         } else {
             mise.clone()
         };
-        cache_p08::ensure_setup_p08(id, job, &setup, always, target)?;
+        cache_p08::ensure_setup_p08(id, job, &setup, always, target, &ctx.checkout_uses)?;
         cache_p08::check_no_rust_cache_with_mbx(id, job)?;
         cache_p08::check_mbx_before_fetch(id, job)?;
         closure::check_internal_staged(id, job, ctx.preseed)?;
@@ -351,8 +350,6 @@ fn merged_jobs(
     support::check_candidate_invariants(&jobs)?;
     support::check_final_gate(&jobs)?;
     support::check_token_hygiene(&jobs)?;
-    crate::mbx_bundle::append_single_bundle_saves(&mut jobs, ctx.pull_request_cache_policy)?;
-    support::check_token_hygiene(&jobs)?;
     Ok(jobs)
 }
 
@@ -369,11 +366,9 @@ fn render_merged(
     } else {
         jobs.clone()
     };
-    let mbx_gc_jobs = crate::mbx_gc_policy::jobs_with_hosted_linux_mbx_objects(&jobs);
-    let mbx_share_out_jobs = crate::mbx_gc_policy::jobs_with_mbx_objects(&jobs);
+    let mbx_jobs = crate::mbx_gc_policy::jobs_with_mbx_objects(&jobs);
     let shared = crate::lane_share::share_lanes(&jobs, ctx)?;
-    let mut document =
-        document::workflow_to_yaml(ir, &shared, ctx, &mbx_gc_jobs, &mbx_share_out_jobs)?;
+    let mut document = document::workflow_to_yaml(ir, &shared, ctx, &mbx_jobs)?;
     if let Some((source, max_parallel)) = &matrix {
         matrix::attach_task_matrix(&mut document, source, *max_parallel)?;
     } else {

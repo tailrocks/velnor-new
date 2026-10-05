@@ -75,7 +75,7 @@ pub use nextest_plan::{
     count_inventory_tests, requires_archive_transfer,
 };
 pub use nextest_shapes::{NextestArchive, NextestList, NextestRun};
-pub use preflight::{RouteDriver, RouteProof, prove_route};
+pub use preflight::{RouteDriver, RouteSelection, select_route};
 pub use requests::{MetadataDiscovery, MetadataQualification, MiseInstall, PinnedToolExec};
 pub use restore::{
     MissReason, RestoreCheck, RestoreEvidence, ReuseFallback, SaveInputs, ToolAvailability,

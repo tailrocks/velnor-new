@@ -194,7 +194,6 @@ fn emit_ctx() -> RenderContext {
         validator_commands: Vec::new(),
         candidate: None,
         preseed: false,
-        pull_request_cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
         verification_tasks: Vec::new(),
         plan_consumer_env: std::collections::BTreeMap::new(),
     }

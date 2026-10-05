@@ -1,8 +1,9 @@
 //! V1 fixed command vectors built only through the Mise adapter.
 
+use std::collections::BTreeMap;
 use std::ffi::{OsStr, OsString};
 
-use velnor_actions_contract::{ProposedTask, Stack};
+use velnor_actions_contract::{ProposedTask, Stack, Step};
 use velnor_actions_mise::{
     CandidateBuild, IsolatedCommand, PinnedTool, PinnedToolExec, RouteDriver, ToolCatalog,
     custom_run::custom_task_run_argv, validate_exact_version,
@@ -34,18 +35,17 @@ pub(crate) fn validator_install_pin(spec: &str) -> Option<(&'static str, &'stati
     }
 }
 
-/// Exact Linux `x86_64` musl release for cargo-machete.
-/// GitHub's release API digest, its published `.sha256` companion, and the
-/// downloaded asset hash agree. Ubi's cold install enumerated the broad API.
+/// Qualified cargo-machete release.
+/// Source: `https://crates.io/api/v1/crates/cargo-machete`; checked 2026-09-29.
+/// The mise registry has no `cargo-machete` shorthand and the aqua registry
+/// has no package, so the spec is backend-qualified `ubi:` (same precedent
+/// as Nextest's aqua path): `mise ls-remote ubi:bnjbvr/cargo-machete` lists
+/// 0.9.2 and the isolated `mise exec ubi:bnjbvr/cargo-machete@0.9.2 --
+/// cargo machete --version` probe reported 0.9.2.
 const CARGO_MACHETE_VERSION: &str = "0.9.2";
-const CARGO_MACHETE_TOOL_SPEC: &str = concat!(
-    "http:cargo-machete[url=https://github.com/bnjbvr/cargo-machete/releases/",
-    "download/v0.9.2/cargo-machete-v0.9.2-x86_64-unknown-linux-musl.tar.gz,",
-    "checksum=sha256:48200087f54c55aabcd4db4af1e25742b49846c02a1b1bfa134711945b35b2e9]",
-);
 
 /// Mise tool specs the validator vectors may select, without versions.
-const VALIDATOR_TOOL_SPECS: [&str; 2] = ["cargo-deny", CARGO_MACHETE_TOOL_SPEC];
+const VALIDATOR_TOOL_SPECS: [&str; 2] = ["cargo-deny", "ubi:bnjbvr/cargo-machete"];
 
 /// Product crates scanned by the machete vector, in contract order.
 ///
@@ -77,30 +77,11 @@ pub(crate) fn task_argv(
     task: &ProposedTask,
     catalog: &ToolCatalog,
 ) -> Result<Vec<String>, OrchestratorError> {
-    match Stack::from_id(&task.stack_id) {
-        Some(Stack::Tofu) => return tofu_task_argv(task, catalog),
-        Some(Stack::Mise) => {
-            let name = task
-                .payload
-                .first()
-                .and_then(|v| v.to_str())
-                .filter(|_| task.payload.len() == 1)
-                .ok_or_else(|| OrchestratorError::Contract {
-                    problem: "named_check_task_payload".to_owned(),
-                })?;
-            return custom_task_run_argv(name).map_err(|e| OrchestratorError::Contract {
-                problem: e.to_string(),
-            });
-        }
-        Some(Stack::Rust) => {}
-        None => {
-            return Err(OrchestratorError::Contract {
-                problem: format!("unknown_task_stack:{}", task.stack_id),
-            });
-        }
+    if Stack::from_id(&task.stack_id) == Some(Stack::Tofu) {
+        return tofu_task_argv(task, catalog);
     }
     let driver = RouteDriver::from_compile_driver(&task.identity.compile_driver);
-    let mut tools = driver.map_or(vec![PinnedTool::Rust], RouteDriver::tools);
+    let mut tools = driver.map_or(vec![PinnedTool::Rust], RouteDriver::probe_tools);
     if tool_needs(&task.identity.compile_driver, &task.identity.test_runner).nextest {
         tools.push(PinnedTool::Nextest);
     }
@@ -259,12 +240,12 @@ pub(crate) fn zizmor_argv(catalog: &ToolCatalog) -> Result<Vec<String>, Orchestr
     )
 }
 
-/// Fixed validator-job vector: verified `cargo machete` release via Mise.
+/// Fixed validator-job vector: `cargo machete` over product crates via Mise.
 pub(crate) fn machete_argv() -> Result<Vec<String>, OrchestratorError> {
     let mut args = vec!["machete"];
     args.extend(MACHETE_SCAN_CRATES);
     validator_argv(
-        CARGO_MACHETE_TOOL_SPEC,
+        "ubi:bnjbvr/cargo-machete",
         CARGO_MACHETE_VERSION,
         "cargo",
         &args,
@@ -305,28 +286,61 @@ fn validator_argv(
     strings_of(exec.argv()).map_err(|problem| OrchestratorError::Contract { problem })
 }
 
-/// Fixed pre-seed MBX route probe through pinned Mise.
+/// Shell steps running each allowlisted custom task via `mise run`.
 ///
-/// Runs `mbx --version` under the exact pinned `mr-boxington` spec so
-/// the verify step proves the compile route, not just the output file.
-/// Resolves through Mise on every run, cold or warm.
+/// Rejected while non-empty: the emitted steps cannot work as built
+/// (the step env carries `MISE_NO_CONFIG=1`, under which mise reports
+/// `no tasks defined`), so any non-empty allowlist fails `generate`
+/// instead of shipping dead steps. Enabling this path needs a
+/// redesign (a qualified config-visible execution boundary plus the
+/// corrected `mise run <task>` argv), not a flag flip: dropping
+/// `MISE_NO_CONFIG` from the step env would let repository task
+/// bodies execute with the job's credentials and checkout. An empty
+/// allowlist (the default) emits nothing.
+/// # Errors
+///
+/// Returns `custom_tasks_unqualified` for any non-empty allowlist, or
+/// a contract error when a name fails the task-name rule.
+pub(crate) fn custom_task_steps(
+    allowlist: &[String],
+    catalog: &ToolCatalog,
+) -> Result<Vec<Step>, OrchestratorError> {
+    if !allowlist.is_empty() {
+        return Err(OrchestratorError::Contract {
+            problem: "custom_tasks_unqualified:custom_tasks is rejected until the config-visible execution path is redesigned; see custom_task_steps docs"
+                .to_owned(),
+        });
+    }
+    allowlist
+        .iter()
+        .map(|task| {
+            let run = custom_task_run_argv(task).map_err(|err| OrchestratorError::Contract {
+                problem: err.to_string(),
+            })?;
+            let env = crate::matrix_step::task_step_env(catalog, &BTreeMap::new(), true)?;
+            velnor_actions_workflow_renderer::shell_step(&format!("Custom task {task}"), run, env)
+                .map_err(|err| OrchestratorError::Contract {
+                    problem: err.to_string(),
+                })
+        })
+        .collect()
+}
+
+/// Fixed pre-seed MBX route probe through the action-owned PATH plus Rust Mise.
+///
+/// Runs `mbx --version` under exact Rust Mise while retaining the native action's
+/// earlier PATH entry. The action owns the MBX installation and object cache.
 /// # Errors
 ///
 /// Returns a contract error when the Mise adapter rejects the vector.
 pub(crate) fn mbx_probe_argv(catalog: &ToolCatalog) -> Result<Vec<String>, OrchestratorError> {
-    exec_argv(
-        vec![PinnedTool::MrBoxington],
-        "mbx",
-        &["--version"],
-        catalog,
-    )
+    exec_argv(vec![PinnedTool::Rust], "mbx", &["--version"], catalog)
 }
 
 /// Fixed bootstrap §4 build vector through pinned Mise.
 ///
-/// Shared by the candidate build and the pre-seed helper build, so both
-/// compile `velnor-actions-cli`/`velnor-actions` with the exact same
-/// pinned Rust plus MBX toolchain and flags.
+/// Shared by the candidate build and pre-seed helper build, so both use
+/// the exact Rust selector and MBX binary installed by the native action.
 pub(crate) fn candidate_build_argv(
     catalog: &ToolCatalog,
 ) -> Result<Vec<String>, OrchestratorError> {

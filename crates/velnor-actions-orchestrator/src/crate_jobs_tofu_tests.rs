@@ -4,7 +4,6 @@
 
 use super::*;
 use velnor_actions_rust::TaskKind;
-use velnor_actions_rust::task_kind_rank;
 
 /// Tofu proposal via the T12 adapter constructor.
 fn tofu_group(root: &str, kind: velnor_actions_tofu::TofuTaskKind) -> ProposedTask {
@@ -24,14 +23,7 @@ fn assert_provider_restore_only(names: &[&str]) {
     for rust in [
         "Restore Cargo sources",
         "Restore Cargo registry",
-        "Verify MBX and Rust toolchains",
-        "Prepare MBX cache identity",
-        "Prepare private MBX store",
-        "Prepare MBX local cache store",
-        "Restore MBX single bundle",
-        "Import MBX single bundle",
-        "Export MBX single bundle",
-        "Save MBX single bundle",
+        "Restore MBX objects",
     ] {
         assert!(!names.contains(&rust), "no rust-pinned {rust}: {names:?}");
     }
@@ -50,7 +42,10 @@ fn tofu_obligations_order_fmt_init_validate() {
     assert!(obligation_rank(&fmt) < obligation_rank(&init));
     assert!(obligation_rank(&init) < obligation_rank(&validate));
     let clippy = crate_jobs_tests::group("demo", TaskKind::Clippy, &[]);
-    assert_eq!(obligation_rank(&clippy), task_kind_rank("clippy"));
+    assert_eq!(
+        obligation_rank(&clippy),
+        velnor_actions_rust::task_kind_rank("clippy")
+    );
     let tasks = vec![&validate, &fmt, &init];
     let obligations = obligations_for(&tasks, &ToolCatalog::pinned()).expect("obligations build");
     let kinds: Vec<&str> = obligations
