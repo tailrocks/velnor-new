@@ -17,6 +17,7 @@ use crate::launch_harness::open;
 
 mod claim_fence;
 mod docker_transport;
+mod docker_transport_delayed;
 mod engine;
 mod fair;
 mod lease;
