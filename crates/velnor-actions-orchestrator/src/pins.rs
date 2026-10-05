@@ -170,20 +170,22 @@ fn consumer_acquire_from(
             ),
         });
     }
-    let target = target_for_runner_label(label).ok_or_else(|| OrchestratorError::Contract {
-        problem: format!("unsupported_target_for_runner:{label}"),
-    })?;
-    let record = manifest
-        .record_for_target(target)
-        .ok_or_else(|| OrchestratorError::Contract {
-            problem: format!("manifest_missing_target:{target}"),
+    let target =
+        ReleaseTarget::for_runner_label(label).ok_or_else(|| OrchestratorError::Contract {
+            problem: format!("unsupported_target_for_runner:{label}"),
         })?;
+    let record =
+        manifest
+            .record_for_target(target.triple())
+            .ok_or_else(|| OrchestratorError::Contract {
+                problem: format!("manifest_missing_target:{}", target.triple()),
+            })?;
     // Defense in depth: re-bind the consumed record's URL even though
     // `validate` already bound every record (X1).
     check_release_artifact(
         &record.artifact,
         &manifest.version,
-        target,
+        target.triple(),
         "release-manifest.json",
         "targets.artifact",
     )?;
@@ -191,6 +193,7 @@ fn consumer_acquire_from(
         &record.artifact,
         &record.sha256,
         &manifest.commit,
+        target,
         &format!("{STAGED_BINARY_PREFIX}{version}"),
     )
 }
@@ -201,18 +204,20 @@ pub(crate) fn lock_acquire_step(
     label: &str,
     staged: &str,
 ) -> Result<Step, OrchestratorError> {
-    let target = target_for_runner_label(label).ok_or_else(|| OrchestratorError::Contract {
-        problem: format!("unsupported_target_for_runner:{label}"),
-    })?;
-    let record = lock
-        .binary_for_target(target)
-        .ok_or_else(|| OrchestratorError::Contract {
-            problem: format!("lock_missing_target:{target}"),
+    let target =
+        ReleaseTarget::for_runner_label(label).ok_or_else(|| OrchestratorError::Contract {
+            problem: format!("unsupported_target_for_runner:{label}"),
         })?;
+    let record =
+        lock.binary_for_target(target.triple())
+            .ok_or_else(|| OrchestratorError::Contract {
+                problem: format!("lock_missing_target:{}", target.triple()),
+            })?;
     acquire_step(
         &record.artifact,
         &record.sha256,
         &lock.generator.commit,
+        target,
         staged,
     )
 }
@@ -223,6 +228,7 @@ fn acquire_step(
     url: &str,
     sha: &str,
     commit: &str,
+    target: ReleaseTarget,
     staged: &str,
 ) -> Result<Step, OrchestratorError> {
     let provenance = HelperProvenance::ReleaseAsset {
@@ -232,14 +238,15 @@ fn acquire_step(
     };
     Ok(provision_acquire_step(
         &provenance,
-        acquire_script_argv(staged, GENERATOR_SEED_ROOT)?,
+        acquire_script_argv(staged, GENERATOR_SEED_ROOT, target)?,
     )?)
 }
 
 /// Host path of the read-only generator seed. Not a job input.
 const GENERATOR_SEED_ROOT: &str = "/opt/velnor/seed";
 
-/// Fixed acquisition argv. A matching seed file is copied. Otherwise curl.
+/// Fixed target-specific acquisition argv. A matching seed file is copied.
+/// Otherwise curl; both paths use the target's native SHA-256 utility.
 ///
 /// Curl stays HTTPS-only (`--proto '=https'`) over TLS 1.2+. The staged
 /// path stays double-quoted. A hash mismatch does not copy the seed.
@@ -251,6 +258,7 @@ const GENERATOR_SEED_ROOT: &str = "/opt/velnor/seed";
 pub fn acquire_script_argv(
     staged: &str,
     seed_root: &str,
+    target: ReleaseTarget,
 ) -> Result<Vec<String>, OrchestratorError> {
     if !absolute_token(seed_root) {
         return Err(OrchestratorError::Contract {
@@ -270,8 +278,12 @@ pub fn acquire_script_argv(
         });
     }
     let seed = format!("{seed_root}/generator/{name}");
+    let checksum_command = match target {
+        ReleaseTarget::LinuxX86_64 => "sha256sum",
+        ReleaseTarget::MacosArm64 | ReleaseTarget::MacosX86_64 => "shasum -a 256",
+    };
     let script = format!(
-        "mkdir -p \"{dir}\" && s=\"{seed}\" d=\"{staged}\" && if [ -f \"$s\" ] && echo \"$VELNOR_ASSET_SHA256  $s\" | sha256sum -c -; then cp \"$s\" \"$d\"; else curl -fsSL --proto '=https' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\" && echo \"$VELNOR_ASSET_SHA256  $d\" | sha256sum -c -; fi && chmod +x \"$d\""
+        "mkdir -p \"{dir}\" && s=\"{seed}\" d=\"{staged}\" && if [ -f \"$s\" ] && echo \"$VELNOR_ASSET_SHA256  $s\" | {checksum_command} -c -; then cp \"$s\" \"$d\"; else curl -fsSL --proto '=https' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\" && echo \"$VELNOR_ASSET_SHA256  $d\" | {checksum_command} -c -; fi && chmod +x \"$d\""
     );
     Ok(vec!["sh".to_owned(), "-c".to_owned(), script])
 }
