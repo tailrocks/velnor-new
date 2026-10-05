@@ -55,6 +55,8 @@ pub(crate) struct Seat {
     pub(crate) assigned: u32,
     /// Classified poll.
     pub(crate) idle: Idle,
+    /// Start or completion notices only. A full slot can acknowledge them.
+    pub(crate) progress: bool,
 }
 
 /// Decide one poll. Occupancy is `occupied` and `running`, not historical `started`.
@@ -102,6 +104,11 @@ const fn admit_scale(seat: Seat) -> Admit {
         };
     }
     if !scale_covered(seat) {
+        if seat.progress {
+            return Admit::Ack {
+                stop: covered_ack_stops(seat.capacity, seat.target, seat.started),
+            };
+        }
         return Admit::Hold;
     }
     // A covered population is acknowledged, not minted again.
@@ -129,6 +136,7 @@ pub(super) const fn covered_ack_stops(capacity: u32, target: u32, started: u32) 
         running: 0,
         assigned: 0,
         idle: Idle::Ack,
+        progress: false,
     };
     seat.capacity == 1 || started_done(seat)
 }

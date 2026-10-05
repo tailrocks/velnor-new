@@ -14,6 +14,7 @@ fn decide(capacity: u32, started: u32, running: u32, idle: Idle) -> Admit {
         running,
         assigned: u32::MAX,
         idle,
+        progress: false,
     })
 }
 
@@ -26,6 +27,7 @@ fn decide_at(capacity: u32, target: u32, started: u32, running: u32, idle: Idle)
         running,
         assigned: u32::MAX,
         idle,
+        progress: false,
     })
 }
 
@@ -94,6 +96,7 @@ fn mint_holds_a_full_slot_even_when_the_count_covers() {
             running: 1,
             assigned: 1,
             idle: Idle::Mint,
+            progress: false,
         }),
         Admit::Hold
     );
@@ -106,6 +109,7 @@ fn mint_holds_a_full_slot_even_when_the_count_covers() {
             running: 1,
             assigned: 1,
             idle: Idle::Mint,
+            progress: false,
         }),
         Admit::Start { stop: false }
     );
@@ -122,6 +126,7 @@ fn scale_does_not_mint_again_once_assigned_is_covered() {
             running: 1,
             assigned: 1,
             idle: Idle::Scale,
+            progress: false,
         }),
         Admit::Ack { stop: false }
     );
@@ -134,6 +139,7 @@ fn scale_does_not_mint_again_once_assigned_is_covered() {
             running: 1,
             assigned: 3,
             idle: Idle::Scale,
+            progress: false,
         }),
         Admit::Start { stop: true }
     );
@@ -146,6 +152,7 @@ fn scale_does_not_mint_again_once_assigned_is_covered() {
             running: 0,
             assigned: 1,
             idle: Idle::Scale,
+            progress: false,
         }),
         Admit::Start { stop: false }
     );
@@ -158,6 +165,7 @@ fn scale_does_not_mint_again_once_assigned_is_covered() {
             running: 0,
             assigned: 1,
             idle: Idle::Scale,
+            progress: false,
         }),
         Admit::Start { stop: true }
     );
@@ -283,6 +291,7 @@ fn historical_starts_do_not_cover_a_free_slot() {
             running: 1,
             assigned: 2,
             idle: Idle::Scale,
+            progress: false,
         }),
         Admit::Start { stop: true }
     );
@@ -299,6 +308,50 @@ fn uncertain_occupancy_does_not_mint_or_ack() {
             running: 0,
             assigned: 1,
             idle: Idle::Scale,
+            progress: false,
+        }),
+        Admit::Hold
+    );
+}
+
+#[test]
+fn full_slot_progress_notice_is_acknowledged() {
+    assert_eq!(
+        admit(Seat {
+            capacity: 4,
+            target: 4,
+            started: 0,
+            occupied: 4,
+            running: 4,
+            assigned: 5,
+            idle: Idle::Scale,
+            progress: true,
+        }),
+        Admit::Ack { stop: false }
+    );
+    assert_eq!(
+        admit(Seat {
+            capacity: 4,
+            target: 4,
+            started: 3,
+            occupied: 3,
+            running: 3,
+            assigned: 5,
+            idle: Idle::Scale,
+            progress: true,
+        }),
+        Admit::Start { stop: true }
+    );
+    assert_eq!(
+        admit(Seat {
+            capacity: 4,
+            target: 4,
+            started: 0,
+            occupied: 4,
+            running: 4,
+            assigned: 5,
+            idle: Idle::Mint,
+            progress: true,
         }),
         Admit::Hold
     );

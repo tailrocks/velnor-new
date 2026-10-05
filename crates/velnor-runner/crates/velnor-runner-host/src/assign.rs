@@ -37,6 +37,16 @@ fn acquire_offer(batch: &ParsedBatch) -> Offer {
     }
 }
 
+/// True when every job is a start or completion notice. An empty batch is not progress.
+#[must_use]
+pub(crate) fn progress_only(batch: &ParsedBatch) -> bool {
+    !batch.jobs.is_empty()
+        && batch
+            .jobs
+            .iter()
+            .all(|job| matches!(job.kind, InnerKind::Started | InnerKind::Completed))
+}
+
 fn available_ids(batch: &ParsedBatch) -> Vec<i64> {
     batch
         .jobs
