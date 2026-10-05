@@ -68,10 +68,14 @@ the project lock defines their tool closure and must be maintained with
 each task's change coverage. These jobs remain unconditional and
 uncached; they do not change the Rust lane's install path.
 
-Non-empty `[stacks.rust].custom_tasks` remains rejected with
-`custom_tasks_unqualified`; arbitrary Mise commands never run inside
-the credential-bearing Rust lane. Generic no-Rust checks use sorted
-`[[workflow.tasks]]` declarations instead.
+Repository-owned Mise execution uses explicit top-level `[[checks]]` declarations,
+independent of Rust task generation. Each declaration binds a task name,
+directory, input files, runner platform, tool pins, and optional named scenario
+evidence. Tools installation remains isolated; a separately qualified task
+projection grants only the declared task closure access to repository inputs.
+The removed Rust custom-task option is rejected as an unknown field. See the
+[implemented named-check contract](../implemented/named-mise-checks.md) for the
+execution boundary, trust admission, and Required evidence rules.
 
 ## 1.2. Isolated verification tasks
 
