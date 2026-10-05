@@ -14,12 +14,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{
-    CrateJob, CrateObligation, Job, JobTimeout, ProposedTask, Stack, Step, VelnorConfig,
-    WorkflowPolicy, crate_display_name, matrix_id_for_task_group, matrix_key_for_id,
-    tofu_display_name,
+    CrateJob, CrateObligation, Job, JobTimeout, ProposedTask, Step, VelnorConfig, WorkflowPolicy,
+    crate_display_name, matrix_id_for_task_group, matrix_key_for_id, tofu_display_name,
 };
 use velnor_actions_mise::{PinnedTool, TaskCacheMode, ToolCatalog};
-use velnor_actions_rust::task_kind_rank;
 use velnor_actions_workflow_renderer::render::PLAN_JOB_ID;
 use velnor_actions_workflow_renderer::steps::CompileDriver as RenderDriver;
 
@@ -28,6 +26,7 @@ use crate::crate_job_ids::{assign_group_ids, group_is_tofu, group_runnable};
 use crate::discover::Discovery;
 use crate::internal::internal;
 use crate::matrix_step::step_name_for;
+use crate::obligation_order::obligation_order_key;
 
 #[path = "crate_jobs_stage.rs"]
 mod stage;
@@ -177,12 +176,10 @@ pub(crate) fn is_runnable(task: &ProposedTask) -> bool {
     !task.no_targets && !task.identity.unit_id.is_empty()
 }
 
-/// Obligation order rank for one task, dispatched by stack.
+/// Rank one proposal through the shared task-order key.
+#[cfg(test)]
 fn obligation_rank(task: &ProposedTask) -> u32 {
-    match Stack::from_id(&task.stack_id) {
-        Some(Stack::Tofu) => velnor_actions_tofu::task_kind_rank(&task.task_kind),
-        _ => task_kind_rank(&task.task_kind),
-    }
+    obligation_order_key(&task.stack_id, &task.task_kind, &task.task_id).0
 }
 
 /// Ordered validated obligations for one crate's tasks.
@@ -193,7 +190,9 @@ fn obligations_for(
     let executed: BTreeSet<&str> = tasks.iter().map(|task| task.task_id.as_str()).collect();
     let mut ordered = tasks.to_vec();
     ordered.sort_by(|left, right| {
-        (obligation_rank(left), &left.task_id).cmp(&(obligation_rank(right), &right.task_id))
+        obligation_order_key(&left.stack_id, &left.task_kind, &left.task_id).cmp(
+            &obligation_order_key(&right.stack_id, &right.task_kind, &right.task_id),
+        )
     });
     let mut obligations = Vec::with_capacity(ordered.len());
     for task in ordered {

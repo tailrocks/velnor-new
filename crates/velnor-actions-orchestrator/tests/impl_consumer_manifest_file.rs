@@ -116,7 +116,7 @@ fn absent_manifest_fails_closed_without_provenance() {
     use velnor_actions_orchestrator::consumer_acquire_step_with_manifest;
     // The release twin returns `None` for an absent file; the pure gate
     // must fail closed with the contract error (no URL, no digest).
-    let err = consumer_acquire_step_with_manifest("ubuntu-26.04", "0.1.0", None)
+    let err = consumer_acquire_step_with_manifest("ubuntu-26.04", env!("CARGO_PKG_VERSION"), None)
         .expect_err("absent manifest fails");
     let text = err.to_string();
     assert!(text.contains("consumer_requires_release_install"), "{text}");

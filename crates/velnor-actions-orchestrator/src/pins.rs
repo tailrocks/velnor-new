@@ -10,8 +10,8 @@ use velnor_actions_actionlint::overrides::{
     ActionPinOverride as ApprovedOverride, ApprovedPinCatalog,
 };
 use velnor_actions_contract::{
-    GeneratorLock, ReleaseManifest, Step, VelnorConfig, VerificationRunner, check_release_artifact,
-    target_for_runner_label,
+    GeneratorLock, ReleaseManifest, ReleaseTarget, Step, VelnorConfig, VerificationRunner,
+    check_release_artifact, target_for_runner_label,
 };
 use velnor_actions_mise::MISE_VERSION;
 use velnor_actions_workflow_renderer::{
@@ -60,10 +60,22 @@ pub(crate) fn resolve_mise_setup(
             problem: format!("mise_setup_unsupported_target:{label}"),
         });
     }
+    resolve_mise_setup_for_release_target(config, ReleaseTarget::LinuxX86_64)
+}
+
+/// Resolve a release runner's Mise setup pins from the named platform ID.
+pub(crate) fn resolve_mise_setup_for_release_target(
+    config: &VelnorConfig,
+    target: ReleaseTarget,
+) -> Result<MiseSetup, OrchestratorError> {
+    let sha256 = match target {
+        ReleaseTarget::LinuxX86_64 => MISE_BINARY_SHA256_LINUX_X64,
+        ReleaseTarget::MacosArm64 => MISE_BINARY_SHA256_MACOS_ARM64,
+    };
     Ok(MiseSetup {
         uses: mise_action_uses(config)?,
         version: MISE_VERSION.to_owned(),
-        sha256: MISE_BINARY_SHA256_LINUX_X64.to_owned(),
+        sha256: sha256.to_owned(),
     })
 }
 
@@ -272,12 +284,14 @@ fn file_token(value: &str) -> bool {
 #[cfg(test)]
 fn test_manifest_json() -> String {
     let version = env!("CARGO_PKG_VERSION");
-    let targets = velnor_actions_contract::SUPPORTED_TARGETS
+    let targets = velnor_actions_contract::ReleaseTarget::ALL
         .iter()
         .map(|target| {
             format!(
-                "{{\"target\":\"{target}\",\"artifact\":\"https://github.com/tailrocks/velnor-new/releases/download/v{version}/velnor-actions-{version}-{target}\",\"sha256\":\"{}\"}}",
-                "a".repeat(64)
+                "{{\"target\":\"{}\",\"artifact\":\"https://github.com/tailrocks/velnor-new/releases/download/v{version}/velnor-actions-{version}-{}\",\"sha256\":\"{}\"}}",
+                target.triple(),
+                target.triple(),
+                "a".repeat(64),
             )
         })
         .collect::<Vec<_>>()
