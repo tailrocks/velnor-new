@@ -11,7 +11,7 @@ use velnor_actions_contract::StepKind;
 
 use crate::setup::MiseSetup;
 
-use super::ToolsCachePayload;
+use crate::cache_p08::ToolsCachePayload;
 
 static NEXT_FIXTURE: AtomicUsize = AtomicUsize::new(0);
 
@@ -111,7 +111,7 @@ fn emitted_identity_environment(payload: &ToolsCachePayload) -> BTreeMap<String,
         return shell_env;
     }
 
-    let step = payload.runtime_identity_step().expect("identity action");
+    let step = payload.runtime_prelude_step().expect("identity prelude");
     let StepKind::Action {
         uses,
         with,
@@ -120,7 +120,10 @@ fn emitted_identity_environment(payload: &ToolsCachePayload) -> BTreeMap<String,
     else {
         panic!("identity is a composite action step");
     };
-    assert_eq!(Some(uses.as_str()), super::action_uses(&payload.runs_on));
+    assert_eq!(
+        Some(uses.as_str()),
+        crate::cache_p08::runtime_prelude_action_uses(&payload.runs_on)
+    );
     assert!(action_env.is_empty());
     let input = crate::cache_p08::TOOLS_CACHE_IDENTITY_DIGEST_INPUT;
     let input_value = with.get(input).expect("emitted digest input");
@@ -325,11 +328,14 @@ fn scale_set_identity_is_a_successful_cold_path_without_digest_injection()
 #[test]
 fn identity_step_binds_fixed_tool_home_environment() {
     let payload = payload("ubuntu-26.04");
-    let step = payload.runtime_identity_step().expect("identity step");
+    let step = payload.runtime_prelude_step().expect("identity prelude");
     let StepKind::Action { uses, with, env } = step.kind else {
         panic!("identity is a composite action step");
     };
-    assert_eq!(Some(uses.as_str()), super::action_uses("ubuntu-26.04"));
+    assert_eq!(
+        Some(uses.as_str()),
+        crate::cache_p08::runtime_prelude_action_uses("ubuntu-26.04")
+    );
     assert!(env.is_empty());
     assert_eq!(
         with.get(crate::cache_p08::TOOLS_CACHE_IDENTITY_DIGEST_INPUT)

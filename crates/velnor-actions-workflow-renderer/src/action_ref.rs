@@ -2,12 +2,15 @@
 //! ref must be `owner/repo` at a 40-hex commit.
 
 use crate::RenderError;
-use velnor_actions_contract::workflow::step_identity::{TOOL_SEED_USES, TOOLS_CACHE_RESTORE_USES};
+use velnor_actions_contract::workflow::step_identity::{
+    TOOL_SEED_USES, TOOLS_CACHE_PRELUDE_USES, TOOLS_CACHE_RESTORE_USES,
+};
 
 /// Validate an `owner/repo@<40 hex>` action ref. Branch names are rejected.
 ///
-/// Only registered tool-seed, tools-restore, and provider-admission composites
-/// are accepted as local paths. Every other local path is rejected.
+/// Only registered tool-seed, tools-cache prelude/restore, and provider-
+/// admission composites are accepted as local paths. Every other local path
+/// is rejected.
 ///
 /// # Errors
 ///
@@ -17,7 +20,8 @@ pub fn validate_uses(uses: &str) -> Result<(), RenderError> {
     if matches!(
         uses,
         TOOL_SEED_USES | TOOLS_CACHE_RESTORE_USES | crate::tofu_cache::TOFU_PROVIDER_ADMISSION_USES
-    ) {
+    ) || TOOLS_CACHE_PRELUDE_USES.contains(&uses)
+    {
         return Ok(());
     }
     let Some((name, sha)) = uses.split_once('@') else {
@@ -46,4 +50,24 @@ fn is_action_name(name: &str) -> bool {
         && name
             .bytes()
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'/' | b'.' | b'-' | b'_'))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_uses;
+    use velnor_actions_contract::workflow::step_identity::TOOLS_CACHE_PRELUDE_USES;
+
+    #[test]
+    fn only_the_three_registered_runtime_preludes_are_local_actions() {
+        for uses in TOOLS_CACHE_PRELUDE_USES {
+            assert!(validate_uses(uses).is_ok(), "{uses}");
+        }
+        for uses in [
+            "./.github/actions/velnor-tools-prelude-u20",
+            "./.github/actions/velnor-tools-prelude-u26/other",
+            "./.github/actions/velnor-tools-prelude-u26@0123456789abcdef",
+        ] {
+            assert!(validate_uses(uses).is_err(), "{uses}");
+        }
+    }
 }

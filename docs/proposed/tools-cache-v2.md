@@ -30,10 +30,12 @@ disables both restore and save; pinned tool setup continues cold.
 
 ## Workflow lifecycle
 
-Supported hosted jobs with a source checkout run the renderer-owned identity step and read-only restore before
-Setup Mise. The workflow restore call uses one fixed generated composite that binds the pinned
+Supported hosted jobs with a source checkout run one fixed renderer-owned prelude composite before the
+read-only restore and Setup Mise. That composite qualifies the hosted image and absolute cache roots, imports
+the matching exact-key host seed, and forwards the identity's `enabled` and `identity` outputs to the workflow
+step. The workflow restore call uses a separate fixed generated composite that binds the pinned
 `actions/cache/restore` action to the exact paths above; its caller supplies only the canonical runtime key.
-The composite identity action requires the workflow checkout, so checkout-less jobs such as the
+The V2 prelude requires the workflow checkout, so checkout-less jobs such as the
 `required` report fan-in retain pinned Setup Mise and tool installation but take the cold path without a V2
 restore or save. Mise's built-in cache is disabled so only the V2 archive owns these paths. Save uses the same
 key and path set and runs only after success on a protected default-branch push when runtime identity passed.

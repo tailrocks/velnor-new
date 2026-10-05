@@ -1,9 +1,10 @@
 //! Tool-seed action payload and name-independent setup admission cases.
 
 use super::*;
+use velnor_actions_contract::StepRole;
 
 #[test]
-fn local_seed_action_payload_and_order_are_not_name_authorized() {
+fn typed_prelude_call_stays_one_step_and_conditional_checkout_stays_cold() {
     let setup = setup_config();
     let mut rendered_job = job(vec![
         crate::steps::checkout_step(CHECKOUT).expect("checkout"),
@@ -18,12 +19,12 @@ fn local_seed_action_payload_and_order_are_not_name_authorized() {
         CHECKOUT,
     )
     .expect("setup and seed");
-    let seed_index = rendered_job
+    let prelude_index = rendered_job
         .steps
         .iter()
-        .position(is_tool_seed_action)
-        .expect("seed action");
-    rendered_job.steps[seed_index].name = "Checkout".to_owned();
+        .position(|step| step.role == Some(StepRole::ToolsCacheIdentity))
+        .expect("V2 prelude");
+    rendered_job.steps[prelude_index].name = "Restore Velnor tool seed".to_owned();
     assert!(
         crate::cache_p08::ensure_tools_cache_v2(
             "renamed-seed",
@@ -35,7 +36,10 @@ fn local_seed_action_payload_and_order_are_not_name_authorized() {
         )
         .is_err()
     );
-    assert_eq!(rendered_job.steps[seed_index].name, "Checkout");
+    assert_eq!(
+        rendered_job.steps[prelude_index].name,
+        "Restore Velnor tool seed"
+    );
 
     let mut conditional = job(vec![
         {
@@ -58,7 +62,7 @@ fn local_seed_action_payload_and_order_are_not_name_authorized() {
         conditional
             .steps
             .iter()
-            .all(|step| !is_tool_seed_action(step))
+            .all(|step| step.role != Some(StepRole::ToolsCacheIdentity))
     );
 }
 

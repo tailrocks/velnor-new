@@ -104,7 +104,10 @@ fn action_step_to_yaml(
     let runtime_identity = step.role == Some(velnor_actions_contract::StepRole::ToolsCacheIdentity)
         || ["ubuntu-22.04", "ubuntu-24.04", "ubuntu-26.04"]
             .iter()
-            .any(|lane| crate::cache_p08::runtime_identity_action_uses(lane) == Some(uses));
+            .any(|lane| {
+                crate::cache_p08::runtime_identity_action_uses(lane) == Some(uses)
+                    || crate::cache_p08::runtime_prelude_action_uses(lane) == Some(uses)
+            });
     if runtime_identity {
         let Some(lane) = runs_on else {
             return Err(RenderError::InvalidWorkflow(
@@ -128,12 +131,6 @@ fn action_step_to_yaml(
     commands::validate_env(env)?;
     let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
     crate::step_ids::push_step_id(&mut entries, step);
-    if runtime_identity {
-        crate::step_ids::push_explicit_step_id(
-            &mut entries,
-            crate::cache_p08::TOOLS_CACHE_IDENTITY_STEP_ID,
-        );
-    }
     if let Some(condition) = &step.condition {
         steps::scan_for_private_subcommands(condition)?;
         entries.push(("if".to_owned(), Yaml::str(condition.clone())));

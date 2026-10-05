@@ -74,14 +74,13 @@ fn only_qualified_hosted_lane_keeps_a_tools_cache_prelude() {
 
     let shared = share_lanes(&jobs, &ctx()).expect("lane-specific prelude factors");
     let hosted_prelude = &shared.runtime_preludes[hosted_id];
-    assert_eq!(hosted_prelude.len(), 3);
+    assert_eq!(hosted_prelude.len(), 2);
     assert_eq!(
         hosted_prelude[0].name,
         crate::cache_p08::TOOLS_CACHE_IDENTITY_NAME
     );
-    assert_eq!(hosted_prelude[1].name, crate::tool_seed::TOOL_SEED_NAME);
     assert_eq!(
-        hosted_prelude[2].name,
+        hosted_prelude[1].name,
         crate::cache_steps::TOOLS_RESTORE_NAME
     );
     assert!(shared.runtime_preludes[local_id].is_empty());
@@ -91,9 +90,9 @@ fn only_qualified_hosted_lane_keeps_a_tools_cache_prelude() {
     };
     assert_eq!(
         identity_uses,
-        crate::cache_p08::runtime_identity_action_uses(HOSTED_RUNS)
+        crate::cache_p08::runtime_prelude_action_uses(HOSTED_RUNS)
     );
-    let restore_uses = match &hosted_prelude[2].kind {
+    let restore_uses = match &hosted_prelude[1].kind {
         StepKind::Action { uses, .. } => Some(uses.as_str()),
         _ => None,
     };
@@ -107,6 +106,14 @@ fn only_qualified_hosted_lane_keeps_a_tools_cache_prelude() {
     assert!(composite.bytes.contains("Setup Mise"));
     assert!(!composite.bytes.contains("V2 identity"));
     assert!(!composite.bytes.contains("Restore Mise tools"));
+    let prelude_action = shared
+        .files
+        .iter()
+        .find(|file| file.path.ends_with("velnor-tools-prelude-u26/action.yml"));
+    assert!(
+        prelude_action.is_none(),
+        "shared files are added by render_merged"
+    );
     assert_emitted_restore_is_hosted_only(&shared, hosted_id, local_id);
 }
 
@@ -128,8 +135,7 @@ fn tools_cache_prelude(
         rustup_components: &[],
     })?;
     Ok(vec![
-        payload.runtime_identity_step()?,
-        crate::tool_seed::seed_step(&payload)?,
+        payload.runtime_prelude_step()?,
         payload.restore_step()?,
     ])
 }
@@ -175,7 +181,7 @@ fn with_wrong_identity_lane(
     let StepKind::Action { uses, .. } = &mut identity.kind else {
         panic!("identity uses a local composite action");
     };
-    *uses = crate::cache_p08::runtime_identity_action_uses("ubuntu-24.04")
+    *uses = crate::cache_p08::runtime_prelude_action_uses("ubuntu-24.04")
         .expect("supported fixture lane")
         .to_owned();
     wrong_lane

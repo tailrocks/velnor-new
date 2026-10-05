@@ -9,6 +9,7 @@ use super::*;
 use crate::tool_seed_test_support::mock_trust_commands;
 
 const TARGET: &str = "x86_64-unknown-linux-gnu";
+const TARGET_RUNS: &str = "ubuntu-26.04";
 const CHECKOUT: &str = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
 const SETUP_USES: &str = "jdx/mise-action@0123456789abcdef0123456789abcdef01234567";
 
@@ -160,17 +161,36 @@ fn step_key_is_derived_from_pinned_job_tools_and_configured_checkout_payload() {
         CHECKOUT,
     )
     .expect("setup and seed");
-    assert_eq!(rendered_job.steps[2].name, TOOL_SEED_NAME);
-    assert_eq!(rendered_job.steps[2].role, Some(StepRole::ToolSeed));
-    let StepKind::Action { with, .. } = &rendered_job.steps[2].kind else {
-        panic!("seed must be an action")
+    assert_eq!(
+        rendered_job.steps[1].name,
+        crate::cache_p08::TOOLS_CACHE_IDENTITY_NAME
+    );
+    assert_eq!(
+        rendered_job.steps[1].role,
+        Some(StepRole::ToolsCacheIdentity)
+    );
+    assert_eq!(
+        rendered_job.steps[1].id,
+        Some(velnor_actions_contract::StepId::ToolsCacheIdentity)
+    );
+    let StepKind::Action { with, .. } = &rendered_job.steps[1].kind else {
+        panic!("V2 identity and seed use the registered prelude composite")
     };
     assert_eq!(
-        with.get("cache_key").map(String::as_str),
-        Some(expected.as_str())
+        with.get(crate::cache_p08::TOOLS_CACHE_IDENTITY_DIGEST_INPUT)
+            .map(String::as_str),
+        Some(tools_payload().static_digest())
     );
-    assert_eq!(rendered_job.steps[4].name, "Setup Mise");
-    assert_eq!(rendered_job.steps[4].role, Some(StepRole::MiseSetup));
+    assert_eq!(
+        rendered_job.steps[2].name,
+        crate::cache_steps::TOOLS_RESTORE_NAME
+    );
+    assert_eq!(rendered_job.steps[3].name, "Setup Mise");
+    assert_eq!(rendered_job.steps[3].role, Some(StepRole::MiseSetup));
+    let action = crate::cache_p08::runtime_prelude_action_file(TARGET_RUNS, "0.1.0")
+        .expect("prelude action file");
+    assert!(action.bytes.contains(&expected));
+    assert!(action.bytes.contains("cache_key:"));
 
     let mut full_history_checkout = crate::steps::checkout_step(CHECKOUT).expect("checkout");
     if let StepKind::Action { with, .. } = &mut full_history_checkout.kind {
@@ -186,7 +206,7 @@ fn step_key_is_derived_from_pinned_job_tools_and_configured_checkout_payload() {
         CHECKOUT,
     )
     .expect("full-history checkout is an eligible seed owner");
-    assert!(is_tool_seed_step(&deep_job.steps[2]));
+    assert_eq!(deep_job.steps[1].role, Some(StepRole::ToolsCacheIdentity));
 
     let fake = Step {
         name: "Checkout".to_owned(),
@@ -208,7 +228,12 @@ fn step_key_is_derived_from_pinned_job_tools_and_configured_checkout_payload() {
         CHECKOUT,
     )
     .expect("cold setup");
-    assert!(fake_job.steps.iter().all(|step| !is_tool_seed_action(step)));
+    assert!(
+        fake_job
+            .steps
+            .iter()
+            .all(|step| step.role != Some(StepRole::ToolsCacheIdentity))
+    );
 
     assert_wrong_pinned_checkout_stays_cold(&setup);
 }
@@ -232,7 +257,7 @@ fn assert_wrong_pinned_checkout_stays_cold(setup: &crate::MiseSetup) {
         wrong_pin_job
             .steps
             .iter()
-            .all(|step| !is_tool_seed_action(step))
+            .all(|step| step.role != Some(StepRole::ToolsCacheIdentity))
     );
 }
 
@@ -294,18 +319,24 @@ fn malformed_seed_key_and_preexisting_v2_steps_are_rejected() {
         CHECKOUT,
     )
     .expect("setup and seed");
-    let seed_index = rendered_job
-        .steps
-        .iter()
-        .position(is_tool_seed_action)
-        .expect("seed action");
-    let mut mismatched_key = rendered_job.clone();
-    if let StepKind::Action { with, .. } = &mut mismatched_key.steps[seed_index].kind {
-        with.insert(
-            "cache_key".to_owned(),
-            "mise-v1-x86_64-unknown-linux-gnu-2026.9.18-0123456789abcdef".to_owned(),
-        );
-    }
+    let mut mismatched_key = job(vec![
+        crate::steps::checkout_step(CHECKOUT).expect("checkout"),
+        mise_shell(),
+        Step {
+            name: TOOL_SEED_NAME.to_owned(),
+            id: None,
+            role: Some(StepRole::ToolSeed),
+            condition: None,
+            kind: StepKind::Action {
+                uses: TOOL_SEED_USES.to_owned(),
+                with: BTreeMap::from([(
+                    "cache_key".to_owned(),
+                    "mise-v1-x86_64-unknown-linux-gnu-2026.9.18-0123456789abcdef".to_owned(),
+                )]),
+                env: BTreeMap::new(),
+            },
+        },
+    ]);
     assert!(
         any_job_has_seed(&BTreeMap::from([(
             "wrong-seed-key".to_owned(),
@@ -326,12 +357,8 @@ fn malformed_seed_key_and_preexisting_v2_steps_are_rejected() {
     );
 
     let mut mismatched_setup = rendered_job;
-    let setup_index = seed_index + 2;
-    if let StepKind::Action { with, .. } = &mut mismatched_setup.steps[setup_index].kind {
-        with.insert(
-            "cache_key".to_owned(),
-            "mise-v1-x86_64-unknown-linux-gnu-2026.9.18-0123456789abcdef".to_owned(),
-        );
+    if let StepKind::Action { with, .. } = &mut mismatched_setup.steps[1].kind {
+        with.insert("d".to_owned(), "not-a-lowercase-static-digest".to_owned());
     }
     assert!(
         crate::cache_p08::ensure_tools_cache_v2(

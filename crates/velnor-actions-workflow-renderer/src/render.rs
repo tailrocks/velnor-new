@@ -383,13 +383,15 @@ fn render_merged(
     let text = marker::with_marker(&ctx.generator_version, &render_yaml(&document))?;
     crate::workflow_size::check_workflow_size(WORKFLOW_PATH, &text)?;
     steps::scan_for_private_subcommands(&text)?;
-    let mut shared_files = crate::render_cache_files::with_runtime_identity_files(
+    let shared_files = crate::render_cache_files::with_runtime_identity_files(
         shared.files,
         &jobs,
         &ctx.generator_version,
     )?;
     if crate::tool_seed::any_job_has_seed(&jobs)? {
-        shared_files.push(crate::tool_seed::action_file(&ctx.generator_version)?);
+        return Err(RenderError::InvalidWorkflow(
+            "tool_seed_requires_tools_prelude".to_owned(),
+        ));
     }
     Ok(RenderedWorkflow {
         yaml: text,

@@ -10,7 +10,7 @@ use super::impl_renderer_fixtures::*;
 const IDENTITY_SCRIPT_PATH: &str = ".github/scripts/velnor-tools-cache-identity.sh";
 const IDENTITY_SCRIPT_NAME: &str = "velnor-tools-cache-identity.sh";
 const RESTORE_ACTION_PATH: &str = ".github/actions/velnor-tools-cache-restore/action.yml";
-const UBUNTU26_ACTION: &str = "./.github/actions/u26";
+const UBUNTU26_ACTION: &str = "./.github/actions/velnor-tools-prelude-u26";
 const IDENTITY_STEP: &str = "V2 identity";
 const RESTORE_STEP: &str = "Restore Mise tools";
 
@@ -94,6 +94,16 @@ fn assert_one_marked_script(rendered: &RenderedWorkflow) -> Result<(), RenderErr
             action.path
         );
     }
+    let preludes: Vec<_> = rendered
+        .shared
+        .iter()
+        .filter(|file| file.path == ".github/actions/velnor-tools-prelude-u26/action.yml")
+        .collect();
+    assert_eq!(preludes.len(), 1);
+    assert!(preludes[0].bytes.contains("id: v2"));
+    assert!(preludes[0].bytes.contains("steps.v2.outputs.enabled"));
+    assert!(preludes[0].bytes.contains("steps.v2.outputs.identity"));
+    assert!(preludes[0].bytes.contains("velnor-tool-seed"));
     assert_eq!(rendered.yaml.matches(UBUNTU26_ACTION).count(), 2);
     let restore_action = rendered
         .shared

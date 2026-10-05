@@ -30,7 +30,7 @@ fn keyed_job() -> Result<Job, RenderError> {
         condition: None,
         permissions: None,
         environment: None,
-        steps: vec![payload.runtime_identity_step()?, payload.restore_step()?],
+        steps: vec![payload.runtime_prelude_step()?, payload.restore_step()?],
     })
 }
 

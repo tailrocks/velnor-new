@@ -2,11 +2,9 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{RunsOn, Step, StepKind, StepRole};
+use velnor_actions_contract::{RunsOn, Step, StepKind};
 
 use crate::{RenderError, cache_p08, commands, marker, steps, tree::RenderedFile, yaml::Yaml};
-
-use super::ToolsCachePayload;
 
 const SCRIPT: &str = concat!(
     "export LC_ALL=C; set -eu; umask 077; ",
@@ -104,63 +102,6 @@ const SCRIPT: &str = concat!(
 
 pub(super) const SCRIPT_PATH: &str = ".github/scripts/velnor-tools-cache-identity.sh";
 const SCRIPT_FILE_NAME: &str = "velnor-tools-cache-identity.sh";
-/// Construct an identity step from the exact lane and payload digest.
-/// # Errors
-pub(super) fn step(payload: &ToolsCachePayload) -> Result<Step, RenderError> {
-    let uses = action_uses(&payload.runs_on).ok_or_else(|| {
-        RenderError::BadCommand("unsupported_tools_cache_identity_lane".to_owned())
-    })?;
-    Ok(Step {
-        name: cache_p08::TOOLS_CACHE_IDENTITY_NAME.to_owned(),
-        id: None,
-        role: Some(StepRole::ToolsCacheIdentity),
-        condition: None,
-        kind: StepKind::Action {
-            uses: uses.to_owned(),
-            with: BTreeMap::from([(
-                cache_p08::TOOLS_CACHE_IDENTITY_DIGEST_INPUT.to_owned(),
-                payload.static_digest.clone(),
-            )]),
-            env: BTreeMap::new(),
-        },
-    })
-}
-
-/// Validate the only local action call accepted by the workflow renderer.
-pub(super) fn validate_action_call(
-    step: &Step,
-    uses: &str,
-    runs_on: &str,
-    with: &BTreeMap<String, String>,
-    env: &BTreeMap<String, String>,
-) -> Result<(), RenderError> {
-    if step.role != Some(StepRole::ToolsCacheIdentity)
-        || Some(uses) != action_uses(runs_on)
-        || !env.is_empty()
-        || with.len() != 1
-        || !with.contains_key(cache_p08::TOOLS_CACHE_IDENTITY_DIGEST_INPUT)
-    {
-        return Err(RenderError::InvalidWorkflow(
-            "malformed_tools_cache_identity_action".to_owned(),
-        ));
-    }
-    let Some(digest) = with.get(cache_p08::TOOLS_CACHE_IDENTITY_DIGEST_INPUT) else {
-        return Err(RenderError::InvalidWorkflow(
-            "malformed_tools_cache_identity_action".to_owned(),
-        ));
-    };
-    if digest.len() != 64
-        || !digest
-            .bytes()
-            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
-    {
-        return Err(RenderError::InvalidWorkflow(
-            "bad_tools_cache_identity_digest".to_owned(),
-        ));
-    }
-    Ok(())
-}
-
 pub(super) fn is_supported_lane(runs_on: &str, target: &str) -> bool {
     let (image, arch) = lane_identity(runs_on, target);
     !image.is_empty() && !arch.is_empty()

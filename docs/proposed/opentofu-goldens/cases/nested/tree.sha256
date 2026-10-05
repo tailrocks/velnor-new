@@ -3,6 +3,7 @@ e8b37bd2c2e072053779a49aa8c24e3f07cb382690cab7dc59756b8899b61854  ./.github/acti
 59555c5e443881912c515d54d1c48ae90f86b7bb0a4ecf85e6483a055b52507f  ./.github/actions/u26/action.yml
 6139179ce61ff5097625f4ea76159d97de3ea4275e0aeea4ab0b86e3272c61e8  ./.github/actions/velnor-tool-seed/action.yml
 dc881cf73a843ecee2227e7b0687ca4dfafedac0f071f2ff8a5d75610595d41c  ./.github/actions/velnor-tools-cache-restore/action.yml
+c854b10113e5bbb39bb34e69a11a730f655e7a2cab9526dcf1b0823c71a47110  ./.github/actions/velnor-tools-prelude-u26/action.yml
 9a9fbc1c5c49dc05bfc5bf5ff857e4b8f3b92613cc95c37fec1643b88e8dee4e  ./.github/scripts/velnor-tools-cache-identity.sh
-7a1fc8fcd49516226053f7cb3eef181e155af5a5fbff53e0997367e2274b5c8e  ./.github/workflows/ci.yml
+0dc9c5be0f8bf7479de46ee8139c1d58b3fb19fc15cd64dbb5fcb1665a96b900  ./.github/workflows/ci.yml
 link ./.github/CLAUDE.md -> AGENTS.md
