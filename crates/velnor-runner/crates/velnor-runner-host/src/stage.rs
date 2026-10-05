@@ -9,8 +9,8 @@ use bollard::query_parameters::RemoveContainerOptionsBuilder;
 use crate::docker_spec::{DeleteDecision, delete_decision, runner_plan};
 use crate::error::HostError;
 use crate::worker::{
-    CreateProjection, create_named_volumes, create_only, deliver_jit, dind_create, join_dind_net,
-    runner_create, start_id,
+    CreateProjection, create_named_volumes, create_only, create_volume, deliver_jit, dind_create,
+    dind_data_volume, join_dind_net, runner_create, start_id,
 };
 
 /// Where `start_pair_until` returns. Later steps are not started.
@@ -51,6 +51,7 @@ pub(crate) trait PairEngine {
 impl PairEngine for Docker {
     async fn prepare_volumes(&self, volume: &str) -> Result<(), HostError> {
         create_named_volumes(self, &runner_plan(volume)?).await?;
+        create_volume(self, &dind_data_volume(volume)?).await?;
         crate::work_owner::own_work_volume(self, &format!("{volume}-work")).await
     }
 
