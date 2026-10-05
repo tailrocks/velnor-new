@@ -1,5 +1,6 @@
 use super::*;
 use std::collections::BTreeMap;
+use std::os::unix::fs::PermissionsExt;
 use velnor_actions_contract::config::{ActionPinOverride, ActionsConfig};
 use velnor_actions_contract::{
     DiscoveryConfig, GeneratorValidation, ResourcesConfig, StacksConfig, TestShardingConfig,
@@ -185,4 +186,66 @@ fn verification_mise_setup_pins_each_runner_architecture() {
     assert_eq!(macos.version, MISE_VERSION);
     assert_eq!(macos.sha256, MISE_BINARY_SHA256_MACOS_ARM64);
     assert_ne!(linux.sha256, macos.sha256);
+}
+
+#[test]
+fn generator_seed_hit_skips_curl_and_a_bad_hash_does_not_copy() {
+    let root = std::env::temp_dir().join(format!("velnor-gen-seed-{}", std::process::id()));
+    std::fs::remove_dir_all(&root).ok();
+    let name = "velnor-actions-0.1.0";
+    let seed_file = root.join("generator").join(name);
+    std::fs::create_dir_all(seed_file.parent().expect("parent")).expect("seed dir");
+    std::fs::write(&seed_file, b"generator-bytes").expect("seed");
+    let staged = root.join("stage").join(name);
+    let argv = acquire_script_argv(staged.to_str().expect("utf8"), root.to_str().expect("utf8"))
+        .expect("argv");
+    let bin = root.join("bin");
+    std::fs::create_dir_all(&bin).expect("bin");
+    let curl = bin.join("curl");
+    std::fs::write(&curl, "#!/bin/sh\necho \"$@\" >> \"$CURL_LOG\"\nexit 22\n").expect("curl");
+    let mut mode = std::fs::metadata(&curl).expect("meta").permissions();
+    mode.set_mode(0o755);
+    std::fs::set_permissions(&curl, mode).expect("mode");
+    let hash = file_sha256(&seed_file);
+    let hit = run_acquire(&argv[2], &bin, &hash);
+    assert!(hit.status.success(), "{hit:?}");
+    assert_eq!(std::fs::read(&staged).expect("staged"), b"generator-bytes");
+    assert!(read_log(&bin).is_empty(), "{}", read_log(&bin));
+    std::fs::remove_file(&staged).expect("clear");
+    let miss = run_acquire(&argv[2], &bin, &"a".repeat(64));
+    assert!(!miss.status.success(), "bad hash must not succeed");
+    assert!(!staged.exists(), "bad seed is not staged");
+    assert!(read_log(&bin).contains("https://example.invalid/generator"));
+    assert_eq!(std::fs::read(&seed_file).expect("seed"), b"generator-bytes");
+    std::fs::remove_dir_all(&root).ok();
+}
+
+fn file_sha256(path: &std::path::Path) -> String {
+    let output = std::process::Command::new("/sbin/sha256sum")
+        .arg(path)
+        .output()
+        .expect("sha256sum");
+    assert!(output.status.success(), "{output:?}");
+    String::from_utf8_lossy(&output.stdout)
+        .split_whitespace()
+        .next()
+        .expect("hash")
+        .to_owned()
+}
+
+fn run_acquire(script: &str, bin: &std::path::Path, hash: &str) -> std::process::Output {
+    let path = format!("{}:/sbin:/usr/bin:/bin", bin.display());
+    std::process::Command::new("sh")
+        .arg("-c")
+        .arg(script)
+        .env("PATH", &path)
+        .env("VELNOR_ASSET_SHA256", hash)
+        .env("VELNOR_ASSET_URL", "https://example.invalid/generator")
+        .env("CURL_LOG", bin.join("curl.log"))
+        .output()
+        .expect("sh")
+}
+
+fn read_log(bin: &std::path::Path) -> String {
+    std::fs::read_to_string(bin.join("curl.log")).unwrap_or_default()
 }

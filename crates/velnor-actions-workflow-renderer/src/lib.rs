@@ -49,6 +49,7 @@ mod steps_internal;
 mod steps_plain;
 mod support;
 pub mod tofu_cache;
+mod tool_seed;
 pub mod toolchain_env;
 pub mod tree;
 mod verification_jobs;

@@ -233,9 +233,18 @@ fn strict_restores_builtin_and_saves_on_elected_writer()
         "P08: sole owner saves once: {names:?}"
     );
     assert_eq!(
-        names.iter().position(|s| s == "Setup Mise"),
+        names.iter().position(|s| s == "Restore Velnor tool seed"),
         Some(1),
-        "setup right after checkout: {names:?}"
+        "tool seed after checkout: {names:?}"
+    );
+    assert_eq!(
+        names.iter().position(|s| s == "Setup Mise"),
+        Some(2),
+        "setup after the tool seed: {names:?}"
+    );
+    assert!(
+        text.contains("/opt/velnor/seed"),
+        "seed path is fixed: {text}"
     );
     for need in ["cache: \"true\"", "cache_key: mise-v1-"] {
         assert!(text.contains(need), "built-in cache {need}:\n{text}");
