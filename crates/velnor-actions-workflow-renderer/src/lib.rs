@@ -24,6 +24,7 @@ pub mod guard;
 mod lane_share;
 pub mod marker;
 mod matrix;
+mod matrix_output_mode;
 mod mbx_bundle;
 mod mbx_gc_policy;
 pub mod msrv;
