@@ -347,3 +347,7 @@ pub(crate) fn key_for_slot(
     }
     Ok(key)
 }
+
+#[cfg(test)]
+#[path = "../qualification_cache_lineage_identity_tests.rs"]
+mod tests;
