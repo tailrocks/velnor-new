@@ -20,6 +20,10 @@ automation that is not wired.
   the `runner` default-label row), `upstream-probe`
   (only with `--check-upstream`), `exception-expiry`,
   `standing-exception`, `advisories`.
+- The shell entrypoint forwards repository checks through the existing CLI's
+  private `repo-policy-v1` gate to the separate `velnor-actions-freshness`
+  library. The library is repository-maintenance support outside V1 planning;
+  this adds no public command or binary.
 - Usages: `scripts/check-freshness.sh` (offline gate),
   `scripts/check-freshness.sh --with-advisories` (plus the live
   `cargo deny` scan, 180 s bound),

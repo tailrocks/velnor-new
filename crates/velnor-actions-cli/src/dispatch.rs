@@ -55,6 +55,8 @@ enum InternalOp {
     PreseedManifest,
     /// Baseline-publish operation.
     Publish,
+    /// Repository-maintenance operation behind its separate private gate.
+    RepoPolicy,
 }
 
 /// Validated private request: operation plus exact request-file path.
@@ -102,6 +104,7 @@ fn gate_request() -> Option<InternalRequest> {
         Ok(tag) if tag == REPORT_OP => InternalOp::Report,
         Ok(tag) if tag == PRESEED_MANIFEST_OP => InternalOp::PreseedManifest,
         Ok(tag) if tag == PUBLISH_OP => InternalOp::Publish,
+        Ok("repo-policy-v1") => InternalOp::RepoPolicy,
         _ => return None,
     };
     if op == InternalOp::Fetch || op == InternalOp::Report {
@@ -112,6 +115,10 @@ fn gate_request() -> Option<InternalRequest> {
     }
     if op == InternalOp::PreseedManifest {
         return runner_velnor_dir().map(|path| InternalRequest { op, path });
+    }
+    if op == InternalOp::RepoPolicy {
+        let root = crate::dispatch_repo_policy::gate_root()?;
+        return Some(InternalRequest { op, path: root });
     }
     let path = env::var_os(REQUEST_FILE_ENV)
         .filter(|value| !value.is_empty())
@@ -133,7 +140,10 @@ fn gate_request() -> Option<InternalRequest> {
                 return None;
             }
         }
-        InternalOp::Fetch | InternalOp::Report | InternalOp::PreseedManifest => {}
+        InternalOp::Fetch
+        | InternalOp::Report
+        | InternalOp::PreseedManifest
+        | InternalOp::RepoPolicy => {}
     }
     Some(InternalRequest { op, path })
 }
@@ -171,6 +181,7 @@ fn run_internal(request: &InternalRequest) -> ExitCode {
             Err(error) => fail_internal(&error.to_string()),
         },
         InternalOp::Publish => run_publish_internal(&request.path),
+        InternalOp::RepoPolicy => crate::dispatch_repo_policy::run(&request.path),
     }
 }
 

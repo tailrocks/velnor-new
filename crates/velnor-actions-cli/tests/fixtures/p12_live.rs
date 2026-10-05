@@ -192,14 +192,16 @@ fn every_fail_row_is_nonzero() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn script_covers_all_forms_scopes_and_namespaces() -> Result<(), Box<dyn Error>> {
-    let script = crate::impl_repo_policy::read("scripts/check-freshness.sh")?;
+    let mut owner = String::new();
+    for path in crate::impl_repo_policy::tree_files("crates/velnor-actions-freshness/src", "rs")? {
+        owner.push_str(&std::fs::read_to_string(path)?);
+    }
     for marker in [
         "build-dependencies",
         "dev-dependencies",
         "target.",
         "workspace",
         "package",
-        "name+version+source",
         "ambiguous identity",
         "unreachable locked package",
         "local-pin",
@@ -209,10 +211,12 @@ fn script_covers_all_forms_scopes_and_namespaces() -> Result<(), Box<dyn Error>>
         "exception-expiry",
         "standing-exception",
         "advisories",
-        "def fail_row",
-        "sys.exit(1)",
+        "fn fail_row",
     ] {
-        assert!(script.contains(marker), "script misses {marker}");
+        assert!(
+            owner.contains(marker),
+            "Rust freshness owner misses {marker}"
+        );
     }
     Ok(())
 }

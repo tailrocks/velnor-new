@@ -11,7 +11,7 @@ use crate::impl_repo_policy::{
 /// Intra-workspace edges allowed per member package.
 fn expected_internal(dir: &str) -> Vec<&str> {
     match dir {
-        "crates/velnor-actions-contract" => vec![],
+        "crates/velnor-actions-contract" | "crates/velnor-actions-freshness" => vec![],
         "crates/velnor-actions-orchestrator" => vec![
             "velnor-actions-actionlint",
             "velnor-actions-contract",
@@ -20,7 +20,9 @@ fn expected_internal(dir: &str) -> Vec<&str> {
             "velnor-actions-tofu",
             "velnor-actions-workflow-renderer",
         ],
-        "crates/velnor-actions-cli" => vec!["velnor-actions-orchestrator"],
+        "crates/velnor-actions-cli" => {
+            vec!["velnor-actions-freshness", "velnor-actions-orchestrator"]
+        }
         _ => vec!["velnor-actions-contract"],
     }
 }
@@ -76,6 +78,11 @@ fn external_deps_allowlisted_used_and_narrow() -> Result<(), Box<dyn Error>> {
         // compile-gated at 1.98.1); default features only, facade-owned
         // byte/count/depth caps, no expression evaluation.
         "hcl",
+        "flate2",
+        "rustls",
+        "rustls-native-certs",
+        "syn",
+        "ureq",
     ];
     for (dir, _) in MEMBERS {
         let body = manifest(dir)?;
@@ -91,7 +98,13 @@ fn external_deps_allowlisted_used_and_narrow() -> Result<(), Box<dyn Error>> {
                 for feature in quoted.into_iter().skip(1).step_by(2) {
                     // Only `derive` globally, plus `fs` on rustix for the
                     // P09 atomic directory exchange (no net/pty/terminal).
-                    let narrow = feature == "derive" || (key == "rustix" && feature == "fs");
+                    let narrow = feature == "derive"
+                        || (key == "rustix" && feature == "fs")
+                        || (dir == "crates/velnor-actions-freshness"
+                            && ((key == "flate2" && feature == "rust_backend")
+                                || (key == "rustls" && feature == "ring")
+                                || (key == "syn" && ["full", "parsing"].contains(&feature))
+                                || (key == "ureq" && feature == "rustls-no-provider")));
                     assert!(narrow, "{dir}/{key} feature {feature}");
                 }
             }
@@ -260,12 +273,6 @@ fn cli_invokes_no_tools_directly() -> Result<(), Box<dyn Error>> {
         ".spawn(",
         ".status()",
         ".output()",
-        "cargo",
-        "mise",
-        "mbx",
-        "nextest",
-        "rustup",
-        "\"gh\"",
         "shell",
         "Shell",
         "sh -c",

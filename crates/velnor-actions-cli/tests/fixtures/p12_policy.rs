@@ -294,10 +294,13 @@ fn unknown_hold_subject_fails() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn action_const_wiring_is_mapped() -> Result<(), Box<dyn Error>> {
-    let script = crate::impl_repo_policy::read("scripts/check-freshness.sh")?;
+    let inventory =
+        crate::impl_repo_policy::read("crates/velnor-actions-freshness/src/inventory.rs")?;
+    let pins =
+        crate::impl_repo_policy::read("crates/velnor-actions-freshness/src/inventory/pins.rs")?;
     assert!(
-        script.contains(ACTIONS_RS),
-        "action const path must be read"
+        inventory.contains(ACTIONS_RS) && pins.contains("EXPECTED_ACTIONS"),
+        "Rust freshness owner must map action consts"
     );
     for key in [
         "actions/cache/restore",
@@ -305,7 +308,7 @@ fn action_const_wiring_is_mapped() -> Result<(), Box<dyn Error>> {
         "asamarts/alint",
         "Swatinem/rust-cache",
     ] {
-        assert!(script.contains(key), "expected action set misses {key}");
+        assert!(inventory.contains(key), "expected action set misses {key}");
     }
     Ok(())
 }

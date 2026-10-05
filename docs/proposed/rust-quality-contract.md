@@ -47,19 +47,19 @@ mise.toml
 mise.lock
 ```
 
-All first-party Rust packages MUST be under `crates/`. The root manifest MUST
-be a virtual workspace with exactly the eight product package names listed in
-the table below. Cargo metadata is authoritative for package membership and
-dependency relationships. V1 does not add a custom linter to reject package
-renames or validate the architecture dependency matrix; those decisions are reviewed only through the §5
-mechanism allowlist (committed policy tests, generic Alint, Clippy, human-reviewed snapshots). Rust/Cargo-specific symbols, Cargo
-metadata, and `rust-toolchain.toml` inspection are restricted to
-`velnor-actions-rust`; Mise syntax, environment, `mise.toml`/`mise.lock`
-inspection, and task metadata are restricted to `velnor-actions-mise`; actionlint
-metadata/configuration belongs to `velnor-actions-actionlint`. Alint enforces
-only its configured generic file/path, required-file, and line-count rules.
-The CLI package MUST
-declare binary `velnor-actions`, the only target name without the
+All first-party Rust packages MUST be under `crates/`. The root manifest MUST be a virtual workspace with exactly the eight product package names listed in
+the table below plus one separately classified repository-only support member,
+`velnor-actions-freshness`. Cargo metadata defines package membership and
+dependency relationships. V1 adds no custom architecture linter; its §5
+mechanism allowlist, Alint, Clippy, tests, and review govern those decisions.
+Within V1 product behavior, Rust/Cargo metadata and `rust-toolchain.toml` belong
+to `velnor-actions-rust`, while Mise syntax, environment, and task metadata
+belong to `velnor-actions-mise`; actionlint metadata belongs to
+`velnor-actions-actionlint`. Repository-only support may inspect Velnor-owned
+Cargo/Mise sources only for private maintenance operations; those results MUST
+NOT feed V1 planning. Alint enforces only its configured generic file/path,
+required-file, and line-count rules.
+The CLI package MUST declare binary `velnor-actions`, the only target name without the
 package-purpose suffix. Non-Rust directories MAY remain in their own
 conventional locations.
 
@@ -80,6 +80,11 @@ independent of other stack crates.
 | `velnor-actions-orchestrator` | Composition, obligation selection, cache evidence, scheduling, generation coordination, typed process-request coordination | Parsing Cargo/Mise files, direct YAML templates, CLI parsing, OS process details, process creation |
 | `velnor-actions-cli` | Clap parser, typed dispatch, concise deterministic human plan renderer, generation output, and exit-code formatting; emits binary `velnor-actions` | Orchestration algorithms or Rust, Mise, and renderer domain rules |
 | `velnor-actions-tofu` | All OpenToFu/HCL discovery, root/module interpretation, task payloads, affected selection, identity extensions | Rust/Cargo, Mise execution, workflow YAML, process details, non-tofu stacks |
+| `velnor-actions-freshness` (repository-only support) | Read-only repository freshness/pin/lock/advisory checks and bounded bootstrap metadata operations behind the existing CLI private gate | V1 planning, task graph or selection, runner behavior, product evidence claims, public commands, or workflow generation |
+
+The support member is separate from the eight product crates and outside the
+V1 product graph. Only the CLI private maintenance gate depends on it; the
+orchestrator MUST NOT consume it.
 
 Hard invariants 10–12 (spec §3.3) are normative throughout. 10 — One owner per
 domain rule per the table above; extend an existing owner before making a new
@@ -117,7 +122,7 @@ snapshot is Rust 1.98.1 with MSRV 1.98. Never use a placeholder MSRV.
 
 ```toml
 [workspace]
-members = ["crates/velnor-actions-contract", "crates/velnor-actions-rust", "crates/velnor-actions-mise", "crates/velnor-actions-actionlint", "crates/velnor-actions-workflow-renderer", "crates/velnor-actions-orchestrator", "crates/velnor-actions-cli", "crates/velnor-actions-tofu"]
+members = ["crates/velnor-actions-contract", "crates/velnor-actions-rust", "crates/velnor-actions-mise", "crates/velnor-actions-actionlint", "crates/velnor-actions-workflow-renderer", "crates/velnor-actions-orchestrator", "crates/velnor-actions-cli", "crates/velnor-actions-freshness", "crates/velnor-actions-tofu"]
 resolver = "3"
 
 [workspace.package]
