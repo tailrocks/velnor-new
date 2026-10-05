@@ -30,3 +30,6 @@ fn assert_oversized_tar_extension_is_rejected(kind: EntryType) {
     );
     assert!(!destination.exists());
 }
+
+#[path = "check_tool_archive_zip_admission_tests.rs"]
+mod zip_admission_tests;
