@@ -9,7 +9,8 @@ use crate::{EnsureError, HostError, IntentState, Journal, Outcome};
 
 mod docker_stub;
 pub(super) use self::docker_stub::DockerStub;
-use self::docker_stub::{closed, hanging, http};
+pub(in crate::launch) use self::docker_stub::http;
+use self::docker_stub::{closed, hanging};
 
 const TIMEOUT: Duration = Duration::from_secs(2);
 
