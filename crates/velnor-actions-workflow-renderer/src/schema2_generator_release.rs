@@ -351,3 +351,7 @@ fn document(jobs: Vec<(String, Yaml)>) -> Yaml {
         ("jobs".to_owned(), Yaml::Map(jobs)),
     ])
 }
+
+#[cfg(test)]
+#[path = "schema2_generator_release_provenance_tests.rs"]
+mod provenance_tests;
