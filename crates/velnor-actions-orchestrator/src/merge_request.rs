@@ -32,13 +32,15 @@ mod needs_channel;
 
 use std::path::{Path, PathBuf};
 
-use velnor_actions_contract::{NEEDS_EXPECTED_ENV, canonical_json_str, parse_strict_json};
+use velnor_actions_contract::{
+    CacheWriterFacts, NEEDS_EXPECTED_ENV, canonical_json_str, parse_strict_json,
+};
 
 use self::needs_channel::{NEEDS_ENV, parse_needs};
 use crate::OrchestratorError;
 use crate::internal::{internal, internal_contract};
 use crate::internal_request::resolve_run_key;
-use crate::request_event::workflow_event_for;
+use crate::request_event::{cache_writer_facts, workflow_event_for};
 
 /// Assemble one canonical merge request from a run directory.
 ///
@@ -62,13 +64,15 @@ pub fn assemble_merge_request(run_key: &str, run_dir: &Path) -> Result<String, O
         .filter(|value| !value.is_empty())
         .as_deref()
         .and_then(event_payload_from);
-    assemble_with_needs(
+    let repository = std::env::var(crate::origin::GITHUB_REPOSITORY_ENV).ok();
+    assemble_with_repository(
         run_key,
         run_dir,
         needs.as_deref(),
         expected.as_deref(),
         event_name.as_deref(),
         event_payload.as_deref(),
+        repository.as_deref(),
     )
 }
 
@@ -90,6 +94,7 @@ fn event_payload_from(value: &std::ffi::OsStr) -> Option<String> {
 /// # Errors
 ///
 /// Returns [`OrchestratorError::Internal`] for encoding failures.
+#[cfg(test)]
 pub(crate) fn assemble_with_needs(
     run_key: &str,
     run_dir: &Path,
@@ -98,8 +103,34 @@ pub(crate) fn assemble_with_needs(
     event_name: Option<&str>,
     event_payload: Option<&str>,
 ) -> Result<String, OrchestratorError> {
+    assemble_with_repository(
+        run_key,
+        run_dir,
+        needs,
+        expected,
+        event_name,
+        event_payload,
+        None,
+    )
+}
+
+/// Assemble with the current runner repository slug included in the facts.
+fn assemble_with_repository(
+    run_key: &str,
+    run_dir: &Path,
+    needs: Option<&str>,
+    expected: Option<&str>,
+    event_name: Option<&str>,
+    event_payload: Option<&str>,
+    repository: Option<&str>,
+) -> Result<String, OrchestratorError> {
     let mut errors = Vec::new();
     let actual_event = resolve_actual_event(event_name, event_payload, &mut errors);
+    let actual_cache_writer = actual_event
+        .zip(event_payload)
+        .and_then(|(event, text)| parse_strict_json(text).ok().map(|payload| (event, payload)))
+        .map(|(event, payload)| cache_writer_facts(event, &payload, repository))
+        .unwrap_or_else(CacheWriterFacts::default);
     let plan = read_json(run_dir, "plan.json", "plan", true, &mut errors);
     let matrix = read_json(run_dir, "matrix.json", "matrix", true, &mut errors);
     let (reports, task_reports) = crate::retrieve_reports::read_staged_reports(
@@ -115,6 +146,7 @@ pub(crate) fn assemble_with_needs(
         "schema": 1,
         "run_key": run_key,
         "actual_event": actual_event,
+        "actual_cache_writer": actual_cache_writer,
         "candidate_attestation": attestation,
         "plan": plan,
         "matrix": matrix,

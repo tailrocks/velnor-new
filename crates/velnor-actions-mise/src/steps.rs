@@ -10,7 +10,10 @@ use std::ffi::OsString;
 use std::path::PathBuf;
 
 use crate::catalog::{PinnedTool, ToolCatalog};
-use crate::command::{IsolatedCommand, NO_AUTO_INSTALL_ENV, mise_argv_tail, toolchain_env};
+use crate::command::{
+    IsolatedCommand, MISE_DATA_DIR_ENV, MISE_DATA_DIR_EXPR, NO_AUTO_INSTALL_ENV,
+    local_mise_data_dir, mise_argv_tail, toolchain_env_with_data_dir, validate_local_path,
+};
 use crate::error::MiseError;
 use crate::requests::{MetadataQualification, MiseInstall};
 
@@ -20,15 +23,15 @@ pub const PREPARE_PINNED_TOOLS_STEP: &str = "Prepare pinned tools";
 
 /// Velnor-owned persistent tool homes carried by every generated step.
 ///
-/// Values are caller-supplied absolute paths or runner-temp expressions;
-/// only presence is enforced here, never a shape, so expression forms
-/// (`${{ runner.temp }}/...`) pass through untouched.
+/// `new` accepts local absolute paths; `runner_temp` is the workflow form.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ToolHomes {
     /// Velnor-owned `MISE_RUSTUP_HOME` value.
     rustup_home: String,
     /// Velnor-owned `MISE_CARGO_HOME` value.
     cargo_home: String,
+    /// Velnor-owned `MISE_DATA_DIR` value.
+    mise_data_dir: String,
 }
 
 impl ToolHomes {
@@ -41,6 +44,7 @@ impl ToolHomes {
         Self {
             rustup_home: "${{ runner.temp }}/velnor/rustup".to_owned(),
             cargo_home: "${{ runner.temp }}/velnor/cargo".to_owned(),
+            mise_data_dir: MISE_DATA_DIR_EXPR.to_owned(),
         }
     }
 
@@ -50,15 +54,12 @@ impl ToolHomes {
     ///
     /// Returns [`MiseError::InvalidStepInput`] for an empty home.
     pub fn new(rustup_home: &str, cargo_home: &str) -> Result<Self, MiseError> {
-        if rustup_home.is_empty() {
-            return Err(invalid_input("rustup_home", rustup_home));
-        }
-        if cargo_home.is_empty() {
-            return Err(invalid_input("cargo_home", cargo_home));
-        }
+        validate_local_path("rustup_home", rustup_home)?;
+        validate_local_path("cargo_home", cargo_home)?;
         Ok(Self {
             rustup_home: rustup_home.to_owned(),
             cargo_home: cargo_home.to_owned(),
+            mise_data_dir: local_mise_data_dir(cargo_home)?,
         })
     }
 
@@ -74,11 +75,11 @@ impl ToolHomes {
         &self.cargo_home
     }
 
-    /// Exact home env triple: both owned homes plus the exact
-    /// `RUSTUP_TOOLCHAIN` pin from the catalog.
+    /// Exact Mise env: data dir, both owned homes, and the toolchain pin.
     #[must_use]
     pub fn env(&self, catalog: &ToolCatalog) -> Vec<(OsString, OsString)> {
-        toolchain_env(
+        toolchain_env_with_data_dir(
+            &self.mise_data_dir,
             &self.rustup_home,
             &self.cargo_home,
             &catalog.rustup_toolchain(),
@@ -87,8 +88,8 @@ impl ToolHomes {
 
     /// Full env for a pinned `exec` verification step.
     ///
-    /// Isolation quartet, install-disable pair, plus the owned-homes
-    /// triple: the step runs the prepared toolchain, and a missing tool
+    /// Isolation quartet, install-disable pair, plus the owned data dir,
+    /// homes, and toolchain: a missing tool
     /// fails as a preparation error instead of installing.
     #[must_use]
     pub fn exec_env(&self, catalog: &ToolCatalog) -> Vec<(OsString, OsString)> {
@@ -163,7 +164,7 @@ impl PreparePinnedTools {
         env
     }
 
-    /// Step env without the owned-homes triple: isolation overlay only.
+    /// Step env without Rust homes: isolation overlay plus data dir.
     ///
     /// Pure-tofu roles install no Rust toolchain, so their prepare
     /// step carries no rustup/cargo homes; config, env files, hooks,
@@ -172,7 +173,12 @@ impl PreparePinnedTools {
     /// matches no spawner env.
     #[must_use]
     pub fn env_without_homes(&self) -> Vec<(OsString, OsString)> {
-        IsolatedCommand::env_overlay()
+        let mut env = IsolatedCommand::env_overlay();
+        env.push((
+            OsString::from(MISE_DATA_DIR_ENV),
+            OsString::from(MISE_DATA_DIR_EXPR),
+        ));
+        env
     }
 
     /// Isolated command running this installation under the owned homes.

@@ -6,13 +6,15 @@
 //! copy, and the cache archive together. `ACTIONS_CACHE_MODE=read` makes
 //! `savePolicy` skip that post. A later step reclaims, writes one directory
 //! bundle under `runner.temp`, deletes the store only after that bundle
-//! exists, and saves that one path. The action restore looks up a different
-//! path, so the next job restores this same path and imports it into the store.
-//! A miss, a missing directory, or a failed import continues the job cold.
-//! Import and export print byte and inode lines for `$RUNNER_TEMP`.
+//! exists, and saves that one path under the shared protected-default gate.
+//! The action restore looks up a different path, so the next job restores
+//! this same path and imports it into the store. A miss, a missing directory,
+//! or a failed import continues the job cold. Import/export print byte and
+//! inode lines for `$RUNNER_TEMP`.
 
 use std::collections::BTreeMap;
 
+use velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION;
 use velnor_actions_contract::{Job, Step, StepKind};
 
 use crate::RenderError;
@@ -33,10 +35,6 @@ pub(crate) const MBX_BUNDLE_RESTORE_NAME: &str = "Restore MBX single bundle";
 pub(crate) const MBX_BUNDLE_IMPORT_NAME: &str = "Import MBX single bundle";
 /// Bundle path outside the mbx store. `actions/cache` archives only this path.
 pub(crate) const MBX_BUNDLE_PATH: &str = "${{ runner.temp }}/mbx-single-bundle";
-/// Push-only export gate. Exact bundle hits skip; pull requests never reach it.
-const PREP_IF: &str = "success() && github.event_name == 'push' && steps.mbx.outputs.cache-hit != 'true' && steps.mbx-bundle.outputs.cache-hit != 'true'";
-/// Save gate. Empty exports set `ready=false` and must not call `actions/cache`.
-const SAVE_IF: &str = "success() && github.event_name == 'push' && steps.mbx.outputs.cache-hit != 'true' && steps.mbx-bundle.outputs.cache-hit != 'true' && steps.mbx-export.outputs.ready == 'true'";
 
 /// One-line script: gc, one external bundle, delete the store only after it exists.
 const EXPORT_SCRIPT: &str = r#"set -eu; df -B1 -P "$RUNNER_TEMP"; df -i -P "$RUNNER_TEMP"; mbx gc; mbx cache dir > "$RUNNER_TEMP/mbx-store-path"; IFS= read -r store < "$RUNNER_TEMP/mbx-store-path"; test -n "$store"; bundle="$RUNNER_TEMP/mbx-single-bundle"; case "$bundle" in "$store"|"$store"/*) exit 1 ;; esac; case "$store" in /|.) exit 1 ;; *mbx*) ;; *) exit 1 ;; esac; rm -rf "$bundle"; if mbx cache export --group "$MBX_CACHE_EXPORT_GROUP" --format directory "$bundle" >"$RUNNER_TEMP/mbx-export.out" 2>&1; then test -d "$bundle"; rm -rf "$store"; df -B1 -P "$RUNNER_TEMP"; df -i -P "$RUNNER_TEMP"; echo "ready=true" >> "$GITHUB_OUTPUT"; else rm -rf "$bundle"; if grep -q "no completed mbx builds are recorded for export group" "$RUNNER_TEMP/mbx-export.out"; then echo "ready=false" >> "$GITHUB_OUTPUT"; exit 0; fi; cat "$RUNNER_TEMP/mbx-export.out"; exit 1; fi"#;
@@ -171,7 +169,9 @@ fn export_step() -> Result<Step, RenderError> {
         vec!["bash".to_owned(), "-c".to_owned(), EXPORT_SCRIPT.to_owned()],
         BTreeMap::new(),
     )?;
-    step.condition = Some(PREP_IF.to_owned());
+    step.condition = Some(format!(
+        "{CACHE_SAVE_CONDITION} && steps.mbx.outputs.cache-hit != 'true' && steps.mbx-bundle.outputs.cache-hit != 'true'"
+    ));
     Ok(step)
 }
 
@@ -187,6 +187,8 @@ fn save_step() -> Result<Step, RenderError> {
             ("path".to_owned(), MBX_BUNDLE_PATH.to_owned()),
         ]),
     )?;
-    step.condition = Some(SAVE_IF.to_owned());
+    step.condition = Some(format!(
+        "{CACHE_SAVE_CONDITION} && steps.mbx.outputs.cache-hit != 'true' && steps.mbx-bundle.outputs.cache-hit != 'true' && steps.mbx-export.outputs.ready == 'true'"
+    ));
     Ok(step)
 }

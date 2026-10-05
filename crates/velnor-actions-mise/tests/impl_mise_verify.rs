@@ -196,6 +196,7 @@ fn verify_commands_match_probes_and_env() -> Result<(), String> {
         ("MISE_LOCKFILE", "0"),
         ("MISE_AUTO_INSTALL", "false"),
         ("MISE_EXEC_AUTO_INSTALL", "false"),
+        ("MISE_DATA_DIR", "/velnor/mise"),
         ("MISE_RUSTUP_HOME", "/velnor/rustup"),
         ("MISE_CARGO_HOME", "/velnor/cargo"),
         ("RUSTUP_TOOLCHAIN", "1.98.1"),
@@ -206,7 +207,7 @@ fn verify_commands_match_probes_and_env() -> Result<(), String> {
             "missing {key}={value}: {env:?}"
         );
     }
-    assert_eq!(env.len(), 9, "exact step env, no drift: {env:?}");
+    assert_eq!(env.len(), 10, "exact step env, no drift: {env:?}");
     Ok(())
 }
 

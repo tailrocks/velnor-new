@@ -8,12 +8,21 @@ use velnor_actions_contract::{Step, StepKind};
 
 use crate::{RenderError, commands, marker};
 
+#[path = "steps_target.rs"]
+mod target;
+pub use target::{TARGET_DIR_PREFIX, lane_cargo_target_env, target_dir_for_lane};
+
+pub use crate::cache_p08::{tools_cache_key_for_tools, tools_digest};
 pub use crate::cache_steps::{
     CACHE_RESTORE_NAME, CACHE_SAVE_NAME, CompileDriver, MBX_ACTION_NAME, MBX_CACHE_MODE_ENV,
-    MBX_RESTORE_NAME, NEVER_ARCHIVE_MARKERS, TASK_ARTIFACTS_DIR, TOOLS_CACHE_PATH,
-    TOOLS_KEY_PREFIX, TOOLS_RESTORE_NAME, TOOLS_RESTORE_USES, TOOLS_SAVE_NAME, TOOLS_SAVE_USES,
-    cache_action_step, check_cache_step_order, check_mbx_gating, is_never_archive_path,
-    mbx_objects_step, mbx_step_for_driver, tools_cache_key, tools_restore_step, tools_save_step,
+    MBX_RESTORE_NAME, NEVER_ARCHIVE_MARKERS, TASK_ARTIFACTS_DIR, TOOLS_CACHE_ELIGIBLE_ENV,
+    TOOLS_CACHE_PATHS, TOOLS_CACHE_RESTORE_CONDITION, TOOLS_CACHE_SAVE_CONDITION,
+    TOOLS_IMAGE_IDENTITY_NAME, TOOLS_IMAGE_OS_ENV, TOOLS_IMAGE_VERSION_ENV, TOOLS_KEY_PREFIX,
+    TOOLS_MISE_BOOTSTRAP_BINARY, TOOLS_MISE_BOOTSTRAP_DATA_DIR, TOOLS_MISE_DATA_DIR,
+    TOOLS_RESTORE_NAME, TOOLS_RESTORE_USES, TOOLS_SAVE_NAME, TOOLS_SAVE_USES, cache_action_step,
+    check_cache_step_order, check_mbx_gating, is_never_archive_path, is_tools_cache_key,
+    is_tools_cache_path, mbx_objects_step, mbx_step_for_driver, tools_cache_image_identity_step,
+    tools_cache_path_input, tools_restore_step, tools_save_step,
 };
 
 pub use crate::steps_artifact::{
@@ -379,19 +388,4 @@ fn is_action_name(name: &str) -> bool {
         && name
             .bytes()
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'/' | b'.' | b'-' | b'_'))
-}
-
-/// Target-directory prefix isolating one lane.
-pub const TARGET_DIR_PREFIX: &str = "$RUNNER_TEMP/velnor/target/";
-
-/// Isolated target directory for one lane.
-#[must_use]
-pub fn target_dir_for_lane(lane_id: &str) -> String {
-    format!("{TARGET_DIR_PREFIX}{lane_id}")
-}
-
-/// `CARGO_TARGET_DIR` env pair isolating one lane (CACHE-1.20).
-#[must_use]
-pub fn lane_cargo_target_env(lane_id: &str) -> (String, String) {
-    ("CARGO_TARGET_DIR".to_owned(), target_dir_for_lane(lane_id))
 }

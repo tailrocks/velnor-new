@@ -12,9 +12,9 @@ use std::collections::BTreeSet;
 
 use serde::Deserialize;
 use velnor_actions_contract::{
-    FinalCounts, FinalReport, FinalStatus, MatrixReport, ObligationDecision, Plan, PlanMatrix,
-    RequiredJobResult, TaskReport, WorkflowEvent, final_report_id_for_run, parse_strict_json,
-    validate_run_key,
+    CacheWriterFacts, FinalCounts, FinalReport, FinalStatus, MatrixReport, ObligationDecision,
+    Plan, PlanMatrix, RequiredJobResult, TaskReport, WorkflowEvent, final_report_id_for_run,
+    parse_strict_json, validate_run_key,
 };
 
 use self::merge_checks::{
@@ -44,6 +44,9 @@ pub(crate) struct MergeRequest {
     /// stronger event fails closed instead of inheriting its stamp).
     #[serde(default)]
     actual_event: Option<WorkflowEvent>,
+    /// Current run event/ref/repository facts; protection is queried from GitHub.
+    #[serde(default)]
+    actual_cache_writer: CacheWriterFacts,
     /// Head-bound candidate attestation; required in candidate mode.
     #[serde(default)]
     candidate_attestation: Option<CandidateAttestation>,
@@ -116,7 +119,13 @@ pub fn merge_internal(request_json: &str) -> Result<String, OrchestratorError> {
         }
         return encode_report(&diagnostic_without_plan(&request, tokens)?);
     };
-    let final_report = build_final(&request, plan)?;
+    let writer_context = crate::cache_writer::context_for_facts(
+        &request.actual_cache_writer,
+        request.actual_event.unwrap_or(WorkflowEvent::Local),
+        &velnor_actions_mise::ToolCatalog::pinned(),
+        std::path::Path::new("."),
+    );
+    let final_report = build_final(&request, plan, &writer_context)?;
     final_report.validate().map_err(internal_contract)?;
     encode_report(&final_report)
 }
@@ -168,7 +177,11 @@ fn evidence_failure(request: &MergeRequest) -> Option<String> {
 }
 
 /// Aggregate one final report from validated plan plus reports.
-fn build_final(request: &MergeRequest, plan: &Plan) -> Result<FinalReport, OrchestratorError> {
+fn build_final(
+    request: &MergeRequest,
+    plan: &Plan,
+    writer_context: &velnor_actions_mise::CacheWriterContext,
+) -> Result<FinalReport, OrchestratorError> {
     let mut signals = Signals::default();
     let mut miss_reasons = BTreeSet::new();
     check_agreement(
@@ -178,7 +191,13 @@ fn build_final(request: &MergeRequest, plan: &Plan) -> Result<FinalReport, Orche
         &mut miss_reasons,
     )?;
     check_plan_shape(plan, &mut signals, &mut miss_reasons);
-    check_trust_coherence(plan, request, &mut signals, &mut miss_reasons);
+    check_trust_coherence(
+        plan,
+        request,
+        writer_context,
+        &mut signals,
+        &mut miss_reasons,
+    );
     check_candidate_binding(plan, request, &mut signals, &mut miss_reasons);
     check_plan_evidence(plan, request, &mut signals, &mut miss_reasons);
     check_execute_inventory(plan, &mut signals, &mut miss_reasons);

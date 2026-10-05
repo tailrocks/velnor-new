@@ -1,15 +1,15 @@
-//! Per-key Mise-cache writer election (P08 race closure).
+//! Per-key tool-cache writer election (P08 race closure).
 //!
-//! Exactly one saver per built-in cache key, elected after every setup
-//! step is inserted. Split from `cache_p08` (size gate).
+//! Exactly one saver per canonical explicit restore key, elected after
+//! every tool-cache scaffold is inserted. Split from `cache_p08`.
 
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{Job, StepKind};
 
-use crate::{RenderError, setup::MISE_ACTION_NAME};
+use crate::{RenderError, cache_steps};
 
-/// Elect one Mise-cache writer per cache key across jobs.
+/// Elect one tool-cache writer per canonical restore key across jobs.
 ///
 /// Every qualified setup restores read-only (`cache_save: "false"`: the
 /// pinned action saves only inside its `install` leg, which Velnor
@@ -129,24 +129,29 @@ fn append_provider_save(job: &mut Job, key: &str, path: &str) -> Result<(), Rend
     Ok(())
 }
 
-/// This job's Mise built-in cache key, when its setup carries one.
+/// This job's canonical tool-cache key, when its pinned restore is valid.
 fn setup_cache_key(job: &Job) -> Option<String> {
     job.steps.iter().find_map(|step| {
         let StepKind::Action { uses, with, .. } = &step.kind else {
             return None;
         };
-        if !uses.starts_with(&format!("{MISE_ACTION_NAME}@")) {
+        if uses != cache_steps::TOOLS_RESTORE_USES
+            || step.condition.as_deref() != Some(cache_steps::TOOLS_CACHE_RESTORE_CONDITION)
+            || with.get("path")? != &cache_steps::tools_cache_path_input()
+        {
             return None;
         }
-        with.get("cache_key").cloned()
+        with.get("key")
+            .filter(|key| cache_steps::is_tools_cache_key(key))
+            .cloned()
     })
 }
 
-/// Append the push-gated tools save over `key` to one writer job.
+/// Append the trusted, image-qualified tool save over `key` to one writer.
 ///
 /// Mirrors `Save Cargo sources`: the trusted save gate keeps PR runs
-/// read-only, and the step archives the default mise data dir the
-/// built-in restore reads, so a push-seeded entry warms every later
+/// read-only, and the step archives the exact canonical payload the
+/// restore reads, so a trusted default-branch push warms every later
 /// restore of the key. Closures and fan-in steps added after the
 /// election install no tools, so the capture stays complete.
 fn append_tools_save(job: &mut Job, key: &str) -> Result<(), RenderError> {
@@ -157,8 +162,7 @@ fn append_tools_save(job: &mut Job, key: &str) -> Result<(), RenderError> {
     {
         return Ok(());
     }
-    let mut save = crate::cache_steps::tools_save_step(key)?;
-    save.condition = Some(velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION.to_owned());
+    let save = crate::cache_steps::tools_save_step(key)?;
     job.steps.push(save);
     Ok(())
 }
