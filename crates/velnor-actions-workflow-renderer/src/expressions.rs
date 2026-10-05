@@ -51,15 +51,15 @@ fn expression_spans(text: &str) -> Option<Vec<&str>> {
 /// Runner paths, the release tag, plan-matrix coordinates, the two
 /// fixed secret bindings (bootstrap registry plus the release forge
 /// token, whose placements the release gates still police separately),
-/// and the protected-default-branch cache-mode selector (the generator
-/// pins it on the native MBX action so other events stay read-only).
+/// and the cache-mode selector. A Scale Set runner may write. A
+/// GitHub-hosted runner writes only on a protected default-branch push.
 /// Notably absent: `github.token` (render-time fetch binding only)
 /// and run IDs (never in env).
 const ENV_EXPRESSIONS: &[&str] = &[
     "runner.temp",
     "github.ref_name",
     "github.event_name",
-    "github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read'",
+    "runner.environment != 'github-hosted' && 'write' || (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read')",
     "secrets.CARGO_REGISTRY_TOKEN",
     "secrets.GITHUB_TOKEN",
     "github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.sha",
@@ -77,6 +77,7 @@ const WITH_EXPRESSIONS: &[&str] = &[
     "github.run_id",
     "github.run_attempt",
     "runner.environment",
+    "runner.environment != 'github-hosted'",
     "github.job",
     "github.event_name == 'push'",
     "steps.publish-baseline.outputs.artifact_name",

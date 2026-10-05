@@ -391,12 +391,12 @@ jobs:
           cache-generation: velnor-mbx-1.21.1-share-out-dir-disabled-v1-gc-auto-v1-action-1687e54eb349cadf61fa38b5813a77875489e8e6-lane-${{ runner.environment }}-job-${{ github.job }}
           github-cache-mode: objects
           save-on-protected-branch: "false"
-          save-on-pull-request: "false"
+          save-on-pull-request: ${{ runner.environment != 'github-hosted' }}
           save-on-workflow-dispatch: "false"
           toolchain: 1.98.1
           version: 1.21.1
         env:
-          ACTIONS_CACHE_MODE: ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
+          ACTIONS_CACHE_MODE: ${{ runner.environment != 'github-hosted' && 'write' || (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read') }}
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MBX_CACHE_DIR: ${{ runner.temp }}/velnor/mbx
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
@@ -404,7 +404,7 @@ jobs:
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
       - name: Verify native MBX version
         env:
-          ACTIONS_CACHE_MODE: ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
+          ACTIONS_CACHE_MODE: ${{ runner.environment != 'github-hosted' && 'write' || (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read') }}
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MBX_CACHE_DIR: ${{ runner.temp }}/velnor/mbx
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
@@ -573,12 +573,12 @@ jobs:
           cache-generation: velnor-mbx-1.21.1-share-out-dir-disabled-v1-gc-auto-v1-action-1687e54eb349cadf61fa38b5813a77875489e8e6-lane-${{ runner.environment }}-job-${{ github.job }}
           github-cache-mode: objects
           save-on-protected-branch: "false"
-          save-on-pull-request: "false"
+          save-on-pull-request: ${{ runner.environment != 'github-hosted' }}
           save-on-workflow-dispatch: "false"
           toolchain: 1.98.1
           version: 1.21.1
         env:
-          ACTIONS_CACHE_MODE: ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
+          ACTIONS_CACHE_MODE: ${{ runner.environment != 'github-hosted' && 'write' || (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read') }}
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MBX_CACHE_DIR: ${{ runner.temp }}/velnor/mbx
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
@@ -586,7 +586,7 @@ jobs:
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
       - name: Verify native MBX version
         env:
-          ACTIONS_CACHE_MODE: ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
+          ACTIONS_CACHE_MODE: ${{ runner.environment != 'github-hosted' && 'write' || (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read') }}
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MBX_CACHE_DIR: ${{ runner.temp }}/velnor/mbx
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo

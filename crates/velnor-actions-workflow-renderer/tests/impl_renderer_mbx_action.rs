@@ -91,7 +91,7 @@ fn native_action_installs_exact_version_and_owns_object_cache() {
     assert_eq!(
         env.get(MBX_CACHE_MODE_ENV).map(String::as_str),
         Some(
-            "${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}"
+            "${{ runner.environment != 'github-hosted' && 'write' || (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read') }}"
         )
     );
     assert_eq!(
@@ -101,11 +101,11 @@ fn native_action_installs_exact_version_and_owns_object_cache() {
     );
     assert_eq!(env.get("RUSTUP_HOME"), env.get("MISE_RUSTUP_HOME"));
     assert_eq!(env.get("CARGO_HOME"), env.get("MISE_CARGO_HOME"));
-    for key in [
-        "save-on-pull-request",
-        "save-on-workflow-dispatch",
-        "save-on-protected-branch",
-    ] {
+    assert_eq!(
+        with.get("save-on-pull-request").map(String::as_str),
+        Some("${{ runner.environment != 'github-hosted' }}")
+    );
+    for key in ["save-on-workflow-dispatch", "save-on-protected-branch"] {
         assert_eq!(with.get(key).map(String::as_str), Some("false"));
     }
 }

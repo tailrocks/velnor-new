@@ -56,8 +56,8 @@ pub(crate) const MBX_SHARE_OUT_DIR_VALUE: &str = "0";
 /// Stable logical store path; runner namespaces provide physical job isolation.
 pub(crate) const MBX_CACHE_DIR_ENV: &str = "MBX_CACHE_DIR";
 pub(crate) const MBX_CACHE_DIR_VALUE: &str = "${{ runner.temp }}/velnor/mbx";
-/// Write permission is granted only to protected default-branch pushes.
-const CACHE_MODE_VALUE: &str = "${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}";
+/// A Scale Set runner may write. A GitHub-hosted runner writes only on a protected default-branch push.
+const CACHE_MODE_VALUE: &str = "${{ runner.environment != 'github-hosted' && 'write' || (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read') }}";
 
 fn rust_path_preflight_step(
     rust_toolchain: &str,
@@ -191,7 +191,10 @@ fn mbx_objects_action_step(
             cache_generation(mbx_version, action_sha),
         ),
         ("save-on-workflow-dispatch".to_owned(), "false".to_owned()),
-        ("save-on-pull-request".to_owned(), "false".to_owned()),
+        (
+            "save-on-pull-request".to_owned(),
+            "${{ runner.environment != 'github-hosted' }}".to_owned(),
+        ),
         ("save-on-protected-branch".to_owned(), "false".to_owned()),
     ]);
     action_step_with_env(MBX_RESTORE_NAME, uses, with, env)
