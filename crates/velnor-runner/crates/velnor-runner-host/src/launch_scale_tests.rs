@@ -3,7 +3,7 @@
 use std::sync::{Arc, Mutex};
 
 use crate::launch::drive_offer;
-use crate::launch_harness::{CANARY, Mode, Script, absent, assigned_wait, ctx, open};
+use crate::launch_harness::{CANARY, JitProbe, Mode, Script, absent, assigned_wait, ctx, open};
 use crate::launch_test_support::valid_worker_volume;
 use crate::{EnsureError, HostError, IntentState, Outcome, Started};
 
@@ -78,6 +78,112 @@ async fn scale_jit_failure_is_not_acked() -> Result<(), String> {
     assert_eq!(script.calls, ["jit"]);
     let rows = journal.rows().await.map_err(|err| err.to_string())?;
     assert_eq!(rows[0].state, IntentState::Uncertain);
+    absent(&scratch.file())
+}
+
+#[tokio::test]
+async fn redelivered_scale_without_a_container_retries_jit() -> Result<(), String> {
+    let (scratch, journal) = open("scale-retry").await?;
+    let mut failed = Script {
+        calls: Vec::new(),
+        mode: Mode::JitFail,
+    };
+    let error = drive_offer(
+        &mut failed,
+        &ctx(),
+        &assigned_wait(7, 1),
+        &journal,
+        |_name, _jit, _bind| async { Err(HostError::Docker) },
+    )
+    .await;
+    assert_eq!(
+        error,
+        Err(EnsureError::Unexpected {
+            status: 0,
+            step: "session",
+        })
+    );
+    let mut replay = Script {
+        calls: Vec::new(),
+        mode: Mode::Ok,
+    };
+    let started = drive_offer(
+        &mut replay,
+        &ctx(),
+        &assigned_wait(7, 1),
+        &journal,
+        |_name, _jit, _bind| async {
+            Ok(Started {
+                dind_id: "dind-1".to_owned(),
+                runner_id: "runner-1".to_owned(),
+            })
+        },
+    )
+    .await
+    .map_err(|err| err.to_string())?;
+    assert_eq!(
+        started.map(|item| item.runner_id).as_deref(),
+        Some("runner-1")
+    );
+    assert_eq!(replay.calls, ["jit", "ack"]);
+    let rows = journal.rows().await.map_err(|err| err.to_string())?;
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].state, IntentState::Done);
+    absent(&scratch.file())
+}
+
+#[tokio::test]
+async fn burned_runner_name_retires_the_row() -> Result<(), String> {
+    let (scratch, journal) = open("jit-conflict").await?;
+    let mut blocked = JitProbe::conflict();
+    let error = drive_offer(
+        &mut blocked,
+        &ctx(),
+        &assigned_wait(7, 1),
+        &journal,
+        |_name, _jit, _bind| async { Err(HostError::Docker) },
+    )
+    .await;
+    assert_eq!(error, Err(EnsureError::Conflict));
+    assert_eq!(blocked.calls(), ["jit"]);
+    let failed = journal.rows().await.map_err(|err| err.to_string())?;
+    assert_eq!(failed.len(), 1);
+    assert_eq!(failed[0].state, IntentState::Failed);
+    let burned = format!("m7-{}", failed[0].id);
+    assert_eq!(
+        blocked.names.first().map(String::as_str),
+        Some(burned.as_str())
+    );
+    let mut replay = JitProbe::allow();
+    let started = drive_offer(
+        &mut replay,
+        &ctx(),
+        &assigned_wait(7, 1),
+        &journal,
+        |_name, _jit, _bind| async {
+            Ok(Started {
+                dind_id: "dind-1".to_owned(),
+                runner_id: "runner-1".to_owned(),
+            })
+        },
+    )
+    .await
+    .map_err(|err| err.to_string())?;
+    assert_eq!(
+        started.map(|item| item.runner_id).as_deref(),
+        Some("runner-1")
+    );
+    assert_eq!(replay.calls(), ["jit", "ack"]);
+    let rows = journal.rows().await.map_err(|err| err.to_string())?;
+    assert_eq!(rows.len(), 2);
+    assert_eq!(rows[0].state, IntentState::Failed);
+    assert_eq!(rows[1].state, IntentState::Done);
+    let next = format!("m7-{}", rows[1].id);
+    assert_eq!(
+        replay.names.first().map(String::as_str),
+        Some(next.as_str())
+    );
+    assert_ne!(burned, next);
     absent(&scratch.file())
 }
 

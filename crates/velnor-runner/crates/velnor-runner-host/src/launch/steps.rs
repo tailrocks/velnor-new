@@ -189,6 +189,14 @@ async fn reject_empty(journal: &Journal, id: i64) -> Result<Option<Started>, Ens
     })
 }
 
+async fn fail_name(journal: &Journal, id: i64) -> Result<Option<Started>, EnsureError> {
+    journal
+        .finish(id, Outcome::DefiniteFailure)
+        .await
+        .map_err(map_journal)?;
+    Err(EnsureError::Conflict)
+}
+
 async fn ensure_runner<T, S, F>(
     lane: &mut T,
     ctx: &Drive,
@@ -204,13 +212,12 @@ where
     F: Future<Output = Result<Started, HostError>>,
 {
     lane.on_admin()?;
-    let (id, fresh) = journal.begin_launch(subject).await.map_err(map_journal)?;
+    let (id, _fresh) = journal.begin_launch(subject).await.map_err(map_journal)?;
     if docker_of(journal, id).await?.is_some() {
         return finish_live(lane, ctx, journal, id, batch).await;
     }
-    if !fresh {
-        return hold(journal, id, EnsureError::Uncertain).await;
-    }
+    // No recorded container. Retry provisioning on this row. Returning
+    // uncertain here redelivers the same message forever and admits nothing.
     mint(lane, ctx, batch, journal, id, name, start).await
 }
 
@@ -228,8 +235,11 @@ where
     S: FnOnce(&str, &[u8], super::bind::Bind) -> F,
     F: Future<Output = Result<Started, HostError>>,
 {
-    let encoded = match fetch_jit(lane, ctx, name) {
+    // The row id keeps a burned GitHub name off the next fresh insert.
+    let runner = format!("{name}-{id}");
+    let encoded = match fetch_jit(lane, ctx, &runner) {
         Ok(encoded) => encoded,
+        Err(SessionError::Conflict) => return fail_name(journal, id).await,
         Err(error) => return hold(journal, id, map_listen(error)).await,
     };
     let bound = super::bind::Bind::new(journal, id);
