@@ -98,3 +98,19 @@ fn direct_acquire_step_env_overrides_mutated_job_environment() -> Result<(), Ren
     );
     Ok(())
 }
+
+#[test]
+fn generated_acquire_action_rejects_condition_in_the_source_scope() -> Result<(), RenderError> {
+    let ctx = context("actions/checkout@0000000000000000000000000000000000000000");
+    let mut step = acquire(
+        "https://example.invalid/expected",
+        &"a".repeat(64),
+        &"b".repeat(40),
+    )?;
+    step.condition = Some("steps.plan.outputs.release == 'true'".to_owned());
+    let error = crate::acquire_action::AcquireActions::default()
+        .call_step(&step, &ctx)
+        .expect_err("a step expression cannot be copied into a composite");
+    assert!(error.to_string().contains("acquire_conditional"));
+    Ok(())
+}

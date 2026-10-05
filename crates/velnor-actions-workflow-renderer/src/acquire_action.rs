@@ -110,6 +110,11 @@ fn validate_source(step: &Step) -> Result<(), RenderError> {
             "acquire_role_missing".to_owned(),
         ));
     }
+    if step.condition.is_some() {
+        return Err(RenderError::InvalidWorkflow(
+            "acquire_conditional".to_owned(),
+        ));
+    }
     let StepKind::Shell { run, env } = &step.kind else {
         return Err(RenderError::InvalidWorkflow("acquire_malformed".to_owned()));
     };
