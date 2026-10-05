@@ -9,6 +9,7 @@ use velnor_actions_workflow_renderer::steps::{
 };
 
 use crate::OrchestratorError;
+use crate::discover::Discovery;
 use crate::vectors::{ZIZMOR_STEP_NAME, candidate_spec, deny_argv, machete_argv, zizmor_argv};
 
 use super::{CHECKOUT_USES, REQUEST_DIR, wire_w1};
@@ -16,34 +17,20 @@ use super::{CHECKOUT_USES, REQUEST_DIR, wire_w1};
 /// Renderer scalars: version, label, staged path, request dir, pins.
 ///
 /// The plan-consumer env follows the plan role: plans without Rust run
-/// the plan-op and freshness steps without the Rust owned-homes triple.
+/// the plan-op and freshness steps triple-less, every other role keeps
+/// the owned-homes triple.
 pub(super) fn render_context(
     config: &VelnorConfig,
     label: &str,
     version: &str,
     catalog: &ToolCatalog,
+    discovery: &Discovery,
     plan_needs_rust: bool,
 ) -> Result<RenderContext, OrchestratorError> {
     debug_assert!(REQUEST_DIR.starts_with(REQUEST_DIR_PREFIX));
     let velnor = config.workflow.policy == WorkflowPolicy::VelnorRepositoryV1;
     let validator_commands = if velnor {
-        vec![
-            ValidatorCommand {
-                validator: ValidatorKind::CargoDeny,
-                name: DENY_STEP_NAME.to_owned(),
-                argv: deny_argv()?,
-            },
-            ValidatorCommand {
-                validator: ValidatorKind::CargoMachete,
-                name: MACHETE_STEP_NAME.to_owned(),
-                argv: machete_argv()?,
-            },
-            ValidatorCommand {
-                validator: ValidatorKind::Zizmor,
-                name: ZIZMOR_STEP_NAME.to_owned(),
-                argv: zizmor_argv(catalog)?,
-            },
-        ]
+        repository_validator_commands(discovery, catalog)?
     } else {
         Vec::new()
     };
@@ -68,6 +55,38 @@ pub(super) fn render_context(
             plan_needs_rust,
         )?,
     })
+}
+
+fn repository_validator_commands(
+    discovery: &Discovery,
+    catalog: &ToolCatalog,
+) -> Result<Vec<ValidatorCommand>, OrchestratorError> {
+    let mut commands = Vec::new();
+    let workspaces = discovery
+        .workspaces
+        .iter()
+        .map(|workspace| workspace.record.workspace_root.clone())
+        .collect::<Vec<_>>();
+    if !workspaces.is_empty() {
+        commands.push(ValidatorCommand {
+            validator: ValidatorKind::CargoDeny,
+            name: DENY_STEP_NAME.to_owned(),
+            argv: deny_argv(&workspaces)?,
+        });
+    }
+    commands.extend([
+        ValidatorCommand {
+            validator: ValidatorKind::CargoMachete,
+            name: MACHETE_STEP_NAME.to_owned(),
+            argv: machete_argv()?,
+        },
+        ValidatorCommand {
+            validator: ValidatorKind::Zizmor,
+            name: ZIZMOR_STEP_NAME.to_owned(),
+            argv: zizmor_argv(catalog)?,
+        },
+    ]);
+    Ok(commands)
 }
 
 /// Actionlint input: workflow path, declared variables, and policy ignores.

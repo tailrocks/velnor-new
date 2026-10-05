@@ -10,8 +10,8 @@ use std::collections::BTreeMap;
 
 use velnor_actions_actionlint::{ActionlintConfigInput, StepSyntax};
 use velnor_actions_contract::{
-    Concurrency, Job, Permissions, Stack, Step, StepKind, Trigger, VelnorConfig,
-    VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy,
+    Concurrency, GeneratorValidation, Job, Permissions, Stack, Step, StepKind, Trigger,
+    ValidatorKind, VelnorConfig, VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy,
 };
 use velnor_actions_mise::{
     PREPARE_RUST_COMPONENTS_STEP, PrepareRustComponents, ToolCatalog, ToolHomes,
@@ -114,12 +114,7 @@ pub(crate) fn build_workflow(
     let version = env!("CARGO_PKG_VERSION").to_owned();
     let policy = config.workflow.policy;
     let use_mbx = plan_uses_mbx(discovery);
-    let support = match policy {
-        WorkflowPolicy::ConsumerV1 => None,
-        WorkflowPolicy::VelnorRepositoryV1 => {
-            Some(policy.support_workflow(config.workflow.generator_validation))
-        }
-    };
+    let support = support_workflow(policy, config.workflow.generator_validation, discovery);
     let mut jobs = BTreeMap::new();
     let acquire = match policy {
         WorkflowPolicy::ConsumerV1 => Some(consumer_acquire_step(label, &version, discovery)?),
@@ -177,7 +172,8 @@ pub(crate) fn build_workflow(
         },
         jobs,
     };
-    let context = workflow_context::render_context(config, label, &version, &catalog, use_rust)?;
+    let context =
+        workflow_context::render_context(config, label, &version, &catalog, discovery, use_rust)?;
     let actionlint = workflow_context::actionlint_input(config, &version, label);
     Ok(WorkflowPlan {
         ir,
@@ -185,6 +181,23 @@ pub(crate) fn build_workflow(
         context,
         actionlint,
     })
+}
+
+fn support_workflow(
+    policy: WorkflowPolicy,
+    validation: GeneratorValidation,
+    discovery: &Discovery,
+) -> Option<VelnorSupportWorkflow> {
+    let mut support = match policy {
+        WorkflowPolicy::ConsumerV1 => return None,
+        WorkflowPolicy::VelnorRepositoryV1 => policy.support_workflow(validation),
+    };
+    if discovery.workspaces.is_empty() {
+        support
+            .validators
+            .retain(|validator| *validator != ValidatorKind::CargoDeny);
+    }
+    Some(support)
 }
 
 /// Insert the lint, final-gate, and baseline-publish jobs.

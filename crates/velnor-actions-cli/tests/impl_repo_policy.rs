@@ -53,6 +53,8 @@ pub(crate) const MEMBERS: [(&str, &str); 9] = [
     ),
 ];
 
+const WORKSPACE_ROOTS: [&str; 2] = ["", "crates/velnor-runner"];
+
 /// Repo root: two levels above this crate's manifest directory.
 pub(crate) fn repo_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -66,6 +68,22 @@ pub(crate) fn read(relative: &str) -> Result<String, Box<dyn Error>> {
 /// Read one member manifest.
 pub(crate) fn manifest(dir: &str) -> Result<String, Box<dyn Error>> {
     read(&format!("{dir}/Cargo.toml"))
+}
+
+/// Lines in one exact TOML table, excluding comments and the table header.
+fn manifest_section<'a>(body: &'a str, section: &str) -> Vec<&'a str> {
+    let header = format!("[{section}]");
+    let mut active = false;
+    let mut lines = Vec::new();
+    for line in body.lines() {
+        let line = line.trim();
+        if line.starts_with('[') {
+            active = line == header;
+        } else if active && !line.is_empty() && !line.starts_with('#') {
+            lines.push(line);
+        }
+    }
+    lines
 }
 
 /// Files with `extension` under a repo-relative dir, recursively.
@@ -214,10 +232,17 @@ fn velnor_name_never_published() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn toolchain_edition_and_resolver() -> Result<(), Box<dyn Error>> {
-    let root = read("Cargo.toml")?;
-    assert!(root.contains("edition = \"2024\""));
-    assert!(root.contains("resolver = \"3\""));
-    assert!(root.contains("rust-version = "));
+    for workspace in WORKSPACE_ROOTS {
+        let path = if workspace.is_empty() {
+            "Cargo.toml".to_owned()
+        } else {
+            format!("{workspace}/Cargo.toml")
+        };
+        let root = read(&path)?;
+        assert!(root.contains("edition = \"2024\""), "{path}");
+        assert!(root.contains("resolver = \"3\""), "{path}");
+        assert!(root.contains("rust-version = \"1.98\""), "{path}");
+    }
     Ok(())
 }
 
@@ -228,31 +253,56 @@ pub(crate) fn minor(version: &str) -> String {
 
 #[test]
 fn rust_version_tracks_toolchain() -> Result<(), Box<dyn Error>> {
-    let workspace = quoted_value(&read("Cargo.toml")?, "rust-version")?;
     let catalog_src = read("crates/velnor-actions-mise/src/catalog.rs")?;
     let catalog = quoted_value(&catalog_src, "RUST_VERSION")?;
     let mise = quoted_value(&read("mise.toml")?, "rust = ")?;
-    assert_eq!(minor(&workspace), minor(&catalog), "catalog drift");
-    assert_eq!(minor(&workspace), minor(&mise), "mise drift");
+    for workspace_root in WORKSPACE_ROOTS {
+        let path = if workspace_root.is_empty() {
+            "Cargo.toml".to_owned()
+        } else {
+            format!("{workspace_root}/Cargo.toml")
+        };
+        let workspace = quoted_value(&read(&path)?, "rust-version")?;
+        assert_eq!(minor(&workspace), minor(&catalog), "{path} catalog drift");
+        assert_eq!(minor(&workspace), minor(&mise), "{path} mise drift");
+    }
     Ok(())
 }
 
 #[test]
 fn members_inherit_workspace_settings() -> Result<(), Box<dyn Error>> {
-    for (dir, _) in MEMBERS {
+    for (dir, _) in MEMBERS.into_iter().chain(p11_metadata::RUNNER_MEMBERS) {
         let body = manifest(dir)?;
-        for key in ["edition.workspace = true", "rust-version.workspace = true"] {
-            assert!(body.contains(key), "{dir} misses {key}");
-        }
-        assert!(body.contains("[lints]"), "{dir} misses [lints]");
-        assert!(body.contains("workspace = true"), "{dir} misses workspace");
+        let package = manifest_section(&body, "package");
+        assert!(
+            package.contains(&"edition.workspace = true"),
+            "{dir} must inherit edition"
+        );
+        assert!(
+            package.contains(&"rust-version.workspace = true"),
+            "{dir} must inherit rust-version"
+        );
+        assert!(
+            !package.iter().any(|line| line.starts_with("edition =")),
+            "{dir} must not override inherited edition"
+        );
+        assert!(
+            !package
+                .iter()
+                .any(|line| line.starts_with("rust-version =")),
+            "{dir} must not override inherited rust-version"
+        );
+        assert_eq!(
+            manifest_section(&body, "lints"),
+            ["workspace = true"],
+            "{dir} must inherit the workspace lint baseline purely"
+        );
     }
     Ok(())
 }
 
 #[test]
 fn workspace_lints_match_baseline() -> Result<(), Box<dyn Error>> {
-    let root = read("Cargo.toml")?;
     let baseline = [
         "unsafe_code = \"forbid\"",
         "unused_must_use = \"deny\"",
@@ -282,8 +332,16 @@ fn workspace_lints_match_baseline() -> Result<(), Box<dyn Error>> {
         "broken_intra_doc_links = \"deny\"",
         "private_intra_doc_links = \"deny\"",
     ];
-    for line in baseline {
-        assert!(root.contains(line), "baseline misses {line}");
+    for workspace_root in WORKSPACE_ROOTS {
+        let path = if workspace_root.is_empty() {
+            "Cargo.toml".to_owned()
+        } else {
+            format!("{workspace_root}/Cargo.toml")
+        };
+        let root = read(&path)?;
+        for line in baseline {
+            assert!(root.contains(line), "{path} baseline misses {line}");
+        }
     }
     Ok(())
 }

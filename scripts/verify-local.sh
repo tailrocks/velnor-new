@@ -152,7 +152,7 @@ stage fmt "${MISE_EXEC[@]}" cargo fmt --all --check
 
 # Nested runner workspace. Root `cargo --workspace` excludes it
 # (`exclude = ["crates/velnor-runner"]`). cargo-deny 0.20.2 matches
-# `CARGO_DENY_VERSION`; that pin rejects `--locked`.
+# `CARGO_DENY_VERSION`; pass its own lockfile and scoped policy explicitly.
 RUNNER_MANIFEST="crates/velnor-runner/Cargo.toml"
 if [ -f "$RUNNER_MANIFEST" ]; then
   stage runner-fmt "${MISE_EXEC[@]}" cargo fmt --manifest-path "$RUNNER_MANIFEST" --all -- --check
@@ -163,7 +163,7 @@ if [ -f "$RUNNER_MANIFEST" ]; then
     stage runner-test "${MISE_EXEC[@]}" cargo test --manifest-path "$RUNNER_MANIFEST" --locked --workspace
   fi
   stage runner-doctest "${MISE_EXEC[@]}" cargo test --manifest-path "$RUNNER_MANIFEST" --locked --workspace --doc
-  stage runner-deny mise exec "cargo-deny@0.20.2" -- cargo deny --manifest-path "$RUNNER_MANIFEST" check
+  stage runner-deny mise exec "cargo-deny@0.20.2" -- cargo deny --locked --manifest-path "$RUNNER_MANIFEST" --config "crates/velnor-runner/deny.toml" check
 fi
 
 # --- repo policy -----------------------------------------------------------

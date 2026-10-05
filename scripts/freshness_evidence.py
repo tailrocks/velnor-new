@@ -1,10 +1,15 @@
 """Check recorded freshness evidence, exceptions, and deny policy."""
 
+import os
 import shutil
 import subprocess
 import tomllib
 
-from freshness_context import norm_version, parse_iso_date, parse_timestamp
+from freshness_context import (
+    norm_version,
+    parse_iso_date,
+    parse_timestamp,
+)
 from freshness_inventory import EXPECTED_ACTIONS, EXPECTED_TOOLS
 
 
@@ -34,7 +39,7 @@ def freshness_row(ctx, subject, entry, pinned, qualified, latest=None,
         ctx.fail_row("upstream-freshness", subject,
                      f"missing or malformed check timestamp {stamp!r}")
         return
-    if age < -0.1:
+    if future_evidence(ctx, stamp):
         ctx.fail_row("upstream-freshness", subject,
                      f"check timestamp {stamp} is in the future")
         return
@@ -56,6 +61,19 @@ def freshness_row(ctx, subject, entry, pinned, qualified, latest=None,
                      f"qualified={qualified!r}")
         return
     _check_latest(ctx, subject, source, stamp, pinned, latest, pin_for_latest)
+
+
+def future_evidence(ctx, stamp):
+    """Reject future date-only evidence by UTC day and timestamps by skew."""
+    text = stamp.strip() if isinstance(stamp, str) else ""
+    moment = parse_timestamp(text)
+    if moment is None:
+        return False
+    date_only = len(text) == 10 and text[4:5] == "-" and text[7:8] == "-" \
+        and "T" not in text and ":" not in text
+    if date_only:
+        return moment.date() > ctx.now.date()
+    return (ctx.now - moment).total_seconds() / 3600 < -0.1
 
 
 def _held_row(ctx, subject, entry, stamp):
@@ -191,51 +209,75 @@ def check_exceptions(ctx):
         _check_standing_record(ctx, entry, reviewed_alint)
 
 
-def _check_deny_policy(ctx):
+def _workspace_label(relative):
+    return relative or "."
+
+
+def _check_deny_policy(ctx, relative):
+    workspace_dir = os.path.join(relative, "deny.toml") if relative \
+        else "deny.toml"
     try:
-        with open(ctx.path("deny.toml"), "rb") as handle:
+        with open(ctx.path(workspace_dir), "rb") as handle:
             deny = tomllib.load(handle)
     except (OSError, tomllib.TOMLDecodeError) as err:
-        ctx.fail_row("advisories", "deny.toml", f"unreadable ({err})")
+        ctx.fail_row("advisories", workspace_dir, f"unreadable ({err})")
         return
     advisories = deny.get("advisories")
     if not isinstance(advisories, dict):
-        ctx.fail_row("advisories", "deny.toml", "[advisories] table missing")
-    elif advisories.get("ignore", []):
-        for ignored in advisories["ignore"]:
-            ctx.fail_row("advisories", str(ignored),
+        ctx.fail_row("advisories", workspace_dir,
+                     "[advisories] table missing")
+        return
+    ignored = advisories.get("ignore")
+    if not isinstance(ignored, list):
+        ctx.fail_row("advisories", workspace_dir,
+                     "[advisories].ignore must be an empty array")
+    elif ignored:
+        for advisory in ignored:
+            ctx.fail_row("advisories", f"{workspace_dir}:{advisory}",
                          "ignored advisory must be a policy exception instead")
     else:
-        ctx.pass_row("advisories", "deny ignore list", "empty")
+        ctx.pass_row("advisories", f"{workspace_dir} ignore list", "empty")
 
 
-def _check_live_advisories(ctx):
+def _check_live_advisories(ctx, relative):
     cargo_deny = shutil.which("cargo-deny")
     if cargo_deny is None:
         ctx.fail_row("advisories", "live scan",
                      "--with-advisories requested but cargo-deny is not on PATH")
         return
+    workspace_dir = os.path.join(ctx.root, relative)
+    manifest = os.path.join(workspace_dir, "Cargo.toml")
+    deny_config = os.path.join(workspace_dir, "deny.toml")
+    subject = os.path.relpath(manifest, ctx.root)
     try:
         completed = subprocess.run(
-            [cargo_deny, "check", "advisories"], cwd=ctx.root,
+            [cargo_deny, "--locked", "--config", deny_config,
+             "--manifest-path", manifest, "check", "advisories"], cwd=ctx.root,
             capture_output=True, text=True, timeout=180)
     except (OSError, subprocess.TimeoutExpired) as err:
-        ctx.fail_row("advisories", "live scan", f"tool failed ({err})")
+        ctx.fail_row("advisories", subject, f"live scan failed ({err})")
     else:
         if completed.returncode == 0:
-            ctx.pass_row("advisories", "live scan",
+            ctx.pass_row("advisories", subject,
                          "cargo deny check advisories: no findings")
         else:
             tail = (completed.stdout + completed.stderr)[-500:]
-            ctx.fail_row("advisories", "live scan",
+            ctx.fail_row("advisories", subject,
                          "cargo deny reported findings; run "
                          f"`cargo deny check advisories` for evidence: {tail!r}")
 
 
 def check_advisories(ctx):
-    _check_deny_policy(ctx)
+    workspaces = ctx.workspace_roots
+    if not workspaces:
+        ctx.fail_row("advisories", "(workspaces)",
+                     "no Cargo workspaces discovered")
+        return
+    for relative, _ in workspaces:
+        _check_deny_policy(ctx, relative)
     if ctx.with_advisories:
-        _check_live_advisories(ctx)
+        for relative, _ in workspaces:
+            _check_live_advisories(ctx, relative)
     else:
         ctx.info_row("advisories", "live scan",
                      "runs as the CI Cargo Deny job; "
