@@ -763,6 +763,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "velnor-archive-guard"
+version = "0.1.0"
+dependencies = [
+ "flate2",
+ "sha2",
+]
+
+[[package]]
 name = "windows-link"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
