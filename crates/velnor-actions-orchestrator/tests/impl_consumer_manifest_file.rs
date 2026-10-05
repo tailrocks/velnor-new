@@ -115,15 +115,11 @@ fn invalid_manifest_fails_prepare() -> TestResult {
 }
 
 #[test]
-fn duplicate_manifest_keys_fail_prepare() -> TestResult {
-    let duplicate = release_manifest_json().replacen(
-        "\"schema\":1,",
-        "\"schema\":1,\"schema\":1,",
-        1,
-    );
+fn duplicate_manifest_keys_fail_prepare() {
+    let duplicate =
+        release_manifest_json().replacen("\"schema\":1,", "\"schema\":1,\"schema\":1,", 1);
     let err = render_consumer_yaml(&duplicate).expect_err("duplicate key fails");
     assert!(err.to_string().contains("duplicate_key"), "{err}");
-    Ok(())
 }
 
 #[test]
