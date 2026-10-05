@@ -35,6 +35,11 @@ Rustc/Cargo execution owner requires independent source qualification.
 
 `bind_inputs.py` verifies the reviewed manifest digest, exact fixture inventory,
 archive checksum, full extracted source inventory, and absence of extra inputs.
+Provision the checkout-owned archive guard before invoking this Python harness;
+the canonical entrypoint is
+`bash scripts/with-owned-archive-guard.sh -- python3 scripts/qualification/mbx-synchronous/run.py ...`.
+This uses the locked Rust 1.98.1 build and keeps the parser fail-closed when the
+guard is missing or stale.
 Supply an independently reviewed manifest SHA-256; accepting a hash newly made
 from altered inputs would defeat the review binding. It optionally hashes an
 opaque owner execution record and every raw artifact into a receipt with status

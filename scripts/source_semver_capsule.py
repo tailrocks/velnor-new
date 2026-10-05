@@ -6,6 +6,8 @@ import posixpath
 import tarfile
 import unicodedata
 
+from owned_archive_preflight import preflight_archive
+
 
 ARCHIVE_LIMIT = 32 * 1024 * 1024
 EXPANDED_LIMIT = 64 * 1024 * 1024
@@ -142,6 +144,7 @@ def _entry_payload(archive, entry, mode):
 def archive_proof(data, inventory, revision, git_files=None):
     """Return exact source members after checking the finite tar contract."""
     require(len(data) <= ARCHIVE_LIMIT, "semver source archive exceeds bound")
+    preflight_archive(data, "semver-capsule", revision.source_commit)
     expected = _inventory(inventory, revision)
     _git_files_match(expected, git_files)
     files, directories, aliases = {}, set(), set()

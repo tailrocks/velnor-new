@@ -687,6 +687,8 @@ dependencies = [
 name = "velnor-actions-native"
 version = "0.1.0"
 dependencies = [
+ "flate2",
+ "sha2",
  "syn 3.0.6",
  "velnor-actions-contract",
 ]

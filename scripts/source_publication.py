@@ -14,6 +14,7 @@ import subprocess
 import tarfile
 
 from source_publication_records import ArchiveKind, reviewed_source_revision
+from owned_archive_preflight import preflight_archive
 
 REPO = "tailrocks/velnor-new"
 HOSTS = ["x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu", "aarch64-apple-darwin"]
@@ -93,6 +94,7 @@ def committed_files(repository, commit):
 
 def archive_proof(data, files):
     found, payloads = set(), {}
+    preflight_archive(data, "source-publication")
     with tarfile.open(fileobj=io.BytesIO(data), mode="r:") as archive:
         for entry in archive:
             require(entry.name.startswith("source/"), "source archive prefix mismatch")

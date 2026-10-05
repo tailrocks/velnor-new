@@ -8,11 +8,13 @@ import tarfile
 
 from owned_tool_source import (MAX_FILES, MAX_SOURCE, build_bootstrap_descriptor,
                                canonical, digest, fetch, source_path)
+from owned_archive_preflight import preflight_archive
 
 
 def binary_bytes(data, archive_format, expected_member="mise/bin/mise"):
     if archive_format == "standalone":
         return data
+    preflight_archive(data, "bootstrap")
     with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as archive:
         binaries, names, total = [], set(), 0
         for member in archive:

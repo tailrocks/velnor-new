@@ -1,0 +1,16 @@
+file Cargo.toml
+file Cargo.lock
+file .mise-version
+file .velnor/version-policy.toml
+file crates/velnor-actions-native/build_support/archive_guard_inputs.rs
+file scripts/build-owned-archive-guard.sh
+file crates/velnor-actions-native/Cargo.toml
+file crates/velnor-actions-native/build.rs
+file scripts/check-owned-archive-guard-sources.sh
+tree crates/velnor-actions-native/src
+tree crates/velnor-actions-native/bin
+tree crates/velnor-actions-contract
+optional .cargo/config
+optional .cargo/config.toml
+optional rust-toolchain
+optional rust-toolchain.toml

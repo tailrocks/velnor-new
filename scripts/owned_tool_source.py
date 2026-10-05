@@ -12,6 +12,9 @@ import tarfile
 import unicodedata
 import urllib.request
 
+from owned_archive_preflight import preflight_archive
+
+
 
 MAX_DOWNLOAD = 128 * 1024 * 1024
 MAX_SOURCE = 512 * 1024 * 1024
@@ -233,6 +236,7 @@ def validate_receipt(data, spec):
 
 
 def archive_entries(data):
+    preflight_archive(data, "source")
     archive = tarfile.open(fileobj=io.BytesIO(data), mode="r:")
     entries, links, total, names = {}, {}, 0, set()
     for entry in archive:

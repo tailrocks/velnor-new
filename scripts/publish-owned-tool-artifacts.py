@@ -36,6 +36,7 @@ import tempfile
 
 from immutable_publication import publish_snapshot, stage_evidence
 from owned_tool_source import OWNED_VERSION_PATTERN, recipe_sha
+from owned_archive_preflight import preflight_archive
 from owned_tool_qualification_evidence import validate_claim
 
 REPO = "tailrocks/velnor-new"
@@ -162,6 +163,7 @@ def native_binary(data, target):
 
 def validate_archive(data, artifact, tool, source):
     require(sha(data) == artifact["archive_sha256"], "archive digest mismatch")
+    preflight_archive(data, "candidate")
     expected = "mise/bin/mise" if tool == "mise" else "mbx"
     directories = {"mise", "mise/bin"} if tool == "mise" else set()
     binary = None

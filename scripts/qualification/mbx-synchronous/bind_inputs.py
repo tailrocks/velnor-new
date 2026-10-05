@@ -3,13 +3,24 @@
 
 import argparse
 import hashlib
+import importlib.util
+import io
 import json
 import os
 from pathlib import Path
 import shutil
 import tarfile
+import stat
 
 ROOT = Path(__file__).resolve().parent
+MAX_REGISTRY_ARCHIVE = 128 * 1024 * 1024
+GUARD_SPEC = importlib.util.spec_from_file_location(
+    "owned_archive_preflight", ROOT.parents[1] / "owned_archive_preflight.py")
+if GUARD_SPEC is None or GUARD_SPEC.loader is None:
+    raise RuntimeError("trusted native archive preflight module is unavailable")
+GUARD_MODULE = importlib.util.module_from_spec(GUARD_SPEC)
+GUARD_SPEC.loader.exec_module(GUARD_MODULE)
+preflight_archive = GUARD_MODULE.preflight_archive
 
 
 def require(condition, message):
@@ -24,6 +35,18 @@ def sha(data):
 def regular(path):
     require(path.is_file() and not path.is_symlink(), "regular file required: " + str(path))
     return path.read_bytes()
+
+
+def archive_snapshot(path):
+    descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    with os.fdopen(descriptor, "rb") as stream:
+        metadata = os.fstat(stream.fileno())
+        require(stat.S_ISREG(metadata.st_mode) and metadata.st_nlink == 1
+                and metadata.st_size <= MAX_REGISTRY_ARCHIVE,
+                "registry archive must be a bounded singly linked regular file")
+        data = stream.read(MAX_REGISTRY_ARCHIVE + 1)
+    require(len(data) <= MAX_REGISTRY_ARCHIVE, "registry archive exceeds size bound")
+    return data
 
 
 def inventory(directory):
@@ -124,10 +147,12 @@ def fixture_inventory(directory, expected):
 
 
 def verify_registry(spec, archive, source):
-    require(sha(regular(archive)) == spec["archive_sha256"], "registry archive checksum differs")
+    archive_data = archive_snapshot(archive)
+    require(sha(archive_data) == spec["archive_sha256"], "registry archive checksum differs")
+    preflight_archive(archive_data, "cargo-package")
     records = []
     prefix = spec["name"] + "-" + spec["version"] + "/"
-    with tarfile.open(archive, "r:gz") as stream:
+    with tarfile.open(fileobj=io.BytesIO(archive_data), mode="r:gz") as stream:
         for member in sorted(stream.getmembers(), key=lambda item: item.name):
             require(member.isfile() and member.name.startswith(prefix), "unsupported archive member")
             relative = member.name[len(prefix):]

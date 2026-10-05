@@ -5,9 +5,20 @@ use std::path::{Path, PathBuf};
 
 #[path = "ownership_ast.rs"]
 mod rust_ast;
+#[path = "ownership_test_source.rs"]
+mod test_source;
 
 const DOMAINS: &[&str] = &[
-    "apt", "homebrew", "java", "node", "oci", "reuse", "ruby", "shell", "swift",
+    "apt",
+    "homebrew",
+    "java",
+    "node",
+    "oci",
+    "owned_archive_guard",
+    "reuse",
+    "ruby",
+    "shell",
+    "swift",
 ];
 
 fn files(root: &Path) -> std::io::Result<Vec<PathBuf>> {
@@ -159,22 +170,18 @@ fn test_source(path: &Path, paths: &[PathBuf]) -> std::io::Result<bool> {
         }
         let text = std::fs::read_to_string(parent)?;
         let compact: String = text.chars().filter(|ch| !ch.is_whitespace()).collect();
-        let explicit = format!("#[cfg(test)]#[path=\"{name}\"]modtests;");
-        let ordinary = "#[cfg(test)]modtests;";
-        let declaration = if name == "tests.rs" && compact.contains(ordinary) {
-            ordinary
-        } else {
-            explicit.as_str()
+        let Some((declaration, module)) = test_source::declaration(name, &compact) else {
+            continue;
         };
-        if compact.contains(declaration) {
-            let production = compact.replace(declaration, "");
-            if production.contains(&format!("\"{name}\"")) || production.contains("modtests;") {
-                return Err(std::io::Error::other(
-                    "test_source_also_referenced_by_product",
-                ));
-            }
-            return Ok(true);
+        let production = compact.replacen(&declaration, "", 1);
+        if production.contains(&format!("\"{name}\""))
+            || production.contains(&format!("mod{module};"))
+        {
+            return Err(std::io::Error::other(
+                "test_source_also_referenced_by_product",
+            ));
         }
+        return Ok(true);
     }
     Ok(false)
 }

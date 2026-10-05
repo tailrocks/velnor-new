@@ -15,6 +15,7 @@ import tarfile
 import tempfile
 
 from owned_tool_source import BASES, check_hash, descriptor, strict_json, validate_receipt
+from owned_archive_preflight import preflight_archive
 from owned_tool_behavior import MISE_ABI, native_host_target, valid_mise_cases
 from source_qualification_execution import API_EVIDENCE_FILES, validate_execution_evidence
 from owned_mbx_observation import observe as observe_mbx, smoke_matches
@@ -151,6 +152,7 @@ def observe_admitted_mbx(arguments, receipt, archive, input_digest, admission,
     with tempfile.TemporaryDirectory(prefix="owned-mbx-observation-") as temporary:
         root = Path(temporary).resolve()
         binary = root / "mbx"
+        preflight_archive(archive, "candidate")
         with tarfile.open(fileobj=io.BytesIO(archive), mode="r:gz") as bundle:
             stream = bundle.extractfile("mbx")
             require(stream is not None, "admitted MBX binary unavailable")
@@ -201,6 +203,7 @@ def qualify(arguments):
     with tempfile.TemporaryDirectory(prefix="owned-native-qualification-") as temporary:
         root = Path(temporary).resolve()
         binary = root / "mise"
+        preflight_archive(archive, "candidate")
         with tarfile.open(fileobj=io.BytesIO(archive), mode="r:gz") as bundle:
             stream = bundle.extractfile("mise/bin/mise")
             require(stream is not None, "native binary unavailable")
