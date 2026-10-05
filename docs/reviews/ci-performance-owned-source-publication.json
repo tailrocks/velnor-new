@@ -1,0 +1,172 @@
+{
+  "behavioral_qualification": null,
+  "cryptographic_source_signatures": false,
+  "independent_recovery_review_sha256": "385984f5ea530b03bbec9ea1b9487eedbb9a2c35dd831d80c1de8f8689556f78",
+  "latest_metadata_correction": {
+    "build_provenance_qualified": false,
+    "independent_effect_review_sha256": "8c3484f3d4237bf8f678d53ba2f156e4cd4d9f84b11ca80baddfde7d3282698d",
+    "latest_release": 401790118,
+    "latest_tag": "v0.1.0",
+    "observed_at": "2026-10-03T00:15:04.162401+00:00",
+    "payload": {
+      "make_latest": "true"
+    },
+    "releases": [
+      {
+        "after_api_sha256": "e4eed46c313b43950d32ca616defac5678c68d73fa7b660a3a05e41ae0e38c91",
+        "asset_count": 3,
+        "asset_identity_size_digests_unchanged": true,
+        "before_api_sha256": "072dbba51ae46baffe752c6813ab7e3c6d520c25463d788ff296b4edac2928b9",
+        "immutable_after": true,
+        "immutable_before": false,
+        "other_release_identity_unchanged": true,
+        "release_id": 401790118,
+        "tag": "v0.1.0"
+      },
+      {
+        "after_api_sha256": "ff3067944c1ab5199c53d6df64fd011cafdf262947e64d63bc36a9b8b926ec48",
+        "asset_count": 5,
+        "asset_identity_size_digests_unchanged": true,
+        "before_api_sha256": "ff3067944c1ab5199c53d6df64fd011cafdf262947e64d63bc36a9b8b926ec48",
+        "immutable_after": true,
+        "immutable_before": true,
+        "other_release_identity_unchanged": true,
+        "release_id": 402229309,
+        "tag": "owned-source-mise-dbbf5b0d8f9c7edc5d0111e17ebaf781ecc97a96"
+      },
+      {
+        "after_api_sha256": "d25f6bf370efd2ec53d3d6ae07d116006ea6a911cc1fc616b1323b5ba21df965",
+        "asset_count": 5,
+        "asset_identity_size_digests_unchanged": true,
+        "before_api_sha256": "d25f6bf370efd2ec53d3d6ae07d116006ea6a911cc1fc616b1323b5ba21df965",
+        "immutable_after": true,
+        "immutable_before": true,
+        "other_release_identity_unchanged": true,
+        "release_id": 402232689,
+        "tag": "owned-source-mbx-action-c3cbe8e56ccb4727624df45022357f49d2953075"
+      }
+    ],
+    "review_sha256": "7d0556b38345b9b9900aed67375b1e53bc0654ecbad5b34b609bacfb1a24ca74",
+    "rollback_attempted": false,
+    "runtime_qualified": false,
+    "schema": 1,
+    "server_mechanism": "unknown; observed API transition only",
+    "status": "LATEST_CORRECTED_WITH_OBSERVED_LEGACY_RELEASE_IMMUTABILITY_TRANSITION",
+    "unexpected_server_side_effect": "published legacy release401790118 immutable false->true during metadata PATCH under enabled repository policy"
+  },
+  "observed_at": "2026-10-03T00:04:51.628227+00:00",
+  "postpublication_independent_review": {
+    "sha256": "78fef04f83a47bf6a842c9fd8b99e2562610ec7117eeda5079ee5c92806cc2f3",
+    "status": "PASS_SOURCE_ONLY"
+  },
+  "prior_mise_draft_failure": {
+    "reason": "published_release_by_tag_excludes_drafts",
+    "recovery": "exact_witnessed_release_and_asset_ids; no replacement_uploads_or_tag_changes",
+    "release_id": 402229309
+  },
+  "releases": [
+    {
+      "api_sha256": "b3003f73a0c0330f86075d120f3d44a2ceab941f845285be9993b6d2b8707647",
+      "assets": {
+        "base.patch": {
+          "digest": "sha256:1faa8dd229d3f403695969fafb41cf5855e68d60fee04c456b851fb95a53637b",
+          "id": 606739719,
+          "size": 20072,
+          "url": "https://github.com/tailrocks/velnor-new/releases/download/owned-source-mise-dbbf5b0d8f9c7edc5d0111e17ebaf781ecc97a96/base.patch"
+        },
+        "source-publication.json": {
+          "digest": "sha256:d384bf993490548ff92042ba72c31d7acf4a2e34f725e9d2fda47c621bc28dc6",
+          "id": 606739767,
+          "size": 3383,
+          "url": "https://github.com/tailrocks/velnor-new/releases/download/owned-source-mise-dbbf5b0d8f9c7edc5d0111e17ebaf781ecc97a96/source-publication.json"
+        },
+        "source-receipt.json": {
+          "digest": "sha256:038587e5c20392736ebdfa25d8d10557b774cbca04f13a0c93b4581b83d7e670",
+          "id": 606739819,
+          "size": 1861,
+          "url": "https://github.com/tailrocks/velnor-new/releases/download/owned-source-mise-dbbf5b0d8f9c7edc5d0111e17ebaf781ecc97a96/source-receipt.json"
+        },
+        "source.commit": {
+          "digest": "sha256:fa982e90ef0857b2fb87eb4e4584197b3fc6371664ab47a404e85b7d4c4df773",
+          "id": 606739866,
+          "size": 353,
+          "url": "https://github.com/tailrocks/velnor-new/releases/download/owned-source-mise-dbbf5b0d8f9c7edc5d0111e17ebaf781ecc97a96/source.commit"
+        },
+        "source.tar": {
+          "digest": "sha256:a2ed2eec09aecf7c964fbf408d6c50fae2ec62a8354f4afb9b5ddaa3812f5d92",
+          "id": 606739944,
+          "size": 55613440,
+          "url": "https://github.com/tailrocks/velnor-new/releases/download/owned-source-mise-dbbf5b0d8f9c7edc5d0111e17ebaf781ecc97a96/source.tar"
+        }
+      },
+      "draft": false,
+      "html_url": "https://github.com/tailrocks/velnor-new/releases/tag/owned-source-mise-dbbf5b0d8f9c7edc5d0111e17ebaf781ecc97a96",
+      "immutable": true,
+      "published_at": "2026-10-03T00:01:49Z",
+      "release_id": 402229309,
+      "source_commit": "dbbf5b0d8f9c7edc5d0111e17ebaf781ecc97a96",
+      "source_ref": "refs/heads/owned-source/mise/dbbf5b0d8f9c7edc5d0111e17ebaf781ecc97a96",
+      "source_tree": "d5eefb0470da013d4f524555df763f16a0faf22d",
+      "tag": "owned-source-mise-dbbf5b0d8f9c7edc5d0111e17ebaf781ecc97a96",
+      "tool": "mise"
+    },
+    {
+      "api_sha256": "d25f6bf370efd2ec53d3d6ae07d116006ea6a911cc1fc616b1323b5ba21df965",
+      "assets": {
+        "base.patch": {
+          "digest": "sha256:25310d9587c5cf5854014140f0fe97aa800303b21316a660fd67bb77f9c9a554",
+          "id": 606753172,
+          "size": 2726523,
+          "url": "https://github.com/tailrocks/velnor-new/releases/download/owned-source-mbx-action-c3cbe8e56ccb4727624df45022357f49d2953075/base.patch"
+        },
+        "source-publication.json": {
+          "digest": "sha256:c0094d1c2a546a4299c9ee908535d345d19b49d0bc6074e9d39284d2a1e08f80",
+          "id": 606753228,
+          "size": 2627,
+          "url": "https://github.com/tailrocks/velnor-new/releases/download/owned-source-mbx-action-c3cbe8e56ccb4727624df45022357f49d2953075/source-publication.json"
+        },
+        "source-receipt.json": {
+          "digest": "sha256:1798003a5f4287d774b6dfa3d54374efd3fce48a8c9543d29306d222458cae8a",
+          "id": 606753263,
+          "size": 1102,
+          "url": "https://github.com/tailrocks/velnor-new/releases/download/owned-source-mbx-action-c3cbe8e56ccb4727624df45022357f49d2953075/source-receipt.json"
+        },
+        "source.commit": {
+          "digest": "sha256:496ca46524ad9ce2a55b01a454ac4925f897cd09139f08909291a0ac579c1dc0",
+          "id": 606753295,
+          "size": 365,
+          "url": "https://github.com/tailrocks/velnor-new/releases/download/owned-source-mbx-action-c3cbe8e56ccb4727624df45022357f49d2953075/source.commit"
+        },
+        "source.tar": {
+          "digest": "sha256:1aa5e5813cdaa08c8240693099c329d261bd93b69e97bef18e773d9e88dadcb1",
+          "id": 606753329,
+          "size": 1679360,
+          "url": "https://github.com/tailrocks/velnor-new/releases/download/owned-source-mbx-action-c3cbe8e56ccb4727624df45022357f49d2953075/source.tar"
+        }
+      },
+      "draft": false,
+      "html_url": "https://github.com/tailrocks/velnor-new/releases/tag/owned-source-mbx-action-c3cbe8e56ccb4727624df45022357f49d2953075",
+      "immutable": true,
+      "published_at": "2026-10-03T00:03:42Z",
+      "release_id": 402232689,
+      "source_commit": "c3cbe8e56ccb4727624df45022357f49d2953075",
+      "source_ref": "refs/heads/owned-source/mbx-action/c3cbe8e56ccb4727624df45022357f49d2953075",
+      "source_tree": "57a9336f26b9ce4a31f5f914c17594ecaa9c1248",
+      "tag": "owned-source-mbx-action-c3cbe8e56ccb4727624df45022357f49d2953075",
+      "tool": "mbx-action"
+    }
+  ],
+  "repository": "tailrocks/velnor-new",
+  "schema": 1,
+  "signed_build_provenance": null,
+  "source_dco_signoffs_verified": true,
+  "source_publisher_revision": {
+    "commit": "e8246595b203ec739a8dae637db944923ca0f232",
+    "focused_isolated_tests": 15,
+    "independent_review_sha256": "e24dc7768dc6b03bbb6009788db1ce329902198dc7d0e7faa52e405bd9a31bb3",
+    "make_latest_policy": "explicit string false at creation and promotion"
+  },
+  "status": "PUBLISHED_IMMUTABLE_SOURCE_ONLY",
+  "tag_target": "c57c700459bbe1549fe7eedcb7d8689585c38986",
+  "unexpected_publication_workflow_runs": 0
+}
