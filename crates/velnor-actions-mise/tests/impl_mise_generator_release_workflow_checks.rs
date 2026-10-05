@@ -24,6 +24,7 @@ fn check_steps_bind_native_runner_and_toolchain_identity() -> Result<(), Box<dyn
     for (target, expected) in [
         (GeneratorReleaseTarget::LinuxX86_64, "Linux x86_64"),
         (GeneratorReleaseTarget::MacosArm64, "Darwin arm64"),
+        (GeneratorReleaseTarget::MacosX86_64, "Darwin x86_64"),
     ] {
         let host = native_host_check_step(target, &homes, &catalog)?;
         let host_script = script(&host)?;
@@ -78,6 +79,15 @@ fn binary_checks_reject_wrong_target_paths_and_runner_families() {
         )
         .is_err()
     );
+    assert!(
+        gnu_runtime_abi_check_step(
+            GeneratorReleaseTarget::MacosX86_64,
+            &binary_path(GeneratorReleaseTarget::MacosX86_64),
+            &homes,
+            &catalog,
+        )
+        .is_err()
+    );
     assert!(apple_sdk_check_step(linux, &homes, &catalog).is_err());
     assert!(apple_linker_check_step(linux, &homes, &catalog).is_err());
     assert!(version_smoke_check_step(&linux_binary, "0.1", &homes, &catalog).is_err());
@@ -123,16 +133,33 @@ fn macos_binary_check_rejects_universal_and_wrong_architectures()
     let mut root = TempDir::new()?;
     let homes = ToolHomes::runner_temp();
     let catalog = ToolCatalog::pinned();
-    let target = GeneratorReleaseTarget::MacosArm64;
-    let step =
-        binary_format_architecture_check_step(target, &binary_path(target), &homes, &catalog)?;
-    write_output_command(root.path(), "file", "Mach-O 64-bit executable arm64\n")?;
-    write_output_command(root.path(), "lipo", "arm64\n")?;
-    assert!(run_step(&step, root.path(), root.path())?);
-    write_output_command(root.path(), "lipo", "arm64 x86_64\n")?;
-    assert!(!run_step(&step, root.path(), root.path())?);
-    write_output_command(root.path(), "lipo", "x86_64\n")?;
-    assert!(!run_step(&step, root.path(), root.path())?);
+    for (target, architecture) in [
+        (GeneratorReleaseTarget::MacosArm64, "arm64"),
+        (GeneratorReleaseTarget::MacosX86_64, "x86_64"),
+    ] {
+        let step =
+            binary_format_architecture_check_step(target, &binary_path(target), &homes, &catalog)?;
+        write_output_command(
+            root.path(),
+            "file",
+            &format!("Mach-O 64-bit executable {architecture}\n"),
+        )?;
+        write_output_command(root.path(), "lipo", &format!("{architecture}\n"))?;
+        assert!(run_step(&step, root.path(), root.path())?);
+        let other_architecture = if architecture == "arm64" {
+            "x86_64"
+        } else {
+            "arm64"
+        };
+        write_output_command(
+            root.path(),
+            "lipo",
+            &format!("{architecture} {other_architecture}\n"),
+        )?;
+        assert!(!run_step(&step, root.path(), root.path())?);
+        write_output_command(root.path(), "lipo", &format!("{other_architecture}\n"))?;
+        assert!(!run_step(&step, root.path(), root.path())?);
+    }
     root.cleanup()?;
     Ok(())
 }
@@ -189,7 +216,7 @@ fn apple_sdk_and_linker_checks_observe_real_executable_paths()
     let mut root = TempDir::new()?;
     let homes = ToolHomes::runner_temp();
     let catalog = ToolCatalog::pinned();
-    let target = GeneratorReleaseTarget::MacosArm64;
+    let target = GeneratorReleaseTarget::MacosX86_64;
     let sdk = root.path().join("sdk");
     let clang = root.path().join("clang");
     let linker = root.path().join("ld");

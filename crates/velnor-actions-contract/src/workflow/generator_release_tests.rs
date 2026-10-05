@@ -11,16 +11,31 @@ fn release_plan_binds_version_source_tag_targets_and_metadata() {
     assert_eq!(plan.source_sha(), SOURCE_SHA);
     assert_eq!(plan.tag(), format!("generator-{SOURCE_SHA}"));
     assert_eq!(plan.repository(), "tailrocks/velnor-new");
+    let targets = plan.targets().collect::<Vec<_>>();
     assert_eq!(
-        plan.targets().map(GeneratorReleaseTarget::triple),
+        targets
+            .iter()
+            .map(|target| target.release_target())
+            .collect::<Vec<_>>(),
+        ReleaseTarget::ALL.to_vec()
+    );
+    assert_eq!(
+        targets
+            .iter()
+            .map(|target| target.triple())
+            .collect::<Vec<_>>(),
         [
             ReleaseTarget::LinuxX86_64.triple(),
             ReleaseTarget::MacosArm64.triple(),
+            ReleaseTarget::MacosX86_64.triple(),
         ]
     );
     assert_eq!(
-        plan.targets().map(GeneratorReleaseTarget::runner_label),
-        ["ubuntu-22.04", "macos-15"]
+        targets
+            .iter()
+            .map(|target| target.runner_label())
+            .collect::<Vec<_>>(),
+        ["ubuntu-22.04", "macos-15", "macos-15-intel"]
     );
 }
 
@@ -35,6 +50,8 @@ fn release_plan_exposes_staged_and_final_asset_inventories() {
             "velnor-actions-0.1.1-x86_64-unknown-linux-gnu.sha256",
             "velnor-actions-0.1.1-aarch64-apple-darwin",
             "velnor-actions-0.1.1-aarch64-apple-darwin.sha256",
+            "velnor-actions-0.1.1-x86_64-apple-darwin",
+            "velnor-actions-0.1.1-x86_64-apple-darwin.sha256",
         ]
     );
     assert_eq!(
@@ -44,6 +61,8 @@ fn release_plan_exposes_staged_and_final_asset_inventories() {
             "velnor-actions-0.1.1-x86_64-unknown-linux-gnu.sha256",
             "velnor-actions-0.1.1-aarch64-apple-darwin",
             "velnor-actions-0.1.1-aarch64-apple-darwin.sha256",
+            "velnor-actions-0.1.1-x86_64-apple-darwin",
+            "velnor-actions-0.1.1-x86_64-apple-darwin.sha256",
             RELEASE_MANIFEST_FILENAME,
             "velnor-actions-release-manifest.json.sha256",
         ]
@@ -112,10 +131,14 @@ fn current_workflow_binding_resolves_to_an_exact_source_bound_plan() {
         GeneratorReleaseSourceBinding::for_current_workflow("0.1.1").expect("source binding");
     assert_eq!(binding.version(), "0.1.1");
     assert_eq!(
-        binding.targets().map(GeneratorReleaseTarget::triple),
+        binding
+            .targets()
+            .map(GeneratorReleaseTarget::triple)
+            .collect::<Vec<_>>(),
         [
             ReleaseTarget::LinuxX86_64.triple(),
             ReleaseTarget::MacosArm64.triple(),
+            ReleaseTarget::MacosX86_64.triple(),
         ]
     );
     assert_eq!(
@@ -125,6 +148,8 @@ fn current_workflow_binding_resolves_to_an_exact_source_bound_plan() {
             "velnor-actions-0.1.1-x86_64-unknown-linux-gnu.sha256",
             "velnor-actions-0.1.1-aarch64-apple-darwin",
             "velnor-actions-0.1.1-aarch64-apple-darwin.sha256",
+            "velnor-actions-0.1.1-x86_64-apple-darwin",
+            "velnor-actions-0.1.1-x86_64-apple-darwin.sha256",
         ]
     );
     let plan = binding.bind(SOURCE_SHA).expect("bound release plan");
@@ -138,6 +163,8 @@ fn current_workflow_binding_resolves_to_an_exact_source_bound_plan() {
             "velnor-actions-0.1.1-x86_64-unknown-linux-gnu.sha256",
             "velnor-actions-0.1.1-aarch64-apple-darwin",
             "velnor-actions-0.1.1-aarch64-apple-darwin.sha256",
+            "velnor-actions-0.1.1-x86_64-apple-darwin",
+            "velnor-actions-0.1.1-x86_64-apple-darwin.sha256",
             RELEASE_MANIFEST_FILENAME,
             "velnor-actions-release-manifest.json.sha256",
         ]

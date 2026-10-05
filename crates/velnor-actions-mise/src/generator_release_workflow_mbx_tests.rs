@@ -63,6 +63,36 @@ fn setup_installs_exact_rust_and_mbx_pins() {
 }
 
 #[test]
+fn macos_x64_setup_uses_the_pinned_x64_mise_binary() {
+    let target = GeneratorReleaseTarget::MacosX86_64;
+    let steps = setup_rust_steps(
+        MISE_USES,
+        target,
+        generator_release_mise_binary_sha256(target),
+        &ToolHomes::runner_temp(),
+        &ToolCatalog::pinned(),
+    )
+    .expect("the Intel runner must use its exact Mise pin");
+    let StepKind::Action { with, .. } = &steps[0].kind else {
+        panic!("the first setup step must install the pinned Mise action");
+    };
+    assert_eq!(
+        with.get("sha256").map(String::as_str),
+        Some("02d8ba561847f996925e361262c0610a24f59fcd9e06ba9ed0b6022e19b317c3")
+    );
+    assert!(
+        setup_rust_steps(
+            MISE_USES,
+            target,
+            "484c135bd4329975d608d3f77e26c2ece5d2f5590f18ca71f44440294f8cfa6f",
+            &ToolHomes::runner_temp(),
+            &ToolCatalog::pinned(),
+        )
+        .is_err()
+    );
+}
+
+#[test]
 fn mbx_build_uses_only_catalog_pins_and_owned_environment() {
     let catalog = catalog();
     let homes = ToolHomes::new("/runner/rustup", "/runner/cargo")

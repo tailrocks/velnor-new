@@ -20,6 +20,10 @@ fn setup_lowers_target_matched_action_checksum_and_rust_tool_install() {
             GeneratorReleaseTarget::MacosArm64,
             "484c135bd4329975d608d3f77e26c2ece5d2f5590f18ca71f44440294f8cfa6f",
         ),
+        (
+            GeneratorReleaseTarget::MacosX86_64,
+            "02d8ba561847f996925e361262c0610a24f59fcd9e06ba9ed0b6022e19b317c3",
+        ),
     ];
     for (target, digest) in expected {
         let steps = setup_rust_steps(

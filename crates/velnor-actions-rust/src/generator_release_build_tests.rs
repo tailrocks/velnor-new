@@ -5,7 +5,7 @@ const SOURCE_SHA: &str = "0123456789abcdef0123456789abcdef01234567";
 
 #[test]
 fn every_target_build_uses_one_explicit_locked_release_command_and_output_root() {
-    for target in GeneratorReleaseTarget::ALL {
+    for target in GeneratorReleaseTarget::all() {
         let build = GeneratorCargoBuild::new(target);
         assert_eq!(build.program(), "cargo");
         assert_eq!(
@@ -54,6 +54,18 @@ fn verification_binds_release_plan_target_output_and_closed_proofs() {
         ),
         (
             GeneratorReleaseTarget::MacosArm64,
+            vec![
+                GeneratorBinaryCheck::NativeHostIdentity,
+                GeneratorBinaryCheck::RustToolchainIdentity,
+                GeneratorBinaryCheck::BinaryFormatArchitecture,
+                GeneratorBinaryCheck::AppleSdk,
+                GeneratorBinaryCheck::AppleLinker,
+                GeneratorBinaryCheck::VersionSmoke,
+                GeneratorBinaryCheck::HelpSmoke,
+            ],
+        ),
+        (
+            GeneratorReleaseTarget::MacosX86_64,
             vec![
                 GeneratorBinaryCheck::NativeHostIdentity,
                 GeneratorBinaryCheck::RustToolchainIdentity,

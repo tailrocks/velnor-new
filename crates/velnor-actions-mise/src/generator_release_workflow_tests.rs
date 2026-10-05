@@ -44,7 +44,7 @@ fn native_check_steps(target: GeneratorReleaseTarget) -> Vec<Step> {
             gnu_runtime_abi_check_step(target, binary, &homes, &catalog)
                 .expect("GNU ABI check must build on Linux"),
         ),
-        GeneratorReleaseTarget::MacosArm64 => {
+        GeneratorReleaseTarget::MacosArm64 | GeneratorReleaseTarget::MacosX86_64 => {
             steps.push(
                 apple_sdk_check_step(target, &homes, &catalog).expect("SDK check must build"),
             );
@@ -83,6 +83,22 @@ fn native_checks_use_control_free_argv_and_keep_platform_guards() {
             GeneratorReleaseTarget::MacosArm64,
             "Darwin arm64",
             "aarch64-apple-darwin",
+            [
+                "Verify native build host",
+                "Verify selected Rust toolchain",
+                "Verify binary format and exact architecture",
+                "Observe selected Apple SDK",
+                "Observe selected Apple linker",
+                "Smoke test release binary version",
+                "Smoke test release binary help",
+            ]
+            .into_iter()
+            .collect::<BTreeSet<_>>(),
+        ),
+        (
+            GeneratorReleaseTarget::MacosX86_64,
+            "Darwin x86_64",
+            "x86_64-apple-darwin",
             [
                 "Verify native build host",
                 "Verify selected Rust toolchain",
@@ -140,7 +156,13 @@ fn native_checks_use_control_free_argv_and_keep_platform_guards() {
                 "Verify binary format and exact architecture" => {
                     assert!(script.contains("file -b"));
                     assert!(script.contains("lipo -archs"));
-                    assert!(script.contains("arm64"));
+                    assert!(
+                        script.contains(if target == GeneratorReleaseTarget::MacosArm64 {
+                            "arm64"
+                        } else {
+                            "x86_64"
+                        })
+                    );
                 }
                 "Verify Ubuntu 22.04 GNU ABI baseline" => {
                     assert!(script.contains("readelf --version-info --wide"));

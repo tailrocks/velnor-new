@@ -30,6 +30,9 @@ const MISE_BINARY_SHA256_LINUX_X64: &str =
 /// `e0089ffb8833fb57b862b89f5aae56766a514eaef08eb2bc10ad652d7b10647b`.
 const MISE_BINARY_SHA256_MACOS_ARM64: &str =
     "484c135bd4329975d608d3f77e26c2ece5d2f5590f18ca71f44440294f8cfa6f";
+/// Installed macOS x64 Mise binary SHA from the pinned x64 platform record.
+const MISE_BINARY_SHA256_MACOS_X64: &str =
+    "02d8ba561847f996925e361262c0610a24f59fcd9e06ba9ed0b6022e19b317c3";
 #[path = "generator_release_workflow_checks.rs"]
 mod checks;
 pub use checks::{
@@ -98,6 +101,7 @@ pub const fn generator_release_mise_binary_sha256(target: GeneratorReleaseTarget
     match target {
         GeneratorReleaseTarget::LinuxX86_64 => MISE_BINARY_SHA256_LINUX_X64,
         GeneratorReleaseTarget::MacosArm64 => MISE_BINARY_SHA256_MACOS_ARM64,
+        GeneratorReleaseTarget::MacosX86_64 => MISE_BINARY_SHA256_MACOS_X64,
     }
 }
 

@@ -82,6 +82,7 @@ pub fn native_host_check_step(
     let expected = match target {
         GeneratorReleaseTarget::LinuxX86_64 => "Linux x86_64",
         GeneratorReleaseTarget::MacosArm64 => "Darwin arm64",
+        GeneratorReleaseTarget::MacosX86_64 => "Darwin x86_64",
     };
     let body = format!(
         "uname -sm | awk -v expected={} {}",
@@ -130,6 +131,7 @@ pub fn binary_format_architecture_check_step(
             shell_quote(ELF_HEADER_GUARD_AWK)
         ),
         GeneratorReleaseTarget::MacosArm64 => apple_format_script(&binary, "arm64"),
+        GeneratorReleaseTarget::MacosX86_64 => apple_format_script(&binary, "x86_64"),
     };
     guarded_step(
         "Verify binary format and exact architecture",
@@ -310,7 +312,7 @@ fn require_target(
 
 fn require_apple_target(target: GeneratorReleaseTarget) -> Result<(), MiseError> {
     match target {
-        GeneratorReleaseTarget::MacosArm64 => Ok(()),
+        GeneratorReleaseTarget::MacosArm64 | GeneratorReleaseTarget::MacosX86_64 => Ok(()),
         GeneratorReleaseTarget::LinuxX86_64 => Err(invalid_step_input("target", target.triple())),
     }
 }

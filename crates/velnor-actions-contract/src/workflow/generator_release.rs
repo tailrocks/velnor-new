@@ -13,11 +13,26 @@ pub enum GeneratorReleaseTarget {
     LinuxX86_64,
     /// macOS ARM64, built on a native Apple Silicon runner.
     MacosArm64,
+    /// macOS x86-64, built on a native Intel runner.
+    MacosX86_64,
 }
 
 impl GeneratorReleaseTarget {
-    /// Every supported target, in release-manifest order.
-    pub const ALL: [Self; 2] = [Self::LinuxX86_64, Self::MacosArm64];
+    /// Iterate the canonical consumer inventory in manifest order.
+    #[must_use]
+    pub fn all() -> impl ExactSizeIterator<Item = Self> + Clone {
+        ReleaseTarget::ALL
+            .into_iter()
+            .map(Self::from_release_target)
+    }
+
+    const fn from_release_target(target: ReleaseTarget) -> Self {
+        match target {
+            ReleaseTarget::LinuxX86_64 => Self::LinuxX86_64,
+            ReleaseTarget::MacosArm64 => Self::MacosArm64,
+            ReleaseTarget::MacosX86_64 => Self::MacosX86_64,
+        }
+    }
 
     /// Canonical release target represented by this producer target.
     #[must_use]
@@ -25,6 +40,7 @@ impl GeneratorReleaseTarget {
         match self {
             Self::LinuxX86_64 => ReleaseTarget::LinuxX86_64,
             Self::MacosArm64 => ReleaseTarget::MacosArm64,
+            Self::MacosX86_64 => ReleaseTarget::MacosX86_64,
         }
     }
 
@@ -40,6 +56,7 @@ impl GeneratorReleaseTarget {
         match self {
             Self::LinuxX86_64 => "ubuntu-22.04",
             Self::MacosArm64 => "macos-15",
+            Self::MacosX86_64 => "macos-15-intel",
         }
     }
 
@@ -89,19 +106,19 @@ impl GeneratorReleaseSourceBinding {
         &self.version
     }
 
-    /// Exact two-target inventory, in canonical manifest order.
+    /// Canonical consumer target inventory, in manifest order.
     #[must_use]
-    pub const fn targets(&self) -> [GeneratorReleaseTarget; 2] {
-        GeneratorReleaseTarget::ALL
+    pub fn targets(&self) -> impl ExactSizeIterator<Item = GeneratorReleaseTarget> + Clone {
+        GeneratorReleaseTarget::all()
     }
 
-    /// Four staged binary and checksum assets, in canonical target order.
+    /// Staged binary and checksum assets, in canonical target order.
     #[must_use]
     pub fn staged_asset_names(&self) -> Vec<String> {
         staged_asset_names(&self.version)
     }
 
-    /// Six final assets: staged binaries and checksums, then manifest files.
+    /// Final assets: one binary and checksum pair per target, then manifest files.
     #[must_use]
     pub fn final_asset_names(&self) -> Vec<String> {
         final_asset_names(&self.version)
@@ -179,19 +196,19 @@ impl GeneratorReleasePlan {
         crate::targets::EXPECTED_REPOSITORY
     }
 
-    /// Exact two-target inventory, in canonical manifest order.
+    /// Canonical consumer target inventory, in manifest order.
     #[must_use]
-    pub const fn targets(&self) -> [GeneratorReleaseTarget; 2] {
-        GeneratorReleaseTarget::ALL
+    pub fn targets(&self) -> impl ExactSizeIterator<Item = GeneratorReleaseTarget> + Clone {
+        GeneratorReleaseTarget::all()
     }
 
-    /// Four staged binary and checksum assets, in canonical target order.
+    /// Staged binary and checksum assets, in canonical target order.
     #[must_use]
     pub fn staged_asset_names(&self) -> Vec<String> {
         staged_asset_names(&self.version)
     }
 
-    /// Six final assets: staged binaries and checksums, then manifest files.
+    /// Final assets: one binary and checksum pair per target, then manifest files.
     #[must_use]
     pub fn final_asset_names(&self) -> Vec<String> {
         final_asset_names(&self.version)
@@ -199,8 +216,8 @@ impl GeneratorReleasePlan {
 }
 
 fn staged_asset_names(version: &str) -> Vec<String> {
-    let mut names = Vec::with_capacity(4);
-    for target in GeneratorReleaseTarget::ALL {
+    let mut names = Vec::with_capacity(2 * ReleaseTarget::ALL.len());
+    for target in GeneratorReleaseTarget::all() {
         names.push(target.binary_filename(version));
         names.push(target.sidecar_filename(version));
     }

@@ -108,7 +108,7 @@ impl GeneratorCargoBuild {
         ];
         match self.target {
             GeneratorReleaseTarget::LinuxX86_64 => checks.push(GeneratorBinaryCheck::GnuRuntimeAbi),
-            GeneratorReleaseTarget::MacosArm64 => {
+            GeneratorReleaseTarget::MacosArm64 | GeneratorReleaseTarget::MacosX86_64 => {
                 checks.push(GeneratorBinaryCheck::AppleSdk);
                 checks.push(GeneratorBinaryCheck::AppleLinker);
             }
