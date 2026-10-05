@@ -62,7 +62,7 @@ fn named_check_identity_and_report_upload_stay_on_their_exact_lane() {
         steps.push(Step {
             name: "Upload reports".to_owned(),
             id: None,
-            role: None,
+            role: Some(StepRole::MatrixReportUpload),
             condition: Some("always()".to_owned()),
             kind: StepKind::Action {
                 uses: crate::steps::UPLOAD_ARTIFACT_USES.to_owned(),

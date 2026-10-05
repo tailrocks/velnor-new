@@ -1,7 +1,62 @@
+use std::collections::BTreeMap;
+
+use velnor_actions_contract::config::{
+    CheckExecutor, CheckPlatform, EPHEMERAL_CHECK_ADMISSION_CONDITION,
+};
 use velnor_actions_contract::workflow::lanes::{
     NAMED_CHECK_JOB_ID_ENV, NAMED_CHECK_LANE_VARIANT_ENV,
 };
-use velnor_actions_contract::{Step, StepKind, StepRole};
+use velnor_actions_contract::{Job, StepKind};
+use velnor_actions_contract::{Step, StepRole};
+
+use crate::composite::composite_yaml;
+use crate::document_steps::{StepRenderContext, step_to_yaml};
+use crate::render::RenderContext;
+use crate::tree::RenderedFile;
+use crate::{RenderError, marker, steps, yaml::render_yaml};
+
+/// Permit the one documented hosted-to-hosted named-check condition refinement.
+pub(crate) fn same_or_admitted_check_condition(hosted: &Job, local: &Job) -> bool {
+    if hosted.condition == local.condition {
+        return true;
+    }
+    hosted.condition.is_none()
+        && local.condition.as_deref() == Some(EPHEMERAL_CHECK_ADMISSION_CONDITION)
+        && matches!(
+            (&hosted.check_runner, &local.check_runner),
+            (Some(hosted_runner), Some(local_runner))
+                if hosted_runner == local_runner
+                    && hosted_runner.platform == CheckPlatform::LinuxX64
+                    && hosted_runner.executor == CheckExecutor::Hosted
+        )
+}
+
+/// Separate lane-only upload/identity steps from the shared action body.
+pub(crate) fn peel_lane_specific(steps: &[Step]) -> (Vec<Step>, Vec<Step>) {
+    let mut common = Vec::new();
+    let mut extra = Vec::new();
+    for step in steps {
+        if is_lane_specific(step) {
+            extra.push(step.clone());
+        } else {
+            common.push(step.clone());
+        }
+    }
+    (common, extra)
+}
+
+fn is_lane_specific(step: &Step) -> bool {
+    if is_postlude_step(step) || step.role == Some(StepRole::MatrixReportUpload) {
+        return true;
+    }
+    match &step.kind {
+        StepKind::Shell { env, .. } | StepKind::Internal { env, .. } => {
+            env.contains_key(NAMED_CHECK_JOB_ID_ENV)
+                || env.contains_key(NAMED_CHECK_LANE_VARIANT_ENV)
+        }
+        StepKind::Action { .. } => false,
+    }
+}
 
 /// Find the point where the lane-specific MBX cache prelude begins.
 pub(crate) fn mbx_prelude_index(steps: &[Step]) -> Option<usize> {
@@ -70,30 +125,102 @@ fn is_postlude_step(step: &Step) -> bool {
     )
 }
 
-/// Keep report uploads and named-check identity on the lane that owns them.
-pub(crate) fn peel_lane_specific(steps: &[Step]) -> (Vec<Step>, Vec<Step>) {
-    let mut common = Vec::new();
-    let mut extra = Vec::new();
-    for step in steps {
-        if is_lane_specific(step) {
-            extra.push(step.clone());
+/// Replace repeated pre-restore step sequences with one shared local action.
+///
+/// The provider restore itself remains in each workflow job because the
+/// elected save step consumes that job-scoped output ID. Only byte-identical
+/// prefixes shared by multiple lane jobs are factored.
+pub(crate) fn factor_provider_preludes(
+    preludes: &mut BTreeMap<String, Vec<Step>>,
+    files: &mut Vec<RenderedFile>,
+    ctx: &RenderContext,
+) -> Result<(), RenderError> {
+    let mut groups: Vec<(Vec<Step>, Vec<String>)> = Vec::new();
+    for (id, steps) in preludes.iter() {
+        let Some(restore_at) = steps
+            .iter()
+            .position(|step| step.role == Some(StepRole::TofuProvidersRestore))
+        else {
+            continue;
+        };
+        if restore_at == 0 {
+            continue;
+        }
+        let prefix = steps[..restore_at].to_vec();
+        if let Some(index) = groups.iter().position(|(known, _)| known == &prefix) {
+            groups[index].1.push(id.clone());
         } else {
-            common.push(step.clone());
+            groups.push((prefix, vec![id.clone()]));
         }
     }
-    (common, extra)
+
+    for (index, (prefix, owners)) in groups.into_iter().enumerate() {
+        if owners.len() < 2 {
+            continue;
+        }
+        let logical = format!("tofu-provider-prelude-{index}");
+        files.push(composite_file(&logical, &prefix, ctx)?);
+        let call = Step {
+            name: "Prepare ToFu provider prelude".to_owned(),
+            id: None,
+            role: None,
+            condition: None,
+            kind: StepKind::Action {
+                uses: format!(
+                    "{}{index}",
+                    crate::action_ref::TOFU_PROVIDER_PRELUDE_ACTION_PREFIX
+                ),
+                with: BTreeMap::new(),
+                env: BTreeMap::new(),
+            },
+        };
+        for owner in owners {
+            let steps = preludes.get_mut(&owner).ok_or_else(|| {
+                RenderError::InvalidWorkflow("provider_prelude_owner_missing".to_owned())
+            })?;
+            let restore_at = steps
+                .iter()
+                .position(|step| step.role == Some(StepRole::TofuProvidersRestore))
+                .ok_or_else(|| {
+                    RenderError::InvalidWorkflow("provider_restore_missing_after_factor".to_owned())
+                })?;
+            steps.splice(..restore_at, [call.clone()]);
+        }
+    }
+    Ok(())
 }
 
-fn is_lane_specific(step: &Step) -> bool {
-    if is_postlude_step(step) {
-        return true;
+/// Render one workflow composite from typed steps.
+pub(crate) fn composite_file(
+    logical: &str,
+    steps: &[Step],
+    ctx: &RenderContext,
+) -> Result<RenderedFile, RenderError> {
+    velnor_actions_contract::workflow::step_identity::validate_step_identity_scope(
+        steps,
+        &format!("composite:{logical}"),
+    )
+    .map_err(RenderError::Contract)?;
+    let mut rendered = Vec::with_capacity(steps.len());
+    let empty_job_env = BTreeMap::new();
+    let render_context = StepRenderContext {
+        job_id: logical,
+        ctx,
+        needs_envs: &[],
+        composite: true,
+        job_env: &empty_job_env,
+        actions_read: false,
+        runs_on: None,
+    };
+    for step in steps {
+        rendered.push(step_to_yaml(step, &render_context)?);
     }
-    match &step.kind {
-        StepKind::Action { uses, .. } if uses == crate::steps::UPLOAD_ARTIFACT_USES => true,
-        StepKind::Shell { env, .. } | StepKind::Internal { env, .. } => {
-            env.contains_key(NAMED_CHECK_JOB_ID_ENV)
-                || env.contains_key(NAMED_CHECK_LANE_VARIANT_ENV)
-        }
-        StepKind::Action { .. } => false,
-    }
+    let body = composite_yaml(logical, rendered)?;
+    let quoted = crate::yaml::quote_run_values_in_yaml(body);
+    let bytes = marker::with_marker(&ctx.generator_version, &render_yaml(&quoted))?;
+    steps::scan_for_private_subcommands(&bytes)?;
+    Ok(RenderedFile {
+        path: format!(".github/actions/{logical}/action.yml"),
+        bytes,
+    })
 }

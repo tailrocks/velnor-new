@@ -81,7 +81,7 @@ pub enum StepRole {
     CheckGenerated,
     /// Upload of the planner report artifact.
     PublishPlan,
-    /// Upload of one matrix task report.
+    /// Upload of a crate or matrix task report artifact.
     MatrixReportUpload,
     /// Download of a candidate attestation artifact.
     AttestationDownload,

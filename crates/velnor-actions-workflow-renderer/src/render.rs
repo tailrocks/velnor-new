@@ -22,6 +22,10 @@ pub use crate::render_constants::*;
 #[path = "validator_tools.rs"]
 mod validator_tools;
 
+#[path = "render_action_pins.rs"]
+mod action_pins_impl;
+pub use action_pins_impl::action_pins;
+
 pub use crate::matrix::{
     COVERED_TASKS_OUTPUT, MATRIX_MAX_PARALLEL_ENV, MATRIX_NEEDS_JOB_ENV, MATRIX_OUTPUT_ENV,
     MatrixSource, PLAN_ID_OUTPUT, PLAN_STEP_ID, RUN_KEY_OUTPUT,
@@ -264,22 +268,6 @@ fn validate_final_jobs(ir: &WorkflowIr, jobs: &BTreeMap<String, Job>) -> Result<
     let mut finalized = ir.clone();
     finalized.jobs.clone_from(jobs);
     finalized.validate().map_err(RenderError::Contract)
-}
-
-/// Sorted unique `uses:` refs across every action step (plan display).
-#[must_use]
-pub fn action_pins(jobs: &BTreeMap<String, Job>) -> Vec<String> {
-    let mut pins = std::collections::BTreeSet::new();
-    for job in jobs.values() {
-        for step in &job.steps {
-            if let velnor_actions_contract::StepKind::Action { uses, .. } = &step.kind
-                && !uses.starts_with("./.github/actions/")
-            {
-                pins.insert(uses.clone());
-            }
-        }
-    }
-    pins.into_iter().collect()
 }
 
 /// Validate context/IR plus policy merge and support invariants.
