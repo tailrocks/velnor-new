@@ -37,6 +37,8 @@ fn token_hygiene_scopes_gh_token_to_plan() -> Result<(), RenderError> {
             checkout_step(&checkout_pin())?,
             Step {
                 name: "Plan".to_owned(),
+                id: None,
+                role: None,
                 condition: None,
                 kind: StepKind::Shell {
                     run: vec!["true".to_owned()],
@@ -68,6 +70,8 @@ fn token_hygiene_scopes_gh_token_to_plan() -> Result<(), RenderError> {
             checkout_step(&checkout_pin())?,
             Step {
                 name: "Leak".to_owned(),
+                id: None,
+                role: None,
                 condition: None,
                 kind: StepKind::Shell {
                     run: vec!["true".to_owned()],
@@ -128,6 +132,8 @@ fn token_hygiene_rejects_prints_and_task_tokens() -> Result<(), RenderError> {
         vec!["plan".to_owned()],
         vec![velnor_actions_contract::Step {
             name: "Run task".to_owned(),
+            id: None,
+            role: None,
             condition: None,
             kind: velnor_actions_contract::StepKind::Shell {
                 run: vec!["true".to_owned()],
@@ -191,6 +197,8 @@ fn token_hygiene_constructor_owns_overlay_and_rejects_all_nine_keys() -> Result<
             vec!["plan".to_owned()],
             vec![Step {
                 name: "Run task".to_owned(),
+                id: None,
+                role: None,
                 condition: None,
                 kind: StepKind::Shell {
                     run: vec!["true".to_owned()],
@@ -228,6 +236,8 @@ fn scrub_coverage_rejects_bare_and_partial_shell_env() -> Result<(), RenderError
                 checkout_step(&checkout_pin())?,
                 Step {
                     name: "Run task".to_owned(),
+                    id: None,
+                    role: None,
                     condition: None,
                     kind: StepKind::Shell {
                         run: vec!["true".to_owned()],

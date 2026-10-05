@@ -23,6 +23,8 @@ fn shell_job(run: Vec<String>) -> Job {
         environment: None,
         steps: vec![Step {
             name: PREPARE_PINNED_TOOLS_STEP.to_owned(),
+            id: None,
+            role: None,
             condition: None,
             kind: StepKind::Shell {
                 run,

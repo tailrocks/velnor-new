@@ -14,7 +14,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_actions_contract::{Job, Step, StepKind};
+use velnor_actions_contract::{Job, Step, StepKind, StepRole};
 
 use crate::{
     MiseSetup, RenderError, cache_p08_detect::detector_words, setup::MISE_ACTION_NAME,
@@ -307,7 +307,7 @@ fn first_mise_index(job: &Job) -> Option<usize> {
 fn insert_at(job: &Job) -> usize {
     job.steps
         .first()
-        .filter(|step| step.name == "Checkout")
+        .filter(|step| step.role == Some(StepRole::Checkout))
         .map_or(0, |_| 1)
 }
 
@@ -367,12 +367,9 @@ pub fn check_no_rust_cache_with_mbx(job_id: &str, job: &Job) -> Result<(), Rende
 ///
 /// Returns [`RenderError::InvalidWorkflow`] when fetch precedes MBX.
 pub fn check_mbx_before_fetch(job_id: &str, job: &Job) -> Result<(), RenderError> {
-    let at = |name: &str| job.steps.iter().position(|s| s.name == name);
-    let fetch = job
-        .steps
-        .iter()
-        .position(|s| s.name.starts_with("Fetch Cargo sources"));
-    if let (Some(mbx), Some(fetch_at)) = (at("Restore MBX objects"), fetch)
+    let at = |role| job.steps.iter().position(|s| s.role == Some(role));
+    let fetch = at(StepRole::CargoSourcesFetch);
+    if let (Some(mbx), Some(fetch_at)) = (at(StepRole::MbxCache), fetch)
         && fetch_at < mbx
     {
         return Err(RenderError::InvalidWorkflow(format!(

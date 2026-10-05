@@ -63,6 +63,8 @@ fn scale_token() -> String {
 pub(super) fn echo_step(index: usize, payload: &str) -> Step {
     Step {
         name: format!("echo {index}"),
+        id: None,
+        role: None,
         condition: None,
         kind: StepKind::Shell {
             run: vec!["echo".to_owned(), payload.to_owned()],
@@ -87,6 +89,8 @@ fn lane_job(display: &str, runs_on: &str, steps: Vec<Step>) -> Job {
 fn checkout() -> Step {
     Step {
         name: "Checkout".to_owned(),
+        id: None,
+        role: None,
         condition: None,
         kind: StepKind::Action {
             uses: ctx().checkout_uses,

@@ -7,7 +7,7 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::workflow::lanes::{HOSTED_SUFFIX, SCALE_SUFFIX};
-use velnor_actions_contract::{Job, Step, StepKind};
+use velnor_actions_contract::{Job, Step, StepKind, StepRole};
 
 use crate::composite::composite_yaml;
 use crate::document_steps::step_to_yaml;
@@ -136,7 +136,7 @@ fn split_pair(hosted: &Job, local: &Job, checkout_uses: &str) -> Option<SharedLa
 
 fn peel_checkout<'a>(steps: &'a [Step], checkout_uses: &str) -> Option<(&'a Step, &'a [Step])> {
     let (checkout, remaining) = steps.split_first()?;
-    let is_expected_checkout = checkout.name == "Checkout"
+    let is_expected_checkout = checkout.role == Some(StepRole::Checkout)
         && checkout.condition.is_none()
         && matches!(
             &checkout.kind,
@@ -152,7 +152,7 @@ fn peel_checkout<'a>(steps: &'a [Step], checkout_uses: &str) -> Option<(&'a Step
 }
 
 fn is_checkout_step(step: &Step) -> bool {
-    step.name == "Checkout"
+    step.role == Some(StepRole::Checkout)
         || matches!(
             &step.kind,
             StepKind::Action { uses, .. }
@@ -174,8 +174,10 @@ fn peel_saves(steps: &[Step]) -> (Vec<Step>, Vec<Step>) {
 }
 
 fn is_elected_save(step: &Step) -> bool {
-    step.name == crate::cache_steps::TOOLS_SAVE_NAME
-        || step.name == crate::tofu_cache::TOFU_PROVIDERS_SAVE_NAME
+    matches!(
+        step.role,
+        Some(StepRole::ToolsCacheSave | StepRole::TofuProvidersSave)
+    )
 }
 
 fn set_steps(jobs: &mut BTreeMap<String, Job>, id: &str, steps: Vec<Step>) {

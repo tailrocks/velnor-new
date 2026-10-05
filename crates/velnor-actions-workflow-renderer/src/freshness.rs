@@ -277,6 +277,8 @@ mod tests {
     fn rejects_internal_steps_fail_closed() {
         let internal = Step {
             name: "Plan".to_owned(),
+            id: None,
+            role: None,
             condition: None,
             kind: velnor_actions_contract::StepKind::Internal {
                 operation: "plan-v1".to_owned(),

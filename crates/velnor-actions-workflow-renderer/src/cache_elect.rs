@@ -5,7 +5,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Job, StepKind};
+use velnor_actions_contract::{Job, StepKind, StepRole};
 
 use crate::{RenderError, setup::MISE_ACTION_NAME};
 
@@ -91,6 +91,9 @@ pub fn elect_tofu_provider_savers(jobs: &mut BTreeMap<String, Job>) -> Result<()
 /// move an election.
 fn provider_restore_entry(job: &Job) -> Option<(String, String)> {
     job.steps.iter().find_map(|step| {
+        if step.role != Some(StepRole::TofuProvidersRestore) {
+            return None;
+        }
         let StepKind::Action { uses, with, .. } = &step.kind else {
             return None;
         };
@@ -119,7 +122,7 @@ fn append_provider_save(job: &mut Job, key: &str, path: &str) -> Result<(), Rend
     if job
         .steps
         .iter()
-        .any(|step| step.name == crate::tofu_cache::TOFU_PROVIDERS_SAVE_NAME)
+        .any(|step| step.role == Some(StepRole::TofuProvidersSave))
     {
         return Ok(());
     }
@@ -153,7 +156,7 @@ fn append_tools_save(job: &mut Job, key: &str) -> Result<(), RenderError> {
     if job
         .steps
         .iter()
-        .any(|step| step.name == crate::cache_steps::TOOLS_SAVE_NAME)
+        .any(|step| step.role == Some(StepRole::ToolsCacheSave))
     {
         return Ok(());
     }

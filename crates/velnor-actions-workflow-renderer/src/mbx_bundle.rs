@@ -13,7 +13,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Job, Step, StepKind};
+use velnor_actions_contract::{Job, Step, StepId, StepKind, StepRole};
 
 use crate::RenderError;
 use crate::cache_steps::{
@@ -45,25 +45,6 @@ const KEY_SCRIPT: &str = r#"set -eu; key="$MBX_KEY"; case "$key" in ''|*-) exit 
 /// Import when the restore matched. A miss, a missing directory, or a failed import stays cold.
 const IMPORT_SCRIPT: &str = r#"set -eu; bundle="$RUNNER_TEMP/mbx-single-bundle"; df -B1 -P "$RUNNER_TEMP"; df -i -P "$RUNNER_TEMP"; if [ -z "$MATCHED" ]; then echo "no mbx bundle matched"; exit 0; fi; if [ ! -d "$bundle" ]; then echo "mbx bundle missing; continuing cold"; exit 0; fi; if ! mbx cache import "$bundle"; then echo "mbx bundle import failed; continuing cold"; rm -rf "$bundle"; exit 0; fi"#;
 
-/// YAML step id for the MBX restore and export steps, when they have one.
-pub(crate) fn step_yaml_id(name: &str) -> Option<&'static str> {
-    match name {
-        MBX_RESTORE_NAME => Some("mbx"),
-        MBX_BUNDLE_KEY_NAME => Some("mbx-bundle-key"),
-        MBX_BUNDLE_RESTORE_NAME => Some("mbx-bundle"),
-        MBX_BUNDLE_EXPORT_NAME => Some("mbx-export"),
-        _ => None,
-    }
-}
-
-/// Emit `id:` for the two MBX steps whose later steps read outputs.
-pub(crate) fn push_step_id(entries: &mut Vec<(String, crate::yaml::Yaml)>, name: &str) {
-    let Some(id) = step_yaml_id(name) else {
-        return;
-    };
-    entries.push(("id".to_owned(), crate::yaml::Yaml::str(id.to_owned())));
-}
-
 /// Force every MBX action to restore-only and append the single-bundle save.
 ///
 /// # Errors
@@ -81,7 +62,7 @@ pub(crate) fn append_single_bundle_saves(
         if job
             .steps
             .iter()
-            .any(|step| step.name == MBX_BUNDLE_EXPORT_NAME)
+            .any(|step| step.role == Some(StepRole::MbxBundleExport))
         {
             continue;
         }
@@ -110,7 +91,7 @@ fn insert_bundle_restore(job: &mut Job) -> Result<(), RenderError> {
     if job
         .steps
         .iter()
-        .any(|step| step.name == MBX_BUNDLE_RESTORE_NAME)
+        .any(|step| step.role == Some(StepRole::MbxBundleRestore))
     {
         return Ok(());
     }
@@ -128,15 +109,18 @@ fn key_step() -> Result<Step, RenderError> {
         "MBX_KEY".to_owned(),
         "${{ steps.mbx.outputs.cache-primary-key }}".to_owned(),
     )]);
-    crate::steps::shell_step(
+    let mut step = crate::steps::shell_step(
         MBX_BUNDLE_KEY_NAME,
         vec!["bash".to_owned(), "-c".to_owned(), KEY_SCRIPT.to_owned()],
         env,
-    )
+    )?;
+    step.id = Some(StepId::MbxBundleKey);
+    step.role = Some(StepRole::MbxBundleKey);
+    Ok(step)
 }
 
 fn restore_step() -> Result<Step, RenderError> {
-    crate::steps::action_step(
+    let mut step = crate::steps::action_step(
         MBX_BUNDLE_RESTORE_NAME,
         TOOLS_RESTORE_USES,
         BTreeMap::from([
@@ -150,7 +134,10 @@ fn restore_step() -> Result<Step, RenderError> {
             ),
             ("path".to_owned(), MBX_BUNDLE_PATH.to_owned()),
         ]),
-    )
+    )?;
+    step.id = Some(StepId::MbxBundle);
+    step.role = Some(StepRole::MbxBundleRestore);
+    Ok(step)
 }
 
 fn import_step() -> Result<Step, RenderError> {
@@ -158,11 +145,13 @@ fn import_step() -> Result<Step, RenderError> {
         "MATCHED".to_owned(),
         "${{ steps.mbx-bundle.outputs.cache-matched-key }}".to_owned(),
     )]);
-    crate::steps::shell_step(
+    let mut step = crate::steps::shell_step(
         MBX_BUNDLE_IMPORT_NAME,
         vec!["bash".to_owned(), "-c".to_owned(), IMPORT_SCRIPT.to_owned()],
         env,
-    )
+    )?;
+    step.role = Some(StepRole::MbxBundleImport);
+    Ok(step)
 }
 
 fn export_step() -> Result<Step, RenderError> {
@@ -172,6 +161,8 @@ fn export_step() -> Result<Step, RenderError> {
         BTreeMap::new(),
     )?;
     step.condition = Some(PREP_IF.to_owned());
+    step.id = Some(StepId::MbxExport);
+    step.role = Some(StepRole::MbxBundleExport);
     Ok(step)
 }
 
@@ -188,5 +179,6 @@ fn save_step() -> Result<Step, RenderError> {
         ]),
     )?;
     step.condition = Some(SAVE_IF.to_owned());
+    step.role = Some(StepRole::MbxBundleSave);
     Ok(step)
 }

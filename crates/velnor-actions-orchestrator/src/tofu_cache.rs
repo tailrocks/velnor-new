@@ -5,16 +5,19 @@
 //! validate execution. Keys mirror the sources transport (static
 //! segments plus a `hashFiles` snapshot), scoped per validation root.
 
-use velnor_actions_contract::{CrateObligation, Step};
+use velnor_actions_contract::{CrateObligation, Step, StepId, StepRole};
 use velnor_actions_mise::PinnedTool;
 
 use crate::OrchestratorError;
 use crate::internal::internal;
 
 /// Provider-cache key prefix (per-root: target + tofu + root slug).
-pub(crate) const TOFU_PROVIDERS_KEY_PREFIX: &str = "velnor-v1-tofu-providers";
+pub(crate) const TOFU_PROVIDERS_KEY_PREFIX: &str =
+    velnor_actions_workflow_renderer::tofu_cache::TOFU_PROVIDERS_KEY_PREFIX;
 /// Owned plugin-cache base (expression form; mirrors the renderer's).
 pub(crate) const TOFU_PROVIDER_CACHE_BASE_EXPR: &str = "${{ runner.temp }}/velnor/tofu-cache";
+/// Restore-output gate and path hygiene for the post-restore admission step.
+const TOFU_PROVIDER_CACHE_ADMISSION_SCRIPT: &str = r#"set -eu; runner_temp=$(cd -P "$RUNNER_TEMP" && pwd -P); case "$TOFU_PROVIDER_CACHE_DIR" in "$runner_temp"/velnor/tofu-cache/*) ;; *) exit 1 ;; esac; cache_parent="$runner_temp/velnor/tofu-cache"; if [ -L "$runner_temp/velnor" ] || [ -L "$cache_parent" ]; then exit 1; fi; mkdir -p "$cache_parent"; if [ "$(cd -P "$cache_parent" && pwd -P)" != "$cache_parent" ]; then exit 1; fi; relative="${TOFU_PROVIDER_CACHE_DIR#"$runner_temp"/}"; case "$relative" in velnor/tofu-cache/*) ;; *) exit 1 ;; esac; slug="${relative#velnor/tofu-cache/}"; case "$slug" in ''|*/*|*[!A-Za-z0-9_-]*) exit 1 ;; esac; cache_dir="$cache_parent/$slug"; if [ "$TOFU_PROVIDER_CACHE_DIR" != "$cache_dir" ]; then exit 1; fi; if [ "$TOFU_CACHE_HIT" = "true" ] && [ -n "$TOFU_EXPECTED_KEY" ] && [ "$TOFU_MATCHED_KEY" = "$TOFU_EXPECTED_KEY" ] && [ -d "$cache_dir" ] && [ ! -L "$cache_dir" ]; then exit 0; fi; rm -rf "$cache_dir"; mkdir -m 700 "$cache_dir""#;
 
 /// Per-root provider-cache key: target + tofu + root slug + lock hash.
 ///
@@ -110,6 +113,49 @@ pub(crate) fn tofu_providers_restore_step(
     .map_err(OrchestratorError::from)?;
     velnor_actions_workflow_renderer::tofu_cache::TOFU_PROVIDERS_RESTORE_NAME
         .clone_into(&mut step.name);
+    step.id = Some(StepId::TofuProviders);
+    step.role = Some(StepRole::TofuProvidersRestore);
+    Ok(step)
+}
+
+/// Admit only the exact cache entry returned by the same restore action.
+///
+/// The restore action may extract a prefix match before exposing its
+/// outputs. On a miss or mismatched key, clear only the validated
+/// job-private plugin-cache leaf so init can run cold. The generated
+/// key binds target, OpenTofu pin, root slug, and lockfile hash; GitHub's
+/// cache branch scope remains the trust boundary. `TF_DATA_DIR` is not
+/// part of this path.
+/// # Errors
+///
+/// Returns render errors for a rejected key or provider-cache path.
+pub(crate) fn tofu_provider_cache_admission_step(
+    key: &str,
+    path: &str,
+) -> Result<Step, OrchestratorError> {
+    if key.trim().is_empty() || !velnor_actions_workflow_renderer::tofu_cache::tofu_providers_path_ok(path) {
+        return Err(bad_key("bad_provider_admission_identity".to_owned()));
+    }
+    let env = std::collections::BTreeMap::from([
+        (
+            "TOFU_CACHE_HIT".to_owned(),
+            format!("${{{{ steps.{}.outputs.cache-hit }}}}", StepId::TofuProviders.as_str()),
+        ),
+        ("TOFU_EXPECTED_KEY".to_owned(), key.to_owned()),
+        (
+            "TOFU_MATCHED_KEY".to_owned(),
+            format!("${{{{ steps.{}.outputs.cache-matched-key }}}}", StepId::TofuProviders.as_str()),
+        ),
+        ("TOFU_PROVIDER_CACHE_DIR".to_owned(), path.to_owned()),
+    ]);
+    let script = vec![
+        "sh".to_owned(),
+        "-c".to_owned(),
+        TOFU_PROVIDER_CACHE_ADMISSION_SCRIPT.to_owned(),
+    ];
+    let mut step = velnor_actions_workflow_renderer::shell_step("Admit Tofu providers", script, env)
+        .map_err(OrchestratorError::from)?;
+    step.role = Some(StepRole::TofuProvidersAdmission);
     Ok(step)
 }
 
@@ -153,6 +199,29 @@ pub(crate) fn restore_step_for_tofu_root(
     tofu_providers_restore_step(&key, &path)
 }
 
+/// Restore followed by the same-key admission step for one root.
+/// # Errors
+///
+/// Returns contract, actionlint, or render errors for invalid cache identity.
+pub(crate) fn restore_and_admit_steps_for_tofu_root(
+    label: &str,
+    catalog: &velnor_actions_mise::ToolCatalog,
+    root: &str,
+) -> Result<[Step; 2], OrchestratorError> {
+    let target = velnor_actions_contract::target_for_runner_label(label).ok_or_else(|| {
+        OrchestratorError::Contract {
+            problem: format!("bad_label:{label}"),
+        }
+    })?;
+    let tofu = catalog.version(PinnedTool::Opentofu);
+    let key = tofu_providers_cache_key(target, tofu, root)?;
+    let path = tofu_provider_cache_path(root)?;
+    Ok([
+        tofu_providers_restore_step(&key, &path)?,
+        tofu_provider_cache_admission_step(&key, &path)?,
+    ])
+}
+
 /// Provider-cache key rejection.
 fn bad_key(problem: String) -> OrchestratorError {
     OrchestratorError::Contract { problem }
@@ -190,6 +259,53 @@ mod tests {
             Some(""),
             "L2 exact-key restore carries no prefix"
         );
+    }
+
+    #[test]
+    fn provider_admission_checks_same_restore_and_only_owns_plugin_cache() {
+        let key = tofu_providers_cache_key("x86_64-unknown-linux-gnu", "1.13.1", "stacks/vpc")
+            .expect("key builds");
+        let path = tofu_provider_cache_path("stacks/vpc").expect("path builds");
+        let step = tofu_provider_cache_admission_step(&key, &path).expect("admission builds");
+        assert_eq!(step.name, "Admit Tofu providers");
+        assert!(step.condition.is_none(), "every restore is admitted");
+        let StepKind::Shell { run, env } = &step.kind else {
+            panic!("admission must be a shell step");
+        };
+        assert!(
+            env.iter().any(|(name, value)| {
+                name == "TOFU_CACHE_HIT"
+                    && value == "${{ steps.tofu-providers.outputs.cache-hit }}"
+            }),
+            "the actual restore hit output is observed"
+        );
+        assert!(
+            env.iter().any(|(name, value)| {
+                name == "TOFU_MATCHED_KEY"
+                    && value == "${{ steps.tofu-providers.outputs.cache-matched-key }}"
+            }),
+            "the actual restore matched key is observed"
+        );
+        assert_eq!(
+            env.get("TOFU_EXPECTED_KEY").map(String::as_str),
+            Some(key.as_str()),
+            "admission compares with the exact configured key"
+        );
+        assert_eq!(
+            env.get("TOFU_PROVIDER_CACHE_DIR").map(String::as_str),
+            Some(path.as_str()),
+            "admission owns the restored plugin-cache leaf"
+        );
+        assert!(!env.contains_key("TF_DATA_DIR"), "data dir is untouched");
+        let script = run.last().expect("admission script");
+        for expected in [
+            "[ \"TOFU_CACHE_HIT\" = \"true\" ]",
+            "[ \"TOFU_MATCHED_KEY\" = \"$TOFU_EXPECTED_KEY\" ]",
+            "rm -rf \"$cache_dir\"",
+            "mkdir -m 700 \"$cache_dir\"",
+        ] {
+            assert!(script.contains(expected), "script lacks {expected:?}: {script}");
+        }
     }
 
     #[test]

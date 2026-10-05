@@ -201,6 +201,8 @@ pub(crate) fn alint_job(ctx: &RenderContext) -> Result<Job, RenderError> {
             checkout,
             Step {
                 name: "Run Alint".to_owned(),
+                id: None,
+                role: None,
                 condition: None,
                 kind: StepKind::Action {
                     uses: ALINT_USES.to_owned(),

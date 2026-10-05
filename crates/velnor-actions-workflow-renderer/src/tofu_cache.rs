@@ -6,7 +6,7 @@
 //! Both archive exactly one job-private plugin-cache dir, never the
 //! data dir beside it.
 
-use velnor_actions_contract::Step;
+use velnor_actions_contract::{Step, StepRole};
 
 use crate::{RenderError, cache_steps};
 
@@ -17,6 +17,8 @@ use crate::{RenderError, cache_steps};
 /// step env carry the expression form (GitHub expands no `$VAR`
 /// there).
 pub const TOFU_PROVIDER_CACHE_BASE_EXPR: &str = "${{ runner.temp }}/velnor/tofu-cache";
+/// Cache-key layer name shared with the orchestrator's key constructor.
+pub const TOFU_PROVIDERS_KEY_PREFIX: &str = "velnor-v1-tofu-providers";
 /// Display name of the provider restore step.
 pub const TOFU_PROVIDERS_RESTORE_NAME: &str = "Restore Tofu providers";
 /// Display name of the provider save step.
@@ -41,7 +43,9 @@ pub fn tofu_providers_save_step(key: &str, path: &str) -> Result<Step, RenderErr
         &[],
         &[path.to_owned()],
     )?;
-    rename_step(step, TOFU_PROVIDERS_SAVE_NAME)
+    let mut step = rename_step(step, TOFU_PROVIDERS_SAVE_NAME)?;
+    step.role = Some(StepRole::TofuProvidersSave);
+    Ok(step)
 }
 
 /// Rename a built step; names are fixed by the caller contract.

@@ -24,6 +24,8 @@ fn context(checkout_uses: &str) -> RenderContext {
 fn step(name: &str, uses: &str) -> Step {
     Step {
         name: name.to_owned(),
+        id: None,
+        role: None,
         condition: None,
         kind: StepKind::Action {
             uses: uses.to_owned(),
@@ -36,6 +38,8 @@ fn step(name: &str, uses: &str) -> Step {
 fn checkout_step(uses: &str) -> Step {
     Step {
         name: "Checkout".to_owned(),
+        id: None,
+        role: None,
         condition: None,
         kind: StepKind::Action {
             uses: uses.to_owned(),

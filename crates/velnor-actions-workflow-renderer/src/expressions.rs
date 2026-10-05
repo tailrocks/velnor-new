@@ -51,12 +51,11 @@ fn expression_spans(text: &str) -> Option<Vec<&str>> {
 /// Runner paths, the release tag, plan-matrix coordinates, the two
 /// fixed secret bindings (bootstrap registry plus the release forge
 /// token, whose placements the release gates still police separately),
-/// and the push-gated cache-mode selector (a pure function of the
-/// event name over string literals; the generator pins it on MBX
-/// restore steps so PR runs can never become cache writers).
+/// the push-gated cache-mode selector (a pure function of the event
+/// name over string literals), and OpenTofu restore evidence.
 /// Notably absent: `github.token` (render-time fetch binding only)
 /// and run IDs (never in env).
-const ENV_EXPRESSIONS: [&str; 8] = [
+const ENV_EXPRESSIONS: [&str; 10] = [
     "runner.temp",
     "github.ref_name",
     "github.event_name",
@@ -65,6 +64,8 @@ const ENV_EXPRESSIONS: [&str; 8] = [
     "secrets.GITHUB_TOKEN",
     "steps.mbx.outputs.cache-primary-key",
     "steps.mbx-bundle.outputs.cache-matched-key",
+    "steps.tofu-providers.outputs.cache-hit",
+    "steps.tofu-providers.outputs.cache-matched-key",
 ];
 
 /// Exact `${{ }}` inners permitted in action `with:` values.
@@ -95,8 +96,8 @@ fn is_matrix_field(inner: &str) -> bool {
 
 /// True for a `hashFiles('...')` call over quoted fixed paths.
 ///
-/// Action cache keys only: the file list carries quotes, commas, dots,
-/// slashes, dashes, and alphanumerics, nothing else.
+/// Cache identity values only: the file list carries quotes, commas,
+/// dots, slashes, dashes, and alphanumerics, nothing else.
 fn is_hash_files(inner: &str) -> bool {
     inner
         .strip_prefix("hashFiles(")
@@ -117,7 +118,7 @@ pub(crate) fn check_env_value(key: &str, value: &str) -> Result<(), RenderError>
         return Err(RenderError::BadCommand(format!("bad_env_expression:{key}")));
     };
     for inner in spans {
-        if !ENV_EXPRESSIONS.contains(&inner) && !is_matrix_field(inner) {
+        if !ENV_EXPRESSIONS.contains(&inner) && !is_matrix_field(inner) && !is_hash_files(inner) {
             return Err(RenderError::BadCommand(format!("bad_env_expression:{key}")));
         }
     }

@@ -6,7 +6,7 @@ use super::{CompileDriver, MBX_ACTION_NAME};
 use crate::RenderError;
 use crate::steps::{action_step_with_env, shell_step, validate_uses};
 use velnor_actions_contract::cachekey::mbx_cache_generation;
-use velnor_actions_contract::{Job, Step};
+use velnor_actions_contract::{Job, Step, StepId, StepRole};
 
 /// Display name for the strict MBX and Rust PATH preflight.
 pub const MBX_PREFLIGHT_NAME: &str = "Verify MBX and Rust toolchains";
@@ -237,7 +237,10 @@ fn mbx_objects_action_step(
         MBX_CACHE_MODE_ENV.to_owned(),
         MBX_ACTION_CACHE_MODE.to_owned(),
     );
-    action_step_with_env(MBX_RESTORE_NAME, uses, with, env)
+    let mut step = action_step_with_env(MBX_RESTORE_NAME, uses, with, env)?;
+    step.id = Some(StepId::Mbx);
+    step.role = Some(StepRole::MbxCache);
+    Ok(step)
 }
 
 /// Expose native Rustup paths as well as Mise's selected tool homes.

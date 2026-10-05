@@ -13,7 +13,7 @@ use crate::{
     yaml::Yaml,
 };
 use velnor_actions_contract::{
-    Job, Permissions, RunsOn, Step, StepKind, Trigger, WorkflowIr,
+    Job, Permissions, RunsOn, Step, StepKind, StepRole, Trigger, WorkflowIr,
     workflow::{ir::DispatchInput, permissions::PermissionLevel},
 };
 
@@ -246,7 +246,7 @@ fn job_to_yaml(
                 if let Some(toolchain) = env.get("RUSTUP_TOOLCHAIN") {
                     job_env.insert("RUSTUP_TOOLCHAIN".to_owned(), toolchain.clone());
                 }
-                if step.name == crate::steps::ACQUIRE_NAME {
+                if step.role == Some(StepRole::AcquireVelnor) {
                     for key in [
                         crate::steps::ASSET_SHA_ENV,
                         crate::steps::ASSET_URL_ENV,
@@ -355,7 +355,7 @@ fn render_job_steps(
 }
 
 fn valid_shared_checkout(checkout: &Step, expected_uses: &str) -> bool {
-    checkout.name == "Checkout"
+    checkout.role == Some(StepRole::Checkout)
         && checkout.condition.is_none()
         && matches!(
             &checkout.kind,
