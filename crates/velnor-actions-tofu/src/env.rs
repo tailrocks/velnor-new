@@ -8,7 +8,7 @@
 
 use std::ffi::OsString;
 
-use velnor_actions_contract::{ContractError, digest_b3, slugify_segment};
+use velnor_actions_contract::ContractError;
 
 use crate::kinds::TofuTaskKind;
 
@@ -26,14 +26,6 @@ pub const TF_DATA_DIR_ENV: &str = "TF_DATA_DIR";
 pub const TF_CLI_CONFIG_FILE_ENV: &str = "TF_CLI_CONFIG_FILE";
 /// Job-private per-root plugin-cache env key (T21 transport).
 pub const TF_PLUGIN_CACHE_DIR_ENV: &str = "TF_PLUGIN_CACHE_DIR";
-/// Root-slug chars kept in a data-dir name; the digest suffix below
-/// keeps truncated slugs unique.
-pub const MAX_DIR_SLUG_CHARS: usize = 64;
-/// Root-digest hex chars carried by a data-dir name.
-pub const DIR_DIGEST_HEX_CHARS: usize = 12;
-/// Max cache-dir bytes embedded in CLI config (headroom under OS limits).
-pub const MAX_CLI_CONFIG_PATH_BYTES: usize = 1024;
-
 /// Fixed payload env for one task kind.
 ///
 /// Every kind carries `TF_IN_AUTOMATION=1 TF_INPUT=0` (T03 baseline
@@ -81,31 +73,23 @@ pub fn tofu_isolation_env(
     env
 }
 
-/// H3-hashed root slug shared by every per-root dir derivation.
+/// Bounded private filesystem locator for one exact normalized root.
 ///
-/// `{slug}-{digest12}`: the slug is the lowercased root with
-/// separators folded (the repo root maps to `root`), truncated to
-/// [`MAX_DIR_SLUG_CHARS`], and the digest is blake3 over the exact
-/// root so case-folded or truncated slugs never collide. Repo-derived
-/// key/path components hash through here, never interpolate.
-#[must_use]
-pub fn tofu_root_slug(root: &str) -> String {
-    let slug = slugify_segment(root);
-    let slug = if slug.is_empty() {
-        "root".to_owned()
-    } else {
-        slug
-    };
-    let slug: String = slug.chars().take(MAX_DIR_SLUG_CHARS).collect();
-    let digest = digest_b3(root.as_bytes());
-    let hex = digest.strip_prefix("b3-").unwrap_or(digest.as_str());
-    let tag: String = hex.chars().take(DIR_DIGEST_HEX_CHARS).collect();
-    format!("{slug}-{tag}")
+/// Locators never grant root authority: generation rejects locator collisions,
+/// and every mutable directory or imported payload proves its exact root key.
+/// # Errors
+/// Rejects noncanonical normalized roots.
+pub fn tofu_root_locator(root: &str) -> Result<String, ContractError> {
+    let key = crate::propose::key_for_root(root);
+    crate::propose::root_for_key(&key)?;
+    Ok(velnor_actions_contract::digest_b3(
+        format!("tofu-private-root-v1\n{key}").as_bytes(),
+    ))
 }
 
 /// Isolated per-root data dir under `base`.
 ///
-/// `{base}/` plus the shared [`tofu_root_slug`]. `base` is
+/// `{base}/` plus the shared [`tofu_root_locator`]. `base` is
 /// caller-owned (a runner-temp expression for rendered steps, a
 /// staging dir for local spawns).
 ///
@@ -116,12 +100,12 @@ pub fn tofu_data_dir_under(base: &str, root: &str) -> Result<String, ContractErr
     if base.is_empty() {
         return Err(ContractError::identity("tofu_data_dir", "empty_base"));
     }
-    Ok(format!("{base}/{}", tofu_root_slug(root)))
+    Ok(format!("{base}/{}", tofu_root_locator(root)?))
 }
 
 /// Job-private per-root plugin-cache dir under `base` (T21).
 ///
-/// `{base}/` plus the shared [`tofu_root_slug`]: the data dir and
+/// `{base}/` plus the shared [`tofu_root_locator`]: the data dir and
 /// the plugin-cache dir for one root share the slug but never the
 /// base, so the two stay separate by construction.
 ///
@@ -132,31 +116,26 @@ pub fn tofu_cache_dir_under(base: &str, root: &str) -> Result<String, ContractEr
     if base.is_empty() {
         return Err(ContractError::identity("tofu_cache_dir", "empty_base"));
     }
-    Ok(format!("{base}/{}", tofu_root_slug(root)))
+    Ok(format!("{base}/{}", tofu_root_locator(root)?))
 }
 
-/// M4 CLI config content: `plugin_cache_dir` + `disable_checkpoint` only.
+/// CLI config: private cache, disabled checkpoint, direct provider sources.
 ///
-/// No credentials, helpers, overrides, or mirrors: the cache dir is
+/// No credentials, helpers, overrides, or mirrors. Explicit direct installation
+/// disables implied filesystem mirrors. The cache dir is
 /// the sole interpolated value and it rejects HCL string breakouts
 /// (quotes, backslashes, control bytes, `${` interpolation) plus
-/// empty and oversize inputs. Callers stage the text into a temp file
+/// empty inputs. Callers stage the text into a temp file
 /// and point `TF_CLI_CONFIG_FILE` at it.
 ///
 /// # Errors
 ///
-/// Returns [`ContractError`] for empty, oversize, or HCL-unsafe input.
+/// Returns [`ContractError`] for empty or HCL-unsafe input.
 pub fn tofu_cli_config(cache_dir: &str) -> Result<String, ContractError> {
     if cache_dir.is_empty() {
         return Err(ContractError::identity(
             "tofu_cli_config",
             "empty_cache_dir",
-        ));
-    }
-    if cache_dir.len() > MAX_CLI_CONFIG_PATH_BYTES {
-        return Err(ContractError::identity(
-            "tofu_cli_config",
-            "oversize_cache_dir",
         ));
     }
     if cache_dir.contains("${") {
@@ -175,6 +154,6 @@ pub fn tofu_cli_config(cache_dir: &str) -> Result<String, ContractError> {
         ));
     }
     Ok(format!(
-        "plugin_cache_dir = \"{cache_dir}\"\ndisable_checkpoint = true\n"
+        "plugin_cache_dir = \"{cache_dir}\"\ndisable_checkpoint = true\nprovider_installation {{\n  direct {{}}\n}}\n"
     ))
 }

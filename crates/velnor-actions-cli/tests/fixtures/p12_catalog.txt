@@ -8,3 +8,6 @@ pub const ZIZMOR_VERSION: &str = "1.30.1";
 pub const NEXTEST_VERSION: &str = "0.9.146";
 pub const OPENTOFU_VERSION: &str = "1.13.1";
 pub const RELEASE_PLZ_VERSION: &str = "0.3.169";
+pub const REUSE_VERSION: &str = "6.2.0";
+pub const PYTHON_VERSION: &str = "3.14.8";
+pub const UV_VERSION: &str = "0.12.23";

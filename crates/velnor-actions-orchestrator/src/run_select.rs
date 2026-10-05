@@ -1,37 +1,33 @@
-//! Exact-base run and baseline-artifact selection (PAR-5.5).
+//! Exact-base candidate discovery and artifact selection (PAR-5.5).
 //!
-//! Pure selection policy over pinned `gh` listings: the winning run
-//! carries its successful attempt, and the baseline artifact must exist
-//! unexpired under its exact name. Selection never guesses: entries
-//! without attempt evidence or without the exact artifact never select.
+//! Run summaries only discover candidates. Immutable original attempt
+//! evidence independently authenticates success through the service API.
 
-/// One selected exact-base run: run plus its successful attempt.
+/// Current successful analysis run selected from service summaries.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SelectedBaseRun {
     /// Numeric GitHub run ID.
     pub run_id: u64,
-    /// Successful attempt the baseline manifest must claim.
+    /// Successful current attempt for analysis evidence.
     pub attempt: u64,
 }
 
-/// Select the newest exact-base successful push run.
+/// Select a current successful analysis run for the exact source and branch.
 ///
-/// The service lists newest first, so the first entry matching the base
-/// SHA, branch, push event, success conclusion, and a positive recorded
-/// attempt wins; any other commit, event, conclusion, or missing attempt
-/// never selects. The returned attempt binds the baseline claim: a
-/// manifest claiming another attempt never loads.
-///
+/// Immutable baseline publication uses candidate discovery plus independent
+/// original-attempt authentication instead of this current-attempt policy.
 /// # Errors
-///
-/// Returns `baseline_unavailable` unless at least one run matches.
+/// Refuses listings without an exact successful push and recorded attempt.
 pub fn select_exact_base_run(
     text: &str,
     base: &str,
     branch: &str,
 ) -> Result<SelectedBaseRun, String> {
-    let runs: Vec<serde_json::Value> =
-        serde_json::from_str(text).map_err(|_| "baseline_unavailable".to_owned())?;
+    let value = velnor_actions_contract::parse_strict_json(text)
+        .map_err(|_| "baseline_unavailable".to_owned())?;
+    let runs = value
+        .as_array()
+        .ok_or_else(|| "baseline_unavailable".to_owned())?;
     runs.iter()
         .filter(|run| {
             run["headSha"] == base
@@ -40,11 +36,51 @@ pub fn select_exact_base_run(
                 && run["conclusion"] == "success"
         })
         .find_map(|run| {
-            let run_id = run["databaseId"].as_u64().filter(|id| *id > 0)?;
-            let attempt = run["attempt"].as_u64().filter(|n| *n > 0)?;
-            Some(SelectedBaseRun { run_id, attempt })
+            Some(SelectedBaseRun {
+                run_id: run["databaseId"].as_u64().filter(|id| *id > 0)?,
+                attempt: run["attempt"].as_u64().filter(|attempt| *attempt > 0)?,
+            })
         })
         .ok_or_else(|| "baseline_unavailable".to_owned())
+}
+
+/// Discover bounded exact-base push runs in the service's newest-first order.
+///
+/// Summary conclusions confer no proof authority. A failed newer retry can
+/// retain an independently authenticated successful original publication.
+/// # Errors
+/// Refuses malformed or oversized listings and listings without candidates.
+pub fn select_exact_base_candidates(
+    text: &str,
+    base: &str,
+    branch: &str,
+) -> Result<Vec<u64>, String> {
+    let value = velnor_actions_contract::parse_strict_json(text)
+        .map_err(|_| "baseline_unavailable".to_owned())?;
+    let runs = value
+        .as_array()
+        .filter(|runs| runs.len() <= 50)
+        .ok_or_else(|| "baseline_unavailable".to_owned())?;
+    let mut seen = std::collections::BTreeSet::new();
+    let candidates: Vec<_> = runs
+        .iter()
+        .filter(|run| {
+            run["headSha"] == base
+                && run["headBranch"] == branch
+                && run["event"] == "push"
+                && run["attempt"].as_u64().is_some_and(|attempt| attempt > 0)
+        })
+        .filter_map(|run| {
+            run["databaseId"]
+                .as_u64()
+                .filter(|id| *id > 0 && seen.insert(*id))
+        })
+        .collect();
+    if candidates.is_empty() {
+        Err("baseline_unavailable".to_owned())
+    } else {
+        Ok(candidates)
+    }
 }
 
 /// Select the exact baseline artifact from a run-artifacts listing.

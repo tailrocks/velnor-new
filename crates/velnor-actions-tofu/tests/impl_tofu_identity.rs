@@ -259,7 +259,7 @@ fn proposal_bridge_derives_and_rejects_drift() {
     let graph = digest_b3(b"graph");
     let config = digest_b3(b"config");
     let bridge = TofuGroupExtensionInputs {
-        unit_id: "root",
+        unit_id: &task.identity.unit_id,
         workspace_id: &workspace,
         profile: "default",
         manifest: ".",
@@ -269,7 +269,7 @@ fn proposal_bridge_derives_and_rejects_drift() {
         lock_digest: DigestSlot::AbsentProven("not_found:.terraform.lock.hcl".to_owned()),
     };
     let ext = extension_for_proposal(&task, &bridge).expect("bridge derives");
-    assert_eq!(ext.unit_id, "root");
+    assert_eq!(ext.unit_id, "dir-");
     assert_eq!(ext.task_kind, TofuTaskKind::Validate);
     assert_eq!(validate_tofu_extension(&ext.to_stack_extension()), Ok(()));
     let mut drifted = task.clone();
@@ -279,7 +279,7 @@ fn proposal_bridge_derives_and_rejects_drift() {
     drifted.identity.compile_driver = "cargo".to_owned();
     let err = extension_for_proposal(&drifted, &bridge).expect_err("driver drift");
     assert!(err.to_string().contains("unknown_driver:cargo"), "{err}");
-    let mut drifted = task;
+    let mut drifted = task.clone();
     drifted.identity.test_runner = "cargo_test".to_owned();
     let err = extension_for_proposal(&drifted, &bridge).expect_err("runner drift");
     assert!(
@@ -299,12 +299,15 @@ fn entry_metadata_pins_tofu_shape() {
     };
     let task = propose_task(&group).expect("proposes");
     let meta = entry_metadata_for_task(&task, &[]).expect("metadata");
-    assert_eq!(meta["unit_id"], serde_json::json!("stacks/a"));
-    assert_eq!(meta["manifest_key"], serde_json::json!("stacks/a"));
+    assert_eq!(meta["unit_id"], serde_json::json!("dir-737461636b732f61"));
+    assert_eq!(
+        meta["manifest_key"],
+        serde_json::json!("dir-737461636b732f61")
+    );
     assert_eq!(meta["kind"], serde_json::json!("init"));
     assert_eq!(meta["compile_driver"], serde_json::json!("tofu"));
     assert_eq!(meta["test_runner"], serde_json::json!("none"));
-    let mut drifted = task;
+    let mut drifted = task.clone();
     drifted.identity.compile_driver = "mbx".to_owned();
     assert!(entry_metadata_for_task(&drifted, &[]).is_err());
 }

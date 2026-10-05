@@ -31,16 +31,16 @@ fn discovery_argv_is_byte_exact() -> Result<(), String> {
             "metadata",
             "--format-version",
             "1",
+            "--locked",
             "--no-deps",
             "--manifest-path",
             "/tmp/x y/Cargo.toml",
         ])
     );
     let argv = request.argv(&pinned());
+    assert!(argv.iter().any(|arg| arg == "--locked"));
     assert!(
-        !argv
-            .iter()
-            .any(|arg| arg == "--locked" || arg == "--offline"),
+        !argv.iter().any(|arg| arg == "--offline"),
         "discovery must not wait for full resolution"
     );
     assert!(

@@ -115,3 +115,71 @@ fn generate_output_dir_flag_parses() -> Result<(), Box<dyn Error>> {
     cleanup(&tmp);
     Ok(())
 }
+
+#[test]
+fn foundation_preview_requires_destination_and_rejects_mode() -> Result<(), Box<dyn Error>> {
+    let tmp = fresh_tempdir("args-foundation")?;
+    let missing = spawn(&["generate", "--foundation-qualification-only"], &[], &tmp)?;
+    assert_eq!(code(&missing), 2);
+    let missing_stderr = String::from_utf8_lossy(&missing.stderr);
+    assert!(missing_stderr.contains("--output-dir"), "{missing_stderr}");
+
+    let preview_path = tmp.join("preview");
+    let preview = preview_path.to_str().unwrap_or("/");
+    let conflict = spawn(
+        &[
+            "generate",
+            "--foundation-qualification-only",
+            "--output-dir",
+            preview,
+            "--mode",
+            "hosted",
+        ],
+        &[],
+        &tmp,
+    )?;
+    assert_eq!(code(&conflict), 2);
+    let conflict_stderr = String::from_utf8_lossy(&conflict.stderr);
+    assert!(conflict_stderr.contains("--mode"), "{conflict_stderr}");
+
+    let accepted = spawn(
+        &[
+            "generate",
+            "--foundation-qualification-only",
+            "--output-dir",
+            preview,
+        ],
+        &[],
+        &tmp,
+    )?;
+    assert_ne!(code(&accepted), 2, "valid Foundation args must parse");
+    cleanup(&tmp);
+    Ok(())
+}
+
+#[test]
+fn foundation_help_exposes_only_fixed_source_mode() -> Result<(), Box<dyn Error>> {
+    let tmp = fresh_tempdir("args-foundation-help")?;
+    let output = spawn(&["generate", "--help"], &[], &tmp)?;
+    assert_eq!(code(&output), 0);
+    let help = String::from_utf8_lossy(&output.stdout).into_owned();
+    assert!(help.contains("--foundation-qualification-only"), "{help}");
+    assert!(help.contains("--output-dir <PATH>"), "{help}");
+    assert!(!help.contains("--foundation-action-ref"), "{help}");
+
+    let unavailable_source = spawn(
+        &[
+            "generate",
+            "--foundation-qualification-only",
+            "--output-dir",
+            "preview",
+            "--foundation-action-ref",
+            "caller/repository/action@main",
+        ],
+        &[],
+        &tmp,
+    )?;
+    assert_eq!(code(&unavailable_source), 2);
+    cleanup(&tmp);
+    Ok(())
+}

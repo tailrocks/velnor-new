@@ -118,7 +118,7 @@ pub(crate) fn build_crate_jobs(
         let repo_has_mbx = crate::workflow::plan_uses_mbx(discovery);
         let mut job = render_job(
             label,
-            policy,
+            crate::matrix_step::suite_tools_for_tasks(policy, tasks)?,
             &model,
             catalog,
             fetch_roots,
@@ -235,7 +235,7 @@ fn gates_for(task: &ProposedTask, executed: &BTreeSet<&str>) -> Vec<String> {
 )]
 fn render_job(
     label: &str,
-    policy: WorkflowPolicy,
+    suite_tools: crate::matrix_step::SuiteTools,
     model: &CrateJob,
     catalog: &ToolCatalog,
     fetch_roots: &[String],
@@ -250,15 +250,13 @@ fn render_job(
     let mut steps = vec![crate::workflow::wire_w1::checkout_step()?];
     steps.extend(acquire.cloned());
     steps.push(crate::matrix_step::download_plan_step()?);
-    let needs_validators =
-        crate::matrix_step::crate_needs_generate_validators(policy, &model.package_name);
     steps.push(crate::matrix_step::prepare_crate_tools_step(
         catalog,
         use_rust,
         use_mbx,
         use_nextest,
-        crate::matrix_step::prepare_install_opentofu(policy, &model.package_name, use_opentofu),
-        needs_validators,
+        use_opentofu || suite_tools.opentofu,
+        suite_tools.generate_validators,
     )?);
     if use_rust {
         steps.push(crate::workflow::prepare_rust_components_step(catalog)?);

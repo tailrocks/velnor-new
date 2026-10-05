@@ -52,14 +52,14 @@ pub(crate) fn tofu_extension_for(
     bundle: &ExtensionBundle,
     reads: &mut velnor_actions_tofu::FileCache,
 ) -> Result<velnor_actions_tofu::TofuTaskIdentityExtension, ContractError> {
-    let normalized = velnor_actions_tofu::root_for_key(&task.identity.unit_key);
+    let normalized = velnor_actions_tofu::normalized_root_for_proposal(task)?;
     let inputs = velnor_actions_tofu::TofuGroupExtensionInputs {
         unit_id: &task.identity.unit_id,
         workspace_id: bundle.workspace_id(),
         profile: &task.configuration,
         manifest: &task.identity.unit_path,
         graph_digest: bundle.graph_digest(),
-        root: &normalized,
+        root: normalized,
         config_digest: bundle.config_digest(),
         lock_digest: velnor_actions_tofu::lock_slot_at_root(root, &task.identity.unit_path, reads),
     };
@@ -232,7 +232,12 @@ pub(crate) fn task_identity_digest(inputs: &IdentityInputs<'_>) -> Result<String
     features.sort();
     let mut flags = task.identity.flags.clone();
     flags.sort();
-    let root = project_root_of(inputs.manifest);
+    let root = if task.stack_id == velnor_actions_tofu::STACK_ID {
+        velnor_actions_tofu::normalized_root_for_proposal(task)?;
+        task.identity.project_root.as_str()
+    } else {
+        project_root_of(inputs.manifest)
+    };
     let identity = TaskIdentity {
         schema_version: 1,
         stack_id: task.stack_id.clone(),

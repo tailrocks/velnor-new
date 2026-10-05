@@ -86,7 +86,9 @@ fn tofu_shared_module_change_rides_plan_to_passed() -> TestResult {
     let (plan, _) = plan_pr(root, Some(&base), &head)?;
     assert_eq!(plan.matrix.include.len(), 6, "full universe planned");
     for obligation in &plan.obligations {
-        let affected = obligation.task_id.starts_with("stack/tofu/stacks/a/");
+        let affected = obligation
+            .task_id
+            .starts_with("stack/tofu/dir-737461636b732f61/");
         assert_eq!(
             obligation.reason == "affected_by_change",
             affected,

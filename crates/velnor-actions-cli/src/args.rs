@@ -29,6 +29,10 @@ pub(crate) enum Command {
         /// Dispatch mode override: `hosted`, `scale-set`, or `both`.
         #[arg(long = "mode", value_name = "MODE")]
         mode: Option<String>,
+        /// Preview only the fixed published Foundation native qualification workflow.
+        /// Requires canonical generator identity and an empty external destination.
+        #[arg(long, requires = "output_dir", conflicts_with = "mode")]
+        foundation_qualification_only: bool,
     },
     /// Read or rewrite `.velnor/config.toml`.
     Config {

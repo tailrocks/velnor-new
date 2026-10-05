@@ -24,35 +24,53 @@ velnor-actions-cli -> velnor-actions-orchestrator
 velnor-actions-orchestrator -> velnor-actions-contract
 velnor-actions-orchestrator -> velnor-actions-rust
 velnor-actions-orchestrator -> velnor-actions-tofu
+velnor-actions-orchestrator -> velnor-actions-native
 velnor-actions-orchestrator -> velnor-actions-mise
 velnor-actions-orchestrator -> velnor-actions-actionlint
 velnor-actions-orchestrator -> velnor-actions-workflow-renderer
 velnor-actions-rust -> velnor-actions-contract
 velnor-actions-tofu -> velnor-actions-contract
+velnor-actions-native -> velnor-actions-contract
 velnor-actions-mise -> velnor-actions-contract
 velnor-actions-actionlint -> velnor-actions-contract
 velnor-actions-workflow-renderer -> velnor-actions-contract
 ```
 
-The V1 workspace MUST have exactly these eight product crates. Every Cargo
-package MUST use `velnor-actions-<purpose>`. Generic names such as
-`velnor-model`, `velnor-core`, `velnor-common`, or
-`velnor-utils`, and `velnor-rust` are forbidden. The only binary-target exception is
-`velnor-actions`, owned by package `velnor-actions-cli`. Future stack adapters
-MUST use explicit stack names such as `velnor-actions-node`; each adapter
-contains only its named stack. Alint is the sole repository-structure linter
-and runs as a separate GitHub Actions job.
+The common product crates are contract, Mise, actionlint, workflow renderer,
+orchestrator and CLI. Rust and OpenTofu retain explicit stack packages. Audited
+native semantics belong to `velnor-actions-native`, a closed container of
+independently owned `swift`, `node`, `java`, `oci`, `apt`, `homebrew`, `ruby`,
+`shell` and `reuse` modules. Each domain exposes typed proposals and owns only
+its domain. Native depends only on contract among product packages. Domains
+MUST NOT reference siblings, share a semantic dispatcher, construct another
+owner's commands, or import Mise/renderer. Mandatory native source boundary
+tests cover imports, qualified paths, reexports, includes, macros and helper
+source closures; Cargo dependency checks alone cannot enforce module isolation.
+Cross-owner producers use typed prerequisites resolved by orchestrator.
+
+Every Cargo package MUST use `velnor-actions-<purpose>`. Generic unrestricted
+core/common/utils/application/delivery packages remain forbidden. The only
+binary-target exception is `velnor-actions`, owned by `velnor-actions-cli`.
+New domains require substantive audited obligations and explicit ownership;
+they cannot enter through raw commands, shell or YAML configuration. Alint is
+the sole repository-structure linter and runs as a separate Actions job.
 
 | Crate | Owns | Must not own |
 |---|---|---|
 | `velnor-actions-contract` | Stack-neutral generator contracts: stack/component IDs, task graph, workflow IR, cache identities, generated-file records, reports, recommendations | Rust/Cargo, Mise, process, filesystem, YAML implementation, CLI, or generic application models |
 | `velnor-actions-rust` | All V1 Rust/Cargo behavior: manifest discovery inputs, metadata conversion, Rust targets/graph, reverse-dependency selection, Rust task proposals and requirements, read-only `rust-toolchain.toml` inspection | Mise command/config/task syntax, GitHub YAML, process execution, or non-Rust stack behavior |
 | `velnor-actions-tofu` | All OpenTofu stack behavior: HCL/JSON structural parsing, file families, local-module closure, tofu task proposals and requirements, root diagnostics, fixed payload argv | Mise command/config/task syntax, GitHub YAML, process execution, or non-tofu stack behavior |
+| `velnor-actions-native` | Closed isolated Swift, Node, Java, OCI, APT, Homebrew, Ruby, Shell and REUSE domain proposals and fixed semantic helper sources | Other domains, Rust/Cargo semantics, Mise syntax/catalog, subprocesses, workflow topology, or YAML |
 | `velnor-actions-mise` | Mise version/tool selection, command construction, read-only `mise.toml`/`mise.lock` inspection, environment isolation, task-cache integration, execution of tool requests through a fixed Mise subprocess wrapper | Cargo metadata/graph rules, `rust-toolchain.toml`, stack discovery, GitHub YAML, or other stack semantics |
 | `velnor-actions-actionlint` | Pinned actionlint capability/version metadata, generated `.github/actionlint.yaml`, invocation, and actionlint-specific pre-write validation | Rust/Cargo, Mise execution, generic YAML rendering, or workflow planning |
-| `velnor-actions-workflow-renderer` | Stack-neutral GitHub Actions YAML from workflow IR: jobs, matrices, steps, triggers, permissions, and syntax supported by pinned actionlint | Rust/Cargo, Mise syntax, repository scanning, subprocesses, or stack-specific policy |
+| `velnor-actions-workflow-renderer` | Stack-neutral GitHub Actions YAML from workflow IR and the closed Foundation SOURCE compiled document: jobs, matrices, steps, triggers, permissions, and syntax supported by pinned actionlint | Rust/Cargo, Mise syntax, repository scanning, subprocesses, or stack-specific policy |
 | `velnor-actions-orchestrator` | Compose stack adapter, Mise adapter, contract, and renderer; plan obligations, apply selection/cache evidence, schedule resource-safe tasks, coordinate generation and writes | Parsing Cargo/Mise inputs, YAML templates, CLI parsing, building shell commands, or launching processes |
 | `velnor-actions-cli` | Clap parser, typed dispatch, concise human plan report, generation output, exit codes; declares binary `velnor-actions` | Planning rules, Cargo/Mise policies, YAML/Mise rendering, or orchestration algorithms |
+
+Foundation SOURCE qualification is a closed compiled-document exception to ordinary WorkflowIR serialization.
+The renderer owns exact `yml.in` bytes, template digest, single action marker substitution, fixed output path, and managed version marker.
+Its only inputs are an immutable syntax-validated full-SHA action reference and explicit generator version; caller template/path/YAML/body, publication trust, and runtime authority are forbidden.
+The orchestrator retains authenticated publication tuple/action-descriptor evidence, repository policy/identity admission, and safe external preview coordination. This exception grants no runner or native execution behavior.
 
 `velnor-actions` is the executable declared by package `velnor-actions-cli`.
 Clap help MUST describe a stack-generic GitHub Actions workflow generator.
@@ -102,6 +120,7 @@ deny.toml
 .velnor/version-policy.toml
 crates/velnor-actions-contract/
 crates/velnor-actions-rust/
+crates/velnor-actions-native/
 crates/velnor-actions-mise/
 crates/velnor-actions-actionlint/
 crates/velnor-actions-workflow-renderer/

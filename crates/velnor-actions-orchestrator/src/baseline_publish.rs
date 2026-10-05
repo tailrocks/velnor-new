@@ -277,6 +277,7 @@ fn publish_manifest(
                     input_digest: obligation.input_digest.clone(),
                     closure_digest: obligation.closure_digest.clone(),
                     proof_run_id: run_id,
+                    carried_from: None,
                     observed_run_id: run_id,
                     external_data: None,
                     proof: None,
@@ -319,6 +320,7 @@ fn publish_manifest(
         artifact_id: crate::cover_compat::baseline_artifact_numeric_id(&name),
         artifact_name: name,
         tasks,
+        parent: None,
         expires_at_unix: None,
     })
 }

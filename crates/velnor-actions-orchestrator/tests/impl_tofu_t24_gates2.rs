@@ -157,7 +157,9 @@ fn gate7_docs_only_runs_zero_tofu_operations() -> TestResult {
     );
     for name in ["stacks/r000", "stacks/r001"] {
         assert!(
-            plan.packages.iter().any(|row| row.package_id == name),
+            plan.packages
+                .iter()
+                .any(|row| row.package_id == velnor_actions_tofu::key_for_root(name)),
             "{name} row present"
         );
     }

@@ -19,12 +19,10 @@ mod tools;
 mod tofu_env;
 
 #[cfg(test)]
-pub(crate) use tools::crate_needs_tofu_install;
+pub(crate) use tools::crate_suite_tools;
 #[cfg(test)]
 pub(crate) use tools::task_driver_tools;
-pub(crate) use tools::{
-    crate_needs_generate_validators, prepare_crate_tools_step, prepare_install_opentofu,
-};
+pub(crate) use tools::{SuiteTools, prepare_crate_tools_step, suite_tools_for_tasks};
 
 /// `Documentation` obligation step name.
 #[cfg(test)]

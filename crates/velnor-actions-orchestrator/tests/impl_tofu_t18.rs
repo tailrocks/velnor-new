@@ -234,9 +234,9 @@ fn init_runs_once_per_root() -> TestResult {
     assert_eq!(
         inits,
         vec![
-            "stack/tofu/stacks/a/init/default",
-            "stack/tofu/stacks/b/init/default",
-            "stack/tofu/stacks/c/init/default",
+            "stack/tofu/dir-737461636b732f61/init/default",
+            "stack/tofu/dir-737461636b732f62/init/default",
+            "stack/tofu/dir-737461636b732f63/init/default",
         ],
         "one init per root"
     );
@@ -265,9 +265,20 @@ fn nested_roots_format_once_at_outer_scope() -> TestResult {
             })
             .map(|task| task.no_targets)
     };
-    assert_eq!(fmt_of("root"), Some(false), "outer fmt runs");
-    assert_eq!(fmt_of("stacks/a"), Some(true), "covered inner fmt skips");
-    for unit in ["root", "stacks/a"] {
+    assert_eq!(
+        fmt_of(&velnor_actions_tofu::key_for_root("")),
+        Some(false),
+        "outer fmt runs"
+    );
+    assert_eq!(
+        fmt_of(&velnor_actions_tofu::key_for_root("stacks/a")),
+        Some(true),
+        "covered inner fmt skips"
+    );
+    for unit in [
+        velnor_actions_tofu::key_for_root(""),
+        velnor_actions_tofu::key_for_root("stacks/a"),
+    ] {
         for kind in ["init", "validate"] {
             let runnable = prep
                 .discovery
@@ -292,9 +303,9 @@ fn nested_roots_format_once_at_outer_scope() -> TestResult {
         let env = shell_env_of(job, "Validate")?;
         let task_id = env.get("VELNOR_TASK_ID").ok_or("validate task id")?;
         let steps = names(job);
-        if task_id.starts_with("stack/tofu/root/") {
+        if task_id.starts_with("stack/tofu/dir-/") {
             saw_outer_fmt = steps.contains(&"Format");
-        } else if task_id.starts_with("stack/tofu/stacks/a/") {
+        } else if task_id.starts_with("stack/tofu/dir-737461636b732f61/") {
             saw_inner_without_fmt = !steps.contains(&"Format");
         }
     }

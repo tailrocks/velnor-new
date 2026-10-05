@@ -3,7 +3,7 @@ use std::ffi::OsString;
 use velnor_actions_tofu::{
     TF_CLI_CONFIG_FILE_ENV, TF_DATA_DIR_ENV, TF_IN_AUTOMATION_ENV, TF_IN_AUTOMATION_ON,
     TF_INPUT_ENV, TF_INPUT_OFF, TF_PLUGIN_CACHE_DIR_ENV, tofu_cache_dir_under, tofu_cli_config,
-    tofu_data_dir_under, tofu_isolation_env, tofu_root_slug,
+    tofu_data_dir_under, tofu_isolation_env, tofu_root_locator,
 };
 
 #[test]
@@ -45,84 +45,88 @@ fn isolation_env_is_automation_pair_plus_paths() {
 }
 
 #[test]
-fn root_slug_is_stable_case_folded_and_unique() {
-    let root = tofu_root_slug("");
-    assert!(root.starts_with("root-"), "{root}");
-    assert_eq!(root, tofu_root_slug(""), "deterministic");
-    let nested = tofu_root_slug("stacks/vpc");
-    assert!(nested.starts_with("stacks-vpc-"), "{nested}");
-    let (head, tag) = nested.rsplit_once('-').expect("digest suffix");
-    assert_eq!(head, "stacks-vpc");
-    assert_eq!(tag.len(), 12, "{nested}");
-    assert!(tag.bytes().all(|b| b.is_ascii_hexdigit()), "{nested}");
-    assert_ne!(tofu_root_slug("A"), tofu_root_slug("a"));
-    assert!(tofu_root_slug("A").starts_with("a-"));
+fn bounded_locators_and_dirs_preserve_exact_root_proof() {
+    let roots = [
+        "",
+        "root",
+        "A",
+        "a",
+        "a-b",
+        "a_b",
+        "a/b",
+        "infra/日本語",
+        "quote'/$`root",
+    ];
+    let mut registry = velnor_actions_tofu::RootLocatorRegistry::default();
+    let paths: std::collections::BTreeSet<String> = roots
+        .iter()
+        .map(|root| registry.admit(root).expect("admit locator"))
+        .collect();
+    assert_eq!(paths.len(), roots.len());
+    for root in roots {
+        let path = tofu_root_locator(root).expect("locator");
+        assert_eq!(path.len(), 67);
+        assert_eq!(
+            tofu_data_dir_under("/tmp/data", root).expect("data"),
+            format!("/tmp/data/{path}")
+        );
+        assert_eq!(
+            tofu_cache_dir_under("/tmp/cache", root).expect("cache"),
+            format!("/tmp/cache/{path}")
+        );
+        assert_eq!(
+            velnor_actions_tofu::root_for_key(&velnor_actions_tofu::key_for_root(root))
+                .expect("exact proof"),
+            root
+        );
+    }
 }
 
 #[test]
-fn cache_dir_mirrors_data_dir_under_its_base() {
-    let base = "${{ runner.temp }}/velnor/tofu-cache";
-    let root = tofu_cache_dir_under(base, "").expect("repo root maps");
-    let data = tofu_data_dir_under("${{ runner.temp }}/velnor/tofu-data", "").expect("data maps");
-    let cache_slug = root
-        .strip_prefix(&format!("{base}/"))
-        .expect("under cache base");
-    let data_slug = data
-        .strip_prefix("${{ runner.temp }}/velnor/tofu-data/")
-        .expect("under data base");
-    assert_eq!(cache_slug, data_slug, "same root shares one slug");
-    assert!(root.starts_with(&format!("{base}/root-")), "{root}");
-    let nested = tofu_cache_dir_under(base, "stacks/vpc").expect("nested maps");
-    assert!(
-        nested.starts_with(&format!("{base}/stacks-vpc-")),
-        "{nested}"
+fn bounded_storage_supports_real_803_byte_source_root() {
+    let temporary = crate::support::TempDir::create("long-root-storage").expect("temporary");
+    let root = std::iter::repeat_n("r".repeat(200), 4)
+        .collect::<Vec<_>>()
+        .join("/");
+    assert_eq!(root.len(), 803);
+    std::fs::create_dir_all(temporary.path().join(&root)).expect("OS-valid source root");
+    std::fs::write(
+        temporary.path().join(&root).join("main.tf"),
+        "variable \"x\" {}\n",
+    )
+    .expect("source file");
+    let base = temporary.path().join("data");
+    let path =
+        tofu_data_dir_under(base.to_str().expect("UTF8 base"), &root).expect("bounded data path");
+    std::fs::create_dir_all(&path).expect("OS-valid data path");
+    let key = velnor_actions_tofu::key_for_root(&root);
+    std::fs::write(std::path::Path::new(&path).join(".velnor-root-key"), &key)
+        .expect("exact owner proof");
+    assert_eq!(
+        std::fs::read_to_string(std::path::Path::new(&path).join(".velnor-root-key"))
+            .expect("proof"),
+        key
     );
-    assert!(tofu_cache_dir_under("", "stacks/vpc").is_err());
 }
 
 #[test]
-fn data_dir_names_are_deterministic_and_unique() {
-    let base = "${{ runner.temp }}/velnor/tofu-data";
-    let root = tofu_data_dir_under(base, "").expect("repo root maps");
-    let again = tofu_data_dir_under(base, "").expect("deterministic");
-    assert_eq!(root, again);
-    let (name, tag) = root.rsplit_once('-').expect("digest suffix");
-    assert!(
-        name.starts_with(&format!("{base}/root-")) || name == format!("{base}/root"),
-        "{root}"
-    );
-    assert_eq!(tag.len(), 12, "{root}");
-    assert!(tag.bytes().all(|b| b.is_ascii_hexdigit()), "{root}");
-    let nested = tofu_data_dir_under(base, "stacks/vpc").expect("nested root maps");
-    assert!(
-        nested.starts_with(&format!("{base}/stacks-vpc-")),
-        "{nested}"
-    );
-    assert_ne!(root, nested);
-    let upper = tofu_data_dir_under(base, "A").expect("upper maps");
-    let lower = tofu_data_dir_under(base, "a").expect("lower maps");
-    assert_ne!(
-        upper, lower,
-        "slug case-folds but the digest must not collide"
-    );
-    assert!(upper.starts_with(&format!("{base}/a-")), "{upper}");
-}
-
-#[test]
-fn data_dir_slug_truncates_but_digest_stays_unique() {
-    let base = "/tmp/velnor/tofu-data";
-    let long = "r".repeat(200);
-    let first = tofu_data_dir_under(base, &long).expect("long root maps");
-    let name = first.strip_prefix(&format!("{base}/")).expect("under base");
-    let (slug, tag) = name.rsplit_once('-').expect("digest suffix");
-    assert_eq!(slug.len(), 64, "{first}");
-    assert_eq!(tag.len(), 12, "{first}");
-    let other = format!("{}x", &long[..199]);
-    let second = tofu_data_dir_under(base, &other).expect("sibling maps");
-    assert_ne!(
-        first, second,
-        "truncated slugs share a prefix; digests must differ"
-    );
+fn long_multibyte_and_boundary_roots_do_not_expand_storage() {
+    for root in [
+        "r".repeat(64),
+        "r".repeat(65),
+        "r".repeat(125),
+        "r".repeat(126),
+        "r".repeat(128),
+        "infra/".repeat(200).trim_end_matches('/').to_owned(),
+        "日本語".repeat(80),
+    ] {
+        let locator = tofu_root_locator(&root).expect("long root");
+        assert_eq!(locator.len(), 67);
+        assert!(tofu_cli_config(&format!("/tmp/cache/{locator}")).is_ok());
+    }
+    for root in [".", "..", "/a", "a//b", "a\\b"] {
+        assert!(tofu_root_locator(root).is_err(), "{root}");
+    }
 }
 
 #[test]
@@ -132,15 +136,15 @@ fn data_dir_rejects_empty_base() {
 }
 
 #[test]
-fn cli_config_is_plugin_cache_plus_checkpoint_only() {
+fn cli_config_has_direct_installation_without_mirrors_or_overrides() {
     assert_eq!(
         tofu_cli_config("/tmp/velnor/cache").expect("config renders"),
-        "plugin_cache_dir = \"/tmp/velnor/cache\"\ndisable_checkpoint = true\n"
+        "plugin_cache_dir = \"/tmp/velnor/cache\"\ndisable_checkpoint = true\nprovider_installation {\n  direct {}\n}\n"
     );
 }
 
 #[test]
-fn cli_config_rejects_injection_and_oversize() {
+fn cli_config_rejects_injection_without_artificial_path_limit() {
     for bad in [
         "",
         "/tmp/has space/x\"quoted\"",
@@ -149,13 +153,12 @@ fn cli_config_rejects_injection_and_oversize() {
         "/tmp/${var}",
         "/tmp/\t tab",
         "/tmp/\u{7f}del",
-        &"p".repeat(1025),
     ] {
         assert!(tofu_cli_config(bad).is_err(), "{bad:?} must fail closed");
     }
     assert!(
-        tofu_cli_config(&"p".repeat(1024)).is_ok(),
-        "1024 bytes pass"
+        tofu_cli_config(&"p".repeat(8192)).is_ok(),
+        "path availability belongs to filesystem transport"
     );
     let err = tofu_cli_config("/tmp/${var}").expect_err("interpolation must fail");
     assert!(err.to_string().contains("interpolation"), "got {err}");

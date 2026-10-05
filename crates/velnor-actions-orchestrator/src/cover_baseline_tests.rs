@@ -53,7 +53,7 @@ fn manifest_json(base: &str, name: &str) -> serde_json::Value {
         "generator_sha256": "1".repeat(64),
         "compatibility_id": digest,
         "artifact_id": numeric,
-        "artifact_name": name,
+        "parent": null, "artifact_name": name,
         "tasks": [],
     })
 }
@@ -217,10 +217,12 @@ fn forwarded_manifest(slug: &str, base: &str) -> BaselineManifest {
             input_digest: digest.clone(),
             closure_digest: digest,
             proof_run_id: 5,
+            carried_from: None,
             observed_run_id: 7,
             external_data: None,
             proof: None,
         }],
+        parent: None,
         expires_at_unix: None,
     }
 }

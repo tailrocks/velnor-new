@@ -27,7 +27,7 @@ use crate::task_report::TASK_ID_ENV;
 pub(super) fn tofu_data_dir_for_extra(
     extra: &BTreeMap<String, String>,
 ) -> Result<Option<String>, OrchestratorError> {
-    let Some(root) = tofu_root_for_extra(extra) else {
+    let Some(root) = tofu_root_for_extra(extra)? else {
         return Ok(None);
     };
     velnor_actions_tofu::tofu_data_dir_under(
@@ -53,7 +53,7 @@ pub(super) fn tofu_data_dir_for_extra(
 pub(super) fn tofu_plugin_cache_dir_for_extra(
     extra: &BTreeMap<String, String>,
 ) -> Result<Option<String>, OrchestratorError> {
-    let Some(root) = tofu_root_for_extra(extra) else {
+    let Some(root) = tofu_root_for_extra(extra)? else {
         return Ok(None);
     };
     velnor_actions_tofu::tofu_cache_dir_under(
@@ -69,14 +69,21 @@ pub(super) fn tofu_plugin_cache_dir_for_extra(
 /// Normalized tofu root for obligation extras, when one applies.
 ///
 /// `None` for non-tofu and task-less extras (fetch steps) plus
-/// unparsable key segments; the reserved-key rule already rejected
+/// malformed keys return an error. The reserved-key rule already rejected
 /// any caller-supplied `TF_*`, so these constructors are the sole
 /// source of the rendered keys.
-fn tofu_root_for_extra(extra: &BTreeMap<String, String>) -> Option<String> {
-    let task_id = extra.get(TASK_ID_ENV)?;
+fn tofu_root_for_extra(
+    extra: &BTreeMap<String, String>,
+) -> Result<Option<String>, OrchestratorError> {
+    let Some(task_id) = extra.get(TASK_ID_ENV) else {
+        return Ok(None);
+    };
     if super::obligation_stack(task_id) != Some(Stack::Tofu) {
-        return None;
+        return Ok(None);
     }
-    let key = crate::extension_schemas::task_key_segment(task_id)?;
-    Some(velnor_actions_tofu::root_for_key(&key))
+    let key = crate::extension_schemas::task_key_segment(task_id)
+        .ok_or_else(|| crate::internal::internal("tofu_unparsable_key"))?;
+    velnor_actions_tofu::root_for_key(&key)
+        .map(Some)
+        .map_err(OrchestratorError::from)
 }

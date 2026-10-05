@@ -141,7 +141,7 @@ pub fn plan_internal(request_json: &str) -> Result<String, OrchestratorError> {
         &prep.discovery.workspaces,
         &prep.runner_label,
     ));
-    let universe = select_universe(&prep.discovery, &mut warnings);
+    let universe = select_universe(&prep.discovery, &mut warnings)?;
     let changed = classify_changed(
         &prep.root,
         request.event,

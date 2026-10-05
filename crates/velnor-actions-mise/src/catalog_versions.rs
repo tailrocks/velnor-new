@@ -59,6 +59,12 @@ pub(crate) fn tool_source(tool: PinnedTool, version: &str) -> String {
             format!("https://github.com/opentofu/opentofu/releases/tag/v{version}")
         }
         PinnedTool::ReleasePlz => format!("https://crates.io/api/v1/crates/release-plz/{version}"),
+        PinnedTool::Reuse => format!("https://pypi.org/pypi/reuse/{version}/json"),
+        PinnedTool::Python => format!(
+            "https://www.python.org/downloads/release/python-{}/",
+            version.replace('.', "")
+        ),
+        PinnedTool::Uv => format!("https://github.com/astral-sh/uv/releases/tag/{version}"),
     }
 }
 

@@ -41,7 +41,7 @@ Open PR census on `tailrocks/velnor`: only 1133 and 1135.
 
 macOS 27.0 (build 26A428), architecture `arm64`. Docker OrbStack 29.4.0, context
 `orbstack`, engine `linux/aarch64`, socket
-`unix:///Users/donbeave/.orbstack/run/docker.sock`. `docker run --platform
+`unix://${HOME}/.orbstack/run/docker.sock`. `docker run --platform
 linux/amd64 alpine:3.22 uname -m` printed `x86_64`. Emulation is available.
 The x64 baseline is the container platform, not the host.
 

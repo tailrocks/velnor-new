@@ -1,0 +1,56 @@
+{
+  "kind": "local_semantics_only_not_fresh_hosted_performance",
+  "fixture": "${TMPDIR}/velnor-c08-pinned-vufcdxwj",
+  "cache": "${TMPDIR}/velnor-c08-pinned-vufcdxwj/mbx-cache",
+  "steps": [
+    {
+      "argv": [
+        "${HOME}/.local/share/mise/installs/mr-boxington/1.21.0/.mise-bins/mbx",
+        "nextest",
+        "--version"
+      ],
+      "exit": 0,
+      "seconds": 0.059897457977058366,
+      "log": "${TMPDIR}/velnor-c08-pinned-vufcdxwj/step-0.log",
+      "contains_failure": false
+    },
+    {
+      "argv": [
+        "${HOME}/.local/share/mise/installs/mr-boxington/1.21.0/.mise-bins/mbx",
+        "nextest",
+        "list",
+        "--profile",
+        "default",
+        "--list-type",
+        "binaries-only",
+        "--locked",
+        "--offline",
+        "--package",
+        "velnor-c08-probe"
+      ],
+      "exit": 0,
+      "seconds": 0.6241893749975134,
+      "log": "${TMPDIR}/velnor-c08-pinned-vufcdxwj/step-1.log",
+      "contains_failure": false
+    },
+    {
+      "argv": [
+        "${HOME}/.local/share/mise/installs/mr-boxington/1.21.0/.mise-bins/mbx",
+        "nextest",
+        "run",
+        "--profile",
+        "default",
+        "--locked",
+        "--offline",
+        "--package",
+        "velnor-c08-probe",
+        "--no-tests",
+        "fail"
+      ],
+      "exit": 100,
+      "seconds": 1.2962330000009388,
+      "log": "${TMPDIR}/velnor-c08-pinned-vufcdxwj/step-2.log",
+      "contains_failure": true
+    }
+  ]
+}

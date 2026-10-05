@@ -26,6 +26,8 @@ use velnor_actions_orchestrator::{
 
 use crate::args::{Cli, Command};
 use crate::dispatch_publish::run_publish_internal;
+#[path = "dispatch_foundation_qualification.rs"]
+mod foundation_qualification;
 
 /// Environment variable selecting the private operation. Never printed.
 const OP_ENV: &str = "VELNOR_INTERNAL_OP";
@@ -73,7 +75,17 @@ pub(crate) fn run_public() -> ExitCode {
     match Cli::parse().command {
         Command::Init => run_init(),
         Command::Plan => run_plan(),
-        Command::Generate { output_dir, mode } => run_generate(output_dir, mode),
+        Command::Generate {
+            output_dir,
+            mode,
+            foundation_qualification_only,
+        } => {
+            if foundation_qualification_only {
+                foundation_qualification::run(output_dir)
+            } else {
+                run_generate(output_dir, mode)
+            }
+        }
         Command::Config { command } => crate::dispatch_config::run_config(&command),
     }
 }

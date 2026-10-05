@@ -85,6 +85,33 @@ fn git_command_in_records_cwd() {
 }
 
 #[test]
+fn discovery_git_owns_optional_lock_control() -> Result<(), String> {
+    for verb in ALLOWED_GIT_VERBS {
+        let request = GitRequest::new(verb, Vec::new()).map_err(|error| error.to_string())?;
+        let command = request.command();
+        assert!(
+            command
+                .full_env()
+                .contains(&(OsString::from("GIT_OPTIONAL_LOCKS"), OsString::from("0"),))
+        );
+        let hostile_parent = [(OsString::from("GIT_OPTIONAL_LOCKS"), OsString::from("1"))];
+        let environment = command.spawn_env(&hostile_parent);
+        assert_eq!(
+            environment
+                .iter()
+                .rev()
+                .find(|(key, _)| key == "GIT_OPTIONAL_LOCKS"),
+            Some(&(OsString::from("GIT_OPTIONAL_LOCKS"), OsString::from("0")))
+        );
+        assert!(matches!(
+            command.with_env(&[(OsString::from("GIT_OPTIONAL_LOCKS"), OsString::from("1"))]),
+            Err(MiseError::InvalidStepInput { field, .. }) if field == "GIT_OPTIONAL_LOCKS"
+        ));
+    }
+    Ok(())
+}
+
+#[test]
 fn live_git_rev_parse_reports_typed_success() -> Result<(), String> {
     let dir = scratch_dir("git-repo")?;
     let git_dir = dir.join(".git");

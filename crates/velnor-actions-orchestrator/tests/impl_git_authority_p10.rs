@@ -2,14 +2,17 @@
 //! (normal repo, linked worktree, include, worktree config, reject
 //! mismatch/missing) through the typed prepare boundary.
 
+use crate::impl_common::git_fixture;
+
 use std::fs;
 use std::path::Path;
-use std::process::Command as StdCommand;
 
 use tempfile::TempDir;
 use velnor_actions_orchestrator::{OrchestratorError, prepare};
 
-use crate::impl_common::{TestResult, fixture_manifest_json, git, without_ambient_identity};
+use crate::impl_common::{
+    TestResult, fixture_manifest_json, git, root_manifest, without_ambient_identity,
+};
 
 /// Canonical origin for Velnor-policy fixtures.
 const CANONICAL_ORIGIN: &str = "https://github.com/tailrocks/velnor-new.git";
@@ -33,10 +36,7 @@ fn make_velnor_repo() -> Result<TempDir, Box<dyn std::error::Error>> {
         root.join(".velnor/release-manifest.json"),
         fixture_manifest_json(),
     )?;
-    fs::write(
-        root.join("Cargo.toml"),
-        "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
-    )?;
+    fs::write(root.join("Cargo.toml"), root_manifest(velnor_config()))?;
     fs::create_dir_all(root.join("src"))?;
     fs::write(root.join("src/lib.rs"), "pub fn f() {}\n")?;
     Ok(dir)
@@ -44,7 +44,7 @@ fn make_velnor_repo() -> Result<TempDir, Box<dyn std::error::Error>> {
 
 /// Run git with owned arguments (for dynamic paths).
 fn git_owned(args: &[String], cwd: &Path) -> TestResult {
-    let status = StdCommand::new("git")
+    let status = git_fixture::command(cwd)?
         .args(args)
         .current_dir(cwd)
         .status()?;

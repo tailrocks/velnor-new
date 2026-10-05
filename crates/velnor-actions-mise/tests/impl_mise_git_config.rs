@@ -1,8 +1,10 @@
 //! P10 `git config` cases: allowlist shape plus live origin reads in a
 //! normal repo and a linked worktree through the typed `GitRequest`.
+#[path = "../../test_support/git_fixture.rs"]
+pub(crate) mod git_fixture;
+
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
-use std::process::Command as StdCommand;
 use velnor_actions_mise::{ALLOWED_GIT_VERBS, GitRequest, is_allowed_git_verb};
 
 /// P10 origin value shared by the repo and its linked worktree.
@@ -20,7 +22,8 @@ fn scratch_dir(test: &str) -> Result<PathBuf, String> {
 
 /// Run git, failing the test on a nonzero status.
 fn git(args: &[&str], cwd: &Path) -> Result<(), String> {
-    let status = StdCommand::new("git")
+    let status = git_fixture::command(cwd)
+        .map_err(|err| err.to_string())?
         .args(args)
         .current_dir(cwd)
         .status()
@@ -31,7 +34,8 @@ fn git(args: &[&str], cwd: &Path) -> Result<(), String> {
 
 /// Run git with owned arguments (for dynamic paths).
 fn git_owned(args: &[String], cwd: &Path) -> Result<(), String> {
-    let status = StdCommand::new("git")
+    let status = git_fixture::command(cwd)
+        .map_err(|err| err.to_string())?
         .args(args)
         .current_dir(cwd)
         .status()
