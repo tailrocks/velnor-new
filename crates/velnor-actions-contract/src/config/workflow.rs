@@ -187,6 +187,24 @@ mod tests {
     }
 
     #[test]
+    fn generic_workflow_runner_catalog_is_linux_only() {
+        assert!(
+            super::RUNNER_LABEL_CATALOG
+                .iter()
+                .all(|label| label.starts_with("ubuntu-"))
+        );
+        let mut config = named("CI");
+        config.runner_label = Some("macos-15".to_owned());
+        assert!(
+            config
+                .validate("config.toml")
+                .expect_err("macOS checks use their separate typed runner config")
+                .to_string()
+                .contains("unsupported_label:macos-15")
+        );
+    }
+
+    #[test]
     fn workflow_tasks_require_sorted_unique_safe_ids() {
         let make = |id: &str| VerificationTask {
             id: id.to_owned(),

@@ -41,6 +41,17 @@ pub(crate) fn write_exclusive(
     bytes: &[u8],
     context: &str,
 ) -> Result<(), OrchestratorError> {
+    write_exclusive_until(path, bytes, context, || Ok(()))
+}
+
+/// Exclusively write in bounded chunks, checking the owning operation's deadline.
+pub(crate) fn write_exclusive_until(
+    path: &Path,
+    bytes: &[u8],
+    context: &str,
+    mut checkpoint: impl FnMut() -> Result<(), OrchestratorError>,
+) -> Result<(), OrchestratorError> {
+    checkpoint()?;
     match fs::symlink_metadata(path) {
         Ok(meta) if meta.file_type().is_symlink() => return Err(internal("symlink_refused")),
         Ok(_) => return Err(internal(&format!("{context}_exists"))),
@@ -50,8 +61,13 @@ pub(crate) fn write_exclusive(
     if !created_identity(&file, path) {
         return Err(internal("symlink_refused"));
     }
-    file.write_all(bytes)
-        .map_err(|_| internal(&format!("{context}_unwritable")))
+    for chunk in bytes.chunks(64 * 1024) {
+        checkpoint()?;
+        file.write_all(chunk)
+            .map_err(|_| internal(&format!("{context}_unwritable")))?;
+        checkpoint()?;
+    }
+    Ok(())
 }
 
 /// Open one new file relative to its parent dirfd, never following symlinks.

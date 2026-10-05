@@ -225,6 +225,13 @@ pub enum EnvPolicy {
     /// Repository task execution: cleared env plus proxy passthrough,
     /// the isolation overlay, and declared inputs only.
     RepoTask,
+    /// Qualified task-only config visibility with owned homes, cleared env,
+    /// and proxy passthrough.
+    QualifiedCheck,
+    /// Read-only qualified probes: explicit environment only, no overlays.
+    QualifiedProbe,
+    /// Qualified acquisition: owned environment, proxy passthrough, and fixed overlay.
+    QualifiedAcquisition,
 }
 
 impl EnvPolicy {
@@ -235,23 +242,43 @@ impl EnvPolicy {
         match self {
             Self::Bootstrap => &CREDENTIAL_ALLOWLIST_BOOTSTRAP,
             Self::Baseline => &CREDENTIAL_ALLOWLIST_BASELINE,
-            Self::Verify | Self::Discovery | Self::RepoTask => &[],
+            Self::Verify
+            | Self::Discovery
+            | Self::RepoTask
+            | Self::QualifiedCheck
+            | Self::QualifiedProbe
+            | Self::QualifiedAcquisition => &[],
         }
     }
 
     /// Whether the child inherits the parent environment (filtered).
-    /// Only [`Self::RepoTask`] spawns cleared.
+    /// Repository tasks and qualified policies spawn cleared.
     #[must_use]
     pub const fn inherits_parent(&self) -> bool {
-        !matches!(self, Self::RepoTask)
+        !matches!(
+            self,
+            Self::RepoTask
+                | Self::QualifiedCheck
+                | Self::QualifiedProbe
+                | Self::QualifiedAcquisition
+        )
+    }
+
+    /// Whether a cleared child may inherit only the ambient proxy keys.
+    #[must_use]
+    pub const fn allows_proxy_passthrough(&self) -> bool {
+        matches!(
+            self,
+            Self::RepoTask | Self::QualifiedCheck | Self::QualifiedAcquisition
+        )
     }
 
     /// Full child environment over an explicit parent snapshot.
     ///
     /// The pure contract behind the spawner: inheriting policies keep
     /// the parent minus stripped credentials, endpoints, and
-    /// tofu/checkpoint ambient families; repo-task keeps the proxy
-    /// passthrough only; and every policy appends `additions` (the
+    /// tofu/checkpoint ambient families; cleared tasks and acquisitions keep
+    /// only proxy passthrough; and every policy appends `additions` (the
     /// isolation overlay plus validated extras) last.
     #[must_use]
     pub fn child_env(
@@ -260,9 +287,7 @@ impl EnvPolicy {
         additions: &[(OsString, OsString)],
     ) -> Vec<(OsString, OsString)> {
         let mut env = Vec::with_capacity(parent.len() + additions.len());
-        if *self == Self::RepoTask {
-            env.extend(proxy_passthrough(parent));
-        } else {
+        if self.inherits_parent() {
             let allowed = self.allowed_credentials();
             for (key, value) in parent {
                 let name = key.to_string_lossy();
@@ -274,6 +299,8 @@ impl EnvPolicy {
                     env.push((key.clone(), value.clone()));
                 }
             }
+        } else if self.allows_proxy_passthrough() {
+            env.extend(proxy_passthrough(parent));
         }
         env.extend(additions.iter().cloned());
         env

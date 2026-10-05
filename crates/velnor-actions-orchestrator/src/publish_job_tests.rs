@@ -9,7 +9,7 @@ use velnor_actions_workflow_renderer::steps::{DOWNLOAD_ARTIFACT_USES, UPLOAD_ART
 /// Internal operation of one step, if any.
 fn operation_of(step: &Step) -> Option<&str> {
     match &step.kind {
-        StepKind::Internal { operation } => Some(operation),
+        StepKind::Internal { operation, .. } => Some(operation),
         StepKind::Action { .. } | StepKind::Shell { .. } => None,
     }
 }

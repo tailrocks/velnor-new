@@ -198,6 +198,7 @@ fn workflow_ir_validates_pins_and_refs() -> Result<(), ContractError> {
     let job = Job {
         display_name: "Plan".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
+        check_runner: None,
         timeout_minutes: JobTimeout::PLAN,
         needs: vec![],
         condition: None,

@@ -50,14 +50,21 @@ fn internal_env(
     ctx: &RenderContext,
     needs_envs: &[(String, String)],
     job_env: &BTreeMap<String, String>,
+    step_env: &BTreeMap<String, String>,
     actions_read: bool,
-) -> Yaml {
+) -> Result<Yaml, RenderError> {
+    commands::validate_env(step_env)?;
     if op == steps::FETCH_OPERATION {
-        return Yaml::Map(vec![
+        if !step_env.is_empty() {
+            return Err(RenderError::InvalidWorkflow(
+                "fetch_internal_env_not_supported".to_owned(),
+            ));
+        }
+        return Ok(Yaml::Map(vec![
             ("GH_REPO".to_owned(), Yaml::str("${{ github.repository }}")),
             ("GH_TOKEN".to_owned(), Yaml::str("${{ github.token }}")),
             (INTERNAL_OP_ENV.to_owned(), Yaml::str(op.to_owned())),
-        ]);
+        ]));
     }
     let request = format!("{}/{target}-request.json", ctx.request_dir);
     let mut env = Vec::new();
@@ -77,7 +84,17 @@ fn internal_env(
             }
         }
     }
-    Yaml::Map(env)
+    let mut seen: std::collections::BTreeSet<String> =
+        env.iter().map(|(key, _)| key.clone()).collect();
+    for (key, value) in step_env {
+        if !seen.insert(key.clone()) {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "duplicate_internal_env:{key}"
+            )));
+        }
+        env.push((key.clone(), Yaml::str(value.clone())));
+    }
+    Ok(Yaml::Map(env))
 }
 
 /// Render one action step: name, condition, pin, inputs, step env.
@@ -122,7 +139,9 @@ fn action_step_to_yaml(
         }
         crate::tool_seed::validate_seed_action(step, None)?;
     }
-    let uses_yaml = if matches!(uses, TOOL_SEED_USES | TOFU_PROVIDER_ADMISSION_USES) {
+    let uses_yaml = if matches!(uses, TOOL_SEED_USES | TOFU_PROVIDER_ADMISSION_USES)
+        || crate::action_ref::is_generated_provider_prelude(uses)
+    {
         Yaml::annotated(uses, "zizmor: ignore[self-repository]")
     } else {
         Yaml::str(uses.to_owned())
@@ -191,7 +210,10 @@ pub(crate) fn step_to_yaml(
             ));
             Ok(Yaml::Map(entries))
         }
-        StepKind::Internal { operation } => {
+        StepKind::Internal {
+            operation,
+            env: step_env,
+        } => {
             let (op, target) = steps::split_internal_operation(operation)?;
             if op == steps::FETCH_OPERATION && !actions_read {
                 return Err(RenderError::InvalidWorkflow(
@@ -215,7 +237,7 @@ pub(crate) fn step_to_yaml(
             };
             entries.push((
                 "env".to_owned(),
-                internal_env(op, target, ctx, channel, job_env, actions_read),
+                internal_env(op, target, ctx, channel, job_env, step_env, actions_read)?,
             ));
             push_composite_shell(&mut entries, composite);
             entries.push((
