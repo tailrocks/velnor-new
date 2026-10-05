@@ -162,20 +162,28 @@ pub(super) fn publish_job(
         steps,
         actions,
     )?;
+    let mut fields = workflow_steps::with_needs(
+        workflow_steps::with_permissions(
+            base("Publish velnor-actions", hosted, 30),
+            workflow_steps::publish_permissions(),
+        ),
+        &[
+            "attest-linux",
+            "attest-macos",
+            "attest-macos-intel",
+            "attest-manifest",
+        ],
+    );
+    fields.push((
+        "environment".to_owned(),
+        Yaml::Map(vec![(
+            "name".to_owned(),
+            Yaml::str("generator-release"),
+        )]),
+    ));
     Ok(finish(
         "publish-generator",
-        workflow_steps::with_needs(
-            workflow_steps::with_permissions(
-                base("Publish velnor-actions", hosted, 30),
-                workflow_steps::publish_permissions(),
-            ),
-            &[
-                "attest-linux",
-                "attest-macos",
-                "attest-macos-intel",
-                "attest-manifest",
-            ],
-        ),
+        fields,
         vec![workflow_steps::checkout_step(), call],
     ))
 }
