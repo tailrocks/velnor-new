@@ -15,12 +15,12 @@ Workflow to generate
   Push branch: main
   Runner: ubuntu-26.04 (latest pinned default)
   Jobs:
-    - actionlint (4 steps)
-    - plan (12 steps)
+    - actionlint (5 steps)
+    - plan (13 steps)
     - publish-baseline (5 steps)
-    - required (9 steps)
-    - rust-a (13 steps)
-    - rust-lib (13 steps)
+    - required (10 steps)
+    - rust-a (14 steps)
+    - rust-lib (14 steps)
     - 2 Rust crate jobs
       Each: Clippy -> run tests -> doctests -> doc build
       Entries:
@@ -40,7 +40,8 @@ Workflow to generate
   Clippy memory groups: 1; barriers: 0
   Cache layers: Mise tools, Cargo sources
   Actionlint: 1.7.12 pinned
-  Action pins: 6
+  Action pins: 7
+    - ./.github/actions/velnor-tool-seed
     - Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
     - actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
     - actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
