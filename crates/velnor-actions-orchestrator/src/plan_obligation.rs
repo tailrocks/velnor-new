@@ -11,8 +11,8 @@ use std::path::Path;
 
 use serde::Serialize;
 use velnor_actions_contract::{
-    MatrixEntry, PlanObligation, ProposedTask, Stack, StackExtension, canonical_json_bytes,
-    digest_b3,
+    MatrixEntry, NamedCheckLane, PlanObligation, ProposedTask, Stack, StackExtension,
+    canonical_json_bytes, digest_b3,
 };
 use velnor_actions_mise::ToolCatalog;
 use velnor_actions_mise::restore::probe_tool_availability;
@@ -65,6 +65,8 @@ pub(crate) struct GroupInputs<'a> {
     pub(crate) snapshot: &'a ExecutionSnapshot,
     /// Repository checkout the closure resolves against.
     pub(crate) root: &'a Path,
+    /// Emitted report identities for named checks.
+    pub(crate) named_check_lanes: &'a BTreeMap<String, Vec<NamedCheckLane>>,
 }
 
 /// Deterministic lane per universe task ID.
@@ -116,7 +118,11 @@ fn extension_for_task(
     bundle: &ExtensionBundle,
     reads: &mut velnor_actions_tofu::FileCache,
 ) -> Result<(StackExtension, bool), OrchestratorError> {
-    if Stack::from_id(&task.stack_id) == Some(Stack::Tofu) {
+    let stack = Stack::require_known(&task.stack_id).map_err(internal_contract)?;
+    if stack == Stack::Mise {
+        return Err(internal("named_check_definition_required"));
+    }
+    if stack == Stack::Tofu {
         let ext = crate::internal_plan::tofu_extension_for(task, root, bundle, reads)
             .map_err(internal_contract)?;
         return Ok((ext.to_stack_extension(), ext.reuse_eligible().is_ok()));
@@ -147,7 +153,7 @@ fn planned_identity(
         Some(inputs.root),
         nextest_config.as_deref(),
     );
-    let (extension, _) = extension_for_task(task, inputs.root, &bundle, reads)?;
+    let extension = extension_for_task(task, inputs.root, &bundle, reads)?.0;
     let closure = resolve_closure_at_root(
         inputs.root,
         task,
@@ -185,14 +191,31 @@ fn planned_identity(
 pub(crate) fn plan_group(
     inputs: &GroupInputs<'_>,
     reads: &mut velnor_actions_tofu::FileCache,
-) -> Result<(PlanObligation, MatrixEntry), OrchestratorError> {
+) -> Result<(PlanObligation, Vec<MatrixEntry>), OrchestratorError> {
     let task = inputs.task;
+    if Stack::from_id(&task.stack_id) == Some(Stack::Mise) {
+        let item = crate::internal_plan::named_checks::discovered(inputs.discovery, task)
+            .map_err(internal_contract)?;
+        let job_id = format!("check-{}", item.check.id);
+        let check_lanes = inputs
+            .named_check_lanes
+            .get(&job_id)
+            .ok_or_else(|| internal("named_check_lane_missing"))?;
+        return crate::internal_plan::named_checks::plan::derive_lanes(
+            inputs.root,
+            item,
+            inputs.run_key,
+            inputs.wire.generator,
+            inputs.catalog,
+            check_lanes,
+        );
+    }
     let _ = inputs.lane;
     let toolchain = toolchain_id(task, inputs.catalog).map_err(internal_contract)?;
     let argv = task_argv(task, inputs.catalog)?;
     let platform_id = platform_id_for_group(inputs.label, task).map_err(internal_contract)?;
     let identity = planned_identity(inputs, &argv, &toolchain, &platform_id, &mut *reads)?;
-    let (_, reuse_eligible) = extension_for_task(task, inputs.root, &identity.bundle, reads)?;
+    let reuse_eligible = extension_for_task(task, inputs.root, &identity.bundle, reads)?.1;
     let input_digest = identity.input_digest;
     let closure_digest = identity.closure_digest;
     let reuse = if inputs.changed {
@@ -225,14 +248,35 @@ pub(crate) fn plan_group(
         }
         _ => reuse,
     };
-    let task_digest = task_digest(&task.task_id, &argv, &toolchain).map_err(internal_contract)?;
+    complete_group(
+        inputs,
+        &argv,
+        &toolchain,
+        &input_digest,
+        closure_digest,
+        reuse,
+    )
+    .map(|(obligation, entry)| (obligation, vec![entry]))
+}
+
+/// Complete existing matrix transport after execution disposition is decided.
+fn complete_group(
+    inputs: &GroupInputs<'_>,
+    argv: &[String],
+    toolchain: &str,
+    input_digest: &str,
+    closure_digest: String,
+    reuse: wire_w2::ReuseOutcome,
+) -> Result<(PlanObligation, MatrixEntry), OrchestratorError> {
+    let task = inputs.task;
+    let task_digest = task_digest(&task.task_id, argv, toolchain).map_err(internal_contract)?;
     // The persisted input digest flows through the validated reuse
     // outcome when one exists, so merge-time live comparison judges the
     // exact recorded value; forced-execution paths carry the identity.
     let recorded = reuse
         .recorded_input_digest
         .clone()
-        .unwrap_or_else(|| input_digest.clone());
+        .unwrap_or_else(|| input_digest.to_owned());
     let obligation = PlanObligation {
         task_id: task.task_id.clone(),
         decision: reuse.decision,
@@ -249,7 +293,7 @@ pub(crate) fn plan_group(
         reuse.task_cache_enabled,
         reuse.task_cache_key.as_deref(),
     );
-    let run = velnor_actions_workflow_renderer::join_argv_for_run(&argv)
+    let run = velnor_actions_workflow_renderer::join_argv_for_run(argv)
         .map_err(|err| internal(&err.to_string()))?;
     let job_id = crate::crate_job_ids::job_id_for_member(&inputs.discovery.proposals, task)
         .ok_or_else(|| internal("crate_job_id_missing"))?;
@@ -260,12 +304,12 @@ pub(crate) fn plan_group(
         &task_digest,
         metadata,
         execute_ids(task),
-        &input_digest,
+        input_digest,
         inputs.run_key,
         &job_id,
     )
     .map_err(internal_contract)?;
-    let cache_ids = cache_ids_for(task, inputs.label, &toolchain).map_err(internal_contract)?;
+    let cache_ids = cache_ids_for(task, inputs.label, toolchain).map_err(internal_contract)?;
     record_lane_target_dir(&mut entry.adapter_metadata, cache_ids.lane_id());
     entry.cache_ids = Some(cache_ids);
     Ok((obligation, entry))

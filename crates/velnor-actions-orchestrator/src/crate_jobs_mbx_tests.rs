@@ -11,7 +11,6 @@ fn drivers_follow_per_crate_selection() {
         &discovery(vec![mbx, cargo]),
         &ToolCatalog::pinned(),
         &[],
-        &[],
         None,
         2,
     )

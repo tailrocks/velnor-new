@@ -210,6 +210,7 @@ fn job(steps: Vec<Step>) -> Job {
         condition: None,
         permissions: None,
         environment: None,
+        check_runner: None,
         steps,
     }
 }

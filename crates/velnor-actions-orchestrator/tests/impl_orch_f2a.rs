@@ -5,6 +5,9 @@ use std::path::{Path, PathBuf};
 use crate::impl_common::{TestResult, passing_reports, plan_for_source_change};
 use crate::impl_orch_plansel::merge_status;
 
+#[path = "impl_orch_runtime_acquisition.rs"]
+mod runtime_acquisition;
+
 /// Orchestrator `src/` directory.
 pub(crate) fn orch_src() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src")
@@ -157,11 +160,14 @@ fn orch_spawns_no_processes_and_confines_shell_wrappers() -> TestResult {
     Ok(())
 }
 
+#[path = "impl_orch_prepare.rs"]
+mod prepare;
+
 #[test]
-fn v1_registers_rust_and_tofu() {
+fn v1_registers_three_stacks_and_detects_rust_and_tofu() {
     use velnor_actions_contract::VelnorConfig;
     use velnor_actions_orchestrator::decisions::{DetectorInfo, detector_registry};
-    assert_eq!(VelnorConfig::REGISTERED_STACKS, &["rust", "tofu"]);
+    assert_eq!(VelnorConfig::REGISTERED_STACKS, &["mise", "rust", "tofu"]);
     assert_eq!(
         detector_registry(),
         vec![
@@ -341,7 +347,7 @@ fn offline_deps_fail_closed_without_fetch() -> TestResult {
                 );
                 continue;
             }
-            let scrubbed = code
+            let scrubbed = runtime_acquisition::scrub_bound_acquisition(&name, &code)
                 .replace("fetch_inventory", "")
                 .replace("FetchFailure", "")
                 .replace("fetch_add", "")
