@@ -36,6 +36,19 @@ fn payload(inputs: ToolsCacheInputs<'_>) -> ToolsCachePayload {
     ToolsCachePayload::new(inputs).expect("typed tools payload")
 }
 
+fn sample_payload() -> ToolsCachePayload {
+    let setup = pinned_mise();
+    let specs = vec!["rust@1.98.1".to_owned(), "shellcheck@0.11.0".to_owned()];
+    let components = vec!["rustfmt".to_owned(), "clippy".to_owned()];
+    payload(inputs(
+        "ubuntu-26.04",
+        &setup,
+        &specs,
+        Some("1.98.1"),
+        &components,
+    ))
+}
+
 fn action_inputs(
     step: &velnor_actions_contract::Step,
 ) -> &std::collections::BTreeMap<String, String> {
@@ -81,16 +94,7 @@ fn rendered_condition(step: &Step) -> String {
 
 #[test]
 fn payload_paths_and_restore_save_inputs_are_identical() {
-    let setup = pinned_mise();
-    let specs = vec!["rust@1.98.1".to_owned(), "shellcheck@0.11.0".to_owned()];
-    let components = vec!["rustfmt".to_owned(), "clippy".to_owned()];
-    let payload = payload(inputs(
-        "ubuntu-26.04",
-        &setup,
-        &specs,
-        Some("1.98.1"),
-        &components,
-    ));
+    let payload = sample_payload();
     assert_eq!(
         payload.paths(),
         [
@@ -114,6 +118,14 @@ fn payload_paths_and_restore_save_inputs_are_identical() {
         crate::cache_steps::validate_tools_restore_call(&restore).expect("registered wrapper call"),
         payload.key_expression()
     );
+    assert_eq!(restore_with.get("key"), save_with.get("key"));
+    assert_eq!(restore_with.get("key"), Some(&payload.key_expression()));
+    assert_eq!(save_with.get("path"), Some(&payload.paths().join("\n")));
+}
+
+#[test]
+fn restore_wrapper_admission_rejects_mutated_calls() {
+    let restore = sample_payload().restore_step().expect("restore");
     velnor_actions_contract::workflow::step_identity::validate_step_sequence(
         std::slice::from_ref(&restore),
         "tools-cache-test",
@@ -153,12 +165,14 @@ fn payload_paths_and_restore_save_inputs_are_identical() {
         restore.condition.as_deref(),
         Some(crate::cache_p08::TOOLS_CACHE_RESTORE_CONDITION)
     );
+}
+
+#[test]
+fn restore_composite_binds_marker_pin_key_and_paths() {
+    let payload = sample_payload();
+    let save = payload.save_step().expect("save");
     let save_condition = crate::cache_p08::save_policy::condition();
     assert_eq!(save.condition.as_deref(), Some(save_condition.as_str()));
-    assert_eq!(restore_with.len(), 1);
-    assert_eq!(restore_with.get("key"), save_with.get("key"));
-    assert_eq!(restore_with.get("key"), Some(&payload.key_expression()));
-    assert_eq!(save_with.get("path"), Some(&payload.paths().join("\n")));
     let restore_action = crate::cache_steps::tools_restore_action_file("0.1.0")
         .expect("generated tools restore action");
     let marker = crate::marker::marker_for_version("0.1.0").expect("generator marker");

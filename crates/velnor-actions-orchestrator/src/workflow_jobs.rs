@@ -180,7 +180,7 @@ pub(crate) fn read_actions_permissions() -> Permissions {
     }
 }
 
-/// Plan-job install set per role: Rust, validators, Nextest, and OpenTofu.
+/// Plan-job install set per role: Rust, validators, Nextest, and `OpenTofu`.
 ///
 /// Validators join the driver set because `Check generated files` runs the public
 /// `generate`, whose staged validation fail-closed-execs pinned actionlint, shellcheck,

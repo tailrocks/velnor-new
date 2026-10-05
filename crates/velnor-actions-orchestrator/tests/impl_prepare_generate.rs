@@ -60,6 +60,7 @@ fn generate_preview_matches_in_place_and_preserves_repo() -> TestResult {
         ".github/actionlint.yaml",
         ".github/actions/u26/action.yml",
         ".github/actions/velnor-tool-seed/action.yml",
+        ".github/actions/velnor-tools-cache-restore/action.yml",
         ".github/scripts/velnor-tools-cache-identity.sh",
         ".github/workflows/ci.yml",
     ];
@@ -349,21 +350,6 @@ fn cold_registry_stderr_classifies_incomplete() {
         classify_metadata_failure("error: failed to download anstyle-wincon v3.0.11"),
         MetadataFailure::Incomplete
     );
-}
-
-#[test]
-fn ignored_rust_plans_no_work() -> TestResult {
-    let repo = make_repo(
-        "schema = 1\n[workflow]\ndefault_branch = \"testmain\"\n[stacks]\nignore = [\"rust\"]\n",
-    )?;
-    let prep = prepare(repo.path())?;
-    assert!(prep.discovery.proposals.is_empty(), "no tasks when ignored");
-    let text = plan_for(&prep)?;
-    assert!(text.contains("Rust: ignored"), "ignored:\n{text}");
-    assert!(text.contains("no-work workflow"), "no-work:\n{text}");
-    let report = generate(&prep, &GenerateOptions { output_dir: None })?;
-    assert_eq!(report.files_written.len(), 7);
-    Ok(())
 }
 
 #[test]

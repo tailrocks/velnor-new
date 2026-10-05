@@ -99,7 +99,9 @@ fn assert_one_marked_script(rendered: &RenderedWorkflow) -> Result<(), RenderErr
         .shared
         .iter()
         .find(|file| file.path == RESTORE_ACTION_PATH)
-        .expect("shared tools restore composite");
+        .ok_or_else(|| {
+            RenderError::InvalidWorkflow("missing_tools_restore_composite".to_owned())
+        })?;
     assert_eq!(
         rendered
             .shared

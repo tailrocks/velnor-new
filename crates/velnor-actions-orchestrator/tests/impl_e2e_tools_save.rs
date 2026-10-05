@@ -6,6 +6,7 @@ use crate::impl_e2e_wiring::{JobText, StepText};
 
 /// Tools-cache step display names, asserted as emitted text.
 const RESTORE_TOOLS_TEXT: &str = "Restore Mise tools";
+const TOOLS_RESTORE_USES: &str = "./.github/actions/velnor-tools-cache-restore";
 const SAVE_TOOLS_TEXT: &str = "Save Mise tools";
 const IDENTITY_TEXT: &str = "V2 identity";
 const TOOLS_PATHS: [&str; 5] = [
@@ -45,8 +46,14 @@ pub(crate) fn check_tools_save_shape(job: &JobText) -> Result<(), String> {
     if identities != 1 {
         return Err(format!("{}: one runtime identity per V2 restore", job.id));
     }
+    if identity_digest(job).is_none() {
+        return Err(format!(
+            "{}: runtime identity without static digest",
+            job.id
+        ));
+    }
     let restore = restores[0];
-    check_cache_action(restore, "actions/cache/restore@", job)?;
+    check_cache_action(restore, TOOLS_RESTORE_USES, job)?;
     if !restore.body.contains("outputs.enabled == 'true'") {
         return Err(format!("{}: restore misses runtime gate", job.id));
     }
@@ -54,7 +61,6 @@ pub(crate) fn check_tools_save_shape(job: &JobText) -> Result<(), String> {
     if !key.starts_with("mise-tools-v2-") {
         return Err(format!("{}: restore is not V2: {key}", job.id));
     }
-    check_paths(restore, job)?;
     for save in saves {
         check_cache_action(save, "actions/cache/save@", job)?;
         if !save
@@ -78,21 +84,28 @@ pub(crate) fn check_tools_save_shape(job: &JobText) -> Result<(), String> {
 pub(crate) fn check_one_tools_saver_per_key(jobs: &[JobText]) -> Result<(), String> {
     use std::collections::BTreeMap;
     let restored = restored_tools_keys(jobs);
-    let mut saved: BTreeMap<String, usize> = BTreeMap::new();
+    let mut saved: BTreeMap<(String, String), usize> = BTreeMap::new();
     for job in jobs {
         for step in job.steps.iter().filter(|step| step.name == SAVE_TOOLS_TEXT) {
-            let key =
-                step_key(step).ok_or_else(|| format!("{}: tools save without key", job.id))?;
-            if !restored.contains(&key) {
-                return Err(format!("{}: tools save archives unrestored {key}", job.id));
+            let cache_identity = cache_identity(job, step)
+                .ok_or_else(|| format!("{}: tools save without cache identity", job.id))?;
+            if !restored.contains(&cache_identity) {
+                return Err(format!(
+                    "{}: tools save archives unrestored {cache_identity:?}",
+                    job.id
+                ));
             }
-            *saved.entry(key).or_default() += 1;
+            *saved.entry(cache_identity).or_default() += 1;
         }
     }
     for key in &restored {
         match saved.get(key) {
             Some(1) => {}
-            other => return Err(format!("key {key} has {other:?} savers, want exactly one")),
+            other => {
+                return Err(format!(
+                    "key {key:?} has {other:?} savers, want exactly one"
+                ));
+            }
         }
     }
     Ok(())
@@ -115,7 +128,7 @@ fn check_paths(step: &StepText, job: &JobText) -> Result<(), String> {
 }
 
 /// Every tools key restored by one V2 restore action in the tree.
-fn restored_tools_keys(jobs: &[JobText]) -> std::collections::BTreeSet<String> {
+fn restored_tools_keys(jobs: &[JobText]) -> std::collections::BTreeSet<(String, String)> {
     let mut restored = std::collections::BTreeSet::new();
     for job in jobs {
         for step in job
@@ -123,12 +136,27 @@ fn restored_tools_keys(jobs: &[JobText]) -> std::collections::BTreeSet<String> {
             .iter()
             .filter(|step| step.name == RESTORE_TOOLS_TEXT)
         {
-            if let Some(key) = step_key(step) {
-                restored.insert(key);
+            if let Some(cache_identity) = cache_identity(job, step) {
+                restored.insert(cache_identity);
             }
         }
     }
     restored
+}
+
+/// Static digest carried by one job's runtime identity action.
+fn identity_digest(job: &JobText) -> Option<String> {
+    job.steps
+        .iter()
+        .find(|step| step.name == IDENTITY_TEXT)?
+        .body
+        .lines()
+        .find_map(|line| line.trim().strip_prefix("d: ").map(str::to_owned))
+}
+
+/// Exact cache identity: shared expression plus its per-payload static digest.
+fn cache_identity(job: &JobText, step: &StepText) -> Option<(String, String)> {
+    Some((step_key(step)?, identity_digest(job)?))
 }
 
 /// The cache key expression carried by one cache action.

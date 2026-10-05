@@ -76,6 +76,7 @@ mod impl_plan_migration;
 mod impl_plan_parity;
 mod impl_plan_prepare;
 mod impl_prepare_generate;
+mod impl_prepare_generate_outputs;
 mod impl_preseed_cold;
 mod impl_preseed_manifest;
 mod impl_protocol;

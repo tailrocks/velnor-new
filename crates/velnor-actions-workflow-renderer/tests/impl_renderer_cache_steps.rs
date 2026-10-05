@@ -177,7 +177,7 @@ fn strict_wires_runtime_qualified_tools_cache_before_setup_and_saves_once()
         &mise(),
     )?;
     let text = &rendered.yaml;
-    let names = step_names(&text, "actionlint");
+    let names = step_names(text, "actionlint");
     assert_eq!(names.iter().filter(|s| *s == TOOLS_RESTORE_NAME).count(), 1);
     assert_eq!(names.iter().filter(|s| *s == TOOLS_SAVE_NAME).count(), 1);
     assert_eq!(
