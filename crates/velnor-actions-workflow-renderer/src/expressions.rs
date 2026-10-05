@@ -55,7 +55,7 @@ fn expression_spans(text: &str) -> Option<Vec<&str>> {
 /// to the default branch; Scale Set routes do not invoke action restore.
 /// Notably absent: `github.token` (render-time fetch binding only)
 /// and run IDs (never in env).
-const ENV_EXPRESSIONS: [&str; 10] = [
+const ENV_EXPRESSIONS: [&str; 12] = [
     "runner.temp",
     "github.ref_name",
     "github.event_name",
@@ -63,9 +63,11 @@ const ENV_EXPRESSIONS: [&str; 10] = [
     "secrets.CARGO_REGISTRY_TOKEN",
     "secrets.GITHUB_TOKEN",
     "steps.mbx-bundle.outputs.cache-matched-key",
+    "steps.mbx-cache-key.outputs.prefix",
     "github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.sha",
     "steps.tofu-providers.outputs.cache-hit",
     "steps.tofu-providers.outputs.cache-matched-key",
+    "inputs.cache_key",
 ];
 
 /// Exact `${{ }}` inners permitted in action `with:` values.

@@ -72,6 +72,12 @@ impl Step {
         }
         if let Some(role) = self.role {
             role.validate(&self.kind, job)?;
+            if role == StepRole::ToolSeed && self.condition.is_some() {
+                return Err(ContractError::identity(
+                    "step.role",
+                    format!("tool_seed_conditional:{job}"),
+                ));
+            }
             if let Some(expected) = role.required_id()
                 && self.id != Some(expected)
             {

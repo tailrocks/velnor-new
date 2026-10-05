@@ -111,7 +111,10 @@ fn action_step_to_yaml(
     if job_id == FINAL_JOB_ID && is_verdict_download(step) {
         entries.push(("continue-on-error".to_owned(), Yaml::Bool(true)));
     }
-    let uses_yaml = if uses == crate::tofu_cache::TOFU_PROVIDER_ADMISSION_USES {
+    let uses_yaml = if matches!(
+        uses,
+        crate::tofu_cache::TOFU_PROVIDER_ADMISSION_USES | crate::tool_seed::TOOL_SEED_USES
+    ) {
         Yaml::annotated(uses, "zizmor: ignore[self-repository]")
     } else {
         Yaml::str(uses.to_owned())
