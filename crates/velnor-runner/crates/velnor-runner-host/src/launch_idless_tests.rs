@@ -1,4 +1,5 @@
-//! A launch row without worker IDs stays occupied until cleanup is proven.
+//! A launch row with no ids and no worker volume releases its slot.
+//! A row that still has a `DinD` id stays occupied.
 
 use crate::launch::{Admit, admission};
 use crate::launch_harness::{absent, assigned_wait, open, started_progress};
@@ -67,21 +68,29 @@ async fn uncertain_without_ids(journal: &Journal, subject: &str) -> Result<(), S
 }
 
 #[tokio::test]
-async fn idless_uncertain_rows_keep_both_slots() -> Result<(), String> {
+async fn idless_uncertain_rows_release_both_slots() -> Result<(), String> {
     let (scratch, journal) = open("idless").await?;
     uncertain_without_ids(&journal, "m1").await?;
     uncertain_without_ids(&journal, "m2").await?;
     let decision = admission(&Idle, &journal, 2, 2, 0, &assigned_wait(9, 2))
         .await
         .map_err(|err| err.to_string())?;
-    assert_eq!(decision, Admit::Hold);
+    assert_eq!(decision, Admit::Start { stop: false });
     let rows = journal.rows().await.map_err(|err| err.to_string())?;
     assert_eq!(rows.len(), 2);
-    assert!(rows.iter().all(|row| !row.cleanup_proven));
+    assert!(rows.iter().all(|row| row.cleanup_proven));
+    assert!(rows.iter().all(|row| row.docker_id.is_none()));
+    assert!(rows.iter().all(|row| row.dind_id.is_none()));
+    assert!(rows.iter().all(|row| row.worker_volume.is_none()));
+    assert!(
+        rows.iter()
+            .all(|row| row.state == crate::IntentState::Uncertain)
+    );
     absent(&scratch.file())
 }
+
 #[tokio::test]
-async fn own_idless_uncertain_row_keeps_its_reservation() -> Result<(), String> {
+async fn own_idless_uncertain_row_releases_its_slot() -> Result<(), String> {
     let (scratch, journal) = open("idless-self").await?;
     let id = journal
         .begin("launch", "m9")
@@ -94,23 +103,34 @@ async fn own_idless_uncertain_row_keeps_its_reservation() -> Result<(), String> 
     let decision = admission(&Idle, &journal, 1, 1, 0, &assigned_wait(9, 1))
         .await
         .map_err(|err| err.to_string())?;
-    assert_eq!(decision, Admit::Hold);
+    let again = admission(&Idle, &journal, 1, 1, 0, &assigned_wait(9, 1))
+        .await
+        .map_err(|err| err.to_string())?;
+    assert_eq!(decision, Admit::Start { stop: true });
+    assert_eq!(again, Admit::Start { stop: true });
     let rows = journal.rows().await.map_err(|err| err.to_string())?;
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].id, id);
     assert_eq!(rows[0].state, crate::IntentState::Uncertain);
-    assert!(!rows[0].cleanup_proven);
+    assert!(rows[0].cleanup_proven);
+    assert!(rows[0].docker_id.is_none());
+    assert!(rows[0].dind_id.is_none());
+    assert!(rows[0].worker_volume.is_none());
     absent(&scratch.file())
 }
 
 #[tokio::test]
-async fn other_idless_uncertain_row_still_blocks_mint() -> Result<(), String> {
+async fn other_idless_uncertain_row_releases_before_mint() -> Result<(), String> {
     let (scratch, journal) = open("idless-other").await?;
     uncertain_without_ids(&journal, "m8").await?;
     let decision = admission(&Idle, &journal, 1, 1, 0, &assigned_wait(9, 1))
         .await
         .map_err(|err| err.to_string())?;
-    assert_eq!(decision, Admit::Hold);
+    assert_eq!(decision, Admit::Start { stop: true });
+    let rows = journal.rows().await.map_err(|err| err.to_string())?;
+    assert_eq!(rows.len(), 1);
+    assert!(rows[0].cleanup_proven);
+    assert!(rows[0].docker_id.is_none());
     absent(&scratch.file())
 }
 
@@ -133,6 +153,13 @@ async fn partial_uncertain_row_still_blocks_its_mint() -> Result<(), String> {
         .await
         .map_err(|err| err.to_string())?;
     assert_eq!(decision, Admit::Hold);
+    let rows = journal.rows().await.map_err(|err| err.to_string())?;
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].id, id);
+    assert!(!rows[0].cleanup_proven);
+    assert_eq!(rows[0].dind_id.as_deref(), Some(hex(1).as_str()));
+    assert!(rows[0].docker_id.is_none());
+    assert!(rows[0].worker_volume.is_none());
     absent(&scratch.file())
 }
 
@@ -143,11 +170,27 @@ fn hex(n: u64) -> String {
 #[tokio::test]
 async fn full_slot_acks_started_progress() -> Result<(), String> {
     let (scratch, journal) = open("progress-full").await?;
-    uncertain_without_ids(&journal, "m8").await?;
+    let id = journal
+        .begin("launch", "m8")
+        .await
+        .map_err(|err| err.to_string())?;
+    journal
+        .bind_worker(id, None, Some(&hex(1)))
+        .await
+        .map_err(|err| err.to_string())?;
+    journal
+        .finish(id, Outcome::Uncertain)
+        .await
+        .map_err(|err| err.to_string())?;
     let decision = admission(&Idle, &journal, 1, 1, 0, &started_progress(11, 5))
         .await
         .map_err(|err| err.to_string())?;
     assert_eq!(decision, Admit::Ack { stop: false });
+    let rows = journal.rows().await.map_err(|err| err.to_string())?;
+    assert_eq!(rows.len(), 1);
+    assert!(!rows[0].cleanup_proven);
+    assert_eq!(rows[0].dind_id.as_deref(), Some(hex(1).as_str()));
+    assert!(rows[0].worker_volume.is_none());
     absent(&scratch.file())
 }
 
