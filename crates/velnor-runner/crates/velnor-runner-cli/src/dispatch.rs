@@ -40,6 +40,10 @@ fn dispatch(cli: &Cli) -> ExitCode {
             scale_set,
             platform,
             max_jobs,
+            runner_cpu_millicores,
+            runner_memory_bytes,
+            dind_cpu_millicores,
+            dind_memory_bytes,
             docker_context,
             endpoint,
         } => connect(&ConnectRequest {
@@ -48,6 +52,10 @@ fn dispatch(cli: &Cli) -> ExitCode {
             scale_set,
             platform,
             max_jobs: *max_jobs,
+            runner_cpu_millicores: *runner_cpu_millicores,
+            runner_memory_bytes: *runner_memory_bytes,
+            dind_cpu_millicores: *dind_cpu_millicores,
+            dind_memory_bytes: *dind_memory_bytes,
             docker_context: docker_context.as_deref(),
             endpoint: endpoint.as_deref(),
         }),
@@ -128,6 +136,10 @@ struct ConnectRequest<'a> {
     scale_set: &'a str,
     platform: &'a str,
     max_jobs: Option<u32>,
+    runner_cpu_millicores: u64,
+    runner_memory_bytes: u64,
+    dind_cpu_millicores: u64,
+    dind_memory_bytes: u64,
     docker_context: Option<&'a str>,
     endpoint: Option<&'a str>,
 }
@@ -180,6 +192,10 @@ fn connect_with<R: Read>(
         request.scale_set,
         request.platform,
         request.max_jobs.unwrap_or(1),
+        request.runner_cpu_millicores,
+        request.runner_memory_bytes,
+        request.dind_cpu_millicores,
+        request.dind_memory_bytes,
         request.docker_context,
         request.endpoint,
     );
@@ -220,13 +236,17 @@ fn sample_config(
     scale_set: &str,
     platform: &str,
     max_jobs: u32,
+    runner_cpu_millicores: u64,
+    runner_memory_bytes: u64,
+    dind_cpu_millicores: u64,
+    dind_memory_bytes: u64,
     docker_context: Option<&str>,
     endpoint: Option<&str>,
 ) -> String {
     let context = docker_context.unwrap_or("orbstack");
     let socket = endpoint.unwrap_or("unix:///var/run/docker.sock");
     format!(
-        "schema = 1\n[github]\nrepository = \"{repo}\"\nscale_set_name = \"{scale_set}\"\ncredential_ref = \"keychain:com.tailrocks.velnor.host/local\"\n[host]\nmax_jobs = {max_jobs}\n[docker]\ncontext = \"{context}\"\nplatform = \"{platform}\"\nendpoint = \"{socket}\"\n"
+        "schema = 1\n[github]\nrepository = \"{repo}\"\nscale_set_name = \"{scale_set}\"\ncredential_ref = \"keychain:com.tailrocks.velnor.host/local\"\n[host]\nmax_jobs = {max_jobs}\n[host.resources]\nrunner_cpu_millicores = {runner_cpu_millicores}\nrunner_memory_bytes = {runner_memory_bytes}\ndind_cpu_millicores = {dind_cpu_millicores}\ndind_memory_bytes = {dind_memory_bytes}\n[docker]\ncontext = \"{context}\"\nplatform = \"{platform}\"\nendpoint = \"{socket}\"\n"
     )
 }
 

@@ -7,7 +7,9 @@ use crate::docker_spec::{Mount, runner_plan};
 use crate::error::HostError;
 use crate::journal::LaunchIdentity;
 
-use super::{BindMount, CreateProjection, DIND_ENTRYPOINT, DIND_IMAGE, runner_create};
+use super::{
+    BindMount, CreateProjection, DIND_ENTRYPOINT, DIND_IMAGE, ResourceBudget, runner_create,
+};
 
 /// Private `DinD` create. Privilege is not a flag on the runner plan.
 ///
@@ -16,7 +18,24 @@ use super::{BindMount, CreateProjection, DIND_ENTRYPOINT, DIND_IMAGE, runner_cre
 /// # Errors
 ///
 /// Returns [`HostError::ForbiddenMount`] when the identity has an invalid volume.
-pub(crate) fn dind_create(identity: &LaunchIdentity) -> Result<CreateProjection, HostError> {
+pub(crate) fn dind_create(
+    identity: &LaunchIdentity,
+    budget: ResourceBudget,
+) -> Result<CreateProjection, HostError> {
+    dind_projection(identity, Some(budget))
+}
+
+pub(crate) fn dind_expectation(
+    identity: &LaunchIdentity,
+    budget: Option<ResourceBudget>,
+) -> Result<CreateProjection, HostError> {
+    dind_projection(identity, budget)
+}
+
+fn dind_projection(
+    identity: &LaunchIdentity,
+    budget: Option<ResourceBudget>,
+) -> Result<CreateProjection, HostError> {
     let runner = runner_plan(identity.private_volume())?;
     let mut mounts = runner.mounts;
     mounts.push(Mount {
@@ -41,6 +60,7 @@ pub(crate) fn dind_create(identity: &LaunchIdentity) -> Result<CreateProjection,
         privileged: true,
         open_stdin: false,
         network_mode: None,
+        resource_budget: budget,
     })
 }
 
@@ -53,9 +73,26 @@ pub(crate) fn dind_create(identity: &LaunchIdentity) -> Result<CreateProjection,
 pub(crate) fn runner_create_for_identity(
     identity: &LaunchIdentity,
     archive_cache_path: Option<&Path>,
+    budget: ResourceBudget,
+) -> Result<CreateProjection, HostError> {
+    runner_projection(identity, archive_cache_path, Some(budget))
+}
+
+pub(crate) fn runner_expectation_for_identity(
+    identity: &LaunchIdentity,
+    archive_cache_path: Option<&Path>,
+    budget: Option<ResourceBudget>,
+) -> Result<CreateProjection, HostError> {
+    runner_projection(identity, archive_cache_path, budget)
+}
+
+fn runner_projection(
+    identity: &LaunchIdentity,
+    archive_cache_path: Option<&Path>,
+    budget: Option<ResourceBudget>,
 ) -> Result<CreateProjection, HostError> {
     let plan = runner_plan(identity.private_volume())?;
-    let mut spec = runner_create(&plan)?;
+    let mut spec = runner_create(&plan, budget)?;
     spec.name = Some(container_name(identity, "runner"));
     spec.labels = container_labels(identity, "runner");
     if let Some(path) = archive_cache_path {

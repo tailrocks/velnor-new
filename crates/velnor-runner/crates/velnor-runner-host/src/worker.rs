@@ -22,13 +22,20 @@ use crate::error::HostError;
 
 mod prepared;
 mod projection;
+mod resource_budget;
 mod resources;
 pub(crate) use prepared::{PreparedDind, prepare_dind_until, start_runner_until};
-pub(super) use projection::{container_labels, container_name, runner_create_for_identity};
+pub(super) use projection::{
+    container_labels, container_name, dind_expectation, runner_create_for_identity,
+    runner_expectation_for_identity,
+};
 pub(super) use projection::{dind_create, identity_labels_match, launch_identity_labels_match};
+#[cfg(test)]
+pub(crate) use resource_budget::test_resource_budget;
+pub(crate) use resource_budget::{ResourceBudget, ResourceBudgetConfig, bounded_host_limits};
 pub(super) use resources::{
-    confirmed_not_found, create_owned_volumes, list_launch, probe_dind, remove_owned_volumes,
-    verify_container, verify_engine,
+    confirmed_not_found, create_owned_volumes, list_launch, probe_dind, remove_owned_volume,
+    verify_container, verify_engine, verify_owned_volume,
 };
 
 #[cfg(test)]
@@ -73,6 +80,8 @@ pub(crate) struct CreateProjection {
     pub open_stdin: bool,
     /// `container:<id>` joins that container's network namespace. Runner only.
     pub network_mode: Option<String>,
+    /// Required resource budget for the runner and its private DinD.
+    pub resource_budget: Option<ResourceBudget>,
 }
 
 /// One controller-owned host bind in a runner create projection.
@@ -112,7 +121,10 @@ pub(crate) struct BollardCreate {
 ///
 /// Returns [`HostError::PrivilegedRunner`] or [`HostError::ForbiddenMount`]
 /// from [`audit_plan`], including JIT in env, cmd, or labels.
-pub(crate) fn runner_create(plan: &ContainerPlan) -> Result<CreateProjection, HostError> {
+pub(crate) fn runner_create(
+    plan: &ContainerPlan,
+    budget: Option<ResourceBudget>,
+) -> Result<CreateProjection, HostError> {
     audit_plan(plan)?;
     if plan.cmd.iter().any(|item| cmd_names_jit(item)) {
         return Err(HostError::ForbiddenMount);
@@ -132,6 +144,7 @@ pub(crate) fn runner_create(plan: &ContainerPlan) -> Result<CreateProjection, Ho
         privileged: false,
         open_stdin: true,
         network_mode: None,
+        resource_budget: budget,
     })
 }
 
@@ -203,8 +216,17 @@ fn none_if_empty(items: &[String]) -> Option<Vec<String>> {
 fn host_config(spec: &CreateProjection) -> Result<HostConfig, HostError> {
     let mut mounts = docker_mounts(&spec.mounts)?.unwrap_or_default();
     mounts.extend(bind_mounts(spec)?);
+    let budget = spec.resource_budget.ok_or(HostError::Config)?;
+    let limits = if spec.privileged {
+        budget.dind()
+    } else {
+        budget.runner()
+    };
     Ok(HostConfig {
         cgroupns_mode: Some(HostConfigCgroupnsModeEnum::PRIVATE),
+        memory: Some(limits.memory_bytes),
+        memory_swap: Some(limits.memory_bytes),
+        nano_cpus: Some(limits.nano_cpus),
         privileged: Some(spec.privileged),
         mounts: Some(mounts),
         network_mode: spec.network_mode.clone(),

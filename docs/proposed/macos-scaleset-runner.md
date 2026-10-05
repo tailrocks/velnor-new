@@ -129,6 +129,23 @@ worker's private DinD engine. The runner container is not privileged. The job
 does not receive the outer Docker socket, host home, Keychain, SSH agent,
 controller config, or management tokens.
 
+Every host configuration must set four per-job budgets under
+`[host.resources]`: `runner_cpu_millicores`, `runner_memory_bytes`,
+`dind_cpu_millicores`, and `dind_memory_bytes`. CPU is millicores; memory is
+bytes. There are no resource defaults. The controller validates each Docker
+limit, checked pair totals, and the selected daemon's CPU count before it opens
+a job session. It applies the runner limits to the unprivileged runner
+container and the DinD limits to the private privileged DinD container. Swap is
+limited to each container's memory limit.
+
+The configured pair CPU and memory totals are the per-job admission costs.
+Admission must also account for already occupied jobs and measured guest CPU,
+available memory, and Docker-root free space. Those measurements describe
+current headroom; they are not durable quotas. In particular, Docker named
+volumes have no per-job storage-size limit here. Free-space checks cannot stop
+a job from consuming the remaining Docker-root storage, so enforced storage
+isolation remains unproven.
+
 `/var/run/docker.sock` inside the runner and inside the private daemon resolves
 to that worker's socket, never the outer engine socket. Named volumes back
 work, temp, actions, tools, and the socket. JIT is delivered on a short-lived

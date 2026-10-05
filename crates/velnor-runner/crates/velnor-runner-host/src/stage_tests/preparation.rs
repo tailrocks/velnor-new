@@ -2,6 +2,7 @@
 
 use super::fake::Fake;
 use super::identity;
+use super::resource_budget;
 use crate::error::{HostError, PreparationCause};
 use crate::stage::{DindProbe, prepare_dind};
 
@@ -14,7 +15,7 @@ async fn prepare_waits_for_inner_api_before_returning() -> Result<(), HostError>
         .lock()
         .map_err(|_| HostError::Docker)?
         .extend([Ok(DindProbe::Starting), Ok(DindProbe::Ready)]);
-    let prepared = prepare_dind(&engine, &identity).await?;
+    let prepared = prepare_dind(&engine, &identity, resource_budget()?).await?;
     assert_eq!(prepared.dind_id().len(), 64);
     assert_eq!(engine.containers()?, 1);
     let events = engine.events()?;
@@ -34,7 +35,7 @@ async fn readiness_failure_returns_typed_error_after_confirmed_cleanup() -> Resu
         .map_err(|_| HostError::Docker)?
         .push_back(Err(HostError::DindStorage));
     assert_eq!(
-        prepare_dind(&engine, &identity).await,
+        prepare_dind(&engine, &identity, resource_budget()?).await,
         Err(HostError::PreparationFailedClean(
             PreparationCause::DindStorage
         ))
@@ -43,7 +44,17 @@ async fn readiness_failure_returns_typed_error_after_confirmed_cleanup() -> Resu
     assert!(
         engine
             .events()?
-            .ends_with(&["remove", "engine", "list-launch", "remove-volumes"])
+            .ends_with(&[
+                "remove",
+                "engine",
+                "list-launch",
+                "verify-docker-volume",
+                "remove-docker-volume",
+                "verify-workspace-volume",
+                "remove-workspace-volume",
+                "verify-socket-volume",
+                "remove-socket-volume",
+            ])
     );
     Ok(())
 }
@@ -64,7 +75,7 @@ async fn confirmed_cleanup_preserves_each_readiness_cause() -> Result<(), HostEr
             .map_err(|_| HostError::Docker)?
             .push_back(Err(error));
         assert_eq!(
-            prepare_dind(&engine, &identity).await,
+            prepare_dind(&engine, &identity, resource_budget()?).await,
             Err(HostError::PreparationFailedClean(cause))
         );
         assert_eq!(engine.containers()?, 0);
@@ -83,11 +94,14 @@ async fn readiness_failure_with_container_cleanup_error_stays_uncertain() -> Res
         .push_back(Err(HostError::DindReadiness));
     *engine.fail_remove.lock().map_err(|_| HostError::Docker)? = true;
     assert_eq!(
-        prepare_dind(&engine, &identity).await,
+        prepare_dind(&engine, &identity, resource_budget()?).await,
         Err(HostError::Cleanup)
     );
     assert_eq!(engine.containers()?, 1);
-    assert!(!engine.events()?.contains(&"remove-volumes"));
+    assert!(!engine
+        .events()?
+        .iter()
+        .any(|event| event.starts_with("remove-") && event.ends_with("-volume")));
     Ok(())
 }
 
@@ -102,14 +116,20 @@ async fn readiness_failure_with_volume_cleanup_error_stays_uncertain() -> Result
         .push_back(Err(HostError::DockerTimeout));
     *engine.fail_volumes.lock().map_err(|_| HostError::Docker)? = true;
     assert_eq!(
-        prepare_dind(&engine, &identity).await,
+        prepare_dind(&engine, &identity, resource_budget()?).await,
         Err(HostError::Cleanup)
     );
     assert_eq!(engine.containers()?, 0);
     assert!(
         engine
             .events()?
-            .ends_with(&["remove", "engine", "list-launch", "remove-volumes"])
+            .ends_with(&[
+                "remove",
+                "engine",
+                "list-launch",
+                "verify-docker-volume",
+                "remove-docker-volume",
+            ])
     );
     Ok(())
 }

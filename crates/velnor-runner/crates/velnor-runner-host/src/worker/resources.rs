@@ -13,7 +13,8 @@ use tokio::time::{Instant, sleep, timeout};
 use crate::action_archive_seed::ActionArchiveLease;
 use crate::error::HostError;
 use crate::journal::LaunchIdentity;
-use crate::stage::{ContainerRecord, DindProbe};
+use crate::stage::{ContainerRecord, DindProbe, WorkerVolume};
+use crate::worker::ResourceBudget;
 
 mod containers;
 pub(super) use containers::refuse_existing;
@@ -56,15 +57,26 @@ pub(crate) async fn create_owned_volumes(
     Ok(())
 }
 
-pub(crate) async fn remove_owned_volumes(
+pub(crate) async fn remove_owned_volume(
     docker: &Docker,
     identity: &LaunchIdentity,
+    volume: WorkerVolume,
+) -> Result<(), HostError> {
+    remove_one_volume(docker, identity, private_volume(volume)).await
+}
+
+pub(crate) async fn verify_owned_volume(
+    docker: &Docker,
+    identity: &LaunchIdentity,
+    volume: WorkerVolume,
 ) -> Result<(), HostError> {
     verify_engine(docker, identity).await?;
-    for volume in PRIVATE_VOLUMES.into_iter().rev() {
-        remove_owned_volume(docker, identity, volume).await?;
+    let volume = private_volume(volume);
+    match inspect_volume(docker, identity, volume).await? {
+        None => Ok(()),
+        Some(labels) if labels == volume_labels(identity, volume) => Ok(()),
+        Some(_) => Err(HostError::Ownership),
     }
-    Ok(())
 }
 
 async fn create_owned_volume(
@@ -85,16 +97,11 @@ async fn create_owned_volume(
     verify_volume(docker, identity, volume).await
 }
 
-async fn remove_owned_volume(
+async fn remove_one_volume(
     docker: &Docker,
     identity: &LaunchIdentity,
     volume: PrivateVolume,
 ) -> Result<(), HostError> {
-    match inspect_volume(docker, identity, volume).await? {
-        None => return Ok(()),
-        Some(labels) if labels == volume_labels(identity, volume) => {}
-        Some(_) => return Err(HostError::Ownership),
-    }
     let name = volume_name(identity, volume);
     let options = RemoveVolumeOptionsBuilder::new().force(false).build();
     match timeout(
@@ -116,6 +123,14 @@ async fn remove_owned_volume(
         return Err(HostError::Cleanup);
     }
     Ok(())
+}
+
+fn private_volume(volume: WorkerVolume) -> PrivateVolume {
+    match volume {
+        WorkerVolume::Socket => PRIVATE_VOLUMES[0],
+        WorkerVolume::Workspace => PRIVATE_VOLUMES[1],
+        WorkerVolume::DockerData => PRIVATE_VOLUMES[2],
+    }
 }
 
 async fn verify_volume(
@@ -185,6 +200,7 @@ pub(crate) async fn verify_container(
     id: &str,
     dind_id: Option<&str>,
     archive_lease: Option<&ActionArchiveLease>,
+    resource_budget: Option<ResourceBudget>,
     require_running: bool,
 ) -> Result<ContainerRecord, HostError> {
     verify_engine(docker, identity).await?;
@@ -196,6 +212,7 @@ pub(crate) async fn verify_container(
         id,
         dind_id,
         archive_lease,
+        resource_budget,
         require_running,
     )
     .await

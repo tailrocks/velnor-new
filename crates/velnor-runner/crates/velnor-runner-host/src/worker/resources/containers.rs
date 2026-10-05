@@ -9,18 +9,24 @@ use bollard::query_parameters::ListContainersOptionsBuilder;
 use tokio::time::timeout;
 
 use super::super::{
-    CreateProjection, DIND_ENTRYPOINT, DIND_IMAGE, dind_create, identity_labels_match,
-    join_dind_net, label_map, launch_identity_labels_match, mount_source,
-    runner_create_for_identity,
+    CreateProjection, DIND_ENTRYPOINT, DIND_IMAGE, dind_expectation, identity_labels_match,
+    join_dind_net, label_map, mount_source, runner_expectation_for_identity,
 };
 use super::confirmed_not_found;
 use crate::action_archive_seed::ActionArchiveLease;
 use crate::error::HostError;
 use crate::journal::LaunchIdentity;
 use crate::stage::ContainerRecord;
+use crate::worker::ResourceBudget;
 
 mod environment;
 use environment::environment_matches;
+#[path = "containers_identity.rs"]
+mod identity_matching;
+use identity_matching::validate_existing_row;
+#[path = "containers_limits.rs"]
+mod limits;
+use limits::resource_limits_match;
 
 const DOCKER_CALL_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -148,20 +154,24 @@ pub(super) async fn verify_container(
     id: &str,
     dind_id: Option<&str>,
     archive_lease: Option<&ActionArchiveLease>,
+    resource_budget: Option<ResourceBudget>,
     require_running: bool,
 ) -> Result<ContainerRecord, HostError> {
     if !container_id(id) {
         return Err(HostError::Ownership);
     }
     let expected = match role {
-        "dind" if dind_id.is_none() && archive_lease.is_none() => dind_create(identity)?,
+        "dind" if dind_id.is_none() && archive_lease.is_none() => {
+            dind_expectation(identity, resource_budget)?
+        }
         "runner" => {
             if archive_lease.is_some_and(|lease| lease.launch_id() != identity.launch_id()) {
                 return Err(HostError::Ownership);
             }
-            let runner = runner_create_for_identity(
+            let runner = runner_expectation_for_identity(
                 identity,
                 archive_lease.map(|lease| lease.cache_path()),
+                resource_budget,
             )?;
             join_dind_net(runner, dind_id.ok_or(HostError::Ownership)?)?
         }
@@ -210,24 +220,6 @@ async fn verify_existing(
     Err(HostError::Ownership)
 }
 
-fn same_launch(expected: &HashMap<String, String>, actual: &HashMap<String, String>) -> bool {
-    launch_identity_labels_match(expected, actual)
-}
-
-fn validate_existing_row(
-    expected: &HashMap<String, String>,
-    actual: &HashMap<String, String>,
-) -> Result<&'static str, HostError> {
-    if !same_launch(expected, actual) {
-        return Err(HostError::Ownership);
-    }
-    match actual.get("velnor.role").map(String::as_str) {
-        Some("dind") => Ok("dind"),
-        Some("runner") => Ok("runner"),
-        _ => Err(HostError::Ownership),
-    }
-}
-
 fn dind_projection(runner: &CreateProjection) -> Result<CreateProjection, HostError> {
     let mut labels = runner.labels.clone();
     let role = labels
@@ -269,6 +261,7 @@ fn dind_projection(runner: &CreateProjection) -> Result<CreateProjection, HostEr
         privileged: true,
         open_stdin: false,
         network_mode: None,
+        resource_budget: runner.resource_budget,
     })
 }
 
@@ -306,6 +299,7 @@ fn topology_matches(
         || !environment_matches(spec, config)?
         || host.privileged != Some(spec.privileged)
         || host.cgroupns_mode != Some(HostConfigCgroupnsModeEnum::PRIVATE)
+        || !resource_limits_match(spec, host)
         || !network_matches(spec.network_mode.as_deref(), host.network_mode.as_deref())
     {
         return Ok(false);

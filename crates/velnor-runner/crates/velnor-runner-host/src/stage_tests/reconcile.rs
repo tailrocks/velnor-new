@@ -2,6 +2,7 @@
 
 use super::fake::Fake;
 use super::identity;
+use super::resource_budget;
 use crate::error::HostError;
 use crate::stage::PairEngine;
 use crate::stage::{prepare_dind, reconcile_worker, start_runner};
@@ -16,14 +17,14 @@ async fn lost_dind_create_response_is_recovered_by_launch_identity() -> Result<(
         .lock()
         .map_err(|_| HostError::Docker)? = Some(1);
     assert_eq!(
-        prepare_dind(&engine, &identity).await,
+        prepare_dind(&engine, &identity, resource_budget()?).await,
         Err(HostError::ContainerCreateUncertain)
     );
 
     let observed = reconcile_worker(&engine, &identity, None, None, None).await?;
     let dind_id = observed.dind_id().ok_or(HostError::Ownership)?;
     assert!(observed.runner_id().is_none());
-    let prepared = prepare_dind(&engine, &identity).await?;
+    let prepared = prepare_dind(&engine, &identity, resource_budget()?).await?;
     assert_eq!(prepared.dind_id(), dind_id);
     assert_eq!(engine.containers()?, 1);
     start_runner(&engine, &prepared, b"jit", None).await?;
@@ -34,7 +35,7 @@ async fn lost_dind_create_response_is_recovered_by_launch_identity() -> Result<(
 async fn expected_dind_and_runner_pair_reconciles() -> Result<(), HostError> {
     let identity = identity()?;
     let engine = Fake::new();
-    let prepared = prepare_dind(&engine, &identity).await?;
+    let prepared = prepare_dind(&engine, &identity, resource_budget()?).await?;
     let started = start_runner(&engine, &prepared, b"jit", None).await?;
 
     let observed = reconcile_worker(
@@ -60,7 +61,9 @@ async fn unrelated_launch_with_the_same_role_is_ignored() -> Result<(), HostErro
         identity.engine_id(),
     )?;
     let engine = Fake::new();
-    engine.create(&dind_create(&unrelated)?).await?;
+    engine
+        .create(&dind_create(&unrelated, resource_budget()?)?)
+        .await?;
 
     let observed = reconcile_worker(&engine, &identity, None, None, None).await?;
     assert!(observed.dind_id().is_none());
@@ -87,8 +90,12 @@ async fn empty_rows_reconcile_as_absent_and_stale_recorded_id_is_checked() -> Re
 async fn duplicate_exact_role_rows_are_not_adopted() -> Result<(), HostError> {
     let identity = identity()?;
     let engine = Fake::new();
-    engine.create(&dind_create(&identity)?).await?;
-    engine.create(&dind_create(&identity)?).await?;
+    engine
+        .create(&dind_create(&identity, resource_budget()?)?)
+        .await?;
+    engine
+        .create(&dind_create(&identity, resource_budget()?)?)
+        .await?;
     assert_eq!(
         reconcile_worker(&engine, &identity, None, None, None).await,
         Err(HostError::Ownership)
@@ -100,7 +107,7 @@ async fn duplicate_exact_role_rows_are_not_adopted() -> Result<(), HostError> {
 async fn recorded_id_conflict_is_not_adopted() -> Result<(), HostError> {
     let identity = identity()?;
     let engine = Fake::new();
-    let prepared = prepare_dind(&engine, &identity).await?;
+    let prepared = prepare_dind(&engine, &identity, resource_budget()?).await?;
     let other_id = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
     assert_eq!(
         reconcile_worker(&engine, &identity, None, Some(other_id), None).await,
@@ -125,7 +132,9 @@ async fn lost_response_does_not_adopt_a_foreign_launch_id() -> Result<(), HostEr
         identity.engine_id(),
     )?;
     let engine = Fake::new();
-    let foreign_id = engine.create(&dind_create(&foreign)?).await?;
+    let foreign_id = engine
+        .create(&dind_create(&foreign, resource_budget()?)?)
+        .await?;
 
     assert_eq!(
         reconcile_worker(&engine, &identity, None, Some(&foreign_id), None).await,
@@ -151,7 +160,7 @@ async fn docker_inspect_failure_is_not_absence() -> Result<(), HostError> {
 async fn runner_without_its_exact_dind_is_uncertain() -> Result<(), HostError> {
     let identity = identity()?;
     let engine = Fake::new();
-    let prepared = prepare_dind(&engine, &identity).await?;
+    let prepared = prepare_dind(&engine, &identity, resource_budget()?).await?;
     let started = start_runner(&engine, &prepared, b"jit", None).await?;
     engine.remove(&started.dind_id).await?;
     assert_eq!(

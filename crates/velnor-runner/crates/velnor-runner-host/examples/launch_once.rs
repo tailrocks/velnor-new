@@ -4,7 +4,7 @@
 use std::path::PathBuf;
 use std::process::{Command, ExitCode};
 
-use velnor_runner_host::{Journal, Started, connect_unix, launch_once};
+use velnor_runner_host::{HostConfig, Journal, Started, connect_unix, launch_once};
 use zeroize::Zeroize;
 
 #[tokio::main]
@@ -19,11 +19,11 @@ async fn main() -> ExitCode {
 }
 
 async fn run(pat: &str) -> ExitCode {
-    let socket = match docker_socket() {
-        Ok(socket) => socket,
+    let config = match host_config() {
+        Ok(config) => config,
         Err(code) => return code,
     };
-    let docker = match connect_unix(&socket) {
+    let docker = match connect_unix(&config.docker.endpoint) {
         Ok(docker) => docker,
         Err(err) => {
             eprintln!("launch_once: {err}");
@@ -41,7 +41,11 @@ async fn run(pat: &str) -> ExitCode {
             return ExitCode::from(1);
         }
     };
-    match launch_once(pat, "tailrocks", "velnor-new", &docker, &journal).await {
+    let Some((owner, repo)) = config.github.repository.split_once('/') else {
+        eprintln!("launch_once: invalid repository binding");
+        return ExitCode::from(1);
+    };
+    match launch_once(pat, owner, repo, &docker, &journal, &config).await {
         Ok(report) => {
             print_workers(report.set_id, &report.workers);
             ExitCode::SUCCESS
@@ -73,31 +77,14 @@ fn journal_path() -> Result<PathBuf, ExitCode> {
     Ok(dir.join("launch.db"))
 }
 
-fn docker_socket() -> Result<String, ExitCode> {
-    if let Ok(host) = std::env::var("DOCKER_HOST")
-        && host.starts_with("unix://")
-    {
-        return Ok(host);
-    }
-    let output = Command::new("docker")
-        .args([
-            "context",
-            "inspect",
-            "--format",
-            "{{.Endpoints.docker.Host}}",
-        ])
-        .output()
-        .map_err(|_| ExitCode::from(1))?;
-    if !output.status.success() {
-        return Err(ExitCode::from(1));
-    }
-    let text = String::from_utf8(output.stdout).map_err(|_| ExitCode::from(1))?;
-    let host = text.trim();
-    if host.starts_with("unix://") {
-        Ok(host.to_owned())
-    } else {
-        Err(ExitCode::from(1))
-    }
+fn host_config() -> Result<HostConfig, ExitCode> {
+    let home = std::env::var("HOME").map_err(|_| ExitCode::from(1))?;
+    let path = PathBuf::from(home).join("Library/Application Support/Velnor/host.toml");
+    let text = std::fs::read_to_string(path).map_err(|_| ExitCode::from(1))?;
+    HostConfig::parse(&text).map_err(|error| {
+        eprintln!("launch_once: {error}");
+        ExitCode::from(1)
+    })
 }
 
 fn read_pat() -> Result<String, ExitCode> {

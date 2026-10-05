@@ -2,13 +2,14 @@
 
 use super::fake::Fake;
 use super::identity;
+use super::resource_budget;
 use crate::error::HostError;
 use crate::stage::{prepare_dind, start_runner};
 use crate::worker::{PreparedDind, Started};
 
 async fn ready_pair(engine: &Fake) -> Result<(PreparedDind, Started), HostError> {
     let identity = identity()?;
-    let prepared = prepare_dind(engine, &identity).await?;
+    let prepared = prepare_dind(engine, &identity, resource_budget()?).await?;
     let started = start_runner(engine, &prepared, b"jit", None).await?;
     Ok((prepared, started))
 }
@@ -34,8 +35,8 @@ async fn runner_start_uses_only_a_verified_prepared_dind() -> Result<(), HostErr
 async fn journal_recovery_rechecks_the_full_dind_identity() -> Result<(), HostError> {
     let identity = identity()?;
     let engine = Fake::new();
-    let prepared = prepare_dind(&engine, &identity).await?;
-    let recovered = PreparedDind::from_journal(&identity, prepared.dind_id())?;
+    let prepared = prepare_dind(&engine, &identity, resource_budget()?).await?;
+    let recovered = PreparedDind::from_journal(&identity, prepared.dind_id(), resource_budget()?)?;
     start_runner(&engine, &recovered, b"jit", None).await?;
     assert!(engine.events()?.contains(&"verify-dind"));
     Ok(())
@@ -51,8 +52,8 @@ async fn recovered_handle_cannot_relabel_a_foreign_dind() -> Result<(), HostErro
         "engine-test",
     )?;
     let engine = Fake::new();
-    let prepared = prepare_dind(&engine, &identity).await?;
-    let forged = PreparedDind::from_journal(&foreign, prepared.dind_id())?;
+    let prepared = prepare_dind(&engine, &identity, resource_budget()?).await?;
+    let forged = PreparedDind::from_journal(&foreign, prepared.dind_id(), resource_budget()?)?;
     assert_eq!(
         start_runner(&engine, &forged, b"jit", None).await,
         Err(HostError::Ownership)
@@ -66,7 +67,7 @@ async fn recovered_handle_cannot_relabel_a_foreign_dind() -> Result<(), HostErro
 async fn runner_start_failure_keeps_pair_for_reconciliation() -> Result<(), HostError> {
     let identity = identity()?;
     let engine = Fake::new();
-    let prepared = prepare_dind(&engine, &identity).await?;
+    let prepared = prepare_dind(&engine, &identity, resource_budget()?).await?;
     *engine.fail_start_at.lock().map_err(|_| HostError::Docker)? = Some(2);
     assert_eq!(
         start_runner(&engine, &prepared, b"jit", None).await,
@@ -81,7 +82,7 @@ async fn runner_start_failure_keeps_pair_for_reconciliation() -> Result<(), Host
 async fn jit_delivery_failure_keeps_pair_for_reconciliation() -> Result<(), HostError> {
     let identity = identity()?;
     let engine = Fake::new();
-    let prepared = prepare_dind(&engine, &identity).await?;
+    let prepared = prepare_dind(&engine, &identity, resource_budget()?).await?;
     *engine.fail_jit.lock().map_err(|_| HostError::Docker)? = true;
     assert_eq!(
         start_runner(&engine, &prepared, b"jit", None).await,
@@ -96,7 +97,7 @@ async fn jit_delivery_failure_keeps_pair_for_reconciliation() -> Result<(), Host
 async fn lost_runner_create_response_keeps_pair_for_reconciliation() -> Result<(), HostError> {
     let identity = identity()?;
     let engine = Fake::new();
-    let prepared = prepare_dind(&engine, &identity).await?;
+    let prepared = prepare_dind(&engine, &identity, resource_budget()?).await?;
     *engine
         .lose_create_response_at
         .lock()

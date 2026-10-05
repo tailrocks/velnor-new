@@ -146,7 +146,13 @@ pub(crate) fn ctx() -> Drive {
 pub(crate) fn prepare(
     identity: LaunchIdentity,
 ) -> impl Future<Output = Result<PreparedDind, HostError>> {
-    async move { PreparedDind::from_journal(&identity, TEST_DIND_ID) }
+    async move {
+        PreparedDind::from_journal(
+            &identity,
+            TEST_DIND_ID,
+            crate::worker::test_resource_budget()?,
+        )
+    }
 }
 
 pub(crate) fn assigned_wait(message_id: i64, assigned: i64) -> Poll {

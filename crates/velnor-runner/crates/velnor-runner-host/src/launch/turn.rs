@@ -7,7 +7,7 @@ use velnor_runner_github::{Poll, QueueSession};
 use crate::journal::{Journal, LaunchReservation};
 use crate::listen::{Link, point_at_queue, poll_path, restore_base};
 use crate::scale_set::EnsureError;
-use crate::worker::Started;
+use crate::worker::{ResourceBudget, Started};
 
 use super::capacity::{self, Admit};
 use super::capacity::{CapacityHysteresis, GuestResourceLimits};
@@ -19,6 +19,11 @@ use super::{Ready, ack_ready, drive_ready, scale_session};
 
 #[cfg(test)]
 mod admission_tests;
+#[cfg(test)]
+mod budget_tests;
+mod policy;
+
+use policy::TurnPolicy;
 
 /// Poll until admission stops and no owned launch container is running.
 ///
@@ -37,14 +42,16 @@ pub(super) async fn poll_and_drive(
     admin_token: &str,
     journal: &Journal,
     docker: &bollard::Docker,
+    resource_budget: ResourceBudget,
+    configured_max_jobs: u32,
 ) -> Result<Vec<Started>, EnsureError> {
     trace::session(session);
     let mut workers = Vec::new();
-    let configured_capacity = capacity::job_capacity();
+    let turn_policy = TurnPolicy::new(resource_budget, configured_max_jobs);
     let initial_occupied = slot::occupied_count(journal).await?;
     let mut capacity_policy = CapacityHysteresis::new();
-    let initial_capacity = capacity_policy.update(
-        configured_capacity,
+    let initial_capacity = turn_policy.capacity(
+        &mut capacity_policy,
         GuestResourceLimits::default(),
         initial_occupied,
     );
@@ -58,7 +65,11 @@ pub(super) async fn poll_and_drive(
         capacity,
         population,
         initial_capacity.occupied,
-        || scale_session(link, set_id, session, admin_token, journal, docker),
+        || {
+            turn_policy.scale_session(|budget| {
+                scale_session(link, set_id, session, admin_token, journal, docker, budget)
+            })
+        },
     )
     .await?
     {
@@ -72,7 +83,7 @@ pub(super) async fn poll_and_drive(
         admin_token,
         journal,
         docker,
-        configured_capacity,
+        turn_policy,
         capacity_policy,
         capacity,
         target,
@@ -251,7 +262,7 @@ struct Turn<'a> {
     admin_token: &'a str,
     journal: &'a Journal,
     docker: &'a bollard::Docker,
-    configured_capacity: u32,
+    turn_policy: TurnPolicy,
     capacity_policy: CapacityHysteresis,
     capacity: u32,
     target: u32,
@@ -260,8 +271,8 @@ struct Turn<'a> {
 impl Turn<'_> {
     async fn drive_poll(&mut self, workers: &mut Vec<Started>) -> Result<bool, EnsureError> {
         let occupied = slot::occupied_count(self.journal).await?;
-        let capacity = self.capacity_policy.update(
-            self.configured_capacity,
+        let capacity = self.turn_policy.capacity(
+            &mut self.capacity_policy,
             GuestResourceLimits::default(),
             occupied,
         );
@@ -330,21 +341,26 @@ impl Turn<'_> {
                 Ok(stop)
             }
             Admit::Start { stop } => {
-                let launched = drive_ready(
-                    self.link,
-                    Ready {
-                        set_id: self.set_id,
-                        session: self.session,
-                        admin_token: self.admin_token,
-                        path,
-                        queue,
-                        polled,
-                    },
-                    self.journal,
-                    self.docker,
-                    admission.reservation,
-                )
-                .await?;
+                let launched = self
+                    .turn_policy
+                    .drive_ready(|budget| {
+                        drive_ready(
+                            self.link,
+                            Ready {
+                                set_id: self.set_id,
+                                session: self.session,
+                                admin_token: self.admin_token,
+                                path,
+                                queue,
+                                polled,
+                            },
+                            self.journal,
+                            self.docker,
+                            admission.reservation,
+                            budget,
+                        )
+                    })
+                    .await?;
                 let Some(worker) = launched else {
                     return Ok(false);
                 };

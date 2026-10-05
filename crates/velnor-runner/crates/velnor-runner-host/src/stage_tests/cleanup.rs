@@ -4,6 +4,7 @@ use bollard::errors::Error as DockerError;
 
 use super::fake::Fake;
 use super::identity;
+use super::resource_budget;
 use crate::error::HostError;
 use crate::stage::{cleanup_prepared_dind, cleanup_worker, prepare_dind, start_runner};
 
@@ -11,14 +12,20 @@ use crate::stage::{cleanup_prepared_dind, cleanup_worker, prepare_dind, start_ru
 async fn prepared_dind_cleanup_removes_only_its_private_resources() -> Result<(), HostError> {
     let identity = identity()?;
     let engine = Fake::new();
-    let prepared = prepare_dind(&engine, &identity).await?;
+    let prepared = prepare_dind(&engine, &identity, resource_budget()?).await?;
     cleanup_prepared_dind(&engine, &prepared).await?;
     assert_eq!(engine.containers()?, 0);
-    assert!(
-        engine
-            .events()?
-            .ends_with(&["remove", "engine", "list-launch", "remove-volumes"])
-    );
+    assert!(engine.events()?.ends_with(&[
+        "remove",
+        "engine",
+        "list-launch",
+        "verify-docker-volume",
+        "remove-docker-volume",
+        "verify-workspace-volume",
+        "remove-workspace-volume",
+        "verify-socket-volume",
+        "remove-socket-volume",
+    ]));
     Ok(())
 }
 
@@ -26,14 +33,14 @@ async fn prepared_dind_cleanup_removes_only_its_private_resources() -> Result<()
 async fn prepared_cleanup_refuses_a_present_runner() -> Result<(), HostError> {
     let identity = identity()?;
     let engine = Fake::new();
-    let prepared = prepare_dind(&engine, &identity).await?;
+    let prepared = prepare_dind(&engine, &identity, resource_budget()?).await?;
     start_runner(&engine, &prepared, b"jit", None).await?;
     assert_eq!(
         cleanup_prepared_dind(&engine, &prepared).await,
         Err(HostError::Ownership)
     );
     assert_eq!(engine.containers()?, 2);
-    assert!(!engine.events()?.contains(&"remove-volumes"));
+    assert_eq!(engine.removed_volume_count()?, 0);
     Ok(())
 }
 
@@ -41,7 +48,7 @@ async fn prepared_cleanup_refuses_a_present_runner() -> Result<(), HostError> {
 async fn active_runner_cleanup_preserves_pair_and_volumes() -> Result<(), HostError> {
     let identity = identity()?;
     let engine = Fake::new();
-    let prepared = prepare_dind(&engine, &identity).await?;
+    let prepared = prepare_dind(&engine, &identity, resource_budget()?).await?;
     let started = start_runner(&engine, &prepared, b"jit", None).await?;
     assert_eq!(
         cleanup_worker(
@@ -55,7 +62,7 @@ async fn active_runner_cleanup_preserves_pair_and_volumes() -> Result<(), HostEr
         Err(HostError::RunnerActive)
     );
     assert_eq!(engine.containers()?, 2);
-    assert!(!engine.events()?.contains(&"remove-volumes"));
+    assert_eq!(engine.removed_volume_count()?, 0);
     Ok(())
 }
 
@@ -63,7 +70,7 @@ async fn active_runner_cleanup_preserves_pair_and_volumes() -> Result<(), HostEr
 async fn cleanup_error_keeps_remaining_pair_and_volumes() -> Result<(), HostError> {
     let identity = identity()?;
     let engine = Fake::new();
-    let prepared = prepare_dind(&engine, &identity).await?;
+    let prepared = prepare_dind(&engine, &identity, resource_budget()?).await?;
     let started = start_runner(&engine, &prepared, b"jit", None).await?;
     engine.stop(&started.runner_id)?;
     *engine.fail_remove.lock().map_err(|_| HostError::Docker)? = true;
@@ -84,10 +91,35 @@ async fn cleanup_error_keeps_remaining_pair_and_volumes() -> Result<(), HostErro
 }
 
 #[tokio::test]
+async fn volume_failure_stops_before_the_next_volume() -> Result<(), HostError> {
+    let identity = identity()?;
+    let engine = Fake::new();
+    let prepared = prepare_dind(&engine, &identity, resource_budget()?).await?;
+    let started = start_runner(&engine, &prepared, b"jit", None).await?;
+    engine.stop(&started.runner_id)?;
+    *engine.fail_volumes.lock().map_err(|_| HostError::Docker)? = true;
+    assert_eq!(
+        cleanup_worker(
+            &engine,
+            &identity,
+            Some(&started.runner_id),
+            Some(&started.dind_id),
+            None,
+        )
+        .await,
+        Err(HostError::DockerTimeout)
+    );
+    assert_eq!(engine.containers()?, 0);
+    assert_eq!(engine.removed_volume_count()?, 1);
+    assert_eq!(engine.events()?.last(), Some(&"remove-docker-volume"));
+    Ok(())
+}
+
+#[tokio::test]
 async fn successful_cleanup_removes_containers_before_volumes() -> Result<(), HostError> {
     let identity = identity()?;
     let engine = Fake::new();
-    let prepared = prepare_dind(&engine, &identity).await?;
+    let prepared = prepare_dind(&engine, &identity, resource_budget()?).await?;
     let started = start_runner(&engine, &prepared, b"jit", None).await?;
     engine.stop(&started.runner_id)?;
     cleanup_worker(
@@ -99,7 +131,8 @@ async fn successful_cleanup_removes_containers_before_volumes() -> Result<(), Ho
     )
     .await?;
     assert_eq!(engine.containers()?, 0);
-    assert_eq!(engine.events()?.last(), Some(&"remove-volumes"));
+    assert_eq!(engine.events()?.last(), Some(&"remove-socket-volume"));
+    assert_eq!(engine.removed_volume_count()?, 3);
     Ok(())
 }
 
@@ -107,12 +140,13 @@ async fn successful_cleanup_removes_containers_before_volumes() -> Result<(), Ho
 async fn cleanup_discovers_owned_pair_when_journal_ids_are_missing() -> Result<(), HostError> {
     let identity = identity()?;
     let engine = Fake::new();
-    let prepared = prepare_dind(&engine, &identity).await?;
+    let prepared = prepare_dind(&engine, &identity, resource_budget()?).await?;
     let started = start_runner(&engine, &prepared, b"jit", None).await?;
     engine.stop(&started.runner_id)?;
     cleanup_worker(&engine, &identity, None, None, None).await?;
     assert_eq!(engine.containers()?, 0);
-    assert_eq!(engine.events()?.last(), Some(&"remove-volumes"));
+    assert_eq!(engine.events()?.last(), Some(&"remove-socket-volume"));
+    assert_eq!(engine.removed_volume_count()?, 3);
     Ok(())
 }
 

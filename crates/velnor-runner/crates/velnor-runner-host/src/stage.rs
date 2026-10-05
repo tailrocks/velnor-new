@@ -4,22 +4,21 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use bollard::Docker;
-use bollard::query_parameters::RemoveContainerOptionsBuilder;
 use tokio::time::{sleep, timeout};
 
 use crate::action_archive_seed::ActionArchiveLease;
 use crate::error::{HostError, PreparationCause};
 use crate::journal::LaunchIdentity;
 use crate::worker::{
-    CreateProjection, PreparedDind, Started, confirmed_not_found, create_only,
-    create_owned_volumes, deliver_jit, dind_create, join_dind_net, list_launch, probe_dind,
-    remove_owned_volumes, runner_create_for_identity, start_id, verify_container, verify_engine,
+    CreateProjection, PreparedDind, ResourceBudget, Started, dind_create, join_dind_net,
+    runner_create_for_identity,
 };
 
 mod cleanup;
-pub(crate) use cleanup::cleanup_worker;
+pub(crate) use cleanup::{cleanup_worker, cleanup_worker_container};
+mod engine;
 mod reconcile;
-pub(crate) use reconcile::{ObservedWorker, reconcile_worker};
+pub(crate) use reconcile::{ObservedWorker, reconcile_worker, reconcile_worker_with_budget};
 
 const PREPARE_DEADLINE: Duration = Duration::from_secs(60);
 const RUNNER_DEADLINE: Duration = Duration::from_secs(45);
@@ -45,6 +44,17 @@ pub(crate) struct ContainerRecord {
     pub(crate) running: Option<bool>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum WorkerVolume {
+    Socket,
+    Workspace,
+    DockerData,
+}
+
+impl WorkerVolume {
+    pub(crate) const CLEANUP_ORDER: [Self; 3] = [Self::DockerData, Self::Workspace, Self::Socket];
+}
+
 pub(crate) trait PairEngine {
     async fn prepare_volumes(&self, identity: &LaunchIdentity) -> Result<(), HostError>;
     async fn create(&self, spec: &CreateProjection) -> Result<String, HostError>;
@@ -63,129 +73,36 @@ pub(crate) trait PairEngine {
         archive_lease: Option<&ActionArchiveLease>,
         require_running: bool,
     ) -> Result<ContainerRecord, HostError>;
-    async fn write_jit(&self, id: &str, jit: &[u8]) -> Result<(), HostError>;
-    async fn remove(&self, id: &str) -> Result<(), HostError>;
-    async fn inspect_container(
-        &self,
-        id_or_name: &str,
-    ) -> Result<Option<ContainerRecord>, HostError>;
-    async fn remove_volumes(&self, identity: &LaunchIdentity) -> Result<(), HostError>;
-    async fn verify_engine(&self, identity: &LaunchIdentity) -> Result<(), HostError>;
-}
-
-impl PairEngine for Docker {
-    async fn prepare_volumes(&self, identity: &LaunchIdentity) -> Result<(), HostError> {
-        create_owned_volumes(self, identity).await
-    }
-
-    async fn create(&self, spec: &CreateProjection) -> Result<String, HostError> {
-        create_only(self, spec).await
-    }
-
-    async fn start(&self, id: &str) -> Result<(), HostError> {
-        start_id(self, id).await
-    }
-
-    async fn probe_dind(&self, id: &str) -> Result<DindProbe, HostError> {
-        probe_dind(self, id).await
-    }
-
-    async fn list_launch(
-        &self,
-        identity: &LaunchIdentity,
-    ) -> Result<Vec<ContainerRecord>, HostError> {
-        list_launch(self, identity).await
-    }
-
-    async fn verify_container(
+    async fn verify_container_with_budget(
         &self,
         identity: &LaunchIdentity,
         role: &str,
         id: &str,
         dind_id: Option<&str>,
         archive_lease: Option<&ActionArchiveLease>,
+        _resource_budget: ResourceBudget,
         require_running: bool,
     ) -> Result<ContainerRecord, HostError> {
-        verify_container(
-            self,
-            identity,
-            role,
-            id,
-            dind_id,
-            archive_lease,
-            require_running,
-        )
-        .await
+        self.verify_container(identity, role, id, dind_id, archive_lease, require_running)
+            .await
     }
-
-    async fn write_jit(&self, id: &str, jit: &[u8]) -> Result<(), HostError> {
-        deliver_jit(self, id, jit).await
-    }
-
-    async fn remove(&self, id: &str) -> Result<(), HostError> {
-        let options = RemoveContainerOptionsBuilder::new().force(true).build();
-        match timeout(
-            CONTAINER_REMOVE_CALL,
-            self.remove_container(id, Some(options)),
-        )
-        .await
-        {
-            Ok(Ok(())) => Ok(()),
-            Ok(Err(error)) if confirmed_not_found(&error) => Ok(()),
-            Err(_) | Ok(Err(_)) => {
-                if confirm_container_absent(self, id).await? {
-                    Ok(())
-                } else {
-                    Err(HostError::Cleanup)
-                }
-            }
-        }
-    }
-
+    async fn write_jit(&self, id: &str, jit: &[u8]) -> Result<(), HostError>;
+    async fn remove(&self, id: &str) -> Result<(), HostError>;
     async fn inspect_container(
         &self,
         id_or_name: &str,
-    ) -> Result<Option<ContainerRecord>, HostError> {
-        let found = match timeout(INSPECT_CALL, self.inspect_container(id_or_name, None)).await {
-            Err(_) => return Err(HostError::DockerTimeout),
-            Ok(Err(error)) if confirmed_not_found(&error) => return Ok(None),
-            Ok(Err(_)) => return Err(HostError::Docker),
-            Ok(Ok(found)) => found,
-        };
-        let record = ContainerRecord {
-            id: found
-                .id
-                .filter(|id| valid_container_id(id))
-                .ok_or(HostError::Ownership)?,
-            labels: found
-                .config
-                .and_then(|config| config.labels)
-                .ok_or(HostError::Ownership)?,
-            running: found.state.and_then(|state| state.running),
-        };
-        Ok(Some(record))
-    }
-
-    async fn remove_volumes(&self, identity: &LaunchIdentity) -> Result<(), HostError> {
-        remove_owned_volumes(self, identity).await
-    }
-
-    async fn verify_engine(&self, identity: &LaunchIdentity) -> Result<(), HostError> {
-        verify_engine(self, identity).await
-    }
-}
-
-fn valid_container_id(id: &str) -> bool {
-    (12..=64).contains(&id.len()) && id.bytes().all(|byte| byte.is_ascii_hexdigit())
-}
-
-async fn confirm_container_absent(docker: &Docker, id: &str) -> Result<bool, HostError> {
-    match timeout(INSPECT_CALL, docker.inspect_container(id, None)).await {
-        Err(_) => Err(HostError::DockerTimeout),
-        Ok(Err(error)) if confirmed_not_found(&error) => Ok(true),
-        Ok(Err(_)) => Err(HostError::Docker),
-        Ok(Ok(_)) => Ok(false),
-    }
+    ) -> Result<Option<ContainerRecord>, HostError>;
+    async fn remove_volume(
+        &self,
+        identity: &LaunchIdentity,
+        volume: WorkerVolume,
+    ) -> Result<(), HostError>;
+    async fn verify_volume(
+        &self,
+        identity: &LaunchIdentity,
+        volume: WorkerVolume,
+    ) -> Result<(), HostError>;
+    async fn verify_engine(&self, identity: &LaunchIdentity) -> Result<(), HostError>;
 }
 
 /// Create volumes and DinD. Return only after its Docker API and private VFS root are ready.
@@ -197,30 +114,44 @@ async fn confirm_container_absent(docker: &Docker, id: &str) -> Result<bool, Hos
 pub(crate) async fn prepare_dind_until(
     docker: &Docker,
     identity: &LaunchIdentity,
+    resource_budget: ResourceBudget,
 ) -> Result<PreparedDind, HostError> {
-    timeout(PREPARE_DEADLINE, prepare_dind(docker, identity))
-        .await
-        .map_err(|_| HostError::LaunchUncertain)?
+    timeout(
+        PREPARE_DEADLINE,
+        prepare_dind(docker, identity, resource_budget),
+    )
+    .await
+    .map_err(|_| HostError::LaunchUncertain)?
 }
 
 pub(crate) async fn prepare_dind<E: PairEngine>(
     engine: &E,
     identity: &LaunchIdentity,
+    resource_budget: ResourceBudget,
 ) -> Result<PreparedDind, HostError> {
-    let observed = reconcile_worker(engine, identity, None, None, None).await?;
+    let observed =
+        reconcile_worker_with_budget(engine, identity, None, None, None, resource_budget).await?;
     if observed.runner_id().is_some() {
         return Err(HostError::Ownership);
     }
     if let Some(dind_id) = observed.dind_id() {
         let record = engine
-            .verify_container(identity, "dind", dind_id, None, None, false)
+            .verify_container_with_budget(
+                identity,
+                "dind",
+                dind_id,
+                None,
+                None,
+                resource_budget,
+                false,
+            )
             .await?;
         match record.running {
             Some(true) => {}
             Some(false) => engine.start(dind_id).await?,
             None => return Err(HostError::Ownership),
         }
-        let prepared = PreparedDind::from_journal(identity, dind_id)?;
+        let prepared = PreparedDind::from_journal(identity, dind_id, resource_budget)?;
         return match wait_dind_ready(engine, dind_id).await {
             Ok(()) => Ok(prepared),
             Err(error) => {
@@ -235,12 +166,14 @@ pub(crate) async fn prepare_dind<E: PairEngine>(
         };
     }
     engine.prepare_volumes(identity).await?;
-    let dind_id = engine.create(&dind_create(identity)?).await?;
+    let dind_id = engine
+        .create(&dind_create(identity, resource_budget)?)
+        .await?;
     engine.start(&dind_id).await?;
     match wait_dind_ready(engine, &dind_id).await {
-        Ok(()) => PreparedDind::from_journal(identity, &dind_id),
+        Ok(()) => PreparedDind::from_journal(identity, &dind_id, resource_budget),
         Err(error) => {
-            let prepared = PreparedDind::from_journal(identity, &dind_id)?;
+            let prepared = PreparedDind::from_journal(identity, &dind_id, resource_budget)?;
             cleanup_prepared_dind(engine, &prepared)
                 .await
                 .map_err(|_| HostError::Cleanup)?;
@@ -285,15 +218,32 @@ pub(crate) async fn start_runner<E: PairEngine>(
     if archive_lease.is_some_and(|lease| lease.launch_id() != identity.launch_id()) {
         return Err(HostError::Ownership);
     }
-    let observed = reconcile_worker(engine, identity, None, Some(prepared.dind_id()), None).await?;
+    let resource_budget = prepared.resource_budget();
+    let observed = reconcile_worker_with_budget(
+        engine,
+        identity,
+        None,
+        Some(prepared.dind_id()),
+        None,
+        resource_budget,
+    )
+    .await?;
     if observed.dind_id() != Some(prepared.dind_id()) || observed.runner_id().is_some() {
         return Err(HostError::Ownership);
     }
     engine
-        .verify_container(identity, "dind", prepared.dind_id(), None, None, true)
+        .verify_container_with_budget(
+            identity,
+            "dind",
+            prepared.dind_id(),
+            None,
+            None,
+            resource_budget,
+            true,
+        )
         .await?;
     let cache_path = archive_lease.map(|lease| lease.cache_path());
-    let runner = runner_create_for_identity(identity, cache_path)?;
+    let runner = runner_create_for_identity(identity, cache_path, prepared.resource_budget())?;
     let spec = join_dind_net(runner, prepared.dind_id())?;
     let runner_id = engine.create(&spec).await?;
     engine.start(&runner_id).await?;
@@ -318,7 +268,12 @@ pub(crate) async fn cleanup_prepared_dind<E: PairEngine>(
 ) -> Result<(), HostError> {
     timeout(
         CLEANUP_DEADLINE,
-        cleanup::cleanup_unstarted_dind(engine, prepared.identity(), prepared.dind_id()),
+        cleanup::cleanup_unstarted_dind(
+            engine,
+            prepared.identity(),
+            prepared.dind_id(),
+            prepared.resource_budget(),
+        ),
     )
     .await
     .map_err(|_| HostError::Cleanup)?

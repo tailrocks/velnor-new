@@ -99,14 +99,7 @@ fn drive(state: &Path, config: &HostConfig) {
         pause();
         return;
     };
-    match launch_blocking(
-        pat,
-        owner,
-        repo,
-        &config.docker.endpoint,
-        &state.join("launch.db"),
-        config.host.max_jobs,
-    ) {
+    match launch_blocking(pat, owner, repo, config, &state.join("launch.db")) {
         Ok(report) => finish_launch(&report),
         Err(error) => {
             eprintln!("{error}");
@@ -155,6 +148,11 @@ mod tests {
         "credential_ref = \"keychain:com.tailrocks.velnor.host/local\"\n",
         "[host]\n",
         "max_jobs = 1\n",
+        "[host.resources]\n",
+        "runner_cpu_millicores = 1000\n",
+        "runner_memory_bytes = 2147483648\n",
+        "dind_cpu_millicores = 3000\n",
+        "dind_memory_bytes = 6442450944\n",
         "[docker]\n",
         "context = \"orbstack\"\n",
         "platform = \"linux/amd64\"\n",

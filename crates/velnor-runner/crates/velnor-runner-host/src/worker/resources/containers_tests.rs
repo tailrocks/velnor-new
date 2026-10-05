@@ -9,9 +9,16 @@ use bollard::models::{
 
 use crate::error::HostError;
 use crate::journal::LaunchIdentity;
-use crate::worker::{CreateProjection, dind_create, label_map, runner_create_for_identity};
+use crate::worker::{
+    CreateProjection, ResourceBudget, dind_create, label_map, runner_create_for_identity,
+    test_resource_budget,
+};
 
-use super::{inspect_labels_match, same_launch, topology_matches, validate_existing_row};
+use super::identity_matching::{same_launch, validate_existing_row};
+use super::{inspect_labels_match, topology_matches};
+
+#[path = "containers_resource_tests.rs"]
+mod resource_tests;
 
 #[path = "containers_cgroupns_tests.rs"]
 mod cgroupns;
@@ -27,6 +34,10 @@ fn identity() -> Result<LaunchIdentity, HostError> {
     )
 }
 
+fn budget() -> Result<ResourceBudget, HostError> {
+    test_resource_budget()
+}
+
 fn inspect_with_labels(labels: HashMap<String, String>) -> ContainerInspectResponse {
     ContainerInspectResponse {
         config: Some(ContainerConfig {
@@ -39,6 +50,12 @@ fn inspect_with_labels(labels: HashMap<String, String>) -> ContainerInspectRespo
 
 fn inspect_projection(spec: &CreateProjection) -> Result<ContainerInspectResponse, HostError> {
     let labels = label_map(&spec.labels)?.ok_or(HostError::Ownership)?;
+    let budget = spec.resource_budget.ok_or(HostError::Config)?;
+    let limits = if spec.privileged {
+        budget.dind()
+    } else {
+        budget.runner()
+    };
     let mut mounts = Vec::with_capacity(spec.mounts.len() + spec.bind_mounts.len());
     let mut env = vec![UBUNTU_PATH.to_owned()];
     env.extend(spec.env.iter().cloned());
@@ -81,6 +98,9 @@ fn inspect_projection(spec: &CreateProjection) -> Result<ContainerInspectRespons
         }),
         host_config: Some(HostConfig {
             cgroupns_mode: Some(HostConfigCgroupnsModeEnum::PRIVATE),
+            nano_cpus: Some(limits.nano_cpus),
+            memory: Some(limits.memory_bytes),
+            memory_swap: Some(limits.memory_bytes),
             privileged: Some(spec.privileged),
             network_mode: spec.network_mode.clone(),
             ..Default::default()
@@ -92,7 +112,7 @@ fn inspect_projection(spec: &CreateProjection) -> Result<ContainerInspectRespons
 
 #[test]
 fn inspect_accepts_inherited_oci_labels_with_exact_velnor_identity() -> Result<(), HostError> {
-    let spec = dind_create(&identity()?)?;
+    let spec = dind_create(&identity()?, budget()?)?;
     let expected = label_map(&spec.labels)?.ok_or(HostError::Ownership)?;
     let mut actual = expected.clone();
     actual.insert(
@@ -109,8 +129,8 @@ fn inspect_accepts_inherited_oci_labels_with_exact_velnor_identity() -> Result<(
 #[test]
 fn runner_preflight_accepts_its_existing_dind_role() -> Result<(), HostError> {
     let identity = identity()?;
-    let runner = runner_create_for_identity(&identity, None)?;
-    let dind = dind_create(&identity)?;
+    let runner = runner_create_for_identity(&identity, None, budget()?)?;
+    let dind = dind_create(&identity, budget()?)?;
     let expected = label_map(&runner.labels)?.ok_or(HostError::Ownership)?;
     let mut actual = label_map(&dind.labels)?.ok_or(HostError::Ownership)?;
     actual.insert(
@@ -130,7 +150,7 @@ fn runner_preflight_accepts_its_existing_dind_role() -> Result<(), HostError> {
 
 #[test]
 fn inspect_rejects_mismatched_velnor_identity_values() -> Result<(), HostError> {
-    let spec = dind_create(&identity()?)?;
+    let spec = dind_create(&identity()?, budget()?)?;
     let expected = label_map(&spec.labels)?.ok_or(HostError::Ownership)?;
     let mut actual = expected.clone();
     actual.insert(
@@ -152,7 +172,7 @@ fn inspect_rejects_mismatched_velnor_identity_values() -> Result<(), HostError> 
 
 #[test]
 fn inspect_rejects_mislabeled_container_role() -> Result<(), HostError> {
-    let spec = dind_create(&identity()?)?;
+    let spec = dind_create(&identity()?, budget()?)?;
     let expected = label_map(&spec.labels)?.ok_or(HostError::Ownership)?;
     let mut actual = expected.clone();
     actual.insert("velnor.role".to_owned(), "runner".to_owned());
@@ -167,7 +187,7 @@ fn inspect_rejects_mislabeled_container_role() -> Result<(), HostError> {
 
 #[test]
 fn inspect_rejects_foreign_velnor_labels() -> Result<(), HostError> {
-    let spec = dind_create(&identity()?)?;
+    let spec = dind_create(&identity()?, budget()?)?;
     let expected = label_map(&spec.labels)?.ok_or(HostError::Ownership)?;
     let mut actual = expected.clone();
     actual.insert("velnor.owner".to_owned(), "foreign".to_owned());
@@ -185,29 +205,11 @@ fn inspect_rejects_foreign_velnor_labels() -> Result<(), HostError> {
 }
 
 #[test]
-fn runner_topology_matches_inspected_projection() -> Result<(), HostError> {
-    let spec = runner_create_for_identity(&identity()?, None)?;
-    let inspected = inspect_projection(&spec)?;
-
-    assert!(topology_matches(&spec, &inspected)?);
-    Ok(())
-}
-
-#[test]
-fn runner_topology_rejects_command_drift() -> Result<(), HostError> {
-    let spec = runner_create_for_identity(&identity()?, None)?;
-    let mut inspected = inspect_projection(&spec)?;
-    inspected.config.as_mut().ok_or(HostError::Ownership)?.cmd = Some(vec!["/bin/sh".to_owned()]);
-
-    assert!(!topology_matches(&spec, &inspected)?);
-    Ok(())
-}
-
-#[test]
 fn runner_topology_matches_allowed_archive_environment() -> Result<(), HostError> {
     let spec = runner_create_for_identity(
         &identity()?,
         Some(Path::new("/var/lib/velnor/action-archives")),
+        budget()?,
     )?;
     let inspected = inspect_projection(&spec)?;
 
@@ -220,6 +222,7 @@ fn runner_topology_rejects_archive_environment_drift() -> Result<(), HostError> 
     let spec = runner_create_for_identity(
         &identity()?,
         Some(Path::new("/var/lib/velnor/action-archives")),
+        budget()?,
     )?;
     let mut inspected = inspect_projection(&spec)?;
     let env = inspected
@@ -241,7 +244,7 @@ fn runner_topology_rejects_archive_environment_drift() -> Result<(), HostError> 
 
 #[test]
 fn runner_topology_rejects_unexpected_environment() -> Result<(), HostError> {
-    let spec = runner_create_for_identity(&identity()?, None)?;
+    let spec = runner_create_for_identity(&identity()?, None, budget()?)?;
     let valid = inspect_projection(&spec)?;
 
     let mut extra = valid.clone();
@@ -280,7 +283,7 @@ fn runner_topology_rejects_unexpected_environment() -> Result<(), HostError> {
 
 #[test]
 fn dind_topology_rejects_unexpected_environment() -> Result<(), HostError> {
-    let spec = dind_create(&identity()?)?;
+    let spec = dind_create(&identity()?, budget()?)?;
     let mut inspected = inspect_projection(&spec)?;
     inspected
         .config
@@ -297,7 +300,7 @@ fn dind_topology_rejects_unexpected_environment() -> Result<(), HostError> {
 
 #[test]
 fn runner_topology_rejects_entrypoint_override() -> Result<(), HostError> {
-    let spec = runner_create_for_identity(&identity()?, None)?;
+    let spec = runner_create_for_identity(&identity()?, None, budget()?)?;
     let mut inspected = inspect_projection(&spec)?;
     inspected
         .config
@@ -311,7 +314,7 @@ fn runner_topology_rejects_entrypoint_override() -> Result<(), HostError> {
 
 #[test]
 fn runner_topology_rejects_stdin_flag_drift() -> Result<(), HostError> {
-    let spec = runner_create_for_identity(&identity()?, None)?;
+    let spec = runner_create_for_identity(&identity()?, None, budget()?)?;
     let valid = inspect_projection(&spec)?;
 
     let mut attach_closed = valid.clone();
@@ -342,7 +345,7 @@ fn runner_topology_rejects_stdin_flag_drift() -> Result<(), HostError> {
 
 #[test]
 fn runner_topology_rejects_tty_drift() -> Result<(), HostError> {
-    let spec = runner_create_for_identity(&identity()?, None)?;
+    let spec = runner_create_for_identity(&identity()?, None, budget()?)?;
     let mut inspected = inspect_projection(&spec)?;
     inspected.config.as_mut().ok_or(HostError::Ownership)?.tty = Some(true);
 
@@ -352,7 +355,7 @@ fn runner_topology_rejects_tty_drift() -> Result<(), HostError> {
 
 #[test]
 fn runner_topology_rejects_user_and_working_directory_drift() -> Result<(), HostError> {
-    let spec = runner_create_for_identity(&identity()?, None)?;
+    let spec = runner_create_for_identity(&identity()?, None, budget()?)?;
     let valid = inspect_projection(&spec)?;
 
     let mut wrong_user = valid.clone();
@@ -371,7 +374,7 @@ fn runner_topology_rejects_user_and_working_directory_drift() -> Result<(), Host
 
 #[test]
 fn dind_topology_matches_its_image_command_and_closed_stdin() -> Result<(), HostError> {
-    let spec = dind_create(&identity()?)?;
+    let spec = dind_create(&identity()?, budget()?)?;
     let inspected = inspect_projection(&spec)?;
 
     assert!(topology_matches(&spec, &inspected)?);
@@ -380,7 +383,7 @@ fn dind_topology_matches_its_image_command_and_closed_stdin() -> Result<(), Host
 
 #[test]
 fn dind_topology_rejects_entrypoint_override() -> Result<(), HostError> {
-    let spec = dind_create(&identity()?)?;
+    let spec = dind_create(&identity()?, budget()?)?;
     let mut inspected = inspect_projection(&spec)?;
     inspected
         .config

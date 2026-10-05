@@ -7,10 +7,9 @@ use std::fmt;
 
 use zeroize::Zeroize;
 
-use velnor_runner_github::{
-    Exchange, Poll, QueueSession, SessionRequest, Transport, TransportFail,
-};
+use velnor_runner_github::{Poll, QueueSession};
 
+use crate::config::HostConfig;
 use crate::daemon_lock::EngineLineageGuard;
 use crate::ensure_product_scale_set;
 use crate::error::HostError;
@@ -18,7 +17,9 @@ use crate::journal::{Journal, LaunchIdentity, LaunchReservation};
 use crate::listen::{Link, Secret, admin_link};
 use crate::reconcile::Reconcile;
 use crate::scale_set::EnsureError;
-use crate::worker::{PreparedDind, Started, prepare_dind_until, start_runner_until};
+use crate::worker::{
+    PreparedDind, ResourceBudget, Started, prepare_dind_until, start_runner_until,
+};
 
 mod capacity;
 mod completion;
@@ -28,6 +29,8 @@ mod initial_scale_tests;
 mod inspect;
 #[cfg(all(test, unix))]
 mod inspect_tests;
+mod lane;
+use lane::{HostLane, ack_ready};
 mod names;
 #[cfg(all(test, unix))]
 mod recovery_tests;
@@ -83,19 +86,29 @@ pub async fn launch_once(
     repo: &str,
     docker: &bollard::Docker,
     journal: &Journal,
+    host_config: &HostConfig,
 ) -> Result<LaunchReport, EnsureError> {
-    let engine = docker
-        .info()
-        .await
+    let _capacity = install_job_capacity(host_config.host.max_jobs);
+    let resource_budget = host_config
+        .resource_budget()
         .map_err(|_| EnsureError::Unexpected {
             status: 0,
-            step: "docker-info",
-        })?
-        .id
-        .ok_or(EnsureError::Unexpected {
-            status: 0,
-            step: "docker-engine-id",
+            step: "worker-resource-budget",
         })?;
+    let info = docker.info().await.map_err(|_| EnsureError::Unexpected {
+        status: 0,
+        step: "docker-info",
+    })?;
+    resource_budget
+        .validate_guest_cpu(info.ncpu)
+        .map_err(|_| EnsureError::Unexpected {
+            status: 0,
+            step: "worker-resource-budget",
+        })?;
+    let engine = info.id.ok_or(EnsureError::Unexpected {
+        status: 0,
+        step: "docker-engine-id",
+    })?;
     let lineage = EngineLineageGuard::acquire(&engine).map_err(|_| EnsureError::Unexpected {
         status: 0,
         step: "engine-lineage",
@@ -122,8 +135,17 @@ pub async fn launch_once(
     let mut link = admin_link(pat, owner, repo)?;
     let admin = Secret::new(link.token());
     let (session, row) = session::open_session(&mut link, set.id, admin.expose(), journal).await?;
-    let driven =
-        turn::poll_and_drive(&mut link, set.id, &session, admin.expose(), journal, docker).await;
+    let driven = turn::poll_and_drive(
+        &mut link,
+        set.id,
+        &session,
+        admin.expose(),
+        journal,
+        docker,
+        resource_budget,
+        host_config.host.max_jobs,
+    )
+    .await;
     let closed = session::close_session(
         &mut link,
         set.id,
@@ -272,6 +294,7 @@ async fn scale_session(
     admin_token: &str,
     journal: &Journal,
     docker: &bollard::Docker,
+    resource_budget: ResourceBudget,
 ) -> Result<Option<Started>, EnsureError> {
     let population = session
         .statistics()
@@ -286,18 +309,14 @@ async fn scale_session(
         admin_token: admin_token.to_owned(),
     };
     let admin = link.base().to_owned();
-    let mut lane = HostLane {
-        link,
-        admin,
-        queue: None,
-    };
+    let mut lane = HostLane::new(link, admin, None);
     let name = runner_name(&session.session_id);
     steps::scale_unacked(
         &mut lane,
         &ctx,
         journal,
         &name,
-        |identity| async move { prepare_dind_until(docker, &identity).await },
+        |identity| async move { prepare_dind_until(docker, &identity, resource_budget).await },
         |_identity, prepared, payload| async move {
             start_runner_until(docker, &prepared, &payload, None).await
         },
@@ -320,6 +339,7 @@ async fn drive_ready(
     journal: &Journal,
     docker: &bollard::Docker,
     reservation: Option<LaunchReservation>,
+    resource_budget: ResourceBudget,
 ) -> Result<Option<Started>, EnsureError> {
     let ctx = Drive {
         set_id: ready.set_id,
@@ -328,68 +348,17 @@ async fn drive_ready(
         admin_token: ready.admin_token.to_owned(),
     };
     let admin = link.base().to_owned();
-    let mut lane = HostLane {
-        link,
-        admin,
-        queue: ready.queue,
-    };
+    let mut lane = HostLane::new(link, admin, ready.queue);
     drive_offer_reserved(
         &mut lane,
         &ctx,
         ready.polled,
         journal,
         reservation,
-        |identity| async move { prepare_dind_until(docker, &identity).await },
+        |identity| async move { prepare_dind_until(docker, &identity, resource_budget).await },
         |_identity, prepared, payload| async move {
             start_runner_until(docker, &prepared, &payload, None).await
         },
     )
     .await
-}
-
-fn ack_ready(
-    link: &mut Link,
-    session: &QueueSession,
-    path: String,
-    queue: Option<String>,
-    polled: &Poll,
-) -> Result<(), EnsureError> {
-    let Poll::Batch(batch) = polled else {
-        return Ok(());
-    };
-    let ctx = Drive {
-        set_id: 0,
-        queue_path: path,
-        queue_token: session.token().to_owned(),
-        admin_token: String::new(),
-    };
-    let admin = link.base().to_owned();
-    let mut lane = HostLane { link, admin, queue };
-    steps_ack::acknowledge(&mut lane, &ctx, batch)
-}
-
-struct HostLane<'a> {
-    link: &'a mut Link,
-    admin: String,
-    queue: Option<String>,
-}
-
-impl Transport for HostLane<'_> {
-    fn exchange(&mut self, request: &SessionRequest) -> Result<Exchange, TransportFail> {
-        self.link.transport().exchange(request)
-    }
-}
-
-impl Lane for HostLane<'_> {
-    fn on_admin(&mut self) -> Result<(), EnsureError> {
-        let admin = self.admin.clone();
-        self.link.set_base(&admin)
-    }
-
-    fn on_queue(&mut self) -> Result<(), EnsureError> {
-        let Some(origin) = self.queue.clone() else {
-            return Ok(());
-        };
-        self.link.set_base(&origin)
-    }
 }

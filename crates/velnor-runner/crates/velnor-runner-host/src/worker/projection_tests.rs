@@ -8,7 +8,9 @@ use crate::error::HostError;
 use crate::journal::LaunchIdentity;
 use crate::stage::DindProbe;
 
-use super::{bollard_create, dind_create, runner_create_for_identity};
+use super::{
+    ResourceBudget, ResourceBudgetConfig, bollard_create, dind_create, runner_create_for_identity,
+};
 
 const INSTANCE_ID: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const INTENT_ID: i64 = 7;
@@ -21,6 +23,16 @@ fn identity() -> Result<LaunchIdentity, HostError> {
     LaunchIdentity::new(INSTANCE_ID, INTENT_ID, LAUNCH_ID, ENGINE_ID)
 }
 
+fn resource_budget() -> Result<ResourceBudget, HostError> {
+    ResourceBudgetConfig {
+        runner_cpu_millicores: 1_000,
+        runner_memory_bytes: 2_147_483_648,
+        dind_cpu_millicores: 3_000,
+        dind_memory_bytes: 6_442_450_944,
+    }
+    .validate()
+}
+
 fn archive_cache_path() -> PathBuf {
     std::env::temp_dir().join(format!("velnor-action-archives-{}", std::process::id()))
 }
@@ -30,8 +42,9 @@ fn runner_and_dind_project_distinct_owned_names_and_labels() -> Result<(), HostE
     let identity = identity()?;
     let volume = identity.private_volume();
     assert_eq!(volume, format!("v{LAUNCH_ID}"));
-    let runner = runner_create_for_identity(&identity, None)?;
-    let dind = dind_create(&identity)?;
+    let budget = resource_budget()?;
+    let runner = runner_create_for_identity(&identity, None, budget)?;
+    let dind = dind_create(&identity, budget)?;
 
     assert_eq!(
         runner.name.as_deref(),
@@ -66,16 +79,28 @@ fn runner_and_dind_project_distinct_owned_names_and_labels() -> Result<(), HostE
 
     let runner_create = bollard_create(&runner)?;
     let dind_create = bollard_create(&dind)?;
-    for create in [&runner_create, &dind_create] {
+    let runner_host = runner_create
+        .config
+        .host_config
+        .as_ref()
+        .ok_or(HostError::Docker)?;
+    let dind_host = dind_create
+        .config
+        .host_config
+        .as_ref()
+        .ok_or(HostError::Docker)?;
+    for host in [runner_host, dind_host] {
         assert_eq!(
-            create
-                .config
-                .host_config
-                .as_ref()
-                .and_then(|host| host.cgroupns_mode),
+            host.cgroupns_mode,
             Some(HostConfigCgroupnsModeEnum::PRIVATE)
         );
     }
+    assert_eq!(runner_host.nano_cpus, Some(1_000_000_000));
+    assert_eq!(runner_host.memory, Some(2_147_483_648));
+    assert_eq!(runner_host.memory_swap, Some(2_147_483_648));
+    assert_eq!(dind_host.nano_cpus, Some(3_000_000_000));
+    assert_eq!(dind_host.memory, Some(6_442_450_944));
+    assert_eq!(dind_host.memory_swap, Some(6_442_450_944));
     assert_eq!(
         runner_create.options.name.as_deref(),
         runner.name.as_deref()
@@ -89,7 +114,7 @@ fn runner_archive_cache_is_a_read_only_bind_in_docker_config() -> Result<(), Hos
     let identity = identity()?;
     let path = archive_cache_path();
     let source = path.to_str().ok_or(HostError::Path)?;
-    let runner = runner_create_for_identity(&identity, Some(&path))?;
+    let runner = runner_create_for_identity(&identity, Some(&path), resource_budget()?)?;
 
     assert_eq!(runner.env, vec![ARCHIVE_ENV]);
     assert!(
@@ -132,7 +157,7 @@ fn runner_archive_cache_is_a_read_only_bind_in_docker_config() -> Result<(), Hos
 fn dind_gets_private_data_volume_without_runner_archive_projection() -> Result<(), HostError> {
     let identity = identity()?;
     let volume = identity.private_volume();
-    let dind = dind_create(&identity)?;
+    let dind = dind_create(&identity, resource_budget()?)?;
 
     assert!(dind.env.is_empty());
     assert!(dind.cmd.is_empty());
@@ -175,12 +200,17 @@ fn dind_gets_private_data_volume_without_runner_archive_projection() -> Result<(
 #[test]
 fn absent_or_relative_archive_path_does_not_create_a_bind() -> Result<(), HostError> {
     let identity = identity()?;
-    let runner = runner_create_for_identity(&identity, None)?;
+    let runner = runner_create_for_identity(&identity, None, resource_budget()?)?;
     assert!(runner.env.is_empty());
     assert!(runner.bind_mounts.is_empty());
 
     assert_eq!(
-        runner_create_for_identity(&identity, Some(Path::new("relative-cache"))).err(),
+        runner_create_for_identity(
+            &identity,
+            Some(Path::new("relative-cache")),
+            resource_budget()?,
+        )
+        .err(),
         Some(HostError::Path)
     );
     Ok(())

@@ -9,12 +9,12 @@ use bollard::models::MountType;
 use crate::docker_spec::runner_plan;
 use crate::worker::{
     BollardCreate, CreateProjection, PreparedDind, bollard_create, dind_create, runner_create,
-    start_runner_until,
+    start_runner_until, test_resource_budget,
 };
 use crate::{HostError, LaunchIdentity, connect_unix};
 
 fn projection(volume: &str) -> Result<CreateProjection, HostError> {
-    runner_create(&runner_plan(volume)?)
+    runner_create(&runner_plan(volume)?, Some(test_resource_budget()?))
 }
 
 fn bollard(volume: &str) -> Result<BollardCreate, HostError> {
@@ -50,18 +50,24 @@ fn runner_create_rejects_jit_in_env_or_cmd() -> Result<(), HostError> {
     let mut plan = runner_plan("worker_a")?;
     plan.env
         .push("ACTIONS_RUNNER_INPUT_JITCONFIG=canary".to_owned());
-    assert_eq!(runner_create(&plan), Err(HostError::ForbiddenMount));
+    assert_eq!(
+        runner_create(&plan, Some(test_resource_budget()?)),
+        Err(HostError::ForbiddenMount)
+    );
 
     let mut plan = runner_plan("worker_a")?;
     plan.cmd.push("canary-jit".to_owned());
-    assert_eq!(runner_create(&plan), Err(HostError::ForbiddenMount));
+    assert_eq!(
+        runner_create(&plan, Some(test_resource_budget()?)),
+        Err(HostError::ForbiddenMount)
+    );
     Ok(())
 }
 
 #[test]
 fn dind_is_privileged_and_owns_its_data_volume() -> Result<(), HostError> {
     let identity = identity()?;
-    let spec = dind_create(&identity)?;
+    let spec = dind_create(&identity, test_resource_budget()?)?;
     assert!(spec.privileged);
     assert!(!spec.open_stdin);
     assert_eq!(spec.env, Vec::<String>::new());
@@ -113,7 +119,7 @@ fn runner_joins_only_its_dind_netns() -> Result<(), HostError> {
     assert_eq!(host.privileged, Some(false));
     assert_eq!(host.network_mode.as_deref(), Some(mode.as_str()));
     let identity = identity()?;
-    let dind = bollard_create(&dind_create(&identity)?)?;
+    let dind = bollard_create(&dind_create(&identity, test_resource_budget()?)?)?;
     let dind_host = dind.config.host_config.as_ref().ok_or(HostError::Docker)?;
     assert!(dind_host.network_mode.is_none());
     Ok(())
@@ -138,7 +144,7 @@ fn bollard_config_from_a_clean_plan_omits_canary() -> Result<(), HostError> {
     let private_volume = identity.private_volume();
     let work_volume = format!("{private_volume}-work");
     let docker_volume = format!("{private_volume}-docker");
-    let dind = bollard_create(&dind_create(&identity)?)?;
+    let dind = bollard_create(&dind_create(&identity, test_resource_budget()?)?)?;
     assert_eq!(dind.options.platform, "linux/amd64");
     assert_eq!(dind.config.open_stdin, Some(false));
     assert!(dind.config.env.is_none());
@@ -198,7 +204,7 @@ impl Drop for IdleDocker {
 #[test]
 fn bollard_create_rejects_a_host_bind() -> Result<(), HostError> {
     let identity = identity()?;
-    let mut spec = dind_create(&identity)?;
+    let mut spec = dind_create(&identity, test_resource_budget()?)?;
     spec.mounts[0].source = "/var/run/docker.sock".to_owned();
     assert_eq!(bollard_create(&spec), Err(HostError::ForbiddenMount));
     Ok(())
@@ -208,15 +214,18 @@ fn bollard_create_rejects_a_host_bind() -> Result<(), HostError> {
 fn bollard_create_rejects_writable_or_unapproved_bind_mounts() -> Result<(), HostError> {
     let identity = identity()?;
     let path = PathBuf::from("/tmp/velnor-action-cache");
-    let mut spec = crate::worker::runner_create_for_identity(&identity, Some(&path))?;
+    let mut spec =
+        crate::worker::runner_create_for_identity(&identity, Some(&path), test_resource_budget()?)?;
     spec.bind_mounts[0].read_only = false;
     assert_eq!(bollard_create(&spec), Err(HostError::ForbiddenMount));
 
-    let mut spec = crate::worker::runner_create_for_identity(&identity, Some(&path))?;
+    let mut spec =
+        crate::worker::runner_create_for_identity(&identity, Some(&path), test_resource_budget()?)?;
     spec.bind_mounts[0].target = "/etc".to_owned();
     assert_eq!(bollard_create(&spec), Err(HostError::ForbiddenMount));
 
-    let mut spec = crate::worker::runner_create_for_identity(&identity, Some(&path))?;
+    let mut spec =
+        crate::worker::runner_create_for_identity(&identity, Some(&path), test_resource_budget()?)?;
     spec.env.clear();
     assert_eq!(bollard_create(&spec), Err(HostError::ForbiddenMount));
     Ok(())
@@ -227,7 +236,7 @@ async fn empty_jit_does_not_create() -> Result<(), HostError> {
     let idle = IdleDocker::open()?;
     let identity = identity()?;
     let dind_id = "a".repeat(64);
-    let prepared = PreparedDind::from_journal(&identity, &dind_id)?;
+    let prepared = PreparedDind::from_journal(&identity, &dind_id, test_resource_budget()?)?;
     assert_eq!(
         start_runner_until(&idle.docker, &prepared, b"", None).await,
         Err(HostError::EmptyJit)

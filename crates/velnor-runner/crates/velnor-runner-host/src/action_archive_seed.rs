@@ -31,7 +31,6 @@ pub(crate) use validation::validate_archive_with_limit;
 
 pub(crate) use identity::ActionArchiveIdentity;
 use identity::object_generation;
-pub(crate) use preparation::{ActionArchiveFetcher, ActionArchiveManifest};
 use storage::{
     cleanup_dir, create_directory, read_json, set_mode, sync_directory, unique_directory,
     verify_bytes, write_json,

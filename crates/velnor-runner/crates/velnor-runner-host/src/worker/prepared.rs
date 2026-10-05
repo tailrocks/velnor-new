@@ -6,13 +6,14 @@ use crate::action_archive_seed::ActionArchiveLease;
 use crate::error::HostError;
 use crate::journal::LaunchIdentity;
 
-use super::Started;
+use super::{ResourceBudget, Started};
 
 /// One verified, identity-owned DinD that passed the inner API and storage checks.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PreparedDind {
     identity: LaunchIdentity,
     dind_id: String,
+    resource_budget: ResourceBudget,
 }
 
 impl PreparedDind {
@@ -24,6 +25,7 @@ impl PreparedDind {
     pub(crate) fn from_journal(
         identity: &LaunchIdentity,
         dind_id: &str,
+        resource_budget: ResourceBudget,
     ) -> Result<Self, HostError> {
         if !container_id(dind_id) {
             return Err(HostError::Ownership);
@@ -31,6 +33,7 @@ impl PreparedDind {
         Ok(Self {
             identity: identity.clone(),
             dind_id: dind_id.to_owned(),
+            resource_budget,
         })
     }
 
@@ -42,6 +45,10 @@ impl PreparedDind {
 
     pub(crate) fn identity(&self) -> &LaunchIdentity {
         &self.identity
+    }
+
+    pub(crate) const fn resource_budget(&self) -> ResourceBudget {
+        self.resource_budget
     }
 }
 
@@ -55,8 +62,9 @@ impl PreparedDind {
 pub(crate) async fn prepare_dind_until(
     docker: &Docker,
     identity: &LaunchIdentity,
+    resource_budget: ResourceBudget,
 ) -> Result<PreparedDind, HostError> {
-    crate::stage::prepare_dind_until(docker, identity).await
+    crate::stage::prepare_dind_until(docker, identity, resource_budget).await
 }
 
 /// Start the runner on one prepared DinD and deliver its JIT payload.

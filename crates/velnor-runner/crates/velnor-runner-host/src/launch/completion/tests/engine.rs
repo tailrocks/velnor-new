@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::{
     Arc, Mutex,
-    atomic::{AtomicBool, Ordering},
+    atomic::{AtomicBool, AtomicUsize, Ordering},
     mpsc,
 };
 use std::time::Duration;
@@ -9,7 +9,7 @@ use std::time::Duration;
 use crate::action_archive_seed::ActionArchiveLease;
 use crate::error::HostError;
 use crate::journal::LaunchIdentity;
-use crate::stage::{ContainerRecord, DindProbe, PairEngine};
+use crate::stage::{ContainerRecord, DindProbe, PairEngine, WorkerVolume};
 use crate::worker::{CreateProjection, container_labels, container_name};
 
 #[derive(Clone)]
@@ -19,6 +19,8 @@ pub(super) struct CompletionEngine {
     names: Arc<Mutex<HashMap<String, String>>>,
     pub(super) removed_volumes: Arc<AtomicBool>,
     pub(super) fail_volumes: Arc<AtomicBool>,
+    container_remove_calls: Arc<AtomicUsize>,
+    volume_remove_calls: Arc<AtomicUsize>,
     verify_delay: Arc<AtomicBool>,
     verify_sender: Option<mpsc::Sender<()>>,
     verify_barrier_used: Arc<AtomicBool>,
@@ -66,6 +68,13 @@ impl CompletionEngine {
         self
     }
 
+    pub(super) fn removal_calls(&self) -> (usize, usize) {
+        (
+            self.container_remove_calls.load(Ordering::Acquire),
+            self.volume_remove_calls.load(Ordering::Acquire),
+        )
+    }
+
     fn new(
         identity: Option<LaunchIdentity>,
         records: HashMap<String, ContainerRecord>,
@@ -77,6 +86,8 @@ impl CompletionEngine {
             names: Arc::new(Mutex::new(names)),
             removed_volumes: Arc::new(AtomicBool::new(false)),
             fail_volumes: Arc::new(AtomicBool::new(false)),
+            container_remove_calls: Arc::new(AtomicUsize::new(0)),
+            volume_remove_calls: Arc::new(AtomicUsize::new(0)),
             verify_delay: Arc::new(AtomicBool::new(false)),
             verify_sender: None,
             verify_barrier_used: Arc::new(AtomicBool::new(false)),
@@ -158,6 +169,7 @@ impl PairEngine for CompletionEngine {
     }
 
     async fn remove(&self, id: &str) -> Result<(), HostError> {
+        self.container_remove_calls.fetch_add(1, Ordering::AcqRel);
         self.records
             .lock()
             .map_err(|_| HostError::Docker)?
@@ -189,14 +201,29 @@ impl PairEngine for CompletionEngine {
             .cloned())
     }
 
-    async fn remove_volumes(&self, _identity: &LaunchIdentity) -> Result<(), HostError> {
+    async fn remove_volume(
+        &self,
+        _identity: &LaunchIdentity,
+        volume: WorkerVolume,
+    ) -> Result<(), HostError> {
+        self.volume_remove_calls.fetch_add(1, Ordering::AcqRel);
         if self.fail_volumes.load(Ordering::Acquire) {
             return Err(HostError::Cleanup);
         }
-        self.removed_volumes.store(true, Ordering::Release);
-        if let Some(sender) = &self.volumes_sender {
-            sender.send(()).map_err(|_| HostError::Docker)?;
+        if volume == WorkerVolume::Socket {
+            self.removed_volumes.store(true, Ordering::Release);
+            if let Some(sender) = &self.volumes_sender {
+                sender.send(()).map_err(|_| HostError::Docker)?;
+            }
         }
+        Ok(())
+    }
+
+    async fn verify_volume(
+        &self,
+        _identity: &LaunchIdentity,
+        _volume: WorkerVolume,
+    ) -> Result<(), HostError> {
         Ok(())
     }
 

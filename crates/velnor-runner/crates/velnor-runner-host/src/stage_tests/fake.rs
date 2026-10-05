@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use crate::action_archive_seed::ActionArchiveLease;
 use crate::error::HostError;
 use crate::journal::LaunchIdentity;
-use crate::stage::{ContainerRecord, DindProbe, PairEngine};
+use crate::stage::{ContainerRecord, DindProbe, PairEngine, WorkerVolume};
 use crate::worker::{CreateProjection, container_labels, container_name, identity_labels_match};
 
 pub(super) struct Fake {
@@ -63,6 +63,18 @@ impl Fake {
         self.ids
             .lock()
             .map(|rows| rows.len())
+            .map_err(|_| HostError::Docker)
+    }
+
+    pub(super) fn removed_volume_count(&self) -> Result<usize, HostError> {
+        self.events
+            .lock()
+            .map(|events| {
+                events
+                    .iter()
+                    .filter(|event| event.starts_with("remove-") && event.ends_with("-volume"))
+                    .count()
+            })
             .map_err(|_| HostError::Docker)
     }
 
@@ -268,12 +280,34 @@ impl PairEngine for Fake {
             .map(|rows| rows.get(&id).cloned())
     }
 
-    async fn remove_volumes(&self, _identity: &LaunchIdentity) -> Result<(), HostError> {
-        self.push("remove-volumes")?;
+    async fn remove_volume(
+        &self,
+        _identity: &LaunchIdentity,
+        volume: WorkerVolume,
+    ) -> Result<(), HostError> {
+        let event = match volume {
+            WorkerVolume::Socket => "remove-socket-volume",
+            WorkerVolume::Workspace => "remove-workspace-volume",
+            WorkerVolume::DockerData => "remove-docker-volume",
+        };
+        self.push(event)?;
         if *self.fail_volumes.lock().map_err(|_| HostError::Docker)? {
             return Err(HostError::DockerTimeout);
         }
         Ok(())
+    }
+
+    async fn verify_volume(
+        &self,
+        _identity: &LaunchIdentity,
+        volume: WorkerVolume,
+    ) -> Result<(), HostError> {
+        let event = match volume {
+            WorkerVolume::Socket => "verify-socket-volume",
+            WorkerVolume::Workspace => "verify-workspace-volume",
+            WorkerVolume::DockerData => "verify-docker-volume",
+        };
+        self.push(event)
     }
 
     async fn verify_engine(&self, _identity: &LaunchIdentity) -> Result<(), HostError> {
