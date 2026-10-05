@@ -157,6 +157,12 @@ fn socket_source_ok(source: &str) -> bool {
         .is_some_and(private_volume_name)
 }
 
+/// True when `name` is one private Docker volume name.
+#[must_use]
+pub(crate) fn accepts_volume_name(name: &str) -> bool {
+    private_volume_name(name)
+}
+
 fn private_volume_name(name: &str) -> bool {
     let mut chars = name.chars();
     match chars.next() {

@@ -110,23 +110,44 @@ fn dind_container_id(id: &str) -> bool {
     (12..=64).contains(&id.len()) && id.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
+/// Name of the private `DinD` data volume. The runner plan does not mount it.
+///
+/// # Errors
+///
+/// Returns [`HostError::ForbiddenMount`] when `private_volume` is not one private name.
+pub(crate) fn dind_data_volume(private_volume: &str) -> Result<String, HostError> {
+    let _runner = runner_plan(private_volume)?;
+    let name = format!("{private_volume}-docker");
+    if !crate::docker_spec::accepts_volume_name(&name) {
+        return Err(HostError::ForbiddenMount);
+    }
+    Ok(name)
+}
+
 /// Private `DinD` create. Privilege is not a flag on the runner plan.
 ///
-/// Mounts are the runner plan's socket volume at `/run` and the work volume at
-/// `/home/runner/_work`. Same names [`runner_plan`] rejects.
+/// Mounts are the runner plan's socket volume at `/run`, the work volume at
+/// `/home/runner/_work`, and [`dind_data_volume`] at `/var/lib/docker`.
+/// The data volume is not on the runner.
 ///
 /// # Errors
 ///
 /// Returns [`HostError::ForbiddenMount`] when `private_volume` is not one private name.
 pub fn dind_create(private_volume: &str) -> Result<CreateProjection, HostError> {
     let runner = runner_plan(private_volume)?;
+    let data = dind_data_volume(private_volume)?;
+    let mut mounts = runner.mounts;
+    mounts.push(Mount {
+        source: format!("volume:{data}"),
+        target: "/var/lib/docker".to_owned(),
+    });
     Ok(CreateProjection {
         image: DIND_IMAGE.to_owned(),
         platform: runner.platform,
         env: Vec::new(),
         cmd: Vec::new(),
         labels: Vec::new(),
-        mounts: runner.mounts,
+        mounts,
         privileged: true,
         open_stdin: false,
         network_mode: None,
@@ -253,16 +274,29 @@ pub(crate) async fn create_named_volumes(
     plan: &ContainerPlan,
 ) -> Result<(), HostError> {
     for mount in &plan.mounts {
-        let name = volume_name(&mount.source)?;
-        let request = VolumeCreateRequest {
-            name: Some(name.to_owned()),
-            ..Default::default()
-        };
-        docker
-            .create_volume(request)
-            .await
-            .map_err(|_| HostError::Docker)?;
+        create_volume(docker, volume_name(&mount.source)?).await?;
     }
+    Ok(())
+}
+
+/// Create one private named volume. Do not pass the work volume here for `chown`.
+///
+/// # Errors
+///
+/// Returns [`HostError::ForbiddenMount`] when `name` is not one private volume name.
+/// Returns [`HostError::Docker`] when Docker rejects the create.
+pub(crate) async fn create_volume(docker: &Docker, name: &str) -> Result<(), HostError> {
+    if !crate::docker_spec::accepts_volume_name(name) {
+        return Err(HostError::ForbiddenMount);
+    }
+    let request = VolumeCreateRequest {
+        name: Some(name.to_owned()),
+        ..Default::default()
+    };
+    docker
+        .create_volume(request)
+        .await
+        .map_err(|_| HostError::Docker)?;
     Ok(())
 }
 
