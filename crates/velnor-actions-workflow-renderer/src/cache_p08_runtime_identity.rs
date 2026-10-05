@@ -2,9 +2,9 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{RunsOn, Step};
+use velnor_actions_contract::{RunsOn, Step, StepKind};
 
-use crate::{RenderError, cache_p08, steps};
+use crate::{RenderError, cache_p08, commands, marker, steps, tree::RenderedFile, yaml::Yaml};
 
 use super::ToolsCachePayload;
 
@@ -35,12 +35,16 @@ const SCRIPT: &str = concat!(
     "printf 'enabled=false\\nreason=identity_scratch_cleanup_failed\\n' >> \"$GITHUB_OUTPUT\"; exit 1; fi; ",
     "printf 'enabled=false\\nreason=%s\\n' \"$reason\" >> \"$GITHUB_OUTPUT\"; exit 0; }; ",
     "case \"$VELNOR_CACHE_LANE\" in scale-set:*) disable scale_set_image_unqualified ;; esac; ",
+    "case \"$VELNOR_CACHE_LANE\" in ubuntu-22.04) expected_image_os=ubuntu22 ;; ",
+    "ubuntu-24.04) expected_image_os=ubuntu24 ;; ubuntu-26.04) expected_image_os=ubuntu26 ;; ",
+    "*) disable lane_image_unqualified ;; esac; expected_arch=X64; ",
+    "expected_target=x86_64-unknown-linux-gnu; ",
     "[ -n \"$runner_os\" ] || disable runner_os_missing; ",
     "[ \"$runner_os\" = Linux ] || disable runner_os_mismatch; ",
     "[ -n \"$runner_arch\" ] || disable runner_arch_missing; ",
-    "[ \"$runner_arch\" = \"$VELNOR_CACHE_EXPECTED_ARCH\" ] || disable runner_arch_mismatch; ",
+    "[ \"$runner_arch\" = \"$expected_arch\" ] || disable runner_arch_mismatch; ",
     "[ -n \"$image_os\" ] || disable image_os_missing; ",
-    "[ \"$image_os\" = \"$VELNOR_CACHE_EXPECTED_IMAGE_OS\" ] || disable image_os_mismatch; ",
+    "[ \"$image_os\" = \"$expected_image_os\" ] || disable image_os_mismatch; ",
     "[ -n \"$image_version\" ] || disable image_version_missing; ",
     "case \"$image_version\" in *[!0-9.]*) disable image_version_invalid ;; esac; ",
     "case \"$image_version\" in *[0-9]*) ;; *) disable image_version_invalid ;; esac; ",
@@ -80,7 +84,7 @@ const SCRIPT: &str = concat!(
     "valid_path \"$sum_file\" && [ -f \"$sum_file\" ] && [ ! -L \"$sum_file\" ] ",
     "|| disable identity_file_invalid; ",
     "for value in \"velnor-tools-runtime-v2\" \"$VELNOR_CACHE_STATIC_DIGEST\" ",
-    "\"$VELNOR_CACHE_LANE\" \"$VELNOR_CACHE_TARGET\" \"$runner_os\" ",
+    "\"$VELNOR_CACHE_LANE\" \"$expected_target\" \"$runner_os\" ",
     "\"$runner_arch\" \"$image_os\" \"$image_version\" \"$home\" ",
     "\"$runner_temp\" \"$effective_mise\" \"$expected_rustup\" ",
     "\"$expected_cargo\"; do if ! printf '%s:%s\\n' \"${#value}\" \"$value\" >> \"$identity_file\"; ",
@@ -98,64 +102,224 @@ const SCRIPT: &str = concat!(
     "\"$fingerprint\" >> \"$GITHUB_OUTPUT\""
 );
 
+pub(super) const SCRIPT_PATH: &str = ".github/scripts/velnor-tools-cache-identity.sh";
+const SCRIPT_FILE_NAME: &str = "velnor-tools-cache-identity.sh";
 /// Construct an identity step from the exact lane and payload digest.
 /// # Errors
 pub(super) fn step(payload: &ToolsCachePayload) -> Result<Step, RenderError> {
-    let (expected_image_os, expected_arch) = lane_identity(&payload.runs_on, &payload.target);
+    let uses = action_uses(&payload.runs_on).ok_or_else(|| {
+        RenderError::BadCommand("unsupported_tools_cache_identity_lane".to_owned())
+    })?;
+    Ok(Step {
+        name: cache_p08::TOOLS_CACHE_IDENTITY_NAME.to_owned(),
+        condition: None,
+        kind: StepKind::Action {
+            uses: uses.to_owned(),
+            with: BTreeMap::from([("d".to_owned(), payload.static_digest.clone())]),
+            env: BTreeMap::new(),
+        },
+    })
+}
+
+/// Validate the only local action call accepted by the workflow renderer.
+pub(super) fn validate_action_call(
+    name: &str,
+    uses: &str,
+    runs_on: &str,
+    with: &BTreeMap<String, String>,
+    env: &BTreeMap<String, String>,
+) -> Result<(), RenderError> {
+    if name != cache_p08::TOOLS_CACHE_IDENTITY_NAME
+        || Some(uses) != action_uses(runs_on)
+        || !env.is_empty()
+        || with.len() != 1
+        || !with.contains_key("d")
+    {
+        return Err(RenderError::InvalidWorkflow(
+            "malformed_tools_cache_identity_action".to_owned(),
+        ));
+    }
+    let Some(digest) = with.get("d") else {
+        return Err(RenderError::InvalidWorkflow(
+            "malformed_tools_cache_identity_action".to_owned(),
+        ));
+    };
+    if digest.len() != 64
+        || !digest
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+    {
+        return Err(RenderError::InvalidWorkflow(
+            "bad_tools_cache_identity_digest".to_owned(),
+        ));
+    }
+    Ok(())
+}
+
+pub(super) fn is_supported_lane(runs_on: &str, target: &str) -> bool {
+    let (image, arch) = lane_identity(runs_on, target);
+    !image.is_empty() && !arch.is_empty()
+}
+
+/// Emit the shared, version-marked identity script used by every job.
+/// # Errors
+pub(super) fn script_file(version: &str) -> Result<RenderedFile, RenderError> {
+    let bytes = marker::with_marker(version, SCRIPT)?;
+    steps::scan_for_private_subcommands(&bytes)?;
+    Ok(RenderedFile {
+        path: SCRIPT_PATH.to_owned(),
+        bytes,
+    })
+}
+
+/// Emit the one local composite action that owns identity env and script setup.
+/// # Errors
+pub(super) fn action_file(runs_on: &str, version: &str) -> Result<RenderedFile, RenderError> {
+    let action_path = action_path(runs_on).ok_or_else(|| {
+        RenderError::BadCommand("unsupported_tools_cache_identity_lane".to_owned())
+    })?;
+    let inner = inner_step(runs_on)?;
+    let StepKind::Shell { run, env } = inner.kind else {
+        return Err(RenderError::InvalidWorkflow(
+            "tools_cache_identity_inner_step_not_shell".to_owned(),
+        ));
+    };
+    let mut entries = vec![("name".to_owned(), Yaml::str(inner.name))];
+    crate::step_ids::push_step_id(&mut entries, cache_p08::TOOLS_CACHE_IDENTITY_NAME);
+    entries.extend([
+        (
+            "env".to_owned(),
+            crate::document_steps::string_map_yaml(&env),
+        ),
+        ("shell".to_owned(), Yaml::str("bash")),
+        (
+            "run".to_owned(),
+            Yaml::str(commands::join_argv_for_run(&run)?),
+        ),
+    ]);
+    let outputs = output_entries();
+    let body = Yaml::Map(vec![
+        ("name".to_owned(), Yaml::str("Velnor Mise cache identity")),
+        (
+            "description".to_owned(),
+            Yaml::str("Qualify the hosted image and cache roots before V2 restore."),
+        ),
+        ("inputs".to_owned(), input_entries()),
+        ("outputs".to_owned(), outputs),
+        (
+            "runs".to_owned(),
+            Yaml::Map(vec![
+                ("using".to_owned(), Yaml::str("composite")),
+                ("steps".to_owned(), Yaml::Seq(vec![Yaml::Map(entries)])),
+            ]),
+        ),
+    ]);
+    let quoted = crate::yaml::quote_run_values_in_yaml(body);
+    let bytes = marker::with_marker(version, &crate::yaml::render_yaml(&quoted))?;
+    steps::scan_for_private_subcommands(&bytes)?;
+    Ok(RenderedFile {
+        path: format!("{action_path}/action.yml"),
+        bytes,
+    })
+}
+
+fn input_entries() -> Yaml {
+    let required_input = |description: &str| {
+        Yaml::Map(vec![
+            ("description".to_owned(), Yaml::str(description)),
+            ("required".to_owned(), Yaml::Bool(true)),
+        ])
+    };
+    Yaml::Map(vec![(
+        "d".to_owned(),
+        required_input("Static V2 identity of the tool pins and owned paths."),
+    )])
+}
+
+fn output_entries() -> Yaml {
+    let output = |description: &str, key: &str| {
+        Yaml::Map(vec![
+            ("description".to_owned(), Yaml::str(description)),
+            (
+                "value".to_owned(),
+                Yaml::str(format!(
+                    "${{{{ steps.{}.outputs.{key} }}}}",
+                    cache_p08::TOOLS_CACHE_IDENTITY_STEP_ID,
+                )),
+            ),
+        ])
+    };
+    Yaml::Map(vec![
+        (
+            "enabled".to_owned(),
+            output(
+                "Whether the image and absolute roots qualify for restore.",
+                "enabled",
+            ),
+        ),
+        (
+            "identity".to_owned(),
+            output(
+                "SHA-256 runtime fingerprint for the qualified host.",
+                "identity",
+            ),
+        ),
+    ])
+}
+
+fn inner_step(runs_on: &str) -> Result<Step, RenderError> {
+    let cargo = "${{ runner.temp }}/velnor/cargo";
+    let rustup = "${{ runner.temp }}/velnor/rustup";
     let env = BTreeMap::from([
-        (
-            "CARGO_HOME".to_owned(),
-            "${{ runner.temp }}/velnor/cargo".to_owned(),
-        ),
-        (
-            "MISE_CARGO_HOME".to_owned(),
-            "${{ runner.temp }}/velnor/cargo".to_owned(),
-        ),
-        (
-            "MISE_RUSTUP_HOME".to_owned(),
-            "${{ runner.temp }}/velnor/rustup".to_owned(),
-        ),
-        (
-            "RUSTUP_HOME".to_owned(),
-            "${{ runner.temp }}/velnor/rustup".to_owned(),
-        ),
+        ("CARGO_HOME".to_owned(), cargo.to_owned()),
+        ("MISE_CARGO_HOME".to_owned(), cargo.to_owned()),
+        ("MISE_RUSTUP_HOME".to_owned(), rustup.to_owned()),
+        ("RUSTUP_HOME".to_owned(), rustup.to_owned()),
         ("RUNNER_TEMP".to_owned(), "${{ runner.temp }}".to_owned()),
-        (
-            "VELNOR_CACHE_EXPECTED_ARCH".to_owned(),
-            expected_arch.to_owned(),
-        ),
-        (
-            "VELNOR_CACHE_EXPECTED_IMAGE_OS".to_owned(),
-            expected_image_os.to_owned(),
-        ),
-        ("VELNOR_CACHE_LANE".to_owned(), payload.runs_on.clone()),
+        ("VELNOR_CACHE_LANE".to_owned(), runs_on.to_owned()),
         (
             "VELNOR_CACHE_STATIC_DIGEST".to_owned(),
-            payload.static_digest.clone(),
+            "${{ inputs.digest }}".to_owned(),
         ),
-        ("VELNOR_CACHE_TARGET".to_owned(), payload.target.clone()),
     ]);
-    steps::shell_step(
-        cache_p08::TOOLS_CACHE_IDENTITY_NAME,
-        vec!["bash".to_owned(), "-c".to_owned(), SCRIPT.to_owned()],
-        env,
-    )
+    let run = vec![
+        "bash".to_owned(),
+        "-c".to_owned(),
+        format!("bash \"$GITHUB_ACTION_PATH/../../scripts/{SCRIPT_FILE_NAME}\""),
+    ];
+    steps::composite_shell_step(cache_p08::TOOLS_CACHE_IDENTITY_NAME, run, env)
+}
+
+pub(super) fn action_uses(runs_on: &str) -> Option<&'static str> {
+    match hosted_image(runs_on)? {
+        "ubuntu22" => Some("./.github/actions/u22"),
+        "ubuntu24" => Some("./.github/actions/u24"),
+        "ubuntu26" => Some("./.github/actions/u26"),
+        _ => None,
+    }
+}
+
+fn action_path(runs_on: &str) -> Option<&'static str> {
+    action_uses(runs_on)?.strip_prefix("./")
+}
+
+fn hosted_image(runs_on: &str) -> Option<&'static str> {
+    let Ok(RunsOn::Hosted(label)) = RunsOn::parse(runs_on) else {
+        return None;
+    };
+    match label.as_str() {
+        "ubuntu-22.04" => Some("ubuntu22"),
+        "ubuntu-24.04" => Some("ubuntu24"),
+        "ubuntu-26.04" => Some("ubuntu26"),
+        _ => None,
+    }
 }
 
 fn lane_identity(runs_on: &str, target: &str) -> (&'static str, &'static str) {
     if !matches!(target, "x86_64-unknown-linux-gnu") {
         return ("", "");
     }
-    let Ok(RunsOn::Hosted(label)) = RunsOn::parse(runs_on) else {
-        return ("", "");
-    };
-    let image = match label.as_str() {
-        "ubuntu-22.04" => "ubuntu22",
-        "ubuntu-24.04" => "ubuntu24",
-        "ubuntu-26.04" => "ubuntu26",
-        _ => "",
-    };
-    (image, "X64")
+    (hosted_image(runs_on).unwrap_or(""), "X64")
 }
 
 #[cfg(test)]

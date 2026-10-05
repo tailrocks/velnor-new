@@ -1,8 +1,6 @@
 use velnor_actions_contract::StepKind;
 
-use super::{
-    HOSTED_RUNS, ctx, echo_step, paired, render_jobs, scale_token, share_lanes, workflow_ir,
-};
+use super::{HOSTED_RUNS, ctx, echo_step, paired, render_jobs, share_lanes, workflow_ir};
 
 #[test]
 fn elected_save_stays_on_the_winner_job() {
@@ -16,7 +14,7 @@ fn elected_save_stays_on_the_winner_job() {
         .clone();
     let save = crate::cache_steps::tools_cache_step(
         false,
-        "mise-tools-v2-fixture-${{steps.velnor-tool-cache-identity.outputs.identity}}",
+        "mise-tools-v2-fixture-${{steps.v2.outputs.identity}}",
         Some(crate::cache_p08::tools_cache_save_condition()),
     )
     .expect("save");
@@ -53,7 +51,7 @@ fn elected_save_stays_on_the_winner_job() {
 }
 
 #[test]
-fn tools_cache_runtime_preludes_stay_lane_specific_outside_shared_action() {
+fn only_qualified_hosted_lane_keeps_a_tools_cache_prelude() {
     use crate::cache_p08::{ToolsCacheInputs, ToolsCachePayload};
 
     let setup = crate::setup::MiseSetup {
@@ -81,27 +79,47 @@ fn tools_cache_runtime_preludes_stay_lane_specific_outside_shared_action() {
     let hosted_id = "rust-0__hosted";
     let local_id = "rust-0__local";
     let hosted_prelude = prelude(HOSTED_RUNS).expect("hosted V2 prelude");
-    let local_prelude = prelude(&scale_token()).expect("Scale Set V2 prelude");
-    for (id, steps) in [(hosted_id, hosted_prelude), (local_id, local_prelude)] {
-        jobs.get_mut(id)
-            .expect("paired lane")
-            .steps
-            .splice(1..1, steps);
-    }
+    jobs.get_mut(hosted_id)
+        .expect("hosted lane")
+        .steps
+        .splice(1..1, hosted_prelude);
+
+    let mut wrong_lane = jobs.clone();
+    let identity = wrong_lane
+        .get_mut(hosted_id)
+        .expect("hosted lane")
+        .steps
+        .iter_mut()
+        .find(|step| step.name == crate::cache_p08::TOOLS_CACHE_IDENTITY_NAME)
+        .expect("runtime identity");
+    let StepKind::Action { uses, .. } = &mut identity.kind else {
+        panic!("identity uses a local composite action");
+    };
+    *uses = crate::cache_p08::runtime_identity_action_uses("ubuntu-24.04")
+        .expect("supported fixture lane")
+        .to_owned();
+    assert!(share_lanes(&wrong_lane, &ctx()).is_err());
 
     let shared = share_lanes(&jobs, &ctx()).expect("lane-specific prelude factors");
-    for id in [hosted_id, local_id] {
-        let prelude = &shared.runtime_preludes[id];
-        assert_eq!(prelude.len(), 2);
-        assert_eq!(prelude[0].name, crate::cache_p08::TOOLS_CACHE_IDENTITY_NAME);
-        assert_eq!(prelude[1].name, crate::cache_steps::TOOLS_RESTORE_NAME);
-    }
-    let identity_lane = |id: &str| match &shared.runtime_preludes[id][0].kind {
-        StepKind::Shell { env, .. } => env.get("VELNOR_CACHE_LANE").map(String::as_str),
+    let hosted_prelude = &shared.runtime_preludes[hosted_id];
+    assert_eq!(hosted_prelude.len(), 2);
+    assert_eq!(
+        hosted_prelude[0].name,
+        crate::cache_p08::TOOLS_CACHE_IDENTITY_NAME
+    );
+    assert_eq!(
+        hosted_prelude[1].name,
+        crate::cache_steps::TOOLS_RESTORE_NAME
+    );
+    assert!(shared.runtime_preludes[local_id].is_empty());
+    let identity_uses = match &shared.runtime_preludes[hosted_id][0].kind {
+        StepKind::Action { uses, .. } => Some(uses.as_str()),
         _ => None,
     };
-    assert_eq!(identity_lane(hosted_id), Some(HOSTED_RUNS));
-    assert_eq!(identity_lane(local_id), Some(scale_token().as_str()));
+    assert_eq!(
+        identity_uses,
+        crate::cache_p08::runtime_identity_action_uses(HOSTED_RUNS)
+    );
 
     let composite = shared
         .files
@@ -109,14 +127,16 @@ fn tools_cache_runtime_preludes_stay_lane_specific_outside_shared_action() {
         .find(|file| file.path == ".github/actions/rust-0/action.yml")
         .expect("shared action");
     assert!(composite.bytes.contains("Setup Mise"));
-    assert!(!composite.bytes.contains("Identify Mise cache runtime"));
+    assert!(!composite.bytes.contains("V2 identity"));
     assert!(!composite.bytes.contains("Restore Mise tools"));
     let yaml = render_jobs(&workflow_ir(), &shared, &ctx()).expect("shared workflow");
     let checkout = yaml.find("name: Checkout").expect("checkout");
-    let identity = yaml
-        .find("name: Identify Mise cache runtime")
-        .expect("identity");
+    let identity = yaml.find("name: V2 identity").expect("identity");
     let restore = yaml.find("name: Restore Mise tools").expect("restore");
     let call = yaml.find("uses: ./.github/actions/rust-0").expect("call");
     assert!(checkout < identity && identity < restore && restore < call);
+    let local_start = yaml.find("rust-0__local:").expect("Scale Set job");
+    let local = &yaml[local_start..];
+    assert!(!local.contains("V2 identity"), "{local}");
+    assert!(!local.contains("Restore Mise tools"), "{local}");
 }

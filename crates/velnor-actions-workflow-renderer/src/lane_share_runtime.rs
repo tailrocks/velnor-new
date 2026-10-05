@@ -1,9 +1,12 @@
 //! Runner-specific V2 tools-cache steps kept outside shared lane actions.
 
-use velnor_actions_contract::{Step, StepKind};
+use velnor_actions_contract::{RunsOn, Step, StepKind};
 
 /// Peel runtime identity and restore steps before the common lane prefix.
-pub(super) fn peel_tools_cache_prelude(steps: &[Step]) -> Option<(Vec<Step>, Vec<Step>)> {
+pub(super) fn peel_tools_cache_prelude(
+    steps: &[Step],
+    runs_on: &str,
+) -> Option<(Vec<Step>, Vec<Step>)> {
     let mut prelude = Vec::new();
     let mut common = Vec::new();
     for step in steps {
@@ -16,7 +19,7 @@ pub(super) fn peel_tools_cache_prelude(steps: &[Step]) -> Option<(Vec<Step>, Vec
             common.push(step.clone());
         }
     }
-    if !valid_tools_cache_prelude(&prelude) {
+    if !valid_tools_cache_prelude(&prelude, runs_on) {
         return None;
     }
     if let Some(setup) = steps
@@ -35,13 +38,24 @@ pub(super) fn peel_tools_cache_prelude(steps: &[Step]) -> Option<(Vec<Step>, Vec
     Some((prelude, common))
 }
 
-fn valid_tools_cache_prelude(steps: &[Step]) -> bool {
+fn valid_tools_cache_prelude(steps: &[Step], runs_on: &str) -> bool {
     match steps {
         [] => true,
         [identity, restore] => {
             let identity_ok = identity.name == crate::cache_p08::TOOLS_CACHE_IDENTITY_NAME
                 && identity.condition.is_none()
-                && matches!(&identity.kind, StepKind::Shell { .. });
+                && matches!(
+                    &identity.kind,
+                    StepKind::Action { uses, with, env }
+                        if crate::cache_p08::validate_runtime_identity_action(
+                            &identity.name,
+                            uses,
+                            runs_on,
+                            with,
+                            env,
+                        )
+                        .is_ok()
+                );
             let expected_paths = crate::cache_steps::TOOLS_CACHE_PATHS.join("\n");
             let restore_ok = matches!(
                 &restore.kind,
@@ -62,11 +76,25 @@ fn valid_tools_cache_prelude(steps: &[Step]) -> bool {
 }
 
 /// Ensure both runners use the same exact V2 payload shape while retaining lane identity.
-pub(super) fn same_tools_cache_prelude_shape(hosted: &[Step], local: &[Step]) -> bool {
-    if !valid_tools_cache_prelude(hosted)
-        || !valid_tools_cache_prelude(local)
-        || hosted.len() != local.len()
+pub(super) fn same_tools_cache_prelude_shape(
+    hosted: &[Step],
+    local: &[Step],
+    hosted_runs_on: &str,
+    local_runs_on: &str,
+) -> bool {
+    if !valid_tools_cache_prelude(hosted, hosted_runs_on)
+        || !valid_tools_cache_prelude(local, local_runs_on)
     {
+        return false;
+    }
+    if local.is_empty()
+        && !hosted.is_empty()
+        && matches!(RunsOn::parse(hosted_runs_on), Ok(RunsOn::Hosted(_)))
+        && matches!(RunsOn::parse(local_runs_on), Ok(RunsOn::ScaleSet(_)))
+    {
+        return true;
+    }
+    if hosted.len() != local.len() {
         return false;
     }
     hosted.iter().zip(local).all(|(hosted, local)| {
@@ -96,9 +124,18 @@ pub(super) fn same_tools_cache_prelude_shape(hosted: &[Step], local: &[Step]) ->
                     env: local_env,
                 },
             ) => {
-                hosted_uses == local_uses
-                    && hosted_env == local_env
-                    && same_cache_inputs(hosted_with, local_with)
+                if hosted.name == crate::cache_p08::TOOLS_CACHE_IDENTITY_NAME {
+                    Some(hosted_uses.as_str())
+                        == crate::cache_p08::runtime_identity_action_uses(hosted_runs_on)
+                        && Some(local_uses.as_str())
+                            == crate::cache_p08::runtime_identity_action_uses(local_runs_on)
+                        && hosted_env == local_env
+                        && hosted_with.keys().eq(local_with.keys())
+                } else {
+                    hosted_uses == local_uses
+                        && hosted_env == local_env
+                        && same_cache_inputs(hosted_with, local_with)
+                }
             }
             _ => false,
         }
@@ -106,7 +143,7 @@ pub(super) fn same_tools_cache_prelude_shape(hosted: &[Step], local: &[Step]) ->
 }
 
 fn tool_cache_key_digest(key: &str) -> Option<&str> {
-    let suffix = "${{steps.velnor-tool-cache-identity.outputs.identity}}";
+    let suffix = "${{steps.v2.outputs.identity}}";
     let body = key.strip_prefix("mise-tools-v2-")?.strip_suffix(suffix)?;
     let digest = body.strip_suffix('-')?;
     (digest.len() == 64
@@ -128,8 +165,7 @@ fn same_cache_inputs(
     }
     let mut hosted_shape = hosted.clone();
     let mut local_shape = local.clone();
-    let normalized =
-        "mise-tools-v2-{static-identity}-${{steps.velnor-tool-cache-identity.outputs.identity}}";
+    let normalized = "mise-tools-v2-{static-identity}-${{steps.v2.outputs.identity}}";
     hosted_shape.insert("key".to_owned(), normalized.to_owned());
     local_shape.insert("key".to_owned(), normalized.to_owned());
     hosted_shape == local_shape

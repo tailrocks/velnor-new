@@ -66,6 +66,7 @@ fn rendered_condition(step: &Step) -> String {
         false,
         &BTreeMap::new(),
         false,
+        None,
     )
     .expect("render consumer step") else {
         panic!("a rendered step is a mapping");
@@ -130,7 +131,7 @@ fn save_step_renders_generic_protected_default_branch_policy() {
 
     assert_eq!(
         condition,
-        "success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.velnor-tool-cache-identity.outputs.enabled == 'true'"
+        "success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true'"
     );
     assert!(!condition.contains("github.repository"));
     assert!(!condition.contains("refs/heads/main"));
@@ -201,7 +202,7 @@ fn runtime_identity_is_required_and_changes_the_final_key() {
     assert!(
         payload
             .key_expression()
-            .contains("steps.velnor-tool-cache-identity.outputs.identity")
+            .contains("steps.v2.outputs.identity")
     );
 }
 

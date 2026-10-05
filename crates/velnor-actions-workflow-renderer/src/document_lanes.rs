@@ -37,6 +37,7 @@ pub(crate) fn render_job_steps(
         append_shared_lane_steps(
             id,
             uses,
+            &job.runs_on,
             ctx,
             needs_envs,
             lanes,
@@ -58,6 +59,7 @@ pub(crate) fn render_job_steps(
                 false,
                 step_context.job_env,
                 step_context.actions_read,
+                Some(&job.runs_on),
             )?);
         }
     }
@@ -67,6 +69,7 @@ pub(crate) fn render_job_steps(
 fn append_shared_lane_steps(
     id: &str,
     uses: &str,
+    runs_on: &str,
     ctx: &RenderContext,
     needs_envs: &[(String, String)],
     lanes: &SharedLaneSteps<'_>,
@@ -83,13 +86,22 @@ fn append_shared_lane_steps(
             "shared_lane_invalid_checkout:{id}"
         )));
     }
-    append_one(id, checkout, ctx, needs_envs, step_context, rendered)?;
+    append_one(
+        id,
+        checkout,
+        ctx,
+        needs_envs,
+        step_context,
+        runs_on,
+        rendered,
+    )?;
     append_steps(
         id,
         lanes.runtime_preludes,
         ctx,
         needs_envs,
         step_context,
+        runs_on,
         rendered,
         "runtime_prelude",
     )?;
@@ -99,6 +111,7 @@ fn append_shared_lane_steps(
         ctx,
         needs_envs,
         step_context,
+        runs_on,
         rendered,
         "prefix",
     )?;
@@ -108,6 +121,7 @@ fn append_shared_lane_steps(
         ctx,
         needs_envs,
         step_context,
+        runs_on,
         rendered,
         "prelude",
     )?;
@@ -118,6 +132,7 @@ fn append_shared_lane_steps(
         ctx,
         needs_envs,
         step_context,
+        runs_on,
         rendered,
         "postlude",
     )
@@ -129,6 +144,7 @@ fn append_steps(
     ctx: &RenderContext,
     needs_envs: &[(String, String)],
     step_context: &JobStepContext<'_>,
+    runs_on: &str,
     rendered: &mut Vec<Yaml>,
     label: &str,
 ) -> Result<(), RenderError> {
@@ -136,7 +152,7 @@ fn append_steps(
         .get(id)
         .ok_or_else(|| RenderError::InvalidWorkflow(format!("shared_lane_missing_{label}:{id}")))?;
     for step in steps {
-        append_one(id, step, ctx, needs_envs, step_context, rendered)?;
+        append_one(id, step, ctx, needs_envs, step_context, runs_on, rendered)?;
     }
     Ok(())
 }
@@ -147,6 +163,7 @@ fn append_one(
     ctx: &RenderContext,
     needs_envs: &[(String, String)],
     step_context: &JobStepContext<'_>,
+    runs_on: &str,
     rendered: &mut Vec<Yaml>,
 ) -> Result<(), RenderError> {
     rendered.push(step_to_yaml(
@@ -157,6 +174,7 @@ fn append_one(
         false,
         step_context.job_env,
         step_context.actions_read,
+        Some(runs_on),
     )?);
     Ok(())
 }
