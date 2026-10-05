@@ -284,7 +284,7 @@ fn action_has_prefix(uses: &str, prefix: &str) -> bool {
 
 /// True when an internal operation matches its role contract.
 fn internal_operation(kind: &StepKind, expected: &str) -> bool {
-    matches!(kind, StepKind::Internal { operation } if operation == expected)
+    matches!(kind, StepKind::Internal { operation, .. } if operation == expected)
 }
 
 /// Validate the typed Mise setup payload shape shared by render paths.

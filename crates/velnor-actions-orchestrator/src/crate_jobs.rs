@@ -54,18 +54,12 @@ pub(crate) fn build_for_workflow(
     fetch_roots: &[String],
     acquire: Option<&Step>,
 ) -> Result<CrateBuild, OrchestratorError> {
-    let custom_tasks: &[String] = config
-        .stacks
-        .rust
-        .as_ref()
-        .map_or(&[], |rust| &rust.custom_tasks);
     build_crate_jobs(
         label,
         config.workflow.policy,
         discovery,
         catalog,
         fetch_roots,
-        custom_tasks,
         acquire,
         config.workflow.max_parallel_jobs,
     )
@@ -84,26 +78,17 @@ pub(crate) fn build_for_workflow(
 /// # Errors
 ///
 /// Returns contract, render-context, or tool-request errors.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "one call site threads job scope plus the concurrency cap"
-)]
 pub(crate) fn build_crate_jobs(
     label: &str,
     policy: WorkflowPolicy,
     discovery: &Discovery,
     catalog: &ToolCatalog,
     fetch_roots: &[String],
-    custom_tasks: &[String],
     acquire: Option<&Step>,
     max_parallel_jobs: u32,
 ) -> Result<CrateBuild, OrchestratorError> {
     let grouped = group_runnable(&discovery.proposals);
     let assigned = assign_group_ids(&grouped);
-    // Reject a non-empty allowlist before the loop: with zero runnable
-    // tasks the loop body (and its rejection) never runs, so the
-    // allowlist would be silently ignored instead of failing closed.
-    let custom_steps = crate::vectors::custom_task_steps(custom_tasks, catalog)?;
     let mut jobs = Vec::with_capacity(grouped.len());
     let mut drivers = BTreeMap::new();
     let mut tofu_ids = Vec::new();
@@ -139,7 +124,7 @@ pub(crate) fn build_crate_jobs(
             obligations: obligations_for(tasks, catalog)?,
         };
         model.validate()?;
-        let mut job = render_job(
+        let job = render_job(
             label,
             policy,
             &model,
@@ -152,9 +137,6 @@ pub(crate) fn build_crate_jobs(
             acquire,
             max_parallel_jobs,
         )?;
-        // Allowlisted custom tasks run after the fixed obligations; the
-        // pre-loop rejection above guarantees this is empty today.
-        job.steps.extend(custom_steps.iter().cloned());
         drivers.insert(job_id.clone(), driver);
         if use_opentofu {
             tofu_ids.push(job_id.clone());
@@ -172,7 +154,9 @@ pub(crate) fn build_crate_jobs(
 /// belong to the plan job, so neither is emitted as an obligation.
 /// Shared with `plan` so its obligation list matches emission exactly.
 pub(crate) fn is_runnable(task: &ProposedTask) -> bool {
-    !task.no_targets && !task.identity.unit_id.is_empty()
+    !task.no_targets
+        && !task.identity.unit_id.is_empty()
+        && Stack::from_id(&task.stack_id) != Some(Stack::Mise)
 }
 
 /// Obligation order rank for one task, dispatched by stack.
@@ -243,7 +227,7 @@ fn gates_for(task: &ProposedTask, executed: &BTreeSet<&str>) -> Vec<String> {
 /// Render one validated crate model to its fixed IR job.
 ///
 /// P08 order: helper staging, plan download (report identities bind
-/// the plan), restore shared sources (or Cargo-only registry), the
+/// the plan), restore the exact shared Cargo sources subset, the
 /// per-root provider restore on opentofu roles, then MBX objects,
 /// then probe-and-fetch, then report-wrapped obligations, then one
 /// always-on crate-report upload carrying every entry. Readers never
@@ -328,6 +312,7 @@ fn render_job(
     Ok(Job {
         display_name: model.display_name.clone(),
         runs_on: label.to_owned(),
+        check_runner: None,
         timeout_minutes: JobTimeout::CRATE,
         needs: vec![PLAN_JOB_ID.to_owned()],
         condition: None,
@@ -337,12 +322,11 @@ fn render_job(
     })
 }
 
-/// Restore step for one Rust crate's exact shared Cargo sources subset.
+/// Restore the exact shared Cargo source subset for one crate.
 ///
 /// Lockless emits nothing, and tofu roles restore providers through
-/// the separate provider-cache step (never here). Compiler driver does
-/// not change the archive paths: readers restore the shared `actions/cache`
-/// snapshot and never save the shared key.
+/// the separate provider-cache step (never here). The separate V2 tools
+/// layer owns Cargo binaries and tool receipts.
 fn restore_step_for_crate(
     label: &str,
     catalog: &ToolCatalog,
@@ -352,11 +336,11 @@ fn restore_step_for_crate(
     if !use_rust || fetch_roots.is_empty() {
         return Ok(None);
     }
-    let target = velnor_actions_contract::target_for_runner_label(label).ok_or_else(|| {
-        OrchestratorError::Contract {
+    let target = velnor_actions_contract::ReleaseTarget::for_runner_label(label)
+        .map(velnor_actions_contract::ReleaseTarget::triple)
+        .ok_or_else(|| OrchestratorError::Contract {
             problem: format!("bad_label:{label}"),
-        }
-    })?;
+        })?;
     let rust = catalog.version(PinnedTool::Rust);
     let key = crate::source_cache::sources_cache_key(target, rust, fetch_roots)?;
     let prefix = crate::source_cache::sources_restore_prefix(&key);

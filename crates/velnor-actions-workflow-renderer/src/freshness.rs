@@ -288,6 +288,7 @@ mod tests {
             condition: None,
             kind: velnor_actions_contract::StepKind::Internal {
                 operation: "plan-v1".to_owned(),
+                env: std::collections::BTreeMap::new(),
             },
         };
         let err = crate::steps_plain::plain_step_to_yaml(&internal).expect_err("rejected");

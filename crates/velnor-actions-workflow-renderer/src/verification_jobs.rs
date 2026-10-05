@@ -63,6 +63,7 @@ pub fn build_verification_task_job(
     Ok(Job {
         display_name: format!("Verify {}", policy.task.id),
         runs_on: policy.runner_label.clone(),
+        check_runner: None,
         timeout_minutes: timeout,
         needs: Vec::new(),
         condition: None,

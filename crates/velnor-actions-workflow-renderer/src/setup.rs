@@ -30,7 +30,46 @@ pub struct MiseSetup {
     pub sha256: String,
 }
 
+/// Verified extracted binary digests for Mise 2026.9.18.
+/// Official release SHASUMS256.txt matches each downloaded archive and its
+/// corresponding raw binary checksum.
+pub const MISE_BINARY_SHA256_LINUX_X64: &str =
+    "d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4";
+/// Extracted Mise binary SHA-256 for macOS ARM64.
+pub const MISE_BINARY_SHA256_MACOS_ARM64: &str =
+    "484c135bd4329975d608d3f77e26c2ece5d2f5590f18ca71f44440294f8cfa6f";
+/// Extracted Mise binary SHA-256 for macOS x86-64.
+pub const MISE_BINARY_SHA256_MACOS_X64: &str =
+    "02d8ba561847f996925e361262c0610a24f59fcd9e06ba9ed0b6022e19b317c3";
+
 impl MiseSetup {
+    /// Resolve a compiled binary pin for one job's target.
+    /// # Errors
+    /// Unsupported targets or versions have no qualified artifact.
+    pub fn for_target(&self, target: &str) -> Result<Self, RenderError> {
+        self.validate()?;
+        if self.version != "2026.9.18" {
+            return Err(RenderError::BadCommand(format!(
+                "mise_setup_unqualified_version:{}",
+                self.version
+            )));
+        }
+        let sha256 = match target {
+            "x86_64-unknown-linux-gnu" => MISE_BINARY_SHA256_LINUX_X64,
+            "aarch64-apple-darwin" => MISE_BINARY_SHA256_MACOS_ARM64,
+            "x86_64-apple-darwin" => MISE_BINARY_SHA256_MACOS_X64,
+            _ => {
+                return Err(RenderError::BadCommand(format!(
+                    "mise_setup_unsupported_target:{target}"
+                )));
+            }
+        };
+        Ok(Self {
+            sha256: sha256.to_owned(),
+            ..self.clone()
+        })
+    }
+
     /// Validate every pin before any step is built from it.
     /// # Errors
     pub fn validate(&self) -> Result<(), RenderError> {

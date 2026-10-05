@@ -124,6 +124,7 @@ pub(crate) fn job(id: &str, display: &str, needs: Vec<String>, steps: Vec<Step>)
         Job {
             display_name: display.to_owned(),
             runs_on: LABEL.to_owned(),
+            check_runner: None,
             timeout_minutes: JobTimeout::CRATE,
             needs,
             condition: None,

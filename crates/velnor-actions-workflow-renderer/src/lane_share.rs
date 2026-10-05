@@ -15,6 +15,8 @@ use crate::render::RenderContext;
 use crate::tree::RenderedFile;
 use crate::{RenderError, marker, steps, yaml::render_yaml};
 
+#[path = "lane_share_check.rs"]
+mod check;
 #[path = "lane_share_runtime.rs"]
 mod runtime;
 
@@ -66,10 +68,10 @@ struct SharedLaneParts {
 ///
 /// # Errors
 ///
-/// A pair whose timeout, condition, permissions, environment, or steps
-/// differ fails closed. Elected cache saves (`Save Mise tools`, `Save Tofu
-/// providers`) stay on the job that owns them and are not part of that
-/// comparison. An unsafe logical id fails closed.
+/// A pair whose timeout, permissions, environment, or common steps differ
+/// fails closed. The one typed hosted check admission condition may differ;
+/// lane identities, report uploads, and elected cache saves remain in their
+/// owning jobs. An unsafe logical id fails closed.
 pub(crate) fn share_lanes(
     jobs: &BTreeMap<String, Job>,
     ctx: &RenderContext,
@@ -199,7 +201,7 @@ fn logical_id(hosted_id: &str) -> Option<&str> {
 
 fn split_pair(hosted: &Job, local: &Job, checkout_uses: &str) -> Option<SharedLaneParts> {
     if hosted.timeout_minutes != local.timeout_minutes
-        || hosted.condition != local.condition
+        || !check::same_or_admitted_condition(hosted, local)
         || hosted.permissions != local.permissions
         || hosted.environment != local.environment
     {
@@ -277,8 +279,16 @@ fn split_shared_steps(
     let mut local_prelude = local_prelude;
     hosted_prelude.extend(hosted_provider_prefix);
     local_prelude.extend(local_provider_prefix);
-    let (hosted_common, hosted_postlude) = crate::lane_share_sections::peel_postlude(hosted_tail);
-    let (local_common, local_postlude) = crate::lane_share_sections::peel_postlude(local_tail);
+    let (hosted_common, hosted_cache_postlude) =
+        crate::lane_share_sections::peel_postlude(hosted_tail);
+    let (local_common, local_cache_postlude) =
+        crate::lane_share_sections::peel_postlude(local_tail);
+    let (hosted_common, hosted_lane_specific) = check::peel_lane_specific(&hosted_common);
+    let (local_common, local_lane_specific) = check::peel_lane_specific(&local_common);
+    let mut hosted_postlude = hosted_lane_specific;
+    hosted_postlude.extend(hosted_cache_postlude);
+    let mut local_postlude = local_lane_specific;
+    local_postlude.extend(local_cache_postlude);
     (hosted_common == local_common).then_some(SharedLaneParts {
         checkout: checkout.clone(),
         hosted_runtime_prelude: Vec::new(),
@@ -364,3 +374,7 @@ mod shell_tests;
 #[cfg(test)]
 #[path = "lane_share_unpinned_tests.rs"]
 mod unpinned_tests;
+
+#[cfg(test)]
+#[path = "lane_share_named_check_tests.rs"]
+mod named_check_tests;
