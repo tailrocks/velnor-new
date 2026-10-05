@@ -3,5 +3,5 @@ e8b37bd2c2e072053779a49aa8c24e3f07cb382690cab7dc59756b8899b61854  ./.github/acti
 3596e2cb66fab24a46f57a7074613e13ad3a642bbc79724d4d66000d6715c35b  ./.github/actions/u26/action.yml
 9bb8644cd07f0374cf0c7382e7a809fd766c3babfbc79ffe372e3321324d64f9  ./.github/actions/velnor-tool-seed/action.yml
 9a9fbc1c5c49dc05bfc5bf5ff857e4b8f3b92613cc95c37fec1643b88e8dee4e  ./.github/scripts/velnor-tools-cache-identity.sh
-b6b9f74841e60bdc74fe98bdd07bd2b799913856442430a7cf013a819fc1250a  ./.github/workflows/ci.yml
+7a72c6532ff901188efdd2f437850d0f66d9f79d95788bb068b1c402fc52568a  ./.github/workflows/ci.yml
 link ./.github/CLAUDE.md -> AGENTS.md
