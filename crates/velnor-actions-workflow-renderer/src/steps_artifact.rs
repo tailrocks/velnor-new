@@ -5,7 +5,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::Step;
+use velnor_actions_contract::{Step, StepId, StepRole};
 
 use super::steps::{
     ARTIFACT_RETENTION_DAYS, CRATE_REPORT_UPLOAD_NAME, DOWNLOAD_ARTIFACT_USES,
@@ -60,7 +60,9 @@ pub fn download_artifact_step(name: &str, path: &str) -> Result<Step, RenderErro
 /// is attached at render.
 /// # Errors
 pub fn matrix_report_upload_step() -> Result<Step, RenderError> {
-    matrix_report_upload_raw("${{ matrix.matrix_key }}", MATRIX_REPORT_UPLOAD_NAME)
+    let mut step = matrix_report_upload_raw("${{ matrix.matrix_key }}", MATRIX_REPORT_UPLOAD_NAME)?;
+    step.role = Some(StepRole::MatrixReportUpload);
+    Ok(step)
 }
 
 /// Crate-report upload for one job (`velnor-crate-<run-key>-<job-id>`).
@@ -72,7 +74,7 @@ pub fn matrix_report_upload_step() -> Result<Step, RenderError> {
 /// # Errors
 pub fn crate_job_report_upload_step(job_id: &str) -> Result<Step, RenderError> {
     velnor_actions_contract::validate_job_id(job_id).map_err(RenderError::Contract)?;
-    action_step(
+    let mut step = action_step(
         CRATE_REPORT_UPLOAD_NAME,
         UPLOAD_ARTIFACT_USES,
         BTreeMap::from([
@@ -90,13 +92,15 @@ pub fn crate_job_report_upload_step(job_id: &str) -> Result<Step, RenderError> {
                 ARTIFACT_RETENTION_DAYS.to_string(),
             ),
         ]),
-    )
+    )?;
+    step.role = Some(StepRole::MatrixReportUpload);
+    Ok(step)
 }
 
 /// Baseline-publish upload step display name.
 pub const BASELINE_PUBLISH_UPLOAD_NAME: &str = "Upload baseline";
 /// Step ID of the baseline-publishing internal step.
-pub const PUBLISH_STEP_ID: &str = "publish-baseline";
+pub const PUBLISH_STEP_ID: &str = StepId::PublishBaseline.as_str();
 /// Step-output name carrying the derived baseline artifact name.
 pub const ARTIFACT_NAME_OUTPUT: &str = "artifact_name";
 /// Retention for published baseline artifacts, in days.
