@@ -138,14 +138,16 @@ impl LoopDriver for ListenerSession {
 
     fn has_pending_cleanup<'a>(&'a mut self) -> LoopFuture<'a, bool> {
         Box::pin(async move {
-            self.journal
-                .completed_launches()
-                .await
-                .map(|rows| !rows.is_empty())
-                .map_err(|_| EnsureError::Unexpected {
-                    status: 0,
-                    step: "test-journal",
-                })
+            self.journal.completed_launches().await.map_or_else(
+                |error| {
+                    eprintln!("poll-test completed launches failed: {error:?}");
+                    Err(EnsureError::Unexpected {
+                        status: 0,
+                        step: "test-journal",
+                    })
+                },
+                |rows| Ok(!rows.is_empty()),
+            )
         })
     }
 
@@ -185,14 +187,20 @@ async fn schedule_completion(
     let row = journal
         .rows()
         .await
-        .map_err(|_| test_journal_error())?
+        .map_err(|error| {
+            eprintln!("poll-test journal rows failed: {error:?}");
+            test_journal_error()
+        })?
         .into_iter()
         .find(|row| row.assignment_key.as_deref() == Some(&assignment_key))
-        .ok_or_else(test_journal_error)?;
-    let identity = journal
-        .launch_identity(row.id)
-        .await
-        .map_err(|_| test_journal_error())?;
+        .ok_or_else(|| {
+            eprintln!("poll-test assignment row missing: {assignment_key}");
+            test_journal_error()
+        })?;
+    let identity = journal.launch_identity(row.id).await.map_err(|error| {
+        eprintln!("poll-test launch identity failed: {error:?}");
+        test_journal_error()
+    })?;
     let name = format!("v{}", identity.launch_id());
     batch.jobs[index].runner_name = Some(name.clone());
     completion::record_completion_events(journal, SET_ID, polled).await?;
