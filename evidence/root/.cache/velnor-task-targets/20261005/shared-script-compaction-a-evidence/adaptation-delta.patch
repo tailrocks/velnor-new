@@ -1,0 +1,87 @@
+--- a/document_shared_scripts.rs
++++ b/document_shared_scripts.rs
+@@ -143,22 +143,13 @@
+     if text.len() <= crate::workflow_size::MAX_WORKFLOW_BYTES {
+         return Ok(text);
+     }
+-    let excluded = shared.calls.keys().cloned().collect();
+-    if let Some(file) =
+-        crate::tool_seed_setup_share::factor_one_group(&mut shared.jobs, &excluded, ctx)?
+-    {
++    let files = share_trusted_scripts(shared, ctx)?;
++    let changed = !files.is_empty();
++    for file in files {
+         push_unique_file(shared, file)?;
+-        text = render(shared)?;
+     }
+-    if text.len() > crate::workflow_size::MAX_WORKFLOW_BYTES {
+-        let files = share_trusted_scripts(shared, ctx)?;
+-        let changed = !files.is_empty();
+-        for file in files {
+-            push_unique_file(shared, file)?;
+-        }
+-        if changed {
+-            text = render(shared)?;
+-        }
++    if changed {
++        text = render(shared)?;
+     }
+     Ok(text)
+ }
+--- a/document_shared_scripts_tests.rs
++++ b/document_shared_scripts_tests.rs
+@@ -3,7 +3,7 @@
+ use velnor_actions_contract::workflow::permissions::PermissionLevel;
+ use velnor_actions_contract::{Job, JobTimeout, Permissions, StepKind, digest_b3};
+ 
+-use super::{SCRIPT_ROOT, share_trusted_scripts};
++use super::{SCRIPT_ROOT, compact_oversized_workflow, share_trusted_scripts};
+ use crate::lane_share::LaneShare;
+ use crate::render::RenderContext;
+ use crate::{marker, steps, toolchain_env};
+@@ -130,6 +130,45 @@
+ }
+ 
+ #[test]
++fn oversized_workflow_renders_once_after_trusted_scripts_are_shared() {
++    let ctx = context();
++    let mut shared = shared_fixture(&ctx);
++    let render_calls = std::cell::Cell::new(0);
++    let compacted = compact_oversized_workflow(
++        &mut shared,
++        &ctx,
++        "x".repeat(crate::workflow_size::MAX_WORKFLOW_BYTES + 1),
++        |shared| {
++            render_calls.set(render_calls.get() + 1);
++            assert_eq!(shared.files.len(), 2);
++            Ok("compacted".to_owned())
++        },
++    )
++    .expect("compact eligible factory bodies");
++
++    assert_eq!(compacted, "compacted");
++    assert_eq!(render_calls.get(), 1);
++}
++
++#[test]
++fn under_limit_workflow_skips_sharing_and_rerender() {
++    let ctx = context();
++    let mut shared = shared_fixture(&ctx);
++    let original = shared.jobs.clone();
++    let render_calls = std::cell::Cell::new(0);
++    let text = compact_oversized_workflow(&mut shared, &ctx, "small".to_owned(), |_| {
++        render_calls.set(render_calls.get() + 1);
++        Ok("unexpected".to_owned())
++    })
++    .expect("leave under-limit workflow alone");
++
++    assert_eq!(text, "small");
++    assert_eq!(render_calls.get(), 0);
++    assert_jobs_equal(&original, &shared.jobs);
++    assert!(shared.files.is_empty());
++}
++
++#[test]
+ fn one_job_or_modified_triplet_does_not_emit_shared_files() {
+     let ctx = context();
+     let mut one = shared_fixture(&ctx);

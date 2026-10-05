@@ -1,0 +1,6 @@
+name: Post fail
+description: Fail the main script and still run the post script.
+runs:
+  using: node24
+  main: main.js
+  post: post.js

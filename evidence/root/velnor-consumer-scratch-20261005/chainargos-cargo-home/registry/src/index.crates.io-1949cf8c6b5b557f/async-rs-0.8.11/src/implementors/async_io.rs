@@ -1,0 +1,59 @@
+use crate::{sys::AsSysFd, traits::Reactor, util::IOHandle};
+use async_io::{Async, Timer};
+use futures_core::Stream;
+use futures_io::{AsyncRead, AsyncWrite};
+use std::{
+    future::Future,
+    io::{self, Read, Write},
+    net::{SocketAddr, TcpStream},
+    time::{Duration, Instant},
+};
+
+/// Dummy object implementing reactor common interfaces on top of async-io
+#[derive(Debug, Default, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct AsyncIO;
+
+impl Reactor for AsyncIO {
+    type TcpStream = Async<TcpStream>;
+    type Sleep = Timer;
+
+    fn register<H: Read + Write + AsSysFd + Send + 'static>(
+        &self,
+        socket: H,
+    ) -> io::Result<impl AsyncRead + AsyncWrite + Send + Unpin + 'static> {
+        Async::new(IOHandle::new(socket))
+    }
+
+    fn sleep(&self, dur: Duration) -> Self::Sleep {
+        Timer::after(dur)
+    }
+
+    fn interval(&self, dur: Duration) -> impl Stream<Item = Instant> + Send + 'static {
+        Timer::interval(dur)
+    }
+
+    fn tcp_connect_addr(
+        &self,
+        addr: SocketAddr,
+    ) -> impl Future<Output = io::Result<Self::TcpStream>> + Send + 'static {
+        async move {
+            let stream = Async::<TcpStream>::connect(addr).await?;
+            stream.get_ref().set_nodelay(true)?;
+            Ok(stream)
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn auto_traits() {
+        use crate::util::test::*;
+        let runtime = AsyncIO;
+        assert_send(&runtime);
+        assert_sync(&runtime);
+        assert_clone(&runtime);
+    }
+}

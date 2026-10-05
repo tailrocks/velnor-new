@@ -1,0 +1,7 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.06s
+────────────
+ Nextest run ID ea8b2359-0ddf-436c-973f-ab268fb01688 with nextest profile: default
+    Starting 1 test across 1 binary (257 tests skipped)
+        PASS [   0.004s] (1/1) velnor-actions-cli::velnor_cli impl_repo_freshness_support::freshness_support_is_private_and_separately_classified
+────────────
+     Summary [   0.005s] 1 test run: 1 passed, 257 skipped

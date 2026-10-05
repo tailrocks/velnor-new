@@ -1,0 +1,3143 @@
+diff --git a/crates/velnor-actions-orchestrator/src/finalized.rs b/crates/velnor-actions-orchestrator/src/finalized.rs
+index 604dc01f0..b26100f7d 100644
+--- a/crates/velnor-actions-orchestrator/src/finalized.rs
++++ b/crates/velnor-actions-orchestrator/src/finalized.rs
+@@ -13,7 +13,7 @@ use velnor_actions_workflow_renderer::finalize_jobs as finalize_render_jobs;
+ 
+ use crate::OrchestratorError;
+ use crate::attach::{attach_lock_acquire, attach_preseed};
+-use crate::pins::resolve_mise_setup;
++use crate::pins::{resolve_mise_setup, resolve_mise_setup_set};
+ use crate::prepare::GenerationPreparation;
+ use crate::validate::verify_velnor_repository_files;
+ 
+@@ -61,7 +61,8 @@ pub fn finalized_jobs(
+     prep: &GenerationPreparation,
+ ) -> Result<BTreeMap<String, Job>, OrchestratorError> {
+     let owned = owned_preparation(prep)?;
+-    let mise = resolve_mise_setup(&owned.config, &owned.runner_label)?;
++    let configured_mise = resolve_mise_setup(&owned.config, &owned.runner_label)?;
++    let mise = resolve_mise_setup_set(&owned.config, &owned.runner_label, &configured_mise)?;
+     let ir = expand_workflow(&owned.workflow.ir, &owned.config, None).map_err(|err| {
+         OrchestratorError::Contract {
+             problem: err.to_string(),
+diff --git a/crates/velnor-actions-orchestrator/src/generate.rs b/crates/velnor-actions-orchestrator/src/generate.rs
+index 3eb0331eb..9953cfc00 100644
+--- a/crates/velnor-actions-orchestrator/src/generate.rs
++++ b/crates/velnor-actions-orchestrator/src/generate.rs
+@@ -13,7 +13,7 @@ use velnor_actions_workflow_renderer::tree::render_tree_with_extra;
+ 
+ use crate::OrchestratorError;
+ use crate::finalized::owned_preparation;
+-use crate::pins::resolve_mise_setup;
++use crate::pins::{resolve_mise_setup, resolve_mise_setup_set};
+ use crate::prepare::GenerationPreparation;
+ use crate::provenance::{ProfileProvenance, profile_provenance};
+ use crate::validate::validate_staged;
+@@ -22,6 +22,10 @@ use crate::validate::validate_staged;
+ #[path = "generate_guards.rs"]
+ pub(crate) mod guards;
+ 
++/// Actionlint 1.7.12 false-positive ignore for `$/` self-repository calls.
++#[path = "self_repo_gap.rs"]
++mod self_repo_gap;
++
+ /// Re-exported snapshot: the `generate::ToolSnapshot` path is stable API.
+ pub use guards::ToolSnapshot;
+ 
+@@ -166,6 +170,7 @@ fn render_all(
+ ) -> Result<RenderedTree, OrchestratorError> {
+     let version = env!("CARGO_PKG_VERSION");
+     let mise = resolve_mise_setup(&prep.config, &prep.runner_label)?;
++    let mise_set = resolve_mise_setup_set(&prep.config, &prep.runner_label, &mise)?;
+     let ir = expand_workflow(&prep.workflow.ir, &prep.config, dispatch).map_err(|err| {
+         OrchestratorError::Contract {
+             problem: err.to_string(),
+@@ -176,7 +181,7 @@ fn render_all(
+         prep.config.workflow.policy,
+         prep.workflow.support.as_ref(),
+         &prep.workflow.context,
+-        &mise,
++        &mise_set,
+     )?;
+     let workflow = rendered.yaml;
+     let actionlint = render_actionlint_yaml(&prep.workflow.actionlint)?;
+@@ -186,6 +191,7 @@ fn render_all(
+     extra.extend(crate::routing::extra_files(&prep.config, version)?);
+     extra.extend(rendered.shared);
+     extra.extend(crate::foundation_qualification::files(prep)?);
++    let actionlint = self_repo_gap::note(&actionlint, &workflow, &extra)?;
+     let tree = render_tree_with_extra(&workflow, &actionlint, &extra, version)?;
+     Ok(tree)
+ }
+diff --git a/crates/velnor-actions-orchestrator/src/pins.rs b/crates/velnor-actions-orchestrator/src/pins.rs
+index 6e0b88889..dc74bb472 100644
+--- a/crates/velnor-actions-orchestrator/src/pins.rs
++++ b/crates/velnor-actions-orchestrator/src/pins.rs
+@@ -1,9 +1,9 @@
+ //! Compiled pin resolution: Mise setup plus helper provenance.
+ //!
+ //! Resolves `[actions.overrides]` against the compiled approved-pair catalog,
+-//! gates the installed-mise digest to the single x64-Linux runner target, and
+-//! builds digest-verified helper acquisition from release or lock provenance.
+-//! Anything without provenance fails closed; no digest is ever invented.
++//! selects installed-Mise digests by qualified runner target, and builds
++//! digest-verified helper acquisition from release or lock provenance. Anything
++//! without provenance fails closed; no digest is ever invented.
+ 
+ use velnor_actions_actionlint::actions::{MISE_ACTION_SHA, MISE_ACTION_VERSION};
+ use velnor_actions_actionlint::overrides::{
+@@ -15,7 +15,7 @@ use velnor_actions_contract::{
+ };
+ use velnor_actions_mise::MISE_VERSION;
+ use velnor_actions_workflow_renderer::{
+-    HelperProvenance, MiseSetup, STAGED_BINARY_PREFIX, provision_acquire_step,
++    HelperProvenance, MiseSetup, MiseSetupSet, STAGED_BINARY_PREFIX, provision_acquire_step,
+ };
+ 
+ use crate::OrchestratorError;
+@@ -24,42 +24,100 @@ use crate::discover::Discovery;
+ /// Override key selecting the Mise setup action pin.
+ const MISE_ACTION_KEY: &str = "jdx/mise-action";
+ 
+-/// Installed `mise` binary digest for mise 2026.9.18 on Linux x86-64.
++/// Installed `mise` binary digest for mise 2026.10.2 on Linux x86-64.
+ ///
+-/// Source: `SHASUMS256.txt` of the jdx/mise `v2026.9.18` release, verified
+-/// 2026-09-30 by downloading `mise-v2026.9.18-linux-x64.tar.zst`, extracting
+-/// `mise/bin/mise`, and hashing the extracted binary. The setup action
+-/// compares its `sha256` input against the installed binary, not the archive,
+-/// so only this digest is emitted, and only for x64-Linux runners.
++/// Source: official tag `v2026.10.2`, commit
++/// `44ea2537166efbe21b19d808355d9914e830941a`; the Linux x64 archive
++/// `mise-v2026.10.2-linux-x64.tar.gz` SHA-256 is
++/// `79a2bf0ffc9b8a9a6391344e875b3c3679c15053fda3e8728ddf1790d63db788`.
++/// Its extracted `mise/bin/mise` SHA-256 is the digest emitted below. The
++/// real Phase 0 probe passed on Linux x86-64. The setup action checks the
++/// installed binary, not the archive, and this pin is only for x64 Linux.
+ const MISE_BINARY_SHA256_LINUX_X64: &str =
+-    "d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4";
++    "8f5f6660336f572830e33cd9b378d3131e529a0d4c4f0c553776be90a1ba302a";
++/// Installed Mise digest for the official v2026.10.2 macOS ARM64 binary.
++///
++/// Source: official release asset `mise-v2026.10.2-macos-arm64`, tag commit
++/// `44ea2537166efbe21b19d808355d9914e830941a`; its downloaded executable SHA-256
++/// is `66d49acecca413c8b334922584982a4907a10588912829873d6c55d0c6d42612`.
++/// The `jdx/mise-action` input checks the installed binary digest.
++const MISE_BINARY_SHA256_MACOS_ARM64: &str =
++    "66d49acecca413c8b334922584982a4907a10588912829873d6c55d0c6d42612";
+ 
+-/// Runner target the compiled mise digest covers.
++/// Linux x64 target covered by the compiled Mise digest.
+ const LINUX_X64_TARGET: &str = "x86_64-unknown-linux-gnu";
++/// macOS ARM64 target covered by the compiled Mise digest.
++const MACOS_ARM64_TARGET: &str = "aarch64-apple-darwin";
++/// Runner label used by the repository's native Apple Silicon Phase0 job.
++const MACOS_ARM64_RUNNER_LABEL: &str = "macos-15";
+ 
+ /// Resolve typed Mise setup pins: overrides plus the compiled catalog.
+ ///
+ /// The `uses` ref comes from `[actions.overrides]` when present (approved
+ /// pairs only; anything else fails closed) or the compiled default pin.
+ /// `version` is the compiled Mise release; `sha256` is the verified
+-/// installed-binary digest, so non-x64-Linux labels fail closed rather than
+-/// emitting a digest for the wrong architecture.
++/// installed-binary digest for the selected target. Only the repository's
++/// supported Linux x64 and native macOS ARM64 runners are accepted.
+ pub(crate) fn resolve_mise_setup(
+     config: &VelnorConfig,
+     label: &str,
+ ) -> Result<MiseSetup, OrchestratorError> {
+-    if target_for_runner_label(label) != Some(LINUX_X64_TARGET) {
+-        return Err(OrchestratorError::Contract {
++    let target =
++        mise_target_for_runner_label(label).ok_or_else(|| OrchestratorError::Contract {
+             problem: format!("mise_setup_unsupported_target:{label}"),
+-        });
+-    }
++        })?;
+     Ok(MiseSetup {
+         uses: mise_action_uses(config)?,
+         version: MISE_VERSION.to_owned(),
+-        sha256: MISE_BINARY_SHA256_LINUX_X64.to_owned(),
++        sha256: mise_binary_sha256(target)?.to_owned(),
+     })
+ }
+ 
++/// Resolve all typed Mise setup records needed by one generated workflow.
++///
++/// The configured runner's setup is reused; only the other supported native
++/// platform is resolved separately. Action overrides therefore apply to both
++/// records without duplicating override policy.
++pub(crate) fn resolve_mise_setup_set(
++    config: &VelnorConfig,
++    label: &str,
++    configured_setup: &MiseSetup,
++) -> Result<MiseSetupSet, OrchestratorError> {
++    let configured_target =
++        mise_target_for_runner_label(label).ok_or_else(|| OrchestratorError::Contract {
++            problem: format!("mise_setup_unsupported_target:{label}"),
++        })?;
++    let mut setups = vec![(configured_target.to_owned(), configured_setup.clone())];
++    for (target, runner_label) in [
++        (LINUX_X64_TARGET, "ubuntu-26.04"),
++        (MACOS_ARM64_TARGET, MACOS_ARM64_RUNNER_LABEL),
++    ] {
++        if target != configured_target {
++            setups.push((target.to_owned(), resolve_mise_setup(config, runner_label)?));
++        }
++    }
++    Ok(MiseSetupSet::new(setups)?)
++}
++
++/// Resolve the exact supported target for a hosted label.
++fn mise_target_for_runner_label(label: &str) -> Option<&'static str> {
++    if label == MACOS_ARM64_RUNNER_LABEL {
++        return Some(MACOS_ARM64_TARGET);
++    }
++    (target_for_runner_label(label) == Some(LINUX_X64_TARGET)).then_some(LINUX_X64_TARGET)
++}
++
++/// Select the digest compiled for one supported Mise target.
++fn mise_binary_sha256(target: &str) -> Result<&'static str, OrchestratorError> {
++    match target {
++        LINUX_X64_TARGET => Ok(MISE_BINARY_SHA256_LINUX_X64),
++        MACOS_ARM64_TARGET => Ok(MISE_BINARY_SHA256_MACOS_ARM64),
++        _ => Err(OrchestratorError::Contract {
++            problem: format!("mise_setup_unsupported_target:{target}"),
++        }),
++    }
++}
++
+ /// Resolve the Mise action ref: an approved override or the compiled default.
+ fn mise_action_uses(config: &VelnorConfig) -> Result<String, OrchestratorError> {
+     let Some(pin) = config.actions.overrides.get(MISE_ACTION_KEY) else {
+@@ -207,7 +265,7 @@ fn acquire_argv(staged: &str) -> Vec<String> {
+ #[cfg(test)]
+ fn test_manifest_json() -> String {
+     let version = env!("CARGO_PKG_VERSION");
+-    let targets = velnor_actions_contract::SUPPORTED_TARGETS
++    let targets = ["x86_64-unknown-linux-gnu", "aarch64-apple-darwin", "x86_64-apple-darwin"]
+         .iter()
+         .map(|target| {
+             format!(
+diff --git a/crates/velnor-actions-orchestrator/src/pins_tests.rs b/crates/velnor-actions-orchestrator/src/pins_tests.rs
+index b3f736397..f9ff44793 100644
+--- a/crates/velnor-actions-orchestrator/src/pins_tests.rs
++++ b/crates/velnor-actions-orchestrator/src/pins_tests.rs
+@@ -139,8 +139,17 @@ fn mise_setup_accepts_approved_override_only() {
+             version: MISE_ACTION_VERSION.to_owned(),
+         },
+     )]);
+-    let setup = resolve_mise_setup(&config_with(approved), "ubuntu-26.04");
+-    assert!(setup.is_ok_and(|setup| setup.uses.ends_with(MISE_ACTION_SHA)));
++    let config = config_with(approved);
++    let setup = resolve_mise_setup(&config, "ubuntu-26.04").expect("approved action pin");
++    assert!(setup.uses.ends_with(MISE_ACTION_SHA));
++    let set = resolve_mise_setup_set(&config, "ubuntu-26.04", &setup)
++        .expect("approved pin on each runner");
++    for target in ["x86_64-unknown-linux-gnu", "aarch64-apple-darwin"] {
++        assert!(
++            set.for_target(target)
++                .is_ok_and(|pin| pin.uses.ends_with(MISE_ACTION_SHA))
++        );
++    }
+     for pin in [
+         ActionPinOverride {
+             sha: "0".repeat(40),
+@@ -161,8 +170,48 @@ fn mise_setup_accepts_approved_override_only() {
+ }
+ 
+ #[test]
+-fn mise_setup_rejects_non_linux_runners() {
+-    for label in ["ubuntu-26.04-arm", "windows-latest", "ubuntu-latest"] {
++fn mise_setup_resolves_linux_and_macos_pins_from_their_targets() {
++    let config = config_with(BTreeMap::new());
++    let linux = resolve_mise_setup(&config, "ubuntu-26.04").expect("Linux setup");
++    assert_eq!(
++        linux.sha256,
++        "8f5f6660336f572830e33cd9b378d3131e529a0d4c4f0c553776be90a1ba302a"
++    );
++    let macos = resolve_mise_setup(&config, "macos-15").expect("macOS setup");
++    assert_eq!(
++        macos.sha256,
++        "66d49acecca413c8b334922584982a4907a10588912829873d6c55d0c6d42612"
++    );
++    assert_eq!(macos.version, linux.version);
++    assert_eq!(macos.uses, linux.uses);
++
++    let setup_set = resolve_mise_setup_set(&config, "ubuntu-26.04", &linux)
++        .expect("both supported target pins");
++    assert_eq!(
++        setup_set
++            .for_target("x86_64-unknown-linux-gnu")
++            .expect("Linux pin")
++            .sha256,
++        linux.sha256
++    );
++    assert_eq!(
++        setup_set
++            .for_target("aarch64-apple-darwin")
++            .expect("macOS pin")
++            .sha256,
++        macos.sha256
++    );
++}
++
++#[test]
++fn mise_setup_rejects_unsupported_runners() {
++    for label in [
++        "ubuntu-26.04-arm",
++        "windows-latest",
++        "ubuntu-latest",
++        "macos-latest",
++        "macos-14",
++    ] {
+         let err = resolve_mise_setup(&config_with(BTreeMap::new()), label);
+         assert!(
+             err.is_err_and(|err| err.to_string().contains("mise_setup_unsupported_target")),
+diff --git a/crates/velnor-actions-orchestrator/tests/impl_schema2_mbx_qualification.rs b/crates/velnor-actions-orchestrator/tests/impl_schema2_mbx_qualification.rs
+index 221539825..1aeb06406 100644
+--- a/crates/velnor-actions-orchestrator/tests/impl_schema2_mbx_qualification.rs
++++ b/crates/velnor-actions-orchestrator/tests/impl_schema2_mbx_qualification.rs
+@@ -18,7 +18,7 @@ fn protected_main_mbx_roundtrip_is_run_bound_and_read_only_on_restore() -> TestR
+     );
+     assert!(writer.contains("actions: write"), "{writer}");
+     assert!(writer.contains("ACTIONS_CACHE_MODE: write"), "{writer}");
+-    assert!(writer.contains("MBX_GC_AUTO: \"1\""), "{writer}");
++    assert!(!writer.contains("MBX_GC_AUTO"), "{writer}");
+     assert!(
+         writer.contains("save-on-workflow-dispatch: \"true\""),
+         "{writer}"
+@@ -47,7 +47,7 @@ fn protected_main_mbx_roundtrip_is_run_bound_and_read_only_on_restore() -> TestR
+     );
+     assert!(reader.contains("actions: read"), "{reader}");
+     assert!(reader.contains("ACTIONS_CACHE_MODE: read"), "{reader}");
+-    assert!(reader.contains("MBX_GC_AUTO: \"1\""), "{reader}");
++    assert!(!reader.contains("MBX_GC_AUTO"), "{reader}");
+     assert!(
+         reader.contains("steps.mbx_cache.outputs.cache-hit"),
+         "{reader}"
+diff --git a/crates/velnor-actions-orchestrator/tests/schema2_class_snapshot_continuation.txt b/crates/velnor-actions-orchestrator/tests/schema2_class_snapshot_continuation.txt
+index 694f36520..6325c6e9c 100644
+--- a/crates/velnor-actions-orchestrator/tests/schema2_class_snapshot_continuation.txt
++++ b/crates/velnor-actions-orchestrator/tests/schema2_class_snapshot_continuation.txt
+@@ -214,7 +214,6 @@
+       contents: read
+       actions: write
+     env:
+-      MBX_GC_AUTO: "1"
+       ACTIONS_CACHE_MODE: write
+       CARGO_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/cargo
+       MISE_AUTO_INSTALL: "false"
+@@ -271,7 +270,6 @@
+       contents: read
+       actions: read
+     env:
+-      MBX_GC_AUTO: "1"
+       ACTIONS_CACHE_MODE: read
+       CARGO_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/cargo
+       MISE_AUTO_INSTALL: "false"
+diff --git a/crates/velnor-actions-workflow-renderer/src/cache_steps.rs b/crates/velnor-actions-workflow-renderer/src/cache_steps.rs
+index 4a9477048..8426f65fd 100644
+--- a/crates/velnor-actions-workflow-renderer/src/cache_steps.rs
++++ b/crates/velnor-actions-workflow-renderer/src/cache_steps.rs
+@@ -5,17 +5,11 @@
+ 
+ use std::collections::BTreeMap;
+ 
+-use velnor_actions_contract::{Step, StepKind};
+-
+-#[path = "cache_steps_mbx_preflight.rs"]
+-mod mbx_preflight;
+-pub(crate) use mbx_preflight::{
+-    MBX_ACTION_CACHE_MODE, MBX_GC_AUTO_ENV, MBX_GC_AUTO_VALUE, is_mbx_action,
+-};
+-pub use mbx_preflight::{
+-    MBX_CACHE_MODE_ENV, MBX_PREFLIGHT_NAME, MBX_RESTORE_NAME, check_mbx_gating,
+-    mbx_steps_for_driver,
++use velnor_actions_contract::cachekey::{
++    MBX_CACHE_GENERATION_PREFIX, cache_key as typed_cache_key,
++    mbx_cache_generation, restore_prefix as typed_restore_prefix,
+ };
++use velnor_actions_contract::{Job, RunsOn, Step, StepKind, digest_b3};
+ 
+ use crate::{
+     RenderError,
+@@ -24,11 +18,16 @@ use crate::{
+ 
+ #[path = "cache_steps_tools.rs"]
+ mod tools;
++#[path = "cache_steps_mbx_preflight.rs"]
++mod mbx_preflight;
+ 
+ pub use tools::{
+     TOOLS_CACHE_PATH, TOOLS_KEY_PREFIX, TOOLS_RESTORE_NAME, TOOLS_RESTORE_USES, TOOLS_SAVE_NAME,
+     TOOLS_SAVE_USES, tools_cache_key, tools_restore_step, tools_save_step,
+ };
++pub use mbx_preflight::{
++    MBX_CACHE_MODE_ENV, MBX_PREFLIGHT_NAME, MBX_RESTORE_NAME, mbx_steps_for_driver,
++};
+ 
+ /// Pinned mr-boxington action name (objects mode).
+ pub const MBX_ACTION_NAME: &str = "jdx/mr-boxington-action";
+@@ -66,6 +65,335 @@ pub enum CompileDriver {
+     Mbx,
+ }
+ 
++/// Gate MBX action/tool presence against per-job driver selections.
++///
++/// Jobs without a declared driver are skipped (plan/final/lint carry
++/// none); declared Cargo jobs must be MBX-free while MBX jobs carry
++/// exactly one objects-mode step.
++/// # Errors
++pub fn check_mbx_gating(
++    jobs: &BTreeMap<String, Job>,
++    drivers: &BTreeMap<String, CompileDriver>,
++) -> Result<(), RenderError> {
++    for (id, driver) in drivers {
++        let Some(job) = jobs.get(id.as_str()) else {
++            return Err(RenderError::InvalidWorkflow(format!(
++                "mbx_gating_unknown_job:{id}"
++            )));
++        };
++        check_job_mbx(id, job, *driver)?;
++    }
++    Ok(())
++}
++
++/// Enforce one job's MBX presence against its declared driver.
++fn check_job_mbx(id: &str, job: &Job, driver: CompileDriver) -> Result<(), RenderError> {
++    let actions = job.steps.iter().filter(|step| is_mbx_action(step)).count();
++    let tools = job
++        .steps
++        .iter()
++        .any(|step| uses_mbx_tool(step) && !is_mbx_action(step));
++    match driver {
++        CompileDriver::Cargo => {
++            if actions > 0 {
++                return Err(RenderError::InvalidWorkflow(format!(
++                    "mbx_action_without_selection:{id}"
++                )));
++            }
++            if tools {
++                return Err(RenderError::InvalidWorkflow(format!(
++                    "mbx_tool_without_selection:{id}"
++                )));
++            }
++        }
++        CompileDriver::Mbx => {
++            if actions == 0 {
++                return Err(RenderError::InvalidWorkflow(format!(
++                    "mbx_missing_for_selection:{id}"
++                )));
++            }
++            if actions > 1 {
++                return Err(RenderError::InvalidWorkflow(format!("mbx_duplicated:{id}")));
++            }
++        }
++    }
++    Ok(())
++}
++
++/// True for `jdx/mr-boxington-action` steps.
++pub(crate) fn is_mbx_action(step: &Step) -> bool {
++    matches!(&step.kind, velnor_actions_contract::StepKind::Action { uses, .. } if uses.starts_with(&format!("{MBX_ACTION_NAME}@")))
++}
++
++/// Keep the pinned MBX action in local-only mode and add the explicit
++/// runner-cache transport only on supported hosted jobs.
++///
++/// A private per-job MBX store is established by the preceding PATH
++/// preflight. Hosted jobs restore/import one directory bundle before their
++/// producers and export/save it afterward; scale-set jobs have no remote
++/// transport until their store ownership is qualified.
++pub(crate) fn apply_mbx_cache_policy(
++    jobs: &mut BTreeMap<String, Job>,
++    default_label: &str,
++) -> Result<(), RenderError> {
++    for (id, job) in jobs {
++        let cache_target = hosted_cache_target(job, default_label);
++        let action_indices: Vec<usize> = job
++            .steps
++            .iter()
++            .enumerate()
++            .filter_map(|(index, step)| is_mbx_action(step).then_some(index))
++            .collect();
++        if action_indices.len() > 1 {
++            return Err(RenderError::InvalidWorkflow(format!(
++                "multiple_mbx_actions:{id}"
++            )));
++        }
++        for action_index in action_indices.into_iter().rev() {
++            let identity = configure_mbx_action(job, action_index, id)?;
++            if let Some(target) = cache_target {
++                let lifecycle = mbx_bundle_steps(id, job, target, &identity)?;
++                insert_before_producers(job, action_index, lifecycle.restore)?;
++                job.steps.extend(lifecycle.save);
++            }
++        }
++    }
++    Ok(())
++}
++
++struct MbxBundleLifecycle {
++    restore: [Step; 2],
++    save: [Step; 2],
++}
++
++fn configure_mbx_action(
++    job: &mut Job,
++    action_index: usize,
++    id: &str,
++) -> Result<(String, String), RenderError> {
++    let (version, toolchain) = mbx_action_identity(&job.steps[action_index], id)?;
++    let preflight = action_index
++        .checked_sub(1)
++        .and_then(|index| job.steps.get(index))
++        .ok_or_else(|| RenderError::InvalidWorkflow(format!("mbx_preflight_missing:{id}")))?;
++    if !mbx_preflight::matches_mbx_steps(
++        preflight,
++        &job.steps[action_index],
++        &version,
++        &toolchain,
++    ) {
++        return Err(RenderError::InvalidWorkflow(format!(
++            "mbx_preflight_mismatch:{id}"
++        )));
++    }
++    let StepKind::Action { with, env, .. } = &mut job.steps[action_index].kind else {
++        return Err(RenderError::InvalidWorkflow(format!("mbx_action_invalid:{id}")));
++    };
++    validate_mbx_action_policy(with, env, id)?;
++    with.insert("backend".to_owned(), "local".to_owned());
++    Ok((version, toolchain))
++}
++
++fn validate_mbx_action_policy(
++    with: &BTreeMap<String, String>,
++    env: &BTreeMap<String, String>,
++    id: &str,
++) -> Result<(), RenderError> {
++    if env.get(MBX_CACHE_MODE_ENV).map(String::as_str) != Some("read") {
++        return Err(RenderError::InvalidWorkflow(format!(
++            "mbx_cache_mode_not_read_only:{id}"
++        )));
++    }
++    if ["MBX_CACHE_DIR", "MBX_CACHE_EXPORT_GROUP", "MBX_GC_AUTO"]
++        .iter()
++        .any(|key| env.contains_key(*key))
++    {
++        return Err(RenderError::InvalidWorkflow(format!(
++            "mbx_store_policy_override:{id}"
++        )));
++    }
++    if with.keys().any(|key| {
++        key.starts_with("save-on-")
++            || matches!(
++                key.as_str(),
++                "backend"
++                    | "cache-key"
++                    | "restore-keys"
++                    | "isolate-objects-cache"
++                    | "cache-key-suffix"
++            )
++    }) {
++        return Err(RenderError::InvalidWorkflow(format!(
++            "mbx_cache_policy_override:{id}"
++        )));
++    }
++    Ok(())
++}
++
++fn mbx_bundle_steps(
++    id: &str,
++    job: &Job,
++    target: &str,
++    identity: &(String, String),
++) -> Result<MbxBundleLifecycle, RenderError> {
++    let (version, toolchain) = identity;
++    let compatibility = mbx_compatibility_digest(id, target, toolchain, version);
++    let snapshot = mbx_snapshot_digest(job);
++    let trusted_key = typed_cache_key("mbx", "trusted", &compatibility, &snapshot)
++        .map_err(RenderError::Contract)?;
++    let pr_key = typed_cache_key("mbx", "pr", &compatibility, &snapshot)
++        .map_err(RenderError::Contract)?;
++    let trusted_prefix = typed_restore_prefix("mbx", "trusted", &compatibility)
++        .map_err(RenderError::Contract)?;
++    let pr_prefix = typed_restore_prefix("mbx", "pr", &compatibility)
++        .map_err(RenderError::Contract)?;
++    let trust_selector = "github.event_name == 'push' && github.ref == 'refs/heads/main' && github.ref_protected";
++    let key = format!(
++        "${{{{ {trust_selector} && '{trusted_key}' || '{pr_key}' }}}}-${{{{ github.sha }}}}"
++    );
++    let prefix = format!(
++        "${{{{ {trust_selector} && '{trusted_prefix}' || '{pr_prefix}' }}}}"
++    );
++    let save_condition = format!(
++        "success() && {trust_selector}"
++    );
++    let steps = crate::stock_mbx_bundle::lifecycle_steps(
++        TOOLS_RESTORE_USES,
++        TOOLS_SAVE_USES,
++        &key,
++        &prefix,
++        &save_condition,
++    )?;
++    Ok(MbxBundleLifecycle {
++        restore: steps.restore,
++        save: steps.save,
++    })
++}
++
++fn mbx_compatibility_digest(id: &str, target: &str, toolchain: &str, version: &str) -> String {
++    let mut bytes = Vec::new();
++    for value in [
++        "velnor-mbx-directory-v1",
++        id,
++        target,
++        toolchain,
++        version,
++    ] {
++        append_identity_part(&mut bytes, value.as_bytes());
++    }
++    digest_b3(&bytes)
++}
++
++fn mbx_snapshot_digest(job: &Job) -> String {
++    let mut bytes = Vec::new();
++    for step in &job.steps {
++        append_identity_part(&mut bytes, step.name.as_bytes());
++        match &step.kind {
++            StepKind::Shell { run, env } => {
++                append_identity_part(&mut bytes, b"shell");
++                for arg in run {
++                    append_identity_part(&mut bytes, arg.as_bytes());
++                }
++                for (key, value) in env {
++                    if matches!(key.as_str(), "MBX_CACHE_DIR" | "MBX_CACHE_EXPORT_GROUP") {
++                        continue;
++                    }
++                    append_identity_part(&mut bytes, key.as_bytes());
++                    append_identity_part(&mut bytes, value.as_bytes());
++                }
++            }
++            StepKind::Action { uses, with, env } => {
++                append_identity_part(&mut bytes, b"action");
++                append_identity_part(&mut bytes, uses.as_bytes());
++                for (key, value) in with {
++                    append_identity_part(&mut bytes, key.as_bytes());
++                    append_identity_part(&mut bytes, value.as_bytes());
++                }
++                for (key, value) in env {
++                    append_identity_part(&mut bytes, key.as_bytes());
++                    append_identity_part(&mut bytes, value.as_bytes());
++                }
++            }
++            StepKind::Internal { operation } => {
++                append_identity_part(&mut bytes, b"internal");
++                append_identity_part(&mut bytes, operation.as_bytes());
++            }
++        }
++    }
++    digest_b3(&bytes)
++}
++
++fn append_identity_part(buffer: &mut Vec<u8>, part: &[u8]) {
++    buffer.extend_from_slice(&(part.len() as u64).to_be_bytes());
++    buffer.extend_from_slice(part);
++}
++
++fn insert_before_producers(
++    job: &mut Job,
++    action_index: usize,
++    restore: [Step; 2],
++) -> Result<(), RenderError> {
++    let insert_at = action_index
++        .checked_add(1)
++        .ok_or_else(|| RenderError::InvalidWorkflow("mbx_step_index_overflow".to_owned()))?;
++    job.steps.splice(insert_at..insert_at, restore);
++    Ok(())
++}
++
++fn mbx_action_identity(step: &Step, id: &str) -> Result<(String, String), RenderError> {
++    let StepKind::Action { with, .. } = &step.kind else {
++        return Err(RenderError::InvalidWorkflow(format!("mbx_action_invalid:{id}")));
++    };
++    if with.get("github-cache-mode").map(String::as_str) != Some("objects")
++        || with.contains_key("version")
++    {
++        return Err(RenderError::InvalidWorkflow(format!("mbx_action_inputs_invalid:{id}")));
++    }
++    let generation = with.get("cache-generation").ok_or_else(|| {
++        RenderError::InvalidWorkflow(format!("mbx_cache_generation_missing:{id}"))
++    })?;
++    let version = generation
++        .strip_prefix(MBX_CACHE_GENERATION_PREFIX)
++        .filter(|version| is_exact_mbx_version(version))
++        .ok_or_else(|| RenderError::InvalidWorkflow(format!("mbx_cache_generation_invalid:{id}")))?
++        .to_owned();
++    if *generation != mbx_cache_generation(&version) {
++        return Err(RenderError::InvalidWorkflow(format!(
++            "mbx_cache_generation_override:{id}"
++        )));
++    }
++    let toolchain = with.get("toolchain").cloned().ok_or_else(|| {
++        RenderError::InvalidWorkflow(format!("mbx_toolchain_missing:{id}"))
++    })?;
++    Ok((version, toolchain))
++}
++
++/// Whether a job maps to a supported hosted target rather than a selector.
++pub(crate) fn has_hosted_cache_target(job: &Job, default_label: &str) -> bool {
++    hosted_cache_target(job, default_label).is_some()
++}
++
++fn hosted_cache_target(job: &Job, default_label: &str) -> Option<&'static str> {
++    let is_scale_set = RunsOn::parse(&job.runs_on).is_ok_and(|selector| selector.is_scale_set());
++    (!is_scale_set)
++        .then(|| crate::job_runners::cache_target_for_job(job, default_label))
++        .flatten()
++}
++
++/// True when shell argv invokes the `mbx` program or tool spec.
++fn uses_mbx_tool(step: &Step) -> bool {
++    matches!(&step.kind, velnor_actions_contract::StepKind::Shell { run, .. } if run.iter().any(|arg| arg == "mbx" || arg.contains("mr-boxington")))
++}
++
++/// Exact MBX versions: three nonempty numeric dot parts, nothing else.
++fn is_exact_mbx_version(version: &str) -> bool {
++    let parts: Vec<&str> = version.split('.').collect();
++    parts.len() == 3
++        && parts
++            .iter()
++            .all(|part| !part.is_empty() && part.bytes().all(|b| b.is_ascii_digit()))
++}
++
+ /// Cache restore/save step over `actions/cache`; MBX never archives here.
+ /// # Errors
+ pub fn cache_action_step(
+@@ -85,12 +413,22 @@ pub fn cache_action_step(
+     if !uses.starts_with(&format!("{want}@")) {
+         return Err(RenderError::BadActionRef(format!("bad_cache_uses:{uses}")));
+     }
+-    if !matches!(layer, "sources" | "task" | "tools" | "tofu-providers") {
++    if !matches!(layer, "sources" | "task" | "tools" | "tofu-providers" | "mbx") {
+         return Err(RenderError::BadCommand("mbx_needs_objects_mode".to_owned()));
+     }
+-    if key.trim().is_empty() || key.contains(' ') || key.contains('\n') {
++    if !cache_key_shape_ok(key) || key.contains('\n') || key.contains('\r') {
+         return Err(RenderError::BadCommand("bad_cache_key".to_owned()));
+     }
++    crate::expressions::check_with_value("key", key)?;
++    for restore_key in restore_keys {
++        if !cache_key_shape_ok(restore_key)
++            || restore_key.contains('\n')
++            || restore_key.contains('\r')
++        {
++            return Err(RenderError::BadCommand("bad_cache_restore_key".to_owned()));
++        }
++        crate::expressions::check_with_value("restore-keys", restore_key)?;
++    }
+     if paths.is_empty() {
+         return Err(RenderError::BadCommand("empty_cache_paths".to_owned()));
+     }
+@@ -119,6 +457,7 @@ fn validate_cache_path(layer: &str, path: &str) -> Result<(), RenderError> {
+         || layer == "task" && path == TASK_ARTIFACTS_DIR
+         || layer == "tools" && path == TOOLS_CACHE_PATH
+         || layer == "tofu-providers" && crate::tofu_cache::tofu_providers_path_ok(path)
++        || layer == "mbx" && path == crate::stock_mbx_bundle::MBX_BUNDLE_CACHE_PATH
+     {
+         Ok(())
+     } else {
+@@ -126,6 +465,27 @@ fn validate_cache_path(layer: &str, path: &str) -> Result<(), RenderError> {
+     }
+ }
+ 
++fn cache_key_shape_ok(value: &str) -> bool {
++    if value.is_empty() {
++        return false;
++    }
++    let mut rest = value;
++    while let Some(start) = rest.find("${{") {
++        if !rest[..start].bytes().all(is_cache_key_literal_byte) {
++            return false;
++        }
++        let Some(end) = rest[start + 3..].find("}}") else {
++            return false;
++        };
++        rest = &rest[start + 3 + end + 2..];
++    }
++    rest.bytes().all(is_cache_key_literal_byte)
++}
++
++fn is_cache_key_literal_byte(byte: u8) -> bool {
++    byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-')
++}
++
+ /// P08 sources subset under the owned Cargo home expression.
+ fn sources_subset_ok(path: &str) -> bool {
+     const HOME: &str = "${{ runner.temp }}/velnor/cargo";
+diff --git a/crates/velnor-actions-workflow-renderer/src/cache_steps_mbx_preflight.rs b/crates/velnor-actions-workflow-renderer/src/cache_steps_mbx_preflight.rs
+index 3d7961dd8..ed7ca72d4 100644
+--- a/crates/velnor-actions-workflow-renderer/src/cache_steps_mbx_preflight.rs
++++ b/crates/velnor-actions-workflow-renderer/src/cache_steps_mbx_preflight.rs
+@@ -2,11 +2,11 @@
+ 
+ use std::collections::BTreeMap;
+ 
+-use super::{CompileDriver, MBX_ACTION_NAME};
++use super::{CompileDriver, MBX_ACTION_NAME, is_exact_mbx_version};
+ use crate::RenderError;
+ use crate::steps::{action_step_with_env, shell_step, validate_uses};
+ use velnor_actions_contract::cachekey::mbx_cache_generation;
+-use velnor_actions_contract::{Job, Step};
++use velnor_actions_contract::{Step, StepKind};
+ 
+ /// Display name for the strict MBX and Rust PATH preflight.
+ pub const MBX_PREFLIGHT_NAME: &str = "Verify MBX and Rust toolchains";
+@@ -35,6 +35,11 @@ pub fn mbx_steps_for_driver(
+                     "bad_rust_toolchain:{rust_toolchain}"
+                 )));
+             }
++            if env.contains_key(MBX_CACHE_MODE_ENV) {
++                return Err(RenderError::InvalidWorkflow(
++                    "mbx_cache_mode_override".to_owned(),
++                ));
++            }
+             let action_env = with_rustup_process_homes(env)?;
+             let preflight =
+                 mbx_path_preflight_step(mbx_version, rust_toolchain, action_env.clone())?;
+@@ -44,79 +49,10 @@ pub fn mbx_steps_for_driver(
+     }
+ }
+ 
+-/// Gate MBX action/tool presence against per-job driver selections.
+-///
+-/// Jobs without a declared driver are skipped (plan/final/lint carry
+-/// none); declared Cargo jobs must be MBX-free while MBX jobs carry
+-/// exactly one objects-mode step.
+-/// # Errors
+-pub fn check_mbx_gating(
+-    jobs: &BTreeMap<String, Job>,
+-    drivers: &BTreeMap<String, CompileDriver>,
+-) -> Result<(), RenderError> {
+-    for (id, driver) in drivers {
+-        let Some(job) = jobs.get(id.as_str()) else {
+-            return Err(RenderError::InvalidWorkflow(format!(
+-                "mbx_gating_unknown_job:{id}"
+-            )));
+-        };
+-        check_job_mbx(id, job, *driver)?;
+-    }
+-    Ok(())
+-}
+-
+-/// Enforce one job's MBX presence against its declared driver.
+-fn check_job_mbx(id: &str, job: &Job, driver: CompileDriver) -> Result<(), RenderError> {
+-    let actions = job.steps.iter().filter(|step| is_mbx_action(step)).count();
+-    let tools = job
+-        .steps
+-        .iter()
+-        .any(|step| uses_mbx_tool(step) && !is_mbx_action(step));
+-    match driver {
+-        CompileDriver::Cargo => {
+-            if actions > 0 {
+-                return Err(RenderError::InvalidWorkflow(format!(
+-                    "mbx_action_without_selection:{id}"
+-                )));
+-            }
+-            if tools {
+-                return Err(RenderError::InvalidWorkflow(format!(
+-                    "mbx_tool_without_selection:{id}"
+-                )));
+-            }
+-        }
+-        CompileDriver::Mbx => {
+-            if actions == 0 {
+-                return Err(RenderError::InvalidWorkflow(format!(
+-                    "mbx_missing_for_selection:{id}"
+-                )));
+-            }
+-            if actions > 1 {
+-                return Err(RenderError::InvalidWorkflow(format!("mbx_duplicated:{id}")));
+-            }
+-        }
+-    }
+-    Ok(())
+-}
+-
+-/// True for `jdx/mr-boxington-action` steps.
+-pub(crate) fn is_mbx_action(step: &Step) -> bool {
+-    matches!(&step.kind, velnor_actions_contract::StepKind::Action { uses, .. } if uses.starts_with(&format!("{MBX_ACTION_NAME}@")))
+-}
+-
+-/// True when shell argv invokes the `mbx` program or tool spec.
+-fn uses_mbx_tool(step: &Step) -> bool {
+-    matches!(&step.kind, velnor_actions_contract::StepKind::Shell { run, .. } if run.iter().any(|arg| arg == "mbx" || arg.contains("mr-boxington")))
+-}
+-
+ /// Env key the cache backend reads for its restore/save mode.
+ pub const MBX_CACHE_MODE_ENV: &str = "ACTIONS_CACHE_MODE";
+ /// Display name of the MBX objects restore step.
+ pub const MBX_RESTORE_NAME: &str = "Restore MBX objects";
+-/// MBX automatic collection must stay enabled so low-disk builds can recover.
+-pub(crate) const MBX_GC_AUTO_ENV: &str = "MBX_GC_AUTO";
+-/// MBX 1.21.1+ honors this value and protects active build consumers.
+-pub(crate) const MBX_GC_AUTO_VALUE: &str = "1";
+ /// Mode that skips the action post. `read` does not permit writes.
+ pub(crate) const MBX_ACTION_CACHE_MODE: &str = "read";
+ 
+@@ -195,6 +131,25 @@ fn mbx_path_preflight_step(
+     )
+ }
+ 
++/// Check that an MBX action's immediately preceding pair is exactly constructed.
++pub(super) fn matches_mbx_steps(
++    preflight: &Step,
++    action: &Step,
++    mbx_version: &str,
++    rust_toolchain: &str,
++) -> bool {
++    let StepKind::Shell { env, .. } = &preflight.kind else {
++        return false;
++    };
++    let StepKind::Action { uses, .. } = &action.kind else {
++        return false;
++    };
++    mbx_path_preflight_step(mbx_version, rust_toolchain, env.clone())
++        .is_ok_and(|expected| expected == *preflight)
++        && mbx_objects_action_step(uses, mbx_version, rust_toolchain, env.clone())
++            .is_ok_and(|expected| expected == *action)
++}
++
+ /// Objects-mode action restore; the prior preflight owns installation.
+ ///
+ /// Omitting `version` makes the action first reuse the already-validated
+@@ -202,8 +157,8 @@ fn mbx_path_preflight_step(
+ /// that second lookup misses; the immediately preceding preflight fails
+ /// for an absent/mismatched install and exposes the exact root for the
+ /// restore step. The explicit toolchain follows the build's catalog pin.
+-/// The step-level [`MBX_CACHE_MODE_ENV`] remains `read`, preserving the
+-/// existing manual bundle writer and transport lifecycle.
++/// The step-level [`MBX_CACHE_MODE_ENV`] remains `read`, disabling the
++/// action's implicit GitHub-cache post while Velnor owns explicit transport.
+ /// # Errors
+ fn mbx_objects_action_step(
+     uses: &str,
+@@ -260,15 +215,6 @@ fn with_rustup_process_homes(
+     Ok(env)
+ }
+ 
+-/// Exact MBX versions: three nonempty numeric dot parts, nothing else.
+-fn is_exact_mbx_version(version: &str) -> bool {
+-    let parts: Vec<&str> = version.split('.').collect();
+-    parts.len() == 3
+-        && parts
+-            .iter()
+-            .all(|part| !part.is_empty() && part.bytes().all(|b| b.is_ascii_digit()))
+-}
+-
+ /// Exact Rust toolchain selectors in the compiled catalog.
+ fn is_exact_rust_toolchain(toolchain: &str) -> bool {
+     let parts: Vec<&str> = toolchain.split('.').collect();
+diff --git a/crates/velnor-actions-workflow-renderer/src/document.rs b/crates/velnor-actions-workflow-renderer/src/document.rs
+index 373766df6..f3d4e961f 100644
+--- a/crates/velnor-actions-workflow-renderer/src/document.rs
++++ b/crates/velnor-actions-workflow-renderer/src/document.rs
+@@ -2,55 +2,34 @@
+ //!
+ //! Fixed key order: name, on, permissions, concurrency, jobs.
+ 
+-use std::collections::{BTreeMap, BTreeSet};
++use std::collections::BTreeMap;
+ 
+ use crate::{
+     RenderError,
+     composite::shared_call,
+-    document_steps::{step_to_yaml, string_map_yaml},
++    document_steps::step_to_yaml,
++    lane_share::SharedCall,
+     render::{FINAL_JOB_ID, RenderContext},
+     steps,
+     yaml::Yaml,
+ };
+ use velnor_actions_contract::{
+-    Job, Permissions, RunsOn, Step, StepKind, Trigger, WorkflowIr,
++    Job, Permissions, Trigger, WorkflowIr,
+     workflow::{ir::DispatchInput, permissions::PermissionLevel},
+ };
+ 
+-#[cfg(test)]
+-#[path = "document_runner_shell_tests.rs"]
+-mod runner_shell_tests;
+-
+ /// Build the workflow document: name, on, permissions, concurrency, jobs.
+ pub(crate) fn workflow_to_yaml(
+     ir: &WorkflowIr,
+     jobs: &BTreeMap<String, Job>,
+     ctx: &RenderContext,
+-    shared: &BTreeMap<String, String>,
+-    checkouts: &BTreeMap<String, Step>,
+-    mbx_gc_jobs: &BTreeSet<String>,
++    shared: &BTreeMap<String, Vec<SharedCall>>,
+ ) -> Result<Yaml, RenderError> {
+-    if shared.keys().ne(checkouts.keys()) || shared.keys().any(|id| !jobs.contains_key(id)) {
+-        return Err(RenderError::InvalidWorkflow(
+-            "shared_lane_checkout_map_mismatch".to_owned(),
+-        ));
+-    }
+     let needs_env = needs_channel_envs(jobs)?;
+     let mut rendered_jobs = Vec::with_capacity(jobs.len());
+     for (id, job) in jobs {
+-        let call = shared.get(id).map(String::as_str);
+-        rendered_jobs.push((
+-            id.clone(),
+-            job_to_yaml(
+-                id,
+-                job,
+-                ctx,
+-                &needs_env,
+-                call,
+-                checkouts,
+-                mbx_gc_jobs.contains(id),
+-            )?,
+-        ));
++        let calls = shared.get(id).map_or(&[][..], Vec::as_slice);
++        rendered_jobs.push((id.clone(), job_to_yaml(id, job, ctx, &needs_env, calls)?));
+     }
+     Ok(Yaml::Map(vec![
+         ("name".to_owned(), Yaml::str(ir.name.clone())),
+@@ -201,88 +180,20 @@ fn job_to_yaml(
+     job: &Job,
+     ctx: &RenderContext,
+     needs_envs: &[(String, String)],
+-    shared: Option<&str>,
+-    checkouts: &BTreeMap<String, Step>,
+-    mbx_gc_auto: bool,
++    shared: &[SharedCall],
+ ) -> Result<Yaml, RenderError> {
+     steps::scan_for_private_subcommands(&job.display_name)?;
+-    let runner = RunsOn::parse(&job.runs_on).map_err(RenderError::Contract)?;
+-    let scale_set = matches!(&runner, RunsOn::ScaleSet(_));
+-    let runs_on = match runner {
+-        RunsOn::Hosted(label) => Yaml::str(label),
+-        RunsOn::ScaleSet(selector) => Yaml::Flow(selector.labels().to_vec()),
+-    };
+-    let step_has_env = job.steps.iter().any(|step| match &step.kind {
+-        StepKind::Shell { env, .. } | StepKind::Action { env, .. } => !env.is_empty(),
+-        StepKind::Internal { .. } => false,
+-    });
+-    let mut job_env = if step_has_env {
+-        crate::toolchain_env::job_level_env()
+-    } else {
+-        BTreeMap::new()
+-    };
+-    if step_has_env {
+-        for step in &job.steps {
+-            let step_env = match &step.kind {
+-                StepKind::Shell { env, .. } | StepKind::Action { env, .. } => Some(env),
+-                StepKind::Internal { .. } => None,
+-            };
+-            if let Some(env) = step_env {
+-                if let Some(toolchain) = env.get("RUSTUP_TOOLCHAIN") {
+-                    job_env.insert("RUSTUP_TOOLCHAIN".to_owned(), toolchain.clone());
+-                }
+-                if step.name == crate::steps::ACQUIRE_NAME {
+-                    for key in [
+-                        crate::steps::ASSET_SHA_ENV,
+-                        crate::steps::ASSET_URL_ENV,
+-                        crate::steps::RELEASE_COMMIT_ENV,
+-                    ] {
+-                        if let Some(val) = env.get(key) {
+-                            job_env.insert(key.to_owned(), val.clone());
+-                        }
+-                    }
+-                }
+-            }
+-        }
+-    }
+-    if mbx_gc_auto {
+-        job_env.insert(
+-            crate::cache_steps::MBX_GC_AUTO_ENV.to_owned(),
+-            crate::cache_steps::MBX_GC_AUTO_VALUE.to_owned(),
+-        );
+-    }
+-    let mut entries = job_header_fields(job, runs_on);
+-    append_job_options(&mut entries, job, scale_set, &job_env)?;
+-    let rendered_steps = render_job_steps(id, job, ctx, needs_envs, shared, checkouts, &job_env)?;
+-    entries.push(("steps".to_owned(), Yaml::Seq(rendered_steps)));
+-    Ok(Yaml::Map(entries))
+-}
+-
+-fn job_header_fields(job: &Job, runs_on: Yaml) -> Vec<(String, Yaml)> {
+-    vec![
++    let mut entries = vec![
+         ("name".to_owned(), Yaml::str(job.display_name.clone())),
+-        ("runs-on".to_owned(), runs_on),
++        (
++            "runs-on".to_owned(),
++            crate::runs_on::runs_on_yaml(&job.runs_on)?,
++        ),
+         (
+             "timeout-minutes".to_owned(),
+             Yaml::Int(i64::from(job.timeout_minutes.minutes())),
+         ),
+-    ]
+-}
+-
+-fn append_job_options(
+-    entries: &mut Vec<(String, Yaml)>,
+-    job: &Job,
+-    scale_set: bool,
+-    job_env: &BTreeMap<String, String>,
+-) -> Result<(), RenderError> {
+-    if scale_set {
+-        entries.push(crate::runs_on::run_shell_defaults_field(
+-            crate::runs_on::SCALE_SET_RUN_SHELL,
+-        ));
+-    }
+-    if !job_env.is_empty() {
+-        entries.push(("env".to_owned(), string_map_yaml(job_env)));
+-    }
++    ];
+     if let Some(environment) = &job.environment {
+         entries.push(("environment".to_owned(), Yaml::str(environment.clone())));
+     }
+@@ -301,52 +212,63 @@ fn append_job_options(
+         steps::scan_for_private_subcommands(condition)?;
+         entries.push(("if".to_owned(), Yaml::str(condition.clone())));
+     }
+-    Ok(())
++    entries.push((
++        "steps".to_owned(),
++        render_job_steps(id, job, ctx, needs_envs, shared)?,
++    ));
++    Ok(Yaml::Map(entries))
+ }
+ 
++/// Render job-local steps around any shared composite calls.
+ fn render_job_steps(
+     id: &str,
+     job: &Job,
+     ctx: &RenderContext,
+     needs_envs: &[(String, String)],
+-    shared: Option<&str>,
+-    checkouts: &BTreeMap<String, Step>,
+-    job_env: &BTreeMap<String, String>,
+-) -> Result<Vec<Yaml>, RenderError> {
+-    let mut rendered_steps =
+-        Vec::with_capacity(job.steps.len() + 2 * usize::from(shared.is_some()));
+-    if let Some(uses) = shared {
+-        let Some(checkout) = checkouts.get(id) else {
+-            return Err(RenderError::InvalidWorkflow(format!(
+-                "shared_lane_missing_checkout:{id}"
+-            )));
+-        };
+-        if !valid_shared_checkout(checkout, &ctx.checkout_uses) {
++    shared: &[SharedCall],
++) -> Result<Yaml, RenderError> {
++    let job_env = BTreeMap::new();
++    let mut rendered_steps = Vec::with_capacity(job.steps.len() + shared.len());
++    let mut source_cursor = 0;
++    let mut previous_start = None;
++    for call in shared {
++        if call.before_step < source_cursor
++            || call.before_step > job.steps.len()
++            || previous_start.is_some_and(|previous| call.before_step <= previous)
++        {
+             return Err(RenderError::InvalidWorkflow(format!(
+-                "shared_lane_invalid_checkout:{id}"
++                "shared_call_order:{id}"
+             )));
+         }
+-        rendered_steps.push(step_to_yaml(id, checkout, ctx, needs_envs, false, job_env)?);
+-        rendered_steps.push(shared_call(uses)?);
+-    } else if checkouts.contains_key(id) {
+-        return Err(RenderError::InvalidWorkflow(format!(
+-            "checkout_without_shared_lane:{id}"
+-        )));
++        while source_cursor < call.before_step {
++            rendered_steps.push(step_to_yaml(
++                id,
++                &job.steps[source_cursor],
++                ctx,
++                needs_envs,
++                false,
++                &job_env,
++            )?);
++            source_cursor += 1;
++        }
++        rendered_steps.push(shared_call(&call.uses)?);
++        source_cursor = call
++            .before_step
++            .checked_add(call.skip_steps)
++            .filter(|end| *end <= job.steps.len())
++            .ok_or_else(|| RenderError::InvalidWorkflow(format!("shared_call_range:{id}")))?;
++        previous_start = Some(call.before_step);
+     }
+-    for step in &job.steps {
+-        rendered_steps.push(step_to_yaml(id, step, ctx, needs_envs, false, job_env)?);
++    while source_cursor < job.steps.len() {
++        rendered_steps.push(step_to_yaml(
++            id,
++            &job.steps[source_cursor],
++            ctx,
++            needs_envs,
++            false,
++            &job_env,
++        )?);
++        source_cursor += 1;
+     }
+-    Ok(rendered_steps)
+-}
+-
+-fn valid_shared_checkout(checkout: &Step, expected_uses: &str) -> bool {
+-    checkout.name == "Checkout"
+-        && checkout.condition.is_none()
+-        && matches!(
+-            &checkout.kind,
+-            StepKind::Action { uses, with, env }
+-                if uses == expected_uses
+-                    && with.get("persist-credentials").map(String::as_str) == Some("false")
+-                    && env.is_empty()
+-        )
++    Ok(Yaml::Seq(rendered_steps))
+ }
+diff --git a/crates/velnor-actions-workflow-renderer/src/document_steps.rs b/crates/velnor-actions-workflow-renderer/src/document_steps.rs
+index 748de74aa..3c9c6588e 100644
+--- a/crates/velnor-actions-workflow-renderer/src/document_steps.rs
++++ b/crates/velnor-actions-workflow-renderer/src/document_steps.rs
+@@ -84,7 +84,7 @@ fn action_step_to_yaml(
+     }
+     commands::validate_env(env)?;
+     let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
+-    crate::mbx_bundle::push_step_id(&mut entries, &step.name);
++    push_step_id(&mut entries, &step.name);
+     if let Some(condition) = &step.condition {
+         steps::scan_for_private_subcommands(condition)?;
+         entries.push(("if".to_owned(), Yaml::str(condition.clone())));
+@@ -121,6 +121,20 @@ pub(crate) fn string_map_yaml(map: &BTreeMap<String, String>) -> Yaml {
+     )
+ }
+ 
++/// Preserve typed workflow step IDs for action and shell serialization.
++fn push_step_id(entries: &mut Vec<(String, Yaml)>, name: &str) {
++    let id = match name {
++        crate::cache_steps::MBX_RESTORE_NAME => Some("mbx"),
++        "Restore MBX bundle" => Some("mbx_cache_restore"),
++        "Import MBX bundle" => Some("mbx_cache_import"),
++        "Export MBX bundle" => Some("mbx_cache_export"),
++        _ => None,
++    };
++    if let Some(id) = id {
++        entries.push(("id".to_owned(), Yaml::str(id)));
++    }
++}
++
+ /// Render one step; internal ops become env plus request file, never argv.
+ /// Every action ref (including the Alint pin) must be a full-SHA pin.
+ pub(crate) fn step_to_yaml(
+@@ -140,7 +154,7 @@ pub(crate) fn step_to_yaml(
+             commands::validate_command_argv(run)?;
+             commands::validate_env(env)?;
+             let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
+-            crate::mbx_bundle::push_step_id(&mut entries, &step.name);
++            push_step_id(&mut entries, &step.name);
+             if let Some(condition) = &step.condition {
+                 steps::scan_for_private_subcommands(condition)?;
+                 entries.push(("if".to_owned(), Yaml::str(condition.clone())));
+diff --git a/crates/velnor-actions-workflow-renderer/src/expressions.rs b/crates/velnor-actions-workflow-renderer/src/expressions.rs
+index 42fffb100..507a2b207 100644
+--- a/crates/velnor-actions-workflow-renderer/src/expressions.rs
++++ b/crates/velnor-actions-workflow-renderer/src/expressions.rs
+@@ -50,37 +50,32 @@ fn expression_spans(text: &str) -> Option<Vec<&str>> {
+ ///
+ /// Runner paths, the release tag, plan-matrix coordinates, the two
+ /// fixed secret bindings (bootstrap registry plus the release forge
+-/// token, whose placements the release gates still police separately),
+-/// and the push-gated cache-mode selector (a pure function of the
+-/// event name over string literals; the generator pins it on MBX
+-/// restore steps so PR runs can never become cache writers).
++/// token, whose placements the release gates still police separately).
+ /// Notably absent: `github.token` (render-time fetch binding only)
+ /// and run IDs (never in env).
+-const ENV_EXPRESSIONS: [&str; 8] = [
++const ENV_EXPRESSIONS: [&str; 5] = [
+     "runner.temp",
+     "github.ref_name",
+     "github.event_name",
+-    "github.event_name == 'push' && 'write' || 'read'",
+     "secrets.CARGO_REGISTRY_TOKEN",
+     "secrets.GITHUB_TOKEN",
+-    "steps.mbx.outputs.cache-primary-key",
+-    "steps.mbx-bundle.outputs.cache-matched-key",
+ ];
+ 
+ /// Exact `${{ }}` inners permitted in action `with:` values.
+ ///
+-/// Run-scoped names, runner paths, matrix coordinates, the
++/// Run- and job-scoped names, runner paths, matrix coordinates, the
+ /// push-gated cache-save flag, and the publish step's derived
+ /// artifact name. Notably absent: every `secrets.*` handle (rejected
+ /// separately as `secret_in_action_input`).
+-const WITH_EXPRESSIONS: [&str; 7] = [
++const WITH_EXPRESSIONS: [&str; 8] = [
+     "runner.temp",
+     "github.run_id",
+     "github.run_attempt",
++    "github.job",
+     "github.event_name == 'push'",
++    "github.event_name == 'push' && github.ref == 'refs/heads/main' && github.ref_protected && 'trusted' || 'pr'",
++    "github.sha",
+     "steps.publish-baseline.outputs.artifact_name",
+-    "steps.mbx.outputs.cache-primary-key",
+-    "steps.mbx-bundle-key.outputs.prefix",
+ ];
+ 
+ /// True for a `matrix.*` field reference (both layers allow the family).
+diff --git a/crates/velnor-actions-workflow-renderer/src/lane_share.rs b/crates/velnor-actions-workflow-renderer/src/lane_share.rs
+index 56db1a3b2..5633d746e 100644
+--- a/crates/velnor-actions-workflow-renderer/src/lane_share.rs
++++ b/crates/velnor-actions-workflow-renderer/src/lane_share.rs
+@@ -7,7 +7,7 @@
+ use std::collections::BTreeMap;
+ 
+ use velnor_actions_contract::workflow::lanes::{HOSTED_SUFFIX, SCALE_SUFFIX};
+-use velnor_actions_contract::{Job, Step, StepKind};
++use velnor_actions_contract::{Job, Step};
+ 
+ use crate::composite::composite_yaml;
+ use crate::document_steps::step_to_yaml;
+@@ -15,6 +15,10 @@ use crate::render::RenderContext;
+ use crate::tree::RenderedFile;
+ use crate::{RenderError, marker, steps, yaml::render_yaml};
+ 
++#[path = "lane_share_lcs.rs"]
++mod pair_sharing;
++pub(crate) use pair_sharing::SharedCall;
++
+ /// CI workflow plus composite actions for duplicated lanes.
+ #[derive(Debug, Clone, PartialEq, Eq)]
+ pub struct RenderedWorkflow {
+@@ -27,23 +31,14 @@ pub struct RenderedWorkflow {
+ /// Jobs rewritten to call a shared action, plus those action files.
+ #[derive(Debug)]
+ pub(crate) struct LaneShare {
+-    /// Same jobs, with shared lanes keeping their headers and elected saves.
++    /// Same jobs, with shared lanes keeping their headers and empty steps.
+     pub jobs: BTreeMap<String, Job>,
+-    /// Job id to local `uses` path.
+-    pub calls: BTreeMap<String, String>,
+-    /// Job id to the original checkout step rendered before each shared call.
+-    pub checkouts: BTreeMap<String, Step>,
+-    /// Composite action files, one per logical job.
++    /// Job id to ordered local composite calls.
++    pub calls: BTreeMap<String, Vec<SharedCall>>,
++    /// Composite action files for shared step runs.
+     pub files: Vec<RenderedFile>,
+ }
+ 
+-struct SharedLaneParts {
+-    checkout: Step,
+-    common: Vec<Step>,
+-    hosted_extra: Vec<Step>,
+-    local_extra: Vec<Step>,
+-}
+-
+ /// Factor `__hosted` / `__local` pairs whose step lists match.
+ ///
+ /// # Errors
+@@ -57,40 +52,36 @@ pub(crate) fn share_lanes(
+     ctx: &RenderContext,
+ ) -> Result<LaneShare, RenderError> {
+     let mut calls = BTreeMap::new();
+-    let mut checkouts = BTreeMap::new();
+     let mut files = Vec::new();
+     let mut next = jobs.clone();
+-    for hosted_id in hosted_ids(jobs) {
++    crate::cache_steps::apply_mbx_cache_policy(&mut next, &ctx.runs_on)?;
++    for hosted_id in hosted_ids(&next) {
+         let Some(logical) = logical_id(&hosted_id) else {
+             return Err(RenderError::InvalidWorkflow(format!(
+                 "bad_lane_id:{hosted_id}"
+             )));
+         };
+         let local_id = format!("{logical}{SCALE_SUFFIX}");
+-        let Some(local) = jobs.get(&local_id) else {
++        let Some(local) = next.get(&local_id) else {
+             continue;
+         };
+-        let Some(hosted) = jobs.get(&hosted_id) else {
++        let Some(hosted) = next.get(&hosted_id) else {
+             continue;
+         };
+-        let Some(parts) = split_pair(hosted, local, &ctx.checkout_uses) else {
+-            return Err(RenderError::InvalidWorkflow(format!(
+-                "lane_body_differs:{logical}"
+-            )));
+-        };
+-        let uses = format!("./.github/actions/{logical}");
+-        files.push(composite_file(logical, &parts.common, ctx)?);
+-        calls.insert(hosted_id.clone(), uses.clone());
+-        calls.insert(local_id.clone(), uses);
+-        checkouts.insert(hosted_id.clone(), parts.checkout.clone());
+-        checkouts.insert(local_id.clone(), parts.checkout);
+-        set_steps(&mut next, &hosted_id, parts.hosted_extra);
+-        set_steps(&mut next, &local_id, parts.local_extra);
++        let pair = pair_sharing::share_pair(logical, hosted, local, ctx)?;
++        if !pair.hosted_calls.is_empty() {
++            calls.insert(hosted_id.clone(), pair.hosted_calls);
++        }
++        if !pair.local_calls.is_empty() {
++            calls.insert(local_id.clone(), pair.local_calls);
++        }
++        files.extend(pair.files);
++        set_steps(&mut next, &hosted_id, pair.hosted_steps);
++        set_steps(&mut next, &local_id, pair.local_steps);
+     }
+     Ok(LaneShare {
+         jobs: next,
+         calls,
+-        checkouts,
+         files,
+     })
+ }
+@@ -111,73 +102,6 @@ fn logical_id(hosted_id: &str) -> Option<&str> {
+     ok.then_some(logical)
+ }
+ 
+-fn split_pair(hosted: &Job, local: &Job, checkout_uses: &str) -> Option<SharedLaneParts> {
+-    if hosted.timeout_minutes != local.timeout_minutes
+-        || hosted.condition != local.condition
+-        || hosted.permissions != local.permissions
+-        || hosted.environment != local.environment
+-    {
+-        return None;
+-    }
+-    let (hosted_checkout, hosted_steps) = peel_checkout(&hosted.steps, checkout_uses)?;
+-    let (local_checkout, local_steps) = peel_checkout(&local.steps, checkout_uses)?;
+-    if hosted_checkout != local_checkout {
+-        return None;
+-    }
+-    let (hosted_common, hosted_extra) = peel_saves(hosted_steps);
+-    let (local_common, local_extra) = peel_saves(local_steps);
+-    (hosted_common == local_common).then_some(SharedLaneParts {
+-        checkout: hosted_checkout.clone(),
+-        common: hosted_common,
+-        hosted_extra,
+-        local_extra,
+-    })
+-}
+-
+-fn peel_checkout<'a>(steps: &'a [Step], checkout_uses: &str) -> Option<(&'a Step, &'a [Step])> {
+-    let (checkout, remaining) = steps.split_first()?;
+-    let is_expected_checkout = checkout.name == "Checkout"
+-        && checkout.condition.is_none()
+-        && matches!(
+-            &checkout.kind,
+-            StepKind::Action { uses, with, env }
+-                if uses == checkout_uses
+-                    && with.get("persist-credentials").map(String::as_str) == Some("false")
+-                    && env.is_empty()
+-        );
+-    if !is_expected_checkout || remaining.iter().any(is_checkout_step) {
+-        return None;
+-    }
+-    Some((checkout, remaining))
+-}
+-
+-fn is_checkout_step(step: &Step) -> bool {
+-    step.name == "Checkout"
+-        || matches!(
+-            &step.kind,
+-            StepKind::Action { uses, .. }
+-                if uses.starts_with("actions/checkout@")
+-        )
+-}
+-
+-fn peel_saves(steps: &[Step]) -> (Vec<Step>, Vec<Step>) {
+-    let mut common = Vec::new();
+-    let mut extra = Vec::new();
+-    for step in steps {
+-        if is_elected_save(step) {
+-            extra.push(step.clone());
+-        } else {
+-            common.push(step.clone());
+-        }
+-    }
+-    (common, extra)
+-}
+-
+-fn is_elected_save(step: &Step) -> bool {
+-    step.name == crate::cache_steps::TOOLS_SAVE_NAME
+-        || step.name == crate::tofu_cache::TOFU_PROVIDERS_SAVE_NAME
+-}
+-
+ fn set_steps(jobs: &mut BTreeMap<String, Job>, id: &str, steps: Vec<Step>) {
+     if let Some(job) = jobs.get_mut(id) {
+         job.steps = steps;
+@@ -188,30 +112,269 @@ fn composite_file(
+     logical: &str,
+     steps: &[Step],
+     ctx: &RenderContext,
++) -> Result<RenderedFile, RenderError> {
++    composite_file_at(logical, &format!(".github/actions/{logical}"), steps, ctx)
++}
++
++fn composite_file_at(
++    logical: &str,
++    action_path: &str,
++    steps: &[Step],
++    ctx: &RenderContext,
+ ) -> Result<RenderedFile, RenderError> {
+     let mut rendered = Vec::with_capacity(steps.len());
+-    let empty_job_env = BTreeMap::new();
+     for step in steps {
+-        rendered.push(step_to_yaml(logical, step, ctx, &[], true, &empty_job_env)?);
++        rendered.push(step_to_yaml(
++            logical,
++            step,
++            ctx,
++            &[],
++            true,
++            &BTreeMap::new(),
++        )?);
+     }
+     let body = composite_yaml(logical, rendered)?;
+     let quoted = crate::yaml::quote_run_values_in_yaml(body);
+     let bytes = marker::with_marker(&ctx.generator_version, &render_yaml(&quoted))?;
+     steps::scan_for_private_subcommands(&bytes)?;
+     Ok(RenderedFile {
+-        path: format!(".github/actions/{logical}/action.yml"),
++        path: format!("{action_path}/action.yml"),
+         bytes,
+     })
+ }
+ 
+ #[cfg(test)]
+-#[path = "lane_share_tests.rs"]
+-mod tests;
++mod tests {
++    use std::collections::BTreeMap;
+ 
+-#[cfg(test)]
+-#[path = "lane_share_shell_tests.rs"]
+-mod shell_tests;
++    use velnor_actions_contract::{
++        Concurrency, Job, JobTimeout, Permissions, SCALE_SET_NAME, ScaleSetSelector, Step,
++        StepKind, Trigger, VELNOR_LABEL, WorkflowIr,
++    };
+ 
+-#[cfg(test)]
+-#[path = "lane_share_unpinned_tests.rs"]
+-mod unpinned_tests;
++    use super::{HOSTED_SUFFIX, SCALE_SUFFIX, share_lanes};
++    use crate::RenderError;
++    use crate::render::{CONCURRENCY_CANCEL, CONCURRENCY_GROUP, RenderContext};
++
++    const HOSTED_RUNS: &str = "ubuntu-26.04";
++    const CAP: usize = 500_000;
++    const LOGICAL_JOBS: usize = 21;
++    const STEPS_PER_JOB: usize = 48;
++
++    fn ctx() -> RenderContext {
++        RenderContext {
++            generator_version: "0.1.0".to_owned(),
++            runs_on: HOSTED_RUNS.to_owned(),
++            staged_binary: "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0".to_owned(),
++            request_dir: "${{ runner.temp }}/velnor/request".to_owned(),
++            checkout_uses: format!("actions/checkout@{:040x}", 0),
++            validator_commands: Vec::new(),
++            candidate: None,
++            preseed: false,
++            plan_consumer_env: BTreeMap::new(),
++        }
++    }
++
++    fn workflow_ir() -> WorkflowIr {
++        WorkflowIr {
++            name: "CI".to_owned(),
++            triggers: Trigger {
++                pull_request_types: ["opened", "synchronize", "reopened", "ready_for_review"]
++                    .into_iter()
++                    .map(str::to_owned)
++                    .collect(),
++                push_branches: vec!["main".to_owned()],
++                merge_group: true,
++                workflow_dispatch: None,
++                schedule: None,
++            },
++            permissions: Permissions::default(),
++            concurrency: Concurrency {
++                group: CONCURRENCY_GROUP.to_owned(),
++                cancel_in_progress: CONCURRENCY_CANCEL.to_owned(),
++            },
++            jobs: BTreeMap::new(),
++        }
++    }
++
++    fn scale_token() -> String {
++        ScaleSetSelector::try_new(
++            SCALE_SET_NAME,
++            &[VELNOR_LABEL.to_owned(), SCALE_SET_NAME.to_owned()],
++        )
++        .expect("scale selector")
++        .token()
++    }
++
++    fn echo_step(index: usize, payload: &str) -> Step {
++        Step {
++            name: format!("echo {index}"),
++            condition: None,
++            kind: StepKind::Shell {
++                run: vec!["echo".to_owned(), payload.to_owned()],
++                env: BTreeMap::new(),
++            },
++        }
++    }
++
++    fn lane_job(display: &str, runs_on: &str, steps: Vec<Step>) -> Job {
++        Job {
++            display_name: display.to_owned(),
++            runs_on: runs_on.to_owned(),
++            timeout_minutes: JobTimeout::CRATE,
++            needs: Vec::new(),
++            condition: None,
++            permissions: None,
++            environment: None,
++            steps,
++        }
++    }
++
++    fn render_jobs(
++        ir: &WorkflowIr,
++        jobs: &BTreeMap<String, Job>,
++        ctx: &RenderContext,
++        calls: &BTreeMap<String, Vec<super::SharedCall>>,
++    ) -> Result<String, crate::RenderError> {
++        let document = crate::document::workflow_to_yaml(
++            ir,
++            jobs,
++            ctx,
++            calls,
++        )?;
++        let quoted = crate::yaml::quote_run_values_in_yaml(document);
++        crate::marker::with_marker(&ctx.generator_version, &crate::yaml::render_yaml(&quoted))
++    }
++
++    fn heavy_steps(payload: &str) -> Vec<Step> {
++        (0..STEPS_PER_JOB)
++            .map(|index| echo_step(index, payload))
++            .collect()
++    }
++
++    fn paired(steps: &[Step]) -> BTreeMap<String, Job> {
++        let scale = scale_token();
++        let mut jobs = BTreeMap::new();
++        for index in 0..LOGICAL_JOBS {
++            let logical = format!("rust-{index}");
++            jobs.insert(
++                format!("{logical}{HOSTED_SUFFIX}"),
++                lane_job(&format!("{logical} hosted"), HOSTED_RUNS, steps.to_vec()),
++            );
++            jobs.insert(
++                format!("{logical}{SCALE_SUFFIX}"),
++                lane_job(&format!("{logical} local"), &scale, steps.to_vec()),
++            );
++        }
++        jobs
++    }
++
++    #[test]
++    fn shared_lanes_keep_ci_under_github_file_cap() {
++        let payload = "a".repeat(400);
++        let jobs = paired(&heavy_steps(&payload));
++        let ir = workflow_ir();
++        let context = ctx();
++        let unshared = render_jobs(&ir, &jobs, &context, &BTreeMap::new()).expect("unshared");
++        assert!(
++            unshared.len() > CAP,
++            "unshared render must exceed the GitHub cap, got {}",
++            unshared.len()
++        );
++        let shared = share_lanes(&jobs, &context).expect("share");
++        let yaml = render_jobs(&ir, &shared.jobs, &context, &shared.calls).expect("shared");
++        assert!(
++            yaml.len() <= CAP,
++            "shared ci.yml must fit, got {}",
++            yaml.len()
++        );
++        assert!(
++            !yaml.contains(&payload),
++            "shared ci.yml still inlines steps"
++        );
++        assert!(yaml.contains("runs-on: ubuntu-26.04"));
++        assert!(yaml.contains("runs-on: [velnor, ubuntu-26.04-scale-set]"));
++        assert!(yaml.contains("uses: $/.github/actions/rust-0"));
++        assert_eq!(shared.files.len(), LOGICAL_JOBS);
++        for file in &shared.files {
++            assert!(
++                file.bytes.len() <= CAP,
++                "{} is {} bytes",
++                file.path,
++                file.bytes.len()
++            );
++            assert!(file.bytes.contains("shell: bash"), "{}", file.path);
++            assert!(file.bytes.contains(&payload), "{}", file.path);
++            assert!(file.path.ends_with("/action.yml"), "{}", file.path);
++        }
++    }
++
++    #[test]
++    fn differing_lane_bodies_fail_closed() {
++        let step = echo_step(0, "one");
++        let mut jobs = paired(&[step]);
++        jobs.get_mut("rust-0__hosted").expect("hosted").steps.pop();
++        let err = share_lanes(&jobs, &ctx()).expect_err("differs");
++        assert!(
++            matches!(err, RenderError::InvalidWorkflow(ref problem) if problem == "lane_body_differs:rust-0"),
++            "{err}"
++        );
++    }
++
++    #[test]
++    fn unsafe_logical_id_fails_closed() {
++        let step = echo_step(0, "one");
++        let mut jobs = BTreeMap::new();
++        jobs.insert(
++            "rust.0__hosted".to_owned(),
++            lane_job("hosted", HOSTED_RUNS, vec![step.clone()]),
++        );
++        jobs.insert(
++            "rust.0__local".to_owned(),
++            lane_job("local", &scale_token(), vec![step]),
++        );
++        let err = share_lanes(&jobs, &ctx()).expect_err("bad id");
++        assert!(
++            matches!(err, RenderError::InvalidWorkflow(ref problem) if problem == "bad_lane_id:rust.0__hosted"),
++            "{err}"
++        );
++    }
++
++    #[test]
++    fn unpaired_jobs_stay_inline() {
++        let mut jobs = BTreeMap::new();
++        jobs.insert(
++            "actionlint".to_owned(),
++            lane_job("actionlint", HOSTED_RUNS, vec![echo_step(0, "one")]),
++        );
++        let shared = share_lanes(&jobs, &ctx()).expect("share");
++        assert!(shared.calls.is_empty());
++        assert_eq!(shared.files, []);
++        let kept = shared.jobs.get("actionlint").expect("actionlint");
++        assert_eq!(kept.steps.len(), 1);
++    }
++
++    #[test]
++    fn elected_save_stays_on_the_winner_job() {
++        let mut jobs = paired(&[echo_step(0, "one")]);
++        let save = crate::cache_steps::tools_save_step("mise-v1").expect("save");
++        jobs.get_mut("rust-0__hosted")
++            .expect("hosted")
++            .steps
++            .push(save);
++        let shared = share_lanes(&jobs, &ctx()).expect("share");
++        let hosted = shared.jobs.get("rust-0__hosted").expect("hosted");
++        let local = shared.jobs.get("rust-0__local").expect("local");
++        assert_eq!(hosted.steps.len(), 1);
++        assert_eq!(hosted.steps.first().expect("save").name, "Save Mise tools");
++        assert_eq!(local.steps, []);
++        let action = shared
++            .files
++            .iter()
++            .find(|file| file.path == ".github/actions/rust-0/action.yml")
++            .expect("composite");
++        assert!(!action.bytes.contains("Save Mise tools"));
++        let yaml = render_jobs(&workflow_ir(), &shared.jobs, &ctx(), &shared.calls).expect("yaml");
++        assert_eq!(yaml.matches("Save Mise tools").count(), 1);
++    }
++}
+diff --git a/crates/velnor-actions-workflow-renderer/src/lib.rs b/crates/velnor-actions-workflow-renderer/src/lib.rs
+index 5e43b8412..00e1ddc1b 100644
+--- a/crates/velnor-actions-workflow-renderer/src/lib.rs
++++ b/crates/velnor-actions-workflow-renderer/src/lib.rs
+@@ -22,11 +22,10 @@ mod final_steps;
+ pub mod foundation_qualification;
+ pub mod freshness;
+ pub mod guard;
++mod job_runners;
+ mod lane_share;
+ pub mod marker;
+ mod matrix;
+-mod mbx_bundle;
+-mod mbx_gc_policy;
+ pub mod msrv;
+ pub mod overlap;
+ pub mod plan_format;
+@@ -47,11 +46,11 @@ pub mod steps;
+ mod steps_artifact;
+ mod steps_internal;
+ mod steps_plain;
++mod stock_mbx_bundle;
+ mod support;
+ pub mod tofu_cache;
+ pub mod toolchain_env;
+ pub mod tree;
+-mod workflow_policy;
+ pub mod yaml;
+ 
+ pub use artifact_paths::{
+@@ -90,23 +89,23 @@ pub use render::{
+     CLAUDE_MD_PATH, CLAUDE_MD_TARGET, CONCURRENCY_CANCEL, CONCURRENCY_GROUP, COVERED_TASKS_OUTPUT,
+     CandidateSpec, EXPECTED_PR_TYPES, FINAL_CONDITION, FINAL_DISPLAY_NAME, FINAL_JOB_ID,
+     MATRIX_MAX_PARALLEL_ENV, MATRIX_NEEDS_JOB_ENV, MATRIX_OUTPUT_ENV, MatrixSource, MiseSetup,
+-    PLAN_ID_OUTPUT, PLAN_JOB_ID, PLAN_STEP_ID, PUBLISH_JOB_ID, RUN_KEY_OUTPUT, RenderContext,
+-    RenderedFile, RenderedSymlink, RenderedTree, TASK_JOB_ID, ValidatorCommand, WORKFLOW_PATH,
+-    action_pins, finalize_jobs, render_workflow_ir, render_workflow_ir_strict,
++    MiseSetupSet, PLAN_ID_OUTPUT, PLAN_JOB_ID, PLAN_STEP_ID, PUBLISH_JOB_ID, RUN_KEY_OUTPUT,
++    RenderContext, RenderedFile, RenderedSymlink, RenderedTree, TASK_JOB_ID, ValidatorCommand,
++    WORKFLOW_PATH, action_pins, finalize_jobs, render_workflow_ir, render_workflow_ir_strict,
+ };
+ pub use schema2::{MbxQualificationPins, Schema2WorkflowRequest, render_schema2_workflows};
+ pub use setup::{MISE_ACTION_NAME, SETUP_MISE_NAME, mise_setup_step};
+ pub use steps::{
+     ACQUIRE_NAME, ASSET_SHA_ENV, ASSET_URL_ENV, BASELINE_PUBLISH_UPLOAD_NAME,
+     CRATE_REPORT_UPLOAD_NAME, CompileDriver, DENY_STEP_NAME, FORBIDDEN_TOKENS, INTERNAL_OP_ENV,
+-    MACHETE_STEP_NAME, MATRIX_REPORT_UPLOAD_NAME, MBX_PREFLIGHT_NAME, MERGE_OPERATION,
+-    PLAN_OPERATION, PUBLISH_OPERATION, PUBLISH_STEP_ID, RELEASE_COMMIT_ENV, REQUEST_DIR_PREFIX,
+-    REQUEST_FILE_ENV, RUN_KEY_EXPR, STAGED_BINARY_PREFIX, WRITE_PRESEED_MANIFEST_OPERATION,
+-    WRITE_REQUEST_OPERATION, acquire_velnor_step, action_step, action_step_with_env,
+-    ambient_shell_step, baseline_publish_upload_step, check_cache_step_order, check_mbx_gating,
+-    checkout_step, crate_job_report_upload_step, internal_step, lane_cargo_target_env,
+-    matrix_report_upload_step, mbx_steps_for_driver, merge_step, plan_step, publish_step,
+-    scan_for_private_subcommands, shell_step, validate_uses, write_request_step,
++    MACHETE_STEP_NAME, MATRIX_REPORT_UPLOAD_NAME, MERGE_OPERATION, PLAN_OPERATION,
++    PUBLISH_OPERATION, PUBLISH_STEP_ID, RELEASE_COMMIT_ENV, REQUEST_DIR_PREFIX, REQUEST_FILE_ENV,
++    RUN_KEY_EXPR, STAGED_BINARY_PREFIX, WRITE_PRESEED_MANIFEST_OPERATION, WRITE_REQUEST_OPERATION,
++    acquire_velnor_step, action_step, action_step_with_env, ambient_shell_step,
++    baseline_publish_upload_step, check_cache_step_order, check_mbx_gating, checkout_step,
++    crate_job_report_upload_step, internal_step, lane_cargo_target_env, matrix_report_upload_step,
++    mbx_steps_for_driver, merge_step, plan_step, publish_step, scan_for_private_subcommands,
++    shell_step, validate_uses, write_request_step, MBX_CACHE_MODE_ENV, MBX_PREFLIGHT_NAME,
+ };
+ pub use tree::{render_tree, render_tree_with_extra};
+ pub use yaml::{Yaml, quote_scalar, render_yaml};
+diff --git a/crates/velnor-actions-workflow-renderer/src/mbx_bundle.rs b/crates/velnor-actions-workflow-renderer/src/mbx_bundle.rs
+deleted file mode 100644
+index 01d859f53..000000000
+--- a/crates/velnor-actions-workflow-renderer/src/mbx_bundle.rs
++++ /dev/null
+@@ -1,192 +0,0 @@
+-//! Single-bundle MBX save for hosted and scale-set object caches.
+-//!
+-//! `jdx/mr-boxington-action` post saves on every default-branch push, ignoring
+-//! `save-on-*`. That post exports a directory inside the live store and then
+-//! asks `actions/cache` to archive it, so the peak is the store, a second full
+-//! copy, and the cache archive together. `ACTIONS_CACHE_MODE=read` makes
+-//! `savePolicy` skip that post. A later step reclaims, writes one directory
+-//! bundle under `runner.temp`, deletes the store only after that bundle
+-//! exists, and saves that one path. The action restore looks up a different
+-//! path, so the next job restores this same path and imports it into the store.
+-//! A miss, a missing directory, or a failed import continues the job cold.
+-//! Import and export print byte and inode lines for `$RUNNER_TEMP`.
+-
+-use std::collections::BTreeMap;
+-
+-use velnor_actions_contract::{Job, Step, StepKind};
+-
+-use crate::RenderError;
+-use crate::cache_steps::{
+-    MBX_ACTION_CACHE_MODE, MBX_ACTION_NAME, MBX_CACHE_MODE_ENV, MBX_RESTORE_NAME,
+-    TOOLS_RESTORE_USES, TOOLS_SAVE_USES, is_mbx_action,
+-};
+-
+-/// Display name of the reclaim-and-export step.
+-pub(crate) const MBX_BUNDLE_EXPORT_NAME: &str = "Export MBX single bundle";
+-/// Display name of the one-file cache save.
+-pub(crate) const MBX_BUNDLE_SAVE_NAME: &str = "Save MBX single bundle";
+-/// Display name of the prefix step ahead of the bundle restore.
+-pub(crate) const MBX_BUNDLE_KEY_NAME: &str = "Prepare MBX bundle key";
+-/// Display name of the bundle restore. Same path the save archived.
+-pub(crate) const MBX_BUNDLE_RESTORE_NAME: &str = "Restore MBX single bundle";
+-/// Display name of the import into the mbx store.
+-pub(crate) const MBX_BUNDLE_IMPORT_NAME: &str = "Import MBX single bundle";
+-/// Bundle path outside the mbx store. `actions/cache` archives only this path.
+-pub(crate) const MBX_BUNDLE_PATH: &str = "${{ runner.temp }}/mbx-single-bundle";
+-/// Push-only export gate. Exact bundle hits skip; pull requests never reach it.
+-const PREP_IF: &str = "success() && github.event_name == 'push' && steps.mbx.outputs.cache-hit != 'true' && steps.mbx-bundle.outputs.cache-hit != 'true'";
+-/// Save gate. Empty exports set `ready=false` and must not call `actions/cache`.
+-const SAVE_IF: &str = "success() && github.event_name == 'push' && steps.mbx.outputs.cache-hit != 'true' && steps.mbx-bundle.outputs.cache-hit != 'true' && steps.mbx-export.outputs.ready == 'true'";
+-
+-/// One-line script: gc, one external bundle, delete the store only after it exists.
+-const EXPORT_SCRIPT: &str = r#"set -eu; df -B1 -P "$RUNNER_TEMP"; df -i -P "$RUNNER_TEMP"; mbx gc; mbx cache dir > "$RUNNER_TEMP/mbx-store-path"; IFS= read -r store < "$RUNNER_TEMP/mbx-store-path"; test -n "$store"; bundle="$RUNNER_TEMP/mbx-single-bundle"; case "$bundle" in "$store"|"$store"/*) exit 1 ;; esac; case "$store" in /|.) exit 1 ;; *mbx*) ;; *) exit 1 ;; esac; rm -rf "$bundle"; if mbx cache export --group "$MBX_CACHE_EXPORT_GROUP" --format directory "$bundle" >"$RUNNER_TEMP/mbx-export.out" 2>&1; then test -d "$bundle"; rm -rf "$store"; df -B1 -P "$RUNNER_TEMP"; df -i -P "$RUNNER_TEMP"; echo "ready=true" >> "$GITHUB_OUTPUT"; else rm -rf "$bundle"; if grep -q "no completed mbx builds are recorded for export group" "$RUNNER_TEMP/mbx-export.out"; then echo "ready=false" >> "$GITHUB_OUTPUT"; exit 0; fi; cat "$RUNNER_TEMP/mbx-export.out"; exit 1; fi"#;
+-/// Drop the commit suffix so an older bundle for this toolchain still restores.
+-const KEY_SCRIPT: &str = r#"set -eu; key="$MBX_KEY"; case "$key" in ''|*-) exit 1 ;; esac; prefix="${key%-*}-"; echo "prefix=${prefix}" >> "$GITHUB_OUTPUT""#;
+-/// Import when the restore matched. A miss, a missing directory, or a failed import stays cold.
+-const IMPORT_SCRIPT: &str = r#"set -eu; bundle="$RUNNER_TEMP/mbx-single-bundle"; df -B1 -P "$RUNNER_TEMP"; df -i -P "$RUNNER_TEMP"; if [ -z "$MATCHED" ]; then echo "no mbx bundle matched"; exit 0; fi; if [ ! -d "$bundle" ]; then echo "mbx bundle missing; continuing cold"; exit 0; fi; if ! mbx cache import "$bundle"; then echo "mbx bundle import failed; continuing cold"; rm -rf "$bundle"; exit 0; fi"#;
+-
+-/// YAML step id for the MBX restore and export steps, when they have one.
+-pub(crate) fn step_yaml_id(name: &str) -> Option<&'static str> {
+-    match name {
+-        MBX_RESTORE_NAME => Some("mbx"),
+-        MBX_BUNDLE_KEY_NAME => Some("mbx-bundle-key"),
+-        MBX_BUNDLE_RESTORE_NAME => Some("mbx-bundle"),
+-        MBX_BUNDLE_EXPORT_NAME => Some("mbx-export"),
+-        _ => None,
+-    }
+-}
+-
+-/// Emit `id:` for the two MBX steps whose later steps read outputs.
+-pub(crate) fn push_step_id(entries: &mut Vec<(String, crate::yaml::Yaml)>, name: &str) {
+-    let Some(id) = step_yaml_id(name) else {
+-        return;
+-    };
+-    entries.push(("id".to_owned(), crate::yaml::Yaml::str(id.to_owned())));
+-}
+-
+-/// Force every MBX action to restore-only and append the single-bundle save.
+-///
+-/// # Errors
+-///
+-/// Returns [`RenderError`] when the export or save step fails validation.
+-pub(crate) fn append_single_bundle_saves(
+-    jobs: &mut BTreeMap<String, Job>,
+-) -> Result<(), RenderError> {
+-    for job in jobs.values_mut() {
+-        if !job.steps.iter().any(is_mbx_action) {
+-            continue;
+-        }
+-        pin_restore_only(job);
+-        insert_bundle_restore(job)?;
+-        if job
+-            .steps
+-            .iter()
+-            .any(|step| step.name == MBX_BUNDLE_EXPORT_NAME)
+-        {
+-            continue;
+-        }
+-        job.steps.push(export_step()?);
+-        job.steps.push(save_step()?);
+-    }
+-    Ok(())
+-}
+-
+-fn pin_restore_only(job: &mut Job) {
+-    for step in &mut job.steps {
+-        let StepKind::Action { uses, env, .. } = &mut step.kind else {
+-            continue;
+-        };
+-        if !uses.starts_with(&format!("{MBX_ACTION_NAME}@")) {
+-            continue;
+-        }
+-        env.insert(
+-            MBX_CACHE_MODE_ENV.to_owned(),
+-            MBX_ACTION_CACHE_MODE.to_owned(),
+-        );
+-    }
+-}
+-
+-fn insert_bundle_restore(job: &mut Job) -> Result<(), RenderError> {
+-    if job
+-        .steps
+-        .iter()
+-        .any(|step| step.name == MBX_BUNDLE_RESTORE_NAME)
+-    {
+-        return Ok(());
+-    }
+-    let Some(index) = job.steps.iter().position(is_mbx_action) else {
+-        return Ok(());
+-    };
+-    let at = index + 1;
+-    let added = [key_step()?, restore_step()?, import_step()?];
+-    job.steps.splice(at..at, added);
+-    Ok(())
+-}
+-
+-fn key_step() -> Result<Step, RenderError> {
+-    let env = BTreeMap::from([(
+-        "MBX_KEY".to_owned(),
+-        "${{ steps.mbx.outputs.cache-primary-key }}".to_owned(),
+-    )]);
+-    crate::steps::shell_step(
+-        MBX_BUNDLE_KEY_NAME,
+-        vec!["bash".to_owned(), "-c".to_owned(), KEY_SCRIPT.to_owned()],
+-        env,
+-    )
+-}
+-
+-fn restore_step() -> Result<Step, RenderError> {
+-    crate::steps::action_step(
+-        MBX_BUNDLE_RESTORE_NAME,
+-        TOOLS_RESTORE_USES,
+-        BTreeMap::from([
+-            (
+-                "key".to_owned(),
+-                "${{ steps.mbx.outputs.cache-primary-key }}".to_owned(),
+-            ),
+-            (
+-                "restore-keys".to_owned(),
+-                "${{ steps.mbx-bundle-key.outputs.prefix }}".to_owned(),
+-            ),
+-            ("path".to_owned(), MBX_BUNDLE_PATH.to_owned()),
+-        ]),
+-    )
+-}
+-
+-fn import_step() -> Result<Step, RenderError> {
+-    let env = BTreeMap::from([(
+-        "MATCHED".to_owned(),
+-        "${{ steps.mbx-bundle.outputs.cache-matched-key }}".to_owned(),
+-    )]);
+-    crate::steps::shell_step(
+-        MBX_BUNDLE_IMPORT_NAME,
+-        vec!["bash".to_owned(), "-c".to_owned(), IMPORT_SCRIPT.to_owned()],
+-        env,
+-    )
+-}
+-
+-fn export_step() -> Result<Step, RenderError> {
+-    let mut step = crate::steps::shell_step(
+-        MBX_BUNDLE_EXPORT_NAME,
+-        vec!["bash".to_owned(), "-c".to_owned(), EXPORT_SCRIPT.to_owned()],
+-        BTreeMap::new(),
+-    )?;
+-    step.condition = Some(PREP_IF.to_owned());
+-    Ok(step)
+-}
+-
+-fn save_step() -> Result<Step, RenderError> {
+-    let mut step = crate::steps::action_step(
+-        MBX_BUNDLE_SAVE_NAME,
+-        TOOLS_SAVE_USES,
+-        BTreeMap::from([
+-            (
+-                "key".to_owned(),
+-                "${{ steps.mbx.outputs.cache-primary-key }}".to_owned(),
+-            ),
+-            ("path".to_owned(), MBX_BUNDLE_PATH.to_owned()),
+-        ]),
+-    )?;
+-    step.condition = Some(SAVE_IF.to_owned());
+-    Ok(step)
+-}
+diff --git a/crates/velnor-actions-workflow-renderer/src/mbx_gc_policy.rs b/crates/velnor-actions-workflow-renderer/src/mbx_gc_policy.rs
+deleted file mode 100644
+index 5606177d4..000000000
+--- a/crates/velnor-actions-workflow-renderer/src/mbx_gc_policy.rs
++++ /dev/null
+@@ -1,19 +0,0 @@
+-//! Job-level GC policy for jobs that restore or publish MBX objects.
+-
+-use std::collections::{BTreeMap, BTreeSet};
+-
+-use velnor_actions_contract::Job;
+-
+-/// Return hosted jobs where the MBX action's collector is disabled by default.
+-///
+-/// The renderer attaches this policy before lane sharing extracts steps into
+-/// composites, so all hosted consuming steps inherit the job environment.
+-pub(crate) fn jobs_with_hosted_mbx_objects(jobs: &BTreeMap<String, Job>) -> BTreeSet<String> {
+-    jobs.iter()
+-        .filter(|(_, job)| {
+-            velnor_actions_contract::target_for_runner_label(&job.runs_on).is_some()
+-                && job.steps.iter().any(crate::cache_steps::is_mbx_action)
+-        })
+-        .map(|(id, _)| id.clone())
+-        .collect()
+-}
+diff --git a/crates/velnor-actions-workflow-renderer/src/render.rs b/crates/velnor-actions-workflow-renderer/src/render.rs
+index 40fca0655..060afb889 100644
+--- a/crates/velnor-actions-workflow-renderer/src/render.rs
++++ b/crates/velnor-actions-workflow-renderer/src/render.rs
+@@ -9,23 +9,23 @@
+ use std::collections::BTreeMap;
+ 
+ use velnor_actions_contract::{
+-    CI_WORKFLOW_PATH, Job, PLAN_JOB_ID as CONTRACT_PLAN_JOB_ID,
++    CI_WORKFLOW_PATH, Concurrency, Job, PLAN_JOB_ID as CONTRACT_PLAN_JOB_ID,
+     REQUIRED_CONDITION as CONTRACT_REQUIRED_CONDITION,
+     REQUIRED_DISPLAY_NAME as CONTRACT_REQUIRED_DISPLAY_NAME,
+-    REQUIRED_JOB_ID as CONTRACT_REQUIRED_JOB_ID, ValidatorKind, VelnorSupportWorkflow, WorkflowIr,
+-    WorkflowPolicy,
++    REQUIRED_JOB_ID as CONTRACT_REQUIRED_JOB_ID, Trigger, ValidatorKind, VelnorSupportWorkflow,
++    WorkflowIr, WorkflowPolicy,
+ };
+ 
+ use crate::{
+-    RenderError, cache_p08, closure, commands, document, final_steps, guard, marker, matrix, msrv,
+-    preseed_closure, steps, support, workflow_policy, yaml::render_yaml,
++    RenderError, cache_p08, closure, commands, document, final_steps, guard, job_runners, marker,
++    matrix, msrv, preseed_closure, steps, support, yaml::render_yaml,
+ };
+ 
+ pub use crate::matrix::{
+     COVERED_TASKS_OUTPUT, MATRIX_MAX_PARALLEL_ENV, MATRIX_NEEDS_JOB_ENV, MATRIX_OUTPUT_ENV,
+     MatrixSource, PLAN_ID_OUTPUT, PLAN_STEP_ID, RUN_KEY_OUTPUT,
+ };
+-pub use crate::setup::MiseSetup;
++pub use crate::setup::{MiseSetup, MiseSetupSet};
+ 
+ /// Generated workflow path inside the repository.
+ ///
+@@ -204,7 +204,7 @@ pub fn render_workflow_ir_strict(
+     policy: WorkflowPolicy,
+     support: Option<&VelnorSupportWorkflow>,
+     ctx: &RenderContext,
+-    mise: &MiseSetup,
++    mise: &MiseSetupSet,
+ ) -> Result<String, RenderError> {
+     Ok(render_workflow_ir_strict_shared(ir, policy, support, ctx, mise)?.yaml)
+ }
+@@ -220,7 +220,7 @@ pub fn render_workflow_ir_strict_shared(
+     policy: WorkflowPolicy,
+     support: Option<&VelnorSupportWorkflow>,
+     ctx: &RenderContext,
+-    mise: &MiseSetup,
++    mise: &MiseSetupSet,
+ ) -> Result<RenderedWorkflow, RenderError> {
+     let jobs = finalize_jobs(ir, policy, support, ctx, mise)?;
+     render_merged(ir, &jobs, ctx)
+@@ -242,17 +242,16 @@ pub fn finalize_jobs(
+     policy: WorkflowPolicy,
+     support: Option<&VelnorSupportWorkflow>,
+     ctx: &RenderContext,
+-    mise: &MiseSetup,
++    mise: &MiseSetupSet,
+ ) -> Result<BTreeMap<String, Job>, RenderError> {
+-    mise.validate()?;
+     let mut jobs = merged_jobs(ir, policy, support, ctx)?;
+     for (id, job) in &mut jobs {
+         let always = id == PLAN_JOB_ID || id == TASK_JOB_ID;
+-        let target =
+-            velnor_actions_contract::target_for_runner_label(&ctx.runs_on).ok_or_else(|| {
+-                RenderError::InvalidWorkflow(format!("tools_cache_unsupported_target:{id}"))
+-            })?;
+-        cache_p08::ensure_setup_p08(id, job, mise, always, target)?;
++        let target = job_runners::cache_target_for_job(job, &ctx.runs_on).ok_or_else(|| {
++            RenderError::InvalidWorkflow(format!("tools_cache_unsupported_target:{id}"))
++        })?;
++        let setup = mise.for_target(target)?;
++        cache_p08::ensure_setup_p08(id, job, setup, always, target)?;
+         cache_p08::check_no_rust_cache_with_mbx(id, job)?;
+         cache_p08::check_mbx_before_fetch(id, job)?;
+         closure::check_internal_staged(id, job, ctx.preseed)?;
+@@ -300,9 +299,9 @@ fn merged_jobs(
+         });
+     }
+     ir.validate().map_err(RenderError::Contract)?;
+-    workflow_policy::check_triggers(&ir.triggers)?;
+-    workflow_policy::check_concurrency(&ir.concurrency)?;
+-    workflow_policy::check_single_label(ir, &ctx.runs_on)?;
++    check_triggers(&ir.triggers)?;
++    check_concurrency(&ir.concurrency)?;
++    job_runners::validate_job_runners(ir, &ctx.runs_on)?;
+     let mut jobs = ir.jobs.clone();
+     match policy {
+         WorkflowPolicy::ConsumerV1 => support::reject_consumer_support(&jobs, support)?,
+@@ -314,8 +313,6 @@ fn merged_jobs(
+     support::check_candidate_invariants(&jobs)?;
+     support::check_final_gate(&jobs)?;
+     support::check_token_hygiene(&jobs)?;
+-    crate::mbx_bundle::append_single_bundle_saves(&mut jobs)?;
+-    support::check_token_hygiene(&jobs)?;
+     Ok(jobs)
+ }
+ 
+@@ -332,16 +329,9 @@ fn render_merged(
+     } else {
+         jobs.clone()
+     };
+-    let mbx_gc_jobs = crate::mbx_gc_policy::jobs_with_hosted_mbx_objects(&jobs);
+     let shared = crate::lane_share::share_lanes(&jobs, ctx)?;
+-    let mut document = document::workflow_to_yaml(
+-        ir,
+-        &shared.jobs,
+-        ctx,
+-        &shared.calls,
+-        &shared.checkouts,
+-        &mbx_gc_jobs,
+-    )?;
++    let mut document =
++        document::workflow_to_yaml(ir, &shared.jobs, ctx, &shared.calls)?;
+     if let Some((source, max_parallel)) = &matrix {
+         matrix::attach_task_matrix(&mut document, source, *max_parallel)?;
+     } else {
+@@ -357,3 +347,34 @@ fn render_merged(
+         shared: shared.files,
+     })
+ }
++
++/// Require the exact trigger shape: 4 PR types, one push branch, merge group.
++fn check_triggers(triggers: &Trigger) -> Result<(), RenderError> {
++    let expected: Vec<String> = EXPECTED_PR_TYPES.iter().map(ToString::to_string).collect();
++    if triggers.pull_request_types != expected {
++        return Err(RenderError::InvalidWorkflow("bad_pr_triggers".to_owned()));
++    }
++    let branch_ok = triggers.push_branches.len() == 1
++        && triggers.push_branches.first().is_some_and(|branch| {
++            !branch.trim().is_empty() && !branch.chars().any(char::is_whitespace)
++        });
++    if !branch_ok {
++        return Err(RenderError::InvalidWorkflow("bad_push_branch".to_owned()));
++    }
++    if !triggers.merge_group {
++        return Err(RenderError::InvalidWorkflow(
++            "missing_merge_group".to_owned(),
++        ));
++    }
++    Ok(())
++}
++
++/// Require the exact concurrency group plus PR-only cancel.
++fn check_concurrency(concurrency: &Concurrency) -> Result<(), RenderError> {
++    if concurrency.group != CONCURRENCY_GROUP
++        || concurrency.cancel_in_progress != CONCURRENCY_CANCEL
++    {
++        return Err(RenderError::InvalidWorkflow("bad_concurrency".to_owned()));
++    }
++    Ok(())
++}
+diff --git a/crates/velnor-actions-workflow-renderer/src/schema2_mbx_qualification.rs b/crates/velnor-actions-workflow-renderer/src/schema2_mbx_qualification.rs
+index 50cdb5658..4c526895e 100644
+--- a/crates/velnor-actions-workflow-renderer/src/schema2_mbx_qualification.rs
++++ b/crates/velnor-actions-workflow-renderer/src/schema2_mbx_qualification.rs
+@@ -5,8 +5,8 @@
+ //! attempt, source SHA, action pin, and MBX release. The dependent reader
+ //! cannot publish a cache or pass on data from an earlier run.
+ //!
+-//! Both jobs set `MBX_GC_AUTO=1` to exercise the hosted policy emitted for
+-//! production MBX jobs, not the action's hosted default.
++//! The action's hosted object-cache GC default remains unchanged; this
++//! qualification does not opt into cleanup that could race active consumers.
+ 
+ use super::features::{checkout_step, finish, gated, lane_base, run_step};
+ use super::{MbxQualificationPins, RunnerSpec};
+@@ -233,7 +233,6 @@ fn build_step() -> Yaml {
+ fn qualification_env(request: &MbxQualificationPins, writer: bool) -> Yaml {
+     let home = "${{ github.workspace }}/.velnor-mbx-cache-qualification";
+     mapping(&[
+-        ("MBX_GC_AUTO", "1"),
+         ("ACTIONS_CACHE_MODE", if writer { "write" } else { "read" }),
+         ("CARGO_HOME", &format!("{home}/cargo")),
+         ("MISE_AUTO_INSTALL", "false"),
+diff --git a/crates/velnor-actions-workflow-renderer/src/setup.rs b/crates/velnor-actions-workflow-renderer/src/setup.rs
+index 8e4de1d25..5b8716b15 100644
+--- a/crates/velnor-actions-workflow-renderer/src/setup.rs
++++ b/crates/velnor-actions-workflow-renderer/src/setup.rs
+@@ -1,10 +1,12 @@
+ //! Pinned Mise setup pins plus the legacy cache-off template.
+ //!
+-//! Pins arrive as typed [`MiseSetup`] from the orchestrator's compiled
+-//! catalog; the renderer never invents them. Strict insertion with the
+-//! qualified built-in cache lives in `cache_p08` (P08); this module keeps
+-//! the pin type, its validation, and the legacy `cache:false` template
+-//! for fixtures and upgrade inputs.
++//! Pins arrive as typed [`MiseSetup`] records in [`MiseSetupSet`] from
++//! the orchestrator's compiled catalog; the renderer never invents them.
++//! Strict insertion with the qualified built-in cache lives in
++//! `cache_p08` (P08); this module keeps the pin types, validation, and
++//! legacy `cache:false` template for fixtures and upgrade inputs.
++
++use std::collections::BTreeMap;
+ 
+ use velnor_actions_contract::Step;
+ 
+@@ -31,6 +33,58 @@ pub struct MiseSetup {
+     pub sha256: String,
+ }
+ 
++/// Validated Mise setup pins for each runner target in one workflow.
++///
++/// The renderer receives this typed set from its orchestrator. It does
++/// not choose versions or digests; it only selects the record matching
++/// the target already resolved for a job.
++#[derive(Debug, Clone, PartialEq, Eq)]
++pub struct MiseSetupSet {
++    by_target: BTreeMap<String, MiseSetup>,
++}
++
++impl MiseSetupSet {
++    /// Build a non-empty set of target-bound setup records.
++    ///
++    /// # Errors
++    ///
++    /// Returns a render error for an unsupported target, duplicate
++    /// target, invalid setup pin, or an empty set.
++    pub fn new(setups: impl IntoIterator<Item = (String, MiseSetup)>) -> Result<Self, RenderError> {
++        let mut by_target = BTreeMap::new();
++        for (target, setup) in setups {
++            if !velnor_actions_contract::targets::is_supported_target(&target) {
++                return Err(RenderError::BadCommand(format!(
++                    "unsupported_mise_setup_target:{target}"
++                )));
++            }
++            setup.validate()?;
++            if by_target.insert(target.clone(), setup).is_some() {
++                return Err(RenderError::BadCommand(format!(
++                    "duplicate_mise_setup_target:{target}"
++                )));
++            }
++        }
++        if by_target.is_empty() {
++            return Err(RenderError::BadCommand(
++                "empty_mise_setup_targets".to_owned(),
++            ));
++        }
++        Ok(Self { by_target })
++    }
++
++    /// Select the already-validated setup record for one target.
++    ///
++    /// # Errors
++    ///
++    /// Returns a render error when the workflow has no pin for `target`.
++    pub fn for_target(&self, target: &str) -> Result<&MiseSetup, RenderError> {
++        self.by_target.get(target).ok_or_else(|| {
++            RenderError::InvalidWorkflow(format!("missing_mise_setup_target:{target}"))
++        })
++    }
++}
++
+ impl MiseSetup {
+     /// Validate every pin before any step is built from it.
+     /// # Errors
+@@ -91,3 +145,60 @@ fn is_catalog_version(value: &str) -> bool {
+         && value.contains('.')
+         && !value.contains("${{")
+ }
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++
++    fn setup(sha256: &str) -> MiseSetup {
++        MiseSetup {
++            uses: "jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5".to_owned(),
++            version: "2026.10.2".to_owned(),
++            sha256: sha256.to_owned(),
++        }
++    }
++
++    #[test]
++    fn setup_set_selects_only_the_requested_typed_record() {
++        let linux_sha256 = "a".repeat(64);
++        let macos_sha256 = "b".repeat(64);
++        let linux = setup(&linux_sha256);
++        let macos = setup(&macos_sha256);
++        let setups = MiseSetupSet::new([
++            ("x86_64-unknown-linux-gnu".to_owned(), linux.clone()),
++            ("aarch64-apple-darwin".to_owned(), macos.clone()),
++        ])
++        .expect("valid target pins");
++        assert_eq!(
++            setups
++                .for_target("x86_64-unknown-linux-gnu")
++                .expect("Linux setup"),
++            &linux
++        );
++        assert_eq!(
++            setups
++                .for_target("aarch64-apple-darwin")
++                .expect("macOS setup"),
++            &macos
++        );
++        assert!(
++            setups
++                .for_target("x86_64-apple-darwin")
++                .is_err_and(|error| error.to_string().contains("missing_mise_setup_target"))
++        );
++    }
++
++    #[test]
++    fn setup_set_rejects_duplicate_unsupported_and_empty_targets() {
++        let pin = setup(&"c".repeat(64));
++        assert!(MiseSetupSet::new(Vec::new()).is_err());
++        assert!(MiseSetupSet::new([("unknown-target".to_owned(), pin.clone())]).is_err());
++        assert!(
++            MiseSetupSet::new([
++                ("x86_64-unknown-linux-gnu".to_owned(), pin.clone()),
++                ("x86_64-unknown-linux-gnu".to_owned(), pin),
++            ])
++            .is_err()
++        );
++    }
++}
+diff --git a/crates/velnor-actions-workflow-renderer/src/steps.rs b/crates/velnor-actions-workflow-renderer/src/steps.rs
+index ed9b33c10..6b4743702 100644
+--- a/crates/velnor-actions-workflow-renderer/src/steps.rs
++++ b/crates/velnor-actions-workflow-renderer/src/steps.rs
+@@ -9,10 +9,10 @@ use velnor_actions_contract::{Step, StepKind};
+ use crate::{RenderError, commands, marker};
+ 
+ pub use crate::cache_steps::{
+-    CACHE_RESTORE_NAME, CACHE_SAVE_NAME, CompileDriver, MBX_ACTION_NAME, MBX_CACHE_MODE_ENV,
+-    MBX_PREFLIGHT_NAME, MBX_RESTORE_NAME, NEVER_ARCHIVE_MARKERS, TASK_ARTIFACTS_DIR,
+-    TOOLS_CACHE_PATH, TOOLS_KEY_PREFIX, TOOLS_RESTORE_NAME, TOOLS_RESTORE_USES, TOOLS_SAVE_NAME,
+-    TOOLS_SAVE_USES, cache_action_step, check_cache_step_order, check_mbx_gating,
++    CACHE_RESTORE_NAME, CACHE_SAVE_NAME, CompileDriver, MBX_ACTION_NAME, MBX_RESTORE_NAME,
++    MBX_CACHE_MODE_ENV, MBX_PREFLIGHT_NAME, NEVER_ARCHIVE_MARKERS, TASK_ARTIFACTS_DIR,
++    TOOLS_CACHE_PATH, TOOLS_KEY_PREFIX, TOOLS_RESTORE_NAME, TOOLS_RESTORE_USES,
++    TOOLS_SAVE_NAME, TOOLS_SAVE_USES, cache_action_step, check_cache_step_order, check_mbx_gating,
+     is_never_archive_path, mbx_steps_for_driver, tools_cache_key, tools_restore_step,
+     tools_save_step,
+ };
+diff --git a/crates/velnor-actions-workflow-renderer/tests/impl_renderer_cache_steps.rs b/crates/velnor-actions-workflow-renderer/tests/impl_renderer_cache_steps.rs
+index 3c88d0e3d..deb1a4196 100644
+--- a/crates/velnor-actions-workflow-renderer/tests/impl_renderer_cache_steps.rs
++++ b/crates/velnor-actions-workflow-renderer/tests/impl_renderer_cache_steps.rs
+@@ -1,10 +1,12 @@
+ //! Gate 4 renderer cases: MBX objects, cache actions, lane target dirs.
+ 
++use velnor_actions_contract::cachekey::mbx_cache_generation;
++
+ use velnor_actions_contract::{Step, StepKind};
+ use velnor_actions_workflow_renderer::steps::{
+-    CompileDriver, MBX_CACHE_MODE_ENV, TOOLS_CACHE_PATH, TOOLS_RESTORE_NAME, TOOLS_SAVE_NAME,
+-    cache_action_step, mbx_steps_for_driver, target_dir_for_lane, tools_cache_key,
+-    tools_restore_step, tools_save_step,
++    CompileDriver, MBX_CACHE_MODE_ENV, MBX_PREFLIGHT_NAME, TOOLS_CACHE_PATH,
++    TOOLS_RESTORE_NAME, TOOLS_SAVE_NAME, cache_action_step, mbx_steps_for_driver,
++    target_dir_for_lane, tools_cache_key, tools_restore_step, tools_save_step,
+ };
+ 
+ use super::impl_renderer_fixtures::*;
+@@ -34,6 +36,51 @@ fn step_kinds_have_no_parallel_syntax() {
+     );
+ }
+ 
++#[test]
++fn mbx_preflight_and_restore_use_exact_stock_action_inputs() {
++    let uses = format!("jdx/mr-boxington-action@{}", sha());
++    let [preflight, step] = mbx_tool_steps(&uses, "1.19.0", "1.98.1").expect("mbx steps");
++    assert_eq!(preflight.name, MBX_PREFLIGHT_NAME);
++    assert_eq!(kind_name(&step), "action");
++    match &step.kind {
++        StepKind::Action {
++            uses: got,
++            with,
++            env,
++        } => {
++            assert!(got.starts_with("jdx/mr-boxington-action@"), "{got}");
++            assert_eq!(
++                with.get("github-cache-mode").map(String::as_str),
++                Some("objects")
++            );
++            assert_eq!(
++                with.get("toolchain").map(String::as_str),
++                Some("1.98.1"),
++                "the cache key carries the exact build toolchain"
++            );
++            assert!(!with.contains_key("version"), "preflight owns MBX version");
++            assert_eq!(
++                with.get("cache-generation").map(String::as_str),
++                Some(mbx_cache_generation("1.19.0").as_str()),
++                "a new MBX release starts an isolated cache namespace"
++            );
++            assert_eq!(env.get(MBX_CACHE_MODE_ENV).map(String::as_str), Some("read"));
++            for input in [
++                "save-on-pull-request",
++                "save-on-workflow-dispatch",
++                "save-on-protected-branch",
++            ] {
++                assert!(
++                    !with.contains_key(input),
++                    "consumer cache writes stay push-only: {input}"
++                );
++            }
++            assert!(!with.contains_key("mode"), "no such action input");
++        }
++        _ => panic!("mbx must be an action step"),
++    }
++}
++
+ #[test]
+ fn cache_restore_accepts_only_allowed_paths() {
+     let uses = format!("actions/cache/restore@{}", sha());
+@@ -284,38 +331,32 @@ fn lane_target_dirs_stay_isolated() {
+ }
+ 
+ #[test]
+-fn mbx_objects_step_gates_save_to_push_via_cache_mode() {
++fn mbx_preflight_pair_keeps_the_read_only_trust_gate() {
+     let uses = format!("jdx/mr-boxington-action@{}", sha());
+-    let [_, direct] = mbx_tool_steps(&uses, "1.19.0", "1.98.1").expect("direct MBX steps");
+-    let [_, driven] = mbx_steps_for_driver(
+-        &uses,
+-        CompileDriver::Mbx,
+-        "1.19.0",
+-        "1.98.1",
+-        mbx_tool_env("1.98.1"),
+-    )
+-    .expect("driver MBX")
+-    .expect("MBX driver emits");
+-    for step in [&direct, &driven] {
+-        let StepKind::Action { env, .. } = &step.kind else {
+-            panic!("mbx must be an action step");
+-        };
+-        assert_eq!(
+-            env.get(MBX_CACHE_MODE_ENV).map(String::as_str),
+-            Some("read"),
+-            "the action stays restore-only so its post cannot triple the store"
+-        );
+-    }
++    let [preflight, action] = mbx_tool_steps(&uses, "1.19.0", "1.98.1").expect("MBX pair");
++    assert_eq!(preflight.name, MBX_PREFLIGHT_NAME);
++    let StepKind::Action { with, env, .. } = &action.kind else {
++        panic!("MBX restore must be an action step");
++    };
++    assert_eq!(env.get(MBX_CACHE_MODE_ENV).map(String::as_str), Some("read"));
++    assert_eq!(with.get("github-cache-mode").map(String::as_str), Some("objects"));
++    assert!(!with.contains_key("version"), "the preflight owns MBX version");
++    assert!(!with.contains_key("isolate-objects-cache"));
++    assert!(!with.contains_key("cache-key-suffix"));
++    assert!(
++        !with.keys().any(|key| key.starts_with("save-on-")),
++        "untrusted jobs cannot opt into writes"
++    );
+     assert!(
+         mbx_steps_for_driver(
+             &uses,
+             CompileDriver::Cargo,
+             "1.19.0",
+             "1.98.1",
+-            mbx_tool_env("1.98.1"),
++            Default::default(),
+         )
+-        .expect("cargo driver")
+-        .is_none(),
+-        "cargo drivers emit no preflight or MBX step to gate"
++            .expect("cargo driver")
++            .is_none(),
++        "cargo drivers emit neither preflight nor action"
+     );
+ }
+diff --git a/crates/velnor-actions-workflow-renderer/tests/impl_renderer_fixtures.rs b/crates/velnor-actions-workflow-renderer/tests/impl_renderer_fixtures.rs
+index 8e4e0e46c..9faff5854 100644
+--- a/crates/velnor-actions-workflow-renderer/tests/impl_renderer_fixtures.rs
++++ b/crates/velnor-actions-workflow-renderer/tests/impl_renderer_fixtures.rs
+@@ -4,33 +4,27 @@ use velnor_actions_contract::{
+     Concurrency, Job, JobTimeout, Permissions, Step, Trigger, ValidatorKind, WorkflowIr,
+     WorkflowPolicy,
+ };
+-use velnor_actions_workflow_renderer::steps::{CompileDriver, mbx_steps_for_driver};
++use velnor_actions_workflow_renderer::setup::MiseSetupSet;
+ use velnor_actions_workflow_renderer::{
+     ASSET_SHA_ENV, ASSET_URL_ENV, CONCURRENCY_CANCEL, CONCURRENCY_GROUP, MiseSetup,
+     RELEASE_COMMIT_ENV, RenderContext, RenderError, STAGED_BINARY_PREFIX, ValidatorCommand,
+     acquire_velnor_step, checkout_step, plan_step, render_workflow_ir, render_workflow_ir_strict,
+     shell_step,
+ };
++use velnor_actions_workflow_renderer::steps::{CompileDriver, mbx_steps_for_driver};
+ 
+ pub(crate) const VERSION: &str = "0.1.0";
+ pub(crate) const LABEL: &str = "ubuntu-26.04";
+ pub(crate) const MISE_USES: &str = "jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5";
+-pub(crate) const MISE_VERSION: &str = "2026.9.18";
++pub(crate) const MISE_VERSION: &str = "2026.10.2";
+ pub(crate) const MISE_SHA256: &str =
+-    "d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4";
+-pub(crate) const STAGED: &str = "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0";
+-
++    "8f5f6660336f572830e33cd9b378d3131e529a0d4c4f0c553776be90a1ba302a";
+ pub(crate) const TEST_MBX_VERSION: &str = "1.21.1";
+ pub(crate) const TEST_RUST_TOOLCHAIN: &str = "1.98.1";
++pub(crate) const STAGED: &str = "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0";
+ 
+ pub(crate) fn mbx_tool_env(rust_toolchain: &str) -> BTreeMap<String, String> {
+     BTreeMap::from([
+-        ("MISE_NO_CONFIG".to_owned(), "1".to_owned()),
+-        ("MISE_NO_ENV".to_owned(), "1".to_owned()),
+-        ("MISE_NO_HOOKS".to_owned(), "1".to_owned()),
+-        ("MISE_LOCKFILE".to_owned(), "0".to_owned()),
+-        ("MISE_AUTO_INSTALL".to_owned(), "false".to_owned()),
+-        ("MISE_EXEC_AUTO_INSTALL".to_owned(), "false".to_owned()),
+         (
+             "MISE_RUSTUP_HOME".to_owned(),
+             "${{ runner.temp }}/velnor/rustup".to_owned(),
+@@ -70,6 +64,18 @@ pub(crate) fn mise() -> MiseSetup {
+     }
+ }
+ 
++pub(crate) fn mise_set() -> MiseSetupSet {
++    let macos = MiseSetup {
++        sha256: "b".repeat(64),
++        ..mise()
++    };
++    MiseSetupSet::new([
++        ("x86_64-unknown-linux-gnu".to_owned(), mise()),
++        ("aarch64-apple-darwin".to_owned(), macos),
++    ])
++    .expect("supported runner setups")
++}
++
+ pub(crate) fn fixture_ctx() -> RenderContext {
+     RenderContext {
+         generator_version: VERSION.to_owned(),
+@@ -156,7 +162,7 @@ pub(crate) fn fixture_ir(jobs: Vec<(String, Job)>) -> WorkflowIr {
+ }
+ 
+ pub(crate) fn strict(ir: &WorkflowIr, ctx: &RenderContext) -> Result<String, RenderError> {
+-    render_workflow_ir_strict(ir, WorkflowPolicy::ConsumerV1, None, ctx, &mise())
++    render_workflow_ir_strict(ir, WorkflowPolicy::ConsumerV1, None, ctx, &mise_set())
+ }
+ 
+ /// Step display names in render order for one job section.
+diff --git a/crates/velnor-actions-workflow-renderer/tests/impl_renderer_mbx_bundle.rs b/crates/velnor-actions-workflow-renderer/tests/impl_renderer_mbx_bundle.rs
+deleted file mode 100644
+index 1296e4772..000000000
+--- a/crates/velnor-actions-workflow-renderer/tests/impl_renderer_mbx_bundle.rs
++++ /dev/null
+@@ -1,156 +0,0 @@
+-//! Hosted MBX saves one bundle outside the store. The action post does not.
+-
+-use velnor_actions_contract::WorkflowPolicy;
+-use velnor_actions_contract::config::{SCALE_SET_NAME, ScaleSetSelector, VELNOR_LABEL};
+-use velnor_actions_workflow_renderer::{RenderError, render_workflow_ir};
+-
+-use super::impl_renderer_fixtures::*;
+-
+-fn mbx_uses() -> String {
+-    format!("jdx/mr-boxington-action@{}", "a".repeat(40))
+-}
+-
+-fn render_mbx(id: &str, scale_set: bool) -> Result<String, RenderError> {
+-    let mbx = mbx_tool_steps(&mbx_uses(), "1.21.1", "1.98.1")?;
+-    let mut built = job(id, "MBX job", Vec::new(), mbx.into());
+-    if scale_set {
+-        let selector = ScaleSetSelector::try_new(
+-            SCALE_SET_NAME,
+-            &[VELNOR_LABEL.to_owned(), SCALE_SET_NAME.to_owned()],
+-        )
+-        .map_err(|_| RenderError::InvalidWorkflow("bad_scale_set".to_owned()))?;
+-        built.1.runs_on = selector.token();
+-    }
+-    render_workflow_ir(
+-        &fixture_ir(vec![built]),
+-        WorkflowPolicy::ConsumerV1,
+-        None,
+-        &fixture_ctx(),
+-    )
+-}
+-
+-fn assert_cold_import(imported: &str) {
+-    for needle in [
+-        "mbx cache import",
+-        "no mbx bundle matched",
+-        "mbx bundle missing; continuing cold",
+-        "mbx bundle import failed; continuing cold",
+-        "df -B1 -P",
+-        "df -i -P",
+-    ] {
+-        assert!(
+-            imported.contains(needle),
+-            "{needle} missing from {imported}"
+-        );
+-    }
+-    assert!(!imported.contains("test -d"), "{imported}");
+-}
+-
+-#[test]
+-fn hosted_export_samples_disk_around_store_delete() -> Result<(), RenderError> {
+-    let text = render_mbx("demo", false)?;
+-    let export = text
+-        .find("name: Export MBX single bundle")
+-        .expect("export step");
+-    let save = text
+-        .find("name: Save MBX single bundle")
+-        .expect("save step");
+-    let script = &text[export..save];
+-    let bytes = script.find("df -B1 -P").expect("byte sample");
+-    let inodes = script.find("df -i -P").expect("inode sample");
+-    let gc = script.find("mbx gc").expect("reclaim");
+-    let exported = script.find("cache export").expect("export");
+-    let durable = script.find("test -d").expect("bundle check");
+-    let deleted = script.find(r#"rm -rf \"$store\""#).expect("store delete");
+-    assert!(bytes < inodes, "{script}");
+-    assert!(inodes < gc, "{script}");
+-    assert!(gc < exported, "{script}");
+-    assert!(exported < durable, "{script}");
+-    assert!(durable < deleted, "{script}");
+-    let after = &script[deleted..];
+-    assert!(after.contains("df -B1 -P"), "{after}");
+-    assert!(after.contains("df -i -P"), "{after}");
+-    assert!(
+-        script.contains("$RUNNER_TEMP/mbx-single-bundle"),
+-        "{script}"
+-    );
+-    assert_eq!(script.matches("--format directory").count(), 1, "{script}");
+-    assert!(!script.contains("github-actions-cache-v1"), "{script}");
+-    Ok(())
+-}
+-
+-#[test]
+-fn hosted_save_is_one_bundle_outside_the_store() -> Result<(), RenderError> {
+-    let text = render_mbx("demo", false)?;
+-    let preflight = text
+-        .find("name: Verify MBX and Rust toolchains")
+-        .expect("toolchain preflight");
+-    let restore = text
+-        .find("name: Restore MBX objects")
+-        .expect("restore step");
+-    let bundle_key = text
+-        .find("name: Prepare MBX bundle key")
+-        .expect("bundle key");
+-    let bundle = text
+-        .find("name: Restore MBX single bundle")
+-        .expect("bundle restore");
+-    let import = text
+-        .find("name: Import MBX single bundle")
+-        .expect("bundle import");
+-    let export = text
+-        .find("name: Export MBX single bundle")
+-        .expect("export step");
+-    let save = text
+-        .find("name: Save MBX single bundle")
+-        .expect("save step");
+-    assert!(
+-        preflight < restore
+-            && restore < bundle_key
+-            && bundle_key < bundle
+-            && bundle < import
+-            && import < export
+-            && export < save,
+-        "{text}"
+-    );
+-    let restored = &text[bundle..import];
+-    assert!(restored.contains("actions/cache/restore@"), "{restored}");
+-    assert!(
+-        restored.contains("path: ${{ runner.temp }}/mbx-single-bundle"),
+-        "{restored}"
+-    );
+-    assert!(
+-        restored.contains("restore-keys: ${{ steps.mbx-bundle-key.outputs.prefix }}"),
+-        "{restored}"
+-    );
+-    assert_cold_import(&text[import..export]);
+-    let action = &text[restore..export];
+-    assert!(action.contains("id: mbx"), "{action}");
+-    assert!(action.contains("ACTIONS_CACHE_MODE: read"), "{action}");
+-    assert!(!action.contains("write"), "{action}");
+-    let saved = &text[save..];
+-    assert!(
+-        saved.contains("path: ${{ runner.temp }}/mbx-single-bundle"),
+-        "{saved}"
+-    );
+-    assert!(
+-        saved.contains("key: ${{ steps.mbx.outputs.cache-primary-key }}"),
+-        "{saved}"
+-    );
+-    assert!(
+-        saved.contains("steps.mbx-export.outputs.ready == 'true'"),
+-        "{saved}"
+-    );
+-    assert!(saved.contains("github.event_name == 'push'"), "{saved}");
+-    assert!(!saved.contains("pull_request"), "{saved}");
+-    assert!(!text.contains("continue-on-error"), "{text}");
+-    Ok(())
+-}
+-
+-#[test]
+-fn scale_set_save_matches_and_skips_hosted_gc_env() -> Result<(), RenderError> {
+-    let text = render_mbx("rust-demo__local", true)?;
+-    assert!(text.contains("name: Export MBX single bundle"), "{text}");
+-    assert!(text.contains("ACTIONS_CACHE_MODE: read"), "{text}");
+-    assert!(!text.contains("MBX_GC_AUTO"), "{text}");
+-    Ok(())
+-}
+diff --git a/crates/velnor-actions-workflow-renderer/tests/impl_renderer_mbx_gc_policy.rs b/crates/velnor-actions-workflow-renderer/tests/impl_renderer_mbx_gc_policy.rs
+deleted file mode 100644
+index 409500e34..000000000
+--- a/crates/velnor-actions-workflow-renderer/tests/impl_renderer_mbx_gc_policy.rs
++++ /dev/null
+@@ -1,96 +0,0 @@
+-//! Automatic MBX collection must cover setup, build, and test steps.
+-
+-use velnor_actions_contract::WorkflowPolicy;
+-use velnor_actions_contract::config::{SCALE_SET_NAME, ScaleSetSelector, VELNOR_LABEL};
+-use velnor_actions_contract::workflow::lanes::{HOSTED_SUFFIX, SCALE_SUFFIX};
+-use velnor_actions_workflow_renderer::steps::{MBX_CACHE_MODE_ENV, checkout_step};
+-use velnor_actions_workflow_renderer::{RenderError, render_workflow_ir};
+-
+-use super::impl_renderer_fixtures::*;
+-
+-/// Rendered GC policy reaches MBX only and composes with push-only saves.
+-#[test]
+-fn action_step_env_renders_only_when_present() -> Result<(), RenderError> {
+-    let uses = format!("jdx/mr-boxington-action@{}", "a".repeat(40));
+-    let [preflight, mbx] = mbx_tool_steps(&uses, "1.21.1", "1.98.1")?;
+-    let plain = checkout_step(&checkout_pin())?;
+-    let text = render_workflow_ir(
+-        &fixture_ir(vec![job(
+-            "demo",
+-            "Demo",
+-            Vec::new(),
+-            vec![plain, preflight, mbx],
+-        )]),
+-        WorkflowPolicy::ConsumerV1,
+-        None,
+-        &fixture_ctx(),
+-    )?;
+-    assert!(
+-        text.contains(&format!("{MBX_CACHE_MODE_ENV}: read")),
+-        "action post stays restore-only:\n{text}"
+-    );
+-    assert!(
+-        !text.contains("&& 'write'"),
+-        "push writes must not come from the action post:\n{text}"
+-    );
+-    assert!(
+-        text.contains("MBX_GC_AUTO: \"1\""),
+-        "MBX jobs enable GC:\n{text}"
+-    );
+-
+-    let plain = checkout_step(&checkout_pin())?;
+-    let cargo_text = render_workflow_ir(
+-        &fixture_ir(vec![job(
+-            "cargo-only",
+-            "Cargo only",
+-            Vec::new(),
+-            vec![plain],
+-        )]),
+-        WorkflowPolicy::ConsumerV1,
+-        None,
+-        &fixture_ctx(),
+-    )?;
+-    assert!(
+-        !cargo_text.contains("MBX_GC_AUTO"),
+-        "Cargo-only jobs do not receive MBX policy:\n{cargo_text}"
+-    );
+-    assert!(
+-        !cargo_text.contains("Export MBX single bundle"),
+-        "Cargo-only jobs do not export an MBX bundle:\n{cargo_text}"
+-    );
+-    Ok(())
+-}
+-
+-/// Lane extraction keeps hosted GC enabled and leaves scale-set policy intact.
+-#[test]
+-fn mbx_gc_policy_is_scoped_to_hosted_mbx_jobs() -> Result<(), RenderError> {
+-    let uses = format!("jdx/mr-boxington-action@{}", "a".repeat(40));
+-    let mbx = mbx_tool_steps(&uses, "1.21.1", "1.98.1")?;
+-    let checkout = checkout_step(&checkout_pin())?;
+-    let hosted = job(
+-        &format!("rust-demo{HOSTED_SUFFIX}"),
+-        "Rust demo hosted",
+-        Vec::new(),
+-        vec![checkout.clone(), mbx[0].clone(), mbx[1].clone()],
+-    );
+-    let mut local = job(
+-        &format!("rust-demo{SCALE_SUFFIX}"),
+-        "Rust demo scale set",
+-        Vec::new(),
+-        vec![checkout, mbx[0].clone(), mbx[1].clone()],
+-    );
+-    local.1.runs_on = ScaleSetSelector::try_new(
+-        SCALE_SET_NAME,
+-        &[VELNOR_LABEL.to_owned(), SCALE_SET_NAME.to_owned()],
+-    )
+-    .expect("valid scale-set selector")
+-    .token();
+-    let text = render_workflow_ir(
+-        &fixture_ir(vec![hosted, local]),
+-        WorkflowPolicy::ConsumerV1,
+-        None,
+-        &fixture_ctx(),
+-    )?;
+-    assert_eq!(text.matches("MBX_GC_AUTO: \"1\"").count(), 1, "{text}");
+-    Ok(())
+-}
+diff --git a/crates/velnor-actions-workflow-renderer/tests/impl_renderer_preseed_strict.rs b/crates/velnor-actions-workflow-renderer/tests/impl_renderer_preseed_strict.rs
+index ce425440e..eaaaea9b5 100644
+--- a/crates/velnor-actions-workflow-renderer/tests/impl_renderer_preseed_strict.rs
++++ b/crates/velnor-actions-workflow-renderer/tests/impl_renderer_preseed_strict.rs
+@@ -17,7 +17,7 @@ fn strict_preseed_accepts_staged_internal_steps() -> Result<(), RenderError> {
+         WorkflowPolicy::VelnorRepositoryV1,
+         None,
+         &ctx,
+-        &mise(),
++        &mise_set(),
+     )?;
+     let plan = step_names(&text, "plan");
+     for name in [
+@@ -60,7 +60,7 @@ fn strict_preseed_closure_rejects_gaps() {
+         WorkflowPolicy::VelnorRepositoryV1,
+         None,
+         &ctx,
+-        &mise(),
++        &mise_set(),
+     );
+     assert!(
+         err.is_err_and(|err| err.to_string().contains("preseed_incomplete")),
+@@ -75,7 +75,7 @@ fn strict_preseed_closure_rejects_gaps() {
+         WorkflowPolicy::VelnorRepositoryV1,
+         None,
+         &ctx,
+-        &mise(),
++        &mise_set(),
+     );
+     assert!(
+         err.is_err_and(|err| err.to_string().contains("preseed_incomplete")),
+@@ -90,7 +90,7 @@ fn strict_preseed_closure_rejects_gaps() {
+         WorkflowPolicy::VelnorRepositoryV1,
+         None,
+         &ctx,
+-        &mise(),
++        &mise_set(),
+     );
+     assert!(
+         err.is_err_and(|err| err.to_string().contains("internal_without_acquire")),
+@@ -109,7 +109,7 @@ fn strict_preseed_closure_rejects_gaps() {
+         WorkflowPolicy::VelnorRepositoryV1,
+         None,
+         &ctx,
+-        &mise(),
++        &mise_set(),
+     );
+     assert!(
+         err.is_err_and(|err| err.to_string().contains("preseed_misordered")),
+@@ -129,7 +129,7 @@ fn strict_preseed_closure_rejects_plan_manifest_gap() {
+         WorkflowPolicy::VelnorRepositoryV1,
+         None,
+         &ctx,
+-        &mise(),
++        &mise_set(),
+     );
+     assert!(
+         err.is_err_and(|err| err.to_string().contains("preseed_incomplete:plan:manifest")),
+@@ -150,7 +150,7 @@ fn strict_preseed_closure_rejects_verify_gaps() {
+         WorkflowPolicy::VelnorRepositoryV1,
+         None,
+         &ctx,
+-        &mise(),
++        &mise_set(),
+     );
+     assert!(
+         err.is_err_and(|err| err.to_string().contains("preseed_incomplete")),
+@@ -169,7 +169,7 @@ fn strict_preseed_closure_rejects_verify_gaps() {
+         WorkflowPolicy::VelnorRepositoryV1,
+         None,
+         &ctx,
+-        &mise(),
++        &mise_set(),
+     );
+     assert!(
+         err.is_err_and(|err| err.to_string().contains("preseed_misordered")),
+@@ -188,7 +188,7 @@ fn strict_rejects_stage_without_preseed_mode() {
+         WorkflowPolicy::VelnorRepositoryV1,
+         None,
+         &ctx,
+-        &mise(),
++        &mise_set(),
+     );
+     assert!(
+         err.is_err_and(|err| err.to_string().contains("preseed_stage_without_mode")),
+diff --git a/crates/velnor-actions-workflow-renderer/tests/impl_renderer_setup.rs b/crates/velnor-actions-workflow-renderer/tests/impl_renderer_setup.rs
+index f0edd74d3..565d487f7 100644
+--- a/crates/velnor-actions-workflow-renderer/tests/impl_renderer_setup.rs
++++ b/crates/velnor-actions-workflow-renderer/tests/impl_renderer_setup.rs
+@@ -1,8 +1,9 @@
+ //! Pinned Mise setup emission: template shape plus strict insertion.
+ use std::collections::BTreeMap;
+-use velnor_actions_contract::Step;
++use velnor_actions_contract::{Step, WorkflowPolicy};
+ use velnor_actions_workflow_renderer::{
+     MiseSetup, RenderError, SETUP_MISE_NAME, checkout_step, mise_setup_step, plan_step,
++    render_workflow_ir_strict,
+ };
+ 
+ use super::impl_renderer_fixtures::*;
+@@ -106,6 +107,39 @@ fn strict_inserts_setup_before_mise_exec() -> Result<(), RenderError> {
+     Ok(())
+ }
+ 
++#[test]
++fn strict_selects_setup_digest_for_each_runner_target() -> Result<(), RenderError> {
++    let linux = job(
++        "linux",
++        "Linux",
++        Vec::new(),
++        vec![checkout_step(&checkout_pin())?],
++    );
++    let mut macos = job(
++        "macos",
++        "macOS",
++        Vec::new(),
++        vec![checkout_step(&checkout_pin())?],
++    );
++    macos.1.runs_on = "macos-15".to_owned();
++    let text = render_workflow_ir_strict(
++        &fixture_ir(vec![linux, macos]),
++        WorkflowPolicy::ConsumerV1,
++        None,
++        &fixture_ctx(),
++        &mise_set(),
++    )?;
++    assert!(
++        text.contains(&format!("sha256: \"{MISE_SHA256}\"")),
++        "{text}"
++    );
++    assert!(
++        text.contains(&format!("sha256: \"{}\"", "b".repeat(64))),
++        "{text}"
++    );
++    Ok(())
++}
++
+ #[test]
+ fn strict_task_job_always_gets_setup() -> Result<(), RenderError> {
+     let plan = job(
+diff --git a/crates/velnor-actions-workflow-renderer/tests/impl_renderer_sweep.rs b/crates/velnor-actions-workflow-renderer/tests/impl_renderer_sweep.rs
+index 2fcb45e85..34a8157fa 100644
+--- a/crates/velnor-actions-workflow-renderer/tests/impl_renderer_sweep.rs
++++ b/crates/velnor-actions-workflow-renderer/tests/impl_renderer_sweep.rs
+@@ -65,7 +65,7 @@ fn every_emitted_step_has_name() -> Result<(), RenderError> {
+         WorkflowPolicy::VelnorRepositoryV1,
+         Some(&support),
+         &ctx,
+-        &mise(),
++        &mise_set(),
+     )?;
+     for line in text.lines() {
+         let trimmed = line.trim_start();
+@@ -115,7 +115,7 @@ fn final_gate_needs_plan_lint_and_support() -> Result<(), RenderError> {
+         &ctx,
+     )?;
+     let start = text.find("required:").expect("final job");
+-    let window = snip(&text, start, 1600);
++    let window = snip(&text, start, 600);
+     for need in [
+         "plan",
+         "actionlint",
+diff --git a/crates/velnor-actions-workflow-renderer/tests/impl_renderer_token_hygiene_env.rs b/crates/velnor-actions-workflow-renderer/tests/impl_renderer_token_hygiene_env.rs
+index 710b3530f..295b75489 100644
+--- a/crates/velnor-actions-workflow-renderer/tests/impl_renderer_token_hygiene_env.rs
++++ b/crates/velnor-actions-workflow-renderer/tests/impl_renderer_token_hygiene_env.rs
+@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
+ use velnor_actions_contract::{Job, WorkflowPolicy};
+ use velnor_actions_workflow_renderer::{
+     RenderError, action_step_with_env, ambient_shell_step, checkout_step, plan_step,
+-    render_workflow_ir, steps::MBX_CACHE_MODE_ENV,
++    render_workflow_ir,
+ };
+ 
+ use super::impl_renderer_fixtures::*;
+@@ -18,19 +18,12 @@ fn mbx_pin() -> String {
+ }
+ 
+ /// Plan job carrying one caller-supplied action step.
+-fn action_plan_job(
+-    steps: Vec<velnor_actions_contract::Step>,
+-) -> Result<(String, Job), RenderError> {
++fn action_plan_job(step: velnor_actions_contract::Step) -> Result<(String, Job), RenderError> {
+     Ok(job(
+         "plan",
+         "Plan",
+         Vec::new(),
+-        [
+-            vec![checkout_step(&checkout_pin())?],
+-            steps,
+-            vec![plan_step()],
+-        ]
+-        .concat(),
++        vec![checkout_step(&checkout_pin())?, step, plan_step()],
+     ))
+ }
+ 
+@@ -43,21 +36,28 @@ fn token_in_action_env_fails_render() -> Result<(), RenderError> {
+         &mbx_pin(),
+         BTreeMap::from([("github-cache-mode".to_owned(), "objects".to_owned())]),
+         BTreeMap::from([(
+-            MBX_CACHE_MODE_ENV.to_owned(),
++            "CACHE_POLICY".to_owned(),
+             "see GITHUB_TOKEN here".to_owned(),
+         )]),
+     )?;
+-    render_fails_with(vec![action_plan_job(vec![leaked])?], "token_in_action_env");
++    render_fails_with(vec![action_plan_job(leaked)?], "token_in_action_env");
+     Ok(())
+ }
+ 
+ #[test]
+-fn benign_mbx_cache_mode_env_passes() -> Result<(), RenderError> {
+-    // The genuine MBX restore step pins its push-gated cache mode in
+-    // step env; the extended gate must not flag that expression.
+-    let restore = mbx_tool_steps(&mbx_pin(), "1.5.0", "1.98.1")?;
++fn mbx_action_keeps_the_read_only_cache_gate() -> Result<(), RenderError> {
++    let [preflight, restore] = mbx_tool_steps(&mbx_pin(), "1.5.0", "1.98.1")?;
++    let velnor_actions_contract::StepKind::Action { env, .. } = &restore.kind else {
++        panic!("MBX action step expected");
++    };
++    assert_eq!(env.get("ACTIONS_CACHE_MODE").map(String::as_str), Some("read"));
+     render_workflow_ir(
+-        &fixture_ir(vec![action_plan_job(restore.into())?]),
++        &fixture_ir(vec![job(
++            "plan",
++            "Plan",
++            Vec::new(),
++            vec![checkout_step(&checkout_pin())?, preflight, restore, plan_step()],
++        )]),
+         WorkflowPolicy::ConsumerV1,
+         None,
+         &fixture_ctx(),
+diff --git a/crates/velnor-actions-workflow-renderer/tests/velnor_workflow_renderer.rs b/crates/velnor-actions-workflow-renderer/tests/velnor_workflow_renderer.rs
+index dd3ae54c4..4eb46e14a 100644
+--- a/crates/velnor-actions-workflow-renderer/tests/velnor_workflow_renderer.rs
++++ b/crates/velnor-actions-workflow-renderer/tests/velnor_workflow_renderer.rs
+@@ -25,14 +25,8 @@ mod impl_renderer_guard;
+ mod impl_renderer_lint;
+ #[path = "impl_renderer_matrix.rs"]
+ mod impl_renderer_matrix;
+-#[path = "impl_renderer_mbx_action.rs"]
+-mod impl_renderer_mbx_action;
+-#[path = "impl_renderer_mbx_bundle.rs"]
+-mod impl_renderer_mbx_bundle;
+-#[path = "impl_renderer_mbx_gc_policy.rs"]
+-mod impl_renderer_mbx_gc_policy;
+-#[path = "impl_renderer_mbx_preflight.rs"]
+-mod impl_renderer_mbx_preflight;
++#[path = "impl_renderer_mbx_cache_isolation.rs"]
++mod impl_renderer_mbx_cache_isolation;
+ #[path = "impl_renderer_mbxgate.rs"]
+ mod impl_renderer_mbxgate;
+ #[path = "impl_renderer_msrv.rs"]
+diff --git a/docs/implemented/cache-measurements.md b/docs/implemented/cache-measurements.md
+index 2d894faa1..4494f76aa 100644
+--- a/docs/implemented/cache-measurements.md
++++ b/docs/implemented/cache-measurements.md
+@@ -207,10 +207,11 @@ prevents a cache from an earlier dispatch from satisfying this check. The
+ reader's `cache-hit=false` assertion intentionally expects the action's
+ run-specific writer key to be reached by its restore prefix.
+ 
+-Both jobs set `MBX_GC_AUTO=1` intentionally: this exercises the same hosted
+-policy that Velnor emits for production MBX object-cache jobs, overriding the
+-action's hosted default. Dispatch once from protected `main` with mode
+-`mbx-cache-roundtrip`; the writer and reader run in order at the same SHA.
++Both jobs keep the pinned action's hosted object-cache GC default unchanged.
++The action defaults automatic GC off for hosted object-cache jobs so restored
++objects remain available during compilation; Velnor does not override that
++setting. Dispatch once from protected `main` with mode `mbx-cache-roundtrip`;
++the writer and reader run in order at the same SHA.
+ 
+ This is a small end-to-end action and cache round-trip probe. It does not
+ measure disk or inode peaks and does not qualify the affected ChainArgos
+diff --git a/fixtures/parity/multi-crate/expected/ci.yml b/fixtures/parity/multi-crate/expected/ci.yml
+index 03aacb5ff..8014aaa34 100644
+--- a/fixtures/parity/multi-crate/expected/ci.yml
++++ b/fixtures/parity/multi-crate/expected/ci.yml
+@@ -308,7 +308,6 @@ jobs:
+       GH_HOST: ""
+       GH_TOKEN: ""
+       GITHUB_TOKEN: ""
+-      MBX_GC_AUTO: "1"
+       MISE_AUTO_INSTALL: "false"
+       MISE_EXEC_AUTO_INSTALL: "false"
+       MISE_GITHUB_TOKEN: ""
+@@ -495,7 +494,6 @@ jobs:
+       GH_HOST: ""
+       GH_TOKEN: ""
+       GITHUB_TOKEN: ""
+-      MBX_GC_AUTO: "1"
+       MISE_AUTO_INSTALL: "false"
+       MISE_EXEC_AUTO_INSTALL: "false"
+       MISE_GITHUB_TOKEN: ""

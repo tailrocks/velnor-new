@@ -1,0 +1,2 @@
+[detached HEAD b825f9370] WIP: preserve existing partial work at immediate stop [skip ci]
+ 2 files changed, 193 insertions(+), 6 deletions(-)

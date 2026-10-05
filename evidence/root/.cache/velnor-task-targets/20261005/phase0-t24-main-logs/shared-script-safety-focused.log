@@ -1,0 +1,24 @@
+   Compiling velnor-actions-workflow-renderer v0.1.0 (/var/tmp/velnor-phase0-t24-main-shared-script-20261005/crates/velnor-actions-workflow-renderer)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.50s
+     Running unittests src/lib.rs (/root/.cache/velnor-task-targets/20261005/phase0-t24-main-target/debug/deps/velnor_actions_workflow_renderer-baaa2ee710553a16)
+
+running 9 tests
+test render::document_shared_scripts::tests::noncontiguous_factory_steps_are_not_shared ... ok
+shared-script execution fixture retained without proven process-group quiescence: /var/tmp/velnor-shared-script-execution-3228780-0
+test render::document_shared_scripts::tests::execution_tests::support::tests::automatic_cleanup_waits_for_process_group_quiescence ... ok
+test render::document_shared_scripts::tests::custom_or_repeated_checkout_is_not_eligible ... ok
+test render::document_shared_scripts::tests::one_job_or_modified_triplet_does_not_emit_shared_files ... ok
+test render::document_shared_scripts::tests::execution_tests::support::tests::cleanup_refuses_a_replacement_directory_at_the_owned_path ... ok
+test render::document_shared_scripts::tests::exact_markers_and_paths_follow_the_factory_body_digest ... ok
+test render::document_shared_scripts::tests::repeated_exact_factory_bodies_preserve_all_step_and_job_metadata ... ok
+test render::document_shared_scripts::tests::execution_tests::sourced_factory_scripts_match_inline_success_and_early_failure ... ok
+test render::document_shared_scripts::tests::execution_tests::sourced_factory_scripts_match_inline_hup_int_and_term_cleanup ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 64 filtered out; finished in 1.98s
+
+     Running tests/velnor_workflow_renderer.rs (/root/.cache/velnor-task-targets/20261005/phase0-t24-main-target/debug/deps/velnor_workflow_renderer-f7fbb3074acf10a8)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 313 filtered out; finished in 0.00s
+

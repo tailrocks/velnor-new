@@ -1,0 +1,114 @@
+JOB actionlint: 0:Checkout | 1:Restore Velnor tool seed | 2:Setup Mise | 3:Run actionlint | 4:Save Mise tools
+JOB plan: 0:Checkout | 1:Restore Velnor tool seed | 2:Setup Mise | 3:Prepare pinned tools | 4:Prepare Rust components | 5:Restore Cargo sources | 6:Fetch Cargo sources | 7:Save Cargo sources | 8:Acquire Velnor | 9:Write request | 10:Check generated files | 11:Plan | 12:Publish plan | 13:Save Mise tools
+CANDIDATE plan at 2:
+[
+    Step {
+        name: "Setup Mise",
+        condition: None,
+        kind: Action {
+            uses: "jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5",
+            with: {
+                "cache": "true",
+                "cache_key": "mise-v1-x86_64-unknown-linux-gnu-2026.9.18-cd6926493099032f",
+                "cache_save": "false",
+                "env": "false",
+                "install": "false",
+                "sha256": "d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4",
+                "version": "2026.9.18",
+            },
+            env: {},
+        },
+    },
+    Step {
+        name: "Prepare pinned tools",
+        condition: None,
+        kind: Shell {
+            run: [
+                "mise",
+                "--no-config",
+                "--no-env",
+                "--no-hooks",
+                "install",
+                "rust@1.98.1",
+                "mr-boxington@1.21.1",
+                "actionlint@1.7.12",
+                "shellcheck@0.11.0",
+                "zizmor@1.30.1",
+                "aqua:nextest-rs/nextest/cargo-nextest@0.9.146",
+            ],
+            env: {
+                "MISE_CARGO_HOME": "${{ runner.temp }}/velnor/cargo",
+                "MISE_LOCKFILE": "0",
+                "MISE_NO_CONFIG": "1",
+                "MISE_NO_ENV": "1",
+                "MISE_NO_HOOKS": "1",
+                "MISE_RUSTUP_HOME": "${{ runner.temp }}/velnor/rustup",
+                "RUSTUP_TOOLCHAIN": "1.98.1",
+            },
+        },
+    },
+    Step {
+        name: "Prepare Rust components",
+        condition: None,
+        kind: Shell {
+            run: [
+                "mise",
+                "--no-config",
+                "--no-env",
+                "--no-hooks",
+                "exec",
+                "rust@1.98.1",
+                "--",
+                "rustup",
+                "component",
+                "add",
+                "--toolchain",
+                "1.98.1-x86_64-unknown-linux-gnu",
+                "clippy",
+                "rustfmt",
+            ],
+            env: {
+                "MISE_AUTO_INSTALL": "false",
+                "MISE_CARGO_HOME": "${{ runner.temp }}/velnor/cargo",
+                "MISE_EXEC_AUTO_INSTALL": "false",
+                "MISE_LOCKFILE": "0",
+                "MISE_NO_CONFIG": "1",
+                "MISE_NO_ENV": "1",
+                "MISE_NO_HOOKS": "1",
+                "MISE_RUSTUP_HOME": "${{ runner.temp }}/velnor/rustup",
+                "RUSTUP_TOOLCHAIN": "1.98.1",
+            },
+        },
+    },
+]
+JOB publish-baseline: 0:Acquire Velnor | 1:Download plan | 2:Write request | 3:Publish baseline | 4:Upload baseline
+JOB required: 0:Setup Mise | 1:Acquire Velnor | 2:Prepare pinned tools | 3:Download plan | 4:Download every expected matrix artifact | 5:Write request | 6:Merge reports | 7:Save Mise tools | 8:Publish final report
+JOB rust-jackin: 0:Checkout | 1:Restore Velnor tool seed | 2:Setup Mise | 3:Acquire Velnor | 4:Download plan | 5:Prepare pinned tools | 6:Prepare Rust components | 7:Restore Cargo sources | 8:Verify MBX and Rust toolchains | 9:Prepare MBX cache identity | 10:Restore MBX objects | 11:Fetch Cargo sources | 12:Format | 13:Clippy | 14:Build test executables | 15:Unit and integration tests | 16:Doctests | 17:Documentation | 18:Upload crate reports
+JOB rust-jackin-agent-status: 0:Checkout | 1:Restore Velnor tool seed | 2:Setup Mise | 3:Acquire Velnor | 4:Download plan | 5:Prepare pinned tools | 6:Prepare Rust components | 7:Restore Cargo sources | 8:Verify MBX and Rust toolchains | 9:Prepare MBX cache identity | 10:Restore MBX objects | 11:Fetch Cargo sources | 12:Format | 13:Clippy | 14:Build test executables | 15:Unit and integration tests | 16:Doctests | 17:Documentation | 18:Upload crate reports
+JOB rust-jackin-capsule: 0:Checkout | 1:Restore Velnor tool seed | 2:Setup Mise | 3:Acquire Velnor | 4:Download plan | 5:Prepare pinned tools | 6:Prepare Rust components | 7:Restore Cargo sources | 8:Verify MBX and Rust toolchains | 9:Prepare MBX cache identity | 10:Restore MBX objects | 11:Fetch Cargo sources | 12:Format | 13:Clippy | 14:Build test executables | 15:Unit and integration tests | 16:Doctests | 17:Documentation | 18:Upload crate reports
+JOB rust-jackin-config: 0:Checkout | 1:Restore Velnor tool seed | 2:Setup Mise | 3:Acquire Velnor | 4:Download plan | 5:Prepare pinned tools | 6:Prepare Rust components | 7:Restore Cargo sources | 8:Verify MBX and Rust toolchains | 9:Prepare MBX cache identity | 10:Restore MBX objects | 11:Fetch Cargo sources | 12:Format | 13:Clippy | 14:Build test executables | 15:Unit and integration tests | 16:Doctests | 17:Documentation | 18:Upload crate reports
+JOB rust-jackin-console: 0:Checkout | 1:Restore Velnor tool seed | 2:Setup Mise | 3:Acquire Velnor | 4:Download plan | 5:Prepare pinned tools | 6:Prepare Rust components | 7:Restore Cargo sources | 8:Verify MBX and Rust toolchains | 9:Prepare MBX cache identity | 10:Restore MBX objects | 11:Fetch Cargo sources | 12:Format | 13:Clippy | 14:Build test executables | 15:Unit and integration tests | 16:Doctests | 17:Documentation | 18:Upload crate reports
+JOB rust-jackin-core: 0:Checkout | 1:Restore Velnor tool seed | 2:Setup Mise | 3:Acquire Velnor | 4:Download plan | 5:Prepare pinned tools | 6:Prepare Rust components | 7:Restore Cargo sources | 8:Verify MBX and Rust toolchains | 9:Prepare MBX cache identity | 10:Restore MBX objects | 11:Fetch Cargo sources | 12:Format | 13:Clippy | 14:Build test executables | 15:Unit and integration tests | 16:Doctests | 17:Documentation | 18:Upload crate reports
+JOB rust-jackin-dev: 0:Checkout | 1:Restore Velnor tool seed | 2:Setup Mise | 3:Acquire Velnor | 4:Download plan | 5:Prepare pinned tools | 6:Prepare Rust components | 7:Restore Cargo sources | 8:Verify MBX and Rust toolchains | 9:Prepare MBX cache identity | 10:Restore MBX objects | 11:Fetch Cargo sources | 12:Format | 13:Clippy | 14:Build test executables | 15:Unit and integration tests | 16:Documentation | 17:Upload crate reports
+JOB rust-jackin-diagnostics: 0:Checkout | 1:Restore Velnor tool seed | 2:Setup Mise | 3:Acquire Velnor | 4:Download plan | 5:Prepare pinned tools | 6:Prepare Rust components | 7:Restore Cargo sources | 8:Verify MBX and Rust toolchains | 9:Prepare MBX cache identity | 10:Restore MBX objects | 11:Fetch Cargo sources | 12:Format | 13:Clippy | 14:Build test executables | 15:Unit and integration tests | 16:Doctests | 17:Documentation | 18:Upload crate reports
+JOB rust-jackin-docker: 0:Checkout | 1:Restore Velnor tool seed | 2:Setup Mise | 3:Acquire Velnor | 4:Download plan | 5:Prepare pinned tools | 6:Prepare Rust components | 7:Restore Cargo sources | 8:Verify MBX and Rust toolchains | 9:Prepare MBX cache identity | 10:Restore MBX objects | 11:Fetch Cargo sources | 12:Format | 13:Clippy | 14:Build test executables | 15:Unit and integration tests | 16:Doctests | 17:Documentation | 18:Upload crate reports
+JOB rust-jackin-env: 0:Checkout | 1:Restore Velnor tool seed | 2:Setup Mise | 3:Acquire Velnor | 4:Download plan | 5:Prepare pinned tools | 6:Prepare Rust components | 7:Restore Cargo sources | 8:Verify MBX and Rust toolchains | 9:Prepare MBX cache identity | 10:Restore MBX objects | 11:Fetch Cargo sources | 12:Format | 13:Clippy | 14:Build test executables | 15:Unit and integration tests | 16:Doctests | 17:Documentation | 18:Upload crate reports
+JOB rust-jackin-host: 0:Checkout | 1:Restore Velnor tool seed | 2:Setup Mise | 3:Acquire Velnor | 4:Download plan | 5:Prepare pinned tools | 6:Prepare Rust components | 7:Restore Cargo sources | 8:Verify MBX and Rust toolchains | 9:Prepare MBX cache identity | 10:Restore MBX objects | 11:Fetch Cargo sources | 12:Format | 13:Clippy | 14:Build test executables | 15:Unit and integration tests | 16:Doctests | 17:Documentation | 18:Upload crate reports
+JOB rust-jackin-image: 0:Checkout | 1:Restore Velnor tool seed | 2:Setup Mise | 3:Acquire Velnor | 4:Download plan | 5:Prepare pinned tools | 6:Prepare Rust components | 7:Restore Cargo sources | 8:Verify MBX and Rust toolchains | 9:Prepare MBX cache identity | 10:Restore MBX objects | 11:Fetch Cargo sources | 12:Format | 13:Clippy | 14:Build test executables | 15:Unit and integration tests | 16:Doctests | 17:Documentation | 18:Upload crate reports
+JOB rust-jackin-instance: 0:Checkout | 1:Restore Velnor tool seed | 2:Setup Mise | 3:Acquire Velnor | 4:Download plan | 5:Prepare pinned tools | 6:Prepare Rust components | 7:Restore Cargo sources | 8:Verify MBX and Rust toolchains | 9:Prepare MBX cache identity | 10:Restore MBX objects | 11:Fetch Cargo sources | 12:Format | 13:Clippy | 14:Build test executables | 15:Unit and integration tests | 16:Doctests | 17:Documentation | 18:Upload crate reports
+JOB rust-jackin-isolation: 0:Checkout | 1:Restore Velnor tool seed | 2:Setup Mise | 3:Acquire Velnor | 4:Download plan | 5:Prepare pinned tools | 6:Prepare Rust components | 7:Restore Cargo sources | 8:Verify MBX and Rust toolchains | 9:Prepare MBX cache identity | 10:Restore MBX objects | 11:Fetch Cargo sources | 12:Format | 13:Clippy | 14:Build test executables | 15:Unit and integration tests | 16:Doctests | 17:Documentation | 18:Upload crate reports
+JOB rust-jackin-launch: 0:Checkout | 1:Restore Velnor tool seed | 2:Setup Mise | 3:Acquire Velnor | 4:Download plan | 5:Prepare pinned tools | 6:Prepare Rust components | 7:Restore Cargo sources | 8:Verify MBX and Rust toolchains | 9:Prepare MBX cache identity | 10:Restore MBX objects | 11:Fetch Cargo sources | 12:Format | 13:Clippy | 14:Build test executables | 15:Unit and integration tests | 16:Doctests | 17:Documentation | 18:Upload crate reports
+JOB rust-jackin-manifest: 0:Checkout | 1:Restore Velnor tool seed | 2:Setup Mise | 3:Acquire Velnor | 4:Download plan | 5:Prepare pinned tools | 6:Prepare Rust components | 7:Restore Cargo sources | 8:Verify MBX and Rust toolchains | 9:Prepare MBX cache identity | 10:Restore MBX objects | 11:Fetch Cargo sources | 12:Format | 13:Clippy | 14:Build test executables | 15:Unit and integration tests | 16:Doctests | 17:Documentation | 18:Upload crate reports
+JOB rust-jackin-otlp-testbed: 0:Checkout | 1:Restore Velnor tool seed | 2:Setup Mise | 3:Acquire Velnor | 4:Download plan | 5:Prepare pinned tools | 6:Prepare Rust components | 7:Restore Cargo sources | 8:Verify MBX and Rust toolchains | 9:Prepare MBX cache identity | 10:Restore MBX objects | 11:Fetch Cargo sources | 12:Format | 13:Clippy | 14:Build test executables | 15:Unit and integration tests | 16:Doctests | 17:Documentation | 18:Upload crate reports
+JOB rust-jackin-process: 0:Checkout | 1:Restore Velnor tool seed | 2:Setup Mise | 3:Acquire Velnor | 4:Download plan | 5:Prepare pinned tools | 6:Prepare Rust components | 7:Restore Cargo sources | 8:Verify MBX and Rust toolchains | 9:Prepare MBX cache identity | 10:Restore MBX objects | 11:Fetch Cargo sources | 12:Format | 13:Clippy | 14:Build test executables | 15:Unit and integration tests | 16:Doctests | 17:Documentation | 18:Upload crate reports
+JOB rust-jackin-process-directory: 0:Checkout | 1:Restore Velnor tool seed | 2:Setup Mise | 3:Acquire Velnor | 4:Download plan | 5:Prepare pinned tools | 6:Prepare Rust components | 7:Restore Cargo sources | 8:Verify MBX and Rust toolchains | 9:Prepare MBX cache identity | 10:Restore MBX objects | 11:Fetch Cargo sources | 12:Format | 13:Clippy | 14:Build test executables | 15:Unit and integration tests | 16:Doctests | 17:Documentation | 18:Upload crate reports
+JOB rust-jackin-protocol: 0:Checkout | 1:Restore Velnor tool seed | 2:Setup Mise | 3:Acquire Velnor | 4:Download plan | 5:Prepare pinned tools | 6:Prepare Rust components | 7:Restore Cargo sources | 8:Verify MBX and Rust toolchains | 9:Prepare MBX cache identity | 10:Restore MBX objects | 11:Fetch Cargo sources | 12:Format | 13:Clippy | 14:Build test executables | 15:Unit and integration tests | 16:Doctests | 17:Documentation | 18:Upload crate reports
+JOB rust-jackin-runtime: 0:Checkout | 1:Restore Velnor tool seed | 2:Setup Mise | 3:Acquire Velnor | 4:Download plan | 5:Prepare pinned tools | 6:Prepare Rust components | 7:Restore Cargo sources | 8:Verify MBX and Rust toolchains | 9:Prepare MBX cache identity | 10:Restore MBX objects | 11:Fetch Cargo sources | 12:Format | 13:Clippy | 14:Build test executables | 15:Unit and integration tests | 16:Doctests | 17:Documentation | 18:Upload crate reports
+JOB rust-jackin-telemetry: 0:Checkout | 1:Restore Velnor tool seed | 2:Setup Mise | 3:Acquire Velnor | 4:Download plan | 5:Prepare pinned tools | 6:Prepare Rust components | 7:Restore Cargo sources | 8:Verify MBX and Rust toolchains | 9:Prepare MBX cache identity | 10:Restore MBX objects | 11:Fetch Cargo sources | 12:Format | 13:Clippy | 14:Build test executables | 15:Unit and integration tests | 16:Doctests | 17:Documentation | 18:Upload crate reports
+JOB rust-jackin-test-support: 0:Checkout | 1:Restore Velnor tool seed | 2:Setup Mise | 3:Acquire Velnor | 4:Download plan | 5:Prepare pinned tools | 6:Prepare Rust components | 7:Restore Cargo sources | 8:Verify MBX and Rust toolchains | 9:Prepare MBX cache identity | 10:Restore MBX objects | 11:Fetch Cargo sources | 12:Format | 13:Clippy | 14:Build test executables | 15:Unit and integration tests | 16:Doctests | 17:Documentation | 18:Upload crate reports
+JOB rust-jackin-tui: 0:Checkout | 1:Restore Velnor tool seed | 2:Setup Mise | 3:Acquire Velnor | 4:Download plan | 5:Prepare pinned tools | 6:Prepare Rust components | 7:Restore Cargo sources | 8:Verify MBX and Rust toolchains | 9:Prepare MBX cache identity | 10:Restore MBX objects | 11:Fetch Cargo sources | 12:Format | 13:Clippy | 14:Build test executables | 15:Unit and integration tests | 16:Doctests | 17:Documentation | 18:Upload crate reports
+JOB rust-jackin-usage: 0:Checkout | 1:Restore Velnor tool seed | 2:Setup Mise | 3:Acquire Velnor | 4:Download plan | 5:Prepare pinned tools | 6:Prepare Rust components | 7:Restore Cargo sources | 8:Verify MBX and Rust toolchains | 9:Prepare MBX cache identity | 10:Restore MBX objects | 11:Fetch Cargo sources | 12:Format | 13:Clippy | 14:Build test executables | 15:Unit and integration tests | 16:Doctests | 17:Documentation | 18:Upload crate reports
+JOB rust-jackin-usage-ffi: 0:Checkout | 1:Restore Velnor tool seed | 2:Setup Mise | 3:Acquire Velnor | 4:Download plan | 5:Prepare pinned tools | 6:Prepare Rust components | 7:Restore Cargo sources | 8:Verify MBX and Rust toolchains | 9:Prepare MBX cache identity | 10:Restore MBX objects | 11:Fetch Cargo sources | 12:Format | 13:Clippy | 14:Build test executables | 15:Unit and integration tests | 16:Doctests | 17:Documentation | 18:Upload crate reports
+JOB rust-jackin-xtask: 0:Checkout | 1:Restore Velnor tool seed | 2:Setup Mise | 3:Acquire Velnor | 4:Download plan | 5:Prepare pinned tools | 6:Prepare Rust components | 7:Restore Cargo sources | 8:Verify MBX and Rust toolchains | 9:Prepare MBX cache identity | 10:Restore MBX objects | 11:Fetch Cargo sources | 12:Format | 13:Clippy | 14:Build test executables | 15:Unit and integration tests | 16:Documentation | 17:Upload crate reports
+strict_named_setup_matches=1
+probe_exit_status=0

@@ -1,0 +1,19 @@
+   Compiling velnor-actions-workflow-renderer v0.1.0 (/tmp/velnor-render-compaction-44b2-20261005/crates/velnor-actions-workflow-renderer)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.47s
+     Running unittests src/lib.rs (/root/.cache/velnor-task-targets/20261005/jackin-compaction/debug/debug/deps/velnor_actions_workflow_renderer-baaa2ee710553a16)
+
+running 1 test
+
+thread 'render::document_shared_scripts::tests::repeated_factory_bodies_keep_order_and_expand_to_exact_original_steps' (3200697) panicked at crates/velnor-actions-workflow-renderer/src/document_shared_scripts_tests.rs:185:10:
+regenerate preflight: BadCommand("credential_step_env:ACTIONS_ID_TOKEN_REQUEST_TOKEN")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test render::document_shared_scripts::tests::repeated_factory_bodies_keep_order_and_expand_to_exact_original_steps ... FAILED
+
+failures:
+
+failures:
+    render::document_shared_scripts::tests::repeated_factory_bodies_keep_order_and_expand_to_exact_original_steps
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 51 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p velnor-actions-workflow-renderer --lib`

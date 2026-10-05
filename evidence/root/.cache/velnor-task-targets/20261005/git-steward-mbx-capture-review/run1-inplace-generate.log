@@ -1,0 +1,20 @@
+cwd=/root/.cache/velnor-task-targets/20261005/git-steward-mbx-capture-review/run1
+binary=/root/.cache/velnor-task-targets/20261005/git-steward-mbx-postfix-target/debug/velnor-actions
+TMPDIR=/var/tmp/velnor-pr12-generate1.dY9JJT
+ea63c3f0cfcc2865a73e45dc112f090b5458f5d362b0cb52e00a838c4366c9c4  /root/.cache/velnor-task-targets/20261005/git-steward-mbx-postfix-target/debug/velnor-actions
+.github/AGENTS.md
+.github/CLAUDE.md
+.github/actionlint.yaml
+.github/actions/velnor-tool-seed/action.yml
+.github/workflows/ci.yml
+.github/workflows/freshness.yml
+.github/workflows/generator-release.yml
+.github/workflows/image-release.yml
+.github/workflows/macos-binary-release.yml
+.github/workflows/qualification.yml
+mise.lock not found; Velnor will not create or refresh it
+mise.toml is read-only input; Velnor never modifies it
+rust-toolchain.toml not found; Velnor will not create it
+shadowed_nextest_config: .config/nextest.toml shadowed by crates/velnor-runner/.config/nextest.toml; profile selected from crates/velnor-runner/.config/nextest.toml
+tool_install_unverified:8 installs skip verification (no mise.lock): actionlint@1.7.12, cargo-deny@0.20.2, gh@2.102.0, nextest@0.9.146, opentofu@1.13.1, rust@1.98.1, shellcheck@0.11.0, zizmor@1.30.1; install on the CI platform and commit the resulting lock
+exit=

@@ -1,0 +1,8 @@
+crates/velnor-actions-workflow-renderer/src/document_shared_scripts.rs
+crates/velnor-actions-workflow-renderer/src/document_shared_scripts_execution_outcomes.rs
+crates/velnor-actions-workflow-renderer/src/document_shared_scripts_execution_signal.rs
+crates/velnor-actions-workflow-renderer/src/document_shared_scripts_execution_support.rs
+crates/velnor-actions-workflow-renderer/src/document_shared_scripts_execution_support_tests.rs
+crates/velnor-actions-workflow-renderer/src/document_shared_scripts_execution_tests.rs
+crates/velnor-actions-workflow-renderer/src/document_shared_scripts_tests.rs
+crates/velnor-actions-workflow-renderer/src/render.rs

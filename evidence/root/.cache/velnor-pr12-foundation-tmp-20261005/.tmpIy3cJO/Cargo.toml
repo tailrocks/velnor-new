@@ -1,0 +1,17 @@
+[package]
+name = "demo"
+version = "0.1.0"
+edition = "2021"
+[workspace]
+members = [
+  "crates/c000",
+  "crates/c001",
+  "crates/c002",
+  "crates/c003",
+  "crates/c004",
+  "crates/c005",
+  "crates/c006",
+  "crates/c007",
+  "crates/c008",
+  "crates/c009",
+]

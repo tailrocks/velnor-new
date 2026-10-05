@@ -1,0 +1,185 @@
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling unicode-ident v1.0.26
+   Compiling syn v3.0.6
+   Compiling serde_core v1.0.229
+   Compiling shlex v2.0.1
+   Compiling find-msvc-tools v0.1.14
+   Compiling cc v1.5.1
+   Compiling zmij v1.0.23
+   Compiling blake3 v1.8.7
+   Compiling serde_json v1.0.151
+   Compiling serde v1.0.229
+   Compiling thiserror v2.0.21
+   Compiling thiserror-impl v2.0.21
+   Compiling serde_derive v1.0.229
+   Compiling memchr v2.8.3
+   Compiling arrayvec v0.7.8
+   Compiling constant_time_eq v0.4.2
+   Compiling itoa v1.0.18
+   Compiling cpufeatures v0.3.1
+   Compiling cfg-if v1.0.5
+   Compiling velnor-actions-contract v0.1.0 (/root/.cache/velnor-task-targets/20261005/mbx-cli-portability-20261005T1530Z/crates/velnor-actions-contract)
+   Compiling velnor-actions-workflow-renderer v0.1.0 (/root/.cache/velnor-task-targets/20261005/mbx-cli-portability-20261005T1530Z/crates/velnor-actions-workflow-renderer)
+error[E0658]: cannot match on `str` in constants
+  --> crates/velnor-actions-workflow-renderer/src/stock_mbx_bundle_cli_tests.rs:28:5
+   |
+28 |     "linux-x86_64" => "97984b8c92953cefc027014d24c8abf8773f2d12ded0385156d2050da8d5fb8c",
+   |     ^^^^^^^^^^^^^^
+   |
+   = note: `str` cannot be compared in compile-time, and therefore cannot be used in `match`es
+   = note: calls in constants are limited to constant functions, tuple structs and tuple variants
+   = note: see issue #143874 <https://github.com/rust-lang/rust/issues/143874> for more information
+
+error: `PartialEq` is not yet stable as a const trait
+  --> crates/velnor-actions-workflow-renderer/src/stock_mbx_bundle_cli_tests.rs:28:5
+   |
+28 |     "linux-x86_64" => "97984b8c92953cefc027014d24c8abf8773f2d12ded0385156d2050da8d5fb8c",
+   |     ^^^^^^^^^^^^^^
+
+error[E0658]: cannot match on `str` in constants
+  --> crates/velnor-actions-workflow-renderer/src/stock_mbx_bundle_cli_tests.rs:29:5
+   |
+29 |     "macos-aarch64" => "ed67908a8661b84fea1ad41f70ed502b77cbcc704ea90918f16b2ce7045408dc",
+   |     ^^^^^^^^^^^^^^^
+   |
+   = note: `str` cannot be compared in compile-time, and therefore cannot be used in `match`es
+   = note: calls in constants are limited to constant functions, tuple structs and tuple variants
+   = note: see issue #143874 <https://github.com/rust-lang/rust/issues/143874> for more information
+
+error: `PartialEq` is not yet stable as a const trait
+  --> crates/velnor-actions-workflow-renderer/src/stock_mbx_bundle_cli_tests.rs:29:5
+   |
+29 |     "macos-aarch64" => "ed67908a8661b84fea1ad41f70ed502b77cbcc704ea90918f16b2ce7045408dc",
+   |     ^^^^^^^^^^^^^^^
+
+error[E0658]: cannot match on `str` in constants
+  --> crates/velnor-actions-workflow-renderer/src/stock_mbx_bundle_cli_tests.rs:34:5
+   |
+34 |     "linux-x86_64" => "https://github.com/jdx/mr-boxington/releases/download/v1.21.1/mbx-x86_64-unknown-linux-gnu.tar.gz",
+   |     ^^^^^^^^^^^^^^
+   |
+   = note: `str` cannot be compared in compile-time, and therefore cannot be used in `match`es
+   = note: calls in constants are limited to constant functions, tuple structs and tuple variants
+   = note: see issue #143874 <https://github.com/rust-lang/rust/issues/143874> for more information
+
+error: `PartialEq` is not yet stable as a const trait
+  --> crates/velnor-actions-workflow-renderer/src/stock_mbx_bundle_cli_tests.rs:34:5
+   |
+34 |     "linux-x86_64" => "https://github.com/jdx/mr-boxington/releases/download/v1.21.1/mbx-x86_64-unknown-linux-gnu.tar.gz",
+   |     ^^^^^^^^^^^^^^
+
+error[E0658]: cannot match on `str` in constants
+  --> crates/velnor-actions-workflow-renderer/src/stock_mbx_bundle_cli_tests.rs:35:5
+   |
+35 |     "macos-aarch64" => "https://github.com/jdx/mr-boxington/releases/download/v1.21.1/mbx-aarch64-apple-darwin.tar.gz",
+   |     ^^^^^^^^^^^^^^^
+   |
+   = note: `str` cannot be compared in compile-time, and therefore cannot be used in `match`es
+   = note: calls in constants are limited to constant functions, tuple structs and tuple variants
+   = note: see issue #143874 <https://github.com/rust-lang/rust/issues/143874> for more information
+
+error: `PartialEq` is not yet stable as a const trait
+  --> crates/velnor-actions-workflow-renderer/src/stock_mbx_bundle_cli_tests.rs:35:5
+   |
+35 |     "macos-aarch64" => "https://github.com/jdx/mr-boxington/releases/download/v1.21.1/mbx-aarch64-apple-darwin.tar.gz",
+   |     ^^^^^^^^^^^^^^^
+
+error[E0658]: cannot match on `str` in constants
+  --> crates/velnor-actions-workflow-renderer/src/stock_mbx_bundle_cli_tests.rs:39:5
+   |
+39 |     "linux-x86_64" => "1ecb4d55582a40a1227e8ca3450da054ea464e5ff976bb5762943fb1ce6f31da",
+   |     ^^^^^^^^^^^^^^
+   |
+   = note: `str` cannot be compared in compile-time, and therefore cannot be used in `match`es
+   = note: calls in constants are limited to constant functions, tuple structs and tuple variants
+   = note: see issue #143874 <https://github.com/rust-lang/rust/issues/143874> for more information
+
+error: `PartialEq` is not yet stable as a const trait
+  --> crates/velnor-actions-workflow-renderer/src/stock_mbx_bundle_cli_tests.rs:39:5
+   |
+39 |     "linux-x86_64" => "1ecb4d55582a40a1227e8ca3450da054ea464e5ff976bb5762943fb1ce6f31da",
+   |     ^^^^^^^^^^^^^^
+
+error[E0658]: cannot match on `str` in constants
+  --> crates/velnor-actions-workflow-renderer/src/stock_mbx_bundle_cli_tests.rs:40:5
+   |
+40 |     "macos-aarch64" => "99464a5bad96c3a472714faa4277aac22193ea9a385dd09892f5c1bbee9c56ba",
+   |     ^^^^^^^^^^^^^^^
+   |
+   = note: `str` cannot be compared in compile-time, and therefore cannot be used in `match`es
+   = note: calls in constants are limited to constant functions, tuple structs and tuple variants
+   = note: see issue #143874 <https://github.com/rust-lang/rust/issues/143874> for more information
+
+error: `PartialEq` is not yet stable as a const trait
+  --> crates/velnor-actions-workflow-renderer/src/stock_mbx_bundle_cli_tests.rs:40:5
+   |
+40 |     "macos-aarch64" => "99464a5bad96c3a472714faa4277aac22193ea9a385dd09892f5c1bbee9c56ba",
+   |     ^^^^^^^^^^^^^^^
+
+error[E0658]: cannot match on `str` in constants
+  --> crates/velnor-actions-workflow-renderer/src/stock_mbx_bundle_cli_tests.rs:47:5
+   |
+47 |     "linux-x86_64" => "8f5f6660336f572830e33cd9b378d3131e529a0d4c4f0c553776be90a1ba302a",
+   |     ^^^^^^^^^^^^^^
+   |
+   = note: `str` cannot be compared in compile-time, and therefore cannot be used in `match`es
+   = note: calls in constants are limited to constant functions, tuple structs and tuple variants
+   = note: see issue #143874 <https://github.com/rust-lang/rust/issues/143874> for more information
+
+error: `PartialEq` is not yet stable as a const trait
+  --> crates/velnor-actions-workflow-renderer/src/stock_mbx_bundle_cli_tests.rs:47:5
+   |
+47 |     "linux-x86_64" => "8f5f6660336f572830e33cd9b378d3131e529a0d4c4f0c553776be90a1ba302a",
+   |     ^^^^^^^^^^^^^^
+
+error[E0658]: cannot match on `str` in constants
+  --> crates/velnor-actions-workflow-renderer/src/stock_mbx_bundle_cli_tests.rs:48:5
+   |
+48 |     "macos-aarch64" => "66d49acecca413c8b334922584982a4907a10588912829873d6c55d0c6d42612",
+   |     ^^^^^^^^^^^^^^^
+   |
+   = note: `str` cannot be compared in compile-time, and therefore cannot be used in `match`es
+   = note: calls in constants are limited to constant functions, tuple structs and tuple variants
+   = note: see issue #143874 <https://github.com/rust-lang/rust/issues/143874> for more information
+
+error: `PartialEq` is not yet stable as a const trait
+  --> crates/velnor-actions-workflow-renderer/src/stock_mbx_bundle_cli_tests.rs:48:5
+   |
+48 |     "macos-aarch64" => "66d49acecca413c8b334922584982a4907a10588912829873d6c55d0c6d42612",
+   |     ^^^^^^^^^^^^^^^
+
+error[E0658]: cannot match on `str` in constants
+  --> crates/velnor-actions-workflow-renderer/src/stock_mbx_bundle_cli_tests.rs:53:5
+   |
+53 |     "linux-x86_64" => "79a2bf0ffc9b8a9a6391344e875b3c3679c15053fda3e8728ddf1790d63db788",
+   |     ^^^^^^^^^^^^^^
+   |
+   = note: `str` cannot be compared in compile-time, and therefore cannot be used in `match`es
+   = note: calls in constants are limited to constant functions, tuple structs and tuple variants
+   = note: see issue #143874 <https://github.com/rust-lang/rust/issues/143874> for more information
+
+error: `PartialEq` is not yet stable as a const trait
+  --> crates/velnor-actions-workflow-renderer/src/stock_mbx_bundle_cli_tests.rs:53:5
+   |
+53 |     "linux-x86_64" => "79a2bf0ffc9b8a9a6391344e875b3c3679c15053fda3e8728ddf1790d63db788",
+   |     ^^^^^^^^^^^^^^
+
+error[E0658]: cannot match on `str` in constants
+  --> crates/velnor-actions-workflow-renderer/src/stock_mbx_bundle_cli_tests.rs:54:5
+   |
+54 |     "macos-aarch64" => "66d49acecca413c8b334922584982a4907a10588912829873d6c55d0c6d42612",
+   |     ^^^^^^^^^^^^^^^
+   |
+   = note: `str` cannot be compared in compile-time, and therefore cannot be used in `match`es
+   = note: calls in constants are limited to constant functions, tuple structs and tuple variants
+   = note: see issue #143874 <https://github.com/rust-lang/rust/issues/143874> for more information
+
+error: `PartialEq` is not yet stable as a const trait
+  --> crates/velnor-actions-workflow-renderer/src/stock_mbx_bundle_cli_tests.rs:54:5
+   |
+54 |     "macos-aarch64" => "66d49acecca413c8b334922584982a4907a10588912829873d6c55d0c6d42612",
+   |     ^^^^^^^^^^^^^^^
+
+For more information about this error, try `rustc --explain E0658`.
+error: could not compile `velnor-actions-workflow-renderer` (lib test) due to 20 previous errors

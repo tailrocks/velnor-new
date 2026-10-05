@@ -1,0 +1,254 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.05s
+────────────
+ Nextest run ID 33a71e58-acce-4326-86a9-8876b5bf525e with nextest profile: default
+    Starting 248 tests across 1 binary
+        PASS [   0.007s] (  1/248) velnor-actions-cli::velnor_cli impl_cli_gate_preseed::preseed_manifest_op_writes_manifest_and_copy
+        PASS [   0.009s] (  2/248) velnor-actions-cli::velnor_cli impl_cli_args::help_describes_stack_generic_generator
+        PASS [   0.009s] (  3/248) velnor-actions-cli::velnor_cli impl_cli_args::extra_positionals_exit_two
+        PASS [   0.009s] (  4/248) velnor-actions-cli::velnor_cli impl_cli_args::output_dir_help_guides_unique_tmp_choice
+        PASS [   0.011s] (  5/248) velnor-actions-cli::velnor_cli impl_cli_args::generate_missing_flag_value_exits_two
+        PASS [   0.019s] (  6/248) velnor-actions-cli::velnor_cli impl_cli_args::unknown_flags_exit_two
+        PASS [   0.020s] (  7/248) velnor-actions-cli::velnor_cli impl_cli_args::generate_output_dir_flag_parses
+        PASS [   0.025s] (  8/248) velnor-actions-cli::velnor_cli impl_cli_gate::help_and_version_identical_with_env
+        PASS [   0.065s] (  9/248) velnor-actions-cli::velnor_cli impl_cli_gate_preseed::preseed_manifest_op_without_writer_env_fails_internal_silently
+        PASS [   0.065s] ( 10/248) velnor-actions-cli::velnor_cli impl_cli_gate::staged_plan_request_runs_json_protocol
+        PASS [   0.065s] ( 11/248) velnor-actions-cli::velnor_cli impl_cli_gate::staged_merge_request_runs_json_protocol
+        PASS [   0.009s] ( 12/248) velnor-actions-cli::velnor_cli impl_cli_gate::write_request_without_github_env_matches_bare
+        PASS [   0.067s] ( 13/248) velnor-actions-cli::velnor_cli impl_cli_gate_preseed::preseed_manifest_op_needs_runner_temp
+        PASS [   0.068s] ( 14/248) velnor-actions-cli::velnor_cli impl_cli_gate::write_request_with_existing_file_matches_bare
+        PASS [   0.010s] ( 15/248) velnor-actions-cli::velnor_cli impl_cli_gate::unknown_op_matches_bare
+        PASS [   0.068s] ( 16/248) velnor-actions-cli::velnor_cli impl_cli::version_flag_reports_binary_name
+        PASS [   0.072s] ( 17/248) velnor-actions-cli::velnor_cli impl_cli_gate::plan_and_merge_without_request_file_match_bare
+        PASS [   0.074s] ( 18/248) velnor-actions-cli::velnor_cli impl_cli_gate::public_commands_ignore_internal_env
+        PASS [   0.082s] ( 19/248) velnor-actions-cli::velnor_cli impl_cli_init::init_leaves_tool_files_and_sources_untouched
+        PASS [   0.027s] ( 20/248) velnor-actions-cli::velnor_cli impl_cli_init::sample_first_line_is_version_marker
+        PASS [   0.108s] ( 21/248) velnor-actions-cli::velnor_cli impl_cli_init::invalid_config_fails_with_key_path_and_no_replace
+        PASS [   0.052s] ( 22/248) velnor-actions-cli::velnor_cli impl_cli_gate::report_op_without_plan_fails_internal_silently
+        PASS [   0.052s] ( 23/248) velnor-actions-cli::velnor_cli impl_cli_smoke::help_is_identical_with_and_without_env
+        PASS [   0.053s] ( 24/248) velnor-actions-cli::velnor_cli impl_cli_init::nested_init_writes_only_root_config
+        PASS [   0.110s] ( 25/248) velnor-actions-cli::velnor_cli impl_cli_args::plan_without_config_exits_one
+        PASS [   0.053s] ( 26/248) velnor-actions-cli::velnor_cli impl_cli_gate::unreadable_request_exits_one_without_response
+        PASS [   0.110s] ( 27/248) velnor-actions-cli::velnor_cli impl_cli_gate::report_op_needs_runner_temp_and_run_id
+        PASS [   0.110s] ( 28/248) velnor-actions-cli::velnor_cli impl_cli_gate::missing_gate_pieces_match_bare
+        PASS [   0.111s] ( 29/248) velnor-actions-cli::velnor_cli impl_cli_gate::internal_op_requires_env_gate_and_keeps_public_tree
+        PASS [   0.111s] ( 30/248) velnor-actions-cli::velnor_cli impl_cli_args::bare_invocation_and_unknown_commands_exit_two
+        PASS [   0.049s] ( 31/248) velnor-actions-cli::velnor_cli impl_repo_freshness::ver33_records_and_qualifies
+        PASS [   0.040s] ( 32/248) velnor-actions-cli::velnor_cli impl_repo_policy::members_inherit_workspace_settings
+        PASS [   0.050s] ( 33/248) velnor-actions-cli::velnor_cli impl_repo_freshness::ver32_one_coherent_set
+        PASS [   0.056s] ( 34/248) velnor-actions-cli::velnor_cli impl_repo_freshness::boot34_mise_version_matches_catalog
+        PASS [   0.047s] ( 35/248) velnor-actions-cli::velnor_cli impl_repo_policy::clippy_toml_has_five_settings
+        PASS [   0.047s] ( 36/248) velnor-actions-cli::velnor_cli impl_repo_goldens::golden_claude_files_are_agents_symlinks
+        PASS [   0.048s] ( 37/248) velnor-actions-cli::velnor_cli impl_repo_freshness::ver34_tool_files_untouched
+        PASS [   0.008s] ( 38/248) velnor-actions-cli::velnor_cli impl_repo_policy::p11_alint::alint_same_id_override_fails
+        PASS [   0.051s] ( 39/248) velnor-actions-cli::velnor_cli impl_repo_freshness::ver227_renovate_proposes_all
+        PASS [   0.033s] ( 40/248) velnor-actions-cli::velnor_cli impl_repo_policy::p11_alint::alint_duped_extends_fails
+        PASS [   0.057s] ( 41/248) velnor-actions-cli::velnor_cli impl_repo_freshness::ver17_expedited_security_path
+        PASS [   0.048s] ( 42/248) velnor-actions-cli::velnor_cli impl_repo_freshness::ver44_velnor_owned_refresh_only
+        PASS [   0.005s] ( 43/248) velnor-actions-cli::velnor_cli impl_repo_policy::p11_compiler::reject_oversize_file_fails
+        PASS [   0.057s] ( 44/248) velnor-actions-cli::velnor_cli impl_repo_freshness::gape2_seed_rules_documented
+        PASS [   0.044s] ( 45/248) velnor-actions-cli::velnor_cli impl_repo_policy::generic_names_forbidden
+        PASS [   0.050s] ( 46/248) velnor-actions-cli::velnor_cli impl_repo_freshness::ver37_merge_after_qual
+        PASS [   0.005s] ( 47/248) velnor-actions-cli::velnor_cli impl_repo_policy::p11_metadata::json_parser_reads_every_shape
+        PASS [   0.005s] ( 48/248) velnor-actions-cli::velnor_cli impl_repo_policy::p11_toml::reject_git_dep_fails
+        PASS [   0.005s] ( 49/248) velnor-actions-cli::velnor_cli impl_repo_policy::p11_toml::members_inherit_lints_purely
+        PASS [   0.005s] ( 50/248) velnor-actions-cli::velnor_cli impl_repo_policy::p11_toml::members_inherit_edition_without_literal
+        PASS [   0.005s] ( 51/248) velnor-actions-cli::velnor_cli impl_repo_policy::p11_toml::reject_weakened_lints_fails
+        PASS [   0.005s] ( 52/248) velnor-actions-cli::velnor_cli impl_repo_policy::p11_toml::reject_wildcard_dep_fails
+        PASS [   0.005s] ( 53/248) velnor-actions-cli::velnor_cli impl_repo_policy::p11_toml::members_use_supported_deps_only
+        PASS [   0.005s] ( 54/248) velnor-actions-cli::velnor_cli impl_repo_policy::p11_toml::reject_wrong_edition_fails
+        PASS [   0.006s] ( 55/248) velnor-actions-cli::velnor_cli impl_repo_policy::p11_toml::workspace_edition_is_2024
+        PASS [   0.005s] ( 56/248) velnor-actions-cli::velnor_cli impl_repo_policy::p12_live::policy_file_is_complete
+        PASS [   0.005s] ( 57/248) velnor-actions-cli::velnor_cli impl_repo_policy::p12_live::procedure_is_reconciled
+        PASS [   0.005s] ( 58/248) velnor-actions-cli::velnor_cli impl_repo_policy::p12_live::script_covers_all_forms_scopes_and_namespaces
+        PASS [   0.147s] ( 59/248) velnor-actions-cli::velnor_cli impl_cli_args::generate_without_output_dir_parses
+        PASS [   0.093s] ( 60/248) velnor-actions-cli::velnor_cli impl_cli_smoke::init_creates_config_then_refuses_overwrite
+        PASS [   0.099s] ( 61/248) velnor-actions-cli::velnor_cli impl_repo_deps::init_reads_no_tool_files
+        PASS [   0.048s] ( 62/248) velnor-actions-cli::velnor_cli impl_repo_freshness::ver15_incompatible_is_migration
+        PASS [   0.099s] ( 63/248) velnor-actions-cli::velnor_cli impl_repo_freshness::ver01_policy_header
+        PASS [   0.074s] ( 64/248) velnor-actions-cli::velnor_cli impl_repo_policy::p11_alint::alint_extended_policy_holds
+        PASS [   0.049s] ( 65/248) velnor-actions-cli::velnor_cli impl_repo_freshness::p12_property::property_path_documented_honestly
+        PASS [   0.051s] ( 66/248) velnor-actions-cli::velnor_cli impl_cli_protocol::write_request_materializes_push_request
+        PASS [   0.102s] ( 67/248) velnor-actions-cli::velnor_cli impl_repo_deps::parse_tests_live_outside_src
+        PASS [   0.102s] ( 68/248) velnor-actions-cli::velnor_cli impl_repo_deps::dependency_edges_match_ownership_table
+        PASS [   0.051s] ( 69/248) velnor-actions-cli::velnor_cli impl_repo_freshness::rq98_risk_triggers_documented
+        PASS [   0.052s] ( 70/248) velnor-actions-cli::velnor_cli impl_repo_freshness::rq211_lock_staleness_probe
+        PASS [   0.053s] ( 71/248) velnor-actions-cli::velnor_cli impl_repo_deps::archive_deps::archive_dependency_policy_rejects_wrong_owner_pin_defaults_and_extra_features
+        PASS [   0.104s] ( 72/248) velnor-actions-cli::velnor_cli impl_repo_deps::dep_versions_exact_and_consistent
+        PASS [   0.104s] ( 73/248) velnor-actions-cli::velnor_cli impl_repo_deps::lockfile_committed_and_locked_used
+        PASS [   0.105s] ( 74/248) velnor-actions-cli::velnor_cli impl_cli_protocol::merge_garbage_request_exits_one
+        PASS [   0.105s] ( 75/248) velnor-actions-cli::velnor_cli impl_cli_verify_local::verify_local_entrypoint_parses
+        PASS [   0.105s] ( 76/248) velnor-actions-cli::velnor_cli impl_repo_deps::cli_invokes_no_tools_directly
+        PASS [   0.054s] ( 77/248) velnor-actions-cli::velnor_cli impl_repo_deps::cli_tests_assert_through_binary_only
+        PASS [   0.057s] ( 78/248) velnor-actions-cli::velnor_cli impl_cli_verify_local::verify_local_entrypoint_lists_exact_stages
+        PASS [   0.023s] ( 79/248) velnor-actions-cli::velnor_cli impl_cli_protocol::write_request_rejects_malformed_payload
+        PASS [   0.059s] ( 80/248) velnor-actions-cli::velnor_cli impl_cli_smoke::unknown_command_exits_two
+        PASS [   0.025s] ( 81/248) velnor-actions-cli::velnor_cli impl_repo_deps::test_entries_match_layout_and_stay_far_below_cases
+        PASS [   0.061s] ( 82/248) velnor-actions-cli::velnor_cli impl_repo_deps::every_crate_has_registered_tests
+        PASS [   0.010s] ( 83/248) velnor-actions-cli::velnor_cli impl_repo_policy::p12_mutants::mutant_scope_covers_risk_wiring
+        PASS [   0.011s] ( 84/248) velnor-actions-cli::velnor_cli impl_repo_policy::p12_policy::action_const_wiring_is_mapped
+        PASS [   0.026s] ( 85/248) velnor-actions-cli::velnor_cli impl_cli_smoke::env_without_request_file_exits_two
+        PASS [   0.115s] ( 86/248) velnor-actions-cli::velnor_cli impl_cli_smoke::init_outside_work_tree_exits_one
+        PASS [   0.119s] ( 87/248) velnor-actions-cli::velnor_cli impl_repo_deps::no_custom_linter_modules
+        PASS [   0.075s] ( 88/248) velnor-actions-cli::velnor_cli impl_repo_deps::one_test_entry_per_crate
+        PASS [   0.129s] ( 89/248) velnor-actions-cli::velnor_cli impl_cli_init::velnor_file_blocks_init
+        PASS [   0.129s] ( 90/248) velnor-actions-cli::velnor_cli impl_cli_init::init_writes_no_other_file
+        PASS [   0.129s] ( 91/248) velnor-actions-cli::velnor_cli impl_cli_init::sample_comments_describe_values_defaults_effects
+        PASS [   0.130s] ( 92/248) velnor-actions-cli::velnor_cli impl_repo_deps::external_deps_allowlisted_used_and_narrow
+        PASS [   0.083s] ( 93/248) velnor-actions-cli::velnor_cli impl_repo_policy::p11_compiler::reject_unsafe_fails
+        PASS [   0.140s] ( 94/248) velnor-actions-cli::velnor_cli impl_cli_smoke::public_failures_collapse_to_one_stderr_line
+        PASS [   0.098s] ( 95/248) velnor-actions-cli::velnor_cli impl_repo_policy::p11_compiler::reject_ignored_result_fails
+        PASS [   0.098s] ( 96/248) velnor-actions-cli::velnor_cli impl_repo_policy::p11_compiler::reject_panic_fails
+        PASS [   0.065s] ( 97/248) velnor-actions-cli::velnor_cli impl_cli_protocol::plan_rejects_unknown_output_mode_before_computation
+        PASS [   0.153s] ( 98/248) velnor-actions-cli::velnor_cli impl_repo_deps::fixtures_stay_independent_and_cover_failures
+        PASS [   0.157s] ( 99/248) velnor-actions-cli::velnor_cli impl_cli_smoke::plan_emits_recommendations_once_to_stdout_only
+        PASS [   0.106s] (100/248) velnor-actions-cli::velnor_cli impl_repo_policy::p11_compiler::accept_clean_passes_every_deny
+        PASS [   0.104s] (101/248) velnor-actions-cli::velnor_cli impl_repo_policy::p11_compiler::reject_unwrap_fails
+        PASS [   0.109s] (102/248) velnor-actions-cli::velnor_cli impl_repo_policy::p11_compiler::reject_long_fn_fails
+        PASS [   0.112s] (103/248) velnor-actions-cli::velnor_cli impl_cli_report::empty_repo_reports_no_work_and_final_check
+        PASS [   0.168s] (104/248) velnor-actions-cli::velnor_cli impl_cli_schema2::config_migrate_preview_does_not_write
+        PASS [   0.009s] (105/248) velnor-actions-cli::velnor_cli impl_repo_policy::p12_upstream::procedure_states_scheduled_producer
+        PASS [   0.012s] (106/248) velnor-actions-cli::velnor_cli impl_repo_policy::package_names_use_purpose_suffix
+        PASS [   0.010s] (107/248) velnor-actions-cli::velnor_cli impl_repo_policy::root_manifest_is_virtual_with_explicit_members
+        PASS [   0.011s] (108/248) velnor-actions-cli::velnor_cli impl_repo_policy::toolchain_edition_and_resolver
+        PASS [   0.015s] (109/248) velnor-actions-cli::velnor_cli impl_repo_policy::rust_version_tracks_toolchain
+        PASS [   0.011s] (110/248) velnor-actions-cli::velnor_cli impl_repo_policy::workspace_lints_match_baseline
+        PASS [   0.015s] (111/248) velnor-actions-cli::velnor_cli impl_repo_policy::velnor_name_never_published
+        PASS [   0.010s] (112/248) velnor-actions-cli::velnor_cli impl_repo_quality::agents_stays_lean_pointer_only
+        PASS [   0.011s] (113/248) velnor-actions-cli::velnor_cli impl_repo_policy::workspace_lists_eight_product_crates_and_archive_guard
+        PASS [   0.012s] (114/248) velnor-actions-cli::velnor_cli impl_repo_quality::contracts_carry_no_fragment_links
+        PASS [   0.012s] (115/248) velnor-actions-cli::velnor_cli impl_repo_quality::oc_reconciles_mirrors_by_reference
+        PASS [   0.231s] (116/248) velnor-actions-cli::velnor_cli impl_cli_parity_golden::consumer_cli_rejects_a_missing_manifest
+        PASS [   0.009s] (117/248) velnor-actions-cli::velnor_cli impl_repo_quality::qc_integrates_spec_section3
+        PASS [   0.012s] (118/248) velnor-actions-cli::velnor_cli impl_repo_quality::qc_disambiguates_homonyms
+        PASS [   0.013s] (119/248) velnor-actions-cli::velnor_cli impl_repo_quality::qc_keeps_original_normatives
+        PASS [   0.199s] (120/248) velnor-actions-cli::velnor_cli impl_repo_deps::size_limits_hold
+        PASS [   0.013s] (121/248) velnor-actions-cli::velnor_cli impl_repo_quality::qc_states_eight_member_workspace
+        PASS [   0.013s] (122/248) velnor-actions-cli::velnor_cli impl_repo_shape::arch112_alint_scopes_product_paths
+        PASS [   0.208s] (123/248) velnor-actions-cli::velnor_cli impl_repo_policy::p11_compiler::reject_each_extra_rust_deny_fails
+        PASS [   0.020s] (124/248) velnor-actions-cli::velnor_cli impl_repo_shape::arch110_product_roots_live_under_crates
+        PASS [   0.013s] (125/248) velnor-actions-cli::velnor_cli impl_repo_shape::arch15_all_stacks_explicit
+        PASS [   0.017s] (126/248) velnor-actions-cli::velnor_cli impl_repo_shape::fixtures_hold_no_symlinks
+        PASS [   0.012s] (127/248) velnor-actions-cli::velnor_cli impl_repo_shape::rq11_repo_shape_files_present
+        PASS [   0.012s] (128/248) velnor-actions-cli::velnor_cli impl_repo_shape::rq41_deviation_and_no_enforcement
+        PASS [   0.018s] (129/248) velnor-actions-cli::velnor_cli impl_repo_shape::policy_zizmor_config_matches_derived_ignores
+        PASS [   0.015s] (130/248) velnor-actions-cli::velnor_cli impl_repo_shape::rq42_classification_registry_complete
+        PASS [   0.013s] (131/248) velnor-actions-cli::velnor_cli impl_repo_shape::rq52_counts_and_classification
+        PASS [   0.013s] (132/248) velnor-actions-cli::velnor_cli impl_repo_shape::rq53_limits_discipline_no_baseline
+        PASS [   0.012s] (133/248) velnor-actions-cli::velnor_cli impl_repo_shape::rq66_rustfmt_baseline
+        PASS [   0.014s] (134/248) velnor-actions-cli::velnor_cli impl_repo_strictness::alint_comment_only_edits_keep_verdicts
+        PASS [   0.015s] (135/248) velnor-actions-cli::velnor_cli impl_repo_strictness::alint_rule_fixtures_pass_fail_and_express_command
+        PASS [   0.013s] (136/248) velnor-actions-cli::velnor_cli impl_repo_strictness::no_git_dependencies
+        PASS [   0.012s] (137/248) velnor-actions-cli::velnor_cli impl_repo_strictness::no_restriction_or_nursery_groups
+        PASS [   0.021s] (138/248) velnor-actions-cli::velnor_cli impl_repo_strictness::no_nightly_toolchain
+        PASS [   0.017s] (139/248) velnor-actions-cli::velnor_cli impl_repo_strictness::strictness_documents_have_size_bound
+        PASS [   0.013s] (140/248) velnor-actions-cli::velnor_cli impl_repo_strictness::strictness_identifiers_are_newtypes
+        PASS [   0.011s] (141/248) velnor-actions-cli::velnor_cli impl_repo_strictness::strictness_negative_coverage_pinned
+        PASS [   0.015s] (142/248) velnor-actions-cli::velnor_cli impl_repo_strictness::strictness_matrix_agreement_uses_strict_boundary
+        PASS [   0.315s] (143/248) velnor-actions-cli::velnor_cli impl_cli_parity_golden::parity_malformed_fails_with_token
+        PASS [   0.009s] (144/248) velnor-actions-cli::velnor_cli impl_repo_strictness::strictness_proofs_need_validating_constructors
+        PASS [   0.012s] (145/248) velnor-actions-cli::velnor_cli impl_repo_strictness::strictness_orchestrator_errors_stay_distinct
+        PASS [   0.010s] (146/248) velnor-actions-cli::velnor_cli impl_repo_strictness::strictness_resource_bounds_reject_zero
+        PASS [   0.009s] (147/248) velnor-actions-cli::velnor_cli impl_repo_suppressions::extra_denies_match_tested_set
+        PASS [   0.012s] (148/248) velnor-actions-cli::velnor_cli impl_repo_suppressions::workspace_lint_tables_have_exact_known_keys
+        PASS [   0.285s] (149/248) velnor-actions-cli::velnor_cli impl_repo_policy::p11_metadata::metadata_members_match_products_and_archive_guard
+        PASS [   0.015s] (150/248) velnor-actions-cli::velnor_cli impl_repo_test_registration::cargo_config::nested_workspace_uses_cargo_metadata_target_directory
+        PASS [   0.028s] (151/248) velnor-actions-cli::velnor_cli impl_repo_suppressions::every_lint_expect_carries_reason
+        PASS [   0.036s] (152/248) velnor-actions-cli::velnor_cli impl_repo_suppressions::no_allow_suppressions_in_product_code
+        PASS [   0.015s] (153/248) velnor-actions-cli::velnor_cli impl_repo_test_registration::graph::cfg::tests::cfg_attr_handles_conditional_and_test_profile_branches
+        PASS [   0.021s] (154/248) velnor-actions-cli::velnor_cli impl_repo_test_registration::fixtures::unproven_invoked_macro_includes_fail_closed
+        PASS [   0.013s] (155/248) velnor-actions-cli::velnor_cli impl_repo_test_registration::graph::cfg::tests::cfg_attr_test_marker_is_a_valid_attribute
+        PASS [   0.087s] (156/248) velnor-actions-cli::velnor_cli impl_repo_strictness::unsafe_forbidden_and_absent
+        PASS [   0.401s] (157/248) velnor-actions-cli::velnor_cli impl_repo_policy::p12_manifest::ambiguous_multi_source_identity_fails
+        PASS [   0.408s] (158/248) velnor-actions-cli::velnor_cli impl_repo_policy::p12_live::nested_deny_ignore_fails
+        PASS [   0.416s] (159/248) velnor-actions-cli::velnor_cli impl_repo_policy::p12_live::deny_ignore_fails
+        PASS [   0.408s] (160/248) velnor-actions-cli::velnor_cli impl_repo_policy::p12_manifest::complete_supported_inventory_passes
+        PASS [   0.415s] (161/248) velnor-actions-cli::velnor_cli impl_repo_policy::p12_live::missing_deny_fails
+        PASS [   0.432s] (162/248) velnor-actions-cli::velnor_cli impl_cli_report::ignored_plan_keeps_ignore_reasons
+        PASS [   0.434s] (163/248) velnor-actions-cli::velnor_cli impl_cli_init::malformed_manifest_fails_naming_file
+        PASS [   0.418s] (164/248) velnor-actions-cli::velnor_cli impl_repo_policy::p12_manifest::dangling_lock_edge_fails
+        PASS [   0.487s] (165/248) velnor-actions-cli::velnor_cli impl_cli_report::plan_explains_pr_narrowing
+        PASS [   0.514s] (166/248) velnor-actions-cli::velnor_cli impl_cli_report::plan_claims_no_hits_coverage_or_selections
+        PASS [   0.514s] (167/248) velnor-actions-cli::velnor_cli impl_cli_report::plan_lists_sections_without_yaml_or_json
+        PASS [   0.514s] (168/248) velnor-actions-cli::velnor_cli impl_cli_parity::plan_writes_nothing_and_exposes_no_plan_json
+        PASS [   0.423s] (169/248) velnor-actions-cli::velnor_cli impl_repo_policy::p12_policy::local_pin_mismatch_fails
+        PASS [   0.429s] (170/248) velnor-actions-cli::velnor_cli impl_repo_policy::p12_manifest::workspace_package_rename_inherits
+        PASS [   0.535s] (171/248) velnor-actions-cli::velnor_cli impl_cli_report::plan_lists_full_field_set
+        PASS [   0.444s] (172/248) velnor-actions-cli::velnor_cli impl_repo_policy::p12_manifest::inexact_requirement_fails
+        PASS [   0.436s] (173/248) velnor-actions-cli::velnor_cli impl_repo_policy::p12_policy::stale_recorded_latest_fails
+        PASS [   0.445s] (174/248) velnor-actions-cli::velnor_cli impl_repo_policy::p12_policy::expired_exception_fails
+        PASS [   0.450s] (175/248) velnor-actions-cli::velnor_cli impl_repo_policy::p12_policy::future_granted_fails
+        PASS [   0.441s] (176/248) velnor-actions-cli::velnor_cli impl_repo_policy::p12_policy::unknown_hold_subject_fails
+        PASS [   0.450s] (177/248) velnor-actions-cli::velnor_cli impl_repo_policy::p12_policy::malformed_exception_fails
+        PASS [   0.447s] (178/248) velnor-actions-cli::velnor_cli impl_repo_policy::p12_policy::policy_mirror_drift_fails
+        PASS [   0.421s] (179/248) velnor-actions-cli::velnor_cli impl_repo_policy::p12_policy_b::future_evidence_fails
+        PASS [   0.469s] (180/248) velnor-actions-cli::velnor_cli impl_repo_policy::p12_manifest::excluded_nested_workspace_uses_its_own_lock
+        PASS [   0.450s] (181/248) velnor-actions-cli::velnor_cli impl_repo_policy::p12_policy::stale_evidence_fails
+        PASS [   0.464s] (182/248) velnor-actions-cli::velnor_cli impl_repo_policy::p12_manifest::nested_workspace_dependency_skew_fails
+        PASS [   0.454s] (183/248) velnor-actions-cli::velnor_cli impl_repo_policy::p12_policy::unblessed_standing_exception_fails
+        PASS [   0.464s] (184/248) velnor-actions-cli::velnor_cli impl_repo_policy::p12_policy::inverted_window_fails
+        PASS [   0.456s] (185/248) velnor-actions-cli::velnor_cli impl_repo_policy::p12_policy_b::blessed_standing_exception_passes
+        PASS [   0.443s] (186/248) velnor-actions-cli::velnor_cli impl_repo_policy::p12_policy_b::dated_exception_missing_field_fails
+        PASS [   0.422s] (187/248) velnor-actions-cli::velnor_cli impl_repo_policy::p12_policy_b::missing_tool_row_fails
+        PASS [   0.470s] (188/248) velnor-actions-cli::velnor_cli impl_repo_policy::p12_manifest::unresolvable_workspace_inheritance_fails
+        PASS [   0.484s] (189/248) velnor-actions-cli::velnor_cli impl_repo_policy::p12_manifest::declared_lock_skew_fails
+        PASS [   0.445s] (190/248) velnor-actions-cli::velnor_cli impl_repo_policy::p12_policy_b::extra_tool_row_fails
+        PASS [   0.443s] (191/248) velnor-actions-cli::velnor_cli impl_repo_policy::p12_policy_b::future_clock_timestamp_inside_skew_grace_passes
+        PASS [   0.460s] (192/248) velnor-actions-cli::velnor_cli impl_repo_policy::p12_policy::unknown_status_is_never_current
+        PASS [   0.475s] (193/248) velnor-actions-cli::velnor_cli impl_repo_policy::p12_manifest::git_dependency_fails
+        PASS [   0.449s] (194/248) velnor-actions-cli::velnor_cli impl_repo_policy::p12_policy_b::dated_exception_passes_with_full_attribution
+        PASS [   0.450s] (195/248) velnor-actions-cli::velnor_cli impl_repo_policy::p12_policy_b::blessed_standing_wrong_tag_fails
+        PASS [   0.457s] (196/248) velnor-actions-cli::velnor_cli impl_repo_policy::p12_policy_b::blessed_standing_missing_attribution_fails
+        PASS [   0.425s] (197/248) velnor-actions-cli::velnor_cli impl_repo_policy::p12_upstream::default_gate_never_fetches
+        PASS [   0.469s] (198/248) velnor-actions-cli::velnor_cli impl_repo_policy::p12_policy::mutant_pin_drift_fails
+        PASS [   0.467s] (199/248) velnor-actions-cli::velnor_cli impl_repo_policy::p12_policy::overlong_exception_fails
+        PASS [   0.477s] (200/248) velnor-actions-cli::velnor_cli impl_repo_policy::p12_manifest::stranded_lock_package_fails
+        PASS [   0.472s] (201/248) velnor-actions-cli::velnor_cli impl_repo_policy::p12_policy::missing_action_row_fails
+        PASS [   0.442s] (202/248) velnor-actions-cli::velnor_cli impl_repo_policy::p12_policy_b::future_clock_timestamp_outside_skew_grace_fails
+        PASS [   0.474s] (203/248) velnor-actions-cli::velnor_cli impl_repo_policy::p12_policy::dangling_mutant_glob_fails
+        PASS [   0.427s] (204/248) velnor-actions-cli::velnor_cli impl_repo_policy::p12_policy_b::non_object_entries_fail
+        PASS [   0.418s] (205/248) velnor-actions-cli::velnor_cli impl_repo_policy::p12_upstream::stale_evidence_names_source_and_timestamp
+        PASS [   0.478s] (206/248) velnor-actions-cli::velnor_cli impl_repo_policy::p12_manifest::target_scope_inexact_fails
+        PASS [   0.528s] (207/248) velnor-actions-cli::velnor_cli impl_cli_verify_local::verify_local_repo_policy_stage_executes
+        PASS [   0.427s] (208/248) velnor-actions-cli::velnor_cli impl_repo_policy::p12_upstream::probe_writes_nothing
+        PASS [   0.434s] (209/248) velnor-actions-cli::velnor_cli impl_repo_policy::p12_upstream::probe_rows_carry_source_and_check_time
+        PASS [   0.427s] (210/248) velnor-actions-cli::velnor_cli impl_repo_policy::p12_upstream::unparseable_body_is_lookup_failure_never_current
+        PASS [   0.441s] (211/248) velnor-actions-cli::velnor_cli impl_repo_policy::p12_upstream::prerelease_only_is_lookup_failure_never_current
+        PASS [   0.649s] (212/248) velnor-actions-cli::velnor_cli impl_cli_parity::plan_queries_no_caches_and_exposes_no_plan_json
+        PASS [   0.660s] (213/248) velnor-actions-cli::velnor_cli impl_cli_report::crates_list_in_stable_package_path_order
+        PASS [   0.672s] (214/248) velnor-actions-cli::velnor_cli impl_cli_smoke::generate_keeps_recommendations_on_stderr
+        PASS [   0.620s] (215/248) velnor-actions-cli::velnor_cli impl_repo_policy::p11_metadata::metadata_runner_members_match_four
+        PASS [   0.683s] (216/248) velnor-actions-cli::velnor_cli impl_cli_smoke::generate_writes_manual_change_suggestions_for_malformed_tools
+        PASS [   0.703s] (217/248) velnor-actions-cli::velnor_cli impl_cli_report::plan_values_come_from_validated_config
+        PASS [   0.759s] (218/248) velnor-actions-cli::velnor_cli impl_cli_report::plan_prints_no_machine_or_volatile_content
+        PASS [   0.661s] (219/248) velnor-actions-cli::velnor_cli impl_repo_policy::p12_policy::held_status_needs_a_covering_hold
+        PASS [   0.506s] (220/248) velnor-actions-cli::velnor_cli impl_repo_strictness::strictness_no_proof_literals_anywhere
+        PASS [   0.854s] (221/248) velnor-actions-cli::velnor_cli impl_cli_smoke::preview_prints_absolute_paths_and_files
+        PASS [   0.884s] (222/248) velnor-actions-cli::velnor_cli impl_cli_parity::plan_job_ids_match_generated_workflow
+        PASS [   0.885s] (223/248) velnor-actions-cli::velnor_cli impl_repo_policy::p11_metadata::metadata_effective_edition_is_2024
+        PASS [   0.957s] (224/248) velnor-actions-cli::velnor_cli impl_repo_policy::p11_metadata::metadata_locked_graph_is_registry_only
+        PASS [   1.026s] (225/248) velnor-actions-cli::velnor_cli impl_repo_policy::p11_compiler::reject_each_extra_clippy_deny_fails
+        PASS [   1.043s] (226/248) velnor-actions-cli::velnor_cli impl_repo_policy::p11_metadata::metadata_msrv_resolves
+        PASS [   0.802s] (227/248) velnor-actions-cli::velnor_cli impl_repo_test_registration::fixtures::compiler_closure_handles_paths_includes_macros_fixtures_and_orphans
+        PASS [   1.184s] (228/248) velnor-actions-cli::velnor_cli impl_repo_policy::p11_compiler::reject_each_rustdoc_deny_fails
+        PASS [   1.278s] (229/248) velnor-actions-cli::velnor_cli impl_cli_smoke::previews_use_unique_tmp_dirs_without_collision
+        PASS [   1.342s] (230/248) velnor-actions-cli::velnor_cli impl_repo_policy::p12_live::every_fail_row_is_nonzero
+        PASS [   1.346s] (231/248) velnor-actions-cli::velnor_cli impl_repo_policy::p12_live::upstream_probe_unreachable_fails
+        PASS [   1.365s] (232/248) velnor-actions-cli::velnor_cli impl_repo_policy::p12_live::upstream_probe_passes_on_canned_evidence
+        PASS [   1.375s] (233/248) velnor-actions-cli::velnor_cli impl_repo_policy::p12_live::upstream_probe_stale_pin_fails
+        PASS [   1.494s] (234/248) velnor-actions-cli::velnor_cli impl_cli_parity::plan_reports_full_configured_crates_in_agreement_with_yaml
+        PASS [   1.514s] (235/248) velnor-actions-cli::velnor_cli impl_cli_tofu_capacity::cli_schema2_paired_tofu_stays_within_capacity_and_fails_closed
+        PASS [   2.056s] (236/248) velnor-actions-cli::velnor_cli impl_repo_freshness::p12_property::property_plan_never_panics_on_arbitrary_bytes
+        PASS [   3.044s] (237/248) velnor-actions-cli::velnor_cli impl_repo_freshness::p12_property::property_plan_never_panics_on_arbitrary_config
+        PASS [   4.470s] (238/248) velnor-actions-cli::velnor_cli impl_repo_freshness::p12_property::property_plan_count_exact_and_deterministic
+        PASS [   4.575s] (239/248) velnor-actions-cli::velnor_cli impl_cli_protocol::plan_without_runner_temp_exits_one
+        PASS [   4.648s] (240/248) velnor-actions-cli::velnor_cli impl_cli_protocol::merge_no_work_plan_reports_no_work
+        PASS [   4.608s] (241/248) velnor-actions-cli::velnor_cli impl_cli_protocol::plan_writes_response_and_github_outputs
+        PASS [   4.578s] (242/248) velnor-actions-cli::velnor_cli impl_cli_protocol::plan_publishes_plan_artifact_files
+        PASS [   4.846s] (243/248) velnor-actions-cli::velnor_cli impl_archive_guard_builder::shared_target_isolated_by_source_bytes_when_mtime_is_preserved
+        PASS [   5.289s] (244/248) velnor-actions-cli::velnor_cli impl_cli_protocol::dynamic_matrix_over_job_limit_preserves_response_but_publishes_nothing
+        PASS [   6.777s] (245/248) velnor-actions-cli::velnor_cli impl_repo_freshness::p12_property::property_generate_repeats_byte_identical
+        PASS [   9.201s] (246/248) velnor-actions-cli::velnor_cli impl_repo_test_registration::cargo_targets_register_every_test_bearing_source
+        PASS [  14.437s] (247/248) velnor-actions-cli::velnor_cli impl_cli_release_manifest::check_release_rejects_invalid_candidate_manifests
+        PASS [  15.091s] (248/248) velnor-actions-cli::velnor_cli impl_cli_parity_golden::parity_artifacts_match_goldens
+────────────
+     Summary [  15.201s] 248 tests run: 248 passed, 0 skipped

@@ -1,0 +1,569 @@
+Required	Set up job	﻿2026-10-05T18:47:26.5601409Z Current runner version: '2.337.0'
+Required	Set up job	2026-10-05T18:47:26.5621871Z ##[group]Runner Image Provisioner
+Required	Set up job	2026-10-05T18:47:26.5622540Z Hosted Compute Agent
+Required	Set up job	2026-10-05T18:47:26.5623134Z Version: 20260901.588
+Required	Set up job	2026-10-05T18:47:26.5623657Z Commit: f88ec8081b781fac6c440065ac7ff9e710ce3d0b
+Required	Set up job	2026-10-05T18:47:26.5624314Z Build Date: 2026-09-01T19:56:44Z
+Required	Set up job	2026-10-05T18:47:26.5624906Z Worker ID: {e6d2dc6f-8027-42b3-baf5-3c24396e4f0f}
+Required	Set up job	2026-10-05T18:47:26.5625748Z Azure Region: westus
+Required	Set up job	2026-10-05T18:47:26.5626283Z ##[endgroup]
+Required	Set up job	2026-10-05T18:47:26.5627670Z ##[group]Operating System
+Required	Set up job	2026-10-05T18:47:26.5628270Z Ubuntu
+Required	Set up job	2026-10-05T18:47:26.5628713Z 26.04.1
+Required	Set up job	2026-10-05T18:47:26.5629133Z LTS
+Required	Set up job	2026-10-05T18:47:26.5629627Z ##[endgroup]
+Required	Set up job	2026-10-05T18:47:26.5630126Z ##[group]Runner Image
+Required	Set up job	2026-10-05T18:47:26.5630678Z Image: ubuntu-26.04
+Required	Set up job	2026-10-05T18:47:26.5631154Z Version: 20260927.149.1
+Required	Set up job	2026-10-05T18:47:26.5632016Z Included Software: https://github.com/actions/runner-images/blob/ubuntu26/20260927.149/images/ubuntu/Ubuntu2604-Readme.md
+Required	Set up job	2026-10-05T18:47:26.5633458Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu26%2F20260927.149
+Required	Set up job	2026-10-05T18:47:26.5634266Z ##[endgroup]
+Required	Set up job	2026-10-05T18:47:26.5635427Z ##[group]GITHUB_TOKEN Permissions
+Required	Set up job	2026-10-05T18:47:26.5637053Z Actions: read
+Required	Set up job	2026-10-05T18:47:26.5637559Z Contents: read
+Required	Set up job	2026-10-05T18:47:26.5638049Z Metadata: read
+Required	Set up job	2026-10-05T18:47:26.5638538Z ##[endgroup]
+Required	Set up job	2026-10-05T18:47:26.5640137Z Secret source: Actions
+Required	Set up job	2026-10-05T18:47:26.5640980Z Cache mode: write
+Required	Set up job	2026-10-05T18:47:26.5641528Z Prepare workflow directory
+Required	Set up job	2026-10-05T18:47:26.5946487Z Prepare all required actions
+Required	Set up job	2026-10-05T18:47:26.5984243Z Getting action download info
+Required	Set up job	2026-10-05T18:47:26.9965621Z Download action repository 'jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5' (SHA:9149ea85001c7435d5a66bb127d6a1b6227cb0a5)
+Required	Set up job	2026-10-05T18:47:27.5457653Z Download action repository 'actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c' (SHA:3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c)
+Required	Set up job	2026-10-05T18:47:27.9047476Z Download action repository 'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a' (SHA:043fb46d1a93c77aae656e7c1c64a875d1fc6a0a)
+Required	Set up job	2026-10-05T18:47:28.0829284Z Complete job name: Required
+Required	Setup Mise	﻿2026-10-05T18:47:28.1574374Z ##[group]Run jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
+Required	Setup Mise	2026-10-05T18:47:28.1576289Z with:
+Required	Setup Mise	2026-10-05T18:47:28.1577095Z   cache: false
+Required	Setup Mise	2026-10-05T18:47:28.1577906Z   cache_save: false
+Required	Setup Mise	2026-10-05T18:47:28.1578774Z   env: false
+Required	Setup Mise	2026-10-05T18:47:28.1579587Z   install: false
+Required	Setup Mise	2026-10-05T18:47:28.1580717Z   sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
+Required	Setup Mise	2026-10-05T18:47:28.1582133Z   version: 2026.9.18
+Required	Setup Mise	2026-10-05T18:47:28.1582998Z   minimum_release_age: 24h
+Required	Setup Mise	2026-10-05T18:47:28.1583964Z   bootstrap: false
+Required	Setup Mise	2026-10-05T18:47:28.1584837Z   cache_key_prefix: mise-v1
+Required	Setup Mise	2026-10-05T18:47:28.1585966Z   experimental: false
+Required	Setup Mise	2026-10-05T18:47:28.1586875Z   log_level: info
+Required	Setup Mise	2026-10-05T18:47:28.1587681Z   reshim: false
+Required	Setup Mise	2026-10-05T18:47:28.1588513Z   add_shims_to_path: true
+Required	Setup Mise	2026-10-05T18:47:28.1594860Z   github_token: ***
+Required	Setup Mise	2026-10-05T18:47:28.1595846Z   fetch_from_github: true
+Required	Setup Mise	2026-10-05T18:47:28.1596796Z   export_path: true
+Required	Setup Mise	2026-10-05T18:47:28.1597631Z   wings_enabled: false
+Required	Setup Mise	2026-10-05T18:47:28.1598945Z env:
+Required	Setup Mise	2026-10-05T18:47:28.1599749Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+Required	Setup Mise	2026-10-05T18:47:28.1600756Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+Required	Setup Mise	2026-10-05T18:47:28.1601704Z   ACTIONS_RUNTIME_TOKEN: 
+Required	Setup Mise	2026-10-05T18:47:28.1602587Z   CARGO_REGISTRY_TOKEN: 
+Required	Setup Mise	2026-10-05T18:47:28.1603556Z   GH_CONFIG_DIR: 
+Required	Setup Mise	2026-10-05T18:47:28.1604364Z   GH_HOST: 
+Required	Setup Mise	2026-10-05T18:47:28.1605381Z   GH_TOKEN: 
+Required	Setup Mise	2026-10-05T18:47:28.1606163Z   GITHUB_TOKEN: 
+Required	Setup Mise	2026-10-05T18:47:28.1606985Z   MISE_AUTO_INSTALL: false
+Required	Setup Mise	2026-10-05T18:47:28.1607958Z   MISE_EXEC_AUTO_INSTALL: false
+Required	Setup Mise	2026-10-05T18:47:28.1608872Z   MISE_GITHUB_TOKEN: 
+Required	Setup Mise	2026-10-05T18:47:28.1609696Z   MISE_LOCKFILE: 0
+Required	Setup Mise	2026-10-05T18:47:28.1610701Z   MISE_NO_CONFIG: 1
+Required	Setup Mise	2026-10-05T18:47:28.1611508Z   MISE_NO_ENV: 1
+Required	Setup Mise	2026-10-05T18:47:28.1612354Z   MISE_NO_HOOKS: 1
+Required	Setup Mise	2026-10-05T18:47:28.1613393Z   NODE_AUTH_TOKEN: 
+Required	Setup Mise	2026-10-05T18:47:28.1614175Z   NPM_TOKEN: 
+Required	Setup Mise	2026-10-05T18:47:28.1615016Z   RUSTUP_TOOLCHAIN: 1.98.1
+Required	Setup Mise	2026-10-05T18:47:28.1616055Z ##[endgroup]
+Required	Setup Mise	2026-10-05T18:47:28.2708024Z `minimum_release_age` is ignored because an explicit mise version was provided
+Required	Setup Mise	2026-10-05T18:47:28.2726919Z ##[group]Download mise@2026.9.18
+Required	Setup Mise	2026-10-05T18:47:28.2729261Z [command]/usr/local/bin/zstd --version
+Required	Setup Mise	2026-10-05T18:47:28.2780803Z *** Zstandard CLI (64-bit) v1.5.7, by Yann Collet ***
+Required	Setup Mise	2026-10-05T18:47:28.2806312Z [command]/usr/bin/tar --zstd --version
+Required	Setup Mise	2026-10-05T18:47:28.2834586Z tar (GNU tar) 1.35
+Required	Setup Mise	2026-10-05T18:47:28.2866270Z Copyright (C) 2023 Free Software Foundation, Inc.
+Required	Setup Mise	2026-10-05T18:47:28.2878791Z License GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>.
+Required	Setup Mise	2026-10-05T18:47:28.2881581Z This is free software: you are free to change and redistribute it.
+Required	Setup Mise	2026-10-05T18:47:28.2887816Z There is NO WARRANTY, to the extent permitted by law.
+Required	Setup Mise	2026-10-05T18:47:28.2889219Z 
+Required	Setup Mise	2026-10-05T18:47:28.2890076Z Written by John Gilmore and Jay Fenlason.
+Required	Setup Mise	2026-10-05T18:47:28.2961829Z [command]/usr/bin/ldd --version
+Required	Setup Mise	2026-10-05T18:47:28.2969938Z ldd (Ubuntu GLIBC 2.43-2ubuntu2.4) 2.43
+Required	Setup Mise	2026-10-05T18:47:28.2971710Z Copyright (C) 2024 Free Software Foundation, Inc.
+Required	Setup Mise	2026-10-05T18:47:28.2973904Z This is free software; see the source for copying conditions.  There is NO
+Required	Setup Mise	2026-10-05T18:47:28.2976560Z warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+Required	Setup Mise	2026-10-05T18:47:28.2978698Z Written by Roland McGrath and Ulrich Drepper.
+Required	Setup Mise	2026-10-05T18:47:28.2980519Z Using curl to download mise
+Required	Setup Mise	2026-10-05T18:47:28.2983939Z [command]/usr/bin/curl -fsSL https://github.com/jdx/mise/releases/download/v2026.9.18/mise-v2026.9.18-linux-x64.tar.zst --output /tmp/mise-action-U9qlDU/mise-v2026.9.18-linux-x64.tar.zst
+Required	Setup Mise	2026-10-05T18:47:28.6126807Z [command]/usr/bin/tar --zstd -xf /tmp/mise-action-U9qlDU/mise-v2026.9.18-linux-x64.tar.zst -C /tmp/mise-action-U9qlDU
+Required	Setup Mise	2026-10-05T18:47:28.8322271Z [command]/usr/bin/mv /tmp/mise-action-U9qlDU/mise/bin/mise /home/runner/.local/share/mise/bin/mise
+Required	Setup Mise	2026-10-05T18:47:29.0661335Z ##[group]Setting env vars
+Required	Setup Mise	2026-10-05T18:47:29.0662789Z Setting MISE_LOG_LEVEL=info
+Required	Setup Mise	2026-10-05T18:47:29.0673200Z Setting MISE_GITHUB_TOKEN=***
+Required	Setup Mise	2026-10-05T18:47:29.0675637Z Setting MISE_TRUSTED_CONFIG_PATHS=/home/runner/work/velnor-new/velnor-new
+Required	Setup Mise	2026-10-05T18:47:29.0677469Z Setting MISE_YES=1
+Required	Setup Mise	2026-10-05T18:47:29.0678790Z Adding /home/runner/.local/share/mise/shims to PATH
+Required	Setup Mise	2026-10-05T18:47:29.0681048Z ##[group]Running mise --version
+Required	Setup Mise	2026-10-05T18:47:29.0682629Z [command]/home/runner/.local/share/mise/bin/mise --version
+Required	Setup Mise	2026-10-05T18:47:29.0771005Z 2026.9.18 linux-x64 (2026-09-30)
+Required	Setup Mise	2026-10-05T18:47:29.0798133Z ##[endgroup]
+Required	Setup Mise	2026-10-05T18:47:29.0799322Z ##[group]Running mise ls
+Required	Setup Mise	2026-10-05T18:47:29.0811406Z [command]/home/runner/.local/share/mise/bin/mise ls
+Required	Setup Mise	2026-10-05T18:47:29.0912672Z ##[endgroup]
+Required	Download helper (pre-seed trust-on-review)	﻿2026-10-05T18:47:29.1258321Z ##[group]Run actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+Required	Download helper (pre-seed trust-on-review)	2026-10-05T18:47:29.1259663Z with:
+Required	Download helper (pre-seed trust-on-review)	2026-10-05T18:47:29.1260429Z   name: velnor-preseed-helper
+Required	Download helper (pre-seed trust-on-review)	2026-10-05T18:47:29.1261401Z   path: /home/runner/work/_temp/velnor/preseed
+Required	Download helper (pre-seed trust-on-review)	2026-10-05T18:47:29.1262417Z   merge-multiple: false
+Required	Download helper (pre-seed trust-on-review)	2026-10-05T18:47:29.1263290Z   repository: tailrocks/velnor-new
+Required	Download helper (pre-seed trust-on-review)	2026-10-05T18:47:29.1264199Z   run-id: 37357012567
+Required	Download helper (pre-seed trust-on-review)	2026-10-05T18:47:29.1265006Z   skip-decompress: false
+Required	Download helper (pre-seed trust-on-review)	2026-10-05T18:47:29.1265982Z   digest-mismatch: error
+Required	Download helper (pre-seed trust-on-review)	2026-10-05T18:47:29.1266809Z env:
+Required	Download helper (pre-seed trust-on-review)	2026-10-05T18:47:29.1267554Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+Required	Download helper (pre-seed trust-on-review)	2026-10-05T18:47:29.1268495Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+Required	Download helper (pre-seed trust-on-review)	2026-10-05T18:47:29.1269394Z   ACTIONS_RUNTIME_TOKEN: 
+Required	Download helper (pre-seed trust-on-review)	2026-10-05T18:47:29.1270240Z   CARGO_REGISTRY_TOKEN: 
+Required	Download helper (pre-seed trust-on-review)	2026-10-05T18:47:29.1271058Z   GH_CONFIG_DIR: 
+Required	Download helper (pre-seed trust-on-review)	2026-10-05T18:47:29.1271813Z   GH_HOST: 
+Required	Download helper (pre-seed trust-on-review)	2026-10-05T18:47:29.1272530Z   GH_TOKEN: 
+Required	Download helper (pre-seed trust-on-review)	2026-10-05T18:47:29.1273271Z   GITHUB_TOKEN: 
+Required	Download helper (pre-seed trust-on-review)	2026-10-05T18:47:29.1274054Z   MISE_AUTO_INSTALL: false
+Required	Download helper (pre-seed trust-on-review)	2026-10-05T18:47:29.1274972Z   MISE_EXEC_AUTO_INSTALL: false
+Required	Download helper (pre-seed trust-on-review)	2026-10-05T18:47:29.1281430Z   MISE_GITHUB_TOKEN: ***
+Required	Download helper (pre-seed trust-on-review)	2026-10-05T18:47:29.1282279Z   MISE_LOCKFILE: 0
+Required	Download helper (pre-seed trust-on-review)	2026-10-05T18:47:29.1283062Z   MISE_NO_CONFIG: 1
+Required	Download helper (pre-seed trust-on-review)	2026-10-05T18:47:29.1283832Z   MISE_NO_ENV: 1
+Required	Download helper (pre-seed trust-on-review)	2026-10-05T18:47:29.1284595Z   MISE_NO_HOOKS: 1
+Required	Download helper (pre-seed trust-on-review)	2026-10-05T18:47:29.1285464Z   NODE_AUTH_TOKEN: 
+Required	Download helper (pre-seed trust-on-review)	2026-10-05T18:47:29.1286233Z   NPM_TOKEN: 
+Required	Download helper (pre-seed trust-on-review)	2026-10-05T18:47:29.1287005Z   RUSTUP_TOOLCHAIN: 1.98.1
+Required	Download helper (pre-seed trust-on-review)	2026-10-05T18:47:29.1287860Z   MISE_LOG_LEVEL: info
+Required	Download helper (pre-seed trust-on-review)	2026-10-05T18:47:29.1288918Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-new/velnor-new
+Required	Download helper (pre-seed trust-on-review)	2026-10-05T18:47:29.1290082Z   MISE_YES: 1
+Required	Download helper (pre-seed trust-on-review)	2026-10-05T18:47:29.1290817Z ##[endgroup]
+Required	Download helper (pre-seed trust-on-review)	2026-10-05T18:47:29.2399882Z Downloading single artifact
+Required	Download helper (pre-seed trust-on-review)	2026-10-05T18:47:29.5359090Z Preparing to download the following artifacts:
+Required	Download helper (pre-seed trust-on-review)	2026-10-05T18:47:29.5360192Z - velnor-preseed-helper (ID: 11365675365, Size: 4792928, Expected Digest: sha256:7433bf105296430300c115b29ebebf7ab3bacd8da9ad79146113a99f9548bd2b)
+Required	Download helper (pre-seed trust-on-review)	2026-10-05T18:47:30.0893777Z Redirecting to blob download url: https://productionresultssa13.blob.core.windows.net/actions-results/40734a1d-f022-8989-8978-c33b1d6511fa/workflow-job-run-01d5f6c2-5351-53ae-acab-6b7c8bc0c961/artifacts/246fe97c17fbd6ae0d2def1bf4376df3b1c7ee12597469f244ea23c8de414c21.zip
+Required	Download helper (pre-seed trust-on-review)	2026-10-05T18:47:30.0895737Z Starting download of artifact to: /home/runner/work/_temp/velnor/preseed
+Required	Download helper (pre-seed trust-on-review)	2026-10-05T18:47:30.4309114Z (node:2860) [DEP0005] DeprecationWarning: Buffer() is deprecated due to security and usability issues. Please use the Buffer.alloc(), Buffer.allocUnsafe(), or Buffer.from() methods instead.
+Required	Download helper (pre-seed trust-on-review)	2026-10-05T18:47:30.4310573Z (Use `node --trace-deprecation ...` to show where the warning was created)
+Required	Download helper (pre-seed trust-on-review)	2026-10-05T18:47:31.2366816Z SHA256 digest of downloaded artifact is 7433bf105296430300c115b29ebebf7ab3bacd8da9ad79146113a99f9548bd2b
+Required	Download helper (pre-seed trust-on-review)	2026-10-05T18:47:31.2367653Z Artifact download completed successfully.
+Required	Download helper (pre-seed trust-on-review)	2026-10-05T18:47:31.2367986Z Total of 1 artifact(s) downloaded
+Required	Download helper (pre-seed trust-on-review)	2026-10-05T18:47:31.2370695Z Download artifact has finished successfully
+Required	Verify helper manifest (pre-seed trust-on-review)	﻿2026-10-05T18:47:31.2497345Z ##[group]Run sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; line=; rest=; m="$RUNNER_TEMP/velnor/preseed/preseed-manifest.json" && b="$RUNNER_TEMP/velnor/preseed/velnor-actions" && test -f "$m" && test -f "$b" && read line rest < "$m" || [ -n "$line" ] && v=${line#*\"schema\":} && v=${v%%,*} && [ "$v" = 1 ] && c=${line#*\"commit\":\"} && c=${c%%\"*} && [ "${#c}" = 40 ] && [ "$c" = "$GITHUB_SHA" ] && t=${line#*\"target\":\"} && t=${t%%\"*} && [ "$t" = "x86_64-unknown-linux-gnu" ] && tc=${line#*\"toolchain\":\"} && tc=${tc%%\"*} && [ -n "$tc" ] && s=${line#*\"sha256\":\"} && s=${s%%\"*} && [ "${#s}" = 64 ] && sha256sum "$b" > "$RUNNER_TEMP/velnor/preseed/got.txt" && read got rest < "$RUNNER_TEMP/velnor/preseed/got.txt" && [ "$got" = "$s" ]'
+Required	Verify helper manifest (pre-seed trust-on-review)	2026-10-05T18:47:31.2500843Z ^[[36;1msh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; line=; rest=; m="$RUNNER_TEMP/velnor/preseed/preseed-manifest.json" && b="$RUNNER_TEMP/velnor/preseed/velnor-actions" && test -f "$m" && test -f "$b" && read line rest < "$m" || [ -n "$line" ] && v=${line#*\"schema\":} && v=${v%%,*} && [ "$v" = 1 ] && c=${line#*\"commit\":\"} && c=${c%%\"*} && [ "${#c}" = 40 ] && [ "$c" = "$GITHUB_SHA" ] && t=${line#*\"target\":\"} && t=${t%%\"*} && [ "$t" = "x86_64-unknown-linux-gnu" ] && tc=${line#*\"toolchain\":\"} && tc=${tc%%\"*} && [ -n "$tc" ] && s=${line#*\"sha256\":\"} && s=${s%%\"*} && [ "${#s}" = 64 ] && sha256sum "$b" > "$RUNNER_TEMP/velnor/preseed/got.txt" && read got rest < "$RUNNER_TEMP/velnor/preseed/got.txt" && [ "$got" = "$s" ]'^[[0m
+Required	Verify helper manifest (pre-seed trust-on-review)	2026-10-05T18:47:31.2695274Z shell: /usr/bin/bash -e {0}
+Required	Verify helper manifest (pre-seed trust-on-review)	2026-10-05T18:47:31.2695563Z env:
+Required	Verify helper manifest (pre-seed trust-on-review)	2026-10-05T18:47:31.2695752Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+Required	Verify helper manifest (pre-seed trust-on-review)	2026-10-05T18:47:31.2695987Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+Required	Verify helper manifest (pre-seed trust-on-review)	2026-10-05T18:47:31.2696203Z   ACTIONS_RUNTIME_TOKEN: 
+Required	Verify helper manifest (pre-seed trust-on-review)	2026-10-05T18:47:31.2696432Z   CARGO_REGISTRY_TOKEN: 
+Required	Verify helper manifest (pre-seed trust-on-review)	2026-10-05T18:47:31.2696883Z   GH_CONFIG_DIR: 
+Required	Verify helper manifest (pre-seed trust-on-review)	2026-10-05T18:47:31.2697052Z   GH_HOST: 
+Required	Verify helper manifest (pre-seed trust-on-review)	2026-10-05T18:47:31.2697220Z   GH_TOKEN: 
+Required	Verify helper manifest (pre-seed trust-on-review)	2026-10-05T18:47:31.2697405Z   GITHUB_TOKEN: 
+Required	Verify helper manifest (pre-seed trust-on-review)	2026-10-05T18:47:31.2697582Z   MISE_AUTO_INSTALL: false
+Required	Verify helper manifest (pre-seed trust-on-review)	2026-10-05T18:47:31.2697786Z   MISE_EXEC_AUTO_INSTALL: false
+Required	Verify helper manifest (pre-seed trust-on-review)	2026-10-05T18:47:31.2699782Z   MISE_GITHUB_TOKEN: ***
+Required	Verify helper manifest (pre-seed trust-on-review)	2026-10-05T18:47:31.2700008Z   MISE_LOCKFILE: 0
+Required	Verify helper manifest (pre-seed trust-on-review)	2026-10-05T18:47:31.2700187Z   MISE_NO_CONFIG: 1
+Required	Verify helper manifest (pre-seed trust-on-review)	2026-10-05T18:47:31.2700382Z   MISE_NO_ENV: 1
+Required	Verify helper manifest (pre-seed trust-on-review)	2026-10-05T18:47:31.2700556Z   MISE_NO_HOOKS: 1
+Required	Verify helper manifest (pre-seed trust-on-review)	2026-10-05T18:47:31.2700726Z   NODE_AUTH_TOKEN: 
+Required	Verify helper manifest (pre-seed trust-on-review)	2026-10-05T18:47:31.2700899Z   NPM_TOKEN: 
+Required	Verify helper manifest (pre-seed trust-on-review)	2026-10-05T18:47:31.2701097Z   RUSTUP_TOOLCHAIN: 1.98.1
+Required	Verify helper manifest (pre-seed trust-on-review)	2026-10-05T18:47:31.2701356Z   MISE_LOG_LEVEL: info
+Required	Verify helper manifest (pre-seed trust-on-review)	2026-10-05T18:47:31.2701625Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-new/velnor-new
+Required	Verify helper manifest (pre-seed trust-on-review)	2026-10-05T18:47:31.2701915Z   MISE_YES: 1
+Required	Verify helper manifest (pre-seed trust-on-review)	2026-10-05T18:47:31.2702098Z ##[endgroup]
+Required	Stage helper (pre-seed trust-on-review)	﻿2026-10-05T18:47:31.2957932Z ##[group]Run sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p $RUNNER_TEMP/velnor/bin && cp $RUNNER_TEMP/velnor/preseed/velnor-actions $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.1 && chmod +x $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.1'
+Required	Stage helper (pre-seed trust-on-review)	2026-10-05T18:47:31.2959876Z ^[[36;1msh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p $RUNNER_TEMP/velnor/bin && cp $RUNNER_TEMP/velnor/preseed/velnor-actions $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.1 && chmod +x $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.1'^[[0m
+Required	Stage helper (pre-seed trust-on-review)	2026-10-05T18:47:31.3011685Z shell: /usr/bin/bash -e {0}
+Required	Stage helper (pre-seed trust-on-review)	2026-10-05T18:47:31.3011914Z env:
+Required	Stage helper (pre-seed trust-on-review)	2026-10-05T18:47:31.3012099Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+Required	Stage helper (pre-seed trust-on-review)	2026-10-05T18:47:31.3012331Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+Required	Stage helper (pre-seed trust-on-review)	2026-10-05T18:47:31.3012548Z   ACTIONS_RUNTIME_TOKEN: 
+Required	Stage helper (pre-seed trust-on-review)	2026-10-05T18:47:31.3012792Z   CARGO_REGISTRY_TOKEN: 
+Required	Stage helper (pre-seed trust-on-review)	2026-10-05T18:47:31.3012982Z   GH_CONFIG_DIR: 
+Required	Stage helper (pre-seed trust-on-review)	2026-10-05T18:47:31.3013163Z   GH_HOST: 
+Required	Stage helper (pre-seed trust-on-review)	2026-10-05T18:47:31.3013332Z   GH_TOKEN: 
+Required	Stage helper (pre-seed trust-on-review)	2026-10-05T18:47:31.3013499Z   GITHUB_TOKEN: 
+Required	Stage helper (pre-seed trust-on-review)	2026-10-05T18:47:31.3013677Z   MISE_AUTO_INSTALL: false
+Required	Stage helper (pre-seed trust-on-review)	2026-10-05T18:47:31.3013882Z   MISE_EXEC_AUTO_INSTALL: false
+Required	Stage helper (pre-seed trust-on-review)	2026-10-05T18:47:31.3015976Z   MISE_GITHUB_TOKEN: ***
+Required	Stage helper (pre-seed trust-on-review)	2026-10-05T18:47:31.3016202Z   MISE_LOCKFILE: 0
+Required	Stage helper (pre-seed trust-on-review)	2026-10-05T18:47:31.3016384Z   MISE_NO_CONFIG: 1
+Required	Stage helper (pre-seed trust-on-review)	2026-10-05T18:47:31.3016567Z   MISE_NO_ENV: 1
+Required	Stage helper (pre-seed trust-on-review)	2026-10-05T18:47:31.3016741Z   MISE_NO_HOOKS: 1
+Required	Stage helper (pre-seed trust-on-review)	2026-10-05T18:47:31.3016911Z   NODE_AUTH_TOKEN: 
+Required	Stage helper (pre-seed trust-on-review)	2026-10-05T18:47:31.3017078Z   NPM_TOKEN: 
+Required	Stage helper (pre-seed trust-on-review)	2026-10-05T18:47:31.3017267Z   RUSTUP_TOOLCHAIN: 1.98.1
+Required	Stage helper (pre-seed trust-on-review)	2026-10-05T18:47:31.3017468Z   MISE_LOG_LEVEL: info
+Required	Stage helper (pre-seed trust-on-review)	2026-10-05T18:47:31.3017733Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-new/velnor-new
+Required	Stage helper (pre-seed trust-on-review)	2026-10-05T18:47:31.3018020Z   MISE_YES: 1
+Required	Stage helper (pre-seed trust-on-review)	2026-10-05T18:47:31.3018198Z ##[endgroup]
+Required	Prepare pinned tools	﻿2026-10-05T18:47:31.3221175Z ##[group]Run mise --no-config --no-env --no-hooks install gh@2.102.0
+Required	Prepare pinned tools	2026-10-05T18:47:31.3221606Z ^[[36;1mmise --no-config --no-env --no-hooks install gh@2.102.0^[[0m
+Required	Prepare pinned tools	2026-10-05T18:47:31.3274994Z shell: /usr/bin/bash -e {0}
+Required	Prepare pinned tools	2026-10-05T18:47:31.3275368Z env:
+Required	Prepare pinned tools	2026-10-05T18:47:31.3275553Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+Required	Prepare pinned tools	2026-10-05T18:47:31.3275783Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+Required	Prepare pinned tools	2026-10-05T18:47:31.3275996Z   ACTIONS_RUNTIME_TOKEN: 
+Required	Prepare pinned tools	2026-10-05T18:47:31.3276201Z   CARGO_REGISTRY_TOKEN: 
+Required	Prepare pinned tools	2026-10-05T18:47:31.3276411Z   GH_CONFIG_DIR: 
+Required	Prepare pinned tools	2026-10-05T18:47:31.3276601Z   GH_HOST: 
+Required	Prepare pinned tools	2026-10-05T18:47:31.3276817Z   GH_TOKEN: 
+Required	Prepare pinned tools	2026-10-05T18:47:31.3276989Z   GITHUB_TOKEN: 
+Required	Prepare pinned tools	2026-10-05T18:47:31.3277166Z   MISE_AUTO_INSTALL: false
+Required	Prepare pinned tools	2026-10-05T18:47:31.3277365Z   MISE_EXEC_AUTO_INSTALL: false
+Required	Prepare pinned tools	2026-10-05T18:47:31.3279356Z   MISE_GITHUB_TOKEN: ***
+Required	Prepare pinned tools	2026-10-05T18:47:31.3279572Z   MISE_LOCKFILE: 0
+Required	Prepare pinned tools	2026-10-05T18:47:31.3279756Z   MISE_NO_CONFIG: 1
+Required	Prepare pinned tools	2026-10-05T18:47:31.3279952Z   MISE_NO_ENV: 1
+Required	Prepare pinned tools	2026-10-05T18:47:31.3280137Z   MISE_NO_HOOKS: 1
+Required	Prepare pinned tools	2026-10-05T18:47:31.3280355Z   NODE_AUTH_TOKEN: 
+Required	Prepare pinned tools	2026-10-05T18:47:31.3280523Z   NPM_TOKEN: 
+Required	Prepare pinned tools	2026-10-05T18:47:31.3280872Z   RUSTUP_TOOLCHAIN: 1.98.1
+Required	Prepare pinned tools	2026-10-05T18:47:31.3281078Z   MISE_LOG_LEVEL: info
+Required	Prepare pinned tools	2026-10-05T18:47:31.3281346Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-new/velnor-new
+Required	Prepare pinned tools	2026-10-05T18:47:31.3281650Z   MISE_YES: 1
+Required	Prepare pinned tools	2026-10-05T18:47:31.3281860Z   MISE_CARGO_HOME: /home/runner/work/_temp/velnor/cargo
+Required	Prepare pinned tools	2026-10-05T18:47:31.3282165Z   MISE_RUSTUP_HOME: /home/runner/work/_temp/velnor/rustup
+Required	Prepare pinned tools	2026-10-05T18:47:31.3282418Z ##[endgroup]
+Required	Prepare pinned tools	2026-10-05T18:47:31.3386979Z ^[[2mmise^[[0m ^[[2mby @jdx^[[0m – installing 1 tool
+Required	Prepare pinned tools	2026-10-05T18:47:32.6504287Z ^[[2mmise^[[0m ^[[38;5;10m✓^[[0m ^[[34mgh^[[0m@2.102.0  1.3s  ^[[2mgh_2.102.0_linux_amd64.tar.gz^[[0m
+Required	Prepare pinned tools	2026-10-05T18:47:32.6505543Z ^[[2mmise^[[0m ^[[36m████████████████^[[0m^[[31m^[[0m^[[2m^[[0m 1/1 · installed 1 tool in 1.3s
+Required	Prepare pinned tools	2026-10-05T18:47:32.6541625Z ^[[33mmise^[[0m ^[[33mWARN^[[0m  gh installed but not activated — it is not in any config file.
+Required	Prepare pinned tools	2026-10-05T18:47:32.6542072Z To install and activate, run:
+Required	Prepare pinned tools	2026-10-05T18:47:32.6542282Z   mise use gh
+Required	Download plan	﻿2026-10-05T18:47:32.6640785Z ##[group]Run actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+Required	Download plan	2026-10-05T18:47:32.6641273Z with:
+Required	Download plan	2026-10-05T18:47:32.6641523Z   name: velnor-plan-r37357012567-a1
+Required	Download plan	2026-10-05T18:47:32.6641879Z   path: /home/runner/work/_temp/velnor/r37357012567-a1
+Required	Download plan	2026-10-05T18:47:32.6642228Z   merge-multiple: false
+Required	Download plan	2026-10-05T18:47:32.6642514Z   repository: tailrocks/velnor-new
+Required	Download plan	2026-10-05T18:47:32.6642823Z   run-id: 37357012567
+Required	Download plan	2026-10-05T18:47:32.6643093Z   skip-decompress: false
+Required	Download plan	2026-10-05T18:47:32.6643383Z   digest-mismatch: error
+Required	Download plan	2026-10-05T18:47:32.6643654Z env:
+Required	Download plan	2026-10-05T18:47:32.6643919Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+Required	Download plan	2026-10-05T18:47:32.6644237Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+Required	Download plan	2026-10-05T18:47:32.6644550Z   ACTIONS_RUNTIME_TOKEN: 
+Required	Download plan	2026-10-05T18:47:32.6644833Z   CARGO_REGISTRY_TOKEN: 
+Required	Download plan	2026-10-05T18:47:32.6645314Z   GH_CONFIG_DIR: 
+Required	Download plan	2026-10-05T18:47:32.6645575Z   GH_HOST: 
+Required	Download plan	2026-10-05T18:47:32.6645818Z   GH_TOKEN: 
+Required	Download plan	2026-10-05T18:47:32.6646061Z   GITHUB_TOKEN: 
+Required	Download plan	2026-10-05T18:47:32.6646330Z   MISE_AUTO_INSTALL: false
+Required	Download plan	2026-10-05T18:47:32.6646682Z   MISE_EXEC_AUTO_INSTALL: false
+Required	Download plan	2026-10-05T18:47:32.6650072Z   MISE_GITHUB_TOKEN: ***
+Required	Download plan	2026-10-05T18:47:32.6650408Z   MISE_LOCKFILE: 0
+Required	Download plan	2026-10-05T18:47:32.6650675Z   MISE_NO_CONFIG: 1
+Required	Download plan	2026-10-05T18:47:32.6650928Z   MISE_NO_ENV: 1
+Required	Download plan	2026-10-05T18:47:32.6651194Z   MISE_NO_HOOKS: 1
+Required	Download plan	2026-10-05T18:47:32.6651455Z   NODE_AUTH_TOKEN: 
+Required	Download plan	2026-10-05T18:47:32.6651721Z   NPM_TOKEN: 
+Required	Download plan	2026-10-05T18:47:32.6651984Z   RUSTUP_TOOLCHAIN: 1.98.1
+Required	Download plan	2026-10-05T18:47:32.6652275Z   MISE_LOG_LEVEL: info
+Required	Download plan	2026-10-05T18:47:32.6652682Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-new/velnor-new
+Required	Download plan	2026-10-05T18:47:32.6653132Z   MISE_YES: 1
+Required	Download plan	2026-10-05T18:47:32.6653381Z ##[endgroup]
+Required	Download plan	2026-10-05T18:47:32.7747803Z Downloading single artifact
+Required	Download plan	2026-10-05T18:47:33.0768976Z Preparing to download the following artifacts:
+Required	Download plan	2026-10-05T18:47:33.0769893Z - velnor-plan-r37357012567-a1 (ID: 11365515795, Size: 41471, Expected Digest: sha256:9a62f83cd46209ebc06af831b4ec91a76b6f1f1eec6237eb2d145b0e9aaaf6b4)
+Required	Download plan	2026-10-05T18:47:33.6533654Z Redirecting to blob download url: https://productionresultssa13.blob.core.windows.net/actions-results/40734a1d-f022-8989-8978-c33b1d6511fa/workflow-job-run-01d5f6c2-5351-53ae-acab-6b7c8bc0c961/artifacts/720324add96d11998c4c6c806c91a0bb185181ac026f5930ad390c2ea85c93c8.zip
+Required	Download plan	2026-10-05T18:47:33.6535012Z Starting download of artifact to: /home/runner/work/_temp/velnor/r37357012567-a1
+Required	Download plan	2026-10-05T18:47:33.9329413Z (node:2899) [DEP0005] DeprecationWarning: Buffer() is deprecated due to security and usability issues. Please use the Buffer.alloc(), Buffer.allocUnsafe(), or Buffer.from() methods instead.
+Required	Download plan	2026-10-05T18:47:33.9330172Z (Use `node --trace-deprecation ...` to show where the warning was created)
+Required	Download plan	2026-10-05T18:47:34.0028468Z SHA256 digest of downloaded artifact is 9a62f83cd46209ebc06af831b4ec91a76b6f1f1eec6237eb2d145b0e9aaaf6b4
+Required	Download plan	2026-10-05T18:47:34.0029007Z Artifact download completed successfully.
+Required	Download plan	2026-10-05T18:47:34.0029253Z Total of 1 artifact(s) downloaded
+Required	Download plan	2026-10-05T18:47:34.0031572Z Download artifact has finished successfully
+Required	Download every expected matrix artifact	﻿2026-10-05T18:47:34.0130300Z ##[group]Run "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.1"
+Required	Download every expected matrix artifact	2026-10-05T18:47:34.0130671Z ^[[36;1m"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.1"^[[0m
+Required	Download every expected matrix artifact	2026-10-05T18:47:34.0182655Z shell: /usr/bin/bash -e {0}
+Required	Download every expected matrix artifact	2026-10-05T18:47:34.0182886Z env:
+Required	Download every expected matrix artifact	2026-10-05T18:47:34.0183082Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+Required	Download every expected matrix artifact	2026-10-05T18:47:34.0183321Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+Required	Download every expected matrix artifact	2026-10-05T18:47:34.0183553Z   ACTIONS_RUNTIME_TOKEN: 
+Required	Download every expected matrix artifact	2026-10-05T18:47:34.0183755Z   CARGO_REGISTRY_TOKEN: 
+Required	Download every expected matrix artifact	2026-10-05T18:47:34.0183948Z   GH_CONFIG_DIR: 
+Required	Download every expected matrix artifact	2026-10-05T18:47:34.0184125Z   GH_HOST: 
+Required	Download every expected matrix artifact	2026-10-05T18:47:34.0186203Z   GH_TOKEN: ***
+Required	Download every expected matrix artifact	2026-10-05T18:47:34.0186408Z   GITHUB_TOKEN: 
+Required	Download every expected matrix artifact	2026-10-05T18:47:34.0186596Z   MISE_AUTO_INSTALL: false
+Required	Download every expected matrix artifact	2026-10-05T18:47:34.0186809Z   MISE_EXEC_AUTO_INSTALL: false
+Required	Download every expected matrix artifact	2026-10-05T18:47:34.0188566Z   MISE_GITHUB_TOKEN: ***
+Required	Download every expected matrix artifact	2026-10-05T18:47:34.0188775Z   MISE_LOCKFILE: 0
+Required	Download every expected matrix artifact	2026-10-05T18:47:34.0188954Z   MISE_NO_CONFIG: 1
+Required	Download every expected matrix artifact	2026-10-05T18:47:34.0189127Z   MISE_NO_ENV: 1
+Required	Download every expected matrix artifact	2026-10-05T18:47:34.0189329Z   MISE_NO_HOOKS: 1
+Required	Download every expected matrix artifact	2026-10-05T18:47:34.0189554Z   NODE_AUTH_TOKEN: 
+Required	Download every expected matrix artifact	2026-10-05T18:47:34.0189723Z   NPM_TOKEN: 
+Required	Download every expected matrix artifact	2026-10-05T18:47:34.0189908Z   RUSTUP_TOOLCHAIN: 1.98.1
+Required	Download every expected matrix artifact	2026-10-05T18:47:34.0190104Z   MISE_LOG_LEVEL: info
+Required	Download every expected matrix artifact	2026-10-05T18:47:34.0190363Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-new/velnor-new
+Required	Download every expected matrix artifact	2026-10-05T18:47:34.0190659Z   MISE_YES: 1
+Required	Download every expected matrix artifact	2026-10-05T18:47:34.0190840Z   GH_REPO: tailrocks/velnor-new
+Required	Download every expected matrix artifact	2026-10-05T18:47:34.0191070Z   VELNOR_INTERNAL_OP: fetch-reports-v1
+Required	Download every expected matrix artifact	2026-10-05T18:47:34.0191295Z ##[endgroup]
+Required	Write request	﻿2026-10-05T18:47:46.6211056Z ##[group]Run "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.1"
+Required	Write request	2026-10-05T18:47:46.6211441Z ^[[36;1m"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.1"^[[0m
+Required	Write request	2026-10-05T18:47:46.6263065Z shell: /usr/bin/bash -e {0}
+Required	Write request	2026-10-05T18:47:46.6263303Z env:
+Required	Write request	2026-10-05T18:47:46.6263489Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+Required	Write request	2026-10-05T18:47:46.6263723Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+Required	Write request	2026-10-05T18:47:46.6263940Z   ACTIONS_RUNTIME_TOKEN: 
+Required	Write request	2026-10-05T18:47:46.6264160Z   CARGO_REGISTRY_TOKEN: 
+Required	Write request	2026-10-05T18:47:46.6264345Z   GH_CONFIG_DIR: 
+Required	Write request	2026-10-05T18:47:46.6264525Z   GH_HOST: 
+Required	Write request	2026-10-05T18:47:46.6264685Z   GH_TOKEN: 
+Required	Write request	2026-10-05T18:47:46.6264855Z   GITHUB_TOKEN: 
+Required	Write request	2026-10-05T18:47:46.6265029Z   MISE_AUTO_INSTALL: false
+Required	Write request	2026-10-05T18:47:46.6265404Z   MISE_EXEC_AUTO_INSTALL: false
+Required	Write request	2026-10-05T18:47:46.6267344Z   MISE_GITHUB_TOKEN: ***
+Required	Write request	2026-10-05T18:47:46.6267550Z   MISE_LOCKFILE: 0
+Required	Write request	2026-10-05T18:47:46.6267738Z   MISE_NO_CONFIG: 1
+Required	Write request	2026-10-05T18:47:46.6267915Z   MISE_NO_ENV: 1
+Required	Write request	2026-10-05T18:47:46.6268092Z   MISE_NO_HOOKS: 1
+Required	Write request	2026-10-05T18:47:46.6268297Z   NODE_AUTH_TOKEN: 
+Required	Write request	2026-10-05T18:47:46.6268470Z   NPM_TOKEN: 
+Required	Write request	2026-10-05T18:47:46.6268649Z   RUSTUP_TOOLCHAIN: 1.98.1
+Required	Write request	2026-10-05T18:47:46.6268845Z   MISE_LOG_LEVEL: info
+Required	Write request	2026-10-05T18:47:46.6269111Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-new/velnor-new
+Required	Write request	2026-10-05T18:47:46.6269395Z   MISE_YES: 1
+Required	Write request	2026-10-05T18:47:46.6269580Z   VELNOR_INTERNAL_OP: write-request-v1
+Required	Write request	2026-10-05T18:47:46.6272531Z   VELNOR_NEEDS_JSON: {
+Required	Write request	  "plan": {
+Required	Write request	    "result": "success",
+Required	Write request	    "outputs": {}
+Required	Write request	  },
+Required	Write request	  "rust-velnor-actions-actionlint": {
+Required	Write request	    "result": "success",
+Required	Write request	    "outputs": {}
+Required	Write request	  },
+Required	Write request	  "rust-velnor-actions-cli": {
+Required	Write request	    "result": "success",
+Required	Write request	    "outputs": {}
+Required	Write request	  },
+Required	Write request	  "rust-velnor-actions-contract": {
+Required	Write request	    "result": "success",
+Required	Write request	    "outputs": {}
+Required	Write request	  },
+Required	Write request	  "rust-velnor-actions-mise": {
+Required	Write request	    "result": "success",
+Required	Write request	    "outputs": {}
+Required	Write request	  },
+Required	Write request	  "rust-velnor-actions-orchestrator": {
+Required	Write request	    "result": "cancelled",
+Required	Write request	    "outputs": {}
+Required	Write request	  },
+Required	Write request	  "rust-velnor-actions-rust": {
+Required	Write request	    "result": "success",
+Required	Write request	    "outputs": {}
+Required	Write request	  },
+Required	Write request	  "rust-velnor-actions-tofu": {
+Required	Write request	    "result": "success",
+Required	Write request	    "outputs": {}
+Required	Write request	  },
+Required	Write request	  "rust-velnor-actions-workflow-renderer": {
+Required	Write request	    "result": "success",
+Required	Write request	    "outputs": {}
+Required	Write request	  },
+Required	Write request	  "rust-velnor-archive-guard": {
+Required	Write request	    "result": "success",
+Required	Write request	    "outputs": {}
+Required	Write request	  },
+Required	Write request	  "rust-velnor-runner-cli": {
+Required	Write request	    "result": "success",
+Required	Write request	    "outputs": {}
+Required	Write request	  },
+Required	Write request	  "rust-velnor-runner-core": {
+Required	Write request	    "result": "success",
+Required	Write request	    "outputs": {}
+Required	Write request	  },
+Required	Write request	  "rust-velnor-runner-github": {
+Required	Write request	    "result": "success",
+Required	Write request	    "outputs": {}
+Required	Write request	  },
+Required	Write request	  "rust-velnor-runner-host": {
+Required	Write request	    "result": "success",
+Required	Write request	    "outputs": {}
+Required	Write request	  },
+Required	Write request	  "actionlint": {
+Required	Write request	    "result": "success",
+Required	Write request	    "outputs": {}
+Required	Write request	  },
+Required	Write request	  "alint": {
+Required	Write request	    "result": "success",
+Required	Write request	    "outputs": {}
+Required	Write request	  },
+Required	Write request	  "cargo-deny": {
+Required	Write request	    "result": "success",
+Required	Write request	    "outputs": {}
+Required	Write request	  },
+Required	Write request	  "cargo-machete": {
+Required	Write request	    "result": "success",
+Required	Write request	    "outputs": {}
+Required	Write request	  },
+Required	Write request	  "zizmor": {
+Required	Write request	    "result": "success",
+Required	Write request	    "outputs": {}
+Required	Write request	  }
+Required	Write request	}
+Required	Write request	2026-10-05T18:47:46.6277069Z   VELNOR_NEEDS_EXPECTED: ["actionlint","alint","cargo-deny","cargo-machete","plan","rust-velnor-actions-actionlint","rust-velnor-actions-cli","rust-velnor-actions-contract","rust-velnor-actions-mise","rust-velnor-actions-orchestrator","rust-velnor-actions-rust","rust-velnor-actions-tofu","rust-velnor-actions-workflow-renderer","rust-velnor-archive-guard","rust-velnor-runner-cli","rust-velnor-runner-core","rust-velnor-runner-github","rust-velnor-runner-host","zizmor"]
+Required	Write request	2026-10-05T18:47:46.6278523Z   VELNOR_REQUEST_FILE: /home/runner/work/_temp/velnor/request/merge-v1-request.json
+Required	Write request	2026-10-05T18:47:46.6278854Z ##[endgroup]
+Required	Merge reports	﻿2026-10-05T18:47:46.6546553Z ##[group]Run "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.1"
+Required	Merge reports	2026-10-05T18:47:46.6546936Z ^[[36;1m"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.1"^[[0m
+Required	Merge reports	2026-10-05T18:47:46.6595913Z shell: /usr/bin/bash -e {0}
+Required	Merge reports	2026-10-05T18:47:46.6596169Z env:
+Required	Merge reports	2026-10-05T18:47:46.6596348Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+Required	Merge reports	2026-10-05T18:47:46.6596593Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+Required	Merge reports	2026-10-05T18:47:46.6596818Z   ACTIONS_RUNTIME_TOKEN: 
+Required	Merge reports	2026-10-05T18:47:46.6597019Z   CARGO_REGISTRY_TOKEN: 
+Required	Merge reports	2026-10-05T18:47:46.6597211Z   GH_CONFIG_DIR: 
+Required	Merge reports	2026-10-05T18:47:46.6597394Z   GH_HOST: 
+Required	Merge reports	2026-10-05T18:47:46.6597559Z   GH_TOKEN: 
+Required	Merge reports	2026-10-05T18:47:46.6597728Z   GITHUB_TOKEN: 
+Required	Merge reports	2026-10-05T18:47:46.6597906Z   MISE_AUTO_INSTALL: false
+Required	Merge reports	2026-10-05T18:47:46.6598111Z   MISE_EXEC_AUTO_INSTALL: false
+Required	Merge reports	2026-10-05T18:47:46.6599991Z   MISE_GITHUB_TOKEN: ***
+Required	Merge reports	2026-10-05T18:47:46.6600209Z   MISE_LOCKFILE: 0
+Required	Merge reports	2026-10-05T18:47:46.6600401Z   MISE_NO_CONFIG: 1
+Required	Merge reports	2026-10-05T18:47:46.6600594Z   MISE_NO_ENV: 1
+Required	Merge reports	2026-10-05T18:47:46.6600776Z   MISE_NO_HOOKS: 1
+Required	Merge reports	2026-10-05T18:47:46.6600977Z   NODE_AUTH_TOKEN: 
+Required	Merge reports	2026-10-05T18:47:46.6601152Z   NPM_TOKEN: 
+Required	Merge reports	2026-10-05T18:47:46.6601340Z   RUSTUP_TOOLCHAIN: 1.98.1
+Required	Merge reports	2026-10-05T18:47:46.6601542Z   MISE_LOG_LEVEL: info
+Required	Merge reports	2026-10-05T18:47:46.6601812Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-new/velnor-new
+Required	Merge reports	2026-10-05T18:47:46.6602099Z   MISE_YES: 1
+Required	Merge reports	2026-10-05T18:47:46.6602278Z   VELNOR_INTERNAL_OP: merge-v1
+Required	Merge reports	2026-10-05T18:47:46.6605357Z   VELNOR_NEEDS_JSON: {
+Required	Merge reports	  "plan": {
+Required	Merge reports	    "result": "success",
+Required	Merge reports	    "outputs": {}
+Required	Merge reports	  },
+Required	Merge reports	  "rust-velnor-actions-actionlint": {
+Required	Merge reports	    "result": "success",
+Required	Merge reports	    "outputs": {}
+Required	Merge reports	  },
+Required	Merge reports	  "rust-velnor-actions-cli": {
+Required	Merge reports	    "result": "success",
+Required	Merge reports	    "outputs": {}
+Required	Merge reports	  },
+Required	Merge reports	  "rust-velnor-actions-contract": {
+Required	Merge reports	    "result": "success",
+Required	Merge reports	    "outputs": {}
+Required	Merge reports	  },
+Required	Merge reports	  "rust-velnor-actions-mise": {
+Required	Merge reports	    "result": "success",
+Required	Merge reports	    "outputs": {}
+Required	Merge reports	  },
+Required	Merge reports	  "rust-velnor-actions-orchestrator": {
+Required	Merge reports	    "result": "cancelled",
+Required	Merge reports	    "outputs": {}
+Required	Merge reports	  },
+Required	Merge reports	  "rust-velnor-actions-rust": {
+Required	Merge reports	    "result": "success",
+Required	Merge reports	    "outputs": {}
+Required	Merge reports	  },
+Required	Merge reports	  "rust-velnor-actions-tofu": {
+Required	Merge reports	    "result": "success",
+Required	Merge reports	    "outputs": {}
+Required	Merge reports	  },
+Required	Merge reports	  "rust-velnor-actions-workflow-renderer": {
+Required	Merge reports	    "result": "success",
+Required	Merge reports	    "outputs": {}
+Required	Merge reports	  },
+Required	Merge reports	  "rust-velnor-archive-guard": {
+Required	Merge reports	    "result": "success",
+Required	Merge reports	    "outputs": {}
+Required	Merge reports	  },
+Required	Merge reports	  "rust-velnor-runner-cli": {
+Required	Merge reports	    "result": "success",
+Required	Merge reports	    "outputs": {}
+Required	Merge reports	  },
+Required	Merge reports	  "rust-velnor-runner-core": {
+Required	Merge reports	    "result": "success",
+Required	Merge reports	    "outputs": {}
+Required	Merge reports	  },
+Required	Merge reports	  "rust-velnor-runner-github": {
+Required	Merge reports	    "result": "success",
+Required	Merge reports	    "outputs": {}
+Required	Merge reports	  },
+Required	Merge reports	  "rust-velnor-runner-host": {
+Required	Merge reports	    "result": "success",
+Required	Merge reports	    "outputs": {}
+Required	Merge reports	  },
+Required	Merge reports	  "actionlint": {
+Required	Merge reports	    "result": "success",
+Required	Merge reports	    "outputs": {}
+Required	Merge reports	  },
+Required	Merge reports	  "alint": {
+Required	Merge reports	    "result": "success",
+Required	Merge reports	    "outputs": {}
+Required	Merge reports	  },
+Required	Merge reports	  "cargo-deny": {
+Required	Merge reports	    "result": "success",
+Required	Merge reports	    "outputs": {}
+Required	Merge reports	  },
+Required	Merge reports	  "cargo-machete": {
+Required	Merge reports	    "result": "success",
+Required	Merge reports	    "outputs": {}
+Required	Merge reports	  },
+Required	Merge reports	  "zizmor": {
+Required	Merge reports	    "result": "success",
+Required	Merge reports	    "outputs": {}
+Required	Merge reports	  }
+Required	Merge reports	}
+Required	Merge reports	2026-10-05T18:47:46.6609663Z   VELNOR_NEEDS_EXPECTED: ["actionlint","alint","cargo-deny","cargo-machete","plan","rust-velnor-actions-actionlint","rust-velnor-actions-cli","rust-velnor-actions-contract","rust-velnor-actions-mise","rust-velnor-actions-orchestrator","rust-velnor-actions-rust","rust-velnor-actions-tofu","rust-velnor-actions-workflow-renderer","rust-velnor-archive-guard","rust-velnor-runner-cli","rust-velnor-runner-core","rust-velnor-runner-github","rust-velnor-runner-host","zizmor"]
+Required	Merge reports	2026-10-05T18:47:46.6611319Z   VELNOR_REQUEST_FILE: /home/runner/work/_temp/velnor/request/merge-v1-request.json
+Required	Merge reports	2026-10-05T18:47:46.6611648Z ##[endgroup]
+Required	Merge reports	2026-10-05T18:47:46.6830570Z ##[error]Process completed with exit code 1.
+Required	Publish final report	﻿2026-10-05T18:47:46.6887382Z ##[group]Run actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+Required	Publish final report	2026-10-05T18:47:46.6887715Z with:
+Required	Publish final report	2026-10-05T18:47:46.6887896Z   if-no-files-found: error
+Required	Publish final report	2026-10-05T18:47:46.6888124Z   name: velnor-final-r37357012567-a1
+Required	Publish final report	2026-10-05T18:47:46.6888431Z   path: /home/runner/work/_temp/velnor/r37357012567-a1/final-report.json
+Required	Publish final report	2026-10-05T18:47:46.6888744Z   retention-days: 30
+Required	Publish final report	2026-10-05T18:47:46.6888941Z   compression-level: 6
+Required	Publish final report	2026-10-05T18:47:46.6889131Z   overwrite: false
+Required	Publish final report	2026-10-05T18:47:46.6889323Z   include-hidden-files: false
+Required	Publish final report	2026-10-05T18:47:46.6889532Z   archive: true
+Required	Publish final report	2026-10-05T18:47:46.6889708Z env:
+Required	Publish final report	2026-10-05T18:47:46.6889883Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+Required	Publish final report	2026-10-05T18:47:46.6890106Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+Required	Publish final report	2026-10-05T18:47:46.6890320Z   ACTIONS_RUNTIME_TOKEN: 
+Required	Publish final report	2026-10-05T18:47:46.6890526Z   CARGO_REGISTRY_TOKEN: 
+Required	Publish final report	2026-10-05T18:47:46.6890716Z   GH_CONFIG_DIR: 
+Required	Publish final report	2026-10-05T18:47:46.6890896Z   GH_HOST: 
+Required	Publish final report	2026-10-05T18:47:46.6891059Z   GH_TOKEN: 
+Required	Publish final report	2026-10-05T18:47:46.6891225Z   GITHUB_TOKEN: 
+Required	Publish final report	2026-10-05T18:47:46.6891462Z   MISE_AUTO_INSTALL: false
+Required	Publish final report	2026-10-05T18:47:46.6891665Z   MISE_EXEC_AUTO_INSTALL: false
+Required	Publish final report	2026-10-05T18:47:46.6893541Z   MISE_GITHUB_TOKEN: ***
+Required	Publish final report	2026-10-05T18:47:46.6893765Z   MISE_LOCKFILE: 0
+Required	Publish final report	2026-10-05T18:47:46.6893946Z   MISE_NO_CONFIG: 1
+Required	Publish final report	2026-10-05T18:47:46.6894125Z   MISE_NO_ENV: 1
+Required	Publish final report	2026-10-05T18:47:46.6894317Z   MISE_NO_HOOKS: 1
+Required	Publish final report	2026-10-05T18:47:46.6894489Z   NODE_AUTH_TOKEN: 
+Required	Publish final report	2026-10-05T18:47:46.6894659Z   NPM_TOKEN: 
+Required	Publish final report	2026-10-05T18:47:46.6894847Z   RUSTUP_TOOLCHAIN: 1.98.1
+Required	Publish final report	2026-10-05T18:47:46.6895178Z   MISE_LOG_LEVEL: info
+Required	Publish final report	2026-10-05T18:47:46.6895481Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-new/velnor-new
+Required	Publish final report	2026-10-05T18:47:46.6895773Z   MISE_YES: 1
+Required	Publish final report	2026-10-05T18:47:46.6895948Z ##[endgroup]
+Required	Publish final report	2026-10-05T18:47:46.8038250Z With the provided path, there will be 1 file uploaded
+Required	Publish final report	2026-10-05T18:47:46.8043162Z Artifact name is valid!
+Required	Publish final report	2026-10-05T18:47:46.8043720Z Root directory input is valid!
+Required	Publish final report	2026-10-05T18:47:47.1883773Z Uploading artifact: velnor-final-r37357012567-a1.zip
+Required	Publish final report	2026-10-05T18:47:47.1949037Z Beginning upload of artifact content to blob storage
+Required	Publish final report	2026-10-05T18:47:47.5046428Z Uploaded bytes 1491
+Required	Publish final report	2026-10-05T18:47:47.5840849Z Finished uploading artifact content to blob storage!
+Required	Publish final report	2026-10-05T18:47:47.5842072Z SHA256 digest of uploaded artifact is 2d5665eb368b776ebf58e8ea5230469fed2bc2318145b637febd58a5fd9ed4d3
+Required	Publish final report	2026-10-05T18:47:47.5844423Z Finalizing artifact upload
+Required	Publish final report	2026-10-05T18:47:48.0015210Z Artifact velnor-final-r37357012567-a1 successfully finalized. Artifact ID 11365881542
+Required	Publish final report	2026-10-05T18:47:48.0016304Z Artifact velnor-final-r37357012567-a1 has been successfully uploaded! Final size is 1491 bytes. Artifact ID is 11365881542
+Required	Publish final report	2026-10-05T18:47:48.0017451Z Artifact download URL: https://github.com/tailrocks/velnor-new/actions/runs/37357012567/artifacts/11365881542
+Required	Complete job	﻿2026-10-05T18:47:48.0154288Z Cleaning up orphan processes

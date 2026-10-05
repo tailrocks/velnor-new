@@ -1,0 +1,96 @@
+diff --git a/crates/velnor-actions-cli/examples/validate_commit_trailers.rs b/crates/velnor-actions-cli/examples/validate_commit_trailers.rs
+--- a/crates/velnor-actions-cli/examples/validate_commit_trailers.rs
++++ b/crates/velnor-actions-cli/examples/validate_commit_trailers.rs
+@@ -334,3 +334,7 @@
+-#[cfg(test)]
+-#[path = "../tests/support/validate_commit_trailers.rs"]
+-mod tests;
++#[cfg(test)]
++#[path = "../../test_support/git_fixture.rs"]
++mod git_fixture;
++
++#[cfg(test)]
++#[path = "../tests/support/validate_commit_trailers.rs"]
++mod tests;
+diff --git a/crates/velnor-actions-cli/tests/support/validate_commit_trailers.rs b/crates/velnor-actions-cli/tests/support/validate_commit_trailers.rs
+--- a/crates/velnor-actions-cli/tests/support/validate_commit_trailers.rs
++++ b/crates/velnor-actions-cli/tests/support/validate_commit_trailers.rs
+@@ -299,28 +299,11 @@
+     }
+ 
+     fn run_git(&self, arguments: &[&str]) -> io::Result<()> {
+-        let output = fixture_git_command(&self.root, &self.environment, arguments)?;
++        let output = git_fixture::command(&self.root)?.args(arguments).output()?;
+         if output.status.success() {
+             Ok(())
+         } else {
+             Err(io::Error::other("Git command failed for trailer fixture"))
+         }
+     }
+ }
+-
+-fn fixture_git_command(
+-    root: &Path,
+-    environment: &[(OsString, OsString)],
+-    arguments: &[&str],
+-) -> io::Result<std::process::Output> {
+-    let mut command = Command::new("git");
+-    command.env_clear();
+-    if let Some(path) = std::env::var_os("PATH") {
+-        command.env("PATH", path);
+-    }
+-    command
+-        .args(arguments)
+-        .current_dir(root)
+-        .envs(environment.iter().map(|(key, value)| (key, value)));
+-    command.output()
+-}
+diff --git a/crates/velnor-actions-cli/tests/impl_repo_deps.rs b/crates/velnor-actions-cli/tests/impl_repo_deps.rs
+--- a/crates/velnor-actions-cli/tests/impl_repo_deps.rs
++++ b/crates/velnor-actions-cli/tests/impl_repo_deps.rs
+@@ -53,6 +53,8 @@ const ALLOWED_EXTERNAL_DEPS: &[&str] = &[
+     // Test-only Rust scanners parse paths/imports; runtime adapters never
+     // depend on or invoke these analyzers. Syn 3 needs `printing` for spans.
+     "proc-macro2",
+     "syn",
++    // CLI trailer compatibility preserves Python Unicode word-boundary semantics.
++    "unicode-general-category",
+     // Reviewed HCL structural parser for the tofu stack (T10, S8):
+     // `hcl` renames `hcl-rs` 0.19.8 (Q1 pre-qualified; MSRV
+     // compile-gated at 1.98.1); default features only, facade-owned
+     // byte/count/depth caps, no expression evaluation.
+diff --git a/crates/velnor-actions-cli/tests/impl_cli_git_isolation.rs b/crates/velnor-actions-cli/tests/impl_cli_git_isolation.rs
+--- a/crates/velnor-actions-cli/tests/impl_cli_git_isolation.rs
++++ b/crates/velnor-actions-cli/tests/impl_cli_git_isolation.rs
+@@ -183,6 +183,24 @@ fn git_fixture_commands_require_shared_authority() -> Result<(), Box<dyn Error>> {
+     let crates = Path::new(env!("CARGO_MANIFEST_DIR"))
+         .parent()
+         .ok_or("missing crates directory")?;
+     let helper = crates.join("test_support/git_fixture.rs");
++    let identity_reader = crates.join("velnor-actions-cli/examples/validate_commit_trailers.rs");
++    let identity_source = std::fs::read_to_string(&identity_reader)?;
++    let direct_git = ["Command::new(", "\"git\")"].concat();
++    assert_eq!(
++        identity_source.matches(direct_git.as_str()).count(),
++        1,
++        "only the checked identity reader may launch Git"
++    );
++    let (_, identity_body) = identity_source
++        .split_once("fn git_identity(")
++        .ok_or("missing identity reader")?;
++    let (identity_body, _) = identity_body
++        .split_once("\nfn parse_git_identity(")
++        .ok_or("identity reader scope changed")?;
++    assert!(identity_body.contains(".arg(\"var\")"));
++    assert!(identity_body.contains(".arg(format!(\"GIT_{kind}_IDENT\"))"));
++    assert!(identity_body.contains(".env(\"GIT_OPTIONAL_LOCKS\", \"0\")"));
++    assert!(identity_body.contains("if isolated_fixture"));
++    assert!(identity_body.contains("command.env_clear()"));
+     let mut pending = vec![crates.to_path_buf()];
+@@ -193,1 +211,4 @@
+-            } else if path.extension().is_some_and(|value| value == "rs") && path != helper {
++            } else if path.extension().is_some_and(|value| path.extension().is_some_and(|value| value == "rs") && path != helper {
++                && path != identity_reader
++            {
+                 let source = std::fs::read_to_string(&path)?;
+                 let direct_git = ["Command::new(", "\"git\")"].concat();

@@ -1,0 +1,24 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.04s
+     Running tests/velnor_cli.rs (/root/.cache/velnor-task-targets/20261005/git-steward-validate-shell/target/debug/deps/velnor_cli-fd5fa9a36fee05a4)
+
+running 4 tests
+test impl_cli_tmp::isolation_tests::malformed_fixture_metadata_pointer_fails_before_spawn ... ok
+test impl_cli_tmp::isolation_tests::git_fixture_commands_require_shared_authority ... FAILED
+test impl_cli_tmp::isolation_tests::fixture_git_ignores_inherited_authority ... ok
+test impl_cli_tmp::isolation_tests::fixture_git_resolves_linked_worktree_metadata ... ok
+
+failures:
+
+---- impl_cli_tmp::isolation_tests::git_fixture_commands_require_shared_authority stdout ----
+
+thread 'impl_cli_tmp::isolation_tests::git_fixture_commands_require_shared_authority' (1783254) panicked at crates/velnor-actions-cli/tests/impl_cli_git_isolation.rs:224:17:
+/tmp/velnor-release-intent-guard-af82-candidate-20261005/crates/velnor-actions-orchestrator/tests/impl_discovery_cache.rs bypasses fixture Git isolation
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    impl_cli_tmp::isolation_tests::git_fixture_commands_require_shared_authority
+
+test result: FAILED. 3 passed; 1 failed; 0 ignored; 0 measured; 239 filtered out; finished in 0.03s
+
+error: test failed, to rerun pass `-p velnor-actions-cli --test velnor_cli`

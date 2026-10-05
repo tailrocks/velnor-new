@@ -1,0 +1,10 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.05s
+     Running tests/velnor_orchestrator.rs (/root/.cache/velnor-task-targets/20261005/no_python_policy-profile-split-joined-target/debug/deps/velnor_orchestrator-6d174f9c7abd565a)
+
+running 1 test
+Initialized empty Git repository in /tmp/.tmp3nn0nA/.git/
+Initialized empty Git repository in /tmp/.tmpXaWYWJ/.git/
+test impl_wire_w1::w1_runs_on_hosted_labels_only ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 694 filtered out; finished in 0.12s
+

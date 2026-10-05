@@ -1,0 +1,359 @@
+    Checking velnor-runner-host v0.1.0 (/root/.cache/velnor-task-targets/20261005/pr92-schema-fix-7be34/merged-main-tree-v2/crates/velnor-runner/crates/velnor-runner-host)
+error: used `assert!` to check that a value is empty
+  --> crates/velnor-runner-host/src/launch/busy_slot_tests.rs:81:5
+   |
+81 |     assert!(script.calls.is_empty());
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+   = note: `-D clippy::assert-is-empty` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(clippy::assert_is_empty)]`
+help: use `assert_eq!` to show the value on failure
+   |
+81 -     assert!(script.calls.is_empty());
+81 +     assert_eq!(script.calls, [] as [&str; 0]);
+   |
+
+error: used `assert!` to check that a value is empty
+  --> crates/velnor-runner-host/src/launch/subject_tests.rs:76:5
+   |
+76 |     assert!(replay.calls.is_empty());
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+help: use `assert_eq!` to show the value on failure
+   |
+76 -     assert!(replay.calls.is_empty());
+76 +     assert_eq!(replay.calls, [] as [&str; 0]);
+   |
+
+error: used `assert!` to check that a value is empty
+  --> crates/velnor-runner-host/src/launch/turn/progress_tests.rs:91:5
+   |
+91 |     assert!(workers.is_empty());
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+help: use `assert_eq!` to show the value on failure
+   |
+91 -     assert!(workers.is_empty());
+91 +     assert_eq!(workers, [] as [worker::Started; 0]);
+   |
+
+error: used `assert!` to check that a value is empty
+   --> crates/velnor-runner-host/src/launch/turn/progress_tests.rs:120:5
+    |
+120 |     assert!(workers.is_empty());
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+help: use `assert_eq!` to show the value on failure
+    |
+120 -     assert!(workers.is_empty());
+120 +     assert_eq!(workers, [] as [worker::Started; 0]);
+    |
+
+error: used `assert!` to check that a value is empty
+  --> crates/velnor-runner-host/src/launch/turn/start_tests/legacy_failed.rs:63:5
+   |
+63 |     assert!(script.calls.is_empty());
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+help: use `assert_eq!` to show the value on failure
+   |
+63 -     assert!(script.calls.is_empty());
+63 +     assert_eq!(script.calls, [] as [&str; 0]);
+   |
+
+error: used `assert!` to check that a value is empty
+  --> crates/velnor-runner-host/src/launch/turn/start_tests/legacy_failed.rs:64:5
+   |
+64 |     assert!(workers.is_empty());
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+help: use `assert_eq!` to show the value on failure
+   |
+64 -     assert!(workers.is_empty());
+64 +     assert_eq!(workers, [] as [worker::Started; 0]);
+   |
+
+error: used `assert!` to check that a value is empty
+  --> crates/velnor-runner-host/src/launch/turn/start_tests.rs:77:5
+   |
+77 |     assert!(workers.is_empty());
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+help: use `assert_eq!` to show the value on failure
+   |
+77 -     assert!(workers.is_empty());
+77 +     assert_eq!(workers, [] as [worker::Started; 0]);
+   |
+
+error: used `assert!` to check that a value is empty
+   --> crates/velnor-runner-host/src/launch/turn/start_tests.rs:124:5
+    |
+124 |     assert!(script.calls.is_empty());
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+help: use `assert_eq!` to show the value on failure
+    |
+124 -     assert!(script.calls.is_empty());
+124 +     assert_eq!(script.calls, [] as [&str; 0]);
+    |
+
+error: used `assert!` to check that a value is empty
+   --> crates/velnor-runner-host/src/launch/turn/start_tests.rs:125:5
+    |
+125 |     assert!(workers.is_empty());
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+help: use `assert_eq!` to show the value on failure
+    |
+125 -     assert!(workers.is_empty());
+125 +     assert_eq!(workers, [] as [worker::Started; 0]);
+    |
+
+error: used `assert!` to check that a value is empty
+   --> crates/velnor-runner-host/src/launch/turn/start_tests.rs:210:5
+    |
+210 | /     assert!(
+211 | |         journal
+212 | |             .rows()
+213 | |             .await
+214 | |             .map_err(|error| error.to_string())?
+215 | |             .is_empty()
+216 | |     );
+    | |_____^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+help: use `assert_eq!` to show the value on failure
+    |
+210 ~     assert_eq!(
+211 ~         journal
+212 +             .rows()
+213 +             .await
+214 +             .map_err(|error| error.to_string())?, [] as [reconcile::IntentRow; 0]
+    |
+
+error: used `assert!` to check that a value is empty
+   --> crates/velnor-runner-host/src/launch/turn/start_tests.rs:261:5
+    |
+261 |     assert!(workers.is_empty());
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+help: use `assert_eq!` to show the value on failure
+    |
+261 -     assert!(workers.is_empty());
+261 +     assert_eq!(workers, [] as [worker::Started; 0]);
+    |
+
+error: used `assert!` to check that a value is empty
+   --> crates/velnor-runner-host/src/launch/turn/start_tests.rs:324:5
+    |
+324 |     assert!(script.calls.is_empty());
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+help: use `assert_eq!` to show the value on failure
+    |
+324 -     assert!(script.calls.is_empty());
+324 +     assert_eq!(script.calls, [] as [&str; 0]);
+    |
+
+error: used `assert!` to check that a value is empty
+   --> crates/velnor-runner-host/src/launch/turn/start_tests.rs:325:5
+    |
+325 |     assert!(workers.is_empty());
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+help: use `assert_eq!` to show the value on failure
+    |
+325 -     assert!(workers.is_empty());
+325 +     assert_eq!(workers, [] as [worker::Started; 0]);
+    |
+
+error: used `assert!` to check that a value is empty
+   --> crates/velnor-runner-host/src/worker/volumes_tests.rs:170:5
+    |
+170 |     assert!(requests.is_empty());
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+help: use `assert_eq!` to show the value on failure
+    |
+170 -     assert!(requests.is_empty());
+170 +     assert_eq!(requests, [] as [std::string::String; 0]);
+    |
+
+error: used `assert!` to check that a value is empty
+   --> crates/velnor-runner-host/src/launch_backfill_tests.rs:214:5
+    |
+214 |     assert!(engine.removed().map_err(|err| err.to_string())?.is_empty());
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+help: use `assert_eq!` to show the value on failure
+    |
+214 -     assert!(engine.removed().map_err(|err| err.to_string())?.is_empty());
+214 +     assert_eq!(engine.removed().map_err(|err| err.to_string())?, [] as [std::string::String; 0]);
+    |
+
+error: used `assert!` to check that a value is empty
+   --> crates/velnor-runner-host/src/launch_backfill_tests.rs:215:5
+    |
+215 | /     assert!(
+216 | |         engine
+217 | |             .removed_volumes()
+218 | |             .map_err(|err| err.to_string())?
+219 | |             .is_empty()
+220 | |     );
+    | |_____^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+help: use `assert_eq!` to show the value on failure
+    |
+215 ~     assert_eq!(
+216 ~         engine
+217 +             .removed_volumes()
+218 +             .map_err(|err| err.to_string())?, [] as [std::string::String; 0]
+    |
+
+error: used `assert!` to check that a value is empty
+   --> crates/velnor-runner-host/src/launch_backfill_tests.rs:251:5
+    |
+251 |     assert!(engine.removed().map_err(|err| err.to_string())?.is_empty());
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+help: use `assert_eq!` to show the value on failure
+    |
+251 -     assert!(engine.removed().map_err(|err| err.to_string())?.is_empty());
+251 +     assert_eq!(engine.removed().map_err(|err| err.to_string())?, [] as [std::string::String; 0]);
+    |
+
+error: used `assert!` to check that a value is empty
+  --> crates/velnor-runner-host/src/launch_scale_tests.rs:80:5
+   |
+80 |     assert!(script.calls.is_empty());
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+help: use `assert_eq!` to show the value on failure
+   |
+80 -     assert!(script.calls.is_empty());
+80 +     assert_eq!(script.calls, [] as [&str; 0]);
+   |
+
+error: used `assert!` to check that a value is empty
+   --> crates/velnor-runner-host/src/launch_scale_tests.rs:120:5
+    |
+120 |     assert!(script.calls.is_empty());
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+help: use `assert_eq!` to show the value on failure
+    |
+120 -     assert!(script.calls.is_empty());
+120 +     assert_eq!(script.calls, [] as [&str; 0]);
+    |
+
+error: used `assert!` to check that a value is empty
+   --> crates/velnor-runner-host/src/launch_tests.rs:197:5
+    |
+197 |     assert!(replay.calls.is_empty());
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+help: use `assert_eq!` to show the value on failure
+    |
+197 -     assert!(replay.calls.is_empty());
+197 +     assert_eq!(replay.calls, [] as [&str; 0]);
+    |
+
+error: used `assert!` to check that a value is empty
+  --> crates/velnor-runner-host/src/launch_worker_cleanup_tests.rs:58:5
+   |
+58 |     assert!(engine.removed().map_err(|err| err.to_string())?.is_empty());
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+help: use `assert_eq!` to show the value on failure
+   |
+58 -     assert!(engine.removed().map_err(|err| err.to_string())?.is_empty());
+58 +     assert_eq!(engine.removed().map_err(|err| err.to_string())?, [] as [std::string::String; 0]);
+   |
+
+error: used `assert!` to check that a value is empty
+  --> crates/velnor-runner-host/src/launch_worker_cleanup_tests.rs:59:5
+   |
+59 | /     assert!(
+60 | |         engine
+61 | |             .removed_volumes()
+62 | |             .map_err(|err| err.to_string())?
+63 | |             .is_empty()
+64 | |     );
+   | |_____^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+help: use `assert_eq!` to show the value on failure
+   |
+59 ~     assert_eq!(
+60 ~         engine
+61 +             .removed_volumes()
+62 +             .map_err(|err| err.to_string())?, [] as [std::string::String; 0]
+   |
+
+error: used `assert!` to check that a value is empty
+  --> crates/velnor-runner-host/src/launch_worker_cleanup_tests.rs:85:5
+   |
+85 |     assert!(engine.removed().map_err(|err| err.to_string())?.is_empty());
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+help: use `assert_eq!` to show the value on failure
+   |
+85 -     assert!(engine.removed().map_err(|err| err.to_string())?.is_empty());
+85 +     assert_eq!(engine.removed().map_err(|err| err.to_string())?, [] as [std::string::String; 0]);
+   |
+
+error: used `assert!` to check that a value is empty
+   --> crates/velnor-runner-host/src/launch_worker_cleanup_tests.rs:261:5
+    |
+261 |     assert!(engine.removed().map_err(|err| err.to_string())?.is_empty());
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+help: use `assert_eq!` to show the value on failure
+    |
+261 -     assert!(engine.removed().map_err(|err| err.to_string())?.is_empty());
+261 +     assert_eq!(engine.removed().map_err(|err| err.to_string())?, [] as [std::string::String; 0]);
+    |
+
+error: used `assert!` to check that a value is empty
+   --> crates/velnor-runner-host/src/launch_worker_cleanup_tests.rs:283:5
+    |
+283 | /     assert!(
+284 | |         engine
+285 | |             .removed_volumes()
+286 | |             .map_err(|err| err.to_string())?
+287 | |             .is_empty()
+288 | |     );
+    | |_____^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+help: use `assert_eq!` to show the value on failure
+    |
+283 ~     assert_eq!(
+284 ~         engine
+285 +             .removed_volumes()
+286 +             .map_err(|err| err.to_string())?, [] as [std::string::String; 0]
+    |
+
+error: could not compile `velnor-runner-host` (lib test) due to 25 previous errors

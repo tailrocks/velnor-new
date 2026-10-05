@@ -1,0 +1,41 @@
+   Compiling velnor-actions-workflow-renderer v0.1.0 (/tmp/velnor-impl-20261005/cache/pr38/crates/velnor-actions-workflow-renderer)
+   Compiling velnor-actions-orchestrator v0.1.0 (/tmp/velnor-impl-20261005/cache/pr38/crates/velnor-actions-orchestrator)
+   Compiling velnor-actions-cli v0.1.0 (/tmp/velnor-impl-20261005/cache/pr38/crates/velnor-actions-cli)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 13.11s
+────────────
+ Nextest run ID 87561e21-0722-45ba-b8b4-7b9f5ea77401 with nextest profile: default
+    Starting 2 tests across 5 binaries (1317 tests skipped)
+       START [         ] (1/2) velnor-actions-cli::velnor_cli impl_cli_tofu_capacity::cli_schema2_paired_tofu_stays_within_capacity_and_fails_closed
+
+running 1 test
+perf: op=cli-generate schema=2 mode=both roots=60 ci_bytes=457255
+perf: op=cli-generate schema=2 mode=both roots=100 failed_closed_bytes=752495 limit_bytes=500000
+test impl_cli_tofu_capacity::cli_schema2_paired_tofu_stays_within_capacity_and_fails_closed ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 237 filtered out; finished in 2.56s
+
+        PASS [   2.571s] (1/2) velnor-actions-cli::velnor_cli impl_cli_tofu_capacity::cli_schema2_paired_tofu_stays_within_capacity_and_fails_closed
+       START [         ] (2/2) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t24_scale::tofu_generate_scales_with_root_count
+
+running 1 test
+Initialized empty Git repository in /tmp/.tmp2T9xJ5/.git/
+perf: op=generate roots=1 prepare_ms=13 generate_ms=278 files=9 ci_bytes=22548
+Initialized empty Git repository in /tmp/.tmp3yYH1j/.git/
+perf: op=generate roots=10 prepare_ms=29 generate_ms=431 files=9 ci_bytes=94407
+Initialized empty Git repository in /tmp/.tmpkGdKJW/.git/
+perf: op=generate roots=31 prepare_ms=60 generate_ms=745 files=9 ci_bytes=262176
+Initialized empty Git repository in /tmp/.tmpXX2LuM/.git/
+perf: op=generate roots=32 prepare_ms=48 generate_ms=727 files=9 ci_bytes=270165
+Initialized empty Git repository in /tmp/.tmp5nGbzJ/.git/
+perf: op=generate roots=40 prepare_ms=67 generate_ms=802 files=9 ci_bytes=334077
+Initialized empty Git repository in /tmp/.tmpHrOvGv/.git/
+perf: op=generate roots=60 prepare_ms=76 generate_ms=1077 files=9 ci_bytes=493857
+Initialized empty Git repository in /tmp/.tmprUQrJw/.git/
+perf: op=generate roots=100 prepare_ms=137 generate_ms=149 failed_closed_bytes=813417 limit_bytes=500000
+test impl_tofu_t24_scale::tofu_generate_scales_with_root_count ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 666 filtered out; finished in 4.71s
+
+        PASS [   4.715s] (2/2) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t24_scale::tofu_generate_scales_with_root_count
+────────────
+     Summary [   7.288s] 2 tests run: 2 passed, 1317 skipped

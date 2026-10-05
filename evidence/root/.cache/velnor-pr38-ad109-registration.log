@@ -1,0 +1,7 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.05s
+────────────
+ Nextest run ID c698ee2e-0a75-426b-be5a-8f14cf6c5ccb with nextest profile: default
+    Starting 1 test across 2 binaries (247 tests skipped)
+        PASS [   8.645s] (1/1) velnor-actions-cli::velnor_cli impl_repo_test_registration::cargo_targets_register_every_test_bearing_source
+────────────
+     Summary [   8.646s] 1 test run: 1 passed, 247 skipped

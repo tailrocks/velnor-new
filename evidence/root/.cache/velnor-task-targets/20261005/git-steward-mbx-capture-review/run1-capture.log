@@ -1,0 +1,11 @@
+cwd=/root/.cache/velnor-task-targets/20261005/git-steward-mbx-capture-review/run1
+binary=/root/.cache/velnor-task-targets/20261005/git-steward-mbx-postfix-target/debug/velnor-actions
+TMPDIR=/var/tmp/velnor-pr12-capture1.irSzz8
+ea63c3f0cfcc2865a73e45dc112f090b5458f5d362b0cb52e00a838c4366c9c4  /root/.cache/velnor-task-targets/20261005/git-steward-mbx-postfix-target/debug/velnor-actions
+captured nested (plan exit 0)
+captured mbx-nextest (plan exit 0)
+captured empty-suite (plan exit 0)
+captured minimal-cargo (plan exit 0)
+captured dogfood (plan exit 0, tree DIFFERS)
+FAIL: dogfood generated workflows are not identical to repository workflows
+retaining failed golden workspace: /var/tmp/velnor-pr12-capture1.irSzz8/velnor-goldens-work.GsMCI3

@@ -1,0 +1,6 @@
+mise by @jdx – installing 1 tool
+mise ⇢ rust@1.98.1  385ms · already installed
+mise ████████████████ 1/1 · installed 0 tools · 1 already installed in 386ms
+   Compiling velnor-archive-guard v0.1.0 (/tmp/velnor-pr12-foundation-20261005/crates/velnor-archive-guard)
+    Checking velnor-actions-cli v0.1.0 (/tmp/velnor-pr12-foundation-20261005/crates/velnor-actions-cli)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.49s

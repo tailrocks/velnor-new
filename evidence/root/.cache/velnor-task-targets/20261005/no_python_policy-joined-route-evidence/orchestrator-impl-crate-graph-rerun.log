@@ -1,0 +1,20 @@
+   Compiling velnor-actions-orchestrator v0.1.0 (/root/.cache/velnor-task-targets/20261005/no_python_policy-joined-pin-test-20261005/crates/velnor-actions-orchestrator)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.51s
+     Running tests/velnor_orchestrator.rs (/root/.cache/velnor-task-targets/20261005/no_python_policy-joined-route-target/debug/deps/velnor_orchestrator-6d174f9c7abd565a)
+
+running 6 tests
+Initialized empty Git repository in /tmp/.tmpbKiNTV/.git/
+Initialized empty Git repository in /tmp/.tmpj4ulZI/.git/
+Initialized empty Git repository in /tmp/.tmpJWzSPY/.git/
+Initialized empty Git repository in /tmp/.tmp8kgUNO/.git/
+Initialized empty Git repository in /tmp/.tmp3CKzIC/.git/
+Initialized empty Git repository in /tmp/.tmpaRsTCQ/.git/
+test impl_crate_graph::w1_crate_prepare_and_obligations_share_toolchain_union ... ok
+test impl_crate_graph::w1_crate_job_prepares_pinned_tools ... ok
+test impl_crate_graph::w1_crate_cache_v1_emits_no_cache_steps ... ok
+test impl_crate_graph::w1_crate_jobs_group_obligations_per_crate ... ok
+test impl_crate_graph::w1_crate_prepare_adds_mbx_driver ... ok
+test impl_crate_graph::nested_mbx_nextest_fixture_uses_action_without_mise_selector ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 689 filtered out; finished in 0.06s
+

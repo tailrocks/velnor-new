@@ -1,0 +1,25 @@
+--- /root/.cache/velnor-task-targets/20261005/shared-script-compaction-a-evidence/e608-live-content.manifest	2026-10-05 19:25:32.442621789 +0200
++++ /root/.cache/velnor-task-targets/20261005/shared-script-compaction-a-evidence/e608-adapted-copy-content.manifest	2026-10-05 19:25:32.634620763 +0200
+@@ -863,6 +863,13 @@
+ e407d12d83a36e3541c80389adcb3fff1f35aac0e594ebd7a243d76c1c4ba2c2  ./crates/velnor-actions-workflow-renderer/src/document.rs
+ db2a63f31c89d21591fd76be62289de9247c1c84e33833ac4e460424b966ed70  ./crates/velnor-actions-workflow-renderer/src/document_lanes.rs
+ 7ae4e38170a77af0ae2c94e85c13e5142a1f5dff47ceb89948551c5cb79cd7fe  ./crates/velnor-actions-workflow-renderer/src/document_runner_shell_tests.rs
++3643f8bbc83eeba8a4f94447f4067de44fa969acb1768a50cf186808b366afc6  ./crates/velnor-actions-workflow-renderer/src/document_shared_scripts.rs
++970be2f32c0756631a8a0fedca0f5a3047fea52d00d5e8d6b37296d3cc54340a  ./crates/velnor-actions-workflow-renderer/src/document_shared_scripts_execution_outcomes.rs
++2a383abb98bfdeb0f3a5e8101a556a7b1c521f28d14a1bf858618c83a3e08980  ./crates/velnor-actions-workflow-renderer/src/document_shared_scripts_execution_signal.rs
++532c5e5c59973462dfe12b0f969d3713d734588f6ce7ba06ea3872f7a05e0c17  ./crates/velnor-actions-workflow-renderer/src/document_shared_scripts_execution_support.rs
++777459d8e7f33d22cb7cb834ec2845929de19257c01d7f063ad70509311b6b83  ./crates/velnor-actions-workflow-renderer/src/document_shared_scripts_execution_support_tests.rs
++2229f82764353c7efd2866e921da4fb2d4544ffbad1682c02608c8ca5d253d8b  ./crates/velnor-actions-workflow-renderer/src/document_shared_scripts_execution_tests.rs
++4660fb64e57e3852df6b427c1c3dcf99094a2f37a11d7daba52d683612e232d9  ./crates/velnor-actions-workflow-renderer/src/document_shared_scripts_tests.rs
+ 124c18d8cb41d32c140252515ffa2007a1a7fd3f91e9459a461369ab55e80107  ./crates/velnor-actions-workflow-renderer/src/document_steps.rs
+ 8dfd95aa64f792522c8efdd6731a3ef3f5a8de724845650c373e07082378c55e  ./crates/velnor-actions-workflow-renderer/src/document_verification_env_tests.rs
+ c18e801a3dfe71de7b1af85dc049aea3a6db264ab897ee9691ef6381d9ab8407  ./crates/velnor-actions-workflow-renderer/src/error.rs
+@@ -894,7 +901,7 @@
+ d54cc40918fde8798a4479c8b737ba51352198055b88701444a138e8f3e3a8d9  ./crates/velnor-actions-workflow-renderer/src/release_spec.rs
+ 382d3da4b200872571b11a8549d730c7eec73880e4c82abd6a5db47c23eb995b  ./crates/velnor-actions-workflow-renderer/src/release_tree.rs
+ db9c276d583b34f0e84e1d57b7b64526a8e760250fdc320dd6152ec5984c4d2f  ./crates/velnor-actions-workflow-renderer/src/release_validators.rs
+-27898bc8b35f3c5c09bbadbd416a6cd45a9311cd3e1424f957d5d8729bc1f4d7  ./crates/velnor-actions-workflow-renderer/src/render.rs
++6b61f7f4c76b28141818d883a89dbaf88207d46fe25c73fb29c76d73e5c6557b  ./crates/velnor-actions-workflow-renderer/src/render.rs
+ 3ffab1b05ff2d4338725f4f8814050c737655a4d325fe00ab386e86b0047e906  ./crates/velnor-actions-workflow-renderer/src/runs_on.rs
+ 49c5007b8008c44a8d2d3d23754e943bb6e2eff777bbd8dc1b6127d21a393141  ./crates/velnor-actions-workflow-renderer/src/schema2.rs
+ 3196c0fa291688611bd8279649ff43b1bcea8af29873d49469d86d8c51a7bf13  ./crates/velnor-actions-workflow-renderer/src/schema2_class_steps.rs

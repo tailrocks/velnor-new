@@ -1,0 +1,19 @@
+--- Repository-level -----------------------------------------------------------
+  i  info     oss-security-policy-exists
+              Consider adding a SECURITY.md so vulnerability reporters know
+              where to disclose.
+              docs: https://docs.github.com/en/code-security/getting-started/adding-a-security-policy-to-your-repository
+  i  info     oss-code-of-conduct-exists
+              Consider adding a CODE_OF_CONDUCT.md.
+              docs: https://www.contributor-covenant.org/
+  i  info     rust-toolchain-pinned
+              Pinning a toolchain (rust-toolchain.toml) makes local and CI
+              builds reproducible.
+
+--- scripts/__pycache__ --------------------------------------------------------
+  x  error    hygiene-no-python-cache
+              Python caches and virtualenvs must not be committed.
+
+Summary (4 violations):
+  x 1 error   i 3 info
+  49 passing * 4 failing

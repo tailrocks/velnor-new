@@ -1,0 +1,32 @@
+{
+  "command": "/usr/bin/env -i PATH=/usr/bin:/bin LC_ALL=C /usr/bin/timeout --signal=TERM --kill-after=5s 30s /usr/bin/python3 -I -S /root/.velnor-generator-preview-20261005/jackin-source-fetch-0cf350-process-group-fixture-v1.py",
+  "end_utc": "2026-10-05T12:51:31Z",
+  "exit_code": 0,
+  "fetch_source": {
+    "commit": "0cf350be6a66fd1316239452a718e890c051ad23",
+    "sha256": "987a80a88842db29c014bedaab372bb87df913c020e95e656d241b7df2dd6474",
+    "tree": "b6d59a8bd853fa1087b4d085605ab088056d4eee"
+  },
+  "fixture_sha256": "898dd60653775dbacde46429eae2c78de4c4623b53f71743436ba6c5c857b3af",
+  "network": "none",
+  "process_group_cases": {
+    "nonzero_exit": {
+      "leader_pid": 650941,
+      "descendant_pid": 650942,
+      "leader_state": "GONE",
+      "descendant_state": "GONE",
+      "result": "PASS"
+    },
+    "timeout": {
+      "leader_pid": 650852,
+      "descendant_pid": 650853,
+      "leader_state": "GONE",
+      "descendant_state": "GONE",
+      "result": "PASS"
+    }
+  },
+  "result": "PASS",
+  "scratch": "/root/.velnor-generator-preview-20261005/jackin-fetch-process-group-fixture-v1-pnu_asmg",
+  "scope": "Locally constructed fake Git parent/descendant processes only. No network, authenticated Git, source fetch, account, container, build, or generator ran.",
+  "start_utc": "2026-10-05T12:51:29Z"
+}

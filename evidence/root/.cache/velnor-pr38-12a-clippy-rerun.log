@@ -1,0 +1,20 @@
+    Checking velnor-actions-workflow-renderer v0.1.1 (/tmp/velnor-impl-20261005/cache/pr38/crates/velnor-actions-workflow-renderer)
+   Compiling velnor-archive-guard v0.1.1 (/tmp/velnor-impl-20261005/cache/pr38/crates/velnor-archive-guard)
+error: item in documentation is missing backticks
+   --> crates/velnor-actions-workflow-renderer/src/cache_elect.rs:134:11
+    |
+134 | /// Every OpenTofu job restores its own root key read-only; exactly one
+    |           ^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.98.0/index.html#doc_markdown
+    = note: `-D clippy::doc-markdown` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::doc_markdown)]`
+help: try
+    |
+134 - /// Every OpenTofu job restores its own root key read-only; exactly one
+134 + /// Every `OpenTofu` job restores its own root key read-only; exactly one
+    |
+
+error: could not compile `velnor-actions-workflow-renderer` (lib) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `velnor-actions-workflow-renderer` (lib test) due to 1 previous error

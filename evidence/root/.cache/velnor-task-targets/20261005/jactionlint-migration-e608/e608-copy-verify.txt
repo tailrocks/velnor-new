@@ -1,0 +1,24 @@
+source_identity
+commit=e608f82039375a4c2a839d5229e1d2dd3035617b
+tree=f5c63ac98f7d79d68eb9448c6ff9600a872d0c2a
+source=/root/.cache/velnor-task-targets/20261005/pr12-e608-source-snapshot/source
+archive=/root/.cache/velnor-task-targets/20261005/pr12-e608-source-snapshot/source.tar
+
+source_tar_sha256=35658bb12b0f725f5cfe51ebe7c0c2bbf4109d1d8310affacd94aca2490f7f12  /root/.cache/velnor-task-targets/20261005/jactionlint-migration-e608/source.tar
+
+regular_manifest_entries=1524
+
+manifest_check_tail:
+./scripts/tests/test_validate_commit_trailers.py: OK
+./scripts/validate-commit-trailers.py: OK
+./scripts/verify-local.sh: OK
+./velnor-actions-ci-performance-goal.md: OK
+./velnor-actions-ci-performance-spec.md: OK
+
+official_binary_version=1.8.2
+installed by downloading from release page
+built with go1.27.1 compiler for linux/amd64
+
+official_binary_sha256=b8394379553597a292d9f5a44d19bc32e9dac97066b9199e64a6efa17c10ac1c  /root/.cache/velnor-task-targets/20261005/jactionlint-migration-e608/tools/jactionlint
+
+source_workflow_baseline=exit=0

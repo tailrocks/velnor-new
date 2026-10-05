@@ -1,0 +1,21 @@
+   Compiling velnor-actions-orchestrator v0.1.0 (/root/.cache/velnor-task-targets/20261005/no_python_policy-profile-split-joined-20261005/crates/velnor-actions-orchestrator)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.26s
+     Running tests/velnor_orchestrator.rs (/root/.cache/velnor-task-targets/20261005/no_python_policy-profile-split-joined-target/debug/deps/velnor_orchestrator-6d174f9c7abd565a)
+
+running 1 test
+Initialized empty Git repository in /tmp/.tmp5IZymW/.git/
+Initialized empty Git repository in /tmp/.tmptNzS9X/.git/
+test impl_wire_w1::w1_runs_on_hosted_labels_only ... FAILED
+
+failures:
+
+---- impl_wire_w1::w1_runs_on_hosted_labels_only stdout ----
+Error: Render { problem: "invalid workflow: missing_scrub:mise-phase0-linux:Fetch locked Rust sources" }
+
+
+failures:
+    impl_wire_w1::w1_runs_on_hosted_labels_only
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 694 filtered out; finished in 0.10s
+
+error: test failed, to rerun pass `-p velnor-actions-orchestrator --test velnor_orchestrator`

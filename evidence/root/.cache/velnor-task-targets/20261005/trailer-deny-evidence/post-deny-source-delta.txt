@@ -1,0 +1,8 @@
+Files /root/.cache/velnor-task-targets/20261005/git-steward-main-2217ad1-source-snapshot-20261005/source/Cargo.lock and ./Cargo.lock differ
+Files /root/.cache/velnor-task-targets/20261005/git-steward-main-2217ad1-source-snapshot-20261005/source/crates/velnor-actions-cli/Cargo.toml and ./crates/velnor-actions-cli/Cargo.toml differ
+Only in ./crates/velnor-actions-cli: examples
+Only in ./crates/velnor-actions-cli/tests: support
+Files /root/.cache/velnor-task-targets/20261005/git-steward-main-2217ad1-source-snapshot-20261005/source/docs/implemented/codex-agent-configuration.md and ./docs/implemented/codex-agent-configuration.md differ
+Files /root/.cache/velnor-task-targets/20261005/git-steward-main-2217ad1-source-snapshot-20261005/source/docs/implemented/commit-trailer-evidence.md and ./docs/implemented/commit-trailer-evidence.md differ
+Only in /root/.cache/velnor-task-targets/20261005/git-steward-main-2217ad1-source-snapshot-20261005/source/scripts/tests: test_validate_commit_trailers.py
+Only in /root/.cache/velnor-task-targets/20261005/git-steward-main-2217ad1-source-snapshot-20261005/source/scripts: validate-commit-trailers.py

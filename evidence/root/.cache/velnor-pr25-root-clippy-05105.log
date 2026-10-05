@@ -1,0 +1,6 @@
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+   Compiling velnor-archive-guard v0.1.1 (/root/.cache/velnor-pr25-aggregate-20261005/crates/velnor-archive-guard)
+    Checking velnor-actions-cli v0.1.1 (/root/.cache/velnor-pr25-aggregate-20261005/crates/velnor-actions-cli)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.85s

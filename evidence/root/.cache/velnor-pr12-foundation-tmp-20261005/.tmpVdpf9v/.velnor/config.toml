@@ -1,0 +1,4 @@
+schema = 1
+[workflow]
+name = "CI"
+default_branch = "testmain"

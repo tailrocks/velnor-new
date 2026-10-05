@@ -1,0 +1,15 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running tests/velnor_mise.rs (/root/.cache/velnor-task-targets/20261005/no_python_policy-103-rust199-target/debug/deps/velnor_mise-6f150b35bd5a247f)
+
+running 4 tests
+test impl_miserc_isolation::affected_release_controls_fail_for_both_no_config_selectors ... mise qualification binary: release=2026.10.1 source=050ce5a20287a0aafd872b1191699a5fdafff5ac sha256=31e6859cf639ed4594906da3fcd0fe2055e9daddae75e9786dbe50b3fb3c0f4a path=/root/.local/bin/mise
+ok
+test impl_miserc_isolation::fixed_release_flag_and_environment_matrix_skips_all_miserc_layers ... mise qualification binary: release=2026.10.3 source=33a839a4d19acca617bc9ec0fe53f61266d60a9d sha256=8d48bc510b7d844fad0bc7156c0855c2a1e7230c51e498a7f6b63b021f8b57c5 path=/root/.cache/velnor-task-targets/20261005/no_python_policy-103-evidence/mise-v2026.10.3-linux-x64
+ok
+test impl_miserc_isolation::no_selector_controls_reach_each_malformed_config_layer ... mise qualification binary: release=2026.10.3 source=33a839a4d19acca617bc9ec0fe53f61266d60a9d sha256=8d48bc510b7d844fad0bc7156c0855c2a1e7230c51e498a7f6b63b021f8b57c5 path=/root/.cache/velnor-task-targets/20261005/no_python_policy-103-evidence/mise-v2026.10.3-linux-x64
+ok
+test impl_miserc_isolation::product::production_command_keeps_no_config_guards_with_a_real_binary ... mise qualification binary: release=2026.10.3 source=33a839a4d19acca617bc9ec0fe53f61266d60a9d sha256=8d48bc510b7d844fad0bc7156c0855c2a1e7230c51e498a7f6b63b021f8b57c5 path=/root/.cache/velnor-task-targets/20261005/no_python_policy-103-evidence/mise-v2026.10.3-linux-x64
+ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 353 filtered out; finished in 2.42s
+

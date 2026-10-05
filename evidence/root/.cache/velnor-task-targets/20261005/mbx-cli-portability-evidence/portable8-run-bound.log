@@ -1,0 +1,14 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s
+────────────
+ Nextest run ID ec4dbe17-aaae-436a-a982-4dfe749a3527 with nextest profile: default
+    Starting 8 tests across 2 binaries (361 tests skipped)
+        PASS [   1.961s] (1/8) velnor-actions-workflow-renderer stock_mbx_bundle_cli_tests::failure_tests::generated_export_failure_skips_cache_save
+        PASS [   0.394s] (2/8) velnor-actions-workflow-renderer stock_mbx_bundle_cli_tests::failure_tests::generated_export_hard_fails_before_save_on_wrong_identity
+        PASS [   0.527s] (3/8) velnor-actions-workflow-renderer stock_mbx_bundle_cli_tests::failure_tests::generated_export_skips_empty_group
+        PASS [   0.463s] (4/8) velnor-actions-workflow-renderer stock_mbx_bundle_cli_tests::failure_tests::generated_import_rejects_noncanonical_private_paths
+        PASS [   0.716s] (5/8) velnor-actions-workflow-renderer stock_mbx_bundle_cli_tests::failure_tests::generated_preflight_rejects_symlink_temp_and_reserved_path_collisions
+        PASS [   3.654s] (6/8) velnor-actions-workflow-renderer stock_mbx_bundle_cli_tests::lifecycle_tests::generated_mbx_steps_cover_miss_hit_and_separate_corruption_fallbacks
+        PASS [   0.674s] (7/8) velnor-actions-workflow-renderer stock_mbx_bundle_cli_tests::lifecycle_tests::generated_restore_failure_runs_producer_cold_and_disables_save
+        PASS [   0.057s] (8/8) velnor-actions-workflow-renderer stock_mbx_bundle_cli_tests::predicate_tests::generated_object_predicate_rejects_empty_symlink_and_hardlink_trees
+────────────
+     Summary [   8.448s] 8 tests run: 8 passed, 361 skipped

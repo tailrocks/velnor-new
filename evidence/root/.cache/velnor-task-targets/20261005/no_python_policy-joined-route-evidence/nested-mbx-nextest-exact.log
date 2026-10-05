@@ -1,0 +1,13 @@
+   Compiling velnor-actions-tofu v0.1.0 (/root/.cache/velnor-task-targets/20261005/no_python_policy-joined-pin-test-20261005/crates/velnor-actions-tofu)
+   Compiling velnor-actions-orchestrator v0.1.0 (/root/.cache/velnor-task-targets/20261005/no_python_policy-joined-pin-test-20261005/crates/velnor-actions-orchestrator)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.45s
+     Running tests/velnor_orchestrator.rs (/root/.cache/velnor-task-targets/20261005/no_python_policy-joined-route-target/debug/deps/velnor_orchestrator-db028013d696be83)
+
+running 1 test
+test impl_crate_graph::nested_mbx_nextest_fixture_uses_action_without_mise_selector ... Initialized empty Git repository in /tmp/.tmprTmdCG/.git/
+ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 694 filtered out; finished in 0.05s
+
+mbx[cache]: 4 hits, 0 misses; 0 B downloaded, 0 B uploaded, 0 B stored locally
+mbx[savings]: rustc believes it compiled everything. it is down 52m 9s across 1842 builds. let it believe.

@@ -1,0 +1,5 @@
+fix: reject malformed freshness evidence shapes
+
+Reject malformed evidence types before fallback or filtering, with CLI regressions.
+
+Co-authored-by: Codex <codex@openai.com>

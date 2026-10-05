@@ -1,0 +1,7 @@
+?? crates/velnor-archive-guard/
+?? docs/implemented/owned-archive-preflight.md
+?? scripts/archive-guard-inputs.txt
+?? scripts/build-owned-archive-guard.sh
+?? scripts/check-owned-archive-guard-sources.sh
+?? scripts/owned_archive_preflight.py
+?? scripts/with-owned-archive-guard.sh

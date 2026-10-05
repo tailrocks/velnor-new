@@ -1,0 +1,6 @@
+a63e6a4550e75e14c2dd2ebe6efefe1360a847967c0ee2f28803eb43949dc6e4  ./.github/AGENTS.md
+b3f39f72416eee5077f2fd187f860e6d9a0a9ea4b33fdf3cfc671b1afbb34e0e  ./.github/actionlint.yaml
+8f21aceb5b1a4f233448aebe7ffdafb15d9ac5234de019b6e90720e9b373d58b  ./.github/actions/velnor-tool-seed/action.yml
+aceb7bfe1f43bdfcc9f6eb638fefec71c77dd252b486f3d34816d2c7c1367a59  ./.github/scripts/velnor-shared/sh-b3-566aabadb34068ae41f3799f5f591ed7b8c6f47057ba095f81c1039720d9ab5e.sh
+b34f0862bd9d746179b0e6f0fc3cb25729e76c9024132dacc91cf50a4ed54d12  ./.github/scripts/velnor-shared/sh-b3-d27cbaf0856ff4026fbd752c2b537ca733f78bdfb252a6994c33d20f2207dd11.sh
+707cad980776f1a189c61553aa3b52325ff7fa2a4b98d3f2b8ed4cc4e3947a12  ./.github/workflows/ci.yml

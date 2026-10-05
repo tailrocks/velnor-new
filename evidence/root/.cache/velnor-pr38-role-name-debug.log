@@ -1,0 +1,30 @@
+   Compiling velnor-actions-orchestrator v0.1.0 (/tmp/velnor-impl-20261005/cache/pr38/crates/velnor-actions-orchestrator)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.57s
+────────────
+ Nextest run ID 869a2356-515f-4fe3-8d80-6477983e30d8 with nextest profile: default
+    Starting 1 test across 3 binaries (1073 tests skipped)
+        FAIL [   0.119s] (1/1) velnor-actions-orchestrator::velnor_orchestrator impl_step_role_name_authority::finalized_generation_is_invariant_to_typed_step_display_names
+  stdout ───
+
+    running 1 test
+    Initialized empty Git repository in /tmp/.tmpKzvtqc/.git/
+    test impl_step_role_name_authority::finalized_generation_is_invariant_to_typed_step_display_names ... FAILED
+
+    failures:
+
+    failures:
+        impl_step_role_name_authority::finalized_generation_is_invariant_to_typed_step_display_names
+
+    test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 660 filtered out; finished in 0.11s
+
+  stderr ───
+
+    thread 'impl_step_role_name_authority::finalized_generation_is_invariant_to_typed_step_display_names' (628006) panicked at crates/velnor-actions-orchestrator/tests/impl_step_role_name_authority.rs:138:9:
+    workflow semantics and companion files are unchanged; first differences: [".github/workflows/ci.yml:319 \"        continue-on-error: true\" -> \"        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c\""]
+    note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+  Cancelling due to test failure: 
+────────────
+     Summary [   0.122s] 1 test run: 0 passed, 1 failed, 1073 skipped
+        FAIL [   0.119s] (1/1) velnor-actions-orchestrator::velnor_orchestrator impl_step_role_name_authority::finalized_generation_is_invariant_to_typed_step_display_names
+error: test run failed

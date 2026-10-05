@@ -1,0 +1,301 @@
+Velnor Actions plan 0.1.0
+Repository: /root/.cache/velnor-task-targets/20261005/jackin-compaction/jackin-44b2-input
+
+Detected stacks
+  Rust: selected
+  Workspace crates: 31
+    - jackin (crates/jackin/Cargo.toml) [bench, bin, lib, test; depends on jackin-brand, jackin-build-meta, jackin-config, jackin-console, jackin-core, jackin-diagnostics, jackin-docker, jackin-env, jackin-image, jackin-launch, jackin-manifest, jackin-otlp-testbed, jackin-process, jackin-protocol, jackin-runtime, jackin-telemetry, jackin-test-support, jackin-tui, jackin-usage]
+    - jackin-agent-status (crates/jackin-agent-status/Cargo.toml) [lib; depends on jackin-core, jackin-protocol]
+    - jackin-brand (crates/jackin-brand/Cargo.toml) [lib]
+    - jackin-build-meta (crates/jackin-build-meta/Cargo.toml) [lib; depends on jackin-process]
+    - jackin-capsule (crates/jackin-capsule/Cargo.toml) [bench, bin, lib, test; depends on jackin-agent-status, jackin-brand, jackin-build-meta, jackin-core, jackin-diagnostics, jackin-otlp-testbed, jackin-process, jackin-protocol, jackin-telemetry, jackin-tui, jackin-usage]
+    - jackin-config (crates/jackin-config/Cargo.toml) [bench, lib, test; depends on jackin-core, jackin-diagnostics, jackin-otlp-testbed, jackin-telemetry]
+    - jackin-console (crates/jackin-console/Cargo.toml) [lib; depends on jackin-config, jackin-core, jackin-diagnostics, jackin-env, jackin-oppicker, jackin-otlp-testbed, jackin-protocol, jackin-telemetry, jackin-tui]
+    - jackin-core (crates/jackin-core/Cargo.toml) [lib]
+    - jackin-dev (crates/jackin-dev/Cargo.toml) [bin]
+    - jackin-diagnostics (crates/jackin-diagnostics/Cargo.toml) [lib, test; depends on jackin-core, jackin-otlp-testbed, jackin-telemetry]
+    - jackin-docker (crates/jackin-docker/Cargo.toml) [lib; depends on jackin-build-meta, jackin-core, jackin-diagnostics, jackin-otlp-testbed, jackin-process, jackin-process-directory, jackin-telemetry]
+    - jackin-env (crates/jackin-env/Cargo.toml) [lib; depends on jackin-config, jackin-core, jackin-diagnostics, jackin-process, jackin-protocol, jackin-telemetry]
+    - jackin-host (crates/jackin-host/Cargo.toml) [lib; depends on jackin-core, jackin-diagnostics, jackin-docker, jackin-process, jackin-protocol, jackin-telemetry, jackin-test-support]
+    - jackin-image (crates/jackin-image/Cargo.toml) [lib; depends on jackin-build-meta, jackin-core, jackin-diagnostics, jackin-docker, jackin-manifest, jackin-otlp-testbed, jackin-process, jackin-telemetry]
+    - jackin-instance (crates/jackin-instance/Cargo.toml) [lib; depends on jackin-config, jackin-core, jackin-diagnostics, jackin-manifest, jackin-process, jackin-telemetry]
+    - jackin-isolation (crates/jackin-isolation/Cargo.toml) [lib; depends on jackin-config, jackin-core, jackin-diagnostics, jackin-docker, jackin-process, jackin-protocol, jackin-telemetry, jackin-test-support]
+    - jackin-launch (crates/jackin-launch/Cargo.toml) [lib; depends on jackin-brand, jackin-build-meta, jackin-core, jackin-diagnostics, jackin-telemetry, jackin-tui]
+    - jackin-manifest (crates/jackin-manifest/Cargo.toml) [bench, lib; depends on jackin-config, jackin-core]
+    - jackin-oppicker (crates/jackin-oppicker/Cargo.toml) [lib; depends on jackin-core, jackin-telemetry]
+    - jackin-otlp-testbed (crates/jackin-otlp-testbed/Cargo.toml) [lib; depends on jackin-telemetry]
+    - jackin-pr-trailers (crates/jackin-pr-trailers/Cargo.toml) [bin; depends on jackin-process]
+    - jackin-process (crates/jackin-process/Cargo.toml) [lib]
+    - jackin-process-directory (crates/jackin-process-directory/Cargo.toml) [lib]
+    - jackin-protocol (crates/jackin-protocol/Cargo.toml) [lib, test; depends on jackin-core, jackin-telemetry]
+    - jackin-runtime (crates/jackin-runtime/Cargo.toml) [bench, lib, test; depends on jackin-brand, jackin-build-meta, jackin-config, jackin-core, jackin-diagnostics, jackin-docker, jackin-env, jackin-host, jackin-image, jackin-instance, jackin-isolation, jackin-launch, jackin-manifest, jackin-otlp-testbed, jackin-process, jackin-protocol, jackin-telemetry, jackin-test-support, jackin-usage]
+    - jackin-telemetry (crates/jackin-telemetry/Cargo.toml) [bench, lib, test]
+    - jackin-test-support (crates/jackin-test-support/Cargo.toml) [lib; depends on jackin-core, jackin-manifest, jackin-telemetry]
+    - jackin-tui (crates/jackin-tui/Cargo.toml) [lib; depends on jackin-brand]
+    - jackin-usage (crates/jackin-usage/Cargo.toml) [bench, lib; depends on jackin-config, jackin-console, jackin-core, jackin-diagnostics, jackin-otlp-testbed, jackin-protocol, jackin-telemetry]
+    - jackin-usage-ffi (crates/jackin-usage-ffi/Cargo.toml) [cdylib, lib, staticlib; depends on jackin-config, jackin-core, jackin-env, jackin-protocol, jackin-telemetry, jackin-usage]
+    - jackin-xtask (crates/jackin-xtask/Cargo.toml) [bin, test; depends on jackin-process]
+  Profile .: mbx compile driver (declared), cargo_nextest test runner (declared)
+  Nextest profile .: ci (.config/nextest.toml)
+    evidence .config/nextest.toml:21 [profile.ci] [durable]
+
+Workflow to generate
+  .github/actionlint.yaml
+  .github/workflows/ci.yml
+  Workflow: CI (consumer-v1)
+  Push branch: main
+  Runner: ubuntu-26.04 (config override)
+  Jobs:
+    - actionlint (5 steps)
+    - plan (14 steps)
+    - publish-baseline (5 steps)
+    - required (9 steps)
+    - rust-jackin (19 steps)
+    - rust-jackin-agent-status (19 steps)
+    - rust-jackin-capsule (19 steps)
+    - rust-jackin-config (19 steps)
+    - rust-jackin-console (19 steps)
+    - rust-jackin-core (19 steps)
+    - rust-jackin-dev (18 steps)
+    - rust-jackin-diagnostics (19 steps)
+    - rust-jackin-docker (19 steps)
+    - rust-jackin-env (19 steps)
+    - rust-jackin-host (19 steps)
+    - rust-jackin-image (19 steps)
+    - rust-jackin-instance (19 steps)
+    - rust-jackin-isolation (19 steps)
+    - rust-jackin-launch (19 steps)
+    - rust-jackin-manifest (19 steps)
+    - rust-jackin-otlp-testbed (19 steps)
+    - rust-jackin-process (19 steps)
+    - rust-jackin-process-directory (19 steps)
+    - rust-jackin-protocol (19 steps)
+    - rust-jackin-runtime (19 steps)
+    - rust-jackin-telemetry (19 steps)
+    - rust-jackin-test-support (19 steps)
+    - rust-jackin-tui (19 steps)
+    - rust-jackin-usage (19 steps)
+    - rust-jackin-usage-ffi (19 steps)
+    - rust-jackin-xtask (18 steps)
+    - 27 Rust crate jobs
+      Each: Clippy -> build -> run tests -> doctests -> doc build -> format check
+      Entries:
+        - rust-jackin
+        - rust-jackin-agent-status
+        - rust-jackin-capsule
+        - rust-jackin-config
+        - rust-jackin-console
+        - rust-jackin-core
+        - rust-jackin-dev
+        - rust-jackin-diagnostics
+        - rust-jackin-docker
+        - rust-jackin-env
+        - rust-jackin-host
+        - rust-jackin-image
+        - rust-jackin-instance
+        - rust-jackin-isolation
+        - rust-jackin-launch
+        - rust-jackin-manifest
+        - rust-jackin-otlp-testbed
+        - rust-jackin-process
+        - rust-jackin-process-directory
+        - rust-jackin-protocol
+        - rust-jackin-runtime
+        - rust-jackin-telemetry
+        - rust-jackin-test-support
+        - rust-jackin-tui
+        - rust-jackin-usage
+        - rust-jackin-usage-ffi
+        - rust-jackin-xtask
+      Obligations:
+        - stack/rust/crates/jackin-agent-status/build/default
+        - stack/rust/crates/jackin-agent-status/clippy/default
+        - stack/rust/crates/jackin-agent-status/doc/default
+        - stack/rust/crates/jackin-agent-status/doctest/default
+        - stack/rust/crates/jackin-agent-status/fmt/default
+        - stack/rust/crates/jackin-agent-status/nextest/default
+        - stack/rust/crates/jackin-capsule/build/default
+        - stack/rust/crates/jackin-capsule/clippy/default
+        - stack/rust/crates/jackin-capsule/doc/default
+        - stack/rust/crates/jackin-capsule/doctest/default
+        - stack/rust/crates/jackin-capsule/fmt/default
+        - stack/rust/crates/jackin-capsule/nextest/default
+        - stack/rust/crates/jackin-config/build/default
+        - stack/rust/crates/jackin-config/clippy/default
+        - stack/rust/crates/jackin-config/doc/default
+        - stack/rust/crates/jackin-config/doctest/default
+        - stack/rust/crates/jackin-config/fmt/default
+        - stack/rust/crates/jackin-config/nextest/default
+        - stack/rust/crates/jackin-console/build/default
+        - stack/rust/crates/jackin-console/clippy/default
+        - stack/rust/crates/jackin-console/doc/default
+        - stack/rust/crates/jackin-console/doctest/default
+        - stack/rust/crates/jackin-console/fmt/default
+        - stack/rust/crates/jackin-console/nextest/default
+        - stack/rust/crates/jackin-core/build/default
+        - stack/rust/crates/jackin-core/clippy/default
+        - stack/rust/crates/jackin-core/doc/default
+        - stack/rust/crates/jackin-core/doctest/default
+        - stack/rust/crates/jackin-core/fmt/default
+        - stack/rust/crates/jackin-core/nextest/default
+        - stack/rust/crates/jackin-dev/build/default
+        - stack/rust/crates/jackin-dev/clippy/default
+        - stack/rust/crates/jackin-dev/doc/default
+        - stack/rust/crates/jackin-dev/fmt/default
+        - stack/rust/crates/jackin-dev/nextest/default
+        - stack/rust/crates/jackin-diagnostics/build/default
+        - stack/rust/crates/jackin-diagnostics/clippy/default
+        - stack/rust/crates/jackin-diagnostics/doc/default
+        - stack/rust/crates/jackin-diagnostics/doctest/default
+        - stack/rust/crates/jackin-diagnostics/fmt/default
+        - stack/rust/crates/jackin-diagnostics/nextest/default
+        - stack/rust/crates/jackin-docker/build/default
+        - stack/rust/crates/jackin-docker/clippy/default
+        - stack/rust/crates/jackin-docker/doc/default
+        - stack/rust/crates/jackin-docker/doctest/default
+        - stack/rust/crates/jackin-docker/fmt/default
+        - stack/rust/crates/jackin-docker/nextest/default
+        - stack/rust/crates/jackin-env/build/default
+        - stack/rust/crates/jackin-env/clippy/default
+        - stack/rust/crates/jackin-env/doc/default
+        - stack/rust/crates/jackin-env/doctest/default
+        - stack/rust/crates/jackin-env/fmt/default
+        - stack/rust/crates/jackin-env/nextest/default
+        - stack/rust/crates/jackin-host/build/default
+        - stack/rust/crates/jackin-host/clippy/default
+        - stack/rust/crates/jackin-host/doc/default
+        - stack/rust/crates/jackin-host/doctest/default
+        - stack/rust/crates/jackin-host/fmt/default
+        - stack/rust/crates/jackin-host/nextest/default
+        - stack/rust/crates/jackin-image/build/default
+        - stack/rust/crates/jackin-image/clippy/default
+        - stack/rust/crates/jackin-image/doc/default
+        - stack/rust/crates/jackin-image/doctest/default
+        - stack/rust/crates/jackin-image/fmt/default
+        - stack/rust/crates/jackin-image/nextest/default
+        - stack/rust/crates/jackin-instance/build/default
+        - stack/rust/crates/jackin-instance/clippy/default
+        - stack/rust/crates/jackin-instance/doc/default
+        - stack/rust/crates/jackin-instance/doctest/default
+        - stack/rust/crates/jackin-instance/fmt/default
+        - stack/rust/crates/jackin-instance/nextest/default
+        - stack/rust/crates/jackin-isolation/build/default
+        - stack/rust/crates/jackin-isolation/clippy/default
+        - stack/rust/crates/jackin-isolation/doc/default
+        - stack/rust/crates/jackin-isolation/doctest/default
+        - stack/rust/crates/jackin-isolation/fmt/default
+        - stack/rust/crates/jackin-isolation/nextest/default
+        - stack/rust/crates/jackin-launch/build/default
+        - stack/rust/crates/jackin-launch/clippy/default
+        - stack/rust/crates/jackin-launch/doc/default
+        - stack/rust/crates/jackin-launch/doctest/default
+        - stack/rust/crates/jackin-launch/fmt/default
+        - stack/rust/crates/jackin-launch/nextest/default
+        - stack/rust/crates/jackin-manifest/build/default
+        - stack/rust/crates/jackin-manifest/clippy/default
+        - stack/rust/crates/jackin-manifest/doc/default
+        - stack/rust/crates/jackin-manifest/doctest/default
+        - stack/rust/crates/jackin-manifest/fmt/default
+        - stack/rust/crates/jackin-manifest/nextest/default
+        - stack/rust/crates/jackin-otlp-testbed/build/default
+        - stack/rust/crates/jackin-otlp-testbed/clippy/default
+        - stack/rust/crates/jackin-otlp-testbed/doc/default
+        - stack/rust/crates/jackin-otlp-testbed/doctest/default
+        - stack/rust/crates/jackin-otlp-testbed/fmt/default
+        - stack/rust/crates/jackin-otlp-testbed/nextest/default
+        - stack/rust/crates/jackin-process-directory/build/default
+        - stack/rust/crates/jackin-process-directory/clippy/default
+        - stack/rust/crates/jackin-process-directory/doc/default
+        - stack/rust/crates/jackin-process-directory/doctest/default
+        - stack/rust/crates/jackin-process-directory/fmt/default
+        - stack/rust/crates/jackin-process-directory/nextest/default
+        - stack/rust/crates/jackin-process/build/default
+        - stack/rust/crates/jackin-process/clippy/default
+        - stack/rust/crates/jackin-process/doc/default
+        - stack/rust/crates/jackin-process/doctest/default
+        - stack/rust/crates/jackin-process/fmt/default
+        - stack/rust/crates/jackin-process/nextest/default
+        - stack/rust/crates/jackin-protocol/build/default
+        - stack/rust/crates/jackin-protocol/clippy/default
+        - stack/rust/crates/jackin-protocol/doc/default
+        - stack/rust/crates/jackin-protocol/doctest/default
+        - stack/rust/crates/jackin-protocol/fmt/default
+        - stack/rust/crates/jackin-protocol/nextest/default
+        - stack/rust/crates/jackin-runtime/build/default
+        - stack/rust/crates/jackin-runtime/clippy/default
+        - stack/rust/crates/jackin-runtime/doc/default
+        - stack/rust/crates/jackin-runtime/doctest/default
+        - stack/rust/crates/jackin-runtime/fmt/default
+        - stack/rust/crates/jackin-runtime/nextest/default
+        - stack/rust/crates/jackin-telemetry/build/default
+        - stack/rust/crates/jackin-telemetry/clippy/default
+        - stack/rust/crates/jackin-telemetry/doc/default
+        - stack/rust/crates/jackin-telemetry/doctest/default
+        - stack/rust/crates/jackin-telemetry/fmt/default
+        - stack/rust/crates/jackin-telemetry/nextest/default
+        - stack/rust/crates/jackin-test-support/build/default
+        - stack/rust/crates/jackin-test-support/clippy/default
+        - stack/rust/crates/jackin-test-support/doc/default
+        - stack/rust/crates/jackin-test-support/doctest/default
+        - stack/rust/crates/jackin-test-support/fmt/default
+        - stack/rust/crates/jackin-test-support/nextest/default
+        - stack/rust/crates/jackin-tui/build/default
+        - stack/rust/crates/jackin-tui/clippy/default
+        - stack/rust/crates/jackin-tui/doc/default
+        - stack/rust/crates/jackin-tui/doctest/default
+        - stack/rust/crates/jackin-tui/fmt/default
+        - stack/rust/crates/jackin-tui/nextest/default
+        - stack/rust/crates/jackin-usage-ffi/build/default
+        - stack/rust/crates/jackin-usage-ffi/clippy/default
+        - stack/rust/crates/jackin-usage-ffi/doc/default
+        - stack/rust/crates/jackin-usage-ffi/doctest/default
+        - stack/rust/crates/jackin-usage-ffi/fmt/default
+        - stack/rust/crates/jackin-usage-ffi/nextest/default
+        - stack/rust/crates/jackin-usage/build/default
+        - stack/rust/crates/jackin-usage/clippy/default
+        - stack/rust/crates/jackin-usage/doc/default
+        - stack/rust/crates/jackin-usage/doctest/default
+        - stack/rust/crates/jackin-usage/fmt/default
+        - stack/rust/crates/jackin-usage/nextest/default
+        - stack/rust/crates/jackin-xtask/build/default
+        - stack/rust/crates/jackin-xtask/clippy/default
+        - stack/rust/crates/jackin-xtask/doc/default
+        - stack/rust/crates/jackin-xtask/fmt/default
+        - stack/rust/crates/jackin-xtask/nextest/default
+        - stack/rust/crates/jackin/build/default
+        - stack/rust/crates/jackin/clippy/default
+        - stack/rust/crates/jackin/doc/default
+        - stack/rust/crates/jackin/doctest/default
+        - stack/rust/crates/jackin/fmt/default
+        - stack/rust/crates/jackin/nextest/default
+  Parallel: 27 independent crate jobs; no matrix fan-out
+  Critical path: stack/rust/crates/jackin-agent-status/clippy/default -> stack/rust/crates/jackin-agent-status/build/default -> stack/rust/crates/jackin-agent-status/nextest/default (3 tasks)
+  Clippy memory groups: 1; barriers: 0
+  Cache layers: Mise tools, Cargo sources, MBX compilation objects
+  Actionlint: 1.7.12 pinned
+  Action pins: 8
+    - ./.github/actions/velnor-tool-seed
+    - actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+    - actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+    - actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+    - actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+    - actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+    - jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
+    - jdx/mr-boxington-action@1687e54eb349cadf61fa38b5813a77875489e8e6
+  Ineligible: stack/rust/crates/jackin-dev/doctest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/crates/jackin-xtask/doctest/default has no test targets; no test command emitted
+  Pull-request execution narrows crate obligations through its event-time affected-work plan.
+
+Required-check migration
+  Old: .github/workflows/velnor.yml (check: Velnor / Required)
+  New: .github/workflows/ci.yml (check: Required)
+  1. Merge the generator change so .github/workflows/ci.yml replaces .github/workflows/velnor.yml in one commit.
+  2. Let one .github/workflows/ci.yml run complete on the default branch so the Required check appears.
+  3. In branch protection, require Required and remove Velnor / Required; never remove the old check before the new one exists. [EXTERNAL: repository admin]
+
+Recommendations
+  mise.lock is read-only input; Velnor never modifies it
+  mise.toml is read-only input; Velnor never modifies it
+  rust-toolchain.toml is read-only input; Velnor never modifies it
+  tool_install_unverified:7 installs skip verification (mise.lock malformed: line 389: expected_quoted_string); fix the lockfile to verify them
+exit=0

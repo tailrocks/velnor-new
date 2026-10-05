@@ -1,0 +1,122 @@
+mise by @jdx – installing 1 tool
+mise rust@1.98.1 info: syncing channel updates for 1.98.1-x86_64-unknown-linux-gnu
+mise rust@1.98.1 info: latest update on 2026-09-03 for version 1.98.1 (48a229cea 2026-09-01)
+mise rust@1.98.1 info: component clippy is up to date
+mise rust@1.98.1 info: component rust-docs is up to date
+mise rust@1.98.1 info: component rustfmt is up to date
+mise rust@1.98.1   1.98.1-x86_64-unknown-linux-gnu unchanged - rustc 1.98.1 (48a229cea 2026-09-01)
+mise rust@1.98.1 info: checking for self-update (current version: 1.29.1)
+mise rust@1.98.1 rustc 1.98.1 (48a229cea 2026-09-01)
+mise ✓ rust@1.98.1  276ms
+mise ████████████████ 1/1 · installed 1 tool in 277ms
+Diff in /var/tmp/velnor-phase0-t24-main-shared-script-20261005/crates/velnor-actions-workflow-renderer/src/document_shared_scripts_execution_support.rs:211:
+             parent_identity,
+             child_identity,
+         }),
+-        Err(setup_error) => rollback_root_setup(path, parent, parent_identity, initial, setup_error),
++        Err(setup_error) => {
++            rollback_root_setup(path, parent, parent_identity, initial, setup_error)
++        }
+     }
+ }
+ 
+Diff in /var/tmp/velnor-phase0-t24-main-shared-script-20261005/crates/velnor-actions-workflow-renderer/src/document_shared_scripts_execution_support.rs:245:
+ fn effective_uid() -> io::Result<u32> {
+     let output = Command::new("id").arg("-u").output()?;
+     if !output.status.success() {
+-        return Err(io::Error::other("could not determine execution fixture uid"));
++        return Err(io::Error::other(
++            "could not determine execution fixture uid",
++        ));
+     }
+     String::from_utf8(output.stdout)
+         .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error.to_string()))?
+Diff in /var/tmp/velnor-phase0-t24-main-shared-script-20261005/crates/velnor-actions-workflow-renderer/src/document_shared_scripts_execution_support.rs:252:
+         .trim()
+         .parse()
+-        .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, format!("invalid uid: {error}")))
++        .map_err(|error| {
++            io::Error::new(io::ErrorKind::InvalidData, format!("invalid uid: {error}"))
++        })
+ }
+ 
+ pub(super) fn case_paths(root: &Path) -> CasePaths {
+Diff in /var/tmp/velnor-phase0-t24-main-shared-script-20261005/crates/velnor-actions-workflow-renderer/src/document_shared_scripts_execution_support.rs:268:
+     }
+ }
+ 
+-pub(super) fn collect_outcome(
+-    paths: &CasePaths,
+-    output: Output,
+-    expect_child: bool,
+-) -> Outcome {
++pub(super) fn collect_outcome(paths: &CasePaths, output: Output, expect_child: bool) -> Outcome {
+     let rust_root = paths.rust_root.to_string_lossy();
+     let runner = paths.runner.to_string_lossy();
+     let path_text = fs::read_to_string(&paths.github_path).expect("read GITHUB_PATH");
+Diff in /var/tmp/velnor-phase0-t24-main-shared-script-20261005/crates/velnor-actions-workflow-renderer/src/document_shared_scripts_execution_support.rs:356:
+         let mut owned = new_root().expect("create owned fixture");
+         let mut holding = new_root().expect("create holding fixture");
+         let original_path = owned.path().to_path_buf();
+-        let original_identity = DirectoryIdentity::capture(&original_path)
+-            .expect("capture original fixture identity");
++        let original_identity =
++            DirectoryIdentity::capture(&original_path).expect("capture original fixture identity");
+         let displaced_path = holding.path().join("displaced-original");
+         fs::rename(&original_path, &displaced_path).expect("move original fixture");
+         fs::create_dir(&original_path).expect("create replacement directory");
+Diff in /var/tmp/velnor-phase0-t24-main-shared-script-20261005/crates/velnor-actions-workflow-renderer/src/document_shared_scripts_execution_support.rs:364:
+-        let replacement_identity = DirectoryIdentity::capture(&original_path)
+-            .expect("capture replacement identity");
++        let replacement_identity =
++            DirectoryIdentity::capture(&original_path).expect("capture replacement identity");
+         let sentinel = original_path.join("must-survive");
+         fs::write(&sentinel, b"replacement-owned").expect("write replacement sentinel");
+ 
+Diff in /var/tmp/velnor-phase0-t24-main-shared-script-20261005/crates/velnor-actions-workflow-renderer/src/document_shared_scripts_execution_support.rs:372:
+             DirectoryIdentity::capture(&original_path).expect("replacement still exists"),
+             replacement_identity
+         );
+-        assert_eq!(fs::read(&sentinel).expect("replacement sentinel survives"), b"replacement-owned");
++        assert_eq!(
++            fs::read(&sentinel).expect("replacement sentinel survives"),
++            b"replacement-owned"
++        );
+ 
+         fs::remove_file(&sentinel).expect("remove replacement sentinel");
+         fs::remove_dir(&original_path).expect("remove replacement directory");
+Diff in /var/tmp/velnor-phase0-t24-main-shared-script-20261005/crates/velnor-actions-workflow-renderer/src/document_shared_scripts_execution_tests.rs:193:
+             );
+         }
+     };
+-    let output = child.wait_with_output().expect("collect signalled shell output");
++    let output = child
++        .wait_with_output()
++        .expect("collect signalled shell output");
+     if output.status.code() != status.code() || output.status.signal() != status.signal() {
+         panic!("signalled shell status changed after quiescence");
+     }
+Diff in /var/tmp/velnor-phase0-t24-main-shared-script-20261005/crates/velnor-actions-workflow-renderer/src/document_shared_scripts_execution_tests.rs:245:
+ fn process_group_is_alive(process_group: u32) -> io::Result<bool> {
+     let output = Command::new("ps").args(["-axo", "pgid=,stat="]).output()?;
+     if !output.status.success() {
+-        return Err(io::Error::other("could not inspect signal-test process group"));
++        return Err(io::Error::other(
++            "could not inspect signal-test process group",
++        ));
+     }
+     let listing = String::from_utf8(output.stdout)
+         .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error.to_string()))?;
+Diff in /var/tmp/velnor-phase0-t24-main-shared-script-20261005/crates/velnor-actions-workflow-renderer/src/document_shared_scripts_execution_tests.rs:305:
+ 
+ fn describe_signal_result(result: io::Result<Output>) -> String {
+     match result {
+-        Ok(output) => format!("{} ({})", output.status, String::from_utf8_lossy(&output.stderr).trim()),
++        Ok(output) => format!(
++            "{} ({})",
++            output.status,
++            String::from_utf8_lossy(&output.stderr).trim()
++        ),
+         Err(error) => error.to_string(),
+     }
+ }

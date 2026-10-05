@@ -1,0 +1,8 @@
+Invocation record for the completed source-bound Clippy run
+source/workdir: /root/.cache/velnor-task-targets/20261005/mbx-cli-clippyfix-20261005T1501Z
+command:
+env CARGO_TARGET_DIR=/root/.cache/velnor-task-targets/20261005/mbx-cli-clippyfix-target CARGO_HOME=/root/.cargo RUSTUP_HOME=/root/.rustup RUSTUP_TOOLCHAIN=1.98.1 CARGO_BUILD_JOBS=1 CARGO_NET_OFFLINE=true CARGO_TERM_COLOR=never TMPDIR=/var/tmp/mq0 PATH=/root/.cargo/bin:/root/.rustup/toolchains/1.98.1-x86_64-unknown-linux-gnu/bin:/usr/bin:/bin /root/.cargo/bin/cargo +1.98.1 clippy --locked --offline --jobs 1 --package velnor-actions-workflow-renderer --all-targets -- -D warnings
+stdout/stderr: /root/.cache/velnor-task-targets/20261005/mbx-cli-clippyfix-evidence-20261005T1503Z/clippy-source-bound.log
+exit status: 0, recorded at /root/.cache/velnor-task-targets/20261005/mbx-cli-clippyfix-evidence-20261005T1503Z/clippy-source-bound.status
+source-v2 manifest: /root/.cache/velnor-task-targets/20261005/stock-helper/frozen-c8-manifest/source-v2.manifest (SHA-256 9b4d24424807daebf5260b9c627188ada1365b8639bb307cdd2ba6450c67acd1)
+source/copy verification: /root/.cache/velnor-task-targets/20261005/mbx-cli-clippyfix-evidence-20261005T1503Z/verify-copy.sh (SHA-256 41170b1150d41cf31987b27ce549978edd855058b5d48af4b438312917030607); log /root/.cache/velnor-task-targets/20261005/mbx-cli-clippyfix-evidence-20261005T1503Z/source-copy-post-clippy-verify.log (SHA-256 5d1fb98ab3391cceae45afadd6e69f6f4ee81327c7aca2ac0283cd14acbc52e1)

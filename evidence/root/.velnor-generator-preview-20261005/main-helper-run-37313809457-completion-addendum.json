@@ -1,0 +1,118 @@
+{
+  "commit_signature_verified": true,
+  "evidence_record_created_at_utc": "2026-10-05T13:19:35Z",
+  "head_commit": "bdb1e14509225d18b4d8ee180731825d0826c16f",
+  "jobs": [
+    {
+      "conclusion": "success",
+      "id": 111775422437,
+      "name": "Cargo Deny"
+    },
+    {
+      "conclusion": "success",
+      "id": 111775422796,
+      "name": "Actionlint"
+    },
+    {
+      "conclusion": "success",
+      "id": 111775422811,
+      "name": "Cargo Machete"
+    },
+    {
+      "conclusion": "success",
+      "id": 111775423009,
+      "name": "Plan"
+    },
+    {
+      "conclusion": "success",
+      "id": 111775423080,
+      "name": "Zizmor"
+    },
+    {
+      "conclusion": "success",
+      "id": 111775423092,
+      "name": "Alint"
+    },
+    {
+      "conclusion": "success",
+      "id": 111776102516,
+      "name": "Rust / velnor-actions-actionlint"
+    },
+    {
+      "conclusion": "success",
+      "id": 111776102608,
+      "name": "Rust / velnor-actions-contract"
+    },
+    {
+      "conclusion": "success",
+      "id": 111776102664,
+      "name": "Rust / velnor-actions-rust"
+    },
+    {
+      "conclusion": "success",
+      "id": 111776102737,
+      "name": "Rust / velnor-actions-cli"
+    },
+    {
+      "conclusion": "success",
+      "id": 111776102745,
+      "name": "Rust / velnor-actions-orchestrator"
+    },
+    {
+      "conclusion": "success",
+      "id": 111776102807,
+      "name": "Rust / velnor-actions-mise"
+    },
+    {
+      "conclusion": "success",
+      "id": 111776102820,
+      "name": "Rust / velnor-actions-workflow-renderer"
+    },
+    {
+      "conclusion": "success",
+      "id": 111776102831,
+      "name": "Rust / velnor-runner-github"
+    },
+    {
+      "conclusion": "success",
+      "id": 111776102850,
+      "name": "Rust / velnor-runner-cli"
+    },
+    {
+      "conclusion": "success",
+      "id": 111776102865,
+      "name": "Rust / velnor-runner-core"
+    },
+    {
+      "conclusion": "success",
+      "id": 111776102884,
+      "name": "Rust / velnor-actions-tofu"
+    },
+    {
+      "conclusion": "success",
+      "id": 111776102978,
+      "name": "Rust / velnor-runner-host"
+    },
+    {
+      "conclusion": "success",
+      "id": 111780992808,
+      "name": "Required"
+    },
+    {
+      "conclusion": "success",
+      "id": 111781185976,
+      "name": "Publish baseline"
+    }
+  ],
+  "main_ref_verified": "bdb1e14509225d18b4d8ee180731825d0826c16f",
+  "prior_in_progress_record_sha256": "7eb3796dc7c240813abe2b16d29d0ac349ca656a80f38b6d7970cd365abc7126",
+  "qualification": "Same-run Plan helper preseed only; no local helper execution and no immutable official release claim.",
+  "run_api_completed_at": "null in API response",
+  "run_conclusion": "success",
+  "run_id": 37313809457,
+  "run_status": "completed",
+  "run_updated_at": "2026-10-05T13:16:41Z",
+  "schema": 1,
+  "successful_job_count": 20,
+  "tree": "9e9ce5ed26af239d20d529378e7f17bc2bb74788"
+}

@@ -1,0 +1,5 @@
+error: no such command: `+1.98.1`
+
+	Cargo does not handle `+toolchain` directives.
+	Did you mean to invoke `cargo` through `rustup` instead?
+/usr/bin/sh: 1: rustup: not found

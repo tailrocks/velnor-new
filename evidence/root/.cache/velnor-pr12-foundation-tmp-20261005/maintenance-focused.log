@@ -1,0 +1,18 @@
+   Compiling velnor-actions-orchestrator v0.1.1 (/tmp/velnor-pr12-foundation-20261005/crates/velnor-actions-orchestrator)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.31s
+────────────
+ Nextest run ID 8f226120-32d7-481e-895f-72e68e4da78c with nextest profile: default
+    Starting 11 tests across 1 binary (519 tests skipped)
+        PASS [   0.007s] ( 1/11) velnor-actions-orchestrator check_runtime::preparation::acquisition::archive::tests::metadata_tests::zip_admission_tests::zip32_count_disagreement_and_multidisk_are_rejected
+        PASS [   0.007s] ( 2/11) velnor-actions-orchestrator check_runtime::preparation::acquisition::archive::tests::metadata_tests::oversized_gnu_longname_metadata_is_rejected_before_tar_entry_parsing
+        PASS [   0.007s] ( 3/11) velnor-actions-orchestrator check_runtime::preparation::acquisition::archive::tests::metadata_tests::zip_admission_tests::zip_failed_latest_central_directory_falls_back_with_both_candidates_bounded
+        PASS [   0.007s] ( 4/11) velnor-actions-orchestrator check_runtime::preparation::acquisition::archive::tests::metadata_tests::oversized_pax_metadata_is_rejected_before_tar_entry_parsing
+        PASS [   0.007s] ( 5/11) velnor-actions-orchestrator check_runtime::preparation::acquisition::archive::tests::metadata_tests::zip_admission_tests::zip64_entry_count_and_multidisk_are_bounded_before_parser_allocation
+        PASS [   0.007s] ( 6/11) velnor-actions-orchestrator check_runtime::preparation::acquisition::archive::tests::metadata_tests::zip_admission_tests::zip64_extensible_data_has_a_fixed_admission_bound
+        PASS [   0.007s] ( 7/11) velnor-actions-orchestrator check_runtime::preparation::acquisition::archive::tests::metadata_tests::zip_admission_tests::zip_eocd_comment_without_trailing_data_is_admitted
+        PASS [   0.007s] ( 8/11) velnor-actions-orchestrator check_runtime::preparation::acquisition::archive::tests::metadata_tests::zip_admission_tests::zip_trailing_bytes_and_malformed_comment_eocd_follow_reader_fallback
+        PASS [   0.011s] ( 9/11) velnor-actions-orchestrator check_runtime::preparation::acquisition::archive::tests::metadata_tests::rust_toolchain_extension_count_within_bound_is_admitted
+        PASS [   0.017s] (10/11) velnor-actions-orchestrator check_runtime::preparation::acquisition::archive::tests::metadata_tests::tar_extension_count_above_bound_is_rejected_separately_from_size
+        PASS [   0.211s] (11/11) velnor-actions-orchestrator check_runtime::preparation::acquisition::archive::tests::metadata_tests::zip_admission_tests::zip64_fallback_directory_over_limit_is_rejected_before_parser_allocation
+────────────
+     Summary [   0.211s] 11 tests run: 11 passed, 519 skipped

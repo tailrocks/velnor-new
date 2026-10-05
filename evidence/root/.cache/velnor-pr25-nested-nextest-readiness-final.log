@@ -1,0 +1,8 @@
+   Compiling velnor-runner-host v0.1.0 (/root/.cache/velnor-pr25-aggregate-20261005/crates/velnor-runner/crates/velnor-runner-host)
+   Compiling velnor-runner-cli v0.1.0 (/root/.cache/velnor-pr25-aggregate-20261005/crates/velnor-runner/crates/velnor-runner-cli)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 7.38s
+────────────
+ Nextest run ID 08f1f6f2-1fa0-4eae-ad2c-f01df9408479 with nextest profile: default
+    Starting 259 tests across 18 binaries
+────────────
+     Summary [   9.377s] 259 tests run: 259 passed, 0 skipped

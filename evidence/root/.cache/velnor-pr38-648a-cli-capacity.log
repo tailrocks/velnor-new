@@ -1,0 +1,10 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.05s
+     Running tests/velnor_cli.rs (/root/.cache/velnor-pr38-v2-prelude-target/debug/deps/velnor_cli-f8c3059c943014de)
+
+running 1 test
+perf: op=cli-generate schema=2 mode=both roots=60 ci_bytes=345011
+perf: op=cli-generate schema=2 mode=both roots=100 failed_closed_bytes=565771 limit_bytes=500000
+test impl_cli_tofu_capacity::cli_schema2_paired_tofu_stays_within_capacity_and_fails_closed ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 247 filtered out; finished in 1.13s
+

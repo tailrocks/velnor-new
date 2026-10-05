@@ -1,0 +1,29 @@
+{
+  "base_sha": "b640665abc7238050e856257c9fb3a150580bc8d",
+  "cause": "Mise generator release native-check shell argument contains literal newlines; renderer rejects control characters in argv.",
+  "correction_owner": "release_mise_mbx_adapter owns generator_release_workflow_checks.rs and generator_release_workflow_tests.rs for single-line shell fix.",
+  "failed_step": "Check generated files",
+  "failed_step_time_utc": "2026-10-05T14:43:24Z",
+  "failure": "velnor-actions: render: bad command: control_char:set -euo pipefail actual=\"$(uname -sm)\" printf 'Native host: %s\\n' \"$actual\" test \"$actual\" = 'Linux x86_64' ",
+  "head_sha": "003606f32e0716edca23308e0b5d4e2065e55224",
+  "observed_at_utc": "2026-10-05T14:48:35Z",
+  "plan_job_conclusion": "failure",
+  "plan_job_id": 111819044514,
+  "plan_job_log_path": "plan-job.log",
+  "plan_job_log_sha256": "da556d00e4ea4d18639fbedb942ea82e88c5375bb503a8065b0f6fa54abd6352",
+  "plan_job_status": "completed",
+  "pull_request": 65,
+  "repository": "tailrocks/velnor-new",
+  "run_conclusion": "failure",
+  "run_status": "completed",
+  "tests": "Rust test matrix skipped because Plan failed. No Rust test pass claimed.",
+  "upstream_steps": {
+    "build_command": "mise --no-config --no-env --no-hooks exec rust@1.98.1 -- mbx build --release --locked --package velnor-actions-cli --bin velnor-actions",
+    "build_step": "success",
+    "cache_activity": "2 hits, 5 misses, 3 not looked up; 0 B downloaded/uploaded; 58.9 MiB stored locally; 43.73 s MBX session; 149.7 ms estimated compiler time avoided",
+    "mbx": "1.21.1",
+    "mbx_verify_step": "success",
+    "mise_rust": "rust@1.98.1; rustc 1.98.1 (48a229cea 2026-09-01)"
+  },
+  "workflow_run_id": 37326539854
+}

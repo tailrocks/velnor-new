@@ -1,0 +1,18 @@
+Test-only cleanup review addendum
+Snapshot: /tmp/velnor-render-compaction-44b2-20261005, detached HEAD 44b2c380cdd65b361beab8ced3332319e7f56c73
+Runtime attestation: /root/.codex/sessions/2026/10/05/rollout-2026-10-05T10-24-15-01a10b29-dd15-7320-963c-6e3f94099647.jsonl, latest observed turn_context ordinal 6238, 2026-10-05T12:05:21.811Z, gpt-6-luna/max; JSONL SHA-256 9a67b7a3c7b6177b8054a03028e38d4cfa84f839d7ee5a1091ed31495f28eb9a.
+Source:
+  execution fixture: /tmp/velnor-render-compaction-44b2-20261005/crates/velnor-actions-workflow-renderer/src/document_shared_scripts_execution_tests.rs
+  SHA-256: 216834fa9f38a9fde5659edad740608f94770dcbbecfcf8e93969f7cf9578e34
+  Cargo.lock: b43ddef9c7a6b7e4c33cb6a8a4dd3659f26a7645a0f0c09782e04b2ee5b898a4 (unchanged)
+  render.rs: e950bab0300704d710e55a5de383d9a9bddfaed4d33c249a362c7dc1a13acf13 (unchanged)
+  workflow_size.rs: 9cc1fb0001aa1d88a95da77c5ff1167f6a1f8d06d4cea4e1067cc4723d593c2c (500000-byte cap unchanged)
+Change: run_case explicitly checks cleanup of its owned temporary root; setup rollback returns the original setup error and includes any rollback cleanup error; Drop uses the same non-symlink/canonical-path guard and reports cleanup failure to stderr. No discarded remove_dir/remove_dir_all Result remains.
+Focused test command (exit 0): CARGO_HOME=/root/.cache/velnor-task-targets/20261005/jackin-compaction/cargo-home CARGO_TARGET_DIR=/root/.cache/velnor-task-targets/20261005/jackin-compaction/debug CARGO_BUILD_JOBS=2 TMPDIR=/root/.cache/velnor-task-targets/20261005/jackin-compaction/tmp /root/.local/bin/mise --no-config --no-env --no-hooks exec rust@1.98.1 jq@1.8.1 -- cargo test --locked --manifest-path crates/velnor-actions-workflow-renderer/Cargo.toml -p velnor-actions-workflow-renderer sourced_cache_key_matches_inline_success_and_partial_failure
+  raw log: /root/.cache/velnor-task-targets/20261005/jackin-compaction/shared_script_cleanup_result_checked.log
+  log SHA-256: f1b1af06f834201d3875cd6cf4670e6caebe46f61e1e60b5491517b03aa0e97d
+  exit status file: /root/.cache/velnor-task-targets/20261005/jackin-compaction/shared_script_cleanup_result_checked.status (0), SHA-256 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa
+  exact command record: /root/.cache/velnor-task-targets/20261005/jackin-compaction/shared_script_cleanup_result_checked.command, SHA-256 5365719fb6d94d29c3b26d30c7000bae5fe8f8d1a12571f9ed3d8d21f6956998
+Formatting: pinned rustfmt --check --edition 2024 for the changed file, exit 0; raw empty log SHA-256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.
+Toolchain: cargo 1.98.1 (797e8a9bc 2026-08-05); rustc 1.98.1 (48a229cea 2026-09-01); rustfmt 1.9.0-stable (48a229ceae 2026-09-01).
+Prior complete component evidence packet: /root/.cache/velnor-task-targets/20261005/jackin-compaction/stock_a_component_evidence_safety_final.txt, SHA-256 9bd73f4b78af91268545f09bc4abdf1538d5d100418034fcb7f93f17c6a912e1; it contains the full renderer 53+300 tests, Clippy/fmt, generated Jackin A/B tree equality and 421541-byte output, actionlint, and warning/targeted SC2086 checks. Product-source hashes and generated output remain unchanged by this test-fixture-only patch.

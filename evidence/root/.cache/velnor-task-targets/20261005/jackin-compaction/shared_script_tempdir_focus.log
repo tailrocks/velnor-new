@@ -1,0 +1,29 @@
+   Compiling velnor-actions-workflow-renderer v0.1.0 (/tmp/velnor-render-compaction-44b2-20261005/crates/velnor-actions-workflow-renderer)
+error[E0433]: cannot find module or crate `tempfile` in this scope
+   --> crates/velnor-actions-workflow-renderer/src/document_shared_scripts_execution_tests.rs:108:5
+    |
+108 |     tempfile::Builder::new()
+    |     ^^^^^^^^ use of unresolved module or unlinked crate `tempfile`
+    |
+    = help: if you wanted to use a crate named `tempfile`, use `cargo add tempfile` to add it to your `Cargo.toml`
+help: consider importing this struct
+    |
+  1 + use std::thread::Builder;
+    |
+help: if you import `Builder`, refer to it directly
+    |
+108 -     tempfile::Builder::new()
+108 +     Builder::new()
+    |
+
+error[E0433]: cannot find module or crate `tempfile` in this scope
+   --> crates/velnor-actions-workflow-renderer/src/document_shared_scripts_execution_tests.rs:107:18
+    |
+107 | fn new_root() -> tempfile::TempDir {
+    |                  ^^^^^^^^ use of unresolved module or unlinked crate `tempfile`
+    |
+    = help: if you wanted to use a crate named `tempfile`, use `cargo add tempfile` to add it to your `Cargo.toml`
+
+For more information about this error, try `rustc --explain E0433`.
+error: could not compile `velnor-actions-workflow-renderer` (lib test) due to 2 previous errors
+exit=101

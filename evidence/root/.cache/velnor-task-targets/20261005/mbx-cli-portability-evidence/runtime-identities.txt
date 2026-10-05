@@ -1,0 +1,8 @@
+workdir=/root/.cache/velnor-task-targets/20261005/mbx-cli-portability-20261005T1530Z
+cargo=/root/.cargo/bin/cargo +1.98.1, cargo 1.98.1 (797e8a9bc 2026-08-05)
+nextest=/root/.local/share/mise/installs/aqua-nextest-rs-nextest-cargo-nextest/0.9.146/cargo-nextest, cargo-nextest 0.9.146 (8af696ddc 2026-09-21), sha256=aac21fea56e7ae3f45b5b7c606e02d62d4ec5b3578658fefe4a98a5f29c4bf1a
+mbx=/root/.local/share/mise/installs/mr-boxington/1.21.1/mbx, mbx 1.21.1, sha256=97984b8c92953cefc027014d24c8abf8773f2d12ded0385156d2050da8d5fb8c
+mise=/tmp/velnor-mise-fixed-2026.10.2/bin/mise, 2026.10.2 linux-x64 (2026-10-04), sha256=8f5f6660336f572830e33cd9b378d3131e529a0d4c4f0c553776be90a1ba302a
+mbx_source_commit=a0a44c61ca6aaa8da41d59deeebdfc46fc9d3313
+mbx_linux_x64_archive_url=https://github.com/jdx/mr-boxington/releases/download/v1.21.1/mbx-x86_64-unknown-linux-gnu.tar.gz
+mbx_linux_x64_archive_sha256=1ecb4d55582a40a1227e8ca3450da054ea464e5ff976bb5762943fb1ce6f31da

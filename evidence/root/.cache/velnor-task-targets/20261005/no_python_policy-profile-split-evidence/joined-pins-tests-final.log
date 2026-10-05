@@ -1,0 +1,19 @@
+   Compiling velnor-actions-orchestrator v0.1.0 (/root/.cache/velnor-task-targets/20261005/no_python_policy-profile-split-joined-20261005/crates/velnor-actions-orchestrator)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.81s
+     Running unittests src/lib.rs (/root/.cache/velnor-task-targets/20261005/no_python_policy-profile-split-joined-target/debug/deps/velnor_actions_orchestrator-2d7f35443e58ece5)
+
+running 11 tests
+test pins::tests::mise_setup_defaults_to_compiled_pins ... ok
+test pins::tests::mise_setup_rejects_non_linux_runners ... ok
+test pins::tests::consumer_gate_rejects_attacker_manifests ... ok
+test pins::tests::consumer_manifest_without_commit_fails ... ok
+test pins::tests::consumer_manifest_mismatch_and_bad_target_fail ... ok
+test pins::tests::mise_setup_accepts_approved_override_only ... ok
+test pins::tests::qualified_mise_checksum_family_rejects_catalog_drift ... ok
+test pins::tests::verification_mise_setup_pins_each_runner_architecture ... ok
+test pins::tests::source_build_consumer_generation_fails_with_provenance ... ok
+test pins::tests::phase0_mise_setup_set_pins_all_three_verified_platforms ... ok
+test pins::tests::fixture_manifest_embeds_runner_target_record ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 479 filtered out; finished in 0.00s
+

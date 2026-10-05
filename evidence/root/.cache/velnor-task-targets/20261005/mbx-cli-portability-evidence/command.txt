@@ -1,0 +1,3 @@
+CARGO_TARGET_DIR=/root/.cache/velnor-task-targets/20261005/mbx-cli-portability-target
+TMPDIR=<private /var/tmp/mbq.portability.*>
+/root/.cargo/bin/cargo +1.98.1 test --locked --offline --jobs 1 -p velnor-actions-workflow-renderer --lib platform_sha256 -- --nocapture

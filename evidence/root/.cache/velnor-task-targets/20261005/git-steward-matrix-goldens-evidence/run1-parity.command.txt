@@ -1,0 +1,2 @@
+cwd=/root/.cache/velnor-task-targets/20261005/git-steward-matrix-goldens-evidence/run1
+env CARGO_TARGET_DIR=/root/.cache/velnor-task-targets/20261005/git-steward-matrix-goldens-target-run1 TMPDIR=/var/tmp/velnor-git-steward-goldens-run1 VELNOR_UPDATE_GOLDENS=1 mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo test --locked --offline --jobs 2 -p velnor-actions-cli --test velnor_cli parity_artifacts_match_goldens

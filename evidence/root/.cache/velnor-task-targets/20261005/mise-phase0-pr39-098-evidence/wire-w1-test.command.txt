@@ -1,0 +1,1 @@
+CARGO_TARGET_DIR=/root/.cache/velnor-task-targets/20261005/mise-phase0-pr39-098-route-target CARGO_BUILD_JOBS=1 mise exec rust@1.98.1 -- cargo test --locked --offline -p velnor-actions-orchestrator --lib wire_w1_tests -- --test-threads=1

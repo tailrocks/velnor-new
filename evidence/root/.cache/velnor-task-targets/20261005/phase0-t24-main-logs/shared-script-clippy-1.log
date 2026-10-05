@@ -1,0 +1,65 @@
+mise by @jdx – installing 1 tool
+mise rust@1.98.1 info: syncing channel updates for 1.98.1-x86_64-unknown-linux-gnu
+mise rust@1.98.1 info: latest update on 2026-09-03 for version 1.98.1 (48a229cea 2026-09-01)
+mise rust@1.98.1 info: component clippy is up to date
+mise rust@1.98.1 info: component rust-docs is up to date
+mise rust@1.98.1 info: component rustfmt is up to date
+mise rust@1.98.1   1.98.1-x86_64-unknown-linux-gnu unchanged - rustc 1.98.1 (48a229cea 2026-09-01)
+mise rust@1.98.1 info: checking for self-update (current version: 1.29.1)
+mise rust@1.98.1 rustc 1.98.1 (48a229cea 2026-09-01)
+mise ✓ rust@1.98.1  256ms
+mise ████████████████ 1/1 · installed 1 tool in 257ms
+    Checking velnor-actions-workflow-renderer v0.1.0 (/var/tmp/velnor-phase0-t24-main-shared-script-20261005/crates/velnor-actions-workflow-renderer)
+error: this argument is passed by value, but not consumed in the function body
+   --> crates/velnor-actions-workflow-renderer/src/document_shared_scripts_execution_support.rs:105:28
+    |
+105 | fn finish_root_setup(path: PathBuf) -> io::Result<OwnedTempDir> {
+    |                            ^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.98.0/index.html#needless_pass_by_value
+    = note: `-D clippy::needless-pass-by-value` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::needless_pass_by_value)]`
+help: consider taking a reference instead
+    |
+105 | fn finish_root_setup(path: &PathBuf) -> io::Result<OwnedTempDir> {
+    |                            +
+
+error: called `.ok().is_some_and(..)` on a `Result` value
+   --> crates/velnor-actions-workflow-renderer/src/document_shared_scripts_execution_support.rs:146:26
+    |
+146 |       let child_survives = fs::read_to_string(&paths.child_pid)
+    |  __________________________^
+147 | |         .ok()
+148 | |         .is_some_and(|pid| pid_is_alive(pid.trim()));
+    | |____________________________________________________^ help: use `is_ok_and` instead: `fs::read_to_string(&paths.child_pid).is_ok_and(|pid| pid_is_alive(pid.trim()))`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.98.0/index.html#manual_is_variant_and
+    = note: `-D clippy::manual-is-variant-and` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::manual_is_variant_and)]`
+
+error: called `map(<f>).unwrap_or_else(<g>)` on a `Result` value
+   --> crates/velnor-actions-workflow-renderer/src/document_shared_scripts_execution_tests.rs:241:19
+    |
+241 |       let cleanup = signal_process_group(child.id(), "TERM")
+    |  ___________________^
+242 | |         .map(|output| format!("{}", output.status))
+243 | |         .unwrap_or_else(|error| error.to_string());
+    | |__________________________________________________^ help: try: `signal_process_group(child.id(), "TERM").map_or_else(|error| error.to_string(), |output| format!("{}", output.status))`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.98.0/index.html#map_unwrap_or
+    = note: `-D clippy::map-unwrap-or` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::map_unwrap_or)]`
+
+error: called `map(<f>).unwrap_or_else(<g>)` on a `Result` value
+   --> crates/velnor-actions-workflow-renderer/src/document_shared_scripts_execution_tests.rs:245:18
+    |
+245 |       let status = output
+    |  __________________^
+246 | |         .map(|result| format!("{}", result.status))
+247 | |         .unwrap_or_else(|error| error.to_string());
+    | |__________________________________________________^ help: try: `output.map_or_else(|error| error.to_string(), |result| format!("{}", result.status))`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.98.0/index.html#map_unwrap_or
+
+error: could not compile `velnor-actions-workflow-renderer` (lib test) due to 4 previous errors
+warning: build failed, waiting for other jobs to finish...

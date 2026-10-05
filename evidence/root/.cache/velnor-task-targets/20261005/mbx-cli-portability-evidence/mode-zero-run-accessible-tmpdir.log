@@ -1,0 +1,7 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s
+────────────
+ Nextest run ID 342dccb4-bb21-4a19-abd5-1e97e3c622d9 with nextest profile: default
+    Starting 1 test across 2 binaries (368 tests skipped)
+        PASS [   0.306s] (1/1) velnor-actions-workflow-renderer stock_mbx_bundle::tests::mode_zero_tests::mode_zero_restored_bundle_uses_the_reserved_cold_store_as_non_root
+────────────
+     Summary [   0.307s] 1 test run: 1 passed, 368 skipped

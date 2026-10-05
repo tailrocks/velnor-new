@@ -1,0 +1,18 @@
+Sensitive evidence retained locally: /root/.velnor-generator-preview-20261005/jackin-source-b80f991d56c2-exact-v2/crates/jackin-capsule/src/exec/tests.rs
+Sensitive evidence retained locally: /root/.velnor-generator-preview-20261005/jackin-source-b80f991d56c2-exact-v2/crates/jackin-diagnostics/src/build_log/tests.rs
+Sensitive evidence retained locally: /root/.velnor-generator-preview-20261005/jackin-source-b80f991d56c2-exact-v2/crates/jackin-diagnostics/src/redact/tests.rs
+Sensitive evidence retained locally: /root/.velnor-generator-preview-20261005/jackin-source-b80f991d56c2-exact-v2/crates/jackin-diagnostics/src/secret_scrub/tests.rs
+Sensitive evidence retained locally: /root/.velnor-generator-preview-20261005/jackin-source-b80f991d56c2-exact-v2/crates/jackin-docker/src/shell_runner/tests.rs
+Sensitive evidence retained locally: /root/.velnor-generator-preview-20261005/jackin-source/crates/jackin-capsule/src/exec/tests.rs
+Sensitive evidence retained locally: /root/.velnor-generator-preview-20261005/jackin-source/crates/jackin-diagnostics/src/redact/tests.rs
+Sensitive evidence retained locally: /root/.velnor-generator-preview-20261005/jackin-source/crates/jackin-diagnostics/src/secret_scrub/tests.rs
+Sensitive evidence retained locally: /root/.velnor-generator-preview-20261005/jackin-source/crates/jackin-docker/src/shell_runner/tests.rs
+Sensitive evidence retained locally: /root/velnor-consumer-scratch-20261005/chainargos-cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/aws-config-1.10.1/src/login/cache.rs
+Sensitive evidence retained locally: /root/velnor-consumer-scratch-20261005/chainargos-cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/aws-config-1.10.1/src/login/dpop.rs
+Sensitive evidence retained locally: /root/velnor-consumer-scratch-20261005/chainargos-cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/aws-config-1.10.1/src/profile/credentials.rs
+Sensitive evidence retained locally: /root/velnor-consumer-scratch-20261005/chainargos-cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/aws-runtime-1.9.1/src/content_encoding/body/http_body_1_x.rs
+Sensitive evidence retained locally: /root/velnor-consumer-scratch-20261005/chainargos-cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/aws-sdk-sts-1.110.0/src/operation/get_access_key_info/builders.rs
+Sensitive evidence retained locally: /root/velnor-consumer-scratch-20261005/chainargos-cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/aws-sigv4-1.5.1/benches/sigv4a.rs
+Sensitive-pattern source inputs were excluded from publication. Original consumer scratch directory is retained; exact candidate paths are recorded in extra-source.secrets0. No secret values are recorded in manifests.
+Retained /tmp/velnor-node2418-provenance-20261005/gpg-release-key-only: contains private-key material, cannot publish to Git. Agent process stopped; directory secured.
+Retained /tmp/velnor-mbx-action-1.6.0: external upstream commit API returned HTTP 404; remote availability not confirmed, so not deleted.

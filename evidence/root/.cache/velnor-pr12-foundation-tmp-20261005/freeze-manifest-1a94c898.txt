@@ -1,0 +1,212 @@
+PR12 freshness foundation immutable-source manifest
+Head: 1a94c89867dd653814ce0b3a38c29cab441925e6
+Tree: e97446c4a4bc537b4572d59aec0405c24d499d69
+Merge parents: db23eae66893b8f68ab253c7f820ed724832017e (foundation); fea935e3439a9feee541cd18eac0cd0b60b2d174 (origin/main)
+Feature base: fea935e3439a9feee541cd18eac0cd0b60b2d174
+Working tree: clean after merge commit
+
+Commits above current main:
+1a94c8986 (HEAD -> impl/pr12-freshness-foundation-20261005) Merge origin/main at fea935e3439a9feee541cd18eac0cd0b60b2d174
+db23eae66 fix: reject malformed freshness evidence shapes
+764f2ffb3 Merge current main into freshness foundation
+9e420020f docs: record historical trailer and PR closeout evidence
+ff874c0c1 Merge current main into freshness foundation
+c814ad90f Merge current main into freshness foundation
+9583d3b68 fix: scope maintenance tasks and harden freshness admission
+050c3c1af Merge current main into freshness foundation
+38f8b988a Bound freshness probe redirects and source parsing
+85bacbc82 Retire the legacy Python trailer validator
+335923759 Borrow process cleanup diagnostics
+abfe08ca1 Satisfy strict freshness crate lint gates
+9cfcc0ef3 Prove process-group cleanup and preserve relative roots
+8d883a843 Remove bounded process cleanup warnings
+5f719d29a Bound freshness subprocess capture by one deadline
+5add4ffb0 Reject duplicate inventory rows and mismatched holds
+c2ef5ae7d Merge current main into freshness support
+ef008ef0d Add bounded repository freshness support
+
+Feature diff summary (origin/main...HEAD):
+ Cargo.lock                                         |  323 +++++-
+ Cargo.toml                                         |    1 +
+ crates/velnor-actions-cli/Cargo.toml               |    1 +
+ crates/velnor-actions-cli/src/dispatch.rs          |   13 +-
+ .../velnor-actions-cli/src/dispatch_repo_policy.rs |   91 ++
+ crates/velnor-actions-cli/src/main.rs              |    1 +
+ .../tests/fixtures/p12_harness.rs                  |   23 +
+ .../velnor-actions-cli/tests/fixtures/p12_live.rs  |   14 +-
+ .../tests/fixtures/p12_policy.rs                   |   46 +-
+ .../tests/fixtures/p12_policy_b.rs                 |   66 ++
+ crates/velnor-actions-cli/tests/impl_cli_gate.rs   |    2 +-
+ .../tests/impl_cli_gate_repo_policy.rs             |  140 +++
+ .../tests/impl_cli_verify_local.rs                 |   65 +-
+ crates/velnor-actions-cli/tests/impl_repo_deps.rs  |   33 +-
+ .../tests/impl_repo_freshness.rs                   |   10 +-
+ .../tests/impl_repo_freshness_support.rs           |   27 +
+ .../velnor-actions-cli/tests/impl_repo_policy.rs   |   35 +-
+ crates/velnor-actions-cli/tests/velnor_cli.rs      |    4 +
+ crates/velnor-actions-freshness/Cargo.toml         |   27 +
+ crates/velnor-actions-freshness/src/context.rs     |  232 ++++
+ .../velnor-actions-freshness/src/dependencies.rs   |   74 ++
+ .../src/dependencies/lock.rs                       |  114 ++
+ .../src/dependencies/lock/graph.rs                 |  174 +++
+ .../src/dependencies/lock/identity.rs              |  142 +++
+ .../src/dependencies/workspace.rs                  |  326 ++++++
+ crates/velnor-actions-freshness/src/evidence.rs    |   17 +
+ .../src/evidence/advisories.rs                     |  151 +++
+ .../src/evidence/exceptions.rs                     |  246 +++++
+ .../src/evidence/freshness.rs                      |  381 +++++++
+ crates/velnor-actions-freshness/src/inventory.rs   |  356 +++++++
+ .../src/inventory/mirror.rs                        |  220 ++++
+ .../velnor-actions-freshness/src/inventory/pins.rs |  393 +++++++
+ crates/velnor-actions-freshness/src/lib.rs         |  118 +++
+ crates/velnor-actions-freshness/src/members.rs     |   81 ++
+ crates/velnor-actions-freshness/src/patterns.rs    |   93 ++
+ crates/velnor-actions-freshness/src/probe.rs       |  148 +++
+ crates/velnor-actions-freshness/src/probe/tests.rs |  241 +++++
+ .../src/probe/tests/http.rs                        |  204 ++++
+ .../src/probe/transport.rs                         |  316 ++++++
+ crates/velnor-actions-freshness/src/process.rs     |  321 ++++++
+ .../src/process/capture.rs                         |   81 ++
+ .../velnor-actions-freshness/src/process/tests.rs  |   93 ++
+ crates/velnor-actions-freshness/src/tests.rs       |  176 ++++
+ crates/velnor-actions-freshness/src/time.rs        |  173 +++
+ .../velnor-actions-freshness/src/trailer_policy.rs |  271 +++++
+ .../src/trailer_policy/tests.rs                    |  183 ++++
+ crates/velnor-actions-freshness/src/validation.rs  |  120 +++
+ .../tests/freshness_contract.rs                    |   11 +
+ .../src/derive_groups.rs                           |   42 +-
+ .../src/derive_groups_task_owner_tests.rs          |  141 +++
+ crates/velnor-actions-orchestrator/src/discover.rs |    2 +-
+ .../src/identities_tests.rs                        |    1 +
+ .../src/inventory_tests.rs                         |    1 +
+ .../src/matrix_step_tests.rs                       |    3 +
+ .../src/matrix_step_tofu_install_tests.rs          |    3 +
+ .../src/select_affected.rs                         |    2 +
+ .../tests/impl_orch_f2f.rs                         |   11 +-
+ crates/velnor-actions-rust/src/lib.rs              |    4 +-
+ crates/velnor-actions-rust/src/metadata.rs         |   72 +-
+ crates/velnor-actions-rust/src/metadata_edges.rs   |    2 +
+ .../tests/impl_adapter_wire_rust.rs                |    1 +
+ crates/velnor-actions-rust/tests/impl_rust_f2a.rs  |    1 +
+ .../tests/impl_rust_metadata.rs                    |   38 +-
+ .../tests/impl_rust_p03_identity.rs                |    1 +
+ .../velnor-actions-rust/tests/impl_rust_tasks.rs   |    1 +
+ .../tests/impl_rust_test_targets.rs                |    1 +
+ docs/implemented/codex-agent-configuration.md      |   14 +-
+ docs/implemented/commit-trailer-evidence.md        |   20 +-
+ .../pr29-pr30-disposition-2026-10-05.md            |   46 +-
+ docs/implemented/update-procedure.md               |    4 +
+ docs/proposed/architecture.md                      |   21 +-
+ docs/proposed/cli-contract.md                      |   17 +-
+ docs/proposed/rust-quality-contract.md             |   47 +-
+ scripts/check-freshness.sh                         | 1113 +-------------------
+ scripts/tests/test_validate_commit_trailers.py     |  120 ---
+ scripts/toml-tool-pin.awk                          |   41 +
+ scripts/validate-commit-trailers.py                |  104 --
+ scripts/verify-local.sh                            |   66 +-
+ 78 files changed, 6856 insertions(+), 1462 deletions(-)
+
+Feature diff names and statuses:
+M	Cargo.lock
+M	Cargo.toml
+M	crates/velnor-actions-cli/Cargo.toml
+M	crates/velnor-actions-cli/src/dispatch.rs
+A	crates/velnor-actions-cli/src/dispatch_repo_policy.rs
+M	crates/velnor-actions-cli/src/main.rs
+M	crates/velnor-actions-cli/tests/fixtures/p12_harness.rs
+M	crates/velnor-actions-cli/tests/fixtures/p12_live.rs
+M	crates/velnor-actions-cli/tests/fixtures/p12_policy.rs
+M	crates/velnor-actions-cli/tests/fixtures/p12_policy_b.rs
+M	crates/velnor-actions-cli/tests/impl_cli_gate.rs
+A	crates/velnor-actions-cli/tests/impl_cli_gate_repo_policy.rs
+M	crates/velnor-actions-cli/tests/impl_cli_verify_local.rs
+M	crates/velnor-actions-cli/tests/impl_repo_deps.rs
+M	crates/velnor-actions-cli/tests/impl_repo_freshness.rs
+A	crates/velnor-actions-cli/tests/impl_repo_freshness_support.rs
+M	crates/velnor-actions-cli/tests/impl_repo_policy.rs
+M	crates/velnor-actions-cli/tests/velnor_cli.rs
+A	crates/velnor-actions-freshness/Cargo.toml
+A	crates/velnor-actions-freshness/src/context.rs
+A	crates/velnor-actions-freshness/src/dependencies.rs
+A	crates/velnor-actions-freshness/src/dependencies/lock.rs
+A	crates/velnor-actions-freshness/src/dependencies/lock/graph.rs
+A	crates/velnor-actions-freshness/src/dependencies/lock/identity.rs
+A	crates/velnor-actions-freshness/src/dependencies/workspace.rs
+A	crates/velnor-actions-freshness/src/evidence.rs
+A	crates/velnor-actions-freshness/src/evidence/advisories.rs
+A	crates/velnor-actions-freshness/src/evidence/exceptions.rs
+A	crates/velnor-actions-freshness/src/evidence/freshness.rs
+A	crates/velnor-actions-freshness/src/inventory.rs
+A	crates/velnor-actions-freshness/src/inventory/mirror.rs
+A	crates/velnor-actions-freshness/src/inventory/pins.rs
+A	crates/velnor-actions-freshness/src/lib.rs
+A	crates/velnor-actions-freshness/src/members.rs
+A	crates/velnor-actions-freshness/src/patterns.rs
+A	crates/velnor-actions-freshness/src/probe.rs
+A	crates/velnor-actions-freshness/src/probe/tests.rs
+A	crates/velnor-actions-freshness/src/probe/tests/http.rs
+A	crates/velnor-actions-freshness/src/probe/transport.rs
+A	crates/velnor-actions-freshness/src/process.rs
+A	crates/velnor-actions-freshness/src/process/capture.rs
+A	crates/velnor-actions-freshness/src/process/tests.rs
+A	crates/velnor-actions-freshness/src/tests.rs
+A	crates/velnor-actions-freshness/src/time.rs
+A	crates/velnor-actions-freshness/src/trailer_policy.rs
+A	crates/velnor-actions-freshness/src/trailer_policy/tests.rs
+A	crates/velnor-actions-freshness/src/validation.rs
+A	crates/velnor-actions-freshness/tests/freshness_contract.rs
+M	crates/velnor-actions-orchestrator/src/derive_groups.rs
+A	crates/velnor-actions-orchestrator/src/derive_groups_task_owner_tests.rs
+M	crates/velnor-actions-orchestrator/src/discover.rs
+M	crates/velnor-actions-orchestrator/src/identities_tests.rs
+M	crates/velnor-actions-orchestrator/src/inventory_tests.rs
+M	crates/velnor-actions-orchestrator/src/matrix_step_tests.rs
+M	crates/velnor-actions-orchestrator/src/matrix_step_tofu_install_tests.rs
+M	crates/velnor-actions-orchestrator/src/select_affected.rs
+M	crates/velnor-actions-orchestrator/tests/impl_orch_f2f.rs
+M	crates/velnor-actions-rust/src/lib.rs
+M	crates/velnor-actions-rust/src/metadata.rs
+M	crates/velnor-actions-rust/src/metadata_edges.rs
+M	crates/velnor-actions-rust/tests/impl_adapter_wire_rust.rs
+M	crates/velnor-actions-rust/tests/impl_rust_f2a.rs
+M	crates/velnor-actions-rust/tests/impl_rust_metadata.rs
+M	crates/velnor-actions-rust/tests/impl_rust_p03_identity.rs
+M	crates/velnor-actions-rust/tests/impl_rust_tasks.rs
+M	crates/velnor-actions-rust/tests/impl_rust_test_targets.rs
+M	docs/implemented/codex-agent-configuration.md
+M	docs/implemented/commit-trailer-evidence.md
+M	docs/implemented/pr29-pr30-disposition-2026-10-05.md
+M	docs/implemented/update-procedure.md
+M	docs/proposed/architecture.md
+M	docs/proposed/cli-contract.md
+M	docs/proposed/rust-quality-contract.md
+M	scripts/check-freshness.sh
+D	scripts/tests/test_validate_commit_trailers.py
+A	scripts/toml-tool-pin.awk
+D	scripts/validate-commit-trailers.py
+M	scripts/verify-local.sh
+
+Verified checks, exact toolchain selection:
+mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 jq@1.8.1 github:asamarts/alint@0.16.1 [cargo-deny@0.20.2] -- <gate>
+cargo fmt --all -- --check: PASS
+cargo clippy --locked --offline --workspace --all-targets -- -D warnings: PASS
+cargo nextest run --locked --offline --workspace: PASS 2896/2896, 1 skipped
+alint validate-config && alint check --fail-on-warning (Alint 0.16.1): PASS, 50 passing, 3 informational findings, 0 failures
+cargo deny check (cargo-deny 0.20.2): PASS, existing duplicate-version/license allowance warnings only
+bash scripts/check-freshness.sh: PASS; ordinary offline/local gate only, not live upstream probes or formal runner qualification
+
+Logs:
+/root/.cache/velnor-pr12-foundation-tmp-20261005/nextest-fea-merge.log
+/root/.cache/velnor-pr12-foundation-tmp-20261005/deny-fea-merge.log
+/root/.cache/velnor-pr12-foundation-tmp-20261005/freshness-fea-merge.log
+
+Latest review-fix delta since 764f2ffb3a9b7104e90644c6bb64aa4a6c6ea66a:
+db23eae66893b8f68ab253c7f820ed724832017e, 5 paths:
+crates/velnor-actions-freshness/src/inventory.rs: reject wrong-type present arrays and top-level checked_at
+crates/velnor-actions-freshness/src/evidence/freshness.rs: reject wrong-type row checked_at instead of fallback
+crates/velnor-actions-freshness/src/validation.rs: fail non-string examine_globs entries instead of filtering them out
+crates/velnor-actions-cli/tests/fixtures/p12_policy.rs and p12_policy_b.rs: CLI regressions for number/object/null and mixed entries
+
+Foundational prior fixes (already present before 764f): bounded subprocess/process-group drain deadline; strict timestamp grammar and checked arithmetic; caller-relative --root canonicalization; RFC-compliant bounded HTTP redirect/path handling; duplicate and unknown inventory rows rejected before probes; exact held-version binding; typed repo-maintenance freshness owner and private typed operation; canonical trailer-policy Rust migration with old Python checker and tests removed.
+
+No live external messages, releases, or qualification claims were made. Source review remains pending at this new immutable SHA.

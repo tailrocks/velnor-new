@@ -1,0 +1,4 @@
+[WARN] migrate: failed create_dir_all: /tools/mise-data/migrations
+mise_version=2026.9.18 linux-x64 (2026-09-30)
+[WARN] migrate: failed create_dir_all: /tools/mise-data/migrations
+unexpected inherited descriptor

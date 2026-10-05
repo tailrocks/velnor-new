@@ -1,0 +1,14 @@
+   Compiling velnor-actions-workflow-renderer v0.1.1 (/tmp/velnor-impl-20261005/cache/pr38/crates/velnor-actions-workflow-renderer)
+   Compiling velnor-actions-orchestrator v0.1.1 (/tmp/velnor-impl-20261005/cache/pr38/crates/velnor-actions-orchestrator)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.89s
+────────────
+ Nextest run ID 6cc11d18-507f-4344-b51e-03de605a5201 with nextest profile: default
+    Starting 6 tests across 5 binaries (1641 tests skipped)
+        PASS [   0.006s] (1/6) velnor-actions-workflow-renderer::velnor_workflow_renderer impl_renderer_lint::zizmor_preparation_keeps_job_env_and_exec_unsets_it
+        PASS [   0.008s] (2/6) velnor-actions-workflow-renderer::velnor_workflow_renderer impl_renderer_lint::zizmor_support_unsets_empty_tokens_after_pinned_install
+        PASS [   0.010s] (3/6) velnor-actions-workflow-renderer::velnor_workflow_renderer impl_renderer_mbx_gc_policy::mbx_job_policy_applies_to_hosted_and_scale_set_lanes
+        PASS [   0.011s] (4/6) velnor-actions-workflow-renderer::velnor_workflow_renderer impl_renderer_mbx_native_owner::native_action_is_the_only_mbx_cache_owner_on_both_lanes
+        PASS [   0.080s] (5/6) velnor-actions-orchestrator::velnor_orchestrator impl_orch_install_sets::velnor_jobs_carry_trio_only_where_executed
+        PASS [   0.643s] (6/6) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t20_stable::tofu_cross_checkout_determinism
+────────────
+     Summary [   0.645s] 6 tests run: 6 passed, 1641 skipped

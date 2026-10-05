@@ -1,0 +1,50 @@
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling unicode-ident v1.0.26
+   Compiling serde_core v1.0.229
+   Compiling syn v3.0.6
+   Compiling serde v1.0.229
+   Compiling itoa v1.0.18
+   Compiling shlex v2.0.1
+   Compiling find-msvc-tools v0.1.14
+   Compiling cc v1.5.1
+   Compiling serde_derive v1.0.229
+   Compiling zmij v1.0.23
+   Compiling blake3 v1.8.7
+   Compiling serde_json v1.0.151
+   Compiling thiserror v2.0.21
+   Compiling thiserror-impl v2.0.21
+   Compiling ryu v1.0.23
+   Compiling memchr v2.8.3
+   Compiling cfg-if v1.0.5
+   Compiling constant_time_eq v0.4.2
+   Compiling arrayvec v0.7.8
+   Compiling cpufeatures v0.3.1
+   Compiling hcl-primitives v0.1.12
+   Compiling vecmap-rs v0.2.5
+   Compiling winnow v1.0.4
+   Compiling pratt v0.4.0
+   Compiling equivalent v1.0.2
+   Compiling hashbrown v0.17.1
+   Compiling fnv v1.0.7
+   Compiling indexmap v2.14.2
+   Compiling hcl-edit v0.9.7
+   Compiling velnor-actions-contract v0.1.0 (/root/.cache/velnor-task-targets/20261005/no_python_policy-103-candidate/crates/velnor-actions-contract)
+   Compiling velnor-actions-tofu v0.1.0 (/root/.cache/velnor-task-targets/20261005/no_python_policy-103-candidate/crates/velnor-actions-tofu)
+   Compiling hcl-rs v0.19.8
+   Compiling velnor-actions-mise v0.1.0 (/root/.cache/velnor-task-targets/20261005/no_python_policy-103-candidate/crates/velnor-actions-mise)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 13.84s
+     Running tests/velnor_mise.rs (/root/.cache/velnor-task-targets/20261005/no_python_policy-103-target/debug/deps/velnor_mise-6d700a72d1410dbe)
+
+running 4 tests
+test impl_miserc_isolation::affected_release_controls_fail_for_both_no_config_selectors ... mise qualification binary: release=2026.10.1 source=050ce5a20287a0aafd872b1191699a5fdafff5ac sha256=31e6859cf639ed4594906da3fcd0fe2055e9daddae75e9786dbe50b3fb3c0f4a path=/root/.local/bin/mise
+ok
+test impl_miserc_isolation::fixed_release_flag_and_environment_matrix_skips_all_miserc_layers ... mise qualification binary: release=2026.10.3 source=33a839a4d19acca617bc9ec0fe53f61266d60a9d sha256=8d48bc510b7d844fad0bc7156c0855c2a1e7230c51e498a7f6b63b021f8b57c5 path=/root/.cache/velnor-task-targets/20261005/no_python_policy-103-evidence/mise-v2026.10.3-linux-x64
+ok
+test impl_miserc_isolation::no_selector_controls_reach_each_malformed_config_layer ... mise qualification binary: release=2026.10.3 source=33a839a4d19acca617bc9ec0fe53f61266d60a9d sha256=8d48bc510b7d844fad0bc7156c0855c2a1e7230c51e498a7f6b63b021f8b57c5 path=/root/.cache/velnor-task-targets/20261005/no_python_policy-103-evidence/mise-v2026.10.3-linux-x64
+ok
+test impl_miserc_isolation::product::production_command_keeps_no_config_guards_with_a_real_binary ... mise qualification binary: release=2026.10.3 source=33a839a4d19acca617bc9ec0fe53f61266d60a9d sha256=8d48bc510b7d844fad0bc7156c0855c2a1e7230c51e498a7f6b63b021f8b57c5 path=/root/.cache/velnor-task-targets/20261005/no_python_policy-103-evidence/mise-v2026.10.3-linux-x64
+ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 353 filtered out; finished in 2.29s
+

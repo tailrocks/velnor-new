@@ -1,0 +1,26 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s
+────────────
+ Nextest run ID 061c0dfe-bdb0-4b02-b102-20024be5f263 with nextest profile: default
+    Starting 1 test across 2 binaries (368 tests skipped)
+        FAIL [   0.055s] (1/1) velnor-actions-workflow-renderer stock_mbx_bundle::tests::mode_zero_tests::mode_zero_restored_bundle_uses_the_reserved_cold_store_as_non_root
+  stdout ───
+
+    running 1 test
+    test stock_mbx_bundle::tests::mode_zero_tests::mode_zero_restored_bundle_uses_the_reserved_cold_store_as_non_root ... FAILED
+
+    failures:
+
+    failures:
+        stock_mbx_bundle::tests::mode_zero_tests::mode_zero_restored_bundle_uses_the_reserved_cold_store_as_non_root
+
+    test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 68 filtered out; finished in 0.05s
+
+  stderr ───
+    mode-zero official MBX: path=/root/.local/share/mise/installs/mr-boxington/1.21.1/mbx version=mbx 1.21.1 sha256=97984b8c92953cefc027014d24c8abf8773f2d12ded0385156d2050da8d5fb8c
+    Error: Custom { kind: Other, error: "import returned exit status: 1: MBX workspace or runner-temp parent is not canonical\n" }
+
+  Cancelling due to test failure: 
+────────────
+     Summary [   0.056s] 1 test run: 0 passed, 1 failed, 368 skipped
+        FAIL [   0.055s] (1/1) velnor-actions-workflow-renderer stock_mbx_bundle::tests::mode_zero_tests::mode_zero_restored_bundle_uses_the_reserved_cold_store_as_non_root
+error: test run failed

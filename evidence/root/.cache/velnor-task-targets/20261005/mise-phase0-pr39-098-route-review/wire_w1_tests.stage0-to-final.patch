@@ -1,0 +1,81 @@
+--- stage0 wire_w1_tests.rs
++++ final wire_w1_tests.rs
+@@ -85,23 +85,33 @@
+     use velnor_actions_mise::PinnedTool;
+ 
+     use crate::matrix_step::task_driver_tools;
+-    assert_eq!(task_driver_tools(true, false), vec![PinnedTool::Rust]);
+-    assert_eq!(task_driver_tools(true, false), vec![PinnedTool::Rust]);
+     assert_eq!(
+-        task_driver_tools(true, true),
+-        vec![PinnedTool::Rust, PinnedTool::Opentofu]
++        task_driver_tools(true, false, false),
++        vec![PinnedTool::Rust]
++    );
++    assert_eq!(
++        task_driver_tools(true, true, false),
++        vec![PinnedTool::Rust, PinnedTool::MrBoxington]
+     );
+     assert_eq!(
+-        task_driver_tools(true, true),
++        task_driver_tools(true, false, true),
+         vec![PinnedTool::Rust, PinnedTool::Opentofu]
+     );
+     assert_eq!(
+-        task_driver_tools(false, true),
++        task_driver_tools(true, true, true),
++        vec![
++            PinnedTool::Rust,
++            PinnedTool::MrBoxington,
++            PinnedTool::Opentofu
++        ]
++    );
++    assert_eq!(
++        task_driver_tools(false, false, true),
+         vec![PinnedTool::Opentofu],
+         "pure-tofu drivers carry no Rust"
+     );
+     assert!(
+-        task_driver_tools(false, false).is_empty(),
++        task_driver_tools(false, false, false).is_empty(),
+         "no drivers without any role"
+     );
+ }
+@@ -123,6 +133,7 @@
+         let step = prepare_crate_tools_step(
+             &catalog,
+             use_rust,
++            use_mbx,
+             use_nextest,
+             use_opentofu,
+             needs_validators,
+@@ -145,10 +156,7 @@
+         let nextest = catalog.tool_spec(PinnedTool::Nextest);
+         assert_eq!(run.contains(&nextest), use_nextest);
+         let mbx = catalog.tool_spec(PinnedTool::MrBoxington);
+-        assert!(
+-            !run.contains(&mbx),
+-            "MBX stays action-owned for use_mbx={use_mbx}: {run:?}"
+-        );
++        assert_eq!(run.contains(&mbx), use_mbx);
+         let opentofu = catalog.tool_spec(PinnedTool::Opentofu);
+         assert_eq!(run.contains(&opentofu), use_opentofu);
+         let rust = catalog.tool_spec(PinnedTool::Rust);
+@@ -185,6 +193,7 @@
+             let step = prepare_crate_tools_step(
+                 &catalog,
+                 use_rust,
++                use_mbx,
+                 use_nextest,
+                 use_opentofu,
+                 needs_validators,
+@@ -202,6 +211,9 @@
+             if use_rust {
+                 expected.push(catalog.tool_spec(PinnedTool::Rust));
+             }
++            if use_mbx {
++                expected.push(catalog.tool_spec(PinnedTool::MrBoxington));
++            }
+             if use_opentofu {
+                 expected.push(catalog.tool_spec(PinnedTool::Opentofu));
+             }

@@ -1,0 +1,224 @@
+diff --git a/crates/velnor-actions-contract/src/workflow/matrix_entry_tests.rs b/crates/velnor-actions-contract/src/workflow/matrix_entry_tests.rs
+index d9df614b7..b9f8e281f 100644
+--- a/crates/velnor-actions-contract/src/workflow/matrix_entry_tests.rs
++++ b/crates/velnor-actions-contract/src/workflow/matrix_entry_tests.rs
+@@ -20,6 +20,15 @@ fn entry(variant: NamedCheckLaneVariant, job_id: &str) -> MatrixEntry {
+         "local",
+         job_id,
+         Some(variant),
++        PlannedPlatform::new(
++            if variant == NamedCheckLaneVariant::Hosted {
++                "ubuntu-26.04"
++            } else {
++                "scale-set:velnor+ubuntu-26.04-scale-set"
++            },
++            "x86_64-unknown-linux-gnu",
++        )
++        .expect("planned platform"),
+     )
+     .expect("derived paired lane")
+ }
+@@ -52,6 +61,8 @@ fn lane_identity_rejects_wrong_stack_or_emitted_job_suffix() {
+         "local",
+         "check-demo__local",
+         Some(NamedCheckLaneVariant::Hosted),
++        PlannedPlatform::new("ubuntu-26.04", "x86_64-unknown-linux-gnu")
++            .expect("planned platform"),
+     )
+     .expect_err("hosted variant cannot claim the local job");
+     assert!(
+diff --git a/crates/velnor-actions-contract/src/workflow/mod.rs b/crates/velnor-actions-contract/src/workflow/mod.rs
+index bf44ef5c2..1eabf356b 100644
+--- a/crates/velnor-actions-contract/src/workflow/mod.rs
++++ b/crates/velnor-actions-contract/src/workflow/mod.rs
+@@ -16,6 +16,7 @@ pub mod plan;
+ pub mod platform;
+ pub mod qualification;
+ pub mod report;
++mod report_validate;
+ pub mod timeout;
+ pub mod trust;
+ pub use artifacts::{
+diff --git a/crates/velnor-actions-contract/src/workflow/plan_tests.rs b/crates/velnor-actions-contract/src/workflow/plan_tests.rs
+index c28db4767..2f5cc8c24 100644
+--- a/crates/velnor-actions-contract/src/workflow/plan_tests.rs
++++ b/crates/velnor-actions-contract/src/workflow/plan_tests.rs
+@@ -2,6 +2,7 @@
+ 
+ use super::*;
+ use crate::workflow::execute::ExecuteTaskIds;
++use crate::workflow::platform::PlannedPlatform;
+ 
+ const TASK: &str = "stack/mise/demo/check/default";
+ 
+@@ -17,6 +18,15 @@ fn lane(variant: NamedCheckLaneVariant, job_id: &str) -> MatrixEntry {
+         "local",
+         job_id,
+         Some(variant),
++        PlannedPlatform::new(
++            if variant == NamedCheckLaneVariant::Hosted {
++                "ubuntu-26.04"
++            } else {
++                "scale-set:velnor+ubuntu-26.04-scale-set"
++            },
++            "x86_64-unknown-linux-gnu",
++        )
++        .expect("planned platform"),
+     )
+     .expect("lane entry")
+ }
+@@ -46,6 +56,8 @@ fn paired_and_single_entries_cannot_share_one_logical_task() {
+         &format!("b3-{}", "b".repeat(64)),
+         "local",
+         "check-demo",
++        PlannedPlatform::new("ubuntu-26.04", "x86_64-unknown-linux-gnu")
++            .expect("planned platform"),
+     )
+     .expect("single entry");
+     single.task_id = TASK.to_owned();
+diff --git a/crates/velnor-actions-contract/tests/impl_contract_reports.rs b/crates/velnor-actions-contract/tests/impl_contract_reports.rs
+index 4f3b279c9..63f1f3bfa 100644
+--- a/crates/velnor-actions-contract/tests/impl_contract_reports.rs
++++ b/crates/velnor-actions-contract/tests/impl_contract_reports.rs
+@@ -118,7 +118,7 @@ fn task_and_matrix_reports_validate() -> Result<(), ContractError> {
+         timing: None,
+     };
+     report.validate()?;
+-    rejects_task_report_v2(&report);
++    rejects_task_report_v1(&report);
+     let skipped = TaskReport {
+         status: TaskStatus::NotSelected,
+         not_selected_reason: Some(NotSelectedReason::UpstreamFailed),
+@@ -158,16 +158,16 @@ fn task_and_matrix_reports_validate() -> Result<(), ContractError> {
+     Ok(())
+ }
+ 
+-fn rejects_task_report_v2(report: &TaskReport) {
++fn rejects_task_report_v1(report: &TaskReport) {
+     let mut legacy_report = report.clone();
+-    legacy_report.schema = 2;
++    legacy_report.schema = 1;
+     assert!(matches!(
+         legacy_report.validate(),
+         Err(ContractError::UnsupportedSchema {
+             field: "schema",
+             found,
+-            expected: "3"
+-        }) if found == "2"
++            expected: "2"
++        }) if found == "1"
+     ));
+ }
+ 
+diff --git a/crates/velnor-actions-contract/tests/impl_remed_cache.rs b/crates/velnor-actions-contract/tests/impl_remed_cache.rs
+index 1a281268e..dd7e281b9 100644
+--- a/crates/velnor-actions-contract/tests/impl_remed_cache.rs
++++ b/crates/velnor-actions-contract/tests/impl_remed_cache.rs
+@@ -170,7 +170,7 @@ fn cache_entry_records_five_identity_digests() -> Result<(), ContractError> {
+     entry.cache_ids = Some(EntryCacheIds::new(
+         &digest_b3(b"w"),
+         &digest_b3(b"lane"),
+-        &digest_b3(b"plat"),
++        &entry.planned_platform.platform_id,
+         &digest_b3(b"tool"),
+         &digest_b3(b"fmt"),
+     )?);
+@@ -180,7 +180,7 @@ fn cache_entry_records_five_identity_digests() -> Result<(), ContractError> {
+     let bad = EntryCacheIds::new(
+         &digest_b3(b"w"),
+         "nope",
+-        &digest_b3(b"plat"),
++        &entry.planned_platform.platform_id,
+         &digest_b3(b"tool"),
+         &digest_b3(b"fmt"),
+     );
+diff --git a/crates/velnor-actions-orchestrator/src/check_gate_tests.rs b/crates/velnor-actions-orchestrator/src/check_gate_tests.rs
+index 1c7e47d4a..92790af45 100644
+--- a/crates/velnor-actions-orchestrator/src/check_gate_tests.rs
++++ b/crates/velnor-actions-orchestrator/src/check_gate_tests.rs
+@@ -10,7 +10,7 @@ use velnor_actions_contract::config::{
+     CheckEvidence, CheckPlatform, HostContainerProfile, QualifiedTool,
+ };
+ use velnor_actions_contract::{
+-    ExecuteTaskIds, ExecuteTaskRef, FinalReport, FinalStatus, MatrixEntry, Plan,
++    ExecuteTaskIds, ExecuteTaskRef, FinalReport, FinalStatus, MatrixEntry, Plan, PlannedPlatform,
+     canonical_json_bytes,
+ };
+ 
+@@ -39,7 +39,9 @@ fn plan_with_tools(qualified_tools: &[QualifiedTool]) -> Plan {
+         serde_json::json!({"check_id":"demo","system_tools":[],"qualified_tools":qualified_tools,"tool_specs":tool_specs,"qualification_digest":qualification_digest,"evidence":{"path":"proof.json","expected_scenarios":["one"]},
+             "runner":{"label":"ubuntu-24.04","platform":"linux_x64","executor":"hosted"}}),
+         ExecuteTaskIds { tasks: BTreeMap::from([("check".into(), ExecuteTaskRef::Single(TASK.into()))]) },
+-        &obligation.input_digest, "local", "check-demo").expect("entry");
++            &obligation.input_digest, "local", "check-demo",
++        PlannedPlatform::new("ubuntu-24.04", "x86_64-unknown-linux-gnu").expect("platform"),
++    ).expect("entry");
+     entry.declared_outputs = vec!["proof.json".into()];
+     plan.matrix.include = vec![entry];
+     plan.obligations = vec![obligation];
+diff --git a/crates/velnor-actions-orchestrator/src/identities.rs b/crates/velnor-actions-orchestrator/src/identities.rs
+index 0763c1f93..6021eb48c 100644
+--- a/crates/velnor-actions-orchestrator/src/identities.rs
++++ b/crates/velnor-actions-orchestrator/src/identities.rs
+@@ -13,7 +13,7 @@ use velnor_actions_contract::{
+ use velnor_actions_mise::{PinnedTool, ToolCatalog};
+ use velnor_actions_rust::{CompileDriver, DepKind, WorkspaceRecord, tool_needs};
+ 
+-use super::snapshot::{ExecutionSnapshot, canonical_digest, platform_id_for};
++use super::snapshot::{ExecutionSnapshot, canonical_digest};
+ use crate::discover::Discovery;
+ use crate::toolcheck::ToolInputCheck;
+ 
+diff --git a/crates/velnor-actions-orchestrator/src/plan_obligation.rs b/crates/velnor-actions-orchestrator/src/plan_obligation.rs
+index 5ff923cb4..38de8aec4 100644
+--- a/crates/velnor-actions-orchestrator/src/plan_obligation.rs
++++ b/crates/velnor-actions-orchestrator/src/plan_obligation.rs
+@@ -254,6 +254,7 @@ pub(crate) fn plan_group(
+         inputs,
+         &argv,
+         &toolchain,
++        planned_platform,
+         &input_digest,
+         closure_digest,
+         reuse,
+@@ -266,6 +267,7 @@ fn complete_group(
+     inputs: &GroupInputs<'_>,
+     argv: &[String],
+     toolchain: &str,
++    planned_platform: velnor_actions_contract::PlannedPlatform,
+     input_digest: &str,
+     closure_digest: String,
+     reuse: wire_w2::ReuseOutcome,
+diff --git a/crates/velnor-actions-orchestrator/src/snapshot.rs b/crates/velnor-actions-orchestrator/src/snapshot.rs
+index 9776c3321..cc480c822 100644
+--- a/crates/velnor-actions-orchestrator/src/snapshot.rs
++++ b/crates/velnor-actions-orchestrator/src/snapshot.rs
+@@ -11,7 +11,7 @@
+ 
+ use serde::Serialize;
+ use velnor_actions_contract::{
+-    ContractError, PlannedPlatform, canonical_json_bytes, digest_b3, parse_strict_json,
++    ContractError, canonical_json_bytes, digest_b3, parse_strict_json,
+ };
+ 
+ /// Explicit unknown marker for unverifiable archive sources.
+@@ -83,8 +83,9 @@ pub(crate) fn check_canonical_version(found: u32) -> Result<(), ContractError> {
+ ///
+ /// Returns [`ContractError`] for unsupported targets and invalid
+ /// platform inputs; no fallback digest is ever substituted.
++#[cfg(test)]
+ pub(crate) fn platform_id_for(label: &str, target: &str) -> Result<String, ContractError> {
+-    Ok(PlannedPlatform::new(label, target)?.platform_id)
++    Ok(velnor_actions_contract::PlannedPlatform::new(label, target)?.platform_id)
+ }
+ 
+ /// One immutable execution snapshot per analysis (P03-1).
+@@ -161,7 +162,7 @@ impl ExecutionSnapshot {
+ #[cfg(test)]
+ mod tests {
+     use super::*;
+-    use velnor_actions_contract::cachekey::PlatformInputs;
++    use velnor_actions_contract::{PlannedPlatform, cachekey::PlatformInputs};
+ 
+     #[test]
+     fn canonical_bytes_ignore_key_order() {

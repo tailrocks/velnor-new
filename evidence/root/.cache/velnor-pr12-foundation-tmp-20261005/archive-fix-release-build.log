@@ -1,0 +1,5 @@
+   Compiling velnor-actions-orchestrator v0.1.1 (/tmp/velnor-pr12-foundation-20261005/crates/velnor-actions-orchestrator)
+   Compiling velnor-actions-cli v0.1.1 (/tmp/velnor-pr12-foundation-20261005/crates/velnor-actions-cli)
+    Finished `release` profile [optimized] target(s) in 2.27s
+mbx[cache]: 0 hits, 0 misses, 2 not looked up, 2 incremental; 0 B downloaded, 0 B uploaded, 0 B stored locally
+mbx[savings]: 13349 compilations old. not one compiled twice.

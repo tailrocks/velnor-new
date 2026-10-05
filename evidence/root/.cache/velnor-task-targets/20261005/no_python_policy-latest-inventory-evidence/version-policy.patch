@@ -1,0 +1,19 @@
+--- a/.velnor/version-policy.toml
++++ b/.velnor/version-policy.toml
+@@ -20,15 +20,12 @@
+ rust = "1.99.0"
+ mr-boxington = "1.22.0"
+ gh = "2.102.0"
+-actionlint = "1.7.12"
++jactionlint = "1.8.2"
+ shellcheck = "0.11.0"
+ zizmor = "1.30.1"
+ nextest = "0.9.146"
+ opentofu = "1.13.1"
+ release-plz = "0.3.169"
+-reuse = "6.2.0"
+-python = "3.14.8"
+-uv = "0.12.23"
+ 
+ [github_runner_images.linux_x64]
+ default = "ubuntu-26.04"

@@ -1,0 +1,27 @@
+   Compiling ring v0.17.14
+   Compiling velnor-archive-guard v0.1.0 (/tmp/velnor-pr12-foundation-20261005/crates/velnor-archive-guard)
+   Compiling rustls v0.23.45
+   Compiling rustls-webpki v0.103.15
+   Compiling ureq v3.4.2
+   Compiling velnor-actions-freshness v0.1.0 (/tmp/velnor-pr12-foundation-20261005/crates/velnor-actions-freshness)
+   Compiling velnor-actions-cli v0.1.0 (/tmp/velnor-pr12-foundation-20261005/crates/velnor-actions-cli)
+error[E0432]: unresolved import `crate::impl_repo_deps::physical_lines`
+  --> crates/velnor-actions-cli/tests/impl_repo_quality.rs:12:5
+   |
+12 | use crate::impl_repo_deps::physical_lines;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^--------------
+   |                            |
+   |                            no `physical_lines` in `impl_repo_deps`
+
+warning: unused import: `repo_root`
+ --> crates/velnor-actions-cli/tests/impl_repo_size.rs:5:46
+  |
+5 | use crate::impl_repo_policy::{MEMBERS, read, repo_root, tree_files};
+  |                                              ^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+For more information about this error, try `rustc --explain E0432`.
+warning: `velnor-actions-cli` (test "velnor_cli") generated 1 warning
+error: could not compile `velnor-actions-cli` (test "velnor_cli") due to 1 previous error; 1 warning emitted
+error: command `/root/.rustup/toolchains/1.98.1-x86_64-unknown-linux-gnu/bin/cargo '--color=auto' test --no-run --message-format json-render-diagnostics --workspace --locked` exited with code 101

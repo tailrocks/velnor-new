@@ -1,0 +1,10 @@
+INPUT=jackin-project/jackin main 0aa821a088e1bacf3d4d85a4c9faaa67faa85132; archive_sha256=c16813b6828ea2becc8f98691221fe9cd4a3e0b9ab6af2d3ba11af9466ca0e35
+SOURCE=44b2c380cdd65b361beab8ced3332319e7f56c73 + compaction module/render.rs hashes in build evidence
+GENERATOR_SHA256=5b7114cbacbf30c0b86c55fb6a9f2581f268f06fc02caf9ceb2f0a98855e6aa6
+MANIFEST_SHA256=ccaf24f1c05c3ead9999d140d1be515fb840fe6033e2c6300986fb4126119ae6
+ccaf24f1c05c3ead9999d140d1be515fb840fe6033e2c6300986fb4126119ae6  /root/.cache/velnor-task-targets/20261005/jackin-compaction/jackin-44b2-input/.velnor/release-manifest.json
+17af85b335ebaa266bdbf488cf1f11634cea14eb16730cfd06fbc33078f2cd61  /root/.cache/velnor-task-targets/20261005/jackin-compaction/jackin-44b2-input/.velnor/config.toml
+e047459428877a9b7cb8ab01cccc884ed290b48b993c4421142e57191f391327  /root/.cache/velnor-task-targets/20261005/jackin-compaction/jackin-44b2-input/.github/workflows/ci.yml
+COMMAND=/root/.cache/velnor-task-targets/20261005/jackin-compaction/debug/velnor-actions plan
+velnor-actions: preparation_incomplete: Cargo.toml: metadata_offline:nonzero_exit: mise: Some(101): error: failed to get `termrock` as a dependency of package `jackin v0.6.4 (/root/.cache/velnor-task-targets/20261005/jackin-compa
+exit=1

@@ -1,0 +1,11 @@
+   Compiling velnor-runner-host v0.1.0 (/root/.cache/velnor-task-targets/20261005/pr92-schema-fix-7be34/merged-main-tree-v2/crates/velnor-runner/crates/velnor-runner-host)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 13.03s
+     Running unittests src/lib.rs (/root/.cache/velnor-task-targets/20261005/pr92-schema-fix-7be34/target/debug/deps/velnor_runner_host-0d933504a4eaedd9)
+
+running 3 tests
+test journal::schema_metadata_tests::malformed_current_schema_is_rejected_without_mutation ... ok
+test journal::schema_metadata_tests::reopened_current_schema_keeps_distinct_insert_ids ... ok
+test journal::schema_metadata_tests::malformed_version_zero_metadata_is_rejected_without_mutation ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 161 filtered out; finished in 0.10s
+

@@ -1,0 +1,3 @@
+26e00afbedcd4a11f133654dfca01c3591cf9a27eee75f4f90919ce2f0dc3be6  ./crates/velnor-actions-orchestrator/src/lib.rs
+57b275087f0995574d6944ee3344e29151e53d61dbe2f0b2e7f6eb9fb7839901  ./crates/velnor-actions-orchestrator/src/validate_shell.rs
+bf2b31a05470ab70aa2b0e65062ffb3f9fe08636ff59e37bcb57984b8b2d58bc  ./scripts/check-freshness.sh

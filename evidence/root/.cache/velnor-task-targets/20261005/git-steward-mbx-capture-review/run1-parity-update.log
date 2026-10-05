@@ -1,0 +1,17 @@
+cwd=/root/.cache/velnor-task-targets/20261005/git-steward-mbx-capture-review/run1
+CARGO_TARGET_DIR=/root/.cache/velnor-task-targets/20261005/git-steward-mbx-postfix-target
+TMPDIR=/var/tmp/velnor-pr12-parity1.bZl7Em
+filter=parity_artifacts_match_goldens
+   Compiling velnor-actions-tofu v0.1.0 (/root/.cache/velnor-task-targets/20261005/git-steward-mbx-capture-review/run1/crates/velnor-actions-tofu)
+   Compiling sha2 v0.11.0
+   Compiling velnor-actions-orchestrator v0.1.0 (/root/.cache/velnor-task-targets/20261005/git-steward-mbx-capture-review/run1/crates/velnor-actions-orchestrator)
+   Compiling velnor-actions-cli v0.1.0 (/root/.cache/velnor-task-targets/20261005/git-steward-mbx-capture-review/run1/crates/velnor-actions-cli)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 9.68s
+     Running tests/velnor_cli.rs (/root/.cache/velnor-task-targets/20261005/git-steward-mbx-postfix-target/debug/deps/velnor_cli-0403e81ef5af656c)
+
+running 1 test
+test impl_cli_parity_golden::parity_artifacts_match_goldens ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 242 filtered out; finished in 1.83s
+
+exit=0

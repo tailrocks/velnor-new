@@ -1,0 +1,13 @@
+valid: PASS; manifest written to private output; source bytes unchanged; no target directory
+bad_archive_digest: PASS; rejected with exit 1; no manifest emitted
+cargo source fetch: downloaded archive checksum differs from Cargo.lock
+missing_source_tree: PASS; rejected with exit 1; no manifest emitted
+cargo source fetch: extracted source directory set differs from the locked registry archive set
+bad_registry_source: PASS; rejected with exit 1; no manifest emitted
+cargo source fetch: offline Cargo metadata includes a non-crates.io package source
+bad_registry_path: PASS; rejected with exit 1; no manifest emitted
+cargo source fetch: registry package manifest path escapes its verified extracted source
+bad_target: PASS; rejected with exit 1; no manifest emitted
+cargo source fetch: offline Cargo metadata identifies the wrong workspace or target path
+bad_workspace_member: PASS; rejected with exit 1; no manifest emitted
+cargo source fetch: offline Cargo metadata workspace members differ from path package records

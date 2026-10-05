@@ -1,0 +1,10 @@
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+   Compiling velnor-actions-cli v0.1.1 (/root/.cache/velnor-pr25-aggregate-20261005/crates/velnor-actions-cli)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.70s
+────────────
+ Nextest run ID 843a1ba6-a256-43cc-acdb-12ad0e3a2bf5 with nextest profile: default
+    Starting 1 test across 2 binaries (244 tests skipped)
+        PASS [   4.735s] (1/1) velnor-actions-cli::velnor_cli impl_archive_guard_builder::shared_target_isolated_by_source_bytes_when_mtime_is_preserved
+────────────
+     Summary [   4.736s] 1 test run: 1 passed, 244 skipped

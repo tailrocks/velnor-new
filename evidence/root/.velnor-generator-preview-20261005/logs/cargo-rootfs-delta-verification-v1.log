@@ -1,0 +1,12 @@
+started_utc=2026-10-05T11:40:44Z
+bash -n /root/.velnor-generator-preview-20261005/preseed-preview-cargo-fetch-v2.sh
+bash -n /root/.velnor-generator-preview-20261005/preseed-preview-cargo-fetch-namespace-v2.sh
+python3 -I -S extracted-rootfs-delta-positive-and-negative-fixture
+positive_result_exit=0
+reviewed base and input delta manifests plus complete result rootfs tree verified
+altered_manifest_exit=1
+cargo source fetch: input mountpoint delta manifest digest mismatch
+outer_sha256=d5c326caed724055af4e317aa4f99a0e59bbc414862da606e9782321e817a306  /root/.velnor-generator-preview-20261005/preseed-preview-cargo-fetch-v2.sh
+namespace_sha256=0bcf118082304e72b1ae46d53abab4ab8dbbca62df731e2a7f3b6627a29043f8  /root/.velnor-generator-preview-20261005/preseed-preview-cargo-fetch-namespace-v2.sh
+delta_manifest_sha256=dd5425fceb1524fc304e0da46cf6c64a8b63ee643f8ad6e6689cb15c241ef974  /root/.velnor-generator-preview-20261005/rootfs-input-delta-manifest.json
+finished_utc=2026-10-05T11:40:44Z

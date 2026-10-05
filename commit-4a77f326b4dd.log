@@ -1,0 +1,26 @@
+[detached HEAD 67acd4e66] WIP: checkpoint existing work at immediate stop [skip ci]
+ 25 files changed, 5754 insertions(+)
+ create mode 100644 crates/velnor-actions-orchestrator/src/freshness.rs
+ create mode 100644 crates/velnor-actions-orchestrator/src/freshness/advisories.rs
+ create mode 100644 crates/velnor-actions-orchestrator/src/freshness/advisories_bounded_tests.rs
+ create mode 100644 crates/velnor-actions-orchestrator/src/freshness/advisories_cleanup.rs
+ create mode 100644 crates/velnor-actions-orchestrator/src/freshness/advisories_process.rs
+ create mode 100644 crates/velnor-actions-orchestrator/src/freshness/advisories_reader_tests.rs
+ create mode 100644 crates/velnor-actions-orchestrator/src/freshness/advisories_readers.rs
+ create mode 100644 crates/velnor-actions-orchestrator/src/freshness/context.rs
+ create mode 100644 crates/velnor-actions-orchestrator/src/freshness/context_offset_tests.rs
+ create mode 100644 crates/velnor-actions-orchestrator/src/freshness/dependencies.rs
+ create mode 100644 crates/velnor-actions-orchestrator/src/freshness/dependency_graph.rs
+ create mode 100644 crates/velnor-actions-orchestrator/src/freshness/dependency_graph_tests.rs
+ create mode 100644 crates/velnor-actions-orchestrator/src/freshness/evidence.rs
+ create mode 100644 crates/velnor-actions-orchestrator/src/freshness/exceptions.rs
+ create mode 100644 crates/velnor-actions-orchestrator/src/freshness/glob.rs
+ create mode 100644 crates/velnor-actions-orchestrator/src/freshness/glob_tests.rs
+ create mode 100644 crates/velnor-actions-orchestrator/src/freshness/inventory.rs
+ create mode 100644 crates/velnor-actions-orchestrator/src/freshness/local_pins.rs
+ create mode 100644 crates/velnor-actions-orchestrator/src/freshness/lock_validation.rs
+ create mode 100644 crates/velnor-actions-orchestrator/src/freshness/policy_mirror.rs
+ create mode 100644 crates/velnor-actions-orchestrator/src/freshness/probe.rs
+ create mode 100644 crates/velnor-actions-orchestrator/src/freshness/probe_tests.rs
+ create mode 100644 crates/velnor-actions-orchestrator/src/freshness/rust_source.rs
+ create mode 100644 crates/velnor-actions-orchestrator/src/freshness/validation.rs

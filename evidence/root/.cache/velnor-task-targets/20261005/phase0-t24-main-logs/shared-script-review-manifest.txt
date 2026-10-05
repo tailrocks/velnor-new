@@ -1,0 +1,16 @@
+Writable isolated source: /var/tmp/velnor-phase0-t24-main-shared-script-20261005
+Frozen preimage snapshot: /var/tmp/velnor-phase0-t24-main-adaptation-20261005
+Owned paths: render.rs callsite; new shared-script module, matcher tests, Unix execution tests/support
+Base render.rs SHA-256: 25e9af22c5d06e1a4314151b495b60a5009a6d1c7fcb2faf25aaeeb950193480
+Post render.rs SHA-256: 7adf7d7323819da74c65915a1a45755cc3190bc4a280ed5c15e13b7f6d4d695d
+New document_shared_scripts.rs SHA-256: 62c188bf109dac00072b155fbad771692088401f5b8337deb947468bdbdfafaf
+New document_shared_scripts_tests.rs SHA-256: d962f1e3630678d218c02007c80f1aafd55be16149c9e56fb1266df6f9c546a4
+New document_shared_scripts_execution_tests.rs SHA-256: 3e382935749fab2838e5fcfafbe4e04e868ca5579807bfafe13aa52f9435af38
+New document_shared_scripts_execution_support.rs SHA-256: d877472b4f4e8d4c5ec109976e1debe23c1453b89acacb2a13c5339d75cf3369
+Unified source patch SHA-256: c23b1d6998a5e3855047f06f6d997d7bdde034781ffdf5805e2e0e3063abc897
+Source delta path-list SHA-256: 960c92fbdaa76303f689256c74b72b76b4752925d6b282939320d5731188e4a9
+Full renderer tests raw log SHA-256: 4e97ad604b7705a202620e0622cd88d4aabde0aed787d4b8b9c1eaafb1a0eb61 (71 unit + 313 integration + 0 doc tests; all passed)
+Strict Clippy raw log SHA-256: a8a5904d8e2422e8148e6acad682cb20358d663148ce0c2389f75e704ee7b013 (all targets, -D warnings; passed)
+Fmt check raw log SHA-256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 (passed)
+Tool identity raw log SHA-256: 6948562b7bd538dcdaf1052823900f8ab85e8ef373aa7f351022c827226f7109 (Cargo 1.98.1, rustc 1.98.1)
+Commands used explicit Mise rust@1.98.1 and cargo +1.98.1; Cargo target: /root/.cache/velnor-task-targets/20261005/phase0-t24-main-target; private Cargo home: /root/.cache/velnor-task-targets/20261005/phase0-t24-main-cargo-home; jobs=2.

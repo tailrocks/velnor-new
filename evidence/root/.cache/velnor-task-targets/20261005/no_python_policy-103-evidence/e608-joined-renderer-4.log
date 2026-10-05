@@ -1,0 +1,29 @@
+   Compiling unicode-ident v1.0.26
+   Compiling serde_core v1.0.229
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling syn v3.0.6
+   Compiling serde v1.0.229
+   Compiling serde_json v1.0.151
+   Compiling serde_derive v1.0.229
+   Compiling thiserror-impl v2.0.21
+   Compiling thiserror v2.0.21
+   Compiling velnor-actions-contract v0.1.0 (/root/.cache/velnor-task-targets/20261005/no_python_policy-103-joined-verification/crates/velnor-actions-contract)
+   Compiling velnor-actions-workflow-renderer v0.1.0 (/root/.cache/velnor-task-targets/20261005/no_python_policy-103-joined-verification/crates/velnor-actions-workflow-renderer)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 12.36s
+     Running unittests src/lib.rs (/root/.cache/velnor-task-targets/20261005/no_python_policy-103-joined-target/debug/deps/velnor_actions_workflow_renderer-baaa2ee710553a16)
+
+running 4 tests
+test render::mise_job_target_tests::setup_set_rejects_mixed_action_or_version ... ok
+test render::mise_job_target_tests::platform_profiles_must_keep_default_action_pin ... ok
+test render::mise_job_target_tests::target_contexts_fail_closed_on_wrong_label_mbx_and_order ... ok
+test render::mise_job_target_tests::renders_setup_and_cache_by_each_typed_runner_target ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 55 filtered out; finished in 0.00s
+
+     Running tests/velnor_workflow_renderer.rs (/root/.cache/velnor-task-targets/20261005/no_python_policy-103-joined-target/debug/deps/velnor_workflow_renderer-f7fbb3074acf10a8)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 313 filtered out; finished in 0.00s
+

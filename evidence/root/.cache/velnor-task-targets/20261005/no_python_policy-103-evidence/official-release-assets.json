@@ -1,0 +1,26 @@
+{
+  "tag_name": "v2026.10.3",
+  "published_at": "2026-10-05T10:35:27Z",
+  "html_url": "https://github.com/jdx/mise/releases/tag/v2026.10.3",
+  "immutable": true,
+  "assets": [
+    {
+      "name": "mise-v2026.10.3-linux-x64",
+      "browser_download_url": "https://github.com/jdx/mise/releases/download/v2026.10.3/mise-v2026.10.3-linux-x64",
+      "digest": "sha256:8d48bc510b7d844fad0bc7156c0855c2a1e7230c51e498a7f6b63b021f8b57c5",
+      "size": 153514928
+    },
+    {
+      "name": "mise-v2026.10.3-macos-arm64",
+      "browser_download_url": "https://github.com/jdx/mise/releases/download/v2026.10.3/mise-v2026.10.3-macos-arm64",
+      "digest": "sha256:0999bd4943523ccdbd149b5ad4080281536801b3f6406ac4495699bd0310969c",
+      "size": 122025088
+    },
+    {
+      "name": "mise-v2026.10.3-macos-x64",
+      "browser_download_url": "https://github.com/jdx/mise/releases/download/v2026.10.3/mise-v2026.10.3-macos-x64",
+      "digest": "sha256:38cdd1d904b25e66ec2fff3b5c88930853ab929b63e72c70e77198f82d6ac144",
+      "size": 149422592
+    }
+  ]
+}

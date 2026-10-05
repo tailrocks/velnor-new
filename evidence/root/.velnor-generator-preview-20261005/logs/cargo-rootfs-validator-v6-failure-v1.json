@@ -1,0 +1,11 @@
+{
+  "effect": "read-only file/hash verification only; no helper/Rustup/Mise/Cargo/Git/mount/namespace/network action; no task data changed",
+  "exit_code": 1,
+  "first_difference": "V6 expected staging_runtime.python_sha256=889c603f0d17cb54060951bcf4f4f9b8c9ebd9e52b392c70209bbb9755d797d9; sealed delta manifest value=889c603f0d17cb54060951bcf4c4f9b8c9ebd9e52b392c70209bbb9755d797d9",
+  "log_path": "/root/.velnor-generator-preview-20261005/logs/cargo-rootfs-validator-v6-failure-v1.log",
+  "log_sha256": "d8499b5d5b3c341fd77ab56f2c6b6891bfbf71daaa8288e4ef79a70927fadf21",
+  "observed_at_utc": "2026-10-05T13:28:53Z",
+  "preflight": "read-only evidence/rootfs validator extracted from V6; no launcher namespace entry",
+  "schema": 1,
+  "source_manifest_sha256": "34cac9f1449601a9c2ddbf526bd4b08724cad30677785c5b445007d9736fcf7d"
+}

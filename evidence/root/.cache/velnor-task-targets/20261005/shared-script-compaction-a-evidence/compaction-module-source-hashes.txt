@@ -1,0 +1,7 @@
+62c188bf109dac00072b155fbad771692088401f5b8337deb947468bdbdfafaf  /var/tmp/velnor-phase0-t24-main-shared-script-20261005/crates/velnor-actions-workflow-renderer/src/document_shared_scripts.rs
+d962f1e3630678d218c02007c80f1aafd55be16149c9e56fb1266df6f9c546a4  /var/tmp/velnor-phase0-t24-main-shared-script-20261005/crates/velnor-actions-workflow-renderer/src/document_shared_scripts_tests.rs
+2229f82764353c7efd2866e921da4fb2d4544ffbad1682c02608c8ca5d253d8b  /var/tmp/velnor-phase0-t24-main-shared-script-20261005/crates/velnor-actions-workflow-renderer/src/document_shared_scripts_execution_tests.rs
+532c5e5c59973462dfe12b0f969d3713d734588f6ce7ba06ea3872f7a05e0c17  /var/tmp/velnor-phase0-t24-main-shared-script-20261005/crates/velnor-actions-workflow-renderer/src/document_shared_scripts_execution_support.rs
+777459d8e7f33d22cb7cb834ec2845929de19257c01d7f063ad70509311b6b83  /var/tmp/velnor-phase0-t24-main-shared-script-20261005/crates/velnor-actions-workflow-renderer/src/document_shared_scripts_execution_support_tests.rs
+970be2f32c0756631a8a0fedca0f5a3047fea52d00d5e8d6b37296d3cc54340a  /var/tmp/velnor-phase0-t24-main-shared-script-20261005/crates/velnor-actions-workflow-renderer/src/document_shared_scripts_execution_outcomes.rs
+2a383abb98bfdeb0f3a5e8101a556a7b1c521f28d14a1bf858618c83a3e08980  /var/tmp/velnor-phase0-t24-main-shared-script-20261005/crates/velnor-actions-workflow-renderer/src/document_shared_scripts_execution_signal.rs

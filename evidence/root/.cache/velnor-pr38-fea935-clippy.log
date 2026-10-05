@@ -1,0 +1,23 @@
+   Compiling velnor-actions-tofu v0.1.0 (/tmp/velnor-impl-20261005/cache/pr38/crates/velnor-actions-tofu)
+   Compiling typenum v1.20.1
+   Compiling crc32fast v1.5.2
+   Compiling cpufeatures v0.3.1
+   Compiling cfg-if v1.0.5
+    Checking simd-adler32 v0.3.10
+    Checking adler2 v2.0.1
+    Checking velnor-actions-contract v0.1.0 (/tmp/velnor-impl-20261005/cache/pr38/crates/velnor-actions-contract)
+    Checking miniz_oxide v0.9.1
+    Checking flate2 v1.1.10
+   Compiling hybrid-array v0.4.15
+   Compiling block-buffer v0.12.1
+   Compiling crypto-common v0.2.2
+    Checking velnor-actions-mise v0.1.0 (/tmp/velnor-impl-20261005/cache/pr38/crates/velnor-actions-mise)
+    Checking velnor-actions-actionlint v0.1.0 (/tmp/velnor-impl-20261005/cache/pr38/crates/velnor-actions-actionlint)
+    Checking velnor-actions-workflow-renderer v0.1.0 (/tmp/velnor-impl-20261005/cache/pr38/crates/velnor-actions-workflow-renderer)
+    Checking velnor-actions-rust v0.1.0 (/tmp/velnor-impl-20261005/cache/pr38/crates/velnor-actions-rust)
+   Compiling digest v0.11.3
+   Compiling sha2 v0.11.0
+    Checking velnor-actions-orchestrator v0.1.0 (/tmp/velnor-impl-20261005/cache/pr38/crates/velnor-actions-orchestrator)
+   Compiling velnor-archive-guard v0.1.0 (/tmp/velnor-impl-20261005/cache/pr38/crates/velnor-archive-guard)
+    Checking velnor-actions-cli v0.1.0 (/tmp/velnor-impl-20261005/cache/pr38/crates/velnor-actions-cli)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.07s

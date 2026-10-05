@@ -1,0 +1,16 @@
+Traceback (most recent call last):
+  File "/root/.velnor-generator-preview-20261005/preseed-preview-source-materialize.py", line 749, in <module>
+    main()
+    ~~~~^^
+  File "/root/.velnor-generator-preview-20261005/preseed-preview-source-materialize.py", line 723, in main
+    checked_source(require_empty_worktree=True)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/root/.velnor-generator-preview-20261005/preseed-preview-source-materialize.py", line 273, in checked_source
+    ist = info.lstat()
+  File "/usr/lib/python3.13/pathlib/_abc.py", line 437, in lstat
+    return self.stat(follow_symlinks=False)
+           ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.13/pathlib/_local.py", line 517, in stat
+    return os.stat(self, follow_symlinks=follow_symlinks)
+           ~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [Errno 2] No such file or directory: '/root/.velnor-generator-preview-20261005/main-source-ac3ab/.git/info'

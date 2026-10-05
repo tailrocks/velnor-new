@@ -1,0 +1,8 @@
+   Compiling velnor-actions-workflow-renderer v0.1.0 (/tmp/velnor-impl-20261005/cache/pr38/crates/velnor-actions-workflow-renderer)
+   Compiling velnor-actions-orchestrator v0.1.0 (/tmp/velnor-impl-20261005/cache/pr38/crates/velnor-actions-orchestrator)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.66s
+────────────
+ Nextest run ID d8e28b3d-c961-417e-a326-1e5362ab45f1 with nextest profile: default
+    Starting 3 tests across 5 binaries (1474 tests skipped)
+────────────
+     Summary [   0.122s] 3 tests run: 3 passed, 1474 skipped

@@ -1,0 +1,55 @@
+   Compiling proc-macro2 v1.0.107
+   Compiling unicode-ident v1.0.26
+   Compiling quote v1.0.47
+   Compiling shlex v2.0.1
+   Compiling serde_core v1.0.229
+   Compiling find-msvc-tools v0.1.14
+   Compiling cc v1.5.1
+   Compiling syn v3.0.6
+   Compiling zmij v1.0.23
+   Compiling blake3 v1.8.7
+   Compiling serde_json v1.0.151
+   Compiling thiserror v2.0.21
+   Compiling serde v1.0.229
+   Compiling thiserror-impl v2.0.21
+   Compiling serde_derive v1.0.229
+   Compiling memchr v2.8.3
+   Compiling arrayvec v0.7.8
+   Compiling constant_time_eq v0.4.2
+   Compiling itoa v1.0.18
+   Compiling cfg-if v1.0.5
+   Compiling cpufeatures v0.3.1
+   Compiling velnor-actions-contract v0.1.0 (/var/tmp/velnor-phase0-t24-main-adaptation-20261005/crates/velnor-actions-contract)
+   Compiling velnor-actions-workflow-renderer v0.1.0 (/var/tmp/velnor-phase0-t24-main-adaptation-20261005/crates/velnor-actions-workflow-renderer)
+warning: unused import: `tool_seed`
+  --> crates/velnor-actions-workflow-renderer/src/tool_seed_setup_share.rs:12:82
+   |
+12 |     MiseSetup, RenderError, cache_p08, composite, document_steps, marker, steps, tool_seed,
+   |                                                                                  ^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: `velnor-actions-workflow-renderer` (lib) generated 1 warning (run `cargo fix --lib -p velnor-actions-workflow-renderer` to apply 1 suggestion)
+warning: `velnor-actions-workflow-renderer` (lib test) generated 1 warning (1 duplicate)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 13.04s
+     Running unittests src/lib.rs (/root/.cache/velnor-task-targets/20261005/phase0-t24-main-target/debug/deps/velnor_actions_workflow_renderer-baaa2ee710553a16)
+
+running 9 tests
+test tool_seed_setup_share::tests::allows_only_exact_renderer_owned_local_action_paths ... ok
+test tool_seed_setup_share::tests::leaves_equal_pairs_on_other_valid_mise_pins_inline ... ok
+test tool_seed_setup_share::tests::factors_one_full_step_identical_group_and_preserves_job_fields_and_tail ... ok
+test tool_seed_setup_share::tests::rejects_input_ir_that_names_the_renderer_owned_action_directly ... ok
+test tool_seed_setup_share::tests::rejects_singletons_and_jobs_already_owned_by_lane_composites ... ok
+test tool_seed_setup_share::tests::chooses_one_largest_group_and_breaks_ties_by_first_job_id ... ok
+test tool_seed_setup_share::tests::rejects_setup_key_when_it_does_not_match_the_job_tool_union ... ok
+test tool_seed_setup_share::tests::rejects_noncanonical_checkout_options_and_context ... ok
+test tool_seed_setup_share::tests::rejects_contextual_or_changed_pair_fields_and_order ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 55 filtered out; finished in 0.00s
+
+     Running tests/velnor_workflow_renderer.rs (/root/.cache/velnor-task-targets/20261005/phase0-t24-main-target/debug/deps/velnor_workflow_renderer-f7fbb3074acf10a8)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 313 filtered out; finished in 0.00s
+

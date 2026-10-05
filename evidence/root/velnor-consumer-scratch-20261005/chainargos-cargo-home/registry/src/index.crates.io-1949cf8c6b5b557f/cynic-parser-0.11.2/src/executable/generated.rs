@@ -1,0 +1,40 @@
+use super::{ExecutableId, ids, iter::Iter, types};
+
+/// A prelude module for all the generated modules
+///
+/// Anything in here will be pulled into scope for the modules
+///
+/// This makes the generator simpler as it doesn't need to dynamically
+/// figure out how to import everything external it needs - it can just
+/// `use prelude::*` and be done with it.
+mod prelude {
+    pub(super) use crate::{
+        AstLookup, Span,
+        common::{IdRange, OperationType},
+        executable::{
+            ExecutableDocument, ReadContext,
+            ids::StringId,
+            iter::{IdReader, Iter},
+        },
+    };
+}
+
+pub mod argument;
+pub mod definition;
+pub mod descriptions;
+pub mod directive;
+pub mod fragment;
+pub mod operation;
+pub mod selections;
+pub mod variable;
+
+mod value {
+    // Note: This is just a requirement for some of the generated stuff
+    // that assumes it'll be here
+
+    pub use crate::values::{ConstValue, Value};
+}
+
+mod strings {
+    pub(super) use crate::common::StringLiteral;
+}

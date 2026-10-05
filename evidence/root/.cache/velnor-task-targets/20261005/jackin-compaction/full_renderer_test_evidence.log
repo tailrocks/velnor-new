@@ -1,0 +1,91 @@
+c911c4dbfb561f637556cce89b661e995a0df6ced12632522681de096969d504  crates/velnor-actions-workflow-renderer/src/document_setup_compaction.rs
+660e1dab384471e3d094db70c6d8c132c6b1c0926eab7b4f4f01c02daef3db70  crates/velnor-actions-workflow-renderer/src/document_setup_compaction_tests.rs
+dfe18cbc20522ae3d144fb8ece21cffed839f83355b6aff1beeed6405bfd9f96  crates/velnor-actions-workflow-renderer/src/document_setup_compaction_rejection_tests.rs
+48afc2b0e0409b5a4270a52fba25679327ce1317ef069ec4217b5c00ce4b92af  crates/velnor-actions-workflow-renderer/src/render.rs
+COMMAND=mise --no-config --no-env --no-hooks exec rust@1.98.1 jq@1.8.1 -- cargo test --locked -p velnor-actions-workflow-renderer --lib
+mise by @jdx – installing 1 tool
+mise rust@1.98.1 info: syncing channel updates for 1.98.1-x86_64-unknown-linux-gnu
+mise rust@1.98.1 info: latest update on 2026-09-03 for version 1.98.1 (48a229cea 2026-09-01)
+mise rust@1.98.1 info: component clippy is up to date
+mise rust@1.98.1 info: component rust-docs is up to date
+mise rust@1.98.1 info: component rustfmt is up to date
+mise rust@1.98.1   1.98.1-x86_64-unknown-linux-gnu unchanged - rustc 1.98.1 (48a229cea 2026-09-01)
+mise rust@1.98.1 info: checking for self-update (current version: 1.29.1)
+mise rust@1.98.1 rustc 1.98.1 (48a229cea 2026-09-01)
+mise ✓ rust@1.98.1  250ms
+mise ████████████████ 1/1 · installed 1 tool in 251ms
+   Compiling velnor-actions-workflow-renderer v0.1.0 (/tmp/velnor-render-compaction-44b2-20261005/crates/velnor-actions-workflow-renderer)
+warning: unused import: `std::collections::BTreeMap`
+ --> crates/velnor-actions-workflow-renderer/src/document_setup_compaction_rejection_tests.rs:1:5
+  |
+1 | use std::collections::BTreeMap;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: `velnor-actions-workflow-renderer` (lib test) generated 1 warning (run `cargo fix --lib -p velnor-actions-workflow-renderer --tests` to apply 1 suggestion)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.48s
+     Running unittests src/lib.rs (/root/.cache/velnor-task-targets/20261005/jackin-compaction/debug/deps/velnor_actions_workflow_renderer-baaa2ee710553a16)
+
+running 53 tests
+test composite::tests::shared_calls_use_only_canonical_repository_local_actions ... ok
+test freshness::tests::rejects_internal_steps_fail_closed ... ok
+test document::runner_shell_tests::rustdocflags_remain_scoped_to_the_documentation_step ... ok
+test freshness::tests::rejects_bad_spec_scalars ... ok
+test document::runner_shell_tests::typed_scale_set_jobs_declare_bash_while_hosted_jobs_keep_default ... ok
+test document::verification_env_tests::emitted_verification_job_scrubs_credentials_without_disabling_mise_config ... ok
+test freshness::tests::renders_schedule_only_read_only_probe ... ok
+test lane_share::tests::duplicate_lane_checkout_fails_closed ... ok
+test lane_share::tests::differing_lane_bodies_fail_closed ... ok
+test lane_share::tests::mismatched_lane_checkout_inputs_fail_closed ... ok
+test lane_share::unpinned_tests::shared_composite_keeps_pinned_remote_refs ... ok
+test lane_share::tests::nonleading_lane_checkout_fails_closed ... ok
+test lane_share::unpinned_tests::shared_composite_rejects_unpinned_remote_action_refs ... ok
+test lane_share::tests::unsafe_logical_id_fails_closed ... ok
+test mbx_bundle::seed_tests::shipped_import_uses_the_fixed_root_and_push_save_stays ... ok
+test lane_share::tests::unpaired_jobs_stay_inline ... ok
+test lane_share::tests::missing_lane_checkout_fails_closed ... ok
+test render::document_setup_compaction::tests::checkout_requires_the_same_repository_root_and_ref ... ok
+test render::document_setup_compaction::tests::setup_block_is_exactly_the_audited_mise_sequence ... ok
+test render::document_setup_compaction::tests::rejection_tests::noncontiguous_or_contextful_shell_steps_stay_inline ... ok
+test render::document_setup_compaction::tests::repeated_setup_keeps_checkout_order_env_and_job_metadata ... ok
+test schema2::release_eligibility::tests::job_renders_a_read_only_source_gate ... ok
+test schema2::release_eligibility::tests::script_uses_the_expected_paginated_selectors_and_bounded_wait ... ok
+test schema2::runner_shell_tests::public_hosted_label_rejects_scale_set_tokens_and_unknown_labels ... ok
+test tool_seed::tests::local_seed_requires_a_prior_checkout ... ok
+test verification_jobs::tests::task_job_contract_rejects_conditions_dependencies_and_extra_steps ... ok
+test verification_jobs::tests::task_job_is_unconditional_cache_off_and_credential_scrubbed ... ok
+test schema2::runner_shell_tests::qualification_and_monitoring_declare_shell_only_for_typed_scale_set ... ok
+test verification_jobs::tests::mixed_linux_and_apple_arm_tasks_keep_distinct_runners ... ok
+test verification_jobs::tests::all_declared_tasks_join_required_fan_in ... ok
+test verification_jobs::tests::paired_task_lanes_are_complete_and_join_required_together ... ok
+test workflow_size::tests::size_limit_ignores_non_workflow_files ... ok
+test workflow_size::tests::size_limit_recognizes_case_insensitive_workflow_extensions ... ok
+test tool_seed::tests::wrong_key_and_absent_seed_do_not_copy ... ok
+test workflow_size::tests::workflow_size_limit_includes_exact_boundary ... ok
+test schema2::release_eligibility::tests::edge::rejects_ambiguous_latest_run_number ... ok
+test render::document_setup_compaction::tests::rejection_tests::expression_contexts_and_action_state_edges_fail_closed ... ok
+test tool_seed::tests::matching_seed_copies_mise_and_rustup_and_keeps_the_seed ... ok
+test tool_seed::tests::action_script_reads_seed_key_and_the_action_file_keeps_the_seed ... ok
+test lane_share::tests::matching_lane_checkout_inputs_are_carried_outside_the_composite ... ok
+test lane_share::tests::elected_save_stays_on_the_winner_job ... ok
+test lane_share::shell_tests::paired_consumer_workflow_sets_shell_for_each_typed_scale_lane_only ... ok
+test schema2::release_eligibility::tests::edge::rejects_ci_run_from_wrong_head_repository ... ok
+test schema2::release_eligibility::tests::rejects_newer_failed_run_instead_of_reusing_old_success ... ok
+test mbx_bundle::seed_tests::seed_hit_imports_the_seed_bundle_and_keeps_it ... ok
+test workflow_size::tests::utf8_workflow_limit_counts_marked_rendered_bytes ... ok
+test schema2::release_eligibility::tests::edge::fails_closed_on_changed_tip_and_unfinished_latest_run ... ok
+test mbx_bundle::seed_tests::wrong_prefix_absent_seed_and_failed_import_leave_the_seed ... ok
+test schema2::release_eligibility::tests::edge::rejects_events_repository_refs_authority_and_stale_ci_sources ... ok
+test schema2::release_eligibility::tests::selects_latest_ci_attempt_across_paginated_results ... ok
+test schema2::release_eligibility::tests::edge::rejects_main_tip_or_ci_attempt_changes_during_the_gate ... ok
+test schema2::release_eligibility::tests::edge::rejects_missing_duplicate_failed_and_wrong_attempt_required_jobs ... ok
+test lane_share::render_tests::shared_lanes_keep_ci_under_github_file_cap ... ok
+
+test result: ok. 53 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+
+c911c4dbfb561f637556cce89b661e995a0df6ced12632522681de096969d504  crates/velnor-actions-workflow-renderer/src/document_setup_compaction.rs
+660e1dab384471e3d094db70c6d8c132c6b1c0926eab7b4f4f01c02daef3db70  crates/velnor-actions-workflow-renderer/src/document_setup_compaction_tests.rs
+dfe18cbc20522ae3d144fb8ece21cffed839f83355b6aff1beeed6405bfd9f96  crates/velnor-actions-workflow-renderer/src/document_setup_compaction_rejection_tests.rs
+48afc2b0e0409b5a4270a52fba25679327ce1317ef069ec4217b5c00ce4b92af  crates/velnor-actions-workflow-renderer/src/render.rs
+exit=0

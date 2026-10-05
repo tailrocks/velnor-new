@@ -1,0 +1,340 @@
+diff --git a/crates/velnor-runner/crates/velnor-runner-host/src/runner_image_contract_tests.rs b/crates/velnor-runner/crates/velnor-runner-host/src/runner_image_contract_tests.rs
+index efc3e13e6..1c8e92d84 100644
+--- a/crates/velnor-runner/crates/velnor-runner-host/src/runner_image_contract_tests.rs
++++ b/crates/velnor-runner/crates/velnor-runner-host/src/runner_image_contract_tests.rs
+@@ -11,6 +11,7 @@ const RUNNER_ENTRYPOINT: &str =
+ const RUNNER_README: &str = include_str!("../../../../../images/runner/ubuntu-26.04/README.md");
+ const DIND_DOCKERFILE: &str = include_str!("../../../../../images/dind/Dockerfile");
+ const DIND_README: &str = include_str!("../../../../../images/dind/README.md");
++const DIND_ENTRYPOINT: &str = include_str!("../../../../../images/dind/entrypoint.sh");
+ 
+ #[test]
+ fn jit_work_folder_resolves_to_both_worker_mounts() -> Result<(), String> {
+@@ -63,6 +64,13 @@ fn checked_in_images_prepare_the_shared_path_for_runner_uid_1000() {
+     assert!(RUNNER_ENTRYPOINT.contains("mktemp /tmp/velnor-jit.XXXXXX"));
+     assert!(!RUNNER_ENTRYPOINT.contains("mktemp \"${work}/"));
+     assert!(RUNNER_ENTRYPOINT.contains("mkdir -p \"$work\""));
++    assert!(!RUNNER_ENTRYPOINT.contains("CARGO_BUILD_JOBS"));
++    assert!(!RUNNER_ENTRYPOINT.contains("runner-job-env"));
++    assert!(!RUNNER_DOCKERFILE.contains("CARGO_BUILD_JOBS"));
++    assert!(!RUNNER_DOCKERFILE.contains("nproc"));
++    assert!(!RUNNER_DOCKERFILE.contains("runner-job-env"));
++    assert!(!RUNNER_README.contains("half of `nproc`"));
++    assert!(RUNNER_README.contains("The image does not override Cargo's job count."));
+ 
+     assert!(DIND_DOCKERFILE.contains("mkdir -p /var/lib/docker /run /home/runner/_work"));
+     assert!(DIND_DOCKERFILE.contains("chown 1000:1000 /home/runner/_work"));
+@@ -71,3 +79,16 @@ fn checked_in_images_prepare_the_shared_path_for_runner_uid_1000() {
+     assert!(RUNNER_README.contains("workFolder: \"_work\""));
+     assert!(DIND_README.contains("uid/gid `1000:1000`"));
+ }
++
++#[test]
++fn dind_publishes_only_a_ready_daemon_without_pulling_workload_images() {
++    assert!(!DIND_ENTRYPOINT.contains("docker pull"));
++    assert!(!DIND_ENTRYPOINT.contains("rabbitmq"));
++    assert!(DIND_ENTRYPOINT.contains("if [ \"$i\" -gt 100 ]; then"));
++    assert!(DIND_ENTRYPOINT.contains("dockerd socket did not appear"));
++    assert!(DIND_ENTRYPOINT.contains("dockerd exited before socket appeared"));
++    assert!(DIND_ENTRYPOINT.contains("kill -KILL \"$pid\""));
++    assert!(DIND_ENTRYPOINT.contains("exit 1"));
++    assert!(DIND_ENTRYPOINT.contains("ln -sfn docker.sock.real \"$public\""));
++    assert!(DIND_README.contains("about 10 seconds"));
++}
+diff --git a/images/dind/README.md b/images/dind/README.md
+index ff091c321..b52aba9eb 100644
+--- a/images/dind/README.md
++++ b/images/dind/README.md
+@@ -13,13 +13,12 @@ snapshotter returns `EINVAL` when this amd64 daemon runs under emulation.
+ The Dockerfile does not copy or mount a host socket and the entrypoint does
+ not prune.
+ 
+-The entrypoint starts `dockerd` on a private socket, pulls
+-`rabbitmq:3.8.22-management` for `linux/arm64`, then links
+-`/run/docker.sock`. Nested Rosetta crashes that image's amd64 Erlang JIT
+-before `Server startup complete; 4 plugins started.` The daemon and the
+-runner stay `linux/amd64`. ARM64 is not the runner baseline. The data root
+-stays `/var/lib/docker` on a DinD-only volume so vfs copies are not
+-whiteouts on the container layer.
++The entrypoint starts `dockerd` on a private socket and links
++`/run/docker.sock` only after that socket appears. Startup fails after a
++bounded wait of about 10 seconds if the daemon does not create it. Each job's
++Docker configuration selects and pulls the service images it needs. The
++daemon and runner stay `linux/amd64`; the data root stays `/var/lib/docker` on
++a DinD-only volume so vfs copies are not whiteouts on the container layer.
+ 
+ The image does not set `privileged`. The controller must:
+ 
+diff --git a/images/dind/entrypoint-test.sh b/images/dind/entrypoint-test.sh
+index 1ebdec510..1d7f33d33 100755
+--- a/images/dind/entrypoint-test.sh
++++ b/images/dind/entrypoint-test.sh
+@@ -22,56 +22,72 @@ done
+ exec python3 - "$sock" <<'PY'
+ import os, socket, sys, time
+ sock = sys.argv[1]
+-os.makedirs(os.path.dirname(sock), exist_ok=True)
+-try:
+-    os.remove(sock)
+-except FileNotFoundError:
+-    pass
+-server = socket.socket(socket.AF_UNIX)
+-server.bind(sock)
+-server.listen(1)
++if os.environ.get("VELNOR_DIND_TEST_EXIT_BEFORE_SOCKET") == "1":
++    sys.exit(0)
++if os.environ.get("VELNOR_DIND_TEST_NO_SOCKET") != "1":
++    os.makedirs(os.path.dirname(sock), exist_ok=True)
++    try:
++        os.remove(sock)
++    except FileNotFoundError:
++        pass
++    server = socket.socket(socket.AF_UNIX)
++    server.bind(sock)
++    server.listen(1)
+ while not os.path.exists("/tmp/dind-stop"):
+     time.sleep(0.05)
+ PY
+ EOF
+   cat >/usr/local/bin/docker <<'EOF'
+ #!/bin/bash
+-printf '%s\n' "$*" >>/tmp/dind-pulls
+-rc="${VELNOR_DIND_PULL_RC:-0}"
+-exit "$rc"
++printf '%s\n' "$*" >>/tmp/dind-docker-invocations
++echo "docker must not run during DinD startup: $*" >&2
++exit 99
+ EOF
+   chmod 0755 /usr/local/bin/dockerd /usr/local/bin/docker
+ }
+ 
+-run_once() {
+-  local rc="$1"
+-  local err="$2"
+-  rm -f /tmp/dind-stop /run/docker.sock /run/docker.sock.real /tmp/dind-pulls
+-  : >/tmp/dind-pulls
+-  VELNOR_DIND_PULL_RC="$rc" bash "$root/entrypoint.sh" >"$err" 2>&1 &
++run_ready() {
++  local err="$1"
++  rm -f /tmp/dind-docker-invocations /tmp/dind-stop /run/docker.sock /run/docker.sock.real
++  sh "$root/entrypoint.sh" >"$err" 2>&1 &
+   local pid=$!
+-  local i
+-  for i in $(seq 1 50); do
+-    if [[ -L /run/docker.sock ]]; then
+-      break
+-    fi
++  local attempts=0
++  while [[ ! -L /run/docker.sock && "$attempts" -lt 50 ]]; do
+     sleep 0.05
++    attempts=$((attempts + 1))
+   done
+   [[ -L /run/docker.sock ]]
++  [[ ! -e /tmp/dind-docker-invocations ]]
+   touch /tmp/dind-stop
+   wait "$pid"
+ }
+ 
+ install_stubs
+-run_once 0 /tmp/dind-ok.err
+-grep -F 'pull --platform linux/arm64 rabbitmq:3.8.22-management' /tmp/dind-pulls >/dev/null
+-grep -F 'velnor-dind: seeded rabbitmq:3.8.22-management linux/arm64' /tmp/dind-ok.err >/dev/null
+-if grep -F 'postgres' /tmp/dind-pulls >/dev/null; then
+-  echo "postgres pull is not the entrypoint" >&2
++run_ready /tmp/dind-ready.err
++if grep -E 'rabbitmq|docker must not run' /tmp/dind-ready.err; then
++  echo "DinD startup must not pull workload images" >&2
+   exit 1
+ fi
+ 
+-run_once 1 /tmp/dind-fail.err
+-grep -F 'velnor-dind: rabbitmq arm64 seed failed' /tmp/dind-fail.err >/dev/null
+-[[ -L /run/docker.sock ]]
++rm -f /tmp/dind-stop /run/docker.sock /run/docker.sock.real
++if env VELNOR_DIND_TEST_EXIT_BEFORE_SOCKET=1 sh "$root/entrypoint.sh" >/tmp/dind-exit.err 2>&1; then
++  echo "DinD startup must fail when dockerd exits before creating its socket" >&2
++  exit 1
++fi
++grep -F 'velnor-dind: dockerd exited before socket appeared' /tmp/dind-exit.err >/dev/null
++[[ ! -L /run/docker.sock ]]
++
++rm -f /tmp/dind-stop /run/docker.sock /run/docker.sock.real
++if timeout 15s env VELNOR_DIND_TEST_NO_SOCKET=1 sh "$root/entrypoint.sh" >/tmp/dind-timeout.err 2>&1; then
++  echo "DinD startup must fail when dockerd never creates its socket" >&2
++  exit 1
++else
++  status=$?
++  if [[ "$status" -eq 124 ]]; then
++    echo "DinD startup timeout exceeded its 15-second test bound" >&2
++    exit 1
++  fi
++fi
++grep -F 'velnor-dind: dockerd socket did not appear' /tmp/dind-timeout.err >/dev/null
++[[ ! -L /run/docker.sock ]]
+ echo "dind-entrypoint ok"
+diff --git a/images/dind/entrypoint.sh b/images/dind/entrypoint.sh
+index 689a8b705..8f2c78419 100755
+--- a/images/dind/entrypoint.sh
++++ b/images/dind/entrypoint.sh
+@@ -1,31 +1,29 @@
+ #!/bin/sh
+-# Nested Rosetta crashes OTP 24 JIT (beam.smp signal 11). The arm64 image
+-# of this tag runs natively and is what testcontainers finds on create.
++# Start the private daemon before publishing its socket to the runner.
+ set -eu
+ export PATH="/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+ real=/run/docker.sock.real
+ public=/run/docker.sock
+ rm -f "$public"
++# Do not publish a socket unless the daemon creates it within about 10 seconds.
+ dockerd --host="unix://${real}" "$@" &
+ pid=$!
+ trap 'kill "$pid" 2>/dev/null || true; wait "$pid" || true; exit 0' TERM INT
+ i=0
+ while [ ! -S "$real" ]; do
+   if ! kill -0 "$pid" 2>/dev/null; then
+-    wait "$pid"
+-    exit $?
++    wait "$pid" 2>/dev/null || true
++    echo "velnor-dind: dockerd exited before socket appeared" >&2
++    exit 1
+   fi
+   i=$((i + 1))
+   if [ "$i" -gt 100 ]; then
+     echo "velnor-dind: dockerd socket did not appear" >&2
+-    break
++    kill -KILL "$pid" 2>/dev/null || true
++    wait "$pid" 2>/dev/null || true
++    exit 1
+   fi
+   sleep 0.1
+ done
+-if docker --host "unix://${real}" pull --platform linux/arm64 rabbitmq:3.8.22-management >&2; then
+-  echo "velnor-dind: seeded rabbitmq:3.8.22-management linux/arm64" >&2
+-else
+-  echo "velnor-dind: rabbitmq arm64 seed failed" >&2
+-fi
+ ln -sfn docker.sock.real "$public"
+ wait "$pid"
+diff --git a/images/runner/ubuntu-26.04/Dockerfile b/images/runner/ubuntu-26.04/Dockerfile
+index 02d81a6bd..f78cd5d7e 100644
+--- a/images/runner/ubuntu-26.04/Dockerfile
++++ b/images/runner/ubuntu-26.04/Dockerfile
+@@ -76,7 +76,6 @@ RUN curl --retry 5 --retry-delay 2 --retry-all-errors -fsSL -o /tmp/docker.tgz \
+ COPY entrypoint.sh /usr/local/bin/velnor-runner-entrypoint
+ COPY wait-docker-sock.sh /usr/local/bin/wait-docker-sock
+ COPY clear-dockerenv.sh /usr/local/bin/clear-dockerenv
+-COPY runner-job-env.sh /usr/local/bin/runner-job-env
+ COPY tar-shim.sh /usr/local/bin/velnor-tar
+ COPY tar-absolute.sh /usr/local/bin/tar-absolute.sh
+ COPY tar-extract.sh /usr/local/bin/tar-extract.sh
+@@ -88,7 +87,7 @@ COPY tar-pax.pl /usr/local/bin/velnor-tar-pax
+ # zstd and git-lfs are installed before the tar divert. dpkg needs GNU tar to unpack.
+ # After the divert, /usr/bin/tar is the BusyBox shim, not GNU tar.
+ # netcat-openbsd provides `nc -z`. Cancel-service probes the service port with it.
+-RUN chmod 0755 /usr/local/bin/velnor-runner-entrypoint /usr/local/bin/wait-docker-sock /usr/local/bin/clear-dockerenv /usr/local/bin/runner-job-env /usr/local/bin/velnor-tar /usr/local/bin/velnor-tar-pax /usr/local/bin/tar-member.pl \
++RUN chmod 0755 /usr/local/bin/velnor-runner-entrypoint /usr/local/bin/wait-docker-sock /usr/local/bin/clear-dockerenv /usr/local/bin/velnor-tar /usr/local/bin/velnor-tar-pax /usr/local/bin/tar-member.pl \
+     && apt-get update \
+     && apt-get install -y --no-install-recommends build-essential clang cmake git-lfs jq libclang-dev libssl-dev netcat-openbsd perl pkg-config protobuf-compiler python3 zstd \
+     && cc --version \
+diff --git a/images/runner/ubuntu-26.04/README.md b/images/runner/ubuntu-26.04/README.md
+index 69fa08d66..50fa3767c 100644
+--- a/images/runner/ubuntu-26.04/README.md
++++ b/images/runner/ubuntu-26.04/README.md
+@@ -28,9 +28,9 @@ SSH agent, or controller config. UID `1000` (`runner`), group `docker` GID `999`
+ In-container passwordless sudo is for job steps only. The entrypoint also
+ removes `/.dockerenv` before the listener so Testcontainers reaches published
+ ports as `localhost`, matching a GitHub-hosted VM. Certificate verification
+-is unchanged. It writes `CARGO_BUILD_JOBS` into `/home/runner/.env` as half of
+-`nproc` (at least 1). Cargo and mbx honor that when `-j` is absent, so two
+-slots do not each take every visible CPU.
++is unchanged. The image does not override Cargo's job count. Workflows may set
++`CARGO_BUILD_JOBS` or pass Cargo's `-j` option according to their own resource
++budget; the runner does not infer compile parallelism from host `nproc`.
+ 
+ `disableUpdate=true` is a scale-set registration invariant. This image does
+ not set it and does not set `RUNNER_ALLOW_RUNASROOT`.
+diff --git a/images/runner/ubuntu-26.04/entrypoint.sh b/images/runner/ubuntu-26.04/entrypoint.sh
+index 8f2950edd..dfe7317f5 100755
+--- a/images/runner/ubuntu-26.04/entrypoint.sh
++++ b/images/runner/ubuntu-26.04/entrypoint.sh
+@@ -50,8 +50,7 @@ fi
+ 
+ cd "$root"
+ # Shell variable only. No export. Image ENV/ARG/labels never carry this.
+-# DinD links the public socket after its seed. Wait before the listener.
++# DinD links the public socket after dockerd is ready. Wait before the listener.
+ /usr/local/bin/wait-docker-sock
+ /usr/local/bin/clear-dockerenv
+-/usr/local/bin/runner-job-env
+ exec "$listener" run --jitconfig "$payload"
+diff --git a/images/runner/ubuntu-26.04/runner-job-env-test.sh b/images/runner/ubuntu-26.04/runner-job-env-test.sh
+deleted file mode 100755
+index e3365ad6f..000000000
+--- a/images/runner/ubuntu-26.04/runner-job-env-test.sh
++++ /dev/null
+@@ -1,23 +0,0 @@
+-#!/bin/bash
+-# Half of 18 is 9. One CPU stays 1. Other .env lines stay.
+-set -euo pipefail
+-root="$(cd "$(dirname "$0")" && pwd)"
+-dir="$(mktemp -d)"
+-bin="$(mktemp -d)"
+-trap 'rm -rf "$dir" "$bin"' EXIT
+-printf '%s\n' '#!/bin/bash' 'echo 18' >"$bin/nproc"
+-chmod 0755 "$bin/nproc"
+-export PATH="$bin:$PATH"
+-export RUNNER_ROOT="$dir"
+-bash "$root/runner-job-env.sh"
+-grep -qx 'CARGO_BUILD_JOBS=9' "$dir/.env"
+-printf '%s\n' 'KEEP=1' >>"$dir/.env"
+-bash "$root/runner-job-env.sh"
+-grep -qx 'KEEP=1' "$dir/.env"
+-grep -qx 'CARGO_BUILD_JOBS=9' "$dir/.env"
+-test "$(grep -c '^CARGO_BUILD_JOBS=' "$dir/.env")" -eq 1
+-printf '%s\n' '#!/bin/bash' 'echo 1' >"$bin/nproc"
+-bash "$root/runner-job-env.sh"
+-grep -qx 'CARGO_BUILD_JOBS=1' "$dir/.env"
+-grep -qx 'KEEP=1' "$dir/.env"
+-echo "runner-job-env ok"
+diff --git a/images/runner/ubuntu-26.04/runner-job-env.sh b/images/runner/ubuntu-26.04/runner-job-env.sh
+deleted file mode 100755
+index 1ae034212..000000000
+--- a/images/runner/ubuntu-26.04/runner-job-env.sh
++++ /dev/null
+@@ -1,24 +0,0 @@
+-#!/bin/bash
+-# Cargo and mbx read CARGO_BUILD_JOBS when -j is absent. The listener loads
+-# /home/runner/.env before the job. Half of nproc, at least one, so two slots
+-# do not each take every visible CPU.
+-set -euo pipefail
+-root="${RUNNER_ROOT:-/home/runner}"
+-env_file="${root}/.env"
+-cpus="$(nproc)"
+-if [[ ! "$cpus" =~ ^[0-9]+$ ]] || [[ "$cpus" -lt 1 ]]; then
+-  echo "nproc unusable" >&2
+-  exit 1
+-fi
+-jobs=$((cpus / 2))
+-if [[ "$jobs" -lt 1 ]]; then
+-  jobs=1
+-fi
+-mkdir -p "$root"
+-tmp="$(mktemp "${root}/.env.XXXXXX")"
+-if [[ -f "$env_file" ]]; then
+-  grep -v '^CARGO_BUILD_JOBS=' "$env_file" >"$tmp" || true
+-fi
+-printf 'CARGO_BUILD_JOBS=%s\n' "$jobs" >>"$tmp"
+-chmod 0644 "$tmp"
+-mv -f "$tmp" "$env_file"
+diff --git a/images/runner/ubuntu-26.04/wait-docker-sock.sh b/images/runner/ubuntu-26.04/wait-docker-sock.sh
+index e68b3836e..d4b0c6e0c 100755
+--- a/images/runner/ubuntu-26.04/wait-docker-sock.sh
++++ b/images/runner/ubuntu-26.04/wait-docker-sock.sh
+@@ -1,5 +1,5 @@
+ #!/bin/bash
+-# DinD publishes /run/docker.sock only after dockerd and the arm64 image seed.
++# DinD publishes /run/docker.sock after its private daemon is ready.
+ # The listener must not accept a job before that socket exists.
+ set -euo pipefail
+ 

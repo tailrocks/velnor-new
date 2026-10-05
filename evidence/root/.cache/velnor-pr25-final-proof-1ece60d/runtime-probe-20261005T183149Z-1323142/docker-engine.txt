@@ -1,0 +1,1 @@
+id=217d445c-e773-41da-b749-d0b32b0881e9 version=29.8.2 os=Debian GNU/Linux 13 (trixie) arch=x86_64 root=/var/lib/docker

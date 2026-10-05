@@ -1,0 +1,29 @@
+   Compiling velnor-actions-workflow-renderer v0.1.0 (/tmp/velnor-impl-20261005/cache/pr38/crates/velnor-actions-workflow-renderer)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.41s
+────────────
+ Nextest run ID 457bad2a-42ed-4467-b4d3-cfa76435b5e7 with nextest profile: default
+    Starting 1 test across 2 binaries (402 tests skipped)
+       START [         ] (1/1) velnor-actions-workflow-renderer lane_share::tests::cache_tests::only_qualified_hosted_lane_keeps_a_tools_cache_prelude
+
+running 1 test
+hosted runtime prelude failed: [("V2 identity", Some(ToolsCacheIdentity)), ("Restore Velnor tool seed", Some(ToolSeed)), ("Restore Mise tools", Some(ToolsCacheRestore)), ("Setup Mise", Some(MiseSetup)), ("echo 0", None)]
+hosted runtime prelude failed: [("V2 identity", Some(ToolsCacheIdentity)), ("Restore Velnor tool seed", Some(ToolSeed)), ("Restore Mise tools", Some(ToolsCacheRestore)), ("Setup Mise", Some(MiseSetup)), ("echo 0", None)]
+
+thread 'lane_share::tests::cache_tests::only_qualified_hosted_lane_keeps_a_tools_cache_prelude' (81798) panicked at crates/velnor-actions-workflow-renderer/src/lane_share_cache_tests.rs:93:45:
+lane-specific prelude factors: InvalidWorkflow("lane_body_differs:rust-0")
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test lane_share::tests::cache_tests::only_qualified_hosted_lane_keeps_a_tools_cache_prelude ... FAILED
+
+failures:
+
+failures:
+    lane_share::tests::cache_tests::only_qualified_hosted_lane_keeps_a_tools_cache_prelude
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 81 filtered out; finished in 0.00s
+
+        FAIL [   0.005s] (1/1) velnor-actions-workflow-renderer lane_share::tests::cache_tests::only_qualified_hosted_lane_keeps_a_tools_cache_prelude
+  Cancelling due to test failure: 
+────────────
+     Summary [   0.006s] 1 test run: 0 passed, 1 failed, 402 skipped
+        FAIL [   0.005s] (1/1) velnor-actions-workflow-renderer lane_share::tests::cache_tests::only_qualified_hosted_lane_keeps_a_tools_cache_prelude
+error: test run failed

@@ -1,0 +1,49 @@
+source commit: bc7f784a51233bd29676353392c9fc07c0ad01a7
+source tree: b3939a4d6010f243485fb528f73af74d49b2fb94
+main parent: 703d1b84d9f9e0246a52e3989bf3b78a13bbbf05
+lock sha256: b43ddef9c7a6b7e4c33cb6a8a4dd3659f26a7645a0f0c09782e04b2ee5b898a4
+source manifest sha256: 14dc98011488a1b950fad7f0a0115054190e88af263190ce535d00bb9dd541b3
+cargo fetch command: mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo fetch --locked --manifest-path /input/Cargo.toml
+offline metadata command: CARGO_NET_OFFLINE=true mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo metadata --locked --offline --format-version 1 --manifest-path /input/Cargo.toml
+exact object-derived source snapshot and Cargo.lock verified
+ -f1)" = 5876a1cfb5a1c6a43182995af93a31cb8729fa4421e3c5466a1afe8cfb9e3f0f ]
+/usr/bin/python3 -I -S /work/rustup-home-prepare.py
+rustup_version=$(/tools/rustup-proxy/rustup --version)
+printf "%s\n" "$rustup_version"
+case "$rustup_version" in "rustup 1.28.2"*) ;; *) echo "unexpected Rustup version" >&2; exit 3 ;; esac
+active_toolchain=$(/tools/rustup-proxy/rustup show active-toolchain)
+printf "rustup_active_toolchain=%s\n" "$active_toolchain"
+case "$active_toolchain" in 1.98.1-x86_64-unknown-linux-gnu*) ;; *) echo "unexpected active Rustup toolchain" >&2; exit 3 ;; esac
+rustup_cargo=$(/tools/rustup-proxy/rustup which cargo)
+rustup_rustc=$(/tools/rustup-proxy/rustup which rustc)
+[ "$rustup_cargo" = /tools/rust-1.98.1/bin/cargo ]
+[ "$rustup_rustc" = /tools/rust-1.98.1/bin/rustc ]
+cd /work
+umask 077
+tool_probe=$(/tools/mise/bin/mise --no-config --no-env --no-hooks exec rust@1.98.1 -- /bin/sh -c "cargo_path=\$(command -v cargo); rustc_path=\$(command -v rustc); case \"\$cargo_path\" in /work/cargo-seed/bin/cargo) ;; *) exit 3 ;; esac; case \"\$rustc_path\" in /work/cargo-seed/bin/rustc) ;; *) exit 3 ;; esac; cargo_version=\$(cargo --version); rustc_version=\$(rustc --version); case \"\$cargo_version\" in cargo\\ 1.98.1*) ;; *) exit 3 ;; esac; case \"\$rustc_version\" in rustc\\ 1.98.1*) ;; *) exit 3 ;; esac; printf \"%s\\n\" \"mise rust@1.98.1 selected \$cargo_path (\$cargo_version) and \$rustc_path (\$rustc_version)\"")
+printf "%s\\n" "$tool_probe"
+/tools/mise/bin/mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo fetch --locked --manifest-path /input/Cargo.toml
+CARGO_NET_OFFLINE=true /tools/mise/bin/mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo metadata --locked --offline --format-version 1 --manifest-path /input/Cargo.toml > /work/qualification/cargo-metadata.json
+printf "offline Cargo metadata qualification completed; no compilation command ran\\n"
+: 22: /usr/bin/find: not found
+ -f1)" = 5876a1cfb5a1c6a43182995af93a31cb8729fa4421e3c5466a1afe8cfb9e3f0f ]
+/usr/bin/python3 -I -S /work/rustup-home-prepare.py
+rustup_version=$(/tools/rustup-proxy/rustup --version)
+printf "%s\n" "$rustup_version"
+case "$rustup_version" in "rustup 1.28.2"*) ;; *) echo "unexpected Rustup version" >&2; exit 3 ;; esac
+active_toolchain=$(/tools/rustup-proxy/rustup show active-toolchain)
+printf "rustup_active_toolchain=%s\n" "$active_toolchain"
+case "$active_toolchain" in 1.98.1-x86_64-unknown-linux-gnu*) ;; *) echo "unexpected active Rustup toolchain" >&2; exit 3 ;; esac
+rustup_cargo=$(/tools/rustup-proxy/rustup which cargo)
+rustup_rustc=$(/tools/rustup-proxy/rustup which rustc)
+[ "$rustup_cargo" = /tools/rust-1.98.1/bin/cargo ]
+[ "$rustup_rustc" = /tools/rust-1.98.1/bin/rustc ]
+cd /work
+umask 077
+tool_probe=$(/tools/mise/bin/mise --no-config --no-env --no-hooks exec rust@1.98.1 -- /bin/sh -c "cargo_path=\$(command -v cargo); rustc_path=\$(command -v rustc); case \"\$cargo_path\" in /work/cargo-seed/bin/cargo) ;; *) exit 3 ;; esac; case \"\$rustc_path\" in /work/cargo-seed/bin/rustc) ;; *) exit 3 ;; esac; cargo_version=\$(cargo --version); rustc_version=\$(rustc --version); case \"\$cargo_version\" in cargo\\ 1.98.1*) ;; *) exit 3 ;; esac; case \"\$rustc_version\" in rustc\\ 1.98.1*) ;; *) exit 3 ;; esac; printf \"%s\\n\" \"mise rust@1.98.1 selected \$cargo_path (\$cargo_version) and \$rustc_path (\$rustc_version)\"")
+printf "%s\\n" "$tool_probe"
+/tools/mise/bin/mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo fetch --locked --manifest-path /input/Cargo.toml
+CARGO_NET_OFFLINE=true /tools/mise/bin/mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo metadata --locked --offline --format-version 1 --manifest-path /input/Cargo.toml > /work/qualification/cargo-metadata.json
+printf "offline Cargo metadata qualification completed; no compilation command ran\\n"
+: 23: /usr/bin/find: not found
+cargo source fetch: Cargo fetch failed with status 1; preserve private logs and work for review

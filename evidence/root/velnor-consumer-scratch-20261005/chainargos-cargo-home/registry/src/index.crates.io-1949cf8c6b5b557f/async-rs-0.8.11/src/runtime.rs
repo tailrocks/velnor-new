@@ -1,0 +1,113 @@
+use crate::{
+    sys::AsSysFd,
+    traits::{Executor, Reactor, RuntimeKit},
+    util::{SocketAddrsResolver, Task},
+};
+use futures_core::Stream;
+use futures_io::{AsyncRead, AsyncWrite};
+use std::{
+    future::Future,
+    io::{self, Read, Write},
+    net::{SocketAddr, ToSocketAddrs},
+    time::{Duration, Instant},
+};
+
+/// A full-featured async runtime that combines an executor and a reactor.
+///
+/// `Runtime<RK>` wraps any [`RuntimeKit`] and adds higher-level helpers such as
+/// domain-name resolution ([`Runtime::to_socket_addrs`]) and runtime-shutdown
+/// error detection ([`Runtime::is_runtime_shutdown_error`]).
+///
+/// Concrete type aliases — `NoopRuntime`, `SmolRuntime`, `TokioRuntime` — are
+/// provided for each built-in backend and are the usual entry points.
+#[derive(Clone, Debug)]
+pub struct Runtime<RK: RuntimeKit> {
+    kit: RK,
+}
+
+impl<RK: RuntimeKit> Runtime<RK> {
+    /// Create a new Runtime from a RuntimeKit
+    pub fn new(kit: RK) -> Self {
+        Self { kit }
+    }
+
+    /// Asynchronously resolve the given domain name
+    pub fn to_socket_addrs<A: ToSocketAddrs + Send + 'static>(
+        &self,
+        addrs: A,
+    ) -> SocketAddrsResolver<'_, RK, A>
+    where
+        <A as ToSocketAddrs>::Iter: Send + 'static,
+    {
+        SocketAddrsResolver {
+            runtime: self,
+            addrs,
+        }
+    }
+
+    /// Check if an `std::io::Error` is a runtime shutdown error
+    pub fn is_runtime_shutdown_error(&self, err: &io::Error) -> bool {
+        #[cfg(feature = "tokio")]
+        if tokio::runtime::is_rt_shutdown_err(err) {
+            return true;
+        }
+        #[cfg(not(feature = "tokio"))]
+        let _ = err;
+        false
+    }
+}
+
+impl<RK: RuntimeKit> From<RK> for Runtime<RK> {
+    fn from(kit: RK) -> Self {
+        Self::new(kit)
+    }
+}
+
+impl<RK: RuntimeKit> Executor for Runtime<RK> {
+    type Task<T: Send + 'static> = <RK as Executor>::Task<T>;
+
+    fn block_on<T, F: Future<Output = T>>(&self, f: F) -> T {
+        self.kit.block_on(f)
+    }
+
+    fn spawn<T: Send + 'static, F: Future<Output = T> + Send + 'static>(
+        &self,
+        f: F,
+    ) -> Task<Self::Task<T>> {
+        self.kit.spawn(f)
+    }
+
+    fn spawn_blocking<T: Send + 'static, F: FnOnce() -> T + Send + 'static>(
+        &self,
+        f: F,
+    ) -> Task<Self::Task<T>> {
+        self.kit.spawn_blocking(f)
+    }
+}
+
+impl<RK: RuntimeKit> Reactor for Runtime<RK> {
+    type TcpStream = <RK as Reactor>::TcpStream;
+    type Sleep = <RK as Reactor>::Sleep;
+
+    fn register<H: Read + Write + AsSysFd + Send + 'static>(
+        &self,
+        socket: H,
+    ) -> io::Result<impl AsyncRead + AsyncWrite + Send + Unpin + 'static> {
+        self.kit.register(socket)
+    }
+
+    fn sleep(&self, dur: Duration) -> Self::Sleep {
+        self.kit.sleep(dur)
+    }
+
+    fn interval(&self, dur: Duration) -> impl Stream<Item = Instant> + Send + 'static {
+        self.kit.interval(dur)
+    }
+
+    fn tcp_connect_addr(
+        &self,
+        addr: SocketAddr,
+    ) -> impl Future<Output = io::Result<Self::TcpStream>> + Send + 'static {
+        self.kit.tcp_connect_addr(addr)
+    }
+}

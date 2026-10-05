@@ -1,0 +1,10 @@
+fix: scope maintenance tasks and harden freshness admission
+
+Parse and enforce a typed repository-maintenance owner only under the
+canonical repository policy, keeping consumer crate tasks unchanged. Add
+derivation and metadata regressions, and classify the private support edge.
+
+Preserve RFC 3986 redirect paths, reject unknown rows before probes, require
+exact-version holds, and keep local commit identity checks mandatory.
+
+Co-authored-by: Codex <codex@openai.com>

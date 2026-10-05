@@ -1,0 +1,39 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.04s
+     Running unittests src/lib.rs (/root/.cache/velnor-task-targets/20261005/validate-shell-question-mark-target/debug/deps/velnor_actions_orchestrator-2d7f35443e58ece5)
+
+running 20 tests
+test validate_shell::shared_script_tests::unrelated_github_shell_files_are_not_selected ... ok
+test validate_shell::shared_script_tests::shared_script_selection_requires_exact_lowercase_digest_and_suffix ... ok
+test validate_shell::shared_script_tests::shared_script_artifact_must_keep_its_generated_marker_first ... ok
+test validate_shell::workflow::tests::harmless_shellcheck_directives_remain_supported ... ok
+test validate_shell::tests::shellcheck_version_mismatch_fails ... ok
+test validate_shell::workflow::tests::container_default_is_posix_and_services_do_not_change_runner_shell ... ok
+test validate_shell::workflow::tests::nested_run_values_are_not_confused_with_steps ... ok
+test validate_shell::workflow::tests::job_and_workflow_defaults_override_container_shell ... ok
+test validate_shell::workflow::tests::step_job_and_workflow_shell_precedence_is_order_independent ... ok
+test validate_shell::workflow::tests::step_shell_after_run_overrides_the_hosted_default ... ok
+test validate_shell::shared_script_tests::malformed_reserved_shared_paths_fail_before_linting ... ok
+test validate_shell::workflow::tests::only_step_run_keys_are_linted ... ok
+test validate_shell::workflow::tests::unknown_runner_shell_and_shellcheck_overrides_fail_closed ... ok
+test validate_shell::workflow::tests::unsupported_step_mapping_order_fails_closed ... ok
+test validate_shell::tests::shellcheck_pure_sc2086_body_fails ... ok
+test validate_shell::tests::shellcheck_clean_passes_violation_and_block_fail ... ok
+test validate_shell::shared_script_tests::shared_script_dialect_sets_the_temporary_shebang ... ok
+test validate_shell::shared_script_tests::shared_script_bodies_reach_warning_and_sc2086_passes ... ok
+test validate_shell::tests::shellcheck_batch_lints_every_body ... ok
+test validate_shell::tests::shellcheck_uses_the_resolved_bash_or_posix_dialect ... ok
+
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 543 filtered out; finished in 0.08s
+
+     Running tests/validation_failure.rs (/root/.cache/velnor-task-targets/20261005/validate-shell-question-mark-target/debug/deps/validation_failure-3f892e6f56094e25)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 10 filtered out; finished in 0.00s
+
+     Running tests/velnor_orchestrator.rs (/root/.cache/velnor-task-targets/20261005/validate-shell-question-mark-target/debug/deps/velnor_orchestrator-6d174f9c7abd565a)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 695 filtered out; finished in 0.00s
+

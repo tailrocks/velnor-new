@@ -1,0 +1,19 @@
+   Compiling velnor-actions-workflow-renderer v0.1.0 (/root/.cache/velnor-task-targets/20261005/mbx-cli-portability-20261005T1530Z/crates/velnor-actions-workflow-renderer)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.78s
+     Running tests/velnor_workflow_renderer.rs (/root/.cache/velnor-task-targets/20261005/mbx-cli-portability-gc-policy-target/debug/deps/velnor_workflow_renderer-f7fbb3074acf10a8)
+
+running 1 test
+test impl_renderer_mbx_gc_policy::every_mbx_runner_disables_gc_and_keeps_local_export ... FAILED
+
+failures:
+
+---- impl_renderer_mbx_gc_policy::every_mbx_runner_disables_gc_and_keeps_local_export stdout ----
+Error: InvalidWorkflow("label_mismatch:rust-demo-macos-arm64__hosted")
+
+
+failures:
+    impl_renderer_mbx_gc_policy::every_mbx_runner_disables_gc_and_keeps_local_export
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 299 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p velnor-actions-workflow-renderer --test velnor_workflow_renderer`

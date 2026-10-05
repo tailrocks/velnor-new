@@ -1,0 +1,15 @@
+[WARN] migrate: failed create_dir_all: /tools/mise-data/migrations
+mise_version=2026.9.18 linux-x64 (2026-09-30)
+[WARN] migrate: failed create_dir_all: /tools/mise-data/migrations
+/bin/sh: 3: cannot create /dev/null: Permission denied
+/bin/sh: 4: cannot create /dev/null: Permission denied
+/bin/sh: 7: cargo: not found
+/bin/sh: 8: rustc: not found
+cargo_path=
+cargo_real=unresolved
+cargo_status=127
+rustc_path=
+rustc_real=unresolved
+rustc_status=127
+RUSTUP_TOOLCHAIN=1.98.1
+mise_exec_status=1

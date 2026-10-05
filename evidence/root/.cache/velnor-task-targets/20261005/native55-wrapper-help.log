@@ -1,0 +1,2 @@
+usage: scripts/check-freshness.sh [--root DIR] [--check-upstream] [--with-advisories]
+exit=0

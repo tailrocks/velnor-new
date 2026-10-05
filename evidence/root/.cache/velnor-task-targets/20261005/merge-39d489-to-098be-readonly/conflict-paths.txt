@@ -1,0 +1,9 @@
+.velnor/freshness-inventory.json
+crates/velnor-actions-orchestrator/src/matrix_tools.rs
+docs/proposed/opentofu-goldens/MANIFEST.sha256
+docs/proposed/opentofu-goldens/cases/dogfood/tree.sha256
+docs/proposed/opentofu-goldens/cases/empty-suite/tree.sha256
+docs/proposed/opentofu-goldens/cases/mbx-nextest/tree.sha256
+docs/proposed/opentofu-goldens/cases/minimal-cargo/tree.sha256
+docs/proposed/opentofu-goldens/cases/nested/tree.sha256
+fixtures/parity/ignored-stack/expected/ci.yml

@@ -1,0 +1,4 @@
+name="Verify MBX and Rust toolchains" occurrences=27 distinct_argv=1 env_shapes=1 conditions=0 shells={"sh"} argv_bytes=2090 body_bytes=2086 original_run_line_bytes=2397 replacement_run_line_bytes=88 saved_per_job=2309 total_workflow_bytes_saved=62343 context_tokens=[] script_file_bytes=2165
+name="Prepare MBX cache identity" occurrences=27 distinct_argv=1 env_shapes=1 conditions=0 shells={"bash"} argv_bytes=1513 body_bytes=1507 original_run_line_bytes=1629 replacement_run_line_bytes=95 saved_per_job=1534 total_workflow_bytes_saved=41418 context_tokens=[] script_file_bytes=1586
+total_workflow_bytes_saved=103761
+probe_exit_status=0

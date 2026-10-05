@@ -1,0 +1,463 @@
+   Compiling proc-macro2 v1.0.107
+   Compiling serde_core v1.0.229
+   Compiling quote v1.0.47
+   Compiling unicode-ident v1.0.26
+   Compiling syn v3.0.6
+   Compiling serde v1.0.229
+   Compiling serde_derive v1.0.229
+    Checking itoa v1.0.18
+   Compiling shlex v2.0.1
+   Compiling find-msvc-tools v0.1.14
+    Checking cfg-if v1.0.5
+   Compiling cc v1.5.1
+   Compiling zmij v1.0.23
+   Compiling blake3 v1.8.7
+   Compiling serde_json v1.0.151
+   Compiling thiserror v2.0.21
+    Checking cpufeatures v0.3.1
+   Compiling thiserror-impl v2.0.21
+    Checking constant_time_eq v0.4.2
+    Checking arrayvec v0.7.8
+    Checking memchr v2.8.3
+    Checking winnow v1.0.4
+    Checking velnor-actions-contract v0.1.0 (/root/.cache/velnor-task-targets/20261005/mbx-cli-portability-20261005T1530Z/crates/velnor-actions-contract)
+    Checking typenum v1.20.1
+    Checking hybrid-array v0.4.15
+    Checking ryu v1.0.23
+   Compiling libc v0.2.189
+    Checking hcl-primitives v0.1.12
+    Checking vecmap-rs v0.2.5
+    Checking hashbrown v0.17.1
+   Compiling getrandom v0.4.3
+    Checking fnv v1.0.7
+    Checking pratt v0.4.0
+    Checking equivalent v1.0.2
+   Compiling rustix v1.1.5
+    Checking indexmap v2.14.2
+    Checking hcl-edit v0.9.7
+    Checking crypto-common v0.2.2
+    Checking block-buffer v0.12.1
+    Checking toml_parser v1.1.3+spec-1.1.0
+    Checking toml_datetime v0.7.5+spec-1.1.0
+    Checking serde_spanned v1.1.1
+   Compiling velnor-actions-tofu v0.1.0 (/root/.cache/velnor-task-targets/20261005/mbx-cli-portability-20261005T1530Z/crates/velnor-actions-tofu)
+    Checking winnow v0.7.15
+    Checking linux-raw-sys v0.12.1
+    Checking bitflags v2.13.2
+    Checking const-oid v0.10.2
+    Checking toml_writer v1.1.2+spec-1.1.0
+    Checking toml v0.9.12+spec-1.1.0
+    Checking digest v0.11.3
+    Checking hcl-rs v0.19.8
+    Checking fastrand v2.5.0
+    Checking zlib-rs v0.6.8
+    Checking once_cell v1.21.4
+    Checking tempfile v3.27.0
+    Checking flate2 v1.1.10
+    Checking sha2 v0.11.0
+    Checking velnor-actions-rust v0.1.0 (/root/.cache/velnor-task-targets/20261005/mbx-cli-portability-20261005T1530Z/crates/velnor-actions-rust)
+    Checking velnor-actions-mise v0.1.0 (/root/.cache/velnor-task-targets/20261005/mbx-cli-portability-20261005T1530Z/crates/velnor-actions-mise)
+    Checking velnor-actions-workflow-renderer v0.1.0 (/root/.cache/velnor-task-targets/20261005/mbx-cli-portability-20261005T1530Z/crates/velnor-actions-workflow-renderer)
+    Checking velnor-actions-actionlint v0.1.0 (/root/.cache/velnor-task-targets/20261005/mbx-cli-portability-20261005T1530Z/crates/velnor-actions-actionlint)
+    Checking velnor-actions-orchestrator v0.1.0 (/root/.cache/velnor-task-targets/20261005/mbx-cli-portability-20261005T1530Z/crates/velnor-actions-orchestrator)
+error: used `assert!` to check that a value is not empty
+   --> crates/velnor-actions-orchestrator/tests/impl_gapc.rs:310:9
+    |
+310 |         assert!(!err.to_string().is_empty());
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+    = note: `-D clippy::assert-is-empty` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::assert_is_empty)]`
+help: use `assert_ne!` to show the value on failure
+    |
+310 -         assert!(!err.to_string().is_empty());
+310 +         assert_ne!(err.to_string(), "");
+    |
+
+error: used `assert!` to check that a value is not empty
+   --> crates/velnor-actions-orchestrator/tests/impl_gates_cover.rs:124:5
+    |
+124 |     assert!(!seed.task_ids.is_empty());
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+help: use `assert_ne!` to show the value on failure
+    |
+124 -     assert!(!seed.task_ids.is_empty());
+124 +     assert_ne!(seed.task_ids, [] as [std::string::String; 0]);
+    |
+
+error: used `assert!` to check that a value is empty
+   --> crates/velnor-actions-orchestrator/tests/impl_matrix.rs:191:5
+    |
+191 |     assert!(final_report.expected_report_ids.is_empty());
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+help: use `assert_eq!` to show the value on failure
+    |
+191 -     assert!(final_report.expected_report_ids.is_empty());
+191 +     assert_eq!(final_report.expected_report_ids, [] as [std::string::String; 0]);
+    |
+
+error: used `assert!` to check that a value is empty
+  --> crates/velnor-actions-orchestrator/tests/impl_merge_plan.rs:89:5
+   |
+89 |     assert!(final_report.expected_report_ids.is_empty());
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+help: use `assert_eq!` to show the value on failure
+   |
+89 -     assert!(final_report.expected_report_ids.is_empty());
+89 +     assert_eq!(final_report.expected_report_ids, [] as [std::string::String; 0]);
+   |
+
+error: used `assert!` to check that a value is empty
+   --> crates/velnor-actions-orchestrator/tests/impl_orch_f2b.rs:186:5
+    |
+186 |     assert!(omission_ledger(&all, &everything).is_empty());
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+help: use `assert_eq!` to show the value on failure
+    |
+186 -     assert!(omission_ledger(&all, &everything).is_empty());
+186 +     assert_eq!(omission_ledger(&all, &everything), [] as [velnor_actions_orchestrator::decisions::TaskOmission; 0]);
+    |
+
+error: used `assert!` to check that a value is empty
+   --> crates/velnor-actions-orchestrator/tests/impl_orch_f2b.rs:266:5
+    |
+266 |     assert!(dupes.is_empty());
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+help: use `assert_eq!` to show the value on failure
+    |
+266 -     assert!(dupes.is_empty());
+266 +     assert_eq!(dupes, [] as [std::string::String; 0]);
+    |
+
+error: used `assert!` to check that a value is empty
+  --> crates/velnor-actions-orchestrator/tests/impl_orch_f2c.rs:40:5
+   |
+40 |     assert!(resource_exclusions(&[("a", 0), ("b", 1)]).is_empty());
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+help: use `assert_eq!` to show the value on failure
+   |
+40 -     assert!(resource_exclusions(&[("a", 0), ("b", 1)]).is_empty());
+40 +     assert_eq!(resource_exclusions(&[("a", 0), ("b", 1)]), [] as [(std::string::String, std::string::String); 0]);
+   |
+
+error: used `assert!` to check that a value is empty
+  --> crates/velnor-actions-orchestrator/tests/impl_orch_f2c.rs:78:5
+   |
+78 |     assert!(sequential_reference(&[]).is_empty());
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+help: use `assert_eq!` to show the value on failure
+   |
+78 -     assert!(sequential_reference(&[]).is_empty());
+78 +     assert_eq!(sequential_reference(&[]), [] as [std::string::String; 0]);
+   |
+
+error: used `assert!` to check that a value is not empty
+   --> crates/velnor-actions-orchestrator/tests/impl_orch_f2d.rs:385:9
+    |
+385 | /         assert!(
+386 | |             !meta["compile_driver"]
+387 | |                 .as_str()
+388 | |                 .unwrap_or_default()
+389 | |                 .is_empty()
+390 | |         );
+    | |_________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+help: use `assert_ne!` to show the value on failure
+    |
+385 ~         assert_ne!(
+386 ~             meta["compile_driver"]
+387 +                 .as_str()
+388 +                 .unwrap_or_default(), ""
+    |
+
+error: used `assert!` to check that a value is not empty
+   --> crates/velnor-actions-orchestrator/tests/impl_orch_f2d.rs:391:9
+    |
+391 |         assert!(!meta["test_runner"].as_str().unwrap_or_default().is_empty());
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+help: use `assert_ne!` to show the value on failure
+    |
+391 -         assert!(!meta["test_runner"].as_str().unwrap_or_default().is_empty());
+391 +         assert_ne!(meta["test_runner"].as_str().unwrap_or_default(), "");
+    |
+
+error: used `assert!` to check that a value is empty
+   --> crates/velnor-actions-orchestrator/tests/impl_orch_install_sets.rs:253:9
+    |
+253 |         assert!(prep.lock_audit_blocking.is_empty());
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+help: use `assert_eq!` to show the value on failure
+    |
+253 -         assert!(prep.lock_audit_blocking.is_empty());
+253 +         assert_eq!(prep.lock_audit_blocking, [] as [std::string::String; 0]);
+    |
+
+error: used `assert!` to check that a value is not empty
+  --> crates/velnor-actions-orchestrator/tests/impl_orch_intake.rs:92:5
+   |
+92 |     assert!(!prep.discovery.proposals.is_empty());
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+help: use `assert_ne!` to show the value on failure
+   |
+92 -     assert!(!prep.discovery.proposals.is_empty());
+92 +     assert_ne!(prep.discovery.proposals, [] as [velnor_actions_contract::ProposedTask; 0]);
+   |
+
+error: used `assert!` to check that a value is not empty
+   --> crates/velnor-actions-orchestrator/tests/impl_orch_intake.rs:322:5
+    |
+322 |     assert!(!prepare(repo.path())?.discovery.proposals.is_empty());
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+help: use `assert_ne!` to show the value on failure
+    |
+322 -     assert!(!prepare(repo.path())?.discovery.proposals.is_empty());
+322 +     assert_ne!(prepare(repo.path())?.discovery.proposals, [] as [velnor_actions_contract::ProposedTask; 0]);
+    |
+
+error: used `assert!` to check that a value is empty
+  --> crates/velnor-actions-orchestrator/tests/impl_orch_lock_audit.rs:74:5
+   |
+74 |     assert!(prep.lock_audit_blocking.is_empty());
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+help: use `assert_eq!` to show the value on failure
+   |
+74 -     assert!(prep.lock_audit_blocking.is_empty());
+74 +     assert_eq!(prep.lock_audit_blocking, [] as [std::string::String; 0]);
+   |
+
+error: used `assert!` to check that a value is empty
+   --> crates/velnor-actions-orchestrator/tests/impl_orch_lock_audit.rs:100:5
+    |
+100 |     assert!(prep.lock_audit_blocking.is_empty());
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+help: use `assert_eq!` to show the value on failure
+    |
+100 -     assert!(prep.lock_audit_blocking.is_empty());
+100 +     assert_eq!(prep.lock_audit_blocking, [] as [std::string::String; 0]);
+    |
+
+error: used `assert!` to check that a value is empty
+   --> crates/velnor-actions-orchestrator/tests/impl_orch_lock_audit.rs:242:5
+    |
+242 |     assert!(prep.lock_audit_blocking.is_empty());
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+help: use `assert_eq!` to show the value on failure
+    |
+242 -     assert!(prep.lock_audit_blocking.is_empty());
+242 +     assert_eq!(prep.lock_audit_blocking, [] as [std::string::String; 0]);
+    |
+
+error: used `assert!` to check that a value is not empty
+  --> crates/velnor-actions-orchestrator/tests/impl_p03_identity.rs:36:5
+   |
+36 |     assert!(!plan.generator.sha256.is_empty());
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+help: use `assert_ne!` to show the value on failure
+   |
+36 -     assert!(!plan.generator.sha256.is_empty());
+36 +     assert_ne!(plan.generator.sha256, "");
+   |
+
+error: used `assert!` to check that a value is not empty
+  --> crates/velnor-actions-orchestrator/tests/impl_p03_identity.rs:48:5
+   |
+48 |     assert!(!plan.generator.target.is_empty());
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+help: use `assert_ne!` to show the value on failure
+   |
+48 -     assert!(!plan.generator.target.is_empty());
+48 +     assert_ne!(plan.generator.target, "");
+   |
+
+error: used `assert!` to check that a value is not empty
+   --> crates/velnor-actions-orchestrator/tests/impl_p03_identity.rs:101:5
+    |
+101 |     assert!(!lanes.is_empty());
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+help: use `assert_ne!` to show the value on failure
+    |
+101 -     assert!(!lanes.is_empty());
+101 +     assert_ne!(lanes, [] as [&str; 0]);
+    |
+
+error: used `assert!` to check that a value is empty
+   --> crates/velnor-actions-orchestrator/tests/impl_p06_detection.rs:105:5
+    |
+105 |     assert!(workspace.findings.is_empty());
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+help: use `assert_eq!` to show the value on failure
+    |
+105 -     assert!(workspace.findings.is_empty());
+105 +     assert_eq!(workspace.findings, [] as [velnor_actions_rust::ProfileFinding; 0]);
+    |
+
+error: used `assert!` to check that a value is empty
+   --> crates/velnor-actions-orchestrator/tests/impl_p06_detection.rs:140:9
+    |
+140 |         assert!(workspace.findings.is_empty());
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+help: use `assert_eq!` to show the value on failure
+    |
+140 -         assert!(workspace.findings.is_empty());
+140 +         assert_eq!(workspace.findings, [] as [velnor_actions_rust::ProfileFinding; 0]);
+    |
+
+error: used `assert!` to check that a value is empty
+   --> crates/velnor-actions-orchestrator/tests/impl_p06_detection.rs:185:5
+    |
+185 |     assert!(workspace.profile.evidence.is_empty());
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+help: use `assert_eq!` to show the value on failure
+    |
+185 -     assert!(workspace.profile.evidence.is_empty());
+185 +     assert_eq!(workspace.profile.evidence, [] as [velnor_actions_rust::Evidence; 0]);
+    |
+
+error: used `assert!` to check that a value is empty
+   --> crates/velnor-actions-orchestrator/tests/impl_p06_detection.rs:280:5
+    |
+280 |     assert!(workspace.findings.is_empty());
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+help: use `assert_eq!` to show the value on failure
+    |
+280 -     assert!(workspace.findings.is_empty());
+280 +     assert_eq!(workspace.findings, [] as [velnor_actions_rust::ProfileFinding; 0]);
+    |
+
+error: used `assert!` to check that a value is empty
+  --> crates/velnor-actions-orchestrator/tests/impl_p06_detection_malformed.rs:81:5
+   |
+81 |     assert!(workspace.findings.is_empty());
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+help: use `assert_eq!` to show the value on failure
+   |
+81 -     assert!(workspace.findings.is_empty());
+81 +     assert_eq!(workspace.findings, [] as [velnor_actions_rust::ProfileFinding; 0]);
+   |
+
+error: used `assert!` to check that a value is empty
+   --> crates/velnor-actions-orchestrator/tests/impl_perf_p13.rs:228:13
+    |
+228 |             assert!(workspace.record.skipped_edges.is_empty());
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+help: use `assert_eq!` to show the value on failure
+    |
+228 -             assert!(workspace.record.skipped_edges.is_empty());
+228 +             assert_eq!(workspace.record.skipped_edges, [] as [velnor_actions_rust::SkippedPathEdge; 0]);
+    |
+
+error: used `assert!` to check that a value is not empty
+   --> crates/velnor-actions-orchestrator/tests/impl_wire_w2.rs:233:5
+    |
+233 | /     assert!(
+234 | |         !value["plan"]["task_ids"]
+235 | |             .as_array()
+236 | |             .expect("task ids")
+237 | |             .is_empty()
+238 | |     );
+    | |_____^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+help: use `assert_ne!` to show the value on failure
+    |
+233 ~     assert_ne!(
+234 ~         value["plan"]["task_ids"]
+235 +             .as_array()
+236 +             .expect("task ids").as_slice(), []
+    |
+
+error: used `assert!` to check that a value is not empty
+   --> crates/velnor-actions-orchestrator/tests/impl_wire_w2.rs:243:5
+    |
+243 |     assert!(!prep.runner_label.is_empty());
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+help: use `assert_ne!` to show the value on failure
+    |
+243 -     assert!(!prep.runner_label.is_empty());
+243 +     assert_ne!(prep.runner_label, "");
+    |
+
+error: used `assert!` to check that a value is not empty
+   --> crates/velnor-actions-orchestrator/tests/impl_wire_w2.rs:269:5
+    |
+269 |     assert!(!ids.is_empty());
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+help: use `assert_ne!` to show the value on failure
+    |
+269 -     assert!(!ids.is_empty());
+269 +     assert_ne!(ids.as_slice(), []);
+    |
+
+error: used `assert!` to check that a value is not empty
+   --> crates/velnor-actions-orchestrator/tests/impl_wire_w2.rs:292:5
+    |
+292 | /     assert!(
+293 | |         !value["plan"]["task_ids"]
+294 | |             .as_array()
+295 | |             .expect("task ids")
+296 | |             .is_empty()
+297 | |     );
+    | |_____^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+help: use `assert_ne!` to show the value on failure
+    |
+292 ~     assert_ne!(
+293 ~         value["plan"]["task_ids"]
+294 +             .as_array()
+295 +             .expect("task ids").as_slice(), []
+    |
+
+error: could not compile `velnor-actions-orchestrator` (test "velnor_orchestrator") due to 29 previous errors

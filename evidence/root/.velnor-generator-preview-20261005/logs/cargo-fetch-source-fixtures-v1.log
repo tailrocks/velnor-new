@@ -1,0 +1,12 @@
+started_utc=2026-10-05T11:47:27Z
+bash -n outer and namespace
+rootfs_delta_positive_exit=0
+reviewed base and input delta manifests plus complete result rootfs tree verified
+rootfs_delta_tamper_exit=1
+cargo source fetch: input mountpoint delta manifest digest mismatch
+pinned_git_exact_bc7_type_exit=0
+pinned_git_exact_bc7_type=commit
+outer_sha256=da5e644badf8ff2a303b72ab89b603e129b6fcc09de840e5b770cd16d8f6f532  /root/.velnor-generator-preview-20261005/preseed-preview-cargo-fetch-v2.sh
+namespace_sha256=0bcf118082304e72b1ae46d53abab4ab8dbbca62df731e2a7f3b6627a29043f8  /root/.velnor-generator-preview-20261005/preseed-preview-cargo-fetch-namespace-v2.sh
+rootfs_input_delta_manifest_sha256=dd5425fceb1524fc304e0da46cf6c64a8b63ee643f8ad6e6689cb15c241ef974  /root/.velnor-generator-preview-20261005/rootfs-input-delta-manifest.json
+finished_utc=2026-10-05T11:47:28Z

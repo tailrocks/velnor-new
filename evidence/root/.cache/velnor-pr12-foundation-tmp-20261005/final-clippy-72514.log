@@ -1,0 +1,8 @@
+   Compiling ring v0.17.14
+   Compiling velnor-archive-guard v0.1.1 (/tmp/velnor-pr12-foundation-20261005/crates/velnor-archive-guard)
+   Compiling rustls v0.23.45
+    Checking rustls-webpki v0.103.15
+    Checking ureq v3.4.2
+    Checking velnor-actions-freshness v0.1.1 (/tmp/velnor-pr12-foundation-20261005/crates/velnor-actions-freshness)
+    Checking velnor-actions-cli v0.1.1 (/tmp/velnor-pr12-foundation-20261005/crates/velnor-actions-cli)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.97s

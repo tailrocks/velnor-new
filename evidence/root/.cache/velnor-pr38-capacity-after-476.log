@@ -1,0 +1,38 @@
+   Compiling velnor-actions-orchestrator v0.1.0 (/tmp/velnor-impl-20261005/cache/pr38/crates/velnor-actions-orchestrator)
+   Compiling velnor-actions-cli v0.1.0 (/tmp/velnor-impl-20261005/cache/pr38/crates/velnor-actions-cli)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 6.07s
+────────────
+ Nextest run ID 503d15a9-9a0c-4fa6-8a4a-193e865f0022 with nextest profile: default
+    Starting 2 tests across 5 binaries (1310 tests skipped)
+        FAIL [   3.261s] (2/2) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t24_scale::tofu_generate_scales_with_root_count
+  stdout ───
+
+    running 1 test
+    Initialized empty Git repository in /tmp/.tmpFXfEex/.git/
+    Initialized empty Git repository in /tmp/.tmpg8xUdr/.git/
+    Initialized empty Git repository in /tmp/.tmp17PLsf/.git/
+    Initialized empty Git repository in /tmp/.tmponQHaD/.git/
+    Initialized empty Git repository in /tmp/.tmpWxr1Xt/.git/
+    Initialized empty Git repository in /tmp/.tmpLvD1q6/.git/
+    test impl_tofu_t24_scale::tofu_generate_scales_with_root_count ... FAILED
+
+    failures:
+
+    failures:
+        impl_tofu_t24_scale::tofu_generate_scales_with_root_count
+
+    test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 660 filtered out; finished in 3.26s
+
+  stderr ───
+    perf: op=generate roots=1 prepare_ms=13 generate_ms=233 files=8 ci_bytes=23707
+    perf: op=generate roots=10 prepare_ms=22 generate_ms=402 files=8 ci_bytes=98653
+    perf: op=generate roots=31 prepare_ms=59 generate_ms=708 files=8 ci_bytes=273625
+    perf: op=generate roots=32 prepare_ms=69 generate_ms=652 files=8 ci_bytes=281957
+    perf: op=generate roots=40 prepare_ms=53 generate_ms=783 files=8 ci_bytes=348613
+    Error: Render { problem: "invalid workflow: workflow_too_large:.github/workflows/ci.yml:515253:500000" }
+
+  Cancelling due to test failure: 
+────────────
+     Summary [   3.266s] 2 tests run: 1 passed, 1 failed, 1310 skipped
+        FAIL [   3.261s] (2/2) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t24_scale::tofu_generate_scales_with_root_count
+error: test run failed

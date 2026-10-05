@@ -1,0 +1,16 @@
+Proposed PR39+098 stage-0 index snapshot; not a commit/tree object because nine paths remain unresolved.
+Merge worktree: /tmp/velnor-release-intent-guard-af82-candidate-20261005
+HEAD (PR side): 39d489229747342043de979e0f3e2c95d8726aa4
+MERGE_HEAD (main side): 098be4ad61e614fa4ddfb30f7e7148e470974597
+Merge base: 703d1b84d9f9e0246a52e3989bf3b78a13bbbf05
+Live main at export: bc06c69815d6e6f5b83f5f8155bff721dafe8ef5
+Live task branch at export: 39d489229747342043de979e0f3e2c95d8726aa4
+Full stage-0 export: /root/.cache/velnor-task-targets/20261005/pr39-098-stage0-snapshot-20261005/full-stage0
+Source-only stage-0 export: /root/.cache/velnor-task-targets/20261005/pr39-098-stage0-snapshot-20261005/source-only
+Stage-0 index entries: 1523 (mode counts: 100644 1505;100755 10;120000 7;160000 1;)
+Unresolved conflict paths omitted: 9; exact stage entries in unresolved-index-entries.txt and path-only list in unresolved-paths.txt.
+Full export materialized 1515 regular files + 7 symlinks; one gitlink is recorded in the index manifest but its submodule worktree is not populated by checkout-index.
+Source-only export has 1430 selected stage-0 entries: 1428 regular files + 1 symlink + 1 gitlink (gitlink content not populated).
+Source-only excludes 93 stage-0 generated output paths recorded in generated-output-exclusions.txt: repository-root .github/**, docs/proposed/opentofu-goldens/**, fixtures/parity/*/expected/**. Nested handwritten fixture workflows are retained.
+Exact full index-stage manifest: index-all-stages.txt; stage-0 mode/blob/path manifest: index-stage0-entries.txt; selected source-only manifest: source-only-index-entries.txt.
+The actual merge worktree Git index SHA-256 remained b7ae79707cd275860b93bc587923c51138ba8e3c88c21753f9ed1d0c2327b3e2 before and after both exports; worktree status and diff --cached --check also remained unchanged/passed.

@@ -1,0 +1,39 @@
+   Compiling proc-macro2 v1.0.107
+   Compiling unicode-ident v1.0.26
+   Compiling quote v1.0.47
+   Compiling syn v3.0.6
+   Compiling serde_core v1.0.229
+   Compiling shlex v2.0.1
+   Compiling find-msvc-tools v0.1.14
+   Compiling cc v1.5.1
+   Compiling zmij v1.0.23
+   Compiling blake3 v1.8.7
+   Compiling serde_json v1.0.151
+   Compiling thiserror v2.0.21
+   Compiling serde v1.0.229
+   Compiling serde_derive v1.0.229
+   Compiling thiserror-impl v2.0.21
+   Compiling memchr v2.8.3
+   Compiling cpufeatures v0.3.1
+   Compiling constant_time_eq v0.4.2
+   Compiling cfg-if v1.0.5
+   Compiling itoa v1.0.18
+   Compiling arrayvec v0.7.8
+   Compiling velnor-actions-contract v0.1.1 (/root/.cache/velnor-task-targets/20261005/stock-mbx-lifecycle-main-20261005/source/crates/velnor-actions-contract)
+   Compiling velnor-actions-workflow-renderer v0.1.1 (/root/.cache/velnor-task-targets/20261005/stock-mbx-lifecycle-main-20261005/source/crates/velnor-actions-workflow-renderer)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 20.85s
+     Running tests/velnor_workflow_renderer.rs (/root/.cache/velnor-task-targets/20261005/stock-mbx-lifecycle-main-target/debug/deps/velnor_workflow_renderer-81928bd455bb6fd2)
+
+running 9 tests
+test impl_renderer_mbxgate::cargo_gating_rejects_mbx_commands_but_ignores_decoy_text ... ok
+test impl_renderer_mbxgate::mbx_gating_rejects_unknown_driver_jobs ... ok
+test impl_renderer_mbxgate::cargo_gating_rejects_the_native_action ... ok
+test impl_renderer_mbxgate::mbx_preflight_role_is_rejected_without_a_selected_driver ... ok
+test impl_renderer_mbxgate::mbx_emitted_only_for_mbx_driver ... ok
+test impl_renderer_mbxgate::mbx_gating_requires_typed_action_and_preflight_roles ... ok
+test impl_renderer_mbxgate::mbx_preflight_role_and_cardinality_are_gated ... ok
+test impl_renderer_mbxgate::mbx_preflight_must_equal_the_factory_step_for_the_selected_action ... ok
+test impl_renderer_mbxgate::mbx_gating_requires_the_exact_guard_before_a_real_command ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 313 filtered out; finished in 0.01s
+

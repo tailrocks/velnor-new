@@ -1,0 +1,57 @@
+Diff in /root/.cache/velnor-task-targets/20261005/mbx-cli-portability-20261005T1530Z/crates/velnor-actions-orchestrator/src/lib.rs:110:
+     DEFAULT_EXTERNAL_DATA_MAX_AGE_SECS, EXTERNAL_DATA_CHECK_KIND, ExternalDataFreshness,
+     external_data_kind, may_skip_external_data,
+ };
+-pub use {finalized::finalized_jobs, freshness::check_freshness};
+ pub use generate::{
+     GenerateOptions, GenerateReport, ToolSnapshot, generate, generate_dispatched,
+     render_staged_tree, render_staged_tree_with,
+Diff in /root/.cache/velnor-task-targets/20261005/mbx-cli-portability-20261005T1530Z/crates/velnor-actions-orchestrator/src/lib.rs:145:
+ pub use velnor_actions_contract::ExecutionMode;
+ pub use velnor_actions_contract::{DYNAMIC_MATRIX_OUTPUT_MODE, PLAN_MATRIX_OUTPUT_MODE_ENV};
+ pub use workflow::{CHECKOUT_USES, DEFAULT_RUNNER_LABEL, WorkflowPlan};
++pub use {finalized::finalized_jobs, freshness::check_freshness};
+ 
+ /// Version marker for the orchestrator shell.
+ pub const ORCHESTRATOR_VERSION: u32 = 0;
+Diff in /root/.cache/velnor-task-targets/20261005/mbx-cli-portability-20261005T1530Z/crates/velnor-actions-workflow-renderer/src/schema2_generator_release.rs:8:
+ use crate::steps::{DOWNLOAD_ARTIFACT_USES, UPLOAD_ARTIFACT_USES};
+ use crate::yaml::Yaml;
+ 
+-use super::{Schema2WorkflowRequest, setup_step};
+ use super::features::{CHECKOUT_USES, base, finish, publish_step, run_step};
++use super::{Schema2WorkflowRequest, setup_step};
+ use crate::setup::MiseSetup;
+ 
+ /// GitHub-hosted macOS label. The arm64 binary is not built on Ubuntu.
+Diff in /root/.cache/velnor-task-targets/20261005/mbx-cli-portability-20261005T1530Z/crates/velnor-actions-workflow-renderer/src/schema2_release.rs:11:
+ use crate::steps::{DOWNLOAD_ARTIFACT_USES, UPLOAD_ARTIFACT_USES};
+ use crate::yaml::Yaml;
+ 
+-use super::{Schema2WorkflowRequest, setup_step};
+ use super::features::{CHECKOUT_USES, base, finish, publish_step, run_step};
++use super::{Schema2WorkflowRequest, setup_step};
+ 
+ /// GitHub-hosted macOS label. The binary is native; it is not built on Ubuntu.
+ const MACOS_RUNS_ON: &str = "macos-15";
+Diff in /root/.cache/velnor-task-targets/20261005/mbx-cli-portability-20261005T1530Z/crates/velnor-actions-workflow-renderer/src/schema2_release_eligibility.rs:1:
+ //! Exact-source eligibility shared by every product release job.
+ 
+-use crate::yaml::Yaml;
+ use crate::setup::MiseSetup;
++use crate::yaml::Yaml;
+ 
+ use super::features::{CHECKOUT_USES, base, finish, run_step};
+ use super::setup_step;
+Diff in /root/.cache/velnor-task-targets/20261005/mbx-cli-portability-20261005T1530Z/crates/velnor-actions-workflow-renderer/tests/impl_renderer_mbx_action.rs:45:
+         with.get("toolchain").map(String::as_str),
+         Some(TEST_RUST_TOOLCHAIN)
+     );
+-    assert_eq!(with.get("version").map(String::as_str), Some(TEST_MBX_VERSION));
++    assert_eq!(
++        with.get("version").map(String::as_str),
++        Some(TEST_MBX_VERSION)
++    );
+     let action_sha = MBX_ACTION
+         .strip_prefix("jdx/mr-boxington-action@")
+         .expect("SHA ref");

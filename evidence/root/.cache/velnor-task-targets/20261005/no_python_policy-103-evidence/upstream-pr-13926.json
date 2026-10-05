@@ -1,0 +1,8 @@
+{
+  "number": 13926,
+  "title": "fix(config): skip miserc discovery with --no-config",
+  "state": "closed",
+  "merged_at": "2026-10-03T15:37:37Z",
+  "merge_commit_sha": "dfe74a90b41603625ee6aabecb42f14a1f5eb0f6",
+  "html_url": "https://github.com/jdx/mise/pull/13926"
+}

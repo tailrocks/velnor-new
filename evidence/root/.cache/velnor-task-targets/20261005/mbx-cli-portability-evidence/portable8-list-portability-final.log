@@ -1,0 +1,7 @@
+error: unexpected argument '--jobs' found
+
+  tip: to pass '--jobs' as a value, use '-- --jobs'
+
+Usage: cargo nextest list --locked --offline [FILTERS]... [-- <FILTERS_AND_ARGS>...]
+
+For more information, try '--help'.

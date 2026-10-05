@@ -1,0 +1,1374 @@
+   Compiling ring v0.17.14
+   Compiling rustls v0.23.45
+   Compiling rustls-webpki v0.103.15
+   Compiling ureq v3.4.2
+   Compiling velnor-actions-freshness v0.1.0 (/tmp/velnor-pr12-foundation-20261005/crates/velnor-actions-freshness)
+   Compiling velnor-actions-cli v0.1.0 (/tmp/velnor-pr12-foundation-20261005/crates/velnor-actions-cli)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.72s
+────────────
+ Nextest run ID 223bcc51-12f0-4a90-b7d0-ad3df26e8c6c with nextest profile: default
+    Starting 1361 tests across 7 binaries
+        PASS [   0.007s] (   1/1361) velnor-actions-cli::velnor_cli impl_cli::version_flag_reports_binary_name
+        PASS [   0.007s] (   2/1361) velnor-actions-cli::velnor_cli impl_cli_gate::staged_plan_request_runs_json_protocol
+        PASS [   0.008s] (   3/1361) velnor-actions-cli::velnor_cli impl_cli_gate::staged_merge_request_runs_json_protocol
+        PASS [   0.008s] (   4/1361) velnor-actions-cli::velnor_cli impl_cli_gate_preseed::preseed_manifest_op_without_writer_env_fails_internal_silently
+        PASS [   0.008s] (   5/1361) velnor-actions-cli::velnor_cli impl_cli_args::generate_missing_flag_value_exits_two
+        PASS [   0.009s] (   6/1361) velnor-actions-cli::velnor_cli impl_cli_args::extra_positionals_exit_two
+        PASS [   0.009s] (   7/1361) velnor-actions-cli::velnor_cli impl_cli_args::help_describes_stack_generic_generator
+        PASS [   0.010s] (   8/1361) velnor-actions-cli::velnor_cli impl_cli_gate::unknown_op_matches_bare
+        PASS [   0.010s] (   9/1361) velnor-actions-cli::velnor_cli impl_cli_args::output_dir_help_guides_unique_tmp_choice
+        PASS [   0.010s] (  10/1361) velnor-actions-cli::velnor_cli impl_cli_gate::report_op_without_plan_fails_internal_silently
+        PASS [   0.010s] (  11/1361) velnor-actions-cli::velnor_cli impl_cli_gate::write_request_with_existing_file_matches_bare
+        PASS [   0.011s] (  12/1361) velnor-actions-cli::velnor_cli impl_cli_protocol::write_request_rejects_malformed_payload
+        PASS [   0.012s] (  13/1361) velnor-actions-cli::velnor_cli impl_cli_gate::plan_and_merge_without_request_file_match_bare
+        PASS [   0.005s] (  14/1361) velnor-actions-cli::velnor_cli impl_repo_freshness::ver15_incompatible_is_migration
+        PASS [   0.004s] (  15/1361) velnor-actions-cli::velnor_cli impl_repo_freshness::ver227_renovate_proposes_all
+        PASS [   0.004s] (  16/1361) velnor-actions-cli::velnor_cli impl_repo_freshness::ver32_one_coherent_set
+        PASS [   0.015s] (  17/1361) velnor-actions-cli::velnor_cli impl_cli_args::bare_invocation_and_unknown_commands_exit_two
+        PASS [   0.016s] (  18/1361) velnor-actions-cli::velnor_cli impl_cli_gate::report_op_needs_runner_temp_and_run_id
+        PASS [   0.004s] (  19/1361) velnor-actions-cli::velnor_cli impl_repo_freshness::ver37_merge_after_qual
+        PASS [   0.017s] (  20/1361) velnor-actions-cli::velnor_cli impl_cli_gate::public_commands_ignore_internal_env
+        PASS [   0.005s] (  21/1361) velnor-actions-cli::velnor_cli impl_repo_freshness::ver44_velnor_owned_refresh_only
+        PASS [   0.009s] (  22/1361) velnor-actions-cli::velnor_cli impl_repo_freshness::rq98_risk_triggers_documented
+        PASS [   0.004s] (  23/1361) velnor-actions-cli::velnor_cli impl_repo_freshness_support::freshness_support_is_private_and_separately_classified
+        PASS [   0.005s] (  24/1361) velnor-actions-cli::velnor_cli impl_repo_goldens::golden_claude_files_are_agents_symlinks
+        PASS [   0.005s] (  25/1361) velnor-actions-cli::velnor_cli impl_repo_policy::clippy_toml_has_five_settings
+        PASS [   0.004s] (  26/1361) velnor-actions-cli::velnor_cli impl_repo_policy::generic_names_forbidden
+        PASS [   0.020s] (  27/1361) velnor-actions-cli::velnor_cli impl_cli_args::unknown_flags_exit_two
+        PASS [   0.009s] (  28/1361) velnor-actions-cli::velnor_cli impl_repo_freshness::ver34_tool_files_untouched
+        PASS [   0.005s] (  29/1361) velnor-actions-cli::velnor_cli impl_repo_policy::members_inherit_workspace_settings
+        PASS [   0.005s] (  30/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p11_alint::alint_duped_extends_fails
+        PASS [   0.022s] (  31/1361) velnor-actions-cli::velnor_cli impl_cli_args::plan_without_config_exits_one
+        PASS [   0.005s] (  32/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p11_alint::alint_same_id_override_fails
+        PASS [   0.004s] (  33/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p11_compiler::reject_oversize_file_fails
+        PASS [   0.025s] (  34/1361) velnor-actions-cli::velnor_cli impl_cli_args::generate_output_dir_flag_parses
+        PASS [   0.009s] (  35/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p11_alint::alint_extended_policy_holds
+        PASS [   0.026s] (  36/1361) velnor-actions-cli::velnor_cli impl_cli_gate::help_and_version_identical_with_env
+        PASS [   0.004s] (  37/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p11_metadata::json_parser_reads_every_shape
+        PASS [   0.048s] (  38/1361) velnor-actions-cli::velnor_cli impl_cli_smoke::help_is_identical_with_and_without_env
+        PASS [   0.049s] (  39/1361) velnor-actions-cli::velnor_cli impl_cli_gate_repo_policy::repo_policy_operation_requires_allowlisted_action_and_root
+        PASS [   0.049s] (  40/1361) velnor-actions-cli::velnor_cli impl_cli_gate::write_request_without_github_env_matches_bare
+        PASS [   0.054s] (  41/1361) velnor-actions-cli::velnor_cli impl_repo_deps::cli_invokes_no_tools_directly
+        PASS [   0.045s] (  42/1361) velnor-actions-cli::velnor_cli impl_repo_freshness::ver33_records_and_qualifies
+        PASS [   0.047s] (  43/1361) velnor-actions-cli::velnor_cli impl_repo_freshness::ver01_policy_header
+        PASS [   0.054s] (  44/1361) velnor-actions-cli::velnor_cli impl_repo_freshness::p12_property::property_path_documented_honestly
+        PASS [   0.054s] (  45/1361) velnor-actions-cli::velnor_cli impl_repo_deps::dependency_edges_match_ownership_table
+        PASS [   0.047s] (  46/1361) velnor-actions-cli::velnor_cli impl_repo_freshness::ver17_expedited_security_path
+        PASS [   0.048s] (  47/1361) velnor-actions-cli::velnor_cli impl_repo_freshness::rq211_lock_staleness_probe
+        PASS [   0.007s] (  48/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p11_toml::members_inherit_edition_without_literal
+        PASS [   0.007s] (  49/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p11_toml::members_inherit_lints_purely
+        PASS [   0.007s] (  50/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p11_toml::members_use_supported_deps_only
+        PASS [   0.056s] (  51/1361) velnor-actions-cli::velnor_cli impl_cli_smoke::unknown_command_exits_two
+        PASS [   0.056s] (  52/1361) velnor-actions-cli::velnor_cli impl_cli_verify_local::verify_local_entrypoint_parses
+        PASS [   0.058s] (  53/1361) velnor-actions-cli::velnor_cli impl_cli_protocol::merge_garbage_request_exits_one
+        PASS [   0.057s] (  54/1361) velnor-actions-cli::velnor_cli impl_cli_gate_repo_policy::repo_policy_trailer_action_reaches_the_shared_owner
+        PASS [   0.059s] (  55/1361) velnor-actions-cli::velnor_cli impl_cli_verify_local::verify_local_bootstrap_reads_quoted_mise_tool_key
+        PASS [   0.005s] (  56/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p11_toml::reject_weakened_lints_fails
+        PASS [   0.006s] (  57/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p11_toml::reject_git_dep_fails
+        PASS [   0.005s] (  58/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p11_toml::reject_wrong_edition_fails
+        PASS [   0.007s] (  59/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p11_toml::reject_wildcard_dep_fails
+        PASS [   0.005s] (  60/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_live::policy_file_is_complete
+        PASS [   0.005s] (  61/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_live::procedure_is_reconciled
+        PASS [   0.007s] (  62/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p11_toml::workspace_edition_is_2024
+        PASS [   0.063s] (  63/1361) velnor-actions-cli::velnor_cli impl_cli_smoke::env_without_request_file_exits_two
+        PASS [   0.007s] (  64/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_live::script_covers_all_forms_scopes_and_namespaces
+        PASS [   0.066s] (  65/1361) velnor-actions-cli::velnor_cli impl_cli_gate::missing_gate_pieces_match_bare
+        PASS [   0.071s] (  66/1361) velnor-actions-cli::velnor_cli impl_cli_init::sample_comments_describe_values_defaults_effects
+        PASS [   0.072s] (  67/1361) velnor-actions-cli::velnor_cli impl_cli_init::init_writes_no_other_file
+        PASS [   0.074s] (  68/1361) velnor-actions-cli::velnor_cli impl_cli_init::sample_first_line_is_version_marker
+        PASS [   0.076s] (  69/1361) velnor-actions-cli::velnor_cli impl_repo_deps::external_deps_allowlisted_used_and_narrow
+        PASS [   0.082s] (  70/1361) velnor-actions-cli::velnor_cli impl_cli_gate::internal_op_requires_env_gate_and_keeps_public_tree
+        PASS [   0.007s] (  71/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_mutants::mutant_scope_covers_risk_wiring
+        PASS [   0.067s] (  72/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p11_compiler::reject_unsafe_fails
+        PASS [   0.094s] (  73/1361) velnor-actions-cli::velnor_cli impl_cli_gate_preseed::preseed_manifest_op_writes_manifest_and_copy
+        PASS [   0.081s] (  74/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p11_compiler::accept_clean_passes_every_deny
+        PASS [   0.052s] (  75/1361) velnor-actions-cli::velnor_cli impl_repo_deps::cli_tests_assert_through_binary_only
+        PASS [   0.020s] (  76/1361) velnor-actions-cli::velnor_cli impl_repo_deps::lockfile_committed_and_locked_used
+        PASS [   0.052s] (  77/1361) velnor-actions-cli::velnor_cli impl_repo_deps::init_reads_no_tool_files
+        PASS [   0.052s] (  78/1361) velnor-actions-cli::velnor_cli impl_repo_freshness::gape2_seed_rules_documented
+        PASS [   0.080s] (  79/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p11_compiler::reject_panic_fails
+        PASS [   0.100s] (  80/1361) velnor-actions-cli::velnor_cli impl_cli_gate::unreadable_request_exits_one_without_response
+        PASS [   0.020s] (  81/1361) velnor-actions-cli::velnor_cli impl_repo_deps::dep_versions_exact_and_consistent
+        PASS [   0.100s] (  82/1361) velnor-actions-cli::velnor_cli impl_cli_gate_preseed::preseed_manifest_op_needs_runner_temp
+        PASS [   0.052s] (  83/1361) velnor-actions-cli::velnor_cli impl_cli_verify_local::verify_local_entrypoint_lists_exact_stages
+        PASS [   0.052s] (  84/1361) velnor-actions-cli::velnor_cli impl_repo_deps::parse_tests_live_outside_src
+        PASS [   0.052s] (  85/1361) velnor-actions-cli::velnor_cli impl_repo_freshness::boot34_mise_version_matches_catalog
+        PASS [   0.082s] (  86/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p11_compiler::reject_ignored_result_fails
+        PASS [   0.081s] (  87/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p11_compiler::reject_unwrap_fails
+        PASS [   0.022s] (  88/1361) velnor-actions-cli::velnor_cli impl_cli_protocol::write_request_materializes_push_request
+        PASS [   0.029s] (  89/1361) velnor-actions-cli::velnor_cli impl_cli_gate_repo_policy::repo_policy_boolean_flags_reject_malformed_values
+        PASS [   0.108s] (  90/1361) velnor-actions-cli::velnor_cli impl_cli_smoke::init_outside_work_tree_exits_one
+        PASS [   0.110s] (  91/1361) velnor-actions-cli::velnor_cli impl_cli_args::generate_without_output_dir_parses
+        PASS [   0.063s] (  92/1361) velnor-actions-cli::velnor_cli impl_repo_deps::one_test_entry_per_crate
+        PASS [   0.063s] (  93/1361) velnor-actions-cli::velnor_cli impl_repo_deps::test_entries_match_layout_and_stay_far_below_cases
+        PASS [   0.012s] (  94/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_policy::action_const_wiring_is_mapped
+        PASS [   0.066s] (  95/1361) velnor-actions-cli::velnor_cli impl_cli_init::velnor_file_blocks_init
+        PASS [   0.035s] (  96/1361) velnor-actions-cli::velnor_cli impl_cli_init::init_leaves_tool_files_and_sources_untouched
+        PASS [   0.070s] (  97/1361) velnor-actions-cli::velnor_cli impl_repo_deps::no_custom_linter_modules
+        PASS [   0.043s] (  98/1361) velnor-actions-cli::velnor_cli impl_cli_init::nested_init_writes_only_root_config
+        PASS [   0.043s] (  99/1361) velnor-actions-cli::velnor_cli impl_repo_deps::every_crate_has_registered_tests
+        PASS [   0.085s] ( 100/1361) velnor-actions-cli::velnor_cli impl_repo_deps::fixtures_stay_independent_and_cover_failures
+        PASS [   0.142s] ( 101/1361) velnor-actions-cli::velnor_cli impl_cli_protocol::plan_rejects_unknown_output_mode_before_computation
+        PASS [   0.144s] ( 102/1361) velnor-actions-cli::velnor_cli impl_cli_smoke::init_creates_config_then_refuses_overwrite
+        PASS [   0.144s] ( 103/1361) velnor-actions-cli::velnor_cli impl_cli_smoke::public_failures_collapse_to_one_stderr_line
+        PASS [   0.101s] ( 104/1361) velnor-actions-cli::velnor_cli impl_cli_init::invalid_config_fails_with_key_path_and_no_replace
+        PASS [   0.008s] ( 105/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_policy_b::repository_only_members_declare_the_typed_maintenance_owner
+        PASS [   0.158s] ( 106/1361) velnor-actions-cli::velnor_cli impl_cli_smoke::plan_emits_recommendations_once_to_stdout_only
+        PASS [   0.084s] ( 107/1361) velnor-actions-cli::velnor_cli impl_cli_schema2::config_migrate_preview_does_not_write
+        PASS [   0.145s] ( 108/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p11_compiler::reject_long_fn_fails
+        PASS [   0.087s] ( 109/1361) velnor-actions-cli::velnor_cli impl_cli_report::empty_repo_reports_no_work_and_final_check
+        PASS [   0.008s] ( 110/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_upstream::procedure_states_scheduled_producer
+        PASS [   0.164s] ( 111/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p11_compiler::reject_each_extra_rust_deny_fails
+        PASS [   0.016s] ( 112/1361) velnor-actions-cli::velnor_cli impl_repo_policy::package_names_use_purpose_suffix
+        PASS [   0.009s] ( 113/1361) velnor-actions-cli::velnor_cli impl_repo_policy::root_manifest_is_virtual_with_explicit_members
+        PASS [   0.008s] ( 114/1361) velnor-actions-cli::velnor_cli impl_repo_policy::rust_version_tracks_toolchain
+        PASS [   0.008s] ( 115/1361) velnor-actions-cli::velnor_cli impl_repo_policy::toolchain_edition_and_resolver
+        PASS [   0.010s] ( 116/1361) velnor-actions-cli::velnor_cli impl_repo_policy::workspace_lints_match_baseline
+        PASS [   0.015s] ( 117/1361) velnor-actions-cli::velnor_cli impl_repo_policy::velnor_name_never_published
+        PASS [   0.019s] ( 118/1361) velnor-actions-cli::velnor_cli impl_repo_policy::workspace_lists_all_registered_members
+        PASS [   0.017s] ( 119/1361) velnor-actions-cli::velnor_cli impl_repo_quality::agents_stays_lean_pointer_only
+        PASS [   0.012s] ( 120/1361) velnor-actions-cli::velnor_cli impl_repo_quality::oc_reconciles_mirrors_by_reference
+        PASS [   0.012s] ( 121/1361) velnor-actions-cli::velnor_cli impl_repo_quality::contracts_carry_no_fragment_links
+        PASS [   0.199s] ( 122/1361) velnor-actions-cli::velnor_cli impl_repo_deps::size_limits_hold
+        PASS [   0.256s] ( 123/1361) velnor-actions-cli::velnor_cli impl_cli_parity::plan_writes_nothing_and_exposes_no_plan_json
+        PASS [   0.020s] ( 124/1361) velnor-actions-cli::velnor_cli impl_repo_quality::qc_disambiguates_homonyms
+        PASS [   0.015s] ( 125/1361) velnor-actions-cli::velnor_cli impl_repo_quality::qc_keeps_original_normatives
+        PASS [   0.020s] ( 126/1361) velnor-actions-cli::velnor_cli impl_repo_quality::qc_integrates_spec_section3
+        PASS [   0.012s] ( 127/1361) velnor-actions-cli::velnor_cli impl_repo_quality::qc_states_eight_member_workspace
+        PASS [   0.011s] ( 128/1361) velnor-actions-cli::velnor_cli impl_repo_shape::arch15_all_stacks_explicit
+        PASS [   0.017s] ( 129/1361) velnor-actions-cli::velnor_cli impl_repo_shape::arch112_alint_scopes_product_paths
+        PASS [   0.017s] ( 130/1361) velnor-actions-cli::velnor_cli impl_repo_shape::arch110_product_roots_live_under_crates
+        PASS [   0.011s] ( 131/1361) velnor-actions-cli::velnor_cli impl_repo_shape::fixtures_hold_no_symlinks
+        PASS [   0.013s] ( 132/1361) velnor-actions-cli::velnor_cli impl_repo_shape::policy_zizmor_config_matches_derived_ignores
+        PASS [   0.013s] ( 133/1361) velnor-actions-cli::velnor_cli impl_repo_shape::rq11_repo_shape_files_present
+        PASS [   0.014s] ( 134/1361) velnor-actions-cli::velnor_cli impl_repo_shape::rq42_classification_registry_complete
+        PASS [   0.015s] ( 135/1361) velnor-actions-cli::velnor_cli impl_repo_shape::rq41_deviation_and_no_enforcement
+        PASS [   0.013s] ( 136/1361) velnor-actions-cli::velnor_cli impl_repo_shape::rq66_rustfmt_baseline
+        PASS [   0.020s] ( 137/1361) velnor-actions-cli::velnor_cli impl_repo_shape::rq52_counts_and_classification
+        PASS [   0.013s] ( 138/1361) velnor-actions-cli::velnor_cli impl_repo_strictness::alint_comment_only_edits_keep_verdicts
+        PASS [   0.015s] ( 139/1361) velnor-actions-cli::velnor_cli impl_repo_shape::rq53_limits_discipline_no_baseline
+        PASS [   0.009s] ( 140/1361) velnor-actions-cli::velnor_cli impl_repo_strictness::no_git_dependencies
+        PASS [   0.013s] ( 141/1361) velnor-actions-cli::velnor_cli impl_repo_strictness::no_restriction_or_nursery_groups
+        PASS [   0.016s] ( 142/1361) velnor-actions-cli::velnor_cli impl_repo_strictness::alint_rule_fixtures_pass_fail_and_express_command
+        PASS [   0.010s] ( 143/1361) velnor-actions-cli::velnor_cli impl_repo_strictness::strictness_documents_have_size_bound
+        PASS [   0.021s] ( 144/1361) velnor-actions-cli::velnor_cli impl_repo_strictness::no_nightly_toolchain
+        PASS [   0.333s] ( 145/1361) velnor-actions-cli::velnor_cli impl_cli_parity_golden::parity_malformed_fails_with_token
+        PASS [   0.010s] ( 146/1361) velnor-actions-cli::velnor_cli impl_repo_strictness::strictness_matrix_agreement_uses_strict_boundary
+        PASS [   0.013s] ( 147/1361) velnor-actions-cli::velnor_cli impl_repo_strictness::strictness_identifiers_are_newtypes
+        PASS [   0.011s] ( 148/1361) velnor-actions-cli::velnor_cli impl_repo_strictness::strictness_negative_coverage_pinned
+        PASS [   0.009s] ( 149/1361) velnor-actions-cli::velnor_cli impl_repo_strictness::strictness_orchestrator_errors_stay_distinct
+        PASS [   0.009s] ( 150/1361) velnor-actions-cli::velnor_cli impl_repo_strictness::strictness_resource_bounds_reject_zero
+        PASS [   0.012s] ( 151/1361) velnor-actions-cli::velnor_cli impl_repo_strictness::strictness_proofs_need_validating_constructors
+        PASS [   0.015s] ( 152/1361) velnor-actions-cli::velnor_cli impl_repo_suppressions::extra_denies_match_tested_set
+        PASS [   0.021s] ( 153/1361) velnor-actions-cli::velnor_cli impl_repo_suppressions::every_lint_expect_carries_reason
+        PASS [   0.011s] ( 154/1361) velnor-actions-cli::velnor_cli impl_repo_suppressions::workspace_lint_tables_have_exact_known_keys
+        PASS [   0.026s] ( 155/1361) velnor-actions-cli::velnor_cli impl_repo_suppressions::no_allow_suppressions_in_product_code
+        PASS [   0.011s] ( 156/1361) velnor-actions-freshness evidence::advisories::tests::diagnostic_tail_is_bounded_by_utf8_bytes
+        PASS [   0.011s] ( 157/1361) velnor-actions-freshness evidence::freshness::tests::held_status_requires_an_exact_pin_version_match
+        PASS [   0.009s] ( 158/1361) velnor-actions-freshness inventory::pins::duplicate_tests::duplicate_tool_and_action_rows_fail_before_probe_state_is_populated
+        PASS [   0.014s] ( 159/1361) velnor-actions-freshness evidence::freshness::tests::future_timestamps_apply_date_and_clock_rules
+        PASS [   0.364s] ( 160/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p11_metadata::metadata_members_match_products_and_archive_guard
+        PASS [   0.009s] ( 161/1361) velnor-actions-freshness patterns::tests::component_match_handles_stars_and_single_characters
+        PASS [   0.011s] ( 162/1361) velnor-actions-freshness inventory::pins::duplicate_tests::unknown_unique_rows_never_enter_upstream_probe_state
+        PASS [   0.014s] ( 163/1361) velnor-actions-freshness inventory::tests::verify_local_toolchain_specs_match_the_policy
+        PASS [   0.073s] ( 164/1361) velnor-actions-cli::velnor_cli impl_repo_strictness::unsafe_forbidden_and_absent
+        PASS [   0.015s] ( 165/1361) velnor-actions-freshness probe::tests::http::file_sources_require_absolute_regular_utf8_files
+        PASS [   0.389s] ( 166/1361) velnor-actions-cli::velnor_cli impl_cli_init::malformed_manifest_fails_naming_file
+        PASS [   0.011s] ( 167/1361) velnor-actions-freshness probe::tests::http::release_formats_parse_json_python_and_structured_rust_toml
+        PASS [   0.456s] ( 168/1361) velnor-actions-cli::velnor_cli impl_cli_report::plan_lists_sections_without_yaml_or_json
+        PASS [   0.381s] ( 169/1361) velnor-actions-cli::velnor_cli impl_cli_report::ignored_plan_keeps_ignore_reasons
+        PASS [   0.020s] ( 170/1361) velnor-actions-freshness process::tests::bounded_capture_accepts_exact_output_and_rejects_one_extra_byte
+        PASS [   0.087s] ( 171/1361) velnor-actions-freshness probe::tests::http::bounded_fetch_accepts_identity_gzip_and_chunked
+        PASS [   0.484s] ( 172/1361) velnor-actions-cli::velnor_cli impl_cli_report::plan_claims_no_hits_coverage_or_selections
+        PASS [   0.081s] ( 173/1361) velnor-actions-freshness probe::tests::http::redirects_are_bounded_and_relative_locations_resolve
+        PASS [   0.492s] ( 174/1361) velnor-actions-cli::velnor_cli impl_cli_report::plan_explains_pr_narrowing
+        PASS [   0.008s] ( 175/1361) velnor-actions-freshness tests::conditional_crate_attrs_duplicates_and_constant_attrs_fail_closed
+        PASS [   0.009s] ( 176/1361) velnor-actions-freshness tests::conditional_and_duplicate_pin_authorities_fail_closed
+        PASS [   0.006s] ( 177/1361) velnor-actions-freshness tests::escaped_and_raw_string_pins_are_not_plain_literals
+        PASS [   0.007s] ( 178/1361) velnor-actions-freshness tests::literal_authority_accepts_only_one_unconditional_public_str_constant
+        PASS [   0.116s] ( 179/1361) velnor-actions-freshness probe::tests::http::encoded_and_decoded_body_caps_are_enforced
+        PASS [   0.431s] ( 180/1361) velnor-actions-cli::velnor_cli impl_cli_report::plan_lists_full_field_set
+        PASS [   0.006s] ( 181/1361) velnor-actions-freshness tests::literal_authority_ignores_comments_and_nested_token_scopes
+        PASS [   0.115s] ( 182/1361) velnor-actions-freshness probe::tests::http::intermediate_identity_gzip_and_chunked_bodies_obey_caps
+        PASS [   0.006s] ( 183/1361) velnor-actions-freshness tests::strict_dates_and_timezone_timestamps_are_normalized
+        PASS [   0.007s] ( 184/1361) velnor-actions-freshness trailer_policy::tests::author_and_committer_must_match_full_documented_identity
+        PASS [   0.007s] ( 185/1361) velnor-actions-freshness trailer_policy::tests::exact_terminal_pair_accepts_lf_crlf_and_optional_final_newline
+        PASS [   0.008s] ( 186/1361) velnor-actions-freshness trailer_policy::tests::file_entrypoint_rejects_relative_paths_before_identity_lookup
+        PASS [   0.074s] ( 187/1361) velnor-actions-freshness probe::tests::http::unsupported_and_broken_content_encodings_fail_closed
+        PASS [   0.011s] ( 188/1361) velnor-actions-freshness trailer_policy::tests::missing_wrong_order_duplicate_body_decoy_and_nonterminal_pairs_fail
+        PASS [   0.011s] ( 189/1361) velnor-actions-freshness trailer_policy::tests::policy_rejects_ambiguous_identity_heading_block_and_values
+        PASS [   0.011s] ( 190/1361) velnor-actions-freshness trailer_policy::tests::unicode_and_control_separators_remain_inside_one_git_record
+        PASS [   0.022s] ( 191/1361) velnor-actions-freshness tests::literal_parser_enforces_utf8_and_source_cap
+        PASS [   0.010s] ( 192/1361) velnor-actions-freshness trailer_policy::tests::valid_file_entrypoint_checks_author_then_committer_when_requested
+        PASS [   0.010s] ( 193/1361) velnor-actions-freshness trailer_policy::tests::valid_file_entrypoint_skips_identity_lookup_without_opt_in
+        PASS [   0.008s] ( 194/1361) velnor-actions-freshness::velnor_actions_freshness typed_toolchain_operation_reads_the_repository_policy
+        PASS [   0.008s] ( 195/1361) velnor-actions-orchestrator attach::attach_tests::lock_acquire_records_source_commit
+        PASS [   0.009s] ( 196/1361) velnor-actions-orchestrator attach::attach_tests::lock_acquire_inserts_digest_verified_stage
+        PASS [   0.008s] ( 197/1361) velnor-actions-orchestrator attach::attach_tests::mbx_tests::lockless_preseed_installs_mbx_before_the_build_without_a_restore
+        PASS [   0.008s] ( 198/1361) velnor-actions-orchestrator attach::attach_tests::mbx_tests::preseed_attach_builds_once_and_sets_mode
+        PASS [   0.009s] ( 199/1361) velnor-actions-orchestrator attach::attach_tests::mbx_tests::preseed_restores_mbx_builds_after_sources_with_homes
+        PASS [   0.007s] ( 200/1361) velnor-actions-orchestrator attach::attach_tests::preseed_attach_builds_once_and_sets_mode
+        PASS [   0.009s] ( 201/1361) velnor-actions-orchestrator attach::attach_tests::source_cache_tests::cargo_only_preseed_replaces_registry_cache_and_uses_native_helper_owner
+        PASS [   0.009s] ( 202/1361) velnor-actions-orchestrator baseline_publish::baseline_publish_tests::publish_never_overwrites_staged_evidence
+        PASS [   0.008s] ( 203/1361) velnor-actions-orchestrator baseline_publish::baseline_publish_tests::publish_rejects_unknown_request_fields
+        PASS [   0.007s] ( 204/1361) velnor-actions-orchestrator baseline_publish::baseline_publish_tests::publish_request_writer_records_push_refs
+        PASS [   0.010s] ( 205/1361) velnor-actions-orchestrator baseline_publish::baseline_publish_tests::publish_skips_covered_without_carry_forward
+        PASS [   0.007s] ( 206/1361) velnor-actions-orchestrator clippy_groups::tests::distinct_clippy_configs_separate_with_barrier
+        PASS [   0.017s] ( 207/1361) velnor-actions-orchestrator baseline_publish::baseline_publish_tests::publish_refuses_every_unsafe_case
+        PASS [   0.009s] ( 208/1361) velnor-actions-orchestrator clippy_groups::tests::single_config_and_empty_need_no_barrier
+        PASS [   0.011s] ( 209/1361) velnor-actions-orchestrator baseline_publish::baseline_publish_tests::staged_manifest_passes_consumer_validation
+        PASS [   0.014s] ( 210/1361) velnor-actions-orchestrator baseline_publish::baseline_publish_tests::publish_stages_trusted_manifest_under_derived_name
+        PASS [   0.010s] ( 211/1361) velnor-actions-orchestrator config_stacks::tests::custom_tasks_parse_and_default_empty
+        PASS [   0.010s] ( 212/1361) velnor-actions-orchestrator config_stacks::tests::nextest_no_tests_overrides_are_rejected
+        PASS [   0.485s] ( 213/1361) velnor-actions-cli::velnor_cli impl_cli_report::crates_list_in_stable_package_path_order
+        PASS [   0.011s] ( 214/1361) velnor-actions-orchestrator config_stacks::tests::release_section_parses_and_defaults_disabled
+        PASS [   0.010s] ( 215/1361) velnor-actions-orchestrator config_stacks::tests::tofu_table_materializes_roots
+        PASS [   0.012s] ( 216/1361) velnor-actions-orchestrator config_stacks::tests::tofu_bad_roots_rejected_at_load
+        PASS [   0.014s] ( 217/1361) velnor-actions-orchestrator config_stacks::tests::render_unsafe_stack_values_are_rejected
+        PASS [   0.572s] ( 218/1361) velnor-actions-cli::velnor_cli impl_cli_parity::plan_queries_no_caches_and_exposes_no_plan_json
+        PASS [   0.012s] ( 219/1361) velnor-actions-orchestrator config_stacks::tests::tofu_table_requires_roots
+        PASS [   0.011s] ( 220/1361) velnor-actions-orchestrator config_stacks::tests::unknown_rust_keys_are_rejected
+        PASS [   0.011s] ( 221/1361) velnor-actions-orchestrator config_stacks::tests::unknown_tofu_keys_are_rejected
+        PASS [   0.012s] ( 222/1361) velnor-actions-orchestrator config_stacks::tests::workflow_verification_tasks_parse_and_default_empty
+        PASS [   0.580s] ( 223/1361) velnor-actions-cli::velnor_cli impl_cli_smoke::generate_writes_manual_change_suggestions_for_malformed_tools
+        PASS [   0.011s] ( 224/1361) velnor-actions-orchestrator cover::revalidate::cover_revalidate_entry_tests::merge_accepts_advisory_with_fresh_external_data
+        PASS [   0.011s] ( 225/1361) velnor-actions-orchestrator cover::revalidate::cover_revalidate_entry_tests::merge_rejects_advisory_without_external_data
+        PASS [   0.010s] ( 226/1361) velnor-actions-orchestrator cover::revalidate::cover_revalidate_entry_tests::merge_rejects_underived_numeric_id
+        PASS [   0.011s] ( 227/1361) velnor-actions-orchestrator cover::revalidate::cover_revalidate_entry_tests::merge_rejects_mismatched_structured_proof
+        PASS [   0.009s] ( 228/1361) velnor-actions-orchestrator cover::revalidate::cover_revalidate_tests::anchor_parts_map_env_values
+        PASS [   0.010s] ( 229/1361) velnor-actions-orchestrator cover::revalidate::cover_revalidate_tests::bound_coverage_revalidates
+        PASS [   0.010s] ( 230/1361) velnor-actions-orchestrator cover::revalidate::cover_revalidate_tests::ci_missing_any_anchor_fails_closed
+        PASS [   0.013s] ( 231/1361) velnor-actions-orchestrator cover::revalidate::cover_revalidate_tests::anchor_tokens_validate_against_contract_vocabulary
+        PASS [   0.009s] ( 232/1361) velnor-actions-orchestrator cover::revalidate::cover_revalidate_tests::merge_rejects_expired_manifest
+        PASS [   0.009s] ( 233/1361) velnor-actions-orchestrator cover::revalidate::cover_revalidate_tests::env_anchors_match_and_refuse_foreign
+        PASS [   0.008s] ( 234/1361) velnor-actions-orchestrator cover::shard::tests::lookup_without_exact_artifact_misses_before_spawning
+        PASS [   0.009s] ( 235/1361) velnor-actions-orchestrator cover::shard::tests::lookup_args_are_fixed_and_validated
+        PASS [   0.009s] ( 236/1361) velnor-actions-orchestrator cover::revalidate::cover_revalidate_tests::wrong_provenance_fails_per_field
+        PASS [   0.010s] ( 237/1361) velnor-actions-orchestrator cover::revalidate::cover_revalidate_tests::merge_rejects_plan_rejected_manifest_invariants
+        PASS [   0.009s] ( 238/1361) velnor-actions-orchestrator cover::shard_baseline::tests::gh_stdout_cap_misses_before_parsing
+        PASS [   0.007s] ( 239/1361) velnor-actions-orchestrator cover_baseline::cover_baseline_lookup_tests::lookup_manifest_misses_without_base_or_obligations
+        PASS [   0.008s] ( 240/1361) velnor-actions-orchestrator cover::shard_baseline::tests::resolve_manifests_requires_exact_artifact_before_spawn
+        PASS [   0.007s] ( 241/1361) velnor-actions-orchestrator cover_baseline::cover_baseline_lookup_tests::lookup_misses_before_spawn_without_exact_name
+        PASS [   0.007s] ( 242/1361) velnor-actions-orchestrator cover_baseline::cover_baseline_lookup_tests::lookup_names_exact_baseline_artifact
+        PASS [   0.008s] ( 243/1361) velnor-actions-orchestrator cover_baseline::cover_baseline_tests::baseline_entry_pins_attempt_and_artifact
+        PASS [   0.009s] ( 244/1361) velnor-actions-orchestrator cover_baseline::cover_baseline_tests::baseline_entry_needs_single_strict_payload
+        PASS [   0.006s] ( 245/1361) velnor-actions-orchestrator cover_baseline::cover_baseline_tests::baseline_publish_and_download_rules
+        PASS [   0.005s] ( 246/1361) velnor-actions-orchestrator cover_baseline::cover_baseline_tests::source_build_keeps_marker_without_lock_fill
+        PASS [   0.602s] ( 247/1361) velnor-actions-cli::velnor_cli impl_cli_smoke::generate_keeps_recommendations_on_stderr
+        PASS [   0.011s] ( 248/1361) velnor-actions-orchestrator cover_baseline::cover_baseline_tests::baseline_entry_rejects_links_and_oversize
+        PASS [   0.007s] ( 249/1361) velnor-actions-orchestrator cover_baseline::provenance_check::provenance_check_tests::every_wrong_dimension_fails_validation
+        PASS [   0.006s] ( 250/1361) velnor-actions-orchestrator cover_baseline::provenance_check::provenance_proof_tests::forwarded_proof_runs_fail_closed
+        PASS [   0.006s] ( 251/1361) velnor-actions-orchestrator cover_baseline::provenance_check::provenance_proof_tests::workflow_slug_binds_anchor_and_manifest
+        PASS [   0.007s] ( 252/1361) velnor-actions-orchestrator cover_baseline::provenance_check::provenance_check_tests::task_entries_validate_identity_runs_freshness_and_proof_binding
+        PASS [   0.013s] ( 253/1361) velnor-actions-orchestrator cover_baseline::cover_baseline_tests::forwarded_proof_marks_baseline_unavailable
+        PASS [   0.006s] ( 254/1361) velnor-actions-orchestrator cover_baseline::provenance_resolve::provenance_resolve_tests::conflicted_expectations_fail_closed
+        PASS [   0.013s] ( 255/1361) velnor-actions-orchestrator cover_baseline::provenance_check::provenance_check_tests::include_defined_origin_resolves
+        PASS [   0.006s] ( 256/1361) velnor-actions-orchestrator cover_baseline::provenance_resolve::provenance_resolve_tests::expected_repository_resolution_matrix
+        PASS [   0.007s] ( 257/1361) velnor-actions-orchestrator cover_baseline::provenance_resolve::provenance_resolve_tests::malformed_env_with_evil_origin_trusts_neither
+        PASS [   0.006s] ( 258/1361) velnor-actions-orchestrator cover_compat::cover_compat_tests::compat_defined_for_empty_plans
+        PASS [   0.206s] ( 259/1361) velnor-actions-freshness probe::tests::http::redirect_sequence_uses_one_overall_deadline
+        PASS [   0.007s] ( 260/1361) velnor-actions-orchestrator cover_compat::cover_compat_tests::compat_ignores_obligation_order
+        PASS [   0.007s] ( 261/1361) velnor-actions-orchestrator cover_compat::cover_compat_tests::compat_is_deterministic_digest
+        PASS [   0.019s] ( 262/1361) velnor-actions-orchestrator cover_baseline::provenance_check::provenance_check_tests::linked_worktree_anchor_shares_remote_identity
+        PASS [   0.007s] ( 263/1361) velnor-actions-orchestrator cover_compat::cover_compat_tests::compat_survives_source_edits_but_not_toolchain_or_shape
+        PASS [   0.018s] ( 264/1361) velnor-actions-orchestrator cover_baseline::provenance_check::provenance_check_tests::repository_slug_and_origins_normalize
+        PASS [   0.006s] ( 265/1361) velnor-actions-orchestrator cover_compat::cover_compat_tests::numeric_id_is_deterministic_nonzero_and_name_bound
+        PASS [   0.007s] ( 266/1361) velnor-actions-orchestrator cover_identity::cover_identity_tests::changed_work_executes_despite_identity_match
+        PASS [   0.008s] ( 267/1361) velnor-actions-orchestrator cover_identity::cover_identity_tests::advisory_needs_fresh_external_data
+        PASS [   0.008s] ( 268/1361) velnor-actions-orchestrator cover_identity::cover_identity_tests::incomplete_closure_refuses
+        PASS [   0.005s] ( 269/1361) velnor-actions-orchestrator cover_identity::cover_identity_tests::tofu_cover_extension_refuses_undeclared_inputs
+        PASS [   0.006s] ( 270/1361) velnor-actions-orchestrator cover_identity::cover_identity_tests::tofu_cover_extension_refuses_drift
+        PASS [   0.007s] ( 271/1361) velnor-actions-orchestrator cover_identity::cover_identity_tests::matching_closure_covers
+        PASS [   0.005s] ( 272/1361) velnor-actions-orchestrator cover_identity::cover_identity_tests::tofu_tasks_bind_no_mbx_pin_across_catalogs
+        PASS [   0.005s] ( 273/1361) velnor-actions-orchestrator cover_identity::cover_identity_tests::tofu_cover_extension_verifies_valid_spellings
+        PASS [   0.164s] ( 274/1361) velnor-actions-freshness process::tests::timeout_covers_child_exit_and_descendant_pipe_drain
+        PASS [   0.008s] ( 275/1361) velnor-actions-orchestrator cover_identity::cover_identity_tests::stale_closure_with_empty_changed_set_executes
+        PASS [   0.005s] ( 276/1361) velnor-actions-orchestrator cover_identity::cover_identity_tests::undiscovered_and_unknown_groups_never_cover
+        PASS [   0.005s] ( 277/1361) velnor-actions-orchestrator cover_identity::cover_proof_tests::live_mbx_binds_driver_and_pin
+        PASS [   0.041s] ( 278/1361) velnor-actions-orchestrator cover::shard_baseline::tests::lookup_repo_resolution_is_request_hermetic
+        PASS [   0.008s] ( 279/1361) velnor-actions-orchestrator cover_identity::cover_identity_tests::undeclared_reads_refuse_with_warning
+        PASS [   0.006s] ( 280/1361) velnor-actions-orchestrator cover_identity::generator::tests::unverifiable_shas_detected
+        PASS [   0.005s] ( 281/1361) velnor-actions-orchestrator covered_tasks::covered_tasks_tests::covered_by_baseline_matches_decision_exactly
+        PASS [   0.007s] ( 282/1361) velnor-actions-orchestrator cover_identity::cover_proof_tests::structured_proof_drift_refuses_per_dimension
+        PASS [   0.007s] ( 283/1361) velnor-actions-orchestrator cover_identity::cover_proof_tests::structured_proof_match_covers_silently
+        PASS [   0.005s] ( 284/1361) velnor-actions-orchestrator covered_tasks::covered_tasks_tests::encode_empty_matches_nothing
+        PASS [   0.005s] ( 285/1361) velnor-actions-orchestrator covered_tasks::covered_tasks_tests::skip_condition_gates_exact_id
+        PASS [   0.005s] ( 286/1361) velnor-actions-orchestrator covered_tasks::covered_tasks_tests::skip_condition_rejects_malformed_ids
+        PASS [   0.006s] ( 287/1361) velnor-actions-orchestrator covered_tasks::covered_tasks_tests::encode_wraps_sorted_covered_only
+        PASS [   0.006s] ( 288/1361) velnor-actions-orchestrator covered_tasks::covered_tasks_tests::wrapped_encoding_never_prefix_matches
+        PASS [   0.006s] ( 289/1361) velnor-actions-orchestrator crate_jobs::crate_jobs_tests::gates_keep_same_crate_edges_only
+        PASS [   0.006s] ( 290/1361) velnor-actions-orchestrator crate_jobs::crate_jobs_tests::empty_groups_build_no_jobs
+        PASS [   0.007s] ( 291/1361) velnor-actions-orchestrator crate_jobs::crate_jobs_tests::acquire_stages_before_report_wrappers
+        PASS [   0.007s] ( 292/1361) velnor-actions-orchestrator crate_jobs::crate_jobs_tests::groups_obligations_into_one_ordered_job_per_crate
+        PASS [   0.008s] ( 293/1361) velnor-actions-orchestrator crate_jobs::crate_jobs_display_tests::id_and_display_prefixes_agree_per_partition
+        PASS [   0.005s] ( 294/1361) velnor-actions-orchestrator crate_jobs::crate_jobs_tests::nonempty_custom_tasks_reject_until_redesigned
+        PASS [   0.164s] ( 295/1361) velnor-actions-freshness process::tests::timeout_kills_a_running_process_without_waiting_for_its_natural_exit
+        PASS [   0.007s] ( 296/1361) velnor-actions-orchestrator crate_jobs::crate_jobs_tests::member_binding_agrees_with_built_jobs
+        PASS [   0.007s] ( 297/1361) velnor-actions-orchestrator crate_jobs::crate_jobs_tests::mbx_tests::drivers_follow_per_crate_selection
+        PASS [   0.041s] ( 298/1361) velnor-actions-orchestrator cover_baseline::provenance_check::provenance_check_tests::missing_and_mismatched_origins_fail_closed
+        PASS [   0.005s] ( 299/1361) velnor-actions-orchestrator crate_jobs::crate_jobs_tests::shards_name_their_index
+        PASS [   0.006s] ( 300/1361) velnor-actions-orchestrator crate_jobs::crate_jobs_tests::nonempty_custom_tasks_reject_with_zero_groups
+        PASS [   0.006s] ( 301/1361) velnor-actions-orchestrator crate_jobs::crate_jobs_tests::skips_testless_and_workspace_groups
+        PASS [   0.005s] ( 302/1361) velnor-actions-orchestrator crate_jobs::crate_jobs_tofu_cache_tests::provider_key_rejects_leading_dash_roots
+        PASS [   0.007s] ( 303/1361) velnor-actions-orchestrator crate_jobs::crate_jobs_tests::velnor_policy_trims_trio_except_validator_spawning_suites
+        PASS [   0.007s] ( 304/1361) velnor-actions-orchestrator crate_jobs::crate_jobs_tofu_cache_tests::mixed_job_restores_both_sources_and_providers
+        PASS [   0.005s] ( 305/1361) velnor-actions-orchestrator crate_jobs::crate_jobs_tofu_cache_tests::provider_key_rejects_loose_tofu_versions
+        PASS [   0.005s] ( 306/1361) velnor-actions-orchestrator crate_jobs::crate_jobs_tofu_cache_tests::provider_key_rejects_unknown_targets
+        PASS [   0.005s] ( 307/1361) velnor-actions-orchestrator crate_jobs::crate_jobs_tofu_cache_tests::provider_key_rejects_unsafe_roots
+        PASS [   0.006s] ( 308/1361) velnor-actions-orchestrator crate_jobs::crate_jobs_tofu_cache_tests::provider_key_rejects_overlong_keys_from_deep_roots
+        PASS [   0.007s] ( 309/1361) velnor-actions-orchestrator crate_jobs::crate_jobs_tofu_cache_tests::provider_restore_keys_are_per_root
+        PASS [   0.006s] ( 310/1361) velnor-actions-orchestrator crate_jobs::crate_jobs_tofu_cache_tests::provider_restore_precedes_init_obligation
+        PASS [   0.165s] ( 311/1361) velnor-actions-freshness process::tests::timeout_reaps_direct_child
+        PASS [   0.007s] ( 312/1361) velnor-actions-orchestrator crate_jobs::crate_jobs_tofu_cache_tests::rust_jobs_carry_no_provider_restore
+        PASS [   0.007s] ( 313/1361) velnor-actions-orchestrator crate_jobs::crate_jobs_tofu_tests::all_tofu_groups_take_tofu_ids_mixed_keep_rust
+        PASS [   0.007s] ( 314/1361) velnor-actions-orchestrator crate_jobs::crate_jobs_tofu_tests::first_tofu_obligation_declares_the_cap
+        PASS [   0.006s] ( 315/1361) velnor-actions-orchestrator crate_jobs::crate_jobs_tofu_tests::rust_jobs_never_stage
+        PASS [   0.007s] ( 316/1361) velnor-actions-orchestrator crate_jobs::crate_jobs_tofu_tests::pure_tofu_group_renders_without_rust_setup
+        PASS [   0.007s] ( 317/1361) velnor-actions-orchestrator crate_jobs::crate_jobs_tofu_tests::mixed_group_keeps_the_rust_union
+        PASS [   0.005s] ( 318/1361) velnor-actions-orchestrator crate_jobs::crate_jobs_tofu_tests::tofu_tasks_bind_no_rust_tools_but_select_opentofu
+        PASS [   0.006s] ( 319/1361) velnor-actions-orchestrator crate_jobs::crate_jobs_tofu_tests::tofu_obligations_order_fmt_init_validate
+        PASS [   0.008s] ( 320/1361) velnor-actions-orchestrator crate_jobs::crate_jobs_tofu_tests::tofu_root_jobs_stage_lanes_by_max_parallel
+        PASS [   0.006s] ( 321/1361) velnor-actions-orchestrator crate_jobs::crate_jobs_upload_tests::obligations_upload_one_artifact_per_job
+        PASS [   0.005s] ( 322/1361) velnor-actions-orchestrator critical_path::tests::longest_weighted_chain_wins
+        PASS [   0.005s] ( 323/1361) velnor-actions-orchestrator critical_path::tests::render_lists_chain_total_and_task_durations
+        PASS [   0.007s] ( 324/1361) velnor-actions-orchestrator crate_jobs::crate_jobs_tofu_tests::wide_cap_stages_nothing
+        PASS [   0.005s] ( 325/1361) velnor-actions-orchestrator critical_path::tests::structural_path_weighs_one_per_task
+        PASS [   0.007s] ( 326/1361) velnor-actions-orchestrator crate_jobs::crate_jobs_upload_tests::obligations_wrap_report_capture
+        PASS [   0.005s] ( 327/1361) velnor-actions-orchestrator decisions::decisions_tests::runner_image_evidence_is_unobserved
+        PASS [   0.005s] ( 328/1361) velnor-actions-orchestrator decisions::decisions_tests::restore_checks_ownership_explicitly
+        PASS [   0.005s] ( 329/1361) velnor-actions-orchestrator decisions::decisions_tests::tofu_paths_never_broaden_selection
+        PASS [   0.006s] ( 330/1361) velnor-actions-orchestrator critical_path::tests::unknown_predecessors_are_zero_roots_and_cycles_terminate
+        PASS [   0.006s] ( 331/1361) velnor-actions-orchestrator critical_path::tests::ties_resolve_to_smallest_chain_head
+        PASS [   0.005s] ( 332/1361) velnor-actions-orchestrator decisions::decisions_tests::trust_maps_to_live_scopes_only
+        PASS [   0.005s] ( 333/1361) velnor-actions-orchestrator derive_groups::tests::archive_planning_errors_instead_of_skipping
+        PASS [   0.035s] ( 334/1361) velnor-actions-orchestrator cover_identity::generator::tests::sha256_matches_padding_edges_and_multiblock
+        PASS [   0.005s] ( 335/1361) velnor-actions-orchestrator discover::tests::absent_file_returns_none
+        PASS [   0.006s] ( 336/1361) velnor-actions-orchestrator derive_groups::task_owner_tests::repository_maintenance_owner_is_scoped_to_the_canonical_repository_policy
+        PASS [   0.005s] ( 337/1361) velnor-actions-orchestrator discover::tests::directory_at_manifest_path_errors
+        PASS [   0.005s] ( 338/1361) velnor-actions-orchestrator discover::tests::non_utf8_file_errors
+        PASS [   0.005s] ( 339/1361) velnor-actions-orchestrator discover::tests::symlink_file_errors
+        PASS [   0.005s] ( 340/1361) velnor-actions-orchestrator discover::tests::tofu_candidate_converts_to_project
+        PASS [   0.005s] ( 341/1361) velnor-actions-orchestrator discover::tests::present_file_returns_its_text
+        PASS [   0.005s] ( 342/1361) velnor-actions-orchestrator discover::tests::unregistered_stack_candidate_fails_closed
+        PASS [   0.005s] ( 343/1361) velnor-actions-orchestrator discover_index::cache_tests::reserved_cache_prefix_matches_only_the_root_and_descendants
+        PASS [   0.005s] ( 344/1361) velnor-actions-orchestrator error::tests::cancelled_and_unsupported_stay_distinct
+        PASS [   0.005s] ( 345/1361) velnor-actions-orchestrator exclusive_write::tests::dir_creation_refuses_anchor_escapes
+        PASS [   0.005s] ( 346/1361) velnor-actions-orchestrator error::tests::unsupported_schema_maps_to_unsupported
+        PASS [   0.005s] ( 347/1361) velnor-actions-orchestrator exclusive_write::tests::dir_creation_refuses_symlinked_components
+        PASS [   0.005s] ( 348/1361) velnor-actions-orchestrator exclusive_write::tests::exclusive_write_refuses_planted_symlinks
+        PASS [   0.005s] ( 349/1361) velnor-actions-orchestrator exclusive_write::tests::exclusive_write_refuses_symlinked_parent
+        PASS [   0.005s] ( 350/1361) velnor-actions-orchestrator exclusive_write::tests::exclusive_write_round_trips_and_refuses_rewrite
+        PASS [   0.005s] ( 351/1361) velnor-actions-orchestrator extension_schemas::tests::segments_parse_nested_keys_shards_and_internal
+        PASS [   0.005s] ( 352/1361) velnor-actions-orchestrator extension_schemas::tests::key_segment_returns_nested_manifest_keys
+        PASS [   0.005s] ( 353/1361) velnor-actions-orchestrator extension_schemas::tests::tofu_schema_covers_tofu_tasks
+        PASS [   0.005s] ( 354/1361) velnor-actions-orchestrator extension_schemas::tests::known_rust_covers_but_unknown_stacks_do_not
+        PASS [   0.005s] ( 355/1361) velnor-actions-orchestrator external_data::tests::advisory_kind_classifies_stack_and_internal_ids
+        PASS [   0.005s] ( 356/1361) velnor-actions-orchestrator external_data::tests::freshness_validation_rejects_bad_source_and_identity
+        PASS [   0.005s] ( 357/1361) velnor-actions-orchestrator external_data::tests::skip_needs_declared_identity_and_fresh_baseline
+        PASS [   0.005s] ( 358/1361) velnor-actions-orchestrator generate::guards::tests::anchor_rejects_symlink_components
+        PASS [   0.014s] ( 359/1361) velnor-actions-orchestrator discover::tests::oversize_file_errors
+        PASS [   0.005s] ( 360/1361) velnor-actions-orchestrator generate::guards::tests::anchor_splits_existing_prefix_from_clean_suffix
+        PASS [   0.005s] ( 361/1361) velnor-actions-orchestrator generate::guards::tests::refuse_matrix_covers_inside_ancestor_and_sibling
+        PASS [   0.005s] ( 362/1361) velnor-actions-orchestrator generate::guards::tests::ownership_is_exclusive_until_released
+        PASS [   0.005s] ( 363/1361) velnor-actions-orchestrator generate::guards::tests::reserve_rejects_raced_github
+        PASS [   0.005s] ( 364/1361) velnor-actions-orchestrator generate::tests::fresh_target_commit_failure_reports_without_rollback
+        PASS [   0.005s] ( 365/1361) velnor-actions-orchestrator generate::tests::commit_failure_preserves_old_tree_without_partial_write
+        PASS [   0.005s] ( 366/1361) velnor-actions-orchestrator git_paths::tests::collects_into_vec
+        PASS [   0.005s] ( 367/1361) velnor-actions-orchestrator generate::tests::rollback_failure_preserved
+        PASS [   0.005s] ( 368/1361) velnor-actions-orchestrator git_paths::tests::empty_chunks_drop
+        PASS [   0.005s] ( 369/1361) velnor-actions-orchestrator git_paths::tests::exact_bytes_survive
+        PASS [   0.005s] ( 370/1361) velnor-actions-orchestrator git_paths::tests::non_utf8_fails_with_tag
+        PASS [   0.004s] ( 371/1361) velnor-actions-orchestrator git_paths::tests::skipping_keeps_decodable_and_flags
+        PASS [   0.005s] ( 372/1361) velnor-actions-orchestrator internal::plan_obligation::tests::rust_tasks_keep_the_rust_envelope
+        PASS [   0.005s] ( 373/1361) velnor-actions-orchestrator internal::plan_obligation::tests::tofu_drift_fails_the_bridge_closed
+        PASS [   0.005s] ( 374/1361) velnor-actions-orchestrator internal::plan_obligation::tests::tofu_tasks_derive_the_tofu_envelope
+        PASS [   0.005s] ( 375/1361) velnor-actions-orchestrator internal_plan::closure_tests::closure_dispatch_rejects_unregistered_stack
+        PASS [   0.652s] ( 376/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p11_metadata::metadata_runner_members_match_four
+        PASS [   0.005s] ( 377/1361) velnor-actions-orchestrator internal_plan::closure_tests::digest_slots_preserve_absence_distinctly
+        PASS [   0.006s] ( 378/1361) velnor-actions-orchestrator internal_plan::closure_tests::checkout_resolution_binds_content_and_absence
+        PASS [   0.005s] ( 379/1361) velnor-actions-orchestrator internal_plan::closure_tests::same_path_with_changed_source_flips
+        PASS [   0.006s] ( 380/1361) velnor-actions-orchestrator internal_plan::closure_tests::tofu_dispatch_rejects_unknown_kind
+        PASS [   0.006s] ( 381/1361) velnor-actions-orchestrator internal_plan::closure_tests::each_input_flips_the_closure_digest
+        PASS [   0.005s] ( 382/1361) velnor-actions-orchestrator internal_plan::identities_tests::cache_format_identity_tracks_emitted_mbx_generation
+        PASS [   0.005s] ( 383/1361) velnor-actions-orchestrator internal_plan::closure_tests::unrelated_tasks_stay_isolated
+        PASS [   0.006s] ( 384/1361) velnor-actions-orchestrator internal_plan::closure_tests::tofu_dispatch_resolves_closure
+        PASS [   0.007s] ( 385/1361) velnor-actions-orchestrator internal_plan::closure_tests::source_edits_flip_and_classes_exclude_explicitly
+        PASS [   0.005s] ( 386/1361) velnor-actions-orchestrator internal_plan::identities_tests::compiler_spec_versions_flip_the_digest
+        PASS [   0.005s] ( 387/1361) velnor-actions-orchestrator internal_plan::identities_tests::formats_stay_single_and_graphs_relocate
+        PASS [   0.005s] ( 388/1361) velnor-actions-orchestrator internal_plan::identities_tests::lanes_follow_responsibility_never_ordinals
+        PASS [   0.005s] ( 389/1361) velnor-actions-orchestrator internal_plan::identities_tests::tofu_bundles_skip_rust_checkout_probes
+        PASS [   0.005s] ( 390/1361) velnor-actions-orchestrator internal_plan::identities_tests::tofu_cache_format_is_distinct_and_valid
+        PASS [   0.005s] ( 391/1361) velnor-actions-orchestrator internal_plan::identities_tests::tofu_toolchain_pins_opentofu_plus_provider_surface
+        PASS [   0.005s] ( 392/1361) velnor-actions-orchestrator internal_plan::identities_tests::tofu_toolchain_flips_on_provider_surface
+        PASS [   0.005s] ( 393/1361) velnor-actions-orchestrator internal_plan::identities_tests::toolchains_bind_sorted_specs_driver_runner
+        PASS [   0.005s] ( 394/1361) velnor-actions-orchestrator internal_plan::snapshot::tests::canonical_bytes_ignore_key_order
+        PASS [   0.005s] ( 395/1361) velnor-actions-orchestrator internal_plan::internal_plan_tests::tofu_metadata_and_cache_ids_derive
+        PASS [   0.005s] ( 396/1361) velnor-actions-orchestrator internal_plan::snapshot::tests::platform_image_evidence_is_unobserved_not_label_split
+        PASS [   0.005s] ( 397/1361) velnor-actions-orchestrator internal_plan::snapshot::tests::triples_map_to_release_targets
+        PASS [   0.005s] ( 398/1361) velnor-actions-orchestrator internal_plan::snapshot::tests::platform_images_and_versions_flip
+        PASS [   0.005s] ( 399/1361) velnor-actions-orchestrator internal_plan::snapshot::tests::unknown_targets_reject_instead_of_taking_host
+        PASS [   0.005s] ( 400/1361) velnor-actions-orchestrator internal_plan::wire_w2::reuse_stages::reuse_stages_tests::changed_live_inputs_reject_reuse
+        PASS [   0.005s] ( 401/1361) velnor-actions-orchestrator internal_plan::wire_w2::reuse_stages::reuse_stages_tests::identity_mismatches_fail_with_precise_reasons
+        PASS [   0.005s] ( 402/1361) velnor-actions-orchestrator internal_plan::wire_w2::reuse_stages::reuse_stages_tests::full_restore_verifies_and_stages_stay_separate
+        PASS [   0.005s] ( 403/1361) velnor-actions-orchestrator internal_plan::wire_w2::reuse_stages::reuse_stages_tests::missing_and_malformed_outputs_fail
+        PASS [   0.005s] ( 404/1361) velnor-actions-orchestrator internal_plan::wire_w2::reuse_stages::reuse_stages_tests::restore_for_another_task_is_no_entry
+        PASS [   0.005s] ( 405/1361) velnor-actions-orchestrator internal_plan::wire_w2::reuse_stages::reuse_stages_tests::zero_byte_outputs_fail_orchestrator_layer_as_incomplete
+        PASS [   0.005s] ( 406/1361) velnor-actions-orchestrator internal_plan::wire_w2::wire_w2_tests::archive_gate_binds_sources_and_refuses_unbound
+        PASS [   0.005s] ( 407/1361) velnor-actions-orchestrator internal_plan::wire_w2::wire_w2_tests::archive_identity_binds_content_not_path
+        PASS [   0.004s] ( 408/1361) velnor-actions-orchestrator internal_plan::wire_w2::wire_w2_tests::observations_thread_to_verified_or_precise_miss
+        PASS [   0.005s] ( 409/1361) velnor-actions-orchestrator internal_plan::wire_w2::wire_w2_tests::reuse_outcomes_execute_with_precise_reasons
+        PASS [   0.005s] ( 410/1361) velnor-actions-orchestrator internal_plan::wire_w2::wire_w2_tests::reused_tasks_verify_outputs_then_fail_trust_closed
+        PASS [   0.006s] ( 411/1361) velnor-actions-orchestrator internal_plan::wire_w2::wire_w2_tests::reuse_event_names_match_mode_spellings
+        PASS [   0.005s] ( 412/1361) velnor-actions-orchestrator internal_plan::wire_w2::wire_w2_tests::verified_reuse_binds_task_and_live_inputs
+        PASS [   0.005s] ( 413/1361) velnor-actions-orchestrator inventory::tests::incomplete_aborts_both_paths
+        PASS [   0.006s] ( 414/1361) velnor-actions-orchestrator internal_plan::wire_w2::wire_w2_tests::tofu_init_and_validate_never_plan_reuse
+        PASS [   0.006s] ( 415/1361) velnor-actions-orchestrator inventory::tests::tool_missing_markers_are_conservative
+        PASS [   0.006s] ( 416/1361) velnor-actions-orchestrator inventory::tests::reuse_matches_legacy_outcomes_and_inventories
+        PASS [   0.006s] ( 417/1361) velnor-actions-orchestrator inventory::tests::tool_mutation_mid_run_fails_closed
+        PASS [   0.006s] ( 418/1361) velnor-actions-orchestrator lock_audit::lock_audit_tests::bare_install_blocks
+        PASS [   0.697s] ( 419/1361) velnor-actions-cli::velnor_cli impl_cli_report::plan_values_come_from_validated_config
+        PASS [   0.005s] ( 420/1361) velnor-actions-orchestrator lock_audit::lock_audit_tests::deny_drift_blocks
+        PASS [   0.006s] ( 421/1361) velnor-actions-orchestrator lock_audit::lock_audit_tests::deny_install_is_audited_by_name
+        PASS [   0.006s] ( 422/1361) velnor-actions-orchestrator lock_audit::lock_audit_tests::drifted_spec_version_blocks
+        PASS [   0.006s] ( 423/1361) velnor-actions-orchestrator lock_audit::lock_audit_tests::empty_install_set_stays_silent
+        PASS [   0.006s] ( 424/1361) velnor-actions-orchestrator lock_audit::lock_audit_tests::foreign_spec_and_malformed_argv_block
+        PASS [   0.005s] ( 425/1361) velnor-actions-orchestrator lock_audit::lock_audit_tests::unclassifiable_validator_vector_blocks
+        PASS [   0.007s] ( 426/1361) velnor-actions-orchestrator lock_audit::lock_audit_tests::oversized_tool_file_blocks
+        PASS [   0.006s] ( 427/1361) velnor-actions-orchestrator lock_audit::lock_audit_tests::unknown_label_skips_loudly_without_blocking
+        PASS [   0.006s] ( 428/1361) velnor-actions-orchestrator matrix_step::matrix_step_tests::doc_obligation_step_carries_typed_rustdocflags
+        PASS [   0.005s] ( 429/1361) velnor-actions-orchestrator matrix_step::matrix_step_tests::identity_env_contract_enforces_in_every_build
+        PASS [   0.006s] ( 430/1361) velnor-actions-orchestrator matrix_step::matrix_step_tests::every_workspace_member_is_classified
+        PASS [   0.005s] ( 431/1361) velnor-actions-orchestrator matrix_step::matrix_step_tests::non_doc_obligation_steps_carry_no_rustdocflags
+        PASS [   0.005s] ( 432/1361) velnor-actions-orchestrator matrix_step::matrix_step_tests::obligation_step_carries_the_report_lookup_key
+        PASS [   0.006s] ( 433/1361) velnor-actions-orchestrator matrix_step::matrix_step_tests::obligation_step_skips_when_plan_covered_it
+        PASS [   0.006s] ( 434/1361) velnor-actions-orchestrator matrix_step::matrix_step_tests::outcome_and_deferred_share_one_start_file
+        PASS [   0.006s] ( 435/1361) velnor-actions-orchestrator matrix_step::matrix_step_tests::report_wrapper_stamps_start_and_hands_env_to_helper
+        PASS [   0.006s] ( 436/1361) velnor-actions-orchestrator matrix_step::matrix_step_tests::tofu_obligation_steps_carry_the_automation_pair
+        PASS [   0.005s] ( 437/1361) velnor-actions-orchestrator matrix_step::matrix_step_tofu_install_tests::every_workspace_member_is_classified_for_tofu
+        PASS [   0.005s] ( 438/1361) velnor-actions-orchestrator matrix_step::matrix_step_tests::validator_installs_follow_executed_suite_per_policy
+        PASS [   0.005s] ( 439/1361) velnor-actions-orchestrator matrix_step::matrix_step_tofu_install_tests::tofu_install_follows_executed_suite_per_policy
+        PASS [   0.005s] ( 440/1361) velnor-actions-orchestrator matrix_step::matrix_step_tofu_tests::tofu_obligation_step_carries_isolated_cache_dir
+        PASS [   0.006s] ( 441/1361) velnor-actions-orchestrator matrix_step::matrix_step_tofu_tests::stackless_obligation_task_ids_keep_malformed_vocabulary
+        PASS [   0.006s] ( 442/1361) velnor-actions-orchestrator matrix_step::matrix_step_tofu_install_tests::mise_crate_job_prepare_installs_opentofu
+        PASS [   0.006s] ( 443/1361) velnor-actions-orchestrator matrix_step::matrix_step_tofu_tests::tofu_step_env_rejects_triple_and_reserved_keys
+        PASS [   0.005s] ( 444/1361) velnor-actions-orchestrator matrix_step::matrix_step_tofu_tests::tofu_step_names_render_through_tofu_table
+        PASS [   0.006s] ( 445/1361) velnor-actions-orchestrator matrix_step::matrix_step_tofu_tests::tofu_obligation_step_carries_tofu_matrix_id_and_no_doc_env
+        PASS [   0.005s] ( 446/1361) velnor-actions-orchestrator merge_request::actual_event_strict_tests::duplicate_payload_keys_fail_closed
+        PASS [   0.006s] ( 447/1361) velnor-actions-orchestrator merge_request::merge_event_tests::assembly_captures_actual_event
+        PASS [   0.006s] ( 448/1361) velnor-actions-orchestrator merge_request::merge_request_tests::assembly_reads_expected_only_and_sorts_reports
+        PASS [   0.007s] ( 449/1361) velnor-actions-orchestrator merge_request::merge_event_tests::assembly_reads_attestation_in_candidate_mode
+        PASS [   0.005s] ( 450/1361) velnor-actions-orchestrator merge_request::merge_request_tests::assembly_shape_carries_no_base
+        PASS [   0.006s] ( 451/1361) velnor-actions-orchestrator merge_request::merge_request_tests::assembly_rejects_duplicate_keys_in_staged_json
+        PASS [   0.007s] ( 452/1361) velnor-actions-orchestrator merge_request::merge_request_tests::assembly_records_gaps_and_rejects_bad_report
+        PASS [   0.005s] ( 453/1361) velnor-actions-orchestrator merge_request::merge_request_tests::event_payload_refuses_symlink
+        PASS [   0.005s] ( 454/1361) velnor-actions-orchestrator merge_request::merge_request_tests::dropped_or_missing_expected_inventory_fails_closed
+        PASS [   0.005s] ( 455/1361) velnor-actions-orchestrator merge_request::needs_channel::tests::direct_and_to_json_shapes_parse_and_sort
+        PASS [   0.006s] ( 456/1361) velnor-actions-orchestrator merge_request::merge_request_tests::request_file_writes_exclusively
+        PASS [   0.005s] ( 457/1361) velnor-actions-orchestrator merge_request::needs_channel::tests::garbage_empty_and_bad_job_inputs_fail_closed
+        PASS [   0.005s] ( 458/1361) velnor-actions-orchestrator noop_report::noop_report_tests::noop_digest_key_is_disjoint_from_exec_digest_key
+        PASS [   0.005s] ( 459/1361) velnor-actions-orchestrator noop_report::noop_report_tests::noop_op_contract_pins_wire_strings
+        PASS [   0.006s] ( 460/1361) velnor-actions-orchestrator merge_request::needs_channel::tests::matrix_driver_job_is_excluded
+        PASS [   0.031s] ( 461/1361) velnor-actions-orchestrator inventory::tests::metadata_subprocess_counts
+        PASS [   0.011s] ( 462/1361) velnor-actions-orchestrator merge_request::merge_request_tests::assembly_rejects_links_oversize_and_unreadable_inputs
+        PASS [   0.006s] ( 463/1361) velnor-actions-orchestrator noop_report::noop_report_tests::noop_rejects_malformed_run_key_before_path_join
+        PASS [   0.005s] ( 464/1361) velnor-actions-orchestrator noop_report::noop_report_tests::noop_request_parsing_is_strict
+        PASS [   0.005s] ( 465/1361) velnor-actions-orchestrator origin::tests::repository_slug_shapes
+        PASS [   0.006s] ( 466/1361) velnor-actions-orchestrator noop_report::noop_report_tests::noop_rejects_contradictions
+        PASS [   0.005s] ( 467/1361) velnor-actions-orchestrator pins::tests::consumer_gate_rejects_attacker_manifests
+        PASS [   0.007s] ( 468/1361) velnor-actions-orchestrator noop_report::noop_report_tests::noop_report_writes_not_selected_with_reason
+        PASS [   0.005s] ( 469/1361) velnor-actions-orchestrator pins::tests::consumer_manifest_mismatch_and_bad_target_fail
+        PASS [   0.005s] ( 470/1361) velnor-actions-orchestrator pins::tests::consumer_manifest_without_commit_fails
+        PASS [   0.005s] ( 471/1361) velnor-actions-orchestrator pins::tests::mise_setup_accepts_approved_override_only
+        PASS [   0.005s] ( 472/1361) velnor-actions-orchestrator pins::tests::fixture_manifest_embeds_runner_target_record
+        PASS [   0.005s] ( 473/1361) velnor-actions-orchestrator pins::tests::mise_setup_defaults_to_compiled_pins
+        PASS [   0.005s] ( 474/1361) velnor-actions-orchestrator pins::tests::mise_setup_rejects_non_linux_runners
+        PASS [   0.005s] ( 475/1361) velnor-actions-orchestrator pins::tests::source_build_consumer_generation_fails_with_provenance
+        PASS [   0.005s] ( 476/1361) velnor-actions-orchestrator plan_output_limits::tests::matrix_jobs_cap_uses_expanded_dynamic_entries_only
+        PASS [   0.005s] ( 477/1361) velnor-actions-orchestrator pins::tests::verification_mise_setup_pins_each_runner_architecture
+        PASS [   0.724s] ( 478/1361) velnor-actions-cli::velnor_cli impl_cli_report::plan_prints_no_machine_or_volatile_content
+        PASS [   0.005s] ( 479/1361) velnor-actions-orchestrator plan_output_limits::tests::step_outputs_remain_complete_while_static_job_promotion_is_narrow
+        PASS [   0.005s] ( 480/1361) velnor-actions-orchestrator plan_output_limits::tests::utf16_budget_counts_ascii_and_surrogate_pairs
+        PASS [   0.005s] ( 481/1361) velnor-actions-orchestrator preseed_manifest::tests::invalid_inputs_fail_closed
+        PASS [   0.005s] ( 482/1361) velnor-actions-orchestrator preseed_manifest::tests::names_match_renderer_consts
+        PASS [   0.005s] ( 483/1361) velnor-actions-orchestrator preseed_manifest::tests::manifest_shape_is_exact_with_real_digest
+        PASS [   0.005s] ( 484/1361) velnor-actions-orchestrator publish_job::publish_job_tests::publish_job_needs_required_and_gates_push
+        PASS [   0.005s] ( 485/1361) velnor-actions-orchestrator qualify::tests::qualify_rebuild_attempt_rejected
+        PASS [   0.004s] ( 486/1361) velnor-actions-orchestrator release_identity::tests::origin_shapes_normalize_to_owner_repo
+        PASS [   0.005s] ( 487/1361) velnor-actions-orchestrator publish_job::publish_job_tests::publish_job_rejects_malformed_branches
+        PASS [   0.005s] ( 488/1361) velnor-actions-orchestrator qualify::tests::qualify_runs_artifact_without_rebuild_markers
+        PASS [   0.005s] ( 489/1361) velnor-actions-orchestrator release_identity::tests::foreign_or_malformed_origins_yield_none
+        PASS [   0.005s] ( 490/1361) velnor-actions-orchestrator release_identity::tests::plan_ids_derive_from_the_source_sha
+        PASS [   0.402s] ( 491/1361) velnor-actions-cli::velnor_cli impl_repo_strictness::strictness_no_proof_literals_anywhere
+        PASS [   0.005s] ( 492/1361) velnor-actions-orchestrator release_identity::tests::workspace_slugs_stay_lock_shaped
+        PASS [   0.005s] ( 493/1361) velnor-actions-orchestrator retrieve_baseline::retrieve_baseline_tests::baseline_skips_bad_repo_before_branch_lookup
+        PASS [   0.005s] ( 494/1361) velnor-actions-orchestrator retrieve_baseline::retrieve_baseline_tests::baseline_skips_unparsable_plan_without_spawning
+        PASS [   0.006s] ( 495/1361) velnor-actions-orchestrator retrieve_baseline::retrieve_baseline_tests::baseline_skips_invalid_base_before_branch_lookup
+        PASS [   0.005s] ( 496/1361) velnor-actions-orchestrator retrieve_baseline::retrieve_baseline_tests::default_branch_args_pins_repo_and_rejects_bad_slug
+        PASS [   0.005s] ( 497/1361) velnor-actions-orchestrator retrieve_baseline::retrieve_baseline_tests::parse_default_branch_accepts_only_strict_names
+        PASS [   0.006s] ( 498/1361) velnor-actions-orchestrator retrieve_baseline::retrieve_baseline_tests::baseline_skips_plan_without_base
+        PASS [   0.006s] ( 499/1361) velnor-actions-orchestrator retrieve_baseline::retrieve_baseline_tests::baseline_skips_when_staged_file_wins
+        PASS [   0.006s] ( 500/1361) velnor-actions-orchestrator retrieve_baseline::retrieve_baseline_tests::baseline_skips_when_nothing_covered
+        PASS [   0.006s] ( 501/1361) velnor-actions-orchestrator retrieve_baseline::retrieve_baseline_tests::baseline_skips_when_staged_symlink_planted
+        PASS [   0.016s] ( 502/1361) velnor-actions-orchestrator plan_output_limits::tests::matrix_and_coverage_outputs_share_one_aggregate_budget
+        PASS [   0.005s] ( 503/1361) velnor-actions-orchestrator retrieve_reports::retrieve_reports_enumeration_tests::enumeration_dedupes_shared_job_artifacts
+        PASS [   0.006s] ( 504/1361) velnor-actions-orchestrator retrieve_baseline::retrieve_baseline_tests::stage_manifest_writes_canonically_and_never_overwrites
+        PASS [   0.736s] ( 505/1361) velnor-actions-cli::velnor_cli impl_cli_smoke::preview_prints_absolute_paths_and_files
+        PASS [   0.005s] ( 506/1361) velnor-actions-orchestrator retrieve_reports::retrieve_reports_enumeration_tests::enumeration_follows_plan_order
+        PASS [   0.006s] ( 507/1361) velnor-actions-orchestrator retrieve_reports::retrieve_reports_tests::malformed_ids_skip_before_join_and_mkdir
+        PASS [   0.005s] ( 508/1361) velnor-actions-orchestrator retrieve_reports::retrieve_reports_tests::missing_plan_retrieves_zero_without_spawning
+        PASS [   0.005s] ( 509/1361) velnor-actions-orchestrator retrieve_reports::retrieve_reports_tests::retrieve_argv_names_exact_artifact
+        PASS [   0.006s] ( 510/1361) velnor-actions-orchestrator retrieve_reports::retrieve_reports_tests::staged_bytes_cover_every_failure_class
+        PASS [   0.005s] ( 511/1361) velnor-actions-orchestrator retrieve_retry::retrieve_retry_tests::retry_stops_at_first_success_and_at_the_bound
+        PASS [   0.005s] ( 512/1361) velnor-actions-orchestrator retrieve_reports::retrieve_reports_tests::staged_task_file_rejects_duplicate_keys
+        PASS [   0.006s] ( 513/1361) velnor-actions-orchestrator retrieve_reports::retrieve_reports_tests::staged_symlinks_reject_and_nested_layout_reads
+        PASS [   0.007s] ( 514/1361) velnor-actions-orchestrator retrieve_reports::retrieve_reports_tests::oversize_and_duplicate_key_plans_retrieve_zero
+        PASS [   0.005s] ( 515/1361) velnor-actions-orchestrator run_select::tests::artifact_expiry_must_be_explicitly_false
+        PASS [   0.005s] ( 516/1361) velnor-actions-orchestrator safe_read::tests::event_symlink_fails_closed
+        PASS [   0.007s] ( 517/1361) velnor-actions-orchestrator retrieve_reports::retrieve_reports_tests::staged_tokens_cover_every_failure_class
+        PASS [   0.005s] ( 518/1361) velnor-actions-orchestrator safe_read::tests::repo_directory_reports_not_a_file
+        PASS [   0.005s] ( 519/1361) velnor-actions-orchestrator safe_read::tests::repo_read_round_trip_and_absent
+        PASS [   0.005s] ( 520/1361) velnor-actions-orchestrator safe_read::tests::repo_oversize_and_bad_utf8_stay_errors
+        PASS [   0.005s] ( 521/1361) velnor-actions-orchestrator safe_read::tests::repo_symlink_refused_names_reason
+        PASS [   0.009s] ( 522/1361) velnor-actions-orchestrator retrieve_reports::retrieve_reports_tests::staged_task_files_cover_success_and_tokens
+        PASS [   0.005s] ( 523/1361) velnor-actions-orchestrator safe_read::tests::symlinked_parent_escape_fails_closed
+        PASS [   0.005s] ( 524/1361) velnor-actions-orchestrator select_affected::tests::nested_change_selects_deepest_beside_root
+        PASS [   0.005s] ( 525/1361) velnor-actions-orchestrator select_affected::tests::shared_declared_input_selects_every_declarer
+        PASS [   0.005s] ( 526/1361) velnor-actions-orchestrator select_affected::tests::root_package_does_not_classify_stray_files
+        PASS [   0.006s] ( 527/1361) velnor-actions-orchestrator select_affected::tests::declared_inputs_select_their_package
+        PASS [   0.006s] ( 528/1361) velnor-actions-orchestrator select_affected::tests::lone_root_package_classifies_everything
+        PASS [   0.004s] ( 529/1361) velnor-actions-orchestrator select_affected::tests::skipped_index_names_broaden_with_explicit_tag
+        PASS [   0.012s] ( 530/1361) velnor-actions-orchestrator retrieve_reports::retrieve_reports_tests::retrieve_plan_read_is_bounded
+        PASS [   0.005s] ( 531/1361) velnor-actions-orchestrator select_affected::tests::union_of_base_and_head_graphs_selects_removed_consumers
+        PASS [   0.005s] ( 532/1361) velnor-actions-orchestrator select_tofu::select_tofu_tests::chdir_findings_name_each_subdir_root_once
+        PASS [   0.005s] ( 533/1361) velnor-actions-orchestrator select_tofu::select_tofu_tests::derive_tofu_inits_once_per_root
+        PASS [   0.005s] ( 534/1361) velnor-actions-orchestrator select_tofu::select_tofu_tests::derive_tofu_marks_empty_fmt_scopes_no_targets
+        PASS [   0.005s] ( 535/1361) velnor-actions-orchestrator select_tofu::select_tofu_tests::derive_tofu_merges_nested_fmt_scopes
+        PASS [   0.005s] ( 536/1361) velnor-actions-orchestrator select_tofu::select_tofu_tests::derive_tofu_proposes_triples_with_fmt_scope_targets
+        PASS [   0.005s] ( 537/1361) velnor-actions-orchestrator select_tofu::select_tofu_tests::rust_kind_predicates_and_tool_needs_stay_false_for_tofu
+        PASS [   0.030s] ( 538/1361) velnor-actions-orchestrator plan_output_limits::tests::output_budget_boundary_is_inclusive
+        PASS [   0.005s] ( 539/1361) velnor-actions-orchestrator select_tofu::select_tofu_tests::selected_roots_derive_from_selected_statuses_only
+        PASS [   0.005s] ( 540/1361) velnor-actions-orchestrator select_tofu::select_tofu_tests::no_tofu_roots_passes_through_without_git
+        PASS [   0.005s] ( 541/1361) velnor-actions-orchestrator source_prep::tests::lockless_roots_emit_no_steps
+        PASS [   0.005s] ( 542/1361) velnor-actions-orchestrator source_prep::tests::crate_fetch_carries_full_validated_contract
+        PASS [   0.005s] ( 543/1361) velnor-actions-orchestrator source_cache::tests::cache_keys_reject_unsupported_execution_targets
+        PASS [   0.005s] ( 544/1361) velnor-actions-orchestrator source_prep::tests::nested_step_names_its_manifest
+        PASS [   0.005s] ( 545/1361) velnor-actions-orchestrator source_prep::tests::plan_fetch_uses_owned_homes_for_shared_snapshot
+        PASS [   0.005s] ( 546/1361) velnor-actions-orchestrator source_prep::tests::root_step_probes_before_fetch_with_miss_record
+        PASS [   0.006s] ( 547/1361) velnor-actions-orchestrator task_report::task_report_cover_tests::covered_obligation_reports_nothing_and_succeeds
+        PASS [   0.007s] ( 548/1361) velnor-actions-orchestrator task_report::task_report_cover_tests::covered_downstream_skips_silently_behind_failure
+        PASS [   0.004s] ( 549/1361) velnor-actions-orchestrator task_report::task_report_tests::downstream_ids_split_dedupe_and_drop_blanks
+        PASS [   0.004s] ( 550/1361) velnor-actions-orchestrator task_report::task_report_tests::exit_codes_accept_the_eight_bit_range
+        PASS [   0.005s] ( 551/1361) velnor-actions-orchestrator task_report::task_report_merge_tests::provider_hit_validate_execution_aggregates_executed
+        PASS [   0.006s] ( 552/1361) velnor-actions-orchestrator task_report::task_report_tests::executed_report_binds_plan_identities
+        PASS [   0.006s] ( 553/1361) velnor-actions-orchestrator task_report::task_report_tests::failed_report_marks_entry_failed
+        PASS [   0.007s] ( 554/1361) velnor-actions-orchestrator task_report::task_report_tests::ambiguous_entries_refuse_rather_than_guess
+        PASS [   0.006s] ( 555/1361) velnor-actions-orchestrator task_report::task_report_tests::planted_symlink_at_report_path_refuses_without_writing
+        PASS [   0.010s] ( 556/1361) velnor-actions-orchestrator task_report::task_report_merge_tests::merge_blocks_all_skipped_noop_end_to_end
+        PASS [   0.005s] ( 557/1361) velnor-actions-orchestrator task_report::task_report_tests::start_stamps_parse_and_measure_or_fail_closed
+        PASS [   0.008s] ( 558/1361) velnor-actions-orchestrator task_report::task_report_tests::failure_reports_downstream_skips_and_success_reports_none
+        PASS [   0.010s] ( 559/1361) velnor-actions-orchestrator task_report::task_report_merge_tests::merge_fails_failing_obligation_and_blocks_downstream
+        PASS [   0.011s] ( 560/1361) velnor-actions-orchestrator task_report::task_report_cover_tests::load_plan_strict_tests::plan_read_is_bounded_and_duplicate_rejecting
+        PASS [   0.005s] ( 561/1361) velnor-actions-orchestrator tofu_cache::tests::provider_key_shape_binds_target_tofu_root_and_lock
+        PASS [   0.005s] ( 562/1361) velnor-actions-orchestrator tofu_cache::tests::provider_restore_is_exact_key_read_only
+        PASS [   0.011s] ( 563/1361) velnor-actions-orchestrator task_report::task_report_merge_tests::merge_lists_shared_job_artifact_once
+        PASS [   0.012s] ( 564/1361) velnor-actions-orchestrator task_report::task_report_merge_tests::merge_flips_not_run_to_executed_end_to_end
+        PASS [   0.008s] ( 565/1361) velnor-actions-orchestrator task_report::task_report_tests::tofu_executed_report_carries_measured_timing
+        PASS [   0.005s] ( 566/1361) velnor-actions-orchestrator toolcheck::tests::malformed_files_are_invalid_with_digests
+        PASS [   0.006s] ( 567/1361) velnor-actions-orchestrator toolcheck::tests::checks_report_presence_parse_values_and_digests
+        PASS [   0.005s] ( 568/1361) velnor-actions-orchestrator toolcheck::tests::unreadable_files_are_not_missing
+        PASS [   0.008s] ( 569/1361) velnor-actions-orchestrator task_report::task_report_tests::unbound_inputs_fail_before_writing
+        PASS [   0.005s] ( 570/1361) velnor-actions-orchestrator validate::tests::actionlint_argv_has_single_config_file_first
+        PASS [   0.005s] ( 571/1361) velnor-actions-orchestrator toolfindings::tests::unrecognized_values_are_unsupported
+        PASS [   0.006s] ( 572/1361) velnor-actions-orchestrator toolfindings::tests::conflicts_need_comparable_divergent_pins
+        PASS [   0.005s] ( 573/1361) velnor-actions-orchestrator validate_shell::workflow::tests::container_default_is_posix_and_services_do_not_change_runner_shell
+        PASS [   0.005s] ( 574/1361) velnor-actions-orchestrator validate_shell::tests::shellcheck_version_mismatch_fails
+        PASS [   0.005s] ( 575/1361) velnor-actions-orchestrator validate_shell::workflow::tests::harmless_shellcheck_directives_remain_supported
+        PASS [   0.005s] ( 576/1361) velnor-actions-orchestrator validate_shell::workflow::tests::job_and_workflow_defaults_override_container_shell
+        PASS [   0.005s] ( 577/1361) velnor-actions-orchestrator validate_shell::workflow::tests::only_step_run_keys_are_linted
+        PASS [   0.005s] ( 578/1361) velnor-actions-orchestrator validate_shell::workflow::tests::nested_run_values_are_not_confused_with_steps
+        PASS [   0.005s] ( 579/1361) velnor-actions-orchestrator validate_shell::workflow::tests::step_job_and_workflow_shell_precedence_is_order_independent
+        PASS [   0.005s] ( 580/1361) velnor-actions-orchestrator validate_shell::workflow::tests::step_shell_after_run_overrides_the_hosted_default
+        PASS [   0.005s] ( 581/1361) velnor-actions-orchestrator validate_shell::workflow::tests::unsupported_step_mapping_order_fails_closed
+        PASS [   0.005s] ( 582/1361) velnor-actions-orchestrator vectors::vectors_tests::candidate_build_delegates_to_mise_constructor
+        PASS [   0.006s] ( 583/1361) velnor-actions-orchestrator validate_shell::workflow::tests::unknown_runner_shell_and_shellcheck_overrides_fail_closed
+        PASS [   0.005s] ( 584/1361) velnor-actions-orchestrator vectors::vectors_tests::custom_task_steps_emit_nothing_and_reject_nonempty
+        PASS [   0.005s] ( 585/1361) velnor-actions-orchestrator vectors::vectors_tests::custom_task_steps_reject_bad_names
+        PASS [   0.006s] ( 586/1361) velnor-actions-orchestrator vectors::vectors_tests::mbx_probe_vector_is_byte_exact
+        PASS [   0.005s] ( 587/1361) velnor-actions-orchestrator vectors::vectors_tests::section4_build_vector_is_byte_exact
+        PASS [   0.005s] ( 588/1361) velnor-actions-orchestrator vectors::vectors_tests::policy_vectors_pin_specs_and_payloads
+        PASS [   0.005s] ( 589/1361) velnor-actions-orchestrator vectors::vectors_tests::task_runner_tools_follow_test_runner
+        PASS [   0.005s] ( 590/1361) velnor-actions-orchestrator vectors::vectors_tests::tofu_subdir_payload_runs_under_chdir_first
+        PASS [   0.006s] ( 591/1361) velnor-actions-orchestrator vectors::vectors_tests::task_payload_program_follows_route_driver
+        PASS [   0.006s] ( 592/1361) velnor-actions-orchestrator vectors::vectors_tests::tofu_task_argv_routes_through_pinned_opentofu
+        PASS [   0.006s] ( 593/1361) velnor-actions-orchestrator vectors::vectors_tests::zizmor_vector_is_pinned_and_offline
+        PASS [   0.006s] ( 594/1361) velnor-actions-orchestrator workflow::wire_w1::wire_w1_tests::checkout_full_provides_history_for_git_archaeology
+        PASS [   0.006s] ( 595/1361) velnor-actions-orchestrator workflow::wire_w1::wire_w1_tests::checkout_pins_canonical_ref_and_validates_inputs
+        PASS [   0.006s] ( 596/1361) velnor-actions-orchestrator workflow::wire_w1::wire_w1_tests::crate_driver_tools_follow_role_selection
+        PASS [   0.006s] ( 597/1361) velnor-actions-orchestrator workflow::wire_w1::wire_w1_tests::crate_tools_follow_selection_with_validators
+        PASS [   0.006s] ( 598/1361) velnor-actions-orchestrator workflow::wire_w1::wire_w1_tests::syntax_gate_allows_matrix_and_rejects_native
+        PASS [   0.006s] ( 599/1361) velnor-actions-orchestrator workflow::wire_w1::wire_w1_tests::task_cache_steps_need_fixture_and_live_mode
+        PASS [   0.007s] ( 600/1361) velnor-actions-orchestrator workflow::wire_w1::wire_w1_tests::crate_tools_install_exact_pinned_set
+        PASS [   0.008s] ( 601/1361) velnor-actions-orchestrator workflow_jobs::workflow_jobs_tests::final_job_needs_plan_crates_and_lint
+        PASS [   0.007s] ( 602/1361) velnor-actions-orchestrator workflow_jobs::workflow_jobs_tests::final_job_writes_request_before_merge
+        PASS [   0.007s] ( 603/1361) velnor-actions-orchestrator workflow_jobs::workflow_jobs_tests::plan_job_checks_out_full_history_for_archaeology
+        PASS [   0.006s] ( 604/1361) velnor-actions-orchestrator workflow_jobs::workflow_jobs_tests::plan_job_prepares_pinned_tools_before_generate_consumers
+        PASS [   0.006s] ( 605/1361) velnor-actions-orchestrator workflow_jobs::workflow_jobs_tests::pure_tofu_plan_drops_all_rust_setup
+        PASS [   0.007s] ( 606/1361) velnor-actions-orchestrator workflow_jobs::workflow_jobs_tests::plan_tools_follow_role_in_all_order
+        PASS [   0.007s] ( 607/1361) velnor-actions-orchestrator workflow_jobs::workflow_jobs_tests::plan_job_writes_request_before_plan
+        PASS [   0.789s] ( 608/1361) velnor-actions-cli::velnor_cli impl_cli_parity::plan_job_ids_match_generated_workflow
+        PASS [   0.041s] ( 609/1361) velnor-actions-orchestrator validate_shell::tests::shellcheck_pure_sc2086_body_fails
+        PASS [   0.053s] ( 610/1361) velnor-actions-orchestrator validate_shell::tests::shellcheck_clean_passes_violation_and_block_fail
+        PASS [   0.059s] ( 611/1361) velnor-actions-orchestrator validate_shell::tests::shellcheck_batch_lints_every_body
+        PASS [   0.094s] ( 612/1361) velnor-actions-orchestrator validate_shell::tests::shellcheck_uses_the_resolved_bash_or_posix_dialect
+        PASS [   0.119s] ( 613/1361) velnor-actions-orchestrator::validation_failure probe::validation_failure_preserves_output
+        PASS [   1.093s] ( 614/1361) velnor-actions-cli::velnor_cli impl_cli_smoke::previews_use_unique_tmp_dirs_without_collision
+        PASS [   0.005s] ( 615/1361) velnor-actions-orchestrator::velnor_orchestrator impl_cache_fixtures::service_report_parses_live_shape_for_sequential_runs
+        PASS [   0.326s] ( 616/1361) velnor-actions-orchestrator::validation_failure zizmor_staging::consumer_tree_unaffected
+        PASS [   0.331s] ( 617/1361) velnor-actions-orchestrator::validation_failure zizmor_staging::velnor_policy_blessed_sha_validates_green
+        PASS [   1.116s] ( 618/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p11_compiler::reject_each_extra_clippy_deny_fails
+        PASS [   0.664s] ( 619/1361) velnor-actions-freshness process::tests::timeout_kills_descendants_holding_the_capture_pipe
+        PASS [   0.395s] ( 620/1361) velnor-actions-orchestrator::validation_failure zizmor_staging::different_unpinned_tag_still_fails
+        PASS [   0.005s] ( 621/1361) velnor-actions-orchestrator::velnor_orchestrator impl_cache_warm::probe_outcome_maps_to_skip_or_explicit_fetch
+        PASS [   0.400s] ( 622/1361) velnor-actions-orchestrator::validation_failure zizmor_staging::staging_suppressions_stable_no_new
+        PASS [   0.415s] ( 623/1361) velnor-actions-orchestrator::validation_failure zizmor_staging::blessed_repo_tag_ref_still_fails
+        PASS [   0.018s] ( 624/1361) velnor-actions-orchestrator::velnor_orchestrator impl_config_internal::branch_failure_hints_default_branch_setting
+        PASS [   0.034s] ( 625/1361) velnor-actions-orchestrator::velnor_orchestrator impl_config_internal::config_errors_name_file_and_key_path
+        PASS [   0.072s] ( 626/1361) velnor-actions-orchestrator::velnor_orchestrator impl_config_internal::identity_ignores_decoy_lines_and_remotes
+        PASS [   0.112s] ( 627/1361) velnor-actions-orchestrator::velnor_orchestrator impl_config_internal::default_branch_prefers_config_then_origin_head
+        PASS [   0.013s] ( 628/1361) velnor-actions-orchestrator::velnor_orchestrator impl_config_internal::init_creates_sample_and_refuses_overwrite
+        PASS [   0.005s] ( 629/1361) velnor-actions-orchestrator::velnor_orchestrator impl_config_internal::internal_entrypoints_reject_bad_schema
+        PASS [   1.321s] ( 630/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p11_compiler::reject_each_rustdoc_deny_fails
+        PASS [   1.294s] ( 631/1361) velnor-actions-cli::velnor_cli impl_cli_parity::plan_reports_full_configured_crates_in_agreement_with_yaml
+        PASS [   0.054s] ( 632/1361) velnor-actions-orchestrator::velnor_orchestrator impl_config_internal::plan_job_lines_come_from_finalized_jobs
+        PASS [   0.024s] ( 633/1361) velnor-actions-orchestrator::velnor_orchestrator impl_config_internal::resolve_root_from_nested_subdir
+        PASS [   0.055s] ( 634/1361) velnor-actions-orchestrator::velnor_orchestrator impl_config_internal::uncommented_init_sample_parses_with_overrides
+        PASS [   0.023s] ( 635/1361) velnor-actions-orchestrator::velnor_orchestrator impl_config_internal::unknown_override_key_rejected_with_key_path
+        PASS [   0.014s] ( 636/1361) velnor-actions-orchestrator::velnor_orchestrator impl_config_internal::uppercase_rust_name_rejected_with_key_path
+        PASS [   0.018s] ( 637/1361) velnor-actions-orchestrator::velnor_orchestrator impl_config_internal::velnor_policy_rejected_without_identity
+        PASS [   0.005s] ( 638/1361) velnor-actions-orchestrator::velnor_orchestrator impl_consumer_manifest_file::absent_manifest_fails_closed_without_provenance
+        PASS [   0.058s] ( 639/1361) velnor-actions-orchestrator::velnor_orchestrator impl_consumer_manifest_file::acquire_url_and_sha_come_from_committed_file
+        PASS [   0.212s] ( 640/1361) velnor-actions-orchestrator::velnor_orchestrator impl_config_internal::runner_label_exact_match_at_prepare
+        PASS [   0.055s] ( 641/1361) velnor-actions-orchestrator::velnor_orchestrator impl_consumer_manifest_file::debug_absent_file_keeps_standin
+        PASS [   0.051s] ( 642/1361) velnor-actions-orchestrator::velnor_orchestrator impl_consumer_manifest_file::invalid_manifest_fails_prepare
+        PASS [   0.050s] ( 643/1361) velnor-actions-orchestrator::velnor_orchestrator impl_consumer_manifest_file::manifest_version_mismatch_fails_prepare
+        PASS [   0.051s] ( 644/1361) velnor-actions-orchestrator::velnor_orchestrator impl_consumer_manifest_file::symlink_manifest_fails_closed
+        PASS [   1.812s] ( 645/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p11_metadata::metadata_locked_graph_is_registry_only
+        PASS [   1.933s] ( 646/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p11_metadata::metadata_msrv_resolves
+        PASS [   2.159s] ( 647/1361) velnor-actions-cli::velnor_cli impl_repo_freshness::p12_property::property_plan_never_panics_on_arbitrary_bytes
+        PASS [   0.057s] ( 648/1361) velnor-actions-orchestrator::velnor_orchestrator impl_crate_graph::w1_crate_cache_v1_emits_no_cache_steps
+        PASS [   0.058s] ( 649/1361) velnor-actions-orchestrator::velnor_orchestrator impl_crate_graph::w1_crate_job_prepares_pinned_tools
+        PASS [   0.057s] ( 650/1361) velnor-actions-orchestrator::velnor_orchestrator impl_crate_graph::w1_crate_jobs_group_obligations_per_crate
+        PASS [   0.060s] ( 651/1361) velnor-actions-orchestrator::velnor_orchestrator impl_crate_graph::w1_crate_prepare_adds_mbx_driver
+        PASS [   0.058s] ( 652/1361) velnor-actions-orchestrator::velnor_orchestrator impl_crate_graph::w1_crate_prepare_and_obligations_share_toolchain_union
+        PASS [   0.112s] ( 653/1361) velnor-actions-orchestrator::velnor_orchestrator impl_discovery_cache::git_parent_alias_into_cache_is_pruned_but_sibling_is_discovered
+        PASS [   0.107s] ( 654/1361) velnor-actions-orchestrator::velnor_orchestrator impl_discovery_cache::non_git_discovery_excludes_only_reserved_cache_root
+        PASS [   0.070s] ( 655/1361) velnor-actions-orchestrator::velnor_orchestrator impl_discovery_cache::raw_non_utf8_tracked_cache_path_fails_public_discovery
+        PASS [   0.036s] ( 656/1361) velnor-actions-orchestrator::velnor_orchestrator impl_discovery_cache::tracked_cache_gitlink_fails_public_discovery
+        PASS [   0.026s] ( 657/1361) velnor-actions-orchestrator::velnor_orchestrator impl_discovery_cache::tracked_cache_payload_fails_public_discovery
+        PASS [   0.135s] ( 658/1361) velnor-actions-orchestrator::velnor_orchestrator impl_discovery_cache::untracked_cache_is_excluded_and_siblings_remain_discoverable
+        PASS [   2.174s] ( 659/1361) velnor-actions-orchestrator::velnor_orchestrator impl_cache_fixtures::restore_mbx_fetch_order_every_crate_job
+        PASS [   2.218s] ( 660/1361) velnor-actions-orchestrator::velnor_orchestrator impl_cache_fixtures::per_job_sources_keys_identical_plan_and_crates
+        PASS [   0.142s] ( 661/1361) velnor-actions-orchestrator::velnor_orchestrator impl_e2e_scrub::emitted_yaml_keeps_ambient_auth_steps_unscrubbed
+        PASS [   3.135s] ( 662/1361) velnor-actions-cli::velnor_cli impl_repo_freshness::p12_property::property_plan_never_panics_on_arbitrary_config
+        PASS [   0.072s] ( 663/1361) velnor-actions-orchestrator::velnor_orchestrator impl_e2e_wiring::emitted_yaml_wires_helpers_consumer
+        PASS [   0.073s] ( 664/1361) velnor-actions-orchestrator::velnor_orchestrator impl_e2e_scrub::emitted_yaml_scrubs_repo_code_steps
+        PASS [   0.084s] ( 665/1361) velnor-actions-orchestrator::velnor_orchestrator impl_e2e_wiring::emitted_yaml_wires_helpers_velnor_policy
+        PASS [   2.366s] ( 666/1361) velnor-actions-orchestrator::velnor_orchestrator impl_cache_fixtures::cargo_only_shared_registry_single_shape
+        PASS [   2.082s] ( 667/1361) velnor-actions-orchestrator::velnor_orchestrator impl_cache_fixtures::single_writer_plan_saves_crates_restore_only
+        PASS [   2.365s] ( 668/1361) velnor-actions-orchestrator::velnor_orchestrator impl_cache_fixtures::per_job_mise_keys_qualified_without_job_suffix
+        PASS [   0.006s] ( 669/1361) velnor-actions-orchestrator::velnor_orchestrator impl_final_orch::external_data_skip_needs_declared_fresh_identity
+        PASS [   2.088s] ( 670/1361) velnor-actions-orchestrator::velnor_orchestrator impl_cache_fixtures::sources_paths_cover_owned_subset_only
+        PASS [   2.019s] ( 671/1361) velnor-actions-orchestrator::velnor_orchestrator impl_cache_warm::rust_components_install_unconditionally_after_restore
+        PASS [   0.060s] ( 672/1361) velnor-actions-orchestrator::velnor_orchestrator impl_final_orch::clippy_configs_schedule_in_separate_groups
+        PASS [   0.006s] ( 673/1361) velnor-actions-orchestrator::velnor_orchestrator impl_final_orch::unknown_extension_schema_disables_reuse_and_coverage
+        PASS [   0.060s] ( 674/1361) velnor-actions-orchestrator::velnor_orchestrator impl_final_orch::conflicting_tool_values_yield_findings
+        PASS [   0.072s] ( 675/1361) velnor-actions-orchestrator::velnor_orchestrator impl_e2e_wiring::preseed_tests::emitted_yaml_preseed_builds_once_and_shares_artifact
+        PASS [   3.196s] ( 676/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p11_metadata::metadata_effective_edition_is_2024
+        PASS [   0.054s] ( 677/1361) velnor-actions-orchestrator::velnor_orchestrator impl_final_orch::critical_path_reports_task_durations
+        PASS [   0.052s] ( 678/1361) velnor-actions-orchestrator::velnor_orchestrator impl_final_orch::malformed_mise_wrapper_fails_closed_before_toolcheck
+        PASS [   0.055s] ( 679/1361) velnor-actions-orchestrator::velnor_orchestrator impl_final_orch::plan_reports_structural_critical_path
+        PASS [   0.057s] ( 680/1361) velnor-actions-orchestrator::velnor_orchestrator impl_final_orch::single_clippy_config_needs_no_barrier
+        PASS [   0.057s] ( 681/1361) velnor-actions-orchestrator::velnor_orchestrator impl_final_orch::tool_inputs_report_presence_parse_values_digests
+        PASS [   0.054s] ( 682/1361) velnor-actions-orchestrator::velnor_orchestrator impl_final_orch::unsupported_tool_values_yield_findings
+        PASS [   2.120s] ( 683/1361) velnor-actions-orchestrator::velnor_orchestrator impl_cache_warm::lockfile_delta_changes_cache_identity
+        PASS [   2.161s] ( 684/1361) velnor-actions-orchestrator::velnor_orchestrator impl_cache_warm::fetch_carries_offline_skip_branch
+        PASS [   0.061s] ( 685/1361) velnor-actions-orchestrator::velnor_orchestrator impl_freshness_emit::freshness_consumer_omits_probe
+        PASS [   0.078s] ( 686/1361) velnor-actions-orchestrator::velnor_orchestrator impl_gapc::declared_keys_are_typed_and_closed
+        PASS [   0.059s] ( 687/1361) velnor-actions-orchestrator::velnor_orchestrator impl_gapc::transient_mbx_blocks_generate
+        PASS [   0.134s] ( 688/1361) velnor-actions-orchestrator::velnor_orchestrator impl_freshness_emit::freshness_velnor_policy_emits_scheduled_probe
+        PASS [   0.100s] ( 689/1361) velnor-actions-orchestrator::velnor_orchestrator impl_gapc::profile_conflict_fails_closed
+        PASS [   0.060s] ( 690/1361) velnor-actions-orchestrator::velnor_orchestrator impl_gapc::transient_nextest_blocks_generate
+        PASS [   2.239s] ( 691/1361) velnor-actions-orchestrator::velnor_orchestrator impl_cache_warm::identical_inputs_render_identical_caches
+        PASS [   0.006s] ( 692/1361) velnor-actions-orchestrator::velnor_orchestrator impl_gate8_e::candidate_never_plans_and_lock_matches_catalog_per_target
+        PASS [   0.063s] ( 693/1361) velnor-actions-orchestrator::velnor_orchestrator impl_gate8_acquire::consumer_plan_job_carries_acquire_step
+        PASS [   0.073s] ( 694/1361) velnor-actions-orchestrator::velnor_orchestrator impl_gate8_acquire::version_policy_drift_fails_velnor_generate
+        PASS [   0.078s] ( 695/1361) velnor-actions-orchestrator::velnor_orchestrator impl_gate8_acquire::velnor_candidate_render_path_includes_release
+        PASS [   0.377s] ( 696/1361) velnor-actions-orchestrator::velnor_orchestrator impl_freshness_emit::freshness_preview_validates_and_writes
+        PASS [   0.364s] ( 697/1361) velnor-actions-orchestrator::velnor_orchestrator impl_gapc::transient_cargo_test_defaults_without_block
+        PASS [   0.400s] ( 698/1361) velnor-actions-orchestrator::velnor_orchestrator impl_gapc::tool_files_untouched
+        PASS [   0.510s] ( 699/1361) velnor-actions-orchestrator::velnor_orchestrator impl_gapc::durable_evidence_stable
+        PASS [   3.953s] ( 700/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_harness::relative_root_is_resolved_before_the_script_changes_directory
+        PASS [   3.966s] ( 701/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_manifest::ambiguous_multi_source_identity_fails
+        PASS [   3.978s] ( 702/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_manifest::declared_lock_skew_fails
+        PASS [   4.053s] ( 703/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_live::nested_deny_ignore_fails
+        PASS [   4.039s] ( 704/1361) velnor-actions-cli::velnor_cli impl_repo_freshness::p12_property::property_plan_count_exact_and_deterministic
+        PASS [   4.072s] ( 705/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_live::missing_deny_fails
+        PASS [   3.513s] ( 706/1361) velnor-actions-orchestrator cover_identity::generator::tests::sha256_matches_vectors_and_exe_verifies
+        PASS [   4.042s] ( 707/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_policy::local_pin_mismatch_fails
+        PASS [   4.107s] ( 708/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_manifest::nested_workspace_dependency_skew_fails
+        PASS [   4.152s] ( 709/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_manifest::complete_supported_inventory_passes
+        PASS [   4.178s] ( 710/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_manifest::git_dependency_fails
+        PASS [   4.193s] ( 711/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_live::deny_ignore_fails
+        PASS [   1.039s] ( 712/1361) velnor-actions-orchestrator::velnor_orchestrator impl_gapc::declared_profile_survives_regeneration
+        PASS [   4.218s] ( 713/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_manifest::inexact_requirement_fails
+        PASS [   4.214s] ( 714/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_manifest::workspace_package_rename_inherits
+        PASS [   0.005s] ( 715/1361) velnor-actions-orchestrator::velnor_orchestrator impl_generate_p09_preview::denylist_pins_mise_strip_set
+        PASS [   4.276s] ( 716/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_manifest::dangling_lock_edge_fails
+        PASS [   4.271s] ( 717/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_manifest::target_scope_inexact_fails
+        PASS [   4.263s] ( 718/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_policy::expired_exception_fails
+        PASS [   4.296s] ( 719/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_policy::unblessed_standing_exception_fails
+        PASS [   4.370s] ( 720/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_manifest::stranded_lock_package_fails
+        PASS [   0.143s] ( 721/1361) velnor-actions-orchestrator::velnor_orchestrator impl_generate_p09_preview::fetch_matches_obligation_contract_by_construction
+        PASS [   4.361s] ( 722/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_policy::missing_action_row_fails
+        PASS [   4.429s] ( 723/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_live::upstream_probe_unreachable_fails
+        PASS [   4.444s] ( 724/1361) velnor-actions-cli::velnor_cli impl_cli_verify_local::verify_local_repo_policy_stage_executes
+        PASS [   4.420s] ( 725/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_policy::stale_recorded_latest_fails
+        PASS [   0.025s] ( 726/1361) velnor-actions-orchestrator::velnor_orchestrator impl_generate_p09_preview::tool_snapshot_unreadable_fails_closed
+        PASS [   4.439s] ( 727/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_policy_b::dated_exception_missing_field_fails
+        PASS [   0.007s] ( 728/1361) velnor-actions-orchestrator::velnor_orchestrator impl_generate_tofu_env::isolation_pairs_agree_between_author_and_constructor
+        PASS [   0.009s] ( 729/1361) velnor-actions-orchestrator::velnor_orchestrator impl_generate_tofu_env::tf_predicate_parity_with_documented_divergence
+        PASS [   0.009s] ( 730/1361) velnor-actions-orchestrator::velnor_orchestrator impl_generate_tofu_env::tofu_key_consts_agree_across_crates
+        PASS [   0.091s] ( 731/1361) velnor-actions-orchestrator::velnor_orchestrator impl_generate_p09_preview::rendered_crate_steps_carry_validated_contract
+        PASS [   4.488s] ( 732/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_policy::unknown_status_is_never_current
+        PASS [   0.045s] ( 733/1361) velnor-actions-orchestrator::velnor_orchestrator impl_generator_seed::generator_seed_hit_skips_curl_and_a_bad_hash_does_not_copy
+        PASS [   1.373s] ( 734/1361) velnor-actions-orchestrator::velnor_orchestrator impl_gapc::generated_workflow_not_evidence
+        PASS [   4.531s] ( 735/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_policy_b::blessed_standing_missing_attribution_fails
+        PASS [   4.569s] ( 736/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_policy::overlong_exception_fails
+        PASS [   0.030s] ( 737/1361) velnor-actions-orchestrator::velnor_orchestrator impl_git_authority_p10::velnor_identity_rejects_mismatched_origin
+        PASS [   0.105s] ( 738/1361) velnor-actions-orchestrator::velnor_orchestrator impl_git_authority_p10::velnor_identity_ok_in_normal_repo
+        PASS [   4.548s] ( 739/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_upstream::prerelease_only_is_lookup_failure_never_current
+        PASS [   0.123s] ( 740/1361) velnor-actions-orchestrator::velnor_orchestrator impl_git_authority_p10::velnor_identity_ok_in_linked_worktree
+        PASS [   0.031s] ( 741/1361) velnor-actions-orchestrator::velnor_orchestrator impl_git_authority_p10::velnor_identity_rejects_missing_origin
+        PASS [   0.092s] ( 742/1361) velnor-actions-orchestrator::velnor_orchestrator impl_git_authority_p10::velnor_identity_ok_via_include
+        PASS [   0.172s] ( 743/1361) velnor-actions-orchestrator::velnor_orchestrator impl_generate_size_guard::workflow_size_failure_preserves_existing_github_tree
+        PASS [   4.627s] ( 744/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_policy::inverted_window_fails
+        PASS [   0.493s] ( 745/1361) velnor-actions-orchestrator::velnor_orchestrator impl_generate_p09_concurrent::concurrent_generate_never_writes_partially
+        PASS [   0.119s] ( 746/1361) velnor-actions-orchestrator::velnor_orchestrator impl_git_authority_p10::velnor_identity_ok_via_worktree_config
+        PASS [   4.648s] ( 747/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_policy::stale_evidence_fails
+        PASS [   0.045s] ( 748/1361) velnor-actions-orchestrator::velnor_orchestrator impl_git_paths_p10::nested_subdir_resolves_repo_root
+        PASS [   4.675s] ( 749/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_policy_b::blessed_standing_exception_passes
+        PASS [   4.687s] ( 750/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_policy_b::blessed_standing_wrong_tag_fails
+        PASS [   0.460s] ( 751/1361) velnor-actions-orchestrator::velnor_orchestrator impl_generate_p09_preview::generate_leaves_tool_files_untouched
+        PASS [   0.114s] ( 752/1361) velnor-actions-orchestrator::velnor_orchestrator impl_git_paths_p10::added_quotepath_manifest_fails_closed
+        PASS [   0.451s] ( 753/1361) velnor-actions-orchestrator::velnor_orchestrator impl_generate_p09_preview::in_place_symlink_target_refused
+        PASS [   4.748s] ( 754/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_manifest::unresolvable_workspace_inheritance_fails
+        PASS [   0.484s] ( 755/1361) velnor-actions-orchestrator::velnor_orchestrator impl_generate_p09_preview::in_place_file_target_refused
+        PASS [   4.744s] ( 756/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_policy_b::dated_exception_passes_with_full_attribution
+        PASS [   0.480s] ( 757/1361) velnor-actions-orchestrator::velnor_orchestrator impl_generate_p09_preview::preview_dotdot_through_missing_refused_without_litter
+        PASS [   0.091s] ( 758/1361) velnor-actions-orchestrator::velnor_orchestrator impl_lane_isolation::rust_partitions_stay_off_and_no_lane_wiring_renders
+        PASS [   4.794s] ( 759/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_policy::dangling_mutant_glob_fails
+        PASS [   0.478s] ( 760/1361) velnor-actions-orchestrator::velnor_orchestrator impl_generate_p09_preview::preview_symlink_chain_refused
+        PASS [   0.117s] ( 761/1361) velnor-actions-orchestrator::velnor_orchestrator impl_lane_isolation::tofu_root_lanes_serialize_per_lane
+        PASS [   4.804s] ( 762/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_upstream::stale_evidence_names_source_and_timestamp
+        PASS [   4.911s] ( 763/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_live::upstream_probe_passes_on_canned_evidence
+        PASS [   5.004s] ( 764/1361) velnor-actions-cli::velnor_cli impl_cli_protocol::plan_writes_response_and_github_outputs
+        PASS [   4.921s] ( 765/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_policy::unknown_hold_subject_fails
+        PASS [   5.036s] ( 766/1361) velnor-actions-cli::velnor_cli impl_cli_protocol::plan_publishes_plan_artifact_files
+        PASS [   4.978s] ( 767/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_live::upstream_probe_stale_pin_fails
+        PASS [   5.044s] ( 768/1361) velnor-actions-cli::velnor_cli impl_cli_protocol::merge_no_work_plan_reports_no_work
+        PASS [   5.048s] ( 769/1361) velnor-actions-cli::velnor_cli impl_cli_protocol::plan_without_runner_temp_exits_one
+        PASS [   4.957s] ( 770/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_policy_b::future_clock_timestamp_outside_skew_grace_fails
+        PASS [   0.941s] ( 771/1361) velnor-actions-orchestrator::velnor_orchestrator impl_gen_gates::cross_checkout_determinism
+        PASS [   5.003s] ( 772/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_policy_b::future_clock_timestamp_inside_skew_grace_passes
+        PASS [   5.040s] ( 773/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_policy::future_granted_fails
+        PASS [   5.053s] ( 774/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_upstream::unparseable_body_is_lookup_failure_never_current
+        PASS [   5.103s] ( 775/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_policy_b::missing_tool_row_fails
+        PASS [   0.991s] ( 776/1361) velnor-actions-orchestrator::velnor_orchestrator impl_gen_gates::repeated_generate_is_fixed_point
+        PASS [   5.100s] ( 777/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_upstream::probe_rows_carry_source_and_check_time
+        PASS [   0.027s] ( 778/1361) velnor-actions-orchestrator::velnor_orchestrator impl_neg_pipeline_p13::negative_config_invalid_fails_prepare
+        PASS [   0.994s] ( 779/1361) velnor-actions-orchestrator::velnor_orchestrator impl_generate_p09_preview::concurrent_generate_lock_refused
+        PASS [   0.044s] ( 780/1361) velnor-actions-orchestrator::velnor_orchestrator impl_neg_pipeline_p13::negative_config_missing_fails_prepare
+        PASS [   5.208s] ( 781/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_policy_b::future_evidence_fails
+        PASS [   0.501s] ( 782/1361) velnor-actions-orchestrator::velnor_orchestrator impl_matrix::obligations_carry_fixed_identity
+        PASS [   0.058s] ( 783/1361) velnor-actions-orchestrator::velnor_orchestrator impl_neg_pipeline_p13::negative_plan_empty_head_fails
+        PASS [   0.893s] ( 784/1361) velnor-actions-orchestrator::velnor_orchestrator impl_generate_p09_preview::preview_twice_second_refused_nonempty
+        PASS [   5.269s] ( 785/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_policy_b::extra_tool_row_fails
+        PASS [   5.243s] ( 786/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_upstream::default_gate_never_fetches
+        PASS [   0.593s] ( 787/1361) velnor-actions-orchestrator::velnor_orchestrator impl_matrix::crate_yaml_shape_exact
+        PASS [   5.343s] ( 788/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_policy_b::non_object_entries_fail
+        PASS [   4.700s] ( 789/1361) velnor-actions-orchestrator::velnor_orchestrator impl_bench_p13::bench_empty_caches_cold_plan
+        PASS [   0.230s] ( 790/1361) velnor-actions-orchestrator::velnor_orchestrator impl_neg_pipeline_p13::negative_discovery_member_malformed_fails_plan
+        PASS [   5.441s] ( 791/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_manifest::excluded_nested_workspace_uses_its_own_lock
+        PASS [   5.413s] ( 792/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_policy::mutant_pin_drift_fails
+        PASS [   4.734s] ( 793/1361) velnor-actions-orchestrator::velnor_orchestrator impl_bench_p13::bench_leaf_edit_minimal_set
+        PASS [   1.038s] ( 794/1361) velnor-actions-orchestrator::velnor_orchestrator impl_generate_p09_preview::success_leaves_no_lock_and_no_warnings
+        PASS [   5.402s] ( 795/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_upstream::probe_writes_nothing
+        PASS [   4.791s] ( 796/1361) velnor-actions-orchestrator::velnor_orchestrator impl_bench_p13::bench_real_dep_and_toolchain_change
+        PASS [   5.473s] ( 797/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_policy::policy_mirror_drift_fails
+        PASS [   0.691s] ( 798/1361) velnor-actions-orchestrator::velnor_orchestrator impl_matrix::tofu_root_jobs_honor_matrix_cap
+        PASS [   0.702s] ( 799/1361) velnor-actions-orchestrator::velnor_orchestrator impl_matrix::rust_jobs_ignore_matrix_cap
+        PASS [   5.515s] ( 800/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_policy::malformed_exception_fails
+        PASS [   5.586s] ( 801/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_policy::mutant_globs_reject_non_string_entries
+        PASS [   0.128s] ( 802/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2a::offline_deps_fail_closed_without_fetch
+        PASS [   5.658s] ( 803/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_policy::policy_runner_supported_rejects_non_string_and_duplicate_labels
+        PASS [   1.352s] ( 804/1361) velnor-actions-orchestrator::velnor_orchestrator impl_generate_p09_preview::preview_inside_repo_leaves_nothing
+        PASS [   1.048s] ( 805/1361) velnor-actions-orchestrator::velnor_orchestrator impl_local_shared_action::both_mode_generate_passes_actionlint_and_zizmor
+        PASS [   0.012s] ( 806/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2a::v1_registers_rust_and_tofu
+        PASS [   0.286s] ( 807/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2a::merge_consumes_no_publish_verbs
+        PASS [   0.096s] ( 808/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2a::v1_creates_no_generated_task_dirs
+        PASS [   0.015s] ( 809/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2b::baselines_expire_on_schedule
+        PASS [   0.013s] ( 810/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2b::broaden_paths_classify_global_and_outside
+        PASS [   0.016s] ( 811/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2b::dedupe_stage_reports_conflicts
+        PASS [   0.008s] ( 812/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2b::every_obligation_classifies_with_reason
+        PASS [   0.013s] ( 813/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2b::exact_base_run_filter_pins_provenance
+        PASS [   0.010s] ( 814/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2b::not_selected_reason_validates_iff_present
+        PASS [   0.014s] ( 815/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2b::offline_stderr_aborts_preparation
+        PASS [   0.010s] ( 816/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2b::omission_ledger_explains_every_skip
+        PASS [   0.011s] ( 817/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2b::plan_artifact_paths_reject_traversal
+        PASS [   0.086s] ( 818/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2a_prepare::plan_and_generate_share_one_prepare_path
+        PASS [   0.605s] ( 819/1361) velnor-actions-orchestrator::velnor_orchestrator impl_neg_pipeline_p13::negative_workflow_unwritable_dir_fails_generate
+        PASS [   0.010s] ( 820/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2c::extension_identity_tracks_lock_digest
+        PASS [   0.021s] ( 821/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2c::cache_paths_have_single_owners
+        PASS [   0.014s] ( 822/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2c::failed_tasks_never_save_results
+        PASS [   0.010s] ( 823/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2c::fanout_needs_measured_savings
+        PASS [   0.012s] ( 824/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2c::identity_extension_carries_no_tool_inputs
+        PASS [   0.238s] ( 825/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2a::suggestions_are_never_executed
+        PASS [   0.013s] ( 826/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2c::lanes_isolate_cargo_writers
+        PASS [   0.014s] ( 827/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2c::lookup_failures_are_distinct_from_current
+        PASS [   0.015s] ( 828/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2c::overlap_ratio_stays_descriptive
+        PASS [   0.014s] ( 829/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2c::partitions_cover_every_test_exactly_once
+        PASS [   0.008s] ( 830/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2c::platform_image_changes_invalidate_identity
+        PASS [   0.007s] ( 831/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2c::reuse_qualification_rejects_nondeterminism
+        PASS [   0.009s] ( 832/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2c::preview_dirs_are_unique_tmp_roots
+        PASS [   0.010s] ( 833/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2c::shared_lanes_get_exclusions
+        PASS [   0.013s] ( 834/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2c::sequential_reference_is_sorted_set
+        PASS [   0.011s] ( 835/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2c::timings_measure_slots_without_double_count
+        PASS [   4.721s] ( 836/1361) velnor-actions-orchestrator::velnor_orchestrator impl_config_internal::internal_merge_aggregates_reports
+        PASS [   4.744s] ( 837/1361) velnor-actions-orchestrator::velnor_orchestrator impl_config_internal::internal_plan_selects_affected_and_validates
+        PASS [   6.092s] ( 838/1361) velnor-actions-cli::velnor_cli impl_cli_protocol::dynamic_matrix_over_job_limit_preserves_response_but_publishes_nothing
+        PASS [   1.296s] ( 839/1361) velnor-actions-orchestrator::velnor_orchestrator impl_matrix::plan_crate_agreement
+        PASS [   0.478s] ( 840/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2a::orch_spawns_no_processes_and_confines_shell_wrappers
+        PASS [   0.481s] ( 841/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2a::reference_copies_neither_omissions_nor_retries
+        PASS [   4.863s] ( 842/1361) velnor-actions-orchestrator::velnor_orchestrator impl_cover_pipeline::mismatched_staged_baseline_fails_closed
+        PASS [   4.978s] ( 843/1361) velnor-actions-orchestrator::velnor_orchestrator impl_cover_pipeline::missing_staged_baseline_fails_closed
+        PASS [   6.661s] ( 844/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_policy::held_status_needs_a_covering_hold
+        PASS [   4.956s] ( 845/1361) velnor-actions-orchestrator::velnor_orchestrator impl_cover_pipeline::staged_baseline_assembles_and_merges_passed
+        PASS [   0.251s] ( 846/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2d::offline_dependency_aborts_plan
+        PASS [   4.986s] ( 847/1361) velnor-actions-orchestrator::velnor_orchestrator impl_cover_pipeline::tampered_staged_baseline_fails_closed
+        PASS [   0.041s] ( 848/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2d::shard_budgets_reject_at_plan_time
+        PASS [   7.718s] ( 849/1361) velnor-actions-orchestrator internal_plan::internal_plan_tests::envelope_binds_input_closure_digest
+        PASS [   8.448s] ( 850/1361) velnor-actions-cli::velnor_cli impl_repo_freshness::p12_property::property_generate_repeats_byte_identical
+        PASS [   0.020s] ( 851/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2e::committed_workflow_carries_generator_gates
+        PASS [   5.491s] ( 852/1361) velnor-actions-orchestrator::velnor_orchestrator impl_fmt_scope::virtual_workspace_fmt_has_unique_task_ids
+        PASS [   5.746s] ( 853/1361) velnor-actions-orchestrator::velnor_orchestrator impl_fmt_scope::root_package_fmt_has_unique_task_ids
+        PASS [   8.980s] ( 854/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_live::every_fail_row_is_nonzero
+        PASS [   5.740s] ( 855/1361) velnor-actions-orchestrator::velnor_orchestrator impl_gates_cover::merge_rejects_covered_claims_without_manifest
+        PASS [   0.773s] ( 856/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2e::authority_order_gates_pipeline
+        PASS [   9.053s] ( 857/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_policy_b::inventory_and_row_timestamps_reject_non_string_values
+        PASS [   9.044s] ( 858/1361) velnor-actions-cli::velnor_cli impl_repo_policy::p12_policy_b::present_non_array_exception_collections_fail_shape
+        PASS [   0.702s] ( 859/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2e::conflicting_tool_pins_recommend
+        PASS [   0.014s] ( 860/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2e::qualify_argv_runs_artifact_only_registered
+        PASS [   0.016s] ( 861/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2e::source_build_consumer_gate_registered
+        PASS [   4.990s] ( 862/1361) velnor-actions-orchestrator::velnor_orchestrator impl_generate_p09_preview::atomic_commit_never_exposes_missing_tree
+        PASS [   0.706s] ( 863/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2e::in_place_generate_preserves_config
+        PASS [   0.178s] ( 864/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2f::crate_boundaries_match_architecture_dependency_direction
+        PASS [   0.013s] ( 865/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2f::evasion_fixtures_are_all_flagged
+        PASS [   0.027s] ( 866/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2f::forbidden_token_table_is_exact
+        PASS [   0.723s] ( 867/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2e::lint_freshness_and_advisory_run_every_generate
+        PASS [   0.021s] ( 868/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2g::cli_carries_no_stack_flags
+        PASS [   5.692s] ( 869/1361) velnor-actions-orchestrator::velnor_orchestrator impl_gates_shard::archive_without_shard_proofs_never_passes
+        PASS [   5.714s] ( 870/1361) velnor-actions-orchestrator::velnor_orchestrator impl_gates_shard::duplicate_missing_and_tampered_shards_fail
+        PASS [   0.742s] ( 871/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2e::malformed_toolchain_recommends_without_writes
+        PASS [   0.135s] ( 872/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_features::partial_feature_subset_applies_intersection
+        PASS [   5.796s] ( 873/1361) velnor-actions-orchestrator::velnor_orchestrator impl_gates_shard::empty_partition_needs_inventory_proof
+        PASS [   0.229s] ( 874/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2f::orchestrator_src_passes_forbidden_table
+        PASS [   5.707s] ( 875/1361) velnor-actions-orchestrator::velnor_orchestrator impl_gates_shard_tokens::limits_reference_and_shard_failures_carry_miss_tokens
+        PASS [   0.157s] ( 876/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_features::config_features_intersect_per_crate
+        PASS [   0.010s] ( 877/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_gen2::orch_gen_plan_module_has_no_second_discovery
+        PASS [   0.023s] ( 878/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_gen2::orch_gen_no_direct_process_spawn_in_source
+        PASS [   0.135s] ( 879/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_features::testless_crate_omits_test_runners
+        PASS [   0.030s] ( 880/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_gen::orch_gen_config_gate_runs_before_discovery
+        PASS [   5.808s] ( 881/1361) velnor-actions-orchestrator::velnor_orchestrator impl_gates_shard::limits_and_reference_revalidate_at_merge
+        PASS [   0.143s] ( 882/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_features::unknown_config_feature_fails_closed_naming_crate
+        PASS [   0.798s] ( 883/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2e::missing_lock_recommends_without_refresh
+        PASS [   0.054s] ( 884/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_gen::orch_gen_invalid_config_preserves_existing_tree
+        PASS [   5.863s] ( 885/1361) velnor-actions-orchestrator::velnor_orchestrator impl_gates_shard::sharded_merge_passes_with_exact_proofs
+        PASS [   0.143s] ( 886/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_gen::orch_gen_candidate_qualify_is_artifact_only
+        PASS [   5.880s] ( 887/1361) velnor-actions-orchestrator::velnor_orchestrator impl_gates_shard::proven_no_target_shard_passes_without_tests
+        PASS [   0.041s] ( 888/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_gen::orch_gen_tool_snapshot_detects_drift
+        PASS [   0.194s] ( 889/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_gen::orch_gen_branch_resolution_touches_no_remote
+        PASS [   5.920s] ( 890/1361) velnor-actions-orchestrator::velnor_orchestrator impl_gates_shard_tokens::binding_failures_carry_miss_tokens
+        PASS [   0.240s] ( 891/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_gen::orch_gen_checked_plan_renders_and_discards
+        PASS [   0.171s] ( 892/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_install_sets::deny_install_is_audited
+        PASS [   0.166s] ( 893/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_install_sets::velnor_jobs_carry_trio_only_where_executed
+        PASS [   0.201s] ( 894/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_install_sets::every_emitted_install_argv_carries_no_config
+        PASS [   0.307s] ( 895/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_gen::orch_gen_plan_names_no_unregistered_stack
+        PASS [   0.152s] ( 896/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_intake::intake_default_budgets_are_conservative_and_reported
+        PASS [   5.670s] ( 897/1361) velnor-actions-orchestrator::velnor_orchestrator impl_git_paths_p10::added_member_manifest_narrows_without_broaden
+        PASS [   5.668s] ( 898/1361) velnor-actions-orchestrator::velnor_orchestrator impl_git_paths_p10::newline_filename_selects_owner_only
+        PASS [   0.171s] ( 899/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_intake::intake_detection_without_tool_files
+        PASS [   0.171s] ( 900/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_intake::intake_exclusions_apply_before_detection
+        PASS [   0.043s] ( 901/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_intake::intake_not_work_tree_records_calling_cwd
+        PASS [   5.728s] ( 902/1361) velnor-actions-orchestrator::velnor_orchestrator impl_git_paths_p10::trailing_space_filename_selects_owner_only
+        PASS [   0.037s] ( 903/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_intake::intake_symlinked_cwd_resolves_to_canonical_root
+        PASS [   1.226s] ( 904/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2e::workflow_steps_stay_sequential
+        PASS [   5.631s] ( 905/1361) velnor-actions-orchestrator::velnor_orchestrator impl_matrix::planned_entries_carry_leg_command_and_digest
+        PASS [   5.760s] ( 906/1361) velnor-actions-orchestrator::velnor_orchestrator impl_git_paths_p10::unicode_filename_selects_owner_only
+        PASS [   0.679s] ( 907/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_gate::generated_ci_gate_matches_needs_and_excludes_downstream
+        PASS [   0.009s] ( 908/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_intake_deps::intake_adapter_dependency_direction
+        PASS [   5.832s] ( 909/1361) velnor-actions-orchestrator::velnor_orchestrator impl_git_paths_p10::local_unicode_change_selects_owner_only
+        PASS [   0.197s] ( 910/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_intake::intake_malformed_manifest_fails_selected_or_ignored
+        PASS [   0.340s] ( 911/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_intake::intake_detection_order_is_deterministic
+        PASS [   0.585s] ( 912/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_gen::orch_gen_zero_candidate_repo_plans_no_work
+        PASS [   0.663s] ( 913/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_gen::orch_gen_plan_matches_generated_tree
+        PASS [   0.125s] ( 914/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_intake::intake_task_ids_are_valid_grammar_and_sorted
+        PASS [   0.090s] ( 915/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_lock_audit::corrupt_checksum_blocks_generate
+        PASS [   0.199s] ( 916/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_intake::intake_selected_detection_contributes_tasks
+        PASS [   5.868s] ( 917/1361) velnor-actions-orchestrator::velnor_orchestrator impl_git_paths_p10::untracked_non_utf8_broadens_with_explicit_tag
+        PASS [   5.928s] ( 918/1361) velnor-actions-orchestrator::velnor_orchestrator impl_git_paths_p10::local_staged_and_unstaged_union_selects
+        PASS [   0.752s] ( 919/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_gen::orch_gen_in_place_preserves_config_and_tool_files
+        PASS [   0.104s] ( 920/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_lock_audit::platform_hole_blocks_generate_with_remediation
+        PASS [   5.989s] ( 921/1361) velnor-actions-orchestrator::velnor_orchestrator impl_git_paths_p10::deleted_path_selects_owner_only
+        PASS [   0.813s] ( 922/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_gen::orch_gen_consumer_ignores_policy_mirror_and_lock
+        PASS [   0.212s] ( 923/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_intake::intake_unconfigured_suites_are_not_sharded
+        PASS [   5.767s] ( 924/1361) velnor-actions-orchestrator::velnor_orchestrator impl_merge::round_trip_passed_with_counts
+        PASS [   1.514s] ( 925/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2e::validator_commands_stay_velnor_only
+        PASS [   0.666s] ( 926/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_intake::intake_consumer_default_ignores_velnor_files
+        PASS [   5.851s] ( 927/1361) velnor-actions-orchestrator::velnor_orchestrator impl_merge::one_failed_crate_fails_required_with_counts
+        PASS [   6.062s] ( 928/1361) velnor-actions-orchestrator::velnor_orchestrator impl_git_paths_p10::non_utf8_path_broadens_explicitly
+        PASS [   6.056s] ( 929/1361) velnor-actions-orchestrator::velnor_orchestrator impl_git_paths_p10::whitespace_only_filename_not_dropped
+        PASS [   0.835s] ( 930/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_intake::intake_child_dir_invocation_writes_only_under_root
+        PASS [   0.591s] ( 931/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_intake::intake_generated_workflow_uses_crate_jobs_not_native_parallel
+        PASS [   5.802s] ( 932/1361) velnor-actions-orchestrator::velnor_orchestrator impl_merge_plan::uncovered_leg_carries_miss_token
+        PASS [   5.898s] ( 933/1361) velnor-actions-orchestrator::velnor_orchestrator impl_merge_plan::missing_plan_merges_to_planning_failed
+        PASS [   5.961s] ( 934/1361) velnor-actions-orchestrator::velnor_orchestrator impl_merge_plan::covered_claim_binds_numeric_artifact_id
+        PASS [   5.968s] ( 935/1361) velnor-actions-orchestrator::velnor_orchestrator impl_merge_plan::empty_diff_no_baseline_executes_all
+        PASS [   5.972s] ( 936/1361) velnor-actions-orchestrator::velnor_orchestrator impl_merge_plan::partial_hollow_plan_with_dropped_leg_fails_closed
+        PASS [   0.632s] ( 937/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_intake::intake_missing_tool_files_recommend_without_writes
+        PASS [   0.562s] ( 938/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_intake::intake_tool_changes_refresh_findings_not_tasks
+        PASS [   5.843s] ( 939/1361) velnor-actions-orchestrator::velnor_orchestrator impl_merge_trust::trust_mismatch_fails_closed_with_scope_token
+        PASS [   6.043s] ( 940/1361) velnor-actions-orchestrator::velnor_orchestrator impl_merge_plan::hollow_plan_with_zero_entries_fails_closed
+        PASS [   0.334s] ( 941/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_p08::c10_only_plan_saves_producer_successful_deltas
+        PASS [   6.189s] ( 942/1361) velnor-actions-orchestrator::velnor_orchestrator impl_merge::precedence_matrix
+        PASS [   0.636s] ( 943/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_intake::intake_tool_inputs_untouched_and_reported
+        PASS [   0.353s] ( 944/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_p08::c11_cache_saves_push_only_prs_and_forks_read_only
+        PASS [   5.934s] ( 945/1361) velnor-actions-orchestrator::velnor_orchestrator impl_merge_trust::plan_event_must_match_merge_time_actual_event
+        PASS [   0.620s] ( 946/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_lock_audit::hostile_config_ignored_by_isolated_installs
+        PASS [   6.116s] ( 947/1361) velnor-actions-orchestrator::velnor_orchestrator impl_merge_plan::revalidate_failures_carry_miss_tokens
+        PASS [   1.218s] ( 948/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_gen::orch_gen_preview_and_in_place_tree_hygiene
+        PASS [   0.362s] ( 949/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_p08::c2_builtin_mise_restore_with_elected_tools_saves
+        PASS [   6.088s] ( 950/1361) velnor-actions-orchestrator::velnor_orchestrator impl_merge_tamper::tampered_reports_rejected
+        PASS [   0.656s] ( 951/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_lock_audit::missing_lock_advises_and_generates
+        PASS [   0.690s] ( 952/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_lock_audit::drifted_lock_advises_without_blocking
+        PASS [   0.300s] ( 953/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_p08::c4_mbx_and_restore_precede_fetch_with_offline_skip
+        PASS [   0.198s] ( 954/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_release_emit::plan_lists_release_files_iff_enabled
+        PASS [   5.950s] ( 955/1361) velnor-actions-orchestrator::velnor_orchestrator impl_neg_pipeline_p13::negative_ir_tampered_plan_rejected
+        PASS [   6.491s] ( 956/1361) velnor-actions-orchestrator::velnor_orchestrator impl_git_paths_p10::renamed_path_selects_owner_only
+        PASS [   0.311s] ( 957/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_p08::c8_crate_jobs_install_validators_for_test_spawns
+        PASS [   5.930s] ( 958/1361) velnor-actions-orchestrator::velnor_orchestrator impl_neg_pipeline_p13::negative_reports_missing_leg_fails_required
+        PASS [   0.725s] ( 959/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_lock_audit::full_lock_leaves_only_rust_unverifiable
+        PASS [   0.127s] ( 960/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_release_emit::release_velnor_policy_rejects_enabled
+        PASS [   0.202s] ( 961/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_release_emit::release_disabled_emits_base_tree_only
+        PASS [  10.484s] ( 962/1361) velnor-actions-orchestrator::velnor_orchestrator impl_bench_p13::bench_warm_restore_second_plan
+        PASS [   6.183s] ( 963/1361) velnor-actions-orchestrator::velnor_orchestrator impl_merge_trust::candidate_attestation_must_bind_the_plan_head
+        PASS [   0.193s] ( 964/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_release_emit::release_requires_origin_identity
+        PASS [   5.998s] ( 965/1361) velnor-actions-orchestrator::velnor_orchestrator impl_neg_pipeline_p13::negative_required_failed_leg_reports_red
+        PASS [   0.189s] ( 966/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_release_emit::release_unknown_package_fails_closed
+        PASS [   0.456s] ( 967/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_p08::c3_sources_subset_at_owned_home_single_writer
+        PASS [   6.286s] ( 968/1361) velnor-actions-orchestrator::velnor_orchestrator impl_merge_plan::task_file_gaps_fail_closed
+        PASS [   0.202s] ( 969/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_release_emit::release_without_release_pr_validates_instead
+        PASS [   0.130s] ( 970/1361) velnor-actions-orchestrator::velnor_orchestrator impl_p06_detection::dot_mise_toml_labeled_correctly
+        PASS [   0.112s] ( 971/1361) velnor-actions-orchestrator::velnor_orchestrator impl_p06_detection::misleading_names_and_comments_not_evidence
+        PASS [   5.874s] ( 972/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_core::orch_core_plan_matrix_outputs_byte_identical
+        PASS [   0.349s] ( 973/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_release_emit::release_emission_is_byte_deterministic
+        PASS [   0.408s] ( 974/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_release_emit::release_bootstrap_mismatch_fails_closed
+        PASS [   5.891s] ( 975/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_core::orch_core_selected_packages_have_execute_obligations
+        PASS [   0.123s] ( 976/1361) velnor-actions-orchestrator::velnor_orchestrator impl_p06_detection::no_evidence_defaults_to_cargo
+        PASS [   0.110s] ( 977/1361) velnor-actions-orchestrator::velnor_orchestrator impl_p06_detection::root_pair_wrapper_conflict_fails
+        PASS [   5.982s] ( 978/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_core::orch_core_obligations_carry_valid_digests
+        PASS [   0.202s] ( 979/1361) velnor-actions-orchestrator::velnor_orchestrator impl_p06_detection::nested_workspace_detects_own_wrapper_and_config
+        PASS [   0.106s] ( 980/1361) velnor-actions-orchestrator::velnor_orchestrator impl_p06_detection::wrapper_only_detects_mbx
+        PASS [   0.633s] ( 981/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_p08::c7_cargo_only_uses_pinned_rust_cache_never_with_mbx
+        PASS [   6.163s] ( 982/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_broaden::cache_miss_never_fails_task
+        PASS [   0.114s] ( 983/1361) velnor-actions-orchestrator::velnor_orchestrator impl_p06_detection_malformed::valid_section_wrapper_selects_mbx
+        PASS [   0.123s] ( 984/1361) velnor-actions-orchestrator::velnor_orchestrator impl_p06_detection_malformed::malformed_nextest_config_fails_closed
+        PASS [   6.075s] ( 985/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_broaden::shard_aggregation_rejects_mismatch_extra_and_unproven
+        PASS [   0.251s] ( 986/1361) velnor-actions-orchestrator::velnor_orchestrator impl_p06_detection::nextest_config_selects_ci_or_default
+        PASS [   0.083s] ( 987/1361) velnor-actions-orchestrator::velnor_orchestrator impl_perf_p13::malformed_manifest_still_fails_plan
+        PASS [  10.839s] ( 988/1361) velnor-actions-orchestrator::velnor_orchestrator impl_bench_p13::bench_public_api_edit_reverse_deps
+        PASS [   0.100s] ( 989/1361) velnor-actions-orchestrator::velnor_orchestrator impl_perf_p13::member_metadata_parses_to_same_record
+        PASS [   0.215s] ( 990/1361) velnor-actions-orchestrator::velnor_orchestrator impl_p06_detection::single_axis_override_without_duplication
+        PASS [   6.305s] ( 991/1361) velnor-actions-orchestrator::velnor_orchestrator impl_neg_pipeline_p13::pipeline_positive_control_all_green
+        PASS [   6.093s] ( 992/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2a::nonzero_retries_rejected_while_retry_state_absent
+        PASS [   0.054s] ( 993/1361) velnor-actions-orchestrator::velnor_orchestrator impl_plan_parity::parity_no_work_repo
+        PASS [   0.114s] ( 994/1361) velnor-actions-orchestrator::velnor_orchestrator impl_permissions_scope::consumer_workflow_scopes_actions_read_to_required
+        PASS [   0.107s] ( 995/1361) velnor-actions-orchestrator::velnor_orchestrator impl_plan_migration::orch_gen_plan_surfaces_required_check_migration
+        PASS [   0.169s] ( 996/1361) velnor-actions-orchestrator::velnor_orchestrator impl_perf_p13::nested_cross_workspace_path_dep_skips_not_fails
+        PASS [   6.747s] ( 997/1361) velnor-actions-orchestrator::velnor_orchestrator impl_merge_plan::agreement_failures_carry_miss_tokens
+        PASS [   0.058s] ( 998/1361) velnor-actions-orchestrator::velnor_orchestrator impl_plan_parity::parity_pure_tofu
+        PASS [   0.140s] ( 999/1361) velnor-actions-orchestrator::velnor_orchestrator impl_permissions_scope::repository_workflow_scopes_actions_read_to_plan_and_required
+        PASS [   0.010s] (1000/1361) velnor-actions-orchestrator::velnor_orchestrator impl_prepare_generate::cold_registry_stderr_classifies_incomplete
+        PASS [   0.661s] (1001/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_release_emit::release_bootstrap_mode_adds_token_job
+        PASS [   0.582s] (1002/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_timeout::generated_ci_bounds_every_job_per_kind
+        PASS [   6.174s] (1003/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_core::orch_core_universe_packages_carry_reasons
+        PASS [   0.129s] (1004/1361) velnor-actions-orchestrator::velnor_orchestrator impl_plan_parity::parity_consumer_lockless
+        PASS [   0.654s] (1005/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_release_emit::release_enabled_emits_family_oidc
+        PASS [   0.333s] (1006/1361) velnor-actions-orchestrator::velnor_orchestrator impl_p06_detection_malformed::malformed_mise_wrapper_fails_closed
+        PASS [   0.167s] (1007/1361) velnor-actions-orchestrator::velnor_orchestrator impl_plan_parity::parity_consumer_lockful
+        PASS [   0.110s] (1008/1361) velnor-actions-orchestrator::velnor_orchestrator impl_plan_prepare::consumer_plan_installs_validators_before_check_generated
+        PASS [   0.135s] (1009/1361) velnor-actions-orchestrator::velnor_orchestrator impl_plan_parity::parity_velnor_policy_lists_validators
+        PASS [   0.028s] (1010/1361) velnor-actions-orchestrator::velnor_orchestrator impl_preseed_manifest::fresh_binary_manifest_passes_shell_verifier
+        PASS [   5.796s] (1011/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2d::adapter_metadata_forwards_adapter_value
+        PASS [   0.011s] (1012/1361) velnor-actions-orchestrator::velnor_orchestrator impl_protocol::merge_assembly_nulls_missing_plan_to_planning_failed
+        PASS [   0.010s] (1013/1361) velnor-actions-orchestrator::velnor_orchestrator impl_protocol::merge_verdict_mapping
+        PASS [   0.126s] (1014/1361) velnor-actions-orchestrator::velnor_orchestrator impl_plan_prepare::preseed_plan_installs_before_build_and_check_generated
+        PASS [   0.157s] (1015/1361) velnor-actions-orchestrator::velnor_orchestrator impl_plan_prepare::mbx_evidence_keeps_plan_mise_free_and_uses_task_action
+        PASS [   6.337s] (1016/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_broaden::untracked_files_broaden
+        PASS [   0.009s] (1017/1361) velnor-actions-orchestrator::velnor_orchestrator impl_protocol::response_sibling_derivation
+        PASS [   5.826s] (1018/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2d::entry_cache_ids_recorded_per_lane
+        PASS [   0.008s] (1019/1361) velnor-actions-orchestrator::velnor_orchestrator impl_protocol::write_request_captures_repository_capability
+        PASS [   0.014s] (1020/1361) velnor-actions-orchestrator::velnor_orchestrator impl_protocol::write_request_materializes_merge_group
+        PASS [   0.014s] (1021/1361) velnor-actions-orchestrator::velnor_orchestrator impl_protocol::write_request_materializes_pull_request
+        PASS [   0.173s] (1022/1361) velnor-actions-orchestrator::velnor_orchestrator impl_plan_prepare::plan_fetch_check_and_plan_share_one_cargo_home
+        PASS [   0.119s] (1023/1361) velnor-actions-orchestrator::velnor_orchestrator impl_prepare_generate::plan_job_omits_fetch_without_lockfile
+        PASS [   5.923s] (1024/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2b::sequential_reference_merges_clean
+        PASS [   0.018s] (1025/1361) velnor-actions-orchestrator::velnor_orchestrator impl_protocol::write_request_materializes_push_without_base
+        PASS [   0.009s] (1026/1361) velnor-actions-orchestrator::velnor_orchestrator impl_protocol::write_request_pins_parents_to_the_anchor
+        PASS [   0.136s] (1027/1361) velnor-actions-orchestrator::velnor_orchestrator impl_prepare_generate::plan_job_fetches_lockful_sources_before_generate_consumers
+        PASS [   0.012s] (1028/1361) velnor-actions-orchestrator::velnor_orchestrator impl_protocol::write_request_rejects_bad_inputs
+        PASS [   0.009s] (1029/1361) velnor-actions-orchestrator::velnor_orchestrator impl_protocol_render::render_gate_roundtrip_accepts_plan
+        PASS [   0.015s] (1030/1361) velnor-actions-orchestrator::velnor_orchestrator impl_protocol_fork::write_request_fails_closed_without_a_fork_flag
+        PASS [   0.013s] (1031/1361) velnor-actions-orchestrator::velnor_orchestrator impl_protocol_fork::write_request_routes_fork_pull_requests_to_fork
+        PASS [   0.012s] (1032/1361) velnor-actions-orchestrator::velnor_orchestrator impl_protocol_render_gate::render_gate_roundtrip_accepts_plan
+        PASS [   0.030s] (1033/1361) velnor-actions-orchestrator::velnor_orchestrator impl_protocol_fork::write_request_rejects_comment_triggers
+        PASS [   0.139s] (1034/1361) velnor-actions-orchestrator::velnor_orchestrator impl_prepare_generate::prepare_plan_text_is_deterministic_and_write_free
+        PASS [   0.161s] (1035/1361) velnor-actions-orchestrator::velnor_orchestrator impl_prepare_generate::prepare_lockless_with_deps_writes_nothing
+        PASS [   6.071s] (1036/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2b::not_selected_tasks_fold_to_blocked
+        PASS [   0.265s] (1037/1361) velnor-actions-orchestrator::velnor_orchestrator impl_prepare_generate::nested_lockful_workspace_gets_named_fetch
+        PASS [   6.027s] (1038/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2d::cache_miss_cannot_fail_merge
+        PASS [  11.356s] (1039/1361) velnor-actions-orchestrator::velnor_orchestrator impl_bench_p13::bench_unchanged_repeat_identical
+        PASS [   0.582s] (1040/1361) velnor-actions-orchestrator::velnor_orchestrator impl_perf_p13::prepare_scales_to_100_crates
+        PASS [   5.963s] (1041/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2d::missing_base_broadens_with_warning
+        PASS [   6.052s] (1042/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2d::merge_without_reports_is_not_run
+        PASS [   0.566s] (1043/1361) velnor-actions-orchestrator::velnor_orchestrator impl_prepare_generate::ignored_rust_plans_no_work
+        PASS [   0.704s] (1044/1361) velnor-actions-orchestrator::velnor_orchestrator impl_prepare_generate::atomic_replace_failure_preserves_old_tree
+        PASS [   1.108s] (1045/1361) velnor-actions-orchestrator::velnor_orchestrator impl_prepare_generate::generated_workflow_has_always_on_lint_job
+        PASS [   1.139s] (1046/1361) velnor-actions-orchestrator::velnor_orchestrator impl_prepare_generate::generate_preview_matches_in_place_and_preserves_repo
+        PASS [   6.002s] (1047/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2d::test_only_changes_still_propagate
+        PASS [   0.105s] (1048/1361) velnor-actions-orchestrator::velnor_orchestrator impl_schema2_mbx_qualification::protected_main_mbx_roundtrip_is_run_bound_and_read_only_on_restore
+        PASS [   5.996s] (1049/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2d::undetected_stacks_plan_no_work
+        PASS [   0.008s] (1050/1361) velnor-actions-orchestrator::velnor_orchestrator impl_schema2_routing::committed_release_files_match_schema2_bytes
+        PASS [   0.166s] (1051/1361) velnor-actions-orchestrator::velnor_orchestrator impl_schema2_mbx_qualification::reader_probes_fail_when_stats_producer_fails_after_valid_json
+        PASS [   0.131s] (1052/1361) velnor-actions-orchestrator::velnor_orchestrator impl_schema2_routing::dispatch_mode_overrides_configured_mode
+        PASS [   0.238s] (1053/1361) velnor-actions-orchestrator::velnor_orchestrator impl_schema2_routing::both_mode_splits_verification_and_keeps_release_hosted
+        PASS [   0.125s] (1054/1361) velnor-actions-orchestrator::velnor_orchestrator impl_schema2_routing::migrate_preview_is_write_and_stays_hosted
+        PASS [   0.008s] (1055/1361) velnor-actions-orchestrator::velnor_orchestrator impl_schema2_routing::shell_tests::tool_lines_ignores_defaults_but_detects_step_differences
+        PASS [   0.139s] (1056/1361) velnor-actions-orchestrator::velnor_orchestrator impl_schema2_routing::schema1_omits_scale_set_selector
+        PASS [   0.138s] (1057/1361) velnor-actions-orchestrator::velnor_orchestrator impl_schema2_routing::schema2_workflows_match_expected_bytes
+        PASS [   0.134s] (1058/1361) velnor-actions-orchestrator::velnor_orchestrator impl_schema2_verification_tasks::macos_task_cannot_select_the_linux_scale_set_profile
+        PASS [   0.412s] (1059/1361) velnor-actions-orchestrator::velnor_orchestrator impl_schema2_verification_tasks::verification_tasks_follow_eligible_lanes_and_stay_required
+        PASS [   2.313s] (1060/1361) velnor-actions-orchestrator::velnor_orchestrator impl_p06_detection::repeated_generation_stable
+        PASS [  10.329s] (1061/1361) velnor-actions-orchestrator::velnor_orchestrator impl_gen_gates::matrix_budget_enforced_never_truncated
+        PASS [   5.914s] (1062/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2e::plan_files_publish_locally_only
+        PASS [   3.396s] (1063/1361) velnor-actions-orchestrator::velnor_orchestrator impl_prepare_generate::preview_refuses_unsafe_destinations
+        PASS [  11.951s] (1064/1361) velnor-actions-orchestrator::velnor_orchestrator impl_gates_cover::wrong_base_manifest_schedules_everything
+        PASS [   6.405s] (1065/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2e::plan_json_matches_github_outputs
+        PASS [  11.949s] (1066/1361) velnor-actions-orchestrator::velnor_orchestrator impl_gates_cover_repository::explicit_conflicting_repository_executes
+        PASS [  12.270s] (1067/1361) velnor-actions-orchestrator::velnor_orchestrator impl_gates_cover::tampered_task_entry_executes_with_miss_warning
+        PASS [  12.019s] (1068/1361) velnor-actions-orchestrator::velnor_orchestrator impl_gates_cover_repository::explicit_matching_repository_covers
+        PASS [  12.406s] (1069/1361) velnor-actions-orchestrator::velnor_orchestrator impl_gates_cover::pr_plan_records_publish_forbidden
+        PASS [   6.835s] (1070/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2e::plan_and_workflow_ids_agree
+        PASS [  12.477s] (1071/1361) velnor-actions-orchestrator::velnor_orchestrator impl_gates_cover::valid_manifest_covers_exact_obligations
+        PASS [   4.918s] (1072/1361) velnor-actions-orchestrator::velnor_orchestrator impl_perf_p13::generate_scales_to_workflow_file_limit_then_fails_closed
+        PASS [   5.879s] (1073/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_merge::orch_core_merge_counts_cover_five_states
+        PASS [   5.968s] (1074/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_merge::orch_core_entries_emit_single_only
+        PASS [   6.056s] (1075/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_merge::orch_core_all_covered_merges_passed
+        PASS [   6.104s] (1076/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_merge::obligation_universe_matches_independent_oracle
+        PASS [   5.972s] (1077/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_merge_final::orch_core_final_report_carries_no_cache_inputs
+        PASS [   6.137s] (1078/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_merge::staged_symlinks_and_oversize_reports_reject
+        PASS [   6.133s] (1079/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_merge_final::orch_core_adapter_metadata_round_trips
+        PASS [   0.012s] (1080/1361) velnor-actions-orchestrator::velnor_orchestrator impl_strict_envelope::plan_envelope_rejects_duplicate_keys
+        PASS [   0.022s] (1081/1361) velnor-actions-orchestrator::velnor_orchestrator impl_strict_envelope::merge_envelope_rejects_duplicate_keys
+        PASS [   6.329s] (1082/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_merge::orch_core_covered_claim_binds_original_proof_run
+        PASS [   6.219s] (1083/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_merge_final::orch_core_final_counts_cover_nine_slots
+        PASS [   0.163s] (1084/1361) velnor-actions-orchestrator::velnor_orchestrator impl_task_source_prep::crate_job_omits_fetch_without_lockfile
+        PASS [   0.046s] (1085/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t09::bad_root_spelling_rejected_at_load
+        PASS [   6.082s] (1086/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_plansel::rename_within_package_marks_owner_affected
+        PASS [   0.230s] (1087/1361) velnor-actions-orchestrator::velnor_orchestrator impl_task_source_prep::crate_job_fetches_lockful_sources_before_obligations
+        PASS [   5.920s] (1088/1361) velnor-actions-orchestrator::velnor_orchestrator impl_p03_identity::lanes_follow_responsibility
+        PASS [   0.047s] (1089/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t09::configured_root_without_config_errors_naming_the_root
+        PASS [   0.058s] (1090/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t09::clean_repo_plan_has_no_tofu_line
+        PASS [   6.570s] (1091/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_merge::blocked_tasks_resolve_below_cancelled
+        PASS [   0.043s] (1092/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t09::dialect_conflict_errors
+        PASS [   6.484s] (1093/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_merge::orch_core_plan_retains_all_package_tasks
+        PASS [   0.064s] (1094/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t09::configured_roots_convert_to_selected_projects
+        PASS [   0.039s] (1095/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t09::duplicate_declaration_root_errors
+        PASS [   0.245s] (1096/1361) velnor-actions-orchestrator::velnor_orchestrator impl_task_source_prep::mbx_objects_precede_fetch_on_mbx_crates
+        PASS [   0.048s] (1097/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t09::e4_content_advises_strong_without_table
+        PASS [   0.054s] (1098/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t09::ignore_suppresses_configured_table
+        PASS [   0.034s] (1099/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t09::missing_roots_rejected
+        PASS [   0.239s] (1100/1361) velnor-actions-orchestrator::velnor_orchestrator impl_task_source_prep::rendered_crate_fetch_precedes_obligations_with_toolchain_triple
+        PASS [   0.058s] (1101/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t09::malformed_root_errors_naming_the_file
+        PASS [   0.066s] (1102/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t09::json_root_converts
+        PASS [   0.067s] (1103/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t09::ignore_suppresses_conflict
+        PASS [   0.052s] (1104/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t09::mise_opentofu_advises_strong
+        PASS [   0.056s] (1105/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t09::multiroot_converts_with_sorted_plan_line
+        PASS [   0.059s] (1106/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t09::shadowed_garbage_passes_conversion
+        PASS [   0.049s] (1107/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t09::strong_file_evidence_advises_in_plan
+        PASS [   0.052s] (1108/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t09::terraform_only_pin_conflicts_with_strong_spelling
+        PASS [   0.040s] (1109/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t09::unknown_tofu_keys_rejected
+        PASS [   0.047s] (1110/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t09::terraform_only_repo_stays_silent
+        PASS [   0.050s] (1111/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t09::unknown_block_root_errors
+        PASS [   0.052s] (1112/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t09::weak_evidence_advises_in_plan
+        PASS [   0.061s] (1113/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t11::diamond_and_remote_convert
+        PASS [   0.048s] (1114/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t11::module_cycle_fails_prepare
+        PASS [   0.053s] (1115/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t11::missing_module_target_fails_prepare
+        PASS [   0.057s] (1116/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t11::escaping_module_source_fails_prepare
+        PASS [  12.513s] (1117/1361) velnor-actions-orchestrator::velnor_orchestrator impl_matrix::ignored_rust_merges_to_no_work_never_passes
+        PASS [  11.917s] (1118/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_broaden::generator_and_workflow_changes_broaden
+        PASS [   0.092s] (1119/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t14::tofu_absent_table_means_no_tofu_diagnostics
+        PASS [   0.095s] (1120/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t14::tofu_corrupt_lock_surfaces_a_recommendation
+        PASS [   0.119s] (1121/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t14::tofu_committed_lock_on_provider_root_plans
+        PASS [   0.138s] (1122/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t14::tofu_bare_root_without_lock_stays_silent
+        PASS [   0.041s] (1123/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t14::tofu_missing_lock_on_provider_root_fails_planning
+        PASS [   0.131s] (1124/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t14::tofu_discovery_keeps_locks_and_workdirs_clean
+        PASS [   0.081s] (1125/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t14::tofu_ignored_stack_means_no_tofu_diagnostics
+        PASS [   6.858s] (1126/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_merge::orch_core_status_tokens_stay_distinct
+        PASS [   0.111s] (1127/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t14::tofu_plan_keeps_locks_and_workdirs_clean
+        PASS [   0.110s] (1128/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t14::tofu_stale_lock_surfaces_a_recommendation
+        PASS [   6.288s] (1129/1361) velnor-actions-orchestrator::velnor_orchestrator impl_p04_reuse::sharded_plan_binds_archive_content_and_executes
+        PASS [   6.382s] (1130/1361) velnor-actions-orchestrator::velnor_orchestrator impl_p03_identity::generator_identity_has_no_zero_digest
+        PASS [   0.112s] (1131/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t14::tofu_version_aligned_with_mise_pin_stays_silent
+        PASS [   0.133s] (1132/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t14::tofu_version_excluding_mise_pin_surfaces_a_recommendation
+        PASS [   0.061s] (1133/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t18::init_runs_once_per_root
+        PASS [   0.073s] (1134/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t17::pure_tofu_repo_drops_all_rust_setup
+        PASS [   0.060s] (1135/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t18::nested_roots_format_once_at_outer_scope
+        PASS [   0.144s] (1136/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t17::mixed_repo_plan_carries_union_with_pure_tofu_group
+        PASS [   0.068s] (1137/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t18::one_job_per_validation_root_with_ordered_steps
+        PASS [   5.803s] (1138/1361) velnor-actions-orchestrator::velnor_orchestrator impl_protocol::publish_plan_files_writes_artifact_pair
+        PASS [   0.085s] (1139/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t18::root_jobs_render_capped_strategy_without_markers
+        PASS [   0.069s] (1140/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t18::root_jobs_stage_needs_by_max_parallel
+        PASS [   0.059s] (1141/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t18::staged_root_jobs_carry_always_while_first_lane_stays_default
+        PASS [   0.056s] (1142/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t19::plan_counts_tofu_roots_on_their_own_line
+        PASS [   0.062s] (1143/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t19::plan_job_carries_no_tofu_format_scope
+        PASS [   0.214s] (1144/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t18::restore_precedes_init_precedes_validate
+        PASS [   6.334s] (1145/1361) velnor-actions-orchestrator::velnor_orchestrator impl_perf_p13::detection_preserved_for_nested_and_independent
+        PASS [   5.919s] (1146/1361) velnor-actions-orchestrator::velnor_orchestrator impl_required_evidence::checkout_mismatch_rejects_plan
+        PASS [   0.056s] (1147/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t20::required_needs_span_plan_tofu_and_lint
+        PASS [   5.958s] (1148/1361) velnor-actions-orchestrator::velnor_orchestrator impl_required_evidence::missing_report_file_fails_closed
+        PASS [   0.081s] (1149/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t20::repo_root_tofu_job_names_the_dot_root
+        PASS [   0.072s] (1150/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t20::tofu_display_lines_carry_no_expressions
+        PASS [   6.009s] (1151/1361) velnor-actions-orchestrator::velnor_orchestrator impl_required_evidence::duplicate_matrix_reports_partition_to_not_run
+        PASS [  12.437s] (1152/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_broaden::lookup_without_repo_scope_misses_before_spawn
+        PASS [   0.080s] (1153/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t20::tofu_root_jobs_carry_opentofu_display_names
+        PASS [   0.071s] (1154/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t20::tofu_steps_are_single_line_scalars_without_setup_action
+        PASS [   0.043s] (1155/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t21::finalized_tofu_jobs_save_exactly_their_restored_key
+        PASS [   6.088s] (1156/1361) velnor-actions-orchestrator::velnor_orchestrator impl_required_evidence::leaf_edit_verifies_unproven_peers
+        PASS [   0.143s] (1157/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t20::tofu_triggers_and_concurrency_match_rust_byte_for_byte
+        PASS [   6.145s] (1158/1361) velnor-actions-orchestrator::velnor_orchestrator impl_required_evidence::candidate_evidence_is_its_needs_conclusion
+        PASS [   5.887s] (1159/1361) velnor-actions-orchestrator::velnor_orchestrator impl_required_reports::shape_malformed_report_diagnoses_planning_failed
+        PASS [  12.552s] (1160/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_broaden::toolfile_edits_leave_universe_unproven
+        PASS [  11.945s] (1161/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2d::global_config_changes_broaden_explicitly
+        PASS [   6.110s] (1162/1361) velnor-actions-orchestrator::velnor_orchestrator impl_required_evidence::validator_states_fold_per_validator
+        PASS [   0.041s] (1163/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t22::missing_lock_fails_planning_before_provider_transport_renders
+        PASS [   0.011s] (1164/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t22::never_archive_mirrors_stay_equal_across_crates
+        PASS [   6.275s] (1165/1361) velnor-actions-orchestrator::velnor_orchestrator impl_protocol::plan_outputs_agree_with_plan_matrix
+        PASS [   0.106s] (1166/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t22::corrupt_lock_diagnoses_while_provider_transport_renders
+        PASS [   6.134s] (1167/1361) velnor-actions-orchestrator::velnor_orchestrator impl_required_reports::shape_malformed_attestation_diagnoses_planning_failed
+        PASS [   0.116s] (1168/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t22::finalized_tofu_jobs_order_restore_before_work_before_save
+        PASS [   0.760s] (1169/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t14::tofu_generate_keeps_locks_clean
+        PASS [   6.372s] (1170/1361) velnor-actions-orchestrator::velnor_orchestrator impl_protocol::merge_assembled_request_roundtrips_to_passed
+        PASS [   6.302s] (1171/1361) velnor-actions-orchestrator::velnor_orchestrator impl_required_evidence::empty_required_inventory_fails_closed
+        PASS [   6.357s] (1172/1361) velnor-actions-orchestrator::velnor_orchestrator impl_protocol::plan_outputs_encode_covered_tasks
+        PASS [   0.099s] (1173/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t22::stale_lock_diagnoses_while_provider_transport_renders
+        PASS [   6.290s] (1174/1361) velnor-actions-orchestrator::velnor_orchestrator impl_required_evidence::plan_reuse_decisions_rejected_without_proof
+        PASS [   0.106s] (1175/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t22::version_excluding_toolchain_diagnoses_while_provider_transport_renders
+        PASS [   0.008s] (1176/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t24_gates2::gate5_cache_hit_never_replaces_validate
+        PASS [   6.169s] (1177/1361) velnor-actions-orchestrator::velnor_orchestrator impl_required_reports::shape_malformed_baseline_diagnoses_planning_failed
+        PASS [   6.193s] (1178/1361) velnor-actions-orchestrator::velnor_orchestrator impl_required_reports::shape_malformed_task_file_diagnoses_planning_failed
+        PASS [   6.205s] (1179/1361) velnor-actions-orchestrator::velnor_orchestrator impl_required_reports::unparsable_report_carries_to_verdict
+        PASS [   0.180s] (1180/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t24_gates2::gate6_limits_bound_fanout_and_subprocess_budgets
+        PASS [   0.056s] (1181/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t24_gates::gate1_pure_tofu_installs_no_rust_toolchain
+        PASS [   0.056s] (1182/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t24_gates::gate4_init_once_fmt_once_no_duplicate_uploads
+        PASS [   0.081s] (1183/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t24_gates::gate3_single_index_single_traversal_bounded_walks
+        PASS [  11.733s] (1184/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2d::plans_are_byte_deterministic
+        PASS [   5.838s] (1185/1361) velnor-actions-orchestrator::velnor_orchestrator impl_required_validators::rendered_inventory_validator_failure_fails_without_work
+        PASS [  12.560s] (1186/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2d::generator_mismatch_executes_with_reason
+        PASS [   0.074s] (1187/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t25::file_cache_constructions_are_hoisted_per_phase
+        PASS [   0.058s] (1188/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t25::plan_artifact_downloads_exactly_once_per_job
+        PASS [  12.012s] (1189/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2d::plan_digests_combine_deterministically
+        PASS [   7.314s] (1190/1361) velnor-actions-orchestrator::velnor_orchestrator impl_perf_p13::full_44_crate_matrix_fits_artifact_and_job_output_budgets
+        PASS [   6.869s] (1191/1361) velnor-actions-orchestrator::velnor_orchestrator impl_required_evidence::validator_results_must_match_inventory_exactly
+        PASS [   0.059s] (1192/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t27_render::tofu_provider_backed_root_without_lock_fails_planning
+        PASS [   0.117s] (1193/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t27_render::tofu_config_rejects_raw_yaml_keys
+        PASS [   0.363s] (1194/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t24_scale::tofu_prepare_scales_to_100_roots
+        PASS [   0.998s] (1195/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t20_stable::tofu_generate_is_fixed_point_and_validated
+        PASS [   0.064s] (1196/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t27_render::tofu_rendered_steps_carry_no_custom_shell
+        PASS [   1.063s] (1197/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t20_stable::tofu_plan_and_generate_leave_every_byte
+        PASS [   1.125s] (1198/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t20_stable::tofu_cross_checkout_determinism
+        PASS [   7.714s] (1199/1361) velnor-actions-orchestrator::velnor_orchestrator impl_perf_p13::plan_100_crates_reports_matrix_budget
+        PASS [  12.744s] (1200/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2d::obligations_carry_internal_reasons
+        PASS [   7.353s] (1201/1361) velnor-actions-orchestrator::velnor_orchestrator impl_required_validators::rendered_inventory_validator_failure_fails_required
+        PASS [   6.328s] (1202/1361) velnor-actions-orchestrator::velnor_orchestrator impl_select::md_in_package_selects_narrowly
+        PASS [   6.630s] (1203/1361) velnor-actions-orchestrator::velnor_orchestrator impl_select::cargo_lock_change_selects_all
+        PASS [   7.832s] (1204/1361) velnor-actions-orchestrator::velnor_orchestrator impl_required_validators::rendered_inventory_each_validator_fails_required
+        PASS [   8.058s] (1205/1361) velnor-actions-orchestrator::velnor_orchestrator impl_required_validators::rendered_inventory_all_success_passes_required
+        PASS [   6.891s] (1206/1361) velnor-actions-orchestrator::velnor_orchestrator impl_select::narrow_change_keeps_universe_with_reasons
+        PASS [  17.282s] (1207/1361) velnor-actions-orchestrator::velnor_orchestrator impl_gates_cover::merge_group_classifies_like_pull_request
+        PASS [   6.226s] (1208/1361) velnor-actions-orchestrator::velnor_orchestrator impl_select::nested_change_stays_narrow_with_root_package
+        PASS [   0.125s] (1209/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t32_negatives::t32_malformed_tf_fails_plan_closed_with_cause
+        PASS [  10.373s] (1210/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_merge::orch_core_matrix_budget_guides_broaden_or_reduce
+        PASS [   6.283s] (1211/1361) velnor-actions-orchestrator::velnor_orchestrator impl_select::root_config_change_selects_all
+        PASS [   0.009s] (1212/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tool_snapshot::snapshot_missing_files_stay_missing
+        PASS [   0.010s] (1213/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tool_snapshot::snapshot_tracks_mise_version_and_lock_files
+        PASS [   0.009s] (1214/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tool_snapshot::snapshot_unreadable_version_file_fails_closed
+        PASS [  21.503s] (1215/1361) velnor-actions-cli::velnor_cli impl_cli_parity_golden::parity_artifacts_match_goldens
+        PASS [   6.383s] (1216/1361) velnor-actions-orchestrator::velnor_orchestrator impl_select::root_package_does_not_mask_unclassified_files
+        PASS [   6.028s] (1217/1361) velnor-actions-orchestrator::velnor_orchestrator impl_select_base::build_only_edge_selects_consumer
+        PASS [   6.302s] (1218/1361) velnor-actions-orchestrator::velnor_orchestrator impl_select::unclassified_file_still_selects_all
+        PASS [   0.077s] (1219/1361) velnor-actions-orchestrator::velnor_orchestrator impl_trust::plan_rejects_claimed_generator_identity
+        PASS [   6.400s] (1220/1361) velnor-actions-orchestrator::velnor_orchestrator impl_select_base::corrupt_base_manifest_tags_comparison_unavailable
+        PASS [   6.372s] (1221/1361) velnor-actions-orchestrator::velnor_orchestrator impl_select_base::dev_only_edge_selects_consumer
+        PASS [   6.487s] (1222/1361) velnor-actions-orchestrator::velnor_orchestrator impl_select_base::merge_checkout_accepts_head2_for_pr
+        PASS [   0.010s] (1223/1361) velnor-actions-orchestrator::velnor_orchestrator impl_trust_identity::trust_probe_identity_inner
+        PASS [   0.012s] (1224/1361) velnor-actions-orchestrator::velnor_orchestrator impl_validators::git_args_reject_non_utf8_and_other_verbs
+        PASS [   6.216s] (1225/1361) velnor-actions-orchestrator::velnor_orchestrator impl_select_base::optional_edge_selects_consumer
+        PASS [   0.014s] (1226/1361) velnor-actions-orchestrator::velnor_orchestrator impl_validators::git_diff_accepts_deleted_call_shape
+        PASS [   0.015s] (1227/1361) velnor-actions-orchestrator::velnor_orchestrator impl_validators::git_diff_accepts_selection_call_shapes
+        PASS [   0.013s] (1228/1361) velnor-actions-orchestrator::velnor_orchestrator impl_validators::git_diff_rejects_injection
+        PASS [   0.008s] (1229/1361) velnor-actions-orchestrator::velnor_orchestrator impl_validators::git_diff_rev_accepts_short_sha_for_selection
+        PASS [   0.008s] (1230/1361) velnor-actions-orchestrator::velnor_orchestrator impl_validators::git_select_args_accept_short_sha_and_reject_injection
+        PASS [   0.015s] (1231/1361) velnor-actions-orchestrator::velnor_orchestrator impl_validators::git_rev_accepts_full_sha_only
+        PASS [   0.007s] (1232/1361) velnor-actions-orchestrator::velnor_orchestrator impl_validators::git_show_accepts_batch_call_shape
+        PASS [  11.650s] (1233/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_merge::orch_core_plan_is_deterministic
+        PASS [   0.010s] (1234/1361) velnor-actions-orchestrator::velnor_orchestrator impl_validators_repo::cache_action_transport_never_carries_mbx
+        PASS [   0.017s] (1235/1361) velnor-actions-orchestrator::velnor_orchestrator impl_validators::git_show_rejects_injection
+        PASS [   0.017s] (1236/1361) velnor-actions-orchestrator::velnor_orchestrator impl_validators_repo::mbx_transport_stays_with_mr_boxington_action
+        PASS [   0.016s] (1237/1361) velnor-actions-orchestrator::velnor_orchestrator impl_validators_repo::velnor_sources_transport_rejects_mbx_paths
+        PASS [   0.034s] (1238/1361) velnor-actions-orchestrator::velnor_orchestrator impl_validators_repo::repo_config_sample_covers_schema_keys
+        PASS [  21.697s] (1239/1361) velnor-actions-orchestrator internal_plan::internal_plan_tests::envelope_binds_platform_toolchain_config_argv
+        PASS [   0.139s] (1240/1361) velnor-actions-orchestrator::velnor_orchestrator impl_wire_w1::w1_candidate_build_matches_mise_constructor
+        PASS [   0.150s] (1241/1361) velnor-actions-orchestrator::velnor_orchestrator impl_wire_w1::w1_actionlint_vars_emit_exact_v1_set
+        PASS [   0.161s] (1242/1361) velnor-actions-orchestrator::velnor_orchestrator impl_wire_w1::w1_actionlint_bridge_uses_configured_runner_label
+        PASS [   0.017s] (1243/1361) velnor-actions-orchestrator::velnor_orchestrator impl_wire_w1::w1_catalog_matches_actionlint_crate_pins
+        PASS [   0.010s] (1244/1361) velnor-actions-orchestrator::velnor_orchestrator impl_wire_w1::w1_native_parallelism_unqualified
+        PASS [   6.706s] (1245/1361) velnor-actions-orchestrator::velnor_orchestrator impl_select_base::merge_checkout_rejects_head2_for_push
+        PASS [   0.215s] (1246/1361) velnor-actions-orchestrator::velnor_orchestrator impl_validators_repo::repo_config_sample_parses_through_prepare
+        PASS [   0.158s] (1247/1361) velnor-actions-orchestrator::velnor_orchestrator impl_wire_w1::w1_checkout_uses_pinned_action_ref
+        PASS [   6.291s] (1248/1361) velnor-actions-orchestrator::velnor_orchestrator impl_select_base::push_missing_base_tags_comparison_unavailable
+        PASS [   0.156s] (1249/1361) velnor-actions-orchestrator::velnor_orchestrator impl_wire_w1::w1_lint_run_embeds_crate_tool_specs
+        PASS [   0.017s] (1250/1361) velnor-actions-orchestrator::velnor_orchestrator impl_wire_w1::w1_runner_label_matches_actionlint_bridge
+        PASS [   0.165s] (1251/1361) velnor-actions-orchestrator::velnor_orchestrator impl_wire_w1::w1_plan_prepare_index_and_contract_order
+        PASS [   0.160s] (1252/1361) velnor-actions-orchestrator::velnor_orchestrator impl_wire_w1::w1_validators_carry_deny_machete_zizmor_in_order
+        PASS [   0.293s] (1253/1361) velnor-actions-orchestrator::velnor_orchestrator impl_wire_w1::w1_pr_workflows_carry_no_msrv
+        PASS [   6.395s] (1254/1361) velnor-actions-orchestrator::velnor_orchestrator impl_select_base::removed_dependency_keeps_consumer_selected
+        PASS [  11.704s] (1255/1361) velnor-actions-orchestrator::velnor_orchestrator impl_p04_reuse::carried_proof_binding_mismatch_executes
+        PASS [   0.883s] (1256/1361) velnor-actions-orchestrator::velnor_orchestrator impl_trust_identity::identity_hint_scenarios
+        PASS [   0.128s] (1257/1361) velnor-actions-orchestrator::velnor_orchestrator impl_wire_w2::cargo_test_shards_reject_config
+        PASS [   4.521s] (1258/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t24_scale::tofu_generate_scales_with_root_count
+        PASS [   0.315s] (1259/1361) velnor-actions-orchestrator::velnor_orchestrator impl_wire_w1::w1_runs_on_hosted_labels_only
+        PASS [   6.457s] (1260/1361) velnor-actions-orchestrator::velnor_orchestrator impl_select_base::target_cfg_edge_selects_consumer
+        PASS [   5.783s] (1261/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t12::module_target_change_selects_calling_root_only
+        PASS [  12.134s] (1262/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_plansel::build_script_and_fixture_changes_mark_owner
+        PASS [   0.567s] (1263/1361) velnor-actions-orchestrator::velnor_orchestrator impl_wire_w1::w1_plan_format_runs_fmt_check
+        PASS [   0.137s] (1264/1361) velnor-actions-orchestrator::velnor_orchestrator impl_wire_w2::matrix_reports_entries_per_task
+        PASS [   0.242s] (1265/1361) velnor-actions-orchestrator::velnor_orchestrator impl_wire_w2::fmt_needs_explicit_config
+        PASS [   6.491s] (1266/1361) velnor-actions-orchestrator::velnor_orchestrator impl_select_removed::pure_rename_selects_old_and_new_owners
+        PASS [   6.553s] (1267/1361) velnor-actions-orchestrator::velnor_orchestrator impl_select_removed::moved_file_selects_old_and_new_owners
+        PASS [  12.076s] (1268/1361) velnor-actions-orchestrator::velnor_orchestrator impl_p03_identity::unchanged_inputs_with_valid_baseline_cover
+        PASS [   5.633s] (1269/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t19::tofu_passed_round_trip
+        PASS [   6.676s] (1270/1361) velnor-actions-orchestrator::velnor_orchestrator impl_select_removed::deleted_member_selects_surviving_owners
+        PASS [  12.148s] (1271/1361) velnor-actions-orchestrator::velnor_orchestrator impl_p03_identity::task_cache_stays_disabled_without_qualification
+        PASS [   6.118s] (1272/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t12::dynamic_base_source_widens_with_recorded_warning
+        PASS [   6.134s] (1273/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t12::rust_change_leaves_tofu_unaffected
+        PASS [   5.881s] (1274/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t19::empty_inventory_fails_tofu_plan_closed
+        PASS [   5.954s] (1275/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t19::docs_only_marks_tofu_obligations_unchanged
+        PASS [   5.647s] (1276/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t22::fork_event_plans_pr_trust_and_generates_restore_only_roundtrip
+        PASS [   5.849s] (1277/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t21::provider_hit_still_runs_init_and_validate
+        PASS [  12.600s] (1278/1361) velnor-actions-orchestrator::velnor_orchestrator impl_p03_identity::relocated_checkout_keeps_identities
+        PASS [   5.771s] (1279/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t24_bench::bench_tofu_lock_change
+        PASS [  18.599s] (1280/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_broaden::baseline_miss_reasons_are_precise
+        PASS [  18.586s] (1281/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_broaden::carried_proof_fails_closed_without_originating_attestation
+        PASS [   6.391s] (1282/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t19::missing_plan_on_tofu_inventory_diagnoses_planning_failed
+        PASS [   6.414s] (1283/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t19::affected_tofu_root_marks_its_triple_changed
+        PASS [   6.310s] (1284/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t19::tofu_validator_fold_marks_exact_set
+        PASS [   6.073s] (1285/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t21::tofu_reuse_claims_fail_closed_at_merge
+        PASS [  12.777s] (1286/1361) velnor-actions-orchestrator::velnor_orchestrator impl_p04_reuse::missing_base_is_a_miss_not_a_failure
+        PASS [   6.438s] (1287/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t19::missing_tofu_report_fails_required_closed
+        PASS [  18.628s] (1288/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_broaden::exact_baseline_covers_unchanged
+        PASS [   6.071s] (1289/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t23::validate_reports_executed_after_provider_cache_hit
+        PASS [   6.907s] (1290/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t12::removed_base_edge_still_selects_its_caller
+        PASS [   6.019s] (1291/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t24_bench::bench_tofu_mixed_rust_change
+        PASS [   6.571s] (1292/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t19::tofu_roots_join_the_package_inventory
+        PASS [  12.734s] (1293/1361) velnor-actions-orchestrator::velnor_orchestrator impl_perf_p13::plan_obligation_set_is_deterministic
+        PASS [   6.221s] (1294/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t24_bench::bench_tofu_root_change
+        PASS [   6.390s] (1295/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t24_bench::bench_tofu_cold_first_plan
+        PASS [   5.818s] (1296/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t25_bench::bench_tofu_corrupt_cache_rejects_and_plans
+        PASS [   6.475s] (1297/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t23::unchanged_tofu_init_validate_refuse_reuse
+        PASS [   6.614s] (1298/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t22::cold_tree_plans_executes_and_generates_without_seeded_cache
+        PASS [  12.749s] (1299/1361) velnor-actions-orchestrator::velnor_orchestrator impl_required_evidence::changed_obligations_never_baseline_cover
+        PASS [   6.432s] (1300/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t24_gates2::gate7_docs_only_runs_zero_tofu_operations
+        PASS [   6.523s] (1301/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t24_bench::bench_tofu_docs_only
+        PASS [   6.482s] (1302/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t24_bench::bench_tofu_shared_module_change
+        PASS [   5.688s] (1303/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t27_reports::tofu_skipped_validator_fails_required_not_run
+        PASS [   5.810s] (1304/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t27_reports::tofu_cancelled_validator_fails_required_cancelled
+        PASS [   5.832s] (1305/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t27_reports::tofu_forged_task_digest_fails_required_planning_failed
+        PASS [   5.889s] (1306/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t27_reports::tofu_duplicate_report_fails_required_not_run
+        PASS [   6.043s] (1307/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t27_render::tofu_nondefault_backend_validates_without_backend_access
+        PASS [   6.087s] (1308/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t27_render::tofu_provider_free_root_runs_without_lock_claims
+        PASS [  18.884s] (1309/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2d::carried_proofs_execute_without_originating_attestation
+        PASS [   5.976s] (1310/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t27_reports::tofu_stale_run_report_fails_required_not_run
+        PASS [   6.129s] (1311/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t27_reports::tofu_cancelled_task_fails_required_cancelled
+        PASS [   6.754s] (1312/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t24_gates::gate2_plan_and_generate_run_zero_tofu_operations
+        PASS [   5.903s] (1313/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t27_reports::tofu_unknown_report_fails_required_planning_failed
+        PASS [   5.923s] (1314/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t27_reports::tofu_wrong_source_task_file_fails_required_planning_failed
+        PASS [  11.906s] (1315/1361) velnor-actions-orchestrator::velnor_orchestrator impl_select::bin_only_package_omits_doctest_with_reason
+        PASS [   5.562s] (1316/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t27_reports_b::tofu_push_plan_stamps_push_event_and_trust
+        PASS [   5.739s] (1317/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t27_reports_b::tofu_shared_module_change_rides_plan_to_passed
+        PASS [   5.702s] (1318/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t32_negatives::t32_clean_tf_change_merges_passed
+        PASS [   5.993s] (1319/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t27_reports_b::tofu_pr_plan_stamps_pr_event_and_trust
+        PASS [   5.434s] (1320/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t32_negatives::t32_failed_plan_reds_required_with_recorded_cause
+        PASS [   5.337s] (1321/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t32_negatives::t32_module_change_selects_root_dot
+        PASS [   5.802s] (1322/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t32_negatives::t32_lock_change_selects_root_dot
+        PASS [   8.282s] (1323/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t24_bench::plan_150_roots_reports_matrix_budget
+        PASS [   5.543s] (1324/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t32_negatives::t32_unformatted_tf_failed_fmt_leg_reds_required
+        PASS [   5.254s] (1325/1361) velnor-actions-orchestrator::velnor_orchestrator impl_trust::new_package_at_head_marks_affected
+        PASS [  23.566s] (1326/1361) velnor-actions-orchestrator::velnor_orchestrator impl_gates_cover::malformed_manifest_is_a_miss_not_a_failure
+        PASS [   4.983s] (1327/1361) velnor-actions-orchestrator::velnor_orchestrator impl_trust::release_lock_never_resolves_generator_identity
+        PASS [   5.450s] (1328/1361) velnor-actions-orchestrator::velnor_orchestrator impl_trust::merge_flags_wrong_manifest_digest
+        PASS [  11.089s] (1329/1361) velnor-actions-orchestrator::velnor_orchestrator impl_select_base::missing_or_bad_base_tags_comparison_unavailable
+        PASS [   5.216s] (1330/1361) velnor-actions-orchestrator::velnor_orchestrator impl_trust::short_sha_base_still_classifies
+        PASS [   4.600s] (1331/1361) velnor-actions-orchestrator::velnor_orchestrator impl_wire_w2::empty_matrix_folds_conclusions
+        PASS [   4.734s] (1332/1361) velnor-actions-orchestrator::velnor_orchestrator impl_wire_w2::committed_drift_warns_never_fails
+        PASS [   4.703s] (1333/1361) velnor-actions-orchestrator::velnor_orchestrator impl_wire_w2::plan_files_match_contract_renderers
+        PASS [   4.629s] (1334/1361) velnor-actions-orchestrator::velnor_orchestrator impl_wire_w2::v1_push_plan_wiring
+        PASS [   4.688s] (1335/1361) velnor-actions-orchestrator::velnor_orchestrator impl_wire_w2::reused_reports_fail_without_restore_proof
+        PASS [   4.783s] (1336/1361) velnor-actions-orchestrator::velnor_orchestrator impl_wire_w2::resource_groups_validate_at_merge
+        PASS [  16.968s] (1337/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_plansel::diamond_closure_marks_transitively
+        PASS [   4.920s] (1338/1361) velnor-actions-orchestrator::velnor_orchestrator impl_wire_w2::nextest_shards_expand_plan_and_verify
+        PASS [  16.944s] (1339/1361) velnor-actions-orchestrator::velnor_orchestrator impl_p03_identity::known_lockfile_covers_and_nextest_binds_toolchain
+        PASS [  10.375s] (1340/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t24_bench::bench_tofu_fork_event
+        PASS [  17.402s] (1341/1361) velnor-actions-orchestrator::velnor_orchestrator impl_p03_identity::source_edit_with_empty_changed_set_executes
+        PASS [  10.554s] (1342/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t24_bench::bench_tofu_warm_second_plan
+        PASS [  23.213s] (1343/1361) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2d::expired_baselines_schedule_execution
+        PASS [  17.980s] (1344/1361) velnor-actions-orchestrator::velnor_orchestrator impl_perf_p13::plan_scales_with_crate_count
+        PASS [   9.905s] (1345/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t27_reports_b::tofu_event_mismatch_fails_required_planning_failed
+        PASS [  29.082s] (1346/1361) velnor-actions-orchestrator internal_plan::internal_plan_tests::envelope_normalizes_components_and_binds_env
+        PASS [   9.254s] (1347/1361) velnor-actions-orchestrator::velnor_orchestrator impl_trust::coverage_warn_notes_no_publish_attempt
+        PASS [   8.548s] (1348/1361) velnor-actions-orchestrator::velnor_orchestrator impl_wire_w2::local_select_uses_working_tree
+        PASS [   8.848s] (1349/1361) velnor-actions-orchestrator::velnor_orchestrator impl_wire_w2::build_script_package_rejects_reuse_and_coverage
+        PASS [   8.721s] (1350/1361) velnor-actions-orchestrator::velnor_orchestrator impl_wire_w2::fork_plans_use_pr_trust
+        PASS [   8.745s] (1351/1361) velnor-actions-orchestrator::velnor_orchestrator impl_wire_w2::input_digest_is_deterministic
+        PASS [  20.996s] (1352/1361) velnor-actions-orchestrator::velnor_orchestrator impl_p04_reuse::every_unsafe_task_entry_executes
+        PASS [  21.053s] (1353/1361) velnor-actions-orchestrator::velnor_orchestrator impl_p03_identity::reports_stay_fresh_per_run
+        PASS [  21.037s] (1354/1361) velnor-actions-orchestrator::velnor_orchestrator impl_p06_detection::four_combos_argv
+        PASS [  21.592s] (1355/1361) velnor-actions-orchestrator::velnor_orchestrator impl_p04_reuse::anchored_repository_binds_and_unanchored_fails_closed
+        PASS [  14.974s] (1356/1361) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t24_scale::tofu_plan_scales_with_root_count
+        PASS [  13.528s] (1357/1361) velnor-actions-orchestrator::velnor_orchestrator impl_trust::injection_revs_broaden_without_spawning_flags
+        PASS [  12.740s] (1358/1361) velnor-actions-orchestrator::velnor_orchestrator impl_wire_w2::baseline_rejects_other_branch_manifests
+        PASS [  17.310s] (1359/1361) velnor-actions-orchestrator::velnor_orchestrator impl_wire_w2::manifest_task_proofs_validate_per_task
+        PASS [  40.259s] (1360/1361) velnor-actions-orchestrator::velnor_orchestrator impl_bench_p13::bench_concurrent_lanes_2_and_4
+        SLOW [> 60.000s] (─────────) velnor-actions-orchestrator::velnor_orchestrator impl_p04_reuse::every_unsafe_manifest_executes
+        PASS [  69.594s] (1361/1361) velnor-actions-orchestrator::velnor_orchestrator impl_p04_reuse::every_unsafe_manifest_executes
+────────────
+     Summary [  80.852s] 1361 tests run: 1361 passed (1 slow), 0 skipped

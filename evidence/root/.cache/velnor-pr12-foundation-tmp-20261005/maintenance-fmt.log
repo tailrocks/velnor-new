@@ -1,0 +1,12 @@
+Diff in /tmp/velnor-pr12-foundation-20261005/crates/velnor-actions-orchestrator/src/check_tool_archive_metadata_tests.rs:32:
+     let temp = scratch("extension-count-limit");
+     let root = scratch_root(&temp);
+     let archive = root.join("metadata.tar.gz");
+-    tar_gz_extension_entries(
+-        &archive,
+-        tar_preflight::MAX_TAR_EXTENSION_ENTRIES + 1,
+-    );
++    tar_gz_extension_entries(&archive, tar_preflight::MAX_TAR_EXTENSION_ENTRIES + 1);
+     let file = fs::File::open(archive).expect("archive");
+     let deadline = CheckDeadline::after(std::time::Duration::from_secs(60)).expect("deadline");
+     let error = tar_preflight::preflight_tar(gzip_reader(file, deadline))

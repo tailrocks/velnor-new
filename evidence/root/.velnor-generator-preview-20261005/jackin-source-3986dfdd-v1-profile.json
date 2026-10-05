@@ -1,0 +1,41 @@
+{
+  "api_evidence": [
+    "GET https://api.github.com/repos/jackin-project/jackin returned repository id 1197700841, full_name jackin-project/jackin, public, default branch main.",
+    "GET https://api.github.com/repos/jackin-project/jackin/git/ref/heads/refactor/build-split-dco returned the pinned head.",
+    "GET https://api.github.com/repos/jackin-project/jackin/commits/3986dfdd07dcfeb739f09f837d3a3ebdd944cbb9 returned the pinned tree and parent.",
+    "GET compare 0cf350be6a66fd1316239452a718e890c051ad23...3986dfdd07dcfeb739f09f837d3a3ebdd944cbb9 showed one commit touching scripts/test-mbx-cargo-wrapper.py only."
+  ],
+  "branch_head": "3986dfdd07dcfeb739f09f837d3a3ebdd944cbb9",
+  "commit": "3986dfdd07dcfeb739f09f837d3a3ebdd944cbb9",
+  "commit_verification": {
+    "github_signature_verified": false,
+    "reason": "unsigned commit metadata; source identity is pinned by commit/tree plus canonical HTTPS origin"
+  },
+  "execution_state": "Source profile prepared and AST-checked. Independent exact-source review, fake process-group fixture, public fetch, raw materialization and private generation have not run for this profile.",
+  "parent": "0cf350be6a66fd1316239452a718e890c051ad23",
+  "profile": "jackin-task-branch-3986dfdd-v1",
+  "ref": "refs/heads/refactor/build-split-dco",
+  "repository": {
+    "canonical_origin": "https://github.com/jackin-project/jackin.git",
+    "default_branch": "main",
+    "full_name": "jackin-project/jackin",
+    "id": 1197700841,
+    "visibility": "public"
+  },
+  "retrieval_time_utc": "2026-10-05 13:02:22 UTC",
+  "schema": 1,
+  "supersedes": "The 0cf350 profile failed before the pinned commit object was obtained because the branch advanced; its partial clone and evidence remain preserved.",
+  "task_owned_fetch_profile": {
+    "audit_script": "jackin-git-config-audit-3986dfdd-v1.py",
+    "audit_sha256": "97e17293f7022d142bb5bd53fc37c66e6de65111427b7ee3676dafe62ed6d921",
+    "fetch_fixture": "jackin-source-fetch-3986dfdd-process-group-fixture-v1.py",
+    "fetch_fixture_sha256": "6a4c6a764ff1d408d42231207f8ab2f284ab5268edc8e688461b184f98920ba4",
+    "fetch_script": "jackin-source-fetch-3986dfdd-v1.py",
+    "fetch_sha256": "604d141f50f7cac27f549bc59242b422fb777d89dca8857a3fe718cb431da20c",
+    "materializer_script": "jackin-source-materialize-3986dfdd-v1.py",
+    "materializer_sha256": "0883320ba00a81e277562b4cc47c23d84e8ccdf07d01d9134262d3516c47301a",
+    "source_directory": "jackin-source-3986dfdd-v1",
+    "template_directory": "jackin-source-3986dfdd-empty-template-v1"
+  },
+  "tree": "50f5bbfc7e89fc66b71356ad12629028abfccea4"
+}

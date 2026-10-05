@@ -1,0 +1,17 @@
+    Checking utf8parse v0.2.2
+    Checking anstyle v1.0.14
+    Checking anstyle-query v1.1.5
+    Checking colorchoice v1.0.5
+    Checking is_terminal_polyfill v1.70.2
+    Checking strsim v0.11.1
+    Checking clap_lex v1.1.1
+   Compiling clap_derive v4.6.7
+    Checking velnor-runner-core v0.1.0 (/tmp/velnor-impl-20261005/release/pr41/crates/velnor-runner/crates/velnor-runner-core)
+    Checking velnor-runner-github v0.1.0 (/tmp/velnor-impl-20261005/release/pr41/crates/velnor-runner/crates/velnor-runner-github)
+    Checking anstyle-parse v1.0.0
+    Checking anstream v1.0.0
+    Checking clap_builder v4.6.7
+    Checking velnor-runner-host v0.1.0 (/tmp/velnor-impl-20261005/release/pr41/crates/velnor-runner/crates/velnor-runner-host)
+    Checking clap v4.6.7
+    Checking velnor-runner-cli v0.1.0 (/tmp/velnor-impl-20261005/release/pr41/crates/velnor-runner/crates/velnor-runner-cli)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 4.39s

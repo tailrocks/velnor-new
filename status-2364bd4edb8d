@@ -1,0 +1,8 @@
+M  crates/velnor-runner/crates/velnor-runner-cli/src/dispatch.rs
+A  crates/velnor-runner/crates/velnor-runner-cli/tests/status_readiness.rs
+M  crates/velnor-runner/crates/velnor-runner-host/src/journal.rs
+M  crates/velnor-runner/crates/velnor-runner-host/src/lib.rs
+A  crates/velnor-runner/crates/velnor-runner-host/src/readiness_scan/mod.rs
+A  crates/velnor-runner/crates/velnor-runner-host/src/readiness_scan/tests.rs
+A  crates/velnor-runner/crates/velnor-runner-host/src/readiness_scan/tests/journal_fail_closed.rs
+M  docs/implemented/macos-scaleset/evidence.md

@@ -1,0 +1,7 @@
+source/.github/CLAUDE.md -> AGENTS.md
+source/CLAUDE.md -> AGENTS.md
+source/docs/proposed/opentofu-goldens/cases/dogfood/preview/.github/CLAUDE.md -> AGENTS.md
+source/docs/proposed/opentofu-goldens/cases/empty-suite/preview/.github/CLAUDE.md -> AGENTS.md
+source/docs/proposed/opentofu-goldens/cases/mbx-nextest/preview/.github/CLAUDE.md -> AGENTS.md
+source/docs/proposed/opentofu-goldens/cases/minimal-cargo/preview/.github/CLAUDE.md -> AGENTS.md
+source/docs/proposed/opentofu-goldens/cases/nested/preview/.github/CLAUDE.md -> AGENTS.md

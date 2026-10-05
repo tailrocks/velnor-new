@@ -1,0 +1,961 @@
+diff --git a/crates/velnor-actions-contract/src/workflow/qualification_cache_lineage.rs b/crates/velnor-actions-contract/src/workflow/qualification_cache_lineage.rs
+index 4960801e7..04f8d69d9 100644
+--- a/crates/velnor-actions-contract/src/workflow/qualification_cache_lineage.rs
++++ b/crates/velnor-actions-contract/src/workflow/qualification_cache_lineage.rs
+@@ -32,3 +32,11 @@ pub use receipt::{
+ #[cfg(test)]
+ #[path = "qualification_cache_lineage_tests.rs"]
+ mod tests;
++
++#[cfg(test)]
++#[path = "qualification_cache_lineage_directive_tests.rs"]
++mod directive_tests;
++
++#[cfg(test)]
++#[path = "qualification_cache_lineage_admission_tests.rs"]
++mod admission_tests;
+diff --git a/crates/velnor-actions-contract/src/workflow/qualification_cache_lineage/directive.rs b/crates/velnor-actions-contract/src/workflow/qualification_cache_lineage/directive.rs
+index d5b2af670..136741dec 100644
+--- a/crates/velnor-actions-contract/src/workflow/qualification_cache_lineage/directive.rs
++++ b/crates/velnor-actions-contract/src/workflow/qualification_cache_lineage/directive.rs
+@@ -91,9 +91,29 @@ impl QualificationCacheDirective {
+             .find(|record| record.layer == layer)
+     }
+ 
+-    /// Bind one directive to actual runtime identity before cache access.
++    /// Rebuild this serialized directive from its plan and admission, then bind runtime identity.
++    ///
++    /// The serialized fields alone never authorize cache access. Any field
++    /// that differs from the plan-derived directive is rejected before keys
++    /// are returned.
+     /// # Errors
+     pub fn bind_runtime(
++        &self,
++        plan: &Plan,
++        admission: Option<&QualificationCacheAdmission>,
++        matrix_key: &str,
++        layer: QualificationCacheLayer,
++        evidence: &QualificationRuntimeIdentity,
++    ) -> Result<BoundQualificationCacheKeys, ContractError> {
++        let expected = Self::for_plan(plan, admission)?
++            .ok_or_else(|| invalid("directive_for_non_qualification_plan"))?;
++        if self != &expected {
++            return Err(invalid("serialized_directive_does_not_match_plan"));
++        }
++        self.bind_validated_runtime(matrix_key, layer, evidence)
++    }
++
++    fn bind_validated_runtime(
+         &self,
+         matrix_key: &str,
+         layer: QualificationCacheLayer,
+diff --git a/crates/velnor-actions-contract/src/workflow/qualification_cache_lineage/directive_types.rs b/crates/velnor-actions-contract/src/workflow/qualification_cache_lineage/directive_types.rs
+index 913a8c78e..2a11a9b4c 100644
+--- a/crates/velnor-actions-contract/src/workflow/qualification_cache_lineage/directive_types.rs
++++ b/crates/velnor-actions-contract/src/workflow/qualification_cache_lineage/directive_types.rs
+@@ -98,7 +98,10 @@ pub struct QualificationCacheLaneDirective {
+     pub layers: Vec<QualificationCacheLayerDirective>,
+ }
+ 
+-/// Bounded, validated phase directive map written as one job output.
++/// Bounded phase directive map written as one job output.
++///
++/// Serialized maps are untrusted until they are reconstructed against their
++/// plan and admitted predecessor before runtime key binding.
+ #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+ #[serde(deny_unknown_fields)]
+ pub struct QualificationCacheDirective {
+diff --git a/crates/velnor-actions-contract/src/workflow/qualification_cache_lineage_admission_fixture.rs b/crates/velnor-actions-contract/src/workflow/qualification_cache_lineage_admission_fixture.rs
+new file mode 100644
+index 000000000..8ef13f914
+--- /dev/null
++++ b/crates/velnor-actions-contract/src/workflow/qualification_cache_lineage_admission_fixture.rs
+@@ -0,0 +1,365 @@
++use std::error::Error;
++
++use super::*;
++use crate::canonical::{canonical_json_bytes, digest_b3};
++use crate::workflow::{
++    QualificationCacheArtifact, QualificationCacheBackendEntry,
++    QualificationCacheBackendObservation, QualificationCacheLaneReceipt, QualificationCacheLayer,
++    QualificationCacheLayerReceipt, QualificationCacheReceipt,
++    QualificationCacheReceiptArtifactDocument, QualificationCacheReceiptLink,
++    QualificationCacheRestore, QualificationCacheRestoreResult, QualificationCacheSave,
++    QualificationCacheSaveActionResult, QualificationPhase, QualificationRunRef,
++    QualificationSourceDelta,
++};
++
++use super::directive_tests::{qualification_plan, runtime_identity};
++
++#[path = "qualification_cache_lineage_metadata_fixture.rs"]
++mod metadata_fixture;
++use self::metadata_fixture::{
++    artifact_metadata, dispatch, producer_context, run_metadata, run_ref,
++};
++
++type TestResult<T = ()> = Result<T, Box<dyn Error>>;
++
++pub(super) struct BuiltNode {
++    pub(super) value: serde_json::Value,
++    pub(super) artifact: QualificationCacheArtifact,
++    pub(super) receipt: QualificationCacheReceipt,
++}
++
++pub(super) fn phase_plan(
++    phase: QualificationPhase,
++    run_id: u64,
++    source_sha: &str,
++    predecessor_run_id: u64,
++) -> Result<crate::workflow::Plan, crate::ContractError> {
++    qualification_plan(
++        phase,
++        run_id,
++        source_sha,
++        Some(QualificationRunRef {
++            run_id: predecessor_run_id,
++            run_attempt: 1,
++        }),
++    )
++}
++
++pub(super) fn completed_node(
++    plan: &crate::workflow::Plan,
++    previous: Option<&BuiltNode>,
++    source_delta: Option<QualificationSourceDelta>,
++) -> TestResult<BuiltNode> {
++    let previous_admission = previous
++        .map(|node| admission_for(node, source_delta.as_ref()))
++        .transpose()?;
++    let producer = producer_context(plan)?;
++    let metadata = run_metadata(plan)?;
++    let receipt = completed_receipt(plan, previous_admission.as_ref(), previous, source_delta)?;
++    let document = QualificationCacheReceiptArtifactDocument {
++        schema: 1,
++        producer,
++        receipt: receipt.clone(),
++    };
++    let bytes = document.to_bounded_json(plan, &metadata, previous_admission.as_ref())?;
++    let artifact = artifact_metadata(plan, bytes.len())?;
++    let value = serde_json::json!({
++        "metadata": metadata,
++        "artifact": artifact.clone(),
++        "producer": document.producer,
++        "receipt": document.receipt,
++        "previous": previous.map(|node| node.value.clone()),
++    });
++    Ok(BuiltNode {
++        value,
++        artifact,
++        receipt,
++    })
++}
++
++fn completed_receipt(
++    plan: &crate::workflow::Plan,
++    admission: Option<&QualificationCacheAdmission>,
++    previous: Option<&BuiltNode>,
++    source_delta: Option<QualificationSourceDelta>,
++) -> TestResult<QualificationCacheReceipt> {
++    let context = dispatch(plan)?;
++    let directive = QualificationCacheDirective::for_plan(plan, admission)?
++        .ok_or_else(|| std::io::Error::other("qualification directive missing"))?;
++    let lanes = plan
++        .matrix
++        .include
++        .iter()
++        .map(|entry| lane_receipt(plan, entry, &directive, admission))
++        .collect::<TestResult<Vec<_>>>()?;
++    let predecessor = previous.map(receipt_link).transpose()?;
++    Ok(QualificationCacheReceipt {
++        schema: 1,
++        plan_id: plan.plan_id.clone(),
++        run: run_ref(context),
++        campaign: context.campaign.clone(),
++        phase: context.phase,
++        source_sha: context.source_sha.clone(),
++        configuration_digest: super::identity::configuration_commitment(plan)?,
++        source_delta,
++        predecessor,
++        lanes,
++    })
++}
++
++fn lane_receipt(
++    plan: &crate::workflow::Plan,
++    entry: &crate::workflow::MatrixEntry,
++    directive: &QualificationCacheDirective,
++    admission: Option<&QualificationCacheAdmission>,
++) -> TestResult<QualificationCacheLaneReceipt> {
++    let layers = [
++        QualificationCacheLayer::MbxObjects,
++        QualificationCacheLayer::MbxBundle,
++        QualificationCacheLayer::CargoSources,
++        QualificationCacheLayer::MiseTools,
++        QualificationCacheLayer::TofuProviders,
++        QualificationCacheLayer::TaskResult,
++    ]
++    .into_iter()
++    .enumerate()
++    .map(|(index, layer)| layer_receipt(plan, entry, directive, admission, layer, index as u64))
++    .collect::<TestResult<Vec<_>>>()?;
++    let prior = admission
++        .map(|value| prior_lane(value, &entry.matrix_key))
++        .transpose()?;
++    let phase = plan.qualification.as_ref().map(|context| context.phase);
++    let is_delta = phase == Some(QualificationPhase::UsefulDelta);
++    let is_warm = phase == Some(QualificationPhase::Warm);
++    Ok(QualificationCacheLaneReceipt {
++        matrix_key: entry.matrix_key.clone(),
++        stack_id: entry.stack_id.clone(),
++        task_id: entry.task_id.clone(),
++        completed_task_ids: completed_tasks(entry),
++        closure_digest: is_delta
++            .then(|| digest_b3(b"closure-useful-delta"))
++            .or_else(|| prior.as_ref().map(|lane| lane.closure_digest.clone()))
++            .unwrap_or_else(|| digest_b3(b"closure-cold")),
++        useful_state_digest: is_delta
++            .then(|| digest_b3(b"useful-delta"))
++            .or_else(|| is_warm.then(|| digest_b3(b"useful-warm")))
++            .or_else(|| prior.as_ref().map(|lane| lane.useful_state_digest.clone()))
++            .unwrap_or_else(|| digest_b3(b"useful-cold")),
++        layers,
++    })
++}
++
++fn layer_receipt(
++    plan: &crate::workflow::Plan,
++    entry: &crate::workflow::MatrixEntry,
++    directive: &QualificationCacheDirective,
++    admission: Option<&QualificationCacheAdmission>,
++    layer: QualificationCacheLayer,
++    index: u64,
++) -> TestResult<QualificationCacheLayerReceipt> {
++    let planned = directive
++        .layer(&entry.matrix_key, layer)
++        .ok_or_else(|| std::io::Error::other("planned layer missing"))?;
++    if !planned.active {
++        return Ok(disabled_layer(planned));
++    }
++    let identity = runtime_identity(&planned.runtime);
++    let keys = directive.bind_runtime(plan, admission, &entry.matrix_key, layer, &identity)?;
++    let bound_restore = keys
++        .restore
++        .as_ref()
++        .ok_or_else(|| std::io::Error::other("restore keys missing"))?;
++    let prior = admission
++        .map(|value| value.layer_receipt(&entry.matrix_key, layer))
++        .transpose()?;
++    let phase = plan.qualification.as_ref().map(|context| context.phase);
++    let is_changed_cache_layer = layer == QualificationCacheLayer::CargoSources
++        && matches!(
++            phase,
++            Some(QualificationPhase::Warm | QualificationPhase::UsefulDelta)
++        );
++    let state = if is_changed_cache_layer {
++        digest_b3(format!("cargo-source-state-after-{phase:?}").as_bytes())
++    } else {
++        prior
++            .as_ref()
++            .and_then(|receipt| receipt.state_digest.clone())
++            .unwrap_or_else(|| digest_b3(format!("cold-state-{layer:?}").as_bytes()))
++    };
++    let (restore, save) = observations(
++        plan,
++        &keys,
++        bound_restore.requested_key.as_str(),
++        bound_restore.expected_cache.clone(),
++        &state,
++        index,
++    )?;
++    Ok(QualificationCacheLayerReceipt {
++        layer,
++        active: true,
++        identity_digest: planned.identity_digest.clone(),
++        runtime_identity: Some(identity),
++        state_digest: Some(state),
++        restore,
++        save,
++    })
++}
++
++fn observations(
++    plan: &crate::workflow::Plan,
++    keys: &crate::workflow::BoundQualificationCacheKeys,
++    requested_key: &str,
++    expected_cache: Option<QualificationCacheBackendEntry>,
++    state: &str,
++    index: u64,
++) -> TestResult<(QualificationCacheRestore, QualificationCacheSave)> {
++    let restore = match expected_cache {
++        Some(entry) => QualificationCacheRestore {
++            requested_key: Some(requested_key.to_owned()),
++            matched_key: Some(requested_key.to_owned()),
++            matched_cache: QualificationCacheBackendObservation::Found(entry),
++            result: QualificationCacheRestoreResult::Hit,
++        },
++        None => QualificationCacheRestore {
++            requested_key: Some(requested_key.to_owned()),
++            matched_key: None,
++            matched_cache: QualificationCacheBackendObservation::Absent,
++            result: QualificationCacheRestoreResult::Miss,
++        },
++    };
++    let (action, requested_save, before, after) = match keys.save_key_for_state(state)? {
++        Some(key) => save_observed(plan, key, index)?,
++        None if keys.save_key.is_some() => (
++            QualificationCacheSaveActionResult::NotRequired,
++            None,
++            QualificationCacheBackendObservation::NotQueried,
++            QualificationCacheBackendObservation::NotQueried,
++        ),
++        None => (
++            QualificationCacheSaveActionResult::Disabled,
++            None,
++            QualificationCacheBackendObservation::NotQueried,
++            QualificationCacheBackendObservation::NotQueried,
++        ),
++    };
++    Ok((
++        restore,
++        QualificationCacheSave {
++            requested_key: requested_save,
++            action,
++            before,
++            after,
++        },
++    ))
++}
++
++fn save_observed(
++    plan: &crate::workflow::Plan,
++    key: &str,
++    index: u64,
++) -> TestResult<(
++    QualificationCacheSaveActionResult,
++    Option<String>,
++    QualificationCacheBackendObservation,
++    QualificationCacheBackendObservation,
++)> {
++    let context = dispatch(plan)?;
++    let entry = QualificationCacheBackendEntry {
++        id: context.run_id * 10 + index + 1,
++        key: key.to_owned(),
++        git_ref: context.git_ref.clone(),
++        size_bytes: 4_096,
++    };
++    Ok((
++        QualificationCacheSaveActionResult::Succeeded,
++        Some(key.to_owned()),
++        QualificationCacheBackendObservation::Absent,
++        QualificationCacheBackendObservation::Found(entry),
++    ))
++}
++
++fn disabled_layer(planned: &QualificationCacheLayerDirective) -> QualificationCacheLayerReceipt {
++    QualificationCacheLayerReceipt {
++        layer: planned.layer,
++        active: false,
++        identity_digest: planned.identity_digest.clone(),
++        runtime_identity: None,
++        state_digest: None,
++        restore: QualificationCacheRestore {
++            requested_key: None,
++            matched_key: None,
++            matched_cache: QualificationCacheBackendObservation::NotQueried,
++            result: QualificationCacheRestoreResult::Disabled,
++        },
++        save: QualificationCacheSave {
++            requested_key: None,
++            action: QualificationCacheSaveActionResult::Disabled,
++            before: QualificationCacheBackendObservation::NotQueried,
++            after: QualificationCacheBackendObservation::NotQueried,
++        },
++    }
++}
++
++fn prior_lane<'a>(
++    admission: &'a QualificationCacheAdmission,
++    matrix_key: &str,
++) -> Result<&'a QualificationCacheLaneReceipt, crate::ContractError> {
++    admission
++        .receipt()
++        .lanes
++        .iter()
++        .find(|lane| lane.matrix_key == matrix_key)
++        .ok_or_else(|| crate::ContractError::identity("test", "prior_lane_missing"))
++}
++
++fn completed_tasks(entry: &crate::workflow::MatrixEntry) -> Vec<String> {
++    let mut tasks = entry
++        .execute_task_ids
++        .tasks
++        .values()
++        .flat_map(|task| match task {
++            crate::workflow::ExecuteTaskRef::Single(value) => vec![value.clone()],
++            crate::workflow::ExecuteTaskRef::Shards(values) => values.clone(),
++        })
++        .collect::<Vec<_>>();
++    tasks.sort();
++    tasks
++}
++
++fn receipt_link(previous: &BuiltNode) -> TestResult<QualificationCacheReceiptLink> {
++    Ok(QualificationCacheReceiptLink {
++        run: previous.receipt.run,
++        receipt_digest: digest_b3(&canonical_json_bytes(&previous.receipt)?),
++        artifact_id: previous.artifact.id,
++        artifact_digest: previous.artifact.digest.clone(),
++    })
++}
++
++pub(super) fn admission_for(
++    node: &BuiltNode,
++    source_delta: Option<&QualificationSourceDelta>,
++) -> TestResult<QualificationCacheAdmission> {
++    admission_from_value(&node.value, source_delta)
++}
++
++pub(super) fn admission_from_value(
++    node: &serde_json::Value,
++    source_delta: Option<&QualificationSourceDelta>,
++) -> TestResult<QualificationCacheAdmission> {
++    let bytes = serde_json::to_vec(&serde_json::json!({
++        "predecessor": node,
++        "source_delta": source_delta,
++    }))?;
++    Ok(QualificationCacheAdmission::parse_bounded(&bytes)?)
++}
++
++pub(super) fn useful_delta(base: &str, source: &str) -> TestResult<QualificationSourceDelta> {
++    let changed_paths = vec!["crates/demo/src/lib.rs".to_owned()];
++    Ok(QualificationSourceDelta {
++        base_source_sha: base.to_owned(),
++        source_sha: source.to_owned(),
++        diff_digest: digest_b3(&canonical_json_bytes(&changed_paths)?),
++        changed_paths,
++        base_is_ancestor: true,
++    })
++}
+diff --git a/crates/velnor-actions-contract/src/workflow/qualification_cache_lineage_admission_tests.rs b/crates/velnor-actions-contract/src/workflow/qualification_cache_lineage_admission_tests.rs
+new file mode 100644
+index 000000000..17718a59c
+--- /dev/null
++++ b/crates/velnor-actions-contract/src/workflow/qualification_cache_lineage_admission_tests.rs
+@@ -0,0 +1,225 @@
++use std::error::Error;
++
++#[path = "qualification_cache_lineage_admission_fixture.rs"]
++mod admission_fixture;
++
++use self::admission_fixture::{
++    BuiltNode, admission_for, admission_from_value, completed_node, phase_plan, useful_delta,
++};
++use super::directive_tests::qualification_plan;
++use super::*;
++use crate::canonical::digest_b3;
++use crate::workflow::{QualificationCacheLayer, QualificationPhase, QualificationRunRef};
++
++type TestResult<T = ()> = Result<T, Box<dyn Error>>;
++
++const SOURCE_A: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
++const SOURCE_B: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
++
++#[test]
++fn complete_cold_warm_third_useful_delta_and_control_admission_paths() -> TestResult {
++    let cold_plan = qualification_plan(QualificationPhase::Cold, 700, SOURCE_A, None)?;
++    let cold = completed_node(&cold_plan, None, None)?;
++
++    let warm_plan = phase_plan(QualificationPhase::Warm, 701, SOURCE_A, 700)?;
++    let cold_admission = admission_for(&cold, None)?;
++    cold_admission.validate_for_plan(&warm_plan)?;
++    let warm = completed_node(&warm_plan, Some(&cold), None)?;
++
++    let third_plan = phase_plan(QualificationPhase::Third, 702, SOURCE_A, 701)?;
++    let warm_admission = admission_for(&warm, None)?;
++    warm_admission.validate_for_plan(&third_plan)?;
++    let third = completed_node(&third_plan, Some(&warm), None)?;
++    assert_warm_successor_is_selected(&cold, &warm, &third, &third_plan, &warm_admission)?;
++
++    let delta = useful_delta(SOURCE_A, SOURCE_B)?;
++    let useful_plan = phase_plan(QualificationPhase::UsefulDelta, 703, SOURCE_B, 702)?;
++    let third_admission = admission_for(&third, Some(&delta))?;
++    third_admission.validate_for_plan(&useful_plan)?;
++    let useful = completed_node(&useful_plan, Some(&third), Some(delta.clone()))?;
++    assert_eq!(useful.receipt.source_delta, Some(delta));
++
++    let directive = QualificationCacheDirective::for_plan(&useful_plan, Some(&third_admission))?
++        .ok_or_else(|| std::io::Error::other("useful-delta directive missing"))?;
++    let entry = &useful_plan.matrix.include[0];
++    let sources = directive
++        .layer(&entry.matrix_key, QualificationCacheLayer::CargoSources)
++        .ok_or_else(|| std::io::Error::other("Cargo sources directive missing"))?;
++    let keys = directive.bind_runtime(
++        &useful_plan,
++        Some(&third_admission),
++        &entry.matrix_key,
++        QualificationCacheLayer::CargoSources,
++        &super::directive_tests::runtime_identity(&sources.runtime),
++    )?;
++    assert!(
++        keys.restore
++            .as_ref()
++            .is_some_and(|restore| restore.expected_cache.is_some())
++    );
++    assert!(keys.save_if_state_changes);
++    assert!(keys.save_key.is_some());
++
++    let control_plan = qualification_plan(QualificationPhase::Control, 704, SOURCE_A, None)?;
++    completed_node(&control_plan, None, None)?;
++    let control_directive = QualificationCacheDirective::for_plan(&control_plan, None)?
++        .ok_or_else(|| std::io::Error::other("control directive missing"))?;
++    assert!(
++        control_directive
++            .lanes
++            .iter()
++            .flat_map(|lane| &lane.layers)
++            .all(|layer| !layer.active
++                && layer.restore_policy == QualificationCacheRestorePolicy::Disabled
++                && layer.save_policy == QualificationCacheSavePolicy::Disabled)
++    );
++    Ok(())
++}
++
++fn assert_warm_successor_is_selected(
++    cold: &BuiltNode,
++    warm: &BuiltNode,
++    third: &BuiltNode,
++    third_plan: &crate::workflow::Plan,
++    warm_admission: &QualificationCacheAdmission,
++) -> TestResult {
++    let cold_layers = &cold.receipt.lanes[0].layers;
++    let warm_layers = &warm.receipt.lanes[0].layers;
++    let third_layers = &third.receipt.lanes[0].layers;
++    let cold_sources = &cold_layers[2];
++    let cold_tools = &cold_layers[3];
++    let warm_sources = &warm_layers[2];
++    let warm_tools = &warm_layers[3];
++    assert_ne!(cold_sources.state_digest, warm_sources.state_digest);
++    assert_eq!(
++        warm_sources.save.action,
++        QualificationCacheSaveActionResult::Succeeded
++    );
++    assert!(matches!(
++        &warm_sources.save.after,
++        QualificationCacheBackendObservation::Found(_)
++    ));
++    assert_eq!(cold_tools.state_digest, warm_tools.state_digest);
++    assert_eq!(
++        warm_tools.save.action,
++        QualificationCacheSaveActionResult::NotRequired
++    );
++
++    let directive = QualificationCacheDirective::for_plan(third_plan, Some(warm_admission))?
++        .ok_or_else(|| std::io::Error::other("third directive missing"))?;
++    let matrix_key = &third_plan.matrix.include[0].matrix_key;
++    let sources = directive
++        .layer(matrix_key, QualificationCacheLayer::CargoSources)
++        .ok_or_else(|| std::io::Error::other("third sources directive missing"))?;
++    let tools = directive
++        .layer(matrix_key, QualificationCacheLayer::MiseTools)
++        .ok_or_else(|| std::io::Error::other("third tools directive missing"))?;
++    assert_eq!(
++        sources.restore.as_ref().map(|restore| restore.slot),
++        Some(QualificationCacheSlot::K2)
++    );
++    assert_eq!(
++        tools.restore.as_ref().map(|restore| restore.slot),
++        Some(QualificationCacheSlot::K1)
++    );
++    assert_eq!(
++        third_layers[2].restore.matched_cache,
++        warm_sources.save.after
++    );
++    assert_eq!(third_layers[3].restore.matched_cache, cold_tools.save.after);
++    Ok(())
++}
++
++#[test]
++fn useful_delta_admission_rejects_missing_wrong_and_unexpected_source_changes() -> TestResult {
++    let cold_plan = qualification_plan(QualificationPhase::Cold, 710, SOURCE_A, None)?;
++    let cold = completed_node(&cold_plan, None, None)?;
++    let warm_plan = phase_plan(QualificationPhase::Warm, 711, SOURCE_A, 710)?;
++    let warm = completed_node(&warm_plan, Some(&cold), None)?;
++    let third_plan = phase_plan(QualificationPhase::Third, 712, SOURCE_A, 711)?;
++    let third = completed_node(&third_plan, Some(&warm), None)?;
++    let useful_plan = phase_plan(QualificationPhase::UsefulDelta, 713, SOURCE_B, 712)?;
++
++    let missing = admission_for(&third, None)?;
++    assert!(missing.validate_for_plan(&useful_plan).is_err());
++    let other_source = "cccccccccccccccccccccccccccccccccccccccc";
++    let wrong_delta = useful_delta(SOURCE_A, other_source)?;
++    let wrong = admission_for(&third, Some(&wrong_delta))?;
++    assert!(wrong.validate_for_plan(&useful_plan).is_err());
++
++    let changed_warm = phase_plan(QualificationPhase::Warm, 714, SOURCE_B, 710)?;
++    let cold_admission = admission_for(&cold, None)?;
++    assert!(cold_admission.validate_for_plan(&changed_warm).is_err());
++    Ok(())
++}
++
++#[test]
++fn plan_predecessor_reference_is_bound_to_the_admitted_attempt() -> TestResult {
++    let cold_plan = qualification_plan(QualificationPhase::Cold, 720, SOURCE_A, None)?;
++    let cold = completed_node(&cold_plan, None, None)?;
++    let warm_plan = phase_plan(QualificationPhase::Warm, 721, SOURCE_A, 720)?;
++    let mut changed_ref_plan = warm_plan.clone();
++    let context = changed_ref_plan
++        .qualification
++        .as_mut()
++        .ok_or_else(|| std::io::Error::other("qualification context missing"))?;
++    context.predecessor = Some(QualificationRunRef {
++        run_id: 720,
++        run_attempt: 2,
++    });
++    let admission = admission_for(&cold, None)?;
++    assert!(admission.validate_for_plan(&changed_ref_plan).is_err());
++    Ok(())
++}
++
++#[test]
++fn full_admission_rejects_mutated_artifact_link_runtime_and_layer_state() -> TestResult {
++    let cold_plan = qualification_plan(QualificationPhase::Cold, 730, SOURCE_A, None)?;
++    let cold = completed_node(&cold_plan, None, None)?;
++    let warm_plan = phase_plan(QualificationPhase::Warm, 731, SOURCE_A, 730)?;
++    let warm = completed_node(&warm_plan, Some(&cold), None)?;
++    let third_plan = phase_plan(QualificationPhase::Third, 732, SOURCE_A, 731)?;
++    let third = completed_node(&third_plan, Some(&warm), None)?;
++    let useful_plan = phase_plan(QualificationPhase::UsefulDelta, 733, SOURCE_B, 732)?;
++    let delta = useful_delta(SOURCE_A, SOURCE_B)?;
++    admission_for(&third, Some(&delta))?.validate_for_plan(&useful_plan)?;
++
++    let mut wrong_link = third.value.clone();
++    wrong_link["receipt"]["predecessor"]["artifact_digest"] =
++        serde_json::json!(format!("sha256:{}", "f".repeat(64)));
++    assert!(rejects_admission(&wrong_link, &useful_plan, Some(&delta)));
++
++    let mut wrong_runtime = third.value.clone();
++    wrong_runtime["receipt"]["lanes"][0]["layers"][2]["runtime_identity"]["platform"]["image_version"] =
++        serde_json::json!("27.04");
++    assert!(rejects_admission(
++        &wrong_runtime,
++        &useful_plan,
++        Some(&delta)
++    ));
++
++    let mut wrong_state = third.value.clone();
++    wrong_state["receipt"]["lanes"][0]["layers"][2]["state_digest"] =
++        serde_json::json!(digest_b3(b"forged third cargo state"));
++    assert!(rejects_admission(&wrong_state, &useful_plan, Some(&delta)));
++
++    let mut wrong_plan_id = third.value.clone();
++    wrong_plan_id["receipt"]["plan_id"] = serde_json::json!("plan-p732-a2");
++    assert!(rejects_admission(
++        &wrong_plan_id,
++        &useful_plan,
++        Some(&delta)
++    ));
++    Ok(())
++}
++
++fn rejects_admission(
++    value: &serde_json::Value,
++    plan: &crate::workflow::Plan,
++    source_delta: Option<&crate::workflow::QualificationSourceDelta>,
++) -> bool {
++    match admission_from_value(value, source_delta) {
++        Ok(admission) => admission.validate_for_plan(plan).is_err(),
++        Err(_) => true,
++    }
++}
+diff --git a/crates/velnor-actions-contract/src/workflow/qualification_cache_lineage_directive_tests.rs b/crates/velnor-actions-contract/src/workflow/qualification_cache_lineage_directive_tests.rs
+new file mode 100644
+index 000000000..155b2c4bf
+--- /dev/null
++++ b/crates/velnor-actions-contract/src/workflow/qualification_cache_lineage_directive_tests.rs
+@@ -0,0 +1,207 @@
++use super::*;
++
++use crate::ids::{plan_id_for_run, run_key_for_ci};
++use crate::workflow::{
++    EntryCacheIds, ExecuteTaskIds, MatrixEntry, ObligationDecision, Plan, PlanBaseline,
++    PlanGenerator, PlanMatrix, PlanObligation, PlanPackage, PlanRunner, QualificationDispatch,
++    QualificationPhase, QualificationRuntimeIdentity, QualificationRuntimeIdentityRequirements,
++    QualificationRuntimePlatform, WorkflowEvent,
++};
++use crate::{RunnerSelection, Trust, digest_b3};
++
++type TestResult = Result<(), Box<dyn std::error::Error>>;
++
++#[test]
++fn serialized_control_and_task_result_saves_cannot_authorize_cache_access() -> TestResult {
++    for (phase, layer) in [
++        (
++            QualificationPhase::Control,
++            QualificationCacheLayer::CargoSources,
++        ),
++        (
++            QualificationPhase::Cold,
++            QualificationCacheLayer::TaskResult,
++        ),
++    ] {
++        let plan = qualification_plan(phase, 700, &"a".repeat(40), None)?;
++        let entry = &plan.matrix.include[0];
++        let directive = QualificationCacheDirective::for_plan(&plan, None)?
++            .ok_or_else(|| std::io::Error::other("qualification directive missing"))?;
++        let layer_directive = directive
++            .layer(&entry.matrix_key, layer)
++            .ok_or_else(|| std::io::Error::other("layer directive missing"))?;
++        let evidence = runtime_identity(&layer_directive.runtime);
++        let mut serialized = serde_json::to_value(&directive)?;
++        let layers = serialized["lanes"][0]["layers"]
++            .as_array_mut()
++            .ok_or_else(|| std::io::Error::other("layers are not an array"))?;
++        let forged = layers
++            .iter_mut()
++            .find(|value| value["layer"] == serde_json::json!(layer))
++            .ok_or_else(|| std::io::Error::other("target layer missing"))?;
++        forged["active"] = serde_json::json!(true);
++        forged["restore"] = serde_json::json!({"slot":"k1","expected_cache":null});
++        forged["restore_policy"] = serde_json::json!("admission_gated");
++        forged["save_policy"] = serde_json::json!("k1");
++
++        let forged: QualificationCacheDirective = serde_json::from_value(serialized)?;
++        assert!(
++            forged
++                .bind_runtime(&plan, None, &entry.matrix_key, layer, &evidence)
++                .is_err(),
++            "{phase:?} forged {layer:?} directive must fail plan reconstruction"
++        );
++    }
++    Ok(())
++}
++
++#[test]
++fn plan_reconstructed_cold_directive_binds_runtime_identity() -> TestResult {
++    let plan = qualification_plan(QualificationPhase::Cold, 700, &"a".repeat(40), None)?;
++    plan.validate()?;
++    let entry = &plan.matrix.include[0];
++    let directive = QualificationCacheDirective::for_plan(&plan, None)?
++        .ok_or_else(|| std::io::Error::other("qualification directive missing"))?;
++    let layer_directive = directive
++        .layer(&entry.matrix_key, QualificationCacheLayer::CargoSources)
++        .ok_or_else(|| std::io::Error::other("layer directive missing"))?;
++    let keys = directive.bind_runtime(
++        &plan,
++        None,
++        &entry.matrix_key,
++        QualificationCacheLayer::CargoSources,
++        &runtime_identity(&layer_directive.runtime),
++    )?;
++    assert!(keys.restore.is_some());
++    assert!(keys.save_key.is_some());
++    Ok(())
++}
++
++pub(super) fn qualification_plan(
++    phase: QualificationPhase,
++    run_id: u64,
++    source_sha: &str,
++    predecessor: Option<crate::workflow::QualificationRunRef>,
++) -> Result<Plan, crate::ContractError> {
++    let package_id = "path+file:///workspace/crates/demo#demo@0.1.0".to_owned();
++    let task_digest = digest_b3(b"test task");
++    let input_digest = digest_b3(b"test input");
++    let run_key = run_key_for_ci(run_id, 1);
++    let entry = qualification_entry(&package_id, &task_digest, &input_digest, &run_key)?;
++    let context = qualification_context(phase, source_sha, run_id, predecessor);
++    Ok(Plan {
++        schema: 1,
++        run_key: run_key.clone(),
++        plan_id: plan_id_for_run(&run_key)?,
++        base: None,
++        head: source_sha.to_owned(),
++        event: WorkflowEvent::Qualification,
++        qualification: Some(context),
++        runner: PlanRunner {
++            label: "ubuntu-26.04".to_owned(),
++            selection: RunnerSelection::LatestDefault,
++        },
++        trust: Trust::Pr,
++        baseline: PlanBaseline::unavailable(Some("qualification_bypass"))?,
++        generator: PlanGenerator {
++            version: "0.1.0".to_owned(),
++            target: "x86_64-unknown-linux-gnu".to_owned(),
++            sha256: "c".repeat(64),
++        },
++        packages: vec![PlanPackage {
++            package_id,
++            name: "demo".to_owned(),
++            manifest: "crates/demo/Cargo.toml".to_owned(),
++            selected: true,
++            reasons: vec!["changed".to_owned()],
++            tasks: vec!["stack/rust/demo/test/default".to_owned()],
++        }],
++        obligations: vec![PlanObligation {
++            task_id: "stack/rust/demo/test/default".to_owned(),
++            decision: ObligationDecision::Execute,
++            reason: "qualification_full".to_owned(),
++            task_digest: task_digest.clone(),
++            input_digest,
++            closure_digest: digest_b3(b"closure"),
++            baseline_proof: None,
++        }],
++        matrix: PlanMatrix {
++            include: vec![entry],
++        },
++        task_ids: vec!["stack/rust/demo/test/default".to_owned()],
++        warnings: Vec::new(),
++        edges: Vec::new(),
++    })
++}
++
++fn qualification_entry(
++    package_id: &str,
++    task_digest: &str,
++    input_digest: &str,
++    run_key: &str,
++) -> Result<MatrixEntry, crate::ContractError> {
++    let mut entry = MatrixEntry::derive(
++        "rust",
++        "stack/rust/demo/test/default",
++        "mise run test",
++        task_digest,
++        serde_json::json!({
++            "package_id": package_id,
++            "unit_id": package_id,
++            "compile_driver": "cargo"
++        }),
++        ExecuteTaskIds::default(),
++        input_digest,
++        run_key,
++        "rust-demo",
++    )?;
++    entry.cache_ids = Some(EntryCacheIds::new(
++        &digest_b3(b"workspace"),
++        &digest_b3(b"lane"),
++        &digest_b3(b"platform"),
++        &digest_b3(b"toolchain"),
++        &digest_b3(b"cache format"),
++    )?);
++    Ok(entry)
++}
++
++fn qualification_context(
++    phase: QualificationPhase,
++    source_sha: &str,
++    run_id: u64,
++    predecessor: Option<crate::workflow::QualificationRunRef>,
++) -> QualificationDispatch {
++    QualificationDispatch {
++        campaign: "directive-boundary".to_owned(),
++        phase,
++        repository: "tailrocks/velnor-new".to_owned(),
++        default_branch: "main".to_owned(),
++        git_ref: "refs/heads/main".to_owned(),
++        ref_protected: true,
++        workflow_ref: "tailrocks/velnor-new/.github/workflows/ci.yml@refs/heads/main".to_owned(),
++        workflow_sha: source_sha.to_owned(),
++        source_sha: source_sha.to_owned(),
++        run_id,
++        run_attempt: 1,
++        predecessor,
++    }
++}
++
++pub(super) fn runtime_identity(
++    requirements: &QualificationRuntimeIdentityRequirements,
++) -> QualificationRuntimeIdentity {
++    QualificationRuntimeIdentity {
++        platform: QualificationRuntimePlatform {
++            os: "linux".to_owned(),
++            arch: "x86_64".to_owned(),
++            runs_on: requirements.runner_label.clone(),
++            image_os: "ubuntu".to_owned(),
++            image_version: "26.04".to_owned(),
++            target: requirements.target.clone(),
++        },
++        toolchain_id: requirements.toolchain_id.clone(),
++        cache_format_id: requirements.cache_format_id.clone(),
++        abi_id: digest_b3(b"abi"),
++        driver_id: requirements.driver_id.clone(),
++    }
++}
+diff --git a/crates/velnor-actions-contract/src/workflow/qualification_cache_lineage_metadata_fixture.rs b/crates/velnor-actions-contract/src/workflow/qualification_cache_lineage_metadata_fixture.rs
+new file mode 100644
+index 000000000..2843a0afe
+--- /dev/null
++++ b/crates/velnor-actions-contract/src/workflow/qualification_cache_lineage_metadata_fixture.rs
+@@ -0,0 +1,73 @@
++use crate::workflow::{
++    QualificationCacheArtifact, QualificationCacheProducerContext, QualificationCacheRunMetadata,
++    QualificationDispatch, QualificationRunRef,
++};
++
++pub(super) fn producer_context(
++    plan: &crate::workflow::Plan,
++) -> super::TestResult<QualificationCacheProducerContext> {
++    let context = dispatch(plan)?;
++    Ok(QualificationCacheProducerContext {
++        repository: context.repository.clone(),
++        default_branch: context.default_branch.clone(),
++        git_ref: context.git_ref.clone(),
++        ref_protected: context.ref_protected,
++        workflow_ref: context.workflow_ref.clone(),
++        workflow_sha: context.workflow_sha.clone(),
++        source_sha: context.source_sha.clone(),
++        run: run_ref(context),
++    })
++}
++
++pub(super) fn run_metadata(
++    plan: &crate::workflow::Plan,
++) -> super::TestResult<QualificationCacheRunMetadata> {
++    let context = dispatch(plan)?;
++    Ok(QualificationCacheRunMetadata {
++        repository: context.repository.clone(),
++        default_branch: context.default_branch.clone(),
++        git_ref: context.git_ref.clone(),
++        ref_protected: context.ref_protected,
++        workflow_path_ref: format!(
++            "{}@{}",
++            crate::workflow::CI_WORKFLOW_PATH,
++            context.default_branch
++        ),
++        workflow_ref: context.workflow_ref.clone(),
++        workflow_sha: context.workflow_sha.clone(),
++        head_sha: context.source_sha.clone(),
++        event: "workflow_dispatch".to_owned(),
++        conclusion: "success".to_owned(),
++        run: run_ref(context),
++    })
++}
++
++pub(super) fn artifact_metadata(
++    plan: &crate::workflow::Plan,
++    size_bytes: usize,
++) -> super::TestResult<QualificationCacheArtifact> {
++    let context = dispatch(plan)?;
++    Ok(QualificationCacheArtifact {
++        id: context.run_id + 1_000,
++        name: crate::workflow::QUALIFICATION_CACHE_RECEIPT_ARTIFACT.to_owned(),
++        digest: format!("sha256:{:064x}", context.run_id),
++        size_bytes: size_bytes as u64,
++        expired: false,
++        workflow_run_id: context.run_id,
++        workflow_head_branch: context.default_branch.clone(),
++        workflow_head_sha: context.source_sha.clone(),
++    })
++}
++
++pub(super) fn dispatch(plan: &crate::workflow::Plan) -> super::TestResult<&QualificationDispatch> {
++    plan.qualification
++        .as_ref()
++        .ok_or_else(|| std::io::Error::other("qualification context missing").into())
++}
++
++pub(super) fn run_ref(context: &QualificationDispatch) -> QualificationRunRef {
++    QualificationRunRef {
++        run_id: context.run_id,
++        run_attempt: context.run_attempt,
++    }
++}

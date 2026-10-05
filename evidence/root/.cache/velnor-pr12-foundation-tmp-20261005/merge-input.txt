@@ -1,0 +1,3 @@
+Integrate qualified platform checks with Rust maintenance policy
+
+Co-authored-by: Codex <codex@openai.com>

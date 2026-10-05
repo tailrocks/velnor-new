@@ -1,0 +1,8 @@
+Integrate fail-closed release manifests and regenerate goldens
+
+Merge the approved release-manifest fixture changes into the freshness
+foundation. Regenerate the canonical five-case OpenTofu output from the
+shipping release binary and verify byte parity.
+
+Co-authored-by: Codex <codex@openai.com>
+Signed-off-by: Alexey Zhokhov <alexey@zhokhov.com>

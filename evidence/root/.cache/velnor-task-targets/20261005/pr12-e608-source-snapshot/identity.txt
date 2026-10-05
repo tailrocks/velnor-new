@@ -1,0 +1,4 @@
+commit=e608f82039375a4c2a839d5229e1d2dd3035617b
+tree=f5c63ac98f7d79d68eb9448c6ff9600a872d0c2a
+source=/root/.cache/velnor-task-targets/20261005/pr12-e608-source-snapshot/source
+archive=/root/.cache/velnor-task-targets/20261005/pr12-e608-source-snapshot/source.tar

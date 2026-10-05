@@ -1,0 +1,31 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s
+────────────
+ Nextest run ID 0394d0d3-ee5d-4b21-a582-68d653ef7fc2 with nextest profile: default
+    Starting 2 tests across 2 binaries (431 tests skipped)
+        FAIL [   0.016s] (1/2) velnor-actions-workflow-renderer schema2::generator_release::archive::tests::extracts_only_an_exact_regular_archive
+  stdout ───
+
+    running 1 test
+    test schema2::generator_release::archive::tests::extracts_only_an_exact_regular_archive ... FAILED
+
+    failures:
+
+    failures:
+        schema2::generator_release::archive::tests::extracts_only_an_exact_regular_archive
+
+    test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 104 filtered out; finished in 0.01s
+
+  stderr ───
+    mise ERROR error parsing config file: /tmp/velnor-impl-20261005/cache/pr38/mise.toml
+    mise ERROR Config files in /tmp/velnor-impl-20261005/cache/pr38/mise.toml are not trusted.
+    Trust them with `mise trust`. See https://mise.jdx.dev/cli/trust.html for more information.
+    mise ERROR Version: 2026.9.18 linux-x64 (2026-09-30)
+    mise ERROR Run with --verbose or MISE_VERBOSE=1 for more information
+    Error: "archive fixture creation failed for valid"
+
+  Cancelling due to test failure: 
+────────────
+     Summary [   0.018s] 1/2 tests run: 0 passed, 1 failed, 431 skipped
+        FAIL [   0.016s] (1/2) velnor-actions-workflow-renderer schema2::generator_release::archive::tests::extracts_only_an_exact_regular_archive
+warning: 1/2 tests were not run due to test failure (run with --no-fail-fast to run all tests, or run with --max-fail)
+error: test run failed

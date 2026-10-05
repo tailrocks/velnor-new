@@ -1,0 +1,6 @@
+[main (root-commit) b1a3db6] fixture
+ 4 files changed, 29 insertions(+)
+ create mode 100644 .velnor/config.toml
+ create mode 100644 .velnor/release-manifest.json
+ create mode 100644 README.md
+ create mode 100644 stacks/r000/main.tf

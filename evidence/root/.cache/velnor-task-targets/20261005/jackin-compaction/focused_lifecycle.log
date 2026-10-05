@@ -1,0 +1,23 @@
+mise by @jdx – installing 1 tool
+mise rust@1.98.1 info: syncing channel updates for 1.98.1-x86_64-unknown-linux-gnu
+mise rust@1.98.1 info: latest update on 2026-09-03 for version 1.98.1 (48a229cea 2026-09-01)
+mise rust@1.98.1 info: component clippy is up to date
+mise rust@1.98.1 info: component rust-docs is up to date
+mise rust@1.98.1 info: component rustfmt is up to date
+mise rust@1.98.1   1.98.1-x86_64-unknown-linux-gnu unchanged - rustc 1.98.1 (48a229cea 2026-09-01)
+mise rust@1.98.1 info: checking for self-update (current version: 1.29.1)
+mise rust@1.98.1 rustc 1.98.1 (48a229cea 2026-09-01)
+mise ✓ rust@1.98.1  239ms
+mise ████████████████ 1/1 · installed 1 tool in 240ms
+   Compiling velnor-actions-workflow-renderer v0.1.0 (/tmp/velnor-render-compaction-44b2-20261005/crates/velnor-actions-workflow-renderer)
+error[E0308]: mismatched types
+   --> crates/velnor-actions-workflow-renderer/src/document_setup_compaction_tests.rs:318:16
+    |
+318 |         bytes: b"other generated action".to_vec(),
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `String`, found `Vec<u8>`
+    |
+    = note: expected struct `String`
+               found struct `Vec<u8>`
+
+For more information about this error, try `rustc --explain E0308`.
+error: could not compile `velnor-actions-workflow-renderer` (lib test) due to 1 previous error

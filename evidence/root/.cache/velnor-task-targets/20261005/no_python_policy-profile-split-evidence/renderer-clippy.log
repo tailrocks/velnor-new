@@ -1,0 +1,7 @@
+    Checking memchr v2.8.3
+    Checking serde_core v1.0.229
+    Checking serde v1.0.229
+    Checking serde_json v1.0.151
+    Checking velnor-actions-contract v0.1.0 (/root/.cache/velnor-task-targets/20261005/no_python_policy-profile-split-joined-20261005/crates/velnor-actions-contract)
+    Checking velnor-actions-workflow-renderer v0.1.0 (/root/.cache/velnor-task-targets/20261005/no_python_policy-profile-split-joined-20261005/crates/velnor-actions-workflow-renderer)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 4.06s

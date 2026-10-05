@@ -1,0 +1,26 @@
+   Compiling velnor-actions-workflow-renderer v0.1.1 (/tmp/velnor-impl-20261005/cache/pr38/crates/velnor-actions-workflow-renderer)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.32s
+────────────
+ Nextest run ID a335f756-081a-4801-b0a0-508526a5306f with nextest profile: default
+    Starting 19 tests across 2 binaries (421 tests skipped)
+        PASS [   0.005s] ( 1/19) velnor-actions-workflow-renderer::velnor_workflow_renderer impl_renderer_p08_elect::provider_writer_election_saves_push_gated_exact_entry
+        PASS [   0.005s] ( 2/19) velnor-actions-workflow-renderer::velnor_workflow_renderer impl_renderer_p08_elect::provider_writer_election_skips_keyless_and_reruns
+        PASS [   0.005s] ( 3/19) velnor-actions-workflow-renderer::velnor_workflow_renderer impl_renderer_p08_tofu_elect::provider_writer_election_elects_lowest_id_per_key
+        PASS [   0.007s] ( 4/19) velnor-actions-workflow-renderer::velnor_workflow_renderer impl_renderer_p08_elect::combined_election_rejects_provider_conflict_before_appending_tools_save
+        PASS [   0.008s] ( 5/19) velnor-actions-workflow-renderer::velnor_workflow_renderer impl_renderer_cache_steps::strict_wires_runtime_qualified_tools_cache_before_setup_and_saves_once
+        PASS [   0.008s] ( 6/19) velnor-actions-workflow-renderer::velnor_workflow_renderer impl_renderer_p08_elect::provider_writer_election_elects_lowest_id_per_key
+        PASS [   0.009s] ( 7/19) velnor-actions-workflow-renderer::velnor_workflow_renderer impl_renderer_p08_elect::tools_cache_writer_rejects_restore_without_identity
+        PASS [   0.010s] ( 8/19) velnor-actions-workflow-renderer::velnor_workflow_renderer impl_renderer_p08_elect::tools_cache_writer_election_prefers_plan_then_lowest_id
+        PASS [   0.011s] ( 9/19) velnor-actions-workflow-renderer lane_share::tests::cache_tests::only_qualified_hosted_lane_keeps_a_tools_cache_prelude
+        PASS [   0.055s] (10/19) velnor-actions-workflow-renderer::velnor_workflow_renderer impl_renderer_p08_elect::tools_cache_writer_skips_keyless_and_reruns
+        PASS [   0.055s] (11/19) velnor-actions-workflow-renderer::velnor_workflow_renderer impl_renderer_p08_tools_election::tools_cache_election_ignores_winner_save_presentation_name
+        PASS [   0.056s] (12/19) velnor-actions-workflow-renderer::velnor_workflow_renderer impl_renderer_p08_elect::tools_cache_writer_saves_exact_payload_and_is_push_gated
+        PASS [   0.056s] (13/19) velnor-actions-workflow-renderer::velnor_workflow_renderer impl_renderer_p08_tofu_elect::provider_writer_election_rejects_a_valid_save_on_a_losing_owner
+        PASS [   0.056s] (14/19) velnor-actions-workflow-renderer::velnor_workflow_renderer impl_renderer_p08_tofu_elect::provider_writer_election_saves_push_gated_exact_entry
+        PASS [   0.056s] (15/19) velnor-actions-workflow-renderer::velnor_workflow_renderer impl_renderer_p08_tofu_elect::provider_writer_election_rejects_mismatched_or_weak_existing_save
+        PASS [   0.056s] (16/19) velnor-actions-workflow-renderer::velnor_workflow_renderer impl_renderer_p08_tools_election::tools_cache_election_rejects_orphan_and_duplicate_winner_saves
+        PASS [   0.057s] (17/19) velnor-actions-workflow-renderer::velnor_workflow_renderer impl_renderer_p08_tools_election::tools_cache_election_rejects_mutated_winner_key_path_and_gate
+        PASS [   0.059s] (18/19) velnor-actions-workflow-renderer::velnor_workflow_renderer impl_renderer_p08_tofu_elect::provider_writer_election_skips_keyless_and_reruns
+        PASS [   0.060s] (19/19) velnor-actions-workflow-renderer::velnor_workflow_renderer impl_renderer_p08_tools_election::tools_cache_election_rejects_loser_saves_and_mutated_loser_shapes
+────────────
+     Summary [   0.062s] 19 tests run: 19 passed, 421 skipped

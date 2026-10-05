@@ -1,0 +1,26 @@
+uid=0(root) gid=0(root) groups=0(root)
+PASS newline-rejected
+PASS absolute-relative-target-preserved
+PASS absolute-link-target-rejected
+PASS dot-symlink-walk
+PASS symlink-escape
+PASS strip-components-rejected-before-symlink-extract
+PASS preexisting-symlink
+PASS symlink-inside
+PASS external-relative-symlink
+PASS mode-and-mtime
+PASS directory-metadata
+PASS restrictive-parent-metadata
+PASS rewritten-long-paths
+PASS rewritten-pax-member
+MEASURE external-restore-100 elapsed-ms=197 busybox-tar-calls=1 member-moves=0
+PASS grouped-external-restore
+PASS empty-dir
+PASS long-and-deep
+PASS gnu-enosys-still-extracts
+PASS space-name
+PASS corrupt-header
+PASS list-drains-tail
+PASS partial-archive
+PASS disk-full
+RESULT pass=23 fail=0

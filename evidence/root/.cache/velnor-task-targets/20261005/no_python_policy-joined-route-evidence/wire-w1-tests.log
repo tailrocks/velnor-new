@@ -1,0 +1,25 @@
+mise by @jdx – installing 1 tool
+mise rust@1.98.1 info: syncing channel updates for 1.98.1-x86_64-unknown-linux-gnu
+mise rust@1.98.1 info: latest update on 2026-09-03 for version 1.98.1 (48a229cea 2026-09-01)
+mise rust@1.98.1 info: component clippy is up to date
+mise rust@1.98.1 info: component rust-docs is up to date
+mise rust@1.98.1 info: component rustfmt is up to date
+mise rust@1.98.1   1.98.1-x86_64-unknown-linux-gnu unchanged - rustc 1.98.1 (48a229cea 2026-09-01)
+mise rust@1.98.1 info: checking for self-update (current version: 1.29.1)
+mise rust@1.98.1 rustc 1.98.1 (48a229cea 2026-09-01)
+mise ✓ rust@1.98.1  327ms
+mise ████████████████ 1/1 · installed 1 tool in 328ms
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running unittests src/lib.rs (/root/.cache/velnor-task-targets/20261005/no_python_policy-joined-route-target/debug/deps/velnor_actions_orchestrator-2d7f35443e58ece5)
+
+running 7 tests
+test workflow::wire_w1::wire_w1_tests::crate_mise_tools_follow_installable_role_selection ... ok
+test workflow::wire_w1::wire_w1_tests::checkout_pins_canonical_ref_and_validates_inputs ... ok
+test workflow::wire_w1::wire_w1_tests::checkout_full_provides_history_for_git_archaeology ... ok
+test workflow::wire_w1::wire_w1_tests::syntax_gate_allows_matrix_and_rejects_native ... ok
+test workflow::wire_w1::wire_w1_tests::task_cache_steps_need_fixture_and_live_mode ... ok
+test workflow::wire_w1::wire_w1_tests::crate_tools_follow_selection_with_validators ... ok
+test workflow::wire_w1::wire_w1_tests::crate_tools_install_exact_pinned_set ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 483 filtered out; finished in 0.00s
+

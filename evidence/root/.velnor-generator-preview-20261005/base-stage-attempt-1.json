@@ -1,0 +1,25 @@
+{
+  "command": [
+    "/usr/bin/env",
+    "-i",
+    "PATH=/usr/bin:/bin",
+    "LC_ALL=C",
+    "/usr/bin/python3",
+    "-I",
+    "-S",
+    "/root/.velnor-generator-preview-20261005/preseed-preview-materialize.py"
+  ],
+  "effective_uid": 0,
+  "exit_code": 1,
+  "finished_utc": "2026-10-05T09:21:55Z",
+  "host": "bastion",
+  "materializer_sha256": "53c9c3707868c5e116e3033785af37397204874fbe3ed4d73500e9aa445e5a98",
+  "output_log_path": "/root/.velnor-generator-preview-20261005/materialize-attempt-1.log",
+  "output_log_sha256": "c75fb2a7bb80f7d3d27dff06f5a58425cd1e87422a97a6b26168081bb4e9d4bb",
+  "plan_sha256": "ebca0ef5f4c716e533cece9637b3d68763cc8265ce4016bf84a85a279416e77f",
+  "provenance_sha256": "67a8ba245858b11276a6496a513584fefec26e26218b0cdfad028a3fac07d137",
+  "redacted_result": "materializer: Mise provenance mismatch",
+  "stage_state": "No .rootfs-materializing, rootfs, or rootfs-base-manifest.json created. No binaries, validators, installers, Cargo, helper, or generator executed.",
+  "started_utc": "2026-10-05T09:21:20Z",
+  "status": "FAIL"
+}

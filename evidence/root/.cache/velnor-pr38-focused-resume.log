@@ -1,0 +1,19 @@
+   Compiling velnor-actions-orchestrator v0.1.0 (/tmp/velnor-impl-20261005/cache/pr38/crates/velnor-actions-orchestrator)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.40s
+────────────
+ Nextest run ID 8a13d8fe-2540-4914-8de3-d88102ddba45 with nextest profile: default
+    Starting 12 tests across 5 binaries (1465 tests skipped)
+        PASS [   0.008s] ( 1/12) velnor-actions-workflow-renderer::velnor_workflow_renderer impl_renderer_mbx_order::typed_mbx_owner_precedes_cargo_source_fetch_independent_of_labels
+        PASS [   0.009s] ( 2/12) velnor-actions-orchestrator attach::attach_tests::preseed_attach_builds_once_and_sets_mode
+        PASS [   0.010s] ( 3/12) velnor-actions-workflow-renderer::velnor_workflow_renderer impl_renderer_p08_elect::provider_writer_election_elects_lowest_id_per_key
+        PASS [   0.010s] ( 4/12) velnor-actions-workflow-renderer::velnor_workflow_renderer impl_renderer_cache_steps::mbx_objects_step_gates_save_to_push_via_cache_mode
+        PASS [   0.010s] ( 5/12) velnor-actions-workflow-renderer::velnor_workflow_renderer impl_renderer_cache_steps::strict_wires_runtime_qualified_tools_cache_before_setup_and_saves_once
+        PASS [   0.010s] ( 6/12) velnor-actions-workflow-renderer::velnor_workflow_renderer impl_renderer_p08_elect::provider_writer_election_saves_push_gated_exact_entry
+        PASS [   0.011s] ( 7/12) velnor-actions-workflow-renderer::velnor_workflow_renderer impl_renderer_finalfanin_cache::checkoutless_required_job_does_not_call_local_cache_action
+        PASS [   0.012s] ( 8/12) velnor-actions-workflow-renderer::velnor_workflow_renderer impl_renderer_mbx_gc_policy::mbx_job_policy_applies_to_hosted_and_scale_set_lanes
+        PASS [   0.015s] ( 9/12) velnor-actions-workflow-renderer::velnor_workflow_renderer impl_renderer_mbx_native_owner::native_action_is_the_only_mbx_cache_owner_on_both_lanes
+        PASS [   0.038s] (10/12) velnor-actions-orchestrator::velnor_orchestrator impl_preseed_cold::unix::cold_preseed_preflight_needs_prepared_rust_and_not_a_warm_mise_cache
+        PASS [   0.071s] (11/12) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t20::tofu_root_jobs_carry_opentofu_display_names
+        PASS [   4.324s] (12/12) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t22::cold_tree_plans_executes_and_generates_without_seeded_cache
+────────────
+     Summary [   4.327s] 12 tests run: 12 passed, 1465 skipped

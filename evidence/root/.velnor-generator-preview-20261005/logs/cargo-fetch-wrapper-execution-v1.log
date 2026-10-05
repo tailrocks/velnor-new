@@ -1,0 +1,8 @@
+started_utc=2026-10-05T11:41:56Z
+d5c326caed724055af4e317aa4f99a0e59bbc414862da606e9782321e817a306  /root/.velnor-generator-preview-20261005/preseed-preview-cargo-fetch-v2.sh
+0bcf118082304e72b1ae46d53abab4ab8dbbca62df731e2a7f3b6627a29043f8  /root/.velnor-generator-preview-20261005/preseed-preview-cargo-fetch-namespace-v2.sh
+dd5425fceb1524fc304e0da46cf6c64a8b63ee643f8ad6e6689cb15c241ef974  /root/.velnor-generator-preview-20261005/rootfs-input-delta-manifest.json
+reviewed base and input delta manifests plus complete result rootfs tree verified
+cargo source snapshot: Git object is missing or returned an invalid header
+wrapper_exit=1
+finished_utc=2026-10-05T11:41:57Z

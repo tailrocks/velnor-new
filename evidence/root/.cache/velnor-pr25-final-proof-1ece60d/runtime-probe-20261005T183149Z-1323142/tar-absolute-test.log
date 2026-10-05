@@ -1,0 +1,27 @@
+uid=0(root) gid=0(root) groups=0(root)
+400270104f3376dcf33ac07aa953dd96f22aeba503c1bdec798cef5bbbf5b82e  images/runner/ubuntu-26.04/tar-shim.sh
+400270104f3376dcf33ac07aa953dd96f22aeba503c1bdec798cef5bbbf5b82e  /usr/local/bin/velnor-tar
+PASS collision-a-then-b
+sed: can't read /proc/332/stat: No such file or directory
+PASS collision-b-then-a
+PASS filter-safe-member
+PASS repeated-path-last-wins
+PASS flag-no-same-owner
+PASS flag-delay-directory-restore
+PASS flag-bzip2
+PASS reject-parent-without-p
+PASS verbose-identical
+PASS safe-hardlink-with-unsafe
+PASS unsafe-hardlink-fails
+PASS plain-extract
+PASS absolute-file
+PASS legacy-unknown-after-value-flags
+PASS dash-positional
+PASS dash-attached-values
+PASS stream-no-raw-archive
+velnor-tar-member: index out of range
+velnor-tar: member extract failed
+PASS emit-death-does-not-hang
+PASS cache-posix
+PASS unicode-member
+RESULT pass=20 fail=0

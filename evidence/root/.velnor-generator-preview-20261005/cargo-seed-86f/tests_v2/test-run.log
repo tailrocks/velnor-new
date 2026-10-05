@@ -1,0 +1,23 @@
+test_archive_copy_enforces_streaming_limit_when_file_grows (test_seed_candidate_v2.SeedCandidateFixture.test_archive_copy_enforces_streaming_limit_when_file_grows) ... ok
+test_archive_copy_rejects_oversize_and_removes_partial_output (test_seed_candidate_v2.SeedCandidateFixture.test_archive_copy_rejects_oversize_and_removes_partial_output) ... ok
+test_archive_decompression_has_a_total_stream_limit (test_seed_candidate_v2.SeedCandidateFixture.test_archive_decompression_has_a_total_stream_limit) ... ok
+test_bounded_entry_caps_combined_output (test_seed_candidate_v2.SeedCandidateFixture.test_bounded_entry_caps_combined_output) ... ok
+test_bounded_entry_times_out_and_reaps_process_tree (test_seed_candidate_v2.SeedCandidateFixture.test_bounded_entry_times_out_and_reaps_process_tree) ... ok
+test_builds_and_verifies_exact_two_version_capsule (test_seed_candidate_v2.SeedCandidateFixture.test_builds_and_verifies_exact_two_version_capsule) ... ok
+test_crates_io_index_path_shapes (test_seed_candidate_v2.SeedCandidateFixture.test_crates_io_index_path_shapes) ... ok
+test_fifo_is_rejected_without_waiting_for_a_writer (test_seed_candidate_v2.SeedCandidateFixture.test_fifo_is_rejected_without_waiting_for_a_writer) ... ok
+test_git_capture_is_capped (test_seed_candidate_v2.SeedCandidateFixture.test_git_capture_is_capped) ... ok
+test_git_command_has_a_runtime_bound (test_seed_candidate_v2.SeedCandidateFixture.test_git_command_has_a_runtime_bound) ... ok
+test_read_detects_file_growth_during_read (test_seed_candidate_v2.SeedCandidateFixture.test_read_detects_file_growth_during_read) ... ok
+test_read_rejects_initial_file_over_limit (test_seed_candidate_v2.SeedCandidateFixture.test_read_rejects_initial_file_over_limit) ... ok
+test_refuses_destination_at_private_directory_root (test_seed_candidate_v2.SeedCandidateFixture.test_refuses_destination_at_private_directory_root) ... ok
+test_refuses_source_commit_that_does_not_match_pin (test_seed_candidate_v2.SeedCandidateFixture.test_refuses_source_commit_that_does_not_match_pin) ... ok
+test_rejects_archive_checksum_mismatch_and_cleans_partial_candidate (test_seed_candidate_v2.SeedCandidateFixture.test_rejects_archive_checksum_mismatch_and_cleans_partial_candidate) ... ok
+test_rejects_archive_path_traversal_without_writing_outside_capsule (test_seed_candidate_v2.SeedCandidateFixture.test_rejects_archive_path_traversal_without_writing_outside_capsule) ... ok
+test_rejects_index_checksum_mismatch_and_cleans_partial_candidate (test_seed_candidate_v2.SeedCandidateFixture.test_rejects_index_checksum_mismatch_and_cleans_partial_candidate) ... ok
+test_verifier_rejects_unexpected_config_or_credential_file (test_seed_candidate_v2.SeedCandidateFixture.test_verifier_rejects_unexpected_config_or_credential_file) ... ok
+
+----------------------------------------------------------------------
+Ran 18 tests in 1.424s
+
+OK

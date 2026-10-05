@@ -1,0 +1,11 @@
+mise ERROR No version is set for shim: cargo-deny
+Set a global default version with one of the following:
+mise use -g aqua:EmbarkStudios/cargo-deny@0.18.4
+mise use -g aqua:EmbarkStudios/cargo-deny@0.20.2
+mise use -g cargo-deny@0.18.4
+mise use -g cargo-deny@0.19.0
+mise use -g cargo-deny@0.20.2
+mise use -g cargo:cargo-deny@0.20.2
+mise use -g github:EmbarkStudios/cargo-deny@0.20.2
+mise ERROR Version: 2026.9.18 linux-x64 (2026-09-30)
+mise ERROR Run with --verbose or MISE_VERBOSE=1 for more information

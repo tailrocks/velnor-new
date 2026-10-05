@@ -1,0 +1,32 @@
+/tmp/velnor-pr56-capacity-59c-702544		3	
+/tmp/velnor-pr56-capacity-59b-694938		3	
+/tmp/velnor-pr56-capacity-59-692040		4	
+/tmp/velnor-mbx-action-1.6.0	1687e54eb349cadf61fa38b5813a77875489e8e6	0	https://github.com/jdx/mr-boxington-action.git
+/tmp/velnor-policy-probe-20261005/github-terraform-667eae4		24	
+/tmp/velnor-policy-probe-20261005/jackin		58	
+/tmp/velnor-release-manifest-integration-20261005/consumer-project		3	
+/tmp/velnor-release-manifest-integration-20261005/consumer		31	https://github.com/tailrocks/velnor-new.git
+/tmp/velnor-permissions.1C7f4R/repo	3ec6f32b5bafa5fa34ce9aa22afd7cfe2e797132	0	https://github.com/tailrocks/velnor-new.git
+/tmp/velnor-upstream-main	3ec6f32b5bafa5fa34ce9aa22afd7cfe2e797132	0	https://github.com/tailrocks/velnor-new.git
+/tmp/velnor-git-steward-retirement-20261005	e608f82039375a4c2a839d5229e1d2dd3035617b	0	https://github.com/tailrocks/velnor-new.git
+/root/.cache/velnor-task-targets/20261005/jackin-compaction/jackin-44b2-input		58	
+/root/.cache/velnor-task-targets/20261005/phase0-t24-main-generations/input-1	b1a3db6854964951b442275ff06158e540008ea3	0	
+/root/.cache/velnor-task-targets/20261005/phase0-t24-main-generations/input-10	2fe584b617497e3900df654c4ae869756b6ebba5	0	
+/root/.cache/velnor-task-targets/20261005/phase0-t24-main-generations/input-60	fa5af15e72b9cf00014866fe0088e6f019e1ebe9	0	
+/root/.cache/velnor-task-targets/20261005/phase0-t24-jackin-run/jackin	f02d62d12a0884d94ea3a8a574ab1aa0bebbdc0f	0	
+/root/.cache/velnor-task-targets/20261005/shared-script-compaction-a-jackin	f02d62d12a0884d94ea3a8a574ab1aa0bebbdc0f	0	
+/root/.cache/velnor-task-targets/20261005/trailer-integration-regressions-20261005	c7ee94a48d1ac9504aecc5ae09a4aaa15941cd38	2	
+/root/.cache/velnor-task-targets/20261005/pr92-schema-fix-7be34/source	7be34b741e7b5d0e2dbe1a1577240a8717fdfc9c	3	https://github.com/tailrocks/velnor-new.git
+/root/.cache/velnor-task-targets/20261005/mise-route-e608-render-pass		37	https://github.com/tailrocks/velnor-new.git
+/root/.cache/velnor-pr38-ccd-capdebug-20261005/repo	05c21a80301adeeccf1e57f594b096af971966b9	0	
+/root/.velnor-generator-preview-20261005/pr65-source	ff41745394712604bddf94b6a4e9f1069100789e	0	https://github.com/tailrocks/velnor-new.git
+/root/.velnor-generator-preview-20261005/jackin-source	0aa821a088e1bacf3d4d85a4c9faaa67faa85132	0	https://github.com/jackin-project/jackin.git
+/root/.velnor-generator-preview-20261005/main-source-clean	33f9572958b06bb5077b1e33333392d7b90a2ddf	0	https://github.com/tailrocks/velnor-new.git
+/root/.velnor-generator-preview-20261005/main-source-full	ecf54b771c0db11e03e54fa2c98cf531e5912585	0	https://github.com/tailrocks/velnor-new.git
+/root/.velnor-generator-preview-20261005/main-source-ac3ab	ac3ab6a3d5ba3701c1300bbdd8114390093c5c29	0	https://github.com/tailrocks/velnor-new.git
+/root/.velnor-generator-preview-20261005/jackin-source-b80f991d56c2-exact-v2	b80f991d56c2c13f913bb444f9f05a36b16d37df	0	https://github.com/jackin-project/jackin.git
+/root/.velnor-generator-preview-20261005/jackin-source-0cf350-v1		0	https://github.com/jackin-project/jackin.git
+/root/.velnor-generator-preview-20261005/main-source-86f	86f864aabc2192a9f8ccd3f01f2e25b7858c3f20	0	https://github.com/tailrocks/velnor-new.git
+/root/velnor-consumer-scratch-20261005/chainargos-java-8c08		46	
+/root/velnor-consumer-scratch-20261005/velnor-72f0fb1		42	
+/root/velnor-consumer-scratch-20261005/parallax-90d901c		39	

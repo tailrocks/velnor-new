@@ -1,0 +1,4 @@
+    Checking velnor-actions-workflow-renderer v0.1.0 (/tmp/velnor-impl-20261005/cache/pr38/crates/velnor-actions-workflow-renderer)
+    Checking velnor-actions-orchestrator v0.1.0 (/tmp/velnor-impl-20261005/cache/pr38/crates/velnor-actions-orchestrator)
+    Checking velnor-actions-cli v0.1.0 (/tmp/velnor-impl-20261005/cache/pr38/crates/velnor-actions-cli)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.33s

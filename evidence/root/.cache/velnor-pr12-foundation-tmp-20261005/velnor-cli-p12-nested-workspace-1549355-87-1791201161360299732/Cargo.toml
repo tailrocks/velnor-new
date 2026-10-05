@@ -1,0 +1,8 @@
+[workspace]
+exclude = ["crates/runner"]
+members = ["crates/aaa", "crates/bbb"]
+resolver = "3"
+
+[workspace.dependencies]
+serde = "=1.0.200"
+toml = { version = "=0.9.0" }

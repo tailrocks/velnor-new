@@ -1,0 +1,41 @@
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling serde_core v1.0.229
+   Compiling syn v3.0.6
+   Compiling serde v1.0.229
+   Compiling serde_derive v1.0.229
+   Compiling zmij v1.0.23
+   Compiling serde_json v1.0.151
+   Compiling thiserror-impl v2.0.21
+   Compiling hcl-primitives v0.1.12
+   Compiling thiserror v2.0.21
+   Compiling vecmap-rs v0.2.5
+   Compiling indexmap v2.14.2
+   Compiling hcl-edit v0.9.7
+   Compiling velnor-actions-contract v0.1.0 (/root/.cache/velnor-task-targets/20261005/mise-phase0-pr39-098-route-candidate/crates/velnor-actions-contract)
+   Compiling hcl-rs v0.19.8
+   Compiling velnor-actions-tofu v0.1.0 (/root/.cache/velnor-task-targets/20261005/mise-phase0-pr39-098-route-candidate/crates/velnor-actions-tofu)
+   Compiling velnor-actions-mise v0.1.0 (/root/.cache/velnor-task-targets/20261005/mise-phase0-pr39-098-route-candidate/crates/velnor-actions-mise)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.40s
+     Running tests/velnor_mise.rs (/root/.cache/velnor-task-targets/20261005/mise-phase0-qualified-global-target/debug/deps/velnor_mise-2fcb1d6c48041843)
+
+running 14 tests
+test impl_mise_lock::lock_commit_diverged_from_manifest_fails ... ok
+test impl_mise_lock::lock_commit_required_and_manifest_strict ... ok
+test impl_mise_lock::lock_matches_manifest_per_target ... ok
+test impl_mise_lock::lock_mismatch_mutable_and_missing_target_fail ... ok
+test impl_mise_lockfile::coverage_matrix_names_every_state ... ok
+test impl_mise_lockfile::decoy_entry_under_alias_key_does_not_verify ... ok
+test impl_mise_lockfile::drifted_spec_version_does_not_resolve ... ok
+test impl_mise_lockfile::every_catalog_spec_resolves_and_foreign_does_not ... ok
+test impl_mise_lockfile::parses_quoted_backend_qualified_keys ... ok
+test impl_mise_lockfile::parses_v3_entries_with_platform_checksums ... ok
+test impl_mise_lockfile::platform_hole_and_corrupt_shape_block ... ok
+test impl_mise_lockfile::platform_map_covers_supported_targets ... ok
+test impl_mise_lockfile::structural_garbage_fails_the_parse ... ok
+test impl_mise_lockfile::uppercase_checksums_verify ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 343 filtered out; finished in 0.00s
+
+mbx[cache]: 25 hits, 0 misses; 0 B downloaded, 0 B uploaded, 0 B stored locally
+mbx[savings]: swept up 104.7 GiB logical so far. the broom is content-addressed.

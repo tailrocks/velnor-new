@@ -1,0 +1,32 @@
+mise by @jdx – installing 1 tool
+mise rust@1.98.1 info: syncing channel updates for 1.98.1-x86_64-unknown-linux-gnu
+mise rust@1.98.1 info: latest update on 2026-09-03 for version 1.98.1 (48a229cea 2026-09-01)
+mise rust@1.98.1 info: component clippy is up to date
+mise rust@1.98.1 info: component rust-docs is up to date
+mise rust@1.98.1 info: component rustfmt is up to date
+mise rust@1.98.1   1.98.1-x86_64-unknown-linux-gnu unchanged - rustc 1.98.1 (48a229cea 2026-09-01)
+mise rust@1.98.1 info: checking for self-update (current version: 1.29.1)
+mise rust@1.98.1 rustc 1.98.1 (48a229cea 2026-09-01)
+mise ✓ rust@1.98.1  250ms
+mise ████████████████ 1/1 · installed 1 tool in 251ms
+   Compiling velnor-actions-workflow-renderer v0.1.0 (/tmp/velnor-render-compaction-44b2-20261005/crates/velnor-actions-workflow-renderer)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.48s
+     Running unittests src/lib.rs (/root/.cache/velnor-task-targets/20261005/jackin-compaction/debug/deps/velnor_actions_workflow_renderer-baaa2ee710553a16)
+
+running 1 test
+test schema2::release_eligibility::tests::edge::fails_closed_on_changed_tip_and_unfinished_latest_run ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 52 filtered out; finished in 0.02s
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running unittests src/lib.rs (/root/.cache/velnor-task-targets/20261005/jackin-compaction/debug/deps/velnor_actions_workflow_renderer-baaa2ee710553a16)
+
+running 1 test
+test schema2::release_eligibility::tests::rejects_newer_failed_run_instead_of_reusing_old_success ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 52 filtered out; finished in 0.02s
+
+error: rustc 1.85.1 is not supported by the following packages:
+  velnor-actions-contract@0.1.0 requires rustc 1.98
+  velnor-actions-workflow-renderer@0.1.0 requires rustc 1.98
+

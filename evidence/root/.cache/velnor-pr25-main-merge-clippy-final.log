@@ -1,0 +1,5 @@
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Checking velnor-runner-host v0.1.0 (/root/.cache/velnor-pr25-aggregate-20261005/crates/velnor-runner/crates/velnor-runner-host)
+    Checking velnor-runner-cli v0.1.0 (/root/.cache/velnor-pr25-aggregate-20261005/crates/velnor-runner/crates/velnor-runner-cli)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.01s

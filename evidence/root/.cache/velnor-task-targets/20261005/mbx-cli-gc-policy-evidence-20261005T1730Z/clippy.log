@@ -1,0 +1,24 @@
+    Checking serde_core v1.0.229
+    Checking zmij v1.0.23
+    Checking itoa v1.0.18
+    Checking cpufeatures v0.3.1
+    Checking cfg-if v1.0.5
+    Checking memchr v2.8.3
+    Checking arrayvec v0.7.8
+    Checking constant_time_eq v0.4.2
+    Checking blake3 v1.8.7
+    Checking serde_json v1.0.151
+    Checking thiserror v2.0.21
+    Checking serde v1.0.229
+    Checking velnor-actions-contract v0.1.0 (/root/.cache/velnor-task-targets/20261005/mbx-cli-portability-20261005T1530Z/crates/velnor-actions-contract)
+    Checking velnor-actions-workflow-renderer v0.1.0 (/root/.cache/velnor-task-targets/20261005/mbx-cli-portability-20261005T1530Z/crates/velnor-actions-workflow-renderer)
+error: this function has too many lines (87/80)
+ --> crates/velnor-actions-workflow-renderer/src/stock_mbx_bundle_cli_failure_tests.rs:5:1
+  |
+5 | fn generated_import_rejects_noncanonical_private_paths() -> Result<(), String> {
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.98.0/index.html#too_many_lines
+  = note: requested on the command line with `-D clippy::too-many-lines`
+
+error: could not compile `velnor-actions-workflow-renderer` (lib test) due to 1 previous error

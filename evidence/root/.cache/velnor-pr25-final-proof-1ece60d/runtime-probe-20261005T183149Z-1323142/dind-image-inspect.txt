@@ -1,0 +1,1 @@
+id=sha256:cf25ee0752caf965af68d9ed078ae63f5dcad49b9ad9effb0be24cd173e1da23 platform=linux/amd64 entrypoint=["/usr/local/bin/velnor-dind-entrypoint"]

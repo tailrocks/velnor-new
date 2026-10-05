@@ -1,0 +1,12 @@
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on build directory
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.69s
+────────────
+ Nextest run ID fcafce06-f2f3-4b1a-bddb-61449e31962a with nextest profile: default
+    Starting 2 tests across 2 binaries (394 tests skipped)
+        PASS [   2.670s] (1/2) velnor-actions-workflow-renderer schema2::generator_release::archive::tests::extracts_only_an_exact_regular_archive
+        PASS [   5.377s] (2/2) velnor-actions-workflow-renderer schema2::generator_release::archive::tests::rejects_links_special_modes_order_duplicates_and_truncation
+────────────
+     Summary [   8.048s] 2 tests run: 2 passed, 394 skipped

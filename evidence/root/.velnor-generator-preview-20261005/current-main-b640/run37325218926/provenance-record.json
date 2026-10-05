@@ -1,0 +1,43 @@
+{
+  "artifact": {
+    "api_archive_sha256": "fb411f07367e0c9c0b2274747c35ca7e76a233faa96810d50a33e15bc7612811",
+    "archive_path": "velnor-preseed-helper.zip",
+    "archive_size_bytes": 3592034,
+    "binary_path": "velnor-actions",
+    "binary_sha256": "695fbd9a8f8e14b5d9bf4bed1a191bd7a03398c1dea4af23e9ec349f6dcd023a",
+    "binary_size_bytes": 10296848,
+    "executed": false,
+    "extracted_mode": "0600",
+    "id": 11352051981,
+    "manifest": {
+      "commit": "b640665abc7238050e856257c9fb3a150580bc8d",
+      "schema": 1,
+      "sha256": "695fbd9a8f8e14b5d9bf4bed1a191bd7a03398c1dea4af23e9ec349f6dcd023a",
+      "target": "x86_64-unknown-linux-gnu",
+      "toolchain": "rust@1.98.1"
+    },
+    "manifest_path": "preseed-manifest.json",
+    "manifest_sha256": "a116c3e665a5faf48f17b5f51f102a094c41aeaba0e45befbd360a011d9fa01d",
+    "name": "velnor-preseed-helper"
+  },
+  "limitations": [
+    "Workflow run was still in progress; Plan job succeeded but complete run result was pending.",
+    "Plan logs were unavailable while the workflow run remained in progress, so MBX activity was not independently verified from logs."
+  ],
+  "observed_at_utc": "2026-10-05T14:42:15Z",
+  "repository": "tailrocks/velnor-new",
+  "source": {
+    "commit": "b640665abc7238050e856257c9fb3a150580bc8d",
+    "ref": "refs/heads/main",
+    "tree": "97655eb96bcd6a5da170ed15c4cd32126cb0666e"
+  },
+  "workflow": {
+    "head_sha": "b640665abc7238050e856257c9fb3a150580bc8d",
+    "name": "CI",
+    "plan_job_completed_at_utc": "2026-10-05T14:33:11Z",
+    "plan_job_conclusion": "success",
+    "plan_job_id": 111814879160,
+    "run_id": 37325218926,
+    "status_at_observation": "in_progress"
+  }
+}

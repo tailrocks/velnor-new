@@ -1,0 +1,23 @@
+{
+  "authoritative_reference": "https://docs.kernel.org/6.12/filesystems/proc.html#chapter-4-configuring-procfs",
+  "authoritative_section": "4.1 Mount options; hidepid=invisible or hidepid=2 and subset=pid semantics.",
+  "command": "env -i PATH=/usr/bin:/bin /usr/bin/unshare --mount --pid --fork -- /bin/bash --noprofile --norc -s",
+  "ended_at_utc": "2026-10-05T13:49:32.185507640Z",
+  "exit_code": 0,
+  "findmnt_version": "util-linux 2.41.5",
+  "host_kernel": "6.12.94+deb13-amd64",
+  "log_path": "/root/.velnor-generator-preview-20261005/logs/proc-mount-observation-v1.log",
+  "log_sha256": "434bbf490f5ff968f3974a16eda7a731e0d54d3759f49a66c146933ebfc43063",
+  "requested_proc_options": [
+    "ro",
+    "nosuid",
+    "nodev",
+    "noexec",
+    "hidepid=2",
+    "subset=pid"
+  ],
+  "schema": 1,
+  "scope": "Disposable private mount and PID namespaces; proc-only observation; no repository source, helper, Rustup, Mise, Cargo, credential source, or network operation.",
+  "started_at_utc": "2026-10-05T13:49:32.164333537Z",
+  "status": "PASS"
+}

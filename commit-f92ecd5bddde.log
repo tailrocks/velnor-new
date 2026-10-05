@@ -1,0 +1,20 @@
+[fix/uncertain-slot-preservation 9f3200156] WIP: preserve existing partial work at immediate stop [skip ci]
+ 18 files changed, 0 insertions(+), 0 deletions(-)
+ create mode 100644 crates/velnor-archive-guard/Cargo.toml
+ create mode 100644 crates/velnor-archive-guard/build.rs
+ create mode 100644 crates/velnor-archive-guard/build_support/archive_guard_inputs.rs
+ create mode 100644 crates/velnor-archive-guard/src/bin/velnor_archive_guard.rs
+ create mode 100644 crates/velnor-archive-guard/src/lib.rs
+ create mode 100644 crates/velnor-archive-guard/src/owned_archive_guard/additional_tests.rs
+ create mode 100644 crates/velnor-archive-guard/src/owned_archive_guard/mod.rs
+ create mode 100644 crates/velnor-archive-guard/src/owned_archive_guard/pax.rs
+ create mode 100644 crates/velnor-archive-guard/src/owned_archive_guard/profile.rs
+ create mode 100644 crates/velnor-archive-guard/src/owned_archive_guard/stream.rs
+ create mode 100644 crates/velnor-archive-guard/src/owned_archive_guard/tests.rs
+ create mode 100644 crates/velnor-archive-guard/tests/archive_guard_cli.rs
+ create mode 100644 docs/implemented/owned-archive-preflight.md
+ create mode 100644 scripts/archive-guard-inputs.txt
+ create mode 100755 scripts/build-owned-archive-guard.sh
+ create mode 100644 scripts/check-owned-archive-guard-sources.sh
+ create mode 100644 scripts/owned_archive_preflight.py
+ create mode 100755 scripts/with-owned-archive-guard.sh

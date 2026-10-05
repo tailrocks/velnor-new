@@ -1,0 +1,4 @@
+worktree=/tmp/velnor-release-intent-guard-af82-candidate-20261005
+HEAD=39d489229747342043de979e0f3e2c95d8726aa4
+MERGE_HEAD=098be4ad61e614fa4ddfb30f7e7148e470974597
+BASE=703d1b84d9f9e0246a52e3989bf3b78a13bbbf05

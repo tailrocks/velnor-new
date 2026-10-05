@@ -1,0 +1,1207 @@
+diff -ruN '--exclude=target' /var/tmp/velnor-phase0-t24-main-adaptation-20261005/crates/velnor-actions-workflow-renderer/src/document_shared_scripts.rs /var/tmp/velnor-phase0-t24-main-shared-script-20261005/crates/velnor-actions-workflow-renderer/src/document_shared_scripts.rs
+--- /var/tmp/velnor-phase0-t24-main-adaptation-20261005/crates/velnor-actions-workflow-renderer/src/document_shared_scripts.rs	1970-01-01 01:00:00.000000000 +0100
++++ /var/tmp/velnor-phase0-t24-main-shared-script-20261005/crates/velnor-actions-workflow-renderer/src/document_shared_scripts.rs	2026-10-05 17:17:18.312192442 +0200
+@@ -0,0 +1,336 @@
++//! Share repeated MBX verifier bodies from their exact typed step factory.
++//!
++//! The complete preflight/action/version-check triplet is regenerated and
++//! compared before a verifier body can be moved to a marked script file.
++//! Each shell step keeps its original process, credential prelude, argv shape,
++//! environment, position, and identity.
++
++use std::collections::{BTreeMap, BTreeSet};
++
++use velnor_actions_contract::{Job, Step, StepKind, digest_b3};
++
++use crate::lane_share::LaneShare;
++use crate::render::RenderContext;
++use crate::tree::RenderedFile;
++use crate::{RenderError, marker, steps, toolchain_env};
++
++#[cfg(test)]
++#[path = "document_shared_scripts_tests.rs"]
++mod tests;
++
++const SCRIPT_ROOT: &str = ".github/scripts/velnor-shared";
++const PREFLIGHT_BODY_DIGEST: &str =
++    "b3-d27cbaf0856ff4026fbd752c2b537ca733f78bdfb252a6994c33d20f2207dd11";
++const VERSION_CHECK_BODY_DIGEST: &str =
++    "b3-566aabadb34068ae41f3799f5f591ed7b8c6f47057ba095f81c1039720d9ab5e";
++
++#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
++enum ShellDialect {
++    Sh,
++    Bash,
++}
++
++impl ShellDialect {
++    fn as_str(self) -> &'static str {
++        match self {
++            Self::Sh => "sh",
++            Self::Bash => "bash",
++        }
++    }
++
++    fn interpreter(self) -> &'static str {
++        self.as_str()
++    }
++
++    fn extension(self) -> &'static str {
++        match self {
++            Self::Sh => "sh",
++            Self::Bash => "bash",
++        }
++    }
++}
++
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++enum FactoryScript {
++    Preflight,
++    VersionCheck,
++}
++
++impl FactoryScript {
++    fn body_digest(self) -> &'static str {
++        match self {
++            Self::Preflight => PREFLIGHT_BODY_DIGEST,
++            Self::VersionCheck => VERSION_CHECK_BODY_DIGEST,
++        }
++    }
++
++    fn triplet_offset(self) -> usize {
++        match self {
++            Self::Preflight => 0,
++            Self::VersionCheck => 2,
++        }
++    }
++}
++
++#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
++struct ScriptKey {
++    dialect: ShellDialect,
++    body: String,
++}
++
++#[derive(Debug, Clone)]
++struct Occurrence {
++    job_id: String,
++    step_index: usize,
++}
++
++/// Rewrite repeated, audited verifier bodies in place and return their files.
++///
++/// Only the exact three-step MBX factory output is eligible. A changed factory
++/// body remains inline until its source and digest are reviewed together.
++///
++/// # Errors
++///
++/// Returns [`RenderError`] if an already-authenticated step changes before it
++/// is rewritten or a generated body cannot be marked.
++pub(crate) fn share_trusted_scripts(
++    shared: &mut LaneShare,
++    ctx: &RenderContext,
++) -> Result<Vec<RenderedFile>, RenderError> {
++    let checkout = steps::checkout_step(&ctx.checkout_uses)?;
++    let mut groups = BTreeMap::<ScriptKey, Vec<Occurrence>>::new();
++    for (job_id, job) in &shared.jobs {
++        if shared.calls.contains_key(job_id) || !has_root_checkout(job, &checkout) {
++            continue;
++        }
++        for (step_index, step) in job.steps.iter().enumerate() {
++            if let Some(key) = approved_factory_script(job, step_index, step) {
++                groups.entry(key).or_default().push(Occurrence {
++                    job_id: job_id.clone(),
++                    step_index,
++                });
++            }
++        }
++    }
++
++    let mut files = Vec::new();
++    for (key, occurrences) in groups {
++        let jobs: BTreeSet<&str> = occurrences
++            .iter()
++            .map(|occurrence| occurrence.job_id.as_str())
++            .collect();
++        if jobs.len() < 2 {
++            continue;
++        }
++        let file = script_file(&key, &ctx.generator_version)?;
++        for occurrence in occurrences {
++            replace_with_source(shared, &occurrence, &key, &file.path)?;
++        }
++        files.push(file);
++    }
++    Ok(files)
++}
++
++pub(crate) fn compact_oversized_workflow<F>(
++    shared: &mut LaneShare,
++    ctx: &RenderContext,
++    mut text: String,
++    render: F,
++) -> Result<String, RenderError>
++where
++    F: Fn(&LaneShare) -> Result<String, RenderError>,
++{
++    if text.len() <= crate::workflow_size::MAX_WORKFLOW_BYTES {
++        return Ok(text);
++    }
++    let excluded = shared.calls.keys().cloned().collect();
++    if let Some(file) =
++        crate::tool_seed_setup_share::factor_one_group(&mut shared.jobs, &excluded, ctx)?
++    {
++        push_unique_file(shared, file)?;
++        text = render(shared)?;
++    }
++    if text.len() > crate::workflow_size::MAX_WORKFLOW_BYTES {
++        let files = share_trusted_scripts(shared, ctx)?;
++        let changed = !files.is_empty();
++        for file in files {
++            push_unique_file(shared, file)?;
++        }
++        if changed {
++            text = render(shared)?;
++        }
++    }
++    Ok(text)
++}
++
++fn push_unique_file(shared: &mut LaneShare, file: RenderedFile) -> Result<(), RenderError> {
++    if shared
++        .files
++        .iter()
++        .any(|existing| existing.path == file.path)
++    {
++        return Err(RenderError::InvalidWorkflow(format!(
++            "generated_shared_file_path_collision:{}",
++            file.path
++        )));
++    }
++    shared.files.push(file);
++    Ok(())
++}
++
++fn has_root_checkout(job: &Job, expected: &Step) -> bool {
++    job.steps.first() == Some(expected)
++        && !job.steps.iter().skip(1).any(|step| {
++            step.name == "Checkout"
++                || matches!(
++                    &step.kind,
++                    StepKind::Action { uses, .. } if uses.starts_with("actions/checkout@")
++                )
++        })
++}
++
++fn approved_factory_script(job: &Job, step_index: usize, step: &Step) -> Option<ScriptKey> {
++    let role = if step.name == steps::MBX_PREFLIGHT_NAME {
++        FactoryScript::Preflight
++    } else if step.name == steps::MBX_VERSION_CHECK_NAME {
++        FactoryScript::VersionCheck
++    } else {
++        return None;
++    };
++    if count_named(job, steps::MBX_PREFLIGHT_NAME) != 1
++        || count_named(job, steps::MBX_VERSION_CHECK_NAME) != 1
++        || count_mbx_actions(job) != 1
++    {
++        return None;
++    }
++    let start = step_index.checked_sub(role.triplet_offset())?;
++    let triplet = job.steps.get(start..start + 3)?;
++    let StepKind::Action { uses, with, .. } = &triplet[1].kind else {
++        return None;
++    };
++    let version = with.get("version")?;
++    let toolchain = with.get("toolchain")?;
++    let StepKind::Shell { env, .. } = &triplet[0].kind else {
++        return None;
++    };
++    let expected = steps::mbx_steps_for_driver(
++        uses,
++        steps::CompileDriver::Mbx,
++        version,
++        toolchain,
++        factory_input_env(env),
++    )
++    .ok()??;
++    if triplet != expected.as_slice() || expected[role.triplet_offset()] != *step {
++        return None;
++    }
++    let (dialect, body) = trusted_factory_shell(step)?;
++    let digest_input = format!("{}\0{}", dialect.as_str(), body);
++    (digest_b3(digest_input.as_bytes()) == role.body_digest())
++        .then_some(ScriptKey { dialect, body })
++}
++
++fn factory_input_env(env: &BTreeMap<String, String>) -> BTreeMap<String, String> {
++    let scrub = toolchain_env::credential_scrub();
++    env.iter()
++        .filter(|(key, _)| !scrub.contains_key(*key))
++        .map(|(key, value)| (key.clone(), value.clone()))
++        .collect()
++}
++
++fn count_named(job: &Job, name: &str) -> usize {
++    job.steps.iter().filter(|step| step.name == name).count()
++}
++
++fn count_mbx_actions(job: &Job) -> usize {
++    job.steps
++        .iter()
++        .filter(|step| {
++            matches!(
++                &step.kind,
++                StepKind::Action { uses, .. }
++                    if uses.starts_with(&format!("{}@", steps::MBX_ACTION_NAME))
++            )
++        })
++        .count()
++}
++
++fn trusted_factory_shell(step: &Step) -> Option<(ShellDialect, String)> {
++    if step.condition.is_some() {
++        return None;
++    }
++    let StepKind::Shell { run, .. } = &step.kind else {
++        return None;
++    };
++    let [interpreter, flag, command] = run.as_slice() else {
++        return None;
++    };
++    if flag != "-c" {
++        return None;
++    }
++    let dialect = match interpreter.as_str() {
++        "sh" => ShellDialect::Sh,
++        "bash" => ShellDialect::Bash,
++        _ => return None,
++    };
++    let prelude = format!("{} ", toolchain_env::credential_unset_prelude());
++    let body = command.strip_prefix(&prelude)?;
++    if body.is_empty()
++        || body.contains("${{")
++        || body.contains("$BASH_SOURCE")
++        || body.contains("${BASH_SOURCE")
++        || body.contains("$0")
++        || body.contains("${0}")
++        || body.contains("LINENO")
++    {
++        return None;
++    }
++    Some((dialect, body.to_owned()))
++}
++
++fn script_file(key: &ScriptKey, version: &str) -> Result<RenderedFile, RenderError> {
++    let digest_input = format!("{}\0{}", key.dialect.as_str(), key.body);
++    let digest = digest_b3(digest_input.as_bytes());
++    let path = format!(
++        "{SCRIPT_ROOT}/{}-{digest}.{}",
++        key.dialect.as_str(),
++        key.dialect.extension()
++    );
++    let bytes = marker::with_marker(version, &key.body)?;
++    Ok(RenderedFile { path, bytes })
++}
++
++fn replace_with_source(
++    shared: &mut LaneShare,
++    occurrence: &Occurrence,
++    key: &ScriptKey,
++    path: &str,
++) -> Result<(), RenderError> {
++    let Some(job) = shared.jobs.get_mut(&occurrence.job_id) else {
++        return Err(RenderError::InvalidWorkflow(
++            "shared_script_job_missing".to_owned(),
++        ));
++    };
++    let Some(step) = job.steps.get_mut(occurrence.step_index) else {
++        return Err(RenderError::InvalidWorkflow(
++            "shared_script_step_missing".to_owned(),
++        ));
++    };
++    let StepKind::Shell { run, .. } = &mut step.kind else {
++        return Err(RenderError::InvalidWorkflow(
++            "shared_script_step_not_shell".to_owned(),
++        ));
++    };
++    let expected_command = toolchain_env::with_credential_unset_script(&key.body);
++    if run.len() != 3
++        || run[0] != key.dialect.interpreter()
++        || run[1] != "-c"
++        || run[2] != expected_command
++    {
++        return Err(RenderError::InvalidWorkflow(
++            "shared_script_argv_changed".to_owned(),
++        ));
++    }
++    run[2] = toolchain_env::with_credential_unset_script(&format!(". './{path}'"));
++    Ok(())
++}
+diff -ruN '--exclude=target' /var/tmp/velnor-phase0-t24-main-adaptation-20261005/crates/velnor-actions-workflow-renderer/src/document_shared_scripts_execution_support.rs /var/tmp/velnor-phase0-t24-main-shared-script-20261005/crates/velnor-actions-workflow-renderer/src/document_shared_scripts_execution_support.rs
+--- /var/tmp/velnor-phase0-t24-main-adaptation-20261005/crates/velnor-actions-workflow-renderer/src/document_shared_scripts_execution_support.rs	1970-01-01 01:00:00.000000000 +0100
++++ /var/tmp/velnor-phase0-t24-main-shared-script-20261005/crates/velnor-actions-workflow-renderer/src/document_shared_scripts_execution_support.rs	2026-10-05 17:22:37.914055367 +0200
+@@ -0,0 +1,206 @@
++use std::fs;
++use std::io;
++use std::os::unix::fs::PermissionsExt;
++use std::os::unix::process::ExitStatusExt;
++use std::path::{Path, PathBuf};
++use std::process::{Command, Output, Stdio};
++use std::sync::atomic::{AtomicUsize, Ordering};
++
++static NEXT_CASE: AtomicUsize = AtomicUsize::new(0);
++
++#[derive(Debug, PartialEq, Eq)]
++pub(super) struct Outcome {
++    pub(super) status_code: Option<i32>,
++    pub(super) signal: Option<i32>,
++    pub(super) stdout: Vec<u8>,
++    pub(super) stderr: Vec<u8>,
++    pub(super) github_env: String,
++    pub(super) github_path: String,
++    pub(super) cwd_unchanged: bool,
++    pub(super) runner_entries: Vec<(String, Vec<u8>)>,
++    pub(super) child_survives: bool,
++}
++
++pub(super) struct CasePaths {
++    pub(super) root: PathBuf,
++    pub(super) runner: PathBuf,
++    pub(super) tools: PathBuf,
++    pub(super) rust_root: PathBuf,
++    pub(super) github_env: PathBuf,
++    pub(super) github_path: PathBuf,
++    pub(super) cwd_capture: PathBuf,
++    pub(super) ready: PathBuf,
++    pub(super) child_pid: PathBuf,
++}
++
++pub(super) struct OwnedTempDir {
++    path: Option<PathBuf>,
++    canonical: PathBuf,
++}
++
++impl OwnedTempDir {
++    pub(super) fn path(&self) -> &Path {
++        self.path.as_deref().expect("owned temp path")
++    }
++
++    pub(super) fn cleanup(mut self) -> io::Result<()> {
++        let path = self.path();
++        verify_owned_directory(path, &self.canonical)?;
++        fs::remove_dir_all(path)?;
++        self.path = None;
++        Ok(())
++    }
++}
++
++impl Drop for OwnedTempDir {
++    fn drop(&mut self) {
++        let Some(path) = self.path.as_deref() else {
++            return;
++        };
++        if let Err(error) = (|| {
++            verify_owned_directory(path, &self.canonical)?;
++            fs::remove_dir_all(path)
++        })() {
++            eprintln!("shared-script execution fixture cleanup failed: {error}");
++        }
++    }
++}
++
++fn verify_owned_directory(path: &Path, canonical: &Path) -> io::Result<()> {
++    let metadata = fs::symlink_metadata(path)?;
++    if !metadata.is_dir() || metadata.file_type().is_symlink() {
++        return Err(io::Error::new(
++            io::ErrorKind::PermissionDenied,
++            "temporary execution fixture is not the owned directory",
++        ));
++    }
++    if fs::canonicalize(path)? != canonical {
++        return Err(io::Error::new(
++            io::ErrorKind::PermissionDenied,
++            "temporary execution fixture changed canonical identity",
++        ));
++    }
++    Ok(())
++}
++
++pub(super) fn new_root() -> io::Result<OwnedTempDir> {
++    for _ in 0..128 {
++        let id = NEXT_CASE.fetch_add(1, Ordering::Relaxed);
++        let path = std::env::temp_dir().join(format!(
++            "velnor-shared-script-execution-{}-{id}",
++            std::process::id()
++        ));
++        match fs::create_dir(&path) {
++            Ok(()) => return finish_root_setup(path),
++            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {}
++            Err(error) => return Err(error),
++        }
++    }
++    Err(io::Error::new(
++        io::ErrorKind::AlreadyExists,
++        "could not allocate a unique execution fixture",
++    ))
++}
++
++fn finish_root_setup(path: PathBuf) -> io::Result<OwnedTempDir> {
++    let setup = (|| {
++        let mut permissions = fs::metadata(&path)?.permissions();
++        permissions.set_mode(0o700);
++        fs::set_permissions(&path, permissions)?;
++        fs::canonicalize(&path)
++    })();
++    match setup {
++        Ok(canonical) => Ok(OwnedTempDir {
++            path: Some(path),
++            canonical,
++        }),
++        Err(setup_error) => match fs::remove_dir(&path) {
++            Ok(()) => Err(setup_error),
++            Err(cleanup_error) => Err(io::Error::new(
++                setup_error.kind(),
++                format!("fixture setup failed ({setup_error}); rollback failed ({cleanup_error})"),
++            )),
++        },
++    }
++}
++
++pub(super) fn case_paths(root: &Path) -> CasePaths {
++    CasePaths {
++        root: root.to_path_buf(),
++        runner: root.join("runner-temp"),
++        tools: root.join("tools"),
++        rust_root: root.join("tools/rust-install"),
++        github_env: root.join("github-env"),
++        github_path: root.join("github-path"),
++        cwd_capture: root.join("cwd-capture"),
++        ready: root.join("mise-ready"),
++        child_pid: root.join("mise-child-pid"),
++    }
++}
++
++pub(super) fn collect_outcome(paths: &CasePaths, output: Output) -> Outcome {
++    let rust_root = paths.rust_root.to_string_lossy();
++    let runner = paths.runner.to_string_lossy();
++    let path_text = fs::read_to_string(&paths.github_path).expect("read GITHUB_PATH");
++    let env_text = fs::read_to_string(&paths.github_env).expect("read GITHUB_ENV");
++    let child_survives =
++        fs::read_to_string(&paths.child_pid).is_ok_and(|pid| pid_is_alive(pid.trim()));
++    Outcome {
++        status_code: output.status.code(),
++        signal: output.status.signal(),
++        stdout: output.stdout,
++        stderr: output.stderr,
++        github_env: env_text.replace(runner.as_ref(), "<RUNNER_TEMP>"),
++        github_path: path_text.replace(rust_root.as_ref(), "<RUST_ROOT>"),
++        cwd_unchanged: fs::read_to_string(&paths.cwd_capture)
++            .is_ok_and(|cwd| cwd.trim_end() == paths.root.to_string_lossy()),
++        runner_entries: tree_entries(&paths.runner),
++        child_survives,
++    }
++}
++
++fn tree_entries(root: &Path) -> Vec<(String, Vec<u8>)> {
++    let mut entries = Vec::new();
++    walk_entries(root, root, &mut entries).expect("snapshot runner tree");
++    entries.sort_by(|left, right| left.0.cmp(&right.0));
++    entries
++}
++
++fn walk_entries(
++    root: &Path,
++    current: &Path,
++    entries: &mut Vec<(String, Vec<u8>)>,
++) -> io::Result<()> {
++    for entry in fs::read_dir(current)? {
++        let entry = entry?;
++        let path = entry.path();
++        let relative = path
++            .strip_prefix(root)
++            .map_err(|error| io::Error::new(io::ErrorKind::InvalidInput, error.to_string()))?
++            .to_string_lossy()
++            .into_owned();
++        let metadata = fs::symlink_metadata(&path)?;
++        if metadata.is_dir() {
++            entries.push((format!("dir:{relative}"), Vec::new()));
++            walk_entries(root, &path, entries)?;
++        } else if metadata.is_file() {
++            entries.push((format!("file:{relative}"), fs::read(&path)?));
++        } else if metadata.file_type().is_symlink() {
++            let target = fs::read_link(&path)?;
++            entries.push((
++                format!("link:{relative}"),
++                target.to_string_lossy().as_bytes().to_vec(),
++            ));
++        }
++    }
++    Ok(())
++}
++
++fn pid_is_alive(pid: &str) -> bool {
++    Command::new("/bin/kill")
++        .args(["-0", pid])
++        .stdout(Stdio::null())
++        .stderr(Stdio::null())
++        .status()
++        .is_ok_and(|status| status.success())
++}
+diff -ruN '--exclude=target' /var/tmp/velnor-phase0-t24-main-adaptation-20261005/crates/velnor-actions-workflow-renderer/src/document_shared_scripts_execution_tests.rs /var/tmp/velnor-phase0-t24-main-shared-script-20261005/crates/velnor-actions-workflow-renderer/src/document_shared_scripts_execution_tests.rs
+--- /var/tmp/velnor-phase0-t24-main-adaptation-20261005/crates/velnor-actions-workflow-renderer/src/document_shared_scripts_execution_tests.rs	1970-01-01 01:00:00.000000000 +0100
++++ /var/tmp/velnor-phase0-t24-main-shared-script-20261005/crates/velnor-actions-workflow-renderer/src/document_shared_scripts_execution_tests.rs	2026-10-05 17:22:37.918055341 +0200
+@@ -0,0 +1,284 @@
++use std::fs;
++use std::io;
++use std::os::unix::fs::PermissionsExt;
++use std::os::unix::process::CommandExt;
++use std::path::Path;
++use std::process::{Child, Command, Output};
++use std::thread;
++use std::time::{Duration, Instant};
++
++use super::super::{ScriptKey, ShellDialect, approved_factory_script, script_file};
++use super::{context, shared_fixture};
++use crate::{steps, toolchain_env};
++use support::{CasePaths, Outcome, case_paths, collect_outcome, new_root};
++
++#[path = "document_shared_scripts_execution_support.rs"]
++mod support;
++
++#[derive(Debug, Clone, Copy)]
++enum ScriptRole {
++    Preflight,
++    VersionCheck,
++}
++
++impl ScriptRole {
++    fn name(self) -> &'static str {
++        match self {
++            Self::Preflight => steps::MBX_PREFLIGHT_NAME,
++            Self::VersionCheck => steps::MBX_VERSION_CHECK_NAME,
++        }
++    }
++}
++
++#[derive(Debug, Clone, Copy)]
++enum CaseMode {
++    Success,
++    Failure,
++    Signal(&'static str),
++}
++
++fn factory_body(role: ScriptRole) -> String {
++    let ctx = context();
++    let fixture = shared_fixture(&ctx);
++    let job = fixture.jobs.get("linux").expect("Linux fixture");
++    let (index, step) = job
++        .steps
++        .iter()
++        .enumerate()
++        .find(|(_, step)| step.name == role.name())
++        .expect("factory shell step");
++    let key = approved_factory_script(job, index, step).expect("exact source factory body");
++    assert_eq!(key.dialect, ShellDialect::Sh);
++    key.body
++}
++
++fn run_case(role: ScriptRole, source: bool, mode: CaseMode) -> Outcome {
++    let temp = new_root().expect("create exclusive temporary case");
++    let root = temp.path().to_path_buf();
++    let paths = case_paths(&root);
++    prepare_case(&paths, role, source, mode);
++    let body = factory_body(role);
++    let command = step_command(&body, source);
++    let output = run_process(&paths, &command, mode);
++    let outcome = collect_outcome(&paths, output);
++    temp.cleanup().expect("remove owned temporary case");
++    outcome
++}
++
++fn prepare_case(paths: &CasePaths, role: ScriptRole, source: bool, mode: CaseMode) {
++    fs::create_dir_all(&paths.runner).expect("runner temp directory");
++    fs::create_dir_all(&paths.rust_root).expect("fake Rust install");
++    fs::create_dir_all(paths.tools.join("bin")).expect("fake tool directory");
++    fs::write(&paths.github_env, "").expect("GITHUB_ENV fixture");
++    fs::write(&paths.github_path, "").expect("GITHUB_PATH fixture");
++    if matches!(role, ScriptRole::VersionCheck) {
++        fs::create_dir_all(paths.runner.join("velnor/mbx/actions"))
++            .expect("prior MBX action output");
++    }
++    install_executable(
++        &paths.rust_root.join("rustc"),
++        if matches!(mode, CaseMode::Failure) && matches!(role, ScriptRole::Preflight) {
++            "#!/bin/sh\nprintf 'rustc 1.97.0\\nrelease: 1.97.0\\n'\n"
++        } else {
++            "#!/bin/sh\nprintf 'rustc 1.98.1\\nrelease: 1.98.1\\n'\n"
++        },
++    );
++    install_executable(&paths.tools.join("bin/mise"), &fake_mise_script());
++    if source {
++        let key = ScriptKey {
++            dialect: ShellDialect::Sh,
++            body: factory_body(role),
++        };
++        let file = script_file(&key, "0.1.0").expect("marked body");
++        let script_path = paths.root.join(&file.path);
++        fs::create_dir_all(script_path.parent().expect("script parent"))
++            .expect("shared script directory");
++        fs::write(script_path, file.bytes).expect("shared script file");
++    }
++}
++
++fn install_executable(path: &Path, body: &str) {
++    fs::write(path, body).expect("write fake executable");
++    let mut mode = fs::metadata(path)
++        .expect("stat fake executable")
++        .permissions();
++    mode.set_mode(0o700);
++    fs::set_permissions(path, mode).expect("set fake executable mode");
++}
++
++fn fake_mise_script() -> String {
++    "#!/bin/sh\nset -eu\nif [ \"${GITHUB_TOKEN+x}\" = x ] || [ \"${ACTIONS_RUNTIME_TOKEN+x}\" = x ]; then exit 91; fi\nif [ \"${BLOCK_MISE:-0}\" = 1 ]; then printf '%s\\n' \"$$\" > \"$CHILD_PID_CAPTURE\"; : > \"$READY_CAPTURE\"; while :; do sleep 1; done; fi\ncase \" $* \" in\n  *\" where rust@\"*) printf '%s\\n' \"$RUST_INSTALL_ROOT\" ;;\n  *\" mbx --version \"*) if [ \"${FAIL_MISE_VERSION:-0}\" = 1 ]; then printf '%s\\n' 'mbx 1.0.0'; else printf '%s\\n' 'mbx 1.21.1'; fi ;;\n  *\" mbx cache dir \"*) printf '%s\\n' \"$MBX_CACHE_DIR/actions\" ;;\n  *) printf '%s\\n' 'unexpected mise arguments' >&2; exit 92 ;;\nesac\n".to_owned()
++}
++
++fn step_command(body: &str, source: bool) -> String {
++    let invocation = if source {
++        let file = script_file(
++            &ScriptKey {
++                dialect: ShellDialect::Sh,
++                body: body.to_owned(),
++            },
++            "0.1.0",
++        )
++        .expect("marked body");
++        format!(". './{}'", file.path)
++    } else {
++        body.to_owned()
++    };
++    toolchain_env::with_credential_unset_script(&format!(
++        "{invocation}; printf '%s\\n' \"$PWD\" > \"$PWD_CAPTURE\""
++    ))
++}
++
++fn run_process(paths: &CasePaths, command: &str, mode: CaseMode) -> Output {
++    let mut process = Command::new("sh");
++    process
++        .arg("-c")
++        .arg(command)
++        .current_dir(&paths.root)
++        .env_clear()
++        .env(
++            "PATH",
++            format!("{}:/usr/bin:/bin", paths.tools.join("bin").display()),
++        )
++        .env("RUNNER_TEMP", &paths.runner)
++        .env("GITHUB_ENV", &paths.github_env)
++        .env("GITHUB_PATH", &paths.github_path)
++        .env("GITHUB_RUN_ID", "147")
++        .env("GITHUB_RUN_ATTEMPT", "3")
++        .env("RUSTUP_TOOLCHAIN", "1.98.1")
++        .env("MBX_CACHE_DIR", paths.runner.join("velnor/mbx"))
++        .env("RUST_INSTALL_ROOT", &paths.rust_root)
++        .env("PWD_CAPTURE", &paths.cwd_capture)
++        .env("READY_CAPTURE", &paths.ready)
++        .env("CHILD_PID_CAPTURE", &paths.child_pid)
++        .env("GITHUB_TOKEN", "ambient-token")
++        .env("ACTIONS_RUNTIME_TOKEN", "ambient-runtime-token")
++        .env("CARGO_REGISTRY_TOKEN", "");
++    match mode {
++        CaseMode::Success => {
++            process.env("FAIL_MISE_VERSION", "0").env("BLOCK_MISE", "0");
++        }
++        CaseMode::Failure => {
++            process.env("FAIL_MISE_VERSION", "1").env("BLOCK_MISE", "0");
++        }
++        CaseMode::Signal(_) => {
++            process.env("FAIL_MISE_VERSION", "0").env("BLOCK_MISE", "1");
++        }
++    }
++    if let CaseMode::Signal(signal) = mode {
++        process.process_group(0);
++        return run_signalled(process, &paths.ready, signal);
++    }
++    process.output().expect("run shell step")
++}
++
++fn run_signalled(mut process: Command, ready: &Path, signal: &str) -> Output {
++    let mut child = process.spawn().expect("spawn signal-test shell");
++    if let Err(error) = wait_until_ready(&mut child, ready) {
++        abort_child(
++            child,
++            &format!("signal fixture did not become ready: {error}"),
++        );
++    }
++    match signal_process_group(child.id(), signal) {
++        Ok(output) if output.status.success() => {
++            child.wait_with_output().expect("wait for signalled shell")
++        }
++        Ok(output) => match wait_for_exit(&mut child) {
++            Ok(()) => child.wait_with_output().expect("collect signalled shell"),
++            Err(error) => abort_child(
++                child,
++                &format!(
++                    "could not send {signal}: {}; shell did not exit: {error}",
++                    String::from_utf8_lossy(&output.stderr)
++                ),
++            ),
++        },
++        Err(error) => abort_child(child, &format!("could not send {signal}: {error}")),
++    }
++}
++
++fn wait_until_ready(child: &mut Child, ready: &Path) -> Result<(), String> {
++    let deadline = Instant::now() + Duration::from_secs(5);
++    while Instant::now() < deadline {
++        if ready.is_file() {
++            return Ok(());
++        }
++        if let Some(status) = child.try_wait().map_err(|error| error.to_string())? {
++            return Err(format!(
++                "shell exited before reaching signal point: {status}"
++            ));
++        }
++        thread::sleep(Duration::from_millis(10));
++    }
++    Err("shell did not reach signal point before timeout".to_owned())
++}
++
++fn signal_process_group(pid: u32, signal: &str) -> io::Result<Output> {
++    Command::new("/bin/kill")
++        .arg("-s")
++        .arg(signal)
++        .arg(format!("-{pid}"))
++        .output()
++}
++
++fn wait_for_exit(child: &mut Child) -> Result<(), String> {
++    let deadline = Instant::now() + Duration::from_secs(2);
++    while Instant::now() < deadline {
++        if child
++            .try_wait()
++            .map_err(|error| error.to_string())?
++            .is_some()
++        {
++            return Ok(());
++        }
++        thread::sleep(Duration::from_millis(10));
++    }
++    Err("timeout waiting for signal exit".to_owned())
++}
++
++fn abort_child(child: Child, reason: &str) -> ! {
++    let cleanup = signal_process_group(child.id(), "TERM").map_or_else(
++        |error| error.to_string(),
++        |output| format!("{}", output.status),
++    );
++    let output = child.wait_with_output();
++    let status = output.map_or_else(
++        |error| error.to_string(),
++        |result| format!("{}", result.status),
++    );
++    panic!("{reason}; termination={cleanup}; output={status}");
++}
++
++#[test]
++fn sourced_factory_scripts_match_inline_success_and_early_failure() {
++    for role in [ScriptRole::Preflight, ScriptRole::VersionCheck] {
++        for mode in [CaseMode::Success, CaseMode::Failure] {
++            let inline = run_case(role, false, mode);
++            let sourced = run_case(role, true, mode);
++            assert_eq!(inline, sourced, "{role:?} {mode:?}");
++            assert!(!inline.child_survives);
++            assert_eq!(inline.cwd_unchanged, matches!(mode, CaseMode::Success));
++            if matches!(mode, CaseMode::Success) {
++                assert_eq!(inline.status_code, Some(0));
++                assert_eq!(inline.signal, None);
++            } else {
++                assert_eq!(inline.status_code, Some(1));
++                assert_eq!(inline.signal, None);
++            }
++        }
++    }
++}
++
++#[test]
++fn sourced_factory_scripts_match_inline_hup_int_and_term_cleanup() {
++    for role in [ScriptRole::Preflight, ScriptRole::VersionCheck] {
++        for signal in ["HUP", "INT", "TERM"] {
++            let inline = run_case(role, false, CaseMode::Signal(signal));
++            let sourced = run_case(role, true, CaseMode::Signal(signal));
++            assert_eq!(inline, sourced, "{role:?} {signal}");
++            assert!(!inline.cwd_unchanged);
++            assert!(!inline.child_survives);
++        }
++    }
++}
+diff -ruN '--exclude=target' /var/tmp/velnor-phase0-t24-main-adaptation-20261005/crates/velnor-actions-workflow-renderer/src/document_shared_scripts_tests.rs /var/tmp/velnor-phase0-t24-main-shared-script-20261005/crates/velnor-actions-workflow-renderer/src/document_shared_scripts_tests.rs
+--- /var/tmp/velnor-phase0-t24-main-adaptation-20261005/crates/velnor-actions-workflow-renderer/src/document_shared_scripts_tests.rs	1970-01-01 01:00:00.000000000 +0100
++++ /var/tmp/velnor-phase0-t24-main-shared-script-20261005/crates/velnor-actions-workflow-renderer/src/document_shared_scripts_tests.rs	2026-10-05 17:16:18.700623527 +0200
+@@ -0,0 +1,318 @@
++use std::collections::BTreeMap;
++
++use velnor_actions_contract::workflow::permissions::PermissionLevel;
++use velnor_actions_contract::{Job, JobTimeout, Permissions, StepKind, digest_b3};
++
++use super::{SCRIPT_ROOT, share_trusted_scripts};
++use crate::lane_share::LaneShare;
++use crate::render::RenderContext;
++use crate::{marker, steps, toolchain_env};
++
++#[cfg(unix)]
++#[path = "document_shared_scripts_execution_tests.rs"]
++mod execution_tests;
++
++fn context() -> RenderContext {
++    RenderContext {
++        generator_version: "0.1.0".to_owned(),
++        runs_on: "ubuntu-26.04".to_owned(),
++        staged_binary: "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0".to_owned(),
++        request_dir: "${{ runner.temp }}/velnor/request".to_owned(),
++        checkout_uses: format!("actions/checkout@{}", "0".repeat(40)),
++        validator_commands: Vec::new(),
++        candidate: None,
++        preseed: false,
++        verification_tasks: Vec::new(),
++        plan_consumer_env: BTreeMap::new(),
++    }
++}
++
++fn fixture_job(ctx: &RenderContext, id: &str, actions_read: bool) -> Job {
++    let action_uses = "jdx/mr-boxington-action@1687e54eb349cadf61fa38b5813a77875489e8e6";
++    let input_env = BTreeMap::from([
++        (
++            "MISE_RUSTUP_HOME".to_owned(),
++            "${{ runner.temp }}/velnor/rustup".to_owned(),
++        ),
++        (
++            "MISE_CARGO_HOME".to_owned(),
++            "${{ runner.temp }}/velnor/cargo".to_owned(),
++        ),
++        ("RUSTUP_TOOLCHAIN".to_owned(), "1.98.1".to_owned()),
++    ]);
++    let steps = steps::mbx_steps_for_driver(
++        action_uses,
++        steps::CompileDriver::Mbx,
++        "1.21.1",
++        "1.98.1",
++        input_env,
++    )
++    .expect("valid MBX factory input")
++    .expect("MBX driver emits a full triplet");
++    let checkout = steps::checkout_step(&ctx.checkout_uses).expect("canonical checkout");
++    let before = steps::shell_step(
++        "Keep before verifier",
++        vec!["sh".to_owned(), "-c".to_owned(), "printf before".to_owned()],
++        BTreeMap::new(),
++    )
++    .expect("valid prefix");
++    let after = steps::shell_step(
++        "Keep after verifier",
++        vec!["sh".to_owned(), "-c".to_owned(), "printf after".to_owned()],
++        BTreeMap::new(),
++    )
++    .expect("valid suffix");
++    Job {
++        display_name: format!("{id} verification"),
++        runs_on: "ubuntu-26.04".to_owned(),
++        timeout_minutes: JobTimeout::CRATE,
++        needs: vec!["plan".to_owned(), "policy".to_owned()],
++        condition: Some("always()".to_owned()),
++        permissions: Some(Permissions {
++            contents: PermissionLevel::Read,
++            actions: if actions_read {
++                PermissionLevel::Read
++            } else {
++                PermissionLevel::None
++            },
++            pull_requests: PermissionLevel::None,
++            id_token: PermissionLevel::None,
++        }),
++        environment: Some(format!("{id}-validation")),
++        steps: vec![
++            checkout,
++            before,
++            steps[0].clone(),
++            steps[1].clone(),
++            steps[2].clone(),
++            after,
++        ],
++    }
++}
++
++fn shared_fixture(ctx: &RenderContext) -> LaneShare {
++    LaneShare {
++        jobs: BTreeMap::from([
++            ("linux".to_owned(), fixture_job(ctx, "linux", true)),
++            ("macos".to_owned(), fixture_job(ctx, "macos", false)),
++        ]),
++        calls: BTreeMap::new(),
++        checkouts: BTreeMap::new(),
++        env_steps: BTreeMap::new(),
++        prefixes: BTreeMap::new(),
++        preludes: BTreeMap::new(),
++        postludes: BTreeMap::new(),
++        files: Vec::new(),
++    }
++}
++
++#[test]
++fn repeated_exact_factory_bodies_preserve_all_step_and_job_metadata() {
++    let ctx = context();
++    let mut shared = shared_fixture(&ctx);
++    let original = shared.jobs.clone();
++    let files = share_trusted_scripts(&mut shared, &ctx).expect("share factory bodies");
++
++    assert_eq!(files.len(), 2);
++    assert!(files.iter().all(|file| file.path.starts_with(SCRIPT_ROOT)));
++    assert!(
++        files
++            .iter()
++            .all(|file| { marker::check_first_line(&file.bytes, &ctx.generator_version).is_ok() })
++    );
++    assert_content_addressed_paths(&files);
++    assert_expands_exactly(&original, &shared.jobs, &files, &ctx.generator_version);
++
++    let mut repeat = shared_fixture(&ctx);
++    let repeated = share_trusted_scripts(&mut repeat, &ctx).expect("deterministic share");
++    assert_eq!(files, repeated);
++    assert_expands_exactly(&original, &repeat.jobs, &repeated, &ctx.generator_version);
++}
++
++#[test]
++fn one_job_or_modified_triplet_does_not_emit_shared_files() {
++    let ctx = context();
++    let mut one = shared_fixture(&ctx);
++    let removed = one.jobs.remove("macos");
++    assert!(removed.is_some());
++    let before = one.jobs.clone();
++    assert!(
++        share_trusted_scripts(&mut one, &ctx)
++            .expect("single eligible job")
++            .is_empty()
++    );
++    assert_jobs_equal(&before, &one.jobs);
++
++    let mut altered = shared_fixture(&ctx);
++    for job in altered.jobs.values_mut() {
++        let step = job
++            .steps
++            .iter_mut()
++            .find(|step| step.name == steps::MBX_PREFLIGHT_NAME)
++            .expect("preflight step");
++        let StepKind::Shell { run, .. } = &mut step.kind else {
++            panic!("preflight factory output is shell")
++        };
++        run[2].push_str("; printf altered");
++    }
++    let before = altered.jobs.clone();
++    assert!(
++        share_trusted_scripts(&mut altered, &ctx)
++            .expect("modified triplets remain inline")
++            .is_empty()
++    );
++    assert_jobs_equal(&before, &altered.jobs);
++}
++
++#[test]
++fn noncontiguous_factory_steps_are_not_shared() {
++    let ctx = context();
++    let mut shared = shared_fixture(&ctx);
++    for job in shared.jobs.values_mut() {
++        let insertion = job
++            .steps
++            .iter()
++            .position(|step| step.name == steps::MBX_RESTORE_NAME)
++            .expect("MBX action step");
++        let separator = steps::shell_step(
++            "Intervening work",
++            vec!["sh".to_owned(), "-c".to_owned(), "true".to_owned()],
++            BTreeMap::new(),
++        )
++        .expect("valid separator");
++        job.steps.insert(insertion, separator);
++    }
++    let before = shared.jobs.clone();
++    assert!(
++        share_trusted_scripts(&mut shared, &ctx)
++            .expect("noncontiguous source steps remain inline")
++            .is_empty()
++    );
++    assert_jobs_equal(&before, &shared.jobs);
++}
++
++#[test]
++fn custom_or_repeated_checkout_is_not_eligible() {
++    let ctx = context();
++    let mut custom = shared_fixture(&ctx);
++    for job in custom.jobs.values_mut() {
++        let StepKind::Action { with, .. } = &mut job.steps[0].kind else {
++            panic!("checkout step is action")
++        };
++        with.insert("path".to_owned(), "elsewhere".to_owned());
++    }
++    assert!(
++        share_trusted_scripts(&mut custom, &ctx)
++            .expect("custom checkout stays inline")
++            .is_empty()
++    );
++
++    let mut repeated = shared_fixture(&ctx);
++    let extra = steps::checkout_step(&ctx.checkout_uses).expect("checkout");
++    repeated
++        .jobs
++        .get_mut("linux")
++        .expect("Linux job")
++        .steps
++        .push(extra);
++    assert!(
++        share_trusted_scripts(&mut repeated, &ctx)
++            .expect("duplicate checkout stays inline")
++            .is_empty()
++    );
++}
++
++#[test]
++fn exact_markers_and_paths_follow_the_factory_body_digest() {
++    let ctx = context();
++    let mut shared = shared_fixture(&ctx);
++    let files = share_trusted_scripts(&mut shared, &ctx).expect("share bodies");
++    for file in files {
++        let (_, body) = file.bytes.split_once('\n').expect("marked body");
++        let script_name = file.path.rsplit('/').next().expect("script filename");
++        let expected = digest_b3(format!("sh\0{body}").as_bytes());
++        assert_eq!(script_name, format!("sh-{expected}.sh"));
++        assert!(file.path.starts_with(".github/scripts/velnor-shared/"));
++    }
++}
++
++fn assert_content_addressed_paths(files: &[crate::tree::RenderedFile]) {
++    assert!(files.iter().all(|file| {
++        let Some(name) = file.path.strip_prefix(&format!("{SCRIPT_ROOT}/")) else {
++            return false;
++        };
++        let Some((stem, extension)) = name.rsplit_once('.') else {
++            return false;
++        };
++        let Some((dialect, digest)) = stem.split_once("-b3-") else {
++            return false;
++        };
++        matches!((dialect, extension), ("sh", "sh") | ("bash", "bash"))
++            && digest.len() == 64
++            && digest.bytes().all(|byte| byte.is_ascii_hexdigit())
++    }));
++}
++
++fn assert_expands_exactly(
++    original: &BTreeMap<String, Job>,
++    compacted: &BTreeMap<String, Job>,
++    files: &[crate::tree::RenderedFile],
++    version: &str,
++) {
++    assert_eq!(
++        original.keys().collect::<Vec<_>>(),
++        compacted.keys().collect::<Vec<_>>()
++    );
++    for (job_id, before) in original {
++        let after = compacted.get(job_id).expect("same job id");
++        let mut expanded = after.clone();
++        assert_eq!(before.steps.len(), after.steps.len());
++        for (index, original_step) in before.steps.iter().enumerate() {
++            let actual = &mut expanded.steps[index];
++            if let StepKind::Shell { run, .. } = &mut actual.kind
++                && run.len() == 3
++                && let Some(file) = files.iter().find(|file| {
++                    run[2]
++                        == toolchain_env::with_credential_unset_script(&format!(
++                            ". './{}'",
++                            file.path
++                        ))
++                })
++            {
++                assert!(marker::check_first_line(&file.bytes, version).is_ok());
++                let (_, body) = file.bytes.split_once('\n').expect("marked body");
++                run[2] = toolchain_env::with_credential_unset_script(body);
++            }
++            assert_eq!(actual, original_step, "{job_id} step {index}");
++        }
++        assert_job_metadata_equal(before, &expanded, job_id);
++    }
++}
++
++fn assert_jobs_equal(left: &BTreeMap<String, Job>, right: &BTreeMap<String, Job>) {
++    assert_eq!(
++        left.keys().collect::<Vec<_>>(),
++        right.keys().collect::<Vec<_>>()
++    );
++    for (job_id, original) in left {
++        let actual = right.get(job_id).expect("same job id");
++        assert_job_metadata_equal(original, actual, job_id);
++        assert_eq!(original.steps, actual.steps, "steps changed for {job_id}");
++    }
++}
++
++fn assert_job_metadata_equal(left: &Job, right: &Job, job_id: &str) {
++    assert_eq!(
++        left.display_name, right.display_name,
++        "display name {job_id}"
++    );
++    assert_eq!(left.runs_on, right.runs_on, "runner {job_id}");
++    assert_eq!(
++        left.timeout_minutes, right.timeout_minutes,
++        "timeout {job_id}"
++    );
++    assert_eq!(left.needs, right.needs, "needs {job_id}");
++    assert_eq!(left.condition, right.condition, "condition {job_id}");
++    assert_eq!(left.permissions, right.permissions, "permissions {job_id}");
++    assert_eq!(left.environment, right.environment, "environment {job_id}");
++}
+diff -ruN '--exclude=target' /var/tmp/velnor-phase0-t24-main-adaptation-20261005/crates/velnor-actions-workflow-renderer/src/render.rs /var/tmp/velnor-phase0-t24-main-shared-script-20261005/crates/velnor-actions-workflow-renderer/src/render.rs
+--- /var/tmp/velnor-phase0-t24-main-adaptation-20261005/crates/velnor-actions-workflow-renderer/src/render.rs	2026-10-05 16:01:22.220781352 +0200
++++ /var/tmp/velnor-phase0-t24-main-shared-script-20261005/crates/velnor-actions-workflow-renderer/src/render.rs	2026-10-05 17:07:33.599410395 +0200
+@@ -21,6 +21,9 @@
+     preseed_closure, steps, support, workflow_policy, yaml::render_yaml,
+ };
+ 
++#[path = "document_shared_scripts.rs"]
++mod document_shared_scripts;
++
+ pub use crate::matrix::{
+     COVERED_TASKS_OUTPUT, MATRIX_MAX_PARALLEL_ENV, MATRIX_NEEDS_JOB_ENV, MATRIX_OUTPUT_ENV,
+     MatrixSource, PLAN_ID_OUTPUT, PLAN_STEP_ID, RUN_KEY_OUTPUT,
+@@ -362,26 +365,13 @@
+         let document = crate::yaml::quote_run_values_in_yaml(document);
+         marker::with_marker(&ctx.generator_version, &render_yaml(&document))
+     };
+-    let mut text = render_text(&shared)?;
+-    if text.len() > crate::workflow_size::MAX_WORKFLOW_BYTES {
+-        let excluded = shared.calls.keys().cloned().collect();
+-        if let Some(file) =
+-            crate::tool_seed_setup_share::factor_one_group(&mut shared.jobs, &excluded, ctx)?
+-        {
+-            if shared
+-                .files
+-                .iter()
+-                .any(|existing| existing.path == file.path)
+-            {
+-                return Err(RenderError::InvalidWorkflow(format!(
+-                    "generated_action_path_collision:{}",
+-                    file.path
+-                )));
+-            }
+-            shared.files.push(file);
+-            text = render_text(&shared)?;
+-        }
+-    }
++    let initial_text = render_text(&shared)?;
++    let text = document_shared_scripts::compact_oversized_workflow(
++        &mut shared,
++        ctx,
++        initial_text,
++        render_text,
++    )?;
+     crate::workflow_size::check_workflow_size(WORKFLOW_PATH, &text)?;
+     steps::scan_for_private_subcommands(&text)?;
+     let mut files = shared.files;

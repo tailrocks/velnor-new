@@ -1,0 +1,8 @@
+3643f8bbc83eeba8a4f94447f4067de44fa969acb1768a50cf186808b366afc6  /root/.cache/velnor-task-targets/20261005/shared-script-compaction-a-copy/crates/velnor-actions-workflow-renderer/src/document_shared_scripts.rs
+4660fb64e57e3852df6b427c1c3dcf99094a2f37a11d7daba52d683612e232d9  /root/.cache/velnor-task-targets/20261005/shared-script-compaction-a-copy/crates/velnor-actions-workflow-renderer/src/document_shared_scripts_tests.rs
+2229f82764353c7efd2866e921da4fb2d4544ffbad1682c02608c8ca5d253d8b  /root/.cache/velnor-task-targets/20261005/shared-script-compaction-a-copy/crates/velnor-actions-workflow-renderer/src/document_shared_scripts_execution_tests.rs
+532c5e5c59973462dfe12b0f969d3713d734588f6ce7ba06ea3872f7a05e0c17  /root/.cache/velnor-task-targets/20261005/shared-script-compaction-a-copy/crates/velnor-actions-workflow-renderer/src/document_shared_scripts_execution_support.rs
+777459d8e7f33d22cb7cb834ec2845929de19257c01d7f063ad70509311b6b83  /root/.cache/velnor-task-targets/20261005/shared-script-compaction-a-copy/crates/velnor-actions-workflow-renderer/src/document_shared_scripts_execution_support_tests.rs
+970be2f32c0756631a8a0fedca0f5a3047fea52d00d5e8d6b37296d3cc54340a  /root/.cache/velnor-task-targets/20261005/shared-script-compaction-a-copy/crates/velnor-actions-workflow-renderer/src/document_shared_scripts_execution_outcomes.rs
+2a383abb98bfdeb0f3a5e8101a556a7b1c521f28d14a1bf858618c83a3e08980  /root/.cache/velnor-task-targets/20261005/shared-script-compaction-a-copy/crates/velnor-actions-workflow-renderer/src/document_shared_scripts_execution_signal.rs
+6b61f7f4c76b28141818d883a89dbaf88207d46fe25c73fb29c76d73e5c6557b  /root/.cache/velnor-task-targets/20261005/shared-script-compaction-a-copy/crates/velnor-actions-workflow-renderer/src/render.rs

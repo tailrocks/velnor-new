@@ -1,0 +1,9 @@
+UTC: 2026-10-05 10:47:28
+Command: /usr/bin/env -i PATH=/usr/bin:/bin /usr/bin/bash --noprofile --norc /root/.velnor-generator-preview-20261005/preseed-preview-cargo-fetch-v2.sh
+Outer SHA256: 6ed0fe33984ebbea0846c9f16ef173f9569812b4660eb8b4bbda2fb6dd43fb59
+Namespace SHA256: d66c3a5c826a4a3916281324a52e83d41a4ea463db7200da720f6d122bfefb25
+Exit code: 1
+Output: cargo source fetch: an inherited file descriptor remains open
+Reached: early outer FD preflight only.
+Not reached: source snapshot, mount setup, Cargo, network, compilation, helper, generation.
+Task-owned resources created: none.

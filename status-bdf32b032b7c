@@ -1,0 +1,26 @@
+ M Cargo.lock
+ M crates/velnor-actions-native/Cargo.toml
+ M crates/velnor-actions-native/src/lib.rs
+ M crates/velnor-actions-native/tests/ownership.rs
+ M scripts/bootstrap-owned-tool-builder.py
+ M scripts/owned_tool_source.py
+ M scripts/publish-owned-tool-artifacts.py
+ M scripts/qualification/mbx-synchronous/README.md
+ M scripts/qualification/mbx-synchronous/bind_inputs.py
+ M scripts/qualify-owned-tool.py
+ M scripts/source_publication.py
+ M scripts/source_semver_capsule.py
+?? .velnor/archive-guard/
+?? crates/velnor-actions-native/bin/
+?? crates/velnor-actions-native/build.rs
+?? crates/velnor-actions-native/build_support/
+?? crates/velnor-actions-native/src/owned_archive_guard/
+?? crates/velnor-actions-native/tests/archive_guard_cli.rs
+?? crates/velnor-actions-native/tests/ownership_test_source.rs
+?? docs/implemented/owned-archive-preflight.md
+?? scripts/archive-guard-inputs.txt
+?? scripts/build-owned-archive-guard.sh
+?? scripts/check-owned-archive-guard-sources.sh
+?? scripts/owned_archive_preflight.py
+?? scripts/test_owned_archive_preflight.py
+?? scripts/with-owned-archive-guard.sh

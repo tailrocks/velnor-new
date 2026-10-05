@@ -1,0 +1,5 @@
+Merge origin/main at fea935e3439a9feee541cd18eac0cd0b60b2d174
+
+Integrate the archive guard workspace member and its locked dependencies, policy, and tests with the freshness foundation.
+
+Co-authored-by: Codex <codex@openai.com>

@@ -1,0 +1,10 @@
+   Compiling velnor-actions-orchestrator v0.1.0 (/tmp/velnor-release-intent-guard-af82-candidate-20261005/crates/velnor-actions-orchestrator)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 14.22s
+     Running tests/velnor_orchestrator.rs (/root/.cache/velnor-task-targets/20261005/git-steward-validate-shell/target/debug/deps/velnor_orchestrator-6d174f9c7abd565a)
+
+running 1 test
+Initialized empty Git repository in /var/tmp/velnor-git-steward-validate-shell-20261005/.tmpCN8Zl0/.git/
+test impl_discovery_cache::raw_non_utf8_tracked_cache_path_fails_public_discovery ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 694 filtered out; finished in 0.07s
+

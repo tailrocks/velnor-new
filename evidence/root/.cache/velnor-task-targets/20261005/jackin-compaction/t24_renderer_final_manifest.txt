@@ -1,0 +1,95 @@
+T24 tool-seed/Mise setup sharing renderer candidate: frozen pin-repair evidence packet
+
+SOURCE SNAPSHOT
+path: /var/tmp/velnor-t24-tofu-compaction-draft-20261005
+base source HEAD: bc4514f6c2acc231e36eb58d723c56b4488b1c3e
+MERGE_HEAD: 703d1b84d9f9e0246a52e3989bf3b78a13bbbf05
+Cargo.lock SHA-256: a54cde625c902855581900d28583781da28ed10183837828b4e5a4b7b019bfe9
+
+Changed renderer paths (base preimage SHA-256 -> final postimage SHA-256):
+crates/velnor-actions-workflow-renderer/src/lib.rs
+  1d6d8e6bb1c67951c3eaba9f53b9c864219fea1211bd6b23376c3b563ceb26cb -> fce9cbcf9d469bb32bbb998aad979ea6ed6619fa6845b2040b7d42cf68f1625a
+crates/velnor-actions-workflow-renderer/src/render.rs
+  e03e60154d460de937d3a9fb93379e96e7769e9b58be1f5c853ed3f8ed74c6db -> 3047204497c0e3c087090921ac31440cd5ae5868bc95b9510e5d1030133a4930
+crates/velnor-actions-workflow-renderer/src/action_ref.rs
+  f959bb9ca6398ccf2b6b297955eca312ab09f651beb8acffc873c90d229b7cf3 -> ad82dbc684e626f9f43a15ab24de370398f11d81e8f19dc774e7b4452e32dd97
+crates/velnor-actions-workflow-renderer/src/document_steps.rs
+  44053c6d5a307f732293899ff77fbd94ca6ca3cf0d15cb94decee81f1f1b351f -> 33b10feadfd805c3f0df8bb071f6b4050e51a8bf924eedeae478edef97d27f6c
+crates/velnor-actions-workflow-renderer/src/tool_seed_setup_share.rs
+  initial candidate 72655fb38977de1a35a325f7e3c99e3897f6cd86141567695aad6534b944900f -> repaired/final b31018b159250caf90161b3bfb4796e831152f47fbb2cfa695b66bdf076c0db6
+crates/velnor-actions-workflow-renderer/src/tool_seed_setup_share_tests.rs
+  initial candidate 3a8c7f48075a6677ddc839091e3931e7ca48fd291d1acf66120f1a3b2af151c1 -> repaired/final 12e8f0687d43b8a6c441add55585512fd35dd5166130d308a9fd1c900c6bed11
+
+The matcher accepts only full factory-identical seed/setup pairs whose Mise action is the reviewed pin `jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5` from `.velnor/version-policy.toml`. An alternate valid 40-hex pin stays inline. It still selects at most one deterministic group, requires canonical first root checkout, keeps all job/env metadata and seed-file emission, and preserves the existing 500,000-byte gate. No generated YAML is hand-edited. Changed Rust files remain under the 400-line limit; lib.rs 128 lines, render.rs 398 lines.
+
+TOOLCHAIN
+Boundary: `mise --no-config --no-env --no-hooks exec rust@1.98.1 jq@1.8.1 -- ...`
+Cargo: 1.98.1 (797e8a9bc 2026-08-05)
+Rustc: 1.98.1 (48a229cea 2026-09-01)
+Tool identity log: /root/.cache/velnor-task-targets/20261005/jackin-compaction/t24_renderer_tools_identity.log
+Identity log SHA-256: a7d5538c574fd53df4124f44f5a8c95ce6e88c1b66c639eab02248beda9529b3
+jq binary SHA-256: 020468de7539ce70ef1bceaf7cde2e8c4f2ca6c3afb84642aabc5c97d9fc2a0d
+
+RUST VALIDATION (Cargo locked, jobs capped at 2)
+Focused renderer matcher: `cargo test --locked --jobs 2 --package velnor-actions-workflow-renderer tool_seed_setup_share::tests -- --nocapture`
+Result: 8/8 passed, including equal alternate-pin jobs remaining inline
+Log: /root/.cache/velnor-task-targets/20261005/jackin-compaction/t24_renderer_focused_test_pinfix.log
+Log SHA-256: 6c287d2a3dd30f768e2559a45e8f45ec88ea8f81cb6ac9bbd33f359e72027dc7
+
+Full renderer: `cargo test --locked --jobs 2 --package velnor-actions-workflow-renderer -- --test-threads 2`
+Result: 56 library + 300 integration tests passed, 0 failed
+Log: /root/.cache/velnor-task-targets/20261005/jackin-compaction/t24_renderer_full_test_pinfix.log
+Log SHA-256: 08a5456c1f801c48003234b5621bb486463a749b832c5edf591ea351d127832f
+
+Strict Clippy: `cargo clippy --locked --jobs 2 --package velnor-actions-workflow-renderer --all-targets -- -D warnings`
+Result: passed
+Log: /root/.cache/velnor-task-targets/20261005/jackin-compaction/t24_renderer_clippy_pinfix.log
+Log SHA-256: 38afb84bd46916be7be363789f205a4cfd349afdc8eab03b3673b126ad23df4d
+
+Workspace formatting: `cargo fmt --all -- --check`
+Result: passed, exit 0
+Log SHA-256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+
+ToFu package behavior/security tests: `cargo test --locked --jobs 2 --package velnor-actions-tofu -- --test-threads 2`
+Result: 1 + 317 tests passed, 0 failed
+Log: /root/.cache/velnor-task-targets/20261005/jackin-compaction/t24_tofu_tests_pinfix.log
+Log SHA-256: a9e798daf11204fe2bea24888d08720c1478d326b5db54098587712360e5527e
+
+CLI build: `cargo build --locked --jobs 2 --package velnor-actions-cli --bin velnor-actions`
+Result: passed; version `velnor-actions 0.1.0`
+Binary: /root/.cache/velnor-task-targets/20261005/jackin-compaction/debug/debug/velnor-actions
+Binary SHA-256: 88d5be31649c843292fc9b04419b9894a62426499e51da0b5969f3e650daa748
+Build log: /root/.cache/velnor-task-targets/20261005/jackin-compaction/t24_renderer_cli_build_pinfix.log
+Build log SHA-256: fe163587787b97a42b2db05c62cf9e90374e89632d99f7f03fe14ded7f4784d9
+
+REAL 60-ROOT TOFU GENERATION
+Fixture: /root/.cache/velnor-task-targets/20261005/jackin-compaction/tofu-profile/fixture/tofu-60-roots
+Config SHA-256: dd4d43dd5d9170129382e8da427bec9a9f0118dd7700f74aaa58f5e9309df28c
+Release manifest SHA-256: f84eab5198f23bf2e4ef1ee430eecd57d687b9a428997822ff327e5fff6b1be5
+Plan and both output-isolated generates succeeded using the repaired source binary.
+Plan log SHA-256: 6cf394f3506d8cfde2e8a348db1fe260ccd6f3cf780772d9092f947523d9751c
+Generate A log SHA-256: 05c707d23c838f5e5cbdcffd06be9c6c528cf116112a0fae4d1193ece0f22fab
+Generate B log SHA-256: c1ca40d4e2b37572638c4f9a2dbab236ea30f2cab1d87a2fdc3b57f83e889bb2
+A/B output tree manifest SHA-256, both: 5a9e213616ea3d1c264fc1e8b40ebf3b257e2a1874ea3161f1f1c3d75e989d90
+Recursive .github tree diff and output-manifest diff are empty; each log SHA-256 is e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.
+Input/binary manifest SHA-256 before and after is identical: c84aa0d8e3bcbacac8fe26023bcea201b56133310255eb1db855b85a09880a10.
+Rendered workflow: 479,102 bytes, SHA-256 d96b27196cd3e58ccc0226c1c15dd6d3fdbac432d87b58c34aad86b6c072204f; unchanged 500,000-byte cap passes by 20,898 bytes.
+Shared action `.github/actions/velnor-shared-setup/action.yml`: 784 bytes, SHA-256 41f857f146af556370f4d54e129c3c4abc475598b812f2f5aa87171e519e4092.
+Nested tool-seed action remains emitted: 1,585 bytes, SHA-256 6af64e54bfa164a3a3983daca601d104776490c4ccc81908c97817fa5a57f89b. Workflow has 60 shared-action calls. `.github/CLAUDE.md` symlink points to `AGENTS.md` in both trees.
+
+1- AND 10-ROOT REGRESSION GENERATION
+1-root plan/generate succeeded; workflow 21,099 bytes, SHA-256 d0a8ef40a9041de0d123c5107f08e3903c14111ba36f5d141323338ce5538bb6; complete output .github tree equals baseline (empty diff SHA e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855). Output manifest SHA-256 472bf20d8267b2b57a76dcab1368697248529279e446bd9e80b0857f7ea89a67.
+1-root plan log SHA-256 7afd97801e444d1f4951a267f625b61fbbf4e749c651f6cdeb437a424aeb3a28; generate log SHA-256 9ef1d55992e355b6be1c55aac5f3218215be0f3f4c56ec8c3fce86113376f04a.
+10-root plan/generate succeeded; workflow 95,532 bytes, SHA-256 9c5e7094657615690b04c7acf6c516fcf85662d2d38051e59489187770216937; complete output .github tree equals baseline (empty diff SHA e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855). Output manifest SHA-256 c76ef481cefddc4f556c29ec62f987c8693ee3f012c10437d683f56837be57bc.
+10-root plan log SHA-256 999df1968f8863963328e333ee039c1c9d8158e449873b15ac32206e4182b66b; generate log SHA-256 57967eafa46ce4fddec95c6f7865d26910e7c89eac88babbdb639b44a8435423.
+
+GENERATED WORKFLOW VALIDATION
+Pinned actionlint 1.7.12 binary SHA-256 c872d6db8c6bf83a8eaa704fc93999f027d55dffbc63b8a6abdccb47df5f4cd4; explicit config/workflow command passed, empty log SHA-256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.
+Pinned zizmor 1.30.1 binary SHA-256 d39db5594fd89d57fdadd744079e1b3a405f24ff312714904f8bd708c69f322f; strict collection over generated .github passed, no findings (63 ignored, 1 suppressed), log SHA-256 b66a69a5f60296f8af080ffad448b04e4ba5dbe1c5c526ea4ac41e825c1e0bac.
+Pinned ShellCheck 0.11.0 binary SHA-256 4da528ddb3a4d1b7b24a59d4e16eb2f5fd960f4bd9a3708a15baddbdf1d5a55b.
+
+LIFECYCLE HANDOFF
+Writer slice is separate and remains outside this source snapshot. Coordinator reports Sol-approved writer files in `/tmp/velnor-t24-composite-writer-703-draft-20261005`, with focused 3/3 lifecycle tests (log SHA-256 prefix 51bae672). Final integrated source still requires steward integration and regeneration.
+
+SCOPE LIMITS
+This is the isolated renderer candidate based on exact 703 source. It proves source-bound T24 1/10/60-root outputs and local tests in this snapshot. It does not include the separately owned writer source changes and makes no hosted-runner execution claim.

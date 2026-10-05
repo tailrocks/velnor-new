@@ -1,0 +1,11 @@
+   Compiling velnor-actions-contract v0.1.1 (/tmp/velnor-pr12-foundation-20261005/crates/velnor-actions-contract)
+   Compiling velnor-actions-tofu v0.1.1 (/tmp/velnor-pr12-foundation-20261005/crates/velnor-actions-tofu)
+   Compiling velnor-actions-rust v0.1.1 (/tmp/velnor-pr12-foundation-20261005/crates/velnor-actions-rust)
+   Compiling velnor-actions-workflow-renderer v0.1.1 (/tmp/velnor-pr12-foundation-20261005/crates/velnor-actions-workflow-renderer)
+   Compiling velnor-actions-actionlint v0.1.1 (/tmp/velnor-pr12-foundation-20261005/crates/velnor-actions-actionlint)
+   Compiling velnor-actions-mise v0.1.1 (/tmp/velnor-pr12-foundation-20261005/crates/velnor-actions-mise)
+   Compiling velnor-actions-orchestrator v0.1.1 (/tmp/velnor-pr12-foundation-20261005/crates/velnor-actions-orchestrator)
+   Compiling velnor-actions-cli v0.1.1 (/tmp/velnor-pr12-foundation-20261005/crates/velnor-actions-cli)
+    Finished `release` profile [optimized] target(s) in 11.76s
+mbx[cache]: 0 hits, 0 misses, 7 not looked up, 8 incremental; 0 B downloaded, 0 B uploaded, 0 B stored locally
+mbx[savings]: 40.1 GiB in every checkout, 40.1 GiB on disk. arithmetic declined to comment.

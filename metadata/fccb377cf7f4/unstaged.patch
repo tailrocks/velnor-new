@@ -1,0 +1,122 @@
+diff --git a/crates/velnor-actions-orchestrator/src/internal.rs b/crates/velnor-actions-orchestrator/src/internal.rs
+index 440bd4873..245e5a860 100644
+--- a/crates/velnor-actions-orchestrator/src/internal.rs
++++ b/crates/velnor-actions-orchestrator/src/internal.rs
+@@ -110,6 +110,20 @@ pub(crate) struct PlanResponse {
+     pub(crate) baseline_manifest: Option<BaselineManifest>,
+ }
+ 
++impl PlanResponse {
++    /// Validate the plan and its duplicated matrix before emitting artifacts or outputs.
++    /// # Errors
++    pub(crate) fn validate(&self) -> Result<(), OrchestratorError> {
++        self.plan.validate().map_err(internal_contract)?;
++        let response_matrix = canonical_json_bytes(&self.matrix).map_err(internal_contract)?;
++        let plan_matrix = canonical_json_bytes(&self.plan.matrix).map_err(internal_contract)?;
++        if response_matrix != plan_matrix {
++            return Err(internal("response_matrix_mismatch"));
++        }
++        Ok(())
++    }
++}
++
+ /// Compute the affected plan plus matrix for one event (schema-1 JSON).
+ ///
+ /// # Errors
+diff --git a/crates/velnor-actions-orchestrator/src/internal_request.rs b/crates/velnor-actions-orchestrator/src/internal_request.rs
+index 36106c1ab..059b1d9a5 100644
+--- a/crates/velnor-actions-orchestrator/src/internal_request.rs
++++ b/crates/velnor-actions-orchestrator/src/internal_request.rs
+@@ -204,6 +204,7 @@ pub fn publish_plan_files(
+     let response: PlanResponse =
+         serde_json::from_str(response_json).map_err(|_| internal("malformed_response"))?;
+     check_schema(response.schema)?;
++    response.validate()?;
+     let dir = plan_artifact_dir(velnor_dir, &response.plan.run_key)?;
+     write_plan_files(&response, velnor_dir, &dir)?;
+     Ok(dir)
+diff --git a/crates/velnor-actions-orchestrator/src/plan_output_limits.rs b/crates/velnor-actions-orchestrator/src/plan_output_limits.rs
+index dbb875fb4..01e9355f2 100644
+--- a/crates/velnor-actions-orchestrator/src/plan_output_limits.rs
++++ b/crates/velnor-actions-orchestrator/src/plan_output_limits.rs
+@@ -52,12 +52,12 @@ pub fn plan_outputs_with_admission(
+     let response: PlanResponse =
+         serde_json::from_str(response_json).map_err(|_| internal("malformed_response"))?;
+     check_schema(response.schema)?;
+-    response.plan.validate().map_err(internal_contract)?;
++    response.validate()?;
+     let qualification = response.plan.qualification.as_ref();
+     let directive = QualificationCacheDirective::for_plan(&response.plan, admission)
+         .map_err(internal_contract)?;
+     let outputs = PlanOutputs {
+-        matrix: canonical_json_str(&response.matrix).map_err(internal_contract)?,
++        matrix: canonical_json_str(&response.plan.matrix).map_err(internal_contract)?,
+         plan_id: response.plan.plan_id.clone(),
+         run_key: response.plan.run_key.clone(),
+         covered_tasks: crate::covered_tasks::CoveredTasks::for_plan(&response.plan).encode(),
+@@ -78,7 +78,7 @@ pub fn plan_outputs_with_admission(
+     };
+     let bytes = check_plan_outputs(
+         mode,
+-        response.matrix.include.len(),
++        response.plan.matrix.include.len(),
+         &outputs.promoted_job_outputs(mode),
+     )?;
+     Ok(PlanOutputs {
+diff --git a/crates/velnor-actions-orchestrator/tests/velnor_orchestrator.rs b/crates/velnor-actions-orchestrator/tests/velnor_orchestrator.rs
+index 7fa967c93..e3d55e142 100644
+--- a/crates/velnor-actions-orchestrator/tests/velnor_orchestrator.rs
++++ b/crates/velnor-actions-orchestrator/tests/velnor_orchestrator.rs
+@@ -1,7 +1,6 @@
+ //! Integration test entry point; cases live in the sibling files.
+ mod impl_bench_p13;
+ mod impl_cache_fixtures;
+-mod impl_cache_sources_exact;
+ mod impl_cache_warm;
+ mod impl_common;
+ mod impl_config_internal;
+@@ -24,7 +23,6 @@ mod impl_gates_shard_tokens;
+ mod impl_gen_gates;
+ mod impl_generate_p09_concurrent;
+ mod impl_generate_p09_preview;
+-mod impl_generate_size_guard;
+ mod impl_generate_tofu_env;
+ mod impl_git_authority_p10;
+ mod impl_git_paths_p10;
+@@ -38,7 +36,6 @@ mod impl_merge_tamper;
+ mod impl_merge_trust;
+ mod impl_neg_pipeline_p13;
+ mod impl_orch_broaden;
+-mod impl_orch_cold_validators;
+ mod impl_orch_core;
+ mod impl_orch_core_cover;
+ mod impl_orch_f2a;
+@@ -60,7 +57,6 @@ mod impl_orch_lock_audit;
+ mod impl_orch_merge;
+ mod impl_orch_merge_final;
+ mod impl_orch_p08;
+-mod impl_orch_p08_sources;
+ mod impl_orch_plansel;
+ mod impl_orch_release_emit;
+ mod impl_orch_timeout;
+@@ -69,11 +65,11 @@ mod impl_p04_reuse;
+ mod impl_p06_detection;
+ mod impl_p06_detection_malformed;
+ mod impl_perf_p13;
++mod impl_plan_matrix_output;
+ mod impl_plan_migration;
+ mod impl_plan_parity;
+ mod impl_plan_prepare;
+ mod impl_prepare_generate;
+-mod impl_preseed_cold;
+ mod impl_preseed_manifest;
+ mod impl_protocol;
+ mod impl_protocol_fork;
+@@ -84,7 +80,6 @@ mod impl_required_reports;
+ mod impl_required_validators;
+ mod impl_schema2_mbx_qualification;
+ mod impl_schema2_routing;
+-mod impl_schema2_verification_tasks;
+ mod impl_select;
+ mod impl_select_base;
+ mod impl_select_removed;

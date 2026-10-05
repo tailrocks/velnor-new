@@ -1,0 +1,4 @@
+a63e6a4550e75e14c2dd2ebe6efefe1360a847967c0ee2f28803eb43949dc6e4  ./AGENTS.md
+b3f39f72416eee5077f2fd187f860e6d9a0a9ea4b33fdf3cfc671b1afbb34e0e  ./actionlint.yaml
+8f21aceb5b1a4f233448aebe7ffdafb15d9ac5234de019b6e90720e9b373d58b  ./actions/velnor-tool-seed/action.yml
+be717af57d6ffca38aed5dc4e27640628a9365b9d5b6faf040c794c13881923e  ./workflows/ci.yml

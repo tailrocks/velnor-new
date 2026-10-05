@@ -1,0 +1,13 @@
+Diff in /tmp/velnor-render-compaction-44b2-20261005/crates/velnor-actions-workflow-renderer/src/document_shared_scripts_tests.rs:258:
+     }
+     let files = share_trusted_scripts(&mut changed, &ctx).expect("reject altered bodies");
+     assert_eq!(files.len(), 1);
+-    assert!(files[0].path.starts_with(&format!("{SCRIPT_ROOT}/bash-b3-")));
++    assert!(
++        files[0]
++            .path
++            .starts_with(&format!("{SCRIPT_ROOT}/bash-b3-"))
++    );
+ }
+ 
+ #[test]

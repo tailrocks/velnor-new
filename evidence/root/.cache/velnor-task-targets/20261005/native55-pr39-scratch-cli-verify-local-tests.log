@@ -1,0 +1,24 @@
+   Compiling velnor-actions-tofu v0.1.0 (/root/.cache/velnor-task-targets/20261005/native55-pr39-scratch-20261005/velnor-39d489229747342043de979e0f3e2c95d8726aa4/crates/velnor-actions-tofu)
+   Compiling velnor-actions-workflow-renderer v0.1.0 (/root/.cache/velnor-task-targets/20261005/native55-pr39-scratch-20261005/velnor-39d489229747342043de979e0f3e2c95d8726aa4/crates/velnor-actions-workflow-renderer)
+error[E0432]: unresolved imports `velnor_actions_contract::DYNAMIC_MATRIX_OUTPUT_MODE`, `velnor_actions_contract::PLAN_MATRIX_OUTPUT_MODE_ENV`
+ --> crates/velnor-actions-workflow-renderer/src/matrix_output_mode.rs:4:31
+  |
+4 | use velnor_actions_contract::{DYNAMIC_MATRIX_OUTPUT_MODE, PLAN_MATRIX_OUTPUT_MODE_ENV};
+  |                               ^^^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^^ no `PLAN_MATRIX_OUTPUT_MODE_ENV` in the root
+  |                               |
+  |                               no `DYNAMIC_MATRIX_OUTPUT_MODE` in the root
+
+error[E0432]: unresolved imports `velnor_actions_contract::HOSTED_SUFFIX`, `velnor_actions_contract::SCALE_SUFFIX`, `velnor_actions_contract::VERIFICATION_TASK_JOB_PREFIX`, `velnor_actions_contract::VerificationRunner`, `velnor_actions_contract::VerificationTask`
+ --> crates/velnor-actions-workflow-renderer/src/verification_jobs.rs:6:5
+  |
+6 |     HOSTED_SUFFIX, Job, JobTimeout, PermissionLevel, Permissions, RunsOn, SCALE_SUFFIX, Step,
+  |     ^^^^^^^^^^^^^ no `HOSTED_SUFFIX` in the root                          ^^^^^^^^^^^^ no `SCALE_SUFFIX` in the root
+7 |     VERIFICATION_TASK_JOB_PREFIX, VerificationRunner, VerificationTask,
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^ no `VerificationTask` in the root
+  |     |                             |
+  |     |                             no `VerificationRunner` in the root
+  |     no `VERIFICATION_TASK_JOB_PREFIX` in the root
+
+For more information about this error, try `rustc --explain E0432`.
+error: could not compile `velnor-actions-workflow-renderer` (lib) due to 2 previous errors
+warning: build failed, waiting for other jobs to finish...

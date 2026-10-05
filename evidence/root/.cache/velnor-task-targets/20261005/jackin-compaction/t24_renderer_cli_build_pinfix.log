@@ -1,0 +1,4 @@
+   Compiling velnor-actions-workflow-renderer v0.1.0 (/var/tmp/velnor-t24-tofu-compaction-draft-20261005/crates/velnor-actions-workflow-renderer)
+   Compiling velnor-actions-orchestrator v0.1.0 (/var/tmp/velnor-t24-tofu-compaction-draft-20261005/crates/velnor-actions-orchestrator)
+   Compiling velnor-actions-cli v0.1.0 (/var/tmp/velnor-t24-tofu-compaction-draft-20261005/crates/velnor-actions-cli)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.17s

@@ -1,0 +1,1155 @@
+diff --cc crates/velnor-actions-orchestrator/src/workflow.rs
+index ec88ade,32587ed..0000000
+--- a/crates/velnor-actions-orchestrator/src/workflow.rs
++++ b/crates/velnor-actions-orchestrator/src/workflow.rs
+@@@ -123,8 -126,8 +126,8 @@@ pub(crate) fn build_workflow
+      };
+      let use_nextest = plan_uses_nextest(discovery);
+      let use_opentofu = plan_uses_opentofu(discovery);
+ -    let use_rust = plan_uses_rust(discovery);
+ +    let use_rust = plan_uses_rust(discovery, policy);
+-     let plan = build_plan_job(
++     let mut plan = build_plan_job(
+          label,
+          acquire.clone(),
+          &catalog,
+diff --cc crates/velnor-actions-orchestrator/tests/zizmor_staging.rs
+index e1d3760,c956749..0000000
+--- a/crates/velnor-actions-orchestrator/tests/zizmor_staging.rs
++++ b/crates/velnor-actions-orchestrator/tests/zizmor_staging.rs
+@@@ -1,6 -1,4 +1,6 @@@
+--//! Staging-only zizmor config cases: zero-ignore staging config over full-SHA refs.
+++//! Staging-only zizmor config cases for generated workflows and local actions.
+ +
+ +use crate::git_fixture;
+  
+  use std::ffi::OsString;
+  use std::fs;
+@@@ -19,11 -18,6 +19,13 @@@ use velnor_actions_mise::{PinnedTool, P
+  use velnor_actions_orchestrator::{GenerateOptions, generate, prepare};
+  use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
+  
+++#[path = "zizmor_staging_consumer.rs"]
+++mod consumer;
+ +#[path = "fixture_package.rs"]
+ +mod fixture_package;
+ +#[path = "zizmor_staging_retired.rs"]
+ +mod retired_foundation;
+ +
+  /// Test error shortcut.
+  type TestResult = Result<(), Box<dyn std::error::Error>>;
+  
+@@@ -227,9 -153,23 +229,12 @@@ fn stage
+          root.join(".github/actionlint.yaml"),
+          fs::read(preview.join(".github/actionlint.yaml"))?,
+      )?;
+ -    let freshness = fs::read_to_string(preview.join(FRESHNESS_WORKFLOW_PATH))?;
+ -    fs::write(root.join(FRESHNESS_WORKFLOW_PATH), &freshness)?;
++     let action = ".github/actions/velnor-tool-seed/action.yml";
++     fs::create_dir_all(root.join(".github/actions/velnor-tool-seed"))?;
++     fs::copy(preview.join(action), root.join(action))?;
+      let input = ZizmorConfigInput {
+          generator_version: env!("CARGO_PKG_VERSION").to_owned(),
+ -        workflows: vec![
+ -            ZizmorWorkflowText {
+ -                path: WORKFLOW_PATH.to_owned(),
+ -                text: yaml.to_owned(),
+ -            },
+ -            ZizmorWorkflowText {
+ -                path: FRESHNESS_WORKFLOW_PATH.to_owned(),
+ -                text: freshness,
+ -            },
+ -        ],
+ +        workflows: staged_workflows,
+      };
+      fs::write(root.join(".zizmor.yml"), render_zizmor_yaml(&input)?.yaml)?;
+      Ok(dir)
+@@@ -289,13 -229,15 +294,15 @@@ fn velnor_policy_blessed_sha_validates_
+      Ok(())
+  }
+  
+- /// The one `undocumented-permissions` finding (low, auditor/pedantic-only)
+- /// stays suppressed across every generated workflow. Zero ignores: every ref
+- /// is hash-pinned.
++ /// The two suppressed findings are `undocumented-permissions` (low,
++ /// auditor/pedantic-only): Plan and Required each grant Actions read to their
++ /// bounded internal baseline/artifact operation. Inline ignores are only
++ /// `self-repository` on local actions. Zizmor must report that count.
+  #[test]
+  fn staging_suppressions_stable_no_new() -> TestResult {
+ -    let (_repo, _parent, preview, yaml, _) = policy_preview()?;
+ -    let staged = stage(&preview, &yaml)?;
+ +    let (_repo, _parent, preview, yaml, _, workflows) = policy_preview()?;
+ +    let staged = stage(&preview, &workflows, &yaml)?;
++     let ignores = self_repository_ignores(staged.path())?;
+      let output = run_zizmor(staged.path())?;
+      let text = streams(&output);
+      assert!(output.success, "staged config greens zizmor: {text}");
+@@@ -307,43 -250,57 +315,26 @@@
+      Ok(())
+  }
+  
+- #[test]
+- fn consumer_tree_unaffected() -> TestResult {
+-     let repo = make_repo("schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n")?;
+-     let prep = prepare(repo.path())?;
+-     let parent = TempDir::new()?;
+-     let preview = parent.path().join("preview");
+-     let report = generate(
+-         &prep,
+-         &GenerateOptions {
+-             output_dir: Some(preview.clone()),
+-         },
+-     )?;
+-     assert_eq!(report.files_written.len(), 4, "four consumer tree items");
+-     let workflow_paths = generated_workflow_paths(&report.files_written);
+-     assert_eq!(
+-         workflow_paths,
+-         vec![WORKFLOW_PATH.to_owned()],
+-         "consumer policy emits only CI"
+-     );
+-     assert!(
+-         !preview.join(".zizmor.yml").exists(),
+-         "no staging config in output"
+-     );
+-     let input = ZizmorConfigInput {
+-         generator_version: env!("CARGO_PKG_VERSION").to_owned(),
+-         workflows: read_generated_workflows(&preview, &workflow_paths)?,
+-     };
+-     assert!(
+-         render_zizmor_yaml(&input)?.approved_ignores.is_empty(),
+-         "consumer needs no ignore"
+-     );
+-     Ok(())
++ /// Count `# zizmor: ignore[self-repository]` and reject every other ignore.
++ fn self_repository_ignores(root: &Path) -> Result<usize, Box<dyn std::error::Error>> {
++     let mut matched = 0;
++     let mut any = 0;
++     for relative in [
++         WORKFLOW_PATH,
++         FRESHNESS_WORKFLOW_PATH,
++         ".github/actions/velnor-tool-seed/action.yml",
++     ] {
++         let text = fs::read_to_string(root.join(relative))?;
++         matched += text.matches("# zizmor: ignore[self-repository]").count();
++         any += text.matches("zizmor: ignore[").count();
++     }
++     assert_eq!(matched, any, "only self-repository ignores are allowed");
++     Ok(matched)
+  }
+  
+ -#[test]
+ -fn consumer_tree_unaffected() -> TestResult {
+ -    let repo = make_repo("schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n")?;
+ -    let prep = prepare(repo.path())?;
+ -    let parent = TempDir::new()?;
+ -    let preview = parent.path().join("preview");
+ -    generate(
+ -        &prep,
+ -        &GenerateOptions {
+ -            output_dir: Some(preview.clone()),
+ -        },
+ -    )?;
+ -    assert!(
+ -        !preview.join(".zizmor.yml").exists(),
+ -        "no staging config in output"
+ -    );
+ -    let yaml = fs::read_to_string(preview.join(WORKFLOW_PATH))?;
+ -    let input = ZizmorConfigInput {
+ -        generator_version: env!("CARGO_PKG_VERSION").to_owned(),
+ -        workflows: vec![ZizmorWorkflowText {
+ -            path: WORKFLOW_PATH.to_owned(),
+ -            text: yaml,
+ -        }],
+ -    };
+ -    assert!(
+ -        render_zizmor_yaml(&input)?.approved_ignores.is_empty(),
+ -        "consumer needs no ignore"
+ -    );
+ -    Ok(())
+ -}
+ -
+  #[test]
+  fn different_unpinned_tag_still_fails() -> TestResult {
+ -    let (_repo, _parent, preview, yaml, _) = policy_preview()?;
+ +    let (_repo, _parent, preview, yaml, _, workflows) = policy_preview()?;
+      let pinned = format!("actions/checkout@{CHECKOUT_ACTION_SHA}");
+      let unpinned = format!("actions/checkout@{CHECKOUT_ACTION_VERSION}");
+      let mutated = yaml.replacen(&pinned, &unpinned, 1);
+diff --cc docs/proposed/opentofu-goldens/MANIFEST.sha256
+index 7540c7e,aa13a49..0000000
+--- a/docs/proposed/opentofu-goldens/MANIFEST.sha256
++++ b/docs/proposed/opentofu-goldens/MANIFEST.sha256
+@@@ -1,60 -1,65 +1,65 @@@
+  e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./dogfood/dogfood.diff
+  1cc103f316d7707bb7ead8d7a203934bbf0f1251b615eb6056deb22c90d6144f  ./dogfood/dogfood.verdict
+  9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./dogfood/generate.exit
+- b764bf50db002ff851dc188daedb631d921fb7e7cfd8b71f0bb33a17bd39105c  ./dogfood/generate.stderr.txt
+ -5d3e1cc496316318d52c38e494eb5143b5ef77ee94d7f1c6e9826cf4f7cba920  ./dogfood/generate.stderr.txt
+++f99a479413f1e7078b3b2636692fe681df01060b190571c41a376ccb57f3f195  ./dogfood/generate.stderr.txt
+  e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./dogfood/generate.stdout.txt
+  9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./dogfood/plan.exit
+  e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./dogfood/plan.stderr.txt
+- 085d783766eb1c3a1bc753fc11de3d632ba53c1b73cb6999c48d146c4b8d688c  ./dogfood/plan.txt
+ -ededff5137dcea5c0e7dd6ee71420d7242f3a485b00907fb88ebaf6d4f151854  ./dogfood/plan.txt
+++4c4b40a4077c3a299c437c933e96239f81f0a05250f755c8b2a707b71df82b42  ./dogfood/plan.txt
+ +a63e6a4550e75e14c2dd2ebe6efefe1360a847967c0ee2f28803eb43949dc6e4  ./dogfood/preview/.github/AGENTS.md
+  0da1fbb188c99eb4cffe66befed975368b8b86ef7e375d2b8ac9a6540818fbff  ./dogfood/preview/.github/actionlint.yaml
+- ce4b8a13bb56bfd2c727e375791926faae07f5059c676667f037fd25eddb2f74  ./dogfood/preview/.github/workflows/ci.yml
++ 6af64e54bfa164a3a3983daca601d104776490c4ccc81908c97817fa5a57f89b  ./dogfood/preview/.github/actions/velnor-tool-seed/action.yml
+ -a63e6a4550e75e14c2dd2ebe6efefe1360a847967c0ee2f28803eb43949dc6e4  ./dogfood/preview/.github/AGENTS.md
+ -6214a6cff871cdad33a0e51101503de730103777b57167eeb7f825e74faae956  ./dogfood/preview/.github/workflows/ci.yml
+++603370228e7eca5bf3efcfccc759a1f9a70aed0647b6686086a7c091299a456b  ./dogfood/preview/.github/workflows/ci.yml
+  0d41b05d10d4da7b26a719f82908f2a47e7224ed93ef3383d81a6d45179fb5d8  ./dogfood/preview/.github/workflows/freshness.yml
+  d13645f1aa9667a1ce9fa0886ca5f4930c3a9a0e33c3dfe7df6b8942cad9962a  ./dogfood/preview/.github/workflows/generator-release.yml
+  a103db30bc49166259cbb40e9948c2677fbc49d84164cc7f71c262ea5d3ecdab  ./dogfood/preview/.github/workflows/image-release.yml
+  f3edd65a1dcc1de22b67e08446003e41d10c8fd4595ffcff72fb9e821a935846  ./dogfood/preview/.github/workflows/macos-binary-release.yml
+- c984a7586172233ab9fdbb503684e8f2eb6c0d6548ccba21dd499e03badc95ce  ./dogfood/preview/.github/workflows/qualification.yml
+- 8f78c2716250cf6f214620981722968a32bef761273694fc247a305854cd84d4  ./dogfood/tree.sha256
++ 1ed3c391c89534bb91860b522f582f60743fb8f26e83348c925800cdfae7d0a9  ./dogfood/preview/.github/workflows/qualification.yml
+ -6f05d106d0e7512bab724dd92b254f36d9b22dae0e05aa7c19edee174c34b47a  ./dogfood/tree.sha256
+++5a1c7cfd0a695cd0504bda1ae1647e4670b6c9fe7d91efacda9e6e0681a37c74  ./dogfood/tree.sha256
+  9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./empty-suite/generate.exit
+- d677ff45aa8708bb8fca8efbb2f7fe7f649566484067ca2eb98e5f37a5f16a1a  ./empty-suite/generate.stderr.txt
++ 406cf9d91e29e4fc57b91de084dcdbfd7a496605ed40ce0b4225be42cc9e06ee  ./empty-suite/generate.stderr.txt
+  e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./empty-suite/generate.stdout.txt
+  9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./empty-suite/plan.exit
+  e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./empty-suite/plan.stderr.txt
+- c3fdb92cefa85b4084edac027fbcfc2b64de9f7f793d2bbc9004a488f50a58ca  ./empty-suite/plan.txt
++ 61ef4dbeb44bf948bca6a806ee0e76164e3e8f0cdf7d3002a6fa9ecacead2e7d  ./empty-suite/plan.txt
+ +a63e6a4550e75e14c2dd2ebe6efefe1360a847967c0ee2f28803eb43949dc6e4  ./empty-suite/preview/.github/AGENTS.md
+  b3f39f72416eee5077f2fd187f860e6d9a0a9ea4b33fdf3cfc671b1afbb34e0e  ./empty-suite/preview/.github/actionlint.yaml
+- 564cf20d5e6fcdc469ab650be38f909fc25e615aad3171385ddaf8c477d26ddf  ./empty-suite/preview/.github/workflows/ci.yml
+- f66fa8bc8820f0c32fcb964f0e70f48b08a1f0b794137a875da4860355624cdc  ./empty-suite/tree.sha256
++ 6af64e54bfa164a3a3983daca601d104776490c4ccc81908c97817fa5a57f89b  ./empty-suite/preview/.github/actions/velnor-tool-seed/action.yml
+ -a63e6a4550e75e14c2dd2ebe6efefe1360a847967c0ee2f28803eb43949dc6e4  ./empty-suite/preview/.github/AGENTS.md
+ -1849415fb3a56303037d6da5fcb947a266d892156b1564ea24a5524ac40c5062  ./empty-suite/preview/.github/workflows/ci.yml
+ -6082105e24359cc798430b4a428eb77783b931b62dba3d8af54fee16c39758c3  ./empty-suite/tree.sha256
+++a02c7aabfed4068c5de374f2255259a0edda9c214efd9dc90c2bd1e91a4b26f7  ./empty-suite/preview/.github/workflows/ci.yml
+++c7fca989bca840f6bd7e80769334e5faa42949a895559c7bcbc348f397517e8e  ./empty-suite/tree.sha256
+  9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./mbx-nextest/generate.exit
+- df07fb90a5ed0a23cb5c657213cf8c363e6fad526d53c161c2d4081acb380dcf  ./mbx-nextest/generate.stderr.txt
++ a96b94aaa7feccb1b41b862584d2d32e28c57fea712fb42f20a0170f4b13d4f9  ./mbx-nextest/generate.stderr.txt
+  e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./mbx-nextest/generate.stdout.txt
+  9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./mbx-nextest/plan.exit
+  e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./mbx-nextest/plan.stderr.txt
+- 9ccc03de35512e2b193989065f9c0dc7e9dc137639a253f8b7594362b4ddb713  ./mbx-nextest/plan.txt
++ 74be7afae9203f1b18e35fe3b96847461906d1f4b50618d4da1c23eeeae2ee5a  ./mbx-nextest/plan.txt
+ +a63e6a4550e75e14c2dd2ebe6efefe1360a847967c0ee2f28803eb43949dc6e4  ./mbx-nextest/preview/.github/AGENTS.md
+  b3f39f72416eee5077f2fd187f860e6d9a0a9ea4b33fdf3cfc671b1afbb34e0e  ./mbx-nextest/preview/.github/actionlint.yaml
+- 7061711026be48480c1619961edde324f1055b8af4e7022e3fb964532bc6a7fd  ./mbx-nextest/preview/.github/workflows/ci.yml
+- 6fb993c9f8d411c7112edcd582bb904726376176354d3f9377b60e3964b7fc5f  ./mbx-nextest/tree.sha256
++ 6af64e54bfa164a3a3983daca601d104776490c4ccc81908c97817fa5a57f89b  ./mbx-nextest/preview/.github/actions/velnor-tool-seed/action.yml
+ -a63e6a4550e75e14c2dd2ebe6efefe1360a847967c0ee2f28803eb43949dc6e4  ./mbx-nextest/preview/.github/AGENTS.md
+ -03916e9a38555d6b9f8b12218b0a523486292d617aa58b122abb20e9c836e051  ./mbx-nextest/preview/.github/workflows/ci.yml
+ -7211b84a583d990d1ea8d24ab508ffb08171b3055d3362d754992d01a41fee79  ./mbx-nextest/tree.sha256
+++faca3f378e1ed331c4cfaa29ec7755c5ccd49d6baee942b32f35bebd881aee74  ./mbx-nextest/preview/.github/workflows/ci.yml
+++5eea9e3301ae800b896f194f04a083e3bf92ca8a3d359b304ba1dec93fc11404  ./mbx-nextest/tree.sha256
+  9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./minimal-cargo/generate.exit
+- 2b8a5970c82395615b1e51c370a508026b99d2b0e20ccbda540d88f573e74174  ./minimal-cargo/generate.stderr.txt
++ ab0d50f5839cb3520adaa5ca562263d4208a63fea959226241bed889e741d8c8  ./minimal-cargo/generate.stderr.txt
+  e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./minimal-cargo/generate.stdout.txt
+  9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./minimal-cargo/plan.exit
+  e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./minimal-cargo/plan.stderr.txt
+- 92b28f43d07cb152bc91e34e321f24e310edc61bc3387039e425dac5e142a814  ./minimal-cargo/plan.txt
++ 6649e37a78f9525cd53709277dfa9c1a3199c35ebf26e68eba58033b092fdba1  ./minimal-cargo/plan.txt
+ +a63e6a4550e75e14c2dd2ebe6efefe1360a847967c0ee2f28803eb43949dc6e4  ./minimal-cargo/preview/.github/AGENTS.md
+  b3f39f72416eee5077f2fd187f860e6d9a0a9ea4b33fdf3cfc671b1afbb34e0e  ./minimal-cargo/preview/.github/actionlint.yaml
+- ede22c13d1521d7af21fb2d88b0002890273f4588537b81a050d3e0ddef082ab  ./minimal-cargo/preview/.github/workflows/ci.yml
+- 5990c710f08ed4213a9798b08955c00f95bf1ebe7b0073789d73751a00033488  ./minimal-cargo/tree.sha256
++ 6af64e54bfa164a3a3983daca601d104776490c4ccc81908c97817fa5a57f89b  ./minimal-cargo/preview/.github/actions/velnor-tool-seed/action.yml
+ -a63e6a4550e75e14c2dd2ebe6efefe1360a847967c0ee2f28803eb43949dc6e4  ./minimal-cargo/preview/.github/AGENTS.md
+ -7adf04c097a1772c2e64a3354aad8ccbabed73bd44bf01e4a25e25122f62b005  ./minimal-cargo/preview/.github/workflows/ci.yml
+ -036347fdd4976ae4e4881a582ee8941c2a91a9515c03b5dc21077748380797c0  ./minimal-cargo/tree.sha256
+++441bcb8e83bf962e99fbf3ea54619797702b17077842cb621c0c0a054a9a407b  ./minimal-cargo/preview/.github/workflows/ci.yml
+++db48b342a3640c85ccaeca21bec52a54e6f6c8fffde37b27f420a58a0071c4f0  ./minimal-cargo/tree.sha256
+  9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./nested/generate.exit
+- 2b8a5970c82395615b1e51c370a508026b99d2b0e20ccbda540d88f573e74174  ./nested/generate.stderr.txt
++ ab0d50f5839cb3520adaa5ca562263d4208a63fea959226241bed889e741d8c8  ./nested/generate.stderr.txt
+  e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./nested/generate.stdout.txt
+  9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./nested/plan.exit
+  e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./nested/plan.stderr.txt
+- 29b08f2f2d77403b90cf841abb1487e6f999156d0804bd8d8ae956c6aae31d3d  ./nested/plan.txt
++ d7fb593e52a9853b3fea2624be1d7788e57debdd034afceb8faba0f77e0b0772  ./nested/plan.txt
+ +a63e6a4550e75e14c2dd2ebe6efefe1360a847967c0ee2f28803eb43949dc6e4  ./nested/preview/.github/AGENTS.md
+  b3f39f72416eee5077f2fd187f860e6d9a0a9ea4b33fdf3cfc671b1afbb34e0e  ./nested/preview/.github/actionlint.yaml
+- b0ebb5a7f6b0ac3a34cf30b0bfd1a1cd15734b20ed71b1ac70f779938a90d4df  ./nested/preview/.github/workflows/ci.yml
+- 6107242d7191e14183548248fabfecf4f52871e215542950cfff5627cc1d86de  ./nested/tree.sha256
++ 6af64e54bfa164a3a3983daca601d104776490c4ccc81908c97817fa5a57f89b  ./nested/preview/.github/actions/velnor-tool-seed/action.yml
+ -a63e6a4550e75e14c2dd2ebe6efefe1360a847967c0ee2f28803eb43949dc6e4  ./nested/preview/.github/AGENTS.md
+ -1b3a6bd95eb29f343f85776403ad99911042e6fc79e727e1e3d5d59829549b96  ./nested/preview/.github/workflows/ci.yml
+ -2556bd3165ce2df173dd2433520ce19e68dabefa871b41cd098cb5430bdcea77  ./nested/tree.sha256
+++3452b9d4882699d967d7352d8b696dd5576581ced82c75b4eac2cf173d72b30d  ./nested/preview/.github/workflows/ci.yml
+++9ef245adea37c6890563c18a5e8478a492f6d147f4a24e2b880731873ac0812e  ./nested/tree.sha256
+  link ./dogfood/preview/.github/CLAUDE.md -> AGENTS.md
+  link ./empty-suite/preview/.github/CLAUDE.md -> AGENTS.md
+  link ./mbx-nextest/preview/.github/CLAUDE.md -> AGENTS.md
+diff --cc docs/proposed/opentofu-goldens/cases/dogfood/plan.txt
+index 4603e19,68319de..0000000
+--- a/docs/proposed/opentofu-goldens/cases/dogfood/plan.txt
++++ b/docs/proposed/opentofu-goldens/cases/dogfood/plan.txt
+@@@ -37,28 -36,27 +37,28 @@@ Workflow to generat
+    Push branch: main
+    Runner: ubuntu-26.04 (latest pinned default)
+    Jobs:
+-     - actionlint (4 steps)
++     - actionlint (5 steps)
+      - alint (2 steps)
+-     - cargo-deny (4 steps)
+-     - cargo-machete (4 steps)
+-     - plan (21 steps)
++     - cargo-deny (5 steps)
++     - cargo-machete (5 steps)
++     - plan (22 steps)
+      - publish-baseline (7 steps)
+      - required (11 steps)
+-     - rust-velnor-actions-actionlint (22 steps)
+-     - rust-velnor-actions-cli (20 steps)
+-     - rust-velnor-actions-contract (21 steps)
+-     - rust-velnor-actions-mise (22 steps)
+-     - rust-velnor-actions-native (21 steps)
+-     - rust-velnor-actions-orchestrator (21 steps)
+-     - rust-velnor-actions-rust (21 steps)
+-     - rust-velnor-actions-tofu (21 steps)
+-     - rust-velnor-actions-workflow-renderer (21 steps)
+-     - rust-velnor-runner-cli (21 steps)
+-     - rust-velnor-runner-core (21 steps)
+-     - rust-velnor-runner-github (21 steps)
+-     - rust-velnor-runner-host (21 steps)
+-     - zizmor (4 steps)
++     - rust-velnor-actions-actionlint (23 steps)
++     - rust-velnor-actions-cli (21 steps)
++     - rust-velnor-actions-contract (22 steps)
++     - rust-velnor-actions-mise (23 steps)
+++    - rust-velnor-actions-native (22 steps)
++     - rust-velnor-actions-orchestrator (22 steps)
++     - rust-velnor-actions-rust (22 steps)
++     - rust-velnor-actions-tofu (22 steps)
++     - rust-velnor-actions-workflow-renderer (22 steps)
++     - rust-velnor-runner-cli (22 steps)
++     - rust-velnor-runner-core (22 steps)
++     - rust-velnor-runner-github (22 steps)
++     - rust-velnor-runner-host (22 steps)
++     - zizmor (5 steps)
+ -    - 12 Rust crate jobs
+ +    - 13 Rust crate jobs
+        Each: Clippy -> build -> run tests -> doctests -> doc build -> format check
+        Entries:
+          - rust-velnor-actions-actionlint
+diff --cc docs/proposed/opentofu-goldens/cases/dogfood/preview/.github/workflows/qualification.yml
+index baa4c00,67195a1..0000000
+--- a/docs/proposed/opentofu-goldens/cases/dogfood/preview/.github/workflows/qualification.yml
++++ b/docs/proposed/opentofu-goldens/cases/dogfood/preview/.github/workflows/qualification.yml
+diff --cc docs/proposed/opentofu-goldens/cases/dogfood/tree.sha256
+index f98875c,161695a..0000000
+--- a/docs/proposed/opentofu-goldens/cases/dogfood/tree.sha256
++++ b/docs/proposed/opentofu-goldens/cases/dogfood/tree.sha256
+@@@ -1,6 -1,7 +1,7 @@@
+ +a63e6a4550e75e14c2dd2ebe6efefe1360a847967c0ee2f28803eb43949dc6e4  ./.github/AGENTS.md
+  0da1fbb188c99eb4cffe66befed975368b8b86ef7e375d2b8ac9a6540818fbff  ./.github/actionlint.yaml
+- ce4b8a13bb56bfd2c727e375791926faae07f5059c676667f037fd25eddb2f74  ./.github/workflows/ci.yml
++ 6af64e54bfa164a3a3983daca601d104776490c4ccc81908c97817fa5a57f89b  ./.github/actions/velnor-tool-seed/action.yml
+ -a63e6a4550e75e14c2dd2ebe6efefe1360a847967c0ee2f28803eb43949dc6e4  ./.github/AGENTS.md
+ -6214a6cff871cdad33a0e51101503de730103777b57167eeb7f825e74faae956  ./.github/workflows/ci.yml
+++603370228e7eca5bf3efcfccc759a1f9a70aed0647b6686086a7c091299a456b  ./.github/workflows/ci.yml
+  0d41b05d10d4da7b26a719f82908f2a47e7224ed93ef3383d81a6d45179fb5d8  ./.github/workflows/freshness.yml
+  d13645f1aa9667a1ce9fa0886ca5f4930c3a9a0e33c3dfe7df6b8942cad9962a  ./.github/workflows/generator-release.yml
+  a103db30bc49166259cbb40e9948c2677fbc49d84164cc7f71c262ea5d3ecdab  ./.github/workflows/image-release.yml
+diff --cc docs/proposed/workflow-contract.md
+index d552f96,2d471ef..0000000
+--- a/docs/proposed/workflow-contract.md
++++ b/docs/proposed/workflow-contract.md
+@@@ -147,24 -138,21 +147,32 @@@ on
+    merge_group:
+  ```
+  
+- The default branch name MUST come from explicit repository configuration or the local
+- `refs/remotes/origin/HEAD` symbolic ref. If neither is available, generation fails with an instruction to set
+- `workflow.default_branch`; it never assumes `main` or fetches a remote. The generator MUST NOT combine broad
+- branch pushes with pull-request path filters. A valid planning job MUST run even when no stack task is
+- selected.
++ The default branch name MUST come from explicit repository configuration or the local `refs/remotes/origin/HEAD`
++ symbolic ref. If neither is available, generation fails with an instruction to set `workflow.default_branch`; it
++ never assumes `main` or fetches a remote. The generator MUST NOT combine broad branch pushes with pull-request
++ path filters. A valid planning job MUST run even when no stack task is selected.
+  
+ +The main `ci.yml` emitter currently emits only the pull-request, default-branch
+ +push, and merge-group triggers shown above. Its closed `WorkflowConfig` has no
+ +`[workflow.verification]` table, and its `Trigger` sets `workflow_dispatch` and
+ +`schedule` absent. This scope is specific to main CI: the separately typed
+ +Velnor Freshness workflow retains its schedule and manual trigger, and the
+ +schema-2 Qualification workflow retains `workflow_dispatch` when requested by
+ +`execution.workflows`. Typed `[[workflow.tasks]]` declarations add verification
+ +jobs to main CI without adding triggers. The former proposal for main-CI
+ +schedule/manual alert and failure simulation is deferred; it does not describe
+ +generated main-CI output.
+ +
+- Every generated workflow MUST set:
++ Every generated workflow MUST set only the permissions required by its jobs.
++ At workflow level, generated CI MUST set `contents: read` and MUST omit
++ `actions`. GitHub denies omitted token scopes when a permissions map exists.
++ Only the repository-policy `plan` and the `required` job may set job-level `actions: read`; both maps MUST
++ retain `contents: read` because job permissions replace workflow permissions.
++ Repository-policy `plan` uses Actions read to authenticate the bounded prior-baseline lookup,
++ binding `GH_TOKEN` and `GH_REPO` only to its internal `plan-v1` step. `required`
++ uses Actions read to fetch exact current-run report artifacts and a validated
++ baseline artifact, binding those variables only to its report-fetch step.
++ Other jobs MUST NOT receive `actions: read` or a nonempty Actions token.
+  
+  ```yaml
+  permissions:
+diff --cc fixtures/parity/ignored-stack/expected/plan.txt
+index 50bda9b,e62a1a3..0000000
+--- a/fixtures/parity/ignored-stack/expected/plan.txt
++++ b/fixtures/parity/ignored-stack/expected/plan.txt
+@@@ -13,8 -13,8 +13,8 @@@ Workflow to generat
+    Push branch: main
+    Runner: ubuntu-26.04 (latest pinned default)
+    Jobs:
+-     - actionlint (4 steps)
+-     - plan (9 steps)
++     - actionlint (5 steps)
+ -    - plan (11 steps)
+++    - plan (10 steps)
+      - publish-baseline (5 steps)
+      - required (9 steps)
+      - no matrix entries (no-work workflow)
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index bfc5ca1..c163460 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -1256,6 +1256,10 @@ jobs:
+         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+         with:
+           persist-credentials: "false"
++      - name: Restore Velnor tool seed
++        uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
++        with:
++          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-ac88a89731444aab
+       - name: Setup Mise
+         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
+         with:
+diff --git a/crates/velnor-actions-orchestrator/src/generate_preserve.rs b/crates/velnor-actions-orchestrator/src/generate_preserve.rs
+index de22bdc..0993f50 100644
+--- a/crates/velnor-actions-orchestrator/src/generate_preserve.rs
++++ b/crates/velnor-actions-orchestrator/src/generate_preserve.rs
+@@ -4,13 +4,19 @@
+ //! entries are copied without following symbolic links. Unsupported file types
+ //! fail before the existing tree is replaced.
+ 
++use std::io::Read;
+ use std::path::{Path, PathBuf};
+ 
+-use velnor_actions_contract::DECLARED_GITHUB_FORMATS;
++use velnor_actions_contract::{
++    DECLARED_GITHUB_FORMATS, MARKER_PREFIX, OLD_MARKER_PREFIX, is_generated_marker_line,
++};
+ use velnor_actions_workflow_renderer::release_tree::RELEASE_TREE_PATHS;
+ 
+ use crate::OrchestratorError;
+ 
++const TOOL_SEED_ACTION_RELATIVE: &str = "actions/velnor-tool-seed/action.yml";
++const SHARED_SCRIPTS_RELATIVE: &str = "scripts/velnor-shared";
++
+ /// Capture only the repository root's own directory mode, never a link target.
+ pub(super) fn root_permissions(
+     source: &Path,
+@@ -128,8 +134,8 @@ pub(super) fn copy_repository_content(
+ }
+ 
+ /// Ownership derives from output inventories, including disabled release paths.
+-fn generator_owned(relative: &Path) -> bool {
+-    relative.starts_with("workflows")
++fn generator_owned(source: &Path, relative: &Path) -> Result<bool, OrchestratorError> {
++    let fixed_inventory = relative.starts_with("workflows")
+         || DECLARED_GITHUB_FORMATS
+             .iter()
+             .map(|format| format.path)
+@@ -138,7 +144,35 @@ fn generator_owned(relative: &Path) -> bool {
+                 Path::new(path)
+                     .strip_prefix(".github")
+                     .is_ok_and(|rel| rel == relative)
+-            })
++            });
++    if fixed_inventory {
++        return Ok(true);
++    }
++    let shared_script = relative
++        .strip_prefix(SHARED_SCRIPTS_RELATIVE)
++        .is_ok_and(|suffix| !suffix.as_os_str().is_empty());
++    if relative != Path::new(TOOL_SEED_ACTION_RELATIVE) && !shared_script {
++        return Ok(false);
++    }
++    generated_marker_file(source)
++}
++
++/// Treat only marked regular files as replaceable generator-owned assets.
++fn generated_marker_file(source: &Path) -> Result<bool, OrchestratorError> {
++    let metadata = std::fs::symlink_metadata(source).map_err(|err| io(source, &err))?;
++    if !metadata.is_file() || metadata.file_type().is_symlink() {
++        return Ok(false);
++    }
++    let file = std::fs::File::open(source).map_err(|err| io(source, &err))?;
++    let prefix_limit = MARKER_PREFIX.len().max(OLD_MARKER_PREFIX.len());
++    let mut prefix = Vec::with_capacity(prefix_limit);
++    file.take(prefix_limit as u64)
++        .read_to_end(&mut prefix)
++        .map_err(|err| io(source, &err))?;
++    let Ok(first_line) = std::str::from_utf8(&prefix) else {
++        return Ok(false);
++    };
++    Ok(is_generated_marker_line(first_line))
+ }
+ 
+ /// Preserve files, directory permissions, and links as entries, never targets.
+@@ -148,7 +182,7 @@ fn copy_entry(
+     relative: &Path,
+     directories: &mut Vec<(PathBuf, std::fs::Permissions)>,
+ ) -> Result<(), OrchestratorError> {
+-    if generator_owned(relative) {
++    if generator_owned(source, relative)? {
+         return Ok(());
+     }
+     let metadata = std::fs::symlink_metadata(source).map_err(|err| io(source, &err))?;
+diff --git a/crates/velnor-actions-orchestrator/src/generate_preserve_tests.rs b/crates/velnor-actions-orchestrator/src/generate_preserve_tests.rs
+index 420b1a4..7f3f541 100644
+--- a/crates/velnor-actions-orchestrator/src/generate_preserve_tests.rs
++++ b/crates/velnor-actions-orchestrator/src/generate_preserve_tests.rs
+@@ -8,12 +8,39 @@ use crate::generate::{swap_directories, write_tree};
+ use velnor_actions_workflow_renderer::render::{RenderedFile, RenderedTree};
+ 
+ type TestResult = Result<(), Box<dyn std::error::Error>>;
++const TOOL_SEED_ACTION_PATH: &str = "actions/velnor-tool-seed/action.yml";
++const GENERATED_TOOL_SEED_ACTION: &str = "# Generated by Velnor Actions 0.1.0; edit .velnor/config.toml and regenerate.\nname: tool seed\n";
+ 
+ fn replacement(root: &Path) -> TestResult {
+     replace_with_cleanup_policy(root, false)
+ }
+ 
+ fn replace_with_cleanup_policy(root: &Path, readonly_backup: bool) -> TestResult {
++    replace_with_tree(root, &generated_tree(false), readonly_backup)
++}
++
++fn replacement_with_tree(root: &Path, tree: &RenderedTree) -> TestResult {
++    replace_with_tree(root, tree, false)
++}
++
++fn generated_tree(with_tool_seed: bool) -> RenderedTree {
++    let mut files = vec![RenderedFile {
++        path: ".github/workflows/ci.yml".to_owned(),
++        bytes: "new workflow\n".to_owned(),
++    }];
++    if with_tool_seed {
++        files.push(RenderedFile {
++            path: format!(".github/{TOOL_SEED_ACTION_PATH}"),
++            bytes: GENERATED_TOOL_SEED_ACTION.to_owned(),
++        });
++    }
++    RenderedTree {
++        files,
++        symlinks: Vec::new(),
++    }
++}
++
++fn replace_with_tree(root: &Path, tree: &RenderedTree, readonly_backup: bool) -> TestResult {
+     let staging = tempfile::tempdir_in(root)?;
+     let permissions = super::root_permissions(&root.join(".github"))?;
+     // Existing roots stage as siblings: read-only directory moves must stay
+@@ -24,15 +51,8 @@ fn replace_with_cleanup_policy(root: &Path, readonly_backup: bool) -> TestResult
+         staging.path().join(".github")
+     };
+     let directories = copy_repository_content(&root.join(".github"), &staged)?;
+-    let tree = RenderedTree {
+-        files: vec![RenderedFile {
+-            path: ".github/workflows/ci.yml".to_owned(),
+-            bytes: "new workflow\n".to_owned(),
+-        }],
+-        symlinks: Vec::new(),
+-    };
+-    super::check_generated_collisions(&staged, &tree)?;
+-    write_tree(&staged, &tree)?;
++    super::check_generated_collisions(&staged, tree)?;
++    write_tree(&staged, tree)?;
+     super::restore_directory_permissions(directories)?;
+     super::restore_root_permissions(&staged, permissions)?;
+     let warnings = swap_directories(root, &root.join(".github"), &staged)?;
+@@ -106,6 +126,79 @@ fn replacement_preserves_unowned_tree_and_removes_only_owned_paths() -> TestResu
+     Ok(())
+ }
+ 
++#[test]
++fn marked_tool_seed_action_repeats_and_retires_when_output_disappears() -> TestResult {
++    let root = tempfile::tempdir()?;
++    let github = root.path().join(".github");
++    let action = github.join(TOOL_SEED_ACTION_PATH);
++    fs::create_dir_all(action.parent().ok_or("action parent")?)?;
++    fs::write(
++        &action,
++        "# Generated by Velnor Actions 0.1.0\nname: stale\n",
++    )?;
++    fs::write(github.join("CODEOWNERS"), b"repository owners")?;
++
++    let generated = generated_tree(true);
++    replacement_with_tree(root.path(), &generated)?;
++    assert_eq!(fs::read(&action)?, GENERATED_TOOL_SEED_ACTION.as_bytes());
++    let first = fs::read(&action)?;
++    replacement_with_tree(root.path(), &generated)?;
++    assert_eq!(fs::read(&action)?, first);
++
++    replacement(root.path())?;
++    assert!(!action.exists(), "stale generated action survives");
++    assert_eq!(fs::read(github.join("CODEOWNERS"))?, b"repository owners");
++    Ok(())
++}
++
++#[test]
++fn unmarked_tool_seed_action_is_preserved_and_collision_refused() -> TestResult {
++    let root = tempfile::tempdir()?;
++    let github = root.path().join(".github");
++    let action = github.join(TOOL_SEED_ACTION_PATH);
++    fs::create_dir_all(action.parent().ok_or("action parent")?)?;
++    fs::write(&action, b"name: repository-owned action\n")?;
++    fs::write(github.join("CODEOWNERS"), b"repository owners")?;
++
++    let error = replacement_with_tree(root.path(), &generated_tree(true))
++        .expect_err("unmarked action collision refuses");
++    assert!(matches!(
++        error.downcast_ref::<crate::OrchestratorError>(),
++        Some(crate::OrchestratorError::OverwriteRefused { .. })
++    ));
++    assert_eq!(fs::read(&action)?, b"name: repository-owned action\n");
++    assert_eq!(fs::read(github.join("CODEOWNERS"))?, b"repository owners");
++    assert!(!github.join("workflows/ci.yml").exists());
++    Ok(())
++}
++
++#[cfg(unix)]
++#[test]
++fn tool_seed_action_symlink_is_not_followed_or_overwritten() -> TestResult {
++    use std::os::unix::fs::symlink;
++    let root = tempfile::tempdir()?;
++    let outside = tempfile::tempdir()?;
++    let github = root.path().join(".github");
++    let action = github.join(TOOL_SEED_ACTION_PATH);
++    let outside_action = outside.path().join("action.yml");
++    fs::create_dir_all(action.parent().ok_or("action parent")?)?;
++    fs::write(&outside_action, GENERATED_TOOL_SEED_ACTION)?;
++    symlink(&outside_action, &action)?;
++
++    let error = replacement_with_tree(root.path(), &generated_tree(true))
++        .expect_err("symlink collision refuses");
++    assert!(matches!(
++        error.downcast_ref::<crate::OrchestratorError>(),
++        Some(crate::OrchestratorError::UnsafePath { .. })
++    ));
++    assert!(fs::symlink_metadata(&action)?.file_type().is_symlink());
++    assert_eq!(
++        fs::read(&outside_action)?,
++        GENERATED_TOOL_SEED_ACTION.as_bytes()
++    );
++    Ok(())
++}
++
+ #[cfg(unix)]
+ #[test]
+ fn preservation_keeps_modes_and_literal_symlink_targets() -> TestResult {
+@@ -293,3 +386,6 @@ fn readonly_repository_directory_mode_is_restored_after_new_output() -> TestResu
+     assert_eq!(fs::read(staged.join("custom/new.yml"))?, b"new output");
+     Ok(())
+ }
++
++#[path = "generate_preserve_shared_tests.rs"]
++mod shared_scripts;
+diff --git a/crates/velnor-actions-orchestrator/src/validate.rs b/crates/velnor-actions-orchestrator/src/validate.rs
+index 13c2abf..4e46162 100644
+--- a/crates/velnor-actions-orchestrator/src/validate.rs
++++ b/crates/velnor-actions-orchestrator/src/validate.rs
+@@ -44,7 +44,7 @@ pub(crate) fn validate_staged(tree: &RenderedTree) -> Result<Vec<String>, Orches
+     run_shellcheck_probe(&catalog, staging.path())?;
+     write_zizmor_config(staging.path(), tree)?;
+     run_zizmor(&catalog, staging.path())?;
+-    run_shellcheck_bodies(&catalog, staging.path(), &workflows)?;
++    run_shellcheck_bodies(&catalog, staging.path(), &workflows, tree)?;
+     let mut validated = vec![
+         catalog.tool_spec(PinnedTool::Actionlint),
+         catalog.tool_spec(PinnedTool::Shellcheck),
+diff --git a/crates/velnor-actions-orchestrator/src/validate_shell.rs b/crates/velnor-actions-orchestrator/src/validate_shell.rs
+index 3f589d9..fadf664 100644
+--- a/crates/velnor-actions-orchestrator/src/validate_shell.rs
++++ b/crates/velnor-actions-orchestrator/src/validate_shell.rs
+@@ -1,9 +1,11 @@
+-//! Shell linting for staged `run:` bodies with pinned shellcheck.
++//! Shell linting for staged workflow bodies and generated shared scripts.
+ 
+ use std::ffi::OsString;
+ use std::path::Path;
+ 
++use velnor_actions_contract::is_generated_marker_line;
+ use velnor_actions_mise::{PinnedTool, ProcessOutput, ToolCatalog};
++use velnor_actions_workflow_renderer::render::RenderedTree;
+ 
+ use crate::OrchestratorError;
+ use crate::validate::{diagnose, pinned_output};
+@@ -11,6 +13,8 @@ use crate::validate::{diagnose, pinned_output};
+ #[path = "validate_shell_yaml.rs"]
+ mod workflow;
+ 
++const SHARED_SCRIPT_PREFIX: &str = ".github/scripts/velnor-shared/";
++
+ /// Prove the pinned shellcheck resolves, runs, and reports its pin.
+ pub(crate) fn run_shellcheck_probe(
+     catalog: &ToolCatalog,
+@@ -58,7 +62,7 @@ fn check_shellcheck_version(output: &str, pinned: &str) -> Result<(), Orchestrat
+     }
+ }
+ 
+-/// Lint every staged `run:` body with one pinned shellcheck run; fail closed.
++/// Lint staged `run:` bodies and generated shared scripts with pinned shellcheck.
+ ///
+ /// Bodies ride one argv (shellcheck checks each file and reports per-file
+ /// gcc diagnostics), so per-crate jobs add files, not subprocesses.
+@@ -66,14 +70,20 @@ pub(crate) fn run_shellcheck_bodies(
+     catalog: &ToolCatalog,
+     staging: &Path,
+     workflows: &[String],
++    tree: &RenderedTree,
+ ) -> Result<(), OrchestratorError> {
+-    let bodies = workflow::staged_runs(staging, workflows)?;
++    let mut bodies = workflow::staged_runs(staging, workflows)?;
++    bodies.extend(staged_shared_scripts(tree)?);
+     let mut files: Vec<OsString> = Vec::new();
+     for (index, run) in bodies.iter().enumerate() {
+         if run.body.trim().is_empty() {
+             continue;
+         }
+-        let path = staging.join(format!("shellcheck-{index}.sh"));
++        let extension = match run.shell {
++            workflow::ShellDialect::Bash => "bash",
++            workflow::ShellDialect::Sh => "sh",
++        };
++        let path = staging.join(format!("shellcheck-{index}.{extension}"));
+         std::fs::write(&path, format!("{}\n{}\n", run.shell.shebang(), run.body))
+             .map_err(|err| OrchestratorError::io(path.display().to_string(), err.to_string()))?;
+         files.push(path.into_os_string());
+@@ -115,6 +125,54 @@ pub(crate) fn run_shellcheck_bodies(
+     }
+ }
+ 
++/// Select exact content-addressed shared shell assets from the rendered tree.
++fn staged_shared_scripts(
++    tree: &RenderedTree,
++) -> Result<Vec<workflow::StagedRun>, OrchestratorError> {
++    let mut runs = Vec::new();
++    for file in &tree.files {
++        if !file.path.starts_with(SHARED_SCRIPT_PREFIX) {
++            continue;
++        }
++        let shell = shared_script_dialect(&file.path)
++            .ok_or_else(|| shellcheck_fail("shared_script_path_invalid"))?;
++        let Some((marker, body)) = file.bytes.split_once('\n') else {
++            return Err(shellcheck_fail("shared_script_marker_missing"));
++        };
++        if !is_generated_marker_line(marker) {
++            return Err(shellcheck_fail("shared_script_marker_missing"));
++        }
++        runs.push(workflow::StagedRun {
++            body: body.to_owned(),
++            shell,
++        });
++    }
++    Ok(runs)
++}
++
++/// Match only the renderer's two content-addressed shared-script path forms.
++fn shared_script_dialect(path: &str) -> Option<workflow::ShellDialect> {
++    let filename = path.strip_prefix(SHARED_SCRIPT_PREFIX)?;
++    let (digest, shell) = if let Some(digest) = filename
++        .strip_prefix("sh-b3-")
++        .and_then(|rest| rest.strip_suffix(".sh"))
++    {
++        (digest, workflow::ShellDialect::Sh)
++    } else if let Some(digest) = filename
++        .strip_prefix("bash-b3-")
++        .and_then(|rest| rest.strip_suffix(".bash"))
++    {
++        (digest, workflow::ShellDialect::Bash)
++    } else {
++        return None;
++    };
++    let valid_digest = digest.len() == 64
++        && digest
++            .bytes()
++            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte));
++    valid_digest.then_some(shell)
++}
++
+ /// Unquote one single-line scalar: plain or double-quoted only.
+ fn unquote_run_scalar(scalar: &str) -> Result<String, OrchestratorError> {
+     let scalar = scalar.trim();
+@@ -160,6 +218,22 @@ fn shellcheck_fail(problem: &str) -> OrchestratorError {
+ mod tests {
+     use super::*;
+ 
++    fn lint_workflow_bodies(
++        catalog: &ToolCatalog,
++        staging: &Path,
++        workflows: &[String],
++    ) -> Result<(), OrchestratorError> {
++        run_shellcheck_bodies(
++            catalog,
++            staging,
++            workflows,
++            &RenderedTree {
++                files: Vec::new(),
++                symlinks: Vec::new(),
++            },
++        )
++    }
++
+     /// One staged workflow carrying a single `run:` line, renderer-shaped.
+     fn staged_run(run: &str) -> Result<(tempfile::TempDir, Vec<String>), String> {
+         staged_runs(std::slice::from_ref(&run))
+@@ -189,19 +263,19 @@ mod tests {
+     fn shellcheck_clean_passes_violation_and_block_fail() -> Result<(), String> {
+         let catalog = ToolCatalog::pinned();
+         let (clean, workflows) = staged_run("echo \"hi\"")?;
+-        run_shellcheck_bodies(&catalog, clean.path(), &workflows).map_err(|err| err.to_string())?;
++        lint_workflow_bodies(&catalog, clean.path(), &workflows).map_err(|err| err.to_string())?;
+         // Error-level SC2070 trips the `-S warning` pass (see
+         // `shellcheck_pure_sc2086_body_fails` for the targeted SC2086 pass).
+         let (dirty, workflows) = staged_run("echo $FOO/bar && [ -n $BAZ ]")?;
+         assert!(
+-            run_shellcheck_bodies(&catalog, dirty.path(), &workflows).is_err_and(|err| {
++            lint_workflow_bodies(&catalog, dirty.path(), &workflows).is_err_and(|err| {
+                 matches!(&err, OrchestratorError::Validation { tool, .. } if tool == "shellcheck")
+                     && err.to_string().contains("SC2070")
+             })
+         );
+         let (blocked, workflows) = staged_run("|")?;
+         assert!(
+-            run_shellcheck_bodies(&catalog, blocked.path(), &workflows)
++            lint_workflow_bodies(&catalog, blocked.path(), &workflows)
+                 .is_err_and(|err| { err.to_string().contains("run_block_scalar_unlintable") })
+         );
+         Ok(())
+@@ -215,7 +289,7 @@ mod tests {
+         let catalog = ToolCatalog::pinned();
+         let (dirty, workflows) = staged_run("echo $FOO/bar")?;
+         assert!(
+-            run_shellcheck_bodies(&catalog, dirty.path(), &workflows).is_err_and(|err| {
++            lint_workflow_bodies(&catalog, dirty.path(), &workflows).is_err_and(|err| {
+                 matches!(&err, OrchestratorError::Validation { tool, .. } if tool == "shellcheck")
+                     && err.to_string().contains("SC2086")
+             })
+@@ -227,18 +301,18 @@ mod tests {
+     fn shellcheck_batch_lints_every_body() -> Result<(), String> {
+         let catalog = ToolCatalog::pinned();
+         let (clean, workflows) = staged_runs(&["echo \"one\"", "echo \"two\""])?;
+-        run_shellcheck_bodies(&catalog, clean.path(), &workflows).map_err(|err| err.to_string())?;
++        lint_workflow_bodies(&catalog, clean.path(), &workflows).map_err(|err| err.to_string())?;
+         // A violation in a later body still fails the single batched run.
+         let (dirty, workflows) = staged_runs(&["echo \"one\"", "echo $FOO/bar && [ -n $BAZ ]"])?;
+         assert!(
+-            run_shellcheck_bodies(&catalog, dirty.path(), &workflows).is_err_and(|err| {
++            lint_workflow_bodies(&catalog, dirty.path(), &workflows).is_err_and(|err| {
+                 matches!(&err, OrchestratorError::Validation { tool, .. } if tool == "shellcheck")
+                     && err.to_string().contains("SC2070")
+             })
+         );
+         // All-empty bodies lint nothing and pass.
+         let (empty, workflows) = staged_runs(&["\"\""])?;
+-        run_shellcheck_bodies(&catalog, empty.path(), &workflows).map_err(|err| err.to_string())?;
++        lint_workflow_bodies(&catalog, empty.path(), &workflows).map_err(|err| err.to_string())?;
+         Ok(())
+     }
+ 
+@@ -251,13 +325,13 @@ mod tests {
+             )
+         };
+         let (bash, workflows) = staged_workflow(&yaml("bash -e {0}"))?;
+-        run_shellcheck_bodies(&catalog, bash.path(), &workflows).map_err(|err| err.to_string())?;
++        lint_workflow_bodies(&catalog, bash.path(), &workflows).map_err(|err| err.to_string())?;
+         let (sh, workflows) = staged_workflow(&yaml("sh -e {0}"))?;
+-        assert!(run_shellcheck_bodies(&catalog, sh.path(), &workflows).is_err());
++        assert!(lint_workflow_bodies(&catalog, sh.path(), &workflows).is_err());
+ 
+         let container_yaml = "jobs:\n  scale-container:\n    runs-on: [self-hosted, runner]\n    steps:\n      - name: posix\n        run: test -n \"$HOME\" && printf '%s\\n' ready\n    container: alpine:3.22\n";
+         let (container, workflows) = staged_workflow(container_yaml)?;
+-        run_shellcheck_bodies(&catalog, container.path(), &workflows)
++        lint_workflow_bodies(&catalog, container.path(), &workflows)
+             .map_err(|err| err.to_string())?;
+         Ok(())
+     }
+@@ -275,3 +349,7 @@ mod tests {
+         );
+     }
+ }
++
++#[cfg(test)]
++#[path = "validate_shell_shared_tests.rs"]
++mod shared_script_tests;
+diff --git a/crates/velnor-actions-orchestrator/tests/zizmor_staging_retired.rs b/crates/velnor-actions-orchestrator/tests/zizmor_staging_retired.rs
+index 33c922b..d8603b1 100644
+--- a/crates/velnor-actions-orchestrator/tests/zizmor_staging_retired.rs
++++ b/crates/velnor-actions-orchestrator/tests/zizmor_staging_retired.rs
+@@ -55,6 +55,7 @@ fn velnor_cleanup_is_deterministic() -> TestResult {
+             ".github/AGENTS.md",
+             ".github/CLAUDE.md",
+             ".github/actionlint.yaml",
++            ".github/actions/velnor-tool-seed/action.yml",
+             ".github/workflows/ci.yml",
+             ".github/workflows/freshness.yml",
+         ]
+@@ -115,6 +116,7 @@ fn consumer_generation_is_deterministic() -> TestResult {
+             ".github/AGENTS.md",
+             ".github/CLAUDE.md",
+             ".github/actionlint.yaml",
++            ".github/actions/velnor-tool-seed/action.yml",
+             ".github/workflows/ci.yml",
+         ]
+         .map(str::to_owned)
+diff --git a/docs/proposed/opentofu-goldens/cases/dogfood/preview/.github/workflows/ci.yml b/docs/proposed/opentofu-goldens/cases/dogfood/preview/.github/workflows/ci.yml
+index bfc5ca1..c163460 100644
+--- a/docs/proposed/opentofu-goldens/cases/dogfood/preview/.github/workflows/ci.yml
++++ b/docs/proposed/opentofu-goldens/cases/dogfood/preview/.github/workflows/ci.yml
+@@ -1256,6 +1256,10 @@ jobs:
+         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+         with:
+           persist-credentials: "false"
++      - name: Restore Velnor tool seed
++        uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
++        with:
++          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-ac88a89731444aab
+       - name: Setup Mise
+         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
+         with:
+diff --git a/docs/proposed/opentofu-goldens/cases/empty-suite/preview/.github/workflows/ci.yml b/docs/proposed/opentofu-goldens/cases/empty-suite/preview/.github/workflows/ci.yml
+index 693e310..77e2c36 100644
+--- a/docs/proposed/opentofu-goldens/cases/empty-suite/preview/.github/workflows/ci.yml
++++ b/docs/proposed/opentofu-goldens/cases/empty-suite/preview/.github/workflows/ci.yml
+@@ -107,7 +107,7 @@ jobs:
+           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+         run: mise --no-config --no-env --no-hooks exec rust@1.98.1 -- rustup component add --toolchain 1.98.1-x86_64-unknown-linux-gnu clippy rustfmt
+       - name: Acquire Velnor
+-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \"$RUNNER_TEMP/velnor/bin\" && if [ -f \"/opt/velnor/seed/generator/velnor-actions-0.1.0\" ] && echo \"$VELNOR_ASSET_SHA256  /opt/velnor/seed/generator/velnor-actions-0.1.0\" | sha256sum -c -; then cp \"/opt/velnor/seed/generator/velnor-actions-0.1.0\" \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"; else curl -fsSL --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" && echo \"$VELNOR_ASSET_SHA256  $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" | sha256sum -c -; fi && chmod +x \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"'"
++        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \"$RUNNER_TEMP/velnor/bin\" && s=\"/opt/velnor/seed/generator/velnor-actions-0.1.0\" d=\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" && if [ -f \"$s\" ] && echo \"$VELNOR_ASSET_SHA256  $s\" | sha256sum -c -; then cp \"$s\" \"$d\"; else curl -fsSL --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\" && echo \"$VELNOR_ASSET_SHA256  $d\" | sha256sum -c -; fi && chmod +x \"$d\"'"
+       - name: Write request
+         env:
+           VELNOR_INTERNAL_OP: write-request-v1
+@@ -170,7 +170,7 @@ jobs:
+     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+     steps:
+       - name: Acquire Velnor
+-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \"$RUNNER_TEMP/velnor/bin\" && if [ -f \"/opt/velnor/seed/generator/velnor-actions-0.1.0\" ] && echo \"$VELNOR_ASSET_SHA256  /opt/velnor/seed/generator/velnor-actions-0.1.0\" | sha256sum -c -; then cp \"/opt/velnor/seed/generator/velnor-actions-0.1.0\" \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"; else curl -fsSL --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" && echo \"$VELNOR_ASSET_SHA256  $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" | sha256sum -c -; fi && chmod +x \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"'"
++        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \"$RUNNER_TEMP/velnor/bin\" && s=\"/opt/velnor/seed/generator/velnor-actions-0.1.0\" d=\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" && if [ -f \"$s\" ] && echo \"$VELNOR_ASSET_SHA256  $s\" | sha256sum -c -; then cp \"$s\" \"$d\"; else curl -fsSL --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\" && echo \"$VELNOR_ASSET_SHA256  $d\" | sha256sum -c -; fi && chmod +x \"$d\"'"
+       - name: Download plan
+         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+         with:
+@@ -241,7 +241,7 @@ jobs:
+           sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
+           version: 2026.9.18
+       - name: Acquire Velnor
+-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \"$RUNNER_TEMP/velnor/bin\" && if [ -f \"/opt/velnor/seed/generator/velnor-actions-0.1.0\" ] && echo \"$VELNOR_ASSET_SHA256  /opt/velnor/seed/generator/velnor-actions-0.1.0\" | sha256sum -c -; then cp \"/opt/velnor/seed/generator/velnor-actions-0.1.0\" \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"; else curl -fsSL --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" && echo \"$VELNOR_ASSET_SHA256  $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" | sha256sum -c -; fi && chmod +x \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"'"
++        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \"$RUNNER_TEMP/velnor/bin\" && s=\"/opt/velnor/seed/generator/velnor-actions-0.1.0\" d=\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" && if [ -f \"$s\" ] && echo \"$VELNOR_ASSET_SHA256  $s\" | sha256sum -c -; then cp \"$s\" \"$d\"; else curl -fsSL --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\" && echo \"$VELNOR_ASSET_SHA256  $d\" | sha256sum -c -; fi && chmod +x \"$d\"'"
+       - name: Prepare pinned tools
+         env:
+           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+@@ -335,7 +335,7 @@ jobs:
+           sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
+           version: 2026.9.18
+       - name: Acquire Velnor
+-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \"$RUNNER_TEMP/velnor/bin\" && if [ -f \"/opt/velnor/seed/generator/velnor-actions-0.1.0\" ] && echo \"$VELNOR_ASSET_SHA256  /opt/velnor/seed/generator/velnor-actions-0.1.0\" | sha256sum -c -; then cp \"/opt/velnor/seed/generator/velnor-actions-0.1.0\" \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"; else curl -fsSL --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" && echo \"$VELNOR_ASSET_SHA256  $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" | sha256sum -c -; fi && chmod +x \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"'"
++        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \"$RUNNER_TEMP/velnor/bin\" && s=\"/opt/velnor/seed/generator/velnor-actions-0.1.0\" d=\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" && if [ -f \"$s\" ] && echo \"$VELNOR_ASSET_SHA256  $s\" | sha256sum -c -; then cp \"$s\" \"$d\"; else curl -fsSL --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\" && echo \"$VELNOR_ASSET_SHA256  $d\" | sha256sum -c -; fi && chmod +x \"$d\"'"
+       - name: Download plan
+         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+         with:
+diff --git a/docs/proposed/opentofu-goldens/cases/empty-suite/tree.sha256 b/docs/proposed/opentofu-goldens/cases/empty-suite/tree.sha256
+index eb66cbf..3c94e5c 100644
+--- a/docs/proposed/opentofu-goldens/cases/empty-suite/tree.sha256
++++ b/docs/proposed/opentofu-goldens/cases/empty-suite/tree.sha256
+@@ -1,5 +1,5 @@
++a63e6a4550e75e14c2dd2ebe6efefe1360a847967c0ee2f28803eb43949dc6e4  ./.github/AGENTS.md
+ b3f39f72416eee5077f2fd187f860e6d9a0a9ea4b33fdf3cfc671b1afbb34e0e  ./.github/actionlint.yaml
+ 6af64e54bfa164a3a3983daca601d104776490c4ccc81908c97817fa5a57f89b  ./.github/actions/velnor-tool-seed/action.yml
+-a63e6a4550e75e14c2dd2ebe6efefe1360a847967c0ee2f28803eb43949dc6e4  ./.github/AGENTS.md
+-1849415fb3a56303037d6da5fcb947a266d892156b1564ea24a5524ac40c5062  ./.github/workflows/ci.yml
++a02c7aabfed4068c5de374f2255259a0edda9c214efd9dc90c2bd1e91a4b26f7  ./.github/workflows/ci.yml
+ link ./.github/CLAUDE.md -> AGENTS.md
+diff --git a/docs/proposed/opentofu-goldens/cases/mbx-nextest/preview/.github/workflows/ci.yml b/docs/proposed/opentofu-goldens/cases/mbx-nextest/preview/.github/workflows/ci.yml
+index c6451d0..65be21b 100644
+--- a/docs/proposed/opentofu-goldens/cases/mbx-nextest/preview/.github/workflows/ci.yml
++++ b/docs/proposed/opentofu-goldens/cases/mbx-nextest/preview/.github/workflows/ci.yml
+@@ -107,7 +107,7 @@ jobs:
+           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+         run: mise --no-config --no-env --no-hooks exec rust@1.98.1 -- rustup component add --toolchain 1.98.1-x86_64-unknown-linux-gnu clippy rustfmt
+       - name: Acquire Velnor
+-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \"$RUNNER_TEMP/velnor/bin\" && if [ -f \"/opt/velnor/seed/generator/velnor-actions-0.1.0\" ] && echo \"$VELNOR_ASSET_SHA256  /opt/velnor/seed/generator/velnor-actions-0.1.0\" | sha256sum -c -; then cp \"/opt/velnor/seed/generator/velnor-actions-0.1.0\" \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"; else curl -fsSL --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" && echo \"$VELNOR_ASSET_SHA256  $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" | sha256sum -c -; fi && chmod +x \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"'"
++        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \"$RUNNER_TEMP/velnor/bin\" && s=\"/opt/velnor/seed/generator/velnor-actions-0.1.0\" d=\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" && if [ -f \"$s\" ] && echo \"$VELNOR_ASSET_SHA256  $s\" | sha256sum -c -; then cp \"$s\" \"$d\"; else curl -fsSL --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\" && echo \"$VELNOR_ASSET_SHA256  $d\" | sha256sum -c -; fi && chmod +x \"$d\"'"
+       - name: Write request
+         env:
+           VELNOR_INTERNAL_OP: write-request-v1
+@@ -170,7 +170,7 @@ jobs:
+     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+     steps:
+       - name: Acquire Velnor
+-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \"$RUNNER_TEMP/velnor/bin\" && if [ -f \"/opt/velnor/seed/generator/velnor-actions-0.1.0\" ] && echo \"$VELNOR_ASSET_SHA256  /opt/velnor/seed/generator/velnor-actions-0.1.0\" | sha256sum -c -; then cp \"/opt/velnor/seed/generator/velnor-actions-0.1.0\" \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"; else curl -fsSL --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" && echo \"$VELNOR_ASSET_SHA256  $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" | sha256sum -c -; fi && chmod +x \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"'"
++        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \"$RUNNER_TEMP/velnor/bin\" && s=\"/opt/velnor/seed/generator/velnor-actions-0.1.0\" d=\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" && if [ -f \"$s\" ] && echo \"$VELNOR_ASSET_SHA256  $s\" | sha256sum -c -; then cp \"$s\" \"$d\"; else curl -fsSL --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\" && echo \"$VELNOR_ASSET_SHA256  $d\" | sha256sum -c -; fi && chmod +x \"$d\"'"
+       - name: Download plan
+         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+         with:
+@@ -241,7 +241,7 @@ jobs:
+           sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
+           version: 2026.9.18
+       - name: Acquire Velnor
+-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \"$RUNNER_TEMP/velnor/bin\" && if [ -f \"/opt/velnor/seed/generator/velnor-actions-0.1.0\" ] && echo \"$VELNOR_ASSET_SHA256  /opt/velnor/seed/generator/velnor-actions-0.1.0\" | sha256sum -c -; then cp \"/opt/velnor/seed/generator/velnor-actions-0.1.0\" \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"; else curl -fsSL --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" && echo \"$VELNOR_ASSET_SHA256  $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" | sha256sum -c -; fi && chmod +x \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"'"
++        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \"$RUNNER_TEMP/velnor/bin\" && s=\"/opt/velnor/seed/generator/velnor-actions-0.1.0\" d=\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" && if [ -f \"$s\" ] && echo \"$VELNOR_ASSET_SHA256  $s\" | sha256sum -c -; then cp \"$s\" \"$d\"; else curl -fsSL --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\" && echo \"$VELNOR_ASSET_SHA256  $d\" | sha256sum -c -; fi && chmod +x \"$d\"'"
+       - name: Prepare pinned tools
+         env:
+           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+@@ -337,7 +337,7 @@ jobs:
+           sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
+           version: 2026.9.18
+       - name: Acquire Velnor
+-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \"$RUNNER_TEMP/velnor/bin\" && if [ -f \"/opt/velnor/seed/generator/velnor-actions-0.1.0\" ] && echo \"$VELNOR_ASSET_SHA256  /opt/velnor/seed/generator/velnor-actions-0.1.0\" | sha256sum -c -; then cp \"/opt/velnor/seed/generator/velnor-actions-0.1.0\" \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"; else curl -fsSL --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" && echo \"$VELNOR_ASSET_SHA256  $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" | sha256sum -c -; fi && chmod +x \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"'"
++        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \"$RUNNER_TEMP/velnor/bin\" && s=\"/opt/velnor/seed/generator/velnor-actions-0.1.0\" d=\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" && if [ -f \"$s\" ] && echo \"$VELNOR_ASSET_SHA256  $s\" | sha256sum -c -; then cp \"$s\" \"$d\"; else curl -fsSL --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\" && echo \"$VELNOR_ASSET_SHA256  $d\" | sha256sum -c -; fi && chmod +x \"$d\"'"
+       - name: Download plan
+         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+         with:
+diff --git a/docs/proposed/opentofu-goldens/cases/mbx-nextest/tree.sha256 b/docs/proposed/opentofu-goldens/cases/mbx-nextest/tree.sha256
+index 341c345..2584b83 100644
+--- a/docs/proposed/opentofu-goldens/cases/mbx-nextest/tree.sha256
++++ b/docs/proposed/opentofu-goldens/cases/mbx-nextest/tree.sha256
+@@ -1,5 +1,5 @@
++a63e6a4550e75e14c2dd2ebe6efefe1360a847967c0ee2f28803eb43949dc6e4  ./.github/AGENTS.md
+ b3f39f72416eee5077f2fd187f860e6d9a0a9ea4b33fdf3cfc671b1afbb34e0e  ./.github/actionlint.yaml
+ 6af64e54bfa164a3a3983daca601d104776490c4ccc81908c97817fa5a57f89b  ./.github/actions/velnor-tool-seed/action.yml
+-a63e6a4550e75e14c2dd2ebe6efefe1360a847967c0ee2f28803eb43949dc6e4  ./.github/AGENTS.md
+-03916e9a38555d6b9f8b12218b0a523486292d617aa58b122abb20e9c836e051  ./.github/workflows/ci.yml
++faca3f378e1ed331c4cfaa29ec7755c5ccd49d6baee942b32f35bebd881aee74  ./.github/workflows/ci.yml
+ link ./.github/CLAUDE.md -> AGENTS.md
+diff --git a/docs/proposed/opentofu-goldens/cases/minimal-cargo/preview/.github/workflows/ci.yml b/docs/proposed/opentofu-goldens/cases/minimal-cargo/preview/.github/workflows/ci.yml
+index 7f294e3..bb04fa0 100644
+--- a/docs/proposed/opentofu-goldens/cases/minimal-cargo/preview/.github/workflows/ci.yml
++++ b/docs/proposed/opentofu-goldens/cases/minimal-cargo/preview/.github/workflows/ci.yml
+@@ -107,7 +107,7 @@ jobs:
+           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+         run: mise --no-config --no-env --no-hooks exec rust@1.98.1 -- rustup component add --toolchain 1.98.1-x86_64-unknown-linux-gnu clippy rustfmt
+       - name: Acquire Velnor
+-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \"$RUNNER_TEMP/velnor/bin\" && if [ -f \"/opt/velnor/seed/generator/velnor-actions-0.1.0\" ] && echo \"$VELNOR_ASSET_SHA256  /opt/velnor/seed/generator/velnor-actions-0.1.0\" | sha256sum -c -; then cp \"/opt/velnor/seed/generator/velnor-actions-0.1.0\" \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"; else curl -fsSL --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" && echo \"$VELNOR_ASSET_SHA256  $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" | sha256sum -c -; fi && chmod +x \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"'"
++        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \"$RUNNER_TEMP/velnor/bin\" && s=\"/opt/velnor/seed/generator/velnor-actions-0.1.0\" d=\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" && if [ -f \"$s\" ] && echo \"$VELNOR_ASSET_SHA256  $s\" | sha256sum -c -; then cp \"$s\" \"$d\"; else curl -fsSL --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\" && echo \"$VELNOR_ASSET_SHA256  $d\" | sha256sum -c -; fi && chmod +x \"$d\"'"
+       - name: Write request
+         env:
+           VELNOR_INTERNAL_OP: write-request-v1
+@@ -170,7 +170,7 @@ jobs:
+     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+     steps:
+       - name: Acquire Velnor
+-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \"$RUNNER_TEMP/velnor/bin\" && if [ -f \"/opt/velnor/seed/generator/velnor-actions-0.1.0\" ] && echo \"$VELNOR_ASSET_SHA256  /opt/velnor/seed/generator/velnor-actions-0.1.0\" | sha256sum -c -; then cp \"/opt/velnor/seed/generator/velnor-actions-0.1.0\" \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"; else curl -fsSL --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" && echo \"$VELNOR_ASSET_SHA256  $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" | sha256sum -c -; fi && chmod +x \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"'"
++        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \"$RUNNER_TEMP/velnor/bin\" && s=\"/opt/velnor/seed/generator/velnor-actions-0.1.0\" d=\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" && if [ -f \"$s\" ] && echo \"$VELNOR_ASSET_SHA256  $s\" | sha256sum -c -; then cp \"$s\" \"$d\"; else curl -fsSL --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\" && echo \"$VELNOR_ASSET_SHA256  $d\" | sha256sum -c -; fi && chmod +x \"$d\"'"
+       - name: Download plan
+         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+         with:
+@@ -241,7 +241,7 @@ jobs:
+           sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
+           version: 2026.9.18
+       - name: Acquire Velnor
+-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \"$RUNNER_TEMP/velnor/bin\" && if [ -f \"/opt/velnor/seed/generator/velnor-actions-0.1.0\" ] && echo \"$VELNOR_ASSET_SHA256  /opt/velnor/seed/generator/velnor-actions-0.1.0\" | sha256sum -c -; then cp \"/opt/velnor/seed/generator/velnor-actions-0.1.0\" \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"; else curl -fsSL --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" && echo \"$VELNOR_ASSET_SHA256  $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" | sha256sum -c -; fi && chmod +x \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"'"
++        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \"$RUNNER_TEMP/velnor/bin\" && s=\"/opt/velnor/seed/generator/velnor-actions-0.1.0\" d=\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" && if [ -f \"$s\" ] && echo \"$VELNOR_ASSET_SHA256  $s\" | sha256sum -c -; then cp \"$s\" \"$d\"; else curl -fsSL --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\" && echo \"$VELNOR_ASSET_SHA256  $d\" | sha256sum -c -; fi && chmod +x \"$d\"'"
+       - name: Prepare pinned tools
+         env:
+           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+@@ -335,7 +335,7 @@ jobs:
+           sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
+           version: 2026.9.18
+       - name: Acquire Velnor
+-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \"$RUNNER_TEMP/velnor/bin\" && if [ -f \"/opt/velnor/seed/generator/velnor-actions-0.1.0\" ] && echo \"$VELNOR_ASSET_SHA256  /opt/velnor/seed/generator/velnor-actions-0.1.0\" | sha256sum -c -; then cp \"/opt/velnor/seed/generator/velnor-actions-0.1.0\" \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"; else curl -fsSL --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" && echo \"$VELNOR_ASSET_SHA256  $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" | sha256sum -c -; fi && chmod +x \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"'"
++        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \"$RUNNER_TEMP/velnor/bin\" && s=\"/opt/velnor/seed/generator/velnor-actions-0.1.0\" d=\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" && if [ -f \"$s\" ] && echo \"$VELNOR_ASSET_SHA256  $s\" | sha256sum -c -; then cp \"$s\" \"$d\"; else curl -fsSL --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\" && echo \"$VELNOR_ASSET_SHA256  $d\" | sha256sum -c -; fi && chmod +x \"$d\"'"
+       - name: Download plan
+         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+         with:
+diff --git a/docs/proposed/opentofu-goldens/cases/minimal-cargo/tree.sha256 b/docs/proposed/opentofu-goldens/cases/minimal-cargo/tree.sha256
+index 349482a..76b2964 100644
+--- a/docs/proposed/opentofu-goldens/cases/minimal-cargo/tree.sha256
++++ b/docs/proposed/opentofu-goldens/cases/minimal-cargo/tree.sha256
+@@ -1,5 +1,5 @@
++a63e6a4550e75e14c2dd2ebe6efefe1360a847967c0ee2f28803eb43949dc6e4  ./.github/AGENTS.md
+ b3f39f72416eee5077f2fd187f860e6d9a0a9ea4b33fdf3cfc671b1afbb34e0e  ./.github/actionlint.yaml
+ 6af64e54bfa164a3a3983daca601d104776490c4ccc81908c97817fa5a57f89b  ./.github/actions/velnor-tool-seed/action.yml
+-a63e6a4550e75e14c2dd2ebe6efefe1360a847967c0ee2f28803eb43949dc6e4  ./.github/AGENTS.md
+-7adf04c097a1772c2e64a3354aad8ccbabed73bd44bf01e4a25e25122f62b005  ./.github/workflows/ci.yml
++441bcb8e83bf962e99fbf3ea54619797702b17077842cb621c0c0a054a9a407b  ./.github/workflows/ci.yml
+ link ./.github/CLAUDE.md -> AGENTS.md
+diff --git a/docs/proposed/opentofu-goldens/cases/nested/preview/.github/workflows/ci.yml b/docs/proposed/opentofu-goldens/cases/nested/preview/.github/workflows/ci.yml
+index 568a80f..5c7b013 100644
+--- a/docs/proposed/opentofu-goldens/cases/nested/preview/.github/workflows/ci.yml
++++ b/docs/proposed/opentofu-goldens/cases/nested/preview/.github/workflows/ci.yml
+@@ -121,7 +121,7 @@ jobs:
+           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+         run: "sh -c 'mkdir -p \"$RUNNER_TEMP/velnor/cargo-clean\" && cd \"$RUNNER_TEMP/velnor/cargo-clean\" && if mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo metadata --locked --offline --manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\" >/dev/null 2>&1; then echo \"velnor: sources hit, skipping fetch\"; else echo \"velnor: sources miss (source_missing), fetching\"; mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo fetch --locked --manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\"; fi'"
+       - name: Acquire Velnor
+-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \"$RUNNER_TEMP/velnor/bin\" && if [ -f \"/opt/velnor/seed/generator/velnor-actions-0.1.0\" ] && echo \"$VELNOR_ASSET_SHA256  /opt/velnor/seed/generator/velnor-actions-0.1.0\" | sha256sum -c -; then cp \"/opt/velnor/seed/generator/velnor-actions-0.1.0\" \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"; else curl -fsSL --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" && echo \"$VELNOR_ASSET_SHA256  $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" | sha256sum -c -; fi && chmod +x \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"'"
++        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \"$RUNNER_TEMP/velnor/bin\" && s=\"/opt/velnor/seed/generator/velnor-actions-0.1.0\" d=\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" && if [ -f \"$s\" ] && echo \"$VELNOR_ASSET_SHA256  $s\" | sha256sum -c -; then cp \"$s\" \"$d\"; else curl -fsSL --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\" && echo \"$VELNOR_ASSET_SHA256  $d\" | sha256sum -c -; fi && chmod +x \"$d\"'"
+       - name: Write request
+         env:
+           VELNOR_INTERNAL_OP: write-request-v1
+@@ -184,7 +184,7 @@ jobs:
+     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+     steps:
+       - name: Acquire Velnor
+-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \"$RUNNER_TEMP/velnor/bin\" && if [ -f \"/opt/velnor/seed/generator/velnor-actions-0.1.0\" ] && echo \"$VELNOR_ASSET_SHA256  /opt/velnor/seed/generator/velnor-actions-0.1.0\" | sha256sum -c -; then cp \"/opt/velnor/seed/generator/velnor-actions-0.1.0\" \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"; else curl -fsSL --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" && echo \"$VELNOR_ASSET_SHA256  $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" | sha256sum -c -; fi && chmod +x \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"'"
++        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \"$RUNNER_TEMP/velnor/bin\" && s=\"/opt/velnor/seed/generator/velnor-actions-0.1.0\" d=\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" && if [ -f \"$s\" ] && echo \"$VELNOR_ASSET_SHA256  $s\" | sha256sum -c -; then cp \"$s\" \"$d\"; else curl -fsSL --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\" && echo \"$VELNOR_ASSET_SHA256  $d\" | sha256sum -c -; fi && chmod +x \"$d\"'"
+       - name: Download plan
+         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+         with:
+@@ -256,7 +256,7 @@ jobs:
+           sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
+           version: 2026.9.18
+       - name: Acquire Velnor
+-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \"$RUNNER_TEMP/velnor/bin\" && if [ -f \"/opt/velnor/seed/generator/velnor-actions-0.1.0\" ] && echo \"$VELNOR_ASSET_SHA256  /opt/velnor/seed/generator/velnor-actions-0.1.0\" | sha256sum -c -; then cp \"/opt/velnor/seed/generator/velnor-actions-0.1.0\" \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"; else curl -fsSL --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" && echo \"$VELNOR_ASSET_SHA256  $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" | sha256sum -c -; fi && chmod +x \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"'"
++        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \"$RUNNER_TEMP/velnor/bin\" && s=\"/opt/velnor/seed/generator/velnor-actions-0.1.0\" d=\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" && if [ -f \"$s\" ] && echo \"$VELNOR_ASSET_SHA256  $s\" | sha256sum -c -; then cp \"$s\" \"$d\"; else curl -fsSL --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\" && echo \"$VELNOR_ASSET_SHA256  $d\" | sha256sum -c -; fi && chmod +x \"$d\"'"
+       - name: Prepare pinned tools
+         env:
+           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+@@ -350,7 +350,7 @@ jobs:
+           sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
+           version: 2026.9.18
+       - name: Acquire Velnor
+-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \"$RUNNER_TEMP/velnor/bin\" && if [ -f \"/opt/velnor/seed/generator/velnor-actions-0.1.0\" ] && echo \"$VELNOR_ASSET_SHA256  /opt/velnor/seed/generator/velnor-actions-0.1.0\" | sha256sum -c -; then cp \"/opt/velnor/seed/generator/velnor-actions-0.1.0\" \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"; else curl -fsSL --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" && echo \"$VELNOR_ASSET_SHA256  $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" | sha256sum -c -; fi && chmod +x \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"'"
++        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \"$RUNNER_TEMP/velnor/bin\" && s=\"/opt/velnor/seed/generator/velnor-actions-0.1.0\" d=\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" && if [ -f \"$s\" ] && echo \"$VELNOR_ASSET_SHA256  $s\" | sha256sum -c -; then cp \"$s\" \"$d\"; else curl -fsSL --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\" && echo \"$VELNOR_ASSET_SHA256  $d\" | sha256sum -c -; fi && chmod +x \"$d\"'"
+       - name: Download plan
+         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+         with:
+@@ -477,7 +477,7 @@ jobs:
+           sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
+           version: 2026.9.18
+       - name: Acquire Velnor
+-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \"$RUNNER_TEMP/velnor/bin\" && if [ -f \"/opt/velnor/seed/generator/velnor-actions-0.1.0\" ] && echo \"$VELNOR_ASSET_SHA256  /opt/velnor/seed/generator/velnor-actions-0.1.0\" | sha256sum -c -; then cp \"/opt/velnor/seed/generator/velnor-actions-0.1.0\" \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"; else curl -fsSL --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" && echo \"$VELNOR_ASSET_SHA256  $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" | sha256sum -c -; fi && chmod +x \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"'"
++        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \"$RUNNER_TEMP/velnor/bin\" && s=\"/opt/velnor/seed/generator/velnor-actions-0.1.0\" d=\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" && if [ -f \"$s\" ] && echo \"$VELNOR_ASSET_SHA256  $s\" | sha256sum -c -; then cp \"$s\" \"$d\"; else curl -fsSL --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\" && echo \"$VELNOR_ASSET_SHA256  $d\" | sha256sum -c -; fi && chmod +x \"$d\"'"
+       - name: Download plan
+         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+         with:
+diff --git a/docs/proposed/opentofu-goldens/cases/nested/tree.sha256 b/docs/proposed/opentofu-goldens/cases/nested/tree.sha256
+index fd5158e..9f63b4b 100644
+--- a/docs/proposed/opentofu-goldens/cases/nested/tree.sha256
++++ b/docs/proposed/opentofu-goldens/cases/nested/tree.sha256
+@@ -1,5 +1,5 @@
++a63e6a4550e75e14c2dd2ebe6efefe1360a847967c0ee2f28803eb43949dc6e4  ./.github/AGENTS.md
+ b3f39f72416eee5077f2fd187f860e6d9a0a9ea4b33fdf3cfc671b1afbb34e0e  ./.github/actionlint.yaml
+ 6af64e54bfa164a3a3983daca601d104776490c4ccc81908c97817fa5a57f89b  ./.github/actions/velnor-tool-seed/action.yml
+-a63e6a4550e75e14c2dd2ebe6efefe1360a847967c0ee2f28803eb43949dc6e4  ./.github/AGENTS.md
+-1b3a6bd95eb29f343f85776403ad99911042e6fc79e727e1e3d5d59829549b96  ./.github/workflows/ci.yml
++3452b9d4882699d967d7352d8b696dd5576581ced82c75b4eac2cf173d72b30d  ./.github/workflows/ci.yml
+ link ./.github/CLAUDE.md -> AGENTS.md
+diff --git a/fixtures/parity/ignored-stack/expected/ci.yml b/fixtures/parity/ignored-stack/expected/ci.yml
+index 59c2e11..0d8581e 100644
+--- a/fixtures/parity/ignored-stack/expected/ci.yml
++++ b/fixtures/parity/ignored-stack/expected/ci.yml
+@@ -84,7 +84,7 @@ jobs:
+       - name: Restore Velnor tool seed
+         uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
+         with:
+-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-761a279144527661
++          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-2a530e800da46c9f
+       - name: Setup Mise
+         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
+         with:

@@ -1,0 +1,10 @@
+PR12 read-only source snapshot
+Commit: 39d489229747342043de979e0f3e2c95d8726aa4
+Tree: c3286cb7967912fd4096da5d63d7d54c650b0267
+Parents: bc4514f6c2acc231e36eb58d723c56b4488b1c3e 703d1b84d9f9e0246a52e3989bf3b78a13bbbf05
+Source: git archive from /tmp/velnor-release-intent-guard-af82-candidate-20261005 at the exact commit above
+Archive: /root/.cache/velnor-task-targets/20261005/pr39d489-source-snapshot-20261005/source.tar
+Tree entry manifest: /root/.cache/velnor-task-targets/20261005/pr39d489-source-snapshot-20261005/tree.entries
+Snapshot root: /root/.cache/velnor-task-targets/20261005/pr39d489-source-snapshot-20261005/ (extracted tracked tree; .git/target/logs excluded)
+Tree entries: 1498 blobs and 1 gitlink; git archive materializes the 1498 blob paths; the gitlink is recorded only in tree.entries.
+Source worktree was detached at commit 39d489229747342043de979e0f3e2c95d8726aa4 and clean before snapshot creation; its staged and unstaged diffs remained empty after archive creation.

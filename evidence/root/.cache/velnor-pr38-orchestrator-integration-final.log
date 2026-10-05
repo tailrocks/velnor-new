@@ -1,0 +1,70 @@
+   Compiling velnor-actions-orchestrator v0.1.0 (/tmp/velnor-impl-20261005/cache/pr38/crates/velnor-actions-orchestrator)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 5.10s
+────────────
+ Nextest run ID cbdbb0f5-8b18-459d-ad5a-5a36eee929d2 with nextest profile: default
+    Starting 7 tests across 3 binaries (1074 tests skipped)
+       START [         ] (1/7) velnor-actions-orchestrator::validation_failure zizmor_staging::blessed_repo_tag_ref_still_fails
+
+running 1 test
+Initialized empty Git repository in /tmp/.tmp19pwBQ/.git/
+test zizmor_staging::blessed_repo_tag_ref_still_fails ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.34s
+
+        PASS [   1.352s] (1/7) velnor-actions-orchestrator::validation_failure zizmor_staging::blessed_repo_tag_ref_still_fails
+       START [         ] (2/7) velnor-actions-orchestrator::validation_failure zizmor_staging::different_unpinned_tag_still_fails
+
+running 1 test
+Initialized empty Git repository in /tmp/.tmpFzghO7/.git/
+test zizmor_staging::different_unpinned_tag_still_fails ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.18s
+
+        PASS [   1.193s] (2/7) velnor-actions-orchestrator::validation_failure zizmor_staging::different_unpinned_tag_still_fails
+       START [         ] (3/7) velnor-actions-orchestrator::validation_failure zizmor_staging::staging_suppressions_stable_no_new
+
+running 1 test
+Initialized empty Git repository in /tmp/.tmpxXWnot/.git/
+test zizmor_staging::staging_suppressions_stable_no_new ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 1.12s
+
+        PASS [   1.131s] (3/7) velnor-actions-orchestrator::validation_failure zizmor_staging::staging_suppressions_stable_no_new
+       START [         ] (4/7) velnor-actions-orchestrator::validation_failure zizmor_staging::velnor_policy_blessed_sha_validates_green
+
+running 1 test
+Initialized empty Git repository in /tmp/.tmpDCziEz/.git/
+test zizmor_staging::velnor_policy_blessed_sha_validates_green ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 0.87s
+
+        PASS [   0.879s] (4/7) velnor-actions-orchestrator::validation_failure zizmor_staging::velnor_policy_blessed_sha_validates_green
+       START [         ] (5/7) velnor-actions-orchestrator::velnor_orchestrator impl_e2e_wiring::emitted_yaml_wires_helpers_consumer
+
+running 1 test
+Initialized empty Git repository in /tmp/.tmp5V5EnB/.git/
+test impl_e2e_wiring::emitted_yaml_wires_helpers_consumer ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 666 filtered out; finished in 0.16s
+
+        PASS [   0.178s] (5/7) velnor-actions-orchestrator::velnor_orchestrator impl_e2e_wiring::emitted_yaml_wires_helpers_consumer
+       START [         ] (6/7) velnor-actions-orchestrator::velnor_orchestrator impl_e2e_wiring::emitted_yaml_wires_helpers_velnor_policy
+
+running 1 test
+Initialized empty Git repository in /tmp/.tmpqJuIIN/.git/
+test impl_e2e_wiring::emitted_yaml_wires_helpers_velnor_policy ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 666 filtered out; finished in 0.19s
+
+        PASS [   0.200s] (6/7) velnor-actions-orchestrator::velnor_orchestrator impl_e2e_wiring::emitted_yaml_wires_helpers_velnor_policy
+       START [         ] (7/7) velnor-actions-orchestrator::velnor_orchestrator impl_e2e_wiring::preseed_tests::emitted_yaml_preseed_builds_once_and_shares_artifact
+
+running 1 test
+Initialized empty Git repository in /tmp/.tmpTxD90S/.git/
+test impl_e2e_wiring::preseed_tests::emitted_yaml_preseed_builds_once_and_shares_artifact ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 666 filtered out; finished in 0.19s
+
+        PASS [   0.197s] (7/7) velnor-actions-orchestrator::velnor_orchestrator impl_e2e_wiring::preseed_tests::emitted_yaml_preseed_builds_once_and_shares_artifact
+────────────
+     Summary [   5.138s] 7 tests run: 7 passed, 1074 skipped

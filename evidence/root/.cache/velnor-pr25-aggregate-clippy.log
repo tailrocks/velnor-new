@@ -1,0 +1,31 @@
+    Checking simd-adler32 v0.3.10
+    Checking adler2 v2.0.1
+   Compiling velnor-actions-tofu v0.1.0 (/root/.cache/velnor-pr25-aggregate-20261005/crates/velnor-actions-tofu)
+    Checking linux-raw-sys v0.12.1
+   Compiling typenum v1.20.1
+    Checking typed-path v0.12.3
+   Compiling cpufeatures v0.3.1
+    Checking libc v0.2.189
+    Checking lzma-rust2 v0.21.0
+    Checking velnor-actions-contract v0.1.0 (/root/.cache/velnor-pr25-aggregate-20261005/crates/velnor-actions-contract)
+    Checking miniz_oxide v0.9.1
+    Checking flate2 v1.1.10
+    Checking rustix v1.1.5
+    Checking zip v8.6.0
+    Checking getrandom v0.4.3
+    Checking filetime v0.2.29
+   Compiling hybrid-array v0.4.15
+    Checking tar v0.4.46
+   Compiling block-buffer v0.12.1
+   Compiling crypto-common v0.2.2
+    Checking tempfile v3.27.0
+   Compiling digest v0.11.3
+   Compiling sha2 v0.11.0
+   Compiling velnor-archive-guard v0.1.0 (/root/.cache/velnor-pr25-aggregate-20261005/crates/velnor-archive-guard)
+    Checking velnor-actions-mise v0.1.0 (/root/.cache/velnor-pr25-aggregate-20261005/crates/velnor-actions-mise)
+    Checking velnor-actions-workflow-renderer v0.1.0 (/root/.cache/velnor-pr25-aggregate-20261005/crates/velnor-actions-workflow-renderer)
+    Checking velnor-actions-rust v0.1.0 (/root/.cache/velnor-pr25-aggregate-20261005/crates/velnor-actions-rust)
+    Checking velnor-actions-actionlint v0.1.0 (/root/.cache/velnor-pr25-aggregate-20261005/crates/velnor-actions-actionlint)
+    Checking velnor-actions-orchestrator v0.1.0 (/root/.cache/velnor-pr25-aggregate-20261005/crates/velnor-actions-orchestrator)
+    Checking velnor-actions-cli v0.1.0 (/root/.cache/velnor-pr25-aggregate-20261005/crates/velnor-actions-cli)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 19.14s

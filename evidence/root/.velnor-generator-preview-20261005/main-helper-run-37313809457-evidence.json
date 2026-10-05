@@ -1,0 +1,60 @@
+{
+  "artifact": {
+    "api_archive_digest": "sha256:4adfba103cc847ea8af882b44c3cf862995660f09e3187517339297f68444bae",
+    "archive_bytes": 3592743,
+    "archive_sha256": "4adfba103cc847ea8af882b44c3cf862995660f09e3187517339297f68444bae",
+    "binary_bytes": 10292992,
+    "binary_path": "/root/.velnor-generator-preview-20261005/main-helper-run-37313809457-artifact-11347670022/velnor-actions",
+    "binary_sha256": "6c0573826b9a5453677be1cc9966e81fd704e23cb9b016049c32a42a23ab35e7",
+    "execution": "NOT EXECUTED locally",
+    "id": 11347670022,
+    "manifest": {
+      "commit": "bdb1e14509225d18b4d8ee180731825d0826c16f",
+      "schema": 1,
+      "sha256": "6c0573826b9a5453677be1cc9966e81fd704e23cb9b016049c32a42a23ab35e7",
+      "target": "x86_64-unknown-linux-gnu",
+      "toolchain": "rust@1.98.1"
+    },
+    "manifest_bytes": 202,
+    "manifest_path": "/root/.velnor-generator-preview-20261005/main-helper-run-37313809457-artifact-11347670022/preseed-manifest.json",
+    "manifest_sha256": "ac3fb301a450cdaf53e1f8011337895fb8efedf8f4340355b222f951002c5e6d",
+    "name": "velnor-preseed-helper"
+  },
+  "evidence_record_created_at_utc": "2026-10-05T13:12:04Z",
+  "limitations": [
+    "Only Plan job status is complete; the workflow run was in progress at the recorded API query.",
+    "Artifact is a same-run CI preseed candidate, not an immutable published release or accepted consumer metadata.",
+    "Helper was not executed on bastion."
+  ],
+  "plan_job": {
+    "completed_at": "2026-10-05T13:04:26Z",
+    "conclusion": "success",
+    "id": 111775423009,
+    "name": "Plan",
+    "started_at": "2026-10-05T13:02:47Z",
+    "status": "completed",
+    "url": "https://github.com/tailrocks/velnor-new/actions/runs/37313809457/job/111775423009"
+  },
+  "plan_log": {
+    "build_command": "env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR mise --no-config --no-env --no-hooks exec rust@1.98.1 -- mbx build --release --locked --package velnor-actions-cli --bin velnor-actions",
+    "bytes": 180795,
+    "compile_result": "successful; target/release/velnor-actions verified before upload",
+    "mbx_cache": "2 hits, 8 misses; 0 B downloaded, 0 B uploaded, 58.4 MiB stored locally",
+    "mbx_session": "41.34s; 149.7ms estimated compiler time avoided",
+    "path": "/root/.velnor-generator-preview-20261005/logs/main-run-37313809457-plan-job-111775423009.log",
+    "sha256": "f95a9c576ec883b602be17256061168fa35dfd549f69dabc16ae3ace3259be27",
+    "source": "GET /repos/tailrocks/velnor-new/actions/jobs/111775423009/logs"
+  },
+  "repository": "tailrocks/velnor-new",
+  "run": {
+    "branch": "main",
+    "commit": "bdb1e14509225d18b4d8ee180731825d0826c16f",
+    "conclusion": null,
+    "event": "push",
+    "id": 37313809457,
+    "status_at_query": "in_progress",
+    "tree": "9e9ce5ed26af239d20d529378e7f17bc2bb74788",
+    "url": "https://github.com/tailrocks/velnor-new/actions/runs/37313809457"
+  },
+  "schema": 1
+}

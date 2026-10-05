@@ -1,0 +1,4 @@
+[codex/pr72-rust-trailer-port-20261005 0c70cf3ed] WIP: preserve existing partial work at immediate stop [skip ci]
+ 2 files changed, 417 insertions(+)
+ create mode 100644 .scratch/trailer_policy_core.rs
+ create mode 100644 .scratch/trailer_policy_tests.rs

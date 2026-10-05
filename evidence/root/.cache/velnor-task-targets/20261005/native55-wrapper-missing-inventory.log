@@ -1,0 +1,2 @@
+check-freshness: missing inventory: /nonexistent/velnor-freshness-fixture/.velnor/freshness-inventory.json
+exit=1

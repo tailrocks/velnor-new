@@ -1,0 +1,92 @@
+DEBUG ARGS: mise --no-config --no-env --no-hooks --yes --jobs 1 --verbose install cargo-deny@0.20.2 mr-boxington@1.21.1
+DEBUG Loaded 150 CA root certificates from the system
+DEBUG GET https://mise-versions.jdx.dev/data/cargo-deny.toml
+DEBUG GET https://mise-versions.jdx.dev/data/cargo-deny.toml 200 OK
+INFO  cargo-deny@0.20.2 [1/3] install
+DEBUG GET https://mise-versions.jdx.dev/api/github/repos/EmbarkStudios/cargo-deny/releases?page=1
+DEBUG GET https://mise-versions.jdx.dev/api/github/repos/EmbarkStudios/cargo-deny/releases?page=1
+DEBUG POST https://mise-versions.jdx.dev/api/tools/cargo-deny
+DEBUG GET https://mise-versions.jdx.dev/api/github/repos/EmbarkStudios/cargo-deny/releases?page=1 200 OK
+DEBUG GET https://mise-versions.jdx.dev/api/github/repos/EmbarkStudios/cargo-deny/releases?page=1 200 OK
+DEBUG GET https://mise-versions.jdx.dev/api/github/repos/EmbarkStudios/cargo-deny/releases/0.20.2
+DEBUG GET https://mise-versions.jdx.dev/api/github/repos/EmbarkStudios/cargo-deny/releases/0.20.2
+DEBUG GET https://mise-versions.jdx.dev/api/github/repos/EmbarkStudios/cargo-deny/releases/0.20.2 200 OK
+DEBUG GET https://mise-versions.jdx.dev/api/github/repos/EmbarkStudios/cargo-deny/releases/0.20.2 200 OK
+DEBUG Loaded 150 CA root certificates from the system
+DEBUG HEAD https://github.com/EmbarkStudios/cargo-deny/releases/download/0.20.2/cargo-deny-0.20.2-x86_64-unknown-linux-musl.tar.gz
+DEBUG HEAD https://github.com/EmbarkStudios/cargo-deny/releases/download/0.20.2/cargo-deny-0.20.2-x86_64-unknown-linux-musl.tar.gz 200 OK
+INFO  cargo-deny@0.20.2 [1/3] download cargo-deny-0.20.2-x86_64-unknown-linux-musl.tar.gz
+DEBUG GET Downloading https://github.com/EmbarkStudios/cargo-deny/releases/download/0.20.2/cargo-deny-0.20.2-x86_64-unknown-linux-musl.tar.gz to ~/.cache/velnor-task-targets/20261005/trailer-deny-downloads/cargo-deny/0.20.2/cargo-deny-0.20.2-x86_64-unknown-linux-musl.tar.gz
+DEBUG GET https://github.com/EmbarkStudios/cargo-deny/releases/download/0.20.2/cargo-deny-0.20.2-x86_64-unknown-linux-musl.tar.gz
+DEBUG GET https://github.com/EmbarkStudios/cargo-deny/releases/download/0.20.2/cargo-deny-0.20.2-x86_64-unknown-linux-musl.tar.gz 200 OK
+DEBUG using GitHub API digest for checksum verification
+INFO  cargo-deny@0.20.2 [2/3] checksum cargo-deny-0.20.2-x86_64-unknown-linux-musl.tar.gz
+INFO  cargo-deny@0.20.2 [3/3] extract cargo-deny-0.20.2-x86_64-unknown-linux-musl.tar.gz
+DEBUG tar -xf /root/.cache/velnor-task-targets/20261005/trailer-deny-downloads/cargo-deny/0.20.2/cargo-deny-0.20.2-x86_64-unknown-linux-musl.tar.gz -C /root/.cache/velnor-task-targets/20261005/trailer-deny-mise-data/installs/cargo-deny/0.20.2
+DEBUG tar extraction summary: UnpackSummary { files: 4, dirs: 1, symlinks: 0, hardlinks: 0, sparse_files: 0, skipped: [] }
+INFO  cargo-deny@0.20.2 ✓ installed
+DEBUG GET https://mise-versions.jdx.dev/data/mr-boxington.toml
+DEBUG GET https://mise-versions.jdx.dev/data/mr-boxington.toml 200 OK
+DEBUG GET https://raw.githubusercontent.com/jdx/mr-boxington/HEAD/.well-known/packslip.json
+DEBUG GET https://raw.githubusercontent.com/jdx/mr-boxington/HEAD/.well-known/packslip.json 404 Not Found
+DEBUG GET https://raw.githubusercontent.com/jdx/mr-boxington/HEAD/.well-known/packslip.json
+DEBUG GET https://raw.githubusercontent.com/jdx/mr-boxington/HEAD/.well-known/packslip.json 404 Not Found
+INFO  mr-boxington@1.21.1 [1/4] install
+DEBUG GET https://raw.githubusercontent.com/jdx/mr-boxington/HEAD/.well-known/packslip.json
+DEBUG POST https://mise-versions.jdx.dev/api/tools/mr-boxington
+DEBUG GET https://raw.githubusercontent.com/jdx/mr-boxington/HEAD/.well-known/packslip.json 404 Not Found
+DEBUG GET https://mise-versions.jdx.dev/api/github/repos/jdx/mr-boxington/releases/v1.21.1
+DEBUG GET https://mise-versions.jdx.dev/api/github/repos/jdx/mr-boxington/releases/v1.21.1
+DEBUG GET https://mise-versions.jdx.dev/api/github/repos/jdx/mr-boxington/releases/v1.21.1 200 OK
+DEBUG GET https://mise-versions.jdx.dev/api/github/repos/jdx/mr-boxington/releases/v1.21.1 200 OK
+DEBUG HEAD https://github.com/jdx/mr-boxington/releases/download/v1.21.1/packslip.sigstore.json
+DEBUG HEAD https://github.com/jdx/mr-boxington/releases/download/v1.21.1/packslip.sigstore.json 200 OK
+INFO  mr-boxington@1.21.1 [1/4] download packslip
+DEBUG GET Downloading https://github.com/jdx/mr-boxington/releases/download/v1.21.1/packslip.sigstore.json to ~/.cache/velnor-task-targets/20261005/trailer-deny-downloads/mr-boxington/1.21.1/packslip.sigstore.json
+DEBUG GET https://github.com/jdx/mr-boxington/releases/download/v1.21.1/packslip.sigstore.json
+DEBUG GET https://github.com/jdx/mr-boxington/releases/download/v1.21.1/packslip.sigstore.json 200 OK
+INFO  mr-boxington@1.21.1 [1/4] verify packslip
+DEBUG mr-boxington@1.21.1: packslip signed by https://github.com/jdx/mr-boxington/.github/workflows/release.yml@refs/heads/main (sigstore-oidc), logged 2026-10-02T12:50:05Z
+INFO  mr-boxington@1.21.1 [2/4] download mbx-x86_64-unknown-linux-gnu.tar.gz
+DEBUG GET Downloading https://github.com/jdx/mr-boxington/releases/download/v1.21.1/mbx-x86_64-unknown-linux-gnu.tar.gz to ~/.cache/velnor-task-targets/20261005/trailer-deny-downloads/mr-boxington/1.21.1/mbx-x86_64-unknown-linux-gnu.tar.gz
+DEBUG GET https://github.com/jdx/mr-boxington/releases/download/v1.21.1/mbx-x86_64-unknown-linux-gnu.tar.gz
+DEBUG GET https://github.com/jdx/mr-boxington/releases/download/v1.21.1/mbx-x86_64-unknown-linux-gnu.tar.gz 200 OK
+INFO  mr-boxington@1.21.1 [3/4] verify mbx-x86_64-unknown-linux-gnu.tar.gz
+INFO  mr-boxington@1.21.1 [3/4] checksum mbx-x86_64-unknown-linux-gnu.tar.gz
+DEBUG tar -xf /root/.cache/velnor-task-targets/20261005/trailer-deny-downloads/mr-boxington/1.21.1/mbx-x86_64-unknown-linux-gnu.tar.gz -C /root/.cache/velnor-task-targets/20261005/trailer-deny-mise-data/installs/mr-boxington/1.21.1
+INFO  mr-boxington@1.21.1 [4/4] extract mbx-x86_64-unknown-linux-gnu.tar.gz
+DEBUG tar extraction summary: UnpackSummary { files: 3, dirs: 0, symlinks: 0, hardlinks: 0, sparse_files: 0, skipped: [] }
+INFO  mr-boxington@1.21.1 [4/4] download mbx.usage.kdl
+DEBUG GET Downloading https://github.com/jdx/mr-boxington/releases/download/v1.21.1/mbx.usage.kdl to ~/.cache/velnor-task-targets/20261005/trailer-deny-mise-data/installs/mr-boxington/1.21.1/.mise-packslip/assets/mbx.usage.kdl
+DEBUG GET https://github.com/jdx/mr-boxington/releases/download/v1.21.1/mbx.usage.kdl
+DEBUG GET https://github.com/jdx/mr-boxington/releases/download/v1.21.1/mbx.usage.kdl 200 OK
+INFO  mr-boxington@1.21.1 [4/4] download mbx.bash
+DEBUG GET Downloading https://github.com/jdx/mr-boxington/releases/download/v1.21.1/mbx.bash to ~/.cache/velnor-task-targets/20261005/trailer-deny-mise-data/installs/mr-boxington/1.21.1/.mise-packslip/assets/mbx.bash
+DEBUG GET https://github.com/jdx/mr-boxington/releases/download/v1.21.1/mbx.bash
+DEBUG GET https://github.com/jdx/mr-boxington/releases/download/v1.21.1/mbx.bash 200 OK
+INFO  mr-boxington@1.21.1 [4/4] download mbx.zsh
+DEBUG GET Downloading https://github.com/jdx/mr-boxington/releases/download/v1.21.1/mbx.zsh to ~/.cache/velnor-task-targets/20261005/trailer-deny-mise-data/installs/mr-boxington/1.21.1/.mise-packslip/assets/mbx.zsh
+DEBUG GET https://github.com/jdx/mr-boxington/releases/download/v1.21.1/mbx.zsh
+DEBUG GET https://github.com/jdx/mr-boxington/releases/download/v1.21.1/mbx.zsh 200 OK
+INFO  mr-boxington@1.21.1 [4/4] download mbx.fish
+DEBUG GET Downloading https://github.com/jdx/mr-boxington/releases/download/v1.21.1/mbx.fish to ~/.cache/velnor-task-targets/20261005/trailer-deny-mise-data/installs/mr-boxington/1.21.1/.mise-packslip/assets/mbx.fish
+DEBUG GET https://github.com/jdx/mr-boxington/releases/download/v1.21.1/mbx.fish
+DEBUG GET https://github.com/jdx/mr-boxington/releases/download/v1.21.1/mbx.fish 200 OK
+INFO  mr-boxington@1.21.1 [4/4] download mbx.powershell
+DEBUG GET Downloading https://github.com/jdx/mr-boxington/releases/download/v1.21.1/mbx.powershell to ~/.cache/velnor-task-targets/20261005/trailer-deny-mise-data/installs/mr-boxington/1.21.1/.mise-packslip/assets/mbx.powershell
+DEBUG GET https://github.com/jdx/mr-boxington/releases/download/v1.21.1/mbx.powershell
+DEBUG GET https://github.com/jdx/mr-boxington/releases/download/v1.21.1/mbx.powershell 200 OK
+DEBUG GET https://api.github.com/repos/jdx/mr-boxington/contents/skills/mbx?ref=a0a44c61ca6aaa8da41d59deeebdfc46fc9d3313
+DEBUG GET https://api.github.com/repos/jdx/mr-boxington/contents/skills/mbx?ref=a0a44c61ca6aaa8da41d59deeebdfc46fc9d3313 200 OK
+INFO  mr-boxington@1.21.1 [4/4] download skills/mbx/SKILL.md
+DEBUG GET Downloading https://api.github.com/repos/jdx/mr-boxington/contents/skills/mbx/SKILL.md?ref=a0a44c61ca6aaa8da41d59deeebdfc46fc9d3313 to ~/.cache/velnor-task-targets/20261005/trailer-deny-mise-data/installs/mr-boxington/1.21.1/.mise-packslip/repo/skills/.mbx.partial/SKILL.md
+DEBUG GET https://api.github.com/repos/jdx/mr-boxington/contents/skills/mbx/SKILL.md?ref=a0a44c61ca6aaa8da41d59deeebdfc46fc9d3313
+DEBUG GET https://api.github.com/repos/jdx/mr-boxington/contents/skills/mbx/SKILL.md?ref=a0a44c61ca6aaa8da41d59deeebdfc46fc9d3313 200 OK
+INFO  mr-boxington@1.21.1 ✓ installed
+DEBUG [aqua:EmbarkStudios/cargo-deny@0.20.2] list_bin_paths: ["/root/.cache/velnor-task-targets/20261005/trailer-deny-mise-data/installs/cargo-deny/0.20.2/cargo-deny-0.20.2-x86_64-unknown-linux-musl"]
+DEBUG [packslip:github.com/jdx/mr-boxington@1.21.1] list_bin_paths: ["/root/.cache/velnor-task-targets/20261005/trailer-deny-mise-data/installs/mr-boxington/1.21.1/.mise-bins"]
+DEBUG updating 0 lockfiles
+WARN  cargo-deny, mr-boxington installed but not activated — they are not in any config file.
+To install and activate, run:
+  mise use cargo-deny
+  mise use mr-boxington

@@ -1,0 +1,15 @@
+    Checking ring v0.17.14
+   Compiling velnor-archive-guard v0.1.1 (/tmp/velnor-pr12-foundation-20261005/crates/velnor-archive-guard)
+    Checking velnor-actions-contract v0.1.1 (/tmp/velnor-pr12-foundation-20261005/crates/velnor-actions-contract)
+    Checking rustls-webpki v0.103.15
+    Checking rustls v0.23.45
+    Checking ureq v3.4.2
+    Checking velnor-actions-freshness v0.1.1 (/tmp/velnor-pr12-foundation-20261005/crates/velnor-actions-freshness)
+    Checking velnor-actions-tofu v0.1.1 (/tmp/velnor-pr12-foundation-20261005/crates/velnor-actions-tofu)
+    Checking velnor-actions-rust v0.1.1 (/tmp/velnor-pr12-foundation-20261005/crates/velnor-actions-rust)
+    Checking velnor-actions-workflow-renderer v0.1.1 (/tmp/velnor-pr12-foundation-20261005/crates/velnor-actions-workflow-renderer)
+    Checking velnor-actions-actionlint v0.1.1 (/tmp/velnor-pr12-foundation-20261005/crates/velnor-actions-actionlint)
+    Checking velnor-actions-mise v0.1.1 (/tmp/velnor-pr12-foundation-20261005/crates/velnor-actions-mise)
+    Checking velnor-actions-orchestrator v0.1.1 (/tmp/velnor-pr12-foundation-20261005/crates/velnor-actions-orchestrator)
+    Checking velnor-actions-cli v0.1.1 (/tmp/velnor-pr12-foundation-20261005/crates/velnor-actions-cli)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 8.52s

@@ -1,0 +1,22 @@
+started_utc=2026-10-05T11:52:37Z
+static_syntax=bash -n outer and namespace
+actual_rootfs_stage_exit=0
+reviewed base and input delta manifests plus complete result rootfs tree verified
+tampered_stage_manifest_exit=1
+cargo source fetch: input mountpoint delta manifest digest mismatch
+exact_source_snapshot_exit=0
+exact source objects verified: bc7f784a51233bd29676353392c9fc07c0ad01a7 b3939a4d6010f243485fb528f73af74d49b2fb94; Cargo snapshot 9252060a324c757bb8465cb432ecc3bf7963c99e4e2e4505bec7cfeefc5b1959; files 1359; bytes 8836558
+git_commit=bc7f784a51233bd29676353392c9fc07c0ad01a7
+git_tree=b3939a4d6010f243485fb528f73af74d49b2fb94
+cargo_snapshot_inventory_sha256=9252060a324c757bb8465cb432ecc3bf7963c99e4e2e4505bec7cfeefc5b1959
+filesystem_manifest_sha256=14dc98011488a1b950fad7f0a0115054190e88af263190ce535d00bb9dd541b3
+snapshot_files=1359
+snapshot_bytes=8836558
+source_archive=NOT_CREATED
+wrong_git_tree_exit=1
+wrong_git_tree_stderr=cargo source snapshot: commit tree differs from the reviewed source tree
+wrong_git_tree_manifest_written=false
+outer_sha256=d78be2e5710fa3bcdb8e6069512f55cf71c396e6621662ed497999f14a3e0c03  /root/.velnor-generator-preview-20261005/preseed-preview-cargo-fetch-v2.sh
+namespace_sha256=dad7771be2a287664bba4f1f17c8927c0a2cc5415f90940d7511490c86e50e19  /root/.velnor-generator-preview-20261005/preseed-preview-cargo-fetch-namespace-v2.sh
+rootfs_delta_manifest_sha256=dd5425fceb1524fc304e0da46cf6c64a8b63ee643f8ad6e6689cb15c241ef974  /root/.velnor-generator-preview-20261005/rootfs-input-delta-manifest.json
+finished_utc=2026-10-05T11:52:38Z

@@ -1,0 +1,7 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s
+────────────
+ Nextest run ID 26f56802-ee58-4adb-af5d-f769fcc7d84f with nextest profile: default
+    Starting 1 test across 1 binary (156 tests skipped)
+        PASS [   0.007s] (1/1) velnor-actions-contract::velnor_contract impl_contract_step_roles::tofu_provider_save_must_follow_restore_without_consumers
+────────────
+     Summary [   0.008s] 1 test run: 1 passed, 156 skipped

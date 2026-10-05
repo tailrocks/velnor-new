@@ -1,0 +1,10 @@
+   Compiling velnor-actions-contract v0.1.1 (/tmp/velnor-pr12-foundation-20261005/crates/velnor-actions-contract)
+   Compiling velnor-actions-workflow-renderer v0.1.1 (/tmp/velnor-pr12-foundation-20261005/crates/velnor-actions-workflow-renderer)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 6.74s
+────────────
+ Nextest run ID d84d5d87-6bf8-424a-995d-ccfb418bf013 with nextest profile: default
+    Starting 2 tests across 2 binaries (396 tests skipped)
+        PASS [   4.726s] (1/2) velnor-actions-workflow-renderer schema2::generator_release::archive::tests::extracts_only_an_exact_regular_archive
+        PASS [   7.383s] (2/2) velnor-actions-workflow-renderer schema2::generator_release::archive::tests::rejects_links_special_modes_order_duplicates_and_truncation
+────────────
+     Summary [   7.384s] 2 tests run: 2 passed, 396 skipped

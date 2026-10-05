@@ -1,0 +1,16 @@
+Diff in /root/.cache/velnor-task-targets/20261005/validate-shell-question-mark-e608-20261005/crates/velnor-actions-orchestrator/src/lib.rs:20:
+ mod crate_jobs;
+ mod critical_path;
+ pub mod decisions;
+-pub mod freshness;
+ mod derive_groups;
+ mod discover;
+ mod discover_index;
+Diff in /root/.cache/velnor-task-targets/20261005/validate-shell-question-mark-e608-20261005/crates/velnor-actions-orchestrator/src/lib.rs:32:
+ mod extension_schemas;
+ mod external_data;
+ mod finalized;
++pub mod freshness;
+ mod freshness_emit;
+ mod generate;
+ mod git_paths;

@@ -1,0 +1,14 @@
+crates/velnor-actions-native/src/oci/oci_archive.py
+crates/velnor-actions-native/src/oci/oci_delivery.py
+crates/velnor-actions-native/src/oci/oci_digest.py
+crates/velnor-actions-native/src/oci/oci_digest_parts.py
+crates/velnor-actions-native/src/oci/oci_index_receipt.py
+crates/velnor-actions-native/src/oci/oci_platform_publish.py
+crates/velnor-actions-native/src/oci/oci_registry.py
+crates/velnor-actions-native/tests/oci/oci_archive_test.py
+crates/velnor-actions-native/tests/oci/oci_index_receipt_test.py
+crates/velnor-actions-native/tests/oci/oci_platform_publish_test.py
+crates/velnor-actions-native/tests/oci/oci_registry_test.py
+crates/velnor-actions-native/tests/oci/oci_support_test.py
+crates/velnor-actions-native/tests/oci/oci_transport_test.py
+crates/velnor-actions-orchestrator/src/release_admission.py

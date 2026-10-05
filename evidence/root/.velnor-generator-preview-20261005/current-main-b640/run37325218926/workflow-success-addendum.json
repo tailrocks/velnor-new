@@ -1,0 +1,27 @@
+{
+  "artifact_executed": false,
+  "artifact_id": 11352051981,
+  "artifact_sha256": "fb411f07367e0c9c0b2274747c35ca7e76a233faa96810d50a33e15bc7612811",
+  "conclusion": "success",
+  "evidence": {
+    "jobs_api_sha256": "990aa5feded340275877a2f13ff770b91938cd8a52ee9b74212e7aac2d750d71",
+    "plan_log_sha256": "ed2492e933695c0ea4196881ac574b03321505e11481233c907aeba09ab494b7",
+    "plan_mbx_addendum_sha256": "0811ecd2c907b506e374f54c89629d1b2a0d797b3054b0ee1eb28a05c86191a7"
+  },
+  "head_sha": "b640665abc7238050e856257c9fb3a150580bc8d",
+  "jobs": {
+    "failed": 0,
+    "plan_job_id": 111814879160,
+    "publish_baseline": "success",
+    "required": "success",
+    "rust_jobs": "all success",
+    "skipped": 0,
+    "success": 20,
+    "total": 20
+  },
+  "observed_at_utc": "2026-10-05T14:49:43Z",
+  "source_commit": "b640665abc7238050e856257c9fb3a150580bc8d",
+  "source_tree": "97655eb96bcd6a5da170ed15c4cd32126cb0666e",
+  "status": "completed",
+  "workflow_run_id": 37325218926
+}

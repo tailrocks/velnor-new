@@ -1,0 +1,9 @@
+Current-main read-only source snapshot
+Commit: bdb1e14509225d18b4d8ee180731825d0826c16f
+Tree: 9e9ce5ed26af239d20d529378e7f17bc2bb74788
+Parent: 4fffbc22ce159305c62ae039668da2a14e2e3366
+Source: git archive from the isolated steward clone after normal fetch into refs/remotes/origin/main
+Archive: /root/.cache/velnor-task-targets/20261005/bdb1e145-main-source-snapshot-20261005/source.tar
+Tree entry manifest: /root/.cache/velnor-task-targets/20261005/bdb1e145-main-source-snapshot-20261005/tree.entries
+Snapshot root: /root/.cache/velnor-task-targets/20261005/bdb1e145-main-source-snapshot-20261005/ (extracted tracked tree; .git/target/logs excluded)
+This is the exact live main OID verified by git ls-remote at snapshot time.

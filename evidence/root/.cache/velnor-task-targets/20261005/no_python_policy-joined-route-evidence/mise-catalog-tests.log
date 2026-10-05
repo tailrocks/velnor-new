@@ -1,0 +1,19 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.03s
+     Running tests/velnor_mise.rs (/root/.cache/velnor-task-targets/20261005/no_python_policy-joined-route-target/debug/deps/velnor_mise-6d700a72d1410dbe)
+
+running 12 tests
+test impl_mise_catalog::exact_version_validation_accepts_only_pins ... ok
+test impl_mise_catalog::catalog_new_validates_every_slot ... ok
+test impl_mise_catalog::mbx_provisioning_modes_validated ... ok
+test impl_mise_catalog::action_mbx_reconcile_matches_pin_only ... ok
+test impl_mise_catalog::opentofu_platform_digests_are_distinct_qualified_hex ... ok
+test impl_mise_catalog::pinned_catalog_matches_selected_versions ... ok
+test impl_mise_catalog::opentofu_digest_follows_qualified_version_only ... ok
+test impl_mise_catalog::rust_toolchain_name_pins_version_and_target ... ok
+test impl_mise_catalog::opentofu_catalog_digest_binds_qualified_artifact ... ok
+test impl_mise_catalog::tool_names_roundtrip_and_reject_aliases ... ok
+test impl_mise_catalog::tool_file_values_never_become_pins ... ok
+test impl_mise_catalog::tool_specs_use_registry_names ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 345 filtered out; finished in 0.00s
+

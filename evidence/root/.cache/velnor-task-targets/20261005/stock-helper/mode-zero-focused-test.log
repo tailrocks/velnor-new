@@ -1,0 +1,8 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running unittests src/lib.rs (/root/.cache/velnor-task-targets/20261005/stock-helper/modezero.a6rn9R/debug/deps/velnor_actions_workflow_renderer-baaa2ee710553a16)
+
+running 1 test
+test stock_mbx_bundle::tests::mode_zero_tests::mode_zero_restored_bundle_uses_the_reserved_cold_store_as_non_root ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 65 filtered out; finished in 0.24s
+

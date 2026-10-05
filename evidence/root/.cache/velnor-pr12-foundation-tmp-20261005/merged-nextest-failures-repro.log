@@ -1,0 +1,14 @@
+   Compiling ring v0.17.14
+   Compiling rustls v0.23.45
+   Compiling rustls-webpki v0.103.15
+   Compiling ureq v3.4.2
+   Compiling velnor-actions-freshness v0.1.1 (/tmp/velnor-pr12-foundation-20261005/crates/velnor-actions-freshness)
+   Compiling velnor-actions-cli v0.1.1 (/tmp/velnor-pr12-foundation-20261005/crates/velnor-actions-cli)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.78s
+────────────
+ Nextest run ID 063a8756-d768-4bc0-87a6-0fa314b3fa25 with nextest profile: default
+    Starting 2 tests across 1 binary (257 tests skipped)
+        PASS [   0.173s] (1/2) velnor-actions-cli::velnor_cli impl_cli_init::malformed_manifest_fails_naming_file
+        PASS [   0.141s] (2/2) velnor-actions-cli::velnor_cli impl_cli_parity_golden::parity_malformed_fails_with_token
+────────────
+     Summary [   0.315s] 2 tests run: 2 passed, 257 skipped

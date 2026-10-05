@@ -1,0 +1,45 @@
+
+[.velnor/freshness-inventory.json]
+stage1 9f09d358a256408fa25a168d5096f6ac21d786d5c1fdbbd2df90b733e8cb5cf2  -
+stage2 7614b5fab3410824eb639084e98ac1cdf2a84bb8869b41aa48a99f155b4d02df  -
+stage3 61547c9f70fc151e47d1d436714cc63fa6e61493d7c9b939efc48d5b7c241864  -
+
+[crates/velnor-actions-orchestrator/src/matrix_tools.rs]
+stage1 cc73c60aa149e78f397e41a8e5d8d2bdd3cb38ed9c6e372d4587d25847ea560e  -
+stage2 99c55397ad521c8e1aa3cb457efb455447426a17d707ca636fd4f841f2d884b4  -
+stage3 8e4ec684a52fff605e6e904c696adcafc8ad472ddab99cc63cd4235094462ce6  -
+
+[docs/proposed/opentofu-goldens/MANIFEST.sha256]
+stage1 c57b2c1a18e6e56f644fb0298702265dfc4f9e6b69f11f384917c2a68b2ece82  -
+stage2 9661068f63798e131170e1cf499699574ae964fa58513e16296f7c0e9263b1e8  -
+stage3 48b741d380f70b57f80aa86639e3658c9924f307589ad393fc56de246240b1fc  -
+
+[docs/proposed/opentofu-goldens/cases/dogfood/tree.sha256]
+stage1 6f05d106d0e7512bab724dd92b254f36d9b22dae0e05aa7c19edee174c34b47a  -
+stage2 5a1c7cfd0a695cd0504bda1ae1647e4670b6c9fe7d91efacda9e6e0681a37c74  -
+stage3 2f3586eca8e534064522806c0a36cf7e39cc622afc7c795ea16af958f2afb2b4  -
+
+[docs/proposed/opentofu-goldens/cases/empty-suite/tree.sha256]
+stage1 6082105e24359cc798430b4a428eb77783b931b62dba3d8af54fee16c39758c3  -
+stage2 c7fca989bca840f6bd7e80769334e5faa42949a895559c7bcbc348f397517e8e  -
+stage3 0837ce599fe69e6ca93b60516aee3a20c3948898ee962dbdb6120955544307c3  -
+
+[docs/proposed/opentofu-goldens/cases/mbx-nextest/tree.sha256]
+stage1 7211b84a583d990d1ea8d24ab508ffb08171b3055d3362d754992d01a41fee79  -
+stage2 5eea9e3301ae800b896f194f04a083e3bf92ca8a3d359b304ba1dec93fc11404  -
+stage3 3d5064a1ddba610e3bcb061cb1618ee258c5ff0343875b15ba74a70675f3e1f0  -
+
+[docs/proposed/opentofu-goldens/cases/minimal-cargo/tree.sha256]
+stage1 036347fdd4976ae4e4881a582ee8941c2a91a9515c03b5dc21077748380797c0  -
+stage2 db48b342a3640c85ccaeca21bec52a54e6f6c8fffde37b27f420a58a0071c4f0  -
+stage3 d653cbba67ee3bfa1f80bb9ded002ae0103a7bb609051bc4d996b6a4fe672d92  -
+
+[docs/proposed/opentofu-goldens/cases/nested/tree.sha256]
+stage1 2556bd3165ce2df173dd2433520ce19e68dabefa871b41cd098cb5430bdcea77  -
+stage2 9ef245adea37c6890563c18a5e8478a492f6d147f4a24e2b880731873ac0812e  -
+stage3 87f975fb54506e1f218582efe557ba152b499e5d4e4adcde7da8b2d201884707  -
+
+[fixtures/parity/ignored-stack/expected/ci.yml]
+stage1 27bd224eec8544f0b9dd147fa80b988e1045911b9403c0f4b8141ded82971e3e  -
+stage2 fdc742845296a54b72e888339a5acb9170072aa87ac41b5c8b382ee1f04eb496  -
+stage3 9584e6faf21b18ace084d4e27b8bb451de82cca90dc95afef4d5a798020e205a  -

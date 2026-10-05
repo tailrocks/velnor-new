@@ -1,0 +1,14 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.04s
+     Running unittests src/lib.rs (/root/.cache/velnor-task-targets/20261005/stock-helper/modezero.a6rn9R/debug/deps/velnor_actions_workflow_renderer-baaa2ee710553a16)
+
+running 7 tests
+test stock_mbx_bundle::tests::generic_shell_factory_rejects_same_name_process_group_spoof ... ok
+test stock_mbx_bundle::tests::untrusted_save_conditions_and_mismatched_cache_pins_are_rejected ... ok
+test stock_mbx_bundle::tests::restore_save_use_one_pinned_path_and_restore_failure_is_soft ... ok
+test stock_mbx_bundle::tests::cleanup_requires_quiesced_children_and_never_reuses_replaced_preflight_identity ... ok
+test stock_mbx_bundle::tests::import_cleans_failed_private_inputs_and_selects_the_reserved_cold_store ... ok
+test stock_mbx_bundle::tests::export_requires_trusted_objects_and_emits_unavailable_for_empty_output ... ok
+test stock_mbx_bundle::tests::mode_zero_tests::mode_zero_restored_bundle_uses_the_reserved_cold_store_as_non_root ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 59 filtered out; finished in 0.48s
+

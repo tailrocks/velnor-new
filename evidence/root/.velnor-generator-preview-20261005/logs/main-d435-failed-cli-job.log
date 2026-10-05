@@ -1,0 +1,1173 @@
+Rust / velnor-actions-cli	UNKNOWN STEP	﻿2026-10-05T11:32:34.6019684Z Current runner version: '2.337.0'
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:34.6057763Z ##[group]Runner Image Provisioner
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:34.6059157Z Hosted Compute Agent
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:34.6060152Z Version: 20260901.588
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:34.6061493Z Commit: f88ec8081b781fac6c440065ac7ff9e710ce3d0b
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:34.6062806Z Build Date: 2026-09-01T19:56:44Z
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:34.6064132Z Worker ID: {ef72fb5f-2b9a-4758-822e-fbfa7ed3ab1f}
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:34.6065390Z Azure Region: eastus
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:34.6066708Z ##[endgroup]
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:34.6069335Z ##[group]Operating System
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:34.6070521Z Ubuntu
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:34.6071449Z 26.04.1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:34.6072322Z LTS
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:34.6073310Z ##[endgroup]
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:34.6074322Z ##[group]Runner Image
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:34.6075498Z Image: ubuntu-26.04
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:34.6076778Z Version: 20260927.149.1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:34.6079064Z Included Software: https://github.com/actions/runner-images/blob/ubuntu26/20260927.149/images/ubuntu/Ubuntu2604-Readme.md
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:34.6081909Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu26%2F20260927.149
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:34.6083546Z ##[endgroup]
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:34.6085349Z ##[group]GITHUB_TOKEN Permissions
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:34.6088808Z Contents: read
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:34.6089814Z Metadata: read
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:34.6091037Z ##[endgroup]
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:34.6094410Z Secret source: Actions
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:34.6096096Z Cache mode: write
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:34.6098051Z Prepare workflow directory
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:34.6730447Z Prepare all required actions
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:34.6808967Z Getting action download info
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:34.8950844Z Download action repository 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:35.7359812Z Download action repository 'jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5' (SHA:9149ea85001c7435d5a66bb127d6a1b6227cb0a5)
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:35.9223790Z Download action repository 'actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c' (SHA:3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c)
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.0627586Z Download action repository 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9' (SHA:55cc8345863c7cc4c66a329aec7e433d2d1c52a9)
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.1409290Z Download action repository 'jdx/mr-boxington-action@1687e54eb349cadf61fa38b5813a77875489e8e6' (SHA:1687e54eb349cadf61fa38b5813a77875489e8e6)
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.2337617Z Download action repository 'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a' (SHA:043fb46d1a93c77aae656e7c1c64a875d1fc6a0a)
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.4658411Z Complete job name: Rust / velnor-actions-cli
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.5900293Z ##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.5902099Z with:
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.5902962Z   persist-credentials: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.5904019Z   repository: tailrocks/velnor-new
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.5914379Z   token: ***
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.5915266Z   ssh-strict: true
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.5916183Z   ssh-user: git
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.5917542Z   clean: true
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.5918474Z   sparse-checkout-cone-mode: true
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.5919540Z   fetch-depth: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.5920411Z   fetch-tags: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.5921342Z   show-progress: true
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.5922245Z   lfs: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.5923064Z   submodules: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.5923947Z   set-safe-directory: true
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.5924958Z   allow-unsafe-pr-checkout: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.5926755Z env:
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.5927667Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.5928774Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.5929854Z   ACTIONS_RUNTIME_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.5930796Z   CARGO_REGISTRY_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.5931713Z   GH_CONFIG_DIR: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.5932539Z   GH_HOST: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.5933593Z   GH_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.5934436Z   GITHUB_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.5935270Z   MBX_GC_AUTO: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.5936111Z   MBX_SHARE_OUT_DIR: 0
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.5937598Z   MISE_AUTO_INSTALL: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.5938593Z   MISE_EXEC_AUTO_INSTALL: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.5939577Z   MISE_GITHUB_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.5940460Z   MISE_LOCKFILE: 0
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.5941299Z   MISE_NO_CONFIG: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.5942145Z   MISE_NO_ENV: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.5943133Z   MISE_NO_HOOKS: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.5943976Z   NODE_AUTH_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.5944799Z   NPM_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.5945635Z   RUSTUP_TOOLCHAIN: 1.98.1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.5946945Z ##[endgroup]
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.7152007Z Syncing repository: tailrocks/velnor-new
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.7156544Z ##[group]Getting Git version info
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.7158666Z Working directory is '/home/runner/work/velnor-new/velnor-new'
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.7161864Z [command]/usr/bin/git version
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.7182901Z git version 2.55.0
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.7243595Z ##[endgroup]
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.7254543Z Temporarily overriding HOME='/home/runner/work/_temp/050b6f01-bf58-4424-ad6b-3db08a58b1c9' before making global git config changes
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.7258389Z Adding repository directory to the temporary git global config as a safe directory
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.7262324Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/velnor-new/velnor-new
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.7335760Z Deleting the contents of '/home/runner/work/velnor-new/velnor-new'
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.7339827Z ##[group]Determining repository object format
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.7342773Z ##[endgroup]
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.7344876Z ##[group]Initializing the repository
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.7348538Z [command]/usr/bin/git init /home/runner/work/velnor-new/velnor-new
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.7474334Z hint: Using 'master' as the name for the initial branch. This default branch name
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.7477511Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.7479676Z hint: to use in all of your new repositories, which will suppress this warning,
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.7481250Z hint: call:
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.7482039Z hint:
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.7483037Z hint: 	git config --global init.defaultBranch <name>
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.7484244Z hint:
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.7485388Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.7487669Z hint: 'development'. The just-created branch can be renamed via this command:
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.7490118Z hint:
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.7491474Z hint: 	git branch -m <name>
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.7493009Z hint:
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.7494531Z hint: Disable this message with "git config set advice.defaultBranchName false"
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.7498898Z Initialized empty Git repository in /home/runner/work/velnor-new/velnor-new/.git/
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.7503406Z [command]/usr/bin/git remote add origin https://github.com/tailrocks/velnor-new
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.7560163Z ##[endgroup]
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.7562761Z ##[group]Disabling automatic garbage collection
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.7565096Z [command]/usr/bin/git config --local gc.auto 0
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.7605407Z ##[endgroup]
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.7607602Z ##[group]Setting up auth
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.7609410Z Removing SSH command configuration
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.7612950Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.7656092Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.8128914Z Removing HTTP extra header
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.8134637Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.8174584Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.8461097Z Removing includeIf entries pointing to credentials config files
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.8466873Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.8513437Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.8812240Z [command]/usr/bin/git config --file /home/runner/work/_temp/git-credentials-cb621e7f-5a89-496d-93bf-498f1d82fec7.config http.https://github.com/.extraheader AUTHORIZATION: basic ***
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.8860036Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/velnor-new/velnor-new/.git.path /home/runner/work/_temp/git-credentials-cb621e7f-5a89-496d-93bf-498f1d82fec7.config
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.8899508Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/velnor-new/velnor-new/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-cb621e7f-5a89-496d-93bf-498f1d82fec7.config
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.8951941Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-cb621e7f-5a89-496d-93bf-498f1d82fec7.config
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.8990110Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-cb621e7f-5a89-496d-93bf-498f1d82fec7.config
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.9021760Z ##[endgroup]
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.9023262Z ##[group]Fetching the repository
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:36.9029432Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +d435ac5b7e686ad9c9c594dde4b024b702435e47:refs/remotes/origin/main
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:37.6178940Z From https://github.com/tailrocks/velnor-new
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:37.6181543Z  * [new ref]         d435ac5b7e686ad9c9c594dde4b024b702435e47 -> origin/main
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:37.6192837Z [command]/usr/bin/git branch --list --remote origin/main
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:37.6225048Z   origin/main
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:37.6234439Z [command]/usr/bin/git rev-parse refs/remotes/origin/main
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:37.6262040Z d435ac5b7e686ad9c9c594dde4b024b702435e47
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:37.6267052Z ##[endgroup]
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:37.6267907Z ##[group]Determining the checkout info
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:37.6268983Z ##[endgroup]
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:37.6273158Z [command]/usr/bin/git sparse-checkout disable
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:37.6331871Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:37.6367068Z ##[group]Checking out the ref
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:37.6371229Z [command]/usr/bin/git checkout --progress --force -B main refs/remotes/origin/main
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:37.8006992Z Switched to a new branch 'main'
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:37.8008853Z branch 'main' set up to track 'origin/main'.
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:37.8849080Z ##[endgroup]
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:37.8906002Z [command]/usr/bin/git log -1 --format=%H
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:37.8937323Z d435ac5b7e686ad9c9c594dde4b024b702435e47
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:37.8947361Z ##[group]Removing auth
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:37.8948139Z Removing SSH command configuration
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:37.8951628Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:37.8993555Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:37.9305073Z Removing HTTP extra header
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:37.9310978Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:37.9358373Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:37.9684052Z Removing includeIf entries pointing to credentials config files
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:37.9686943Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:37.9721804Z includeif.gitdir:/home/runner/work/velnor-new/velnor-new/.git.path
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:37.9723681Z includeif.gitdir:/home/runner/work/velnor-new/velnor-new/.git/worktrees/*.path
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:37.9725006Z includeif.gitdir:/github/workspace/.git.path
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:37.9725977Z includeif.gitdir:/github/workspace/.git/worktrees/*.path
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:37.9735259Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/velnor-new/velnor-new/.git.path
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:37.9784567Z /home/runner/work/_temp/git-credentials-cb621e7f-5a89-496d-93bf-498f1d82fec7.config
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:37.9800673Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/velnor-new/velnor-new/.git.path \/home\/runner\/work\/_temp\/git\-credentials\-cb621e7f\-5a89\-496d\-93bf\-498f1d82fec7\.config
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:37.9849673Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/velnor-new/velnor-new/.git/worktrees/*.path
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:37.9881197Z /home/runner/work/_temp/git-credentials-cb621e7f-5a89-496d-93bf-498f1d82fec7.config
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:37.9893825Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/velnor-new/velnor-new/.git/worktrees/*.path \/home\/runner\/work\/_temp\/git\-credentials\-cb621e7f\-5a89\-496d\-93bf\-498f1d82fec7\.config
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:37.9939847Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git.path
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:37.9973365Z /github/runner_temp/git-credentials-cb621e7f-5a89-496d-93bf-498f1d82fec7.config
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:37.9986180Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git.path \/github\/runner_temp\/git\-credentials\-cb621e7f\-5a89\-496d\-93bf\-498f1d82fec7\.config
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.0033266Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git/worktrees/*.path
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.0064921Z /github/runner_temp/git-credentials-cb621e7f-5a89-496d-93bf-498f1d82fec7.config
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.0078395Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-cb621e7f\-5a89\-496d\-93bf\-498f1d82fec7\.config
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.0132121Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.0452829Z Removing credentials config '/home/runner/work/_temp/git-credentials-cb621e7f-5a89-496d-93bf-498f1d82fec7.config'
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.0465165Z ##[endgroup]
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.0839204Z Prepare all required actions
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1002803Z ##[group]Run ./.github/actions/velnor-tool-seed
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1003212Z with:
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1003588Z   cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-ccc5d847fd871b3b
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1004015Z env:
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1004265Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1004583Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1004886Z   ACTIONS_RUNTIME_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1005164Z   CARGO_REGISTRY_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1005450Z   GH_CONFIG_DIR: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1005694Z   GH_HOST: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1005928Z   GH_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1006170Z   GITHUB_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1006653Z   MBX_GC_AUTO: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1006911Z   MBX_SHARE_OUT_DIR: 0
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1007192Z   MISE_AUTO_INSTALL: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1007480Z   MISE_EXEC_AUTO_INSTALL: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1007779Z   MISE_GITHUB_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1008097Z   MISE_LOCKFILE: 0
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1008354Z   MISE_NO_CONFIG: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1008603Z   MISE_NO_ENV: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1008848Z   MISE_NO_HOOKS: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1009092Z   NODE_AUTH_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1009335Z   NPM_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1009592Z   RUSTUP_TOOLCHAIN: 1.98.1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1009879Z ##[endgroup]
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1074903Z ##[start-action display=Copy matching tool seed;id=__self.__run]
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1132173Z ##[group]Run bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -euo pipefail; trusted_seed_owner_root() { if [ "${RUNNER_OS-}" = macOS ]; then /usr/bin/stat -f %u "$1" | /usr/bin/grep -qx 0; else /usr/bin/stat -c %u -- "$1" | /usr/bin/grep -qx 0; fi; }; trusted_seed_file_matches() { local file="$1" expected="$2" actual="" size="" newline=""; [ -f "$file" ] && [ ! -L "$file" ] || return 1; if [ "${RUNNER_OS-}" = macOS ]; then IFS= read -r size < <(/usr/bin/stat -f %z "$file") || return 1; else IFS= read -r size < <(/usr/bin/stat -c %s -- "$file") || return 1; fi; case "$size" in '\'''\''|*[!0-9]*) return 1 ;; esac; [ "$size" -le 512 ] || return 1; if IFS= read -r -d '\'''\'' actual < "$file"; then return 1; fi; printf -v newline '\''\n'\''; [ "$actual" = "$expected" ] || [ "$actual" = "$expected$newline" ]; }; trusted_seed_path_is_real() { local current="$1"; while [ "$current" != / ]; do [ ! -L "$current" ] || return 1; current="${current%/*}"; [ -n "$current" ] || current=/; done; }; trusted_seed_mount_is_immutable() { if [ "${RUNNER_OS-}" = macOS ]; then /sbin/mount | /usr/bin/awk -v seed="$1" '\''index($0, " on ") { marker=index($0, " on "); source=substr($0, 1, marker-1); rest=substr($0, marker+4); options_at=index(rest, " ("); target=substr(rest, 1, options_at-1); mount_options=substr(rest, options_at+2); targets[NR]=target; sources[NR]=source; options[NR]=mount_options; if (target == seed) { exact++; seed_source=source; if (mount_options ~ /read-only|rdonly/) readonly=1 } else if (index(target, seed "/") == 1) nested=1 } END { for (i=1; i<=NR; i++) if (sources[i] == seed_source && targets[i] != seed && options[i] !~ /read-only|rdonly/) writable_alias=1; exit !(exact == 1 && readonly && !nested && !writable_alias) }'\''; else /usr/bin/findmnt -arn -o TARGET,FSTYPE,MAJ:MIN,OPTIONS | /usr/bin/awk -v seed="$1" '\''{ target=$1; targets[NR]=target; devices[NR]=$3; options[NR]=$4; if (target == seed) { exact++; device=$3; if ($2 != "overlay" && $2 != "fuse.overlayfs" && $4 ~ /(^|,)ro(,|$)/) readonly=1 } else if (index(target, seed "/") == 1) nested=1 } END { for (i=1; i<=NR; i++) if (devices[i] == device && targets[i] != seed && options[i] ~ /(^|,)rw(,|$)/) writable_alias=1; exit !(exact == 1 && readonly && !nested && !writable_alias) }'\''; fi; }; trusted_seed_tree_bounded() { local root="$1" count=0 entry relative depth; if ! /usr/bin/find "$root" -xdev -print0 | while IFS= read -r -d '\'''\'' entry; do ((count+=1)); [ "$count" -le 100000 ] || exit 1; case "$entry" in "$root") depth=0 ;; "$root"/*) relative="${entry#"$root"/}"; depth=1; while [[ "$relative" == */* ]]; do relative="${relative#*/}"; ((depth+=1)); done ;; *) exit 1 ;; esac; [ "$depth" -le 16 ] || exit 1; done; then return 1; fi; }; trusted_seed_tree_entries_are_safe() { if ! /usr/bin/find "$1" -xdev \( ! -type d -a ! -type f -o ! -uid 0 \) -print0 | while IFS= read -r -d '\'''\'' entry; do exit 1; done; then return 1; fi; }; trusted_seed_tree_is_safe() { trusted_seed_tree_bounded "$1" && trusted_seed_tree_entries_are_safe "$1"; }; trusted_seed_is_trusted() { [ -d "$1" ] && [ ! -L "$1" ] || return 1; trusted_seed_path_is_real "$1" || return 1; [ -f "$1/PROVENANCE" ] && [ ! -L "$1/PROVENANCE" ] || return 1; trusted_seed_owner_root "$1" || return 1; trusted_seed_owner_root "$1/PROVENANCE" || return 1; trusted_seed_file_matches "$1/PROVENANCE" "velnor-host-seed-v1" || return 1; trusted_seed_mount_is_immutable "$1" || return 1; trusted_seed_tree_is_safe "$1"; }; seed="/opt/velnor/seed"; key="$SEED_KEY"; if [ ! -e "$seed" ]; then echo "tool seed absent"; exit 0; fi; if ! trusted_seed_is_trusted "$seed"; then echo "untrusted tool seed; continuing cold"; exit 0; fi; if [ -z "$key" ] || [ ! -f "$seed/mise/KEY" ]; then echo "tool seed key mismatch"; exit 0; fi; if ! trusted_seed_file_matches "$seed/mise/KEY" "$key"; then echo "tool seed key mismatch"; exit 0; fi; if [ -d "$seed/mise/tree" ]; then /bin/mkdir -p "$HOME/.local/share/mise"; /bin/cp -R "$seed/mise/tree/." "$HOME/.local/share/mise/"; echo "tool seed restored share-dir"; fi; if [ -d "$seed/rustup/tree" ]; then /bin/mkdir -p "$RUNNER_TEMP/velnor/rustup"; /bin/cp -R "$seed/rustup/tree/." "$RUNNER_TEMP/velnor/rustup/"; echo "tool seed restored toolchain-dir"; fi'
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1157825Z ^[[36;1mbash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -euo pipefail; trusted_seed_owner_root() { if [ "${RUNNER_OS-}" = macOS ]; then /usr/bin/stat -f %u "$1" | /usr/bin/grep -qx 0; else /usr/bin/stat -c %u -- "$1" | /usr/bin/grep -qx 0; fi; }; trusted_seed_file_matches() { local file="$1" expected="$2" actual="" size="" newline=""; [ -f "$file" ] && [ ! -L "$file" ] || return 1; if [ "${RUNNER_OS-}" = macOS ]; then IFS= read -r size < <(/usr/bin/stat -f %z "$file") || return 1; else IFS= read -r size < <(/usr/bin/stat -c %s -- "$file") || return 1; fi; case "$size" in '\'''\''|*[!0-9]*) return 1 ;; esac; [ "$size" -le 512 ] || return 1; if IFS= read -r -d '\'''\'' actual < "$file"; then return 1; fi; printf -v newline '\''\n'\''; [ "$actual" = "$expected" ] || [ "$actual" = "$expected$newline" ]; }; trusted_seed_path_is_real() { local current="$1"; while [ "$current" != / ]; do [ ! -L "$current" ] || return 1; current="${current%/*}"; [ -n "$current" ] || current=/; done; }; trusted_seed_mount_is_immutable() { if [ "${RUNNER_OS-}" = macOS ]; then /sbin/mount | /usr/bin/awk -v seed="$1" '\''index($0, " on ") { marker=index($0, " on "); source=substr($0, 1, marker-1); rest=substr($0, marker+4); options_at=index(rest, " ("); target=substr(rest, 1, options_at-1); mount_options=substr(rest, options_at+2); targets[NR]=target; sources[NR]=source; options[NR]=mount_options; if (target == seed) { exact++; seed_source=source; if (mount_options ~ /read-only|rdonly/) readonly=1 } else if (index(target, seed "/") == 1) nested=1 } END { for (i=1; i<=NR; i++) if (sources[i] == seed_source && targets[i] != seed && options[i] !~ /read-only|rdonly/) writable_alias=1; exit !(exact == 1 && readonly && !nested && !writable_alias) }'\''; else /usr/bin/findmnt -arn -o TARGET,FSTYPE,MAJ:MIN,OPTIONS | /usr/bin/awk -v seed="$1" '\''{ target=$1; targets[NR]=target; devices[NR]=$3; options[NR]=$4; if (target == seed) { exact++; device=$3; if ($2 != "overlay" && $2 != "fuse.overlayfs" && $4 ~ /(^|,)ro(,|$)/) readonly=1 } else if (index(target, seed "/") == 1) nested=1 } END { for (i=1; i<=NR; i++) if (devices[i] == device && targets[i] != seed && options[i] ~ /(^|,)rw(,|$)/) writable_alias=1; exit !(exact == 1 && readonly && !nested && !writable_alias) }'\''; fi; }; trusted_seed_tree_bounded() { local root="$1" count=0 entry relative depth; if ! /usr/bin/find "$root" -xdev -print0 | while IFS= read -r -d '\'''\'' entry; do ((count+=1)); [ "$count" -le 100000 ] || exit 1; case "$entry" in "$root") depth=0 ;; "$root"/*) relative="${entry#"$root"/}"; depth=1; while [[ "$relative" == */* ]]; do relative="${relative#*/}"; ((depth+=1)); done ;; *) exit 1 ;; esac; [ "$depth" -le 16 ] || exit 1; done; then return 1; fi; }; trusted_seed_tree_entries_are_safe() { if ! /usr/bin/find "$1" -xdev \( ! -type d -a ! -type f -o ! -uid 0 \) -print0 | while IFS= read -r -d '\'''\'' entry; do exit 1; done; then return 1; fi; }; trusted_seed_tree_is_safe() { trusted_seed_tree_bounded "$1" && trusted_seed_tree_entries_are_safe "$1"; }; trusted_seed_is_trusted() { [ -d "$1" ] && [ ! -L "$1" ] || return 1; trusted_seed_path_is_real "$1" || return 1; [ -f "$1/PROVENANCE" ] && [ ! -L "$1/PROVENANCE" ] || return 1; trusted_seed_owner_root "$1" || return 1; trusted_seed_owner_root "$1/PROVENANCE" || return 1; trusted_seed_file_matches "$1/PROVENANCE" "velnor-host-seed-v1" || return 1; trusted_seed_mount_is_immutable "$1" || return 1; trusted_seed_tree_is_safe "$1"; }; seed="/opt/velnor/seed"; key="$SEED_KEY"; if [ ! -e "$seed" ]; then echo "tool seed absent"; exit 0; fi; if ! trusted_seed_is_trusted "$seed"; then echo "untrusted tool seed; continuing cold"; exit 0; fi; if [ -z "$key" ] || [ ! -f "$seed/mise/KEY" ]; then echo "tool seed key mismatch"; exit 0; fi; if ! trusted_seed_file_matches "$seed/mise/KEY" "$key"; then echo "tool seed key mismatch"; exit 0; fi; if [ -d "$seed/mise/tree" ]; then /bin/mkdir -p "$HOME/.local/share/mise"; /bin/cp -R "$seed/mise/tree/." "$HOME/.local/share/mise/"; echo "tool seed restored share-dir"; fi; if [ -d "$seed/rustup/tree" ]; then /bin/mkdir -p "$RUNNER_TEMP/velnor/rustup"; /bin/cp -R "$seed/rustup/tree/." "$RUNNER_TEMP/velnor/rustup/"; echo "tool seed restored toolchain-dir"; fi'^[[0m
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1355767Z shell: /usr/bin/bash --noprofile --norc -e -o pipefail {0}
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1356559Z env:
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1356882Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1357267Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1357627Z   ACTIONS_RUNTIME_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1357954Z   CARGO_REGISTRY_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1358277Z   GH_CONFIG_DIR: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1358561Z   GH_HOST: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1358831Z   GH_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1359103Z   GITHUB_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1359416Z   MBX_GC_AUTO: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1359705Z   MBX_SHARE_OUT_DIR: 0
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1360030Z   MISE_AUTO_INSTALL: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1360363Z   MISE_EXEC_AUTO_INSTALL: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1360701Z   MISE_GITHUB_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1361004Z   MISE_LOCKFILE: 0
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1361295Z   MISE_NO_CONFIG: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1361588Z   MISE_NO_ENV: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1361874Z   MISE_NO_HOOKS: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1362172Z   NODE_AUTH_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1362458Z   NPM_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1362748Z   RUSTUP_TOOLCHAIN: 1.98.1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1398748Z   SEED_KEY: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-ccc5d847fd871b3b
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1399331Z ##[endgroup]
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1535394Z tool seed absent
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1555676Z ##[end-action id=__self.__run;outcome=success;conclusion=success;duration_ms=47]
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1677953Z ##[group]Run jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1678451Z with:
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1678697Z   cache: true
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1679059Z   cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-ccc5d847fd871b3b
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1679481Z   cache_save: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1679733Z   env: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1679966Z   install: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1680331Z   sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1680774Z   version: 2026.9.18
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1681039Z   minimum_release_age: 24h
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1681425Z   bootstrap: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1681694Z   cache_key_prefix: mise-v1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1681985Z   experimental: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1682252Z   log_level: info
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1682506Z   reshim: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1682760Z   add_shims_to_path: true
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1685456Z   github_token: ***
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1685780Z   fetch_from_github: true
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1686066Z   export_path: true
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1686623Z   wings_enabled: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1686912Z env:
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1687158Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1687473Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1687766Z   ACTIONS_RUNTIME_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1688048Z   CARGO_REGISTRY_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1688311Z   GH_CONFIG_DIR: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1688556Z   GH_HOST: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1688782Z   GH_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1689009Z   GITHUB_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1689265Z   MBX_GC_AUTO: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1689510Z   MBX_SHARE_OUT_DIR: 0
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1689775Z   MISE_AUTO_INSTALL: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1690062Z   MISE_EXEC_AUTO_INSTALL: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1690348Z   MISE_GITHUB_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1690611Z   MISE_LOCKFILE: 0
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1690860Z   MISE_NO_CONFIG: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1691106Z   MISE_NO_ENV: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1691343Z   MISE_NO_HOOKS: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1691589Z   NODE_AUTH_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1691834Z   NPM_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1692090Z   RUSTUP_TOOLCHAIN: 1.98.1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.1692584Z ##[endgroup]
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.3054412Z ##[group]Restoring mise cache
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.3130126Z [command]/usr/bin/ldd --version
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.3180401Z ldd (Ubuntu GLIBC 2.43-2ubuntu2.4) 2.43
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.3182046Z Copyright (C) 2024 Free Software Foundation, Inc.
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.3182882Z This is free software; see the source for copying conditions.  There is NO
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.3183914Z warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.3184748Z Written by Roland McGrath and Ulrich Drepper.
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.7409005Z mise cache not found for mise-v1-x86_64-unknown-linux-gnu-2026.9.18-ccc5d847fd871b3b
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.7412864Z `minimum_release_age` is ignored because an explicit mise version was provided
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.7414281Z ##[group]Download mise@2026.9.18
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.7439751Z [command]/usr/local/bin/zstd --version
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.7485916Z *** Zstandard CLI (64-bit) v1.5.7, by Yann Collet ***
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.7507409Z [command]/usr/bin/tar --zstd --version
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.7551362Z tar (GNU tar) 1.35
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.7552583Z Copyright (C) 2023 Free Software Foundation, Inc.
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.7553935Z License GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>.
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.7554952Z This is free software: you are free to change and redistribute it.
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.7555760Z There is NO WARRANTY, to the extent permitted by law.
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.7556189Z 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.7556736Z Written by John Gilmore and Jay Fenlason.
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.7574880Z [command]/usr/bin/ldd --version
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.7624770Z ldd (Ubuntu GLIBC 2.43-2ubuntu2.4) 2.43
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.7626427Z Copyright (C) 2024 Free Software Foundation, Inc.
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.7628216Z This is free software; see the source for copying conditions.  There is NO
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.7629309Z warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.7630168Z Written by Roland McGrath and Ulrich Drepper.
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.7653134Z Using curl to download mise
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:38.7667663Z [command]/usr/bin/curl -fsSL https://github.com/jdx/mise/releases/download/v2026.9.18/mise-v2026.9.18-linux-x64.tar.zst --output /tmp/mise-action-OI9VJg/mise-v2026.9.18-linux-x64.tar.zst
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:39.0282945Z [command]/usr/bin/tar --zstd -xf /tmp/mise-action-OI9VJg/mise-v2026.9.18-linux-x64.tar.zst -C /tmp/mise-action-OI9VJg
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:39.3464474Z [command]/usr/bin/mv /tmp/mise-action-OI9VJg/mise/bin/mise /home/runner/.local/share/mise/bin/mise
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:39.6787141Z ##[group]Setting env vars
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:39.6788029Z Setting MISE_LOG_LEVEL=info
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:39.6793722Z Setting MISE_GITHUB_TOKEN=***
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:39.6794591Z Setting MISE_TRUSTED_CONFIG_PATHS=/home/runner/work/velnor-new/velnor-new
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:39.6795497Z Setting MISE_YES=1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:39.6796530Z Adding /home/runner/.local/share/mise/shims to PATH
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:39.6797774Z ##[group]Running mise --version
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:39.6819115Z [command]/home/runner/.local/share/mise/bin/mise --version
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:39.6935648Z 2026.9.18 linux-x64 (2026-09-30)
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:39.6971196Z ##[endgroup]
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:39.6973865Z ##[group]Running mise ls
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:39.6991692Z [command]/home/runner/.local/share/mise/bin/mise ls
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:39.7129914Z ##[endgroup]
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:39.7450831Z ##[group]Run actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:39.7451307Z with:
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:39.7451535Z   name: velnor-preseed-helper
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:39.7451831Z   path: /home/runner/work/_temp/velnor/preseed
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:39.7452137Z   merge-multiple: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:39.7452383Z   repository: tailrocks/velnor-new
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:39.7452652Z   run-id: 37303474086
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:39.7452872Z   skip-decompress: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:39.7453105Z   digest-mismatch: error
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:39.7453327Z env:
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:39.7453738Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:39.7454002Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:39.7454251Z   ACTIONS_RUNTIME_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:39.7454487Z   CARGO_REGISTRY_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:39.7454712Z   GH_CONFIG_DIR: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:39.7454920Z   GH_HOST: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:39.7455113Z   GH_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:39.7455302Z   GITHUB_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:39.7455547Z   MBX_GC_AUTO: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:39.7455755Z   MBX_SHARE_OUT_DIR: 0
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:39.7455982Z   MISE_AUTO_INSTALL: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:39.7456519Z   MISE_EXEC_AUTO_INSTALL: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:39.7459325Z   MISE_GITHUB_TOKEN: ***
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:39.7459581Z   MISE_LOCKFILE: 0
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:39.7459794Z   MISE_NO_CONFIG: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:39.7460005Z   MISE_NO_ENV: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:39.7460217Z   MISE_NO_HOOKS: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:39.7460441Z   NODE_AUTH_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:39.7460646Z   NPM_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:39.7460859Z   RUSTUP_TOOLCHAIN: 1.98.1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:39.7461113Z   MISE_LOG_LEVEL: info
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:39.7461431Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-new/velnor-new
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:39.7461793Z   MISE_YES: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:39.7462002Z ##[endgroup]
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:39.8979181Z Downloading single artifact
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:39.9893372Z Preparing to download the following artifacts:
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:39.9894677Z - velnor-preseed-helper (ID: 11343165934, Size: 3587708, Expected Digest: sha256:e785806aca672d5be4856b2b3fd5f8817e5b46337b293c54b30356b4dbede9ea)
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.1558229Z Redirecting to blob download url: https://productionresultssa7.blob.core.windows.net/actions-results/cce5c35a-adc4-8b1c-b953-bd036d0efb67/workflow-job-run-84cf509c-bd50-5391-bc05-a50a7dce6812/artifacts/246fe97c17fbd6ae0d2def1bf4376df3b1c7ee12597469f244ea23c8de414c21.zip
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.1561513Z Starting download of artifact to: /home/runner/work/_temp/velnor/preseed
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.2462495Z (node:2559) [DEP0005] DeprecationWarning: Buffer() is deprecated due to security and usability issues. Please use the Buffer.alloc(), Buffer.allocUnsafe(), or Buffer.from() methods instead.
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.2464999Z (Use `node --trace-deprecation ...` to show where the warning was created)
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.3783724Z SHA256 digest of downloaded artifact is e785806aca672d5be4856b2b3fd5f8817e5b46337b293c54b30356b4dbede9ea
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.3784758Z Artifact download completed successfully.
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.3785281Z Total of 1 artifact(s) downloaded
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.3792024Z Download artifact has finished successfully
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.3966513Z ##[group]Run sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; line=; rest=; m="$RUNNER_TEMP/velnor/preseed/preseed-manifest.json" && b="$RUNNER_TEMP/velnor/preseed/velnor-actions" && test -f "$m" && test -f "$b" && read line rest < "$m" || [ -n "$line" ] && v=${line#*\"schema\":} && v=${v%%,*} && [ "$v" = 1 ] && c=${line#*\"commit\":\"} && c=${c%%\"*} && [ "${#c}" = 40 ] && [ "$c" = "$GITHUB_SHA" ] && t=${line#*\"target\":\"} && t=${t%%\"*} && [ "$t" = "x86_64-unknown-linux-gnu" ] && tc=${line#*\"toolchain\":\"} && tc=${tc%%\"*} && [ -n "$tc" ] && s=${line#*\"sha256\":\"} && s=${s%%\"*} && [ "${#s}" = 64 ] && sha256sum "$b" > "$RUNNER_TEMP/velnor/preseed/got.txt" && read got rest < "$RUNNER_TEMP/velnor/preseed/got.txt" && [ "$got" = "$s" ]'
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.3974400Z ^[[36;1msh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; line=; rest=; m="$RUNNER_TEMP/velnor/preseed/preseed-manifest.json" && b="$RUNNER_TEMP/velnor/preseed/velnor-actions" && test -f "$m" && test -f "$b" && read line rest < "$m" || [ -n "$line" ] && v=${line#*\"schema\":} && v=${v%%,*} && [ "$v" = 1 ] && c=${line#*\"commit\":\"} && c=${c%%\"*} && [ "${#c}" = 40 ] && [ "$c" = "$GITHUB_SHA" ] && t=${line#*\"target\":\"} && t=${t%%\"*} && [ "$t" = "x86_64-unknown-linux-gnu" ] && tc=${line#*\"toolchain\":\"} && tc=${tc%%\"*} && [ -n "$tc" ] && s=${line#*\"sha256\":\"} && s=${s%%\"*} && [ "${#s}" = 64 ] && sha256sum "$b" > "$RUNNER_TEMP/velnor/preseed/got.txt" && read got rest < "$RUNNER_TEMP/velnor/preseed/got.txt" && [ "$got" = "$s" ]'^[[0m
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4037161Z shell: /usr/bin/bash -e {0}
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4037451Z env:
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4037674Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4037962Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4038218Z   ACTIONS_RUNTIME_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4038474Z   CARGO_REGISTRY_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4038707Z   GH_CONFIG_DIR: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4038905Z   GH_HOST: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4039093Z   GH_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4039284Z   GITHUB_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4039490Z   MBX_GC_AUTO: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4039686Z   MBX_SHARE_OUT_DIR: 0
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4039911Z   MISE_AUTO_INSTALL: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4040149Z   MISE_EXEC_AUTO_INSTALL: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4042915Z   MISE_GITHUB_TOKEN: ***
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4043167Z   MISE_LOCKFILE: 0
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4043422Z   MISE_NO_CONFIG: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4043630Z   MISE_NO_ENV: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4043825Z   MISE_NO_HOOKS: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4044020Z   NODE_AUTH_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4044214Z   NPM_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4044418Z   RUSTUP_TOOLCHAIN: 1.98.1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4044657Z   MISE_LOG_LEVEL: info
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4044978Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-new/velnor-new
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4045337Z   MISE_YES: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4045538Z ##[endgroup]
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4285831Z ##[group]Run sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p $RUNNER_TEMP/velnor/bin && cp $RUNNER_TEMP/velnor/preseed/velnor-actions $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0 && chmod +x $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0'
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4288597Z ^[[36;1msh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p $RUNNER_TEMP/velnor/bin && cp $RUNNER_TEMP/velnor/preseed/velnor-actions $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0 && chmod +x $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0'^[[0m
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4348703Z shell: /usr/bin/bash -e {0}
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4348976Z env:
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4349192Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4349473Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4349771Z   ACTIONS_RUNTIME_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4350014Z   CARGO_REGISTRY_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4350241Z   GH_CONFIG_DIR: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4350444Z   GH_HOST: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4350636Z   GH_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4350824Z   GITHUB_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4351024Z   MBX_GC_AUTO: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4351227Z   MBX_SHARE_OUT_DIR: 0
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4351464Z   MISE_AUTO_INSTALL: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4351720Z   MISE_EXEC_AUTO_INSTALL: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4354458Z   MISE_GITHUB_TOKEN: ***
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4354717Z   MISE_LOCKFILE: 0
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4354932Z   MISE_NO_CONFIG: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4355143Z   MISE_NO_ENV: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4355347Z   MISE_NO_HOOKS: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4355557Z   NODE_AUTH_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4355760Z   NPM_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4355971Z   RUSTUP_TOOLCHAIN: 1.98.1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4356494Z   MISE_LOG_LEVEL: info
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4356883Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-new/velnor-new
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4357262Z   MISE_YES: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4357467Z ##[endgroup]
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4640402Z ##[group]Run actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4640847Z with:
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4641069Z   name: velnor-plan-r37303474086-a1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4641392Z   path: /home/runner/work/_temp/velnor/r37303474086-a1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4641714Z   merge-multiple: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4642149Z   repository: tailrocks/velnor-new
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4642411Z   run-id: 37303474086
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4642646Z   skip-decompress: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4642885Z   digest-mismatch: error
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4643118Z env:
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4643321Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4643591Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4643849Z   ACTIONS_RUNTIME_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4644095Z   CARGO_REGISTRY_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4644317Z   GH_CONFIG_DIR: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4644521Z   GH_HOST: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4644705Z   GH_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4644906Z   GITHUB_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4645134Z   MBX_GC_AUTO: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4645331Z   MBX_SHARE_OUT_DIR: 0
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4645554Z   MISE_AUTO_INSTALL: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4645792Z   MISE_EXEC_AUTO_INSTALL: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4648963Z   MISE_GITHUB_TOKEN: ***
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4649220Z   MISE_LOCKFILE: 0
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4649446Z   MISE_NO_CONFIG: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4649654Z   MISE_NO_ENV: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4649851Z   MISE_NO_HOOKS: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4650048Z   NODE_AUTH_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4650242Z   NPM_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4650443Z   RUSTUP_TOOLCHAIN: 1.98.1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4650680Z   MISE_LOG_LEVEL: info
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4650989Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-new/velnor-new
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4651343Z   MISE_YES: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.4651538Z ##[endgroup]
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.6137581Z Downloading single artifact
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.7144301Z Preparing to download the following artifacts:
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.7145905Z - velnor-plan-r37303474086-a1 (ID: 11343310787, Size: 38212, Expected Digest: sha256:d6e5013d9fe269c355b181ee37d67f79fcaef3fbae9a088b290381611a84a0e5)
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.8899226Z Redirecting to blob download url: https://productionresultssa7.blob.core.windows.net/actions-results/cce5c35a-adc4-8b1c-b953-bd036d0efb67/workflow-job-run-84cf509c-bd50-5391-bc05-a50a7dce6812/artifacts/c9920819b519fa80b44c0f39c506319c35ac7375104bb681785f2f8382372be7.zip
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.8901586Z Starting download of artifact to: /home/runner/work/_temp/velnor/r37303474086-a1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.9368308Z (node:2580) [DEP0005] DeprecationWarning: Buffer() is deprecated due to security and usability issues. Please use the Buffer.alloc(), Buffer.allocUnsafe(), or Buffer.from() methods instead.
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.9370007Z (Use `node --trace-deprecation ...` to show where the warning was created)
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.9458742Z SHA256 digest of downloaded artifact is d6e5013d9fe269c355b181ee37d67f79fcaef3fbae9a088b290381611a84a0e5
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.9459917Z Artifact download completed successfully.
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.9460497Z Total of 1 artifact(s) downloaded
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.9464252Z Download artifact has finished successfully
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.9578870Z ##[group]Run mise --no-config --no-env --no-hooks install rust@1.98.1 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.30.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.9580004Z ^[[36;1mmise --no-config --no-env --no-hooks install rust@1.98.1 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.30.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146^[[0m
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.9639083Z shell: /usr/bin/bash -e {0}
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.9639377Z env:
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.9639602Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.9639899Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.9640160Z   ACTIONS_RUNTIME_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.9640403Z   CARGO_REGISTRY_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.9640642Z   GH_CONFIG_DIR: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.9640860Z   GH_HOST: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.9641054Z   GH_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.9641264Z   GITHUB_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.9641470Z   MBX_GC_AUTO: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.9641686Z   MBX_SHARE_OUT_DIR: 0
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.9641978Z   MISE_AUTO_INSTALL: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.9642228Z   MISE_EXEC_AUTO_INSTALL: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.9645546Z   MISE_GITHUB_TOKEN: ***
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.9646109Z   MISE_LOCKFILE: 0
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.9646647Z   MISE_NO_CONFIG: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.9646869Z   MISE_NO_ENV: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.9647079Z   MISE_NO_HOOKS: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.9647299Z   NODE_AUTH_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.9647509Z   NPM_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.9647721Z   RUSTUP_TOOLCHAIN: 1.98.1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.9647975Z   MISE_LOG_LEVEL: info
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.9648308Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-new/velnor-new
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.9648689Z   MISE_YES: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.9648946Z   MISE_CARGO_HOME: /home/runner/work/_temp/velnor/cargo
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.9649325Z   MISE_RUSTUP_HOME: /home/runner/work/_temp/velnor/rustup
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.9649660Z ##[endgroup]
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:40.9780436Z ^[[2mmise^[[0m ^[[2mby @jdx^[[0m – installing 5 tools
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:41.1177611Z ^[[2mmise^[[0m ^[[34mrust^[[0m@1.98.1 info: downloading installer
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:41.2869809Z ^[[2mmise^[[0m ^[[34mrust^[[0m@1.98.1 info: profile set to default
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:41.2870873Z ^[[2mmise^[[0m ^[[34mrust^[[0m@1.98.1 info: default host tuple is x86_64-unknown-linux-gnu
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:41.2871842Z ^[[2mmise^[[0m ^[[34mrust^[[0m@1.98.1 info: skipping toolchain installation
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:41.2873400Z ^[[2mmise^[[0m ^[[34mrust^[[0m@1.98.1 Rust is installed now. Great!
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:41.2874426Z ^[[2mmise^[[0m ^[[34mrust^[[0m@1.98.1 To get started you need Cargo's bin directory (/home/runner/work/_
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:41.2875142Z ^[[2mmise^[[0m ^[[34mrust^[[0m@1.98.1 temp/velnor/cargo/bin) in your PATH
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:41.2875759Z ^[[2mmise^[[0m ^[[34mrust^[[0m@1.98.1 environment variable. This has not been done automatically.
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:41.2876675Z ^[[2mmise^[[0m ^[[34mrust^[[0m@1.98.1 To configure your current shell, you need to source
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:41.2877370Z ^[[2mmise^[[0m ^[[34mrust^[[0m@1.98.1 the corresponding env file under /home/runner/work/_temp/velnor/cargo.
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:41.2878125Z ^[[2mmise^[[0m ^[[34mrust^[[0m@1.98.1 Consider running the right command for your shell (note the leading DOT):
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:41.2879064Z ^[[2mmise^[[0m ^[[34mrust^[[0m@1.98.1 . "/home/runner/work/_temp/velnor/cargo/env"     # For sh/ash/dash/pdksh/bash
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:41.2880020Z ^[[2mmise^[[0m ^[[34mrust^[[0m@1.98.1 . "/home/runner/work/_temp/velnor/cargo/env.ps1" # For pwsh
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:41.2880638Z ^[[2mmise^[[0m ^[[34mrust^[[0m@1.98.1 cargo:rerun-if-env-changed=CC_x86_64-unknown-linux-gnu
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:41.2881177Z ^[[2mmise^[[0m ^[[34mrust^[[0m@1.98.1 CC_x86_64-unknown-linux-gnu = None
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:41.2881705Z ^[[2mmise^[[0m ^[[34mrust^[[0m@1.98.1 cargo:rerun-if-env-changed=CC_x86_64_unknown_linux_gnu
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:41.2882211Z ^[[2mmise^[[0m ^[[34mrust^[[0m@1.98.1 CC_x86_64_unknown_linux_gnu = None
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:41.2882661Z ^[[2mmise^[[0m ^[[34mrust^[[0m@1.98.1 cargo:rerun-if-env-changed=HOST_CC
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:41.2883226Z ^[[2mmise^[[0m ^[[34mrust^[[0m@1.98.1 HOST_CC = None
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:41.2883925Z ^[[2mmise^[[0m ^[[34mrust^[[0m@1.98.1 cargo:rerun-if-env-changed=CC
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:41.2884350Z ^[[2mmise^[[0m ^[[34mrust^[[0m@1.98.1 CC = None
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:41.2884816Z ^[[2mmise^[[0m ^[[34mrust^[[0m@1.98.1 cargo:rerun-if-env-changed=CC_ENABLE_DEBUG_OUTPUT
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:41.3232567Z ^[[2mmise^[[0m ^[[34mrust^[[0m@1.98.1 cargo:rerun-if-env-changed=CRATE_CC_NO_DEFAULTS
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:41.3233296Z ^[[2mmise^[[0m ^[[34mrust^[[0m@1.98.1 CRATE_CC_NO_DEFAULTS = None
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:41.3233912Z ^[[2mmise^[[0m ^[[34mrust^[[0m@1.98.1 cargo:rerun-if-env-changed=CFLAGS
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:41.3234334Z ^[[2mmise^[[0m ^[[34mrust^[[0m@1.98.1 CFLAGS = None
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:41.3234787Z ^[[2mmise^[[0m ^[[34mrust^[[0m@1.98.1 cargo:rerun-if-env-changed=HOST_CFLAGS
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:41.3235230Z ^[[2mmise^[[0m ^[[34mrust^[[0m@1.98.1 HOST_CFLAGS = None
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:41.3235738Z ^[[2mmise^[[0m ^[[34mrust^[[0m@1.98.1 cargo:rerun-if-env-changed=CFLAGS_x86_64_unknown_linux_gnu
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:41.3236856Z ^[[2mmise^[[0m ^[[34mrust^[[0m@1.98.1 CFLAGS_x86_64_unknown_linux_gnu = None
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:41.3237491Z ^[[2mmise^[[0m ^[[34mrust^[[0m@1.98.1 cargo:rerun-if-env-changed=CFLAGS_x86_64-unknown-linux-gnu
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:41.3238362Z ^[[2mmise^[[0m ^[[34mrust^[[0m@1.98.1 CFLAGS_x86_64-unknown-linux-gnu = None
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:41.3455632Z ^[[2mmise^[[0m ^[[34mrust^[[0m@1.98.1 info: syncing channel updates for 1.98.1-x86_64-unknown-linux-gnu
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:41.4729210Z ^[[2mmise^[[0m ^[[34mrust^[[0m@1.98.1 info: latest update on 2026-09-03 for version 1.98.1 (48a229cea 2026-09-01)
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:41.4757610Z ^[[2mmise^[[0m ^[[34mrust^[[0m@1.98.1 info: downloading 6 components
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:41.5833116Z ^[[2mmise^[[0m ^[[38;5;10m✓^[[0m ^[[34maqua:nextest-rs/nextest/cargo-nextest^[[0m@0.9.146  603ms  ^[[2mcargo-nextest-0.9.146-x86_64-unknown-linux-gnu.tar.gz^[[0m
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:41.7291369Z ^[[2mmise^[[0m ^[[38;5;10m✓^[[0m ^[[34mactionlint^[[0m@1.7.12                              749ms  ^[[2mactionlint_1.7.12_linux_amd64.tar.gz^[[0m
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:41.7438493Z ^[[2mmise^[[0m ^[[38;5;10m✓^[[0m ^[[34mshellcheck^[[0m@0.11.0                              762ms  ^[[2mshellcheck-v0.11.0.linux.x86_64.tar.xz^[[0m
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:41.9694842Z ^[[2mmise^[[0m ^[[38;5;10m✓^[[0m ^[[34mzizmor^[[0m@1.30.1                                  989ms  ^[[2mzizmor-x86_64-unknown-linux-gnu.tar.gz^[[0m
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:43.9784653Z ^[[2mmise^[[0m ^[[36m███████████████^[[0m^[[31m^[[0m^[[2m░^[[0m 4/5 · 3.0s
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:43.9786126Z   ^[[34mrust^[[0m@1.98.1                                    Downloading rustup-init  3.0s  30/30 kB · 10 kB/s
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:46.9786513Z ^[[2mmise^[[0m ^[[36m███████████████^[[0m^[[31m^[[0m^[[2m░^[[0m 4/5 · 6.0s
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:46.9787538Z   ^[[34mrust^[[0m@1.98.1                                    Downloading rustup-init  6.0s  30/30 kB · 5 kB/s
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:49.9787727Z ^[[2mmise^[[0m ^[[36m███████████████^[[0m^[[31m^[[0m^[[2m░^[[0m 4/5 · 9.0s
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:49.9789150Z   ^[[34mrust^[[0m@1.98.1                                    Downloading rustup-init  9.0s  30/30 kB · 3 kB/s
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:52.9789393Z ^[[2mmise^[[0m ^[[36m███████████████^[[0m^[[31m^[[0m^[[2m░^[[0m 4/5 · 12.0s
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:52.9790442Z   ^[[34mrust^[[0m@1.98.1                                    Downloading rustup-init  12.0s  30/30 kB · 3 kB/s
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.6622731Z ^[[2mmise^[[0m ^[[34mrust^[[0m@1.98.1   1.98.1-x86_64-unknown-linux-gnu installed - rustc 1.98.1 (48a229cea 2026-09-01)
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.6628466Z ^[[2mmise^[[0m ^[[34mrust^[[0m@1.98.1 info: default toolchain set to 1.98.1-x86_64-unknown-linux-gnu
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.6964127Z ^[[2mmise^[[0m ^[[34mrust^[[0m@1.98.1 rustc 1.98.1 (48a229cea 2026-09-01)
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.6992825Z ^[[2mmise^[[0m ^[[38;5;10m✓^[[0m ^[[34mrust^[[0m@1.98.1                                    12.7s
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.6997781Z ^[[2mmise^[[0m ^[[36m████████████████^[[0m^[[31m^[[0m^[[2m^[[0m 5/5 · installed 5 tools in 12.7s
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.7077469Z ^[[33mmise^[[0m ^[[33mWARN^[[0m  aqua:nextest-rs/nextest/cargo-nextest, shellcheck, zizmor, actionlint, rust installed but not activated — they are not in any config file.
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.7079638Z To install and activate, run:
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.7080309Z   mise use aqua:nextest-rs/nextest/cargo-nextest
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.7080851Z   mise use shellcheck
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.7081242Z   mise use zizmor
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.7081605Z   mise use actionlint
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.7082058Z   mise use rust
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.7156678Z ##[group]Run mise --no-config --no-env --no-hooks exec rust@1.98.1 -- rustup component add --toolchain 1.98.1-x86_64-unknown-linux-gnu clippy rustfmt
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.7158357Z ^[[36;1mmise --no-config --no-env --no-hooks exec rust@1.98.1 -- rustup component add --toolchain 1.98.1-x86_64-unknown-linux-gnu clippy rustfmt^[[0m
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.7242821Z shell: /usr/bin/bash -e {0}
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.7243105Z env:
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.7243326Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.7243621Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.7243885Z   ACTIONS_RUNTIME_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.7244123Z   CARGO_REGISTRY_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.7244361Z   GH_CONFIG_DIR: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.7244569Z   GH_HOST: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.7244762Z   GH_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.7244964Z   GITHUB_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.7245426Z   MBX_GC_AUTO: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.7245634Z   MBX_SHARE_OUT_DIR: 0
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.7245862Z   MISE_AUTO_INSTALL: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.7246137Z   MISE_EXEC_AUTO_INSTALL: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.7249400Z   MISE_GITHUB_TOKEN: ***
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.7249842Z   MISE_LOCKFILE: 0
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.7250210Z   MISE_NO_CONFIG: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.7250578Z   MISE_NO_ENV: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.7250937Z   MISE_NO_HOOKS: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.7251311Z   NODE_AUTH_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.7251713Z   NPM_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.7252099Z   RUSTUP_TOOLCHAIN: 1.98.1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.7252558Z   MISE_LOG_LEVEL: info
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.7253139Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-new/velnor-new
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.7253798Z   MISE_YES: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.7254326Z   MISE_CARGO_HOME: /home/runner/work/_temp/velnor/cargo
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.7255011Z   MISE_RUSTUP_HOME: /home/runner/work/_temp/velnor/rustup
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.7255595Z ##[endgroup]
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.8330865Z info: component clippy is up to date
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.8331456Z info: component rustfmt is up to date
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.9037418Z ##[group]Run actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.9037904Z with:
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.9038418Z   key: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-80c489f79741a2c354ddda04d3166db39b51a23a12d42e952de96ea98e5583af
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.9039871Z   path: /home/runner/work/_temp/velnor/cargo/.crates.toml
+Rust / velnor-actions-cli	UNKNOWN STEP	/home/runner/work/_temp/velnor/cargo/.crates2.json
+Rust / velnor-actions-cli	UNKNOWN STEP	/home/runner/work/_temp/velnor/cargo/bin
+Rust / velnor-actions-cli	UNKNOWN STEP	/home/runner/work/_temp/velnor/cargo/registry/index
+Rust / velnor-actions-cli	UNKNOWN STEP	/home/runner/work/_temp/velnor/cargo/registry/cache
+Rust / velnor-actions-cli	UNKNOWN STEP	/home/runner/work/_temp/velnor/cargo/git/db
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.9041095Z   restore-keys: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.9041478Z   enableCrossOsArchive: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.9041743Z   fail-on-cache-miss: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.9041993Z   lookup-only: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.9042213Z env:
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.9042436Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.9042743Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.9042998Z   ACTIONS_RUNTIME_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.9043241Z   CARGO_REGISTRY_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.9043464Z   GH_CONFIG_DIR: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.9043668Z   GH_HOST: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.9043859Z   GH_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.9044051Z   GITHUB_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.9044259Z   MBX_GC_AUTO: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.9044469Z   MBX_SHARE_OUT_DIR: 0
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.9044697Z   MISE_AUTO_INSTALL: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.9044942Z   MISE_EXEC_AUTO_INSTALL: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.9048124Z   MISE_GITHUB_TOKEN: ***
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.9048400Z   MISE_LOCKFILE: 0
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.9048616Z   MISE_NO_CONFIG: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.9048831Z   MISE_NO_ENV: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.9049040Z   MISE_NO_HOOKS: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.9049246Z   NODE_AUTH_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.9049461Z   NPM_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.9049667Z   RUSTUP_TOOLCHAIN: 1.98.1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.9049916Z   MISE_LOG_LEVEL: info
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.9050252Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-new/velnor-new
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.9050612Z   MISE_YES: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:53.9050811Z ##[endgroup]
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.1038683Z Cache hit for: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-80c489f79741a2c354ddda04d3166db39b51a23a12d42e952de96ea98e5583af
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.6429964Z Received 67175509 of 67175509 (100.0%), 140.8 MBs/sec
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.6430746Z Cache Size: ~64 MB (67175509 B)
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.6460340Z [command]/usr/bin/tar -xf /home/runner/work/_temp/1a077a87-4e18-4e3e-9d67-0ff5179f7abe/cache.tzst -P -C /home/runner/work/velnor-new/velnor-new --use-compress-program unzstd
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.8290574Z Cache restored successfully
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.8402550Z Cache restored from key: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-80c489f79741a2c354ddda04d3166db39b51a23a12d42e952de96ea98e5583af
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.8603734Z ##[group]Run sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; case "$RUNNER_TEMP" in /*) ;; *) printf '\''%s\n'\'' '\''RUNNER_TEMP must be absolute'\'' >&2; exit 1 ;; esac; [ -d "$RUNNER_TEMP" ] || { printf '\''%s\n'\'' '\''RUNNER_TEMP must exist'\'' >&2; exit 1; }; check_no_symlink() { path=$1; while [ "$path" != / ]; do [ ! -L "$path" ] || return 1; path=${path%/*}; [ -n "$path" ] || path=/; done; return 0; }; check_no_symlink "$RUNNER_TEMP" || { printf '\''%s\n'\'' '\''RUNNER_TEMP path contains a symlink'\'' >&2; exit 1; }; mbx_cache_dir="$RUNNER_TEMP/velnor/mbx"; [ "${MBX_CACHE_DIR:-}" = "$mbx_cache_dir" ] || { printf '\''%s\n'\'' '\''MBX_CACHE_DIR must use the stable runner-temp path'\'' >&2; exit 1; }; [ ! -L "$RUNNER_TEMP/velnor" ] || { printf '\''%s\n'\'' '\''Velnor temp root must not be a symlink'\'' >&2; exit 1; }; if [ ! -e "$RUNNER_TEMP/velnor" ]; then (umask 077 && mkdir -m 700 "$RUNNER_TEMP/velnor"); fi; [ -d "$RUNNER_TEMP/velnor" ] && check_no_symlink "$RUNNER_TEMP/velnor" || { printf '\''%s\n'\'' '\''Velnor temp root must be a real directory'\'' >&2; exit 1; }; [ ! -e "$mbx_cache_dir" ] && [ ! -L "$mbx_cache_dir" ] || { printf '\''%s\n'\'' '\''MBX store root already exists in this private runner namespace'\'' >&2; exit 1; }; (umask 077 && mkdir -m 700 "$mbx_cache_dir") || { printf '\''%s\n'\'' '\''could not reserve the MBX store root'\'' >&2; exit 1; }; [ -n "${GITHUB_ENV:-}" ] && [ -f "$GITHUB_ENV" ] && [ ! -L "$GITHUB_ENV" ] || { printf '\''%s\n'\'' '\''GITHUB_ENV must be a regular runner file'\'' >&2; exit 1; }; check_no_symlink "$GITHUB_ENV" || { printf '\''%s\n'\'' '\''GITHUB_ENV path contains a symlink'\'' >&2; exit 1; }; printf '\''MBX_CACHE_DIR=%s\n'\'' "$mbx_cache_dir" >> "$GITHUB_ENV"; [ -n "$GITHUB_PATH" ] || { printf '\''%s\n'\'' '\''GITHUB_PATH is required'\'' >&2; exit 1; }; case "$GITHUB_RUN_ID" in '\'''\''|*[!0-9]*) printf '\''%s\n'\'' '\''run id must be numeric'\'' >&2; exit 1 ;; esac; case "$GITHUB_RUN_ATTEMPT" in '\'''\''|*[!0-9]*) printf '\''%s\n'\'' '\''run attempt must be numeric'\'' >&2; exit 1 ;; esac; probe_dir="$RUNNER_TEMP/velnor-mbx-preflight-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"; [ ! -e "$probe_dir" ] && [ ! -L "$probe_dir" ] || { printf '\''%s\n'\'' '\''preflight scratch already exists'\'' >&2; exit 1; }; (umask 077 && mkdir -m 700 "$probe_dir") || { printf '\''%s\n'\'' '\''could not reserve preflight scratch'\'' >&2; exit 1; }; cleanup() { rm -f "$probe_dir/rust-root" "$probe_dir/rustc-output"; rmdir "$probe_dir"; }; trap cleanup EXIT; trap '\''exit 1'\'' HUP INT TERM; mise --no-config --no-env --no-hooks where '\''rust@1.98.1'\'' > "$probe_dir/rust-root"; exec 3< "$probe_dir/rust-root"; IFS= read -r rust_root <&3 || { printf '\''%s\n'\'' '\''Mise returned no Rust install path'\'' >&2; exit 1; }; extra=; if IFS= read -r extra <&3 || [ -n "$extra" ]; then printf '\''%s\n'\'' '\''Mise returned multiple Rust install paths'\'' >&2; exit 1; fi; exec 3<&-; [ -n "$rust_root" ] || { printf '\''%s\n'\'' '\''Mise returned an empty Rust install path'\'' >&2; exit 1; }; case "$rust_root" in /*) ;; *) printf '\''%s\n'\'' '\''Rust install path must be absolute'\'' >&2; exit 1 ;; esac; rustc_bin="$rust_root/rustc"; [ -x "$rustc_bin" ] || { printf '\''expected Rustup shim at %s\n'\'' "$rustc_bin" >&2; exit 1; }; "$rustc_bin" '\''+1.98.1'\'' -vV > "$probe_dir/rustc-output"; grep -Fqx '\''release: 1.98.1'\'' "$probe_dir/rustc-output" || { printf '\''Rustup did not report exact toolchain 1.98.1\n'\'' >&2; exit 1; }; printf '\''%s\n'\'' "$rust_root" >> "$GITHUB_PATH"'
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.8626860Z ^[[36;1msh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; case "$RUNNER_TEMP" in /*) ;; *) printf '\''%s\n'\'' '\''RUNNER_TEMP must be absolute'\'' >&2; exit 1 ;; esac; [ -d "$RUNNER_TEMP" ] || { printf '\''%s\n'\'' '\''RUNNER_TEMP must exist'\'' >&2; exit 1; }; check_no_symlink() { path=$1; while [ "$path" != / ]; do [ ! -L "$path" ] || return 1; path=${path%/*}; [ -n "$path" ] || path=/; done; return 0; }; check_no_symlink "$RUNNER_TEMP" || { printf '\''%s\n'\'' '\''RUNNER_TEMP path contains a symlink'\'' >&2; exit 1; }; mbx_cache_dir="$RUNNER_TEMP/velnor/mbx"; [ "${MBX_CACHE_DIR:-}" = "$mbx_cache_dir" ] || { printf '\''%s\n'\'' '\''MBX_CACHE_DIR must use the stable runner-temp path'\'' >&2; exit 1; }; [ ! -L "$RUNNER_TEMP/velnor" ] || { printf '\''%s\n'\'' '\''Velnor temp root must not be a symlink'\'' >&2; exit 1; }; if [ ! -e "$RUNNER_TEMP/velnor" ]; then (umask 077 && mkdir -m 700 "$RUNNER_TEMP/velnor"); fi; [ -d "$RUNNER_TEMP/velnor" ] && check_no_symlink "$RUNNER_TEMP/velnor" || { printf '\''%s\n'\'' '\''Velnor temp root must be a real directory'\'' >&2; exit 1; }; [ ! -e "$mbx_cache_dir" ] && [ ! -L "$mbx_cache_dir" ] || { printf '\''%s\n'\'' '\''MBX store root already exists in this private runner namespace'\'' >&2; exit 1; }; (umask 077 && mkdir -m 700 "$mbx_cache_dir") || { printf '\''%s\n'\'' '\''could not reserve the MBX store root'\'' >&2; exit 1; }; [ -n "${GITHUB_ENV:-}" ] && [ -f "$GITHUB_ENV" ] && [ ! -L "$GITHUB_ENV" ] || { printf '\''%s\n'\'' '\''GITHUB_ENV must be a regular runner file'\'' >&2; exit 1; }; check_no_symlink "$GITHUB_ENV" || { printf '\''%s\n'\'' '\''GITHUB_ENV path contains a symlink'\'' >&2; exit 1; }; printf '\''MBX_CACHE_DIR=%s\n'\'' "$mbx_cache_dir" >> "$GITHUB_ENV"; [ -n "$GITHUB_PATH" ] || { printf '\''%s\n'\'' '\''GITHUB_PATH is required'\'' >&2; exit 1; }; case "$GITHUB_RUN_ID" in '\'''\''|*[!0-9]*) printf '\''%s\n'\'' '\''run id must be numeric'\'' >&2; exit 1 ;; esac; case "$GITHUB_RUN_ATTEMPT" in '\'''\''|*[!0-9]*) printf '\''%s\n'\'' '\''run attempt must be numeric'\'' >&2; exit 1 ;; esac; probe_dir="$RUNNER_TEMP/velnor-mbx-preflight-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"; [ ! -e "$probe_dir" ] && [ ! -L "$probe_dir" ] || { printf '\''%s\n'\'' '\''preflight scratch already exists'\'' >&2; exit 1; }; (umask 077 && mkdir -m 700 "$probe_dir") || { printf '\''%s\n'\'' '\''could not reserve preflight scratch'\'' >&2; exit 1; }; cleanup() { rm -f "$probe_dir/rust-root" "$probe_dir/rustc-output"; rmdir "$probe_dir"; }; trap cleanup EXIT; trap '\''exit 1'\'' HUP INT TERM; mise --no-config --no-env --no-hooks where '\''rust@1.98.1'\'' > "$probe_dir/rust-root"; exec 3< "$probe_dir/rust-root"; IFS= read -r rust_root <&3 || { printf '\''%s\n'\'' '\''Mise returned no Rust install path'\'' >&2; exit 1; }; extra=; if IFS= read -r extra <&3 || [ -n "$extra" ]; then printf '\''%s\n'\'' '\''Mise returned multiple Rust install paths'\'' >&2; exit 1; fi; exec 3<&-; [ -n "$rust_root" ] || { printf '\''%s\n'\'' '\''Mise returned an empty Rust install path'\'' >&2; exit 1; }; case "$rust_root" in /*) ;; *) printf '\''%s\n'\'' '\''Rust install path must be absolute'\'' >&2; exit 1 ;; esac; rustc_bin="$rust_root/rustc"; [ -x "$rustc_bin" ] || { printf '\''expected Rustup shim at %s\n'\'' "$rustc_bin" >&2; exit 1; }; "$rustc_bin" '\''+1.98.1'\'' -vV > "$probe_dir/rustc-output"; grep -Fqx '\''release: 1.98.1'\'' "$probe_dir/rustc-output" || { printf '\''Rustup did not report exact toolchain 1.98.1\n'\'' >&2; exit 1; }; printf '\''%s\n'\'' "$rust_root" >> "$GITHUB_PATH"'^[[0m
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.8694694Z shell: /usr/bin/bash -e {0}
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.8695018Z env:
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.8695253Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.8695549Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.8695816Z   ACTIONS_RUNTIME_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.8696070Z   CARGO_REGISTRY_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.8696462Z   GH_CONFIG_DIR: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.8696679Z   GH_HOST: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.8696874Z   GH_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.8697079Z   GITHUB_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.8697290Z   MBX_GC_AUTO: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.8697505Z   MBX_SHARE_OUT_DIR: 0
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.8697739Z   MISE_AUTO_INSTALL: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.8697994Z   MISE_EXEC_AUTO_INSTALL: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.8700773Z   MISE_GITHUB_TOKEN: ***
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.8701243Z   MISE_LOCKFILE: 0
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.8701492Z   MISE_NO_CONFIG: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.8701848Z   MISE_NO_ENV: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.8702065Z   MISE_NO_HOOKS: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.8702274Z   NODE_AUTH_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.8702492Z   NPM_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.8702721Z   RUSTUP_TOOLCHAIN: 1.98.1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.8702978Z   MISE_LOG_LEVEL: info
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.8703309Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-new/velnor-new
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.8703688Z   MISE_YES: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.8703939Z   CARGO_HOME: /home/runner/work/_temp/velnor/cargo
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.8704290Z   MBX_CACHE_DIR: /home/runner/work/_temp/velnor/mbx
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.8704647Z   MISE_CARGO_HOME: /home/runner/work/_temp/velnor/cargo
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.8705025Z   MISE_RUSTUP_HOME: /home/runner/work/_temp/velnor/rustup
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.8705385Z   RUSTUP_HOME: /home/runner/work/_temp/velnor/rustup
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.8705698Z ##[endgroup]
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.9203535Z ##[group]Run jdx/mr-boxington-action@1687e54eb349cadf61fa38b5813a77875489e8e6
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.9204014Z with:
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.9204800Z   cache-generation: velnor-mbx-1.21.1-share-out-dir-disabled-v1-gc-auto-v1-action-1687e54eb349cadf61fa38b5813a77875489e8e6-lane-github-hosted-job-rust-velnor-actions-cli
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.9205646Z   github-cache-mode: objects
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.9205924Z   save-on-protected-branch: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.9206213Z   save-on-pull-request: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.9206854Z   save-on-workflow-dispatch: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.9207138Z   toolchain: 1.98.1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.9207384Z   version: 1.21.1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.9207598Z   backend: github
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.9210131Z   github-token: ***
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.9210382Z   working-directory: .
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.9210625Z   cache-links: auto
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.9210838Z env:
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.9211053Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.9211366Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.9211631Z   ACTIONS_RUNTIME_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.9211882Z   CARGO_REGISTRY_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.9212124Z   GH_CONFIG_DIR: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.9212340Z   GH_HOST: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.9212536Z   GH_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.9212739Z   GITHUB_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.9212951Z   MBX_GC_AUTO: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.9213167Z   MBX_SHARE_OUT_DIR: 0
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.9213400Z   MISE_AUTO_INSTALL: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.9213658Z   MISE_EXEC_AUTO_INSTALL: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.9216200Z   MISE_GITHUB_TOKEN: ***
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.9216715Z   MISE_LOCKFILE: 0
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.9216944Z   MISE_NO_CONFIG: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.9217160Z   MISE_NO_ENV: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.9217374Z   MISE_NO_HOOKS: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.9217586Z   NODE_AUTH_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.9217807Z   NPM_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.9218022Z   RUSTUP_TOOLCHAIN: 1.98.1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.9218275Z   MISE_LOG_LEVEL: info
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.9218613Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-new/velnor-new
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.9218981Z   MISE_YES: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.9219232Z   MBX_CACHE_DIR: /home/runner/work/_temp/velnor/mbx
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.9219560Z   ACTIONS_CACHE_MODE: write
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.9219850Z   CARGO_HOME: /home/runner/work/_temp/velnor/cargo
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.9220204Z   MISE_CARGO_HOME: /home/runner/work/_temp/velnor/cargo
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.9220577Z   MISE_RUSTUP_HOME: /home/runner/work/_temp/velnor/rustup
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.9220935Z   RUSTUP_HOME: /home/runner/work/_temp/velnor/rustup
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:54.9221251Z ##[endgroup]
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:55.4950704Z [command]/usr/bin/tar xz --warning=no-unknown-keyword --overwrite -C /home/runner/work/_temp/54c22cf5-6977-48d8-ae10-eb384ea8200e -f /home/runner/work/_temp/84c16a4b-043f-45e5-910b-169239aec3c9
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:55.7386559Z Cache hit for restore-key: linux-x64-mbx-velnor-mbx-1.21.1-share-out-dir-disabled-v1-gc-auto-v1-action-1687e54eb349cadf61fa38b5813a77875489e8e6-lane-github-hosted-job-rust-velnor-actions-cli-dir-rust-39d372ba6fa2-2d9bca8a37b0440e29a3520aa03e77752079f400
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:56.5148253Z Received 156846855 of 156846855 (100.0%), 201.9 MBs/sec
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:56.5157314Z Cache Size: ~150 MB (156846855 B)
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:56.5245148Z [command]/usr/bin/tar -xf /home/runner/work/_temp/feada8d4-10d4-481a-be36-d0372a9a00a6/cache.tzst -P -C /home/runner/work/velnor-new/velnor-new --use-compress-program unzstd
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:57.7326805Z Cache restored successfully
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:57.7399197Z Set up mbx 1.21.1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:57.7408671Z [command]/opt/hostedtoolcache/mbx-780ccb52aa3a95ac1b0ee0ecf5184561b1a4bdf1fe88180333dc0e11a92980f5/1.21.1/x64/mbx cache import /home/runner/work/_temp/velnor/mbx/actions/github-actions-cache-v1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:58.7637361Z imported 202 actions and 1197 objects from /home/runner/work/_temp/velnor/mbx/actions/github-actions-cache-v1 (692.8 MiB)
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:58.7639048Z restored Cargo workspace state (406 referenced files, 946.9 MiB)
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:58.7644825Z Restored mbx cache from linux-x64-mbx-velnor-mbx-1.21.1-share-out-dir-disabled-v1-gc-auto-v1-action-1687e54eb349cadf61fa38b5813a77875489e8e6-lane-github-hosted-job-rust-velnor-actions-cli-dir-rust-39d372ba6fa2-2d9bca8a37b0440e29a3520aa03e77752079f400
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:58.7648160Z Will save the mbx cache after a successful job (default-branch push)
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:58.9281890Z ##[group]Run sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; case "$RUNNER_TEMP" in /*) ;; *) printf '\''%s\n'\'' '\''RUNNER_TEMP must be absolute'\'' >&2; exit 1 ;; esac; check_no_symlink() { path=$1; while [ "$path" != / ]; do [ ! -L "$path" ] || return 1; path=${path%/*}; [ -n "$path" ] || path=/; done; return 0; }; [ -d "$RUNNER_TEMP" ] && check_no_symlink "$RUNNER_TEMP" || { printf '\''%s\n'\'' '\''RUNNER_TEMP must be a real directory'\'' >&2; exit 1; }; [ "${MBX_CACHE_DIR:-}" = "$RUNNER_TEMP/velnor/mbx" ] || { printf '\''%s\n'\'' '\''MBX_CACHE_DIR changed from its stable runner-temp path'\'' >&2; exit 1; }; [ -d "$RUNNER_TEMP/velnor" ] && [ -d "$MBX_CACHE_DIR" ] && [ -d "$MBX_CACHE_DIR/actions" ] || { printf '\''%s\n'\'' '\''MBX store directories are missing'\'' >&2; exit 1; }; check_no_symlink "$RUNNER_TEMP/velnor" && check_no_symlink "$MBX_CACHE_DIR/actions" || { printf '\''%s\n'\'' '\''MBX store path contains a symlink'\'' >&2; exit 1; }; case "$GITHUB_RUN_ID" in '\'''\''|*[!0-9]*) printf '\''%s\n'\'' '\''run id must be numeric'\'' >&2; exit 1 ;; esac; case "$GITHUB_RUN_ATTEMPT" in '\'''\''|*[!0-9]*) printf '\''%s\n'\'' '\''run attempt must be numeric'\'' >&2; exit 1 ;; esac; probe_dir="$RUNNER_TEMP/velnor-mbx-verify-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"; [ ! -e "$probe_dir" ] && [ ! -L "$probe_dir" ] || { printf '\''%s\n'\'' '\''verification scratch already exists'\'' >&2; exit 1; }; (umask 077 && mkdir -m 700 "$probe_dir") || { printf '\''%s\n'\'' '\''could not reserve verification scratch'\'' >&2; exit 1; }; cleanup() { rm -f "$probe_dir/version" "$probe_dir/cache-dir"; rmdir "$probe_dir"; }; trap cleanup EXIT; trap '\''exit 1'\'' HUP INT TERM; mise --no-config --no-env --no-hooks exec rust@1.98.1 -- mbx --version > "$probe_dir/version"; exec 3< "$probe_dir/version"; IFS= read -r version_line <&3 || { printf '\''%s\n'\'' '\''MBX version output is empty or unterminated'\'' >&2; exit 1; }; extra=; if IFS= read -r extra <&3 || [ -n "$extra" ]; then printf '\''%s\n'\'' '\''MBX version output has extra data'\'' >&2; exit 1; fi; exec 3<&-; [ "$version_line" = '\''mbx 1.21.1'\'' ] || { printf '\''%s\n'\'' '\''MBX on PATH does not match the pinned action version'\'' >&2; exit 1; }; mise --no-config --no-env --no-hooks exec rust@1.98.1 -- mbx cache dir > "$probe_dir/cache-dir"; exec 3< "$probe_dir/cache-dir"; IFS= read -r cache_dir <&3 || { printf '\''%s\n'\'' '\''MBX cache dir output is empty or unterminated'\'' >&2; exit 1; }; extra=; if IFS= read -r extra <&3 || [ -n "$extra" ]; then printf '\''%s\n'\'' '\''MBX cache dir output has extra data'\'' >&2; exit 1; fi; exec 3<&-; [ "$cache_dir" = "$MBX_CACHE_DIR/actions" ] || { printf '\''%s\n'\'' '\''MBX reported an unexpected object store path'\'' >&2; exit 1; }'
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:58.9298840Z ^[[36;1msh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; case "$RUNNER_TEMP" in /*) ;; *) printf '\''%s\n'\'' '\''RUNNER_TEMP must be absolute'\'' >&2; exit 1 ;; esac; check_no_symlink() { path=$1; while [ "$path" != / ]; do [ ! -L "$path" ] || return 1; path=${path%/*}; [ -n "$path" ] || path=/; done; return 0; }; [ -d "$RUNNER_TEMP" ] && check_no_symlink "$RUNNER_TEMP" || { printf '\''%s\n'\'' '\''RUNNER_TEMP must be a real directory'\'' >&2; exit 1; }; [ "${MBX_CACHE_DIR:-}" = "$RUNNER_TEMP/velnor/mbx" ] || { printf '\''%s\n'\'' '\''MBX_CACHE_DIR changed from its stable runner-temp path'\'' >&2; exit 1; }; [ -d "$RUNNER_TEMP/velnor" ] && [ -d "$MBX_CACHE_DIR" ] && [ -d "$MBX_CACHE_DIR/actions" ] || { printf '\''%s\n'\'' '\''MBX store directories are missing'\'' >&2; exit 1; }; check_no_symlink "$RUNNER_TEMP/velnor" && check_no_symlink "$MBX_CACHE_DIR/actions" || { printf '\''%s\n'\'' '\''MBX store path contains a symlink'\'' >&2; exit 1; }; case "$GITHUB_RUN_ID" in '\'''\''|*[!0-9]*) printf '\''%s\n'\'' '\''run id must be numeric'\'' >&2; exit 1 ;; esac; case "$GITHUB_RUN_ATTEMPT" in '\'''\''|*[!0-9]*) printf '\''%s\n'\'' '\''run attempt must be numeric'\'' >&2; exit 1 ;; esac; probe_dir="$RUNNER_TEMP/velnor-mbx-verify-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"; [ ! -e "$probe_dir" ] && [ ! -L "$probe_dir" ] || { printf '\''%s\n'\'' '\''verification scratch already exists'\'' >&2; exit 1; }; (umask 077 && mkdir -m 700 "$probe_dir") || { printf '\''%s\n'\'' '\''could not reserve verification scratch'\'' >&2; exit 1; }; cleanup() { rm -f "$probe_dir/version" "$probe_dir/cache-dir"; rmdir "$probe_dir"; }; trap cleanup EXIT; trap '\''exit 1'\'' HUP INT TERM; mise --no-config --no-env --no-hooks exec rust@1.98.1 -- mbx --version > "$probe_dir/version"; exec 3< "$probe_dir/version"; IFS= read -r version_line <&3 || { printf '\''%s\n'\'' '\''MBX version output is empty or unterminated'\'' >&2; exit 1; }; extra=; if IFS= read -r extra <&3 || [ -n "$extra" ]; then printf '\''%s\n'\'' '\''MBX version output has extra data'\'' >&2; exit 1; fi; exec 3<&-; [ "$version_line" = '\''mbx 1.21.1'\'' ] || { printf '\''%s\n'\'' '\''MBX on PATH does not match the pinned action version'\'' >&2; exit 1; }; mise --no-config --no-env --no-hooks exec rust@1.98.1 -- mbx cache dir > "$probe_dir/cache-dir"; exec 3< "$probe_dir/cache-dir"; IFS= read -r cache_dir <&3 || { printf '\''%s\n'\'' '\''MBX cache dir output is empty or unterminated'\'' >&2; exit 1; }; extra=; if IFS= read -r extra <&3 || [ -n "$extra" ]; then printf '\''%s\n'\'' '\''MBX cache dir output has extra data'\'' >&2; exit 1; fi; exec 3<&-; [ "$cache_dir" = "$MBX_CACHE_DIR/actions" ] || { printf '\''%s\n'\'' '\''MBX reported an unexpected object store path'\'' >&2; exit 1; }'^[[0m
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:58.9366764Z shell: /usr/bin/bash -e {0}
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:58.9367179Z env:
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:58.9367427Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:58.9367718Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:58.9367994Z   ACTIONS_RUNTIME_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:58.9368259Z   CARGO_REGISTRY_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:58.9368494Z   GH_CONFIG_DIR: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:58.9368714Z   GH_HOST: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:58.9368914Z   GH_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:58.9369115Z   GITHUB_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:58.9369325Z   MBX_GC_AUTO: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:58.9369539Z   MBX_SHARE_OUT_DIR: 0
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:58.9369779Z   MISE_AUTO_INSTALL: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:58.9370037Z   MISE_EXEC_AUTO_INSTALL: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:58.9372704Z   MISE_GITHUB_TOKEN: ***
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:58.9372973Z   MISE_LOCKFILE: 0
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:58.9373198Z   MISE_NO_CONFIG: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:58.9373420Z   MISE_NO_ENV: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:58.9373637Z   MISE_NO_HOOKS: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:58.9373846Z   NODE_AUTH_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:58.9374062Z   NPM_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:58.9374291Z   RUSTUP_TOOLCHAIN: 1.98.1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:58.9374742Z   MISE_LOG_LEVEL: info
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:58.9375084Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-new/velnor-new
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:58.9375458Z   MISE_YES: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:58.9375713Z   MBX_CACHE_DIR: /home/runner/work/_temp/velnor/mbx
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:58.9376029Z   MBX_CACHE_LINKS: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:58.9376602Z   MBX_CACHE_EXPORT_GROUP: github-actions-37303474086-1-0f5da686-c73e-4b50-a32a-05c8eba3d59d
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:58.9377077Z   ACTIONS_CACHE_MODE: write
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:58.9377383Z   CARGO_HOME: /home/runner/work/_temp/velnor/cargo
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:58.9377751Z   MISE_CARGO_HOME: /home/runner/work/_temp/velnor/cargo
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:58.9378127Z   MISE_RUSTUP_HOME: /home/runner/work/_temp/velnor/rustup
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:58.9378501Z   RUSTUP_HOME: /home/runner/work/_temp/velnor/rustup
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:58.9378818Z ##[endgroup]
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:59.0673813Z ##[group]Run sh -c 'mkdir -p "$RUNNER_TEMP/velnor/cargo-clean" && cd "$RUNNER_TEMP/velnor/cargo-clean" && if mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo metadata --locked --offline --manifest-path "$GITHUB_WORKSPACE/Cargo.toml" >/dev/null 2>&1; then echo "velnor: sources hit, skipping fetch"; else echo "velnor: sources miss (source_missing), fetching"; mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo fetch --locked --manifest-path "$GITHUB_WORKSPACE/Cargo.toml"; fi'
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:59.0678430Z ^[[36;1msh -c 'mkdir -p "$RUNNER_TEMP/velnor/cargo-clean" && cd "$RUNNER_TEMP/velnor/cargo-clean" && if mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo metadata --locked --offline --manifest-path "$GITHUB_WORKSPACE/Cargo.toml" >/dev/null 2>&1; then echo "velnor: sources hit, skipping fetch"; else echo "velnor: sources miss (source_missing), fetching"; mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo fetch --locked --manifest-path "$GITHUB_WORKSPACE/Cargo.toml"; fi'^[[0m
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:59.0740370Z shell: /usr/bin/bash -e {0}
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:59.0740687Z env:
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:59.0740953Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:59.0741254Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:59.0741543Z   ACTIONS_RUNTIME_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:59.0741807Z   CARGO_REGISTRY_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:59.0742049Z   GH_CONFIG_DIR: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:59.0742275Z   GH_HOST: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:59.0742487Z   GH_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:59.0742694Z   GITHUB_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:59.0742920Z   MBX_GC_AUTO: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:59.0743146Z   MBX_SHARE_OUT_DIR: 0
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:59.0743394Z   MISE_AUTO_INSTALL: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:59.0743662Z   MISE_EXEC_AUTO_INSTALL: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:59.0746720Z   MISE_GITHUB_TOKEN: ***
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:59.0747009Z   MISE_LOCKFILE: 0
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:59.0747242Z   MISE_NO_CONFIG: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:59.0747476Z   MISE_NO_ENV: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:59.0747709Z   MISE_NO_HOOKS: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:59.0747947Z   NODE_AUTH_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:59.0748176Z   NPM_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:59.0748417Z   RUSTUP_TOOLCHAIN: 1.98.1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:59.0748676Z   MISE_LOG_LEVEL: info
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:59.0749038Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-new/velnor-new
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:59.0749440Z   MISE_YES: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:59.0749705Z   MBX_CACHE_DIR: /home/runner/work/_temp/velnor/mbx
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:59.0750041Z   MBX_CACHE_LINKS: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:59.0750477Z   MBX_CACHE_EXPORT_GROUP: github-actions-37303474086-1-0f5da686-c73e-4b50-a32a-05c8eba3d59d
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:59.0751014Z   MISE_CARGO_HOME: /home/runner/work/_temp/velnor/cargo
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:59.0751409Z   MISE_RUSTUP_HOME: /home/runner/work/_temp/velnor/rustup
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:32:59.0751745Z ##[endgroup]
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:00.4795896Z velnor: sources hit, skipping fetch
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:00.5211858Z ##[group]Run sh -c 'mkdir -p "$RUNNER_TEMP/velnor/cargo-clean" && cd "$RUNNER_TEMP/velnor/cargo-clean" && if mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo metadata --locked --offline --manifest-path "$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.toml" >/dev/null 2>&1; then echo "velnor: sources hit, skipping fetch"; else echo "velnor: sources miss (source_missing), fetching"; mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo fetch --locked --manifest-path "$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.toml"; fi'
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:00.5218357Z ^[[36;1msh -c 'mkdir -p "$RUNNER_TEMP/velnor/cargo-clean" && cd "$RUNNER_TEMP/velnor/cargo-clean" && if mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo metadata --locked --offline --manifest-path "$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.toml" >/dev/null 2>&1; then echo "velnor: sources hit, skipping fetch"; else echo "velnor: sources miss (source_missing), fetching"; mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo fetch --locked --manifest-path "$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.toml"; fi'^[[0m
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:00.5281213Z shell: /usr/bin/bash -e {0}
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:00.5281639Z env:
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:00.5281984Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:00.5282393Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:00.5282715Z   ACTIONS_RUNTIME_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:00.5282991Z   CARGO_REGISTRY_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:00.5283235Z   GH_CONFIG_DIR: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:00.5283456Z   GH_HOST: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:00.5283659Z   GH_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:00.5283870Z   GITHUB_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:00.5284095Z   MBX_GC_AUTO: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:00.5284322Z   MBX_SHARE_OUT_DIR: 0
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:00.5284562Z   MISE_AUTO_INSTALL: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:00.5284826Z   MISE_EXEC_AUTO_INSTALL: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:00.5287915Z   MISE_GITHUB_TOKEN: ***
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:00.5288197Z   MISE_LOCKFILE: 0
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:00.5288430Z   MISE_NO_CONFIG: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:00.5288669Z   MISE_NO_ENV: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:00.5288889Z   MISE_NO_HOOKS: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:00.5289104Z   NODE_AUTH_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:00.5289327Z   NPM_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:00.5289553Z   RUSTUP_TOOLCHAIN: 1.98.1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:00.5289804Z   MISE_LOG_LEVEL: info
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:00.5290144Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-new/velnor-new
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:00.5290528Z   MISE_YES: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:00.5290780Z   MBX_CACHE_DIR: /home/runner/work/_temp/velnor/mbx
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:00.5291097Z   MBX_CACHE_LINKS: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:00.5291512Z   MBX_CACHE_EXPORT_GROUP: github-actions-37303474086-1-0f5da686-c73e-4b50-a32a-05c8eba3d59d
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:00.5292032Z   MISE_CARGO_HOME: /home/runner/work/_temp/velnor/cargo
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:00.5292430Z   MISE_RUSTUP_HOME: /home/runner/work/_temp/velnor/rustup
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:00.5292780Z ##[endgroup]
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.6108856Z velnor: sources hit, skipping fetch
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.6176849Z ##[group]Run sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; s=$(date +%s%3N); mise --no-config --no-env --no-hooks exec rust@1.98.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx fmt --check --manifest-path crates/velnor-actions-cli/Cargo.toml; code=$?; VELNOR_EXIT_CODE="$code" VELNOR_START_MS="$s" VELNOR_INTERNAL_OP=write-task-report-v1 "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0"; helper_code=$?; if [ "$code" -ne 0 ]; then exit "$code"; fi; exit "$helper_code"'
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.6183422Z ^[[36;1msh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; s=$(date +%s%3N); mise --no-config --no-env --no-hooks exec rust@1.98.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx fmt --check --manifest-path crates/velnor-actions-cli/Cargo.toml; code=$?; VELNOR_EXIT_CODE="$code" VELNOR_START_MS="$s" VELNOR_INTERNAL_OP=write-task-report-v1 "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0"; helper_code=$?; if [ "$code" -ne 0 ]; then exit "$code"; fi; exit "$helper_code"'^[[0m
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.6265521Z shell: /usr/bin/bash -e {0}
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.6265974Z env:
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.6266557Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.6267042Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.6267780Z   ACTIONS_RUNTIME_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.6268206Z   CARGO_REGISTRY_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.6268729Z   GH_CONFIG_DIR: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.6269094Z   GH_HOST: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.6269430Z   GH_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.6269757Z   GITHUB_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.6270120Z   MBX_GC_AUTO: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.6270481Z   MBX_SHARE_OUT_DIR: 0
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.6270872Z   MISE_AUTO_INSTALL: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.6271305Z   MISE_EXEC_AUTO_INSTALL: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.6276157Z   MISE_GITHUB_TOKEN: ***
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.6276820Z   MISE_LOCKFILE: 0
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.6277198Z   MISE_NO_CONFIG: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.6277570Z   MISE_NO_ENV: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.6277931Z   MISE_NO_HOOKS: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.6278289Z   NODE_AUTH_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.6278650Z   NPM_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.6279019Z   RUSTUP_TOOLCHAIN: 1.98.1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.6279438Z   MISE_LOG_LEVEL: info
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.6279998Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-new/velnor-new
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.6280641Z   MISE_YES: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.6281053Z   MBX_CACHE_DIR: /home/runner/work/_temp/velnor/mbx
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.6281596Z   MBX_CACHE_LINKS: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.6282284Z   MBX_CACHE_EXPORT_GROUP: github-actions-37303474086-1-0f5da686-c73e-4b50-a32a-05c8eba3d59d
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.6283154Z   MISE_CARGO_HOME: /home/runner/work/_temp/velnor/cargo
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.6283793Z   MISE_RUSTUP_HOME: /home/runner/work/_temp/velnor/rustup
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.6284587Z   VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-cli/fmt/default
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.6285331Z   VELNOR_MATRIX_KEY: m-7569343f915bb22f
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.6286079Z   VELNOR_TASK_DIGEST: b3-8bc4144a80131135ef77b24d182152d8de781019a257664cff23ad37f942b121
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.6287211Z   VELNOR_TASK_ID: stack/rust/crates/velnor-actions-cli/fmt/default
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.6287817Z ##[endgroup]
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.7849903Z ##[group]Run sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; s=$(date +%s%3N); mise --no-config --no-env --no-hooks exec rust@1.98.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx clippy --locked --offline --manifest-path crates/velnor-actions-cli/Cargo.toml --package velnor-actions-cli --all-targets -- -D warnings; code=$?; VELNOR_EXIT_CODE="$code" VELNOR_START_MS="$s" VELNOR_INTERNAL_OP=write-task-report-v1 "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0"; helper_code=$?; if [ "$code" -ne 0 ]; then exit "$code"; fi; exit "$helper_code"'
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.7854235Z ^[[36;1msh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; s=$(date +%s%3N); mise --no-config --no-env --no-hooks exec rust@1.98.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx clippy --locked --offline --manifest-path crates/velnor-actions-cli/Cargo.toml --package velnor-actions-cli --all-targets -- -D warnings; code=$?; VELNOR_EXIT_CODE="$code" VELNOR_START_MS="$s" VELNOR_INTERNAL_OP=write-task-report-v1 "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0"; helper_code=$?; if [ "$code" -ne 0 ]; then exit "$code"; fi; exit "$helper_code"'^[[0m
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.7916724Z shell: /usr/bin/bash -e {0}
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.7917023Z env:
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.7917260Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.7917567Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.7917840Z   ACTIONS_RUNTIME_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.7918097Z   CARGO_REGISTRY_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.7918339Z   GH_CONFIG_DIR: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.7918566Z   GH_HOST: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.7918766Z   GH_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.7918973Z   GITHUB_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.7919186Z   MBX_GC_AUTO: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.7919403Z   MBX_SHARE_OUT_DIR: 0
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.7919642Z   MISE_AUTO_INSTALL: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.7919914Z   MISE_EXEC_AUTO_INSTALL: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.7922585Z   MISE_GITHUB_TOKEN: ***
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.7923099Z   MISE_LOCKFILE: 0
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.7923332Z   MISE_NO_CONFIG: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.7923558Z   MISE_NO_ENV: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.7923777Z   MISE_NO_HOOKS: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.7923988Z   NODE_AUTH_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.7924206Z   NPM_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.7924435Z   RUSTUP_TOOLCHAIN: 1.98.1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.7924682Z   MISE_LOG_LEVEL: info
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.7925018Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-new/velnor-new
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.7925394Z   MISE_YES: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.7925646Z   MBX_CACHE_DIR: /home/runner/work/_temp/velnor/mbx
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.7925973Z   MBX_CACHE_LINKS: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.7926643Z   MBX_CACHE_EXPORT_GROUP: github-actions-37303474086-1-0f5da686-c73e-4b50-a32a-05c8eba3d59d
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.7927183Z   MISE_CARGO_HOME: /home/runner/work/_temp/velnor/cargo
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.7927583Z   MISE_RUSTUP_HOME: /home/runner/work/_temp/velnor/rustup
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.7928058Z   VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-cli/clippy/default
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.7928513Z   VELNOR_MATRIX_KEY: m-167c225e22fadf7f
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.7928963Z   VELNOR_TASK_DIGEST: b3-24ed580847becc76ef59c4e9e3040e1d935dd4c3909fdf24b8cad7e45a45ca1d
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.7929509Z   VELNOR_TASK_ID: stack/rust/crates/velnor-actions-cli/clippy/default
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.7929885Z ##[endgroup]
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.9893703Z     Checking velnor-actions-contract v0.1.0 (/home/runner/work/velnor-new/velnor-new/crates/velnor-actions-contract)
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:02.9923517Z    Compiling velnor-actions-tofu v0.1.0 (/home/runner/work/velnor-new/velnor-new/crates/velnor-actions-tofu)
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:03.0418882Z     Checking velnor-actions-workflow-renderer v0.1.0 (/home/runner/work/velnor-new/velnor-new/crates/velnor-actions-workflow-renderer)
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:03.0421151Z     Checking velnor-actions-rust v0.1.0 (/home/runner/work/velnor-new/velnor-new/crates/velnor-actions-rust)
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:03.0422832Z     Checking velnor-actions-actionlint v0.1.0 (/home/runner/work/velnor-new/velnor-new/crates/velnor-actions-actionlint)
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:03.0739504Z     Checking velnor-actions-mise v0.1.0 (/home/runner/work/velnor-new/velnor-new/crates/velnor-actions-mise)
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:03.5201880Z     Checking velnor-actions-orchestrator v0.1.0 (/home/runner/work/velnor-new/velnor-new/crates/velnor-actions-orchestrator)
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:03.5564088Z     Checking velnor-actions-cli v0.1.0 (/home/runner/work/velnor-new/velnor-new/crates/velnor-actions-cli)
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:03.5862777Z     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.69s
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:03.6045802Z mbx[cache]: object cache: 12 hits, 0 misses; 0 B downloaded, 0 B uploaded, 0 B stored locally
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:03.6047315Z mbx[cache]: 750.6ms session; 11.26s estimated compiler time avoided (summed across compilations)
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:03.6048645Z mbx[cache]: Cargo artifact reuse and CI cache archive transfers are not included above
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:03.6183146Z ##[group]Run sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; s=$(date +%s%3N); mise --no-config --no-env --no-hooks exec rust@1.98.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx nextest list --profile ci --list-type binaries-only --locked --offline --manifest-path crates/velnor-actions-cli/Cargo.toml --package velnor-actions-cli; code=$?; VELNOR_EXIT_CODE="$code" VELNOR_START_MS="$s" VELNOR_INTERNAL_OP=write-task-report-v1 "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0"; helper_code=$?; if [ "$code" -ne 0 ]; then exit "$code"; fi; exit "$helper_code"'
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:03.6191251Z ^[[36;1msh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; s=$(date +%s%3N); mise --no-config --no-env --no-hooks exec rust@1.98.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx nextest list --profile ci --list-type binaries-only --locked --offline --manifest-path crates/velnor-actions-cli/Cargo.toml --package velnor-actions-cli; code=$?; VELNOR_EXIT_CODE="$code" VELNOR_START_MS="$s" VELNOR_INTERNAL_OP=write-task-report-v1 "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0"; helper_code=$?; if [ "$code" -ne 0 ]; then exit "$code"; fi; exit "$helper_code"'^[[0m
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:03.6283223Z shell: /usr/bin/bash -e {0}
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:03.6283720Z env:
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:03.6284144Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:03.6284697Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:03.6285202Z   ACTIONS_RUNTIME_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:03.6285659Z   CARGO_REGISTRY_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:03.6286099Z   GH_CONFIG_DIR: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:03.6286807Z   GH_HOST: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:03.6287186Z   GH_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:03.6287564Z   GITHUB_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:03.6287976Z   MBX_GC_AUTO: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:03.6288387Z   MBX_SHARE_OUT_DIR: 0
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:03.6288862Z   MISE_AUTO_INSTALL: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:03.6289454Z   MISE_EXEC_AUTO_INSTALL: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:03.6294472Z   MISE_GITHUB_TOKEN: ***
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:03.6294966Z   MISE_LOCKFILE: 0
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:03.6295379Z   MISE_NO_CONFIG: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:03.6295781Z   MISE_NO_ENV: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:03.6296168Z   MISE_NO_HOOKS: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:03.6297079Z   NODE_AUTH_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:03.6297490Z   NPM_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:03.6297916Z   RUSTUP_TOOLCHAIN: 1.98.1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:03.6298373Z   MISE_LOG_LEVEL: info
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:03.6298967Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-new/velnor-new
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:03.6299645Z   MISE_YES: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:03.6300100Z   MBX_CACHE_DIR: /home/runner/work/_temp/velnor/mbx
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:03.6300687Z   MBX_CACHE_LINKS: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:03.6301430Z   MBX_CACHE_EXPORT_GROUP: github-actions-37303474086-1-0f5da686-c73e-4b50-a32a-05c8eba3d59d
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:03.6302360Z   MISE_CARGO_HOME: /home/runner/work/_temp/velnor/cargo
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:03.6303073Z   MISE_RUSTUP_HOME: /home/runner/work/_temp/velnor/rustup
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:03.6303966Z   VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-cli/build/default
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:03.6304773Z   VELNOR_MATRIX_KEY: m-7453ab9ff0d4f64d
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:03.6305621Z   VELNOR_TASK_DIGEST: b3-ecbb7c5195d565eb1ae89c615c85c63b3a6f7431a98acebfb04472d787259d94
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:03.6306949Z   VELNOR_TASK_ID: stack/rust/crates/velnor-actions-cli/build/default
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:03.6307640Z ##[endgroup]
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:03.8817678Z    Compiling velnor-actions-contract v0.1.0 (/home/runner/work/velnor-new/velnor-new/crates/velnor-actions-contract)
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:03.8832375Z    Compiling velnor-actions-tofu v0.1.0 (/home/runner/work/velnor-new/velnor-new/crates/velnor-actions-tofu)
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:03.9297579Z    Compiling velnor-actions-rust v0.1.0 (/home/runner/work/velnor-new/velnor-new/crates/velnor-actions-rust)
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:03.9300416Z    Compiling velnor-actions-workflow-renderer v0.1.0 (/home/runner/work/velnor-new/velnor-new/crates/velnor-actions-workflow-renderer)
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:03.9361558Z    Compiling velnor-actions-mise v0.1.0 (/home/runner/work/velnor-new/velnor-new/crates/velnor-actions-mise)
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:03.9687869Z    Compiling velnor-actions-actionlint v0.1.0 (/home/runner/work/velnor-new/velnor-new/crates/velnor-actions-actionlint)
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:03.9855780Z    Compiling velnor-actions-orchestrator v0.1.0 (/home/runner/work/velnor-new/velnor-new/crates/velnor-actions-orchestrator)
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.0423781Z    Compiling velnor-actions-cli v0.1.0 (/home/runner/work/velnor-new/velnor-new/crates/velnor-actions-cli)
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.1183043Z     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.29s
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.1291842Z velnor-actions-cli::velnor_cli
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.1292528Z velnor-actions-cli::bin/velnor-actions
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.1344402Z mbx[cache]: object cache: 12 hits, 0 misses; 0 B downloaded, 0 B uploaded, 0 B stored locally
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.1345765Z mbx[cache]: 459.7ms session; 29.98s estimated compiler time avoided (summed across compilations)
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.1347568Z mbx[cache]: Cargo artifact reuse and CI cache archive transfers are not included above
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.1466566Z ##[group]Run sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; s=$(date +%s%3N); mise --no-config --no-env --no-hooks exec rust@1.98.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx nextest run --profile ci --locked --offline --manifest-path crates/velnor-actions-cli/Cargo.toml --package velnor-actions-cli --no-tests fail; code=$?; VELNOR_EXIT_CODE="$code" VELNOR_START_MS="$s" VELNOR_INTERNAL_OP=write-task-report-v1 "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0"; helper_code=$?; if [ "$code" -ne 0 ]; then exit "$code"; fi; exit "$helper_code"'
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.1470960Z ^[[36;1msh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; s=$(date +%s%3N); mise --no-config --no-env --no-hooks exec rust@1.98.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx nextest run --profile ci --locked --offline --manifest-path crates/velnor-actions-cli/Cargo.toml --package velnor-actions-cli --no-tests fail; code=$?; VELNOR_EXIT_CODE="$code" VELNOR_START_MS="$s" VELNOR_INTERNAL_OP=write-task-report-v1 "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0"; helper_code=$?; if [ "$code" -ne 0 ]; then exit "$code"; fi; exit "$helper_code"'^[[0m
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.1531427Z shell: /usr/bin/bash -e {0}
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.1531709Z env:
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.1531936Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.1532239Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.1532511Z   ACTIONS_RUNTIME_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.1532774Z   CARGO_REGISTRY_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.1533021Z   GH_CONFIG_DIR: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.1533242Z   GH_HOST: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.1533445Z   GH_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.1533649Z   GITHUB_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.1533881Z   MBX_GC_AUTO: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.1534102Z   MBX_SHARE_OUT_DIR: 0
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.1534341Z   MISE_AUTO_INSTALL: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.1534610Z   MISE_EXEC_AUTO_INSTALL: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.1537546Z   MISE_GITHUB_TOKEN: ***
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.1537828Z   MISE_LOCKFILE: 0
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.1538049Z   MISE_NO_CONFIG: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.1538278Z   MISE_NO_ENV: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.1538495Z   MISE_NO_HOOKS: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.1538705Z   NODE_AUTH_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.1538922Z   NPM_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.1539142Z   RUSTUP_TOOLCHAIN: 1.98.1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.1539390Z   MISE_LOG_LEVEL: info
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.1539731Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-new/velnor-new
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.1540107Z   MISE_YES: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.1540362Z   MBX_CACHE_DIR: /home/runner/work/_temp/velnor/mbx
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.1540689Z   MBX_CACHE_LINKS: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.1541107Z   MBX_CACHE_EXPORT_GROUP: github-actions-37303474086-1-0f5da686-c73e-4b50-a32a-05c8eba3d59d
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.1541633Z   MISE_CARGO_HOME: /home/runner/work/_temp/velnor/cargo
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.1542028Z   MISE_RUSTUP_HOME: /home/runner/work/_temp/velnor/rustup
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.1542519Z   VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/velnor-actions-cli/nextest/default
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.1542977Z   VELNOR_MATRIX_KEY: m-67ee20a34e48b6e3
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.1543419Z   VELNOR_TASK_DIGEST: b3-0f4293d55a0cfc2045288a1c8f3828985d32eec41de3cdfcabd4876ad3493287
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.1543970Z   VELNOR_TASK_ID: stack/rust/crates/velnor-actions-cli/nextest/default
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.1544352Z ##[endgroup]
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.3740791Z     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.06s
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.3904270Z ────────────
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.3904995Z  Nextest run ID 22778a1a-c162-41c8-8eed-6a7866a792ab with nextest profile: ci
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.3905723Z     Starting 237 tests across 2 binaries
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.3998214Z         PASS [   0.008s] (  1/237) velnor-actions-cli::velnor_cli impl_cli::version_flag_reports_binary_name
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.4010594Z         PASS [   0.010s] (  2/237) velnor-actions-cli::velnor_cli impl_cli_args::generate_missing_flag_value_exits_two
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.4034638Z         PASS [   0.013s] (  3/237) velnor-actions-cli::velnor_cli impl_cli_args::extra_positionals_exit_two
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.4103055Z         PASS [   0.020s] (  4/237) velnor-actions-cli::velnor_cli impl_cli_args::bare_invocation_and_unknown_commands_exit_two
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.4148030Z         PASS [   0.010s] (  5/237) velnor-actions-cli::velnor_cli impl_cli_args::help_describes_stack_generic_generator
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.4195407Z         PASS [   0.009s] (  6/237) velnor-actions-cli::velnor_cli impl_cli_args::output_dir_help_guides_unique_tmp_choice
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.4249526Z         PASS [   0.026s] (  7/237) velnor-actions-cli::velnor_cli impl_cli_args::generate_output_dir_flag_parses
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.4274743Z         PASS [   0.026s] (  8/237) velnor-actions-cli::velnor_cli impl_cli_args::generate_without_output_dir_parses
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.4368717Z         PASS [   0.024s] (  9/237) velnor-actions-cli::velnor_cli impl_cli_args::plan_without_config_exits_one
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.4427877Z         PASS [   0.023s] ( 10/237) velnor-actions-cli::velnor_cli impl_cli_args::unknown_flags_exit_two
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.4451685Z         PASS [   0.018s] ( 11/237) velnor-actions-cli::velnor_cli impl_cli_gate::internal_op_requires_env_gate_and_keeps_public_tree
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.4527768Z         PASS [   0.028s] ( 12/237) velnor-actions-cli::velnor_cli impl_cli_gate::help_and_version_identical_with_env
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.4581234Z         PASS [   0.021s] ( 13/237) velnor-actions-cli::velnor_cli impl_cli_gate::missing_gate_pieces_match_bare
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.4601413Z         PASS [   0.018s] ( 14/237) velnor-actions-cli::velnor_cli impl_cli_gate::plan_and_merge_without_request_file_match_bare
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.4655685Z         PASS [   0.020s] ( 15/237) velnor-actions-cli::velnor_cli impl_cli_gate::public_commands_ignore_internal_env
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.4704886Z         PASS [   0.012s] ( 16/237) velnor-actions-cli::velnor_cli impl_cli_gate::report_op_without_plan_fails_internal_silently
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.4742907Z         PASS [   0.011s] ( 17/237) velnor-actions-cli::velnor_cli impl_cli_gate::staged_merge_request_runs_json_protocol
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.4749349Z         PASS [   0.021s] ( 18/237) velnor-actions-cli::velnor_cli impl_cli_gate::report_op_needs_runner_temp_and_run_id
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.4757376Z         PASS [   0.009s] ( 19/237) velnor-actions-cli::velnor_cli impl_cli_gate::staged_plan_request_runs_json_protocol
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.4838707Z         PASS [   0.013s] ( 20/237) velnor-actions-cli::velnor_cli impl_cli_gate::unknown_op_matches_bare
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.4902882Z         PASS [   0.015s] ( 21/237) velnor-actions-cli::velnor_cli impl_cli_gate::write_request_with_existing_file_matches_bare
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.4916519Z         PASS [   0.019s] ( 22/237) velnor-actions-cli::velnor_cli impl_cli_gate::unreadable_request_exits_one_without_response
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.4921465Z         PASS [   0.018s] ( 23/237) velnor-actions-cli::velnor_cli impl_cli_gate::write_request_without_github_env_matches_bare
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.5000090Z         PASS [   0.017s] ( 24/237) velnor-actions-cli::velnor_cli impl_cli_gate_preseed::preseed_manifest_op_needs_runner_temp
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.5009314Z         PASS [   0.011s] ( 25/237) velnor-actions-cli::velnor_cli impl_cli_gate_preseed::preseed_manifest_op_without_writer_env_fails_internal_silently
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.5019119Z         PASS [   0.011s] ( 26/237) velnor-actions-cli::velnor_cli impl_cli_gate_preseed::preseed_manifest_op_writes_manifest_and_copy
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.5225909Z         PASS [   0.030s] ( 27/237) velnor-actions-cli::velnor_cli impl_cli_init::init_leaves_tool_files_and_sources_untouched
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.5247590Z         PASS [   0.024s] ( 28/237) velnor-actions-cli::velnor_cli impl_cli_init::init_writes_no_other_file
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.5479979Z         PASS [   0.025s] ( 29/237) velnor-actions-cli::velnor_cli impl_cli_init::nested_init_writes_only_root_config
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.5529019Z         PASS [   0.026s] ( 30/237) velnor-actions-cli::velnor_cli impl_cli_init::sample_comments_describe_values_defaults_effects
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.5602377Z         PASS [   0.059s] ( 31/237) velnor-actions-cli::velnor_cli impl_cli_init::invalid_config_fails_with_key_path_and_no_replace
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.5754184Z         PASS [   0.024s] ( 32/237) velnor-actions-cli::velnor_cli impl_cli_init::velnor_file_blocks_init
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.5759145Z         PASS [   0.028s] ( 33/237) velnor-actions-cli::velnor_cli impl_cli_init::sample_first_line_is_version_marker
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.7131100Z         PASS [   0.211s] ( 34/237) velnor-actions-cli::velnor_cli impl_cli_init::malformed_manifest_fails_naming_file
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.9678795Z         PASS [   0.391s] ( 35/237) velnor-actions-cli::velnor_cli impl_cli_parity::plan_queries_no_caches_and_exposes_no_plan_json
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:04.9819771Z         PASS [   0.267s] ( 36/237) velnor-actions-cli::velnor_cli impl_cli_parity::plan_writes_nothing_and_exposes_no_plan_json
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:05.2560201Z         PASS [   0.275s] ( 37/237) velnor-actions-cli::velnor_cli impl_cli_parity_golden::parity_malformed_fails_with_token
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:05.4951510Z         PASS [   0.935s] ( 38/237) velnor-actions-cli::velnor_cli impl_cli_parity::plan_job_ids_match_generated_workflow
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:05.5040834Z         PASS [   0.008s] ( 39/237) velnor-actions-cli::velnor_cli impl_cli_protocol::merge_garbage_request_exits_one
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:06.5176021Z         PASS [   1.941s] ( 40/237) velnor-actions-cli::velnor_cli impl_cli_parity::plan_reports_full_configured_crates_in_agreement_with_yaml
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:10.6477894Z         PASS [   5.143s] ( 41/237) velnor-actions-cli::velnor_cli impl_cli_protocol::merge_no_work_plan_reports_no_work
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:10.6927883Z         PASS [   0.043s] ( 42/237) velnor-actions-cli::velnor_cli impl_cli_protocol::plan_rejects_unknown_output_mode_before_computation
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:11.2318092Z         PASS [   4.713s] ( 43/237) velnor-actions-cli::velnor_cli impl_cli_protocol::plan_publishes_plan_artifact_files
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:16.2307854Z         PASS [   4.998s] ( 44/237) velnor-actions-cli::velnor_cli impl_cli_protocol::plan_writes_response_and_github_outputs
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:16.2417798Z         PASS [   0.010s] ( 45/237) velnor-actions-cli::velnor_cli impl_cli_protocol::write_request_materializes_push_request
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:16.2507761Z         PASS [   0.009s] ( 46/237) velnor-actions-cli::velnor_cli impl_cli_protocol::write_request_rejects_malformed_payload
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:16.9518074Z         PASS [   6.256s] ( 47/237) velnor-actions-cli::velnor_cli impl_cli_protocol::plan_without_runner_temp_exits_one
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:16.9597909Z         PASS [   0.709s] ( 48/237) velnor-actions-cli::velnor_cli impl_cli_report::crates_list_in_stable_package_path_order
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:17.0262621Z         PASS [   0.079s] ( 49/237) velnor-actions-cli::velnor_cli impl_cli_report::empty_repo_reports_no_work_and_final_check
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:17.2953784Z         PASS [   0.335s] ( 50/237) velnor-actions-cli::velnor_cli impl_cli_report::ignored_plan_keeps_ignore_reasons
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:17.4067945Z         PASS [   0.377s] ( 51/237) velnor-actions-cli::velnor_cli impl_cli_report::plan_claims_no_hits_coverage_or_selections
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:17.6317764Z         PASS [   0.336s] ( 52/237) velnor-actions-cli::velnor_cli impl_cli_report::plan_explains_pr_narrowing
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:17.8387881Z         PASS [   0.434s] ( 53/237) velnor-actions-cli::velnor_cli impl_cli_report::plan_lists_full_field_set
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:18.0071725Z         PASS [   0.378s] ( 54/237) velnor-actions-cli::velnor_cli impl_cli_report::plan_lists_sections_without_yaml_or_json
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:18.5878177Z         PASS [   0.747s] ( 55/237) velnor-actions-cli::velnor_cli impl_cli_report::plan_prints_no_machine_or_volatile_content
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:18.6698848Z         PASS [   0.083s] ( 56/237) velnor-actions-cli::velnor_cli impl_cli_schema2::config_migrate_preview_does_not_write
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:18.6857812Z         PASS [   0.678s] ( 57/237) velnor-actions-cli::velnor_cli impl_cli_report::plan_values_come_from_validated_config
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:18.6959454Z         PASS [   0.028s] ( 58/237) velnor-actions-cli::velnor_cli impl_cli_smoke::env_without_request_file_exits_two
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:19.2322087Z         PASS [   0.546s] ( 59/237) velnor-actions-cli::velnor_cli impl_cli_smoke::generate_keeps_recommendations_on_stderr
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:19.2698496Z         PASS [   0.036s] ( 60/237) velnor-actions-cli::velnor_cli impl_cli_smoke::help_is_identical_with_and_without_env
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:19.2730452Z         PASS [   0.575s] ( 61/237) velnor-actions-cli::velnor_cli impl_cli_smoke::generate_writes_manual_change_suggestions_for_malformed_tools
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:19.2925155Z         PASS [   0.021s] ( 62/237) velnor-actions-cli::velnor_cli impl_cli_smoke::init_outside_work_tree_exits_one
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:19.3322632Z         PASS [   0.064s] ( 63/237) velnor-actions-cli::velnor_cli impl_cli_smoke::init_creates_config_then_refuses_overwrite
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:19.3788065Z         PASS [   0.086s] ( 64/237) velnor-actions-cli::velnor_cli impl_cli_smoke::plan_emits_recommendations_once_to_stdout_only
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:20.3928085Z         PASS [   1.056s] ( 65/237) velnor-actions-cli::velnor_cli impl_cli_smoke::preview_prints_absolute_paths_and_files
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:20.4528127Z         PASS [   0.063s] ( 66/237) velnor-actions-cli::velnor_cli impl_cli_smoke::public_failures_collapse_to_one_stderr_line
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:20.4601953Z         PASS [   0.008s] ( 67/237) velnor-actions-cli::velnor_cli impl_cli_smoke::unknown_command_exits_two
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:20.4674557Z         PASS [   0.006s] ( 68/237) velnor-actions-cli::velnor_cli impl_cli_verify_local::verify_local_entrypoint_lists_exact_stages
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:20.4765589Z         PASS [   0.009s] ( 69/237) velnor-actions-cli::velnor_cli impl_cli_verify_local::verify_local_entrypoint_parses
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:20.6774222Z         FAIL [   0.198s] ( 70/237) velnor-actions-cli::velnor_cli impl_cli_verify_local::verify_local_repo_policy_stage_executes
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:20.6806497Z   stdout ───
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:20.6807788Z 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:20.6808713Z     running 1 test
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:20.6809923Z     test impl_cli_verify_local::verify_local_repo_policy_stage_executes ... FAILED
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:20.6810797Z 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:20.6811131Z     failures:
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:20.6811513Z 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:20.6812065Z     failures:
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:20.6812667Z         impl_cli_verify_local::verify_local_repo_policy_stage_executes
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:20.6813449Z 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:20.6814100Z     test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 236 filtered out; finished in 0.19s
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:20.6816122Z 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:20.6816619Z   stderr ───
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:20.6817454Z 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:20.6818790Z     thread 'impl_cli_verify_local::verify_local_repo_policy_stage_executes' (7096) panicked at crates/velnor-actions-cli/tests/impl_cli_verify_local.rs:156:5:
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:20.6820839Z     repo-policy stage failed: check-freshness: FAIL
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:20.6822211Z       - upstream-freshness gh: stale evidence: checked 2026-10-04T11:28:54Z (24.1h ago, interval 24h)
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:20.6824061Z       - upstream-freshness actionlint: stale evidence: checked 2026-10-04T11:28:54Z (24.1h ago, interval 24h)
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:20.6825778Z       - upstream-freshness shellcheck: stale evidence: checked 2026-10-04T11:28:54Z (24.1h ago, interval 24h)
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:20.6827613Z       - upstream-freshness zizmor: stale evidence: checked 2026-10-04T11:28:54Z (24.1h ago, interval 24h)
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:20.6828890Z       - upstream-freshness nextest: stale evidence: checked 2026-10-04T11:28:54Z (24.1h ago, interval 24h)
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:20.6830130Z       - upstream-freshness opentofu: stale evidence: checked 2026-10-04T11:28:54Z (24.1h ago, interval 24h)
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:20.6832798Z       - upstream-freshness release-plz: stale evidence: checked 2026-10-04T11:28:54Z (24.1h ago, interval 24h)
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:20.6834808Z       - upstream-freshness Swatinem/rust-cache: stale evidence: checked 2026-10-04T11:28:54Z (24.1h ago, interval 24h)
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:20.6837062Z       - upstream-freshness actions/cache/restore: stale evidence: checked 2026-10-04T11:28:54Z (24.1h ago, interval 24h)
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:20.6839147Z       - upstream-freshness actions/cache/save: stale evidence: checked 2026-10-04T11:28:54Z (24.1h ago, interval 24h)
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:20.6840720Z       - upstream-freshness actions/checkout: stale evidence: checked 2026-10-04T11:28:54Z (24.1h ago, interval 24h)
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:20.6842346Z       - upstream-freshness actions/download-artifact: stale evidence: checked 2026-10-04T11:28:54Z (24.1h ago, interval 24h)
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:20.6844031Z       - upstream-freshness actions/upload-artifact: stale evidence: checked 2026-10-04T11:28:54Z (24.1h ago, interval 24h)
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:20.6845629Z       - upstream-freshness runner: stale evidence: checked 2026-10-04T11:17:14Z (24.3h ago, interval 24h)
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:20.6846686Z 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:20.6847224Z     note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:20.6847943Z 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:20.6848358Z   Cancelling due to test failure: 3 tests still running
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:20.9900486Z         PASS [   1.612s] ( 71/237) velnor-actions-cli::velnor_cli impl_cli_smoke::previews_use_unique_tmp_dirs_without_collision
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:22.8511748Z         PASS [  17.595s] ( 72/237) velnor-actions-cli::velnor_cli impl_cli_protocol::dynamic_matrix_over_job_limit_preserves_response_but_publishes_nothing
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:23.1564126Z         PASS [  18.190s] ( 73/237) velnor-actions-cli::velnor_cli impl_cli_parity_golden::parity_artifacts_match_goldens
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:23.1565683Z ────────────
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:23.1566637Z      Summary [  18.766s] 73/237 tests run: 72 passed, 1 failed, 0 skipped
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:23.1567937Z         FAIL [   0.198s] ( 70/237) velnor-actions-cli::velnor_cli impl_cli_verify_local::verify_local_repo_policy_stage_executes
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:23.1569324Z warning: 164/237 tests were not run due to test failure (run with --no-fail-fast to run all tests, or run with --max-fail)
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:23.1576982Z error: test run failed
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:23.1691764Z ##[error]Process completed with exit code 100.
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:23.1768119Z ##[group]Run actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:23.1768566Z with:
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:23.1768795Z   if-no-files-found: error
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:23.1769128Z   name: velnor-crate-r37303474086-a1-rust-velnor-actions-cli
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:23.1769539Z   path: /home/runner/work/_temp/velnor/r37303474086-a1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:23.1769873Z   retention-days: 30
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:23.1770110Z   compression-level: 6
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:23.1770360Z   overwrite: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:23.1770593Z   include-hidden-files: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:23.1770851Z   archive: true
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:23.1771065Z env:
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:23.1771273Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:23.1771555Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:23.1771820Z   ACTIONS_RUNTIME_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:23.1772058Z   CARGO_REGISTRY_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:23.1772298Z   GH_CONFIG_DIR: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:23.1772516Z   GH_HOST: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:23.1772741Z   GH_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:23.1772942Z   GITHUB_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:23.1773164Z   MBX_GC_AUTO: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:23.1773380Z   MBX_SHARE_OUT_DIR: 0
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:23.1773607Z   MISE_AUTO_INSTALL: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:23.1773862Z   MISE_EXEC_AUTO_INSTALL: false
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:23.1776801Z   MISE_GITHUB_TOKEN: ***
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:23.1777082Z   MISE_LOCKFILE: 0
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:23.1777305Z   MISE_NO_CONFIG: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:23.1777529Z   MISE_NO_ENV: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:23.1777749Z   MISE_NO_HOOKS: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:23.1778170Z   NODE_AUTH_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:23.1778389Z   NPM_TOKEN: 
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:23.1778614Z   RUSTUP_TOOLCHAIN: 1.98.1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:23.1778871Z   MISE_LOG_LEVEL: info
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:23.1779208Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-new/velnor-new
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:23.1779580Z   MISE_YES: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:23.1779830Z   MBX_CACHE_DIR: /home/runner/work/_temp/velnor/mbx
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:23.1780149Z   MBX_CACHE_LINKS: 1
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:23.1780567Z   MBX_CACHE_EXPORT_GROUP: github-actions-37303474086-1-0f5da686-c73e-4b50-a32a-05c8eba3d59d
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:23.1781027Z ##[endgroup]
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:23.3381667Z With the provided path, there will be 10 files uploaded
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:23.3383745Z Artifact name is valid!
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:23.3384052Z Root directory input is valid!
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:23.5299141Z Uploading artifact: velnor-crate-r37303474086-a1-rust-velnor-actions-cli.zip
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:23.5344267Z Beginning upload of artifact content to blob storage
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:23.6497296Z Uploaded bytes 42487
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:23.6742202Z Finished uploading artifact content to blob storage!
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:23.6743416Z SHA256 digest of uploaded artifact is aaca77383f72d6d26a311e7ebf21a1ae39bb0171f6d65fa9c8e9ef5d013c1b0d
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:23.6744511Z Finalizing artifact upload
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:23.9720813Z Artifact velnor-crate-r37303474086-a1-rust-velnor-actions-cli successfully finalized. Artifact ID 11343231076
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:23.9722983Z Artifact velnor-crate-r37303474086-a1-rust-velnor-actions-cli has been successfully uploaded! Final size is 42487 bytes. Artifact ID is 11343231076
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:23.9725434Z Artifact download URL: https://github.com/tailrocks/velnor-new/actions/runs/37303474086/artifacts/11343231076
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:23.9935795Z Post job cleanup.
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:24.0819969Z [command]/usr/bin/git version
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:24.0882601Z git version 2.55.0
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:24.0923518Z Temporarily overriding HOME='/home/runner/work/_temp/31a62170-263d-4e06-96b0-306bf7eba3ce' before making global git config changes
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:24.0924943Z Adding repository directory to the temporary git global config as a safe directory
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:24.0932129Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/velnor-new/velnor-new
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:24.0974084Z Removing SSH command configuration
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:24.0981643Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:24.1034183Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:24.1378868Z Removing HTTP extra header
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:24.1385425Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:24.1436576Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:24.1768814Z Removing includeIf entries pointing to credentials config files
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:24.1777774Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:24.1848657Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-05T11:33:24.2312255Z Cleaning up orphan processes

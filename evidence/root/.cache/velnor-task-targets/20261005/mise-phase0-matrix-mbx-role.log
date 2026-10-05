@@ -1,0 +1,6 @@
+
+running 1 test
+test crate_jobs::crate_jobs_tests::mbx_tests::drivers_follow_per_crate_selection ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 486 filtered out; finished in 0.00s
+

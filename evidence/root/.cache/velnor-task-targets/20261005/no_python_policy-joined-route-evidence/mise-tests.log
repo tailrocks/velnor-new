@@ -1,0 +1,422 @@
+   Compiling serde_json v1.0.151
+   Compiling velnor-actions-contract v0.1.0 (/root/.cache/velnor-task-targets/20261005/no_python_policy-joined-pin-test-20261005/crates/velnor-actions-contract)
+   Compiling velnor-actions-tofu v0.1.0 (/root/.cache/velnor-task-targets/20261005/no_python_policy-joined-pin-test-20261005/crates/velnor-actions-tofu)
+   Compiling velnor-actions-mise v0.1.0 (/root/.cache/velnor-task-targets/20261005/no_python_policy-joined-pin-test-20261005/crates/velnor-actions-mise)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 13.40s
+     Running unittests src/lib.rs (/root/.cache/velnor-task-targets/20261005/no_python_policy-joined-route-target/debug/deps/velnor_actions_mise-5bc1136d010e7c6e)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/velnor_mise.rs (/root/.cache/velnor-task-targets/20261005/no_python_policy-joined-route-target/debug/deps/velnor_mise-6d700a72d1410dbe)
+
+running 357 tests
+test impl_adapter_wire_mise::fork_event_is_read_only ... ok
+test impl_adapter_wire_mise::freshness_requirements_enforced ... ok
+test impl_adapter_wire_mise::catalog_identities_validate ... ok
+test impl_adapter_wire_mise::inventory_count_parses_string_arrays ... ok
+test impl_adapter_wire_mise::lock_tool_versions_exposes_map ... ok
+test impl_adapter_wire_mise::inspect_mise_file_never_fails_never_writes ... ok
+test impl_adapter_wire_mise::mise_symbols_route_to_mise ... ok
+test impl_adapter_wire_mise::archive_identity_binds_platform_and_config ... ok
+test impl_adapter_wire_mise::save_decision_denies_with_reasons ... ok
+test impl_adapter_wire_mise::rust_files_named_only_in_toolfiles ... ok
+test impl_adapter_wire_mise::policy_header_validates_and_rejects_weakening ... ok
+test impl_adapter_wire_mise::save_useful_needs_delta ... ok
+test impl_adapter_wire_mise::single_shard_skips_archive_write_and_transfer ... ok
+test impl_adapter_wire_mise::writers_overlap_guards_layers ... ok
+test impl_mise::tool_id_is_mise ... ok
+test impl_mise_baseline::baseline_list_args_are_fixed_and_exact ... ok
+test impl_mise_baseline::baseline_argv_runs_pinned_gh ... ok
+test impl_mise_baseline::baseline_lookup_records_exact_inputs ... ok
+test impl_mise_baseline::baseline_lookup_rejects_malformed_inputs ... ok
+test impl_mise_build::candidate_build_argv_is_byte_exact ... ok
+test impl_mise_baseline::baseline_lookup_commands_carry_baseline_policy ... ok
+test impl_mise_build::candidate_build_specs_come_only_from_catalog ... ok
+test impl_mise_build::candidate_build_command_matches_argv ... ok
+test impl_mise_cache::artifact_dir_prefers_task_cache_parent ... ok
+test impl_mise_cache::artifact_path_joins_and_rejects_escapes ... ok
+test impl_mise_cache::cache_modes_roundtrip_display_parse ... ok
+test impl_mise_cache::descriptor_without_sources_is_not_eligible ... ok
+test impl_mise_cache_gates::modes_follow_event_kind ... ok
+test impl_mise_cache::descriptor_digest_is_deterministic ... ok
+test impl_mise_cache::read_and_verify_artifact_roundtrip ... ok
+test impl_mise_cache_gates::reuse_qualification_rejects_nondeterministic_tasks ... ok
+test impl_mise_cache_gates::reused_outputs_verify_presence_and_digests ... ok
+test impl_mise_cache_gates::saves_gate_on_push_and_pass_for_all_layers ... ok
+test impl_mise_cache_gates::restore_classification_uses_precise_reasons ... ok
+test impl_mise_cache_gates::sources_allowlist_rejects_creds_targets_and_homes ... ok
+test impl_mise_cache_gates::task_argv_pins_globals_mode_and_file ... ok
+test impl_mise_cache_gates::task_defs_stay_under_runner_temp ... ok
+test impl_mise_cache_gates::zero_byte_outputs_fail_mise_layer_as_incomplete ... ok
+test impl_mise_cache_gates::task_toml_renders_marker_and_fixed_fields ... ok
+test impl_mise_cache_t22::fetch_decision_keeps_its_closed_reason_set ... ok
+test impl_mise_cache_t22::never_archive_markers_reject_state_plans_and_credentials ... ok
+test impl_mise_cache_t22::provider_corruption_discards_and_refetches_through_the_model_checks ... ok
+test impl_mise_cache_t22::provider_restore_errors_stay_inside_the_closed_thirteen ... ok
+test impl_mise_cache_t22::restored_results_verify_evidence_before_outputs ... ok
+test impl_mise_cache_t22::save_decision_keeps_single_writer_push_gated_saves ... ok
+test impl_mise_cache_t22::provider_restore_checks_run_in_order_with_precise_reasons ... ok
+test impl_mise_cache_t22::sources_subset_validation_enforces_the_never_archive_list ... ok
+test impl_mise_cache_t22::symlink_loop_maps_to_unavailable_and_still_executes ... ok
+test impl_mise_cache_t22::wrong_tool_version_cools_to_tool_missing_and_executes ... ok
+test impl_mise_cache_t22::zero_byte_provider_entries_fail_the_p04_rule ... ok
+test impl_mise_catalog::action_mbx_reconcile_matches_pin_only ... ok
+test impl_mise_cache_t22::symlinked_cache_entry_with_tampered_bytes_fails_closed ... ok
+test impl_mise_catalog::catalog_new_validates_every_slot ... ok
+test impl_mise_catalog::exact_version_validation_accepts_only_pins ... ok
+test impl_mise_catalog::mbx_provisioning_modes_validated ... ok
+test impl_mise_catalog::opentofu_catalog_digest_binds_qualified_artifact ... ok
+test impl_mise_catalog::opentofu_digest_follows_qualified_version_only ... ok
+Mach-O: Mach-O 64-bit executable arm64
+Initialized empty Git repository in /tmp/velnor-mise-p10-config-missing-2982208/.git/
+test impl_mise_catalog::opentofu_platform_digests_are_distinct_qualified_hex ... ok
+Apple SDK: /tmp/velnor-generator-release-2982208-4/sdk
+Binary version: velnor-actions 0.1.1
+Initialized empty Git repository in /tmp/velnor-mise-p10-config-wt-2982208/.git/
+Initialized empty Git repository in /tmp/velnor-mise-p10-config-include-2982208/.git/
+test impl_mise_catalog::pinned_catalog_matches_selected_versions ... ok
+test impl_mise_catalog::rust_toolchain_name_pins_version_and_target ... libmissing.so => not found
+ok
+test impl_mise_catalog::tool_file_values_never_become_pins ... ok
+Usage: velnor-actions <COMMAND>
+
+Commands:
+  init
+  plan
+  generate
+  config
+test impl_mise_catalog::tool_names_roundtrip_and_reject_aliases ... libc.so.6 => /lib/libc.so.6
+Mach-O: Mach-O 64-bit executable arm64
+ok
+test impl_mise_catalog::tool_specs_use_registry_names ... ok
+test impl_mise_command::args_pass_through_byte_exact ... ok
+test impl_mise_command::cancel_or_timeout_classifier_separates_abortions_from_outcomes ... ok
+test impl_mise_command::custom_task_run_shape_is_plain_mise_run ... ok
+test impl_mise_command::empty_payload_is_rejected ... ok
+test impl_mise_command::isolation_env_carries_the_quartet ... ok
+Apple Clang: /tmp/velnor-generator-release-2982208-4/clang
+Apple linker: /tmp/velnor-generator-release-2982208-4/ld
+test impl_mise_command::mise_argv_places_globals_before_subcommand ... ok
+test impl_mise_command::no_shell_interprets_any_argument ... ok
+test impl_mise_command::process_output_reports_typed_exit ... ok
+Binary version: velnor-actions 0.1.0
+Mach-O: Mach-O 64-bit executable arm64
+test impl_mise_command::separator_splits_specs_from_payload ... ok
+test impl_mise_command::with_cwd_records_working_directory ... ok
+libc.so.6 => /lib/libc.so.6
+test impl_mise_env::auto_install_predicate_separates_exec_from_install ... ok
+test impl_mise_env::automation_pair_appends_as_allowed_extra ... ok
+test impl_mise_env::credential_pattern_catches_registry_and_token_variants ... ok
+test impl_mise_env::credential_strip_set_is_exact ... ok
+test impl_mise_env::endpoint_selectors_are_reserved_and_unsettable ... ok
+test impl_mise_env::every_built_mise_subcommand_is_allowlisted ... ok
+test impl_mise_env::exec_disables_implicit_install ... ok
+test impl_mise_env::install_and_direct_keep_install_enabled ... ok
+test impl_mise_env::mise_prefix_is_reserved_except_owned_homes ... ok
+test impl_mise_env::oidc_token_pair_never_reaches_task_env ... ok
+test impl_mise_env::rustup_toolchain_is_exact_catalog_pin ... ok
+test impl_mise_env::subcommand_allowlist_is_exec_install_run ... ok
+test impl_mise_env::tofu_families_are_reserved_except_automation_pair ... ok
+test impl_mise_env::tofu_reserved_keys_fail_loud_via_with_env_and_repo_task ... ok
+test impl_mise_env::toolchain_env_names_are_exact ... ok
+test impl_mise_env::toolchain_env_triple_is_exact ... ok
+test impl_mise_env::with_env_appends_toolchain_pairs ... ok
+test impl_mise_env_policy::baseline_keeps_only_ci_identity ... ok
+test impl_mise_env_policy::bootstrap_keeps_only_download_credentials ... ok
+test impl_mise_env_policy::credential_allowlists_are_exact ... ok
+test impl_mise_env_policy::gh_exec_selects_baseline_policy ... ok
+test impl_mise_env_policy::proxy_allowlist_is_exact ... ok
+test impl_mise_env_policy::endpoint_selectors_strip_for_every_policy ... ok
+test impl_mise_env_policy::repo_task_env_is_proxy_plus_explicit_only ... ok
+test impl_mise_env_policy::tofu_exec_baked_env_survives_hostile_parent ... ok
+test impl_mise_env_policy::tofu_ambient_families_strip_for_every_policy ... ok
+test impl_mise_gate6::custom_task_bad_names_and_inputs_rejected ... ok
+test impl_mise_gate6::custom_task_grant_requires_opt_in_and_declarations ... ok
+Usage: velnor-actions <COMMAND>
+test impl_mise_gate6::custom_task_without_opt_in_never_grants ... ok
+test impl_mise_env_policy::verify_and_discovery_strip_every_credential ... ok
+test impl_mise_gate6::gated_render_carries_marker_and_fixed_fields ... ok
+test impl_mise_gate6::qualified_argv_matches_fixed_shape ... ok
+test impl_mise_gate6::unqualified_tasks_never_reach_run_argv ... ok
+test impl_mise_gate6::fixture_tokens_require_gate6_shape ... ok
+[testmain (root-commit) 6ba78a7] one
+ 1 file changed, 1 insertion(+)
+ create mode 100644 file.txt
+test impl_mise_generator_release_workflow::setup_lowers_target_matched_action_checksum_and_rust_tool_install ... ok
+test impl_mise_git::allowlist_rejects_mutating_and_info_verbs ... ok
+test impl_mise_git::allowlist_accepts_exactly_five_verbs ... ok
+test impl_mise_gate6::gated_render_configures_no_remote_cache ... ok
+test impl_mise_git_config::config_verb_is_allowlisted ... ok
+test impl_mise_generator_release_workflow_checks::binary_checks_reject_wrong_target_paths_and_runner_families ... ok
+test impl_mise_install::cargo_profile_exec_invokes_no_mbx ... ok
+test impl_mise_install::install_empty_toolchain_rejected ... ok
+test impl_mise_install::install_command_matches_argv_and_keeps_install_enabled ... ok
+test impl_mise_install::mbx_install_carries_exact_mbx_spec ... ok
+test impl_mise_git::git_argv_runs_git_directly ... ok
+test impl_mise_generator_release_workflow_checks::check_steps_bind_native_runner_and_toolchain_identity ... ok
+test impl_mise_isolation::constructors_assign_typed_policies ... ok
+test impl_mise_isolation::hook_escape_privileged_declared_keys_never_run ... ok
+test impl_mise_install::cargo_profile_install_mentions_no_mbx ... ok
+test impl_mise_install::install_specs_come_only_from_catalog ... ok
+test impl_mise_isolation::repo_task_rejects_reserved_declared_keys ... ok
+test impl_mise_isolation::precancelled_run_fails_typed_without_spawning ... ok
+test impl_mise_generator_release_workflow::setup_rejects_wrong_mise_action_pin_and_target_checksum ... ok
+test impl_mise_git::git_command_in_records_cwd ... ok
+test impl_mise_install::install_carries_specs_only ... ok
+test impl_mise_git::discovery_git_owns_optional_lock_control ... ok
+test impl_mise_isolation::reserved_override_rejected ... ok
+[testmain (root-commit) 6ba78a7] one
+ 1 file changed, 1 insertion(+)
+ create mode 100644 file.txt
+test impl_mise_isolation::default_bounds_match_named_consts ... ok
+libc.so.6 => /lib/libc.so.6
+[testmain (root-commit) 6ba78a7] one
+ 1 file changed, 1 insertion(+)
+ create mode 100644 file.txt
+test impl_mise_isolation::reserved_keys_cover_isolation_disable_and_credentials ... ok
+test impl_mise_install::install_argv_is_byte_exact ... ok
+test impl_mise_env_policy::live_repo_task_keeps_ambient_proxy_only ... ok
+test impl_mise_generator_release_workflow::rust_exec_lowers_pinned_cargo_args_and_owned_environment ... ok
+test impl_mise_git::live_git_rev_parse_reports_typed_success ... ok
+test impl_mise_git::live_git_outside_repo_reports_typed_failure ... ok
+test impl_mise_isolation::real_exit_and_signal_preserved ... ok
+test impl_mise_lock::lock_commit_diverged_from_manifest_fails ... ok
+Preparing worktree (new branch 'p10cfg')
+test impl_mise_lockfile::decoy_entry_under_alias_key_does_not_verify ... ok
+test impl_mise_lockfile::coverage_matrix_names_every_state ... ok
+test impl_mise_lockfile::drifted_spec_version_does_not_resolve ... ok
+test impl_mise_isolation::sentinel_credential_absent ... ok
+test impl_mise_generator_release_workflow_checks::gnu_abi_check_rejects_missing_dependencies_and_failed_readelf ... ok
+test impl_mise_isolation::over_limit_stream_fails_closed ... ok
+test impl_mise_lockfile::parses_quoted_backend_qualified_keys ... ok
+test impl_mise_lockfile::parses_v3_entries_with_platform_checksums ... ok
+test impl_mise_lock::lock_matches_manifest_per_target ... ok
+test impl_mise_lock::lock_mismatch_mutable_and_missing_target_fail ... ok
+test impl_mise_lockfile::platform_map_covers_supported_targets ... ok
+test impl_mise_lockfile::every_catalog_spec_resolves_and_foreign_does_not ... ok
+test impl_mise_generator_release_workflow_checks::linux_elf_header_parser_normalizes_spacing_and_requires_exact_fields ... ok
+test impl_mise_lockfile::structural_garbage_fails_the_parse ... ok
+test impl_mise_lockfile::uppercase_checksums_verify ... ok
+test impl_mise_multiline::array_table_redefined_as_table_rejected ... ok
+test impl_mise_generator_release_workflow_checks::apple_sdk_and_linker_checks_observe_real_executable_paths ... ok
+test impl_mise_generator_release_workflow_checks::macos_binary_check_rejects_universal_and_wrong_architectures ... ok
+test impl_mise_multiline::duplicate_keys_within_array_table_rejected ... ok
+test impl_mise_multiline::multiline_basic_string_and_trimming ... ok
+test impl_mise_lockfile::platform_hole_and_corrupt_shape_block ... ok
+test impl_mise_multiline::multiline_empty_and_escaped_quotes ... ok
+test impl_mise_multiline::multiline_key_rejected ... ok
+test impl_mise_multiline::multiline_line_continuation ... ok
+test impl_mise_lock::lock_commit_required_and_manifest_strict ... ok
+test impl_mise_multiline::multiline_literal_string_in_tasks ... ok
+test impl_mise_multiline::multiline_literal_with_cargo_wrapper ... ok
+test impl_mise_multiline::multiline_with_cargo_wrapper ... ok
+test impl_mise_multiline::table_redefined_as_array_table_rejected ... ok
+test impl_mise_multiline::nextest_array_of_tables_overrides ... ok
+test impl_mise_multiline::unterminated_multiline_string_rejected ... ok
+test impl_mise_negative::candidate_build_vector_pins_implemented_trio_form ... ok
+test impl_mise_negative::discovery_touches_no_project_mise_files ... ok
+test impl_mise_negative::forbidden_payloads_are_rejected ... ok
+test impl_mise_negative::every_request_routes_through_mise_or_git ... ok
+test impl_mise_negative::forbidden_rejection_names_program_and_reason ... ok
+test impl_mise_negative::gh_pinned_exec_is_exact ... ok
+test impl_mise_negative::qualification_command_matches_argv ... ok
+test impl_mise_negative::specs_derive_only_from_catalog ... ok
+test impl_mise_negative::toolchain_probe_mechanism_routes_through_pins ... ok
+test impl_mise_negative::wrapper_preserves_sorted_features_and_target ... ok
+test impl_mise_nextest::driver_selects_program_and_tools ... ok
+test impl_mise_nextest::list_argv_is_byte_exact ... ok
+test impl_mise_nextest::archive_argv_is_byte_exact_per_driver ... ok
+test impl_mise_nextest::malformed_inputs_are_rejected ... ok
+test impl_mise_nextest_plan::sorted_inventory_sorts_and_dedups ... ok
+test impl_mise_nextest_plan::nextest_interfaces_are_only_archive_list_run ... ok
+test impl_mise_nextest::nextest_commands_match_argv ... ok
+test impl_mise_nextest::partitions_never_carry_compile_inputs ... ok
+test impl_mise_nextest::run_argv_is_byte_exact_with_no_tests_fail ... ok
+test impl_mise_p06::consumed_config_selects_emitted_profile ... ok
+test impl_mise_p06::nextest_bad_profile_rejected ... ok
+test impl_mise_nextest_plan::archive_plan_key_ignores_driver ... ok
+test impl_mise_p06::mbx_wrapper_without_pin_is_missing ... ok
+test impl_mise_p06::mbx_wrapper_loose_pin_is_invalid ... ok
+test impl_mise_nextest_plan::archive_plan_runs_once_per_package_config ... ok
+test impl_mise_p06::nextest_comment_is_not_evidence ... ok
+test impl_mise_p06::nextest_ci_profile_selected ... ok
+test impl_mise_p06::nextest_ci_subsection_and_dotted_forms ... ok
+test impl_mise_p06::nextest_default_constructors_match_ci ... ok
+test impl_mise_p06::nextest_default_without_ci ... ok
+test impl_mise_p06::nextest_empty_and_malformed ... ok
+test impl_mise_p06::non_mbx_wrapper_needs_no_pin ... ok
+libc.so.6 => /lib/libc.so.6
+test impl_mise_p06::nextest_four_combos_argv ... ok
+test impl_mise_p06::resolved_default_differs_from_baked_ci ... ok
+test impl_mise_p06::repo_wrapper_reconciles_with_local_mbx_pin ... ok
+test impl_mise_p06::wrapper_absent_is_none ... ok
+test impl_mise_p06::wrapper_comment_is_not_evidence ... ok
+test impl_mise_nextest_plan::sorted_inventory_rejects_unsorted_or_duplicate ... ok
+test impl_mise_nextest::nextest_archive_accepts_config_feature_syntax ... ok
+test impl_mise_p06::wrapper_near_miss_commands_not_mbx ... ok
+test impl_mise_p06::wrapper_section_forms ... ok
+test impl_mise_p06::wrapper_inline_table_form ... ok
+test impl_mise_p06::wrapper_string_mention_is_not_evidence ... ok
+test impl_mise_p08::c10_save_needs_success_delta_scope_and_writers ... ok
+test impl_mise_p06::wrapper_shim_section_form ... ok
+test impl_mise_p06::wrapper_malformed_is_diagnostic ... ok
+HEAD is now at 6ba78a7 one
+test impl_mise_p06::wrapper_wrong_types_rejected ... ok
+test impl_mise_generator_release_workflow_checks::candidate_version_and_help_smokes_execute_the_expected_public_cli ... ok
+test impl_mise_p08::c10b_trusted_save_authorizes_only_the_push_only_gate ... ok
+test impl_mise_p08::c11_quota_from_service_data_not_hardcoded ... ok
+test impl_mise_p08::c12_remote_mbx_backends_rejected ... ok
+test impl_mise_p08::c13_usage_report_composes_service_parse_quota_and_transfer ... ok
+test impl_mise_p08::c1_dangling_symlink_never_counts_as_warm ... ok
+test impl_mise_p08::c1_inventory_lists_every_runtime_path_with_one_owner ... ok
+test impl_mise_p08::c3_single_trusted_writer_never_races ... ok
+test impl_mise_p08::c4_restore_and_mbx_precede_fetch_with_offline_skip ... ok
+test impl_mise_p08::c3_subset_lives_at_real_home_without_credentials ... ok
+test impl_mise_p08::c5_qualified_transport_is_objects_plus_shared_with_numbers ... ok
+test impl_mise_p08::c6_no_path_has_two_owners ... ok
+test impl_mise_p08::c9_pr_save_needs_action_support_and_forks_stay_read_only ... ok
+test impl_mise_preflight::compile_driver_spelling_maps_to_route ... ok
+test impl_mise_preflight::cargo_proof_pins_exact_toolchain_without_wrapper ... ok
+test impl_mise_policy::repo_policy_mirror_matches_compiled_catalog ... ok
+test impl_mise_preflight::unreportable_format_fails_without_guessing ... ok
+test impl_mise_preflight::route_selections_are_deterministic ... ok
+test impl_mise_preflight::mbx_route_separates_action_identity_from_mise_probe ... ok
+test impl_mise_preflight::proof_command_matches_invocation ... ok
+test impl_mise_redaction::isolated_command_debug_redacts_token_value ... ok
+test impl_mise_policy::policy_drift_fails_mirror_check ... ok
+test impl_mise_redaction::pinned_exec_debug_redacts_token_value ... ok
+test impl_mise_redaction::registry_token_is_reserved ... ok
+test impl_mise_redaction::oidc_command_debug_has_no_token_shape ... ok
+test impl_mise_release_modes::argv_preserves_spaced_paths_without_shell ... ok
+test impl_mise_redaction::secret_env_redacts_while_plain_values_stay_visible ... ok
+test impl_mise_release_modes::auth_modes_never_blend_or_fall_back ... ok
+test impl_mise_release_modes::coordinator_payload_equals_release_argv_after_separator ... ok
+test impl_mise_release_modes::release_pr_takes_exactly_one_package ... ok
+test impl_mise_release_modes::dry_run_argv_snapshot_never_carries_token ... ok
+test impl_mise_release_plz::coordinator_command_selects_pinned_tools ... ok
+test impl_mise_release_plz::explicit_config_is_always_required ... ok
+test impl_mise_release_plz::phases_never_share_one_call ... ok
+test impl_mise_release_plz::release_plz_cksum_is_full_sha256 ... ok
+test impl_mise_release_plz::release_argv_shapes_per_constructor ... ok
+test impl_mise_release_plz::freshness_inventory_mirrors_release_plz ... FAILED
+test impl_mise_release_plz::release_pr_argv_base_shape ... ok
+test impl_mise_release_plz::release_plz_pin_is_exact ... ok
+test impl_mise_release_plz::release_pr_argv_full_options ... ok
+test impl_mise_release_plz::token_and_oidc_constructors_stay_distinct ... ok
+test impl_mise_release_plz::trusted_publishing_gate_matches_upstream ... ok
+test impl_mise_requests::discovery_argv_is_byte_exact ... ok
+test impl_mise_requests::discovery_empty_manifest_rejected ... ok
+test impl_mise_requests::discovery_command_matches_argv ... ok
+test impl_mise_release_plz::repo_policy_mirror_covers_release_plz ... ok
+test impl_mise_requests::pinned_exec_accepts_all_catalog_tools ... ok
+test impl_mise_requests::pinned_exec_rejects_empty_toolchain_and_program ... ok
+test impl_mise_requests::pinned_exec_runs_nextest_without_preinstalled_tools ... ok
+test impl_mise_requests::pinned_exec_selects_exact_tools ... ok
+test impl_mise_requests::qualification_argv_carries_locked_offline ... ok
+test impl_mise_requests::qualification_empty_manifest_rejected ... ok
+test impl_mise_restore::cancelled_child_never_maps_to_miss ... ok
+test impl_mise_restore::miss_reasons_cover_contract_set_exactly ... ok
+test impl_mise_git_optional_locks::unix_tests::production_git_optional_locks_suppress_status_refresh_under_hostile_parent ... ok
+test impl_mise_reuse::artifact_transport_stays_opaque_and_rooted ... ok
+test impl_mise_restore::provider_restore_classifies_through_the_model_five_check_chain ... ok
+test impl_mise_restore::fallback_maps_every_error_and_executes ... ok
+test impl_mise_reuse::missing_tools_execute_with_cache_unavailable ... ok
+test impl_mise_restore::restore_verification_orders_evidence_then_outputs ... ok
+test impl_mise_reuse::qualification_rejects_nondeterministic_and_undeclared_state ... ok
+test impl_mise_reuse::cache_key_derivation_requires_matching_grant ... ok
+test impl_mise_reuse::release_events_never_reuse ... ok
+test impl_mise_reuse::reuse_request_rejects_undeclared_inputs_before_execution ... ok
+test impl_mise_steps::prepare_pinned_tools_argv_is_fixed_install ... ok
+test impl_mise_steps::prepare_pinned_tools_command_matches_step ... ok
+test impl_mise_steps::prepare_pinned_tools_env_disables_knobs_and_carries_homes ... ok
+test impl_mise_steps::prepare_pinned_tools_env_without_homes_is_isolation_only ... ok
+test impl_mise_steps::prepare_pinned_tools_exposes_tools_and_homes ... ok
+test impl_mise_steps::prepare_pinned_tools_rejects_empty_toolchain ... ok
+test impl_mise_steps::prepare_pinned_tools_specs_come_only_from_catalog ... ok
+test impl_mise_steps::prepare_step_name_matches_both_contracts ... ok
+test impl_mise_steps::prepared_inputs_argv_is_locked_offline_qualification ... ok
+test impl_mise_steps::prepared_inputs_env_matches_command ... ok
+test impl_mise_steps::prepared_inputs_rejects_empty_manifest ... ok
+test impl_mise_steps::prepared_inputs_step_name_is_contract_fixed ... ok
+test impl_mise_steps::rust_components_argv_is_fixed_rustup_add ... ok
+test impl_mise_steps::rust_components_command_matches_step ... ok
+test impl_mise_steps::tool_homes_exec_env_is_verification_env ... ok
+test impl_mise_steps::tool_homes_rejects_empty ... ok
+test impl_mise_steps::tool_homes_runner_temp_uses_expression_paths ... ok
+test impl_mise_git_config::config_get_missing_key_is_typed_failure ... ok
+test impl_mise_surface::catalog_pins_ignore_project_selectors ... ok
+test impl_mise_templates::only_dependencies_is_repo_wide ... ok
+test impl_mise_templates::template_execution_preserves_exit_status ... ok
+test impl_mise_templates::template_names_are_stable ... ok
+test impl_mise_surface::all_mise_vectors_invoke_mise_program ... ok
+test impl_mise_templates::template_names_roundtrip ... ok
+test impl_mise_surface::no_config_passthrough_in_vectors ... ok
+test impl_mise_tofu_exec::tofu_baked_keys_stay_reserved_as_extras ... ok
+test impl_mise_tofu_exec::tofu_exec_rejects_empty_inputs ... ok
+test impl_mise_tofu_exec::tofu_exec_selects_verify_policy_and_disables_install ... ok
+test impl_mise_tofu_exec::tofu_exec_stages_cwd ... ok
+test impl_mise_tofu_exec::tofu_exec_wraps_pinned_opentofu_payload ... ok
+test impl_mise_tofu_exec::tofu_exit_modes_separate_outcomes_from_abortions ... ok
+test impl_mise_tofu_exec::tofu_key_consts_are_exact ... ok
+test impl_mise_tofu_exec::tofu_precancelled_run_fails_typed_without_spawning ... ok
+test impl_mise_tofu_t27::nonzero_exit_display_preserves_code_and_stderr ... ok
+test impl_mise_tofu_t27::cross_trust_provider_cache_entry_rejected ... ok
+test impl_mise_tofu_t27::poisoned_cache_report_fails_closed ... ok
+test impl_mise_tofu_t27::poisoned_provider_cache_bytes_rejected ... ok
+test impl_mise_tofu_t27::tofu_exit_status_authoritative_over_non_json_stdout ... ok
+test impl_mise_tofu_t27::tofu_child_env_strips_registry_and_credential_keys ... ok
+test impl_mise_tofu_t27::tofu_stdout_text_rejects_invalid_utf8_early ... ok
+test impl_mise_tofu_t27::tofu_extras_reject_credential_shaped_keys_loud ... ok
+test impl_mise_tofu_t27_realbin::live_tofu_registry_init_downloads_provider ... ignored, needs VELNOR_LIVE_TOFU=1 plus registry network
+test impl_mise_tofu_t27::unavailable_provider_stderr_classifies_typed ... ok
+test impl_mise_tofu_t27::tofu_verify_policy_holds_no_credentials ... ok
+test impl_mise_tofu_t27_realbin::catalog_pin_is_opentofu_1_13_1 ... ok
+test impl_mise_tofu_t27_realbin::offline_fixtures_admit_no_network_shape ... ok
+test impl_mise_git_config::config_get_resolves_include ... ok
+test impl_mise_verify::verify_finding_without_guidance_is_rejected ... ok
+test impl_mise_verify::verify_commands_match_probes_and_env ... ok
+test impl_mise_verify::verify_mbx_route_selects_action_identity_and_rust_probe ... ok
+test impl_mise_verify::verify_nextest_adds_runner_probe_per_driver ... ok
+test impl_miserc_isolation::affected_release_controls_fail_for_both_no_config_selectors ... ignored, official mise releases are selected by the mandatory real-binary qualification lane
+test impl_miserc_isolation::fixed_release_flag_and_environment_matrix_skips_all_miserc_layers ... ignored, official mise releases are selected by the mandatory real-binary qualification lane
+test impl_miserc_isolation::no_selector_controls_reach_each_malformed_config_layer ... ignored, official mise releases are selected by the mandatory real-binary qualification lane
+test impl_mise_tofu_exec::tofu_exec_bakes_exact_isolation_env ... ok
+test impl_miserc_isolation::product::production_command_keeps_no_config_guards_with_a_real_binary ... ignored, official mise releases are selected by the mandatory real-binary qualification lane
+test impl_mise_verify::verify_rejects_blank_and_hostile_target_or_platform ... ok
+test impl_mise_verify::verify_selects_cargo_route_with_one_probe ... ok
+test impl_mise_verify::verify_step_name_is_contract_fixed ... ok
+test impl_mise_surface::mise_lock_neither_present_nor_tracked ... ok
+test impl_mise_verify::verify_unreportable_format_fails_without_guessing ... ok
+test impl_mise_verify::verify_reports_valid_findings_and_rejects_invalid ... ok
+test impl_miserc_isolation::product::env_cleared_child_keeps_the_validated_temp_root ... ok
+test impl_mise_git_optional_locks::unix_tests::optional_locks_preserve_explicit_add_commit_and_clone_writes ... ok
+test impl_mise_git_config::config_get_reads_origin_through_worktree ... ok
+test impl_mise_tofu_t27_realbin::real_tofu_payload_sigkill_preserved_through_ctor ... ok
+test impl_mise_generator_release_workflow_checks::gnu_abi_parser_accepts_ubuntu_2204_and_fails_closed_on_unknown_or_new_tokens ... ok
+test impl_mise_forbidden_src::mise_sources_stay_read_only_and_unmanaged ... ok
+test impl_mise_isolation::mid_run_cancel_kills_child_and_reports_cancelled ... ok
+test impl_mise_tofu_t27_realbin::real_tofu_version_reports_pinned_release ... ok
+test impl_mise_tofu_t27_realbin::real_tofu_fmt_check_passes_clean_fixture ... ok
+test impl_mise_tofu_t27_realbin::real_tofu_fmt_check_exit_3_stays_typed ... ok
+test impl_mise_tofu_t27_realbin::real_tofu_dead_mirror_init_fails_typed ... ok
+test impl_mise_tofu_t27_realbin::real_tofu_init_then_validate_offline ... ok
+test impl_mise_isolation::timeout_kills_and_reports_timeout ... ok
+test impl_mise_tofu_t27_realbin::real_tofu_timeout_kills_and_classifies ... ok
+
+failures:
+
+---- impl_mise_release_plz::freshness_inventory_mirrors_release_plz stdout ----
+
+thread 'impl_mise_release_plz::freshness_inventory_mirrors_release_plz' (2982640) panicked at crates/velnor-actions-mise/tests/impl_mise_release_plz.rs:355:46:
+freshness inventory exists: Os { code: 2, kind: NotFound, message: "No such file or directory" }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    impl_mise_release_plz::freshness_inventory_mirrors_release_plz
+
+test result: FAILED. 351 passed; 1 failed; 5 ignored; 0 measured; 0 filtered out; finished in 2.05s
+
+error: test failed, to rerun pass `-p velnor-actions-mise --test velnor_mise`

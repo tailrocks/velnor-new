@@ -1,0 +1,48 @@
+mise by @jdx – installing 1 tool
+mise rust@1.98.1 info: syncing channel updates for 1.98.1-x86_64-unknown-linux-gnu
+mise rust@1.98.1 info: latest update on 2026-09-03 for version 1.98.1 (48a229cea 2026-09-01)
+mise rust@1.98.1 info: component clippy is up to date
+mise rust@1.98.1 info: component rust-docs is up to date
+mise rust@1.98.1 info: component rustfmt is up to date
+mise rust@1.98.1   1.98.1-x86_64-unknown-linux-gnu unchanged - rustc 1.98.1 (48a229cea 2026-09-01)
+mise rust@1.98.1 info: checking for self-update (current version: 1.29.1)
+mise rust@1.98.1 rustc 1.98.1 (48a229cea 2026-09-01)
+mise ✓ rust@1.98.1  701ms
+mise ████████████████ 1/1 · installed 1 tool in 703ms
+   Compiling velnor-actions-workflow-renderer v0.1.0 (/var/tmp/velnor-phase0-t24-main-shared-script-20261005/crates/velnor-actions-workflow-renderer)
+warning: method `name` is never used
+  --> crates/velnor-actions-workflow-renderer/src/document_shared_scripts.rs:60:8
+   |
+59 | impl FactoryScript {
+   | ------------------ method in this implementation
+60 |     fn name(self) -> &'static str {
+   |        ^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `velnor-actions-workflow-renderer` (lib test) generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.37s
+     Running unittests src/lib.rs (/root/.cache/velnor-task-targets/20261005/phase0-t24-main-target/debug/deps/velnor_actions_workflow_renderer-baaa2ee710553a16)
+
+running 7 tests
+test render::document_shared_scripts::tests::noncontiguous_factory_steps_are_not_shared ... ok
+test render::document_shared_scripts::tests::custom_or_repeated_checkout_is_not_eligible ... ok
+test render::document_shared_scripts::tests::exact_markers_and_paths_follow_the_factory_body_digest ... ok
+test render::document_shared_scripts::tests::one_job_or_modified_triplet_does_not_emit_shared_files ... ok
+test render::document_shared_scripts::tests::repeated_exact_factory_bodies_preserve_all_step_and_job_metadata ... ok
+Hangup
+
+thread 'render::document_shared_scripts::tests::execution_tests::sourced_factory_scripts_match_inline_hup_int_and_term_cleanup' (529823) panicked at crates/velnor-actions-workflow-renderer/src/document_shared_scripts_execution_tests.rs:219:5:
+could not send HUP: exit status: 1; termination=Ok(ExitStatus(unix_wait_status(256))); output=Ok(Output { status: ExitStatus(unix_wait_status(256)), stdout: "", stderr: "" })
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test render::document_shared_scripts::tests::execution_tests::sourced_factory_scripts_match_inline_hup_int_and_term_cleanup ... FAILED
+test render::document_shared_scripts::tests::execution_tests::sourced_factory_scripts_match_inline_success_and_early_failure ... ok
+
+failures:
+
+failures:
+    render::document_shared_scripts::tests::execution_tests::sourced_factory_scripts_match_inline_hup_int_and_term_cleanup
+
+test result: FAILED. 6 passed; 1 failed; 0 ignored; 0 measured; 64 filtered out; finished in 0.11s
+
+error: test failed, to rerun pass `-p velnor-actions-workflow-renderer --lib`

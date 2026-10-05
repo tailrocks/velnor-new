@@ -1,0 +1,13 @@
+Merge current main into runtime platform bridge
+
+Preserve the independent observed-platform contract work while carrying forward the current generator and lane changes.
+
+Co-authored-by: Codex <codex@openai.com>
+
+# Conflicts:
+#	crates/velnor-actions-contract/src/lib.rs
+#	crates/velnor-actions-contract/src/workflow/matrix_entry.rs
+#	crates/velnor-actions-contract/src/workflow/mod.rs
+#	crates/velnor-actions-contract/src/workflow/plan.rs
+#	crates/velnor-actions-orchestrator/src/identities.rs
+#	crates/velnor-actions-orchestrator/src/plan_obligation.rs

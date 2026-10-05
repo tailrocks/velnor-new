@@ -1,0 +1,5 @@
+name: Local docker
+description: Print docker-action-ok from a local Docker action.
+runs:
+  using: docker
+  image: Dockerfile

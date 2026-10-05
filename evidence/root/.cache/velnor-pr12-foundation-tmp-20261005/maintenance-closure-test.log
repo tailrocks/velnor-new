@@ -1,0 +1,9 @@
+   Compiling velnor-actions-orchestrator v0.1.1 (/tmp/velnor-pr12-foundation-20261005/crates/velnor-actions-orchestrator)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 5.01s
+────────────
+ Nextest run ID 5bf3cda6-b6ea-4bc1-b7d5-d5ed3dad33eb with nextest profile: default
+    Starting 2 tests across 1 binary (528 tests skipped)
+        PASS [   0.605s] (1/2) velnor-actions-orchestrator workflow::check_jobs::maintenance_tests::maintenance_check_declares_archive_and_freshness_policy_inputs
+        PASS [   0.679s] (2/2) velnor-actions-orchestrator workflow::check_jobs::maintenance_tests::canonical_maintenance_check_is_required_without_adding_product_tasks
+────────────
+     Summary [   0.680s] 2 tests run: 2 passed, 528 skipped

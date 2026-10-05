@@ -1,0 +1,7 @@
+[detached HEAD 67623602a] WIP: preserve existing partial work at immediate stop [skip ci]
+ 12 files changed, 974 insertions(+), 11 deletions(-)
+ create mode 100644 crates/velnor-actions-contract/src/workflow/qualification_cache_lineage_admission_fixture.rs
+ create mode 100644 crates/velnor-actions-contract/src/workflow/qualification_cache_lineage_admission_tests.rs
+ create mode 100644 crates/velnor-actions-contract/src/workflow/qualification_cache_lineage_directive_tests.rs
+ create mode 100644 crates/velnor-actions-contract/src/workflow/qualification_cache_lineage_metadata_fixture.rs
+ create mode 100644 crates/velnor-actions-orchestrator/tests/impl_plan_matrix_output.rs

@@ -1,0 +1,30 @@
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Checking velnor-actions-orchestrator v0.1.0 (/root/.cache/velnor-task-targets/20261005/native55-pr39-scratch-20261005/velnor-39d489229747342043de979e0f3e2c95d8726aa4/crates/velnor-actions-orchestrator)
+error: this block may be rewritten with the `?` operator
+   --> crates/velnor-actions-orchestrator/src/validate_shell.rs:161:12
+    |
+161 |       } else if let Some(digest) = filename
+    |  ____________^
+162 | |         .strip_prefix("bash-b3-")
+163 | |         .and_then(|rest| rest.strip_suffix(".bash"))
+...   |
+167 | |         return None;
+168 | |     };
+    | |_____^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.98.0/index.html#question_mark
+    = note: `-D clippy::question-mark` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::question_mark)]`
+help: replace it with
+    |
+161 ~     } else {
+162 +         let digest = filename
+163 +         .strip_prefix("bash-b3-")
+164 +         .and_then(|rest| rest.strip_suffix(".bash"))?;
+165 +         (digest, workflow::ShellDialect::Bash)
+166 ~     };
+    |
+
+error: could not compile `velnor-actions-orchestrator` (lib) due to 1 previous error
+exit=101

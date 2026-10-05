@@ -1,0 +1,12 @@
+   Compiling velnor-actions-workflow-renderer v0.1.0 (/root/.cache/velnor-task-targets/20261005/no_python_policy-profile-split-candidate-20261005/crates/velnor-actions-workflow-renderer)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.46s
+     Running unittests src/lib.rs (/root/.cache/velnor-task-targets/20261005/no_python_policy-profile-split-target/debug/deps/velnor_actions_workflow_renderer-baaa2ee710553a16)
+
+running 4 tests
+test render::mise_job_target_tests::setup_set_rejects_mixed_action_or_version ... ok
+test render::mise_job_target_tests::candidate_profiles_must_keep_default_action_pin ... ok
+test render::mise_job_target_tests::target_contexts_fail_closed_on_wrong_label_mbx_and_order ... ok
+test render::mise_job_target_tests::renders_setup_and_cache_by_each_typed_runner_target ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 55 filtered out; finished in 0.00s
+

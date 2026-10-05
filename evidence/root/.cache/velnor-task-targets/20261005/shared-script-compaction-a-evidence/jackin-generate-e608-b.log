@@ -1,0 +1,13 @@
+Preview: /root/.cache/velnor-task-targets/20261005/shared-script-compaction-a-e608-generations/generation-b
+Repository: /root/.cache/velnor-task-targets/20261005/shared-script-compaction-a-jackin
+.github/AGENTS.md
+.github/CLAUDE.md
+.github/actionlint.yaml
+.github/actions/velnor-tool-seed/action.yml
+.github/scripts/velnor-shared/sh-b3-566aabadb34068ae41f3799f5f591ed7b8c6f47057ba095f81c1039720d9ab5e.sh
+.github/scripts/velnor-shared/sh-b3-d27cbaf0856ff4026fbd752c2b537ca733f78bdfb252a6994c33d20f2207dd11.sh
+.github/workflows/ci.yml
+mise.lock is read-only input; Velnor never modifies it
+mise.toml is read-only input; Velnor never modifies it
+rust-toolchain.toml is read-only input; Velnor never modifies it
+tool_install_unverified:6 installs skip verification (mise.lock malformed: line 389: expected_quoted_string); fix the lockfile to verify them

@@ -1,0 +1,20 @@
+[impl/evidence-pr12 7290eb34a] WIP: preserve existing partial work at immediate stop [skip ci]
+ 30 files changed, 2858 insertions(+), 17 deletions(-)
+ create mode 100644 crates/velnor-actions-native/bin/velnor-archive-guard.rs
+ create mode 100644 crates/velnor-actions-native/build.rs
+ create mode 100644 crates/velnor-actions-native/build_support/archive_guard_inputs.rs
+ create mode 100644 crates/velnor-actions-native/src/owned_archive_guard/additional_tests.rs
+ create mode 100644 crates/velnor-actions-native/src/owned_archive_guard/mod.rs
+ create mode 100644 crates/velnor-actions-native/src/owned_archive_guard/pax.rs
+ create mode 100644 crates/velnor-actions-native/src/owned_archive_guard/profile.rs
+ create mode 100644 crates/velnor-actions-native/src/owned_archive_guard/stream.rs
+ create mode 100644 crates/velnor-actions-native/src/owned_archive_guard/tests.rs
+ create mode 100644 crates/velnor-actions-native/tests/archive_guard_cli.rs
+ create mode 100644 crates/velnor-actions-native/tests/ownership_test_source.rs
+ create mode 100644 docs/implemented/owned-archive-preflight.md
+ create mode 100644 scripts/archive-guard-inputs.txt
+ create mode 100755 scripts/build-owned-archive-guard.sh
+ create mode 100644 scripts/check-owned-archive-guard-sources.sh
+ create mode 100644 scripts/owned_archive_preflight.py
+ create mode 100644 scripts/test_owned_archive_preflight.py
+ create mode 100755 scripts/with-owned-archive-guard.sh

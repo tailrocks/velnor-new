@@ -1,0 +1,27 @@
+   Compiling velnor-actions-workflow-renderer v0.1.0 (/tmp/velnor-render-compaction-44b2-20261005/crates/velnor-actions-workflow-renderer)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.23s
+     Running unittests src/lib.rs (/root/.cache/velnor-task-targets/20261005/jackin-compaction/debug/debug/deps/velnor_actions_workflow_renderer-baaa2ee710553a16)
+
+running 4 tests
+test render::document_shared_scripts::tests::source_sensitive_shell_constructs_are_rejected ... ok
+test render::document_shared_scripts::tests::repeated_factory_bodies_keep_order_and_expand_to_exact_original_steps ... FAILED
+test render::document_shared_scripts::tests::one_job_and_non_factory_shells_do_not_create_unneeded_files ... ok
+test render::document_shared_scripts::tests::custom_checkout_identity_and_later_checkout_fail_closed ... ok
+
+failures:
+
+---- render::document_shared_scripts::tests::repeated_factory_bodies_keep_order_and_expand_to_exact_original_steps stdout ----
+
+thread 'render::document_shared_scripts::tests::repeated_factory_bodies_keep_order_and_expand_to_exact_original_steps' (3187908) panicked at crates/velnor-actions-workflow-renderer/src/document_shared_scripts_tests.rs:163:5:
+assertion `left == right` failed
+  left: 1
+ right: 2
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    render::document_shared_scripts::tests::repeated_factory_bodies_keep_order_and_expand_to_exact_original_steps
+
+test result: FAILED. 3 passed; 1 failed; 0 ignored; 0 measured; 48 filtered out; finished in 0.01s
+
+error: test failed, to rerun pass `-p velnor-actions-workflow-renderer --lib`

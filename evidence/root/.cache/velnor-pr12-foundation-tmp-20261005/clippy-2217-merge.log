@@ -1,0 +1,28 @@
+   Compiling proc-macro2 v1.0.107
+   Compiling ring v0.17.14
+   Compiling velnor-archive-guard v0.1.0 (/tmp/velnor-pr12-foundation-20261005/crates/velnor-archive-guard)
+    Checking quote v1.0.47
+    Checking syn v3.0.6
+   Compiling rustls v0.23.45
+   Compiling serde_derive v1.0.229
+   Compiling thiserror-impl v2.0.21
+   Compiling clap_derive v4.6.7
+    Checking rustls-webpki v0.103.15
+    Checking thiserror v2.0.21
+    Checking clap v4.6.7
+    Checking serde v1.0.229
+    Checking velnor-actions-contract v0.1.0 (/tmp/velnor-pr12-foundation-20261005/crates/velnor-actions-contract)
+    Checking vecmap-rs v0.2.5
+    Checking hcl-primitives v0.1.12
+    Checking hcl-edit v0.9.7
+    Checking ureq v3.4.2
+    Checking hcl-rs v0.19.8
+    Checking velnor-actions-freshness v0.1.0 (/tmp/velnor-pr12-foundation-20261005/crates/velnor-actions-freshness)
+    Checking velnor-actions-tofu v0.1.0 (/tmp/velnor-pr12-foundation-20261005/crates/velnor-actions-tofu)
+    Checking velnor-actions-mise v0.1.0 (/tmp/velnor-pr12-foundation-20261005/crates/velnor-actions-mise)
+    Checking velnor-actions-workflow-renderer v0.1.0 (/tmp/velnor-pr12-foundation-20261005/crates/velnor-actions-workflow-renderer)
+    Checking velnor-actions-rust v0.1.0 (/tmp/velnor-pr12-foundation-20261005/crates/velnor-actions-rust)
+    Checking velnor-actions-actionlint v0.1.0 (/tmp/velnor-pr12-foundation-20261005/crates/velnor-actions-actionlint)
+    Checking velnor-actions-orchestrator v0.1.0 (/tmp/velnor-pr12-foundation-20261005/crates/velnor-actions-orchestrator)
+    Checking velnor-actions-cli v0.1.0 (/tmp/velnor-pr12-foundation-20261005/crates/velnor-actions-cli)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 12.15s

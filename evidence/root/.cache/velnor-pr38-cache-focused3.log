@@ -1,0 +1,31 @@
+   Compiling velnor-actions-workflow-renderer v0.1.0 (/tmp/velnor-impl-20261005/cache/pr38/crates/velnor-actions-workflow-renderer)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.37s
+────────────
+ Nextest run ID 5213c63f-9109-43da-b293-827b43dfbe75 with nextest profile: default
+    Starting 5 tests across 2 binaries (398 tests skipped)
+        FAIL [   0.010s] (5/5) velnor-actions-workflow-renderer lane_share::tests::cache_tests::only_qualified_hosted_lane_keeps_a_tools_cache_prelude
+  stdout ───
+
+    running 1 test
+    test lane_share::tests::cache_tests::only_qualified_hosted_lane_keeps_a_tools_cache_prelude ... FAILED
+
+    failures:
+
+    failures:
+        lane_share::tests::cache_tests::only_qualified_hosted_lane_keeps_a_tools_cache_prelude
+
+    test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 81 filtered out; finished in 0.00s
+
+  stderr ───
+
+    thread 'lane_share::tests::cache_tests::only_qualified_hosted_lane_keeps_a_tools_cache_prelude' (131734) panicked at crates/velnor-actions-workflow-renderer/src/lane_share_cache_tests.rs:100:5:
+    assertion `left == right` failed
+      left: "Restore Velnor tool seed"
+     right: "Restore Mise tools"
+    note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+  Cancelling due to test failure: 
+────────────
+     Summary [   0.011s] 5 tests run: 4 passed, 1 failed, 398 skipped
+        FAIL [   0.010s] (5/5) velnor-actions-workflow-renderer lane_share::tests::cache_tests::only_qualified_hosted_lane_keeps_a_tools_cache_prelude
+error: test run failed

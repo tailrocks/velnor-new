@@ -1,0 +1,6 @@
+source_sha256=c71e54e2120a11c94a86f820dc2fcbc71b3b9cb08c8aea8d471c68fb797771fd
+find_sha256=91b75e72c495e68dd6aab198c2fd6c458fd51a2dc361045ee31f8e657417de26
+clean_command=/usr/bin/env -i PATH=/usr/bin:/bin /usr/bin/bash --noprofile --norc /root/.velnor-generator-preview-20261005/cargo-fetch-wrapper-preflight-fixture.sh clean 3>&-
+complete wrapper preflight PASS (clean)
+inherited_command=/usr/bin/env -i PATH=/usr/bin:/bin /usr/bin/bash --noprofile --norc /root/.velnor-generator-preview-20261005/cargo-fetch-wrapper-preflight-fixture.sh inherited 3>/dev/null
+complete wrapper preflight PASS (inherited)

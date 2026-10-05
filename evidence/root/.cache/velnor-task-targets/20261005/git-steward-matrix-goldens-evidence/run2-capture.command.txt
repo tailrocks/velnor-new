@@ -1,0 +1,2 @@
+cwd=/root/.cache/velnor-task-targets/20261005/git-steward-matrix-goldens-evidence/run2
+env TMPDIR=/var/tmp/velnor-git-steward-goldens-run2 bash scripts/capture-opentofu-goldens.sh capture /root/.cache/velnor-task-targets/20261005/git-steward-matrix-goldens-target/debug/velnor-actions

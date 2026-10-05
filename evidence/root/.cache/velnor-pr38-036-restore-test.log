@@ -1,0 +1,7 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s
+────────────
+ Nextest run ID f01a2662-8af2-4535-aa57-034fa054c7c1 with nextest profile: default
+    Starting 1 test across 1 binary (108 tests skipped)
+        PASS [   0.005s] (1/1) velnor-actions-workflow-renderer cache_p08::tool_payload::tests::restore_composite_binds_marker_pin_key_and_paths
+────────────
+     Summary [   0.005s] 1 test run: 1 passed, 108 skipped

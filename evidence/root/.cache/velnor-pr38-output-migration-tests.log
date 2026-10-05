@@ -1,0 +1,173 @@
+   Compiling velnor-actions-orchestrator v0.1.0 (/tmp/velnor-impl-20261005/cache/pr38/crates/velnor-actions-orchestrator)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 6.17s
+────────────
+ Nextest run ID 92bd8106-6859-46b4-8370-f733e0c75844 with nextest profile: default
+    Starting 15 tests across 3 binaries (1066 tests skipped)
+       START [         ] ( 1/15) velnor-actions-orchestrator::velnor_orchestrator impl_gen_gates::cross_checkout_determinism
+
+running 1 test
+Initialized empty Git repository in /tmp/.tmpV82MMR/.git/
+Initialized empty Git repository in /tmp/.tmpEviUuz/.git/
+test impl_gen_gates::cross_checkout_determinism ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 666 filtered out; finished in 0.70s
+
+        PASS [   0.707s] ( 1/15) velnor-actions-orchestrator::velnor_orchestrator impl_gen_gates::cross_checkout_determinism
+       START [         ] ( 2/15) velnor-actions-orchestrator::velnor_orchestrator impl_generate_p09_preview::concurrent_generate_lock_refused
+
+running 1 test
+Initialized empty Git repository in /tmp/.tmpNufIIG/.git/
+test impl_generate_p09_preview::concurrent_generate_lock_refused ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 666 filtered out; finished in 0.70s
+
+        PASS [   0.710s] ( 2/15) velnor-actions-orchestrator::velnor_orchestrator impl_generate_p09_preview::concurrent_generate_lock_refused
+       START [         ] ( 3/15) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2e::malformed_toolchain_recommends_without_writes
+
+running 1 test
+Initialized empty Git repository in /tmp/.tmpPeXE0S/.git/
+test impl_orch_f2e::malformed_toolchain_recommends_without_writes ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 666 filtered out; finished in 0.37s
+
+        PASS [   0.379s] ( 3/15) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2e::malformed_toolchain_recommends_without_writes
+       START [         ] ( 4/15) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2e::plan_and_workflow_ids_agree
+
+running 1 test
+Initialized empty Git repository in /tmp/.tmpUogTlA/.git/
+[testmain (root-commit) 5ffa83a] one
+ 4 files changed, 10 insertions(+)
+ create mode 100644 .velnor/config.toml
+ create mode 100644 .velnor/release-manifest.json
+ create mode 100644 Cargo.toml
+ create mode 100644 src/lib.rs
+[testmain e362b1a] two
+ 1 file changed, 1 insertion(+)
+Initialized empty Git repository in /tmp/.tmpKQgGYh/.git/
+test impl_orch_f2e::plan_and_workflow_ids_agree ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 666 filtered out; finished in 4.44s
+
+        PASS [   4.443s] ( 4/15) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2e::plan_and_workflow_ids_agree
+       START [         ] ( 5/15) velnor-actions-orchestrator::velnor_orchestrator impl_orch_gen::orch_gen_plan_matches_generated_tree
+
+running 1 test
+Initialized empty Git repository in /tmp/.tmpd86NCb/.git/
+test impl_orch_gen::orch_gen_plan_matches_generated_tree ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 666 filtered out; finished in 0.34s
+
+        PASS [   0.347s] ( 5/15) velnor-actions-orchestrator::velnor_orchestrator impl_orch_gen::orch_gen_plan_matches_generated_tree
+       START [         ] ( 6/15) velnor-actions-orchestrator::velnor_orchestrator impl_orch_gen::orch_gen_zero_candidate_repo_plans_no_work
+
+running 1 test
+Initialized empty Git repository in /tmp/.tmpgs9Iep/.git/
+test impl_orch_gen::orch_gen_zero_candidate_repo_plans_no_work ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 666 filtered out; finished in 0.24s
+
+        PASS [   0.245s] ( 6/15) velnor-actions-orchestrator::velnor_orchestrator impl_orch_gen::orch_gen_zero_candidate_repo_plans_no_work
+       START [         ] ( 7/15) velnor-actions-orchestrator::velnor_orchestrator impl_orch_p08::c11_cache_saves_push_only_prs_and_forks_read_only
+
+running 1 test
+Initialized empty Git repository in /tmp/.tmpTaR5i4/.git/
+Initialized empty Git repository in /tmp/.tmp1RuIJC/.git/
+test impl_orch_p08::c11_cache_saves_push_only_prs_and_forks_read_only ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 666 filtered out; finished in 0.15s
+
+        PASS [   0.158s] ( 7/15) velnor-actions-orchestrator::velnor_orchestrator impl_orch_p08::c11_cache_saves_push_only_prs_and_forks_read_only
+       START [         ] ( 8/15) velnor-actions-orchestrator::velnor_orchestrator impl_orch_release_emit::release_bootstrap_mode_adds_token_job
+
+running 1 test
+Initialized empty Git repository in /tmp/.tmp6yuVfk/.git/
+[testmain (root-commit) 5d2c191] bootstrap fixture
+ 4 files changed, 10 insertions(+)
+ create mode 100644 .velnor/config.toml
+ create mode 100644 .velnor/release-manifest.json
+ create mode 100644 Cargo.toml
+ create mode 100644 src/lib.rs
+test impl_orch_release_emit::release_bootstrap_mode_adds_token_job ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 666 filtered out; finished in 0.33s
+
+        PASS [   0.336s] ( 8/15) velnor-actions-orchestrator::velnor_orchestrator impl_orch_release_emit::release_bootstrap_mode_adds_token_job
+       START [         ] ( 9/15) velnor-actions-orchestrator::velnor_orchestrator impl_orch_release_emit::release_disabled_emits_base_tree_only
+
+running 1 test
+Initialized empty Git repository in /tmp/.tmpnHMWtC/.git/
+Initialized empty Git repository in /tmp/.tmprOhIhS/.git/
+test impl_orch_release_emit::release_disabled_emits_base_tree_only ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 666 filtered out; finished in 0.10s
+
+        PASS [   0.109s] ( 9/15) velnor-actions-orchestrator::velnor_orchestrator impl_orch_release_emit::release_disabled_emits_base_tree_only
+       START [         ] (10/15) velnor-actions-orchestrator::velnor_orchestrator impl_orch_release_emit::release_enabled_emits_family_oidc
+
+running 1 test
+Initialized empty Git repository in /tmp/.tmpMhCBFM/.git/
+[testmain (root-commit) 6874872] release fixture
+ 4 files changed, 13 insertions(+)
+ create mode 100644 .velnor/config.toml
+ create mode 100644 .velnor/release-manifest.json
+ create mode 100644 Cargo.toml
+ create mode 100644 src/lib.rs
+test impl_orch_release_emit::release_enabled_emits_family_oidc ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 666 filtered out; finished in 0.32s
+
+        PASS [   0.326s] (10/15) velnor-actions-orchestrator::velnor_orchestrator impl_orch_release_emit::release_enabled_emits_family_oidc
+       START [         ] (11/15) velnor-actions-orchestrator::velnor_orchestrator impl_prepare_generate::generate_preview_matches_in_place_and_preserves_repo
+
+running 1 test
+Initialized empty Git repository in /tmp/.tmpaoJ5Ey/.git/
+test impl_prepare_generate::generate_preview_matches_in_place_and_preserves_repo ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 666 filtered out; finished in 0.55s
+
+        PASS [   0.557s] (11/15) velnor-actions-orchestrator::velnor_orchestrator impl_prepare_generate::generate_preview_matches_in_place_and_preserves_repo
+       START [         ] (12/15) velnor-actions-orchestrator::velnor_orchestrator impl_prepare_generate::ignored_rust_plans_no_work
+
+running 1 test
+Initialized empty Git repository in /tmp/.tmpYm9orz/.git/
+test impl_prepare_generate::ignored_rust_plans_no_work ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 666 filtered out; finished in 0.25s
+
+        PASS [   0.257s] (12/15) velnor-actions-orchestrator::velnor_orchestrator impl_prepare_generate::ignored_rust_plans_no_work
+       START [         ] (13/15) velnor-actions-orchestrator::velnor_orchestrator impl_schema2_routing::both_mode_splits_verification_and_keeps_release_hosted
+
+running 1 test
+Initialized empty Git repository in /tmp/.tmpEcwjHi/.git/
+[testmain (root-commit) 265d499] fixture
+ 4 files changed, 27 insertions(+)
+ create mode 100644 .velnor/config.toml
+ create mode 100644 .velnor/release-manifest.json
+ create mode 100644 Cargo.toml
+ create mode 100644 src/lib.rs
+test impl_schema2_routing::both_mode_splits_verification_and_keeps_release_hosted ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 666 filtered out; finished in 0.09s
+
+        PASS [   0.100s] (13/15) velnor-actions-orchestrator::velnor_orchestrator impl_schema2_routing::both_mode_splits_verification_and_keeps_release_hosted
+       START [         ] (14/15) velnor-actions-orchestrator::velnor_orchestrator impl_schema2_routing::dispatch_mode_overrides_configured_mode
+
+running 1 test
+Initialized empty Git repository in /tmp/.tmp7g1Gb5/.git/
+test impl_schema2_routing::dispatch_mode_overrides_configured_mode ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 666 filtered out; finished in 0.06s
+
+        PASS [   0.066s] (14/15) velnor-actions-orchestrator::velnor_orchestrator impl_schema2_routing::dispatch_mode_overrides_configured_mode
+       START [         ] (15/15) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t20_stable::tofu_cross_checkout_determinism
+
+running 1 test
+Initialized empty Git repository in /tmp/.tmpVhsQf7/.git/
+Initialized empty Git repository in /tmp/.tmpBr4urz/.git/
+test impl_tofu_t20_stable::tofu_cross_checkout_determinism ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 666 filtered out; finished in 0.56s
+
+        PASS [   0.560s] (15/15) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t20_stable::tofu_cross_checkout_determinism
+────────────
+     Summary [   9.303s] 15 tests run: 15 passed, 1066 skipped

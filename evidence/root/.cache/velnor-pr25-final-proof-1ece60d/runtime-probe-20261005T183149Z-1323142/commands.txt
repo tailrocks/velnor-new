@@ -1,0 +1,11 @@
+Builds (run by runner25 from repository root):
+docker build --pull --progress=plain --platform linux/amd64 -t velnor-dind:pr25-final-1ece60d7 images/dind
+docker build --pull --progress=plain --platform linux/amd64 -t velnor-runner:pr25-final-1ece60d7 images/runner/ubuntu-26.04
+
+Tar absolute and legacy option suite (run in immutable runner image, network disabled, source read-only mounted at /src, root user for the harness):
+docker run --rm --network none --name runner25-pr25-tar-absolute-20261005-1323142 --user 0 --tmpfs /lowdisk:rw,mode=1777,size=1048576 --mount type=bind,src=/root/.cache/velnor-pr25-aggregate-20261005,dst=/src,readonly --workdir /src --entrypoint /bin/bash sha256:71363278e057e2f9c405a3ff766bb84e70d42ab0b740f7578b274d753e825929 -lc 'set -euo pipefail; id; sha256sum images/runner/ubuntu-26.04/tar-shim.sh; sha256sum /usr/local/bin/velnor-tar; bash images/runner/ubuntu-26.04/tar-absolute-test.sh'
+
+Tar semantics suite (same immutable image and read-only mount):
+docker run --rm --network none --name runner25-pr25-tar-semantics-20261005-1323142 --user 0 --tmpfs /lowdisk:rw,mode=1777,size=1048576 --mount type=bind,src=/root/.cache/velnor-pr25-aggregate-20261005,dst=/src,readonly --workdir /src --entrypoint /bin/bash sha256:71363278e057e2f9c405a3ff766bb84e70d42ab0b740f7578b274d753e825929 -lc 'set -euo pipefail; id; bash images/runner/ubuntu-26.04/tar-semantics-test.sh'
+
+Fresh-volume/runtime probe: see work-volume-probe.sh; it binds the DIND and runner commands to immutable image IDs, validates absence of all generated container names and volume before enabling cleanup, then checks absence after cleanup.

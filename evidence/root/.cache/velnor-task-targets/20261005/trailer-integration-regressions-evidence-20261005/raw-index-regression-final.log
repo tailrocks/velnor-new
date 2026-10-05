@@ -1,0 +1,9 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.08s
+     Running tests/velnor_orchestrator.rs (target/debug/deps/velnor_orchestrator-6d174f9c7abd565a)
+
+running 1 test
+Initialized empty Git repository in /tmp/.tmptQKPml/.git/
+test impl_discovery_cache::raw_non_utf8_tracked_cache_path_fails_public_discovery ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 694 filtered out; finished in 0.07s
+

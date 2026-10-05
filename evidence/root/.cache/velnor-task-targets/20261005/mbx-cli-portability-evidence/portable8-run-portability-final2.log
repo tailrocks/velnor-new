@@ -1,0 +1,5 @@
+error: the argument '--test-threads <N>' cannot be used multiple times
+
+Usage: cargo nextest run [OPTIONS] [FILTERS]... [-- <FILTERS_AND_ARGS>...]
+
+For more information, try '--help'.

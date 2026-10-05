@@ -1,0 +1,11 @@
+worktree /tmp/velnor-native-bcd2-repo-20261005.git
+bare
+
+worktree /tmp/velnor-native-bcd2-candidate-20261005
+HEAD bcd2fd3ef612dc7e22a7e21d6eed3504bebc1642
+detached
+
+worktree /tmp/velnor-native-c8-candidate-20261005
+HEAD 52df75a7f7bfbca124d1689b11dd301188415d23
+detached
+

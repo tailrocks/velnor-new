@@ -1,0 +1,9 @@
+UTC: 2026-10-05 10:56:36
+Command: /usr/bin/env -i PATH=/usr/bin:/bin /usr/bin/bash --noprofile --norc /root/.velnor-generator-preview-20261005/preseed-preview-cargo-fetch-v2.sh
+Outer SHA256: c71e54e2120a11c94a86f820dc2fcbc71b3b9cb08c8aea8d471c68fb797771fd
+Namespace SHA256: d66c3a5c826a4a3916281324a52e83d41a4ea463db7200da720f6d122bfefb25
+Exit code: 1
+Output: cargo source fetch: pinned Rust toolchain is unavailable
+Reached: outer static path checks.
+Not reached: source snapshot, mount setup, Cargo, network, compilation, helper, generation.
+Task-owned resources created: none.

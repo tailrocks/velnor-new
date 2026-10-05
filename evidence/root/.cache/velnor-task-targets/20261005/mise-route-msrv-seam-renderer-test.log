@@ -1,0 +1,31 @@
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling unicode-ident v1.0.26
+   Compiling syn v3.0.6
+   Compiling serde_core v1.0.229
+   Compiling find-msvc-tools v0.1.14
+   Compiling shlex v2.0.1
+   Compiling cc v1.5.1
+   Compiling zmij v1.0.23
+   Compiling blake3 v1.8.7
+   Compiling serde v1.0.229
+   Compiling serde_json v1.0.151
+   Compiling thiserror v2.0.21
+   Compiling thiserror-impl v2.0.21
+   Compiling serde_derive v1.0.229
+   Compiling arrayvec v0.7.8
+   Compiling memchr v2.8.3
+   Compiling cpufeatures v0.3.1
+   Compiling constant_time_eq v0.4.2
+   Compiling cfg-if v1.0.5
+   Compiling itoa v1.0.18
+   Compiling velnor-actions-contract v0.1.0 (/root/.cache/velnor-task-targets/20261005/mise-route-msrv-seam-private/crates/velnor-actions-contract)
+   Compiling velnor-actions-workflow-renderer v0.1.0 (/root/.cache/velnor-task-targets/20261005/mise-route-msrv-seam-private/crates/velnor-actions-workflow-renderer)
+error[E0063]: missing field `toolchain_version` in initializer of `MsrvSpec`
+  --> crates/velnor-actions-workflow-renderer/tests/impl_renderer_msrv.rs:47:20
+   |
+47 |         let spec = MsrvSpec {
+   |                    ^^^^^^^^ missing `toolchain_version`
+
+For more information about this error, try `rustc --explain E0063`.
+error: could not compile `velnor-actions-workflow-renderer` (test "velnor_workflow_renderer") due to 1 previous error

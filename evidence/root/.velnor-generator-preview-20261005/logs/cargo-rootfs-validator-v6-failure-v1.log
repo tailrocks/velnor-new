@@ -1,0 +1,3 @@
+Pinned evidence files: PASS (15)
+Pinned Mise/Git/Rustup/toolchain paths: PASS
+embedded read-only validator failed: cargo source fetch: Rustup delta staging runtime differs from the reviewed tool provenance

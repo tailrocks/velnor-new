@@ -1,0 +1,33 @@
+name: Build and test
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "**"
+  pull_request:
+  schedule:
+    - cron: "0 12 * * 1"
+
+jobs:
+  build_and_test:
+    runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.rust == 'nightly' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        rust: [stable]
+        include:
+          - os: ubuntu-latest
+            rust: nightly
+          - os: ubuntu-latest
+            rust: beta
+          - os: ubuntu-latest
+            rust: msrv
+    steps:
+      - uses: amqp-rs/actions/checkout@main
+      - uses: amqp-rs/actions/build@main
+        with:
+          rust: ${{ matrix.rust }}

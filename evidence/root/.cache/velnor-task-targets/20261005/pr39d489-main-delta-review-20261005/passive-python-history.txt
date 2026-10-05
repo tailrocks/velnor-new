@@ -1,0 +1,29 @@
+PATH crates/velnor-actions-native/src/oci/oci_archive.py
+main_DELETE branch_ADD 8cba870d41f00be145ff6ddb3420926078d85451 feat: add immutable OCI release codecs and admission
+common_base PATH crates/velnor-actions-native/src/oci/oci_delivery.py
+main_DELETE branch_ADD 8cba870d41f00be145ff6ddb3420926078d85451 feat: add immutable OCI release codecs and admission
+common_base PATH crates/velnor-actions-native/src/oci/oci_digest.py
+main_DELETE branch_ADD 8cba870d41f00be145ff6ddb3420926078d85451 feat: add immutable OCI release codecs and admission
+common_base PATH crates/velnor-actions-native/src/oci/oci_digest_parts.py
+main_DELETE branch_ADD 8cba870d41f00be145ff6ddb3420926078d85451 feat: add immutable OCI release codecs and admission
+common_base PATH crates/velnor-actions-native/src/oci/oci_index_receipt.py
+main_DELETE branch_ADD 8cba870d41f00be145ff6ddb3420926078d85451 feat: add immutable OCI release codecs and admission
+common_base PATH crates/velnor-actions-native/src/oci/oci_platform_publish.py
+main_DELETE branch_ADD 8cba870d41f00be145ff6ddb3420926078d85451 feat: add immutable OCI release codecs and admission
+common_base PATH crates/velnor-actions-native/src/oci/oci_registry.py
+main_DELETE branch_ADD 8cba870d41f00be145ff6ddb3420926078d85451 feat: add immutable OCI release codecs and admission
+common_base PATH crates/velnor-actions-native/tests/oci/oci_archive_test.py
+main_DELETE branch_ADD 7f4e0cce67136c1144a94701872b9c01f6d247c0 test: restore workspace and native ownership gates
+common_base PATH crates/velnor-actions-native/tests/oci/oci_index_receipt_test.py
+main_DELETE branch_ADD 7f4e0cce67136c1144a94701872b9c01f6d247c0 test: restore workspace and native ownership gates
+common_base PATH crates/velnor-actions-native/tests/oci/oci_platform_publish_test.py
+main_DELETE branch_ADD 7f4e0cce67136c1144a94701872b9c01f6d247c0 test: restore workspace and native ownership gates
+common_base PATH crates/velnor-actions-native/tests/oci/oci_registry_test.py
+main_DELETE branch_ADD 7f4e0cce67136c1144a94701872b9c01f6d247c0 test: restore workspace and native ownership gates
+common_base PATH crates/velnor-actions-native/tests/oci/oci_support_test.py
+main_DELETE branch_ADD 7f4e0cce67136c1144a94701872b9c01f6d247c0 test: restore workspace and native ownership gates
+common_base PATH crates/velnor-actions-native/tests/oci/oci_transport_test.py
+main_DELETE branch_ADD 7f4e0cce67136c1144a94701872b9c01f6d247c0 test: restore workspace and native ownership gates
+common_base PATH crates/velnor-actions-orchestrator/src/release_admission.py
+main_DELETE branch_ADD 8cba870d41f00be145ff6ddb3420926078d85451 feat: add immutable OCI release codecs and admission
+common_base 

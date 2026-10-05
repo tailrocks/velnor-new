@@ -1,0 +1,876 @@
+diff --git a/.velnor/freshness-inventory.json b/.velnor/freshness-inventory.json
+index 205861119..3aa7b15d6 100644
+--- a/.velnor/freshness-inventory.json
++++ b/.velnor/freshness-inventory.json
+@@ -1,7 +1,7 @@
+ {
+   "actions": [
+     {
+-      "checked_at": "2026-10-05T11:41:06Z",
++      "checked_at": "2026-10-05T12:26:50Z",
+       "key": "jdx/mise-action",
+       "latest": "v5.1.1",
+       "pinned_sha": "9149ea85001c7435d5a66bb127d6a1b6227cb0a5",
+@@ -12,7 +12,7 @@
+       "status": "held"
+     },
+     {
+-      "checked_at": "2026-10-05T11:41:06Z",
++      "checked_at": "2026-10-05T12:26:50Z",
+       "key": "actions/checkout",
+       "latest": "v7.0.1",
+       "pinned_sha": "3d3c42e5aac5ba805825da76410c181273ba90b1",
+@@ -23,7 +23,7 @@
+       "status": "current"
+     },
+     {
+-      "checked_at": "2026-10-05T11:41:06Z",
++      "checked_at": "2026-10-05T12:26:50Z",
+       "key": "actions/download-artifact",
+       "latest": "v8.0.1",
+       "pinned_sha": "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+@@ -34,7 +34,7 @@
+       "status": "current"
+     },
+     {
+-      "checked_at": "2026-10-05T11:41:06Z",
++      "checked_at": "2026-10-05T12:26:50Z",
+       "key": "actions/upload-artifact",
+       "latest": "v7.0.1",
+       "pinned_sha": "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a",
+@@ -45,7 +45,7 @@
+       "status": "current"
+     },
+     {
+-      "checked_at": "2026-10-05T11:41:06Z",
++      "checked_at": "2026-10-05T12:26:50Z",
+       "key": "actions/cache/restore",
+       "latest": "v6.1.0",
+       "pinned_sha": "55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+@@ -56,7 +56,7 @@
+       "status": "current"
+     },
+     {
+-      "checked_at": "2026-10-05T11:41:06Z",
++      "checked_at": "2026-10-05T12:26:50Z",
+       "key": "actions/cache/save",
+       "latest": "v6.1.0",
+       "pinned_sha": "55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+@@ -67,7 +67,7 @@
+       "status": "current"
+     },
+     {
+-      "checked_at": "2026-10-05T11:41:06Z",
++      "checked_at": "2026-10-05T12:26:50Z",
+       "key": "jdx/mr-boxington-action",
+       "latest": "v1.7.1",
+       "pinned_sha": "1687e54eb349cadf61fa38b5813a77875489e8e6",
+@@ -79,7 +79,7 @@
+       "latest_sha": "d0825fbaf3cc36ca2609aa38e71046265a1f1e37"
+     },
+     {
+-      "checked_at": "2026-10-05T11:41:06Z",
++      "checked_at": "2026-10-05T12:26:50Z",
+       "key": "asamarts/alint",
+       "latest": "v0.17.0",
+       "pinned_sha": "9f9d34ba0eae3888299b9e570f43338b0e7f2cdb",
+@@ -90,7 +90,7 @@
+       "status": "held"
+     },
+     {
+-      "checked_at": "2026-10-05T11:41:06Z",
++      "checked_at": "2026-10-05T12:26:50Z",
+       "key": "Swatinem/rust-cache",
+       "latest": "v2.9.2",
+       "pinned_sha": "6323deb102c322ba6fcbdcafc7e3dddab59af2b6",
+@@ -102,7 +102,7 @@
+     }
+   ],
+   "check_interval_hours": 24,
+-  "checked_at": "2026-10-05T11:41:06Z",
++  "checked_at": "2026-10-05T12:26:50Z",
+   "exceptions": [],
+   "max_exception_days": 14,
+   "runner": {
+@@ -175,7 +175,7 @@
+   ],
+   "tools": [
+     {
+-      "checked_at": "2026-10-05T11:41:06Z",
++      "checked_at": "2026-10-05T12:26:50Z",
+       "latest": "v2026.10.3",
+       "name": "mise",
+       "pinned": "2026.9.18",
+@@ -184,7 +184,7 @@
+       "status": "held"
+     },
+     {
+-      "checked_at": "2026-10-05T11:41:06Z",
++      "checked_at": "2026-10-05T12:26:50Z",
+       "latest": "1.99.0",
+       "name": "rust",
+       "pinned": "1.98.1",
+@@ -193,7 +193,7 @@
+       "status": "held"
+     },
+     {
+-      "checked_at": "2026-10-05T11:41:06Z",
++      "checked_at": "2026-10-05T12:26:50Z",
+       "latest": "v1.22.0",
+       "name": "mr-boxington",
+       "pinned": "1.21.1",
+@@ -203,7 +203,7 @@
+       "latest_sha": "10474d43342ad65df3b02323dd8092d18ab38101"
+     },
+     {
+-      "checked_at": "2026-10-05T11:41:06Z",
++      "checked_at": "2026-10-05T12:26:50Z",
+       "latest": "v2.102.0",
+       "name": "gh",
+       "pinned": "2.102.0",
+@@ -212,7 +212,7 @@
+       "status": "current"
+     },
+     {
+-      "checked_at": "2026-10-05T11:41:06Z",
++      "checked_at": "2026-10-05T12:26:50Z",
+       "latest": "v1.7.12",
+       "name": "actionlint",
+       "pinned": "1.7.12",
+@@ -221,7 +221,7 @@
+       "status": "current"
+     },
+     {
+-      "checked_at": "2026-10-05T11:41:06Z",
++      "checked_at": "2026-10-05T12:26:50Z",
+       "latest": "v0.11.0",
+       "name": "shellcheck",
+       "pinned": "0.11.0",
+@@ -230,7 +230,7 @@
+       "status": "current"
+     },
+     {
+-      "checked_at": "2026-10-05T11:41:06Z",
++      "checked_at": "2026-10-05T12:26:50Z",
+       "latest": "v1.30.1",
+       "name": "zizmor",
+       "pinned": "1.30.1",
+@@ -239,7 +239,7 @@
+       "status": "current"
+     },
+     {
+-      "checked_at": "2026-10-05T11:41:06Z",
++      "checked_at": "2026-10-05T12:26:50Z",
+       "latest": "0.9.146",
+       "name": "nextest",
+       "pinned": "0.9.146",
+@@ -248,7 +248,7 @@
+       "status": "current"
+     },
+     {
+-      "checked_at": "2026-10-05T11:41:06Z",
++      "checked_at": "2026-10-05T12:26:50Z",
+       "latest": "v1.13.1",
+       "name": "opentofu",
+       "pinned": "1.13.1",
+@@ -257,7 +257,7 @@
+       "status": "current"
+     },
+     {
+-      "checked_at": "2026-10-05T11:41:06Z",
++      "checked_at": "2026-10-05T12:26:50Z",
+       "latest": "0.3.169",
+       "name": "release-plz",
+       "pinned": "0.3.169",
+diff --git a/crates/velnor-runner/crates/velnor-runner-host/src/assign.rs b/crates/velnor-runner/crates/velnor-runner-host/src/assign.rs
+index 4aa464778..73e587a0f 100644
+--- a/crates/velnor-runner/crates/velnor-runner-host/src/assign.rs
++++ b/crates/velnor-runner/crates/velnor-runner-host/src/assign.rs
+@@ -37,6 +37,16 @@ fn acquire_offer(batch: &ParsedBatch) -> Offer {
+     }
+ }
+ 
++/// True when every job is a start or completion notice. An empty batch is not progress.
++#[must_use]
++pub(crate) fn progress_only(batch: &ParsedBatch) -> bool {
++    !batch.jobs.is_empty()
++        && batch
++            .jobs
++            .iter()
++            .all(|job| matches!(job.kind, InnerKind::Started | InnerKind::Completed))
++}
++
+ fn available_ids(batch: &ParsedBatch) -> Vec<i64> {
+     batch
+         .jobs
+diff --git a/crates/velnor-runner/crates/velnor-runner-host/src/launch.rs b/crates/velnor-runner/crates/velnor-runner-host/src/launch.rs
+index 4d41c2bb1..82a7ab9b0 100644
+--- a/crates/velnor-runner/crates/velnor-runner-host/src/launch.rs
++++ b/crates/velnor-runner/crates/velnor-runner-host/src/launch.rs
+@@ -280,7 +280,8 @@ async fn drive_ready<T>(
+ where
+     T: Transport + Lane,
+ {
+-    if slot::busy(journal, docker, capacity).await? {
++    let except = steps::mint_subject(ready.polled);
++    if slot::busy_except(journal, docker, capacity, except.as_deref()).await? {
+         return Ok(None);
+     }
+     let ctx = Drive {
+diff --git a/crates/velnor-runner/crates/velnor-runner-host/src/launch/capacity.rs b/crates/velnor-runner/crates/velnor-runner-host/src/launch/capacity.rs
+index 95431942b..21359fd28 100644
+--- a/crates/velnor-runner/crates/velnor-runner-host/src/launch/capacity.rs
++++ b/crates/velnor-runner/crates/velnor-runner-host/src/launch/capacity.rs
+@@ -53,6 +53,8 @@ pub(crate) struct Seat {
+     pub(crate) assigned: u32,
+     /// Classified poll.
+     pub(crate) idle: Idle,
++    /// Start or completion notices only. A full slot can acknowledge them.
++    pub(crate) progress: bool,
+ }
+ 
+ /// Decide one poll. A free slot starts the next job. Historical `started` does not.
+@@ -98,6 +100,11 @@ const fn admit_scale(seat: Seat) -> Admit {
+         };
+     }
+     if !scale_covered(seat) {
++        if seat.progress {
++            return Admit::Ack {
++                stop: started_done(seat),
++            };
++        }
+         return Admit::Hold;
+     }
+     Admit::Ack {
+diff --git a/crates/velnor-runner/crates/velnor-runner-host/src/launch/inspect_tests.rs b/crates/velnor-runner/crates/velnor-runner-host/src/launch/inspect_tests.rs
+index 90d914e0b..473b175e8 100644
+--- a/crates/velnor-runner/crates/velnor-runner-host/src/launch/inspect_tests.rs
++++ b/crates/velnor-runner/crates/velnor-runner-host/src/launch/inspect_tests.rs
+@@ -24,7 +24,11 @@ async fn non_not_found_inspect_error_blocks_admission_and_reconcile() -> Result<
+         http(500, r#"{"message":"private runner-id detail"}"#),
+     ])?;
+ 
+-    let busy = within(slot::busy(&journal, &stub.docker, 2), "capacity probe").await?;
++    let busy = within(
++        slot::busy_except(&journal, &stub.docker, 2, None),
++        "capacity probe",
++    )
++    .await?;
+     let reconcile = within(
+         gate::reconcile_gate(&journal, &stub.docker),
+         "reconcile probe",
+diff --git a/crates/velnor-runner/crates/velnor-runner-host/src/launch/slot.rs b/crates/velnor-runner/crates/velnor-runner-host/src/launch/slot.rs
+index 8da3a6c9e..160139514 100644
+--- a/crates/velnor-runner/crates/velnor-runner-host/src/launch/slot.rs
++++ b/crates/velnor-runner/crates/velnor-runner-host/src/launch/slot.rs
+@@ -2,31 +2,81 @@
+ //! Busy means occupancy or the running count has reached capacity.
+ 
+ use crate::IntentState;
+-use crate::journal::Journal;
++use crate::journal::{Journal, Outcome};
+ use crate::reconcile::IntentRow;
+ use crate::scale_set::EnsureError;
+ use crate::stage::PairEngine;
+ 
+-pub(super) async fn busy<E: PairEngine + ?Sized>(
++pub(super) async fn busy_except<E: PairEngine + ?Sized>(
+     journal: &Journal,
+     engine: &E,
+     capacity: u32,
++    except: Option<&str>,
+ ) -> Result<bool, EnsureError> {
+-    if occupied(journal).await? >= capacity {
++    if occupied_except(journal, except).await? >= capacity {
+         return Ok(true);
+     }
+     Ok(running_count(journal, engine).await? >= capacity)
+ }
+ 
+ pub(super) async fn occupied(journal: &Journal) -> Result<u32, EnsureError> {
++    occupied_except(journal, None).await
++}
++
++/// Occupied permits, excluding one idless uncertain subject.
++///
++/// That subject is the redelivered `m{message_id}`. Its empty row must not
++/// block `ensure_runner`, which fails the row only after the directory is clear.
++/// A docker id, a dind id, or a worker volume still holds the permit.
++pub(super) async fn occupied_except(
++    journal: &Journal,
++    except: Option<&str>,
++) -> Result<u32, EnsureError> {
+     let rows = journal.rows().await.map_err(map_journal)?;
+-    let count = rows.iter().filter(|row| holds(row)).count();
++    let count = rows
++        .iter()
++        .filter(|row| holds(row) && !idless_self(row, except))
++        .count();
+     u32::try_from(count).map_err(|_| EnsureError::Unexpected {
+         status: 0,
+         step: "capacity",
+     })
+ }
+ 
++/// Fail one idless uncertain row and open a fresh launch for the same subject.
++///
++/// A docker id, a dind id, or a worker volume returns [`None`]. The caller holds that row.
++pub(super) async fn reopen_idless(
++    journal: &Journal,
++    id: i64,
++    subject: &str,
++) -> Result<Option<i64>, EnsureError> {
++    let rows = journal.rows().await.map_err(map_journal)?;
++    let Some(row) = rows.iter().find(|row| row.id == id) else {
++        return Ok(None);
++    };
++    if row.subject != subject || !idless_self(row, Some(subject)) {
++        return Ok(None);
++    }
++    journal
++        .finish(id, Outcome::DefiniteFailure)
++        .await
++        .map_err(map_journal)?;
++    let (next, fresh) = journal.begin_launch(subject).await.map_err(map_journal)?;
++    Ok(fresh.then_some(next))
++}
++
++fn idless_self(row: &IntentRow, except: Option<&str>) -> bool {
++    let Some(subject) = except else {
++        return false;
++    };
++    row.subject == subject
++        && row.state == IntentState::Uncertain
++        && row.docker_id.as_deref().is_none_or(str::is_empty)
++        && row.dind_id.as_deref().is_none_or(str::is_empty)
++        && row.worker_volume.as_deref().is_none_or(str::is_empty)
++}
++
+ pub(super) async fn running_count<E: PairEngine + ?Sized>(
+     journal: &Journal,
+     engine: &E,
+diff --git a/crates/velnor-runner/crates/velnor-runner-host/src/launch/steps.rs b/crates/velnor-runner/crates/velnor-runner-host/src/launch/steps.rs
+index c1917a0da..536f6809f 100644
+--- a/crates/velnor-runner/crates/velnor-runner-host/src/launch/steps.rs
++++ b/crates/velnor-runner/crates/velnor-runner-host/src/launch/steps.rs
+@@ -50,6 +50,15 @@ pub(crate) fn idle(polled: &Poll) -> Idle {
+     }
+ }
+ 
++/// Subject of a redelivered scale message. Other polls have no exception.
++#[must_use]
++pub(super) fn mint_subject(polled: &Poll) -> Option<String> {
++    let Poll::Batch(batch) = polled else {
++        return None;
++    };
++    (idle(polled) == Idle::Scale).then(|| format!("m{}", batch.message_id))
++}
++
+ fn assigned_population(batch: &velnor_runner_github::ParsedBatch) -> Option<i64> {
+     batch
+         .statistics
+@@ -213,6 +222,9 @@ where
+         return finish_live(lane, ctx, journal, id, batch).await;
+     }
+     if !fresh {
++        if let Some(next) = super::slot::reopen_idless(journal, id, subject).await? {
++            return mint(lane, ctx, batch, journal, next, name, start).await;
++        }
+         return hold(journal, id, EnsureError::Uncertain).await;
+     }
+     mint(lane, ctx, batch, journal, id, name, start).await
+diff --git a/crates/velnor-runner/crates/velnor-runner-host/src/launch/turn.rs b/crates/velnor-runner/crates/velnor-runner-host/src/launch/turn.rs
+index c5318a92b..da498f8b7 100644
+--- a/crates/velnor-runner/crates/velnor-runner-host/src/launch/turn.rs
++++ b/crates/velnor-runner/crates/velnor-runner-host/src/launch/turn.rs
+@@ -122,6 +122,13 @@ async fn pump<H: PollHost>(
+     }
+ }
+ 
++fn progress_batch(polled: &Poll) -> bool {
++    let Poll::Batch(batch) = polled else {
++        return false;
++    };
++    crate::assign::progress_only(batch)
++}
++
+ fn assigned_in(polled: &Poll) -> u32 {
+     let Poll::Batch(batch) = polled else {
+         return 0;
+@@ -143,7 +150,8 @@ pub(crate) async fn admission<E: crate::stage::PairEngine + ?Sized>(
+ ) -> Result<Admit, EnsureError> {
+     slot::release_exited(journal, engine).await?;
+     let idle = steps::idle(polled);
+-    let occupied = slot::occupied(journal).await?;
++    let except = steps::mint_subject(polled);
++    let occupied = slot::occupied_except(journal, except.as_deref()).await?;
+     let running = if capacity::needs_running(idle) {
+         slot::running_count(journal, engine).await?
+     } else {
+@@ -157,6 +165,7 @@ pub(crate) async fn admission<E: crate::stage::PairEngine + ?Sized>(
+         running,
+         assigned: assigned_in(polled),
+         idle,
++        progress: progress_batch(polled),
+     }))
+ }
+ 
+diff --git a/crates/velnor-runner/crates/velnor-runner-host/src/launch_capacity_tests.rs b/crates/velnor-runner/crates/velnor-runner-host/src/launch_capacity_tests.rs
+index cc8dc8d90..3c93c5788 100644
+--- a/crates/velnor-runner/crates/velnor-runner-host/src/launch_capacity_tests.rs
++++ b/crates/velnor-runner/crates/velnor-runner-host/src/launch_capacity_tests.rs
+@@ -38,6 +38,7 @@ fn seat(
+         running,
+         assigned,
+         idle,
++        progress: false,
+     })
+ }
+ 
+@@ -105,6 +106,7 @@ fn scale_does_not_mint_again_once_assigned_is_covered() {
+             running: 1,
+             assigned: 1,
+             idle: Idle::Scale,
++            progress: false,
+         }),
+         Admit::Ack { stop: false }
+     );
+@@ -117,6 +119,7 @@ fn scale_does_not_mint_again_once_assigned_is_covered() {
+             running: 1,
+             assigned: 3,
+             idle: Idle::Scale,
++            progress: false,
+         }),
+         Admit::Start { stop: true }
+     );
+@@ -129,6 +132,7 @@ fn scale_does_not_mint_again_once_assigned_is_covered() {
+             running: 0,
+             assigned: 1,
+             idle: Idle::Scale,
++            progress: false,
+         }),
+         Admit::Start { stop: false }
+     );
+@@ -141,6 +145,7 @@ fn scale_does_not_mint_again_once_assigned_is_covered() {
+             running: 0,
+             assigned: 1,
+             idle: Idle::Scale,
++            progress: false,
+         }),
+         Admit::Start { stop: true }
+     );
+@@ -282,11 +287,29 @@ fn historical_starts_do_not_cover_a_free_slot() {
+             running: 1,
+             assigned: 2,
+             idle: Idle::Scale,
++            progress: false,
+         }),
+         Admit::Start { stop: true }
+     );
+ }
+ 
++#[test]
++fn full_progress_notice_is_acknowledged() {
++    assert_eq!(
++        admit(Seat {
++            capacity: 1,
++            target: 1,
++            started: 0,
++            occupied: 1,
++            running: 0,
++            assigned: 5,
++            idle: Idle::Scale,
++            progress: true,
++        }),
++        Admit::Ack { stop: false }
++    );
++}
++
+ #[test]
+ fn uncertain_occupancy_does_not_mint_or_ack() {
+     assert_eq!(
+@@ -298,6 +321,7 @@ fn uncertain_occupancy_does_not_mint_or_ack() {
+             running: 0,
+             assigned: 1,
+             idle: Idle::Scale,
++            progress: false,
+         }),
+         Admit::Hold
+     );
+diff --git a/crates/velnor-runner/crates/velnor-runner-host/src/launch_harness.rs b/crates/velnor-runner/crates/velnor-runner-host/src/launch_harness.rs
+index ce3a1dbb8..a1c418e7b 100644
+--- a/crates/velnor-runner/crates/velnor-runner-host/src/launch_harness.rs
++++ b/crates/velnor-runner/crates/velnor-runner-host/src/launch_harness.rs
+@@ -137,6 +137,31 @@ pub(crate) fn ctx() -> Drive {
+     }
+ }
+ 
++pub(crate) fn started_progress(message_id: i64, assigned: i64) -> Poll {
++    let mut poll = assigned_wait(message_id, assigned);
++    let Poll::Batch(batch) = &mut poll else {
++        return poll;
++    };
++    batch.jobs = vec![
++        progress_job(InnerKind::Started),
++        progress_job(InnerKind::Started),
++    ];
++    poll
++}
++
++fn progress_job(kind: InnerKind) -> InnerJob {
++    InnerJob {
++        kind,
++        request_id: Some(0),
++        job_id: None,
++        labels: Vec::new(),
++        runner_id: None,
++        runner_name: None,
++        result: None,
++        fields: Vec::new(),
++    }
++}
++
+ pub(crate) fn assigned_wait(message_id: i64, assigned: i64) -> Poll {
+     Poll::Batch(ParsedBatch {
+         message_id,
+diff --git a/crates/velnor-runner/crates/velnor-runner-host/src/launch_idless_tests.rs b/crates/velnor-runner/crates/velnor-runner-host/src/launch_idless_tests.rs
+index f58396ccb..fcab68095 100644
+--- a/crates/velnor-runner/crates/velnor-runner-host/src/launch_idless_tests.rs
++++ b/crates/velnor-runner/crates/velnor-runner-host/src/launch_idless_tests.rs
+@@ -1,7 +1,7 @@
+ //! A launch row without worker IDs stays occupied until cleanup is proven.
+ 
+ use crate::launch::{Admit, admission};
+-use crate::launch_harness::{absent, assigned_wait, open};
++use crate::launch_harness::{absent, assigned_wait, open, started_progress};
+ use crate::stage::PairEngine;
+ use crate::worker::CreateProjection;
+ use crate::{HostError, Journal, Outcome};
+@@ -80,3 +80,71 @@ async fn idless_uncertain_rows_keep_both_slots() -> Result<(), String> {
+     assert!(rows.iter().all(|row| !row.cleanup_proven));
+     absent(&scratch.file())
+ }
++#[tokio::test]
++async fn own_idless_uncertain_row_does_not_block_its_mint() -> Result<(), String> {
++    let (scratch, journal) = open("idless-self").await?;
++    uncertain_without_ids(&journal, "m9").await?;
++    let decision = admission(&Idle, &journal, 1, 1, 0, &assigned_wait(9, 1))
++        .await
++        .map_err(|err| err.to_string())?;
++    assert_eq!(decision, Admit::Start { stop: true });
++    absent(&scratch.file())
++}
++
++#[tokio::test]
++async fn other_idless_uncertain_row_still_blocks_mint() -> Result<(), String> {
++    let (scratch, journal) = open("idless-other").await?;
++    uncertain_without_ids(&journal, "m8").await?;
++    let decision = admission(&Idle, &journal, 1, 1, 0, &assigned_wait(9, 1))
++        .await
++        .map_err(|err| err.to_string())?;
++    assert_eq!(decision, Admit::Hold);
++    absent(&scratch.file())
++}
++
++#[tokio::test]
++async fn partial_uncertain_row_still_blocks_its_mint() -> Result<(), String> {
++    let (scratch, journal) = open("partial-self").await?;
++    let id = journal
++        .begin("launch", "m9")
++        .await
++        .map_err(|err| err.to_string())?;
++    journal
++        .bind_worker(id, None, Some(&hex(1)))
++        .await
++        .map_err(|err| err.to_string())?;
++    journal
++        .finish(id, Outcome::Uncertain)
++        .await
++        .map_err(|err| err.to_string())?;
++    let decision = admission(&Idle, &journal, 1, 1, 0, &assigned_wait(9, 1))
++        .await
++        .map_err(|err| err.to_string())?;
++    assert_eq!(decision, Admit::Hold);
++    absent(&scratch.file())
++}
++
++fn hex(n: u64) -> String {
++    format!("{n:064x}")
++}
++
++#[tokio::test]
++async fn full_slot_acks_started_progress() -> Result<(), String> {
++    let (scratch, journal) = open("progress-full").await?;
++    uncertain_without_ids(&journal, "m8").await?;
++    let decision = admission(&Idle, &journal, 1, 1, 0, &started_progress(11, 5))
++        .await
++        .map_err(|err| err.to_string())?;
++    assert_eq!(decision, Admit::Ack { stop: false });
++    absent(&scratch.file())
++}
++
++#[tokio::test]
++async fn free_slot_still_scales_started_progress() -> Result<(), String> {
++    let (scratch, journal) = open("progress-free").await?;
++    let decision = admission(&Idle, &journal, 2, 2, 0, &started_progress(11, 1))
++        .await
++        .map_err(|err| err.to_string())?;
++    assert_eq!(decision, Admit::Start { stop: false });
++    absent(&scratch.file())
++}
+diff --git a/crates/velnor-runner/crates/velnor-runner-host/src/launch_scale_tests.rs b/crates/velnor-runner/crates/velnor-runner-host/src/launch_scale_tests.rs
+index 48c545f09..84a6a3411 100644
+--- a/crates/velnor-runner/crates/velnor-runner-host/src/launch_scale_tests.rs
++++ b/crates/velnor-runner/crates/velnor-runner-host/src/launch_scale_tests.rs
+@@ -53,6 +53,83 @@ async fn scale_mints_jit_then_acks_without_acquire() -> Result<(), String> {
+     absent(&scratch.file())
+ }
+ 
++#[tokio::test]
++async fn idless_uncertain_subject_mints_after_the_empty_row_fails() -> Result<(), String> {
++    let (scratch, journal) = open("idless-mint").await?;
++    let stale = journal
++        .begin("launch", "m9")
++        .await
++        .map_err(|err| err.to_string())?;
++    journal
++        .finish(stale, Outcome::Uncertain)
++        .await
++        .map_err(|err| err.to_string())?;
++    let mut script = Script {
++        calls: Vec::new(),
++        mode: Mode::Ok,
++    };
++    let started = drive_offer(
++        &mut script,
++        &ctx(),
++        &assigned_wait(9, 1),
++        &journal,
++        |_name, _jit, _bind| async {
++            Ok(Started {
++                dind_id: "dind-2".to_owned(),
++                runner_id: "runner-2".to_owned(),
++            })
++        },
++    )
++    .await
++    .map_err(|err| err.to_string())?;
++    let started = started.ok_or_else(|| "missing worker".to_owned())?;
++    assert_eq!(started.runner_id, "runner-2");
++    assert_eq!(script.calls, ["jit", "ack"]);
++    let rows = journal.rows().await.map_err(|err| err.to_string())?;
++    assert_eq!(rows.len(), 2);
++    assert_eq!(rows[0].id, stale);
++    assert_eq!(rows[0].state, IntentState::Failed);
++    assert_eq!(rows[1].state, IntentState::Done);
++    assert_eq!(rows[1].docker_id.as_deref(), Some("runner-2"));
++    absent(&scratch.file())
++}
++
++#[tokio::test]
++async fn partial_uncertain_subject_does_not_mint() -> Result<(), String> {
++    let (scratch, journal) = open("partial-mint").await?;
++    let stale = journal
++        .begin("launch", "m9")
++        .await
++        .map_err(|err| err.to_string())?;
++    journal
++        .bind_worker(stale, None, Some("dind-kept"))
++        .await
++        .map_err(|err| err.to_string())?;
++    journal
++        .finish(stale, Outcome::Uncertain)
++        .await
++        .map_err(|err| err.to_string())?;
++    let mut script = Script {
++        calls: Vec::new(),
++        mode: Mode::Ok,
++    };
++    let error = drive_offer(
++        &mut script,
++        &ctx(),
++        &assigned_wait(9, 1),
++        &journal,
++        |_name, _jit, _bind| async { Err(HostError::Docker) },
++    )
++    .await;
++    assert_eq!(error, Err(EnsureError::Uncertain));
++    assert!(script.calls.is_empty());
++    let rows = journal.rows().await.map_err(|err| err.to_string())?;
++    assert_eq!(rows.len(), 1);
++    assert_eq!(rows[0].state, IntentState::Uncertain);
++    assert_eq!(rows[0].dind_id.as_deref(), Some("dind-kept"));
++    absent(&scratch.file())
++}
++
+ #[tokio::test]
+ async fn scale_jit_failure_is_not_acked() -> Result<(), String> {
+     let (scratch, journal) = open("scale-jit").await?;
+diff --git a/crates/velnor-runner/crates/velnor-runner-host/src/launch_tests.rs b/crates/velnor-runner/crates/velnor-runner-host/src/launch_tests.rs
+index b64f7c84a..b6287f0e9 100644
+--- a/crates/velnor-runner/crates/velnor-runner-host/src/launch_tests.rs
++++ b/crates/velnor-runner/crates/velnor-runner-host/src/launch_tests.rs
+@@ -5,7 +5,9 @@ use std::sync::{Arc, Mutex};
+ use velnor_runner_github::{ParsedBatch, Poll};
+ 
+ use crate::launch::{Idle, drive_offer, idle};
+-use crate::launch_harness::{CANARY, Mode, Script, absent, assigned_wait, available, ctx, open};
++use crate::launch_harness::{
++    CANARY, Mode, Script, absent, assigned_wait, available, ctx, open, started_progress,
++};
+ use crate::launch_test_support::valid_worker_volume;
+ use crate::{EnsureError, HostError, IntentState, Started};
+ 
+@@ -23,6 +25,7 @@ fn statistics_advance_and_offers_stay() {
+     assert_eq!(idle(&assigned_wait(7, 1)), Idle::Scale);
+     assert_eq!(idle(&assigned_wait(7, 0)), Idle::Ack);
+     assert_eq!(idle(&assigned_wait(8, -1)), Idle::Blocked);
++    assert_eq!(idle(&started_progress(11, 5)), Idle::Scale);
+ }
+ 
+ #[tokio::test]
+diff --git a/docs/implemented/freshness-evidence-2026-10-05.md b/docs/implemented/freshness-evidence-2026-10-05.md
+index 7dd401a92..74953a963 100644
+--- a/docs/implemented/freshness-evidence-2026-10-05.md
++++ b/docs/implemented/freshness-evidence-2026-10-05.md
+@@ -8,55 +8,97 @@ metadata only; it does not qualify a new tool, action, or cache route.
+ 
+ The [GitHub-hosted runners reference](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)
+ was rechecked on 2026-10-05. Its public and private standard-runner tables
+-still list `ubuntu-26.04`, `ubuntu-24.04`, and `ubuntu-22.04`, matching the
+-inventory's supported labels and unchanged `ubuntu-26.04` default.
++still list ubuntu-26.04, ubuntu-24.04, and ubuntu-22.04, matching the
++inventory's supported labels and unchanged ubuntu-26.04 default.
+ 
+ Protected-main [CI run 37300188152](https://github.com/tailrocks/velnor-new/actions/runs/37300188152)
+-completed successfully at head `2d9bca8a37b0440e29a3520aa03e77752079f400`.
++completed successfully at head 2d9bca8a37b0440e29a3520aa03e77752079f400.
+ Its successful [Rust / velnor-actions-cli job](https://github.com/tailrocks/velnor-new/actions/runs/37300188152/job/111731481419)
+-started at `2026-10-05T11:02:45Z`. The runner log records Ubuntu `26.04.1`,
+-image `ubuntu-26.04`, image version `20260927.149.1`, runner version `2.337.0`,
+-and [image release `ubuntu26/20260927.149`](https://github.com/actions/runner-images/releases/tag/ubuntu26%2F20260927.149).
+-This is a runtime image observation only; it is not a formal Qualification run.
++started at 2026-10-05T11:02:45Z. The runner log records Ubuntu 26.04.1,
++image ubuntu-26.04, image version 20260927.149.1, runner version 2.337.0,
++and [image release ubuntu26/20260927.149](https://github.com/actions/runner-images/releases/tag/ubuntu26%2F20260927.149).
++The retained log is /tmp/velnor-pr75-cli-111731481419.log (SHA-256
++3eae40aa0fd8203775391ecbd8550bc6acd15c6db2ddac68b30d0ae05abc28be). The
++job checked out source head 2d9bca8a37b0440e29a3520aa03e77752079f400; this
++runner observation is separate from the d435ac5 inventory source below. It
++is a runtime image observation only; it is not a formal Qualification run.
+ 
+ ## Tool and action releases
+ 
+-Two bounded, read-only source captures completed on 2026-10-05. Capture A ran
+-from `11:38:00Z` through `11:38:10Z`; capture B ran from `11:40:22Z` through
+-`11:41:06Z`. Each captured all 18 distinct source URLs represented by the 19
+-tool/action inventory rows. GitHub release/tag metadata came from GitHub's
+-API, the Rust version from the stable-channel TOML, and Cargo tool versions
+-from crates.io. The raw response sizes and SHA-256 digests were verified
+-against both capture manifests. The parsed A and B latest-version tables are
+-identical (SHA-256 `f33dbac44fc52cf8693091a2986cc5b3c91f898ba30b506524e5750080aa3df8`);
+-the manifest SHA-256 values are `3676fbb2f984bcc07fc5389809df80bb3d4d64c9ea8645b7e3aad1a347a2bf00`
+-for A and `3ddb82ab9cf05596cf77c4d090e2612c1604df06263f18f6eef3f8e142deef29`
+-for B. `checked_at` records the end of capture B.
++Replacement A/B observations were captured from the exact inventory at main
++d435ac5b7e686ad9c9c594dde4b024b702435e47 (tree
++32b2bad140a9bc00d3daa7d0e54993c995fabc97). The source inventory blob is
++7807bf94f5f3ea32e93a242b16d1e1d7ad7b5eb5; its SHA-256 is
++ea12f4c9dd41a194d90dc9b92d22bae54e5ac4af4ab5799992fff75275fb72c6. The
++collector /private/tmp/velnor-capture-upstream-d435-v2.py has SHA-256
++6f5cbd14bee1a6a1a6842c6d7bb19be840e53f7614bb0e72a1d161be45fbeac0. It
++made unauthenticated, sequential HTTPS requests with the repository probe's
++10-second timeout and 512-KiB body cap. It retained status, final URL, selected
++response headers, the manifest requested_at value recorded after body read and
++parse (not a request-start time), persisted body length/hash, truncation status,
++and parsed latest version for each source. The capture directory and raw
++responses remain at /private/tmp/velnor-pr75-captures-d435-20261005-r2/.
++
++Capture A ran from 2026-10-05T12:21:25Z through 12:21:38Z. Its manifest
++A/manifest.json has SHA-256
++7b038374d3eca856457aa8044f6273785d13120835c58baaecdafe8d53e212e5; parsed
++table A/parsed-table.json has SHA-256
++e48a110cca8b04da021feb594bc55cde487c7fbed251a313d9ea44026489d5f7.
++Capture B ran from 2026-10-05T12:26:36Z through 12:26:50Z; its manifest
++B/manifest.json has SHA-256
++09c1e54500c68871599ae56c969dde5282af3e10ef7f9269876bfa957fb40ce0; parsed
++table B/parsed-table.json has SHA-256
++d3f727c61f294a4afd26e4193728f8f022eb7e6b0b44c989d6a45e0932fc78ec. All 18
++source requests returned HTTP 200. The two captures' latest values match
++row-by-row across all 19 inventory rows; the manifest and table files have
++different hashes because they identify separate captures and times. The raw
++response paths and persisted-byte hashes are recorded in each manifest.
++
++The stable Rust channel response advertised a Content-Length of 943,486
++bytes. Each capture retained the first 524,288 bytes, with
++truncated_to_cap: true; SHA-256
++af513485c004f709556925f707785a659595a655014b3b616df29d2d6afbadff hashes
++that persisted prefix, not the full upstream response. In both prefixes, byte
++offset 80,035 (raw line 1,759) contains [pkg.rust] followed by
++version = "1.99.0 (b940084d7 2026-09-28)". The repository parser at
++scripts/check-freshness.sh:1078-1082 selects that table's version; it does not
++select the earlier [pkg.cargo] version. The prefix includes the complete field
++used by the parser.
++
++The initial collector attempt is retained separately at
++/private/tmp/velnor-pr75-capture-A.log (SHA-256
++f9bb5dccca58f7307aa15b956c31050e51cbb45ca4b7c05301709035b5e9bc46). It
++failed when the Rust channel response exceeded the configured cap and is not
++counted as an observation. The earlier revision's cited A/B capture artifacts
++were unavailable for independent revalidation; this replacement pair does not
++claim to verify those earlier hashes.
+ 
+ | Inventory row | Latest observed | Disposition |
+ | --- | --- | --- |
+-| tool `mise` | `v2026.10.3` | held at `2026.9.18` under #6 |
+-| tool `rust` | `1.99.0` | held at `1.98.1` under #6 |
+-| tool `mr-boxington` | `v1.22.0` | held at `1.21.1` under #29 |
+-| tool `gh` | `v2.102.0` | matches pin |
+-| tool `actionlint` | `v1.7.12` | matches pin |
+-| tool `shellcheck` | `v0.11.0` | matches pin |
+-| tool `zizmor` | `v1.30.1` | matches pin |
+-| tool `nextest` | `0.9.146` | matches pin |
+-| tool `opentofu` | `v1.13.1` | matches pin |
+-| tool `release-plz` | `0.3.169` | matches pin |
+-| action `jdx/mise-action` | `v5.1.1` | held at `v5.0.0` under #6 |
+-| action `actions/checkout` | `v7.0.1` | matches pin |
+-| action `actions/download-artifact` | `v8.0.1` | matches pin |
+-| action `actions/upload-artifact` | `v7.0.1` | matches pin |
+-| action `actions/cache/restore` | `v6.1.0` | matches pin |
+-| action `actions/cache/save` | `v6.1.0` | matches pin |
+-| action `jdx/mr-boxington-action` | `v1.7.1` | held at `v1.6.0` under #29 |
+-| action `asamarts/alint` | `v0.17.0` | held at `v0.16.1` under #6 |
+-| action `Swatinem/rust-cache` | `v2.9.2` | matches pin |
+-
+-All 13 rows marked `current` still match their pins. The six existing held rows
+-remain held with their pin, qualified version/SHA, exception owner, issue, and
+-expiry unchanged. Only the latest-observed values for `mise` and
+-`jdx/mise-action` changed from the preceding inventory; no release was promoted.
+-The separately evidenced runner row is unchanged by this release-metadata check.
++| tool mise | v2026.10.3 | held at 2026.9.18 under #6 |
++| tool rust | 1.99.0 | held at 1.98.1 under #6 |
++| tool mr-boxington | v1.22.0 | held at 1.21.1 under #29 |
++| tool gh | v2.102.0 | matches pin |
++| tool actionlint | v1.7.12 | matches pin |
++| tool shellcheck | v0.11.0 | matches pin |
++| tool zizmor | v1.30.1 | matches pin |
++| tool nextest | 0.9.146 | matches pin |
++| tool opentofu | v1.13.1 | matches pin |
++| tool release-plz | 0.3.169 | matches pin |
++| action jdx/mise-action | v5.1.1 | held at v5.0.0 under #6 |
++| action actions/checkout | v7.0.1 | matches pin |
++| action actions/download-artifact | v8.0.1 | matches pin |
++| action actions/upload-artifact | v7.0.1 | matches pin |
++| action actions/cache/restore | v6.1.0 | matches pin |
++| action actions/cache/save | v6.1.0 | matches pin |
++| action jdx/mr-boxington-action | v1.7.1 | held at v1.6.0 under #29 |
++| action asamarts/alint | v0.17.0 | held at v0.16.1 under #6 |
++| action Swatinem/rust-cache | v2.9.2 | matches pin |
++
++The 13 current rows still match their pins, and all six existing held rows
++remain held with the same pin, qualified version/SHA, exception owner, issue,
++and expiry. The captured latest values match the PR75 inventory; no version,
++qualification, or hold was promoted by this follow-up. Inventory checked_at
++values for these 19 tool/action rows and the top-level inventory are set to the
++end of Capture B, 2026-10-05T12:26:50Z. The hosted-runner row retains its
++separate observation time.

@@ -1,0 +1,16 @@
+   Compiling ring v0.17.14
+   Compiling rustls v0.23.45
+   Compiling rustls-webpki v0.103.15
+   Compiling ureq v3.4.2
+   Compiling velnor-actions-freshness v0.1.1 (/tmp/velnor-pr12-foundation-20261005/crates/velnor-actions-freshness)
+   Compiling velnor-actions-cli v0.1.1 (/tmp/velnor-pr12-foundation-20261005/crates/velnor-actions-cli)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 5.44s
+────────────
+ Nextest run ID e67e9765-08cf-43a6-aa04-f3b64c350179 with nextest profile: default
+    Starting 4 tests across 1 binary (255 tests skipped)
+        PASS [   0.005s] (1/4) velnor-actions-cli::velnor_cli impl_repo_quality::oc_reconciles_mirrors_by_reference
+        PASS [   0.005s] (2/4) velnor-actions-cli::velnor_cli impl_repo_quality::qc_integrates_spec_section3
+        PASS [   0.005s] (3/4) velnor-actions-cli::velnor_cli impl_repo_quality::qc_keeps_original_normatives
+        PASS [   0.132s] (4/4) velnor-actions-cli::velnor_cli impl_repo_size::size_limits_hold
+────────────
+     Summary [   0.132s] 4 tests run: 4 passed, 255 skipped

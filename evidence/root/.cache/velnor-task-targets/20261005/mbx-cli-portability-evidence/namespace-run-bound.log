@@ -1,0 +1,7 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s
+────────────
+ Nextest run ID 873b958d-39e3-4916-aab8-f5170d2a2cf8 with nextest profile: default
+    Starting 1 test across 2 binaries (368 tests skipped)
+        PASS [   0.043s] (1/1) velnor-actions-workflow-renderer stock_mbx_bundle_cli_tests::predicate_tests::generated_object_predicate_rejects_cross_device_descendants
+────────────
+     Summary [   0.043s] 1 test run: 1 passed, 368 skipped

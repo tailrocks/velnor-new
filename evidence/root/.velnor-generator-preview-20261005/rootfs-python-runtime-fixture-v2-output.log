@@ -1,0 +1,26 @@
+Traceback (most recent call last):
+  File "/root/.velnor-generator-preview-20261005/rootfs-python-runtime-fixture-v2.py", line 561, in <module>
+    main()
+    ~~~~^^
+  File "/root/.velnor-generator-preview-20261005/rootfs-python-runtime-fixture-v2.py", line 506, in main
+    process = subprocess.run(
+        ["/usr/bin/python3", "-I", "-S", "-B", "-c", child_code],
+    ...<8 lines>...
+        check=False,
+    )
+  File "/usr/lib/python3.13/subprocess.py", line 554, in run
+    with Popen(*popenargs, **kwargs) as process:
+         ~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.13/subprocess.py", line 1039, in __init__
+    self._execute_child(args, executable, preexec_fn, close_fds,
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                        pass_fds, cwd, env,
+                        ^^^^^^^^^^^^^^^^^^^
+    ...<5 lines>...
+                        gid, gids, uid, umask,
+                        ^^^^^^^^^^^^^^^^^^^^^^
+                        start_new_session, process_group)
+                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.13/subprocess.py", line 1972, in _execute_child
+    raise child_exception_type(errno_num, err_msg, err_filename)
+PermissionError: [Errno 13] Permission denied: '/usr/bin/python3'

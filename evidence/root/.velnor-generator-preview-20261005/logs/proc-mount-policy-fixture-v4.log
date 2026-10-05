@@ -1,0 +1,25 @@
+namespace_sha256=59d14f020a88558578e4abafab674705c46cf4445d3b4f492cc024338f287019
+fixture_started_at_utc=2026-10-05T15:14:09.554763820Z
+accepted_policy=ro,nosuid,nodev,noexec,relatime,hidepid=2,subset=pid
+accepted_policy=ro,nosuid,nodev,noexec,relatime,hidepid=invisible,subset=pid
+rejected_policy=ro,nosuid,nodev,noexec,relatime,subset=pid
+rejected_policy=ro,nosuid,nodev,noexec,relatime,hidepid=0,subset=pid
+rejected_policy=ro,nosuid,nodev,noexec,relatime,hidepid=1,subset=pid
+rejected_policy=ro,nosuid,nodev,noexec,relatime,hidepid=4,subset=pid
+rejected_policy=ro,nosuid,nodev,noexec,relatime,hidepid=20,subset=pid
+rejected_policy=ro,nosuid,nodev,noexec,relatime,hidepid=2,hidepid=invisible,subset=pid
+rejected_policy=ro,nosuid,nodev,noexec,relatime,hidepid=2,subset=pid,subset=all
+rejected_policy=ro,nosuid,nodev,noexec,relatime,hidepid=2,subset=pid,gid=0
+rejected_policy=ro,nosuid,nodev,noexec,relatime,hidepid=2,subset=pid,
+rejected_policy=,ro,nosuid,nodev,noexec,relatime,hidepid=2,subset=pid
+rejected_policy=ro,nosuid,nodev,noexec,,relatime,hidepid=2,subset=pid
+rejected_policy=rw,nosuid,nodev,noexec,relatime,hidepid=2,subset=pid
+rejected_policy=ro,suid,nodev,noexec,relatime,hidepid=2,subset=pid
+rejected_policy=ro,nosuid,dev,noexec,relatime,hidepid=2,subset=pid
+rejected_policy=ro,nosuid,nodev,exec,relatime,hidepid=2,subset=pid
+rejected_policy=ro,nosuid,nodev,noexec,relatime,hidepid=2,subset=all
+rejected_policy=ro,nosuid,nodev,noexec,relatime,hidepid=2,subset=pid,unknown=1
+parser_matrix=PASS accepted=2 rejected=17
+findmnt_options=ro,nosuid,nodev,noexec,relatime,hidepid=invisible,subset=pid
+private_mountinfo=305 134 0:47 / /root/.velnor-generator-preview-20261005/proc-policy-fixture.OGAw2O4B/proc ro,nosuid,nodev,noexec,relatime - proc proc ro,hidepid=invisible,subset=pid
+actual_proc_policy=PASS options=ro,nosuid,nodev,noexec,relatime,hidepid=invisible,subset=pid

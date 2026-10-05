@@ -1,0 +1,1417 @@
+﻿2026-10-05T13:02:48.2637161Z Current runner version: '2.337.0'
+2026-10-05T13:02:48.2662016Z ##[group]Runner Image Provisioner
+2026-10-05T13:02:48.2663108Z Hosted Compute Agent
+2026-10-05T13:02:48.2663715Z Version: 20260901.588
+2026-10-05T13:02:48.2664398Z Commit: f88ec8081b781fac6c440065ac7ff9e710ce3d0b
+2026-10-05T13:02:48.2665205Z Build Date: 2026-09-01T19:56:44Z
+2026-10-05T13:02:48.2665889Z Worker ID: {29c02591-43e0-4473-8e07-b5a4610ccbf3}
+2026-10-05T13:02:48.2666827Z Azure Region: northcentralus
+2026-10-05T13:02:48.2667506Z ##[endgroup]
+2026-10-05T13:02:48.2669002Z ##[group]Operating System
+2026-10-05T13:02:48.2669703Z Ubuntu
+2026-10-05T13:02:48.2670245Z 26.04.1
+2026-10-05T13:02:48.2670839Z LTS
+2026-10-05T13:02:48.2671386Z ##[endgroup]
+2026-10-05T13:02:48.2672234Z ##[group]Runner Image
+2026-10-05T13:02:48.2672958Z Image: ubuntu-26.04
+2026-10-05T13:02:48.2673555Z Version: 20260927.149.1
+2026-10-05T13:02:48.2674897Z Included Software: https://github.com/actions/runner-images/blob/ubuntu26/20260927.149/images/ubuntu/Ubuntu2604-Readme.md
+2026-10-05T13:02:48.2676388Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu26%2F20260927.149
+2026-10-05T13:02:48.2677455Z ##[endgroup]
+2026-10-05T13:02:48.2678650Z ##[group]GITHUB_TOKEN Permissions
+2026-10-05T13:02:48.2680739Z Actions: read
+2026-10-05T13:02:48.2681441Z Contents: read
+2026-10-05T13:02:48.2682487Z Metadata: read
+2026-10-05T13:02:48.2683072Z ##[endgroup]
+2026-10-05T13:02:48.2685145Z Secret source: Actions
+2026-10-05T13:02:48.2686179Z Cache mode: write
+2026-10-05T13:02:48.2686928Z Prepare workflow directory
+2026-10-05T13:02:48.3183693Z Prepare all required actions
+2026-10-05T13:02:48.3253930Z Getting action download info
+2026-10-05T13:02:48.5918138Z Download action repository 'jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5' (SHA:9149ea85001c7435d5a66bb127d6a1b6227cb0a5)
+2026-10-05T13:02:49.0408443Z Download action repository 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+2026-10-05T13:02:49.0828448Z Download action repository 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9' (SHA:55cc8345863c7cc4c66a329aec7e433d2d1c52a9)
+2026-10-05T13:02:49.1576896Z Download action repository 'jdx/mr-boxington-action@1687e54eb349cadf61fa38b5813a77875489e8e6' (SHA:1687e54eb349cadf61fa38b5813a77875489e8e6)
+2026-10-05T13:02:49.3807337Z Download action repository 'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a' (SHA:043fb46d1a93c77aae656e7c1c64a875d1fc6a0a)
+2026-10-05T13:02:49.5764765Z Complete job name: Plan
+2026-10-05T13:02:49.6718286Z ##[group]Run jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
+2026-10-05T13:02:49.6719457Z with:
+2026-10-05T13:02:49.6719918Z   cache: true
+2026-10-05T13:02:49.6720632Z   cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-ccc5d847fd871b3b
+2026-10-05T13:02:49.6721476Z   cache_save: false
+2026-10-05T13:02:49.6722275Z   env: false
+2026-10-05T13:02:49.6722730Z   install: false
+2026-10-05T13:02:49.6723456Z   sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
+2026-10-05T13:02:49.6724356Z   version: 2026.9.18
+2026-10-05T13:02:49.6724881Z   minimum_release_age: 24h
+2026-10-05T13:02:49.6725430Z   bootstrap: false
+2026-10-05T13:02:49.6725927Z   cache_key_prefix: mise-v1
+2026-10-05T13:02:49.6726499Z   experimental: false
+2026-10-05T13:02:49.6727013Z   log_level: info
+2026-10-05T13:02:49.6727482Z   reshim: false
+2026-10-05T13:02:49.6727954Z   add_shims_to_path: true
+2026-10-05T13:02:49.6733231Z   github_token: ***
+2026-10-05T13:02:49.6733810Z   fetch_from_github: true
+2026-10-05T13:02:49.6734348Z   export_path: true
+2026-10-05T13:02:49.6734838Z   wings_enabled: false
+2026-10-05T13:02:49.6735630Z env:
+2026-10-05T13:02:49.6736092Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+2026-10-05T13:02:49.6736707Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+2026-10-05T13:02:49.6737291Z   ACTIONS_RUNTIME_TOKEN: 
+2026-10-05T13:02:49.6737818Z   CARGO_REGISTRY_TOKEN: 
+2026-10-05T13:02:49.6738332Z   GH_CONFIG_DIR: 
+2026-10-05T13:02:49.6738811Z   GH_HOST: 
+2026-10-05T13:02:49.6739260Z   GH_TOKEN: 
+2026-10-05T13:02:49.6740034Z   GITHUB_TOKEN: 
+2026-10-05T13:02:49.6740500Z   MBX_GC_AUTO: 1
+2026-10-05T13:02:49.6740975Z   MBX_SHARE_OUT_DIR: 0
+2026-10-05T13:02:49.6741494Z   MISE_AUTO_INSTALL: false
+2026-10-05T13:02:49.6742379Z   MISE_EXEC_AUTO_INSTALL: false
+2026-10-05T13:02:49.6742952Z   MISE_GITHUB_TOKEN: 
+2026-10-05T13:02:49.6743442Z   MISE_LOCKFILE: 0
+2026-10-05T13:02:49.6743911Z   MISE_NO_CONFIG: 1
+2026-10-05T13:02:49.6744385Z   MISE_NO_ENV: 1
+2026-10-05T13:02:49.6744843Z   MISE_NO_HOOKS: 1
+2026-10-05T13:02:49.6745322Z   NODE_AUTH_TOKEN: 
+2026-10-05T13:02:49.6745787Z   NPM_TOKEN: 
+2026-10-05T13:02:49.6746246Z   RUSTUP_TOOLCHAIN: 1.98.1
+2026-10-05T13:02:49.6746776Z ##[endgroup]
+2026-10-05T13:02:49.8137429Z ##[group]Restoring mise cache
+2026-10-05T13:02:49.8139562Z [command]/usr/bin/ldd --version
+2026-10-05T13:02:49.8200912Z ldd (Ubuntu GLIBC 2.43-2ubuntu2.4) 2.43
+2026-10-05T13:02:49.8202926Z Copyright (C) 2024 Free Software Foundation, Inc.
+2026-10-05T13:02:49.8204731Z This is free software; see the source for copying conditions.  There is NO
+2026-10-05T13:02:49.8207120Z warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+2026-10-05T13:02:49.8210269Z Written by Roland McGrath and Ulrich Drepper.
+2026-10-05T13:02:49.9641095Z mise cache not found for mise-v1-x86_64-unknown-linux-gnu-2026.9.18-ccc5d847fd871b3b
+2026-10-05T13:02:49.9644591Z `minimum_release_age` is ignored because an explicit mise version was provided
+2026-10-05T13:02:49.9646249Z ##[group]Download mise@2026.9.18
+2026-10-05T13:02:49.9667261Z [command]/usr/local/bin/zstd --version
+2026-10-05T13:02:49.9699610Z *** Zstandard CLI (64-bit) v1.5.7, by Yann Collet ***
+2026-10-05T13:02:49.9717076Z [command]/usr/bin/tar --zstd --version
+2026-10-05T13:02:49.9749525Z tar (GNU tar) 1.35
+2026-10-05T13:02:49.9750582Z Copyright (C) 2023 Free Software Foundation, Inc.
+2026-10-05T13:02:49.9752483Z License GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>.
+2026-10-05T13:02:49.9754346Z This is free software: you are free to change and redistribute it.
+2026-10-05T13:02:49.9755950Z There is NO WARRANTY, to the extent permitted by law.
+2026-10-05T13:02:49.9756816Z 
+2026-10-05T13:02:49.9757253Z Written by John Gilmore and Jay Fenlason.
+2026-10-05T13:02:49.9768111Z [command]/usr/bin/ldd --version
+2026-10-05T13:02:49.9802597Z ldd (Ubuntu GLIBC 2.43-2ubuntu2.4) 2.43
+2026-10-05T13:02:49.9803773Z Copyright (C) 2024 Free Software Foundation, Inc.
+2026-10-05T13:02:49.9805647Z This is free software; see the source for copying conditions.  There is NO
+2026-10-05T13:02:49.9806884Z warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+2026-10-05T13:02:49.9808003Z Written by Roland McGrath and Ulrich Drepper.
+2026-10-05T13:02:49.9824627Z Using curl to download mise
+2026-10-05T13:02:49.9836827Z [command]/usr/bin/curl -fsSL https://github.com/jdx/mise/releases/download/v2026.9.18/mise-v2026.9.18-linux-x64.tar.zst --output /tmp/mise-action-kMf2gU/mise-v2026.9.18-linux-x64.tar.zst
+2026-10-05T13:02:50.2192662Z [command]/usr/bin/tar --zstd -xf /tmp/mise-action-kMf2gU/mise-v2026.9.18-linux-x64.tar.zst -C /tmp/mise-action-kMf2gU
+2026-10-05T13:02:50.5081430Z [command]/usr/bin/mv /tmp/mise-action-kMf2gU/mise/bin/mise /home/runner/.local/share/mise/bin/mise
+2026-10-05T13:02:50.8060440Z ##[group]Setting env vars
+2026-10-05T13:02:50.8062027Z Setting MISE_LOG_LEVEL=info
+2026-10-05T13:02:50.8075587Z Setting MISE_GITHUB_TOKEN=***
+2026-10-05T13:02:50.8077332Z Setting MISE_TRUSTED_CONFIG_PATHS=/home/runner/work/velnor-new/velnor-new
+2026-10-05T13:02:50.8079177Z Setting MISE_YES=1
+2026-10-05T13:02:50.8080345Z Adding /home/runner/.local/share/mise/shims to PATH
+2026-10-05T13:02:50.8082659Z ##[group]Running mise --version
+2026-10-05T13:02:50.8085330Z [command]/home/runner/.local/share/mise/bin/mise --version
+2026-10-05T13:02:50.8197669Z 2026.9.18 linux-x64 (2026-09-30)
+2026-10-05T13:02:50.8231613Z ##[endgroup]
+2026-10-05T13:02:50.8233279Z ##[group]Running mise ls
+2026-10-05T13:02:50.8244992Z [command]/home/runner/.local/share/mise/bin/mise ls
+2026-10-05T13:02:50.8373200Z ##[endgroup]
+2026-10-05T13:02:50.8872987Z ##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+2026-10-05T13:02:50.8874614Z with:
+2026-10-05T13:02:50.8875539Z   fetch-depth: 0
+2026-10-05T13:02:50.8876577Z   persist-credentials: false
+2026-10-05T13:02:50.8877768Z   repository: tailrocks/velnor-new
+2026-10-05T13:02:50.8887334Z   token: ***
+2026-10-05T13:02:50.8888303Z   ssh-strict: true
+2026-10-05T13:02:50.8889287Z   ssh-user: git
+2026-10-05T13:02:50.8890246Z   clean: true
+2026-10-05T13:02:50.8891262Z   sparse-checkout-cone-mode: true
+2026-10-05T13:02:50.8892616Z   fetch-tags: false
+2026-10-05T13:02:50.8893637Z   show-progress: true
+2026-10-05T13:02:50.8894644Z   lfs: false
+2026-10-05T13:02:50.8895593Z   submodules: false
+2026-10-05T13:02:50.8896630Z   set-safe-directory: true
+2026-10-05T13:02:50.8897785Z   allow-unsafe-pr-checkout: false
+2026-10-05T13:02:50.8898948Z env:
+2026-10-05T13:02:50.8899896Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+2026-10-05T13:02:50.8901129Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+2026-10-05T13:02:50.8902460Z   ACTIONS_RUNTIME_TOKEN: 
+2026-10-05T13:02:50.8903559Z   CARGO_REGISTRY_TOKEN: 
+2026-10-05T13:02:50.8904621Z   GH_CONFIG_DIR: 
+2026-10-05T13:02:50.8905587Z   GH_HOST: 
+2026-10-05T13:02:50.8906500Z   GH_TOKEN: 
+2026-10-05T13:02:50.8907424Z   GITHUB_TOKEN: 
+2026-10-05T13:02:50.8908389Z   MBX_GC_AUTO: 1
+2026-10-05T13:02:50.8909359Z   MBX_SHARE_OUT_DIR: 0
+2026-10-05T13:02:50.8910420Z   MISE_AUTO_INSTALL: false
+2026-10-05T13:02:50.8911534Z   MISE_EXEC_AUTO_INSTALL: false
+2026-10-05T13:02:50.8921031Z   MISE_GITHUB_TOKEN: ***
+2026-10-05T13:02:50.8922207Z   MISE_LOCKFILE: 0
+2026-10-05T13:02:50.8923185Z   MISE_NO_CONFIG: 1
+2026-10-05T13:02:50.8924154Z   MISE_NO_ENV: 1
+2026-10-05T13:02:50.8925152Z   MISE_NO_HOOKS: 1
+2026-10-05T13:02:50.8926129Z   NODE_AUTH_TOKEN: 
+2026-10-05T13:02:50.8927105Z   NPM_TOKEN: 
+2026-10-05T13:02:50.8928067Z   RUSTUP_TOOLCHAIN: 1.98.1
+2026-10-05T13:02:50.8929149Z   MISE_LOG_LEVEL: info
+2026-10-05T13:02:50.8930539Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-new/velnor-new
+2026-10-05T13:02:50.8932193Z   MISE_YES: 1
+2026-10-05T13:02:50.8933157Z ##[endgroup]
+2026-10-05T13:02:50.9900810Z Syncing repository: tailrocks/velnor-new
+2026-10-05T13:02:50.9903936Z ##[group]Getting Git version info
+2026-10-05T13:02:50.9906175Z Working directory is '/home/runner/work/velnor-new/velnor-new'
+2026-10-05T13:02:50.9909314Z [command]/usr/bin/git version
+2026-10-05T13:02:50.9924992Z git version 2.55.0
+2026-10-05T13:02:50.9947118Z ##[endgroup]
+2026-10-05T13:02:50.9958938Z Temporarily overriding HOME='/home/runner/work/_temp/eb791736-89d8-4e2f-9533-43fbb3ef2e81' before making global git config changes
+2026-10-05T13:02:50.9963822Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-05T13:02:50.9967719Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/velnor-new/velnor-new
+2026-10-05T13:02:51.0026491Z Deleting the contents of '/home/runner/work/velnor-new/velnor-new'
+2026-10-05T13:02:51.0030234Z ##[group]Determining repository object format
+2026-10-05T13:02:51.0033409Z ##[endgroup]
+2026-10-05T13:02:51.0035805Z ##[group]Initializing the repository
+2026-10-05T13:02:51.0048340Z [command]/usr/bin/git init /home/runner/work/velnor-new/velnor-new
+2026-10-05T13:02:51.0145435Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-10-05T13:02:51.0148554Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-10-05T13:02:51.0150886Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-10-05T13:02:51.0153070Z hint: call:
+2026-10-05T13:02:51.0154495Z hint:
+2026-10-05T13:02:51.0156170Z hint: 	git config --global init.defaultBranch <name>
+2026-10-05T13:02:51.0158217Z hint:
+2026-10-05T13:02:51.0160141Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-10-05T13:02:51.0163328Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-10-05T13:02:51.0166277Z hint:
+2026-10-05T13:02:51.0168002Z hint: 	git branch -m <name>
+2026-10-05T13:02:51.0169638Z hint:
+2026-10-05T13:02:51.0171282Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-10-05T13:02:51.0174109Z Initialized empty Git repository in /home/runner/work/velnor-new/velnor-new/.git/
+2026-10-05T13:02:51.0179315Z [command]/usr/bin/git remote add origin https://github.com/tailrocks/velnor-new
+2026-10-05T13:02:51.0216424Z ##[endgroup]
+2026-10-05T13:02:51.0218332Z ##[group]Disabling automatic garbage collection
+2026-10-05T13:02:51.0220408Z [command]/usr/bin/git config --local gc.auto 0
+2026-10-05T13:02:51.0258003Z ##[endgroup]
+2026-10-05T13:02:51.0259751Z ##[group]Setting up auth
+2026-10-05T13:02:51.0261021Z Removing SSH command configuration
+2026-10-05T13:02:51.0264535Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-05T13:02:51.0304116Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-05T13:02:51.0723534Z Removing HTTP extra header
+2026-10-05T13:02:51.0730715Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-05T13:02:51.0768806Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-05T13:02:51.1057386Z Removing includeIf entries pointing to credentials config files
+2026-10-05T13:02:51.1061450Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-05T13:02:51.1097656Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-05T13:02:51.1391408Z [command]/usr/bin/git config --file /home/runner/work/_temp/git-credentials-35b149d9-1306-44fe-8725-6c98a167b55f.config http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-10-05T13:02:51.1436880Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/velnor-new/velnor-new/.git.path /home/runner/work/_temp/git-credentials-35b149d9-1306-44fe-8725-6c98a167b55f.config
+2026-10-05T13:02:51.1475820Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/velnor-new/velnor-new/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-35b149d9-1306-44fe-8725-6c98a167b55f.config
+2026-10-05T13:02:51.1531701Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-35b149d9-1306-44fe-8725-6c98a167b55f.config
+2026-10-05T13:02:51.1572367Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-35b149d9-1306-44fe-8725-6c98a167b55f.config
+2026-10-05T13:02:51.1606867Z ##[endgroup]
+2026-10-05T13:02:51.1609236Z ##[group]Fetching the repository
+2026-10-05T13:02:51.1616684Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules origin +refs/heads/*:refs/remotes/origin/* +refs/tags/*:refs/tags/*
+2026-10-05T13:02:59.5745511Z From https://github.com/tailrocks/velnor-new
+2026-10-05T13:02:59.5746402Z  * [new branch]          capacity-pressure           -> origin/capacity-pressure
+2026-10-05T13:02:59.5747353Z  * [new branch]          codex/agent-model-configuration -> origin/codex/agent-model-configuration
+2026-10-05T13:02:59.5748407Z  * [new branch]          codex/chainargos-cache-foundation -> origin/codex/chainargos-cache-foundation
+2026-10-05T13:02:59.5749431Z  * [new branch]          codex/chainargos-mbx-cache-repair -> origin/codex/chainargos-mbx-cache-repair
+2026-10-05T13:02:59.5750400Z  * [new branch]          codex/freshness-evidence-20261005 -> origin/codex/freshness-evidence-20261005
+2026-10-05T13:02:59.5751155Z  * [new branch]          codex/freshness-evidence-followup-20261005 -> origin/codex/freshness-evidence-followup-20261005
+2026-10-05T13:02:59.5752641Z  * [new branch]          codex/g0-generator-publication -> origin/codex/g0-generator-publication
+2026-10-05T13:02:59.5753223Z  * [new branch]          codex/mbx-lifecycle-fix     -> origin/codex/mbx-lifecycle-fix
+2026-10-05T13:02:59.5753854Z  * [new branch]          codex/mbx-released-action-isolation -> origin/codex/mbx-released-action-isolation
+2026-10-05T13:02:59.5754639Z  * [new branch]          codex/product-release-current-main -> origin/codex/product-release-current-main
+2026-10-05T13:02:59.5755495Z  * [new branch]          codex/proposal-flags-order-wip-20261005-5d49f2dc0a85 -> origin/codex/proposal-flags-order-wip-20261005-5d49f2dc0a85
+2026-10-05T13:02:59.5756679Z  * [new branch]          codex/source-bound-product-releases -> origin/codex/source-bound-product-releases
+2026-10-05T13:02:59.5757689Z  * [new branch]          codex/velnor-goal-integration -> origin/codex/velnor-goal-integration
+2026-10-05T13:02:59.5758691Z  * [new branch]          fix/generator-release-provenance -> origin/fix/generator-release-provenance
+2026-10-05T13:02:59.5759675Z  * [new branch]          fix/hosted-qualification-dispatch -> origin/fix/hosted-qualification-dispatch
+2026-10-05T13:02:59.5760562Z  * [new branch]          fix/pr25-strip-components   -> origin/fix/pr25-strip-components
+2026-10-05T13:02:59.5761577Z  * [new branch]          fix/qualification-output-budget-integration -> origin/fix/qualification-output-budget-integration
+2026-10-05T13:02:59.5762989Z  * [new branch]          fix/qualified-platform-checks -> origin/fix/qualified-platform-checks
+2026-10-05T13:02:59.5764035Z  * [new branch]          fix/schema2-empty-cache-run-attempt -> origin/fix/schema2-empty-cache-run-attempt
+2026-10-05T13:02:59.5764947Z  * [new branch]          fix/tar-list-drain          -> origin/fix/tar-list-drain
+2026-10-05T13:02:59.5765907Z  * [new branch]          fix/test-registration-autotests-false -> origin/fix/test-registration-autotests-false
+2026-10-05T13:02:59.5766911Z  * [new branch]          fix/tofu-exact-cache-admission -> origin/fix/tofu-exact-cache-admission
+2026-10-05T13:02:59.5768331Z  * [new branch]          g4-submodule-fixture        -> origin/g4-submodule-fixture
+2026-10-05T13:02:59.5769472Z  * [new branch]          impl/archive-guard-foundation -> origin/impl/archive-guard-foundation
+2026-10-05T13:02:59.5770365Z  * [new branch]          main                        -> origin/main
+2026-10-05T13:02:59.5771601Z  * [new branch]          owned-source/cache-action/8758d976a1b25eb387f48aa04ea86f57739b84cf -> origin/owned-source/cache-action/8758d976a1b25eb387f48aa04ea86f57739b84cf
+2026-10-05T13:02:59.5774050Z  * [new branch]          owned-source/mbx-action/62ec0713473dffeab46884b7c03906042794e696 -> origin/owned-source/mbx-action/62ec0713473dffeab46884b7c03906042794e696
+2026-10-05T13:02:59.5775683Z  * [new branch]          owned-source/mbx-action/c3cbe8e56ccb4727624df45022357f49d2953075 -> origin/owned-source/mbx-action/c3cbe8e56ccb4727624df45022357f49d2953075
+2026-10-05T13:02:59.5777435Z  * [new branch]          owned-source/mbx/1cde36b9f519f1fea8bf4ba8d82721906410448c -> origin/owned-source/mbx/1cde36b9f519f1fea8bf4ba8d82721906410448c
+2026-10-05T13:02:59.5779089Z  * [new branch]          owned-source/mbx/3e462cf9248dd3d17baf9131af5f7a4aec76b80e -> origin/owned-source/mbx/3e462cf9248dd3d17baf9131af5f7a4aec76b80e
+2026-10-05T13:02:59.5780605Z  * [new branch]          owned-source/mbx/7fd10972216ce478478b704781b4a4f2715f46d4 -> origin/owned-source/mbx/7fd10972216ce478478b704781b4a4f2715f46d4
+2026-10-05T13:02:59.5781577Z  * [new branch]          owned-source/mbx/ac6ceed10df0c6cb0af1bc6d1a69d0de4d392f81 -> origin/owned-source/mbx/ac6ceed10df0c6cb0af1bc6d1a69d0de4d392f81
+2026-10-05T13:02:59.5782885Z  * [new branch]          owned-source/mbx/c0996a090ae992de83a5131889e28342a04f4d9b -> origin/owned-source/mbx/c0996a090ae992de83a5131889e28342a04f4d9b
+2026-10-05T13:02:59.5817153Z  * [new branch]          owned-source/mise/dbbf5b0d8f9c7edc5d0111e17ebaf781ecc97a96 -> origin/owned-source/mise/dbbf5b0d8f9c7edc5d0111e17ebaf781ecc97a96
+2026-10-05T13:02:59.5819133Z  * [new branch]          owned-source/semver-checker/583dddce84706786fc54c41a2c768c28a09c65fd -> origin/owned-source/semver-checker/583dddce84706786fc54c41a2c768c28a09c65fd
+2026-10-05T13:02:59.5820096Z  * [new branch]          perf/cache-selection-qualification -> origin/perf/cache-selection-qualification
+2026-10-05T13:02:59.5821285Z  * [new branch]          recovery/20261005T212315Z-31c8af98/SRC-V5-SUBFAMILY-001-008/unmapped-rust-blobs-c1f238b6fe4c -> origin/recovery/20261005T212315Z-31c8af98/SRC-V5-SUBFAMILY-001-008/unmapped-rust-blobs-c1f238b6fe4c
+2026-10-05T13:02:59.5823500Z  * [new branch]          recovery/20261005T212315Z-31c8af98/SRC-V5-SUBFAMILY-001/orphan-tree-34866a72b0b0 -> origin/recovery/20261005T212315Z-31c8af98/SRC-V5-SUBFAMILY-001/orphan-tree-34866a72b0b0
+2026-10-05T13:02:59.5825141Z  * [new branch]          recovery/20261005T212315Z-31c8af98/SRC-V5-SUBFAMILY-001/sanitized-source-head-905b76dadf8b -> origin/recovery/20261005T212315Z-31c8af98/SRC-V5-SUBFAMILY-001/sanitized-source-head-905b76dadf8b
+2026-10-05T13:02:59.5826566Z  * [new branch]          recovery/20261005T212315Z-31c8af98/SRC-V5-SUBFAMILY-001/working-tree-8ee1cc4673e2 -> origin/recovery/20261005T212315Z-31c8af98/SRC-V5-SUBFAMILY-001/working-tree-8ee1cc4673e2
+2026-10-05T13:02:59.5827909Z  * [new branch]          recovery/20261005T212315Z-31c8af98/SRC-V5-SUBFAMILY-002/working-tree-ebe5b3f7e01f -> origin/recovery/20261005T212315Z-31c8af98/SRC-V5-SUBFAMILY-002/working-tree-ebe5b3f7e01f
+2026-10-05T13:02:59.5829300Z  * [new branch]          recovery/20261005T212315Z-31c8af98/SRC-V5-SUBFAMILY-003/working-tree-5b9aa2cd5ca6 -> origin/recovery/20261005T212315Z-31c8af98/SRC-V5-SUBFAMILY-003/working-tree-5b9aa2cd5ca6
+2026-10-05T13:02:59.5830709Z  * [new branch]          recovery/20261005T212315Z-31c8af98/SRC-V5-SUBFAMILY-004/working-tree-03a157c8f2a1 -> origin/recovery/20261005T212315Z-31c8af98/SRC-V5-SUBFAMILY-004/working-tree-03a157c8f2a1
+2026-10-05T13:02:59.5832418Z  * [new branch]          recovery/20261005T212315Z-31c8af98/SRC-V5-SUBFAMILY-005/working-tree-5ddac867938a -> origin/recovery/20261005T212315Z-31c8af98/SRC-V5-SUBFAMILY-005/working-tree-5ddac867938a
+2026-10-05T13:02:59.5833820Z  * [new branch]          recovery/20261005T212315Z-31c8af98/SRC-V5-SUBFAMILY-006/working-tree-e42d7eb17504 -> origin/recovery/20261005T212315Z-31c8af98/SRC-V5-SUBFAMILY-006/working-tree-e42d7eb17504
+2026-10-05T13:02:59.5835167Z  * [new branch]          recovery/20261005T212315Z-31c8af98/SRC-V5-SUBFAMILY-007/working-tree-cc906364d3bc -> origin/recovery/20261005T212315Z-31c8af98/SRC-V5-SUBFAMILY-007/working-tree-cc906364d3bc
+2026-10-05T13:02:59.5836520Z  * [new branch]          recovery/20261005T212315Z-31c8af98/SRC-V5-SUBFAMILY-008/working-tree-f989288eb0cc -> origin/recovery/20261005T212315Z-31c8af98/SRC-V5-SUBFAMILY-008/working-tree-f989288eb0cc
+2026-10-05T13:02:59.5838183Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/REMOTE-PR-18/path-sanitized-50042cdf15ba8c4e3aa9da95d13dd888f5ba7fcd -> origin/recovery/velnor-20261005T212315Z-31c8af98/REMOTE-PR-18/path-sanitized-50042cdf15ba8c4e3aa9da95d13dd888f5ba7fcd
+2026-10-05T13:02:59.5840023Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/REMOTE-PR-44/source-head-9595984327980bfcc123dfc089ddc7ae39a5c86b -> origin/recovery/velnor-20261005T212315Z-31c8af98/REMOTE-PR-44/source-head-9595984327980bfcc123dfc089ddc7ae39a5c86b
+2026-10-05T13:02:59.5841878Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/REMOTE-PR-45/source-head-fca5e23666e8fed53852e5a0f3ecb35e9b3945bc -> origin/recovery/velnor-20261005T212315Z-31c8af98/REMOTE-PR-45/source-head-fca5e23666e8fed53852e5a0f3ecb35e9b3945bc
+2026-10-05T13:02:59.5843650Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/REMOTE-PR-49/source-head-949affbf920de03a0050ca62c950b1a0103cd855 -> origin/recovery/velnor-20261005T212315Z-31c8af98/REMOTE-PR-49/source-head-949affbf920de03a0050ca62c950b1a0103cd855
+2026-10-05T13:02:59.5846309Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/REMOTE-PR-51/path-sanitized-522aa04b91e81e5ccf60c9cf43a301418941ce24 -> origin/recovery/velnor-20261005T212315Z-31c8af98/REMOTE-PR-51/path-sanitized-522aa04b91e81e5ccf60c9cf43a301418941ce24
+2026-10-05T13:02:59.5849444Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-GROK-SS-01a0fe4b-4083-7723-b3dc-e812ae8fa0ea/wip-sanitized-docs-2687cc912c0f -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-GROK-SS-01a0fe4b-4083-7723-b3dc-e812ae8fa0ea/wip-sanitized-docs-2687cc912c0f
+2026-10-05T13:02:59.5852841Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-012ee6671d7db66020ae91c34d68f5e8e30263ea -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-012ee6671d7db66020ae91c34d68f5e8e30263ea
+2026-10-05T13:02:59.5855895Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-02097a67af09dc29e3dc74cb09be3b52b7468b05 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-02097a67af09dc29e3dc74cb09be3b52b7468b05
+2026-10-05T13:02:59.5859031Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-026e66245da3accde03c5d1f941289e103fb6e2d -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-026e66245da3accde03c5d1f941289e103fb6e2d
+2026-10-05T13:02:59.5862227Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-0408f45808c94dbf8aa43f5d19c1367f25364e45 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-0408f45808c94dbf8aa43f5d19c1367f25364e45
+2026-10-05T13:02:59.5865389Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-0550179553061fa98a10e7ec4fce9b75ffac507b -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-0550179553061fa98a10e7ec4fce9b75ffac507b
+2026-10-05T13:02:59.5867589Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-066318d1f4bb1a5ffdc949ec925814d429f6a1ee -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-066318d1f4bb1a5ffdc949ec925814d429f6a1ee
+2026-10-05T13:02:59.5869440Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-069fc33e9fbb8bc721b31cb8cca81824f9387145 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-069fc33e9fbb8bc721b31cb8cca81824f9387145
+2026-10-05T13:02:59.5871232Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-072cba56d28e471db8c72a7921496ea975b623f5 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-072cba56d28e471db8c72a7921496ea975b623f5
+2026-10-05T13:02:59.5873479Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-07c8b39ea0a6a01ed51477cd1a183a64350f508c -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-07c8b39ea0a6a01ed51477cd1a183a64350f508c
+2026-10-05T13:02:59.5876146Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-09b443ef4ea7087c1a4f774415686b19c6a78b38 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-09b443ef4ea7087c1a4f774415686b19c6a78b38
+2026-10-05T13:02:59.5878019Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-0c5a8782e38e106d2d12b5044ed1183d61098a5d -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-0c5a8782e38e106d2d12b5044ed1183d61098a5d
+2026-10-05T13:02:59.5879864Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-0ecc00e713988277f8959000fa03f877f4ea4637 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-0ecc00e713988277f8959000fa03f877f4ea4637
+2026-10-05T13:02:59.5882127Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-0ed75495539c35a7ce5f2cccd6dcd1e1a4e9b443 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-0ed75495539c35a7ce5f2cccd6dcd1e1a4e9b443
+2026-10-05T13:02:59.5884615Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-11593e1aad390dfd07d5af95413710e51998f44a -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-11593e1aad390dfd07d5af95413710e51998f44a
+2026-10-05T13:02:59.5887667Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-130691aa81f9e8ad2d434017ab73855de56975d9 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-130691aa81f9e8ad2d434017ab73855de56975d9
+2026-10-05T13:02:59.5890702Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-13249cb64d4d3fa67a69ff29f2fe0e519f15b589 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-13249cb64d4d3fa67a69ff29f2fe0e519f15b589
+2026-10-05T13:02:59.5894274Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-13e0bf003a4aff63783e013a399677f5485ca28d -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-13e0bf003a4aff63783e013a399677f5485ca28d
+2026-10-05T13:02:59.5897400Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-13fc4ee2bb5df4fdb8d8dbdfdf6d0efa56b75843 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-13fc4ee2bb5df4fdb8d8dbdfdf6d0efa56b75843
+2026-10-05T13:02:59.5899949Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-15c21f7e555b63bdcd208b6464a53c0767d42b7f -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-15c21f7e555b63bdcd208b6464a53c0767d42b7f
+2026-10-05T13:02:59.5901951Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-160b6cfb422b064680a51eb4c4fe6bedd78892b1 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-160b6cfb422b064680a51eb4c4fe6bedd78892b1
+2026-10-05T13:02:59.5903764Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-166e33e57d6d752f7ce93a39673df5b583895504 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-166e33e57d6d752f7ce93a39673df5b583895504
+2026-10-05T13:02:59.5905668Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-1704839f1c67882c652ce3ceaa263c22ca4acc7c -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-1704839f1c67882c652ce3ceaa263c22ca4acc7c
+2026-10-05T13:02:59.5907518Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-181b25e1ca046b67200379fc76723c78b6ed7033 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-181b25e1ca046b67200379fc76723c78b6ed7033
+2026-10-05T13:02:59.5909271Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-1859a5032e52e4e28125d5606300097128069593 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-1859a5032e52e4e28125d5606300097128069593
+2026-10-05T13:02:59.5911009Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-1ae64366b11ac02452054b0519e37470b70bec01 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-1ae64366b11ac02452054b0519e37470b70bec01
+2026-10-05T13:02:59.5912981Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-1f82e6b77b925a3bd742190f5b4e6186434d5816 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-1f82e6b77b925a3bd742190f5b4e6186434d5816
+2026-10-05T13:02:59.5915040Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-2020795455b37a261fbe3d78dabd62ae8f0ebb20 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-2020795455b37a261fbe3d78dabd62ae8f0ebb20
+2026-10-05T13:02:59.5917829Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-2127e7856d0f9307e74463ab96b66cb26c9b3d7e -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-2127e7856d0f9307e74463ab96b66cb26c9b3d7e
+2026-10-05T13:02:59.5919956Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-2154b801eba6353d0a19a0f91668a203a9ac105b -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-2154b801eba6353d0a19a0f91668a203a9ac105b
+2026-10-05T13:02:59.5921975Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-22de636d9721b24a6e28f419eea5607a8de5ead3 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-22de636d9721b24a6e28f419eea5607a8de5ead3
+2026-10-05T13:02:59.5923889Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-2322c7410bfa0d4824299aba8db3120e9fda343a -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-2322c7410bfa0d4824299aba8db3120e9fda343a
+2026-10-05T13:02:59.5925679Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-2439a3e72706151be05baa7191c1fc60c1c5d6ea -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-2439a3e72706151be05baa7191c1fc60c1c5d6ea
+2026-10-05T13:02:59.5927452Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-2451448e862f66a0fe6683b3125d2cb03dc267e4 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-2451448e862f66a0fe6683b3125d2cb03dc267e4
+2026-10-05T13:02:59.5929201Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-25676c7c9e707c032b8ea95a37610786081c5e1b -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-25676c7c9e707c032b8ea95a37610786081c5e1b
+2026-10-05T13:02:59.5930956Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-26a31ddb893a85445a6468b79bf48176b47d298b -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-26a31ddb893a85445a6468b79bf48176b47d298b
+2026-10-05T13:02:59.5932977Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-281139eea563c08571593d91be33ddca6c9fe7bb -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-281139eea563c08571593d91be33ddca6c9fe7bb
+2026-10-05T13:02:59.5934723Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-281c1ed312256c9678899ec1b3672f20767546ea -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-281c1ed312256c9678899ec1b3672f20767546ea
+2026-10-05T13:02:59.5936467Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-281ddea23f2d2d349c247c80feb99e5a5fdcd0e0 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-281ddea23f2d2d349c247c80feb99e5a5fdcd0e0
+2026-10-05T13:02:59.5938250Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-2a2ef0ed4f1ae25ebad34342f5f3ced11a68fc95 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-2a2ef0ed4f1ae25ebad34342f5f3ced11a68fc95
+2026-10-05T13:02:59.5940034Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-2ae9c4a4e54521a2b28df57c2c2b4a75b7116f4c -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-2ae9c4a4e54521a2b28df57c2c2b4a75b7116f4c
+2026-10-05T13:02:59.5941939Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-2b8e283ec544d65c71bb13687136dce03da1cd26 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-2b8e283ec544d65c71bb13687136dce03da1cd26
+2026-10-05T13:02:59.5944152Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-2ca28821dbc2b42f72f102212d10e97ea548b682 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-2ca28821dbc2b42f72f102212d10e97ea548b682
+2026-10-05T13:02:59.5946185Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-2e591b0cabe20ddb30b76c3bd974d809e6c4273a -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-2e591b0cabe20ddb30b76c3bd974d809e6c4273a
+2026-10-05T13:02:59.5948071Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-2ede501dd53f77c3121a22002f2a749fd75069e6 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-2ede501dd53f77c3121a22002f2a749fd75069e6
+2026-10-05T13:02:59.5950075Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-2ee05018edd4b3cbc99daec6df072928376a7822 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-2ee05018edd4b3cbc99daec6df072928376a7822
+2026-10-05T13:02:59.5952749Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-31c79de2c03c24a985e3b1649cdfadf7bcd015c2 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-31c79de2c03c24a985e3b1649cdfadf7bcd015c2
+2026-10-05T13:02:59.5954563Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-31deefb70119aa2efbc3f567c5316afa4ba2c069 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-31deefb70119aa2efbc3f567c5316afa4ba2c069
+2026-10-05T13:02:59.5956315Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-3676dc167a0d2f061c8023e02010b9e158c14592 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-3676dc167a0d2f061c8023e02010b9e158c14592
+2026-10-05T13:02:59.5958043Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-371865e12102b7825fcd32d792e9bab4caf64be9 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-371865e12102b7825fcd32d792e9bab4caf64be9
+2026-10-05T13:02:59.5959982Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-37416ae648c9bdb7319ddfc8a21776dcec93eba9 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-37416ae648c9bdb7319ddfc8a21776dcec93eba9
+2026-10-05T13:02:59.5961894Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-3783954ac2ebdd8da1f08602ce5087e4d3b8ab1f -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-3783954ac2ebdd8da1f08602ce5087e4d3b8ab1f
+2026-10-05T13:02:59.5963668Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-3c36745ef9aab616f4cd4854ba2235476add2934 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-3c36745ef9aab616f4cd4854ba2235476add2934
+2026-10-05T13:02:59.5965412Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-3dcd23a041761b50a25e0a5b2f5d72bf1feca2f9 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-3dcd23a041761b50a25e0a5b2f5d72bf1feca2f9
+2026-10-05T13:02:59.5967137Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-3dd99d4709cee905b3b1885d6805950d8439bb96 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-3dd99d4709cee905b3b1885d6805950d8439bb96
+2026-10-05T13:02:59.5969548Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-3efa1408ab50cd5d51ddf1f52f363d593796cadf -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-3efa1408ab50cd5d51ddf1f52f363d593796cadf
+2026-10-05T13:02:59.5971496Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-3f9d9ed1c6944525919ddfd7e16fb3b5d5ba1701 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-3f9d9ed1c6944525919ddfd7e16fb3b5d5ba1701
+2026-10-05T13:02:59.5973655Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-40160ff56b5bc999c9acb6326631ce91e32a4cbc -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-40160ff56b5bc999c9acb6326631ce91e32a4cbc
+2026-10-05T13:02:59.5975377Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-41e1f68dbd957b077c2442f7632de761cff523c2 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-41e1f68dbd957b077c2442f7632de761cff523c2
+2026-10-05T13:02:59.5977102Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-4258c30b8adde05313e1e80eae9fd7e6117c9d17 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-4258c30b8adde05313e1e80eae9fd7e6117c9d17
+2026-10-05T13:02:59.5978825Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-42bd1b187c38a360876e68f4696785396801f144 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-42bd1b187c38a360876e68f4696785396801f144
+2026-10-05T13:02:59.5980548Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-4476e001f5498493793305f20168840215a2e276 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-4476e001f5498493793305f20168840215a2e276
+2026-10-05T13:02:59.5982427Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-44fea847f3054371e5458e9cd840e9316a288841 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-44fea847f3054371e5458e9cd840e9316a288841
+2026-10-05T13:02:59.5984297Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-464367ce2c118d3594b066d2aaeeaf206ae07544 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-464367ce2c118d3594b066d2aaeeaf206ae07544
+2026-10-05T13:02:59.5986535Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-47a869929f92b32c74a6439e59ab9a094605e8e8 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-47a869929f92b32c74a6439e59ab9a094605e8e8
+2026-10-05T13:02:59.5988260Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-4d511993bdc18fce7dbe095897ae4eec521d3adf -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-4d511993bdc18fce7dbe095897ae4eec521d3adf
+2026-10-05T13:02:59.5990286Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-4d80a69283f707cdccf5b287acd5e83c8cf8b3d0 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-4d80a69283f707cdccf5b287acd5e83c8cf8b3d0
+2026-10-05T13:02:59.5992284Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-557d6258bf56f08e88f320a05b0582257c65b2ab -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-557d6258bf56f08e88f320a05b0582257c65b2ab
+2026-10-05T13:02:59.5994032Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-55f09cdc1ce6c6b8aa8bf45a7d14e4c3184156d2 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-55f09cdc1ce6c6b8aa8bf45a7d14e4c3184156d2
+2026-10-05T13:02:59.5995767Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-56c4003e32e14cef61e178ecabdc5eb66edef619 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-56c4003e32e14cef61e178ecabdc5eb66edef619
+2026-10-05T13:02:59.5997879Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-59d4ecbe01fe14395a05712855fa74e8edd89b79 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-59d4ecbe01fe14395a05712855fa74e8edd89b79
+2026-10-05T13:02:59.5999743Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-5abfc0558493fc5413a30a8cfa8ae54904124164 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-5abfc0558493fc5413a30a8cfa8ae54904124164
+2026-10-05T13:02:59.6001492Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-5b2a50c6487d183c75d614ae1f1d318a88410202 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-5b2a50c6487d183c75d614ae1f1d318a88410202
+2026-10-05T13:02:59.6003449Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-6081faae15f882a4bd8c95de5245f98505d771fa -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-6081faae15f882a4bd8c95de5245f98505d771fa
+2026-10-05T13:02:59.6005191Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-609d7f1eca2e216677d5488dd7ef9d95ea2c137a -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-609d7f1eca2e216677d5488dd7ef9d95ea2c137a
+2026-10-05T13:02:59.6006934Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-60f410138fa483c8b37f59d4a5da2db7e1896a04 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-60f410138fa483c8b37f59d4a5da2db7e1896a04
+2026-10-05T13:02:59.6008635Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-6116d5317cd12a57e297919824701d10525372b7 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-6116d5317cd12a57e297919824701d10525372b7
+2026-10-05T13:02:59.6010343Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-6138a252944dfa4800baee4d9f2fad89b6ec2bd8 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-6138a252944dfa4800baee4d9f2fad89b6ec2bd8
+2026-10-05T13:02:59.6012330Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-620ec397a3958190f7859179d9e43d7dc687f9b5 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-620ec397a3958190f7859179d9e43d7dc687f9b5
+2026-10-05T13:02:59.6014101Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-6265dd9d4ee611d5a99623263ab0061afa1c1f16 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-6265dd9d4ee611d5a99623263ab0061afa1c1f16
+2026-10-05T13:02:59.6015848Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-626ff6878f93c7771281bcc0c534412fd0293097 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-626ff6878f93c7771281bcc0c534412fd0293097
+2026-10-05T13:02:59.6017576Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-6329b0c2b68200401b1a4eab532dbf8f8581a0f0 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-6329b0c2b68200401b1a4eab532dbf8f8581a0f0
+2026-10-05T13:02:59.6019315Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-63947b182d0378cb6c5e9055b9bba7c77fbc2f9d -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-63947b182d0378cb6c5e9055b9bba7c77fbc2f9d
+2026-10-05T13:02:59.6021022Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-64f7478825373106c5966033c8421d9366c487f9 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-64f7478825373106c5966033c8421d9366c487f9
+2026-10-05T13:02:59.6022921Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-655fa9cfcf34621b8e3433baf11a36d4297e571f -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-655fa9cfcf34621b8e3433baf11a36d4297e571f
+2026-10-05T13:02:59.6024950Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-66bd24e0a886cc5d9393756cc659f31a16d4a414 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-66bd24e0a886cc5d9393756cc659f31a16d4a414
+2026-10-05T13:02:59.6026690Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-67774769f233beb8f68aa4d4c664b57afc59a5de -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-67774769f233beb8f68aa4d4c664b57afc59a5de
+2026-10-05T13:02:59.6028434Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-695c15437677be19f7c000ac45d328da3809d134 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-695c15437677be19f7c000ac45d328da3809d134
+2026-10-05T13:02:59.6030147Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-69a4701c5a0bd2db0351f19b46ab275576892081 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-69a4701c5a0bd2db0351f19b46ab275576892081
+2026-10-05T13:02:59.6032094Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-6a47f4ac53450b8637e2166245171d4257983ee8 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-6a47f4ac53450b8637e2166245171d4257983ee8
+2026-10-05T13:02:59.6033822Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-6a84a6364609e27c8e77a8c9368ee11b9e343a13 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-6a84a6364609e27c8e77a8c9368ee11b9e343a13
+2026-10-05T13:02:59.6035565Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-6be7bd0fc3e8fd21ce62ac0fd3ca8c6d4aa1e8ab -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-6be7bd0fc3e8fd21ce62ac0fd3ca8c6d4aa1e8ab
+2026-10-05T13:02:59.6037320Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-6e9d50adfb0a949eaeea9ea857c677b6a68445c0 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-6e9d50adfb0a949eaeea9ea857c677b6a68445c0
+2026-10-05T13:02:59.6039062Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-6f4d5c2a46fd77f7efc844f0a835f3358833954e -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-6f4d5c2a46fd77f7efc844f0a835f3358833954e
+2026-10-05T13:02:59.6040831Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-6fa8b66712bb4367845042a669d3092fe9c3400e -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-6fa8b66712bb4367845042a669d3092fe9c3400e
+2026-10-05T13:02:59.6042785Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-715981a9f09e26aaa538440f348c60b5a827e489 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-715981a9f09e26aaa538440f348c60b5a827e489
+2026-10-05T13:02:59.6044531Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-73bfa1c4b9858b5cbcb0110042b34ff79a223c94 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-73bfa1c4b9858b5cbcb0110042b34ff79a223c94
+2026-10-05T13:02:59.6046291Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-75ec4990c1fb8b00f9201822c7f66d891314083d -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-75ec4990c1fb8b00f9201822c7f66d891314083d
+2026-10-05T13:02:59.6048013Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-7649cb2e7125f0e6bb78a25a8462dac8d3d801ca -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-7649cb2e7125f0e6bb78a25a8462dac8d3d801ca
+2026-10-05T13:02:59.6049874Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-7669f06cc041fcf4ea1061ec19ac916caad32ef8 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-7669f06cc041fcf4ea1061ec19ac916caad32ef8
+2026-10-05T13:02:59.6051876Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-7810343be2ebe820f044da58d4caa0c581498759 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-7810343be2ebe820f044da58d4caa0c581498759
+2026-10-05T13:02:59.6053638Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-782c81dc65b6045ae479148a09a5058535f73c81 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-782c81dc65b6045ae479148a09a5058535f73c81
+2026-10-05T13:02:59.6055351Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-782caa2b3d9f9418b5f5f4c122d1b7bd85b35ee7 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-782caa2b3d9f9418b5f5f4c122d1b7bd85b35ee7
+2026-10-05T13:02:59.6057075Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-7a3ff4d7f7b8334fe575daf340af970b7f08c446 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-7a3ff4d7f7b8334fe575daf340af970b7f08c446
+2026-10-05T13:02:59.6058795Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-7aa22f75970d539f17cb326382f81211a06bddc2 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-7aa22f75970d539f17cb326382f81211a06bddc2
+2026-10-05T13:02:59.6060538Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-7bc42297d3c7677bcde22b263e8d4aedbb8e9f34 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-7bc42297d3c7677bcde22b263e8d4aedbb8e9f34
+2026-10-05T13:02:59.6062481Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-7ca4da687384cee8d0589b6782d674986fb4f44d -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-7ca4da687384cee8d0589b6782d674986fb4f44d
+2026-10-05T13:02:59.6064268Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-7dd70f73ab2bf067e978c7e874bdc87d16f2519d -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-7dd70f73ab2bf067e978c7e874bdc87d16f2519d
+2026-10-05T13:02:59.6066009Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-7ea84443d8fb32c995c1b1ca36f324d9664f4138 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-7ea84443d8fb32c995c1b1ca36f324d9664f4138
+2026-10-05T13:02:59.6067743Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-80108d3e5f289d02c2bde16e5dbb7f579fc47d1b -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-80108d3e5f289d02c2bde16e5dbb7f579fc47d1b
+2026-10-05T13:02:59.6069489Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-80e9a6d55d3e37ba1b6bc9dde72d3397f74f491b -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-80e9a6d55d3e37ba1b6bc9dde72d3397f74f491b
+2026-10-05T13:02:59.6071216Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-834759bbcb5328a592f130113c344e3a88891cab -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-834759bbcb5328a592f130113c344e3a88891cab
+2026-10-05T13:02:59.6073184Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-8380eaf7962257ffc94827a7d7ca2e50d84e3221 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-8380eaf7962257ffc94827a7d7ca2e50d84e3221
+2026-10-05T13:02:59.6075062Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-8439c896fa81d3eca7f4d2f577a55aabcaaca9bb -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-8439c896fa81d3eca7f4d2f577a55aabcaaca9bb
+2026-10-05T13:02:59.6076927Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-84ac92320c23c0b58dcb42f9d784ba55336477a0 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-84ac92320c23c0b58dcb42f9d784ba55336477a0
+2026-10-05T13:02:59.6078646Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-84f1227deb833d07755c00b0b189ddfe7622e87e -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-84f1227deb833d07755c00b0b189ddfe7622e87e
+2026-10-05T13:02:59.6080355Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-8607f4a0e7d0ca8aca75e0514c733a5db18fcac2 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-8607f4a0e7d0ca8aca75e0514c733a5db18fcac2
+2026-10-05T13:02:59.6082285Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-87bef4353f9bd95788e40e0737cb9d3715298a35 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-87bef4353f9bd95788e40e0737cb9d3715298a35
+2026-10-05T13:02:59.6084008Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-89101bffb398b1734104f85def55fa454ca70d4b -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-89101bffb398b1734104f85def55fa454ca70d4b
+2026-10-05T13:02:59.6085715Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-8957fe62bea7f5195c58a10f36ecd20c2b4e98e2 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-8957fe62bea7f5195c58a10f36ecd20c2b4e98e2
+2026-10-05T13:02:59.6087436Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-8c648d366f14fb2d4719f68115e1471590766549 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-8c648d366f14fb2d4719f68115e1471590766549
+2026-10-05T13:02:59.6089196Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-8cd227c4e7ec07c7c5c45b38fdb7a72dc76fc860 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-8cd227c4e7ec07c7c5c45b38fdb7a72dc76fc860
+2026-10-05T13:02:59.6090930Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-8dcf4f341adb949ebc0f3e35d46ca28204c3d90d -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-8dcf4f341adb949ebc0f3e35d46ca28204c3d90d
+2026-10-05T13:02:59.6092832Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-8e727778768f933d99d06aed068021d73f2a9318 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-8e727778768f933d99d06aed068021d73f2a9318
+2026-10-05T13:02:59.6094543Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-8f53f843e2873454c1299bb771e6ed91ac9b53a8 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-8f53f843e2873454c1299bb771e6ed91ac9b53a8
+2026-10-05T13:02:59.6096266Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-8fd872220085091e9d9a1d709193b2afa4433bfb -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-8fd872220085091e9d9a1d709193b2afa4433bfb
+2026-10-05T13:02:59.6097971Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-90768915fbc1082bebee2ff65404335f626074ec -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-90768915fbc1082bebee2ff65404335f626074ec
+2026-10-05T13:02:59.6099678Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-91bc33734c363d4f69d8dc1e3e6135bf4c3791af -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-91bc33734c363d4f69d8dc1e3e6135bf4c3791af
+2026-10-05T13:02:59.6101660Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-92293688177db578dc71fa02795ccfd9062f2dae -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-92293688177db578dc71fa02795ccfd9062f2dae
+2026-10-05T13:02:59.6103513Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-97fa00adfec815e5fdcb3c3a0b43f1dcf0ec8082 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-97fa00adfec815e5fdcb3c3a0b43f1dcf0ec8082
+2026-10-05T13:02:59.6105241Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-981bf4375d52f47b3e8b8a4657ad2e604fd70304 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-981bf4375d52f47b3e8b8a4657ad2e604fd70304
+2026-10-05T13:02:59.6106966Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-9942a0e4921ecd3cb8e42fafab46f8dd949dca96 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-9942a0e4921ecd3cb8e42fafab46f8dd949dca96
+2026-10-05T13:02:59.6108687Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-99cc1e33172864ecee800f7b031797061691c790 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-99cc1e33172864ecee800f7b031797061691c790
+2026-10-05T13:02:59.6110394Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-9c83692a1c9e2624b7277ca7d01a691ceda9d1b1 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-9c83692a1c9e2624b7277ca7d01a691ceda9d1b1
+2026-10-05T13:02:59.6112394Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-9e3ab783d23d7db54ce64d20bd6b38a6a6666db1 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-9e3ab783d23d7db54ce64d20bd6b38a6a6666db1
+2026-10-05T13:02:59.6114149Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-a0ba076b79c14251e1af10af21da3f8dac718219 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-a0ba076b79c14251e1af10af21da3f8dac718219
+2026-10-05T13:02:59.6115895Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-a0dc3ad56b84fe1be5994741e2efe45b1653d41a -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-a0dc3ad56b84fe1be5994741e2efe45b1653d41a
+2026-10-05T13:02:59.6117644Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-a179bb9bb122d061eb9869310a40adffcc4d7718 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-a179bb9bb122d061eb9869310a40adffcc4d7718
+2026-10-05T13:02:59.6119389Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-a2bbf737fa1b6bdb52c23336c98fb5f1a2f25dff -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-a2bbf737fa1b6bdb52c23336c98fb5f1a2f25dff
+2026-10-05T13:02:59.6121119Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-a364dc753c7ea1fc02a02d350259ee1cd08e3dc3 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-a364dc753c7ea1fc02a02d350259ee1cd08e3dc3
+2026-10-05T13:02:59.6123067Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-a40a8b9b9b5599d3034d1201131fdf622348ae9a -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-a40a8b9b9b5599d3034d1201131fdf622348ae9a
+2026-10-05T13:02:59.6124952Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-a40fa0645e2c823a71cd47cc36da6f4a5cdbb15e -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-a40fa0645e2c823a71cd47cc36da6f4a5cdbb15e
+2026-10-05T13:02:59.6126845Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-a54dceb8b4d178a6a5217f31661bb667794eff11 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-a54dceb8b4d178a6a5217f31661bb667794eff11
+2026-10-05T13:02:59.6128727Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-a60e2412dd80ceb0cb05e429b7021111d7bf72c5 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-a60e2412dd80ceb0cb05e429b7021111d7bf72c5
+2026-10-05T13:02:59.6130471Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-a629c513d6cf68449d5fe24d2e4005c58ef8174e -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-a629c513d6cf68449d5fe24d2e4005c58ef8174e
+2026-10-05T13:02:59.6132332Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-a7984460e313f85950d181a3cd4e2ac56b49c9e6 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-a7984460e313f85950d181a3cd4e2ac56b49c9e6
+2026-10-05T13:02:59.6134087Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-a8302478aad0992a075fe9e591b089be5be3b592 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-a8302478aad0992a075fe9e591b089be5be3b592
+2026-10-05T13:02:59.6135826Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-ab021771d6cd648ff2d7957a80abb45e4a2cdb37 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-ab021771d6cd648ff2d7957a80abb45e4a2cdb37
+2026-10-05T13:02:59.6137552Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-ab2de3b6151f65565e435271b589babb0f28e71c -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-ab2de3b6151f65565e435271b589babb0f28e71c
+2026-10-05T13:02:59.6139292Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-ac0d76851861d30aa58c194dc4ba954f072a993e -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-ac0d76851861d30aa58c194dc4ba954f072a993e
+2026-10-05T13:02:59.6141027Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-ac357d1f5d00297e87a49776bffaf3ac0fa12737 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-ac357d1f5d00297e87a49776bffaf3ac0fa12737
+2026-10-05T13:02:59.6142865Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-ac4ad2d5d8de2ed33e5fd38b055adc5459457589 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-ac4ad2d5d8de2ed33e5fd38b055adc5459457589
+2026-10-05T13:02:59.6144608Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-ace35bb001ddbbaa58db3f1b79565e9b5fbd9b03 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-ace35bb001ddbbaa58db3f1b79565e9b5fbd9b03
+2026-10-05T13:02:59.6146362Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-ad6b21704ae545f3e1d4b1f05009a394fa2abd52 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-ad6b21704ae545f3e1d4b1f05009a394fa2abd52
+2026-10-05T13:02:59.6148099Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-afa20899aa1205eeef53905b02bc5fada80cc46f -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-afa20899aa1205eeef53905b02bc5fada80cc46f
+2026-10-05T13:02:59.6149850Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-afcc351d4e2e44b37c277316e17f8e01f711432e -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-afcc351d4e2e44b37c277316e17f8e01f711432e
+2026-10-05T13:02:59.6151872Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-b12b888ee4ad01cbcd38f5d96835cd295456a53d -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-b12b888ee4ad01cbcd38f5d96835cd295456a53d
+2026-10-05T13:02:59.6154068Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-b1ff986d5d8eb9d82b5e6854d9ffa4d5fe3a5d2a -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-b1ff986d5d8eb9d82b5e6854d9ffa4d5fe3a5d2a
+2026-10-05T13:02:59.6155864Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-b27b838a7b8d21a2df905ba9ff087b4420af7191 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-b27b838a7b8d21a2df905ba9ff087b4420af7191
+2026-10-05T13:02:59.6157606Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-b2b52694111c897e8235c11323934bcc11bad542 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-b2b52694111c897e8235c11323934bcc11bad542
+2026-10-05T13:02:59.6159327Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-b44d30c03343b9059e4904acc1075ab7e917a443 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-b44d30c03343b9059e4904acc1075ab7e917a443
+2026-10-05T13:02:59.6161079Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-b8632100e7475c2fafa8b0528ef7b63cfd9563a8 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-b8632100e7475c2fafa8b0528ef7b63cfd9563a8
+2026-10-05T13:02:59.6163099Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-bb40451f02e364802950cfe752b8f8c80e5eda68 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-bb40451f02e364802950cfe752b8f8c80e5eda68
+2026-10-05T13:02:59.6164859Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-bd60d5add0985667d1ca4c5da8da39c0bfa1b1d1 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-bd60d5add0985667d1ca4c5da8da39c0bfa1b1d1
+2026-10-05T13:02:59.6166610Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-be139faceb5e17485a42a15fbd03cc87467173dd -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-be139faceb5e17485a42a15fbd03cc87467173dd
+2026-10-05T13:02:59.6168341Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-bef83d66d7bd1e3a3196012466dff7ed3fcbb03d -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-bef83d66d7bd1e3a3196012466dff7ed3fcbb03d
+2026-10-05T13:02:59.6170087Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-c047bbfdbb07078a1d9f15b73d2501d26401f27a -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-c047bbfdbb07078a1d9f15b73d2501d26401f27a
+2026-10-05T13:02:59.6171898Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-c38d01910e7be58bb66a394d06504999c69ed2e6 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-c38d01910e7be58bb66a394d06504999c69ed2e6
+2026-10-05T13:02:59.6173633Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-c4e62f3cccb8cd2f535bbbe25e1f5af0fa90697c -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-c4e62f3cccb8cd2f535bbbe25e1f5af0fa90697c
+2026-10-05T13:02:59.6175355Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-c559457f9e77b7a5fbd86731b628b913a47a5f85 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-c559457f9e77b7a5fbd86731b628b913a47a5f85
+2026-10-05T13:02:59.6177084Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-c60c7acb0eb2e70720d764486ee6b5383820d2de -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-c60c7acb0eb2e70720d764486ee6b5383820d2de
+2026-10-05T13:02:59.6179095Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-c761925c124e62f691fa1759081ccfe3a530bfdd -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-c761925c124e62f691fa1759081ccfe3a530bfdd
+2026-10-05T13:02:59.6180823Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-c8446c946d95dc6abb6eeb3178ae3efacdda6d8c -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-c8446c946d95dc6abb6eeb3178ae3efacdda6d8c
+2026-10-05T13:02:59.6182686Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-ca7b6ed4ed594cf0eeb8770cdce532095d1d853e -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-ca7b6ed4ed594cf0eeb8770cdce532095d1d853e
+2026-10-05T13:02:59.6184437Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-cbc2f12ba8d700cd049b5da3c187e4b88ac6e6fd -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-cbc2f12ba8d700cd049b5da3c187e4b88ac6e6fd
+2026-10-05T13:02:59.6186167Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-cd1a87e48bf6b6de725f42d7f15c8526b37cb484 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-cd1a87e48bf6b6de725f42d7f15c8526b37cb484
+2026-10-05T13:02:59.6187885Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-ce023a7da367951bad4eee948853368f95431eab -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-ce023a7da367951bad4eee948853368f95431eab
+2026-10-05T13:02:59.6189608Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-ce768569c4a184ad330270f786ebaf93f5fdfaa9 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-ce768569c4a184ad330270f786ebaf93f5fdfaa9
+2026-10-05T13:02:59.6191340Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-d002b93b5ad82f2b4cbffd06161c10ff91dc0721 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-d002b93b5ad82f2b4cbffd06161c10ff91dc0721
+2026-10-05T13:02:59.6193172Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-d1104246570a13391b66cb742ef68ec4f881ffa8 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-d1104246570a13391b66cb742ef68ec4f881ffa8
+2026-10-05T13:02:59.6194875Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-d2df65532a4d7d69f06f1ac4c371108f8756f192 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-d2df65532a4d7d69f06f1ac4c371108f8756f192
+2026-10-05T13:02:59.6196611Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-d6a7b2d8dbfaf9c901bd9745133ef55b3915d6c3 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-d6a7b2d8dbfaf9c901bd9745133ef55b3915d6c3
+2026-10-05T13:02:59.6198362Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-d7cf45149aeb989f39be70d5a2caae408867f7ff -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-d7cf45149aeb989f39be70d5a2caae408867f7ff
+2026-10-05T13:02:59.6200080Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-d7f7828864161429ffc82b6f86a4d550810d730a -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-d7f7828864161429ffc82b6f86a4d550810d730a
+2026-10-05T13:02:59.6201893Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-d9cfffc743632861bf5d4a4aaa3a8d70d7217a98 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-d9cfffc743632861bf5d4a4aaa3a8d70d7217a98
+2026-10-05T13:02:59.6203767Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-daa22ce12df377fa1b7e13ac71c9d7d5a26a4225 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-daa22ce12df377fa1b7e13ac71c9d7d5a26a4225
+2026-10-05T13:02:59.6205621Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-dc199f051a2f70dca0ed2da538c13a22b9de2a4a -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-dc199f051a2f70dca0ed2da538c13a22b9de2a4a
+2026-10-05T13:02:59.6207357Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-dd5becb22bb97897cdbb2d92e15f2b83b5726c5d -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-dd5becb22bb97897cdbb2d92e15f2b83b5726c5d
+2026-10-05T13:02:59.6209085Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-e074f333ae939d26cf4342a06e77336c8dbbb81b -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-e074f333ae939d26cf4342a06e77336c8dbbb81b
+2026-10-05T13:02:59.6210816Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-e3df3e574710100cbd28e0403217f9f8bf441db7 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-e3df3e574710100cbd28e0403217f9f8bf441db7
+2026-10-05T13:02:59.6212637Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-e567b13562c07ab33cc4df6d1473259954893cff -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-e567b13562c07ab33cc4df6d1473259954893cff
+2026-10-05T13:02:59.6214365Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-e8eacbfd96dda37c2c240ed73246b453d710a619 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-e8eacbfd96dda37c2c240ed73246b453d710a619
+2026-10-05T13:02:59.6216084Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-e9e974acd78a9d8720175e66510411cd03548c26 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-e9e974acd78a9d8720175e66510411cd03548c26
+2026-10-05T13:02:59.6217794Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-ec03831ee85f8630678014e8ca6685c0891630f8 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-ec03831ee85f8630678014e8ca6685c0891630f8
+2026-10-05T13:02:59.6219513Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-ed6da6b36334bdf39027a98e3f2691e0c4ac3e52 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-ed6da6b36334bdf39027a98e3f2691e0c4ac3e52
+2026-10-05T13:02:59.6221255Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-ee86ebdcb0948fa7394f20dc1084cca98b10a135 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-ee86ebdcb0948fa7394f20dc1084cca98b10a135
+2026-10-05T13:02:59.6223099Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-f04be42313382b8ff0dc5c4e78a4808eeb271e8f -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-f04be42313382b8ff0dc5c4e78a4808eeb271e8f
+2026-10-05T13:02:59.6224866Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-f1fb418c23c68c14d7b03a5ee0965c317f039f77 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-f1fb418c23c68c14d7b03a5ee0965c317f039f77
+2026-10-05T13:02:59.6226580Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-f33727a99f5d3341518d715c8d5e625af402c776 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-f33727a99f5d3341518d715c8d5e625af402c776
+2026-10-05T13:02:59.6228444Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-f59f9ef318b9bcc2e87f00b1f1312aea5375f4fa -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-f59f9ef318b9bcc2e87f00b1f1312aea5375f4fa
+2026-10-05T13:02:59.6230314Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-f757b37732ad6db65a318c7bb900953f66267ec1 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-f757b37732ad6db65a318c7bb900953f66267ec1
+2026-10-05T13:02:59.6232156Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-f93d603e91bd8fe23e1b46c72b8b61d320ae7857 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-f93d603e91bd8fe23e1b46c72b8b61d320ae7857
+2026-10-05T13:02:59.6233893Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-fa5114abaefd6a01c2e664480eadcb63227bc6e1 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-fa5114abaefd6a01c2e664480eadcb63227bc6e1
+2026-10-05T13:02:59.6235634Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-fa661d1318a6e18f9f0739ccc760b784f7e38a24 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-fa661d1318a6e18f9f0739ccc760b784f7e38a24
+2026-10-05T13:02:59.6237373Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-fbff07adba5f6e33b4dc8d41ed1f39216908488b -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-fbff07adba5f6e33b4dc8d41ed1f39216908488b
+2026-10-05T13:02:59.6239121Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-fc6f88f18c92b7b3357a11b11e78dfe8a8e13124 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-fc6f88f18c92b7b3357a11b11e78dfe8a8e13124
+2026-10-05T13:02:59.6240848Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-fdd940b5a8bab32a947981bf36b9dbe6edb00be6 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-fdd940b5a8bab32a947981bf36b9dbe6edb00be6
+2026-10-05T13:02:59.6242686Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-ff55c2a810d2f22b8018aea224fc54fa58eb0646 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-ff55c2a810d2f22b8018aea224fc54fa58eb0646
+2026-10-05T13:02:59.6244416Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-ffc367b4b382454fd8f5abeb6adb429390e4c614 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/graph-anchor-ffc367b4b382454fd8f5abeb6adb429390e4c614
+2026-10-05T13:02:59.6246040Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/index-only-staged-51167ad8b2a4fe4e -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/index-only-staged-51167ad8b2a4fe4e
+2026-10-05T13:02:59.6247772Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/sanitized-graph-anchor-02aaebc07e3c272a2c4e9610c93c237a230afd59 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/sanitized-graph-anchor-02aaebc07e3c272a2c4e9610c93c237a230afd59
+2026-10-05T13:02:59.6249701Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/sanitized-graph-anchor-141693be57c54b965e80f61e217e1e252c404434 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/sanitized-graph-anchor-141693be57c54b965e80f61e217e1e252c404434
+2026-10-05T13:02:59.6251605Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/sanitized-graph-anchor-28365d90a35444abb24629edfb14a898cc4995cb -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/sanitized-graph-anchor-28365d90a35444abb24629edfb14a898cc4995cb
+2026-10-05T13:02:59.6253758Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/sanitized-graph-anchor-324962336820762e815cacb6457e7180db0a31c9 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/sanitized-graph-anchor-324962336820762e815cacb6457e7180db0a31c9
+2026-10-05T13:02:59.6255783Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/sanitized-graph-anchor-4920c5ddc8e4656d499bd433e7921c86d635b4d1 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/sanitized-graph-anchor-4920c5ddc8e4656d499bd433e7921c86d635b4d1
+2026-10-05T13:02:59.6257688Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/sanitized-graph-anchor-560306eed4847cee9b4266a1c46a93b5bc92c961 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/sanitized-graph-anchor-560306eed4847cee9b4266a1c46a93b5bc92c961
+2026-10-05T13:02:59.6259612Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/sanitized-graph-anchor-587b65cddd106c0e8ae6d35c4efba97f411d3f54 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/sanitized-graph-anchor-587b65cddd106c0e8ae6d35c4efba97f411d3f54
+2026-10-05T13:02:59.6261562Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/sanitized-graph-anchor-74baf276d40c59366960b26ac6f07a1cbb10e69a -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/sanitized-graph-anchor-74baf276d40c59366960b26ac6f07a1cbb10e69a
+2026-10-05T13:02:59.6263642Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/sanitized-graph-anchor-8c947eaaf176f846af6c00f9d647b95b5befd4ab -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/sanitized-graph-anchor-8c947eaaf176f846af6c00f9d647b95b5befd4ab
+2026-10-05T13:02:59.6265540Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/sanitized-graph-anchor-91a6caa21286ae1358b71730767b8429033303a0 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/sanitized-graph-anchor-91a6caa21286ae1358b71730767b8429033303a0
+2026-10-05T13:02:59.6267466Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/sanitized-graph-anchor-a811f1e6839de6ca7947c5c765e4d19d13d114d7 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/sanitized-graph-anchor-a811f1e6839de6ca7947c5c765e4d19d13d114d7
+2026-10-05T13:02:59.6269363Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/sanitized-graph-anchor-b14e9bef4575d9dc0079096122f180635d3141a1 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/sanitized-graph-anchor-b14e9bef4575d9dc0079096122f180635d3141a1
+2026-10-05T13:02:59.6271255Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/sanitized-graph-anchor-bd58bed58de04d9a1bf90158bf21c4903dd95510 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/sanitized-graph-anchor-bd58bed58de04d9a1bf90158bf21c4903dd95510
+2026-10-05T13:02:59.6273289Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/sanitized-graph-anchor-c0c2da3035d04cdb3b0e020f1835724258807c02 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/sanitized-graph-anchor-c0c2da3035d04cdb3b0e020f1835724258807c02
+2026-10-05T13:02:59.6275204Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/sanitized-graph-anchor-c2a77b7af496e8960c85709e81f056a4be3c1a2d -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/sanitized-graph-anchor-c2a77b7af496e8960c85709e81f056a4be3c1a2d
+2026-10-05T13:02:59.6277114Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/sanitized-graph-anchor-e4c03ed1fa48f6397b03996eb6972bd3585bb783 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/sanitized-graph-anchor-e4c03ed1fa48f6397b03996eb6972bd3585bb783
+2026-10-05T13:02:59.6279009Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/sanitized-graph-anchor-e792907e4aec5520168106440f22e441e0701adf -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/sanitized-graph-anchor-e792907e4aec5520168106440f22e441e0701adf
+2026-10-05T13:02:59.6281046Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/sanitized-graph-anchor-f57e0b44f1a8ac717bdba3e6059fc7c1759bf40d -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/sanitized-graph-anchor-f57e0b44f1a8ac717bdba3e6059fc7c1759bf40d
+2026-10-05T13:02:59.6283196Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/sanitized-graph-anchor-fcfd3ae2d1b2acec631469427a8e64da80d0d1db -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/sanitized-graph-anchor-fcfd3ae2d1b2acec631469427a8e64da80d0d1db
+2026-10-05T13:02:59.6285047Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/wip-untracked-65751ff1ac9acfa4ac697f037d1a31847cdbcf54 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-KEEPER-001/wip-untracked-65751ff1ac9acfa4ac697f037d1a31847cdbcf54
+2026-10-05T13:02:59.6286687Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-QUERY29-SELECTOR-V3/working-tree-49ddf3159d35 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-QUERY29-SELECTOR-V3/working-tree-49ddf3159d35
+2026-10-05T13:02:59.6288147Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-QUERY29-SELECTOR-V4/working-tree-5901fc34cd45 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-QUERY29-SELECTOR-V4/working-tree-5901fc34cd45
+2026-10-05T13:02:59.6289606Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-QUERY29-SOURCE-V3/conflict-stage-1-72614abb9e8b -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-QUERY29-SOURCE-V3/conflict-stage-1-72614abb9e8b
+2026-10-05T13:02:59.6291081Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-QUERY29-SOURCE-V3/conflict-stage-2-3d3229230d90 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-QUERY29-SOURCE-V3/conflict-stage-2-3d3229230d90
+2026-10-05T13:02:59.6292648Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-QUERY29-SOURCE-V3/conflict-stage-3-1cec1bb2bc75 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-QUERY29-SOURCE-V3/conflict-stage-3-1cec1bb2bc75
+2026-10-05T13:02:59.6294108Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-QUERY29-SOURCE-V3/index-stage0-df99d7c405ba -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-QUERY29-SOURCE-V3/index-stage0-df99d7c405ba
+2026-10-05T13:02:59.6295526Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-QUERY29-SOURCE-V3/working-tree-48a2771feea2 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-QUERY29-SOURCE-V3/working-tree-48a2771feea2
+2026-10-05T13:02:59.6297010Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-QUERY29-SOURCE-V5/unreachable-objects-fd3be2277f27 -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-QUERY29-SOURCE-V5/unreachable-objects-fd3be2277f27
+2026-10-05T13:02:59.6298545Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/SRC-TARGET-CANDIDATE-001/sanitized-wip-9a6489b4c7fd -> origin/recovery/velnor-20261005T212315Z-31c8af98/SRC-TARGET-CANDIDATE-001/sanitized-wip-9a6489b4c7fd
+2026-10-05T13:02:59.6300284Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/WT-COMMON-01414509879b02a7/wip-worktree-597d04387845916ed30cbda144d57e3aeac9ef2f -> origin/recovery/velnor-20261005T212315Z-31c8af98/WT-COMMON-01414509879b02a7/wip-worktree-597d04387845916ed30cbda144d57e3aeac9ef2f
+2026-10-05T13:02:59.6302192Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/WT-COMMON-0dfba41d08b1b022/original-source-tip-1ecd84d1f6320e9a -> origin/recovery/velnor-20261005T212315Z-31c8af98/WT-COMMON-0dfba41d08b1b022/original-source-tip-1ecd84d1f6320e9a
+2026-10-05T13:02:59.6303961Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/WT-COMMON-0dfba41d08b1b022/wip-sanitized-d54794d3a006ce2577b21dfc663a84ca -> origin/recovery/velnor-20261005T212315Z-31c8af98/WT-COMMON-0dfba41d08b1b022/wip-sanitized-d54794d3a006ce2577b21dfc663a84ca
+2026-10-05T13:02:59.6306057Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/WT-COMMON-93b2ea1f318c93f4/source-codex-release-version-pin-prep-0.1.1-4176fdf65085defd -> origin/recovery/velnor-20261005T212315Z-31c8af98/WT-COMMON-93b2ea1f318c93f4/source-codex-release-version-pin-prep-0.1.1-4176fdf65085defd
+2026-10-05T13:02:59.6307941Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/grok14-shared-01-06/unreachable-2ce93d53e882aa98 -> origin/recovery/velnor-20261005T212315Z-31c8af98/grok14-shared-01-06/unreachable-2ce93d53e882aa98
+2026-10-05T13:02:59.6309382Z  * [new branch]          recovery/velnor-20261005T212315Z-31c8af98/grok14-shared-01-06/unreachable-639e8af64fdb348c -> origin/recovery/velnor-20261005T212315Z-31c8af98/grok14-shared-01-06/unreachable-639e8af64fdb348c
+2026-10-05T13:02:59.6310322Z  * [new branch]          tar-absolute                -> origin/tar-absolute
+2026-10-05T13:02:59.6310853Z  * [new tag]             archive-owned-source-2026-10-04 -> archive-owned-source-2026-10-04
+2026-10-05T13:02:59.6312028Z  * [new tag]             archive-owned-source-2026-10-04-cache-action-8758d976a1b25eb387f48aa04ea86f57739b84cf -> archive-owned-source-2026-10-04-cache-action-8758d976a1b25eb387f48aa04ea86f57739b84cf
+2026-10-05T13:02:59.6313443Z  * [new tag]             archive-owned-source-2026-10-04-mbx-ac6ceed10df0c6cb0af1bc6d1a69d0de4d392f81 -> archive-owned-source-2026-10-04-mbx-ac6ceed10df0c6cb0af1bc6d1a69d0de4d392f81
+2026-10-05T13:02:59.6314806Z  * [new tag]             archive-owned-source-2026-10-04-mbx-action-62ec0713473dffeab46884b7c03906042794e696 -> archive-owned-source-2026-10-04-mbx-action-62ec0713473dffeab46884b7c03906042794e696
+2026-10-05T13:02:59.6316203Z  * [new tag]             archive-owned-source-2026-10-04-mbx-action-c3cbe8e56ccb4727624df45022357f49d2953075 -> archive-owned-source-2026-10-04-mbx-action-c3cbe8e56ccb4727624df45022357f49d2953075
+2026-10-05T13:02:59.6317577Z  * [new tag]             archive-owned-source-2026-10-04-mise-dbbf5b0d8f9c7edc5d0111e17ebaf781ecc97a96 -> archive-owned-source-2026-10-04-mise-dbbf5b0d8f9c7edc5d0111e17ebaf781ecc97a96
+2026-10-05T13:02:59.6319002Z  * [new tag]             archive-owned-source-2026-10-04-semver-checker-583dddce84706786fc54c41a2c768c28a09c65fd -> archive-owned-source-2026-10-04-semver-checker-583dddce84706786fc54c41a2c768c28a09c65fd
+2026-10-05T13:02:59.6320172Z  * [new tag]             binary-19a43f57566c1179febb4a1c3967bfcde4f032aa -> binary-19a43f57566c1179febb4a1c3967bfcde4f032aa
+2026-10-05T13:02:59.6320977Z  * [new tag]             binary-28b83bddb1ea1a231b37f3b6619e69a768c698c9 -> binary-28b83bddb1ea1a231b37f3b6619e69a768c698c9
+2026-10-05T13:02:59.6321848Z  * [new tag]             binary-a6d053cc43778728696dd362afd936309f2aaa23 -> binary-a6d053cc43778728696dd362afd936309f2aaa23
+2026-10-05T13:02:59.6322678Z  * [new tag]             generator-0561601c1f71a80d16e75983124b4bd69c883bb1 -> generator-0561601c1f71a80d16e75983124b4bd69c883bb1
+2026-10-05T13:02:59.6323555Z  * [new tag]             generator-0c40d077fcad5450521351f497ce003c69915eff -> generator-0c40d077fcad5450521351f497ce003c69915eff
+2026-10-05T13:02:59.6324415Z  * [new tag]             generator-1856b5b9f47569515c8fa00657a2c8dde6aada9f -> generator-1856b5b9f47569515c8fa00657a2c8dde6aada9f
+2026-10-05T13:02:59.6325264Z  * [new tag]             generator-2ca2fbd63c2650656ecb4ec7974fd8f7630e7a7f -> generator-2ca2fbd63c2650656ecb4ec7974fd8f7630e7a7f
+2026-10-05T13:02:59.6326107Z  * [new tag]             generator-38eb3174d7111420c9cccbff2764229aade2bf1c -> generator-38eb3174d7111420c9cccbff2764229aade2bf1c
+2026-10-05T13:02:59.6326950Z  * [new tag]             generator-44b2c380cdd65b361beab8ced3332319e7f56c73 -> generator-44b2c380cdd65b361beab8ced3332319e7f56c73
+2026-10-05T13:02:59.6327792Z  * [new tag]             generator-47815c83b9eeadbaf84b741918fffa7ea550da89 -> generator-47815c83b9eeadbaf84b741918fffa7ea550da89
+2026-10-05T13:02:59.6328635Z  * [new tag]             generator-ad73ae9f0500ddd02d64aad142bbecb2122c0617 -> generator-ad73ae9f0500ddd02d64aad142bbecb2122c0617
+2026-10-05T13:02:59.6329461Z  * [new tag]             generator-d40868152f7fe0106e3ede858a411f502f00810f -> generator-d40868152f7fe0106e3ede858a411f502f00810f
+2026-10-05T13:02:59.6330735Z  * [new tag]             owned-source-mbx-action-62ec0713473dffeab46884b7c03906042794e696 -> owned-source-mbx-action-62ec0713473dffeab46884b7c03906042794e696
+2026-10-05T13:02:59.6331960Z  * [new tag]             owned-source-mbx-action-c3cbe8e56ccb4727624df45022357f49d2953075 -> owned-source-mbx-action-c3cbe8e56ccb4727624df45022357f49d2953075
+2026-10-05T13:02:59.6333019Z  * [new tag]             owned-source-mise-dbbf5b0d8f9c7edc5d0111e17ebaf781ecc97a96 -> owned-source-mise-dbbf5b0d8f9c7edc5d0111e17ebaf781ecc97a96
+2026-10-05T13:02:59.6334128Z  * [new tag]             owned-source-semver-checker-583dddce84706786fc54c41a2c768c28a09c65fd -> owned-source-semver-checker-583dddce84706786fc54c41a2c768c28a09c65fd
+2026-10-05T13:02:59.6335128Z  * [new tag]             runner-19a43f57566c1179febb4a1c3967bfcde4f032aa -> runner-19a43f57566c1179febb4a1c3967bfcde4f032aa
+2026-10-05T13:02:59.6335941Z  * [new tag]             runner-28b83bddb1ea1a231b37f3b6619e69a768c698c9 -> runner-28b83bddb1ea1a231b37f3b6619e69a768c698c9
+2026-10-05T13:02:59.6336598Z  * [new tag]             seed/velnor-actions-0.1.0   -> seed/velnor-actions-0.1.0
+2026-10-05T13:02:59.6337104Z  * [new tag]             seed/velnor-actions-0.1.0-2 -> seed/velnor-actions-0.1.0-2
+2026-10-05T13:02:59.6337600Z  * [new tag]             seed/velnor-actions-0.1.0-3 -> seed/velnor-actions-0.1.0-3
+2026-10-05T13:02:59.6338075Z  * [new tag]             seed/velnor-actions-0.1.0-4 -> seed/velnor-actions-0.1.0-4
+2026-10-05T13:02:59.6338543Z  * [new tag]             seed/velnor-actions-0.1.0-5 -> seed/velnor-actions-0.1.0-5
+2026-10-05T13:02:59.6339015Z  * [new tag]             seed/velnor-actions-0.1.0-6 -> seed/velnor-actions-0.1.0-6
+2026-10-05T13:02:59.6339483Z  * [new tag]             seed/velnor-actions-0.1.0-7 -> seed/velnor-actions-0.1.0-7
+2026-10-05T13:02:59.6339955Z  * [new tag]             seed/velnor-actions-0.1.0-8 -> seed/velnor-actions-0.1.0-8
+2026-10-05T13:02:59.6340427Z  * [new tag]             seed/velnor-actions-0.1.0-9 -> seed/velnor-actions-0.1.0-9
+2026-10-05T13:02:59.6340852Z  * [new tag]             v0.1.0                      -> v0.1.0
+2026-10-05T13:02:59.6342095Z [command]/usr/bin/git branch --list --remote origin/main
+2026-10-05T13:02:59.6342433Z   origin/main
+2026-10-05T13:02:59.6343028Z [command]/usr/bin/git rev-parse refs/remotes/origin/main
+2026-10-05T13:02:59.6343385Z bdb1e14509225d18b4d8ee180731825d0826c16f
+2026-10-05T13:02:59.6344170Z ##[endgroup]
+2026-10-05T13:02:59.6344565Z ##[group]Determining the checkout info
+2026-10-05T13:02:59.6344995Z ##[endgroup]
+2026-10-05T13:02:59.6345251Z [command]/usr/bin/git sparse-checkout disable
+2026-10-05T13:02:59.6346007Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-10-05T13:02:59.6346894Z ##[group]Checking out the ref
+2026-10-05T13:02:59.6347327Z [command]/usr/bin/git checkout --progress --force -B main refs/remotes/origin/main
+2026-10-05T13:03:00.9629609Z Updating files:  99% (1362/1375)
+2026-10-05T13:03:00.9630145Z Updating files: 100% (1375/1375)
+2026-10-05T13:03:00.9630553Z Updating files: 100% (1375/1375), done.
+2026-10-05T13:03:00.9667138Z Switched to a new branch 'main'
+2026-10-05T13:03:00.9669821Z branch 'main' set up to track 'origin/main'.
+2026-10-05T13:03:01.0249492Z ##[endgroup]
+2026-10-05T13:03:01.0299240Z [command]/usr/bin/git log -1 --format=%H
+2026-10-05T13:03:01.0328015Z bdb1e14509225d18b4d8ee180731825d0826c16f
+2026-10-05T13:03:01.0340240Z ##[group]Removing auth
+2026-10-05T13:03:01.0340696Z Removing SSH command configuration
+2026-10-05T13:03:01.0345477Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-05T13:03:01.0382859Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-05T13:03:01.0675183Z Removing HTTP extra header
+2026-10-05T13:03:01.0678724Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-05T13:03:01.0715480Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-05T13:03:01.1005649Z Removing includeIf entries pointing to credentials config files
+2026-10-05T13:03:01.1009623Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-05T13:03:01.1041616Z includeif.gitdir:/home/runner/work/velnor-new/velnor-new/.git.path
+2026-10-05T13:03:01.1042571Z includeif.gitdir:/home/runner/work/velnor-new/velnor-new/.git/worktrees/*.path
+2026-10-05T13:03:01.1043257Z includeif.gitdir:/github/workspace/.git.path
+2026-10-05T13:03:01.1043719Z includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-10-05T13:03:01.1056019Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/velnor-new/velnor-new/.git.path
+2026-10-05T13:03:01.1082449Z /home/runner/work/_temp/git-credentials-35b149d9-1306-44fe-8725-6c98a167b55f.config
+2026-10-05T13:03:01.1092175Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/velnor-new/velnor-new/.git.path \/home\/runner\/work\/_temp\/git\-credentials\-35b149d9\-1306\-44fe\-8725\-6c98a167b55f\.config
+2026-10-05T13:03:01.1130101Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/velnor-new/velnor-new/.git/worktrees/*.path
+2026-10-05T13:03:01.1155349Z /home/runner/work/_temp/git-credentials-35b149d9-1306-44fe-8725-6c98a167b55f.config
+2026-10-05T13:03:01.1165125Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/velnor-new/velnor-new/.git/worktrees/*.path \/home\/runner\/work\/_temp\/git\-credentials\-35b149d9\-1306\-44fe\-8725\-6c98a167b55f\.config
+2026-10-05T13:03:01.1240264Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git.path
+2026-10-05T13:03:01.1285260Z /github/runner_temp/git-credentials-35b149d9-1306-44fe-8725-6c98a167b55f.config
+2026-10-05T13:03:01.1293175Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git.path \/github\/runner_temp\/git\-credentials\-35b149d9\-1306\-44fe\-8725\-6c98a167b55f\.config
+2026-10-05T13:03:01.1329307Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-10-05T13:03:01.1356500Z /github/runner_temp/git-credentials-35b149d9-1306-44fe-8725-6c98a167b55f.config
+2026-10-05T13:03:01.1363565Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-35b149d9\-1306\-44fe\-8725\-6c98a167b55f\.config
+2026-10-05T13:03:01.1399471Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-05T13:03:01.1687228Z Removing credentials config '/home/runner/work/_temp/git-credentials-35b149d9-1306-44fe-8725-6c98a167b55f.config'
+2026-10-05T13:03:01.1696986Z ##[endgroup]
+2026-10-05T13:03:01.1863917Z ##[group]Run mise --no-config --no-env --no-hooks install rust@1.98.1 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.30.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146
+2026-10-05T13:03:01.1865032Z [36;1mmise --no-config --no-env --no-hooks install rust@1.98.1 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.30.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146[0m
+2026-10-05T13:03:01.2025988Z shell: /usr/bin/bash -e {0}
+2026-10-05T13:03:01.2026268Z env:
+2026-10-05T13:03:01.2026493Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+2026-10-05T13:03:01.2026776Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+2026-10-05T13:03:01.2027039Z   ACTIONS_RUNTIME_TOKEN: 
+2026-10-05T13:03:01.2027277Z   CARGO_REGISTRY_TOKEN: 
+2026-10-05T13:03:01.2027508Z   GH_CONFIG_DIR: 
+2026-10-05T13:03:01.2027713Z   GH_HOST: 
+2026-10-05T13:03:01.2027909Z   GH_TOKEN: 
+2026-10-05T13:03:01.2028102Z   GITHUB_TOKEN: 
+2026-10-05T13:03:01.2028302Z   MBX_GC_AUTO: 1
+2026-10-05T13:03:01.2028500Z   MBX_SHARE_OUT_DIR: 0
+2026-10-05T13:03:01.2029040Z   MISE_AUTO_INSTALL: false
+2026-10-05T13:03:01.2029280Z   MISE_EXEC_AUTO_INSTALL: false
+2026-10-05T13:03:01.2032364Z   MISE_GITHUB_TOKEN: ***
+2026-10-05T13:03:01.2032620Z   MISE_LOCKFILE: 0
+2026-10-05T13:03:01.2032838Z   MISE_NO_CONFIG: 1
+2026-10-05T13:03:01.2033044Z   MISE_NO_ENV: 1
+2026-10-05T13:03:01.2033258Z   MISE_NO_HOOKS: 1
+2026-10-05T13:03:01.2033457Z   NODE_AUTH_TOKEN: 
+2026-10-05T13:03:01.2033659Z   NPM_TOKEN: 
+2026-10-05T13:03:01.2033870Z   RUSTUP_TOOLCHAIN: 1.98.1
+2026-10-05T13:03:01.2034119Z   MISE_LOG_LEVEL: info
+2026-10-05T13:03:01.2034442Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-new/velnor-new
+2026-10-05T13:03:01.2034800Z   MISE_YES: 1
+2026-10-05T13:03:01.2035045Z   MISE_CARGO_HOME: /home/runner/work/_temp/velnor/cargo
+2026-10-05T13:03:01.2035411Z   MISE_RUSTUP_HOME: /home/runner/work/_temp/velnor/rustup
+2026-10-05T13:03:01.2035716Z ##[endgroup]
+2026-10-05T13:03:01.2184767Z [2mmise[0m [2mby @jdx[0m – installing 5 tools
+2026-10-05T13:03:01.3789415Z [2mmise[0m [34mrust[0m@1.98.1 info: downloading installer
+2026-10-05T13:03:01.5406487Z [2mmise[0m [34mrust[0m@1.98.1 info: profile set to default
+2026-10-05T13:03:01.5407301Z [2mmise[0m [34mrust[0m@1.98.1 info: default host tuple is x86_64-unknown-linux-gnu
+2026-10-05T13:03:01.5408141Z [2mmise[0m [34mrust[0m@1.98.1 info: skipping toolchain installation
+2026-10-05T13:03:01.5408870Z [2mmise[0m [34mrust[0m@1.98.1 Rust is installed now. Great!
+2026-10-05T13:03:01.5409723Z [2mmise[0m [34mrust[0m@1.98.1 To get started you need Cargo's bin directory (/home/runner/work/_
+2026-10-05T13:03:01.5410402Z [2mmise[0m [34mrust[0m@1.98.1 temp/velnor/cargo/bin) in your PATH
+2026-10-05T13:03:01.5411133Z [2mmise[0m [34mrust[0m@1.98.1 environment variable. This has not been done automatically.
+2026-10-05T13:03:01.5412109Z [2mmise[0m [34mrust[0m@1.98.1 To configure your current shell, you need to source
+2026-10-05T13:03:01.5412775Z [2mmise[0m [34mrust[0m@1.98.1 the corresponding env file under /home/runner/work/_temp/velnor/cargo.
+2026-10-05T13:03:01.5413498Z [2mmise[0m [34mrust[0m@1.98.1 Consider running the right command for your shell (note the leading DOT):
+2026-10-05T13:03:01.5414232Z [2mmise[0m [34mrust[0m@1.98.1 . "/home/runner/work/_temp/velnor/cargo/env"     # For sh/ash/dash/pdksh/bash
+2026-10-05T13:03:01.5414977Z [2mmise[0m [34mrust[0m@1.98.1 . "/home/runner/work/_temp/velnor/cargo/env.ps1" # For pwsh
+2026-10-05T13:03:01.5415944Z [2mmise[0m [34mrust[0m@1.98.1 cargo:rerun-if-env-changed=CC_x86_64-unknown-linux-gnu
+2026-10-05T13:03:01.5416538Z [2mmise[0m [34mrust[0m@1.98.1 CC_x86_64-unknown-linux-gnu = None
+2026-10-05T13:03:01.5417065Z [2mmise[0m [34mrust[0m@1.98.1 cargo:rerun-if-env-changed=CC_x86_64_unknown_linux_gnu
+2026-10-05T13:03:01.5417557Z [2mmise[0m [34mrust[0m@1.98.1 CC_x86_64_unknown_linux_gnu = None
+2026-10-05T13:03:01.5418056Z [2mmise[0m [34mrust[0m@1.98.1 cargo:rerun-if-env-changed=HOST_CC
+2026-10-05T13:03:01.5418654Z [2mmise[0m [34mrust[0m@1.98.1 HOST_CC = None
+2026-10-05T13:03:01.5419791Z [2mmise[0m [34mrust[0m@1.98.1 cargo:rerun-if-env-changed=CC
+2026-10-05T13:03:01.5420381Z [2mmise[0m [34mrust[0m@1.98.1 CC = None
+2026-10-05T13:03:01.5421053Z [2mmise[0m [34mrust[0m@1.98.1 cargo:rerun-if-env-changed=CC_ENABLE_DEBUG_OUTPUT
+2026-10-05T13:03:01.5706553Z [2mmise[0m [34mrust[0m@1.98.1 cargo:rerun-if-env-changed=CRATE_CC_NO_DEFAULTS
+2026-10-05T13:03:01.5707447Z [2mmise[0m [34mrust[0m@1.98.1 CRATE_CC_NO_DEFAULTS = None
+2026-10-05T13:03:01.5708194Z [2mmise[0m [34mrust[0m@1.98.1 cargo:rerun-if-env-changed=CFLAGS
+2026-10-05T13:03:01.5708851Z [2mmise[0m [34mrust[0m@1.98.1 CFLAGS = None
+2026-10-05T13:03:01.5709536Z [2mmise[0m [34mrust[0m@1.98.1 cargo:rerun-if-env-changed=HOST_CFLAGS
+2026-10-05T13:03:01.5710370Z [2mmise[0m [34mrust[0m@1.98.1 HOST_CFLAGS = None
+2026-10-05T13:03:01.5711183Z [2mmise[0m [34mrust[0m@1.98.1 cargo:rerun-if-env-changed=CFLAGS_x86_64_unknown_linux_gnu
+2026-10-05T13:03:01.5712214Z [2mmise[0m [34mrust[0m@1.98.1 CFLAGS_x86_64_unknown_linux_gnu = None
+2026-10-05T13:03:01.5713493Z [2mmise[0m [34mrust[0m@1.98.1 cargo:rerun-if-env-changed=CFLAGS_x86_64-unknown-linux-gnu
+2026-10-05T13:03:01.5714379Z [2mmise[0m [34mrust[0m@1.98.1 CFLAGS_x86_64-unknown-linux-gnu = None
+2026-10-05T13:03:01.5909663Z [2mmise[0m [34mrust[0m@1.98.1 info: syncing channel updates for 1.98.1-x86_64-unknown-linux-gnu
+2026-10-05T13:03:01.6882247Z [2mmise[0m [34mrust[0m@1.98.1 info: latest update on 2026-09-03 for version 1.98.1 (48a229cea 2026-09-01)
+2026-10-05T13:03:01.6883595Z [2mmise[0m [34mrust[0m@1.98.1 info: downloading 6 components
+2026-10-05T13:03:01.9354308Z [2mmise[0m [38;5;10m✓[0m [34maqua:nextest-rs/nextest/cargo-nextest[0m@0.9.146  713ms  [2mcargo-nextest-0.9.146-x86_64-unknown-linux-gnu.tar.gz[0m
+2026-10-05T13:03:02.0017017Z [2mmise[0m [38;5;10m✓[0m [34mshellcheck[0m@0.11.0                              781ms  [2mshellcheck-v0.11.0.linux.x86_64.tar.xz[0m
+2026-10-05T13:03:02.1049081Z [2mmise[0m [38;5;10m✓[0m [34mactionlint[0m@1.7.12                              884ms  [2mactionlint_1.7.12_linux_amd64.tar.gz[0m
+2026-10-05T13:03:02.4219919Z [2mmise[0m [38;5;10m✓[0m [34mzizmor[0m@1.30.1                                  1.2s  [2mzizmor-x86_64-unknown-linux-gnu.tar.gz[0m
+2026-10-05T13:03:04.2187746Z [2mmise[0m [36m███████████████[0m[31m[0m[2m░[0m 4/5 · 3.0s
+2026-10-05T13:03:04.2188387Z   [34mrust[0m@1.98.1                                    Downloading rustup-init  3.0s  30/30 kB · 10 kB/s
+2026-10-05T13:03:07.2189892Z [2mmise[0m [36m███████████████[0m[31m[0m[2m░[0m 4/5 · 6.0s
+2026-10-05T13:03:07.2190737Z   [34mrust[0m@1.98.1                                    Downloading rustup-init  6.0s  30/30 kB · 5 kB/s
+2026-10-05T13:03:10.2191656Z [2mmise[0m [36m███████████████[0m[31m[0m[2m░[0m 4/5 · 9.0s
+2026-10-05T13:03:10.2192666Z   [34mrust[0m@1.98.1                                    Downloading rustup-init  9.0s  30/30 kB · 3 kB/s
+2026-10-05T13:03:13.2192932Z [2mmise[0m [36m███████████████[0m[31m[0m[2m░[0m 4/5 · 12.0s
+2026-10-05T13:03:13.2193576Z   [34mrust[0m@1.98.1                                    Downloading rustup-init  12.0s  30/30 kB · 3 kB/s
+2026-10-05T13:03:15.4249797Z [2mmise[0m [34mrust[0m@1.98.1   1.98.1-x86_64-unknown-linux-gnu installed - rustc 1.98.1 (48a229cea 2026-09-01)
+2026-10-05T13:03:15.4253338Z [2mmise[0m [34mrust[0m@1.98.1 info: default toolchain set to 1.98.1-x86_64-unknown-linux-gnu
+2026-10-05T13:03:15.4572218Z [2mmise[0m [34mrust[0m@1.98.1 rustc 1.98.1 (48a229cea 2026-09-01)
+2026-10-05T13:03:15.4597528Z [2mmise[0m [38;5;10m✓[0m [34mrust[0m@1.98.1                                    14.2s
+2026-10-05T13:03:15.4599480Z [2mmise[0m [36m████████████████[0m[31m[0m[2m[0m 5/5 · installed 5 tools in 14.2s
+2026-10-05T13:03:15.4683886Z [33mmise[0m [33mWARN[0m  rust, actionlint, shellcheck, aqua:nextest-rs/nextest/cargo-nextest, zizmor installed but not activated — they are not in any config file.
+2026-10-05T13:03:15.4685374Z To install and activate, run:
+2026-10-05T13:03:15.4685769Z   mise use rust
+2026-10-05T13:03:15.4686079Z   mise use actionlint
+2026-10-05T13:03:15.4686411Z   mise use shellcheck
+2026-10-05T13:03:15.4686792Z   mise use aqua:nextest-rs/nextest/cargo-nextest
+2026-10-05T13:03:15.4687314Z   mise use zizmor
+2026-10-05T13:03:15.4752461Z ##[group]Run mise --no-config --no-env --no-hooks exec rust@1.98.1 -- rustup component add --toolchain 1.98.1-x86_64-unknown-linux-gnu clippy rustfmt
+2026-10-05T13:03:15.4753485Z [36;1mmise --no-config --no-env --no-hooks exec rust@1.98.1 -- rustup component add --toolchain 1.98.1-x86_64-unknown-linux-gnu clippy rustfmt[0m
+2026-10-05T13:03:15.4818679Z shell: /usr/bin/bash -e {0}
+2026-10-05T13:03:15.4818951Z env:
+2026-10-05T13:03:15.4819167Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+2026-10-05T13:03:15.4819453Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+2026-10-05T13:03:15.4819712Z   ACTIONS_RUNTIME_TOKEN: 
+2026-10-05T13:03:15.4819956Z   CARGO_REGISTRY_TOKEN: 
+2026-10-05T13:03:15.4820374Z   GH_CONFIG_DIR: 
+2026-10-05T13:03:15.4820576Z   GH_HOST: 
+2026-10-05T13:03:15.4820767Z   GH_TOKEN: 
+2026-10-05T13:03:15.4820956Z   GITHUB_TOKEN: 
+2026-10-05T13:03:15.4833499Z   MBX_GC_AUTO: 1
+2026-10-05T13:03:15.4833767Z   MBX_SHARE_OUT_DIR: 0
+2026-10-05T13:03:15.4834016Z   MISE_AUTO_INSTALL: false
+2026-10-05T13:03:15.4834309Z   MISE_EXEC_AUTO_INSTALL: false
+2026-10-05T13:03:15.4837117Z   MISE_GITHUB_TOKEN: ***
+2026-10-05T13:03:15.4837373Z   MISE_LOCKFILE: 0
+2026-10-05T13:03:15.4837582Z   MISE_NO_CONFIG: 1
+2026-10-05T13:03:15.4837800Z   MISE_NO_ENV: 1
+2026-10-05T13:03:15.4838000Z   MISE_NO_HOOKS: 1
+2026-10-05T13:03:15.4838198Z   NODE_AUTH_TOKEN: 
+2026-10-05T13:03:15.4838396Z   NPM_TOKEN: 
+2026-10-05T13:03:15.4838599Z   RUSTUP_TOOLCHAIN: 1.98.1
+2026-10-05T13:03:15.4838839Z   MISE_LOG_LEVEL: info
+2026-10-05T13:03:15.4839152Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-new/velnor-new
+2026-10-05T13:03:15.4839501Z   MISE_YES: 1
+2026-10-05T13:03:15.4839741Z   MISE_CARGO_HOME: /home/runner/work/_temp/velnor/cargo
+2026-10-05T13:03:15.4840105Z   MISE_RUSTUP_HOME: /home/runner/work/_temp/velnor/rustup
+2026-10-05T13:03:15.4840418Z ##[endgroup]
+2026-10-05T13:03:15.5851284Z info: component clippy is up to date
+2026-10-05T13:03:15.5851931Z info: component rustfmt is up to date
+2026-10-05T13:03:15.6542978Z ##[group]Run actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+2026-10-05T13:03:15.6543409Z with:
+2026-10-05T13:03:15.6543920Z   key: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-80c489f79741a2c354ddda04d3166db39b51a23a12d42e952de96ea98e5583af
+2026-10-05T13:03:15.6545272Z   path: /home/runner/work/_temp/velnor/cargo/.crates.toml
+/home/runner/work/_temp/velnor/cargo/.crates2.json
+/home/runner/work/_temp/velnor/cargo/bin
+/home/runner/work/_temp/velnor/cargo/registry/index
+/home/runner/work/_temp/velnor/cargo/registry/cache
+/home/runner/work/_temp/velnor/cargo/git/db
+2026-10-05T13:03:15.6546397Z   restore-keys: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-
+2026-10-05T13:03:15.6546784Z   enableCrossOsArchive: false
+2026-10-05T13:03:15.6547051Z   fail-on-cache-miss: false
+2026-10-05T13:03:15.6547292Z   lookup-only: false
+2026-10-05T13:03:15.6547509Z env:
+2026-10-05T13:03:15.6547715Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+2026-10-05T13:03:15.6548013Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+2026-10-05T13:03:15.6548263Z   ACTIONS_RUNTIME_TOKEN: 
+2026-10-05T13:03:15.6548497Z   CARGO_REGISTRY_TOKEN: 
+2026-10-05T13:03:15.6548724Z   GH_CONFIG_DIR: 
+2026-10-05T13:03:15.6548929Z   GH_HOST: 
+2026-10-05T13:03:15.6549122Z   GH_TOKEN: 
+2026-10-05T13:03:15.6549316Z   GITHUB_TOKEN: 
+2026-10-05T13:03:15.6549515Z   MBX_GC_AUTO: 1
+2026-10-05T13:03:15.6549715Z   MBX_SHARE_OUT_DIR: 0
+2026-10-05T13:03:15.6549939Z   MISE_AUTO_INSTALL: false
+2026-10-05T13:03:15.6550193Z   MISE_EXEC_AUTO_INSTALL: false
+2026-10-05T13:03:15.6553264Z   MISE_GITHUB_TOKEN: ***
+2026-10-05T13:03:15.6553525Z   MISE_LOCKFILE: 0
+2026-10-05T13:03:15.6553743Z   MISE_NO_CONFIG: 1
+2026-10-05T13:03:15.6553953Z   MISE_NO_ENV: 1
+2026-10-05T13:03:15.6554165Z   MISE_NO_HOOKS: 1
+2026-10-05T13:03:15.6554368Z   NODE_AUTH_TOKEN: 
+2026-10-05T13:03:15.6554576Z   NPM_TOKEN: 
+2026-10-05T13:03:15.6554788Z   RUSTUP_TOOLCHAIN: 1.98.1
+2026-10-05T13:03:15.6555026Z   MISE_LOG_LEVEL: info
+2026-10-05T13:03:15.6555351Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-new/velnor-new
+2026-10-05T13:03:15.6555707Z   MISE_YES: 1
+2026-10-05T13:03:15.6555908Z ##[endgroup]
+2026-10-05T13:03:15.9267932Z Cache hit for: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-80c489f79741a2c354ddda04d3166db39b51a23a12d42e952de96ea98e5583af
+2026-10-05T13:03:16.7377027Z Received 67175509 of 67175509 (100.0%), 92.8 MBs/sec
+2026-10-05T13:03:16.7377582Z Cache Size: ~64 MB (67175509 B)
+2026-10-05T13:03:16.7484278Z [command]/usr/bin/tar -xf /home/runner/work/_temp/bee7e07d-133a-428c-960c-a0934b2450e6/cache.tzst -P -C /home/runner/work/velnor-new/velnor-new --use-compress-program unzstd
+2026-10-05T13:03:16.9296792Z Cache restored successfully
+2026-10-05T13:03:16.9409901Z Cache restored from key: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-80c489f79741a2c354ddda04d3166db39b51a23a12d42e952de96ea98e5583af
+2026-10-05T13:03:16.9566440Z ##[group]Run sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; case "$RUNNER_TEMP" in /*) ;; *) printf '\''%s\n'\'' '\''RUNNER_TEMP must be absolute'\'' >&2; exit 1 ;; esac; [ -d "$RUNNER_TEMP" ] || { printf '\''%s\n'\'' '\''RUNNER_TEMP must exist'\'' >&2; exit 1; }; check_no_symlink() { path=$1; while [ "$path" != / ]; do [ ! -L "$path" ] || return 1; path=${path%/*}; [ -n "$path" ] || path=/; done; return 0; }; check_no_symlink "$RUNNER_TEMP" || { printf '\''%s\n'\'' '\''RUNNER_TEMP path contains a symlink'\'' >&2; exit 1; }; mbx_cache_dir="$RUNNER_TEMP/velnor/mbx"; [ "${MBX_CACHE_DIR:-}" = "$mbx_cache_dir" ] || { printf '\''%s\n'\'' '\''MBX_CACHE_DIR must use the stable runner-temp path'\'' >&2; exit 1; }; [ ! -L "$RUNNER_TEMP/velnor" ] || { printf '\''%s\n'\'' '\''Velnor temp root must not be a symlink'\'' >&2; exit 1; }; if [ ! -e "$RUNNER_TEMP/velnor" ]; then (umask 077 && mkdir -m 700 "$RUNNER_TEMP/velnor"); fi; [ -d "$RUNNER_TEMP/velnor" ] && check_no_symlink "$RUNNER_TEMP/velnor" || { printf '\''%s\n'\'' '\''Velnor temp root must be a real directory'\'' >&2; exit 1; }; [ ! -e "$mbx_cache_dir" ] && [ ! -L "$mbx_cache_dir" ] || { printf '\''%s\n'\'' '\''MBX store root already exists in this private runner namespace'\'' >&2; exit 1; }; (umask 077 && mkdir -m 700 "$mbx_cache_dir") || { printf '\''%s\n'\'' '\''could not reserve the MBX store root'\'' >&2; exit 1; }; [ -n "${GITHUB_ENV:-}" ] && [ -f "$GITHUB_ENV" ] && [ ! -L "$GITHUB_ENV" ] || { printf '\''%s\n'\'' '\''GITHUB_ENV must be a regular runner file'\'' >&2; exit 1; }; check_no_symlink "$GITHUB_ENV" || { printf '\''%s\n'\'' '\''GITHUB_ENV path contains a symlink'\'' >&2; exit 1; }; printf '\''MBX_CACHE_DIR=%s\n'\'' "$mbx_cache_dir" >> "$GITHUB_ENV"; [ -n "$GITHUB_PATH" ] || { printf '\''%s\n'\'' '\''GITHUB_PATH is required'\'' >&2; exit 1; }; case "$GITHUB_RUN_ID" in '\'''\''|*[!0-9]*) printf '\''%s\n'\'' '\''run id must be numeric'\'' >&2; exit 1 ;; esac; case "$GITHUB_RUN_ATTEMPT" in '\'''\''|*[!0-9]*) printf '\''%s\n'\'' '\''run attempt must be numeric'\'' >&2; exit 1 ;; esac; probe_dir="$RUNNER_TEMP/velnor-mbx-preflight-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"; [ ! -e "$probe_dir" ] && [ ! -L "$probe_dir" ] || { printf '\''%s\n'\'' '\''preflight scratch already exists'\'' >&2; exit 1; }; (umask 077 && mkdir -m 700 "$probe_dir") || { printf '\''%s\n'\'' '\''could not reserve preflight scratch'\'' >&2; exit 1; }; cleanup() { rm -f "$probe_dir/rust-root" "$probe_dir/rustc-output"; rmdir "$probe_dir"; }; trap cleanup EXIT; trap '\''exit 1'\'' HUP INT TERM; mise --no-config --no-env --no-hooks where '\''rust@1.98.1'\'' > "$probe_dir/rust-root"; exec 3< "$probe_dir/rust-root"; IFS= read -r rust_root <&3 || { printf '\''%s\n'\'' '\''Mise returned no Rust install path'\'' >&2; exit 1; }; extra=; if IFS= read -r extra <&3 || [ -n "$extra" ]; then printf '\''%s\n'\'' '\''Mise returned multiple Rust install paths'\'' >&2; exit 1; fi; exec 3<&-; [ -n "$rust_root" ] || { printf '\''%s\n'\'' '\''Mise returned an empty Rust install path'\'' >&2; exit 1; }; case "$rust_root" in /*) ;; *) printf '\''%s\n'\'' '\''Rust install path must be absolute'\'' >&2; exit 1 ;; esac; rustc_bin="$rust_root/rustc"; [ -x "$rustc_bin" ] || { printf '\''expected Rustup shim at %s\n'\'' "$rustc_bin" >&2; exit 1; }; "$rustc_bin" '\''+1.98.1'\'' -vV > "$probe_dir/rustc-output"; grep -Fqx '\''release: 1.98.1'\'' "$probe_dir/rustc-output" || { printf '\''Rustup did not report exact toolchain 1.98.1\n'\'' >&2; exit 1; }; printf '\''%s\n'\'' "$rust_root" >> "$GITHUB_PATH"'
+2026-10-05T13:03:16.9585578Z [36;1msh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; case "$RUNNER_TEMP" in /*) ;; *) printf '\''%s\n'\'' '\''RUNNER_TEMP must be absolute'\'' >&2; exit 1 ;; esac; [ -d "$RUNNER_TEMP" ] || { printf '\''%s\n'\'' '\''RUNNER_TEMP must exist'\'' >&2; exit 1; }; check_no_symlink() { path=$1; while [ "$path" != / ]; do [ ! -L "$path" ] || return 1; path=${path%/*}; [ -n "$path" ] || path=/; done; return 0; }; check_no_symlink "$RUNNER_TEMP" || { printf '\''%s\n'\'' '\''RUNNER_TEMP path contains a symlink'\'' >&2; exit 1; }; mbx_cache_dir="$RUNNER_TEMP/velnor/mbx"; [ "${MBX_CACHE_DIR:-}" = "$mbx_cache_dir" ] || { printf '\''%s\n'\'' '\''MBX_CACHE_DIR must use the stable runner-temp path'\'' >&2; exit 1; }; [ ! -L "$RUNNER_TEMP/velnor" ] || { printf '\''%s\n'\'' '\''Velnor temp root must not be a symlink'\'' >&2; exit 1; }; if [ ! -e "$RUNNER_TEMP/velnor" ]; then (umask 077 && mkdir -m 700 "$RUNNER_TEMP/velnor"); fi; [ -d "$RUNNER_TEMP/velnor" ] && check_no_symlink "$RUNNER_TEMP/velnor" || { printf '\''%s\n'\'' '\''Velnor temp root must be a real directory'\'' >&2; exit 1; }; [ ! -e "$mbx_cache_dir" ] && [ ! -L "$mbx_cache_dir" ] || { printf '\''%s\n'\'' '\''MBX store root already exists in this private runner namespace'\'' >&2; exit 1; }; (umask 077 && mkdir -m 700 "$mbx_cache_dir") || { printf '\''%s\n'\'' '\''could not reserve the MBX store root'\'' >&2; exit 1; }; [ -n "${GITHUB_ENV:-}" ] && [ -f "$GITHUB_ENV" ] && [ ! -L "$GITHUB_ENV" ] || { printf '\''%s\n'\'' '\''GITHUB_ENV must be a regular runner file'\'' >&2; exit 1; }; check_no_symlink "$GITHUB_ENV" || { printf '\''%s\n'\'' '\''GITHUB_ENV path contains a symlink'\'' >&2; exit 1; }; printf '\''MBX_CACHE_DIR=%s\n'\'' "$mbx_cache_dir" >> "$GITHUB_ENV"; [ -n "$GITHUB_PATH" ] || { printf '\''%s\n'\'' '\''GITHUB_PATH is required'\'' >&2; exit 1; }; case "$GITHUB_RUN_ID" in '\'''\''|*[!0-9]*) printf '\''%s\n'\'' '\''run id must be numeric'\'' >&2; exit 1 ;; esac; case "$GITHUB_RUN_ATTEMPT" in '\'''\''|*[!0-9]*) printf '\''%s\n'\'' '\''run attempt must be numeric'\'' >&2; exit 1 ;; esac; probe_dir="$RUNNER_TEMP/velnor-mbx-preflight-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"; [ ! -e "$probe_dir" ] && [ ! -L "$probe_dir" ] || { printf '\''%s\n'\'' '\''preflight scratch already exists'\'' >&2; exit 1; }; (umask 077 && mkdir -m 700 "$probe_dir") || { printf '\''%s\n'\'' '\''could not reserve preflight scratch'\'' >&2; exit 1; }; cleanup() { rm -f "$probe_dir/rust-root" "$probe_dir/rustc-output"; rmdir "$probe_dir"; }; trap cleanup EXIT; trap '\''exit 1'\'' HUP INT TERM; mise --no-config --no-env --no-hooks where '\''rust@1.98.1'\'' > "$probe_dir/rust-root"; exec 3< "$probe_dir/rust-root"; IFS= read -r rust_root <&3 || { printf '\''%s\n'\'' '\''Mise returned no Rust install path'\'' >&2; exit 1; }; extra=; if IFS= read -r extra <&3 || [ -n "$extra" ]; then printf '\''%s\n'\'' '\''Mise returned multiple Rust install paths'\'' >&2; exit 1; fi; exec 3<&-; [ -n "$rust_root" ] || { printf '\''%s\n'\'' '\''Mise returned an empty Rust install path'\'' >&2; exit 1; }; case "$rust_root" in /*) ;; *) printf '\''%s\n'\'' '\''Rust install path must be absolute'\'' >&2; exit 1 ;; esac; rustc_bin="$rust_root/rustc"; [ -x "$rustc_bin" ] || { printf '\''expected Rustup shim at %s\n'\'' "$rustc_bin" >&2; exit 1; }; "$rustc_bin" '\''+1.98.1'\'' -vV > "$probe_dir/rustc-output"; grep -Fqx '\''release: 1.98.1'\'' "$probe_dir/rustc-output" || { printf '\''Rustup did not report exact toolchain 1.98.1\n'\'' >&2; exit 1; }; printf '\''%s\n'\'' "$rust_root" >> "$GITHUB_PATH"'[0m
+2026-10-05T13:03:16.9658752Z shell: /usr/bin/bash -e {0}
+2026-10-05T13:03:16.9659029Z env:
+2026-10-05T13:03:16.9659245Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+2026-10-05T13:03:16.9659532Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+2026-10-05T13:03:16.9659800Z   ACTIONS_RUNTIME_TOKEN: 
+2026-10-05T13:03:16.9660041Z   CARGO_REGISTRY_TOKEN: 
+2026-10-05T13:03:16.9660275Z   GH_CONFIG_DIR: 
+2026-10-05T13:03:16.9660486Z   GH_HOST: 
+2026-10-05T13:03:16.9660682Z   GH_TOKEN: 
+2026-10-05T13:03:16.9660885Z   GITHUB_TOKEN: 
+2026-10-05T13:03:16.9661091Z   MBX_GC_AUTO: 1
+2026-10-05T13:03:16.9661297Z   MBX_SHARE_OUT_DIR: 0
+2026-10-05T13:03:16.9661525Z   MISE_AUTO_INSTALL: false
+2026-10-05T13:03:16.9662097Z   MISE_EXEC_AUTO_INSTALL: false
+2026-10-05T13:03:16.9665060Z   MISE_GITHUB_TOKEN: ***
+2026-10-05T13:03:16.9665480Z   MISE_LOCKFILE: 0
+2026-10-05T13:03:16.9665709Z   MISE_NO_CONFIG: 1
+2026-10-05T13:03:16.9665923Z   MISE_NO_ENV: 1
+2026-10-05T13:03:16.9666129Z   MISE_NO_HOOKS: 1
+2026-10-05T13:03:16.9666338Z   NODE_AUTH_TOKEN: 
+2026-10-05T13:03:16.9666548Z   NPM_TOKEN: 
+2026-10-05T13:03:16.9666758Z   RUSTUP_TOOLCHAIN: 1.98.1
+2026-10-05T13:03:16.9667004Z   MISE_LOG_LEVEL: info
+2026-10-05T13:03:16.9667324Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-new/velnor-new
+2026-10-05T13:03:16.9667690Z   MISE_YES: 1
+2026-10-05T13:03:16.9667927Z   CARGO_HOME: /home/runner/work/_temp/velnor/cargo
+2026-10-05T13:03:16.9668264Z   MBX_CACHE_DIR: /home/runner/work/_temp/velnor/mbx
+2026-10-05T13:03:16.9668611Z   MISE_CARGO_HOME: /home/runner/work/_temp/velnor/cargo
+2026-10-05T13:03:16.9668979Z   MISE_RUSTUP_HOME: /home/runner/work/_temp/velnor/rustup
+2026-10-05T13:03:16.9669329Z   RUSTUP_HOME: /home/runner/work/_temp/velnor/rustup
+2026-10-05T13:03:16.9669637Z ##[endgroup]
+2026-10-05T13:03:17.0138537Z ##[group]Run jdx/mr-boxington-action@1687e54eb349cadf61fa38b5813a77875489e8e6
+2026-10-05T13:03:17.0138961Z with:
+2026-10-05T13:03:17.0139651Z   cache-generation: velnor-mbx-1.21.1-share-out-dir-disabled-v1-gc-auto-v1-action-1687e54eb349cadf61fa38b5813a77875489e8e6-lane-github-hosted-job-plan
+2026-10-05T13:03:17.0140382Z   github-cache-mode: objects
+2026-10-05T13:03:17.0140660Z   save-on-protected-branch: false
+2026-10-05T13:03:17.0140938Z   save-on-pull-request: false
+2026-10-05T13:03:17.0141221Z   save-on-workflow-dispatch: false
+2026-10-05T13:03:17.0141490Z   toolchain: 1.98.1
+2026-10-05T13:03:17.0141709Z   version: 1.21.1
+2026-10-05T13:03:17.0142189Z   backend: github
+2026-10-05T13:03:17.0144800Z   github-token: ***
+2026-10-05T13:03:17.0145031Z   working-directory: .
+2026-10-05T13:03:17.0145268Z   cache-links: auto
+2026-10-05T13:03:17.0145478Z env:
+2026-10-05T13:03:17.0145693Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+2026-10-05T13:03:17.0145988Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+2026-10-05T13:03:17.0146276Z   ACTIONS_RUNTIME_TOKEN: 
+2026-10-05T13:03:17.0146519Z   CARGO_REGISTRY_TOKEN: 
+2026-10-05T13:03:17.0146747Z   GH_CONFIG_DIR: 
+2026-10-05T13:03:17.0146958Z   GH_HOST: 
+2026-10-05T13:03:17.0147160Z   GH_TOKEN: 
+2026-10-05T13:03:17.0147364Z   GITHUB_TOKEN: 
+2026-10-05T13:03:17.0147570Z   MBX_GC_AUTO: 1
+2026-10-05T13:03:17.0147773Z   MBX_SHARE_OUT_DIR: 0
+2026-10-05T13:03:17.0148017Z   MISE_AUTO_INSTALL: false
+2026-10-05T13:03:17.0148261Z   MISE_EXEC_AUTO_INSTALL: false
+2026-10-05T13:03:17.0150915Z   MISE_GITHUB_TOKEN: ***
+2026-10-05T13:03:17.0151159Z   MISE_LOCKFILE: 0
+2026-10-05T13:03:17.0151372Z   MISE_NO_CONFIG: 1
+2026-10-05T13:03:17.0151583Z   MISE_NO_ENV: 1
+2026-10-05T13:03:17.0152068Z   MISE_NO_HOOKS: 1
+2026-10-05T13:03:17.0152299Z   NODE_AUTH_TOKEN: 
+2026-10-05T13:03:17.0152508Z   NPM_TOKEN: 
+2026-10-05T13:03:17.0152720Z   RUSTUP_TOOLCHAIN: 1.98.1
+2026-10-05T13:03:17.0152961Z   MISE_LOG_LEVEL: info
+2026-10-05T13:03:17.0153305Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-new/velnor-new
+2026-10-05T13:03:17.0153664Z   MISE_YES: 1
+2026-10-05T13:03:17.0153899Z   MBX_CACHE_DIR: /home/runner/work/_temp/velnor/mbx
+2026-10-05T13:03:17.0154211Z   ACTIONS_CACHE_MODE: write
+2026-10-05T13:03:17.0154500Z   CARGO_HOME: /home/runner/work/_temp/velnor/cargo
+2026-10-05T13:03:17.0154849Z   MISE_CARGO_HOME: /home/runner/work/_temp/velnor/cargo
+2026-10-05T13:03:17.0155211Z   MISE_RUSTUP_HOME: /home/runner/work/_temp/velnor/rustup
+2026-10-05T13:03:17.0155565Z   RUSTUP_HOME: /home/runner/work/_temp/velnor/rustup
+2026-10-05T13:03:17.0155880Z ##[endgroup]
+2026-10-05T13:03:17.7488566Z [command]/usr/bin/tar xz --warning=no-unknown-keyword --overwrite -C /home/runner/work/_temp/d1403571-2355-493e-ad20-c936c69de2ad -f /home/runner/work/_temp/9a683c5e-6fe2-4155-9981-51bcd3593e24
+2026-10-05T13:03:17.9722031Z Cache hit for restore-key: linux-x64-mbx-velnor-mbx-1.21.1-share-out-dir-disabled-v1-gc-auto-v1-action-1687e54eb349cadf61fa38b5813a77875489e8e6-lane-github-hosted-job-plan-dir-rust-39d372ba6fa2-4fffbc22ce159305c62ae039668da2a14e2e3366
+2026-10-05T13:03:18.6713117Z Received 64161907 of 64161907 (100.0%), 103.2 MBs/sec
+2026-10-05T13:03:18.6713872Z Cache Size: ~61 MB (64161907 B)
+2026-10-05T13:03:18.6818156Z [command]/usr/bin/tar -xf /home/runner/work/_temp/f541afd6-c692-460b-a209-37d1c40bab59/cache.tzst -P -C /home/runner/work/velnor-new/velnor-new --use-compress-program unzstd
+2026-10-05T13:03:19.0147143Z Cache restored successfully
+2026-10-05T13:03:19.0181628Z Set up mbx 1.21.1
+2026-10-05T13:03:19.0189614Z [command]/opt/hostedtoolcache/mbx-780ccb52aa3a95ac1b0ee0ecf5184561b1a4bdf1fe88180333dc0e11a92980f5/1.21.1/x64/mbx cache import /home/runner/work/_temp/velnor/mbx/actions/github-actions-cache-v1
+2026-10-05T13:03:19.2017025Z imported 10 actions and 230 objects from /home/runner/work/_temp/velnor/mbx/actions/github-actions-cache-v1 (202.9 MiB)
+2026-10-05T13:03:19.2018359Z restored Cargo workspace state (199 referenced files, 254.8 MiB)
+2026-10-05T13:03:19.2025965Z Restored mbx cache from linux-x64-mbx-velnor-mbx-1.21.1-share-out-dir-disabled-v1-gc-auto-v1-action-1687e54eb349cadf61fa38b5813a77875489e8e6-lane-github-hosted-job-plan-dir-rust-39d372ba6fa2-4fffbc22ce159305c62ae039668da2a14e2e3366
+2026-10-05T13:03:19.2027737Z Will save the mbx cache after a successful job (default-branch push)
+2026-10-05T13:03:19.2324376Z ##[group]Run sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; case "$RUNNER_TEMP" in /*) ;; *) printf '\''%s\n'\'' '\''RUNNER_TEMP must be absolute'\'' >&2; exit 1 ;; esac; check_no_symlink() { path=$1; while [ "$path" != / ]; do [ ! -L "$path" ] || return 1; path=${path%/*}; [ -n "$path" ] || path=/; done; return 0; }; [ -d "$RUNNER_TEMP" ] && check_no_symlink "$RUNNER_TEMP" || { printf '\''%s\n'\'' '\''RUNNER_TEMP must be a real directory'\'' >&2; exit 1; }; [ "${MBX_CACHE_DIR:-}" = "$RUNNER_TEMP/velnor/mbx" ] || { printf '\''%s\n'\'' '\''MBX_CACHE_DIR changed from its stable runner-temp path'\'' >&2; exit 1; }; [ -d "$RUNNER_TEMP/velnor" ] && [ -d "$MBX_CACHE_DIR" ] && [ -d "$MBX_CACHE_DIR/actions" ] || { printf '\''%s\n'\'' '\''MBX store directories are missing'\'' >&2; exit 1; }; check_no_symlink "$RUNNER_TEMP/velnor" && check_no_symlink "$MBX_CACHE_DIR/actions" || { printf '\''%s\n'\'' '\''MBX store path contains a symlink'\'' >&2; exit 1; }; case "$GITHUB_RUN_ID" in '\'''\''|*[!0-9]*) printf '\''%s\n'\'' '\''run id must be numeric'\'' >&2; exit 1 ;; esac; case "$GITHUB_RUN_ATTEMPT" in '\'''\''|*[!0-9]*) printf '\''%s\n'\'' '\''run attempt must be numeric'\'' >&2; exit 1 ;; esac; probe_dir="$RUNNER_TEMP/velnor-mbx-verify-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"; [ ! -e "$probe_dir" ] && [ ! -L "$probe_dir" ] || { printf '\''%s\n'\'' '\''verification scratch already exists'\'' >&2; exit 1; }; (umask 077 && mkdir -m 700 "$probe_dir") || { printf '\''%s\n'\'' '\''could not reserve verification scratch'\'' >&2; exit 1; }; cleanup() { rm -f "$probe_dir/version" "$probe_dir/cache-dir"; rmdir "$probe_dir"; }; trap cleanup EXIT; trap '\''exit 1'\'' HUP INT TERM; mise --no-config --no-env --no-hooks exec rust@1.98.1 -- mbx --version > "$probe_dir/version"; exec 3< "$probe_dir/version"; IFS= read -r version_line <&3 || { printf '\''%s\n'\'' '\''MBX version output is empty or unterminated'\'' >&2; exit 1; }; extra=; if IFS= read -r extra <&3 || [ -n "$extra" ]; then printf '\''%s\n'\'' '\''MBX version output has extra data'\'' >&2; exit 1; fi; exec 3<&-; [ "$version_line" = '\''mbx 1.21.1'\'' ] || { printf '\''%s\n'\'' '\''MBX on PATH does not match the pinned action version'\'' >&2; exit 1; }; mise --no-config --no-env --no-hooks exec rust@1.98.1 -- mbx cache dir > "$probe_dir/cache-dir"; exec 3< "$probe_dir/cache-dir"; IFS= read -r cache_dir <&3 || { printf '\''%s\n'\'' '\''MBX cache dir output is empty or unterminated'\'' >&2; exit 1; }; extra=; if IFS= read -r extra <&3 || [ -n "$extra" ]; then printf '\''%s\n'\'' '\''MBX cache dir output has extra data'\'' >&2; exit 1; fi; exec 3<&-; [ "$cache_dir" = "$MBX_CACHE_DIR/actions" ] || { printf '\''%s\n'\'' '\''MBX reported an unexpected object store path'\'' >&2; exit 1; }'
+2026-10-05T13:03:19.2340340Z [36;1msh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; case "$RUNNER_TEMP" in /*) ;; *) printf '\''%s\n'\'' '\''RUNNER_TEMP must be absolute'\'' >&2; exit 1 ;; esac; check_no_symlink() { path=$1; while [ "$path" != / ]; do [ ! -L "$path" ] || return 1; path=${path%/*}; [ -n "$path" ] || path=/; done; return 0; }; [ -d "$RUNNER_TEMP" ] && check_no_symlink "$RUNNER_TEMP" || { printf '\''%s\n'\'' '\''RUNNER_TEMP must be a real directory'\'' >&2; exit 1; }; [ "${MBX_CACHE_DIR:-}" = "$RUNNER_TEMP/velnor/mbx" ] || { printf '\''%s\n'\'' '\''MBX_CACHE_DIR changed from its stable runner-temp path'\'' >&2; exit 1; }; [ -d "$RUNNER_TEMP/velnor" ] && [ -d "$MBX_CACHE_DIR" ] && [ -d "$MBX_CACHE_DIR/actions" ] || { printf '\''%s\n'\'' '\''MBX store directories are missing'\'' >&2; exit 1; }; check_no_symlink "$RUNNER_TEMP/velnor" && check_no_symlink "$MBX_CACHE_DIR/actions" || { printf '\''%s\n'\'' '\''MBX store path contains a symlink'\'' >&2; exit 1; }; case "$GITHUB_RUN_ID" in '\'''\''|*[!0-9]*) printf '\''%s\n'\'' '\''run id must be numeric'\'' >&2; exit 1 ;; esac; case "$GITHUB_RUN_ATTEMPT" in '\'''\''|*[!0-9]*) printf '\''%s\n'\'' '\''run attempt must be numeric'\'' >&2; exit 1 ;; esac; probe_dir="$RUNNER_TEMP/velnor-mbx-verify-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"; [ ! -e "$probe_dir" ] && [ ! -L "$probe_dir" ] || { printf '\''%s\n'\'' '\''verification scratch already exists'\'' >&2; exit 1; }; (umask 077 && mkdir -m 700 "$probe_dir") || { printf '\''%s\n'\'' '\''could not reserve verification scratch'\'' >&2; exit 1; }; cleanup() { rm -f "$probe_dir/version" "$probe_dir/cache-dir"; rmdir "$probe_dir"; }; trap cleanup EXIT; trap '\''exit 1'\'' HUP INT TERM; mise --no-config --no-env --no-hooks exec rust@1.98.1 -- mbx --version > "$probe_dir/version"; exec 3< "$probe_dir/version"; IFS= read -r version_line <&3 || { printf '\''%s\n'\'' '\''MBX version output is empty or unterminated'\'' >&2; exit 1; }; extra=; if IFS= read -r extra <&3 || [ -n "$extra" ]; then printf '\''%s\n'\'' '\''MBX version output has extra data'\'' >&2; exit 1; fi; exec 3<&-; [ "$version_line" = '\''mbx 1.21.1'\'' ] || { printf '\''%s\n'\'' '\''MBX on PATH does not match the pinned action version'\'' >&2; exit 1; }; mise --no-config --no-env --no-hooks exec rust@1.98.1 -- mbx cache dir > "$probe_dir/cache-dir"; exec 3< "$probe_dir/cache-dir"; IFS= read -r cache_dir <&3 || { printf '\''%s\n'\'' '\''MBX cache dir output is empty or unterminated'\'' >&2; exit 1; }; extra=; if IFS= read -r extra <&3 || [ -n "$extra" ]; then printf '\''%s\n'\'' '\''MBX cache dir output has extra data'\'' >&2; exit 1; fi; exec 3<&-; [ "$cache_dir" = "$MBX_CACHE_DIR/actions" ] || { printf '\''%s\n'\'' '\''MBX reported an unexpected object store path'\'' >&2; exit 1; }'[0m
+2026-10-05T13:03:19.2428846Z shell: /usr/bin/bash -e {0}
+2026-10-05T13:03:19.2429359Z env:
+2026-10-05T13:03:19.2429756Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+2026-10-05T13:03:19.2430154Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+2026-10-05T13:03:19.2430429Z   ACTIONS_RUNTIME_TOKEN: 
+2026-10-05T13:03:19.2430694Z   CARGO_REGISTRY_TOKEN: 
+2026-10-05T13:03:19.2430939Z   GH_CONFIG_DIR: 
+2026-10-05T13:03:19.2431169Z   GH_HOST: 
+2026-10-05T13:03:19.2431376Z   GH_TOKEN: 
+2026-10-05T13:03:19.2431906Z   GITHUB_TOKEN: 
+2026-10-05T13:03:19.2432342Z   MBX_GC_AUTO: 1
+2026-10-05T13:03:19.2432699Z   MBX_SHARE_OUT_DIR: 0
+2026-10-05T13:03:19.2433238Z   MISE_AUTO_INSTALL: false
+2026-10-05T13:03:19.2433728Z   MISE_EXEC_AUTO_INSTALL: false
+2026-10-05T13:03:19.2438089Z   MISE_GITHUB_TOKEN: ***
+2026-10-05T13:03:19.2438666Z   MISE_LOCKFILE: 0
+2026-10-05T13:03:19.2511011Z   MISE_NO_CONFIG: 1
+2026-10-05T13:03:19.2511408Z   MISE_NO_ENV: 1
+2026-10-05T13:03:19.2511892Z   MISE_NO_HOOKS: 1
+2026-10-05T13:03:19.2512455Z   NODE_AUTH_TOKEN: 
+2026-10-05T13:03:19.2512757Z   NPM_TOKEN: 
+2026-10-05T13:03:19.2513096Z   RUSTUP_TOOLCHAIN: 1.98.1
+2026-10-05T13:03:19.2513509Z   MISE_LOG_LEVEL: info
+2026-10-05T13:03:19.2514024Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-new/velnor-new
+2026-10-05T13:03:19.2514536Z   MISE_YES: 1
+2026-10-05T13:03:19.2514888Z   MBX_CACHE_DIR: /home/runner/work/_temp/velnor/mbx
+2026-10-05T13:03:19.2515313Z   MBX_CACHE_LINKS: 1
+2026-10-05T13:03:19.2515855Z   MBX_CACHE_EXPORT_GROUP: github-actions-37313809457-1-927df0e3-4dfe-4e89-bc1f-fae4944f3eb8
+2026-10-05T13:03:19.2516547Z   ACTIONS_CACHE_MODE: write
+2026-10-05T13:03:19.2516954Z   CARGO_HOME: /home/runner/work/_temp/velnor/cargo
+2026-10-05T13:03:19.2517484Z   MISE_CARGO_HOME: /home/runner/work/_temp/velnor/cargo
+2026-10-05T13:03:19.2518053Z   MISE_RUSTUP_HOME: /home/runner/work/_temp/velnor/rustup
+2026-10-05T13:03:19.2518610Z   RUSTUP_HOME: /home/runner/work/_temp/velnor/rustup
+2026-10-05T13:03:19.2519082Z ##[endgroup]
+2026-10-05T13:03:19.2913885Z ##[group]Run sh -c 'mkdir -p "$RUNNER_TEMP/velnor/cargo-clean" && cd "$RUNNER_TEMP/velnor/cargo-clean" && if mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo metadata --locked --offline --manifest-path "$GITHUB_WORKSPACE/Cargo.toml" >/dev/null 2>&1; then echo "velnor: sources hit, skipping fetch"; else echo "velnor: sources miss (source_missing), fetching"; mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo fetch --locked --manifest-path "$GITHUB_WORKSPACE/Cargo.toml"; fi'
+2026-10-05T13:03:19.2916776Z [36;1msh -c 'mkdir -p "$RUNNER_TEMP/velnor/cargo-clean" && cd "$RUNNER_TEMP/velnor/cargo-clean" && if mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo metadata --locked --offline --manifest-path "$GITHUB_WORKSPACE/Cargo.toml" >/dev/null 2>&1; then echo "velnor: sources hit, skipping fetch"; else echo "velnor: sources miss (source_missing), fetching"; mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo fetch --locked --manifest-path "$GITHUB_WORKSPACE/Cargo.toml"; fi'[0m
+2026-10-05T13:03:19.2983273Z shell: /usr/bin/bash -e {0}
+2026-10-05T13:03:19.2983551Z env:
+2026-10-05T13:03:19.2983771Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+2026-10-05T13:03:19.2984071Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+2026-10-05T13:03:19.2984337Z   ACTIONS_RUNTIME_TOKEN: 
+2026-10-05T13:03:19.2984577Z   CARGO_REGISTRY_TOKEN: 
+2026-10-05T13:03:19.2984816Z   GH_CONFIG_DIR: 
+2026-10-05T13:03:19.2985027Z   GH_HOST: 
+2026-10-05T13:03:19.2985230Z   GH_TOKEN: 
+2026-10-05T13:03:19.2985432Z   GITHUB_TOKEN: 
+2026-10-05T13:03:19.2985642Z   MBX_GC_AUTO: 1
+2026-10-05T13:03:19.2985866Z   MBX_SHARE_OUT_DIR: 0
+2026-10-05T13:03:19.2986105Z   MISE_AUTO_INSTALL: false
+2026-10-05T13:03:19.2986354Z   MISE_EXEC_AUTO_INSTALL: false
+2026-10-05T13:03:19.2989174Z   MISE_GITHUB_TOKEN: ***
+2026-10-05T13:03:19.2989573Z   MISE_LOCKFILE: 0
+2026-10-05T13:03:19.2989803Z   MISE_NO_CONFIG: 1
+2026-10-05T13:03:19.2990024Z   MISE_NO_ENV: 1
+2026-10-05T13:03:19.2990246Z   MISE_NO_HOOKS: 1
+2026-10-05T13:03:19.2990477Z   NODE_AUTH_TOKEN: 
+2026-10-05T13:03:19.2990701Z   NPM_TOKEN: 
+2026-10-05T13:03:19.2990925Z   RUSTUP_TOOLCHAIN: 1.98.1
+2026-10-05T13:03:19.2991176Z   MISE_LOG_LEVEL: info
+2026-10-05T13:03:19.2991519Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-new/velnor-new
+2026-10-05T13:03:19.2992226Z   MISE_YES: 1
+2026-10-05T13:03:19.2992477Z   MBX_CACHE_DIR: /home/runner/work/_temp/velnor/mbx
+2026-10-05T13:03:19.2992793Z   MBX_CACHE_LINKS: 1
+2026-10-05T13:03:19.2993201Z   MBX_CACHE_EXPORT_GROUP: github-actions-37313809457-1-927df0e3-4dfe-4e89-bc1f-fae4944f3eb8
+2026-10-05T13:03:19.2993923Z   MISE_CARGO_HOME: /home/runner/work/_temp/velnor/cargo
+2026-10-05T13:03:19.2994305Z   MISE_RUSTUP_HOME: /home/runner/work/_temp/velnor/rustup
+2026-10-05T13:03:19.2994626Z ##[endgroup]
+2026-10-05T13:03:19.8731887Z velnor: sources hit, skipping fetch
+2026-10-05T13:03:19.8767687Z ##[group]Run sh -c 'mkdir -p "$RUNNER_TEMP/velnor/cargo-clean" && cd "$RUNNER_TEMP/velnor/cargo-clean" && if mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo metadata --locked --offline --manifest-path "$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.toml" >/dev/null 2>&1; then echo "velnor: sources hit, skipping fetch"; else echo "velnor: sources miss (source_missing), fetching"; mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo fetch --locked --manifest-path "$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.toml"; fi'
+2026-10-05T13:03:19.8771172Z [36;1msh -c 'mkdir -p "$RUNNER_TEMP/velnor/cargo-clean" && cd "$RUNNER_TEMP/velnor/cargo-clean" && if mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo metadata --locked --offline --manifest-path "$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.toml" >/dev/null 2>&1; then echo "velnor: sources hit, skipping fetch"; else echo "velnor: sources miss (source_missing), fetching"; mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo fetch --locked --manifest-path "$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.toml"; fi'[0m
+2026-10-05T13:03:19.8838176Z shell: /usr/bin/bash -e {0}
+2026-10-05T13:03:19.8838472Z env:
+2026-10-05T13:03:19.8838705Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+2026-10-05T13:03:19.8838998Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+2026-10-05T13:03:19.8839266Z   ACTIONS_RUNTIME_TOKEN: 
+2026-10-05T13:03:19.8839505Z   CARGO_REGISTRY_TOKEN: 
+2026-10-05T13:03:19.8839735Z   GH_CONFIG_DIR: 
+2026-10-05T13:03:19.8839959Z   GH_HOST: 
+2026-10-05T13:03:19.8840153Z   GH_TOKEN: 
+2026-10-05T13:03:19.8840350Z   GITHUB_TOKEN: 
+2026-10-05T13:03:19.8840568Z   MBX_GC_AUTO: 1
+2026-10-05T13:03:19.8840777Z   MBX_SHARE_OUT_DIR: 0
+2026-10-05T13:03:19.8841019Z   MISE_AUTO_INSTALL: false
+2026-10-05T13:03:19.8841267Z   MISE_EXEC_AUTO_INSTALL: false
+2026-10-05T13:03:19.8844326Z   MISE_GITHUB_TOKEN: ***
+2026-10-05T13:03:19.8844595Z   MISE_LOCKFILE: 0
+2026-10-05T13:03:19.8844816Z   MISE_NO_CONFIG: 1
+2026-10-05T13:03:19.8845048Z   MISE_NO_ENV: 1
+2026-10-05T13:03:19.8845259Z   MISE_NO_HOOKS: 1
+2026-10-05T13:03:19.8845476Z   NODE_AUTH_TOKEN: 
+2026-10-05T13:03:19.8845695Z   NPM_TOKEN: 
+2026-10-05T13:03:19.8845921Z   RUSTUP_TOOLCHAIN: 1.98.1
+2026-10-05T13:03:19.8846187Z   MISE_LOG_LEVEL: info
+2026-10-05T13:03:19.8846520Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-new/velnor-new
+2026-10-05T13:03:19.8846894Z   MISE_YES: 1
+2026-10-05T13:03:19.8847154Z   MBX_CACHE_DIR: /home/runner/work/_temp/velnor/mbx
+2026-10-05T13:03:19.8847469Z   MBX_CACHE_LINKS: 1
+2026-10-05T13:03:19.8847884Z   MBX_CACHE_EXPORT_GROUP: github-actions-37313809457-1-927df0e3-4dfe-4e89-bc1f-fae4944f3eb8
+2026-10-05T13:03:19.8848402Z   MISE_CARGO_HOME: /home/runner/work/_temp/velnor/cargo
+2026-10-05T13:03:19.8848787Z   MISE_RUSTUP_HOME: /home/runner/work/_temp/velnor/rustup
+2026-10-05T13:03:19.8849117Z ##[endgroup]
+2026-10-05T13:03:21.9125182Z velnor: sources hit, skipping fetch
+2026-10-05T13:03:21.9160298Z ##[group]Run env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR mise --no-config --no-env --no-hooks exec rust@1.98.1 -- mbx build --release --locked --package velnor-actions-cli --bin velnor-actions
+2026-10-05T13:03:21.9162571Z [36;1menv -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR mise --no-config --no-env --no-hooks exec rust@1.98.1 -- mbx build --release --locked --package velnor-actions-cli --bin velnor-actions[0m
+2026-10-05T13:03:21.9228723Z shell: /usr/bin/bash -e {0}
+2026-10-05T13:03:21.9228999Z env:
+2026-10-05T13:03:21.9229229Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+2026-10-05T13:03:21.9229520Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+2026-10-05T13:03:21.9229795Z   ACTIONS_RUNTIME_TOKEN: 
+2026-10-05T13:03:21.9230035Z   CARGO_REGISTRY_TOKEN: 
+2026-10-05T13:03:21.9230312Z   GH_CONFIG_DIR: 
+2026-10-05T13:03:21.9230530Z   GH_HOST: 
+2026-10-05T13:03:21.9230726Z   GH_TOKEN: 
+2026-10-05T13:03:21.9230941Z   GITHUB_TOKEN: 
+2026-10-05T13:03:21.9231152Z   MBX_GC_AUTO: 1
+2026-10-05T13:03:21.9231365Z   MBX_SHARE_OUT_DIR: 0
+2026-10-05T13:03:21.9231990Z   MISE_AUTO_INSTALL: false
+2026-10-05T13:03:21.9232254Z   MISE_EXEC_AUTO_INSTALL: false
+2026-10-05T13:03:21.9235033Z   MISE_GITHUB_TOKEN: ***
+2026-10-05T13:03:21.9235309Z   MISE_LOCKFILE: 0
+2026-10-05T13:03:21.9235542Z   MISE_NO_CONFIG: 1
+2026-10-05T13:03:21.9235762Z   MISE_NO_ENV: 1
+2026-10-05T13:03:21.9235987Z   MISE_NO_HOOKS: 1
+2026-10-05T13:03:21.9236206Z   NODE_AUTH_TOKEN: 
+2026-10-05T13:03:21.9236421Z   NPM_TOKEN: 
+2026-10-05T13:03:21.9236649Z   RUSTUP_TOOLCHAIN: 1.98.1
+2026-10-05T13:03:21.9236902Z   MISE_LOG_LEVEL: info
+2026-10-05T13:03:21.9237232Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-new/velnor-new
+2026-10-05T13:03:21.9237611Z   MISE_YES: 1
+2026-10-05T13:03:21.9237909Z   MBX_CACHE_DIR: /home/runner/work/_temp/velnor/mbx
+2026-10-05T13:03:21.9238242Z   MBX_CACHE_LINKS: 1
+2026-10-05T13:03:21.9238663Z   MBX_CACHE_EXPORT_GROUP: github-actions-37313809457-1-927df0e3-4dfe-4e89-bc1f-fae4944f3eb8
+2026-10-05T13:03:21.9239170Z   MISE_CARGO_HOME: /home/runner/work/_temp/velnor/cargo
+2026-10-05T13:03:21.9239556Z   MISE_RUSTUP_HOME: /home/runner/work/_temp/velnor/rustup
+2026-10-05T13:03:21.9239885Z ##[endgroup]
+2026-10-05T13:03:22.0626151Z    Compiling velnor-actions-contract v0.1.0 (/home/runner/work/velnor-new/velnor-new/crates/velnor-actions-contract)
+2026-10-05T13:03:22.0642958Z    Compiling velnor-actions-tofu v0.1.0 (/home/runner/work/velnor-new/velnor-new/crates/velnor-actions-tofu)
+2026-10-05T13:03:25.4126739Z    Compiling velnor-actions-actionlint v0.1.0 (/home/runner/work/velnor-new/velnor-new/crates/velnor-actions-actionlint)
+2026-10-05T13:03:25.4128234Z    Compiling velnor-actions-mise v0.1.0 (/home/runner/work/velnor-new/velnor-new/crates/velnor-actions-mise)
+2026-10-05T13:03:27.4883658Z    Compiling velnor-actions-rust v0.1.0 (/home/runner/work/velnor-new/velnor-new/crates/velnor-actions-rust)
+2026-10-05T13:03:34.7204381Z    Compiling velnor-actions-workflow-renderer v0.1.0 (/home/runner/work/velnor-new/velnor-new/crates/velnor-actions-workflow-renderer)
+2026-10-05T13:03:36.9723204Z mbx[progress]: 15s elapsed; 2 hits, 3 misses, 0 bypassed, 0 not looked up; ~149.7ms compiler work saved
+2026-10-05T13:03:40.0493488Z    Compiling velnor-actions-orchestrator v0.1.0 (/home/runner/work/velnor-new/velnor-new/crates/velnor-actions-orchestrator)
+2026-10-05T13:03:51.9743141Z mbx[progress]: 30s elapsed; 2 hits, 6 misses, 0 bypassed, 0 not looked up; ~149.7ms compiler work saved
+2026-10-05T13:04:02.2049696Z    Compiling velnor-actions-cli v0.1.0 (/home/runner/work/velnor-new/velnor-new/crates/velnor-actions-cli)
+2026-10-05T13:04:03.2881331Z     Finished `release` profile [optimized] target(s) in 41.30s
+2026-10-05T13:04:03.3102705Z mbx[cache]: object cache: 2 hits, 8 misses; 0 B downloaded, 0 B uploaded, 58.4 MiB stored locally
+2026-10-05T13:04:03.3103921Z mbx[cache]: 41.34s session; 149.7ms estimated compiler time avoided (summed across compilations)
+2026-10-05T13:04:03.3105066Z mbx[cache]: Cargo artifact reuse and CI cache archive transfers are not included above
+2026-10-05T13:04:03.3163750Z ##[group]Run sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; test -x target/release/velnor-actions && mkdir -p "$RUNNER_TEMP/velnor" && mise --no-config --no-env --no-hooks exec rust@1.98.1 -- mbx --version > "$RUNNER_TEMP/velnor/preseed-mbx-version" && grep -qxF "mbx 1.21.1" "$RUNNER_TEMP/velnor/preseed-mbx-version"'
+2026-10-05T13:04:03.3166336Z [36;1msh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; test -x target/release/velnor-actions && mkdir -p "$RUNNER_TEMP/velnor" && mise --no-config --no-env --no-hooks exec rust@1.98.1 -- mbx --version > "$RUNNER_TEMP/velnor/preseed-mbx-version" && grep -qxF "mbx 1.21.1" "$RUNNER_TEMP/velnor/preseed-mbx-version"'[0m
+2026-10-05T13:04:03.3232966Z shell: /usr/bin/bash -e {0}
+2026-10-05T13:04:03.3233248Z env:
+2026-10-05T13:04:03.3233512Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+2026-10-05T13:04:03.3233991Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+2026-10-05T13:04:03.3234264Z   ACTIONS_RUNTIME_TOKEN: 
+2026-10-05T13:04:03.3234508Z   CARGO_REGISTRY_TOKEN: 
+2026-10-05T13:04:03.3234742Z   GH_CONFIG_DIR: 
+2026-10-05T13:04:03.3234966Z   GH_HOST: 
+2026-10-05T13:04:03.3235166Z   GH_TOKEN: 
+2026-10-05T13:04:03.3235367Z   GITHUB_TOKEN: 
+2026-10-05T13:04:03.3235588Z   MBX_GC_AUTO: 1
+2026-10-05T13:04:03.3235809Z   MBX_SHARE_OUT_DIR: 0
+2026-10-05T13:04:03.3236048Z   MISE_AUTO_INSTALL: false
+2026-10-05T13:04:03.3236303Z   MISE_EXEC_AUTO_INSTALL: false
+2026-10-05T13:04:03.3239174Z   MISE_GITHUB_TOKEN: ***
+2026-10-05T13:04:03.3239445Z   MISE_LOCKFILE: 0
+2026-10-05T13:04:03.3239676Z   MISE_NO_CONFIG: 1
+2026-10-05T13:04:03.3239900Z   MISE_NO_ENV: 1
+2026-10-05T13:04:03.3240112Z   MISE_NO_HOOKS: 1
+2026-10-05T13:04:03.3240326Z   NODE_AUTH_TOKEN: 
+2026-10-05T13:04:03.3240548Z   NPM_TOKEN: 
+2026-10-05T13:04:03.3240767Z   RUSTUP_TOOLCHAIN: 1.98.1
+2026-10-05T13:04:03.3241031Z   MISE_LOG_LEVEL: info
+2026-10-05T13:04:03.3241376Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-new/velnor-new
+2026-10-05T13:04:03.3242051Z   MISE_YES: 1
+2026-10-05T13:04:03.3242318Z   MBX_CACHE_DIR: /home/runner/work/_temp/velnor/mbx
+2026-10-05T13:04:03.3242628Z   MBX_CACHE_LINKS: 1
+2026-10-05T13:04:03.3243042Z   MBX_CACHE_EXPORT_GROUP: github-actions-37313809457-1-927df0e3-4dfe-4e89-bc1f-fae4944f3eb8
+2026-10-05T13:04:03.3243549Z   MISE_CARGO_HOME: /home/runner/work/_temp/velnor/cargo
+2026-10-05T13:04:03.3243921Z   MISE_RUSTUP_HOME: /home/runner/work/_temp/velnor/rustup
+2026-10-05T13:04:03.3244250Z ##[endgroup]
+2026-10-05T13:04:03.3490726Z ##[group]Run env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR target/release/velnor-actions
+2026-10-05T13:04:03.3492528Z [36;1menv -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR target/release/velnor-actions[0m
+2026-10-05T13:04:03.3553480Z shell: /usr/bin/bash -e {0}
+2026-10-05T13:04:03.3553772Z env:
+2026-10-05T13:04:03.3553994Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+2026-10-05T13:04:03.3554283Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+2026-10-05T13:04:03.3554567Z   ACTIONS_RUNTIME_TOKEN: 
+2026-10-05T13:04:03.3554812Z   CARGO_REGISTRY_TOKEN: 
+2026-10-05T13:04:03.3555052Z   GH_CONFIG_DIR: 
+2026-10-05T13:04:03.3555267Z   GH_HOST: 
+2026-10-05T13:04:03.3555463Z   GH_TOKEN: 
+2026-10-05T13:04:03.3555672Z   GITHUB_TOKEN: 
+2026-10-05T13:04:03.3555919Z   MBX_GC_AUTO: 1
+2026-10-05T13:04:03.3556141Z   MBX_SHARE_OUT_DIR: 0
+2026-10-05T13:04:03.3556385Z   MISE_AUTO_INSTALL: false
+2026-10-05T13:04:03.3556647Z   MISE_EXEC_AUTO_INSTALL: false
+2026-10-05T13:04:03.3559394Z   MISE_GITHUB_TOKEN: ***
+2026-10-05T13:04:03.3559663Z   MISE_LOCKFILE: 0
+2026-10-05T13:04:03.3559896Z   MISE_NO_CONFIG: 1
+2026-10-05T13:04:03.3560123Z   MISE_NO_ENV: 1
+2026-10-05T13:04:03.3560336Z   MISE_NO_HOOKS: 1
+2026-10-05T13:04:03.3560565Z   NODE_AUTH_TOKEN: 
+2026-10-05T13:04:03.3560775Z   NPM_TOKEN: 
+2026-10-05T13:04:03.3560990Z   RUSTUP_TOOLCHAIN: 1.98.1
+2026-10-05T13:04:03.3561242Z   MISE_LOG_LEVEL: info
+2026-10-05T13:04:03.3561574Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-new/velnor-new
+2026-10-05T13:04:03.3562154Z   MISE_YES: 1
+2026-10-05T13:04:03.3562417Z   MBX_CACHE_DIR: /home/runner/work/_temp/velnor/mbx
+2026-10-05T13:04:03.3562730Z   MBX_CACHE_LINKS: 1
+2026-10-05T13:04:03.3563147Z   MBX_CACHE_EXPORT_GROUP: github-actions-37313809457-1-927df0e3-4dfe-4e89-bc1f-fae4944f3eb8
+2026-10-05T13:04:03.3563646Z   VELNOR_INTERNAL_OP: write-preseed-manifest-v1
+2026-10-05T13:04:03.3564011Z   VELNOR_PRESEED_BINARY: target/release/velnor-actions
+2026-10-05T13:04:03.3564429Z   VELNOR_PRESEED_OUT: /home/runner/work/_temp/velnor/preseed-output
+2026-10-05T13:04:03.3564821Z   VELNOR_PRESEED_TARGET: x86_64-unknown-linux-gnu
+2026-10-05T13:04:03.3565163Z   VELNOR_PRESEED_TOOLCHAIN: rust@1.98.1
+2026-10-05T13:04:03.3565637Z ##[endgroup]
+2026-10-05T13:04:03.3931416Z ##[group]Run actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+2026-10-05T13:04:03.3932149Z with:
+2026-10-05T13:04:03.3932407Z   if-no-files-found: error
+2026-10-05T13:04:03.3932693Z   name: velnor-preseed-helper
+2026-10-05T13:04:03.3933015Z   path: /home/runner/work/_temp/velnor/preseed-output
+2026-10-05T13:04:03.3933369Z   retention-days: 30
+2026-10-05T13:04:03.3933611Z   compression-level: 6
+2026-10-05T13:04:03.3933846Z   overwrite: false
+2026-10-05T13:04:03.3934090Z   include-hidden-files: false
+2026-10-05T13:04:03.3934347Z   archive: true
+2026-10-05T13:04:03.3934562Z env:
+2026-10-05T13:04:03.3934793Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+2026-10-05T13:04:03.3935085Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+2026-10-05T13:04:03.3935363Z   ACTIONS_RUNTIME_TOKEN: 
+2026-10-05T13:04:03.3935613Z   CARGO_REGISTRY_TOKEN: 
+2026-10-05T13:04:03.3935852Z   GH_CONFIG_DIR: 
+2026-10-05T13:04:03.3936076Z   GH_HOST: 
+2026-10-05T13:04:03.3936282Z   GH_TOKEN: 
+2026-10-05T13:04:03.3936545Z   GITHUB_TOKEN: 
+2026-10-05T13:04:03.3936765Z   MBX_GC_AUTO: 1
+2026-10-05T13:04:03.3936980Z   MBX_SHARE_OUT_DIR: 0
+2026-10-05T13:04:03.3937224Z   MISE_AUTO_INSTALL: false
+2026-10-05T13:04:03.3937476Z   MISE_EXEC_AUTO_INSTALL: false
+2026-10-05T13:04:03.3940229Z   MISE_GITHUB_TOKEN: ***
+2026-10-05T13:04:03.3940497Z   MISE_LOCKFILE: 0
+2026-10-05T13:04:03.3940731Z   MISE_NO_CONFIG: 1
+2026-10-05T13:04:03.3940956Z   MISE_NO_ENV: 1
+2026-10-05T13:04:03.3941183Z   MISE_NO_HOOKS: 1
+2026-10-05T13:04:03.3941404Z   NODE_AUTH_TOKEN: 
+2026-10-05T13:04:03.3941622Z   NPM_TOKEN: 
+2026-10-05T13:04:03.3942136Z   RUSTUP_TOOLCHAIN: 1.98.1
+2026-10-05T13:04:03.3942399Z   MISE_LOG_LEVEL: info
+2026-10-05T13:04:03.3942739Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-new/velnor-new
+2026-10-05T13:04:03.3943123Z   MISE_YES: 1
+2026-10-05T13:04:03.3943386Z   MBX_CACHE_DIR: /home/runner/work/_temp/velnor/mbx
+2026-10-05T13:04:03.3943716Z   MBX_CACHE_LINKS: 1
+2026-10-05T13:04:03.3944142Z   MBX_CACHE_EXPORT_GROUP: github-actions-37313809457-1-927df0e3-4dfe-4e89-bc1f-fae4944f3eb8
+2026-10-05T13:04:03.3944610Z ##[endgroup]
+2026-10-05T13:04:03.5394037Z With the provided path, there will be 2 files uploaded
+2026-10-05T13:04:03.5412655Z Artifact name is valid!
+2026-10-05T13:04:03.5413120Z Root directory input is valid!
+2026-10-05T13:04:03.8111898Z Uploading artifact: velnor-preseed-helper.zip
+2026-10-05T13:04:03.8150115Z Beginning upload of artifact content to blob storage
+2026-10-05T13:04:04.5461568Z Uploaded bytes 3592743
+2026-10-05T13:04:04.5797262Z Finished uploading artifact content to blob storage!
+2026-10-05T13:04:04.5798045Z SHA256 digest of uploaded artifact is 4adfba103cc847ea8af882b44c3cf862995660f09e3187517339297f68444bae
+2026-10-05T13:04:04.5798933Z Finalizing artifact upload
+2026-10-05T13:04:04.8408929Z Artifact velnor-preseed-helper successfully finalized. Artifact ID 11347670022
+2026-10-05T13:04:04.8409973Z Artifact velnor-preseed-helper has been successfully uploaded! Final size is 3592743 bytes. Artifact ID is 11347670022
+2026-10-05T13:04:04.8413233Z Artifact download URL: https://github.com/tailrocks/velnor-new/actions/runs/37313809457/artifacts/11347670022
+2026-10-05T13:04:04.8564237Z ##[group]Run sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p $RUNNER_TEMP/velnor/bin && cp target/release/velnor-actions $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0 && chmod +x $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0'
+2026-10-05T13:04:04.8567571Z [36;1msh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p $RUNNER_TEMP/velnor/bin && cp target/release/velnor-actions $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0 && chmod +x $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0'[0m
+2026-10-05T13:04:04.8642247Z shell: /usr/bin/bash -e {0}
+2026-10-05T13:04:04.8642543Z env:
+2026-10-05T13:04:04.8642780Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+2026-10-05T13:04:04.8643279Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+2026-10-05T13:04:04.8643568Z   ACTIONS_RUNTIME_TOKEN: 
+2026-10-05T13:04:04.8643869Z   CARGO_REGISTRY_TOKEN: 
+2026-10-05T13:04:04.8644120Z   GH_CONFIG_DIR: 
+2026-10-05T13:04:04.8644360Z   GH_HOST: 
+2026-10-05T13:04:04.8644566Z   GH_TOKEN: 
+2026-10-05T13:04:04.8644800Z   GITHUB_TOKEN: 
+2026-10-05T13:04:04.8645023Z   MBX_GC_AUTO: 1
+2026-10-05T13:04:04.8645259Z   MBX_SHARE_OUT_DIR: 0
+2026-10-05T13:04:04.8645503Z   MISE_AUTO_INSTALL: false
+2026-10-05T13:04:04.8645774Z   MISE_EXEC_AUTO_INSTALL: false
+2026-10-05T13:04:04.8648595Z   MISE_GITHUB_TOKEN: ***
+2026-10-05T13:04:04.8648874Z   MISE_LOCKFILE: 0
+2026-10-05T13:04:04.8649109Z   MISE_NO_CONFIG: 1
+2026-10-05T13:04:04.8649329Z   MISE_NO_ENV: 1
+2026-10-05T13:04:04.8649552Z   MISE_NO_HOOKS: 1
+2026-10-05T13:04:04.8649763Z   NODE_AUTH_TOKEN: 
+2026-10-05T13:04:04.8649984Z   NPM_TOKEN: 
+2026-10-05T13:04:04.8650203Z   RUSTUP_TOOLCHAIN: 1.98.1
+2026-10-05T13:04:04.8650459Z   MISE_LOG_LEVEL: info
+2026-10-05T13:04:04.8650806Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-new/velnor-new
+2026-10-05T13:04:04.8651189Z   MISE_YES: 1
+2026-10-05T13:04:04.8651439Z   MBX_CACHE_DIR: /home/runner/work/_temp/velnor/mbx
+2026-10-05T13:04:04.8651876Z   MBX_CACHE_LINKS: 1
+2026-10-05T13:04:04.8652295Z   MBX_CACHE_EXPORT_GROUP: github-actions-37313809457-1-927df0e3-4dfe-4e89-bc1f-fae4944f3eb8
+2026-10-05T13:04:04.8652793Z ##[endgroup]
+2026-10-05T13:04:04.9524211Z ##[group]Run actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+2026-10-05T13:04:04.9524634Z with:
+2026-10-05T13:04:04.9525172Z   key: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-80c489f79741a2c354ddda04d3166db39b51a23a12d42e952de96ea98e5583af
+2026-10-05T13:04:04.9526563Z   path: /home/runner/work/_temp/velnor/cargo/.crates.toml
+/home/runner/work/_temp/velnor/cargo/.crates2.json
+/home/runner/work/_temp/velnor/cargo/bin
+/home/runner/work/_temp/velnor/cargo/registry/index
+/home/runner/work/_temp/velnor/cargo/registry/cache
+/home/runner/work/_temp/velnor/cargo/git/db
+2026-10-05T13:04:04.9527693Z   enableCrossOsArchive: false
+2026-10-05T13:04:04.9527964Z env:
+2026-10-05T13:04:04.9528192Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+2026-10-05T13:04:04.9528500Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+2026-10-05T13:04:04.9528768Z   ACTIONS_RUNTIME_TOKEN: 
+2026-10-05T13:04:04.9529027Z   CARGO_REGISTRY_TOKEN: 
+2026-10-05T13:04:04.9529270Z   GH_CONFIG_DIR: 
+2026-10-05T13:04:04.9529535Z   GH_HOST: 
+2026-10-05T13:04:04.9529777Z   GH_TOKEN: 
+2026-10-05T13:04:04.9529999Z   GITHUB_TOKEN: 
+2026-10-05T13:04:04.9530288Z   MBX_GC_AUTO: 1
+2026-10-05T13:04:04.9530545Z   MBX_SHARE_OUT_DIR: 0
+2026-10-05T13:04:04.9530812Z   MISE_AUTO_INSTALL: false
+2026-10-05T13:04:04.9531084Z   MISE_EXEC_AUTO_INSTALL: false
+2026-10-05T13:04:04.9534347Z   MISE_GITHUB_TOKEN: ***
+2026-10-05T13:04:04.9534641Z   MISE_LOCKFILE: 0
+2026-10-05T13:04:04.9534882Z   MISE_NO_CONFIG: 1
+2026-10-05T13:04:04.9535112Z   MISE_NO_ENV: 1
+2026-10-05T13:04:04.9535327Z   MISE_NO_HOOKS: 1
+2026-10-05T13:04:04.9535562Z   NODE_AUTH_TOKEN: 
+2026-10-05T13:04:04.9535780Z   NPM_TOKEN: 
+2026-10-05T13:04:04.9536011Z   RUSTUP_TOOLCHAIN: 1.98.1
+2026-10-05T13:04:04.9536279Z   MISE_LOG_LEVEL: info
+2026-10-05T13:04:04.9536625Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-new/velnor-new
+2026-10-05T13:04:04.9537006Z   MISE_YES: 1
+2026-10-05T13:04:04.9537256Z   MBX_CACHE_DIR: /home/runner/work/_temp/velnor/mbx
+2026-10-05T13:04:04.9537581Z   MBX_CACHE_LINKS: 1
+2026-10-05T13:04:04.9538000Z   MBX_CACHE_EXPORT_GROUP: github-actions-37313809457-1-927df0e3-4dfe-4e89-bc1f-fae4944f3eb8
+2026-10-05T13:04:04.9538465Z ##[endgroup]
+2026-10-05T13:04:05.0946982Z [command]/usr/bin/tar --posix -cf cache.tzst --exclude cache.tzst -P -C /home/runner/work/velnor-new/velnor-new --files-from manifest.txt --use-compress-program zstdmt
+2026-10-05T13:04:05.4573424Z Failed to save: Unable to reserve cache with key velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-80c489f79741a2c354ddda04d3166db39b51a23a12d42e952de96ea98e5583af, another job may be creating this cache.
+2026-10-05T13:04:05.4719346Z ##[group]Run "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0"
+2026-10-05T13:04:05.4719828Z [36;1m"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0"[0m
+2026-10-05T13:04:05.4784699Z shell: /usr/bin/bash -e {0}
+2026-10-05T13:04:05.4784979Z env:
+2026-10-05T13:04:05.4785208Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+2026-10-05T13:04:05.4785502Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+2026-10-05T13:04:05.4785772Z   ACTIONS_RUNTIME_TOKEN: 
+2026-10-05T13:04:05.4786026Z   CARGO_REGISTRY_TOKEN: 
+2026-10-05T13:04:05.4786267Z   GH_CONFIG_DIR: 
+2026-10-05T13:04:05.4786494Z   GH_HOST: 
+2026-10-05T13:04:05.4786700Z   GH_TOKEN: 
+2026-10-05T13:04:05.4786919Z   GITHUB_TOKEN: 
+2026-10-05T13:04:05.4787136Z   MBX_GC_AUTO: 1
+2026-10-05T13:04:05.4787357Z   MBX_SHARE_OUT_DIR: 0
+2026-10-05T13:04:05.4787608Z   MISE_AUTO_INSTALL: false
+2026-10-05T13:04:05.4787865Z   MISE_EXEC_AUTO_INSTALL: false
+2026-10-05T13:04:05.4790665Z   MISE_GITHUB_TOKEN: ***
+2026-10-05T13:04:05.4790939Z   MISE_LOCKFILE: 0
+2026-10-05T13:04:05.4791226Z   MISE_NO_CONFIG: 1
+2026-10-05T13:04:05.4791456Z   MISE_NO_ENV: 1
+2026-10-05T13:04:05.4791683Z   MISE_NO_HOOKS: 1
+2026-10-05T13:04:05.4792083Z   NODE_AUTH_TOKEN: 
+2026-10-05T13:04:05.4792315Z   NPM_TOKEN: 
+2026-10-05T13:04:05.4792540Z   RUSTUP_TOOLCHAIN: 1.98.1
+2026-10-05T13:04:05.4792807Z   MISE_LOG_LEVEL: info
+2026-10-05T13:04:05.4793150Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-new/velnor-new
+2026-10-05T13:04:05.4793529Z   MISE_YES: 1
+2026-10-05T13:04:05.4793787Z   MBX_CACHE_DIR: /home/runner/work/_temp/velnor/mbx
+2026-10-05T13:04:05.4794108Z   MBX_CACHE_LINKS: 1
+2026-10-05T13:04:05.4794529Z   MBX_CACHE_EXPORT_GROUP: github-actions-37313809457-1-927df0e3-4dfe-4e89-bc1f-fae4944f3eb8
+2026-10-05T13:04:05.4795017Z   VELNOR_INTERNAL_OP: write-request-v1
+2026-10-05T13:04:05.4795450Z   VELNOR_REQUEST_FILE: /home/runner/work/_temp/velnor/request/plan-v1-request.json
+2026-10-05T13:04:05.4795870Z ##[endgroup]
+2026-10-05T13:04:05.4924865Z ##[group]Run sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0 generate --output-dir "$RUNNER_TEMP/velnor-actions-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" && diff -r --brief .github "$RUNNER_TEMP/velnor-actions-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}/.github"'
+2026-10-05T13:04:05.4927459Z [36;1msh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0 generate --output-dir "$RUNNER_TEMP/velnor-actions-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" && diff -r --brief .github "$RUNNER_TEMP/velnor-actions-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}/.github"'[0m
+2026-10-05T13:04:05.4988165Z shell: /usr/bin/bash -e {0}
+2026-10-05T13:04:05.4988455Z env:
+2026-10-05T13:04:05.4988736Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+2026-10-05T13:04:05.4989137Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+2026-10-05T13:04:05.4989431Z   ACTIONS_RUNTIME_TOKEN: 
+2026-10-05T13:04:05.4989769Z   CARGO_REGISTRY_TOKEN: 
+2026-10-05T13:04:05.4990041Z   GH_CONFIG_DIR: 
+2026-10-05T13:04:05.4990265Z   GH_HOST: 
+2026-10-05T13:04:05.4990526Z   GH_TOKEN: 
+2026-10-05T13:04:05.5003065Z   GITHUB_TOKEN: 
+2026-10-05T13:04:05.5003367Z   MBX_GC_AUTO: 1
+2026-10-05T13:04:05.5003600Z   MBX_SHARE_OUT_DIR: 0
+2026-10-05T13:04:05.5003852Z   MISE_AUTO_INSTALL: false
+2026-10-05T13:04:05.5004133Z   MISE_EXEC_AUTO_INSTALL: false
+2026-10-05T13:04:05.5006929Z   MISE_GITHUB_TOKEN: ***
+2026-10-05T13:04:05.5007217Z   MISE_LOCKFILE: 0
+2026-10-05T13:04:05.5007449Z   MISE_NO_CONFIG: 1
+2026-10-05T13:04:05.5007676Z   MISE_NO_ENV: 1
+2026-10-05T13:04:05.5007892Z   MISE_NO_HOOKS: 1
+2026-10-05T13:04:05.5008114Z   NODE_AUTH_TOKEN: 
+2026-10-05T13:04:05.5008333Z   NPM_TOKEN: 
+2026-10-05T13:04:05.5008565Z   RUSTUP_TOOLCHAIN: 1.98.1
+2026-10-05T13:04:05.5008819Z   MISE_LOG_LEVEL: info
+2026-10-05T13:04:05.5009174Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-new/velnor-new
+2026-10-05T13:04:05.5009791Z   MISE_YES: 1
+2026-10-05T13:04:05.5010054Z   MBX_CACHE_DIR: /home/runner/work/_temp/velnor/mbx
+2026-10-05T13:04:05.5010376Z   MBX_CACHE_LINKS: 1
+2026-10-05T13:04:05.5010812Z   MBX_CACHE_EXPORT_GROUP: github-actions-37313809457-1-927df0e3-4dfe-4e89-bc1f-fae4944f3eb8
+2026-10-05T13:04:05.5011342Z   MISE_CARGO_HOME: /home/runner/work/_temp/velnor/cargo
+2026-10-05T13:04:05.5011863Z   MISE_RUSTUP_HOME: /home/runner/work/_temp/velnor/rustup
+2026-10-05T13:04:05.5012198Z ##[endgroup]
+2026-10-05T13:04:08.1523210Z Preview: /home/runner/work/_temp/velnor-actions-37313809457-1
+2026-10-05T13:04:08.1523712Z Repository: /home/runner/work/velnor-new/velnor-new
+2026-10-05T13:04:08.1524076Z .github/AGENTS.md
+2026-10-05T13:04:08.1524304Z .github/CLAUDE.md
+2026-10-05T13:04:08.1524729Z .github/actionlint.yaml
+2026-10-05T13:04:08.1525046Z .github/actions/velnor-tool-seed/action.yml
+2026-10-05T13:04:08.1525462Z .github/workflows/ci.yml
+2026-10-05T13:04:08.1525797Z .github/workflows/freshness.yml
+2026-10-05T13:04:08.1526156Z .github/workflows/generator-release.yml
+2026-10-05T13:04:08.1526518Z .github/workflows/image-release.yml
+2026-10-05T13:04:08.1526873Z .github/workflows/macos-binary-release.yml
+2026-10-05T13:04:08.1527233Z .github/workflows/qualification.yml
+2026-10-05T13:04:08.1527584Z mise.lock not found; Velnor will not create or refresh it
+2026-10-05T13:04:08.1528034Z mise.toml is read-only input; Velnor never modifies it
+2026-10-05T13:04:08.1528482Z rust-toolchain.toml not found; Velnor will not create it
+2026-10-05T13:04:08.1529304Z shadowed_nextest_config: .config/nextest.toml shadowed by crates/velnor-runner/.config/nextest.toml; profile selected from crates/velnor-runner/.config/nextest.toml
+2026-10-05T13:04:08.1531024Z tool_install_unverified:8 installs skip verification (no mise.lock): actionlint@1.7.12, cargo-deny@0.20.2, gh@2.102.0, nextest@0.9.146, opentofu@1.13.1, rust@1.98.1, shellcheck@0.11.0, zizmor@1.30.1; install on the CI platform and commit the resulting lock
+2026-10-05T13:04:08.1600780Z ##[group]Run "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0"
+2026-10-05T13:04:08.1601254Z [36;1m"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0"[0m
+2026-10-05T13:04:08.1666426Z shell: /usr/bin/bash -e {0}
+2026-10-05T13:04:08.1666722Z env:
+2026-10-05T13:04:08.1666960Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+2026-10-05T13:04:08.1667264Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+2026-10-05T13:04:08.1667543Z   ACTIONS_RUNTIME_TOKEN: 
+2026-10-05T13:04:08.1667799Z   CARGO_REGISTRY_TOKEN: 
+2026-10-05T13:04:08.1668048Z   GH_CONFIG_DIR: 
+2026-10-05T13:04:08.1668272Z   GH_HOST: 
+2026-10-05T13:04:08.1670953Z   GH_TOKEN: ***
+2026-10-05T13:04:08.1671198Z   GITHUB_TOKEN: 
+2026-10-05T13:04:08.1671433Z   MBX_GC_AUTO: 1
+2026-10-05T13:04:08.1671656Z   MBX_SHARE_OUT_DIR: 0
+2026-10-05T13:04:08.1672127Z   MISE_AUTO_INSTALL: false
+2026-10-05T13:04:08.1672402Z   MISE_EXEC_AUTO_INSTALL: false
+2026-10-05T13:04:08.1675063Z   MISE_GITHUB_TOKEN: ***
+2026-10-05T13:04:08.1675325Z   MISE_LOCKFILE: 0
+2026-10-05T13:04:08.1675595Z   MISE_NO_CONFIG: 1
+2026-10-05T13:04:08.1675829Z   MISE_NO_ENV: 1
+2026-10-05T13:04:08.1676055Z   MISE_NO_HOOKS: 1
+2026-10-05T13:04:08.1676274Z   NODE_AUTH_TOKEN: 
+2026-10-05T13:04:08.1676499Z   NPM_TOKEN: 
+2026-10-05T13:04:08.1676725Z   RUSTUP_TOOLCHAIN: 1.98.1
+2026-10-05T13:04:08.1676979Z   MISE_LOG_LEVEL: info
+2026-10-05T13:04:08.1677315Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-new/velnor-new
+2026-10-05T13:04:08.1677706Z   MISE_YES: 1
+2026-10-05T13:04:08.1677955Z   MBX_CACHE_DIR: /home/runner/work/_temp/velnor/mbx
+2026-10-05T13:04:08.1678280Z   MBX_CACHE_LINKS: 1
+2026-10-05T13:04:08.1678700Z   MBX_CACHE_EXPORT_GROUP: github-actions-37313809457-1-927df0e3-4dfe-4e89-bc1f-fae4944f3eb8
+2026-10-05T13:04:08.1679184Z   GH_REPO: tailrocks/velnor-new
+2026-10-05T13:04:08.1679467Z   VELNOR_INTERNAL_OP: plan-v1
+2026-10-05T13:04:08.1679872Z   VELNOR_REQUEST_FILE: /home/runner/work/_temp/velnor/request/plan-v1-request.json
+2026-10-05T13:04:08.1680351Z   MISE_CARGO_HOME: /home/runner/work/_temp/velnor/cargo
+2026-10-05T13:04:08.1680982Z   MISE_RUSTUP_HOME: /home/runner/work/_temp/velnor/rustup
+2026-10-05T13:04:08.1681329Z ##[endgroup]
+2026-10-05T13:04:17.7169624Z ##[group]Run actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+2026-10-05T13:04:17.7170080Z with:
+2026-10-05T13:04:17.7170312Z   if-no-files-found: error
+2026-10-05T13:04:17.7170598Z   name: velnor-plan-r37313809457-a1
+2026-10-05T13:04:17.7170937Z   path: /home/runner/work/_temp/velnor/r37313809457-a1
+2026-10-05T13:04:17.7171284Z   retention-days: 30
+2026-10-05T13:04:17.7171534Z   compression-level: 6
+2026-10-05T13:04:17.7172086Z   overwrite: false
+2026-10-05T13:04:17.7172374Z   include-hidden-files: false
+2026-10-05T13:04:17.7172647Z   archive: true
+2026-10-05T13:04:17.7172871Z env:
+2026-10-05T13:04:17.7173099Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+2026-10-05T13:04:17.7173397Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+2026-10-05T13:04:17.7173674Z   ACTIONS_RUNTIME_TOKEN: 
+2026-10-05T13:04:17.7173933Z   CARGO_REGISTRY_TOKEN: 
+2026-10-05T13:04:17.7174202Z   GH_CONFIG_DIR: 
+2026-10-05T13:04:17.7174426Z   GH_HOST: 
+2026-10-05T13:04:17.7174633Z   GH_TOKEN: 
+2026-10-05T13:04:17.7174874Z   GITHUB_TOKEN: 
+2026-10-05T13:04:17.7175092Z   MBX_GC_AUTO: 1
+2026-10-05T13:04:17.7175314Z   MBX_SHARE_OUT_DIR: 0
+2026-10-05T13:04:17.7175555Z   MISE_AUTO_INSTALL: false
+2026-10-05T13:04:17.7175819Z   MISE_EXEC_AUTO_INSTALL: false
+2026-10-05T13:04:17.7178591Z   MISE_GITHUB_TOKEN: ***
+2026-10-05T13:04:17.7178869Z   MISE_LOCKFILE: 0
+2026-10-05T13:04:17.7179110Z   MISE_NO_CONFIG: 1
+2026-10-05T13:04:17.7179336Z   MISE_NO_ENV: 1
+2026-10-05T13:04:17.7179565Z   MISE_NO_HOOKS: 1
+2026-10-05T13:04:17.7179789Z   NODE_AUTH_TOKEN: 
+2026-10-05T13:04:17.7180017Z   NPM_TOKEN: 
+2026-10-05T13:04:17.7180245Z   RUSTUP_TOOLCHAIN: 1.98.1
+2026-10-05T13:04:17.7180513Z   MISE_LOG_LEVEL: info
+2026-10-05T13:04:17.7180858Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-new/velnor-new
+2026-10-05T13:04:17.7181252Z   MISE_YES: 1
+2026-10-05T13:04:17.7181529Z   MBX_CACHE_DIR: /home/runner/work/_temp/velnor/mbx
+2026-10-05T13:04:17.7182106Z   MBX_CACHE_LINKS: 1
+2026-10-05T13:04:17.7182539Z   MBX_CACHE_EXPORT_GROUP: github-actions-37313809457-1-927df0e3-4dfe-4e89-bc1f-fae4944f3eb8
+2026-10-05T13:04:17.7183005Z ##[endgroup]
+2026-10-05T13:04:17.8645045Z With the provided path, there will be 2 files uploaded
+2026-10-05T13:04:17.8645899Z Artifact name is valid!
+2026-10-05T13:04:17.8646301Z Root directory input is valid!
+2026-10-05T13:04:18.1454184Z Uploading artifact: velnor-plan-r37313809457-a1.zip
+2026-10-05T13:04:18.1494326Z Beginning upload of artifact content to blob storage
+2026-10-05T13:04:18.2895002Z Uploaded bytes 38223
+2026-10-05T13:04:18.3175582Z Finished uploading artifact content to blob storage!
+2026-10-05T13:04:18.3176655Z SHA256 digest of uploaded artifact is ae0ad82bbbc57558c8d9b4d2179b38936b0418c9640746d1bb7736713f594853
+2026-10-05T13:04:18.3177594Z Finalizing artifact upload
+2026-10-05T13:04:18.6014921Z Artifact velnor-plan-r37313809457-a1 successfully finalized. Artifact ID 11346519727
+2026-10-05T13:04:18.6016319Z Artifact velnor-plan-r37313809457-a1 has been successfully uploaded! Final size is 38223 bytes. Artifact ID is 11346519727
+2026-10-05T13:04:18.6019391Z Artifact download URL: https://github.com/tailrocks/velnor-new/actions/runs/37313809457/artifacts/11346519727
+2026-10-05T13:04:18.6168440Z ##[group]Run actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+2026-10-05T13:04:18.6168859Z with:
+2026-10-05T13:04:18.6169184Z   key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-ccc5d847fd871b3b
+2026-10-05T13:04:18.6169574Z   path: ~/.local/share/mise
+2026-10-05T13:04:18.6169847Z   enableCrossOsArchive: false
+2026-10-05T13:04:18.6170119Z env:
+2026-10-05T13:04:18.6170354Z   ACTIONS_ID_TOKEN_REQUEST_TOKEN: 
+2026-10-05T13:04:18.6170647Z   ACTIONS_ID_TOKEN_REQUEST_URL: 
+2026-10-05T13:04:18.6170926Z   ACTIONS_RUNTIME_TOKEN: 
+2026-10-05T13:04:18.6171188Z   CARGO_REGISTRY_TOKEN: 
+2026-10-05T13:04:18.6171433Z   GH_CONFIG_DIR: 
+2026-10-05T13:04:18.6171664Z   GH_HOST: 
+2026-10-05T13:04:18.6172143Z   GH_TOKEN: 
+2026-10-05T13:04:18.6172575Z   GITHUB_TOKEN: 
+2026-10-05T13:04:18.6172811Z   MBX_GC_AUTO: 1
+2026-10-05T13:04:18.6173038Z   MBX_SHARE_OUT_DIR: 0
+2026-10-05T13:04:18.6173290Z   MISE_AUTO_INSTALL: false
+2026-10-05T13:04:18.6173559Z   MISE_EXEC_AUTO_INSTALL: false
+2026-10-05T13:04:18.6176506Z   MISE_GITHUB_TOKEN: ***
+2026-10-05T13:04:18.6176786Z   MISE_LOCKFILE: 0
+2026-10-05T13:04:18.6177026Z   MISE_NO_CONFIG: 1
+2026-10-05T13:04:18.6177257Z   MISE_NO_ENV: 1
+2026-10-05T13:04:18.6177479Z   MISE_NO_HOOKS: 1
+2026-10-05T13:04:18.6177705Z   NODE_AUTH_TOKEN: 
+2026-10-05T13:04:18.6177930Z   NPM_TOKEN: 
+2026-10-05T13:04:18.6178159Z   RUSTUP_TOOLCHAIN: 1.98.1
+2026-10-05T13:04:18.6178427Z   MISE_LOG_LEVEL: info
+2026-10-05T13:04:18.6178777Z   MISE_TRUSTED_CONFIG_PATHS: /home/runner/work/velnor-new/velnor-new
+2026-10-05T13:04:18.6179156Z   MISE_YES: 1
+2026-10-05T13:04:18.6179414Z   MBX_CACHE_DIR: /home/runner/work/_temp/velnor/mbx
+2026-10-05T13:04:18.6179743Z   MBX_CACHE_LINKS: 1
+2026-10-05T13:04:18.6180168Z   MBX_CACHE_EXPORT_GROUP: github-actions-37313809457-1-927df0e3-4dfe-4e89-bc1f-fae4944f3eb8
+2026-10-05T13:04:18.6180650Z ##[endgroup]
+2026-10-05T13:04:18.7623416Z [command]/usr/bin/tar --posix -cf cache.tzst --exclude cache.tzst -P -C /home/runner/work/velnor-new/velnor-new --files-from manifest.txt --use-compress-program zstdmt
+2026-10-05T13:04:19.5277028Z Failed to save: Unable to reserve cache with key mise-v1-x86_64-unknown-linux-gnu-2026.9.18-ccc5d847fd871b3b, another job may be creating this cache.
+2026-10-05T13:04:19.5534850Z Post job cleanup.
+2026-10-05T13:04:19.6810274Z [command]/opt/hostedtoolcache/mbx-780ccb52aa3a95ac1b0ee0ecf5184561b1a4bdf1fe88180333dc0e11a92980f5/1.21.1/x64/mbx cache export --group github-actions-37313809457-1-927df0e3-4dfe-4e89-bc1f-fae4944f3eb8 --format directory /home/runner/work/_temp/velnor/mbx/actions/github-actions-cache-v1
+2026-10-05T13:04:19.9586068Z exported 9 actions and 227 objects (202.9 MiB) for export group "github-actions-37313809457-1-927df0e3-4dfe-4e89-bc1f-fae4944f3eb8"
+2026-10-05T13:04:19.9764678Z [command]/usr/bin/tar --posix -cf cache.tzst --exclude cache.tzst -P -C /home/runner/work/velnor-new/velnor-new --files-from manifest.txt --use-compress-program zstdmt
+2026-10-05T13:04:21.6840703Z Sent 64079101 of 64079101 (100.0%), 61.1 MBs/sec
+2026-10-05T13:04:21.9160204Z Saved mbx cache linux-x64-mbx-velnor-mbx-1.21.1-share-out-dir-disabled-v1-gc-auto-v1-action-1687e54eb349cadf61fa38b5813a77875489e8e6-lane-github-hosted-job-plan-dir-rust-39d372ba6fa2-bdb1e14509225d18b4d8ee180731825d0826c16f (ID 8518944457)
+2026-10-05T13:04:21.9338615Z Post job cleanup.
+2026-10-05T13:04:22.0213734Z [command]/usr/bin/git version
+2026-10-05T13:04:22.0271037Z git version 2.55.0
+2026-10-05T13:04:22.0307443Z Temporarily overriding HOME='/home/runner/work/_temp/5769abfd-dc4c-4d7e-befa-7480e4fc2457' before making global git config changes
+2026-10-05T13:04:22.0308992Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-05T13:04:22.0315649Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/velnor-new/velnor-new
+2026-10-05T13:04:22.0353598Z Removing SSH command configuration
+2026-10-05T13:04:22.0359410Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-05T13:04:22.0409857Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-05T13:04:22.0732370Z Removing HTTP extra header
+2026-10-05T13:04:22.0738256Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-05T13:04:22.0793510Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-05T13:04:22.1127466Z Removing includeIf entries pointing to credentials config files
+2026-10-05T13:04:22.1134844Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-05T13:04:22.1173686Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-05T13:04:22.1615693Z Evaluate and set job outputs
+2026-10-05T13:04:22.1620603Z Cleaning up orphan processes

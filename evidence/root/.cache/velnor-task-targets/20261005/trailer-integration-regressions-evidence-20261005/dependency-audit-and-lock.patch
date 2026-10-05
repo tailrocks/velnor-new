@@ -1,0 +1,66 @@
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -666,9 +666,7 @@
+ version = "0.1.0"
+ dependencies = [
+  "clap",
+- "proc-macro2",
+  "serde_json",
+- "syn 3.0.6",
+  "unicode-general-category",
+  "velnor-actions-orchestrator",
+ ]
+--- a/crates/velnor-actions-cli/Cargo.toml
++++ b/crates/velnor-actions-cli/Cargo.toml
+@@ -13,7 +13,6 @@
+ [dependencies]
+ velnor-actions-orchestrator = { version = "=0.1.0", path = "../velnor-actions-orchestrator" }
+ clap = { version = "=4.6.7", features = ["derive"] }
+-unicode-general-category = "=1.1.0"
+ 
+ [lints]
+ workspace = true
+@@ -23,9 +22,8 @@
+ path = "tests/velnor_cli.rs"
+ 
+ [dev-dependencies]
+-proc-macro2 = "=1.0.107"
+ serde_json = { workspace = true }
+-syn = { version = "=3.0.6", features = ["full", "visit"] }
++unicode-general-category = "=1.1.0"
+ 
+ [[example]]
+ name = "validate_commit_trailers"
+--- a/crates/velnor-actions-cli/tests/impl_repo_policy.rs
++++ b/crates/velnor-actions-cli/tests/impl_repo_policy.rs
+@@ -146,11 +146,11 @@
+     Ok(count)
+ }
+ 
+-/// True when `dep` is referenced from `dir` sources or tests.
++/// True when `dep` is referenced from `dir` sources, tests, or examples.
+ pub(crate) fn dep_referenced(dir: &str, dep: &str) -> Result<bool, Box<dyn Error>> {
+     let import = format!("use {dep}");
+     let path = format!("{dep}::");
+-    for area in ["src", "tests"] {
++    for area in ["src", "tests", "examples"] {
+         for file in tree_files(&format!("{dir}/{area}"), "rs")? {
+             let body = std::fs::read_to_string(&file)?;
+             if body.contains(&import) || body.contains(&path) {
+--- a/crates/velnor-actions-cli/tests/impl_repo_deps.rs
++++ b/crates/velnor-actions-cli/tests/impl_repo_deps.rs
+@@ -159,10 +159,10 @@
+     assert_test_scanner_is_test_only(dir, body, key)?;
+     assert_narrow_features(dir, key, line);
+     assert_archive_dependency_is_narrow(dir, body, key, line)?;
+-    let import_name = if key == "proc-macro2" {
+-        "proc_macro2"
+-    } else {
+-        key
++    let import_name = match key {
++        "proc-macro2" => "proc_macro2",
++        "unicode-general-category" => "unicode_general_category",
++        _ => key,
+     };
+     assert!(dep_referenced(dir, import_name)?, "{dir} never uses {key}");
+     Ok(())

@@ -1,0 +1,7 @@
+Merge remote-tracking branch 'origin/main' into impl/cache-pr30
+
+# Conflicts:
+#	.github/workflows/ci.yml
+#	crates/velnor-actions-orchestrator/tests/schema2_class_snapshot.txt
+#	crates/velnor-actions-workflow-renderer/src/document.rs
+#	fixtures/parity/multi-crate/expected/ci.yml

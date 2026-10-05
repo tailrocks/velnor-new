@@ -1,0 +1,13 @@
+   Compiling ring v0.17.14
+   Compiling rustls v0.23.45
+   Compiling rustls-webpki v0.103.15
+   Compiling ureq v3.4.2
+   Compiling velnor-actions-freshness v0.1.1 (/tmp/velnor-pr12-foundation-20261005/crates/velnor-actions-freshness)
+   Compiling velnor-actions-cli v0.1.1 (/tmp/velnor-pr12-foundation-20261005/crates/velnor-actions-cli)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.73s
+────────────
+ Nextest run ID 610f62c1-cbd2-435d-84e1-a4b603f761cb with nextest profile: default
+    Starting 1 test across 1 binary (258 tests skipped)
+        PASS [   0.115s] (1/1) velnor-actions-cli::velnor_cli impl_repo_size::size_limits_hold
+────────────
+     Summary [   0.115s] 1 test run: 1 passed, 258 skipped

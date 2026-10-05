@@ -1,0 +1,14 @@
+{
+  "branch": "refactor/build-split-dco",
+  "commit": "4043d4e42d07bd782677061f9f2a3f0872ba3219",
+  "origin": "https://github.com/jackin-project/jackin.git",
+  "parent": "fe92af75e6b0da7ee90436df0b0f9af95e1af9e3",
+  "profile_id": "4043d4e42d07",
+  "remote_ref": "refs/heads/refactor/build-split-dco",
+  "repository": "jackin-project/jackin",
+  "repository_id": 1197700841,
+  "retrieved_at_utc": "2026-10-05T13:26:12Z",
+  "schema": 1,
+  "signature_verified": false,
+  "tree": "f7e9742a175720cf59a25107101702b99d6a6db8"
+}

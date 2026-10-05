@@ -1,0 +1,7 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.07s
+────────────
+ Nextest run ID 81c7ec61-dd63-4dee-96f4-a883a13c6bc3 with nextest profile: default
+    Starting 1 test across 1 binary (247 tests skipped)
+        PASS [  14.593s] (1/1) velnor-actions-cli::velnor_cli impl_cli_release_manifest::check_release_rejects_invalid_candidate_manifests
+────────────
+     Summary [  14.594s] 1 test run: 1 passed, 247 skipped

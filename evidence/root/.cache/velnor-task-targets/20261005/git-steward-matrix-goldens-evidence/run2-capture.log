@@ -1,0 +1,3 @@
+captured nested (plan exit 0)
+FATAL: plan failed for mbx-nextest
+retaining failed golden workspace: /var/tmp/velnor-git-steward-goldens-run2/velnor-goldens-work.2H0vFk

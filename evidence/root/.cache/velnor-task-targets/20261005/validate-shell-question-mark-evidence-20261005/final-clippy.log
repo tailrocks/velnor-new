@@ -1,0 +1,17 @@
+    Checking velnor-actions-orchestrator v0.1.0 (/root/.cache/velnor-task-targets/20261005/validate-shell-question-mark-e608-20261005/crates/velnor-actions-orchestrator)
+error: item in documentation is missing backticks
+ --> crates/velnor-actions-orchestrator/src/validate_shell_shared_tests.rs:1:12
+  |
+1 | //! Pinned ShellCheck coverage for content-addressed shared scripts.
+  |            ^^^^^^^^^^
+  |
+  = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.98.0/index.html#doc_markdown
+  = note: `-D clippy::doc-markdown` implied by `-D warnings`
+  = help: to override `-D warnings` add `#[allow(clippy::doc_markdown)]`
+help: try
+  |
+1 - //! Pinned ShellCheck coverage for content-addressed shared scripts.
+1 + //! Pinned `ShellCheck` coverage for content-addressed shared scripts.
+  |
+
+error: could not compile `velnor-actions-orchestrator` (lib test) due to 1 previous error

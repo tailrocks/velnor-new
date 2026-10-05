@@ -1,0 +1,5 @@
+Only in /var/tmp/velnor-phase0-t24-main-shared-script-20261005/crates/velnor-actions-workflow-renderer/src: document_shared_scripts.rs
+Only in /var/tmp/velnor-phase0-t24-main-shared-script-20261005/crates/velnor-actions-workflow-renderer/src: document_shared_scripts_execution_support.rs
+Only in /var/tmp/velnor-phase0-t24-main-shared-script-20261005/crates/velnor-actions-workflow-renderer/src: document_shared_scripts_execution_tests.rs
+Only in /var/tmp/velnor-phase0-t24-main-shared-script-20261005/crates/velnor-actions-workflow-renderer/src: document_shared_scripts_tests.rs
+Files /var/tmp/velnor-phase0-t24-main-adaptation-20261005/crates/velnor-actions-workflow-renderer/src/render.rs and /var/tmp/velnor-phase0-t24-main-shared-script-20261005/crates/velnor-actions-workflow-renderer/src/render.rs differ

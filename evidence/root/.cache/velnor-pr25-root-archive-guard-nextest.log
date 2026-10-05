@@ -1,0 +1,78 @@
+   Compiling serde_core v1.0.229
+   Compiling serde v1.0.229
+   Compiling memchr v2.8.3
+   Compiling syn v3.0.6
+   Compiling serde_derive v1.0.229
+   Compiling thiserror-impl v2.0.21
+   Compiling serde_json v1.0.151
+   Compiling thiserror v2.0.21
+   Compiling velnor-actions-contract v0.1.1 (/root/.cache/velnor-pr25-aggregate-20261005/crates/velnor-actions-contract)
+   Compiling velnor-actions-workflow-renderer v0.1.1 (/root/.cache/velnor-pr25-aggregate-20261005/crates/velnor-actions-workflow-renderer)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 8.38s
+────────────
+ Nextest run ID 077ad30c-05ca-4628-9532-b9b39b699ada with nextest profile: default
+    Starting 2 tests across 2 binaries (394 tests skipped)
+        FAIL [   2.472s] (1/2) velnor-actions-workflow-renderer schema2::generator_release::archive::tests::extracts_only_an_exact_regular_archive
+  stdout ───
+
+    running 1 test
+    test schema2::generator_release::archive::tests::extracts_only_an_exact_regular_archive ... FAILED
+
+    failures:
+
+    failures:
+        schema2::generator_release::archive::tests::extracts_only_an_exact_regular_archive
+
+    test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 78 filtered out; finished in 2.47s
+
+  stderr ───
+    mise WARN  mise version 2026.10.2 available
+    mise WARN  To update, run mise self-update
+    mise by @jdx – installing 1 tool
+    mise rust@1.98.1 info: syncing channel updates for 1.98.1-x86_64-unknown-linux-gnu
+    mise rust@1.98.1 info: latest update on 2026-09-03 for version 1.98.1 (48a229cea 2026-09-01)
+    mise rust@1.98.1 info: component clippy is up to date
+    mise rust@1.98.1 info: component rust-docs is up to date
+    mise rust@1.98.1 info: component rustfmt is up to date
+    mise rust@1.98.1   1.98.1-x86_64-unknown-linux-gnu unchanged - rustc 1.98.1 (48a229cea 2026-09-01)
+    mise rust@1.98.1 info: checking for self-update (current version: 1.29.1)
+    mise rust@1.98.1 rustc 1.98.1 (48a229cea 2026-09-01)
+    mise ✓ rust@1.98.1  284ms
+    mise ████████████████ 1/1 · installed 1 tool in 285ms
+    mise WARN  rust installed but not activated — it is not in any config file.
+    To install and activate, run:
+      mise use rust
+       Compiling velnor-archive-guard v0.1.1 (/root/.cache/velnor-pr25-aggregate-20261005/crates/velnor-archive-guard)
+        Finished `release` profile [optimized] target(s) in 0.38s
+    mise by @jdx – installing 1 tool
+    mise rust@1.98.1 info: syncing channel updates for 1.98.1-x86_64-unknown-linux-gnu
+    mise rust@1.98.1 info: latest update on 2026-09-03 for version 1.98.1 (48a229cea 2026-09-01)
+    mise rust@1.98.1 info: component clippy is up to date
+    mise rust@1.98.1 info: component rust-docs is up to date
+    mise rust@1.98.1 info: component rustfmt is up to date
+    mise rust@1.98.1   1.98.1-x86_64-unknown-linux-gnu unchanged - rustc 1.98.1 (48a229cea 2026-09-01)
+    mise rust@1.98.1 info: checking for self-update (current version: 1.29.1)
+    mise rust@1.98.1 rustc 1.98.1 (48a229cea 2026-09-01)
+    mise ✓ rust@1.98.1  265ms
+    mise ████████████████ 1/1 · installed 1 tool in 267ms
+    Traceback (most recent call last):
+      File "/root/.cache/velnor-pr25-aggregate-20261005/scripts/generator-release/extract-candidate.py", line 57, in <module>
+        preflight_archive(archive_bytes, "candidate")
+        ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+      File "/root/.cache/velnor-pr25-aggregate-20261005/scripts/owned_archive_preflight.py", line 376, in preflight_archive
+        command = [str(_guard_path()), mode]
+                       ~~~~~~~~~~~^^
+      File "/root/.cache/velnor-pr25-aggregate-20261005/scripts/owned_archive_preflight.py", line 51, in _guard_path
+        raise ValueError("native archive guard is stale or not built; run: " + BUILD_COMMAND)
+    ValueError: native archive guard is stale or not built; run: bash scripts/build-owned-archive-guard.sh
+
+    thread 'schema2::generator_release::archive::tests::extracts_only_an_exact_regular_archive' (336285) panicked at crates/velnor-actions-workflow-renderer/src/schema2_generator_release_archive.rs:241:9:
+    assertion failed: run_extractor(&scratch.0, &archive)?
+    note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+  Cancelling due to test failure: 1 test still running
+        PASS [   4.902s] (2/2) velnor-actions-workflow-renderer schema2::generator_release::archive::tests::rejects_links_special_modes_order_duplicates_and_truncation
+────────────
+     Summary [   4.903s] 2 tests run: 1 passed, 1 failed, 394 skipped
+        FAIL [   2.472s] (1/2) velnor-actions-workflow-renderer schema2::generator_release::archive::tests::extracts_only_an_exact_regular_archive
+error: test run failed

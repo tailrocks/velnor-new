@@ -1,0 +1,24 @@
+   Compiling strsim v0.11.1
+   Compiling darling_core v0.24.1
+   Compiling darling_macro v0.24.1
+   Compiling darling v0.24.1
+   Compiling bon-macros v3.10.1
+   Compiling bon v3.10.1
+   Compiling tantivy v0.26.2
+   Compiling turso_core v0.8.1
+   Compiling turso_sync_engine v0.8.1
+   Compiling turso_sdk_kit v0.8.1
+   Compiling turso_sync_sdk_kit v0.8.1
+   Compiling turso v0.8.1
+   Compiling velnor-runner-host v0.1.0 (/root/.cache/velnor-pr25-aggregate-20261005/crates/velnor-runner/crates/velnor-runner-host)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 40.68s
+────────────
+ Nextest run ID bd2618dc-b556-4e84-a956-670567d5b571 with nextest profile: default
+    Starting 5 tests across 1 binary (174 tests skipped)
+        PASS [   0.010s] (1/5) velnor-runner-host worker::volumes_tests::unlabeled_matching_volume_is_not_removed
+        PASS [   0.040s] (2/5) velnor-runner-host launch_scale_redelivery_tests::uncertain_jit_failure_redelivery_stays_queued
+        PASS [   0.044s] (3/5) velnor-runner-host worker::volumes_tests::release_tests::done_post_delete_non_404_keeps_cleanup_unproven
+        PASS [   0.048s] (4/5) velnor-runner-host launch::turn::start_tests::uncertain_volume_keeps_cleanup_unproven_and_redelivery_unacked
+        PASS [   0.204s] (5/5) velnor-runner-host launch::effect_tests::unusable_successes_hold_acquired_jobs_without_retry_or_ack
+────────────
+     Summary [   0.204s] 5 tests run: 5 passed, 174 skipped

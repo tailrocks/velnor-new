@@ -1,0 +1,4 @@
+path=/tmp/velnor-jit.7dLsw1
+mktemp_mode=600
+chmod_mode=600 path=/tmp/velnor-jit.7dLsw1
+chmod_mode=600 path=/tmp/velnor-jit.7dLsw1

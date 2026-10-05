@@ -1,0 +1,14 @@
+Read-only current-main source snapshot
+Captured: 2026-10-05T15:55:08Z (UTC)
+Live source verified immediately before archive by both git ls-remote origin refs/heads/main and GitHub REST repos/tailrocks/velnor-new/commits/main.
+Commit: 2217ad1b53209fc19895912ffc0dde7c4fcf7915
+Tree: 216a1dcd0cc2665bba13584ea5fb577a472f5cef
+Parent: 3fef32c3796cbae4d493057543dbec2de2630b25
+Snapshot root: /root/.cache/velnor-task-targets/20261005/git-steward-main-2217ad1-source-snapshot-20261005/source/
+Archive: /root/.cache/velnor-task-targets/20261005/git-steward-main-2217ad1-source-snapshot-20261005/source.tar
+Regular-file SHA-256 manifest: regular-files.sha256 (1532 files)
+Symlink target manifest: symlinks.tsv (7 links)
+Full Git tree-entry manifest: git-tree-entries.txt (1540 entries: 1532 regular files, 7 symlinks, 1 gitlink)
+Gitlink: qualification/fixtures/submodule -> 85e202a9446b105a9c8b8e9589b54bc1e513a808; archive does not populate submodule contents.
+No .git metadata is included in source/.
+Object access: git fetch --no-tags --no-write-fetch-head origin refs/heads/main fetched the commit object only in isolated clone /tmp/velnor-git-steward-retirement-20261005. No refs, FETCH_HEAD, index, or checkout were changed; prior and subsequent status stayed clean, HEAD remained cff74165a5732799aa2af5544fe51882d9e92aef, origin/main remained fea935e3439a9feee541cd18eac0cd0b60b2d174, and index SHA-256 remained 3f9f03f5248b6eaa74329716c68c4abd1f793b4d97031652c590ba340c17fa5a.

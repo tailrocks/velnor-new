@@ -1,0 +1,33 @@
+mise by @jdx – installing 1 tool
+mise rust@1.98.1 info: syncing channel updates for 1.98.1-x86_64-unknown-linux-gnu
+mise rust@1.98.1 info: latest update on 2026-09-03 for version 1.98.1 (48a229cea 2026-09-01)
+mise rust@1.98.1 info: component clippy is up to date
+mise rust@1.98.1 info: component rust-docs is up to date
+mise rust@1.98.1 info: component rustfmt is up to date
+mise rust@1.98.1   1.98.1-x86_64-unknown-linux-gnu unchanged - rustc 1.98.1 (48a229cea 2026-09-01)
+mise rust@1.98.1 info: checking for self-update (current version: 1.29.1)
+mise rust@1.98.1 rustc 1.98.1 (48a229cea 2026-09-01)
+mise ✓ rust@1.98.1  333ms
+mise ████████████████ 1/1 · installed 1 tool in 333ms
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.05s
+     Running unittests src/lib.rs (/root/.cache/velnor-task-targets/20261005/phase0-t24-main-target/debug/deps/velnor_actions_workflow_renderer-baaa2ee710553a16)
+
+running 9 tests
+test tool_seed_setup_share::tests::allows_only_exact_renderer_owned_local_action_paths ... ok
+test tool_seed_setup_share::tests::leaves_equal_pairs_on_other_valid_mise_pins_inline ... ok
+test tool_seed_setup_share::tests::factors_one_full_step_identical_group_and_preserves_job_fields_and_tail ... ok
+test tool_seed_setup_share::tests::rejects_input_ir_that_names_the_renderer_owned_action_directly ... ok
+test tool_seed_setup_share::tests::chooses_one_largest_group_and_breaks_ties_by_first_job_id ... ok
+test tool_seed_setup_share::tests::rejects_setup_key_when_it_does_not_match_the_job_tool_union ... ok
+test tool_seed_setup_share::tests::rejects_singletons_and_jobs_already_owned_by_lane_composites ... ok
+test tool_seed_setup_share::tests::rejects_noncanonical_checkout_options_and_context ... ok
+test tool_seed_setup_share::tests::rejects_contextual_or_changed_pair_fields_and_order ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 55 filtered out; finished in 0.00s
+
+     Running tests/velnor_workflow_renderer.rs (/root/.cache/velnor-task-targets/20261005/phase0-t24-main-target/debug/deps/velnor_workflow_renderer-f7fbb3074acf10a8)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 313 filtered out; finished in 0.00s
+

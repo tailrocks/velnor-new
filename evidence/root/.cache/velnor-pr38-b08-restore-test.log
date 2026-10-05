@@ -1,0 +1,8 @@
+   Compiling velnor-actions-workflow-renderer v0.1.1 (/tmp/velnor-impl-20261005/cache/pr38/crates/velnor-actions-workflow-renderer)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.43s
+────────────
+ Nextest run ID 1e997c53-860f-403f-bb53-ac6ed2349877 with nextest profile: default
+    Starting 1 test across 2 binaries (439 tests skipped)
+        PASS [   0.006s] (1/1) velnor-actions-workflow-renderer cache_p08::tool_payload::tests::restore_composite_binds_marker_pin_key_and_paths
+────────────
+     Summary [   0.007s] 1 test run: 1 passed, 439 skipped

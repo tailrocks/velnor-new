@@ -1,0 +1,36 @@
+{
+  "limitation": "The full workflow run had not completed at observation time. This proves successful source-bound helper build and MBX activity in the Plan job only; it does not prove the whole main run passed.",
+  "mbx": {
+    "cache": {
+      "bytes_downloaded": 0,
+      "bytes_uploaded": 0,
+      "estimated_compiler_time_avoided": "1m 38s",
+      "hits": 9,
+      "misses": 0,
+      "not_looked_up": 1,
+      "reuse_note": "Cargo artifact reuse and CI cache archive transfers are not included",
+      "session": "883.8 ms",
+      "stored_locally": "1.9 KiB"
+    },
+    "command": "env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR mise --no-config --no-env --no-hooks exec rust@1.98.1 -- mbx build --release --locked --package velnor-actions-cli --bin velnor-actions",
+    "verification_step": "Verify MBX compile (pre-seed trust-on-review); completed success",
+    "version": "mbx 1.21.1"
+  },
+  "observed_at_utc": "2026-10-05T14:45:33Z",
+  "plan_job_conclusion": "success",
+  "plan_job_id": 111814879160,
+  "plan_job_log": {
+    "path": "plan-job.log",
+    "retrieval": "GitHub Actions completed-job logs API",
+    "sha256": "ed2492e933695c0ea4196881ac574b03321505e11481233c907aeba09ab494b7"
+  },
+  "plan_job_status": "completed",
+  "run_status_at_observation": "in_progress",
+  "source_commit": "b640665abc7238050e856257c9fb3a150580bc8d",
+  "toolchain": {
+    "mise_selection": "rust@1.98.1",
+    "observed_rustc": "rustc 1.98.1 (48a229cea 2026-09-01)",
+    "verification_step": "Verify Rust before MBX action; completed success"
+  },
+  "workflow_run_id": 37325218926
+}

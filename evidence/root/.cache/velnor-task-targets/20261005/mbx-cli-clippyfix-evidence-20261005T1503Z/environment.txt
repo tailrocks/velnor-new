@@ -1,0 +1,13 @@
+source_root=/root/.cache/velnor-task-targets/20261005/mbx-cli-clippyfix-20261005T1501Z
+manifest=/root/.cache/velnor-task-targets/20261005/stock-helper/frozen-c8-manifest/source-v2.manifest
+manifest_sha256=9b4d24424807daebf5260b9c627188ada1365b8639bb307cdd2ba6450c67acd1
+cargo=/root/.cargo/bin/cargo
+rustc=/root/.cargo/bin/rustc
+cargo_home=/root/.cargo
+rustup_home=/root/.rustup
+rustup_toolchain=1.98.1
+cargo_target_dir=/root/.cache/velnor-task-targets/20261005/mbx-cli-clippyfix-target
+tmpdir=/var/tmp/mq0
+cargo_jobs=1
+cargo_net_offline=true
+PATH=/root/.cargo/bin:/root/.rustup/toolchains/1.98.1-x86_64-unknown-linux-gnu/bin:/usr/bin:/bin

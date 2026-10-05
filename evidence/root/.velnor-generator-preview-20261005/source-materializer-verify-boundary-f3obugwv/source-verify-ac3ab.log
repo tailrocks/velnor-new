@@ -1,0 +1,1 @@
+PASS: source worktree, index, and Git object tree match the immutable commit

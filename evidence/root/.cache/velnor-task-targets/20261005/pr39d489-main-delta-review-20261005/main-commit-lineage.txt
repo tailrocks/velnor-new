@@ -1,0 +1,18 @@
+ac3ab6a3d5ba3701c1300bbdd8114390093c5c29
+703d1b84d9f9e0246a52e3989bf3b78a13bbbf05
+feat(cache): make the native MBX action the sole cache owner
+76c62565352ed5122e0185d1c215ee1377df6a3e
+ac3ab6a3d5ba3701c1300bbdd8114390093c5c29
+fix(cache): require trusted host seed admission
+2d9bca8a37b0440e29a3520aa03e77752079f400
+76c62565352ed5122e0185d1c215ee1377df6a3e
+fix(cache): restore held MBX production pin
+d435ac5b7e686ad9c9c594dde4b024b702435e47
+2d9bca8a37b0440e29a3520aa03e77752079f400
+fix(release): guard canonical commit trailers
+4fffbc22ce159305c62ae039668da2a14e2e3366
+d435ac5b7e686ad9c9c594dde4b024b702435e47
+fix(ci): refresh verified runner and upstream evidence
+bdb1e14509225d18b4d8ee180731825d0826c16f
+4fffbc22ce159305c62ae039668da2a14e2e3366
+fix(discovery): prune paths resolving into reserved cache

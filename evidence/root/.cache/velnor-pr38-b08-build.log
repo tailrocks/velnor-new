@@ -1,0 +1,4 @@
+   Compiling velnor-actions-workflow-renderer v0.1.1 (/tmp/velnor-impl-20261005/cache/pr38/crates/velnor-actions-workflow-renderer)
+   Compiling velnor-actions-orchestrator v0.1.1 (/tmp/velnor-impl-20261005/cache/pr38/crates/velnor-actions-orchestrator)
+   Compiling velnor-actions-cli v0.1.1 (/tmp/velnor-impl-20261005/cache/pr38/crates/velnor-actions-cli)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.11s

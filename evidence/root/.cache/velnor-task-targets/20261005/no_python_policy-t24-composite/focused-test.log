@@ -1,0 +1,22 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.04s
+     Running unittests src/lib.rs (/root/.cache/velnor-task-targets/20261005/no_python_policy-t24-composite/debug/deps/velnor_actions_orchestrator-2d7f35443e58ece5)
+
+running 3 tests
+test generate::preserve::tests::shared_setup_action::unmarked_action_is_preserved_and_active_collision_refused ... ok
+test generate::preserve::tests::shared_setup_action::ancestor_symlink_refuses_active_output_and_is_preserved_untraversed ... ok
+test generate::preserve::tests::shared_setup_action::marked_action_repeats_then_retires_without_touching_neighbors ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 482 filtered out; finished in 0.00s
+
+     Running tests/validation_failure.rs (/root/.cache/velnor-task-targets/20261005/no_python_policy-t24-composite/debug/deps/validation_failure-3f892e6f56094e25)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 10 filtered out; finished in 0.00s
+
+     Running tests/velnor_orchestrator.rs (/root/.cache/velnor-task-targets/20261005/no_python_policy-t24-composite/debug/deps/velnor_orchestrator-6d174f9c7abd565a)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 688 filtered out; finished in 0.00s
+

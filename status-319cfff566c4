@@ -1,0 +1,10 @@
+ M crates/velnor-runner/crates/velnor-runner-host/src/runner_image_contract_tests.rs
+ M images/dind/README.md
+ M images/dind/entrypoint-test.sh
+ M images/dind/entrypoint.sh
+ M images/runner/ubuntu-26.04/Dockerfile
+ M images/runner/ubuntu-26.04/README.md
+ M images/runner/ubuntu-26.04/entrypoint.sh
+ D images/runner/ubuntu-26.04/runner-job-env-test.sh
+ D images/runner/ubuntu-26.04/runner-job-env.sh
+ M images/runner/ubuntu-26.04/wait-docker-sock.sh

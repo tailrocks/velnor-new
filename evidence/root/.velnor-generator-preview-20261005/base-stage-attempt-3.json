@@ -1,0 +1,38 @@
+{
+  "asset_contract_fixture_sha256": "8d011c7f8a95771e7ede987d321999e1af114ccf44070ce5d0f803af835b3031",
+  "base_manifest_path": "/root/.velnor-generator-preview-20261005/rootfs-base-manifest.json",
+  "base_manifest_sha256": "1a69b71279d9c5a7e7c1c5937d9c55898f1e5b0f1fc7405010d6ffb273f47acf",
+  "command": [
+    "/usr/bin/env",
+    "-i",
+    "PATH=/usr/bin:/bin",
+    "LC_ALL=C",
+    "/usr/bin/python3",
+    "-I",
+    "-S",
+    "/root/.velnor-generator-preview-20261005/preseed-preview-materialize.py"
+  ],
+  "earlier_attempts": "Attempt 1 provenance-key mismatch and attempt 2 absolute null-device destination are preserved as separate private failure records and logs; attempt-2 partial tree remains quarantined.",
+  "effective_uid": 0,
+  "exit_code": 0,
+  "finished_utc": "2026-10-05T09:44:08Z",
+  "host": "bastion",
+  "materializer_sha256": "4aba299ea3cb925bae7413bd6b8b45845d1ce83a1f617d964b9068dbf87da0a3",
+  "output_log_path": "/root/.velnor-generator-preview-20261005/materialize.log",
+  "output_log_sha256": "e7aa5422812e916088fd050cae3aae08287c35834389f0666f66f20f45cc777e",
+  "plan_sha256": "ebca0ef5f4c716e533cece9637b3d68763cc8265ce4016bf84a85a279416e77f",
+  "preflight_counts": {
+    "devices": 1,
+    "directories": 36,
+    "host_files": 37,
+    "rust_archive_members": 218,
+    "symlinks": 5,
+    "validator_archive_members": 15
+  },
+  "rootfs_path": "/root/.velnor-generator-preview-20261005/rootfs",
+  "rootfs_tree_sha256": "1cef88b359a08c32cccb6078a55309d4db67b883dc260ccc3bbeb80ddce55763",
+  "scope": "Static ownership, copying, archive validation and extraction only. No Mise, Rust, Cargo, validator, installer, helper, network, account, container, or generator command ran.",
+  "started_utc": "2026-10-05T09:43:48Z",
+  "status": "PASS",
+  "tool_provenance_sha256": "67a8ba245858b11276a6496a513584fefec26e26218b0cdfad028a3fac07d137"
+}

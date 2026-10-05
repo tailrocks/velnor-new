@@ -1,0 +1,14 @@
+    Checking velnor-actions-workflow-renderer v0.1.0 (/var/tmp/velnor-t24-tofu-compaction-draft-20261005/crates/velnor-actions-workflow-renderer)
+error: very complex type used. Consider factoring parts into `type` definitions
+   --> crates/velnor-actions-workflow-renderer/src/tool_seed_setup_share.rs:150:6
+    |
+150 | ) -> Option<(&str, &BTreeMap<String, String>, &BTreeMap<String, String>)> {
+    |      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.98.0/index.html#type_complexity
+    = note: `-D clippy::type-complexity` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::type_complexity)]`
+
+error: could not compile `velnor-actions-workflow-renderer` (lib) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `velnor-actions-workflow-renderer` (lib test) due to 1 previous error

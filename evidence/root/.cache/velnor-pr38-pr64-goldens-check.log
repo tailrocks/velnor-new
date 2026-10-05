@@ -1,0 +1,31 @@
+captured nested (plan exit 0)
+captured mbx-nextest (plan exit 0)
+captured empty-suite (plan exit 0)
+captured minimal-cargo (plan exit 0)
+captured dogfood (plan exit 0, tree identical)
+match: nested
+match: mbx-nextest
+match: empty-suite
+match: minimal-cargo
+FAIL: golden mismatch: dogfood (see /tmp/velnor-goldens-work.svVERm/check-diff/dogfood.diff)
+diff -r /tmp/velnor-impl-20261005/cache/pr38/docs/proposed/opentofu-goldens/cases/dogfood/dogfood.diff /tmp/velnor-goldens-work.svVERm/stage/dogfood/dogfood.diff
+1,25d0
+< diff -r shipping/.github/workflows/ci.yml generated/.github/workflows/ci.yml
+< 2165a2166,2170
+< >       - name: V2 identity
+< >         id: v2
+< >         uses: ./.github/actions/u26 # zizmor: ignore[self-repository]
+< >         with:
+< >           d: 01750789fb96f8e2cc28e1c7aa90ce960c8ec356a33db8df5fa374ed71095a58
+< 2169c2174,2179
+< <           cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-99eaf1e44a41b31d
+< ---
+< >           cache_key: mise-tools-v2-${{steps.v2.outputs.identity}}
+< >       - name: Restore Mise tools
+< >         if: steps.v2.outputs.enabled == 'true'
+< >         uses: ./.github/actions/velnor-tools-cache-restore # zizmor: ignore[self-repository]
+< >         with:
+< >           key: mise-tools-v2-${{steps.v2.outputs.identity}}
+< 2173,2174c2183
+< <           cache: "true"
+retaining failed golden workspace: /tmp/velnor-goldens-work.svVERm

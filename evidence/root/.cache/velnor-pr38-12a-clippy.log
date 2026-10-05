@@ -1,0 +1,39 @@
+    Blocking waiting for file lock on package cache
+    Checking velnor-actions-contract v0.1.1 (/tmp/velnor-impl-20261005/cache/pr38/crates/velnor-actions-contract)
+   Compiling velnor-archive-guard v0.1.1 (/tmp/velnor-impl-20261005/cache/pr38/crates/velnor-archive-guard)
+    Checking velnor-actions-tofu v0.1.1 (/tmp/velnor-impl-20261005/cache/pr38/crates/velnor-actions-tofu)
+    Checking velnor-actions-actionlint v0.1.1 (/tmp/velnor-impl-20261005/cache/pr38/crates/velnor-actions-actionlint)
+    Checking velnor-actions-workflow-renderer v0.1.1 (/tmp/velnor-impl-20261005/cache/pr38/crates/velnor-actions-workflow-renderer)
+    Checking velnor-actions-mise v0.1.1 (/tmp/velnor-impl-20261005/cache/pr38/crates/velnor-actions-mise)
+    Checking velnor-actions-rust v0.1.1 (/tmp/velnor-impl-20261005/cache/pr38/crates/velnor-actions-rust)
+error: item in documentation is missing backticks
+   --> crates/velnor-actions-workflow-renderer/src/cache_elect.rs:132:45
+    |
+132 | /// Construct, but do not append, validated ToFu provider saves.
+    |                                             ^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.98.0/index.html#doc_markdown
+    = note: `-D clippy::doc-markdown` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::doc_markdown)]`
+help: try
+    |
+132 - /// Construct, but do not append, validated ToFu provider saves.
+132 + /// Construct, but do not append, validated `ToFu` provider saves.
+    |
+
+error: item in documentation is missing backticks
+   --> crates/velnor-actions-workflow-renderer/src/cache_elect.rs:134:11
+    |
+134 | /// Every OpenTofu job restores its own root key read-only; exactly one
+    |           ^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.98.0/index.html#doc_markdown
+help: try
+    |
+134 - /// Every OpenTofu job restores its own root key read-only; exactly one
+134 + /// Every `OpenTofu` job restores its own root key read-only; exactly one
+    |
+
+error: could not compile `velnor-actions-workflow-renderer` (lib) due to 2 previous errors
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `velnor-actions-workflow-renderer` (lib test) due to 2 previous errors

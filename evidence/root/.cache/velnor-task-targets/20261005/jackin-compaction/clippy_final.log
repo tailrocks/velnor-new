@@ -1,0 +1,3 @@
+COMMAND=mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo clippy --locked -p velnor-actions-workflow-renderer --all-targets -- -D warnings
+    Checking velnor-actions-workflow-renderer v0.1.0 (/tmp/velnor-render-compaction-44b2-20261005/crates/velnor-actions-workflow-renderer)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.44s

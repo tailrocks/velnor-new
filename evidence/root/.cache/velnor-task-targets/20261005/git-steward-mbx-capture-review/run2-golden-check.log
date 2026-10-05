@@ -1,0 +1,15 @@
+cwd=/root/.cache/velnor-task-targets/20261005/git-steward-mbx-capture-review/run2
+binary=/root/.cache/velnor-task-targets/20261005/git-steward-mbx-postfix-target/debug/velnor-actions
+TMPDIR=/var/tmp/velnor-pr12-run2-golden-check.lyJnIc
+captured nested (plan exit 0)
+captured mbx-nextest (plan exit 0)
+captured empty-suite (plan exit 0)
+captured minimal-cargo (plan exit 0)
+captured dogfood (plan exit 0, tree identical)
+match: nested
+match: mbx-nextest
+match: empty-suite
+match: minimal-cargo
+match: dogfood
+ALL GOLDENS MATCH
+exit=0

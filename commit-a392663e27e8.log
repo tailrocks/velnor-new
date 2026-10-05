@@ -1,0 +1,2 @@
+[impl/generator-pr68 46189385f] WIP: preserve existing partial work at immediate stop [skip ci]
+ 35 files changed, 237 insertions(+), 238 deletions(-)

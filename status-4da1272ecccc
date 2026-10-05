@@ -1,0 +1,76 @@
+M  .config/nextest.toml
+M  crates/velnor-actions-cli/tests/impl_cli_tofu_capacity.rs
+M  crates/velnor-actions-contract/src/workflow/ir.rs
+M  crates/velnor-actions-contract/src/workflow/job_validation.rs
+M  crates/velnor-actions-contract/src/workflow/lanes.rs
+M  crates/velnor-actions-contract/src/workflow/named_check_lanes.rs
+M  crates/velnor-actions-contract/src/workflow/step_protocol.rs
+M  crates/velnor-actions-contract/tests/impl_contract_step_roles.rs
+M  crates/velnor-actions-orchestrator/src/attach_mbx_tests.rs
+M  crates/velnor-actions-orchestrator/src/check_tool_tree.rs
+ M crates/velnor-actions-orchestrator/src/cover_baseline.rs
+ M crates/velnor-actions-orchestrator/src/cover_baseline_tests.rs
+M  crates/velnor-actions-orchestrator/src/crate_jobs.rs
+ M crates/velnor-actions-orchestrator/src/lib.rs
+M  crates/velnor-actions-orchestrator/src/matrix_step.rs
+M  crates/velnor-actions-orchestrator/src/matrix_step_tests.rs
+M  crates/velnor-actions-orchestrator/src/matrix_step_tofu_install_tests.rs
+M  crates/velnor-actions-orchestrator/src/matrix_tools.rs
+ M crates/velnor-actions-orchestrator/src/retrieve_baseline_race_tests.rs
+ M crates/velnor-actions-orchestrator/src/retrieve_planned_baseline.rs
+M  crates/velnor-actions-orchestrator/src/retrieve_planned_baseline_tests.rs
+ M crates/velnor-actions-orchestrator/src/run_select.rs
+ M crates/velnor-actions-orchestrator/src/shard_baseline.rs
+M  crates/velnor-actions-orchestrator/src/shard_baseline_retry_tests.rs
+ M crates/velnor-actions-orchestrator/src/shard_baseline_tests.rs
+ M crates/velnor-actions-orchestrator/src/shard_tests.rs
+ M crates/velnor-actions-orchestrator/tests/impl_common.rs
+ M crates/velnor-actions-orchestrator/tests/impl_consumer_manifest_file.rs
+ M crates/velnor-actions-orchestrator/tests/impl_gen_gates.rs
+ M crates/velnor-actions-orchestrator/tests/impl_generate_p09_preview.rs
+ M crates/velnor-actions-orchestrator/tests/impl_generate_preserve.rs
+ M crates/velnor-actions-orchestrator/tests/impl_orch_f2b.rs
+ M crates/velnor-actions-orchestrator/tests/impl_orch_f2e.rs
+ M crates/velnor-actions-orchestrator/tests/impl_orch_gen.rs
+ M crates/velnor-actions-orchestrator/tests/impl_orch_release_emit.rs
+ M crates/velnor-actions-orchestrator/tests/impl_prepare_generate.rs
+ M crates/velnor-actions-orchestrator/tests/impl_tofu_t20_stable.rs
+M  crates/velnor-actions-orchestrator/tests/impl_tofu_t22.rs
+ M crates/velnor-actions-orchestrator/tests/impl_tofu_t24_scale.rs
+ M crates/velnor-actions-orchestrator/tests/zizmor_staging.rs
+M  crates/velnor-actions-workflow-renderer/src/acquire_action.rs
+MM crates/velnor-actions-workflow-renderer/src/action_ref.rs
+M  crates/velnor-actions-workflow-renderer/src/cache_p08.rs
+M  crates/velnor-actions-workflow-renderer/src/document.rs
+MM crates/velnor-actions-workflow-renderer/src/lane_share.rs
+M  crates/velnor-actions-workflow-renderer/src/lane_share_render_tests.rs
+M  crates/velnor-actions-workflow-renderer/src/lane_share_sections.rs
+M  crates/velnor-actions-workflow-renderer/src/plan_format.rs
+M  crates/velnor-actions-workflow-renderer/src/steps_artifact.rs
+M  crates/velnor-actions-workflow-renderer/src/tofu_cache.rs
+M  crates/velnor-actions-workflow-renderer/src/tool_seed_admission_tests.rs
+M  crates/velnor-actions-workflow-renderer/src/tool_seed_tests.rs
+M  crates/velnor-actions-workflow-renderer/tests/impl_renderer_cache_t22.rs
+M  crates/velnor-actions-workflow-renderer/tests/impl_renderer_p08.rs
+M  crates/velnor-actions-workflow-renderer/tests/impl_renderer_tofu_cache.rs
+M  crates/velnor-runner/crates/velnor-runner-host/src/launch/steps.rs
+M  crates/velnor-runner/crates/velnor-runner-host/src/launch/turn.rs
+A  crates/velnor-runner/crates/velnor-runner-host/src/launch/turn/progress_tests.rs
+M  crates/velnor-runner/crates/velnor-runner-host/src/launch_tests.rs
+UU docs/proposed/opentofu-goldens/MANIFEST.sha256
+M  docs/proposed/opentofu-goldens/cases/dogfood/plan.txt
+UU docs/proposed/opentofu-goldens/cases/dogfood/tree.sha256
+M  docs/proposed/opentofu-goldens/cases/empty-suite/plan.txt
+UU docs/proposed/opentofu-goldens/cases/empty-suite/tree.sha256
+M  docs/proposed/opentofu-goldens/cases/mbx-nextest/plan.txt
+UU docs/proposed/opentofu-goldens/cases/mbx-nextest/tree.sha256
+M  docs/proposed/opentofu-goldens/cases/minimal-cargo/plan.txt
+UU docs/proposed/opentofu-goldens/cases/minimal-cargo/tree.sha256
+M  docs/proposed/opentofu-goldens/cases/nested/plan.txt
+UU docs/proposed/opentofu-goldens/cases/nested/tree.sha256
+?? crates/velnor-actions-orchestrator/src/baseline_archive.rs
+?? crates/velnor-actions-orchestrator/src/baseline_archive_eocd_tests.rs
+?? crates/velnor-actions-orchestrator/src/baseline_archive_tests.rs
+?? crates/velnor-actions-orchestrator/src/baseline_archive_zip.rs
+?? crates/velnor-actions-orchestrator/src/baseline_artifact_listing.rs
+?? crates/velnor-actions-orchestrator/src/baseline_artifact_listing_tests.rs

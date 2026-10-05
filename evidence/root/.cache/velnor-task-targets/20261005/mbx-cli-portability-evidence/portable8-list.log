@@ -1,0 +1,19 @@
+   Compiling velnor-actions-workflow-renderer v0.1.0 (/root/.cache/velnor-task-targets/20261005/mbx-cli-portability-20261005T1530Z/crates/velnor-actions-workflow-renderer)
+warning: unused import: `RunnerIdentity`
+  --> crates/velnor-actions-workflow-renderer/src/stock_mbx_bundle_mode_zero_tests.rs:22:29
+   |
+22 | use fixture::{FixturePaths, RunnerIdentity, runner_identity};
+   |                             ^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: `velnor-actions-workflow-renderer` (lib test) generated 1 warning (run `cargo fix --lib -p velnor-actions-workflow-renderer --tests` to apply 1 suggestion)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.26s
+velnor-actions-workflow-renderer stock_mbx_bundle_cli_tests::failure_tests::generated_export_failure_skips_cache_save
+velnor-actions-workflow-renderer stock_mbx_bundle_cli_tests::failure_tests::generated_export_hard_fails_before_save_on_wrong_identity
+velnor-actions-workflow-renderer stock_mbx_bundle_cli_tests::failure_tests::generated_export_skips_empty_group
+velnor-actions-workflow-renderer stock_mbx_bundle_cli_tests::failure_tests::generated_import_rejects_noncanonical_private_paths
+velnor-actions-workflow-renderer stock_mbx_bundle_cli_tests::failure_tests::generated_preflight_rejects_symlink_temp_and_reserved_path_collisions
+velnor-actions-workflow-renderer stock_mbx_bundle_cli_tests::lifecycle_tests::generated_mbx_steps_cover_miss_hit_and_separate_corruption_fallbacks
+velnor-actions-workflow-renderer stock_mbx_bundle_cli_tests::lifecycle_tests::generated_restore_failure_runs_producer_cold_and_disables_save
+velnor-actions-workflow-renderer stock_mbx_bundle_cli_tests::predicate_tests::generated_object_predicate_rejects_empty_symlink_and_hardlink_trees

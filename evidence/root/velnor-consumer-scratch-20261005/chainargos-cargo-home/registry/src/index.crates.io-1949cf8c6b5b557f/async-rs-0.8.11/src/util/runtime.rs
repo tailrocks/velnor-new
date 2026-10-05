@@ -1,0 +1,84 @@
+use crate::{
+    sys::AsSysFd,
+    traits::{Executor, Reactor, RuntimeKit},
+    util::Task,
+};
+use futures_core::Stream;
+use futures_io::{AsyncRead, AsyncWrite};
+use std::{
+    fmt,
+    future::Future,
+    io::{self, Read, Write},
+    net::SocketAddr,
+    time::{Duration, Instant},
+};
+
+/// A [`RuntimeKit`] composed of independent [`Executor`] and [`Reactor`] instances.
+///
+/// Use this when you want to pair two existing implementations that were not originally
+/// designed as a single unit — for example a custom executor with a smol reactor.
+/// For the common case where both sides come from the same backend, the concrete
+/// runtime aliases (`SmolRuntime`, `TokioRuntime`, …) are simpler.
+#[derive(Clone, Debug)]
+pub struct RuntimeParts<E: Executor, R: Reactor> {
+    executor: E,
+    reactor: R,
+}
+
+impl<E: Executor, R: Reactor> RuntimeParts<E, R> {
+    /// Create new RuntimeParts from separate Executor and Reactor
+    pub fn new(executor: E, reactor: R) -> Self {
+        Self { executor, reactor }
+    }
+}
+
+impl<E: Executor + fmt::Debug, R: Reactor + fmt::Debug> RuntimeKit for RuntimeParts<E, R> {}
+
+impl<E: Executor, R: Reactor> Executor for RuntimeParts<E, R> {
+    type Task<T: Send + 'static> = E::Task<T>;
+
+    fn block_on<T, F: Future<Output = T>>(&self, f: F) -> T {
+        self.executor.block_on(f)
+    }
+
+    fn spawn<T: Send + 'static, F: Future<Output = T> + Send + 'static>(
+        &self,
+        f: F,
+    ) -> Task<Self::Task<T>> {
+        self.executor.spawn(f)
+    }
+
+    fn spawn_blocking<T: Send + 'static, F: FnOnce() -> T + Send + 'static>(
+        &self,
+        f: F,
+    ) -> Task<Self::Task<T>> {
+        self.executor.spawn_blocking(f)
+    }
+}
+
+impl<E: Executor, R: Reactor> Reactor for RuntimeParts<E, R> {
+    type TcpStream = R::TcpStream;
+    type Sleep = R::Sleep;
+
+    fn register<H: Read + Write + AsSysFd + Send + 'static>(
+        &self,
+        socket: H,
+    ) -> io::Result<impl AsyncRead + AsyncWrite + Send + Unpin + 'static> {
+        self.reactor.register(socket)
+    }
+
+    fn sleep(&self, dur: Duration) -> Self::Sleep {
+        self.reactor.sleep(dur)
+    }
+
+    fn interval(&self, dur: Duration) -> impl Stream<Item = Instant> + Send + 'static {
+        self.reactor.interval(dur)
+    }
+
+    fn tcp_connect_addr(
+        &self,
+        addr: SocketAddr,
+    ) -> impl Future<Output = io::Result<Self::TcpStream>> + Send + 'static {
+        self.reactor.tcp_connect_addr(addr)
+    }
+}

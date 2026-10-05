@@ -1,0 +1,6 @@
+[detached HEAD 410dfd929] WIP: preserve existing partial work at immediate stop [skip ci]
+ 8 files changed, 839 insertions(+), 4 deletions(-)
+ create mode 100644 crates/velnor-runner/crates/velnor-runner-cli/tests/status_readiness.rs
+ create mode 100644 crates/velnor-runner/crates/velnor-runner-host/src/readiness_scan/mod.rs
+ create mode 100644 crates/velnor-runner/crates/velnor-runner-host/src/readiness_scan/tests.rs
+ create mode 100644 crates/velnor-runner/crates/velnor-runner-host/src/readiness_scan/tests/journal_fail_closed.rs

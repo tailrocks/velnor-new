@@ -1,0 +1,7 @@
+# Negative fixture: wildcard dependency (rejected: every version
+# requirement must be an exact `=x.y.z` pin).
+[package]
+name = "p11-wildcard-fail"
+
+[dependencies]
+demo-dep = "*"

@@ -1,0 +1,122 @@
+--- a/.velnor/freshness-inventory.json
++++ b/.velnor/freshness-inventory.json
+@@ -1,15 +1,16 @@
+ {
+   "actions": [
+     {
+-      "checked_at": "2026-10-05T12:26:50Z",
++      "checked_at": "2026-10-05T18:08:00Z",
+       "key": "jdx/mise-action",
+       "latest": "v5.1.1",
+-      "pinned_sha": "9149ea85001c7435d5a66bb127d6a1b6227cb0a5",
+-      "pinned_version": "v5.0.0",
++      "pinned_sha": "2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca",
++      "pinned_version": "v5.1.1",
+       "qualified_sha": "9149ea85001c7435d5a66bb127d6a1b6227cb0a5",
+       "qualified_version": "v5.0.0",
+       "source": "https://api.github.com/repos/jdx/mise-action/releases/latest",
+-      "status": "held"
++      "status": "pending",
++      "latest_sha": "2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca"
+     },
+     {
+       "checked_at": "2026-10-05T12:26:50Z",
+@@ -67,27 +68,28 @@
+       "status": "current"
+     },
+     {
+-      "checked_at": "2026-10-05T12:26:50Z",
++      "checked_at": "2026-10-05T18:08:00Z",
+       "key": "jdx/mr-boxington-action",
+       "latest": "v1.7.1",
+-      "pinned_sha": "1687e54eb349cadf61fa38b5813a77875489e8e6",
+-      "pinned_version": "v1.6.0",
++      "pinned_sha": "d0825fbaf3cc36ca2609aa38e71046265a1f1e37",
++      "pinned_version": "v1.7.1",
+       "qualified_sha": "1687e54eb349cadf61fa38b5813a77875489e8e6",
+       "qualified_version": "v1.6.0",
+       "source": "https://api.github.com/repos/jdx/mr-boxington-action/releases",
+-      "status": "held",
++      "status": "pending",
+       "latest_sha": "d0825fbaf3cc36ca2609aa38e71046265a1f1e37"
+     },
+     {
+-      "checked_at": "2026-10-05T12:26:50Z",
++      "checked_at": "2026-10-05T18:08:00Z",
+       "key": "asamarts/alint",
+       "latest": "v0.17.0",
+-      "pinned_sha": "9f9d34ba0eae3888299b9e570f43338b0e7f2cdb",
+-      "pinned_version": "v0.16.1",
++      "pinned_sha": "d93c0283b19dd78afcd8a4b303f1556a7759ba81",
++      "pinned_version": "v0.17.0",
+       "qualified_sha": "9f9d34ba0eae3888299b9e570f43338b0e7f2cdb",
+       "qualified_version": "v0.16.1",
+       "source": "https://api.github.com/repos/asamarts/alint/releases/latest",
+-      "status": "held"
++      "status": "pending",
++      "latest_sha": "d93c0283b19dd78afcd8a4b303f1556a7759ba81"
+     },
+     {
+       "checked_at": "2026-10-05T12:26:50Z",
+@@ -175,31 +177,31 @@
+   ],
+   "tools": [
+     {
+-      "checked_at": "2026-10-05T12:26:50Z",
++      "checked_at": "2026-10-05T18:08:00Z",
+       "latest": "v2026.10.3",
+       "name": "mise",
+-      "pinned": "2026.9.18",
++      "pinned": "2026.10.3",
+       "qualified": "2026.9.18",
+       "source": "https://api.github.com/repos/jdx/mise/releases/latest",
+-      "status": "held"
++      "status": "pending"
+     },
+     {
+-      "checked_at": "2026-10-05T12:26:50Z",
++      "checked_at": "2026-10-05T18:08:00Z",
+       "latest": "1.99.0",
+       "name": "rust",
+-      "pinned": "1.98.1",
++      "pinned": "1.99.0",
+       "qualified": "1.98.1",
+       "source": "https://static.rust-lang.org/dist/channel-rust-stable.toml",
+-      "status": "held"
++      "status": "pending"
+     },
+     {
+-      "checked_at": "2026-10-05T12:26:50Z",
++      "checked_at": "2026-10-05T18:08:00Z",
+       "latest": "v1.22.0",
+       "name": "mr-boxington",
+-      "pinned": "1.21.1",
++      "pinned": "1.22.0",
+       "qualified": "1.21.1",
+       "source": "https://api.github.com/repos/jdx/mr-boxington/releases/latest",
+-      "status": "held",
++      "status": "pending",
+       "latest_sha": "10474d43342ad65df3b02323dd8092d18ab38101"
+     },
+     {
+@@ -212,13 +214,13 @@
+       "status": "current"
+     },
+     {
+-      "checked_at": "2026-10-05T12:26:50Z",
+-      "latest": "v1.7.12",
+-      "name": "actionlint",
+-      "pinned": "1.7.12",
+-      "qualified": "1.7.12",
+-      "source": "https://api.github.com/repos/rhysd/actionlint/releases/latest",
+-      "status": "current"
++      "checked_at": "2026-10-05T18:08:00Z",
++      "latest": "v1.8.2",
++      "name": "jactionlint",
++      "pinned": "1.8.2",
++      "qualified": null,
++      "source": "https://api.github.com/repos/jdx/jactionlint/releases/latest",
++      "status": "pending"
+     },
+     {
+       "checked_at": "2026-10-05T12:26:50Z",

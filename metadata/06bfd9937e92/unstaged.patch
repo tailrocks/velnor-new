@@ -1,0 +1,119 @@
+diff --git a/crates/velnor-actions-orchestrator/src/matrix_step.rs b/crates/velnor-actions-orchestrator/src/matrix_step.rs
+index b9926cd4a..c39939b0d 100644
+--- a/crates/velnor-actions-orchestrator/src/matrix_step.rs
++++ b/crates/velnor-actions-orchestrator/src/matrix_step.rs
+@@ -278,12 +278,11 @@ pub(crate) fn helper_path_for_version() -> String {
+ 
+ /// `sh -c` argv wrapping one joined command with report capture.
+ ///
+-/// Stamps the wall-clock start to a per-entry file first (argv
+-/// validation forbids `$(...)`, so the stamp travels via file, never
+-/// substitution), runs the obligation, captures `$?`, reads the stamp
+-/// back, reports through the staged helper's [`REPORT_OP`], then exits
+-/// with the obligation code (helper failure surfaces only on an
+-/// otherwise passing obligation, so failures never mask each other).
++/// Captures the wall-clock start with the one permitted fixed
++/// `$(date +%s%3N)` substitution, runs the obligation, captures `$?`,
++/// reports through the staged helper's [`REPORT_OP`], then exits with
++/// the obligation code (helper failure surfaces only on an otherwise
++/// passing obligation, so failures never mask each other).
+ /// Credential removal is the step constructor's job (`shell_step`
+ /// prefixes argv-wide `env -u`), not a script prelude's: obligations
+ /// execute repository code (build scripts), and the step env cannot
+diff --git a/crates/velnor-actions-workflow-renderer/src/document.rs b/crates/velnor-actions-workflow-renderer/src/document.rs
+index f98adef3a..373766df6 100644
+--- a/crates/velnor-actions-workflow-renderer/src/document.rs
++++ b/crates/velnor-actions-workflow-renderer/src/document.rs
+@@ -231,9 +231,6 @@ fn job_to_yaml(
+                 if let Some(toolchain) = env.get("RUSTUP_TOOLCHAIN") {
+                     job_env.insert("RUSTUP_TOOLCHAIN".to_owned(), toolchain.clone());
+                 }
+-                if let Some(flags) = env.get("RUSTDOCFLAGS") {
+-                    job_env.insert("RUSTDOCFLAGS".to_owned(), flags.clone());
+-                }
+                 if step.name == crate::steps::ACQUIRE_NAME {
+                     for key in [
+                         crate::steps::ASSET_SHA_ENV,
+diff --git a/crates/velnor-actions-workflow-renderer/src/document_runner_shell_tests.rs b/crates/velnor-actions-workflow-renderer/src/document_runner_shell_tests.rs
+index fda9e4170..524e23c35 100644
+--- a/crates/velnor-actions-workflow-renderer/src/document_runner_shell_tests.rs
++++ b/crates/velnor-actions-workflow-renderer/src/document_runner_shell_tests.rs
+@@ -99,3 +99,78 @@ fn typed_scale_set_jobs_declare_bash_while_hosted_jobs_keep_default() {
+         "{scale}"
+     );
+ }
++
++fn field<'a>(value: &'a crate::yaml::Yaml, key: &str) -> Option<&'a crate::yaml::Yaml> {
++    let crate::yaml::Yaml::Map(entries) = value else {
++        return None;
++    };
++    entries
++        .iter()
++        .find(|(entry_key, _)| entry_key == key)
++        .map(|(_, entry_value)| entry_value)
++}
++
++#[test]
++fn rustdocflags_remain_scoped_to_the_documentation_step() {
++    let doc_step = Step {
++        name: "Documentation".to_owned(),
++        condition: None,
++        kind: StepKind::Shell {
++            run: vec!["echo".to_owned(), "doc".to_owned()],
++            env: BTreeMap::from([("RUSTDOCFLAGS".to_owned(), "-D warnings".to_owned())]),
++        },
++    };
++    let test_step = Step {
++        name: "Tests".to_owned(),
++        condition: None,
++        kind: StepKind::Shell {
++            run: vec!["echo".to_owned(), "test".to_owned()],
++            env: BTreeMap::new(),
++        },
++    };
++    let mut task_job = job("ubuntu-26.04");
++    task_job.steps = vec![doc_step, test_step];
++    let jobs = BTreeMap::from([("task".to_owned(), task_job)]);
++    let rendered = workflow_to_yaml(
++        &workflow(jobs.clone()),
++        &jobs,
++        &context(),
++        &BTreeMap::new(),
++        &BTreeMap::new(),
++        &BTreeSet::new(),
++    )
++    .expect("workflow renders");
++    let jobs = field(&rendered, "jobs").expect("jobs map");
++    let task = field(jobs, "task").expect("task job");
++    let job_env = field(task, "env").expect("job environment");
++    assert_eq!(
++        field(job_env, "RUSTDOCFLAGS"),
++        None,
++        "task-specific rustdoc flags must not enter the job environment"
++    );
++    let crate::yaml::Yaml::Seq(steps) = field(task, "steps").expect("job steps") else {
++        panic!("steps must be a sequence");
++    };
++    let doc = steps
++        .iter()
++        .find(|step| field(step, "name") == Some(&crate::yaml::Yaml::str("Documentation")))
++        .expect("documentation step");
++    let doc_env = field(doc, "env").expect("documentation step environment");
++    assert_eq!(
++        field(doc_env, "RUSTDOCFLAGS"),
++        Some(&crate::yaml::Yaml::str("-D warnings")),
++        "the documentation step keeps its typed flags"
++    );
++    let tests = steps
++        .iter()
++        .find(|step| field(step, "name") == Some(&crate::yaml::Yaml::str("Tests")))
++        .expect("test step");
++    assert_eq!(
++        field(
++            field(tests, "env").unwrap_or(&crate::yaml::Yaml::Null),
++            "RUSTDOCFLAGS"
++        ),
++        None,
++        "sibling tasks must not inherit documentation flags"
++    );
++}

@@ -1,0 +1,4 @@
+# pinned: cargo-mutants = "27.1.0"
+examine_globs = [
+    "crates/aaa/Cargo.toml",
+]

@@ -1,0 +1,7 @@
+schema = 1
+[workflow]
+name = "CI"
+default_branch = "testmain"
+max_parallel_jobs = 2
+[stacks.tofu]
+roots = ["stacks/r000", "stacks/r001", "stacks/r002", "stacks/r003", "stacks/r004", "stacks/r005", "stacks/r006", "stacks/r007", "stacks/r008", "stacks/r009", "stacks/r010", "stacks/r011", "stacks/r012", "stacks/r013", "stacks/r014", "stacks/r015", "stacks/r016", "stacks/r017", "stacks/r018", "stacks/r019", "stacks/r020", "stacks/r021", "stacks/r022", "stacks/r023", "stacks/r024", "stacks/r025", "stacks/r026", "stacks/r027", "stacks/r028", "stacks/r029", "stacks/r030", "stacks/r031", "stacks/r032", "stacks/r033", "stacks/r034", "stacks/r035", "stacks/r036", "stacks/r037", "stacks/r038", "stacks/r039"]

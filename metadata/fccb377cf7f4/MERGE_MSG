@@ -1,0 +1,6 @@
+test(contract): prove per-layer warm cache selection
+
+Exercise an observed Warm K2 creation on the changed Cargo sources layer while an unchanged Mise tools layer retains K1. Verify Third selects K2 and K1 per layer, and make tamper tests start from an actually admitted Third predecessor for UsefulDelta.
+
+Co-authored-by: Codex <codex@openai.com>
+Signed-off-by: Alexey Zhokhov <alexey@zhokhov.com>

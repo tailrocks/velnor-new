@@ -1,0 +1,17 @@
+   Compiling velnor-actions-orchestrator v0.1.0 (/root/.cache/velnor-task-targets/20261005/no_python_policy-joined-pin-test-20261005/crates/velnor-actions-orchestrator)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 9.43s
+     Running unittests src/lib.rs (/root/.cache/velnor-task-targets/20261005/no_python_policy-joined-route-target/debug/deps/velnor_actions_orchestrator-4f04318694f8a7e8)
+
+running 7 tests
+test workflow::wire_w1::wire_w1_tests::checkout_full_provides_history_for_git_archaeology ... ok
+test workflow::wire_w1::wire_w1_tests::checkout_pins_canonical_ref_and_validates_inputs ... ok
+test workflow::wire_w1::wire_w1_tests::crate_mise_tools_follow_installable_role_selection ... ok
+test workflow::wire_w1::wire_w1_tests::crate_tools_follow_selection_with_validators ... ok
+test workflow::wire_w1::wire_w1_tests::crate_tools_install_exact_pinned_set ... ok
+test workflow::wire_w1::wire_w1_tests::syntax_gate_allows_matrix_and_rejects_native ... ok
+test workflow::wire_w1::wire_w1_tests::task_cache_steps_need_fixture_and_live_mode ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 483 filtered out; finished in 0.00s
+
+mbx[cache]: 0 hits, 1 misses; 0 B downloaded, 0 B uploaded, 111.1 MiB stored locally
+mbx[savings]: 35.5 GiB of outputs, one copy, several very confident checkouts.

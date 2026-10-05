@@ -1,0 +1,20 @@
+worktree /root/Projects/tailrocks/velnor-project/velnor-new-pr-12
+HEAD 6a285e0909074c11f692c3ec68d59b9692da36bd
+branch refs/heads/perf/cache-selection-qualification
+
+worktree /tmp/velnor-mbx-integration-candidate-20261005
+HEAD fe9aff2b804b706c13adc3bc48647f3bbca97a2e
+detached
+
+worktree /tmp/velnor-pr12-phase0-merge-d707-20261005
+HEAD 8625f5d191bffc807f7b80a607ad1fc51cbc171b
+detached
+
+worktree /tmp/velnor-pr12-probe-tests-20261005
+HEAD 67acd4e66b5804861405ccf842753db373d12bf7
+detached
+
+worktree /tmp/velnor-source-retirement-draft-20261005
+HEAD d900ba9af90d5392c0af135d317511cf00de67c6
+detached
+

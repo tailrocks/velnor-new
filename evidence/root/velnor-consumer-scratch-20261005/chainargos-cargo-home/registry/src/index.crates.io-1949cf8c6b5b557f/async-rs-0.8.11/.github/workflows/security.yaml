@@ -1,0 +1,18 @@
+name: Security audit
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "**"
+  pull_request:
+  schedule:
+    - cron: "0 12 * * 1"
+
+jobs:
+  security_audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: amqp-rs/actions/checkout@main
+      - uses: amqp-rs/actions/security@main

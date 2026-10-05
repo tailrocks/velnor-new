@@ -1,0 +1,8 @@
+fix: preserve redirect paths and bound upstream probe rows
+
+Preserve RFC 3986 dot-segment semantics, including repeated and terminal
+slashes, and admit only expected inventory rows to upstream probe state.
+Require local identity validation for commits and test exact-version holds.
+
+Co-authored-by: Codex <codex@openai.com>
+Signed-off-by: Alexey Zhokhov <alexey@zhokhov.com>

@@ -1,0 +1,31 @@
+   Compiling proc-macro2 v1.0.107
+   Compiling unicode-ident v1.0.26
+   Compiling quote v1.0.47
+   Compiling serde_core v1.0.229
+   Compiling shlex v2.0.1
+   Compiling find-msvc-tools v0.1.14
+   Compiling zmij v1.0.23
+   Compiling serde_json v1.0.151
+   Compiling thiserror v2.0.21
+   Compiling serde v1.0.229
+   Compiling memchr v2.8.3
+   Compiling arrayvec v0.7.8
+   Compiling cpufeatures v0.3.1
+   Compiling cfg-if v1.0.5
+   Compiling itoa v1.0.18
+   Compiling constant_time_eq v0.4.2
+   Compiling cc v1.5.1
+   Compiling syn v3.0.6
+   Compiling blake3 v1.8.7
+   Compiling thiserror-impl v2.0.21
+   Compiling serde_derive v1.0.229
+   Compiling velnor-actions-contract v0.1.0 (/var/tmp/velnor-phase0-t24-main-shared-script-20261005/crates/velnor-actions-contract)
+   Compiling velnor-actions-workflow-renderer v0.1.0 (/var/tmp/velnor-phase0-t24-main-shared-script-20261005/crates/velnor-actions-workflow-renderer)
+warning: unused import: `ExitStatusExt`
+ --> crates/velnor-actions-workflow-renderer/src/document_shared_scripts_execution_tests.rs:3:42
+  |
+3 | use std::os::unix::process::{CommandExt, ExitStatusExt};
+  |                                          ^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+

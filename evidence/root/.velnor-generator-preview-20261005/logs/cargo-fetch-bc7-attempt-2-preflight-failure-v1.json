@@ -1,0 +1,14 @@
+{
+  "command": "env -i PATH=/usr/bin:/bin /usr/bin/bash --noprofile --norc /root/.velnor-generator-preview-20261005/preseed-preview-cargo-fetch-v5.sh",
+  "exit_code": 1,
+  "expected_record_mode_from_V5": "0:0:644",
+  "first_guard": "Rustup execution record identity changed",
+  "observed_at_utc": "2026-10-05T13:22:45Z",
+  "observed_record_identity": "0:0:600:2227",
+  "observed_record_sha256": "124d065d1ac4caf81ec7f4d721b9f3b767136bfeba7ddd3d74579ee07bedf219",
+  "output_log": "/root/.velnor-generator-preview-20261005/logs/cargo-fetch-bc7-attempt-2-preflight-failure-v1.log",
+  "output_log_sha256": "462db63699b1c5bee4eb42654e1d7d77b8b8062326ab82ccfd58bee8f8e129b0",
+  "phase": "host preflight before namespace, helper/Rustup/Mise/Cargo/Git source snapshot, mount, or network work",
+  "result": "FAIL; no acquisition attempt; preserve existing evidence unchanged",
+  "schema": 1
+}

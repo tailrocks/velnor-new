@@ -1,0 +1,4 @@
+Integrate protected-main idless-slot fix
+
+Co-authored-by: Codex <codex@openai.com>
+Signed-off-by: Alexey Zhokhov <alexey@zhokhov.com>

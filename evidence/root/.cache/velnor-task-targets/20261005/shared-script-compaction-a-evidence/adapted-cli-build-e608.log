@@ -1,0 +1,19 @@
+   Compiling serde v1.0.229
+   Compiling velnor-actions-contract v0.1.0 (/root/.cache/velnor-task-targets/20261005/shared-script-compaction-a-copy/crates/velnor-actions-contract)
+   Compiling hcl-primitives v0.1.12
+   Compiling libc v0.2.189
+   Compiling vecmap-rs v0.2.5
+   Compiling hcl-edit v0.9.7
+   Compiling velnor-actions-tofu v0.1.0 (/root/.cache/velnor-task-targets/20261005/shared-script-compaction-a-copy/crates/velnor-actions-tofu)
+   Compiling getrandom v0.4.3
+   Compiling hcl-rs v0.19.8
+   Compiling tempfile v3.27.0
+   Compiling velnor-actions-rust v0.1.0 (/root/.cache/velnor-task-targets/20261005/shared-script-compaction-a-copy/crates/velnor-actions-rust)
+   Compiling velnor-actions-actionlint v0.1.0 (/root/.cache/velnor-task-targets/20261005/shared-script-compaction-a-copy/crates/velnor-actions-actionlint)
+   Compiling velnor-actions-workflow-renderer v0.1.0 (/root/.cache/velnor-task-targets/20261005/shared-script-compaction-a-copy/crates/velnor-actions-workflow-renderer)
+   Compiling velnor-actions-mise v0.1.0 (/root/.cache/velnor-task-targets/20261005/shared-script-compaction-a-copy/crates/velnor-actions-mise)
+   Compiling velnor-actions-orchestrator v0.1.0 (/root/.cache/velnor-task-targets/20261005/shared-script-compaction-a-copy/crates/velnor-actions-orchestrator)
+   Compiling velnor-actions-cli v0.1.0 (/root/.cache/velnor-task-targets/20261005/shared-script-compaction-a-copy/crates/velnor-actions-cli)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.07s
+mbx[cache]: 19 hits, 0 misses; 0 B downloaded, 0 B uploaded, 0 B stored locally
+mbx[savings]: found 104.5 GiB logical of target/ whose checkouts left long ago. the estate has been settled.

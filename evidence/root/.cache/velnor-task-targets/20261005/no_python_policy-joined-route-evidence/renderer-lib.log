@@ -1,0 +1,88 @@
+   Compiling proc-macro2 v1.0.107
+   Compiling unicode-ident v1.0.26
+   Compiling quote v1.0.47
+   Compiling syn v3.0.6
+   Compiling find-msvc-tools v0.1.14
+   Compiling shlex v2.0.1
+   Compiling serde_core v1.0.229
+   Compiling cc v1.5.1
+   Compiling zmij v1.0.23
+   Compiling blake3 v1.8.7
+   Compiling serde v1.0.229
+   Compiling serde_json v1.0.151
+   Compiling thiserror v2.0.21
+   Compiling thiserror-impl v2.0.21
+   Compiling serde_derive v1.0.229
+   Compiling itoa v1.0.18
+   Compiling cfg-if v1.0.5
+   Compiling cpufeatures v0.3.1
+   Compiling arrayvec v0.7.8
+   Compiling constant_time_eq v0.4.2
+   Compiling memchr v2.8.3
+   Compiling velnor-actions-contract v0.1.0 (/root/.cache/velnor-task-targets/20261005/no_python_policy-joined-pin-test-20261005/crates/velnor-actions-contract)
+   Compiling velnor-actions-workflow-renderer v0.1.0 (/root/.cache/velnor-task-targets/20261005/no_python_policy-joined-pin-test-20261005/crates/velnor-actions-workflow-renderer)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 39.62s
+     Running unittests src/lib.rs (/root/.cache/velnor-task-targets/20261005/no_python_policy-joined-route-target/debug/deps/velnor_actions_workflow_renderer-baaa2ee710553a16)
+
+running 58 tests
+test composite::tests::shared_calls_use_only_canonical_repository_local_actions ... ok
+test document::verification_env_tests::report_fetch_requires_the_exact_read_permission ... ok
+test document::runner_shell_tests::typed_scale_set_jobs_declare_bash_while_hosted_jobs_keep_default ... ok
+test document::runner_shell_tests::rustdocflags_remain_scoped_to_the_documentation_step ... ok
+test freshness::tests::rejects_bad_spec_scalars ... ok
+test freshness::tests::rejects_internal_steps_fail_closed ... ok
+test cache_p08::setup_tests::configured_setup_pin_version_sha_condition_env_and_key_are_exact ... ok
+test document::verification_env_tests::emitted_verification_job_scrubs_credentials_without_disabling_mise_config ... ok
+test freshness::tests::renders_schedule_only_read_only_probe ... ok
+test lane_share::tests::differing_lane_bodies_fail_closed ... ok
+test lane_share::tests::duplicate_lane_checkout_fails_closed ... ok
+test lane_share::tests::unpaired_jobs_stay_inline ... ok
+test lane_share::tests::unsafe_logical_id_fails_closed ... ok
+test lane_share::tests::nonleading_lane_checkout_fails_closed ... ok
+test lane_share::tests::missing_lane_checkout_fails_closed ... ok
+test lane_share::shell_tests::paired_consumer_workflow_sets_shell_for_each_typed_scale_lane_only ... ok
+test lane_share::tests::mismatched_lane_checkout_inputs_fail_closed ... ok
+test lane_share::unpinned_tests::shared_composite_keeps_pinned_remote_refs ... ok
+test lane_share::unpinned_tests::shared_composite_rejects_unpinned_remote_action_refs ... ok
+test render::mise_job_target_tests::setup_set_rejects_mixed_action_or_version ... ok
+test render::mise_job_target_tests::target_contexts_fail_closed_on_wrong_label_mbx_and_order ... ok
+test schema2::release_eligibility::tests::job_renders_a_read_only_source_gate ... ok
+test tool_seed::tests::step_key_is_derived_from_pinned_job_tools_and_configured_checkout_payload ... ok
+test verification_jobs::tests::all_declared_tasks_join_required_fan_in ... ok
+test schema2::release_eligibility::tests::script_uses_the_expected_paginated_selectors_and_bounded_wait ... ok
+test verification_jobs::tests::paired_task_lanes_are_complete_and_join_required_together ... ok
+test verification_jobs::tests::task_job_is_unconditional_cache_off_and_credential_scrubbed ... ok
+test verification_jobs::tests::task_job_contract_rejects_conditions_dependencies_and_extra_steps ... ok
+test lane_share::tests::elected_save_stays_on_the_winner_job ... ok
+test schema2::runner_shell_tests::qualification_and_monitoring_declare_shell_only_for_typed_scale_set ... ok
+test render::mise_job_target_tests::renders_setup_and_cache_by_each_typed_runner_target ... ok
+test tool_seed::tests::existing_seed_must_match_exact_job_key_and_payload ... ok
+test workflow_size::tests::size_limit_ignores_non_workflow_files ... ok
+test schema2::runner_shell_tests::public_hosted_label_rejects_scale_set_tokens_and_unknown_labels ... ok
+test workflow_size::tests::workflow_size_limit_includes_exact_boundary ... ok
+test tool_seed_admission::tests::key_file_match_rejects_nul_extra_lines_and_oversize_inputs ... ok
+test schema2::release_eligibility::tests::edge::rejects_ci_run_from_wrong_head_repository ... ok
+test tool_seed::tests::local_seed_action_payload_and_order_are_not_name_authorized ... ok
+test lane_share::tests::matching_lane_checkout_inputs_are_carried_outside_the_composite ... ok
+test schema2::release_eligibility::tests::edge::rejects_ambiguous_latest_run_number ... ok
+test workflow_size::tests::size_limit_recognizes_case_insensitive_workflow_extensions ... ok
+test verification_jobs::tests::mixed_linux_and_apple_arm_tasks_keep_distinct_runners ... ok
+test tool_seed::tests::action_composite_contains_the_guarded_fixed_root_and_exact_input ... ok
+test tool_seed_admission::tests::false_owner_and_mount_commands_fail_closed ... ok
+test workflow_size::tests::utf8_workflow_limit_counts_marked_rendered_bytes ... ok
+test schema2::release_eligibility::tests::rejects_newer_failed_run_instead_of_reusing_old_success ... ok
+test schema2::release_eligibility::tests::edge::fails_closed_on_changed_tip_and_unfinished_latest_run ... ok
+test tool_seed::tests::matching_tool_seed_copies_both_trees_after_admission_and_keeps_source ... ok
+test schema2::release_eligibility::tests::edge::rejects_events_repository_refs_authority_and_stale_ci_sources ... ok
+test tool_seed_admission::tests::provenance_marker_rejects_oversize_nul_and_extra_lines ... ok
+test tool_seed_admission::tests::symlinks_and_non_root_entries_fail_tree_admission ... ok
+test tool_seed::tests::rejected_mount_and_mismatched_key_leave_destinations_untouched ... ok
+test tool_seed_admission::tests::only_one_exact_read_only_non_overlay_mount_is_admitted ... ok
+test schema2::release_eligibility::tests::selects_latest_ci_attempt_across_paginated_results ... ok
+test schema2::release_eligibility::tests::edge::rejects_main_tip_or_ci_attempt_changes_during_the_gate ... ok
+test schema2::release_eligibility::tests::edge::rejects_missing_duplicate_failed_and_wrong_attempt_required_jobs ... ok
+test lane_share::render_tests::shared_lanes_keep_ci_under_github_file_cap ... ok
+test tool_seed_admission::tests::tree_scan_rejects_depth_count_and_find_errors_without_truncation ... ok
+
+test result: ok. 58 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 14.39s
+

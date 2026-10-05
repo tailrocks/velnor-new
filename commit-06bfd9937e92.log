@@ -1,0 +1,2 @@
+[impl/pr49 04716aa4b] WIP: preserve existing partial work at immediate stop [skip ci]
+ 3 files changed, 80 insertions(+), 9 deletions(-)

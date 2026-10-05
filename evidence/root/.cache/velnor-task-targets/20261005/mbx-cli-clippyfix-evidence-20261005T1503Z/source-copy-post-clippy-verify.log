@@ -1,0 +1,6 @@
+source-v2 manifest SHA-256: 9b4d24424807daebf5260b9c627188ada1365b8639bb307cdd2ba6450c67acd1
+source/copy SHA rows verified: 1407
+matching directories: 213
+matching file mode/size rows: 1407
+matching symlink mode/target rows: 7
+source and isolated copy match in content, modes, sizes, and symlink targets

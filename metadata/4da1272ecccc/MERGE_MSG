@@ -1,0 +1,33 @@
+Merge remote-tracking branch 'origin/main' into impl/generator-pr28
+
+# Conflicts:
+#	crates/velnor-actions-cli/tests/impl_cli_tofu_capacity.rs
+#	crates/velnor-actions-contract/src/workflow/step.rs
+#	crates/velnor-actions-contract/src/workflow/step_identity.rs
+#	crates/velnor-actions-contract/src/workflow/step_protocol.rs
+#	crates/velnor-actions-contract/tests/impl_contract_step_roles.rs
+#	crates/velnor-actions-orchestrator/src/attach_mbx_tests.rs
+#	crates/velnor-actions-orchestrator/src/matrix_tools.rs
+#	crates/velnor-actions-orchestrator/src/tofu_cache.rs
+#	crates/velnor-actions-orchestrator/tests/impl_tofu_t22.rs
+#	crates/velnor-actions-workflow-renderer/src/action_ref.rs
+#	crates/velnor-actions-workflow-renderer/src/cache_p08.rs
+#	crates/velnor-actions-workflow-renderer/src/document.rs
+#	crates/velnor-actions-workflow-renderer/src/document_steps.rs
+#	crates/velnor-actions-workflow-renderer/src/lane_share.rs
+#	crates/velnor-actions-workflow-renderer/src/lane_share_render_tests.rs
+#	crates/velnor-actions-workflow-renderer/src/lane_share_sections.rs
+#	crates/velnor-actions-workflow-renderer/src/lib.rs
+#	crates/velnor-actions-workflow-renderer/src/plan_format.rs
+#	crates/velnor-actions-workflow-renderer/src/tofu_cache.rs
+#	crates/velnor-actions-workflow-renderer/tests/impl_renderer_cache_t22.rs
+#	crates/velnor-actions-workflow-renderer/tests/impl_renderer_p08.rs
+#	crates/velnor-actions-workflow-renderer/tests/impl_renderer_tofu_cache.rs
+#	crates/velnor-actions-workflow-renderer/tests/impl_renderer_token_hygiene_env.rs
+#	crates/velnor-actions-workflow-renderer/tests/impl_renderer_tree_policy.rs
+#	docs/proposed/opentofu-goldens/MANIFEST.sha256
+#	docs/proposed/opentofu-goldens/cases/dogfood/tree.sha256
+#	docs/proposed/opentofu-goldens/cases/empty-suite/tree.sha256
+#	docs/proposed/opentofu-goldens/cases/mbx-nextest/tree.sha256
+#	docs/proposed/opentofu-goldens/cases/minimal-cargo/tree.sha256
+#	docs/proposed/opentofu-goldens/cases/nested/tree.sha256

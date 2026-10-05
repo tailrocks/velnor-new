@@ -1,0 +1,26 @@
+mise by @jdx – installing 1 tool
+mise rust@1.98.1 info: syncing channel updates for 1.98.1-x86_64-unknown-linux-gnu
+mise rust@1.98.1 info: latest update on 2026-09-03 for version 1.98.1 (48a229cea 2026-09-01)
+mise rust@1.98.1 info: component clippy is up to date
+mise rust@1.98.1 info: component rust-docs is up to date
+mise rust@1.98.1 info: component rustfmt is up to date
+mise rust@1.98.1   1.98.1-x86_64-unknown-linux-gnu unchanged - rustc 1.98.1 (48a229cea 2026-09-01)
+mise rust@1.98.1 info: checking for self-update (current version: 1.29.1)
+mise rust@1.98.1 rustc 1.98.1 (48a229cea 2026-09-01)
+mise ✓ rust@1.98.1  311ms
+mise ████████████████ 1/1 · installed 1 tool in 312ms
+   Compiling velnor-actions-workflow-renderer v0.1.0 (/tmp/velnor-render-compaction-44b2-20261005/crates/velnor-actions-workflow-renderer)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.96s
+     Running unittests src/lib.rs (/root/.cache/velnor-task-targets/20261005/jackin-compaction/debug/debug/deps/velnor_actions_workflow_renderer-baaa2ee710553a16)
+
+running 1 test
+test render::document_shared_scripts::tests::execution_tests::sourced_cache_key_matches_inline_success_and_partial_failure ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 52 filtered out; finished in 0.03s
+
+     Running tests/velnor_workflow_renderer.rs (/root/.cache/velnor-task-targets/20261005/jackin-compaction/debug/debug/deps/velnor_workflow_renderer-f7fbb3074acf10a8)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 300 filtered out; finished in 0.00s
+

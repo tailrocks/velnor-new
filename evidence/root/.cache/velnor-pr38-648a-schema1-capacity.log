@@ -1,0 +1,24 @@
+   Compiling velnor-actions-workflow-renderer v0.1.1 (/tmp/velnor-impl-20261005/cache/pr38/crates/velnor-actions-workflow-renderer)
+   Compiling velnor-actions-orchestrator v0.1.1 (/tmp/velnor-impl-20261005/cache/pr38/crates/velnor-actions-orchestrator)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 5.90s
+     Running tests/velnor_orchestrator.rs (/root/.cache/velnor-pr38-v2-prelude-target/debug/deps/velnor_orchestrator-8d081b7f4f4189c7)
+
+running 1 test
+Initialized empty Git repository in /tmp/.tmpEJxb4L/.git/
+perf: op=generate roots=1 prepare_ms=13 generate_ms=257 files=10 ci_bytes=21789
+Initialized empty Git repository in /tmp/.tmpsnrtq5/.git/
+perf: op=generate roots=10 prepare_ms=22 generate_ms=417 files=10 ci_bytes=91533
+Initialized empty Git repository in /tmp/.tmpgWdNBh/.git/
+perf: op=generate roots=31 prepare_ms=45 generate_ms=683 files=10 ci_bytes=254367
+Initialized empty Git repository in /tmp/.tmpbONrN1/.git/
+perf: op=generate roots=32 prepare_ms=75 generate_ms=715 files=10 ci_bytes=262121
+Initialized empty Git repository in /tmp/.tmp3w4AlY/.git/
+perf: op=generate roots=40 prepare_ms=83 generate_ms=796 files=10 ci_bytes=324153
+Initialized empty Git repository in /tmp/.tmpPik20b/.git/
+perf: op=generate roots=60 prepare_ms=104 generate_ms=1113 files=10 ci_bytes=479233
+Initialized empty Git repository in /tmp/.tmpKbuggC/.git/
+perf: op=generate roots=100 prepare_ms=148 generate_ms=157 failed_closed_bytes=789393 limit_bytes=500000
+test impl_tofu_t24_scale::tofu_generate_scales_with_root_count ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 675 filtered out; finished in 4.74s
+

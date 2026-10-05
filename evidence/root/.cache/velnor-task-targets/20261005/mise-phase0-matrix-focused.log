@@ -1,0 +1,8 @@
+
+running 3 tests
+test workflow::wire_w1::wire_w1_tests::crate_driver_tools_follow_role_selection ... ok
+test workflow::wire_w1::wire_w1_tests::crate_tools_follow_selection_with_validators ... ok
+test workflow::wire_w1::wire_w1_tests::crate_tools_install_exact_pinned_set ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 484 filtered out; finished in 0.00s
+

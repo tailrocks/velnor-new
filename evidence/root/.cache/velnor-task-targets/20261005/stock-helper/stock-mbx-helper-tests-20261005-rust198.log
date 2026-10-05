@@ -1,0 +1,135 @@
+rustc 1.98.1 (48a229cea 2026-09-01)
+cargo 1.98.1 (797e8a9bc 2026-08-05)
+   Compiling velnor-actions-contract v0.1.0 (/tmp/velnor-native-c8-candidate-20261005/crates/velnor-actions-contract)
+   Compiling velnor-actions-workflow-renderer v0.1.0 (/tmp/velnor-native-c8-candidate-20261005/crates/velnor-actions-workflow-renderer)
+error[E0425]: cannot find function `generated_preflight_steps` in module `super`
+   --> crates/velnor-actions-workflow-renderer/src/stock_mbx_bundle_cli_fixture.rs:155:20
+    |
+155 |             super::generated_preflight_steps(&self.rustup, &self.root.join("cargo"))?;
+    |                    ^^^^^^^^^^^^^^^^^^^^^^^^^ not found in `super`
+    |
+help: consider importing this function
+    |
+  1 + use crate::stock_mbx_bundle_cli_tests::runner::generated_preflight_steps;
+    |
+help: if you import `generated_preflight_steps`, refer to it directly
+    |
+155 -             super::generated_preflight_steps(&self.rustup, &self.root.join("cargo"))?;
+155 +             generated_preflight_steps(&self.rustup, &self.root.join("cargo"))?;
+    |
+
+error[E0425]: cannot find function `check_local_setup_env` in module `super`
+   --> crates/velnor-actions-workflow-renderer/src/stock_mbx_bundle_cli_fixture.rs:156:16
+    |
+156 |         super::check_local_setup_env(&local_setup, &self.root.join("cargo"))?;
+    |                ^^^^^^^^^^^^^^^^^^^^^ not found in `super`
+    |
+help: consider importing this function
+    |
+  1 + use crate::stock_mbx_bundle_cli_tests::runner::check_local_setup_env;
+    |
+help: if you import `check_local_setup_env`, refer to it directly
+    |
+156 -         super::check_local_setup_env(&local_setup, &self.root.join("cargo"))?;
+156 +         check_local_setup_env(&local_setup, &self.root.join("cargo"))?;
+    |
+
+error[E0425]: cannot find function `check_empty_store` in this scope
+  --> crates/velnor-actions-workflow-renderer/src/stock_mbx_bundle_cli_lifecycle_tests.rs:98:5
+   |
+98 |     check_empty_store(stage, &primary_selection(stage))?;
+   |     ^^^^^^^^^^^^^^^^^ not found in this scope
+   |
+help: consider importing this function
+   |
+ 1 + use crate::stock_mbx_bundle_cli_tests::runner::check_empty_store;
+   |
+
+error[E0425]: cannot find function `primary_selection` in this scope
+  --> crates/velnor-actions-workflow-renderer/src/stock_mbx_bundle_cli_lifecycle_tests.rs:98:31
+   |
+98 |     check_empty_store(stage, &primary_selection(stage))?;
+   |                               ^^^^^^^^^^^^^^^^^ not found in this scope
+   |
+help: consider importing this function
+   |
+ 1 + use crate::stock_mbx_bundle_cli_tests::runner::primary_selection;
+   |
+
+error[E0425]: cannot find function `check_empty_store` in this scope
+   --> crates/velnor-actions-workflow-renderer/src/stock_mbx_bundle_cli_lifecycle_tests.rs:137:5
+    |
+137 |     check_empty_store(reader, &primary_selection(reader))?;
+    |     ^^^^^^^^^^^^^^^^^ not found in this scope
+    |
+help: consider importing this function
+    |
+  1 + use crate::stock_mbx_bundle_cli_tests::runner::check_empty_store;
+    |
+
+error[E0425]: cannot find function `primary_selection` in this scope
+   --> crates/velnor-actions-workflow-renderer/src/stock_mbx_bundle_cli_lifecycle_tests.rs:137:32
+    |
+137 |     check_empty_store(reader, &primary_selection(reader))?;
+    |                                ^^^^^^^^^^^^^^^^^
+    |
+help: a local variable with a similar name exists
+    |
+137 -     check_empty_store(reader, &primary_selection(reader))?;
+137 +     check_empty_store(reader, &writer_selection(reader))?;
+    |
+help: consider importing this function
+    |
+  1 + use crate::stock_mbx_bundle_cli_tests::runner::primary_selection;
+    |
+
+error[E0425]: cannot find value `MBX_ACTION_CACHE_MODE` in module `crate::cache_steps`
+   --> crates/velnor-actions-workflow-renderer/src/stock_mbx_bundle_cli_runner.rs:60:33
+    |
+ 60 |             crate::cache_steps::MBX_ACTION_CACHE_MODE,
+    |                                 ^^^^^^^^^^^^^^^^^^^^^
+    |
+   ::: crates/velnor-actions-workflow-renderer/src/cache_steps.rs:33:1
+    |
+ 33 | pub const MBX_ACTION_NAME: &str = "jdx/mr-boxington-action";
+    | ------------------------------------------------------------ similarly named constant `MBX_ACTION_NAME` defined here
+    |
+note: constant `crate::cache_steps::mbx_preflight::MBX_ACTION_CACHE_MODE` exists but is inaccessible
+   --> crates/velnor-actions-workflow-renderer/src/cache_steps_mbx_preflight.rs:133:1
+    |
+133 | pub(crate) const MBX_ACTION_CACHE_MODE: &str = "read";
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ not accessible
+help: a constant with a similar name exists
+    |
+ 60 -             crate::cache_steps::MBX_ACTION_CACHE_MODE,
+ 60 +             crate::cache_steps::MBX_ACTION_NAME,
+    |
+
+error[E0308]: mismatched types
+  --> crates/velnor-actions-workflow-renderer/src/stock_mbx_bundle_cli_runner.rs:42:16
+   |
+42 |         .ok_or("MBX driver did not create preflight")
+   |          ----- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `String`, found `&str`
+   |          |
+   |          arguments to this method are incorrect
+   |
+help: the return type of this call is `&'static str` due to the type of the argument passed
+  --> crates/velnor-actions-workflow-renderer/src/stock_mbx_bundle_cli_runner.rs:40:5
+   |
+40 | /     mbx_steps_for_driver(&uses, CompileDriver::Mbx, "1.21.1", "1.98.1", env)
+41 | |         .map_err(|err| err.to_string())?
+42 | |         .ok_or("MBX driver did not create preflight")
+   | |________________-------------------------------------^
+   |                  |
+   |                  this argument influences the return type of `ok_or`
+note: method defined here
+  --> /rustc/48a229ceaefd4985c50990b14116b6d856af0985/library/core/src/option.rs:1333:17
+help: try using a conversion method
+   |
+42 |         .ok_or("MBX driver did not create preflight".to_string())
+   |                                                     ++++++++++++
+
+Some errors have detailed explanations: E0308, E0425.
+For more information about an error, try `rustc --explain E0308`.
+error: could not compile `velnor-actions-workflow-renderer` (lib test) due to 8 previous errors
+warning: build failed, waiting for other jobs to finish...

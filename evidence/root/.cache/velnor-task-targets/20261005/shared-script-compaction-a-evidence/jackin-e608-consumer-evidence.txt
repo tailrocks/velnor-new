@@ -1,0 +1,33 @@
+Adapted e608 A-route actual-consumer compaction check
+
+Renderer source and binary
+- Current steward source base: HEAD e608f82039375a4c2a839d5229e1d2dd3035617b.
+- Source content manifest at e608: SHA-256 8686761c3d2a586370aa4f841b8b09ea40d0b93259e84e3aaf25fabd37cd0bab.
+- Adapted private source copy: /root/.cache/velnor-task-targets/20261005/shared-script-compaction-a-copy.
+- Adapted full content manifest: SHA-256 9a644786bec52196a66454c652de3f5cb54888ea6dad098cd8a96f8e271669f0.
+- The adapted copy differs from live e608 only at the seven new shared-script module files and render.rs; e608-source-delta.txt records the complete path-level diff.
+- CLI built from adapted e608 copy with Rust/Cargo 1.98.1, CARGO_BUILD_JOBS=1 and private CARGO_TARGET_DIR /root/.cache/velnor-task-targets/20261005/shared-script-compaction-a-target.
+- CLI binary SHA-256 d60f1c298da026980a27d8a787b915f8f16f5a245ec5f4b4ed3fe0c159a73ee6; `velnor-actions --version` reports 0.1.0.
+
+Actual input fixture identity
+- Prior two-generation evidence manifest SHA-256 73ff80537a6bde5ee67acffaa439da428ac6d5cbd00ca4f3818a9bbd295cfa1f.
+- Source fixture path: /root/.cache/velnor-task-targets/20261005/phase0-t24-jackin-run/jackin.
+- Disposable isolated clone path: /root/.cache/velnor-task-targets/20261005/shared-script-compaction-a-jackin.
+- Clone HEAD f02d62d12a0884d94ea3a8a574ab1aa0bebbdc0f on branch main; clean status, no remote, no object alternates. Clone used --no-local --no-hardlinks with private HOME/global/system/hooks settings; source fixture refs/index unchanged.
+- `.velnor/config.toml` SHA-256 17af85b335ebaa266bdbf488cf1f11634cea14eb16730cfd06fbc33078f2cd61.
+- Verified real 1856 release manifest SHA-256 ccaf24f1c05c3ead9999d140d1be515fb840fe6033e2c6300986fb4126119ae6; it binds release source commit 1856b5b9f47569515c8fa00657a2c8dde6aada9f and Linux binary SHA-256 b0628fde53f3da2223fb9d1a860286428501bf5098c14441d948fd8b40e20ebb.
+- Checked-in `.github/workflows/ci.yml` input SHA-256 e047459428877a9b7cb8ab01cccc884ed290b48b993c4421142e57191f391327. The original scratch with the fake future manifest was not used.
+
+Fresh generation result
+- Plan and both fresh generate commands exited 0, recorded in e608-generation-exits.txt.
+- Generation A: /root/.cache/velnor-task-targets/20261005/shared-script-compaction-a-e608-generations/generation-a.
+- Generation B: /root/.cache/velnor-task-targets/20261005/shared-script-compaction-a-e608-generations/generation-b.
+- Both `.github/workflows/ci.yml` outputs are 421760 bytes (78240 below the 500000-byte cap); both SHA-256 707cad980776f1a189c61553aa3b52325ff7fa2a4b98d3f2b8ed4cc4e3947a12.
+- Full relative file manifests are byte-identical (`cmp` succeeded), and `diff -qr` returned no differences. Output contains the two generated shared MBX verifier scripts.
+- Results also match the prior private run from the same source code: its generated workflow hash is the same 707cad980776f1a189c61553aa3b52325ff7fa2a4b98d3f2b8ed4cc4e3947a12.
+- Plan/generate note: the untouched `mise.lock` is malformed at line 389, yielding `tool_install_unverified:6`; no fixture input was modified. No hosted or physical-runner qualification is claimed.
+
+Isolation
+- Private Git HOME/config/hooks: /root/.cache/velnor-task-targets/20261005/shared-script-compaction-a-fixture-home.
+- Existing pinned tool install was read-only via MISE_DATA_DIR=/root/.local/share/mise; MISE_CACHE_DIR remained private under the disposable HOME and auto-install was disabled.
+- Generation outputs, logs, manifests, and build target are all in root-backed XFS task paths. No shared Git index/ref or source workspace was mutated.

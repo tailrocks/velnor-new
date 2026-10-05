@@ -1,0 +1,3 @@
+check-freshness: unknown argument: --not-a-flag
+usage: scripts/check-freshness.sh [--root DIR] [--check-upstream] [--with-advisories]
+exit=2

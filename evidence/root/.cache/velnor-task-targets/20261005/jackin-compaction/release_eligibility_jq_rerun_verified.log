@@ -1,0 +1,54 @@
+TEST schema2::release_eligibility::tests::edge::fails_closed_on_changed_tip_and_unfinished_latest_run
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running unittests src/lib.rs (/root/.cache/velnor-task-targets/20261005/jackin-compaction/debug/deps/velnor_actions_workflow_renderer-baaa2ee710553a16)
+
+running 1 test
+test schema2::release_eligibility::tests::edge::fails_closed_on_changed_tip_and_unfinished_latest_run ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 52 filtered out; finished in 0.02s
+
+TEST schema2::release_eligibility::tests::rejects_newer_failed_run_instead_of_reusing_old_success
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running unittests src/lib.rs (/root/.cache/velnor-task-targets/20261005/jackin-compaction/debug/deps/velnor_actions_workflow_renderer-baaa2ee710553a16)
+
+running 1 test
+test schema2::release_eligibility::tests::rejects_newer_failed_run_instead_of_reusing_old_success ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 52 filtered out; finished in 0.02s
+
+TEST schema2::release_eligibility::tests::edge::rejects_ci_run_from_wrong_head_repository
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running unittests src/lib.rs (/root/.cache/velnor-task-targets/20261005/jackin-compaction/debug/deps/velnor_actions_workflow_renderer-baaa2ee710553a16)
+
+running 1 test
+test schema2::release_eligibility::tests::edge::rejects_ci_run_from_wrong_head_repository ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 52 filtered out; finished in 0.01s
+
+TEST schema2::release_eligibility::tests::edge::rejects_main_tip_or_ci_attempt_changes_during_the_gate
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running unittests src/lib.rs (/root/.cache/velnor-task-targets/20261005/jackin-compaction/debug/deps/velnor_actions_workflow_renderer-baaa2ee710553a16)
+
+running 1 test
+test schema2::release_eligibility::tests::edge::rejects_main_tip_or_ci_attempt_changes_during_the_gate ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 52 filtered out; finished in 0.11s
+
+TEST schema2::release_eligibility::tests::selects_latest_ci_attempt_across_paginated_results
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running unittests src/lib.rs (/root/.cache/velnor-task-targets/20261005/jackin-compaction/debug/deps/velnor_actions_workflow_renderer-baaa2ee710553a16)
+
+running 1 test
+test schema2::release_eligibility::tests::selects_latest_ci_attempt_across_paginated_results ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 52 filtered out; finished in 0.07s
+
+TEST schema2::release_eligibility::tests::edge::rejects_events_repository_refs_authority_and_stale_ci_sources
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running unittests src/lib.rs (/root/.cache/velnor-task-targets/20261005/jackin-compaction/debug/deps/velnor_actions_workflow_renderer-baaa2ee710553a16)
+
+running 1 test
+test schema2::release_eligibility::tests::edge::rejects_events_repository_refs_authority_and_stale_ci_sources ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 52 filtered out; finished in 0.02s
+

@@ -1,0 +1,6 @@
+captured nested (plan exit 0)
+captured mbx-nextest (plan exit 0)
+captured empty-suite (plan exit 0)
+captured minimal-cargo (plan exit 0)
+captured dogfood (plan exit 0, tree identical)
+wrote /tmp/velnor-impl-20261005/cache/pr38/docs/proposed/opentofu-goldens/cases

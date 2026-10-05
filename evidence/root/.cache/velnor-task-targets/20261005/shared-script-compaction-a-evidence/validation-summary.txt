@@ -1,0 +1,18 @@
+Source copy: /root/.cache/velnor-task-targets/20261005/shared-script-compaction-a-copy
+Captured candidate base HEAD/MERGE_HEAD: 39d489229747342043de979e0f3e2c95d8726aa4 / 098be4ad61e614fa4ddfb30f7e7148e470974597
+Full source preimage manifest SHA-256: 1baa6fa8445f7b4ddcdd97987e34c55b48563634804f606876f56b1673dcd390
+Current live candidate HEAD: e608f82039375a4c2a839d5229e1d2dd3035617b
+Pinned Rust: rustc 1.98.1 (48a229cea 2026-09-01)
+Pinned Cargo: cargo 1.98.1 (797e8a9bc 2026-08-05)
+Focused test: cargo test --locked -p velnor-actions-workflow-renderer render::document_shared_scripts::tests -- --test-threads=1; 11 passed
+Full renderer test: cargo test --locked -p velnor-actions-workflow-renderer -- --test-threads=1; 66 unit + 313 integration passed
+Clippy: cargo clippy --locked -p velnor-actions-workflow-renderer --all-targets -- -D warnings; passed
+Formatting: rustfmt --edition 2024 --check on all eight owned source paths; passed
+CARGO_BUILD_JOBS=1; private CARGO_TARGET_DIR=/root/.cache/velnor-task-targets/20261005/shared-script-compaction-a-target
+focused-tests.log SHA-256 77064ef020bba83155af7ebfef11c0792dce242e85dc814f1985a33f33f2b678
+full-renderer-tests.log SHA-256 f8f2898328815d083c6782d5481da1792328854d4aa7e367fdbc195a8042eeff
+clippy-renderer.log SHA-256 9c1a6bec2416bf2bee1c08ad6b7f44b2e13afeed1f5d0428297160d5d1e054be
+rustfmt-owned.log SHA-256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+Eight-path postimage manifest SHA-256 c930d4ce89e8a0fd53ef0ec6ba3a678d1fa11a02c5d9a6fcb4e859f738598979
+Exact patch SHA-256 5b6097dc04f8f8b059c0cff38161fb74a8696703a42891ed8df9fd115d03b651
+Adaptation delta SHA-256 c1cb56f298c897a88f490b9940afe2d8b580da5ac1bf17a2896cc1b3365a18d9

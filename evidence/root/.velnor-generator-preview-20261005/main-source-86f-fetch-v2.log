@@ -1,0 +1,66 @@
+argv=["/usr/bin/git","-c","core.fsmonitor=false","-c","core.hooksPath=/dev/null","-c","diff.external=","-c","credential.helper=","-c","http.sslVerify=true","-c","http.followRedirects=false","-c","protocol.version=2","-c","maintenance.auto=false","-c","gc.auto=0","-c","gc.autoDetach=false","--version"]
+output=git version 2.47.3
+argv=["/usr/bin/git","-c","core.fsmonitor=false","-c","core.hooksPath=/dev/null","-c","diff.external=","-c","credential.helper=","-c","http.sslVerify=true","-c","http.followRedirects=false","-c","protocol.version=2","-c","maintenance.auto=false","-c","gc.auto=0","-c","gc.autoDetach=false","ls-remote","--exit-code","--heads","https://github.com/tailrocks/velnor-new.git","refs/heads/main"]
+output=540e12a4a225683e78378e63bfdbba2ddba29d86	refs/heads/main
+argv=["/usr/bin/git","-c","core.fsmonitor=false","-c","core.hooksPath=/dev/null","-c","diff.external=","-c","credential.helper=","-c","http.sslVerify=true","-c","http.followRedirects=false","-c","protocol.version=2","-c","maintenance.auto=false","-c","gc.auto=0","-c","gc.autoDetach=false","init","--template=/root/.velnor-generator-preview-20261005/main-source-86f-empty-template-v1","--initial-branch=main","/root/.velnor-generator-preview-20261005/main-source-86f"]
+output=Initialized empty Git repository in /root/.velnor-generator-preview-20261005/main-source-86f/.git/
+argv=["/usr/bin/git","-c","core.fsmonitor=false","-c","core.hooksPath=/dev/null","-c","diff.external=","-c","credential.helper=","-c","http.sslVerify=true","-c","http.followRedirects=false","-c","protocol.version=2","-c","maintenance.auto=false","-c","gc.auto=0","-c","gc.autoDetach=false","-C","/root/.velnor-generator-preview-20261005/main-source-86f","remote","add","origin","https://github.com/tailrocks/velnor-new.git"]
+argv=["/usr/bin/git","-c","core.fsmonitor=false","-c","core.hooksPath=/dev/null","-c","diff.external=","-c","credential.helper=","-c","http.sslVerify=true","-c","http.followRedirects=false","-c","protocol.version=2","-c","maintenance.auto=false","-c","gc.auto=0","-c","gc.autoDetach=false","-C","/root/.velnor-generator-preview-20261005/main-source-86f","config","--local","--replace-all","core.hooksPath","/dev/null"]
+argv=["/usr/bin/git","-c","core.fsmonitor=false","-c","core.hooksPath=/dev/null","-c","diff.external=","-c","credential.helper=","-c","http.sslVerify=true","-c","http.followRedirects=false","-c","protocol.version=2","-c","maintenance.auto=false","-c","gc.auto=0","-c","gc.autoDetach=false","-C","/root/.velnor-generator-preview-20261005/main-source-86f","config","--local","--replace-all","credential.helper",""]
+argv=["/usr/bin/git","-c","core.fsmonitor=false","-c","core.hooksPath=/dev/null","-c","diff.external=","-c","credential.helper=","-c","http.sslVerify=true","-c","http.followRedirects=false","-c","protocol.version=2","-c","maintenance.auto=false","-c","gc.auto=0","-c","gc.autoDetach=false","-C","/root/.velnor-generator-preview-20261005/main-source-86f","config","--local","--replace-all","remote.origin.fetch","+refs/heads/*:refs/remotes/origin/*"]
+argv=["/usr/bin/git","-c","core.fsmonitor=false","-c","core.hooksPath=/dev/null","-c","diff.external=","-c","credential.helper=","-c","http.sslVerify=true","-c","http.followRedirects=false","-c","protocol.version=2","-c","maintenance.auto=false","-c","gc.auto=0","-c","gc.autoDetach=false","-C","/root/.velnor-generator-preview-20261005/main-source-86f","config","--local","--replace-all","remote.origin.tagOpt","--no-tags"]
+argv=["/usr/bin/git","-c","core.fsmonitor=false","-c","core.hooksPath=/dev/null","-c","diff.external=","-c","credential.helper=","-c","http.sslVerify=true","-c","http.followRedirects=false","-c","protocol.version=2","-c","maintenance.auto=false","-c","gc.auto=0","-c","gc.autoDetach=false","-C","/root/.velnor-generator-preview-20261005/main-source-86f","fetch","--no-tags","--no-auto-gc","--depth=1","--no-recurse-submodules","origin","86f864aabc2192a9f8ccd3f01f2e25b7858c3f20"]
+output=From https://github.com/tailrocks/velnor-new
+ * branch            86f864aabc2192a9f8ccd3f01f2e25b7858c3f20 -> FETCH_HEAD
+argv=["/usr/bin/git","-c","core.fsmonitor=false","-c","core.hooksPath=/dev/null","-c","diff.external=","-c","credential.helper=","-c","http.sslVerify=true","-c","http.followRedirects=false","-c","protocol.version=2","-c","maintenance.auto=false","-c","gc.auto=0","-c","gc.autoDetach=false","-C","/root/.velnor-generator-preview-20261005/main-source-86f","rev-parse","FETCH_HEAD^{commit}"]
+output=86f864aabc2192a9f8ccd3f01f2e25b7858c3f20
+argv=["/usr/bin/git","-c","core.fsmonitor=false","-c","core.hooksPath=/dev/null","-c","diff.external=","-c","credential.helper=","-c","http.sslVerify=true","-c","http.followRedirects=false","-c","protocol.version=2","-c","maintenance.auto=false","-c","gc.auto=0","-c","gc.autoDetach=false","-C","/root/.velnor-generator-preview-20261005/main-source-86f","fetch","--no-tags","--no-auto-gc","--depth=1","--no-recurse-submodules","origin","+refs/heads/main:refs/remotes/origin/main"]
+output=From https://github.com/tailrocks/velnor-new
+ * [new branch]      main       -> origin/main
+argv=["/usr/bin/git","-c","core.fsmonitor=false","-c","core.hooksPath=/dev/null","-c","diff.external=","-c","credential.helper=","-c","http.sslVerify=true","-c","http.followRedirects=false","-c","protocol.version=2","-c","maintenance.auto=false","-c","gc.auto=0","-c","gc.autoDetach=false","-C","/root/.velnor-generator-preview-20261005/main-source-86f","rev-parse","refs/remotes/origin/main"]
+output=540e12a4a225683e78378e63bfdbba2ddba29d86
+argv=["/usr/bin/git","-c","core.fsmonitor=false","-c","core.hooksPath=/dev/null","-c","diff.external=","-c","credential.helper=","-c","http.sslVerify=true","-c","http.followRedirects=false","-c","protocol.version=2","-c","maintenance.auto=false","-c","gc.auto=0","-c","gc.autoDetach=false","ls-remote","--exit-code","--heads","https://github.com/tailrocks/velnor-new.git","refs/heads/main"]
+output=540e12a4a225683e78378e63bfdbba2ddba29d86	refs/heads/main
+argv=["/usr/bin/git","-c","core.fsmonitor=false","-c","core.hooksPath=/dev/null","-c","diff.external=","-c","credential.helper=","-c","http.sslVerify=true","-c","http.followRedirects=false","-c","protocol.version=2","-c","maintenance.auto=false","-c","gc.auto=0","-c","gc.autoDetach=false","-C","/root/.velnor-generator-preview-20261005/main-source-86f","update-ref","refs/heads/main","86f864aabc2192a9f8ccd3f01f2e25b7858c3f20"]
+argv=["/usr/bin/git","-c","core.fsmonitor=false","-c","core.hooksPath=/dev/null","-c","diff.external=","-c","credential.helper=","-c","http.sslVerify=true","-c","http.followRedirects=false","-c","protocol.version=2","-c","maintenance.auto=false","-c","gc.auto=0","-c","gc.autoDetach=false","-C","/root/.velnor-generator-preview-20261005/main-source-86f","symbolic-ref","HEAD","refs/heads/main"]
+argv=["/usr/bin/git","-c","core.fsmonitor=false","-c","core.hooksPath=/dev/null","-c","diff.external=","-c","credential.helper=","-c","http.sslVerify=true","-c","http.followRedirects=false","-c","protocol.version=2","-c","maintenance.auto=false","-c","gc.auto=0","-c","gc.autoDetach=false","-C","/root/.velnor-generator-preview-20261005/main-source-86f","symbolic-ref","refs/remotes/origin/HEAD","refs/remotes/origin/main"]
+argv=["/usr/bin/git","-c","core.fsmonitor=false","-c","core.hooksPath=/dev/null","-c","diff.external=","-c","credential.helper=","-c","http.sslVerify=true","-c","http.followRedirects=false","-c","protocol.version=2","-c","maintenance.auto=false","-c","gc.auto=0","-c","gc.autoDetach=false","-C","/root/.velnor-generator-preview-20261005/main-source-86f","config","--local","--replace-all","branch.main.remote","origin"]
+argv=["/usr/bin/git","-c","core.fsmonitor=false","-c","core.hooksPath=/dev/null","-c","diff.external=","-c","credential.helper=","-c","http.sslVerify=true","-c","http.followRedirects=false","-c","protocol.version=2","-c","maintenance.auto=false","-c","gc.auto=0","-c","gc.autoDetach=false","-C","/root/.velnor-generator-preview-20261005/main-source-86f","config","--local","--replace-all","branch.main.merge","refs/heads/main"]
+argv=["/usr/bin/git","-c","core.fsmonitor=false","-c","core.hooksPath=/dev/null","-c","diff.external=","-c","credential.helper=","-c","http.sslVerify=true","-c","http.followRedirects=false","-c","protocol.version=2","-c","maintenance.auto=false","-c","gc.auto=0","-c","gc.autoDetach=false","-C","/root/.velnor-generator-preview-20261005/main-source-86f","rev-parse","HEAD"]
+output=86f864aabc2192a9f8ccd3f01f2e25b7858c3f20
+argv=["/usr/bin/git","-c","core.fsmonitor=false","-c","core.hooksPath=/dev/null","-c","diff.external=","-c","credential.helper=","-c","http.sslVerify=true","-c","http.followRedirects=false","-c","protocol.version=2","-c","maintenance.auto=false","-c","gc.auto=0","-c","gc.autoDetach=false","-C","/root/.velnor-generator-preview-20261005/main-source-86f","rev-parse","HEAD^{tree}"]
+output=1e16a9270f3ea99b04e68521cfc876fa19db67ac
+argv=["/usr/bin/git","-c","core.fsmonitor=false","-c","core.hooksPath=/dev/null","-c","diff.external=","-c","credential.helper=","-c","http.sslVerify=true","-c","http.followRedirects=false","-c","protocol.version=2","-c","maintenance.auto=false","-c","gc.auto=0","-c","gc.autoDetach=false","-C","/root/.velnor-generator-preview-20261005/main-source-86f","cat-file","commit","86f864aabc2192a9f8ccd3f01f2e25b7858c3f20"]
+output=tree 1e16a9270f3ea99b04e68521cfc876fa19db67ac
+parent aea2cf5bb281ee307b0c00a7faee415486da2bcd
+author Alexey Zhokhov <alexey@zhokhov.com> 1791217397 +0700
+committer GitHub <noreply@github.com> 1791217397 +0700
+gpgsig -----BEGIN PGP SIGNATURE-----
+ 
+ wsFcBAABCAAQBQJqw871CRC1aQ7uu5UhlAAAoQkQAGa4TRecPd5AGFDFRphMRipw
+ cBbFLgTfkb8XEYuZQMyBTXFX7Hzq+df2vjnLH62lO7wBAQlcSwEyxxBhKQrXiX5P
+ TZOp7wF8llzW2MPVfYhdLCbn4g4PKil+tOGnWjVOsi3NKnjaulgsDLfUkY6Bvyaq
+ MYr/fFi4ai2hZezE1yLKPFhLkyKNl+XlmoxwZajf+0rFZBzHyOE6G9CqMzaLeKv6
+ bF3yh36C48P/IjuWz6hHfd9o5Y6HT+6lB3G+dey4gI7nzeQ65AOuaxpS9pNuIEl4
+ mD1o50y8yKNpCtVrCfVds+xXoi4e5wPnXnkZvYERRdlEfhx1oaTPoXolaznbpqd8
+ mzxNoiWvyI9nz1TOSULe8jCtTpqtpmA82jcWFF2xQDXJEfa3P04LcHcpoyeqOqlN
+ RTmyDLPj3CLrwY6qHuD/opkf25M3XDkCUfnzz7AMs3DnLE/awX369TrFu7OVIKv9
+ k//Wb7K50oQ97JzXQqJU+5QOwzhkOn4G2pmGKNrpA52RkSxj8oDnxop8P1RWrf0j
+ f9qBxGAth0MRe/4rPubarVzGtX9rVFwsYCNlr6S6PH46mBRI9GTYzOa0XOyNsbkg
+ dVlIAStZcVqWGeSNHiv7oF9edot0SEyJJFL12o9wrg7RxgeE8UKSWWowqbeqDlQq
+ KCpyx11/c0808+OKQFog
+ =zkk9
+ -----END PGP SIGNATURE-----
+ 
+
+docs: correct PR30 attribution and cache-path evidence
+
+Correct the historical PR30 cleanup timeline and cite the actual current Mise home constructor and orchestrator call sites. Preserve the distinction between the proposed cache contract and generated CARGO_HOME.
+
+Co-authored-by: Codex <codex@openai.com>
+Signed-off-by: Alexey Zhokhov <alexey@zhokhov.com>
+argv=["/usr/bin/git","-c","core.fsmonitor=false","-c","core.hooksPath=/dev/null","-c","diff.external=","-c","credential.helper=","-c","http.sslVerify=true","-c","http.followRedirects=false","-c","protocol.version=2","-c","maintenance.auto=false","-c","gc.auto=0","-c","gc.autoDetach=false","-C","/root/.velnor-generator-preview-20261005/main-source-86f","rev-parse","--abbrev-ref","--symbolic-full-name","@{u}"]
+output=origin/main
+argv=["/usr/bin/git","-c","core.fsmonitor=false","-c","core.hooksPath=/dev/null","-c","diff.external=","-c","credential.helper=","-c","http.sslVerify=true","-c","http.followRedirects=false","-c","protocol.version=2","-c","maintenance.auto=false","-c","gc.auto=0","-c","gc.autoDetach=false","-C","/root/.velnor-generator-preview-20261005/main-source-86f","cat-file","-e","86f864aabc2192a9f8ccd3f01f2e25b7858c3f20^{commit}"]
+argv=["/usr/bin/git","-c","core.fsmonitor=false","-c","core.hooksPath=/dev/null","-c","diff.external=","-c","credential.helper=","-c","http.sslVerify=true","-c","http.followRedirects=false","-c","protocol.version=2","-c","maintenance.auto=false","-c","gc.auto=0","-c","gc.autoDetach=false","-C","/root/.velnor-generator-preview-20261005/main-source-86f","fsck","--strict","--full","--no-reflogs","--no-progress"]
+PASS: exact Velnor commit=86f864aabc2192a9f8ccd3f01f2e25b7858c3f20 tree=1e16a9270f3ea99b04e68521cfc876fa19db67ac transcript_sha256=aad27db0288e46f6a13ab6c4ec6fe86e88bb128e6da19b45620d7eab0af52b01

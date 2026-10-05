@@ -1,0 +1,9 @@
+bc67054977cebea7656ebcb7f561889d72bde53319d459d362e868f61e3029cc  crates/velnor-actions-cli/src/args.rs
+fed0133dd2deb7b58956c09336fadd140c4e6afe0e5331c620ef58879552e3d0  crates/velnor-actions-cli/src/dispatch.rs
+38425ccf74386e78b134a807f03dcc4febc6eadf8cc13563b212472a905dc06d  crates/velnor-actions-cli/src/main.rs
+a9eaadbf0296c0a883964a95bd03820afd48a0fde8d37f7d1b444137d974a6db  crates/velnor-actions-cli/tests/impl_cli_verify_local.rs
+ABSENT  crates/velnor-actions-cli/examples/verify_local_metadata.rs
+d1aec591a1c1519da01f58a7d8e1bfe411cd3f82d56feaa8b9ccdff0d844a19b  scripts/verify-local.sh
+e5588ac48355dac50e7b55b3248e411c59b4f3142e4363328c196d61942aa3ad  scripts/check-no-python.sh
+f508088a676d8f09add94966d9eec99be5185346cf4aa3e4a3e2522384a14b4a  .alint.yml
+7614b5fab3410824eb639084e98ac1cdf2a84bb8869b41aa48a99f155b4d02df  .velnor/freshness-inventory.json

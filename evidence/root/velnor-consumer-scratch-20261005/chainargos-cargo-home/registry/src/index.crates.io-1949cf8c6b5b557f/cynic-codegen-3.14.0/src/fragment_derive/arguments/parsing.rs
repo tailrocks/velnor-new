@@ -1,0 +1,380 @@
+use proc_macro2::Span;
+use syn::{
+    Attribute, Ident, LitStr, Result, Token,
+    ext::IdentExt,
+    parse::{Parse, ParseStream},
+    punctuated::Punctuated,
+    spanned::Spanned,
+};
+
+pub fn arguments_from_field_attrs(
+    attrs: &[syn::Attribute],
+) -> Result<Option<(Vec<FieldArgument>, proc_macro2::Span)>> {
+    for attr in attrs {
+        if attr.path().is_ident("arguments") {
+            let parsed: CynicArguments = attr.parse_args()?;
+            return Ok(Some((parsed.arguments.into_iter().collect(), attr.span())));
+        }
+    }
+    Ok(None)
+}
+
+/// Implements syn::Parse to parse out arguments from the arguments
+/// attribute.
+#[derive(Debug)]
+pub struct CynicArguments {
+    pub arguments: Punctuated<FieldArgument, Token![,]>,
+}
+
+impl Parse for CynicArguments {
+    fn parse(input: ParseStream<'_>) -> Result<Self> {
+        Ok(CynicArguments {
+            arguments: Punctuated::parse_terminated(input)?,
+        })
+    }
+}
+
+impl CynicArguments {
+    pub fn into_inner(self) -> Vec<FieldArgument> {
+        self.arguments.into_iter().collect()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct FieldArgument {
+    pub argument_name: Ident,
+    pub value: FieldArgumentValue,
+    pub requires_feature: Option<syn::LitStr>,
+}
+
+#[derive(Debug, Clone)]
+pub enum FieldArgumentValue {
+    Literal(ArgumentLiteral),
+    Expression(Box<syn::Expr>),
+}
+
+impl Parse for FieldArgument {
+    fn parse(input: ParseStream<'_>) -> Result<Self> {
+        let requires_feature = {
+            let lookahead = input.lookahead1();
+            if lookahead.peek(Token![#]) {
+                Some(input.parse::<FeatureAttribute>()?.0)
+            } else {
+                None
+            }
+        };
+
+        let argument_name = input.call(Ident::parse_any)?;
+        let lookahead = input.lookahead1();
+        let value;
+        if lookahead.peek(Token![:]) {
+            input.parse::<Token![:]>()?;
+            value = FieldArgumentValue::Literal(input.parse()?);
+        } else if lookahead.peek(Token![=]) {
+            input.parse::<Token![=]>()?;
+            value = FieldArgumentValue::Expression(input.parse()?);
+        } else {
+            return Err(lookahead.error());
+        }
+
+        Ok(FieldArgument {
+            requires_feature,
+            argument_name,
+            value,
+        })
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum ArgumentLiteral {
+    Literal(syn::Lit),
+    Enum(proc_macro2::Ident),
+    Object(Punctuated<FieldArgument, Token![,]>, Span),
+    List(Punctuated<ArgumentLiteral, Token![,]>, Span),
+    Variable(proc_macro2::Ident, Span),
+    Null(Span),
+}
+
+impl ArgumentLiteral {
+    pub fn span(&self) -> Span {
+        match self {
+            ArgumentLiteral::Literal(lit) => lit.span(),
+            ArgumentLiteral::Enum(ident) => ident.span(),
+            ArgumentLiteral::Object(_, span) => *span,
+            ArgumentLiteral::List(_, span) => *span,
+            ArgumentLiteral::Variable(_, span) => *span,
+            ArgumentLiteral::Null(span) => *span,
+        }
+    }
+}
+
+impl Parse for ArgumentLiteral {
+    fn parse(input: ParseStream<'_>) -> Result<Self> {
+        let lookahead = input.lookahead1();
+        if lookahead.peek(syn::token::Brace) {
+            let span = input.span();
+            let content;
+            syn::braced!(content in input);
+
+            Ok(ArgumentLiteral::Object(
+                content.parse_terminated(FieldArgument::parse, Token![,])?,
+                span,
+            ))
+        } else if lookahead.peek(syn::token::Bracket) {
+            let span = input.span();
+            let content;
+            syn::bracketed!(content in input);
+
+            Ok(ArgumentLiteral::List(
+                content.parse_terminated(ArgumentLiteral::parse, Token![,])?,
+                span,
+            ))
+        } else if lookahead.peek(Token![$]) {
+            let dollar_span = input.span();
+            input.parse::<Token![$]>()?;
+
+            let mut span = input.span();
+            if let Some(joined_span) = dollar_span.join(span) {
+                // This only works on nightly, so fall back to the span of the ident.
+                span = joined_span;
+            }
+
+            Ok(ArgumentLiteral::Variable(input.parse()?, span))
+        } else if lookahead.peek(syn::Lit) {
+            Ok(ArgumentLiteral::Literal(input.parse()?))
+        } else if lookahead.peek(Ident) {
+            let ident = input.call(Ident::parse_any)?;
+
+            if ident == "null" {
+                return Ok(ArgumentLiteral::Null(ident.span()));
+            }
+
+            Ok(ArgumentLiteral::Enum(ident))
+        } else {
+            Err(lookahead.error())
+        }
+    }
+}
+
+pub struct FeatureAttribute(LitStr);
+
+impl Parse for FeatureAttribute {
+    fn parse(input: ParseStream<'_>) -> Result<Self> {
+        use syn::{Expr, ExprLit, Lit};
+
+        let mut attrs = input.call(Attribute::parse_outer)?;
+        if attrs.is_empty() {
+            return Err(syn::Error::new(
+                Span::call_site(),
+                "arguments must have one attribute",
+            ));
+        }
+        if attrs.len() > 1 {
+            return Err(syn::Error::new_spanned(
+                &attrs[2],
+                "arguments may only have one attribute",
+            ));
+        }
+
+        let attr = attrs.pop().unwrap();
+        match attr.meta {
+            syn::Meta::NameValue(meta) if is_feature_flag(&meta) => {
+                let Expr::Lit(ExprLit {
+                    lit: Lit::Str(literal),
+                    ..
+                }) = meta.value
+                else {
+                    panic!("bug: we already checked this was a feature flag");
+                };
+                Ok(Self(literal))
+            }
+            _ => Err(syn::Error::new_spanned(
+                attr,
+                "argument attributes must have the form `feature = \"xyz\"`",
+            )),
+        }
+    }
+}
+
+fn is_feature_flag(meta: &syn::MetaNameValue) -> bool {
+    use syn::{Expr, ExprLit, Lit};
+    meta.path.is_ident("feature")
+        && matches!(
+            meta.value,
+            Expr::Lit(ExprLit {
+                lit: Lit::Str(_),
+                ..
+            })
+        )
+}
+
+#[cfg(test)]
+mod test {
+    use assert_matches::assert_matches;
+    use quote::quote;
+    use syn::parse_quote;
+
+    use super::*;
+
+    #[test]
+    fn test_parsing_string_literal() {
+        let parsed: CynicArguments = parse_quote! { x: "abcd" };
+
+        let arguments = parsed.arguments.iter().collect::<Vec<_>>();
+
+        assert_eq!(arguments.len(), 1);
+        assert_eq!(arguments[0].argument_name.to_string(), "x".to_string());
+        assert_matches!(
+            arguments[0].value,
+            FieldArgumentValue::Literal(ArgumentLiteral::Literal(_))
+        );
+    }
+
+    #[test]
+    fn test_parsing_boolean_literal() {
+        let parsed: CynicArguments = parse_quote! { x: true, y: false };
+
+        let arguments = parsed.arguments.iter().collect::<Vec<_>>();
+
+        assert_eq!(arguments.len(), 2);
+        assert_eq!(arguments[0].argument_name.to_string(), "x".to_string());
+        assert_matches!(
+            &arguments[0].value,
+            FieldArgumentValue::Literal(ArgumentLiteral::Literal(lit)) => {
+                let expected: syn::Lit = parse_quote!{ true };
+                assert_eq!(lit, &expected);
+            }
+        );
+
+        assert_eq!(arguments[1].argument_name.to_string(), "y".to_string());
+        assert_matches!(
+            &arguments[1].value,
+            FieldArgumentValue::Literal(ArgumentLiteral::Literal(lit)) => {
+                let expected: syn::Lit = parse_quote!{ false };
+                assert_eq!(lit, &expected);
+            }
+        );
+    }
+
+    #[test]
+    fn test_parsing_null() {
+        let parsed: CynicArguments = parse_quote! { x: null };
+
+        let arguments = parsed.arguments.iter().collect::<Vec<_>>();
+
+        assert_eq!(arguments.len(), 1);
+        assert_eq!(arguments[0].argument_name.to_string(), "x".to_string());
+        assert_matches!(
+            &arguments[0].value,
+            FieldArgumentValue::Literal(ArgumentLiteral::Null(_))
+        );
+    }
+
+    #[test]
+    fn test_parsing_multiple_arg_expressions() {
+        let parsed: CynicArguments = parse_quote! { x: 1, y: $variable };
+
+        let arguments = parsed.arguments.iter().collect::<Vec<_>>();
+
+        assert_eq!(arguments.len(), 2);
+        assert_eq!(arguments[0].argument_name.to_string(), "x".to_string());
+        assert_matches!(
+            arguments[0].value,
+            FieldArgumentValue::Literal(ArgumentLiteral::Literal(_))
+        );
+
+        assert_eq!(arguments[1].argument_name.to_string(), "y".to_string());
+        assert_matches!(&arguments[1].value, FieldArgumentValue::Literal(ArgumentLiteral::Variable(name ,_)) => {
+            assert_eq!(name.to_string(), "variable");
+        });
+    }
+
+    #[test]
+    fn test_parsing_feature_flag() {
+        let parsed: CynicArguments = parse_quote! { #[feature = "2025"] x: 1 };
+
+        let arguments = parsed.arguments.iter().collect::<Vec<_>>();
+
+        assert_eq!(arguments.len(), 1);
+        assert_eq!(arguments[0].argument_name.to_string(), "x".to_string());
+        assert_eq!(
+            arguments[0].requires_feature.as_ref().map(LitStr::value),
+            Some("2025".into())
+        );
+        assert_matches!(
+            arguments[0].value,
+            FieldArgumentValue::Literal(ArgumentLiteral::Literal(_))
+        );
+    }
+
+    #[test]
+    fn test_feature_flag_parsing_fail() {
+        let test_cases = [
+            quote! { #[foo = "fail"] x: 1 },
+            quote! { #[feature = 1] x: 1 },
+            quote! { #[feature = {}] x: 1 },
+            quote! { #[] x: 1 },
+            quote! { #[feature = "abcd", feature = "defg"] x: 1 },
+        ];
+
+        let results = test_cases
+            .iter()
+            .map(|test| syn::parse2::<CynicArguments>(test.clone()))
+            .collect::<Vec<_>>();
+
+        insta::assert_debug_snapshot!(results, @r#"
+        [
+            Err(
+                Error(
+                    "argument attributes must have the form `feature = \"xyz\"`",
+                ),
+            ),
+            Err(
+                Error(
+                    "argument attributes must have the form `feature = \"xyz\"`",
+                ),
+            ),
+            Err(
+                Error(
+                    "argument attributes must have the form `feature = \"xyz\"`",
+                ),
+            ),
+            Err(
+                Error(
+                    "unexpected end of input, expected identifier",
+                ),
+            ),
+            Err(
+                Error(
+                    "unexpected token, expected `]`",
+                ),
+            ),
+        ]
+        "#);
+    }
+
+    #[test]
+    fn test_parsing_list_and_object() {
+        let parsed: CynicArguments = parse_quote! { x: {fieldOne: ["hello"], fieldTwo: "hello"}};
+        let arguments = parsed.arguments.iter().collect::<Vec<_>>();
+
+        assert_eq!(arguments.len(), 1);
+        assert_eq!(arguments[0].argument_name.to_string(), "x".to_string());
+        assert_matches!(&arguments[0].value, FieldArgumentValue::Literal(ArgumentLiteral::Object(fields, _)) => {
+            let fields = fields.iter().collect::<Vec<_>>();
+            assert_eq!(fields.len(), 2);
+
+            assert_eq!(fields[0].argument_name.to_string(), "fieldOne");
+            assert_matches!(&fields[0].value, FieldArgumentValue::Literal(ArgumentLiteral::List(vals, _)) => {
+
+                let vals = vals.iter().collect::<Vec<_>>();
+                assert_eq!(vals.len(), 1);
+
+                assert_matches!(vals[0], ArgumentLiteral::Literal(_));
+            });
+
+            assert_eq!(fields[1].argument_name.to_string(), "fieldTwo");
+            assert_matches!(fields[1].value, FieldArgumentValue::Literal(ArgumentLiteral::Literal(_)));
+        });
+    }
+}

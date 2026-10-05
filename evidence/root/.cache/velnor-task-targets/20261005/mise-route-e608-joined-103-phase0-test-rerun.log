@@ -1,0 +1,28 @@
+   Compiling velnor-actions-orchestrator v0.1.0 (/root/.cache/velnor-task-targets/20261005/mise-route-e608-joined-103/crates/velnor-actions-orchestrator)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 11.36s
+     Running unittests src/lib.rs (/root/.cache/velnor-task-targets/20261005/mise-route-e608-joined-target/debug/deps/velnor_actions_orchestrator-68b2d2e5abe67626)
+
+running 5 tests
+test workflow_jobs::mise_phase0::tests::mise_phase0_runtime_uses_the_selected_rust_toolchain ... ok
+test workflow_jobs::mise_phase0::tests::duplicate_phase0_job_id_fails_without_partially_inserting_other_lanes ... ok
+test workflow_jobs::mise_phase0::tests::phase0_jobs_cover_three_platforms_with_mise_only_tools ... ok
+test workflow_jobs::mise_phase0::tests::linux_phase0_runs_a_separate_locked_workspace_msrv_check ... FAILED
+test workflow::workflow_mise_phase0_tests::required_gate_needs_each_real_binary_platform_job ... ok
+
+failures:
+
+---- workflow_jobs::mise_phase0::tests::linux_phase0_runs_a_separate_locked_workspace_msrv_check stdout ----
+
+thread 'workflow_jobs::mise_phase0::tests::linux_phase0_runs_a_separate_locked_workspace_msrv_check' (4009848) panicked at crates/velnor-actions-orchestrator/src/workflow_jobs_mise_phase0_tests.rs:109:5:
+assertion `left == right` failed
+  left: ["env", "-u", "ACTIONS_ID_TOKEN_REQUEST_TOKEN", "-u", "ACTIONS_ID_TOKEN_REQUEST_URL", "-u", "ACTIONS_RUNTIME_TOKEN", "-u", "GITHUB_TOKEN", "-u", "MISE_GITHUB_TOKEN", "-u", "GH_TOKEN", "-u", "GH_HOST", "-u", "GH_CONFIG_DIR", "mise", "--no-config", "--no-env", "--no-hooks", "install", "rust@1.98.1"]
+ right: ["mise", "--no-config", "--no-env", "--no-hooks", "install", "rust@1.98.1"]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    workflow_jobs::mise_phase0::tests::linux_phase0_runs_a_separate_locked_workspace_msrv_check
+
+test result: FAILED. 4 passed; 1 failed; 0 ignored; 0 measured; 487 filtered out; finished in 0.00s
+
+error: test failed, to rerun pass `-p velnor-actions-orchestrator --lib`

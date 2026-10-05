@@ -1,0 +1,30 @@
+{
+  "command": [
+    "/usr/bin/env",
+    "-i",
+    "PATH=/usr/bin:/bin",
+    "LC_ALL=C",
+    "/usr/bin/python3",
+    "-I",
+    "-S",
+    "/root/.velnor-generator-preview-20261005/preseed-preview-materialize.py"
+  ],
+  "effective_uid": 0,
+  "exit_code": 1,
+  "finished_utc": "2026-10-05T09:31:12Z",
+  "host": "bastion",
+  "materializer_sha256": "6cea80e6c5cb1303f1e2180cfc73d3f18a9b0b18f32af6fdda8572dbedbe6506",
+  "output_log_path": "/root/.velnor-generator-preview-20261005/materialize-attempt-2.log",
+  "output_log_sha256": "f9c2d615ab6c203b87f7c0eda40ecedfa5891dc41e0e5e265c78f104327a890a",
+  "partial_stage_entries": 73,
+  "partial_stage_path": "/root/.velnor-generator-preview-20261005/.rootfs-materializing-attempt-2",
+  "partial_stage_regular_file_bytes": 10142071,
+  "partial_stage_tree_sha256": "887538a60840050286bcf69924960049403a76c03d893c5668b15612bdab58af",
+  "plan_sha256": "ebca0ef5f4c716e533cece9637b3d68763cc8265ce4016bf84a85a279416e77f",
+  "provenance_sha256": "67a8ba245858b11276a6496a513584fefec26e26218b0cdfad028a3fac07d137",
+  "redacted_result": "materializer: unsafe relative path",
+  "root_cause": "TreeWriter.null_device called parentfd with absolute /dev/null although parentfd requires relative paths. All 37 planned host files were copied and hash-checked; /dev/null device, Rust archives, Mise, validators, and later steps were not reached.",
+  "stage_state": "Original partial stage preserved by same-directory rename. No tool or installer executed; no network, Cargo, helper, or generator operation occurred.",
+  "started_utc": "2026-10-05T09:30:46Z",
+  "status": "FAIL"
+}

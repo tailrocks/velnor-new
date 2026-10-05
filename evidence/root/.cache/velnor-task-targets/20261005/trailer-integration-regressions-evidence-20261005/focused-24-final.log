@@ -1,0 +1,31 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.04s
+     Running unittests examples/validate_commit_trailers.rs (target/debug/examples/validate_commit_trailers-1e86c6ce31c4799e)
+
+running 24 tests
+test tests::blank_line_inside_canonical_block_fails ... ok
+test tests::ambiguous_trailer_block_fails ... ok
+test tests::body_decoy_trailer_fails ... ok
+test tests::canonical_policy_accepts_universal_newlines ... ok
+test tests::ambiguous_policy_heading_fails ... ok
+test tests::combining_mark_exposes_body_trailer_decoy ... ok
+test tests::crlf_terminal_block_passes ... ok
+test tests::duplicate_trailers_fail ... ok
+test tests::cli_accepts_local_identity_check_flag ... ok
+test tests::exact_terminal_block_passes ... ok
+test tests::missing_trailers_fail ... ok
+test tests::noncontiguous_trailers_fail ... ok
+test tests::python_strip_control_space_rejects_empty_subject ... ok
+test tests::short_signoff_name_fails ... ok
+test tests::reversed_trailers_fail ... ok
+test tests::trailing_blank_line_fails ... ok
+test tests::unicode_line_break_exposes_body_trailer_decoy ... ok
+test tests::trailing_blank_line_in_policy_block_fails ... ok
+test tests::unicode_word_suffix_is_not_a_trailer_label ... ok
+test tests::wrong_codex_coauthor_fails ... ok
+test tests::unicode_casefold_alias_exposes_body_trailer_decoy ... ok
+test tests::wrong_signoff_email_fails ... ok
+test tests::local_identity_mismatch_fails ... ok
+test tests::local_author_and_committer_match_identity ... ok
+
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+

@@ -1,0 +1,10 @@
+[detached HEAD fe9aff2b8] WIP: checkpoint existing work at immediate stop [skip ci]
+ 34 files changed, 2202 insertions(+), 990 deletions(-)
+ create mode 100644 crates/velnor-actions-workflow-renderer/src/job_runners.rs
+ create mode 100644 crates/velnor-actions-workflow-renderer/src/lane_share_lcs.rs
+ delete mode 100644 crates/velnor-actions-workflow-renderer/src/mbx_bundle.rs
+ delete mode 100644 crates/velnor-actions-workflow-renderer/src/mbx_gc_policy.rs
+ create mode 100644 crates/velnor-actions-workflow-renderer/src/stock_mbx_bundle.rs
+ delete mode 100644 crates/velnor-actions-workflow-renderer/tests/impl_renderer_mbx_bundle.rs
+ create mode 100644 crates/velnor-actions-workflow-renderer/tests/impl_renderer_mbx_cache_isolation.rs
+ delete mode 100644 crates/velnor-actions-workflow-renderer/tests/impl_renderer_mbx_gc_policy.rs

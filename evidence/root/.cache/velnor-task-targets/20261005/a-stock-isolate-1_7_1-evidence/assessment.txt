@@ -1,0 +1,34 @@
+A stock-action isolation alternative assessment (source-only)
+Date: 2026-10-05
+Implementation scope: none; inspected the private adapted-A source copy and official action source tag v1.7.1.
+
+Source identities
+- Official action tag documented in the repository freshness evidence: jdx/mr-boxington-action v1.7.1 -> d0825fbaf3cc36ca2609aa38e71046265a1f1e37.
+- Raw official action source snapshots are in this directory:
+  action.yml SHA-256 bad9dbd4f5e62162fb70d1dad84e84e721957bb2e6d69d66cff711263be28869
+  src/index.ts SHA-256 7efac7170832d336f207c5a66d788c731dabbf8ede9dda75935dbbb568eb67ca
+  src/objects-cache.ts SHA-256 6af112ea137a9a8ae80b487b40fff5bc44869cdc8d93bbb042740ebc5b3df300
+  packaged dist/index.js SHA-256 0785ff9249529187d58abc12bb603e3e80965c122d031f37d46ce547d4aa58d1; string checks confirm it carries the isolated-cache, output, and post-cleanup paths.
+- Private current-A source copy: /root/.cache/velnor-task-targets/20261005/shared-script-compaction-a-copy; adapted-A manifest SHA-256 9a644786bec52196a66454c652de3f5cb54888ea6dad098cd8a96f8e271669f0.
+- Relevant current-A file SHA-256s:
+  crates/velnor-actions-contract/src/workflow/ir.rs 305a195113ce105fc27238bd27d3aff162d559b29c8656cb25cd1a7689977009
+  crates/velnor-actions-workflow-renderer/src/document_steps.rs 124c18d8cb41d32c140252515ffa2007a1a7fd3f91e9459a461369ab55e80107
+  crates/velnor-actions-workflow-renderer/src/cache_steps_mbx_preflight.rs 3f543e3d74c88d0078f112f10f3abde9761cd0adf2ada875d338e08dc75b80ae
+  crates/velnor-actions-workflow-renderer/src/document.rs e407d12d83a36e3541c80389adcb3fff1f35aac0e594ebd7a243d76c1c4ba2c2
+  .velnor/version-policy.toml c5a32352a4c8d259bb2f7620e67ba5ccd9be71443bf26e13b8164a23e6f68247
+
+Official v1.7.1 flow (source line numbers from downloaded files)
+- action.yml:34-36 defines isolate-objects-cache; lines 93-95 say node24, main dist/index.js, post dist/index.js; line 96 is post-if: success().
+- src/index.ts:330-346 validates mode and installs MBX; setup/asset checksum/version validation is completed by setupMbx before isolate paths are created.
+- src/index.ts:386-408 creates the private RUNNER_TEMP store, overrides MBX_CACHE_DIR, validates that `mbx cache dir` resolves inside the store, and prepares the bundle path.
+- src/index.ts:500-520 calls actions/cache restore first, then emits mbx-version and saves POST_STATE='github', before attempting the import.
+- src/index.ts:521-534 validates/imports a restored bundle. An import error throws before cache-hit, cache-primary-key, cache path state, or final github-save/github-restore-only POST_STATE are stored (lines 542-557 are after successful import).
+- src/index.ts:593-605 runs isolated post cleanup only when POST_STATE is github-save or github-restore-only. On an import exception POST_STATE remains 'github', so post skips the cleanup/save branch. On an ordinary main-action failure, action.yml's post-if success() also prevents post from running.
+- src/objects-cache.ts:89-115 creates a random mkdtemp store and stable bundle location; 148-181 verifies exact direct-child, canonical, non-symlink paths; 298-312 validates and imports then deletes the bundle only after import succeeds; 314-344 removes the store/bundle and checks the root is empty, but those cleanup helpers are internal to the action and are not invoked on import failure.
+
+Disposition
+`isolate-objects-cache: true` makes the action store private, but v1.7.1 does not offer import-failure fallback. Bare continue-on-error cannot distinguish setup/restore failures from import failure safely and can let a valid installed binary mask restore/API/archive failures. Using mbx-version output as a stage signal would require a rendered step id (the typed Step IR has no id field), and the current MBX version check insists on the preflight path `${RUNNER_TEMP}/velnor/mbx`, whereas isolate overrides it. The current action does not expose its cache key or save state when import fails. In addition, runner-source review reports continue-on-error applies to action post execution too, so that flag could suppress a post export/save ENOSPC failure.
+
+A safe supported A fallback therefore needs at least: an action output id and failure gate; a verified cleanup route for the exact action-private store and external bundle; an isolated-path-aware version check; and a trusted producer-save path/key after a cold build. The stock action has no API for the latter once main throws. This exceeds a narrow existing renderer seam; no executable cleanup fixture or source changes were made. Recommend not treating the stock isolation input as equivalent to B's corrupt-cache cold fallback plus successful-producer behavior unless the action adds a supported recovery contract or the generator implements/reviews the missing lifecycle.
+
+No runtime, physical-hosted, or macOS qualification was performed.

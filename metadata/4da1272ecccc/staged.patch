@@ -1,0 +1,2466 @@
+diff --git a/.config/nextest.toml b/.config/nextest.toml
+index e265771b5..82f9d7624 100644
+--- a/.config/nextest.toml
++++ b/.config/nextest.toml
+@@ -6,3 +6,7 @@ retries = 0
+ test-threads = "num-cpus"
+ status-level = "all"
+ final-status-level = "flaky"
++
++[[profile.ci.overrides]]
++filter = 'package(velnor-actions-orchestrator) and test(bench_concurrent_lanes_2_and_4)'
++success-output = "immediate"
+diff --git a/crates/velnor-actions-cli/tests/impl_cli_tofu_capacity.rs b/crates/velnor-actions-cli/tests/impl_cli_tofu_capacity.rs
+index be31d3aeb..30a3f4b4e 100644
+--- a/crates/velnor-actions-cli/tests/impl_cli_tofu_capacity.rs
++++ b/crates/velnor-actions-cli/tests/impl_cli_tofu_capacity.rs
+@@ -3,7 +3,9 @@
+ use std::error::Error;
+ use std::path::Path;
+ 
+-use crate::impl_cli_tmp::{cleanup, code, fresh_tempdir, git_init, spawn};
++use crate::impl_cli_tmp::{
++    cleanup, code, fresh_tempdir, git_init, install_consumer_manifest, spawn,
++};
+ 
+ const MAX_WORKFLOW_BYTES: usize = 500_000;
+ 
+@@ -34,6 +36,7 @@ fn paired_tofu_repo(roots: usize) -> Result<std::path::PathBuf, Box<dyn Error>>
+              platform = \"linux/amd64\"\n[stacks.tofu]\nroots = [{roots}]\n"
+         ),
+     )?;
++    install_consumer_manifest(&repo)?;
+     for name in names {
+         let root = repo.join(&name);
+         std::fs::create_dir_all(&root)?;
+@@ -65,7 +68,12 @@ fn cli_schema2_paired_tofu_stays_within_capacity_and_fails_closed() -> Result<()
+         &[],
+         &repo,
+     )?;
+-    assert_eq!(code(&generated), 0, "stderr: {:?}", generated.stderr);
++    assert_eq!(
++        code(&generated),
++        0,
++        "stderr: {}",
++        String::from_utf8_lossy(&generated.stderr)
++    );
+     let workflow = std::fs::read(workflow_path(&preview))?;
+     assert!(
+         workflow.len() <= MAX_WORKFLOW_BYTES,
+diff --git a/crates/velnor-actions-contract/src/workflow/ir.rs b/crates/velnor-actions-contract/src/workflow/ir.rs
+index 9dc8c7493..5f993ac39 100644
+--- a/crates/velnor-actions-contract/src/workflow/ir.rs
++++ b/crates/velnor-actions-contract/src/workflow/ir.rs
+@@ -1,9 +1,9 @@
+ //! Stack-neutral GitHub Actions workflow IR.
+ use super::jobs::{ScheduleTrigger, is_safe_display_name};
+ use super::permissions::{PermissionLevel, Permissions};
++pub use super::step::{Step, StepKind};
+ #[path = "job_validation.rs"]
+ mod job_validation;
+-pub use super::step::{Step, StepKind};
+ use super::timeout::JobTimeout;
+ use crate::errors::ContractError;
+ use serde::{Deserialize, Serialize};
+diff --git a/crates/velnor-actions-contract/src/workflow/job_validation.rs b/crates/velnor-actions-contract/src/workflow/job_validation.rs
+index 4c03021a8..fa9d74096 100644
+--- a/crates/velnor-actions-contract/src/workflow/job_validation.rs
++++ b/crates/velnor-actions-contract/src/workflow/job_validation.rs
+@@ -119,9 +119,7 @@ impl Job {
+                 format!("empty_steps:{id}"),
+             ));
+         }
+-        for step in &self.steps {
+-            step.validate(id)?;
+-        }
++        super::super::step_identity::validate_step_sequence(&self.steps, id)?;
+         Ok(())
+     }
+ }
+diff --git a/crates/velnor-actions-contract/src/workflow/lanes.rs b/crates/velnor-actions-contract/src/workflow/lanes.rs
+index 2e80e2e74..d5df52f51 100644
+--- a/crates/velnor-actions-contract/src/workflow/lanes.rs
++++ b/crates/velnor-actions-contract/src/workflow/lanes.rs
+@@ -302,7 +302,7 @@ fn retarget(
+ fn retarget_check_identity(job: &mut Job, source_id: &str, output_id: &str, lane: EmitLane) {
+     for step in &mut job.steps {
+         match &mut step.kind {
+-            super::ir::StepKind::Shell { env, .. } => {
++            super::step::StepKind::Shell { env, .. } => {
+                 if let Some(job_id) = env.get_mut(NAMED_CHECK_JOB_ID_ENV)
+                     && job_id == source_id
+                 {
+@@ -316,7 +316,7 @@ fn retarget_check_identity(job: &mut Job, source_id: &str, output_id: &str, lane
+                     }
+                 }
+             }
+-            super::ir::StepKind::Action { with, .. } => {
++            super::step::StepKind::Action { with, .. } => {
+                 if let Some(name) = with.get_mut("name")
+                     && name.starts_with("velnor-crate-")
+                     && name.ends_with(&format!("-{source_id}"))
+@@ -326,7 +326,7 @@ fn retarget_check_identity(job: &mut Job, source_id: &str, output_id: &str, lane
+                     name.push_str(output_id);
+                 }
+             }
+-            super::ir::StepKind::Internal { .. } => {}
++            super::step::StepKind::Internal { .. } => {}
+         }
+     }
+ }
+diff --git a/crates/velnor-actions-contract/src/workflow/named_check_lanes.rs b/crates/velnor-actions-contract/src/workflow/named_check_lanes.rs
+index 36b23dd09..fc264bc17 100644
+--- a/crates/velnor-actions-contract/src/workflow/named_check_lanes.rs
++++ b/crates/velnor-actions-contract/src/workflow/named_check_lanes.rs
+@@ -1,8 +1,9 @@
+ //! Exact named-check job/report identities shared by workflow and plan.
+ 
+-use super::ir::{StepKind, WorkflowIr};
++use super::ir::WorkflowIr;
+ use super::jobs::PLAN_JOB_ID;
+ use super::lanes::{Placement, placement_for};
++use super::step::StepKind;
+ use super::{HOSTED_SUFFIX, SCALE_SUFFIX, lane_class};
+ use crate::config::{ExecutionMode, VelnorConfig};
+ use crate::errors::ContractError;
+diff --git a/crates/velnor-actions-contract/src/workflow/step_protocol.rs b/crates/velnor-actions-contract/src/workflow/step_protocol.rs
+index b314c0523..489e1cf58 100644
+--- a/crates/velnor-actions-contract/src/workflow/step_protocol.rs
++++ b/crates/velnor-actions-contract/src/workflow/step_protocol.rs
+@@ -143,6 +143,9 @@ fn validate_provider_save(
+         return Err(invalid(scope, "tofu_provider_save_count"));
+     }
+     if let Some(index) = roles.saves.first().copied() {
++        if index <= binding.restore_index {
++            return Err(invalid(scope, "tofu_provider_save_before_restore"));
++        }
+         let save = &steps[index];
+         let save_with = action_with(save).ok_or_else(|| invalid(scope, "tofu_save_shape"))?;
+         let restore = &steps[binding.restore_index];
+diff --git a/crates/velnor-actions-contract/tests/impl_contract_step_roles.rs b/crates/velnor-actions-contract/tests/impl_contract_step_roles.rs
+index e729fc183..d5d4d3852 100644
+--- a/crates/velnor-actions-contract/tests/impl_contract_step_roles.rs
++++ b/crates/velnor-actions-contract/tests/impl_contract_step_roles.rs
+@@ -316,6 +316,17 @@ fn tofu_provider_save_must_match_restore_gate_and_order() {
+     );
+ }
+ 
++#[test]
++fn tofu_provider_save_must_follow_restore_without_consumers() {
++    let error = validate_step_sequence(&[tofu_save(), tofu_restore()], "tofu-job")
++        .expect_err("save outputs cannot be consumed before their restore step runs");
++    assert!(
++        error
++            .to_string()
++            .contains("tofu_provider_save_before_restore")
++    );
++}
++
+ #[test]
+ fn configured_checkout_authority_is_typed_exact_and_name_independent() {
+     use velnor_actions_contract::workflow::step_identity::is_configured_checkout;
+diff --git a/crates/velnor-actions-orchestrator/src/attach_mbx_tests.rs b/crates/velnor-actions-orchestrator/src/attach_mbx_tests.rs
+index 489143668..8036e1a50 100644
+--- a/crates/velnor-actions-orchestrator/src/attach_mbx_tests.rs
++++ b/crates/velnor-actions-orchestrator/src/attach_mbx_tests.rs
+@@ -1,8 +1,8 @@
+ use super::*;
+-use velnor_actions_contract::StepRole;
+ 
+ #[test]
+ fn preseed_restores_mbx_builds_after_sources_with_homes() {
++    use velnor_actions_contract::StepRole;
+     use velnor_actions_workflow_renderer::{PRESEED_BUILD_NAME, PRESEED_VERIFY_NAME};
+     let roots = [String::new()];
+     let mut plan = preseed_fixture(true, &roots);
+@@ -55,121 +55,3 @@ fn preseed_restores_mbx_builds_after_sources_with_homes() {
+     assert_owned_homes(steps, StepRole::PreseedBuild, PRESEED_BUILD_NAME);
+     assert_owned_homes(steps, StepRole::PreseedVerifyBuild, PRESEED_VERIFY_NAME);
+ }
+-
+-#[test]
+-fn lockless_preseed_installs_mbx_before_the_build_without_a_restore() {
+-    use velnor_actions_workflow_renderer::{MBX_PREFLIGHT_NAME, PRESEED_BUILD_NAME};
+-    let mut plan = preseed_fixture(false, &[]);
+-    attach_preseed(&mut plan, "ubuntu-26.04", "0.1.0", &[]).expect("attach");
+-    let steps = &plan.ir.jobs["plan"].steps;
+-    let names: Vec<&str> = steps.iter().map(|step| step.name.as_str()).collect();
+-    let roles: Vec<Option<StepRole>> = steps.iter().map(|step| step.role).collect();
+-    assert!(!roles.contains(&Some(StepRole::CargoSourcesRestore)));
+-    let at = |role| {
+-        roles
+-            .iter()
+-            .position(|seen| *seen == Some(role))
+-            .unwrap_or_else(|| panic!("missing {role:?}: {roles:?}"))
+-    };
+-    let prepare_components = at(StepRole::PrepareRustComponents);
+-    let preflight = at(StepRole::MbxPreflight);
+-    let action = at(StepRole::MbxCache);
+-    let version_check = at(StepRole::MbxVersionCheck);
+-    let build = at(StepRole::PreseedBuild);
+-    assert!(
+-        prepare_components < preflight
+-            && preflight < action
+-            && action < version_check
+-            && version_check < build,
+-        "Rust setup and exact MBX installation precede the build: {names:?}"
+-    );
+-    assert_eq!(
+-        roles
+-            .iter()
+-            .filter(|role| **role == Some(StepRole::MbxCache))
+-            .count(),
+-        1
+-    );
+-    assert_owned_homes(steps, StepRole::MbxPreflight, MBX_PREFLIGHT_NAME);
+-    assert_owned_homes(steps, StepRole::PreseedBuild, PRESEED_BUILD_NAME);
+-}
+-
+-#[test]
+-fn preseed_attach_builds_once_and_sets_mode() {
+-    use velnor_actions_actionlint::ActionlintConfigInput;
+-    use velnor_actions_workflow_renderer::{
+-        MBX_VERSION_CHECK_NAME, PRESEED_BUILD_NAME, PRESEED_STAGE_NAME, steps::MBX_RESTORE_NAME,
+-    };
+-    let catalog = ToolCatalog::pinned();
+-    let mut plan = WorkflowPlan {
+-        ir: bare_ir(BTreeMap::from([
+-            (
+-                "plan".to_owned(),
+-                plan_job(
+-                    "ubuntu-26.04",
+-                    None,
+-                    &catalog,
+-                    PlanJobToolNeeds {
+-                        rust: PlanRustNeed::CompilerAndComponents,
+-                        mbx: false,
+-                        nextest: false,
+-                        opentofu: false,
+-                    },
+-                    &[],
+-                )
+-                .expect("plan job"),
+-            ),
+-            ("rust-demo".to_owned(), legacy_task_job()),
+-            (
+-                "required".to_owned(),
+-                final_job("ubuntu-26.04", &["rust-demo".to_owned()], None, &catalog)
+-                    .expect("final job"),
+-            ),
+-            (
+-                "publish-baseline".to_owned(),
+-                baseline_publish_job("ubuntu-26.04", "main", None).expect("publish job"),
+-            ),
+-        ])),
+-        support: None,
+-        context: RenderContext {
+-            generator_version: "0.1.0".to_owned(),
+-            runs_on: "ubuntu-26.04".to_owned(),
+-            staged_binary: format!("{STAGED_BINARY_PREFIX}0.1.0"),
+-            request_dir: REQUEST_DIR.to_owned(),
+-            checkout_uses: CHECKOUT_USES.to_owned(),
+-            validator_commands: Vec::new(),
+-            candidate: None,
+-            preseed: false,
+-            verification_tasks: Vec::new(),
+-            plan_consumer_env: std::collections::BTreeMap::new(),
+-        },
+-        actionlint: ActionlintConfigInput::new("0.1.0").with_workflow_path(WORKFLOW_PATH),
+-    };
+-    assert!(attach_preseed(&mut plan, "ubuntu-26.04", "0.1.0", &[]).is_ok());
+-    assert!(plan.context.preseed);
+-    let names: Vec<&str> = plan.ir.jobs["plan"]
+-        .steps
+-        .iter()
+-        .map(|step| step.name.as_str())
+-        .collect();
+-    assert_eq!(
+-        names,
+-        [
+-            "Checkout",
+-            "Prepare pinned tools",
+-            "Prepare Rust components",
+-            "Verify Rust before MBX action",
+-            MBX_RESTORE_NAME,
+-            MBX_VERSION_CHECK_NAME,
+-            PRESEED_BUILD_NAME,
+-            "Verify MBX compile (pre-seed trust-on-review)",
+-            "Write helper manifest (pre-seed trust-on-review)",
+-            "Upload helper (pre-seed trust-on-review)",
+-            PRESEED_STAGE_NAME,
+-            "Write request",
+-            "Plan",
+-        ]
+-    );
+-    assert_preseed_consumers(&plan);
+-    assert!(attach_preseed(&mut plan, "ubuntu-26.04-arm", "0.1.0", &[]).is_err());
+-}
+diff --git a/crates/velnor-actions-orchestrator/src/check_tool_tree.rs b/crates/velnor-actions-orchestrator/src/check_tool_tree.rs
+index 4ab81f3be..26bd9c7b7 100644
+--- a/crates/velnor-actions-orchestrator/src/check_tool_tree.rs
++++ b/crates/velnor-actions-orchestrator/src/check_tool_tree.rs
+@@ -330,9 +330,10 @@ mod tests {
+     }
+     #[test]
+     fn positive_hash_and_freeze() {
+-        let root = source();
+-        let expected = tree_sha256(root.path(), deadline()).expect("hash");
+-        let entries = collect(root.path(), deadline()).expect("entries");
++        let held = source();
++        let root = held.path().canonicalize().expect("canonical root");
++        let expected = tree_sha256(&root, deadline()).expect("hash");
++        let entries = collect(&root, deadline()).expect("entries");
+         let manifest = entries
+             .iter()
+             .map(|entry| match entry {
+@@ -347,15 +348,12 @@ mod tests {
+             expected, previous,
+             "streaming preserves the locked tree recipe"
+         );
+-        freeze_tree(root.path(), deadline()).expect("freeze");
++        freeze_tree(&root, deadline()).expect("freeze");
+         assert_eq!(
+-            tree_sha256(root.path(), deadline()).expect("frozen hash"),
++            tree_sha256(&root, deadline()).expect("frozen hash"),
+             expected
+         );
+-        assert_eq!(
+-            fs::read(root.path().join("bin/tool")).expect("tool"),
+-            b"tool"
+-        );
++        assert_eq!(fs::read(root.join("bin/tool")).expect("tool"), b"tool");
+     }
+     #[test]
+     fn tamper_changes_identity() {
+diff --git a/crates/velnor-actions-orchestrator/src/crate_jobs.rs b/crates/velnor-actions-orchestrator/src/crate_jobs.rs
+index 86cfa3c37..c236035ca 100644
+--- a/crates/velnor-actions-orchestrator/src/crate_jobs.rs
++++ b/crates/velnor-actions-orchestrator/src/crate_jobs.rs
+@@ -198,14 +198,13 @@ fn render_job(
+     let mut steps = vec![crate::workflow::wire_w1::checkout_step()?];
+     steps.extend(acquire.cloned());
+     steps.push(crate::matrix_step::download_plan_step()?);
+-    let suite: Option<crate::matrix_step::CrateSuite> =
+-        crate::matrix_step::suite_for_package(&model.package_name);
+-    let needs_validators = crate::matrix_step::crate_needs_generate_validators(policy, suite);
++    let needs_validators =
++        crate::matrix_step::crate_needs_generate_validators(policy, &model.package_name);
+     steps.push(crate::matrix_step::prepare_crate_tools_step(
+         catalog,
+         use_rust,
+         use_nextest,
+-        crate::matrix_step::prepare_install_opentofu(policy, suite, use_opentofu),
++        crate::matrix_step::prepare_install_opentofu(policy, &model.package_name, use_opentofu),
+         needs_validators,
+     )?);
+     if use_rust {
+diff --git a/crates/velnor-actions-orchestrator/src/matrix_step.rs b/crates/velnor-actions-orchestrator/src/matrix_step.rs
+index 54c80c311..921e02c9e 100644
+--- a/crates/velnor-actions-orchestrator/src/matrix_step.rs
++++ b/crates/velnor-actions-orchestrator/src/matrix_step.rs
+@@ -23,8 +23,7 @@ pub(crate) use tools::crate_needs_tofu_install;
+ #[cfg(test)]
+ pub(crate) use tools::task_driver_tools;
+ pub(crate) use tools::{
+-    CrateSuite, crate_needs_generate_validators, prepare_crate_tools_step,
+-    prepare_install_opentofu, suite_for_package,
++    crate_needs_generate_validators, prepare_crate_tools_step, prepare_install_opentofu,
+ };
+ 
+ /// `Documentation` obligation step name.
+diff --git a/crates/velnor-actions-orchestrator/src/matrix_step_tests.rs b/crates/velnor-actions-orchestrator/src/matrix_step_tests.rs
+index 0b36ca50f..668f0b648 100644
+--- a/crates/velnor-actions-orchestrator/src/matrix_step_tests.rs
++++ b/crates/velnor-actions-orchestrator/src/matrix_step_tests.rs
+@@ -274,16 +274,13 @@ fn validator_installs_follow_executed_suite_per_policy() {
+         "demo",
+     ] {
+         assert!(
+-            crate_needs_generate_validators(WorkflowPolicy::ConsumerV1, suite_for_package(package)),
++            crate_needs_generate_validators(WorkflowPolicy::ConsumerV1, package),
+             "consumer suites are opaque: {package} keeps the trio"
+         );
+     }
+     for package in ["velnor-actions-orchestrator", "velnor-actions-cli"] {
+         assert!(
+-            crate_needs_generate_validators(
+-                WorkflowPolicy::VelnorRepositoryV1,
+-                suite_for_package(package)
+-            ),
++            crate_needs_generate_validators(WorkflowPolicy::VelnorRepositoryV1, package),
+             "{package} spawns validators and must install them"
+         );
+     }
+@@ -297,10 +294,7 @@ fn validator_installs_follow_executed_suite_per_policy() {
+         "demo",
+     ] {
+         assert!(
+-            !crate_needs_generate_validators(
+-                WorkflowPolicy::VelnorRepositoryV1,
+-                suite_for_package(package)
+-            ),
++            !crate_needs_generate_validators(WorkflowPolicy::VelnorRepositoryV1, package),
+             "{package} never spawns validators and must trim the trio"
+         );
+     }
+diff --git a/crates/velnor-actions-orchestrator/src/matrix_step_tofu_install_tests.rs b/crates/velnor-actions-orchestrator/src/matrix_step_tofu_install_tests.rs
+index 190dc1a0b..02dcd39fd 100644
+--- a/crates/velnor-actions-orchestrator/src/matrix_step_tofu_install_tests.rs
++++ b/crates/velnor-actions-orchestrator/src/matrix_step_tofu_install_tests.rs
+@@ -92,15 +92,12 @@ fn tofu_install_follows_executed_suite_per_policy() {
+         "demo",
+     ] {
+         assert!(
+-            !crate_needs_tofu_install(WorkflowPolicy::ConsumerV1, suite_for_package(package)),
++            !crate_needs_tofu_install(WorkflowPolicy::ConsumerV1, package),
+             "consumer suites cannot reach our tofu_exec ctor: {package} installs no opentofu"
+         );
+     }
+     assert!(
+-        crate_needs_tofu_install(
+-            WorkflowPolicy::VelnorRepositoryV1,
+-            suite_for_package("velnor-actions-mise")
+-        ),
++        crate_needs_tofu_install(WorkflowPolicy::VelnorRepositoryV1, "velnor-actions-mise"),
+         "mise spawns real tofu and must install opentofu"
+     );
+     for package in [
+@@ -114,10 +111,7 @@ fn tofu_install_follows_executed_suite_per_policy() {
+         "demo",
+     ] {
+         assert!(
+-            !crate_needs_tofu_install(
+-                WorkflowPolicy::VelnorRepositoryV1,
+-                suite_for_package(package)
+-            ),
++            !crate_needs_tofu_install(WorkflowPolicy::VelnorRepositoryV1, package),
+             "{package} never spawns tofu and must not install opentofu"
+         );
+     }
+diff --git a/crates/velnor-actions-orchestrator/src/matrix_tools.rs b/crates/velnor-actions-orchestrator/src/matrix_tools.rs
+index fc18abbb4..287e55c15 100644
+--- a/crates/velnor-actions-orchestrator/src/matrix_tools.rs
++++ b/crates/velnor-actions-orchestrator/src/matrix_tools.rs
+@@ -1,7 +1,7 @@
+-//! Crate-job tool-set construction and typed suite tool ownership.
++//! Crate-job tool-set construction: drivers plus validator trio.
+ //!
+ //! Declared via `#[path]` from `matrix_step.rs` (no `lib.rs` edit);
+-//! `matrix_step` re-exports the constructors and suite resolver.
++//! `matrix_step` re-exports the constructors so call sites stay put.
+ 
+ use velnor_actions_contract::{Step, StepRole, WorkflowPolicy};
+ use velnor_actions_mise::{
+@@ -23,158 +23,67 @@ pub(crate) fn task_driver_tools(use_rust: bool, use_opentofu: bool) -> Vec<Pinne
+     tools
+ }
+ 
+-/// One workspace suite with its exact package identity.
+-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+-enum SuiteName {
+-    Orchestrator,
+-    Cli,
+-    Contract,
+-    Mise,
+-    Rust,
+-    Tofu,
+-    WorkflowRenderer,
+-    Actionlint,
+-    ArchiveGuard,
+-}
+-
+-impl SuiteName {
+-    /// Canonical Cargo package name for this suite.
+-    const fn package_name(self) -> &'static str {
+-        match self {
+-            Self::Orchestrator => "velnor-actions-orchestrator",
+-            Self::Cli => "velnor-actions-cli",
+-            Self::Contract => "velnor-actions-contract",
+-            Self::Mise => "velnor-actions-mise",
+-            Self::Rust => "velnor-actions-rust",
+-            Self::Tofu => "velnor-actions-tofu",
+-            Self::WorkflowRenderer => "velnor-actions-workflow-renderer",
+-            Self::Actionlint => "velnor-actions-actionlint",
+-            Self::ArchiveGuard => "velnor-archive-guard",
+-        }
+-    }
+-}
+-
+-/// Suite-owned tool capability used to construct crate-job setup.
+-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+-enum SuiteTool {
+-    GenerateValidators,
+-    OpenTofuExecution,
+-}
+-
+-/// Typed suite identity plus the tools its executed tests require.
+-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+-pub(crate) struct CrateSuite {
+-    name: SuiteName,
+-    tools: &'static [SuiteTool],
+-}
+-
+-impl CrateSuite {
+-    /// Whether this suite owns an execution that requires one installed tool.
+-    fn owns(self, tool: SuiteTool) -> bool {
+-        self.tools.contains(&tool)
+-    }
+-
+-    /// Canonical Cargo package name for this suite.
+-    const fn package_name(self) -> &'static str {
+-        self.name.package_name()
+-    }
+-}
+-
+-const NO_SUITE_TOOLS: &[SuiteTool] = &[];
+-const GENERATE_VALIDATOR_TOOLS: &[SuiteTool] = &[SuiteTool::GenerateValidators];
+-const OPENTOFU_TOOLS: &[SuiteTool] = &[SuiteTool::OpenTofuExecution];
+-
+-/// Single source of truth for typed suite identities and owned tool needs.
+-const SUITE_TOOL_OWNERS: [CrateSuite; 9] = [
+-    CrateSuite {
+-        name: SuiteName::Orchestrator,
+-        tools: GENERATE_VALIDATOR_TOOLS,
+-    },
+-    CrateSuite {
+-        name: SuiteName::Cli,
+-        tools: GENERATE_VALIDATOR_TOOLS,
+-    },
+-    CrateSuite {
+-        name: SuiteName::Contract,
+-        tools: NO_SUITE_TOOLS,
+-    },
+-    CrateSuite {
+-        name: SuiteName::Mise,
+-        tools: OPENTOFU_TOOLS,
+-    },
+-    CrateSuite {
+-        name: SuiteName::Rust,
+-        tools: NO_SUITE_TOOLS,
+-    },
+-    CrateSuite {
+-        name: SuiteName::Tofu,
+-        tools: NO_SUITE_TOOLS,
+-    },
+-    CrateSuite {
+-        name: SuiteName::WorkflowRenderer,
+-        tools: NO_SUITE_TOOLS,
+-    },
+-    CrateSuite {
+-        name: SuiteName::Actionlint,
+-        tools: NO_SUITE_TOOLS,
+-    },
+-    CrateSuite {
+-        name: SuiteName::ArchiveGuard,
+-        tools: NO_SUITE_TOOLS,
+-    },
+-];
+-
+-/// Resolve one known workspace package to its typed suite and tool owners.
+-#[must_use]
+-pub(crate) fn suite_for_package(package: &str) -> Option<CrateSuite> {
+-    SUITE_TOOL_OWNERS
+-        .iter()
+-        .copied()
+-        .find(|suite| suite.package_name() == package)
+-}
++/// Velnor-repository suites that shell out to the `generate` validators.
++///
++/// Only the orchestrator suite (validating `generate` plus zizmor
++/// staging) and the CLI suite (parity runs `generate`) execute the
++/// trio; every other suite only asserts argv, never spawns validators.
++///
++/// Re-audit when a suite starts spawning validators: grep its tests
++/// for `generate()` executions and `PinnedToolExec` trio runs
++/// (actionlint, shellcheck, zizmor); a suite that executes any of
++/// them joins this list, anything else stays trimmed. Adding a
++/// workspace crate fails `every_workspace_member_is_classified`
++/// until it is classified here or in the trimmed set.
++const GENERATE_VALIDATOR_SUITES: [&str; 2] = ["velnor-actions-orchestrator", "velnor-actions-cli"];
+ 
+ /// Whether one crate job installs the `generate` validators.
+ ///
+-/// Velnor-policy jobs trim by executed suite: only suites owning
+-/// [`SuiteTool::GenerateValidators`] install the trio; the rest install
+-/// drivers plus Nextest. The orchestrator and CLI suites own it because
+-/// their tests execute `generate`; other suites only assert argv.
+-/// Consumer suites are opaque to the generator, so consumer jobs keep the trio
++/// Velnor-policy jobs trim by executed suite: only the two suites above
++/// install the trio, the rest install drivers plus Nextest. Consumer
++/// suites are opaque to the generator, so consumer jobs keep the trio
+ /// fail-safe: dropping an install a suite needs fails CI with
+ /// `couldn't exec process` (run 36751323928), while an unneeded
+ /// install only costs seconds. Dedicated validator jobs remain the
+ /// lint gates for the committed workflow either way.
+ #[must_use]
+-pub(crate) fn crate_needs_generate_validators(
+-    policy: WorkflowPolicy,
+-    suite: Option<CrateSuite>,
+-) -> bool {
++pub(crate) fn crate_needs_generate_validators(policy: WorkflowPolicy, package: &str) -> bool {
+     match policy {
+         WorkflowPolicy::ConsumerV1 => true,
+-        WorkflowPolicy::VelnorRepositoryV1 => {
+-            suite.is_some_and(|suite| suite.owns(SuiteTool::GenerateValidators))
+-        }
++        WorkflowPolicy::VelnorRepositoryV1 => GENERATE_VALIDATOR_SUITES.contains(&package),
+     }
+ }
+ 
++/// Velnor-repository suites that spawn real `tofu` binaries.
++///
++/// Only the mise suite executes `tofu` (the T27 real-binary runs
++/// via `IsolatedCommand::tofu_exec` plus `run_bounded`); the
++/// orchestrator suite only constructs the ctor to assert its env
++/// (zero `run_*` calls), and no other suite touches `tofu_exec` or
++/// `VELNOR_LIVE_TOFU` at all.
++///
++/// Re-audit when a suite starts spawning tofu: grep its tests for
++/// `tofu_exec` plus `run_bounded`/`run_cancellable` executions;
++/// ctor-only and env-assertion uses do NOT join this list. Adding
++/// a workspace crate fails
++/// `every_workspace_member_is_classified_for_tofu` until it is
++/// classified here or in the trimmed set.
++const TOFU_EXEC_SUITES: [&str; 1] = ["velnor-actions-mise"];
++
+ /// Whether one crate job installs opentofu for its executed suite.
+ ///
+-/// Velnor-policy jobs install only for suites owning
+-/// [`SuiteTool::OpenTofuExecution`]. Only mise executes the real-binary
+-/// tests; the orchestrator only constructs the command for env assertions.
+-/// Tofu obligations select the driver separately (see
++/// Velnor-policy jobs install only for the suite above; tofu
++/// obligations select the driver separately (see
+ /// [`prepare_install_opentofu`]). Consumer jobs never install here:
+ /// unlike the `generate` validators (fail-safe-true because
+ /// consumer suites CAN execute `generate`), consumer suites CANNOT
+ /// reach our `tofu_exec` ctor — the mise crate is not
+ /// published/consumable — so false is correct, not just cheaper.
+ #[must_use]
+-pub(crate) fn crate_needs_tofu_install(policy: WorkflowPolicy, suite: Option<CrateSuite>) -> bool {
++pub(crate) fn crate_needs_tofu_install(policy: WorkflowPolicy, package: &str) -> bool {
+     match policy {
+         WorkflowPolicy::ConsumerV1 => false,
+-        WorkflowPolicy::VelnorRepositoryV1 => {
+-            suite.is_some_and(|suite| suite.owns(SuiteTool::OpenTofuExecution))
+-        }
++        WorkflowPolicy::VelnorRepositoryV1 => TOFU_EXEC_SUITES.contains(&package),
+     }
+ }
+ 
+@@ -182,10 +91,10 @@ pub(crate) fn crate_needs_tofu_install(policy: WorkflowPolicy, suite: Option<Cra
+ #[must_use]
+ pub(crate) fn prepare_install_opentofu(
+     policy: WorkflowPolicy,
+-    suite: Option<CrateSuite>,
++    package: &str,
+     use_opentofu: bool,
+ ) -> bool {
+-    use_opentofu || crate_needs_tofu_install(policy, suite)
++    use_opentofu || crate_needs_tofu_install(policy, package)
+ }
+ 
+ /// Typed `Prepare pinned tools` step for the crate-job tool set.
+@@ -240,57 +149,3 @@ pub(crate) fn prepare_crate_tools_step(
+     step.role = Some(StepRole::PreparePinnedTools);
+     Ok(step)
+ }
+-
+-#[cfg(test)]
+-mod tests {
+-    use std::fs;
+-    use std::path::Path;
+-
+-    use super::{SUITE_TOOL_OWNERS, suite_for_package};
+-
+-    #[test]
+-    fn typed_tool_owner_table_matches_workspace_members() {
+-        let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+-        let root = manifest_dir
+-            .parent()
+-            .and_then(Path::parent)
+-            .expect("crate lives two levels under the workspace root");
+-        let mut members = Vec::new();
+-        for entry in fs::read_dir(root.join("crates")).expect("crates dir lists") {
+-            let manifest = entry.expect("dir entry reads").path().join("Cargo.toml");
+-            let text = fs::read_to_string(&manifest).expect("member manifest reads");
+-            let mut in_package = false;
+-            for line in text.lines() {
+-                if line.trim() == "[package]" {
+-                    in_package = true;
+-                } else if line.starts_with('[') {
+-                    in_package = false;
+-                } else if in_package && line.trim_start().starts_with("name = ") {
+-                    let name = line
+-                        .trim_start()
+-                        .trim_start_matches("name = ")
+-                        .trim()
+-                        .trim_matches('"');
+-                    members.push(name.to_owned());
+-                    break;
+-                }
+-            }
+-        }
+-        let mut registered: Vec<String> = SUITE_TOOL_OWNERS
+-            .iter()
+-            .map(|suite| suite.package_name().to_owned())
+-            .collect();
+-        members.sort();
+-        registered.sort();
+-        assert_eq!(
+-            members, registered,
+-            "typed owner rows must cover each crate"
+-        );
+-        assert!(
+-            members
+-                .iter()
+-                .all(|member| suite_for_package(member).is_some()),
+-            "every workspace package resolves to its typed suite"
+-        );
+-    }
+-}
+diff --git a/crates/velnor-actions-orchestrator/src/retrieve_planned_baseline_tests.rs b/crates/velnor-actions-orchestrator/src/retrieve_planned_baseline_tests.rs
+index 42884256d..eb8baf404 100644
+--- a/crates/velnor-actions-orchestrator/src/retrieve_planned_baseline_tests.rs
++++ b/crates/velnor-actions-orchestrator/src/retrieve_planned_baseline_tests.rs
+@@ -49,33 +49,46 @@ fn resolve_mock(
+     plan: &Plan,
+     parent: &BaselineManifest,
+     metadata: &serde_json::Value,
+-) -> (Option<BaselineManifest>, Vec<Vec<String>>) {
++) -> (Option<BaselineManifest>, Vec<Vec<String>>, Vec<Vec<String>>) {
++    let manifest = canonical_json_bytes(parent).expect("canonical parent");
++    let archive = crate::baseline_archive::test_archive("baseline.json", &manifest);
++    let digest = format!(
++        "sha256:{}",
++        crate::cover_identity::generator::sha256_hex(&archive)
++    );
++    let listed = serde_json::json!({"total_count": 1, "artifacts": [{
++        "id": 99, "name": parent.artifact_name, "expired": false,
++        "size_in_bytes": archive.len(), "digest": digest
++    }]})
++    .to_string();
+     let mut calls = Vec::new();
+-    let found = resolve_planned(plan, "o/r", "testmain", |args| {
+-        let args: Vec<String> = args
+-            .iter()
+-            .map(|a| a.to_string_lossy().into_owned())
+-            .collect();
+-        calls.push(args.clone());
+-        if args[0] == "run" {
+-            let destination = args.iter().position(|a| a == "--dir").expect("destination") + 1;
+-            let dir = Path::new(&args[destination]);
+-            std::fs::create_dir(dir).expect("artifact dir");
+-            std::fs::write(
+-                dir.join("baseline.json"),
+-                canonical_json_bytes(parent).expect("canonical parent"),
+-            )
+-            .expect("downloaded parent");
+-            Ok(String::new())
+-        } else if args[1].ends_with("/artifacts") {
+-            Ok(serde_json::json!({"artifacts": [{"id": 99,
+-                "name": parent.artifact_name, "expired": false}]})
+-            .to_string())
+-        } else {
+-            Ok(metadata.to_string())
+-        }
+-    });
+-    (found, calls)
++    let mut archive_calls = Vec::new();
++    let found = resolve_planned(
++        plan,
++        "o/r",
++        "testmain",
++        |args| {
++            let args: Vec<String> = args
++                .iter()
++                .map(|a| a.to_string_lossy().into_owned())
++                .collect();
++            calls.push(args.clone());
++            if args[1].contains("/artifacts?name=") {
++                Ok(listed.clone())
++            } else {
++                Ok(metadata.to_string())
++            }
++        },
++        |args| {
++            archive_calls.push(
++                args.iter()
++                    .map(|arg| arg.to_string_lossy().into_owned())
++                    .collect(),
++            );
++            Ok(archive.clone())
++        },
++    );
++    (found, calls, archive_calls)
+ }
+ 
+ #[test]
+@@ -83,11 +96,28 @@ fn selected_parent_survives_newer_same_base_run_and_attempt() {
+     let (plan, parent) = fixture();
+     // Latest same-base run/attempt may now be run 8 or attempt 2. The
+     // resolver never lists latest runs: it authenticates run 7 attempt 1.
+-    let (found, calls) = resolve_mock(&plan, &parent, &attempt_record(&parent));
++    let (found, calls, archive_calls) = resolve_mock(&plan, &parent, &attempt_record(&parent));
+     assert!(found.is_some());
+-    assert_eq!(calls[0], ["api", "repos/o/r/actions/runs/7/artifacts"]);
+-    assert_eq!(calls[1][..3], ["run", "download", "7"]);
+-    assert_eq!(calls[2], ["api", "repos/o/r/actions/runs/7/attempts/1"]);
++    assert_eq!(
++        calls[0],
++        vec![
++            "api".to_owned(),
++            format!(
++                "repos/o/r/actions/runs/7/artifacts?name={}&per_page=100&page=1",
++                parent.artifact_name
++            )
++        ]
++    );
++    assert_eq!(
++        calls[1],
++        ["api", "repos/o/r/actions/runs/7/attempts/1"],
++        "the exact attempt is authenticated after ZIP admission"
++    );
++    assert!(
++        archive_calls
++            .iter()
++            .any(|args| args == &["api", "repos/o/r/actions/artifacts/99/zip"])
++    );
+     assert!(
+         !calls
+             .iter()
+@@ -122,13 +152,14 @@ fn wrong_service_attempt_or_provenance_never_authenticates() {
+ fn replacement_manifest_digest_never_downloads_as_selected_parent() {
+     let (plan, mut parent) = fixture();
+     parent.run_attempt = 2;
+-    let (found, calls) = resolve_mock(&plan, &parent, &attempt_record(&parent));
++    let (found, calls, archive_calls) = resolve_mock(&plan, &parent, &attempt_record(&parent));
+     assert!(found.is_none());
+     assert_eq!(
+         calls.len(),
+-        2,
++        1,
+         "digest rejection before attempt authentication"
+     );
++    assert_eq!(archive_calls.len(), 1, "the selected ZIP was checked first");
+ }
+ 
+ #[test]
+diff --git a/crates/velnor-actions-orchestrator/src/shard_baseline_retry_tests.rs b/crates/velnor-actions-orchestrator/src/shard_baseline_retry_tests.rs
+index 73d2616a3..a8242cd0e 100644
+--- a/crates/velnor-actions-orchestrator/src/shard_baseline_retry_tests.rs
++++ b/crates/velnor-actions-orchestrator/src/shard_baseline_retry_tests.rs
+@@ -14,7 +14,11 @@ fn normal_retry_lookup(
+     parent: &BaselineManifest,
+     current_conclusion: &str,
+     original_conclusion: &str,
+-) -> (Result<Vec<BaselineManifest>, String>, Vec<Vec<String>>) {
++) -> (
++    Result<Vec<BaselineManifest>, String>,
++    Vec<Vec<String>>,
++    Vec<Vec<String>>,
++) {
+     let lookup = BaselineLookup::new(
+         &parent.source_commit,
+         ".github/workflows/ci.yml",
+@@ -22,48 +26,56 @@ fn normal_retry_lookup(
+         "o/r",
+     )
+     .expect("lookup");
++    let manifest = canonical_json_bytes(parent).expect("canonical original bytes");
++    let archive = crate::baseline_archive::test_archive("baseline.json", &manifest);
++    let listed = serde_json::json!({"total_count":1,"artifacts":[{
++        "id":parent.artifact_id,"name":parent.artifact_name,"expired":false,
++        "size_in_bytes":archive.len(),"digest":format!(
++            "sha256:{}",crate::cover_identity::generator::sha256_hex(&archive)
++        )
++    }]})
++    .to_string();
+     let mut calls = Vec::new();
+-    let found = resolve_with(&lookup, &parent.artifact_name, |args| {
+-        let args: Vec<_> = args
+-            .iter()
+-            .map(|arg| arg.to_string_lossy().into_owned())
+-            .collect();
+-        calls.push(args.clone());
+-        if args[0] == "run" && args[1] == "list" {
+-            Ok(
+-                serde_json::json!([{"databaseId":7,"headSha":parent.source_commit,
++    let mut archive_calls = Vec::new();
++    let found = resolve_with(
++        &lookup,
++        &parent.artifact_name,
++        |args| {
++            let args: Vec<_> = args
++                .iter()
++                .map(|arg| arg.to_string_lossy().into_owned())
++                .collect();
++            calls.push(args.clone());
++            if args[0] == "run" && args[1] == "list" {
++                Ok(
++                    serde_json::json!([{"databaseId":7,"headSha":parent.source_commit,
+                 "event":"push","conclusion":current_conclusion,"headBranch":"testmain",
+                 "attempt":2}])
+-                .to_string(),
+-            )
+-        } else if args[0] == "run" {
+-            let at = args.iter().position(|arg| arg == "--dir").expect("dir") + 1;
+-            let directory = Path::new(&args[at]);
+-            std::fs::create_dir(directory).expect("download dir");
+-            std::fs::write(
+-                directory.join("baseline.json"),
+-                canonical_json_bytes(parent).expect("canonical original bytes"),
+-            )
+-            .expect("original download");
+-            Ok(String::new())
+-        } else if args[1].ends_with("/artifacts") {
+-            Ok(
+-                serde_json::json!({"artifacts":[{"id":99,"name":parent.artifact_name,
+-                "expired":false}]})
+-                .to_string(),
+-            )
+-        } else {
+-            assert!(args[1].ends_with("/runs/7/attempts/1"));
+-            Ok(
+-                serde_json::json!({"id":7,"run_attempt":1,"head_sha":parent.source_commit,
++                    .to_string(),
++                )
++            } else if args[1].contains("/artifacts?name=") {
++                Ok(listed.clone())
++            } else {
++                assert!(args[1].ends_with("/runs/7/attempts/1"));
++                Ok(
++                    serde_json::json!({"id":7,"run_attempt":1,"head_sha":parent.source_commit,
+                 "event":"push","status":"completed","conclusion":original_conclusion,
+                 "head_branch":"testmain","path":".github/workflows/ci.yml",
+                 "repository":{"full_name":"O/R"}})
+-                .to_string(),
+-            )
+-        }
+-    });
+-    (found, calls)
++                    .to_string(),
++                )
++            }
++        },
++        |args| {
++            archive_calls.push(
++                args.iter()
++                    .map(|arg| arg.to_string_lossy().into_owned())
++                    .collect(),
++            );
++            Ok(archive.clone())
++        },
++    );
++    (found, calls, archive_calls)
+ }
+ 
+ #[test]
+@@ -72,7 +84,7 @@ fn replayed_publication_remains_usable_for_next_plan_coverage() {
+     let original_bytes = canonical_json_bytes(&retained).expect("original bytes");
+     // The T16 publisher retains this immutable attempt-1 artifact when
+     // attempt 2 succeeds. Normal lookup sees the latest summary attempt 2.
+-    let (found, calls) = normal_retry_lookup(&retained, "success", "success");
++    let (found, calls, archive_calls) = normal_retry_lookup(&retained, "success", "success");
+     let found = found
+         .expect("normal lookup")
+         .pop()
+@@ -87,6 +99,13 @@ fn replayed_publication_remains_usable_for_next_plan_coverage() {
+             .iter()
+             .any(|args| args[1].ends_with("/runs/7/attempts/1"))
+     );
++    assert_eq!(
++        archive_calls,
++        [vec![
++            "api".to_owned(),
++            format!("repos/o/r/actions/artifacts/{}/zip", retained.artifact_id)
++        ]]
++    );
+     let next_plan = plan_for(&found, Some(&found.source_commit));
+     assert!(crate::covered_tasks::plan_has_covered(&next_plan));
+     let (signals, missing) = verdict(&next_plan, Some(&found));
+diff --git a/crates/velnor-actions-orchestrator/tests/impl_tofu_t22.rs b/crates/velnor-actions-orchestrator/tests/impl_tofu_t22.rs
+index 063c5cf36..3e5960999 100644
+--- a/crates/velnor-actions-orchestrator/tests/impl_tofu_t22.rs
++++ b/crates/velnor-actions-orchestrator/tests/impl_tofu_t22.rs
+@@ -132,13 +132,14 @@ fn provider_admission_discards_prefix_and_missing_matches() -> TestResult {
+         .get("cache-path")
+         .ok_or("provider composite misses owned path")?;
+     let temp = tempfile::tempdir()?;
++    let runner_temp = temp.path().canonicalize()?;
+     let resolved_path =
+-        cache_path.replace("${{ runner.temp }}", &temp.path().display().to_string());
++        cache_path.replace("${{ runner.temp }}", &runner_temp.display().to_string());
+     let leaf = Path::new(&resolved_path);
+     fs::create_dir_all(leaf)?;
+     fs::write(leaf.join("verified-provider"), b"cached")?;
+ 
+-    let exact = run_admission(restore, temp.path(), "true", expected, false)?;
++    let exact = run_admission(restore, &runner_temp, "true", expected, false)?;
+     assert!(
+         exact.status.success(),
+         "{}",
+@@ -154,7 +155,7 @@ fn provider_admission_discards_prefix_and_missing_matches() -> TestResult {
+         ("false", String::new()),
+     ] {
+         fs::write(leaf.join("verified-provider"), b"must be removed")?;
+-        let rejected = run_admission(restore, temp.path(), hit, &matched, true)?;
++        let rejected = run_admission(restore, &runner_temp, hit, &matched, true)?;
+         assert!(
+             rejected.status.success(),
+             "{}",
+diff --git a/crates/velnor-actions-workflow-renderer/src/acquire_action.rs b/crates/velnor-actions-workflow-renderer/src/acquire_action.rs
+index 4b0a30fc6..a2a60f723 100644
+--- a/crates/velnor-actions-workflow-renderer/src/acquire_action.rs
++++ b/crates/velnor-actions-workflow-renderer/src/acquire_action.rs
+@@ -41,9 +41,10 @@ impl AcquireActions {
+     /// Replace a validated Acquire step with a fixed local action call.
+     ///
+     /// The action identity hashes the complete typed step, including its
+-    /// literal release tuple and fixed command vector. Its caller has no
+-    /// `with` or `env` inputs, so workflow environment mutations cannot
+-    /// replace the source tuple.
++    /// literal release tuple and fixed command vector, with the display name
++    /// normalized because it is presentation only. Its caller has no `with`
++    /// or `env` inputs, so workflow environment mutations cannot replace the
++    /// source tuple.
+     /// # Errors
+     pub(crate) fn call_step(
+         &mut self,
+@@ -51,7 +52,9 @@ impl AcquireActions {
+         ctx: &RenderContext,
+     ) -> Result<Step, RenderError> {
+         validate_source(source)?;
+-        let identity = canonical_json_bytes(source).map_err(RenderError::Contract)?;
++        let mut canonical_source = source.clone();
++        canonical_source.name = "<presentation>".to_owned();
++        let identity = canonical_json_bytes(&canonical_source).map_err(RenderError::Contract)?;
+         let digest = velnor_actions_contract::digest_b3(&identity);
+         let digest = digest
+             .strip_prefix("b3-")
+@@ -62,7 +65,7 @@ impl AcquireActions {
+             "{}{digest}",
+             velnor_actions_contract::workflow::step_identity::ACQUIRE_VELNOR_ACTION_PREFIX
+         );
+-        let candidate = action_file(&name, source, ctx)?;
++        let candidate = action_file(&name, &canonical_source, ctx)?;
+         if let Some(existing) = self.files.get(&name) {
+             if existing.bytes != candidate.bytes {
+                 return Err(RenderError::InvalidWorkflow(
+diff --git a/crates/velnor-actions-workflow-renderer/src/action_ref.rs b/crates/velnor-actions-workflow-renderer/src/action_ref.rs
+index 8c570d83a..66ad47767 100644
+--- a/crates/velnor-actions-workflow-renderer/src/action_ref.rs
++++ b/crates/velnor-actions-workflow-renderer/src/action_ref.rs
+@@ -4,9 +4,13 @@
+ use crate::RenderError;
+ use velnor_actions_contract::workflow::step_identity::TOOL_SEED_USES;
+ 
++/// Prefix for renderer-generated shared `ToFu` setup composites.
++pub(crate) const TOFU_PROVIDER_PRELUDE_ACTION_PREFIX: &str =
++    "./.github/actions/tofu-provider-prelude-";
++
+ /// Validate an `owner/repo@<40 hex>` action ref. Branch names are rejected.
+ ///
+-/// Tool seed, provider admission, and content-addressed acquisition actions
++/// Tool seed, provider admission, provider prelude, and content-addressed acquisition actions
+ /// are the only local paths this renderer emits. Every other local path is
+ /// rejected.
+ ///
+@@ -19,6 +23,7 @@ pub fn validate_uses(uses: &str) -> Result<(), RenderError> {
+         uses,
+         TOOL_SEED_USES | crate::tofu_cache::TOFU_PROVIDER_ADMISSION_USES
+     ) || crate::acquire_action::is_acquire_action_uses(uses)
++        || is_generated_provider_prelude(uses)
+     {
+         return Ok(());
+     }
+@@ -42,6 +47,17 @@ pub fn validate_uses(uses: &str) -> Result<(), RenderError> {
+     Ok(())
+ }
+ 
++pub(crate) fn is_generated_provider_prelude(uses: &str) -> bool {
++    uses.strip_prefix(TOFU_PROVIDER_PRELUDE_ACTION_PREFIX)
++        .is_some_and(|suffix| {
++            !suffix.is_empty()
++                && suffix.bytes().all(|byte| byte.is_ascii_digit())
++                && suffix
++                    .parse::<usize>()
++                    .is_ok_and(|index| index.to_string() == suffix)
++        })
++}
++
+ /// True for `owner/repo` over alphanumerics plus `.-_`.
+ fn is_action_name(name: &str) -> bool {
+     !name.is_empty()
+@@ -49,3 +65,22 @@ fn is_action_name(name: &str) -> bool {
+             .bytes()
+             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'/' | b'.' | b'-' | b'_'))
+ }
++
++#[cfg(test)]
++mod tests {
++    use super::validate_uses;
++
++    #[test]
++    fn only_canonical_generated_provider_prelude_paths_are_local() {
++        assert!(validate_uses("./.github/actions/tofu-provider-prelude-0").is_ok());
++        assert!(validate_uses("./.github/actions/tofu-provider-prelude-12").is_ok());
++        for uses in [
++            "./.github/actions/tofu-provider-prelude-",
++            "./.github/actions/tofu-provider-prelude-01",
++            "./.github/actions/tofu-provider-prelude-1-extra",
++            "./.github/actions/untrusted-local-action",
++        ] {
++            assert!(validate_uses(uses).is_err(), "unexpected local action {uses}");
++        }
++    }
++}
+diff --git a/crates/velnor-actions-workflow-renderer/src/cache_p08.rs b/crates/velnor-actions-workflow-renderer/src/cache_p08.rs
+index 34403704d..7a477de8f 100644
+--- a/crates/velnor-actions-workflow-renderer/src/cache_p08.rs
++++ b/crates/velnor-actions-workflow-renderer/src/cache_p08.rs
+@@ -14,9 +14,8 @@
+ 
+ use std::collections::{BTreeMap, BTreeSet};
+ 
+-use velnor_actions_contract::{
+-    Job, Step, StepKind, StepRole, workflow::step_identity::is_configured_checkout,
+-};
++use velnor_actions_contract::workflow::step_identity::is_configured_checkout;
++use velnor_actions_contract::{Job, Step, StepKind, StepRole};
+ 
+ use crate::{MiseSetup, RenderError, cache_p08_detect::detector_words, setup::MISE_ACTION_NAME};
+ 
+diff --git a/crates/velnor-actions-workflow-renderer/src/document.rs b/crates/velnor-actions-workflow-renderer/src/document.rs
+index a8bed9afb..606706234 100644
+--- a/crates/velnor-actions-workflow-renderer/src/document.rs
++++ b/crates/velnor-actions-workflow-renderer/src/document.rs
+@@ -13,7 +13,7 @@ use crate::{
+     yaml::Yaml,
+ };
+ use velnor_actions_contract::{
+-    Job, Permissions, RunsOn, StepKind, StepRole, Trigger, WorkflowIr,
++    Job, Permissions, RunsOn, StepKind, Trigger, WorkflowIr,
+     workflow::{ir::DispatchInput, permissions::PermissionLevel},
+ };
+ 
+@@ -53,21 +53,25 @@ pub(crate) fn workflow_to_yaml(
+     let mut rendered_jobs = Vec::with_capacity(jobs.len());
+     for (id, job) in jobs {
+         let call = shared.calls.get(id).map(String::as_str);
+-        let mbx_policy = MbxJobPolicy {
+-            native_mbx: mbx_jobs.contains(id),
+-            actions_read: grants_exact_actions_read(
+-                job.permissions.as_ref().unwrap_or(&ir.permissions).actions,
+-            ),
+-        };
+-        let render_context = JobRenderContext {
+-            needs_envs: &needs_env,
+-            shared: call,
+-            lanes: &lane_steps,
+-            mbx_policy,
+-        };
+-        rendered_jobs.push((id.clone(), job_to_yaml(id, job, ctx, &render_context)?));
++        let actions_read =
++            grants_exact_actions_read(job.permissions.as_ref().unwrap_or(&ir.permissions).actions);
++        rendered_jobs.push((
++            id.clone(),
++            job_to_yaml(
++                id,
++                job,
++                ctx,
++                &needs_env,
++                call,
++                &lane_steps,
++                MbxJobPolicy {
++                    native_mbx: mbx_jobs.contains(id),
++                    actions_read,
++                },
++            )?,
++        ));
+     }
+-    let mut document = vec![
++    Ok(Yaml::Map(vec![
+         ("name".to_owned(), Yaml::str(ir.name.clone())),
+         ("on".to_owned(), triggers_to_yaml(&ir.triggers)),
+         (
+@@ -84,9 +88,8 @@ pub(crate) fn workflow_to_yaml(
+                 ),
+             ]),
+         ),
+-    ];
+-    document.push(("jobs".to_owned(), Yaml::Map(rendered_jobs)));
+-    Ok(Yaml::Map(document))
++        ("jobs".to_owned(), Yaml::Map(rendered_jobs)),
++    ]))
+ }
+ 
+ /// Report download is intentionally limited to the least-privilege `read` grant.
+@@ -234,19 +237,15 @@ struct MbxJobPolicy {
+     actions_read: bool,
+ }
+ 
+-struct JobRenderContext<'a> {
+-    needs_envs: &'a [(String, String)],
+-    shared: Option<&'a str>,
+-    lanes: &'a crate::document_lanes::SharedLaneSteps<'a>,
+-    mbx_policy: MbxJobPolicy,
+-}
+-
+ /// Render one job: name, runs-on, timeout, environment, permissions, needs, if, steps.
+ fn job_to_yaml(
+     id: &str,
+     job: &Job,
+     ctx: &RenderContext,
+-    render_context: &JobRenderContext<'_>,
++    needs_envs: &[(String, String)],
++    shared: Option<&str>,
++    lanes: &crate::document_lanes::SharedLaneSteps<'_>,
++    mbx_policy: MbxJobPolicy,
+ ) -> Result<Yaml, RenderError> {
+     steps::scan_for_private_subcommands(&job.display_name)?;
+     let runner = RunsOn::parse(&job.runs_on).map_err(RenderError::Contract)?;
+@@ -255,17 +254,13 @@ fn job_to_yaml(
+         RunsOn::Hosted(label) => Yaml::str(label),
+         RunsOn::ScaleSet(selector) => Yaml::Flow(selector.labels().to_vec()),
+     };
+-    let source_steps = render_context
+-        .lanes
++    let source_steps = lanes
+         .env_steps
+         .get(id)
+         .map_or(job.steps.as_slice(), Vec::as_slice);
+-    let step_has_env = source_steps.iter().any(|step| {
+-        step.role == Some(StepRole::AcquireVelnor)
+-            || match &step.kind {
+-                StepKind::Shell { env, .. } | StepKind::Action { env, .. } => !env.is_empty(),
+-                StepKind::Internal { .. } => false,
+-            }
++    let step_has_env = source_steps.iter().any(|step| match &step.kind {
++        StepKind::Shell { env, .. } | StepKind::Action { env, .. } => !env.is_empty(),
++        StepKind::Internal { .. } => false,
+     });
+     let mut job_env = if step_has_env {
+         if ctx
+@@ -289,14 +284,14 @@ fn job_to_yaml(
+                 StepKind::Shell { env, .. } | StepKind::Action { env, .. } => Some(env),
+                 StepKind::Internal { .. } => None,
+             };
+-            if let Some(env) = step_env
+-                && let Some(toolchain) = env.get("RUSTUP_TOOLCHAIN")
+-            {
+-                job_env.insert("RUSTUP_TOOLCHAIN".to_owned(), toolchain.clone());
++            if let Some(env) = step_env {
++                if let Some(toolchain) = env.get("RUSTUP_TOOLCHAIN") {
++                    job_env.insert("RUSTUP_TOOLCHAIN".to_owned(), toolchain.clone());
++                }
+             }
+         }
+     }
+-    if render_context.mbx_policy.native_mbx {
++    if mbx_policy.native_mbx {
+         job_env.insert(
+             crate::cache_steps::MBX_GC_AUTO_ENV.to_owned(),
+             crate::cache_steps::MBX_GC_AUTO_VALUE.to_owned(),
+@@ -312,12 +307,12 @@ fn job_to_yaml(
+         id,
+         job,
+         ctx,
+-        render_context.needs_envs,
+-        render_context.shared,
+-        render_context.lanes,
++        needs_envs,
++        shared,
++        lanes,
+         &crate::document_lanes::JobStepContext {
+             job_env: &job_env,
+-            actions_read: render_context.mbx_policy.actions_read,
++            actions_read: mbx_policy.actions_read,
+         },
+     )?;
+     entries.push(("steps".to_owned(), Yaml::Seq(rendered_steps)));
+diff --git a/crates/velnor-actions-workflow-renderer/src/lane_share.rs b/crates/velnor-actions-workflow-renderer/src/lane_share.rs
+index 1debb313c..ce1bb7847 100644
+--- a/crates/velnor-actions-workflow-renderer/src/lane_share.rs
++++ b/crates/velnor-actions-workflow-renderer/src/lane_share.rs
+@@ -6,18 +6,13 @@
+ 
+ use std::collections::BTreeMap;
+ 
+-pub(super) use velnor_actions_contract::workflow::lanes::SCALE_SUFFIX;
+-use velnor_actions_contract::{Job, Step, StepRole};
++use velnor_actions_contract::workflow::lanes::{HOSTED_SUFFIX, SCALE_SUFFIX};
++use velnor_actions_contract::{Job, Step, StepKind, StepRole};
+ 
+-use self::lane_share_pair::{SharedLaneParts, hosted_ids, logical_id, set_steps, split_pair};
+ use crate::RenderError;
+-use crate::lane_share_composite::composite_file;
+ use crate::render::RenderContext;
+ use crate::tree::RenderedFile;
+ 
+-#[path = "lane_share_pair.rs"]
+-mod lane_share_pair;
+-
+ /// CI workflow plus composite actions for duplicated lanes.
+ #[derive(Debug, Clone, PartialEq, Eq)]
+ pub struct RenderedWorkflow {
+@@ -48,6 +43,16 @@ pub(crate) struct LaneShare {
+     pub files: Vec<RenderedFile>,
+ }
+ 
++struct SharedLaneParts {
++    checkout: Step,
++    prefix: Vec<Step>,
++    hosted_prelude: Vec<Step>,
++    local_prelude: Vec<Step>,
++    common: Vec<Step>,
++    hosted_postlude: Vec<Step>,
++    local_postlude: Vec<Step>,
++}
++
+ /// Factor `__hosted` / `__local` pairs whose step lists match.
+ ///
+ /// # Errors
+@@ -60,6 +65,7 @@ pub(crate) fn share_lanes(
+     jobs: &BTreeMap<String, Job>,
+     ctx: &RenderContext,
+ ) -> Result<LaneShare, RenderError> {
++    let mut acquire_actions = crate::acquire_action::AcquireActions::default();
+     let mut calls = BTreeMap::new();
+     let mut checkouts = BTreeMap::new();
+     let mut prefixes = BTreeMap::new();
+@@ -68,7 +74,6 @@ pub(crate) fn share_lanes(
+     let mut files = Vec::new();
+     let mut next = jobs.clone();
+     let mut env_steps = BTreeMap::new();
+-    let mut acquire_actions = crate::acquire_action::AcquireActions::default();
+     if next.values().any(|job| {
+         job.steps
+             .iter()
+@@ -96,10 +101,15 @@ pub(crate) fn share_lanes(
+                 "lane_body_differs:{logical}"
+             )));
+         };
++        acquire_actions.transform_steps(&mut parts.prefix, ctx)?;
++        acquire_actions.transform_steps(&mut parts.hosted_prelude, ctx)?;
++        acquire_actions.transform_steps(&mut parts.local_prelude, ctx)?;
++        acquire_actions.transform_steps(&mut parts.hosted_postlude, ctx)?;
++        acquire_actions.transform_steps(&mut parts.local_postlude, ctx)?;
+         let uses = format!("./.github/actions/{logical}");
+-        files.push(composite_for_pair(
++        files.push(crate::lane_share_composite::composite_file(
+             logical,
+-            &mut parts,
++            &parts.common,
+             ctx,
+             &mut acquire_actions,
+         )?);
+@@ -118,7 +128,13 @@ pub(crate) fn share_lanes(
+         postludes.insert(hosted_id.clone(), parts.hosted_postlude);
+         postludes.insert(local_id.clone(), parts.local_postlude);
+     }
+-    let shared = LaneShare {
++    for (id, job) in &mut next {
++        if !calls.contains_key(id) {
++            acquire_actions.transform_steps(&mut job.steps, ctx)?;
++        }
++    }
++    crate::lane_share_sections::factor_provider_preludes(&mut preludes, &mut files, ctx)?;
++    let mut shared = LaneShare {
+         jobs: next,
+         calls,
+         checkouts,
+@@ -128,47 +144,12 @@ pub(crate) fn share_lanes(
+         postludes,
+         files,
+     };
+-    finalize_shared_lanes(shared, ctx, acquire_actions)
+-}
+-
+-fn finalize_shared_lanes(
+-    mut shared: LaneShare,
+-    ctx: &RenderContext,
+-    mut acquire_actions: crate::acquire_action::AcquireActions,
+-) -> Result<LaneShare, RenderError> {
+-    validate_serialized_scopes(&shared)?;
+-    for (id, job) in &mut shared.jobs {
+-        let replaced_acquire = !shared.postludes.contains_key(id)
+-            && acquire_actions.transform_steps(&mut job.steps, ctx)?;
+-        if replaced_acquire {
+-            velnor_actions_contract::workflow::step_identity::validate_step_sequence(
+-                &job.steps, id,
+-            )
+-            .map_err(RenderError::Contract)?;
+-        }
+-    }
+     validate_serialized_scopes(&shared)?;
+     acquire_actions.append_files(&mut shared.files);
+-    shared
+-        .files
+-        .sort_by(|left, right| left.path.cmp(&right.path));
++    shared.files.sort_by(|left, right| left.path.cmp(&right.path));
+     Ok(shared)
+ }
+ 
+-fn composite_for_pair(
+-    logical: &str,
+-    parts: &mut SharedLaneParts,
+-    ctx: &RenderContext,
+-    acquire_actions: &mut crate::acquire_action::AcquireActions,
+-) -> Result<RenderedFile, RenderError> {
+-    acquire_actions.transform_steps(&mut parts.prefix, ctx)?;
+-    acquire_actions.transform_steps(&mut parts.hosted_prelude, ctx)?;
+-    acquire_actions.transform_steps(&mut parts.local_prelude, ctx)?;
+-    acquire_actions.transform_steps(&mut parts.hosted_postlude, ctx)?;
+-    acquire_actions.transform_steps(&mut parts.local_postlude, ctx)?;
+-    composite_file(logical, &parts.common, ctx, acquire_actions)
+-}
+-
+ /// Validate the expanded workflow-job and composite-action step scopes.
+ fn validate_serialized_scopes(shared: &LaneShare) -> Result<(), RenderError> {
+     // Validate each full source job before its common body moves into a
+@@ -203,6 +184,140 @@ fn validate_serialized_scopes(shared: &LaneShare) -> Result<(), RenderError> {
+     Ok(())
+ }
+ 
++fn hosted_ids(jobs: &BTreeMap<String, Job>) -> Vec<String> {
++    jobs.keys()
++        .filter(|id| id.ends_with(HOSTED_SUFFIX))
++        .cloned()
++        .collect()
++}
++
++fn logical_id(hosted_id: &str) -> Option<&str> {
++    let logical = hosted_id.strip_suffix(HOSTED_SUFFIX)?;
++    let ok = !logical.is_empty()
++        && logical
++            .bytes()
++            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_');
++    ok.then_some(logical)
++}
++
++fn split_pair(hosted: &Job, local: &Job, checkout_uses: &str) -> Option<SharedLaneParts> {
++    if hosted.timeout_minutes != local.timeout_minutes
++        || !crate::lane_share_sections::same_or_admitted_check_condition(hosted, local)
++        || hosted.permissions != local.permissions
++        || hosted.environment != local.environment
++    {
++        return None;
++    }
++    let (hosted_checkout, hosted_steps) = peel_checkout(&hosted.steps, checkout_uses)?;
++    let (local_checkout, local_steps) = peel_checkout(&local.steps, checkout_uses)?;
++    if hosted_checkout != local_checkout {
++        return None;
++    }
++    split_shared_steps(hosted_checkout, hosted_steps, local_steps)
++}
++
++fn split_shared_steps(
++    checkout: &Step,
++    hosted_steps: &[Step],
++    local_steps: &[Step],
++) -> Option<SharedLaneParts> {
++    let hosted_action = hosted_steps.iter().any(crate::cache_steps::is_mbx_action);
++    let local_action = local_steps.iter().any(crate::cache_steps::is_mbx_action);
++    if hosted_action != local_action {
++        return None;
++    }
++    let (prefix, hosted_prelude, local_prelude, hosted_tail, local_tail) = if hosted_action {
++        let hosted_at = crate::lane_share_sections::mbx_prelude_index(hosted_steps)?;
++        let local_at = crate::lane_share_sections::mbx_prelude_index(local_steps)?;
++        let hosted_prefix = &hosted_steps[..hosted_at];
++        let local_prefix = &local_steps[..local_at];
++        if hosted_prefix != local_prefix {
++            return None;
++        }
++        let (hosted_prelude, hosted_tail) =
++            crate::lane_share_sections::peel_mbx_prelude(&hosted_steps[hosted_at..])?;
++        let (local_prelude, local_tail) =
++            crate::lane_share_sections::peel_mbx_prelude(&local_steps[local_at..])?;
++        (
++            hosted_prefix.to_vec(),
++            hosted_prelude,
++            local_prelude,
++            hosted_tail,
++            local_tail,
++        )
++    } else {
++        (
++            Vec::new(),
++            Vec::new(),
++            Vec::new(),
++            hosted_steps,
++            local_steps,
++        )
++    };
++    let (hosted_provider_prefix, hosted_tail) =
++        crate::lane_share_sections::peel_provider_restore_prefix(hosted_tail);
++    let (local_provider_prefix, local_tail) =
++        crate::lane_share_sections::peel_provider_restore_prefix(local_tail);
++    if hosted_provider_prefix != local_provider_prefix {
++        return None;
++    }
++    let mut hosted_prelude = hosted_prelude;
++    let mut local_prelude = local_prelude;
++    hosted_prelude.extend(hosted_provider_prefix);
++    local_prelude.extend(local_provider_prefix);
++    let (hosted_common, hosted_cache_postlude) =
++        crate::lane_share_sections::peel_postlude(hosted_tail);
++    let (local_common, local_cache_postlude) =
++        crate::lane_share_sections::peel_postlude(local_tail);
++    let (hosted_common, hosted_lane_specific) =
++        crate::lane_share_sections::peel_lane_specific(&hosted_common);
++    let (local_common, local_lane_specific) =
++        crate::lane_share_sections::peel_lane_specific(&local_common);
++    let mut hosted_postlude = hosted_lane_specific;
++    hosted_postlude.extend(hosted_cache_postlude);
++    let mut local_postlude = local_lane_specific;
++    local_postlude.extend(local_cache_postlude);
++    (hosted_common == local_common).then_some(SharedLaneParts {
++        checkout: checkout.clone(),
++        prefix,
++        hosted_prelude,
++        local_prelude,
++        common: hosted_common,
++        hosted_postlude,
++        local_postlude,
++    })
++}
++fn peel_checkout<'a>(steps: &'a [Step], checkout_uses: &str) -> Option<(&'a Step, &'a [Step])> {
++    let (checkout, remaining) = steps.split_first()?;
++    let is_expected_checkout = checkout.role == Some(StepRole::Checkout)
++        && checkout.condition.is_none()
++        && matches!(
++            &checkout.kind,
++            StepKind::Action { uses, with, .. }
++                if uses == checkout_uses
++                    && with.get("persist-credentials").map(String::as_str) == Some("false")
++        );
++    if !is_expected_checkout || remaining.iter().any(is_checkout_step) {
++        return None;
++    }
++    Some((checkout, remaining))
++}
++
++fn is_checkout_step(step: &Step) -> bool {
++    step.role == Some(StepRole::Checkout)
++        || matches!(
++            &step.kind,
++            StepKind::Action { uses, .. }
++                if uses.starts_with("actions/checkout@")
++        )
++}
++
++fn set_steps(jobs: &mut BTreeMap<String, Job>, id: &str, steps: Vec<Step>) {
++    if let Some(job) = jobs.get_mut(id) {
++        job.steps = steps;
++    }
++}
++
+ #[cfg(test)]
+ #[path = "lane_share_tests.rs"]
+ mod tests;
+diff --git a/crates/velnor-actions-workflow-renderer/src/lane_share_render_tests.rs b/crates/velnor-actions-workflow-renderer/src/lane_share_render_tests.rs
+index b47ccb512..d13a5c532 100644
+--- a/crates/velnor-actions-workflow-renderer/src/lane_share_render_tests.rs
++++ b/crates/velnor-actions-workflow-renderer/src/lane_share_render_tests.rs
+@@ -115,7 +115,7 @@ fn paired_tofu_restore_output_owner_stays_in_outer_job_scope() {
+             ]),
+         },
+     };
+-    let mut jobs = paired(&[restore, consumer]);
++    let mut jobs = paired(&[echo_step(0, "shared-prelude"), restore, consumer]);
+     let mut save = tofu_providers_save_step().expect("provider save step");
+     save.condition = Some(velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION.to_owned());
+     jobs.get_mut("rust-0__hosted")
+@@ -125,6 +125,9 @@ fn paired_tofu_restore_output_owner_stays_in_outer_job_scope() {
+ 
+     let shared = share_lanes(&jobs, &ctx()).expect("paired provider lanes share");
+     let hosted = render_jobs(&workflow_ir(), &shared, &ctx()).expect("workflow renders");
++    let setup_at = hosted
++        .find("uses: ./.github/actions/tofu-provider-prelude-0")
++        .expect("shared provider prelude call");
+     let restore_at = hosted.find("id: tofu-providers").expect("outer restore id");
+     let composite_at = hosted
+         .find("uses: ./.github/actions/rust-0")
+@@ -132,7 +135,13 @@ fn paired_tofu_restore_output_owner_stays_in_outer_job_scope() {
+     let save_at = hosted
+         .find("name: Save Tofu providers")
+         .expect("elected outer save");
+-    assert!(restore_at < composite_at && composite_at < save_at);
++    assert!(setup_at < restore_at && restore_at < composite_at && composite_at < save_at);
++    assert_eq!(
++        hosted
++            .matches("uses: ./.github/actions/tofu-provider-prelude-0")
++            .count(),
++        LOGICAL_JOBS * 2
++    );
+     assert!(hosted.contains("steps.tofu-providers.outputs.cache-key"));
+     assert!(hosted.contains("steps.tofu-providers.outputs.cache-path"));
+ 
+@@ -144,5 +153,12 @@ fn paired_tofu_restore_output_owner_stays_in_outer_job_scope() {
+     assert!(common.bytes.contains("name: Init for validate"));
+     assert!(!common.bytes.contains("id: tofu-providers"));
+     assert!(!common.bytes.contains("tofu-provider-admission"));
++    let provider_prelude = shared
++        .files
++        .iter()
++        .find(|file| file.path == ".github/actions/tofu-provider-prelude-0/action.yml")
++        .expect("shared typed setup prefix");
++    assert!(provider_prelude.bytes.contains("shared-prelude"));
++    assert!(!provider_prelude.bytes.contains("id: tofu-providers"));
+     assert_eq!(hosted.matches("id: tofu-providers").count(), 42);
+ }
+diff --git a/crates/velnor-actions-workflow-renderer/src/lane_share_sections.rs b/crates/velnor-actions-workflow-renderer/src/lane_share_sections.rs
+index 1ac92bf41..2fcb1b81e 100644
+--- a/crates/velnor-actions-workflow-renderer/src/lane_share_sections.rs
++++ b/crates/velnor-actions-workflow-renderer/src/lane_share_sections.rs
+@@ -1,5 +1,63 @@
++use std::collections::BTreeMap;
++
++use velnor_actions_contract::config::{
++    CheckExecutor, CheckPlatform, EPHEMERAL_CHECK_ADMISSION_CONDITION,
++};
++use velnor_actions_contract::workflow::lanes::{
++    NAMED_CHECK_JOB_ID_ENV, NAMED_CHECK_LANE_VARIANT_ENV,
++};
++use velnor_actions_contract::{Job, StepKind};
+ use velnor_actions_contract::{Step, StepRole};
+ 
++use crate::composite::composite_yaml;
++use crate::document_steps::step_to_yaml;
++use crate::render::RenderContext;
++use crate::tree::RenderedFile;
++use crate::{RenderError, marker, steps, yaml::render_yaml};
++
++/// Permit the one documented hosted-to-hosted named-check condition refinement.
++pub(crate) fn same_or_admitted_check_condition(hosted: &Job, local: &Job) -> bool {
++    if hosted.condition == local.condition {
++        return true;
++    }
++    hosted.condition.is_none()
++        && local.condition.as_deref() == Some(EPHEMERAL_CHECK_ADMISSION_CONDITION)
++        && matches!(
++            (&hosted.check_runner, &local.check_runner),
++            (Some(hosted_runner), Some(local_runner))
++                if hosted_runner == local_runner
++                    && hosted_runner.platform == CheckPlatform::LinuxX64
++                    && hosted_runner.executor == CheckExecutor::Hosted
++        )
++}
++
++/// Separate lane-only upload/identity steps from the shared action body.
++pub(crate) fn peel_lane_specific(steps: &[Step]) -> (Vec<Step>, Vec<Step>) {
++    let mut common = Vec::new();
++    let mut extra = Vec::new();
++    for step in steps {
++        if is_lane_specific(step) {
++            extra.push(step.clone());
++        } else {
++            common.push(step.clone());
++        }
++    }
++    (common, extra)
++}
++
++fn is_lane_specific(step: &Step) -> bool {
++    if is_postlude_step(step) || step.role == Some(StepRole::MatrixReportUpload) {
++        return true;
++    }
++    match &step.kind {
++        StepKind::Shell { env, .. } | StepKind::Internal { env, .. } => {
++            env.contains_key(NAMED_CHECK_JOB_ID_ENV)
++                || env.contains_key(NAMED_CHECK_LANE_VARIANT_ENV)
++        }
++        StepKind::Action { .. } => false,
++    }
++}
++
+ /// Find the point where the lane-specific MBX cache prelude begins.
+ pub(crate) fn mbx_prelude_index(steps: &[Step]) -> Option<usize> {
+     let preflight = steps
+@@ -66,3 +124,102 @@ fn is_postlude_step(step: &Step) -> bool {
+         Some(StepRole::ToolsCacheSave | StepRole::TofuProvidersSave)
+     )
+ }
++
++/// Replace repeated pre-restore step sequences with one shared local action.
++///
++/// The provider restore itself remains in each workflow job because the
++/// elected save step consumes that job-scoped output ID. Only byte-identical
++/// prefixes shared by multiple lane jobs are factored.
++pub(crate) fn factor_provider_preludes(
++    preludes: &mut BTreeMap<String, Vec<Step>>,
++    files: &mut Vec<RenderedFile>,
++    ctx: &RenderContext,
++) -> Result<(), RenderError> {
++    let mut groups: Vec<(Vec<Step>, Vec<String>)> = Vec::new();
++    for (id, steps) in preludes.iter() {
++        let Some(restore_at) = steps
++            .iter()
++            .position(|step| step.role == Some(StepRole::TofuProvidersRestore))
++        else {
++            continue;
++        };
++        if restore_at == 0 {
++            continue;
++        }
++        let prefix = steps[..restore_at].to_vec();
++        if let Some(index) = groups.iter().position(|(known, _)| known == &prefix) {
++            groups[index].1.push(id.clone());
++        } else {
++            groups.push((prefix, vec![id.clone()]));
++        }
++    }
++
++    for (index, (prefix, owners)) in groups.into_iter().enumerate() {
++        if owners.len() < 2 {
++            continue;
++        }
++        let logical = format!("tofu-provider-prelude-{index}");
++        files.push(composite_file(&logical, &prefix, ctx)?);
++        let call = Step {
++            name: "Prepare ToFu provider prelude".to_owned(),
++            id: None,
++            role: None,
++            condition: None,
++            kind: StepKind::Action {
++                uses: format!(
++                    "{}{index}",
++                    crate::action_ref::TOFU_PROVIDER_PRELUDE_ACTION_PREFIX
++                ),
++                with: BTreeMap::new(),
++                env: BTreeMap::new(),
++            },
++        };
++        for owner in owners {
++            let steps = preludes.get_mut(&owner).ok_or_else(|| {
++                RenderError::InvalidWorkflow("provider_prelude_owner_missing".to_owned())
++            })?;
++            let restore_at = steps
++                .iter()
++                .position(|step| step.role == Some(StepRole::TofuProvidersRestore))
++                .ok_or_else(|| {
++                    RenderError::InvalidWorkflow("provider_restore_missing_after_factor".to_owned())
++                })?;
++            steps.splice(..restore_at, [call.clone()]);
++        }
++    }
++    Ok(())
++}
++
++/// Render one workflow composite from typed steps.
++pub(crate) fn composite_file(
++    logical: &str,
++    steps: &[Step],
++    ctx: &RenderContext,
++) -> Result<RenderedFile, RenderError> {
++    velnor_actions_contract::workflow::step_identity::validate_step_identity_scope(
++        steps,
++        &format!("composite:{logical}"),
++    )
++    .map_err(RenderError::Contract)?;
++    let mut rendered = Vec::with_capacity(steps.len());
++    let empty_job_env = BTreeMap::new();
++    for step in steps {
++        rendered.push(step_to_yaml(
++            logical,
++            step,
++            ctx,
++            &[],
++            true,
++            &empty_job_env,
++            false,
++        )?);
++    }
++    let body = composite_yaml(logical, rendered)?;
++    let quoted = crate::yaml::quote_run_values_in_yaml(body);
++    let bytes = marker::with_marker(&ctx.generator_version, &render_yaml(&quoted))?;
++    steps::scan_for_private_subcommands(&bytes)?;
++    Ok(RenderedFile {
++        path: format!(".github/actions/{logical}/action.yml"),
++        bytes,
++    })
++}
+diff --git a/crates/velnor-actions-workflow-renderer/src/plan_format.rs b/crates/velnor-actions-workflow-renderer/src/plan_format.rs
+index f214b486d..5964677c7 100644
+--- a/crates/velnor-actions-workflow-renderer/src/plan_format.rs
++++ b/crates/velnor-actions-workflow-renderer/src/plan_format.rs
+@@ -77,11 +77,6 @@ fn format_insert_at(plan: &Job) -> usize {
+             plan.steps
+                 .iter()
+                 .position(|step| step.role == Some(StepRole::PlanProducer))
+-                .or_else(|| {
+-                    plan.steps.iter().position(|step| {
+-                        matches!(&step.kind, StepKind::Internal { operation, .. } if operation == steps::PLAN_OPERATION)
+-                    })
+-                })
+         })
+         .or_else(|| {
+             plan.steps
+diff --git a/crates/velnor-actions-workflow-renderer/src/steps_artifact.rs b/crates/velnor-actions-workflow-renderer/src/steps_artifact.rs
+index bebd0694c..46f650890 100644
+--- a/crates/velnor-actions-workflow-renderer/src/steps_artifact.rs
++++ b/crates/velnor-actions-workflow-renderer/src/steps_artifact.rs
+@@ -74,7 +74,7 @@ pub fn matrix_report_upload_step() -> Result<Step, RenderError> {
+ /// # Errors
+ pub fn crate_job_report_upload_step(job_id: &str) -> Result<Step, RenderError> {
+     velnor_actions_contract::validate_job_id(job_id).map_err(RenderError::Contract)?;
+-    action_step(
++    let mut step = action_step(
+         CRATE_REPORT_UPLOAD_NAME,
+         UPLOAD_ARTIFACT_USES,
+         BTreeMap::from([
+@@ -92,7 +92,9 @@ pub fn crate_job_report_upload_step(job_id: &str) -> Result<Step, RenderError> {
+                 ARTIFACT_RETENTION_DAYS.to_string(),
+             ),
+         ]),
+-    )
++    )?;
++    step.role = Some(StepRole::MatrixReportUpload);
++    Ok(step)
+ }
+ 
+ /// Baseline-publish upload step display name.
+diff --git a/crates/velnor-actions-workflow-renderer/src/tofu_cache.rs b/crates/velnor-actions-workflow-renderer/src/tofu_cache.rs
+index 686f18127..8f6e99eb1 100644
+--- a/crates/velnor-actions-workflow-renderer/src/tofu_cache.rs
++++ b/crates/velnor-actions-workflow-renderer/src/tofu_cache.rs
+@@ -13,6 +13,7 @@ pub use velnor_actions_contract::workflow::step_identity::{
+ use velnor_actions_contract::{Step, StepRole};
+ 
+ use crate::{RenderError, marker, steps, yaml};
++
+ /// Display name of the provider restore step.
+ pub const TOFU_PROVIDERS_RESTORE_NAME: &str = "Restore Tofu providers";
+ /// Display name of the provider save step.
+@@ -221,7 +222,7 @@ fn rename_step(mut step: Step, name: &str) -> Result<Step, RenderError> {
+ 
+ /// True for exactly one owned plugin-cache dir under the base.
+ ///
+-/// Single path segment, ASCII locator charset only, no traversal, no
++/// Single path segment, slug charset only, no traversal, no
+ /// never-archive names (state, plans, credentials), never the bare
+ /// base: the data dir beside it (`tofu-data`) and every foreign tree
+ /// stay out.
+diff --git a/crates/velnor-actions-workflow-renderer/src/tool_seed_admission_tests.rs b/crates/velnor-actions-workflow-renderer/src/tool_seed_admission_tests.rs
+index 5395a8d6c..3e1e4bd79 100644
+--- a/crates/velnor-actions-workflow-renderer/src/tool_seed_admission_tests.rs
++++ b/crates/velnor-actions-workflow-renderer/src/tool_seed_admission_tests.rs
+@@ -12,7 +12,7 @@ fn scratch(name: &str) -> PathBuf {
+     ));
+     fs::remove_dir_all(&path).ok();
+     fs::create_dir_all(&path).expect("scratch");
+-    path
++    path.canonicalize().expect("canonical scratch")
+ }
+ 
+ fn seed(root: &Path) {
+diff --git a/crates/velnor-actions-workflow-renderer/src/tool_seed_tests.rs b/crates/velnor-actions-workflow-renderer/src/tool_seed_tests.rs
+index c1decd814..d55b773c1 100644
+--- a/crates/velnor-actions-workflow-renderer/src/tool_seed_tests.rs
++++ b/crates/velnor-actions-workflow-renderer/src/tool_seed_tests.rs
+@@ -16,7 +16,7 @@ fn scratch(name: &str) -> PathBuf {
+     let path = std::env::temp_dir().join(format!("velnor-tool-seed-{name}-{}", std::process::id()));
+     fs::remove_dir_all(&path).ok();
+     fs::create_dir_all(&path).expect("scratch");
+-    path
++    path.canonicalize().expect("canonical scratch")
+ }
+ 
+ fn cache_key() -> String {
+diff --git a/crates/velnor-actions-workflow-renderer/tests/impl_renderer_cache_t22.rs b/crates/velnor-actions-workflow-renderer/tests/impl_renderer_cache_t22.rs
+index 35ef0db0d..e8bbd8ccb 100644
+--- a/crates/velnor-actions-workflow-renderer/tests/impl_renderer_cache_t22.rs
++++ b/crates/velnor-actions-workflow-renderer/tests/impl_renderer_cache_t22.rs
+@@ -9,7 +9,6 @@ use velnor_actions_workflow_renderer::tofu_cache::{
+ 
+ const HOME: &str = "${{ runner.temp }}/velnor/cargo";
+ const KEY: &str = "velnor-v1-sources-trusted-compat-snapshot";
+-const ROOT_LOCATOR: &str = "b3-0000000000000000000000000000000000000000000000000000000000000000";
+ 
+ #[test]
+ fn never_archive_mirror_lists_state_plans_and_credentials() {
+@@ -58,12 +57,12 @@ fn sources_steps_reject_never_archive_paths() -> Result<(), RenderError> {
+ 
+ #[test]
+ fn provider_paths_reject_never_archive_paths() {
+-    let good = format!("{TOFU_PROVIDER_CACHE_BASE_EXPR}/{ROOT_LOCATOR}");
++    let good = format!("{TOFU_PROVIDER_CACHE_BASE_EXPR}/root-0123456789ab");
+     assert!(tofu_providers_path_ok(&good));
+     for bad in [
+-        format!("{TOFU_PROVIDER_CACHE_BASE_EXPR}/{ROOT_LOCATOR}.tfstate"),
++        format!("{TOFU_PROVIDER_CACHE_BASE_EXPR}/root-0123456789ab.tfstate"),
+         format!("{TOFU_PROVIDER_CACHE_BASE_EXPR}/plan.tfplan"),
+-        format!("{TOFU_PROVIDER_CACHE_BASE_EXPR}/credentials-{ROOT_LOCATOR}"),
++        format!("{TOFU_PROVIDER_CACHE_BASE_EXPR}/credentials-root-0123456789ab"),
+     ] {
+         assert!(!tofu_providers_path_ok(&bad), "must reject {bad}");
+     }
+diff --git a/crates/velnor-actions-workflow-renderer/tests/impl_renderer_p08.rs b/crates/velnor-actions-workflow-renderer/tests/impl_renderer_p08.rs
+index 61f6dbb66..7edc34b1b 100644
+--- a/crates/velnor-actions-workflow-renderer/tests/impl_renderer_p08.rs
++++ b/crates/velnor-actions-workflow-renderer/tests/impl_renderer_p08.rs
+@@ -1,10 +1,10 @@
+ //! P08 renderer cases: built-in Mise cache, sources paths, rust-cache gates.
+ 
+ use std::collections::BTreeMap;
+-use velnor_actions_contract::{Job, JobTimeout, StepKind, StepRole};
++use velnor_actions_contract::{Job, JobTimeout, StepKind};
+ use velnor_actions_workflow_renderer::cache_p08::{
+-    check_mbx_before_fetch, check_no_rust_cache_with_mbx, infer_job_tools,
+-    mise_cache_key_for_tools, mise_setup_step_p08, tools_digest,
++    check_no_rust_cache_with_mbx, infer_job_tools, mise_cache_key_for_tools, mise_setup_step_p08,
++    tools_digest,
+ };
+ use velnor_actions_workflow_renderer::steps::cache_action_step;
+ 
+@@ -245,48 +245,6 @@ fn rust_cache_never_stacks_over_mbx() {
+     assert!(check_no_rust_cache_with_mbx("demo", &mbx_only).is_ok());
+ }
+ 
+-#[test]
+-fn mbx_restore_precedes_fetch() {
+-    let fetch = velnor_actions_contract::Step {
+-        name: "Fetch Cargo sources".to_owned(),
+-        id: None,
+-        role: Some(StepRole::CargoSourcesFetch),
+-        condition: None,
+-        kind: StepKind::Shell {
+-            run: vec!["sh".to_owned()],
+-            env: BTreeMap::new(),
+-        },
+-    };
+-    let mbx = velnor_actions_contract::Step {
+-        name: "Restore MBX objects".to_owned(),
+-        id: None,
+-        role: Some(StepRole::MbxCache),
+-        condition: None,
+-        kind: StepKind::Action {
+-            uses: format!("jdx/mr-boxington-action@{}", "d".repeat(40)),
+-            with: BTreeMap::new(),
+-            env: BTreeMap::new(),
+-        },
+-    };
+-    let good = Job {
+-        display_name: "Good".to_owned(),
+-        runs_on: LABEL.to_owned(),
+-        check_runner: None,
+-        timeout_minutes: JobTimeout::CRATE,
+-        needs: Vec::new(),
+-        condition: None,
+-        permissions: None,
+-        environment: None,
+-        steps: vec![mbx.clone(), fetch.clone()],
+-    };
+-    assert!(check_mbx_before_fetch("demo", &good).is_ok());
+-    let bad = Job {
+-        steps: vec![fetch, mbx],
+-        ..good.clone()
+-    };
+-    assert!(check_mbx_before_fetch("demo", &bad).is_err());
+-}
+-
+ #[test]
+ fn step_conditions_serialize_as_if_with_upload_default()
+ -> Result<(), velnor_actions_workflow_renderer::RenderError> {
+@@ -346,3 +304,63 @@ fn step_conditions_serialize_as_if_with_upload_default()
+ 
+ #[path = "impl_renderer_p08_order.rs"]
+ mod order;
++
++#[test]
++fn strict_render_elects_single_writer_per_shared_key()
++-> Result<(), velnor_actions_workflow_renderer::RenderError> {
++    use velnor_actions_workflow_renderer::{plan_step, shell_step};
++    let prepare = || {
++        shell_step(
++            "Prepare pinned tools",
++            vec![
++                "mise".to_owned(),
++                "install".to_owned(),
++                "rust@1.98.1".to_owned(),
++            ],
++            BTreeMap::new(),
++        )
++    };
++    let text = strict(
++        &fixture_ir(vec![
++            job(
++                "plan",
++                "Plan",
++                Vec::new(),
++                vec![prepare()?, acquire_fixture()?, plan_step()],
++            ),
++            job(
++                "rust-demo",
++                "Rust / demo",
++                vec!["plan".to_owned()],
++                vec![prepare()?],
++            ),
++        ]),
++        &fixture_ctx(),
++    )?;
++    let plan_at = text.find("\n  plan:\n").expect("plan block");
++    let crate_at = text.find("\n  rust-demo:\n").expect("crate block");
++    let (plan_block, crate_block) = text.split_at(crate_at);
++    let plan_block = &plan_block[plan_at..];
++    assert!(
++        plan_block.contains("- name: Save Mise tools"),
++        "plan wins the shared key:\n{text}"
++    );
++    assert!(
++        plan_block.contains("if: success() && github.event_name == 'push'"),
++        "winner saves push-only:\n{text}"
++    );
++    assert!(
++        !crate_block.contains("Save Mise tools"),
++        "crate restores read-only:\n{text}"
++    );
++    assert_eq!(
++        text.matches("- name: Save Mise tools").count(),
++        1,
++        "exactly one saver per key:\n{text}"
++    );
++    assert!(
++        !text.contains("cache_save: ${{"),
++        "no setup promises a built-in save:\n{text}"
++    );
++    Ok(())
++}
+diff --git a/crates/velnor-actions-workflow-renderer/tests/impl_renderer_tofu_cache.rs b/crates/velnor-actions-workflow-renderer/tests/impl_renderer_tofu_cache.rs
+index b5a5a48d0..fd06fdb85 100644
+--- a/crates/velnor-actions-workflow-renderer/tests/impl_renderer_tofu_cache.rs
++++ b/crates/velnor-actions-workflow-renderer/tests/impl_renderer_tofu_cache.rs
+@@ -47,14 +47,11 @@ fn provider_restore_and_admission_share_one_typed_composite() {
+ 
+ #[test]
+ fn provider_paths_stay_under_the_owned_base() {
+-    assert!(tofu_providers_path_ok(
+-        "${{ runner.temp }}/velnor/tofu-cache/b3-0000000000000000000000000000000000000000000000000000000000000000"
+-    ));
+     assert!(tofu_providers_path_ok(
+         "${{ runner.temp }}/velnor/tofu-cache/root-0123456789ab"
+     ));
+     assert!(tofu_providers_path_ok(
+-        "${{ runner.temp }}/velnor/tofu-cache/b3-1111111111111111111111111111111111111111111111111111111111111111"
++        "${{ runner.temp }}/velnor/tofu-cache/stacks-vpc-abcdef012345"
+     ));
+     for bad in [
+         TOFU_PROVIDER_CACHE_BASE_EXPR,
+@@ -62,10 +59,10 @@ fn provider_paths_stay_under_the_owned_base() {
+         "${{ runner.temp }}/velnor/tofu-cache/a/b",
+         "${{ runner.temp }}/velnor/tofu-cache/../evil",
+         "${{ runner.temp }}/velnor/tofu-cache/root-x credentials",
+-        "${{ runner.temp }}/velnor/tofu-cache/credentials-b3-0000000000000000000000000000000000000000000000000000000000000000",
++        "${{ runner.temp }}/velnor/tofu-cache/credentials-root-0123456789ab",
+         "${{ runner.temp }}/velnor/tofu-cache/root-*.hcl",
+-        "${{ runner.temp }}/velnor/tofu-data/b3-0000000000000000000000000000000000000000000000000000000000000000",
+-        "$RUNNER_TEMP/velnor/tofu-cache/b3-0000000000000000000000000000000000000000000000000000000000000000",
++        "${{ runner.temp }}/velnor/tofu-data/root-0123456789ab",
++        "$RUNNER_TEMP/velnor/tofu-cache/root-0123456789ab",
+         "",
+     ] {
+         assert!(!tofu_providers_path_ok(bad), "{bad:?} must fail closed");
+diff --git a/crates/velnor-runner/crates/velnor-runner-host/src/launch/steps.rs b/crates/velnor-runner/crates/velnor-runner-host/src/launch/steps.rs
+index c1917a0da..a0f97e2c4 100644
+--- a/crates/velnor-runner/crates/velnor-runner-host/src/launch/steps.rs
++++ b/crates/velnor-runner/crates/velnor-runner-host/src/launch/steps.rs
+@@ -26,30 +26,42 @@ pub(crate) enum Idle {
+     Launch,
+     /// Assigned population is positive. Mint one JIT runner, then acknowledge.
+     Scale,
+-    /// No offer and no assigned job. Delete the message so the next one can arrive.
++    /// The batch is safe to acknowledge, even when assigned population is unknown.
++    /// Deleting it does not free a running slot.
+     Ack,
+     /// A message that must stay on the queue.
+     Blocked,
+ }
+ 
+ /// Classify one poll. One available id is acquired. A positive current assigned
+-/// population starts one runner before ack. Missing or invalid census stays queued.
++/// population starts one runner before ack. Missing census allows only empty or
++/// start/completion-only batches to be acknowledged; it never implies zero jobs.
+ #[must_use]
+ pub(crate) fn idle(polled: &Poll) -> Idle {
+     match polled {
+         Poll::Empty => Idle::Empty,
+         Poll::Batch(batch) => match offer(polled) {
+             Offer::Acquire { ids, .. } if ids.len() == 1 => Idle::Launch,
+-            Offer::Wait if may_ack(batch, true) => match assigned_population(batch) {
+-                Some(population) if population > 0 => Idle::Scale,
+-                Some(0) => Idle::Ack,
+-                Some(_) | None => Idle::Blocked,
+-            },
++            Offer::Wait if may_ack(batch, true) => {
++                if absent_census_progress(batch) {
++                    Idle::Ack
++                } else {
++                    match assigned_population(batch) {
++                        Some(population) if population > 0 => Idle::Scale,
++                        Some(0) => Idle::Ack,
++                        Some(_) | None => Idle::Blocked,
++                    }
++                }
++            }
+             Offer::Acquire { .. } | Offer::Wait => Idle::Blocked,
+         },
+     }
+ }
+ 
++fn absent_census_progress(batch: &velnor_runner_github::ParsedBatch) -> bool {
++    batch.statistics.is_none() && (batch.jobs.is_empty() || crate::assign::progress_only(batch))
++}
++
+ fn assigned_population(batch: &velnor_runner_github::ParsedBatch) -> Option<i64> {
+     batch
+         .statistics
+diff --git a/crates/velnor-runner/crates/velnor-runner-host/src/launch/turn.rs b/crates/velnor-runner/crates/velnor-runner-host/src/launch/turn.rs
+index d7e8d6f26..2712bb537 100644
+--- a/crates/velnor-runner/crates/velnor-runner-host/src/launch/turn.rs
++++ b/crates/velnor-runner/crates/velnor-runner-host/src/launch/turn.rs
+@@ -333,5 +333,7 @@ mod tests {
+     }
+ }
+ 
++#[cfg(all(test, unix))]
++mod progress_tests;
+ #[cfg(all(test, unix))]
+ mod start_tests;
+diff --git a/crates/velnor-runner/crates/velnor-runner-host/src/launch/turn/progress_tests.rs b/crates/velnor-runner/crates/velnor-runner-host/src/launch/turn/progress_tests.rs
+new file mode 100644
+index 000000000..e3c4c9b96
+--- /dev/null
++++ b/crates/velnor-runner/crates/velnor-runner-host/src/launch/turn/progress_tests.rs
+@@ -0,0 +1,147 @@
++//! Missing-statistics batches ack and continue through the real pump.
++
++use std::collections::VecDeque;
++
++use velnor_runner_github::{InnerJob, InnerKind, ParsedBatch, Poll};
++
++use super::{PollHost, admission, pump};
++use crate::journal::Outcome;
++use crate::launch;
++use crate::launch::capacity::Admit;
++use crate::launch::steps;
++use crate::launch_harness::{Mode, Script, absent, ctx, open};
++use crate::scale_set::EnsureError;
++use crate::worker::Started;
++
++struct ProgressPolls<'a> {
++    journal: &'a crate::Journal,
++    polls: VecDeque<Poll>,
++    poll_count: usize,
++    script: Script,
++}
++
++impl PollHost for ProgressPolls<'_> {
++    async fn poll(&mut self, _workers: &mut Vec<Started>) -> Result<bool, EnsureError> {
++        self.poll_count = self.poll_count.saturating_add(1);
++        let Some(polled) = self.polls.pop_front() else {
++            return Ok(true);
++        };
++        let decision = admission(
++            &crate::launch_test_support::Engine::new(),
++            self.journal,
++            2,
++            2,
++            0,
++            &polled,
++        )
++        .await?;
++        let Admit::Ack { stop } = decision else {
++            return Err(EnsureError::Unexpected {
++                status: 0,
++                step: "queue",
++            });
++        };
++        if let Poll::Batch(batch) = &polled {
++            steps::acknowledge(&mut self.script, &ctx(), batch)?;
++        }
++        Ok(stop)
++    }
++
++    #[expect(
++        clippy::unused_async_trait_impl,
++        reason = "the fake runner count is an in-memory value"
++    )]
++    async fn running(&mut self) -> Result<u32, EnsureError> {
++        Ok(0)
++    }
++}
++
++#[tokio::test]
++async fn missing_stats_notifications_ack_then_poll_again() -> Result<(), String> {
++    let (scratch, journal) = open("missing-stats-pump").await?;
++    let (row, _) = journal
++        .begin_launch("m95")
++        .await
++        .map_err(|error| error.to_string())?;
++    journal
++        .finish(row, Outcome::Uncertain)
++        .await
++        .map_err(|error| error.to_string())?;
++    assert_eq!(launch::slot::occupied(&journal).await, Ok(1));
++
++    let mut host = ProgressPolls {
++        journal: &journal,
++        polls: VecDeque::from([
++            batch(96, Vec::new()),
++            batch(97, vec![job(InnerKind::Started), job(InnerKind::Completed)]),
++        ]),
++        poll_count: 0,
++        script: Script {
++            calls: Vec::new(),
++            mode: Mode::Ok,
++        },
++    };
++    let mut workers = Vec::new();
++    pump(&mut host, &mut workers, 1)
++        .await
++        .map_err(|error| error.to_string())?;
++
++    assert_eq!(host.poll_count, 3);
++    assert_eq!(host.script.calls, ["ack", "ack"]);
++    assert!(workers.is_empty());
++    assert_eq!(launch::slot::occupied(&journal).await, Ok(1));
++    let rows = journal.rows().await.map_err(|error| error.to_string())?;
++    assert_eq!(rows.len(), 1);
++    assert_eq!(rows[0].id, row);
++    assert_eq!(rows[0].subject, "m95");
++    assert_eq!(rows[0].state, crate::IntentState::Uncertain);
++    absent(&scratch.file())
++}
++
++#[tokio::test]
++async fn ack_error_propagates_without_start_or_repoll() -> Result<(), String> {
++    let (scratch, journal) = open("missing-stats-ack-fail").await?;
++    let mut host = ProgressPolls {
++        journal: &journal,
++        polls: VecDeque::from([batch(98, Vec::new())]),
++        poll_count: 0,
++        script: Script {
++            calls: Vec::new(),
++            mode: Mode::AckFail,
++        },
++    };
++    let mut workers = Vec::new();
++    assert_eq!(
++        pump(&mut host, &mut workers, 1).await,
++        Err(EnsureError::Unexpected {
++            status: 0,
++            step: "session",
++        })
++    );
++    assert_eq!(host.poll_count, 1);
++    assert_eq!(host.script.calls, ["ack"]);
++    assert!(workers.is_empty());
++    assert_eq!(launch::slot::occupied(&journal).await, Ok(0));
++    absent(&scratch.file())
++}
++
++fn batch(message_id: i64, jobs: Vec<InnerJob>) -> Poll {
++    Poll::Batch(ParsedBatch {
++        message_id,
++        statistics: None,
++        jobs,
++    })
++}
++
++fn job(kind: InnerKind) -> InnerJob {
++    InnerJob {
++        kind,
++        request_id: None,
++        job_id: None,
++        labels: Vec::new(),
++        runner_id: None,
++        runner_name: None,
++        result: None,
++        fields: Vec::new(),
++    }
++}
+diff --git a/crates/velnor-runner/crates/velnor-runner-host/src/launch_tests.rs b/crates/velnor-runner/crates/velnor-runner-host/src/launch_tests.rs
+index b6287f0e9..5a3c55c63 100644
+--- a/crates/velnor-runner/crates/velnor-runner-host/src/launch_tests.rs
++++ b/crates/velnor-runner/crates/velnor-runner-host/src/launch_tests.rs
+@@ -2,7 +2,7 @@
+ 
+ use std::sync::{Arc, Mutex};
+ 
+-use velnor_runner_github::{ParsedBatch, Poll};
++use velnor_runner_github::{InnerJob, InnerKind, ParsedBatch, Poll, Statistics};
+ 
+ use crate::launch::{Idle, drive_offer, idle};
+ use crate::launch_harness::{
+@@ -18,7 +18,7 @@ fn statistics_advance_and_offers_stay() {
+         statistics: None,
+         jobs: Vec::new(),
+     });
+-    assert_eq!(idle(&stats), Idle::Blocked);
++    assert_eq!(idle(&stats), Idle::Ack);
+     assert_eq!(idle(&available(&[3])), Idle::Launch);
+     assert_eq!(idle(&Poll::Empty), Idle::Empty);
+     assert_eq!(idle(&available(&[3, 4])), Idle::Blocked);
+@@ -26,6 +26,89 @@ fn statistics_advance_and_offers_stay() {
+     assert_eq!(idle(&assigned_wait(7, 0)), Idle::Ack);
+     assert_eq!(idle(&assigned_wait(8, -1)), Idle::Blocked);
+     assert_eq!(idle(&started_progress(11, 5)), Idle::Scale);
++
++    assert_eq!(idle(&no_stats(vec![job(InnerKind::Started)])), Idle::Ack);
++    assert_eq!(idle(&no_stats(vec![job(InnerKind::Completed)])), Idle::Ack);
++    assert_eq!(
++        idle(&no_stats(vec![
++            job(InnerKind::Started),
++            job(InnerKind::Completed),
++        ])),
++        Idle::Ack
++    );
++    assert_eq!(
++        idle(&no_stats(vec![job(InnerKind::Assigned)])),
++        Idle::Blocked
++    );
++    assert_eq!(
++        idle(&no_stats(vec![job(InnerKind::Available)])),
++        Idle::Blocked
++    );
++    assert_eq!(
++        idle(&no_stats(vec![
++            job(InnerKind::Started),
++            job(InnerKind::Available),
++        ])),
++        Idle::Blocked
++    );
++    let mut available_with_id = job(InnerKind::Available);
++    available_with_id.request_id = Some(9);
++    assert_eq!(
++        idle(&no_stats(vec![job(InnerKind::Started), available_with_id])),
++        Idle::Launch
++    );
++    assert_eq!(
++        idle(&no_stats(vec![job(InnerKind::Unsupported(
++            "FutureKind".to_owned(),
++        ))])),
++        Idle::Blocked
++    );
++    assert_eq!(
++        idle(&batch(
++            Some(Statistics {
++                total_available_jobs: 0,
++                total_acquired_jobs: 0,
++                total_assigned_jobs: -1,
++                total_running_jobs: 0,
++                total_registered_runners: 0,
++                total_busy_runners: 0,
++                total_idle_runners: 0,
++            }),
++            vec![job(InnerKind::Started)],
++        )),
++        Idle::Blocked
++    );
++    let synthetic = ParsedBatch {
++        message_id: -1,
++        statistics: None,
++        jobs: Vec::new(),
++    };
++    assert_eq!(idle(&Poll::Batch(synthetic)), Idle::Blocked);
++}
++
++fn no_stats(jobs: Vec<InnerJob>) -> Poll {
++    batch(None, jobs)
++}
++
++fn batch(statistics: Option<Statistics>, jobs: Vec<InnerJob>) -> Poll {
++    Poll::Batch(ParsedBatch {
++        message_id: 77,
++        statistics,
++        jobs,
++    })
++}
++
++fn job(kind: InnerKind) -> InnerJob {
++    InnerJob {
++        kind,
++        request_id: None,
++        job_id: None,
++        labels: Vec::new(),
++        runner_id: None,
++        runner_name: None,
++        result: None,
++        fields: Vec::new(),
++    }
+ }
+ 
+ #[tokio::test]
+* Unmerged path docs/proposed/opentofu-goldens/MANIFEST.sha256
+diff --git a/docs/proposed/opentofu-goldens/cases/dogfood/plan.txt b/docs/proposed/opentofu-goldens/cases/dogfood/plan.txt
+index 8eb35f957..fae74e62d 100644
+--- a/docs/proposed/opentofu-goldens/cases/dogfood/plan.txt
++++ b/docs/proposed/opentofu-goldens/cases/dogfood/plan.txt
+@@ -41,7 +41,7 @@ Workflow to generate
+     - alint (2 steps)
+     - cargo-deny (5 steps)
+     - cargo-machete (5 steps)
+-    - plan (21 steps)
++    - plan (22 steps)
+     - publish-baseline (7 steps)
+     - required (11 steps)
+     - rust-velnor-actions-actionlint (23 steps)
+* Unmerged path docs/proposed/opentofu-goldens/cases/dogfood/tree.sha256
+diff --git a/docs/proposed/opentofu-goldens/cases/empty-suite/plan.txt b/docs/proposed/opentofu-goldens/cases/empty-suite/plan.txt
+index 6b861ef30..3108bfb1c 100644
+--- a/docs/proposed/opentofu-goldens/cases/empty-suite/plan.txt
++++ b/docs/proposed/opentofu-goldens/cases/empty-suite/plan.txt
+@@ -16,7 +16,7 @@ Workflow to generate
+   Runner: ubuntu-26.04 (latest pinned default)
+   Jobs:
+     - actionlint (5 steps)
+-    - plan (10 steps)
++    - plan (11 steps)
+     - publish-baseline (5 steps)
+     - required (9 steps)
+     - rust-empty-suite (11 steps)
+* Unmerged path docs/proposed/opentofu-goldens/cases/empty-suite/tree.sha256
+diff --git a/docs/proposed/opentofu-goldens/cases/mbx-nextest/plan.txt b/docs/proposed/opentofu-goldens/cases/mbx-nextest/plan.txt
+index 69f4d213e..af913cbaa 100644
+--- a/docs/proposed/opentofu-goldens/cases/mbx-nextest/plan.txt
++++ b/docs/proposed/opentofu-goldens/cases/mbx-nextest/plan.txt
+@@ -18,7 +18,7 @@ Workflow to generate
+   Runner: ubuntu-26.04 (latest pinned default)
+   Jobs:
+     - actionlint (5 steps)
+-    - plan (10 steps)
++    - plan (11 steps)
+     - publish-baseline (5 steps)
+     - required (9 steps)
+     - rust-app (16 steps)
+* Unmerged path docs/proposed/opentofu-goldens/cases/mbx-nextest/tree.sha256
+diff --git a/docs/proposed/opentofu-goldens/cases/minimal-cargo/plan.txt b/docs/proposed/opentofu-goldens/cases/minimal-cargo/plan.txt
+index 438763dd3..8c3c2efff 100644
+--- a/docs/proposed/opentofu-goldens/cases/minimal-cargo/plan.txt
++++ b/docs/proposed/opentofu-goldens/cases/minimal-cargo/plan.txt
+@@ -15,7 +15,7 @@ Workflow to generate
+   Runner: ubuntu-26.04 (latest pinned default)
+   Jobs:
+     - actionlint (5 steps)
+-    - plan (10 steps)
++    - plan (11 steps)
+     - publish-baseline (5 steps)
+     - required (9 steps)
+     - rust-minimal-cargo (12 steps)
+* Unmerged path docs/proposed/opentofu-goldens/cases/minimal-cargo/tree.sha256
+diff --git a/docs/proposed/opentofu-goldens/cases/nested/plan.txt b/docs/proposed/opentofu-goldens/cases/nested/plan.txt
+index d0b676385..1f63c2e93 100644
+--- a/docs/proposed/opentofu-goldens/cases/nested/plan.txt
++++ b/docs/proposed/opentofu-goldens/cases/nested/plan.txt
+@@ -16,7 +16,7 @@ Workflow to generate
+   Runner: ubuntu-26.04 (latest pinned default)
+   Jobs:
+     - actionlint (5 steps)
+-    - plan (12 steps)
++    - plan (13 steps)
+     - publish-baseline (5 steps)
+     - required (9 steps)
+     - rust-a (14 steps)
+* Unmerged path docs/proposed/opentofu-goldens/cases/nested/tree.sha256

@@ -1,0 +1,7 @@
+ M crates/velnor-actions-workflow-renderer/src/cache_elect.rs
+ M crates/velnor-actions-workflow-renderer/src/cache_p08.rs
+ M crates/velnor-actions-workflow-renderer/src/cache_p08_setup.rs
+ M crates/velnor-actions-workflow-renderer/src/render.rs
+ M crates/velnor-actions-workflow-renderer/src/tofu_cache.rs
+ M crates/velnor-actions-workflow-renderer/tests/impl_renderer_p08_elect.rs
+ M crates/velnor-actions-workflow-renderer/tests/impl_renderer_p08_tofu_elect.rs

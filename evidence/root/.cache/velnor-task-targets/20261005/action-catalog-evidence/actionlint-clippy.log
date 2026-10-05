@@ -1,0 +1,6 @@
+    Checking serde_core v1.0.229
+    Checking serde_json v1.0.151
+    Checking serde v1.0.229
+    Checking velnor-actions-contract v0.1.0 (/root/.cache/velnor-task-targets/20261005/mbx-cli-portability-20261005T1530Z/crates/velnor-actions-contract)
+    Checking velnor-actions-actionlint v0.1.0 (/root/.cache/velnor-task-targets/20261005/mbx-cli-portability-20261005T1530Z/crates/velnor-actions-actionlint)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.86s

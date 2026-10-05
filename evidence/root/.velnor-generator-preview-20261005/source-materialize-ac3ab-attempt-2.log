@@ -1,0 +1,13 @@
+Traceback (most recent call last):
+  File "/root/.velnor-generator-preview-20261005/preseed-preview-source-materialize.py", line 759, in <module>
+    main()
+    ~~~~^^
+  File "/root/.velnor-generator-preview-20261005/preseed-preview-source-materialize.py", line 744, in main
+    verify_lfs_pointers = verify_worktree(root_fd, entries)
+  File "/root/.velnor-generator-preview-20261005/preseed-preview-source-materialize.py", line 677, in verify_worktree
+    walk(root_fd, "")
+    ~~~~^^^^^^^^^^^^^
+  File "/root/.velnor-generator-preview-20261005/preseed-preview-source-materialize.py", line 618, in walk
+    path = prefix + "/" + name if prefix else name
+           ~~~~~~~^~~~~
+TypeError: can't concat str to bytearray

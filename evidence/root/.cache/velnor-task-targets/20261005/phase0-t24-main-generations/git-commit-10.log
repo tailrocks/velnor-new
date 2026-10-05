@@ -1,0 +1,15 @@
+[main (root-commit) 2fe584b] fixture
+ 13 files changed, 47 insertions(+)
+ create mode 100644 .velnor/config.toml
+ create mode 100644 .velnor/release-manifest.json
+ create mode 100644 README.md
+ create mode 100644 stacks/r000/main.tf
+ create mode 100644 stacks/r001/main.tf
+ create mode 100644 stacks/r002/main.tf
+ create mode 100644 stacks/r003/main.tf
+ create mode 100644 stacks/r004/main.tf
+ create mode 100644 stacks/r005/main.tf
+ create mode 100644 stacks/r006/main.tf
+ create mode 100644 stacks/r007/main.tf
+ create mode 100644 stacks/r008/main.tf
+ create mode 100644 stacks/r009/main.tf

@@ -1,0 +1,15 @@
+started_utc=2026-10-05T11:49:38Z
+positive_exit=0
+exact source objects verified: bc7f784a51233bd29676353392c9fc07c0ad01a7 b3939a4d6010f243485fb528f73af74d49b2fb94; Cargo snapshot 9252060a324c757bb8465cb432ecc3bf7963c99e4e2e4505bec7cfeefc5b1959; files 1359; bytes 8836558
+manifest_sha256=14dc98011488a1b950fad7f0a0115054190e88af263190ce535d00bb9dd541b3
+snapshot_tree_sha256=9252060a324c757bb8465cb432ecc3bf7963c99e4e2e4505bec7cfeefc5b1959
+snapshot_blob_count=1359
+snapshot_blob_bytes=8836558
+snapshot_manifest_mode=0o600
+git_metadata_absent=true; cargo_config_absent=true; exact .cargo/mutants.toml exception=true
+wrong_tree_exit=1
+wrong_tree_stderr=cargo source snapshot: commit tree differs from the reviewed source tree
+wrong_tree_manifest_written=false
+outer_sha256=da5e644badf8ff2a303b72ab89b603e129b6fcc09de840e5b770cd16d8f6f532  /root/.velnor-generator-preview-20261005/preseed-preview-cargo-fetch-v2.sh
+namespace_sha256=0bcf118082304e72b1ae46d53abab4ab8dbbca62df731e2a7f3b6627a29043f8  /root/.velnor-generator-preview-20261005/preseed-preview-cargo-fetch-namespace-v2.sh
+finished_utc=2026-10-05T11:49:38Z

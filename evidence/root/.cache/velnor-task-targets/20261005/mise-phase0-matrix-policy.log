@@ -1,0 +1,33 @@
+
+running 28 tests
+test matrix_step::matrix_step_tests::doc_obligation_step_carries_typed_rustdocflags ... ok
+test matrix_step::matrix_step_tests::every_workspace_member_is_classified ... ok
+test matrix_step::matrix_step_tests::identity_env_contract_enforces_in_every_build ... ok
+test matrix_step::matrix_step_tests::non_doc_obligation_steps_carry_no_rustdocflags ... ok
+test matrix_step::matrix_step_tests::obligation_step_carries_the_report_lookup_key ... ok
+test matrix_step::matrix_step_tests::obligation_step_skips_when_plan_covered_it ... ok
+test matrix_step::matrix_step_tests::outcome_and_deferred_share_one_start_file ... ok
+test matrix_step::matrix_step_tests::report_wrapper_stamps_start_and_hands_env_to_helper ... ok
+test matrix_step::matrix_step_tests::tofu_obligation_steps_carry_the_automation_pair ... ok
+test matrix_step::matrix_step_tests::validator_installs_follow_executed_suite_per_policy ... ok
+test matrix_step::matrix_step_tofu_install_tests::mise_crate_job_prepare_installs_opentofu ... ok
+test matrix_step::matrix_step_tofu_install_tests::tofu_install_follows_executed_suite_per_policy ... ok
+test matrix_step::matrix_step_tofu_tests::stackless_obligation_task_ids_keep_malformed_vocabulary ... ok
+test matrix_step::matrix_step_tofu_tests::tofu_isolation_rejects_noncanonical_task_root_keys ... ok
+test matrix_step::matrix_step_tofu_tests::tofu_obligation_step_carries_isolated_cache_dir ... ok
+test matrix_step::matrix_step_tofu_tests::tofu_obligation_step_carries_tofu_matrix_id_and_no_doc_env ... ok
+test matrix_step::matrix_step_tofu_tests::tofu_step_env_rejects_triple_and_reserved_keys ... ok
+test matrix_step::matrix_step_tofu_tests::tofu_step_names_render_through_tofu_table ... ok
+test matrix_step::tools::suite::tests::conflicting_rust_owners_are_rejected ... ok
+test matrix_step::tools::suite::tests::mixed_group_uses_rust_owner_after_non_rust_first_task ... ok
+test matrix_step::tools::suite::tests::native_owner_requires_neither_validator_nor_tofu_execution ... ok
+test matrix_step::tools::suite::tests::non_rust_repository_obligation_has_no_compiled_suite ... ok
+test matrix_step::tools::suite::tests::opaque_consumer_runner_named_suite_retains_validators ... ok
+test matrix_step::tools::suite::tests::runner_cli_suite_requires_no_v1_extra_tools ... ok
+test matrix_step::tools::suite::tests::runner_core_suite_requires_no_v1_extra_tools ... ok
+test matrix_step::tools::suite::tests::runner_github_suite_requires_no_v1_extra_tools ... ok
+test matrix_step::tools::suite::tests::runner_host_suite_requires_no_v1_extra_tools ... ok
+test matrix_step::tools::suite::tests::unregistered_repository_suite_is_rejected ... ok
+
+test result: ok. 28 passed; 0 failed; 0 ignored; 0 measured; 459 filtered out; finished in 0.01s
+

@@ -1,0 +1,362 @@
+row: {"check":"policy-header","detail":"1","status":"pass","subject":"schema"}
+ok: policy-header schema 1
+row: {"check":"policy-header","detail":"'stable'","status":"pass","subject":"channel"}
+ok: policy-header channel 'stable'
+row: {"check":"policy-header","detail":"https://github.com/rust-lang/crates.io-index","status":"pass","subject":"registry"}
+ok: policy-header registry https://github.com/rust-lang/crates.io-index
+row: {"check":"policy-header","detail":"24","status":"pass","subject":"check_interval_hours"}
+ok: policy-header check_interval_hours 24
+row: {"check":"policy-header","detail":"14","status":"pass","subject":"max_exception_days"}
+ok: policy-header max_exception_days 14
+row: {"check":"local-pin","detail":"2026.9.18","status":"pass","subject":"tool mise (crates/velnor-actions-mise/src/catalog.rs::MISE_VERSION)"}
+ok: local-pin tool mise (crates/velnor-actions-mise/src/catalog.rs::MISE_VERSION) 2026.9.18
+row: {"check":"local-pin","detail":"1.98.1","status":"pass","subject":"tool rust (crates/velnor-actions-mise/src/catalog.rs::RUST_VERSION)"}
+ok: local-pin tool rust (crates/velnor-actions-mise/src/catalog.rs::RUST_VERSION) 1.98.1
+row: {"check":"local-pin","detail":"1.21.1","status":"pass","subject":"tool mr-boxington (crates/velnor-actions-mise/src/catalog.rs::MR_BOXINGTON_VERSION)"}
+ok: local-pin tool mr-boxington (crates/velnor-actions-mise/src/catalog.rs::MR_BOXINGTON_VERSION) 1.21.1
+row: {"check":"local-pin","detail":"2.102.0","status":"pass","subject":"tool gh (crates/velnor-actions-mise/src/catalog.rs::GH_VERSION)"}
+ok: local-pin tool gh (crates/velnor-actions-mise/src/catalog.rs::GH_VERSION) 2.102.0
+row: {"check":"local-pin","detail":"1.7.12","status":"pass","subject":"tool actionlint (crates/velnor-actions-mise/src/catalog.rs::ACTIONLINT_VERSION)"}
+ok: local-pin tool actionlint (crates/velnor-actions-mise/src/catalog.rs::ACTIONLINT_VERSION) 1.7.12
+row: {"check":"local-pin","detail":"0.11.0","status":"pass","subject":"tool shellcheck (crates/velnor-actions-mise/src/catalog.rs::SHELLCHECK_VERSION)"}
+ok: local-pin tool shellcheck (crates/velnor-actions-mise/src/catalog.rs::SHELLCHECK_VERSION) 0.11.0
+row: {"check":"local-pin","detail":"1.30.1","status":"pass","subject":"tool zizmor (crates/velnor-actions-mise/src/catalog.rs::ZIZMOR_VERSION)"}
+ok: local-pin tool zizmor (crates/velnor-actions-mise/src/catalog.rs::ZIZMOR_VERSION) 1.30.1
+row: {"check":"local-pin","detail":"0.9.146","status":"pass","subject":"tool nextest (crates/velnor-actions-mise/src/catalog.rs::NEXTEST_VERSION)"}
+ok: local-pin tool nextest (crates/velnor-actions-mise/src/catalog.rs::NEXTEST_VERSION) 0.9.146
+row: {"check":"local-pin","detail":"1.13.1","status":"pass","subject":"tool opentofu (crates/velnor-actions-mise/src/catalog.rs::OPENTOFU_VERSION)"}
+ok: local-pin tool opentofu (crates/velnor-actions-mise/src/catalog.rs::OPENTOFU_VERSION) 1.13.1
+row: {"check":"local-pin","detail":"0.3.169","status":"pass","subject":"tool release-plz (crates/velnor-actions-mise/src/catalog.rs::RELEASE_PLZ_VERSION)"}
+ok: local-pin tool release-plz (crates/velnor-actions-mise/src/catalog.rs::RELEASE_PLZ_VERSION) 0.3.169
+row: {"check":"local-pin","detail":"v5.0.0","status":"pass","subject":"action jdx/mise-action version (crates/velnor-actions-actionlint/src/actions.rs::MISE_ACTION_VERSION)"}
+ok: local-pin action jdx/mise-action version (crates/velnor-actions-actionlint/src/actions.rs::MISE_ACTION_VERSION) v5.0.0
+row: {"check":"local-pin","detail":"9149ea85001c7435d5a66bb127d6a1b6227cb0a5","status":"pass","subject":"action jdx/mise-action sha (crates/velnor-actions-actionlint/src/actions.rs::MISE_ACTION_SHA)"}
+ok: local-pin action jdx/mise-action sha (crates/velnor-actions-actionlint/src/actions.rs::MISE_ACTION_SHA) 9149ea85001c7435d5a66bb127d6a1b6227cb0a5
+row: {"check":"local-pin","detail":"v7.0.1","status":"pass","subject":"action actions/checkout version (crates/velnor-actions-actionlint/src/actions.rs::CHECKOUT_ACTION_VERSION)"}
+ok: local-pin action actions/checkout version (crates/velnor-actions-actionlint/src/actions.rs::CHECKOUT_ACTION_VERSION) v7.0.1
+row: {"check":"local-pin","detail":"3d3c42e5aac5ba805825da76410c181273ba90b1","status":"pass","subject":"action actions/checkout sha (crates/velnor-actions-actionlint/src/actions.rs::CHECKOUT_ACTION_SHA)"}
+ok: local-pin action actions/checkout sha (crates/velnor-actions-actionlint/src/actions.rs::CHECKOUT_ACTION_SHA) 3d3c42e5aac5ba805825da76410c181273ba90b1
+row: {"check":"local-pin","detail":"v8.0.1","status":"pass","subject":"action actions/download-artifact version (crates/velnor-actions-actionlint/src/actions.rs::DOWNLOAD_ARTIFACT_ACTION_VERSION)"}
+ok: local-pin action actions/download-artifact version (crates/velnor-actions-actionlint/src/actions.rs::DOWNLOAD_ARTIFACT_ACTION_VERSION) v8.0.1
+row: {"check":"local-pin","detail":"3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c","status":"pass","subject":"action actions/download-artifact sha (crates/velnor-actions-actionlint/src/actions.rs::DOWNLOAD_ARTIFACT_ACTION_SHA)"}
+ok: local-pin action actions/download-artifact sha (crates/velnor-actions-actionlint/src/actions.rs::DOWNLOAD_ARTIFACT_ACTION_SHA) 3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+row: {"check":"local-pin","detail":"v7.0.1","status":"pass","subject":"action actions/upload-artifact version (crates/velnor-actions-actionlint/src/actions.rs::UPLOAD_ARTIFACT_ACTION_VERSION)"}
+ok: local-pin action actions/upload-artifact version (crates/velnor-actions-actionlint/src/actions.rs::UPLOAD_ARTIFACT_ACTION_VERSION) v7.0.1
+row: {"check":"local-pin","detail":"043fb46d1a93c77aae656e7c1c64a875d1fc6a0a","status":"pass","subject":"action actions/upload-artifact sha (crates/velnor-actions-actionlint/src/actions.rs::UPLOAD_ARTIFACT_ACTION_SHA)"}
+ok: local-pin action actions/upload-artifact sha (crates/velnor-actions-actionlint/src/actions.rs::UPLOAD_ARTIFACT_ACTION_SHA) 043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+row: {"check":"local-pin","detail":"v6.1.0","status":"pass","subject":"action actions/cache/restore version (crates/velnor-actions-actionlint/src/actions.rs::CACHE_ACTION_VERSION)"}
+ok: local-pin action actions/cache/restore version (crates/velnor-actions-actionlint/src/actions.rs::CACHE_ACTION_VERSION) v6.1.0
+row: {"check":"local-pin","detail":"55cc8345863c7cc4c66a329aec7e433d2d1c52a9","status":"pass","subject":"action actions/cache/restore sha (crates/velnor-actions-actionlint/src/actions.rs::CACHE_ACTION_SHA)"}
+ok: local-pin action actions/cache/restore sha (crates/velnor-actions-actionlint/src/actions.rs::CACHE_ACTION_SHA) 55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+row: {"check":"local-pin","detail":"v6.1.0","status":"pass","subject":"action actions/cache/save version (crates/velnor-actions-actionlint/src/actions.rs::CACHE_ACTION_VERSION)"}
+ok: local-pin action actions/cache/save version (crates/velnor-actions-actionlint/src/actions.rs::CACHE_ACTION_VERSION) v6.1.0
+row: {"check":"local-pin","detail":"55cc8345863c7cc4c66a329aec7e433d2d1c52a9","status":"pass","subject":"action actions/cache/save sha (crates/velnor-actions-actionlint/src/actions.rs::CACHE_ACTION_SHA)"}
+ok: local-pin action actions/cache/save sha (crates/velnor-actions-actionlint/src/actions.rs::CACHE_ACTION_SHA) 55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+row: {"check":"local-pin","detail":"v1.6.0","status":"pass","subject":"action jdx/mr-boxington-action version (crates/velnor-actions-actionlint/src/actions.rs::MR_BOXINGTON_ACTION_VERSION)"}
+ok: local-pin action jdx/mr-boxington-action version (crates/velnor-actions-actionlint/src/actions.rs::MR_BOXINGTON_ACTION_VERSION) v1.6.0
+row: {"check":"local-pin","detail":"1687e54eb349cadf61fa38b5813a77875489e8e6","status":"pass","subject":"action jdx/mr-boxington-action sha (crates/velnor-actions-actionlint/src/actions.rs::MR_BOXINGTON_ACTION_SHA)"}
+ok: local-pin action jdx/mr-boxington-action sha (crates/velnor-actions-actionlint/src/actions.rs::MR_BOXINGTON_ACTION_SHA) 1687e54eb349cadf61fa38b5813a77875489e8e6
+row: {"check":"local-pin","detail":"v0.16.1","status":"pass","subject":"action asamarts/alint version (crates/velnor-actions-actionlint/src/actions.rs::ALINT_ACTION_VERSION)"}
+ok: local-pin action asamarts/alint version (crates/velnor-actions-actionlint/src/actions.rs::ALINT_ACTION_VERSION) v0.16.1
+row: {"check":"local-pin","detail":"9f9d34ba0eae3888299b9e570f43338b0e7f2cdb","status":"pass","subject":"action asamarts/alint sha (crates/velnor-actions-actionlint/src/actions.rs::ALINT_ACTION_SHA)"}
+ok: local-pin action asamarts/alint sha (crates/velnor-actions-actionlint/src/actions.rs::ALINT_ACTION_SHA) 9f9d34ba0eae3888299b9e570f43338b0e7f2cdb
+row: {"check":"local-pin","detail":"v2.9.2","status":"pass","subject":"action Swatinem/rust-cache version (crates/velnor-actions-actionlint/src/actions.rs::RUST_CACHE_ACTION_VERSION)"}
+ok: local-pin action Swatinem/rust-cache version (crates/velnor-actions-actionlint/src/actions.rs::RUST_CACHE_ACTION_VERSION) v2.9.2
+row: {"check":"local-pin","detail":"6323deb102c322ba6fcbdcafc7e3dddab59af2b6","status":"pass","subject":"action Swatinem/rust-cache sha (crates/velnor-actions-actionlint/src/actions.rs::RUST_CACHE_ACTION_SHA)"}
+ok: local-pin action Swatinem/rust-cache sha (crates/velnor-actions-actionlint/src/actions.rs::RUST_CACHE_ACTION_SHA) 6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+row: {"check":"local-pin","detail":"1.7.12","status":"pass","subject":"tool actionlint mirror (capabilities.rs)"}
+ok: local-pin tool actionlint mirror (capabilities.rs) 1.7.12
+row: {"check":"local-pin","detail":"0.11.0","status":"pass","subject":"tool shellcheck mirror (tools.rs)"}
+ok: local-pin tool shellcheck mirror (tools.rs) 0.11.0
+row: {"check":"local-pin","detail":"v0.16.1","status":"pass","subject":"action asamarts/alint binary mirror (render.rs)"}
+ok: local-pin action asamarts/alint binary mirror (render.rs) v0.16.1
+row: {"check":"local-pin","detail":"ubuntu-26.04","status":"pass","subject":"runner default (config.rs::RUNNER_LABEL_BRIDGE)"}
+ok: local-pin runner default (config.rs::RUNNER_LABEL_BRIDGE) ubuntu-26.04
+row: {"check":"local-pin","detail":"ubuntu-26.04,ubuntu-24.04,ubuntu-22.04","status":"pass","subject":"runner supported"}
+ok: local-pin runner supported ubuntu-26.04,ubuntu-24.04,ubuntu-22.04
+row: {"check":"policy-mirror","detail":"1.7.12","status":"pass","subject":"tool actionlint"}
+ok: policy-mirror tool actionlint 1.7.12
+row: {"check":"policy-mirror","detail":"2.102.0","status":"pass","subject":"tool gh"}
+ok: policy-mirror tool gh 2.102.0
+row: {"check":"policy-mirror","detail":"2026.9.18","status":"pass","subject":"tool mise"}
+ok: policy-mirror tool mise 2026.9.18
+row: {"check":"policy-mirror","detail":"1.21.1","status":"pass","subject":"tool mr-boxington"}
+ok: policy-mirror tool mr-boxington 1.21.1
+row: {"check":"policy-mirror","detail":"0.9.146","status":"pass","subject":"tool nextest"}
+ok: policy-mirror tool nextest 0.9.146
+row: {"check":"policy-mirror","detail":"1.13.1","status":"pass","subject":"tool opentofu"}
+ok: policy-mirror tool opentofu 1.13.1
+row: {"check":"policy-mirror","detail":"0.3.169","status":"pass","subject":"tool release-plz"}
+ok: policy-mirror tool release-plz 0.3.169
+row: {"check":"policy-mirror","detail":"1.98.1","status":"pass","subject":"tool rust"}
+ok: policy-mirror tool rust 1.98.1
+row: {"check":"policy-mirror","detail":"0.11.0","status":"pass","subject":"tool shellcheck"}
+ok: policy-mirror tool shellcheck 0.11.0
+row: {"check":"policy-mirror","detail":"1.30.1","status":"pass","subject":"tool zizmor"}
+ok: policy-mirror tool zizmor 1.30.1
+row: {"check":"policy-mirror","detail":"ubuntu-26.04","status":"pass","subject":"runner default"}
+ok: policy-mirror runner default ubuntu-26.04
+row: {"check":"policy-mirror","detail":"ubuntu-26.04,ubuntu-24.04,ubuntu-22.04","status":"pass","subject":"runner supported"}
+ok: policy-mirror runner supported ubuntu-26.04,ubuntu-24.04,ubuntu-22.04
+row: {"check":"policy-mirror","detail":"v2.9.2@6323deb102c322ba6fcbdcafc7e3dddab59af2b6","status":"pass","subject":"action Swatinem/rust-cache"}
+ok: policy-mirror action Swatinem/rust-cache v2.9.2@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+row: {"check":"policy-mirror","detail":"v6.1.0@55cc8345863c7cc4c66a329aec7e433d2d1c52a9","status":"pass","subject":"action actions/cache/restore"}
+ok: policy-mirror action actions/cache/restore v6.1.0@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+row: {"check":"policy-mirror","detail":"v6.1.0@55cc8345863c7cc4c66a329aec7e433d2d1c52a9","status":"pass","subject":"action actions/cache/save"}
+ok: policy-mirror action actions/cache/save v6.1.0@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+row: {"check":"policy-mirror","detail":"v7.0.1@3d3c42e5aac5ba805825da76410c181273ba90b1","status":"pass","subject":"action actions/checkout"}
+ok: policy-mirror action actions/checkout v7.0.1@3d3c42e5aac5ba805825da76410c181273ba90b1
+row: {"check":"policy-mirror","detail":"v8.0.1@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c","status":"pass","subject":"action actions/download-artifact"}
+ok: policy-mirror action actions/download-artifact v8.0.1@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+row: {"check":"policy-mirror","detail":"v7.0.1@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a","status":"pass","subject":"action actions/upload-artifact"}
+ok: policy-mirror action actions/upload-artifact v7.0.1@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+row: {"check":"policy-mirror","detail":"v0.16.1@9f9d34ba0eae3888299b9e570f43338b0e7f2cdb","status":"pass","subject":"action asamarts/alint"}
+ok: policy-mirror action asamarts/alint v0.16.1@9f9d34ba0eae3888299b9e570f43338b0e7f2cdb
+row: {"check":"policy-mirror","detail":"v5.0.0@9149ea85001c7435d5a66bb127d6a1b6227cb0a5","status":"pass","subject":"action jdx/mise-action"}
+ok: policy-mirror action jdx/mise-action v5.0.0@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
+row: {"check":"policy-mirror","detail":"v1.6.0@1687e54eb349cadf61fa38b5813a77875489e8e6","status":"pass","subject":"action jdx/mr-boxington-action"}
+ok: policy-mirror action jdx/mr-boxington-action v1.6.0@1687e54eb349cadf61fa38b5813a77875489e8e6
+row: {"check":"local-pin","detail":"27.1.0","status":"pass","subject":"validation-tools/cargo-mutants"}
+ok: local-pin validation-tools/cargo-mutants 27.1.0
+row: {"check":"local-pin","detail":"1 match(es)","status":"pass","subject":".cargo/mutants.toml scope crates/velnor-actions-contract/src/cachekey.rs"}
+ok: local-pin .cargo/mutants.toml scope crates/velnor-actions-contract/src/cachekey.rs 1 match(es)
+row: {"check":"local-pin","detail":"1 match(es)","status":"pass","subject":".cargo/mutants.toml scope crates/velnor-actions-contract/src/candidate_manifest.rs"}
+ok: local-pin .cargo/mutants.toml scope crates/velnor-actions-contract/src/candidate_manifest.rs 1 match(es)
+row: {"check":"local-pin","detail":"11 match(es)","status":"pass","subject":".cargo/mutants.toml scope crates/velnor-actions-contract/src/config/**/*.rs"}
+ok: local-pin .cargo/mutants.toml scope crates/velnor-actions-contract/src/config/**/*.rs 11 match(es)
+row: {"check":"local-pin","detail":"4 match(es)","status":"pass","subject":".cargo/mutants.toml scope crates/velnor-actions-contract/src/ids/**/*.rs"}
+ok: local-pin .cargo/mutants.toml scope crates/velnor-actions-contract/src/ids/**/*.rs 4 match(es)
+row: {"check":"local-pin","detail":"1 match(es)","status":"pass","subject":".cargo/mutants.toml scope crates/velnor-actions-contract/src/manifest.rs"}
+ok: local-pin .cargo/mutants.toml scope crates/velnor-actions-contract/src/manifest.rs 1 match(es)
+row: {"check":"local-pin","detail":"1 match(es)","status":"pass","subject":".cargo/mutants.toml scope crates/velnor-actions-contract/src/strict_json.rs"}
+ok: local-pin .cargo/mutants.toml scope crates/velnor-actions-contract/src/strict_json.rs 1 match(es)
+row: {"check":"local-pin","detail":"1 match(es)","status":"pass","subject":".cargo/mutants.toml scope crates/velnor-actions-contract/src/tooling.rs"}
+ok: local-pin .cargo/mutants.toml scope crates/velnor-actions-contract/src/tooling.rs 1 match(es)
+row: {"check":"local-pin","detail":"1 match(es)","status":"pass","subject":".cargo/mutants.toml scope crates/velnor-actions-contract/src/workflow/cache_ids.rs"}
+ok: local-pin .cargo/mutants.toml scope crates/velnor-actions-contract/src/workflow/cache_ids.rs 1 match(es)
+row: {"check":"local-pin","detail":"1 match(es)","status":"pass","subject":".cargo/mutants.toml scope crates/velnor-actions-contract/src/workflow/plan.rs"}
+ok: local-pin .cargo/mutants.toml scope crates/velnor-actions-contract/src/workflow/plan.rs 1 match(es)
+row: {"check":"local-pin","detail":"1 match(es)","status":"pass","subject":".cargo/mutants.toml scope crates/velnor-actions-mise/src/lock.rs"}
+ok: local-pin .cargo/mutants.toml scope crates/velnor-actions-mise/src/lock.rs 1 match(es)
+row: {"check":"local-pin","detail":"1 match(es)","status":"pass","subject":".cargo/mutants.toml scope crates/velnor-actions-mise/src/toolfiles.rs"}
+ok: local-pin .cargo/mutants.toml scope crates/velnor-actions-mise/src/toolfiles.rs 1 match(es)
+row: {"check":"local-pin","detail":"1 match(es)","status":"pass","subject":".cargo/mutants.toml scope crates/velnor-actions-orchestrator/src/cover.rs"}
+ok: local-pin .cargo/mutants.toml scope crates/velnor-actions-orchestrator/src/cover.rs 1 match(es)
+row: {"check":"local-pin","detail":"1 match(es)","status":"pass","subject":".cargo/mutants.toml scope crates/velnor-actions-orchestrator/src/cover_baseline.rs"}
+ok: local-pin .cargo/mutants.toml scope crates/velnor-actions-orchestrator/src/cover_baseline.rs 1 match(es)
+row: {"check":"local-pin","detail":"1 match(es)","status":"pass","subject":".cargo/mutants.toml scope crates/velnor-actions-orchestrator/src/cover_identity.rs"}
+ok: local-pin .cargo/mutants.toml scope crates/velnor-actions-orchestrator/src/cover_identity.rs 1 match(es)
+row: {"check":"local-pin","detail":"1 match(es)","status":"pass","subject":".cargo/mutants.toml scope crates/velnor-actions-orchestrator/src/inventory.rs"}
+ok: local-pin .cargo/mutants.toml scope crates/velnor-actions-orchestrator/src/inventory.rs 1 match(es)
+row: {"check":"local-pin","detail":"1 match(es)","status":"pass","subject":".cargo/mutants.toml scope crates/velnor-actions-orchestrator/src/merge.rs"}
+ok: local-pin .cargo/mutants.toml scope crates/velnor-actions-orchestrator/src/merge.rs 1 match(es)
+row: {"check":"local-pin","detail":"1 match(es)","status":"pass","subject":".cargo/mutants.toml scope crates/velnor-actions-orchestrator/src/merge_request.rs"}
+ok: local-pin .cargo/mutants.toml scope crates/velnor-actions-orchestrator/src/merge_request.rs 1 match(es)
+row: {"check":"local-pin","detail":"1 match(es)","status":"pass","subject":".cargo/mutants.toml scope crates/velnor-actions-orchestrator/src/pins.rs"}
+ok: local-pin .cargo/mutants.toml scope crates/velnor-actions-orchestrator/src/pins.rs 1 match(es)
+row: {"check":"local-pin","detail":"1 match(es)","status":"pass","subject":".cargo/mutants.toml scope crates/velnor-actions-orchestrator/src/select.rs"}
+ok: local-pin .cargo/mutants.toml scope crates/velnor-actions-orchestrator/src/select.rs 1 match(es)
+row: {"check":"local-pin","detail":"1 match(es)","status":"pass","subject":".cargo/mutants.toml scope crates/velnor-actions-orchestrator/src/select_affected.rs"}
+ok: local-pin .cargo/mutants.toml scope crates/velnor-actions-orchestrator/src/select_affected.rs 1 match(es)
+row: {"check":"local-pin","detail":"1 match(es)","status":"pass","subject":".cargo/mutants.toml scope crates/velnor-actions-orchestrator/src/select_edges.rs"}
+ok: local-pin .cargo/mutants.toml scope crates/velnor-actions-orchestrator/src/select_edges.rs 1 match(es)
+row: {"check":"local-pin","detail":"1 match(es)","status":"pass","subject":".cargo/mutants.toml scope crates/velnor-actions-orchestrator/src/validate.rs"}
+ok: local-pin .cargo/mutants.toml scope crates/velnor-actions-orchestrator/src/validate.rs 1 match(es)
+row: {"check":"local-pin","detail":"1 match(es)","status":"pass","subject":".cargo/mutants.toml scope crates/velnor-actions-orchestrator/src/wire_w1.rs"}
+ok: local-pin .cargo/mutants.toml scope crates/velnor-actions-orchestrator/src/wire_w1.rs 1 match(es)
+row: {"check":"local-pin","detail":"1 match(es)","status":"pass","subject":".cargo/mutants.toml scope crates/velnor-actions-orchestrator/src/wire_w2.rs"}
+ok: local-pin .cargo/mutants.toml scope crates/velnor-actions-orchestrator/src/wire_w2.rs 1 match(es)
+row: {"check":"local-pin","detail":"1 match(es)","status":"pass","subject":".cargo/mutants.toml scope crates/velnor-actions-rust/src/identity.rs"}
+ok: local-pin .cargo/mutants.toml scope crates/velnor-actions-rust/src/identity.rs 1 match(es)
+row: {"check":"local-pin","detail":"1 match(es)","status":"pass","subject":".cargo/mutants.toml scope crates/velnor-actions-rust/src/metadata.rs"}
+ok: local-pin .cargo/mutants.toml scope crates/velnor-actions-rust/src/metadata.rs 1 match(es)
+row: {"check":"lock-staleness","detail":"=0.1.0 @ workspace","status":"pass","subject":"velnor-actions-actionlint:dependencies:velnor-actions-contract"}
+ok: lock-staleness velnor-actions-actionlint:dependencies:velnor-actions-contract =0.1.0 @ workspace
+row: {"check":"lock-staleness","detail":"=4.6.7 @ registry","status":"pass","subject":"velnor-actions-cli:dependencies:clap"}
+ok: lock-staleness velnor-actions-cli:dependencies:clap =4.6.7 @ registry
+row: {"check":"lock-staleness","detail":"=0.1.0 @ workspace","status":"pass","subject":"velnor-actions-cli:dependencies:velnor-actions-orchestrator"}
+ok: lock-staleness velnor-actions-cli:dependencies:velnor-actions-orchestrator =0.1.0 @ workspace
+row: {"check":"lock-staleness","detail":"=1.0.151 @ registry","status":"pass","subject":"velnor-actions-cli:dev-dependencies:serde_json"}
+ok: lock-staleness velnor-actions-cli:dev-dependencies:serde_json =1.0.151 @ registry
+row: {"check":"lock-staleness","detail":"=1.8.7 @ registry","status":"pass","subject":"velnor-actions-contract:dependencies:blake3"}
+ok: lock-staleness velnor-actions-contract:dependencies:blake3 =1.8.7 @ registry
+row: {"check":"lock-staleness","detail":"=1.0.229 @ registry","status":"pass","subject":"velnor-actions-contract:dependencies:serde"}
+ok: lock-staleness velnor-actions-contract:dependencies:serde =1.0.229 @ registry
+row: {"check":"lock-staleness","detail":"=1.0.151 @ registry","status":"pass","subject":"velnor-actions-contract:dependencies:serde_json"}
+ok: lock-staleness velnor-actions-contract:dependencies:serde_json =1.0.151 @ registry
+row: {"check":"lock-staleness","detail":"=2.0.21 @ registry","status":"pass","subject":"velnor-actions-contract:dependencies:thiserror"}
+ok: lock-staleness velnor-actions-contract:dependencies:thiserror =2.0.21 @ registry
+row: {"check":"lock-staleness","detail":"=1.0.151 @ registry","status":"pass","subject":"velnor-actions-contract:dev-dependencies:serde_json"}
+ok: lock-staleness velnor-actions-contract:dev-dependencies:serde_json =1.0.151 @ registry
+row: {"check":"lock-staleness","detail":"=1.0.229 @ registry","status":"pass","subject":"velnor-actions-mise:dependencies:serde"}
+ok: lock-staleness velnor-actions-mise:dependencies:serde =1.0.229 @ registry
+row: {"check":"lock-staleness","detail":"=0.1.0 @ workspace","status":"pass","subject":"velnor-actions-mise:dependencies:velnor-actions-contract"}
+ok: lock-staleness velnor-actions-mise:dependencies:velnor-actions-contract =0.1.0 @ workspace
+row: {"check":"lock-staleness","detail":"=0.1.0 @ workspace","status":"pass","subject":"velnor-actions-mise:dev-dependencies:velnor-actions-tofu"}
+ok: lock-staleness velnor-actions-mise:dev-dependencies:velnor-actions-tofu =0.1.0 @ workspace
+row: {"check":"lock-staleness","detail":"=1.1.5 @ registry","status":"pass","subject":"velnor-actions-orchestrator:dependencies:rustix"}
+ok: lock-staleness velnor-actions-orchestrator:dependencies:rustix =1.1.5 @ registry
+row: {"check":"lock-staleness","detail":"=1.0.229 @ registry","status":"pass","subject":"velnor-actions-orchestrator:dependencies:serde"}
+ok: lock-staleness velnor-actions-orchestrator:dependencies:serde =1.0.229 @ registry
+row: {"check":"lock-staleness","detail":"=1.0.151 @ registry","status":"pass","subject":"velnor-actions-orchestrator:dependencies:serde_json"}
+ok: lock-staleness velnor-actions-orchestrator:dependencies:serde_json =1.0.151 @ registry
+row: {"check":"lock-staleness","detail":"=0.11.0 @ registry","status":"pass","subject":"velnor-actions-orchestrator:dependencies:sha2"}
+ok: lock-staleness velnor-actions-orchestrator:dependencies:sha2 =0.11.0 @ registry
+row: {"check":"lock-staleness","detail":"=3.27.0 @ registry","status":"pass","subject":"velnor-actions-orchestrator:dependencies:tempfile"}
+ok: lock-staleness velnor-actions-orchestrator:dependencies:tempfile =3.27.0 @ registry
+row: {"check":"lock-staleness","detail":"=2.0.21 @ registry","status":"pass","subject":"velnor-actions-orchestrator:dependencies:thiserror"}
+ok: lock-staleness velnor-actions-orchestrator:dependencies:thiserror =2.0.21 @ registry
+row: {"check":"lock-staleness","detail":"=0.9.12 @ registry","status":"pass","subject":"velnor-actions-orchestrator:dependencies:toml"}
+ok: lock-staleness velnor-actions-orchestrator:dependencies:toml =0.9.12 @ registry
+row: {"check":"lock-staleness","detail":"=0.1.0 @ workspace","status":"pass","subject":"velnor-actions-orchestrator:dependencies:velnor-actions-actionlint"}
+ok: lock-staleness velnor-actions-orchestrator:dependencies:velnor-actions-actionlint =0.1.0 @ workspace
+row: {"check":"lock-staleness","detail":"=0.1.0 @ workspace","status":"pass","subject":"velnor-actions-orchestrator:dependencies:velnor-actions-contract"}
+ok: lock-staleness velnor-actions-orchestrator:dependencies:velnor-actions-contract =0.1.0 @ workspace
+row: {"check":"lock-staleness","detail":"=0.1.0 @ workspace","status":"pass","subject":"velnor-actions-orchestrator:dependencies:velnor-actions-mise"}
+ok: lock-staleness velnor-actions-orchestrator:dependencies:velnor-actions-mise =0.1.0 @ workspace
+row: {"check":"lock-staleness","detail":"=0.1.0 @ workspace","status":"pass","subject":"velnor-actions-orchestrator:dependencies:velnor-actions-rust"}
+ok: lock-staleness velnor-actions-orchestrator:dependencies:velnor-actions-rust =0.1.0 @ workspace
+row: {"check":"lock-staleness","detail":"=0.1.0 @ workspace","status":"pass","subject":"velnor-actions-orchestrator:dependencies:velnor-actions-tofu"}
+ok: lock-staleness velnor-actions-orchestrator:dependencies:velnor-actions-tofu =0.1.0 @ workspace
+row: {"check":"lock-staleness","detail":"=0.1.0 @ workspace","status":"pass","subject":"velnor-actions-orchestrator:dependencies:velnor-actions-workflow-renderer"}
+ok: lock-staleness velnor-actions-orchestrator:dependencies:velnor-actions-workflow-renderer =0.1.0 @ workspace
+row: {"check":"lock-staleness","detail":"=1.0.151 @ registry","status":"pass","subject":"velnor-actions-orchestrator:dev-dependencies:serde_json"}
+ok: lock-staleness velnor-actions-orchestrator:dev-dependencies:serde_json =1.0.151 @ registry
+row: {"check":"lock-staleness","detail":"=3.27.0 @ registry","status":"pass","subject":"velnor-actions-orchestrator:dev-dependencies:tempfile"}
+ok: lock-staleness velnor-actions-orchestrator:dev-dependencies:tempfile =3.27.0 @ registry
+row: {"check":"lock-staleness","detail":"=0.1.0 @ workspace","status":"pass","subject":"velnor-actions-orchestrator:dev-dependencies:velnor-actions-contract"}
+ok: lock-staleness velnor-actions-orchestrator:dev-dependencies:velnor-actions-contract =0.1.0 @ workspace
+row: {"check":"lock-staleness","detail":"=1.0.229 @ registry","status":"pass","subject":"velnor-actions-rust:dependencies:serde"}
+ok: lock-staleness velnor-actions-rust:dependencies:serde =1.0.229 @ registry
+row: {"check":"lock-staleness","detail":"=1.0.151 @ registry","status":"pass","subject":"velnor-actions-rust:dependencies:serde_json"}
+ok: lock-staleness velnor-actions-rust:dependencies:serde_json =1.0.151 @ registry
+row: {"check":"lock-staleness","detail":"=0.9.12 @ registry","status":"pass","subject":"velnor-actions-rust:dependencies:toml"}
+ok: lock-staleness velnor-actions-rust:dependencies:toml =0.9.12 @ registry
+row: {"check":"lock-staleness","detail":"=0.1.0 @ workspace","status":"pass","subject":"velnor-actions-rust:dependencies:velnor-actions-contract"}
+ok: lock-staleness velnor-actions-rust:dependencies:velnor-actions-contract =0.1.0 @ workspace
+row: {"check":"lock-staleness","detail":"=0.19.8 @ registry","status":"pass","subject":"velnor-actions-tofu:dependencies:hcl"}
+ok: lock-staleness velnor-actions-tofu:dependencies:hcl =0.19.8 @ registry
+row: {"check":"lock-staleness","detail":"=1.0.229 @ registry","status":"pass","subject":"velnor-actions-tofu:dependencies:serde"}
+ok: lock-staleness velnor-actions-tofu:dependencies:serde =1.0.229 @ registry
+row: {"check":"lock-staleness","detail":"=1.0.151 @ registry","status":"pass","subject":"velnor-actions-tofu:dependencies:serde_json"}
+ok: lock-staleness velnor-actions-tofu:dependencies:serde_json =1.0.151 @ registry
+row: {"check":"lock-staleness","detail":"=0.1.0 @ workspace","status":"pass","subject":"velnor-actions-tofu:dependencies:velnor-actions-contract"}
+ok: lock-staleness velnor-actions-tofu:dependencies:velnor-actions-contract =0.1.0 @ workspace
+row: {"check":"lock-staleness","detail":"=0.1.0 @ workspace","status":"pass","subject":"velnor-actions-workflow-renderer:dependencies:velnor-actions-contract"}
+ok: lock-staleness velnor-actions-workflow-renderer:dependencies:velnor-actions-contract =0.1.0 @ workspace
+row: {"check":"lock-staleness","detail":"37 match, 0 fail, 81 locked names retained","status":"info","subject":"./(declared-summary)"}
+row: {"check":"lock-staleness","detail":"8 members","status":"pass","subject":"./(lock-membership)"}
+ok: lock-staleness ./(lock-membership) 8 members
+row: {"check":"lock-staleness","detail":"82 locked packages reachable","status":"pass","subject":"./(lock-graph)"}
+ok: lock-staleness ./(lock-graph) 82 locked packages reachable
+row: {"check":"lock-mtime","detail":"lock_is_newest=false","status":"info","subject":"Cargo.lock"}
+row: {"check":"lock-staleness","detail":"=4.6.7 @ registry","status":"pass","subject":"velnor-runner-cli:dependencies:clap"}
+ok: lock-staleness velnor-runner-cli:dependencies:clap =4.6.7 @ registry
+row: {"check":"lock-staleness","detail":"=1.0.151 @ registry","status":"pass","subject":"velnor-runner-cli:dependencies:serde_json"}
+ok: lock-staleness velnor-runner-cli:dependencies:serde_json =1.0.151 @ registry
+row: {"check":"lock-staleness","detail":"=0.1.0 @ workspace","status":"pass","subject":"velnor-runner-cli:dependencies:velnor-runner-core"}
+ok: lock-staleness velnor-runner-cli:dependencies:velnor-runner-core =0.1.0 @ workspace
+row: {"check":"lock-staleness","detail":"=0.1.0 @ workspace","status":"pass","subject":"velnor-runner-cli:dependencies:velnor-runner-host"}
+ok: lock-staleness velnor-runner-cli:dependencies:velnor-runner-host =0.1.0 @ workspace
+row: {"check":"lock-staleness","detail":"=3.7.0 @ registry","status":"pass","subject":"velnor-runner-cli:target.cfg(target_os = \"macos\").dev-dependencies:security-framework"}
+ok: lock-staleness velnor-runner-cli:target.cfg(target_os = "macos").dev-dependencies:security-framework =3.7.0 @ registry
+row: {"check":"lock-staleness","detail":"=2.0.21 @ registry","status":"pass","subject":"velnor-runner-core:dependencies:thiserror"}
+ok: lock-staleness velnor-runner-core:dependencies:thiserror =2.0.21 @ registry
+row: {"check":"lock-staleness","detail":"=1.0.229 @ registry","status":"pass","subject":"velnor-runner-github:dependencies:serde"}
+ok: lock-staleness velnor-runner-github:dependencies:serde =1.0.229 @ registry
+row: {"check":"lock-staleness","detail":"=1.0.151 @ registry","status":"pass","subject":"velnor-runner-github:dependencies:serde_json"}
+ok: lock-staleness velnor-runner-github:dependencies:serde_json =1.0.151 @ registry
+row: {"check":"lock-staleness","detail":"=2.0.21 @ registry","status":"pass","subject":"velnor-runner-github:dependencies:thiserror"}
+ok: lock-staleness velnor-runner-github:dependencies:thiserror =2.0.21 @ registry
+row: {"check":"lock-staleness","detail":"=0.1.0 @ workspace","status":"pass","subject":"velnor-runner-github:dependencies:velnor-runner-core"}
+ok: lock-staleness velnor-runner-github:dependencies:velnor-runner-core =0.1.0 @ workspace
+row: {"check":"lock-staleness","detail":"=1.8.1 @ registry","status":"pass","subject":"velnor-runner-github:dependencies:zeroize"}
+ok: lock-staleness velnor-runner-github:dependencies:zeroize =1.8.1 @ registry
+row: {"check":"lock-staleness","detail":"=0.21.1 @ registry","status":"pass","subject":"velnor-runner-host:dependencies:bollard"}
+ok: lock-staleness velnor-runner-host:dependencies:bollard =0.21.1 @ registry
+row: {"check":"lock-staleness","detail":"=0.4.3 @ registry","status":"pass","subject":"velnor-runner-host:dependencies:getrandom"}
+ok: lock-staleness velnor-runner-host:dependencies:getrandom =0.4.3 @ registry
+row: {"check":"lock-staleness","detail":"=1.0.229 @ registry","status":"pass","subject":"velnor-runner-host:dependencies:serde"}
+ok: lock-staleness velnor-runner-host:dependencies:serde =1.0.229 @ registry
+row: {"check":"lock-staleness","detail":"=1.0.151 @ registry","status":"pass","subject":"velnor-runner-host:dependencies:serde_json"}
+ok: lock-staleness velnor-runner-host:dependencies:serde_json =1.0.151 @ registry
+row: {"check":"lock-staleness","detail":"=2.0.21 @ registry","status":"pass","subject":"velnor-runner-host:dependencies:thiserror"}
+ok: lock-staleness velnor-runner-host:dependencies:thiserror =2.0.21 @ registry
+row: {"check":"lock-staleness","detail":"=1.49.0 @ registry","status":"pass","subject":"velnor-runner-host:dependencies:tokio"}
+ok: lock-staleness velnor-runner-host:dependencies:tokio =1.49.0 @ registry
+row: {"check":"lock-staleness","detail":"=0.9.12 @ registry","status":"pass","subject":"velnor-runner-host:dependencies:toml"}
+ok: lock-staleness velnor-runner-host:dependencies:toml =0.9.12 @ registry
+row: {"check":"lock-staleness","detail":"=0.8.1 @ registry","status":"pass","subject":"velnor-runner-host:dependencies:turso"}
+ok: lock-staleness velnor-runner-host:dependencies:turso =0.8.1 @ registry
+row: {"check":"lock-staleness","detail":"=0.1.0 @ workspace","status":"pass","subject":"velnor-runner-host:dependencies:velnor-runner-core"}
+ok: lock-staleness velnor-runner-host:dependencies:velnor-runner-core =0.1.0 @ workspace
+row: {"check":"lock-staleness","detail":"=0.1.0 @ workspace","status":"pass","subject":"velnor-runner-host:dependencies:velnor-runner-github"}
+ok: lock-staleness velnor-runner-host:dependencies:velnor-runner-github =0.1.0 @ workspace
+row: {"check":"lock-staleness","detail":"=1.8.1 @ registry","status":"pass","subject":"velnor-runner-host:dependencies:zeroize"}
+ok: lock-staleness velnor-runner-host:dependencies:zeroize =1.8.1 @ registry
+row: {"check":"lock-staleness","detail":"=3.7.0 @ registry","status":"pass","subject":"velnor-runner-host:target.cfg(target_os = \"macos\").dependencies:security-framework"}
+ok: lock-staleness velnor-runner-host:target.cfg(target_os = "macos").dependencies:security-framework =3.7.0 @ registry
+row: {"check":"lock-staleness","detail":"23 match, 0 fail, 364 locked names retained","status":"info","subject":"crates/velnor-runner/(declared-summary)"}
+row: {"check":"lock-staleness","detail":"4 members","status":"pass","subject":"crates/velnor-runner/(lock-membership)"}
+ok: lock-staleness crates/velnor-runner/(lock-membership) 4 members
+row: {"check":"lock-staleness","detail":"384 locked packages reachable","status":"pass","subject":"crates/velnor-runner/(lock-graph)"}
+ok: lock-staleness crates/velnor-runner/(lock-graph) 384 locked packages reachable
+row: {"check":"lock-mtime","detail":"lock_is_newest=false","status":"info","subject":"crates/velnor-runner/Cargo.lock"}
+row: {"check":"upstream-freshness","detail":"held, evidence 2026-10-04T11:28:54Z","status":"pass","subject":"mise"}
+ok: upstream-freshness mise held, evidence 2026-10-04T11:28:54Z
+row: {"check":"upstream-freshness","detail":"held, evidence 2026-10-04T11:28:54Z","status":"pass","subject":"rust"}
+ok: upstream-freshness rust held, evidence 2026-10-04T11:28:54Z
+row: {"check":"upstream-freshness","detail":"held, evidence 2026-10-05T00:51:30Z","status":"pass","subject":"mr-boxington"}
+ok: upstream-freshness mr-boxington held, evidence 2026-10-05T00:51:30Z
+row: {"check":"upstream-freshness","detail":"current, evidence 2026-10-04T11:28:54Z","status":"pass","subject":"gh"}
+ok: upstream-freshness gh current, evidence 2026-10-04T11:28:54Z
+row: {"check":"upstream-freshness","detail":"current, evidence 2026-10-04T11:28:54Z","status":"pass","subject":"actionlint"}
+ok: upstream-freshness actionlint current, evidence 2026-10-04T11:28:54Z
+row: {"check":"upstream-freshness","detail":"current, evidence 2026-10-04T11:28:54Z","status":"pass","subject":"shellcheck"}
+ok: upstream-freshness shellcheck current, evidence 2026-10-04T11:28:54Z
+row: {"check":"upstream-freshness","detail":"current, evidence 2026-10-04T11:28:54Z","status":"pass","subject":"zizmor"}
+ok: upstream-freshness zizmor current, evidence 2026-10-04T11:28:54Z
+row: {"check":"upstream-freshness","detail":"current, evidence 2026-10-04T11:28:54Z","status":"pass","subject":"nextest"}
+ok: upstream-freshness nextest current, evidence 2026-10-04T11:28:54Z
+row: {"check":"upstream-freshness","detail":"current, evidence 2026-10-04T11:28:54Z","status":"pass","subject":"opentofu"}
+ok: upstream-freshness opentofu current, evidence 2026-10-04T11:28:54Z
+row: {"check":"upstream-freshness","detail":"current, evidence 2026-10-04T11:28:54Z","status":"pass","subject":"release-plz"}
+ok: upstream-freshness release-plz current, evidence 2026-10-04T11:28:54Z
+row: {"check":"upstream-freshness","detail":"current, evidence 2026-10-04T11:28:54Z","status":"pass","subject":"Swatinem/rust-cache"}
+ok: upstream-freshness Swatinem/rust-cache current, evidence 2026-10-04T11:28:54Z
+row: {"check":"upstream-freshness","detail":"current, evidence 2026-10-04T11:28:54Z","status":"pass","subject":"actions/cache/restore"}
+ok: upstream-freshness actions/cache/restore current, evidence 2026-10-04T11:28:54Z
+row: {"check":"upstream-freshness","detail":"current, evidence 2026-10-04T11:28:54Z","status":"pass","subject":"actions/cache/save"}
+ok: upstream-freshness actions/cache/save current, evidence 2026-10-04T11:28:54Z
+row: {"check":"upstream-freshness","detail":"current, evidence 2026-10-04T11:28:54Z","status":"pass","subject":"actions/checkout"}
+ok: upstream-freshness actions/checkout current, evidence 2026-10-04T11:28:54Z
+row: {"check":"upstream-freshness","detail":"current, evidence 2026-10-04T11:28:54Z","status":"pass","subject":"actions/download-artifact"}
+ok: upstream-freshness actions/download-artifact current, evidence 2026-10-04T11:28:54Z
+row: {"check":"upstream-freshness","detail":"current, evidence 2026-10-04T11:28:54Z","status":"pass","subject":"actions/upload-artifact"}
+ok: upstream-freshness actions/upload-artifact current, evidence 2026-10-04T11:28:54Z
+row: {"check":"upstream-freshness","detail":"held, evidence 2026-10-04T11:28:54Z","status":"pass","subject":"asamarts/alint"}
+ok: upstream-freshness asamarts/alint held, evidence 2026-10-04T11:28:54Z
+row: {"check":"upstream-freshness","detail":"held, evidence 2026-10-04T11:28:54Z","status":"pass","subject":"jdx/mise-action"}
+ok: upstream-freshness jdx/mise-action held, evidence 2026-10-04T11:28:54Z
+row: {"check":"upstream-freshness","detail":"held, evidence 2026-10-05T00:51:30Z","status":"pass","subject":"jdx/mr-boxington-action"}
+ok: upstream-freshness jdx/mr-boxington-action held, evidence 2026-10-05T00:51:30Z
+row: {"check":"upstream-freshness","detail":"current, evidence 2026-10-05T11:02:45Z","status":"pass","subject":"runner"}
+ok: upstream-freshness runner current, evidence 2026-10-05T11:02:45Z
+row: {"check":"exception-expiry","detail":"expires 2026-10-15","status":"pass","subject":"asamarts/alint"}
+ok: exception-expiry asamarts/alint expires 2026-10-15
+row: {"check":"exception-expiry","detail":"expires 2026-10-15","status":"pass","subject":"jdx/mise-action"}
+ok: exception-expiry jdx/mise-action expires 2026-10-15
+row: {"check":"exception-expiry","detail":"expires 2026-10-18","status":"pass","subject":"jdx/mr-boxington-action"}
+ok: exception-expiry jdx/mr-boxington-action expires 2026-10-18
+row: {"check":"exception-expiry","detail":"expires 2026-10-17","status":"pass","subject":"mise"}
+ok: exception-expiry mise expires 2026-10-17
+row: {"check":"exception-expiry","detail":"expires 2026-10-18","status":"pass","subject":"mr-boxington"}
+ok: exception-expiry mr-boxington expires 2026-10-18
+row: {"check":"exception-expiry","detail":"expires 2026-10-15","status":"pass","subject":"rust"}
+ok: exception-expiry rust expires 2026-10-15
+row: {"check":"advisories","detail":"empty","status":"pass","subject":"deny.toml ignore list"}
+ok: advisories deny.toml ignore list empty
+row: {"check":"advisories","detail":"empty","status":"pass","subject":"crates/velnor-runner/deny.toml ignore list"}
+ok: advisories crates/velnor-runner/deny.toml ignore list empty
+row: {"check":"advisories","detail":"runs for every Cargo workspace in CI; --with-advisories runs it here","status":"info","subject":"live scan"}
+check-freshness: PASS

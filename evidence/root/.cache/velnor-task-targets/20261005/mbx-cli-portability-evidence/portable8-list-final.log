@@ -1,0 +1,10 @@
+   Compiling velnor-actions-workflow-renderer v0.1.0 (/root/.cache/velnor-task-targets/20261005/mbx-cli-portability-20261005T1530Z/crates/velnor-actions-workflow-renderer)
+error[E0432]: unresolved import `super::shell`
+  --> crates/velnor-actions-workflow-renderer/src/stock_mbx_bundle_mode_zero_tests.rs:16:13
+   |
+16 | use super::{shell, steps};
+   |             ^^^^^ no `shell` in `stock_mbx_bundle_cli_tests`
+
+For more information about this error, try `rustc --explain E0432`.
+error: could not compile `velnor-actions-workflow-renderer` (lib test) due to 1 previous error
+error: command `/root/.rustup/toolchains/1.98.1-x86_64-unknown-linux-gnu/bin/cargo '--color=auto' test --no-run --message-format json-render-diagnostics --package velnor-actions-workflow-renderer --locked --offline` exited with code 101

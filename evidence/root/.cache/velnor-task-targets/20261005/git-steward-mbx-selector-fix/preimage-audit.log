@@ -1,0 +1,32 @@
+source manifest verification
+/root/.cache/velnor-task-targets/20261005/no_python_policy-joined-pin-test-20261005/.mise-version: OK
+/root/.cache/velnor-task-targets/20261005/no_python_policy-joined-pin-test-20261005/.mise/tasks/mise-phase0: OK
+/root/.cache/velnor-task-targets/20261005/no_python_policy-joined-pin-test-20261005/.velnor/version-policy.toml: OK
+/root/.cache/velnor-task-targets/20261005/no_python_policy-joined-pin-test-20261005/crates/velnor-actions-contract/src/lib.rs: OK
+/root/.cache/velnor-task-targets/20261005/no_python_policy-joined-pin-test-20261005/crates/velnor-actions-contract/src/workflow/jobs.rs: OK
+/root/.cache/velnor-task-targets/20261005/no_python_policy-joined-pin-test-20261005/crates/velnor-actions-contract/src/workflow/lanes.rs: OK
+/root/.cache/velnor-task-targets/20261005/no_python_policy-joined-pin-test-20261005/crates/velnor-actions-contract/src/workflow/mod.rs: OK
+/root/.cache/velnor-task-targets/20261005/no_python_policy-joined-pin-test-20261005/crates/velnor-actions-mise/src/catalog.rs: OK
+/root/.cache/velnor-task-targets/20261005/no_python_policy-joined-pin-test-20261005/crates/velnor-actions-mise/tests/impl_mise_catalog.rs: OK
+/root/.cache/velnor-task-targets/20261005/no_python_policy-joined-pin-test-20261005/crates/velnor-actions-mise/tests/impl_mise_lock.rs: OK
+/root/.cache/velnor-task-targets/20261005/no_python_policy-joined-pin-test-20261005/crates/velnor-actions-mise/tests/impl_mise_policy.rs: OK
+/root/.cache/velnor-task-targets/20261005/no_python_policy-joined-pin-test-20261005/crates/velnor-actions-mise/tests/impl_miserc_isolation.rs: OK
+/root/.cache/velnor-task-targets/20261005/no_python_policy-joined-pin-test-20261005/crates/velnor-actions-orchestrator/src/crate_jobs.rs: OK
+/root/.cache/velnor-task-targets/20261005/no_python_policy-joined-pin-test-20261005/crates/velnor-actions-orchestrator/src/generate.rs: OK
+/root/.cache/velnor-task-targets/20261005/no_python_policy-joined-pin-test-20261005/crates/velnor-actions-orchestrator/src/matrix_tools.rs: OK
+/root/.cache/velnor-task-targets/20261005/no_python_policy-joined-pin-test-20261005/crates/velnor-actions-orchestrator/src/pins.rs: OK
+/root/.cache/velnor-task-targets/20261005/no_python_policy-joined-pin-test-20261005/crates/velnor-actions-orchestrator/src/pins_tests.rs: OK
+/root/.cache/velnor-task-targets/20261005/no_python_policy-joined-pin-test-20261005/crates/velnor-actions-orchestrator/src/wire_w1_tests.rs: OK
+/root/.cache/velnor-task-targets/20261005/no_python_policy-joined-pin-test-20261005/crates/velnor-actions-orchestrator/src/workflow.rs: OK
+/root/.cache/velnor-task-targets/20261005/no_python_policy-joined-pin-test-20261005/crates/velnor-actions-orchestrator/src/workflow_jobs.rs: OK
+/root/.cache/velnor-task-targets/20261005/no_python_policy-joined-pin-test-20261005/crates/velnor-actions-orchestrator/src/workflow_jobs_mise_phase0.rs: OK
+/root/.cache/velnor-task-targets/20261005/no_python_policy-joined-pin-test-20261005/crates/velnor-actions-orchestrator/src/workflow_jobs_mise_phase0_tests.rs: OK
+/root/.cache/velnor-task-targets/20261005/no_python_policy-joined-pin-test-20261005/crates/velnor-actions-orchestrator/src/workflow_jobs_tests.rs: OK
+/root/.cache/velnor-task-targets/20261005/no_python_policy-joined-pin-test-20261005/crates/velnor-actions-orchestrator/src/workflow_mise_phase0_tests.rs: OK
+/root/.cache/velnor-task-targets/20261005/no_python_policy-joined-pin-test-20261005/crates/velnor-actions-orchestrator/tests/impl_crate_graph.rs: OK
+/root/.cache/velnor-task-targets/20261005/no_python_policy-joined-pin-test-20261005/crates/velnor-actions-workflow-renderer/src/mise_job_target.rs: OK
+/root/.cache/velnor-task-targets/20261005/no_python_policy-joined-pin-test-20261005/crates/velnor-actions-workflow-renderer/src/mise_job_target_finalize.rs: OK
+/root/.cache/velnor-task-targets/20261005/no_python_policy-joined-pin-test-20261005/crates/velnor-actions-workflow-renderer/src/mise_job_target_tests.rs: OK
+/root/.cache/velnor-task-targets/20261005/no_python_policy-joined-pin-test-20261005/crates/velnor-actions-workflow-renderer/src/render.rs: OK
+target preimages, index stage0, and modes
+zsh:14: command not found: sha256sum

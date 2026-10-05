@@ -1,0 +1,51 @@
+{
+  "api_evidence": [
+    "GitHub API repository metadata identified public repository id 1197700841 as jackin-project/jackin.",
+    "GitHub API branch ref returned cd38f849396046dffe53f993f2b3f1e76d5d6906 at retrieval time.",
+    "GitHub API commit metadata bound the exact tree and parent.",
+    "GitHub API compare against 3986dfdd07dcfeb739f09f837d3a3ebdd944cbb9 showed only four docs/task files changed: branches.md, checklist.md, ci-coverage.md, reviews.md."
+  ],
+  "branch_head": "cd38f849396046dffe53f993f2b3f1e76d5d6906",
+  "commit": "cd38f849396046dffe53f993f2b3f1e76d5d6906",
+  "commit_verification": {
+    "github_signature_verified": false,
+    "reason": "unsigned commit metadata; source identity is pinned by commit/tree plus canonical HTTPS origin"
+  },
+  "execution_state": "Profile prepared and AST-checked only. Independent exact-source review, fake process fixture, public fetch, source materialization, and generation remain pending.",
+  "parent": "3986dfdd07dcfeb739f09f837d3a3ebdd944cbb9",
+  "profile": "jackin-task-branch-cd38f849-v1",
+  "ref": "refs/heads/refactor/build-split-dco",
+  "repository": {
+    "canonical_origin": "https://github.com/jackin-project/jackin.git",
+    "default_branch": "main",
+    "full_name": "jackin-project/jackin",
+    "id": 1197700841,
+    "visibility": "public"
+  },
+  "retrieval_time_utc": "2026-10-05 13:06:14 UTC",
+  "schema": 1,
+  "source_delta": {
+    "changed_paths": [
+      "plans/jackin-build-split/branches.md",
+      "plans/jackin-build-split/checklist.md",
+      "plans/jackin-build-split/ci-coverage.md",
+      "plans/jackin-build-split/reviews.md"
+    ],
+    "code_from": "3986dfdd07dcfeb739f09f837d3a3ebdd944cbb9",
+    "summary": "Docs-only successor. Cargo.lock, .velnor/config.toml, toolchain files, and executable generator inputs are unchanged."
+  },
+  "supersedes": "The earlier 0cf fetch attempt failed safely before source object binding after its branch advanced; 3986 remains source-reviewed and fixture-passed but unmaterialized.",
+  "task_owned_fetch_profile": {
+    "audit_script": "jackin-git-config-audit-cd38f849-v1.py",
+    "audit_sha256": "97e17293f7022d142bb5bd53fc37c66e6de65111427b7ee3676dafe62ed6d921",
+    "fetch_fixture": "jackin-source-fetch-cd38f849-process-group-fixture-v1.py",
+    "fetch_fixture_sha256": "ea1b0877c88db6c641e9046e755305503c21513fac9e6c44ceba563c2a37efa0",
+    "fetch_script": "jackin-source-fetch-cd38f849-v1.py",
+    "fetch_sha256": "2907bc1c84ccd36a05a652ea7003345de3b579b7bf35e6304806e80fb538da22",
+    "materializer_script": "jackin-source-materialize-cd38f849-v1.py",
+    "materializer_sha256": "597c5508a33bf20fa5b30212b19a73410cde29e47aa11e7d091cf2148347a8c4",
+    "source_directory": "jackin-source-cd38f849-v1",
+    "template_directory": "jackin-source-cd38f849-empty-template-v1"
+  },
+  "tree": "95fa93fbb386106d4ba851e8fe62b84984f244b7"
+}

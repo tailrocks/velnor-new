@@ -1,0 +1,8 @@
+v2026.10.1 tag object and peeled commit:
+b752bdc18b1b5961e4f9ba01a63bc3c11a0a1f79
+050ce5a20287a0aafd872b1191699a5fdafff5ac
+v2026.10.2 tag object and peeled commit:
+f0ff293c4b40ac6bd74b99af9b329c2c62762e6f
+44ea2537166efbe21b19d808355d9914e830941a
+PR #13926 source dfe74a90b41603625ee6aabecb42f14a1f5eb0f6 is an ancestor of v2026.10.2: PASS
+v2026.10.2 official release body contains #13926: PASS

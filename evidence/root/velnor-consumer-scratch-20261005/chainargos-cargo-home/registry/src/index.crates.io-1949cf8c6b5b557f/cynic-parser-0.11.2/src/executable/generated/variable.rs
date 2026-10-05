@@ -1,0 +1,89 @@
+use super::prelude::*;
+use super::{
+    ExecutableId,
+    descriptions::Description,
+    directive::Directive,
+    ids::{ConstValueId, DescriptionId, DirectiveId, TypeId, VariableDefinitionId},
+    types::Type,
+    value::ConstValue,
+};
+#[allow(unused_imports)]
+use std::fmt::{self, Write};
+
+pub struct VariableDefinitionRecord {
+    pub description: Option<DescriptionId>,
+    pub name: StringId,
+    pub name_span: Span,
+    pub ty: TypeId,
+    pub default_value: Option<ConstValueId>,
+    pub directives: IdRange<DirectiveId>,
+}
+
+#[derive(Clone, Copy)]
+pub struct VariableDefinition<'a>(pub(in super::super) ReadContext<'a, VariableDefinitionId>);
+
+impl<'a> VariableDefinition<'a> {
+    pub fn description(&self) -> Option<Description<'a>> {
+        let document = self.0.document;
+        document
+            .lookup(self.0.id)
+            .description
+            .map(|id| document.read(id))
+    }
+    pub fn name(&self) -> &'a str {
+        let document = &self.0.document;
+        document.lookup(document.lookup(self.0.id).name)
+    }
+    pub fn name_span(&self) -> Span {
+        let document = self.0.document;
+        document.lookup(self.0.id).name_span
+    }
+    pub fn ty(&self) -> Type<'a> {
+        let document = self.0.document;
+        document.read(document.lookup(self.0.id).ty)
+    }
+    pub fn default_value(&self) -> Option<ConstValue<'a>> {
+        let document = self.0.document;
+        document
+            .lookup(self.0.id)
+            .default_value
+            .map(|id| document.read(id))
+    }
+    pub fn directives(&self) -> Iter<'a, Directive<'a>> {
+        let document = self.0.document;
+        super::Iter::new(document.lookup(self.0.id).directives, document)
+    }
+}
+
+impl VariableDefinition<'_> {
+    pub fn id(&self) -> VariableDefinitionId {
+        self.0.id
+    }
+}
+
+impl fmt::Debug for VariableDefinition<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("VariableDefinition")
+            .field("description", &self.description())
+            .field("name", &self.name())
+            .field("ty", &self.ty())
+            .field("default_value", &self.default_value())
+            .field("directives", &self.directives())
+            .finish()
+    }
+}
+
+impl ExecutableId for VariableDefinitionId {
+    type Reader<'a> = VariableDefinition<'a>;
+    fn read(self, document: &ExecutableDocument) -> Self::Reader<'_> {
+        VariableDefinition(ReadContext { id: self, document })
+    }
+}
+
+impl IdReader for VariableDefinition<'_> {
+    type Id = VariableDefinitionId;
+    type Reader<'a> = VariableDefinition<'a>;
+    fn new(id: Self::Id, document: &'_ ExecutableDocument) -> Self::Reader<'_> {
+        document.read(id)
+    }
+}

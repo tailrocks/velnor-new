@@ -1,0 +1,2 @@
+PASS: partial worktree matches authenticated raw Git tree; commit=ac3ab6a3d5ba3701c1300bbdd8114390093c5c29 tree=b4cc6aa0df400e111cbee27a2cd5edc9f0144bac entries=1356 gitlinks=1 lfs_pointers=1
+PASS: raw Git tree materialized; commit=ac3ab6a3d5ba3701c1300bbdd8114390093c5c29 tree=b4cc6aa0df400e111cbee27a2cd5edc9f0144bac entries=1356 gitlinks=1 lfs_pointers=1 manifest_sha256=6c56696f0e5bdaa0ab1462139c614835353d43f2dc3da2f4a45beeec1a017ef3

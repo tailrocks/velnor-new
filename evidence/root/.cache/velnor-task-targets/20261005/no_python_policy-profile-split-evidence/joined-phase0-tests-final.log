@@ -1,0 +1,11 @@
+   Compiling velnor-actions-orchestrator v0.1.0 (/root/.cache/velnor-task-targets/20261005/no_python_policy-profile-split-joined-20261005/crates/velnor-actions-orchestrator)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.18s
+     Running unittests src/lib.rs (/root/.cache/velnor-task-targets/20261005/no_python_policy-profile-split-joined-target/debug/deps/velnor_actions_orchestrator-2d7f35443e58ece5)
+
+running 3 tests
+test workflow_jobs::mise_phase0::tests::duplicate_phase0_job_id_fails_without_partially_inserting_other_lanes ... ok
+test workflow_jobs::mise_phase0::tests::phase0_jobs_cover_three_platforms_and_role_specific_tools ... ok
+test workflow::workflow_mise_phase0_tests::required_gate_needs_each_real_binary_platform_job ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 487 filtered out; finished in 0.00s
+

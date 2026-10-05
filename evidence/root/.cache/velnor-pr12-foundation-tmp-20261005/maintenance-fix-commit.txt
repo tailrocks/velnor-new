@@ -1,0 +1,8 @@
+fix: admit bounded Rust toolchain archive metadata
+
+The pinned Rust 1.98.1 Linux std archive has 65 GNU long-name records.
+Admit up to 256 extension records per archive while keeping the 64 KiB
+per-record and 1 MiB total payload bounds. Report count and size failures
+with separate diagnostics.
+
+Co-authored-by: Codex <codex@openai.com>

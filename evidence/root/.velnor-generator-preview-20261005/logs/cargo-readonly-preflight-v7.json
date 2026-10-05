@@ -1,0 +1,66 @@
+{
+  "home_helper": {
+    "execution": "NOT RUN",
+    "path": "/root/.velnor-generator-preview-20261005/rustup-home-prepare-v2.py",
+    "sha256": "5876a1cfb5a1c6a43182995af93a31cb8729fa4421e3c5466a1afe8cfb9e3f0f"
+  },
+  "namespace_launcher": {
+    "path": "/root/.velnor-generator-preview-20261005/preseed-preview-cargo-fetch-namespace-v4.sh",
+    "sha256": "1a13cbbf7c0372119dbb878e389f3739b6078d53626963cd30c0c6c5685998b3"
+  },
+  "not_run": [
+    "Rustup helper",
+    "Rustup binary",
+    "Mise activation",
+    "Cargo fetch",
+    "Cargo metadata",
+    "Git object snapshot",
+    "mounts/namespaces",
+    "network"
+  ],
+  "outer_launcher": {
+    "path": "/root/.velnor-generator-preview-20261005/preseed-preview-cargo-fetch-v7.sh",
+    "sha256": "6fd8535feeda5a455ef240c2616c736edcc79154a1bef2145d4d5b864c5a7faa"
+  },
+  "prior_failures_preserved": [
+    {
+      "cause": "V5 expected Rustup stage evidence mode 0644; actual private record mode 0600",
+      "path": "/root/.velnor-generator-preview-20261005/logs/cargo-fetch-bc7-attempt-2-preflight-failure-v1.json",
+      "sha256": "633aacaae10d873edc2b80e733366fd33ed5be3dcb9e9297fb2db988aa1fac0b"
+    },
+    {
+      "cause": "V6 hardcoded Python digest differed from hash-bound staged runtime manifest",
+      "path": "/root/.velnor-generator-preview-20261005/logs/cargo-rootfs-validator-v6-failure-v1.json",
+      "sha256": "f500d0a9d57e53bac787e8af9f1945214c6cb46ccd79faad325dd176fe08af1a"
+    }
+  ],
+  "recorded_at_utc": "2026-10-05T13:32:54Z",
+  "schema": 1,
+  "sealed_rootfs_validator": {
+    "cargo_lock_sha256": "b43ddef9c7a6b7e4c33cb6a8a4dd3659f26a7645a0f0c09782e04b2ee5b898a4",
+    "decoded_python_validator_argc": "26",
+    "result": "PASS; read-only validator verified base, input, Rustup delta and complete result tree",
+    "result_rootfs_tree_sha256": "fa4194fa10eecd66c72580c4c6acde1d02a1a9a800275b15178ae5b4bf6acf06",
+    "source_commit": "bc7f784a51233bd29676353392c9fc07c0ad01a7",
+    "source_tree": "b3939a4d6010f243485fb528f73af74d49b2fb94"
+  },
+  "staging_runtime_validation": {
+    "binding": "derived from SHA-verified rootfs-rustup-delta-v1-manifest.json and checked against actual host executable bytes",
+    "env_sha256": "eb1c64bbc9908afcdf8cb48524f17112d8dd76a249f80dee2f01da14747b3b6e",
+    "python_realpath": "/usr/bin/python3.13",
+    "python_sha256": "889c603f0d17cb54060951bcf4c4f9b8c9ebd9e52b392c70209bbb9755d797d9",
+    "python_version": "3.13.5"
+  },
+  "static_checks": {
+    "bash_n_namespace": "PASS",
+    "bash_n_outer": "PASS",
+    "embedded_file_hash_mode_size_pins": "PASS; 15 files",
+    "host_tool_hash_pins": "PASS; 17 tools",
+    "inner_sh_n": "PASS",
+    "namespace_embedded_python_ast": "PASS; 2 blocks",
+    "outer_embedded_python_ast": "PASS; 6 blocks",
+    "source_object_store_and_output_paths": "PASS; outputs absent",
+    "transitive_launcher_helper_namespace_pins": "PASS"
+  },
+  "status": "V7 source review pending; bounded activation/fetch not yet attempted"
+}

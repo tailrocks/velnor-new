@@ -1,0 +1,65 @@
+--- a/crates/velnor-actions-orchestrator/src/init.rs
++++ b/crates/velnor-actions-orchestrator/src/init.rs
+@@ -138,7 +138,7 @@
+ # "actions/cache/save" = { version = "v6.1.0", sha = "55cc8345863c7cc4c66a329aec7e433d2d1c52a9" }
+ # "actions/upload-artifact" = { version = "v7.0.1", sha = "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a" }
+ # "actions/download-artifact" = { version = "v8.0.1", sha = "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c" }
+-# "jdx/mr-boxington-action" = { version = "v1.6.0", sha = "1687e54eb349cadf61fa38b5813a77875489e8e6" }
++# "jdx/mr-boxington-action" = { version = "v1.7.1", sha = "d0825fbaf3cc36ca2609aa38e71046265a1f1e37" }
+ # "Swatinem/rust-cache" = { version = "v2.9.2", sha = "6323deb102c322ba6fcbdcafc7e3dddab59af2b6" }
+ # Values must be an allowlisted action's matching release version and full SHA.
+ "#;
+--- a/crates/velnor-actions-mise/src/cache_trust.rs
++++ b/crates/velnor-actions-mise/src/cache_trust.rs
+@@ -1,9 +1,10 @@
+ //! P08 trust, save, and quota policy: PR scoping, deltas, service data.
+ //!
+-//! The pinned MBX v1.6.0 action supports opt-in same-repo PR saving, but
+-//! Velnor keeps that option off: PRs restore the default-branch cache
+-//! read-only; any PR-branch save never promotes to trusted.
+-//! Fork PRs stay read-only. PR outputs never become trusted/release
++//! The pinned MBX v1.7.1 action supports opt-in saves for same-repository
++//! pull requests, scoped to that pull request. Velnor keeps that input off:
++//! pull requests restore the default-branch cache read-only, and no
++//! pull-request save becomes trusted. Fork pull requests stay read-only.
++//! Pull-request outputs never become trusted/release
+ //! evidence. Saves happen only for producer-successful useful deltas in
+ //! the allowed trust scope after writers finish. Cache-service errors
+ //! never fail verification nor permit skipped work. Quota/headroom come
+--- a/crates/velnor-actions-orchestrator/src/workflow_jobs_mise_phase0_route_tests.rs
++++ b/crates/velnor-actions-orchestrator/src/workflow_jobs_mise_phase0_route_tests.rs
+@@ -64,7 +64,7 @@
+             (JobConclusion::Cancelled, false, true),
+         ] {
+             let mut signals = Signals::default();
+-            crate::required_evidence::fold_jobs(
++            crate::merge::required_evidence::fold_jobs(
+                 &[RequiredJobResult {
+                     job_id: id.to_owned(),
+                     conclusion,
+--- a/crates/velnor-actions-orchestrator/src/publish_job_tests.rs
++++ b/crates/velnor-actions-orchestrator/src/publish_job_tests.rs
+@@ -10,7 +10,9 @@
+ fn operation_of(step: &Step) -> Option<&str> {
+     match &step.kind {
+         StepKind::Internal { operation } => Some(operation),
+-        StepKind::Action { .. } | StepKind::Shell { .. } => None,
++        StepKind::Action { .. } | StepKind::MbxProcessGroupShell(_) | StepKind::Shell { .. } => {
++            None
++        }
+     }
+ }
+ 
+--- a/crates/velnor-actions-orchestrator/src/workflow_jobs_tests.rs
++++ b/crates/velnor-actions-orchestrator/src/workflow_jobs_tests.rs
+@@ -9,7 +9,9 @@
+ fn operation_of(step: &Step) -> Option<&str> {
+     match &step.kind {
+         StepKind::Internal { operation } => Some(operation),
+-        StepKind::Action { .. } | StepKind::Shell { .. } => None,
++        StepKind::Action { .. } | StepKind::MbxProcessGroupShell(_) | StepKind::Shell { .. } => {
++            None
++        }
+     }
+ }
+ 

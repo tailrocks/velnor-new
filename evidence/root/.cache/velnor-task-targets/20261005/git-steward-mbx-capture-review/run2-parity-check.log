@@ -1,0 +1,13 @@
+cwd=/root/.cache/velnor-task-targets/20261005/git-steward-mbx-capture-review/run2
+CARGO_TARGET_DIR=/root/.cache/velnor-task-targets/20261005/git-steward-mbx-capture-run2-target
+TMPDIR=/var/tmp/velnor-pr12-run2-parity-check.8NjMpQ
+filter=parity_artifacts_match_goldens
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.04s
+     Running tests/velnor_cli.rs (/root/.cache/velnor-task-targets/20261005/git-steward-mbx-capture-run2-target/debug/deps/velnor_cli-0403e81ef5af656c)
+
+running 1 test
+test impl_cli_parity_golden::parity_artifacts_match_goldens ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 242 filtered out; finished in 1.83s
+
+exit=0

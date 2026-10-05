@@ -1,0 +1,12 @@
+c911c4dbfb561f637556cce89b661e995a0df6ced12632522681de096969d504  crates/velnor-actions-workflow-renderer/src/document_setup_compaction.rs
+660e1dab384471e3d094db70c6d8c132c6b1c0926eab7b4f4f01c02daef3db70  crates/velnor-actions-workflow-renderer/src/document_setup_compaction_tests.rs
+694dd875841dbfd907a73001c1b6e0ad8bf9b23ebde23373029cd2fa685c7b14  crates/velnor-actions-workflow-renderer/src/document_setup_compaction_rejection_tests.rs
+48afc2b0e0409b5a4270a52fba25679327ce1317ef069ec4217b5c00ce4b92af  crates/velnor-actions-workflow-renderer/src/render.rs
+COMMAND=mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo clippy --locked -p velnor-actions-workflow-renderer --all-targets -- -D warnings
+    Checking velnor-actions-workflow-renderer v0.1.0 (/tmp/velnor-render-compaction-44b2-20261005/crates/velnor-actions-workflow-renderer)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.44s
+c911c4dbfb561f637556cce89b661e995a0df6ced12632522681de096969d504  crates/velnor-actions-workflow-renderer/src/document_setup_compaction.rs
+660e1dab384471e3d094db70c6d8c132c6b1c0926eab7b4f4f01c02daef3db70  crates/velnor-actions-workflow-renderer/src/document_setup_compaction_tests.rs
+694dd875841dbfd907a73001c1b6e0ad8bf9b23ebde23373029cd2fa685c7b14  crates/velnor-actions-workflow-renderer/src/document_setup_compaction_rejection_tests.rs
+48afc2b0e0409b5a4270a52fba25679327ce1317ef069ec4217b5c00ce4b92af  crates/velnor-actions-workflow-renderer/src/render.rs
+exit=0

@@ -1,0 +1,384 @@
+worktree /root/Projects/tailrocks/velnor-project/velnor-new
+HEAD 4f6def90e7b1008626db18675d1cac129b8f2ad7
+branch refs/heads/main
+
+worktree /root/.cache/velnor-archive-guard-target-namespace-20261005
+HEAD d3ed26f1a47aa67c8296d00607472f5c63116365
+branch refs/heads/fix/archive-guard-target-namespace-20261005
+
+worktree /root/.cache/velnor-archive-guard-target-namespace-baseline-20261005
+HEAD 3fef32c3796cbae4d493057543dbec2de2630b25
+detached
+
+worktree /root/.cache/velnor-g0-provenance-20261005
+HEAD a54e34b01b8bd5b327dcdac0de4831370303b86e
+branch refs/heads/fix/generator-release-provenance
+
+worktree /root/.cache/velnor-macos-native-build-task-20261005
+HEAD 34a8b19f5a4359e8a19e6ae0fe396aa955c02aff
+branch refs/heads/feat/macos-native-build-task-20261005
+
+worktree /root/.cache/velnor-native-image-task-20261005
+HEAD 86f864aabc2192a9f8ccd3f01f2e25b7858c3f20
+branch refs/heads/codex/native-image-task-20261005
+
+worktree /root/.cache/velnor-pr25-aggregate-20261005
+HEAD f17e2e182fd42e43a74e7a689a50b7d4c082e62a
+branch refs/heads/codex/pr25-aggregate-20261005
+
+worktree /root/.cache/velnor-pr25-alint-0bd
+HEAD 0bd37872dd983ab3c209049d725f7016da99b7c5
+detached
+
+worktree /root/.cache/velnor-pr25-image-final
+HEAD 3fd5fd76a54f43d21b1336021cdd9ac4f26498f1
+branch refs/heads/fix/pr25-runner-image-startup-budget
+
+worktree /root/.cache/velnor-pr25-image-fix
+HEAD 54a1f2e6033ab10c7d38b3cf51378b05b93920c2
+branch refs/heads/fix/runner-image-startup-budget
+
+worktree /root/.cache/velnor-pr25-incoming-997
+HEAD 997229740f5835168bca7ae49f03947a84448a1f
+detached
+
+worktree /root/.cache/velnor-pr25-integration
+HEAD 0b33076092d5711de1a38432fa8ff7841a98405c
+branch refs/heads/integration/pr25-strip-final
+
+worktree /root/.cache/velnor-pr25-postmerge-docs-20261005
+HEAD f17e2e182fd42e43a74e7a689a50b7d4c082e62a
+detached
+
+worktree /root/.cache/velnor-pr25-tar-strip
+HEAD 0fbc621f7da351d809466d25ad821569ded06c96
+branch refs/heads/fix/pr25-strip-components
+
+worktree /root/.cache/velnor-pr46-alint-20261005
+HEAD 279972f926c19a9d152bf2bc5a5e6a190139705b
+detached
+
+worktree /root/.cache/velnor-pr46-check-587e336
+HEAD 587e336df20eebbc91f9b0e9272ffe344098f403
+detached
+
+worktree /root/.cache/velnor-pr64-sync
+HEAD f7fdab2edd2989689c3d3abf2688107a1493fb60
+detached
+
+worktree /root/.cache/velnor-pr70-compare
+HEAD 476fb34ed9c4f04c4bdeb0debf638963988881d0
+detached
+
+worktree /root/.cache/velnor-pr72-rust-trailer-port-20261005
+HEAD 3f4cefc46851cf76e5b424074760978a8ee2133f
+branch refs/heads/codex/pr72-rust-trailer-port-20261005
+
+worktree /root/.cache/velnor-pr74-audit
+HEAD 226a1bff9f220abe4c3a34385b5db25373714ac8
+detached
+
+worktree /root/.cache/velnor-pr74-fix
+HEAD 26707b33dc7dace548a478d803c75e9aceffef9e
+branch refs/heads/fix/pr74-cache-index-admission
+
+worktree /root/.cache/velnor-pr83-pr46-prototype
+HEAD 3f9dbbb041513bab70db59d9898e9e59eec3b81d
+detached
+
+worktree /root/.cache/velnor-pr83-sync
+HEAD b77699a913394263af328c9ed7f4e6b95c06e38e
+branch refs/heads/pr83-sync-20261005
+
+worktree /root/.cache/velnor-release-pr41-alint-098
+HEAD a8f677d2e972c87ca6156057e0dfd10f55bf67fe
+detached
+
+worktree /root/.cache/velnor-release-pr41-bc06-alint
+HEAD 3b52d4997e2f2471e867a7dcee5c8bcd1cf3f6cf
+detached
+
+worktree /root/.cache/velnor-release-pr41-ccb2-alint
+HEAD 524e853c78b3ae5d0e00b447b9b828a2f5874189
+detached
+
+worktree /root/.cache/velnor-runner-freshness-evidence
+HEAD deb649e215c4fff011d78d4bd4ad425694bba64c
+branch refs/heads/fix/runner-freshness-evidence-20261005
+
+worktree /root/.cache/velnor-step-seed-authority
+HEAD 3ab98e230ca18b884829e3bb9c0a702c773b1cd6
+branch refs/heads/fix/step-seed-authority-api
+
+worktree /root/.cache/velnor-test-registration
+HEAD 4303af0708643deca2fc717a377d192c434eb06b
+branch refs/heads/fix/test-registration-autotests-false
+
+worktree /root/.cache/velnor-tofu-exact-cache-admission
+HEAD b093c46a9eef9523841b63bbef8546cdffbf20ff
+branch refs/heads/fix/tofu-exact-cache-admission
+
+worktree /root/.cache/velnor-worktrees/pr46-alint-92c405d
+HEAD 92c405dc17d8f3cbe8945ad429917633fe7d8f6f
+detached
+
+worktree /root/.local/share/velnor/generator-runtime-platform-id
+HEAD 25a495744fbd30afdfedb6ca19c27bc29029060b
+branch refs/heads/impl/generator-runtime-platform-id
+
+worktree /root/.local/share/velnor/pr12-hold-duplicates-test
+HEAD c2ef5ae7d4ecddda7a6e71e19b2d56b79ebcf5f1
+detached
+
+worktree /root/Projects/tailrocks/velnor-project/velnor-actions-permission-fix
+HEAD dccf0fbe04a43cd0b04791663a6c9fe619687a62
+branch refs/heads/fix/required-actions-read-scope
+
+worktree /root/Projects/tailrocks/velnor-project/velnor-workflow-capability
+HEAD f17ebbc992da8549197f63d2aaaf1c317ed57426
+branch refs/heads/codex/typed-workflow-capability
+
+worktree /root/velnor-uncertain-main-update
+HEAD eaf6372d78a553eef6ba6e4b2b6d56eb4f4695da
+branch refs/heads/fix/uncertain-slot-preservation-sync
+
+worktree /root/velnor-uncertain-remote-cleanup-guard
+HEAD 7be34b741e7b5d0e2dbe1a1577240a8717fdfc9c
+branch refs/heads/fix/uncertain-remote-cleanup-guard
+
+worktree /tmp/velnor-ci-workspace-policy
+HEAD 3b77aaabbff9aa8133072bf47984960696a7cc32
+branch refs/heads/fix/ci-workspace-policy
+
+worktree /tmp/velnor-empty-cache-attempt
+HEAD af94f83803b7f8e55949cab144ecceda5811dc0a
+branch refs/heads/fix/schema2-empty-cache-run-attempt
+
+worktree /tmp/velnor-impl-20261005/archive/pr25
+HEAD 4b24238130fe246a40bd43b6917c450bdcd1877e
+branch refs/heads/impl/archive-pr25
+
+worktree /tmp/velnor-impl-20261005/cache/pr29
+HEAD 4ad1e34a1e20589386ddefdc25eaceb067341f0b
+branch refs/heads/impl/cache-pr29
+
+worktree /tmp/velnor-impl-20261005/cache/pr30
+HEAD fe0064cbb82d861653439faaf4a088186571dec6
+branch refs/heads/impl/cache-pr30
+
+worktree /tmp/velnor-impl-20261005/cache/pr38
+HEAD b08bc12250dff1b41e3acf1aa542f9932ee8cfe3
+branch refs/heads/impl/cache-pr38
+
+worktree /tmp/velnor-impl-20261005/cache/pr57
+HEAD 098d445fbe8fddcc7367a0d7942fc1a6e318a0a3
+branch refs/heads/impl/cache-pr57
+
+worktree /tmp/velnor-impl-20261005/cache/seed-authority
+HEAD a5984a8d17bc2e9cd023fe42918cab11f4e38523
+branch refs/heads/fix/host-seed-admission
+
+worktree /tmp/velnor-impl-20261005/evidence/pr12
+HEAD 8625f5d191bffc807f7b80a607ad1fc51cbc171b
+branch refs/heads/impl/evidence-pr12
+
+worktree /tmp/velnor-impl-20261005/generator/pr20
+HEAD 9a912c8a805c5e2e30006909568baf4f587ddd3d
+branch refs/heads/impl/generator-pr20
+
+worktree /tmp/velnor-impl-20261005/generator/pr28
+HEAD 38a6cf7a1d5934c7cfcca19a43c4615e504e7d6c
+branch refs/heads/impl/generator-pr28
+
+worktree /tmp/velnor-impl-20261005/generator/pr68
+HEAD c912e1b8660e58999346bf89c78d460b638a06a3
+branch refs/heads/impl/generator-pr68
+
+worktree /tmp/velnor-impl-20261005/generator/pr68-followup
+HEAD a657f6d110b407c9a26694ed1625d462254c7289
+branch refs/heads/impl/generator-pr68-followup
+
+worktree /tmp/velnor-impl-20261005/pr29-30-disposition
+HEAD d4fab77dd55107d11d8f19a546cba43d9badde96
+branch refs/heads/codex/pr29-pr30-disposition-2026-10-05
+
+worktree /tmp/velnor-impl-20261005/pr49
+HEAD 949affbf920de03a0050ca62c950b1a0103cd855
+branch refs/heads/impl/pr49
+
+worktree /tmp/velnor-impl-20261005/pr49-followup
+HEAD d1b8f21613c88c6504381ef1a96fedcc3aadef43
+branch refs/heads/fix/pr49-rustdoc-scope
+
+worktree /tmp/velnor-impl-20261005/release/pr41
+HEAD bfc947f2d2dc2ca7533d603820206767b1e79025
+branch refs/heads/impl/release-pr41
+
+worktree /tmp/velnor-impl-20261005/release/pr46
+HEAD b35bfaada996c03c734d12b406cba9ed168b12b6
+branch refs/heads/impl/release-pr46
+
+worktree /tmp/velnor-main-6180
+HEAD 6180ccebc7eff8b8f40f988eea2cf948bb235c9d
+detached
+
+worktree /tmp/velnor-matrix-job-output
+HEAD 6deba5a071dbd75682b0799c387a6777fc6075f3
+branch refs/heads/fix/matrix-job-output-budget
+
+worktree /tmp/velnor-mbx-production-hold
+HEAD effed7e3c88b285ad46cef23f02a69796eb6c0cb
+branch refs/heads/fix/mbx-production-hold
+
+worktree /tmp/velnor-nextest53
+HEAD 0172b1b48c80ded0b7948a3b5f5b07eb1ab28813
+branch refs/heads/codex/nextest53-fix
+
+worktree /tmp/velnor-nextest53-main-8b440
+HEAD 8b440705578dcdcb3089614289180343218adc43
+detached
+
+worktree /tmp/velnor-output-map-test
+HEAD cefea965d671708d23ca756554d0e393b75b1742
+detached
+
+worktree /tmp/velnor-p13-size-guard-fixture
+HEAD aaef9053f05eb05f1239599015940e4d33f4a278
+branch refs/heads/codex/p13-size-guard-fixture-20261005
+
+worktree /tmp/velnor-pr12-delivery-20261005
+HEAD bc4514f6c2acc231e36eb58d723c56b4488b1c3e
+branch refs/heads/impl/pr12-delivery-20261005
+
+worktree /tmp/velnor-pr12-foundation-20261005
+HEAD 1557aabb4d3eeb8705e077934c9d38a7d9228f45
+branch refs/heads/impl/pr12-freshness-foundation-20261005
+
+worktree /tmp/velnor-pr12-process-check-20261005
+HEAD 3359237590520fb4f4e083435af0fa6e89746534
+detached
+
+worktree /tmp/velnor-pr25-currentmain-sync
+HEAD fd3066c0fcb49138a0f732ee5bececb2110a35a9
+branch refs/heads/codex/pr25-currentmain-runner-sync
+
+worktree /tmp/velnor-pr56-3dff-baseline
+HEAD 3dfffc02ccb3ceddf717c11d14944283cc76ecba
+detached
+
+worktree /tmp/velnor-pr56-boundary-test
+HEAD e41356bd5f24d524d0b0a28ecaca8c6bbf3dc98b
+detached
+
+worktree /tmp/velnor-pr56-run-id
+HEAD 7f4b24afdfbd79a6accc790921e2ae064d91e553
+branch refs/heads/fix/hosted-qualification-dispatch-run-id
+
+worktree /tmp/velnor-pr58-census-fix
+HEAD 10c921a37dbd76bab2c0dd79e457b493c34209ce
+branch refs/heads/codex/pr58-census-fix
+
+worktree /tmp/velnor-pr82-uncertain
+HEAD 375ff947688ef35635e48a3bf501acf80877c96b
+branch refs/heads/fix/idless-uncertain-preserve
+
+worktree /tmp/velnor-qualification-fail-fast
+HEAD 234b5f41d2273eff630eac3129be9567ceff0008
+branch refs/heads/fix/qualification-pipeline-fail-fast
+
+worktree /tmp/velnor-qualification-output-map
+HEAD aa9f372e8a0a4eaef071f46205abf2d075f2f0fc
+branch refs/heads/fix/qualification-output-budget-integration
+
+worktree /tmp/velnor-review-25
+HEAD e27681f7ab0059a47b59643b04d418faa36ec7a0
+detached
+
+worktree /tmp/velnor-review-25-runner
+HEAD e27681f7ab0059a47b59643b04d418faa36ec7a0
+detached
+
+worktree /tmp/velnor-review-29
+HEAD 4ad1e34a1e20589386ddefdc25eaceb067341f0b
+detached
+
+worktree /tmp/velnor-review-30
+HEAD fe0064cbb82d861653439faaf4a088186571dec6
+detached
+
+worktree /tmp/velnor-review-38
+HEAD 0c67ce14a041567893d820b7cda171e723227b7e
+detached
+
+worktree /tmp/velnor-review-41
+HEAD b4bf03d655c828c8f073448a20eb89efe081f9fc
+detached
+
+worktree /tmp/velnor-review-46
+HEAD 234820e84b8c75ce2bf5adeb4fd6a890541d9ab7
+detached
+
+worktree /tmp/velnor-review-48-runner
+HEAD 2cc62f286bc214dcf5c18471cc8982e27297cea6
+detached
+
+worktree /tmp/velnor-review-generator-20
+HEAD f53081d700d18e5f42723d5237679c4bccf72a78
+detached
+
+worktree /tmp/velnor-review-generator-28
+HEAD e426a0f2f124c5820a193869a36f8d0b69c46f48
+detached
+
+worktree /tmp/velnor-review-matrix-15364
+HEAD 15364fcb21ce7376ab485dfa5bdb59075783671b
+detached
+
+worktree /tmp/velnor-review-matrix-cfc56
+HEAD cfc56d48347fe021008e146e5654f793428c153a
+detached
+
+worktree /tmp/velnor-review-matrix-daf77
+HEAD daf77e83e73550adb36a6fd8b715475d753864f0
+detached
+
+worktree /tmp/velnor-review-permissions-81e65
+HEAD 81e65fee08edc3b73839d9ff810cb7da6a170a65
+detached
+
+worktree /tmp/velnor-review-preseed-03f64
+HEAD 03f64e8f0c3901a924dd5661986acf425105c2f5
+detached
+
+worktree /tmp/velnor-review-qualification-dd520
+HEAD dd52028f5c2e4cfaf6918b8ea595893ca8cbcb5d
+detached
+
+worktree /tmp/velnor-transport-review-38f8b988
+HEAD 38f8b988a6a122fe25338bf9ff1bb540abe0ccde
+detached
+
+worktree /tmp/velnor-uncertain-main
+HEAD 162b460aa05b4487ce542779a8727d16bfbe6f9d
+branch refs/heads/fix/uncertain-slot-preservation
+
+worktree /tmp/velnor-work-18
+HEAD 50042cdf15ba8c4e3aa9da95d13dd888f5ba7fcd
+branch refs/heads/scaleset-evidence
+
+worktree /tmp/velnor-work-25
+HEAD 54a1f2e6033ab10c7d38b3cf51378b05b93920c2
+branch refs/heads/codex/pr25-archive-fixes
+
+worktree /tmp/velnor-work-48
+HEAD c09d06098f4188b73f1b12a80f88fc8b0d5053c7
+branch refs/heads/codex/pr48-admission-refill
+
+worktree /tmp/velnor-work-pr25-main38eb
+HEAD ab269676e8620f93a841a45f2ee6c91b4317492e
+branch refs/heads/codex/pr25-runner-slice
+
+worktree /tmp/velnor-work-qualification-dispatch
+HEAD 0430ac9fba60fd628dcd415492640a8f7a97b990
+branch refs/heads/fix/hosted-qualification-dispatch
+

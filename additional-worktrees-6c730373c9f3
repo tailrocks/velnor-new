@@ -1,0 +1,28 @@
+worktree /tmp/velnor-git-steward-retirement-20261005
+HEAD e608f82039375a4c2a839d5229e1d2dd3035617b
+detached
+
+worktree /tmp/velnor-mbx-retirement-review-20261005
+HEAD a949662c58e4b411387218fb48ccfdc7b94ebc40
+detached
+
+worktree /tmp/velnor-pr92-schema-remediation-20261005
+HEAD 2991176e5c9d7810a0478e3d5f68f02c776b3418
+branch refs/heads/codex/pr92-schema-metadata-fix
+
+worktree /tmp/velnor-preservation-20261005
+HEAD 0fb6405a1b3ce30d06673cf4387ddf3fb00197f2
+branch refs/heads/codex/preserve-wip-20261005
+
+worktree /tmp/velnor-release-intent-guard-af82-candidate-20261005
+HEAD 96556c18a0dc8b55753065a0daa4280cd8fbf369
+branch refs/heads/perf/cache-selection-qualification
+
+worktree /tmp/velnor-release-source-removal-a949-candidate-20261005
+HEAD af82eeb4520b45612df2280e2ff2dbef2bd470d6
+detached
+
+worktree /var/tmp/v703g-20261005
+HEAD bc4514f6c2acc231e36eb58d723c56b4488b1c3e
+detached
+

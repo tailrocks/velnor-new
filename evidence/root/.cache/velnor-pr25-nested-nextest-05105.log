@@ -1,0 +1,283 @@
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Blocking waiting for file lock on package cache
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.45s
+────────────
+ Nextest run ID 478aceda-4f0d-46bc-bbc9-d3dd8fe78729 with nextest profile: default
+    Starting 270 tests across 18 binaries
+        PASS [   0.007s] (  1/270) velnor-runner-core::invariants duplicate_report_is_rejected_before_success
+        PASS [   0.011s] (  2/270) velnor-runner-core lifecycle_tests::acquire_failure_and_cleanup_mismatch_do_not_release
+        PASS [   0.012s] (  3/270) velnor-runner-core lifecycle_tests::illegal_event_does_not_release_occupied_states
+        PASS [   0.011s] (  4/270) velnor-runner-core lifecycle_tests::quarantine_does_not_release_occupied_states
+        PASS [   0.011s] (  5/270) velnor-runner-core::exclusion root_workspace_excludes_runner
+        PASS [   0.017s] (  6/270) velnor-runner-core::invariants occupancy_never_exceeds_n_and_drop_does_not_release
+        PASS [   0.035s] (  7/270) velnor-runner-cli compare_tests::swapped_artifact_is_not_proven
+        PASS [   0.039s] (  8/270) velnor-runner-cli compare_tests::wrong_attempt_is_not_proven
+        PASS [   0.042s] (  9/270) velnor-runner-cli service::tests::plist_logs_stay_out_of_the_secret_channel
+        PASS [   0.046s] ( 10/270) velnor-runner-cli daemon_run::tests::missing_config_waits
+        PASS [   0.045s] ( 11/270) velnor-runner-cli daemon_run::tests::credential_text_trims_and_rejects_empty
+        PASS [   0.046s] ( 12/270) velnor-runner-cli daemon_run::tests::second_daemon_lock_fails_closed
+        PASS [   0.045s] ( 13/270) velnor-runner-cli daemon_run::tests::bad_toml_is_err_and_hides_the_secret
+        PASS [   0.048s] ( 14/270) velnor-runner-cli service::tests::launchctl_uses_the_gui_domain_and_does_not_fork
+        PASS [   0.048s] ( 15/270) velnor-runner-cli compare_tests::omitted_page_is_not_proven
+        PASS [   0.047s] ( 16/270) velnor-runner-cli readiness_probe::tests::readiness_child_uses_only_the_private_operation_and_state_path
+        PASS [   0.047s] ( 17/270) velnor-runner-cli daemon_run::tests::valid_host_toml_listens
+        PASS [   0.050s] ( 18/270) velnor-runner-cli compare_tests::bad_conclusions_are_not_proven
+        PASS [   0.048s] ( 19/270) velnor-runner-cli dispatch::connect_tests::connect_empty_stdin_does_not_create_or_overwrite
+        PASS [   0.051s] ( 20/270) velnor-runner-cli compare_tests::missing_lane_is_not_proven
+        PASS [   0.049s] ( 21/270) velnor-runner-cli dispatch::connect_tests::connect_help_reads_stdin_and_has_no_token_flag
+        PASS [   0.055s] ( 22/270) velnor-runner-cli::status_readiness fifo_config_is_rejected_without_blocking_status
+        PASS [   0.054s] ( 23/270) velnor-runner-cli::status_readiness malformed_config_is_degraded
+        PASS [   0.054s] ( 24/270) velnor-runner-cli::status_readiness oversized_config_is_degraded
+        PASS [   0.052s] ( 25/270) velnor-runner-cli::help help_exits_success_and_a_bad_command_does_not
+        PASS [   0.054s] ( 26/270) velnor-runner-cli compare_tests::unsafe_archives_are_not_proven
+        PASS [   0.068s] ( 27/270) velnor-runner-cli::status_readiness empty_directory_keeps_probe_off_the_state
+        PASS [   0.069s] ( 28/270) velnor-runner-cli readiness_probe::tests::expired_readiness_child_is_killed_and_reaped
+        PASS [   0.011s] ( 29/270) velnor-runner-core::invariants source_profile_artifact_and_census_fail_closed
+        PASS [   0.010s] ( 30/270) velnor-runner-github::session_reopen reopen_rejects_unrelated_session_400
+        PASS [   0.010s] ( 31/270) velnor-runner-core::invariants replay_does_not_mint_a_second_grant
+        PASS [   0.011s] ( 32/270) velnor-runner-cli compare_tests::missing_or_empty_directory_is_not_proven
+        PASS [   0.013s] ( 33/270) velnor-runner-cli compare_tests::hosted_and_scale_set_pair_is_proven
+        PASS [   0.082s] ( 34/270) velnor-runner-cli compare_tests::duplicate_execution_is_not_proven
+        PASS [   0.013s] ( 35/270) velnor-runner-core::invariants synthetic_message_id_is_not_ackable_and_zero_is
+        PASS [   0.083s] ( 36/270) velnor-runner-cli::help help_lists_every_command
+        PASS [   0.015s] ( 37/270) velnor-runner-host assign_tests::available_ids_are_the_only_acquire
+        PASS [   0.017s] ( 38/270) velnor-runner-core::invariants redelivery_does_not_rejuvenate_and_stale_epoch_is_rejected
+        PASS [   0.016s] ( 39/270) velnor-runner-github::wire partial_acquire_outside_ids_and_noop
+        PASS [   0.033s] ( 40/270) velnor-runner-host docker_spec_tests::docker_sock_is_only_a_private_volume
+        PASS [   0.032s] ( 41/270) velnor-runner-github::session_effect jit_bytes_stay_out_of_debug_and_errors
+        PASS [   0.033s] ( 42/270) velnor-runner-host assign_tests::a_batch_without_an_available_id_waits
+        PASS [   0.104s] ( 43/270) velnor-runner-core::invariants non_released_states_count_until_proven_cleanup
+        PASS [   0.033s] ( 44/270) velnor-runner-host docker_client_tests::docker_deadline_preserves_results_and_fails_closed_on_timeout
+        PASS [   0.032s] ( 45/270) velnor-runner-core::invariants parity_fails_closed
+        PASS [   0.033s] ( 46/270) velnor-runner-github::session_reopen reopen_deletes_only_listed_sessions_then_creates
+        PASS [   0.035s] ( 47/270) velnor-runner-host docker_client::tests::absolute_unix_path_only
+        PASS [   0.035s] ( 48/270) velnor-runner-cli::status_readiness drain_flag_is_draining
+        PASS [   0.032s] ( 49/270) velnor-runner-host connect_tests::credential_is_a_keychain_ref
+        PASS [   0.032s] ( 50/270) velnor-runner-host docker_client_tests::rejected_sockets_do_not_need_a_daemon
+        PASS [   0.032s] ( 51/270) velnor-runner-github::session_reopen reopen_treats_expired_session_400_as_gone
+        PASS [   0.032s] ( 52/270) velnor-runner-github::wire assigned_population_is_not_the_batch_length
+        PASS [   0.034s] ( 53/270) velnor-runner-host docker_spec_tests::audit_rejects_host_and_token_env
+        PASS [   0.033s] ( 54/270) velnor-runner-host docker_client_tests::source_uses_only_the_unix_constructor
+        PASS [   0.034s] ( 55/270) velnor-runner-github::registration_http admin_connection_empty_url_is_rejected
+        PASS [   0.036s] ( 56/270) velnor-runner-cli compare_tests::cached_success_is_not_proven
+        PASS [   0.104s] ( 57/270) velnor-runner-cli::status_readiness missing_state_is_waiting_for_credentials
+        PASS [   0.038s] ( 58/270) velnor-runner-github::wire refresh_is_single_flight_and_forbidden_is_terminal
+        PASS [   0.038s] ( 59/270) velnor-runner-github::wire null_and_omitted_statistics_match_and_message_zero_is_real
+        PASS [   0.041s] ( 60/270) velnor-runner-host docker_spec_tests::normal_plan_omits_canary
+        PASS [   0.020s] ( 61/270) velnor-runner-github::wire jit_debug_does_not_contain_the_secret
+        PASS [   0.038s] ( 62/270) velnor-runner-github::wire empty_poll_is_not_an_ack_and_unknown_kind_is_visible
+        PASS [   0.039s] ( 63/270) velnor-runner-host docker_spec_tests::audit_rejects_host_and_secret_mounts
+        PASS [   0.038s] ( 64/270) velnor-runner-host connect_tests::structs_used_by_connect_plan_stay_secret_free
+        PASS [   0.039s] ( 65/270) velnor-runner-host ipc_tests::roundtrip_is_big_endian
+        PASS [   0.039s] ( 66/270) velnor-runner-host docker_spec_tests::cleanup_set_keeps_foreign_name_collision
+        PASS [   0.039s] ( 67/270) velnor-runner-host docker_spec_tests::platform_stays_linux_amd64
+        PASS [   0.042s] ( 68/270) velnor-runner-github::registration_sets create_sends_product_labels_and_preview_query
+        PASS [   0.039s] ( 69/270) velnor-runner-host https_tests::https_base_rejects_plain_http
+        PASS [   0.041s] ( 70/270) velnor-runner-github::session_poll poll_timeout_is_uncertain
+        PASS [   0.042s] ( 71/270) velnor-runner-github::session_effect ack_skips_unsafe_batches_and_deletes_real_ids
+        PASS [   0.038s] ( 72/270) velnor-runner-host connect_tests::same_binding_is_idempotent_and_other_bindings_are_rejected
+        PASS [   0.041s] ( 73/270) velnor-runner-host journal_tests::before_advertise_holds_uncertain_and_adopts
+        PASS [   0.044s] ( 74/270) velnor-runner-github::session_poll poll_second_unauthorized_fails_without_a_third_call
+        PASS [   0.044s] ( 75/270) velnor-runner-github::session_open create_keeps_session_statistics
+        PASS [   0.013s] ( 76/270) velnor-runner-host launch::inspect_tests::docker_info_failure_does_not_fall_back_to_the_configured_ceiling
+        PASS [   0.044s] ( 77/270) velnor-runner-github::session_poll poll_query_omits_non_positive_cursor_and_sends_total_capacity
+        PASS [   0.044s] ( 78/270) velnor-runner-github::session_poll empty_poll_is_not_acknowledged
+        PASS [   0.045s] ( 79/270) velnor-runner-github::runner_groups count_mismatch_is_malformed
+        PASS [   0.045s] ( 80/270) velnor-runner-github::runner_protocol invalid_lookup_and_delete_inputs_do_not_reach_transport
+        PASS [   0.046s] ( 81/270) velnor-runner-github::wire completed_message_decodes_runner_identity_and_keeps_job_fields
+        PASS [   0.047s] ( 82/270) velnor-runner-host docker_spec_tests::names_are_not_delete_authority
+        PASS [   0.047s] ( 83/270) velnor-runner-host docker_spec_tests::canary_is_found_in_env_cmd_labels_and_mounts
+        PASS [   0.024s] ( 84/270) velnor-runner-host launch::inspect::tests::only_not_found_is_treated_as_absent
+        PASS [   0.011s] ( 85/270) velnor-runner-github::session_effect ack_non_204_fails_and_unauthorized_retries_once
+        PASS [   0.017s] ( 86/270) velnor-runner-github::runner_groups empty_token_does_not_call
+        PASS [   0.019s] ( 87/270) velnor-runner-github::registration_sets get_query_percent_encodes_reserved_bytes
+        PASS [   0.022s] ( 88/270) velnor-runner-github::registration_http empty_credentials_do_not_call_transport
+        PASS [   0.024s] ( 89/270) velnor-runner-github::registration_http missing_registration_token_is_rejected
+        PASS [   0.023s] ( 90/270) velnor-runner-github::runner_protocol remove_runner_uses_id_and_requires_http_204
+        PASS [   0.084s] ( 91/270) velnor-runner-host journal_tests::around_commits_pending_before_effect_and_hides_secret
+        PASS [   0.054s] ( 92/270) velnor-runner-host launch::inspect::tests::nonterminal_states_keep_the_slot_until_exit
+        PASS [   0.030s] ( 93/270) velnor-runner-github::registration_http admin_connection_retries_403_then_stops
+        PASS [   0.030s] ( 94/270) velnor-runner-github::registration_http registration_token_posts_201_and_hides_the_token
+        PASS [   0.030s] ( 95/270) velnor-runner-github::session_reopen reopen_conflict_does_not_delete_an_unlisted_session
+        PASS [   0.047s] ( 96/270) velnor-runner-github::session_open refresh_skips_when_the_snapshot_already_moved
+        PASS [   0.040s] ( 97/270) velnor-runner-github::runner_protocol get_runner_by_name_uses_exact_query_and_decodes_reference
+        PASS [   0.041s] ( 98/270) velnor-runner-github::session_open refresh_patches_the_same_session
+        PASS [   0.048s] ( 99/270) velnor-runner-github::runner_protocol lookup_errors_keep_http_and_transport_certainty
+        PASS [   0.040s] (100/270) velnor-runner-github::registration_sets get_by_id_decodes_and_accepts
+        PASS [   0.060s] (101/270) velnor-runner-github::registration_http registration_paths_reject_empty_components
+        PASS [   0.061s] (102/270) velnor-runner-github::session_effect acquire_timeout_and_reset_are_not_definite_failures
+        PASS [   0.110s] (103/270) velnor-runner-github::session_open conflict_does_not_delete_the_other_session
+        PASS [   0.110s] (104/270) velnor-runner-github::wire registration_disables_updates_and_rejects_hosted_label
+        PASS [   0.064s] (105/270) velnor-runner-github::session_effect jit_request_uses_runner_image_work_folder
+        PASS [   0.072s] (106/270) velnor-runner-github::session_poll poll_retries_unauthorized_once_then_reads
+        PASS [   0.073s] (107/270) velnor-runner-github::runner_protocol only_an_exact_single_result_is_returned
+        PASS [   0.079s] (108/270) velnor-runner-github::registration_http admin_connection_retries_401_once
+        PASS [   0.079s] (109/270) velnor-runner-github::registration_http admin_connection_remote_auth_is_redacted
+        PASS [   0.130s] (110/270) velnor-runner-github::session_poll poll_preserves_statistics
+        PASS [   0.153s] (111/270) velnor-runner-github::session_open create_stores_the_queue_and_hides_the_token
+        PASS [   0.095s] (112/270) velnor-runner-github::registration_sets empty_create_labels_use_the_set_name
+        PASS [   0.096s] (113/270) velnor-runner-github::session_effect acquire_keeps_partial_ids_and_rejects_foreign_ids
+        PASS [   0.096s] (114/270) velnor-runner-github::runner_groups list_reads_default_group_and_hides_the_token
+        PASS [   0.096s] (115/270) velnor-runner-github::registration_sets get_count_distinguishes_missing_duplicate_and_malformed
+        PASS [   0.100s] (116/270) velnor-runner-github::registration_sets admin_token_freshness_is_strict_past_sixty_seconds
+        PASS [   0.103s] (117/270) velnor-runner-github::session_effect delete_session_rejects_non_204
+        PASS [   0.103s] (118/270) velnor-runner-github::session_poll poll_forbidden_does_not_retry
+        PASS [   0.103s] (119/270) velnor-runner-github::session_poll empty_queue_token_does_not_call_transport
+        PASS [   0.155s] (120/270) velnor-runner-host launch_capacity_tests::ack_does_not_start_or_free_a_slot
+        PASS [   0.180s] (121/270) velnor-runner-host launch::gate::tests::line_counts_and_hides_docker_ids
+        PASS [   0.240s] (122/270) velnor-runner-host connect_tests::disconnect_deletes_only_recorded_ownership
+        PASS [   0.257s] (123/270) velnor-runner-host assign_tests::empty_poll_waits
+        PASS [   0.231s] (124/270) velnor-runner-host keychain_tests::read_secret_keeps_the_canary_out_of_errors
+        PASS [   0.230s] (125/270) velnor-runner-host launch_capacity_tests::admit_target_parser_bounds
+        PASS [   0.236s] (126/270) velnor-runner-host launch_capacity_tests::capacity_one_first_launch_starts_then_stops
+        PASS [   0.202s] (127/270) velnor-runner-host launch_capacity_tests::target_above_capacity_queues_the_third_job
+        PASS [   0.244s] (128/270) velnor-runner-host launch_capacity_tests::blocked_poll_is_an_error
+        PASS [   0.239s] (129/270) velnor-runner-host launch_capacity_tests::capacity_two_first_launch_starts_and_stays
+        PASS [   0.235s] (130/270) velnor-runner-host launch_capacity_tests::job_capacity_parser_bounds
+        PASS [   0.249s] (131/270) velnor-runner-host docker_spec_tests::runner_plan_is_not_privileged
+        PASS [   0.252s] (132/270) velnor-runner-host https_tests::join_keeps_the_encoded_query
+        PASS [   0.300s] (133/270) velnor-runner-host journal_tests::failed_acquire_does_not_occupy_and_clean_rows_advertise
+        PASS [   0.276s] (134/270) velnor-runner-host launch::inspect_tests::guest_capacity_uses_the_selected_docker_engine_info
+        PASS [   0.258s] (135/270) velnor-runner-host launch_capacity_tests::nested_capacity_overrides_restore_the_outer_limit
+        PASS [   0.281s] (136/270) velnor-runner-host launch_capacity_tests::historical_starts_do_not_cover_a_free_slot
+        PASS [   0.058s] (137/270) velnor-runner-host plist_tests::plist_escapes_the_binary_path
+        PASS [   0.330s] (138/270) velnor-runner-host journal_tests::release_permitted_gates_capacity_release
+        PASS [   0.259s] (139/270) velnor-runner-host launch_capacity_tests::uncertain_occupancy_does_not_mint_or_ack
+        PASS [   0.265s] (140/270) velnor-runner-host launch_capacity_tests::statistics_only_block_when_population_or_capacity_is_covered
+        PASS [   0.286s] (141/270) velnor-runner-host guest::tests::eighteen_cpu_guest_yields_four_slots_under_a_high_ceiling
+        PASS [   0.274s] (142/270) velnor-runner-host launch_capacity_tests::poll_limit_follows_capacity
+        PASS [   0.297s] (143/270) velnor-runner-host launch_capacity_tests::installed_capacity_beats_the_env_parse
+        PASS [   0.320s] (144/270) velnor-runner-host launch_capacity_tests::capacity_one_refills_after_the_worker_exits
+        PASS [   0.109s] (145/270) velnor-runner-host listen_tests::absolute_https_splits_origin_and_path
+        PASS [   0.310s] (146/270) velnor-runner-host https_tests::curl_argv_has_no_header
+        PASS [   0.322s] (147/270) velnor-runner-host guest::tests::memory_disk_and_zero_cpu_can_lower_the_count
+        PASS [   0.286s] (148/270) velnor-runner-host launch_idless_tests::free_slot_still_scales_started_progress
+        PASS [   0.218s] (149/270) velnor-runner-host launch_tests::statistics_advance_and_offers_stay
+        PASS [   0.319s] (150/270) velnor-runner-host ipc_tests::oversize_and_truncated_frames_are_rejected
+        PASS [   0.038s] (151/270) velnor-runner-host readiness_scan::tests::missing_state_remains_missing
+        PASS [   0.336s] (152/270) velnor-runner-host launch_capacity_tests::full_launch_is_not_started_or_acked
+        PASS [   0.347s] (153/270) velnor-runner-host launch::inspect_tests::hanging_docker_info_stops_at_the_configured_deadline
+        PASS [   0.337s] (154/270) velnor-runner-host launch_capacity_tests::full_progress_notice_is_acknowledged
+        PASS [   0.304s] (155/270) velnor-runner-host launch_capacity_tests::three_waves_refill_after_exit_and_a_mid_wave_failure
+        PASS [   0.354s] (156/270) velnor-runner-host keychain::interaction_tests::overlapping_copies_keep_the_process_prompt_flag_disabled
+        PASS [   0.350s] (157/270) velnor-runner-host launch_capacity_tests::full_capacity_holds_an_uncovered_scale_offer
+        PASS [   0.363s] (158/270) velnor-runner-host launch::inspect::tests::status_must_prove_a_terminal_or_live_lifecycle
+        PASS [   0.351s] (159/270) velnor-runner-host launch_capacity_tests::capacity_two_second_launch_starts
+        PASS [   0.064s] (160/270) velnor-runner-host readiness_scan::tests::missing_journal_stays_clear_and_uncreated
+        PASS [   0.129s] (161/270) velnor-runner-host plist_tests::keychain_import_does_not_take_the_secret
+        PASS [   0.315s] (162/270) velnor-runner-host launch_capacity_tests::wide_poll_limit_defaults_to_ninety
+        PASS [   0.138s] (163/270) velnor-runner-host listen_tests::queue_path_strips_the_admin_origin
+        PASS [   0.016s] (164/270) velnor-runner-host stage_tests::remove_recorded_deletes_only_the_owned_id
+        PASS [   0.059s] (165/270) velnor-runner-host readiness_scan::tests::partial_observer_never_claims_ready
+        PASS [   0.012s] (166/270) velnor-runner-host stage_tests::remove_recorded_keeps_a_foreign_id
+        PASS [   0.081s] (167/270) velnor-runner-host readiness_scan::tests::missing_keychain_item_beats_a_dead_socket
+        PASS [   0.132s] (168/270) velnor-runner-host readiness_scan::tests::journal_fail_closed::journal_deadline_is_unreadable_and_drops_pending_query
+        PASS [   0.066s] (169/270) velnor-runner-host readiness_tests::empty_controller_is_not_ready
+        PASS [   0.357s] (170/270) velnor-runner-host launch_capacity_tests::scale_does_not_mint_again_once_assigned_is_covered
+        PASS [   0.061s] (171/270) velnor-runner-host stage::tests::cleanup_removes_only_verified_owned_identity
+        PASS [   0.042s] (172/270) velnor-runner-host stage_tests::volumes_stop_creates_no_container
+        PASS [   0.059s] (173/270) velnor-runner-host stage_tests::jit_stop_writes_stdin_after_both_starts
+        PASS [   0.069s] (174/270) velnor-runner-host runner_image_contract_tests::jit_work_folder_resolves_to_both_worker_mounts
+        PASS [   0.103s] (175/270) velnor-runner-host readiness_scan::tests::nonregular_config_is_rejected_without_reading
+        PASS [   0.103s] (176/270) velnor-runner-host readiness_scan::tests::oversized_config_is_rejected
+        PASS [   0.063s] (177/270) velnor-runner-host stage_tests::missing_name_is_not_deleted
+        PASS [   0.439s] (178/270) velnor-runner-host journal_tests::missing_row_is_not_a_successful_finish
+        PASS [   0.062s] (179/270) velnor-runner-host worker::volumes_tests::created_volumes_have_exact_worker_and_role_labels
+        PASS [   0.096s] (180/270) velnor-runner-host runner_image_contract_tests::checked_in_images_prepare_the_shared_path_for_runner_uid_1000
+        PASS [   0.088s] (181/270) velnor-runner-host stage::tests::cleanup_fails_closed_for_uncertain_identity_and_empty_name
+        PASS [   0.037s] (182/270) velnor-runner-host worker_tests::bollard_create_rejects_a_host_bind
+        PASS [   0.030s] (183/270) velnor-runner-host worker_tests::empty_jit_does_not_create
+        PASS [   0.024s] (184/270) velnor-runner-host worker_tests::runner_create_opens_stdin_and_is_not_privileged
+        PASS [   0.183s] (185/270) velnor-runner-host readiness_scan::tests::drain_file_reports_draining_without_config
+        PASS [   0.101s] (186/270) velnor-runner-host readiness_scan::tests::unknown_state_is_unreadable
+        PASS [   0.059s] (187/270) velnor-runner-host worker::volumes_tests::volume_delete_error_fails_closed
+        PASS [   0.309s] (188/270) velnor-runner-host launch_tests::two_offers_are_not_acquired
+        PASS [   0.454s] (189/270) velnor-runner-host journal_tests::reopen_sees_the_row
+        PASS [   0.112s] (190/270) velnor-runner-host readiness_scan::tests::symlinked_config_is_rejected
+        PASS [   0.428s] (191/270) velnor-runner-host launch::turn::start_tests::missing_current_census_blocks_ack_and_start
+        PASS [   0.070s] (192/270) velnor-runner-host stage_tests::runner_started_does_not_write_jit
+        PASS [   0.069s] (193/270) velnor-runner-host stage_tests::second_create_failure_removes_only_the_owned_dind
+        PASS [   0.157s] (194/270) velnor-runner-host readiness_scan::tests::journal_fail_closed::readiness_deadline_degrades_and_drops_pending_work
+        PASS [   0.070s] (195/270) velnor-runner-host stage_tests::runner_created_does_not_start
+        PASS [   0.087s] (196/270) velnor-runner-host stage::tests::inspect_only_treats_not_found_as_absent_and_requires_id
+        PASS [   0.181s] (197/270) velnor-runner-host readiness_scan::tests::garbage_journal_is_unreadable
+        PASS [   0.064s] (198/270) velnor-runner-host worker::volumes_tests::container_identity_requires_id_and_exact_labels
+        PASS [   0.159s] (199/270) velnor-runner-host readiness_scan::tests::journal_fail_closed::nonregular_and_broken_link_journals_are_unreadable
+        PASS [   0.051s] (200/270) velnor-runner-host worker_tests::bollard_config_from_a_clean_plan_omits_canary
+        PASS [   0.460s] (201/270) velnor-runner-host journal_tests::empty_and_quoted_kinds_are_rejected
+        PASS [   0.094s] (202/270) velnor-runner-host runner_image_contract_tests::dind_publishes_only_a_ready_daemon_without_pulling_workload_images
+        PASS [   0.424s] (203/270) velnor-runner-host launch_capacity_tests::capacity_two_empty_after_one_start_stays
+        PASS [   0.089s] (204/270) velnor-runner-host stage_tests::dind_started_does_not_create_the_runner
+        PASS [   0.090s] (205/270) velnor-runner-host stage_tests::dind_created_does_not_start
+        PASS [   0.190s] (206/270) velnor-runner-host plist_tests::launch_agent_runs_daemon_in_the_foreground
+        PASS [   0.068s] (207/270) velnor-runner-host worker::volumes_tests::only_exactly_owned_volumes_are_removed
+        PASS [   0.464s] (208/270) velnor-runner-host journal_tests::drop_does_not_delete_pending_rows
+        PASS [   0.035s] (209/270) velnor-runner-host worker_tests::malformed_ownership_label_is_rejected
+        PASS [   0.030s] (210/270) velnor-runner-host worker_tests::runner_joins_only_its_dind_netns
+        PASS [   0.441s] (211/270) velnor-runner-host launch::busy_slot_tests::busy_slot_does_not_ack_scale_assignment
+        PASS [   0.032s] (212/270) velnor-runner-host worker_tests::runner_create_rejects_jit_in_env_or_cmd
+        PASS [   0.442s] (213/270) velnor-runner-host launch::inspect_tests::closed_docker_connection_is_not_treated_as_absent
+        PASS [   0.042s] (214/270) velnor-runner-host worker_tests::dind_is_privileged_and_shares_the_runner_volumes
+        PASS [   0.448s] (215/270) velnor-runner-host launch::inspect_tests::docker_api_observations_preserve_only_known_running_states
+        PASS [   0.451s] (216/270) velnor-runner-host journal_worker_volume_tests::worker_volume_is_durable_and_cannot_be_rebound
+        PASS [   0.446s] (217/270) velnor-runner-host launch::turn::start_idless_tests::full_uncertain_slot_still_acks_progress_notice
+        PASS [   0.448s] (218/270) velnor-runner-host launch::turn::start_tests::zero_initial_census_and_positive_poll_keep_jit_conflict_unacked
+        PASS [   0.186s] (219/270) velnor-runner-host readiness_scan::tests::journal_fail_closed::malformed_cleanup_and_unknown_kinds_are_unreadable
+        PASS [   0.449s] (220/270) velnor-runner-host launch::turn::start_tests::unlabeled_volume_keeps_cleanup_unproven_and_redelivery_unacked
+        PASS [   0.388s] (221/270) velnor-runner-host launch_idless_tests::own_idless_uncertain_row_keeps_its_reservation
+        PASS [   0.451s] (222/270) velnor-runner-host launch::turn::start_tests::dind_only_live_row_keeps_the_current_assignment_unacked
+        PASS [   0.379s] (223/270) velnor-runner-host launch_scale_redelivery_tests::uncertain_jit_failure_redelivery_stays_queued
+        PASS [   0.379s] (224/270) velnor-runner-host launch_idless_tests::partial_uncertain_row_still_blocks_its_mint
+        PASS [   0.470s] (225/270) velnor-runner-host journal_tests::uncertain_outcome_keeps_the_row
+        PASS [   0.458s] (226/270) velnor-runner-host launch::inspect_tests::failed_done_row_inspect_cannot_advertise_capacity
+        PASS [   0.335s] (227/270) velnor-runner-host launch_tests::forbidden_acquire_is_failed_and_not_acked
+        PASS [   0.484s] (228/270) velnor-runner-host journal_tests::cleanup_proof_reopens
+        PASS [   0.453s] (229/270) velnor-runner-host launch::turn::start_idless_tests::idless_uncertain_reservation_blocks_turn_without_jit_or_ack
+        PASS [   0.455s] (230/270) velnor-runner-host launch::inspect_tests::non_not_found_inspect_error_blocks_admission_and_reconcile
+        PASS [   0.450s] (231/270) velnor-runner-host launch_backfill_tests::replay_of_a_running_worker_does_not_mint_again
+        PASS [   0.363s] (232/270) velnor-runner-host launch_tests::ack_failure_keeps_the_runner_bound
+        PASS [   0.339s] (233/270) velnor-runner-host launch_tests::empty_acquire_is_not_acked
+        PASS [   0.380s] (234/270) velnor-runner-host launch_scale_tests::jit_conflict_marks_the_fresh_row_failed_without_ack
+        PASS [   0.365s] (235/270) velnor-runner-host launch_scale_tests::partial_uncertain_subject_does_not_mint
+        PASS [   0.283s] (236/270) velnor-runner-host launch_worker_cleanup_tests::foreign_volume_prevents_cleanup_proof_and_keeps_the_slot
+        PASS [   0.458s] (237/270) velnor-runner-host launch::turn::start_tests::missing_status_keeps_the_slot_and_blocks_assignment
+        PASS [   0.341s] (238/270) velnor-runner-host launch_tests::launch_acks_only_after_start_and_hides_jit
+        PASS [   0.366s] (239/270) velnor-runner-host launch_scale_tests::redelivered_scale_row_does_not_count_as_a_worker
+        PASS [   0.343s] (240/270) velnor-runner-host launch_tests::start_failure_after_acquire_is_not_acked
+        PASS [   0.386s] (241/270) velnor-runner-host launch_scale_tests::idless_uncertain_subject_keeps_its_reservation
+        PASS [   0.340s] (242/270) velnor-runner-host launch_tests::uncertain_acquire_does_not_ack
+        PASS [   0.306s] (243/270) velnor-runner-host launch_worker_cleanup_tests::foreign_container_at_owned_name_is_not_adopted_or_removed
+        PASS [   0.410s] (244/270) velnor-runner-host launch_idless_tests::full_slot_acks_started_progress
+        PASS [   0.098s] (245/270) velnor-runner-host worker::volumes_tests::post_delete_non_not_found_keeps_cleanup_unproven
+        PASS [   0.370s] (246/270) velnor-runner-host launch_scale_tests::scale_jit_failure_is_not_acked
+        PASS [   0.469s] (247/270) velnor-runner-host journal_worker_volume_tests::recovered_worker_ids_are_immutable
+        PASS [   0.482s] (248/270) velnor-runner-host journal_worker_volume_tests::cleaned_replay_gets_a_fresh_unproven_row
+        PASS [   0.490s] (249/270) velnor-runner-host journal_tests::replay_reuses_live_subject_and_failed_starts_again
+        PASS [   0.390s] (250/270) velnor-runner-host launch_scale_tests::a_failed_new_statistics_subject_does_not_ack_or_change_a_pending_row
+        PASS [   0.403s] (251/270) velnor-runner-host launch_idless_tests::other_idless_uncertain_row_still_blocks_mint
+        PASS [   0.391s] (252/270) velnor-runner-host launch_scale_tests::a_new_statistics_subject_does_not_reuse_a_bound_uncertain_row
+        PASS [   0.466s] (253/270) velnor-runner-host launch::turn::start_tests::bound_running_worker_acks_without_a_second_jit_request
+        PASS [   0.350s] (254/270) velnor-runner-host launch_tests::bound_runner_acks_without_a_second_start
+        PASS [   0.160s] (255/270) velnor-runner-host readiness_scan::tests::pending_launch_occupies_and_failed_acquire_does_not
+        PASS [   0.375s] (256/270) velnor-runner-host launch_scale_tests::scale_mints_jit_then_acks_without_acquire
+        PASS [   0.396s] (257/270) velnor-runner-host launch_scale_conflict_tests::partial_scale_row_is_not_retired
+        PASS [   0.157s] (258/270) velnor-runner-host readiness_scan::tests::proven_cleanup_clears_and_done_launch_stays
+        PASS [   0.418s] (259/270) velnor-runner-host launch_idless_tests::idless_uncertain_rows_keep_both_slots
+        PASS [   0.469s] (260/270) velnor-runner-host launch_backfill_tests::dind_only_recovery_removes_owned_container_and_volumes
+        PASS [   0.466s] (261/270) velnor-runner-host launch::turn::start_tests::volume_only_live_row_keeps_the_current_assignment_unacked
+        PASS [   0.473s] (262/270) velnor-runner-host launch::subject_tests::a_second_statistics_name_mints_again
+        PASS [   0.476s] (263/270) velnor-runner-host launch_backfill_tests::gone_runner_without_dind_frees_the_slot
+        PASS [   0.477s] (264/270) velnor-runner-host launch_backfill_tests::capacity_one_mints_after_the_pair_is_removed
+        PASS [   0.407s] (265/270) velnor-runner-host launch_scale_tests::finished_scale_row_does_not_block_the_next_message
+        PASS [   0.363s] (266/270) velnor-runner-host launch_worker_cleanup_tests::crash_after_create_recovers_ids_cleans_pair_and_starts_new_generation
+        PASS [   0.287s] (267/270) velnor-runner-host launch_worker_cleanup_tests::independent_journals_never_adopt_or_delete_each_others_workers
+        PASS [   0.503s] (268/270) velnor-runner-host launch_backfill_tests::capacity_two_mints_when_one_runner_exits
+        PASS [   0.616s] (269/270) velnor-runner-host readiness_scan::tests::journal_scan_stops_after_the_row_budget
+        PASS [   9.412s] (270/270) velnor-runner-host launch::turn::tests::empty_polls_keep_the_same_session
+────────────
+     Summary [   9.532s] 270 tests run: 270 passed, 0 skipped

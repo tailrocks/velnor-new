@@ -1,0 +1,7 @@
+PASS: mise-phase0 shell syntax
+PASS: list contains exactly 4 selected test identities
+PASS selected status: affected_release_controls_fail_for_both_no_config_selectors
+PASS selected status: fixed_release_flag_and_environment_matrix_skips_all_miserc_layers
+PASS selected status: no_selector_controls_reach_each_malformed_config_layer
+PASS selected status: product::production_command_keeps_no_config_guards_with_a_real_binary
+Nextest filtered summary (global nonmatches are not selected skips):      Summary [   2.214s] 4 tests run: 4 passed, 341 skipped

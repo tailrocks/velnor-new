@@ -1,0 +1,10 @@
+   Compiling velnor-actions-orchestrator v0.1.0 (/root/.cache/velnor-task-targets/20261005/mbx-cli-portability-20261005T1530Z/crates/velnor-actions-orchestrator)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 19.73s
+     Running tests/velnor_orchestrator.rs (/root/.cache/velnor-task-targets/20261005/action-catalog-199-target/debug/deps/velnor_orchestrator-e1d5cf1795c8ae86)
+
+running 1 test
+Initialized empty Git repository in /var/tmp/velnor-stock-mbx-rerun-20261005-01/.tmp8UR8aq/.git/
+test impl_schema2_mbx_qualification::protected_main_mbx_roundtrip_is_run_bound_and_read_only_on_restore ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 652 filtered out; finished in 0.05s
+

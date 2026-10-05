@@ -1,0 +1,7 @@
+docs: record historical trailer and PR closeout evidence
+
+Document protected-main trailer ordering and the later PR29/30
+closeout actions without rewriting published history.
+
+Co-authored-by: Codex <codex@openai.com>
+Signed-off-by: Alexey Zhokhov <alexey@zhokhov.com>

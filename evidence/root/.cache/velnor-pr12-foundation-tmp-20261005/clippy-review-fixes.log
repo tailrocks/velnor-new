@@ -1,0 +1,26 @@
+   Compiling ring v0.17.14
+   Compiling velnor-archive-guard v0.1.0 (/tmp/velnor-pr12-foundation-20261005/crates/velnor-archive-guard)
+    Checking velnor-actions-orchestrator v0.1.0 (/tmp/velnor-pr12-foundation-20261005/crates/velnor-actions-orchestrator)
+   Compiling rustls v0.23.45
+    Checking rustls-webpki v0.103.15
+    Checking ureq v3.4.2
+    Checking velnor-actions-freshness v0.1.0 (/tmp/velnor-pr12-foundation-20261005/crates/velnor-actions-freshness)
+    Checking velnor-actions-cli v0.1.0 (/tmp/velnor-pr12-foundation-20261005/crates/velnor-actions-cli)
+error[E0716]: temporary value dropped while borrowed
+   --> crates/velnor-actions-cli/tests/impl_repo_policy.rs:196:39
+    |
+196 |           let owner = manifest_section(&manifest(dir)?, "package.metadata.velnor");
+    |                                         ^^^^^^^^^^^^^^                            - temporary value is freed at the end of this statement
+    |                                         |
+    |                                         creates a temporary value which is freed while still in use
+197 | /         assert_eq!(
+198 | |             owner,
+199 | |             ["v1-task-owner = \"repository-maintenance\""],
+200 | |             "{dir} must declare the typed repository-only task owner"
+201 | |         );
+    | |_________- borrow later used here
+    |
+    = note: consider using a `let` binding to create a longer lived value
+
+For more information about this error, try `rustc --explain E0716`.
+error: could not compile `velnor-actions-cli` (test "velnor_cli") due to 1 previous error

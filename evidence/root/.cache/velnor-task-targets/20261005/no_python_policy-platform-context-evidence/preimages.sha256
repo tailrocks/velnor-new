@@ -1,0 +1,7 @@
+27898bc8b35f3c5c09bbadbd416a6cd45a9311cd3e1424f957d5d8729bc1f4d7  crates/velnor-actions-workflow-renderer/src/render.rs
+7e8ea65c209b0d06419d4ea29a932026b9d3d7240467beeab4d303c67c58271e  crates/velnor-actions-orchestrator/src/pins.rs
+787bd43c4c07cdd7bb8d251bdeec73dd6184c26f48c379b8b0bd6091a879de4a  crates/velnor-actions-orchestrator/src/pins_tests.rs
+c5a32352a4c8d259bb2f7620e67ba5ccd9be71443bf26e13b8164a23e6f68247  .velnor/version-policy.toml
+ABSENT crates/velnor-actions-workflow-renderer/src/mise_job_target.rs
+ABSENT crates/velnor-actions-workflow-renderer/src/mise_job_target_finalize.rs
+ABSENT crates/velnor-actions-workflow-renderer/src/mise_job_target_tests.rs

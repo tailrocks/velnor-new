@@ -1,0 +1,15 @@
+{
+  "sha": "d0402837e065465e391bc013006490892917572c",
+  "tag": "v2026.10.3",
+  "object": {
+    "sha": "33a839a4d19acca617bc9ec0fe53f61266d60a9d",
+    "type": "commit",
+    "url": "https://api.github.com/repos/jdx/mise/git/commits/33a839a4d19acca617bc9ec0fe53f61266d60a9d"
+  },
+  "tagger": {
+    "name": "mise-en-dev",
+    "email": "release@mise.jdx.dev",
+    "date": "2026-10-05T08:46:41Z"
+  },
+  "message": "- **(bootstrap)** render templates in Compose projects by @jdx in [#13938](https://github.com/jdx/mise/pull/13938)\n- **(dotfiles)** add dotfile groups by @jdx in [#13945](https://github.com/jdx/mise/pull/13945)\n- **(task)** allow customizing confirm answer labels by @jdx in [#13944](https://github.com/jdx/mise/pull/13944)\n\n- **(env)** resolve dotenv ${VAR} against the file's own values before ambient env by @jdx in [#13946](https://github.com/jdx/mise/pull/13946)\n- **(exec)** limit @latest resolution to the tools named on the command line by @jdx in [#13943](https://github.com/jdx/mise/pull/13943)\n- **(ruby)** expose depends tools to ruby-build by @seuros in [#13942](https://github.com/jdx/mise/pull/13942)\n\n- show pinned packslip bootstraps for mise and Docker by @jdx in [#13935](https://github.com/jdx/mise/pull/13935)\n\n- add jactionlint ([github:jdx/jactionlint](https://github.com/jdx/jactionlint)) and deprecate actionlint by @jdx in [#13960](https://github.com/jdx/mise/pull/13960)\n\n- update pr-closer policy by @jdx in [e19e8cb](https://github.com/jdx/mise/commit/e19e8cbefdbc588852314e0bbd465ca9e381fb61)\n\n- **(env)** stop copying secret values into shell state and the env cache by @jdx in [#13950](https://github.com/jdx/mise/pull/13950)\n-----BEGIN PGP SIGNATURE-----\n\niQIzBAABCgAdFiEEJIU+yfZVzoC0jmw6i4HJ0XQToG0FAmrDY/EACgkQi4HJ0XQT\noG1XEw//UAVcvTAGHhOOJLa8Iv8ytLAw8SQ3b4Zb7Vp07QLx0Bq5PUnHti/5tJIQ\ndv6wKZQBVI9wpjZ+ooFGlC86c6CzzuEkYjKZ+sW11dV6a/BgHletRqSQd8yt6Teo\nLuRWTwD97SouvY/xhAeY+V3acDnpUsDYagZjrt8jOzruXkq1zIZ+r3/6fgom84Z0\nikj1ssTsvUGc1HdTUfJE8OohR6vY4lz3B/LLBj5txM1gOIAwxwiHnMY8CeT0GXMZ\nQ6hWSLUhBCPWvYvMTyHfeKzve2akLnSMLP7TeYg7tpznafWlOzRn+mSUFVPqQQfy\n8dhd0O5ZHS2CWfgRJFqqfhrJ5GF9t3iR5X+RUTwUbgvLVOqwBfapYuwphaIQTUzD\nRyXfeSg/aFwpgdgWlV0ydWRUTcf+fln+qJdYMmg3PCd8RoXlvVUO40ksWG76g/QX\nSUkMiFHyBGbP20Ud3exhP/a1HUUWoYIrz0Podgpq66Jd6LIkhCK53qoqgvg4+KpC\na/2dRZNS6N6m5Fhi82tqSSqlHqzTbOLvdHfGjb5sXNTGwmHPGtg1bnIHqEzd7MlE\nfRLA/is6/1o9JhAKrt1jh1tNwwBQwf/SnsnElm+2vde6PrFCMpijTtwlTv+K448h\n55BcKkT5ET9eXDQ25OPHOZAq40ZDIg91wew9FjhA2ENQ8f2oj3U=\n=W49Y\n-----END PGP SIGNATURE-----\n"
+}

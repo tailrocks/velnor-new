@@ -1,0 +1,21 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.03s
+     Running tests/velnor_mise.rs (/root/.cache/velnor-task-targets/20261005/no_python_policy-joined-route-target/debug/deps/velnor_mise-6d700a72d1410dbe)
+
+running 14 tests
+test impl_mise_lock::lock_commit_diverged_from_manifest_fails ... ok
+test impl_mise_lock::lock_matches_manifest_per_target ... ok
+test impl_mise_lockfile::decoy_entry_under_alias_key_does_not_verify ... ok
+test impl_mise_lockfile::drifted_spec_version_does_not_resolve ... ok
+test impl_mise_lock::lock_mismatch_mutable_and_missing_target_fail ... ok
+test impl_mise_lockfile::coverage_matrix_names_every_state ... ok
+test impl_mise_lockfile::every_catalog_spec_resolves_and_foreign_does_not ... ok
+test impl_mise_lockfile::parses_quoted_backend_qualified_keys ... ok
+test impl_mise_lockfile::parses_v3_entries_with_platform_checksums ... ok
+test impl_mise_lockfile::platform_map_covers_supported_targets ... ok
+test impl_mise_lockfile::structural_garbage_fails_the_parse ... ok
+test impl_mise_lockfile::uppercase_checksums_verify ... ok
+test impl_mise_lock::lock_commit_required_and_manifest_strict ... ok
+test impl_mise_lockfile::platform_hole_and_corrupt_shape_block ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 343 filtered out; finished in 0.00s
+

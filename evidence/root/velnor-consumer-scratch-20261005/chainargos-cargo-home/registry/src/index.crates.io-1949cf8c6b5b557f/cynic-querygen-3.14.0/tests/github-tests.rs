@@ -1,0 +1,38 @@
+use insta::assert_snapshot;
+
+macro_rules! test_query {
+    ($name:ident, $filename:literal) => {
+        #[test]
+        fn $name() {
+            let schema = include_str!("../../schemas/github.graphql");
+            let query = include_str!(concat!("queries/github/", $filename));
+
+            assert_snapshot!(
+                cynic_querygen::Generator::new(schema)
+                    .expect("schema parse failed")
+                    .generate(query)
+                    .expect("QueryGen Failed")
+            )
+        }
+    };
+}
+
+test_query!(add_comment_mutation, "add-comment-mutation.graphql");
+test_query!(field_on_interface, "field-on-interface.graphql");
+test_query!(fragment_on_interface, "fragment-on-interface.graphql");
+test_query!(inline_fragment_on_union, "inline-fragment-on-union.graphql");
+test_query!(
+    inline_fragment_with_arguments,
+    "inline-fragment-with-arguments.graphql"
+);
+test_query!(
+    inline_fragment_with_renames,
+    "inline-fragment-with-renames.graphql"
+);
+test_query!(input_object_arguments, "input-object-arguments.graphql");
+test_query!(input_object_literals, "input-object-literals.graphql");
+test_query!(literal_enums, "literal-enums.graphql");
+test_query!(queries_with_typename, "queries-with-typename.graphql");
+test_query!(query_with_all_derives, "query-with-all-derives.graphql");
+test_query!(test_include, "test-include.graphql");
+test_query!(test_skip, "test-skip.graphql");

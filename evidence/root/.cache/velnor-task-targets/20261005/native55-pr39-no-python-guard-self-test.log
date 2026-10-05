@@ -1,0 +1,24 @@
+check-no-python: self-test accepted passive source outside the automation namespace
+check-no-python: self-test accepted comments, dependency data, and echoed token
+check-no-python: self-test rejected tracked source below a target-named fixture directory through Git enumeration
+check-no-python: self-test rejected untracked Alint-ignored script shebang through Git enumeration
+check-no-python: self-test rejected Git-ignored fixture launcher through Git enumeration
+check-no-python: self-test accepted ignored Cargo output directory symlink
+check-no-python: self-test rejected ignored target launcher symlink through Git enumeration
+check-no-python: self-test rejected new source in automation namespace through Git enumeration
+check-no-python: self-test rejected inline interpreter launch through Git enumeration
+check-no-python: self-test rejected nested Makefile recipe through Git enumeration
+check-no-python: self-test rejected shell assignment launch through Git enumeration
+check-no-python: self-test rejected continued nested Dockerfile command through Git enumeration
+check-no-python: self-test rejected workflow run command through Git enumeration
+check-no-python: self-test rejected non-executable env shell entrypoint through Git enumeration
+check-no-python: self-test rejected mise interpreter version launch through Git enumeration
+check-no-python: self-test rejected uv script launch through Git enumeration
+check-no-python: self-test rejected multiline Rust process launch through Git enumeration
+check-no-python: self-test rejected chained Rust wrapper args through Git enumeration
+check-no-python: self-test rejected process-source symlink through Git enumeration
+check-no-python: self-test rejected Rust receiver arg launch through Git enumeration
+check-no-python: self-test rejected multiline Node process launch through Git enumeration
+check-no-python: self-test rejected package task command through Git enumeration
+check-no-python: self-test rejected TOML task command through Git enumeration
+check-no-python: self-tests passed

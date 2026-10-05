@@ -1,0 +1,10 @@
+   Compiling velnor-actions-mise v0.1.0 (/root/.cache/velnor-task-targets/20261005/no_python_policy-103-mbx-cli-join/crates/velnor-actions-mise)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.49s
+     Running tests/velnor_mise.rs (/root/.cache/velnor-task-targets/20261005/no_python_policy-103-mbx-target/debug/deps/velnor_mise-6d700a72d1410dbe)
+
+running 2 tests
+test impl_mise_policy::repo_policy_mirror_matches_compiled_catalog ... ok
+test impl_mise_policy::policy_drift_fails_mirror_check ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 343 filtered out; finished in 0.00s
+

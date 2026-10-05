@@ -1,0 +1,11 @@
+Merge branch 'main' of https://github.com/tailrocks/velnor-new into HEAD
+
+# Conflicts:
+#	crates/velnor-actions-orchestrator/src/workflow.rs
+#	crates/velnor-actions-orchestrator/tests/zizmor_staging.rs
+#	docs/proposed/opentofu-goldens/MANIFEST.sha256
+#	docs/proposed/opentofu-goldens/cases/dogfood/plan.txt
+#	docs/proposed/opentofu-goldens/cases/dogfood/preview/.github/workflows/qualification.yml
+#	docs/proposed/opentofu-goldens/cases/dogfood/tree.sha256
+#	docs/proposed/workflow-contract.md
+#	fixtures/parity/ignored-stack/expected/plan.txt

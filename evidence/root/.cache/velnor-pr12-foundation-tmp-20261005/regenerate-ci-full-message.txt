@@ -1,0 +1,4 @@
+Regenerate CI from the shipping workflow generator
+
+Co-authored-by: Codex <codex@openai.com>
+Signed-off-by: Alexey Zhokhov <alexey@zhokhov.com>

@@ -1,0 +1,13 @@
+test_builds_and_verifies_exact_two_version_capsule (test_seed_candidate.SeedCandidateFixture.test_builds_and_verifies_exact_two_version_capsule) ... ok
+test_crates_io_index_path_shapes (test_seed_candidate.SeedCandidateFixture.test_crates_io_index_path_shapes) ... ok
+test_refuses_destination_at_private_directory_root (test_seed_candidate.SeedCandidateFixture.test_refuses_destination_at_private_directory_root) ... ok
+test_refuses_source_commit_that_does_not_match_pin (test_seed_candidate.SeedCandidateFixture.test_refuses_source_commit_that_does_not_match_pin) ... ok
+test_rejects_archive_checksum_mismatch_and_cleans_partial_candidate (test_seed_candidate.SeedCandidateFixture.test_rejects_archive_checksum_mismatch_and_cleans_partial_candidate) ... ok
+test_rejects_archive_path_traversal_without_writing_outside_capsule (test_seed_candidate.SeedCandidateFixture.test_rejects_archive_path_traversal_without_writing_outside_capsule) ... ok
+test_rejects_index_checksum_mismatch_and_cleans_partial_candidate (test_seed_candidate.SeedCandidateFixture.test_rejects_index_checksum_mismatch_and_cleans_partial_candidate) ... ok
+test_verifier_rejects_unexpected_config_or_credential_file (test_seed_candidate.SeedCandidateFixture.test_verifier_rejects_unexpected_config_or_credential_file) ... ok
+
+----------------------------------------------------------------------
+Ran 8 tests in 0.195s
+
+OK

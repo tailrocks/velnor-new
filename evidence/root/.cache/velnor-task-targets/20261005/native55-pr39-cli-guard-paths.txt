@@ -1,0 +1,10 @@
+crates/velnor-actions-cli/src/args.rs
+crates/velnor-actions-cli/src/dispatch.rs
+crates/velnor-actions-cli/src/main.rs
+crates/velnor-actions-cli/src/dispatch_freshness.rs
+crates/velnor-actions-cli/examples/verify_local_metadata.rs
+crates/velnor-actions-cli/tests/impl_cli_verify_local.rs
+scripts/verify-local.sh
+scripts/check-no-python.sh
+.alint.yml
+.velnor/freshness-inventory.json

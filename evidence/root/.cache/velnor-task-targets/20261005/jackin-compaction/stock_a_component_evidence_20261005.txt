@@ -1,0 +1,71 @@
+Velnor PR12 stock-A shared-script compaction evidence
+Captured: 2026-10-05 UTC
+
+Source snapshot
+- Worktree: /tmp/velnor-render-compaction-44b2-20261005
+- HEAD: 44b2c380cdd65b361beab8ced3332319e7f56c73 (detached)
+- Source paths owned in this slice:
+  crates/velnor-actions-workflow-renderer/src/render.rs
+  crates/velnor-actions-workflow-renderer/src/document_shared_scripts.rs
+  crates/velnor-actions-workflow-renderer/src/document_shared_scripts_tests.rs
+  crates/velnor-actions-workflow-renderer/src/document_shared_scripts_execution_tests.rs
+- SHA-256:
+  e950bab0300704d710e55a5de383d9a9bddfaed4d33c249a362c7dc1a13acf13  render.rs
+  a9bc39db922b6b0858a46ec9f71981618860f91bb40032a7d8b35975f7ed5793  document_shared_scripts.rs
+  22b8042e1a1448f36af5afd21cbf2f4aca3cf42e7f7e6a69e3784035ed6c2b3c  document_shared_scripts_tests.rs
+  dd0ca4b7146c002f12fa5d17f15be267d6090698152719e899b8b32c7895ddd3  document_shared_scripts_execution_tests.rs
+  9cc1fb0001aa1d88a95da77c5ff1167f6a1f8d06d4cea4e1067cc4723d593c2c  src/workflow_size.rs (unchanged, MAX_WORKFLOW_BYTES=500000)
+  b43ddef9c7a6b7e4c33cb6a8a4dd3659f26a7645a0f0c09782e04b2ee5b898a4  Cargo.lock (unchanged)
+- Worktree status contains only render.rs modified and the three new owned Rust files; no generated YAML, index, or commit.
+
+Jackin fixture
+- Repository source: jackin-project/jackin, main 0aa821a088e1bacf3d4d85a4c9faaa67faa85132; archive SHA-256 c16813b6828ea2becc8f98691221fe9cd4a3e0b9ab6af2d3ba11af9466ca0e35.
+- Hydrated fixture: /root/.cache/velnor-task-targets/20261005/jackin-compaction/jackin-44b2-input
+- .velnor/config.toml SHA-256 17af85b335ebaa266bdbf488cf1f11634cea14eb16730cfd06fbc33078f2cd61
+- .velnor/release-manifest.json SHA-256 ccaf24f1c05c3ead9999d140d1be515fb840fe6033e2c6300986fb4126119ae6 (genuine existing Jackin manifest)
+- Input .github/workflows/ci.yml SHA-256 e047459428877a9b7cb8ab01cccc884ed290b48b993c4421142e57191f391327 (500239 bytes)
+- Cargo.lock SHA-256 5e7f6b7018a449bd81a86e70bcf7e577b5ad378901001df845fa455794205097 before and after cargo fetch --locked.
+
+Toolchain and private paths
+- CARGO_HOME=/root/.cache/velnor-task-targets/20261005/jackin-compaction/cargo-home
+- CARGO_TARGET_DIR=/root/.cache/velnor-task-targets/20261005/jackin-compaction/debug
+- TMPDIR=/root/.cache/velnor-task-targets/20261005/jackin-compaction/tmp; CARGO_BUILD_JOBS=2.
+- Production boundary: mise --no-config --no-env --no-hooks exec rust@1.98.1 jq@1.8.1 --
+- cargo 1.98.1 (797e8a9bc 2026-08-05), raw identity log /root/.cache/velnor-task-targets/20261005/jackin-compaction/toolchain_cargo_pathfix.log, SHA-256 9950bbb2d5c3417b1a068f0e81f6d3cac991a363193bdf2a22d447f5acf8b503.
+- rustc 1.98.1 (48a229cea 2026-09-01), raw identity log /root/.cache/velnor-task-targets/20261005/jackin-compaction/toolchain_rustc_pathfix.log, SHA-256 778fbc643a806f0dd123c056e66201d7e8a56a61928ec0a33171be8d6c2d5a37.
+- Authorized fetch command, exit 0: timeout 600s mise --no-config --no-env --no-hooks exec rust@1.98.1 jq@1.8.1 -- env CARGO_HOME=/root/.cache/velnor-task-targets/20261005/jackin-compaction/cargo-home CARGO_TARGET_DIR=/root/.cache/velnor-task-targets/20261005/jackin-compaction/debug CARGO_BUILD_JOBS=2 CARGO_HTTP_TIMEOUT=30 CARGO_NET_RETRY=2 TMPDIR=/root/.cache/velnor-task-targets/20261005/jackin-compaction/tmp /root/.rustup/toolchains/1.98.1-x86_64-unknown-linux-gnu/bin/cargo fetch --locked
+- Raw verified-fetch log: /root/.cache/velnor-task-targets/20261005/jackin-compaction/jackin_cargo_fetch_verified.log (empty, SHA-256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855; cache was already hydrated).
+
+Build and Rust validation
+- fmt: timeout 180s mise --no-config --no-env --no-hooks exec rust@1.98.1 jq@1.8.1 -- env CARGO_HOME=... CARGO_TARGET_DIR=... CARGO_BUILD_JOBS=2 TMPDIR=... /root/.rustup/toolchains/1.98.1-x86_64-unknown-linux-gnu/bin/cargo fmt --all -- --check; exit 0. Log /root/.cache/velnor-task-targets/20261005/jackin-compaction/shared_script_fmt_pathfix_final.log, SHA-256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.
+- Full renderer tests: same Mise/private env, cargo test --locked -p velnor-actions-workflow-renderer; exit 0. 53 library tests + 300 integration tests passed, 0 doctests. Log /root/.cache/velnor-task-targets/20261005/jackin-compaction/shared_script_test_pathfix.log, SHA-256 3c5be93a767e8494d25a4a859b6f91350cb0739fc92dd8059860802a387db5ad.
+- Clippy: same Mise/private env, cargo clippy --locked -p velnor-actions-workflow-renderer --all-targets -- -D warnings; exit 0. Log /root/.cache/velnor-task-targets/20261005/jackin-compaction/shared_script_clippy_pathfix.log, SHA-256 d5035cd3ec19ac27f3843b7fe015ad8766cb24150934b5ca2a5e0f10830a8e71.
+- CLI build: same Mise/private env, cargo build --locked -p velnor-actions-cli --bin velnor-actions; exit 0. Log /root/.cache/velnor-task-targets/20261005/jackin-compaction/shared_script_cli_build_pathfix.log, SHA-256 e13312da13c4c67a0212a8746fdf57b61959d5cfd2b291e69624e30055da989b.
+- Built binary /root/.cache/velnor-task-targets/20261005/jackin-compaction/debug/debug/velnor-actions, SHA-256 001fb37f14e76c071ca139003d9f11a4baa479075068a2e869daa4f0663233f9; --version reports velnor-actions 0.1.0.
+
+Source-bound Jackin plan and deterministic generations
+- plan command: env CARGO_HOME=... CARGO_TARGET_DIR=... /root/.cache/velnor-task-targets/20261005/jackin-compaction/debug/debug/velnor-actions plan; fixture cwd above; exit 0. Log /root/.cache/velnor-task-targets/20261005/jackin-compaction/jackin_plan_pathfix.log, SHA-256 9083ace931f7675085fdf4074f44d58d90b8133f329c0508fb1b269acf12126b.
+- Generation commands: same env/cwd and binary, `generate --output-dir /root/.cache/velnor-task-targets/20261005/jackin-compaction/jackin-shared-script-pathfix-a`, then the same command with `...-b`; both exit 0.
+- A raw log /root/.cache/velnor-task-targets/20261005/jackin-compaction/jackin_generate_pathfix_a.log SHA-256 60a5a8411f92038a38de8d88907670c289be2913f54a71ab7049c1b97f71defa.
+- B raw log /root/.cache/velnor-task-targets/20261005/jackin-compaction/jackin_generate_pathfix_b.log SHA-256 140be2827a02c8370dbe6cde2a14bd6cac45c1d794bc6d10dd4fab5fed038882.
+- Both output .github/workflows/ci.yml files are 421541 bytes, SHA-256 5b45fa09310805942e21257d1cded023135cb581b7017ada65dfb6b8790ae4f2. They are 78459 bytes under the unchanged 500000-byte limit.
+- Both trees compare equal (`diff -qr`, exit 0; empty log SHA-256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855). Normalized tree manifests A and B are byte-identical; each manifest SHA-256 2812d269958b9f915d8c0566a9e26fd2f728d316353bf2f6bba4f46f0729ea4e.
+- Generated shared script paths follow the approved exact forms:
+  .github/scripts/velnor-shared/bash-b3-50b3e247bef03d021f5d9446c5bbf2e9c2e573cf3c22081aed4290cb168a6a42.bash (1434 bytes; SHA-256 1c77bf22534e1046928e276ca4644086aa4dc8e43070cc18d90e97b4816fd929)
+  .github/scripts/velnor-shared/sh-b3-4042dbbfbfe69296a6dc8b12cf3aee080fbc32eec40e57f22f238816cb99d774.sh (2013 bytes; SHA-256 4e0b5ad50e852a2f38d38d8c19a7de7c760f5681b2e540251df4214200db5811)
+- The generated action seed file is separate at .github/actions/velnor-tool-seed/action.yml (1585 bytes; SHA-256 6af64e54bfa164a3a3983daca601d104776490c4ccc81908c97817fa5a57f89b).
+- Jackin generation emits its existing warning: tool_install_unverified:7 because its mise.lock is malformed at line 389. This is unchanged fixture input; plan and both generations still exit 0.
+
+Pinned workflow/script validation
+- actionlint 1.7.12 SHA-256 c872d6db8c6bf83a8eaa704fc93999f027d55dffbc63b8a6abdccb47df5f4cd4.
+- ShellCheck 0.11.0 SHA-256 4da528ddb3a4d1b7b24a59d4e16eb2f5fd960f4bd9a3708a15baddbdf1d5a55b.
+- actionlint command: mise --no-config --no-env --no-hooks exec actionlint@1.7.12 -- actionlint -config-file .github/actionlint.yaml -shellcheck /root/.local/share/mise/installs/shellcheck/0.11.0/shellcheck-v0.11.0/shellcheck .github/workflows/ci.yml; exit 0. Log /root/.cache/velnor-task-targets/20261005/jackin-compaction/jackin_actionlint_pathfix_corrected.log (empty, SHA-256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855).
+- ShellCheck commands under `mise --no-config --no-env --no-hooks exec shellcheck@0.11.0`: `shellcheck -s bash --severity=warning` on the generated .bash file and `shellcheck -s sh --severity=warning` on the generated .sh file; both exit 0. Raw logs `jackin_shellcheck_bash_pathfix.log` and `jackin_shellcheck_sh_pathfix.log` are empty, each SHA-256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.
+
+Current runtime turn attestation
+- Owned JSONL: /root/.codex/sessions/2026/10/05/rollout-2026-10-05T10-24-15-01a10b29-dd15-7320-963c-6e3f94099647.jsonl; its session_meta payload maps agent_path `/root/consumer_render_compaction` and cwd `/root/Projects/tailrocks/velnor-project/velnor-new-pr-12`.
+- Latest turn_context found in this file: ordinal 4530, timestamp 2026-10-05T11:06:05.847Z, model gpt-6-luna, effort max.
+
+Limitations
+- These are stock-A component results at 44b2 only. Final combined B/native/Mise Jackin generation has not been measured here.
+- This lane does not own the generator writer; it does not prove stale generated-script removal or repository-owned .github lifecycle. The component should not be treated as final integration or hosted-runner qualification.

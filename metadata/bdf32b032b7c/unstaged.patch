@@ -1,0 +1,324 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index 7caf280e7..ccab82230 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -687,6 +687,8 @@ dependencies = [
+ name = "velnor-actions-native"
+ version = "0.1.0"
+ dependencies = [
++ "flate2",
++ "sha2",
+  "syn 3.0.6",
+  "velnor-actions-contract",
+ ]
+diff --git a/crates/velnor-actions-native/Cargo.toml b/crates/velnor-actions-native/Cargo.toml
+index ebd8ce36a..1b54b812d 100644
+--- a/crates/velnor-actions-native/Cargo.toml
++++ b/crates/velnor-actions-native/Cargo.toml
+@@ -6,9 +6,17 @@ rust-version.workspace = true
+ license.workspace = true
+ autotests = false
+ 
++[[bin]]
++name = "velnor-archive-guard"
++path = "bin/velnor-archive-guard.rs"
++
+ [dependencies]
++flate2 = { version = "=1.1.10", default-features = false, features = ["zlib-rs"] }
+ velnor-actions-contract = { version = "=0.1.0", path = "../velnor-actions-contract" }
+ 
++[build-dependencies]
++sha2 = { version = "=0.11.0", default-features = false }
++
+ [lints]
+ workspace = true
+ 
+@@ -16,5 +24,10 @@ workspace = true
+ name = "velnor_native"
+ path = "tests/velnor_native.rs"
+ 
++[[test]]
++name = "archive_guard_cli"
++path = "tests/archive_guard_cli.rs"
++
+ [dev-dependencies]
++sha2 = { version = "=0.11.0", default-features = false }
+ syn = { version = "=3.0.6", default-features = false, features = ["full", "parsing", "visit"] }
+diff --git a/crates/velnor-actions-native/src/lib.rs b/crates/velnor-actions-native/src/lib.rs
+index 8020a22d4..94318cbed 100644
+--- a/crates/velnor-actions-native/src/lib.rs
++++ b/crates/velnor-actions-native/src/lib.rs
+@@ -1,5 +1,6 @@
+ //! Isolated native domain proposals; tooling and workflow composition stay with their owners.
+ 
++pub mod owned_archive_guard;
+ pub mod reuse;
+ pub mod ruby;
+ pub mod shell;
+diff --git a/crates/velnor-actions-native/tests/ownership.rs b/crates/velnor-actions-native/tests/ownership.rs
+index 4637c74c4..568f4cdf3 100644
+--- a/crates/velnor-actions-native/tests/ownership.rs
++++ b/crates/velnor-actions-native/tests/ownership.rs
+@@ -5,9 +5,20 @@ use std::path::{Path, PathBuf};
+ 
+ #[path = "ownership_ast.rs"]
+ mod rust_ast;
++#[path = "ownership_test_source.rs"]
++mod test_source;
+ 
+ const DOMAINS: &[&str] = &[
+-    "apt", "homebrew", "java", "node", "oci", "reuse", "ruby", "shell", "swift",
++    "apt",
++    "homebrew",
++    "java",
++    "node",
++    "oci",
++    "owned_archive_guard",
++    "reuse",
++    "ruby",
++    "shell",
++    "swift",
+ ];
+ 
+ fn files(root: &Path) -> std::io::Result<Vec<PathBuf>> {
+@@ -159,22 +170,18 @@ fn test_source(path: &Path, paths: &[PathBuf]) -> std::io::Result<bool> {
+         }
+         let text = std::fs::read_to_string(parent)?;
+         let compact: String = text.chars().filter(|ch| !ch.is_whitespace()).collect();
+-        let explicit = format!("#[cfg(test)]#[path=\"{name}\"]modtests;");
+-        let ordinary = "#[cfg(test)]modtests;";
+-        let declaration = if name == "tests.rs" && compact.contains(ordinary) {
+-            ordinary
+-        } else {
+-            explicit.as_str()
++        let Some((declaration, module)) = test_source::declaration(name, &compact) else {
++            continue;
+         };
+-        if compact.contains(declaration) {
+-            let production = compact.replace(declaration, "");
+-            if production.contains(&format!("\"{name}\"")) || production.contains("modtests;") {
+-                return Err(std::io::Error::other(
+-                    "test_source_also_referenced_by_product",
+-                ));
+-            }
+-            return Ok(true);
++        let production = compact.replacen(&declaration, "", 1);
++        if production.contains(&format!("\"{name}\""))
++            || production.contains(&format!("mod{module};"))
++        {
++            return Err(std::io::Error::other(
++                "test_source_also_referenced_by_product",
++            ));
+         }
++        return Ok(true);
+     }
+     Ok(false)
+ }
+diff --git a/scripts/bootstrap-owned-tool-builder.py b/scripts/bootstrap-owned-tool-builder.py
+index 64d9e02aa..2ad01ce3b 100644
+--- a/scripts/bootstrap-owned-tool-builder.py
++++ b/scripts/bootstrap-owned-tool-builder.py
+@@ -8,11 +8,13 @@ import tarfile
+ 
+ from owned_tool_source import (MAX_FILES, MAX_SOURCE, build_bootstrap_descriptor,
+                                canonical, digest, fetch, source_path)
++from owned_archive_preflight import preflight_archive
+ 
+ 
+ def binary_bytes(data, archive_format, expected_member="mise/bin/mise"):
+     if archive_format == "standalone":
+         return data
++    preflight_archive(data, "bootstrap")
+     with tarfile.open(fileobj=io.BytesIO(data), mode="r:gz") as archive:
+         binaries, names, total = [], set(), 0
+         for member in archive:
+diff --git a/scripts/owned_tool_source.py b/scripts/owned_tool_source.py
+index 0e495de67..d3d56e457 100644
+--- a/scripts/owned_tool_source.py
++++ b/scripts/owned_tool_source.py
+@@ -12,6 +12,9 @@ import tarfile
+ import unicodedata
+ import urllib.request
+ 
++from owned_archive_preflight import preflight_archive
++
++
+ 
+ MAX_DOWNLOAD = 128 * 1024 * 1024
+ MAX_SOURCE = 512 * 1024 * 1024
+@@ -233,6 +236,7 @@ def validate_receipt(data, spec):
+ 
+ 
+ def archive_entries(data):
++    preflight_archive(data, "source")
+     archive = tarfile.open(fileobj=io.BytesIO(data), mode="r:")
+     entries, links, total, names = {}, {}, 0, set()
+     for entry in archive:
+diff --git a/scripts/publish-owned-tool-artifacts.py b/scripts/publish-owned-tool-artifacts.py
+index a01e68402..c68d86eb7 100644
+--- a/scripts/publish-owned-tool-artifacts.py
++++ b/scripts/publish-owned-tool-artifacts.py
+@@ -36,6 +36,7 @@ import tempfile
+ 
+ from immutable_publication import publish_snapshot, stage_evidence
+ from owned_tool_source import OWNED_VERSION_PATTERN, recipe_sha
++from owned_archive_preflight import preflight_archive
+ from owned_tool_qualification_evidence import validate_claim
+ 
+ REPO = "tailrocks/velnor-new"
+@@ -162,6 +163,7 @@ def native_binary(data, target):
+ 
+ def validate_archive(data, artifact, tool, source):
+     require(sha(data) == artifact["archive_sha256"], "archive digest mismatch")
++    preflight_archive(data, "candidate")
+     expected = "mise/bin/mise" if tool == "mise" else "mbx"
+     directories = {"mise", "mise/bin"} if tool == "mise" else set()
+     binary = None
+diff --git a/scripts/qualification/mbx-synchronous/README.md b/scripts/qualification/mbx-synchronous/README.md
+index 2d1607fba..577b5a3c4 100644
+--- a/scripts/qualification/mbx-synchronous/README.md
++++ b/scripts/qualification/mbx-synchronous/README.md
+@@ -35,6 +35,11 @@ Rustc/Cargo execution owner requires independent source qualification.
+ 
+ `bind_inputs.py` verifies the reviewed manifest digest, exact fixture inventory,
+ archive checksum, full extracted source inventory, and absence of extra inputs.
++Provision the checkout-owned archive guard before invoking this Python harness;
++the canonical entrypoint is
++`bash scripts/with-owned-archive-guard.sh -- python3 scripts/qualification/mbx-synchronous/run.py ...`.
++This uses the locked Rust 1.98.1 build and keeps the parser fail-closed when the
++guard is missing or stale.
+ Supply an independently reviewed manifest SHA-256; accepting a hash newly made
+ from altered inputs would defeat the review binding. It optionally hashes an
+ opaque owner execution record and every raw artifact into a receipt with status
+diff --git a/scripts/qualification/mbx-synchronous/bind_inputs.py b/scripts/qualification/mbx-synchronous/bind_inputs.py
+index be77a9c49..96ef6b8e8 100644
+--- a/scripts/qualification/mbx-synchronous/bind_inputs.py
++++ b/scripts/qualification/mbx-synchronous/bind_inputs.py
+@@ -3,13 +3,24 @@
+ 
+ import argparse
+ import hashlib
++import importlib.util
++import io
+ import json
+ import os
+ from pathlib import Path
+ import shutil
+ import tarfile
++import stat
+ 
+ ROOT = Path(__file__).resolve().parent
++MAX_REGISTRY_ARCHIVE = 128 * 1024 * 1024
++GUARD_SPEC = importlib.util.spec_from_file_location(
++    "owned_archive_preflight", ROOT.parents[1] / "owned_archive_preflight.py")
++if GUARD_SPEC is None or GUARD_SPEC.loader is None:
++    raise RuntimeError("trusted native archive preflight module is unavailable")
++GUARD_MODULE = importlib.util.module_from_spec(GUARD_SPEC)
++GUARD_SPEC.loader.exec_module(GUARD_MODULE)
++preflight_archive = GUARD_MODULE.preflight_archive
+ 
+ 
+ def require(condition, message):
+@@ -26,6 +37,18 @@ def regular(path):
+     return path.read_bytes()
+ 
+ 
++def archive_snapshot(path):
++    descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
++    with os.fdopen(descriptor, "rb") as stream:
++        metadata = os.fstat(stream.fileno())
++        require(stat.S_ISREG(metadata.st_mode) and metadata.st_nlink == 1
++                and metadata.st_size <= MAX_REGISTRY_ARCHIVE,
++                "registry archive must be a bounded singly linked regular file")
++        data = stream.read(MAX_REGISTRY_ARCHIVE + 1)
++    require(len(data) <= MAX_REGISTRY_ARCHIVE, "registry archive exceeds size bound")
++    return data
++
++
+ def inventory(directory):
+     require(directory.is_dir() and not directory.is_symlink(), "regular source directory required")
+     result = []
+@@ -124,10 +147,12 @@ def fixture_inventory(directory, expected):
+ 
+ 
+ def verify_registry(spec, archive, source):
+-    require(sha(regular(archive)) == spec["archive_sha256"], "registry archive checksum differs")
++    archive_data = archive_snapshot(archive)
++    require(sha(archive_data) == spec["archive_sha256"], "registry archive checksum differs")
++    preflight_archive(archive_data, "cargo-package")
+     records = []
+     prefix = spec["name"] + "-" + spec["version"] + "/"
+-    with tarfile.open(archive, "r:gz") as stream:
++    with tarfile.open(fileobj=io.BytesIO(archive_data), mode="r:gz") as stream:
+         for member in sorted(stream.getmembers(), key=lambda item: item.name):
+             require(member.isfile() and member.name.startswith(prefix), "unsupported archive member")
+             relative = member.name[len(prefix):]
+diff --git a/scripts/qualify-owned-tool.py b/scripts/qualify-owned-tool.py
+index 19b71b2fd..30f4ddea8 100644
+--- a/scripts/qualify-owned-tool.py
++++ b/scripts/qualify-owned-tool.py
+@@ -15,6 +15,7 @@ import tarfile
+ import tempfile
+ 
+ from owned_tool_source import BASES, check_hash, descriptor, strict_json, validate_receipt
++from owned_archive_preflight import preflight_archive
+ from owned_tool_behavior import MISE_ABI, native_host_target, valid_mise_cases
+ from source_qualification_execution import API_EVIDENCE_FILES, validate_execution_evidence
+ from owned_mbx_observation import observe as observe_mbx, smoke_matches
+@@ -151,6 +152,7 @@ def observe_admitted_mbx(arguments, receipt, archive, input_digest, admission,
+     with tempfile.TemporaryDirectory(prefix="owned-mbx-observation-") as temporary:
+         root = Path(temporary).resolve()
+         binary = root / "mbx"
++        preflight_archive(archive, "candidate")
+         with tarfile.open(fileobj=io.BytesIO(archive), mode="r:gz") as bundle:
+             stream = bundle.extractfile("mbx")
+             require(stream is not None, "admitted MBX binary unavailable")
+@@ -201,6 +203,7 @@ def qualify(arguments):
+     with tempfile.TemporaryDirectory(prefix="owned-native-qualification-") as temporary:
+         root = Path(temporary).resolve()
+         binary = root / "mise"
++        preflight_archive(archive, "candidate")
+         with tarfile.open(fileobj=io.BytesIO(archive), mode="r:gz") as bundle:
+             stream = bundle.extractfile("mise/bin/mise")
+             require(stream is not None, "native binary unavailable")
+diff --git a/scripts/source_publication.py b/scripts/source_publication.py
+index eced8ab4a..9e4c3f791 100644
+--- a/scripts/source_publication.py
++++ b/scripts/source_publication.py
+@@ -14,6 +14,7 @@ import subprocess
+ import tarfile
+ 
+ from source_publication_records import ArchiveKind, reviewed_source_revision
++from owned_archive_preflight import preflight_archive
+ 
+ REPO = "tailrocks/velnor-new"
+ HOSTS = ["x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu", "aarch64-apple-darwin"]
+@@ -93,6 +94,7 @@ def committed_files(repository, commit):
+ 
+ def archive_proof(data, files):
+     found, payloads = set(), {}
++    preflight_archive(data, "source-publication")
+     with tarfile.open(fileobj=io.BytesIO(data), mode="r:") as archive:
+         for entry in archive:
+             require(entry.name.startswith("source/"), "source archive prefix mismatch")
+diff --git a/scripts/source_semver_capsule.py b/scripts/source_semver_capsule.py
+index 4e07763c8..5d1fe857d 100644
+--- a/scripts/source_semver_capsule.py
++++ b/scripts/source_semver_capsule.py
+@@ -6,6 +6,8 @@ import posixpath
+ import tarfile
+ import unicodedata
+ 
++from owned_archive_preflight import preflight_archive
++
+ 
+ ARCHIVE_LIMIT = 32 * 1024 * 1024
+ EXPANDED_LIMIT = 64 * 1024 * 1024
+@@ -142,6 +144,7 @@ def _entry_payload(archive, entry, mode):
+ def archive_proof(data, inventory, revision, git_files=None):
+     """Return exact source members after checking the finite tar contract."""
+     require(len(data) <= ARCHIVE_LIMIT, "semver source archive exceeds bound")
++    preflight_archive(data, "semver-capsule", revision.source_commit)
+     expected = _inventory(inventory, revision)
+     _git_files_match(expected, git_files)
+     files, directories, aliases = {}, set(), set()

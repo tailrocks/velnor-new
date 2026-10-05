@@ -1,0 +1,1 @@
+{"malicious_exit": 1, "malicious_stderr": "git config audit: unapproved local Git config key or value: filter.attack.clean", "safe_exit": 0, "safe_stdout": "PASS: local Git config allowlist; 6 entries; sha256=062f4e7553a86b024c4d8b7cca77968698dbaac2d30ca30d6a1754e4f41bf2ae", "sentinel_created": false}

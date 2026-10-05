@@ -1,0 +1,28 @@
+{
+  "cases": {
+    "nonzero_exit": {
+      "descendant": "Z",
+      "leader": "GONE",
+      "status": "PASS"
+    },
+    "timeout": {
+      "descendant": "Z",
+      "leader": "GONE",
+      "status": "PASS"
+    }
+  },
+  "cleanup": "Removed only fixture-created scratch after verifying all children were GONE or Z; no task files were removed.",
+  "command": "/usr/bin/env -i PATH=/usr/bin:/bin LC_ALL=C /usr/bin/timeout --signal=TERM --kill-after=5s 30s /usr/bin/python3 -I -S /root/.velnor-generator-preview-20261005/jackin-source-fetch-3986dfdd-process-group-fixture-v1.py",
+  "exit_code": 0,
+  "fetch_source_sha256": "604d141f50f7cac27f549bc59242b422fb777d89dca8857a3fe718cb431da20c",
+  "finished_utc": "2026-10-05 13:05:22 UTC",
+  "fixture_sha256": "6a4c6a764ff1d408d42231207f8ab2f284ab5268edc8e688461b184f98920ba4",
+  "network": "none; only local fake Git process groups ran",
+  "output_log": "jackin-source-fetch-3986dfdd-process-group-fixture-v1.log",
+  "output_log_sha256": "1433af9f1438c081d838ff624b697d962b1520ecd28c2f7171bf1a76a6851c5f",
+  "profile": "jackin-task-branch-3986dfdd-v1",
+  "result": "PASS",
+  "schema": 1,
+  "scope_limit": "This verifies timeout/nonzero process-group cleanup. It does not prove public Git fetch or source materialization.",
+  "started_utc": "2026-10-05 13:05:21 UTC"
+}

@@ -1,0 +1,10 @@
+source commit: bc7f784a51233bd29676353392c9fc07c0ad01a7
+source tree: b3939a4d6010f243485fb528f73af74d49b2fb94
+main parent: 703d1b84d9f9e0246a52e3989bf3b78a13bbbf05
+lock sha256: b43ddef9c7a6b7e4c33cb6a8a4dd3659f26a7645a0f0c09782e04b2ee5b898a4
+source manifest sha256: 14dc98011488a1b950fad7f0a0115054190e88af263190ce535d00bb9dd541b3
+cargo fetch command: mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo fetch --locked --manifest-path /input/Cargo.toml
+offline metadata command: CARGO_NET_OFFLINE=true mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo metadata --locked --offline --format-version 1 --manifest-path /input/Cargo.toml
+exact object-derived source snapshot and Cargo.lock verified
+cargo source namespace: private proc hidepid policy differs
+cargo source fetch: Cargo fetch failed with status 1; preserve private logs and work for review

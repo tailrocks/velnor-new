@@ -1,0 +1,14 @@
+Preview: /root/.cache/velnor-task-targets/20261005/jackin-compaction/jackin-shared-script-safety-a
+Repository: /root/.cache/velnor-task-targets/20261005/jackin-compaction/jackin-44b2-input
+.github/AGENTS.md
+.github/CLAUDE.md
+.github/actionlint.yaml
+.github/actions/velnor-tool-seed/action.yml
+.github/scripts/velnor-shared/bash-b3-50b3e247bef03d021f5d9446c5bbf2e9c2e573cf3c22081aed4290cb168a6a42.bash
+.github/scripts/velnor-shared/sh-b3-4042dbbfbfe69296a6dc8b12cf3aee080fbc32eec40e57f22f238816cb99d774.sh
+.github/workflows/ci.yml
+mise.lock is read-only input; Velnor never modifies it
+mise.toml is read-only input; Velnor never modifies it
+rust-toolchain.toml is read-only input; Velnor never modifies it
+tool_install_unverified:7 installs skip verification (mise.lock malformed: line 389: expected_quoted_string); fix the lockfile to verify them
+exit=0

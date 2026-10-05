@@ -1,0 +1,3 @@
+Integrate the Rust test-registration guard
+
+Co-authored-by: Codex <codex@openai.com>

@@ -1,0 +1,11 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.04s
+     Running tests/velnor_cli.rs (/root/.cache/velnor-task-targets/20261005/git-steward-validate-shell/target/debug/deps/velnor_cli-fd5fa9a36fee05a4)
+
+running 4 tests
+test impl_cli_tmp::isolation_tests::malformed_fixture_metadata_pointer_fails_before_spawn ... ok
+test impl_cli_tmp::isolation_tests::git_fixture_commands_require_shared_authority ... ok
+test impl_cli_tmp::isolation_tests::fixture_git_ignores_inherited_authority ... ok
+test impl_cli_tmp::isolation_tests::fixture_git_resolves_linked_worktree_metadata ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 239 filtered out; finished in 0.03s
+

@@ -1,0 +1,16 @@
+name: Lint
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "**"
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: amqp-rs/actions/checkout@main
+      - uses: amqp-rs/actions/lint@main

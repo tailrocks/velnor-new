@@ -1,0 +1,1 @@
+PASS: six assets, every SHA-256 is 64 lowercase hex, all API/sidecar/download comparisons equal where available

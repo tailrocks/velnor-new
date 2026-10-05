@@ -1,0 +1,8 @@
+31e6859cf639ed4594906da3fcd0fe2055e9daddae75e9786dbe50b3fb3c0f4a  /root/.cache/velnor-task-targets/20261005/mise-route/mise-v2026.10.1-linux-x64
+8f5f6660336f572830e33cd9b378d3131e529a0d4c4f0c553776be90a1ba302a  /root/.cache/velnor-task-targets/20261005/mise-route/mise-v2026.10.2-linux-x64
+8f5f6660336f572830e33cd9b378d3131e529a0d4c4f0c553776be90a1ba302a  /root/.cache/velnor-task-targets/20261005/mise-route/linux-x64-extracted-mise-v2026.10.2
+79a2bf0ffc9b8a9a6391344e875b3c3679c15053fda3e8728ddf1790d63db788  /root/.cache/velnor-task-targets/20261005/mise-route/mise-v2026.10.2-linux-x64.tar.gz
+723e3032f26b9bad34954286e56bc64c8901a9da2b8e3585c550f472a443f600  /root/.cache/velnor-task-targets/20261005/mise-route/mise-v2026.10.1-macos-x64
+1c6b3d4aaeba8d3b8b57e2d06e4b7825a5134b7aa6e97313bd99db6f22bac21f  /root/.cache/velnor-task-targets/20261005/mise-route/mise-v2026.10.2-macos-x64
+1c6b3d4aaeba8d3b8b57e2d06e4b7825a5134b7aa6e97313bd99db6f22bac21f  /root/.cache/velnor-task-targets/20261005/mise-route/macos-x64-extracted/mise/bin/mise
+cc1497f6c370580d81d386004578f97d36b08031f6534818e0fd2756d54d0aca  /root/.cache/velnor-task-targets/20261005/mise-route/mise-v2026.10.2-macos-x64.tar.gz

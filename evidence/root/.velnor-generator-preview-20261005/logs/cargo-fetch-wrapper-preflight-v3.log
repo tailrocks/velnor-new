@@ -1,0 +1,8 @@
+source_sha256=942bedafa295f8a4ae29a6f13687f32d6e75c4134a039c62bb8dfa6cf2112d96
+find_sha256=91b75e72c495e68dd6aab198c2fd6c458fd51a2dc361045ee31f8e657417de26
+rust_selector=/tools/rust-1.98.1
+cargo_path=/root/.velnor-generator-preview-20261005/rootfs/tools/rust-1.98.1/bin/cargo 0:0:755
+clean_command=/usr/bin/env -i PATH=/usr/bin:/bin /usr/bin/timeout --kill-after=5s 120s /usr/bin/env -i PATH=/usr/bin:/bin /usr/bin/bash --noprofile --norc /root/.velnor-generator-preview-20261005/cargo-fetch-wrapper-preflight-fixture-v3.sh clean 3>&-
+inherited_result=NOT RUN; clean_result=FAIL exit_code=1
+failure=outer preflight failed at `rootfs mount points are missing` because the sealed base rootfs has no `/input` directory
+acquisition=NOT RUN; no source snapshot, work directory, task mount, Cargo command, or network request was reached

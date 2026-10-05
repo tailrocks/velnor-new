@@ -1,0 +1,42 @@
+   Compiling syn v3.0.6
+   Compiling utf8parse v0.2.2
+   Compiling anstyle-parse v1.0.0
+   Compiling anstyle v1.0.14
+   Compiling is_terminal_polyfill v1.70.2
+   Compiling anstyle-query v1.1.5
+   Compiling colorchoice v1.0.5
+   Compiling anstream v1.0.0
+   Compiling velnor-actions-tofu v0.1.0 (/root/Projects/tailrocks/velnor-project/velnor-new-pr-12/crates/velnor-actions-tofu)
+   Compiling clap_lex v1.1.1
+   Compiling strsim v0.11.1
+   Compiling heck v0.5.0
+   Compiling clap_builder v4.6.7
+   Compiling serde_derive v1.0.229
+   Compiling thiserror-impl v2.0.21
+   Compiling serde v1.0.229
+   Compiling hcl-primitives v0.1.12
+   Compiling thiserror v2.0.21
+   Compiling velnor-actions-contract v0.1.0 (/root/Projects/tailrocks/velnor-project/velnor-new-pr-12/crates/velnor-actions-contract)
+   Compiling vecmap-rs v0.2.5
+   Compiling hcl-edit v0.9.7
+   Compiling hcl-rs v0.19.8
+   Compiling velnor-actions-mise v0.1.0 (/root/Projects/tailrocks/velnor-project/velnor-new-pr-12/crates/velnor-actions-mise)
+   Compiling velnor-actions-rust v0.1.0 (/root/Projects/tailrocks/velnor-project/velnor-new-pr-12/crates/velnor-actions-rust)
+   Compiling velnor-actions-workflow-renderer v0.1.0 (/root/Projects/tailrocks/velnor-project/velnor-new-pr-12/crates/velnor-actions-workflow-renderer)
+   Compiling velnor-actions-actionlint v0.1.0 (/root/Projects/tailrocks/velnor-project/velnor-new-pr-12/crates/velnor-actions-actionlint)
+   Compiling clap_derive v4.6.7
+   Compiling velnor-actions-orchestrator v0.1.0 (/root/Projects/tailrocks/velnor-project/velnor-new-pr-12/crates/velnor-actions-orchestrator)
+   Compiling clap v4.6.7
+   Compiling velnor-actions-cli v0.1.0 (/root/Projects/tailrocks/velnor-project/velnor-new-pr-12/crates/velnor-actions-cli)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 21.29s
+     Running tests/velnor_cli.rs (/root/.cache/velnor-task-targets/20261005/native55-pr39-target/debug/deps/velnor_cli-b99ccdab0ba24419)
+
+running 5 tests
+test impl_cli_verify_local::verify_local_metadata_selects_sorted_packages_and_libraries ... ok
+test impl_cli_verify_local::verify_local_entrypoint_lists_exact_stages ... ok
+test impl_cli_verify_local::verify_local_entrypoint_parses ... ok
+test impl_cli_verify_local::verify_local_repo_policy_stage_executes ... ok
+test impl_cli_verify_local::verify_local_toolchain_pins_match_native_mise_values ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 236 filtered out; finished in 0.04s
+

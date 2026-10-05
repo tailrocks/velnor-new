@@ -1,0 +1,56 @@
+   Compiling proc-macro2 v1.0.107
+   Compiling unicode-ident v1.0.26
+   Compiling quote v1.0.47
+   Compiling serde_core v1.0.229
+   Compiling syn v3.0.6
+   Compiling serde v1.0.229
+   Compiling serde_derive v1.0.229
+   Compiling shlex v2.0.1
+   Compiling find-msvc-tools v0.1.14
+   Compiling itoa v1.0.18
+   Compiling cc v1.5.1
+   Compiling zmij v1.0.23
+   Compiling blake3 v1.8.7
+   Compiling thiserror v2.0.21
+   Compiling serde_json v1.0.151
+   Compiling thiserror-impl v2.0.21
+   Compiling constant_time_eq v0.4.2
+   Compiling arrayvec v0.7.8
+   Compiling cpufeatures v0.3.1
+   Compiling memchr v2.8.3
+   Compiling cfg-if v1.0.5
+   Compiling ryu v1.0.23
+   Compiling hcl-primitives v0.1.12
+   Compiling vecmap-rs v0.2.5
+   Compiling hashbrown v0.17.1
+   Compiling pratt v0.4.0
+   Compiling winnow v1.0.4
+   Compiling fnv v1.0.7
+   Compiling equivalent v1.0.2
+   Compiling indexmap v2.14.2
+   Compiling hcl-edit v0.9.7
+   Compiling velnor-actions-contract v0.1.0 (/root/.cache/velnor-task-targets/20261005/mise-phase0-pr39-098-route-candidate/crates/velnor-actions-contract)
+   Compiling velnor-actions-tofu v0.1.0 (/root/.cache/velnor-task-targets/20261005/mise-phase0-pr39-098-route-candidate/crates/velnor-actions-tofu)
+   Compiling hcl-rs v0.19.8
+   Compiling velnor-actions-mise v0.1.0 (/root/.cache/velnor-task-targets/20261005/mise-phase0-pr39-098-route-candidate/crates/velnor-actions-mise)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.81s
+     Running tests/velnor_mise.rs (/root/.cache/velnor-task-targets/20261005/mise-phase0-qualified-global-target/debug/deps/velnor_mise-2fcb1d6c48041843)
+
+running 12 tests
+test impl_mise_catalog::action_mbx_reconcile_matches_pin_only ... ok
+test impl_mise_catalog::catalog_new_validates_every_slot ... ok
+test impl_mise_catalog::exact_version_validation_accepts_only_pins ... ok
+test impl_mise_catalog::mbx_provisioning_modes_validated ... ok
+test impl_mise_catalog::opentofu_catalog_digest_binds_qualified_artifact ... ok
+test impl_mise_catalog::opentofu_digest_follows_qualified_version_only ... ok
+test impl_mise_catalog::opentofu_platform_digests_are_distinct_qualified_hex ... ok
+test impl_mise_catalog::pinned_catalog_matches_qualified_versions ... ok
+test impl_mise_catalog::rust_toolchain_name_pins_version_and_target ... ok
+test impl_mise_catalog::tool_file_values_never_become_pins ... ok
+test impl_mise_catalog::tool_names_roundtrip_and_reject_aliases ... ok
+test impl_mise_catalog::tool_specs_use_registry_names ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 345 filtered out; finished in 0.00s
+
+mbx[cache]: 52 hits, 2 misses; 0 B downloaded, 0 B uploaded, 63.4 MiB stored locally
+mbx[savings]: 12659 cache hits and counting. rustc thinks it has been busy.

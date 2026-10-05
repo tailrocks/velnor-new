@@ -1,0 +1,7 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.04s
+────────────
+ Nextest run ID 05e00c6c-463a-4c5d-a99a-b8295dd3e0a1 with nextest profile: default
+    Starting 1 test across 1 binary (527 tests skipped)
+        PASS [   0.006s] (1/1) velnor-actions-orchestrator attach::attach_tests::source_cache_tests::cargo_only_preseed_uses_exact_sources_and_native_helper_owners
+────────────
+     Summary [   0.007s] 1 test run: 1 passed, 527 skipped

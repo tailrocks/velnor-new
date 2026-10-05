@@ -1,0 +1,1 @@
+ccaf24f1c05c3ead9999d140d1be515fb840fe6033e2c6300986fb4126119ae6  /tmp/velnor-release-manifest-integration-20261005/consumer-project/.velnor/release-manifest.json

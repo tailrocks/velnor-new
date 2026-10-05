@@ -1,0 +1,2 @@
+findmnt_options=ro,nosuid,nodev,noexec,relatime,hidepid=invisible,subset=pid
+private_mountinfo=305 134 0:47 / /root/.velnor-generator-preview-20261005/proc-options-fixture.GLutB3c0/proc ro,nosuid,nodev,noexec,relatime - proc proc ro,hidepid=invisible,subset=pid

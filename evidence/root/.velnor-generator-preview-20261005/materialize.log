@@ -1,0 +1,4 @@
+base rootfs staged; no tools were executed
+path_preflight={"devices": 1, "directories": 36, "host_files": 37, "rust_archive_members": 218, "symlinks": 5, "validator_archive_members": 15}
+base_manifest_sha256=1a69b71279d9c5a7e7c1c5937d9c55898f1e5b0f1fc7405010d6ffb273f47acf
+base_rootfs_tree_sha256=1cef88b359a08c32cccb6078a55309d4db67b883dc260ccc3bbeb80ddce55763

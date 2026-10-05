@@ -1,0 +1,14 @@
+M  .velnor/freshness-inventory.json
+M  crates/velnor-runner/crates/velnor-runner-host/src/assign.rs
+M  crates/velnor-runner/crates/velnor-runner-host/src/launch.rs
+M  crates/velnor-runner/crates/velnor-runner-host/src/launch/capacity.rs
+M  crates/velnor-runner/crates/velnor-runner-host/src/launch/inspect_tests.rs
+M  crates/velnor-runner/crates/velnor-runner-host/src/launch/slot.rs
+M  crates/velnor-runner/crates/velnor-runner-host/src/launch/steps.rs
+M  crates/velnor-runner/crates/velnor-runner-host/src/launch/turn.rs
+M  crates/velnor-runner/crates/velnor-runner-host/src/launch_capacity_tests.rs
+M  crates/velnor-runner/crates/velnor-runner-host/src/launch_harness.rs
+M  crates/velnor-runner/crates/velnor-runner-host/src/launch_idless_tests.rs
+M  crates/velnor-runner/crates/velnor-runner-host/src/launch_scale_tests.rs
+M  crates/velnor-runner/crates/velnor-runner-host/src/launch_tests.rs
+M  docs/implemented/freshness-evidence-2026-10-05.md

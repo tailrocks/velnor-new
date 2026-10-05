@@ -1,0 +1,57 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s
+────────────
+ Nextest run ID 07a0d56b-fc3a-44af-a099-f577b91631c1 with nextest profile: default
+    Starting 51 tests across 2 binaries (382 tests skipped)
+        PASS [   0.006s] ( 1/51) velnor-actions-workflow-renderer cache_p08::tool_payload::runtime_identity::tests::identity_step_binds_fixed_tool_home_environment
+        PASS [   0.007s] ( 2/51) velnor-actions-workflow-renderer cache_p08::tool_payload::runtime_identity::tests::generated_identity_actions_bind_each_supported_hosted_lane
+        PASS [   0.009s] ( 3/51) velnor-actions-workflow-renderer cache_p08::setup_pipeline::tests::parses_the_fixed_rust_components_payload
+        PASS [   0.018s] ( 4/51) velnor-actions-workflow-renderer cache_p08::tool_payload::runtime_identity::tests::hosted_identity_hashes_the_validated_image_and_owned_roots
+        PASS [   0.018s] ( 5/51) velnor-actions-workflow-renderer cache_p08::tool_payload::runtime_identity::tests::scratch_tests::existing_final_symlinks_cannot_redirect_identity_or_digest_writes
+        PASS [   0.030s] ( 6/51) velnor-actions-workflow-renderer cache_p08::tool_payload::runtime_identity::tests::static_tools_digest_is_bound_into_the_canonical_runtime_key
+        PASS [   0.035s] ( 7/51) velnor-actions-workflow-renderer cache_p08::tool_payload::runtime_identity::tests::validation_tests::hosted_identity_disables_for_invalid_native_or_mise_homes
+        PASS [   0.038s] ( 8/51) velnor-actions-workflow-renderer::velnor_workflow_renderer impl_renderer_cache_steps::lane_target_dirs_stay_isolated
+        PASS [   0.039s] ( 9/51) velnor-actions-workflow-renderer tool_seed::tests::action_file_tests::local_seed_action_payload_and_order_are_not_name_authorized
+        PASS [   0.039s] (10/51) velnor-actions-workflow-renderer::velnor_workflow_renderer impl_renderer_cache_steps::cache_restore_accepts_only_owned_paths
+        PASS [   0.040s] (11/51) velnor-actions-workflow-renderer cache_p08::tool_payload::tests::restore_composite_binds_marker_pin_key_and_paths
+        PASS [   0.040s] (12/51) velnor-actions-workflow-renderer::velnor_workflow_renderer impl_renderer_p08_tools_election::tools_cache_election_rejects_orphan_and_duplicate_winner_saves
+        PASS [   0.040s] (13/51) velnor-actions-workflow-renderer tool_seed::tests::action_file_tests::action_composite_contains_the_guarded_fixed_root_and_exact_input
+        PASS [   0.041s] (14/51) velnor-actions-workflow-renderer::velnor_workflow_renderer impl_renderer_cache_steps::cache_save_writes_task_artifacts_only
+        PASS [   0.041s] (15/51) velnor-actions-workflow-renderer::velnor_workflow_renderer impl_renderer_cache_steps::step_kinds_have_no_parallel_syntax
+        PASS [   0.041s] (16/51) velnor-actions-workflow-renderer tool_seed::tests::step_key_is_derived_from_pinned_job_tools_and_configured_checkout_payload
+        PASS [   0.043s] (17/51) velnor-actions-workflow-renderer::velnor_workflow_renderer impl_renderer_cache_steps::mbx_objects_step_gates_save_to_push_via_cache_mode
+        PASS [   0.044s] (18/51) velnor-actions-workflow-renderer cache_p08::tool_payload::tests::restore_wrapper_admission_rejects_mutated_calls
+        PASS [   0.055s] (19/51) velnor-actions-workflow-renderer tool_seed_admission::tests::key_file_match_rejects_nul_extra_lines_and_oversize_inputs
+        PASS [   0.049s] (20/51) velnor-actions-workflow-renderer::velnor_workflow_renderer impl_renderer_cache_t22::never_archive_mirror_lists_state_plans_and_credentials
+        PASS [   0.006s] (21/51) velnor-actions-workflow-renderer cache_p08::tool_payload::tests::static_identity_canonicalizes_inputs_and_binds_runner_selector
+        PASS [   0.006s] (22/51) velnor-actions-workflow-renderer cache_p08::tool_payload::tests::payload_key_is_namespaced_to_static_payload_and_runtime_identity
+        PASS [   0.050s] (23/51) velnor-actions-workflow-renderer::velnor_workflow_renderer impl_renderer_cache_steps::tools_layer_accepts_only_its_exact_v2_payload_paths
+        PASS [   0.085s] (24/51) velnor-actions-workflow-renderer cache_p08::tool_payload::tests::runtime_identity_is_required_and_changes_the_final_key
+        PASS [   0.050s] (25/51) velnor-actions-workflow-renderer::velnor_workflow_renderer impl_renderer_cache_t22::sources_steps_reject_never_archive_paths
+        PASS [   0.050s] (26/51) velnor-actions-workflow-renderer cache_p08::tool_payload::tests::save_step_renders_generic_protected_default_branch_policy
+        PASS [   0.050s] (27/51) velnor-actions-workflow-renderer cache_p08::tool_payload::tests::payload_rejects_untyped_or_mismatched_tool_inputs
+        PASS [   0.050s] (28/51) velnor-actions-workflow-renderer::velnor_workflow_renderer impl_renderer_p08_tools_election::tools_cache_election_rejects_mutated_winner_key_path_and_gate
+        PASS [   0.050s] (29/51) velnor-actions-workflow-renderer::velnor_workflow_renderer impl_renderer_cache_script::cache_free_render_does_not_emit_runtime_identity_script
+        PASS [   0.085s] (30/51) velnor-actions-workflow-renderer cache_p08::tool_payload::tests::payload_paths_and_restore_save_inputs_are_identical
+        PASS [   0.051s] (31/51) velnor-actions-workflow-renderer::velnor_workflow_renderer impl_renderer_p08_tools_election::tools_cache_election_rejects_loser_saves_and_mutated_loser_shapes
+        PASS [   0.085s] (32/51) velnor-actions-workflow-renderer::velnor_workflow_renderer impl_renderer_cache_steps::strict_wires_runtime_qualified_tools_cache_before_setup_and_saves_once
+        PASS [   0.086s] (33/51) velnor-actions-workflow-renderer tool_seed::tests::malformed_seed_key_and_preexisting_v2_steps_are_rejected
+        PASS [   0.052s] (34/51) velnor-actions-workflow-renderer::velnor_workflow_renderer impl_renderer_cache_steps::strict_leaves_setup_less_jobs_without_tools_cache
+        PASS [   0.054s] (35/51) velnor-actions-workflow-renderer::velnor_workflow_renderer impl_renderer_cache_t22::provider_paths_reject_never_archive_paths
+        PASS [   0.089s] (36/51) velnor-actions-workflow-renderer cache_p08::tool_payload::runtime_identity::tests::scale_set_identity_is_a_successful_cold_path_without_digest_injection
+        PASS [   0.055s] (37/51) velnor-actions-workflow-renderer::velnor_workflow_renderer impl_renderer_cache_steps::seed_and_tools_prelude_require_the_configured_unconditional_checkout
+        PASS [   0.090s] (38/51) velnor-actions-workflow-renderer::velnor_workflow_renderer impl_renderer_cache_script::shared_runtime_identity_script_covers_hosted_and_unpaired_jobs_once
+        PASS [   0.096s] (39/51) velnor-actions-workflow-renderer cache_p08::tool_payload::runtime_identity::tests::validation_tests::hosted_identity_disables_for_root_home_or_runner_temp
+        PASS [   0.097s] (40/51) velnor-actions-workflow-renderer cache_p08::tool_payload::runtime_identity::tests::scratch_tests::hash_failure_disables_identity_and_removes_private_scratch
+        PASS [   0.021s] (41/51) velnor-actions-workflow-renderer tool_seed_admission::tests::false_owner_and_mount_commands_fail_closed
+        PASS [   0.069s] (42/51) velnor-actions-workflow-renderer cache_p08::tool_payload::runtime_identity::tests::validation_tests::hosted_identity_disables_for_unarchived_or_aliased_mise_roots
+        PASS [   0.111s] (43/51) velnor-actions-workflow-renderer cache_p08::tool_payload::runtime_identity::tests::validation_tests::hosted_identity_disables_on_image_arch_or_version_mismatch
+        PASS [   0.080s] (44/51) velnor-actions-workflow-renderer tool_seed::tests::matching_tool_seed_copies_both_trees_after_admission_and_keeps_source
+        PASS [   0.082s] (45/51) velnor-actions-workflow-renderer tool_seed_admission::tests::provenance_marker_rejects_oversize_nul_and_extra_lines
+        PASS [   0.085s] (46/51) velnor-actions-workflow-renderer tool_seed_admission::tests::symlinks_and_non_root_entries_fail_tree_admission
+        PASS [   0.049s] (47/51) velnor-actions-workflow-renderer tool_seed::tests::rejected_mount_and_mismatched_key_leave_destinations_untouched
+        PASS [   0.137s] (48/51) velnor-actions-workflow-renderer cache_p08::tool_payload::runtime_identity::tests::fingerprint_tests::runtime_fingerprint_is_stable_and_binds_image_and_absolute_roots
+        PASS [   0.065s] (49/51) velnor-actions-workflow-renderer tool_seed_admission::tests::only_one_exact_read_only_non_overlay_mount_is_admitted
+        PASS [   1.025s] (50/51) velnor-actions-workflow-renderer cache_p08::tool_payload::runtime_identity::tests::scratch_tests::cancellation_during_hashing_cleans_private_scratch_without_enabling_cache
+        PASS [   6.412s] (51/51) velnor-actions-workflow-renderer tool_seed_admission::tests::tree_scan_rejects_depth_count_and_find_errors_without_truncation
+────────────
+     Summary [   6.492s] 51 tests run: 51 passed, 382 skipped

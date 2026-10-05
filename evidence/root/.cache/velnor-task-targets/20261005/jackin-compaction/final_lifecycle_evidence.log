@@ -1,0 +1,186 @@
+3b3cda927c333c69ab8aa104197d7d32f1195eb0dccd61d510b706350c81895f  crates/velnor-actions-workflow-renderer/src/document_setup_compaction.rs
+fad4f42bdfd3444a9b9625a081985a9d566138f98ad4f3a048f7cf34deb2164d  crates/velnor-actions-workflow-renderer/src/document_setup_compaction_tests.rs
+a4385b4a5c3ad1dbd2c57ffcd7f201440916ae9895075a6a9a0f33f87f0ab681  crates/velnor-actions-workflow-renderer/src/document_setup_compaction_rejection_tests.rs
+48afc2b0e0409b5a4270a52fba25679327ce1317ef069ec4217b5c00ce4b92af  crates/velnor-actions-workflow-renderer/src/render.rs
+mise by @jdx – installing 1 tool
+mise rust@1.98.1 info: syncing channel updates for 1.98.1-x86_64-unknown-linux-gnu
+mise rust@1.98.1 info: latest update on 2026-09-03 for version 1.98.1 (48a229cea 2026-09-01)
+mise rust@1.98.1 info: component clippy is up to date
+mise rust@1.98.1 info: component rust-docs is up to date
+mise rust@1.98.1 info: component rustfmt is up to date
+mise rust@1.98.1   1.98.1-x86_64-unknown-linux-gnu unchanged - rustc 1.98.1 (48a229cea 2026-09-01)
+mise rust@1.98.1 info: checking for self-update (current version: 1.29.1)
+mise rust@1.98.1 rustc 1.98.1 (48a229cea 2026-09-01)
+mise ✓ rust@1.98.1  242ms
+mise ████████████████ 1/1 · installed 1 tool in 243ms
+mise by @jdx – installing 1 tool
+mise rust@1.98.1 info: syncing channel updates for 1.98.1-x86_64-unknown-linux-gnu
+mise rust@1.98.1 info: latest update on 2026-09-03 for version 1.98.1 (48a229cea 2026-09-01)
+mise rust@1.98.1 info: component clippy is up to date
+mise rust@1.98.1 info: component rust-docs is up to date
+mise rust@1.98.1 info: component rustfmt is up to date
+mise rust@1.98.1   1.98.1-x86_64-unknown-linux-gnu unchanged - rustc 1.98.1 (48a229cea 2026-09-01)
+mise rust@1.98.1 info: checking for self-update (current version: 1.29.1)
+mise rust@1.98.1 rustc 1.98.1 (48a229cea 2026-09-01)
+mise ✓ rust@1.98.1  239ms
+mise ████████████████ 1/1 · installed 1 tool in 240ms
+   Compiling velnor-actions-workflow-renderer v0.1.0 (/tmp/velnor-render-compaction-44b2-20261005/crates/velnor-actions-workflow-renderer)
+error[E0308]: mismatched types
+   --> crates/velnor-actions-workflow-renderer/src/document_setup_compaction_tests.rs:318:16
+    |
+318 |         bytes: b"other generated action".to_vec(),
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `String`, found `Vec<u8>`
+    |
+    = note: expected struct `String`
+               found struct `Vec<u8>`
+
+For more information about this error, try `rustc --explain E0308`.
+error: could not compile `velnor-actions-workflow-renderer` (lib test) due to 1 previous error
+   Compiling velnor-actions-workflow-renderer v0.1.0 (/tmp/velnor-render-compaction-44b2-20261005/crates/velnor-actions-workflow-renderer)
+error[E0308]: mismatched types
+   --> crates/velnor-actions-workflow-renderer/src/document_setup_compaction_tests.rs:318:16
+    |
+318 |         bytes: b"other generated action".to_vec(),
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `String`, found `Vec<u8>`
+    |
+    = note: expected struct `String`
+               found struct `Vec<u8>`
+
+For more information about this error, try `rustc --explain E0308`.
+error: could not compile `velnor-actions-workflow-renderer` (lib test) due to 1 previous error
+mise by @jdx – installing 1 tool
+mise rust@1.98.1 info: syncing channel updates for 1.98.1-x86_64-unknown-linux-gnu
+mise rust@1.98.1 info: latest update on 2026-09-03 for version 1.98.1 (48a229cea 2026-09-01)
+mise rust@1.98.1 info: component clippy is up to date
+mise rust@1.98.1 info: component rust-docs is up to date
+mise rust@1.98.1 info: component rustfmt is up to date
+mise rust@1.98.1   1.98.1-x86_64-unknown-linux-gnu unchanged - rustc 1.98.1 (48a229cea 2026-09-01)
+mise rust@1.98.1 info: checking for self-update (current version: 1.29.1)
+mise rust@1.98.1 rustc 1.98.1 (48a229cea 2026-09-01)
+mise ✓ rust@1.98.1  326ms
+mise ████████████████ 1/1 · installed 1 tool in 327ms
+mise WARN  missing: rust@1.98.1
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling unicode-ident v1.0.26
+   Compiling find-msvc-tools v0.1.14
+   Compiling serde_core v1.0.229
+   Compiling syn v3.0.6
+   Compiling shlex v2.0.1
+   Compiling cc v1.5.1
+   Compiling zmij v1.0.23
+   Compiling blake3 v1.8.7
+   Compiling serde_json v1.0.151
+   Compiling thiserror v2.0.21
+   Compiling serde v1.0.229
+   Compiling thiserror-impl v2.0.21
+   Compiling serde_derive v1.0.229
+    Checking cfg-if v1.0.5
+    Checking arrayvec v0.7.8
+    Checking itoa v1.0.18
+    Checking cpufeatures v0.3.1
+    Checking memchr v2.8.3
+    Checking constant_time_eq v0.4.2
+    Checking velnor-actions-contract v0.1.0 (/tmp/velnor-render-compaction-44b2-20261005/crates/velnor-actions-contract)
+    Checking velnor-actions-workflow-renderer v0.1.0 (/tmp/velnor-render-compaction-44b2-20261005/crates/velnor-actions-workflow-renderer)
+error[E0308]: mismatched types
+   --> crates/velnor-actions-workflow-renderer/src/document_setup_compaction_tests.rs:318:16
+    |
+318 |         bytes: b"other generated action".to_vec(),
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `String`, found `Vec<u8>`
+    |
+    = note: expected struct `std::string::String`
+               found struct `std::vec::Vec<u8>`
+
+For more information about this error, try `rustc --explain E0308`.
+error: could not compile `velnor-actions-workflow-renderer` (lib test) due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+error: used `assert!` to check that a value is not empty
+  --> crates/velnor-actions-workflow-renderer/tests/impl_renderer_msrv.rs:39:5
+   |
+39 |     assert!(!unlocked.is_empty());
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+   = note: `-D clippy::assert-is-empty` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(clippy::assert_is_empty)]`
+help: use `assert_ne!` to show the value on failure
+   |
+39 -     assert!(!unlocked.is_empty());
+39 +     assert_ne!(unlocked, [] as [std::string::String; 0]);
+   |
+
+error: used `assert!` to check that a value is empty
+  --> crates/velnor-actions-workflow-renderer/tests/impl_renderer_msrv.rs:75:5
+   |
+75 |     assert!(job.needs.is_empty());
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+help: use `assert_eq!` to show the value on failure
+   |
+75 -     assert!(job.needs.is_empty());
+75 +     assert_eq!(job.needs, [] as [std::string::String; 0]);
+   |
+
+error: used `assert!` to check that a value is empty
+  --> crates/velnor-actions-workflow-renderer/tests/impl_renderer_overlap.rs:48:5
+   |
+48 |     assert!(jobs["velnor-prep-download"].needs.is_empty());
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+help: use `assert_eq!` to show the value on failure
+   |
+48 -     assert!(jobs["velnor-prep-download"].needs.is_empty());
+48 +     assert_eq!(jobs["velnor-prep-download"].needs, [] as [std::string::String; 0]);
+   |
+
+error: used `assert!` to check that a value is empty
+  --> crates/velnor-actions-workflow-renderer/tests/impl_renderer_overlap.rs:49:5
+   |
+49 |     assert!(jobs["velnor-prep-image"].needs.is_empty());
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+help: use `assert_eq!` to show the value on failure
+   |
+49 -     assert!(jobs["velnor-prep-image"].needs.is_empty());
+49 +     assert_eq!(jobs["velnor-prep-image"].needs, [] as [std::string::String; 0]);
+   |
+
+error: used `assert!` to check that a value is empty
+  --> crates/velnor-actions-workflow-renderer/tests/impl_renderer_p08_elect.rs:79:5
+   |
+79 |     assert!(tools_saves(&jobs["rust-b"]).is_empty());
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+help: use `assert_eq!` to show the value on failure
+   |
+79 -     assert!(tools_saves(&jobs["rust-b"]).is_empty());
+79 +     assert_eq!(tools_saves(&jobs["rust-b"]), [] as [&velnor_actions_contract::Step; 0]);
+   |
+
+error: used `assert!` to check that a value is empty
+   --> crates/velnor-actions-workflow-renderer/tests/impl_renderer_p08_elect.rs:231:5
+    |
+231 |     assert!(provider_saves(&jobs["tofu-b"]).is_empty());
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#assert_is_empty
+help: use `assert_eq!` to show the value on failure
+    |
+231 -     assert!(provider_saves(&jobs["tofu-b"]).is_empty());
+231 +     assert_eq!(provider_saves(&jobs["tofu-b"]), [] as [&velnor_actions_contract::Step; 0]);
+    |
+
+error: could not compile `velnor-actions-workflow-renderer` (test "velnor_workflow_renderer") due to 6 previous errors
+3b3cda927c333c69ab8aa104197d7d32f1195eb0dccd61d510b706350c81895f  crates/velnor-actions-workflow-renderer/src/document_setup_compaction.rs
+fad4f42bdfd3444a9b9625a081985a9d566138f98ad4f3a048f7cf34deb2164d  crates/velnor-actions-workflow-renderer/src/document_setup_compaction_tests.rs
+a4385b4a5c3ad1dbd2c57ffcd7f201440916ae9895075a6a9a0f33f87f0ab681  crates/velnor-actions-workflow-renderer/src/document_setup_compaction_rejection_tests.rs
+48afc2b0e0409b5a4270a52fba25679327ce1317ef069ec4217b5c00ce4b92af  crates/velnor-actions-workflow-renderer/src/render.rs
+fmt_exit=0
+focused_exit=101
+full_test_exit=101
+clippy_exit=101

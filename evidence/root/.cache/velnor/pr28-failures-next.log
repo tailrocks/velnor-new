@@ -1,0 +1,56 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.04s
+────────────
+ Nextest run ID 65e1d7b7-557f-49be-910c-11e89164e0ad with nextest profile: default
+    Starting 20 tests across 3 binaries (1261 tests skipped)
+        PASS [   0.060s] ( 1/20) velnor-actions-orchestrator::velnor_orchestrator impl_consumer_manifest_file::acquire_url_and_sha_come_from_committed_file
+        PASS [   0.195s] ( 2/20) velnor-actions-orchestrator::velnor_orchestrator impl_step_role_name_authority::finalized_generation_is_invariant_to_typed_step_display_names
+        PASS [   0.196s] ( 3/20) velnor-actions-orchestrator::velnor_orchestrator impl_orch_release_emit::release_disabled_emits_base_tree_only
+        PASS [   0.286s] ( 4/20) velnor-actions-orchestrator::velnor_orchestrator impl_orch_gen::orch_gen_zero_candidate_repo_plans_no_work
+        PASS [   0.310s] ( 5/20) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2e::malformed_toolchain_recommends_without_writes
+        PASS [   0.348s] ( 6/20) velnor-actions-orchestrator::velnor_orchestrator impl_prepare_generate::ignored_rust_plans_no_work
+        PASS [   0.348s] ( 7/20) velnor-actions-orchestrator::validation_failure zizmor_staging::velnor_policy_blessed_sha_validates_green
+        PASS [   0.382s] ( 8/20) velnor-actions-orchestrator::velnor_orchestrator impl_orch_gen::orch_gen_plan_matches_generated_tree
+        PASS [   0.407s] ( 9/20) velnor-actions-orchestrator::validation_failure zizmor_staging::staging_suppressions_stable_no_new
+        PASS [   0.417s] (10/20) velnor-actions-orchestrator::velnor_orchestrator impl_orch_release_emit::release_enabled_emits_family_oidc
+        PASS [   0.424s] (11/20) velnor-actions-orchestrator::velnor_orchestrator impl_orch_release_emit::release_bootstrap_mode_adds_token_job
+        PASS [   0.449s] (12/20) velnor-actions-orchestrator::validation_failure zizmor_staging::blessed_repo_tag_ref_still_fails
+        PASS [   0.463s] (13/20) velnor-actions-orchestrator::validation_failure zizmor_staging::different_unpinned_tag_still_fails
+        PASS [   0.507s] (14/20) velnor-actions-orchestrator::velnor_orchestrator impl_generate_preserve::dispatch_switch_preserves_custom_actions_and_removes_shared_outputs
+        PASS [   0.538s] (15/20) velnor-actions-orchestrator::velnor_orchestrator impl_generate_p09_preview::concurrent_generate_lock_refused
+        PASS [   0.594s] (16/20) velnor-actions-orchestrator::velnor_orchestrator impl_gen_gates::cross_checkout_determinism
+        PASS [   0.582s] (17/20) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t20_stable::tofu_cross_checkout_determinism
+        PASS [   0.636s] (18/20) velnor-actions-orchestrator::velnor_orchestrator impl_prepare_generate::generate_preview_matches_in_place_and_preserves_repo
+        FAIL [   3.125s] (19/20) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t24_scale::tofu_generate_scales_with_root_count
+        PASS [   5.264s] (20/20) velnor-actions-orchestrator::velnor_orchestrator impl_orch_f2e::plan_and_workflow_ids_agree
+────────────
+     Summary [   5.266s] 20 tests run: 19 passed, 1 failed, 1261 skipped
+        FAIL [   3.125s] (19/20) velnor-actions-orchestrator::velnor_orchestrator impl_tofu_t24_scale::tofu_generate_scales_with_root_count
+  stdout ───
+
+    running 1 test
+    Initialized empty Git repository in /tmp/.tmpqPIKQk/.git/
+    Initialized empty Git repository in /tmp/.tmpfxjrkN/.git/
+    Initialized empty Git repository in /tmp/.tmpNMmi9T/.git/
+    Initialized empty Git repository in /tmp/.tmp71pzx2/.git/
+    Initialized empty Git repository in /tmp/.tmpDu1H9N/.git/
+    Initialized empty Git repository in /tmp/.tmpg0UN0C/.git/
+    test impl_tofu_t24_scale::tofu_generate_scales_with_root_count ... FAILED
+
+    failures:
+
+    failures:
+        impl_tofu_t24_scale::tofu_generate_scales_with_root_count
+
+    test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 681 filtered out; finished in 3.11s
+
+  stderr ───
+    perf: op=generate roots=1 prepare_ms=14 generate_ms=233 files=7 ci_bytes=17548
+    perf: op=generate roots=10 prepare_ms=25 generate_ms=383 files=7 ci_bytes=83935
+    perf: op=generate roots=40 prepare_ms=58 generate_ms=691 files=7 ci_bytes=305365
+    perf: op=generate roots=60 prepare_ms=82 generate_ms=979 files=7 ci_bytes=452985
+
+    thread 'impl_tofu_t24_scale::tofu_generate_scales_with_root_count' (2858655) panicked at crates/velnor-actions-orchestrator/tests/impl_tofu_t24_scale.rs:85:13:
+    existing preview refusal: render: invalid workflow: workflow_too_large:.github/workflows/ci.yml:748225:500000
+    note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+error: test run failed

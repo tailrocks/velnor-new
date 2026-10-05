@@ -1,0 +1,8 @@
+   Compiling velnor-actions-orchestrator v0.1.1 (/tmp/velnor-pr12-foundation-20261005/crates/velnor-actions-orchestrator)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.38s
+────────────
+ Nextest run ID ad12df14-d377-46bf-b1d7-ad7628ce6427 with nextest profile: default
+    Starting 1 test across 1 binary (673 tests skipped)
+        PASS [   0.009s] (1/1) velnor-actions-orchestrator::velnor_orchestrator impl_validators_repo::repo_config_sample_covers_schema_keys
+────────────
+     Summary [   0.011s] 1 test run: 1 passed, 673 skipped

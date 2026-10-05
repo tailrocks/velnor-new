@@ -1,0 +1,17 @@
+{
+  "command": "env -i PATH=/usr/bin:/bin /usr/bin/bash --noprofile --norc /root/.velnor-generator-preview-20261005/proc-mount-policy-fixture-v4.sh",
+  "ended_at_utc": "2026-10-05T15:14:09.576853088Z",
+  "exit_code": 0,
+  "fixture_script_sha256": "34c875bff669098544ab6e257213d9da349f5d52572c5afd110ac4dc2830d4f9",
+  "kernel_reference": "https://docs.kernel.org/6.12/filesystems/proc.html#chapter-4-configuring-procfs",
+  "kernel_reference_section": "4.1 Mount options: hidepid=invisible or hidepid=2; subset=pid",
+  "log_path": "/root/.velnor-generator-preview-20261005/logs/proc-mount-policy-fixture-v4.log",
+  "log_sha256": "af7cce68abf2de47b27a6864717bd06d26848b9606587e3236f53f15c192b34d",
+  "namespace_script_sha256": "59d14f020a88558578e4abafab674705c46cf4445d3b4f492cc024338f287019",
+  "previous_proc_observation_log_sha256": "434bbf490f5ff968f3974a16eda7a731e0d54d3759f49a66c146933ebfc43063",
+  "previous_proc_observation_record_sha256": "a4719e2a2c972f999968a9824db219336836afbd6e9010664ad885185a30db0e",
+  "schema": 1,
+  "scope": "Pure parser matrix plus disposable private mount and PID namespaces for proc-only option observation; no source, helper, Rustup, Mise, Cargo, credentials, or network.",
+  "started_at_utc": "2026-10-05T15:14:09.554763820Z",
+  "status": "PASS"
+}

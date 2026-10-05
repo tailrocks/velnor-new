@@ -1,0 +1,12 @@
+   Compiling velnor-actions-contract v0.1.1 (/tmp/velnor-impl-20261005/cache/pr38/crates/velnor-actions-contract)
+   Compiling velnor-actions-workflow-renderer v0.1.1 (/tmp/velnor-impl-20261005/cache/pr38/crates/velnor-actions-workflow-renderer)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.27s
+────────────
+ Nextest run ID 76009dd9-4925-4376-a415-7af2b792c7d2 with nextest profile: default
+    Starting 4 tests across 2 binaries (435 tests skipped)
+        PASS [   0.005s] (1/4) velnor-actions-workflow-renderer::velnor_workflow_renderer impl_renderer_setup::strict_rejects_setup_misuse
+        PASS [   0.005s] (2/4) velnor-actions-workflow-renderer::velnor_workflow_renderer impl_renderer_p08_tools_election::tools_cache_election_ignores_winner_save_presentation_name
+        PASS [   0.006s] (3/4) velnor-actions-workflow-renderer::velnor_workflow_renderer impl_renderer_setup::strict_setup_role_ignores_presentation_name
+        PASS [   0.007s] (4/4) velnor-actions-workflow-renderer::velnor_workflow_renderer impl_renderer_p08_tools_election::tools_cache_election_rejects_mutated_winner_key_path_and_gate
+────────────
+     Summary [   0.007s] 4 tests run: 4 passed, 435 skipped

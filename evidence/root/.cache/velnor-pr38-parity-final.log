@@ -1,0 +1,14 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.04s
+────────────
+ Nextest run ID 3936910f-8746-4e23-af0b-ed3aaa0bc8a0 with nextest profile: default
+    Starting 1 test across 2 binaries (237 tests skipped)
+       START [         ] (1/1) velnor-actions-cli::velnor_cli impl_cli_parity_golden::parity_artifacts_match_goldens
+
+running 1 test
+test impl_cli_parity_golden::parity_artifacts_match_goldens ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 237 filtered out; finished in 15.87s
+
+        PASS [  15.878s] (1/1) velnor-actions-cli::velnor_cli impl_cli_parity_golden::parity_artifacts_match_goldens
+────────────
+     Summary [  15.879s] 1 test run: 1 passed, 237 skipped

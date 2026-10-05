@@ -1,0 +1,88 @@
+rustc 1.98.1 (48a229cea 2026-09-01)
+    Blocking waiting for file lock on package cache
+   Compiling velnor-actions-orchestrator v0.1.0 (/root/.cache/velnor-task-targets/20261005/native55-pr39-scratch-20261005/velnor-39d489229747342043de979e0f3e2c95d8726aa4/crates/velnor-actions-orchestrator)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.59s
+     Running unittests src/lib.rs (/root/.cache/velnor-task-targets/20261005/native55-pr39-target/debug/deps/velnor_actions_orchestrator-2d7f35443e58ece5)
+
+running 78 tests
+test freshness::advisories::advisories_bounded_tests::captured_diagnostic_tail_uses_unicode_characters ... ok
+test freshness::advisories::advisories_bounded_tests::nonblocking_drain_bounds_repeated_interrupted_reads_per_poll ... ok
+test freshness::advisories::advisories_policy_tests::empty_ignore_array_passes_and_nonempty_subject_keeps_policy_path ... ok
+test freshness::advisories::readers::tests::output_capture_propagates_injected_read_error ... ok
+test freshness::advisories::advisories_policy_tests::live_scan_uses_locked_resolution_and_workspace_scoped_inputs ... ok
+test freshness::context_offset_tests::malformed_four_byte_non_ascii_offset_fails_without_panicking ... ok
+test freshness::advisories::advisories_policy_tests::ignore_requires_an_explicit_empty_array_for_root_and_nested_files ... ok
+test freshness::context_offset_tests::numeric_offsets_and_date_only_timestamps_remain_valid ... ok
+test freshness::context_offset_tests::iso_calendar_and_clock_components_follow_strict_bounds ... ok
+test freshness::advisories::advisories_policy_tests::live_scan_resolves_inputs_when_root_is_relative ... ok
+test freshness::context_offset_tests::rust_source_read_rejects_invalid_utf8 ... ok
+test freshness::advisories::readers::tests::output_capture_bounds_repeated_interrupted_reads ... ok
+test freshness::dependency_graph::tests::malformed_identity_fields_do_not_default_to_empty_or_local ... ok
+test freshness::dependency_graph::tests::missing_dependency_field_remains_a_valid_empty_list ... ok
+test freshness::dependency_graph::tests::exact_registry_pin_and_complete_graph_pass ... ok
+test freshness::dependency_graph::tests::non_string_edge_fails_even_when_a_valid_edge_is_present ... ok
+test freshness::dependency_graph::tests::present_non_array_dependency_field_fails_closed ... ok
+test freshness::dependencies::tests::declared_version_missing_from_lock_fails ... ok
+test freshness::evidence::tests::same_day_date_only_evidence_is_not_future ... ok
+test freshness::dependency_graph::tests::stranded_and_dangling_lock_entries_fail ... ok
+test freshness::evidence::tests::future_date_only_evidence_fails_by_utc_calendar_day ... ok
+test freshness::exceptions::tests::dated_hold_enforces_maximum_span_and_known_subject ... ok
+test freshness::evidence::tests::timestamp_future_skew_remains_six_minutes ... ok
+test freshness::exceptions::tests::standing_exception_requires_the_reviewed_mutable_tag ... ok
+test freshness::dependencies::tests::inherited_exact_pin_and_complete_lock_graph_pass ... ok
+test freshness::glob::tests::filesystem_globs_apply_bracket_classes_and_negation ... ok
+test freshness::glob::tests::directory_symlinks_cannot_escape_root_but_internal_links_match ... ok
+test freshness::glob::tests::glob_components_support_classes_negation_ranges_and_literal_brackets ... ok
+test freshness::glob::tests::glob_rejects_root_escape_and_absolute_patterns ... ok
+test freshness::glob::tests::static_file_pattern_matches_without_directory_walk ... ok
+test freshness::context_offset_tests::rust_source_read_rejects_content_over_the_cap ... ok
+test freshness::glob::tests::recursive_double_star_terminal_matches_nested_files_and_directories ... ok
+test freshness::glob::tests::wildcard_matches_symlink_to_regular_file ... ok
+test freshness::nested_workspaces::tests::missing_root_workspace_fails_dependencies_and_advisory_discovery ... ok
+test freshness::nested_workspaces::tests::malformed_workspace_members_fail_instead_of_becoming_empty ... ok
+test freshness::policy_mirror::tests::action_review_date_rejects_year_zero_and_accepts_year_one ... ok
+test freshness::nested_workspaces::tests::workspace_discovery_deduplicates_in_root_symlink_alias_cycles ... ok
+test freshness::nested_workspaces::tests::workspace_discovery_rejects_symlink_aliases_outside_repository_root ... ok
+test freshness::nested_workspaces::tests::workspace_discovery_has_a_global_unique_directory_bound ... ok
+test freshness::policy_mirror::tests::retired_tool_rows_are_outside_the_current_tool_set ... ok
+test freshness::glob::tests::static_prefix_prunes_unrelated_trees_and_recursive_work_is_capped ... ok
+test freshness::probe::tests::parses_stable_release_shapes_used_by_reviewed_sources ... ok
+test freshness::nested_workspaces::tests::nested_only_lock_packages_are_known_exception_subjects ... ok
+test freshness::nested_workspaces::tests::malformed_excludes_and_missing_member_globs_fail_closed ... ok
+test freshness::nested_workspaces::tests::recursive_excludes_and_member_globs_include_root_packages ... ok
+test freshness::rust_source::extracts_public_plain_strings_and_rejects_private_constants ... ok
+test freshness::rust_source_tests::commented_declaration_does_not_satisfy_pin ... ok
+test freshness::probe::tests::rejects_unsupported_and_malformed_response_encodings ... ok
+test freshness::rust_source_tests::cfg_attr_target_and_conditional_crate_attrs_fail_closed ... ok
+test freshness::nested_workspaces::tests::missing_nested_deny_policy_fails_closed ... ok
+test freshness::probe::tests::passes_https_source_as_a_safe_curl_url ... ok
+test freshness::probe::tests::rejects_truncated_and_corrupt_gzip_streams ... ok
+test freshness::rust_source_tests::complete_byte_and_unicode_char_escapes_are_consumed ... ok
+test freshness::rust_source_tests::cooked_and_raw_literal_families_cannot_supply_declarations ... ok
+test freshness::rust_source_tests::duplicate_declarations_fail_closed ... ok
+test freshness::rust_source_tests::escaped_pin_literal_fails_closed ... ok
+test freshness::rust_source_tests::ignores_line_and_nested_block_comment_decoys ... ok
+test freshness::rust_source_tests::macro_body_declaration_does_not_satisfy_pin ... ok
+test freshness::rust_source_tests::macro_rules_all_delimiters_hide_body_declarations ... ok
+test freshness::rust_source_tests::non_ascii_hex_escape_remains_invalid_in_rust_string ... ok
+test freshness::rust_source_tests::nested_cfg_module_and_associated_const_are_not_authorities ... ok
+test freshness::rust_source_tests::raw_c_braces_inside_macro_body_do_not_end_the_group ... ok
+test freshness::rust_source_tests::raw_string_contents_cannot_supply_a_declaration ... ok
+test freshness::rust_source_tests::reads_one_public_literal ... ok
+test freshness::rust_source_tests::string_contents_cannot_supply_a_declaration ... ok
+test freshness::rust_source_tests::conditional_authority_fails_closed ... ok
+test freshness::advisories::advisories_bounded_tests::nonzero_direct_exit_keeps_diagnostic_tail ... ok
+test freshness::context_offset_tests::rust_source_read_accepts_content_at_the_cap ... ok
+test freshness::probe::tests::fetches_file_fixture_and_rejects_invalid_sources ... ok
+test freshness::probe::tests::rejects_non_success_http_status ... ok
+test freshness::probe::tests::ignores_hostile_curlrc_and_fetches_literal_local_http_url ... ok
+test freshness::advisories::advisories_bounded_tests::wait_error_path_cleans_child_tree_without_joining_blocked_readers ... ok
+test freshness::advisories::advisories_bounded_tests::direct_exit_with_descendant_held_pipes_finishes_after_tree_cleanup ... ok
+test freshness::advisories::advisories_bounded_tests::threaded_reader_fallback_bounds_descendant_held_pipes ... ok
+test freshness::advisories::advisories_bounded_tests::threaded_reader_fallback_bounds_timed_out_child_tree ... ok
+test freshness::advisories::advisories_bounded_tests::direct_timeout_kills_child_tree_and_returns_within_cleanup_bound ... ok
+test freshness::probe::tests::decodes_bounded_gzip_and_rejects_expansion_over_one_mib ... ok
+test freshness::probe::tests::accepts_identity_and_gzip_bodies_at_the_one_mib_limit ... ok
+
+test result: ok. 78 passed; 0 failed; 0 ignored; 0 measured; 482 filtered out; finished in 0.44s
+

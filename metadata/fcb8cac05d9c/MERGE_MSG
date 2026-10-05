@@ -1,0 +1,31 @@
+Merge remote-tracking branch 'origin/main' into impl/cache-pr29
+
+# Conflicts:
+#	.github/workflows/ci.yml
+#	.velnor/freshness-inventory.json
+#	crates/velnor-actions-orchestrator/tests/schema2_class_snapshot.txt
+#	crates/velnor-actions-workflow-renderer/src/cache_steps.rs
+#	crates/velnor-actions-workflow-renderer/src/document.rs
+#	crates/velnor-actions-workflow-renderer/src/document_steps.rs
+#	crates/velnor-actions-workflow-renderer/src/lane_share.rs
+#	crates/velnor-actions-workflow-renderer/src/lane_share_tests.rs
+#	crates/velnor-actions-workflow-renderer/src/render.rs
+#	crates/velnor-actions-workflow-renderer/src/steps.rs
+#	crates/velnor-actions-workflow-renderer/tests/impl_renderer_cache_steps.rs
+#	crates/velnor-actions-workflow-renderer/tests/impl_renderer_mbx_bundle.rs
+#	crates/velnor-actions-workflow-renderer/tests/impl_renderer_mbx_gc_policy.rs
+#	crates/velnor-actions-workflow-renderer/tests/impl_renderer_token_hygiene_env.rs
+#	crates/velnor-actions-workflow-renderer/tests/velnor_workflow_renderer.rs
+#	docs/proposed/opentofu-goldens/MANIFEST.sha256
+#	docs/proposed/opentofu-goldens/cases/dogfood/preview/.github/workflows/ci.yml
+#	docs/proposed/opentofu-goldens/cases/dogfood/preview/.github/workflows/qualification.yml
+#	docs/proposed/opentofu-goldens/cases/dogfood/tree.sha256
+#	docs/proposed/opentofu-goldens/cases/mbx-nextest/preview/.github/workflows/ci.yml
+#	docs/proposed/opentofu-goldens/cases/mbx-nextest/tree.sha256
+#	docs/proposed/task-execution-contract.md
+#	fixtures/parity/multi-crate/expected/ci.yml
+#	fixtures/parity/multi-crate/expected/expected-set.json
+#	fixtures/parity/multi-crate/expected/plan-v1.json
+#	fixtures/parity/multi-crate/expected/plan.txt
+#	fixtures/parity/multi-crate/expected/task-report.json
+#	scripts/capture-opentofu-goldens.sh

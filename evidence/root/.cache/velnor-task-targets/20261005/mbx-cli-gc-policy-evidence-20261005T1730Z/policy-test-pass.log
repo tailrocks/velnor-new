@@ -1,0 +1,17 @@
+   Compiling velnor-actions-workflow-renderer v0.1.0 (/root/.cache/velnor-task-targets/20261005/mbx-cli-portability-20261005T1530Z/crates/velnor-actions-workflow-renderer)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.49s
+     Running unittests src/lib.rs (/root/.cache/velnor-task-targets/20261005/mbx-cli-portability-gc-policy-target/debug/deps/velnor_actions_workflow_renderer-baaa2ee710553a16)
+
+running 1 test
+test mbx_gc_policy::tests::selector_covers_mbx_jobs_on_linux_macos_and_scale_set ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 68 filtered out; finished in 0.00s
+
+     Running tests/velnor_workflow_renderer.rs (/root/.cache/velnor-task-targets/20261005/mbx-cli-portability-gc-policy-target/debug/deps/velnor_workflow_renderer-f7fbb3074acf10a8)
+
+running 2 tests
+test impl_renderer_mbx_gc_policy::cargo_only_jobs_receive_no_mbx_cache_policy ... ok
+test impl_renderer_mbx_gc_policy::hosted_and_scale_set_mbx_jobs_disable_gc_and_keep_local_export ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 298 filtered out; finished in 0.03s
+

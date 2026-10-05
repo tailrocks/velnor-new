@@ -1,0 +1,5 @@
+04573d445771970b80a85171c0a6aa26ab83f753e8c629914f1df140beaea44c  /root/.cache/velnor-task-targets/20261005/mise-phase0-pr39-098-route-candidate/.mise-version
+27c35aa0c15a0a1bb5a493add443fd89690f6b36f827ecbaeffa9c36e5842001  /root/.cache/velnor-task-targets/20261005/mise-phase0-pr39-098-route-candidate/crates/velnor-actions-mise/src/catalog.rs
+b354e386b3fb5e7da6274104b43f594a110b5004c2035cd84be2b608f9527ee8  /root/.cache/velnor-task-targets/20261005/mise-phase0-pr39-098-route-candidate/crates/velnor-actions-mise/tests/impl_mise_catalog.rs
+dfbf483be0072d30e51648e6dbfc1721b6d78862e8043ca4929792747dc72ca9  /root/.cache/velnor-task-targets/20261005/mise-phase0-pr39-098-route-candidate/crates/velnor-actions-mise/tests/impl_mise_lock.rs
+344f1c38e796c2d521b3d93c9adb0c7f24f0e60d6f8ae11e9ed7c6160a749b9d  /root/.cache/velnor-task-targets/20261005/mise-phase0-pr39-098-route-candidate/crates/velnor-actions-mise/tests/impl_mise_policy.rs

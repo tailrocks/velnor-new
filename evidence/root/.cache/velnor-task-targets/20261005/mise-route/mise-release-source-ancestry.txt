@@ -1,0 +1,22 @@
+source_repository=https://github.com/jdx/mise.git
+
+release_tag_commit:
+44ea2537166efbe21b19d808355d9914e830941a
+17123d84c783aa70f6d531f887e2da5bee588953
+cea8548806a274886eb8981da99bebea61d5a25f
+2026-10-04T06:11:00-05:00
+chore: release 2026.10.2 (#13921)
+
+fix_pr_commit:
+dfe74a90b41603625ee6aabecb42f14a1f5eb0f6
+3f0b40f0697f35374db98d5a2f298657ce9e66a0
+73da24792e41be3d45bd94af9bf384c34e340248
+2026-10-03T22:37:36+07:00
+fix(config): skip miserc discovery with --no-config (#13926)
+
+source_ancestry_check:
+PASS: PR #13926 commit is an ancestor of v2026.10.2 release commit
+
+fix_changed_paths:
+A	e2e/config/test_no_config_skips_miserc
+M	src/config/miserc.rs

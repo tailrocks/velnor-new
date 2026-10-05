@@ -1,0 +1,35 @@
+   Compiling velnor-actions-cli v0.1.0 (/tmp/velnor-release-intent-guard-af82-candidate-20261005/crates/velnor-actions-cli)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.47s
+     Running tests/velnor_cli.rs (/root/.cache/velnor-task-targets/20261005/git-steward-validate-shell/target/debug/deps/velnor_cli-fd5fa9a36fee05a4)
+
+running 14 tests
+test impl_repo_deps::cli_invokes_no_tools_directly ... ok
+test impl_repo_deps::init_reads_no_tool_files ... ok
+test impl_repo_deps::dependency_edges_match_ownership_table ... ok
+test impl_repo_deps::dep_versions_exact_and_consistent ... ok
+test impl_repo_deps::parse_tests_live_outside_src ... ok
+test impl_repo_deps::cli_tests_assert_through_binary_only ... ok
+test impl_repo_deps::git_policy::lockfile_committed_and_locked_used ... ok
+test impl_repo_deps::layout::one_test_entry_per_crate ... ok
+test impl_repo_deps::no_custom_linter_modules ... ok
+test impl_repo_deps::layout::test_entries_match_layout_and_stay_far_below_cases ... ok
+test impl_repo_deps::layout::every_crate_has_registered_tests ... ok
+test impl_repo_deps::external_deps_allowlisted_used_and_narrow ... ok
+test impl_repo_deps::layout::fixtures_stay_independent_and_cover_failures ... ok
+test impl_repo_deps::layout::size_limits_hold ... FAILED
+
+failures:
+
+---- impl_repo_deps::layout::size_limits_hold stdout ----
+
+thread 'impl_repo_deps::layout::size_limits_hold' (1778466) panicked at crates/velnor-actions-cli/tests/impl_repo_deps_layout.rs:58:5:
+over 400 lines: /tmp/velnor-release-intent-guard-af82-candidate-20261005/crates/velnor-actions-cli/../../crates/velnor-actions-orchestrator/src/lib.rs lib/main (151)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+
+failures:
+    impl_repo_deps::layout::size_limits_hold
+
+test result: FAILED. 13 passed; 1 failed; 0 ignored; 0 measured; 229 filtered out; finished in 0.09s
+
+error: test failed, to rerun pass `-p velnor-actions-cli --test velnor_cli`

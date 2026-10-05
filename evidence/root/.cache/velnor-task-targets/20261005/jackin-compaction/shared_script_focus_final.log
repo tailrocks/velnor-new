@@ -1,0 +1,13 @@
+   Compiling velnor-actions-workflow-renderer v0.1.0 (/tmp/velnor-render-compaction-44b2-20261005/crates/velnor-actions-workflow-renderer)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.47s
+     Running unittests src/lib.rs (/root/.cache/velnor-task-targets/20261005/jackin-compaction/debug/debug/deps/velnor_actions_workflow_renderer-baaa2ee710553a16)
+
+running 5 tests
+test render::document_shared_scripts::tests::source_sensitive_shell_constructs_are_rejected ... ok
+test render::document_shared_scripts::tests::custom_checkout_identity_and_later_checkout_fail_closed ... ok
+test render::document_shared_scripts::tests::one_job_and_non_factory_shells_do_not_create_unneeded_files ... ok
+test render::document_shared_scripts::tests::repeated_factory_bodies_keep_order_and_expand_to_exact_original_steps ... ok
+test render::document_shared_scripts::tests::execution_tests::sourced_cache_key_matches_inline_success_and_partial_failure ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 48 filtered out; finished in 0.03s
+
