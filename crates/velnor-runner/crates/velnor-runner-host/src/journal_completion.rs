@@ -2,6 +2,7 @@
 
 use crate::error::HostError;
 use crate::journal::Journal;
+use crate::journal_sql::one_row;
 use crate::reconcile::IntentRow;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

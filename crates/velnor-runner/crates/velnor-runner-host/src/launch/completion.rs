@@ -120,8 +120,8 @@ where
         transport: &transport,
         set_id,
         token: &token,
-        journal,
-        docker,
+        journal: &journal,
+        docker: &docker,
         active: &active,
         limit,
     };
