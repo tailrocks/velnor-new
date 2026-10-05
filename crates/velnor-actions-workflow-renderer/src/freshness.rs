@@ -16,7 +16,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{FRESHNESS_WORKFLOW_PATH, ScheduleTrigger, Step};
+use velnor_actions_contract::{FRESHNESS_WORKFLOW_PATH, ScheduleTrigger, Step, StepRole};
 
 use crate::{
     RenderError, guard, marker,
@@ -81,7 +81,7 @@ impl FreshnessSpec {
 /// Returns [`RenderError`] for invalid spec scalars or steps.
 pub fn render_freshness_workflow(spec: &FreshnessSpec) -> Result<RenderedFile, RenderError> {
     spec.validate()?;
-    let checkout = action_step(
+    let mut checkout = action_step(
         "Checkout",
         &spec.checkout_uses,
         BTreeMap::from([
@@ -89,6 +89,7 @@ pub fn render_freshness_workflow(spec: &FreshnessSpec) -> Result<RenderedFile, R
             ("fetch-depth".to_owned(), "1".to_owned()),
         ]),
     )?;
+    checkout.role = Some(StepRole::Checkout);
     let probe = shell_step(
         "Check upstream freshness",
         vec![
@@ -115,6 +116,11 @@ fn freshness_document(
     checkout: &Step,
     probe: &Step,
 ) -> Result<Yaml, RenderError> {
+    velnor_actions_contract::workflow::step_identity::validate_step_sequence(
+        &[checkout.clone(), probe.clone()],
+        FRESHNESS_JOB_ID,
+    )
+    .map_err(RenderError::Contract)?;
     let crons: Vec<Yaml> = spec
         .schedule
         .cron
@@ -277,6 +283,8 @@ mod tests {
     fn rejects_internal_steps_fail_closed() {
         let internal = Step {
             name: "Plan".to_owned(),
+            id: None,
+            role: None,
             condition: None,
             kind: velnor_actions_contract::StepKind::Internal {
                 operation: "plan-v1".to_owned(),

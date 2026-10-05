@@ -47,7 +47,7 @@ pub(crate) fn mbx_tool_steps(
     uses: &str,
     mbx_version: &str,
     rust_toolchain: &str,
-) -> Result<[Step; 2], RenderError> {
+) -> Result<[Step; 3], RenderError> {
     mbx_steps_for_driver(
         uses,
         CompileDriver::Mbx,

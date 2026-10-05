@@ -28,6 +28,8 @@ fn job(runs_on: &str) -> Job {
         environment: None,
         steps: vec![Step {
             name: "Run probe".to_owned(),
+            id: None,
+            role: None,
             condition: None,
             kind: StepKind::Shell {
                 run: vec!["echo".to_owned(), "probe".to_owned()],
@@ -116,6 +118,8 @@ fn field<'a>(value: &'a crate::yaml::Yaml, key: &str) -> Option<&'a crate::yaml:
 fn rustdocflags_remain_scoped_to_the_documentation_step() {
     let doc_step = Step {
         name: "Documentation".to_owned(),
+        id: None,
+        role: None,
         condition: None,
         kind: StepKind::Shell {
             run: vec!["echo".to_owned(), "doc".to_owned()],
@@ -124,6 +128,8 @@ fn rustdocflags_remain_scoped_to_the_documentation_step() {
     };
     let test_step = Step {
         name: "Tests".to_owned(),
+        id: None,
+        role: None,
         condition: None,
         kind: StepKind::Shell {
             run: vec!["echo".to_owned(), "test".to_owned()],

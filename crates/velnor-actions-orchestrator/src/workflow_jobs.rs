@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 use std::ffi::OsString;
 
 use velnor_actions_contract::workflow::permissions::PermissionLevel;
-use velnor_actions_contract::{Job, JobTimeout, Permissions, Step};
+use velnor_actions_contract::{Job, JobTimeout, Permissions, Step, StepRole};
 use velnor_actions_mise::{
     PREPARE_PINNED_TOOLS_STEP, PinnedTool, PinnedToolExec, PreparePinnedTools, ToolCatalog,
     ToolHomes,
@@ -29,10 +29,10 @@ pub(crate) const LINT_DISPLAY_NAME: &str = "Actionlint";
 
 /// Planner job: checkout, pinned-tool install, optional Acquire, request, plan.
 ///
-/// `Prepare pinned tools` installs the exact catalog tools the later steps consume
-/// through fail-closed `mise exec`, per role: Rust plus the detected MBX driver
-/// for the format/build steps, Nextest when any leg selects it, Opentofu when any
-/// tofu work exists, and the validators the public `generate` runs inside `Check
+/// `Prepare pinned tools` installs the exact catalog tools the plan steps consume
+/// through fail-closed `mise exec`, per role: Rust for Rust plan operations,
+/// Nextest when any leg selects it, Opentofu when any tofu work exists, and the
+/// validators the public `generate` runs inside `Check
 /// generated files`. Without it the freshness step fails with `mise ...
 /// couldn't exec process` because implicit installation is disabled there.
 /// Pure-tofu plans install opentofu plus the validators with no Rust setup
@@ -49,17 +49,11 @@ pub(crate) const LINT_DISPLAY_NAME: &str = "Actionlint";
 /// # Errors
 ///
 /// Returns a contract error when a typed step request is rejected.
-#[expect(
-    clippy::too_many_arguments,
-    clippy::fn_params_excessive_bools,
-    reason = "one call site threads job scope plus role selection"
-)]
 pub(crate) fn plan_job(
     label: &str,
     acquire: Option<Step>,
     catalog: &ToolCatalog,
     use_rust: bool,
-    use_mbx: bool,
     use_nextest: bool,
     use_opentofu: bool,
     fetch_roots: &[String],
@@ -67,7 +61,7 @@ pub(crate) fn plan_job(
     let mut steps = vec![checkout_history_action()?];
     let prepare = prepare_pinned_tools_step(
         catalog,
-        plan_tools(use_rust, use_mbx, use_nextest, use_opentofu),
+        plan_tools(use_rust, use_nextest, use_opentofu),
         use_rust,
     )?;
     steps.push(prepare);
@@ -186,26 +180,18 @@ pub(crate) fn read_actions_permissions() -> Permissions {
     }
 }
 
-/// Plan-job install set per role: drivers, the `generate` validators, Nextest when used.
+/// Plan-job install set per role: Rust, validators, Nextest, and OpenTofu.
 ///
 /// Validators join the driver set because `Check generated files` runs the public
 /// `generate`, whose staged validation fail-closed-execs pinned actionlint, shellcheck,
 /// and zizmor; installing only the driver toolchain leaves that step red. Order
 /// follows `PinnedTool::ALL`. Pure-tofu plans carry opentofu plus the validators
-/// with no Rust; mixed plans carry the union.
-#[expect(
-    clippy::fn_params_excessive_bools,
-    reason = "four independent install flags mirror the role selection"
-)]
-fn plan_tools(
-    use_rust: bool,
-    use_mbx: bool,
-    use_nextest: bool,
-    use_opentofu: bool,
-) -> Vec<PinnedTool> {
+/// with no Rust; mixed plans carry the union. The native MBX action owns MBX
+/// installation for both ordinary and pre-seed plans; its preceding
+/// preflight checks only that the exact Rust toolchain is ready.
+fn plan_tools(use_rust: bool, use_nextest: bool, use_opentofu: bool) -> Vec<PinnedTool> {
     let mut tools = Vec::new();
     tools.extend(use_rust.then_some(PinnedTool::Rust));
-    tools.extend(use_mbx.then_some(PinnedTool::MrBoxington));
     tools.extend([
         PinnedTool::Actionlint,
         PinnedTool::Shellcheck,
@@ -243,10 +229,13 @@ fn prepare_pinned_tools_step(
         strings_of_env(&prepare.env_without_homes())
     }
     .map_err(|problem| OrchestratorError::Contract { problem })?;
-    velnor_actions_workflow_renderer::ambient_shell_step(PREPARE_PINNED_TOOLS_STEP, run, env)
-        .map_err(|err| OrchestratorError::Contract {
+    let mut step =
+        velnor_actions_workflow_renderer::ambient_shell_step(PREPARE_PINNED_TOOLS_STEP, run, env)
+            .map_err(|err| OrchestratorError::Contract {
             problem: err.to_string(),
-        })
+        })?;
+    step.role = Some(StepRole::PreparePinnedTools);
+    Ok(step)
 }
 
 /// Typed write-request step for one internal target, mapped to contract errors.

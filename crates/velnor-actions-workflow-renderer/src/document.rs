@@ -13,7 +13,7 @@ use crate::{
     yaml::Yaml,
 };
 use velnor_actions_contract::{
-    Job, Permissions, RunsOn, StepKind, Trigger, WorkflowIr,
+    Job, Permissions, RunsOn, StepKind, StepRole, Trigger, WorkflowIr,
     workflow::{ir::DispatchInput, permissions::PermissionLevel},
 };
 
@@ -52,7 +52,7 @@ pub(crate) fn workflow_to_yaml(
     for (id, job) in jobs {
         let call = shared.calls.get(id).map(String::as_str);
         let actions_read =
-            job.permissions.as_ref().unwrap_or(&ir.permissions).actions == PermissionLevel::Read;
+            grants_exact_actions_read(job.permissions.as_ref().unwrap_or(&ir.permissions).actions);
         rendered_jobs.push((
             id.clone(),
             job_to_yaml(
@@ -89,6 +89,13 @@ pub(crate) fn workflow_to_yaml(
         ),
         ("jobs".to_owned(), Yaml::Map(rendered_jobs)),
     ]))
+}
+
+/// Report download is intentionally limited to the least-privilege `read` grant.
+/// A broader `write` grant can access artifacts on GitHub, but does not satisfy
+/// this renderer policy; callers must model the dedicated reader scope.
+fn grants_exact_actions_read(level: PermissionLevel) -> bool {
+    level == PermissionLevel::Read
 }
 
 fn lane_steps(shared: &LaneShare) -> crate::document_lanes::SharedLaneSteps<'_> {
@@ -248,33 +255,6 @@ fn job_to_yaml(
         RunsOn::Hosted(label) => Yaml::str(label),
         RunsOn::ScaleSet(selector) => Yaml::Flow(selector.labels().to_vec()),
     };
-    let job_env = job_environment(id, job, ctx, lanes, mbx_policy);
-    let mut entries = job_header_fields(job, runs_on);
-    append_job_options(&mut entries, job, scale_set, &job_env)?;
-    let rendered_steps = crate::document_lanes::render_job_steps(
-        id,
-        job,
-        ctx,
-        needs_envs,
-        shared,
-        lanes,
-        &crate::document_lanes::JobStepContext {
-            job_env: &job_env,
-            runs_on: Some(&job.runs_on),
-            actions_read: mbx_policy.actions_read,
-        },
-    )?;
-    entries.push(("steps".to_owned(), Yaml::Seq(rendered_steps)));
-    Ok(Yaml::Map(entries))
-}
-
-fn job_environment(
-    id: &str,
-    job: &Job,
-    ctx: &RenderContext,
-    lanes: &crate::document_lanes::SharedLaneSteps<'_>,
-    mbx_policy: MbxJobPolicy,
-) -> BTreeMap<String, String> {
     let source_steps = lanes
         .env_steps
         .get(id)
@@ -309,7 +289,7 @@ fn job_environment(
                 if let Some(toolchain) = env.get("RUSTUP_TOOLCHAIN") {
                     job_env.insert("RUSTUP_TOOLCHAIN".to_owned(), toolchain.clone());
                 }
-                if step.name == crate::steps::ACQUIRE_NAME {
+                if step.role == Some(StepRole::AcquireVelnor) {
                     for key in [
                         crate::steps::ASSET_SHA_ENV,
                         crate::steps::ASSET_URL_ENV,
@@ -335,7 +315,23 @@ fn job_environment(
             crate::cache_steps::MBX_SHARE_OUT_DIR_VALUE.to_owned(),
         );
     }
-    job_env
+    let mut entries = job_header_fields(job, runs_on);
+    append_job_options(&mut entries, job, scale_set, &job_env)?;
+    let rendered_steps = crate::document_lanes::render_job_steps(
+        id,
+        job,
+        ctx,
+        needs_envs,
+        shared,
+        lanes,
+        &crate::document_lanes::JobStepContext {
+            job_env: &job_env,
+            runs_on: Some(&job.runs_on),
+            actions_read: mbx_policy.actions_read,
+        },
+    )?;
+    entries.push(("steps".to_owned(), Yaml::Seq(rendered_steps)));
+    Ok(Yaml::Map(entries))
 }
 
 fn job_header_fields(job: &Job, runs_on: Yaml) -> Vec<(String, Yaml)> {

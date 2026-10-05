@@ -1,43 +1,46 @@
 //! Renderer-owned workflow step output IDs.
 
+use velnor_actions_contract::{Step, StepId};
+
 use crate::yaml::Yaml;
 
-/// Append the fixed output ID for one renderer-owned step name.
-pub(crate) fn push_step_id(entries: &mut Vec<(String, Yaml)>, name: &str) {
-    let Some(id) = step_id(name) else {
+/// Append the output ID authorized by a typed step identity.
+pub(crate) fn push_step_id(entries: &mut Vec<(String, Yaml)>, step: &Step) {
+    let Some(id) = step.id.map(StepId::as_str) else {
         return;
     };
-    entries.push(("id".to_owned(), Yaml::str(id.to_owned())));
+    push_explicit_step_id(entries, id);
 }
 
-fn step_id(name: &str) -> Option<&'static str> {
-    match name {
-        crate::cache_steps::MBX_RESTORE_NAME => Some("mbx"),
-        crate::mbx_bundle::MBX_CACHE_KEY_NAME => Some("mbx-cache-key"),
-        crate::mbx_bundle::MBX_BUNDLE_RESTORE_NAME => Some("mbx-bundle"),
-        crate::mbx_bundle::MBX_BUNDLE_EXPORT_NAME => Some("mbx-export"),
-        crate::cache_p08::TOOLS_CACHE_IDENTITY_NAME => {
-            Some(crate::cache_p08::TOOLS_CACHE_IDENTITY_STEP_ID)
-        }
-        _ => None,
-    }
+/// Append an output ID for a fixed generated action whose ID has no contract
+/// enum variant yet.
+pub(crate) fn push_explicit_step_id(entries: &mut Vec<(String, Yaml)>, id: &str) {
+    entries.push(("id".to_owned(), Yaml::str(id.to_owned())));
 }
 
 #[cfg(test)]
 mod tests {
     use super::push_step_id;
+    use velnor_actions_contract::{Step, StepId, StepKind, StepRole};
+
     use crate::yaml::Yaml;
 
     #[test]
     fn runtime_cache_identity_has_one_renderer_owned_output_id() {
         let mut entries = Vec::new();
-        push_step_id(&mut entries, crate::cache_p08::TOOLS_CACHE_IDENTITY_NAME);
+        let step = Step {
+            name: "presentation can vary".to_owned(),
+            id: Some(StepId::PublishBaseline),
+            role: Some(StepRole::BaselinePublisher),
+            condition: None,
+            kind: StepKind::Internal {
+                operation: "publish-baseline-v1".to_owned(),
+            },
+        };
+        push_step_id(&mut entries, &step);
         assert_eq!(
             entries,
-            vec![(
-                "id".to_owned(),
-                Yaml::str(crate::cache_p08::TOOLS_CACHE_IDENTITY_STEP_ID.to_owned())
-            )]
+            vec![("id".to_owned(), Yaml::str("publish-baseline".to_owned()))]
         );
     }
 }

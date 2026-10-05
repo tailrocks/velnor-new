@@ -17,10 +17,11 @@ use crate::{
 /// An absent plan artifact (failed plan) must still reach the merge
 /// verdict instead of failing the job at the download step.
 fn is_verdict_download(step: &Step) -> bool {
-    matches!(
-        &step.kind,
-        StepKind::Action { uses, .. } if uses == steps::DOWNLOAD_ARTIFACT_USES
-    ) && step.name == crate::closure::DOWNLOAD_PLAN_NAME
+    step.role == Some(velnor_actions_contract::StepRole::DownloadPlan)
+        && matches!(
+            &step.kind,
+            StepKind::Action { uses, .. } if uses == steps::DOWNLOAD_ARTIFACT_USES
+        )
 }
 
 /// Env for one internal step: op plus request file, authorized reads carry auth.
@@ -83,7 +84,7 @@ fn action_step_to_yaml(
     job_env: &BTreeMap<String, String>,
     runs_on: Option<&str>,
 ) -> Result<Yaml, RenderError> {
-    let runtime_identity = step.name == crate::cache_p08::TOOLS_CACHE_IDENTITY_NAME
+    let runtime_identity = step.role == Some(velnor_actions_contract::StepRole::ToolsCacheIdentity)
         || ["ubuntu-22.04", "ubuntu-24.04", "ubuntu-26.04"]
             .iter()
             .any(|lane| crate::cache_p08::runtime_identity_action_uses(lane) == Some(uses));
@@ -93,7 +94,7 @@ fn action_step_to_yaml(
                 "tools_cache_identity_missing_runner".to_owned(),
             ));
         };
-        crate::cache_p08::validate_runtime_identity_action(&step.name, uses, lane, with, env)?;
+        crate::cache_p08::validate_runtime_identity_action(step, uses, lane, with, env)?;
     } else if uses == crate::tool_seed::TOOL_SEED_USES {
         crate::tool_seed::validate_action_call(step, uses, with, env)?;
     } else {
@@ -107,7 +108,13 @@ fn action_step_to_yaml(
     }
     commands::validate_env(env)?;
     let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
-    crate::step_ids::push_step_id(&mut entries, &step.name);
+    crate::step_ids::push_step_id(&mut entries, step);
+    if runtime_identity {
+        crate::step_ids::push_explicit_step_id(
+            &mut entries,
+            crate::cache_p08::TOOLS_CACHE_IDENTITY_STEP_ID,
+        );
+    }
     if let Some(condition) = &step.condition {
         steps::scan_for_private_subcommands(condition)?;
         entries.push(("if".to_owned(), Yaml::str(condition.clone())));
@@ -120,7 +127,10 @@ fn action_step_to_yaml(
     if job_id == FINAL_JOB_ID && is_verdict_download(step) {
         entries.push(("continue-on-error".to_owned(), Yaml::Bool(true)));
     }
-    let uses_value = if runtime_identity || uses == crate::tool_seed::TOOL_SEED_USES {
+    let uses_value = if runtime_identity
+        || uses == crate::tool_seed::TOOL_SEED_USES
+        || uses == crate::tofu_cache::TOFU_PROVIDER_ADMISSION_USES
+    {
         Yaml::annotated(uses, "zizmor: ignore[self-repository]")
     } else {
         Yaml::str(uses.to_owned())
@@ -178,7 +188,7 @@ pub(crate) fn step_to_yaml(
                 commands::validate_env(env)?;
             }
             let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
-            crate::step_ids::push_step_id(&mut entries, &step.name);
+            crate::step_ids::push_step_id(&mut entries, step);
             if let Some(condition) = &step.condition {
                 steps::scan_for_private_subcommands(condition)?;
                 entries.push(("if".to_owned(), Yaml::str(condition.clone())));
@@ -221,6 +231,7 @@ pub(crate) fn step_to_yaml(
             } else {
                 &[]
             };
+            crate::step_ids::push_step_id(&mut entries, step);
             entries.push((
                 "env".to_owned(),
                 internal_env(

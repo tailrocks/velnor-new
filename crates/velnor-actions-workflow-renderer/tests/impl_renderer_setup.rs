@@ -102,7 +102,10 @@ fn strict_inserts_setup_before_mise_exec() -> Result<(), RenderError> {
     ] {
         assert!(text.contains(&line), "sole owner saves {line}:\n{text}");
     }
-    assert!(!text.contains("cache_key:"), "no action-owned key:\n{text}");
+    assert!(
+        text.contains("cache_key: mise-tools-v2-"),
+        "host seed key is explicit:\n{text}"
+    );
     Ok(())
 }
 
@@ -191,6 +194,8 @@ fn strict_rejects_setup_misuse() -> Result<(), RenderError> {
     );
     let malformed = velnor_actions_contract::Step {
         name: SETUP_MISE_NAME.to_owned(),
+        id: None,
+        role: None,
         condition: None,
         kind: velnor_actions_contract::StepKind::Action {
             uses: MISE_USES.to_owned(),

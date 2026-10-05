@@ -73,6 +73,7 @@ fn only_qualified_hosted_lane_keeps_a_tools_cache_prelude() {
         })?;
         Ok::<_, crate::RenderError>(vec![
             payload.runtime_identity_step()?,
+            crate::tool_seed::seed_step(&payload)?,
             payload.restore_step()?,
         ])
     };
@@ -91,13 +92,14 @@ fn only_qualified_hosted_lane_keeps_a_tools_cache_prelude() {
 
     let shared = share_lanes(&jobs, &ctx()).expect("lane-specific prelude factors");
     let hosted_prelude = &shared.runtime_preludes[hosted_id];
-    assert_eq!(hosted_prelude.len(), 2);
+    assert_eq!(hosted_prelude.len(), 3);
     assert_eq!(
         hosted_prelude[0].name,
         crate::cache_p08::TOOLS_CACHE_IDENTITY_NAME
     );
+    assert_eq!(hosted_prelude[1].name, crate::tool_seed::TOOL_SEED_NAME);
     assert_eq!(
-        hosted_prelude[1].name,
+        hosted_prelude[2].name,
         crate::cache_steps::TOOLS_RESTORE_NAME
     );
     assert!(shared.runtime_preludes[local_id].is_empty());
@@ -140,7 +142,7 @@ fn with_wrong_identity_lane(
         .expect("hosted lane")
         .steps
         .iter_mut()
-        .find(|step| step.name == crate::cache_p08::TOOLS_CACHE_IDENTITY_NAME)
+        .find(|step| step.role == Some(velnor_actions_contract::StepRole::ToolsCacheIdentity))
         .expect("runtime identity");
     let StepKind::Action { uses, .. } = &mut identity.kind else {
         panic!("identity uses a local composite action");

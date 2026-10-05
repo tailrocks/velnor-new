@@ -45,6 +45,7 @@ fn tool_lines(body: &str) -> Vec<&str> {
                 lane_specific_cache_step = matches!(
                     content,
                     "- name: V2 identity"
+                        | "- name: Restore Velnor tool seed"
                         | "- name: Restore Mise tools"
                         | "- name: Save Mise tools"
                 );

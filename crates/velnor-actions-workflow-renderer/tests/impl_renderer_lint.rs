@@ -149,14 +149,56 @@ fn validator_commands() -> Vec<ValidatorCommand> {
         validator_command(
             ValidatorKind::Zizmor,
             "Run zizmor",
-            [
-                &mise[..],
-                &["exec", zizmor, "--", "zizmor", "--no-online-audits"][..],
-            ]
-            .concat(),
+            scrubbed_zizmor_argv(zizmor),
             [&mise[..], &["install", zizmor][..]].concat(),
         ),
     ]
+}
+
+fn scrubbed_zizmor_argv(tool: &'static str) -> Vec<&'static str> {
+    let mut argv = vec!["env"];
+    for variable in [
+        "ACTIONS_ID_TOKEN_REQUEST_TOKEN",
+        "ACTIONS_ID_TOKEN_REQUEST_URL",
+        "ACTIONS_RUNTIME_TOKEN",
+        "GITHUB_TOKEN",
+        "MISE_GITHUB_TOKEN",
+        "GH_TOKEN",
+        "GH_HOST",
+        "GH_CONFIG_DIR",
+    ] {
+        argv.extend(["-u", variable]);
+    }
+    argv.extend([
+        "mise",
+        "--no-config",
+        "--no-env",
+        "--no-hooks",
+        "exec",
+        tool,
+        "--",
+        "zizmor",
+        "--no-online-audits",
+    ]);
+    argv
+}
+
+fn with_credential_unset(mut argv: Vec<String>) -> Vec<String> {
+    let mut wrapped = vec!["env".to_owned()];
+    for variable in [
+        "ACTIONS_ID_TOKEN_REQUEST_TOKEN",
+        "ACTIONS_ID_TOKEN_REQUEST_URL",
+        "ACTIONS_RUNTIME_TOKEN",
+        "GITHUB_TOKEN",
+        "MISE_GITHUB_TOKEN",
+        "GH_TOKEN",
+        "GH_HOST",
+        "GH_CONFIG_DIR",
+    ] {
+        wrapped.extend(["-u".to_owned(), variable.to_owned()]);
+    }
+    wrapped.append(&mut argv);
+    wrapped
 }
 
 fn validator_command(
@@ -220,7 +262,7 @@ fn zizmor_support_unsets_empty_tokens_after_pinned_install() -> Result<(), Rende
             "install".to_owned(),
             "zizmor@1.30.1".to_owned(),
         ],
-        argv: mise_argv(
+        argv: with_credential_unset(mise_argv(
             "zizmor@1.30.1",
             "zizmor",
             &[
@@ -229,7 +271,7 @@ fn zizmor_support_unsets_empty_tokens_after_pinned_install() -> Result<(), Rende
                 ".zizmor.yml",
                 ".github/workflows",
             ],
-        ),
+        )),
     }];
     let support = VelnorSupportWorkflow {
         validators: vec![ValidatorKind::Zizmor],
@@ -263,8 +305,8 @@ fn zizmor_support_unsets_empty_tokens_after_pinned_install() -> Result<(), Rende
     );
     assert!(zizmor_job[execute..].contains("exec zizmor@1.30.1 -- zizmor"));
     assert!(
-        zizmor_job.contains("GH_TOKEN: \"\""),
-        "empty scrub overlay remains"
+        !zizmor_job.contains("GH_TOKEN: \"\""),
+        "bootstrap must not inherit empty auth values"
     );
     Ok(())
 }
@@ -352,8 +394,8 @@ fn zizmor_preparation_keeps_job_env_and_exec_unsets_it() -> Result<(), RenderErr
         "validator command must remove inherited token environment:\n{zizmor}"
     );
     assert!(
-        zizmor.contains("GH_TOKEN: \"\""),
-        "scrubbed environment must be rendered:\n{zizmor}"
+        !zizmor.contains("GH_TOKEN: \"\""),
+        "empty credentials break Mise bootstrap and must not be inherited:\n{zizmor}"
     );
     Ok(())
 }

@@ -11,7 +11,7 @@ use std::collections::BTreeMap;
 use std::fs;
 
 use tempfile::TempDir;
-use velnor_actions_contract::{Step, StepKind};
+use velnor_actions_contract::{Step, StepKind, StepRole};
 use velnor_actions_mise::{cache_sources, cache_trust};
 use velnor_actions_orchestrator::{GenerationPreparation, prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
@@ -313,11 +313,10 @@ fn single_writer_plan_saves_crates_restore_only() -> TestResult {
 fn restore_mbx_fetch_order_every_crate_job() -> TestResult {
     let (_repo, prep) = prep_for(true)?;
     for job in crate_jobs(&prep) {
-        let names: Vec<String> = job_steps(&prep, &job)?
-            .iter()
-            .map(|step| step.name.clone())
-            .collect();
-        cache_sources::check_restore_before_fetch(&names, true).expect("order");
+        let steps = job_steps(&prep, &job)?;
+        let roles: Vec<Option<StepRole>> = steps.iter().map(|step| step.role).collect();
+        let names: Vec<String> = steps.iter().map(|step| step.name.clone()).collect();
+        cache_sources::check_restore_before_fetch(&roles, true).expect("order");
         let at = |want: &str| names.iter().position(|n| n == want);
         let (Some(restore), Some(mbx), Some(fetch)) = (
             at("Restore Cargo sources"),

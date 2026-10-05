@@ -55,15 +55,13 @@ fn expression_spans(text: &str) -> Option<Vec<&str>> {
 /// to the default branch; Scale Set routes do not invoke action restore.
 /// Notably absent: `github.token` (render-time fetch binding only)
 /// and run IDs (never in env).
-const ENV_EXPRESSIONS: [&str; 10] = [
+const ENV_EXPRESSIONS: [&str; 8] = [
     "runner.temp",
     "github.ref_name",
     "github.event_name",
     "github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read'",
     "secrets.CARGO_REGISTRY_TOKEN",
     "secrets.GITHUB_TOKEN",
-    "steps.mbx-bundle.outputs.cache-matched-key",
-    "steps.mbx-cache-key.outputs.prefix",
     "github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.sha",
     "inputs.cache_key",
 ];
@@ -74,15 +72,17 @@ const ENV_EXPRESSIONS: [&str; 10] = [
 /// push-gated cache-save flag, and the publish step's derived
 /// artifact name. Notably absent: every `secrets.*` handle (rejected
 /// separately as `secret_in_action_input`).
-const WITH_EXPRESSIONS: [&str; 8] = [
+const WITH_EXPRESSIONS: [&str; 10] = [
     "runner.temp",
     "github.run_id",
     "github.run_attempt",
     "github.event_name == 'push'",
     "steps.publish-baseline.outputs.artifact_name",
-    "steps.mbx-cache-key.outputs.key",
-    "steps.mbx-cache-key.outputs.prefix",
     "steps.v2.outputs.identity",
+    "runner.environment",
+    "github.job",
+    "steps.tofu-providers.outputs.cache-key",
+    "steps.tofu-providers.outputs.cache-path",
 ];
 
 /// True for a `matrix.*` field reference (both layers allow the family).

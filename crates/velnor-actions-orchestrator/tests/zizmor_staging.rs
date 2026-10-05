@@ -130,7 +130,7 @@ fn policy_preview() -> Result<PolicyPreview, Box<dyn std::error::Error>> {
             output_dir: Some(preview.clone()),
         },
     )?;
-    assert_eq!(report.files_written.len(), 7, "seven generated files");
+    assert_eq!(report.files_written.len(), 8, "eight generated files");
     assert!(
         report
             .files_written

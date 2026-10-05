@@ -271,14 +271,7 @@ pub fn finalize_jobs(
             velnor_actions_contract::target_for_runner_label(&ctx.runs_on).ok_or_else(|| {
                 RenderError::InvalidWorkflow(format!("tools_cache_unsupported_target:{id}"))
             })?;
-        cache_p08::ensure_tools_cache_v2(
-            id,
-            job,
-            mise,
-            always,
-            target,
-            &ctx.checkout_uses,
-        )?;
+        cache_p08::ensure_tools_cache_v2(id, job, mise, always, target, &ctx.checkout_uses)?;
         cache_p08::check_no_legacy_rust_cache(id, job)?;
         cache_p08::check_mbx_before_fetch(id, job)?;
         closure::check_internal_staged(id, job, ctx.preseed)?;
@@ -297,14 +290,17 @@ pub fn finalize_jobs(
     Ok(jobs)
 }
 
-/// Sorted unique `uses:` refs across every action step (plan display).
+/// Sorted unique pinned `uses:` refs across every action step (plan display).
+/// Generated local composites are paths, not external action pins.
 #[must_use]
 pub fn action_pins(jobs: &BTreeMap<String, Job>) -> Vec<String> {
     let mut pins = std::collections::BTreeSet::new();
     for job in jobs.values() {
         for step in &job.steps {
             if let velnor_actions_contract::StepKind::Action { uses, .. } = &step.kind {
-                pins.insert(uses.clone());
+                if !uses.starts_with("./.github/actions/") {
+                    pins.insert(uses.clone());
+                }
             }
         }
     }
@@ -346,7 +342,6 @@ fn merged_jobs(
     support::check_candidate_invariants(&jobs)?;
     support::check_final_gate(&jobs)?;
     support::check_token_hygiene(&jobs)?;
-    crate::mbx_bundle::append_single_bundle_saves(&mut jobs)?;
     support::check_token_hygiene(&jobs)?;
     Ok(jobs)
 }
@@ -375,7 +370,6 @@ fn render_merged(
         matrix::attach_plan_outputs(&mut document)?;
     }
     matrix::attach_crate_job_caps(&mut document, &caps)?;
-    matrix::insert_publish_step_id(&mut document)?;
     let document = crate::yaml::quote_run_values_in_yaml(document);
     let text = marker::with_marker(&ctx.generator_version, &render_yaml(&document))?;
     crate::workflow_size::check_workflow_size(WORKFLOW_PATH, &text)?;
@@ -385,7 +379,7 @@ fn render_merged(
         &jobs,
         &ctx.generator_version,
     )?;
-    if crate::tool_seed::any_job_has_seed(&jobs) {
+    if crate::tool_seed::any_job_has_seed(&jobs)? {
         shared_files.push(crate::tool_seed::action_file(&ctx.generator_version)?);
     }
     Ok(RenderedWorkflow {

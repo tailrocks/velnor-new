@@ -153,8 +153,12 @@ fn finalized_tofu_jobs_save_exactly_their_restored_key() -> TestResult {
         let StepKind::Action { with, .. } = &restore.kind else {
             return Err(format!("{id} restore must be an action step").into());
         };
-        let key = with.get("key").ok_or("restore key")?.clone();
-        let path = with.get("path").ok_or("restore path")?.clone();
+        let key = with.get("cache-key").ok_or("restore key")?.clone();
+        let path = with.get("cache-path").ok_or("restore path")?;
+        assert!(
+            velnor_actions_workflow_renderer::tofu_cache::tofu_providers_path_ok(path),
+            "{id} restores one owned plugin-cache leaf"
+        );
         let saves: Vec<_> = job
             .steps
             .iter()
@@ -166,8 +170,16 @@ fn finalized_tofu_jobs_save_exactly_their_restored_key() -> TestResult {
         let StepKind::Action { with: inputs, .. } = &save.kind else {
             return Err(format!("{id} save must be an action step").into());
         };
-        assert_eq!(inputs.get("key"), Some(&key), "{id} saves its own key");
-        assert_eq!(inputs.get("path"), Some(&path), "{id} saves its own path");
+        assert_eq!(
+            inputs.get("key").map(String::as_str),
+            Some(velnor_actions_contract::workflow::step_identity::TOFU_PROVIDERS_KEY_OUTPUT_EXPR),
+            "{id} saves the output key from its own restore"
+        );
+        assert_eq!(
+            inputs.get("path").map(String::as_str),
+            Some(velnor_actions_contract::workflow::step_identity::TOFU_PROVIDERS_PATH_OUTPUT_EXPR),
+            "{id} saves the output path from its own restore"
+        );
         keys.push(key);
     }
     assert_eq!(keys.len(), 2, "one tofu job per root");
