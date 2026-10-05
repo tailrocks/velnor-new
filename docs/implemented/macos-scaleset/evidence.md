@@ -9,23 +9,25 @@ ack-without-start. Later one-class runs covered JavaScript, services,
 artifacts, Buildx, an expected failure, and the classes in the second table
 below, plus Compose, bind mounts, Testcontainers, submodules/LFS,
 same-port workers, and cancel-with-service in the third table. The full G4
-gate stays `NOT_RUN`. No ChainArgos rollout. The first `image-release.yml`
-and `macos-binary-release.yml` dispatches returned HTTP 404 and were not
+gate stays `BLOCKED_EXTERNAL`. ChainArgos now pins the PR 16 generator
+commit; that rollout is not G7. The first `image-release.yml` and
+`macos-binary-release.yml` dispatches returned HTTP 404 and were not
 retried. Later registered runs published GitHub release assets from `19a43f5`
 (image run `37102027384`, macOS run `37102029367`). Those assets are not a
-GHCR push, not a new generator, and not a ChainArgos pin. G3, the full G4
-suite, G7, and G8 stay `NOT_RUN`.
+GHCR push, not a new generator, and not the ChainArgos pin. G3 is `PASS`.
+G7 and G8 stay `NOT_RUN`.
 
 ## Identities
 
 | Source | SHA or value | Versus research pin |
 |---|---|---|
-| `tailrocks/velnor-new` main | `c57c700459bbe1549fe7eedcb7d8689585c38986` | unchanged |
-| tag `v0.1.0` | lightweight tag on that same commit | unchanged |
-| release `target_commitish` | `95c1d6f0f1056881e42d53846dac8ffccd7aa6a5` | not the tag object |
-| release `immutable` | `false` | not a provenance proof |
-| Linux asset SHA-256 | `aa7e44d6579e9c586106d120ed3658fcf1c9b041027ad9f03473e8efacd3b5d5` | checksum, not notarization |
-| macOS arm64 asset SHA-256 | `b6f514b71e3d1d72978c66cecf23560e7f25ad51727e9f26c88870b77d61695f` | checksum, not notarization |
+| `tailrocks/velnor-new` main | `b9fdb1bc27b7aeeb71264cd2195328b4c5387627` | PR 17 squash; was `c57c700459bbe1549fe7eedcb7d8689585c38986` |
+| tag `v0.1.0` | `c57c700459bbe1549fe7eedcb7d8689585c38986` | not moved |
+| tag `generator-d40868152f7fe0106e3ede858a411f502f00810f` | `d40868152f7fe0106e3ede858a411f502f00810f` | PR 16 squash; not `v0.1.0` |
+| `v0.1.0` release `target_commitish` | `95c1d6f0f1056881e42d53846dac8ffccd7aa6a5` | not the tag object |
+| `v0.1.0` release `immutable` | `false` | not a provenance proof |
+| `v0.1.0` Linux asset SHA-256 | `aa7e44d6579e9c586106d120ed3658fcf1c9b041027ad9f03473e8efacd3b5d5` | checksum, not notarization |
+| `v0.1.0` macOS arm64 asset SHA-256 | `b6f514b71e3d1d72978c66cecf23560e7f25ad51727e9f26c88870b77d61695f` | checksum, not notarization |
 | `tailrocks/velnor` main | `3f6633252963efef0d71244aadae36516a11601e` | unchanged |
 | PR 1133 head | `a2a4d9f4da2c5c7a4bee8cb55b2525f301890b3a` | moved; was `27049c4bfca42d9d5a1e8cbbe584a2658ee5a77d`; draft; 0 reviews; 70 files |
 | PR 1135 head | `3074bb36c2fe4f9ca0b34deb19a67acc3eb5a9c8` | unchanged; draft; 0 reviews; 5 files |
@@ -33,7 +35,7 @@ suite, G7, and G8 stay `NOT_RUN`.
 | `actions/runner` | `d7bc179baf11a02110b46cfbbc4040f74ac3f60a` | re-read 2026-10-03; unchanged |
 | runner release | `v2.337.0` linux x64 SHA-256 `70920811a4f8ad4328818682bca5c6469c1c942fab52448868071d0063816613` | from the release body |
 | `actions/runner-images` | `6d942e630479cd99a93dadfc766af11242bfa402` | Ubuntu 26.04 readme says generally available, image `20260927.149.1` |
-| `ChainArgos/java-monorepo` main | `570132119c488150d8adcea2d9334fc3654567d4` | moved; was `5f77c0b09eda3ac4a6fb8c5de0a622a0cb926c45` |
+| `ChainArgos/java-monorepo` main | `0a937e0c0442782bfb88c43cfdf67c1fc3f3b4f0` | PR 2084 squash; was `570132119c488150d8adcea2d9334fc3654567d4` |
 
 Open PR census on `tailrocks/velnor`: only 1133 and 1135.
 
@@ -79,7 +81,7 @@ On 2026-10-03 the debug binary `crates/velnor-runner/target/debug/velnor-host` (
 
 ## ChainArgos coverage
 
-Re-read at `570132119c488150d8adcea2d9334fc3654567d4`: `.velnor/config.toml` is still schema 1, Rust `mbx`, `cargo_nextest`. The only workflow is generated `ci.yml` (24 jobs, every `runs-on` is `ubuntu-26.04`). No Java, Kotlin, Gradle, Bun, or frontend test job is in that file.
+Re-read at `570132119c488150d8adcea2d9334fc3654567d4`: `.velnor/config.toml` is still schema 1, Rust `mbx`, `cargo_nextest`. The only workflow is generated `ci.yml` (24 jobs, every `runs-on` is `ubuntu-26.04`). No Java, Kotlin, Gradle, Bun, or frontend test job is in that file. That commit is the old pin. The current pin is schema 2 and is recorded below.
 
 Ruleset `protect-main` (id 15177499) on `ChainArgos/java-monorepo` was re-read on 2026-10-03. Its required status check context is `Required` (one entry). Approving-review count is 0. Merge method is squash. Linear history is required. Review threads must be resolved. `protect-tags` (id 15581293) is also active. Do not delete either ruleset and do not invent a green `Required` or `ci-required` status.
 
@@ -179,7 +181,7 @@ This section does not mark G4 `PASS`. A later `features` dispatch and a queue-pr
 
 Every non-skipped job concluded `success`. This is not a queue-pressure proof: four scale-set jobs succeeded, and no snapshot showed one still queued behind two busy workers.
 
-While those four workers were up, `docker inspect` showed each runner `privileged=false`, user `runner`, published ports empty, mounts only `volume:/run` and `volume:/home/runner/_work`. Each DinD was privileged with the same private volumes and no published ports. Needle counts for `jitconfig`, `actions_runner_input_jitconfig`, `ghp_`, and `github_pat_` were 0 on all eight containers. Host `arm64`, Docker VM `aarch64`. Scratch: `g3-inspect-features.txt`. That inspect is not the kill-at-each-stage matrix, so G3 stays `NOT_RUN`.
+While those four workers were up, `docker inspect` showed each runner `privileged=false`, user `runner`, published ports empty, mounts only `volume:/run` and `volume:/home/runner/_work`. Each DinD was privileged with the same private volumes and no published ports. Needle counts for `jitconfig`, `actions_runner_input_jitconfig`, `ghp_`, and `github_pat_` were 0 on all eight containers. Host `arm64`, Docker VM `aarch64`. Scratch: `g3-inspect-features.txt`. That inspect is not the kill-at-each-stage matrix, so this observation does not mark G3.
 
 ## Queue pressure
 
@@ -227,7 +229,7 @@ Later, example `stage_once` called `start_pair_until` on this Mac (`HEAD` `c7c7f
 
 Qualification run [37103831130](https://github.com/tailrocks/velnor-new/actions/runs/37103831130) at `4f512e27099d2ba1e869bcbea6abd5a43824efde` concluded `success`. Job [111148411061](https://github.com/tailrocks/velnor-new/actions/runs/37103831130/job/111148411061) (`Verify / Velnor Scale Set / Linux x64`) concluded `success` on runner `m100000108` in group `Default`, started `2026-10-03T06:49:25Z`, completed `2026-10-03T06:49:35Z`. `launch_once` printed `set_id=1 started=true runner_id=7e0e126d41c56f113f5ba16b621c48f545df99b36bb252066917ae804c1fb8c9 dind_id=948d97b50f004e26bb6f7e96bbeaf3ad6369b28f81ad374083dc140affa80edb` and exited 0. That runner container image was `velnor-runner:ubuntu-26.04-2.337.0`. It started `2026-10-03T06:49:16Z` and exited 0 at `2026-10-03T06:49:36Z`. `docker exec` at `2026-10-03T06:51:24Z` failed: `container 7e0e126d41c56f113f5ba16b621c48f545df99b36bb252066917ae804c1fb8c9 is not running`. Scratch: `launch-once-exec.txt`, `g3-jit.txt`.
 
-No canary secret was planted in that job. G3 stays `NOT_RUN`. The job log still has no cgroup or `AssertCompatibleOS` line. G4's cgroup proof is `BLOCKED_EXTERNAL` in `verification.md`.
+No canary secret was planted in that job. This observation does not mark G3. The job log still has no cgroup or `AssertCompatibleOS` line. G4's cgroup proof is `BLOCKED_EXTERNAL` in `verification.md`.
 
 ## Live exec during sleep 180
 
@@ -241,7 +243,7 @@ Same device 41 and inode in both containers: `_work` `128827765`, `_temp` `12882
 
 The counted secret was the controller JIT payload on the guest `Runner.Listener` argv. It was not printed. Counts of that exact string were 0 in Docker inspect (env, cmd, labels, entrypoint, and the full document), container logs, host argv, `launch.db` (including wal and shm), `.velnor` TOML, and LaunchAgent plists. The cancel job does not reference `secrets.*`, and no guest process environ contained a `GITHUB_TOKEN` key at exec time.
 
-Cleanup removed only the containers this run created and volumes `m100000110`, `m100000110-work`, `m100000113`, and `m100000113-work`. Pre-existing container count was 24 before and 24 after. G3 stays `NOT_RUN`: `_actions` was never created, no Actions secrets-context value entered the job, and kill-at-each-stage, foreign-object, and registry-auth checks were not part of this run.
+Cleanup removed only the containers this run created and volumes `m100000110`, `m100000110-work`, `m100000113`, and `m100000113-work`. Pre-existing container count was 24 before and 24 after. This observation does not mark G3: `_actions` was never created, no Actions secrets-context value entered the job, and kill-at-each-stage, foreign-object, and registry-auth checks were not part of this run.
 
 ## Publish attempts
 
@@ -253,14 +255,14 @@ Each command was run once and was not retried.
 
 Those two dispatches were not retried. The files were absent from `main` and from this branch at that time. Later commits put generated `image-release.yml` and `macos-binary-release.yml` on `macos-scaleset` only. They are not on `main`. No image and no macOS binary were published by those 404s.
 
-GitHub does not index a `workflow_dispatch`-only file that is not on the default branch. `main` cannot take these files: schema-1 CI diffs the whole `.github` tree, and ruleset `protect-main` (`24396608`) requires a pull request plus the `Required` check. Qualification was indexed only after commit `6b53cd8` added `push: {}`. Commit `f229bf6` did the same for the two release workflows and was pushed. GitHub then listed Image release `373713267` and macOS binary release `373713266`.
+GitHub does not index a `workflow_dispatch`-only file that is not on the default branch. `main` at that time could not take these files: schema-1 CI diffed the whole `.github` tree, and ruleset `protect-main` (`24396608`) requires a pull request plus the `Required` check. Qualification was indexed only after commit `6b53cd8` added `push: {}`. Commit `f229bf6` did the same for the two release workflows and was pushed. GitHub then listed Image release `373713267` and macOS binary release `373713266`.
 
 That push started both workflows at `f229bf685db2a4d296ae07159b9e250921ca17a1`:
 
 - Image release run [37101248625](https://github.com/tailrocks/velnor-new/actions/runs/37101248625) concluded `failure`. Build runner images and Attest runner images concluded `success`. Publish runner images exited 4: `gh` had no `GH_TOKEN`.
 - macOS binary release run [37101248540](https://github.com/tailrocks/velnor-new/actions/runs/37101248540) concluded `failure`. Build velnor-host exited 101: `package ID specification velnor-host did not match any packages`. The package is `velnor-runner-cli`. The binary name is `velnor-host`.
 
-Commit `784399d` selects `-p velnor-runner-cli` and removes `push: {}`. The workflow ids remained. `gh workflow run macos-binary-release.yml --ref macos-scaleset` created run [37101412470](https://github.com/tailrocks/velnor-new/actions/runs/37101412470) at `784399d`. That run was cancelled: its publish step still had no `GH_TOKEN`, so it would have failed the same way as `37101248625`. The publish step now sets `GH_TOKEN` to `${{ github.token }}` on the publish job only. At `ebb7767`, `workflow_dispatch` started image run [37101622880](https://github.com/tailrocks/velnor-new/actions/runs/37101622880) and macOS run [37101625217](https://github.com/tailrocks/velnor-new/actions/runs/37101625217). Image build and attest succeeded again. Publish exited 1: `failed to run git: fatal: not a git repository` because the publish job had not checked out a repository and `gh` ran inside `assets`. macOS run `37101625217` was cancelled so it would not fail the same way after the compile. The publish job now checks out the ref and passes `-R "$GITHUB_REPOSITORY"`. At `19a43f5`, `workflow_dispatch` started image run [37102027384](https://github.com/tailrocks/velnor-new/actions/runs/37102027384) and macOS run [37102029367](https://github.com/tailrocks/velnor-new/actions/runs/37102029367). Both concluded `success`. Publish created GitHub release tags, not a GHCR push (`push-to-registry=false`). Attest succeeded. Generator release `v0.1.0` was not modified. ChainArgos was not updated. G7 and G8 stay `NOT_RUN`.
+Commit `784399d` selects `-p velnor-runner-cli` and removes `push: {}`. The workflow ids remained. `gh workflow run macos-binary-release.yml --ref macos-scaleset` created run [37101412470](https://github.com/tailrocks/velnor-new/actions/runs/37101412470) at `784399d`. That run was cancelled: its publish step still had no `GH_TOKEN`, so it would have failed the same way as `37101248625`. The publish step now sets `GH_TOKEN` to `${{ github.token }}` on the publish job only. At `ebb7767`, `workflow_dispatch` started image run [37101622880](https://github.com/tailrocks/velnor-new/actions/runs/37101622880) and macOS run [37101625217](https://github.com/tailrocks/velnor-new/actions/runs/37101625217). Image build and attest succeeded again. Publish exited 1: `failed to run git: fatal: not a git repository` because the publish job had not checked out a repository and `gh` ran inside `assets`. macOS run `37101625217` was cancelled so it would not fail the same way after the compile. The publish job now checks out the ref and passes `-R "$GITHUB_REPOSITORY"`. At `19a43f5`, `workflow_dispatch` started image run [37102027384](https://github.com/tailrocks/velnor-new/actions/runs/37102027384) and macOS run [37102029367](https://github.com/tailrocks/velnor-new/actions/runs/37102029367). Both concluded `success`. Publish created GitHub release tags, not a GHCR push (`push-to-registry=false`). Attest succeeded. Generator release `v0.1.0` was not modified. Those image and macOS releases did not update ChainArgos. G7 and G8 stay `NOT_RUN`.
 
 Tag `runner-19a43f57566c1179febb4a1c3967bfcde4f032aa` (published `2026-10-03T06:11:32Z`):
 
@@ -277,7 +279,7 @@ Tag `binary-19a43f57566c1179febb4a1c3967bfcde4f032aa` (published `2026-10-03T06:
 
 Scratch: `release-assets.log`. These assets do not include the later stage-stop commit.
 
-A new generator release cannot be cut from `macos-scaleset`. `docs/proposed/bootstrap-and-release-contract.md` §2.1 cuts a release only from a known-good default-branch commit, and ruleset `protect-tags` (`24397132`) forbids moving `v0.1.0`. `origin/main` is still `c57c700459bbe1549fe7eedcb7d8689585c38986`. That commit has no release workflow; `v0.1.0` was uploaded outside Actions. `docs/implemented/release-gates.md` BOOT-4.7 says the protected release job is not implemented. ChainArgos downloads only `velnor-actions-0.1.0-x86_64-unknown-linux-gnu`. The runner and host release tags are not that pin. G7 stays `NOT_RUN`.
+A new generator release cannot be cut from `macos-scaleset`. `docs/proposed/bootstrap-and-release-contract.md` §2.1 cuts a release only from a known-good default-branch commit, and ruleset `protect-tags` (`24397132`) forbids moving `v0.1.0`. Tag `v0.1.0` remains `c57c700459bbe1549fe7eedcb7d8689585c38986`. That commit has no release workflow; the tag was uploaded outside Actions. At the 2026-10-03 evidence snapshot, `origin/main` was `b9fdb1bc27b7aeeb71264cd2195328b4c5387627` and included `generator-release.yml` from PR 16. The published tag and the ChainArgos pin are in the section below. `docs/implemented/release-gates.md` BOOT-4.7 says the protected release job is not implemented. The `19a43f5` runner and host release tags are not that pin. G7 stays `NOT_RUN`.
 
 ## Composite `_actions` while the runner was up
 
@@ -287,7 +289,7 @@ A new generator release cannot be cut from `macos-scaleset`. `docs/proposed/boot
 
 Same device 41 and inode in both containers: `_work` `128828060`, `_temp` `128828306`, `_actions` `128828317`, `_tool` `128828305`, both socket paths `128828189`. `externals` was runner-image device 53 inode `128748463` and absent in DinD. DinD listed `/home/runner/_work/_actions/actions/checkout/3d3c42e5aac5ba805825da76410c181273ba90b1`. Runner `Privileged=false`, user `runner`, published ports empty, network `container:` the DinD id. Mounts were only volumes `m100000116` (`/run`) and `m100000116-work` (`/home/runner/_work`).
 
-The collector then removed those two containers and both volumes (`docker rm` and `docker volume rm` exited 0). Pre-existing container count stayed 24. The scale-set job was still `in_progress` with no listener, so `gh run cancel 37108023561` was sent. That job is not a success. This run does not inject `secrets.G3_CANARY`. No registry `config.json` was written or checked. G3 stays `NOT_RUN`.
+The collector then removed those two containers and both volumes (`docker rm` and `docker volume rm` exited 0). Pre-existing container count stayed 24. The scale-set job was still `in_progress` with no listener, so `gh run cancel 37108023561` was sent. That job is not a success. This run does not inject `secrets.G3_CANARY`. No registry `config.json` was written or checked. This observation does not mark G3.
 
 ## Secret canary while the runner was up
 
@@ -297,7 +299,7 @@ The collector then removed those two containers and both volumes (`docker rm` an
 
 Same device 41 and inode in both containers: `_work` `128828624`, `_temp` `128828870`, `_tool` `128828869`, both socket paths `128828753`. `_actions` was absent in both. `externals` was runner-image device 221 inode `128748463` and absent in DinD. The runner process environment contained `G3_CANARY` with a value equal to the canary file (exact count 2). DinD count was 0. The value is not in this file. Counts of those bytes were 0 in Docker inspect (env, cmd, labels, and full), container logs, host argv, `launch.db` plus wal and shm, `.velnor` TOML (2 files), LaunchAgent plists (9 files), and the launch trace. The trace records `POST .../generatejitconfig` status 200 bytes 4389 and does not include the JIT body.
 
-Marker text `g3-registry-marker` was written to `/home/runner/.docker/config.json` in the runner and `/root/.docker/config.json` in DinD, then read back. Those paths are container-layer files, not the work volume. The collector removed both containers and both volumes (`docker volume rm` exited 0). The ids were gone. Pre-existing container count stayed 24. `/var/lib/docker/volumes` does not exist on this OrbStack host, so the host grep was skipped. G3 stays `NOT_RUN`: this job did not create `_actions`, and non-ASCII paths plus kill-at-each-stage remain the earlier rows.
+Marker text `g3-registry-marker` was written to `/home/runner/.docker/config.json` in the runner and `/root/.docker/config.json` in DinD, then read back. Those paths are container-layer files, not the work volume. The collector removed both containers and both volumes (`docker volume rm` exited 0). The ids were gone. Pre-existing container count stayed 24. `/var/lib/docker/volumes` does not exist on this OrbStack host, so the host grep was skipped. This observation does not mark G3: this job did not create `_actions`, and non-ASCII paths plus kill-at-each-stage remain the earlier rows.
 
 ## Composite `_actions` after the job succeeded
 
@@ -306,6 +308,26 @@ Marker text `g3-registry-marker` was written to `/home/runner/.docker/config.jso
 `docker exec` while runner `2c775e3df1503e162e8645f0ed6fc91a80275b927703557477d616c5f431e7fd` and DinD `12f71a1a1199ca9ebc00b726ce6760737b1d36835449eceb8658fbc663e2f907` were running. Guest `uname -m` was `x86_64` on host `arm64`. Images were `linux/amd64`. Private engine `427b9311-e71b-428a-abdd-d662a8e7ea9c` (server 29.8.2, arch `x86_64`) was not host engine `bc9058a0-c807-412b-a088-6c1d96ddd462`. Runner `Privileged=false`, user `runner`, published ports empty, network `container:` the DinD id, binds empty, labels `velnor.role=runner` and `velnor.volume=m100000121`. DinD was privileged on `bridge`, binds empty. Mounts were only volumes `m100000121` (`/run`) and `m100000121-work` (`/home/runner/_work`).
 
 Same device 41 and inode in both containers: `_work` `128828916`, `_temp` `128829162`, `_actions` `128829173`, `_tool` `128829161`, both socket paths `128829044`. `externals` was runner-image device 53 inode `128748463` and absent in DinD. Both containers listed `/home/runner/_work/_actions/actions/checkout/3d3c42e5aac5ba805825da76410c181273ba90b1`. Marker `g3-registry-marker` was written to the runner and DinD `config.json` paths and read back. After the job conclusion was `success`, `docker rm -f` of those two ids and `docker volume rm` of those two volumes exited 0. The ids were gone. Pre-existing count stayed 24.
+
+## Generator release and ChainArgos canary
+
+PR 16 squash `d40868152f7fe0106e3ede858a411f502f00810f` published tag `generator-d40868152f7fe0106e3ede858a411f502f00810f`. The assets are `velnor-actions-0.1.0-x86_64-unknown-linux-gnu` and `velnor-actions-0.1.0-aarch64-apple-darwin`, plus `.sha256` files. Git tag `v0.1.0` remains `c57c700459bbe1549fe7eedcb7d8689585c38986`.
+
+PR 17 squash `b9fdb1bc27b7aeeb71264cd2195328b4c5387627`: `daemon run` calls `launch_once`, and a second daemon fails closed. The installed LaunchAgent binary is a local release of `030363df06a99355afc9534fa42868faf7f39500`, sha256 `8a989ac6b7592b570b6c102e4f0d916b48d4e362c3d2e989be2b8aa3fe41a8df`. It is not a newly published macos-binary-release asset.
+
+ChainArgos hosted baseline PR run [37113202410](https://github.com/ChainArgos/java-monorepo/actions/runs/37113202410) succeeded. Main push [37114238559](https://github.com/ChainArgos/java-monorepo/actions/runs/37114238559) failed only on Post Restore MBX objects (`mbx cache export exited with code 1`). That is not a scale-set failure.
+
+ChainArgos pins generator commit `d40868152f7fe0106e3ede858a411f502f00810f`, schema 2, `execution.mode` `hosted`. PR [2084](https://github.com/ChainArgos/java-monorepo/pull/2084) squash `0a937e0c0442782bfb88c43cfdf67c1fc3f3b4f0` added dispatch-only `qualification.yml`. Required CI [37116617913](https://github.com/ChainArgos/java-monorepo/actions/runs/37116617913) succeeded. `ci.yml` stayed `ubuntu-26.04`.
+
+N=1 default dispatch (`mode` `both`, one scale-set job) run [37117721384](https://github.com/ChainArgos/java-monorepo/actions/runs/37117721384) succeeded on head `0a937e0c0442782bfb88c43cfdf67c1fc3f3b4f0`. This is not G7.
+
+| Lane | Job | Result |
+| --- | --- | --- |
+| hosted | [111187658087](https://github.com/ChainArgos/java-monorepo/actions/runs/37117721384/job/111187658087) | labels `ubuntu-26.04`; runner GitHub Actions `1000059887`; `success` |
+| scale-set | [111187658197](https://github.com/ChainArgos/java-monorepo/actions/runs/37117721384/job/111187658197) | labels `velnor`, `ubuntu-26.04-scale-set`; runner `m100000001`; group `Default`; `success`; log line `qualification-scale-set` |
+| compare | [111187714536](https://github.com/ChainArgos/java-monorepo/actions/runs/37117721384/job/111187714536) | labels `ubuntu-26.04`; `success` |
+
+Listener `set_id=3` is on ChainArgos scale set `ubuntu-26.04-scale-set`. Host architecture is `arm64`. Runner and DinD images are `amd64` (emulation). The runner container was not privileged, user `runner`, env key `PATH` only. DinD was privileged. Launch row 71, docker `e38aae1eb975`, exited. DinD was left running because the launch path does not remove containers. That is not cleanup proof.
 
 ## Not yet run
 
