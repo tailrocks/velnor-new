@@ -204,9 +204,7 @@ pub fn publish_plan_files(
     response_json: &str,
     velnor_dir: &Path,
 ) -> Result<PathBuf, OrchestratorError> {
-    let response: PlanResponse =
-        serde_json::from_str(response_json).map_err(|_| internal("malformed_response"))?;
-    check_schema(response.schema)?;
+    let response = PlanResponse::parse(response_json)?;
     let dir = plan_artifact_dir(velnor_dir, &response.plan.run_key)?;
     write_plan_files(&response, velnor_dir, &dir)?;
     Ok(dir)
@@ -228,17 +226,23 @@ pub(crate) fn write_plan_files(
     velnor_dir: &Path,
     dir: &Path,
 ) -> Result<(), OrchestratorError> {
-    crate::exclusive_write::create_dir_no_symlink(artifact_anchor(velnor_dir)?, dir)?;
+    response.validate()?;
     let plan = plan_json_bytes(&response.plan).map_err(internal_contract)?;
-    let matrix = matrix_json_bytes(&response.matrix).map_err(internal_contract)?;
+    let matrix = matrix_json_bytes(&response.plan.matrix).map_err(internal_contract)?;
+    let baseline = response
+        .baseline_manifest
+        .as_ref()
+        .map(canonical_json_bytes)
+        .transpose()
+        .map_err(internal_contract)?;
+    crate::exclusive_write::create_dir_no_symlink(artifact_anchor(velnor_dir)?, dir)?;
     crate::exclusive_write::write_exclusive(&dir.join(PLAN_JSON_FILENAME), &plan, "plan_artifact")?;
     crate::exclusive_write::write_exclusive(
         &dir.join(MATRIX_JSON_FILENAME),
         &matrix,
         "plan_artifact",
     )?;
-    if let Some(manifest) = response.baseline_manifest.as_ref() {
-        let bytes = canonical_json_bytes(manifest).map_err(internal_contract)?;
+    if let Some(bytes) = baseline {
         crate::exclusive_write::write_exclusive(
             &dir.join(crate::baseline_publish::BASELINE_FILENAME),
             &bytes,

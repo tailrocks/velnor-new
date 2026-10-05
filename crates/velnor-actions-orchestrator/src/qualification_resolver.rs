@@ -63,8 +63,7 @@ pub fn read_qualification_admission(
     response_json: &str,
     runner_temp: &Path,
 ) -> Result<Option<QualificationCacheAdmission>, OrchestratorError> {
-    let response: crate::internal::PlanResponse =
-        serde_json::from_str(response_json).map_err(|_| internal("malformed_response"))?;
+    let response = crate::internal::PlanResponse::parse(response_json)?;
     let expected = response
         .plan
         .qualification
