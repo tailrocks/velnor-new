@@ -131,14 +131,13 @@ fn repo_sample_excludes_nested_cargo_test_fixtures_before_admission() -> TestRes
             let sample = repo_sample_text()?;
             let repo = make_sample_repo(&sample)?;
             let root = repo.path();
-            let fixture =
-                "crates/velnor-actions-mise/tests/fixtures/mbx-synchronous/registry-fixture";
+            let fixture = "crates/example/tests/fixtures/nested-cargo-fixture";
             let manifest = format!("{fixture}/Cargo.toml");
             let source = root.join(fixture).join("src");
             fs::create_dir_all(&source)?;
             fs::write(
                 root.join(&manifest),
-                "[package]\nname = \"mbx-synchronous-registry-fixture\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+                "[package]\nname = \"nested-cargo-fixture\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
             )?;
             fs::write(source.join("lib.rs"), "pub fn fixture() {}\n")?;
 
@@ -162,7 +161,7 @@ fn repo_sample_excludes_nested_cargo_test_fixtures_before_admission() -> TestRes
                 prep.discovery
                     .proposals
                     .iter()
-                    .all(|task| task.display_name != "mbx-synchronous-registry-fixture"),
+                    .all(|task| task.display_name != "nested-cargo-fixture"),
                 "nested fixture entered task proposals"
             );
             finalized_jobs(&prep)?;
