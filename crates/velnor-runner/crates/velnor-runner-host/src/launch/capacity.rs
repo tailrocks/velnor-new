@@ -140,13 +140,15 @@ thread_local! {
     static JOB_CAPACITY_OVERRIDE: Cell<Option<u32>> = const { Cell::new(None) };
 }
 
-/// Clears the thread-local capacity when dropped.
+/// Restores the prior thread-local capacity when dropped.
 #[must_use]
-pub(crate) struct CapacityGuard;
+pub(crate) struct CapacityGuard {
+    previous: Option<u32>,
+}
 
 impl Drop for CapacityGuard {
     fn drop(&mut self) {
-        JOB_CAPACITY_OVERRIDE.with(|slot| slot.set(None));
+        JOB_CAPACITY_OVERRIDE.with(|slot| slot.set(self.previous));
     }
 }
 
@@ -155,8 +157,12 @@ impl Drop for CapacityGuard {
 /// Zero becomes 1. The value is not clamped to a fixed maximum.
 pub(crate) fn install_job_capacity(max_jobs: u32) -> CapacityGuard {
     let stored = if max_jobs == 0 { 1 } else { max_jobs };
-    JOB_CAPACITY_OVERRIDE.with(|slot| slot.set(Some(stored)));
-    CapacityGuard
+    let previous = JOB_CAPACITY_OVERRIDE.with(|slot| {
+        let previous = slot.get();
+        slot.set(Some(stored));
+        previous
+    });
+    CapacityGuard { previous }
 }
 
 /// Installed host capacity, else `VELNOR_MAX_JOBS`.

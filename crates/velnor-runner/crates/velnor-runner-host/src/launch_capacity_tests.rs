@@ -188,6 +188,22 @@ fn installed_capacity_beats_the_env_parse() {
 }
 
 #[test]
+fn nested_capacity_overrides_restore_the_outer_limit() {
+    let outer = install_job_capacity(3);
+    assert_eq!(job_capacity(), 3);
+    {
+        let _inner = install_job_capacity(2);
+        assert_eq!(job_capacity(), 2);
+    }
+    assert_eq!(job_capacity(), 3);
+    drop(outer);
+    assert_eq!(
+        job_capacity(),
+        parse_job_capacity(std::env::var("VELNOR_MAX_JOBS").ok().as_deref())
+    );
+}
+
+#[test]
 fn target_above_capacity_queues_the_third_job() {
     assert!(needs_running(Idle::Launch));
     assert!(!needs_running(Idle::Empty));
