@@ -146,11 +146,11 @@ pub(crate) fn test_markers(dir: &str) -> Result<usize, Box<dyn Error>> {
     Ok(count)
 }
 
-/// True when `dep` is referenced from `dir` sources or tests.
+/// True when `dep` is referenced from `dir` sources, tests, or examples.
 pub(crate) fn dep_referenced(dir: &str, dep: &str) -> Result<bool, Box<dyn Error>> {
     let import = format!("use {dep}");
     let path = format!("{dep}::");
-    for area in ["src", "tests"] {
+    for area in ["src", "tests", "examples"] {
         for file in tree_files(&format!("{dir}/{area}"), "rs")? {
             let body = std::fs::read_to_string(&file)?;
             if body.contains(&import) || body.contains(&path) {
