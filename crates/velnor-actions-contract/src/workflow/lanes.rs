@@ -3,9 +3,13 @@
 //! Schema 1 returns the same jobs. Control and single-writer jobs stay
 //! one hosted job. `both` duplicates eligible verification only.
 
-use crate::config::{ExecutionConfig, ExecutionMode, ExecutionRole, VelnorConfig};
+use crate::config::{
+    ExecutionConfig, ExecutionMode, ExecutionRole, VERIFICATION_TASK_JOB_PREFIX, VelnorConfig,
+    VerificationRunner,
+};
 use crate::errors::ContractError;
 
+use super::ValidatorKind;
 use super::ir::{Job, WorkflowIr};
 use super::jobs::{PLAN_JOB_ID, REQUIRED_JOB_ID};
 
@@ -44,10 +48,12 @@ enum EmitLane {
 /// Classify a planner job id.
 #[must_use]
 pub fn lane_class(job_id: &str) -> LaneClass {
-    if matches!(
-        job_id,
-        PLAN_JOB_ID | REQUIRED_JOB_ID | "compare" | "queue-monitor"
-    ) {
+    if job_id == ValidatorKind::Actionlint.job_id()
+        || matches!(
+            job_id,
+            PLAN_JOB_ID | REQUIRED_JOB_ID | "compare" | "queue-monitor"
+        )
+    {
         LaneClass::Control
     } else if job_id == "publish-baseline"
         || job_id.starts_with("release-")
@@ -82,7 +88,7 @@ pub fn expand_workflow(
     let mut jobs = std::collections::BTreeMap::new();
     for (id, job) in &ir.jobs {
         let class = lane_class(id);
-        let placement = placement_for(execution, dispatch, class, id)?;
+        let placement = placement_for(execution, dispatch, class, id, job)?;
         emit_job(&mut jobs, id, job, execution, class, placement, &map)?;
     }
     let mut expanded = ir.clone();
@@ -109,8 +115,8 @@ fn id_map(
     dispatch: Option<ExecutionMode>,
 ) -> Result<std::collections::BTreeMap<String, Vec<String>>, ContractError> {
     let mut map = std::collections::BTreeMap::new();
-    for id in ir.jobs.keys() {
-        let placement = placement_for(execution, dispatch, lane_class(id), id)?;
+    for (id, job) in &ir.jobs {
+        let placement = placement_for(execution, dispatch, lane_class(id), id, job)?;
         let ids = match placement {
             Placement::Both => vec![
                 format!("{id}{HOSTED_SUFFIX}"),
@@ -128,6 +134,7 @@ fn placement_for(
     dispatch: Option<ExecutionMode>,
     class: LaneClass,
     job_id: &str,
+    job: &Job,
 ) -> Result<Placement, ContractError> {
     if let Some(over) = execution.overrides.get(job_id)
         && !role_matches(over.role, class)
@@ -139,6 +146,20 @@ fn placement_for(
         ));
     }
     if class != LaneClass::Verification {
+        return Ok(Placement::HostedOnly);
+    }
+    if !verification_task_supports_scale_set(job_id, job)? {
+        if execution
+            .overrides
+            .get(job_id)
+            .is_some_and(|over| over.profile == execution.scale_set_profile)
+        {
+            return Err(ContractError::config(
+                "config.toml",
+                format!("execution.overrides.{job_id}.profile"),
+                "verification_runner_incompatible_with_scale_set",
+            ));
+        }
         return Ok(Placement::HostedOnly);
     }
     if let Some(mode) = dispatch.or(execution.mode) {
@@ -164,6 +185,22 @@ fn placement_for(
             format!("execution.overrides.{job_id}.profile"),
             format!("unknown_profile:{key}"),
         ))
+    }
+}
+
+/// Native macOS tasks cannot use the Linux/amd64 Scale Set profile.
+fn verification_task_supports_scale_set(job_id: &str, job: &Job) -> Result<bool, ContractError> {
+    if !job_id.starts_with(VERIFICATION_TASK_JOB_PREFIX) {
+        return Ok(true);
+    }
+    match job.runs_on.as_str() {
+        label if label == VerificationRunner::LinuxX64.runs_on() => Ok(true),
+        label if label == VerificationRunner::MacosArm64.runs_on() => Ok(false),
+        label => Err(ContractError::config(
+            "config.toml",
+            format!("workflow.tasks.runner:{job_id}"),
+            format!("unsupported_verification_runner:{label}"),
+        )),
     }
 }
 

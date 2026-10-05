@@ -113,10 +113,14 @@ fn uses_mbx_tool(step: &Step) -> bool {
 pub const MBX_CACHE_MODE_ENV: &str = "ACTIONS_CACHE_MODE";
 /// Display name of the MBX objects restore step.
 pub const MBX_RESTORE_NAME: &str = "Restore MBX objects";
-/// MBX automatic collection must stay enabled so low-disk builds can recover.
+/// Hosted Linux jobs disable asynchronous collection through action export.
 pub(crate) const MBX_GC_AUTO_ENV: &str = "MBX_GC_AUTO";
-/// MBX 1.21.1+ honors this value and protects active build consumers.
-pub(crate) const MBX_GC_AUTO_VALUE: &str = "1";
+/// MBX 1.21.1+ honors this value. Hosted Linux jobs keep collection off.
+pub(crate) const MBX_GC_AUTO_VALUE: &str = "0";
+/// Hosted Linux jobs must not materialize a shared read-only `OUT_DIR`.
+pub(crate) const MBX_SHARE_OUT_DIR_ENV: &str = "MBX_SHARE_OUT_DIR";
+/// Disable shared `OUT_DIR` materialization on hosted Linux MBX jobs.
+pub(crate) const MBX_SHARE_OUT_DIR_VALUE: &str = "0";
 /// Mode that skips the action post. `read` does not permit writes.
 pub(crate) const MBX_ACTION_CACHE_MODE: &str = "read";
 
@@ -202,8 +206,8 @@ fn mbx_path_preflight_step(
 /// that second lookup misses; the immediately preceding preflight fails
 /// for an absent/mismatched install and exposes the exact root for the
 /// restore step. The explicit toolchain follows the build's catalog pin.
-/// The step-level [`MBX_CACHE_MODE_ENV`] remains `read`, preserving the
-/// existing manual bundle writer and transport lifecycle.
+/// The step starts at `read`. Bundle policy then replaces that mode with the
+/// hosted write gate. No `version` input is passed.
 /// # Errors
 fn mbx_objects_action_step(
     uses: &str,
@@ -225,12 +229,15 @@ fn mbx_objects_action_step(
             "bad_rust_toolchain:{rust_toolchain}"
         )));
     }
+    let action_sha = uses
+        .strip_prefix(&format!("{MBX_ACTION_NAME}@"))
+        .ok_or_else(|| RenderError::BadActionRef(format!("not_mbx_action:{uses}")))?;
     let with = BTreeMap::from([
         ("github-cache-mode".to_owned(), "objects".to_owned()),
         ("toolchain".to_owned(), rust_toolchain.to_owned()),
         (
             "cache-generation".to_owned(),
-            mbx_cache_generation(mbx_version),
+            hosted_linux_cache_generation(mbx_version, action_sha),
         ),
     ]);
     env.insert(
@@ -238,6 +245,14 @@ fn mbx_objects_action_step(
         MBX_ACTION_CACHE_MODE.to_owned(),
     );
     action_step_with_env(MBX_RESTORE_NAME, uses, with, env)
+}
+
+/// Base generation, then the hosted-Linux share token, then the action SHA.
+fn hosted_linux_cache_generation(mbx_version: &str, action_sha: &str) -> String {
+    format!(
+        "{}${{{{ runner.environment == 'github-hosted' && runner.os == 'Linux' && '-share-out-dir-disabled-v1' || '' }}}}-action-{action_sha}",
+        mbx_cache_generation(mbx_version)
+    )
 }
 
 /// Expose native Rustup paths as well as Mise's selected tool homes.
