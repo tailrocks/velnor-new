@@ -9,6 +9,7 @@ use velnor_actions_contract::{Step, StepKind};
 use super::KEY_SCRIPT;
 
 const GENERATION: &str = "velnor-mbx-1.21.1-dir";
+const ACTION_GENERATION: &str = "velnor-mbx-1.21.1";
 const COMPATIBILITY: &str = "linux-x64-mbx-velnor-mbx-1.21.1-dir-rust-eaa76ad37f36";
 const TOOL_HOME_ENV_KEYS: [&str; 5] = [
     "MISE_RUSTUP_HOME",
@@ -132,7 +133,7 @@ fn mbx_action(env: BTreeMap<String, String>) -> Step {
         kind: StepKind::Action {
             uses: "jdx/mr-boxington-action@1687e54eb349cadf61fa38b5813a77875489e8e6".to_owned(),
             with: BTreeMap::from([
-                ("cache-generation".to_owned(), GENERATION.to_owned()),
+                ("cache-generation".to_owned(), ACTION_GENERATION.to_owned()),
                 ("toolchain".to_owned(), "1.98.1".to_owned()),
             ]),
             env,
