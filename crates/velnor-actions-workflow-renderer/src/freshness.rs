@@ -99,7 +99,6 @@ pub fn render_freshness_workflow(spec: &FreshnessSpec) -> Result<RenderedFile, R
         BTreeMap::new(),
     )?;
     let document = freshness_document(spec, &checkout, &probe)?;
-    let document = crate::yaml::quote_run_values_in_yaml(document);
     let text = marker::with_marker(&spec.generator_version, &render_yaml(&document))?;
     crate::workflow_size::check_workflow_size(FRESHNESS_WORKFLOW_PATH, &text)?;
     steps::scan_for_private_subcommands(&text)?;

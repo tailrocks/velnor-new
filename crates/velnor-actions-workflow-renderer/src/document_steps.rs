@@ -207,7 +207,7 @@ pub(crate) fn step_to_yaml(
             push_composite_shell(&mut entries, composite);
             entries.push((
                 "run".to_owned(),
-                Yaml::str(commands::quote_run_arg(&ctx.staged_binary)),
+                Yaml::str(commands::quote_run_arg(&ctx.staged_binary)?),
             ));
             Ok(Yaml::Map(entries))
         }

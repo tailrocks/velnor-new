@@ -87,6 +87,8 @@ mod impl_renderer_size;
 mod impl_renderer_steps;
 #[path = "impl_renderer_steps_env.rs"]
 mod impl_renderer_steps_env;
+#[path = "impl_renderer_steps_parameter_expansion.rs"]
+mod impl_renderer_steps_parameter_expansion;
 #[path = "impl_renderer_steps_quote.rs"]
 mod impl_renderer_steps_quote;
 #[path = "impl_renderer_sweep.rs"]
