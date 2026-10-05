@@ -1,7 +1,7 @@
 //! Candidate-build vector cases (BOOT-4.8).
 use std::ffi::OsString;
 use velnor_actions_mise::{
-    CANDIDATE_BUILD_BIN, CANDIDATE_BUILD_PACKAGE, CandidateBuild, ToolCatalog,
+    CANDIDATE_BUILD_BIN, CANDIDATE_BUILD_PACKAGE, CandidateBuild, PinnedTool, ToolCatalog,
 };
 
 fn pinned() -> ToolCatalog {
@@ -26,7 +26,6 @@ fn candidate_build_argv_is_byte_exact() -> Result<(), String> {
             "--no-hooks",
             "exec",
             "rust@1.98.1",
-            "mr-boxington@1.21.1",
             "--",
             "mbx",
             "build",
@@ -64,7 +63,16 @@ fn candidate_build_specs_come_only_from_catalog() -> Result<(), String> {
     let build = CandidateBuild::new().map_err(|err| err.to_string())?;
     let argv = build.argv(&catalog);
     assert!(argv.iter().any(|arg| arg == "rust@1.97.0"));
-    assert!(argv.iter().any(|arg| arg == "mr-boxington@1.18.0"));
+    assert_eq!(
+        catalog.tool_spec(PinnedTool::MrBoxington),
+        "mr-boxington@1.18.0"
+    );
+    assert!(
+        !argv
+            .iter()
+            .any(|arg| arg.to_string_lossy().starts_with("mr-boxington@")),
+        "native action owns MBX; candidate Mise selectors exclude it: {argv:?}"
+    );
     assert!(
         !argv.iter().any(|arg| arg == "mr-boxington@1.21.1"),
         "no pinned fallback may leak in: {argv:?}"

@@ -67,7 +67,7 @@ pub(crate) fn plan_job(
     let mut steps = vec![checkout_history_action()?];
     let prepare = prepare_pinned_tools_step(
         catalog,
-        plan_tools(use_rust, use_mbx, use_nextest, use_opentofu),
+        plan_tools(use_rust, use_nextest, use_opentofu),
         use_rust,
     )?;
     steps.push(prepare);
@@ -195,19 +195,9 @@ pub(crate) fn read_actions_permissions() -> Permissions {
 /// and zizmor; installing only the driver toolchain leaves that step red. Order
 /// follows `PinnedTool::ALL`. Pure-tofu plans carry opentofu plus the validators
 /// with no Rust; mixed plans carry the union.
-#[expect(
-    clippy::fn_params_excessive_bools,
-    reason = "four independent install flags mirror the role selection"
-)]
-fn plan_tools(
-    use_rust: bool,
-    use_mbx: bool,
-    use_nextest: bool,
-    use_opentofu: bool,
-) -> Vec<PinnedTool> {
+fn plan_tools(use_rust: bool, use_nextest: bool, use_opentofu: bool) -> Vec<PinnedTool> {
     let mut tools = Vec::new();
     tools.extend(use_rust.then_some(PinnedTool::Rust));
-    tools.extend(use_mbx.then_some(PinnedTool::MrBoxington));
     tools.extend([
         PinnedTool::Actionlint,
         PinnedTool::Shellcheck,

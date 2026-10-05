@@ -99,7 +99,7 @@ pub(crate) fn task_argv(
         }
     }
     let driver = RouteDriver::from_compile_driver(&task.identity.compile_driver);
-    let mut tools = driver.map_or(vec![PinnedTool::Rust], RouteDriver::tools);
+    let mut tools = driver.map_or(vec![PinnedTool::Rust], RouteDriver::probe_tools);
     if tool_needs(&task.identity.compile_driver, &task.identity.test_runner).nextest {
         tools.push(PinnedTool::Nextest);
     }
@@ -306,26 +306,19 @@ fn validator_argv(
 
 /// Fixed pre-seed MBX route probe through pinned Mise.
 ///
-/// Runs `mbx --version` under the exact pinned `mr-boxington` spec so
-/// the verify step proves the compile route, not just the output file.
-/// Resolves through Mise on every run, cold or warm.
+/// Runs `mbx --version` under exact Rust Mise while retaining the native action's
+/// earlier PATH entry. The action owns the MBX installation and object cache.
 /// # Errors
 ///
 /// Returns a contract error when the Mise adapter rejects the vector.
 pub(crate) fn mbx_probe_argv(catalog: &ToolCatalog) -> Result<Vec<String>, OrchestratorError> {
-    exec_argv(
-        vec![PinnedTool::MrBoxington],
-        "mbx",
-        &["--version"],
-        catalog,
-    )
+    exec_argv(vec![PinnedTool::Rust], "mbx", &["--version"], catalog)
 }
 
 /// Fixed bootstrap §4 build vector through pinned Mise.
 ///
-/// Shared by the candidate build and the pre-seed helper build, so both
-/// compile `velnor-actions-cli`/`velnor-actions` with the exact same
-/// pinned Rust plus MBX toolchain and flags.
+/// Shared by the candidate build and pre-seed helper build, so both use
+/// the exact Rust selector and MBX binary installed by the native action.
 pub(crate) fn candidate_build_argv(
     catalog: &ToolCatalog,
 ) -> Result<Vec<String>, OrchestratorError> {

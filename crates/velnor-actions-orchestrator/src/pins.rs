@@ -256,8 +256,8 @@ const GENERATOR_SEED_ROOT: &str = "/opt/velnor/seed";
 ///
 /// # Errors
 ///
-/// Returns [`OrchestratorError::Contract`] for unsupported targets or unsafe
-/// seed and staged path tokens.
+/// Returns [`OrchestratorError::Contract`] when the seed root or staged
+/// path is outside its closed safe-path grammar or the target is unsupported.
 pub fn acquire_script_argv(
     staged: &str,
     seed_root: &str,
@@ -277,6 +277,11 @@ pub fn acquire_script_argv(
             problem: format!("bad_seed_root:{seed_root}"),
         });
     }
+    if !staged_path_token(staged) {
+        return Err(OrchestratorError::Contract {
+            problem: format!("bad_staged_path:{staged}"),
+        });
+    }
     let dir = staged.rsplit_once('/').map_or(staged, |(head, _)| head);
     let name = staged.rsplit_once('/').map_or(staged, |(_, tail)| tail);
     if !file_token(name) {
@@ -286,7 +291,7 @@ pub fn acquire_script_argv(
     }
     let seed = format!("{seed_root}/generator/{name}");
     let script = format!(
-        "mkdir -p \"{dir}\" && if [ -f \"{seed}\" ] && echo \"$VELNOR_ASSET_SHA256  {seed}\" | {digest}; then cp \"{seed}\" \"{staged}\"; else curl -fsSL --proto '=https' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"{staged}\" && echo \"$VELNOR_ASSET_SHA256  {staged}\" | {digest}; fi && chmod +x \"{staged}\""
+        "mkdir -p \"{dir}\" && s=\"{seed}\" d=\"{staged}\" && if [ -f \"$s\" ] && echo \"$VELNOR_ASSET_SHA256  $s\" | {digest}; then cp \"$s\" \"$d\"; else curl -fsSL --proto '=https' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\" && echo \"$VELNOR_ASSET_SHA256  $d\" | {digest}; fi && chmod +x \"$d\""
     );
     Ok(vec!["sh".to_owned(), "-c".to_owned(), script])
 }
@@ -302,6 +307,13 @@ fn absolute_token(value: &str) -> bool {
         && value
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'/' | b'.' | b'_' | b'-'))
+}
+
+/// Allow static absolute test paths or the one emitted runner-temp prefix.
+fn staged_path_token(value: &str) -> bool {
+    value
+        .strip_prefix(STAGED_BINARY_PREFIX)
+        .map_or_else(|| absolute_token(value), file_token)
 }
 
 fn file_token(value: &str) -> bool {

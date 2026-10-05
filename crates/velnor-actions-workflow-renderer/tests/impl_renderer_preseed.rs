@@ -14,10 +14,10 @@ use super::impl_renderer_fixtures::*;
 
 const TARGET: &str = "x86_64-unknown-linux-gnu";
 const MARK: &str = "(pre-seed trust-on-review)";
-const MBX_VERSION: &str = "1.19.0";
+const MBX_VERSION: &str = "1.21.1";
 
 fn mbx_probe() -> Vec<String> {
-    mise_argv("mr-boxington@1.19.0", "mbx", &["--version"])
+    mise_argv("rust@1.98.1", "mbx", &["--version"])
 }
 
 fn build_argv() -> Vec<String> {
@@ -191,10 +191,10 @@ fn preseed_verify_pins_binary_and_mbx_route() -> Result<(), RenderError> {
     assert_eq!((run[0].as_str(), run[1].as_str()), ("sh", "-c"));
     for need in [
         "test -x target/release/velnor-actions",
-        "mise --no-config --no-env --no-hooks exec mr-boxington@1.19.0 -- mbx --version",
+        "mise --no-config --no-env --no-hooks exec rust@1.98.1 -- mbx --version",
         "mkdir -p \"$RUNNER_TEMP/velnor\"",
-        "mise --no-config --no-env --no-hooks exec mr-boxington@1.19.0 -- mbx --version > \"$RUNNER_TEMP/velnor/preseed-mbx-version\"",
-        "grep -qxF \"mbx 1.19.0\" \"$RUNNER_TEMP/velnor/preseed-mbx-version\"",
+        "mise --no-config --no-env --no-hooks exec rust@1.98.1 -- mbx --version > \"$RUNNER_TEMP/velnor/preseed-mbx-version\"",
+        "grep -qxF \"mbx 1.21.1\" \"$RUNNER_TEMP/velnor/preseed-mbx-version\"",
     ] {
         assert!(run[2].contains(need), "verify misses {need}: {}", run[2]);
     }
@@ -212,8 +212,9 @@ fn preseed_verify_pins_binary_and_mbx_route() -> Result<(), RenderError> {
     for bad_probe in [
         Vec::new(),
         vec!["mbx".to_owned(), "--version".to_owned()],
-        mise_argv("mr-boxington@1.19.0", "mbx", &["--help"]),
-        mise_argv("mr-boxington@latest", "mbx", &["--version"]),
+        mise_argv("rust@1.98.1", "mbx", &["--help"]),
+        mise_argv("mr-boxington@1.21.1", "mbx", &["--version"]),
+        mise_argv("rust@1.98.1", "mbx", &["--version", "--verbose"]),
     ] {
         assert!(
             preseed_verify_step(&bad_probe, MBX_VERSION, &BTreeMap::new()).is_err(),

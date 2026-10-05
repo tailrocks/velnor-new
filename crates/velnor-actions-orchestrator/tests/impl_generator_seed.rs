@@ -15,6 +15,21 @@ fn generator_seed_hit_skips_curl_and_a_bad_hash_does_not_copy()
     let root = std::env::temp_dir().join(format!("velnor-gen-seed-{}", std::process::id()));
     std::fs::remove_dir_all(&root).ok();
     let name = "velnor-actions-0.1.0";
+    let root_text = root.to_str().ok_or("root")?;
+    for unsafe_staged in [
+        "/tmp/$(id)/velnor-actions-0.1.0",
+        "$RUNNER_TEMP/velnor/bin/$(id)",
+    ] {
+        assert!(acquire_script_argv(unsafe_staged, root_text, "x86_64-unknown-linux-gnu").is_err());
+    }
+    assert!(
+        acquire_script_argv(
+            "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0",
+            root_text,
+            "x86_64-unknown-linux-gnu",
+        )
+        .is_ok()
+    );
     let seed_file = root.join("generator").join(name);
     let parent = seed_file.parent().ok_or("seed parent")?;
     std::fs::create_dir_all(parent)?;

@@ -87,7 +87,7 @@ fn plan_job_checks_out_full_history_for_archaeology() {
 #[test]
 fn plan_tools_follow_role_in_all_order() {
     assert_eq!(
-        plan_tools(true, false, false, false),
+        plan_tools(true, false, false),
         vec![
             PinnedTool::Rust,
             PinnedTool::Actionlint,
@@ -96,7 +96,7 @@ fn plan_tools_follow_role_in_all_order() {
         ]
     );
     assert_eq!(
-        plan_tools(false, false, false, true),
+        plan_tools(false, false, true),
         vec![
             PinnedTool::Actionlint,
             PinnedTool::Shellcheck,
@@ -106,10 +106,9 @@ fn plan_tools_follow_role_in_all_order() {
         "pure-tofu plans carry opentofu plus the validators, no Rust"
     );
     assert_eq!(
-        plan_tools(true, true, true, true),
+        plan_tools(true, true, true),
         vec![
             PinnedTool::Rust,
-            PinnedTool::MrBoxington,
             PinnedTool::Actionlint,
             PinnedTool::Shellcheck,
             PinnedTool::Zizmor,
@@ -119,9 +118,9 @@ fn plan_tools_follow_role_in_all_order() {
         "mixed plans carry the union"
     );
     for tools in [
-        plan_tools(true, false, false, false),
-        plan_tools(false, false, false, true),
-        plan_tools(true, true, true, true),
+        plan_tools(true, false, false),
+        plan_tools(false, false, true),
+        plan_tools(true, true, true),
     ] {
         let order: Vec<usize> = tools
             .iter()
@@ -180,9 +179,6 @@ fn plan_job_prepares_pinned_tools_before_generate_consumers() {
             catalog.tool_spec(PinnedTool::Shellcheck),
             catalog.tool_spec(PinnedTool::Zizmor),
         ];
-        if use_mbx {
-            specs.insert(1, catalog.tool_spec(PinnedTool::MrBoxington));
-        }
         if use_nextest {
             specs.push(catalog.tool_spec(PinnedTool::Nextest));
         }
@@ -190,6 +186,10 @@ fn plan_job_prepares_pinned_tools_before_generate_consumers() {
             install_at.map(|at| &run[at + 1..]),
             Some(specs.as_slice()),
             "install specs: {run:?}"
+        );
+        assert!(
+            !run.iter().any(|spec| spec.starts_with("mr-boxington@")),
+            "native action owns MBX installation even when selected: use_mbx={use_mbx}; {run:?}"
         );
         let keys = [
             "MISE_NO_CONFIG",
