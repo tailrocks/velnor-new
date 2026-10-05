@@ -55,14 +55,19 @@ pub(crate) async fn remove_worker_volumes(
         let Some(observed) = inspect_volume(docker, &volume.name).await? else {
             continue;
         };
-        if observed.name != volume.name
-            || (!owns(worker, &volume, &observed) && !observed.labels.is_empty())
-        {
+        let unlabeled = observed.labels.is_empty();
+        if observed.name != volume.name || (!unlabeled && !owns(worker, &volume, &observed)) {
             return Ok(false);
         }
-        docker_deadline(docker.remove_volume(&volume.name, None::<RemoveVolumeOptions>))
+        if docker_deadline(docker.remove_volume(&volume.name, None::<RemoveVolumeOptions>))
             .await?
-            .map_err(|_| HostError::Docker)?;
+            .is_err()
+        {
+            if unlabeled {
+                return Ok(false);
+            }
+            return Err(HostError::Docker);
+        }
         if inspect_volume(docker, &volume.name).await?.is_some() {
             return Ok(false);
         }

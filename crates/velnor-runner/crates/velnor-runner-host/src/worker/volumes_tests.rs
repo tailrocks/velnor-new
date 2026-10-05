@@ -14,6 +14,10 @@ use crate::{HostError, IntentState, Outcome, dind_create};
 
 const TIMEOUT: Duration = Duration::from_secs(2);
 const WORKER: &str = "wtransport";
+const BARE_VOLUME: &str = concat!(
+    r#"{"Name":"wtransport","Driver":"local","Mountpoint":"/v","#,
+    r#""Labels":{},"Options":{},"Scope":"local"}"#,
+);
 
 #[tokio::test]
 async fn only_exactly_owned_volumes_are_removed() -> Result<(), String> {
@@ -47,24 +51,17 @@ async fn only_exactly_owned_volumes_are_removed() -> Result<(), String> {
         3
     );
     let bare = DockerStub::open(vec![
-        http(
-            200,
-            r#"{"Name":"wtransport","Driver":"local","Mountpoint":"/v","Labels":{},"Options":{},"Scope":"local"}"#,
-        ),
+        http(200, BARE_VOLUME),
         http(204, ""),
         http(404, "{}"),
         http(404, "{}"),
         http(404, "{}"),
     ])?;
     assert_eq!(remove_worker_volumes(&bare.docker, WORKER).await, Ok(true));
-    assert_eq!(
-        bare.finish()
-            .await?
-            .iter()
-            .filter(|line| line.starts_with("DELETE "))
-            .count(),
-        1
-    );
+    assert_eq!(bare.finish().await?.len(), 5);
+    let busy = DockerStub::open(vec![http(200, BARE_VOLUME), http(409, "{}")])?;
+    assert_eq!(remove_worker_volumes(&busy.docker, WORKER).await, Ok(false));
+    assert_eq!(busy.finish().await?.len(), 2);
     Ok(())
 }
 
