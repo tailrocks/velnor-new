@@ -16,7 +16,6 @@ pub mod command;
 pub mod custom_run;
 pub mod error;
 pub mod gate6;
-pub mod generator_release_workflow;
 pub mod gh;
 pub mod git;
 pub mod nextest;
@@ -64,12 +63,6 @@ pub use command::{
 };
 pub use error::MiseError;
 pub use gate6::{Gate6Fixture, qualified_task_run_argv, render_gated_task_toml};
-pub use generator_release_workflow::{
-    apple_linker_check_step, apple_sdk_check_step, binary_format_architecture_check_step,
-    generator_release_mise_binary_sha256, gnu_runtime_abi_check_step, help_smoke_check_step,
-    native_host_check_step, rust_exec_step, rust_toolchain_check_step, setup_rust_steps,
-    version_smoke_check_step,
-};
 pub use gh::BaselineLookup;
 pub use git::{ALLOWED_GIT_VERBS, GitRequest, is_allowed_git_verb};
 pub use nextest::{ARCHIVE_FILE, NEXTEST_EXTRACT_BASE, NextestDriver, NextestPartition};

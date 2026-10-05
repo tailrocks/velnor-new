@@ -8,6 +8,7 @@
 # user-facing plan text and generated YAML bytes around it.
 #
 # Usage: scripts/capture-opentofu-goldens.sh [capture|check [CLI_BINARY]]
+#        scripts/capture-opentofu-goldens.sh check-release CLI_BINARY CANDIDATE_MANIFEST MANIFEST_SHA256
 #   capture  regenerate docs/proposed/opentofu-goldens/ (only at known-good)
 #   check    regenerate to temp and byte-diff (default; never writes goldens)
 #   CLI_BINARY uses that exact executable and skips the default debug build.
@@ -19,22 +20,44 @@ WORK=""
 MODE="${1:-check}"
 BIN_EXPLICIT=0
 
-if [ "$#" -gt 2 ]; then
-  echo "FATAL: usage: $0 [capture|check [CLI_BINARY]]"
-  exit 2
-fi
 case "$MODE" in
-  capture|check) ;;
+  capture|check|check-release) ;;
   *)
     echo "FATAL: usage: $0 [capture|check [CLI_BINARY]]"
     exit 2
     ;;
 esac
+if [ "$MODE" = "check-release" ]; then
+  if [ "$#" -ne 4 ]; then
+    echo "FATAL: usage: $0 check-release CLI_BINARY CANDIDATE_MANIFEST MANIFEST_SHA256"
+    exit 2
+  fi
+elif [ "$#" -gt 2 ]; then
+  echo "FATAL: usage: $0 [capture|check [CLI_BINARY]]"
+  exit 2
+fi
 if ! CALLER_DIR="$(pwd -P)"; then
   echo "FATAL: could not resolve caller directory"
   exit 2
 fi
-if [ "$#" -eq 2 ]; then
+if [ "$MODE" = "check-release" ]; then
+  BIN_EXPLICIT=1
+  BIN_ARG="$2"
+  MANIFEST_ARG="$3"
+  CANDIDATE_MANIFEST_SHA256="$4"
+  if [ -z "$BIN_ARG" ] || [ -z "$MANIFEST_ARG" ] || [ -z "$CANDIDATE_MANIFEST_SHA256" ]; then
+    echo "FATAL: explicit candidate binary, manifest path, and manifest SHA-256 are required"
+    exit 2
+  fi
+  case "$BIN_ARG" in
+    /*) BIN="$BIN_ARG" ;;
+    *) BIN="$CALLER_DIR/$BIN_ARG" ;;
+  esac
+  case "$MANIFEST_ARG" in
+    /*) CANDIDATE_MANIFEST="$MANIFEST_ARG" ;;
+    *) CANDIDATE_MANIFEST="$CALLER_DIR/$MANIFEST_ARG" ;;
+  esac
+elif [ "$#" -eq 2 ]; then
   BIN_EXPLICIT=1
   BIN_ARG="$2"
   if [ -z "$BIN_ARG" ]; then
@@ -54,6 +77,8 @@ FIXTURES="nested mbx-nextest empty-suite minimal-cargo"
 fail=0
 note() { echo "$1"; }
 die() { echo "FAIL: $1"; fail=1; }
+
+source "$ROOT/scripts/generator-release/qualification-goldens.sh"
 
 # Portable link-preserving recursive copy. Plain `cp -r` dereferences
 # symlinks (BSD: -r is -RL; GNU: -r on links is non-portable), which
@@ -83,7 +108,10 @@ normalize_generate_stderr() {
 # `find -type f` alone skips links, leaving targets unpinned.
 hash_tree() {
   (cd "$1" && {
-    find . -type f | sort | xargs sha256sum
+    find . -type f | LC_ALL=C sort | while IFS= read -r file; do
+      local_digest="$(file_sha256 "$file")" || exit 1
+      printf '%s  %s\n' "$local_digest" "$file"
+    done
     find . -type l | sort | while IFS= read -r link; do
       printf 'link %s -> %s\n' "$link" "$(readlink "$link")"
     done
@@ -98,23 +126,6 @@ link_identity() {
   (cd "$1" && find . -type l | sort | while IFS= read -r link; do
     printf '%s -> %s\n' "$link" "$(readlink "$link")"
   done)
-}
-
-# Release binaries require an explicit consumer manifest. Install the shared
-# schema fixture as input to each temporary consumer checkout; it is not
-# product provenance or release qualification evidence.
-write_fixture_release_manifest() {
-  local repo="$1"
-  local manifest="$repo/.velnor/release-manifest.json"
-  if [ -e "$manifest" ] || [ -L "$manifest" ]; then
-    [ -f "$manifest" ] && [ ! -L "$manifest" ]
-    return $?
-  fi
-  if [ -L "$repo/.velnor" ] || { [ -e "$repo/.velnor" ] && [ ! -d "$repo/.velnor" ]; }; then
-    return 1
-  fi
-  mkdir -p "$repo/.velnor" || return 1
-  cp "$ROOT/fixtures/consumer-release-manifest.json" "$manifest"
 }
 
 build_bin() {
@@ -135,13 +146,12 @@ setup_case() {
   repo="$WORK/$case"
   mkdir -p "$repo"
   copy_tree "$ROOT/fixtures/$case/." "$repo/"
+  mkdir -p "$repo/.velnor"
   if [ ! -f "$repo/.velnor/config.toml" ]; then
-    mkdir -p "$repo/.velnor"
     printf 'schema = 1\n\n[workflow]\ndefault_branch = "main"\n' > "$repo/.velnor/config.toml"
   fi
-  if ! write_fixture_release_manifest "$repo"; then
-    echo "FATAL: could not prepare deterministic release manifest for $case"
-    exit 2
+  if [ "$MODE" = "check-release" ]; then
+    stage_candidate_manifest "$repo" "$case"
   fi
   (cd "$repo" \
     && git init -q \
@@ -176,6 +186,20 @@ capture_case() {
     exit 2
   fi
   hash_tree "$preview" "$out/tree.sha256"
+}
+
+check_release_policy_negative() {
+  local repo="$WORK/hostile-config" output="$WORK/hostile-output"
+  setup_case hostile-config >/dev/null
+  if (cd "$repo" && "$BIN" generate --output-dir "$output" >"$WORK/hostile.stdout" 2>"$WORK/hostile.stderr"); then
+    echo "FAIL: release candidate accepted the hostile policy fixture"
+    fail=1
+  elif ! grep -F '.velnor/config.toml: evil: unknown_config_field' "$WORK/hostile.stderr"; then
+    echo "FAIL: release candidate rejected the hostile fixture for an unexpected reason"
+    fail=1
+  else
+    note "release policy negative match: hostile-config"
+  fi
 }
 
 capture_dogfood() {
@@ -224,6 +248,9 @@ capture_dogfood() {
 }
 
 build_bin
+if [ "$MODE" = "check-release" ]; then
+  validate_candidate_manifest
+fi
 if ! WORK="$(mktemp -d "${TMPDIR:-/tmp}/velnor-goldens-work.XXXXXX")"; then
   echo "FATAL: could not create a private golden workspace"
   exit 2
@@ -246,6 +273,30 @@ trap cleanup_work EXIT
 
 stage="$WORK/stage"
 mkdir -p "$stage"
+if [ "$MODE" = "check-release" ]; then
+  for case in $FIXTURES; do
+    repo="$WORK/$case"
+    if ! head="$(setup_case "$case")"; then
+      echo "FATAL: could not set up release fixture $case"
+      exit 2
+    fi
+    capture_release_case "$case" "$repo" "$stage/$case"
+    if ! diff "$GOLDEN_DIR/cases/$case/tree.sha256" "$stage/$case/tree.sha256"; then
+      die "release fixture golden mismatch: $case"
+    else
+      note "release fixture match: $case"
+    fi
+    if ! link_identity "$GOLDEN_DIR/cases/$case/preview" >"$stage/$case/golden.links" \
+      || ! link_identity "$stage/$case/preview" >"$stage/$case/stage.links" \
+      || ! diff "$stage/$case/golden.links" "$stage/$case/stage.links"; then
+      die "release fixture symlink mismatch: $case"
+    fi
+  done
+  check_release_policy_negative
+  capture_release_dogfood "$stage/dogfood"
+  [ "$fail" = "0" ] && note "ALL RELEASE FIXTURE GOLDENS AND DOGFOOD PARITY MATCH"
+  exit "$fail"
+fi
 for case in $FIXTURES; do
   repo="$WORK/$case"
   if ! head="$(setup_case "$case")"; then

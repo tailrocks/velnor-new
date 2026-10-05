@@ -5,7 +5,8 @@ use std::path::Path;
 
 use velnor_actions_contract::{
     DETECTION_SCHEMA, DetectionStatus, FileIndex, ProposedTask, RustStackConfig, VelnorConfig,
-    apply_stack_ignores, check_candidate_outcomes, check_duplicates, selected_projects,
+    WorkflowPolicy, apply_stack_ignores, check_candidate_outcomes, check_duplicates,
+    selected_projects,
 };
 #[path = "discovery_registry.rs"]
 mod registry;
@@ -22,9 +23,11 @@ use crate::clippy_groups::{ClippyMemoryPlan, clippy_memory_groups};
 use crate::discover_index::build_file_index;
 use crate::inventory::{qualify_workspaces, run_inventories};
 use crate::recommendations::collect_recommendations;
-use crate::safe_read::{MAX_REPO_FILE_BYTES, RepoRead, read_repo_file};
 use crate::toolcheck::{ToolInputCheck, check_tool_inputs};
 use crate::{discover_tofu::qualify_tofu_step, evidence::profile_for_workspace};
+
+#[path = "consumer_manifest.rs"]
+mod consumer_manifest;
 
 /// One workspace with its inventory, profile, and recommendations.
 #[derive(Debug, Clone)]
@@ -38,9 +41,6 @@ pub struct PlannedWorkspace {
     /// Blocking profile findings; `generate` fails closed when non-empty.
     pub findings: Vec<velnor_actions_rust::ProfileFinding>,
 }
-
-/// Committed consumer-manifest filename under `.velnor`.
-const RELEASE_MANIFEST_REL: &str = ".velnor/release-manifest.json";
 
 /// Full detection output feeding planning and rendering.
 #[derive(Debug, Clone)]
@@ -61,10 +61,8 @@ pub struct Discovery {
     pub clippy_memory: ClippyMemoryPlan,
     /// Non-fatal generation recommendations.
     pub recommendations: Vec<String>,
-    /// Release-manifest text from the committed repo file.
-    ///
-    /// Absent files stay `None` in every build so ConsumerV1 generation
-    /// fails closed with `consumer_requires_release_install`.
+    /// Consumer release-manifest text from the committed repo file.
+    /// Only `ConsumerV1` reads it; absent files fail closed during acquire.
     pub consumer_manifest_json: Option<String>,
     /// Whether non-UTF-8 names require broad selection.
     pub skipped_non_utf8: bool,
@@ -122,7 +120,13 @@ pub(crate) fn discover(root: &Path, config: &VelnorConfig) -> Result<Discovery, 
     let clippy_memory = clippy_memory_groups(&proposals);
     let recommendations =
         collect_recommendations(root, config, &index, &workspaces, &tool_checks, &mut reads);
-    let consumer_manifest_json = consumer_manifest_text(root)?;
+    // The source repository bootstraps from source or its own generator
+    // lock; the consumer manifest is not an input under this policy.
+    let consumer_manifest_json = if config.workflow.policy == WorkflowPolicy::ConsumerV1 {
+        consumer_manifest::consumer_manifest_text(root)?
+    } else {
+        None
+    };
     Ok(Discovery {
         mise_checks,
         statuses,
@@ -137,34 +141,6 @@ pub(crate) fn discover(root: &Path, config: &VelnorConfig) -> Result<Discovery, 
         tofu_note: tofu_step.note,
         tofu_units,
     })
-}
-
-/// Read the committed release-manifest file; absent is `None`.
-///
-/// Cfg-independent so tests (debug assertions on) cover the exact read
-/// the release twin relies on; schema and version validation happen
-/// downstream in the consumer acquire gate. Present-but-unreadable
-/// files (symlink, escape, oversize, bad UTF-8) error: an unreadable
-/// manifest is never silently masked as absent (X6).
-/// # Errors
-///
-/// Returns IO or unsafe-path errors for present-but-unreadable files.
-pub(crate) fn read_manifest_file(root: &Path) -> Result<Option<String>, OrchestratorError> {
-    match read_repo_file(root, RELEASE_MANIFEST_REL, MAX_REPO_FILE_BYTES)? {
-        RepoRead::Absent => Ok(None),
-        RepoRead::Text(text) => Ok(Some(text)),
-    }
-}
-
-/// Read only the committed consumer manifest in every build mode.
-///
-/// Absent files stay `None` so consumer acquisition fails closed;
-/// unreadable files error instead of masking.
-/// # Errors
-///
-/// Returns IO or unsafe-path errors for present-but-unreadable files.
-fn consumer_manifest_text(root: &Path) -> Result<Option<String>, OrchestratorError> {
-    read_manifest_file(root)
 }
 
 /// Sorted local dependency display names for one package.
