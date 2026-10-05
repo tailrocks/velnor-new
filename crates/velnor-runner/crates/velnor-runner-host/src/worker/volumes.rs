@@ -10,6 +10,7 @@ use bollard::query_parameters::RemoveVolumeOptions;
 use crate::docker_client::docker_deadline;
 use crate::docker_spec::Mount as PlannedMount;
 use crate::error::HostError;
+use velnor_runner_core::runner_work_path;
 
 #[derive(Clone)]
 struct WorkerVolume {
@@ -107,12 +108,12 @@ fn labels(worker: &str, role: &str) -> HashMap<String, String> {
     ])
 }
 
-fn target(role: &str) -> &'static str {
+fn target(role: &str) -> String {
     match role {
-        "socket" => "/run",
-        "work" => "/home/runner/work",
-        "dind-data" => "/var/lib/docker",
-        _ => "",
+        "socket" => "/run".to_owned(),
+        "work" => runner_work_path(),
+        "dind-data" => "/var/lib/docker".to_owned(),
+        _ => String::new(),
     }
 }
 

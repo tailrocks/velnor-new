@@ -9,11 +9,41 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{UnixListener, UnixStream};
 
 use crate::launch::admission;
-use crate::worker::{remove_worker_volumes, worker_id_for_name};
+use crate::worker::{create_named_volumes, dind_create, remove_worker_volumes, worker_id_for_name};
 use crate::{HostError, IntentState, Outcome};
 
 const TIMEOUT: Duration = Duration::from_secs(2);
 const WORKER: &str = "wtransport";
+
+#[tokio::test]
+async fn named_volumes_require_the_actions_runner_work_path() -> Result<(), String> {
+    let mut invalid = dind_create(WORKER)
+        .map_err(|error| error.to_string())?
+        .mounts;
+    invalid[1].target = "/home/runner/work".to_owned();
+    let rejected = DockerStub::open(Vec::new())?;
+    let result = create_named_volumes(&rejected.docker, WORKER, &invalid).await;
+    let requests = rejected.finish().await?;
+    assert_eq!(result, Err(HostError::ForbiddenMount));
+    assert!(requests.is_empty());
+
+    let mounts = dind_create(WORKER)
+        .map_err(|error| error.to_string())?
+        .mounts;
+    let responses = volume_names()
+        .into_iter()
+        .map(|(name, role)| http(201, &volume_json(name, WORKER, role)))
+        .collect();
+    let accepted = DockerStub::open(responses)?;
+    assert_eq!(
+        create_named_volumes(&accepted.docker, WORKER, &mounts).await,
+        Ok(())
+    );
+    let requests = accepted.finish().await?;
+    assert_eq!(requests.len(), 3);
+    assert!(requests.iter().all(|request| request.starts_with("POST ")));
+    Ok(())
+}
 
 #[tokio::test]
 async fn only_exactly_owned_volumes_are_removed() -> Result<(), String> {
@@ -322,6 +352,7 @@ async fn send_response(stream: &mut UnixStream, response: Response) -> Result<()
 fn reason(status: u16) -> &'static str {
     match status {
         200 => "OK",
+        201 => "Created",
         204 => "No Content",
         404 => "Not Found",
         500 => "Internal Server Error",

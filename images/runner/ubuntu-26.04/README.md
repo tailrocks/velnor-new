@@ -44,8 +44,8 @@ Controller must:
 - Mount this worker's private socket so `/var/run/docker.sock` is not the
   outer engine socket. Do not mount the host socket, host home, Keychain,
   SSH agent, or controller config.
-- Mount a named volume at `/home/runner/work` writable by uid `1000`.
-  That tree holds work, `_temp`, `_actions`, and `_tool`. The path matches
-  GitHub-hosted `runner.temp` (`/home/runner/work/_temp`), which `actions/cache`
-  includes in its version hash. Share the same absolute paths into this
-  worker's DinD container. `externals` is `/home/runner/externals`.
+- Mount a named volume at `/home/runner/_work` writable by uid `1000`, and
+  register the JIT runner with `workFolder: "_work"`. The official runner
+  resolves that folder under `/home/runner`; it contains work, `_temp`,
+  `_actions`, and `_tool`. Share the same absolute path with this worker's DinD
+  container. `externals` is `/home/runner/externals`.

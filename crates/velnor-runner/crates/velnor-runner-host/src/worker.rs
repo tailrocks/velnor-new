@@ -144,7 +144,7 @@ fn dind_container_id(id: &str) -> bool {
 /// Private `DinD` create. Privilege is not a flag on the runner plan.
 ///
 /// Mounts are the runner plan's socket volume at `/run`, the work volume at
-/// `/home/runner/work`, and a DinD-only volume at `/var/lib/docker`. The data
+/// `/home/runner/_work`, and a DinD-only volume at `/var/lib/docker`. The data
 /// volume is not on the runner. vfs on the container layer slows later
 /// Testcontainers starts.
 ///

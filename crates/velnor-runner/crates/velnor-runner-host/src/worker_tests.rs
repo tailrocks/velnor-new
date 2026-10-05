@@ -152,7 +152,7 @@ fn bollard_config_from_a_clean_plan_omits_canary() -> Result<(), HostError> {
     assert_eq!(mounts[0].target.as_deref(), Some("/run"));
     assert_eq!(mounts[0].source.as_deref(), Some("worker_a"));
     assert_eq!(mounts[0].typ, Some(MountType::VOLUME));
-    assert_eq!(mounts[1].target.as_deref(), Some("/home/runner/work"));
+    assert_eq!(mounts[1].target.as_deref(), Some("/home/runner/_work"));
     assert_eq!(mounts[1].source.as_deref(), Some("worker_a-work"));
     assert_eq!(mounts[1].typ, Some(MountType::VOLUME));
     assert_eq!(mounts[2].target.as_deref(), Some("/var/lib/docker"));

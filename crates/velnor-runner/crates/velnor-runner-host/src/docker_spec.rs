@@ -1,6 +1,7 @@
 //! One Ubuntu 26.04 runner. Platform is `linux/amd64`. JIT stays off the plan.
 
 use crate::error::HostError;
+use velnor_runner_core::runner_work_path;
 
 /// One mount. `source` is `volume:<name>` or a bind path.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -49,7 +50,6 @@ const RUNNER_PLATFORM: &str = "linux/amd64";
 const RUNNER_IMAGE: &str = "velnor-runner:ubuntu-26.04-2.337.0";
 const ENTRYPOINT: &str = "/usr/local/bin/velnor-runner-entrypoint";
 const SOCKET_TARGET: &str = "/run";
-const WORK_TARGET: &str = "/home/runner/work";
 
 const HOST_NEEDLES: &[&str] = &[
     "ssh-agent",
@@ -93,7 +93,7 @@ pub fn runner_plan(private_volume: &str) -> Result<ContainerPlan, HostError> {
             },
             Mount {
                 source: format!("volume:{work}"),
-                target: WORK_TARGET.to_owned(),
+                target: runner_work_path(),
             },
         ],
     })

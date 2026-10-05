@@ -95,6 +95,8 @@ mod plist_tests;
 #[cfg(test)]
 mod readiness_tests;
 #[cfg(test)]
+mod runner_image_contract_tests;
+#[cfg(test)]
 mod stage_tests;
 #[cfg(test)]
 mod worker_tests;
