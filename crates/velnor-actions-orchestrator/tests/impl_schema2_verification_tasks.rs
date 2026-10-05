@@ -243,36 +243,27 @@ fn heredoc_body<'a>(script: &'a str, delimiter: &str) -> &'a str {
 const EXPECTED_SELECTED_MISE_CONFIG: &str = r#"
 [tools."aqua:nextest-rs/nextest/cargo-nextest"]
 version = "0.9.140"
-
 [tools."github:boltffi/boltffi"]
 version = "0.30.1"
 matching_regex = '^boltffi-(darwin-aarch64|darwin-x86_64|linux-aarch64(-musl)?|linux-x86_64(-musl)?|windows-arm64|windows-x86_64)\.(tar\.gz|zip)$'
-
 [tools."mr-boxington"]
 version = "1.22.0"
-
 [tools."rust"]
 version = "1.97.1"
 components = "clippy,rustfmt"
 targets = "aarch64-unknown-linux-gnu,x86_64-unknown-linux-gnu"
-
 [tools."swiftlint"]
 version = "0.65.1"
 os = ["macos"]
-
 [tools."xcodegen"]
 version = "2.46.0"
-
 [settings]
 lockfile = true
-
 [settings.cargo]
 binstall = true
 binstall_only = true
-
 [wrappers.cargo]
 command = "mbx"
-
 [wrappers.cargo.env]
 MBX_CARGO_SHIM_MODE = "1"
 "#;
