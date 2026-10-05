@@ -351,3 +351,7 @@ mod shell_tests;
 #[cfg(test)]
 #[path = "lane_share_unpinned_tests.rs"]
 mod unpinned_tests;
+
+#[cfg(test)]
+#[path = "lane_share_named_check_tests.rs"]
+mod named_check_tests;
