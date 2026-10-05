@@ -60,7 +60,10 @@ fn emitted_verification_job_scrubs_credentials_without_disabling_mise_config() {
         &[],
         None,
         &lanes,
-        super::MbxJobPolicy { native_mbx: false },
+        super::MbxJobPolicy {
+            native_mbx: false,
+            actions_read: false,
+        },
     )
     .expect("render verification job");
     let rendered = crate::yaml::render_yaml(&yaml);
