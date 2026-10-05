@@ -18,7 +18,7 @@ The test-registration check starts from Cargo compiler artifacts whose
 profiles actually enable `cfg(test)`, then follows Rust modules, direct literal
 `include!` sources, and invoked `macro_rules!` includes that have one empty
 matcher and empty calls in the same source module. A macro call is associated
-only with a later definition in Rust source order. Other invoked macros that
+only with an earlier definition in Rust source order. Other invoked macros that
 contain `include!` fail closed. A metadata-declared test target skipped by
 Cargo because its `required-features` are disabled is still registered: its
 declared source and statically reachable module/include closure are inspected,
