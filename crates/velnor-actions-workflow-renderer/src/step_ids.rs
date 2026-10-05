@@ -35,6 +35,7 @@ mod tests {
             condition: None,
             kind: StepKind::Internal {
                 operation: "publish-baseline-v1".to_owned(),
+                env: std::collections::BTreeMap::new(),
             },
         };
         push_step_id(&mut entries, &step);

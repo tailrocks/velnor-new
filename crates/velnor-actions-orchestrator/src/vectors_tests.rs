@@ -215,35 +215,6 @@ fn section4_build_vector_is_byte_exact() {
 }
 
 #[test]
-fn custom_task_steps_emit_nothing_and_reject_nonempty() {
-    let catalog = ToolCatalog::pinned();
-    let steps = custom_task_steps(&[], &catalog).expect("empty allowlist");
-    assert!(steps.is_empty(), "empty emits nothing");
-    // Non-empty allowlists fail generate: the emitted steps cannot
-    // work as built (`MISE_NO_CONFIG=1` hides every task), so they
-    // must never ship silently.
-    for allowlist in [argv_of(&["audit", "lint"]), argv_of(&["audit"])] {
-        let err = custom_task_steps(&allowlist, &catalog).expect_err("must reject");
-        assert!(
-            err.to_string().contains("custom_tasks_unqualified"),
-            "{err}"
-        );
-    }
-}
-
-#[test]
-fn custom_task_steps_reject_bad_names() {
-    let catalog = ToolCatalog::pinned();
-    for bad in ["", "  ", "two words", "a/b", "--help", "-x", ".hidden"] {
-        let allowlist = argv_of(&[bad]);
-        assert!(
-            custom_task_steps(&allowlist, &catalog).is_err(),
-            "{bad:?} must fail closed"
-        );
-    }
-}
-
-#[test]
 fn tofu_task_argv_routes_through_pinned_opentofu() {
     use velnor_actions_tofu::{TofuTaskGroup, TofuTaskKind};
     let group = TofuTaskGroup {

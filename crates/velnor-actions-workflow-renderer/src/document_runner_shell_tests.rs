@@ -26,6 +26,7 @@ fn job(runs_on: &str) -> Job {
         condition: None,
         permissions: None,
         environment: None,
+        check_runner: None,
         steps: vec![Step {
             name: "Run probe".to_owned(),
             id: None,

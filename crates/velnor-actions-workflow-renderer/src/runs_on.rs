@@ -1,8 +1,19 @@
 //! Render a typed [`RunsOn`] value. Hosted stays a scalar string.
 
-use velnor_actions_contract::RunsOn;
+use velnor_actions_contract::{ReleaseTarget, RunsOn, SCALE_SET_NAME};
 
 use crate::{RenderError, yaml::Yaml};
+
+/// Rust target triple for a hosted label or the repository scale set.
+pub(crate) fn target_for_runner(label: &str) -> Option<&'static str> {
+    match RunsOn::parse(label).ok()? {
+        RunsOn::Hosted(label) => ReleaseTarget::for_runner_label(&label).map(ReleaseTarget::triple),
+        RunsOn::ScaleSet(selector) if selector.name() == SCALE_SET_NAME => {
+            Some(ReleaseTarget::LinuxX86_64.triple())
+        }
+        RunsOn::ScaleSet(_) => None,
+    }
+}
 
 /// Scale Set image shell for the active Ubuntu 26.04 linux/amd64 profile.
 /// The runner specification pins this base image and it includes Bash.

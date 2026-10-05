@@ -13,6 +13,7 @@ use velnor_actions_workflow_renderer::render::{RenderContext, WORKFLOW_PATH};
 /// Minimal crate job covering the crate attach branch.
 fn legacy_task_job() -> Job {
     Job {
+        check_runner: None,
         display_name: "Rust / demo".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
         timeout_minutes: JobTimeout::CRATE,

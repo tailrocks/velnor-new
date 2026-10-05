@@ -18,8 +18,8 @@ fn stack_id_spells_tofu() {
 
 #[test]
 fn registry_lists_rust_before_tofu() {
-    assert_eq!(VelnorConfig::REGISTERED_STACKS, &["rust", "tofu"]);
-    assert_eq!(Stack::all(), &[Stack::Rust, Stack::Tofu]);
+    assert_eq!(VelnorConfig::REGISTERED_STACKS, &["mise", "rust", "tofu"]);
+    assert_eq!(Stack::all(), &[Stack::Mise, Stack::Rust, Stack::Tofu]);
 }
 
 #[test]
@@ -30,7 +30,8 @@ fn stack_from_id_roundtrips() {
 }
 
 #[test]
-fn require_known_admits_both_stacks() {
+fn require_known_admits_registered_stacks() {
+    assert_eq!(Stack::require_known("mise"), Ok(Stack::Mise));
     assert_eq!(Stack::require_known("rust"), Ok(Stack::Rust));
     assert_eq!(Stack::require_known("tofu"), Ok(Stack::Tofu));
     assert!(Stack::require_known("cobol").is_err());

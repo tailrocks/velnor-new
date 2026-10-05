@@ -41,14 +41,21 @@ fn internal_env(
     ctx: &RenderContext,
     needs_envs: &[(String, String)],
     job_env: &BTreeMap<String, String>,
+    step_env: &BTreeMap<String, String>,
     actions_read: bool,
-) -> Yaml {
+) -> Result<Yaml, RenderError> {
+    commands::validate_env(step_env)?;
     if op == steps::FETCH_OPERATION {
-        return Yaml::Map(vec![
+        if !step_env.is_empty() {
+            return Err(RenderError::InvalidWorkflow(
+                "fetch_internal_env_not_supported".to_owned(),
+            ));
+        }
+        return Ok(Yaml::Map(vec![
             ("GH_REPO".to_owned(), Yaml::str("${{ github.repository }}")),
             ("GH_TOKEN".to_owned(), Yaml::str("${{ github.token }}")),
             (INTERNAL_OP_ENV.to_owned(), Yaml::str(op.to_owned())),
-        ]);
+        ]));
     }
     let request = format!("{}/{target}-request.json", ctx.request_dir);
     let mut env = Vec::new();
@@ -68,7 +75,17 @@ fn internal_env(
             }
         }
     }
-    Yaml::Map(env)
+    let mut seen: std::collections::BTreeSet<String> =
+        env.iter().map(|(key, _)| key.clone()).collect();
+    for (key, value) in step_env {
+        if !seen.insert(key.clone()) {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "duplicate_internal_env:{key}"
+            )));
+        }
+        env.push((key.clone(), Yaml::str(value.clone())));
+    }
+    Ok(Yaml::Map(env))
 }
 
 /// Render one action step: name, condition, pin, inputs, step env.
@@ -213,45 +230,67 @@ pub(crate) fn step_to_yaml(
             ));
             Ok(Yaml::Map(entries))
         }
-        StepKind::Internal { operation } => {
-            let (op, target) = steps::split_internal_operation(operation)?;
-            if op == steps::FETCH_OPERATION && !step_context.actions_read {
-                return Err(RenderError::InvalidWorkflow(
-                    "report_fetch_requires_actions_read".to_owned(),
-                ));
-            }
-            let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
-            if let Some(condition) = &step.condition {
-                steps::scan_for_private_subcommands(condition)?;
-                entries.push(("if".to_owned(), Yaml::str(condition.clone())));
-            }
-            // No `continue-on-error` on the fetch step (F5): the helper
-            // retries each leg bounded and still exits success on
-            // per-leg failure, so the merge judges honestly; only hard
-            // environment failures fail the job, unmasked.
-            let channel = if job_id == FINAL_JOB_ID && target == steps::MERGE_OPERATION {
-                needs_envs
-            } else {
-                &[]
-            };
-            crate::step_ids::push_step_id(&mut entries, step);
-            entries.push((
-                "env".to_owned(),
-                internal_env(
-                    op,
-                    target,
-                    ctx,
-                    channel,
-                    step_context.job_env,
-                    step_context.actions_read,
-                ),
-            ));
-            push_composite_shell(&mut entries, composite);
-            entries.push((
-                "run".to_owned(),
-                Yaml::str(commands::quote_run_arg(&ctx.staged_binary)),
-            ));
-            Ok(Yaml::Map(entries))
+        StepKind::Internal { .. } => {
+            internal_step_to_yaml(job_id, step, ctx, needs_envs, composite, step_context)
         }
     }
+}
+
+/// Render one internal planner step. The operation travels in env, never argv.
+fn internal_step_to_yaml(
+    job_id: &str,
+    step: &Step,
+    ctx: &RenderContext,
+    needs_envs: &[(String, String)],
+    composite: bool,
+    step_context: &crate::document_lanes::JobStepContext<'_>,
+) -> Result<Yaml, RenderError> {
+    let StepKind::Internal {
+        operation,
+        env: step_env,
+    } = &step.kind
+    else {
+        return Err(RenderError::InvalidWorkflow(
+            "internal_step_required".to_owned(),
+        ));
+    };
+    let (op, target) = steps::split_internal_operation(operation)?;
+    if op == steps::FETCH_OPERATION && !step_context.actions_read {
+        return Err(RenderError::InvalidWorkflow(
+            "report_fetch_requires_actions_read".to_owned(),
+        ));
+    }
+    let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
+    if let Some(condition) = &step.condition {
+        steps::scan_for_private_subcommands(condition)?;
+        entries.push(("if".to_owned(), Yaml::str(condition.clone())));
+    }
+    // No `continue-on-error` on the fetch step (F5): the helper
+    // retries each leg bounded and still exits success on
+    // per-leg failure, so the merge judges honestly; only hard
+    // environment failures fail the job, unmasked.
+    let channel = if job_id == FINAL_JOB_ID && target == steps::MERGE_OPERATION {
+        needs_envs
+    } else {
+        &[]
+    };
+    crate::step_ids::push_step_id(&mut entries, step);
+    entries.push((
+        "env".to_owned(),
+        internal_env(
+            op,
+            target,
+            ctx,
+            channel,
+            step_context.job_env,
+            step_env,
+            step_context.actions_read,
+        )?,
+    ));
+    push_composite_shell(&mut entries, composite);
+    entries.push((
+        "run".to_owned(),
+        Yaml::str(commands::quote_run_arg(&ctx.staged_binary)),
+    ));
+    Ok(Yaml::Map(entries))
 }
