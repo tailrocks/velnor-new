@@ -80,6 +80,72 @@ fn future_evidence_fails() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
+fn inventory_and_row_timestamps_reject_non_string_values() -> Result<(), Box<dyn Error>> {
+    let top_anchor = format!("\"checked_at\":\"{}\"", harness::days_iso(0)?);
+    for invalid in ["123", "{}", "null"] {
+        let fixture = harness::passing(&format!("p12-top-timestamp-{invalid}"))?;
+        harness::mutate(
+            &fixture.dir,
+            INVENTORY,
+            &top_anchor,
+            &format!("\"checked_at\":{invalid}"),
+        )?;
+        let run = harness::run_script(&fixture.dir, &[])?;
+        harness::assert_fail(&run, "must be a string when present");
+        assert!(
+            run.stdout.contains("\"subject\":\"checked_at\""),
+            "{}",
+            run.stdout
+        );
+        harness::cleanup(&fixture);
+    }
+
+    let row_anchor = "\"source\":\"https://api.github.com/repos/jdx/mise/releases/latest\",\
+        \"status\":\"current\"}";
+    for invalid in ["123", "{}", "null"] {
+        let fixture = harness::passing(&format!("p12-row-timestamp-{invalid}"))?;
+        let replacement = format!(
+            "\"source\":\"https://api.github.com/repos/jdx/mise/releases/latest\",\
+             \"status\":\"current\",\"checked_at\":{invalid}}}"
+        );
+        harness::mutate(&fixture.dir, INVENTORY, row_anchor, &replacement)?;
+        let run = harness::run_script(&fixture.dir, &[])?;
+        harness::assert_fail(&run, "checked_at must be a string");
+        assert!(
+            run.stdout.contains("\"subject\":\"mise\""),
+            "{}",
+            run.stdout
+        );
+        harness::cleanup(&fixture);
+    }
+    Ok(())
+}
+
+#[test]
+fn present_non_array_exception_collections_fail_shape() -> Result<(), Box<dyn Error>> {
+    for field in ["temporary_holds", "exceptions"] {
+        for invalid in ["123", "{}", "null"] {
+            let fixture = harness::passing(&format!("p12-{field}-{invalid}"))?;
+            harness::mutate(
+                &fixture.dir,
+                INVENTORY,
+                &format!("\"{field}\":[]"),
+                &format!("\"{field}\":{invalid}"),
+            )?;
+            let run = harness::run_script(&fixture.dir, &[])?;
+            harness::assert_fail(&run, "must be an array");
+            assert!(
+                run.stdout.contains(&format!("\"subject\":\"{field}\"")),
+                "{}",
+                run.stdout
+            );
+            harness::cleanup(&fixture);
+        }
+    }
+    Ok(())
+}
+
+#[test]
 fn future_clock_timestamp_inside_skew_grace_passes() -> Result<(), Box<dyn Error>> {
     let fixture = harness::passing("p12-future-clock-grace")?;
     let today = harness::days_iso(0)?;

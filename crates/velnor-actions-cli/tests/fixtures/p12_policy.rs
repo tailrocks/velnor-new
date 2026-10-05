@@ -102,6 +102,27 @@ fn dangling_mutant_glob_fails() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
+fn mutant_globs_reject_non_string_entries() -> Result<(), Box<dyn Error>> {
+    for (suffix, replacement) in [
+        ("number-only", "123"),
+        ("mixed", "\"crates/aaa/Cargo.toml\",\n    123"),
+    ] {
+        let fixture = harness::passing(&format!("p12-mutant-glob-{suffix}"))?;
+        harness::mutate(
+            &fixture.dir,
+            MUTANTS,
+            "\"crates/aaa/Cargo.toml\"",
+            replacement,
+        )?;
+        let run = harness::run_script(&fixture.dir, &[])?;
+        harness::assert_fail(&run, ".cargo/mutants.toml examine_globs");
+        harness::assert_fail(&run, "must be a string");
+        harness::cleanup(&fixture);
+    }
+    Ok(())
+}
+
+#[test]
 fn stale_recorded_latest_fails() -> Result<(), Box<dyn Error>> {
     let fixture = harness::passing("p12-latest")?;
     harness::mutate(

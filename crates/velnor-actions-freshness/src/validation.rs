@@ -82,8 +82,16 @@ fn check_scope_matches(ctx: &mut FreshnessContext, text: &str) {
         );
         return;
     }
-    for glob in globs.iter().filter_map(Value::as_str) {
-        check_scope_pattern(ctx, glob);
+    for (index, glob) in globs.iter().enumerate() {
+        let Some(pattern) = glob.as_str() else {
+            ctx.fail_row(
+                "local-pin",
+                &format!("{MUTANTS} examine_globs"),
+                &format!("entry {index} must be a string, got {glob}"),
+            );
+            continue;
+        };
+        check_scope_pattern(ctx, pattern);
     }
 }
 

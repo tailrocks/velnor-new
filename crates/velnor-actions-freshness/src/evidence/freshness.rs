@@ -137,11 +137,18 @@ fn evidence_time(
     subject: &str,
     entry: &Value,
 ) -> Option<(String, i64)> {
-    let stamp = entry
-        .get("checked_at")
-        .and_then(Value::as_str)
-        .map(str::to_owned)
-        .or_else(|| ctx.top_checked.clone());
+    let stamp = match entry.get("checked_at") {
+        Some(Value::String(stamp)) => Some(stamp.clone()),
+        Some(value) => {
+            ctx.fail_row(
+                "upstream-freshness",
+                subject,
+                &format!("checked_at must be a string, got {value}"),
+            );
+            return None;
+        }
+        None => ctx.top_checked.clone(),
+    };
     let Some(stamp) = stamp else {
         ctx.fail_row(
             "upstream-freshness",
