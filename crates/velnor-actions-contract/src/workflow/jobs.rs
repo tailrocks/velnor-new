@@ -58,6 +58,8 @@ pub enum ValidatorKind {
     Actionlint,
     /// Workflow security audit.
     Zizmor,
+    /// Pinned Python source-unit tests required by the repository policy.
+    PythonSourceTests,
 }
 
 impl ValidatorKind {
@@ -70,6 +72,7 @@ impl ValidatorKind {
             Self::CargoMachete => "cargo-machete",
             Self::Actionlint => "actionlint",
             Self::Zizmor => "zizmor",
+            Self::PythonSourceTests => "python-source-tests",
         }
     }
 
@@ -82,18 +85,20 @@ impl ValidatorKind {
             Self::CargoMachete => "Cargo Machete",
             Self::Actionlint => "Actionlint",
             Self::Zizmor => "Zizmor",
+            Self::PythonSourceTests => "Python source tests",
         }
     }
 
     /// Every validator kind in emission order.
     #[must_use]
-    pub fn all() -> [Self; 5] {
+    pub fn all() -> [Self; 6] {
         [
             Self::Alint,
             Self::CargoDeny,
             Self::CargoMachete,
             Self::Actionlint,
             Self::Zizmor,
+            Self::PythonSourceTests,
         ]
     }
 
@@ -101,12 +106,13 @@ impl ValidatorKind {
     ///
     /// Actionlint is always-on base IR on both policies, never support.
     #[must_use]
-    pub fn repository_validators() -> [Self; 4] {
+    pub fn repository_validators() -> [Self; 5] {
         [
             Self::Alint,
             Self::CargoDeny,
             Self::CargoMachete,
             Self::Zizmor,
+            Self::PythonSourceTests,
         ]
     }
 }

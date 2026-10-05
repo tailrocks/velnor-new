@@ -5,6 +5,7 @@ use velnor_actions_mise::toolfiles::lockfile::{
     InstallCoverage, InstallSubject, audit_install_coverage, mise_platform_for_target,
     parse_mise_lockfile, subject_for_install_spec,
 };
+use velnor_actions_mise::{PYTHON_PBS_SHA256, PYTHON_PBS_URL};
 
 fn catalog() -> ToolCatalog {
     ToolCatalog::pinned()
@@ -171,7 +172,13 @@ fn uppercase_checksums_verify() -> Result<(), String> {
 #[test]
 fn drifted_spec_version_does_not_resolve() {
     let catalog = catalog();
-    for spec in ["rust@1.97.0", "actionlint@1.7.11", "rust@latest", "rust@"] {
+    for spec in [
+        "rust@1.97.0",
+        "actionlint@1.7.11",
+        "rust@latest",
+        "rust@",
+        "python@3.14.8",
+    ] {
         assert_eq!(
             subject_for_install_spec(spec, &catalog),
             None,
@@ -212,7 +219,15 @@ fn every_catalog_spec_resolves_and_foreign_does_not() {
             "{spec} pins the catalog version"
         );
         let key = spec.split_once('@').map_or("", |(head, _)| head);
-        assert_eq!(subject.lock_key, key, "{spec} keeps its spec key");
+        let lock_key = if tool == PinnedTool::Python {
+            "http:python"
+        } else {
+            key
+        };
+        assert_eq!(
+            subject.lock_key, lock_key,
+            "{spec} maps to its Mise lock key"
+        );
     }
     for foreign in [
         "cargo-deny@0.20.2",
@@ -227,6 +242,45 @@ fn every_catalog_spec_resolves_and_foreign_does_not() {
             "{foreign} must not resolve"
         );
     }
+}
+
+/// Pinned HTTP lock serialization keeps backend options separate from the
+/// platform URL/checksum. This audit checks lock hygiene, not artifact origin.
+#[test]
+fn python_http_lock_hygiene_uses_generated_shape() -> Result<(), String> {
+    let catalog = catalog();
+    let python_subject = subject(PinnedTool::Python, &catalog)?;
+    assert_eq!(python_subject.lock_key, "http:python");
+    assert!(subject_for_install_spec("http:python@3.14.8", &catalog).is_none());
+    let altered_spec = catalog
+        .tool_spec(PinnedTool::Python)
+        .replace("strip_components=1", "strip_components=2");
+    assert!(subject_for_install_spec(&altered_spec, &catalog).is_none());
+    let text = format!(
+        "[[tools.\"http:python\"]]\nversion = \"3.14.8\"\nbackend = \"http:python\"\nspecifiers = [\"3.14.8\"]\noptions = {{ strip_components = \"1\" }}\n\n[tools.\"http:python\".\"platforms.linux-x64\"]\nchecksum = \"sha256:{PYTHON_PBS_SHA256}\"\nurl = \"{PYTHON_PBS_URL}\"\n"
+    );
+    let lock = parse_mise_lockfile(&text)?;
+    let entry = lock.tools.get("http:python").ok_or("Python HTTP entry")?;
+    assert_eq!(entry.version, "3.14.8");
+    assert_eq!(
+        entry.checksums.get("linux-x64").map(String::as_str),
+        Some(checksum(PYTHON_PBS_SHA256).as_str())
+    );
+    assert_eq!(
+        audit_install_coverage(&lock, &[python_subject.clone()], "linux-x64"),
+        vec![InstallCoverage::Verified]
+    );
+
+    let decoy = format!(
+        "[[tools.python]]\nversion = \"3.14.8\"\n\n[tools.python.\"platforms.linux-x64\"]\nchecksum = \"sha256:{}\"\n",
+        "b".repeat(64)
+    );
+    let lock = parse_mise_lockfile(&decoy)?;
+    assert_eq!(
+        audit_install_coverage(&lock, &[python_subject], "linux-x64"),
+        vec![InstallCoverage::MissingEntry]
+    );
+    Ok(())
 }
 
 /// A decoy entry under the non-addressed key never affects the verdict.
