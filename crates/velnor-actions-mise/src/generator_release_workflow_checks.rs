@@ -66,6 +66,9 @@ END {
 }
 "#;
 
+const NATIVE_HOST_GUARD_AWK: &str =
+    r#"{ print "Native host: " $0 } END { if (NR != 1 || $0 != expected) exit 1 }"#;
+
 /// Require the selected native runner OS and machine to match the target.
 ///
 /// # Errors
@@ -81,8 +84,9 @@ pub fn native_host_check_step(
         GeneratorReleaseTarget::MacosArm64 => "Darwin arm64",
     };
     let body = format!(
-        "uname -sm | awk -v expected={} '{{ print \"Native host: \" $0; if (NR != 1 || $0 != expected) bad = 1 }} END {{ if (bad) exit 1 }}'",
-        shell_quote(expected)
+        "uname -sm | awk -v expected={} {}",
+        shell_quote(expected),
+        shell_quote(NATIVE_HOST_GUARD_AWK)
     );
     guarded_step("Verify native build host", &body, homes, catalog)
 }

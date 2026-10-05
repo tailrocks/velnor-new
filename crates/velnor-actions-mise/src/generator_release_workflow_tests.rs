@@ -1,9 +1,15 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::{OsStr, OsString};
+#[cfg(unix)]
+use std::io::{self, Write};
 use std::path::Path;
+#[cfg(unix)]
+use std::process::{Command, Stdio};
 
 use velnor_actions_contract::{GeneratorReleaseTarget, Step, StepKind};
 
+#[cfg(unix)]
+use super::NATIVE_HOST_GUARD_AWK;
 use super::{
     apple_linker_check_step, apple_sdk_check_step, binary_format_architecture_check_step,
     generator_release_mise_binary_sha256, gnu_runtime_abi_check_step, help_smoke_check_step,
@@ -350,6 +356,38 @@ fn native_checks_use_control_free_argv_and_keep_platform_guards() {
             }
         }
     }
+}
+
+#[cfg(unix)]
+fn native_host_guard_accepts(input: &str, expected: &str) -> io::Result<bool> {
+    let mut child = Command::new("awk")
+        .arg("-v")
+        .arg(format!("expected={expected}"))
+        .arg(NATIVE_HOST_GUARD_AWK)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()?;
+    if let Some(mut stdin) = child.stdin.take() {
+        stdin.write_all(input.as_bytes())?;
+    }
+    Ok(child.wait()?.success())
+}
+
+#[cfg(unix)]
+#[test]
+fn native_host_guard_requires_exactly_one_expected_host_line() -> io::Result<()> {
+    let expected = "Linux x86_64";
+
+    assert!(native_host_guard_accepts("Linux x86_64\n", expected)?);
+    assert!(!native_host_guard_accepts("", expected)?);
+    assert!(!native_host_guard_accepts(
+        "Linux x86_64\nextra\n",
+        expected
+    )?);
+    assert!(!native_host_guard_accepts("Linux aarch64\n", expected)?);
+
+    Ok(())
 }
 
 #[test]
