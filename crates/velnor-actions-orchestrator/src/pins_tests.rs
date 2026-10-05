@@ -52,9 +52,13 @@ fn source_build_consumer_generation_fails_with_provenance() {
 fn consumer_manifest_mismatch_and_bad_target_fail() {
     let err = consumer_acquire_from("ubuntu-26.04", "9.9.9", Some(&test_manifest_json()));
     assert!(err.is_err_and(|err| err.to_string().contains("version_mismatch")));
-    let err = consumer_acquire_from("ubuntu-26.04-arm", "0.1.0", Some(&test_manifest_json()));
+    let err = consumer_acquire_from(
+        "ubuntu-26.04-arm",
+        env!("CARGO_PKG_VERSION"),
+        Some(&test_manifest_json()),
+    );
     assert!(err.is_err_and(|err| err.to_string().contains("unsupported_target_for_runner")));
-    let err = consumer_acquire_from("ubuntu-26.04", "0.1.0", Some("not json"));
+    let err = consumer_acquire_from("ubuntu-26.04", env!("CARGO_PKG_VERSION"), Some("not json"));
     assert!(err.is_err());
 }
 
