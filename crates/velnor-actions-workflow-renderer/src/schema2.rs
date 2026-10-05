@@ -154,8 +154,9 @@ impl GeneratorReleasePins {
 pub struct MbxQualificationPins {
     /// Resolved Mise action and binary pins.
     pub mise_setup: MiseSetup,
-    /// Full-SHA MBX GitHub Action ref.
-    pub mbx_action_uses: String,
+    /// Full-SHA candidate MBX Action ref for this unqualified experiment.
+    /// It is separate from the production pin and generation never qualifies it.
+    pub candidate_action_uses: String,
     /// Exact MBX tool version.
     pub mbx_version: String,
     /// Exact Rust toolchain version used by the qualification lane.
@@ -236,9 +237,11 @@ pub fn render_schema2_workflows(
 }
 
 fn file(path: &str, version: &str, body: &Yaml) -> Result<RenderedFile, RenderError> {
+    let bytes = with_marker(version, &render_yaml(body))?;
+    crate::workflow_size::check_workflow_size(path, &bytes)?;
     Ok(RenderedFile {
         path: path.to_owned(),
-        bytes: with_marker(version, &render_yaml(body))?,
+        bytes,
     })
 }
 

@@ -130,13 +130,13 @@ fn workflow_request(
         let mbx_action = velnor_actions_actionlint::actions::PinnedActionRef::new(
             "jdx/mr-boxington-action",
             None,
-            velnor_actions_actionlint::actions::MR_BOXINGTON_ACTION_SHA,
-            velnor_actions_actionlint::actions::MR_BOXINGTON_ACTION_VERSION,
+            velnor_actions_actionlint::actions::MR_BOXINGTON_ACTION_CANDIDATE_SHA,
+            velnor_actions_actionlint::actions::MR_BOXINGTON_ACTION_CANDIDATE_VERSION,
         )?;
         let tool_catalog = velnor_actions_mise::ToolCatalog::pinned();
         Some(MbxQualificationPins {
             mise_setup: crate::pins::resolve_mise_setup(config, &hosted)?,
-            mbx_action_uses: mbx_action.uses_value(),
+            candidate_action_uses: mbx_action.uses_value(),
             mbx_version: tool_catalog
                 .version(velnor_actions_mise::PinnedTool::MrBoxington)
                 .to_owned(),

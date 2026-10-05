@@ -17,8 +17,6 @@ use crate::worker::Started;
 
 use super::{Drive, Lane};
 
-const KIND: &str = "launch";
-
 /// What one poll allows before acquire.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Idle {
@@ -92,14 +90,17 @@ pub(super) async fn launch_id<T, S, F>(
 ) -> Result<Option<Started>, EnsureError>
 where
     T: velnor_runner_github::Transport + Lane,
-    S: FnOnce(&str, &[u8]) -> F,
+    S: FnOnce(&str, &[u8], super::bind::Bind) -> F,
     F: Future<Output = Result<Started, HostError>>,
 {
     lane.on_admin()?;
     let subject = format!("m{}r{request_id}", batch.message_id);
-    let id = journal.begin(KIND, &subject).await.map_err(map_journal)?;
+    let (id, fresh) = journal.begin_launch(&subject).await.map_err(map_journal)?;
     if docker_of(journal, id).await?.is_some() {
         return ack_bound(lane, ctx, batch, journal, id).await;
+    }
+    if !fresh {
+        return hold(journal, id, EnsureError::Uncertain).await;
     }
     match taken(lane, ctx, request_id) {
         Ok(AcquireOutcome::Acquired(ids)) if ids.is_empty() => reject_empty(journal, id).await,
@@ -121,7 +122,7 @@ pub(super) async fn scale_id<T, S, F>(
 ) -> Result<Option<Started>, EnsureError>
 where
     T: velnor_runner_github::Transport + Lane,
-    S: FnOnce(&str, &[u8]) -> F,
+    S: FnOnce(&str, &[u8], super::bind::Bind) -> F,
     F: Future<Output = Result<Started, HostError>>,
 {
     let name = format!("m{}", batch.message_id);
@@ -139,7 +140,7 @@ pub(super) async fn scale_unacked<T, S, F>(
 ) -> Result<Option<Started>, EnsureError>
 where
     T: velnor_runner_github::Transport + Lane,
-    S: FnOnce(&str, &[u8]) -> F,
+    S: FnOnce(&str, &[u8], super::bind::Bind) -> F,
     F: Future<Output = Result<Started, HostError>>,
 {
     // Subject is this session's runner name. A shared "scale" row stayed Done
@@ -199,13 +200,16 @@ async fn ensure_runner<T, S, F>(
 ) -> Result<Option<Started>, EnsureError>
 where
     T: velnor_runner_github::Transport + Lane,
-    S: FnOnce(&str, &[u8]) -> F,
+    S: FnOnce(&str, &[u8], super::bind::Bind) -> F,
     F: Future<Output = Result<Started, HostError>>,
 {
     lane.on_admin()?;
-    let id = journal.begin(KIND, subject).await.map_err(map_journal)?;
+    let (id, fresh) = journal.begin_launch(subject).await.map_err(map_journal)?;
     if docker_of(journal, id).await?.is_some() {
         return finish_live(lane, ctx, journal, id, batch).await;
+    }
+    if !fresh {
+        return hold(journal, id, EnsureError::Uncertain).await;
     }
     mint(lane, ctx, batch, journal, id, name, start).await
 }
@@ -221,18 +225,40 @@ async fn mint<T, S, F>(
 ) -> Result<Option<Started>, EnsureError>
 where
     T: velnor_runner_github::Transport + Lane,
-    S: FnOnce(&str, &[u8]) -> F,
+    S: FnOnce(&str, &[u8], super::bind::Bind) -> F,
     F: Future<Output = Result<Started, HostError>>,
 {
     let encoded = match fetch_jit(lane, ctx, name) {
         Ok(encoded) => encoded,
-        Err(error) => return hold(journal, id, map_listen(error)).await,
+        Err(error) => {
+            let mapped = map_listen(error);
+            if matches!(mapped, EnsureError::Conflict) {
+                journal
+                    .finish(id, Outcome::DefiniteFailure)
+                    .await
+                    .map_err(map_journal)?;
+                return Err(mapped);
+            }
+            return hold(journal, id, mapped).await;
+        }
     };
-    let Ok(started) = start(name, encoded.expose().as_bytes()).await else {
+    let bound = super::bind::Bind::new(journal, id);
+    let Ok(volume) = crate::worker::new_worker_volume() else {
+        return hold(
+            journal,
+            id,
+            EnsureError::Unexpected {
+                status: 0,
+                step: "worker identity",
+            },
+        )
+        .await;
+    };
+    let Ok(started) = start(&volume, encoded.expose().as_bytes(), bound).await else {
         return hold(journal, id, EnsureError::Uncertain).await;
     };
     journal
-        .bind(id, Some(&started.runner_id), None)
+        .bind_worker(id, Some(&started.runner_id), Some(&started.dind_id))
         .await
         .map_err(map_journal)?;
     if let Some(batch) = batch

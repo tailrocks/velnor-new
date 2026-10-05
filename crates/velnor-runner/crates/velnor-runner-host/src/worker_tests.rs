@@ -22,6 +22,7 @@ fn bollard(volume: &str) -> Result<BollardCreate, HostError> {
 #[test]
 fn runner_create_opens_stdin_and_is_not_privileged() -> Result<(), HostError> {
     let spec = projection("worker_a")?;
+    assert_eq!(spec.name, "worker_a-runner");
     assert!(spec.open_stdin);
     assert!(!spec.privileged);
     assert_eq!(spec.platform, "linux/amd64");
@@ -29,6 +30,11 @@ fn runner_create_opens_stdin_and_is_not_privileged() -> Result<(), HostError> {
     assert_eq!(spec.mounts.len(), 2);
     assert_eq!(spec.mounts[0].source, "volume:worker_a");
     assert_eq!(spec.mounts[0].target, "/run");
+    assert!(
+        spec.mounts
+            .iter()
+            .all(|mount| mount.target != "/var/lib/docker")
+    );
     assert_eq!(spec.env, Vec::<String>::new());
     assert!(spec.network_mode.is_none());
     Ok(())
@@ -53,13 +59,29 @@ fn dind_is_privileged_and_shares_the_runner_volumes() -> Result<(), HostError> {
         assert_eq!(dind_create(name).err(), runner_plan(name).err(), "{name}");
     }
     let spec = dind_create("worker_a")?;
+    assert_eq!(spec.name, "worker_a-dind");
+    assert!(spec.labels.contains(&"velnor.worker=worker_a".to_owned()));
+    assert!(spec.labels.contains(&"velnor.role=dind".to_owned()));
     assert!(spec.privileged);
     assert!(!spec.open_stdin);
     assert_eq!(spec.env, Vec::<String>::new());
     assert_eq!(spec.cmd, Vec::<String>::new());
     assert_eq!(spec.image, "velnor-dind:29.8.2");
     assert_eq!(spec.platform, "linux/amd64");
-    assert_eq!(spec.mounts, runner_plan("worker_a")?.mounts);
+    let runner = runner_plan("worker_a")?;
+    assert_eq!(&spec.mounts[..runner.mounts.len()], &runner.mounts[..]);
+    assert!(
+        !runner
+            .mounts
+            .iter()
+            .any(|mount| mount.target == "/var/lib/docker")
+    );
+    assert_eq!(
+        spec.mounts
+            .last()
+            .map(|mount| (mount.source.as_str(), mount.target.as_str())),
+        Some(("volume:worker_a-docker", "/var/lib/docker"))
+    );
     assert!(spec.network_mode.is_none());
     Ok(())
 }
@@ -104,6 +126,7 @@ fn runner_joins_only_its_dind_netns() -> Result<(), HostError> {
 #[test]
 fn bollard_config_from_a_clean_plan_omits_canary() -> Result<(), HostError> {
     let created = bollard("worker_a")?;
+    assert_eq!(created.options.name.as_deref(), Some("worker_a-runner"));
     assert_eq!(created.options.platform, "linux/amd64");
     assert_eq!(created.config.open_stdin, Some(true));
     let host = created
@@ -117,6 +140,7 @@ fn bollard_config_from_a_clean_plan_omits_canary() -> Result<(), HostError> {
     assert!(!text.to_ascii_lowercase().contains("jitconfig"));
 
     let dind = bollard_create(&dind_create("worker_a")?)?;
+    assert_eq!(dind.options.name.as_deref(), Some("worker_a-dind"));
     assert_eq!(dind.options.platform, "linux/amd64");
     assert_eq!(dind.config.open_stdin, Some(false));
     assert!(dind.config.env.is_none());
@@ -124,13 +148,16 @@ fn bollard_config_from_a_clean_plan_omits_canary() -> Result<(), HostError> {
     let host = dind.config.host_config.as_ref().ok_or(HostError::Docker)?;
     assert_eq!(host.privileged, Some(true));
     let mounts = host.mounts.as_ref().ok_or(HostError::Docker)?;
-    assert_eq!(mounts.len(), 2);
+    assert_eq!(mounts.len(), 3);
     assert_eq!(mounts[0].target.as_deref(), Some("/run"));
     assert_eq!(mounts[0].source.as_deref(), Some("worker_a"));
     assert_eq!(mounts[0].typ, Some(MountType::VOLUME));
     assert_eq!(mounts[1].target.as_deref(), Some("/home/runner/_work"));
     assert_eq!(mounts[1].source.as_deref(), Some("worker_a-work"));
     assert_eq!(mounts[1].typ, Some(MountType::VOLUME));
+    assert_eq!(mounts[2].target.as_deref(), Some("/var/lib/docker"));
+    assert_eq!(mounts[2].source.as_deref(), Some("worker_a-docker"));
+    assert_eq!(mounts[2].typ, Some(MountType::VOLUME));
     let text = format!("{dind:?}");
     assert!(!text.contains("canary-jit"));
     assert!(!text.contains("/var/run/docker.sock"));
