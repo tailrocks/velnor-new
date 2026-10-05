@@ -212,7 +212,8 @@ policy that Velnor emits for production MBX object-cache jobs, overriding the
 action's hosted default. Dispatch once from protected `main` with mode
 `mbx-cache-roundtrip`; the writer and reader run in order at the same SHA.
 
-This is a small end-to-end action and cache round-trip probe. It does not
-measure disk or inode peaks and does not qualify the affected ChainArgos
-workload. That evidence must come from the consumer's affected crates after
-adoption; a green probe alone is not an ENOSPC repair verdict.
+This is a small end-to-end action and cache round-trip probe. The writer
+samples `df -B1 -P` and `df -i -P` on `$RUNNER_TEMP` after the probe build.
+The reader prints those same lines and tees the MBX stats JSON before the
+`jq -e` checks. It still does not qualify the affected ChainArgos workload.
+A green probe alone is not an ENOSPC repair verdict.
