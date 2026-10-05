@@ -77,37 +77,33 @@ jobs:
     outputs:
       covered_tasks: ${{ steps.plan.outputs.covered_tasks }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          fetch-depth: "0"
-          persist-credentials: "false"
-      - name: Restore Velnor tool seed
-        uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
-        with:
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-cd6926493099032f
       - name: Setup Mise
         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
           cache: "true"
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-cd6926493099032f
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-ccc5d847fd871b3b
           cache_save: "false"
           env: "false"
           install: "false"
           sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
           version: 2026.9.18
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: "0"
+          persist-credentials: "false"
       - name: Prepare pinned tools
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-        run: mise --no-config --no-env --no-hooks install rust@1.98.1 mr-boxington@1.21.1 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.30.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146
+        run: mise --no-config --no-env --no-hooks install rust@1.98.1 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.30.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146
       - name: Prepare Rust components
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
         run: mise --no-config --no-env --no-hooks exec rust@1.98.1 -- rustup component add --toolchain 1.98.1-x86_64-unknown-linux-gnu clippy rustfmt
       - name: Acquire Velnor
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \"$RUNNER_TEMP/velnor/bin\" && if [ -f \"/opt/velnor/seed/generator/velnor-actions-0.1.0\" ] && echo \"$VELNOR_ASSET_SHA256  /opt/velnor/seed/generator/velnor-actions-0.1.0\" | sha256sum -c -; then cp \"/opt/velnor/seed/generator/velnor-actions-0.1.0\" \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"; else curl -fsSL --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" && echo \"$VELNOR_ASSET_SHA256  $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" | sha256sum -c -; fi && chmod +x \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"'"
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \"$RUNNER_TEMP/velnor/bin\" && s=\"/opt/velnor/seed/generator/velnor-actions-0.1.0\" d=\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" && if [ -f \"$s\" ] && echo \"$VELNOR_ASSET_SHA256  $s\" | sha256sum -c -; then cp \"$s\" \"$d\"; else curl -fsSL --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\" && echo \"$VELNOR_ASSET_SHA256  $d\" | sha256sum -c -; fi && chmod +x \"$d\"'"
       - name: Write request
         env:
           VELNOR_INTERNAL_OP: write-request-v1
@@ -138,7 +134,7 @@ jobs:
         if: success() && github.event_name == 'push'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
-          key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-cd6926493099032f
+          key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-ccc5d847fd871b3b
           path: ~/.local/share/mise
   publish-baseline:
     name: Publish baseline
@@ -170,7 +166,7 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - name: Acquire Velnor
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \"$RUNNER_TEMP/velnor/bin\" && if [ -f \"/opt/velnor/seed/generator/velnor-actions-0.1.0\" ] && echo \"$VELNOR_ASSET_SHA256  /opt/velnor/seed/generator/velnor-actions-0.1.0\" | sha256sum -c -; then cp \"/opt/velnor/seed/generator/velnor-actions-0.1.0\" \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"; else curl -fsSL --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" && echo \"$VELNOR_ASSET_SHA256  $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" | sha256sum -c -; fi && chmod +x \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"'"
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \"$RUNNER_TEMP/velnor/bin\" && s=\"/opt/velnor/seed/generator/velnor-actions-0.1.0\" d=\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" && if [ -f \"$s\" ] && echo \"$VELNOR_ASSET_SHA256  $s\" | sha256sum -c -; then cp \"$s\" \"$d\"; else curl -fsSL --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\" && echo \"$VELNOR_ASSET_SHA256  $d\" | sha256sum -c -; fi && chmod +x \"$d\"'"
       - name: Download plan
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
@@ -241,7 +237,7 @@ jobs:
           sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
           version: 2026.9.18
       - name: Acquire Velnor
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \"$RUNNER_TEMP/velnor/bin\" && if [ -f \"/opt/velnor/seed/generator/velnor-actions-0.1.0\" ] && echo \"$VELNOR_ASSET_SHA256  /opt/velnor/seed/generator/velnor-actions-0.1.0\" | sha256sum -c -; then cp \"/opt/velnor/seed/generator/velnor-actions-0.1.0\" \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"; else curl -fsSL --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" && echo \"$VELNOR_ASSET_SHA256  $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" | sha256sum -c -; fi && chmod +x \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"'"
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \"$RUNNER_TEMP/velnor/bin\" && s=\"/opt/velnor/seed/generator/velnor-actions-0.1.0\" d=\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" && if [ -f \"$s\" ] && echo \"$VELNOR_ASSET_SHA256  $s\" | sha256sum -c -; then cp \"$s\" \"$d\"; else curl -fsSL --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\" && echo \"$VELNOR_ASSET_SHA256  $d\" | sha256sum -c -; fi && chmod +x \"$d\"'"
       - name: Prepare pinned tools
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
@@ -300,7 +296,7 @@ jobs:
       GH_HOST: ""
       GH_TOKEN: ""
       GITHUB_TOKEN: ""
-      MBX_GC_AUTO: "0"
+      MBX_GC_AUTO: "1"
       MBX_SHARE_OUT_DIR: "0"
       MISE_AUTO_INSTALL: "false"
       MISE_EXEC_AUTO_INSTALL: "false"
@@ -325,19 +321,19 @@ jobs:
       - name: Restore Velnor tool seed
         uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
         with:
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-cd6926493099032f
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-ccc5d847fd871b3b
       - name: Setup Mise
         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
           cache: "true"
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-cd6926493099032f
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-ccc5d847fd871b3b
           cache_save: "false"
           env: "false"
           install: "false"
           sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
           version: 2026.9.18
       - name: Acquire Velnor
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \"$RUNNER_TEMP/velnor/bin\" && if [ -f \"/opt/velnor/seed/generator/velnor-actions-0.1.0\" ] && echo \"$VELNOR_ASSET_SHA256  /opt/velnor/seed/generator/velnor-actions-0.1.0\" | sha256sum -c -; then cp \"/opt/velnor/seed/generator/velnor-actions-0.1.0\" \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"; else curl -fsSL --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" && echo \"$VELNOR_ASSET_SHA256  $RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" | sha256sum -c -; fi && chmod +x \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"'"
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \"$RUNNER_TEMP/velnor/bin\" && s=\"/opt/velnor/seed/generator/velnor-actions-0.1.0\" d=\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\" && if [ -f \"$s\" ] && echo \"$VELNOR_ASSET_SHA256  $s\" | sha256sum -c -; then cp \"$s\" \"$d\"; else curl -fsSL --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\" && echo \"$VELNOR_ASSET_SHA256  $d\" | sha256sum -c -; fi && chmod +x \"$d\"'"
       - name: Download plan
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
@@ -347,44 +343,46 @@ jobs:
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-        run: mise --no-config --no-env --no-hooks install rust@1.98.1 mr-boxington@1.21.1 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.30.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146
+        run: mise --no-config --no-env --no-hooks install rust@1.98.1 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.30.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146
       - name: Prepare Rust components
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
         run: mise --no-config --no-env --no-hooks exec rust@1.98.1 -- rustup component add --toolchain 1.98.1-x86_64-unknown-linux-gnu clippy rustfmt
-      - name: Verify MBX and Rust toolchains
+      - name: Verify Rust before MBX action
         env:
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          MBX_CACHE_DIR: ${{ runner.temp }}/velnor/mbx
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; [ -n \"$GITHUB_PATH\" ] || { printf '\\''%s\\n'\\'' '\\''GITHUB_PATH is required'\\'' >&2; exit 1; }; probe_dir=\"$RUNNER_TEMP/velnor/mbx-preflight\"; mkdir -p \"$probe_dir\"; mbx_probe=\"$probe_dir/mbx-root\"; rust_probe=\"$probe_dir/rust-root\"; mise --no-config --no-env --no-hooks where '\\''mr-boxington@1.21.1'\\'' > \"$mbx_probe\"; mise --no-config --no-env --no-hooks where '\\''rust@1.98.1'\\'' > \"$rust_probe\"; IFS= read -r mbx_root < \"$mbx_probe\" || { printf '\\''%s\\n'\\'' '\\''Mise returned no MBX install path'\\'' >&2; exit 1; }; IFS= read -r rust_root < \"$rust_probe\" || { printf '\\''%s\\n'\\'' '\\''Mise returned no Rust install path'\\'' >&2; exit 1; }; [ -n \"$mbx_root\" ] || { printf '\\''%s\\n'\\'' '\\''Mise returned an empty MBX install path'\\'' >&2; exit 1; }; [ -n \"$rust_root\" ] || { printf '\\''%s\\n'\\'' '\\''Mise returned an empty Rust install path'\\'' >&2; exit 1; }; case \"$mbx_root\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''Mise returned a non-absolute MBX install path'\\'' >&2; exit 1 ;; esac; case \"$rust_root\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''Mise returned a non-absolute Rust install path'\\'' >&2; exit 1 ;; esac; mbx_bin=\"$mbx_root/mbx\"; rustc_bin=\"$rust_root/rustc\"; [ -x \"$mbx_bin\" ] || { printf '\\''expected executable MBX at %s\\n'\\'' \"$mbx_bin\" >&2; exit 1; }; [ -x \"$rustc_bin\" ] || { printf '\\''expected Rustup shim at %s\\n'\\'' \"$rustc_bin\" >&2; exit 1; }; mbx_output_file=\"$probe_dir/mbx-version\"; rustc_output_file=\"$probe_dir/rustc-version\"; \"$mbx_bin\" --version > \"$mbx_output_file\"; IFS= read -r mbx_output < \"$mbx_output_file\" || { printf '\\''%s\\n'\\'' '\\''MBX returned no version'\\'' >&2; exit 1; }; [ \"$mbx_output\" = '\\''mbx 1.21.1'\\'' ] || { printf '\\''expected MBX 1.21.1, got %s\\n'\\'' \"$mbx_output\" >&2; exit 1; }; \"$rustc_bin\" '\\''+1.98.1'\\'' -vV > \"$rustc_output_file\"; grep -Fqx '\\''release: 1.98.1'\\'' \"$rustc_output_file\" || { printf '\\''Rustup did not report exact toolchain 1.98.1\\n'\\'' >&2; exit 1; }; rm -f \"$mbx_probe\" \"$rust_probe\" \"$mbx_output_file\" \"$rustc_output_file\"; rmdir \"$probe_dir\"; printf '\\''%s\\n'\\'' \"$rust_root\" \"$mbx_root\" >> \"$GITHUB_PATH\"'"
-      - name: Prepare MBX cache identity
-        id: mbx-cache-key
-        env:
-          CACHE_GENERATION: velnor-mbx-1.21.1-share-out-dir-disabled-v1-action-1687e54eb349cadf61fa38b5813a77875489e8e6-dir
-          CACHE_REVISION: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.sha }}
-          CREATE_EXPORT_GROUP: "false"
-          RUST_TOOLCHAIN: 1.98.1
-        run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; case \"$RUNNER_OS:$RUNNER_ARCH\" in Linux:X64) os=linux; arch=x64 ;; Linux:ARM64) os=linux; arch=arm64 ;; macOS:X64) os=darwin; arch=x64 ;; macOS:ARM64) os=darwin; arch=arm64 ;; Windows:X64) os=win32; arch=x64 ;; Windows:ARM64) os=win32; arch=arm64 ;; *) printf '\\''unsupported MBX runner %s/%s\\n'\\'' \"$RUNNER_OS\" \"$RUNNER_ARCH\" >&2; exit 1 ;; esac; test -n \"$CACHE_REVISION\"; rust_file=\"$RUNNER_TEMP/mbx-rustc-identity-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_JOB}\"; digest_file=\"${rust_file}-sha256\"; rustc \"+$RUST_TOOLCHAIN\" -vV > \"$rust_file\"; if [ \"$os\" = darwin ]; then shasum -a 256 \"$rust_file\" > \"$digest_file\"; else sha256sum \"$rust_file\" > \"$digest_file\"; fi; IFS='\\'' '\\'' read -r identity _ < \"$digest_file\"; rm -f \"$rust_file\" \"$digest_file\"; identity=\"${identity:0:12}\"; test -n \"$identity\"; toolchain=\"rust-${identity}\"; key=\"${os}-${arch}-mbx-${CACHE_GENERATION}-dir-${toolchain}-${GITHUB_JOB}-${CACHE_REVISION}\"; case \"$key\" in '\\'''\\''|*-) exit 1 ;; esac; prefix=\"${key%-*}-\"; printf '\\''key=%s\\nprefix=%s\\n'\\'' \"$key\" \"$prefix\" >> \"$GITHUB_OUTPUT\"; if [ \"$CREATE_EXPORT_GROUP\" = true ]; then test -r /proc/sys/kernel/random/uuid; IFS= read -r group_id < /proc/sys/kernel/random/uuid; test -n \"$group_id\"; group=\"github-actions-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${group_id}\"; printf '\\''MBX_CACHE_EXPORT_GROUP=%s\\n'\\'' \"$group\" >> \"$GITHUB_ENV\"; fi'"
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; [ -d \"$RUNNER_TEMP\" ] || { printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must exist'\\'' >&2; exit 1; }; check_no_symlink() { path=$1; while [ \"$path\" != / ]; do [ ! -L \"$path\" ] || return 1; path=${path%/*}; [ -n \"$path\" ] || path=/; done; return 0; }; check_no_symlink \"$RUNNER_TEMP\" || { printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP path contains a symlink'\\'' >&2; exit 1; }; mbx_cache_dir=\"$RUNNER_TEMP/velnor/mbx\"; [ \"${MBX_CACHE_DIR:-}\" = \"$mbx_cache_dir\" ] || { printf '\\''%s\\n'\\'' '\\''MBX_CACHE_DIR must use the stable runner-temp path'\\'' >&2; exit 1; }; [ ! -L \"$RUNNER_TEMP/velnor\" ] || { printf '\\''%s\\n'\\'' '\\''Velnor temp root must not be a symlink'\\'' >&2; exit 1; }; if [ ! -e \"$RUNNER_TEMP/velnor\" ]; then (umask 077 && mkdir -m 700 \"$RUNNER_TEMP/velnor\"); fi; [ -d \"$RUNNER_TEMP/velnor\" ] && check_no_symlink \"$RUNNER_TEMP/velnor\" || { printf '\\''%s\\n'\\'' '\\''Velnor temp root must be a real directory'\\'' >&2; exit 1; }; [ ! -e \"$mbx_cache_dir\" ] && [ ! -L \"$mbx_cache_dir\" ] || { printf '\\''%s\\n'\\'' '\\''MBX store root already exists in this private runner namespace'\\'' >&2; exit 1; }; (umask 077 && mkdir -m 700 \"$mbx_cache_dir\") || { printf '\\''%s\\n'\\'' '\\''could not reserve the MBX store root'\\'' >&2; exit 1; }; [ -n \"${GITHUB_ENV:-}\" ] && [ -f \"$GITHUB_ENV\" ] && [ ! -L \"$GITHUB_ENV\" ] || { printf '\\''%s\\n'\\'' '\\''GITHUB_ENV must be a regular runner file'\\'' >&2; exit 1; }; check_no_symlink \"$GITHUB_ENV\" || { printf '\\''%s\\n'\\'' '\\''GITHUB_ENV path contains a symlink'\\'' >&2; exit 1; }; printf '\\''MBX_CACHE_DIR=%s\\n'\\'' \"$mbx_cache_dir\" >> \"$GITHUB_ENV\"; [ -n \"$GITHUB_PATH\" ] || { printf '\\''%s\\n'\\'' '\\''GITHUB_PATH is required'\\'' >&2; exit 1; }; case \"$GITHUB_RUN_ID\" in '\\'''\\''|*[!0-9]*) printf '\\''%s\\n'\\'' '\\''run id must be numeric'\\'' >&2; exit 1 ;; esac; case \"$GITHUB_RUN_ATTEMPT\" in '\\'''\\''|*[!0-9]*) printf '\\''%s\\n'\\'' '\\''run attempt must be numeric'\\'' >&2; exit 1 ;; esac; probe_dir=\"$RUNNER_TEMP/velnor-mbx-preflight-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT\"; [ ! -e \"$probe_dir\" ] && [ ! -L \"$probe_dir\" ] || { printf '\\''%s\\n'\\'' '\\''preflight scratch already exists'\\'' >&2; exit 1; }; (umask 077 && mkdir -m 700 \"$probe_dir\") || { printf '\\''%s\\n'\\'' '\\''could not reserve preflight scratch'\\'' >&2; exit 1; }; cleanup() { rm -f \"$probe_dir/rust-root\" \"$probe_dir/rustc-output\"; rmdir \"$probe_dir\"; }; trap cleanup EXIT; trap '\\''exit 1'\\'' HUP INT TERM; mise --no-config --no-env --no-hooks where '\\''rust@1.98.1'\\'' > \"$probe_dir/rust-root\"; exec 3< \"$probe_dir/rust-root\"; IFS= read -r rust_root <&3 || { printf '\\''%s\\n'\\'' '\\''Mise returned no Rust install path'\\'' >&2; exit 1; }; extra=; if IFS= read -r extra <&3 || [ -n \"$extra\" ]; then printf '\\''%s\\n'\\'' '\\''Mise returned multiple Rust install paths'\\'' >&2; exit 1; fi; exec 3<&-; [ -n \"$rust_root\" ] || { printf '\\''%s\\n'\\'' '\\''Mise returned an empty Rust install path'\\'' >&2; exit 1; }; case \"$rust_root\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''Rust install path must be absolute'\\'' >&2; exit 1 ;; esac; rustc_bin=\"$rust_root/rustc\"; [ -x \"$rustc_bin\" ] || { printf '\\''expected Rustup shim at %s\\n'\\'' \"$rustc_bin\" >&2; exit 1; }; \"$rustc_bin\" '\\''+1.98.1'\\'' -vV > \"$probe_dir/rustc-output\"; grep -Fqx '\\''release: 1.98.1'\\'' \"$probe_dir/rustc-output\" || { printf '\\''Rustup did not report exact toolchain 1.98.1\\n'\\'' >&2; exit 1; }; printf '\\''%s\\n'\\'' \"$rust_root\" >> \"$GITHUB_PATH\"'"
       - name: Restore MBX objects
-        id: mbx
         uses: jdx/mr-boxington-action@1687e54eb349cadf61fa38b5813a77875489e8e6
         with:
-          backend: github
-          cache-generation: velnor-mbx-1.21.1-share-out-dir-disabled-v1-action-1687e54eb349cadf61fa38b5813a77875489e8e6
-          cache-key: ${{ steps.mbx-cache-key.outputs.key }}
+          cache-generation: velnor-mbx-1.22.0-share-out-dir-disabled-v1-gc-auto-v1-action-1687e54eb349cadf61fa38b5813a77875489e8e6-lane-${{ runner.environment }}-job-${{ github.job }}
           github-cache-mode: objects
-          restore-keys: ${{ steps.mbx-cache-key.outputs.prefix }}
+          save-on-protected-branch: "false"
+          save-on-pull-request: "false"
+          save-on-workflow-dispatch: "false"
           toolchain: 1.98.1
+          version: 1.22.0
         env:
           ACTIONS_CACHE_MODE: ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
           CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          MBX_CACHE_DIR: ${{ runner.temp }}/velnor/mbx
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-          VELNOR_MBX_VERSION: 1.21.1
+      - name: Verify native MBX version
+        env:
+          ACTIONS_CACHE_MODE: ${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}
+          CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          MBX_CACHE_DIR: ${{ runner.temp }}/velnor/mbx
+          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
+          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; case \"$RUNNER_TEMP\" in /*) ;; *) printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be absolute'\\'' >&2; exit 1 ;; esac; check_no_symlink() { path=$1; while [ \"$path\" != / ]; do [ ! -L \"$path\" ] || return 1; path=${path%/*}; [ -n \"$path\" ] || path=/; done; return 0; }; [ -d \"$RUNNER_TEMP\" ] && check_no_symlink \"$RUNNER_TEMP\" || { printf '\\''%s\\n'\\'' '\\''RUNNER_TEMP must be a real directory'\\'' >&2; exit 1; }; [ \"${MBX_CACHE_DIR:-}\" = \"$RUNNER_TEMP/velnor/mbx\" ] || { printf '\\''%s\\n'\\'' '\\''MBX_CACHE_DIR changed from its stable runner-temp path'\\'' >&2; exit 1; }; [ -d \"$RUNNER_TEMP/velnor\" ] && [ -d \"$MBX_CACHE_DIR\" ] && [ -d \"$MBX_CACHE_DIR/actions\" ] || { printf '\\''%s\\n'\\'' '\\''MBX store directories are missing'\\'' >&2; exit 1; }; check_no_symlink \"$RUNNER_TEMP/velnor\" && check_no_symlink \"$MBX_CACHE_DIR/actions\" || { printf '\\''%s\\n'\\'' '\\''MBX store path contains a symlink'\\'' >&2; exit 1; }; case \"$GITHUB_RUN_ID\" in '\\'''\\''|*[!0-9]*) printf '\\''%s\\n'\\'' '\\''run id must be numeric'\\'' >&2; exit 1 ;; esac; case \"$GITHUB_RUN_ATTEMPT\" in '\\'''\\''|*[!0-9]*) printf '\\''%s\\n'\\'' '\\''run attempt must be numeric'\\'' >&2; exit 1 ;; esac; probe_dir=\"$RUNNER_TEMP/velnor-mbx-verify-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT\"; [ ! -e \"$probe_dir\" ] && [ ! -L \"$probe_dir\" ] || { printf '\\''%s\\n'\\'' '\\''verification scratch already exists'\\'' >&2; exit 1; }; (umask 077 && mkdir -m 700 \"$probe_dir\") || { printf '\\''%s\\n'\\'' '\\''could not reserve verification scratch'\\'' >&2; exit 1; }; cleanup() { rm -f \"$probe_dir/version\" \"$probe_dir/cache-dir\"; rmdir \"$probe_dir\"; }; trap cleanup EXIT; trap '\\''exit 1'\\'' HUP INT TERM; mise --no-config --no-env --no-hooks exec rust@1.98.1 -- mbx --version > \"$probe_dir/version\"; exec 3< \"$probe_dir/version\"; IFS= read -r version_line <&3 || { printf '\\''%s\\n'\\'' '\\''MBX version output is empty or unterminated'\\'' >&2; exit 1; }; extra=; if IFS= read -r extra <&3 || [ -n \"$extra\" ]; then printf '\\''%s\\n'\\'' '\\''MBX version output has extra data'\\'' >&2; exit 1; fi; exec 3<&-; [ \"$version_line\" = '\\''mbx 1.22.0'\\'' ] || { printf '\\''%s\\n'\\'' '\\''MBX on PATH does not match the pinned action version'\\'' >&2; exit 1; }; mise --no-config --no-env --no-hooks exec rust@1.98.1 -- mbx cache dir > \"$probe_dir/cache-dir\"; exec 3< \"$probe_dir/cache-dir\"; IFS= read -r cache_dir <&3 || { printf '\\''%s\\n'\\'' '\\''MBX cache dir output is empty or unterminated'\\'' >&2; exit 1; }; extra=; if IFS= read -r extra <&3 || [ -n \"$extra\" ]; then printf '\\''%s\\n'\\'' '\\''MBX cache dir output has extra data'\\'' >&2; exit 1; fi; exec 3<&-; [ \"$cache_dir\" = \"$MBX_CACHE_DIR/actions\" ] || { printf '\\''%s\\n'\\'' '\\''MBX reported an unexpected object store path'\\'' >&2; exit 1; }'"
       - name: Clippy
         if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/app/clippy/default,')"
         env:
@@ -392,9 +390,9 @@ jobs:
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/app/clippy/default
           VELNOR_MATRIX_KEY: m-c560a3bfe9e3edbf
-          VELNOR_TASK_DIGEST: b3-6d777e2fded6b043d98a340d6c9ccfa9ff6a555371ff0ff4daee49cc50c74728
+          VELNOR_TASK_DIGEST: b3-3dcafb294d4548d142077c3bcf998b6a37f1193fabf1873acef1dd9884721fdb
           VELNOR_TASK_ID: stack/rust/crates/app/clippy/default
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; s=$(date +%s%3N); mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx clippy --locked --offline --manifest-path crates/app/Cargo.toml --package app --all-targets -- -D warnings; code=$?; VELNOR_EXIT_CODE=\"$code\" VELNOR_START_MS=\"$s\" VELNOR_INTERNAL_OP=write-task-report-v1 \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\"'"
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; s=$(date +%s%3N); mise --no-config --no-env --no-hooks exec rust@1.98.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx clippy --locked --offline --manifest-path crates/app/Cargo.toml --package app --all-targets -- -D warnings; code=$?; VELNOR_EXIT_CODE=\"$code\" VELNOR_START_MS=\"$s\" VELNOR_INTERNAL_OP=write-task-report-v1 \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\"'"
       - name: Build test executables
         if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/app/build/default,')"
         env:
@@ -402,9 +400,9 @@ jobs:
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/app/build/default
           VELNOR_MATRIX_KEY: m-b7640e836e4084e7
-          VELNOR_TASK_DIGEST: b3-c39c39862b03e8d40763e80d0080eddfd205236238e505969e10a5d6157c717f
+          VELNOR_TASK_DIGEST: b3-d897ab93db7c1de97a476604326228b0ef4eb8b39f8bf3532047959a409e350d
           VELNOR_TASK_ID: stack/rust/crates/app/build/default
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; s=$(date +%s%3N); mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx nextest list --profile default --list-type binaries-only --locked --offline --manifest-path crates/app/Cargo.toml --package app; code=$?; VELNOR_EXIT_CODE=\"$code\" VELNOR_START_MS=\"$s\" VELNOR_INTERNAL_OP=write-task-report-v1 \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\"'"
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; s=$(date +%s%3N); mise --no-config --no-env --no-hooks exec rust@1.98.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx nextest list --profile default --list-type binaries-only --locked --offline --manifest-path crates/app/Cargo.toml --package app; code=$?; VELNOR_EXIT_CODE=\"$code\" VELNOR_START_MS=\"$s\" VELNOR_INTERNAL_OP=write-task-report-v1 \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\"'"
       - name: Unit and integration tests
         if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/app/nextest/default,')"
         env:
@@ -412,9 +410,9 @@ jobs:
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/app/nextest/default
           VELNOR_MATRIX_KEY: m-f25d84d84c54a5ac
-          VELNOR_TASK_DIGEST: b3-d5941ed6d258bb461610a165f081472c44b11eef41aa5a5457a753fc48c02c98
+          VELNOR_TASK_DIGEST: b3-03e92627c136530bb06a4473b6eecd5a5ced63142bff472c2972f0d7ae1ffbef
           VELNOR_TASK_ID: stack/rust/crates/app/nextest/default
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; s=$(date +%s%3N); mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx nextest run --profile default --locked --offline --manifest-path crates/app/Cargo.toml --package app --no-tests fail; code=$?; VELNOR_EXIT_CODE=\"$code\" VELNOR_START_MS=\"$s\" VELNOR_INTERNAL_OP=write-task-report-v1 \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\"'"
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; s=$(date +%s%3N); mise --no-config --no-env --no-hooks exec rust@1.98.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx nextest run --profile default --locked --offline --manifest-path crates/app/Cargo.toml --package app --no-tests fail; code=$?; VELNOR_EXIT_CODE=\"$code\" VELNOR_START_MS=\"$s\" VELNOR_INTERNAL_OP=write-task-report-v1 \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\"'"
       - name: Doctests
         if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/app/doctest/default,')"
         env:
@@ -422,9 +420,9 @@ jobs:
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/app/doctest/default
           VELNOR_MATRIX_KEY: m-a286706805d0f77d
-          VELNOR_TASK_DIGEST: b3-c28e90cb2e5028707bc41da9ec5feaac2080f1186521c5662bfa740cf52c7df9
+          VELNOR_TASK_DIGEST: b3-a19e86f77751773670cad82cb0c3e364b766b0a6e647372e0e0f057245fb6230
           VELNOR_TASK_ID: stack/rust/crates/app/doctest/default
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; s=$(date +%s%3N); mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx test --locked --offline --manifest-path crates/app/Cargo.toml --package app --doc; code=$?; VELNOR_EXIT_CODE=\"$code\" VELNOR_START_MS=\"$s\" VELNOR_INTERNAL_OP=write-task-report-v1 \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\"'"
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; s=$(date +%s%3N); mise --no-config --no-env --no-hooks exec rust@1.98.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx test --locked --offline --manifest-path crates/app/Cargo.toml --package app --doc; code=$?; VELNOR_EXIT_CODE=\"$code\" VELNOR_START_MS=\"$s\" VELNOR_INTERNAL_OP=write-task-report-v1 \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\"'"
       - name: Documentation
         if: "!contains(needs.plan.outputs.covered_tasks, ',stack/rust/crates/app/doc/default,')"
         env:
@@ -433,9 +431,9 @@ jobs:
           RUSTDOCFLAGS: "-D warnings"
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/app/doc/default
           VELNOR_MATRIX_KEY: m-d0e8abd0cfc431dc
-          VELNOR_TASK_DIGEST: b3-5699273c811f74d96db3f70d506424ed473125df264ce6dc4e4453b7ef14d4c4
+          VELNOR_TASK_DIGEST: b3-3af2b436fc283e498885ac9b2a3db4cc22af0a72c466b384fcf1e3c0b92828d2
           VELNOR_TASK_ID: stack/rust/crates/app/doc/default
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; s=$(date +%s%3N); mise --no-config --no-env --no-hooks exec rust@1.98.1 mr-boxington@1.21.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx doc --locked --offline --manifest-path crates/app/Cargo.toml --package app --no-deps; code=$?; VELNOR_EXIT_CODE=\"$code\" VELNOR_START_MS=\"$s\" VELNOR_INTERNAL_OP=write-task-report-v1 \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\"'"
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; s=$(date +%s%3N); mise --no-config --no-env --no-hooks exec rust@1.98.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 -- mbx doc --locked --offline --manifest-path crates/app/Cargo.toml --package app --no-deps; code=$?; VELNOR_EXIT_CODE=\"$code\" VELNOR_START_MS=\"$s\" VELNOR_INTERNAL_OP=write-task-report-v1 \"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\"'"
       - name: Upload crate reports
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
