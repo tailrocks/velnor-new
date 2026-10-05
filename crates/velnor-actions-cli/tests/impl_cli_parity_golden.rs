@@ -56,6 +56,11 @@ fn checkout(case: &str) -> Result<(PathBuf, String), Box<dyn Error>> {
     let repo = dir.join("repo");
     std::fs::create_dir_all(&repo)?;
     copy_dir(&corpus(case).join("input"), &repo)?;
+    if case != "malformed" && case != "malformed-ignored" {
+        let manifest = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../fixtures/consumer-release-manifest.json");
+        std::fs::copy(manifest, repo.join(".velnor/release-manifest.json"))?;
+    }
     git_init(&repo)?;
     let head = commit_all(&repo)?;
     Ok((repo, head))
@@ -350,5 +355,22 @@ fn parity_malformed_fails_with_token() -> Result<(), Box<dyn Error>> {
     for case in FAIL_CASES {
         check_fail(case)?;
     }
+    Ok(())
+}
+
+#[test]
+fn consumer_cli_rejects_a_missing_manifest() -> Result<(), Box<dyn Error>> {
+    let (repo, _) = checkout("minimal-cargo")?;
+    std::fs::remove_file(repo.join(".velnor/release-manifest.json"))?;
+    let plan = spawn(&["plan"], &[], &repo)?;
+    let stderr = String::from_utf8_lossy(&plan.stderr);
+    if code(&plan) == 0 || !stderr.contains("consumer_requires_release_install") {
+        return Err(format!(
+            "missing manifest must fail through the actual CLI: exit={}, stderr={stderr:?}",
+            code(&plan)
+        )
+        .into());
+    }
+    cleanup(repo.parent().ok_or("repo lacks parent")?);
     Ok(())
 }
