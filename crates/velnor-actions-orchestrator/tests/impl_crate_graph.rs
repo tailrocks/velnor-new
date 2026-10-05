@@ -123,8 +123,16 @@ fn w1_crate_prepare_adds_mbx_driver() -> TestResult {
     let task = window(yaml, "  rust-demo:", "  required:")?;
     let catalog = ToolCatalog::pinned();
     assert!(
-        task.contains(&catalog.tool_spec(PinnedTool::MrBoxington)),
-        "mbx spec:\n{task}"
+        !task.contains(&catalog.tool_spec(PinnedTool::MrBoxington)),
+        "the native action, not Mise, owns MBX installation:\n{task}"
+    );
+    assert!(
+        task.contains("uses: jdx/mr-boxington-action@")
+            && task.contains(&format!(
+                "version: {}",
+                catalog.version(PinnedTool::MrBoxington)
+            )),
+        "MBX action uses the exact catalog version:\n{task}"
     );
     assert_eq!(
         task.matches("Restore MBX objects").count(),

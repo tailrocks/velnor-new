@@ -197,7 +197,7 @@ mod tests {
             binary.display().to_string(),
             out.display().to_string(),
             "x86_64-unknown-linux-gnu".to_owned(),
-            "rust@1.98.1+mr-boxington@1.21.1".to_owned(),
+            "rust@1.98.1".to_owned(),
             "a".repeat(40),
             temp,
         )
