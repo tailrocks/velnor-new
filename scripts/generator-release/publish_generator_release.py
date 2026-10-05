@@ -15,6 +15,7 @@ from github_release_api import (
     MANIFEST_CHECKSUM_NAME,
     MANIFEST_NAME,
     REPOSITORY,
+    TARGETS,
     accepted_metadata,
     create_source_tag,
     current_main,
@@ -31,15 +32,13 @@ from github_release_api import (
 )
 
 WORKFLOW = ".github/workflows/generator-release.yml"
-TARGETS = {
-    "x86_64-unknown-linux-gnu": Path("linux-assets"),
-    "aarch64-apple-darwin": Path("macos-assets"),
-}
+
+
 def stage_assets(version: str, directory: Path) -> None:
-    for target, source in TARGETS.items():
+    for target, source_directory in TARGETS:
         binary = f"velnor-actions-{version}-{target}"
         for name in (binary, f"{binary}.sha256"):
-            path = source / name
+            path = Path(source_directory) / name
             try:
                 if not stat.S_ISREG(path.lstat().st_mode):
                     fail(f"asset_not_regular:{name}")
@@ -99,7 +98,7 @@ def publish(version: str) -> None:
         ])
         identifier = release_id(tag)
         files = []
-        for target in TARGETS:
+        for target, _source_directory in TARGETS:
             binary = f"velnor-actions-{version}-{target}"
             files.extend((str(directory / binary), str(directory / f"{binary}.sha256")))
         mise(["release", "upload", tag, *files, "--repo", REPOSITORY])

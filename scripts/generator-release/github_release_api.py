@@ -14,7 +14,13 @@ from typing import NoReturn
 REPOSITORY = "tailrocks/velnor-new"
 GH_VERSION = "2.102.0"
 HELPER = Path(__file__).with_name("create-release-manifest.py")
-TARGETS = ("x86_64-unknown-linux-gnu", "aarch64-apple-darwin")
+# Canonical release inventory, in manifest order. Each target is staged from
+# the build artifact directory produced by its native workflow job.
+TARGETS = (
+    ("x86_64-unknown-linux-gnu", "linux-assets"),
+    ("aarch64-apple-darwin", "macos-assets"),
+    ("x86_64-apple-darwin", "macos-x86_64-assets"),
+)
 MANIFEST_NAME = "velnor-actions-release-manifest.json"
 MANIFEST_CHECKSUM_NAME = f"{MANIFEST_NAME}.sha256"
 ACCEPTED_DIRECTORY_NAME = "velnor-generator-accepted"
@@ -275,7 +281,7 @@ def accepted_metadata(
     ):
         fail("accepted_release_asset_invalid")
     expected_names = []
-    for target in TARGETS:
+    for target, _source_directory in TARGETS:
         binary = f"velnor-actions-{version}-{target}"
         expected_names.extend((binary, f"{binary}.sha256"))
     expected_names.extend((MANIFEST_NAME, MANIFEST_CHECKSUM_NAME))

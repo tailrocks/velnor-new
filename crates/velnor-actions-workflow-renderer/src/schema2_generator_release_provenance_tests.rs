@@ -6,9 +6,10 @@ use std::time::{SystemTime, UNIX_EPOCH};
 #[path = "schema2_generator_release_api_fixtures.rs"]
 mod api_fixtures;
 use self::api_fixtures::{
-    LINUX_SHA, LINUX_TARGET, MACOS_SHA, MACOS_TARGET, MANIFEST_CHECKSUM_NAME, MANIFEST_NAME,
-    RELEASE_VERSION, REPOSITORY, assert_failure, assert_success, asset_record, asset_records,
-    asset_records_without_url, asset_url, output_text, release_json, write_local_assets,
+    LINUX_SHA, LINUX_TARGET, MACOS_ARM64_TARGET, MACOS_X86_64_TARGET, MANIFEST_CHECKSUM_NAME,
+    MANIFEST_NAME, RELEASE_VERSION, REPOSITORY, TARGET_FIXTURES, assert_failure, assert_success,
+    asset_record, asset_records, asset_records_without_url, asset_url, output_text, release_json,
+    write_local_assets,
 };
 
 struct Scratch(PathBuf);
@@ -121,7 +122,11 @@ fn source_target_version_digest_and_asset_path_mismatches_fail() -> Result<(), B
 
     let fixture = Fixture::new("wrong-target")?;
     let mut records = fixture.records.clone();
-    records[2] = records[2].replace(MACOS_TARGET, "x86_64-apple-darwin");
+    for record in &mut records {
+        if record.contains(MACOS_X86_64_TARGET) {
+            *record = record.replace(MACOS_X86_64_TARGET, "x86_64-apple-darwin-invalid");
+        }
+    }
     let release = release_json(true, false, &fixture.tag, &records);
     let output = run_helper(
         &fixture,
@@ -131,6 +136,35 @@ fn source_target_version_digest_and_asset_path_mismatches_fail() -> Result<(), B
         &fixture.commit,
     );
     assert_failure(&output, "release_asset_set_mismatch");
+
+    let fixture = Fixture::new("missing-third-target")?;
+    let mut records = fixture.records.clone();
+    records.retain(|record| !record.contains(MACOS_X86_64_TARGET));
+    let release = release_json(true, false, &fixture.tag, &records);
+    let output = run_helper(
+        &fixture,
+        "create",
+        &release,
+        RELEASE_VERSION,
+        &fixture.commit,
+    );
+    assert_failure(&output, "release_asset_set_mismatch");
+
+    assert!(
+        TARGET_FIXTURES
+            .iter()
+            .any(|(target, _, _, _, _)| *target == LINUX_TARGET)
+    );
+    assert!(
+        TARGET_FIXTURES
+            .iter()
+            .any(|(target, _, _, _, _)| *target == MACOS_ARM64_TARGET)
+    );
+    assert!(
+        TARGET_FIXTURES
+            .iter()
+            .any(|(target, _, _, _, _)| *target == MACOS_X86_64_TARGET)
+    );
 
     let fixture = Fixture::new("wrong-version")?;
     let release = release_json(true, false, &fixture.tag, &fixture.records);

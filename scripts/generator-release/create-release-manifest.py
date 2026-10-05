@@ -14,12 +14,11 @@ from pathlib import Path
 from typing import NoReturn
 from urllib.parse import urlsplit
 
-from github_release_api import valid_release_version
+from github_release_api import TARGETS, valid_release_version
 
 REPOSITORY = "tailrocks/velnor-new"
 MANIFEST_NAME = "velnor-actions-release-manifest.json"
 MANIFEST_CHECKSUM_NAME = f"{MANIFEST_NAME}.sha256"
-TARGETS = ("x86_64-unknown-linux-gnu", "aarch64-apple-darwin")
 
 
 def fail(problem: str) -> NoReturn:
@@ -55,7 +54,7 @@ def sha256(value: bytes) -> str:
 
 def asset_names(version: str) -> tuple[str, ...]:
     names: list[str] = []
-    for target in TARGETS:
+    for target, _source_directory in TARGETS:
         binary = f"velnor-actions-{version}-{target}"
         names.extend((binary, f"{binary}.sha256"))
     return tuple(names)
@@ -173,7 +172,7 @@ def validate_assets(
         valid_url(record.get("browser_download_url"), tag, name)
         digests[name] = digest
 
-    for target in TARGETS:
+    for target, _source_directory in TARGETS:
         name = f"velnor-actions-{version}-{target}"
         sidecar = read_regular(asset_dir / f"{name}.sha256")
         if sidecar != f"{digests[name]}  {name}\n".encode("ascii"):
@@ -209,7 +208,7 @@ def manifest_bytes(
     digests: dict[str, str],
 ) -> bytes:
     targets = []
-    for target in TARGETS:
+    for target, _source_directory in TARGETS:
         name = f"velnor-actions-{version}-{target}"
         targets.append(
             {

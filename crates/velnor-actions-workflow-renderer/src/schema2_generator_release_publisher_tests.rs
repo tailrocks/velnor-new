@@ -1,6 +1,7 @@
 use super::{
-    LINUX_TARGET, MACOS_TARGET, MANIFEST_NAME, RELEASE_VERSION, assert_failure, assert_success,
-    asset_record, asset_records, asset_url, output_text, release_json,
+    LINUX_TARGET, MACOS_X86_64_TARGET, MANIFEST_NAME, RELEASE_VERSION, TARGET_FIXTURES,
+    assert_failure, assert_success, asset_record, asset_records, asset_url, output_text,
+    release_json,
 };
 use std::error::Error;
 use std::fs;
@@ -28,7 +29,9 @@ fn publisher_emits_acceptance_only_after_complete_immutable_verification()
     let accepted_manifest = fixture.accepted_directory.join(MANIFEST_NAME);
     let accepted_checksum = fixture.accepted_directory.join(MANIFEST_CHECKSUM_NAME);
     let acceptance = fixture.accepted_directory.join(ACCEPTANCE_NAME);
-    for target in [LINUX_TARGET, MACOS_TARGET] {
+    for (target, _source_directory, _bytes, _digest, _sidecar_digest) in
+        TARGET_FIXTURES.iter().copied()
+    {
         let name = format!("velnor-actions-{RELEASE_VERSION}-{target}");
         let url = asset_url(&fixture.tag, &name);
         assert!(manifest.contains(&url));
@@ -79,6 +82,7 @@ fn publisher_fails_closed_for_bad_draft_assets_and_source() -> Result<(), Box<dy
         "wrong-source",
         "wrong-event-source",
         "wrong-target-set",
+        "missing-third-target-set",
         "wrong-hash",
         "unsafe-path",
         "wrong-upload-state",
@@ -106,7 +110,16 @@ fn publisher_fails_closed_for_bad_draft_assets_and_source() -> Result<(), Box<dy
                 "release_source_not_current_main"
             }
             "wrong-target-set" => {
-                records[2] = records[2].replace(MACOS_TARGET, "wrong-target");
+                for record in &mut records {
+                    if record.contains(MACOS_X86_64_TARGET) {
+                        *record =
+                            record.replace(MACOS_X86_64_TARGET, "x86_64-apple-darwin-invalid");
+                    }
+                }
+                "manifest_validation_failed"
+            }
+            "missing-third-target-set" => {
+                records.retain(|record| !record.contains(MACOS_X86_64_TARGET));
                 "manifest_validation_failed"
             }
             "wrong-hash" => {

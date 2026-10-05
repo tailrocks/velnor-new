@@ -1,6 +1,6 @@
 use super::super::{
-    LINUX_TARGET, MACOS_TARGET, MANIFEST_NAME, RELEASE_VERSION, Scratch, assert_success,
-    asset_record, asset_records, asset_url, output_text, release_json, write_local_assets,
+    MANIFEST_NAME, RELEASE_VERSION, Scratch, TARGET_FIXTURES, assert_success, asset_record,
+    asset_records, asset_url, output_text, release_json, write_local_assets,
 };
 use std::env;
 use std::error::Error;
@@ -253,11 +253,10 @@ impl PublisherFixture {
 }
 
 fn copy_build_assets(source: &Path, workspace: &Path) -> Result<(), Box<dyn Error>> {
-    for (target, directory) in [
-        (LINUX_TARGET, "linux-assets"),
-        (MACOS_TARGET, "macos-assets"),
-    ] {
-        let destination = workspace.join(directory);
+    for (target, source_directory, _bytes, _digest, _sidecar_digest) in
+        TARGET_FIXTURES.iter().copied()
+    {
+        let destination = workspace.join(source_directory);
         fs::create_dir_all(&destination)?;
         let binary = format!("velnor-actions-{RELEASE_VERSION}-{target}");
         for name in [binary.clone(), format!("{binary}.sha256")] {
