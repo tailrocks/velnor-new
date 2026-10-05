@@ -1,5 +1,6 @@
 //! Read-only controller readiness. No secret is logged and no worker is started.
 
+use std::io::ErrorKind;
 use std::path::Path;
 use std::time::Duration;
 
@@ -56,31 +57,47 @@ enum JournalFact {
 /// is not created.
 #[must_use]
 pub fn controller_readiness(state: &Path, service: &str, account: &str) -> Readiness {
-    let runtime = tokio::runtime::Builder::new_current_thread()
-        .enable_time()
-        .enable_io()
-        .build();
-    let Ok(runtime) = runtime else {
-        return Readiness::Degraded;
-    };
-    runtime.block_on(assess(state, service, account))
+    match sync_gate(state, service, account) {
+        SyncGate::Done(ready) => ready,
+        SyncGate::Probe(endpoint) => block_probe(state, &endpoint),
+    }
 }
 
-async fn assess(state: &Path, service: &str, account: &str) -> Readiness {
+fn block_probe(state: &Path, endpoint: &str) -> Readiness {
+    let Ok(runtime) = tokio::runtime::Builder::new_current_thread()
+        .enable_time()
+        .enable_io()
+        .build()
+    else {
+        return Readiness::Degraded;
+    };
+    runtime.block_on(probe(state, endpoint))
+}
+
+enum SyncGate {
+    Done(Readiness),
+    Probe(String),
+}
+
+fn sync_gate(state: &Path, service: &str, account: &str) -> SyncGate {
     let drain = state.join("drain").is_file();
     if drain || !state.is_dir() {
-        return classify(blank(drain, state.is_dir()));
+        return SyncGate::Done(classify(blank(drain, state.is_dir())));
     }
     let Some(config) = read_config(state) else {
-        return classify(blank(false, true));
+        return SyncGate::Done(classify(blank(false, true)));
     };
     if !credential_present(service, account) {
-        return classify(Facts {
+        return SyncGate::Done(classify(Facts {
             config_ok: Answer::Yes,
             ..blank(false, true)
-        });
+        }));
     }
-    if !engine_up(&config.docker.endpoint).await {
+    SyncGate::Probe(config.docker.endpoint)
+}
+
+async fn probe(state: &Path, endpoint: &str) -> Readiness {
+    if !engine_up(endpoint).await {
         return classify(Facts {
             config_ok: Answer::Yes,
             credential: Answer::Yes,
@@ -158,13 +175,34 @@ async fn engine_up(endpoint: &str) -> bool {
 }
 
 async fn journal_mark(path: &Path) -> JournalFact {
-    if !path.is_file() {
-        return JournalFact::Clear;
+    match journal_path(path) {
+        JournalPath::Absent => JournalFact::Clear,
+        JournalPath::Unreadable => JournalFact::Unreadable,
+        JournalPath::Scan => match scan_rows(path).await {
+            Ok(rows) if rows.iter().any(occupies) => JournalFact::Occupied,
+            Ok(_) => JournalFact::Clear,
+            Err(_) => JournalFact::Unreadable,
+        },
     }
-    match scan_rows(path).await {
-        Ok(rows) if rows.iter().any(occupies) => JournalFact::Occupied,
-        Ok(_) => JournalFact::Clear,
-        Err(_) => JournalFact::Unreadable,
+}
+
+enum JournalPath {
+    Absent,
+    Scan,
+    Unreadable,
+}
+
+fn journal_path(path: &Path) -> JournalPath {
+    let meta = match path.symlink_metadata() {
+        Err(err) if err.kind() == ErrorKind::NotFound => return JournalPath::Absent,
+        Err(_) => return JournalPath::Unreadable,
+        Ok(meta) => meta,
+    };
+    let file = meta.file_type().is_symlink() || meta.is_file();
+    if file && path.is_file() {
+        JournalPath::Scan
+    } else {
+        JournalPath::Unreadable
     }
 }
 

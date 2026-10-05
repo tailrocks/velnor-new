@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use super::{Answer, Facts, JournalFact, assess, classify, journal_mark};
+use super::{Answer, Facts, JournalFact, classify, controller_readiness, journal_mark};
 use crate::journal::{Journal, Outcome};
 use crate::readiness::Readiness;
 
@@ -168,11 +168,11 @@ fn sync_entry_leaves_a_missing_directory_absent() -> Result<(), String> {
     Ok(())
 }
 
-#[tokio::test]
-async fn drain_file_reports_draining_without_config() -> Result<(), String> {
+#[test]
+fn drain_file_reports_draining_without_config() -> Result<(), String> {
     let scratch = Scratch::new("drain")?;
     std::fs::write(scratch.path().join("drain"), b"1").map_err(|err| err.to_string())?;
-    let state = assess(scratch.path(), SERVICE, ACCOUNT).await;
+    let state = controller_readiness(scratch.path(), SERVICE, ACCOUNT);
     if state == Readiness::Draining {
         Ok(())
     } else {
@@ -180,11 +180,11 @@ async fn drain_file_reports_draining_without_config() -> Result<(), String> {
     }
 }
 
-#[tokio::test]
-async fn missing_keychain_item_beats_a_dead_socket() -> Result<(), String> {
+#[test]
+fn missing_keychain_item_beats_a_dead_socket() -> Result<(), String> {
     let scratch = Scratch::new("cred")?;
     std::fs::write(scratch.path().join("host.toml"), sample()).map_err(|err| err.to_string())?;
-    let state = assess(scratch.path(), SERVICE, ACCOUNT).await;
+    let state = controller_readiness(scratch.path(), SERVICE, ACCOUNT);
     if state == Readiness::WaitingForCredentials {
         Ok(())
     } else {
@@ -293,5 +293,38 @@ async fn unknown_state_is_unreadable() -> Result<(), String> {
         Ok(())
     } else {
         Err("state".to_owned())
+    }
+}
+
+#[test]
+fn sync_drain_is_draining_without_a_probe() -> Result<(), String> {
+    let scratch = Scratch::new("sync-drain")?;
+    std::fs::write(scratch.path().join("drain"), b"1").map_err(|err| err.to_string())?;
+    let state = super::controller_readiness(scratch.path(), SERVICE, ACCOUNT);
+    if state == Readiness::Draining {
+        Ok(())
+    } else {
+        Err(state.as_str().to_owned())
+    }
+}
+
+#[tokio::test]
+async fn unreadable_journal_paths_stay_unreadable() -> Result<(), String> {
+    let scratch = Scratch::new("stat")?;
+    let dir = scratch.path().join("dir.db");
+    std::fs::create_dir(&dir).map_err(|err| err.to_string())?;
+    if journal_mark(&dir).await != JournalFact::Unreadable {
+        return Err("dir".to_owned());
+    }
+    let link = scratch.path().join("link.db");
+    let missing = scratch.path().join("missing-target");
+    std::os::unix::fs::symlink(&missing, &link).map_err(|err| err.to_string())?;
+    if missing.exists() {
+        return Err("created".to_owned());
+    }
+    if journal_mark(&link).await == JournalFact::Unreadable {
+        Ok(())
+    } else {
+        Err("link".to_owned())
     }
 }
