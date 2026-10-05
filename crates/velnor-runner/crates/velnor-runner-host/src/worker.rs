@@ -12,7 +12,7 @@ use bollard::query_parameters::{
 use tokio::io::AsyncWriteExt;
 
 use crate::docker_client::docker_deadline;
-use crate::docker_spec::{ContainerPlan, Mount, audit_plan, runner_plan};
+use crate::docker_spec::{ContainerPlan, Mount, audit_plan, runner_mounts, runner_plan};
 use crate::error::HostError;
 use crate::stage::PairStop;
 
@@ -111,7 +111,7 @@ pub fn runner_create(plan: &ContainerPlan) -> Result<CreateProjection, HostError
         env: plan.env.clone(),
         cmd: plan.cmd.clone(),
         labels: plan.labels.clone(),
-        mounts: plan.mounts.clone(),
+        mounts: runner_mounts(&plan.mounts)?,
         privileged: false,
         open_stdin: true,
         network_mode: None,
@@ -275,8 +275,13 @@ fn docker_mount(mount: &Mount) -> Result<DockerMount, HostError> {
         target: Some(mount.target.clone()),
         source: Some(source),
         typ: Some(typ),
+        read_only: seed_read_only(&mount.source),
         ..Default::default()
     })
+}
+
+fn seed_read_only(source: &str) -> Option<bool> {
+    (source == crate::docker_spec::SEED_VOLUME).then_some(true)
 }
 
 fn mount_source(source: &str) -> Result<(MountType, String), HostError> {
