@@ -45,11 +45,67 @@ fn plan_job_writes_request_before_plan() {
             false,
             false,
             false,
+            WorkflowPolicy::ConsumerV1,
             &[],
         )
         .expect("plan job");
         assert_request_before(&job, "Plan", "write-request-v1:plan-v1", PLAN_OPERATION);
     }
+}
+
+#[test]
+fn only_velnor_policy_adds_receipt_admission_after_request_and_before_plan() {
+    let catalog = ToolCatalog::pinned();
+    let job = plan_job(
+        "ubuntu-26.04",
+        None,
+        &catalog,
+        true,
+        false,
+        false,
+        false,
+        WorkflowPolicy::VelnorRepositoryV1,
+        &[],
+    )
+    .expect("plan job");
+    let names: Vec<&str> = job.steps.iter().map(|step| step.name.as_str()).collect();
+    let write = names
+        .iter()
+        .position(|name| *name == "Write request")
+        .expect("request step");
+    let admit = names
+        .iter()
+        .position(|name| *name == "Admit qualification predecessor")
+        .expect("admission step");
+    let plan = names
+        .iter()
+        .position(|name| *name == "Plan")
+        .expect("plan step");
+    assert!(write < admit && admit < plan, "step order: {names:?}");
+    assert_eq!(
+        operation_of(&job.steps[admit]),
+        Some(QUALIFICATION_ADMISSION_OPERATION)
+    );
+
+    let consumer = plan_job(
+        "ubuntu-26.04",
+        None,
+        &catalog,
+        true,
+        false,
+        false,
+        false,
+        WorkflowPolicy::ConsumerV1,
+        &[],
+    )
+    .expect("consumer plan job");
+    assert!(
+        !consumer
+            .steps
+            .iter()
+            .any(|step| step.name == "Admit qualification predecessor"),
+        "consumer workflows do not receive the Velnor resolver"
+    );
 }
 
 #[test]
@@ -63,6 +119,7 @@ fn plan_job_checks_out_full_history_for_archaeology() {
         false,
         false,
         false,
+        WorkflowPolicy::ConsumerV1,
         &[],
     )
     .expect("plan job");
@@ -90,6 +147,7 @@ fn plan_tools_follow_role_in_all_order() {
         plan_tools(true, false, false, false),
         vec![
             PinnedTool::Rust,
+            PinnedTool::Gh,
             PinnedTool::Actionlint,
             PinnedTool::Shellcheck,
             PinnedTool::Zizmor,
@@ -98,6 +156,7 @@ fn plan_tools_follow_role_in_all_order() {
     assert_eq!(
         plan_tools(false, false, false, true),
         vec![
+            PinnedTool::Gh,
             PinnedTool::Actionlint,
             PinnedTool::Shellcheck,
             PinnedTool::Zizmor,
@@ -110,6 +169,7 @@ fn plan_tools_follow_role_in_all_order() {
         vec![
             PinnedTool::Rust,
             PinnedTool::MrBoxington,
+            PinnedTool::Gh,
             PinnedTool::Actionlint,
             PinnedTool::Shellcheck,
             PinnedTool::Zizmor,
@@ -150,6 +210,7 @@ fn plan_job_prepares_pinned_tools_before_generate_consumers() {
             use_mbx,
             use_nextest,
             false,
+            WorkflowPolicy::ConsumerV1,
             &[],
         )
         .expect("plan job");
@@ -176,6 +237,7 @@ fn plan_job_prepares_pinned_tools_before_generate_consumers() {
         let install_at = run.iter().position(|arg| arg == "install");
         let mut specs = vec![
             catalog.tool_spec(PinnedTool::Rust),
+            catalog.tool_spec(PinnedTool::Gh),
             catalog.tool_spec(PinnedTool::Actionlint),
             catalog.tool_spec(PinnedTool::Shellcheck),
             catalog.tool_spec(PinnedTool::Zizmor),
@@ -222,6 +284,7 @@ fn pure_tofu_plan_drops_all_rust_setup() {
         false,
         false,
         true,
+        WorkflowPolicy::ConsumerV1,
         &[],
     )
     .expect("plan job");
@@ -251,6 +314,7 @@ fn pure_tofu_plan_drops_all_rust_setup() {
     assert_eq!(
         specs,
         [
+            catalog.tool_spec(PinnedTool::Gh),
             catalog.tool_spec(PinnedTool::Actionlint),
             catalog.tool_spec(PinnedTool::Shellcheck),
             catalog.tool_spec(PinnedTool::Zizmor),

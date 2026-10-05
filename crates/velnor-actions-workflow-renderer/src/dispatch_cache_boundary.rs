@@ -8,18 +8,17 @@ use crate::render::PLAN_JOB_ID;
 
 const DISPATCH_DENY: &str = "github.event_name != 'workflow_dispatch'";
 
-/// Suppress every cache action in jobs that cannot consume validated plan outputs.
+/// Suppress cache access on workflow dispatch until a layer has a validated
+/// pre-use admission path.
 ///
-/// Raw event metadata can deny access before planning, but it never grants a
-/// writer. Jobs downstream of Plan receive their read/write policy from the
-/// validated plan outputs and keep their cache actions for that later gate.
+/// The current cache producers either import directly into live paths or use
+/// post-extraction action outputs. Raw event metadata can deny access, but it
+/// never grants a reader or writer. The typed plan directive is propagated to
+/// downstream jobs for layer-specific producers to consume once they support
+/// staging and pre-use exact-object admission.
 pub(crate) fn suppress_unvalidated_cache_access(jobs: &mut BTreeMap<String, Job>) {
-    for (id, job) in jobs {
-        let has_plan_outputs =
-            id != PLAN_JOB_ID && job.needs.iter().any(|need| need == PLAN_JOB_ID);
-        if has_plan_outputs {
-            continue;
-        }
+    for job in jobs.values_mut() {
+        let _has_plan_outputs = job.needs.iter().any(|need| need == PLAN_JOB_ID);
         for step in &mut job.steps {
             if is_mise_setup_cache(step) {
                 disable_mise_cache(step);
@@ -146,7 +145,7 @@ mod tests {
 
         suppress_unvalidated_cache_access(&mut jobs);
 
-        for id in ["plan", "mbx-plan"] {
+        for id in ["plan", "mbx-plan", "crate"] {
             let condition = jobs[id].steps[0]
                 .condition
                 .as_deref()
@@ -162,19 +161,19 @@ mod tests {
             Some("${{ github.event_name != 'workflow_dispatch' && 'true' || 'false' }}"),
             "setup still runs but cache access is denied on dispatch"
         );
-        assert!(jobs["crate"].steps[0].condition.is_none());
+        assert!(jobs["crate"].needs.contains(&"plan".to_owned()));
     }
 
     #[test]
     fn suppression_preserves_existing_cache_step_condition() {
         let mut step = cache_step("actions/cache/save@sha", "sources");
         step.condition = Some("success() && github.event_name == 'push'".to_owned());
-        let mut jobs = BTreeMap::from([("plan".to_owned(), job(&[], step))]);
+        let mut jobs = BTreeMap::from([("crate".to_owned(), job(&["plan"], step))]);
 
         suppress_unvalidated_cache_access(&mut jobs);
 
         assert_eq!(
-            jobs["plan"].steps[0].condition.as_deref(),
+            jobs["crate"].steps[0].condition.as_deref(),
             Some(
                 "(success() && github.event_name == 'push') && github.event_name != 'workflow_dispatch'"
             )
@@ -185,12 +184,12 @@ mod tests {
     fn dispatch_deny_remains_outermost_for_existing_disjunctions() {
         let mut step = cache_step("actions/cache/save@sha", "sources");
         step.condition = Some("(github.event_name != 'workflow_dispatch' || always())".to_owned());
-        let mut jobs = BTreeMap::from([("plan".to_owned(), job(&[], step))]);
+        let mut jobs = BTreeMap::from([("crate".to_owned(), job(&["plan"], step))]);
 
         suppress_unvalidated_cache_access(&mut jobs);
 
         assert_eq!(
-            jobs["plan"].steps[0].condition.as_deref(),
+            jobs["crate"].steps[0].condition.as_deref(),
             Some(
                 "((github.event_name != 'workflow_dispatch' || always())) && github.event_name != 'workflow_dispatch'"
             )

@@ -38,8 +38,12 @@ requests; the orchestrator MUST NOT launch processes or construct shell text.
 Internal workflow steps MUST NOT be exposed as subcommands. The sole
 non-CLI internal entrypoint is a bare invocation (no CLI arguments)
 with `VELNOR_INTERNAL_OP` naming a versioned typed operation
-(`write-request-v1`, `plan-v1`, `merge-v1`, `fetch-reports-v1`, or
-`write-task-report-v1`) plus its gate inputs. `plan-v1` and `merge-v1`
+(`write-request-v1`, `resolve-qualification-admission-v1`, `plan-v1`,
+`merge-v1`, `fetch-reports-v1`, or `write-task-report-v1`) plus its gate
+inputs. The resolver operation exists only in the Velnor repository
+workflow; it verifies and stages the immutable predecessor receipt for a
+qualification dispatch. It accepts no caller-selected repository, URL,
+artifact path, cache key, or token. `plan-v1` and `merge-v1`
 read schema-1 JSON from the existing request file at
 `VELNOR_REQUEST_FILE` and write the schema-1 JSON result to the sibling
 `<op>-response.json` derived from the `<op>-request.json` file name;
@@ -48,6 +52,15 @@ its matrix and identity fit the selected workflow output policy. A rejected
 output policy fails before plan artifacts or `$GITHUB_OUTPUT` are written;
 an unknown output-mode marker is rejected before planning and produces no
 result file.
+`resolve-qualification-admission-v1` requires the existing plan request,
+runner-temp anchor, and read-only GitHub API credentials. Lineage phases
+write one bounded, symlink-safe admission document under runner temp only
+after validating authoritative run/attempt and artifact metadata and the
+downloaded ZIP digest. Cold and control phases reject stale admission files
+and stage no predecessor.
+The plan operation validates the staged document against the completed
+plan before emitting qualification cache directives; absence or mismatch
+fails closed for lineage phases.
 `write-request-v1` requires that path to be absent plus the GitHub event
 environment and the runner-temp anchor (`RUNNER_TEMP`, which the request
 path must sit under), and materializes the request file; `fetch-reports-v1`

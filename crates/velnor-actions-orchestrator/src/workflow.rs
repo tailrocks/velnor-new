@@ -78,6 +78,7 @@ fn build_plan_job(
     use_mbx: bool,
     use_nextest: bool,
     use_opentofu: bool,
+    policy: WorkflowPolicy,
     fetch_roots: &[String],
     discovery: &Discovery,
 ) -> Result<Job, OrchestratorError> {
@@ -89,6 +90,7 @@ fn build_plan_job(
         use_mbx,
         use_nextest,
         use_opentofu,
+        policy,
         fetch_roots,
     )?;
     if let Some(format) = wire_w1::workspace_format_step(discovery, catalog)? {
@@ -136,6 +138,7 @@ pub(crate) fn build_workflow(
         use_mbx,
         use_nextest,
         use_opentofu,
+        policy,
         fetch_roots,
         discovery,
     )?;
@@ -212,6 +215,20 @@ fn qualification_dispatch() -> WorkflowDispatch {
                     "useful_delta".to_owned(),
                     "warm".to_owned(),
                 ],
+                default: None,
+            },
+            DispatchInput {
+                name: "predecessor_run_attempt".to_owned(),
+                required: false,
+                input_type: DispatchInputType::String,
+                choices: Vec::new(),
+                default: None,
+            },
+            DispatchInput {
+                name: "predecessor_run_id".to_owned(),
+                required: false,
+                input_type: DispatchInputType::String,
+                choices: Vec::new(),
                 default: None,
             },
         ],

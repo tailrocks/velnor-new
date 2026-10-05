@@ -119,6 +119,7 @@ fn strategy_shape_exact_and_marker_stripped() -> Result<(), RenderError> {
         "      qualification_phase: ${{ steps.plan.outputs.qualification_phase }}",
         "      qualification_cache_enabled: ${{ steps.plan.outputs.qualification_cache_enabled }}",
         "      qualification_cache_write: ${{ steps.plan.outputs.qualification_cache_write }}",
+        "      qualification_cache_directives: ${{ steps.plan.outputs.qualification_cache_directives }}",
         "VELNOR_PLAN_MATRIX_OUTPUT_MODE: dynamic_matrix",
         "        id: plan",
     ] {

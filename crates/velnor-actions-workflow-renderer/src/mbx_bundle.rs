@@ -13,8 +13,7 @@ use velnor_actions_contract::{Job, Step, StepKind};
 
 use crate::RenderError;
 use crate::cache_steps::{
-    MBX_ACTION_NAME, MBX_CACHE_MODE_ENV, TOOLS_RESTORE_USES,
-    MBX_RESTORE_NAME, TOOLS_SAVE_USES, is_mbx_action,
+    MBX_ACTION_NAME, MBX_CACHE_MODE_ENV, TOOLS_RESTORE_USES, TOOLS_SAVE_USES, is_mbx_action,
 };
 
 /// Display name of the reclaim-and-export step.
@@ -51,25 +50,6 @@ const EXPORT_SCRIPT: &str = r#"set -eu; df -B1 -P "$RUNNER_TEMP"; df -i -P "$RUN
 const KEY_SCRIPT: &str = r#"set -eu; key="$MBX_KEY"; case "$key" in ''|*-) exit 1 ;; esac; prefix="${key%-*}-"; echo "prefix=${prefix}" >> "$GITHUB_OUTPUT""#;
 /// Import when the restore matched. A miss, a missing directory, or a failed import stays cold.
 const IMPORT_SCRIPT: &str = r#"set -eu; bundle="$RUNNER_TEMP/mbx-single-bundle"; df -B1 -P "$RUNNER_TEMP"; df -i -P "$RUNNER_TEMP"; if [ -z "$MATCHED" ]; then echo "no mbx bundle matched"; exit 0; fi; if [ ! -d "$bundle" ]; then echo "mbx bundle missing; continuing cold"; exit 0; fi; if ! mbx cache import "$bundle"; then echo "mbx bundle import failed; continuing cold"; rm -rf "$bundle"; exit 0; fi"#;
-
-/// YAML step id for the MBX restore and export steps, when they have one.
-pub(crate) fn step_yaml_id(name: &str) -> Option<&'static str> {
-    match name {
-        MBX_RESTORE_NAME => Some("mbx"),
-        MBX_BUNDLE_KEY_NAME => Some("mbx-bundle-key"),
-        MBX_BUNDLE_RESTORE_NAME => Some("mbx-bundle"),
-        MBX_BUNDLE_EXPORT_NAME => Some("mbx-export"),
-        _ => None,
-    }
-}
-
-/// Emit `id:` for the two MBX steps whose later steps read outputs.
-pub(crate) fn push_step_id(entries: &mut Vec<(String, crate::yaml::Yaml)>, name: &str) {
-    let Some(id) = step_yaml_id(name) else {
-        return;
-    };
-    entries.push(("id".to_owned(), crate::yaml::Yaml::str(id.to_owned())));
-}
 
 /// Force every MBX action to restore-only and append the single-bundle save.
 ///
