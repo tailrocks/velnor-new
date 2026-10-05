@@ -263,19 +263,21 @@ struct Ready<'a> {
     session: &'a QueueSession,
     admin_token: &'a str,
     path: String,
-    queue: Option<String>,
     polled: &'a Poll,
 }
 
-async fn drive_ready(
-    link: &mut Link,
+async fn drive_ready<T>(
+    lane: &mut T,
     ready: Ready<'_>,
     journal: &Journal,
     docker: &bollard::Docker,
     capacity: u32,
-) -> Result<Option<Started>, EnsureError> {
+) -> Result<Option<Started>, EnsureError>
+where
+    T: Transport + Lane,
+{
     if slot::busy(journal, docker, capacity).await? {
-        return held(link, ready);
+        return Ok(None);
     }
     let ctx = Drive {
         set_id: ready.set_id,
@@ -283,26 +285,12 @@ async fn drive_ready(
         queue_token: ready.session.token().to_owned(),
         admin_token: ready.admin_token.to_owned(),
     };
-    let admin = link.base().to_owned();
-    let mut lane = HostLane {
-        link,
-        admin,
-        queue: ready.queue,
-    };
-    drive_offer(&mut lane, &ctx, ready.polled, journal, |volume, jit| {
+    drive_offer(lane, &ctx, ready.polled, journal, |volume, jit| {
         let volume = volume.to_owned();
         let payload = jit.to_vec();
         async move { start_pair(docker, &volume, &payload).await }
     })
     .await
-}
-
-fn held(link: &mut Link, ready: Ready<'_>) -> Result<Option<Started>, EnsureError> {
-    if !matches!(steps::idle(ready.polled), steps::Idle::Scale) {
-        return Ok(None);
-    }
-    ack_ready(link, ready.session, ready.path, ready.queue, ready.polled)?;
-    Ok(None)
 }
 
 fn ack_ready(
