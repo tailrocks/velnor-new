@@ -10,9 +10,7 @@ use velnor_actions_workflow_renderer::plan_format::FORMAT_STEP_NAME;
 use velnor_actions_workflow_renderer::steps::{INTERNAL_OP_ENV, STAGED_BINARY_PREFIX};
 
 use crate::OrchestratorError;
-use crate::task_report::{
-    DOWNSTREAM_IDS_ENV, EXIT_CODE_ENV, REPORT_OP, START_MS_ENV, START_TIME_OP, TASK_ID_ENV,
-};
+use crate::task_report::{EXIT_CODE_ENV, REPORT_OP, START_MS_ENV, START_TIME_OP, TASK_ID_ENV};
 
 #[path = "matrix_tools.rs"]
 mod tools;
