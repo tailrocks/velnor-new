@@ -2,6 +2,7 @@
 
 use crate::RenderError;
 use crate::yaml::Yaml;
+use velnor_actions_contract::RELEASE_MANIFEST_FILENAME;
 
 use super::super::features::{base, finish};
 use super::GeneratorReleasePins;
@@ -10,13 +11,15 @@ use super::jobs;
 use super::workflow_steps::{self, with_needs, with_permissions};
 
 /// Published versioned release manifest.
-pub(super) const FILE: &str = "release-manifest.json";
+pub(super) const FILE: &str = RELEASE_MANIFEST_FILENAME;
 /// Workflow artifact used to carry the attested manifest to publish.
 pub(super) const ARTIFACT: &str = "generator-release-manifest";
 /// Download location in the publication job.
 pub(super) const DIR: &str = "manifest-assets";
 /// Same-run canonical manifest path used by candidate qualification and publication.
-pub(super) const CANDIDATE_PATH: &str = "manifest-assets/release-manifest.json";
+pub(super) fn candidate_path() -> String {
+    format!("{DIR}/{FILE}")
+}
 /// Download location for detached signed Sigstore bundles.
 pub(super) const ATTESTATION_DIR: &str = "release-attestations";
 
@@ -117,7 +120,7 @@ fn candidate_manifest_steps(pins: &GeneratorReleasePins) -> Result<Vec<Yaml>, Re
             "Rebuild and compare the canonical candidate manifest",
             &publication_verify_script(pins),
         ),
-        workflow_steps::attest_step(CANDIDATE_PATH),
+        workflow_steps::attest_step(&candidate_path()),
         workflow_steps::bash_step_with_token(
             "Fetch and verify manifest attestation bundle",
             &manifest_attestation_bundle_script(),
@@ -164,16 +167,18 @@ fn manifest_action_inputs() -> Vec<(&'static str, &'static str, &'static str)> {
 
 /// Rebuild the expected manifest from verified downloaded binaries and records.
 pub(super) fn publication_verify_script(pins: &GeneratorReleasePins) -> String {
+    let candidate_path = candidate_path();
     format!(
-        "{}\ncmp {FILE} {CANDIDATE_PATH}",
+        "{}\ncmp {FILE} {candidate_path}",
         manifest_script(&pins.rust_version, &pins.mr_boxington_version)
     )
 }
 
 /// Verify exact canonical manifest bytes downloaded from the candidate job.
 pub(super) fn manifest_digest_check_script() -> String {
+    let candidate_path = candidate_path();
     format!(
-        "set -eu\nexpected=\"$VELNOR_RELEASE_MANIFEST_SHA256\"\nactual=\"$(sha256sum '{CANDIDATE_PATH}' | awk 'NR == 1 {{ print $1; next }} {{ exit 1 }} END {{ if (NR != 1) exit 1 }}')\"\ntest \"${{#expected}}\" -eq 64\ntest \"$actual\" = \"$expected\""
+        "set -eu\nexpected=\"$VELNOR_RELEASE_MANIFEST_SHA256\"\nactual=\"$(sha256sum '{candidate_path}' | awk 'NR == 1 {{ print $1; next }} {{ exit 1 }} END {{ if (NR != 1) exit 1 }}')\"\ntest \"${{#expected}}\" -eq 64\ntest \"$actual\" = \"$expected\""
     )
 }
 
@@ -210,6 +215,7 @@ pub(super) fn published_release_verify_script() -> String {
 
 /// Cryptographically verify every bundle carried through the attest jobs.
 pub(super) fn attestation_bundle_script() -> String {
+    let candidate_path = candidate_path();
     let mut lines = vec![
         "set -eu".to_owned(),
         "test \"$GITHUB_WORKFLOW_SHA\" = \"$GITHUB_SHA\"".to_owned(),
@@ -222,7 +228,7 @@ pub(super) fn attestation_bundle_script() -> String {
             ));
         }
     }
-    lines.push(attestation_verify_script(CANDIDATE_PATH, FILE));
+    lines.push(attestation_verify_script(&candidate_path, FILE));
     lines.join("\n")
 }
 
@@ -248,9 +254,10 @@ pub(super) fn asset_attestation_bundle_paths(product: assets::ProductAsset) -> V
 
 /// Fetch and verify the signed manifest bundle after manifest attestation.
 pub(super) fn manifest_attestation_bundle_script() -> String {
+    let candidate_path = candidate_path();
     format!(
         "set -eu\ntest \"$GITHUB_WORKFLOW_SHA\" = \"$GITHUB_SHA\"\nmkdir -p {ATTESTATION_DIR}\n{}",
-        attestation_fetch_script(CANDIDATE_PATH, FILE)
+        attestation_fetch_script(&candidate_path, FILE)
     )
 }
 

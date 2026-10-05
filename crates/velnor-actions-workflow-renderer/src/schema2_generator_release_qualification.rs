@@ -15,7 +15,7 @@ pub(super) struct QualificationJob<'a> {
     pub runs_on: Yaml,
     pub build_job: &'a str,
     pub product: ProductAsset,
-    pub source_action: &'a Yaml,
+    pub source_step: &'a Yaml,
 }
 
 /// Qualify a build artifact in a job that has no write or attestation permissions.
@@ -78,15 +78,13 @@ pub(super) fn job(
         ],
         actions,
     )?;
-    Ok(finish(
-        job.id,
-        with_permissions(
-            workflow_steps::with_needs(
-                base(job.name, job.runs_on, 120),
-                &[job.build_job, "candidate-manifest"],
-            ),
-            workflow_steps::qualification_permissions(),
+    let mut fields = with_permissions(
+        workflow_steps::with_needs(
+            base(job.name, job.runs_on, 120),
+            &[job.build_job, "candidate-manifest"],
         ),
-        vec![job.source_action.clone(), call],
-    ))
+        workflow_steps::qualification_permissions(),
+    );
+    fields.retain(|(key, _)| key != "name");
+    Ok(finish(job.id, fields, vec![job.source_step.clone(), call]))
 }

@@ -1,21 +1,14 @@
 //! Credential-free source preparation for candidate qualification.
 
-use crate::RenderError;
 use crate::Yaml;
 
-use super::jobs;
 use super::workflow_steps;
 
-/// Generate the shared source-preparation action used before every qualifier.
-pub(super) fn action(actions: &mut Vec<(String, Yaml)>) -> Result<Yaml, RenderError> {
-    jobs::local_action(
-        "generator-release-source",
+/// Prepare the exact candidate source inline before local composite resolution.
+pub(super) fn qualification_step() -> Yaml {
+    workflow_steps::bash_step(
         "Fetch exact public source without an action post hook",
-        vec![workflow_steps::bash_step(
-            "Fetch exact public source without an action post hook",
-            QUALIFICATION_SOURCE_PREPARE,
-        )],
-        actions,
+        QUALIFICATION_SOURCE_PREPARE,
     )
 }
 

@@ -51,19 +51,19 @@ pub(super) fn generator_release(
     let macos = runs_on_yaml(MACOS_RUNS_ON)?;
     let macos_intel = runs_on_yaml(MACOS_INTEL_RUNS_ON)?;
     let mut actions = Vec::new();
-    let source_action = source::action(&mut actions)?;
+    let source_step = source::qualification_step();
     let mut jobs = vec![assets::source_gate_job(hosted.clone(), pins)?];
     jobs.extend(linux_jobs(
         hosted.clone(),
         pins,
-        &source_action,
+        &source_step,
         &mut actions,
     )?);
-    jobs.extend(macos_arm64_jobs(macos, pins, &source_action, &mut actions)?);
+    jobs.extend(macos_arm64_jobs(macos, pins, &source_step, &mut actions)?);
     jobs.extend(macos_x86_64_jobs(
         macos_intel,
         pins,
-        &source_action,
+        &source_step,
         &mut actions,
     )?);
     jobs.push(candidate_manifest::job(hosted.clone(), pins));
@@ -78,7 +78,7 @@ pub(super) fn generator_release(
 fn linux_jobs(
     hosted: Yaml,
     pins: &GeneratorReleasePins,
-    source_action: &Yaml,
+    source_step: &Yaml,
     actions: &mut Vec<(String, Yaml)>,
 ) -> Result<Vec<(String, Yaml)>, RenderError> {
     let steps = assets::build_steps(
@@ -105,7 +105,7 @@ fn linux_jobs(
                 runs_on: hosted.clone(),
                 build_job: "build-linux",
                 product: assets::LINUX,
-                source_action,
+                source_step,
             },
             pins,
             actions,
@@ -125,7 +125,7 @@ fn linux_jobs(
 fn macos_arm64_jobs(
     macos: Yaml,
     pins: &GeneratorReleasePins,
-    source_action: &Yaml,
+    source_step: &Yaml,
     actions: &mut Vec<(String, Yaml)>,
 ) -> Result<Vec<(String, Yaml)>, RenderError> {
     let steps = assets::build_steps(
@@ -152,7 +152,7 @@ fn macos_arm64_jobs(
                 runs_on: macos.clone(),
                 build_job: "build-macos",
                 product: assets::MACOS_ARM64,
-                source_action,
+                source_step,
             },
             pins,
             actions,
@@ -172,7 +172,7 @@ fn macos_arm64_jobs(
 fn macos_x86_64_jobs(
     macos: Yaml,
     pins: &GeneratorReleasePins,
-    source_action: &Yaml,
+    source_step: &Yaml,
     actions: &mut Vec<(String, Yaml)>,
 ) -> Result<Vec<(String, Yaml)>, RenderError> {
     let steps = assets::build_steps(
@@ -199,7 +199,7 @@ fn macos_x86_64_jobs(
                 runs_on: macos.clone(),
                 build_job: "build-macos-intel",
                 product: assets::MACOS_X86_64,
-                source_action,
+                source_step,
             },
             pins,
             actions,

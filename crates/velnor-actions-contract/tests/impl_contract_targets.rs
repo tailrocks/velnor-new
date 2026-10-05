@@ -20,10 +20,7 @@ fn supported_targets_and_naming() {
     );
     assert!(is_supported_target("x86_64-unknown-linux-gnu"));
     assert!(!is_supported_target("wasm32-unknown-unknown"));
-    assert_eq!(
-        RELEASE_MANIFEST_FILENAME,
-        "velnor-actions-release-manifest.json"
-    );
+    assert_eq!(RELEASE_MANIFEST_FILENAME, "release-manifest.json");
     assert_eq!(
         asset_filename("0.1.0", "x86_64-unknown-linux-gnu"),
         "velnor-actions-0.1.0-x86_64-unknown-linux-gnu"

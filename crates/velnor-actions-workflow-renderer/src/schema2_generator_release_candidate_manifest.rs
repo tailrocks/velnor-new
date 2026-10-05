@@ -8,6 +8,7 @@ use super::{assets, manifest, workflow_steps};
 
 /// Build and upload the canonical manifest consumed by qualification and attestation.
 pub(super) fn job(hosted: Yaml, pins: &GeneratorReleasePins) -> (String, Yaml) {
+    let candidate_path = manifest::candidate_path();
     let mut steps = Vec::new();
     for product in assets::ASSETS {
         let artifact_id = format!("${{{{ needs.{}.outputs.artifact_id }}}}", product.build_job);
@@ -51,7 +52,7 @@ pub(super) fn job(hosted: Yaml, pins: &GeneratorReleasePins) -> (String, Yaml) {
             "upload",
             "Upload same-run release manifest",
             manifest::ARTIFACT,
-            &[manifest::CANDIDATE_PATH],
+            &[&candidate_path],
         ),
     ]);
     let needs = [
@@ -87,6 +88,6 @@ pub(super) fn job(hosted: Yaml, pins: &GeneratorReleasePins) -> (String, Yaml) {
 fn manifest_digest_script() -> String {
     format!(
         "set -eu\ndigest=\"$(sha256sum '{path}' | awk 'NR == 1 {{ print $1; next }} {{ exit 1 }} END {{ if (NR != 1) exit 1 }}')\"\ntest \"${{#digest}}\" -eq 64\nprintf 'manifest_sha256=%s\\n' \"$digest\" >> \"$GITHUB_OUTPUT\"",
-        path = manifest::CANDIDATE_PATH
+        path = manifest::candidate_path()
     )
 }

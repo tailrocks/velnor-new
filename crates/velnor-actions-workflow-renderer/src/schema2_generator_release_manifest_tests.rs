@@ -1,6 +1,6 @@
 use super::{
-    FILE, attestation_fetch_script, manifest_attestation_bundle_script, manifest_script,
-    tag_preflight_script,
+    DIR, FILE, attestation_fetch_script, candidate_path, manifest_attestation_bundle_script,
+    manifest_script, tag_preflight_script,
 };
 use std::error::Error;
 use std::fs;
@@ -9,6 +9,10 @@ use std::os::unix::fs::symlink;
 use std::path::PathBuf;
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
+use velnor_actions_contract::RELEASE_MANIFEST_FILENAME;
+
+const MANIFEST_PRODUCER: &str =
+    include_str!("../../../scripts/generator-release/create-release-manifest.sh");
 
 struct Scratch(PathBuf);
 
@@ -38,6 +42,19 @@ fn manifest_bundle_uses_the_created_and_attested_file() {
         "{fetch}"
     );
     assert!(!fetch.contains(&format!("subject='{FILE}'")));
+}
+
+#[test]
+fn renderer_uses_the_public_canonical_manifest_filename() {
+    assert_eq!(FILE, RELEASE_MANIFEST_FILENAME);
+    assert_eq!(
+        candidate_path(),
+        format!("{DIR}/{RELEASE_MANIFEST_FILENAME}")
+    );
+    assert!(
+        MANIFEST_PRODUCER.contains(&format!("> {RELEASE_MANIFEST_FILENAME}")),
+        "the shell producer must write the public canonical filename"
+    );
 }
 
 #[test]

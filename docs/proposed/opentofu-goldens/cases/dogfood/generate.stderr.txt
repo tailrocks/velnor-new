@@ -15,7 +15,6 @@ Repository: <repo>
 .github/actions/generator-release-qualify-linux/action.yml
 .github/actions/generator-release-qualify-macos-intel/action.yml
 .github/actions/generator-release-qualify-macos/action.yml
-.github/actions/generator-release-source/action.yml
 .github/workflows/ci.yml
 .github/workflows/freshness.yml
 .github/workflows/generator-release.yml

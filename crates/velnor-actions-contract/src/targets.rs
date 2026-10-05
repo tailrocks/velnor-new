@@ -56,8 +56,8 @@ pub const SUPPORTED_TARGETS: [&str; 3] = [
     ReleaseTarget::MacosX86_64.triple(),
 ];
 
-/// Release-manifest JSON asset filename (version is inside the JSON).
-pub const RELEASE_MANIFEST_FILENAME: &str = "velnor-actions-release-manifest.json";
+/// Canonical release-manifest JSON asset filename (version is inside the JSON).
+pub const RELEASE_MANIFEST_FILENAME: &str = "release-manifest.json";
 
 /// Whether `target` is a supported release triple.
 #[must_use]

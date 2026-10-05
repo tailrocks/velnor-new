@@ -7,7 +7,7 @@ mod action_snapshots;
 mod qualification_snapshots;
 #[path = "schema2_generator_release_security_snapshots.rs"]
 mod security_snapshots;
-use action_snapshots::{Actions, action, action_text};
+use action_snapshots::{Actions, action_text};
 
 pub(super) const GENERATOR_RELEASE: &str = include_str!("snapshots/generator-release.yml");
 
@@ -39,15 +39,6 @@ fn assert_generator(body: &str, actions: &Actions) -> Result<(), Box<dyn std::er
     assert_job_order(body);
     assert_global_policy(body, actions);
     assert_checkouts(body, actions)?;
-    let source_action = action(actions, "generator-release-source")?;
-    assert!(
-        source_action.contains("Fetch exact public source without an action post hook"),
-        "{source_action}"
-    );
-    assert!(
-        source_action.contains("credential.helper="),
-        "{source_action}"
-    );
     assert_source_gate(body)?;
     security_snapshots::assert_isolated_candidate_execution(body, actions)?;
     publication_snapshots::assert_asset_catalog(&action_text(actions));
@@ -96,20 +87,13 @@ fn assert_checkouts(body: &str, actions: &Actions) -> Result<(), Box<dyn std::er
         if id.starts_with("qualify-") {
             assert_eq!(checkouts, 0, "{id}: {job}");
             assert!(
-                job.contains("./.github/actions/generator-release-source"),
-                "{id}: {job}"
-            );
-            assert_eq!(
-                job.matches("uses: ./.github/actions/").count(),
-                2,
-                "{id}: {job}"
+                !job.lines().any(|line| line.starts_with("    name:")),
+                "{id} uses its descriptive job ID to keep the workflow within the file-size gate"
             );
         } else {
             assert_eq!(checkouts, 1, "{id}: {job}");
         }
-        if !id.starts_with("qualify-")
-            && !matches!(id, "verify-release-source" | "candidate-manifest")
-        {
+        if !matches!(id, "verify-release-source" | "candidate-manifest") {
             assert_eq!(
                 job.matches("uses: ./.github/actions/").count(),
                 1,
