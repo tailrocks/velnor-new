@@ -314,7 +314,6 @@ fn merged_jobs(
     support::check_candidate_invariants(&jobs)?;
     support::check_final_gate(&jobs)?;
     support::check_token_hygiene(&jobs)?;
-    crate::mbx_bundle::append_single_bundle_saves(&mut jobs)?;
     support::check_token_hygiene(&jobs)?;
     Ok(jobs)
 }
@@ -332,7 +331,7 @@ fn render_merged(
     } else {
         jobs.clone()
     };
-    let mbx_gc_jobs = crate::mbx_gc_policy::jobs_with_hosted_mbx_objects(&jobs);
+    let mbx_jobs = crate::mbx_gc_policy::jobs_with_mbx_objects(&jobs);
     let shared = crate::lane_share::share_lanes(&jobs, ctx)?;
     let mut document = document::workflow_to_yaml(
         ir,
@@ -340,7 +339,7 @@ fn render_merged(
         ctx,
         &shared.calls,
         &shared.checkouts,
-        &mbx_gc_jobs,
+        &mbx_jobs,
     )?;
     if let Some((source, max_parallel)) = &matrix {
         matrix::attach_task_matrix(&mut document, source, *max_parallel)?;

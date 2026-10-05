@@ -203,7 +203,7 @@ fn job_to_yaml(
     needs_envs: &[(String, String)],
     shared: Option<&str>,
     checkouts: &BTreeMap<String, Step>,
-    mbx_gc_auto: bool,
+    mbx_policy: bool,
 ) -> Result<Yaml, RenderError> {
     steps::scan_for_private_subcommands(&job.display_name)?;
     let runner = RunsOn::parse(&job.runs_on).map_err(RenderError::Contract)?;
@@ -248,10 +248,14 @@ fn job_to_yaml(
             }
         }
     }
-    if mbx_gc_auto {
+    if mbx_policy {
         job_env.insert(
             crate::cache_steps::MBX_GC_AUTO_ENV.to_owned(),
             crate::cache_steps::MBX_GC_AUTO_VALUE.to_owned(),
+        );
+        job_env.insert(
+            crate::cache_steps::MBX_SHARE_OUT_DIR_ENV.to_owned(),
+            crate::cache_steps::MBX_SHARE_OUT_DIR_VALUE.to_owned(),
         );
     }
     let mut entries = job_header_fields(job, runs_on);

@@ -66,7 +66,7 @@ fn mbx_probe_vector_is_byte_exact() {
         "--no-env",
         "--no-hooks",
         "exec",
-        "mr-boxington@1.21.1",
+        "rust@1.98.1",
         "--",
         "mbx",
         "--version",
@@ -108,17 +108,20 @@ fn group_with_driver(driver: velnor_actions_rust::CompileDriver) -> ProposedTask
 #[test]
 fn task_payload_program_follows_route_driver() {
     let catalog = ToolCatalog::pinned();
-    for (driver, program, mbx) in [
-        (CompileDriver::Cargo, "cargo", false),
-        (CompileDriver::Mbx, "mbx", true),
-    ] {
+    let rust_spec = catalog.tool_spec(PinnedTool::Rust);
+    for (driver, program) in [(CompileDriver::Cargo, "cargo"), (CompileDriver::Mbx, "mbx")] {
         let argv = task_argv(&group_with_driver(driver), &catalog).expect("task argv");
         let at = argv.iter().position(|arg| arg == "--").expect("separator");
         assert_eq!(argv[at + 1], program, "{} program", driver.as_str());
         assert_eq!(
-            argv.iter().any(|arg| arg.contains("mr-boxington")),
-            mbx,
-            "{} tools",
+            &argv[5..at],
+            std::slice::from_ref(&rust_spec),
+            "{} selects only Rust through Mise; MBX is action-owned",
+            driver.as_str()
+        );
+        assert!(
+            !argv.iter().any(|arg| arg.contains("mr-boxington")),
+            "{} must not reinstall action-owned MBX: {argv:?}",
             driver.as_str()
         );
     }
@@ -159,7 +162,6 @@ fn section4_build_vector_is_byte_exact() {
         "--no-hooks",
         "exec",
         "rust@1.98.1",
-        "mr-boxington@1.21.1",
         "--",
         "mbx",
         "build",

@@ -18,7 +18,7 @@ max_exception_days = 14
 [tools]
 mise = "2026.9.18"
 rust = "1.98.1"
-mr-boxington = "1.21.1"
+mr-boxington = "1.22.0"
 gh = "2.102.0"
 actionlint = "1.7.12"
 shellcheck = "0.11.0"
@@ -69,8 +69,8 @@ reviewed = "2026-09-28"
 
 [[actions]]
 name = "jdx/mr-boxington-action"
-version = "v1.6.0"
-sha = "1687e54eb349cadf61fa38b5813a77875489e8e6"
+version = "v1.7.1"
+sha = "d0825fbaf3cc36ca2609aa38e71046265a1f1e37"
 reviewed = "2026-10-03"
 
 [[actions]]

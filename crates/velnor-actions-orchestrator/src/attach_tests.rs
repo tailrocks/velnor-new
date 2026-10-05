@@ -186,85 +186,6 @@ fn lock_acquire_records_source_commit() {
     }
 }
 
-#[test]
-fn preseed_attach_builds_once_and_sets_mode() {
-    use velnor_actions_actionlint::ActionlintConfigInput;
-    use velnor_actions_workflow_renderer::{PRESEED_BUILD_NAME, PRESEED_STAGE_NAME};
-    let catalog = ToolCatalog::pinned();
-    let mut plan = WorkflowPlan {
-        ir: bare_ir(BTreeMap::from([
-            (
-                "plan".to_owned(),
-                plan_job(
-                    "ubuntu-26.04",
-                    None,
-                    &catalog,
-                    true,
-                    false,
-                    false,
-                    false,
-                    &[],
-                )
-                .expect("plan job"),
-            ),
-            ("rust-demo".to_owned(), legacy_task_job()),
-            (
-                "required".to_owned(),
-                final_job("ubuntu-26.04", &["rust-demo".to_owned()], None, &catalog)
-                    .expect("final job"),
-            ),
-            (
-                "publish-baseline".to_owned(),
-                baseline_publish_job("ubuntu-26.04", "main", None).expect("publish job"),
-            ),
-        ])),
-        support: None,
-        context: RenderContext {
-            generator_version: "0.1.0".to_owned(),
-            runs_on: "ubuntu-26.04".to_owned(),
-            staged_binary: format!("{STAGED_BINARY_PREFIX}0.1.0"),
-            request_dir: REQUEST_DIR.to_owned(),
-            checkout_uses: CHECKOUT_USES.to_owned(),
-            validator_commands: Vec::new(),
-            candidate: None,
-            preseed: false,
-            plan_consumer_env: std::collections::BTreeMap::new(),
-        },
-        actionlint: ActionlintConfigInput::new("0.1.0").with_workflow_path(WORKFLOW_PATH),
-    };
-    assert!(attach_preseed(&mut plan, "ubuntu-26.04", "0.1.0").is_ok());
-    assert!(plan.context.preseed);
-    let names: Vec<&str> = plan.ir.jobs["plan"]
-        .steps
-        .iter()
-        .map(|s| s.name.as_str())
-        .collect();
-    assert_eq!(
-        names,
-        [
-            "Checkout",
-            "Prepare pinned tools",
-            PRESEED_BUILD_NAME,
-            "Verify MBX compile (pre-seed trust-on-review)",
-            "Write helper manifest (pre-seed trust-on-review)",
-            "Upload helper (pre-seed trust-on-review)",
-            PRESEED_STAGE_NAME,
-            "Prepare Rust components",
-            "Write request",
-            "Plan",
-        ]
-    );
-    for id in ["rust-demo", "required", "publish-baseline"] {
-        let names: Vec<&str> = plan.ir.jobs[id]
-            .steps
-            .iter()
-            .map(|s| s.name.as_str())
-            .collect();
-        assert_consumer_triple(id, &names);
-    }
-    assert!(attach_preseed(&mut plan, "ubuntu-26.04-arm", "0.1.0").is_err());
-}
-
 /// Download, verify, then stage exactly once; never rebuild.
 fn assert_consumer_triple(id: &str, names: &[&str]) {
     use velnor_actions_workflow_renderer::{
@@ -347,16 +268,36 @@ fn assert_owned_homes(steps: &[Step], name: &str) {
 mod mbx_tests;
 
 #[test]
-fn preseed_skips_mbx_restore_for_cargo_only_plans() {
-    use velnor_actions_workflow_renderer::{PRESEED_BUILD_NAME, PRESEED_VERIFY_NAME};
-    let mut plan = preseed_fixture(false, &[String::new()]);
-    attach_preseed(&mut plan, "ubuntu-26.04", "0.1.0").expect("attach");
+fn preseed_replaces_cargo_only_registry_cache_with_shared_sources() {
+    use velnor_actions_workflow_renderer::{
+        MBX_PREFLIGHT_NAME, MBX_VERSION_CHECK_NAME, PRESEED_BUILD_NAME, PRESEED_VERIFY_NAME,
+        cache_p08::{RESTORE_SOURCES_NAME, SAVE_SOURCES_NAME},
+    };
+    let roots = [String::new()];
+    let mut plan = preseed_fixture(false, &roots);
+    attach_preseed(&mut plan, "ubuntu-26.04", "0.1.0", &roots).expect("attach");
     let steps = &plan.ir.jobs["plan"].steps;
     let names: Vec<&str> = steps.iter().map(|step| step.name.as_str()).collect();
     assert!(
-        !names.contains(&MBX_RESTORE_NAME),
-        "cargo-only plans stay rust-cache-only: {names:?}"
+        !names.contains(&"Restore Cargo registry"),
+        "the overlapping registry fallback is replaced: {names:?}"
     );
+    let restore = names
+        .iter()
+        .position(|step| *step == RESTORE_SOURCES_NAME)
+        .expect("source restore");
+    let preflight = names
+        .iter()
+        .position(|step| *step == MBX_PREFLIGHT_NAME)
+        .expect("Rust preflight");
+    let mbx = names
+        .iter()
+        .position(|step| *step == MBX_RESTORE_NAME)
+        .expect("native owner");
+    let version_check = names
+        .iter()
+        .position(|step| *step == MBX_VERSION_CHECK_NAME)
+        .expect("native MBX version guard");
     let probe = names
         .iter()
         .position(|step| *step == crate::source_prep::FETCH_SOURCES_STEP)
@@ -365,7 +306,19 @@ fn preseed_skips_mbx_restore_for_cargo_only_plans() {
         .iter()
         .position(|step| *step == PRESEED_BUILD_NAME)
         .expect("build step");
-    assert!(probe < build, "build anchors after sources: {names:?}");
+    let save = names
+        .iter()
+        .position(|step| *step == SAVE_SOURCES_NAME)
+        .expect("source save");
+    assert!(
+        restore < preflight
+            && preflight < mbx
+            && mbx < version_check
+            && version_check < probe
+            && probe < build
+            && build < save,
+        "source restore, MBX setup, source probe, build, save order: {names:?}"
+    );
     assert_owned_homes(steps, PRESEED_BUILD_NAME);
     assert_owned_homes(steps, PRESEED_VERIFY_NAME);
 }

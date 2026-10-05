@@ -153,7 +153,7 @@ fn mise_install_step(request: &MbxQualificationPins) -> Yaml {
 
 fn mbx_action_step(request: &MbxQualificationPins, writer: bool) -> Yaml {
     let generation = format!(
-        "velnor-qualification-mbx-{}-action-{}-run-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}-${{{{ github.sha }}}}",
+        "velnor-qualification-mbx-{}-share-out-dir-disabled-v1-action-{}-run-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}-${{{{ github.sha }}}}",
         request.mbx_version,
         &request.mbx_action_uses[format!("{MBX_ACTION_NAME}@").len()..]
     );
@@ -169,6 +169,8 @@ fn mbx_action_step(request: &MbxQualificationPins, writer: bool) -> Yaml {
             mapping(&[
                 ("github-cache-mode", "objects"),
                 ("version", &request.mbx_version),
+                ("toolchain", &request.rust_version),
+                ("isolate-objects-cache", "true"),
                 ("cache-generation", &generation),
                 (
                     "save-on-workflow-dispatch",
@@ -216,7 +218,7 @@ fn verify_action_step(request: &MbxQualificationPins, writer: bool) -> Yaml {
                 if writer {
                     ""
                 } else {
-                    r#" && test "$CACHE_HIT" = 'false'"#
+                    r#" && test "$CACHE_HIT" = 'true'"#
                 }
             )),
         ),
@@ -234,6 +236,7 @@ fn qualification_env(request: &MbxQualificationPins, writer: bool) -> Yaml {
     let home = "${{ github.workspace }}/.velnor-mbx-cache-qualification";
     mapping(&[
         ("MBX_GC_AUTO", "1"),
+        ("MBX_SHARE_OUT_DIR", "0"),
         ("ACTIONS_CACHE_MODE", if writer { "write" } else { "read" }),
         ("CARGO_HOME", &format!("{home}/cargo")),
         ("MISE_AUTO_INSTALL", "false"),
