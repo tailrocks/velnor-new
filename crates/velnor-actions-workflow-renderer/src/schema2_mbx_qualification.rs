@@ -51,12 +51,12 @@ pub(super) fn jobs(
     hosted: &RunnerSpec,
 ) -> Result<Vec<(String, Yaml)>, RenderError> {
     request.mise_setup.validate()?;
-    validate_uses(&request.mbx_action_uses)?;
+    validate_uses(&request.candidate_action_uses)?;
     let action_prefix = format!("{MBX_ACTION_NAME}@");
-    if !request.mbx_action_uses.starts_with(&action_prefix) {
+    if !request.candidate_action_uses.starts_with(&action_prefix) {
         return Err(RenderError::BadActionRef(format!(
             "not_mbx_action:{}",
-            request.mbx_action_uses
+            request.candidate_action_uses
         )));
     }
     validate_exact_version(&request.mbx_version, "mbx")?;
@@ -158,13 +158,13 @@ fn mbx_action_step(request: &MbxQualificationPins, writer: bool) -> Yaml {
     let generation = format!(
         "velnor-qualification-mbx-{}-action-{}-run-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}-${{{{ github.sha }}}}",
         request.mbx_version,
-        &request.mbx_action_uses[format!("{MBX_ACTION_NAME}@").len()..]
+        &request.candidate_action_uses[format!("{MBX_ACTION_NAME}@").len()..]
     );
     Yaml::Map(vec![
         ("name".to_owned(), Yaml::str("Restore MBX objects")),
         (
             "uses".to_owned(),
-            Yaml::str(request.mbx_action_uses.clone()),
+            Yaml::str(request.candidate_action_uses.clone()),
         ),
         ("id".to_owned(), Yaml::str("mbx_cache")),
         (

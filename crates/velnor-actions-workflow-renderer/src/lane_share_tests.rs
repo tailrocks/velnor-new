@@ -22,6 +22,7 @@ pub(super) fn ctx() -> RenderContext {
         validator_commands: Vec::new(),
         candidate: None,
         preseed: false,
+        verification_tasks: Vec::new(),
         plan_consumer_env: BTreeMap::new(),
     }
 }
@@ -95,25 +96,13 @@ fn checkout() -> Step {
 
 pub(super) fn render_jobs(
     ir: &WorkflowIr,
-    jobs: &BTreeMap<String, Job>,
+    shared: &super::LaneShare,
     ctx: &RenderContext,
-    calls: &BTreeMap<String, String>,
-    checkouts: &BTreeMap<String, Step>,
-    env_steps: &BTreeMap<String, Vec<Step>>,
-    prefixes: &BTreeMap<String, Vec<Step>>,
-    preludes: &BTreeMap<String, Vec<Step>>,
-    postludes: &BTreeMap<String, Vec<Step>>,
 ) -> Result<String, crate::RenderError> {
     let document = crate::document::workflow_to_yaml(
         ir,
-        jobs,
+        shared,
         ctx,
-        calls,
-        checkouts,
-        env_steps,
-        prefixes,
-        preludes,
-        postludes,
         &std::collections::BTreeSet::new(),
         &std::collections::BTreeSet::new(),
     )?;
@@ -231,18 +220,7 @@ fn matching_lane_checkout_inputs_are_carried_outside_the_composite() {
         .find(|file| file.path == ".github/actions/rust-0/action.yml")
         .expect("composite");
     assert!(!action.bytes.contains("Checkout"));
-    let yaml = render_jobs(
-        &workflow_ir(),
-        &shared.jobs,
-        &ctx(),
-        &shared.calls,
-        &shared.checkouts,
-        &shared.env_steps,
-        &shared.prefixes,
-        &shared.preludes,
-        &shared.postludes,
-    )
-    .expect("yaml");
+    let yaml = render_jobs(&workflow_ir(), &shared, &ctx()).expect("yaml");
     assert!(yaml.contains("fetch-depth:"));
 }
 
@@ -314,18 +292,7 @@ fn elected_save_stays_on_the_winner_job() {
         .find(|file| file.path == ".github/actions/rust-0/action.yml")
         .expect("composite");
     assert!(!action.bytes.contains("Save Mise tools"));
-    let yaml = render_jobs(
-        &workflow_ir(),
-        &shared.jobs,
-        &ctx(),
-        &shared.calls,
-        &shared.checkouts,
-        &shared.env_steps,
-        &shared.prefixes,
-        &shared.preludes,
-        &shared.postludes,
-    )
-    .expect("yaml");
+    let yaml = render_jobs(&workflow_ir(), &shared, &ctx()).expect("yaml");
     assert_eq!(yaml.matches("Save Mise tools").count(), 1);
     let checkout_at = yaml.find("name: Checkout").expect("checkout");
     let call_at = yaml.find("uses: ./.github/actions/rust-0").expect("call");

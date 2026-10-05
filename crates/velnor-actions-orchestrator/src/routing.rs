@@ -136,7 +136,7 @@ fn workflow_request(
         let tool_catalog = velnor_actions_mise::ToolCatalog::pinned();
         Some(MbxQualificationPins {
             mise_setup: crate::pins::resolve_mise_setup(config, &hosted)?,
-            mbx_action_uses: mbx_action.uses_value(),
+            candidate_action_uses: mbx_action.uses_value(),
             mbx_version: tool_catalog
                 .version(velnor_actions_mise::PinnedTool::MrBoxington)
                 .to_owned(),

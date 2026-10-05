@@ -22,18 +22,17 @@ fn shared_lanes_keep_ci_under_github_file_cap() {
     let jobs = paired(&steps);
     let ir = workflow_ir();
     let context = ctx();
-    let unshared = render_jobs(
-        &ir,
-        &jobs,
-        &context,
-        &BTreeMap::new(),
-        &BTreeMap::new(),
-        &BTreeMap::new(),
-        &BTreeMap::new(),
-        &BTreeMap::new(),
-        &BTreeMap::new(),
-    )
-    .expect("unshared");
+    let unshared_lanes = super::LaneShare {
+        jobs: jobs.clone(),
+        calls: BTreeMap::new(),
+        checkouts: BTreeMap::new(),
+        env_steps: BTreeMap::new(),
+        prefixes: BTreeMap::new(),
+        preludes: BTreeMap::new(),
+        postludes: BTreeMap::new(),
+        files: Vec::new(),
+    };
+    let unshared = render_jobs(&ir, &unshared_lanes, &context).expect("unshared");
     assert!(
         unshared.len() > CAP,
         "unshared render has {} bytes",
@@ -41,18 +40,7 @@ fn shared_lanes_keep_ci_under_github_file_cap() {
     );
 
     let shared = share_lanes(&jobs, &context).expect("share");
-    let yaml = render_jobs(
-        &ir,
-        &shared.jobs,
-        &context,
-        &shared.calls,
-        &shared.checkouts,
-        &shared.env_steps,
-        &shared.prefixes,
-        &shared.preludes,
-        &shared.postludes,
-    )
-    .expect("shared");
+    let yaml = render_jobs(&ir, &shared, &context).expect("shared");
     assert!(yaml.len() <= CAP, "shared ci.yml has {} bytes", yaml.len());
     assert!(!yaml.contains(&payload));
     assert!(yaml.contains("runs-on: ubuntu-26.04"));

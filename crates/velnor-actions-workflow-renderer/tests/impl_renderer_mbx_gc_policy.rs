@@ -8,7 +8,7 @@ use velnor_actions_workflow_renderer::{RenderError, render_workflow_ir};
 
 use super::impl_renderer_fixtures::*;
 
-/// Hosted Linux MBX jobs disable collection and every MBX job disables OUT_DIR sharing.
+/// Hosted Linux MBX jobs disable collection and every MBX job disables `OUT_DIR` sharing.
 #[test]
 fn action_step_env_renders_only_when_present() -> Result<(), RenderError> {
     let uses = format!("jdx/mr-boxington-action@{}", "a".repeat(40));
@@ -84,7 +84,7 @@ fn action_step_env_renders_only_when_present() -> Result<(), RenderError> {
     Ok(())
 }
 
-/// Hosted Linux disables automatic GC; both typed lanes disable shared OUT_DIR.
+/// Hosted Linux disables automatic GC; both typed lanes disable shared `OUT_DIR`.
 #[test]
 fn mbx_gc_policy_uses_typed_lane_and_share_out_policy_covers_both_lanes() -> Result<(), RenderError>
 {

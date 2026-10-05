@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex};
 
 use crate::launch::drive_offer;
 use crate::launch_harness::{CANARY, Mode, Script, absent, assigned_wait, ctx, open};
+use crate::launch_test_support::valid_worker_volume;
 use crate::{EnsureError, HostError, IntentState, Outcome, Started};
 
 #[tokio::test]
@@ -20,7 +21,7 @@ async fn scale_mints_jit_then_acks_without_acquire() -> Result<(), String> {
         &ctx(),
         &assigned_wait(7, 1),
         &journal,
-        |name, jit| {
+        |name, jit, _bind| {
             let name = name.to_owned();
             let jit = jit.to_vec();
             let seen = Arc::clone(&seen);
@@ -44,7 +45,7 @@ async fn scale_mints_jit_then_acks_without_acquire() -> Result<(), String> {
     assert_eq!(script.calls, ["jit", "ack"]);
     {
         let slot = volume.lock().map_err(|err| err.to_string())?;
-        assert_eq!(slot.as_str(), "m7");
+        assert!(valid_worker_volume(slot.as_str()));
     }
     let rows = journal.rows().await.map_err(|err| err.to_string())?;
     assert_eq!(rows.len(), 1);
@@ -64,7 +65,7 @@ async fn scale_jit_failure_is_not_acked() -> Result<(), String> {
         &ctx(),
         &assigned_wait(7, 1),
         &journal,
-        |_name, _jit| async { Err(HostError::Docker) },
+        |_name, _jit, _bind| async { Err(HostError::Docker) },
     )
     .await;
     assert_eq!(
@@ -92,7 +93,7 @@ async fn finished_scale_row_does_not_block_the_next_message() -> Result<(), Stri
         &ctx(),
         &assigned_wait(7, 1),
         &journal,
-        |_name, _jit| async {
+        |_name, _jit, _bind| async {
             Ok(Started {
                 dind_id: "dind-1".to_owned(),
                 runner_id: "runner-1".to_owned(),
@@ -114,7 +115,7 @@ async fn finished_scale_row_does_not_block_the_next_message() -> Result<(), Stri
         &ctx(),
         &assigned_wait(8, 1),
         &journal,
-        |_name, _jit| async {
+        |_name, _jit, _bind| async {
             Ok(Started {
                 dind_id: "dind-2".to_owned(),
                 runner_id: "runner-2".to_owned(),
@@ -145,7 +146,7 @@ async fn redelivered_scale_row_does_not_count_as_a_worker() -> Result<(), String
         &ctx(),
         &assigned_wait(7, 1),
         &journal,
-        |_name, _jit| async {
+        |_name, _jit, _bind| async {
             Ok(Started {
                 dind_id: "dind-1".to_owned(),
                 runner_id: "runner-1".to_owned(),
@@ -167,7 +168,7 @@ async fn redelivered_scale_row_does_not_count_as_a_worker() -> Result<(), String
         &ctx(),
         &assigned_wait(7, 1),
         &journal,
-        |_name, _jit| async { Err(HostError::Docker) },
+        |_name, _jit, _bind| async { Err(HostError::Docker) },
     )
     .await
     .map_err(|err| err.to_string())?;
@@ -205,7 +206,7 @@ async fn a_new_statistics_subject_does_not_reuse_a_bound_uncertain_row() -> Resu
         &ctx(),
         &assigned_wait(8, 1),
         &journal,
-        |_name, _jit| async {
+        |_name, _jit, _bind| async {
             Ok(Started {
                 dind_id: "dind-new".to_owned(),
                 runner_id: "runner-new".to_owned(),
@@ -252,7 +253,7 @@ async fn a_failed_new_statistics_subject_does_not_ack_or_change_a_pending_row() 
         &ctx(),
         &assigned_wait(8, 1),
         &journal,
-        |_name, _jit| async { Err(HostError::Docker) },
+        |_name, _jit, _bind| async { Err(HostError::Docker) },
     )
     .await;
 

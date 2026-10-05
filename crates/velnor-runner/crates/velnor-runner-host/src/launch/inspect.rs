@@ -3,13 +3,17 @@
 use bollard::Docker;
 use bollard::errors::Error as DockerError;
 
+use crate::docker_client::docker_deadline;
 use crate::scale_set::EnsureError;
 
-pub(super) async fn container_running(docker: &Docker, id: &str) -> Result<bool, EnsureError> {
-    classify_inspect(docker.inspect_container(id, None).await)
+pub(crate) async fn container_running(docker: &Docker, id: &str) -> Result<bool, EnsureError> {
+    let response = docker_deadline(docker.inspect_container(id, None))
+        .await
+        .map_err(|_| inspect_error(0))?;
+    classify_inspect(response)
 }
 
-fn classify_inspect(
+pub(crate) fn classify_inspect(
     response: Result<bollard::models::ContainerInspectResponse, DockerError>,
 ) -> Result<bool, EnsureError> {
     match response {

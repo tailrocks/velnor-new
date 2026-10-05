@@ -143,7 +143,7 @@ fn configure_runner_scoped_cache(job: &mut Job) -> Result<bool, RenderError> {
         with.remove("cache-key");
         with.remove("restore-keys");
         env.remove(MBX_CACHE_MODE_ENV);
-        step.name = MBX_LOCAL_SETUP_NAME.to_owned();
+        MBX_LOCAL_SETUP_NAME.clone_into(&mut step.name);
     } else {
         with.insert("backend".to_owned(), "github".to_owned());
         with.insert(

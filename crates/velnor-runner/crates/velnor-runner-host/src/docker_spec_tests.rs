@@ -8,6 +8,7 @@ use crate::{
 
 fn base_plan() -> ContainerPlan {
     ContainerPlan {
+        name: "worker-runner".to_owned(),
         privileged: false,
         platform: "linux/amd64".to_owned(),
         image: "velnor-runner:ubuntu-26.04-2.337.0".to_owned(),

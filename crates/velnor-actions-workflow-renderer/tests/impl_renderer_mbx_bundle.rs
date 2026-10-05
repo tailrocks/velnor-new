@@ -61,8 +61,7 @@ fn hosted_jobs_keep_the_action_owned_object_cache() -> Result<(), RenderError> {
     let action_start = text.find("name: Restore MBX objects").expect("restore");
     let action_end = text[action_start..]
         .find("\n      - name:")
-        .map(|offset| action_start + offset)
-        .unwrap_or(text.len());
+        .map_or(text.len(), |offset| action_start + offset);
     let action = &text[action_start..action_end];
     assert!(action.contains("backend: github"), "{action}");
     assert!(action.contains("github-cache-mode: objects"), "{action}");
@@ -146,7 +145,15 @@ fn scale_set_owns_key_group_restore_import_export_and_save() -> Result<(), Rende
         "Scale Set keeps MBX GC enabled: {text}"
     );
 
-    let key_step = &text[key..restore];
+    assert_scale_set_key(&text[key..restore]);
+    assert_scale_set_restore(&text[bundle..import]);
+    assert_cold_import(&text[import..export]);
+    assert_scale_set_export(&text[export..save]);
+    assert_scale_set_save(&text[save..]);
+    Ok(())
+}
+
+fn assert_scale_set_key(key_step: &str) {
     for needle in [
         "rustc",
         "RUST_TOOLCHAIN",
@@ -166,7 +173,9 @@ fn scale_set_owns_key_group_restore_import_export_and_save() -> Result<(), Rende
         !key_step.contains("$("),
         "command substitution is forbidden: {key_step}"
     );
-    let restored = &text[bundle..import];
+}
+
+fn assert_scale_set_restore(restored: &str) {
     assert!(restored.contains("actions/cache/restore@"), "{restored}");
     assert!(
         restored.contains("key: ${{ steps.mbx-cache-key.outputs.key }}"),
@@ -176,22 +185,28 @@ fn scale_set_owns_key_group_restore_import_export_and_save() -> Result<(), Rende
         restored.contains("restore-keys: ${{ steps.mbx-cache-key.outputs.prefix }}"),
         "{restored}"
     );
-    assert_cold_import(&text[import..export]);
+}
 
-    let script = &text[export..save];
-    let gc = script.find("mbx gc").expect("GC before export");
-    let exported = script.find("cache export").expect("bundle export");
-    let durable = script.find("test -d").expect("bundle check");
-    let deleted = script.find(r#"rm -rf \"$store\""#).expect("store cleanup");
+fn assert_scale_set_export(script: &str) {
     assert!(
-        gc < exported && exported < durable && durable < deleted,
-        "{script}"
+        matches!(
+            (
+                script.find("mbx gc"),
+                script.find("cache export"),
+                script.find("test -d"),
+                script.find(r#"rm -rf \"$store\""#),
+            ),
+            (Some(gc), Some(exported), Some(durable), Some(deleted))
+                if gc < exported && exported < durable && durable < deleted
+        ),
+        "GC, export, bundle check, and store cleanup must be ordered: {script}"
     );
     assert!(script.contains("df -B1 -P"), "{script}");
     assert!(script.contains("df -i -P"), "{script}");
     assert_eq!(script.matches("--format directory").count(), 1, "{script}");
+}
 
-    let saved = &text[save..];
+fn assert_scale_set_save(saved: &str) {
     assert!(
         saved.contains("key: ${{ steps.mbx-cache-key.outputs.key }}"),
         "{saved}"
@@ -205,7 +220,6 @@ fn scale_set_owns_key_group_restore_import_export_and_save() -> Result<(), Rende
         saved.contains("github.ref_protected == true"),
         "unprotected push cannot save: {saved}"
     );
-    Ok(())
 }
 
 #[test]
@@ -257,41 +271,39 @@ fn both_mode_shares_tasks_after_typed_cache_preludes() -> Result<(), RenderError
         "{text}"
     );
 
-    let hosted_at = text.find("rust-demo__hosted:").expect("hosted lane");
-    let local_at = text.find("rust-demo__local:").expect("Scale Set lane");
+    assert_shared_lane_routes(&text);
+    Ok(())
+}
+
+fn assert_shared_lane_routes(text: &str) {
+    let hosted_at = must_find(text, "rust-demo__hosted:");
+    let local_at = must_find(text, "rust-demo__local:");
     let hosted = &text[hosted_at..local_at];
     let local = &text[local_at..];
     assert!(hosted.contains("backend: github"), "{hosted}");
     assert!(local.contains("backend: local"), "{local}");
     assert!(!local.contains("ACTIONS_CACHE_MODE"), "{local}");
     assert!(!local.contains("cache-primary-key"), "{local}");
-
-    let local_key = local
-        .find("name: Prepare MBX cache identity")
-        .expect("local cache identity");
-    let local_action = local
-        .find("name: Prepare MBX local cache store")
-        .expect("local action");
-    let local_bundle = local
-        .find("name: Restore MBX single bundle")
-        .expect("bundle restore");
-    let local_call = local
-        .find("uses: ./.github/actions/rust-demo")
-        .expect("shared task action");
-    let local_export = local
-        .find("name: Export MBX single bundle")
-        .expect("bundle export");
+    let local_key = must_find(local, "name: Prepare MBX cache identity");
+    let local_action = must_find(local, "name: Prepare MBX local cache store");
+    let local_bundle = must_find(local, "name: Restore MBX single bundle");
+    let local_call = must_find(local, "uses: ./.github/actions/rust-demo");
+    let local_export = must_find(local, "name: Export MBX single bundle");
     assert!(
-        local_key < local_action && local_action < local_bundle && local_bundle < local_call,
+        local_key < local_action && local_action < local_bundle,
         "{local}"
     );
-    assert!(local_call < local_export, "{local}");
-    let hosted_action = hosted
-        .find("name: Restore MBX objects")
-        .expect("hosted action");
-    let hosted_call = hosted
-        .find("uses: ./.github/actions/rust-demo")
-        .expect("shared task action");
+    assert!(
+        local_bundle < local_call && local_call < local_export,
+        "{local}"
+    );
+    let hosted_action = must_find(hosted, "name: Restore MBX objects");
+    let hosted_call = must_find(hosted, "uses: ./.github/actions/rust-demo");
     assert!(hosted_action < hosted_call, "{hosted}");
-    Ok(())
+}
+
+fn must_find(text: &str, needle: &str) -> usize {
+    let found = text.find(needle);
+    assert!(found.is_some(), "{needle} missing from {text}");
+    found.unwrap_or_default()
 }

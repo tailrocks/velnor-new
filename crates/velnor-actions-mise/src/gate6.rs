@@ -5,7 +5,7 @@
 //! qualification fixtures. Both gates live here so callers cannot reach
 //! the invocation shapes or the renderer without passing them.
 
-use velnor_actions_contract::is_valid_custom_task_name;
+use velnor_actions_contract::is_valid_mise_task_name;
 
 use crate::cache::{
     QualifiedTaskDef, TaskCacheMode, qualify_reuse, render_task_toml, task_run_argv,
@@ -66,7 +66,7 @@ impl CustomTaskGrant {
         if !opt_in {
             return Err(Self::refused(task, "custom_task_opt_in_required"));
         }
-        if !is_valid_custom_task_name(task) {
+        if !is_valid_mise_task_name(task) {
             return Err(Self::refused(task, "custom_task_bad_name"));
         }
         if inputs.iter().any(|input| input.trim().is_empty()) {

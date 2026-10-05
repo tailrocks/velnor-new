@@ -1,8 +1,26 @@
 //! Security assertions for the protected-main MBX cache round trip.
 
+use velnor_actions_actionlint::actions::{
+    MR_BOXINGTON_ACTION_CANDIDATE_SHA, MR_BOXINGTON_ACTION_SHA,
+};
 use velnor_actions_orchestrator::{prepare, render_staged_tree};
 
 use crate::impl_common::{TestResult, make_repo};
+
+fn assert_candidate_ref(writer: &str) {
+    assert!(
+        writer.contains(&format!(
+            "uses: jdx/mr-boxington-action@{MR_BOXINGTON_ACTION_CANDIDATE_SHA}"
+        )),
+        "the experiment must invoke its exact immutable candidate"
+    );
+    assert!(
+        !writer.contains(&format!(
+            "uses: jdx/mr-boxington-action@{MR_BOXINGTON_ACTION_SHA}"
+        )),
+        "qualification must not silently substitute the production pin"
+    );
+}
 
 #[test]
 fn protected_main_mbx_roundtrip_is_run_bound_and_read_only_on_restore() -> TestResult {
@@ -12,6 +30,7 @@ fn protected_main_mbx_roundtrip_is_run_bound_and_read_only_on_restore() -> TestR
         crate::impl_schema2_routing::required_file(&tree, ".github/workflows/qualification.yml")?;
 
     let writer = crate::impl_schema2_routing::job_body(qualification, "mbx-cache-write-hosted")?;
+    assert_candidate_ref(writer);
     assert!(
         writer.contains("inputs.mode == 'mbx-cache-roundtrip' && github.ref == 'refs/heads/main' && github.ref_protected == true"),
         "{writer}"

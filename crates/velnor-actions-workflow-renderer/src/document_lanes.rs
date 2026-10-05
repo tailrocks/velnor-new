@@ -10,6 +10,7 @@ use crate::yaml::Yaml;
 
 pub(crate) struct SharedLaneSteps<'a> {
     pub checkouts: &'a BTreeMap<String, Step>,
+    pub env_steps: &'a BTreeMap<String, Vec<Step>>,
     pub prefixes: &'a BTreeMap<String, Vec<Step>>,
     pub preludes: &'a BTreeMap<String, Vec<Step>>,
     pub postludes: &'a BTreeMap<String, Vec<Step>>,
