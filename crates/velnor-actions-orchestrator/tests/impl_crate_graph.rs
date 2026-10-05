@@ -10,7 +10,7 @@ use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_orchestrator::{prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
-use super::impl_common::{TestResult, config_with_branch, make_repo};
+use super::impl_common::{TestResult, config_with_branch, make_repo, without_ambient_identity};
 
 /// Staged workflow text for one config; temp keeps the dir alive.
 fn preview_yaml(config: &str) -> Result<(TempDir, String), Box<dyn std::error::Error>> {
@@ -123,8 +123,16 @@ fn w1_crate_prepare_adds_mbx_driver() -> TestResult {
     let task = window(yaml, "  rust-demo:", "  required:")?;
     let catalog = ToolCatalog::pinned();
     assert!(
-        task.contains(&catalog.tool_spec(PinnedTool::MrBoxington)),
-        "mbx spec:\n{task}"
+        !task.contains(&catalog.tool_spec(PinnedTool::MrBoxington)),
+        "the native action, not Mise, owns MBX installation:\n{task}"
+    );
+    assert!(
+        task.contains("uses: jdx/mr-boxington-action@")
+            && task.contains(&format!(
+                "version: {}",
+                catalog.version(PinnedTool::MrBoxington)
+            )),
+        "MBX action uses the exact catalog version:\n{task}"
     );
     assert_eq!(
         task.matches("Restore MBX objects").count(),
@@ -137,6 +145,59 @@ fn w1_crate_prepare_adds_mbx_driver() -> TestResult {
         "{task}"
     );
     Ok(())
+}
+
+#[test]
+fn nested_mbx_nextest_fixture_uses_action_without_mise_selector() -> TestResult {
+    without_ambient_identity(
+        "nested_mbx_nextest_fixture_uses_action_without_mise_selector",
+        || {
+            let repo = make_repo(config_with_branch())?;
+            let root = repo.path();
+            let fixture =
+                std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/mbx-nextest");
+            for path in [
+                "Cargo.toml",
+                "mise.toml",
+                ".mise/tasks/test",
+                "crates/app/Cargo.toml",
+                "crates/app/src/lib.rs",
+            ] {
+                let source = fixture.join(path);
+                let destination = root.join(path);
+                fs::create_dir_all(destination.parent().ok_or("fixture destination parent")?)?;
+                fs::copy(source, destination)?;
+            }
+
+            let prep = prepare(root)?;
+            let tree = render_staged_tree(&prep)?;
+            let yaml = tree.get(WORKFLOW_PATH).ok_or("missing workflow")?;
+            let job = window(yaml, "  rust-app:", "  required:")?;
+            let catalog = ToolCatalog::pinned();
+            let mbx_selector = catalog.tool_spec(PinnedTool::MrBoxington);
+            assert!(
+                job.contains("mbx nextest run --profile default --locked"),
+                "nested fixture keeps its Nextest obligation:\n{job}"
+            );
+            assert_eq!(
+                job.matches("uses: jdx/mr-boxington-action@").count(),
+                1,
+                "native action supplies MBX exactly once:\n{job}"
+            );
+            assert!(
+                job.contains(&format!(
+                    "version: {}",
+                    catalog.version(PinnedTool::MrBoxington)
+                )),
+                "the native action receives the selected catalog version:\n{job}"
+            );
+            assert!(
+                !job.contains(&mbx_selector),
+                "Mise must not install an action-owned MBX selector:\n{job}"
+            );
+            Ok(())
+        },
+    )
 }
 
 #[test]

@@ -277,7 +277,6 @@ fn render_job(
     steps.push(crate::matrix_step::prepare_crate_tools_step(
         catalog,
         use_rust,
-        use_mbx,
         use_nextest,
         use_opentofu || suite_tools.opentofu,
         suite_tools.generate_validators,

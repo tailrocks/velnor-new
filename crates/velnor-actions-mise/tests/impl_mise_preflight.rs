@@ -1,6 +1,6 @@
-//! Preflight route-proof cases.
+//! Preflight route-selection cases.
 use std::ffi::OsString;
-use velnor_actions_mise::{MiseError, RouteDriver, ToolCatalog, prove_route};
+use velnor_actions_mise::{MiseError, RouteDriver, ToolCatalog, select_route};
 
 fn pinned() -> ToolCatalog {
     ToolCatalog::pinned()
@@ -8,11 +8,12 @@ fn pinned() -> ToolCatalog {
 
 #[test]
 fn cargo_proof_pins_exact_toolchain_without_wrapper() -> Result<(), String> {
-    let proof = prove_route(&pinned(), RouteDriver::Cargo, "cargo-1", "gen-7")
+    let selection = select_route(&pinned(), RouteDriver::Cargo, "cargo-1", "gen-7")
         .map_err(|err| err.to_string())?;
-    assert_eq!(proof.driver(), RouteDriver::Cargo);
-    assert_eq!(proof.specs(), &["rust@1.98.1".to_owned()]);
-    let invocation = proof.invocation(&pinned());
+    assert_eq!(selection.driver(), RouteDriver::Cargo);
+    assert_eq!(selection.identity_specs(), &["rust@1.98.1".to_owned()]);
+    assert_eq!(selection.probe_specs(), &["rust@1.98.1".to_owned()]);
+    let invocation = selection.invocation(&pinned());
     assert_eq!(
         invocation,
         [
@@ -37,22 +38,23 @@ fn cargo_proof_pins_exact_toolchain_without_wrapper() -> Result<(), String> {
         "cargo proof must show no MBX wrapper: {invocation:?}"
     );
     assert!(velnor_actions_contract::is_valid_digest(
-        proof.cache_format_id()
+        selection.cache_format_id()
     ));
     Ok(())
 }
 
 #[test]
-fn mbx_proof_reports_tool_version_and_invocation() -> Result<(), String> {
-    let proof = prove_route(&pinned(), RouteDriver::Mbx, "mbx-obj-3", "gen-9")
+fn mbx_route_separates_action_identity_from_mise_probe() -> Result<(), String> {
+    let selection = select_route(&pinned(), RouteDriver::Mbx, "mbx-obj-3", "gen-9")
         .map_err(|err| err.to_string())?;
-    assert_eq!(proof.driver(), RouteDriver::Mbx);
+    assert_eq!(selection.driver(), RouteDriver::Mbx);
     assert_eq!(
-        proof.specs(),
+        selection.identity_specs(),
         &["rust@1.98.1".to_owned(), "mr-boxington@1.21.1".to_owned()]
     );
-    let invocation = proof.invocation(&pinned());
-    assert!(invocation.iter().any(|arg| arg == "mr-boxington@1.21.1"));
+    assert_eq!(selection.probe_specs(), &["rust@1.98.1".to_owned()]);
+    let invocation = selection.invocation(&pinned());
+    assert!(!invocation.iter().any(|arg| arg == "mr-boxington@1.21.1"));
     assert_eq!(
         invocation.last(),
         Some(&OsString::from("--version")),
@@ -60,7 +62,7 @@ fn mbx_proof_reports_tool_version_and_invocation() -> Result<(), String> {
     );
     assert_eq!(invocation[0], OsString::from("mise"));
     assert!(velnor_actions_contract::is_valid_digest(
-        proof.cache_format_id()
+        selection.cache_format_id()
     ));
     Ok(())
 }
@@ -68,27 +70,27 @@ fn mbx_proof_reports_tool_version_and_invocation() -> Result<(), String> {
 #[test]
 fn unreportable_format_fails_without_guessing() {
     for (format, generation) in [("", "gen-9"), ("mbx-obj-3", ""), ("", "")] {
-        let err = prove_route(&pinned(), RouteDriver::Mbx, format, generation)
+        let err = select_route(&pinned(), RouteDriver::Mbx, format, generation)
             .expect_err("unreportable MBX format must fail");
         assert!(
             err.to_string().contains("format_unreportable"),
             "precise miss reason: {err}"
         );
     }
-    let err = prove_route(&pinned(), RouteDriver::Cargo, "", "gen-7")
+    let err = select_route(&pinned(), RouteDriver::Cargo, "", "gen-7")
         .expect_err("unreportable cargo format must fail");
     assert!(err.to_string().contains("format_unreportable"));
     assert!(matches!(err, MiseError::Contract { .. }));
 }
 
 #[test]
-fn route_proofs_are_deterministic() -> Result<(), String> {
-    let first = prove_route(&pinned(), RouteDriver::Mbx, "mbx-obj-3", "gen-9")
+fn route_selections_are_deterministic() -> Result<(), String> {
+    let first = select_route(&pinned(), RouteDriver::Mbx, "mbx-obj-3", "gen-9")
         .map_err(|err| err.to_string())?;
-    let second = prove_route(&pinned(), RouteDriver::Mbx, "mbx-obj-3", "gen-9")
+    let second = select_route(&pinned(), RouteDriver::Mbx, "mbx-obj-3", "gen-9")
         .map_err(|err| err.to_string())?;
     assert_eq!(first, second);
-    let other = prove_route(&pinned(), RouteDriver::Mbx, "mbx-obj-4", "gen-9")
+    let other = select_route(&pinned(), RouteDriver::Mbx, "mbx-obj-4", "gen-9")
         .map_err(|err| err.to_string())?;
     assert_ne!(first.cache_format_id(), other.cache_format_id());
     Ok(())
@@ -96,10 +98,12 @@ fn route_proofs_are_deterministic() -> Result<(), String> {
 
 #[test]
 fn proof_command_matches_invocation() -> Result<(), String> {
-    let proof = prove_route(&pinned(), RouteDriver::Cargo, "cargo-1", "gen-7")
+    let selection = select_route(&pinned(), RouteDriver::Cargo, "cargo-1", "gen-7")
         .map_err(|err| err.to_string())?;
-    let command = proof.command(&pinned()).map_err(|err| err.to_string())?;
-    assert_eq!(command.argv(), proof.invocation(&pinned()));
+    let command = selection
+        .command(&pinned())
+        .map_err(|err| err.to_string())?;
+    assert_eq!(command.argv(), selection.invocation(&pinned()));
     assert_eq!(command.program(), "mise");
     Ok(())
 }
