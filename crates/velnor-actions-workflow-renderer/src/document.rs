@@ -1,6 +1,6 @@
 //! Workflow-IR to YAML document builders.
 //!
-//! Fixed key order: name, on, permissions, concurrency, jobs.
+//! Fixed key order: name, on, permissions, concurrency, env, jobs.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -36,6 +36,7 @@ pub(crate) fn workflow_to_yaml(
         ));
     }
     let needs_env = needs_channel_envs(jobs)?;
+    let workflow_env = crate::toolchain_env::workflow_level_env();
     let mut rendered_jobs = Vec::with_capacity(jobs.len());
     for (id, job) in jobs {
         let call = shared.get(id).map(String::as_str);
@@ -69,6 +70,7 @@ pub(crate) fn workflow_to_yaml(
                 ),
             ]),
         ),
+        ("env".to_owned(), string_map_yaml(&workflow_env)),
         ("jobs".to_owned(), Yaml::Map(rendered_jobs)),
     ]))
 }
@@ -205,6 +207,7 @@ fn job_to_yaml(
     checkouts: &BTreeMap<String, Step>,
     mbx_gc_auto: bool,
 ) -> Result<Yaml, RenderError> {
+    let workflow_env = crate::toolchain_env::workflow_level_env();
     steps::scan_for_private_subcommands(&job.display_name)?;
     let runner = RunsOn::parse(&job.runs_on).map_err(RenderError::Contract)?;
     let scale_set = matches!(&runner, RunsOn::ScaleSet(_));
@@ -216,11 +219,7 @@ fn job_to_yaml(
         StepKind::Shell { env, .. } | StepKind::Action { env, .. } => !env.is_empty(),
         StepKind::Internal { .. } => false,
     });
-    let mut job_env = if step_has_env {
-        crate::toolchain_env::job_level_env()
-    } else {
-        BTreeMap::new()
-    };
+    let mut job_env = BTreeMap::new();
     if step_has_env {
         for step in &job.steps {
             let step_env = match &step.kind {
@@ -253,7 +252,10 @@ fn job_to_yaml(
     }
     let mut entries = job_header_fields(job, runs_on);
     append_job_options(&mut entries, job, scale_set, &job_env)?;
-    let rendered_steps = render_job_steps(id, job, ctx, needs_envs, shared, checkouts, &job_env)?;
+    let mut effective_env = workflow_env.clone();
+    effective_env.extend(job_env.clone());
+    let rendered_steps =
+        render_job_steps(id, job, ctx, needs_envs, shared, checkouts, &effective_env)?;
     entries.push(("steps".to_owned(), Yaml::Seq(rendered_steps)));
     Ok(Yaml::Map(entries))
 }

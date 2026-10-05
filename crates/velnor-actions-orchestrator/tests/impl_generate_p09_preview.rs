@@ -130,7 +130,7 @@ fn rendered_crate_steps_carry_validated_contract() -> TestResult {
         "MISE_AUTO_INSTALL:",
         "MISE_EXEC_AUTO_INSTALL:",
     ] {
-        assert!(task.contains(key), "task misses {key}");
+        assert!(yaml.contains(key), "workflow misses {key}");
     }
     for key in [
         "MISE_GITHUB_TOKEN",
@@ -142,8 +142,8 @@ fn rendered_crate_steps_carry_validated_contract() -> TestResult {
         "CARGO_REGISTRY_TOKEN",
     ] {
         assert!(
-            task.contains(&format!("{key}: \"\"")),
-            "task must scrub {key} empty"
+            yaml.contains(&format!("{key}: \"\"")),
+            "workflow must scrub {key} empty"
         );
     }
     Ok(())
