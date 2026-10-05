@@ -70,12 +70,12 @@
       "checked_at": "2026-10-04T11:28:54Z",
       "key": "jdx/mr-boxington-action",
       "latest": "v1.7.1",
-      "pinned_sha": "d0825fbaf3cc36ca2609aa38e71046265a1f1e37",
-      "pinned_version": "v1.7.1",
-      "qualified_sha": "d0825fbaf3cc36ca2609aa38e71046265a1f1e37",
-      "qualified_version": "v1.7.1",
+      "pinned_sha": "1687e54eb349cadf61fa38b5813a77875489e8e6",
+      "pinned_version": "v1.6.0",
+      "qualified_sha": "1687e54eb349cadf61fa38b5813a77875489e8e6",
+      "qualified_version": "v1.6.0",
       "source": "https://api.github.com/repos/jdx/mr-boxington-action/releases",
-      "status": "current",
+      "status": "held",
       "latest_sha": "d0825fbaf3cc36ca2609aa38e71046265a1f1e37"
     },
     {
@@ -135,6 +135,15 @@
       "key": "jdx/mise-action",
       "owner": "@donbeave",
       "reason": "upstream moved mid-consolidation; VER-3.2 update set tracked in #6, rust bump needs maintainer qualification decision"
+    },
+    {
+      "expires": "2026-10-18",
+      "granted": "2026-10-04",
+      "held_version": "v1.6.0",
+      "issue": "#29",
+      "key": "jdx/mr-boxington-action",
+      "owner": "@donbeave",
+      "reason": "latest stable v1.7.1 resolves to released commit d0825fbaf3cc36ca2609aa38e71046265a1f1e37; the protected-main roundtrip workflow may target that exact SHA only as an unqualified experiment; #29 separately qualifies candidate ec3ebbfbc1fdaffa59d476e87e4f386fdc60d533, which is not that release; retain the qualified v1.6.0 production pin until the exact released source passes cache lifecycle, disk, input, and cleanup qualification"
     },
     {
       "expires": "2026-10-17",
