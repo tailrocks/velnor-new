@@ -262,10 +262,13 @@ fn zizmor_support_unsets_empty_tokens_after_pinned_install() -> Result<(), Rende
         "GH_TOKEN must be unset"
     );
     assert!(zizmor_job[execute..].contains("exec zizmor@1.30.1 -- zizmor"));
-    assert!(
-        zizmor_job.contains("GH_TOKEN: \"\""),
-        "empty scrub overlay remains"
-    );
+    let workflow_env = text
+        .split_once("\nenv:\n")
+        .and_then(|(_, rest)| rest.split_once("\nconcurrency:"))
+        .map(|(env, _)| env)
+        .ok_or_else(|| RenderError::InvalidWorkflow("missing_workflow_env".to_owned()))?;
+    assert!(workflow_env.contains("GH_TOKEN: \"\""));
+    assert!(!zizmor_job.contains("GH_TOKEN: \"\""));
     Ok(())
 }
 
@@ -351,9 +354,15 @@ fn zizmor_preparation_keeps_job_env_and_exec_unsets_it() -> Result<(), RenderErr
             .contains("env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN"),
         "validator command must remove inherited token environment:\n{zizmor}"
     );
+    let workflow_env = text
+        .split_once("\nenv:\n")
+        .and_then(|(_, rest)| rest.split_once("\nconcurrency:"))
+        .map(|(env, _)| env)
+        .ok_or_else(|| RenderError::InvalidWorkflow("missing_workflow_env".to_owned()))?;
     assert!(
-        zizmor.contains("GH_TOKEN: \"\""),
-        "scrubbed environment must be rendered:\n{zizmor}"
+        workflow_env.contains("GH_TOKEN: \"\""),
+        "scrubbed environment must be rendered at workflow scope:\n{workflow_env}"
     );
+    assert!(!zizmor.contains("GH_TOKEN: \"\""));
     Ok(())
 }
