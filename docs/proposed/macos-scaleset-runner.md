@@ -122,7 +122,11 @@ and GitHub state before advertising capacity, and adopts still-running owned
 workers. Pending or uncertain rows lack enough durable stage and remote-operation
 identity to settle an interrupted acquire or JIT request from Docker state alone;
 retain their slot and owned volumes until an authoritative settlement mechanism
-exists. An engine identity change stops automatic mutation.
+exists. On first open, the journal migrates every version-zero failed launch row
+to uncertain and clears its local cleanup flag: the old schema cannot distinguish
+a rejected request from a remote effect with an unusable response. This may
+conservatively retain an old definite rejection. Unknown journal versions fail
+closed. An engine identity change stops automatic mutation.
 
 Disabled runner self-update is a registration invariant. Do not patch the
 official runner. Do not spoof `/proc` to bypass `AssertCompatibleOS`.

@@ -265,7 +265,8 @@ impl Journal {
         )
         .await
         .map_err(|_| HostError::Journal)?;
-        schema::ensure_columns(&conn).await
+        schema::ensure_columns(&conn).await?;
+        schema::migrate_legacy_launch_failures(&conn).await
     }
 
     async fn connection(&self) -> Result<turso::Connection, HostError> {
