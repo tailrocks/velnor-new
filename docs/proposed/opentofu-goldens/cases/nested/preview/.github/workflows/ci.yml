@@ -13,6 +13,24 @@ name: CI
   merge_group:
 permissions:
   contents: read
+env:
+  ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
+  ACTIONS_ID_TOKEN_REQUEST_URL: ""
+  ACTIONS_RUNTIME_TOKEN: ""
+  CARGO_REGISTRY_TOKEN: ""
+  GH_CONFIG_DIR: ""
+  GH_HOST: ""
+  GH_TOKEN: ""
+  GITHUB_TOKEN: ""
+  MISE_AUTO_INSTALL: "false"
+  MISE_EXEC_AUTO_INSTALL: "false"
+  MISE_GITHUB_TOKEN: ""
+  MISE_LOCKFILE: "0"
+  MISE_NO_CONFIG: "1"
+  MISE_NO_ENV: "1"
+  MISE_NO_HOOKS: "1"
+  NODE_AUTH_TOKEN: ""
+  NPM_TOKEN: ""
 concurrency:
   group: velnor-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -21,34 +39,15 @@ jobs:
     name: Actionlint
     runs-on: ubuntu-26.04
     timeout-minutes: 10
-    env:
-      ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-      ACTIONS_ID_TOKEN_REQUEST_URL: ""
-      ACTIONS_RUNTIME_TOKEN: ""
-      CARGO_REGISTRY_TOKEN: ""
-      GH_CONFIG_DIR: ""
-      GH_HOST: ""
-      GH_TOKEN: ""
-      GITHUB_TOKEN: ""
-      MISE_AUTO_INSTALL: "false"
-      MISE_EXEC_AUTO_INSTALL: "false"
-      MISE_GITHUB_TOKEN: ""
-      MISE_LOCKFILE: "0"
-      MISE_NO_CONFIG: "1"
-      MISE_NO_ENV: "1"
-      MISE_NO_HOOKS: "1"
-      NODE_AUTH_TOKEN: ""
-      NPM_TOKEN: ""
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
       - name: Restore Velnor tool seed
-        if: github.event_name != 'workflow_dispatch'
         uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
         with:
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-75c77caa4018556f
+          cache_key: ${{ github.event_name != 'workflow_dispatch' && 'mise-v1-x86_64-unknown-linux-gnu-2026.9.18-75c77caa4018556f' || '' }}
       - name: V2 identity
         id: v2
         uses: ./.github/actions/u26 # zizmor: ignore[self-repository]
@@ -75,7 +74,7 @@ jobs:
       - name: Run actionlint
         run: env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR mise --no-config --no-env --no-hooks exec actionlint@1.7.12 shellcheck@0.11.0 -- actionlint -color
       - name: Save Mise tools
-        if: (success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true') && github.event_name != 'workflow_dispatch'
+        if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           key: mise-tools-v2-97190eef167066fff58bef17bf9186ae7514e35f27bbc39417666efed2076810-${{steps.v2.outputs.identity}}
@@ -85,23 +84,6 @@ jobs:
     runs-on: ubuntu-26.04
     timeout-minutes: 10
     env:
-      ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-      ACTIONS_ID_TOKEN_REQUEST_URL: ""
-      ACTIONS_RUNTIME_TOKEN: ""
-      CARGO_REGISTRY_TOKEN: ""
-      GH_CONFIG_DIR: ""
-      GH_HOST: ""
-      GH_TOKEN: ""
-      GITHUB_TOKEN: ""
-      MISE_AUTO_INSTALL: "false"
-      MISE_EXEC_AUTO_INSTALL: "false"
-      MISE_GITHUB_TOKEN: ""
-      MISE_LOCKFILE: "0"
-      MISE_NO_CONFIG: "1"
-      MISE_NO_ENV: "1"
-      MISE_NO_HOOKS: "1"
-      NODE_AUTH_TOKEN: ""
-      NPM_TOKEN: ""
       RUSTUP_TOOLCHAIN: 1.98.1
       VELNOR_ASSET_SHA256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
       VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.0/velnor-actions-0.1.0-x86_64-unknown-linux-gnu
@@ -120,10 +102,9 @@ jobs:
           fetch-depth: "0"
           persist-credentials: "false"
       - name: Restore Velnor tool seed
-        if: github.event_name != 'workflow_dispatch'
         uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
         with:
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-761a279144527661
+          cache_key: ${{ github.event_name != 'workflow_dispatch' && 'mise-v1-x86_64-unknown-linux-gnu-2026.9.18-761a279144527661' || '' }}
       - name: V2 identity
         id: v2
         uses: ./.github/actions/u26 # zizmor: ignore[self-repository]
@@ -152,8 +133,10 @@ jobs:
         run: mise --no-config --no-env --no-hooks install rust@1.98.1 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.30.1
       - name: Prepare Rust components
         env:
+          CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
         run: mise --no-config --no-env --no-hooks exec rust@1.98.1 -- rustup component add --toolchain 1.98.1-x86_64-unknown-linux-gnu clippy rustfmt
       - name: Restore Cargo sources
         if: github.event_name != 'workflow_dispatch'
@@ -168,7 +151,7 @@ jobs:
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
         run: "sh -c 'mkdir -p \"$RUNNER_TEMP/velnor/cargo-clean\" && cd \"$RUNNER_TEMP/velnor/cargo-clean\" && if mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo metadata --locked --offline --manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\" >/dev/null 2>&1; then echo \"velnor: sources hit, skipping fetch\"; else echo \"velnor: sources miss (source_missing), fetching\"; mise --no-config --no-env --no-hooks exec rust@1.98.1 -- cargo fetch --locked --manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\"; fi'"
       - name: Save Cargo sources
-        if: (success() && github.event_name == 'push') && github.event_name != 'workflow_dispatch'
+        if: success() && github.event_name == 'push'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           key: velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-${{hashFiles('Cargo.lock')}}
@@ -202,7 +185,7 @@ jobs:
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ github.run_attempt }}
           retention-days: "30"
       - name: Save Mise tools
-        if: (success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true') && github.event_name != 'workflow_dispatch'
+        if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           key: mise-tools-v2-5592322abaa18b91cdd36db9fb315733d64bb2ffb78c311d40cf3e6f826403e0-${{steps.v2.outputs.identity}}
@@ -212,23 +195,6 @@ jobs:
     runs-on: ubuntu-26.04
     timeout-minutes: 10
     env:
-      ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-      ACTIONS_ID_TOKEN_REQUEST_URL: ""
-      ACTIONS_RUNTIME_TOKEN: ""
-      CARGO_REGISTRY_TOKEN: ""
-      GH_CONFIG_DIR: ""
-      GH_HOST: ""
-      GH_TOKEN: ""
-      GITHUB_TOKEN: ""
-      MISE_AUTO_INSTALL: "false"
-      MISE_EXEC_AUTO_INSTALL: "false"
-      MISE_GITHUB_TOKEN: ""
-      MISE_LOCKFILE: "0"
-      MISE_NO_CONFIG: "1"
-      MISE_NO_ENV: "1"
-      MISE_NO_HOOKS: "1"
-      NODE_AUTH_TOKEN: ""
-      NPM_TOKEN: ""
       VELNOR_ASSET_SHA256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
       VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.0/velnor-actions-0.1.0-x86_64-unknown-linux-gnu
       VELNOR_RELEASE_COMMIT: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
@@ -267,23 +233,6 @@ jobs:
     runs-on: ubuntu-26.04
     timeout-minutes: 10
     env:
-      ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-      ACTIONS_ID_TOKEN_REQUEST_URL: ""
-      ACTIONS_RUNTIME_TOKEN: ""
-      CARGO_REGISTRY_TOKEN: ""
-      GH_CONFIG_DIR: ""
-      GH_HOST: ""
-      GH_TOKEN: ""
-      GITHUB_TOKEN: ""
-      MISE_AUTO_INSTALL: "false"
-      MISE_EXEC_AUTO_INSTALL: "false"
-      MISE_GITHUB_TOKEN: ""
-      MISE_LOCKFILE: "0"
-      MISE_NO_CONFIG: "1"
-      MISE_NO_ENV: "1"
-      MISE_NO_HOOKS: "1"
-      NODE_AUTH_TOKEN: ""
-      NPM_TOKEN: ""
       RUSTUP_TOOLCHAIN: 1.98.1
       VELNOR_ASSET_SHA256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
       VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.0/velnor-actions-0.1.0-x86_64-unknown-linux-gnu
@@ -353,7 +302,7 @@ jobs:
           VELNOR_REQUEST_FILE: ${{ runner.temp }}/velnor/request/merge-v1-request.json
         run: "\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0\""
       - name: Save Mise tools
-        if: (success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true') && github.event_name != 'workflow_dispatch'
+        if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           key: mise-tools-v2-7e3d4db8a565e5bbdd358ccdd5b80c13f6d352fd3dcf39d3a81d9470689a7d24-${{steps.v2.outputs.identity}}
@@ -371,23 +320,6 @@ jobs:
     runs-on: ubuntu-26.04
     timeout-minutes: 30
     env:
-      ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-      ACTIONS_ID_TOKEN_REQUEST_URL: ""
-      ACTIONS_RUNTIME_TOKEN: ""
-      CARGO_REGISTRY_TOKEN: ""
-      GH_CONFIG_DIR: ""
-      GH_HOST: ""
-      GH_TOKEN: ""
-      GITHUB_TOKEN: ""
-      MISE_AUTO_INSTALL: "false"
-      MISE_EXEC_AUTO_INSTALL: "false"
-      MISE_GITHUB_TOKEN: ""
-      MISE_LOCKFILE: "0"
-      MISE_NO_CONFIG: "1"
-      MISE_NO_ENV: "1"
-      MISE_NO_HOOKS: "1"
-      NODE_AUTH_TOKEN: ""
-      NPM_TOKEN: ""
       RUSTUP_TOOLCHAIN: 1.98.1
       VELNOR_ASSET_SHA256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
       VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.0/velnor-actions-0.1.0-x86_64-unknown-linux-gnu
@@ -400,10 +332,9 @@ jobs:
         with:
           persist-credentials: "false"
       - name: Restore Velnor tool seed
-        if: github.event_name != 'workflow_dispatch'
         uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
         with:
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-761a279144527661
+          cache_key: ${{ github.event_name != 'workflow_dispatch' && 'mise-v1-x86_64-unknown-linux-gnu-2026.9.18-761a279144527661' || '' }}
       - name: V2 identity
         id: v2
         uses: ./.github/actions/u26 # zizmor: ignore[self-repository]
@@ -439,8 +370,10 @@ jobs:
         run: mise --no-config --no-env --no-hooks install rust@1.98.1 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.30.1
       - name: Prepare Rust components
         env:
+          CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
         run: mise --no-config --no-env --no-hooks exec rust@1.98.1 -- rustup component add --toolchain 1.98.1-x86_64-unknown-linux-gnu clippy rustfmt
       - name: Restore Cargo sources
         if: github.event_name != 'workflow_dispatch'
@@ -508,23 +441,6 @@ jobs:
     runs-on: ubuntu-26.04
     timeout-minutes: 30
     env:
-      ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
-      ACTIONS_ID_TOKEN_REQUEST_URL: ""
-      ACTIONS_RUNTIME_TOKEN: ""
-      CARGO_REGISTRY_TOKEN: ""
-      GH_CONFIG_DIR: ""
-      GH_HOST: ""
-      GH_TOKEN: ""
-      GITHUB_TOKEN: ""
-      MISE_AUTO_INSTALL: "false"
-      MISE_EXEC_AUTO_INSTALL: "false"
-      MISE_GITHUB_TOKEN: ""
-      MISE_LOCKFILE: "0"
-      MISE_NO_CONFIG: "1"
-      MISE_NO_ENV: "1"
-      MISE_NO_HOOKS: "1"
-      NODE_AUTH_TOKEN: ""
-      NPM_TOKEN: ""
       RUSTUP_TOOLCHAIN: 1.98.1
       VELNOR_ASSET_SHA256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
       VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.0/velnor-actions-0.1.0-x86_64-unknown-linux-gnu
@@ -537,10 +453,9 @@ jobs:
         with:
           persist-credentials: "false"
       - name: Restore Velnor tool seed
-        if: github.event_name != 'workflow_dispatch'
         uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
         with:
-          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-761a279144527661
+          cache_key: ${{ github.event_name != 'workflow_dispatch' && 'mise-v1-x86_64-unknown-linux-gnu-2026.9.18-761a279144527661' || '' }}
       - name: V2 identity
         id: v2
         uses: ./.github/actions/u26 # zizmor: ignore[self-repository]
@@ -576,8 +491,10 @@ jobs:
         run: mise --no-config --no-env --no-hooks install rust@1.98.1 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.30.1
       - name: Prepare Rust components
         env:
+          CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
         run: mise --no-config --no-env --no-hooks exec rust@1.98.1 -- rustup component add --toolchain 1.98.1-x86_64-unknown-linux-gnu clippy rustfmt
       - name: Restore Cargo sources
         if: github.event_name != 'workflow_dispatch'

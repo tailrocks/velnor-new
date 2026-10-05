@@ -100,6 +100,23 @@ link_identity() {
   done)
 }
 
+# Release binaries require an explicit consumer manifest. Install the shared
+# schema fixture as input to each temporary consumer checkout; it is not
+# product provenance or release qualification evidence.
+write_fixture_release_manifest() {
+  local repo="$1"
+  local manifest="$repo/.velnor/release-manifest.json"
+  if [ -e "$manifest" ] || [ -L "$manifest" ]; then
+    [ -f "$manifest" ] && [ ! -L "$manifest" ]
+    return $?
+  fi
+  if [ -L "$repo/.velnor" ] || { [ -e "$repo/.velnor" ] && [ ! -d "$repo/.velnor" ]; }; then
+    return 1
+  fi
+  mkdir -p "$repo/.velnor" || return 1
+  cp "$ROOT/fixtures/consumer-release-manifest.json" "$manifest"
+}
+
 build_bin() {
   if [ "$BIN_EXPLICIT" -eq 1 ]; then
     if [ ! -f "$BIN" ] || [ ! -x "$BIN" ]; then
@@ -121,6 +138,10 @@ setup_case() {
   if [ ! -f "$repo/.velnor/config.toml" ]; then
     mkdir -p "$repo/.velnor"
     printf 'schema = 1\n\n[workflow]\ndefault_branch = "main"\n' > "$repo/.velnor/config.toml"
+  fi
+  if ! write_fixture_release_manifest "$repo"; then
+    echo "FATAL: could not prepare deterministic release manifest for $case"
+    exit 2
   fi
   (cd "$repo" \
     && git init -q \

@@ -57,16 +57,9 @@ pub struct Discovery {
     pub recommendations: Vec<String>,
     /// Release-manifest text from the committed repo file.
     ///
-    /// Debug builds fall back to a stand-in when the file is absent
-    /// (flagged by [`Discovery::consumer_manifest_stand_in`], warned at
-    /// generation); release builds keep `None` so generation fails
-    /// closed with `consumer_requires_release_install`.
+    /// Absent files remain `None` in every build mode so consumer
+    /// generation fails closed with `consumer_requires_release_install`.
     pub consumer_manifest_json: Option<String>,
-    /// Whether the manifest text above is the debug-only stand-in.
-    ///
-    /// Always false in release builds (no fallback exists there).
-    /// `generate` warns loudly when this is set; `plan` stays silent.
-    pub consumer_manifest_stand_in: bool,
     /// Whether index enumeration skipped any non-UTF-8 name.
     ///
     /// Selection broadens explicitly on this: a skipped name cannot be
@@ -119,7 +112,7 @@ pub(crate) fn discover(root: &Path, config: &VelnorConfig) -> Result<Discovery, 
     let clippy_memory = clippy_memory_groups(&proposals);
     let recommendations =
         collect_recommendations(root, config, &index, &workspaces, &tool_checks, &mut reads);
-    let (consumer_manifest_json, consumer_manifest_stand_in) = consumer_manifest_text(root)?;
+    let consumer_manifest_json = consumer_manifest_text(root)?;
     Ok(Discovery {
         statuses,
         workspaces,
@@ -129,7 +122,6 @@ pub(crate) fn discover(root: &Path, config: &VelnorConfig) -> Result<Discovery, 
         clippy_memory,
         recommendations,
         consumer_manifest_json,
-        consumer_manifest_stand_in,
         skipped_non_utf8,
         tofu_note: tofu_step.note,
         tofu_units,
@@ -219,51 +211,15 @@ pub(crate) fn read_manifest_file(root: &Path) -> Result<Option<String>, Orchestr
     }
 }
 
-/// Consumer manifest text plus stand-in flag: committed file, else a
-/// debug-only stand-in.
+/// Read only the committed consumer manifest in every build mode.
 ///
-/// Absent files fall back to the embedded stand-in (flagged so
-/// `generate` warns loudly); present-but-unreadable files error
-/// instead of masking. The stand-in carries the bound official-asset
-/// URL shape so the consumer gate validates it exactly like a
-/// committed file.
+/// Absent files stay `None` so the consumer acquire gate fails closed
+/// with `consumer_requires_release_install`; unreadable files error.
 /// # Errors
 ///
 /// Returns IO or unsafe-path errors for present-but-unreadable files.
-#[cfg(debug_assertions)]
-fn consumer_manifest_text(root: &Path) -> Result<(Option<String>, bool), OrchestratorError> {
-    if let Some(text) = read_manifest_file(root)? {
-        return Ok((Some(text), false));
-    }
-    let sha = "a".repeat(64);
-    let version = env!("CARGO_PKG_VERSION");
-    let mut targets = Vec::new();
-    for target in velnor_actions_contract::SUPPORTED_TARGETS {
-        targets.push(format!(
-            "{{\"target\":\"{target}\",\"artifact\":\"https://github.com/tailrocks/velnor-new/releases/download/v{version}/velnor-actions-{version}-{target}\",\"sha256\":\"{sha}\"}}"
-        ));
-    }
-    let targets = targets.join(",");
-    let commit = "b".repeat(40);
-    Ok((
-        Some(format!(
-            "{{\"schema\":1,\"version\":\"{version}\",\"repository\":\"tailrocks/velnor-new\",\"commit\":\"{commit}\",\"targets\":[{targets}]}}"
-        )),
-        true,
-    ))
-}
-
-/// Consumer manifest text plus stand-in flag: the committed file only.
-///
-/// Absent files stay `None` (the consumer acquire gate fails closed
-/// with `consumer_requires_release_install`); unreadable files error.
-/// The flag is always false: release builds have no stand-in.
-/// # Errors
-///
-/// Returns IO or unsafe-path errors for present-but-unreadable files.
-#[cfg(not(debug_assertions))]
-fn consumer_manifest_text(root: &Path) -> Result<(Option<String>, bool), OrchestratorError> {
-    read_manifest_file(root).map(|text| (text, false))
+fn consumer_manifest_text(root: &Path) -> Result<Option<String>, OrchestratorError> {
+    read_manifest_file(root)
 }
 
 /// Sorted local dependency display names for one package.
