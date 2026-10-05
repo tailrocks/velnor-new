@@ -286,7 +286,7 @@ shellcheck→zizmor→shellcheck-`run:`-bodies; tofu steps as single-line
 scalars; no `setup-opentofu` (Mise only). Read-only `plan`/`generate`
 proven by before/after snapshots (no `.terraform`/lock/tool/source mutation,
 no init/network during discovery). Verification detail is owned by
-`rust-quality-contract.md` §9; per-root jobs and tofu step order are the
+`rust-verification-contract.md`; per-root jobs and tofu step order are the
 adoption delta.
 
 ### 4.6 E2E qualification (WS7 Q0–Q7)
