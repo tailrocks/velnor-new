@@ -6,10 +6,11 @@ use velnor_actions_contract::{
     FinalReport, FinalStatus, Job, JobConclusion, JobTimeout, MatrixReport, MatrixStatus,
     NotSelectedReason, ObligationDecision, Permissions, Plan, PlanBaseline, PlanGenerator,
     PlanMatrix, PlanObligation, PlanPackage, PlanRunner, PlatformBinding,
-    PlatformUnavailableReason, RequiredJobResult, RunnerSelection, Step, StepKind, TaskReport,
-    TaskStatus, Trigger, Trust, WorkflowEvent, WorkflowIr, artifact_id_for_matrix,
-    artifact_id_for_plan, canonical_json_bytes, digest_b3, final_report_id_for_run,
-    plan_id_for_run, run_key_for_ci, task_report_id_for_task, validate_final_report_id,
+    PlatformRunnerEnvironment, PlatformUnavailableReason, RequiredJobResult, RunnerSelection, Step,
+    StepKind, TaskReport, TaskStatus, Trigger, Trust, WorkflowEvent, WorkflowIr,
+    artifact_id_for_matrix, artifact_id_for_plan, canonical_json_bytes, digest_b3,
+    final_report_id_for_run, plan_id_for_run, run_key_for_ci, task_report_id_for_task,
+    validate_final_report_id,
 };
 
 #[test]
@@ -104,6 +105,7 @@ fn task_and_matrix_reports_validate() -> Result<(), ContractError> {
         },
         platform_binding: PlatformBinding::Unavailable {
             planned_platform_id: digest_b3(b"planned-platform"),
+            runner_environment: PlatformRunnerEnvironment::Unknown,
             reason: PlatformUnavailableReason::ObservationNotRecorded,
         },
         exit_code: 0,
@@ -290,6 +292,7 @@ fn reports_validate_only_when_matrix_id_matches_entry() -> Result<(), ContractEr
         },
         platform_binding: PlatformBinding::Unavailable {
             planned_platform_id: digest_b3(b"planned-platform"),
+            runner_environment: PlatformRunnerEnvironment::Unknown,
             reason: PlatformUnavailableReason::ObservationNotRecorded,
         },
         exit_code: 0,
@@ -353,6 +356,7 @@ fn absent_duration_deserializes_to_none_and_skips() -> Result<(), ContractError>
         "platform_binding": {
             "state": "unavailable",
             "planned_platform_id": "b3-0000000000000000000000000000000000000000000000000000000000000000",
+            "runner_environment": "unknown",
             "reason": "observation_not_recorded"
         },
         "exit_code": 0,

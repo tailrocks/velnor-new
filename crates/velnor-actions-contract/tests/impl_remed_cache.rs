@@ -7,9 +7,9 @@ use velnor_actions_contract::cachekey::{
 };
 use velnor_actions_contract::{
     CacheLayer, CacheOutcome, CacheResult, ContractError, EntryCacheIds, MatrixEntry,
-    PlatformBinding, PlatformUnavailableReason, TaskReport, TaskStatus, Trust, WorkflowEvent,
-    canonical_json_str, digest_b3, input_digest, is_secret_env_name, parse_strict_json,
-    run_key_for_ci, task_report_id_for_task,
+    PlatformBinding, PlatformRunnerEnvironment, PlatformUnavailableReason, TaskReport, TaskStatus,
+    Trust, WorkflowEvent, canonical_json_str, digest_b3, input_digest, is_secret_env_name,
+    parse_strict_json, run_key_for_ci, task_report_id_for_task,
 };
 
 fn executed_report(
@@ -38,6 +38,7 @@ fn executed_report(
         },
         platform_binding: PlatformBinding::Unavailable {
             planned_platform_id: digest_b3(b"planned-platform"),
+            runner_environment: PlatformRunnerEnvironment::Unknown,
             reason: PlatformUnavailableReason::ObservationNotRecorded,
         },
         exit_code: 0,

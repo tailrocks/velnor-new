@@ -15,6 +15,8 @@ pub enum PlatformBinding {
     Observed {
         /// Planned identity from the immutable plan.
         planned_platform_id: String,
+        /// Runner environment recorded by the generated observation step.
+        runner_environment: PlatformRunnerEnvironment,
         /// Canonical identity recomputed from observed facts.
         observed_platform_id: String,
         /// Exact facts used to derive the observed identity.
@@ -24,9 +26,35 @@ pub enum PlatformBinding {
     Unavailable {
         /// Planned identity from the immutable plan.
         planned_platform_id: String,
+        /// Runner environment recorded by the generated observation step.
+        runner_environment: PlatformRunnerEnvironment,
         /// Closed reason for withholding observed cache identity.
         reason: PlatformUnavailableReason,
     },
+}
+
+/// GitHub's runner-provided environment class, carried as typed evidence.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum PlatformRunnerEnvironment {
+    /// A runner provisioned by GitHub Actions.
+    GithubHosted,
+    /// A repository or organization supplied runner, including Scale Sets.
+    SelfHosted,
+    /// The observation operation did not obtain a recognized value.
+    Unknown,
+}
+
+impl PlatformRunnerEnvironment {
+    /// Parse the closed values emitted by `${{ runner.environment }}`.
+    #[must_use]
+    pub fn parse(value: &str) -> Self {
+        match value {
+            "github-hosted" => Self::GithubHosted,
+            "self-hosted" => Self::SelfHosted,
+            _ => Self::Unknown,
+        }
+    }
 }
 
 /// Why a task has no admitted runtime platform identity.
@@ -50,12 +78,20 @@ impl PlatformBinding {
     /// # Errors
     pub fn observed(
         planned_platform_id: &str,
+        runner_environment: PlatformRunnerEnvironment,
         inputs: PlatformInputs,
     ) -> Result<Self, ContractError> {
         validate_digest(planned_platform_id)?;
+        if runner_environment != PlatformRunnerEnvironment::GithubHosted {
+            return Err(ContractError::identity(
+                "platform_binding.runner_environment",
+                "observed_requires_github_hosted",
+            ));
+        }
         let observed_platform_id = observed_platform_id(&inputs)?;
         Ok(Self::Observed {
             planned_platform_id: planned_platform_id.to_owned(),
+            runner_environment,
             observed_platform_id,
             inputs,
         })
@@ -65,11 +101,14 @@ impl PlatformBinding {
     /// # Errors
     pub fn unavailable(
         planned_platform_id: &str,
+        runner_environment: PlatformRunnerEnvironment,
         reason: PlatformUnavailableReason,
     ) -> Result<Self, ContractError> {
         validate_digest(planned_platform_id)?;
+        validate_unavailable_reason(runner_environment, reason)?;
         Ok(Self::Unavailable {
             planned_platform_id: planned_platform_id.to_owned(),
+            runner_environment,
             reason,
         })
     }
@@ -95,10 +134,17 @@ impl PlatformBinding {
         validate_digest(self.planned_platform_id())?;
         if let Self::Observed {
             observed_platform_id: supplied,
+            runner_environment,
             inputs,
             ..
         } = self
         {
+            if *runner_environment != PlatformRunnerEnvironment::GithubHosted {
+                return Err(ContractError::identity(
+                    "platform_binding.runner_environment",
+                    "observed_requires_github_hosted",
+                ));
+            }
             validate_digest(supplied)?;
             if observed_platform_id(inputs)? != *supplied {
                 return Err(ContractError::identity(
@@ -106,6 +152,13 @@ impl PlatformBinding {
                     "identity_mismatch",
                 ));
             }
+        } else if let Self::Unavailable {
+            runner_environment,
+            reason,
+            ..
+        } = self
+        {
+            validate_unavailable_reason(*runner_environment, *reason)?;
         }
         Ok(())
     }
@@ -117,11 +170,26 @@ impl PlatformBinding {
         planned_platform_id: &str,
         runs_on: &str,
         target: &str,
+        expected_environment: PlatformRunnerEnvironment,
     ) -> Result<(), ContractError> {
         self.validate()?;
         if self.planned_platform_id() != planned_platform_id {
             return Err(ContractError::identity(
                 "platform_binding.planned_platform_id",
+                "plan_mismatch",
+            ));
+        }
+        let recorded_environment = match self {
+            Self::Observed {
+                runner_environment, ..
+            }
+            | Self::Unavailable {
+                runner_environment, ..
+            } => *runner_environment,
+        };
+        if recorded_environment != expected_environment {
+            return Err(ContractError::identity(
+                "platform_binding.runner_environment",
                 "plan_mismatch",
             ));
         }
@@ -144,5 +212,31 @@ impl PlatformBinding {
             }
         }
         Ok(())
+    }
+}
+
+/// Keep unavailable reasons coherent with the runner evidence that produced them.
+fn validate_unavailable_reason(
+    runner_environment: PlatformRunnerEnvironment,
+    reason: PlatformUnavailableReason,
+) -> Result<(), ContractError> {
+    let valid = match reason {
+        PlatformUnavailableReason::CustomRunner => {
+            runner_environment == PlatformRunnerEnvironment::SelfHosted
+        }
+        PlatformUnavailableReason::MissingImageMetadata => {
+            runner_environment == PlatformRunnerEnvironment::GithubHosted
+        }
+        PlatformUnavailableReason::InvalidRuntimeFacts
+        | PlatformUnavailableReason::RuntimeFactsMismatch
+        | PlatformUnavailableReason::ObservationNotRecorded => true,
+    };
+    if valid {
+        Ok(())
+    } else {
+        Err(ContractError::identity(
+            "platform_binding.reason",
+            "reason_environment_mismatch",
+        ))
     }
 }

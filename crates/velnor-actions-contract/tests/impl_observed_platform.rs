@@ -3,8 +3,10 @@
 use velnor_actions_contract::cachekey::{
     MAX_OBSERVED_PLATFORM_FACT_BYTES, PlatformInputs, observed_platform_id, platform_id,
 };
-use velnor_actions_contract::{ContractError, RunnerImageEvidence, UNOBSERVED_IMAGE_VALUE};
-use velnor_actions_contract::{PlatformBinding, PlatformUnavailableReason};
+use velnor_actions_contract::{
+    ContractError, PlatformBinding, PlatformRunnerEnvironment, PlatformUnavailableReason,
+    RunnerImageEvidence, UNOBSERVED_IMAGE_VALUE,
+};
 
 fn inputs() -> PlatformInputs {
     PlatformInputs {
@@ -66,19 +68,49 @@ fn report_binding_proves_the_observation_matches_the_planned_platform() {
     planned.image_os = UNOBSERVED_IMAGE_VALUE.to_owned();
     planned.image_version = UNOBSERVED_IMAGE_VALUE.to_owned();
     let planned_id = platform_id(&planned).expect("planned ID");
-    let binding = PlatformBinding::observed(&planned_id, observed.clone()).expect("binding");
+    let binding = PlatformBinding::observed(
+        &planned_id,
+        PlatformRunnerEnvironment::GithubHosted,
+        observed.clone(),
+    )
+    .expect("binding");
     binding
-        .validate_for_plan(&planned_id, "ubuntu-26.04", "x86_64-unknown-linux-gnu")
+        .validate_for_plan(
+            &planned_id,
+            "ubuntu-26.04",
+            "x86_64-unknown-linux-gnu",
+            PlatformRunnerEnvironment::GithubHosted,
+        )
         .expect("valid plan binding");
+    assert!(
+        binding
+            .validate_for_plan(
+                &planned_id,
+                "ubuntu-26.04",
+                "x86_64-unknown-linux-gnu",
+                PlatformRunnerEnvironment::SelfHosted,
+            )
+            .is_err()
+    );
 
     assert!(
         binding
-            .validate_for_plan(&planned_id, "ubuntu-24.04", "x86_64-unknown-linux-gnu",)
+            .validate_for_plan(
+                &planned_id,
+                "ubuntu-24.04",
+                "x86_64-unknown-linux-gnu",
+                PlatformRunnerEnvironment::GithubHosted,
+            )
             .is_err()
     );
     assert!(
         binding
-            .validate_for_plan(&planned_id, "ubuntu-26.04", "aarch64-apple-darwin")
+            .validate_for_plan(
+                &planned_id,
+                "ubuntu-26.04",
+                "aarch64-apple-darwin",
+                PlatformRunnerEnvironment::GithubHosted,
+            )
             .is_err()
     );
     assert!(
@@ -86,15 +118,57 @@ fn report_binding_proves_the_observation_matches_the_planned_platform() {
             .validate_for_plan(
                 &platform_id(&inputs()).expect("different planned ID"),
                 "ubuntu-26.04",
-                "x86_64-unknown-linux-gnu"
+                "x86_64-unknown-linux-gnu",
+                PlatformRunnerEnvironment::GithubHosted,
             )
             .is_err()
     );
 
-    let unavailable =
-        PlatformBinding::unavailable(&planned_id, PlatformUnavailableReason::CustomRunner)
-            .expect("unavailable binding");
+    let unavailable = PlatformBinding::unavailable(
+        &planned_id,
+        PlatformRunnerEnvironment::SelfHosted,
+        PlatformUnavailableReason::CustomRunner,
+    )
+    .expect("unavailable binding");
     unavailable
-        .validate_for_plan(&planned_id, "ubuntu-26.04", "x86_64-unknown-linux-gnu")
+        .validate_for_plan(
+            &planned_id,
+            "ubuntu-26.04",
+            "x86_64-unknown-linux-gnu",
+            PlatformRunnerEnvironment::SelfHosted,
+        )
         .expect("unavailable evidence still binds the plan");
+}
+
+#[test]
+fn only_github_hosted_observations_can_be_admitted() {
+    let mut planned = inputs();
+    planned.image_os = UNOBSERVED_IMAGE_VALUE.to_owned();
+    planned.image_version = UNOBSERVED_IMAGE_VALUE.to_owned();
+    let planned_id = platform_id(&planned).expect("planned ID");
+
+    assert!(
+        PlatformBinding::observed(&planned_id, PlatformRunnerEnvironment::SelfHosted, inputs(),)
+            .is_err()
+    );
+    assert!(
+        PlatformBinding::unavailable(
+            &planned_id,
+            PlatformRunnerEnvironment::GithubHosted,
+            PlatformUnavailableReason::CustomRunner,
+        )
+        .is_err()
+    );
+    assert_eq!(
+        PlatformRunnerEnvironment::parse("github-hosted"),
+        PlatformRunnerEnvironment::GithubHosted
+    );
+    assert_eq!(
+        PlatformRunnerEnvironment::parse("self-hosted"),
+        PlatformRunnerEnvironment::SelfHosted
+    );
+    assert_eq!(
+        PlatformRunnerEnvironment::parse("unexpected"),
+        PlatformRunnerEnvironment::Unknown
+    );
 }

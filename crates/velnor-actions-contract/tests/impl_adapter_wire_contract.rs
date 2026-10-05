@@ -4,10 +4,10 @@ use crate::impl_contract_ids::{GROUP, TASK, sample_entry};
 use crate::impl_remed_contract::sample_plan;
 use velnor_actions_contract::{
     ContractError, EdgeKind, ExecuteTaskRef, FinalCounts, FinalReport, FinalStatus, JobConclusion,
-    PlatformBinding, PlatformUnavailableReason, RequiredJobResult, TaskEdge, TaskReport,
-    TaskStatus, TaskTiming, WorkflowEvent, artifact_id_for_matrix, artifact_id_for_plan, digest_b3,
-    final_report_id_for_run, plan_id_for_run, run_key_for_ci, task_report_id_for_task,
-    validate_plan_edges,
+    PlatformBinding, PlatformRunnerEnvironment, PlatformUnavailableReason, RequiredJobResult,
+    TaskEdge, TaskReport, TaskStatus, TaskTiming, WorkflowEvent, artifact_id_for_matrix,
+    artifact_id_for_plan, digest_b3, final_report_id_for_run, plan_id_for_run, run_key_for_ci,
+    task_report_id_for_task, validate_plan_edges,
 };
 
 #[test]
@@ -174,6 +174,7 @@ fn task_report_schedule_fields_validate() -> Result<(), ContractError> {
         },
         platform_binding: PlatformBinding::Unavailable {
             planned_platform_id: digest_b3(b"planned-platform"),
+            runner_environment: PlatformRunnerEnvironment::Unknown,
             reason: PlatformUnavailableReason::ObservationNotRecorded,
         },
         exit_code: 0,

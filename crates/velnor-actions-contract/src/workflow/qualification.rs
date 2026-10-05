@@ -295,7 +295,9 @@ mod deny_unknown_fields_tests {
 
     use super::{JobConclusion, RequiredJobResult};
     use crate::workflow::plan::WorkflowEvent;
-    use crate::workflow::platform::{PlatformBinding, PlatformUnavailableReason};
+    use crate::workflow::platform::{
+        PlatformBinding, PlatformRunnerEnvironment, PlatformUnavailableReason,
+    };
     use crate::workflow::report::{
         CacheLayer, CacheOutcome, CacheResult, MatrixReport, MatrixStatus, MatrixTaskEntry,
         TaskReport, TaskStatus,
@@ -337,6 +339,7 @@ mod deny_unknown_fields_tests {
             },
             platform_binding: PlatformBinding::Unavailable {
                 planned_platform_id: crate::canonical::digest_b3(b"planned-platform"),
+                runner_environment: PlatformRunnerEnvironment::Unknown,
                 reason: PlatformUnavailableReason::ObservationNotRecorded,
             },
             exit_code: 1,

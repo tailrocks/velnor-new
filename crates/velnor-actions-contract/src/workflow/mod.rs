@@ -46,7 +46,7 @@ pub use plan::{
     PlanGenerator, PlanMatrix, PlanObligation, PlanPackage, PlanRunner, WorkflowEvent,
     validate_matrix_run,
 };
-pub use platform::{PlatformBinding, PlatformUnavailableReason};
+pub use platform::{PlatformBinding, PlatformRunnerEnvironment, PlatformUnavailableReason};
 pub use qualification::{
     FinalCounts, FinalReport, FinalStatus, JobConclusion, RequiredJobResult,
     final_report_id_for_run, final_report_relpath, join_runner_temp, matrix_report_relpath,

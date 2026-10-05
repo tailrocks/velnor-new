@@ -3,9 +3,9 @@ use crate::impl_contract_ids::{TASK, sample_entry, sample_identity};
 use velnor_actions_contract::cachekey::{MISS_REASONS, cache_key, validate_miss_reason};
 use velnor_actions_contract::{
     CacheLayer, CacheOutcome, CacheResult, ContractError, PlatformBinding,
-    PlatformUnavailableReason, RUST_EXTENSION_REQUIRED_SLOTS, StackExtension,
-    TOFU_EXTENSION_REQUIRED_SLOTS, TaskReport, TaskStatus, Trust, WorkflowEvent, digest_b3,
-    final_report_id_for_run, final_report_relpath, input_digest, join_runner_temp,
+    PlatformRunnerEnvironment, PlatformUnavailableReason, RUST_EXTENSION_REQUIRED_SLOTS,
+    StackExtension, TOFU_EXTENSION_REQUIRED_SLOTS, TaskReport, TaskStatus, Trust, WorkflowEvent,
+    digest_b3, final_report_id_for_run, final_report_relpath, input_digest, join_runner_temp,
     matrix_report_relpath, run_key_for_ci, task_report_id_for_task, task_report_relpath,
     validate_rust_extension, validate_tofu_extension,
 };
@@ -54,6 +54,7 @@ fn cache_miss_reason_membership_enforced() -> Result<(), ContractError> {
         },
         platform_binding: PlatformBinding::Unavailable {
             planned_platform_id: digest_b3(b"planned-platform"),
+            runner_environment: PlatformRunnerEnvironment::Unknown,
             reason: PlatformUnavailableReason::ObservationNotRecorded,
         },
         exit_code: 0,
@@ -142,6 +143,7 @@ fn cache_report_outputs_declared_and_secret_free() -> Result<(), ContractError> 
         },
         platform_binding: PlatformBinding::Unavailable {
             planned_platform_id: digest_b3(b"planned-platform"),
+            runner_environment: PlatformRunnerEnvironment::Unknown,
             reason: PlatformUnavailableReason::ObservationNotRecorded,
         },
         exit_code: 0,
@@ -160,7 +162,8 @@ fn cache_report_outputs_declared_and_secret_free() -> Result<(), ContractError> 
     report.outputs = vec!["/abs/report.json".to_owned()];
     assert!(report.validate().is_err());
     let text = serde_json::to_string(&report).expect("serialize");
-    for key in ["environment", "secret", "token", "credential"] {
+    assert!(text.contains("\"runner_environment\":\"unknown\""));
+    for key in ["\"environment\":", "secret", "token", "credential"] {
         assert!(!text.contains(key), "leaked {key}");
     }
     Ok(())
@@ -326,6 +329,7 @@ fn cache_provider_layer_reports_only_closed_reasons() -> Result<(), ContractErro
         },
         platform_binding: PlatformBinding::Unavailable {
             planned_platform_id: digest_b3(b"planned-platform"),
+            runner_environment: PlatformRunnerEnvironment::Unknown,
             reason: PlatformUnavailableReason::ObservationNotRecorded,
         },
         exit_code: 0,
