@@ -80,6 +80,40 @@ fn future_evidence_fails() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
+fn future_clock_timestamp_inside_skew_grace_passes() -> Result<(), Box<dyn Error>> {
+    let fixture = harness::passing("p12-future-clock-grace")?;
+    let today = harness::days_iso(0)?;
+    let future = harness::timestamp_iso(5 * 60)?;
+    harness::mutate(
+        &fixture.dir,
+        INVENTORY,
+        &format!("\"checked_at\":\"{today}\""),
+        &format!("\"checked_at\":\"{future}\""),
+    )?;
+    let run = harness::run_script(&fixture.dir, &[])?;
+    harness::assert_clean(&run);
+    harness::cleanup(&fixture);
+    Ok(())
+}
+
+#[test]
+fn future_clock_timestamp_outside_skew_grace_fails() -> Result<(), Box<dyn Error>> {
+    let fixture = harness::passing("p12-future-clock-outside-grace")?;
+    let today = harness::days_iso(0)?;
+    let future = harness::timestamp_iso(7 * 60)?;
+    harness::mutate(
+        &fixture.dir,
+        INVENTORY,
+        &format!("\"checked_at\":\"{today}\""),
+        &format!("\"checked_at\":\"{future}\""),
+    )?;
+    let run = harness::run_script(&fixture.dir, &[])?;
+    harness::assert_fail(&run, "is in the future");
+    harness::cleanup(&fixture);
+    Ok(())
+}
+
+#[test]
 fn blessed_standing_exception_passes() -> Result<(), Box<dyn Error>> {
     let fixture = harness::passing("p12-blessed")?;
     harness::mutate(

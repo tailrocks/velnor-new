@@ -5,9 +5,9 @@
 #   local-pin          compiled-in constants == reviewed inventory pins,
 #                      including the version-policy mirror and the
 #                      cargo-mutants activation pin.
-#   effective-identity declared manifest requirements == Cargo.lock
+#   effective-identity declared manifest requirements == each Cargo.lock
 #                      resolution, keyed by name+version+source with every
-#                      dependency form and scope covered.
+#                      discovered workspace, dependency form, and scope.
 #   upstream-freshness reviewed pins are backed by fresh upstream evidence
 #                      (source URL + check timestamp); stale evidence, stale
 #                      pins, and lookup failures fail, never report current.
@@ -27,8 +27,8 @@
 #                      per request) and fail stale pins and lookup failures.
 #                      Writes nothing; run by the generated weekly
 #                      `.github/workflows/freshness.yml`, never gating builds.
-#   --with-advisories  run the live `cargo deny check advisories` scan
-#                      (180 s timeout) in addition to the deny-policy checks.
+#   --with-advisories  run the live `cargo deny check advisories` scan for
+#                      each workspace (180 s each) plus the policy checks.
 set -euo pipefail
 
 ROOT=""
@@ -480,10 +480,10 @@ if mutants_text is not None and policy is not None:
                      f"{len(hits)} match(es)")
 
 # --- Effective identity: declared == locked by name+version+source.
-# Covers every dependency form (string, table, workspace-inherited,
-# renamed via `package`) and scope (dependencies, dev-dependencies,
-# build-dependencies, target.*). Lock entries are retained as a list so
-# multiple versions of one name never shadow each other.
+# Every workspace lock is evaluated independently. Nested virtual workspaces
+# are discovered from the parent's explicit Cargo workspace.exclude list;
+# each workspace's member declarations then select the manifests under its
+# own dependency-inheritance and lockfile scope.
 DEP_SECTIONS = ("dependencies", "dev-dependencies", "build-dependencies")
 CRATES_IO = "registry+https://github.com/rust-lang/crates.io-index"
 
@@ -513,36 +513,123 @@ def lock_identity(entry):
     return (name, version, source)
 
 
-try:
-    with open(f"{root}/Cargo.toml", "rb") as handle:
-        workspace_doc = tomllib.load(handle)
-    inherited = (workspace_doc.get("workspace") or {}).get("dependencies", {})
-except (OSError, tomllib.TOMLDecodeError) as err:
-    fail_row("lock-staleness", "workspace Cargo.toml", f"unreadable ({err})")
-    inherited = None
-try:
-    with open(f"{root}/Cargo.lock", "rb") as handle:
-        locked = tomllib.load(handle).get("package", [])
-except (OSError, tomllib.TOMLDecodeError, AttributeError) as err:
-    fail_row("lock-staleness", "Cargo.lock", f"unreadable ({err})")
-    locked = None
-if locked is not None and inherited is not None:
-    manifests = sorted(globmod.glob(f"{root}/crates/*/Cargo.toml"))
-    if not manifests:
-        fail_row("lock-staleness", "crates/*/Cargo.toml", "no members found")
-    member_names = set()
-    declared = []  # (crate, scope, alias, real, req, detail)
-    for manifest in manifests:
+def discover_workspaces():
+    """Read the root workspace and nested workspaces it explicitly excludes."""
+    roots = []
+    pending = [""]
+    seen = set()
+    while pending:
+        relative = pending.pop(0)
+        if relative in seen:
+            continue
+        seen.add(relative)
+        manifest = os.path.join(root, relative, "Cargo.toml")
         try:
             with open(manifest, "rb") as handle:
                 doc = tomllib.load(handle)
         except (OSError, tomllib.TOMLDecodeError) as err:
             fail_row("lock-staleness", manifest, f"unreadable ({err})")
             continue
+        workspace = doc.get("workspace")
+        if not isinstance(workspace, dict):
+            fail_row("lock-staleness", manifest, "no [workspace] table")
+            continue
+        roots.append((relative, doc))
+        excludes = workspace.get("exclude", [])
+        if not isinstance(excludes, list):
+            fail_row("lock-staleness", manifest,
+                     "workspace.exclude must be an array")
+            continue
+        for excluded in excludes:
+            if not isinstance(excluded, str):
+                fail_row("lock-staleness", manifest,
+                         f"workspace.exclude entry is not a string: {excluded!r}")
+                continue
+            pattern = os.path.join(root, relative, excluded)
+            for hit in globmod.glob(pattern, recursive=True):
+                nested_manifest = (
+                    hit if os.path.isfile(hit) and
+                    os.path.basename(hit) == "Cargo.toml"
+                    else os.path.join(hit, "Cargo.toml")
+                )
+                if not os.path.isfile(nested_manifest):
+                    continue
+                nested_relative = os.path.relpath(
+                    os.path.dirname(nested_manifest), root
+                )
+                if nested_relative == "." or nested_relative in seen:
+                    continue
+                try:
+                    with open(nested_manifest, "rb") as handle:
+                        nested_doc = tomllib.load(handle)
+                except (OSError, tomllib.TOMLDecodeError) as err:
+                    fail_row("lock-staleness", nested_manifest,
+                             f"unreadable ({err})")
+                    continue
+                if isinstance(nested_doc.get("workspace"), dict):
+                    pending.append(nested_relative)
+    return roots
+
+
+def check_workspace_identity(relative, workspace_doc):
+    """Check one Cargo workspace against only its own lockfile."""
+    label = relative or "."
+    workspace_dir = os.path.join(root, relative)
+    manifest = os.path.join(workspace_dir, "Cargo.toml")
+    lock_path = os.path.join(workspace_dir, "Cargo.lock")
+    workspace = workspace_doc.get("workspace") or {}
+    inherited = workspace.get("dependencies", {})
+    if not isinstance(inherited, dict):
+        fail_row("lock-staleness", f"{label}/Cargo.toml",
+                 "workspace.dependencies must be a table")
+        inherited = None
+    try:
+        with open(lock_path, "rb") as handle:
+            locked = tomllib.load(handle).get("package", [])
+    except (OSError, tomllib.TOMLDecodeError, AttributeError) as err:
+        fail_row("lock-staleness", os.path.relpath(lock_path, root),
+                 f"unreadable ({err})")
+        return None
+    if inherited is None:
+        return None
+
+    manifests = []
+    if isinstance(workspace_doc.get("package"), dict):
+        manifests.append(manifest)
+    members = workspace.get("members", [])
+    if not isinstance(members, list):
+        fail_row("lock-staleness", f"{label}/Cargo.toml",
+                 "workspace.members must be an array")
+        members = []
+    for member in members:
+        if not isinstance(member, str):
+            fail_row("lock-staleness", f"{label}/Cargo.toml",
+                     f"workspace member is not a string: {member!r}")
+            continue
+        pattern = os.path.join(workspace_dir, member, "Cargo.toml")
+        matches = globmod.glob(pattern, recursive=True)
+        if not matches:
+            fail_row("lock-staleness", f"{label}/{member}",
+                     "workspace member manifest not found")
+        manifests.extend(matches)
+    manifests = sorted(set(manifests))
+    if not manifests:
+        fail_row("lock-staleness", f"{label}/Cargo.toml",
+                 "no workspace member manifests found")
+
+    member_names = set()
+    declared = []  # (crate, scope, alias, real, req, detail)
+    for member_manifest in manifests:
+        try:
+            with open(member_manifest, "rb") as handle:
+                doc = tomllib.load(handle)
+        except (OSError, tomllib.TOMLDecodeError) as err:
+            fail_row("lock-staleness", member_manifest, f"unreadable ({err})")
+            continue
         package = doc.get("package")
         if not isinstance(package, dict) or not package.get("name"):
-            # Nested virtual workspace (crates/velnor-runner). Its lock is
-            # separate; it is not a root member.
+            fail_row("lock-staleness", member_manifest,
+                     "workspace member has no package name")
             continue
         crate = package["name"]
         member_names.add(crate)
@@ -583,12 +670,12 @@ if locked is not None and inherited is not None:
             else:
                 fail_row("lock-staleness", subject,
                          f"malformed spec {spec!r}")
+
     by_name = {}
     for entry in locked:
         by_name.setdefault(entry.get("name"), []).append(entry)
     passed = failed = 0
     for subject, real, req, _ in declared:
-        # Every direct external requirement MUST be exact `=x.y.z` (VER-2.26).
         if not isinstance(req, str) or not req.startswith("="):
             fail_row("lock-staleness", subject,
                      f"requirement {req!r} is not exact `=x.y.z` (VER-2.26)")
@@ -628,18 +715,18 @@ if locked is not None and inherited is not None:
         else:
             pass_row("lock-staleness", subject, f"{req} @ registry")
             passed += 1
-    info_row("lock-staleness", "(declared-summary)",
+
+    info_row("lock-staleness", f"{label}/(declared-summary)",
              f"{passed} match, {failed} fail, "
              f"{len(by_name)} locked names retained")
-    # Reverse direction: every locked package must trace to the workspace.
     local_names = {entry.get("name") for entry in locked
                    if not entry.get("source")}
     if local_names != member_names:
-        fail_row("lock-staleness", "(lock-membership)",
+        fail_row("lock-staleness", f"{label}/(lock-membership)",
                  f"local lock {sorted(local_names)} != "
                  f"members {sorted(member_names)}")
     else:
-        pass_row("lock-staleness", "(lock-membership)",
+        pass_row("lock-staleness", f"{label}/(lock-membership)",
                  f"{len(member_names)} members")
     queue = [entry for name in sorted(local_names & member_names)
              for entry in by_name.get(name, [])]
@@ -648,42 +735,54 @@ if locked is not None and inherited is not None:
         entry = queue.pop()
         for edge in entry.get("dependencies", []) or []:
             parts = edge.split(" ")
-            cands = by_name.get(parts[0], [])
+            candidates = by_name.get(parts[0], [])
             if len(parts) > 1:
-                cands = [c for c in cands
-                         if (c.get("version") or "") == parts[1]]
+                candidates = [item for item in candidates
+                              if (item.get("version") or "") == parts[1]]
             if len(parts) > 2:
-                want_src = parts[2].strip("()")
-                cands = [c for c in cands
-                         if (c.get("source") or "") == want_src]
-            if not cands:
-                fail_row("lock-staleness", "(lock-graph)",
+                want_source = parts[2].strip("()")
+                candidates = [item for item in candidates
+                              if (item.get("source") or "") == want_source]
+            if not candidates:
+                fail_row("lock-staleness", f"{label}/(lock-graph)",
                          f"dangling edge {entry.get('name')} -> {edge}")
                 continue
-            for cand in cands:
-                ident = lock_identity(cand)
+            for candidate in candidates:
+                ident = lock_identity(candidate)
                 if ident not in reachable:
                     reachable.add(ident)
-                    queue.append(cand)
+                    queue.append(candidate)
     stranded = [entry for entry in locked
                 if lock_identity(entry) not in reachable]
     if stranded:
-        for entry in sorted(stranded, key=lambda e: e.get("name", "")):
-            fail_row("lock-staleness", "(lock-graph)",
+        for entry in sorted(stranded, key=lambda item: item.get("name", "")):
+            fail_row("lock-staleness", f"{label}/(lock-graph)",
                      f"unreachable locked package "
                      f"{entry.get('name')} {entry.get('version')}")
     else:
-        pass_row("lock-staleness", "(lock-graph)",
+        pass_row("lock-staleness", f"{label}/(lock-graph)",
                  f"{len(locked)} locked packages reachable")
     try:
-        lock_mtime = os.path.getmtime(f"{root}/Cargo.lock")
-        newest_manifest = max(os.path.getmtime(m) for m in manifests)
+        lock_mtime = os.path.getmtime(lock_path)
+        newest_manifest = max(os.path.getmtime(item) for item in manifests)
         stale = lock_mtime < newest_manifest
-        info_row("lock-mtime", "Cargo.lock",
+        info_row("lock-mtime", os.path.relpath(lock_path, root),
                  f"lock_is_newest={str(not stale).lower()}")
     except OSError as err:
-        info_row("lock-mtime", "Cargo.lock", f"mtime unreadable ({err})")
+        info_row("lock-mtime", os.path.relpath(lock_path, root),
+                 f"mtime unreadable ({err})")
+    return locked
 
+
+workspace_roots = discover_workspaces()
+locked = []
+for workspace_relative, workspace_doc in workspace_roots:
+    workspace_locked = check_workspace_identity(workspace_relative, workspace_doc)
+    if workspace_locked is not None:
+        locked.extend(workspace_locked)
+if not locked:
+    info_row("lock-staleness", "(all workspaces)",
+             "no lock packages loaded")
 # --- Upstream freshness: pins need fresh evidence, never bare equality.
 # status=current requires qualified==pinned AND a check timestamp within
 # check_interval_hours. Anything else (stale evidence, stale pin, lookup
@@ -698,6 +797,25 @@ def evidence_age_hours(entry):
     if moment is None:
         return (None, stamp)
     return ((NOW - moment).total_seconds() / 3600, stamp)
+
+
+def future_evidence(stamp):
+    """True when evidence is after now.
+
+    A date-only stamp is future when its UTC day is after today. A stamp
+    with a clock keeps a 0.1 hour skew grace.
+    """
+    text = stamp.strip() if isinstance(stamp, str) else ""
+    moment = parse_timestamp(text)
+    if moment is None:
+        return False
+    date_only = (
+        len(text) == 10 and text[4:5] == "-" and text[7:8] == "-"
+        and "T" not in text and ":" not in text
+    )
+    if date_only:
+        return moment.date() > NOW.date()
+    return (NOW - moment).total_seconds() / 3600 < -0.1
 
 
 def freshness_row(subject, entry, pinned, qualified, latest=None,
@@ -715,7 +833,7 @@ def freshness_row(subject, entry, pinned, qualified, latest=None,
         fail_row("upstream-freshness", subject,
                  f"missing or malformed check timestamp {stamp!r}")
         return
-    if age < -0.1:
+    if future_evidence(stamp):
         fail_row("upstream-freshness", subject,
                  f"check timestamp {stamp} is in the future")
         return
@@ -853,48 +971,62 @@ for exc in inv.get("exceptions", []):
     else:
         check_dated(exc, "standing-exception")
 
-# --- Advisories: deny policy plus the optional live scan.
-try:
-    with open(f"{root}/deny.toml", "rb") as handle:
-        deny = tomllib.load(handle)
-except (OSError, tomllib.TOMLDecodeError) as err:
-    fail_row("advisories", "deny.toml", f"unreadable ({err})")
-    deny = None
-if deny is not None:
+# --- Advisories: each workspace's deny policy plus the optional live scans.
+for workspace_relative, _ in workspace_roots:
+    workspace_dir = os.path.join(root, workspace_relative)
+    manifest_path = os.path.join(workspace_dir, "Cargo.toml")
+    deny_path = os.path.join(workspace_dir, "deny.toml")
+    deny_subject = os.path.relpath(deny_path, root)
+    try:
+        with open(deny_path, "rb") as handle:
+            deny = tomllib.load(handle)
+    except (OSError, tomllib.TOMLDecodeError) as err:
+        fail_row("advisories", deny_subject, f"unreadable ({err})")
+        continue
     advisories = deny.get("advisories")
     if not isinstance(advisories, dict):
-        fail_row("advisories", "deny.toml",
-                 "[advisories] table missing")
-    elif advisories.get("ignore", []):
-        for ignored in advisories["ignore"]:
-            fail_row("advisories", str(ignored),
+        fail_row("advisories", deny_subject, "[advisories] table missing")
+        continue
+    ignored = advisories.get("ignore")
+    if not isinstance(ignored, list):
+        fail_row("advisories", deny_subject,
+                 "[advisories].ignore must be an empty array")
+    elif ignored:
+        for advisory in ignored:
+            fail_row("advisories", f"{deny_subject}:{advisory}",
                      "ignored advisory must be a policy exception instead")
     else:
-        pass_row("advisories", "deny ignore list", "empty")
+        pass_row("advisories", f"{deny_subject} ignore list", "empty")
 if with_advisories:
     cargo_deny = shutil.which("cargo-deny")
     if cargo_deny is None:
         fail_row("advisories", "live scan",
                  "--with-advisories requested but cargo-deny is not on PATH")
     else:
-        try:
-            completed = subprocess.run(
-                [cargo_deny, "check", "advisories"], cwd=root,
-                capture_output=True, text=True, timeout=180)
-        except (OSError, subprocess.TimeoutExpired) as err:
-            fail_row("advisories", "live scan", f"tool failed ({err})")
-        else:
-            if completed.returncode == 0:
-                pass_row("advisories", "live scan",
-                         "cargo deny check advisories: no findings")
+        for workspace_relative, _ in workspace_roots:
+            workspace_dir = os.path.join(root, workspace_relative)
+            manifest_path = os.path.join(workspace_dir, "Cargo.toml")
+            deny_path = os.path.join(workspace_dir, "deny.toml")
+            subject = os.path.relpath(manifest_path, root)
+            try:
+                completed = subprocess.run(
+                    [cargo_deny, "--locked", "--config", deny_path,
+                     "--manifest-path", manifest_path, "check", "advisories"],
+                    cwd=root, capture_output=True, text=True, timeout=180)
+            except (OSError, subprocess.TimeoutExpired) as err:
+                fail_row("advisories", subject, f"live scan failed ({err})")
             else:
-                tail = (completed.stdout + completed.stderr)[-500:]
-                fail_row("advisories", "live scan",
-                         "cargo deny reported findings; run "
-                         f"`cargo deny check advisories` for evidence: {tail!r}")
+                if completed.returncode == 0:
+                    pass_row("advisories", subject,
+                             "cargo deny check advisories: no findings")
+                else:
+                    tail = (completed.stdout + completed.stderr)[-500:]
+                    fail_row("advisories", subject,
+                             "cargo deny reported findings; run "
+                             f"`cargo deny check advisories` for evidence: {tail!r}")
 else:
     info_row("advisories", "live scan",
-             "runs as the CI Cargo Deny job; --with-advisories runs it here")
+             "runs for every Cargo workspace in CI; --with-advisories runs it here")
 
 # --- Bounded read-only upstream probe (weekly freshness.yml; writes nothing).
 FETCH_TIMEOUT = 10
