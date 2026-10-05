@@ -21,3 +21,4 @@
 | D17 | Plan artifacts are named `velnor-plan-r<run_id>-a<run_attempt>`. `gh run rerun --failed` does not re-run Plan, so dependents look up an artifact that was never uploaded. A rerun of failed jobs must include Plan in the same attempt. |
 | D18 | Owned Docker cleanup matches the full container id. `NetworkMode` is `container:<64-hex>`. A 12-character id is not ownership proof and must not authorize `docker rm`. |
 | D19 | An expired scale-set session is only the specifically identified HTTP 400 on delete/reopen. Any other 400 remains a failure. |
+| D20 | Generic DinD startup does not pull workload service images. It publishes the public socket only after bounded daemon readiness and fails nonzero if readiness fails. A workload-specific image requirement belongs to that workflow's declared inputs; RabbitMQ ARM64 component evidence in PR25 commit `f78a33973` does not authorize an unbounded universal startup pull. |

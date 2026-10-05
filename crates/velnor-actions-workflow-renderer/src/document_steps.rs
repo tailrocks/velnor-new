@@ -104,7 +104,12 @@ fn action_step_to_yaml(
     if job_id == FINAL_JOB_ID && is_verdict_download(step) {
         entries.push(("continue-on-error".to_owned(), Yaml::Bool(true)));
     }
-    entries.push(("uses".to_owned(), Yaml::str(uses.to_owned())));
+    let uses_yaml = if uses == crate::tool_seed::TOOL_SEED_USES {
+        Yaml::annotated(uses, "zizmor: ignore[self-repository]")
+    } else {
+        Yaml::str(uses.to_owned())
+    };
+    entries.push(("uses".to_owned(), uses_yaml));
     if !with.is_empty() {
         entries.push(("with".to_owned(), string_map_yaml(with)));
     }

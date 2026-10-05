@@ -270,7 +270,11 @@ are retained at `/tmp/runner25-b3-image-build.log` and
 checks the `_work` mount, private `/tmp/velnor-jit.*` location, and absence of
 a runner mount at `/tmp`. Its source SHA-256 is
 `6e27926566362fb05ca792437ed8a148644c31589cfbdb56af77745620c3fe04`.
-## Final PR25 startup and resource-budget image receipt
+## Earlier helper-branch image receipt
+
+This receipt applies to the separately reviewed helper branch before the
+aggregate main/PR sync. The frozen aggregate image proof is in
+[runner-work-volume-pr25-aggregate-proof.md](runner-work-volume-pr25-aggregate-proof.md).
 
 This build combines the runner-image correction reviewed against base
 `54a1f2e6033ab10c7d38b3cf51378b05b93920c2` (binary diff SHA-256
