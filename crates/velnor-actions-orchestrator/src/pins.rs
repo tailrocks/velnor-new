@@ -25,7 +25,7 @@ use crate::discover::Discovery;
 const MISE_ACTION_KEY: &str = "jdx/mise-action";
 
 use velnor_actions_workflow_renderer::setup::{
-    MISE_BINARY_SHA256_LINUX_X64, MISE_BINARY_SHA256_MACOS_ARM64,
+    MISE_BINARY_SHA256_LINUX_X64, MISE_BINARY_SHA256_MACOS_ARM64, MISE_BINARY_SHA256_MACOS_X64,
 };
 
 /// Resolve typed Mise setup pins: overrides plus the compiled catalog.
@@ -46,17 +46,21 @@ pub(crate) fn resolve_mise_setup(
     resolve_mise_setup_for_release_target(config, target)
 }
 
-/// Resolve a release runner's Mise setup pins from the shared target identity.
+/// Resolve a release runner's Mise setup pins from the named platform ID.
 pub(crate) fn resolve_mise_setup_for_release_target(
     config: &VelnorConfig,
     target: ReleaseTarget,
 ) -> Result<MiseSetup, OrchestratorError> {
+    let sha256 = match target {
+        ReleaseTarget::LinuxX86_64 => MISE_BINARY_SHA256_LINUX_X64,
+        ReleaseTarget::MacosArm64 => MISE_BINARY_SHA256_MACOS_ARM64,
+        ReleaseTarget::MacosX86_64 => MISE_BINARY_SHA256_MACOS_X64,
+    };
     Ok(MiseSetup {
         uses: mise_action_uses(config)?,
         version: MISE_VERSION.to_owned(),
-        sha256: MISE_BINARY_SHA256_LINUX_X64.to_owned(),
-    }
-    .for_target(target.triple())?)
+        sha256: sha256.to_owned(),
+    })
 }
 
 /// Resolve cache-off Mise setup for an isolated verification runner.

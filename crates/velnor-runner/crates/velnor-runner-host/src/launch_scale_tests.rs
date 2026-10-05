@@ -54,43 +54,38 @@ async fn scale_mints_jit_then_acks_without_acquire() -> Result<(), String> {
 }
 
 #[tokio::test]
-async fn idless_uncertain_subject_mints_after_the_empty_row_fails() -> Result<(), String> {
-    let (scratch, journal) = open("idless-mint").await?;
-    let stale = journal
+async fn idless_uncertain_subject_keeps_its_reservation() -> Result<(), String> {
+    let (scratch, journal) = open("idless-uncertain").await?;
+    let row = journal
         .begin("launch", "m9")
         .await
         .map_err(|err| err.to_string())?;
     journal
-        .finish(stale, Outcome::Uncertain)
+        .finish(row, Outcome::Uncertain)
         .await
         .map_err(|err| err.to_string())?;
     let mut script = Script {
         calls: Vec::new(),
         mode: Mode::Ok,
     };
-    let started = drive_offer(
+    let result = drive_offer(
         &mut script,
         &ctx(),
         &assigned_wait(9, 1),
         &journal,
-        |_name, _jit, _bind| async {
-            Ok(Started {
-                dind_id: "dind-2".to_owned(),
-                runner_id: "runner-2".to_owned(),
-            })
-        },
+        |_name, _jit, _bind| async { Err(HostError::Docker) },
     )
-    .await
-    .map_err(|err| err.to_string())?;
-    let started = started.ok_or_else(|| "missing worker".to_owned())?;
-    assert_eq!(started.runner_id, "runner-2");
-    assert_eq!(script.calls, ["jit", "ack"]);
+    .await;
+    assert_eq!(result, Err(EnsureError::Uncertain));
+    assert!(script.calls.is_empty());
     let rows = journal.rows().await.map_err(|err| err.to_string())?;
-    assert_eq!(rows.len(), 2);
-    assert_eq!(rows[0].id, stale);
-    assert_eq!(rows[0].state, IntentState::Failed);
-    assert_eq!(rows[1].state, IntentState::Done);
-    assert_eq!(rows[1].docker_id.as_deref(), Some("runner-2"));
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].id, row);
+    assert_eq!(rows[0].subject, "m9");
+    assert_eq!(rows[0].state, IntentState::Uncertain);
+    assert!(rows[0].docker_id.is_none());
+    assert!(rows[0].dind_id.is_none());
+    assert!(rows[0].worker_volume.is_none());
     absent(&scratch.file())
 }
 

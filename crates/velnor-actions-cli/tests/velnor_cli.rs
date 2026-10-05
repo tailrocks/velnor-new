@@ -45,3 +45,5 @@ mod impl_repo_shape;
 mod impl_repo_strictness;
 #[path = "impl_repo_suppressions.rs"]
 mod impl_repo_suppressions;
+#[path = "impl_repo_test_registration.rs"]
+mod impl_repo_test_registration;
