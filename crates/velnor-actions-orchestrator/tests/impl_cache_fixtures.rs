@@ -18,6 +18,9 @@ use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
 use super::impl_common::{TestResult, config_with_branch, fixture_manifest_json, git};
 
+#[path = "impl_cache_report_fixtures.rs"]
+mod report_fixtures;
+
 /// Owned Cargo home expression shared by writers and readers.
 const SHARED_HOME: &str = "${{ runner.temp }}/velnor/cargo";
 
@@ -386,21 +389,4 @@ fn cargo_only_uses_same_exact_sources_archive() -> TestResult {
         "broad archive removed"
     );
     Ok(())
-}
-
-#[test]
-fn service_report_parses_live_shape_for_sequential_runs() {
-    // Fixed format sample (live `gh cache list --json` shape); the numbers
-    // it carries are illustrative — real totals live in performance.md.
-    let body = r#"[{"key":"velnor-v1-sources-x86_64-unknown-linux-gnu-1.98.1-aa","sizeInBytes":17568922},{"key":"mise-tools-v2-typed-runtime-bb","sizeInBytes":65857248}]"#;
-    let report =
-        cache_trust::summarize_cache_usage(body, 10_737_418_240, 17_568_922, 3).expect("report");
-    assert_eq!(report.active_bytes, 17_568_922 + 65_857_248);
-    assert_eq!(report.count, 2);
-    assert_eq!(report.headroom_bytes, 10_737_418_240 - report.active_bytes);
-    assert_eq!(report.aggregate_transfer_bytes, 17_568_922 * 3);
-    eprintln!(
-        "cache: stored={} transfer={} headroom={} entries={}",
-        report.stored_bytes, report.aggregate_transfer_bytes, report.headroom_bytes, report.count
-    );
 }
