@@ -31,7 +31,7 @@ cdd06e788409b7aa9fed9018d255e28b921c751f2c59bd4536dc47d7af168094  ./dogfood/prev
 375d0b0f18bebb8dd173a1538020b1ddf02e3d4b8e50f2d6ba85faa9a4aa3a54  ./dogfood/preview/.github/workflows/qualification.yml
 89ca8d2537d0696a34057643a0957eaf34402cddd81130b253f63638043701cf  ./dogfood/tree.sha256
 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./empty-suite/generate.exit
-cc33c5acd5238f94d712f768b5a0552e9bec3ce168acefb64b9235d7d2716bf4  ./empty-suite/generate.stderr.txt
+76587098ed7865cf8fa387b4fbd8ed3c30983c20fc02e746ad27de980e7ced8d  ./empty-suite/generate.stderr.txt
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./empty-suite/generate.stdout.txt
 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./empty-suite/plan.exit
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./empty-suite/plan.stderr.txt
@@ -45,7 +45,7 @@ dc881cf73a843ecee2227e7b0687ca4dfafedac0f071f2ff8a5d75610595d41c  ./empty-suite/
 010b63c1eca2d7a03712fca8e701788fcdeb62ff09ec0b4602df5347570a3dd8  ./empty-suite/preview/.github/workflows/ci.yml
 58c19c341bc38d4cb8e447f4a46d1026e621b81f0db3312d46a83685ef3d807b  ./empty-suite/tree.sha256
 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./mbx-nextest/generate.exit
-b7e2733c95fb85a1c66d548f38813001c1b54be075be949f244d4df901185d73  ./mbx-nextest/generate.stderr.txt
+7ee068c4259857fe77e79ff92214e59dbb419ef0641e71bccad4b5fd8c81d8f4  ./mbx-nextest/generate.stderr.txt
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./mbx-nextest/generate.stdout.txt
 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./mbx-nextest/plan.exit
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./mbx-nextest/plan.stderr.txt
@@ -59,7 +59,7 @@ dc881cf73a843ecee2227e7b0687ca4dfafedac0f071f2ff8a5d75610595d41c  ./mbx-nextest/
 49fc4624221f0c7fd22aaae35edd627a77a7a563b35fbaf45fc47b61f6d85f32  ./mbx-nextest/preview/.github/workflows/ci.yml
 e37f0a709c3b659552d3a98ee1f4fabb8f66c097a5582c5fb8950e572f5a7249  ./mbx-nextest/tree.sha256
 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./minimal-cargo/generate.exit
-c21c50741461ed43b84ed789e6c91d3f1bfb1f243c6437380dd7ad2e5c643352  ./minimal-cargo/generate.stderr.txt
+509c3a024218a45482ce84dcb472c64f8d9020fc27749f5c3a7b1a072e83b85c  ./minimal-cargo/generate.stderr.txt
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./minimal-cargo/generate.stdout.txt
 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./minimal-cargo/plan.exit
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./minimal-cargo/plan.stderr.txt
@@ -73,7 +73,7 @@ dc881cf73a843ecee2227e7b0687ca4dfafedac0f071f2ff8a5d75610595d41c  ./minimal-carg
 2fbac0eccf400e55f485db3e2037ae358cc8ab9a27d774d489938819e23127ae  ./minimal-cargo/preview/.github/workflows/ci.yml
 d6273b341b202900f89485e0f673f52f016e62d707609f477584dea86679584f  ./minimal-cargo/tree.sha256
 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./nested/generate.exit
-c21c50741461ed43b84ed789e6c91d3f1bfb1f243c6437380dd7ad2e5c643352  ./nested/generate.stderr.txt
+509c3a024218a45482ce84dcb472c64f8d9020fc27749f5c3a7b1a072e83b85c  ./nested/generate.stderr.txt
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./nested/generate.stdout.txt
 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./nested/plan.exit
 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./nested/plan.stderr.txt
