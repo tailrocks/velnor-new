@@ -9,7 +9,7 @@
 //!
 //! Both install-class emissions are audited: `Prepare pinned tools`
 //! steps from the IR (catalog specs) and validator install commands
-//! from the typed render context (validator pins). Validator steps
+//! from the typed render context (catalog or validator pins). Validator steps
 //! materialize at render time, so scraping the IR alone would leave
 //! the deny ambient install invisible; the typed commands close that
 //! gap without string-matching rendered YAML.
@@ -34,7 +34,9 @@ use velnor_actions_mise::toolfiles::lockfile::{
 use velnor_actions_mise::{MISE_LOCK_FILE, PREPARE_PINNED_TOOLS_STEP, ToolCatalog};
 use velnor_actions_workflow_renderer::render::ValidatorCommand;
 
-use crate::vectors::validator_install_pin;
+use self::validator::{MiseVectors, classify_mise_vectors};
+
+mod validator;
 
 /// Audit outcome: one advisory summary plus fail-closed diagnostics.
 pub(crate) struct LockAuditOutcome {
@@ -49,35 +51,12 @@ pub(crate) struct LockAuditOutcome {
 /// unbounded into `prepare`/`generate`.
 const MAX_TOOL_FILE_BYTES: u64 = 1024 * 1024;
 
-/// What one validator command contributes to the install audit.
-enum CommandInstalls {
-    /// No `mise` vector needing audit: no `mise` token, or only
-    /// isolated `exec` vectors. Not audited.
-    NotInstall,
-    /// Emitted install specs, possibly empty (the caller blocks bare).
-    Specs(Vec<String>),
-    /// A `mise` token with an unclassifiable tail (the caller blocks
-    /// with the detail; silence would be a fail-open).
-    Unclassifiable(String),
-}
-
-/// Classification of the `mise` vectors in one argv token run.
-enum MiseVectors {
-    /// No `mise` token, or only isolated `exec` vectors.
-    NotInstall,
-    /// The first `install` vector's specs, possibly empty.
-    Install(Vec<String>),
-    /// A `mise` token with an unclassifiable tail (unknown subcommand
-    /// or truncated argv); detail feeds the blocking diagnostic.
-    Unclassifiable(String),
-}
-
 /// Audit emitted install sets against `root/mise.lock`.
 ///
 /// Install sets come from the built workflow (what CI will install,
 /// not intent): Prepare specs from the IR resolve through the
 /// catalog, validator install specs from the typed render context
-/// resolve through the validator pin, and anything else blocks as a
+/// resolve through the catalog or validator-specific pins, and anything else blocks as a
 /// generator bug, never silently. A `mise` vector that is neither an
 /// `install` nor an isolated `exec` blocks as unclassifiable.
 pub(crate) fn audit_prepare_installs(
@@ -110,7 +89,7 @@ pub(crate) fn audit_prepare_installs(
         }
     }
     for command in validator_commands {
-        audit_validator_command(command, &mut subjects, &mut blocking);
+        validator::audit_validator_command(command, &catalog, &mut subjects, &mut blocking);
     }
     subjects.sort_by(|left, right| left.display.cmp(&right.display));
     subjects.dedup();
@@ -163,119 +142,6 @@ fn prepare_specs(id: &str, step: &Step, blocking: &mut Vec<String>) -> Option<Ve
             None
         }
     }
-}
-
-/// Audit one validator command's install contribution.
-///
-/// Isolated `exec` vectors contribute nothing; install specs resolve
-/// through the validator pin only (a catalog spec here blocks as
-/// misplaced instead of auditing through the wrong pin set), and an
-/// unclassifiable `mise` vector blocks instead of passing silently.
-fn audit_validator_command(
-    command: &ValidatorCommand,
-    subjects: &mut Vec<InstallSubject>,
-    blocking: &mut Vec<String>,
-) {
-    match validator_command_specs(command) {
-        CommandInstalls::NotInstall => {}
-        CommandInstalls::Unclassifiable(detail) => {
-            let diagnostic = format!("unauditable_validator_argv:{}:{detail}", command.name);
-            blocking.push(diagnostic);
-        }
-        CommandInstalls::Specs(specs) => {
-            if specs.is_empty() {
-                blocking.push(bare_install(&command.name));
-                return;
-            }
-            for spec in specs {
-                match validator_subject(&spec) {
-                    Some(subject) => subjects.push(subject),
-                    None => blocking.push(format!("unauditable_install_spec:{spec}")),
-                }
-            }
-        }
-    }
-}
-
-/// Install contribution of one validator command.
-///
-/// Scans the typed argv (plain vectors and `sh -c` scripts alike) and
-/// classifies each `mise` vector: `install` extracts, isolated `exec`
-/// contributes nothing, anything else blocks as unclassifiable.
-fn validator_command_specs(command: &ValidatorCommand) -> CommandInstalls {
-    let mut tokens = Vec::new();
-    for arg in &command.argv {
-        if looks_like_script(arg) {
-            tokens.extend(arg.split_whitespace());
-        } else {
-            tokens.push(arg.as_str());
-        }
-    }
-    match classify_mise_vectors(&tokens) {
-        MiseVectors::Install(specs) => CommandInstalls::Specs(specs),
-        MiseVectors::NotInstall => CommandInstalls::NotInstall,
-        MiseVectors::Unclassifiable(detail) => CommandInstalls::Unclassifiable(detail),
-    }
-}
-
-/// True for argv elements holding a shell script rather than one token.
-fn looks_like_script(arg: &str) -> bool {
-    arg.chars().any(char::is_whitespace)
-}
-
-/// Classify the `mise` vectors in one token run, in order.
-///
-/// Each `mise` token classifies through the flags that follow it:
-/// `install` extracts its specs, `exec` skips to the next `mise`
-/// token, and anything else (unknown subcommand, truncated tail)
-/// fails closed — an installer-adjacent vector the audit cannot prove
-/// is an `exec` must block, never pass silently. A bare `install`
-/// without a preceding `mise` (a `cargo install` payload) never
-/// classifies. Specs run until the first shell metacharacter (scripts)
-/// or the end of argv (plain vectors).
-fn classify_mise_vectors(tokens: &[&str]) -> MiseVectors {
-    for (at, token) in tokens.iter().enumerate() {
-        if *token != "mise" {
-            continue;
-        }
-        let mut cursor = at + 1;
-        while cursor < tokens.len() && tokens[cursor].starts_with('-') {
-            cursor += 1;
-        }
-        let Some(subcommand) = tokens.get(cursor) else {
-            return MiseVectors::Unclassifiable("truncated".to_owned());
-        };
-        match *subcommand {
-            "install" => return MiseVectors::Install(specs_until_metachar(&tokens[cursor + 1..])),
-            "exec" => {}
-            other => {
-                return MiseVectors::Unclassifiable(format!("unexpected_subcommand:{other}"));
-            }
-        }
-    }
-    MiseVectors::NotInstall
-}
-
-/// Specs until the first shell metacharacter (scripts) or argv end.
-fn specs_until_metachar(tail: &[&str]) -> Vec<String> {
-    let mut specs = Vec::new();
-    for spec in tail {
-        if matches!(*spec, "&&" | ";" | "||" | "}" | "{" | "(" | ")") {
-            break;
-        }
-        specs.push((*spec).to_owned());
-    }
-    specs
-}
-
-/// Resolve one emitted validator spec through the validator pin.
-fn validator_subject(spec: &str) -> Option<InstallSubject> {
-    let (name, version) = validator_install_pin(spec)?;
-    Some(InstallSubject {
-        display: format!("{name}@{version}"),
-        expected_version: version.to_owned(),
-        lock_key: name.to_owned(),
-    })
 }
 
 /// Read a tool file capped at [`MAX_TOOL_FILE_BYTES`].

@@ -41,13 +41,12 @@ pub(crate) fn check_token_hygiene(jobs: &BTreeMap<String, Job>) -> Result<(), Re
 /// the real steps through this gate, so a drifted literal fails there,
 /// not here. Fetch and prepare download tools and sources (registry
 /// auth is their purpose); nested fetch names carry a manifest suffix.
-/// The pinned offline analyzers (deny, machete, zizmor, actionlint)
-/// execute no repository code and cold-install their tools, so they
-/// run ambient: scrubbing broke `ubi:` installs (API 401) and zizmor
-/// (empty-token abort), CI run 36815180228. Plan and fetch-reports are
-/// internal steps with no shell env to gate, and release publishes
-/// through `gh` (allowlisted by job ID below).
-const AMBIENT_AUTH_STEPS: [&str; 7] = [
+/// Pinned offline analyzers execute no repository code and cold-install
+/// their tools, so they run ambient: scrubbing broke `ubi:` installs (API
+/// 401) and zizmor (empty-token abort), CI run 36815180228. Python source
+/// tests use a separate ambient install-only step, then a scrubbed run
+/// step. Plan and fetch-reports are internal; release publishes through `gh`.
+const AMBIENT_AUTH_STEPS: [&str; 8] = [
     "Prepare pinned tools",
     "Prepare Rust components",
     "Fetch Cargo sources",
@@ -55,6 +54,7 @@ const AMBIENT_AUTH_STEPS: [&str; 7] = [
     crate::steps::MACHETE_STEP_NAME,
     "Run zizmor",
     "Run actionlint",
+    crate::render::PYTHON_SOURCE_PREPARE_NAME,
 ];
 
 /// True when a step name carries ambient-auth permission.

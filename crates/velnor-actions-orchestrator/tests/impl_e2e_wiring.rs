@@ -267,6 +267,7 @@ fn emitted_yaml_wires_helpers_velnor_policy() -> TestResult {
             ("cargo-deny", "Run cargo-deny"),
             ("cargo-machete", "Run cargo-machete"),
             ("zizmor", "Run zizmor"),
+            ("python-source-tests", "Run Python source tests"),
         ] {
             let job = jobs.iter().find(|job| job.id == id);
             let job = job.unwrap_or_else(|| panic!("missing {id} job"));
@@ -369,7 +370,13 @@ fn emitted_yaml_wires_helpers_consumer() -> TestResult {
         .get(WORKFLOW_PATH)
         .ok_or("missing workflow in staged tree")?;
     let jobs = check_tree(yaml).map_err(|err| format!("{err}:\n{yaml}"))?;
-    for id in ["alint", "cargo-deny", "cargo-machete", "zizmor"] {
+    for id in [
+        "alint",
+        "cargo-deny",
+        "cargo-machete",
+        "zizmor",
+        "python-source-tests",
+    ] {
         assert!(jobs.iter().all(|job| job.id != id), "consumer emits {id}");
     }
     Ok(())
