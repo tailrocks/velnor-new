@@ -284,7 +284,7 @@ fn json_parser_reads_every_shape() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
-fn metadata_members_match_eight() -> Result<(), Box<dyn Error>> {
+fn metadata_members_match_products_and_archive_guard() -> Result<(), Box<dyn Error>> {
     let doc = metadata()?;
     let mut names: Vec<&str> = workspace_packages(&doc)?
         .iter()
@@ -292,8 +292,9 @@ fn metadata_members_match_eight() -> Result<(), Box<dyn Error>> {
         .collect();
     names.sort_unstable();
     let mut want: Vec<&str> = super::MEMBERS.iter().map(|member| member.1).collect();
+    want.push("velnor-archive-guard");
     want.sort_unstable();
-    assert_eq!(names, want, "resolver member set drift");
+    assert_eq!(names, want, "product and archive guard member set drift");
     Ok(())
 }
 
