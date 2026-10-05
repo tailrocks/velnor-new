@@ -1,5 +1,7 @@
 //! P01/P02 regression tests: closed required evidence, obligation universe.
 
+use crate::impl_common::git_fixture;
+
 use serde_json::json;
 use velnor_actions_contract::{FinalStatus, JobConclusion, ObligationDecision};
 use velnor_actions_orchestrator::{assemble_merge_request, merge_internal};
@@ -354,7 +356,7 @@ fn checkout_mismatch_rejects_plan() -> TestResult {
     let root = repo.path();
     crate::impl_common::git(&["add", "."], root)?;
     crate::impl_common::git(&["commit", "-m", "one"], root)?;
-    let output = std::process::Command::new("git")
+    let output = git_fixture::command(root)?
         .args(["rev-parse", "HEAD"])
         .current_dir(root)
         .output()?;
