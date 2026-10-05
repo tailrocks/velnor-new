@@ -158,12 +158,12 @@ list_members() {
 }
 
 move_member() {
-  local actual="$1"
-  local intended="$2"
+  local actual="$1" intended="$2" parent
   if [ -d "$intended" ] && [ ! -L "$intended" ] && [ ! -d "$actual" ]; then
     die "destination is a directory: $intended"
   fi
-  mkdir -p -- "$(dirname -- "$intended")"
+  parent="${intended%/*}"
+  mkdir -p -- "${parent:-/}"
   if [ -d "$actual" ] && [ ! -L "$actual" ] && [ -d "$intended" ] && [ ! -L "$intended" ]; then
     local child
     for child in "$actual"/* "$actual"/.[!.]* "$actual"/..?*; do
@@ -192,7 +192,7 @@ job_path() {
 # A symlink may point only inside an allowed root. A later member must
 # not walk through an archive symlink or a symlink already on disk.
 reject_symlink_traversal() {
-  local -A links=()
+  local -A links=() safe=()
   local i name target dir intended root key prefix
   root="$(norm_path "${chdir:-$PWD}")"
   for i in "${!mem_name[@]}"; do
@@ -217,11 +217,16 @@ reject_symlink_traversal() {
     name="${mem_name[$i]}"
     prefix="$(member_intended "$name")"
     while [ "$prefix" != "/" ] && [ "$prefix" != "." ] && [ "$prefix" != "$root" ]; do
-      prefix="$(dirname -- "$prefix")"
-      [ "$prefix" != "/" ] && [ "$prefix" != "." ] || break
+      case "$prefix" in
+        */*) prefix="${prefix%/*}"; [ -n "$prefix" ] || prefix=/ ;;
+        *) prefix=. ;;
+      esac
+      [ "$prefix" = / ] || [ "$prefix" = . ] && break
+      [ -n "${safe[$prefix]:-}" ] && break
       if [ -n "${links[$prefix]:-}" ] || [ -L "$prefix" ]; then
         die "member traverses symlink: $name"
       fi
+      safe["$prefix"]=1
       [ "$prefix" = "$root" ] && break
     done
   done
