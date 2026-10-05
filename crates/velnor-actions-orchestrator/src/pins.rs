@@ -229,8 +229,8 @@ const GENERATOR_SEED_ROOT: &str = "/opt/velnor/seed";
 ///
 /// # Errors
 ///
-/// Returns [`OrchestratorError::Contract`] when `seed_root` or the staged
-/// file name is not a safe path token.
+/// Returns [`OrchestratorError::Contract`] when the seed root or staged
+/// path is outside its closed safe-path grammar.
 pub fn acquire_script_argv(
     staged: &str,
     seed_root: &str,
@@ -238,6 +238,11 @@ pub fn acquire_script_argv(
     if !absolute_token(seed_root) {
         return Err(OrchestratorError::Contract {
             problem: format!("bad_seed_root:{seed_root}"),
+        });
+    }
+    if !staged_path_token(staged) {
+        return Err(OrchestratorError::Contract {
+            problem: format!("bad_staged_path:{staged}"),
         });
     }
     let dir = staged.rsplit_once('/').map_or(staged, |(head, _)| head);
@@ -261,6 +266,13 @@ fn absolute_token(value: &str) -> bool {
         && value
             .bytes()
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'/' | b'.' | b'_' | b'-'))
+}
+
+/// Allow static absolute test paths or the one emitted runner-temp prefix.
+fn staged_path_token(value: &str) -> bool {
+    value
+        .strip_prefix(STAGED_BINARY_PREFIX)
+        .map_or_else(|| absolute_token(value), file_token)
 }
 
 fn file_token(value: &str) -> bool {
