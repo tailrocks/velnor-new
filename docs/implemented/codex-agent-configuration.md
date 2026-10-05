@@ -57,4 +57,4 @@ git commit \
 
 Inspect the resulting message with `git show -s --format=%B HEAD`. Review-only agents must not edit or commit. Never rewrite a commit already pushed to a shared branch to correct its trailers; make a new follow-up commit and describe any historical metadata correction truthfully.
 
-Before any local commit or API-submitted squash message, run `python3 scripts/validate-commit-trailers.py MESSAGE_FILE`. For local commits, pass `--check-local-identities` as well. The validator reads the exact trailer block above; after an API merge, independently verify the actual remote commit message and author metadata.
+Before any local commit or API-submitted squash message, run `cargo run --locked -p velnor-actions-cli --example validate_commit_trailers -- MESSAGE_FILE` from the repository root. For local commits, add `--check-local-identities` after the message path. The manual Rust validator reads the exact trailer block above; after an API merge, independently verify the actual remote commit message and author metadata.
