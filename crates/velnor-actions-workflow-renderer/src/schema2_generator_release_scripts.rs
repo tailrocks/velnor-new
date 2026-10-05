@@ -11,6 +11,49 @@ pub(super) fn publish(version: &str, assets: &super::AssetNames) -> String {
     publish::publish(version, assets)
 }
 
+pub(super) fn candidate_provenance(
+    version: &str,
+    target: &str,
+    asset: &str,
+    sidecar: &str,
+    provenance: &str,
+    sum_command: &str,
+) -> String {
+    format!(
+        "set -eu\n{CATALOG_VERSION}\n{PROVENANCE_BODY}",
+        CATALOG_VERSION = CATALOG_VERSION,
+        PROVENANCE_BODY = provenance_body(version, target, asset, sidecar, provenance, sum_command),
+    )
+}
+
+fn provenance_body(
+    version: &str,
+    target: &str,
+    asset: &str,
+    sidecar: &str,
+    provenance: &str,
+    sum_command: &str,
+) -> String {
+    format!(
+        r#"
+test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+RUST_VERSION="$(catalog_version RUST_VERSION)"
+MBX_VERSION="$(catalog_version MR_BOXINGTON_VERSION)"
+digest="$({sum_command} {asset} | awk 'NR == 1 && length($1) == 64 && $1 !~ /[^0-9a-f]/ {{ print $1; next }} {{ exit 1 }} END {{ if (NR != 1) exit 1 }}')"
+test -s {sidecar}
+jq -n --arg version "{version}" --arg repository "$GITHUB_REPOSITORY" --arg commit "$GITHUB_SHA" --arg target "{target}" --arg asset "{asset}" --arg sha256 "$digest" --arg rust "$RUST_VERSION" --arg mr_boxington "$MBX_VERSION" '{{"schema":1,"version":$version,"repository":$repository,"commit":$commit,"target":$target,"asset":$asset,"sha256":$digest,"toolchain":{{"rust":$rust,"mr-boxington":$mr_boxington}}}}' > {provenance}
+chmod 644 {provenance}
+test -s {provenance}
+"#
+    )
+}
+
+pub(super) fn manifest_digest(manifest: &str) -> String {
+    format!(
+        "set -eu\ndigest=\"$(sha256sum '{manifest}' | awk 'NR == 1 && length($1) == 64 && $1 !~ /[^0-9a-f]/ {{ print $1; next }} {{ exit 1 }} END {{ if (NR != 1) exit 1 }}')\"\nprintf 'manifest_sha256=%s\\n' \"$digest\" >> \"$GITHUB_OUTPUT\""
+    )
+}
+
 const CATALOG_VERSION: &str = r#"
 catalog_version() {
   awk -F '"' -v name="$1" '

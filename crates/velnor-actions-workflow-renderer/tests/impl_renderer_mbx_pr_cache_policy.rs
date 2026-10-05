@@ -19,7 +19,11 @@ fn opt_in_reaches_key_prep_and_elected_save_conditions() -> Result<(), RenderErr
         &context,
     )?;
 
-    let key = step_window(&text, "Prepare MBX bundle key", "Restore MBX single bundle");
+    let key = step_window(
+        &text,
+        "Prepare MBX cache identity",
+        "Restore MBX single bundle",
+    );
     for required in [
         "MBX_PR_CACHE_POLICY: same-repository-scoped",
         "github.event_name",
@@ -60,7 +64,7 @@ fn opt_in_reaches_key_prep_and_elected_save_conditions() -> Result<(), RenderErr
             "{condition}"
         );
         assert!(
-            condition.contains("steps.mbx-bundle-key.outputs.pr-cache-allowed == 'true'"),
+            condition.contains("steps.mbx-cache-key.outputs.pr-cache-allowed == 'true'"),
             "{condition}"
         );
     }
@@ -76,7 +80,11 @@ fn read_only_render_keeps_existing_push_only_writer_gate() -> Result<(), RenderE
         None,
         &fixture_ctx(),
     )?;
-    let key = step_window(&text, "Prepare MBX bundle key", "Restore MBX single bundle");
+    let key = step_window(
+        &text,
+        "Prepare MBX cache identity",
+        "Restore MBX single bundle",
+    );
     assert!(!key.contains("MBX_PR_CACHE_POLICY"), "{key}");
     let save = text
         .get(
@@ -87,7 +95,9 @@ fn read_only_render_keeps_existing_push_only_writer_gate() -> Result<(), RenderE
         .ok_or_else(|| RenderError::InvalidWorkflow("bad_save_window".to_owned()))?;
     assert!(save.contains("github.event_name == 'push'"), "{save}");
     assert!(
-        save.contains("github.ref_name == github.event.repository.default_branch"),
+        save.contains(
+            "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)"
+        ),
         "{save}"
     );
     assert!(!save.contains("pull_request"), "{save}");

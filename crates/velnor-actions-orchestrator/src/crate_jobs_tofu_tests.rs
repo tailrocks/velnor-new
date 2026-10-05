@@ -4,6 +4,7 @@
 
 use super::*;
 use velnor_actions_rust::TaskKind;
+use velnor_actions_rust::task_kind_rank;
 
 /// Tofu proposal via the T12 adapter constructor.
 fn tofu_group(root: &str, kind: velnor_actions_tofu::TofuTaskKind) -> ProposedTask {

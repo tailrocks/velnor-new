@@ -20,5 +20,6 @@ fn schema2_workflows_match_expected_bytes() -> TestResult {
         &marked(MONITORING)
     );
     schema2_generator_release_snapshots::assert_rendered(&tree)?;
+    schema2_generator_candidate_snapshots::assert_rendered(&tree)?;
     Ok(())
 }
