@@ -1,0 +1,18 @@
+[core]
+	repositoryformatversion = 0
+	filemode = true
+	bare = false
+	logallrefupdates = true
+	ignorecase = true
+	precomposeunicode = true
+[remote "canonical"]
+	url = git@github.com:tailrocks/velnor-new.git
+	fetch = +refs/heads/*:refs/remotes/canonical/*
+[lfs]
+	repositoryformatversion = 0
+[branch "recovery/main-plus-perf"]
+	remote = canonical
+	merge = refs/heads/main
+[remote "origin"]
+	url = git@github.com:tailrocks/velnor-new.git
+	fetch = +refs/heads/*:refs/remotes/origin/*
