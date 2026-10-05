@@ -5,8 +5,8 @@ use std::fs;
 use tempfile::TempDir;
 use velnor_actions_contract::canonical_json_str;
 use velnor_actions_orchestrator::{
-    assemble_merge_request, merge_internal, merge_passed, plan_internal, plan_outputs,
-    publish_plan_files, response_path_for, write_request_parts,
+    PlanOutputMode, assemble_merge_request, merge_internal, merge_passed, plan_internal,
+    plan_outputs, publish_plan_files, response_path_for, write_request_parts,
 };
 
 use crate::impl_common::{
@@ -198,17 +198,21 @@ fn plan_outputs_agree_with_plan_matrix() -> TestResult {
         "root": root.display().to_string(),
     });
     let response = plan_internal(&request.to_string())?;
-    let outputs = plan_outputs(&response)?;
+    let outputs = plan_outputs(&response, PlanOutputMode::Static)?;
     let value: serde_json::Value = serde_json::from_str(&response)?;
-    assert_eq!(outputs.plan, canonical_json_str(&value["plan"])?);
     assert_eq!(outputs.matrix, canonical_json_str(&value["matrix"])?);
     assert!(!outputs.matrix.contains('\n'));
-    assert!(outputs.plan.contains(&outputs.matrix));
     assert!(
         outputs.covered_tasks.is_empty(),
         "execute-all plans emit no channel"
     );
-    assert!(err_of(plan_outputs("not json"), "outputs reject garbage").is_ok());
+    assert!(
+        err_of(
+            plan_outputs("not json", PlanOutputMode::Static),
+            "outputs reject garbage"
+        )
+        .is_ok()
+    );
     Ok(())
 }
 
@@ -222,7 +226,7 @@ fn plan_outputs_encode_covered_tasks() -> TestResult {
         "plan": plan_json,
         "matrix": plan_json["matrix"],
     });
-    let outputs = plan_outputs(&response.to_string())?;
+    let outputs = plan_outputs(&response.to_string(), PlanOutputMode::Static)?;
     let mut ids: Vec<&str> = plan
         .obligations
         .iter()

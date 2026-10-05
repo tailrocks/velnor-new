@@ -47,6 +47,7 @@ mod noop_report;
 mod origin;
 mod pins;
 mod plan;
+mod plan_output_limits;
 mod plan_stacks;
 mod prepare;
 mod preseed_manifest;
@@ -122,6 +123,7 @@ pub use merge::merge_internal;
 pub use merge_request::assemble_merge_request;
 pub use pins::consumer_acquire_step_with_manifest;
 pub use plan::{plan_text, plan_text_checked};
+pub use plan_output_limits::{JOB_OUTPUTS_BUDGET_UTF16_BYTES, PlanOutputMode};
 pub use prepare::{GenerationPreparation, prepare};
 pub use preseed_manifest::{PRESEED_MANIFEST_OP, write_preseed_manifest};
 pub use provenance::{EvidenceProvenance, ProfileProvenance};
@@ -143,6 +145,7 @@ pub use velnor_actions_contract::workflow::{
     QUALIFICATION_CACHE_ENABLED_OUTPUT, QUALIFICATION_CACHE_WRITE_OUTPUT,
     QUALIFICATION_CAMPAIGN_OUTPUT, QUALIFICATION_PHASE_OUTPUT,
 };
+pub use velnor_actions_contract::{DYNAMIC_MATRIX_OUTPUT_MODE, PLAN_MATRIX_OUTPUT_MODE_ENV};
 pub use workflow::{CHECKOUT_USES, DEFAULT_RUNNER_LABEL, WorkflowPlan};
 
 /// Version marker for the orchestrator shell.

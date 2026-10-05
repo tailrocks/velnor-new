@@ -125,6 +125,7 @@ pub use workflow::{
     task_report_relpath, tofu_display_name, trust_for_event, validate_final_report_id,
     validate_job_id, validate_matrix_run,
 };
+pub use workflow::{DYNAMIC_MATRIX_OUTPUT_MODE, PLAN_MATRIX_OUTPUT_MODE_ENV};
 
 /// Version marker for the contract schema shell.
 pub const CONTRACT_VERSION: u32 = 0;
