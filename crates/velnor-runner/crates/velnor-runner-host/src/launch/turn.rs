@@ -136,6 +136,16 @@ async fn pump<H: PollHost>(
     }
 }
 
+/// A cleared job name and a steady scale name stay on the queue.
+///
+/// Neither error acknowledges the message or ends the session.
+fn queue_stays(error: Option<&EnsureError>) -> bool {
+    matches!(
+        error,
+        Some(EnsureError::NameSteady | EnsureError::NameCleared)
+    )
+}
+
 fn assigned_in(polled: &Poll) -> u32 {
     let Poll::Batch(batch) = polled else {
         return 0;
@@ -274,7 +284,7 @@ impl Turn<'_> {
                     },
                 )
                 .await;
-                if let Err(EnsureError::NameSteady) = &launched {
+                if queue_stays(launched.as_ref().err()) {
                     // Skip this message id. Do not delete that runner again and do not ack.
                     let id = super::steady::message_id(polled);
                     if let Some(next) = super::steady::steady_cursor(self.cursor, id) {
@@ -358,5 +368,13 @@ mod tests {
         // Bound 8 used to return before this poll. `launch_once` deletes only after return.
         assert!(host.polls >= 9, "{}", host.polls);
         Ok(())
+    }
+
+    #[test]
+    fn cleared_name_keeps_the_session() {
+        assert!(super::queue_stays(Some(&EnsureError::NameCleared)));
+        assert!(super::queue_stays(Some(&EnsureError::NameSteady)));
+        assert!(!super::queue_stays(Some(&EnsureError::Conflict)));
+        assert!(!super::queue_stays(None));
     }
 }

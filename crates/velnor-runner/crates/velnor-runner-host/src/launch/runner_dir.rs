@@ -189,7 +189,8 @@ where
     let Listed::Offline(id) = listed else {
         return Ok(listed_decision(listed));
     };
-    if recorded(journal, name, id).await? {
+    // The journal subject is not the runner name on the job path.
+    if recorded(journal, row, id).await? {
         return Ok(Decision::Repeat);
     }
     let decision = delete_offline(lane, &path, id, &ctx.pat)?;
@@ -199,12 +200,19 @@ where
     Ok(decision)
 }
 
-async fn recorded(journal: &Journal, name: &str, id: i64) -> Result<bool, EnsureError> {
-    let needle = id.to_string();
+async fn recorded(journal: &Journal, row_id: i64, runner_id: i64) -> Result<bool, EnsureError> {
+    let needle = runner_id.to_string();
     let rows = journal.rows().await.map_err(steps::map_journal)?;
+    let Some(subject) = rows
+        .iter()
+        .find(|row| row.id == row_id)
+        .map(|row| row.subject.clone())
+    else {
+        return Ok(false);
+    };
     Ok(rows.iter().any(|row| {
         row.kind == "launch"
-            && row.subject == name
+            && row.subject == subject
             && row.github_runner_id.as_deref() == Some(needle.as_str())
     }))
 }

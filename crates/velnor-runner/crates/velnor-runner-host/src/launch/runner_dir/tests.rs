@@ -306,3 +306,59 @@ async fn fresh_jit_conflict_deletes_the_offline_runner_and_starts() -> Result<()
     assert!(one_done(&rows));
     absent(&scratch.file())
 }
+
+#[tokio::test]
+async fn job_subject_does_not_delete_the_same_offline_id_again() -> Result<(), String> {
+    let (scratch, journal) = open("job-subject").await?;
+    let (first, started) = drive_job(Mode::JobNameTaken, &journal).await;
+    assert_eq!(started, Err("runner name cleared".to_owned()));
+    assert_eq!(
+        first
+            .iter()
+            .filter(|call| **call == "runner-delete")
+            .count(),
+        1
+    );
+    assert!(!first.contains(&"ack"));
+    let (second, again) = drive_job(Mode::JobNameTaken, &journal).await;
+    assert_eq!(again, Err("runner name cleared".to_owned()));
+    assert_eq!(
+        second
+            .iter()
+            .filter(|call| **call == "runner-delete")
+            .count(),
+        0
+    );
+    let rows = journal.rows().await.map_err(|err| err.to_string())?;
+    assert!(rows.iter().any(|row| {
+        row.subject == "m4r7"
+            && row.state == IntentState::Failed
+            && row.github_runner_id.as_deref() == Some("20246")
+    }));
+    let occupied = rows
+        .iter()
+        .filter(|row| super::super::slot::holds(row))
+        .count();
+    assert_eq!(occupied, 0);
+    absent(&scratch.file())
+}
+
+async fn drive_job(
+    mode: Mode,
+    journal: &Journal,
+) -> (Vec<&'static str>, Result<Option<Started>, String>) {
+    let mut script = Script {
+        calls: Vec::new(),
+        mode,
+    };
+    let started = super::super::drive_offer(
+        &mut script,
+        &creds(),
+        &crate::launch_harness::available(&[7]),
+        journal,
+        start,
+    )
+    .await
+    .map_err(|err| err.to_string());
+    (script.calls, started)
+}

@@ -63,6 +63,8 @@ pub(crate) enum Mode {
     NameTakenOnce,
     /// Every JIT is HTTP 409. The directory deletes the offline runner.
     NameTaken,
+    /// Every JIT is HTTP 409 for job runner `v7` id 20246.
+    JobNameTaken,
 }
 
 impl Transport for Script {
@@ -77,7 +79,7 @@ impl Transport for Script {
             if matches!(self.mode, Mode::JitFail) {
                 return Err(TransportFail::Http(500));
             }
-            if matches!(self.mode, Mode::NameTaken)
+            if matches!(self.mode, Mode::NameTaken | Mode::JobNameTaken)
                 || (matches!(self.mode, Mode::NameTakenOnce) && prior == 0)
             {
                 return Ok(Exchange {
@@ -151,8 +153,13 @@ impl Script {
         }
         let busy = matches!(self.mode, Mode::BusyRunner);
         let status = if busy { "online" } else { "offline" };
+        let (id, name) = if matches!(self.mode, Mode::JobNameTaken) {
+            (20246, "v7")
+        } else {
+            (20231, "m100000788")
+        };
         let body = format!(
-            r#"{{"total_count":1,"runners":[{{"id":20231,"name":"m100000788","status":"{status}","busy":{busy}}}]}}"#
+            r#"{{"total_count":1,"runners":[{{"id":{id},"name":"{name}","status":"{status}","busy":{busy}}}]}}"#
         );
         Exchange {
             status: 200,
