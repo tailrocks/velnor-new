@@ -59,6 +59,14 @@ normalization.
 | minimal-cargo | 0 | same |
 | dogfood (this repo) | 0 | plan.txt, generate tree, `dogfood.verdict=identical`, tree.sha256 |
 
+The four consumer fixtures receive the checked-in
+`fixtures/consumer-release-manifest.json` in their scratch repositories.
+Its placeholder commit and target digests only exercise the canonical
+three-target schema. They are not a source-bound candidate manifest, native
+qualification, or release evidence. The dogfood producer repo stays on its
+VelnorRepositoryV1 path and receives no consumer manifest. The actual CLI
+parity suite also removes the fixture and verifies that `plan` fails closed.
+
 The checked-in producer workflow was regenerated from the reviewed source with
 the locked release candidate (`mbx build --release --locked --package
 velnor-actions-cli --bin velnor-actions`). Its complete `.github` output was
