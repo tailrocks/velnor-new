@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+[[ "$1" == '--foreground' && "$2" == '600s' ]] \
+  || { printf 'unexpected timeout invocation\n' >&2; exit 91; }
+shift 2
+exec "$@"

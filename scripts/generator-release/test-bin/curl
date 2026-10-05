@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+output=''
+write_status=false
+url=''
+while [[ "$#" -gt 0 ]]; do
+  case "$1" in
+    --output|-o) output="$2"; shift 2 ;;
+    --write-out) write_status=true; shift 2 ;;
+    --*) shift; [[ "${1-}" == -* ]] || shift ;;
+    https://*) url="$1"; shift ;;
+    *) shift ;;
+  esac
+done
+[[ -n "$output" && "$write_status" == true && -n "$url" ]] \
+  || { printf 'unexpected curl invocation\n' >&2; exit 93; }
+
+state="${FAKE_STATE:?FAKE_STATE is required}"
+count="$(cat "$state/curl-gets" 2>/dev/null || printf '0')"
+printf '%s\n' "$((count + 1))" > "$state/curl-gets"
+mode="${FAKE_CURL_MODE:-ok}"
+path="${url#https://api.github.com/repos/tailrocks/velnor-new/}"
+status=200
+
+case "$mode" in
+  publisher_timeout) exit 28 ;;
+  publisher_403)
+    status=403
+    body='{"message":"Resource not accessible by integration","status":"403"}'
+    ;;
+  publisher_malformed)
+    body='not-json'
+    ;;
+  *)
+    case "$path" in
+      actions/artifacts/*)
+        artifact_id="${path##*/}"
+        body="$(jq -c --argjson id "$artifact_id" \
+          '.artifacts[] | select(.id == $id)' "${FAKE_ARTIFACTS_JSON:?}")"
+        if [[ "$mode" == 'artifact_substitution' && "$artifact_id" == '501' ]]; then
+          body="$(jq -c '.name = "substituted"' <<< "$body")"
+        fi
+        ;;
+      git/ref/tags/v0.1.1)
+        if [[ "$mode" == 'existing_tag' || -e "$state/tag-created" ]]; then
+          body="{\"ref\":\"refs/tags/v0.1.1\",\"object\":{\"sha\":\"${FAKE_SHA:?}\",\"type\":\"commit\"}}"
+        else
+          status=404
+          body='{"message":"Not Found","status":"404"}'
+        fi
+        ;;
+      releases/tags/v0.1.1)
+        if [[ "$mode" == 'existing_release' || -e "$state/release-created" ]]; then
+          body="$(cat "${FAKE_RELEASE_JSON:?}")"
+        else
+          status=404
+          body='{"message":"Not Found","status":"404"}'
+        fi
+        ;;
+      *)
+        printf 'fake curl: unexpected endpoint %s\n' "$path" >&2
+        exit 94
+        ;;
+    esac
+    ;;
+esac
+
+printf '%s\n' "$body" > "$output"
+printf '%s' "$status"

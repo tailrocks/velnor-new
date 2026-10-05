@@ -1,0 +1,123 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+fail() { printf 'fake gh: %s\n' "$1" >&2; exit 92; }
+mode="${FAKE_GH_MODE:-ok}"
+state="${FAKE_STATE:?FAKE_STATE is required}"
+
+if [[ "$1" == '--version' ]]; then
+  printf 'gh version 2.102.0 (fixture)\n'
+  exit 0
+fi
+
+if [[ "$1" == 'attestation' && "$2" == 'verify' ]]; then
+  [[ "$mode" != 'wrong_attestation' ]] || fail 'attestation source mismatch'
+  subject="$3"
+  [[ -s "$subject" ]] || fail 'attestation subject is missing'
+  shift 3
+  repo_arg='' signer_workflow='' signer_digest='' source_digest=''
+  source_ref='' bundle='' format='' deny=false
+  while [[ "$#" -gt 0 ]]; do
+    case "$1" in
+      --deny-self-hosted-runners) deny=true; shift ;;
+      --repo) repo_arg="$2"; shift 2 ;;
+      --signer-workflow) signer_workflow="$2"; shift 2 ;;
+      --signer-digest) signer_digest="$2"; shift 2 ;;
+      --source-digest) source_digest="$2"; shift 2 ;;
+      --source-ref) source_ref="$2"; shift 2 ;;
+      --bundle) bundle="$2"; shift 2 ;;
+      --format) format="$2"; shift 2 ;;
+      *) fail "unexpected attestation argument: $1" ;;
+    esac
+  done
+  [[ "$repo_arg" == 'tailrocks/velnor-new' \
+    && "$signer_workflow" == 'tailrocks/velnor-new/.github/workflows/generator-release.yml' \
+    && "$signer_digest" == "${FAKE_SHA:?}" \
+    && "$source_digest" == "${FAKE_SHA:?}" \
+    && "$source_ref" == "refs/heads/${FAKE_BRANCH:-main}" \
+    && "$bundle" == assets/* \
+    && "$format" == 'json' && "$deny" == 'true' ]] \
+    || fail 'attestation verification did not receive exact source policy'
+  printf '[{"verificationResult":{}}]\n'
+  exit 0
+fi
+
+if [[ "$1" == 'release' && "$2" == 'create' ]]; then
+  [[ "$mode" != 'release_lost' ]] || {
+    count="$(cat "$state/release-posts" 2>/dev/null || printf '0')"
+    printf '%s\n' "$((count + 1))" > "$state/release-posts"
+    : > "$state/release-created"
+    fail 'release response lost after request was applied'
+  }
+  [[ "$mode" != 'release_existing' ]] || fail 'release already exists'
+  [[ "$(cat "$state/tag-created" 2>/dev/null || true)" == 'yes' ]] \
+    || fail 'release create was attempted before tag creation'
+  [[ "$*" != *'--clobber'* ]] || fail 'release create must never clobber assets'
+  assets=0
+  for arg in "$@"; do
+    [[ "$arg" == assets/* ]] && assets=$((assets + 1))
+  done
+  [[ "$assets" -eq 8 ]] || fail 'release create did not receive eight exact assets'
+  count="$(cat "$state/release-posts" 2>/dev/null || printf '0')"
+  printf '%s\n' "$((count + 1))" > "$state/release-posts"
+  : > "$state/release-created"
+  printf 'https://github.com/tailrocks/velnor-new/releases/tag/v0.1.1\n'
+  exit 0
+fi
+
+[[ "$1" == 'api' ]] || fail "unexpected gh command: $*"
+shift
+method='GET'
+endpoint=''
+while [[ "$#" -gt 0 ]]; do
+  case "$1" in
+    --method|-X) method="$2"; shift 2 ;;
+    repos/*) endpoint="$1"; shift ;;
+    *) shift ;;
+  esac
+done
+[[ -n "$endpoint" ]] || fail 'API endpoint is missing'
+
+if [[ "$method" == 'POST' && "$endpoint" == 'repos/tailrocks/velnor-new/git/refs' ]]; then
+  count="$(cat "$state/tag-posts" 2>/dev/null || printf '0')"
+  printf '%s\n' "$((count + 1))" > "$state/tag-posts"
+  printf 'yes\n' > "$state/tag-created"
+  if [[ "$mode" == 'tag_lost' ]]; then
+    fail 'tag response lost after request was applied'
+  fi
+  printf '{"ref":"refs/tags/v0.1.1","object":{"sha":"%s","type":"commit"}}\n' "$FAKE_SHA"
+  exit 0
+fi
+
+case "$mode" in
+  source_403) fail 'HTTP 403 from fixture API' ;;
+  source_timeout) fail 'fixture API timed out' ;;
+  source_malformed) printf '{broken\n'; exit 0 ;;
+esac
+
+case "$endpoint" in
+  repos/tailrocks/velnor-new)
+    printf '{"default_branch":"%s"}\n' "${FAKE_BRANCH:-main}"
+    ;;
+  repos/tailrocks/velnor-new/branches/*)
+    printf '{"commit":{"sha":"%s"}}\n' "$FAKE_SHA"
+    ;;
+  repos/tailrocks/velnor-new/actions/workflows/ci.yml/runs)
+    if [[ "$mode" == 'source_no_run' ]]; then
+      printf '[{"workflow_runs":[]} ]\n'
+      exit 0
+    fi
+    ci_sha="$FAKE_SHA"
+    ci_status='completed'
+    ci_conclusion='success'
+    if [[ "$mode" == 'source_wrong_sha' ]]; then ci_sha='ffffffffffffffffffffffffffffffffffffffff'; fi
+    if [[ "$mode" == 'source_pending' ]]; then ci_status='in_progress'; ci_conclusion='null'; fi
+    printf '[{"workflow_runs":[{"id":9001,"run_number":44,"run_attempt":1,"path":".github/workflows/ci.yml","event":"push","head_branch":"%s","head_sha":"%s","head_repository":{"full_name":"tailrocks/velnor-new"},"status":"%s","conclusion":"%s"}]}]\n' \
+      "${FAKE_BRANCH:-main}" "$ci_sha" "$ci_status" "$ci_conclusion"
+    ;;
+  repos/tailrocks/velnor-new/actions/runs/9001/attempts/1/jobs)
+    printf '[{"jobs":[{"id":9101,"run_id":9001,"run_attempt":1,"name":"Required","status":"completed","conclusion":"success","head_sha":"%s","head_branch":"%s"}]}]\n' \
+      "$FAKE_SHA" "${FAKE_BRANCH:-main}"
+    ;;
+  *) fail "unexpected API endpoint: $endpoint" ;;
+esac

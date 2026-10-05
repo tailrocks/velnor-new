@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euo pipefail
+[[ "$1" == '--no-config' && "$2" == '--no-env' && "$3" == '--no-hooks' \
+  && "$4" == 'exec' && "$5" == 'gh@2.102.0' && "$6" == '--' ]] \
+  || { printf 'unexpected mise invocation\n' >&2; exit 90; }
+shift 6
+exec "$@"
