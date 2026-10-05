@@ -33,6 +33,7 @@
 
 ## Work principles
 
+- Do not create or execute Python scripts or inline Python programs (such as `python -c`). Implement automation and one-off utilities in Rust or shell.
 - Judge by correctness, consistency, and goal fit. Never defer a known-wrong state for ROI, cost, effort, or edge-case claims.
 - Stop only at a proven tool/model/project limit. When uncertain, inspect, test, and measure first.
 - Before fixing a bug, find why the architecture permitted it and whether relatives hide nearby. Prefer structural fixes that remove the enabling condition; a symptom patch must name the deferred root cause.
