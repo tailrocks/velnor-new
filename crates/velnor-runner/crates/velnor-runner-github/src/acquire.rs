@@ -16,9 +16,9 @@ pub enum AcquireOutcome {
 /// Whether a failed call might still have happened.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Certainty {
-    /// Timeout or reset. Keep the intent and the permit.
+    /// A timeout, reset, or unusable success response may hide an effect.
     Uncertain,
-    /// The service rejected the call. The acquire did not happen.
+    /// The service explicitly rejected the call or local validation stopped it.
     Definite,
 }
 
@@ -33,11 +33,13 @@ pub enum TransportFail {
     Http(u16),
 }
 
-/// Map a transport failure to certainty. Timeouts stay occupied.
+/// Map a transport failure to certainty. Timeouts and server failures stay occupied.
 #[must_use]
 pub const fn effect_certainty(fail: TransportFail) -> Certainty {
     match fail {
-        TransportFail::Timeout | TransportFail::Reset => Certainty::Uncertain,
+        TransportFail::Timeout | TransportFail::Reset | TransportFail::Http(500..=u16::MAX) => {
+            Certainty::Uncertain
+        }
         TransportFail::Http(_) => Certainty::Definite,
     }
 }
