@@ -5,6 +5,12 @@ use serde_json::Value;
 
 use crate::error::WireError;
 
+/// Local byte bound for one Scale Set poll body.
+pub const MAX_POLL_BODY_BYTES: usize = 256 * 1024;
+/// Maximum message count accepted from one Scale Set poll.
+pub const MAX_POLL_MESSAGES: usize = 50;
+const MAX_POLL_ENVELOPE_BYTES: usize = MAX_POLL_BODY_BYTES * 8;
+
 /// One decoded poll.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Poll {
@@ -12,6 +18,18 @@ pub enum Poll {
     Empty,
     /// HTTP 200 envelope.
     Batch(ParsedBatch),
+    /// A valid outer envelope whose bounded inner body could not be decoded.
+    /// The host must persist this exact body under the outer ID before ACK.
+    Quarantined(QuarantinedBatch),
+}
+
+/// Malformed inner body retained under its stable outer Scale Set message ID.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct QuarantinedBatch {
+    /// The outer `runnerScaleSetMessageResponse.messageId`.
+    pub message_id: i64,
+    /// Exact decoded outer `body` string, bounded by [`MAX_POLL_BODY_BYTES`].
+    pub raw_body: String,
 }
 
 /// Inner job kind.
@@ -34,6 +52,8 @@ pub enum InnerKind {
 pub struct ParsedBatch {
     /// Service message id. Zero is real. Negative one is synthetic.
     pub message_id: i64,
+    /// Exact inner message body. Keep it when ownership needs quarantine.
+    pub raw_body: String,
     /// Assigned-population snapshot, when the service sent one.
     pub statistics: Option<Statistics>,
     /// Parsed inner messages, including unsupported kinds.
@@ -100,7 +120,8 @@ struct Envelope {
     statistics: Option<Statistics>,
 }
 
-/// Decode a poll. HTTP 202 ignores the body.
+/// Decode a poll. HTTP 202 ignores the body. A bounded malformed inner body
+/// is returned as [`Poll::Quarantined`] when its outer message ID is stable.
 ///
 /// # Errors
 ///
@@ -112,28 +133,59 @@ pub fn parse_poll(status: u16, body: &str) -> Result<Poll, WireError> {
     if status != 200 {
         return Err(WireError::UnexpectedStatus);
     }
-    parse_envelope(body).map(Poll::Batch)
+    parse_envelope(body)
 }
 
-fn parse_envelope(body: &str) -> Result<ParsedBatch, WireError> {
+fn parse_envelope(body: &str) -> Result<Poll, WireError> {
+    if body.len() > MAX_POLL_ENVELOPE_BYTES {
+        return Err(WireError::Malformed);
+    }
     let envelope: Envelope = serde_json::from_str(body).map_err(|_| WireError::Malformed)?;
     if envelope.message_type != "RunnerScaleSetJobMessages" {
         return Err(WireError::UnsupportedEnvelope);
     }
-    let jobs = parse_body(&envelope.body)?;
-    Ok(ParsedBatch {
-        message_id: envelope.message_id,
-        statistics: envelope.statistics,
-        jobs,
-    })
+    if envelope.message_id < 0 {
+        return Err(WireError::Malformed);
+    }
+    let raw_body = envelope.body;
+    if raw_body.len() > MAX_POLL_BODY_BYTES {
+        return Err(WireError::Malformed);
+    }
+    match parse_body(&raw_body) {
+        Ok(jobs) => Ok(Poll::Batch(ParsedBatch {
+            message_id: envelope.message_id,
+            raw_body,
+            statistics: envelope.statistics,
+            jobs,
+        })),
+        Err(_error) => Ok(Poll::Quarantined(QuarantinedBatch {
+            message_id: envelope.message_id,
+            raw_body,
+        })),
+    }
 }
 
 fn parse_body(body: &str) -> Result<Vec<InnerJob>, WireError> {
+    if body.len() > MAX_POLL_BODY_BYTES {
+        return Err(WireError::Malformed);
+    }
     if body.is_empty() {
         return Ok(Vec::new());
     }
     let values: Vec<Value> = serde_json::from_str(body).map_err(|_| WireError::Malformed)?;
+    if values.len() > MAX_POLL_MESSAGES {
+        return Err(WireError::Malformed);
+    }
     values.iter().map(parse_inner).collect()
+}
+
+/// Parse a persisted exact inner message body for bounded inbox recovery.
+///
+/// # Errors
+///
+/// Returns [`WireError::Malformed`] when JSON is invalid or exceeds a byte or message limit.
+pub fn parse_inner_messages(body: &str) -> Result<Vec<InnerJob>, WireError> {
+    parse_body(body)
 }
 
 fn parse_inner(value: &Value) -> Result<InnerJob, WireError> {
