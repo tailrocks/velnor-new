@@ -19,6 +19,10 @@ mod offer;
 pub(super) use offer::assignment;
 pub(crate) use offer::{Idle, idle};
 
+#[cfg(test)]
+#[path = "steps/assigned_resume_tests.rs"]
+mod assigned_resume_tests;
+
 pub(super) async fn launch_id<T, S, F>(
     lane: &mut T,
     ctx: &Drive,
@@ -43,9 +47,17 @@ where
         return ack_bound(lane, ctx, batch, journal, id).await;
     }
     if !fresh {
-        return hold(journal, id, EnsureError::Uncertain).await;
-    }
-    if !journal
+        if journal.claim_launch_jit(id).await.map_err(map_journal)? {
+            return mint_claimed(lane, ctx, Some(batch), journal, id, &name, start).await;
+        }
+        if !journal
+            .claim_assigned_acquire(id)
+            .await
+            .map_err(map_journal)?
+        {
+            return hold(journal, id, EnsureError::Uncertain).await;
+        }
+    } else if !journal
         .claim_assigned_acquire(id)
         .await
         .map_err(map_journal)?
@@ -185,7 +197,10 @@ where
         return finish_live(lane, ctx, journal, id, batch).await;
     }
     if !fresh {
-        return hold(journal, id, EnsureError::Uncertain).await;
+        if !journal.claim_launch_jit(id).await.map_err(map_journal)? {
+            return hold(journal, id, EnsureError::Uncertain).await;
+        }
+        return mint_claimed(lane, ctx, batch, journal, id, name, start).await;
     }
     mint(lane, ctx, batch, journal, id, name, start).await
 }
@@ -207,6 +222,23 @@ where
     if !journal.claim_launch_jit(id).await.map_err(map_journal)? {
         return hold(journal, id, EnsureError::Uncertain).await;
     }
+    mint_claimed(lane, ctx, batch, journal, id, name, start).await
+}
+
+async fn mint_claimed<T, S, F>(
+    lane: &mut T,
+    ctx: &Drive,
+    batch: Option<&velnor_runner_github::ParsedBatch>,
+    journal: &Journal,
+    id: i64,
+    name: &str,
+    start: S,
+) -> Result<Option<Started>, EnsureError>
+where
+    T: velnor_runner_github::Transport + Lane,
+    S: FnOnce(&str, &[u8], super::bind::Bind) -> F,
+    F: Future<Output = Result<Started, HostError>>,
+{
     let encoded = match fetch_jit(lane, ctx, name) {
         Ok(encoded) => encoded,
         Err(error) => {
