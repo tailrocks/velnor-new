@@ -360,6 +360,7 @@ run_case absolute-relative-target-preserved case_absolute_relative_target
 run_case absolute-link-target-rejected case_absolute_link_target
 run_case dot-symlink-walk case_dot_symlink_walk
 run_case symlink-escape case_symlink_escape
+run_case strip-components-rejected-before-symlink-extract case_strip_components_rejected_before_symlink_extract
 run_case preexisting-symlink case_preexisting_symlink
 run_case symlink-inside case_symlink_inside
 run_case external-relative-symlink case_external_relative_symlink

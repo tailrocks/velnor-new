@@ -1,5 +1,24 @@
 # Planned extraction regressions shared by tar-semantics-test.sh.
 
+case_strip_components_rejected_before_symlink_extract() {
+  local root="$work/strip-components" err status=0
+  rm -rf -- "$root"
+  mkdir -p "$root/dest" "$root/outside"
+  write_ustar "$root/arc.tar" s prefix/link ../outside || return 1
+  err="$root/err"
+  bash "$shim" -xf "$root/arc.tar" -C "$root/dest" --strip-components=1 >"$err" 2>&1 || status=$?
+  [ "$status" -ne 0 ] || return 1
+  grep -F -q -- 'unsupported option --strip-components' "$err" || return 1
+  [ ! -e "$root/dest/link" ] && [ ! -L "$root/dest/link" ] || return 1
+  [ -z "$(find "$root/dest" -mindepth 1 -print -quit)" ] || return 1
+
+  status=0
+  bash "$shim" -xf "$root/arc.tar" -C "$root/dest" --strip-components 1 >"$err" 2>&1 || status=$?
+  [ "$status" -ne 0 ] || return 1
+  grep -F -q -- 'unsupported option --strip-components' "$err" || return 1
+  [ -z "$(find "$root/dest" -mindepth 1 -print -quit)" ] || return 1
+}
+
 case_external_relative_symlink() {
   local root="$work/external-link" status=0
   rm -rf -- "$root"

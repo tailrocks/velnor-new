@@ -249,9 +249,6 @@ reject_symlink_traversal() {
 
 finish_tar() {
   local needs_pax=0 path stripped
-  if [ "$absolute" -eq 1 ] && [ -n "$strip" ]; then
-    die "unsupported -P with --strip-components"
-  fi
   # actions/cache create passes --posix. That format is the pax writer.
   # Extract and list do not implement it, so they still fail closed.
   if [ "${posix:-0}" -eq 1 ]; then

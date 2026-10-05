@@ -279,13 +279,16 @@ case_unsafe_hardlink() {
 case_plain() {
   local root="$work/plain"
   rm -rf -- "$root"
-  mkdir -p "$root/src/sub" "$root/out" "$root/stripped"
+  mkdir -p "$root/src/sub" "$root/out"
   printf ok >"$root/src/sub/f"
   bash "$shim" -cf "$root/arc.tar" -C "$root/src" sub/f || return 1
   bash "$shim" -xf "$root/arc.tar" -C "$root/out" || return 1
   [ "$(cat "$root/out/sub/f")" = ok ] || return 1
-  bash "$shim" -xf "$root/arc.tar" -C "$root/stripped" --strip-components=1 || return 1
-  [ "$(cat "$root/stripped/f")" = ok ] || return 1
+  local err="$root/err" status=0
+  run_shim "$err" -xf "$root/arc.tar" -C "$root/out" --strip-components=1 || status=$?
+  [ "$status" -ne 0 ] || return 1
+  grep -F -q -- 'unsupported option --strip-components=1' "$err" || return 1
+  [ ! -e "$root/out/f" ] || return 1
 }
 
 case_absolute_file() {

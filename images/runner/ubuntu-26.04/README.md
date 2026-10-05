@@ -16,7 +16,8 @@ targets may resolve outside `-C`; an archive member that walks through an
 archive symlink or a symlink already on disk still fails closed. Modes,
 executable bits, directory timestamps, empty directories, and pax paths
 longer than the ustar name field round-trip. `--zstd`, `--files-from`, and `-P` are implemented. `-v` does not
-change archive bytes. Ubuntu 26.04 GNU tar calls `openat2`, and qemu-user fails
+change archive bytes. `--strip-components` is unsupported and fails closed.
+Ubuntu 26.04 GNU tar calls `openat2`, and qemu-user fails
 that with `ENOSYS`, so GNU tar stays at `/usr/bin/tar.gnu` and is not the
 `tar` on `PATH`. `zstd` is installed so cache archives match hosted runners.
 `git-lfs` is installed before the tar divert so `git lfs` is on `PATH`.
