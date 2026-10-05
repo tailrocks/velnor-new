@@ -25,7 +25,7 @@ async fn non_not_found_inspect_error_blocks_admission_and_reconcile() -> Result<
         http(500, r#"{"message":"private runner-id detail"}"#),
     ])?;
 
-    let busy = within(slot::busy(&journal, &stub.docker, 1), "capacity probe").await?;
+    let busy = within(slot::busy(&journal, &stub.docker, 2), "capacity probe").await?;
     let reconcile = within(
         gate::reconcile_gate(&journal, &stub.docker),
         "reconcile probe",
@@ -33,7 +33,13 @@ async fn non_not_found_inspect_error_blocks_admission_and_reconcile() -> Result<
     .await?;
     stub.finish().await?;
 
-    assert_eq!(busy, Ok(true));
+    assert_eq!(
+        busy,
+        Err(EnsureError::Unexpected {
+            status: 0,
+            step: "docker",
+        })
+    );
     assert_eq!(
         reconcile,
         Err(EnsureError::Unexpected {
@@ -146,7 +152,19 @@ async fn docker_api_observations_preserve_only_known_running_states() -> Result<
         http(200, "{}"),
     ])?;
 
-    for expected in [Ok(0), Ok(1), Ok(0), Ok(0), Ok(0)] {
+    for expected in [
+        Ok(0),
+        Ok(1),
+        Ok(0),
+        Err(EnsureError::Unexpected {
+            status: 0,
+            step: "docker",
+        }),
+        Err(EnsureError::Unexpected {
+            status: 0,
+            step: "docker",
+        }),
+    ] {
         let actual = within(
             slot::running_count(&journal, &stub.docker),
             "slot observation",
@@ -181,11 +199,21 @@ async fn closed_docker_connection_is_not_treated_as_absent() -> Result<(), Strin
     let before = journal.rows().await.map_err(|error| error.to_string())?;
     let stub = DockerStub::open(vec![closed()])?;
 
-    let actual = within(slot::census(&journal, &stub.docker), "slot observation").await?;
+    let actual = within(
+        slot::running_count(&journal, &stub.docker),
+        "slot observation",
+    )
+    .await?;
     stub.finish().await?;
 
-    assert_eq!(actual.as_ref().map(|seen| seen.running), Ok(0));
-    assert_eq!(actual.map(|seen| seen.held), Ok(1));
+    assert_eq!(
+        actual,
+        Err(EnsureError::Unexpected {
+            status: 0,
+            step: "docker",
+        })
+    );
+    assert_eq!(slot::occupied(&journal).await, Ok(1));
     let after = journal.rows().await.map_err(|error| error.to_string())?;
     assert_eq!(after, before);
     no_response_body_in_journal(&scratch.file())

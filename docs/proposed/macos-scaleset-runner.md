@@ -136,6 +136,14 @@ stdin channel after a durable provision intent. JIT is absent from Docker
 `Config.Env`, `Cmd`, labels, image layers, host argv, journal, TOML, launchd
 plist, and evidence archives.
 
+JIT `workFolder` is `_work`, relative to the official runner root at
+`/home/runner`, so the job work directory resolves to `/home/runner/_work`.
+Mount the same per-worker named work volume there in both containers. The
+runner and DinD images create that path as uid/gid `1000:1000`, mode `0755`,
+before the first empty-volume mount; DinD starts first and Docker initializes
+the volume from its image path. This keeps the JIT temp file, checkout, tools,
+and job workspace on the same writable volume for the runner user.
+
 Delete only objects whose immutable id matches the journal. Names are not
 delete authority. Foreign objects survive. A missing delete response is not
 success. No host-wide prune. No prefix delete.

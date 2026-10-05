@@ -1,9 +1,8 @@
 //! Admission for one poll. `poll_and_drive` calls `admit`.
 
-use crate::IntentState;
 use crate::launch::{
-    Admit, Idle, InspectFact, Seat, admit, install_job_capacity, job_capacity, needs_running,
-    occupies, parse_admit_target, parse_job_capacity, poll_limit, slot_held, wide_poll_limit,
+    Admit, Idle, Seat, admit, install_job_capacity, job_capacity, needs_running,
+    parse_admit_target, parse_job_capacity, poll_limit, statistics_blocked, wide_poll_limit,
 };
 
 fn decide(capacity: u32, started: u32, running: u32, idle: Idle) -> Admit {
@@ -273,63 +272,44 @@ fn poll_limit_follows_capacity() {
 }
 
 #[test]
-fn occupies_only_a_running_named_container() {
-    let id = Some("abc");
-    assert!(occupies(IntentState::Done, id, true));
-    assert!(occupies(IntentState::Pending, id, true));
-    assert!(occupies(IntentState::Uncertain, id, true));
-    assert!(!occupies(IntentState::Done, id, false));
-    assert!(!occupies(IntentState::Failed, id, true));
-    assert!(!occupies(IntentState::Pending, None, true));
-    assert!(!occupies(IntentState::Failed, None, false));
+fn historical_starts_do_not_cover_a_free_slot() {
+    assert_eq!(
+        admit(Seat {
+            capacity: 2,
+            target: 2,
+            started: 2,
+            occupied: 1,
+            running: 1,
+            assigned: 2,
+            idle: Idle::Scale,
+        }),
+        Admit::Start { stop: true }
+    );
 }
 
 #[test]
-fn one_unresolved_row_holds_only_its_slot() {
-    assert!(slot_held(
-        true,
-        IntentState::Uncertain,
-        false,
-        InspectFact::NoId
-    ));
-    assert!(slot_held(
-        true,
-        IntentState::Pending,
-        false,
-        InspectFact::Unresolved
-    ));
-    assert!(!slot_held(
-        true,
-        IntentState::Done,
-        false,
-        InspectFact::NotRunning
-    ));
-    assert!(!slot_held(
-        true,
-        IntentState::Done,
-        false,
-        InspectFact::NoId
-    ));
-    assert!(!slot_held(
-        false,
-        IntentState::Pending,
-        false,
-        InspectFact::Unresolved
-    ));
-    assert!(!slot_held(
-        true,
-        IntentState::Failed,
-        false,
-        InspectFact::Running
-    ));
-    assert!(!slot_held(
-        true,
-        IntentState::Pending,
-        true,
-        InspectFact::Running
-    ));
-    let decision = seat(4, 4, 4, 1, 0, 4, Idle::Launch);
-    assert_eq!(decision, Admit::Start { stop: true });
+fn uncertain_occupancy_does_not_mint_or_ack() {
+    assert_eq!(
+        admit(Seat {
+            capacity: 1,
+            target: 1,
+            started: 0,
+            occupied: 1,
+            running: 0,
+            assigned: 1,
+            idle: Idle::Scale,
+        }),
+        Admit::Hold
+    );
+}
+
+#[test]
+fn statistics_only_block_when_population_or_capacity_is_covered() {
+    assert!(statistics_blocked(0, 0, 2, 0));
+    assert!(statistics_blocked(2, 0, 2, 3));
+    assert!(statistics_blocked(0, 2, 2, 3));
+    assert!(statistics_blocked(0, 1, 2, 1));
+    assert!(!statistics_blocked(1, 1, 2, 3));
 }
 
 #[test]

@@ -23,7 +23,6 @@ mod readiness;
 mod reconcile;
 mod scale_set;
 mod stage;
-mod work_owner;
 mod worker;
 
 pub use assign::{Offer, offer};
@@ -70,21 +69,33 @@ mod ipc_tests;
 #[cfg(test)]
 mod journal_tests;
 #[cfg(test)]
+mod journal_worker_volume_tests;
+#[cfg(test)]
 mod keychain_tests;
+#[cfg(test)]
+mod launch_backfill_tests;
 #[cfg(test)]
 mod launch_capacity_tests;
 #[cfg(test)]
 mod launch_harness;
 #[cfg(test)]
+mod launch_idless_tests;
+#[cfg(test)]
 mod launch_scale_tests;
 #[cfg(test)]
+mod launch_test_support;
+#[cfg(test)]
 mod launch_tests;
+#[cfg(test)]
+mod launch_worker_cleanup_tests;
 #[cfg(test)]
 mod listen_tests;
 #[cfg(test)]
 mod plist_tests;
 #[cfg(test)]
 mod readiness_tests;
+#[cfg(test)]
+mod runner_image_contract_tests;
 #[cfg(test)]
 mod stage_tests;
 #[cfg(test)]

@@ -34,6 +34,9 @@ Controller must:
   outer engine socket. Do not mount the host socket, host home, Keychain,
   SSH agent, or controller config.
 - Mount a named volume at `/home/runner/_work` writable by uid `1000`.
+- Register the JIT runner with `workFolder: "_work"`; the Actions runner
+  resolves this relative to `/home/runner`, so its job work directory matches
+  the named volume and the entrypoint's temporary JIT file.
   That tree holds work, `_temp`, `_actions`, and `_tool`. Share the same
   absolute paths into this worker's DinD container. `externals` is
   `/home/runner/externals`.

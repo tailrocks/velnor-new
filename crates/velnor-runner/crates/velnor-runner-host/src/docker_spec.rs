@@ -1,6 +1,7 @@
 //! One Ubuntu 26.04 runner. Platform is `linux/amd64`. JIT stays off the plan.
 
 use crate::error::HostError;
+use velnor_runner_core::runner_work_path;
 
 /// One mount. `source` is `volume:<name>` or a bind path.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -16,6 +17,8 @@ pub struct Mount {
 /// One runner. JIT is not a field: stdin feeds the entrypoint, not env, cmd, or labels.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ContainerPlan {
+    /// Deterministic per-worker container name used for crash recovery.
+    pub name: String,
     /// Must stay false for the runner.
     pub privileged: bool,
     /// Requested OCI platform. Always `linux/amd64`, never the host or VM arch.
@@ -47,7 +50,6 @@ const RUNNER_PLATFORM: &str = "linux/amd64";
 const RUNNER_IMAGE: &str = "velnor-runner:ubuntu-26.04-2.337.0";
 const ENTRYPOINT: &str = "/usr/local/bin/velnor-runner-entrypoint";
 const SOCKET_TARGET: &str = "/run";
-const WORK_TARGET: &str = "/home/runner/_work";
 
 const HOST_NEEDLES: &[&str] = &[
     "ssh-agent",
@@ -73,6 +75,7 @@ pub fn runner_plan(private_volume: &str) -> Result<ContainerPlan, HostError> {
     }
     let work = format!("{private_volume}-work");
     Ok(ContainerPlan {
+        name: format!("{private_volume}-runner"),
         privileged: false,
         platform: RUNNER_PLATFORM.to_owned(),
         image: RUNNER_IMAGE.to_owned(),
@@ -81,6 +84,7 @@ pub fn runner_plan(private_volume: &str) -> Result<ContainerPlan, HostError> {
         labels: vec![
             "velnor.role=runner".to_owned(),
             format!("velnor.volume={private_volume}"),
+            format!("velnor.worker={private_volume}"),
         ],
         mounts: vec![
             Mount {
@@ -89,7 +93,7 @@ pub fn runner_plan(private_volume: &str) -> Result<ContainerPlan, HostError> {
             },
             Mount {
                 source: format!("volume:{work}"),
-                target: WORK_TARGET.to_owned(),
+                target: runner_work_path(),
             },
         ],
     })
@@ -116,7 +120,8 @@ pub fn audit_plan(plan: &ContainerPlan) -> Result<(), HostError> {
 }
 
 fn shape_rejected(plan: &ContainerPlan) -> bool {
-    plan.platform != RUNNER_PLATFORM
+    !private_volume_name(&plan.name)
+        || plan.platform != RUNNER_PLATFORM
         || image_rejected(&plan.image)
         || contains_jit(&plan.env)
         || contains_jit(&plan.cmd)
@@ -155,12 +160,6 @@ fn socket_source_ok(source: &str) -> bool {
     source
         .strip_prefix("volume:")
         .is_some_and(private_volume_name)
-}
-
-/// True when `name` is one private Docker volume name.
-#[must_use]
-pub(crate) fn accepts_volume_name(name: &str) -> bool {
-    private_volume_name(name)
 }
 
 fn private_volume_name(name: &str) -> bool {

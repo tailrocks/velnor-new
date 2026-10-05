@@ -136,6 +136,20 @@ pub(crate) const fn needs_running(idle: Idle) -> bool {
     matches!(idle, Idle::Launch | Idle::Scale)
 }
 
+/// True when session statistics must not mint another pair.
+#[must_use]
+pub(crate) fn statistics_blocked(
+    occupied: u32,
+    running: u32,
+    capacity: u32,
+    population: i64,
+) -> bool {
+    if population <= 0 || occupied >= capacity || running >= capacity {
+        return true;
+    }
+    i64::from(running) >= population
+}
+
 thread_local! {
     static JOB_CAPACITY_OVERRIDE: Cell<Option<u32>> = const { Cell::new(None) };
 }
