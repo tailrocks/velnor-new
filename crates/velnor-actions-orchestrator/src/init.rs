@@ -95,8 +95,9 @@ const SAMPLE_BODY: &str = r#"schema = 1
 # generator_validation = "bootstrap"  # Generator validation mode.
 # max_parallel_jobs = 2                # Maximum generated matrix concurrency.
 
-# Optional no-Rust verification tasks. Each sorted declaration gets a
-# tokenless standalone job and joins the Required check on all CI triggers.
+# Optional isolated verification tasks. Authors and reviewers keep task bodies
+# free of Rust compilation; V1 does not inspect them. Each declaration gets a
+# read-only contents token and joins Required on every CI trigger.
 # [[workflow.tasks]]
 # id = "native-format"
 # kind = "verification"

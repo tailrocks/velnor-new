@@ -224,7 +224,7 @@ fn job_to_yaml(
         if ctx
             .verification_tasks
             .iter()
-            .any(|task| task.job_id() == id)
+            .any(|task| task.owns_job_id(id))
         {
             // Verification jobs intentionally execute repository-declared
             // Mise tasks, so they need Mise config while retaining the same

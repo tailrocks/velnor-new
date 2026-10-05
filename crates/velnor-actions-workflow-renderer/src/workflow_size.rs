@@ -3,7 +3,11 @@
 use crate::RenderError;
 use std::path::Path;
 
-/// Maximum rendered workflow size, including the generator marker.
+/// Maximum rendered workflow size, including the marker; decimal 500 KB.
+///
+/// GitHub Actions documents a 500 KB per-file ceiling. V1 applies an exact
+/// 500,000-byte cap so every accepted workflow stays within that published
+/// limit.
 pub const MAX_WORKFLOW_BYTES: usize = 500_000;
 
 /// Reject an oversized generated workflow after its marker has been added.

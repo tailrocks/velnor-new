@@ -33,8 +33,8 @@ pub use stacks::{
 };
 pub use tofu::{RootProblem, TofuStackConfig, Utf8RepoRelDir};
 pub use verification::{
-    VerificationRunner, VerificationTask, VerificationTaskKind, is_valid_mise_task_name,
-    is_valid_verification_task_id,
+    VERIFICATION_TASK_JOB_PREFIX, VerificationRunner, VerificationTask, VerificationTaskKind,
+    is_valid_mise_task_name, is_valid_verification_task_id,
 };
 pub use workflow::{
     GeneratorValidation, LATEST_RUNNER_LABEL, RUNNER_LABEL_CATALOG, RunnerSelection,

@@ -3,6 +3,9 @@
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
 
+/// Generated job-key prefix for a declared workflow verification task.
+pub const VERIFICATION_TASK_JOB_PREFIX: &str = "task-";
+
 /// One allowlisted task executed in its own least-privilege job.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -23,7 +26,10 @@ pub struct VerificationTask {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum VerificationTaskKind {
-    /// Read-only validation task that does not compile Rust.
+    /// Repository-declared validation task whose body V1 does not inspect.
+    ///
+    /// Task authors and reviewers must keep this task free of Rust
+    /// compilation; the typed declaration does not enforce that property.
     Verification,
 }
 

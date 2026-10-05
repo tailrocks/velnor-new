@@ -208,6 +208,19 @@ mod tests {
     }
 
     #[test]
+    fn nextest_no_tests_overrides_are_rejected() {
+        let load = load_config;
+        for action in ["warn", "pass"] {
+            let root = rooted(&format!(
+                "schema = 1\n[stacks.rust]\nno_tests = \"{action}\"\n"
+            ));
+            let err = load(root.path()).expect_err("empty-suite override must fail closed");
+            assert!(err.to_string().contains("unknown_config_field"), "{err}");
+            assert!(err.to_string().contains("no_tests"), "{err}");
+        }
+    }
+
+    #[test]
     fn tofu_table_materializes_roots() {
         let load = load_config;
         let root = rooted("schema = 1\n[stacks.tofu]\nroots = [\".\", \"infra\"]\n");
