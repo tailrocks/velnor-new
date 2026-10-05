@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use super::super::cache_admission::CacheAdmission;
-use super::{build_index_from_list, build_index_walk};
+use super::{IndexError, build_index_from_list, build_index_walk};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -206,6 +206,37 @@ fn listed_path_rechecks_replaced_directory_ancestry() -> TestResult {
 
     assert!(admission.listed_path_is_reserved(repo, "alias/z/Cargo.toml")?);
     assert!(!admission.listed_path_is_reserved(repo, ".velnor/cache-extra/payload.crate")?);
+    Ok(())
+}
+
+/// A replaced cache-root symlink fails closed on the next listed path.
+#[test]
+#[cfg(unix)]
+fn listed_path_rejects_replaced_cache_root_symlink() -> TestResult {
+    let root = TempDir::new()?;
+    let old_cache = TempDir::new()?;
+    let new_cache = TempDir::new()?;
+    write_file(old_cache.path(), "old.crate")?;
+    write_file(new_cache.path(), "payload.crate")?;
+    let cache_parent = root.path().join(".velnor");
+    fs::create_dir_all(&cache_parent)?;
+    let cache = cache_parent.join("cache");
+    std::os::unix::fs::symlink(old_cache.path(), &cache)?;
+    write_file(root.path(), "src/ordinary.txt")?;
+    let alias = root.path().join("src/cache-alias.crate");
+    std::os::unix::fs::symlink(new_cache.path().join("payload.crate"), &alias)?;
+
+    let admission = CacheAdmission::new(root.path());
+    assert!(!admission.listed_path_is_reserved(root.path(), "src/ordinary.txt")?);
+
+    fs::remove_file(&cache)?;
+    std::os::unix::fs::symlink(new_cache.path(), &cache)?;
+
+    let error = admission
+        .listed_path_is_reserved(root.path(), "src/cache-alias.crate")
+        .expect_err("a cache-root replacement must not use stale identity");
+    assert!(matches!(error, IndexError::ReadFailed(_)));
+    assert!(error.to_string().contains("reserved cache root changed"));
     Ok(())
 }
 

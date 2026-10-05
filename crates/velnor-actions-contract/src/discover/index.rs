@@ -211,6 +211,7 @@ fn walk_dir(
     skipped_non_utf8: &mut bool,
     cache_admission: &CacheAdmission,
 ) -> Result<(), IndexError> {
+    cache_admission.ensure_cache_root_unchanged()?;
     let entries = std::fs::read_dir(dir).map_err(|err| IndexError::ReadFailed(err.to_string()))?;
     for entry in entries {
         let entry = entry.map_err(|err| IndexError::ReadFailed(err.to_string()))?;
@@ -259,6 +260,7 @@ fn walk_link(
     let target = link
         .canonicalize()
         .map_err(|_| IndexError::SymlinkLoop(show(link)))?;
+    cache_admission.ensure_cache_root_unchanged()?;
     if cache_admission.target_is_reserved(&target) {
         return Ok(());
     }
