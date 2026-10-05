@@ -193,12 +193,13 @@ fn acquire_step(
 
 /// Fixed acquisition argv over the staged path plus asset env references.
 ///
-/// Curl is pinned to HTTPS-only (`--proto '=https'`) over TLS 1.2+ and
-/// the staged path is defensively double-quoted (X12).
+/// Curl is pinned to HTTPS-only (`--proto '=https'`) over TLS 1.2+.
+/// Curl retries all failures up to five times, including a TLS EOF. Certificate
+/// verification stays on; the staged path is double-quoted (X12).
 fn acquire_argv(staged: &str) -> Vec<String> {
     let dir = staged.rsplit_once('/').map_or(staged, |(head, _)| head);
     let script = format!(
-        "mkdir -p \"{dir}\" && curl -fsSL --proto '=https' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"{staged}\" && echo \"$VELNOR_ASSET_SHA256  {staged}\" | sha256sum -c - && chmod +x \"{staged}\""
+        "mkdir -p \"{dir}\" && curl -fsSL --retry 5 --retry-all-errors --proto '=https' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"{staged}\" && echo \"$VELNOR_ASSET_SHA256  {staged}\" | sha256sum -c - && chmod +x \"{staged}\""
     );
     vec!["sh".to_owned(), "-c".to_owned(), script]
 }
