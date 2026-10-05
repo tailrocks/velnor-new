@@ -31,28 +31,27 @@ pub(crate) fn validate_call(step: &Step) -> Result<&str, RenderError> {
 }
 
 /// Drop restored tools bytes unless the pinned action reports an exact key hit.
-const TOOLS_CACHE_ADMISSION_SCRIPT: &str = r#"set -eu
-[ -n "$HOME" ] && [ -n "$RUNNER_TEMP" ] || exit 1
-case "$HOME" in /*) ;; *) exit 1 ;; esac
-case "$RUNNER_TEMP" in /*) ;; *) exit 1 ;; esac
-[ "$HOME" != / ] && [ "$RUNNER_TEMP" != / ] || exit 1
-if [ "$TOOLS_CACHE_HIT" = true ] \
-    && [ -n "$TOOLS_EXPECTED_KEY" ] \
-    && [ "$TOOLS_MATCHED_KEY" = "$TOOLS_EXPECTED_KEY" ]; then
-    [ ! -L "$HOME/.local/share/mise" ] || exit 1
-    [ ! -L "$RUNNER_TEMP/velnor/rustup" ] || exit 1
-    [ ! -L "$RUNNER_TEMP/velnor/cargo/bin" ] || exit 1
-    [ ! -L "$RUNNER_TEMP/velnor/cargo/.crates.toml" ] || exit 1
-    [ ! -L "$RUNNER_TEMP/velnor/cargo/.crates2.json" ] || exit 1
-    exit 0
-fi
+/// Semicolons keep this valid after `quote_run_line_env_paths` joins words with spaces.
+const TOOLS_CACHE_ADMISSION_SCRIPT: &str = r#"set -eu;
+[ -n "$HOME" ] && [ -n "$RUNNER_TEMP" ] || exit 1;
+case "$HOME" in /*) ;; *) exit 1 ;; esac;
+case "$RUNNER_TEMP" in /*) ;; *) exit 1 ;; esac;
+[ "$HOME" != / ] && [ "$RUNNER_TEMP" != / ] || exit 1;
+if [ "$TOOLS_CACHE_HIT" = true ] && [ -n "$TOOLS_EXPECTED_KEY" ] && [ "$TOOLS_MATCHED_KEY" = "$TOOLS_EXPECTED_KEY" ]; then
+[ ! -L "$HOME/.local/share/mise" ] || exit 1;
+[ ! -L "$RUNNER_TEMP/velnor/rustup" ] || exit 1;
+[ ! -L "$RUNNER_TEMP/velnor/cargo/bin" ] || exit 1;
+[ ! -L "$RUNNER_TEMP/velnor/cargo/.crates.toml" ] || exit 1;
+[ ! -L "$RUNNER_TEMP/velnor/cargo/.crates2.json" ] || exit 1;
+exit 0;
+fi;
 for d in "$HOME/.local/share/mise" "$RUNNER_TEMP/velnor/rustup" "$RUNNER_TEMP/velnor/cargo/bin"; do
-    [ ! -L "$d" ] || exit 1
-    rm -rf "$d"
-done
+[ ! -L "$d" ] || exit 1;
+rm -rf "$d";
+done;
 for f in "$RUNNER_TEMP/velnor/cargo/.crates.toml" "$RUNNER_TEMP/velnor/cargo/.crates2.json"; do
-    [ ! -L "$f" ] || exit 1
-    rm -f "$f"
+[ ! -L "$f" ] || exit 1;
+rm -f "$f";
 done"#;
 
 fn restore_step() -> Result<Yaml, RenderError> {
@@ -150,4 +149,23 @@ pub(crate) fn action_file(version: &str) -> Result<RenderedFile, RenderError> {
         path: format!("{action_directory}/action.yml"),
         bytes,
     })
+}
+
+/// Parse the quoted `run:` scalar the way Actions does, then `bash -n` it.
+#[cfg(test)]
+pub(crate) fn assert_rendered_admission_parses(bytes: &str) {
+    let raw = bytes
+        .split("run: \"")
+        .nth(1)
+        .and_then(|rest| rest.split("\"\n").next())
+        .expect("admission run scalar");
+    let script = raw.replace("\\\"", "\"").replace("\\\\", "\\");
+    let file = std::env::temp_dir().join("velnor-tools-admission-bash-n.sh");
+    std::fs::write(&file, &script).expect("admission script");
+    let status = std::process::Command::new("bash")
+        .arg("-n")
+        .arg(&file)
+        .status()
+        .expect("bash -n");
+    assert!(status.success(), "{script}");
 }

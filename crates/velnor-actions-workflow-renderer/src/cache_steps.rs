@@ -36,6 +36,8 @@ pub use tools::{
     TOOLS_RESTORE_USES, TOOLS_SAVE_NAME, TOOLS_SAVE_USES,
 };
 
+#[cfg(test)]
+pub(crate) use tools::assert_rendered_admission_parses;
 pub(crate) use tools::restore_action_file as tools_restore_action_file;
 
 /// Build one V2 tools-cache action over the fixed path set.

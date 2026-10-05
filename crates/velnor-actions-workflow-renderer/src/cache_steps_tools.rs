@@ -85,3 +85,6 @@ pub(super) fn cache_step(
 pub(crate) fn restore_action_file(version: &str) -> Result<crate::tree::RenderedFile, RenderError> {
     restore_action::action_file(version)
 }
+
+#[cfg(test)]
+pub(crate) use restore_action::assert_rendered_admission_parses;
