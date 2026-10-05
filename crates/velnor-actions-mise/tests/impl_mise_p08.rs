@@ -9,10 +9,15 @@ use velnor_actions_mise::runtime_paths as paths;
 fn c1_inventory_lists_every_runtime_path_with_one_owner() {
     let inv = paths::inventory();
     for id in [
+        "mise-data",
         "mise-installs",
+        "mise-bootstrap-binary",
         "rustup-toolchains",
         "cargo-sources",
+        "cargo-git-sources",
         "cargo-binaries",
+        "cargo-crates-metadata",
+        "cargo-crates2-metadata",
         "cargo-target",
         "mbx-objects",
         "tofu-provider-cache",
@@ -20,7 +25,35 @@ fn c1_inventory_lists_every_runtime_path_with_one_owner() {
         assert!(paths::is_known_id(id), "missing {id}");
         assert!(!paths::owner_for(id).expect("owner").is_empty());
     }
-    assert_eq!(inv.len(), 8, "exact inventory size");
+    assert_eq!(inv.len(), 13, "exact inventory size");
+    assert_eq!(
+        paths::owner_for("cargo-binaries").expect("owner"),
+        "catalog/tools"
+    );
+    assert_eq!(
+        paths::owner_for("cargo-sources").expect("owner"),
+        "velnor/sources"
+    );
+    let tool_paths = inv
+        .iter()
+        .filter(|path| path.owner == "catalog/tools")
+        .map(|path| path.path)
+        .collect::<Vec<_>>();
+    let source_paths = inv
+        .iter()
+        .filter(|path| path.owner == "velnor/sources")
+        .map(|path| path.path)
+        .collect::<Vec<_>>();
+    for tool in &tool_paths {
+        for source in &source_paths {
+            assert!(
+                !tool.starts_with(&format!("{source}/"))
+                    && !source.starts_with(&format!("{tool}/"))
+                    && tool != source,
+                "tool/source ownership overlap: {tool} and {source}"
+            );
+        }
+    }
     assert_eq!(
         paths::owner_for("tofu-provider-cache").expect("owner"),
         "velnor/tofu-providers"
@@ -43,7 +76,7 @@ fn c1_dangling_symlink_never_counts_as_warm() {
 fn c3_subset_lives_at_real_home_without_credentials() {
     let home = "${{ runner.temp }}/velnor/cargo";
     let got = sources::sources_cache_paths(home).expect("paths");
-    assert_eq!(got.len(), 6);
+    assert_eq!(got.len(), 3);
     assert!(sources::validate_sources_subset(&got, home).is_ok());
     assert!(sources::sources_cache_paths("").is_err());
     for bad in [
@@ -128,11 +161,13 @@ fn c5_qualified_transport_is_objects_plus_shared_with_numbers() {
 
 #[test]
 fn c6_no_path_has_two_owners() {
-    let disjoint = [
-        ("~/.local/share/mise", "catalog/tools"),
-        ("$CARGO_HOME/registry", "velnor/sources"),
-        ("mr-boxington-action/objects", "mr-boxington/MBX"),
-    ];
+    let inv = paths::inventory();
+    let mut disjoint = inv
+        .iter()
+        .filter(|entry| matches!(entry.owner, "catalog/tools" | "velnor/sources"))
+        .map(|entry| (entry.path, entry.owner))
+        .collect::<Vec<_>>();
+    disjoint.push(("mr-boxington-action/objects", "mr-boxington/MBX"));
     assert!(transport::check_no_double_owner(&disjoint).is_ok());
     let doubled = [
         ("$CARGO_HOME/registry", "velnor/sources"),
@@ -167,7 +202,7 @@ fn c9_pr_save_needs_action_support_and_forks_stay_read_only() {
     }
     assert_eq!(
         velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION,
-        "success() && github.event_name == 'push'"
+        "success() && github.event_name == 'push' && github.ref_protected == true && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)"
     );
 }
 

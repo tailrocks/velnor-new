@@ -116,7 +116,7 @@ fn overlap_ratio_stays_descriptive() {
 #[test]
 fn cache_paths_have_single_owners() {
     use velnor_actions_workflow_renderer::steps::{
-        TARGET_DIR_PREFIX, TASK_ARTIFACTS_DIR, TOOLS_CACHE_PATH,
+        TARGET_DIR_PREFIX, TASK_ARTIFACTS_DIR, TOOLS_CACHE_PATHS,
     };
     let table = cache_ownership_table();
     let mut seen: std::collections::BTreeMap<&str, &str> = std::collections::BTreeMap::new();
@@ -134,7 +134,9 @@ fn cache_paths_have_single_owners() {
     }
     let paths: Vec<&str> = table.iter().map(|(path, _)| *path).collect();
     assert!(paths.contains(&TARGET_DIR_PREFIX), "target lane owner");
-    assert!(paths.contains(&TOOLS_CACHE_PATH), "tool owner");
+    for path in TOOLS_CACHE_PATHS {
+        assert!(paths.contains(&path), "tool owner {path}");
+    }
     assert!(paths.contains(&TASK_ARTIFACTS_DIR), "task-result owner");
     assert!(
         !paths.iter().any(|path| path.contains("candidate")),
@@ -155,13 +157,20 @@ fn preview_dirs_are_unique_tmp_roots() {
 
 #[test]
 fn failed_tasks_never_save_results() {
+    use velnor_actions_contract::CacheWriterContext;
     use velnor_actions_mise::cache::save_allowed;
+    let writer = |event| CacheWriterContext {
+        event,
+        reference: Some("refs/heads/main"),
+        default_branch: Some("main"),
+        ref_protected: true,
+    };
     for event in ["push", "pull_request", "merge_group"] {
-        assert!(!save_allowed("trusted", event, false), "{event}");
+        assert!(!save_allowed("trusted", writer(event), false), "{event}");
     }
-    assert!(save_allowed("trusted", "push", true));
-    assert!(!save_allowed("trusted", "pull_request", true));
-    assert!(!save_allowed("trusted", "merge_group", true));
+    assert!(save_allowed("trusted", writer("push"), true));
+    assert!(!save_allowed("trusted", writer("pull_request"), true));
+    assert!(!save_allowed("trusted", writer("merge_group"), true));
 }
 
 #[test]

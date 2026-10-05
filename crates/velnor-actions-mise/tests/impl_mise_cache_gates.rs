@@ -1,6 +1,6 @@
 //! Gate 4/6 cache cases: sources allowlist, task defs, modes, reuse.
 
-use velnor_actions_contract::digest_b3;
+use velnor_actions_contract::{CacheWriterContext, digest_b3};
 use velnor_actions_mise::cache::{
     QualifiedTaskDef, TaskCacheMode, mode_for_event, qualify_reuse, save_allowed, task_run_argv,
     validate_sources_path, validate_task_def_path, verify_reused_outputs,
@@ -21,6 +21,15 @@ fn observed_restore() -> RestoreObservation {
         observed_owner: "trusted".to_owned(),
         expected_inputs: digest_b3(b"inputs"),
         observed_inputs: digest_b3(b"inputs"),
+    }
+}
+
+fn writer(event: &str) -> CacheWriterContext<'_> {
+    CacheWriterContext {
+        event,
+        reference: Some("refs/heads/main"),
+        default_branch: Some("main"),
+        ref_protected: true,
     }
 }
 
@@ -215,10 +224,16 @@ fn restore_classification_uses_precise_reasons() {
 /// Failed runs never save on any layer, and non-push events never save
 /// through this path; unknown trust scopes deny closed.
 #[test]
-fn saves_gate_on_push_and_pass_for_all_layers() {
+fn saves_require_successful_protected_default_push_for_all_layers() {
     for layer in ["trusted", "pr"] {
-        assert!(save_allowed(layer, "push", true), "{layer} push saves");
-        assert!(!save_allowed(layer, "push", false), "{layer} failed run");
+        assert!(
+            save_allowed(layer, writer("push"), true),
+            "{layer} push saves"
+        );
+        assert!(
+            !save_allowed(layer, writer("push"), false),
+            "{layer} failed run"
+        );
         for event in [
             "pull_request",
             "merge_group",
@@ -227,12 +242,35 @@ fn saves_gate_on_push_and_pass_for_all_layers() {
             "local",
             "schedule",
         ] {
-            assert!(!save_allowed(layer, event, true), "{layer} {event}");
-            assert!(!save_allowed(layer, event, false), "{layer} {event}");
+            assert!(!save_allowed(layer, writer(event), true), "{layer} {event}");
+            assert!(
+                !save_allowed(layer, writer(event), false),
+                "{layer} {event}"
+            );
         }
     }
-    assert!(!save_allowed("unknown", "push", true));
-    assert!(!save_allowed("", "push", true));
+    assert!(!save_allowed("unknown", writer("push"), true));
+    assert!(!save_allowed("", writer("push"), true));
+    for denied in [
+        CacheWriterContext {
+            ref_protected: false,
+            ..writer("push")
+        },
+        CacheWriterContext {
+            reference: Some("refs/heads/feature"),
+            ..writer("push")
+        },
+        CacheWriterContext {
+            reference: None,
+            ..writer("push")
+        },
+        CacheWriterContext {
+            default_branch: None,
+            ..writer("push")
+        },
+    ] {
+        assert!(!save_allowed("trusted", denied, true));
+    }
 }
 
 /// Reuse requires every declared output present with a matching digest.

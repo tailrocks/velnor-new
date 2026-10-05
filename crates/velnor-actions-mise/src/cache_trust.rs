@@ -11,6 +11,7 @@
 //! a hardcoded limit: callers pass the limit in.
 
 use crate::error::MiseError;
+use velnor_actions_contract::CacheWriterContext;
 
 /// Velnor does not opt in to the action's same-repository PR cache writes.
 pub const MBX_PR_SAVE_OPTED_IN: bool = false;
@@ -69,7 +70,7 @@ pub fn save_after_success(gate: SaveGate) -> bool {
 /// Fails closed unless the save policy allows exactly protected pushes:
 /// [`save_after_success`] must still require all four gate conditions,
 /// [`crate::restore::save_decision`] must permit only the
-/// trusted/push/passed combination, [`crate::cache::save_allowed`] must
+/// trusted/protected-default-push/passed combination, [`crate::cache::save_allowed`] must
 /// agree, and the generator must not enable PR saves. The
 /// returned condition is the `if:` gate the emitted save step carries;
 /// policy drift fails generation instead of emitting a stale gate.
@@ -77,20 +78,20 @@ pub fn save_after_success(gate: SaveGate) -> bool {
 /// # Errors
 ///
 /// Returns [`MiseError::Contract`] when the policy no longer matches
-/// the emitted push-only gate.
+/// the emitted protected-default gate.
 pub fn authorize_trusted_save() -> Result<&'static str, MiseError> {
     authorize_trusted_save_for(MBX_PR_SAVE_OPTED_IN)
 }
 
 /// Authorize one trusted-layer save step under an explicit PR-save policy.
 ///
-/// The generator policy arrives as a parameter so tests cover drift
-/// rejection without flipping the production constant.
+/// This validates the generator's static expression. Runtime callers still
+/// pass immutable event/ref facts through [`save_decision`].
 ///
 /// # Errors
 ///
 /// Returns [`MiseError::Contract`] when the policy no longer matches
-/// the emitted push-only gate.
+/// the emitted protected-default gate.
 pub fn authorize_trusted_save_for(pr_save_supported: bool) -> Result<&'static str, MiseError> {
     use crate::restore::{SaveInputs, save_decision};
     let open = SaveGate {
@@ -107,7 +108,12 @@ pub fn authorize_trusted_save_for(pr_save_supported: bool) -> Result<&'static st
     }
     let allowed = SaveInputs {
         layer_trust: "trusted",
-        event: "push",
+        writer: CacheWriterContext {
+            event: "push",
+            reference: Some("refs/heads/main"),
+            default_branch: Some("main"),
+            ref_protected: true,
+        },
         passed: true,
         unavailable: false,
         active_writer: false,
@@ -134,19 +140,22 @@ pub fn authorize_trusted_save_for(pr_save_supported: bool) -> Result<&'static st
             return Err(contract("save_policy_drift:overpermissive"));
         }
     }
-    if !crate::cache::save_allowed("trusted", "push", true)
-        || crate::cache::save_allowed("trusted", "push", false)
+    if !crate::cache::save_allowed("trusted", allowed.writer, true)
+        || crate::cache::save_allowed("trusted", allowed.writer, false)
     {
         return Err(contract("save_policy_drift:allowlist"));
     }
     let gate = velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION;
-    if !gate.contains("success()") {
+    if !gate.contains("success()")
+        || !gate.contains("github.ref_protected == true")
+        || !gate.contains("github.event.repository.default_branch")
+    {
         return Err(contract("save_gate_missing_success"));
     }
     Ok(gate)
 }
 
-/// Deny every non-push event and unknown trust spelling around `allowed`.
+/// Deny non-push events, non-default refs, and incomplete ref facts.
 ///
 /// The allowlist is `push` only; `schedule`, `workflow_dispatch`, and
 /// any future trigger stay denied, as do unknown trust spellings and
@@ -168,12 +177,41 @@ fn deny_non_push_variants(allowed: &crate::restore::SaveInputs<'_>) -> Result<()
         "",
         "Push",
     ] {
-        let denied = crate::restore::SaveInputs { event, ..*allowed };
+        let denied = crate::restore::SaveInputs {
+            writer: CacheWriterContext {
+                event,
+                ..allowed.writer
+            },
+            ..*allowed
+        };
         if save_decision(&denied).is_ok() {
             return Err(contract("save_policy_drift:event_allowed"));
         }
-        if crate::cache::save_allowed("trusted", event, true) {
+        if crate::cache::save_allowed("trusted", denied.writer, true) {
             return Err(contract("save_policy_drift:allowlist"));
+        }
+    }
+    for writer in [
+        CacheWriterContext {
+            ref_protected: false,
+            ..allowed.writer
+        },
+        CacheWriterContext {
+            reference: Some("refs/heads/feature"),
+            ..allowed.writer
+        },
+        CacheWriterContext {
+            reference: None,
+            ..allowed.writer
+        },
+        CacheWriterContext {
+            default_branch: None,
+            ..allowed.writer
+        },
+    ] {
+        let denied = crate::restore::SaveInputs { writer, ..*allowed };
+        if save_decision(&denied).is_ok() || crate::cache::save_allowed("trusted", writer, true) {
+            return Err(contract("save_policy_drift:ref_allowed"));
         }
     }
     for layer_trust in ["", "untrusted", "prerelease"] {
