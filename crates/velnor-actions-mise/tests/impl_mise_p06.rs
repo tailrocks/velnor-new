@@ -201,10 +201,9 @@ fn nextest_four_combos_argv() {
             assert_eq!(full[0], "mise");
             assert!(full.contains(&rust), "{driver:?}/{profile} rust");
             assert!(full.contains(&nextest), "{driver:?}/{profile} nextest");
-            assert_eq!(
-                full.contains(&mbx),
-                driver == NextestDriver::Mbx,
-                "{driver:?}/{profile} mbx"
+            assert!(
+                !full.contains(&mbx),
+                "{driver:?}/{profile} leaves action-owned MBX out of Mise selectors"
             );
 
             let partition = NextestPartition::new(1, 1).expect("partition");
@@ -220,7 +219,10 @@ fn nextest_four_combos_argv() {
             assert!(payload.windows(2).any(|w| w == ["--profile", profile]));
             let full = argv_text(&run.argv(&catalog));
             assert!(full.contains(&nextest));
-            assert_eq!(full.contains(&mbx), driver == NextestDriver::Mbx);
+            assert!(
+                !full.contains(&mbx),
+                "{driver:?}/{profile} leaves action-owned MBX out of Mise selectors"
+            );
         }
     }
 }

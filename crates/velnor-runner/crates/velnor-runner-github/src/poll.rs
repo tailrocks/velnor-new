@@ -51,6 +51,12 @@ pub struct InnerJob {
     pub job_id: Option<String>,
     /// `requestLabels` names. Empty when the field is absent.
     pub labels: Vec<String>,
+    /// `runnerId` on `JobStarted` and `JobCompleted` when present.
+    pub runner_id: Option<i64>,
+    /// `runnerName` on `JobStarted` and `JobCompleted` when present.
+    pub runner_name: Option<String>,
+    /// `result` on `JobCompleted` when present.
+    pub result: Option<String>,
     /// Object keys. Names only, so a live trace can show the shape.
     pub fields: Vec<String>,
 }
@@ -138,6 +144,15 @@ fn parse_inner(value: &Value) -> Result<InnerJob, WireError> {
     let request_id = value.get("runnerRequestId").and_then(Value::as_i64);
     let job_id = numeric_job_id(value.get("jobId").and_then(Value::as_str));
     let labels = label_names(value.get("requestLabels"));
+    let runner_id = value.get("runnerId").and_then(Value::as_i64);
+    let runner_name = value
+        .get("runnerName")
+        .and_then(Value::as_str)
+        .map(ToOwned::to_owned);
+    let result = value
+        .get("result")
+        .and_then(Value::as_str)
+        .map(ToOwned::to_owned);
     let fields = object_fields(value);
     let kind = match kind_text {
         "JobAvailable" => InnerKind::Available,
@@ -151,6 +166,9 @@ fn parse_inner(value: &Value) -> Result<InnerJob, WireError> {
         request_id,
         job_id,
         labels,
+        runner_id,
+        runner_name,
+        result,
         fields,
     })
 }

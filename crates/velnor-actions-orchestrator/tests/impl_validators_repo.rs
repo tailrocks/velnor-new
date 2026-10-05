@@ -361,10 +361,12 @@ fn mbx_transport_stays_with_mr_boxington_action() {
         ),
         ("RUSTUP_TOOLCHAIN".to_owned(), rust.clone()),
     ]);
-    let [preflight, step] = mbx_steps_for_driver(&mbx, CompileDriver::Mbx, pin, &rust, env.clone())
-        .expect("objects steps")
-        .expect("MBX profile");
-    assert_eq!(preflight.name, "Verify MBX and Rust toolchains");
+    let [preflight, step, version_check] =
+        mbx_steps_for_driver(&mbx, CompileDriver::Mbx, pin, &rust, env.clone())
+            .expect("objects steps")
+            .expect("MBX profile");
+    assert_eq!(preflight.name, "Verify Rust before MBX action");
+    assert_eq!(version_check.name, "Verify native MBX version");
     assert!(
         format!("{:?}", step.kind).contains("jdx/mr-boxington-action"),
         "mbx bytes move only through the external action"

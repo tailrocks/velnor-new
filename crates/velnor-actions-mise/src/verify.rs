@@ -1,9 +1,9 @@
 //! Typed `Verify toolchain` step requests (task §2 step 2).
 //!
-//! Verifies Rust, the selected compile driver, the selected test
+//! Builds identity probes for Rust, the selected compile driver, the selected test
 //! runner, the target, and the runner platform, and reports optional
-//! advisory tool-file findings. The compile route is proven through
-//! [`prove_route`]; probes are identity
+//! advisory tool-file findings. The requested compile route is selected through
+//! [`select_route`]; probes are identity
 //! invocations (`--version`), never builds. Findings arrive validated
 //! from the owning adapters; this step only reports them.
 
@@ -15,7 +15,7 @@ use crate::catalog::ToolCatalog;
 use crate::command::{IsolatedCommand, NO_AUTO_INSTALL_ENV};
 use crate::error::MiseError;
 use crate::nextest::NextestDriver;
-use crate::preflight::{RouteDriver, RouteProof, prove_route};
+use crate::preflight::{RouteDriver, RouteSelection, select_route};
 use crate::requests::PinnedToolExec;
 use crate::steps::{ToolHomes, validate_step_token};
 
@@ -46,7 +46,7 @@ impl TestRunner {
 /// Validated inputs for one `Verify toolchain` step.
 #[derive(Debug, Clone)]
 pub struct VerifySpec<'a> {
-    /// Compile route: Cargo proves the exact toolchain, MBX the MBX tool.
+    /// Compile route selection: MBX requires an action-owned binary on PATH.
     pub driver: RouteDriver,
     /// Selected test runner.
     pub runner: TestRunner,
@@ -64,7 +64,7 @@ pub struct VerifySpec<'a> {
     pub findings: Vec<Finding>,
 }
 
-/// Proven toolchain plus its recorded target, platform, and findings.
+/// Toolchain probes plus their recorded target, platform, and findings.
 ///
 /// Probe verification is one argv per probe: the route probe always,
 /// plus the runner probe when Nextest is selected (`cargo_test` is
@@ -73,15 +73,15 @@ pub struct VerifySpec<'a> {
 /// attaches to the matrix entry and report; they alter no argv.
 #[derive(Debug, Clone)]
 pub struct VerifyToolchain {
-    /// Proven compile route: exact specs plus the identity probe.
-    route: RouteProof,
+    /// Selected compile route: identity inputs plus the exact requested probe.
+    route: RouteSelection,
     /// Selected test runner.
     runner: TestRunner,
     /// Runner identity probe; `None` when the route probe covers it.
     runner_probe: Option<PinnedToolExec>,
-    /// Verified target triple or `host`.
+    /// Recorded target triple or `host`.
     target: String,
-    /// Verified runner platform label.
+    /// Recorded runner platform label.
     platform: String,
     /// Owned homes carried by the step env.
     homes: ToolHomes,
@@ -90,7 +90,7 @@ pub struct VerifyToolchain {
 }
 
 impl VerifyToolchain {
-    /// Prove the route and record target, platform, homes, and findings.
+    /// Select the route and record target, platform, homes, and findings.
     ///
     /// # Errors
     ///
@@ -107,7 +107,7 @@ impl VerifyToolchain {
                 problem: err.to_string(),
             })?;
         }
-        let route = prove_route(catalog, spec.driver, spec.format, spec.generation)?;
+        let route = select_route(catalog, spec.driver, spec.format, spec.generation)?;
         let runner_probe = runner_probe(spec.driver, spec.runner)?;
         Ok(Self {
             route,
@@ -126,22 +126,28 @@ impl VerifyToolchain {
         VERIFY_TOOLCHAIN_STEP
     }
 
-    /// Proven compile route.
+    /// Selected compile route. An external action prerequisite is not executed here.
     #[must_use]
-    pub fn route(&self) -> &RouteProof {
+    pub fn route(&self) -> &RouteSelection {
         &self.route
     }
 
-    /// Proven route driver.
+    /// Selected route driver; external action prerequisites are not executed here.
     #[must_use]
     pub fn driver(&self) -> RouteDriver {
         self.route.driver()
     }
 
-    /// Exact `<tool>@<version>` selectors proving the route.
+    /// Selected exact tool identities, including action-owned prerequisites.
     #[must_use]
-    pub fn specs(&self) -> &[String] {
-        self.route.specs()
+    pub fn identity_specs(&self) -> &[String] {
+        self.route.identity_specs()
+    }
+
+    /// Exact tool selectors passed to Mise for the route probe.
+    #[must_use]
+    pub fn probe_specs(&self) -> &[String] {
+        self.route.probe_specs()
     }
 
     /// Cache-format identity over the reported format and generation.
@@ -156,13 +162,13 @@ impl VerifyToolchain {
         self.runner
     }
 
-    /// Verified target triple or `host`.
+    /// Recorded target triple or `host`.
     #[must_use]
     pub fn target(&self) -> &str {
         &self.target
     }
 
-    /// Verified runner platform label.
+    /// Recorded runner platform label.
     #[must_use]
     pub fn platform(&self) -> &str {
         &self.platform
