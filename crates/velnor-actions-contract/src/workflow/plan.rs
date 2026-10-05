@@ -14,6 +14,15 @@ use crate::ids::{
     report_id_for_matrix, validate_id, validate_run_key, validate_task_id,
 };
 use serde::{Deserialize, Serialize};
+
+/// Plan-step marker selecting output limits for an output-fed matrix job.
+///
+/// The renderer adds this environment variable only when the plan's
+/// `matrix` step output becomes a GitHub job output consumed by
+/// `strategy.matrix`.
+pub const PLAN_MATRIX_OUTPUT_MODE_ENV: &str = "VELNOR_PLAN_MATRIX_OUTPUT_MODE";
+/// Exact value of [`PLAN_MATRIX_OUTPUT_MODE_ENV`] for dynamic matrices.
+pub const DYNAMIC_MATRIX_OUTPUT_MODE: &str = "dynamic_matrix";
 use std::collections::BTreeSet;
 /// One `matrix.include` entry.
 #[derive(Debug, Clone, Serialize, Deserialize)]

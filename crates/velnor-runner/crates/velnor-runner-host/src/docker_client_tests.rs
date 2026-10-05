@@ -1,7 +1,9 @@
 //! Bollard is constructed only from the configured absolute Unix socket.
 
 use std::path::Path;
+use std::time::Duration;
 
+use crate::docker_client::docker_deadline_after;
 use crate::{HostError, connect_unix};
 
 fn constructor_is_unix(tail: &str) -> bool {
@@ -44,4 +46,18 @@ fn source_uses_only_the_unix_constructor() -> Result<(), std::io::Error> {
     }
     assert!(saw);
     Ok(())
+}
+
+#[tokio::test]
+async fn docker_deadline_preserves_results_and_fails_closed_on_timeout() {
+    let response =
+        docker_deadline_after(async { Ok::<_, u16>(200) }, Duration::from_millis(50)).await;
+    assert_eq!(response, Ok(Ok(200)));
+
+    let timeout = docker_deadline_after(
+        tokio::time::sleep(Duration::from_millis(20)),
+        Duration::from_millis(1),
+    )
+    .await;
+    assert_eq!(timeout, Err(HostError::Docker));
 }

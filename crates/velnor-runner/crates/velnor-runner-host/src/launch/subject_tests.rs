@@ -12,12 +12,18 @@ async fn a_second_statistics_name_mints_again() -> Result<(), String> {
         calls: Vec::new(),
         mode: Mode::Ok,
     };
-    let started = scale_unacked(&mut first, &ctx(), &journal, "s-one", |_name, _jit| async {
-        Ok(Started {
-            dind_id: "dind-1".to_owned(),
-            runner_id: "runner-1".to_owned(),
-        })
-    })
+    let started = scale_unacked(
+        &mut first,
+        &ctx(),
+        &journal,
+        "s-one",
+        |_name, _jit, _bind| async {
+            Ok(Started {
+                dind_id: "dind-1".to_owned(),
+                runner_id: "runner-1".to_owned(),
+            })
+        },
+    )
     .await
     .map_err(|err| err.to_string())?;
     assert_eq!(
@@ -34,7 +40,7 @@ async fn a_second_statistics_name_mints_again() -> Result<(), String> {
         &ctx(),
         &journal,
         "s-two",
-        |_name, _jit| async {
+        |_name, _jit, _bind| async {
             Ok(Started {
                 dind_id: "dind-2".to_owned(),
                 runner_id: "runner-2".to_owned(),
@@ -57,7 +63,7 @@ async fn a_second_statistics_name_mints_again() -> Result<(), String> {
         &ctx(),
         &journal,
         "s-one",
-        |_name, _jit| async {
+        |_name, _jit, _bind| async {
             Ok(Started {
                 dind_id: "dind-3".to_owned(),
                 runner_id: "runner-3".to_owned(),

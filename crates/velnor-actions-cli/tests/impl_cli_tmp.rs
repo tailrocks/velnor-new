@@ -7,6 +7,7 @@ pub(crate) mod git_fixture;
 mod isolation_tests;
 
 use std::error::Error;
+use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -165,6 +166,32 @@ pub(crate) fn add_crate_pair(repo: &Path) -> Result<(), Box<dyn Error>> {
             return Err(format!("cargo init {name} failed").into());
         }
     }
+    Ok(())
+}
+
+/// Add a committed-universe-ready Cargo workspace with one root crate and
+/// `members` leaf crates. Used by plan protocol limits that depend on the
+/// real expanded task matrix rather than serialized artifact row count.
+pub(crate) fn write_workspace(repo: &Path, members: usize) -> Result<(), Box<dyn Error>> {
+    let mut manifest = String::from(
+        "[package]\nname = \"dynamic-root\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\
+         [workspace]\nmembers = [\n",
+    );
+    for index in 0..members {
+        let name = format!("member{index:03}");
+        writeln!(manifest, "  \"crates/{name}\",")?;
+        let crate_dir = repo.join("crates").join(&name);
+        std::fs::create_dir_all(crate_dir.join("src"))?;
+        std::fs::write(
+            crate_dir.join("Cargo.toml"),
+            format!("[package]\nname = \"{name}\"\nversion = \"0.1.0\"\nedition = \"2021\"\n"),
+        )?;
+        std::fs::write(crate_dir.join("src/lib.rs"), "pub fn item() {}\n")?;
+    }
+    manifest.push_str("]\n");
+    std::fs::write(repo.join("Cargo.toml"), manifest)?;
+    std::fs::create_dir_all(repo.join("src"))?;
+    std::fs::write(repo.join("src/lib.rs"), "pub fn root() {}\n")?;
     Ok(())
 }
 

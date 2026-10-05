@@ -278,3 +278,43 @@ fn rust_cache_inputs_schema_enforced() {
     ]);
     assert!(validate_action_inputs(&schema, &empty).is_err());
 }
+
+#[test]
+fn mbx_experiment_target_is_current_unqualified_release() {
+    use velnor_actions_actionlint::actions::{
+        MR_BOXINGTON_ACTION_CANDIDATE_SHA, MR_BOXINGTON_ACTION_CANDIDATE_VERSION,
+        MR_BOXINGTON_ACTION_SHA, MR_BOXINGTON_ACTION_VERSION,
+    };
+
+    assert_ne!(
+        (
+            MR_BOXINGTON_ACTION_CANDIDATE_VERSION,
+            MR_BOXINGTON_ACTION_CANDIDATE_SHA
+        ),
+        (MR_BOXINGTON_ACTION_VERSION, MR_BOXINGTON_ACTION_SHA),
+        "the experiment target must stay separate from the production pin"
+    );
+    let inventory = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../.velnor/freshness-inventory.json");
+    let inventory = std::fs::read_to_string(inventory).expect("freshness inventory readable");
+    let action = inventory
+        .split("\"key\": \"jdx/mr-boxington-action\"")
+        .nth(1)
+        .expect("MBX action inventory row present");
+    let action = action
+        .split_once("\n    }")
+        .map(|(row, _)| row)
+        .expect("MBX action inventory row terminates");
+    assert!(
+        action.contains(&format!(
+            "\"latest\": \"{MR_BOXINGTON_ACTION_CANDIDATE_VERSION}\""
+        )),
+        "candidate version must match the current inventory row: {action}"
+    );
+    assert!(
+        action.contains(&format!(
+            "\"latest_sha\": \"{MR_BOXINGTON_ACTION_CANDIDATE_SHA}\""
+        )),
+        "candidate SHA must match the current inventory row: {action}"
+    );
+}

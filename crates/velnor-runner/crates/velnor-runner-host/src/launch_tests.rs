@@ -4,8 +4,10 @@ use std::sync::{Arc, Mutex};
 
 use velnor_runner_github::{ParsedBatch, Poll};
 
-use crate::launch::{Idle, drive_offer, idle};
+use crate::journal::Outcome;
+use crate::launch::{Idle, drive_offer, fail_unstarted, idle};
 use crate::launch_harness::{CANARY, Mode, Script, absent, assigned_wait, available, ctx, open};
+use crate::launch_test_support::valid_worker_volume;
 use crate::{EnsureError, HostError, IntentState, Started};
 
 #[test]
@@ -24,6 +26,58 @@ fn statistics_advance_and_offers_stay() {
 }
 
 #[tokio::test]
+async fn name_taken_failure_releases_the_unstarted_scale_row() -> Result<(), String> {
+    let (scratch, journal) = open("name-taken").await?;
+    let id = journal
+        .begin("launch", "m100000769")
+        .await
+        .map_err(|err| err.to_string())?;
+    journal
+        .finish(id, Outcome::Uncertain)
+        .await
+        .map_err(|err| err.to_string())?;
+    let failed = fail_unstarted(&journal, &assigned_wait(100_000_769, 5))
+        .await
+        .map_err(|err| err.to_string())?;
+    if !failed {
+        return Err("unstarted row was not failed".to_owned());
+    }
+    let state = journal.read(id).await.map_err(|err| err.to_string())?;
+    if state != IntentState::Failed {
+        return Err(format!("state {state:?}"));
+    }
+    absent(&scratch.file())
+}
+
+#[tokio::test]
+async fn name_taken_keeps_a_row_that_has_a_container() -> Result<(), String> {
+    let (scratch, journal) = open("name-taken-live").await?;
+    let id = journal
+        .begin("launch", "m100000769")
+        .await
+        .map_err(|err| err.to_string())?;
+    journal
+        .finish(id, Outcome::Uncertain)
+        .await
+        .map_err(|err| err.to_string())?;
+    journal
+        .bind_worker(id, Some("runner-container"), None)
+        .await
+        .map_err(|err| err.to_string())?;
+    let failed = fail_unstarted(&journal, &assigned_wait(100_000_769, 5))
+        .await
+        .map_err(|err| err.to_string())?;
+    if failed {
+        return Err("container row was treated as a name collision".to_owned());
+    }
+    let state = journal.read(id).await.map_err(|err| err.to_string())?;
+    if state != IntentState::Uncertain {
+        return Err(format!("state {state:?}"));
+    }
+    absent(&scratch.file())
+}
+
+#[tokio::test]
 async fn launch_acks_only_after_start_and_hides_jit() -> Result<(), String> {
     let (scratch, journal) = open("ok").await?;
     let seen = Arc::new(Mutex::new(Vec::new()));
@@ -37,12 +91,12 @@ async fn launch_acks_only_after_start_and_hides_jit() -> Result<(), String> {
         &ctx(),
         &available(&[3]),
         &journal,
-        |volume, jit| {
+        |volume, jit, _bind| {
             let volume = volume.to_owned();
             let jit = jit.to_vec();
             let captured = Arc::clone(&captured);
             async move {
-                if volume != "v3" {
+                if !valid_worker_volume(&volume) {
                     return Err(HostError::ForbiddenMount);
                 }
                 let mut slot = captured.lock().map_err(|_| HostError::Docker)?;
@@ -67,6 +121,7 @@ async fn launch_acks_only_after_start_and_hides_jit() -> Result<(), String> {
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].state, IntentState::Done);
     assert_eq!(rows[0].docker_id.as_deref(), Some("runner-1"));
+    assert_eq!(rows[0].dind_id.as_deref(), Some("dind-1"));
     absent(&scratch.file())
 }
 
@@ -82,7 +137,7 @@ async fn uncertain_acquire_does_not_ack() -> Result<(), String> {
         &ctx(),
         &available(&[3]),
         &journal,
-        |_volume, _jit| async { Err(HostError::Docker) },
+        |_volume, _jit, _bind| async { Err(HostError::Docker) },
     )
     .await
     .map_err(|err| err.to_string());
@@ -91,6 +146,25 @@ async fn uncertain_acquire_does_not_ack() -> Result<(), String> {
     let rows = journal.rows().await.map_err(|err| err.to_string())?;
     assert_eq!(rows[0].state, IntentState::Uncertain);
     assert_eq!(rows[0].docker_id, None);
+    let id = rows[0].id;
+    let mut replay = Script {
+        calls: Vec::new(),
+        mode: Mode::Ok,
+    };
+    let replayed = drive_offer(
+        &mut replay,
+        &ctx(),
+        &available(&[3]),
+        &journal,
+        |_volume, _jit, _bind| async { Err(HostError::Docker) },
+    )
+    .await;
+    assert_eq!(replayed, Err(EnsureError::Uncertain));
+    assert!(replay.calls.is_empty());
+    let rows = journal.rows().await.map_err(|err| err.to_string())?;
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].id, id);
+    assert_eq!(rows[0].state, IntentState::Uncertain);
     absent(&scratch.file())
 }
 
@@ -106,7 +180,7 @@ async fn forbidden_acquire_is_failed_and_not_acked() -> Result<(), String> {
         &ctx(),
         &available(&[3]),
         &journal,
-        |_volume, _jit| async { Err(HostError::Docker) },
+        |_volume, _jit, _bind| async { Err(HostError::Docker) },
     )
     .await;
     assert_eq!(error, Err(EnsureError::Forbidden));
@@ -128,7 +202,7 @@ async fn empty_acquire_is_not_acked() -> Result<(), String> {
         &ctx(),
         &available(&[3]),
         &journal,
-        |_volume, _jit| async { Err(HostError::Docker) },
+        |_volume, _jit, _bind| async { Err(HostError::Docker) },
     )
     .await;
     assert_eq!(
@@ -156,7 +230,7 @@ async fn two_offers_are_not_acquired() -> Result<(), String> {
         &ctx(),
         &available(&[3, 4]),
         &journal,
-        |_volume, _jit| async { Err(HostError::Docker) },
+        |_volume, _jit, _bind| async { Err(HostError::Docker) },
     )
     .await;
     assert_eq!(
@@ -184,7 +258,7 @@ async fn bound_runner_acks_without_a_second_start() -> Result<(), String> {
         &ctx(),
         &available(&[3]),
         &journal,
-        |_volume, _jit| async {
+        |_volume, _jit, _bind| async {
             Ok(Started {
                 dind_id: "dind-1".to_owned(),
                 runner_id: "runner-1".to_owned(),
@@ -206,7 +280,7 @@ async fn bound_runner_acks_without_a_second_start() -> Result<(), String> {
         &ctx(),
         &available(&[3]),
         &journal,
-        |_volume, _jit| async { Err(HostError::Docker) },
+        |_volume, _jit, _bind| async { Err(HostError::Docker) },
     )
     .await
     .map_err(|err| err.to_string())?;
@@ -227,7 +301,7 @@ async fn start_failure_after_acquire_is_not_acked() -> Result<(), String> {
         &ctx(),
         &available(&[3]),
         &journal,
-        |_volume, _jit| async { Err(HostError::Docker) },
+        |_volume, _jit, _bind| async { Err(HostError::Docker) },
     )
     .await;
     assert_eq!(error, Err(EnsureError::Uncertain));
@@ -250,7 +324,7 @@ async fn ack_failure_keeps_the_runner_bound() -> Result<(), String> {
         &ctx(),
         &available(&[3]),
         &journal,
-        |_volume, _jit| async {
+        |_volume, _jit, _bind| async {
             Ok(Started {
                 dind_id: "dind-1".to_owned(),
                 runner_id: "runner-1".to_owned(),

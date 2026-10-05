@@ -49,9 +49,17 @@ fn action_uses_exact_cache_inputs_after_preflight() {
         !with.contains_key("version"),
         "preflight owns exact MBX identity"
     );
+    let action_sha = MBX_ACTION
+        .strip_prefix("jdx/mr-boxington-action@")
+        .expect("SHA ref");
+    let expected_generation = format!(
+        "{}-share-out-dir-disabled-v1-action-{action_sha}",
+        mbx_cache_generation(TEST_MBX_VERSION)
+    );
     assert_eq!(
         with.get("cache-generation").map(String::as_str),
-        Some(mbx_cache_generation(TEST_MBX_VERSION).as_str())
+        Some(expected_generation.as_str()),
+        "every generated MBX lane binds the no-share policy and action SHA"
     );
     assert_eq!(
         env.get(MBX_CACHE_MODE_ENV).map(String::as_str),
@@ -59,6 +67,10 @@ fn action_uses_exact_cache_inputs_after_preflight() {
     );
     assert_eq!(env.get("RUSTUP_HOME"), env.get("MISE_RUSTUP_HOME"));
     assert_eq!(env.get("CARGO_HOME"), env.get("MISE_CARGO_HOME"));
+    assert_eq!(
+        env.get("VELNOR_MBX_VERSION").map(String::as_str),
+        Some(TEST_MBX_VERSION)
+    );
     for key in [
         "save-on-pull-request",
         "save-on-workflow-dispatch",

@@ -1,8 +1,26 @@
 //! Security assertions for the protected-main MBX cache round trip.
 
+use velnor_actions_actionlint::actions::{
+    MR_BOXINGTON_ACTION_CANDIDATE_SHA, MR_BOXINGTON_ACTION_SHA,
+};
 use velnor_actions_orchestrator::{prepare, render_staged_tree};
 
 use crate::impl_common::{TestResult, make_repo};
+
+fn assert_candidate_ref(writer: &str) {
+    assert!(
+        writer.contains(&format!(
+            "uses: jdx/mr-boxington-action@{MR_BOXINGTON_ACTION_CANDIDATE_SHA}"
+        )),
+        "the experiment must invoke its exact immutable candidate"
+    );
+    assert!(
+        !writer.contains(&format!(
+            "uses: jdx/mr-boxington-action@{MR_BOXINGTON_ACTION_SHA}"
+        )),
+        "qualification must not silently substitute the production pin"
+    );
+}
 
 #[test]
 fn protected_main_mbx_roundtrip_is_run_bound_and_read_only_on_restore() -> TestResult {
@@ -10,8 +28,15 @@ fn protected_main_mbx_roundtrip_is_run_bound_and_read_only_on_restore() -> TestR
     let tree = render_staged_tree(&prepare(repo.path())?)?;
     let qualification =
         crate::impl_schema2_routing::required_file(&tree, ".github/workflows/qualification.yml")?;
-
     let writer = crate::impl_schema2_routing::job_body(qualification, "mbx-cache-write-hosted")?;
+    let reader = crate::impl_schema2_routing::job_body(qualification, "mbx-cache-read-hosted")?;
+    assert_candidate_ref(writer);
+    assert_writer(writer);
+    assert_reader(reader);
+    Ok(())
+}
+
+fn assert_writer(writer: &str) {
     assert!(
         writer.contains("inputs.mode == 'mbx-cache-roundtrip' && github.ref == 'refs/heads/main' && github.ref_protected == true"),
         "{writer}"
@@ -24,7 +49,7 @@ fn protected_main_mbx_roundtrip_is_run_bound_and_read_only_on_restore() -> TestR
         "{writer}"
     );
     assert!(
-        writer.contains("velnor-qualification-mbx-1.21.1-action-1687e54eb349cadf61fa38b5813a77875489e8e6-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}"),
+        writer.contains("velnor-qualification-mbx-1.21.1-action-d0825fbaf3cc36ca2609aa38e71046265a1f1e37-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}"),
         "{writer}"
     );
     assert!(writer.contains("version: 1.21.1"), "{writer}");
@@ -35,8 +60,14 @@ fn protected_main_mbx_roundtrip_is_run_bound_and_read_only_on_restore() -> TestR
         "{writer}"
     );
     assert!(writer.contains("rustc --print sysroot"), "{writer}");
+    assert!(
+        writer.contains("df -B1 -P \\\"$RUNNER_TEMP\\\""),
+        "{writer}"
+    );
+    assert!(writer.contains("df -i -P \\\"$RUNNER_TEMP\\\""), "{writer}");
+}
 
-    let reader = crate::impl_schema2_routing::job_body(qualification, "mbx-cache-read-hosted")?;
+fn assert_reader(reader: &str) {
     assert!(
         reader.contains("inputs.mode == 'mbx-cache-roundtrip' && github.ref == 'refs/heads/main' && github.ref_protected == true"),
         "{reader}"
@@ -53,7 +84,7 @@ fn protected_main_mbx_roundtrip_is_run_bound_and_read_only_on_restore() -> TestR
         "{reader}"
     );
     assert!(
-        reader.contains("velnor-qualification-mbx-1.21.1-action-1687e54eb349cadf61fa38b5813a77875489e8e6-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}"),
+        reader.contains("velnor-qualification-mbx-1.21.1-action-d0825fbaf3cc36ca2609aa38e71046265a1f1e37-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}"),
         "{reader}"
     );
     assert!(
@@ -65,8 +96,36 @@ fn protected_main_mbx_roundtrip_is_run_bound_and_read_only_on_restore() -> TestR
         "{reader}"
     );
     assert!(reader.contains("mbx cache stats --json"), "{reader}");
+    assert!(reader.contains(".objects > 0"), "{reader}");
     assert!(
         reader.contains(".savings.cached_compilations > 0"),
+        "{reader}"
+    );
+    assert!(
+        reader.contains("df -B1 -P \\\"$RUNNER_TEMP\\\""),
+        "{reader}"
+    );
+    assert!(reader.contains("df -i -P \\\"$RUNNER_TEMP\\\""), "{reader}");
+    assert!(
+        reader.contains("tee \\\"$RUNNER_TEMP/mbx-object-stats.json\\\""),
+        "{reader}"
+    );
+    assert!(
+        reader.contains("tee \\\"$RUNNER_TEMP/mbx-reuse-stats.json\\\""),
+        "{reader}"
+    );
+    assert!(
+        !reader.contains("tee \\\"$RUNNER_TEMP/mbx-object-stats.json\\\" | jq"),
+        "{reader}"
+    );
+    assert!(
+        reader.contains("jq -e '.objects > 0' \\\"$RUNNER_TEMP/mbx-object-stats.json\\\""),
+        "{reader}"
+    );
+    assert!(
+        reader.contains(
+            "jq -e '.savings.cached_compilations > 0' \\\"$RUNNER_TEMP/mbx-reuse-stats.json\\\""
+        ),
         "{reader}"
     );
     assert!(reader.contains("version: 1.21.1"), "{reader}");
@@ -76,5 +135,4 @@ fn protected_main_mbx_roundtrip_is_run_bound_and_read_only_on_restore() -> TestR
             .contains("CARGO_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/cargo"),
         "{reader}"
     );
-    Ok(())
 }

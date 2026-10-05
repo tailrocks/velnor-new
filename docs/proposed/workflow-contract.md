@@ -6,9 +6,11 @@ This document fixes V1 defaults; unsupported configuration MUST be rejected.
 
 ## 1. Product boundary
 
-Velnor Actions is a stack-generic workflow generator. Registered Rust, OpenTofu and audited native domain
-adapters derive task proposals from repository evidence. Self-hosted runners, Docker supervision, a workflow
-interpreter and a distributed cache service are deferred.
+Velnor Actions is a stack-generic workflow generator, not a task interpreter. Registered Rust and OpenTofu
+adapters derive task proposals from repository evidence. `velnor-actions-native` contains isolated audited
+domain proposals behind typed façades; typed verification declarations join the same workflow IR. GitHub
+Actions runs jobs on hosted or configured Scale Set runners, while V1 never runs scripts locally or manages
+runner lifecycle. Docker supervision and a distributed cache service are deferred.
 
 Each registered stack adapter owns its discovery and task proposals. The Mise adapter owns tool selection,
 command construction and execution, and cache integration. The actionlint crate owns actionlint configuration
@@ -60,6 +62,8 @@ With `--output-dir PATH`, PATH is the exact fresh preview root; it MUST be absen
 writes `PATH/.github` without modifying the repository. CI and local callers MUST choose a unique directory
 under `/tmp` or the runner temp directory.
 
+Workflow files under `.github/workflows` MUST be at most 500,000 UTF-8 bytes, including the marker, within GitHub Actions' [published 500 KB per-file limit](https://docs.github.com/en/actions/reference/limits). Larger files fail with `workflow_too_large:<path>:<actual_bytes>:500000` before writes; V1 never truncates or leaves partial output.
+
 The CLI has no public scan, doctor, task, report, root, stack, profile, format, or check options. `plan`
 prints only the concise human report specified in the CLI contract; it does not expose internal JSON
 plan/report formats or execute tasks. The generated GitHub job named `plan` is an internal workflow
@@ -73,10 +77,10 @@ preparation and policy obligations are deduplicated by identity, stack tasks are
 the required final gate includes every selected obligation. A selected detection MUST contribute proposals or
 an explicit no-work result; it MUST NOT be silently discarded.
 
-V1 registers only the Rust/Cargo detector, so V1 output contains Rust obligations only. Unregistered stacks
-receive no validation claim. A repository with no selected Rust detection produces a valid empty scan and
-no-work workflow. An invalid discovered Cargo manifest fails with its path and Cargo's diagnostic. Future
-adapters add detectors and proposals to this same composition model; they do not add stack subcommands.
+V1 registers Rust/Cargo and OpenTofu detectors; only those selected stacks produce obligations. Unregistered
+stacks receive no validation claim. With no selected Rust or OpenTofu detection, the scan is empty and no-work.
+Invalid Cargo manifests and OpenTofu inputs fail with their path and diagnostic. Future adapters add detectors
+and proposals to this same composition model; they do not add stack subcommands.
 `generate` performs detection, scan, plan, validation, and rendering in one command. Internal plan and report
 values are typed artifacts, not a public JSON API. Stack ignores have no CLI override.
 
@@ -149,67 +153,16 @@ The default branch name MUST come from explicit repository configuration or the 
 branch pushes with pull-request path filters. A valid planning job MUST run even when no stack task is
 selected.
 
-Repositories may opt into main CI cadence and manual verification:
-
-```toml
-[workflow.verification]
-schedule = "17 3 * * *" # optional numeric five-field cron, UTC
-workflow_dispatch = true # optional; defaults to false
-alert = true # optional fixed failure issue observer; defaults to false
-```
-
-Omitting this table adds neither trigger. Schedule and manual dispatch run the
-existing Plan, obligations, and Required gate in this same `ci.yml` graph; they
-MUST NOT dispatch another workflow or create a second task graph. The manual UI
-declares string `scope` with default `full` and choices `affected` or `full`, plus
-optional string `base_sha`. The default is a UI value, not evidence of what the
-event submitted: if the raw dispatch payload has no `scope`, the request scope is
-`affected`, even when the native `inputs` context exposes the YAML default
-`full`. If supplied, the scope must be exactly `affected` or `full`. Ordinary
-events ignore dispatch payload and environment fields.
-
-Schedule always selects `Full`. A manual request with explicit `full` also
-selects `Full`; an `affected` request selects `Affected` only with a usable exact
-base. A missing base, or a valid but unavailable/non-commit base, widens the
-plan to `Full` with a recorded reason. A supplied affected-mode `base_sha` must
-be exactly 40 lowercase hexadecimal characters. Reject malformed values before
-any Git lookup; do not accept branch names, tags, symbolic refs, abbreviated
-SHAs, or fallback default bases. Plan resolves the validated SHA in its own
-checkout by direct argv (no shell): `git rev-parse --verify --end-of-options
-<sha>^{commit}`. It accepts the input only when the resolved commit identity
-equals the supplied SHA. No remote fetch or baseline resolver substitutes for a
-missing object. `Full` ignores `base_sha` and performs no base lookup.
-
-The request and authenticated plan retain the event, typed scope, exact runner
-`GITHUB_SHA`, raw dispatch input presence/values, and base-resolution outcome.
-Plan and merge independently capture the runner event and inputs, validate the
-closed input grammar, and reject disagreement with the authenticated plan.
-Merge compares the newly captured raw base value with the plan's authenticated
-base identity/outcome; it performs no local Git lookup and MUST NOT claim that a
-base object exists based on merge-time state. A full plan, whether requested or
-reached by conservative widening, MUST enumerate and execute every applicable
-obligation from the complete validated inventory; no obligation lane is omitted
-by baseline-driven filtering. It skips baseline lookup and coverage, and rejects
-task-result reuse and baseline proofs. Affected selection retains the usual
-complete proof requirements. Both events use read-only trust
-and caches; baseline publication remains limited to successful protected
-default-branch pushes. Failed, missing, or cancelled obligation evidence MUST
-fail the same Required gate.
-
-`alert = true` requires schedule or manual dispatch. The separate downstream
-observer has only `issues: write`, the protected environment
-`verification-alerts`, and an exact generated origin/default-branch/protected-ref
-schedule-or-dispatch gate. Verification retains read-only trust. The fixed
-observer opens or updates `Nightly CI red` using only Required's actual result,
-run URL, and source SHA; it executes no repository program, checkout, or mutable
-template. When alerts and dispatch are enabled, a native Boolean
-`simulate_failure` input defaults false. The request retains both the raw
-dispatch value and native Boolean; a mismatch or malformed value MUST fail
-closed, and a missing value means false. Only an explicitly matched true value
-runs a fixed failing step immediately before Plan; Required emits the actual
-`planning_failed` report. Ordinary runs allocate no extra runner. See
-[verification observer contract](verification-observer-contract.md) and the
-[trigger-contract decision erratum](../reviews/verification-trigger-contract-erratum-20261004.md).
+The main `ci.yml` emitter currently emits only the pull-request, default-branch
+push, and merge-group triggers shown above. Its closed `WorkflowConfig` has no
+`[workflow.verification]` table, and its `Trigger` sets `workflow_dispatch` and
+`schedule` absent. This scope is specific to main CI: the separately typed
+Velnor Freshness workflow retains its schedule and manual trigger, and the
+schema-2 Qualification workflow retains `workflow_dispatch` when requested by
+`execution.workflows`. Typed `[[workflow.tasks]]` declarations add verification
+jobs to main CI without adding triggers. The former proposal for main-CI
+schedule/manual alert and failure simulation is deferred; it does not describe
+generated main-CI output.
 
 Every generated workflow MUST set:
 
@@ -230,9 +183,11 @@ group: velnor-${{ github.workflow }}-${{ github.event.pull_request.number || git
 cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 ```
 
-For `workflow.policy = "consumer-v1"`, compose detections into `plan`, one `rust-<slug>` crate job
-per selected crate, `actionlint`, and `required`. V1 permits only Rust, so the selected set is empty or `{rust}`;
-future adapters add namespaced crate jobs without CLI selectors.
+For `workflow.policy = "consumer-v1"`, compose detections into `plan`, stack task jobs, `actionlint`, and `required`.
+V1 registers Rust and OpenTofu detectors; selected stacks are any subset of `{rust, tofu}`. All-Tofu groups
+use `tofu-<slug>`; Rust and mixed groups use `rust-<slug>`. Future adapters add namespaced jobs without CLI selectors.
+
+Typed `[[workflow.tasks]]` verification jobs join `Required` under either workflow policy; schema-2 routing, fail-closed admission, and authoring limits are defined in the [tooling input contract](tooling-input-contract.md).
 
 The following labels are GitHub Actions job IDs only. They are not Cargo packages, executable
 names, generated command labels, or CLI subcommands. The sole Velnor executable is `velnor-actions`.
@@ -283,18 +238,19 @@ pull request. `Required` depends on the plan, every crate job, the lint and vali
 validation, and the candidate report when candidate mode is enabled.
 
 The final job MUST have stable display name `Required`; branch protection requires that exact check.
-Every generated job MUST use the same single literal, versioned Ubuntu label in `runs-on`. With no
-`workflow.runner_label` override, Velnor MUST use the latest pinned x64 label from [version
-policy](version-policy.md); the current snapshot selects `ubuntu-26.04`. An explicit older label is allowed
-only when listed in the policy's supported-label set and named in `.velnor/config.toml`. Velnor MUST reject
-`ubuntu-latest`, every `*-latest` alias, unversioned labels, unsupported labels, expressions, matrices, and
-aliases in every generated `runs-on` field. V1 emits no self-hosted labels. The plan records the selected label and whether it came from `latest_default` or `config_override`.
+The `ci.yml` control jobs use one literal, versioned Ubuntu label. Without `workflow.runner_label`, Velnor MUST
+use the latest pinned x64 policy label (`ubuntu-26.04` currently); older hosted labels require policy support
+and an explicit `.velnor/config.toml` value. Typed verification tasks use declared hosted runners; schema-2 routing may place
+eligible Linux work on the configured Scale Set or emit both copies (see [tooling input](tooling-input-contract.md)).
+Velnor MUST reject `*-latest`, unversioned or unsupported hosted labels, expressions, matrices, and aliases in
+every generated `runs-on`. Scale Set selectors MUST match validated `[execution]`. The plan records its control
+label and whether it came from `latest_default` or `config_override`.
 
 Every generated job MUST carry a per-job `timeout-minutes` below GitHub's 360 minute default; the bound is a required typed Job IR field (1–360 minutes),
 rendered right after `runs-on`. Per-kind defaults follow the measured green-run walls in `docs/implemented/performance.md`: 30 minutes for crate-shaped jobs, 10 minutes for `plan`, `required`, validator, and release jobs.
 
-`plan` MUST upload its plan report with `if: always()`. It MUST fail when its matrix JSON exceeds 256
-KiB. It MUST report a clear planning error and request a broadened or reduced plan instead of truncating entries.
+`plan` MUST upload its plan report with `if: always()` and fail above a 512 KiB canonical `matrix.json` artifact or, when the workflow promotes an output-fed matrix, above 256 expanded jobs or 900,000 aggregate UTF-16 bytes across promoted job outputs. The artifact cap is independent of job outputs; count actual `matrix.include` entries only on the dynamic path because static artifact rows are not matrix jobs. GitHub documents a 1 MB per-job output limit approximated in UTF-16 and a 256-job matrix maximum in its [workflow syntax reference](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax).
+`plan` MUST report a clear planning error and request a broadened or reduced plan instead of truncating entries.
 
 The generated jobs MUST use these step sequences and commands. Action steps are the pinned allowlisted actions
 above; every shell step is generated with fixed arguments and may not contain repository-provided shell text.
@@ -389,6 +345,4 @@ identity rules are defined in [the workflow matrix contract](workflow-matrix-con
 
 ## 5. Task execution
 
-Per-matrix steps, exact generated commands, Mise invocation, cache mode, and task-report requirements for V1
-Rust tasks are fixed in the [Rust task execution contract](task-execution-contract.md). Future stack adapters
-provide their own typed task execution profiles.
+Rust task profiles follow the [task execution contract](task-execution-contract.md); future adapters own typed profiles.

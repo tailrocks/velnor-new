@@ -8,7 +8,7 @@ mod workflow_context;
 
 use std::collections::BTreeMap;
 
-use velnor_actions_actionlint::{ActionlintConfigInput, StepSyntax};
+use velnor_actions_actionlint::{ActionlintConfigInput, IgnorePolicy, StepSyntax};
 use velnor_actions_contract::{
     Concurrency, GeneratorValidation, Job, Permissions, Stack, Step, StepKind, Trigger,
     ValidatorKind, VelnorConfig, VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy,
@@ -19,7 +19,7 @@ use velnor_actions_mise::{
 use velnor_actions_rust::{CompileDriver, TestRunner};
 use velnor_actions_workflow_renderer::render::{
     CONCURRENCY_CANCEL, CONCURRENCY_GROUP, EXPECTED_PR_TYPES, FINAL_JOB_ID, PLAN_JOB_ID,
-    PUBLISH_JOB_ID, RenderContext,
+    PUBLISH_JOB_ID, RenderContext, WORKFLOW_PATH,
 };
 use velnor_actions_workflow_renderer::steps::PLAN_OPERATION;
 
@@ -113,6 +113,7 @@ pub(crate) fn build_workflow(
     let catalog = ToolCatalog::pinned();
     let version = env!("CARGO_PKG_VERSION").to_owned();
     let policy = config.workflow.policy;
+    let verification_tasks = crate::verification_tasks::policies(config)?;
     let use_mbx = plan_uses_mbx(discovery);
     let support = support_workflow(policy, config.workflow.generator_validation, discovery);
     let mut jobs = BTreeMap::new();
@@ -135,25 +136,19 @@ pub(crate) fn build_workflow(
         discovery,
     )?;
     jobs.insert(PLAN_JOB_ID.to_owned(), plan);
-    let custom_tasks: &[String] = config
-        .stacks
-        .rust
-        .as_ref()
-        .map_or(&[], |rust| &rust.custom_tasks);
-    let built = crate::crate_jobs::build_crate_jobs(
+    let built = crate::crate_jobs::build_for_workflow(
+        config,
         label,
-        policy,
         discovery,
         &catalog,
         fetch_roots,
-        custom_tasks,
         acquire.as_ref(),
-        config.workflow.max_parallel_jobs,
     )?;
     let crate_ids: Vec<String> = built.jobs.iter().map(|(id, _)| id.clone()).collect();
     for (id, job) in built.jobs {
         jobs.insert(id, job);
     }
+    crate::verification_tasks::insert_jobs(&mut jobs, &verification_tasks)?;
     insert_gate_jobs(&mut jobs, label, branch, &crate_ids, acquire, &catalog)?;
     wire_w1::check_crate_mbx_gating(&jobs, &built.drivers)?;
     let ir = WorkflowIr {
@@ -172,9 +167,16 @@ pub(crate) fn build_workflow(
         },
         jobs,
     };
-    let context =
-        workflow_context::render_context(config, label, &version, &catalog, discovery, use_rust)?;
-    let actionlint = workflow_context::actionlint_input(config, &version, label);
+    let context = workflow_context::render_context(
+        config,
+        label,
+        &version,
+        &catalog,
+        discovery,
+        use_rust,
+        verification_tasks,
+    )?;
+    let actionlint = actionlint_input(config, &version, label);
     Ok(WorkflowPlan {
         ir,
         support,
@@ -264,10 +266,8 @@ fn insert_format_step(plan: &mut Job, format: Step) {
     plan.steps.insert(at, format);
 }
 
-/// True when any selected workspace compiles through MBX.
-///
-/// The plan job pre-installs the MBX driver only on detected project
-/// evidence, never by default; consumers without MBX stay Cargo-only.
+/// True when any selected workspace compiles through MBX. Only detected
+/// evidence enables pre-install; consumers without it stay Cargo-only.
 pub(crate) fn plan_uses_mbx(discovery: &Discovery) -> bool {
     discovery
         .workspaces
@@ -275,11 +275,8 @@ pub(crate) fn plan_uses_mbx(discovery: &Discovery) -> bool {
         .any(|workspace| workspace.profile.compile_driver == CompileDriver::Mbx)
 }
 
-/// True when any selected workspace runs tests through Nextest.
-///
-/// Both prepare steps union the Nextest runner on this signal, so
-/// `cargo_nextest` legs resolve the pinned runner while `cargo_test`
-/// legs never carry it.
+/// True when any selected workspace runs tests through Nextest; only those
+/// legs resolve the pinned runner.
 fn plan_uses_nextest(discovery: &Discovery) -> bool {
     discovery
         .workspaces
@@ -301,8 +298,8 @@ pub(crate) fn plan_uses_opentofu(discovery: &Discovery) -> bool {
 
 /// True when the plan job needs the Rust toolchain.
 ///
-/// Consumers require Rust only for selected Rust evidence. The generator
-/// repository additionally builds its candidate-source helper in Plan.
+/// Consumers require Rust only for selected Rust evidence. The Velnor
+/// repository policy retains Rust setup for its own dogfood plan.
 fn plan_uses_rust(discovery: &Discovery, policy: WorkflowPolicy) -> bool {
     policy == WorkflowPolicy::VelnorRepositoryV1
         || !discovery.workspaces.is_empty()
@@ -331,6 +328,27 @@ pub(crate) fn prepare_rust_components_step(
         .map_err(|problem| OrchestratorError::Contract { problem })?;
     velnor_actions_workflow_renderer::ambient_shell_step(PREPARE_RUST_COMPONENTS_STEP, run, env)
         .map_err(OrchestratorError::from)
+}
+
+/// Actionlint input: generated workflow path plus policy-graded ignores.
+///
+/// The bridge label is the effective configured runner label (F2):
+/// the emitted `self-hosted-runner` entry must match `runs-on`, never
+/// a hardcoded distro.
+fn actionlint_input(config: &VelnorConfig, version: &str, label: &str) -> ActionlintConfigInput {
+    let policy = config.workflow.policy;
+    let mut input = ActionlintConfigInput::new(version)
+        .with_workflow_path(WORKFLOW_PATH)
+        .with_config_variables(wire_w1::declared_config_variables())
+        .with_runner_label(label);
+    if let Some(execution) = &config.execution {
+        input.extra_runner_labels = execution.actionlint_labels();
+    }
+    input.policy = match policy {
+        WorkflowPolicy::ConsumerV1 => IgnorePolicy::Consumer,
+        WorkflowPolicy::VelnorRepositoryV1 => IgnorePolicy::VelnorProtected,
+    };
+    input
 }
 
 #[cfg(test)]

@@ -1,12 +1,15 @@
-//! Hosted-only MBX objects-cache qualification.
+//! Hosted-only MBX objects-cache qualification experiment.
 //!
 //! Write and read are separate jobs in one dispatch. The writer is restricted
 //! to protected main; the shared cache generation is bound to that run,
 //! attempt, source SHA, action pin, and MBX release. The dependent reader
 //! cannot publish a cache or pass on data from an earlier run.
+//! The action ref is an explicit candidate input separate from the production
+//! pin; emitting this probe does not assert that candidate qualification passed.
 //!
-//! Both jobs set `MBX_GC_AUTO=1` to exercise the hosted policy emitted for
-//! production MBX jobs, not the action's hosted default.
+//! Both jobs set `MBX_GC_AUTO=1` for this protected-main roundtrip probe.
+//! This probe does not exercise production's typed hosted action backend or
+//! Scale Set local backend, nor the universal `MBX_SHARE_OUT_DIR=0` policy.
 
 use super::features::{checkout_step, finish, gated, lane_base, run_step};
 use super::{MbxQualificationPins, RunnerSpec};
@@ -36,8 +39,9 @@ pub fn cache_probe() -> u64 { 42 }
 EOF
 mbx build --manifest-path "$root/Cargo.toml"
 "#;
-const IMPORT_PROBE: &str = "mbx cache stats --json | jq -e '.objects > 0' >/dev/null";
-const REUSE_PROBE: &str = "mbx stats --json | jq -e '.savings.cached_compilations > 0' >/dev/null";
+const DISK_SAMPLE: &str = "df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"";
+const IMPORT_PROBE: &str = "df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; mbx cache stats --json | tee \"$RUNNER_TEMP/mbx-object-stats.json\"; jq -e '.objects > 0' \"$RUNNER_TEMP/mbx-object-stats.json\"";
+const REUSE_PROBE: &str = "df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; mbx stats --json | tee \"$RUNNER_TEMP/mbx-reuse-stats.json\"; jq -e '.savings.cached_compilations > 0' \"$RUNNER_TEMP/mbx-reuse-stats.json\"";
 
 /// Emit isolated writer and reader jobs for the pinned MBX runtime.
 ///
@@ -48,12 +52,12 @@ pub(super) fn jobs(
     hosted: &RunnerSpec,
 ) -> Result<Vec<(String, Yaml)>, RenderError> {
     request.mise_setup.validate()?;
-    validate_uses(&request.mbx_action_uses)?;
+    validate_uses(&request.candidate_action_uses)?;
     let action_prefix = format!("{MBX_ACTION_NAME}@");
-    if !request.mbx_action_uses.starts_with(&action_prefix) {
+    if !request.candidate_action_uses.starts_with(&action_prefix) {
         return Err(RenderError::BadActionRef(format!(
             "not_mbx_action:{}",
-            request.mbx_action_uses
+            request.candidate_action_uses
         )));
     }
     validate_exact_version(&request.mbx_version, "mbx")?;
@@ -106,6 +110,9 @@ fn job(request: &MbxQualificationPins, hosted: &RunnerSpec, writer: bool) -> (St
         steps.push(run_step("Require imported MBX objects", IMPORT_PROBE));
     }
     steps.push(build_step());
+    if writer {
+        steps.push(run_step("Sample runner disk", DISK_SAMPLE));
+    }
     if !writer {
         steps.push(run_step("Require reused compilation", REUSE_PROBE));
     }
@@ -155,13 +162,13 @@ fn mbx_action_step(request: &MbxQualificationPins, writer: bool) -> Yaml {
     let generation = format!(
         "velnor-qualification-mbx-{}-action-{}-run-${{{{ github.run_id }}}}-${{{{ github.run_attempt }}}}-${{{{ github.sha }}}}",
         request.mbx_version,
-        &request.mbx_action_uses[format!("{MBX_ACTION_NAME}@").len()..]
+        &request.candidate_action_uses[format!("{MBX_ACTION_NAME}@").len()..]
     );
     Yaml::Map(vec![
         ("name".to_owned(), Yaml::str("Restore MBX objects")),
         (
             "uses".to_owned(),
-            Yaml::str(request.mbx_action_uses.clone()),
+            Yaml::str(request.candidate_action_uses.clone()),
         ),
         ("id".to_owned(), Yaml::str("mbx_cache")),
         (

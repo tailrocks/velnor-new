@@ -89,6 +89,8 @@ pub struct RenderContext {
     /// review). Accepts fixed pre-seed staging for internal steps and
     /// requires the build-once artifact closure; never set for consumers.
     pub preseed: bool,
+    /// Sorted isolated verification jobs with per-runner Mise pins.
+    pub verification_tasks: Vec<crate::VerificationTaskPolicy>,
     /// Caller-validated env for plan-job helper consumers: the freshness
     /// step and the `plan-v1` internal step run the helper, whose
     /// locked/offline qualification reads the Cargo home the Fetch step
@@ -247,6 +249,14 @@ pub fn finalize_jobs(
     mise.validate()?;
     let mut jobs = merged_jobs(ir, policy, support, ctx)?;
     for (id, job) in &mut jobs {
+        if ctx
+            .verification_tasks
+            .iter()
+            .any(|task| task.owns_job_id(id))
+        {
+            closure::check_internal_staged(id, job, ctx.preseed)?;
+            continue;
+        }
         let always = id == PLAN_JOB_ID || id == TASK_JOB_ID;
         let target =
             velnor_actions_contract::target_for_runner_label(&ctx.runs_on).ok_or_else(|| {
@@ -302,7 +312,7 @@ fn merged_jobs(
     ir.validate().map_err(RenderError::Contract)?;
     workflow_policy::check_triggers(&ir.triggers)?;
     workflow_policy::check_concurrency(&ir.concurrency)?;
-    workflow_policy::check_single_label(ir, &ctx.runs_on)?;
+    workflow_policy::check_single_label(ir, &ctx.runs_on, &ctx.verification_tasks)?;
     let mut jobs = ir.jobs.clone();
     match policy {
         WorkflowPolicy::ConsumerV1 => support::reject_consumer_support(&jobs, support)?,
@@ -310,6 +320,12 @@ fn merged_jobs(
             support::merge_support_jobs(&mut jobs, support, ctx)?;
         }
     }
+    let verification_ids = crate::verification_jobs::validate_verification_jobs(
+        &jobs,
+        &ctx.verification_tasks,
+        &ctx.checkout_uses,
+    )?;
+    crate::verification_jobs::extend_required_needs(&mut jobs, &verification_ids)?;
     msrv::check_no_msrv(&jobs)?;
     support::check_candidate_invariants(&jobs)?;
     support::check_final_gate(&jobs)?;
@@ -332,16 +348,11 @@ fn render_merged(
     } else {
         jobs.clone()
     };
-    let mbx_gc_jobs = crate::mbx_gc_policy::jobs_with_hosted_mbx_objects(&jobs);
+    let mbx_gc_jobs = crate::mbx_gc_policy::jobs_with_hosted_linux_mbx_objects(&jobs);
+    let mbx_share_out_jobs = crate::mbx_gc_policy::jobs_with_mbx_objects(&jobs);
     let shared = crate::lane_share::share_lanes(&jobs, ctx)?;
-    let mut document = document::workflow_to_yaml(
-        ir,
-        &shared.jobs,
-        ctx,
-        &shared.calls,
-        &shared.checkouts,
-        &mbx_gc_jobs,
-    )?;
+    let mut document =
+        document::workflow_to_yaml(ir, &shared, ctx, &mbx_gc_jobs, &mbx_share_out_jobs)?;
     if let Some((source, max_parallel)) = &matrix {
         matrix::attach_task_matrix(&mut document, source, *max_parallel)?;
     } else {
@@ -351,6 +362,7 @@ fn render_merged(
     matrix::insert_publish_step_id(&mut document)?;
     let document = crate::yaml::quote_run_values_in_yaml(document);
     let text = marker::with_marker(&ctx.generator_version, &render_yaml(&document))?;
+    crate::workflow_size::check_workflow_size(WORKFLOW_PATH, &text)?;
     steps::scan_for_private_subcommands(&text)?;
     Ok(RenderedWorkflow {
         yaml: text,

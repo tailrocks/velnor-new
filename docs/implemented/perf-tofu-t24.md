@@ -84,8 +84,8 @@ lock root, mixed rust-only, fork PR-trust with PR digest).
 
 ## 3. Synthetic scaling (n=5 per width)
 
-Plan scales to 40 roots (120 obligations, under the 320 KiB
-matrix budget); prepare/generate scale to 100 roots (300
+At the measured head, plan scaled to 40 roots (120 obligations, under
+the then-current 320 KiB matrix budget); prepare/generate scaled to 100 roots (300
 proposals). Walls are local observations, not hosted performance.
 
 | Roots | prepare_ms (sorted, med) | plan_ms (sorted, med) | generate_ms (sorted, med) |

@@ -1,6 +1,7 @@
 //! `POST .../generatejitconfig`. The request JSON and the response are not logged.
 
 use serde::{Deserialize, Serialize};
+use velnor_runner_core::RUNNER_WORK_FOLDER;
 
 use crate::refresh::{StatusClass, classify_status};
 use crate::{EncodedJit, WireError, jit_path};
@@ -9,7 +10,9 @@ use super::error::{SessionError, reject};
 use super::request::{Method, SessionRequest, Transport};
 use super::retry::{API_QUERY, bearer, execute, fresh_gate, json_content, user_agent};
 
-/// JSON body for [`jit`]. `workFolder` is empty, matching the pinned scaler.
+/// JSON body for [`jit`]. `workFolder` is `_work`, relative to the runner root.
+/// The work volume is mounted at `/home/runner/_work`, which also holds the
+/// runner's temporary JIT payload before the listener starts.
 ///
 /// # Errors
 ///
@@ -21,7 +24,7 @@ pub fn jit_request(name: &str) -> Result<Vec<u8>, WireError> {
     }
     serde_json::to_vec(&JitRequest {
         name,
-        work_folder: "",
+        work_folder: RUNNER_WORK_FOLDER,
     })
     .map_err(|_| WireError::Encode)
 }

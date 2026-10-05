@@ -11,7 +11,9 @@ use std::path::{Component, Path, PathBuf};
 use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
-use velnor_actions_contract::{canonical_json_bytes, digest_b3, validate_digest};
+use velnor_actions_contract::{
+    canonical_json_bytes, digest_b3, is_valid_mise_task_name, validate_digest,
+};
 
 use crate::error::MiseError;
 
@@ -318,7 +320,7 @@ pub fn task_run_argv(
     file: &str,
 ) -> Result<Vec<String>, MiseError> {
     validate_task_def_path(file)?;
-    if !velnor_actions_contract::is_valid_custom_task_name(task) {
+    if !is_valid_mise_task_name(task) {
         return Err(ineligible(task, "bad_task_name"));
     }
     Ok([

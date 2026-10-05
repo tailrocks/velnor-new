@@ -9,12 +9,13 @@ use velnor_actions_contract::{Step, StepKind};
 
 #[path = "cache_steps_mbx_preflight.rs"]
 mod mbx_preflight;
-pub(crate) use mbx_preflight::{
-    MBX_ACTION_CACHE_MODE, MBX_GC_AUTO_ENV, MBX_GC_AUTO_VALUE, is_mbx_action,
-};
 pub use mbx_preflight::{
     MBX_CACHE_MODE_ENV, MBX_PREFLIGHT_NAME, MBX_RESTORE_NAME, check_mbx_gating,
     mbx_steps_for_driver,
+};
+pub(crate) use mbx_preflight::{
+    MBX_GC_AUTO_ENV, MBX_GC_AUTO_VALUE, MBX_SHARE_OUT_DIR_ENV, MBX_SHARE_OUT_DIR_VALUE,
+    is_mbx_action,
 };
 
 use crate::{

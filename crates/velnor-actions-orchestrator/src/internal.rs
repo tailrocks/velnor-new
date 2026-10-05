@@ -36,12 +36,8 @@ pub use crate::internal_request::{
 /// Schema version accepted by both internal entrypoints.
 pub(crate) const SCHEMA: u32 = 1;
 
-/// Maximum canonical `matrix.json` bytes; oversize errors, never truncates.
-///
-/// Recalibrated to 512 KiB (524,288 bytes) to accommodate multi-crate
-/// repositories (such as 44-crate workspaces needing ~395 KB) while
-/// preserving fail-closed budget enforcement for 60+ crate matrices (~595 KB)
-/// well under GitHub Actions' 1 MB output limit.
+/// Maximum canonical `matrix.json` artifact bytes; oversize errors, never
+/// truncates. Job outputs have a separate UTF-16 aggregate budget.
 pub(crate) const MATRIX_BUDGET_BYTES: usize = 524_288;
 
 /// Env key carrying the exact request-file path.

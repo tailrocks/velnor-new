@@ -18,15 +18,19 @@ use crate::journal::Journal;
 use crate::listen::{Link, Secret, admin_link};
 use crate::reconcile::Reconcile;
 use crate::scale_set::EnsureError;
-use crate::worker::{Started, start_pair};
+use crate::worker::Started;
 
+mod bind;
+#[cfg(all(test, unix))]
+mod busy_slot_tests;
 mod capacity;
 mod gate;
-#[cfg(all(test, unix))]
-mod initial_scale_tests;
 mod inspect;
 #[cfg(all(test, unix))]
 mod inspect_tests;
+mod name_taken;
+
+pub(crate) use inspect::classify_inspect;
 mod session;
 mod slot;
 mod steps;
@@ -40,12 +44,14 @@ pub(crate) use capacity::{install_job_capacity, job_capacity};
 #[cfg(test)]
 pub(crate) use capacity::{
     Admit, Seat, admit, needs_running, parse_admit_target, parse_job_capacity, poll_limit,
-    wide_poll_limit,
+    statistics_blocked, wide_poll_limit,
 };
 #[cfg(test)]
-pub(crate) use slot::occupies;
+pub(crate) use name_taken::{fail_unstarted, should_ack};
 #[cfg(test)]
 pub(crate) use steps::{Idle, idle};
+#[cfg(test)]
+pub(crate) use turn::admission;
 
 /// What one launch attempt started. No JIT and no token.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -76,6 +82,15 @@ pub async fn launch_once(
     docker: &bollard::Docker,
     journal: &Journal,
 ) -> Result<LaunchReport, EnsureError> {
+    let ceiling = job_capacity();
+    let capacity = crate::guest::discover_guest_capacity(docker, ceiling)
+        .await
+        .map_err(|_| EnsureError::Unexpected {
+            status: 0,
+            step: "docker budget",
+        })?;
+    let _capacity = install_job_capacity(capacity);
+    slot::release_exited(journal, docker).await?;
     let set = ensure_product_scale_set(pat, owner, repo)?;
     if std::env::var("VELNOR_RECONCILE").ok().as_deref() == Some("1") {
         let decision = gate::reconcile_gate(journal, docker).await?;
@@ -168,7 +183,7 @@ pub(crate) async fn drive_offer<T, S, F>(
 ) -> Result<Option<Started>, EnsureError>
 where
     T: velnor_runner_github::Transport + Lane,
-    S: FnOnce(&str, &[u8]) -> F,
+    S: FnOnce(&str, &[u8], bind::Bind) -> F,
     F: Future<Output = Result<Started, HostError>>,
 {
     if matches!(steps::idle(polled), steps::Idle::Scale) {
@@ -228,10 +243,10 @@ async fn scale_session(
         queue: None,
     };
     let name = runner_name(&session.session_id);
-    steps::scale_unacked(&mut lane, &ctx, journal, &name, |volume, jit| {
+    steps::scale_unacked(&mut lane, &ctx, journal, &name, |volume, jit, bind| {
         let volume = volume.to_owned();
         let payload = jit.to_vec();
-        async move { start_pair(docker, &volume, &payload).await }
+        async move { bind::start_bound(docker, &volume, &payload, &bind).await }
     })
     .await
 }
@@ -255,19 +270,21 @@ struct Ready<'a> {
     session: &'a QueueSession,
     admin_token: &'a str,
     path: String,
-    queue: Option<String>,
     polled: &'a Poll,
 }
 
-async fn drive_ready(
-    link: &mut Link,
+async fn drive_ready<T>(
+    lane: &mut T,
     ready: Ready<'_>,
     journal: &Journal,
     docker: &bollard::Docker,
     capacity: u32,
-) -> Result<Option<Started>, EnsureError> {
+) -> Result<Option<Started>, EnsureError>
+where
+    T: Transport + Lane,
+{
     if slot::busy(journal, docker, capacity).await? {
-        return held(link, ready);
+        return Ok(None);
     }
     let ctx = Drive {
         set_id: ready.set_id,
@@ -275,26 +292,12 @@ async fn drive_ready(
         queue_token: ready.session.token().to_owned(),
         admin_token: ready.admin_token.to_owned(),
     };
-    let admin = link.base().to_owned();
-    let mut lane = HostLane {
-        link,
-        admin,
-        queue: ready.queue,
-    };
-    drive_offer(&mut lane, &ctx, ready.polled, journal, |volume, jit| {
+    drive_offer(lane, &ctx, ready.polled, journal, |volume, jit, bind| {
         let volume = volume.to_owned();
         let payload = jit.to_vec();
-        async move { start_pair(docker, &volume, &payload).await }
+        async move { bind::start_bound(docker, &volume, &payload, &bind).await }
     })
     .await
-}
-
-fn held(link: &mut Link, ready: Ready<'_>) -> Result<Option<Started>, EnsureError> {
-    if !matches!(steps::idle(ready.polled), steps::Idle::Scale) {
-        return Ok(None);
-    }
-    ack_ready(link, ready.session, ready.path, ready.queue, ready.polled)?;
-    Ok(None)
 }
 
 fn ack_ready(

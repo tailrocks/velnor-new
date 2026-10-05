@@ -52,6 +52,7 @@ fn ctx() -> RenderContext {
         validator_commands: Vec::new(),
         candidate: None,
         preseed: false,
+        verification_tasks: Vec::new(),
         plan_consumer_env: std::collections::BTreeMap::new(),
     }
 }
