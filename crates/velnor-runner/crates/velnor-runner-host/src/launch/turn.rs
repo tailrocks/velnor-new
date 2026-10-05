@@ -1,5 +1,7 @@
 //! One session loop. A running owned worker keeps the session up.
 
+use std::future::Future;
+
 use velnor_runner_github::{Poll, QueueSession};
 
 use crate::journal::Journal;
@@ -34,9 +36,13 @@ pub(super) async fn poll_and_drive(
     trace::session(session);
     let mut workers = Vec::new();
     let capacity = capacity::job_capacity();
-    if !slot::busy(journal, docker, capacity).await?
-        && let Some(started) =
-            scale_session(link, set_id, session, admin_token, journal, docker).await?
+    let population = session
+        .statistics()
+        .map_or(0, velnor_runner_github::Statistics::assigned_population);
+    if let Some(started) = scale_if_free(journal, docker, capacity, population, || {
+        scale_session(link, set_id, session, admin_token, journal, docker)
+    })
+    .await?
     {
         workers.push(started);
     }
@@ -58,6 +64,30 @@ pub(super) async fn poll_and_drive(
     };
     until_idle(&mut turn, &mut workers, bound).await?;
     Ok(workers)
+}
+
+pub(super) async fn scale_if_free<S, F>(
+    journal: &Journal,
+    docker: &bollard::Docker,
+    capacity: u32,
+    population: i64,
+    scale: S,
+) -> Result<Option<Started>, EnsureError>
+where
+    S: FnOnce() -> F,
+    F: Future<Output = Result<Option<Started>, EnsureError>>,
+{
+    let Ok(assigned) = u64::try_from(population) else {
+        return Ok(None);
+    };
+    if assigned == 0 {
+        return Ok(None);
+    }
+    let running = slot::running_count(journal, docker).await?;
+    if running >= capacity || u64::from(running) >= assigned {
+        return Ok(None);
+    }
+    scale().await
 }
 
 /// Keep polling after admission stops while an owned container is running.
@@ -96,6 +126,17 @@ async fn departed(turn: &Turn<'_>, workers: &[Started], missed: u8) -> Result<bo
     Ok(running == 0 && (workers.is_empty() || missed >= 2))
 }
 
+fn assigned_in(polled: &Poll) -> u32 {
+    let Poll::Batch(batch) = polled else {
+        return 0;
+    };
+    let raw = batch
+        .statistics
+        .as_ref()
+        .map_or(0, velnor_runner_github::Statistics::assigned_population);
+    u32::try_from(raw.max(0)).unwrap_or(u32::MAX)
+}
+
 struct Turn<'a> {
     link: &'a mut Link,
     set_id: i64,
@@ -123,6 +164,7 @@ impl Turn<'_> {
             target: self.target,
             started,
             running,
+            assigned: assigned_in(&polled),
             idle,
         });
         self.apply(decision, workers, path, queue, &polled).await
@@ -172,9 +214,10 @@ impl Turn<'_> {
                     self.capacity,
                 )
                 .await?;
-                if let Some(worker) = launched {
-                    workers.push(worker);
-                }
+                let Some(worker) = launched else {
+                    return Ok(false);
+                };
+                workers.push(worker);
                 Ok(stop)
             }
         }

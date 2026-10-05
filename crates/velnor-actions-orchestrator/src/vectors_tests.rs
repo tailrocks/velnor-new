@@ -66,7 +66,7 @@ fn mbx_probe_vector_is_byte_exact() {
         "--no-env",
         "--no-hooks",
         "exec",
-        "mr-boxington@1.21.0",
+        "mr-boxington@1.21.1",
         "--",
         "mbx",
         "--version",
@@ -97,6 +97,7 @@ fn group_with_driver(driver: velnor_actions_rust::CompileDriver) -> ProposedTask
         uses_network: false,
         uses_clock: false,
         uses_random: false,
+        run_ignored: None,
         nextest_profile: velnor_actions_rust::NextestProfile::Default,
     };
     let task = velnor_actions_rust::propose_task(&group).expect("fixture proposes");
@@ -158,7 +159,7 @@ fn section4_build_vector_is_byte_exact() {
         "--no-hooks",
         "exec",
         "rust@1.98.1",
-        "mr-boxington@1.21.0",
+        "mr-boxington@1.21.1",
         "--",
         "mbx",
         "build",

@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use velnor_actions_actionlint::render_actionlint_yaml;
 use velnor_actions_contract::{ExecutionMode, expand_workflow};
 use velnor_actions_workflow_renderer::guard::{self, SafeTreePath};
-use velnor_actions_workflow_renderer::render::{RenderedTree, render_workflow_ir_strict};
+use velnor_actions_workflow_renderer::render::RenderedTree;
 use velnor_actions_workflow_renderer::steps::rehead_actionlint_marker;
 use velnor_actions_workflow_renderer::tree::render_tree_with_extra;
 
@@ -162,18 +162,20 @@ fn render_all(
             problem: err.to_string(),
         }
     })?;
-    let workflow = render_workflow_ir_strict(
+    let rendered = velnor_actions_workflow_renderer::render::render_workflow_ir_strict_shared(
         &ir,
         prep.config.workflow.policy,
         prep.workflow.support.as_ref(),
         &prep.workflow.context,
         &mise,
     )?;
+    let workflow = rendered.yaml;
     let actionlint = render_actionlint_yaml(&prep.workflow.actionlint)?;
     let actionlint = rehead_actionlint_marker(&actionlint.yaml, version)?;
     let mut extra = crate::release_emit::release_files(prep, &mise)?;
     extra.extend(crate::freshness_emit::freshness_files(prep)?);
     extra.extend(crate::routing::extra_files(&prep.config, version)?);
+    extra.extend(rendered.shared);
     let tree = render_tree_with_extra(&workflow, &actionlint, &extra, version)?;
     Ok(tree)
 }

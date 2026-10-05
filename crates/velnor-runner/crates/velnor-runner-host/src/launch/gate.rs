@@ -7,6 +7,8 @@ use crate::journal::Journal;
 use crate::reconcile::{IntentRow, Reconcile, before_advertise};
 use crate::scale_set::EnsureError;
 
+use super::inspect::container_running;
+
 /// `hold occupied=N adopt=M` or `advertise occupied=N`.
 ///
 /// Adopt is a count. Full docker ids are not printed.
@@ -24,17 +26,19 @@ pub(crate) fn gate_line(decision: &Reconcile) -> String {
 /// Compare the journal with running containers, then advertise or hold.
 ///
 /// Rows are loaded before any inspect, so the database connection is not held
-/// across Docker. Inspect failures count as not running. Nothing is deleted.
+/// across Docker. Only a Docker 404 means not running; incomplete observations
+/// and other inspect failures return an error. Nothing is deleted.
 ///
 /// # Errors
 ///
-/// Returns [`EnsureError`] when the journal cannot be read.
+/// Returns [`EnsureError`] when the journal cannot be read or an inspect result
+/// cannot establish the container's running state.
 pub(crate) async fn reconcile_gate(
     journal: &Journal,
     docker: &Docker,
 ) -> Result<Reconcile, EnsureError> {
     let rows = journal.rows().await.map_err(map_journal)?;
-    let observed_docker = running_ids(&rows, docker).await;
+    let observed_docker = running_ids(&rows, docker).await?;
     Ok(before_advertise(
         &rows,
         &str_refs(&observed_docker),
@@ -60,24 +64,17 @@ fn owned_ids(rows: &[IntentRow]) -> Vec<&str> {
         .collect()
 }
 
-async fn running_ids(rows: &[IntentRow], docker: &Docker) -> Vec<String> {
+async fn running_ids(rows: &[IntentRow], docker: &Docker) -> Result<Vec<String>, EnsureError> {
     let mut running = Vec::new();
     for row in rows {
         let Some(id) = row.docker_id.as_deref().filter(|id| !id.is_empty()) else {
             continue;
         };
-        if container_running(docker, id).await {
+        if container_running(docker, id).await? {
             running.push(id.to_owned());
         }
     }
-    running
-}
-
-async fn container_running(docker: &Docker, id: &str) -> bool {
-    let Ok(info) = docker.inspect_container(id, None).await else {
-        return false;
-    };
-    info.state.and_then(|state| state.running).unwrap_or(false)
+    Ok(running)
 }
 
 fn map_journal(error: HostError) -> EnsureError {

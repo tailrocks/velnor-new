@@ -9,16 +9,16 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{
-    CI_WORKFLOW_PATH, Concurrency, Job, PLAN_JOB_ID as CONTRACT_PLAN_JOB_ID,
+    CI_WORKFLOW_PATH, Job, PLAN_JOB_ID as CONTRACT_PLAN_JOB_ID,
     REQUIRED_CONDITION as CONTRACT_REQUIRED_CONDITION,
     REQUIRED_DISPLAY_NAME as CONTRACT_REQUIRED_DISPLAY_NAME,
-    REQUIRED_JOB_ID as CONTRACT_REQUIRED_JOB_ID, Trigger, ValidatorKind, VelnorSupportWorkflow,
-    WorkflowIr, WorkflowPolicy,
+    REQUIRED_JOB_ID as CONTRACT_REQUIRED_JOB_ID, ValidatorKind, VelnorSupportWorkflow, WorkflowIr,
+    WorkflowPolicy,
 };
 
 use crate::{
     RenderError, cache_p08, closure, commands, document, final_steps, guard, marker, matrix, msrv,
-    preseed_closure, steps, support, yaml::render_yaml,
+    preseed_closure, steps, support, workflow_policy, yaml::render_yaml,
 };
 
 pub use crate::matrix::{
@@ -120,6 +120,7 @@ pub struct CandidateSpec {
     pub qualify: Vec<String>,
 }
 
+pub use crate::lane_share::RenderedWorkflow;
 pub use crate::tree::{RenderedFile, RenderedSymlink, RenderedTree};
 pub use velnor_actions_contract::{AGENTS_MD_PATH, CLAUDE_MD_PATH, CLAUDE_MD_TARGET};
 
@@ -167,6 +168,15 @@ pub fn render_workflow_ir(
     support: Option<&VelnorSupportWorkflow>,
     ctx: &RenderContext,
 ) -> Result<String, RenderError> {
+    Ok(render_workflow_parts(ir, policy, support, ctx)?.yaml)
+}
+
+fn render_workflow_parts(
+    ir: &WorkflowIr,
+    policy: WorkflowPolicy,
+    support: Option<&VelnorSupportWorkflow>,
+    ctx: &RenderContext,
+) -> Result<RenderedWorkflow, RenderError> {
     let mut jobs = merged_jobs(ir, policy, support, ctx)?;
     closure::insert_plan_closure(&mut jobs, ctx)?;
     closure::insert_request_closure(&mut jobs)?;
@@ -196,6 +206,22 @@ pub fn render_workflow_ir_strict(
     ctx: &RenderContext,
     mise: &MiseSetup,
 ) -> Result<String, RenderError> {
+    Ok(render_workflow_ir_strict_shared(ir, policy, support, ctx, mise)?.yaml)
+}
+
+/// Strict render plus the composite actions duplicated lanes call.
+///
+/// # Errors
+///
+/// Returns [`RenderError`] for invalid pins, context, IR, policy,
+/// missing setup/staging, steps, or a lane pair whose bodies differ.
+pub fn render_workflow_ir_strict_shared(
+    ir: &WorkflowIr,
+    policy: WorkflowPolicy,
+    support: Option<&VelnorSupportWorkflow>,
+    ctx: &RenderContext,
+    mise: &MiseSetup,
+) -> Result<RenderedWorkflow, RenderError> {
     let jobs = finalize_jobs(ir, policy, support, ctx, mise)?;
     render_merged(ir, &jobs, ctx)
 }
@@ -274,9 +300,9 @@ fn merged_jobs(
         });
     }
     ir.validate().map_err(RenderError::Contract)?;
-    check_triggers(&ir.triggers)?;
-    check_concurrency(&ir.concurrency)?;
-    check_single_label(ir, &ctx.runs_on)?;
+    workflow_policy::check_triggers(&ir.triggers)?;
+    workflow_policy::check_concurrency(&ir.concurrency)?;
+    workflow_policy::check_single_label(ir, &ctx.runs_on)?;
     let mut jobs = ir.jobs.clone();
     match policy {
         WorkflowPolicy::ConsumerV1 => support::reject_consumer_support(&jobs, support)?,
@@ -288,6 +314,8 @@ fn merged_jobs(
     support::check_candidate_invariants(&jobs)?;
     support::check_final_gate(&jobs)?;
     support::check_token_hygiene(&jobs)?;
+    crate::mbx_bundle::append_single_bundle_saves(&mut jobs)?;
+    support::check_token_hygiene(&jobs)?;
     Ok(jobs)
 }
 
@@ -296,7 +324,7 @@ fn render_merged(
     ir: &WorkflowIr,
     jobs: &BTreeMap<String, Job>,
     ctx: &RenderContext,
-) -> Result<String, RenderError> {
+) -> Result<RenderedWorkflow, RenderError> {
     let matrix = matrix::task_matrix_of(jobs)?;
     let caps = matrix::crate_job_caps(jobs)?;
     let jobs = if matrix.is_some() || !caps.is_empty() {
@@ -304,7 +332,16 @@ fn render_merged(
     } else {
         jobs.clone()
     };
-    let mut document = document::workflow_to_yaml(ir, &jobs, ctx)?;
+    let mbx_gc_jobs = crate::mbx_gc_policy::jobs_with_hosted_mbx_objects(&jobs);
+    let shared = crate::lane_share::share_lanes(&jobs, ctx)?;
+    let mut document = document::workflow_to_yaml(
+        ir,
+        &shared.jobs,
+        ctx,
+        &shared.calls,
+        &shared.checkouts,
+        &mbx_gc_jobs,
+    )?;
     if let Some((source, max_parallel)) = &matrix {
         matrix::attach_task_matrix(&mut document, source, *max_parallel)?;
     } else {
@@ -315,49 +352,8 @@ fn render_merged(
     let document = crate::yaml::quote_run_values_in_yaml(document);
     let text = marker::with_marker(&ctx.generator_version, &render_yaml(&document))?;
     steps::scan_for_private_subcommands(&text)?;
-    Ok(text)
-}
-
-/// Require the exact trigger shape: 4 PR types, one push branch, merge group.
-fn check_triggers(triggers: &Trigger) -> Result<(), RenderError> {
-    let expected: Vec<String> = EXPECTED_PR_TYPES.iter().map(ToString::to_string).collect();
-    if triggers.pull_request_types != expected {
-        return Err(RenderError::InvalidWorkflow("bad_pr_triggers".to_owned()));
-    }
-    let branch_ok = triggers.push_branches.len() == 1
-        && triggers.push_branches.first().is_some_and(|branch| {
-            !branch.trim().is_empty() && !branch.chars().any(char::is_whitespace)
-        });
-    if !branch_ok {
-        return Err(RenderError::InvalidWorkflow("bad_push_branch".to_owned()));
-    }
-    if !triggers.merge_group {
-        return Err(RenderError::InvalidWorkflow(
-            "missing_merge_group".to_owned(),
-        ));
-    }
-    Ok(())
-}
-
-/// Require the exact concurrency group plus PR-only cancel.
-fn check_concurrency(concurrency: &Concurrency) -> Result<(), RenderError> {
-    if concurrency.group != CONCURRENCY_GROUP
-        || concurrency.cancel_in_progress != CONCURRENCY_CANCEL
-    {
-        return Err(RenderError::InvalidWorkflow("bad_concurrency".to_owned()));
-    }
-    Ok(())
-}
-
-/// Require every job to use the single context label.
-fn check_single_label(ir: &WorkflowIr, label: &str) -> Result<(), RenderError> {
-    for (id, job) in &ir.jobs {
-        if job.runs_on != label
-            && !velnor_actions_contract::RunsOn::parse(&job.runs_on)
-                .is_ok_and(|selector| selector.is_scale_set())
-        {
-            return Err(RenderError::InvalidWorkflow(format!("label_mismatch:{id}")));
-        }
-    }
-    Ok(())
+    Ok(RenderedWorkflow {
+        yaml: text,
+        shared: shared.files,
+    })
 }

@@ -63,6 +63,53 @@ fn reopen_deletes_only_listed_sessions_then_creates() -> Result<(), &'static str
 }
 
 #[test]
+fn reopen_treats_expired_session_400_as_gone() -> Result<(), &'static str> {
+    let expired = r#"{"message":"The session identifier dead-session is not valid.","typeName":"GitHub.Actions.Runtime.WebApi.RunnerScaleSetSessionExpiredException, GitHub.Actions.Runtime.WebApi"}"#;
+    let mut script = Script::replies(vec![(400, expired), (200, BODY)]);
+    let opened = reopen_session(
+        &mut script,
+        7,
+        "velnor-host",
+        "admin-canary",
+        &["dead-session"],
+    )
+    .map_err(|_| "reopen")?;
+    assert_eq!(opened.session_id, "sess");
+    assert_eq!(script.seen.len(), 2);
+    assert_eq!(script.seen[0].method, Method::Delete);
+    assert!(script.seen[0].path.ends_with("/7/sessions/dead-session"));
+    assert_eq!(script.seen[1].method, Method::Post);
+    assert!(script.seen[1].path.ends_with("/7/sessions"));
+    let rendered = format!("{opened:?}");
+    assert!(!rendered.contains("dead-session"));
+    assert!(!rendered.contains("RunnerScaleSetSessionExpiredException"));
+    Ok(())
+}
+
+#[test]
+fn reopen_rejects_unrelated_session_400() -> Result<(), &'static str> {
+    let mut script = Script::replies(vec![(400, "other-canary")]);
+    let opened = reopen_session(
+        &mut script,
+        7,
+        "velnor-host",
+        "admin-canary",
+        &["dead-session"],
+    );
+    match opened {
+        Err(error) => assert_eq!(
+            error,
+            SessionError::Wire(velnor_runner_github::WireError::UnexpectedStatus)
+        ),
+        Ok(_) => return Err("expected refusal"),
+    }
+    assert_eq!(script.seen.len(), 1);
+    assert_eq!(script.seen[0].method, Method::Delete);
+    assert!(!format!("{:?}", script.seen[0]).contains("other-canary"));
+    Ok(())
+}
+
+#[test]
 fn reopen_conflict_does_not_delete_an_unlisted_session() -> Result<(), &'static str> {
     let mut script = Script::replies(vec![(409, "other-session")]);
     let opened = reopen_session(&mut script, 7, "velnor-host", "admin-canary", &[]);
