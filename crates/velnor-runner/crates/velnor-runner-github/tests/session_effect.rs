@@ -76,7 +76,7 @@ fn must_err<T>(result: &Result<T, SessionError>) -> Result<SessionError, &'stati
 fn batch_of(body: &str) -> Result<ParsedBatch, &'static str> {
     match parse_poll(200, body).map_err(|_| "batch")? {
         Poll::Batch(batch) => Ok(batch),
-        Poll::Empty => Err("batch"),
+        Poll::Empty | Poll::Quarantined(_) => Err("batch"),
     }
 }
 
@@ -169,6 +169,7 @@ fn ack_skips_unsafe_batches_and_deletes_real_ids() -> Result<(), &'static str> {
     suppressed(&unknown, true, false)?;
     let negative = ParsedBatch {
         message_id: -1,
+        raw_body: String::new(),
         statistics: None,
         jobs: Vec::new(),
     };
@@ -180,6 +181,7 @@ fn ack_skips_unsafe_batches_and_deletes_real_ids() -> Result<(), &'static str> {
     suppressed(&available, false, false)?;
     let zero = ParsedBatch {
         message_id: 0,
+        raw_body: String::new(),
         statistics: None,
         jobs: Vec::new(),
     };
@@ -217,6 +219,7 @@ fn ack_skips_unsafe_batches_and_deletes_real_ids() -> Result<(), &'static str> {
 fn ack_non_204_fails_and_unauthorized_retries_once() -> Result<(), &'static str> {
     let zero = ParsedBatch {
         message_id: 0,
+        raw_body: String::new(),
         statistics: None,
         jobs: Vec::new(),
     };

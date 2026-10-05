@@ -3,86 +3,21 @@
 use std::future::Future;
 
 use velnor_runner_github::{
-    Ack, AckScope, AcquireOutcome, Certainty, EncodedJit, Poll, RefreshGate, SessionError, ack,
-    acquire, jit, jit_request, may_ack,
+    Ack, AckScope, AcquireOutcome, Certainty, EncodedJit, RefreshGate, SessionError, ack, acquire,
+    jit, jit_request,
 };
 
-use crate::Offer;
 use crate::error::HostError;
 use crate::journal::{Journal, Outcome};
 use crate::listen::map_listen;
-use crate::offer;
 use crate::scale_set::EnsureError;
 use crate::worker::Started;
 
 use super::{Drive, Lane};
 
-/// What one poll allows before acquire.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum Idle {
-    /// HTTP 202. The queue has nothing else.
-    Empty,
-    /// One `JobAvailable` id. Do not acknowledge yet.
-    Launch,
-    /// Assigned population is positive. Mint one JIT runner, then acknowledge.
-    Scale,
-    /// No offer and no assigned job. Delete the message so the next one can arrive.
-    Ack,
-    /// A message that must stay on the queue.
-    Blocked,
-}
-
-/// Classify one poll. One available id is acquired. A positive current assigned
-/// population starts one runner before ack. Missing or invalid census stays queued.
-#[must_use]
-pub(crate) fn idle(polled: &Poll) -> Idle {
-    match polled {
-        Poll::Empty => Idle::Empty,
-        Poll::Batch(batch) => match offer(polled) {
-            Offer::Acquire { ids, .. } if ids.len() == 1 => Idle::Launch,
-            Offer::Wait if may_ack(batch, true) => match assigned_population(batch) {
-                Some(population) if population > 0 => Idle::Scale,
-                Some(0) => Idle::Ack,
-                Some(_) | None => Idle::Blocked,
-            },
-            Offer::Acquire { .. } | Offer::Wait => Idle::Blocked,
-        },
-    }
-}
-
-fn assigned_population(batch: &velnor_runner_github::ParsedBatch) -> Option<i64> {
-    batch
-        .statistics
-        .as_ref()
-        .map(velnor_runner_github::Statistics::assigned_population)
-        .filter(|population| *population >= 0)
-}
-
-pub(super) fn assignment(
-    polled: &Poll,
-) -> Result<Option<(&velnor_runner_github::ParsedBatch, i64)>, EnsureError> {
-    let Poll::Batch(batch) = polled else {
-        return Ok(None);
-    };
-    match offer(polled) {
-        Offer::Wait => Ok(None),
-        Offer::Acquire { ids, .. } => one_request(batch, &ids),
-    }
-}
-
-fn one_request<'a>(
-    batch: &'a velnor_runner_github::ParsedBatch,
-    ids: &[i64],
-) -> Result<Option<(&'a velnor_runner_github::ParsedBatch, i64)>, EnsureError> {
-    if ids.len() == 1 {
-        Ok(Some((batch, ids[0])))
-    } else {
-        Err(EnsureError::Unexpected {
-            status: 0,
-            step: "capacity",
-        })
-    }
-}
+mod offer;
+pub(super) use offer::assignment;
+pub(crate) use offer::{Idle, idle};
 
 pub(super) async fn launch_id<T, S, F>(
     lane: &mut T,
@@ -99,18 +34,45 @@ where
 {
     lane.on_admin()?;
     let subject = format!("m{}r{request_id}", batch.message_id);
-    let (id, fresh) = journal.begin_launch(&subject).await.map_err(map_journal)?;
+    let name = format!("v{request_id}");
+    let (id, fresh) = journal
+        .begin_assigned_launch(&subject, ctx.set_id, request_id, &name)
+        .await
+        .map_err(map_journal)?;
     if docker_of(journal, id).await?.is_some() {
         return ack_bound(lane, ctx, batch, journal, id).await;
     }
     if !fresh {
         return hold(journal, id, EnsureError::Uncertain).await;
     }
+    if !journal
+        .claim_assigned_acquire(id)
+        .await
+        .map_err(map_journal)?
+    {
+        return hold(journal, id, EnsureError::Uncertain).await;
+    }
     match taken(lane, ctx, request_id) {
-        Ok(AcquireOutcome::Acquired(ids)) if ids.is_empty() => reject_empty(journal, id).await,
-        Ok(_) => {
-            let name = format!("v{request_id}");
+        Ok(AcquireOutcome::Acquired(ids)) if ids.as_slice() == [request_id] => {
+            journal
+                .record_assigned_acquire(id, true)
+                .await
+                .map_err(map_journal)?;
             mint(lane, ctx, Some(batch), journal, id, &name, start).await
+        }
+        Ok(AcquireOutcome::Noop) => {
+            journal
+                .record_assigned_acquire(id, true)
+                .await
+                .map_err(map_journal)?;
+            hold(journal, id, EnsureError::Uncertain).await
+        }
+        Ok(AcquireOutcome::Acquired(_)) => {
+            journal
+                .record_assigned_acquire(id, false)
+                .await
+                .map_err(map_journal)?;
+            reject_empty(journal, id).await
         }
         Err(error) => fail_acquire(journal, id, error).await,
     }
@@ -174,11 +136,17 @@ async fn fail_acquire(
     id: i64,
     error: SessionError,
 ) -> Result<Option<Started>, EnsureError> {
-    let outcome = match error.certainty() {
-        Certainty::Uncertain => Outcome::Uncertain,
-        Certainty::Definite => Outcome::DefiniteFailure,
-    };
-    journal.finish(id, outcome).await.map_err(map_journal)?;
+    if error.certainty() == Certainty::Uncertain {
+        journal
+            .finish(id, Outcome::Uncertain)
+            .await
+            .map_err(map_journal)?;
+    } else {
+        journal
+            .record_assigned_acquire(id, false)
+            .await
+            .map_err(map_journal)?;
+    }
     Err(map_listen(error))
 }
 
@@ -209,6 +177,10 @@ where
 {
     lane.on_admin()?;
     let (id, fresh) = journal.begin_launch(subject).await.map_err(map_journal)?;
+    journal
+        .bind_launch_identity(id, ctx.set_id, None, name)
+        .await
+        .map_err(map_journal)?;
     if docker_of(journal, id).await?.is_some() {
         return finish_live(lane, ctx, journal, id, batch).await;
     }
@@ -232,6 +204,9 @@ where
     S: FnOnce(&str, &[u8], super::bind::Bind) -> F,
     F: Future<Output = Result<Started, HostError>>,
 {
+    if !journal.claim_launch_jit(id).await.map_err(map_journal)? {
+        return hold(journal, id, EnsureError::Uncertain).await;
+    }
     let encoded = match fetch_jit(lane, ctx, name) {
         Ok(encoded) => encoded,
         Err(error) => {

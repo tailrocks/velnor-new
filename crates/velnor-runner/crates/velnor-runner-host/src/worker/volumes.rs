@@ -25,6 +25,27 @@ pub(crate) struct VerifiedWorkerVolume {
     volume: WorkerVolume,
 }
 
+impl VerifiedWorkerVolume {
+    /// Send one delete request for this previously verified volume.
+    pub(crate) async fn remove_request(&self, docker: &Docker) -> Result<(), HostError> {
+        docker_deadline(docker.remove_volume(&self.volume.name, None::<RemoveVolumeOptions>))
+            .await?
+            .map_err(|_| HostError::Docker)
+    }
+
+    /// Confirm the verified volume's name is absent with one inspect request.
+    pub(crate) async fn confirm_removed(
+        &self,
+        docker: &Docker,
+    ) -> Result<WorkerVolumeRemoval, HostError> {
+        if inspect_volume(docker, &self.volume.name).await?.is_some() {
+            Ok(WorkerVolumeRemoval::StillPresent)
+        } else {
+            Ok(WorkerVolumeRemoval::Removed)
+        }
+    }
+}
+
 /// One of the fixed volumes attached to a worker pair.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum WorkerVolumeRole {
@@ -156,16 +177,8 @@ pub(crate) async fn remove_verified_worker_volume(
     docker: &Docker,
     verified: &VerifiedWorkerVolume,
 ) -> Result<WorkerVolumeRemoval, HostError> {
-    docker_deadline(docker.remove_volume(&verified.volume.name, None::<RemoveVolumeOptions>))
-        .await?
-        .map_err(|_| HostError::Docker)?;
-    if inspect_volume(docker, &verified.volume.name)
-        .await?
-        .is_some()
-    {
-        return Ok(WorkerVolumeRemoval::StillPresent);
-    }
-    Ok(WorkerVolumeRemoval::Removed)
+    verified.remove_request(docker).await?;
+    verified.confirm_removed(docker).await
 }
 
 async fn inspect_volume(docker: &Docker, name: &str) -> Result<Option<Volume>, HostError> {
