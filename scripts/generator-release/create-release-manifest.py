@@ -11,6 +11,7 @@ import re
 import stat
 import sys
 from pathlib import Path
+from typing import NoReturn
 from urllib.parse import urlsplit
 
 REPOSITORY = "tailrocks/velnor-new"
@@ -18,7 +19,7 @@ MANIFEST_NAME = "velnor-actions-release-manifest.json"
 TARGETS = ("x86_64-unknown-linux-gnu", "aarch64-apple-darwin")
 
 
-def fail(problem: str) -> None:
+def fail(problem: str) -> NoReturn:
     raise ValueError(problem)
 
 
@@ -60,6 +61,8 @@ def asset_names(version: str) -> tuple[str, ...]:
 def valid_url(value: object, tag: str, asset: str) -> str:
     if not isinstance(value, str) or not value or not value.isprintable():
         fail(f"missing_browser_download_url:{asset}")
+    if not value.startswith("https://") or any(character.isspace() for character in value):
+        fail(f"noncanonical_browser_download_url:{asset}")
     parsed = urlsplit(value)
     if (
         parsed.scheme != "https"
@@ -173,7 +176,12 @@ def validate_assets(
 
 
 def manifest_bytes(
-    indexed: dict[str, dict[str, object]], version: str, repository: str, commit: str, tag: str, digests: dict[str, str]
+    indexed: dict[str, dict[str, object]],
+    version: str,
+    repository: str,
+    commit: str,
+    tag: str,
+    digests: dict[str, str],
 ) -> bytes:
     targets = []
     for target in TARGETS:

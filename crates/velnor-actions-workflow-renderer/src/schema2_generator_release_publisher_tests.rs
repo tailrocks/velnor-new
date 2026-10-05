@@ -1,0 +1,384 @@
+use super::{
+    LINUX_TARGET, MACOS_TARGET, MANIFEST_NAME, RELEASE_VERSION, Scratch, assert_failure,
+    assert_success, asset_record, asset_records, asset_url, output_text, release_json,
+    write_local_assets,
+};
+use std::env;
+use std::error::Error;
+use std::fs;
+use std::os::unix::fs::PermissionsExt;
+use std::path::{Path, PathBuf};
+use std::process::{Command, Output};
+
+const REPOSITORY: &str = "tailrocks/velnor-new";
+const FAKE_MISE: &str = r##"#!/usr/bin/env python3
+import json, os, sys
+args = sys.argv[1:]
+with open(os.environ["GH_FAKE_MISE_CALLS"], "a", encoding="utf-8") as log:
+    log.write(json.dumps(args) + "\n")
+if len(args) < 4 or args[3] not in ("install", "exec"):
+    raise SystemExit(97)
+if args[3] == "install":
+    if any(os.environ.get(name) for name in ("GH_TOKEN", "GITHUB_TOKEN", "MISE_GITHUB_TOKEN")):
+        raise SystemExit(99)
+    raise SystemExit(0)
+if args[4:6] != ["gh@2.102.0", "--"]:
+    raise SystemExit(98)
+if not os.environ.get("GH_TOKEN"):
+    raise SystemExit(89)
+os.environ["GH_FAKE_MISE_EXECUTED"] = "1"
+os.execvpe(args[6], args[6:], os.environ)
+"##;
+
+const FAKE_GH: &str = r##"#!/usr/bin/env python3
+import json, os, shutil, sys
+from pathlib import Path
+args = sys.argv[1:]
+if os.environ.get("GH_FAKE_MISE_EXECUTED") != "1":
+    raise SystemExit(88)
+with open(os.environ["GH_FAKE_CALLS"], "a", encoding="utf-8") as log:
+    log.write(json.dumps(args) + "\n")
+if args[0] == "api":
+    endpoint = args[-1]
+    if endpoint == "repos/tailrocks/velnor-new/commits/main":
+        result = {"sha": os.environ["GH_FAKE_MAIN_SHA"]}
+    elif "/git/ref/tags/" in endpoint:
+        tag = endpoint.rsplit("/", 1)[1]
+        result = {"ref": f"refs/tags/{tag}", "object": {"type": "commit", "sha": os.environ["GH_FAKE_TAG_SHA"]}}
+    elif "/releases/tags/" in endpoint:
+        index_file = Path(os.environ["GH_FAKE_RELEASE_INDEX"])
+        index = int(index_file.read_text()) if index_file.exists() else 0
+        index_file.write_text(str(index + 1))
+        response = Path(os.environ["GH_FAKE_API_DIR"]) / f"release-{index}.json"
+        result = json.loads(response.read_text(encoding="utf-8"))
+    else:
+        raise SystemExit(96)
+    print(json.dumps(result, separators=(",", ":")))
+elif args[0] == "release" and args[1] == "upload":
+    if args[args.index("--repo") + 1] != "tailrocks/velnor-new":
+        raise SystemExit(90)
+    index = 3
+    while index < len(args):
+        value = args[index]
+        if value == "--repo":
+            break
+        path = Path(value)
+        if not path.is_file():
+            raise SystemExit(95)
+        if path.name == "velnor-actions-release-manifest.json":
+            shutil.copyfile(path, os.environ["GH_FAKE_MANIFEST_COPY"])
+        index += 1
+elif args[0] == "release" and args[1] in ("create", "edit"):
+    if args[1] == "create":
+        if args[args.index("--repo") + 1] != "tailrocks/velnor-new":
+            raise SystemExit(90)
+        target = args[args.index("--target") + 1]
+        if target != os.environ["GITHUB_SHA"] or args[2] != "generator-" + target:
+            raise SystemExit(93)
+        if "--draft" not in args or "--latest=false" not in args:
+            raise SystemExit(92)
+    else:
+        if args[args.index("--repo") + 1] != "tailrocks/velnor-new":
+            raise SystemExit(90)
+        if "--draft=false" not in args:
+            raise SystemExit(91)
+else:
+    raise SystemExit(94)
+"##;
+
+struct PublisherFixture {
+    _scratch: Scratch,
+    workspace: PathBuf,
+    assets: PathBuf,
+    api: PathBuf,
+    bin: PathBuf,
+    runner_temp: PathBuf,
+    calls: PathBuf,
+    mise_calls: PathBuf,
+    release_index: PathBuf,
+    manifest_copy: PathBuf,
+    commit: String,
+    tag: String,
+}
+
+impl PublisherFixture {
+    fn new(name: &str) -> Result<Self, Box<dyn Error>> {
+        let scratch = Scratch::new(name)?;
+        let workspace = scratch.path().join("workspace");
+        let assets = scratch.path().join("assets");
+        let api = scratch.path().join("api");
+        let bin = scratch.path().join("bin");
+        let runner_temp = scratch.path().join("runner-temp");
+        for directory in [&workspace, &assets, &api, &bin, &runner_temp] {
+            fs::create_dir_all(directory)?;
+        }
+        let calls = scratch.path().join("gh-calls.jsonl");
+        let mise_calls = scratch.path().join("mise-calls.jsonl");
+        let release_index = scratch.path().join("release-index");
+        let manifest_copy = scratch.path().join("uploaded-manifest.json");
+        let output = Command::new("git")
+            .args(["init", "-b", "main"])
+            .current_dir(&workspace)
+            .output()?;
+        assert_success(&output);
+        fs::write(workspace.join("source.txt"), b"fixture source\n")?;
+        let output = Command::new("git")
+            .args(["add", "source.txt"])
+            .current_dir(&workspace)
+            .output()?;
+        assert_success(&output);
+        let output = Command::new("git")
+            .args([
+                "-c",
+                "user.name=Fixture",
+                "-c",
+                "user.email=fixture@example.invalid",
+                "commit",
+                "-m",
+                "fixture source",
+            ])
+            .current_dir(&workspace)
+            .output()?;
+        assert_success(&output);
+        let output = Command::new("git")
+            .args(["rev-parse", "HEAD"])
+            .current_dir(&workspace)
+            .output()?;
+        assert_success(&output);
+        let commit = String::from_utf8(output.stdout)?.trim().to_owned();
+        let tag = format!("generator-{commit}");
+        write_local_assets(&assets, RELEASE_VERSION)?;
+        copy_build_assets(&assets, &workspace)?;
+        write_executable(&bin.join("mise"), FAKE_MISE)?;
+        write_executable(&bin.join("gh"), FAKE_GH)?;
+        let fixture = Self {
+            _scratch: scratch,
+            workspace,
+            assets,
+            api,
+            bin,
+            runner_temp,
+            calls,
+            mise_calls,
+            release_index,
+            manifest_copy,
+            commit,
+            tag,
+        };
+        Ok(fixture)
+    }
+
+    fn run(
+        &self,
+        responses: &[String],
+        tag_commit: &str,
+        event_commit: &str,
+    ) -> Result<Output, Box<dyn Error>> {
+        for (index, response) in responses.iter().enumerate() {
+            fs::write(self.api.join(format!("release-{index}.json")), response)?;
+        }
+        let mut paths = vec![self.bin.clone()];
+        paths.extend(env::split_paths(&env::var_os("PATH").unwrap_or_default()));
+        let path = env::join_paths(paths)?;
+        Ok(Command::new("python3")
+            .arg(publisher_path())
+            .args(["--version", RELEASE_VERSION])
+            .current_dir(&self.workspace)
+            .env("PATH", path)
+            .env("RUNNER_TEMP", &self.runner_temp)
+            .env("GITHUB_REPOSITORY", REPOSITORY)
+            .env("GITHUB_REF", "refs/heads/main")
+            .env("GITHUB_EVENT_NAME", "workflow_dispatch")
+            .env(
+                "GITHUB_WORKFLOW_REF",
+                "tailrocks/velnor-new/.github/workflows/generator-release.yml@refs/heads/main",
+            )
+            .env("GITHUB_WORKFLOW_SHA", event_commit)
+            .env("GITHUB_SHA", event_commit)
+            .env("GH_TOKEN", "fixture-token")
+            .env("GH_FAKE_MAIN_SHA", &self.commit)
+            .env("GH_FAKE_TAG_SHA", tag_commit)
+            .env("GH_FAKE_API_DIR", &self.api)
+            .env("GH_FAKE_RELEASE_INDEX", &self.release_index)
+            .env("GH_FAKE_CALLS", &self.calls)
+            .env("GH_FAKE_MISE_CALLS", &self.mise_calls)
+            .env("GH_FAKE_MANIFEST_COPY", &self.manifest_copy)
+            .output()?)
+    }
+
+    fn manifest_expected(&self) -> Result<Vec<String>, Box<dyn Error>> {
+        let records = asset_records(RELEASE_VERSION, &self.tag);
+        let response = release_json(true, false, &self.tag, &records);
+        let release_path = self._scratch.path().join("manifest-input.json");
+        fs::write(&release_path, response)?;
+        let output = Command::new("python3")
+            .arg(helper_path())
+            .args([
+                "--mode",
+                "create",
+                "--release-json",
+                release_path.to_str().ok_or("release path is not UTF-8")?,
+                "--asset-dir",
+                self.assets.to_str().ok_or("asset path is not UTF-8")?,
+                "--manifest",
+                self.assets
+                    .join(MANIFEST_NAME)
+                    .to_str()
+                    .ok_or("manifest path is not UTF-8")?,
+                "--version",
+                RELEASE_VERSION,
+                "--repository",
+                REPOSITORY,
+                "--commit",
+                &self.commit,
+                "--tag",
+                &self.tag,
+                "--tag-commit",
+                &self.commit,
+            ])
+            .output()?;
+        assert_success(&output);
+        let digest = output_text(&output)?
+            .lines()
+            .find_map(|line| line.strip_prefix("release_manifest_sha256="))
+            .ok_or("missing manifest digest")?;
+        let size = fs::metadata(self.assets.join(MANIFEST_NAME))?.len();
+        let mut final_records = records;
+        final_records.push(asset_record(
+            MANIFEST_NAME,
+            size,
+            digest,
+            Some(&asset_url(&self.tag, MANIFEST_NAME)),
+        ));
+        Ok(final_records)
+    }
+}
+
+fn copy_build_assets(source: &Path, workspace: &Path) -> Result<(), Box<dyn Error>> {
+    for (target, directory) in [
+        (LINUX_TARGET, "linux-assets"),
+        (MACOS_TARGET, "macos-assets"),
+    ] {
+        let destination = workspace.join(directory);
+        fs::create_dir_all(&destination)?;
+        let binary = format!("velnor-actions-{RELEASE_VERSION}-{target}");
+        for name in [binary.clone(), format!("{binary}.sha256")] {
+            fs::copy(source.join(&name), destination.join(&name))?;
+        }
+    }
+    Ok(())
+}
+
+fn write_executable(path: &Path, source: &str) -> Result<(), Box<dyn Error>> {
+    fs::write(path, source)?;
+    let mut permissions = fs::metadata(path)?.permissions();
+    permissions.set_mode(0o755);
+    fs::set_permissions(path, permissions)?;
+    Ok(())
+}
+
+fn helper_path() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../scripts/generator-release/create-release-manifest.py")
+}
+
+fn publisher_path() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../scripts/generator-release/publish_generator_release.py")
+}
+
+#[test]
+fn publisher_uses_observed_urls_and_publishes_only_after_full_api_verification()
+-> Result<(), Box<dyn Error>> {
+    let fixture = PublisherFixture::new("publish-valid")?;
+    let records = asset_records(RELEASE_VERSION, &fixture.tag);
+    let first = release_json(true, false, &fixture.tag, &records);
+    let final_records = fixture.manifest_expected()?;
+    let draft = release_json(true, false, &fixture.tag, &final_records);
+    let published = release_json(false, true, &fixture.tag, &final_records);
+    let output = fixture.run(&[first, draft, published], &fixture.commit, &fixture.commit)?;
+    assert_success(&output);
+    let manifest = fs::read_to_string(&fixture.manifest_copy)?;
+    for target in [LINUX_TARGET, MACOS_TARGET] {
+        let name = format!("velnor-actions-{RELEASE_VERSION}-{target}");
+        assert!(manifest.contains(&asset_url(&fixture.tag, &name)));
+    }
+    assert!(manifest.contains(&format!("\"commit\":\"{}\"", fixture.commit)));
+    assert_eq!(fs::read_to_string(&fixture.release_index)?, "3");
+    let mise_calls = fs::read_to_string(&fixture.mise_calls)?;
+    assert!(mise_calls.contains("gh@2.102.0"));
+    assert!(mise_calls.contains("exec"));
+    let gh_calls = fs::read_to_string(&fixture.calls)?;
+    assert!(gh_calls.contains("release"));
+    assert!(gh_calls.contains("--draft=false"));
+    Ok(())
+}
+
+#[test]
+fn publisher_fails_closed_for_invalid_api_metadata_and_source() -> Result<(), Box<dyn Error>> {
+    for case in [
+        "missing-url",
+        "wrong-url",
+        "wrong-source",
+        "wrong-event-source",
+        "wrong-target-set",
+        "wrong-hash",
+        "unsafe-path",
+        "wrong-upload-state",
+    ] {
+        let fixture = PublisherFixture::new(case)?;
+        let mut records = asset_records(RELEASE_VERSION, &fixture.tag);
+        let mut tag_sha = fixture.commit.clone();
+        let mut event_sha = fixture.commit.clone();
+        let reason = match case {
+            "missing-url" => {
+                records = super::asset_records_without_url(RELEASE_VERSION, &fixture.tag);
+                "manifest_validation_failed"
+            }
+            "wrong-url" => {
+                records[0] =
+                    records[0].replace(&fixture.tag, &format!("generator-{}", "ff".repeat(20)));
+                "manifest_validation_failed"
+            }
+            "wrong-source" => {
+                tag_sha = "cd".repeat(20);
+                "manifest_validation_failed"
+            }
+            "wrong-event-source" => {
+                event_sha = "ef".repeat(20);
+                "release_source_not_current_main"
+            }
+            "wrong-target-set" => {
+                records[2] = records[2].replace(MACOS_TARGET, "wrong-target");
+                "manifest_validation_failed"
+            }
+            "wrong-hash" => {
+                records[0] = records[0].replace(super::LINUX_SHA, &"0".repeat(64));
+                "manifest_validation_failed"
+            }
+            "unsafe-path" => {
+                records[0] = records[0].replace(
+                    &format!("velnor-actions-{RELEASE_VERSION}-{LINUX_TARGET}"),
+                    "../escape",
+                );
+                "manifest_validation_failed"
+            }
+            "wrong-upload-state" => {
+                records[0] = records[0].replace("\"state\":\"uploaded\"", "\"state\":\"starter\"");
+                "manifest_validation_failed"
+            }
+            _ => return Err(format!("unknown case: {case}").into()),
+        };
+        let response = release_json(true, false, &fixture.tag, &records);
+        let output = fixture.run(
+            &[response.clone(), response.clone(), response],
+            &tag_sha,
+            &event_sha,
+        )?;
+        assert_failure(&output, reason);
+        assert!(!fixture.manifest_copy.exists());
+        let calls = fs::read_to_string(&fixture.calls).unwrap_or_default();
+        assert!(!calls.contains("--draft=false"));
+    }
+    Ok(())
+}
