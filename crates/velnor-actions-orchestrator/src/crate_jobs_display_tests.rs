@@ -42,7 +42,6 @@ fn id_and_display_prefixes_agree_per_partition() {
         ]),
         &ToolCatalog::pinned(),
         &[],
-        &[],
         None,
         2,
     )
