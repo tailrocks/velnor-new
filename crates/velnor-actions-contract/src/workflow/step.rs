@@ -1,6 +1,6 @@
 //! Workflow step payloads and local validation.
 
-use super::step_identity::{StepId, StepRole};
+use super::step_identity::{StepId, StepRole, TOFU_PROVIDER_ADMISSION_USES};
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
 
@@ -115,7 +115,7 @@ fn validate_id_kind(id: Option<StepId>, kind: &StepKind, job: &str) -> Result<()
             matches!(kind, StepKind::Action { uses, .. } if uses.starts_with("actions/cache/restore@"))
         }
         StepId::TofuProviders => {
-            matches!(kind, StepKind::Action { uses, with, .. } if uses.starts_with("actions/cache/restore@") && with.get("restore-keys").is_some_and(String::is_empty))
+            matches!(kind, StepKind::Action { uses, .. } if uses == TOFU_PROVIDER_ADMISSION_USES)
         }
     };
     if valid {

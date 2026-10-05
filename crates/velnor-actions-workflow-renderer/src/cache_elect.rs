@@ -112,17 +112,17 @@ fn provider_restore_entry(job: &Job) -> Option<(String, String)> {
         if step.role != Some(StepRole::TofuProvidersRestore) {
             return None;
         }
-        let StepKind::Action { uses, with, .. } = &step.kind else {
+        let StepKind::Action { uses, with, env } = &step.kind else {
             return None;
         };
-        if !uses.starts_with("actions/cache/restore@") {
+        if uses != crate::tofu_cache::TOFU_PROVIDER_ADMISSION_USES || !env.is_empty() {
             return None;
         }
-        let key = with.get("key")?;
+        let key = with.get("cache-key")?;
         if key.trim().is_empty() {
             return None;
         }
-        let path = with.get("path")?;
+        let path = with.get("cache-path")?;
         if !crate::tofu_cache::tofu_providers_path_ok(path) {
             return None;
         }
@@ -165,8 +165,10 @@ fn append_provider_save(job: &mut Job, key: &str, path: &str) -> Result<(), Rend
         if !uses.starts_with("actions/cache/save@")
             || !env.is_empty()
             || with.len() != 2
-            || with.get("key").map(String::as_str) != Some(key)
-            || with.get("path").map(String::as_str) != Some(path)
+            || with.get("key").map(String::as_str)
+                != Some(velnor_actions_contract::workflow::step_identity::TOFU_PROVIDERS_KEY_OUTPUT_EXPR)
+            || with.get("path").map(String::as_str)
+                != Some(velnor_actions_contract::workflow::step_identity::TOFU_PROVIDERS_PATH_OUTPUT_EXPR)
         {
             return Err(RenderError::InvalidWorkflow(
                 "tofu_provider_save_restore_mismatch".to_owned(),
@@ -181,7 +183,7 @@ fn append_provider_save(job: &mut Job, key: &str, path: &str) -> Result<(), Rend
         }
         return Ok(());
     }
-    let mut save = crate::tofu_cache::tofu_providers_save_step(key, path)?;
+    let mut save = crate::tofu_cache::tofu_providers_save_step()?;
     save.condition = Some(velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION.to_owned());
     job.steps.push(save);
     Ok(())

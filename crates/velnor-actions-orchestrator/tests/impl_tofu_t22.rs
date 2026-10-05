@@ -113,30 +113,32 @@ fn provider_admission_discards_prefix_and_missing_matches() -> TestResult {
     fs::create_dir_all(repo.path().join("stacks/a"))?;
     fs::write(repo.path().join("stacks/a/main.tf"), "variable \"x\" {}\n")?;
     let jobs = finalized_jobs(&prepare(repo.path())?)?;
-    let admission = jobs
+    let restore = jobs
         .values()
         .flat_map(|job| &job.steps)
-        .find(|step| step.role == Some(StepRole::TofuProvidersAdmission))
-        .ok_or("finalized tofu job misses provider admission")?;
-    let StepKind::Action { uses, with, .. } = &admission.kind else {
-        return Err("provider admission is not a local action call".into());
+        .find(|step| step.role == Some(StepRole::TofuProvidersRestore))
+        .ok_or("finalized tofu job misses provider restore/admission")?;
+    let StepKind::Action { uses, with, .. } = &restore.kind else {
+        return Err("provider restore/admission is not a local action call".into());
     };
     assert_eq!(
         uses,
         velnor_actions_workflow_renderer::tofu_cache::TOFU_PROVIDER_ADMISSION_USES
     );
     let expected = with
-        .get("expected-key")
-        .ok_or("provider admission misses expected key")?;
-    let slug = with
-        .get("cache-slug")
-        .ok_or("provider admission misses owned path")?;
+        .get("cache-key")
+        .ok_or("provider composite misses key")?;
+    let cache_path = with
+        .get("cache-path")
+        .ok_or("provider composite misses owned path")?;
     let temp = tempfile::tempdir()?;
-    let leaf = temp.path().join("velnor/tofu-cache").join(slug);
-    fs::create_dir_all(&leaf)?;
+    let resolved_path =
+        cache_path.replace("${{ runner.temp }}", &temp.path().display().to_string());
+    let leaf = Path::new(&resolved_path);
+    fs::create_dir_all(leaf)?;
     fs::write(leaf.join("verified-provider"), b"cached")?;
 
-    let exact = run_admission(admission, temp.path(), "true", expected, false)?;
+    let exact = run_admission(restore, temp.path(), "true", expected, false)?;
     assert!(
         exact.status.success(),
         "{}",
@@ -152,7 +154,7 @@ fn provider_admission_discards_prefix_and_missing_matches() -> TestResult {
         ("false", String::new()),
     ] {
         fs::write(leaf.join("verified-provider"), b"must be removed")?;
-        let rejected = run_admission(admission, temp.path(), hit, &matched, true)?;
+        let rejected = run_admission(restore, temp.path(), hit, &matched, true)?;
         assert!(
             rejected.status.success(),
             "{}",
@@ -175,14 +177,16 @@ fn run_admission(
         ));
     };
     let expected = with
-        .get("expected-key")
-        .ok_or_else(|| std::io::Error::other("admission misses expected key"))?;
-    let slug = with
-        .get("cache-slug")
-        .ok_or_else(|| std::io::Error::other("admission misses cache slug"))?;
+        .get("cache-key")
+        .ok_or_else(|| std::io::Error::other("provider composite misses key"))?;
+    let cache_path = with
+        .get("cache-path")
+        .ok_or_else(|| std::io::Error::other("provider composite misses path"))?;
+    let resolved_path =
+        cache_path.replace("${{ runner.temp }}", &runner_temp.display().to_string());
     let script = if verify_cleared {
         format!(
-            "{}; test ! -e \"$RUNNER_TEMP/velnor/tofu-cache/$TOFU_PROVIDER_CACHE_SLUG/verified-provider\"",
+            "{}; test ! -e \"$TOFU_PROVIDER_CACHE_PATH/verified-provider\"",
             velnor_actions_workflow_renderer::tofu_cache::TOFU_PROVIDER_ADMISSION_SCRIPT
         )
     } else {
@@ -197,7 +201,7 @@ fn run_admission(
         .env("TOFU_CACHE_HIT", hit)
         .env("TOFU_MATCHED_KEY", matched)
         .env("TOFU_EXPECTED_KEY", expected)
-        .env("TOFU_PROVIDER_CACHE_SLUG", slug);
+        .env("TOFU_PROVIDER_CACHE_PATH", resolved_path);
     command.output()
 }
 

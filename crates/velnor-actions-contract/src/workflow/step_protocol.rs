@@ -5,14 +5,16 @@ use std::collections::BTreeMap;
 use super::{
     ir::CACHE_SAVE_CONDITION,
     step::{Step, StepKind},
-    step_identity::{StepId, StepRole, TOFU_PROVIDER_CACHE_BASE_EXPR, TOFU_PROVIDERS_KEY_PREFIX},
+    step_identity::{
+        StepId, StepRole, TOFU_PROVIDER_ADMISSION_USES, TOFU_PROVIDER_CACHE_BASE_EXPR,
+        TOFU_PROVIDERS_KEY_OUTPUT_EXPR, TOFU_PROVIDERS_KEY_PREFIX, TOFU_PROVIDERS_PATH_OUTPUT_EXPR,
+    },
 };
 use crate::errors::ContractError;
 
 #[derive(Default)]
 struct ProtocolSteps {
     restores: Vec<usize>,
-    admissions: Vec<usize>,
     consumers: Vec<usize>,
     saves: Vec<usize>,
 }
@@ -20,10 +22,10 @@ struct ProtocolSteps {
 struct ProviderBinding<'a> {
     key: &'a str,
     path: &'a str,
-    admission_index: usize,
+    restore_index: usize,
 }
 
-/// Validate the exact provider restore, admission, use, and save sequence.
+/// Validate the exact provider restore/admission, use, and save sequence.
 pub(super) fn validate_tofu_provider_sequence(
     steps: &[Step],
     scope: &str,
@@ -43,7 +45,6 @@ fn classify_protocol_steps(steps: &[Step], scope: &str) -> Result<ProtocolSteps,
     for (index, step) in steps.iter().enumerate() {
         match step.role {
             Some(StepRole::TofuProvidersRestore) => roles.restores.push(index),
-            Some(StepRole::TofuProvidersAdmission) => roles.admissions.push(index),
             Some(StepRole::TofuProviderUse) => roles.consumers.push(index),
             Some(StepRole::TofuProvidersSave) => roles.saves.push(index),
             _ => {}
@@ -67,14 +68,11 @@ fn classify_protocol_steps(steps: &[Step], scope: &str) -> Result<ProtocolSteps,
 impl ProtocolSteps {
     /// True when any typed provider-cache step participates in the job.
     fn present(&self) -> bool {
-        !self.restores.is_empty()
-            || !self.admissions.is_empty()
-            || !self.consumers.is_empty()
-            || !self.saves.is_empty()
+        !self.restores.is_empty() || !self.consumers.is_empty() || !self.saves.is_empty()
     }
 }
 
-/// Bind the admission to one unconditional restore and its output owner.
+/// Bind one unconditional restore/admission composite to its output owner.
 fn validate_restore_admission<'a>(
     steps: &'a [Step],
     roles: &ProtocolSteps,
@@ -83,45 +81,29 @@ fn validate_restore_admission<'a>(
     if roles.restores.len() != 1 {
         return Err(invalid(scope, "tofu_provider_restore_count"));
     }
-    if roles.admissions.len() != 1 {
-        return Err(invalid(scope, "tofu_provider_admission_count"));
-    }
     let restore_index = roles.restores[0];
-    let admission_index = roles.admissions[0];
     let restore = &steps[restore_index];
-    let admission = &steps[admission_index];
     if restore.condition.is_some() {
         return Err(invalid(scope, "tofu_provider_restore_conditional"));
     }
-    if admission_index != restore_index + 1 {
-        return Err(invalid(scope, "tofu_provider_admission_not_adjacent"));
-    }
-    if admission.condition.is_some() {
-        return Err(invalid(scope, "tofu_provider_admission_conditional"));
-    }
     let restore_with = action_with(restore).ok_or_else(|| invalid(scope, "tofu_restore_shape"))?;
-    let admission_with =
-        action_with(admission).ok_or_else(|| invalid(scope, "tofu_admission_shape"))?;
     let key = restore_with
-        .get("key")
+        .get("cache-key")
         .map(String::as_str)
         .ok_or_else(|| invalid(scope, "tofu_restore_key_missing"))?;
     let path = restore_with
-        .get("path")
+        .get("cache-path")
         .map(String::as_str)
         .ok_or_else(|| invalid(scope, "tofu_restore_path_missing"))?;
     let slug =
         provider_path_slug(path).ok_or_else(|| invalid(scope, "tofu_provider_path_invalid"))?;
-    if admission_with.get("expected-key").map(String::as_str) != Some(key) {
-        return Err(invalid(scope, "tofu_provider_admission_key_mismatch"));
-    }
-    if admission_with.get("cache-slug").map(String::as_str) != Some(slug) {
-        return Err(invalid(scope, "tofu_provider_admission_slug_mismatch"));
+    if !valid_provider_cache_key(key, slug) {
+        return Err(invalid(scope, "tofu_provider_key_invalid"));
     }
     Ok(ProviderBinding {
         key,
         path,
-        admission_index,
+        restore_index,
     })
 }
 
@@ -135,7 +117,7 @@ fn validate_provider_consumers(
     for index in consumers.iter().copied() {
         let consumer = &steps[index];
         let env = step_env(consumer).ok_or_else(|| invalid(scope, "tofu_provider_use_env"))?;
-        if index <= binding.admission_index {
+        if index <= binding.restore_index {
             return Err(invalid(scope, "tofu_provider_use_before_admission"));
         }
         if env.get("TF_PLUGIN_CACHE_DIR").map(String::as_str) != Some(binding.path) {
@@ -163,8 +145,20 @@ fn validate_provider_save(
     if let Some(index) = roles.saves.first().copied() {
         let save = &steps[index];
         let save_with = action_with(save).ok_or_else(|| invalid(scope, "tofu_save_shape"))?;
-        if save_with.get("key").map(String::as_str) != Some(binding.key)
-            || save_with.get("path").map(String::as_str) != Some(binding.path)
+        let restore = &steps[binding.restore_index];
+        let restore_with =
+            action_with(restore).ok_or_else(|| invalid(scope, "tofu_restore_shape"))?;
+        if restore_with.get("cache-key").map(String::as_str) != Some(binding.key)
+            || restore_with.get("cache-path").map(String::as_str) != Some(binding.path)
+        {
+            return Err(invalid(scope, "tofu_provider_save_binding_mismatch"));
+        }
+        let expected_key = output_reference(restore, "cache-key")
+            .ok_or_else(|| invalid(scope, "tofu_provider_restore_id_missing"))?;
+        let expected_path = output_reference(restore, "cache-path")
+            .ok_or_else(|| invalid(scope, "tofu_provider_restore_id_missing"))?;
+        if save_with.get("key") != Some(&expected_key)
+            || save_with.get("path") != Some(&expected_path)
         {
             return Err(invalid(scope, "tofu_provider_save_binding_mismatch"));
         }
@@ -178,21 +172,26 @@ fn validate_provider_save(
     Ok(())
 }
 
+/// Reference one output of the exact typed composite that admitted the cache.
+fn output_reference(step: &Step, output: &str) -> Option<String> {
+    let id = step.id?;
+    Some(format!("${{{{ steps.{}.outputs.{output} }}}}", id.as_str()))
+}
+
 /// Validate one provider restore payload before cross-step binding.
 pub(crate) fn valid_provider_restore(kind: &StepKind) -> bool {
     let StepKind::Action { uses, with, env } = kind else {
         return false;
     };
-    let Some(key) = with.get("key") else {
+    let Some(key) = with.get("cache-key") else {
         return false;
     };
-    let Some(path) = with.get("path") else {
+    let Some(path) = with.get("cache-path") else {
         return false;
     };
-    with.len() == 3
-        && uses.starts_with("actions/cache/restore@")
+    with.len() == 2
+        && uses == TOFU_PROVIDER_ADMISSION_USES
         && env.is_empty()
-        && with.get("restore-keys").is_some_and(String::is_empty)
         && provider_path_slug(path).is_some_and(|slug| valid_provider_cache_key(key, slug))
 }
 
@@ -210,7 +209,8 @@ pub(crate) fn valid_provider_save(kind: &StepKind) -> bool {
     with.len() == 2
         && uses.starts_with("actions/cache/save@")
         && env.is_empty()
-        && provider_path_slug(path).is_some_and(|slug| valid_provider_cache_key(key, slug))
+        && key == TOFU_PROVIDERS_KEY_OUTPUT_EXPR
+        && path == TOFU_PROVIDERS_PATH_OUTPUT_EXPR
 }
 
 /// Validate a shell step that consumes the admitted provider cache.
@@ -307,6 +307,9 @@ fn is_provider_cache_action(step: &Step) -> bool {
     let StepKind::Action { uses, with, .. } = &step.kind else {
         return false;
     };
+    if uses == TOFU_PROVIDER_ADMISSION_USES {
+        return true;
+    }
     let cache_action =
         uses.starts_with("actions/cache/restore@") || uses.starts_with("actions/cache/save@");
     cache_action

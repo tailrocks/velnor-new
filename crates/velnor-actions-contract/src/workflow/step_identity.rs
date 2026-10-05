@@ -13,6 +13,10 @@ pub const TOOL_SEED_USES: &str = "./.github/actions/velnor-tool-seed";
 pub const TOFU_PROVIDER_CACHE_BASE_EXPR: &str = "${{ runner.temp }}/velnor/tofu-cache";
 /// Exact-key layer identity shared by the restore and save protocol.
 pub const TOFU_PROVIDERS_KEY_PREFIX: &str = "velnor-v1-tofu-providers";
+/// Composite output expression for the exact configured provider key.
+pub const TOFU_PROVIDERS_KEY_OUTPUT_EXPR: &str = "${{ steps.tofu-providers.outputs.cache-key }}";
+/// Composite output expression for the owned provider-cache path.
+pub const TOFU_PROVIDERS_PATH_OUTPUT_EXPR: &str = "${{ steps.tofu-providers.outputs.cache-path }}";
 
 /// Stable GitHub Actions id for a step whose outputs have consumers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -30,7 +34,7 @@ pub enum StepId {
     MbxBundle,
     /// MBX export output consumed by its save gate.
     MbxExport,
-    /// `OpenTofu` provider-cache restore outputs consumed by admission.
+    /// `OpenTofu` provider-cache composite outputs consumed by the save step.
     TofuProviders,
 }
 
@@ -110,10 +114,8 @@ pub enum StepRole {
     CargoRegistryRestore,
     /// One elected `OpenTofu` provider-cache writer.
     TofuProvidersSave,
-    /// `OpenTofu` provider-cache restore whose output is admitted before use.
+    /// `OpenTofu` provider-cache restore/admission composite before provider use.
     TofuProvidersRestore,
-    /// `OpenTofu` provider-cache admission before any provider consumer.
-    TofuProvidersAdmission,
     /// `OpenTofu` init/validate shell that consumes the admitted plugin cache.
     TofuProviderUse,
     /// Pre-seed build of the candidate helper.
@@ -165,7 +167,6 @@ impl StepRole {
             Self::Checkout => valid_checkout_payload(kind),
             Self::ToolSeed => valid_tool_seed_payload(kind),
             Self::MiseSetup => valid_mise_setup(kind),
-            Self::TofuProvidersAdmission => valid_tofu_admission(kind),
             Self::TofuProviderUse => super::step_protocol::valid_provider_use(kind),
             Self::PlanProducer => internal_operation(kind, "plan-v1"),
             Self::BaselinePublisher => internal_operation(kind, "publish-baseline-v1"),
@@ -248,7 +249,7 @@ pub fn is_configured_checkout(step: &Step, expected_uses: &str) -> bool {
     step.role == Some(StepRole::Checkout)
         && step.condition.is_none()
         && matches!(&step.kind, StepKind::Action { uses, .. } if uses == expected_uses)
-        && valid_checkout_payload(&step.kind)
+        && valid_configured_checkout_payload(&step.kind)
 }
 
 /// Check that a step is the unconditional local tool-seed consumer.
@@ -261,10 +262,16 @@ pub fn is_tool_seed_step(step: &Step) -> bool {
 
 /// Require the standard credential-free checkout action payload.
 fn valid_checkout_payload(kind: &StepKind) -> bool {
-    matches!(kind, StepKind::Action { uses, with, env }
+    matches!(kind, StepKind::Action { uses, with, .. }
         if action_has_prefix(uses, "actions/checkout@")
+            && with.get("persist-credentials").is_some_and(|value| value == "false"))
+}
+
+/// Require the simple generated checkout shape used before host-seed reads.
+fn valid_configured_checkout_payload(kind: &StepKind) -> bool {
+    matches!(kind, StepKind::Action { with, env, .. }
+        if valid_checkout_payload(kind)
             && with.len() == 1
-            && with.get("persist-credentials").is_some_and(|value| value == "false")
             && env.is_empty())
 }
 
@@ -305,19 +312,6 @@ fn valid_mise_setup(kind: &StepKind) -> bool {
 }
 
 /// Validate the local provider admission call and exact same-restore outputs.
-fn valid_tofu_admission(kind: &StepKind) -> bool {
-    matches!(kind, StepKind::Action { uses, with, env }
-    if uses == TOFU_PROVIDER_ADMISSION_USES
-        && env.is_empty()
-        && with.len() == 4
-        && with.get("cache-hit").is_some_and(|value| value == "${{ steps.tofu-providers.outputs.cache-hit }}")
-        && with.get("matched-key").is_some_and(|value| value == "${{ steps.tofu-providers.outputs.cache-matched-key }}")
-        && with.get("expected-key").is_some_and(|value| !value.trim().is_empty())
-        && with.get("cache-slug").is_some_and(|value| {
-            !value.is_empty() && value.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
-        }))
-}
-
 /// Validate MBX action backend mode for hosted cache and local setup roles.
 fn valid_mbx_cache(kind: &StepKind, local: bool) -> bool {
     matches!(kind, StepKind::Action { uses, with, .. }

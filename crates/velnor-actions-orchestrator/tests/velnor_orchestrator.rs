@@ -104,6 +104,7 @@ mod impl_tofu_t23;
 mod impl_tofu_t24_bench;
 mod impl_tofu_t24_gates;
 mod impl_tofu_t24_gates2;
+mod impl_tofu_t24_provider_cache;
 mod impl_tofu_t24_scale;
 mod impl_tofu_t25;
 mod impl_tofu_t25_bench;

@@ -78,7 +78,7 @@ pub(crate) fn share_lanes(
     if next.values().any(|job| {
         job.steps
             .iter()
-            .any(|step| step.role == Some(StepRole::TofuProvidersAdmission))
+            .any(|step| step.role == Some(StepRole::TofuProvidersRestore))
     }) {
         files.push(crate::tofu_cache::provider_admission_file(
             &ctx.generator_version,

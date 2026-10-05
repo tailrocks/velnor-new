@@ -55,7 +55,7 @@ fn expression_spans(text: &str) -> Option<Vec<&str>> {
 /// to the default branch; Scale Set routes do not invoke action restore.
 /// Notably absent: `github.token` (render-time fetch binding only)
 /// and run IDs (never in env).
-const ENV_EXPRESSIONS: [&str; 12] = [
+const ENV_EXPRESSIONS: [&str; 10] = [
     "runner.temp",
     "github.ref_name",
     "github.event_name",
@@ -65,8 +65,6 @@ const ENV_EXPRESSIONS: [&str; 12] = [
     "steps.mbx-bundle.outputs.cache-matched-key",
     "steps.mbx-cache-key.outputs.prefix",
     "github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.sha",
-    "steps.tofu-providers.outputs.cache-hit",
-    "steps.tofu-providers.outputs.cache-matched-key",
     "inputs.cache_key",
 ];
 
@@ -84,8 +82,8 @@ const WITH_EXPRESSIONS: [&str; 9] = [
     "steps.publish-baseline.outputs.artifact_name",
     "steps.mbx-cache-key.outputs.key",
     "steps.mbx-cache-key.outputs.prefix",
-    "steps.tofu-providers.outputs.cache-hit",
-    "steps.tofu-providers.outputs.cache-matched-key",
+    "steps.tofu-providers.outputs.cache-key",
+    "steps.tofu-providers.outputs.cache-path",
 ];
 
 /// True for a `matrix.*` field reference (both layers allow the family).
@@ -115,21 +113,6 @@ fn is_hash_files(inner: &str) -> bool {
         })
 }
 
-/// Exact lockfile digest expression permitted only for provider-cache admission.
-fn is_tofu_lock_hash(inner: &str) -> bool {
-    let Some(path) = inner
-        .strip_prefix("hashFiles('")
-        .and_then(|rest| rest.strip_suffix("')"))
-    else {
-        return false;
-    };
-    (path == ".terraform.lock.hcl" || path.ends_with("/.terraform.lock.hcl"))
-        && !path.contains("..")
-        && path
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-' | b'.' | b'/'))
-}
-
 /// Reject unlisted `${{ }}` spans in one shell-step env value.
 /// # Errors
 pub(crate) fn check_env_value(key: &str, value: &str) -> Result<(), RenderError> {
@@ -137,10 +120,7 @@ pub(crate) fn check_env_value(key: &str, value: &str) -> Result<(), RenderError>
         return Err(RenderError::BadCommand(format!("bad_env_expression:{key}")));
     };
     for inner in spans {
-        if !(ENV_EXPRESSIONS.contains(&inner)
-            || is_matrix_field(inner)
-            || key == "TOFU_EXPECTED_KEY" && is_tofu_lock_hash(inner))
-        {
+        if !(ENV_EXPRESSIONS.contains(&inner) || is_matrix_field(inner)) {
             return Err(RenderError::BadCommand(format!("bad_env_expression:{key}")));
         }
     }

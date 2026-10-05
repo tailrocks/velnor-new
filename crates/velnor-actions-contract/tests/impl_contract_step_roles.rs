@@ -64,37 +64,11 @@ fn tofu_restore() -> Step {
         role: Some(StepRole::TofuProvidersRestore),
         condition: None,
         kind: StepKind::Action {
-            uses: "actions/cache/restore@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_owned(),
-            with: BTreeMap::from([
-                ("key".to_owned(), TOFU_KEY.to_owned()),
-                ("path".to_owned(), TOFU_PATH.to_owned()),
-                ("restore-keys".to_owned(), String::new()),
-            ]),
-            env: BTreeMap::new(),
-        },
-    }
-}
-
-fn tofu_admission() -> Step {
-    Step {
-        name: "Admit Tofu providers".to_owned(),
-        id: None,
-        role: Some(StepRole::TofuProvidersAdmission),
-        condition: None,
-        kind: StepKind::Action {
             uses: velnor_actions_contract::workflow::step_identity::TOFU_PROVIDER_ADMISSION_USES
                 .to_owned(),
             with: BTreeMap::from([
-                (
-                    "cache-hit".to_owned(),
-                    "${{ steps.tofu-providers.outputs.cache-hit }}".to_owned(),
-                ),
-                ("expected-key".to_owned(), TOFU_KEY.to_owned()),
-                (
-                    "matched-key".to_owned(),
-                    "${{ steps.tofu-providers.outputs.cache-matched-key }}".to_owned(),
-                ),
-                ("cache-slug".to_owned(), "root-0123456789ab".to_owned()),
+                ("cache-key".to_owned(), TOFU_KEY.to_owned()),
+                ("cache-path".to_owned(), TOFU_PATH.to_owned()),
             ]),
             env: BTreeMap::new(),
         },
@@ -126,8 +100,16 @@ fn tofu_save() -> Step {
         kind: StepKind::Action {
             uses: "actions/cache/save@bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb".to_owned(),
             with: BTreeMap::from([
-                ("key".to_owned(), TOFU_KEY.to_owned()),
-                ("path".to_owned(), TOFU_PATH.to_owned()),
+                (
+                    "key".to_owned(),
+                    velnor_actions_contract::workflow::step_identity::TOFU_PROVIDERS_KEY_OUTPUT_EXPR
+                        .to_owned(),
+                ),
+                (
+                    "path".to_owned(),
+                    velnor_actions_contract::workflow::step_identity::TOFU_PROVIDERS_PATH_OUTPUT_EXPR
+                        .to_owned(),
+                ),
             ]),
             env: BTreeMap::new(),
         },
@@ -135,83 +117,62 @@ fn tofu_save() -> Step {
 }
 
 fn tofu_sequence() -> Vec<Step> {
-    vec![tofu_restore(), tofu_admission(), tofu_use(), tofu_save()]
+    vec![tofu_restore(), tofu_use(), tofu_save()]
 }
 
 #[test]
 fn tofu_provider_pair_and_consumer_sequence_is_valid() {
     validate_step_sequence(&tofu_sequence(), "tofu-job")
-        .expect("restore, admission, use, and save are bound");
+        .expect("composite restore/admission, use, and save are bound");
 }
 
 #[test]
-fn tofu_provider_sequence_rejects_missing_conditional_or_mismatched_admission() {
+fn tofu_provider_sequence_rejects_missing_conditional_or_malformed_composite() {
     let mut missing = tofu_sequence();
-    missing.remove(1);
+    missing.remove(0);
     assert!(
         validate_step_sequence(&missing, "tofu-job")
-            .expect_err("restore without admission")
+            .expect_err("provider use without restore/admission composite")
             .to_string()
-            .contains("tofu_provider_admission_count")
+            .contains("tofu_provider_restore_count")
     );
 
     let mut conditional = tofu_sequence();
-    conditional[1].condition = Some("success()".to_owned());
+    conditional[0].condition = Some("success()".to_owned());
     assert!(
         validate_step_sequence(&conditional, "tofu-job")
-            .expect_err("conditional admission")
+            .expect_err("conditional restore/admission composite")
             .to_string()
-            .contains("tofu_provider_admission_conditional")
+            .contains("tofu_provider_restore_conditional")
     );
 
-    let mut wrong_key = tofu_sequence();
-    if let StepKind::Action { with, .. } = &mut wrong_key[1].kind {
-        with.insert("expected-key".to_owned(), OTHER_TOFU_KEY.to_owned());
+    let mut wrong_key_slug = tofu_sequence();
+    if let StepKind::Action { with, .. } = &mut wrong_key_slug[0].kind {
+        with.insert("cache-key".to_owned(), OTHER_TOFU_KEY.to_owned());
     }
     assert!(
-        validate_step_sequence(&wrong_key, "tofu-job")
-            .expect_err("admission must name the restore key")
+        validate_step_sequence(&wrong_key_slug, "tofu-job")
+            .expect_err("composite key must bind the path leaf")
             .to_string()
-            .contains("tofu_provider_admission_key_mismatch")
+            .contains("role_kind_mismatch")
     );
 
-    let mut wrong_slug = tofu_sequence();
-    if let StepKind::Action { with, .. } = &mut wrong_slug[1].kind {
-        with.insert("cache-slug".to_owned(), "different-root".to_owned());
+    let mut wrong_path_slug = tofu_sequence();
+    if let StepKind::Action { with, .. } = &mut wrong_path_slug[0].kind {
+        with.insert("cache-path".to_owned(), OTHER_TOFU_PATH.to_owned());
     }
     assert!(
-        validate_step_sequence(&wrong_slug, "tofu-job")
-            .expect_err("admission must own the restore leaf")
+        validate_step_sequence(&wrong_path_slug, "tofu-job")
+            .expect_err("composite path must bind the key leaf")
             .to_string()
-            .contains("tofu_provider_admission_slug_mismatch")
-    );
-
-    let mut nonadjacent = tofu_sequence();
-    nonadjacent.insert(
-        1,
-        Step {
-            name: "Intervening step".to_owned(),
-            id: None,
-            role: None,
-            condition: None,
-            kind: StepKind::Shell {
-                run: vec!["true".to_owned()],
-                env: BTreeMap::new(),
-            },
-        },
-    );
-    assert!(
-        validate_step_sequence(&nonadjacent, "tofu-job")
-            .expect_err("admission must immediately follow restore")
-            .to_string()
-            .contains("tofu_provider_admission_not_adjacent")
+            .contains("role_kind_mismatch")
     );
 }
 
 #[test]
 fn tofu_provider_sequence_rejects_unadmitted_or_misdirected_use() {
     let mut before_restore = tofu_sequence();
-    let consumer = before_restore.remove(2);
+    let consumer = before_restore.remove(1);
     before_restore.insert(0, consumer);
     assert!(
         validate_step_sequence(&before_restore, "tofu-job")
@@ -221,7 +182,7 @@ fn tofu_provider_sequence_rejects_unadmitted_or_misdirected_use() {
     );
 
     let mut wrong_path = tofu_sequence();
-    if let StepKind::Shell { env, .. } = &mut wrong_path[2].kind {
+    if let StepKind::Shell { env, .. } = &mut wrong_path[1].kind {
         env.insert("TF_PLUGIN_CACHE_DIR".to_owned(), OTHER_TOFU_PATH.to_owned());
     }
     assert!(
@@ -232,7 +193,7 @@ fn tofu_provider_sequence_rejects_unadmitted_or_misdirected_use() {
     );
 
     let mut nested_data_dir = tofu_sequence();
-    if let StepKind::Shell { env, .. } = &mut nested_data_dir[2].kind {
+    if let StepKind::Shell { env, .. } = &mut nested_data_dir[1].kind {
         env.insert(
             "TF_DATA_DIR".to_owned(),
             format!("{TOFU_PATH}/terraform-data"),
@@ -246,7 +207,7 @@ fn tofu_provider_sequence_rejects_unadmitted_or_misdirected_use() {
     );
 
     let mut untyped_use = tofu_sequence();
-    untyped_use[2].role = None;
+    untyped_use[1].role = None;
     assert!(
         validate_step_sequence(&untyped_use, "tofu-job")
             .expect_err("provider environment requires a typed consumer")
@@ -258,19 +219,23 @@ fn tofu_provider_sequence_rejects_unadmitted_or_misdirected_use() {
 #[test]
 fn tofu_provider_save_must_match_restore_gate_and_order() {
     let mut wrong_key = tofu_sequence();
-    if let StepKind::Action { with, .. } = &mut wrong_key[3].kind {
+    if let StepKind::Action { with, .. } = &mut wrong_key[2].kind {
         with.insert("key".to_owned(), OTHER_TOFU_KEY.to_owned());
         with.insert("path".to_owned(), OTHER_TOFU_PATH.to_owned());
     }
-    assert!(
-        validate_step_sequence(&wrong_key, "tofu-job")
-            .expect_err("save key/path must match restore")
-            .to_string()
-            .contains("tofu_provider_save_binding_mismatch")
-    );
+    assert!(validate_step_sequence(&wrong_key, "tofu-job").is_err());
+
+    let mut wrong_output_owner = tofu_sequence();
+    if let StepKind::Action { with, .. } = &mut wrong_output_owner[2].kind {
+        with.insert(
+            "key".to_owned(),
+            "${{ steps.another-step.outputs.cache-key }}".to_owned(),
+        );
+    }
+    assert!(validate_step_sequence(&wrong_output_owner, "tofu-job").is_err());
 
     let mut weak_gate = tofu_sequence();
-    weak_gate[3].condition = Some("success()".to_owned());
+    weak_gate[2].condition = Some("success()".to_owned());
     assert!(
         validate_step_sequence(&weak_gate, "tofu-job")
             .expect_err("save must keep the elected push gate")
@@ -289,7 +254,7 @@ fn tofu_provider_save_must_match_restore_gate_and_order() {
 
     let mut before_use = tofu_sequence();
     let save = before_use.pop().expect("save exists");
-    before_use.insert(2, save);
+    before_use.insert(1, save);
     assert!(
         validate_step_sequence(&before_use, "tofu-job")
             .expect_err("save must follow every provider consumer")
@@ -336,9 +301,13 @@ fn configured_checkout_authority_is_typed_exact_and_name_independent() {
         with.insert("fetch-depth".to_owned(), "0".to_owned());
     }
     assert!(!is_configured_checkout(&checkout, CHECKOUT_USES));
+    validate_step_sequence(std::slice::from_ref(&checkout), "checkout")
+        .expect("general checkout role supports workflow-specific inputs");
     if let StepKind::Action { with, env, .. } = &mut checkout.kind {
         with.remove("fetch-depth");
         env.insert("GIT_CONFIG_COUNT".to_owned(), "1".to_owned());
     }
     assert!(!is_configured_checkout(&checkout, CHECKOUT_USES));
+    validate_step_sequence(std::slice::from_ref(&checkout), "checkout")
+        .expect("general checkout role supports workflow-specific environment");
 }
