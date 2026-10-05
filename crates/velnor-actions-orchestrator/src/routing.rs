@@ -6,7 +6,10 @@
 use std::path::Path;
 
 use velnor_actions_contract::config::LATEST_RUNNER_LABEL;
-use velnor_actions_contract::{ExecutionConfig, ExecutionMode, RoutingWorkflow, VelnorConfig};
+use velnor_actions_contract::{
+    ExecutionConfig, ExecutionMode, RoutingWorkflow, VelnorConfig, VerificationRunner,
+};
+use velnor_actions_workflow_renderer::schema2::MiseSetupSet;
 use velnor_actions_workflow_renderer::{
     MbxQualificationPins, RenderedFile, Schema2WorkflowRequest, render_schema2_workflows,
 };
@@ -123,6 +126,14 @@ fn workflow_request(
             OrchestratorError::config(CONFIG_REL, "execution.profiles.hosted.label", "missing")
         })?;
     let scale_set = execution.scale_selector().map_err(config_error)?;
+    let mise_setups = MiseSetupSet {
+        linux_x64: crate::pins::resolve_mise_setup(config, &hosted)?,
+        macos_arm64: crate::pins::resolve_verification_mise_setup(
+            config,
+            VerificationRunner::MacosArm64,
+        )?,
+        macos_x64: crate::pins::resolve_macos_x64_mise_setup(config)?,
+    };
     let mbx_qualification = if execution
         .workflows
         .contains(&RoutingWorkflow::Qualification)
@@ -135,7 +146,6 @@ fn workflow_request(
         )?;
         let tool_catalog = velnor_actions_mise::ToolCatalog::pinned();
         Some(MbxQualificationPins {
-            mise_setup: crate::pins::resolve_mise_setup(config, &hosted)?,
             candidate_action_uses: mbx_action.uses_value(),
             mbx_version: tool_catalog
                 .version(velnor_actions_mise::PinnedTool::MrBoxington)
@@ -152,6 +162,7 @@ fn workflow_request(
         hosted_label: hosted,
         scale_set,
         workflows: execution.workflows.clone(),
+        mise_setups,
         mbx_qualification,
     })
 }

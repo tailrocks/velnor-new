@@ -300,7 +300,12 @@ fn script_uses_the_expected_paginated_selectors_and_bounded_wait() {
 
 #[test]
 fn job_renders_a_read_only_source_gate() {
-    let (name, value) = job(crate::yaml::Yaml::str("ubuntu-latest"));
+    let setup = crate::setup::MiseSetup {
+        uses: format!("jdx/mise-action@{}", "a".repeat(40)),
+        version: "2026.10.2".to_owned(),
+        sha256: "b".repeat(64),
+    };
+    let (name, value) = job(crate::yaml::Yaml::str("ubuntu-latest"), &setup);
     assert_eq!(name, JOB_ID);
     let rendered = crate::yaml::render_yaml(&crate::yaml::Yaml::Map(vec![(name, value)]));
     assert!(rendered.contains("actions: read"));

@@ -14,11 +14,12 @@ fn sha() -> &'static str {
     "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 }
 
-/// Step kinds stay closed: action, shell, internal — no parallel syntax.
+/// Step kinds stay closed, including the fixed MBX process-group shell.
 fn kind_name(step: &Step) -> &'static str {
     match &step.kind {
         StepKind::Action { .. } => "action",
         StepKind::Shell { .. } => "shell",
+        StepKind::MbxProcessGroupShell(_) => "mbx-process-group-shell",
         StepKind::Internal { .. } => "internal",
     }
 }

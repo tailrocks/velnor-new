@@ -205,6 +205,7 @@ fn rust_cache_never_stacks_over_mbx() {
     let rust_cache = velnor_actions_contract::Step {
         name: "Restore Cargo registry".to_owned(),
         condition: None,
+        continue_on_error: None,
         kind: StepKind::Action {
             uses: format!("Swatinem/rust-cache@{sha}"),
             with: BTreeMap::new(),
@@ -235,18 +236,20 @@ fn rust_cache_never_stacks_over_mbx() {
 }
 
 #[test]
-fn mbx_restore_precedes_fetch() {
+fn mbx_setup_precedes_fetch() {
     let fetch = velnor_actions_contract::Step {
         name: "Fetch Cargo sources".to_owned(),
         condition: None,
+        continue_on_error: None,
         kind: StepKind::Shell {
             run: vec!["sh".to_owned()],
             env: BTreeMap::new(),
         },
     };
     let mbx = velnor_actions_contract::Step {
-        name: "Restore MBX objects".to_owned(),
+        name: "Prepare MBX local cache store".to_owned(),
         condition: None,
+        continue_on_error: None,
         kind: StepKind::Action {
             uses: format!("jdx/mr-boxington-action@{}", "d".repeat(40)),
             with: BTreeMap::new(),

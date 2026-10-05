@@ -148,11 +148,11 @@
     {
       "expires": "2026-10-17",
       "granted": "2026-10-03",
-      "held_version": "2026.9.18",
+      "held_version": "2026.10.2",
       "issue": "#6",
       "key": "mise",
       "owner": "@donbeave",
-      "reason": "probe 2026-10-04T11:28:54Z found latest v2026.10.1 at the recorded release source; keep 2026.9.18 until the #6 update set"
+      "reason": "official v2026.10.2 is the selected pin and the previous qualified release remains 2026.9.18; Linux x64, macOS ARM64, and macOS Intel real-binary checks are wired into Required, but hosted qualification and the packaged release remain pending"
     },
     {
       "expires": "2026-10-18",
@@ -175,10 +175,10 @@
   ],
   "tools": [
     {
-      "checked_at": "2026-10-04T11:28:54Z",
-      "latest": "v2026.10.1",
+      "checked_at": "2026-10-05T06:54:58Z",
+      "latest": "v2026.10.2",
       "name": "mise",
-      "pinned": "2026.9.18",
+      "pinned": "2026.10.2",
       "qualified": "2026.9.18",
       "source": "https://api.github.com/repos/jdx/mise/releases/latest",
       "status": "held"

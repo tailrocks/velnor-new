@@ -77,6 +77,11 @@ fn check_job_steps(id: &str, job: &ReleaseJobSpec) -> Result<(), RenderError> {
                 commands::validate_command_argv(run)?;
                 commands::validate_env(env)?;
             }
+            StepKind::MbxProcessGroupShell(_) => {
+                return Err(RenderError::InvalidWorkflow(format!(
+                    "release_process_group_step:{id}"
+                )));
+            }
             StepKind::Internal { .. } => {
                 return Err(RenderError::InvalidWorkflow(format!(
                     "release_internal_op:{id}"
@@ -88,28 +93,39 @@ fn check_job_steps(id: &str, job: &ReleaseJobSpec) -> Result<(), RenderError> {
 }
 
 /// All scannable step payload texts (argv, env, action inputs).
-fn payload_texts(step: &Step) -> Vec<&str> {
+fn payload_texts(step: &Step) -> Result<Vec<String>, RenderError> {
     match &step.kind {
-        StepKind::Action { uses, with, env } => std::iter::once(uses.as_str())
-            .chain(with.keys().map(String::as_str))
-            .chain(with.values().map(String::as_str))
-            .chain(env.keys().map(String::as_str))
-            .chain(env.values().map(String::as_str))
-            .collect(),
-        StepKind::Shell { run, env } => run
+        StepKind::Action { uses, with, env } => Ok(std::iter::once(uses.clone())
+            .chain(with.keys().cloned())
+            .chain(with.values().cloned())
+            .chain(env.keys().cloned())
+            .chain(env.values().cloned())
+            .collect()),
+        StepKind::Shell { run, env } => Ok(run
             .iter()
-            .map(String::as_str)
-            .chain(env.keys().map(String::as_str))
-            .chain(env.values().map(String::as_str))
-            .collect(),
-        StepKind::Internal { .. } => Vec::new(),
+            .cloned()
+            .chain(env.keys().cloned())
+            .chain(env.values().cloned())
+            .collect()),
+        StepKind::MbxProcessGroupShell(payload) => {
+            let run = crate::steps_mbx_process_group::rendered_run(step, payload)?;
+            Ok(run
+                .into_iter()
+                .chain(payload.env().keys().cloned())
+                .chain(payload.env().values().cloned())
+                .collect())
+        }
+        StepKind::Internal { .. } => Ok(Vec::new()),
     }
 }
 
 /// Reject one substring in every payload text of a job's steps.
 fn forbid_substring(id: &str, steps: &[Step], needle: &str, code: &str) -> Result<(), RenderError> {
     for step in steps {
-        if payload_texts(step).iter().any(|text| text.contains(needle)) {
+        if payload_texts(step)?
+            .iter()
+            .any(|text| text.contains(needle))
+        {
             return Err(RenderError::InvalidWorkflow(format!("{code}:{id}")));
         }
     }
@@ -142,6 +158,15 @@ fn forbid_unexpected_secrets(id: &str, steps: &[Step]) -> Result<(), RenderError
                 if env
                     .iter()
                     .any(|(key, value)| value.contains("secrets.") && !is_forge_binding(key, value))
+                {
+                    return Err(rejected());
+                }
+            }
+            StepKind::MbxProcessGroupShell(payload) => {
+                if payload
+                    .env()
+                    .values()
+                    .any(|value| value.contains("secrets."))
                 {
                     return Err(rejected());
                 }
@@ -315,6 +340,11 @@ fn check_publish_bootstrap(
                     }
                     bindings += 1;
                 }
+            }
+            StepKind::MbxProcessGroupShell(_) => {
+                return Err(RenderError::InvalidWorkflow(format!(
+                    "release_process_group_step:{id}"
+                )));
             }
             StepKind::Action { with, .. } => {
                 for value in with.values() {

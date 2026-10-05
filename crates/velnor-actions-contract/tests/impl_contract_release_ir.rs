@@ -47,6 +47,7 @@ fn ci_job() -> Job {
         steps: vec![Step {
             name: "run".to_owned(),
             condition: None,
+            continue_on_error: None,
             kind: StepKind::Internal {
                 operation: "demo".to_owned(),
             },

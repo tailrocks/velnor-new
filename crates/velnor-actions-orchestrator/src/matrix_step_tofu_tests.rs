@@ -23,6 +23,20 @@ fn tofu_step_env_rejects_triple_and_reserved_keys() {
         );
     }
     for key in [
+        MBX_CACHE_DIR_ENV,
+        MBX_CACHE_EXPORT_GROUP_ENV,
+        MBX_GC_AUTO_ENV,
+        MBX_SHARE_OUT_DIR_ENV,
+    ] {
+        assert!(!env.contains_key(key), "Tofu never receives {key}");
+        let extra = BTreeMap::from([(key.to_owned(), "invalid".to_owned())]);
+        let err = task_step_env(&catalog, &extra, false).expect_err("MBX env is Rust-only");
+        assert!(
+            err.to_string().contains("reserved_step_env"),
+            "Tofu MBX extras fail closed: {err}"
+        );
+    }
+    for key in [
         MISE_RUSTUP_HOME_ENV,
         MISE_CARGO_HOME_ENV,
         RUSTUP_TOOLCHAIN_ENV,
@@ -90,8 +104,15 @@ fn tofu_step_names_render_through_tofu_table() {
 #[test]
 fn tofu_obligation_step_carries_tofu_matrix_id_and_no_doc_env() {
     use velnor_actions_rust::RUSTDOCFLAGS_ENV;
-    let step =
-        obligation_step(&tofu_obligation(), &ToolCatalog::pinned(), &[], None).expect("step");
+    let step = obligation_step(
+        &tofu_obligation(),
+        &ToolCatalog::pinned(),
+        &[],
+        CompileDriver::Cargo,
+        None,
+        "ubuntu-24.04",
+    )
+    .expect("step");
     let velnor_actions_contract::StepKind::Shell { env, .. } = &step.kind else {
         panic!("obligation must be a shell step");
     };
@@ -107,8 +128,15 @@ fn tofu_obligation_step_carries_tofu_matrix_id_and_no_doc_env() {
 
 #[test]
 fn tofu_obligation_step_carries_isolated_cache_dir() {
-    let step =
-        obligation_step(&tofu_obligation(), &ToolCatalog::pinned(), &[], None).expect("step");
+    let step = obligation_step(
+        &tofu_obligation(),
+        &ToolCatalog::pinned(),
+        &[],
+        CompileDriver::Cargo,
+        None,
+        "ubuntu-24.04",
+    )
+    .expect("step");
     let velnor_actions_contract::StepKind::Shell { env, .. } = &step.kind else {
         panic!("obligation must be a shell step");
     };
@@ -135,6 +163,14 @@ fn tofu_obligation_step_carries_isolated_cache_dir() {
 fn stackless_obligation_task_ids_keep_malformed_vocabulary() {
     let mut bad = tofu_obligation();
     bad.task_id = "bogus".to_owned();
-    let err = obligation_step(&bad, &ToolCatalog::pinned(), &[], None).expect_err("must fail");
+    let err = obligation_step(
+        &bad,
+        &ToolCatalog::pinned(),
+        &[],
+        CompileDriver::Cargo,
+        None,
+        "ubuntu-24.04",
+    )
+    .expect_err("must fail");
     assert!(err.to_string().contains("malformed_task_id"), "{err}");
 }

@@ -7,12 +7,12 @@
 //! The action ref is an explicit candidate input separate from the production
 //! pin; emitting this probe does not assert that candidate qualification passed.
 //!
-//! Both jobs set `MBX_GC_AUTO=1` for this protected-main roundtrip probe.
-//! This probe does not exercise production's typed hosted action backend or
-//! Scale Set local backend, nor the universal `MBX_SHARE_OUT_DIR=0` policy.
+//! Both hosted Linux jobs keep `MBX_GC_AUTO=0` disabled for the Linux GC policy.
+//! The probe does not change the separate Scale Set stock/default behavior.
+//! It remains an experiment, not evidence of the production cache backend.
 
 use super::features::{checkout_step, finish, gated, lane_base, run_step};
-use super::{MbxQualificationPins, RunnerSpec};
+use super::{MbxQualificationPins, MiseSetupSet, RunnerSpec, setup_step};
 use crate::cache_steps::MBX_ACTION_NAME;
 use crate::yaml::Yaml;
 use crate::{RenderError, steps::validate_uses};
@@ -49,9 +49,10 @@ const REUSE_PROBE: &str = "df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"
 /// Invalid action, Mise, MBX, or Rust pins fail closed.
 pub(super) fn jobs(
     request: &MbxQualificationPins,
+    mise_setups: &MiseSetupSet,
     hosted: &RunnerSpec,
 ) -> Result<Vec<(String, Yaml)>, RenderError> {
-    request.mise_setup.validate()?;
+    mise_setups.validate()?;
     validate_uses(&request.candidate_action_uses)?;
     let action_prefix = format!("{MBX_ACTION_NAME}@");
     if !request.candidate_action_uses.starts_with(&action_prefix) {
@@ -64,12 +65,17 @@ pub(super) fn jobs(
     validate_exact_version(&request.rust_version, "rust")?;
 
     Ok(vec![
-        job(request, hosted, true),
-        job(request, hosted, false),
+        job(request, mise_setups, hosted, true),
+        job(request, mise_setups, hosted, false),
     ])
 }
 
-fn job(request: &MbxQualificationPins, hosted: &RunnerSpec, writer: bool) -> (String, Yaml) {
+fn job(
+    request: &MbxQualificationPins,
+    mise_setups: &MiseSetupSet,
+    hosted: &RunnerSpec,
+    writer: bool,
+) -> (String, Yaml) {
     let (id, title, mode) = if writer {
         (
             "mbx-cache-write-hosted",
@@ -101,7 +107,7 @@ fn job(request: &MbxQualificationPins, hosted: &RunnerSpec, writer: bool) -> (St
 
     let mut steps = vec![
         checkout_step(),
-        mise_setup_step(request),
+        setup_step(mise_setups.for_runner(velnor_actions_contract::VerificationRunner::LinuxX64)),
         mise_install_step(request),
         mbx_action_step(request, writer),
         verify_action_step(request, writer),
@@ -119,27 +125,6 @@ fn job(request: &MbxQualificationPins, hosted: &RunnerSpec, writer: bool) -> (St
 
     let when = format!("inputs.mode == '{mode}' && {MAIN_REF}");
     gated(finish(id, fields, steps), &when)
-}
-
-fn mise_setup_step(request: &MbxQualificationPins) -> Yaml {
-    Yaml::Map(vec![
-        ("name".to_owned(), Yaml::str("Set up Mise")),
-        (
-            "uses".to_owned(),
-            Yaml::str(request.mise_setup.uses.clone()),
-        ),
-        (
-            "with".to_owned(),
-            mapping(&[
-                ("version", &request.mise_setup.version),
-                ("sha256", &request.mise_setup.sha256),
-                ("install", "false"),
-                ("env", "false"),
-                ("cache", "false"),
-                ("cache_save", "false"),
-            ]),
-        ),
-    ])
 }
 
 fn mise_install_step(request: &MbxQualificationPins) -> Yaml {
@@ -240,7 +225,7 @@ fn build_step() -> Yaml {
 fn qualification_env(request: &MbxQualificationPins, writer: bool) -> Yaml {
     let home = "${{ github.workspace }}/.velnor-mbx-cache-qualification";
     mapping(&[
-        ("MBX_GC_AUTO", "1"),
+        ("MBX_GC_AUTO", "0"),
         ("ACTIONS_CACHE_MODE", if writer { "write" } else { "read" }),
         ("CARGO_HOME", &format!("{home}/cargo")),
         ("MISE_AUTO_INSTALL", "false"),
@@ -277,5 +262,31 @@ fn validate_exact_version(value: &str, tool: &str) -> Result<(), RenderError> {
         Err(RenderError::BadCommand(format!(
             "bad_{tool}_version:{value}"
         )))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{MbxQualificationPins, qualification_env};
+    use crate::yaml::Yaml;
+
+    #[test]
+    fn hosted_qualification_keeps_linux_gc_disabled_for_writer_and_reader() {
+        let request = MbxQualificationPins {
+            candidate_action_uses:
+                "jdx/mr-boxington-action@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".to_owned(),
+            mbx_version: "1.21.1".to_owned(),
+            rust_version: "1.98.1".to_owned(),
+        };
+        for writer in [true, false] {
+            let Yaml::Map(fields) = qualification_env(&request, writer) else {
+                panic!("qualification environment must be a map");
+            };
+            let Some((_, Yaml::Str(gc))) = fields.iter().find(|(key, _)| key == "MBX_GC_AUTO")
+            else {
+                panic!("qualification environment is missing MBX_GC_AUTO");
+            };
+            assert_eq!(gc, "0");
+        }
     }
 }

@@ -29,6 +29,7 @@ mod exclusive_write;
 mod extension_schemas;
 mod external_data;
 mod finalized;
+mod freshness;
 mod freshness_emit;
 mod generate;
 mod git_paths;
@@ -109,7 +110,7 @@ pub use external_data::{
     DEFAULT_EXTERNAL_DATA_MAX_AGE_SECS, EXTERNAL_DATA_CHECK_KIND, ExternalDataFreshness,
     external_data_kind, may_skip_external_data,
 };
-pub use finalized::finalized_jobs;
+pub use {finalized::finalized_jobs, freshness::check_freshness};
 pub use generate::{
     GenerateOptions, GenerateReport, ToolSnapshot, generate, generate_dispatched,
     render_staged_tree, render_staged_tree_with,

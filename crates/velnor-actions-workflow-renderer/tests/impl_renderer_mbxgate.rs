@@ -18,7 +18,7 @@ fn mbx_argv() -> Vec<String> {
 fn mbx_emitted_only_for_mbx_driver() -> Result<(), RenderError> {
     let [preflight, selected] = mbx_tool_steps(&mbx_pin(), "1.19.0", "1.98.1")?;
     assert_eq!(preflight.name, "Verify MBX and Rust toolchains");
-    assert_eq!(selected.name, "Restore MBX objects");
+    assert_eq!(selected.name, "Prepare MBX local cache store");
     assert!(
         mbx_steps_for_driver(
             &mbx_pin(),

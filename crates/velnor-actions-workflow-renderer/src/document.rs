@@ -248,6 +248,7 @@ fn job_to_yaml(
         .map_or(job.steps.as_slice(), Vec::as_slice);
     let step_has_env = source_steps.iter().any(|step| match &step.kind {
         StepKind::Shell { env, .. } | StepKind::Action { env, .. } => !env.is_empty(),
+        StepKind::MbxProcessGroupShell(payload) => !payload.env().is_empty(),
         StepKind::Internal { .. } => false,
     });
     let mut job_env = if step_has_env {
@@ -270,6 +271,7 @@ fn job_to_yaml(
         for step in source_steps {
             let step_env = match &step.kind {
                 StepKind::Shell { env, .. } | StepKind::Action { env, .. } => Some(env),
+                StepKind::MbxProcessGroupShell(payload) => Some(payload.env()),
                 StepKind::Internal { .. } => None,
             };
             if let Some(env) = step_env {

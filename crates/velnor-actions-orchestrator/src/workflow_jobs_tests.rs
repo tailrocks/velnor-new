@@ -306,3 +306,33 @@ fn final_job_needs_plan_crates_and_lint() {
     let job = final_job("ubuntu-26.04", &[], None, &catalog).expect("final job");
     assert_eq!(job.needs, [PLAN_JOB_ID.to_owned(), LINT_JOB_ID.to_owned()]);
 }
+
+#[test]
+fn final_job_fans_in_phase0_results_under_always_condition() {
+    let catalog = ToolCatalog::pinned();
+    let phase0 = vec![
+        velnor_actions_contract::MISE_PHASE0_LINUX_JOB_ID.to_owned(),
+        velnor_actions_contract::MISE_PHASE0_MACOS_ARM64_JOB_ID.to_owned(),
+        velnor_actions_contract::MISE_PHASE0_MACOS_INTEL_JOB_ID.to_owned(),
+    ];
+    let job = final_job_with_extra_needs(
+        "ubuntu-26.04",
+        &["rust-demo".to_owned()],
+        &phase0,
+        None,
+        &catalog,
+    )
+    .expect("final job");
+    assert_eq!(job.condition.as_deref(), Some(FINAL_CONDITION));
+    assert_eq!(
+        job.needs,
+        [
+            PLAN_JOB_ID.to_owned(),
+            "rust-demo".to_owned(),
+            phase0[0].clone(),
+            phase0[1].clone(),
+            phase0[2].clone(),
+            LINT_JOB_ID.to_owned(),
+        ]
+    );
+}

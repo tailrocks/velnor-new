@@ -74,6 +74,11 @@ pub(crate) fn run_public() -> ExitCode {
         Command::Init => run_init(),
         Command::Plan => run_plan(),
         Command::Generate { output_dir, mode } => run_generate(output_dir, mode),
+        Command::Freshness {
+            root,
+            check_upstream,
+            with_advisories,
+        } => crate::dispatch_freshness::run(&root, check_upstream, with_advisories),
         Command::Config { command } => crate::dispatch_config::run_config(&command),
     }
 }

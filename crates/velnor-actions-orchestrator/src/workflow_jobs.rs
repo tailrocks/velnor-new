@@ -144,14 +144,31 @@ pub(crate) fn lint_job(label: &str, catalog: &ToolCatalog) -> Result<Job, Orches
 /// # Errors
 ///
 /// Returns a contract error when a typed step request is rejected.
+#[cfg(test)]
 pub(crate) fn final_job(
     label: &str,
     crate_job_ids: &[String],
     acquire: Option<Step>,
     catalog: &ToolCatalog,
 ) -> Result<Job, OrchestratorError> {
+    final_job_with_extra_needs(label, crate_job_ids, &[], acquire, catalog)
+}
+
+/// Final gate with additional Required-fanin job IDs.
+///
+/// # Errors
+///
+/// Returns a contract error when a typed step request is rejected.
+pub(crate) fn final_job_with_extra_needs(
+    label: &str,
+    crate_job_ids: &[String],
+    extra_required_job_ids: &[String],
+    acquire: Option<Step>,
+    catalog: &ToolCatalog,
+) -> Result<Job, OrchestratorError> {
     let mut needs = vec![PLAN_JOB_ID.to_owned()];
     needs.extend(crate_job_ids.iter().cloned());
+    needs.extend(extra_required_job_ids.iter().cloned());
     needs.push(LINT_JOB_ID.to_owned());
     let mut steps = Vec::new();
     steps.extend(acquire);

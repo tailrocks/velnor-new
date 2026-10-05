@@ -53,6 +53,7 @@ pub fn internal_step(name: &str, operation: &str) -> Result<Step, RenderError> {
     Ok(Step {
         name: name.to_owned(),
         condition: None,
+        continue_on_error: None,
         kind: StepKind::Internal {
             operation: operation.to_owned(),
         },
@@ -70,6 +71,7 @@ pub fn write_request_step(target: &str) -> Result<Step, RenderError> {
     Ok(Step {
         name: "Write request".to_owned(),
         condition: None,
+        continue_on_error: None,
         kind: StepKind::Internal {
             operation: format!("{WRITE_REQUEST_OPERATION}:{target}"),
         },
@@ -82,6 +84,7 @@ pub fn plan_step() -> Step {
     Step {
         name: "Plan".to_owned(),
         condition: None,
+        continue_on_error: None,
         kind: StepKind::Internal {
             operation: PLAN_OPERATION.to_owned(),
         },
@@ -94,6 +97,7 @@ pub fn merge_step() -> Step {
     Step {
         name: "Merge reports".to_owned(),
         condition: None,
+        continue_on_error: None,
         kind: StepKind::Internal {
             operation: MERGE_OPERATION.to_owned(),
         },
@@ -106,6 +110,7 @@ pub fn publish_step() -> Step {
     Step {
         name: "Publish baseline".to_owned(),
         condition: None,
+        continue_on_error: None,
         kind: StepKind::Internal {
             operation: PUBLISH_OPERATION.to_owned(),
         },

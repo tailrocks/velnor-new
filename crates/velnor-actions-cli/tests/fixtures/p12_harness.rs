@@ -93,11 +93,22 @@ pub(crate) fn mutate(dir: &Path, rel: &str, old: &str, new: &str) -> Result<(), 
     Ok(())
 }
 
-/// Run `check-freshness.sh --root dir` plus `extra` args.
+/// Run the native freshness command against `dir` plus `extra` args.
 pub(crate) fn run_script(dir: &Path, extra: &[&str]) -> Result<Run, Box<dyn Error>> {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-actions"));
+    command.arg("freshness").arg("--root").arg(dir).args(extra);
+    capture(command)
+}
+
+/// Run the public shell wrapper once to pin its CLI wiring.
+pub(crate) fn run_wrapper(dir: &Path, extra: &[&str]) -> Result<Run, Box<dyn Error>> {
     let script = crate::impl_repo_policy::repo_root().join("scripts/check-freshness.sh");
     let mut command = Command::new("bash");
     command.arg(script).arg("--root").arg(dir).args(extra);
+    capture(command)
+}
+
+fn capture(mut command: Command) -> Result<Run, Box<dyn Error>> {
     let output = command.output()?;
     Ok(Run {
         code: output.status.code().unwrap_or(-1),

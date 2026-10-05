@@ -77,6 +77,7 @@ pub(crate) fn shell(name: &str, argv: &[&str], env: &[(&str, &str)]) -> Step {
     Step {
         name: name.to_owned(),
         condition: None,
+        continue_on_error: None,
         kind: StepKind::Shell {
             run: argv.iter().map(ToString::to_string).collect(),
             env: env

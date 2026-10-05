@@ -16,6 +16,21 @@ fn step_shell_after_run_overrides_the_hosted_default() -> Result<(), String> {
 }
 
 #[test]
+fn intel_macos_phase0_runner_uses_the_hosted_bash_default() -> Result<(), String> {
+    let runs = bodies(
+        "jobs:\n  probe:\n    runs-on: macos-15-intel\n    steps:\n      - name: test\n        run: bash .mise/tasks/mise-phase0\n",
+    )?;
+    assert_eq!(
+        runs,
+        [(
+            "bash .mise/tasks/mise-phase0".to_owned(),
+            ShellDialect::Bash
+        )]
+    );
+    Ok(())
+}
+
+#[test]
 fn step_job_and_workflow_shell_precedence_is_order_independent() -> Result<(), String> {
     let runs = bodies(
         "jobs:\n  job-default-after-steps:\n    runs-on: [self-hosted, runner]\n    steps:\n      - name: job default\n        run: echo job\n    defaults:\n      run:\n        shell: bash -e {0}\n  step-override:\n    runs-on: [self-hosted, runner]\n    defaults:\n      run:\n        shell: bash -e {0}\n    steps:\n      - name: step override\n        run: echo step\n        shell: sh\n  workflow-default:\n    runs-on: [self-hosted, runner]\n    steps:\n      - name: workflow default\n        run: echo workflow\ndefaults:\n  run:\n    shell: sh\n",

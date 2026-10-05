@@ -24,6 +24,7 @@ fn renderer_rejects_unpinned_actions_inside_ir() -> Result<(), RenderError> {
             task_job(Step {
                 name: name.to_owned(),
                 condition: None,
+                continue_on_error: None,
                 kind: StepKind::Action {
                     uses: uses.to_owned(),
                     with: BTreeMap::new(),

@@ -38,6 +38,7 @@ fn token_hygiene_scopes_gh_token_to_plan() -> Result<(), RenderError> {
             Step {
                 name: "Plan".to_owned(),
                 condition: None,
+                continue_on_error: None,
                 kind: StepKind::Shell {
                     run: vec!["true".to_owned()],
                     env: scrubbed,
@@ -69,6 +70,7 @@ fn token_hygiene_scopes_gh_token_to_plan() -> Result<(), RenderError> {
             Step {
                 name: "Leak".to_owned(),
                 condition: None,
+                continue_on_error: None,
                 kind: StepKind::Shell {
                     run: vec!["true".to_owned()],
                     env: BTreeMap::from([("GITHUB_TOKEN".to_owned(), "x".to_owned())]),
@@ -129,6 +131,7 @@ fn token_hygiene_rejects_prints_and_task_tokens() -> Result<(), RenderError> {
         vec![velnor_actions_contract::Step {
             name: "Run task".to_owned(),
             condition: None,
+            continue_on_error: None,
             kind: velnor_actions_contract::StepKind::Shell {
                 run: vec!["true".to_owned()],
                 env: BTreeMap::from([("GH_TOKEN".to_owned(), "${{ github.token }}".to_owned())]),
@@ -192,6 +195,7 @@ fn token_hygiene_constructor_owns_overlay_and_rejects_all_nine_keys() -> Result<
             vec![Step {
                 name: "Run task".to_owned(),
                 condition: None,
+                continue_on_error: None,
                 kind: StepKind::Shell {
                     run: vec!["true".to_owned()],
                     env: BTreeMap::from([(key.to_owned(), "x".to_owned())]),
@@ -229,6 +233,7 @@ fn scrub_coverage_rejects_bare_and_partial_shell_env() -> Result<(), RenderError
                 Step {
                     name: "Run task".to_owned(),
                     condition: None,
+                    continue_on_error: None,
                     kind: StepKind::Shell {
                         run: vec!["true".to_owned()],
                         env,

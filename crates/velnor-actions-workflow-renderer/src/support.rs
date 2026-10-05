@@ -202,6 +202,7 @@ pub(crate) fn alint_job(ctx: &RenderContext) -> Result<Job, RenderError> {
             Step {
                 name: "Run Alint".to_owned(),
                 condition: None,
+                continue_on_error: None,
                 kind: StepKind::Action {
                     uses: ALINT_USES.to_owned(),
                     with,

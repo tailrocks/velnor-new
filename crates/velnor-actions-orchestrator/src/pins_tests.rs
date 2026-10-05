@@ -181,8 +181,27 @@ fn verification_mise_setup_pins_each_runner_architecture() {
         .expect("Apple ARM64 Mise pin");
 
     assert_eq!(linux.version, MISE_VERSION);
+    assert_eq!(
+        linux.sha256,
+        "8f5f6660336f572830e33cd9b378d3131e529a0d4c4f0c553776be90a1ba302a"
+    );
     assert_eq!(linux.sha256, MISE_BINARY_SHA256_LINUX_X64);
     assert_eq!(macos.version, MISE_VERSION);
+    assert_eq!(
+        macos.sha256,
+        "66d49acecca413c8b334922584982a4907a10588912829873d6c55d0c6d42612"
+    );
     assert_eq!(macos.sha256, MISE_BINARY_SHA256_MACOS_ARM64);
     assert_ne!(linux.sha256, macos.sha256);
+}
+
+#[test]
+fn macos_intel_phase0_setup_uses_the_official_x64_binary_digest() {
+    let setup =
+        resolve_macos_x64_mise_setup(&config_with(BTreeMap::new())).expect("macOS Intel setup");
+    assert_eq!(setup.version, "2026.10.2");
+    assert_eq!(
+        setup.sha256,
+        "1c6b3d4aaeba8d3b8b57e2d06e4b7825a5134b7aa6e97313bd99db6f22bac21f"
+    );
 }

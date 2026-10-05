@@ -32,6 +32,15 @@ pub const PLAN_JOB_ID: &str = "plan";
 /// Canonical orchestration job ID for the required gate.
 pub const REQUIRED_JOB_ID: &str = "required";
 
+/// Required real-binary Mise qualification job on Linux x64.
+pub const MISE_PHASE0_LINUX_JOB_ID: &str = "mise-phase0-linux";
+
+/// Required real-binary Mise qualification job on macOS ARM64.
+pub const MISE_PHASE0_MACOS_ARM64_JOB_ID: &str = "mise-phase0-macos-arm64";
+
+/// Required real-binary Mise qualification job on macOS Intel.
+pub const MISE_PHASE0_MACOS_INTEL_JOB_ID: &str = "mise-phase0-macos-intel";
+
 /// Display name of the planner job.
 pub const PLAN_DISPLAY_NAME: &str = "Plan";
 

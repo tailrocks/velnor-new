@@ -4,9 +4,10 @@ use std::collections::BTreeMap;
 use std::ffi::OsString;
 
 use velnor_actions_contract::{CrateObligation, Stack, Step, sanitize_error_detail};
-use velnor_actions_mise::{ISOLATION_ENV, NO_AUTO_INSTALL_ENV, ToolCatalog, ToolHomes};
+use velnor_actions_mise::ToolCatalog;
 use velnor_actions_rust::{payload_env_for_kind, step_base_name};
 use velnor_actions_workflow_renderer::plan_format::FORMAT_STEP_NAME;
+use velnor_actions_workflow_renderer::steps::CompileDriver;
 use velnor_actions_workflow_renderer::steps::{INTERNAL_OP_ENV, STAGED_BINARY_PREFIX};
 
 use crate::OrchestratorError;
@@ -17,6 +18,16 @@ mod tools;
 
 #[path = "matrix_tofu_env.rs"]
 mod tofu_env;
+
+#[path = "matrix_step_env.rs"]
+mod step_env;
+use step_env::mbx_producer_env;
+pub(crate) use step_env::task_step_env;
+#[cfg(test)]
+pub(crate) use step_env::{
+    MBX_CACHE_DIR_ENV, MBX_CACHE_DIR_OUTPUT, MBX_CACHE_EXPORT_GROUP_ENV,
+    MBX_CACHE_EXPORT_GROUP_OUTPUT, MBX_GC_AUTO_ENV, MBX_SHARE_OUT_DIR_ENV,
+};
 
 #[cfg(test)]
 pub(crate) use tools::crate_needs_tofu_install;
@@ -75,68 +86,6 @@ fn payload_env_for_obligation(task_id: &str, kind: &str) -> Vec<(OsString, OsStr
         Some(Stack::Tofu) => velnor_actions_tofu::payload_env_for_kind(kind),
         _ => payload_env_for_kind(kind),
     }
-}
-
-/// Validated env every crate-job step runs with.
-///
-/// Single constructor shared by obligation steps and `Fetch Cargo
-/// sources`: the isolation quartet plus install disable from the Mise
-/// adapter's single source, the owned-homes triple for rust steps,
-/// and caller extras. Tofu obligations carry no triple; they carry
-/// the isolated per-root `TF_DATA_DIR` from the tofu adapter's
-/// derivation instead (the temp CLI config path stays local-only
-/// until a materialization step lands). Reserved keys in the extras
-/// fail closed, so generated steps use the same validated contract as
-/// local helper requests and fetch plus consumers can never drift
-/// apart (run 36560676954 failed every leg when only `Run task`
-/// carried the triple).
-///
-/// # Errors
-///
-/// Returns a contract error for reserved extras (triple keys included
-/// when `needs_rust` is false) and a render error for blank triple
-/// inputs or denied credential keys.
-pub(crate) fn task_step_env(
-    catalog: &ToolCatalog,
-    extra: &BTreeMap<String, String>,
-    needs_rust: bool,
-) -> Result<BTreeMap<String, String>, OrchestratorError> {
-    use velnor_actions_workflow_renderer::toolchain_env;
-    for key in extra.keys() {
-        if velnor_actions_mise::command::is_reserved_env_key(key)
-            || (!needs_rust && toolchain_env::TOOLCHAIN_HOME_KEYS.contains(&key.as_str()))
-        {
-            return Err(OrchestratorError::Contract {
-                problem: format!("reserved_step_env:{key}"),
-            });
-        }
-    }
-    let mut base = BTreeMap::new();
-    for (key, value) in ISOLATION_ENV.iter().chain(NO_AUTO_INSTALL_ENV.iter()) {
-        base.insert((*key).to_owned(), (*value).to_owned());
-    }
-    base.extend(
-        extra
-            .iter()
-            .map(|(key, value)| (key.clone(), value.clone())),
-    );
-    if let Some(data_dir) = tofu_env::tofu_data_dir_for_extra(extra)? {
-        base.insert(velnor_actions_tofu::TF_DATA_DIR_ENV.to_owned(), data_dir);
-    }
-    if let Some(cache_dir) = tofu_env::tofu_plugin_cache_dir_for_extra(extra)? {
-        base.insert(
-            velnor_actions_tofu::TF_PLUGIN_CACHE_DIR_ENV.to_owned(),
-            cache_dir,
-        );
-    }
-    if !needs_rust {
-        toolchain_env::reject_denied_step_keys(&base).map_err(OrchestratorError::from)?;
-        return Ok(base);
-    }
-    let homes = ToolHomes::runner_temp();
-    let toolchain = catalog.rustup_toolchain();
-    toolchain_env::checked_task_env(&base, homes.rustup_home(), homes.cargo_home(), &toolchain)
-        .map_err(OrchestratorError::from)
 }
 
 /// Fixed obligation identity env carried by every obligation step.
@@ -204,7 +153,9 @@ pub(crate) fn obligation_step(
     obligation: &CrateObligation,
     catalog: &ToolCatalog,
     _downstream: &[String],
+    driver: CompileDriver,
     matrix_cap: Option<u32>,
+    runner_label: &str,
 ) -> Result<Step, OrchestratorError> {
     // Unknown segments keep the previous single-stack behavior: the
     // grammar validation below fails them as malformed task IDs.
@@ -225,8 +176,11 @@ pub(crate) fn obligation_step(
             value.to_string_lossy().into_owned(),
         );
     }
-    check_identity_env_contract(&identity, &obligation.task_id)?;
     let needs_rust = obligation_stack(&obligation.task_id) != Some(Stack::Tofu);
+    if needs_rust && driver == CompileDriver::Mbx {
+        identity.extend(mbx_producer_env(runner_label)?);
+    }
+    check_identity_env_contract(&identity, &obligation.task_id)?;
     let env = task_step_env(catalog, &identity, needs_rust)?;
     let joined =
         velnor_actions_workflow_renderer::join_argv_for_run(&obligation.run).map_err(|err| {
@@ -367,6 +321,14 @@ pub(crate) fn crate_upload_step(job_id: &str) -> Result<Step, OrchestratorError>
 #[cfg(test)]
 #[path = "matrix_step_tests.rs"]
 mod matrix_step_tests;
+
+#[cfg(test)]
+#[path = "matrix_step_mbx_tests.rs"]
+mod matrix_step_mbx_tests;
+
+#[cfg(test)]
+#[path = "matrix_step_identity_tests.rs"]
+mod matrix_step_identity_tests;
 
 #[cfg(test)]
 #[path = "matrix_step_tofu_tests.rs"]

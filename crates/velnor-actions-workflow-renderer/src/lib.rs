@@ -10,6 +10,7 @@ pub mod cache_p08;
 mod cache_p08_detect;
 mod cache_steps;
 mod candidate;
+mod candidate_scripts;
 pub mod closure;
 mod closure_paths;
 mod commands;
@@ -47,7 +48,9 @@ pub mod setup;
 pub mod steps;
 mod steps_artifact;
 mod steps_internal;
+mod steps_mbx_process_group;
 mod steps_plain;
+mod stock_mbx_bundle;
 mod support;
 pub mod tofu_cache;
 pub mod toolchain_env;
@@ -56,6 +59,10 @@ mod verification_jobs;
 mod workflow_policy;
 mod workflow_size;
 pub mod yaml;
+
+#[cfg(test)]
+#[path = "stock_mbx_bundle_cli_tests.rs"]
+mod stock_mbx_bundle_cli_tests;
 
 pub use artifact_paths::{
     CANDIDATE_OUTPUT_DIR_EXPR, CANDIDATE_STAGE_DIR_EXPR, PRESEED_OUTPUT_DIR_EXPR,
@@ -97,19 +104,21 @@ pub use render::{
     RenderedFile, RenderedSymlink, RenderedTree, TASK_JOB_ID, ValidatorCommand, WORKFLOW_PATH,
     action_pins, finalize_jobs, render_workflow_ir, render_workflow_ir_strict,
 };
-pub use schema2::{MbxQualificationPins, Schema2WorkflowRequest, render_schema2_workflows};
+pub use schema2::{
+    MbxQualificationPins, MiseSetupSet, Schema2WorkflowRequest, render_schema2_workflows,
+};
 pub use setup::{MISE_ACTION_NAME, SETUP_MISE_NAME, mise_setup_step};
 pub use steps::{
     ACQUIRE_NAME, ASSET_SHA_ENV, ASSET_URL_ENV, BASELINE_PUBLISH_UPLOAD_NAME,
     CRATE_REPORT_UPLOAD_NAME, CompileDriver, DENY_STEP_NAME, FORBIDDEN_TOKENS, INTERNAL_OP_ENV,
-    MACHETE_STEP_NAME, MATRIX_REPORT_UPLOAD_NAME, MBX_PREFLIGHT_NAME, MERGE_OPERATION,
-    PLAN_OPERATION, PUBLISH_OPERATION, PUBLISH_STEP_ID, RELEASE_COMMIT_ENV, REQUEST_DIR_PREFIX,
-    REQUEST_FILE_ENV, RUN_KEY_EXPR, STAGED_BINARY_PREFIX, WRITE_PRESEED_MANIFEST_OPERATION,
-    WRITE_REQUEST_OPERATION, acquire_velnor_step, action_step, action_step_with_env,
-    ambient_shell_step, baseline_publish_upload_step, check_cache_step_order, check_mbx_gating,
-    checkout_step, crate_job_report_upload_step, internal_step, lane_cargo_target_env,
-    matrix_report_upload_step, mbx_steps_for_driver, merge_step, plan_step, publish_step,
-    scan_for_private_subcommands, shell_step, validate_uses, write_request_step,
+    MACHETE_STEP_NAME, MATRIX_REPORT_UPLOAD_NAME, MBX_LOCAL_SETUP_NAME, MBX_PREFLIGHT_NAME,
+    MERGE_OPERATION, PLAN_OPERATION, PUBLISH_OPERATION, PUBLISH_STEP_ID, RELEASE_COMMIT_ENV,
+    REQUEST_DIR_PREFIX, REQUEST_FILE_ENV, RUN_KEY_EXPR, STAGED_BINARY_PREFIX,
+    WRITE_PRESEED_MANIFEST_OPERATION, WRITE_REQUEST_OPERATION, acquire_velnor_step, action_step,
+    action_step_with_env, ambient_shell_step, baseline_publish_upload_step, check_cache_step_order,
+    check_mbx_gating, checkout_step, crate_job_report_upload_step, internal_step,
+    lane_cargo_target_env, matrix_report_upload_step, mbx_steps_for_driver, merge_step, plan_step,
+    publish_step, scan_for_private_subcommands, shell_step, validate_uses, write_request_step,
 };
 pub use tree::{render_tree, render_tree_with_extra};
 pub use verification_jobs::{

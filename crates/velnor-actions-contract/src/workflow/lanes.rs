@@ -11,7 +11,10 @@ use crate::errors::ContractError;
 
 use super::ValidatorKind;
 use super::ir::{Job, WorkflowIr};
-use super::jobs::{PLAN_JOB_ID, REQUIRED_JOB_ID};
+use super::jobs::{
+    MISE_PHASE0_LINUX_JOB_ID, MISE_PHASE0_MACOS_ARM64_JOB_ID, MISE_PHASE0_MACOS_INTEL_JOB_ID,
+    PLAN_JOB_ID, REQUIRED_JOB_ID,
+};
 
 /// Suffix for the hosted copy of a verification job.
 pub const HOSTED_SUFFIX: &str = "__hosted";
@@ -51,7 +54,13 @@ pub fn lane_class(job_id: &str) -> LaneClass {
     if job_id == ValidatorKind::Actionlint.job_id()
         || matches!(
             job_id,
-            PLAN_JOB_ID | REQUIRED_JOB_ID | "compare" | "queue-monitor"
+            PLAN_JOB_ID
+                | REQUIRED_JOB_ID
+                | MISE_PHASE0_LINUX_JOB_ID
+                | MISE_PHASE0_MACOS_ARM64_JOB_ID
+                | MISE_PHASE0_MACOS_INTEL_JOB_ID
+                | "compare"
+                | "queue-monitor"
         )
     {
         LaneClass::Control
@@ -296,4 +305,23 @@ fn hosted_name(name: &str) -> String {
 
 fn scale_name(name: &str) -> String {
     format!("{name} / Velnor Scale Set / Linux x64")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{LaneClass, lane_class};
+    use crate::workflow::{
+        MISE_PHASE0_LINUX_JOB_ID, MISE_PHASE0_MACOS_ARM64_JOB_ID, MISE_PHASE0_MACOS_INTEL_JOB_ID,
+    };
+
+    #[test]
+    fn mise_phase0_jobs_are_control_jobs_and_cannot_be_split() {
+        for id in [
+            MISE_PHASE0_LINUX_JOB_ID,
+            MISE_PHASE0_MACOS_ARM64_JOB_ID,
+            MISE_PHASE0_MACOS_INTEL_JOB_ID,
+        ] {
+            assert_eq!(lane_class(id), LaneClass::Control);
+        }
+    }
 }

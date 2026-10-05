@@ -3,7 +3,7 @@ use std::collections::BTreeSet;
 use velnor_actions_contract::{RoutingWorkflow, SCALE_SET_NAME, VELNOR_LABEL};
 
 use super::{
-    MbxQualificationPins, Schema2WorkflowRequest, monitoring, qualification,
+    MbxQualificationPins, MiseSetupSet, Schema2WorkflowRequest, monitoring, qualification,
     render_schema2_workflows,
 };
 use crate::setup::MiseSetup;
@@ -15,12 +15,24 @@ fn request() -> Schema2WorkflowRequest {
         hosted_label: "ubuntu-26.04".to_owned(),
         scale_set: Schema2WorkflowRequest::canonical_scale_set().expect("valid scale set"),
         workflows: BTreeSet::from([RoutingWorkflow::Qualification]),
-        mbx_qualification: Some(MbxQualificationPins {
-            mise_setup: MiseSetup {
+        mise_setups: MiseSetupSet {
+            linux_x64: MiseSetup {
                 uses: format!("jdx/mise-action@{}", "a".repeat(40)),
-                version: "2026.1.0".to_owned(),
-                sha256: "a".repeat(64),
+                version: "2026.10.2".to_owned(),
+                sha256: "b".repeat(64),
             },
+            macos_arm64: MiseSetup {
+                uses: format!("jdx/mise-action@{}", "a".repeat(40)),
+                version: "2026.10.2".to_owned(),
+                sha256: "c".repeat(64),
+            },
+            macos_x64: MiseSetup {
+                uses: format!("jdx/mise-action@{}", "a".repeat(40)),
+                version: "2026.10.2".to_owned(),
+                sha256: "d".repeat(64),
+            },
+        },
+        mbx_qualification: Some(MbxQualificationPins {
             candidate_action_uses: format!(
                 "{}@{}",
                 crate::cache_steps::MBX_ACTION_NAME,
@@ -112,6 +124,34 @@ fn qualification_and_monitoring_declare_shell_only_for_typed_scale_set() {
     let request = request();
     assert_lane_shells(&qualification(&request).expect("qualification renders"), 2);
     assert_lane_shells(&monitoring(&request).expect("monitoring renders"), 1);
+}
+
+#[test]
+fn mise_setup_selection_covers_each_phase0_runner_platform() {
+    let request = request();
+    let setups = &request.mise_setups;
+    let linux_digest = "b".repeat(64);
+    let arm_digest = "c".repeat(64);
+    let intel_digest = "d".repeat(64);
+    assert_eq!(
+        setups
+            .for_runner_label("ubuntu-26.04")
+            .map(|setup| setup.sha256.as_str()),
+        Some(linux_digest.as_str())
+    );
+    assert_eq!(
+        setups
+            .for_runner_label("macos-15")
+            .map(|setup| setup.sha256.as_str()),
+        Some(arm_digest.as_str())
+    );
+    assert_eq!(
+        setups
+            .for_runner_label("macos-15-intel")
+            .map(|setup| setup.sha256.as_str()),
+        Some(intel_digest.as_str())
+    );
+    assert!(setups.for_runner_label("windows-2025").is_none());
 }
 
 #[test]

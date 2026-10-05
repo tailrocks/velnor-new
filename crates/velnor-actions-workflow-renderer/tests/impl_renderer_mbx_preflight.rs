@@ -53,17 +53,22 @@ fn remove_if_present(path: &Path) -> std::io::Result<()> {
 
 struct Fixture {
     root: TempRoot,
+    workspace: PathBuf,
     mbx_root: PathBuf,
     rust_root: PathBuf,
     mbx_bin: PathBuf,
     rustc_bin: PathBuf,
     github_path: PathBuf,
+    github_output: PathBuf,
+    github_env: PathBuf,
     path: String,
 }
 
 impl Fixture {
     fn new() -> std::io::Result<Self> {
         let root = TempRoot::new()?;
+        let workspace = root.0.join("checkout workspace");
+        fs::create_dir(&workspace)?;
         let fake_bin = root.0.join("fake command bin");
         let mbx_root = root.0.join("mise installs/mr boxington/1.21.1");
         let rust_root = root.0.join("mise installs/rust tools/1.98.1");
@@ -80,13 +85,20 @@ impl Fixture {
         let mbx_bin = mbx_root.join("mbx");
         let rustc_bin = rust_root.join("rustc");
         let github_path = root.0.join("GitHub path file");
+        let github_output = root.0.join("GitHub output file");
+        let github_env = root.0.join("GitHub env file");
+        fs::write(&github_output, "")?;
+        fs::write(&github_env, "")?;
         let fixture = Self {
             root,
+            workspace,
             mbx_root,
             rust_root,
             mbx_bin,
             rustc_bin,
             github_path,
+            github_output,
+            github_env,
             path,
         };
         fixture.write_mbx(Some(TEST_MBX_VERSION), true)?;
@@ -119,15 +131,42 @@ impl Fixture {
     }
 
     fn run(&self, script: &str, case: ProbeCase) -> std::io::Result<(bool, String, String)> {
+        self.reset_workspace()?;
+        self.run_at(script, case, &self.workspace)
+    }
+
+    fn run_at(
+        &self,
+        script: &str,
+        case: ProbeCase,
+        workspace: &Path,
+    ) -> std::io::Result<(bool, String, String)> {
         self.write_mbx(case.mbx_version, case.mbx_executable)?;
         self.write_rustc(case.rustc_present, case.rustc_executable)?;
         fs::write(&self.github_path, "")?;
+        fs::write(&self.github_output, "")?;
+        fs::write(&self.github_env, "")?;
         let result = Command::new("sh")
             .args(["-c", script])
             .env_clear()
             .env("PATH", &self.path)
             .env("RUNNER_TEMP", &self.root.0)
+            .env("GITHUB_WORKSPACE", workspace)
+            .env(
+                "RUNNER_OS",
+                if cfg!(target_os = "macos") {
+                    "macOS"
+                } else {
+                    "Linux"
+                },
+            )
             .env("GITHUB_PATH", &self.github_path)
+            .env("GITHUB_OUTPUT", &self.github_output)
+            .env("GITHUB_ENV", &self.github_env)
+            .env("GITHUB_REPOSITORY_ID", "741852963")
+            .env("GITHUB_RUN_ID", "12001")
+            .env("GITHUB_RUN_ATTEMPT", "1")
+            .env("GITHUB_JOB", "mbx_lifecycle")
             .env("MBX_ROOT", &self.mbx_root)
             .env("RUST_ROOT", &self.rust_root)
             .env("MBX_MODE", case.mbx_version.unwrap_or("missing"))
@@ -141,6 +180,16 @@ impl Fixture {
         let paths = fs::read_to_string(&self.github_path)?;
         let stderr = String::from_utf8_lossy(&result.stderr).into_owned();
         Ok((result.status.success(), paths, stderr))
+    }
+
+    fn reset_workspace(&self) -> std::io::Result<()> {
+        remove_dir_all_if_present(&self.root.0.join("velnor"))?;
+        remove_dir_all_if_present(&self.workspace.join(".velnor-mbx-cache"))?;
+        match fs::remove_dir(self.workspace.join(".velnor-mbx-cache.lock")) {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(error) => Err(error),
+        }
     }
 
     fn visible_tools(&self, entries: &str) -> std::io::Result<Vec<String>> {
@@ -158,6 +207,14 @@ impl Fixture {
             .lines()
             .map(str::to_owned)
             .collect())
+    }
+}
+
+fn remove_dir_all_if_present(path: &Path) -> std::io::Result<()> {
+    match fs::remove_dir_all(path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error),
     }
 }
 
@@ -180,119 +237,23 @@ fn assert_rejected(fixture: &Fixture, script: &str, case: ProbeCase) -> std::io:
         case.name
     );
     assert!(paths.is_empty(), "{} must not update PATH", case.name);
-    Ok(())
-}
-
-#[test]
-fn preflight_checks_exact_installs_before_exposing_paths() -> Result<(), Box<dyn std::error::Error>>
-{
-    let fixture = Fixture::new()?;
-    let [preflight, action] = mbx_tool_steps(
-        "jdx/mr-boxington-action@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        TEST_MBX_VERSION,
-        TEST_RUST_TOOLCHAIN,
-    )
-    .expect("preflight steps");
-    let StepKind::Shell { run, .. } = &preflight.kind else {
-        panic!("preflight must be a shell step");
-    };
-    let script = run.get(2).expect("shell script");
-    let StepKind::Action { env, .. } = &action.kind else {
-        panic!("restore must be an action step");
-    };
-    assert_eq!(env.get("RUSTUP_HOME"), env.get("MISE_RUSTUP_HOME"));
-    assert_eq!(env.get("CARGO_HOME"), env.get("MISE_CARGO_HOME"));
-    assert_valid_preflight(&fixture, script)?;
-    assert_rejects_unqualified_preflight(&fixture, script)?;
-    Ok(())
-}
-
-fn assert_valid_preflight(fixture: &Fixture, script: &str) -> std::io::Result<()> {
-    let valid = exact_probe_case();
-    let (success, paths, stderr) = fixture.run(script, valid)?;
-    assert!(success, "exact installs pass: {paths:?}; stderr: {stderr}");
-    assert_eq!(
-        paths,
-        format!(
-            "{}\n{}\n",
-            fixture.rust_root.display(),
-            fixture.mbx_root.display()
-        )
+    assert!(fs::read_to_string(&fixture.github_output)?.is_empty());
+    assert!(fs::read_to_string(&fixture.github_env)?.is_empty());
+    assert!(
+        !fixture
+            .root
+            .0
+            .join("velnor/mbx-job-741852963-12001-1-mbx_lifecycle")
+            .exists(),
+        "{} must release its failed exclusive root",
+        case.name
     );
-    assert_eq!(
-        fixture.visible_tools(&paths)?,
-        [
-            fixture.mbx_bin.display().to_string(),
-            fixture.rustc_bin.display().to_string()
-        ],
-        "the action resolves the same validated MBX binary and Rustup shim"
-    );
+    assert!(!fixture.workspace.join(".velnor-mbx-cache.lock").exists());
+    assert!(!fixture.workspace.join(".velnor-mbx-cache").exists());
     Ok(())
 }
 
-fn assert_rejects_unqualified_preflight(fixture: &Fixture, script: &str) -> std::io::Result<()> {
-    let valid = exact_probe_case();
-    let cases = [
-        ProbeCase {
-            name: "missing MBX",
-            mbx_version: None,
-            ..valid
-        },
-        ProbeCase {
-            name: "non-executable MBX",
-            mbx_executable: false,
-            ..valid
-        },
-        ProbeCase {
-            name: "wrong MBX version",
-            mbx_version: Some("1.20.0"),
-            ..valid
-        },
-        ProbeCase {
-            name: "missing named Rust toolchain",
-            rust_mode: "missing-toolchain",
-            ..valid
-        },
-        ProbeCase {
-            name: "wrong Rust toolchain",
-            rust_mode: "wrong-toolchain",
-            ..valid
-        },
-        ProbeCase {
-            name: "relative MBX install path",
-            mise_mode: "relative-mbx",
-            ..valid
-        },
-        ProbeCase {
-            name: "relative Rust install path",
-            mise_mode: "relative-rust",
-            ..valid
-        },
-        ProbeCase {
-            name: "missing Rustup shim",
-            rustc_present: false,
-            ..valid
-        },
-        ProbeCase {
-            name: "non-executable Rustup shim",
-            rustc_executable: false,
-            ..valid
-        },
-    ];
-    for case in cases {
-        assert_rejected(fixture, script, case)?;
-    }
-    Ok(())
-}
-
-fn exact_probe_case() -> ProbeCase {
-    ProbeCase {
-        name: "exact installs",
-        mbx_version: Some(TEST_MBX_VERSION),
-        mbx_executable: true,
-        mise_mode: "absolute",
-        rust_mode: "ok",
-        rustc_present: true,
-        rustc_executable: true,
-    }
-}
+#[path = "impl_renderer_mbx_preflight_cases.rs"]
+mod cases;
+#[path = "impl_renderer_mbx_preflight_security.rs"]
+mod security;

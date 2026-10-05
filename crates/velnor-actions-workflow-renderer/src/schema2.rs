@@ -10,7 +10,6 @@ use crate::RenderError;
 use crate::marker::with_marker;
 use crate::render::RenderedFile;
 use crate::runs_on::runs_on_yaml;
-use crate::setup::MiseSetup;
 use crate::yaml::{Yaml, render_yaml};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -76,6 +75,8 @@ mod features;
 mod generator_release;
 #[path = "schema2_mbx_qualification.rs"]
 mod mbx_qualification;
+#[path = "schema2_mise.rs"]
+mod mise;
 #[path = "schema2_release.rs"]
 mod release;
 /// Exact-source gates for composed product-release workflows.
@@ -85,6 +86,12 @@ pub mod release_eligibility;
 #[cfg(test)]
 #[path = "schema2_runner_shell_tests.rs"]
 mod runner_shell_tests;
+
+pub use mise::MiseSetupSet;
+
+fn setup_step(setup: &crate::setup::MiseSetup) -> Yaml {
+    mise::setup_step(setup)
+}
 
 /// Which schema 2 workflows to emit, plus the selectors they use.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -97,6 +104,8 @@ pub struct Schema2WorkflowRequest {
     pub scale_set: ScaleSetSelector,
     /// Workflows to emit. Empty emits nothing.
     pub workflows: BTreeSet<RoutingWorkflow>,
+    /// Orchestrator-resolved Mise action and per-target binary digests.
+    pub mise_setups: MiseSetupSet,
     /// Pinned tool inputs, required only when qualification is emitted.
     pub mbx_qualification: Option<MbxQualificationPins>,
 }
@@ -104,8 +113,6 @@ pub struct Schema2WorkflowRequest {
 /// Exact tools used by the hosted MBX cache qualification.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MbxQualificationPins {
-    /// Resolved Mise action and binary pins.
-    pub mise_setup: MiseSetup,
     /// Full-SHA candidate MBX Action ref for this unqualified experiment.
     /// It is separate from the production pin and generation never qualifies it.
     pub candidate_action_uses: String,
@@ -139,6 +146,7 @@ pub fn render_schema2_workflows(
     request: &Schema2WorkflowRequest,
 ) -> Result<Vec<RenderedFile>, RenderError> {
     RunnerSpec::hosted(&request.hosted_label)?;
+    request.mise_setups.validate()?;
     let mut files = Vec::new();
     if request.workflows.contains(&RoutingWorkflow::Qualification) {
         files.push(file(
@@ -239,7 +247,11 @@ fn qualification(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> 
     jobs.extend(features::negative_jobs(&hosted, &scale));
     jobs.extend(classes::class_jobs(&hosted, &scale));
     if let Some(pins) = &request.mbx_qualification {
-        jobs.extend(mbx_qualification::jobs(pins, &hosted)?);
+        jobs.extend(mbx_qualification::jobs(
+            pins,
+            &request.mise_setups,
+            &hosted,
+        )?);
     } else if request.workflows.contains(&RoutingWorkflow::Qualification) {
         return Err(RenderError::InvalidWorkflow(
             "missing_mbx_qualification_pins".to_owned(),

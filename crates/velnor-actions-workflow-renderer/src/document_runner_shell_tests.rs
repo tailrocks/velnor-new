@@ -29,6 +29,7 @@ fn job(runs_on: &str) -> Job {
         steps: vec![Step {
             name: "Run probe".to_owned(),
             condition: None,
+            continue_on_error: None,
             kind: StepKind::Shell {
                 run: vec!["echo".to_owned(), "probe".to_owned()],
                 env: BTreeMap::new(),
@@ -102,6 +103,32 @@ fn typed_scale_set_jobs_declare_bash_while_hosted_jobs_keep_default() {
     );
 }
 
+#[test]
+fn typed_continue_on_error_is_emitted_only_when_enabled() {
+    let mut action = job("ubuntu-26.04");
+    action.steps[0].continue_on_error = Some(true);
+    let jobs = BTreeMap::from([("action".to_owned(), action)]);
+    let ctx = context();
+    let shared = crate::lane_share::share_lanes(&jobs, &ctx).expect("lane sharing validates");
+    let rendered = workflow_to_yaml(
+        &workflow(jobs),
+        &shared,
+        &ctx,
+        &BTreeSet::new(),
+        &BTreeSet::new(),
+    )
+    .expect("workflow renders");
+    let jobs = field(&rendered, "jobs").expect("jobs map");
+    let action = field(jobs, "action").expect("action job");
+    let crate::yaml::Yaml::Seq(steps) = field(action, "steps").expect("job steps") else {
+        panic!("steps must be a sequence");
+    };
+    assert_eq!(
+        field(&steps[0], "continue-on-error"),
+        Some(&crate::yaml::Yaml::Bool(true))
+    );
+}
+
 fn field<'a>(value: &'a crate::yaml::Yaml, key: &str) -> Option<&'a crate::yaml::Yaml> {
     let crate::yaml::Yaml::Map(entries) = value else {
         return None;
@@ -117,6 +144,7 @@ fn rustdocflags_remain_scoped_to_the_documentation_step() {
     let doc_step = Step {
         name: "Documentation".to_owned(),
         condition: None,
+        continue_on_error: None,
         kind: StepKind::Shell {
             run: vec!["echo".to_owned(), "doc".to_owned()],
             env: BTreeMap::from([("RUSTDOCFLAGS".to_owned(), "-D warnings".to_owned())]),
@@ -125,6 +153,7 @@ fn rustdocflags_remain_scoped_to_the_documentation_step() {
     let test_step = Step {
         name: "Tests".to_owned(),
         condition: None,
+        continue_on_error: None,
         kind: StepKind::Shell {
             run: vec!["echo".to_owned(), "test".to_owned()],
             env: BTreeMap::new(),

@@ -62,6 +62,7 @@ pub(super) fn echo_step(index: usize, payload: &str) -> Step {
     Step {
         name: format!("echo {index}"),
         condition: None,
+        continue_on_error: None,
         kind: StepKind::Shell {
             run: vec!["echo".to_owned(), payload.to_owned()],
             env: BTreeMap::new(),
@@ -86,6 +87,7 @@ fn checkout() -> Step {
     Step {
         name: "Checkout".to_owned(),
         condition: None,
+        continue_on_error: None,
         kind: StepKind::Action {
             uses: ctx().checkout_uses,
             with: BTreeMap::from([("persist-credentials".to_owned(), "false".to_owned())]),
@@ -255,6 +257,36 @@ fn unpaired_jobs_stay_inline() {
     assert!(shared.files.is_empty());
     let kept = shared.jobs.get("actionlint").expect("actionlint");
     assert_eq!(kept.steps.len(), 1);
+}
+
+#[test]
+fn mbx_cleanup_stays_after_export_and_save_in_the_lane_postlude() {
+    let mut export = echo_step(1, "export");
+    export.name = crate::mbx_bundle::MBX_BUNDLE_EXPORT_NAME.to_owned();
+    let mut save = echo_step(2, "save");
+    save.name = crate::mbx_bundle::MBX_BUNDLE_SAVE_NAME.to_owned();
+    let mut cleanup = echo_step(3, "cleanup");
+    cleanup.name = crate::mbx_bundle::MBX_BUNDLE_CLEANUP_NAME.to_owned();
+    cleanup.condition = Some("always()".to_owned());
+    let steps = vec![echo_step(0, "producer"), export, save, cleanup.clone()];
+
+    let (common, postlude) = super::peel_postlude(&steps);
+
+    assert_eq!(common.len(), 1);
+    assert_eq!(common[0].name, "echo 0");
+    assert_eq!(postlude.len(), 3);
+    assert_eq!(
+        postlude
+            .iter()
+            .map(|step| step.name.as_str())
+            .collect::<Vec<_>>(),
+        [
+            crate::mbx_bundle::MBX_BUNDLE_EXPORT_NAME,
+            crate::mbx_bundle::MBX_BUNDLE_SAVE_NAME,
+            crate::mbx_bundle::MBX_BUNDLE_CLEANUP_NAME,
+        ]
+    );
+    assert_eq!(postlude[2], cleanup);
 }
 
 #[test]

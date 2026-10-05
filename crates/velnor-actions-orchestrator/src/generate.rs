@@ -13,7 +13,7 @@ use velnor_actions_workflow_renderer::tree::render_tree_with_extra;
 
 use crate::OrchestratorError;
 use crate::finalized::owned_preparation;
-use crate::pins::resolve_mise_setup;
+use crate::pins::resolve_mise_setup_set;
 use crate::prepare::GenerationPreparation;
 use crate::provenance::{ProfileProvenance, profile_provenance};
 use crate::validate::validate_staged;
@@ -156,7 +156,13 @@ fn render_all(
     dispatch: Option<ExecutionMode>,
 ) -> Result<RenderedTree, OrchestratorError> {
     let version = env!("CARGO_PKG_VERSION");
-    let mise = resolve_mise_setup(&prep.config, &prep.runner_label)?;
+    let mise_setups = resolve_mise_setup_set(&prep.config, &prep.runner_label)?;
+    let mise = mise_setups
+        .for_runner_label(&prep.runner_label)
+        .cloned()
+        .ok_or_else(|| OrchestratorError::Contract {
+            problem: format!("mise_setup_unsupported_target:{}", prep.runner_label),
+        })?;
     let ir = expand_workflow(&prep.workflow.ir, &prep.config, dispatch).map_err(|err| {
         OrchestratorError::Contract {
             problem: err.to_string(),
@@ -167,7 +173,7 @@ fn render_all(
         prep.config.workflow.policy,
         prep.workflow.support.as_ref(),
         &prep.workflow.context,
-        &mise,
+        &mise_setups,
     )?;
     let workflow = rendered.yaml;
     let actionlint = render_actionlint_yaml(&prep.workflow.actionlint)?;

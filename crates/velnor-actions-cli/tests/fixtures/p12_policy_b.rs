@@ -63,6 +63,64 @@ fn extra_tool_row_fails() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
+fn malformed_exception_collections_fail_closed() -> Result<(), Box<dyn Error>> {
+    for (field, malformed) in [
+        ("temporary_holds", "{}"),
+        ("temporary_holds", "null"),
+        ("exceptions", "{}"),
+        ("exceptions", "null"),
+    ] {
+        let fixture = harness::passing("p12-malformed-collection")?;
+        harness::mutate(
+            &fixture.dir,
+            INVENTORY,
+            &format!("\"{field}\":[]"),
+            &format!("\"{field}\":{malformed}"),
+        )?;
+        let run = harness::run_script(&fixture.dir, &[])?;
+        harness::assert_fail(&run, field);
+        harness::cleanup(&fixture);
+    }
+    Ok(())
+}
+
+#[test]
+fn absent_and_empty_exception_collections_are_valid() -> Result<(), Box<dyn Error>> {
+    let fixture = harness::passing("p12-empty-collections")?;
+    harness::assert_clean(&harness::run_script(&fixture.dir, &[])?);
+    harness::mutate(
+        &fixture.dir,
+        INVENTORY,
+        ",\"temporary_holds\":[],\"exceptions\":[]}",
+        "}",
+    )?;
+    harness::assert_clean(&harness::run_script(&fixture.dir, &[])?);
+    harness::cleanup(&fixture);
+    Ok(())
+}
+
+#[test]
+fn malformed_non_ascii_timestamp_emits_a_failure_row() -> Result<(), Box<dyn Error>> {
+    let fixture = harness::passing("p12-malformed-offset")?;
+    let checked = harness::days_iso(0)?;
+    harness::mutate(
+        &fixture.dir,
+        INVENTORY,
+        &format!("\"checked_at\":\"{checked}\""),
+        "\"checked_at\":\"2026-10-05T12:34:56+€x\"",
+    )?;
+    let run = harness::run_script(&fixture.dir, &[])?;
+    harness::assert_fail(&run, "malformed timestamp");
+    assert!(
+        !run.stderr.contains("panicked"),
+        "unexpected panic: {}",
+        run.stderr
+    );
+    harness::cleanup(&fixture);
+    Ok(())
+}
+
+#[test]
 fn future_evidence_fails() -> Result<(), Box<dyn Error>> {
     let fixture = harness::passing("p12-future-evidence")?;
     let today = harness::days_iso(0)?;

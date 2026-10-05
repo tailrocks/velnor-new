@@ -24,6 +24,7 @@ fn shell_job(run: Vec<String>) -> Job {
         steps: vec![Step {
             name: PREPARE_PINNED_TOOLS_STEP.to_owned(),
             condition: None,
+            continue_on_error: None,
             kind: StepKind::Shell {
                 run,
                 env: BTreeMap::new(),

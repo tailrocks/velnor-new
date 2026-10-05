@@ -124,7 +124,7 @@ pub(crate) fn is_inline_shell(argv: &[String]) -> bool {
 /// Inside single quotes `$`, `"`, and `\` stay literal for the outer
 /// shell, so the inner shell expands inherited env plus its own
 /// assignments exactly as the fixed script intends.
-fn quote_script_arg(script: &str) -> String {
+pub(crate) fn quote_script_arg(script: &str) -> String {
     format!("'{}'", script.replace('\'', "'\\''"))
 }
 

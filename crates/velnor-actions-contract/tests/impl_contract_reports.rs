@@ -206,6 +206,7 @@ fn workflow_ir_validates_pins_and_refs() -> Result<(), ContractError> {
         steps: vec![Step {
             name: "Checkout".to_owned(),
             condition: None,
+            continue_on_error: None,
             kind: StepKind::Shell {
                 run: vec!["mise".to_owned(), "install".to_owned()],
                 env: BTreeMap::new(),

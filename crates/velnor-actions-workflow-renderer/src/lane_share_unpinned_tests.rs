@@ -25,6 +25,7 @@ fn step(name: &str, uses: &str) -> Step {
     Step {
         name: name.to_owned(),
         condition: None,
+        continue_on_error: None,
         kind: StepKind::Action {
             uses: uses.to_owned(),
             with: BTreeMap::new(),
@@ -37,6 +38,7 @@ fn checkout_step(uses: &str) -> Step {
     Step {
         name: "Checkout".to_owned(),
         condition: None,
+        continue_on_error: None,
         kind: StepKind::Action {
             uses: uses.to_owned(),
             with: BTreeMap::from([("persist-credentials".to_owned(), "false".to_owned())]),

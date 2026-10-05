@@ -42,6 +42,36 @@ fn assert_freshness_shape(yaml: &str) {
         "exact pin:\n{yaml}"
     );
     assert!(
+        yaml.contains("uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5"),
+        "digest-pinned Mise setup:\n{yaml}"
+    );
+    assert!(
+        yaml.contains("version: 2026.10.2"),
+        "current Mise release pin:\n{yaml}"
+    );
+    assert!(
+        yaml.contains("sha256: 8f5f6660336f572830e33cd9b378d3131e529a0d4c4f0c553776be90a1ba302a"),
+        "installed Mise binary digest:\n{yaml}"
+    );
+    assert!(
+        yaml.contains("mise --no-config --no-env --no-hooks install rust@1.98.1"),
+        "exact Rust toolchain install:\n{yaml}"
+    );
+    assert!(
+        yaml.contains("mise --no-config --no-env --no-hooks exec rust@1.98.1 -- bash scripts/check-freshness.sh --check-upstream"),
+        "native probe uses the installed Rust toolchain:\n{yaml}"
+    );
+    let positions = [
+        yaml.find("name: Checkout"),
+        yaml.find("name: Setup Mise"),
+        yaml.find("name: Install Rust toolchain"),
+        yaml.find("name: Check upstream freshness"),
+    ];
+    assert!(
+        positions.iter().all(Option::is_some) && positions.windows(2).all(|pair| pair[0] < pair[1]),
+        "checkout, setup, install, probe ordering:\n{yaml}"
+    );
+    assert!(
         yaml.contains("scripts/check-freshness.sh --check-upstream"),
         "bounded probe:\n{yaml}"
     );

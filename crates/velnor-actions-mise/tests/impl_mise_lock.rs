@@ -1,4 +1,5 @@
 //! Bootstrap lock parse and lock-vs-manifest verify cases.
+use velnor_actions_mise::MISE_VERSION;
 use velnor_actions_mise::catalog::lock::{
     LockError, parse_generator_lock, parse_release_manifest, verify_lock_against_manifest,
 };
@@ -9,12 +10,13 @@ fn binary_record(target: &str, sha: &str) -> String {
     )
 }
 
-fn lock_text(sha: &str) -> String {
+fn lock_text(sha: &str, mise_version: &str) -> String {
     let bins = binary_record("x86_64-unknown-linux-gnu", sha)
         + &binary_record("aarch64-apple-darwin", sha);
     format!(
-        "schema = 1\n[generator]\nbinary = \"velnor-actions\"\nversion = \"0.1.0\"\ncommit = \"{}\"\n{bins}[mise-bootstrap]\nversion = \"2026.9.18\"\nartifact = \"https://example.invalid/mise\"\nsha256 = \"{}\"\n[[actions]]\nname = \"actions/checkout\"\nversion = \"v7.0.1\"\nsha = \"{}\"\nreviewed = \"2026-09-28\"\n",
+        "schema = 1\n[generator]\nbinary = \"velnor-actions\"\nversion = \"0.1.0\"\ncommit = \"{}\"\n{bins}[mise-bootstrap]\nversion = \"{}\"\nartifact = \"https://example.invalid/mise\"\nsha256 = \"{}\"\n[[actions]]\nname = \"actions/checkout\"\nversion = \"v7.0.1\"\nsha = \"{}\"\nreviewed = \"2026-09-28\"\n",
         "a".repeat(40),
+        mise_version,
         "c".repeat(64),
         "d".repeat(40)
     )
@@ -34,19 +36,34 @@ fn manifest_text(sha: &str) -> String {
 
 #[test]
 fn lock_matches_manifest_per_target() -> Result<(), LockError> {
-    let lock = parse_generator_lock(&lock_text(&"a".repeat(64)))?;
+    assert_eq!(MISE_VERSION, "2026.10.2", "selected bootstrap pin");
+    let lock = parse_generator_lock(&lock_text(&"a".repeat(64), MISE_VERSION))?;
     let manifest = parse_release_manifest(&manifest_text(&"a".repeat(64)))?;
     verify_lock_against_manifest(&lock, &manifest)
 }
 
 #[test]
+fn lock_rejects_the_previous_qualified_mise_release() -> Result<(), LockError> {
+    let lock = parse_generator_lock(&lock_text(&"a".repeat(64), "2026.9.18"))?;
+    let manifest = parse_release_manifest(&manifest_text(&"a".repeat(64)))?;
+    let err = verify_lock_against_manifest(&lock, &manifest)
+        .expect_err("held qualified version is not the selected bootstrap pin");
+    assert_eq!(
+        err.to_string(),
+        "lock_mismatch:mise_bootstrap:2026.9.18:2026.10.2"
+    );
+    Ok(())
+}
+
+#[test]
 fn lock_mismatch_mutable_and_missing_target_fail() -> Result<(), LockError> {
-    let lock = parse_generator_lock(&lock_text(&"a".repeat(64)))?;
+    let lock = parse_generator_lock(&lock_text(&"a".repeat(64), MISE_VERSION))?;
     let drifted = parse_release_manifest(&manifest_text(&"b".repeat(64)))?;
     assert!(verify_lock_against_manifest(&lock, &drifted).is_err());
-    let mutable = lock_text(&"a".repeat(64)).replace("https://example.invalid", "https://x/latest");
+    let mutable = lock_text(&"a".repeat(64), MISE_VERSION)
+        .replace("https://example.invalid", "https://x/latest");
     assert!(parse_generator_lock(&mutable).is_err());
-    let dropped = lock_text(&"a".repeat(64))
+    let dropped = lock_text(&"a".repeat(64), MISE_VERSION)
         .replace(&binary_record("aarch64-apple-darwin", &"a".repeat(64)), "");
     assert!(parse_generator_lock(&dropped).is_err());
     assert!(parse_generator_lock("schema = 1\n[bogus\n").is_err());
@@ -55,7 +72,7 @@ fn lock_mismatch_mutable_and_missing_target_fail() -> Result<(), LockError> {
 
 #[test]
 fn lock_commit_diverged_from_manifest_fails() -> Result<(), LockError> {
-    let lock = parse_generator_lock(&lock_text(&"a".repeat(64)))?;
+    let lock = parse_generator_lock(&lock_text(&"a".repeat(64), MISE_VERSION))?;
     let manifest = parse_release_manifest(&manifest_text(&"a".repeat(64)))?;
     assert_eq!(lock.generator.commit, manifest.commit);
     let relabeled = manifest_text(&"a".repeat(64)).replace(
@@ -70,7 +87,7 @@ fn lock_commit_diverged_from_manifest_fails() -> Result<(), LockError> {
 
 #[test]
 fn lock_commit_required_and_manifest_strict() -> Result<(), LockError> {
-    let full = lock_text(&"a".repeat(64));
+    let full = lock_text(&"a".repeat(64), MISE_VERSION);
     let commit = "a".repeat(40);
     let segment = format!("commit = \"{commit}\"\n");
     assert!(full.contains(&segment), "fixture must carry commit");

@@ -25,7 +25,7 @@ fn drivers_follow_per_crate_selection() {
         .expect("MBX preflight");
     let restore = steps
         .iter()
-        .position(|name| *name == "Restore MBX objects")
+        .position(|name| *name == "Prepare MBX local cache store")
         .expect("MBX restore");
     assert!(
         preflight < restore,
@@ -40,7 +40,10 @@ fn drivers_follow_per_crate_selection() {
         "every MBX action has one strict preflight"
     );
     let steps = names(&found.jobs[1].1);
-    assert!(!steps.contains(&"Restore MBX objects"), "{steps:?}");
+    assert!(
+        !steps.contains(&"Prepare MBX local cache store"),
+        "{steps:?}"
+    );
     assert!(
         !steps.contains(&"Verify MBX and Rust toolchains"),
         "Cargo jobs have no MBX preflight: {steps:?}"

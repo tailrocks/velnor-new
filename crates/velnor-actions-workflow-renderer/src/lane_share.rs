@@ -232,9 +232,8 @@ fn is_mbx_prelude_step(step: &Step) -> bool {
     matches!(
         step.name.as_str(),
         crate::cache_steps::MBX_PREFLIGHT_NAME
-            | crate::cache_steps::MBX_RESTORE_NAME
             | crate::mbx_bundle::MBX_CACHE_KEY_NAME
-            | crate::mbx_bundle::MBX_LOCAL_SETUP_NAME
+            | crate::cache_steps::MBX_LOCAL_SETUP_NAME
             | crate::mbx_bundle::MBX_BUNDLE_RESTORE_NAME
             | crate::mbx_bundle::MBX_BUNDLE_IMPORT_NAME
     )
@@ -257,7 +256,9 @@ fn is_postlude_step(step: &Step) -> bool {
     is_elected_save(step)
         || matches!(
             step.name.as_str(),
-            crate::mbx_bundle::MBX_BUNDLE_EXPORT_NAME | crate::mbx_bundle::MBX_BUNDLE_SAVE_NAME
+            crate::mbx_bundle::MBX_BUNDLE_EXPORT_NAME
+                | crate::mbx_bundle::MBX_BUNDLE_SAVE_NAME
+                | crate::mbx_bundle::MBX_BUNDLE_CLEANUP_NAME
         )
 }
 

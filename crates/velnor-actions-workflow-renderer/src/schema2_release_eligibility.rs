@@ -1,11 +1,11 @@
 //! Exact-source eligibility shared by every product release job.
 
 use crate::yaml::Yaml;
+use crate::setup::MiseSetup;
 
 use super::features::{CHECKOUT_USES, base, finish, run_step};
+use super::setup_step;
 
-const MISE_USES: &str = "jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5";
-const MISE_VERSION: &str = "2026.9.18";
 const GH_VERSION: &str = "2.102.0";
 const REPOSITORY: &str = "tailrocks/velnor-new";
 const WORKFLOW_PATH: &str = ".github/workflows/product-release.yml";
@@ -55,7 +55,7 @@ pub const JOB_ID: &str = "release-eligibility";
 /// Read-only source and required-CI gate. Its outputs bind all build jobs to
 /// one immutable event SHA and identify the authority and CI attempt.
 #[must_use]
-pub fn job(runs_on: Yaml) -> (String, Yaml) {
+pub fn job(runs_on: Yaml, setup: &MiseSetup) -> (String, Yaml) {
     let mut fields = base("Check release source eligibility", runs_on, 70);
     fields.push((
         "permissions".to_owned(),
@@ -90,7 +90,7 @@ pub fn job(runs_on: Yaml) -> (String, Yaml) {
         fields,
         vec![
             checkout_step(),
-            mise_step(),
+            setup_step(setup),
             run_step(
                 "Install pinned GitHub CLI",
                 &format!("mise --no-config --no-env --no-hooks install gh@{GH_VERSION}"),
@@ -237,22 +237,6 @@ fn checkout_step() -> Yaml {
                 ("fetch-depth".to_owned(), Yaml::str("1")),
                 ("persist-credentials".to_owned(), Yaml::str("false")),
                 ("ref".to_owned(), Yaml::str("${{ github.sha }}")),
-            ]),
-        ),
-    ])
-}
-
-fn mise_step() -> Yaml {
-    Yaml::Map(vec![
-        ("name".to_owned(), Yaml::str("Set up pinned Mise")),
-        ("uses".to_owned(), Yaml::str(MISE_USES)),
-        (
-            "with".to_owned(),
-            Yaml::Map(vec![
-                ("cache".to_owned(), Yaml::str("false")),
-                ("env".to_owned(), Yaml::str("false")),
-                ("install".to_owned(), Yaml::str("false")),
-                ("version".to_owned(), Yaml::str(MISE_VERSION)),
             ]),
         ),
     ])

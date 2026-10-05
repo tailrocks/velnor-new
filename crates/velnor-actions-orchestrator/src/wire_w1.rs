@@ -55,6 +55,7 @@ pub(crate) fn checkout_step() -> Result<Step, OrchestratorError> {
     Ok(Step {
         name: "Checkout".to_owned(),
         condition: None,
+        continue_on_error: None,
         kind: StepKind::Action {
             uses: PinnedActionRef::checkout().uses_value(),
             with,
@@ -87,6 +88,7 @@ pub(crate) fn checkout_step_full() -> Result<Step, OrchestratorError> {
     Ok(Step {
         name: "Checkout".to_owned(),
         condition: None,
+        continue_on_error: None,
         kind: StepKind::Action {
             uses: PinnedActionRef::checkout().uses_value(),
             with,

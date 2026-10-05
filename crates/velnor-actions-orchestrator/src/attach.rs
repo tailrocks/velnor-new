@@ -13,7 +13,7 @@ use velnor_actions_contract::{
 use velnor_actions_mise::{PREPARE_PINNED_TOOLS_STEP, PinnedTool, ToolCatalog};
 use velnor_actions_workflow_renderer::cache_p08::{RESTORE_SOURCES_NAME, RUST_CACHE_NAME};
 use velnor_actions_workflow_renderer::render::{FINAL_JOB_ID, PLAN_JOB_ID, PUBLISH_JOB_ID};
-use velnor_actions_workflow_renderer::steps::{MBX_RESTORE_NAME, STAGED_BINARY_PREFIX};
+use velnor_actions_workflow_renderer::steps::{MBX_LOCAL_SETUP_NAME, STAGED_BINARY_PREFIX};
 use velnor_actions_workflow_renderer::{
     PreseedStageSource, preseed_build_step, preseed_download_step, preseed_manifest_step,
     preseed_manifest_verify_step, preseed_stage_step, preseed_upload_step, preseed_verify_step,
@@ -220,7 +220,7 @@ fn preseed_anchor(steps: &[Step]) -> usize {
 
 /// True for plan-job restore steps (shared, registry, MBX objects).
 fn is_plan_restore(name: &str) -> bool {
-    name == RESTORE_SOURCES_NAME || name == RUST_CACHE_NAME || name == MBX_RESTORE_NAME
+    name == RESTORE_SOURCES_NAME || name == RUST_CACHE_NAME || name == MBX_LOCAL_SETUP_NAME
 }
 
 #[cfg(test)]

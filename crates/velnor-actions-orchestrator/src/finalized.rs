@@ -13,7 +13,7 @@ use velnor_actions_workflow_renderer::finalize_jobs as finalize_render_jobs;
 
 use crate::OrchestratorError;
 use crate::attach::{attach_lock_acquire, attach_preseed};
-use crate::pins::resolve_mise_setup;
+use crate::pins::resolve_mise_setup_set;
 use crate::prepare::GenerationPreparation;
 use crate::validate::verify_velnor_repository_files;
 
@@ -61,7 +61,7 @@ pub fn finalized_jobs(
     prep: &GenerationPreparation,
 ) -> Result<BTreeMap<String, Job>, OrchestratorError> {
     let owned = owned_preparation(prep)?;
-    let mise = resolve_mise_setup(&owned.config, &owned.runner_label)?;
+    let mise_setups = resolve_mise_setup_set(&owned.config, &owned.runner_label)?;
     let ir = expand_workflow(&owned.workflow.ir, &owned.config, None).map_err(|err| {
         OrchestratorError::Contract {
             problem: err.to_string(),
@@ -72,6 +72,6 @@ pub fn finalized_jobs(
         owned.config.workflow.policy,
         owned.workflow.support.as_ref(),
         &owned.workflow.context,
-        &mise,
+        &mise_setups,
     )?)
 }

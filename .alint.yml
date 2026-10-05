@@ -18,10 +18,11 @@
 # inheritance predicates in `crates/velnor-actions-cli/tests/fixtures/`).
 #
 # Schema: alint config model (`version` + `rules`, each rule with
-# id/kind/level). The top-level `command` rule is trusted and checks only
-# each AGENTS.md's sibling CLAUDE.md symlink, which Alint has no native
-# symlink-target rule to express. Its `pair` rule checks existence only;
-# the command below checks the link type and target on the CI Linux runner.
+# id/kind/level). The trusted top-level command rules check each AGENTS.md's
+# sibling CLAUDE.md symlink (the `pair` rule checks existence only; the
+# command checks link type and target) and run `scripts/check-no-python.sh`.
+# Alint runs command rules from the repository root and substitutes `{path}`
+# with the matched relative path, so the scanner runs once on its exact file.
 # Validate with the pinned alint binary: `alint validate-config`.
 # The 80-line function/method limit (§5, "using Clippy accounting") is NOT
 # expressed here — alint ships no function-level rule kind. It is enforced
@@ -62,6 +63,7 @@ rules:
       - .alint.yml
       - .config/nextest.toml
       - AGENTS.md
+      - scripts/check-no-python.sh
     level: error
     message: "Repo-shape file is missing (rust-quality-contract §1)"
 
@@ -79,6 +81,18 @@ rules:
       - "{path}"
     level: error
     message: "Each AGENTS.md must have a sibling CLAUDE.md symlink to AGENTS.md"
+
+  # Scan tracked, untracked, and Git-ignored repository candidates for active
+  # Python sources and interpreter launches. This command is a mandatory PR
+  # gate; the checker must remain clean after native ports and retirements.
+  - id: no-python-execution
+    kind: command
+    paths: "scripts/check-no-python.sh"
+    command:
+      - bash
+      - "{path}"
+    level: error
+    message: "Repository automation must not use Python scripts or interpreter launches"
 
   # Keep instruction files concise so they fit in agent context by default.
   - id: agent-instructions-max-lines

@@ -285,6 +285,7 @@ fn acquire_stages_before_report_wrappers() {
     let acquire = Step {
         name: "Acquire Velnor".to_owned(),
         condition: None,
+        continue_on_error: None,
         kind: velnor_actions_contract::StepKind::Shell {
             run: vec![String::from("true")],
             env: BTreeMap::new(),

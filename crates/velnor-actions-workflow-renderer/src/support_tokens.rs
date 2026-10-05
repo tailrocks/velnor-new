@@ -107,6 +107,20 @@ fn check_step_tokens(id: &str, step: &Step) -> Result<(), RenderError> {
             }
             check_scrub_coverage(id, &step.name, env)?;
         }
+        StepKind::MbxProcessGroupShell(payload) => {
+            let env = payload.env();
+            check_env_tokens(id, env)?;
+            let run = crate::steps_mbx_process_group::rendered_run(step, payload)?;
+            for arg in strip_unset_argv(&run) {
+                if names_token(&strip_unset_prelude(arg)) {
+                    return Err(RenderError::InvalidWorkflow(format!(
+                        "token_in_run:{id}:{}",
+                        step.name
+                    )));
+                }
+            }
+            check_scrub_coverage(id, &step.name, env)?;
+        }
         StepKind::Action { with, env, .. } => {
             for value in with.values() {
                 if names_token(value) {

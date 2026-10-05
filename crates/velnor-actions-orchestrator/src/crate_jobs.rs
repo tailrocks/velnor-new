@@ -18,7 +18,9 @@ use velnor_actions_contract::{
     WorkflowPolicy, crate_display_name, matrix_id_for_task_group, matrix_key_for_id,
     tofu_display_name,
 };
-use velnor_actions_mise::{PinnedTool, TaskCacheMode, ToolCatalog};
+#[cfg(test)]
+use velnor_actions_mise::PinnedTool;
+use velnor_actions_mise::{TaskCacheMode, ToolCatalog};
 use velnor_actions_rust::task_kind_rank;
 use velnor_actions_workflow_renderer::render::PLAN_JOB_ID;
 use velnor_actions_workflow_renderer::steps::CompileDriver as RenderDriver;
@@ -31,6 +33,10 @@ use crate::matrix_step::step_name_for;
 
 #[path = "crate_jobs_stage.rs"]
 mod stage;
+
+#[path = "crate_jobs_cache.rs"]
+mod cache;
+use cache::restore_step_for_crate;
 
 #[cfg(test)]
 pub(crate) use stage::needs;
@@ -148,6 +154,7 @@ pub(crate) fn build_crate_jobs(
             fetch_roots,
             use_rust,
             use_mbx,
+            driver,
             use_nextest,
             use_opentofu,
             repo_has_mbx,
@@ -265,6 +272,7 @@ fn render_job(
     fetch_roots: &[String],
     use_rust: bool,
     use_mbx: bool,
+    driver: RenderDriver,
     use_nextest: bool,
     use_opentofu: bool,
     repo_has_mbx: bool,
@@ -327,7 +335,9 @@ fn render_job(
             obligation,
             catalog,
             &downstream,
+            driver,
             cap,
+            label,
         )?);
     }
     steps.push(crate::matrix_step::crate_upload_step(&model.job_id)?);
@@ -341,42 +351,6 @@ fn render_job(
         environment: None,
         steps,
     })
-}
-
-/// Restore step for one crate: shared sources, or Cargo-only registry.
-///
-/// Lockless emits nothing, and tofu roles restore providers through
-/// the separate provider-cache step (never here). Cargo-only repos
-/// (no MBX anywhere) restore via pinned `rust-cache` (read-only);
-/// every other lockful crate restores the shared `actions/cache`
-/// snapshot (read-only, never saves the shared key).
-fn restore_step_for_crate(
-    label: &str,
-    catalog: &ToolCatalog,
-    fetch_roots: &[String],
-    use_rust: bool,
-    use_mbx: bool,
-    repo_has_mbx: bool,
-) -> Result<Option<Step>, OrchestratorError> {
-    if !use_rust || fetch_roots.is_empty() {
-        return Ok(None);
-    }
-    let target = velnor_actions_contract::target_for_runner_label(label).ok_or_else(|| {
-        OrchestratorError::Contract {
-            problem: format!("bad_label:{label}"),
-        }
-    })?;
-    let rust = catalog.version(PinnedTool::Rust);
-    if !use_mbx && !repo_has_mbx {
-        let shared = format!(
-            "{}-{target}-{rust}",
-            crate::source_cache::RUST_CACHE_SHARED_PREFIX
-        );
-        return crate::source_cache::rust_cache_step(&shared, false).map(Some);
-    }
-    let key = crate::source_cache::sources_cache_key(target, rust, fetch_roots)?;
-    let prefix = crate::source_cache::sources_restore_prefix(&key);
-    crate::source_cache::sources_restore_step(&key, &[prefix]).map(Some)
 }
 
 #[cfg(test)]

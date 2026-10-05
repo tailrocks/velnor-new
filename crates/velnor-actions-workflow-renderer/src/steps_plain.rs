@@ -55,6 +55,9 @@ pub(crate) fn plain_step_to_yaml(step: &Step) -> Result<Yaml, RenderError> {
         StepKind::Internal { .. } => Err(RenderError::InvalidWorkflow(
             "internal_op_rejected".to_owned(),
         )),
+        StepKind::MbxProcessGroupShell(_) => Err(RenderError::InvalidWorkflow(
+            "mbx_process_group_rejected_in_satellite_workflow".to_owned(),
+        )),
     }
 }
 

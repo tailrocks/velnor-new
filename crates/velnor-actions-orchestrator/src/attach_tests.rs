@@ -60,7 +60,7 @@ fn lock_acquire_inserts_digest_verified_stage() {
             }],
         },
         mise_bootstrap: MiseBootstrap {
-            version: "2026.9.18".to_owned(),
+            version: "2026.10.2".to_owned(),
             artifact: "https://example.invalid/m".to_owned(),
             sha256: "b".repeat(64),
         },
@@ -143,7 +143,7 @@ fn lock_acquire_records_source_commit() {
             }],
         },
         mise_bootstrap: MiseBootstrap {
-            version: "2026.9.18".to_owned(),
+            version: "2026.10.2".to_owned(),
             artifact: "https://example.invalid/m".to_owned(),
             sha256: "b".repeat(64),
         },
@@ -356,7 +356,7 @@ fn preseed_skips_mbx_restore_for_cargo_only_plans() {
     let steps = &plan.ir.jobs["plan"].steps;
     let names: Vec<&str> = steps.iter().map(|step| step.name.as_str()).collect();
     assert!(
-        !names.contains(&MBX_RESTORE_NAME),
+        !names.contains(&MBX_LOCAL_SETUP_NAME),
         "cargo-only plans stay rust-cache-only: {names:?}"
     );
     let probe = names

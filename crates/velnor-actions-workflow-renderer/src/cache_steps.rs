@@ -9,13 +9,12 @@ use velnor_actions_contract::{Step, StepKind};
 
 #[path = "cache_steps_mbx_preflight.rs"]
 mod mbx_preflight;
+pub(crate) use mbx_preflight::MBX_TRANSPORT_CACHE_PATH;
+pub(crate) use mbx_preflight::is_mbx_action;
 pub use mbx_preflight::{
-    MBX_CACHE_MODE_ENV, MBX_PREFLIGHT_NAME, MBX_RESTORE_NAME, check_mbx_gating,
+    MBX_CACHE_MODE_ENV, MBX_GC_AUTO_ENV, MBX_GC_AUTO_VALUE, MBX_LOCAL_SETUP_NAME,
+    MBX_PREFLIGHT_NAME, MBX_SHARE_OUT_DIR_ENV, MBX_SHARE_OUT_DIR_VALUE, check_mbx_gating,
     mbx_steps_for_driver,
-};
-pub(crate) use mbx_preflight::{
-    MBX_GC_AUTO_ENV, MBX_GC_AUTO_VALUE, MBX_SHARE_OUT_DIR_ENV, MBX_SHARE_OUT_DIR_VALUE,
-    is_mbx_action,
 };
 
 use crate::{
@@ -63,7 +62,8 @@ pub fn is_never_archive_path(path: &str) -> bool {
 pub enum CompileDriver {
     /// Cargo profile: MBX action and installation are absent.
     Cargo,
-    /// MBX profile: the objects-mode action restores compiler objects.
+    /// MBX profile: the pinned local action installs MBX; separate steps
+    /// restore and save the external object bundle.
     Mbx,
 }
 
@@ -86,10 +86,14 @@ pub fn cache_action_step(
     if !uses.starts_with(&format!("{want}@")) {
         return Err(RenderError::BadActionRef(format!("bad_cache_uses:{uses}")));
     }
-    if !matches!(layer, "sources" | "task" | "tools" | "tofu-providers") {
+    if !matches!(
+        layer,
+        "sources" | "task" | "tools" | "tofu-providers" | "mbx"
+    ) {
         return Err(RenderError::BadCommand("mbx_needs_objects_mode".to_owned()));
     }
-    if key.trim().is_empty() || key.contains(' ') || key.contains('\n') {
+    let generated_mbx_key = layer == "mbx" && key == "${{ steps.mbx-cache-key.outputs.key }}";
+    if key.trim().is_empty() || (key.contains(' ') && !generated_mbx_key) || key.contains('\n') {
         return Err(RenderError::BadCommand("bad_cache_key".to_owned()));
     }
     if paths.is_empty() {
@@ -120,6 +124,7 @@ fn validate_cache_path(layer: &str, path: &str) -> Result<(), RenderError> {
         || layer == "task" && path == TASK_ARTIFACTS_DIR
         || layer == "tools" && path == TOOLS_CACHE_PATH
         || layer == "tofu-providers" && crate::tofu_cache::tofu_providers_path_ok(path)
+        || layer == "mbx" && path == MBX_TRANSPORT_CACHE_PATH
     {
         Ok(())
     } else {
@@ -150,8 +155,8 @@ fn sources_subset_ok(path: &str) -> bool {
 
 /// Check restore-before/save-after ordering over cache action steps.
 ///
-/// Every `actions/cache/restore` step (plus MBX objects restore) must
-/// precede every `actions/cache/save` step within one job.
+/// Every external `actions/cache/restore` step must precede every
+/// `actions/cache/save` step. The MBX local setup action does not restore.
 /// # Errors
 pub fn check_cache_step_order(steps: &[Step]) -> Result<(), RenderError> {
     let mut last_restore: Option<usize> = None;
@@ -160,9 +165,7 @@ pub fn check_cache_step_order(steps: &[Step]) -> Result<(), RenderError> {
         let StepKind::Action { uses, .. } = &step.kind else {
             continue;
         };
-        if uses.starts_with("actions/cache/restore@")
-            || uses.starts_with(&format!("{MBX_ACTION_NAME}@"))
-        {
+        if uses.starts_with("actions/cache/restore@") {
             last_restore = Some(index);
         } else if uses.starts_with("actions/cache/save@") {
             first_save.get_or_insert(index);

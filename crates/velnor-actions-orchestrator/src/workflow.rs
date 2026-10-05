@@ -27,10 +27,13 @@ use crate::OrchestratorError;
 use crate::discover::Discovery;
 use crate::pins::consumer_acquire_step;
 use crate::utf8::{strings_of, strings_of_env};
-use crate::workflow_jobs::{final_job, lint_job, plan_job};
+use crate::workflow_jobs::{final_job_with_extra_needs, lint_job, plan_job};
 
 #[path = "workflow_context.rs"]
 mod workflow_context;
+
+#[path = "workflow_jobs_mise_phase0.rs"]
+mod mise_phase0;
 
 pub(crate) use crate::workflow_jobs::LINT_JOB_ID;
 
@@ -152,7 +155,9 @@ pub(crate) fn build_workflow(
         jobs.insert(id, job);
     }
     crate::verification_tasks::insert_jobs(&mut jobs, &verification_tasks)?;
-    insert_gate_jobs(&mut jobs, label, branch, &crate_ids, acquire, &catalog)?;
+    insert_gate_jobs(
+        &mut jobs, label, branch, &crate_ids, acquire, &catalog, policy,
+    )?;
     wire_w1::check_crate_mbx_gating(&jobs, &built.drivers)?;
     let ir = WorkflowIr {
         name: config.workflow.name.clone(),
@@ -220,12 +225,21 @@ fn insert_gate_jobs(
     crate_ids: &[String],
     acquire: Option<Step>,
     catalog: &ToolCatalog,
+    policy: WorkflowPolicy,
 ) -> Result<(), OrchestratorError> {
     jobs.insert(LINT_JOB_ID.to_owned(), lint_job(label, catalog)?);
-    jobs.insert(
-        FINAL_JOB_ID.to_owned(),
-        final_job(label, crate_ids, acquire.clone(), catalog)?,
-    );
+    let phase0_jobs = if policy == WorkflowPolicy::VelnorRepositoryV1 {
+        mise_phase0::jobs(catalog)?
+    } else {
+        Vec::new()
+    };
+    let phase0_ids: Vec<String> = phase0_jobs.iter().map(|(id, _)| id.clone()).collect();
+    for (id, job) in phase0_jobs {
+        jobs.insert(id, job);
+    }
+    let required =
+        final_job_with_extra_needs(label, crate_ids, &phase0_ids, acquire.clone(), catalog)?;
+    jobs.insert(FINAL_JOB_ID.to_owned(), required);
     jobs.insert(
         PUBLISH_JOB_ID.to_owned(),
         crate::publish_job::baseline_publish_job(label, branch, acquire)?,
@@ -348,3 +362,7 @@ fn actionlint_input(config: &VelnorConfig, version: &str, label: &str) -> Action
     };
     input
 }
+
+#[cfg(test)]
+#[path = "workflow_jobs_mise_phase0_route_tests.rs"]
+mod phase0_required_tests;

@@ -1,6 +1,6 @@
 //! Pinned tool catalog: exact mise tool selectors for every Velnor command.
 //!
-//! Qualified pins (rechecked 2026-09-30); project `mise.toml` selectors
+//! Exact pins (rechecked 2026-10-05); project `mise.toml` selectors
 //! never alter these pins.
 
 use velnor_actions_contract::ToolIdentity;
@@ -32,9 +32,9 @@ mod versions;
 pub use versions::{check_freshness_requirements, validate_exact_version};
 use versions::{invalid_version, tool_source};
 
-/// Qualified mise runner release (tag `v2026.9.18`).
-/// Source: `https://api.github.com/repos/jdx/mise/releases/latest`; checked 2026-09-30.
-pub const MISE_VERSION: &str = "2026.9.18";
+/// Selected Mise runner release (tag `v2026.10.2`); platform qualification remains held.
+/// Source: `https://api.github.com/repos/jdx/mise/releases/latest`; checked 2026-10-05.
+pub const MISE_VERSION: &str = "2026.10.2";
 /// Qualified Rust stable toolchain.
 /// Source: `https://static.rust-lang.org/dist/channel-rust-stable.toml`; checked 2026-09-28.
 pub const RUST_VERSION: &str = "1.98.1";

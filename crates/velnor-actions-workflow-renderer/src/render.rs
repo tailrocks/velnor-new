@@ -12,10 +12,11 @@ use velnor_actions_contract::{
     CI_WORKFLOW_PATH, Job, PLAN_JOB_ID as CONTRACT_PLAN_JOB_ID,
     REQUIRED_CONDITION as CONTRACT_REQUIRED_CONDITION,
     REQUIRED_DISPLAY_NAME as CONTRACT_REQUIRED_DISPLAY_NAME,
-    REQUIRED_JOB_ID as CONTRACT_REQUIRED_JOB_ID, ValidatorKind, VelnorSupportWorkflow, WorkflowIr,
-    WorkflowPolicy,
+    REQUIRED_JOB_ID as CONTRACT_REQUIRED_JOB_ID, RunsOn, ValidatorKind, VelnorSupportWorkflow,
+    WorkflowIr, WorkflowPolicy,
 };
 
+use crate::schema2::MiseSetupSet;
 use crate::{
     RenderError, cache_p08, closure, commands, document, final_steps, guard, marker, matrix, msrv,
     preseed_closure, steps, support, workflow_policy, yaml::render_yaml,
@@ -126,6 +127,10 @@ pub use crate::lane_share::RenderedWorkflow;
 pub use crate::tree::{RenderedFile, RenderedSymlink, RenderedTree};
 pub use velnor_actions_contract::{AGENTS_MD_PATH, CLAUDE_MD_PATH, CLAUDE_MD_TARGET};
 
+#[cfg(test)]
+#[path = "render_mise_target_tests.rs"]
+mod mise_target_tests;
+
 impl RenderContext {
     /// Validate every context scalar before rendering.
     ///
@@ -206,7 +211,7 @@ pub fn render_workflow_ir_strict(
     policy: WorkflowPolicy,
     support: Option<&VelnorSupportWorkflow>,
     ctx: &RenderContext,
-    mise: &MiseSetup,
+    mise: &MiseSetupSet,
 ) -> Result<String, RenderError> {
     Ok(render_workflow_ir_strict_shared(ir, policy, support, ctx, mise)?.yaml)
 }
@@ -222,7 +227,7 @@ pub fn render_workflow_ir_strict_shared(
     policy: WorkflowPolicy,
     support: Option<&VelnorSupportWorkflow>,
     ctx: &RenderContext,
-    mise: &MiseSetup,
+    mise: &MiseSetupSet,
 ) -> Result<RenderedWorkflow, RenderError> {
     let jobs = finalize_jobs(ir, policy, support, ctx, mise)?;
     render_merged(ir, &jobs, ctx)
@@ -244,7 +249,7 @@ pub fn finalize_jobs(
     policy: WorkflowPolicy,
     support: Option<&VelnorSupportWorkflow>,
     ctx: &RenderContext,
-    mise: &MiseSetup,
+    mise: &MiseSetupSet,
 ) -> Result<BTreeMap<String, Job>, RenderError> {
     mise.validate()?;
     let mut jobs = merged_jobs(ir, policy, support, ctx)?;
@@ -258,11 +263,11 @@ pub fn finalize_jobs(
             continue;
         }
         let always = id == PLAN_JOB_ID || id == TASK_JOB_ID;
-        let target =
-            velnor_actions_contract::target_for_runner_label(&ctx.runs_on).ok_or_else(|| {
-                RenderError::InvalidWorkflow(format!("tools_cache_unsupported_target:{id}"))
-            })?;
-        cache_p08::ensure_setup_p08(id, job, mise, always, target)?;
+        let setup = mise.for_runner_label(&job.runs_on).ok_or_else(|| {
+            RenderError::InvalidWorkflow(format!("mise_setup_unsupported_target:{id}"))
+        })?;
+        let target = mise_cache_target(&job.runs_on, id)?;
+        cache_p08::ensure_setup_p08(id, job, setup, always, target)?;
         cache_p08::check_no_rust_cache_with_mbx(id, job)?;
         cache_p08::check_mbx_before_fetch(id, job)?;
         closure::check_internal_staged(id, job, ctx.preseed)?;
@@ -279,6 +284,18 @@ pub fn finalize_jobs(
     closure::insert_final_closure(&mut jobs)?;
     final_steps::insert_final_fanin(&mut jobs, ctx)?;
     Ok(jobs)
+}
+
+fn mise_cache_target(runner: &str, job_id: &str) -> Result<&'static str, RenderError> {
+    match RunsOn::parse(runner).map_err(RenderError::Contract)? {
+        RunsOn::ScaleSet(_) => Ok(velnor_actions_contract::SUPPORTED_TARGETS[0]),
+        RunsOn::Hosted(label) if label == "macos-15" => Ok("aarch64-apple-darwin"),
+        RunsOn::Hosted(label) if label == "macos-15-intel" => Ok("x86_64-apple-darwin"),
+        RunsOn::Hosted(label) => velnor_actions_contract::target_for_runner_label(&label)
+            .ok_or_else(|| {
+                RenderError::InvalidWorkflow(format!("tools_cache_unsupported_target:{job_id}"))
+            }),
+    }
 }
 
 /// Sorted unique `uses:` refs across every action step (plan display).

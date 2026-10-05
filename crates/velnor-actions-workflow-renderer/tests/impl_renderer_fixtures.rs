@@ -6,7 +6,7 @@ use velnor_actions_contract::{
 };
 use velnor_actions_workflow_renderer::steps::{CompileDriver, mbx_steps_for_driver};
 use velnor_actions_workflow_renderer::{
-    ASSET_SHA_ENV, ASSET_URL_ENV, CONCURRENCY_CANCEL, CONCURRENCY_GROUP, MiseSetup,
+    ASSET_SHA_ENV, ASSET_URL_ENV, CONCURRENCY_CANCEL, CONCURRENCY_GROUP, MiseSetup, MiseSetupSet,
     RELEASE_COMMIT_ENV, RenderContext, RenderError, STAGED_BINARY_PREFIX, ValidatorCommand,
     acquire_velnor_step, checkout_step, plan_step, render_workflow_ir, render_workflow_ir_strict,
     shell_step,
@@ -67,6 +67,21 @@ pub(crate) fn mise() -> MiseSetup {
         uses: MISE_USES.to_owned(),
         version: MISE_VERSION.to_owned(),
         sha256: MISE_SHA256.to_owned(),
+    }
+}
+
+pub(crate) fn mise_set() -> MiseSetupSet {
+    let linux = mise();
+    MiseSetupSet {
+        linux_x64: linux.clone(),
+        macos_arm64: MiseSetup {
+            sha256: "c".repeat(64),
+            ..linux.clone()
+        },
+        macos_x64: MiseSetup {
+            sha256: "d".repeat(64),
+            ..linux
+        },
     }
 }
 
@@ -157,7 +172,7 @@ pub(crate) fn fixture_ir(jobs: Vec<(String, Job)>) -> WorkflowIr {
 }
 
 pub(crate) fn strict(ir: &WorkflowIr, ctx: &RenderContext) -> Result<String, RenderError> {
-    render_workflow_ir_strict(ir, WorkflowPolicy::ConsumerV1, None, ctx, &mise())
+    render_workflow_ir_strict(ir, WorkflowPolicy::ConsumerV1, None, ctx, &mise_set())
 }
 
 /// Step display names in render order for one job section.

@@ -7,7 +7,6 @@ use super::p12_harness as harness;
 const INVENTORY: &str = ".velnor/freshness-inventory.json";
 const POLICY: &str = ".velnor/version-policy.toml";
 const CATALOG: &str = "crates/velnor-actions-mise/src/catalog.rs";
-const ACTIONS_RS: &str = "crates/velnor-actions-actionlint/src/actions.rs";
 const MUTANTS: &str = ".cargo/mutants.toml";
 
 /// Temporary-hold object with full attribution for `key`.
@@ -294,18 +293,32 @@ fn unknown_hold_subject_fails() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn action_const_wiring_is_mapped() -> Result<(), Box<dyn Error>> {
-    let script = crate::impl_repo_policy::read("scripts/check-freshness.sh")?;
-    assert!(
-        script.contains(ACTIONS_RS),
-        "action const path must be read"
-    );
+    let fixture = harness::passing("p12-action-pin-mapping")?;
+    let run = harness::run_script(&fixture.dir, &[])?;
+    harness::assert_clean(&run);
     for key in [
+        "jdx/mise-action",
+        "actions/checkout",
+        "actions/download-artifact",
+        "actions/upload-artifact",
         "actions/cache/restore",
         "actions/cache/save",
         "asamarts/alint",
         "Swatinem/rust-cache",
     ] {
-        assert!(script.contains(key), "expected action set misses {key}");
+        for field in ["version", "sha"] {
+            let subject = format!("action {key} {field}");
+            assert!(
+                harness::rows(&run).iter().any(|row| {
+                    row.contains("\"check\":\"local-pin\"")
+                        && row.contains("\"status\":\"pass\"")
+                        && row.contains(&subject)
+                }),
+                "missing mapped action pin {subject}:\n{}",
+                run.stdout
+            );
+        }
     }
+    harness::cleanup(&fixture);
     Ok(())
 }

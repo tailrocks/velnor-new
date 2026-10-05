@@ -1,19 +1,33 @@
-//! Typed MBX backend routes and their separate Scale Set bundle protocol.
+//! One explicit stock bundle lifecycle around every MBX producer.
 
 use velnor_actions_contract::WorkflowPolicy;
 use velnor_actions_contract::cachekey::mbx_cache_generation;
 use velnor_actions_contract::config::{SCALE_SET_NAME, ScaleSetSelector, VELNOR_LABEL};
+use velnor_actions_contract::workflow::lanes::{HOSTED_SUFFIX, SCALE_SUFFIX};
 use velnor_actions_workflow_renderer::{RenderError, render_workflow_ir, steps::checkout_step};
 
 use super::impl_renderer_fixtures::*;
+
+const LOCAL_SETUP: &str = "name: Prepare MBX local cache store";
+const KEY_STEP: &str = "name: Prepare MBX cache identity";
+const RESTORE: &str = "name: Restore MBX single bundle";
+const IMPORT: &str = "name: Import MBX single bundle";
+const EXPORT: &str = "name: Export MBX single bundle";
+const SAVE: &str = "name: Save MBX single bundle";
+const CLEANUP: &str = "name: Cleanup MBX single bundle";
 
 fn mbx_uses() -> String {
     format!("jdx/mr-boxington-action@{}", "a".repeat(40))
 }
 
 fn render_mbx(id: &str, scale_set: bool) -> Result<String, RenderError> {
-    let mbx = mbx_tool_steps(&mbx_uses(), "1.21.1", "1.98.1")?;
-    let mut built = job(id, "MBX job", Vec::new(), mbx.into());
+    let pair = mbx_tool_steps(&mbx_uses(), "1.21.1", "1.98.1")?;
+    let mut steps = pair.into_iter().collect::<Vec<_>>();
+    steps.push(scrubbed_shell_step(
+        "Build Rust producer",
+        vec!["mbx".to_owned(), "build".to_owned()],
+    )?);
+    let mut built = job(id, "MBX job", Vec::new(), steps);
     if scale_set {
         let selector = ScaleSetSelector::try_new(
             SCALE_SET_NAME,
@@ -38,197 +52,108 @@ fn expected_action_generation() -> String {
     )
 }
 
-fn assert_cold_import(imported: &str) {
-    for needle in [
-        "mbx cache import",
-        "no mbx bundle matched",
-        "mbx bundle missing; continuing cold",
-        "mbx bundle import failed; continuing cold",
-        "df -B1 -P",
-        "df -i -P",
+fn assert_one_lifecycle(text: &str) {
+    for (needle, count) in [
+        (RESTORE, 1),
+        (IMPORT, 1),
+        (EXPORT, 1),
+        (SAVE, 1),
+        (CLEANUP, 1),
     ] {
-        assert!(
-            imported.contains(needle),
-            "{needle} missing from {imported}"
-        );
+        assert_eq!(text.matches(needle).count(), count, "{needle}: {text}");
     }
-    assert!(!imported.contains("test -d"), "{imported}");
-}
-
-#[test]
-fn hosted_jobs_keep_the_action_owned_object_cache() -> Result<(), RenderError> {
-    let text = render_mbx("demo", false)?;
-    let action_start = text.find("name: Restore MBX objects").expect("restore");
-    let action_end = text[action_start..]
-        .find("\n      - name:")
-        .map_or(text.len(), |offset| action_start + offset);
-    let action = &text[action_start..action_end];
-    assert!(action.contains("backend: github"), "{action}");
-    assert!(action.contains("github-cache-mode: objects"), "{action}");
-    assert!(
-        action.contains("ACTIONS_CACHE_MODE: ${{ github.event_name == 'push'"),
-        "protected default-branch writes only: {action}"
-    );
-    assert!(
-        action.contains("github.ref_protected == true && 'write' || 'read'"),
-        "{action}"
-    );
-    assert!(
-        action.contains("cache-key: ${{ steps.mbx-cache-key.outputs.key }}"),
-        "{action}"
-    );
-    assert!(
-        action.contains("restore-keys: ${{ steps.mbx-cache-key.outputs.prefix }}"),
-        "{action}"
-    );
-    assert!(!action.contains("isolate-objects-cache"), "{action}");
-    assert!(!action.contains("cache-key-suffix"), "{action}");
-    assert!(action.contains(&expected_action_generation()), "{action}");
-    assert!(text.contains("MBX_GC_AUTO: \"0\""), "{text}");
-    assert!(text.contains("MBX_SHARE_OUT_DIR: \"0\""), "{text}");
-    assert!(text.contains("name: Prepare MBX cache identity"), "{text}");
-    for bundle_step in [
-        "Restore MBX single bundle",
-        "Import MBX single bundle",
-        "Export MBX single bundle",
-        "Save MBX single bundle",
-    ] {
-        assert!(
-            !text.contains(bundle_step),
-            "hosted route emitted {bundle_step}: {text}"
-        );
-    }
-    Ok(())
-}
-
-#[test]
-fn scale_set_owns_key_group_restore_import_export_and_save() -> Result<(), RenderError> {
-    let text = render_mbx("rust-demo__local", true)?;
+    let missing = usize::MAX;
     let preflight = text
         .find("name: Verify MBX and Rust toolchains")
-        .expect("toolchain preflight");
-    let restore = text
-        .find("name: Prepare MBX local cache store")
-        .expect("local backend setup");
-    let key = text
-        .find("name: Prepare MBX cache identity")
-        .expect("cache identity");
-    let bundle = text
-        .find("name: Restore MBX single bundle")
-        .expect("bundle restore");
-    let import = text
-        .find("name: Import MBX single bundle")
-        .expect("bundle import");
-    let export = text
-        .find("name: Export MBX single bundle")
-        .expect("bundle export");
-    let save = text
-        .find("name: Save MBX single bundle")
-        .expect("bundle save");
+        .unwrap_or(missing);
+    let key = text.find(KEY_STEP).unwrap_or(missing);
+    let setup = text.find(LOCAL_SETUP).unwrap_or(missing);
+    let restore = text.find(RESTORE).unwrap_or(missing);
+    let import = text.find(IMPORT).unwrap_or(missing);
+    let build = text.find("name: Build Rust producer").unwrap_or(missing);
+    let export = text.find(EXPORT).unwrap_or(missing);
+    let save = text.find(SAVE).unwrap_or(missing);
+    let cleanup = text.find(CLEANUP).unwrap_or(missing);
     assert!(
-        preflight < key && key < restore && restore < bundle,
+        preflight < key && key < setup && setup < restore && restore < import,
+        "setup/restore order: {text}"
+    );
+    assert!(
+        import < build && build < export && export < save && save < cleanup,
+        "producer lifecycle: {text}"
+    );
+    assert!(text.contains("backend: local"), "{text}");
+    assert!(text.contains("github-cache-mode: objects"), "{text}");
+    assert!(text.contains("ACTIONS_CACHE_MODE: read"), "{text}");
+    assert!(
+        text.contains("MBX_CACHE_DIR: ${{ steps.mbx_cache_preflight.outputs.cache_dir }}"),
         "{text}"
     );
     assert!(
-        bundle < import && import < export && export < save,
-        "{text}"
-    );
-    assert!(
-        text.contains("backend: local"),
-        "Scale Set avoids action restore: {text}"
-    );
-    assert!(!text.contains("ACTIONS_CACHE_MODE"), "{text}");
-    assert!(!text.contains("cache-primary-key"), "{text}");
-    assert!(text.contains("MBX_SHARE_OUT_DIR: \"0\""), "{text}");
-    assert!(
-        !text.contains("MBX_GC_AUTO"),
-        "Scale Set keeps MBX GC enabled: {text}"
-    );
-
-    assert_scale_set_key(&text[key..restore]);
-    assert_scale_set_restore(&text[bundle..import]);
-    assert_cold_import(&text[import..export]);
-    assert_scale_set_export(&text[export..save]);
-    assert_scale_set_save(&text[save..]);
-    Ok(())
-}
-
-fn assert_scale_set_key(key_step: &str) {
-    for needle in [
-        "rustc",
-        "RUST_TOOLCHAIN",
-        "sha256sum",
-        "CACHE_REVISION",
-        "github-actions-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${group_id}",
-        "${GITHUB_JOB}-${CACHE_REVISION}",
-        "CREATE_EXPORT_GROUP",
-        "/proc/sys/kernel/random/uuid",
-    ] {
-        assert!(
-            key_step.contains(needle),
-            "{needle} missing from {key_step}"
-        );
-    }
-    assert!(
-        !key_step.contains("$("),
-        "command substitution is forbidden: {key_step}"
-    );
-}
-
-fn assert_scale_set_restore(restored: &str) {
-    assert!(restored.contains("actions/cache/restore@"), "{restored}");
-    assert!(
-        restored.contains("key: ${{ steps.mbx-cache-key.outputs.key }}"),
-        "{restored}"
-    );
-    assert!(
-        restored.contains("restore-keys: ${{ steps.mbx-cache-key.outputs.prefix }}"),
-        "{restored}"
-    );
-}
-
-fn assert_scale_set_export(script: &str) {
-    assert!(
-        matches!(
-            (
-                script.find("mbx gc"),
-                script.find("cache export"),
-                script.find("test -d"),
-                script.find(r#"rm -rf \"$store\""#),
-            ),
-            (Some(gc), Some(exported), Some(durable), Some(deleted))
-                if gc < exported && exported < durable && durable < deleted
+        text.contains(
+            "MBX_CACHE_EXPORT_GROUP: ${{ steps.mbx_cache_preflight.outputs.export_group }}"
         ),
-        "GC, export, bundle check, and store cleanup must be ordered: {script}"
-    );
-    assert!(script.contains("df -B1 -P"), "{script}");
-    assert!(script.contains("df -i -P"), "{script}");
-    assert_eq!(script.matches("--format directory").count(), 1, "{script}");
-}
-
-fn assert_scale_set_save(saved: &str) {
-    assert!(
-        saved.contains("key: ${{ steps.mbx-cache-key.outputs.key }}"),
-        "{saved}"
+        "{text}"
     );
     assert!(
-        saved.contains("steps.mbx-export.outputs.ready == 'true'"),
-        "{saved}"
+        text.contains("path: .velnor-mbx-cache/mbx-single-bundle"),
+        "{text}"
     );
-    assert!(saved.contains("github.event_name == 'push'"), "{saved}");
     assert!(
-        saved.contains("github.ref_protected == true"),
-        "unprotected push cannot save: {saved}"
+        text.contains("restore-keys: ${{ steps.mbx-cache-key.outputs.prefix }}"),
+        "{text}"
     );
+    assert!(
+        text.contains("key: ${{ steps.mbx-cache-key.outputs.key }}"),
+        "{text}"
+    );
+    assert!(text.contains(&expected_action_generation()), "{text}");
+    assert!(text.contains("github.event_name == 'push'"), "{text}");
+    assert!(
+        text.contains("toJSON(github.event.repository.fork) == 'false'"),
+        "{text}"
+    );
+    assert!(
+        text.contains("github.event.repository.default_branch != ''"),
+        "{text}"
+    );
+    assert!(text.contains("github.ref_protected == true"), "{text}");
+    assert!(!text.contains("cache-key-suffix"), "{text}");
+    assert!(!text.contains("isolate-objects-cache"), "{text}");
+    assert!(!text.contains("mbx gc"), "{text}");
+    assert!(!text.contains("rm -rf"), "{text}");
 }
 
 #[test]
-fn both_mode_shares_tasks_after_typed_cache_preludes() -> Result<(), RenderError> {
-    use velnor_actions_contract::workflow::lanes::{HOSTED_SUFFIX, SCALE_SUFFIX};
+fn hosted_and_scale_set_jobs_use_one_explicit_lifecycle() -> Result<(), RenderError> {
+    let hosted = render_mbx("hosted", false)?;
+    assert_one_lifecycle(&hosted);
+    assert!(hosted.contains("MBX_GC_AUTO: \"0\""), "{hosted}");
+    assert!(hosted.contains("MBX_SHARE_OUT_DIR: \"0\""), "{hosted}");
+    assert!(
+        hosted.contains("RUNNER_LANE: hosted-ubuntu-26.04"),
+        "{hosted}"
+    );
 
+    let scale = render_mbx("scale-local", true)?;
+    assert_one_lifecycle(&scale);
+    assert!(!scale.contains("MBX_GC_AUTO"), "{scale}");
+    assert!(scale.contains("MBX_SHARE_OUT_DIR: \"0\""), "{scale}");
+    assert!(
+        scale.contains("RUNNER_LANE: scale-set-ubuntu-26.04-scale-set"),
+        "{scale}"
+    );
+    Ok(())
+}
+
+#[test]
+fn paired_lanes_keep_restore_before_composite_and_save_after_it() -> Result<(), RenderError> {
     let action = mbx_tool_steps(&mbx_uses(), "1.21.1", "1.98.1")?;
     let checkout = checkout_step(&checkout_pin())?;
-    let build = scrubbed_shell_step("Build", vec!["mbx".to_owned(), "build".to_owned()])?;
+    let build = scrubbed_shell_step(
+        "Build Rust producer",
+        vec!["mbx".to_owned(), "build".to_owned()],
+    )?;
     let steps = vec![checkout, action[0].clone(), action[1].clone(), build];
     let hosted = job(
         &format!("rust-demo{HOSTED_SUFFIX}"),
@@ -236,74 +161,41 @@ fn both_mode_shares_tasks_after_typed_cache_preludes() -> Result<(), RenderError
         Vec::new(),
         steps.clone(),
     );
-    let mut local = job(
+    let mut scale = job(
         &format!("rust-demo{SCALE_SUFFIX}"),
         "Rust demo Scale Set",
         Vec::new(),
         steps,
     );
-    local.1.runs_on = ScaleSetSelector::try_new(
+    scale.1.runs_on = ScaleSetSelector::try_new(
         SCALE_SET_NAME,
         &[VELNOR_LABEL.to_owned(), SCALE_SET_NAME.to_owned()],
     )
     .map_err(|_| RenderError::InvalidWorkflow("bad_scale_set".to_owned()))?
     .token();
     let text = render_workflow_ir(
-        &fixture_ir(vec![hosted, local]),
+        &fixture_ir(vec![hosted, scale]),
         WorkflowPolicy::ConsumerV1,
         None,
         &fixture_ctx(),
     )?;
-    assert_eq!(
-        text.matches("uses: ./.github/actions/rust-demo").count(),
-        2,
-        "{text}"
-    );
-    assert_eq!(
-        text.matches("MBX_SHARE_OUT_DIR: \"0\"").count(),
-        2,
-        "{text}"
-    );
-    assert_eq!(text.matches("MBX_GC_AUTO: \"0\"").count(), 1, "{text}");
-    assert_eq!(
-        text.matches("name: Restore MBX single bundle").count(),
-        1,
-        "{text}"
-    );
-
-    assert_shared_lane_routes(&text);
+    assert_eq!(text.matches(RESTORE).count(), 2, "{text}");
+    assert_eq!(text.matches(IMPORT).count(), 2, "{text}");
+    assert_eq!(text.matches(EXPORT).count(), 2, "{text}");
+    assert_eq!(text.matches(SAVE).count(), 2, "{text}");
+    for lane in ["rust-demo__hosted:", "rust-demo__local:"] {
+        let start = text.find(lane).expect("lane");
+        let tail = &text[start..];
+        let call = tail
+            .find("uses: ./.github/actions/rust-demo")
+            .expect("composite");
+        let import = tail.find(IMPORT).expect("import");
+        let export = tail.find(EXPORT).expect("export");
+        let save = tail.find(SAVE).expect("save");
+        assert!(
+            import < call && call < export && export < save,
+            "{lane}: {tail}"
+        );
+    }
     Ok(())
-}
-
-fn assert_shared_lane_routes(text: &str) {
-    let hosted_at = must_find(text, "rust-demo__hosted:");
-    let local_at = must_find(text, "rust-demo__local:");
-    let hosted = &text[hosted_at..local_at];
-    let local = &text[local_at..];
-    assert!(hosted.contains("backend: github"), "{hosted}");
-    assert!(local.contains("backend: local"), "{local}");
-    assert!(!local.contains("ACTIONS_CACHE_MODE"), "{local}");
-    assert!(!local.contains("cache-primary-key"), "{local}");
-    let local_key = must_find(local, "name: Prepare MBX cache identity");
-    let local_action = must_find(local, "name: Prepare MBX local cache store");
-    let local_bundle = must_find(local, "name: Restore MBX single bundle");
-    let local_call = must_find(local, "uses: ./.github/actions/rust-demo");
-    let local_export = must_find(local, "name: Export MBX single bundle");
-    assert!(
-        local_key < local_action && local_action < local_bundle,
-        "{local}"
-    );
-    assert!(
-        local_bundle < local_call && local_call < local_export,
-        "{local}"
-    );
-    let hosted_action = must_find(hosted, "name: Restore MBX objects");
-    let hosted_call = must_find(hosted, "uses: ./.github/actions/rust-demo");
-    assert!(hosted_action < hosted_call, "{hosted}");
-}
-
-fn must_find(text: &str, needle: &str) -> usize {
-    let found = text.find(needle);
-    assert!(found.is_some(), "{needle} missing from {text}");
-    found.unwrap_or_default()
 }

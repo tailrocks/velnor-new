@@ -42,6 +42,20 @@ fn hosted_linux(runs_on: &str) -> bool {
     matches!(
         RunsOn::parse(runs_on),
         Ok(RunsOn::Hosted(label))
-            if velnor_actions_contract::target_for_runner_label(&label).is_some()
+            if velnor_actions_contract::target_for_runner_label(&label)
+                == Some(velnor_actions_contract::SUPPORTED_TARGETS[0])
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::hosted_linux;
+
+    #[test]
+    fn gc_policy_selects_only_hosted_linux_not_macos_or_scale_sets() {
+        assert!(hosted_linux("ubuntu-24.04"));
+        assert!(!hosted_linux("macos-15"));
+        assert!(!hosted_linux("macos-15-intel"));
+        assert!(!hosted_linux("scale-set:velnor+ubuntu-26.04-scale-set"));
+    }
 }

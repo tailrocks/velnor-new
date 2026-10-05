@@ -11,15 +11,11 @@ use crate::runs_on::runs_on_yaml;
 use crate::steps::{DOWNLOAD_ARTIFACT_USES, UPLOAD_ARTIFACT_USES};
 use crate::yaml::Yaml;
 
-use super::Schema2WorkflowRequest;
+use super::{Schema2WorkflowRequest, setup_step};
 use super::features::{CHECKOUT_USES, base, finish, publish_step, run_step};
 
 /// GitHub-hosted macOS label. The binary is native; it is not built on Ubuntu.
 const MACOS_RUNS_ON: &str = "macos-15";
-/// Same `jdx/mise-action` commit CI pins. Not a floating tag.
-const MISE_USES: &str = "jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5";
-/// Catalog version. The Linux cache checksum is not reused on macOS.
-const MISE_VERSION: &str = "2026.9.18";
 /// `actions/attest-build-provenance` tag `v4.2.2` (commit, not a floating tag).
 const ATTEST_USES: &str =
     "actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8";
@@ -128,7 +124,7 @@ pub(super) fn image_release(request: &Schema2WorkflowRequest) -> Result<Yaml, Re
 /// # Errors
 ///
 /// An illegal macOS label fails.
-pub(super) fn macos_binary_release(_request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> {
+pub(super) fn macos_binary_release(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> {
     let macos = runs_on_yaml(MACOS_RUNS_ON)?;
     let files = [HOST_BIN, CHECKSUMS];
     Ok(document(
@@ -140,7 +136,7 @@ pub(super) fn macos_binary_release(_request: &Schema2WorkflowRequest) -> Result<
                 macos.clone(),
                 120,
                 vec![
-                    mise_step(),
+                    setup_step(&request.mise_setups.macos_arm64),
                     run_step("Install pinned Rust", RUST_INSTALL),
                     run_step("Build velnor-host", BINARY_BUILD),
                     run_step("Verify Mach-O architecture", BINARY_VERIFY),
@@ -241,22 +237,6 @@ fn artifact_name(build_id: &str) -> &'static str {
     } else {
         "binary-assets"
     }
-}
-
-fn mise_step() -> Yaml {
-    Yaml::Map(vec![
-        ("name".to_owned(), Yaml::str("Setup Mise")),
-        ("uses".to_owned(), Yaml::str(MISE_USES)),
-        (
-            "with".to_owned(),
-            Yaml::Map(vec![
-                ("cache".to_owned(), Yaml::str("false")),
-                ("env".to_owned(), Yaml::str("false")),
-                ("install".to_owned(), Yaml::str("false")),
-                ("version".to_owned(), Yaml::str(MISE_VERSION)),
-            ]),
-        ),
-    ])
 }
 
 fn checkout_step() -> Yaml {

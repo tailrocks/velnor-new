@@ -12,6 +12,7 @@ pub mod permissions;
 pub mod plan;
 pub mod qualification;
 pub mod report;
+mod step_ir;
 pub mod timeout;
 pub mod trust;
 pub use artifacts::{
@@ -23,9 +24,13 @@ pub use baseline::{BaselineProof, BaselineStatus, ManifestTaskProof, PlanBaselin
 pub use cache_ids::EntryCacheIds;
 pub use crate_job::{CrateJob, CrateObligation};
 pub use execute::{ExecuteTaskIds, ExecuteTaskRef};
-pub use ir::{Concurrency, Job, Step, StepKind, Trigger, WorkflowIr};
+pub use ir::{
+    Concurrency, Job, MbxProcessGroupOperation, MbxProcessGroupShell, Step, StepKind, Trigger,
+    WorkflowIr,
+};
 pub use jobs::{
     CI_WORKFLOW_PATH, CRATE_JOB_ID_PREFIX, FRESHNESS_CRON_WEEKLY, FRESHNESS_WORKFLOW_PATH,
+    MISE_PHASE0_LINUX_JOB_ID, MISE_PHASE0_MACOS_ARM64_JOB_ID, MISE_PHASE0_MACOS_INTEL_JOB_ID,
     PLAN_DISPLAY_NAME, PLAN_JOB_ID, REQUIRED_CONDITION, REQUIRED_DISPLAY_NAME, REQUIRED_JOB_ID,
     RequiredCheckMigration, STALE_WORKFLOW_PATHS, ScheduleTrigger, TOFU_DISPLAY_PREFIX,
     TOFU_JOB_ID_PREFIX, ValidatorKind, WORKFLOW_DISPLAY_NAME, assign_crate_job_ids,

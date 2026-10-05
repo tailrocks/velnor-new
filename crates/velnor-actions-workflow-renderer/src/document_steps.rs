@@ -94,7 +94,12 @@ fn action_step_to_yaml(
             Yaml::str(crate::render::FINAL_CONDITION.to_owned()),
         ));
     }
-    if job_id == FINAL_JOB_ID && is_verdict_download(step) {
+    if let Some(continue_on_error) = step.continue_on_error {
+        entries.push((
+            "continue-on-error".to_owned(),
+            Yaml::Bool(continue_on_error),
+        ));
+    } else if job_id == FINAL_JOB_ID && is_verdict_download(step) {
         entries.push(("continue-on-error".to_owned(), Yaml::Bool(true)));
     }
     entries.push(("uses".to_owned(), Yaml::str(uses.to_owned())));
@@ -139,26 +144,11 @@ pub(crate) fn step_to_yaml(
         StepKind::Shell { run, env } => {
             commands::validate_command_argv(run)?;
             commands::validate_env(env)?;
-            let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
-            crate::mbx_bundle::push_step_id(&mut entries, &step.name);
-            if let Some(condition) = &step.condition {
-                steps::scan_for_private_subcommands(condition)?;
-                entries.push(("if".to_owned(), Yaml::str(condition.clone())));
-            }
-            let filtered_env: BTreeMap<String, String> = env
-                .iter()
-                .filter(|(k, v)| job_env.get(*k).map(String::as_str) != Some(v.as_str()))
-                .map(|(k, v)| (k.clone(), v.clone()))
-                .collect();
-            if !filtered_env.is_empty() {
-                entries.push(("env".to_owned(), string_map_yaml(&filtered_env)));
-            }
-            push_composite_shell(&mut entries, composite);
-            entries.push((
-                "run".to_owned(),
-                Yaml::str(commands::join_argv_for_run(run)?),
-            ));
-            Ok(Yaml::Map(entries))
+            shell_step_to_yaml(step, run, env, composite, job_env, false)
+        }
+        StepKind::MbxProcessGroupShell(payload) => {
+            let run = crate::steps_mbx_process_group::rendered_run(step, payload)?;
+            shell_step_to_yaml(step, &run, payload.env(), composite, job_env, true)
         }
         StepKind::Internal { operation } => {
             let (op, target) = steps::split_internal_operation(operation)?;
@@ -167,10 +157,14 @@ pub(crate) fn step_to_yaml(
                 steps::scan_for_private_subcommands(condition)?;
                 entries.push(("if".to_owned(), Yaml::str(condition.clone())));
             }
-            // No `continue-on-error` on the fetch step (F5): the helper
-            // retries each leg bounded and still exits success on
-            // per-leg failure, so the merge judges honestly; only hard
-            // environment failures fail the job, unmasked.
+            if let Some(continue_on_error) = step.continue_on_error {
+                entries.push((
+                    "continue-on-error".to_owned(),
+                    Yaml::Bool(continue_on_error),
+                ));
+            }
+            // The fetch step does not set this flag: it retries each leg
+            // bounded and returns per-leg failures for the merge to judge.
             let channel = if job_id == FINAL_JOB_ID && target == steps::MERGE_OPERATION {
                 needs_envs
             } else {
@@ -188,4 +182,45 @@ pub(crate) fn step_to_yaml(
             Ok(Yaml::Map(entries))
         }
     }
+}
+
+fn shell_step_to_yaml(
+    step: &Step,
+    run: &[String],
+    env: &BTreeMap<String, String>,
+    composite: bool,
+    job_env: &BTreeMap<String, String>,
+    process_group: bool,
+) -> Result<Yaml, RenderError> {
+    let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
+    crate::mbx_bundle::push_step_id(&mut entries, &step.name);
+    if let Some(condition) = &step.condition {
+        steps::scan_for_private_subcommands(condition)?;
+        entries.push(("if".to_owned(), Yaml::str(condition.clone())));
+    }
+    if let Some(continue_on_error) = step.continue_on_error {
+        entries.push((
+            "continue-on-error".to_owned(),
+            Yaml::Bool(continue_on_error),
+        ));
+    }
+    let filtered_env: BTreeMap<String, String> = env
+        .iter()
+        .filter(|(key, value)| job_env.get(*key).map(String::as_str) != Some(value.as_str()))
+        .map(|(key, value)| (key.clone(), value.clone()))
+        .collect();
+    if !filtered_env.is_empty() {
+        entries.push(("env".to_owned(), string_map_yaml(&filtered_env)));
+    }
+    push_composite_shell(&mut entries, composite);
+    let run = if process_group {
+        let script = run.get(2).ok_or_else(|| {
+            RenderError::InvalidWorkflow("mbx_process_group_missing_script".to_owned())
+        })?;
+        format!("bash -c {}", commands::quote_script_arg(script))
+    } else {
+        commands::join_argv_for_run(run)?
+    };
+    entries.push(("run".to_owned(), Yaml::str(run)));
+    Ok(Yaml::Map(entries))
 }

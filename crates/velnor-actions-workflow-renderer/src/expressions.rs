@@ -54,9 +54,15 @@ fn expression_spans(text: &str) -> Option<Vec<&str>> {
 /// and the MBX cache-mode selector. Hosted writes require a protected push
 /// to the default branch; Scale Set routes do not invoke action restore.
 /// Notably absent: `github.token` (render-time fetch binding only)
-/// and run IDs (never in env).
-const ENV_EXPRESSIONS: [&str; 8] = [
+/// and raw run IDs (only preflighted per-job identities enter the MBX
+/// lifecycle steps).
+const ENV_EXPRESSIONS: [&str; 41] = [
     "runner.temp",
+    "runner.os",
+    "runner.arch",
+    "github.sha",
+    "github.job",
+    "github.repository_id",
     "github.ref_name",
     "github.event_name",
     "github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read'",
@@ -64,6 +70,34 @@ const ENV_EXPRESSIONS: [&str; 8] = [
     "secrets.GITHUB_TOKEN",
     "steps.mbx-bundle.outputs.cache-matched-key",
     "github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.sha",
+    "steps.mbx_cache_preflight.outputs.job_root",
+    "steps.mbx_cache_preflight.outputs.job_identity",
+    "steps.mbx_cache_preflight.outputs.cache_dir",
+    "steps.mbx_cache_preflight.outputs.cold_cache_dir",
+    "steps.mbx_cache_preflight.outputs.bundle_path",
+    "steps.mbx_cache_preflight.outputs.export_group",
+    "steps.mbx_cache_preflight.outputs.import_cwd",
+    "steps.mbx_cache_preflight.outputs.job_root_identity",
+    "steps.mbx_cache_preflight.outputs.cache_dir_identity",
+    "steps.mbx_cache_preflight.outputs.cold_cache_dir_identity",
+    "steps.mbx_cache_preflight.outputs.bundle_path_identity",
+    "steps.mbx_cache_preflight.outputs.import_cwd_identity",
+    "steps.mbx_cache_restore.outcome",
+    "steps.mbx_cache_restore.outputs.cache-matched-key",
+    "steps.mbx_cache_import.outputs.cache_dir",
+    "steps.mbx_cache_import.outputs.export_group",
+    "steps.mbx_cache_import.outputs.bundle_identity",
+    "steps.mbx_cache_preflight.outputs.workspace_root",
+    "steps.mbx_cache_preflight.outputs.workspace_identity",
+    "steps.mbx_cache_preflight.outputs.transport_parent",
+    "steps.mbx_cache_preflight.outputs.transport_parent_identity",
+    "steps.mbx_cache_preflight.outputs.transport_lease",
+    "steps.mbx_cache_preflight.outputs.transport_lease_identity",
+    "steps.mbx_cache_import.outcome",
+    "steps.mbx_cache_import.outputs.mbx_quiesced",
+    "steps.mbx_cache_export.outcome",
+    "steps.mbx_cache_export.outputs.cleanup_safe",
+    "steps.mbx_cache_export.outputs.bundle_identity",
 ];
 
 /// Exact `${{ }}` inners permitted in action `with:` values.

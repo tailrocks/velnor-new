@@ -14,6 +14,7 @@ use velnor_actions_contract::{
     target_for_runner_label,
 };
 use velnor_actions_mise::MISE_VERSION;
+use velnor_actions_workflow_renderer::schema2::MiseSetupSet;
 use velnor_actions_workflow_renderer::{
     HelperProvenance, MiseSetup, STAGED_BINARY_PREFIX, provision_acquire_step,
 };
@@ -24,22 +25,31 @@ use crate::discover::Discovery;
 /// Override key selecting the Mise setup action pin.
 const MISE_ACTION_KEY: &str = "jdx/mise-action";
 
-/// Installed `mise` binary digest for mise 2026.9.18 on Linux x86-64.
+/// Installed `mise` binary digest for mise 2026.10.2 on Linux x86-64.
 ///
-/// Source: `SHASUMS256.txt` of the jdx/mise `v2026.9.18` release, verified
-/// 2026-09-30 by downloading `mise-v2026.9.18-linux-x64.tar.zst`, extracting
-/// `mise/bin/mise`, and hashing the extracted binary. The setup action
-/// compares its `sha256` input against the installed binary, not the archive,
-/// so only this digest is emitted, and only for x64-Linux runners.
+/// Official release archive `mise-v2026.10.2-linux-x64.tar.gz` SHA-256:
+/// `79a2bf0ffc9b8a9a6391344e875b3c3679c15053fda3e8728ddf1790d63db788`.
+/// The released standalone executable and extracted archive executable both
+/// hash to this value; this is the digest `jdx/mise-action` verifies.
 const MISE_BINARY_SHA256_LINUX_X64: &str =
-    "d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4";
+    "8f5f6660336f572830e33cd9b378d3131e529a0d4c4f0c553776be90a1ba302a";
 
-/// Installed `mise` binary digest for mise 2026.9.18 on Apple ARM64.
+/// Installed `mise` binary digest for mise 2026.10.2 on Apple ARM64.
 ///
-/// Source: the `mise-v2026.9.18-macos-arm64` entry in the official
-/// `SHASUMS256.txt`, fetched over HTTPS on 2026-10-05.
+/// Official release archive `mise-v2026.10.2-macos-arm64.tar.gz` SHA-256:
+/// `a3f67ff009f1436013eee37864c1c1855d9d9a9e4982a660b6495589635384e7`.
+/// The released standalone executable and extracted archive executable both
+/// hash to this value; this is the digest `jdx/mise-action` verifies.
 const MISE_BINARY_SHA256_MACOS_ARM64: &str =
-    "484c135bd4329975d608d3f77e26c2ece5d2f5590f18ca71f44440294f8cfa6f";
+    "66d49acecca413c8b334922584982a4907a10588912829873d6c55d0c6d42612";
+
+/// Installed `mise` binary digest for mise 2026.10.2 on macOS Intel x64.
+///
+/// Official standalone release asset `mise-v2026.10.2-macos-x64` SHA-256:
+/// `1c6b3d4aaeba8d3b8b57e2d06e4b7825a5134b7aa6e97313bd99db6f22bac21f`.
+/// This is a runner setup pin, not a Velnor producer release target.
+const MISE_BINARY_SHA256_MACOS_X64: &str =
+    "1c6b3d4aaeba8d3b8b57e2d06e4b7825a5134b7aa6e97313bd99db6f22bac21f";
 
 /// Runner target the compiled mise digest covers.
 const LINUX_X64_TARGET: &str = "x86_64-unknown-linux-gnu";
@@ -50,7 +60,7 @@ const LINUX_X64_TARGET: &str = "x86_64-unknown-linux-gnu";
 /// pairs only; anything else fails closed) or the compiled default pin.
 /// `version` is the compiled Mise release; `sha256` is the verified
 /// installed-binary digest, so this general-purpose setup path rejects labels
-/// outside x64 Linux rather than emitting a digest for the wrong architecture.
+/// outside supported x64-Linux runners rather than emitting a wrong digest.
 pub(crate) fn resolve_mise_setup(
     config: &VelnorConfig,
     label: &str,
@@ -80,6 +90,29 @@ pub(crate) fn resolve_verification_mise_setup(
         uses: mise_action_uses(config)?,
         version: MISE_VERSION.to_owned(),
         sha256: sha256.to_owned(),
+    })
+}
+
+/// Resolve the official macOS Intel Mise setup used by the Phase0 job.
+pub(crate) fn resolve_macos_x64_mise_setup(
+    config: &VelnorConfig,
+) -> Result<MiseSetup, OrchestratorError> {
+    Ok(MiseSetup {
+        uses: mise_action_uses(config)?,
+        version: MISE_VERSION.to_owned(),
+        sha256: MISE_BINARY_SHA256_MACOS_X64.to_owned(),
+    })
+}
+
+/// Resolve every Mise executable platform used by generated jobs.
+pub(crate) fn resolve_mise_setup_set(
+    config: &VelnorConfig,
+    linux_label: &str,
+) -> Result<MiseSetupSet, OrchestratorError> {
+    Ok(MiseSetupSet {
+        linux_x64: resolve_mise_setup(config, linux_label)?,
+        macos_arm64: resolve_verification_mise_setup(config, VerificationRunner::MacosArm64)?,
+        macos_x64: resolve_macos_x64_mise_setup(config)?,
     })
 }
 

@@ -45,10 +45,7 @@ fn action_uses_exact_cache_inputs_after_preflight() {
         with.get("toolchain").map(String::as_str),
         Some(TEST_RUST_TOOLCHAIN)
     );
-    assert!(
-        !with.contains_key("version"),
-        "preflight owns exact MBX identity"
-    );
+    assert_eq!(with.get("version").map(String::as_str), Some(TEST_MBX_VERSION));
     let action_sha = MBX_ACTION
         .strip_prefix("jdx/mr-boxington-action@")
         .expect("SHA ref");
@@ -147,7 +144,7 @@ fn rendered_action_receives_preflight_paths_and_matching_tool_homes() -> Result<
         .expect("rendered preflight");
     let action = names
         .iter()
-        .position(|name| name == "Restore MBX objects")
+        .position(|name| name == "Prepare MBX local cache store")
         .expect("rendered MBX action");
     assert!(preflight < action, "rendered order: {names:?}");
     let rustup_home = "$".to_owned() + "{{ runner.temp }}/velnor/rustup";
