@@ -127,15 +127,13 @@ fn plan_100_crates_reports_matrix_budget() -> TestResult {
     Ok(())
 }
 
-/// The cache-complete 29-member fixture fits; the 30/40/100 fixtures fail closed.
+/// Measured generation stays within the fixed byte cap for 1/10/29/30/40 members.
 ///
 /// The 500,000-byte workflow contract, not a crate-count promise, is the
-/// limit. Runtime-qualified V2 cache preludes are emitted in each independent
-/// consumer job, so this deterministic fixture exceeds that byte ceiling at
-/// 30 members; 29 remains below it with measured headroom.
+/// limit. The 60/100-member fixtures are retained as measured over-cap failures.
 #[test]
 fn generate_scales_to_workflow_file_limit_then_fails_closed() -> TestResult {
-    for members in [1_usize, 10, 29, 30, 40, 100] {
+    for members in [1_usize, 10, 29, 30, 40, 60, 100] {
         let repo = workspace_repo(members)?;
         let root = repo.path();
         let prep = timed(|| prepare(root));
@@ -146,7 +144,7 @@ fn generate_scales_to_workflow_file_limit_then_fails_closed() -> TestResult {
             output_dir: Some(target.clone()),
         };
         let (result, gen_ms) = timed(|| generate(&prep, &opts));
-        if members >= 30 {
+        if members >= 60 {
             let Err(error) = result else {
                 return Err(std::io::Error::other(format!(
                     "{members}-member workflow unexpectedly fit the contract"

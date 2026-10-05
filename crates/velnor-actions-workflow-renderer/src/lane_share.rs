@@ -162,9 +162,16 @@ fn split_pair(hosted: &Job, local: &Job, checkout_uses: &str) -> Option<SharedLa
     if hosted_checkout != local_checkout {
         return None;
     }
-    let (hosted_runtime_prelude, hosted_steps) = runtime::peel_tools_cache_prelude(hosted_steps)?;
-    let (local_runtime_prelude, local_steps) = runtime::peel_tools_cache_prelude(local_steps)?;
-    if !runtime::same_tools_cache_prelude_shape(&hosted_runtime_prelude, &local_runtime_prelude) {
+    let (hosted_runtime_prelude, hosted_steps) =
+        runtime::peel_tools_cache_prelude(hosted_steps, &hosted.runs_on)?;
+    let (local_runtime_prelude, local_steps) =
+        runtime::peel_tools_cache_prelude(local_steps, &local.runs_on)?;
+    if !runtime::same_tools_cache_prelude_shape(
+        &hosted_runtime_prelude,
+        &local_runtime_prelude,
+        &hosted.runs_on,
+        &local.runs_on,
+    ) {
         return None;
     }
     let mut parts = split_shared_steps(hosted_checkout, &hosted_steps, &local_steps)?;
@@ -327,7 +334,15 @@ fn composite_file(
     let mut rendered = Vec::with_capacity(steps.len());
     let empty_job_env = BTreeMap::new();
     for step in steps {
-        rendered.push(step_to_yaml(logical, step, ctx, &[], true, &empty_job_env)?);
+        rendered.push(step_to_yaml(
+            logical,
+            step,
+            ctx,
+            &[],
+            true,
+            &empty_job_env,
+            None,
+        )?);
     }
     let body = composite_yaml(logical, rendered)?;
     let quoted = crate::yaml::quote_run_values_in_yaml(body);

@@ -51,6 +51,7 @@ pub(crate) enum Mode {
     Forbidden,
     AckFail,
     JitFail,
+    JitConflict,
 }
 
 impl Transport for Script {
@@ -61,6 +62,12 @@ impl Transport for Script {
         }
         if request.path.contains("generatejitconfig") {
             self.calls.push("jit");
+            if matches!(self.mode, Mode::JitConflict) {
+                return Ok(Exchange {
+                    status: 409,
+                    body: Vec::new(),
+                });
+            }
             if matches!(self.mode, Mode::JitFail) {
                 return Err(TransportFail::Http(500));
             }

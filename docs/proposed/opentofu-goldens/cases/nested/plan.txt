@@ -40,7 +40,8 @@ Workflow to generate
   Clippy memory groups: 1; barriers: 0
   Cache layers: Mise tools, Cargo sources
   Actionlint: 1.7.12 pinned
-  Action pins: 6
+  Action pins: 7
+    - ./.github/actions/u26
     - actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
     - actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
     - actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1

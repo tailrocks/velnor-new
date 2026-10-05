@@ -28,13 +28,12 @@ mismatched runtime identity disables both restore and save; pinned tool setup co
 
 ## Workflow lifecycle
 
-Generated jobs run the renderer-owned identity step and read-only restore before Setup Mise. Mise's built-in
-cache is disabled so only the V2 archive owns these paths. Save uses the same key and path set and runs only
-after success on a protected default-branch push when runtime identity passed.
+Supported hosted jobs run the renderer-owned identity step and read-only restore before Setup Mise. Mise's
+built-in cache is disabled so only the V2 archive owns these paths. Save uses the same key and path set and runs
+only after success on a protected default-branch push when runtime identity passed.
 
-Paired hosted and Scale Set jobs keep separate identity and restore preludes after checkout and before their
-shared composite action. The runtime identity includes the lane selector, so one lane cannot restore the
-other lane's archive. Elected saves remain on their winning job after the shared action. Scale Set image
-identity remains unqualified and therefore takes the cold path.
+Paired hosted and Scale Set jobs preserve checkout, cache, and shared-work ordering. Only the hosted lane gets a
+V2 prelude; Scale Set identity remains unqualified, so it emits no V2 restore/save and takes the cold path.
+Elected hosted saves remain on their winning job after the shared action.
 
 No V1 tools-cache key, built-in Mise cache path, or legacy Cargo-home alias is emitted by the renderer.

@@ -144,13 +144,17 @@ fn pure_tofu_repo_drops_all_rust_setup() -> TestResult {
     let tree = render_staged_tree(&prep)?;
     let yaml = tree.get(WORKFLOW_PATH).ok_or("missing workflow")?;
     let plan_window = job_window(yaml, "plan")?;
-    assert!(plan_window.contains("name: Identify Mise cache runtime"));
-    assert!(plan_window.contains("MISE_RUSTUP_HOME:"));
-    assert!(plan_window.contains("MISE_CARGO_HOME:"));
+    assert!(plan_window.contains("name: V2 identity"));
+    assert!(plan_window.contains("uses: ./.github/actions/u26"));
     assert!(
         !plan_window.contains("RUSTUP_TOOLCHAIN:"),
         "pure-tofu plan configures no Rust toolchain:\n{plan_window}"
     );
+    let identity_action = tree
+        .get(".github/actions/u26/action.yml")
+        .ok_or("missing V2 identity action")?;
+    assert!(identity_action.contains("MISE_RUSTUP_HOME:"));
+    assert!(identity_action.contains("MISE_CARGO_HOME:"));
     Ok(())
 }
 

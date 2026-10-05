@@ -85,6 +85,9 @@ pub(crate) fn ensure_tools_cache_v2(
         rustup_toolchain: rust_version,
         rustup_components: &components,
     })?;
+    if !payload.runtime_identity_supported() {
+        return Ok(());
+    }
     let identity = payload.runtime_identity_step()?;
     let restore = payload.restore_step()?;
     job.steps

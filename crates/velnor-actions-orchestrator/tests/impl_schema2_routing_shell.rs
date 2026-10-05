@@ -8,22 +8,24 @@ pub(super) fn assert_scale_set_shell_and_same_steps(
     );
     assert!(!hosted.contains("defaults:"), "{hosted}");
     assert_eq!(tool_lines(hosted), tool_lines(local));
-    let hosted_identity = named_step(hosted, "Identify Mise cache runtime")?;
-    let local_identity = named_step(local, "Identify Mise cache runtime")?;
-    for body in [hosted, local] {
-        let checkout = position(body, "uses: actions/checkout@")?;
-        let identity = position(body, "name: Identify Mise cache runtime")?;
-        let restore = position(body, "name: Restore Mise tools")?;
-        let shared = position(body, "uses: ./.github/actions/rust-demo")?;
-        assert!(checkout < identity && identity < restore && restore < shared);
-        assert!(named_step(body, "Identify Mise cache runtime")?.contains("VELNOR_CACHE_LANE"));
-        assert!(named_step(body, "Restore Mise tools")?.contains("actions/cache/restore@"));
-        if let Some(save) = optional_named_step(body, "Save Mise tools") {
-            let save_at = position(body, "name: Save Mise tools")?;
-            assert!(shared < save_at && save.contains("actions/cache/save@"));
-        }
+    let checkout = position(hosted, "uses: actions/checkout@")?;
+    let identity = position(hosted, "name: V2 identity")?;
+    let restore = position(hosted, "name: Restore Mise tools")?;
+    let shared = position(hosted, "uses: ./.github/actions/rust-demo")?;
+    assert!(checkout < identity && identity < restore && restore < shared);
+    assert!(named_step(hosted, "V2 identity")?.contains("uses: ./.github/actions/u26"));
+    assert!(named_step(hosted, "Restore Mise tools")?.contains("actions/cache/restore@"));
+    if let Some(save) = optional_named_step(hosted, "Save Mise tools") {
+        let save_at = position(hosted, "name: Save Mise tools")?;
+        assert!(shared < save_at && save.contains("actions/cache/save@"));
     }
-    assert_ne!(hosted_identity, local_identity);
+    assert!(
+        position(local, "uses: actions/checkout@")?
+            < position(local, "uses: ./.github/actions/rust-demo")?
+    );
+    assert!(optional_named_step(local, "V2 identity").is_none());
+    assert!(optional_named_step(local, "Restore Mise tools").is_none());
+    assert!(optional_named_step(local, "Save Mise tools").is_none());
     Ok(())
 }
 
@@ -42,7 +44,7 @@ fn tool_lines(body: &str) -> Vec<&str> {
             if in_steps && indent == 6 && content.starts_with("- name:") {
                 lane_specific_cache_step = matches!(
                     content,
-                    "- name: Identify Mise cache runtime"
+                    "- name: V2 identity"
                         | "- name: Restore Mise tools"
                         | "- name: Save Mise tools"
                 );

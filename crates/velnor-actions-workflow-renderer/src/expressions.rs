@@ -80,7 +80,7 @@ const WITH_EXPRESSIONS: [&str; 8] = [
     "steps.publish-baseline.outputs.artifact_name",
     "steps.mbx-cache-key.outputs.key",
     "steps.mbx-cache-key.outputs.prefix",
-    "steps.velnor-tool-cache-identity.outputs.identity",
+    "steps.v2.outputs.identity",
 ];
 
 /// True for a `matrix.*` field reference (both layers allow the family).
@@ -113,11 +113,21 @@ fn is_hash_files(inner: &str) -> bool {
 /// Reject unlisted `${{ }}` spans in one shell-step env value.
 /// # Errors
 pub(crate) fn check_env_value(key: &str, value: &str) -> Result<(), RenderError> {
+    check_env_value_with_scope(key, value, false)
+}
+
+/// Validate env expressions scoped to a generated composite action body.
+pub(crate) fn check_composite_env_value(key: &str, value: &str) -> Result<(), RenderError> {
+    check_env_value_with_scope(key, value, true)
+}
+
+fn check_env_value_with_scope(key: &str, value: &str, composite: bool) -> Result<(), RenderError> {
     let Some(spans) = expression_spans(value) else {
         return Err(RenderError::BadCommand(format!("bad_env_expression:{key}")));
     };
     for inner in spans {
-        if !ENV_EXPRESSIONS.contains(&inner) && !is_matrix_field(inner) {
+        let composite_input = composite && inner == "inputs.digest";
+        if !ENV_EXPRESSIONS.contains(&inner) && !is_matrix_field(inner) && !composite_input {
             return Err(RenderError::BadCommand(format!("bad_env_expression:{key}")));
         }
     }

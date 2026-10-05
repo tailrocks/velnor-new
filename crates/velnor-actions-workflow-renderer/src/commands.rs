@@ -62,6 +62,18 @@ pub fn validate_command_argv(argv: &[String]) -> Result<(), RenderError> {
 ///
 /// Returns [`RenderError::BadCommand`] or [`RenderError::PrivateSubcommand`].
 pub fn validate_env(env: &BTreeMap<String, String>) -> Result<(), RenderError> {
+    validate_env_in_scope(env, false)
+}
+
+/// Validate environment for a generated composite action's typed inputs.
+pub(crate) fn validate_composite_env(env: &BTreeMap<String, String>) -> Result<(), RenderError> {
+    validate_env_in_scope(env, true)
+}
+
+fn validate_env_in_scope(
+    env: &BTreeMap<String, String>,
+    composite: bool,
+) -> Result<(), RenderError> {
     for (key, value) in env {
         if key.is_empty()
             || !key
@@ -76,7 +88,11 @@ pub fn validate_env(env: &BTreeMap<String, String>) -> Result<(), RenderError> {
         {
             return Err(RenderError::BadCommand(format!("bad_env_value:{key}")));
         }
-        crate::expressions::check_env_value(key, value)?;
+        if composite {
+            crate::expressions::check_composite_env_value(key, value)?;
+        } else {
+            crate::expressions::check_env_value(key, value)?;
+        }
         scan_for_private_subcommands(key)?;
         scan_for_private_subcommands(value)?;
     }
