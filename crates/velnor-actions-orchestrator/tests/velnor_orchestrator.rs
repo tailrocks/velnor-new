@@ -59,6 +59,7 @@ mod impl_orch_lock_audit;
 mod impl_orch_merge;
 mod impl_orch_merge_final;
 mod impl_orch_p08;
+mod impl_orch_p08_pr_policy;
 mod impl_orch_plansel;
 mod impl_orch_release_emit;
 mod impl_orch_timeout;
