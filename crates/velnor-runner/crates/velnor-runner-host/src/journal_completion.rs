@@ -2,7 +2,6 @@
 
 use crate::error::HostError;
 use crate::journal::Journal;
-use crate::journal_sql::one_row;
 use crate::reconcile::IntentRow;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -147,18 +146,80 @@ impl Journal {
     pub(crate) async fn mark_completion_worker_cleanup_proven(
         &self,
         id: i64,
-    ) -> Result<(), HostError> {
+        generation: i64,
+        now: i64,
+    ) -> Result<bool, HostError> {
+        if id <= 0 || generation <= 0 || now < 0 {
+            return Err(HostError::Journal);
+        }
         let _write = self.write_guard().await;
         self.sync_lineage().await?;
         let connection = self.connection().await?;
         let changed = connection
             .execute(
-                "UPDATE intents SET worker_cleanup_proven = 1 WHERE id = ?1 AND kind = 'launch' AND runner_completed = 1 AND cleanup_proven = 0",
-                [id],
+                "UPDATE intents SET worker_cleanup_proven = 1 WHERE id = ?1 AND kind = 'launch' AND runner_completed = 1 AND cleanup_proven = 0 AND EXISTS (SELECT 1 FROM completion_cleanup AS c WHERE c.intent_id = intents.id AND c.claim_generation = ?2 AND c.lease_until > ?3)",
+                (id, generation, now),
             )
             .await
             .map_err(|_| HostError::Journal);
-        self.sync_after(changed.and_then(one_row)).await
+        let marked = self.sync_after(changed.map(|rows| rows == 1)).await?;
+        Ok(marked)
+    }
+
+    /// Commit final completion cleanup only for the current unexpired claim.
+    ///
+    /// This transition frees the occupied slot and removes the claim atomically.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`HostError::Journal`] when the transaction or lineage sync fails.
+    pub(crate) async fn record_completion_cleanup(
+        &self,
+        id: i64,
+        generation: i64,
+        now: i64,
+    ) -> Result<bool, HostError> {
+        if id <= 0 || generation <= 0 || now < 0 {
+            return Err(HostError::Journal);
+        }
+        let _write = self.write_guard().await;
+        self.sync_lineage().await?;
+        let connection = self.connection().await?;
+        connection
+            .execute("BEGIN IMMEDIATE", ())
+            .await
+            .map_err(|_| HostError::Journal)?;
+        let result = async {
+            let changed = connection
+                .execute(
+                    "UPDATE intents SET cleanup_proven = 1 WHERE id = ?1 AND kind = 'launch' AND runner_completed = 1 AND worker_cleanup_proven = 1 AND cleanup_proven = 0 AND EXISTS (SELECT 1 FROM completion_cleanup AS c WHERE c.intent_id = intents.id AND c.claim_generation = ?2 AND c.lease_until > ?3)",
+                    (id, generation, now),
+                )
+                .await
+                .map_err(|_| HostError::Journal)?;
+            if changed == 0 {
+                return Ok(false);
+            }
+            let removed = connection
+                .execute(
+                    "DELETE FROM completion_cleanup WHERE intent_id = ?1 AND claim_generation = ?2 AND lease_until > ?3",
+                    (id, generation, now),
+                )
+                .await
+                .map_err(|_| HostError::Journal)?;
+            if removed != 1 {
+                return Err(HostError::Journal);
+            }
+            Ok(true)
+        }
+        .await;
+        let ended = if result.is_ok() {
+            connection.execute("COMMIT", ()).await
+        } else {
+            connection.execute("ROLLBACK", ()).await
+        };
+        ended.map_err(|_| HostError::Journal)?;
+        self.sync_after(result).await
     }
 
     /// Return whether cleanup proof was committed before archive-lease retirement.

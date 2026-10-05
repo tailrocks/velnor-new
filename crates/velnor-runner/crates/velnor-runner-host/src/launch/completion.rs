@@ -5,14 +5,14 @@ use std::sync::{
     atomic::{AtomicUsize, Ordering},
 };
 
-use velnor_runner_github::{InnerJob, InnerKind, Transport, get_runner_by_name, remove_runner};
+use velnor_runner_github::{InnerJob, InnerKind, Transport};
 
 use super::capacity;
 use crate::journal::Journal;
 use crate::listen::Secret;
 use crate::reconcile::IntentRow;
 use crate::scale_set::EnsureError;
-use crate::stage::{PairEngine, cleanup_worker, reconcile_worker};
+use crate::stage::PairEngine;
 
 const CLEANUP_CONCURRENCY_LIMIT: u32 = 4;
 const CLEANUP_SCAN_LIMIT: u32 = 128;
@@ -23,12 +23,15 @@ static ACTIVE_CLEANUPS: OnceLock<Arc<AtomicUsize>> = OnceLock::new();
 #[cfg(test)]
 mod tests;
 
+mod reconcile;
 mod support;
 
-use support::{
-    completion_error, held, log_cleanup_error, map_journal, open_archive_store, retry_at,
-    runner_matches, unix_seconds,
+use reconcile::{
+    archive_store_for, cleanup_owned_pair, finish_proven_completion, observe_and_bind,
+    open_archive_lease, remove_registered_runner,
 };
+
+use support::{completion_error, held, log_cleanup_error, map_journal, retry_at, unix_seconds};
 
 pub(super) async fn record_completion_events(
     journal: &Journal,
@@ -113,34 +116,72 @@ where
         .map_err(map_journal)?;
     let mut handles = Vec::new();
     let token = Secret::new(admin_token);
-    let lease_until = now
-        .checked_add(CLEANUP_LEASE_SECONDS)
-        .ok_or_else(completion_error)?;
+    let schedule = CleanupSchedule {
+        transport: &transport,
+        set_id,
+        token: &token,
+        journal,
+        docker,
+        active: &active,
+        limit,
+    };
     for row in pending {
-        if !claim_cleanup_slot(&active, limit) {
-            continue;
+        if let Some(handle) = schedule.one(row, now).await? {
+            handles.push(handle);
         }
-        let claim = journal
+    }
+    Ok(handles)
+}
+
+struct CleanupSchedule<'a, T, E> {
+    transport: &'a T,
+    set_id: i64,
+    token: &'a Secret,
+    journal: &'a Journal,
+    docker: &'a E,
+    active: &'a Arc<AtomicUsize>,
+    limit: usize,
+}
+
+impl<T, E> CleanupSchedule<'_, T, E>
+where
+    T: Transport + Clone + Send + 'static,
+    E: PairEngine + Clone + Send + Sync + 'static,
+{
+    async fn one(
+        &self,
+        row: IntentRow,
+        now: i64,
+    ) -> Result<Option<tokio::task::JoinHandle<()>>, EnsureError> {
+        let lease_until = now
+            .checked_add(CLEANUP_LEASE_SECONDS)
+            .ok_or_else(completion_error)?;
+        if !claim_cleanup_slot(self.active, self.limit) {
+            return Ok(None);
+        }
+        let claim = self
+            .journal
             .claim_completion_cleanup(row.id, now, lease_until)
             .await;
         let claim = match claim {
             Ok(Some(claim)) => claim,
             Ok(None) => {
-                active.fetch_sub(1, Ordering::AcqRel);
-                continue;
+                self.active.fetch_sub(1, Ordering::AcqRel);
+                return Ok(None);
             }
             Err(error) => {
-                active.fetch_sub(1, Ordering::AcqRel);
+                self.active.fetch_sub(1, Ordering::AcqRel);
                 return Err(map_journal(error));
             }
         };
-        let task_journal = journal.clone();
-        let task_docker = docker.clone();
-        let task_token = Secret::new(token.expose());
-        let task_row = row.clone();
-        let mut task_transport = transport.clone();
-        let task_active = Arc::clone(&active);
-        handles.push(tokio::task::spawn_blocking(move || {
+        let task_journal = self.journal.clone();
+        let task_docker = self.docker.clone();
+        let task_token = Secret::new(self.token.expose());
+        let task_row = row;
+        let mut task_transport = self.transport.clone();
+        let task_active = Arc::clone(self.active);
+        let set_id = self.set_id;
+        Ok(Some(tokio::task::spawn_blocking(move || {
             let _permit = CleanupPermit(task_active);
             let runtime = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
@@ -154,6 +195,7 @@ where
                 task_token.expose(),
                 &task_journal,
                 &task_docker,
+                claim.generation,
                 task_row.clone(),
             ));
             if !matches!(result, Ok(true)) {
@@ -175,10 +217,8 @@ where
                     claim.generation
                 );
             }
-        }));
+        })))
     }
-    drop(transport);
-    Ok(handles)
 }
 
 async fn record_completion(
@@ -208,126 +248,67 @@ async fn reconcile_one<T: Transport + ?Sized, E: PairEngine>(
     admin_token: &str,
     journal: &Journal,
     docker: &E,
+    claim_generation: i64,
     row: IntentRow,
 ) -> Result<bool, EnsureError> {
     let identity = journal.launch_identity(row.id).await.map_err(map_journal)?;
-    let archive_store = if row.seed_generation_id.is_some() {
-        match open_archive_store(journal) {
-            Ok(store) => Some(store),
-            Err(_) => return held(&row, "archive-store-unavailable"),
-        }
-    } else {
-        None
+    let archive_store = match archive_store_for(journal, &row) {
+        Ok(store) => store,
+        Err(stage) => return held(&row, stage),
     };
     if journal
         .completion_worker_cleanup_proven(row.id)
         .await
         .map_err(map_journal)?
     {
-        if let (Some(store), Some(generation)) =
-            (archive_store.as_ref(), row.seed_generation_id.as_deref())
-        {
-            if store
-                .release_after_confirmed_cleanup(identity.launch_id(), generation)
-                .is_err()
-            {
-                return held(&row, "archive-lease-retirement");
-            }
-        }
-        journal.record_cleanup(row.id).await.map_err(map_journal)?;
-        return Ok(true);
+        return finish_proven_completion(
+            journal,
+            &row,
+            &identity,
+            archive_store.as_ref(),
+            claim_generation,
+        )
+        .await;
     }
-    let archive_lease = match (archive_store.as_ref(), row.seed_generation_id.as_deref()) {
-        (Some(store), Some(generation)) => {
-            match store.open_existing_lease(identity.launch_id(), generation) {
-                Ok(lease) => Some(lease),
-                Err(_) => return held(&row, "archive-lease-unavailable"),
-            }
-        }
-        (None, None) => None,
-        _ => return held(&row, "archive-lease-identity"),
+    let archive_lease = match open_archive_lease(archive_store.as_ref(), &row, &identity) {
+        Ok(lease) => lease,
+        Err(stage) => return held(&row, stage),
+    };
+    let Some(observed) =
+        observe_and_bind(docker, journal, &row, &identity, archive_lease.as_ref()).await?
+    else {
+        return Ok(false);
     };
     let runner_name = format!("v{}", identity.launch_id());
-    let observed = match reconcile_worker(
-        docker,
-        &identity,
-        row.docker_id.as_deref(),
-        row.dind_id.as_deref(),
-        archive_lease.as_ref(),
-    )
-    .await
+    if let Err(stage) = remove_registered_runner(
+        transport,
+        admin_token,
+        set_id,
+        &runner_name,
+        row.github_runner_id.as_deref(),
+    ) {
+        return held(&row, stage);
+    }
+    if let Err(stage) =
+        cleanup_owned_pair(docker, &identity, &observed, &row, archive_lease.as_ref()).await
     {
-        Ok(observed) => observed,
-        Err(_) => return held(&row, "docker-observation"),
-    };
-    if observed.runner_running() == Some(true) {
-        return held(&row, "runner-active");
+        return held(&row, stage);
     }
-    if observed.runner_id().is_some() && observed.runner_running() != Some(false) {
-        return held(&row, "runner-state-unknown");
-    }
-    if let Some(runner_id) = observed.runner_id() {
-        journal
-            .bind_runner_container(row.id, runner_id)
-            .await
-            .map_err(map_journal)?;
-    }
-    if let Some(dind_id) = observed.dind_id() {
-        journal
-            .bind_dind_container(row.id, dind_id)
-            .await
-            .map_err(map_journal)?;
-    }
-    let github_runner_id = row
-        .github_runner_id
-        .as_deref()
-        .and_then(|id| id.parse::<i64>().ok());
-    let Some(github_runner_id) = github_runner_id else {
-        return held(&row, "github-id-missing");
-    };
-    match get_runner_by_name(transport, &runner_name, admin_token) {
-        Ok(Some(runner)) if runner_matches(&runner, github_runner_id, set_id, &runner_name) => {
-            if remove_runner(transport, runner.id, admin_token).is_err() {
-                return held(&row, "github-delete");
-            }
-            match get_runner_by_name(transport, &runner_name, admin_token) {
-                Ok(None) => {}
-                Ok(Some(_)) => return held(&row, "github-still-present"),
-                Err(_) => return held(&row, "github-confirm-absence"),
-            }
-        }
-        Ok(None) => {}
-        Ok(Some(_)) => return held(&row, "github-identity"),
-        Err(_) => return held(&row, "github-lookup"),
-    }
-    if cleanup_worker(
-        docker,
-        &identity,
-        observed.runner_id().or(row.docker_id.as_deref()),
-        observed.dind_id().or(row.dind_id.as_deref()),
-        archive_lease.as_ref(),
-    )
-    .await
-    .is_err()
-    {
-        return held(&row, "docker-cleanup");
-    }
-    journal
-        .mark_completion_worker_cleanup_proven(row.id)
+    let marked = journal
+        .mark_completion_worker_cleanup_proven(row.id, claim_generation, unix_seconds()?)
         .await
         .map_err(map_journal)?;
-    if let (Some(store), Some(generation)) =
-        (archive_store.as_ref(), row.seed_generation_id.as_deref())
-    {
-        if store
-            .release_after_confirmed_cleanup(identity.launch_id(), generation)
-            .is_err()
-        {
-            return held(&row, "archive-lease-retirement");
-        }
+    if !marked {
+        return held(&row, "cleanup-claim-expired");
     }
-    journal.record_cleanup(row.id).await.map_err(map_journal)?;
-    Ok(true)
+    finish_proven_completion(
+        journal,
+        &row,
+        &identity,
+        archive_store.as_ref(),
+        claim_generation,
+    )
+    .await
 }
 
 fn cleanup_slots() -> Arc<AtomicUsize> {

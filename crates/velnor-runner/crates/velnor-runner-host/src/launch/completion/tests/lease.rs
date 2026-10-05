@@ -107,8 +107,13 @@ async fn restart_retires_archive_lease_after_durable_worker_cleanup_proof() -> R
     completion::record_completion_events(&journal, 7, &completion_poll(90, 100, &runner_name))
         .await
         .map_err(|error| error.to_string())?;
+    let claim = journal
+        .claim_completion_cleanup(id, 100, 110)
+        .await
+        .map_err(|error| error.to_string())?
+        .ok_or_else(|| "expected cleanup claim".to_owned())?;
     journal
-        .mark_completion_worker_cleanup_proven(id)
+        .mark_completion_worker_cleanup_proven(id, claim.generation, 101)
         .await
         .map_err(|error| error.to_string())?;
     assert!(
@@ -159,6 +164,75 @@ async fn restart_retires_archive_lease_after_durable_worker_cleanup_proof() -> R
         api.calls()?.is_empty(),
         "restart must not repeat GitHub cleanup"
     );
+    assert!(
+        journal
+            .intent(id)
+            .await
+            .map_err(|error| error.to_string())?
+            .cleanup_proven
+    );
+    assert_eq!(journal.occupied_launches().await, Ok(0));
+    assert!(
+        store
+            .open_existing_lease(identity.launch_id(), lease.generation_id())
+            .is_err()
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn restart_finishes_after_archive_retirement_before_journal_commit() -> Result<(), String> {
+    let (scratch, journal) = open("completion-lease-retired-before-journal").await?;
+    let (id, identity, _runner_id, _dind_id) = launch(&journal, 7, 92).await?;
+    let (archive_root, store, lease) = seed_archive_lease(&journal, id, &identity).await?;
+    let runner_name = format!("v{}", identity.launch_id());
+    completion::record_completion_events(&journal, 7, &completion_poll(92, 102, &runner_name))
+        .await
+        .map_err(|error| error.to_string())?;
+    let claim = journal
+        .claim_completion_cleanup(id, 100, 110)
+        .await
+        .map_err(|error| error.to_string())?
+        .ok_or_else(|| "expected cleanup claim".to_owned())?;
+    assert!(
+        journal
+            .mark_completion_worker_cleanup_proven(id, claim.generation, 101)
+            .await
+            .map_err(|error| error.to_string())?
+    );
+    store
+        .release_after_confirmed_cleanup(identity.launch_id(), lease.generation_id())
+        .map_err(|error| error.to_string())?;
+    assert!(
+        !journal
+            .intent(id)
+            .await
+            .map_err(|error| error.to_string())?
+            .cleanup_proven
+    );
+    drop(store);
+    drop(journal);
+
+    let journal = crate::Journal::open(&scratch.file())
+        .await
+        .map_err(|error| error.to_string())?;
+    let store =
+        ActionArchiveStore::open_existing(&archive_root).map_err(|error| error.to_string())?;
+    let api = BlockingRunnerApi::released(&runner_name, 102);
+    let tasks = completion::schedule_completed_isolated(
+        api.clone(),
+        7,
+        "admin-token",
+        journal.clone(),
+        CompletionEngine::empty(),
+    )
+    .await
+    .map_err(|error| error.to_string())?;
+    assert_eq!(tasks.len(), 1);
+    for task in tasks {
+        task.await.map_err(|error| error.to_string())?;
+    }
+    assert!(api.calls()?.is_empty());
     assert!(
         journal
             .intent(id)

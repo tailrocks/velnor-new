@@ -54,6 +54,77 @@ async fn cleanup_claim_generation_fences_a_stale_worker_after_restart() -> Resul
 }
 
 #[tokio::test]
+async fn stale_claim_cannot_prove_or_commit_cleanup_after_reopen() -> Result<(), String> {
+    let (scratch, journal) = open("completion-stale-success").await?;
+    let id = completed_launch(&journal, 91).await?;
+    let mut now = 100_i64;
+    let mut stale = None;
+    for expected in 1_i64..=5 {
+        let claim = journal
+            .claim_completion_cleanup(id, now, now + 10)
+            .await
+            .map_err(|error| error.to_string())?
+            .ok_or_else(|| "expected a cleanup claim".to_owned())?;
+        assert_eq!(claim.generation, expected);
+        stale = Some(claim);
+        now += 10;
+    }
+    let stale = stale.ok_or_else(|| "expected the fifth cleanup claim".to_owned())?;
+    drop(journal);
+
+    let journal = crate::Journal::open(&scratch.file())
+        .await
+        .map_err(|error| error.to_string())?;
+    let current = journal
+        .claim_completion_cleanup(id, now, now + 10)
+        .await
+        .map_err(|error| error.to_string())?
+        .ok_or_else(|| "expected claim after restart".to_owned())?;
+    assert_eq!(current.generation, 6);
+    assert_eq!(
+        journal
+            .mark_completion_worker_cleanup_proven(id, stale.generation, now + 1)
+            .await,
+        Ok(false)
+    );
+    assert_eq!(
+        journal
+            .record_completion_cleanup(id, stale.generation, now + 1)
+            .await,
+        Ok(false)
+    );
+    assert!(
+        !journal
+            .completion_worker_cleanup_proven(id)
+            .await
+            .map_err(|error| error.to_string())?
+    );
+    assert_eq!(journal.occupied_launches().await, Ok(1));
+    assert_eq!(
+        journal
+            .claim_completion_cleanup(id, now + 1, now + 11)
+            .await
+            .map_err(|error| error.to_string())?,
+        None,
+        "stale success must not release the new claim"
+    );
+    assert!(
+        journal
+            .mark_completion_worker_cleanup_proven(id, current.generation, now + 2)
+            .await
+            .map_err(|error| error.to_string())?
+    );
+    assert!(
+        journal
+            .record_completion_cleanup(id, current.generation, now + 3)
+            .await
+            .map_err(|error| error.to_string())?
+    );
+    assert_eq!(journal.occupied_launches().await, Ok(0));
+    Ok(())
+}
+
+#[tokio::test]
 async fn cleanup_claim_generation_overflow_fails_closed() -> Result<(), String> {
     let (_scratch, journal) = open("completion-claim-overflow").await?;
     let id = completed_launch(&journal, 87).await?;
@@ -128,10 +199,17 @@ async fn completion_cleanup_marker_is_durable_before_archive_retirement() -> Res
             .await
             .map_err(|error| error.to_string())?
     );
-    journal
-        .mark_completion_worker_cleanup_proven(id)
+    let claim = journal
+        .claim_completion_cleanup(id, 100, 110)
         .await
-        .map_err(|error| error.to_string())?;
+        .map_err(|error| error.to_string())?
+        .ok_or_else(|| "expected completion cleanup claim".to_owned())?;
+    assert!(
+        journal
+            .mark_completion_worker_cleanup_proven(id, claim.generation, 101)
+            .await
+            .map_err(|error| error.to_string())?
+    );
     drop(journal);
     let reopened = crate::Journal::open(&scratch.file())
         .await
