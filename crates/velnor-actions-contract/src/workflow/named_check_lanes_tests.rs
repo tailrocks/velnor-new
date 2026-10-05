@@ -3,7 +3,7 @@
 use super::*;
 use crate::config::{CheckExecutor, CheckPlatform, CheckRunner};
 use crate::workflow::{Concurrency, Job, JobTimeout, Permissions, Step, Trigger, WorkflowIr};
-use crate::{VelnorConfig, expand_workflow};
+use crate::{StepRole, VelnorConfig, expand_workflow};
 use std::collections::{BTreeMap, BTreeSet};
 
 fn runner(label: &str, platform: CheckPlatform) -> CheckRunner {
@@ -45,7 +45,7 @@ fn job(id: &str, check_runner: Option<CheckRunner>, needs: &[&str]) -> Job {
             Step {
                 name: "Upload reports".to_owned(),
                 id: None,
-                role: None,
+                role: Some(StepRole::MatrixReportUpload),
                 condition: Some("always()".to_owned()),
                 kind: StepKind::Action {
                     uses: "actions/upload-artifact@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
