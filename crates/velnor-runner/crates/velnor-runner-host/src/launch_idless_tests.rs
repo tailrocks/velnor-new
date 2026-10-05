@@ -1,7 +1,7 @@
 //! A launch row without worker IDs stays occupied until cleanup is proven.
 
 use crate::launch::{Admit, admission};
-use crate::launch_harness::{absent, assigned_wait, open};
+use crate::launch_harness::{absent, assigned_wait, open, started_progress};
 use crate::stage::PairEngine;
 use crate::worker::CreateProjection;
 use crate::{HostError, Journal, Outcome};
@@ -126,4 +126,25 @@ async fn partial_uncertain_row_still_blocks_its_mint() -> Result<(), String> {
 
 fn hex(n: u64) -> String {
     format!("{n:064x}")
+}
+
+#[tokio::test]
+async fn full_slot_acks_started_progress() -> Result<(), String> {
+    let (scratch, journal) = open("progress-full").await?;
+    uncertain_without_ids(&journal, "m8").await?;
+    let decision = admission(&Idle, &journal, 1, 1, 0, &started_progress(11, 5))
+        .await
+        .map_err(|err| err.to_string())?;
+    assert_eq!(decision, Admit::Ack { stop: false });
+    absent(&scratch.file())
+}
+
+#[tokio::test]
+async fn free_slot_still_scales_started_progress() -> Result<(), String> {
+    let (scratch, journal) = open("progress-free").await?;
+    let decision = admission(&Idle, &journal, 2, 2, 0, &started_progress(11, 1))
+        .await
+        .map_err(|err| err.to_string())?;
+    assert_eq!(decision, Admit::Start { stop: false });
+    absent(&scratch.file())
 }

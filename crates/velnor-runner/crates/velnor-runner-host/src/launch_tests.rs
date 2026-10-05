@@ -25,7 +25,7 @@ fn statistics_advance_and_offers_stay() {
     assert_eq!(idle(&assigned_wait(7, 1)), Idle::Scale);
     assert_eq!(idle(&assigned_wait(7, 0)), Idle::Ack);
     assert_eq!(idle(&assigned_wait(8, -1)), Idle::Blocked);
-    assert_eq!(idle(&started_progress(11, 5)), Idle::Ack);
+    assert_eq!(idle(&started_progress(11, 5)), Idle::Scale);
 }
 
 #[tokio::test]

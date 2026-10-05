@@ -122,6 +122,13 @@ async fn pump<H: PollHost>(
     }
 }
 
+fn progress_batch(polled: &Poll) -> bool {
+    let Poll::Batch(batch) = polled else {
+        return false;
+    };
+    crate::assign::progress_only(batch)
+}
+
 fn assigned_in(polled: &Poll) -> u32 {
     let Poll::Batch(batch) = polled else {
         return 0;
@@ -158,6 +165,7 @@ pub(crate) async fn admission<E: crate::stage::PairEngine + ?Sized>(
         running,
         assigned: assigned_in(polled),
         idle,
+        progress: progress_batch(polled),
     }))
 }
 
