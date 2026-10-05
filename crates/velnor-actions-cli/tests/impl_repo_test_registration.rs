@@ -1,5 +1,7 @@
 //! Cargo/rustc source closure for every registered workspace test target.
 
+#[path = "impl_repo_test_registration_cargo.rs"]
+mod cargo_config;
 #[path = "impl_repo_test_registration_dep_info.rs"]
 mod dep_info;
 #[path = "impl_repo_test_registration_fixtures.rs"]
@@ -48,6 +50,7 @@ fn cargo_output(manifest: &Path, args: &[&str]) -> Outcome<std::process::Output>
         .arg("--manifest-path")
         .arg(manifest)
         .args(options)
+        .env("CARGO_TARGET_DIR", cargo_config::cargo_target_dir()?)
         .current_dir(current_dir)
         .output()?;
     if !output.status.success() {

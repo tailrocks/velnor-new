@@ -171,6 +171,10 @@ fn compiler_closure_handles_paths_includes_macros_fixtures_and_orphans() -> Outc
     let workspace = super::workspace_plan(&manifest)?;
     let data_only = scratch.0.join("tests/orphan_data.rs").canonicalize()?;
     assert!(compiler_dependencies_contain(&workspace, &data_only)?);
+    assert!(
+        !scratch.0.join("target").exists(),
+        "nested Cargo test wrote artifacts into the scanned source tree"
+    );
     let (registered, orphans) = super::registration_audit(&[workspace])?;
     let registered_root = scratch.0.join("tests/registered.rs").canonicalize()?;
     let root_findings = super::graph::source_findings(&registered_root)?;
