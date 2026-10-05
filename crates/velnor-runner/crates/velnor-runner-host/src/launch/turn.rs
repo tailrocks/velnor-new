@@ -66,25 +66,58 @@ pub(super) async fn poll_and_drive(
     Ok(workers)
 }
 
+/// One session's poll and running-count source.
+trait PollHost {
+    /// `Ok(false)` keeps the session. `Ok(true)` is an admission stop.
+    async fn poll(&mut self, workers: &mut Vec<Started>) -> Result<bool, EnsureError>;
+
+    /// Owned containers still running.
+    async fn running(&mut self) -> Result<u32, EnsureError>;
+}
+
+impl PollHost for Turn<'_> {
+    async fn poll(&mut self, workers: &mut Vec<Started>) -> Result<bool, EnsureError> {
+        self.drive_poll(workers).await
+    }
+
+    async fn running(&mut self) -> Result<u32, EnsureError> {
+        slot::running_count(self.journal, self.docker).await
+    }
+}
+
 /// Keep polling after admission stops while an owned container is running.
+///
+/// An empty session stays open past `bound`. `launch_once` deletes the session
+/// only after this returns, so eight empty polls must not return.
 async fn until_idle(
     turn: &mut Turn<'_>,
+    workers: &mut Vec<Started>,
+    bound: usize,
+) -> Result<(), EnsureError> {
+    pump(turn, workers, bound).await
+}
+
+async fn pump<H: PollHost>(
+    host: &mut H,
     workers: &mut Vec<Started>,
     bound: usize,
 ) -> Result<(), EnsureError> {
     let mut polls = 0usize;
     let mut missed = 0u8;
     loop {
-        if polls >= bound && departed(turn, workers, missed).await? {
+        if polls >= bound && !workers.is_empty() && missed >= 2 && host.running().await? == 0 {
             return Ok(());
         }
-        let stop = turn.drive_poll(workers).await?;
+        let stop = host.poll(workers).await?;
         polls = polls.saturating_add(1);
         if !stop {
+            // The broker can assign a job only while this session still exists.
+            if workers.is_empty() {
+                tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+            }
             continue;
         }
-        let running = slot::running_count(turn.journal, turn.docker).await?;
-        if running > 0 {
+        if host.running().await? > 0 {
             missed = 0;
             tokio::time::sleep(std::time::Duration::from_secs(2)).await;
             continue;
@@ -95,11 +128,6 @@ async fn until_idle(
         }
         tokio::time::sleep(std::time::Duration::from_secs(2)).await;
     }
-}
-
-async fn departed(turn: &Turn<'_>, workers: &[Started], missed: u8) -> Result<bool, EnsureError> {
-    let running = slot::running_count(turn.journal, turn.docker).await?;
-    Ok(running == 0 && (workers.is_empty() || missed >= 2))
 }
 
 fn assigned_in(polled: &Poll) -> u32 {
@@ -231,5 +259,40 @@ impl Turn<'_> {
             return Ok(false);
         }
         Ok(true)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{PollHost, pump};
+    use crate::scale_set::EnsureError;
+    use crate::worker::Started;
+
+    struct Fake {
+        polls: usize,
+    }
+
+    impl PollHost for Fake {
+        async fn poll(&mut self, workers: &mut Vec<Started>) -> Result<bool, EnsureError> {
+            let _ = workers;
+            self.polls = self.polls.saturating_add(1);
+            Ok(self.polls >= 10)
+        }
+
+        async fn running(&mut self) -> Result<u32, EnsureError> {
+            Ok(0)
+        }
+    }
+
+    #[tokio::test]
+    async fn empty_polls_keep_the_same_session() -> Result<(), String> {
+        let mut host = Fake { polls: 0 };
+        let mut workers = Vec::new();
+        pump(&mut host, &mut workers, 8)
+            .await
+            .map_err(|err| err.to_string())?;
+        // Bound 8 used to return before this poll. `launch_once` deletes only after return.
+        assert!(host.polls >= 9, "{}", host.polls);
+        Ok(())
     }
 }
