@@ -4,7 +4,7 @@ use std::io::{self, Write};
 use flate2::Compression as GzipLevel;
 use flate2::write::GzEncoder;
 
-use super::{Profile, validate, validate_with_profile};
+use super::{ArchiveEncoding, Profile, validate, validate_with_profile};
 
 fn header(name: &str, kind: u8, size: u64) -> [u8; 512] {
     let mut block = [0_u8; 512];
@@ -103,6 +103,10 @@ fn assert_rejected<R: std::io::Read>(
 
 fn assert_rejected_tar(archive: &[u8], mode: &str, needle: &str) -> Result<(), Box<dyn Error>> {
     assert_rejected(gzip(archive)?.as_slice(), mode, needle)
+}
+
+fn assert_rejected_raw_tar(archive: &[u8], mode: &str, needle: &str) -> Result<(), Box<dyn Error>> {
+    assert_rejected(archive, mode, needle)
 }
 
 fn validate_tar(archive: &[u8], mode: &str) -> Result<(), Box<dyn Error>> {
@@ -237,7 +241,7 @@ fn candidate_mode_rejects_extension_headers() -> Result<(), Box<dyn Error>> {
         &pax_record("path", "file"),
     )?;
     finish_archive(&mut archive);
-    assert_rejected_tar(&archive, "candidate", "PAX tar extensions are forbidden")
+    assert_rejected_raw_tar(&archive, "candidate", "PAX tar extensions are forbidden")
 }
 
 #[test]
@@ -264,6 +268,7 @@ fn sparse_members_and_member_limits_are_rejected() -> Result<(), Box<dyn Error>>
     append_member(&mut archive, "two", b'0', b"y")?;
     finish_archive(&mut archive);
     let policy = Profile {
+        encoding: ArchiveEncoding::Gzip,
         input_limit: 4096,
         archive_limit: 4096,
         payload_limit: 10,
@@ -303,6 +308,7 @@ fn decompression_limit_covers_tail_after_tar_end_markers() -> Result<(), Box<dyn
     finish_archive(&mut archive);
     archive.resize(8192, 0);
     let mut policy = Profile {
+        encoding: ArchiveEncoding::Gzip,
         input_limit: 4096,
         archive_limit: 4096,
         payload_limit: 1024,
@@ -331,7 +337,7 @@ fn truncated_and_concatenated_gzip_streams_are_rejected() -> Result<(), Box<dyn 
     let compressed = gzip(&archive)?;
     assert_rejected(
         &compressed[..compressed.len() - 5],
-        "candidate",
+        "cargo-package",
         "archive read failed",
     )?;
 
@@ -339,7 +345,7 @@ fn truncated_and_concatenated_gzip_streams_are_rejected() -> Result<(), Box<dyn 
     concatenated.extend_from_slice(&gzip(&archive)?);
     assert_rejected(
         concatenated.as_slice(),
-        "candidate",
+        "cargo-package",
         "nonzero bytes follow tar end markers",
     )
 }

@@ -2,8 +2,11 @@
 
 Repository tools that inspect candidate or Cargo package archives must run the
 native guard against the exact immutable bytes before opening them with a tar
-parser. The guard reads standard input, enforces compression, member, payload,
-and metadata bounds, and exits nonzero on any malformed or unsupported input.
+parser. The guard reads standard input, enforces profile-specific encoding,
+member, payload, and metadata bounds, and exits nonzero on malformed or
+unsupported input. Release candidates are the raw TAR emitted by `tar -cf`;
+Cargo package archives are gzip-compressed TAR. Each mode accepts only its
+declared encoding.
 
 Provision the locked native executable from a clean checkout with:
 

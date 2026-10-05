@@ -1,5 +1,12 @@
 #[derive(Clone, Copy)]
+pub(super) enum ArchiveEncoding {
+    RawTar,
+    Gzip,
+}
+
+#[derive(Clone, Copy)]
 pub(super) struct Profile {
+    pub(super) encoding: ArchiveEncoding,
     pub(super) input_limit: u64,
     pub(super) archive_limit: u64,
     pub(super) payload_limit: u64,
@@ -28,7 +35,8 @@ pub(super) fn profile(mode: &str) -> Result<Profile, String> {
 
 fn candidate_profile() -> Profile {
     Profile {
-        input_limit: CARGO_PACKAGE_PAYLOAD_LIMIT,
+        encoding: ArchiveEncoding::RawTar,
+        input_limit: CANDIDATE_ARCHIVE_LIMIT,
         archive_limit: CANDIDATE_ARCHIVE_LIMIT,
         payload_limit: CANDIDATE_PAYLOAD_LIMIT,
         member_limit: CANDIDATE_MEMBERS,
@@ -39,6 +47,7 @@ fn candidate_profile() -> Profile {
 
 fn cargo_package_profile() -> Profile {
     Profile {
+        encoding: ArchiveEncoding::Gzip,
         input_limit: CARGO_PACKAGE_INPUT_LIMIT,
         archive_limit: LARGE_ARCHIVE_LIMIT,
         payload_limit: CARGO_PACKAGE_PAYLOAD_LIMIT,

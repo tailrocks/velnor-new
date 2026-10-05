@@ -1,9 +1,10 @@
-use super::super::{Profile, validate_with_profile};
+use super::super::{ArchiveEncoding, Profile, validate_with_profile};
 use super::{append_member, assert_rejected_tar, finish_archive, gzip, pax_record};
 use std::error::Error;
 
 fn profile(input_limit: u64, archive_limit: u64, payload_limit: u64) -> Profile {
     Profile {
+        encoding: ArchiveEncoding::Gzip,
         input_limit,
         archive_limit,
         payload_limit,
@@ -77,6 +78,10 @@ fn gzip_crc_corruption_is_rejected() -> Result<(), Box<dyn Error>> {
     let mut compressed = gzip(&archive)?;
     let crc_offset = compressed.len() - 8;
     compressed[crc_offset] ^= 1;
-    super::assert_rejected(compressed.as_slice(), "candidate", "archive read failed")?;
+    super::assert_rejected(
+        compressed.as_slice(),
+        "cargo-package",
+        "archive read failed",
+    )?;
     Ok(())
 }
