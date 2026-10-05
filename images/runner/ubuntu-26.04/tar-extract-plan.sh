@@ -16,8 +16,10 @@ record_directory_metadata() {
   done
   if [ -s "$batch" ]; then
     [ -n "${dir_meta_file}" ] || dir_meta_file="$(mktemp "${TMPDIR:-/tmp}/velnor-dir-meta.XXXXXX")"
-    perl "${_velnor_tar_here}/tar-dir-meta.pl" record "$dir_meta_file" <"$batch" \
-      || die "cannot record directory metadata"
+    if ! perl "${_velnor_tar_here}/tar-dir-meta.pl" record "$dir_meta_file" <"$batch"; then
+      rm -f -- "$batch"
+      die "cannot record directory metadata"
+    fi
   fi
   rm -f -- "$batch"
 }

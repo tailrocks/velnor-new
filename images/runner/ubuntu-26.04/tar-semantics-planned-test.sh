@@ -258,3 +258,52 @@ EOF
   [ "$(find "$root/dest/workspace/external/cache" -type f | wc -l | tr -d ' ')" = "$count" ] || return 1
   [ -z "$(find "$root/stage" -mindepth 1 -print -quit)" ] || return 1
 }
+
+case_record_failure_keeps_mode() {
+  local root="$work/record-full" dir mode
+  rm -rf -- "$root"
+  dir="$root/d"
+  mkdir -p "$dir"
+  chmod 0550 "$dir"
+  printf '%s\0%s\0%s\0' "$dir" "$dir" 550 |
+    perl "$rundir/tar-dir-meta.pl" record /dev/full && return 1
+  mode="$(stat -c %a "$dir")"
+  [ "$mode" = 550 ]
+}
+
+case_short_restore_applies_complete_rows() {
+  local root="$work/short-restore" dir mode mtime status=0
+  rm -rf -- "$root"
+  dir="$root/d"
+  mkdir -p "$dir"
+  chmod 0700 "$dir"
+  printf '%s\0%s\0%s\0%s\0partial' "$dir" 550 1600000000.000000000 1 >"$root/state"
+  perl "$rundir/tar-dir-meta.pl" restore "$root/state" >"$root/err" 2>&1 || status=$?
+  [ "$status" -ne 0 ] || return 1
+  grep -F -q 'short record' "$root/err" || return 1
+  mode="$(stat -c %a "$dir")"
+  mtime="$(stat -c %Y "$dir")"
+  [ "$mode" = 550 ] && [ "$mtime" = 1600000000 ]
+}
+
+case_record_failure_removes_batch() {
+  local root="$work/batch-clean" status=0
+  rm -rf -- "$root"
+  mkdir -p "$root/tmp" "$root/tree/dir" "$root/bin"
+  printf 'exit 1;\n' >"$root/bin/tar-dir-meta.pl"
+  (
+    die() { exit 1; }
+    member_intended() { printf -v "$2" '%s' "$1"; }
+    dir_meta_file=""
+    _velnor_tar_here="$root/bin"
+    # shellcheck disable=SC1091
+    . "$rundir/tar-extract-plan.sh"
+    mem_type[1]=5
+    mem_strip[1]=dir
+    mem_name[1]=dir
+    mem_mode[1]=0755
+    TMPDIR="$root/tmp" record_directory_metadata "$root/tree" 1
+  ) || status=$?
+  [ "$status" -ne 0 ] || return 1
+  [ -z "$(find "$root/tmp" -name 'velnor-dir-batch.*' -print -quit)" ]
+}

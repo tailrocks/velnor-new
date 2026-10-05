@@ -367,6 +367,9 @@ run_case external-relative-symlink case_external_relative_symlink
 run_case mode-and-mtime case_mode_and_mtime
 run_case directory-metadata case_directory_metadata
 run_case many-directory-metadata case_many_directory_metadata
+run_case record-failure-keeps-mode case_record_failure_keeps_mode
+run_case short-restore-applies-complete-rows case_short_restore_applies_complete_rows
+run_case record-failure-removes-batch case_record_failure_removes_batch
 run_case restrictive-parent-metadata case_restrictive_parent_metadata
 run_case rewritten-long-paths case_rewritten_long_paths
 run_case rewritten-pax-member case_rewritten_pax_member

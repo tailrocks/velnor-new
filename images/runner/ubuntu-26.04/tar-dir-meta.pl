@@ -4,6 +4,7 @@
 use strict;
 use warnings;
 use bytes;
+use IO::Handle;
 use Time::HiRes qw(lstat utime);
 
 my $command = shift @ARGV or die "velnor-tar-dir-meta: missing command\n";
@@ -25,29 +26,31 @@ sub read_record {
     my @fields = ($first);
     for (2 .. $count) {
         my $field = <$fh>;
-        die "velnor-tar-dir-meta: short record\n" if !defined $field;
+        return ("SHORT") if !defined $field;
         chomp $field;
         push @fields, $field;
     }
-    return @fields;
+    return ("OK", @fields);
 }
 
 sub record_batch {
     my ($path) = @_;
     local $/ = "\0";
     open my $out, ">>:raw", $path or die "velnor-tar-dir-meta: $path: $!\n";
+    $out->autoflush(1);
     while (1) {
-        my ($actual, $intended, $mode) = read_record(*STDIN, 3);
-        last if !defined $actual;
+        my ($status, $actual, $intended, $mode) = read_record(*STDIN, 3);
+        last if !defined $status;
+        die "velnor-tar-dir-meta: short record\n" if $status ne "OK";
         my @st = lstat($actual) or die "velnor-tar-dir-meta: cannot stat $actual: $!\n";
         die "velnor-tar-dir-meta: not a directory: $actual\n" if !-d _;
         my $perm = $st[2] & 07777;
-        chmod($perm | 0700, $actual)
-            or die "velnor-tar-dir-meta: cannot defer mode $actual: $!\n";
         my $depth = ($intended =~ tr/\///);
         my $mtime = sprintf("%.9f", $st[9]);
         print {$out} "$intended\0$mode\0$mtime\0$depth\0"
             or die "velnor-tar-dir-meta: write: $!\n";
+        chmod($perm | 0700, $actual)
+            or die "velnor-tar-dir-meta: cannot defer mode $actual: $!\n";
     }
     close $out or die "velnor-tar-dir-meta: close: $!\n";
 }
@@ -58,9 +61,14 @@ sub restore_all {
     open my $in, "<:raw", $path or die "velnor-tar-dir-meta: $path: $!\n";
     my %last;
     my $seq = 0;
+    my $short = 0;
     while (1) {
-        my ($intended, $mode, $mtime, $depth) = read_record($in, 4);
-        last if !defined $intended;
+        my ($status, $intended, $mode, $mtime, $depth) = read_record($in, 4);
+        last if !defined $status;
+        if ($status ne "OK") {
+            $short = 1;
+            last;
+        }
         $seq += 1;
         $last{$intended} = [ $seq, $intended, $mode, $mtime, $depth + 0 ];
     }
@@ -80,5 +88,6 @@ sub restore_all {
             $status = 1;
         }
     }
+    die "velnor-tar-dir-meta: short record\n" if $short;
     return $status;
 }
