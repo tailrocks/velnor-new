@@ -137,7 +137,53 @@ async fn validate_current_schema(conn: &turso::Connection) -> Result<(), HostErr
     {
         return Err(HostError::Journal);
     }
+    if !has_canonical_id_column(conn).await? || has_primary_key_index(conn).await? {
+        return Err(HostError::Journal);
+    }
     Ok(())
+}
+
+async fn has_canonical_id_column(conn: &turso::Connection) -> Result<bool, HostError> {
+    let mut rows = conn
+        .query(
+            "SELECT sql FROM sqlite_schema WHERE type = 'table' AND name = 'intents'",
+            (),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let Some(row) = rows.next().await.map_err(|_| HostError::Journal)? else {
+        return Ok(false);
+    };
+    let sql = row.get::<String>(0).map_err(|_| HostError::Journal)?;
+    let Some(open) = sql.find('(') else {
+        return Ok(false);
+    };
+    let definition = sql[open + 1..]
+        .split(',')
+        .next()
+        .ok_or(HostError::Journal)?;
+    let tokens = definition
+        .split_ascii_whitespace()
+        .map(|token| {
+            token
+                .trim_matches(['"', '`', '[', ']'])
+                .to_ascii_uppercase()
+        })
+        .collect::<Vec<_>>();
+    Ok(tokens == ["ID", "INTEGER", "PRIMARY", "KEY", "AUTOINCREMENT"])
+}
+
+async fn has_primary_key_index(conn: &turso::Connection) -> Result<bool, HostError> {
+    let mut rows = conn
+        .query("PRAGMA index_list(intents)", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    while let Some(row) = rows.next().await.map_err(|_| HostError::Journal)? {
+        if row.get::<String>(3).map_err(|_| HostError::Journal)? == "pk" {
+            return Ok(true);
+        }
+    }
+    Ok(false)
 }
 
 async fn read_columns(conn: &turso::Connection) -> Result<HashMap<String, ColumnInfo>, HostError> {

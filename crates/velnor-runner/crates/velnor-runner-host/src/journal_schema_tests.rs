@@ -236,6 +236,38 @@ async fn current_schema_rejects_a_composite_primary_key() -> Result<(), String> 
 }
 
 #[tokio::test]
+async fn current_schema_rejects_desc_primary_key_without_rowid_alias() -> Result<(), String> {
+    let scratch = Scratch::new()?;
+    let path = scratch.file();
+    seed(
+        &path,
+        1,
+        "CREATE TABLE intents (id INTEGER PRIMARY KEY DESC AUTOINCREMENT, kind TEXT NOT NULL, subject TEXT NOT NULL, state TEXT NOT NULL, docker_id TEXT, github_runner_id TEXT, cleanup_proven INTEGER NOT NULL DEFAULT 0, dind_id TEXT, worker_volume TEXT)",
+        "",
+    )
+    .await?;
+
+    assert!(Journal::open(&path).await.is_err());
+    Ok(())
+}
+
+#[tokio::test]
+async fn current_schema_rejects_non_autoincrement_id() -> Result<(), String> {
+    let scratch = Scratch::new()?;
+    let path = scratch.file();
+    seed(
+        &path,
+        1,
+        "CREATE TABLE intents (id INTEGER PRIMARY KEY, kind TEXT NOT NULL, subject TEXT NOT NULL, state TEXT NOT NULL, docker_id TEXT, github_runner_id TEXT, cleanup_proven INTEGER NOT NULL DEFAULT 0, dind_id TEXT, worker_volume TEXT)",
+        "",
+    )
+    .await?;
+
+    assert!(Journal::open(&path).await.is_err());
+    Ok(())
+}
+
+#[tokio::test]
 async fn row_id_updates_rollback_when_identity_becomes_ambiguous() -> Result<(), String> {
     #[derive(Clone, Copy)]
     enum Mutation {
