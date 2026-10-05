@@ -12,6 +12,9 @@ pub enum WireError {
     /// Returned ids were not a subset of the request.
     #[error("acquire id outside request")]
     OutsideRequest,
+    /// Runner lookup returned more than one match.
+    #[error("multiple runners found")]
+    MultipleResults,
     /// A second 401 refresh is not attempted.
     #[error("refresh exhausted")]
     RefreshExhausted,
