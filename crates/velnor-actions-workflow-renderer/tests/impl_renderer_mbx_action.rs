@@ -85,9 +85,11 @@ fn native_action_installs_exact_version_and_owns_object_cache() {
         with.get("isolate-objects-cache").map(String::as_str),
         Some("${{ runner.environment == 'github-hosted' }}")
     );
+    let expected_generation = mbx_cache_generation(TEST_MBX_VERSION);
     assert_eq!(
         with.get("cache-generation").map(String::as_str),
-        Some(mbx_cache_generation(TEST_MBX_VERSION).as_str())
+        Some(expected_generation.as_str()),
+        "the generation matches the exact MBX version and disabled shared OUT_DIR policy"
     );
     assert_eq!(
         env.get(MBX_CACHE_MODE_ENV).map(String::as_str),

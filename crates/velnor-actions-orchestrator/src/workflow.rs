@@ -19,18 +19,18 @@ use velnor_actions_mise::{
 use velnor_actions_rust::{CompileDriver, TestRunner};
 use velnor_actions_workflow_renderer::render::{
     CONCURRENCY_CANCEL, CONCURRENCY_GROUP, EXPECTED_PR_TYPES, FINAL_JOB_ID, PLAN_JOB_ID,
-    PUBLISH_JOB_ID, RenderContext, ValidatorCommand, WORKFLOW_PATH,
+    PUBLISH_JOB_ID, RenderContext, WORKFLOW_PATH,
 };
-use velnor_actions_workflow_renderer::steps::{
-    DENY_STEP_NAME, MACHETE_STEP_NAME, PLAN_OPERATION, REQUEST_DIR_PREFIX, STAGED_BINARY_PREFIX,
-};
+use velnor_actions_workflow_renderer::steps::PLAN_OPERATION;
 
 use crate::OrchestratorError;
 use crate::discover::Discovery;
 use crate::pins::consumer_acquire_step;
 use crate::utf8::{strings_of, strings_of_env};
-use crate::vectors::{ZIZMOR_STEP_NAME, candidate_spec, deny_argv, machete_argv, zizmor_argv};
 use crate::workflow_jobs::{final_job, lint_job, plan_job};
+
+#[path = "workflow_context.rs"]
+mod workflow_context;
 
 pub(crate) use crate::workflow_jobs::LINT_JOB_ID;
 
@@ -116,13 +116,9 @@ pub(crate) fn build_workflow(
     let catalog = ToolCatalog::pinned();
     let version = env!("CARGO_PKG_VERSION").to_owned();
     let policy = config.workflow.policy;
+    let verification_tasks = crate::verification_tasks::policies(config)?;
     let use_mbx = plan_uses_mbx(discovery);
-    let support = match policy {
-        WorkflowPolicy::ConsumerV1 => None,
-        WorkflowPolicy::VelnorRepositoryV1 => {
-            Some(policy.support_workflow(config.workflow.generator_validation))
-        }
-    };
+    let support = support_workflow(policy, config.workflow.generator_validation, discovery);
     let mut jobs = BTreeMap::new();
     let acquire = match policy {
         WorkflowPolicy::ConsumerV1 => Some(consumer_acquire_step(label, &version, discovery)?),
@@ -143,25 +139,19 @@ pub(crate) fn build_workflow(
         discovery,
     )?;
     jobs.insert(PLAN_JOB_ID.to_owned(), plan);
-    let custom_tasks: &[String] = config
-        .stacks
-        .rust
-        .as_ref()
-        .map_or(&[], |rust| &rust.custom_tasks);
-    let built = crate::crate_jobs::build_crate_jobs(
+    let built = crate::crate_jobs::build_for_workflow(
+        config,
         label,
-        policy,
         discovery,
         &catalog,
         fetch_roots,
-        custom_tasks,
         acquire.as_ref(),
-        config.workflow.max_parallel_jobs,
     )?;
     let crate_ids: Vec<String> = built.jobs.iter().map(|(id, _)| id.clone()).collect();
     for (id, job) in built.jobs {
         jobs.insert(id, job);
     }
+    crate::verification_tasks::insert_jobs(&mut jobs, &verification_tasks)?;
     insert_gate_jobs(&mut jobs, label, branch, &crate_ids, acquire, &catalog)?;
     wire_w1::check_crate_mbx_gating(&jobs, &built.drivers)?;
     let ir = WorkflowIr {
@@ -180,7 +170,15 @@ pub(crate) fn build_workflow(
         },
         jobs,
     };
-    let context = render_context(config, label, &version, &catalog, use_rust)?;
+    let context = workflow_context::render_context(
+        config,
+        label,
+        &version,
+        &catalog,
+        discovery,
+        use_rust,
+        verification_tasks,
+    )?;
     let actionlint = actionlint_input(config, &version, label);
     Ok(WorkflowPlan {
         ir,
@@ -188,6 +186,23 @@ pub(crate) fn build_workflow(
         context,
         actionlint,
     })
+}
+
+fn support_workflow(
+    policy: WorkflowPolicy,
+    validation: GeneratorValidation,
+    discovery: &Discovery,
+) -> Option<VelnorSupportWorkflow> {
+    let mut support = match policy {
+        WorkflowPolicy::ConsumerV1 => return None,
+        WorkflowPolicy::VelnorRepositoryV1 => policy.support_workflow(validation),
+    };
+    if discovery.workspaces.is_empty() {
+        support
+            .validators
+            .retain(|validator| *validator != ValidatorKind::CargoDeny);
+    }
+    Some(support)
 }
 
 /// Insert the lint, final-gate, and baseline-publish jobs.
@@ -254,10 +269,8 @@ fn insert_format_step(plan: &mut Job, format: Step) {
     plan.steps.insert(at, format);
 }
 
-/// True when any selected workspace compiles through MBX.
-///
-/// The plan job pre-installs the MBX driver only on detected project
-/// evidence, never by default; consumers without MBX stay Cargo-only.
+/// True when any selected workspace compiles through MBX. Only detected
+/// evidence enables pre-install; consumers without it stay Cargo-only.
 pub(crate) fn plan_uses_mbx(discovery: &Discovery) -> bool {
     discovery
         .workspaces
@@ -265,11 +278,8 @@ pub(crate) fn plan_uses_mbx(discovery: &Discovery) -> bool {
         .any(|workspace| workspace.profile.compile_driver == CompileDriver::Mbx)
 }
 
-/// True when any selected workspace runs tests through Nextest.
-///
-/// Both prepare steps union the Nextest runner on this signal, so
-/// `cargo_nextest` legs resolve the pinned runner while `cargo_test`
-/// legs never carry it.
+/// True when any selected workspace runs tests through Nextest; only those
+/// legs resolve the pinned runner.
 fn plan_uses_nextest(discovery: &Discovery) -> bool {
     discovery
         .workspaces
@@ -291,10 +301,8 @@ pub(crate) fn plan_uses_opentofu(discovery: &Discovery) -> bool {
 
 /// True when the plan job needs the Rust toolchain.
 ///
-/// Every repo keeps it except pure-tofu ones: tofu work with zero
-/// rust workspaces. Repos with neither keep it too (fail-safe: an
-/// unneeded install costs seconds, a missing toolchain fails the
-/// format/build steps).
+/// Keep Rust unless this is a pure-tofu repo with no Rust workspaces.
+/// Other repos retain it for their format/build steps.
 fn plan_uses_rust(discovery: &Discovery) -> bool {
     !(plan_uses_opentofu(discovery) && discovery.workspaces.is_empty())
 }
@@ -318,64 +326,6 @@ pub(crate) fn prepare_rust_components_step(
         .map_err(|problem| OrchestratorError::Contract { problem })?;
     velnor_actions_workflow_renderer::ambient_shell_step(PREPARE_RUST_COMPONENTS_STEP, run, env)
         .map_err(OrchestratorError::from)
-}
-
-/// Renderer scalars: version, label, staged path, request dir, pins.
-///
-/// The plan-consumer env follows the plan role: pure-tofu plans run
-/// the plan-op and freshness steps triple-less, every other role
-/// keeps the owned-homes triple.
-fn render_context(
-    config: &VelnorConfig,
-    label: &str,
-    version: &str,
-    catalog: &ToolCatalog,
-    plan_needs_rust: bool,
-) -> Result<RenderContext, OrchestratorError> {
-    debug_assert!(REQUEST_DIR.starts_with(REQUEST_DIR_PREFIX));
-    let velnor = config.workflow.policy == WorkflowPolicy::VelnorRepositoryV1;
-    let validator_commands = if velnor {
-        vec![
-            ValidatorCommand {
-                validator: ValidatorKind::CargoDeny,
-                name: DENY_STEP_NAME.to_owned(),
-                argv: deny_argv()?,
-            },
-            ValidatorCommand {
-                validator: ValidatorKind::CargoMachete,
-                name: MACHETE_STEP_NAME.to_owned(),
-                argv: machete_argv()?,
-            },
-            ValidatorCommand {
-                validator: ValidatorKind::Zizmor,
-                name: ZIZMOR_STEP_NAME.to_owned(),
-                argv: zizmor_argv(catalog)?,
-            },
-        ]
-    } else {
-        Vec::new()
-    };
-    let candidate =
-        if velnor && config.workflow.generator_validation == GeneratorValidation::Candidate {
-            Some(candidate_spec(catalog)?)
-        } else {
-            None
-        };
-    Ok(RenderContext {
-        generator_version: version.to_owned(),
-        runs_on: label.to_owned(),
-        staged_binary: format!("{STAGED_BINARY_PREFIX}{version}"),
-        request_dir: REQUEST_DIR.to_owned(),
-        checkout_uses: CHECKOUT_USES.to_owned(),
-        validator_commands,
-        candidate,
-        preseed: false,
-        plan_consumer_env: crate::matrix_step::task_step_env(
-            catalog,
-            &std::collections::BTreeMap::new(),
-            plan_needs_rust,
-        )?,
-    })
 }
 
 /// Actionlint input: generated workflow path plus policy-graded ignores.

@@ -26,8 +26,9 @@ pub(crate) fn gate_line(decision: &Reconcile) -> String {
 /// Compare the journal with running containers, then advertise or hold.
 ///
 /// Rows are loaded before any inspect, so the database connection is not held
-/// across Docker. Only a Docker 404 means not running; incomplete observations
-/// and other inspect failures return an error. Nothing is deleted.
+/// across Docker. A Docker 404 means that container is not running. A timeout
+/// or any other inspect failure stops reconciliation before capacity is advertised.
+/// Nothing is deleted.
 ///
 /// # Errors
 ///

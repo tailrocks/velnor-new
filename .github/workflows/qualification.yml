@@ -723,6 +723,7 @@ jobs:
       actions: write
     env:
       MBX_GC_AUTO: "1"
+      MBX_SHARE_OUT_DIR: "0"
       ACTIONS_CACHE_MODE: write
       CARGO_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/cargo
       MISE_AUTO_INSTALL: "false"
@@ -757,7 +758,9 @@ jobs:
         with:
           github-cache-mode: objects
           version: 1.22.0
-          cache-generation: velnor-qualification-mbx-1.22.0-action-d0825fbaf3cc36ca2609aa38e71046265a1f1e37-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+          toolchain: 1.98.1
+          isolate-objects-cache: "true"
+          cache-generation: velnor-qualification-mbx-1.22.0-share-out-dir-disabled-v1-action-d0825fbaf3cc36ca2609aa38e71046265a1f1e37-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
           save-on-workflow-dispatch: "true"
       - name: Verify MBX action identity and write policy
         env:
@@ -780,6 +783,7 @@ jobs:
       actions: read
     env:
       MBX_GC_AUTO: "1"
+      MBX_SHARE_OUT_DIR: "0"
       ACTIONS_CACHE_MODE: read
       CARGO_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/cargo
       MISE_AUTO_INSTALL: "false"
@@ -814,7 +818,9 @@ jobs:
         with:
           github-cache-mode: objects
           version: 1.22.0
-          cache-generation: velnor-qualification-mbx-1.22.0-action-d0825fbaf3cc36ca2609aa38e71046265a1f1e37-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+          toolchain: 1.98.1
+          isolate-objects-cache: "true"
+          cache-generation: velnor-qualification-mbx-1.22.0-share-out-dir-disabled-v1-action-d0825fbaf3cc36ca2609aa38e71046265a1f1e37-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
           save-on-workflow-dispatch: "false"
       - name: Verify MBX action identity and write policy
         env:
@@ -822,7 +828,7 @@ jobs:
           CACHE_SAVE_ELIGIBLE: ${{ steps.mbx_cache.outputs.cache-save-eligible }}
           CACHE_SAVE_REASON: ${{ steps.mbx_cache.outputs.cache-save-reason }}
           CACHE_HIT: ${{ steps.mbx_cache.outputs.cache-hit }}
-        run: "test \"$MBX_VERSION\" = '1.22.0' && test \"$CACHE_SAVE_ELIGIBLE\" = 'false' && test \"$CACHE_SAVE_REASON\" = 'workflow_dispatch; save-on-workflow-dispatch is off' && test \"$CACHE_HIT\" = 'false'"
+        run: "test \"$MBX_VERSION\" = '1.22.0' && test \"$CACHE_SAVE_ELIGIBLE\" = 'false' && test \"$CACHE_SAVE_REASON\" = 'workflow_dispatch; save-on-workflow-dispatch is off' && test \"$CACHE_HIT\" = 'true'"
       - name: Require imported MBX objects
         run: mbx cache stats --json | jq -e '.objects > 0' >/dev/null
       - name: Compile MBX cache probe

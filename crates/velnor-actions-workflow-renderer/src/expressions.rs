@@ -55,11 +55,13 @@ fn expression_spans(text: &str) -> Option<Vec<&str>> {
 /// pins it on the native MBX action so other events stay read-only).
 /// Notably absent: `github.token` (render-time fetch binding only)
 /// and run IDs (never in env).
-const ENV_EXPRESSIONS: [&str; 6] = [
+const ENV_EXPRESSIONS: [&str; 8] = [
     "runner.temp",
     "github.ref_name",
     "github.event_name",
+    "github.event_name == 'push' && 'write' || 'read'",
     "github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read'",
+    "runner.environment == 'github-hosted' && (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read') || 'none'",
     "secrets.CARGO_REGISTRY_TOKEN",
     "secrets.GITHUB_TOKEN",
 ];
@@ -70,12 +72,15 @@ const ENV_EXPRESSIONS: [&str; 6] = [
 /// push-gated cache-save flag, and the publish step's derived
 /// artifact name. Notably absent: every `secrets.*` handle (rejected
 /// separately as `secret_in_action_input`).
-const WITH_EXPRESSIONS: [&str; 7] = [
+const WITH_EXPRESSIONS: [&str; 10] = [
     "runner.temp",
     "runner.environment == 'github-hosted'",
     "github.run_id",
     "github.run_attempt",
     "github.job",
+    "runner.environment == 'github-hosted' && runner.os == 'Linux'",
+    "runner.environment == 'github-hosted' && github.job || ''",
+    "runner.environment == 'github-hosted' && runner.os == 'Linux' && '-share-out-dir-disabled-v1' || ''",
     "github.event_name == 'push'",
     "steps.publish-baseline.outputs.artifact_name",
 ];

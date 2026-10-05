@@ -319,7 +319,6 @@ jobs:
       MISE_NO_HOOKS: "1"
       NODE_AUTH_TOKEN: ""
       NPM_TOKEN: ""
-      RUSTDOCFLAGS: "-D warnings"
       RUSTUP_TOOLCHAIN: 1.98.1
       VELNOR_ASSET_SHA256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
       VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.0/velnor-actions-0.1.0-x86_64-unknown-linux-gnu
@@ -457,6 +456,7 @@ jobs:
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          RUSTDOCFLAGS: "-D warnings"
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/app/doc/default
           VELNOR_MATRIX_KEY: m-d0e8abd0cfc431dc
           VELNOR_TASK_DIGEST: b3-cec0862e24aaf79a54a35d525d4a7dd1df6339619a237bdc47353af4d4c81fc7
@@ -494,7 +494,6 @@ jobs:
       MISE_NO_HOOKS: "1"
       NODE_AUTH_TOKEN: ""
       NPM_TOKEN: ""
-      RUSTDOCFLAGS: "-D warnings"
       RUSTUP_TOOLCHAIN: 1.98.1
       VELNOR_ASSET_SHA256: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
       VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v0.1.0/velnor-actions-0.1.0-x86_64-unknown-linux-gnu
@@ -622,6 +621,7 @@ jobs:
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
+          RUSTDOCFLAGS: "-D warnings"
           VELNOR_MATRIX_ID: stack:rust|task:stack/rust/crates/tool/doc/default
           VELNOR_MATRIX_KEY: m-027253d227704e16
           VELNOR_TASK_DIGEST: b3-7d39c46b2d97b4a024cbd690a825da3fe9f835ded85ee977e7c3cc05882984e3

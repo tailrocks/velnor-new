@@ -146,6 +146,7 @@ fn preseed_attach_builds_once_and_sets_mode() {
             validator_commands: Vec::new(),
             candidate: None,
             preseed: false,
+            verification_tasks: Vec::new(),
             plan_consumer_env: std::collections::BTreeMap::new(),
         },
         actionlint: ActionlintConfigInput::new("0.1.0").with_workflow_path(WORKFLOW_PATH),
@@ -175,13 +176,6 @@ fn preseed_attach_builds_once_and_sets_mode() {
             "Plan",
         ]
     );
-    for id in ["rust-demo", "required", "publish-baseline"] {
-        let names: Vec<&str> = plan.ir.jobs[id]
-            .steps
-            .iter()
-            .map(|step| step.name.as_str())
-            .collect();
-        assert_consumer_triple(id, &names);
-    }
+    assert_preseed_consumers(&plan);
     assert!(attach_preseed(&mut plan, "ubuntu-26.04-arm", "0.1.0", &[]).is_err());
 }

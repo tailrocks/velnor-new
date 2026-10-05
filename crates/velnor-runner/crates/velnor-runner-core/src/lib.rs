@@ -8,6 +8,7 @@ mod evidence;
 mod identity;
 mod lifecycle;
 mod ownership;
+mod paths;
 
 pub use capacity::Capacity;
 pub use error::{EvidenceError, IdError, StateError};
@@ -20,6 +21,7 @@ pub use identity::{
 };
 pub use lifecycle::{Effect, Transition, WorkerEvent, WorkerState, transition};
 pub use ownership::{CleanupProof, OwnedIds, OwnershipFailure};
+pub use paths::{RUNNER_ROOT, RUNNER_WORK_FOLDER, runner_work_path};
 
 #[cfg(test)]
 mod lifecycle_tests;

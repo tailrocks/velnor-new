@@ -47,6 +47,7 @@ fn context() -> RenderContext {
         validator_commands: Vec::new(),
         candidate: None,
         preseed: false,
+        verification_tasks: Vec::new(),
         plan_consumer_env: BTreeMap::new(),
     }
 }
@@ -98,4 +99,78 @@ fn typed_scale_set_jobs_declare_bash_while_hosted_jobs_keep_default() {
         scale.contains("defaults:\n      run:\n        shell: bash -e {0}"),
         "{scale}"
     );
+}
+
+fn field<'a>(value: &'a crate::yaml::Yaml, key: &str) -> Option<&'a crate::yaml::Yaml> {
+    let crate::yaml::Yaml::Map(entries) = value else {
+        return None;
+    };
+    entries
+        .iter()
+        .find(|(entry_key, _)| entry_key == key)
+        .map(|(_, entry_value)| entry_value)
+}
+
+#[test]
+fn rustdocflags_remain_scoped_to_the_documentation_step() {
+    let doc_step = Step {
+        name: "Documentation".to_owned(),
+        condition: None,
+        kind: StepKind::Shell {
+            run: vec!["echo".to_owned(), "doc".to_owned()],
+            env: BTreeMap::from([("RUSTDOCFLAGS".to_owned(), "-D warnings".to_owned())]),
+        },
+    };
+    let test_step = Step {
+        name: "Tests".to_owned(),
+        condition: None,
+        kind: StepKind::Shell {
+            run: vec!["echo".to_owned(), "test".to_owned()],
+            env: BTreeMap::new(),
+        },
+    };
+    let mut task_job = job("ubuntu-26.04");
+    task_job.steps = vec![doc_step, test_step];
+    let jobs = BTreeMap::from([("task".to_owned(), task_job)]);
+    let rendered = workflow_to_yaml(
+        &workflow(jobs.clone()),
+        &jobs,
+        &context(),
+        &BTreeMap::new(),
+        &BTreeMap::new(),
+        &BTreeSet::new(),
+    )
+    .expect("workflow renders");
+    let jobs = field(&rendered, "jobs").expect("jobs map");
+    let task = field(jobs, "task").expect("task job");
+    let job_env = field(task, "env").expect("job environment");
+    assert_eq!(
+        field(job_env, "RUSTDOCFLAGS"),
+        None,
+        "task-specific rustdoc flags must not enter the job environment"
+    );
+    let crate::yaml::Yaml::Seq(steps) = field(task, "steps").expect("job steps") else {
+        panic!("steps must be a sequence");
+    };
+    let doc = steps
+        .iter()
+        .find(|step| field(step, "name") == Some(&crate::yaml::Yaml::str("Documentation")))
+        .expect("documentation step");
+    let doc_env = field(doc, "env").expect("documentation step environment");
+    assert_eq!(
+        field(doc_env, "RUSTDOCFLAGS"),
+        Some(&crate::yaml::Yaml::str("-D warnings")),
+        "the documentation step keeps its typed flags"
+    );
+    let tests = steps
+        .iter()
+        .find(|step| field(step, "name") == Some(&crate::yaml::Yaml::str("Tests")))
+        .expect("test step");
+    if let Some(test_env) = field(tests, "env") {
+        assert_eq!(
+            field(test_env, "RUSTDOCFLAGS"),
+            None,
+            "sibling tasks must not inherit documentation flags"
+        );
+    }
 }

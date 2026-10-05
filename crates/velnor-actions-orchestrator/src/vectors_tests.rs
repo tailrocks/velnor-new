@@ -8,7 +8,8 @@ fn argv_of(parts: &[&str]) -> Vec<String> {
 
 #[test]
 fn policy_vectors_pin_specs_and_payloads() {
-    let deny = deny_argv().expect("deny argv");
+    let roots = [String::new(), "crates/velnor-runner".to_owned()];
+    let deny = deny_argv(&roots).expect("deny argv");
     assert_eq!(&deny[..2], ["sh", "-c"], "deny runs isolated, not bare");
     let script = &deny[2];
     for need in [
@@ -18,7 +19,10 @@ fn policy_vectors_pin_specs_and_payloads() {
         "mkdir -p \"$RUNNER_TEMP/velnor/cargo-clean\"",
         "cd \"$RUNNER_TEMP/velnor/cargo-clean\"",
         "mise --no-config --no-env --no-hooks exec cargo-deny@0.20.2 -- cargo deny --locked",
-        "--manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\" check",
+        "--manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\"",
+        "--config \"$GITHUB_WORKSPACE/deny.toml\" check",
+        "--manifest-path \"$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.toml\"",
+        "--config \"$GITHUB_WORKSPACE/crates/velnor-runner/deny.toml\" check",
     ] {
         assert!(script.contains(need), "deny script misses {need}: {script}");
     }
@@ -31,6 +35,17 @@ fn policy_vectors_pin_specs_and_payloads() {
         at("mise --no-config --no-env --no-hooks install") < at("unset ")
             && at("unset ") < at("cargo deny"),
         "deny must bootstrap, then drop creds, then run cargo: {script}"
+    );
+    assert!(
+        at("$GITHUB_WORKSPACE/Cargo.toml\" --config")
+            < at("$GITHUB_WORKSPACE/crates/velnor-runner/Cargo.toml\" --config"),
+        "both workspaces must be checked in declared order: {script}"
+    );
+    let root_only = deny_argv(&[String::new()]).expect("root-only deny argv");
+    assert!(root_only[2].contains("$GITHUB_WORKSPACE/Cargo.toml"));
+    assert!(
+        !root_only[2].contains("velnor-runner"),
+        "discovery without a nested runner must not inject its manifest"
     );
     let machete = machete_argv().expect("machete argv");
     let want = argv_of(&[
