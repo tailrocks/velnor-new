@@ -197,7 +197,7 @@ fn rendered_inventory_validator_failure_fails_required() -> TestResult {
 }
 
 /// Every Required-gating validator job ID in the rendered workflow.
-fn required_validators() -> [&'static str; 6] {
+fn required_validators() -> [&'static str; 7] {
     [
         "plan",
         "actionlint",
@@ -205,6 +205,7 @@ fn required_validators() -> [&'static str; 6] {
         "cargo-deny",
         "cargo-machete",
         "zizmor",
+        "python-source-tests",
     ]
 }
 

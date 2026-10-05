@@ -23,7 +23,7 @@ use crate::{
     candidate::{candidate_job, release_job},
     render::{
         ALINT_BINARY_VERSION, ALINT_USES, CANDIDATE_JOB_ID, FINAL_CONDITION, FINAL_DISPLAY_NAME,
-        FINAL_JOB_ID, PLAN_JOB_ID, RenderContext, ValidatorCommand,
+        FINAL_JOB_ID, PLAN_JOB_ID, PYTHON_SOURCE_PREPARE_NAME, RenderContext, ValidatorCommand,
     },
     steps,
 };
@@ -113,9 +113,10 @@ pub(crate) fn merge_support_jobs(
                     problem: "actionlint_not_support".to_owned(),
                 });
             }
-            ValidatorKind::CargoDeny | ValidatorKind::CargoMachete | ValidatorKind::Zizmor => {
-                validator_job(ctx, *validator)?
-            }
+            ValidatorKind::CargoDeny
+            | ValidatorKind::CargoMachete
+            | ValidatorKind::Zizmor
+            | ValidatorKind::PythonSourceTests => validator_job(ctx, *validator)?,
         };
         insert_support_job(jobs, validator.job_id(), job)?;
     }
@@ -214,19 +215,37 @@ pub(crate) fn alint_job(ctx: &RenderContext) -> Result<Job, RenderError> {
 
 /// Fixed validator job: checkout plus its caller-supplied command.
 ///
-/// The validator runs its pinned analyzer with ambient auth: the cold
-/// tool bootstrap needs authenticated quota (the scrub overlay broke
-/// `ubi:` installs with API 401s and zizmor with empty-token aborts,
-/// CI run 36815180228). Static analyzers execute no repository code;
-/// cargo-backed validators (deny) run from the cargo isolation dir
-/// with an absolute manifest path, so repo `.cargo/config.toml`
-/// providers never execute while ambient auth is in scope. The step
-/// carries no scrub keys at all.
+/// Pinned analyzers install and run ambient because bootstrap needs
+/// authenticated quota (the scrub overlay broke `ubi:` installs with
+/// API 401 and zizmor with an empty-token abort, CI run 36815180228).
+/// Python suites use `prepare_argv` for install only, then execute code
+/// from the checkout in a scrubbed shell step. Cargo-backed analyzers
+/// (deny) run outside ambient with an absolute manifest path, so repo
+/// `.cargo/config.toml` providers cannot execute with credentials.
 pub(crate) fn validator_job(
     ctx: &RenderContext,
     validator: ValidatorKind,
 ) -> Result<Job, RenderError> {
     let command = find_validator_command(&ctx.validator_commands, validator)?;
+    let mut job_steps = vec![steps::checkout_step(&ctx.checkout_uses)?];
+    if command.prepare_argv.is_empty() {
+        job_steps.push(steps::ambient_shell_step(
+            &command.name,
+            command.argv.clone(),
+            BTreeMap::new(),
+        )?);
+    } else {
+        job_steps.push(steps::ambient_shell_step(
+            PYTHON_SOURCE_PREPARE_NAME,
+            command.prepare_argv.clone(),
+            BTreeMap::new(),
+        )?);
+        job_steps.push(steps::shell_step(
+            &command.name,
+            crate::validator_command::execution_argv(command)?,
+            BTreeMap::new(),
+        )?);
+    }
     Ok(Job {
         display_name: validator.display_name().to_owned(),
         runs_on: ctx.runs_on.clone(),
@@ -235,10 +254,7 @@ pub(crate) fn validator_job(
         condition: None,
         permissions: None,
         environment: None,
-        steps: vec![
-            steps::checkout_step(&ctx.checkout_uses)?,
-            steps::ambient_shell_step(&command.name, command.argv.clone(), BTreeMap::new())?,
-        ],
+        steps: job_steps,
     })
 }
 

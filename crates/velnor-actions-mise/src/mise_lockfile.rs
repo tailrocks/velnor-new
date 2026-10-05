@@ -239,7 +239,19 @@ fn split_setting(code: &str, index: usize) -> Result<(&str, String), String> {
         .or_else(|| {
             let integer = !trimmed.is_empty() && trimmed.bytes().all(|b| b.is_ascii_digit());
             let array = trimmed.starts_with('[') && trimmed.ends_with(']');
-            (integer || array).then(|| trimmed.to_owned())
+            let table = trimmed
+                .strip_prefix('{')
+                .and_then(|body| body.strip_suffix('}'))
+                .is_some_and(|body| {
+                    body.split(',').all(|pair| {
+                        pair.split_once('=').is_some_and(|(key, value)| {
+                            !key.trim().is_empty()
+                                && value.trim().starts_with('"')
+                                && value.trim().ends_with('"')
+                        })
+                    })
+                });
+            (integer || array || table).then(|| trimmed.to_owned())
         });
     match (key.is_empty(), value) {
         (false, Some(value)) => Ok((key, value)),
@@ -252,26 +264,41 @@ fn line_problem(index: usize, problem: &str) -> String {
     format!("line {}: {problem}", index.saturating_add(1))
 }
 
-/// Lock keys a catalog tool may appear under: the registry name plus
-/// the backend-qualified spec prefix (Nextest's aqua path).
-fn lock_keys_for(tool: PinnedTool, catalog: &ToolCatalog) -> Vec<String> {
-    let mut keys = vec![tool.tool_name().to_owned()];
+/// Accepted install-spec prefixes for a catalog tool.
+fn selector_prefixes_for(tool: PinnedTool, catalog: &ToolCatalog) -> Vec<String> {
     let spec = catalog.tool_spec(tool);
-    if let Some(prefix) = spec.split_once('@').map(|(head, _)| head.to_owned())
-        && prefix != keys[0]
-    {
+    let Some(prefix) = spec.split_once('@').map(|(head, _)| head.to_owned()) else {
+        return Vec::new();
+    };
+    if tool == PinnedTool::Python {
+        // Inline URL, checksum, and extraction options must match exactly.
+        return vec![prefix];
+    }
+    let mut keys = vec![tool.tool_name().to_owned()];
+    if prefix != keys[0] {
         keys.push(prefix);
     }
     keys
 }
 
+/// Lockfile key Mise derives from one accepted selector prefix.
+fn lock_key_for(tool: PinnedTool, prefix: &str) -> String {
+    if tool == PinnedTool::Python {
+        // BackendArg strips inline options from its short key; Mise stores
+        // those options separately in the lock entry.
+        return prefix
+            .split_once('[')
+            .map_or(prefix, |(short, _)| short)
+            .to_owned();
+    }
+    prefix.to_owned()
+}
+
 /// One emitted install to audit: display name, expected pin version,
 /// and the exact lock key the emitted spec addresses.
 ///
-/// The lock key is the spec's key verbatim, never a first match over
-/// aliases: mise honors the entry under the key the install names, so
-/// an entry under any other key is invisible to that install (a decoy
-/// entry must never mask a hole or a corrupt checksum).
+/// The lock key is the value Mise writes for the selected backend. Inline
+/// options are matched from the CLI spec and stored in a separate lock field.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InstallSubject {
     /// `tool@pin` display name for findings.
@@ -284,11 +311,8 @@ pub struct InstallSubject {
 
 /// Resolve an emitted install spec (`key@version`) to its audit subject.
 ///
-/// The key must name a catalog tool (registry name or backend-qualified
-/// spec prefix); the recorded lock key is the spec's key verbatim. The
-/// spec version must equal the catalog pin exactly: a drifted spec is
-/// unauditable (the caller blocks it), never silently re-pinned to the
-/// pin it should have carried. Lock-side drift stays a later advisory.
+/// The key must match a catalog selector prefix; the spec version must equal
+/// the catalog pin exactly. Drifted or option-mutated specs are unauditable.
 #[must_use]
 pub fn subject_for_install_spec(spec: &str, catalog: &ToolCatalog) -> Option<InstallSubject> {
     let (key, version) = spec.split_once('@')?;
@@ -296,7 +320,7 @@ pub fn subject_for_install_spec(spec: &str, catalog: &ToolCatalog) -> Option<Ins
         return None;
     }
     let tool = PinnedTool::ALL.iter().find(|tool| {
-        lock_keys_for(**tool, catalog)
+        selector_prefixes_for(**tool, catalog)
             .iter()
             .any(|known| known == key)
     })?;
@@ -306,7 +330,7 @@ pub fn subject_for_install_spec(spec: &str, catalog: &ToolCatalog) -> Option<Ins
     Some(InstallSubject {
         display: format!("{}@{}", tool.tool_name(), catalog.version(*tool)),
         expected_version: catalog.version(*tool).to_owned(),
-        lock_key: key.to_owned(),
+        lock_key: lock_key_for(*tool, key),
     })
 }
 

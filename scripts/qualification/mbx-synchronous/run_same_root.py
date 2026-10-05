@@ -45,10 +45,13 @@ def assert_owned(state):
 
 
 def observe_directories(run):
-    root = Path(run["cwd"]).parent
+    root = Path(run["run_root"])
+    workspace = Path(run["cwd"])
+    paths = {"workspace": workspace,
+             **{name: root / name for name in
+                ("cargo-home", "target", "cache", "home", "tmp", "rustup-home")}}
     observations = {}
-    for name in ("workspace", "cargo-home", "target", "cache", "home", "tmp", "rustup-home"):
-        path = root / name
+    for name, path in paths.items():
         record = allocation(path)
         record["initial_entries"] = sorted(item.relative_to(path).as_posix()
                                            for item in path.rglob("*"))
@@ -146,12 +149,12 @@ def observed_state(args, number, manifest, record, bundle):
         if number == 1:
             record["registry_seed_inventory"] = run["registry_inputs"]
             BASE.tool_observations(args, record, run)
-        baseline = Path(run["cwd"]).parent / "comparison-state.json"
+        baseline = BASE.run_root(run) / "comparison-state.json"
         operation = "comparison-state" if number == 1 else "import"
         BASE.transport(active_args, run, operation, bundle, baseline, manifest)
         for index, command in enumerate(manifest["commands"]):
             BASE.observed_command(active_args, run, command, "command-" + str(index + 1))
-        candidate = Path(run["cwd"]).parent / "mbx-cache-bundle"
+        candidate = BASE.run_root(run) / "mbx-cache-bundle"
         exported = BASE.transport(active_args, run, "export", candidate, baseline, manifest)
         BASE.require(exported is not None or bundle is not None, "cold export produced no bundle")
     except (ValueError, OSError, KeyError) as error:

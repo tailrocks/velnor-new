@@ -29,8 +29,11 @@ pub use mbx::MbxProvisioning;
 /// Exact-version validation plus qualification sources (split for size).
 #[path = "catalog_versions.rs"]
 mod versions;
+pub use versions::{
+    PYTHON_BINARY_SHA256_LINUX_X64, PYTHON_PBS_SHA256, PYTHON_PBS_SIZE_BYTES, PYTHON_PBS_URL,
+};
 pub use versions::{check_freshness_requirements, validate_exact_version};
-use versions::{invalid_version, tool_source};
+use versions::{invalid_version, python_tool_spec, tool_source};
 
 /// Qualified mise runner release (tag `v2026.9.18`).
 /// Source: `https://api.github.com/repos/jdx/mise/releases/latest`; checked 2026-09-30.
@@ -83,8 +86,8 @@ pub const RELEASE_PLZ_VERSION: &str = "0.3.169";
 /// REUSE lint package; isolated Python/uv workload probe passed 2026-10-02.
 /// Source: `https://pypi.org/pypi/reuse/6.2.0/json`; checked 2026-10-02.
 pub const REUSE_VERSION: &str = "6.2.0";
-/// `CPython` upstream pin; Mise provisions Astral's standalone distribution.
-/// Source: `https://www.python.org/downloads/`; checked 2026-10-02.
+/// `CPython` version supplied by the PBS20261001 Linux x64 artifact below.
+/// The artifact release, URL, checksum, and extraction ABI are policy-bound.
 pub const PYTHON_VERSION: &str = "3.14.8";
 /// uv runtime used by Mise's pipx backend for REUSE installation.
 /// Source: `https://api.github.com/repos/astral-sh/uv/releases/latest`; checked 2026-10-04.
@@ -285,15 +288,15 @@ impl ToolCatalog {
 
     /// Qualified artifact digest for one tool, or the placeholder.
     ///
-    /// Only the qualified `OpenTofu` pin carries its digest (contract
-    /// §4.3: the `linux_amd64` `.tar.gz` SHA-256, matching the x64-Linux
-    /// runner fleet); any other version keeps the placeholder so an
-    /// unqualified pin never validates as trusted.
+    /// Qualified OpenTofu and Python pins carry artifact digests. Other
+    /// versions keep the placeholder so unqualified pins never validate.
     fn tool_digest(&self, tool: PinnedTool) -> &str {
-        if tool == PinnedTool::Opentofu && self.version(tool) == OPENTOFU_VERSION {
-            OPENTOFU_SHA256_LINUX_AMD64
-        } else {
-            PLACEHOLDER_DIGEST
+        match tool {
+            PinnedTool::Opentofu if self.version(tool) == OPENTOFU_VERSION => {
+                OPENTOFU_SHA256_LINUX_AMD64
+            }
+            PinnedTool::Python if self.version(tool) == PYTHON_VERSION => PYTHON_PBS_SHA256,
+            _ => PLACEHOLDER_DIGEST,
         }
     }
 
@@ -331,12 +334,12 @@ impl ToolCatalog {
         }
     }
 
-    /// Mise selector for one tool: `<tool>@<exact>`, except Nextest,
-    /// which needs its aqua path, and REUSE, which binds Python and extras.
+    /// Mise selector for one tool, with backend-specific selectors for
+    /// Nextest, Python, and REUSE.
     ///
-    /// Rust carries no inline options: bracketed tool options are silently
-    /// ignored on config-less CLI specs, so components install through the
-    /// fixed `PrepareRustComponents` step instead.
+    /// Rust carries no inline options because the core backend ignores its
+    /// component options in config-less specs; `PrepareRustComponents` adds
+    /// them separately. Python's HTTP selector binds its artifact and layout.
     #[must_use]
     pub fn tool_spec(&self, tool: PinnedTool) -> String {
         match tool {
@@ -347,6 +350,7 @@ impl ToolCatalog {
                 "pipx:reuse[extras=charset-normalizer,uvx_args=\"--python {PYTHON_VERSION} --no-python-downloads\"]@{}",
                 self.version(tool)
             ),
+            PinnedTool::Python => python_tool_spec(self.version(tool)),
             _ => format!("{}@{}", tool.tool_name(), self.version(tool)),
         }
     }

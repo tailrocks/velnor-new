@@ -39,6 +39,8 @@ mod impl_renderer_overlap;
 mod impl_renderer_p08;
 #[path = "impl_renderer_p08_elect.rs"]
 mod impl_renderer_p08_elect;
+#[path = "impl_renderer_p08_python.rs"]
+mod impl_renderer_p08_python;
 #[path = "impl_renderer_planclose.rs"]
 mod impl_renderer_planclose;
 #[path = "impl_renderer_planformat.rs"]
@@ -51,6 +53,8 @@ mod impl_renderer_preseed_strict;
 mod impl_renderer_preseed_verify;
 #[path = "impl_renderer_protocol.rs"]
 mod impl_renderer_protocol;
+#[path = "impl_renderer_python_source.rs"]
+mod impl_renderer_python_source;
 #[path = "impl_renderer_release_checkouts.rs"]
 mod impl_renderer_release_checkouts;
 #[path = "impl_renderer_release_config.rs"]

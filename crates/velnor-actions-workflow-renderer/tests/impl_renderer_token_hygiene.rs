@@ -265,6 +265,7 @@ fn scrub_coverage_allows_ambient_auth_steps_and_release() -> Result<(), RenderEr
         "Fetch Cargo sources (nested/Cargo.toml)",
         DENY_STEP_NAME,
         MACHETE_STEP_NAME,
+        "Prepare Python source tests",
         "Run zizmor",
         "Run actionlint",
     ] {
