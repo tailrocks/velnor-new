@@ -197,6 +197,15 @@ fn assert_native_checksum_utility(step: velnor_actions_contract::Step, target: R
         2,
         "{script}"
     );
+    assert!(
+        script.contains(&format!("echo \"$p$s\"|{expected} -c -")),
+        "{script}"
+    );
+    assert!(script.contains("cp \"$s\" \"$d\""), "{script}");
+    assert!(
+        script.contains(&format!("echo \"$p$d\"|{expected} -c -")),
+        "{script}"
+    );
     assert!(!script.contains(other), "{script}");
 }
 

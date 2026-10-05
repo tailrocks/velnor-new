@@ -73,7 +73,11 @@ fn fixed_composite_forwards_identity_and_runs_seed_before_outer_restore() -> Res
             .bytes
             .find(&format!("uses: {}", crate::tool_seed::TOOL_SEED_USES))
             .expect("seed child");
-        assert!(identity_at < seed_at);
+        let enabled_gate = file
+            .bytes
+            .find(&format!("if: {}", cache_p08::TOOLS_CACHE_RESTORE_CONDITION))
+            .expect("seed enabled gate");
+        assert!(identity_at < enabled_gate && enabled_gate < seed_at);
         assert!(file.bytes.contains("id: v2"));
         assert!(file.bytes.contains("d:"));
         assert!(file.bytes.contains("inputs.d"));

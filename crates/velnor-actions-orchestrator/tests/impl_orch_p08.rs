@@ -95,8 +95,12 @@ fn c2_v2_mise_cache_restores_with_elected_tools_saves() -> TestResult {
             "action cache disabled (mbx={mbx})"
         );
         assert!(
-            yaml.contains("cache_key: mise-tools-v2-"),
-            "seed uses the exact V2 tools identity (mbx={mbx})"
+            yaml.contains("uses: ./.github/actions/velnor-tools-prelude-u26"),
+            "V2 prelude owns runtime identity and seed import (mbx={mbx})"
+        );
+        assert!(
+            yaml.contains("          d: "),
+            "prelude static identity input (mbx={mbx})"
         );
         for path in [
             "${{ runner.temp }}/velnor/rustup",
