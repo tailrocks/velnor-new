@@ -166,7 +166,7 @@ fn render_carries_no_forbidden_constructs() -> Result<(), RenderError> {
 }
 
 #[test]
-fn permissions_block_is_exactly_read_read() -> Result<(), RenderError> {
+fn default_permissions_block_omits_ungranted_actions() -> Result<(), RenderError> {
     let text = render_workflow_ir(
         &fixture_ir(vec![minimal_plan_job()?]),
         WorkflowPolicy::ConsumerV1,
@@ -177,7 +177,7 @@ fn permissions_block_is_exactly_read_read() -> Result<(), RenderError> {
     let end = text.find("concurrency:").expect("concurrency");
     assert_eq!(
         &text[start..end],
-        "permissions:\n  contents: read\n  actions: read\n"
+        "permissions:\n  contents: read\n"
     );
     Ok(())
 }

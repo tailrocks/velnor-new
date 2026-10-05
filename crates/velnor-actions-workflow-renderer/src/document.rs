@@ -86,22 +86,22 @@ fn level_str(level: PermissionLevel) -> &'static str {
     }
 }
 
-/// Render permissions: contents/actions always, grants beyond none explicit.
+/// Render permissions: contents is explicit; other scopes appear only when granted.
 ///
-/// The CI default stays exactly `contents: read` plus `actions: read`;
-/// wider scopes render only when the IR grants them, so validated
+/// An omitted scope is denied by GitHub when a permissions map exists.
+/// Wider scopes render only when the IR grants them, so validated
 /// overrides are never silently dropped.
 fn permissions_to_yaml(permissions: &Permissions) -> Yaml {
-    let mut entries = vec![
-        (
-            "contents".to_owned(),
-            Yaml::str(level_str(permissions.contents).to_owned()),
-        ),
-        (
+    let mut entries = vec![(
+        "contents".to_owned(),
+        Yaml::str(level_str(permissions.contents).to_owned()),
+    )];
+    if !matches!(permissions.actions, PermissionLevel::None) {
+        entries.push((
             "actions".to_owned(),
             Yaml::str(level_str(permissions.actions).to_owned()),
-        ),
-    ];
+        ));
+    }
     if !matches!(permissions.pull_requests, PermissionLevel::None) {
         entries.push((
             "pull-requests".to_owned(),

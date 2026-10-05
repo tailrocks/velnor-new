@@ -144,17 +144,29 @@ The default branch name MUST come from explicit repository configuration or the 
 branch pushes with pull-request path filters. A valid planning job MUST run even when no stack task is
 selected.
 
-Every generated workflow MUST set:
+Every generated workflow MUST set only the permissions required by its jobs.
+At workflow level, generated CI MUST set `contents: read` and MUST omit
+`actions`. GitHub denies omitted token scopes when a permissions map exists.
+Only `required` may set job-level `actions: read`. It uses the scope to fetch
+the exact report artifacts for the current run and any validated baseline
+artifact. Its job-level map MUST also retain `contents: read` because job
+permissions replace workflow permissions.
+Other jobs MUST NOT receive `actions: read`.
 
 ```yaml
 permissions:
   contents: read
-  actions: read
 ```
 
-All other permissions MUST be absent or `none`. `actions: read` is only for the exact trusted baseline
-artifact. Release publication uses a separate workflow with explicit permissions; fork pull requests receive
-no write access. `[stacks.rust.release]` adds `release.yml` (see [release contract](release-contract.md)) with per-job permissions that MUST NOT weaken this default.
+All other permissions MUST be absent or `none`. The current `plan` renderer has
+no job-token binding for prior-baseline lookup. That lookup cannot authenticate,
+so generated workflows MUST NOT claim that it reuses a trusted baseline. The
+planner records a lookup miss and schedules affected obligations. A separate
+reviewed change must add a job-scoped token and `actions: read` before planning
+can claim authenticated baseline reuse. Release publication uses a separate
+workflow with explicit permissions; fork pull requests receive no write access.
+`[stacks.rust.release]` adds `release.yml` (see [release contract](release-contract.md))
+with per-job permissions that MUST NOT weaken this default.
 
 The workflow concurrency group MUST be:
 
@@ -175,8 +187,12 @@ names, generated command labels, or CLI subcommands. The sole Velnor executable 
 1. `plan`: checkout; setup Mise through its pinned action with exact catalog `version`/`sha256`; acquire
    the bootstrap asset from the generated descriptor and verify it. Consumers embed the generating release version, target URL, and
    digest; Velnor uses the matching `.velnor/generator.lock` record and checks equality. Install exact tools
-   from the embedded catalog, including GitHub CLI for trusted-baseline lookup. Discover obligations, resolve
-   a valid baseline, classify every obligation, and emit the bounded matrix and complete plan report. In
+   from the embedded catalog, including GitHub CLI. The current `plan` job has
+   no token binding for prior-baseline lookup, so it cannot authenticate that
+   request. It records a lookup miss and schedules affected obligations. A
+   separate reviewed change must bind a job-scoped token and `actions: read`
+   before planning can claim authenticated baseline reuse. It classifies every
+   obligation and emits the bounded matrix and complete plan report. In
    bootstrap validation mode, check generated files with the locked binary. In candidate mode, do not invoke
    the candidate or require the bootstrap to reproduce new generator output.
 2. `rust-<slug>`: one job per selected crate, grouping that crate's

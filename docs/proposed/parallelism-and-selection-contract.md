@@ -188,7 +188,23 @@ validating `baseline.json`, it removes the downloaded archive and extracted
 temporary files. This avoids a second GitHub HTTP client and reuses Mise as the
 tool installer.
 
-Generated workflow permissions are `contents: read` and `actions: read`; the planning process receives `${{ github.token }}` only as `GH_TOKEN`, which must never be printed or inherited by task execution. Before any repository task starts, Velnor removes `GH_TOKEN`, `GITHUB_TOKEN`, `ACTIONS_RUNTIME_TOKEN`, and other undeclared action credential variables from the child environment. No `pull_request_target`, PR write token, wildcard artifact download, executable in the baseline, or PR-produced proof is allowed. The published baseline contains evidence only: no source, executable, credentials, or task-cache directories. If `gh` is missing, API access fails, or download fails, planning records `baseline_unavailable` and schedules affected obligations normally; it still fails if the Rust inventory itself is incomplete.
+Generated workflows set workflow-level `contents: read` and omit `actions`.
+The `required` job alone receives job-level `contents: read` and `actions: read`
+for exact report downloads and any validated baseline artifact. Job permissions
+replace workflow permissions, so both scopes are explicit on that job. The current `plan` job
+has no token binding for prior-baseline lookup; it cannot authenticate that
+request. A lookup miss records `baseline_unavailable` and schedules affected
+obligations. A separate reviewed change must scope a token and `actions: read`
+to `plan` before generated workflows can claim authenticated baseline reuse.
+Before any repository task starts, Velnor removes `GH_TOKEN`, `GITHUB_TOKEN`,
+`ACTIONS_RUNTIME_TOKEN`, and other undeclared action credential variables from
+the child environment. No `pull_request_target`, PR write token, wildcard
+artifact download, executable in the baseline, or PR-produced proof is allowed.
+The published baseline contains evidence only: no source, executable,
+credentials, or task-cache directories. If `gh` is missing, API access fails,
+or download fails, planning records `baseline_unavailable` and schedules
+affected obligations normally; it still fails if the Rust inventory itself
+is incomplete.
 
 A task is `covered` only when the baseline entry’s entire compatibility and input identity matches the current obligation. Baseline lookup failure is an optimization miss: missing, expired, inaccessible, malformed, wrong-ref, wrong-commit, stale-schema, or incomplete evidence causes all otherwise-unproven obligations to execute. Record the precise reason. An incomplete task inventory is a planning failure, not a baseline miss.
 

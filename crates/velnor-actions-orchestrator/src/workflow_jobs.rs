@@ -6,7 +6,8 @@
 use std::collections::BTreeMap;
 use std::ffi::OsString;
 
-use velnor_actions_contract::{Job, JobTimeout, Step};
+use velnor_actions_contract::workflow::permissions::PermissionLevel;
+use velnor_actions_contract::{Job, JobTimeout, Permissions, Step};
 use velnor_actions_mise::{
     PREPARE_PINNED_TOOLS_STEP, PinnedTool, PinnedToolExec, PreparePinnedTools, ToolCatalog,
     ToolHomes,
@@ -168,7 +169,12 @@ pub(crate) fn final_job(
         timeout_minutes: JobTimeout::REQUIRED,
         needs,
         condition: Some(FINAL_CONDITION.to_owned()),
-        permissions: None,
+        permissions: Some(Permissions {
+            contents: PermissionLevel::Read,
+            pull_requests: PermissionLevel::None,
+            id_token: PermissionLevel::None,
+            actions: PermissionLevel::Read,
+        }),
         environment: None,
         steps,
     })

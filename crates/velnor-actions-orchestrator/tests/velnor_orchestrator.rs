@@ -70,6 +70,7 @@ mod impl_plan_migration;
 mod impl_plan_parity;
 mod impl_plan_prepare;
 mod impl_prepare_generate;
+mod impl_permissions_scope;
 mod impl_preseed_manifest;
 mod impl_protocol;
 mod impl_protocol_fork;
