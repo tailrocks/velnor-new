@@ -29,6 +29,8 @@ mod impl_mise_gate6;
 mod impl_mise_git;
 #[path = "impl_mise_git_config.rs"]
 mod impl_mise_git_config;
+#[path = "impl_mise_git_optional_locks.rs"]
+mod impl_mise_git_optional_locks;
 #[path = "impl_mise_install.rs"]
 mod impl_mise_install;
 #[path = "impl_mise_isolation.rs"]
@@ -79,3 +81,5 @@ mod impl_mise_tofu_t27;
 mod impl_mise_tofu_t27_realbin;
 #[path = "impl_mise_verify.rs"]
 mod impl_mise_verify;
+#[path = "impl_miserc_isolation.rs"]
+mod impl_miserc_isolation;
