@@ -270,7 +270,20 @@ sub walk {
         $state->{gnu_name} = undef;
         $state->{gnu_link} = undef;
     }
+    # The end marker is one zero block. The writer still has the second
+    # marker and gzip padding. Leave that unread and pipefail reports
+    # "member list failed" after gzip gets SIGPIPE.
+    drain_stdin();
     return $index;
+}
+
+sub drain_stdin {
+    my $buf = "";
+    while (1) {
+        my $got = sysread STDIN, $buf, 1048576;
+        die "velnor-tar-member: read: $!\n" if !defined $got;
+        last if $got == 0;
+    }
 }
 
 sub cmd_list {
