@@ -1,12 +1,13 @@
 //! Gate 4 renderer cases: MBX objects, cache actions, lane target dirs.
 
 use velnor_actions_contract::cachekey::mbx_cache_generation;
+use velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION;
 
 use velnor_actions_contract::{Step, StepKind};
 use velnor_actions_workflow_renderer::steps::{
-    CompileDriver, MBX_CACHE_MODE_ENV, TOOLS_CACHE_PATH, TOOLS_RESTORE_NAME, TOOLS_SAVE_NAME,
-    cache_action_step, mbx_objects_step, mbx_step_for_driver, target_dir_for_lane, tools_cache_key,
-    tools_restore_step, tools_save_step,
+    CompileDriver, MBX_CACHE_MODE_ENV, TOOLS_RESTORE_NAME, TOOLS_SAVE_NAME, action_step,
+    action_step_with_env, cache_action_step, mbx_objects_step, mbx_step_for_driver,
+    target_dir_for_lane,
 };
 
 use super::impl_renderer_fixtures::*;
@@ -34,6 +35,49 @@ fn step_kinds_have_no_parallel_syntax() {
         kind_name(&velnor_actions_workflow_renderer::steps::plan_step()),
         "internal"
     );
+}
+
+#[test]
+fn mbx_domain_expression_allowlist_is_exact() {
+    let trust = "github.event_name == 'push' && github.ref_protected && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && 'trusted' || 'pr'";
+    let mode = "github.event_name == 'push' && github.ref_protected && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && 'write' || 'read'";
+    let key = format!("domain-${{{{ {trust} }}}}-${{{{ github.run_id }}}}");
+    let uses = format!("jdx/mr-boxington-action@{}", sha());
+    let allowed = action_step(
+        "MBX",
+        &uses,
+        std::collections::BTreeMap::from([("cache-key".to_owned(), key.clone())]),
+    );
+    assert!(allowed.is_ok(), "exact domain expression allowed: {key}");
+    assert!(
+        action_step_with_env(
+            "MBX",
+            &uses,
+            std::collections::BTreeMap::new(),
+            std::collections::BTreeMap::from([(
+                MBX_CACHE_MODE_ENV.to_owned(),
+                format!("${{{{ {mode} }}}}")
+            )]),
+        )
+        .is_ok(),
+        "exact protected-default writer mode is allowlisted"
+    );
+
+    for bad in [
+        key.replace("github.ref_protected", "env.CI"),
+        key.replace("github.event.repository.default_branch", "github.ref_name"),
+        key.replace("'trusted' || 'pr'", "'write' || 'read'"),
+    ] {
+        assert!(
+            action_step(
+                "MBX",
+                &uses,
+                std::collections::BTreeMap::from([("cache-key".to_owned(), bad.clone())]),
+            )
+            .is_err(),
+            "unowned cache-key expression rejected: {bad}"
+        );
+    }
 }
 
 #[test]
@@ -100,8 +144,9 @@ fn cache_restore_accepts_only_allowed_paths() {
     let uses = format!("actions/cache/restore@{}", sha());
     let key = "velnor-v1-sources-trusted-compat-snapshot".to_owned();
     let paths = vec![
-        "$CARGO_HOME/registry".to_owned(),
-        "$CARGO_HOME/git".to_owned(),
+        "${{ runner.temp }}/velnor/cargo/registry/cache".to_owned(),
+        "${{ runner.temp }}/velnor/cargo/registry/index".to_owned(),
+        "${{ runner.temp }}/velnor/cargo/git/db".to_owned(),
     ];
     let step = cache_action_step(
         true,
@@ -125,6 +170,8 @@ fn cache_restore_accepts_only_allowed_paths() {
     }
     for bad in [
         "$CARGO_HOME/credentials.toml",
+        "$CARGO_HOME/registry",
+        "$CARGO_HOME/git",
         "$RUNNER_TEMP/velnor/target/abc",
         "/abs/path",
         "$HOME/.rustup",
@@ -151,6 +198,7 @@ fn cache_save_writes_task_artifacts_only() {
     let key = "velnor-v1-task-trusted-compat-snapshot".to_owned();
     let task_dir = "$MISE_TASK_CACHE_DIR/task-artifacts/v2".to_owned();
     let step = cache_action_step(false, &uses, "task", &key, &[], &[task_dir]).expect("save");
+    assert_eq!(step.condition.as_deref(), Some(CACHE_SAVE_CONDITION));
     match &step.kind {
         StepKind::Action { with, .. } => {
             assert!(
@@ -182,126 +230,6 @@ fn cache_save_writes_task_artifacts_only() {
         )
         .is_err()
     );
-}
-
-#[test]
-fn tools_cache_key_scopes_target_mise_generator_job_and_toolfiles() {
-    let key = tools_cache_key("x86_64-unknown-linux-gnu", "2026.9.16", "0.1.0", "plan")
-        .expect("tools key");
-    assert!(key.starts_with("mise-tools-v1-"), "{key}");
-    for part in [
-        "x86_64-unknown-linux-gnu",
-        "2026.9.16",
-        "0.1.0",
-        "plan",
-        "hashFiles('mise.toml','.mise.toml','mise.lock','.mise.lock','.tool-versions')",
-    ] {
-        assert!(key.contains(part), "key misses {part}: {key}");
-    }
-    assert!(!key.contains(' ') && !key.contains('\n'), "{key}");
-    for bad in [
-        ("", "2026.9.16", "0.1.0", "plan"),
-        ("x86_64-unknown-linux-gnu", "latest", "0.1.0", "plan"),
-        (
-            "x86_64-unknown-linux-gnu",
-            "2026.9.16",
-            "0.1.0",
-            "velnor plan",
-        ),
-        (
-            "x86_64-unknown-linux-gnu",
-            "2026.9.16",
-            "0.1.0",
-            "plan${{x}}",
-        ),
-        ("wasm32-unknown-unknown", "2026.9.16", "0.1.0", "plan"),
-    ] {
-        assert!(
-            tools_cache_key(bad.0, bad.1, bad.2, bad.3).is_err(),
-            "key accepted {bad:?}"
-        );
-    }
-}
-
-#[test]
-fn tools_restore_and_save_pin_mise_data_dir_only() {
-    let key = tools_cache_key("x86_64-unknown-linux-gnu", "2026.9.16", "0.1.0", "plan")
-        .expect("tools key");
-    let restore = tools_restore_step(&key).expect("restore");
-    assert_eq!(restore.name, TOOLS_RESTORE_NAME);
-    let StepKind::Action { uses, with, .. } = &restore.kind else {
-        panic!("restore must be an action step");
-    };
-    assert!(uses.starts_with("actions/cache/restore@"), "{uses}");
-    assert_eq!(with.get("key").map(String::as_str), Some(key.as_str()));
-    assert_eq!(with.get("path").map(String::as_str), Some(TOOLS_CACHE_PATH));
-    assert!(
-        with.get("restore-keys")
-            .is_some_and(|keys| keys.starts_with("mise-tools-v1-")),
-        "restore carries a prefix key"
-    );
-    let save = tools_save_step(&key).expect("save");
-    assert_eq!(save.name, TOOLS_SAVE_NAME);
-    let StepKind::Action { uses, with, .. } = &save.kind else {
-        panic!("save must be an action step");
-    };
-    assert!(uses.starts_with("actions/cache/save@"), "{uses}");
-    assert_eq!(with.get("key").map(String::as_str), Some(key.as_str()));
-    assert_eq!(with.get("path").map(String::as_str), Some(TOOLS_CACHE_PATH));
-    assert!(
-        !with.contains_key("restore-keys"),
-        "save has no restore keys"
-    );
-    assert!(
-        cache_action_step(
-            true,
-            &format!("actions/cache/restore@{}", sha()),
-            "tools",
-            &key,
-            &[],
-            &["$CARGO_HOME/registry".to_owned()]
-        )
-        .is_err(),
-        "tools layer rejects non-mise paths"
-    );
-}
-
-#[test]
-fn strict_restores_builtin_and_saves_on_elected_writer()
--> Result<(), velnor_actions_workflow_renderer::RenderError> {
-    use velnor_actions_workflow_renderer::checkout_step;
-    let lint = job(
-        "actionlint",
-        "Actionlint",
-        Vec::new(),
-        vec![
-            checkout_step(&checkout_pin())?,
-            scrubbed_shell_step(
-                "Run actionlint",
-                mise_argv("actionlint@1.7.12", "actionlint", &["-color"]),
-            )?,
-        ],
-    );
-    let text = strict(&fixture_ir(vec![lint]), &fixture_ctx())?;
-    let names = step_names(&text, "actionlint");
-    assert!(
-        !names.iter().any(|s| s == TOOLS_RESTORE_NAME),
-        "P08: restores stay built-in: {names:?}"
-    );
-    assert_eq!(
-        names.iter().filter(|s| *s == TOOLS_SAVE_NAME).count(),
-        1,
-        "P08: sole owner saves once: {names:?}"
-    );
-    assert_eq!(
-        names.iter().position(|s| s == "Setup Mise"),
-        Some(1),
-        "setup right after checkout: {names:?}"
-    );
-    for need in ["cache: \"true\"", "cache_key: mise-v1-"] {
-        assert!(text.contains(need), "built-in cache {need}:\n{text}");
-    }
-    Ok(())
 }
 
 #[test]

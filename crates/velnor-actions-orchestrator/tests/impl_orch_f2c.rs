@@ -154,14 +154,12 @@ fn preview_dirs_are_unique_tmp_roots() {
 }
 
 #[test]
-fn failed_tasks_never_save_results() {
+fn unverified_writer_context_never_saves_results() {
     use velnor_actions_mise::cache::save_allowed;
-    for event in ["push", "pull_request", "merge_group"] {
-        assert!(!save_allowed("trusted", event, false), "{event}");
-    }
-    assert!(save_allowed("trusted", "push", true));
-    assert!(!save_allowed("trusted", "pull_request", true));
-    assert!(!save_allowed("trusted", "merge_group", true));
+    let writer = velnor_actions_mise::CacheWriterContext::default();
+    assert!(!save_allowed("trusted", &writer, false));
+    assert!(!save_allowed("trusted", &writer, true));
+    assert!(!save_allowed("pr", &writer, true));
 }
 
 #[test]

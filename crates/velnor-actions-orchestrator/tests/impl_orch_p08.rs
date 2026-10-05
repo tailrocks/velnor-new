@@ -2,11 +2,12 @@
 //!
 //! Cargo-only fixtures use pinned `rust-cache` (registry-only, shared key);
 //! MBX fixtures use objects + one shared `actions/cache` snapshot (plan
-//! writes, crates read). Tools use the built-in Mise cache only.
+//! writes, crates read). Tools use explicit canonical Mise state archives.
 
 use std::fs;
 
 use velnor_actions_contract::StepKind;
+use velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION;
 use velnor_actions_orchestrator::{prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
@@ -63,12 +64,12 @@ fn job_names(job: &str, mbx: bool) -> Result<Vec<String>, Box<dyn std::error::Er
 }
 
 #[test]
-fn c2_builtin_mise_restore_with_elected_tools_saves() -> TestResult {
+fn c2_explicit_mise_restore_with_elected_tools_saves() -> TestResult {
     for mbx in [false, true] {
         let yaml = yaml_for(mbx)?;
         assert!(
-            !yaml.contains("Restore Mise tools"),
-            "restores stay built-in (mbx={mbx})"
+            yaml.contains("- name: Restore Mise tools"),
+            "explicit restore runs before setup (mbx={mbx})"
         );
         assert!(
             yaml.contains("- name: Save Mise tools"),
@@ -79,10 +80,17 @@ fn c2_builtin_mise_restore_with_elected_tools_saves() -> TestResult {
             "no role-suffixed tools keys (mbx={mbx})"
         );
         assert!(
-            yaml.contains("cache_key: mise-v1-"),
-            "built-in cache key (mbx={mbx})"
+            yaml.contains("key: mise-v3-${{ runner.os }}-${{ runner.arch }}-${{ env.VELNOR_CACHE_IMAGE_OS }}-${{ env.VELNOR_CACHE_IMAGE_VERSION }}-"),
+            "explicit cache has canonical image-aware key (mbx={mbx})"
         );
-        assert!(yaml.contains("cache: \"true\""), "built-in on (mbx={mbx})");
+        assert!(
+            yaml.contains("cache: \"false\""),
+            "built-in off (mbx={mbx})"
+        );
+        assert!(
+            !yaml.contains("cache_key:"),
+            "implicit cache key disabled (mbx={mbx})"
+        );
     }
     Ok(())
 }
@@ -175,7 +183,7 @@ fn c7_cargo_only_uses_pinned_rust_cache_never_with_mbx() -> TestResult {
     );
     let plan = job_names("plan", false)?;
     assert!(
-        plan.contains(&"Restore Cargo registry".to_owned()),
+        !plan.contains(&"Restore Cargo registry".to_owned()),
         "{plan:?}"
     );
     let crates = job_names("rust-demo", false)?;
@@ -242,9 +250,8 @@ fn c10_only_plan_saves_producer_successful_deltas() -> TestResult {
 }
 
 #[test]
-fn c11_cache_saves_push_only_prs_and_forks_read_only() -> TestResult {
-    use velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION;
-    // IR: exactly one save step (plan writer), carrying the push-only gate;
+fn c11_cache_saves_protected_default_prs_and_forks_read_only() -> TestResult {
+    // IR: exactly one save step (plan writer), carrying the protected-default gate;
     // every other plan step (restores, fetch, obligations) stays ungated.
     let repo = make_repo(config_with_branch())?;
     let root = repo.path();
@@ -264,7 +271,7 @@ fn c11_cache_saves_push_only_prs_and_forks_read_only() -> TestResult {
             assert_eq!(
                 step.condition.as_deref(),
                 Some(CACHE_SAVE_CONDITION),
-                "save must be push-gated"
+                "save must use the protected-default predicate"
             );
         } else {
             assert!(
@@ -279,38 +286,51 @@ fn c11_cache_saves_push_only_prs_and_forks_read_only() -> TestResult {
     // unconditional `actions/cache/save` may exist (fork read-only).
     let yaml = yaml_for(true)?;
     let save_at = yaml.find("- name: Save Cargo sources").ok_or("save step")?;
-    assert!(
-        yaml[save_at..].starts_with(
-            "- name: Save Cargo sources\n        if: success() && github.event_name == 'push'",
-        ),
-        "save renders push-only if:\n{yaml}"
+    let expected_save = format!(
+        "- name: Save Cargo sources\n        if: {}",
+        velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION
     );
-    assert_tools_saves_push_gated_per_key(&yaml);
+    assert!(
+        yaml[save_at..].starts_with(&expected_save),
+        "save renders protected-default predicate:\n{yaml}"
+    );
+    assert_tools_saves_protected_default_per_key(&yaml);
     Ok(())
 }
 
-/// YAML: one push-gated tools save per restored `mise-v1-` key (plus the
+/// YAML: one trusted tools save per restored `mise-v3-` key (plus the
 /// sources save), every setup restore-only.
-fn assert_tools_saves_push_gated_per_key(yaml: &str) {
+fn assert_tools_saves_protected_default_per_key(yaml: &str) {
     let mut keys = std::collections::BTreeSet::new();
+    let mut in_tools_restore = false;
     for line in yaml.lines() {
-        if let Some(key) = line.trim().strip_prefix("cache_key: ") {
-            keys.insert(key.to_owned());
+        if let Some(name) = line.trim().strip_prefix("- name: ") {
+            in_tools_restore = name == "Restore Mise tools";
+        }
+        if in_tools_restore && let Some(key) = line.trim().strip_prefix("key: ") {
+            keys.insert(key.trim_matches('"').to_owned());
+            in_tools_restore = false;
         }
     }
     assert!(!keys.is_empty(), "at least one restored tools key:\n{yaml}");
     let mbx_saves = yaml.matches("- name: Save MBX single bundle").count();
-    let mbx_exports = yaml.matches("- name: Export MBX single bundle").count();
     assert_eq!(
         yaml.matches("actions/cache/save@").count(),
         1 + keys.len() + mbx_saves,
         "sources plus one tools save per key plus the MBX bundle:\n{yaml}"
     );
     assert_eq!(
-        yaml.matches("if: success() && github.event_name == 'push'")
-            .count(),
-        1 + keys.len() + mbx_saves + mbx_exports,
-        "every save push-gated:\n{yaml}"
+        yaml.matches(&format!("if: {CACHE_SAVE_CONDITION}")).count(),
+        1 + keys.len(),
+        "source and tool cache producers use the shared trusted-save predicate:\n{yaml}"
+    );
+    assert_eq!(
+        yaml.matches(&format!(
+            "if: {CACHE_SAVE_CONDITION} && env.VELNOR_CACHE_IMAGE_ELIGIBLE == 'true'"
+        ))
+        .count(),
+        keys.len(),
+        "every tool save also requires a qualified runner image:\n{yaml}"
     );
     assert!(
         !yaml.contains("- name: Restore Cargo sources\n        if:"),
@@ -323,7 +343,7 @@ fn assert_tools_saves_push_gated_per_key(yaml: &str) {
     );
     for line in yaml.lines() {
         if let Some(key) = line.trim().strip_prefix("key: ")
-            && key.starts_with("mise-v1-")
+            && key.starts_with("mise-v3-")
         {
             assert!(
                 keys.contains(key),

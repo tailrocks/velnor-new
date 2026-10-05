@@ -57,6 +57,29 @@ fn assembly_captures_actual_event() {
 }
 
 #[test]
+fn assembly_captures_current_run_writer_facts_without_protection_claim() {
+    let dir = staged(&plan_with(&[]), &[]);
+    let payload =
+        r#"{"ref":"refs/heads/main","repository":{"full_name":"o/r","default_branch":"main"}}"#;
+    let request = assemble_with_repository(
+        "local",
+        dir.path(),
+        Some(r#"{"plan":"success"}"#),
+        Some(r#"["plan"]"#),
+        Some("push"),
+        Some(payload),
+        Some("o/r"),
+    )
+    .expect("assemble");
+    let value: serde_json::Value = serde_json::from_str(&request).expect("json");
+    assert_eq!(value["actual_cache_writer"]["event"], "push");
+    assert_eq!(value["actual_cache_writer"]["git_ref"], "refs/heads/main");
+    assert_eq!(value["actual_cache_writer"]["default_branch"], "main");
+    assert_eq!(value["actual_cache_writer"]["repository"], "o/r");
+    assert!(value["actual_cache_writer"].get("ref_protected").is_none());
+}
+
+#[test]
 fn assembly_reads_attestation_in_candidate_mode() {
     let file = |body: &str| {
         staged(

@@ -1,10 +1,9 @@
-//! Pinned Mise setup pins plus the legacy cache-off template.
+//! Pinned Mise setup pins and the isolated cache-off bootstrap template.
 //!
 //! Pins arrive as typed [`MiseSetup`] from the orchestrator's compiled
 //! catalog; the renderer never invents them. Strict insertion with the
-//! qualified built-in cache lives in `cache_p08` (P08); this module keeps
-//! the pin type, its validation, and the legacy `cache:false` template
-//! for fixtures and upgrade inputs.
+//! explicit canonical cache lives in `cache_p08` (P08); this module keeps
+//! the pin type and one isolated `cache:false` bootstrap template.
 
 use velnor_actions_contract::Step;
 
@@ -55,18 +54,16 @@ impl MiseSetup {
     }
 }
 
-/// Legacy `Setup Mise` step: exact pins, `cache:false` (upgrade input).
+/// `Setup Mise` step: exact pins, `cache:false`, isolated bootstrap home.
 ///
 /// `install: false` keeps project tool files, tasks, and hooks from
 /// running; `env: false` keeps Mise env out of subsequent steps.
-/// Retained for fixtures and as the upgrade input that strict rendering
-/// replaces with the qualified built-in-cache shape (`cache:true` plus
-/// an explicit `cache_key`, never the workspace-hashing default that
-/// ELOOPs on symlink loops). The `with` map is exactly these six keys.
+/// The verified bootstrap has its own data root. Tool installs use a
+/// separate fixed `MISE_DATA_DIR` in later typed command environments.
 /// # Errors
 pub fn mise_setup_step(setup: &MiseSetup) -> Result<Step, RenderError> {
     setup.validate()?;
-    steps::action_step(
+    steps::action_step_with_env(
         SETUP_MISE_NAME,
         &setup.uses,
         std::collections::BTreeMap::from([
@@ -76,6 +73,16 @@ pub fn mise_setup_step(setup: &MiseSetup) -> Result<Step, RenderError> {
             ("env".to_owned(), "false".to_owned()),
             ("cache".to_owned(), "false".to_owned()),
             ("cache_save".to_owned(), "false".to_owned()),
+        ]),
+        std::collections::BTreeMap::from([
+            (
+                "MISE_DATA_DIR".to_owned(),
+                crate::cache_steps::TOOLS_MISE_BOOTSTRAP_DATA_DIR.to_owned(),
+            ),
+            ("MISE_NO_CONFIG".to_owned(), "1".to_owned()),
+            ("MISE_NO_ENV".to_owned(), "1".to_owned()),
+            ("MISE_NO_HOOKS".to_owned(), "1".to_owned()),
+            ("MISE_LOCKFILE".to_owned(), "0".to_owned()),
         ]),
     )
 }
