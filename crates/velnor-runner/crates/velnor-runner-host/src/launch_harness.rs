@@ -61,6 +61,8 @@ pub(crate) enum Mode {
     DeleteFail,
     /// First JIT is HTTP 409. The directory then deletes the offline runner.
     NameTakenOnce,
+    /// Every JIT is HTTP 409. The directory deletes the offline runner.
+    NameTaken,
 }
 
 impl Transport for Script {
@@ -75,7 +77,9 @@ impl Transport for Script {
             if matches!(self.mode, Mode::JitFail) {
                 return Err(TransportFail::Http(500));
             }
-            if matches!(self.mode, Mode::NameTakenOnce) && prior == 0 {
+            if matches!(self.mode, Mode::NameTaken)
+                || (matches!(self.mode, Mode::NameTakenOnce) && prior == 0)
+            {
                 return Ok(Exchange {
                     status: 409,
                     body: Vec::new(),

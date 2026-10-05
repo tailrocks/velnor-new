@@ -210,6 +210,57 @@ async fn volume_row_is_not_cleared() -> Result<(), String> {
 }
 
 #[tokio::test]
+async fn empty_row_keeps_a_mint_retry_after_delete() -> Result<(), String> {
+    let (scratch, journal) = open("empty-retry").await?;
+    let stale = seed_uncertain(&journal).await?;
+    let (calls, started) = drive(Mode::NameTakenOnce, &journal).await;
+    if started?.is_none() {
+        return Err("retry mint did not start".to_owned());
+    }
+    assert_eq!(
+        calls,
+        [
+            "runners-list",
+            "runner-delete",
+            "jit",
+            "runners-list",
+            "runner-delete",
+            "jit",
+            "ack"
+        ]
+    );
+    if slot_holds(&journal, stale).await? {
+        return Err("stale row holds a slot after retry".to_owned());
+    }
+    absent(&scratch.file())
+}
+
+#[tokio::test]
+async fn exhausted_name_clear_does_not_ack() -> Result<(), String> {
+    let (scratch, journal) = open("name-taken").await?;
+    let (calls, started) = drive(Mode::NameTaken, &journal).await;
+    assert_eq!(started, Err("effect uncertain".to_owned()));
+    assert_eq!(
+        calls,
+        [
+            "jit",
+            "runners-list",
+            "runner-delete",
+            "jit",
+            "runners-list",
+            "runner-delete"
+        ]
+    );
+    let rows = journal.rows().await.map_err(|err| err.to_string())?;
+    let occupied = rows
+        .iter()
+        .filter(|row| super::super::slot::holds(row))
+        .count();
+    assert_eq!(occupied, 0);
+    absent(&scratch.file())
+}
+
+#[tokio::test]
 async fn fresh_jit_conflict_deletes_the_offline_runner_and_starts() -> Result<(), String> {
     let (scratch, journal) = open("fresh-409").await?;
     let (calls, started) = drive(Mode::NameTakenOnce, &journal).await;

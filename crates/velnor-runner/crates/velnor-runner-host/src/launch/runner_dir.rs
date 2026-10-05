@@ -33,8 +33,8 @@ enum Decision {
 ///
 /// # Errors
 ///
-/// Returns [`EnsureError::Conflict`] when a second name collision remains.
 /// Returns [`EnsureError::Uncertain`] when the directory or the row is not clear.
+/// A cleared name is not [`EnsureError::Conflict`]. The caller must not acknowledge it.
 pub(super) async fn ensure_runner<T, S, F>(
     lane: &mut T,
     ctx: &Drive,
@@ -63,14 +63,14 @@ where
             if extra == 0 || !release_empty(lane, ctx, journal, id, name).await? {
                 return steps::hold(journal, id, EnsureError::Uncertain).await;
             }
-            extra -= 1;
+            // The cleared row was not a mint. The next mint keeps its one retry.
             continue;
         }
         match steps::mint(lane, ctx, batch, journal, id, name, &start).await {
             Err(EnsureError::NameCleared) if extra > 0 => {
                 extra -= 1;
             }
-            Err(EnsureError::NameCleared) => return Err(EnsureError::Conflict),
+            Err(EnsureError::NameCleared) => return Err(EnsureError::Uncertain),
             other => return other,
         }
     }
