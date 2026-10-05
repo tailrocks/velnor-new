@@ -178,6 +178,10 @@ fn mixed_platform_checks_keep_exact_tools_and_unconditional_reports() {
             panic!("qualified helper");
         };
         assert!(run.iter().any(|arg| arg.contains("velnor-actions-")));
+        assert!(
+            run.iter().all(|arg| !arg.contains("date +%s%3N")),
+            "native check execution does not use the Ubuntu task timestamp wrapper"
+        );
         assert_eq!(
             env.get(INTERNAL_OP_ENV).map(String::as_str),
             Some("execute-check-v1")

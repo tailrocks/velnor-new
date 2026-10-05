@@ -102,14 +102,6 @@ fn evidence_files_missing_empty_and_symlink_refuse() {
     }
 }
 #[test]
-fn portable_wrapper_requires_timer_helper() {
-    let wrapper = crate::matrix_step::report_wrapper_argv("true", "/missing/helper", "/tmp/start");
-    assert!(wrapper[2].contains("start-time-v1"));
-    assert!(wrapper[2].contains("|| exit $?"));
-    assert!(!wrapper[2].contains("date +"));
-}
-
-#[test]
 fn strict_evidence_parser_rejects_duplicate_and_foreign_fields() {
     let root = tempfile::TempDir::new().expect("temp");
     let json = serde_json::to_string(&proof()).expect("json");

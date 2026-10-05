@@ -4,10 +4,8 @@ use crate::{CheckDeadline, IsolatedCommand, MiseError};
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use velnor_actions_contract::config::{
-    CheckRunner, HostContainerProfile, MAX_CHECK_CONTAINER_APP_INFO_CAPTURE_BYTES,
-    MAX_CHECK_CONTAINER_APP_VERIFY_CAPTURE_BYTES, MAX_CHECK_CONTAINER_DAEMON_CAPTURE_BYTES,
-    MAX_CHECK_CONTAINER_IDENTITY_CAPTURE_BYTES, MAX_CHECK_CONTAINER_PATH_BYTES,
-    MAX_CHECK_CONTAINER_PROBE_CAPTURE_BYTES,
+    CheckRunner, HostContainerProfile, MAX_CHECK_CONTAINER_DAEMON_CAPTURE_BYTES,
+    MAX_CHECK_CONTAINER_PATH_BYTES, MAX_CHECK_CONTAINER_PROBE_CAPTURE_BYTES,
 };
 #[path = "check_container_observation.rs"]
 mod observation;
@@ -15,6 +13,9 @@ pub use observation::{
     ContainerObservation, ContainerProbeOutput, DockerDaemonObservation, OrbStackAppObservation,
     OrbStackObservation, validate_check_capability_proof,
 };
+#[path = "check_capabilities_probe.rs"]
+mod probe;
+use probe::{probe_failure, probe_orbstack};
 
 /// Owned bytes and runtime paths verified and prepared by the orchestrator.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -245,155 +246,6 @@ fn probe(
         stdout_digest,
         stderr_digest,
     })
-}
-
-fn probe_failure(
-    program: &Path,
-    args: &[&str],
-    result: &crate::command::ProcessOutput,
-) -> MiseError {
-    let program = program.as_os_str().as_encoded_bytes().escape_ascii();
-    let snippet = String::from_utf8_lossy(&result.stderr[..result.stderr.len().min(4 * 1024)]);
-    let stdout_digest = velnor_actions_contract::digest_b3(&result.stdout);
-    let stderr_digest = velnor_actions_contract::digest_b3(&result.stderr);
-    invalid(
-        "container_probe",
-        format!(
-            "bounded_probe_failed: program=\"{program}\", args={args:?}, code={:?}, signal={:?}, stdout_digest={stdout_digest}, stderr_digest={stderr_digest}, stderr={snippet:?}",
-            result.code, result.signal,
-        ),
-    )
-}
-
-fn probe_orbstack(
-    sdk: &velnor_actions_contract::config::HostOrbStackSdk,
-    prepared: &PreparedContainer,
-    env: &[(OsString, OsString)],
-    deadline: CheckDeadline,
-) -> Result<OrbStackObservation, MiseError> {
-    let program = prepared
-        .orbctl_program
-        .as_ref()
-        .ok_or_else(|| invalid("orbstack", "prepared_cli_missing"))?;
-    let info_path = Path::new(&sdk.app_bundle_path).join("Contents/Info.plist");
-    let info_path = info_path
-        .to_str()
-        .ok_or_else(|| invalid("orbstack", "invalid_plist_path"))?;
-    let info = probe(
-        Path::new("/usr/bin/plutil"),
-        &["-convert", "json", "-o", "-", info_path],
-        env,
-        deadline,
-        MAX_CHECK_CONTAINER_APP_INFO_CAPTURE_BYTES,
-    )?;
-    let codesign = Path::new("/usr/bin/codesign");
-    let signature = probe(
-        codesign,
-        &["-dv", "--verbose=4", &sdk.app_bundle_path],
-        env,
-        deadline,
-        MAX_CHECK_CONTAINER_IDENTITY_CAPTURE_BYTES,
-    )?;
-    let owned_bundle = owned_cli_bundle(program)?;
-    let outer_integrity = probe(
-        codesign,
-        &["--verify", "--strict", &sdk.app_bundle_path],
-        env,
-        deadline,
-        MAX_CHECK_CONTAINER_APP_VERIFY_CAPTURE_BYTES,
-    )?;
-    let source_cli_integrity = probe(
-        codesign,
-        &["--verify", "--strict", &sdk.cli_bundle_path],
-        env,
-        deadline,
-        MAX_CHECK_CONTAINER_APP_VERIFY_CAPTURE_BYTES,
-    )?;
-    let owned_cli_integrity = probe(
-        codesign,
-        &["--verify", "--strict", owned_bundle],
-        env,
-        deadline,
-        MAX_CHECK_CONTAINER_APP_VERIFY_CAPTURE_BYTES,
-    )?;
-    let source_cli_signature = probe(
-        codesign,
-        &["-dv", "--verbose=4", &sdk.cli_bundle_path],
-        env,
-        deadline,
-        MAX_CHECK_CONTAINER_IDENTITY_CAPTURE_BYTES,
-    )?;
-    let owned_cli_signature = probe(
-        codesign,
-        &["-dv", "--verbose=4", owned_bundle],
-        env,
-        deadline,
-        MAX_CHECK_CONTAINER_IDENTITY_CAPTURE_BYTES,
-    )?;
-    let app = OrbStackAppObservation::parse(
-        info,
-        signature,
-        outer_integrity,
-        source_cli_integrity,
-        owned_cli_integrity,
-        source_cli_signature,
-        owned_cli_signature,
-    )?;
-    Ok(OrbStackObservation {
-        program: program.clone(),
-        sha256: prepared
-            .orbctl_sha256
-            .clone()
-            .ok_or_else(|| invalid("orbstack", "cli_hash_missing"))?,
-        app,
-        version: probe(
-            program,
-            &["version"],
-            env,
-            deadline,
-            MAX_CHECK_CONTAINER_PROBE_CAPTURE_BYTES,
-        )?,
-        status: probe(
-            program,
-            &["status"],
-            env,
-            deadline,
-            MAX_CHECK_CONTAINER_PROBE_CAPTURE_BYTES,
-        )?,
-    })
-}
-
-fn owned_cli_bundle(program: &Path) -> Result<&str, MiseError> {
-    program
-        .ancestors()
-        .find(|path| {
-            path.extension()
-                .and_then(|value| value.to_str())
-                .is_some_and(|extension| extension.eq_ignore_ascii_case("app"))
-        })
-        .and_then(Path::to_str)
-        .ok_or_else(|| invalid("orbstack", "owned_nested_bundle_missing"))
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn owned_bundle_accepts_uppercase_extension_and_rejects_near_names()
-    -> Result<(), crate::MiseError> {
-        for name in ["scli.app", "scli.APP", "scli.ApP"] {
-            let path = std::path::PathBuf::from("/owned")
-                .join(name)
-                .join("Contents/MacOS/scli");
-            assert_eq!(super::owned_cli_bundle(&path)?, format!("/owned/{name}"));
-        }
-        assert!(
-            super::owned_cli_bundle(std::path::Path::new(
-                "/owned/scli.app-copy/Contents/MacOS/scli"
-            ))
-            .is_err()
-        );
-        Ok(())
-    }
 }
 
 #[cfg(all(test, unix))]

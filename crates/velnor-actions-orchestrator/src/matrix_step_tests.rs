@@ -91,23 +91,18 @@ fn obligation_step_skips_when_plan_covered_it() {
 
 #[test]
 fn report_wrapper_stamps_start_and_hands_env_to_helper() {
-    let argv = report_wrapper_argv("true", "/tmp/h", "/tmp/start");
+    let argv = report_wrapper_argv("true", "/tmp/h");
     assert_eq!(&argv[..2], ["sh".to_owned(), "-c".to_owned()]);
     let script = &argv[2];
     assert!(
-        script
-            .contains("VELNOR_INTERNAL_OP=start-time-v1 \"/tmp/h\" > \"/tmp/start\" || exit $?; "),
-        "start stamp first after unset prelude: {script}"
-    );
-    assert!(
-        script.contains("read -r start_ms rest < \"/tmp/start\""),
-        "stamp read back: {script}"
+        script.contains("s=$(date +%s%3N); "),
+        "start stamp first: {script}"
     );
     for env in [EXIT_CODE_ENV, START_MS_ENV] {
         assert!(script.contains(env), "helper env {env}: {script}");
     }
     assert!(
-        script.contains(&format!("{START_MS_ENV}=\"$start_ms\"")),
+        script.contains(&format!("{START_MS_ENV}=\"$s\"")),
         "stamp handed to helper: {script}"
     );
     assert!(
@@ -115,10 +110,6 @@ fn report_wrapper_stamps_start_and_hands_env_to_helper() {
         "obligation code wins: {script}"
     );
     velnor_actions_workflow_renderer::validate_command_argv(&argv).expect("valid wrapper");
-    assert!(
-        !script.contains("$("),
-        "no command substitution (file handoff only): {script}"
-    );
 }
 
 #[test]
@@ -129,10 +120,7 @@ fn outcome_and_deferred_share_one_start_file() {
     assert_eq!(start, "$RUNNER_TEMP/velnor/start-m-abc");
     let save = outcome_wrapper_argv("true", &outcome, &start);
     assert!(
-        save[2].starts_with(&format!(
-            "VELNOR_INTERNAL_OP=start-time-v1 \"{}\" > \"{start}\" || exit $?; ",
-            helper_path_for_version()
-        )),
+        save[2].starts_with(&format!("date +%s%3N > \"{start}\"; ")),
         "outcome stamps start first (no unset prelude on outcome): {}",
         save[2]
     );

@@ -4,20 +4,20 @@ use super::{ContainerProbeOutput, OrbStackAppObservation};
 #[test]
 fn plist_executable_binds_declared_main_file_not_an_app_neighbor() -> Result<(), crate::MiseError> {
     let info = r#"{"CFBundleExecutable":"OrbStack"}"#;
-    super::validate_main_executable(info, "Contents/MacOS/OrbStack")?;
+    super::app::validate_main_executable(info, "Contents/MacOS/OrbStack")?;
     for declared in [
         "Contents/MacOS/Other",
         "Contents/Resources/OrbStack",
         "Contents/MacOS/OrbStack-copy",
     ] {
-        assert!(super::validate_main_executable(info, declared).is_err());
+        assert!(super::app::validate_main_executable(info, declared).is_err());
     }
     for info in [
         "{}",
         r#"{"CFBundleExecutable":"../OrbStack"}"#,
         r#"{"CFBundleExecutable":""}"#,
     ] {
-        assert!(super::validate_main_executable(info, "Contents/MacOS/OrbStack").is_err());
+        assert!(super::app::validate_main_executable(info, "Contents/MacOS/OrbStack").is_err());
     }
     Ok(())
 }

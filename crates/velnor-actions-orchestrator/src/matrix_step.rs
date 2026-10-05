@@ -10,7 +10,7 @@ use velnor_actions_workflow_renderer::plan_format::FORMAT_STEP_NAME;
 use velnor_actions_workflow_renderer::steps::{INTERNAL_OP_ENV, STAGED_BINARY_PREFIX};
 
 use crate::OrchestratorError;
-use crate::task_report::{EXIT_CODE_ENV, REPORT_OP, START_MS_ENV, START_TIME_OP, TASK_ID_ENV};
+use crate::task_report::{EXIT_CODE_ENV, REPORT_OP, START_MS_ENV, TASK_ID_ENV};
 
 #[path = "matrix_tools.rs"]
 mod tools;
@@ -234,8 +234,7 @@ pub(crate) fn obligation_step(
                 problem: err.to_string(),
             }
         })?;
-    let start = start_path_for_key(&obligation.matrix_key);
-    let run = report_wrapper_argv(&joined, &helper_path_for_version(), &start);
+    let run = report_wrapper_argv(&joined, &helper_path_for_version());
     let mut step = velnor_actions_workflow_renderer::shell_step(&obligation.step_name, run, env)
         .map_err(OrchestratorError::from)?;
     // Skip when the plan covered this obligation: unknown coverage
@@ -279,22 +278,23 @@ pub(crate) fn helper_path_for_version() -> String {
 
 /// `sh -c` argv wrapping one joined command with report capture.
 ///
-/// Stamps the wall-clock start to a per-entry file first (argv
-/// validation forbids `$(...)`, so the stamp travels via file, never
-/// substitution), runs the obligation, captures `$?`, reads the stamp
-/// back, reports through the staged helper's [`REPORT_OP`], then exits
-/// with the obligation code (helper failure surfaces only on an
-/// otherwise passing obligation, so failures never mask each other).
+/// Captures the wall-clock start with GNU `date`'s millisecond format,
+/// runs the obligation, captures `$?`, reports through the staged
+/// helper's [`REPORT_OP`], then exits with the obligation code (helper
+/// failure surfaces only on an otherwise passing obligation, so failures
+/// never mask each other). This wrapper is used only by generic jobs,
+/// whose workflow runner labels are Ubuntu; named checks invoke the helper
+/// directly and measure duration with Rust `Instant` on Linux or macOS.
 /// Credential removal is the step constructor's job (`shell_step`
 /// prefixes argv-wide `env -u`), not a script prelude's: obligations
 /// execute repository code (build scripts), and the step env cannot
 /// shadow runner-injected credentials (D3).
-pub(crate) fn report_wrapper_argv(joined: &str, helper: &str, start_path: &str) -> Vec<String> {
+pub(crate) fn report_wrapper_argv(joined: &str, helper: &str) -> Vec<String> {
     vec![
         "sh".to_owned(),
         "-c".to_owned(),
         format!(
-            "{INTERNAL_OP_ENV}={START_TIME_OP} \"{helper}\" > \"{start_path}\" || exit $?; {joined}; code=$?; read -r start_ms rest < \"{start_path}\"; {EXIT_CODE_ENV}=\"$code\" {START_MS_ENV}=\"$start_ms\" {INTERNAL_OP_ENV}={REPORT_OP} \"{helper}\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\""
+            "s=$(date +%s%3N); {joined}; code=$?; {EXIT_CODE_ENV}=\"$code\" {START_MS_ENV}=\"$s\" {INTERNAL_OP_ENV}={REPORT_OP} \"{helper}\"; helper_code=$?; if [ \"$code\" -ne 0 ]; then exit \"$code\"; fi; exit \"$helper_code\""
         ),
     ]
 }
@@ -310,12 +310,11 @@ pub(crate) fn outcome_wrapper_argv(
     outcome_path: &str,
     start_path: &str,
 ) -> Vec<String> {
-    let helper = helper_path_for_version();
     vec![
         "sh".to_owned(),
         "-c".to_owned(),
         format!(
-            "{INTERNAL_OP_ENV}={START_TIME_OP} \"{helper}\" > \"{start_path}\" || exit $?; {joined}; code=$?; echo \"$code\" > \"{outcome_path}\"; exit \"$code\""
+            "date +%s%3N > \"{start_path}\"; {joined}; code=$?; echo \"$code\" > \"{outcome_path}\"; exit \"$code\""
         ),
     ]
 }

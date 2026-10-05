@@ -209,6 +209,11 @@ cleanup. Mise remains a read-only inspection and subprocess adapter, returning
 typed projection/command data without owning temporary-file writes. This keeps
 the existing tooling ownership boundary.
 
+Named checks execute through the staged helper directly and measure task
+duration with Rust `Instant`. They may run on Linux or macOS. The GNU `date`
+millisecond wrapper used by ordinary workflow task jobs is restricted to the
+Ubuntu-only generic workflow runner catalog and is not used for named checks.
+
 Tool preparation uses frozen qualified acquisition recipes over owned verified
 archives and prefixes. Archive and dependency SHA-256, full installed-tree
 SHA-256, executable SHA-256, and typed exact version probes must all match the
