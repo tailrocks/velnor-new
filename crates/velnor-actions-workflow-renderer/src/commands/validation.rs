@@ -41,7 +41,11 @@ fn validate_argv(argv: &[String], script_index: Option<usize>) -> Result<(), Ren
         {
             return Err(RenderError::BadCommand(format!("control_char:{arg}")));
         }
-        if script_index != Some(index) && (arg.contains("$(") || arg.contains('`')) {
+        // The shared shell parser makes this script one outer-shell argument.
+        if script_index != Some(index)
+            && shell_script_index != Some(index)
+            && (arg.contains("$(") || arg.contains('`'))
+        {
             return Err(RenderError::BadCommand(format!(
                 "command_substitution:{arg}"
             )));
@@ -65,33 +69,30 @@ fn validate_argv(argv: &[String], script_index: Option<usize>) -> Result<(), Ren
 
 /// Return the script argument only when argv is an inline shell invocation.
 ///
-/// The generated credential wrapper is an `env -u NAME` prefix. Accept its
-/// exact known form first. Also recognize ordinary `env` unset options so an
-/// untrusted caller cannot hide a shell behind `env -u CUSTOM`.
-fn inline_shell_script_index(argv: &[String]) -> Result<Option<usize>, RenderError> {
-    let prefix = crate::toolchain_env::unset_prefix_len(argv);
-    if argv
-        .get(prefix)
-        .is_some_and(|command| is_supported_shell(command))
-    {
-        return shell_script_argument_index(argv, prefix);
+/// Accept only bounded `env` wrappers and shell options. Reject wrappers or
+/// options that hide an inline script from the validator.
+pub(super) fn inline_shell_script_index(argv: &[String]) -> Result<Option<usize>, RenderError> {
+    let mut command_index = 0;
+    let mut env_depth = 0;
+    loop {
+        let Some(command) = argv.get(command_index) else {
+            return Ok(None);
+        };
+        if is_supported_shell(command) {
+            return shell_script_argument_index(argv, command_index);
+        }
+        if !is_executable_named(command, "env") {
+            return Ok(None);
+        }
+        if env_depth == MAX_ENV_WRAPPER_DEPTH {
+            return Err(unsupported_shell_wrapper());
+        }
+        env_depth += 1;
+        let Some(next_command) = env_command_index(argv, command_index)? else {
+            return Ok(None);
+        };
+        command_index = next_command;
     }
-    if argv
-        .first()
-        .is_none_or(|command| !is_executable_named(command, "env"))
-    {
-        return Ok(None);
-    }
-    let Some(command_index) = env_command_index(argv, 0) else {
-        return Ok(None);
-    };
-    if argv
-        .get(command_index)
-        .is_some_and(|command| is_supported_shell(command))
-    {
-        return shell_script_argument_index(argv, command_index);
-    }
-    Ok(None)
 }
 
 fn shell_script_argument_index(
@@ -102,7 +103,11 @@ fn shell_script_argument_index(
     let mut unsupported_option = false;
     while let Some(option) = argv.get(index) {
         if option == "--" {
-            return Ok(None);
+            return if unsupported_option {
+                Err(unsupported_shell_options())
+            } else {
+                Ok(None)
+            };
         }
         if option == "-c" {
             if unsupported_option {
@@ -153,17 +158,27 @@ fn shell_script_argument_index(
             continue;
         }
         if option.starts_with('+') {
-            if option.contains('c') {
-                return Err(unsupported_shell_options());
-            }
             unsupported_option = true;
             index += 1;
+            if matches!(option.as_str(), "+o" | "+O") {
+                index += 1;
+            }
             continue;
+        }
+        if unsupported_option {
+            return Err(unsupported_shell_options());
         }
         return Ok(None);
     }
-    Ok(None)
+    if unsupported_option {
+        Err(unsupported_shell_options())
+    } else {
+        Ok(None)
+    }
 }
+
+/// Bound env-to-env command wrappers before a shell.
+const MAX_ENV_WRAPPER_DEPTH: usize = 4;
 
 fn is_supported_shell(command: &str) -> bool {
     is_executable_named(command, "sh") || is_executable_named(command, "bash")
@@ -184,24 +199,46 @@ fn unsupported_shell_options() -> RenderError {
     RenderError::BadCommand("unsupported_inline_shell_options".to_owned())
 }
 
-/// Find the command after the small set of ordinary `env` prefixes.
-fn env_command_index(argv: &[String], env_index: usize) -> Option<usize> {
+/// Find the command after the supported `env` prefixes.
+fn env_command_index(argv: &[String], env_index: usize) -> Result<Option<usize>, RenderError> {
     let mut index = env_index + 1;
     loop {
-        let arg = argv.get(index)?;
+        let Some(arg) = argv.get(index) else {
+            return Ok(None);
+        };
         match arg.as_str() {
-            "--" => return Some(index + 1),
+            "--" => return Ok(Some(index + 1)),
             "-u" | "--unset" => {
-                argv.get(index + 1)?;
+                if argv.get(index + 1).is_none() {
+                    return Err(unsupported_shell_wrapper());
+                }
                 index += 2;
             }
-            "-i" | "--ignore-environment" | "-" => index += 1,
+            "-i" | "--ignore-environment" | "-" | "-0" | "--null" | "-v" | "--debug" => {
+                index += 1;
+            }
+            "-C" | "--chdir" => {
+                if argv.get(index + 1).is_none() {
+                    return Err(unsupported_shell_wrapper());
+                }
+                index += 2;
+            }
+            "-S" | "--split-string" => return Err(unsupported_shell_wrapper()),
             value if value.starts_with("--unset=") => index += 1,
+            value if value.starts_with("--chdir=") => index += 1,
+            value if value.starts_with("--split-string=") => {
+                return Err(unsupported_shell_wrapper());
+            }
+            "--help" | "--version" => return Ok(None),
             value if is_env_assignment(value) => index += 1,
-            value if value.starts_with('-') => return None,
-            _ => return Some(index),
+            value if value.starts_with('-') => return Err(unsupported_shell_wrapper()),
+            _ => return Ok(Some(index)),
         }
     }
+}
+
+fn unsupported_shell_wrapper() -> RenderError {
+    RenderError::BadCommand("unsupported_shell_wrapper".to_owned())
 }
 
 fn is_env_assignment(value: &str) -> bool {

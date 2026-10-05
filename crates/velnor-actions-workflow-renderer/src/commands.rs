@@ -11,20 +11,20 @@ pub use validation::{validate_command_argv, validate_env};
 /// Join validated argv into one `run:` line with POSIX quoting.
 ///
 /// `$NAME`/`${...}` spans pass through for runner expansion; every other
-/// character is quoted. See [`quote_run_arg`]. The inline script of
-/// `sh -c`/`bash -c` is single-quoted whole instead: inner-shell
+/// character is quoted. See [`quote_run_arg`]. A recognized inline shell
+/// script is single-quoted whole instead: inner-shell
 /// variables (assigned or inherited) must survive the outer shell, and
 /// the script's own quotes must stay syntactic, not literal. The
-/// credential-unset prefix (shared `env -u` length predicate) is
-/// transparent to the shape check: a wrapped `sh -c` still quotes
-/// its script, at its shifted index.
+/// same bounded launcher parser drives validation and quoting so the
+/// script stays at its parsed index through supported `env` wrappers and
+/// shell flags.
 ///
 /// # Errors
 ///
 /// Returns [`RenderError::BadCommand`] when argv validation fails.
 pub fn join_argv_for_run(argv: &[String]) -> Result<String, RenderError> {
     validate_command_argv(argv)?;
-    Ok(join_validated_argv(argv))
+    join_validated_argv(argv)
 }
 
 /// Join a renderer step after its exact fixed script identity has been checked.
@@ -37,13 +37,13 @@ pub fn join_argv_for_run(argv: &[String]) -> Result<String, RenderError> {
 /// Returns [`RenderError::BadCommand`] when argv validation fails.
 pub(crate) fn join_argv_for_step(name: &str, argv: &[String]) -> Result<String, RenderError> {
     validate_step_command_argv(name, argv)?;
-    Ok(join_validated_argv(argv))
+    join_validated_argv(argv)
 }
 
-fn join_validated_argv(argv: &[String]) -> String {
-    let prefix = crate::toolchain_env::unset_prefix_len(argv);
-    let script_at = is_inline_shell(&argv[prefix..]).then_some(prefix + 2);
-    argv.iter()
+fn join_validated_argv(argv: &[String]) -> Result<String, RenderError> {
+    let script_at = validation::inline_shell_script_index(argv)?;
+    let run = argv
+        .iter()
         .enumerate()
         .map(|(index, arg)| {
             if script_at == Some(index) {
@@ -53,7 +53,8 @@ fn join_validated_argv(argv: &[String]) -> String {
             }
         })
         .collect::<Vec<_>>()
-        .join(" ")
+        .join(" ");
+    Ok(run)
 }
 
 /// True for `sh -c <script>`/`bash -c <script>` vectors.

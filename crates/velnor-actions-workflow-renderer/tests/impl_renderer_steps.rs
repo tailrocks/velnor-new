@@ -5,8 +5,9 @@
 use std::collections::BTreeMap;
 use velnor_actions_workflow_renderer::{
     ASSET_SHA_ENV, ASSET_URL_ENV, RELEASE_COMMIT_ENV, RenderError, STAGED_BINARY_PREFIX,
-    acquire_velnor_step, action_step, checkout_step, internal_step, merge_step, plan_step,
-    scan_for_private_subcommands, shell_step, validate_command_argv, validate_env, validate_uses,
+    acquire_velnor_step, action_step, checkout_step, internal_step, join_argv_for_run, merge_step,
+    plan_step, scan_for_private_subcommands, shell_step, validate_command_argv, validate_env,
+    validate_uses,
 };
 
 fn pin(name: &str) -> String {
@@ -190,6 +191,27 @@ fn argv_scans_path_shells_and_bounded_option_forms() {
             "-c",
             "sleep 1&echo done",
         ]),
+        argv(&["bash", "+o", "pipefail", "-c", "sleep 1&echo done"]),
+        argv(&["bash", "+O", "extglob", "-c", "sleep 1&echo done"]),
+        argv(&[
+            "env",
+            "-u",
+            "CUSTOM",
+            "/usr/bin/env",
+            "--chdir=/tmp",
+            "/bin/bash",
+            "-c",
+            "sleep 1&echo done",
+        ]),
+        argv(&[
+            "env",
+            "--unknown-wrapper-option",
+            "bash",
+            "-c",
+            "sleep 1&echo done",
+        ]),
+        argv(&["env", "-uCUSTOM", "bash", "-c", "sleep 1&echo done"]),
+        argv(&["env", "-S", "bash -c 'sleep 1&echo done'"]),
     ] {
         assert!(
             validate_command_argv(&command).is_err(),
@@ -215,6 +237,48 @@ fn argv_scans_path_shells_and_bounded_option_forms() {
             "supported shell invocation rejected: {command:?}"
         );
     }
+
+    let mut nested = Vec::new();
+    for _ in 0..5 {
+        nested.push("env".to_owned());
+    }
+    nested.extend(argv(&["bash", "-c", "sleep 1&echo done"]));
+    assert!(
+        validate_command_argv(&nested).is_err(),
+        "deep env chain accepted"
+    );
+
+    assert!(
+        validate_command_argv(&argv(&[
+            "env",
+            "FOO=bar",
+            "curl",
+            "https://example.invalid/x?a=1&b=2",
+        ]))
+        .is_ok()
+    );
+    assert!(validate_command_argv(&argv(&["env", "--version"])).is_ok());
+}
+
+#[test]
+fn inline_shell_quote_preserves_inner_expansions() -> Result<(), RenderError> {
+    let script = "printf \"%s\" \"$value\" && printf \"%s\" \"$(printf inner)\"";
+    let command = argv(&[
+        "env",
+        "-u",
+        "CUSTOM",
+        "/usr/bin/env",
+        "--chdir=/tmp",
+        "/bin/bash",
+        "-ec",
+        script,
+    ]);
+    let rendered = join_argv_for_run(&command)?;
+    assert_eq!(
+        rendered,
+        format!("env -u CUSTOM /usr/bin/env --chdir=/tmp /bin/bash -ec '{script}'")
+    );
+    Ok(())
 }
 
 #[test]
