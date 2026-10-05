@@ -56,13 +56,15 @@ fn expression_spans(text: &str) -> Option<Vec<&str>> {
 /// restore steps so PR runs can never become cache writers).
 /// Notably absent: `github.token` (render-time fetch binding only)
 /// and run IDs (never in env).
-const ENV_EXPRESSIONS: [&str; 6] = [
+const ENV_EXPRESSIONS: [&str; 8] = [
     "runner.temp",
     "github.ref_name",
     "github.event_name",
     "github.event_name == 'push' && 'write' || 'read'",
     "secrets.CARGO_REGISTRY_TOKEN",
     "secrets.GITHUB_TOKEN",
+    "steps.mbx.outputs.cache-primary-key",
+    "steps.mbx-bundle.outputs.cache-matched-key",
 ];
 
 /// Exact `${{ }}` inners permitted in action `with:` values.
@@ -71,13 +73,14 @@ const ENV_EXPRESSIONS: [&str; 6] = [
 /// push-gated cache-save flag, and the publish step's derived
 /// artifact name. Notably absent: every `secrets.*` handle (rejected
 /// separately as `secret_in_action_input`).
-const WITH_EXPRESSIONS: [&str; 6] = [
+const WITH_EXPRESSIONS: [&str; 7] = [
     "runner.temp",
     "github.run_id",
     "github.run_attempt",
     "github.event_name == 'push'",
     "steps.publish-baseline.outputs.artifact_name",
     "steps.mbx.outputs.cache-primary-key",
+    "steps.mbx-bundle-key.outputs.prefix",
 ];
 
 /// True for a `matrix.*` field reference (both layers allow the family).

@@ -76,10 +76,15 @@ independent of other stack crates.
 | `velnor-actions-rust` | All Rust/Cargo discovery, metadata conversion, targets, graph, affected selection, Rust task proposals, `rust-toolchain.toml` inspection | Mise config/commands, workflow YAML, process execution, or non-Rust stack behavior |
 | `velnor-actions-mise` | Mise tool selection, pinned command construction, fixed subprocess/environment wrapper, `mise.toml`/`mise.lock` inspection, Mise cache integration | Cargo metadata, Rust graph/selection rules, `rust-toolchain.toml`, GitHub YAML, stack discovery |
 | `velnor-actions-actionlint` | actionlint pin/capability metadata, generated config, action-schema validation | Mise process execution, stack scanning, generic workflow rendering |
-| `velnor-actions-workflow-renderer` | Generic GitHub Actions workflow YAML from typed workflow IR | Rust/Cargo, Mise syntax, repository scanning, subprocesses, stack policy |
+| `velnor-actions-workflow-renderer` | Generic GitHub Actions workflow YAML from typed workflow IR and the closed Foundation SOURCE compiled document | Rust/Cargo, Mise syntax, repository scanning, subprocesses, stack policy |
 | `velnor-actions-orchestrator` | Composition, obligation selection, cache evidence, scheduling, generation coordination, typed process-request coordination | Parsing Cargo/Mise files, direct YAML templates, CLI parsing, OS process details, process creation |
 | `velnor-actions-cli` | Clap parser, typed dispatch, concise deterministic human plan renderer, generation output, and exit-code formatting; emits binary `velnor-actions` | Orchestration algorithms or Rust, Mise, and renderer domain rules |
 | `velnor-actions-tofu` | All OpenToFu/HCL discovery, root/module interpretation, task payloads, affected selection, identity extensions | Rust/Cargo, Mise execution, workflow YAML, process details, non-tofu stacks |
+
+Foundation SOURCE qualification is a closed compiled-document exception to ordinary WorkflowIR serialization.
+The renderer owns exact `yml.in` bytes, template digest, single action marker substitution, fixed output path, and managed version marker.
+Its only inputs are an immutable syntax-validated full-SHA action reference and explicit generator version; caller template/path/YAML/body, publication trust, and runtime authority are forbidden.
+The orchestrator retains authenticated publication tuple/action-descriptor evidence, repository policy/identity admission, and safe external preview coordination. This exception grants no runner or native execution behavior.
 
 Hard invariants 10–12 (spec §3.3) are normative throughout. 10 — One owner per
 domain rule per the table above; extend an existing owner before making a new

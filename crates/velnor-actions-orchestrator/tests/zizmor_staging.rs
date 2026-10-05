@@ -1,9 +1,10 @@
 //! Staging-only zizmor config cases: zero-ignore staging config over full-SHA refs.
 
+use crate::git_fixture;
+
 use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use tempfile::TempDir;
 use velnor_actions_actionlint::actions::{
@@ -16,14 +17,22 @@ use velnor_actions_actionlint::config::{
 use velnor_actions_contract::FRESHNESS_WORKFLOW_PATH;
 use velnor_actions_mise::{PinnedTool, PinnedToolExec, ProcessOutput, ToolCatalog};
 use velnor_actions_orchestrator::{GenerateOptions, generate, prepare};
-use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
+use velnor_actions_workflow_renderer::{
+    foundation_qualification::WORKFLOW_PATH as FOUNDATION_WORKFLOW_PATH, render::WORKFLOW_PATH,
+};
+
+#[path = "fixture_package.rs"]
+mod fixture_package;
 
 /// Test error shortcut.
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 /// Run git with inherited failure context.
 fn git(args: &[&str], cwd: &Path) -> TestResult {
-    let status = Command::new("git").args(args).current_dir(cwd).status()?;
+    let status = git_fixture::command(cwd)?
+        .args(args)
+        .current_dir(cwd)
+        .status()?;
     assert!(status.success(), "git {args:?} failed");
     Ok(())
 }
@@ -92,7 +101,7 @@ fn make_repo(config: &str) -> Result<TempDir, Box<dyn std::error::Error>> {
     fs::write(root.join(".velnor/release-manifest.json"), manifest_json())?;
     fs::write(
         root.join("Cargo.toml"),
-        "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+        fixture_package::root_manifest(config),
     )?;
     fs::create_dir_all(root.join("src"))?;
     fs::write(root.join("src/lib.rs"), "pub fn f() {}\n")?;
@@ -121,8 +130,15 @@ fn make_policy_repo() -> Result<TempDir, Box<dyn std::error::Error>> {
     Ok(repo)
 }
 
-/// Live dirs plus preview root, workflow bytes, and validators.
-type PolicyPreview = (TempDir, TempDir, PathBuf, String, Vec<String>);
+/// Live dirs plus preview root, workflow bytes, validators, and staged inputs.
+type PolicyPreview = (
+    TempDir,
+    TempDir,
+    PathBuf,
+    String,
+    Vec<String>,
+    Vec<ZizmorWorkflowText>,
+);
 
 /// Green Velnor-policy preview.
 fn policy_preview() -> Result<PolicyPreview, Box<dyn std::error::Error>> {
@@ -136,7 +152,7 @@ fn policy_preview() -> Result<PolicyPreview, Box<dyn std::error::Error>> {
             output_dir: Some(preview.clone()),
         },
     )?;
-    assert_eq!(report.files_written.len(), 5, "five generated files");
+    assert_eq!(report.files_written.len(), 6, "six generated items");
     assert!(
         report
             .files_written
@@ -145,34 +161,73 @@ fn policy_preview() -> Result<PolicyPreview, Box<dyn std::error::Error>> {
         "freshness probe emitted: {:?}",
         report.files_written
     );
+    let workflow_paths = generated_workflow_paths(&report.files_written);
+    let expected_paths = vec![
+        WORKFLOW_PATH.to_owned(),
+        FOUNDATION_WORKFLOW_PATH.to_owned(),
+        FRESHNESS_WORKFLOW_PATH.to_owned(),
+    ];
+    assert_eq!(workflow_paths, expected_paths, "exact Velnor workflow set");
+    let workflows = read_generated_workflows(&preview, &workflow_paths)?;
     let yaml = fs::read_to_string(preview.join(WORKFLOW_PATH))?;
-    Ok((repo, parent, preview, yaml, report.validated_by))
+    Ok((repo, parent, preview, yaml, report.validated_by, workflows))
+}
+
+/// Workflow paths emitted by generation, sorted for exact policy assertions.
+fn generated_workflow_paths(files: &[String]) -> Vec<String> {
+    let mut paths: Vec<String> = files
+        .iter()
+        .filter(|path| path.starts_with(".github/workflows/"))
+        .cloned()
+        .collect();
+    paths.sort();
+    paths
+}
+
+/// Capture every generated workflow for staged validation.
+fn read_generated_workflows(
+    preview: &Path,
+    paths: &[String],
+) -> Result<Vec<ZizmorWorkflowText>, Box<dyn std::error::Error>> {
+    let mut workflows = Vec::with_capacity(paths.len());
+    for path in paths {
+        workflows.push(ZizmorWorkflowText {
+            path: path.clone(),
+            text: fs::read_to_string(preview.join(path))?,
+        });
+    }
+    Ok(workflows)
 }
 
 /// Scratch tree mirroring staged validation: `.github` plus config.
-fn stage(preview: &Path, yaml: &str) -> Result<TempDir, Box<dyn std::error::Error>> {
+fn stage(
+    preview: &Path,
+    workflows: &[ZizmorWorkflowText],
+    yaml: &str,
+) -> Result<TempDir, Box<dyn std::error::Error>> {
     let dir = TempDir::new()?;
     let root = dir.path();
     fs::create_dir_all(root.join(".github/workflows"))?;
-    fs::write(root.join(WORKFLOW_PATH), yaml)?;
+    let mut staged_workflows = Vec::with_capacity(workflows.len());
+    for workflow in workflows {
+        let text = if workflow.path == WORKFLOW_PATH {
+            yaml.to_owned()
+        } else {
+            workflow.text.clone()
+        };
+        fs::write(root.join(&workflow.path), &text)?;
+        staged_workflows.push(ZizmorWorkflowText {
+            path: workflow.path.clone(),
+            text,
+        });
+    }
     fs::write(
         root.join(".github/actionlint.yaml"),
         fs::read(preview.join(".github/actionlint.yaml"))?,
     )?;
-    let freshness = fs::read_to_string(preview.join(FRESHNESS_WORKFLOW_PATH))?;
-    fs::write(root.join(FRESHNESS_WORKFLOW_PATH), &freshness)?;
     let input = ZizmorConfigInput {
         generator_version: env!("CARGO_PKG_VERSION").to_owned(),
-        workflows: vec![
-            ZizmorWorkflowText {
-                path: WORKFLOW_PATH.to_owned(),
-                text: yaml.to_owned(),
-            },
-            ZizmorWorkflowText {
-                path: FRESHNESS_WORKFLOW_PATH.to_owned(),
-                text: freshness,
-            },
-        ],
+        workflows: staged_workflows,
     };
     fs::write(root.join(".zizmor.yml"), render_zizmor_yaml(&input)?.yaml)?;
     Ok(dir)
@@ -210,7 +265,7 @@ fn streams(output: &ProcessOutput) -> String {
 
 #[test]
 fn velnor_policy_blessed_sha_validates_green() -> TestResult {
-    let (_repo, _parent, preview, yaml, validated_by) = policy_preview()?;
+    let (_repo, _parent, preview, yaml, validated_by, _) = policy_preview()?;
     assert_eq!(
         validated_by,
         vec![
@@ -232,13 +287,13 @@ fn velnor_policy_blessed_sha_validates_green() -> TestResult {
     Ok(())
 }
 
-/// The 1 suppressed finding is `undocumented-permissions` (low,
-/// auditor/pedantic-only); it must stay suppressed. Zero ignores: every
-/// emitted ref is hash-pinned.
+/// The one `undocumented-permissions` finding (low, auditor/pedantic-only)
+/// stays suppressed across every generated workflow. Zero ignores: every ref
+/// is hash-pinned.
 #[test]
 fn staging_suppressions_stable_no_new() -> TestResult {
-    let (_repo, _parent, preview, yaml, _) = policy_preview()?;
-    let staged = stage(&preview, &yaml)?;
+    let (_repo, _parent, preview, yaml, _, workflows) = policy_preview()?;
+    let staged = stage(&preview, &workflows, &yaml)?;
     let output = run_zizmor(staged.path())?;
     let text = streams(&output);
     assert!(output.success, "staged config greens zizmor: {text}");
@@ -256,23 +311,26 @@ fn consumer_tree_unaffected() -> TestResult {
     let prep = prepare(repo.path())?;
     let parent = TempDir::new()?;
     let preview = parent.path().join("preview");
-    generate(
+    let report = generate(
         &prep,
         &GenerateOptions {
             output_dir: Some(preview.clone()),
         },
     )?;
+    assert_eq!(report.files_written.len(), 4, "four consumer tree items");
+    let workflow_paths = generated_workflow_paths(&report.files_written);
+    assert_eq!(
+        workflow_paths,
+        vec![WORKFLOW_PATH.to_owned()],
+        "consumer policy emits only CI"
+    );
     assert!(
         !preview.join(".zizmor.yml").exists(),
         "no staging config in output"
     );
-    let yaml = fs::read_to_string(preview.join(WORKFLOW_PATH))?;
     let input = ZizmorConfigInput {
         generator_version: env!("CARGO_PKG_VERSION").to_owned(),
-        workflows: vec![ZizmorWorkflowText {
-            path: WORKFLOW_PATH.to_owned(),
-            text: yaml,
-        }],
+        workflows: read_generated_workflows(&preview, &workflow_paths)?,
     };
     assert!(
         render_zizmor_yaml(&input)?.approved_ignores.is_empty(),
@@ -283,12 +341,12 @@ fn consumer_tree_unaffected() -> TestResult {
 
 #[test]
 fn different_unpinned_tag_still_fails() -> TestResult {
-    let (_repo, _parent, preview, yaml, _) = policy_preview()?;
+    let (_repo, _parent, preview, yaml, _, workflows) = policy_preview()?;
     let pinned = format!("actions/checkout@{CHECKOUT_ACTION_SHA}");
     let unpinned = format!("actions/checkout@{CHECKOUT_ACTION_VERSION}");
     let mutated = yaml.replacen(&pinned, &unpinned, 1);
     assert_ne!(mutated, yaml, "fixture still pins checkout");
-    let staged = stage(&preview, &mutated)?;
+    let staged = stage(&preview, &workflows, &mutated)?;
     let output = run_zizmor(staged.path())?;
     let text = streams(&output);
     assert!(!output.success, "unpinned checkout must fail: {text}");
@@ -299,12 +357,12 @@ fn different_unpinned_tag_still_fails() -> TestResult {
 
 #[test]
 fn blessed_repo_tag_ref_still_fails() -> TestResult {
-    let (_repo, _parent, preview, yaml, _) = policy_preview()?;
+    let (_repo, _parent, preview, yaml, _, workflows) = policy_preview()?;
     let blessed = format!("{ALINT_ACTION}@{ALINT_ACTION_SHA}");
     let wrong = format!("{ALINT_ACTION}@{ALINT_ACTION_VERSION}");
     let mutated = yaml.replacen(&blessed, &wrong, 1);
     assert_ne!(mutated, yaml, "fixture still carries blessed SHA");
-    let staged = stage(&preview, &mutated)?;
+    let staged = stage(&preview, &workflows, &mutated)?;
     let output = run_zizmor(staged.path())?;
     let text = streams(&output);
     assert!(!output.success, "wrong alint tag must fail: {text}");
