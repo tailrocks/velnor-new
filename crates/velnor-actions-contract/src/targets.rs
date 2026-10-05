@@ -7,8 +7,8 @@
 /// Every supported release target triple, in manifest order.
 pub const SUPPORTED_TARGETS: [&str; 2] = ["x86_64-unknown-linux-gnu", "aarch64-apple-darwin"];
 
-/// Release-manifest JSON asset filename (version is inside the JSON).
-pub const RELEASE_MANIFEST_FILENAME: &str = "velnor-actions-release-manifest.json";
+/// Generator release-manifest asset filename (version is inside the JSON).
+pub const RELEASE_MANIFEST_FILENAME: &str = "release-manifest.json";
 
 /// Whether `target` is a supported release triple.
 #[must_use]
