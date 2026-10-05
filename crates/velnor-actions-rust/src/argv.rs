@@ -204,6 +204,11 @@ fn push_kind_args(
             ]);
             push_manifest(args, manifest)?;
             push_package(args, group)?;
+            if let Some(mode) = &group.run_ignored
+                && mode != "default"
+            {
+                args.extend([flag("--run-ignored"), flag(mode)]);
+            }
             args.extend([flag("--no-tests"), flag("fail")]);
         }
         TaskKind::Doctest => {

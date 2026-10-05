@@ -114,11 +114,7 @@ pub(crate) type Snapshot = BTreeMap<String, (Vec<u8>, SystemTime)>;
 /// `prepare` succeeds.
 pub(crate) fn fixture_manifest_json() -> String {
     let version = env!("CARGO_PKG_VERSION");
-    let targets = [
-        "x86_64-unknown-linux-gnu",
-        "aarch64-apple-darwin",
-        "x86_64-apple-darwin",
-    ]
+    let targets = velnor_actions_contract::SUPPORTED_TARGETS
     .iter()
     .map(|target| {
         format!(
