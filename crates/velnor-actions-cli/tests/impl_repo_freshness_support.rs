@@ -21,6 +21,7 @@ fn freshness_support_is_private_and_separately_classified() -> Result<(), Box<dy
         assert!(contract.contains("repository-only"));
         assert!(
             contract.contains("outside the eight-product V1 graph")
+                || contract.contains("outside the eight-product V1 task graph")
                 || contract.contains("outside the orchestrator, product task graph")
         );
     }
