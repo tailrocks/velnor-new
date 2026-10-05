@@ -4,7 +4,8 @@ use std::error::Error;
 use std::path::Path;
 
 use crate::impl_cli_tmp::{
-    cleanup, code, commit_all, fresh_tempdir, git_init, head_sha, spawn_isolated, write_workspace,
+    cleanup, code, commit_all, fresh_tempdir, git_init, head_sha, install_consumer_manifest,
+    spawn_isolated, write_workspace,
 };
 
 /// Serialized workflow marker selecting dynamic matrix output accounting.
@@ -98,6 +99,7 @@ fn empty_repo() -> Result<std::path::PathBuf, Box<dyn Error>> {
     git_init(&tmp)?;
     assert_eq!(code(&spawn_isolated(&["init"], &[], &tmp)?), 0);
     pin_branch(&tmp)?;
+    install_consumer_manifest(&tmp)?;
     commit_all(&tmp)?;
     Ok(tmp)
 }

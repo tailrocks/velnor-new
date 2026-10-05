@@ -3,7 +3,7 @@ use std::fs;
 use tempfile::TempDir;
 use velnor_actions_orchestrator::prepare;
 
-use crate::impl_common::{TestResult, git, plan_for};
+use crate::impl_common::{TestResult, git, install_fixture_release_manifest, plan_for};
 
 /// Git-initialized repo with `config` plus extra `files`.
 fn make_tofu_repo(
@@ -18,6 +18,7 @@ fn make_tofu_repo(
     git(&["config", "commit.gpgsign", "false"], root)?;
     fs::create_dir_all(root.join(".velnor"))?;
     fs::write(root.join(".velnor/config.toml"), config)?;
+    install_fixture_release_manifest(root)?;
     for (relative, content) in files {
         let target = root.join(relative);
         if let Some(parent) = target.parent() {
