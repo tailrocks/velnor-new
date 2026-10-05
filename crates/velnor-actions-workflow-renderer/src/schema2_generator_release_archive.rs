@@ -177,10 +177,11 @@ elif case == "archive-oversized":
                 ))
             }
         });
-        result
-            .as_ref()
-            .map(|_| ())
-            .map_err(|error| Box::new(std::io::Error::other(error.clone())) as Box<dyn Error>)
+        if let Err(error) = result {
+            Err(Box::new(std::io::Error::other(error.clone())) as Box<dyn Error>)
+        } else {
+            Ok(())
+        }
     }
 
     fn run_extractor(directory: &Path, archive: &Path) -> Result<bool, Box<dyn Error>> {

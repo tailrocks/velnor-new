@@ -103,9 +103,25 @@ pub(super) fn published_release_verify_script() -> String {
 }
 
 fn release_api_helpers() -> String {
-    format!(
-        "verify_release_metadata() {{\n  local response=\"$1\" expected_draft=\"$2\"\n  jq -e --argjson release_id \"$release_id\" --arg tag \"$tag\" --arg api_url \"https://api.github.com/repos/$GITHUB_REPOSITORY/releases/$release_id\" --arg html_url \"https://github.com/$GITHUB_REPOSITORY/releases/tag/$tag\" --argjson expected_draft \"$expected_draft\" '.id == $release_id and .tag_name == $tag and .url == $api_url and .html_url == $html_url and .draft == $expected_draft and .prerelease == false and (if $expected_draft then true else .immutable == true end)' \"$response\" > /dev/null\n}}\n\nverify_release_assets() {{\n  local response=\"$1\" path name digest size url\n  jq -e --argjson expected \"$expected_release_asset_names\" '(.assets | type) == \"array\" and all(.assets[]; (.name | type) == \"string\") and ([.assets[].name] | sort) == ($expected | sort) and ([.assets[].name] | length) == ([.assets[].name] | unique | length)' \"$response\" > /dev/null\n  for path in \"${{release_asset_paths[@]}}\"; do\n    test -f \"$path\" && test ! -L \"$path\" && test -s \"$path\"\n    name=\"${{path##*/}}\"\n    digest=\"$(sha256sum \"$path\" | awk 'NR == 1 {{ print $1; next }} {{ exit 1 }} END {{ if (NR != 1) exit 1 }}')\"\n    size=\"$(wc -c < \"$path\")\"\n    size=\"${{size//[[:space:]]/}}\"\n    url=\"https://github.com/$GITHUB_REPOSITORY/releases/download/$tag/$name\"\n    jq -e --arg name \"$name\" --arg url \"$url\" --arg digest \"sha256:$digest\" --argjson size \"$size\" '[.assets[] | select(.name == $name)] as $matches | ($matches | length) == 1 and $matches[0].state == \"uploaded\" and $matches[0].browser_download_url == $url and $matches[0].digest == $digest and $matches[0].size == $size' \"$response\" > /dev/null\n  done\n}}"
-    )
+    r#"verify_release_metadata() {
+  local response="$1" expected_draft="$2"
+  jq -e --argjson release_id "$release_id" --arg tag "$tag" --arg api_url "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/$release_id" --arg html_url "https://github.com/$GITHUB_REPOSITORY/releases/tag/$tag" --argjson expected_draft "$expected_draft" '.id == $release_id and .tag_name == $tag and .url == $api_url and .html_url == $html_url and .draft == $expected_draft and .prerelease == false and (if $expected_draft then true else .immutable == true end)' "$response" > /dev/null
+}
+
+verify_release_assets() {
+  local response="$1" path name digest size url
+  jq -e --argjson expected "$expected_release_asset_names" '(.assets | type) == "array" and all(.assets[]; (.name | type) == "string") and ([.assets[].name] | sort) == ($expected | sort) and ([.assets[].name] | length) == ([.assets[].name] | unique | length)' "$response" > /dev/null
+  for path in "${release_asset_paths[@]}"; do
+    test -f "$path" && test ! -L "$path" && test -s "$path"
+    name="${path##*/}"
+    digest="$(sha256sum "$path" | awk 'NR == 1 { print $1; next } { exit 1 } END { if (NR != 1) exit 1 }')"
+    size="$(wc -c < "$path")"
+    size="${size//[[:space:]]/}"
+    url="https://github.com/$GITHUB_REPOSITORY/releases/download/$tag/$name"
+    jq -e --arg name "$name" --arg url "$url" --arg digest "sha256:$digest" --argjson size "$size" '[.assets[] | select(.name == $name)] as $matches | ($matches | length) == 1 and $matches[0].state == "uploaded" and $matches[0].browser_download_url == $url and $matches[0].digest == $digest and $matches[0].size == $size' "$response" > /dev/null
+  done
+}"#
+        .to_owned()
 }
 
 fn acceptance_receipt_script() -> String {

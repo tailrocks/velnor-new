@@ -156,7 +156,7 @@ pub(super) fn publish_job(
         Yaml::Map(vec![("name".to_owned(), Yaml::str("generator-release"))]),
     ));
     let acceptance_paths = manifest::acceptance_artifact_paths();
-    let acceptance_path_refs = acceptance_paths.iter().copied().collect::<Vec<_>>();
+    let acceptance_path_refs = acceptance_paths.to_vec();
     let acceptance_name = manifest::acceptance_artifact_name();
     Ok(finish(
         "publish-generator",

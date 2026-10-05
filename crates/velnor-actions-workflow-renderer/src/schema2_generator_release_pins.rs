@@ -8,11 +8,11 @@ use crate::setup::MiseSetup;
 /// The renderer only joins validated argv into workflow steps.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GeneratorReleasePins {
-    /// Setup pins for the Linux x86_64 release runner.
+    /// Setup pins for the Linux `x86_64` release runner.
     pub linux_x86_64_setup: MiseSetup,
     /// Setup pins for the macOS arm64 release runner.
     pub macos_arm64_setup: MiseSetup,
-    /// Setup pins for the macOS x86_64 release runner.
+    /// Setup pins for the macOS `x86_64` release runner.
     pub macos_x86_64_setup: MiseSetup,
     /// Exact `mise install` argv for source-policy tools.
     pub install_gate_tools_argv: Vec<String>,

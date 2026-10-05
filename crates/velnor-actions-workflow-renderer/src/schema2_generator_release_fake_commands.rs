@@ -3,13 +3,7 @@ use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
-pub(super) fn install_mock_gh(root: &Path) -> Result<(), Box<dyn Error>> {
-    let bin = root.join("mock-bin");
-    fs::create_dir_all(&bin)?;
-    let mock = bin.join("gh");
-    fs::write(
-        &mock,
-        r#"#!/bin/sh
+const MOCK_GH: &str = r#"#!/bin/sh
 set -eu
 printf '%s\n' "$*" >> "$GH_CALLS"
 if [ "$1" = attestation ] && [ "$2" = verify ]; then exit 0; fi
@@ -87,8 +81,13 @@ if [ "$1 $2" = 'release upload' ]; then
   exit 0
 fi
 exit 46
-"#,
-    )?;
+"#;
+
+pub(super) fn install_mock_gh(root: &Path) -> Result<(), Box<dyn Error>> {
+    let bin = root.join("mock-bin");
+    fs::create_dir_all(&bin)?;
+    let mock = bin.join("gh");
+    fs::write(&mock, MOCK_GH)?;
     let mut permissions = fs::metadata(&mock)?.permissions();
     permissions.set_mode(0o755);
     fs::set_permissions(mock, permissions)?;

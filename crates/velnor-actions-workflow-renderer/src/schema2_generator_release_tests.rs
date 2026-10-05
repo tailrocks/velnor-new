@@ -293,9 +293,11 @@ fn release_json(root: &Path, case: Failure, draft: bool) -> Result<String, Box<d
             continue;
         }
         let mut digest = sha256(&asset)?;
-        if (draft && case == Failure::WrongDraftDigest && index == 0)
-            || (!draft && case == Failure::WrongPublishedDigest && index == 0)
-        {
+        let wrong_digest = matches!(
+            (draft, case),
+            (true, Failure::WrongDraftDigest) | (false, Failure::WrongPublishedDigest)
+        );
+        if wrong_digest && index == 0 {
             digest = "0".repeat(64);
         }
         let name = Path::new(path)
@@ -304,11 +306,7 @@ fn release_json(root: &Path, case: Failure, draft: bool) -> Result<String, Box<d
             .to_str()
             .ok_or("release asset basename is not UTF-8")?;
         let size = fs::metadata(&asset)?.len()
-            + if draft && case == Failure::WrongDraftSize && index == 0 {
-                1
-            } else {
-                0
-            };
+            + u64::from(draft && case == Failure::WrongDraftSize && index == 0);
         let url = if draft && case == Failure::WrongDraftUrl && index == 0 {
             "https://github.com/untrusted/releases/download/v0.1.1/asset".to_owned()
         } else {
