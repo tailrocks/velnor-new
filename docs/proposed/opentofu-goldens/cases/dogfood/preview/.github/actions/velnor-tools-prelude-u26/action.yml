@@ -19,6 +19,7 @@ runs:
       with:
         d: ${{ inputs.d }}
     - name: Restore Velnor tool seed
+      if: steps.v2.outputs.enabled == 'true'
       uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
       with:
         cache_key: mise-tools-v2-${{steps.v2.outputs.identity}}

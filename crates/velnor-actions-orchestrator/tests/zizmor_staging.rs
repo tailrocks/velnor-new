@@ -135,7 +135,7 @@ fn policy_preview() -> Result<PolicyPreview, Box<dyn std::error::Error>> {
             output_dir: Some(preview.clone()),
         },
     )?;
-    assert_eq!(report.files_written.len(), 9, "nine generated files");
+    assert_eq!(report.files_written.len(), 10, "ten generated files");
     assert!(
         report
             .files_written
@@ -147,6 +147,12 @@ fn policy_preview() -> Result<PolicyPreview, Box<dyn std::error::Error>> {
             .files_written
             .iter()
             .any(|path| path == ".github/scripts/velnor-tools-cache-identity.sh")
+    );
+    assert!(
+        report
+            .files_written
+            .iter()
+            .any(|path| { path == ".github/actions/velnor-tools-prelude-u26/action.yml" })
     );
     assert!(
         report

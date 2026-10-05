@@ -11,7 +11,7 @@ const MAX_WORKFLOW_BYTES: usize = 500_000;
 
 /// Build a schema-2 ToFu-only repo using both hosted and scale-set lanes.
 ///
-/// Default policy is ConsumerV1, so generation requires the release manifest.
+/// Default policy is `ConsumerV1`, so generation requires the release manifest.
 fn paired_tofu_repo(roots: usize) -> Result<std::path::PathBuf, Box<dyn Error>> {
     let repo = fresh_tempdir(&format!("tofu-paired-{roots}"))?;
     git_init(&repo)?;

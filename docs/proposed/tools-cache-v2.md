@@ -26,14 +26,14 @@ toolchain and components, target, runner lane, and the owned paths. The workflow
 with the qualified hosted image and validated absolute cache roots. The canonical key is
 `mise-tools-v2-${{steps.v2.outputs.identity}}`; the output already binds both static and runtime dimensions,
 so the static digest is not repeated in the key. A missing, unsupported, or mismatched runtime identity
-disables both restore and save; pinned tool setup continues cold.
+disables seed import, workflow restore, and save; pinned tool setup continues cold.
 
 ## Workflow lifecycle
 
 Supported hosted jobs with a source checkout run one fixed renderer-owned prelude composite before the
 read-only restore and Setup Mise. That composite qualifies the hosted image and absolute cache roots, imports
-the matching exact-key host seed, and forwards the identity's `enabled` and `identity` outputs to the workflow
-step. The workflow restore call uses a separate fixed generated composite that binds the pinned
+the matching exact-key host seed only when identity is enabled, and forwards the identity's `enabled` and
+`identity` outputs to the workflow step. The workflow restore call uses a separate fixed generated composite that binds the pinned
 `actions/cache/restore` action to the exact paths above; its caller supplies only the canonical runtime key.
 The V2 prelude requires the workflow checkout, so checkout-less jobs such as the
 `required` report fan-in retain pinned Setup Mise and tool installation but take the cold path without a V2
