@@ -25,7 +25,10 @@ async fn crash_after_create_recovers_ids_cleans_pair_and_starts_new_generation()
     assert_eq!(rows[0].dind_id.as_deref(), Some(dind.as_str()));
     assert_eq!(rows[0].state, IntentState::Uncertain);
     assert!(!rows[0].cleanup_proven);
-    assert!(engine.removed().map_err(|err| err.to_string())?.is_empty());
+    assert_eq!(
+        engine.removed().map_err(|err| err.to_string())?,
+        Vec::<String>::new()
+    );
 
     engine
         .set_running(&runner, false)
@@ -201,7 +204,10 @@ async fn foreign_container_at_owned_name_is_not_adopted_or_removed() -> Result<(
     let rows = journal.rows().await.map_err(|err| err.to_string())?;
     assert!(rows[0].docker_id.is_none());
     assert!(!rows[0].cleanup_proven);
-    assert!(engine.removed().map_err(|err| err.to_string())?.is_empty());
+    assert_eq!(
+        engine.removed().map_err(|err| err.to_string())?,
+        Vec::<String>::new()
+    );
     absent(&scratch.file())
 }
 
@@ -223,11 +229,9 @@ async fn foreign_volume_prevents_cleanup_proof_and_keeps_the_slot() -> Result<()
     assert_eq!(decision, Admit::Hold);
     let rows = journal.rows().await.map_err(|err| err.to_string())?;
     assert!(!rows[0].cleanup_proven);
-    assert!(
-        engine
-            .removed_volumes()
-            .map_err(|err| err.to_string())?
-            .is_empty()
+    assert_eq!(
+        engine.removed_volumes().map_err(|err| err.to_string())?,
+        Vec::<String>::new()
     );
     absent(&scratch.file())
 }

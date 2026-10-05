@@ -11,7 +11,7 @@ use super::capacity::{self, Admit};
 use super::slot;
 use super::steps;
 use super::trace;
-use super::{Ready, ack_ready, drive_ready, scale_session};
+use super::{Ready, Rest, ack_ready, drive_ready, scale_session};
 
 /// Poll until admission stops and no owned launch container is running.
 ///
@@ -30,6 +30,7 @@ pub(super) async fn poll_and_drive(
     admin_token: &str,
     journal: &Journal,
     docker: &bollard::Docker,
+    rest: Rest<'_>,
 ) -> Result<Vec<Started>, EnsureError> {
     trace::session(session);
     let mut workers = Vec::new();
@@ -42,7 +43,7 @@ pub(super) async fn poll_and_drive(
     let running = slot::running_count(journal, docker).await?;
     if !capacity::statistics_blocked(occupied, running, capacity, population)
         && let Some(started) =
-            scale_session(link, set_id, session, admin_token, journal, docker).await?
+            scale_session(link, set_id, session, admin_token, journal, docker, rest).await?
     {
         workers.push(started);
     }
@@ -56,6 +57,9 @@ pub(super) async fn poll_and_drive(
         docker,
         capacity,
         target,
+        owner: rest.owner,
+        repo: rest.repo,
+        pat: rest.pat,
     };
     let bound = if target > capacity {
         capacity::poll_bound_wide()
@@ -194,6 +198,9 @@ struct Turn<'a> {
     docker: &'a bollard::Docker,
     capacity: u32,
     target: u32,
+    owner: &'a str,
+    repo: &'a str,
+    pat: &'a str,
 }
 
 impl Turn<'_> {
@@ -254,6 +261,11 @@ impl Turn<'_> {
                     self.journal,
                     self.docker,
                     self.capacity,
+                    Rest {
+                        owner: self.owner,
+                        repo: self.repo,
+                        pat: self.pat,
+                    },
                 )
                 .await;
                 if let Err(EnsureError::Conflict) = &launched

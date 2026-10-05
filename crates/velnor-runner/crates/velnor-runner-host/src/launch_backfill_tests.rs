@@ -257,7 +257,10 @@ async fn replay_of_a_running_worker_does_not_mint_again() -> Result<(), String> 
         .await
         .map_err(|err| err.to_string())?;
     assert_eq!(replay, Admit::Ack { stop: true });
-    assert!(engine.removed().map_err(|err| err.to_string())?.is_empty());
+    assert_eq!(
+        engine.removed().map_err(|err| err.to_string())?,
+        Vec::<String>::new()
+    );
     let mut calls = script();
     let again = drive_offer(
         &mut calls,

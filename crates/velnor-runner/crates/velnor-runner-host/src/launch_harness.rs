@@ -51,6 +51,16 @@ pub(crate) enum Mode {
     Forbidden,
     AckFail,
     JitFail,
+    /// Offline idle runner `m100000788` id 20231. Delete returns 204.
+    OfflineRunner,
+    /// Online busy runner. Delete must not be called.
+    BusyRunner,
+    /// Runner list returns HTTP 500.
+    ListFail,
+    /// Delete returns HTTP 500 after an offline list.
+    DeleteFail,
+    /// First JIT is HTTP 409. The directory then deletes the offline runner.
+    NameTakenOnce,
 }
 
 impl Transport for Script {
@@ -60,15 +70,26 @@ impl Transport for Script {
             return self.acquire(&request.body);
         }
         if request.path.contains("generatejitconfig") {
+            let prior = self.calls.iter().filter(|&&item| item == "jit").count();
             self.calls.push("jit");
             if matches!(self.mode, Mode::JitFail) {
                 return Err(TransportFail::Http(500));
+            }
+            if matches!(self.mode, Mode::NameTakenOnce) && prior == 0 {
+                return Ok(Exchange {
+                    status: 409,
+                    body: Vec::new(),
+                });
             }
             let body = format!(r#"{{"encodedJITConfig":"{CANARY}"}}"#);
             return Ok(Exchange {
                 status: 200,
                 body: body.into_bytes(),
             });
+        }
+        if request.path.contains("/actions/runners") && !request.path.contains("registration-token")
+        {
+            return Ok(self.runners(request.method));
         }
         if request.method == Method::Delete {
             self.calls.push("ack");
@@ -100,6 +121,41 @@ impl Script {
         })
     }
 
+    fn runners(&mut self, method: Method) -> Exchange {
+        let delete = method == Method::Delete;
+        self.calls.push(if delete {
+            "runner-delete"
+        } else {
+            "runners-list"
+        });
+        if matches!(self.mode, Mode::ListFail) && !delete {
+            return Exchange {
+                status: 500,
+                body: Vec::new(),
+            };
+        }
+        if delete {
+            let status = if matches!(self.mode, Mode::DeleteFail) {
+                500
+            } else {
+                204
+            };
+            return Exchange {
+                status,
+                body: Vec::new(),
+            };
+        }
+        let busy = matches!(self.mode, Mode::BusyRunner);
+        let status = if busy { "online" } else { "offline" };
+        let body = format!(
+            r#"{{"total_count":1,"runners":[{{"id":20231,"name":"m100000788","status":"{status}","busy":{busy}}}]}}"#
+        );
+        Exchange {
+            status: 200,
+            body: body.into_bytes(),
+        }
+    }
+
     fn ack(&self) -> Result<Exchange, TransportFail> {
         if matches!(self.mode, Mode::AckFail) {
             return Err(TransportFail::Http(500));
@@ -119,6 +175,10 @@ impl Lane for Script {
     fn on_queue(&mut self) -> Result<(), EnsureError> {
         Ok(())
     }
+
+    fn use_github_api(&mut self) -> Result<(), EnsureError> {
+        Ok(())
+    }
 }
 
 pub(crate) fn ctx() -> Drive {
@@ -127,6 +187,9 @@ pub(crate) fn ctx() -> Drive {
         queue_path: "queues/messages".to_owned(),
         queue_token: "queue-token".to_owned(),
         admin_token: "admin-token".to_owned(),
+        owner: String::new(),
+        repo: String::new(),
+        pat: String::new(),
     }
 }
 

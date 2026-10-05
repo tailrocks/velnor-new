@@ -107,7 +107,7 @@ pub(super) async fn launch_id<T, S, F>(
 ) -> Result<Option<Started>, EnsureError>
 where
     T: velnor_runner_github::Transport + Lane,
-    S: FnOnce(&str, &[u8], super::bind::Bind) -> F,
+    S: Fn(&str, &[u8], super::bind::Bind) -> F,
     F: Future<Output = Result<Started, HostError>>,
 {
     lane.on_admin()?;
@@ -123,7 +123,7 @@ where
         Ok(AcquireOutcome::Acquired(ids)) if ids.is_empty() => reject_empty(journal, id).await,
         Ok(_) => {
             let name = format!("v{request_id}");
-            mint(lane, ctx, Some(batch), journal, id, &name, start).await
+            mint(lane, ctx, Some(batch), journal, id, &name, &start).await
         }
         Err(error) => fail_acquire(journal, id, error).await,
     }
@@ -139,12 +139,12 @@ pub(super) async fn scale_id<T, S, F>(
 ) -> Result<Option<Started>, EnsureError>
 where
     T: velnor_runner_github::Transport + Lane,
-    S: FnOnce(&str, &[u8], super::bind::Bind) -> F,
+    S: Fn(&str, &[u8], super::bind::Bind) -> F,
     F: Future<Output = Result<Started, HostError>>,
 {
     let name = format!("m{}", batch.message_id);
     let subject = name.clone();
-    ensure_runner(lane, ctx, journal, &name, &subject, Some(batch), start).await
+    super::runner_dir::ensure_runner(lane, ctx, journal, &name, &subject, Some(batch), start).await
 }
 
 /// One runner from the create-session statistics. There is no message to ack.
@@ -157,11 +157,11 @@ pub(super) async fn scale_unacked<T, S, F>(
 ) -> Result<Option<Started>, EnsureError>
 where
     T: velnor_runner_github::Transport + Lane,
-    S: FnOnce(&str, &[u8], super::bind::Bind) -> F,
+    S: Fn(&str, &[u8], super::bind::Bind) -> F,
     F: Future<Output = Result<Started, HostError>>,
 {
     // A shared Done "scale" row blocked later mints. The subject is this session.
-    ensure_runner(lane, ctx, journal, name, name, None, start).await
+    super::runner_dir::ensure_runner(lane, ctx, journal, name, name, None, start).await
 }
 
 fn taken<T>(lane: &mut T, ctx: &Drive, request_id: i64) -> Result<AcquireOutcome, SessionError>
@@ -205,57 +205,25 @@ async fn reject_empty(journal: &Journal, id: i64) -> Result<Option<Started>, Ens
     })
 }
 
-async fn ensure_runner<T, S, F>(
-    lane: &mut T,
-    ctx: &Drive,
-    journal: &Journal,
-    name: &str,
-    subject: &str,
-    batch: Option<&velnor_runner_github::ParsedBatch>,
-    start: S,
-) -> Result<Option<Started>, EnsureError>
-where
-    T: velnor_runner_github::Transport + Lane,
-    S: FnOnce(&str, &[u8], super::bind::Bind) -> F,
-    F: Future<Output = Result<Started, HostError>>,
-{
-    lane.on_admin()?;
-    let (id, fresh) = journal.begin_launch(subject).await.map_err(map_journal)?;
-    if docker_of(journal, id).await?.is_some() {
-        return finish_live(lane, ctx, journal, id, batch).await;
-    }
-    if !fresh {
-        return hold(journal, id, EnsureError::Uncertain).await;
-    }
-    mint(lane, ctx, batch, journal, id, name, start).await
-}
-
-async fn mint<T, S, F>(
+pub(super) async fn mint<T, S, F>(
     lane: &mut T,
     ctx: &Drive,
     batch: Option<&velnor_runner_github::ParsedBatch>,
     journal: &Journal,
     id: i64,
     name: &str,
-    start: S,
+    start: &S,
 ) -> Result<Option<Started>, EnsureError>
 where
     T: velnor_runner_github::Transport + Lane,
-    S: FnOnce(&str, &[u8], super::bind::Bind) -> F,
+    S: Fn(&str, &[u8], super::bind::Bind) -> F,
     F: Future<Output = Result<Started, HostError>>,
 {
     let encoded = match fetch_jit(lane, ctx, name) {
         Ok(encoded) => encoded,
         Err(error) => {
-            let mapped = map_listen(error);
-            if matches!(mapped, EnsureError::Conflict) {
-                journal
-                    .finish(id, Outcome::DefiniteFailure)
-                    .await
-                    .map_err(map_journal)?;
-                return Err(mapped);
-            }
-            return hold(journal, id, mapped).await;
+            return super::runner_dir::after_jit(lane, ctx, journal, id, name, map_listen(error))
+                .await;
         }
     };
     let bound = super::bind::Bind::new(journal, id);
@@ -294,7 +262,7 @@ where
     jit(lane, ctx.set_id, &ctx.admin_token, &body)
 }
 
-async fn finish_live<T>(
+pub(super) async fn finish_live<T>(
     lane: &mut T,
     ctx: &Drive,
     journal: &Journal,
@@ -362,7 +330,7 @@ where
     Ok(None)
 }
 
-async fn hold(
+pub(super) async fn hold(
     journal: &Journal,
     id: i64,
     error: EnsureError,
@@ -381,7 +349,7 @@ async fn mark_done(journal: &Journal, id: i64) -> Result<(), EnsureError> {
     journal.finish(id, Outcome::Done).await.map_err(map_journal)
 }
 
-async fn docker_of(journal: &Journal, id: i64) -> Result<Option<String>, EnsureError> {
+pub(super) async fn docker_of(journal: &Journal, id: i64) -> Result<Option<String>, EnsureError> {
     let rows = journal.rows().await.map_err(map_journal)?;
     Ok(rows
         .into_iter()
@@ -389,7 +357,7 @@ async fn docker_of(journal: &Journal, id: i64) -> Result<Option<String>, EnsureE
         .and_then(|row| row.docker_id))
 }
 
-fn map_journal(error: HostError) -> EnsureError {
+pub(super) fn map_journal(error: HostError) -> EnsureError {
     match error {
         HostError::Endpoint => EnsureError::Endpoint,
         _ => EnsureError::Unexpected {

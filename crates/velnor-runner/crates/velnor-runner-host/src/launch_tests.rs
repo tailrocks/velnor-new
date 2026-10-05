@@ -212,7 +212,7 @@ async fn uncertain_acquire_does_not_ack() -> Result<(), String> {
     )
     .await;
     assert_eq!(replayed, Err(EnsureError::Uncertain));
-    assert!(replay.calls.is_empty());
+    assert_eq!(replay.calls, Vec::<&str>::new());
     let rows = journal.rows().await.map_err(|err| err.to_string())?;
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].id, id);

@@ -48,6 +48,9 @@ pub enum EnsureError {
     /// Another session holds the set.
     #[error("session conflict")]
     Conflict,
+    /// The offline runner name was removed. Mint again. Do not acknowledge yet.
+    #[error("runner name cleared")]
+    NameCleared,
     /// A finished status was not the one the call expects.
     #[error("unexpected status {status} at {step}")]
     Unexpected {

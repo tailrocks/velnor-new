@@ -17,7 +17,7 @@ use crate::scale_set::ensure_product_scale_set;
 
 /// Session owner sent to the scale-set service.
 pub(crate) const OWNER_NAME: &str = "velnor-host";
-const GITHUB_API: &str = "https://api.github.com";
+pub(crate) const GITHUB_API: &str = "https://api.github.com";
 
 /// Counts from session create. No token and no queue URL.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
