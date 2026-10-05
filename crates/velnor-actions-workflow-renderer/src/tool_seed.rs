@@ -7,7 +7,7 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::workflow::step_identity::{
-    is_configured_checkout, is_tool_seed_step, TOOL_SEED_USES,
+    TOOL_SEED_USES, is_configured_checkout, is_tool_seed_step,
 };
 use velnor_actions_contract::{Job, Step, StepKind, StepRole};
 
@@ -187,7 +187,9 @@ fn cache_key_at(job: &Job, index: usize) -> Result<String, RenderError> {
         return Err(RenderError::InvalidWorkflow("setup_missing".to_owned()));
     };
     if step.role != Some(StepRole::MiseSetup) {
-        return Err(RenderError::InvalidWorkflow("setup_missing_role".to_owned()));
+        return Err(RenderError::InvalidWorkflow(
+            "setup_missing_role".to_owned(),
+        ));
     }
     with.get("cache_key")
         .filter(|key| crate::cache_p08::is_cache_key(key))
@@ -380,7 +382,10 @@ mod tests {
         mismatched.name = "Checkout".to_owned();
         let mut job = job(vec![mismatched, setup(&cache_key)]);
         let index = insert_before_setup(&mut job, 1, checkout_uses).expect("mismatched");
-        assert_eq!(index, 1, "a display label cannot authorize a mismatched ref");
+        assert_eq!(
+            index, 1,
+            "a display label cannot authorize a mismatched ref"
+        );
         assert!(job.steps.iter().all(|step| !is_tool_seed_step(step)));
     }
 }

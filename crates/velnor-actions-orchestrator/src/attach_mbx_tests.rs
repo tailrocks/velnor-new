@@ -46,8 +46,9 @@ fn preseed_restores_mbx_builds_after_sources_with_homes() {
     };
     assert_eq!(with.get("toolchain").map(String::as_str), Some("1.98.1"));
     assert!(
-        !with.contains_key("version"),
-        "preflight owns MBX install identity"
+        with.get("version").map(String::as_str)
+            == Some(ToolCatalog::pinned().version(PinnedTool::MrBoxington)),
+        "the native action installs the catalog-pinned MBX version"
     );
     assert_eq!(env.get("RUSTUP_HOME"), env.get("MISE_RUSTUP_HOME"));
     assert_eq!(env.get("CARGO_HOME"), env.get("MISE_CARGO_HOME"));

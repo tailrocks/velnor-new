@@ -159,9 +159,7 @@ impl StepRole {
             Self::ToolsCacheSave | Self::CargoSourcesSave => {
                 action_has_prefix_for_kind(kind, "actions/cache/save@")
             }
-            Self::CargoSourcesRestore => {
-                action_has_prefix_for_kind(kind, "actions/cache/restore@")
-            }
+            Self::CargoSourcesRestore => action_has_prefix_for_kind(kind, "actions/cache/restore@"),
             Self::TofuProvidersRestore => super::step_protocol::valid_provider_restore(kind),
             Self::TofuProvidersSave => super::step_protocol::valid_provider_save(kind),
             Self::CargoRegistryRestore => action_has_prefix_for_kind(kind, "Swatinem/rust-cache@"),
@@ -183,8 +181,7 @@ impl StepRole {
             | Self::PreseedManifest
             | Self::PreseedVerifyBuild
             | Self::PreseedVerifyManifest
-            | Self::MbxPreflight
-            => matches!(kind, StepKind::Shell { .. }),
+            | Self::MbxPreflight => matches!(kind, StepKind::Shell { .. }),
         }
     }
 
@@ -212,6 +209,8 @@ impl StepRole {
 ///
 /// Checkout is a semantic role, not a display-name convention. The caller
 /// supplies the exact pinned action ref from its validated render context.
+/// The seed consumer accepts its normal shallow checkout and the plan's
+/// full-history checkout; other action inputs or step environments fail.
 #[must_use]
 pub fn is_configured_checkout(step: &Step, expected_uses: &str) -> bool {
     step.role == Some(StepRole::Checkout)
@@ -235,11 +234,13 @@ fn valid_checkout_payload(kind: &StepKind) -> bool {
             && with.get("persist-credentials").is_some_and(|value| value == "false"))
 }
 
-/// Require the simple generated checkout shape used before host-seed reads.
+/// Require one approved generated checkout shape before host-seed reads.
 fn valid_configured_checkout_payload(kind: &StepKind) -> bool {
     matches!(kind, StepKind::Action { with, env, .. }
         if valid_checkout_payload(kind)
-            && with.len() == 1
+            && (with.len() == 1
+                || (with.len() == 2
+                    && with.get("fetch-depth").is_some_and(|depth| depth == "0")))
             && env.is_empty())
 }
 

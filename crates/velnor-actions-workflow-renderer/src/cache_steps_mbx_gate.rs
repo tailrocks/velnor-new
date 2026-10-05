@@ -68,6 +68,13 @@ fn check_job_mbx(id: &str, job: &Job, driver: CompileDriver) -> Result<(), Rende
         .filter(|(_, step)| step.role == Some(StepRole::MbxVersionCheck))
         .map(|(index, _)| index)
         .collect();
+    let preflights: Vec<usize> = job
+        .steps
+        .iter()
+        .enumerate()
+        .filter(|(_, step)| step.role == Some(StepRole::MbxPreflight))
+        .map(|(index, _)| index)
+        .collect();
     match driver {
         CompileDriver::Cargo if !actions.is_empty() => Err(RenderError::InvalidWorkflow(format!(
             "mbx_action_without_selection:{id}"
@@ -82,21 +89,36 @@ fn check_job_mbx(id: &str, job: &Job, driver: CompileDriver) -> Result<(), Rende
         CompileDriver::Mbx if actions.len() > 1 => {
             Err(RenderError::InvalidWorkflow(format!("mbx_duplicated:{id}")))
         }
+        CompileDriver::Mbx if job.steps[actions[0]].role != Some(StepRole::MbxCache) => Err(
+            RenderError::InvalidWorkflow(format!("mbx_action_role_missing:{id}")),
+        ),
+        CompileDriver::Mbx if preflights.is_empty() => Err(RenderError::InvalidWorkflow(format!(
+            "mbx_preflight_missing:{id}"
+        ))),
+        CompileDriver::Mbx if preflights.len() > 1 => Err(RenderError::InvalidWorkflow(format!(
+            "mbx_preflight_duplicated:{id}"
+        ))),
         CompileDriver::Mbx if version_checks.is_empty() => Err(RenderError::InvalidWorkflow(
             format!("mbx_version_check_missing:{id}"),
         )),
         CompileDriver::Mbx if version_checks.len() > 1 => Err(RenderError::InvalidWorkflow(
             format!("mbx_version_check_duplicated:{id}"),
         )),
-        CompileDriver::Mbx => {
-            check_mbx_version_order(id, job, actions[0], &build_commands, version_checks[0])
-        }
+        CompileDriver::Mbx => check_mbx_version_order(
+            id,
+            job,
+            preflights[0],
+            actions[0],
+            &build_commands,
+            version_checks[0],
+        ),
     }
 }
 
 fn check_mbx_version_order(
     id: &str,
     job: &Job,
+    preflight_at: usize,
     action_at: usize,
     commands: &[usize],
     check_at: usize,
@@ -127,7 +149,8 @@ fn check_mbx_version_order(
             "mbx_version_check_mismatch:{id}"
         )));
     }
-    if action_at >= check_at
+    if preflight_at >= action_at
+        || action_at >= check_at
         || commands.is_empty()
         || commands.iter().any(|index| *index <= check_at)
     {

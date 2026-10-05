@@ -300,9 +300,16 @@ fn configured_checkout_authority_is_typed_exact_and_name_independent() {
     if let StepKind::Action { with, .. } = &mut checkout.kind {
         with.insert("fetch-depth".to_owned(), "0".to_owned());
     }
-    assert!(!is_configured_checkout(&checkout, CHECKOUT_USES));
+    assert!(is_configured_checkout(&checkout, CHECKOUT_USES));
     validate_step_sequence(std::slice::from_ref(&checkout), "checkout")
-        .expect("general checkout role supports workflow-specific inputs");
+        .expect("plan's full-history checkout remains a configured seed source");
+    if let StepKind::Action { with, .. } = &mut checkout.kind {
+        with.insert("fetch-depth".to_owned(), "1".to_owned());
+    }
+    assert!(!is_configured_checkout(&checkout, CHECKOUT_USES));
+    if let StepKind::Action { with, .. } = &mut checkout.kind {
+        with.insert("fetch-depth".to_owned(), "0".to_owned());
+    }
     if let StepKind::Action { with, env, .. } = &mut checkout.kind {
         with.remove("fetch-depth");
         env.insert("GIT_CONFIG_COUNT".to_owned(), "1".to_owned());

@@ -2,8 +2,8 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Step, StepKind, StepRole};
 use velnor_actions_contract::workflow::step_identity::TOOL_SEED_USES;
+use velnor_actions_contract::{Step, StepKind, StepRole};
 
 use crate::{
     RenderError, commands,

@@ -17,7 +17,7 @@ fn cargo_only_preseed_replaces_registry_cache_and_uses_native_helper_owner() {
     );
     let role_at = |role| {
         steps
-        .iter()
+            .iter()
             .position(|step| step.role == Some(role))
             .unwrap_or_else(|| panic!("missing {role:?}: {names:?}"))
     };
@@ -39,7 +39,7 @@ fn cargo_only_preseed_replaces_registry_cache_and_uses_native_helper_owner() {
     );
     assert_eq!(
         steps
-        .iter()
+            .iter()
             .filter(|step| step.role == Some(StepRole::MbxCache))
             .count(),
         1,
