@@ -23,6 +23,9 @@ jobs:
     if: inputs.mode == 'both'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash -e {0}
     steps:
       - name: Qualify scale-set lane
         run: echo qualification-scale-set
@@ -56,6 +59,9 @@ jobs:
     if: inputs.mode == 'features' || inputs.mode == 'js'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -84,6 +90,9 @@ jobs:
     if: inputs.mode == 'features' || inputs.mode == 'services'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
     services:
       redis:
         image: redis:7-alpine
@@ -115,6 +124,9 @@ jobs:
     if: inputs.mode == 'features' || inputs.mode == 'artifacts'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
     permissions:
       contents: read
       actions: write
@@ -140,6 +152,9 @@ jobs:
     if: inputs.mode == 'features' || inputs.mode == 'buildx'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
     steps:
       - name: Buildx probe
         run: docker buildx version && printf 'FROM scratch\n' > Dockerfile && docker buildx build --progress=plain -t velnor-g4:probe .
@@ -156,6 +171,9 @@ jobs:
     if: inputs.mode == 'negative'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 10
+    defaults:
+      run:
+        shell: bash -e {0}
     steps:
       - name: Intentional failure
         run: echo expected-negative && exit 1
@@ -176,6 +194,9 @@ jobs:
     if: inputs.mode == 'composite'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -198,6 +219,9 @@ jobs:
     if: inputs.mode == 'js-pin'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
     steps:
       - name: Pinned script
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
@@ -220,6 +244,9 @@ jobs:
     if: inputs.mode == 'docker-action'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -232,6 +259,9 @@ jobs:
     if: inputs.mode == 'container'
     runs-on: ubuntu-26.04
     timeout-minutes: 20
+    defaults:
+      run:
+        shell: sh -e {0}
     container: alpine:3.22
     services:
       redis:
@@ -248,6 +278,9 @@ jobs:
     if: inputs.mode == 'container'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 20
+    defaults:
+      run:
+        shell: sh -e {0}
     container: alpine:3.22
     services:
       redis:
@@ -264,6 +297,9 @@ jobs:
     if: inputs.mode == 'outputs'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
     outputs:
       proof: ${{ steps.emit.outputs.proof }}
     steps:
@@ -297,6 +333,9 @@ jobs:
     if: inputs.mode == 'mask'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
     steps:
       - name: Mask canary
         run: "echo \"::add-mask::g4-mask-canary\" && echo g4-mask-canary"
@@ -305,6 +344,9 @@ jobs:
     if: inputs.mode == 'cache'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
     permissions:
       contents: read
       actions: write
@@ -351,6 +393,9 @@ jobs:
     if: inputs.mode == 'oidc'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
     permissions:
       id-token: write
       contents: read
@@ -374,6 +419,9 @@ jobs:
     if: inputs.mode == 'post-fail'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -394,6 +442,9 @@ jobs:
     if: inputs.mode == 'cancel'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
     steps:
       - name: Sleep until cancelled
         run: sleep 180
@@ -420,6 +471,9 @@ jobs:
     if: inputs.mode == 'compose'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -446,6 +500,9 @@ jobs:
     if: inputs.mode == 'bind'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
     steps:
       - name: Bind workspace file
         run: "printf '%s\\n' bind-ok > \"$GITHUB_WORKSPACE/g4-bind.txt\" && docker run --rm -v \"$GITHUB_WORKSPACE/g4-bind.txt:/g4-bind.txt:ro\" alpine:3.22 cat /g4-bind.txt > \"$RUNNER_TEMP/g4-bind-out\" && grep -qx bind-ok \"$RUNNER_TEMP/g4-bind-out\""
@@ -468,6 +525,9 @@ jobs:
     if: inputs.mode == 'cancel-service'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
     services:
       redis:
         image: redis:7-alpine
@@ -494,6 +554,9 @@ jobs:
     if: inputs.mode == 'testcontainers'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash -e {0}
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -520,6 +583,9 @@ jobs:
     if: inputs.mode == 'submodule'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -550,6 +616,9 @@ jobs:
     if: inputs.mode == 'ports'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash -e {0}
     steps:
       - name: Hold host port
         run: "docker run -d --name g4-hold -p 8080:80 alpine:3.22 sleep 120 && i=0 && while [ \"$i\" -lt 30 ]; do docker port g4-hold 80 | grep -q 8080 && break; i=$((i+1)); sleep 1; done && docker port g4-hold 80 | grep -q 8080 && echo port-held && sleep 45 && docker rm -f g4-hold"
@@ -558,6 +627,9 @@ jobs:
     if: inputs.mode == 'ports'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash -e {0}
     steps:
       - name: Hold host port
         run: "docker run -d --name g4-hold -p 8080:80 alpine:3.22 sleep 120 && i=0 && while [ \"$i\" -lt 30 ]; do docker port g4-hold 80 | grep -q 8080 && break; i=$((i+1)); sleep 1; done && docker port g4-hold 80 | grep -q 8080 && echo port-held && sleep 45 && docker rm -f g4-hold"
@@ -590,6 +662,9 @@ jobs:
     if: inputs.mode == 'pressure'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash -e {0}
     steps:
       - name: Pressure sleep
         run: echo pressure-start && sleep 150 && echo pressure-ok
@@ -598,6 +673,9 @@ jobs:
     if: inputs.mode == 'pressure'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash -e {0}
     steps:
       - name: Pressure sleep
         run: echo pressure-start && sleep 150 && echo pressure-ok
@@ -606,6 +684,9 @@ jobs:
     if: inputs.mode == 'pressure'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash -e {0}
     steps:
       - name: Pressure sleep
         run: echo pressure-start && sleep 150 && echo pressure-ok
@@ -624,6 +705,9 @@ jobs:
     if: inputs.mode == 'secret'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
     steps:
       - name: Hold secret canary
         env:
@@ -668,12 +752,12 @@ jobs:
       - name: Install pinned Rust toolchain
         run: "mise install rust@1.98.1 && printf '%s/bin\\n' \"$(mise exec rust@1.98.1 -- rustc --print sysroot)\" >> \"$GITHUB_PATH\""
       - name: Restore MBX objects
-        uses: jdx/mr-boxington-action@1687e54eb349cadf61fa38b5813a77875489e8e6
+        uses: jdx/mr-boxington-action@d0825fbaf3cc36ca2609aa38e71046265a1f1e37
         id: mbx_cache
         with:
           github-cache-mode: objects
           version: 1.21.1
-          cache-generation: velnor-qualification-mbx-1.21.1-action-1687e54eb349cadf61fa38b5813a77875489e8e6-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+          cache-generation: velnor-qualification-mbx-1.21.1-action-d0825fbaf3cc36ca2609aa38e71046265a1f1e37-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
           save-on-workflow-dispatch: "true"
       - name: Verify MBX action identity and write policy
         env:
@@ -725,12 +809,12 @@ jobs:
       - name: Install pinned Rust toolchain
         run: "mise install rust@1.98.1 && printf '%s/bin\\n' \"$(mise exec rust@1.98.1 -- rustc --print sysroot)\" >> \"$GITHUB_PATH\""
       - name: Restore MBX objects
-        uses: jdx/mr-boxington-action@1687e54eb349cadf61fa38b5813a77875489e8e6
+        uses: jdx/mr-boxington-action@d0825fbaf3cc36ca2609aa38e71046265a1f1e37
         id: mbx_cache
         with:
           github-cache-mode: objects
           version: 1.21.1
-          cache-generation: velnor-qualification-mbx-1.21.1-action-1687e54eb349cadf61fa38b5813a77875489e8e6-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+          cache-generation: velnor-qualification-mbx-1.21.1-action-d0825fbaf3cc36ca2609aa38e71046265a1f1e37-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
           save-on-workflow-dispatch: "false"
       - name: Verify MBX action identity and write policy
         env:
