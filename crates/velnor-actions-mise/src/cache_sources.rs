@@ -13,6 +13,7 @@
 //! Seven jobs racing to save one immutable key is rejected by construction.
 
 use crate::error::MiseError;
+use velnor_actions_contract::StepRole;
 
 /// Sufficient Cargo-home subset (relative to the owned home).
 pub const SOURCE_SUBSET: [&str; 6] = [
@@ -145,38 +146,40 @@ pub fn fetch_decision(
 
 /// Require restore/config steps before every fetch/build/test step.
 ///
-/// `names` is the job's step-name sequence. Every `Fetch Cargo sources`
-/// (and `Clippy` as the first build/test obligation) must follow a
-/// sources restore and, on MBX jobs, the MBX objects restore.
+/// `roles` is the job's typed semantic sequence. Every source fetch must
+/// follow a sources restore and, on MBX jobs, the MBX objects restore.
 ///
 /// # Errors
 ///
 /// Returns [`MiseError::CacheNotEligible`] when fetch precedes restore.
-pub fn check_restore_before_fetch(names: &[String], has_mbx: bool) -> Result<(), MiseError> {
-    let at = |want: &str| names.iter().position(|n| n == want);
-    let restore = at("Restore Cargo sources");
-    let fetch = at("Fetch Cargo sources").or_else(|| {
-        names
+pub fn check_restore_before_fetch(
+    roles: &[Option<StepRole>],
+    has_mbx: bool,
+) -> Result<(), MiseError> {
+    let fetches = roles
+        .iter()
+        .enumerate()
+        .filter_map(|(index, role)| (*role == Some(StepRole::CargoSourcesFetch)).then_some(index));
+    for fetch_at in fetches {
+        let source_restore = roles
             .iter()
-            .position(|n| n.starts_with("Fetch Cargo sources"))
-    });
-    if let (Some(restore_at), Some(fetch_at)) = (restore, fetch)
-        && fetch_at < restore_at
-    {
-        return Err(MiseError::CacheNotEligible {
-            task: "fetch".to_owned(),
-            reason: "fetch_before_restore".to_owned(),
-        });
-    }
-    if has_mbx {
-        let mbx = at("Restore MBX objects");
-        if let (Some(mbx_at), Some(fetch_at)) = (mbx, fetch)
-            && fetch_at < mbx_at
-        {
+            .position(|role| *role == Some(StepRole::CargoSourcesRestore));
+        if source_restore.is_some_and(|restore_at| fetch_at < restore_at) {
             return Err(MiseError::CacheNotEligible {
                 task: "fetch".to_owned(),
-                reason: "fetch_before_mbx".to_owned(),
+                reason: "fetch_before_restore".to_owned(),
             });
+        }
+        if has_mbx {
+            let mbx_restore = roles
+                .iter()
+                .position(|role| *role == Some(StepRole::MbxCache));
+            if mbx_restore.is_some_and(|restore_at| fetch_at < restore_at) {
+                return Err(MiseError::CacheNotEligible {
+                    task: "fetch".to_owned(),
+                    reason: "fetch_before_mbx".to_owned(),
+                });
+            }
         }
     }
     Ok(())

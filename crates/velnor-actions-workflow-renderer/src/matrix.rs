@@ -10,13 +10,12 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Job, StepKind};
+use velnor_actions_contract::{Job, StepId, StepKind};
 
 use crate::{
     RenderError,
     matrix_output_mode::mark_dynamic_matrix_output_mode,
-    render::{PLAN_JOB_ID, PUBLISH_JOB_ID, TASK_JOB_ID},
-    steps,
+    render::{PLAN_JOB_ID, TASK_JOB_ID},
     yaml::Yaml,
 };
 
@@ -27,7 +26,7 @@ pub const MATRIX_OUTPUT_ENV: &str = "VELNOR_MATRIX_OUTPUT";
 /// Matrix marker: `strategy.max-parallel` entry cap.
 pub const MATRIX_MAX_PARALLEL_ENV: &str = "VELNOR_MATRIX_MAX_PARALLEL";
 /// Step ID of the matrix-producing plan step.
-pub const PLAN_STEP_ID: &str = "plan";
+pub const PLAN_STEP_ID: &str = StepId::Plan.as_str();
 /// Job-output name carrying the plan ID (`plan-<run-key>`).
 pub const PLAN_ID_OUTPUT: &str = "plan_id";
 /// Job-output name carrying the run key (`r<run-id>-a<run-attempt>`).
@@ -219,7 +218,7 @@ pub(crate) fn attach_task_matrix(
         }
     }
     insert_job_key(jobs, needs_job, "outputs", Yaml::Map(outputs))?;
-    insert_plan_step_id(jobs, needs_job, output)
+    require_plan_step_id(jobs, needs_job, output)
 }
 
 /// Emit each capped job's declared `strategy.max-parallel`.
@@ -271,7 +270,7 @@ pub(crate) fn attach_plan_outputs(document: &mut Yaml) -> Result<(), RenderError
     else {
         return Err(matrix_invalid("matrix_without_jobs"));
     };
-    if !tag_op_step(jobs, PLAN_JOB_ID, steps::PLAN_OPERATION, PLAN_STEP_ID) {
+    if !has_step_id(jobs, PLAN_JOB_ID, PLAN_STEP_ID) {
         return Ok(());
     }
     insert_job_key(
@@ -285,31 +284,6 @@ pub(crate) fn attach_plan_outputs(document: &mut Yaml) -> Result<(), RenderError
             )),
         )]),
     )
-}
-
-/// Tag the publish job's publish step with its step ID.
-///
-/// The upload step names the artifact through the publish step's
-/// outputs; without the tag the reference dangles. No-op without a
-/// publish job.
-pub(crate) fn insert_publish_step_id(document: &mut Yaml) -> Result<(), RenderError> {
-    let Yaml::Map(entries) = document else {
-        return Err(matrix_invalid("matrix_without_document"));
-    };
-    let Some(Yaml::Map(jobs)) = entries
-        .iter_mut()
-        .find(|entry| entry.0 == "jobs")
-        .map(|entry| &mut entry.1)
-    else {
-        return Err(matrix_invalid("matrix_without_jobs"));
-    };
-    tag_op_step(
-        jobs,
-        PUBLISH_JOB_ID,
-        steps::PUBLISH_OPERATION,
-        steps::PUBLISH_STEP_ID,
-    );
-    Ok(())
 }
 
 /// Insert a job key directly before its `steps` entry.
@@ -336,13 +310,13 @@ fn insert_job_key(
     Ok(())
 }
 
-/// Tag the producer's `plan-v1` step with its step ID, after its name.
-fn insert_plan_step_id(
+/// Require the planner's typed output id before wiring job outputs.
+fn require_plan_step_id(
     jobs: &mut [(String, Yaml)],
     id: &str,
     output: &str,
 ) -> Result<(), RenderError> {
-    if !tag_op_step(jobs, id, steps::PLAN_OPERATION, PLAN_STEP_ID) {
+    if !has_step_id(jobs, id, PLAN_STEP_ID) {
         return Err(matrix_invalid(&format!(
             "matrix_without_plan_step:{output}"
         )));
@@ -350,18 +324,15 @@ fn insert_plan_step_id(
     mark_dynamic_matrix_output_mode(jobs, id, PLAN_STEP_ID)
 }
 
-/// Tag one internal step with its step ID, after its name.
-///
-/// Returns false when the job or the operation step is absent, so
-/// optional passes no-op while required passes fail closed.
-fn tag_op_step(jobs: &mut [(String, Yaml)], id: &str, operation: &str, step_id: &str) -> bool {
+/// Check for one explicitly declared step id in a serialized job.
+fn has_step_id(jobs: &[(String, Yaml)], id: &str, step_id: &str) -> bool {
     let steps = jobs
-        .iter_mut()
+        .iter()
         .find_map(|(name, job)| (name == id).then_some(job))
         .and_then(|job| {
             if let Yaml::Map(entries) = job {
                 entries
-                    .iter_mut()
+                    .iter()
                     .find_map(|(name, value)| (name == "steps").then_some(value))
             } else {
                 None
@@ -370,18 +341,12 @@ fn tag_op_step(jobs: &mut [(String, Yaml)], id: &str, operation: &str, step_id: 
     let Some(Yaml::Seq(items)) = steps else {
         return false;
     };
-    for item in items {
-        let Yaml::Map(step) = item else { continue };
-        let targeted = step.iter().any(|(name, env)| {
-            name == "env"
-                && matches!(env, Yaml::Map(vars) if vars.iter().any(|(var, val)| {
-                    var == steps::INTERNAL_OP_ENV && matches!(val, Yaml::Str(op) if op == operation)
-                }))
-        });
-        if targeted {
-            step.insert(1, ("id".to_owned(), Yaml::str(step_id.to_owned())));
-            return true;
-        }
-    }
-    false
+    items.iter().any(|item| {
+        matches!(
+            item,
+            Yaml::Map(step) if step.iter().any(|(name, value)| {
+                name == "id" && matches!(value, Yaml::Str(actual) if actual == step_id)
+            })
+        )
+    })
 }
