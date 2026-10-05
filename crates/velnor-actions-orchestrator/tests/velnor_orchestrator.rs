@@ -40,7 +40,6 @@ mod impl_merge_tamper;
 mod impl_merge_trust;
 mod impl_neg_pipeline_p13;
 mod impl_orch_broaden;
-mod impl_orch_cold_validators;
 mod impl_orch_core;
 mod impl_orch_core_cover;
 mod impl_orch_f2a;

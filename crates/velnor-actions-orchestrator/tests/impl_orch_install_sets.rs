@@ -130,21 +130,15 @@ fn job_section<'a>(yaml: &'a str, id: &str) -> Option<&'a str> {
     Some(&tail[..end])
 }
 
-/// Cache miss remains executable: explicit install sits after setup and before exec.
-fn assert_cold_install_order(section: &str, command: &str) -> Result<(), String> {
-    let position = |name: &str| {
-        section
-            .find(name)
-            .ok_or_else(|| format!("job misses {name}: {section}"))
-    };
-    let restore = position("- name: Restore Mise tools")?;
-    let setup = position("- name: Setup Mise")?;
-    let install = position("- name: Prepare pinned tools")?;
-    let run = position(command)?;
-    if !(restore < setup && setup < install && install < run) {
-        return Err(format!("cold install order is wrong: {section}"));
+/// Validators invoke their exact analyzer pin through isolated Mise exec.
+fn assert_pinned_exec(section: &str, tool: &str) -> Result<(), String> {
+    if section.contains("mise --no-config --no-env --no-hooks exec") && section.contains(tool) {
+        Ok(())
+    } else {
+        Err(format!(
+            "validator does not execute pinned {tool}: {section}"
+        ))
     }
-    Ok(())
 }
 
 #[test]
@@ -179,23 +173,13 @@ fn velnor_jobs_carry_trio_only_where_executed() -> TestResult {
         for spec in trio {
             assert!(!required.contains(spec), "required must not carry {spec}");
         }
-        let lint = runs.get("actionlint").ok_or("lint must prepare tools")?;
-        assert!(lint.contains("actionlint@1.7.12"), "{lint}");
-        assert!(lint.contains("shellcheck@0.11.0"), "{lint}");
-        let machete = runs.get("cargo-machete").ok_or("machete must prepare")?;
-        assert!(
-            machete.contains("ubi:bnjbvr/cargo-machete@0.9.2"),
-            "{machete}"
-        );
-        let zizmor = runs.get("zizmor").ok_or("zizmor must prepare")?;
-        assert!(zizmor.contains("zizmor@1.30.1"), "{zizmor}");
-        for (id, command) in [
-            ("actionlint", "Run actionlint"),
-            ("cargo-machete", "Run cargo-machete"),
-            ("zizmor", "Run zizmor"),
+        for (id, tool) in [
+            ("actionlint", "actionlint@1.7.12"),
+            ("cargo-machete", "ubi:bnjbvr/cargo-machete@0.9.2"),
+            ("zizmor", "zizmor@1.30.1"),
         ] {
             let section = job_section(&yaml, id).ok_or("validator job missing")?;
-            assert_cold_install_order(section, command)?;
+            assert_pinned_exec(section, tool)?;
         }
         for id in ["alint", "cargo-deny"] {
             assert!(

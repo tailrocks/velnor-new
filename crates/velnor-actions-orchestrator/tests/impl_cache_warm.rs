@@ -11,7 +11,7 @@
 use std::collections::BTreeMap;
 use std::fs;
 
-use velnor_actions_contract::StepKind;
+use velnor_actions_contract::{StepKind, StepRole};
 use velnor_actions_mise::{PREPARE_RUST_COMPONENTS_STEP, cache_sources};
 use velnor_actions_orchestrator::{finalized_jobs, prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::{SETUP_MISE_NAME, render::WORKFLOW_PATH};
@@ -234,10 +234,22 @@ fn rust_components_install_unconditionally_after_restore() -> TestResult {
                 .iter()
                 .position(|name| *name == SETUP_MISE_NAME)
                 .ok_or_else(|| missing("setup"))?;
-            let components = names
+            let needs_components = id.starts_with("rust-")
+                || job
+                    .steps
+                    .iter()
+                    .any(|step| step.role == Some(StepRole::PlanFormat));
+            let Some(components) = names
                 .iter()
                 .position(|name| *name == PREPARE_RUST_COMPONENTS_STEP)
-                .ok_or_else(|| missing("components"))?;
+            else {
+                assert!(
+                    !needs_components,
+                    "{id} needs components only when it owns compilation or Format (mbx={mbx})"
+                );
+                continue;
+            };
+            assert!(needs_components, "{id} has no selected component consumer");
             assert!(
                 setup < components,
                 "{id}: components install after restore (mbx={mbx})"
@@ -270,7 +282,7 @@ fn rust_components_install_unconditionally_after_restore() -> TestResult {
             .get(WORKFLOW_PATH)
             .ok_or_else(|| std::io::Error::other("missing workflow"))?;
         let emitted = yaml_steps(yaml);
-        for id in ["plan", "rust-a", "rust-b"] {
+        for id in ["rust-a", "rust-b"] {
             let names = emitted
                 .get(id)
                 .ok_or_else(|| std::io::Error::other(format!("missing {id}")))?;
@@ -289,6 +301,25 @@ fn rust_components_install_unconditionally_after_restore() -> TestResult {
                     at(PREPARE_RUST_COMPONENTS_STEP)? < at("Clippy")?,
                     "{id}: components precede obligations (mbx={mbx})"
                 );
+            }
+            if let Some(names) = emitted.get("plan") {
+                let has_format = names.iter().any(|name| name == "Format");
+                assert_eq!(
+                    names
+                        .iter()
+                        .any(|name| name == PREPARE_RUST_COMPONENTS_STEP),
+                    has_format,
+                    "planner components follow its selected Format step (mbx={mbx})"
+                );
+                if has_format {
+                    assert!(
+                        names.iter().position(|name| name == SETUP_MISE_NAME)
+                            < names
+                                .iter()
+                                .position(|name| name == PREPARE_RUST_COMPONENTS_STEP),
+                        "plan Format components follow restore/setup (mbx={mbx})"
+                    );
+                }
             }
         }
     }

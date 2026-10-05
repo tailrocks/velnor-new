@@ -15,7 +15,7 @@ pub(crate) use tokens::check_token_hygiene;
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{
-    Job, JobTimeout, Step, StepKind, ValidatorKind, VelnorSupportWorkflow,
+    Job, JobTimeout, Step, StepKind, StepRole, ValidatorKind, VelnorSupportWorkflow,
 };
 
 use crate::{
@@ -42,9 +42,6 @@ pub(crate) const RELEASE_DISPLAY_NAME: &str = "Release";
 
 /// Release ref gate: the job runs only on protected refs (tags/branches).
 pub(crate) const RELEASE_REF_CONDITION: &str = "github.ref_protected == true";
-
-/// Display name of the explicit cold-cache tool installation step.
-const PREPARE_PINNED_TOOLS_NAME: &str = "Prepare pinned tools";
 
 /// Consumer policy: reject support IR and Velnor-only job IDs.
 ///
@@ -220,52 +217,31 @@ pub(crate) fn alint_job(ctx: &RenderContext) -> Result<Job, RenderError> {
 
 /// Fixed validator job: checkout plus its caller-supplied command.
 ///
-/// Tool preparation runs with ambient auth because cold installs may
-/// need authenticated quota. Separate analyzer execution uses the
-/// standard scrubbed shell step. Cargo Deny is the exception: its
-/// single fixed vector installs the tool, then removes credentials
-/// before running the isolated Cargo payload.
+/// The validator runs its pinned analyzer with ambient auth: the cold
+/// tool bootstrap needs authenticated quota (the scrub overlay broke
+/// `ubi:` installs with API 401s and zizmor with empty-token aborts,
+/// CI run 36815180228). Static analyzers execute no repository code;
+/// cargo-backed validators (deny) run from the cargo isolation dir
+/// with an absolute manifest path, so repo `.cargo/config.toml`
+/// providers never execute while ambient auth is in scope. The step
+/// carries no scrub keys at all.
 pub(crate) fn validator_job(
     ctx: &RenderContext,
     validator: ValidatorKind,
 ) -> Result<Job, RenderError> {
     let command = find_validator_command(&ctx.validator_commands, validator)?;
-    let mut steps = vec![steps::checkout_step(&ctx.checkout_uses)?];
-    if !command.prepare_argv.is_empty() {
-        let mut prepare = steps::ambient_shell_step(
-            PREPARE_PINNED_TOOLS_NAME,
-            command.prepare_argv.clone(),
-            BTreeMap::new(),
-        )?;
-        prepare.role = Some(velnor_actions_contract::StepRole::PreparePinnedTools);
-        steps.push(prepare);
-    }
-    let mut run_step = match validator {
-        ValidatorKind::CargoDeny => {
-            steps::ambient_shell_step(&command.name, command.argv.clone(), BTreeMap::new())?
-        }
-        ValidatorKind::CargoMachete | ValidatorKind::Zizmor => {
-            steps::shell_step(&command.name, command.argv.clone(), BTreeMap::new())?
-        }
-        _ => {
-            return Err(RenderError::PolicyRejected {
-                policy: "velnor-repository-v1".to_owned(),
-                problem: format!("unsupported_validator_job:{}", validator.job_id()),
-            });
-        }
-    };
-    run_step.role = Some(match validator {
-        ValidatorKind::CargoDeny => velnor_actions_contract::StepRole::CargoDeny,
-        ValidatorKind::CargoMachete => velnor_actions_contract::StepRole::CargoMachete,
-        ValidatorKind::Zizmor => velnor_actions_contract::StepRole::Zizmor,
-        _ => {
-            return Err(RenderError::PolicyRejected {
-                policy: "velnor-repository-v1".to_owned(),
-                problem: format!("unsupported_validator_job:{}", validator.job_id()),
-            });
+    let mut step = steps::ambient_shell_step(&command.name, command.argv.clone(), BTreeMap::new())?;
+    step.role = Some(match validator {
+        ValidatorKind::CargoDeny => StepRole::CargoDeny,
+        ValidatorKind::CargoMachete => StepRole::CargoMachete,
+        ValidatorKind::Zizmor => StepRole::Zizmor,
+        ValidatorKind::Alint | ValidatorKind::Actionlint => {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "validator_not_shell:{}",
+                validator.job_id()
+            )));
         }
     });
-    steps.push(run_step);
     Ok(Job {
         display_name: validator.display_name().to_owned(),
         runs_on: ctx.runs_on.clone(),
@@ -275,7 +251,7 @@ pub(crate) fn validator_job(
         condition: None,
         permissions: None,
         environment: None,
-        steps,
+        steps: vec![steps::checkout_step(&ctx.checkout_uses)?, step],
     })
 }
 

@@ -47,12 +47,6 @@ fn policy_vectors_pin_specs_and_payloads() {
         !root_only[2].contains("velnor-runner"),
         "discovery without a nested runner must not inject its manifest"
     );
-    assert!(validator_argv("evil-tool", "1.2.3", "cargo", &["deny"]).is_err());
-    assert!(validator_argv("cargo-deny", "latest", "cargo", &["deny"]).is_err());
-}
-
-#[test]
-fn machete_validator_is_pinned_and_installed_before_execution() {
     let machete = machete_argv().expect("machete argv");
     let want = argv_of(&[
         "mise",
@@ -74,26 +68,8 @@ fn machete_validator_is_pinned_and_installed_before_execution() {
         "crates/velnor-actions-cli",
     ]);
     assert_eq!(machete, want);
-    let machete_install = machete_install_argv().expect("machete install argv");
-    assert_eq!(
-        machete_install,
-        argv_of(&[
-            "mise",
-            "--no-config",
-            "--no-env",
-            "--no-hooks",
-            "install",
-            "ubi:bnjbvr/cargo-machete@0.9.2",
-        ])
-    );
-    assert_eq!(
-        validator_install_pin("ubi:bnjbvr/cargo-machete@0.9.2"),
-        Some(("cargo-machete", "0.9.2", "ubi:bnjbvr/cargo-machete"))
-    );
-    assert_eq!(
-        validator_install_pin("zizmor@1.30.1"),
-        Some(("zizmor", "1.30.1", "zizmor"))
-    );
+    assert!(validator_argv("evil-tool", "1.2.3", "cargo", &["deny"]).is_err());
+    assert!(validator_argv("cargo-deny", "latest", "cargo", &["deny"]).is_err());
 }
 
 #[test]
