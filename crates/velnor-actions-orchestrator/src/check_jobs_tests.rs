@@ -164,6 +164,15 @@ fn mixed_platform_checks_keep_exact_tools_and_unconditional_reports() {
     assert_eq!(jobs[1].1.runs_on, "macos-15");
     for (id, job) in &jobs {
         assert_eq!(job.needs, ["plan"]);
+        let checkout = job.steps.first().expect("checkout");
+        let StepKind::Action { with, .. } = &checkout.kind else {
+            panic!("checkout action");
+        };
+        assert_eq!(
+            with.get("fetch-depth").map(String::as_str),
+            Some("0"),
+            "named check verifies the plan head against the merge commit parent"
+        );
         let execution = job
             .steps
             .iter()

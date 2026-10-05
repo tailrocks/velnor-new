@@ -45,7 +45,7 @@ fn check_job(
     catalog: &ToolCatalog,
 ) -> Result<Job, OrchestratorError> {
     let check = &discovered.check;
-    let mut steps = vec![crate::workflow::wire_w1::checkout_step()?];
+    let mut steps = vec![crate::workflow::wire_w1::checkout_step_full()?];
     steps.extend(acquire);
     steps.push(crate::matrix_step::download_plan_step()?);
     steps.push(execute_check_step(discovered, catalog)?);
