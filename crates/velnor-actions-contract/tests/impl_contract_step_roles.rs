@@ -128,6 +128,17 @@ fn tofu_provider_pair_and_consumer_sequence_is_valid() {
 }
 
 #[test]
+fn tofu_provider_save_must_follow_restore_without_consumers() {
+    let steps = [tofu_save(), tofu_restore()];
+    assert!(
+        validate_step_sequence(&steps, "tofu-job")
+            .expect_err("provider save before restore is rejected without consumers")
+            .to_string()
+            .contains("tofu_provider_save_before_restore")
+    );
+}
+
+#[test]
 fn tofu_provider_sequence_rejects_missing_conditional_or_malformed_composite() {
     let mut missing = tofu_sequence();
     missing.remove(0);
