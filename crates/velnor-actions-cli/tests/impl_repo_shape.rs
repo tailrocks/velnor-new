@@ -30,7 +30,7 @@ fn collect_entries(dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), Box<dyn Err
 }
 
 #[test]
-fn arch110_product_roots_live_under_crates() -> Result<(), Box<dyn Error>> {
+fn arch110_workspace_package_roots_live_under_crates() -> Result<(), Box<dyn Error>> {
     for (dir, _) in MEMBERS {
         assert!(dir.starts_with("crates/"), "{dir} escapes crates/");
     }
