@@ -39,6 +39,8 @@ pub const PRESEED_STAGE_DIR: &str = "$RUNNER_TEMP/velnor/preseed";
 pub const PRESEED_MANIFEST_FILE: &str = "preseed-manifest.json";
 /// Fixed `mbx build --release` output, mirrored from the candidate path.
 pub const PRESEED_BUILD_OUTPUT: &str = "target/release/velnor-actions";
+/// Temporary output from the pinned MBX compile-route check.
+const PRESEED_MBX_VERSION_OUTPUT: &str = "$RUNNER_TEMP/velnor/preseed-mbx-version";
 /// Downloaded helper binary inside the pre-seed stage directory.
 pub const PRESEED_DOWNLOADED_BINARY: &str = "$RUNNER_TEMP/velnor/preseed/velnor-actions";
 
@@ -112,8 +114,9 @@ pub fn preseed_build_step(
 /// isolated `mbx --version` probe and requires its whole line to equal
 /// `mbx <version>` (exact pinned catalog version, never `latest`), so a
 /// wrong-toolchain compile fails here instead of uploading. The probe
-/// resolves through Mise on every run, cold or warm; the script carries
-/// no quotes, substitution, or variables, keeping shellcheck quoting safe.
+/// resolves through Mise on every run, cold or warm. The script writes
+/// probe output to a temporary file before comparing it, so a matching
+/// partial response cannot mask a nonzero Mise exit.
 /// # Errors
 pub fn preseed_verify_step(
     probe: &[String],
@@ -128,7 +131,7 @@ pub fn preseed_verify_step(
     }
     check_probe_shape(probe)?;
     let script = format!(
-        "test -x {PRESEED_BUILD_OUTPUT} && {} | grep -qxF \"mbx {mbx_version}\"",
+        "test -x {PRESEED_BUILD_OUTPUT} && mkdir -p \"$RUNNER_TEMP/velnor\" && {} > \"{PRESEED_MBX_VERSION_OUTPUT}\" && grep -qxF \"mbx {mbx_version}\" \"{PRESEED_MBX_VERSION_OUTPUT}\"",
         probe.join(" ")
     );
     steps::shell_step(
