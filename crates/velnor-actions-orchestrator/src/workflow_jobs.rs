@@ -70,6 +70,7 @@ pub(crate) fn plan_job(
         use_rust,
     )?;
     steps.push(prepare);
+    steps.push(prepare_gh_for_trust_lookup_step(catalog)?);
     if use_rust {
         steps.push(crate::workflow::prepare_rust_components_step(catalog)?);
     }
@@ -204,6 +205,37 @@ fn plan_tools(
     tools
 }
 
+/// Best-effort install of pinned `gh`; missing API support means cold execution.
+fn prepare_gh_for_trust_lookup_step(catalog: &ToolCatalog) -> Result<Step, OrchestratorError> {
+    let prepare =
+        PreparePinnedTools::new(vec![PinnedTool::Gh], ToolHomes::runner_temp()).map_err(|err| {
+            OrchestratorError::Contract {
+                problem: err.to_string(),
+            }
+        })?;
+    let argv = strings_of(prepare.argv(catalog))
+        .map_err(|problem| OrchestratorError::Contract { problem })?;
+    let command = velnor_actions_workflow_renderer::join_argv_for_run(&argv).map_err(|err| {
+        OrchestratorError::Contract {
+            problem: err.to_string(),
+        }
+    })?;
+    let env = strings_of_env(&prepare.env_without_homes())
+        .map_err(|problem| OrchestratorError::Contract { problem })?;
+    velnor_actions_workflow_renderer::ambient_shell_step(
+        "Prepare GitHub CLI for trust lookup (best effort)",
+        vec![
+            "bash".to_owned(),
+            "-c".to_owned(),
+            format!("{command} || true"),
+        ],
+        env,
+    )
+    .map_err(|err| OrchestratorError::Contract {
+        problem: err.to_string(),
+    })
+}
+
 /// Typed `Prepare pinned tools` step for one exact tool set.
 ///
 /// Homes use the runner-temp expression form: shell `$VAR` never expands
@@ -213,7 +245,7 @@ fn plan_tools(
 /// # Errors
 ///
 /// Returns a contract error when the Mise adapter rejects the request.
-fn prepare_pinned_tools_step(
+pub(crate) fn prepare_pinned_tools_step(
     catalog: &ToolCatalog,
     tools: Vec<PinnedTool>,
     use_rust: bool,

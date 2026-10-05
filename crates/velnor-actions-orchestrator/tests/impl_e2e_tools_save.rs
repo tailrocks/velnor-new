@@ -1,54 +1,79 @@
-//! End-to-end tools-save wiring checks over parsed workflow text.
-//!
-//! Split from `impl_e2e_wiring` (size gate): per-job save shape plus the
-//! tree-wide one-saver-per-key check.
+//! End-to-end explicit tool-cache wiring over parsed workflow text.
+
+use velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION;
+use velnor_actions_workflow_renderer::steps::{
+    TOOLS_CACHE_PATHS, TOOLS_CACHE_RESTORE_CONDITION, TOOLS_CACHE_SAVE_CONDITION,
+    TOOLS_RESTORE_USES, TOOLS_SAVE_USES,
+};
 
 use crate::impl_e2e_wiring::{JobText, StepText};
 
-/// Tools-cache step display names, asserted as emitted text.
-const RESTORE_TOOLS_TEXT: &str = "Restore Mise tools";
-const SAVE_TOOLS_TEXT: &str = "Save Mise tools";
+const RESTORE_NAME: &str = "Restore Mise tools";
+const SAVE_NAME: &str = "Save Mise tools";
+const KEY_PREFIX: &str = "mise-v3-";
 
-/// Tools restores stay built-in (never a manual restore step, never a
-/// role-suffixed `mise-tools-v1-` key); at most one `Save Mise tools`
-/// step per job, carrying the shared `mise-v1-` key under the push-only
-/// gate (P08: one saver per key, PRs read-only).
+/// Every tool restore/save is pinned and consumes the canonical payload.
 pub(crate) fn check_tools_save_shape(job: &JobText) -> Result<(), String> {
-    let mut saves = 0;
-    for step in &job.steps {
-        if step.name == RESTORE_TOOLS_TEXT {
-            return Err(format!("{}: tools restores stay built-in", job.id));
+    let restores = job
+        .steps
+        .iter()
+        .filter(|step| step.name == RESTORE_NAME)
+        .collect::<Vec<_>>();
+    let saves = job
+        .steps
+        .iter()
+        .filter(|step| step.name == SAVE_NAME)
+        .collect::<Vec<_>>();
+    let has_setup = job.steps.iter().any(|step| step.name == "Setup Mise");
+    if restores.len() != usize::from(has_setup) {
+        return Err(format!("{}: expected one restore iff setup exists", job.id));
+    }
+    if saves.len() > 1 {
+        return Err(format!("{}: at most one tools save", job.id));
+    }
+    for restore in restores {
+        if !restore
+            .body
+            .contains(&format!("uses: {TOOLS_RESTORE_USES}"))
+            || !restore
+                .body
+                .contains(&format!("if: {TOOLS_CACHE_RESTORE_CONDITION}"))
+            || restore.body.contains("restore-keys:")
+        {
+            return Err(format!("{}: malformed exact tools restore", job.id));
         }
-        if step.body.contains("key: mise-tools-v1-") {
-            return Err(format!("{}: role-suffixed tools key must go", job.id));
+        check_payload(job, restore)?;
+        let key = step_key(job, restore)?;
+        if !key.starts_with(KEY_PREFIX) {
+            return Err(format!("{}: noncanonical tools key {key}", job.id));
         }
-        if step.name == SAVE_TOOLS_TEXT {
-            saves += 1;
-            for need in [
-                "key: mise-v1-",
-                "if: success() && github.event_name == 'push'",
-            ] {
-                if !step.body.contains(need) {
-                    return Err(format!("{}: tools save misses {need}", job.id));
-                }
+        if let Some(save) = saves.first() {
+            if step_key(job, save)? != key {
+                return Err(format!("{}: tools save key differs from restore", job.id));
             }
         }
     }
-    if saves > 1 {
-        return Err(format!("{}: at most one tools save", job.id));
+    for save in saves {
+        let trusted = format!("{CACHE_SAVE_CONDITION} && {TOOLS_CACHE_SAVE_CONDITION}");
+        if !save.body.contains(&format!("uses: {TOOLS_SAVE_USES}"))
+            || !save.body.contains(&trusted)
+            || !step_key(job, save)?.starts_with(KEY_PREFIX)
+        {
+            return Err(format!("{}: malformed trusted tools save", job.id));
+        }
+        check_payload(job, save)?;
     }
     Ok(())
 }
 
-/// Exactly one `Save Mise tools` step per restored `mise-v1-` key across
-/// the tree, archiving that same key.
+/// One explicit elected saver per canonical restored key across the tree.
 pub(crate) fn check_one_tools_saver_per_key(jobs: &[JobText]) -> Result<(), String> {
-    use std::collections::BTreeMap;
+    use std::collections::{BTreeMap, BTreeSet};
     let restored = restored_tools_keys(jobs);
-    let mut saved: BTreeMap<String, usize> = BTreeMap::new();
+    let mut saved = BTreeMap::<String, usize>::new();
     for job in jobs {
-        for step in job.steps.iter().filter(|s| s.name == SAVE_TOOLS_TEXT) {
-            let key = save_step_key(job, step)?;
+        for step in job.steps.iter().filter(|step| step.name == SAVE_NAME) {
+            let key = step_key(job, step)?;
             if !restored.contains(&key) {
                 return Err(format!("{}: tools save archives unrestored {key}", job.id));
             }
@@ -56,37 +81,49 @@ pub(crate) fn check_one_tools_saver_per_key(jobs: &[JobText]) -> Result<(), Stri
         }
     }
     for key in &restored {
-        match saved.get(key) {
-            Some(1) => {}
-            other => {
-                return Err(format!("key {key} has {other:?} savers, want exactly one"));
-            }
+        if saved.get(key) != Some(&1) {
+            return Err(format!(
+                "key {key} has {:?} savers, want one",
+                saved.get(key)
+            ));
         }
+    }
+    let saved_keys = saved.keys().collect::<BTreeSet<_>>();
+    if saved_keys.len() != restored.len() {
+        return Err("tools restore/save key sets differ".to_owned());
     }
     Ok(())
 }
 
-/// Every `mise-v1-` key restored by a `Setup Mise` step in the tree.
-fn restored_tools_keys(jobs: &[JobText]) -> std::collections::BTreeSet<String> {
-    let mut restored = std::collections::BTreeSet::new();
-    for job in jobs {
-        for step in job.steps.iter().filter(|s| s.name == "Setup Mise") {
-            for line in step.body.lines() {
-                if let Some(key) = line.trim().strip_prefix("cache_key: ") {
-                    restored.insert(key.to_owned());
-                }
-            }
-        }
+/// Every canonical root occurs once and in declaration order.
+fn check_payload(job: &JobText, step: &StepText) -> Result<(), String> {
+    let mut cursor = 0;
+    for path in TOOLS_CACHE_PATHS {
+        let Some(at) = step.body[cursor..].find(path) else {
+            return Err(format!("{} {:?}: payload misses {path}", job.id, step.name));
+        };
+        cursor += at + path.len();
     }
-    restored
+    Ok(())
 }
 
-/// The archived key of one tools save step body.
-fn save_step_key(job: &JobText, step: &StepText) -> Result<String, String> {
-    for line in step.body.lines() {
-        if let Some(key) = line.trim().strip_prefix("key: ") {
-            return Ok(key.to_owned());
-        }
-    }
-    Err(format!("{}: tools save without key", job.id))
+/// Read the canonical action-key input from one rendered step.
+fn step_key(job: &JobText, step: &StepText) -> Result<String, String> {
+    step.body
+        .lines()
+        .find_map(|line| line.trim().strip_prefix("key: "))
+        .map(str::to_owned)
+        .ok_or_else(|| format!("{} {:?}: missing key", job.id, step.name))
+}
+
+/// The set of keys explicitly restored by tool-cache steps.
+fn restored_tools_keys(jobs: &[JobText]) -> std::collections::BTreeSet<String> {
+    jobs.iter()
+        .flat_map(|job| {
+            job.steps
+                .iter()
+                .filter(|step| step.name == RESTORE_NAME)
+                .filter_map(|step| step_key(job, step).ok())
+        })
+        .collect()
 }

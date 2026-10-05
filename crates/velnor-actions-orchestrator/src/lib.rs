@@ -7,6 +7,7 @@
 
 mod attach;
 mod baseline_publish;
+mod cache_writer;
 mod clippy_groups;
 mod config;
 mod config_stacks;

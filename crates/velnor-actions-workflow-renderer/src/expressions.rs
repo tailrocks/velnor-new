@@ -56,11 +56,22 @@ fn expression_spans(text: &str) -> Option<Vec<&str>> {
 /// restore steps so PR runs can never become cache writers).
 /// Notably absent: `github.token` (render-time fetch binding only)
 /// and run IDs (never in env).
-const ENV_EXPRESSIONS: [&str; 8] = [
+const ENV_EXPRESSIONS: [&str; 9] = [
     "runner.temp",
     "github.ref_name",
     "github.event_name",
     "github.event_name == 'push' && 'write' || 'read'",
+    "github.event_name == 'push' && github.ref_protected && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && 'write' || 'read'",
+    "secrets.CARGO_REGISTRY_TOKEN",
+    "secrets.GITHUB_TOKEN",
+    "steps.mbx.outputs.cache-primary-key",
+    "steps.mbx-bundle.outputs.cache-matched-key",
+];
+    "runner.temp",
+    "github.ref_name",
+    "github.event_name",
+    "github.event_name == 'push' && 'write' || 'read'",
+    "github.event_name == 'push' && github.ref_protected && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && 'write' || 'read'",
     "secrets.CARGO_REGISTRY_TOKEN",
     "secrets.GITHUB_TOKEN",
     "steps.mbx.outputs.cache-primary-key",
@@ -69,16 +80,33 @@ const ENV_EXPRESSIONS: [&str; 8] = [
 
 /// Exact `${{ }}` inners permitted in action `with:` values.
 ///
-/// Run-scoped names, runner paths, matrix coordinates, the
-/// push-gated cache-save flag, and the publish step's derived
-/// artifact name. Notably absent: every `secrets.*` handle (rejected
-/// separately as `secret_in_action_input`).
-const WITH_EXPRESSIONS: [&str; 7] = [
+/// Run-scoped names, runner paths, matrix coordinates, owned image
+/// identity, MBX keys and restore prefixes, protected-default trust, and
+/// the publish artifact name. Notably absent: every `secrets.*` handle.
+const WITH_EXPRESSIONS: [&str; 12] = [
     "runner.temp",
+    "runner.os",
+    "runner.arch",
     "github.run_id",
     "github.run_attempt",
     "github.event_name == 'push'",
+    "env.VELNOR_CACHE_IMAGE_OS",
+    "env.VELNOR_CACHE_IMAGE_VERSION",
     "steps.publish-baseline.outputs.artifact_name",
+    "github.event_name == 'push' && github.ref_protected && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && 'trusted' || 'pr'",
+    "steps.mbx.outputs.cache-primary-key",
+    "steps.mbx-bundle-key.outputs.prefix",
+];
+    "runner.temp",
+    "runner.os",
+    "runner.arch",
+    "github.run_id",
+    "github.run_attempt",
+    "github.event_name == 'push'",
+    "env.VELNOR_CACHE_IMAGE_OS",
+    "env.VELNOR_CACHE_IMAGE_VERSION",
+    "steps.publish-baseline.outputs.artifact_name",
+    "github.event_name == 'push' && github.ref_protected && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && 'trusted' || 'pr'",
     "steps.mbx.outputs.cache-primary-key",
     "steps.mbx-bundle-key.outputs.prefix",
 ];
