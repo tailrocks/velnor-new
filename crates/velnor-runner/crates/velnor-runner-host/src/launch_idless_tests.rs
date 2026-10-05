@@ -84,10 +84,10 @@ async fn idless_uncertain_rows_keep_both_slots() -> Result<(), String> {
 async fn own_idless_uncertain_row_does_not_block_its_mint() -> Result<(), String> {
     let (scratch, journal) = open("idless-self").await?;
     uncertain_without_ids(&journal, "m9").await?;
-    let decision = admission(&Idle, &journal, 2, 2, 0, &assigned_wait(9, 1))
+    let decision = admission(&Idle, &journal, 1, 1, 0, &assigned_wait(9, 1))
         .await
         .map_err(|err| err.to_string())?;
-    assert_eq!(decision, Admit::Start { stop: false });
+    assert_eq!(decision, Admit::Start { stop: true });
     absent(&scratch.file())
 }
 

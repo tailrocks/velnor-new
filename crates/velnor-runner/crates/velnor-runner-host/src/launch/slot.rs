@@ -2,7 +2,7 @@
 //! Busy means occupancy or the running count has reached capacity.
 
 use crate::IntentState;
-use crate::journal::Journal;
+use crate::journal::{Journal, Outcome};
 use crate::reconcile::IntentRow;
 use crate::scale_set::EnsureError;
 use crate::stage::PairEngine;
@@ -41,6 +41,29 @@ pub(super) async fn occupied_except(
         status: 0,
         step: "capacity",
     })
+}
+
+/// Fail one idless uncertain row and open a fresh launch for the same subject.
+///
+/// A docker id, a dind id, or a worker volume returns [`None`]. The caller holds that row.
+pub(super) async fn reopen_idless(
+    journal: &Journal,
+    id: i64,
+    subject: &str,
+) -> Result<Option<i64>, EnsureError> {
+    let rows = journal.rows().await.map_err(map_journal)?;
+    let Some(row) = rows.iter().find(|row| row.id == id) else {
+        return Ok(None);
+    };
+    if row.subject != subject || !idless_self(row, Some(subject)) {
+        return Ok(None);
+    }
+    journal
+        .finish(id, Outcome::DefiniteFailure)
+        .await
+        .map_err(map_journal)?;
+    let (next, fresh) = journal.begin_launch(subject).await.map_err(map_journal)?;
+    Ok(fresh.then_some(next))
 }
 
 fn idless_self(row: &IntentRow, except: Option<&str>) -> bool {
