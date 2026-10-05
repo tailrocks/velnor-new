@@ -103,6 +103,14 @@ fn action_step_to_yaml(
     if job_id == FINAL_JOB_ID && is_verdict_download(step) {
         entries.push(("continue-on-error".to_owned(), Yaml::Bool(true)));
     }
+    if uses.starts_with(crate::tool_seed::TOOL_SEED_USES) {
+        if uses != crate::tool_seed::TOOL_SEED_USES {
+            return Err(RenderError::InvalidWorkflow(
+                "tool_seed_bad_action_ref".to_owned(),
+            ));
+        }
+        crate::tool_seed::validate_seed_action(step, None)?;
+    }
     let uses_yaml = if uses == crate::tool_seed::TOOL_SEED_USES {
         Yaml::annotated(uses, "zizmor: ignore[self-repository]")
     } else {
