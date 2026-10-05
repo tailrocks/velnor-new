@@ -3,8 +3,6 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::time::{SystemTime, UNIX_EPOCH};
-use velnor_actions_contract::{GeneratorReleaseSourceBinding, RoutingWorkflow};
-
 #[path = "schema2_generator_release_api_fixtures.rs"]
 mod api_fixtures;
 use self::api_fixtures::{
@@ -72,112 +70,6 @@ impl Fixture {
         fs::write(&path, text)?;
         Ok(path)
     }
-}
-
-#[test]
-fn manifest_uses_actual_api_urls_and_verifies_the_published_release() -> Result<(), Box<dyn Error>>
-{
-    let fixture = Fixture::new("actual-url")?;
-    let binding = GeneratorReleaseSourceBinding::for_current_workflow(RELEASE_VERSION)?;
-    let source_plan = binding.bind(&fixture.commit)?;
-    assert_eq!(source_plan.tag(), fixture.tag);
-    assert_eq!(source_plan.source_sha(), fixture.commit);
-    let initial = release_json(true, false, &fixture.tag, &fixture.records);
-    let output = run_helper(
-        &fixture,
-        "create",
-        &initial,
-        RELEASE_VERSION,
-        &fixture.commit,
-    );
-    assert_success(&output);
-    let manifest = fs::read_to_string(fixture.manifest())?;
-    for target in [LINUX_TARGET, MACOS_TARGET] {
-        let name = format!("velnor-actions-{RELEASE_VERSION}-{target}");
-        let actual_url = asset_url(&fixture.tag, &name);
-        assert!(manifest.contains(&format!("\"artifact\":\"{actual_url}\"")));
-    }
-    assert!(manifest.contains(&format!("\"commit\":\"{}\"", fixture.commit)));
-    assert!(manifest.contains(&format!("\"version\":\"{RELEASE_VERSION}\"")));
-    assert!(manifest.contains(&format!("\"repository\":\"{REPOSITORY}\"")));
-
-    let helper_output = output_text(&output)?;
-    let digest = helper_output
-        .lines()
-        .find_map(|line| line.strip_prefix("release_manifest_sha256="))
-        .ok_or("missing manifest digest")?
-        .to_owned();
-    let checksum_digest = helper_output
-        .lines()
-        .find_map(|line| line.strip_prefix("release_manifest_checksum_sha256="))
-        .ok_or("missing manifest checksum digest")?
-        .to_owned();
-    let manifest_size = fs::metadata(fixture.manifest())?.len();
-    let checksum_size = fs::metadata(fixture.asset_dir.join(MANIFEST_CHECKSUM_NAME))?.len();
-    let mut final_records = fixture.records.clone();
-    final_records.push(asset_record(
-        MANIFEST_NAME,
-        manifest_size,
-        &digest,
-        Some(&asset_url(&fixture.tag, MANIFEST_NAME)),
-    ));
-    final_records.push(asset_record(
-        MANIFEST_CHECKSUM_NAME,
-        checksum_size,
-        &checksum_digest,
-        Some(&asset_url(&fixture.tag, MANIFEST_CHECKSUM_NAME)),
-    ));
-    let final_asset_names = final_records
-        .iter()
-        .map(|record| record_name(record))
-        .collect::<Result<Vec<_>, _>>()?;
-    assert_eq!(final_asset_names, source_plan.final_asset_names());
-
-    let workflow_request = super::Schema2WorkflowRequest {
-        version: RELEASE_VERSION.to_owned(),
-        hosted_label: "ubuntu-26.04".to_owned(),
-        scale_set: super::Schema2WorkflowRequest::canonical_scale_set()?,
-        workflows: std::collections::BTreeSet::from([RoutingWorkflow::GeneratorRelease]),
-        mbx_qualification: None,
-    };
-    let workflow = crate::yaml::render_yaml(&super::generator_release(&workflow_request)?);
-    assert!(workflow.contains("VELNOR_RELEASE_SOURCE_SHA: ${{ github.sha }}"));
-    assert!(workflow.contains(&source_plan.final_asset_names()[0]));
-    assert!(workflow.contains(&source_plan.final_asset_names()[3]));
-    assert!(workflow.contains("--version '0.1.0'"));
-    assert!(workflow.contains("--target x86_64-unknown-linux-gnu"));
-    assert!(workflow.contains("--target aarch64-apple-darwin"));
-
-    let draft = release_json(true, false, &fixture.tag, &final_records);
-    let output = run_helper(
-        &fixture,
-        "verify-draft",
-        &draft,
-        RELEASE_VERSION,
-        &fixture.commit,
-    );
-    assert_success(&output);
-    let published = release_json(false, true, &fixture.tag, &final_records);
-    let output = run_helper(
-        &fixture,
-        "verify",
-        &published,
-        RELEASE_VERSION,
-        &fixture.commit,
-    );
-    assert_success(&output);
-    Ok(())
-}
-
-fn record_name(record: &str) -> Result<String, Box<dyn Error>> {
-    Ok(record
-        .split_once("\"name\":\"")
-        .ok_or("missing release asset name")?
-        .1
-        .split_once('"')
-        .ok_or("unterminated release asset name")?
-        .0
-        .to_owned())
 }
 
 #[test]
@@ -308,36 +200,6 @@ fn source_target_version_digest_and_asset_path_mismatches_fail() -> Result<(), B
     Ok(())
 }
 
-#[test]
-fn publisher_uploads_acceptance_metadata_only_after_release_verification()
--> Result<(), Box<dyn Error>> {
-    use std::collections::BTreeSet;
-    use velnor_actions_contract::RoutingWorkflow;
-
-    let request = super::Schema2WorkflowRequest {
-        version: RELEASE_VERSION.to_owned(),
-        hosted_label: "ubuntu-26.04".to_owned(),
-        scale_set: super::Schema2WorkflowRequest::canonical_scale_set()?,
-        workflows: BTreeSet::from([RoutingWorkflow::GeneratorRelease]),
-        mbx_qualification: None,
-    };
-    let workflow = crate::yaml::render_yaml(&super::generator_release(&request)?);
-    let publication = workflow
-        .find("name: Publish GitHub release")
-        .ok_or("missing publication step")?;
-    let acceptance = workflow
-        .find("name: Upload verified release metadata")
-        .ok_or("missing acceptance artifact step")?;
-    assert!(publication < acceptance);
-    assert!(workflow.contains("actions: write"));
-    assert!(workflow.contains("contents: write"));
-    assert!(workflow.contains("velnor-actions-release-manifest.json.sha256"));
-    assert!(workflow.contains("velnor-actions-release-acceptance.json"));
-    assert!(workflow.contains("if-no-files-found: error"));
-    assert!(workflow.contains("retention-days: 14"));
-    Ok(())
-}
-
 fn run_helper(
     fixture: &Fixture,
     mode: &str,
@@ -396,3 +258,6 @@ mod url_tests;
 #[cfg(unix)]
 #[path = "schema2_generator_release_publisher_tests.rs"]
 mod publisher_tests;
+
+#[path = "schema2_generator_release_contract_tests.rs"]
+mod contract_tests;
