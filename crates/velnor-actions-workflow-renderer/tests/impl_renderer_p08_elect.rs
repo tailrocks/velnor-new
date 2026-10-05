@@ -5,13 +5,13 @@ use velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION;
 use velnor_actions_contract::{Job, JobTimeout, Step, StepId, StepKind, StepRole};
 use velnor_actions_workflow_renderer::RenderError;
 use velnor_actions_workflow_renderer::cache_p08::{
-    ToolsCacheInputs, ToolsCachePayload, elect_tofu_provider_savers, elect_tools_cache_writers,
+    ToolsCacheInputs, ToolsCachePayload, elect_cache_writers,
 };
 use velnor_actions_workflow_renderer::steps::{
     TOOLS_CACHE_PATHS, TOOLS_RESTORE_NAME, TOOLS_SAVE_NAME, TOOLS_SAVE_USES,
 };
 use velnor_actions_workflow_renderer::tofu_cache::{
-    TOFU_PROVIDERS_SAVE_NAME, TOFU_PROVIDERS_SAVE_USES,
+    TOFU_PROVIDERS_SAVE_NAME, TOFU_PROVIDERS_SAVE_USES, tofu_providers_save_step,
 };
 
 use super::impl_renderer_fixtures::*;
@@ -55,7 +55,7 @@ fn tools_cache_writer_election_prefers_plan_then_lowest_id() -> Result<(), Rende
         ("rust-b".to_owned(), keyed_job("actionlint@1.7.12")?),
         ("rust-c".to_owned(), keyed_job("shellcheck@0.11.0")?),
     ]);
-    elect_tools_cache_writers(&mut jobs)?;
+    elect_cache_writers(&mut jobs)?;
     assert_eq!(
         saved_key(&jobs["plan"]),
         restore_key(&jobs["plan"]),
@@ -72,7 +72,7 @@ fn tools_cache_writer_election_prefers_plan_then_lowest_id() -> Result<(), Rende
         ("rust-b".to_owned(), keyed_job("actionlint@1.7.12")?),
         ("rust-a".to_owned(), keyed_job("actionlint@1.7.12")?),
     ]);
-    elect_tools_cache_writers(&mut jobs)?;
+    elect_cache_writers(&mut jobs)?;
     assert_eq!(
         saved_key(&jobs["rust-a"]),
         restore_key(&jobs["rust-a"]),
@@ -112,7 +112,7 @@ fn tools_cache_writer_saves_exact_payload_and_is_push_gated() -> Result<(), Rend
         ("plan".to_owned(), keyed_job("actionlint@1.7.12")?),
         ("rust-b".to_owned(), keyed_job("actionlint@1.7.12")?),
     ]);
-    elect_tools_cache_writers(&mut jobs)?;
+    elect_cache_writers(&mut jobs)?;
     let saves = tools_saves(&jobs["plan"]);
     assert_eq!(saves.len(), 1, "winner saves once");
     let save = saves[0];
@@ -154,8 +154,8 @@ fn tools_cache_writer_skips_keyless_and_reruns() -> Result<(), RenderError> {
         ("bare".to_owned(), bare),
         ("rust-a".to_owned(), keyed_job("actionlint@1.7.12")?),
     ]);
-    elect_tools_cache_writers(&mut jobs)?;
-    elect_tools_cache_writers(&mut jobs)?;
+    elect_cache_writers(&mut jobs)?;
+    elect_cache_writers(&mut jobs)?;
     assert!(jobs["bare"].steps.is_empty(), "keyless job untouched");
     assert_eq!(
         tools_saves(&jobs["rust-a"]).len(),
@@ -203,6 +203,12 @@ fn provider_job(key: &str, path: &str) -> Job {
     }
 }
 
+fn provider_save() -> Result<Step, RenderError> {
+    let mut save = tofu_providers_save_step()?;
+    save.condition = Some(CACHE_SAVE_CONDITION.to_owned());
+    Ok(save)
+}
+
 /// The provider key one job's single save step archives, when exactly one.
 fn provider_saved_key(job: &Job) -> Option<&str> {
     let saves = provider_saves(job);
@@ -248,7 +254,7 @@ fn provider_writer_election_elects_lowest_id_per_key() -> Result<(), RenderError
             provider_job(PROVIDER_KEY_B, PROVIDER_PATH_B),
         ),
     ]);
-    elect_tofu_provider_savers(&mut jobs)?;
+    elect_cache_writers(&mut jobs)?;
     assert_eq!(
         provider_saved_key(&jobs["tofu-a"]),
         Some(velnor_actions_contract::workflow::step_identity::TOFU_PROVIDERS_KEY_OUTPUT_EXPR),
@@ -273,7 +279,7 @@ fn provider_writer_election_saves_push_gated_exact_entry() -> Result<(), RenderE
         "tofu-a".to_owned(),
         provider_job(PROVIDER_KEY_A, PROVIDER_PATH_A),
     )]);
-    elect_tofu_provider_savers(&mut jobs)?;
+    elect_cache_writers(&mut jobs)?;
     let saves = provider_saves(&jobs["tofu-a"]);
     assert_eq!(saves.len(), 1, "winner saves once");
     let save = saves[0];
@@ -317,8 +323,8 @@ fn provider_writer_election_skips_keyless_and_reruns() -> Result<(), RenderError
             provider_job(PROVIDER_KEY_A, PROVIDER_PATH_A),
         ),
     ]);
-    elect_tofu_provider_savers(&mut jobs)?;
-    elect_tofu_provider_savers(&mut jobs)?;
+    elect_cache_writers(&mut jobs)?;
+    elect_cache_writers(&mut jobs)?;
     assert!(jobs["bare"].steps.is_empty(), "keyless job untouched");
     assert_eq!(
         provider_saves(&jobs["tofu-a"]).len(),
@@ -329,10 +335,69 @@ fn provider_writer_election_skips_keyless_and_reruns() -> Result<(), RenderError
 }
 
 #[test]
+fn cache_election_validates_both_families_before_mutating_jobs() -> Result<(), RenderError> {
+    let mut losing_provider = provider_job(PROVIDER_KEY_A, PROVIDER_PATH_A);
+    losing_provider.steps.push(provider_save()?);
+    let mut jobs = BTreeMap::from([
+        ("plan".to_owned(), keyed_job("actionlint@1.7.12")?),
+        (
+            "tofu-a".to_owned(),
+            provider_job(PROVIDER_KEY_A, PROVIDER_PATH_A),
+        ),
+        ("tofu-b".to_owned(), losing_provider),
+    ]);
+    let original = jobs
+        .iter()
+        .map(|(id, job)| (id.clone(), job.steps.clone()))
+        .collect::<BTreeMap<_, _>>();
+
+    assert!(elect_cache_writers(&mut jobs).is_err());
+    for (id, steps) in original {
+        assert_eq!(jobs[&id].steps, steps, "failed election mutated {id}");
+    }
+    assert!(tools_saves(&jobs["plan"]).is_empty());
+    Ok(())
+}
+
+#[test]
 fn tools_cache_writer_rejects_restore_without_identity() -> Result<(), RenderError> {
     let mut malformed = keyed_job("actionlint@1.7.12")?;
     malformed.steps.remove(0);
     let mut jobs = BTreeMap::from([("rust-z".to_owned(), malformed)]);
-    assert!(elect_tools_cache_writers(&mut jobs).is_err());
+    assert!(elect_cache_writers(&mut jobs).is_err());
+    Ok(())
+}
+
+#[test]
+fn tools_cache_election_binds_restore_to_static_identity_digest() -> Result<(), RenderError> {
+    let mut malformed = keyed_job("actionlint@1.7.12")?;
+    let key = restore_key(&malformed).map(str::to_owned);
+    let identity = &mut malformed.steps[0];
+    let StepKind::Action { with, .. } = &mut identity.kind else {
+        return Err(RenderError::InvalidWorkflow("test_identity_not_action".to_owned()));
+    };
+    with.insert("d".to_owned(), "f".repeat(64));
+    assert_eq!(restore_key(&malformed), key.as_deref());
+    let original = malformed.steps.clone();
+    let mut jobs = BTreeMap::from([("rust-a".to_owned(), malformed)]);
+
+    assert!(elect_cache_writers(&mut jobs).is_err());
+    assert_eq!(jobs["rust-a"].steps, original);
+    Ok(())
+}
+
+#[test]
+fn tools_cache_election_ignores_save_presentation_name() -> Result<(), RenderError> {
+    let mut jobs = BTreeMap::from([("plan".to_owned(), keyed_job("actionlint@1.7.12")?)]);
+    elect_cache_writers(&mut jobs)?;
+    let save = jobs["plan"]
+        .steps
+        .iter_mut()
+        .find(|step| step.role == Some(StepRole::ToolsCacheSave))
+        .ok_or_else(|| RenderError::InvalidWorkflow("test_save_missing".to_owned()))?;
+    save.name = "Store Mise payload".to_owned();
+
+    elect_cache_writers(&mut jobs)?;
+    assert_eq!(tools_saves(&jobs["plan"]).len(), 1);
     Ok(())
 }
