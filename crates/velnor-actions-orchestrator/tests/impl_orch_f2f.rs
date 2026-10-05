@@ -36,6 +36,7 @@ fn members() -> Vec<&'static str> {
         "crates/velnor-actions-cli",
         "crates/velnor-actions-contract",
         "crates/velnor-actions-mise",
+        "crates/velnor-actions-native",
         "crates/velnor-actions-orchestrator",
         "crates/velnor-actions-rust",
         "crates/velnor-actions-tofu",
@@ -46,7 +47,13 @@ fn members() -> Vec<&'static str> {
 #[test]
 fn crate_boundaries_match_architecture_dependency_direction() -> TestResult {
     let output = std::process::Command::new("cargo")
-        .args(["metadata", "--format-version", "1", "--manifest-path"])
+        .args([
+            "metadata",
+            "--locked",
+            "--format-version",
+            "1",
+            "--manifest-path",
+        ])
         .arg(repo_root().join("Cargo.toml"))
         .current_dir(repo_root())
         .output()?;

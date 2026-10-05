@@ -61,7 +61,7 @@ fn chdir_findings_name_each_subdir_root_once() {
         }
     }
     let mut warnings = Vec::new();
-    push_chdir_findings(&discovery, &mut warnings);
+    push_chdir_findings(&discovery, &mut warnings).expect("valid proposal roots");
     assert_eq!(
         warnings,
         vec![
@@ -80,7 +80,7 @@ fn chdir_findings_name_each_subdir_root_once() {
         .proposals
         .push(velnor_actions_tofu::propose_task(&group).expect("proposes"));
     let mut silent = Vec::new();
-    push_chdir_findings(&root_only, &mut silent);
+    push_chdir_findings(&root_only, &mut silent).expect("valid repo root");
     assert!(silent.is_empty());
 }
 
@@ -121,11 +121,11 @@ fn derive_tofu_proposes_triples_with_fmt_scope_targets() {
     assert!(fmt.iter().all(|task| !task.no_targets));
     let validate = tasks
         .iter()
-        .find(|task| task.task_id == "stack/tofu/stacks/b/validate/default")
+        .find(|task| task.task_id == "stack/tofu/dir-737461636b732f62/validate/default")
         .expect("second validate");
     assert_eq!(
         validate.depends_on,
-        vec!["stack/tofu/stacks/b/init/default".to_owned()]
+        vec!["stack/tofu/dir-737461636b732f62/init/default".to_owned()]
     );
 }
 
@@ -141,9 +141,13 @@ fn derive_tofu_merges_nested_fmt_scopes() {
             .find(|task| task.task_kind == "fmt" && task.identity.unit_id == unit)
             .map(|task| task.no_targets)
     };
-    assert_eq!(fmt_no_targets("root"), Some(false), "outer fmt runs");
     assert_eq!(
-        fmt_no_targets("stacks/a"),
+        fmt_no_targets(&key_for_root("")),
+        Some(false),
+        "outer fmt runs"
+    );
+    assert_eq!(
+        fmt_no_targets(&key_for_root("stacks/a")),
         Some(true),
         "covered inner fmt skips"
     );
@@ -173,8 +177,8 @@ fn derive_tofu_inits_once_per_root() {
     assert_eq!(
         inits,
         [
-            "stack/tofu/stacks/a/init/default",
-            "stack/tofu/stacks/b/init/default",
+            "stack/tofu/dir-737461636b732f61/init/default",
+            "stack/tofu/dir-737461636b732f62/init/default",
         ],
         "duplicate statuses still derive one init per root"
     );
@@ -230,4 +234,14 @@ fn no_tofu_roots_passes_through_without_git() {
     assert_eq!(rust, changed);
     assert!(tofu.is_empty());
     assert!(warnings.is_empty());
+}
+
+#[test]
+fn chdir_findings_reject_contradictory_root_authorities() {
+    let mut discovery = discovery_with(Vec::new(), Vec::new());
+    discovery.proposals = derive_tofu(&[selected("root")], &[]).expect("proposals");
+    discovery.proposals[0].identity.project_root = ".".to_owned();
+    let err = push_chdir_findings(&discovery, &mut Vec::new())
+        .expect_err("changed root authority must fail");
+    assert!(err.to_string().contains("proposal_root_mismatch"), "{err}");
 }
