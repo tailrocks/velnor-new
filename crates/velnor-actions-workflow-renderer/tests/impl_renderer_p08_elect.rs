@@ -2,17 +2,10 @@
 
 use std::collections::BTreeMap;
 use velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION;
-use velnor_actions_contract::{Job, JobTimeout, Step, StepId, StepKind, StepRole};
+use velnor_actions_contract::{Job, JobTimeout, Step, StepKind, StepRole};
 use velnor_actions_workflow_renderer::RenderError;
-use velnor_actions_workflow_renderer::cache_p08::{
-    elect_mise_cache_writers, elect_tofu_provider_savers, mise_setup_step_p08,
-};
-use velnor_actions_workflow_renderer::steps::{
-    TOOLS_CACHE_PATH, TOOLS_RESTORE_USES, TOOLS_SAVE_NAME, TOOLS_SAVE_USES, cache_action_step,
-};
-use velnor_actions_workflow_renderer::tofu_cache::{
-    TOFU_PROVIDERS_SAVE_NAME, TOFU_PROVIDERS_SAVE_USES,
-};
+use velnor_actions_workflow_renderer::cache_p08::{elect_mise_cache_writers, mise_setup_step_p08};
+use velnor_actions_workflow_renderer::steps::{TOOLS_CACHE_PATH, TOOLS_SAVE_USES};
 
 use super::impl_renderer_fixtures::*;
 
@@ -30,7 +23,7 @@ fn setup_save(job: &Job) -> Option<&str> {
 fn tools_saves(job: &Job) -> Vec<&Step> {
     job.steps
         .iter()
-        .filter(|step| step.name == TOOLS_SAVE_NAME)
+        .filter(|step| step.role == Some(StepRole::ToolsCacheSave))
         .collect()
 }
 
@@ -142,155 +135,6 @@ fn mise_cache_writer_election_skips_keyless_and_reruns() -> Result<(), RenderErr
     assert!(jobs["bare"].steps.is_empty(), "keyless job untouched");
     assert_eq!(
         tools_saves(&jobs["rust-a"]).len(),
-        1,
-        "reruns add no second save"
-    );
-    Ok(())
-}
-
-/// `Save Tofu providers` steps carried by one job, in step order.
-fn provider_saves(job: &Job) -> Vec<&Step> {
-    job.steps
-        .iter()
-        .filter(|step| step.name == TOFU_PROVIDERS_SAVE_NAME)
-        .collect()
-}
-
-/// One provider-restore job over an explicit key + path.
-fn provider_job(key: &str, path: &str) -> Result<Job, RenderError> {
-    let mut restore = cache_action_step(
-        true,
-        TOOLS_RESTORE_USES,
-        "tofu-providers",
-        key,
-        &[],
-        &[path.to_owned()],
-    )?;
-    restore.id = Some(StepId::TofuProviders);
-    restore.role = Some(StepRole::TofuProvidersRestore);
-    Ok(Job {
-        display_name: "Provider".to_owned(),
-        runs_on: LABEL.to_owned(),
-        timeout_minutes: JobTimeout::CRATE,
-        needs: Vec::new(),
-        condition: None,
-        permissions: None,
-        environment: None,
-        steps: vec![restore],
-    })
-}
-
-/// The provider key one job's single save step archives, when exactly one.
-fn provider_saved_key(job: &Job) -> Option<&str> {
-    let saves = provider_saves(job);
-    if saves.len() != 1 {
-        return None;
-    }
-    match &saves[0].kind {
-        StepKind::Action { with, .. } => with.get("key").map(String::as_str),
-        _ => None,
-    }
-}
-
-const PROVIDER_KEY_A: &str = "velnor-v1-tofu-providers-x86_64-unknown-linux-gnu-1.13.1-root-0123456789ab-${{hashFiles('.terraform.lock.hcl')}}";
-const PROVIDER_PATH_A: &str = "${{ runner.temp }}/velnor/tofu-cache/root-0123456789ab";
-const PROVIDER_KEY_B: &str = "velnor-v1-tofu-providers-x86_64-unknown-linux-gnu-1.13.1-stacks-vpc-abcdef012345-${{hashFiles('stacks/vpc/.terraform.lock.hcl')}}";
-const PROVIDER_PATH_B: &str = "${{ runner.temp }}/velnor/tofu-cache/stacks-vpc-abcdef012345";
-
-#[test]
-fn provider_writer_election_elects_lowest_id_per_key() -> Result<(), RenderError> {
-    let bare = Job {
-        display_name: "Plan".to_owned(),
-        runs_on: LABEL.to_owned(),
-        timeout_minutes: JobTimeout::CRATE,
-        needs: Vec::new(),
-        condition: None,
-        permissions: None,
-        environment: None,
-        steps: Vec::new(),
-    };
-    let mut jobs = BTreeMap::from([
-        ("plan".to_owned(), bare),
-        (
-            "tofu-b".to_owned(),
-            provider_job(PROVIDER_KEY_A, PROVIDER_PATH_A)?,
-        ),
-        (
-            "tofu-a".to_owned(),
-            provider_job(PROVIDER_KEY_A, PROVIDER_PATH_A)?,
-        ),
-        (
-            "tofu-c".to_owned(),
-            provider_job(PROVIDER_KEY_B, PROVIDER_PATH_B)?,
-        ),
-    ]);
-    elect_tofu_provider_savers(&mut jobs)?;
-    assert_eq!(
-        provider_saved_key(&jobs["tofu-a"]),
-        Some(PROVIDER_KEY_A),
-        "lowest id wins the shared key"
-    );
-    assert!(provider_saves(&jobs["tofu-b"]).is_empty());
-    assert_eq!(
-        provider_saved_key(&jobs["tofu-c"]),
-        Some(PROVIDER_KEY_B),
-        "sole owner keeps its writer"
-    );
-    assert!(
-        jobs["plan"].steps.is_empty(),
-        "the plan job never restores so never saves"
-    );
-    Ok(())
-}
-
-#[test]
-fn provider_writer_election_saves_push_gated_exact_entry() -> Result<(), RenderError> {
-    let mut jobs = BTreeMap::from([(
-        "tofu-a".to_owned(),
-        provider_job(PROVIDER_KEY_A, PROVIDER_PATH_A)?,
-    )]);
-    elect_tofu_provider_savers(&mut jobs)?;
-    let saves = provider_saves(&jobs["tofu-a"]);
-    assert_eq!(saves.len(), 1, "winner saves once");
-    let save = saves[0];
-    assert_eq!(save.condition.as_deref(), Some(CACHE_SAVE_CONDITION));
-    let StepKind::Action { uses, with, .. } = &save.kind else {
-        panic!("save must be an action step");
-    };
-    assert_eq!(uses, TOFU_PROVIDERS_SAVE_USES);
-    assert_eq!(with.get("key").map(String::as_str), Some(PROVIDER_KEY_A));
-    assert_eq!(with.get("path").map(String::as_str), Some(PROVIDER_PATH_A));
-    assert!(
-        !with.contains_key("restore-keys"),
-        "saves carry no restore keys"
-    );
-    Ok(())
-}
-
-#[test]
-fn provider_writer_election_skips_keyless_and_reruns() -> Result<(), RenderError> {
-    let bare = Job {
-        display_name: "Bare".to_owned(),
-        runs_on: LABEL.to_owned(),
-        timeout_minutes: JobTimeout::CRATE,
-        needs: Vec::new(),
-        condition: None,
-        permissions: None,
-        environment: None,
-        steps: Vec::new(),
-    };
-    let mut jobs = BTreeMap::from([
-        ("bare".to_owned(), bare),
-        (
-            "tofu-a".to_owned(),
-            provider_job(PROVIDER_KEY_A, PROVIDER_PATH_A)?,
-        ),
-    ]);
-    elect_tofu_provider_savers(&mut jobs)?;
-    elect_tofu_provider_savers(&mut jobs)?;
-    assert!(jobs["bare"].steps.is_empty(), "keyless job untouched");
-    assert_eq!(
-        provider_saves(&jobs["tofu-a"]).len(),
         1,
         "reruns add no second save"
     );

@@ -14,6 +14,7 @@ pub mod qualification;
 pub mod report;
 pub mod step;
 pub mod step_identity;
+mod step_protocol;
 pub mod timeout;
 pub mod trust;
 pub use artifacts::{

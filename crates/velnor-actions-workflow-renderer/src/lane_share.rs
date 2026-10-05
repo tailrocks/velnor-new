@@ -135,6 +135,14 @@ pub(crate) fn share_lanes(
 
 /// Validate the expanded workflow-job and composite-action step scopes.
 fn validate_serialized_scopes(shared: &LaneShare) -> Result<(), RenderError> {
+    // Validate each full source job before its common body moves into a
+    // composite. Provider restore/admission/use can span the hosted/local
+    // prelude and the shared composite, so validating only the serialized
+    // workflow steps and composite body independently would lose that order.
+    for (id, steps) in &shared.env_steps {
+        velnor_actions_contract::workflow::step_identity::validate_step_sequence(steps, id)
+            .map_err(RenderError::Contract)?;
+    }
     for (id, job) in &shared.jobs {
         let Some(checkout) = shared.checkouts.get(id) else {
             velnor_actions_contract::workflow::step_identity::validate_step_sequence(
@@ -153,7 +161,7 @@ fn validate_serialized_scopes(shared: &LaneShare) -> Result<(), RenderError> {
         if let Some(postlude) = shared.postludes.get(id) {
             steps.extend(postlude.iter().cloned());
         }
-        velnor_actions_contract::workflow::step_identity::validate_step_sequence(&steps, id)
+        velnor_actions_contract::workflow::step_identity::validate_step_identity_scope(&steps, id)
             .map_err(RenderError::Contract)?;
     }
     Ok(())
@@ -344,7 +352,7 @@ fn composite_file(
     steps: &[Step],
     ctx: &RenderContext,
 ) -> Result<RenderedFile, RenderError> {
-    velnor_actions_contract::workflow::step_identity::validate_step_sequence(
+    velnor_actions_contract::workflow::step_identity::validate_step_identity_scope(
         steps,
         &format!("composite:{logical}"),
     )

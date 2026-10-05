@@ -7,6 +7,10 @@ use std::collections::BTreeSet;
 
 /// Fixed local action path used for exact provider-cache admission.
 pub const TOFU_PROVIDER_ADMISSION_USES: &str = "./.github/actions/tofu-provider-admission";
+/// Expression path for the job-private `OpenTofu` plugin cache.
+pub const TOFU_PROVIDER_CACHE_BASE_EXPR: &str = "${{ runner.temp }}/velnor/tofu-cache";
+/// Exact-key layer identity shared by the restore and save protocol.
+pub const TOFU_PROVIDERS_KEY_PREFIX: &str = "velnor-v1-tofu-providers";
 
 /// Stable GitHub Actions id for a step whose outputs have consumers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -106,6 +110,8 @@ pub enum StepRole {
     TofuProvidersRestore,
     /// `OpenTofu` provider-cache admission before any provider consumer.
     TofuProvidersAdmission,
+    /// `OpenTofu` init/validate shell that consumes the admitted plugin cache.
+    TofuProviderUse,
     /// Pre-seed build of the candidate helper.
     PreseedBuild,
     /// Pre-seed manifest creation.
@@ -157,6 +163,7 @@ impl StepRole {
                     && with.get("persist-credentials").is_some_and(|value| value == "false")),
             Self::MiseSetup => valid_mise_setup(kind),
             Self::TofuProvidersAdmission => valid_tofu_admission(kind),
+            Self::TofuProviderUse => super::step_protocol::valid_provider_use(kind),
             Self::PlanProducer => internal_operation(kind, "plan-v1"),
             Self::BaselinePublisher => internal_operation(kind, "publish-baseline-v1"),
             Self::FetchReports => internal_operation(kind, "fetch-reports-v1"),
@@ -167,16 +174,14 @@ impl StepRole {
             | Self::MatrixReportUpload
             | Self::PublishFinal
             | Self::PreseedUpload => action_has_prefix_for_kind(kind, "actions/upload-artifact@"),
-            Self::ToolsCacheSave
-            | Self::TofuProvidersSave
-            | Self::MbxBundleSave
-            | Self::CargoSourcesSave => action_has_prefix_for_kind(kind, "actions/cache/save@"),
+            Self::ToolsCacheSave | Self::MbxBundleSave | Self::CargoSourcesSave => {
+                action_has_prefix_for_kind(kind, "actions/cache/save@")
+            }
             Self::CargoSourcesRestore | Self::MbxBundleRestore => {
                 action_has_prefix_for_kind(kind, "actions/cache/restore@")
             }
-            Self::TofuProvidersRestore => matches!(kind, StepKind::Action { uses, with, .. }
-                if action_has_prefix(uses, "actions/cache/restore@")
-                    && with.get("restore-keys").is_some_and(String::is_empty)),
+            Self::TofuProvidersRestore => super::step_protocol::valid_provider_restore(kind),
+            Self::TofuProvidersSave => super::step_protocol::valid_provider_save(kind),
             Self::CargoRegistryRestore => action_has_prefix_for_kind(kind, "Swatinem/rust-cache@"),
             Self::MbxCache => valid_mbx_cache(kind, false),
             Self::MbxLocalSetup => valid_mbx_cache(kind, true),
@@ -290,6 +295,25 @@ fn valid_mbx_cache(kind: &StepKind, local: bool) -> bool {
 ///
 /// Returns a contract error for an invalid role/payload or duplicate step ID.
 pub fn validate_step_sequence(steps: &[Step], scope: &str) -> Result<(), ContractError> {
+    validate_step_identities(steps, scope)?;
+    super::step_protocol::validate_tofu_provider_sequence(steps, scope)
+}
+
+/// Validate IDs and role payloads in a partial serialized scope.
+///
+/// Use this for a composite body or an expanded workflow scope assembled
+/// from only the steps serialized at that level. Call
+/// [`validate_step_sequence`] on the full source sequence to enforce any
+/// cross-step provider-cache protocol before factoring.
+/// # Errors
+///
+/// Returns a contract error for an invalid role/payload or duplicate output ID.
+pub fn validate_step_identity_scope(steps: &[Step], scope: &str) -> Result<(), ContractError> {
+    validate_step_identities(steps, scope)
+}
+
+/// Validate each step and require unique IDs within one serialized scope.
+fn validate_step_identities(steps: &[Step], scope: &str) -> Result<(), ContractError> {
     let mut ids = BTreeSet::new();
     for step in steps {
         step.validate(scope)?;

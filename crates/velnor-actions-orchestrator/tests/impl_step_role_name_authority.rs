@@ -92,6 +92,7 @@ fn rename_authority_steps(jobs: &mut std::collections::BTreeMap<String, Job>) {
         StepRole::CargoSourcesFetch,
         StepRole::TofuProvidersRestore,
         StepRole::TofuProvidersAdmission,
+        StepRole::TofuProviderUse,
         StepRole::MbxPreflight,
         StepRole::MbxCache,
     ] {
@@ -176,6 +177,7 @@ fn is_authority_role(role: StepRole) -> bool {
             | StepRole::ToolsCacheSave
             | StepRole::TofuProvidersRestore
             | StepRole::TofuProvidersAdmission
+            | StepRole::TofuProviderUse
             | StepRole::TofuProvidersSave
             | StepRole::MbxPreflight
             | StepRole::MbxCache

@@ -5,7 +5,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Job, StepKind, StepRole};
+use velnor_actions_contract::{Job, Step, StepKind, StepRole};
 
 use crate::{RenderError, setup::MISE_ACTION_NAME};
 
@@ -65,6 +65,8 @@ pub fn elect_tofu_provider_savers(jobs: &mut BTreeMap<String, Job>) -> Result<()
     let mut by_key: BTreeMap<String, Vec<String>> = BTreeMap::new();
     let mut path_for: BTreeMap<String, String> = BTreeMap::new();
     for (id, job) in jobs.iter() {
+        velnor_actions_contract::workflow::step_identity::validate_step_sequence(&job.steps, id)
+            .map_err(RenderError::Contract)?;
         if let Some((key, path)) = provider_restore_entry(job) {
             if let Some(existing) = path_for.get(&key)
                 && existing != &path
@@ -84,8 +86,17 @@ pub fn elect_tofu_provider_savers(jobs: &mut BTreeMap<String, Job>) -> Result<()
         let Some(path) = path_for.get(key) else {
             continue;
         };
-        if let Some(job) = jobs.get_mut(winner) {
-            append_provider_save(job, key, path)?;
+        for owner in owners {
+            let Some(job) = jobs.get_mut(owner) else {
+                continue;
+            };
+            if owner == winner {
+                append_provider_save(job, key, path)?;
+            } else if has_provider_save(job) {
+                return Err(RenderError::InvalidWorkflow(format!(
+                    "tofu_provider_save_not_elected:{owner}"
+                )));
+            }
         }
     }
     Ok(())
@@ -126,17 +137,61 @@ fn provider_restore_entry(job: &Job) -> Option<(String, String)> {
 /// reads, so a push-seeded entry warms every later restore of the
 /// key. Jobs that already carry the save keep exactly one.
 fn append_provider_save(job: &mut Job, key: &str, path: &str) -> Result<(), RenderError> {
-    if job
+    let restore_entry = provider_restore_entry(job);
+    if restore_entry
+        .as_ref()
+        .is_none_or(|(restore_key, restore_path)| restore_key != key || restore_path != path)
+    {
+        return Err(RenderError::InvalidWorkflow(
+            "tofu_provider_save_restore_mismatch".to_owned(),
+        ));
+    }
+    let saves: Vec<&Step> = job
         .steps
         .iter()
-        .any(|step| step.role == Some(StepRole::TofuProvidersSave))
-    {
+        .filter(|step| step.role == Some(StepRole::TofuProvidersSave))
+        .collect();
+    if saves.len() > 1 {
+        return Err(RenderError::InvalidWorkflow(
+            "tofu_provider_save_duplicate".to_owned(),
+        ));
+    }
+    if let Some(save) = saves.first() {
+        let StepKind::Action { uses, with, env } = &save.kind else {
+            return Err(RenderError::InvalidWorkflow(
+                "tofu_provider_save_shape".to_owned(),
+            ));
+        };
+        if !uses.starts_with("actions/cache/save@")
+            || !env.is_empty()
+            || with.len() != 2
+            || with.get("key").map(String::as_str) != Some(key)
+            || with.get("path").map(String::as_str) != Some(path)
+        {
+            return Err(RenderError::InvalidWorkflow(
+                "tofu_provider_save_restore_mismatch".to_owned(),
+            ));
+        }
+        if save.condition.as_deref()
+            != Some(velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION)
+        {
+            return Err(RenderError::InvalidWorkflow(
+                "tofu_provider_save_gate_mismatch".to_owned(),
+            ));
+        }
         return Ok(());
     }
     let mut save = crate::tofu_cache::tofu_providers_save_step(key, path)?;
     save.condition = Some(velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION.to_owned());
     job.steps.push(save);
     Ok(())
+}
+
+/// True when one job already carries a typed provider save.
+fn has_provider_save(job: &Job) -> bool {
+    job.steps
+        .iter()
+        .any(|step| step.role == Some(StepRole::TofuProvidersSave))
 }
 
 /// This job's Mise built-in cache key, when its setup carries one.

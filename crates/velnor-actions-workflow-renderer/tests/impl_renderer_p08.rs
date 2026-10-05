@@ -1,7 +1,7 @@
 //! P08 renderer cases: built-in Mise cache, sources paths, rust-cache gates.
 
 use std::collections::BTreeMap;
-use velnor_actions_contract::{Job, JobTimeout, StepKind, StepRole};
+use velnor_actions_contract::{Job, JobTimeout, StepId, StepKind, StepRole};
 use velnor_actions_workflow_renderer::cache_p08::{
     check_mbx_before_fetch, check_no_rust_cache_with_mbx, infer_job_tools,
     mise_cache_key_for_tools, mise_setup_step_p08, tools_digest,
@@ -250,7 +250,7 @@ fn mbx_restore_precedes_fetch() {
     };
     let mbx = velnor_actions_contract::Step {
         name: "Restore MBX objects".to_owned(),
-        id: None,
+        id: Some(StepId::MbxCacheRestore),
         role: Some(StepRole::MbxCache),
         condition: None,
         kind: StepKind::Action {

@@ -15,7 +15,8 @@ use crate::internal::internal;
 pub(crate) const TOFU_PROVIDERS_KEY_PREFIX: &str =
     velnor_actions_workflow_renderer::tofu_cache::TOFU_PROVIDERS_KEY_PREFIX;
 /// Owned plugin-cache base (expression form; mirrors the renderer's).
-pub(crate) const TOFU_PROVIDER_CACHE_BASE_EXPR: &str = "${{ runner.temp }}/velnor/tofu-cache";
+pub(crate) const TOFU_PROVIDER_CACHE_BASE_EXPR: &str =
+    velnor_actions_workflow_renderer::tofu_cache::TOFU_PROVIDER_CACHE_BASE_EXPR;
 /// Per-root provider-cache key: target + tofu + root slug + lock hash.
 ///
 /// Static segments invalidate exactly when pins or the root change;
