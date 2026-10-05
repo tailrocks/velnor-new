@@ -9,7 +9,64 @@ use crate::worker::{dind_create, join_dind_net, runner_create};
 use crate::{IntentState, Journal, Outcome};
 
 #[tokio::test]
-async fn crash_after_create_recovers_ids_cleans_pair_and_starts_new_generation()
+async fn pending_and_uncertain_rows_keep_owned_volumes_without_remote_settlement()
+-> Result<(), String> {
+    unresolved_volume_row_keeps_occupancy("pending-volume", false).await?;
+    unresolved_volume_row_keeps_occupancy("uncertain-volume", true).await
+}
+
+async fn unresolved_volume_row_keeps_occupancy(label: &str, uncertain: bool) -> Result<(), String> {
+    let (scratch, journal) = open(label).await?;
+    let engine = Engine::new();
+    let (row, fresh) = journal
+        .begin_launch("remote-operation")
+        .await
+        .map_err(|err| err.to_string())?;
+    assert!(fresh);
+    let volume = crate::worker::new_worker_volume().map_err(|err| err.to_string())?;
+    journal
+        .bind_worker_volume(row, &volume)
+        .await
+        .map_err(|err| err.to_string())?;
+    engine
+        .prepare_volumes(&volume)
+        .await
+        .map_err(|err| err.to_string())?;
+    if uncertain {
+        journal
+            .finish(row, Outcome::Uncertain)
+            .await
+            .map_err(|err| err.to_string())?;
+    }
+
+    let decision = admission(&engine, &journal, 1, 1, 0, &assigned_wait(15, 1))
+        .await
+        .map_err(|err| err.to_string())?;
+    assert_eq!(decision, Admit::Hold);
+    let rows = journal.rows().await.map_err(|err| err.to_string())?;
+    assert_eq!(rows.len(), 1);
+    assert_eq!(
+        rows[0].state,
+        if uncertain {
+            IntentState::Uncertain
+        } else {
+            IntentState::Pending
+        }
+    );
+    assert_eq!(rows[0].worker_volume.as_deref(), Some(volume.as_str()));
+    assert!(!rows[0].cleanup_proven);
+    assert!(engine.removed().map_err(|err| err.to_string())?.is_empty());
+    assert!(
+        engine
+            .removed_volumes()
+            .map_err(|err| err.to_string())?
+            .is_empty()
+    );
+    absent(&scratch.file())
+}
+
+#[tokio::test]
+async fn completed_worker_exit_recovers_ids_cleans_pair_and_starts_new_generation()
 -> Result<(), String> {
     let (scratch, journal) = open("worker-crash").await?;
     let engine = Engine::new();
@@ -23,7 +80,7 @@ async fn crash_after_create_recovers_ids_cleans_pair_and_starts_new_generation()
     assert_eq!(rows.len(), 1);
     assert_eq!(rows[0].docker_id.as_deref(), Some(runner.as_str()));
     assert_eq!(rows[0].dind_id.as_deref(), Some(dind.as_str()));
-    assert_eq!(rows[0].state, IntentState::Uncertain);
+    assert_eq!(rows[0].state, IntentState::Done);
     assert!(!rows[0].cleanup_proven);
     assert!(engine.removed().map_err(|err| err.to_string())?.is_empty());
 
@@ -91,7 +148,7 @@ async fn create_unbound_pair(
         .await
         .map_err(|err| err.to_string())?;
     journal
-        .finish(row, Outcome::Uncertain)
+        .finish(row, Outcome::Done)
         .await
         .map_err(|err| err.to_string())?;
     engine
@@ -178,7 +235,7 @@ async fn foreign_container_at_owned_name_is_not_adopted_or_removed() -> Result<(
         .await
         .map_err(|err| err.to_string())?;
     journal
-        .finish(row, Outcome::Uncertain)
+        .finish(row, Outcome::Done)
         .await
         .map_err(|err| err.to_string())?;
     engine

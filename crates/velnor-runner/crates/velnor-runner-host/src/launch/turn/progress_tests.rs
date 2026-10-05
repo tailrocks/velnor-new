@@ -113,10 +113,7 @@ async fn ack_error_propagates_without_start_or_repoll() -> Result<(), String> {
     let mut workers = Vec::new();
     assert_eq!(
         pump(&mut host, &mut workers, 1).await,
-        Err(EnsureError::Unexpected {
-            status: 0,
-            step: "session",
-        })
+        Err(EnsureError::Uncertain)
     );
     assert_eq!(host.poll_count, 1);
     assert_eq!(host.script.calls, ["ack"]);
