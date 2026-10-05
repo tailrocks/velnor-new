@@ -23,6 +23,7 @@ rundir="$(mktemp -d /tmp/tar-sem-layout.XXXXXX)"
 cp "$here/tar-shim.sh" "$here/tar-absolute.sh" "$here/tar-extract.sh" "$here/tar-extract-plan.sh" "$rundir/"
 cp "$here/tar-pax.pl" "$rundir/velnor-tar-pax"
 cp "$here/tar-member.pl" "$rundir/"
+cp "$here/tar-dir-meta.pl" "$rundir/"
 cp "$here/tar-member-stream.pl" "$rundir/"
 cp "$here/tar-member-rewrite.pl" "$rundir/"
 chmod 0755 "$rundir/tar-shim.sh" "$rundir/velnor-tar-pax" "$rundir/tar-member.pl"
@@ -365,6 +366,7 @@ run_case symlink-inside case_symlink_inside
 run_case external-relative-symlink case_external_relative_symlink
 run_case mode-and-mtime case_mode_and_mtime
 run_case directory-metadata case_directory_metadata
+run_case many-directory-metadata case_many_directory_metadata
 run_case restrictive-parent-metadata case_restrictive_parent_metadata
 run_case rewritten-long-paths case_rewritten_long_paths
 run_case rewritten-pax-member case_rewritten_pax_member

@@ -14,11 +14,7 @@ dest_root=""
 isolated_any=0
 extract_all=0
 member_pl=""
-dir_restore_path=()
-dir_restore_mode=()
-dir_restore_mtime=()
-dir_restore_depth=()
-declare -A dir_restore_index=()
+dir_meta_file=""
 dir_metadata_restored=0
 
 cleanup_extract() {
@@ -42,8 +38,12 @@ cleanup_extract() {
     prod_pid=""
   fi
   if [ "${dir_metadata_restored}" -eq 0 ] && \
-    [ "${#dir_restore_path[@]}" -gt 0 ]; then
+    [ -n "${dir_meta_file}" ] && [ -s "${dir_meta_file}" ]; then
     restore_directory_metadata || true
+  fi
+  if [ -n "${dir_meta_file}" ]; then
+    rm -f -- "$dir_meta_file"
+    dir_meta_file=""
   fi
   if [ -n "${stage_dir}" ]; then
     rm -rf -- "$stage_dir"

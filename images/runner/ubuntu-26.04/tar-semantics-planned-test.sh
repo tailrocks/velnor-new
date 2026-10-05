@@ -1,5 +1,52 @@
 # Planned extraction regressions shared by tar-semantics-test.sh.
 
+case_many_directory_metadata() {
+  local root="$work/many-dir" i mode mtime forks old_path dir
+  local -a args=()
+  rm -rf -- "$root"
+  mkdir -p "$root/dest/repo" "$root/bin"
+  for i in $(seq 0 47); do
+    args+=(d "../ext/d$(printf '%02d' "$i")/" 0750 $((1600000000 + i)))
+    args+=(f "../ext/d$(printf '%02d' "$i")/child" "payload-$i")
+  done
+  write_ustar "$root/arc.tar" "${args[@]}" || return 1
+  cat >"$root/bin/touch" <<'EOF'
+#!/bin/sh
+printf 'touch\n' >>"$VELNOR_FORK_LOG"
+exec /usr/bin/touch "$@"
+EOF
+  cat >"$root/bin/stat" <<'EOF'
+#!/bin/sh
+printf 'stat\n' >>"$VELNOR_FORK_LOG"
+exec /usr/bin/stat "$@"
+EOF
+  cat >"$root/bin/chmod" <<'EOF'
+#!/bin/sh
+printf 'chmod\n' >>"$VELNOR_FORK_LOG"
+exec /bin/chmod "$@"
+EOF
+  chmod 0755 "$root/bin/touch" "$root/bin/stat" "$root/bin/chmod"
+  : >"$root/fork.log"
+  old_path="$PATH"
+  VELNOR_FORK_LOG="$root/fork.log" PATH="$root/bin:$PATH" \
+    bash "$shim" -xf "$root/arc.tar" -P -C "$root/dest/repo" || return 1
+  PATH="$old_path"
+  forks="$(wc -l <"$root/fork.log" | tr -d ' ')"
+  [ "$forks" = 0 ] || {
+    printf 'directory metadata forked %s times\n' "$forks" >&2
+    return 1
+  }
+  for i in $(seq 0 47); do
+    dir="$root/dest/ext/d$(printf '%02d' "$i")"
+    mode="$(stat -c %a "$dir")"
+    mtime="$(stat -c %Y "$dir")"
+    [ "$mode" = 750 ] && [ "$mtime" = $((1600000000 + i)) ] || {
+      printf 'many-dir mismatch i=%s mode=%s mtime=%s\n' "$i" "$mode" "$mtime" >&2
+      return 1
+    }
+  done
+}
+
 case_external_relative_symlink() {
   local root="$work/external-link" status=0
   rm -rf -- "$root"
