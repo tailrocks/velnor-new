@@ -4,7 +4,7 @@ use std::error::Error;
 mod admission_fixture;
 
 use self::admission_fixture::{
-    admission_for, admission_from_value, completed_node, phase_plan, useful_delta,
+    BuiltNode, admission_for, admission_from_value, completed_node, phase_plan, useful_delta,
 };
 use super::directive_tests::qualification_plan;
 use super::*;
@@ -30,6 +30,7 @@ fn complete_cold_warm_third_useful_delta_and_control_admission_paths() -> TestRe
     let warm_admission = admission_for(&warm, None)?;
     warm_admission.validate_for_plan(&third_plan)?;
     let third = completed_node(&third_plan, Some(&warm), None)?;
+    assert_warm_successor_is_selected(&cold, &warm, &third, &third_plan, &warm_admission)?;
 
     let delta = useful_delta(SOURCE_A, SOURCE_B)?;
     let useful_plan = phase_plan(QualificationPhase::UsefulDelta, 703, SOURCE_B, 702)?;
@@ -72,6 +73,60 @@ fn complete_cold_warm_third_useful_delta_and_control_admission_paths() -> TestRe
                 && layer.restore_policy == QualificationCacheRestorePolicy::Disabled
                 && layer.save_policy == QualificationCacheSavePolicy::Disabled)
     );
+    Ok(())
+}
+
+fn assert_warm_successor_is_selected(
+    cold: &BuiltNode,
+    warm: &BuiltNode,
+    third: &BuiltNode,
+    third_plan: &crate::workflow::Plan,
+    warm_admission: &QualificationCacheAdmission,
+) -> TestResult {
+    let cold_layers = &cold.receipt.lanes[0].layers;
+    let warm_layers = &warm.receipt.lanes[0].layers;
+    let third_layers = &third.receipt.lanes[0].layers;
+    let cold_sources = &cold_layers[2];
+    let cold_tools = &cold_layers[3];
+    let warm_sources = &warm_layers[2];
+    let warm_tools = &warm_layers[3];
+    assert_ne!(cold_sources.state_digest, warm_sources.state_digest);
+    assert_eq!(
+        warm_sources.save.action,
+        QualificationCacheSaveActionResult::Succeeded
+    );
+    assert!(matches!(
+        &warm_sources.save.after,
+        QualificationCacheBackendObservation::Found(_)
+    ));
+    assert_eq!(cold_tools.state_digest, warm_tools.state_digest);
+    assert_eq!(
+        warm_tools.save.action,
+        QualificationCacheSaveActionResult::NotRequired
+    );
+
+    let directive = QualificationCacheDirective::for_plan(third_plan, Some(warm_admission))?
+        .ok_or_else(|| std::io::Error::other("third directive missing"))?;
+    let matrix_key = &third_plan.matrix.include[0].matrix_key;
+    let sources = directive
+        .layer(matrix_key, QualificationCacheLayer::CargoSources)
+        .ok_or_else(|| std::io::Error::other("third sources directive missing"))?;
+    let tools = directive
+        .layer(matrix_key, QualificationCacheLayer::MiseTools)
+        .ok_or_else(|| std::io::Error::other("third tools directive missing"))?;
+    assert_eq!(
+        sources.restore.as_ref().map(|restore| restore.slot),
+        Some(QualificationCacheSlot::K2)
+    );
+    assert_eq!(
+        tools.restore.as_ref().map(|restore| restore.slot),
+        Some(QualificationCacheSlot::K1)
+    );
+    assert_eq!(
+        third_layers[2].restore.matched_cache,
+        warm_sources.save.after
+    );
+    assert_eq!(third_layers[3].restore.matched_cache, cold_tools.save.after);
     Ok(())
 }
 
@@ -125,30 +180,45 @@ fn full_admission_rejects_mutated_artifact_link_runtime_and_layer_state() -> Tes
     let warm = completed_node(&warm_plan, Some(&cold), None)?;
     let third_plan = phase_plan(QualificationPhase::Third, 732, SOURCE_A, 731)?;
     let third = completed_node(&third_plan, Some(&warm), None)?;
+    let useful_plan = phase_plan(QualificationPhase::UsefulDelta, 733, SOURCE_B, 732)?;
+    let delta = useful_delta(SOURCE_A, SOURCE_B)?;
+    admission_for(&third, Some(&delta))?.validate_for_plan(&useful_plan)?;
 
     let mut wrong_link = third.value.clone();
     wrong_link["receipt"]["predecessor"]["artifact_digest"] =
         serde_json::json!(format!("sha256:{}", "f".repeat(64)));
-    assert!(rejects_admission(&wrong_link, &third_plan));
+    assert!(rejects_admission(&wrong_link, &useful_plan, Some(&delta)));
 
     let mut wrong_runtime = third.value.clone();
     wrong_runtime["receipt"]["lanes"][0]["layers"][2]["runtime_identity"]["platform"]["image_version"] =
         serde_json::json!("27.04");
-    assert!(rejects_admission(&wrong_runtime, &third_plan));
+    assert!(rejects_admission(
+        &wrong_runtime,
+        &useful_plan,
+        Some(&delta)
+    ));
 
     let mut wrong_state = third.value.clone();
     wrong_state["receipt"]["lanes"][0]["layers"][2]["state_digest"] =
         serde_json::json!(digest_b3(b"forged third cargo state"));
-    assert!(rejects_admission(&wrong_state, &third_plan));
+    assert!(rejects_admission(&wrong_state, &useful_plan, Some(&delta)));
 
     let mut wrong_plan_id = third.value.clone();
     wrong_plan_id["receipt"]["plan_id"] = serde_json::json!("plan-p732-a2");
-    assert!(rejects_admission(&wrong_plan_id, &third_plan));
+    assert!(rejects_admission(
+        &wrong_plan_id,
+        &useful_plan,
+        Some(&delta)
+    ));
     Ok(())
 }
 
-fn rejects_admission(value: &serde_json::Value, plan: &crate::workflow::Plan) -> bool {
-    match admission_from_value(value, None) {
+fn rejects_admission(
+    value: &serde_json::Value,
+    plan: &crate::workflow::Plan,
+    source_delta: Option<&crate::workflow::QualificationSourceDelta>,
+) -> bool {
+    match admission_from_value(value, source_delta) {
         Ok(admission) => admission.validate_for_plan(plan).is_err(),
         Err(_) => true,
     }

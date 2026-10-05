@@ -128,10 +128,9 @@ fn lane_receipt(
     let prior = admission
         .map(|value| prior_lane(value, &entry.matrix_key))
         .transpose()?;
-    let is_delta = plan
-        .qualification
-        .as_ref()
-        .is_some_and(|context| context.phase == QualificationPhase::UsefulDelta);
+    let phase = plan.qualification.as_ref().map(|context| context.phase);
+    let is_delta = phase == Some(QualificationPhase::UsefulDelta);
+    let is_warm = phase == Some(QualificationPhase::Warm);
     Ok(QualificationCacheLaneReceipt {
         matrix_key: entry.matrix_key.clone(),
         stack_id: entry.stack_id.clone(),
@@ -143,6 +142,7 @@ fn lane_receipt(
             .unwrap_or_else(|| digest_b3(b"closure-cold")),
         useful_state_digest: is_delta
             .then(|| digest_b3(b"useful-delta"))
+            .or_else(|| is_warm.then(|| digest_b3(b"useful-warm")))
             .or_else(|| prior.as_ref().map(|lane| lane.useful_state_digest.clone()))
             .unwrap_or_else(|| digest_b3(b"useful-cold")),
         layers,
@@ -172,12 +172,14 @@ fn layer_receipt(
     let prior = admission
         .map(|value| value.layer_receipt(&entry.matrix_key, layer))
         .transpose()?;
-    let is_changed_source_layer = plan.qualification.as_ref().is_some_and(|context| {
-        context.phase == QualificationPhase::UsefulDelta
-            && layer == QualificationCacheLayer::CargoSources
-    });
-    let state = if is_changed_source_layer {
-        digest_b3(b"cargo-source-state-after-useful-delta")
+    let phase = plan.qualification.as_ref().map(|context| context.phase);
+    let is_changed_cache_layer = layer == QualificationCacheLayer::CargoSources
+        && matches!(
+            phase,
+            Some(QualificationPhase::Warm | QualificationPhase::UsefulDelta)
+        );
+    let state = if is_changed_cache_layer {
+        digest_b3(format!("cargo-source-state-after-{phase:?}").as_bytes())
     } else {
         prior
             .as_ref()
