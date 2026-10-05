@@ -69,8 +69,29 @@ fn store(service: &str, account: &str, secret: &[u8]) -> Result<(), HostError> {
 #[cfg(target_os = "macos")]
 fn fetch(service: &str, account: &str) -> Result<Vec<u8>, HostError> {
     // An ACL mismatch must return. Launchd has no window for a prompt.
-    let _no_prompt = security_framework::os::macos::keychain::SecKeychain::disable_user_interaction()
-        .map_err(|_| HostError::Keychain)?;
+    copy_without_prompt(service, account, || Ok(()))
+}
+
+/// Copy the token for `service` and `account` while prompts are disabled.
+///
+/// `during` runs while that guard is still held.
+///
+/// # Errors
+///
+/// Returns [`HostError::Keychain`] when the framework or `during` fails.
+#[cfg(target_os = "macos")]
+pub(crate) fn copy_without_prompt<F>(
+    service: &str,
+    account: &str,
+    during: F,
+) -> Result<Vec<u8>, HostError>
+where
+    F: FnOnce() -> Result<(), HostError>,
+{
+    let _no_prompt =
+        security_framework::os::macos::keychain::SecKeychain::disable_user_interaction()
+            .map_err(|_| HostError::Keychain)?;
+    during()?;
     security_framework::passwords::generic_password(
         security_framework::passwords::PasswordOptions::new_generic_password(service, account),
     )
