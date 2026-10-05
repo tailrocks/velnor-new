@@ -1,4 +1,3 @@
-velnor-actions: WARNING: .velnor/release-manifest.json is absent; generated workflows use a debug-only stand-in that MUST NOT ship
 Preview: <preview>
 Repository: <repo>
 .github/AGENTS.md

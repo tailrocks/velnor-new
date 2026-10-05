@@ -10,8 +10,8 @@ use velnor_actions_actionlint::overrides::{
     ActionPinOverride as ApprovedOverride, ApprovedPinCatalog,
 };
 use velnor_actions_contract::{
-    GeneratorLock, ReleaseManifest, ReleaseTarget, Step, VelnorConfig, VerificationRunner,
-    check_release_artifact,
+    GeneratorLock, RELEASE_MANIFEST_FILENAME, ReleaseManifest, ReleaseTarget, Step, VelnorConfig,
+    VerificationRunner, check_release_artifact,
 };
 use velnor_actions_mise::MISE_VERSION;
 use velnor_actions_workflow_renderer::{
@@ -39,17 +39,11 @@ pub(crate) fn resolve_mise_setup(
     config: &VelnorConfig,
     label: &str,
 ) -> Result<MiseSetup, OrchestratorError> {
-    let target = ReleaseTarget::for_runner_label(label)
-        .map(ReleaseTarget::triple)
-        .ok_or_else(|| OrchestratorError::Contract {
+    let target =
+        ReleaseTarget::for_runner_label(label).ok_or_else(|| OrchestratorError::Contract {
             problem: format!("mise_setup_unsupported_target:{label}"),
         })?;
-    Ok(MiseSetup {
-        uses: mise_action_uses(config)?,
-        version: MISE_VERSION.to_owned(),
-        sha256: MISE_BINARY_SHA256_LINUX_X64.to_owned(),
-    }
-    .for_target(target)?)
+    resolve_mise_setup_for_release_target(config, target)
 }
 
 /// Resolve a release runner's Mise setup pins from the named platform ID.
@@ -167,8 +161,8 @@ fn consumer_acquire_for_target(
                 .to_owned(),
         });
     };
-    let manifest = ReleaseManifest::parse_json(json, "release-manifest.json")?;
-    manifest.validate("release-manifest.json")?;
+    let manifest = ReleaseManifest::parse_json(json, RELEASE_MANIFEST_FILENAME)?;
+    manifest.validate(RELEASE_MANIFEST_FILENAME)?;
     if manifest.version != version {
         return Err(OrchestratorError::Contract {
             problem: format!(
@@ -189,7 +183,7 @@ fn consumer_acquire_for_target(
         &record.artifact,
         &manifest.version,
         target.triple(),
-        "release-manifest.json",
+        RELEASE_MANIFEST_FILENAME,
         "targets.artifact",
     )?;
     acquire_step(

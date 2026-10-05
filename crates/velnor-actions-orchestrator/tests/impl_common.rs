@@ -107,27 +107,22 @@ pub(crate) fn without_ambient_ci_env(test: &str, inner: impl FnOnce() -> TestRes
 /// Snapshot map shortcut.
 pub(crate) type Snapshot = BTreeMap<String, (Vec<u8>, SystemTime)>;
 
-/// Release-manifest fixture for consumer generation tests.
+/// Canonical-schema fixture for positive consumer-generation tests.
 ///
-/// Both debug and release builds read `.velnor/release-manifest.json`
-/// as consumer provenance. Every fixture repo carries it so consumer
-/// `prepare` succeeds.
+/// Its placeholder source and digests are serialization inputs, not
+/// release provenance or qualification evidence.
 pub(crate) fn fixture_manifest_json() -> String {
-    let version = env!("CARGO_PKG_VERSION");
-    let targets = velnor_actions_contract::SUPPORTED_TARGETS
-    .iter()
-    .map(|target| {
-        format!(
-            "{{\"target\":\"{target}\",\"artifact\":\"https://github.com/tailrocks/velnor-new/releases/download/v{version}/velnor-actions-{version}-{target}\",\"sha256\":\"{}\"}}",
-            "a".repeat(64)
-        )
-    })
-    .collect::<Vec<_>>()
-    .join(",");
-    format!(
-        "{{\"schema\":1,\"version\":\"{version}\",\"repository\":\"tailrocks/velnor-new\",\"commit\":\"{}\",\"targets\":[{targets}]}}",
-        "a".repeat(40)
-    )
+    include_str!("../../../fixtures/consumer-release-manifest.json").to_owned()
+}
+
+/// Install the deterministic schema-only manifest in a positive fixture.
+pub(crate) fn install_fixture_release_manifest(root: &Path) -> TestResult {
+    fs::create_dir_all(root.join(".velnor"))?;
+    fs::write(
+        root.join(".velnor/release-manifest.json"),
+        fixture_manifest_json(),
+    )?;
+    Ok(())
 }
 
 /// Build a git fixture: config plus one root crate (uncommitted).
