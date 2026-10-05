@@ -4,16 +4,18 @@ Recorded 2026-10-06. This sanitized ledger records preserved refs and registered
 
 ## Preserved status
 
-- Merged: PR #74 at bdb1e14509225d18b4d8ee180731825d0826c16f; PR #88 at 787157ed; PR #89 at 540e12a4a225683e78378e63bfdbba2ddba29d86. Main CI run 37347111265 was pending at last refresh.
+- Merged: PR #74 at bdb1e14509225d18b4d8ee180731825d0826c16f; PR #88 at 787157ed; PR #89 at 540e12a4a225683e78378e63bfdbba2ddba29d86. Current main is 4f6def90e7b1008626db18675d1cac129b8f2ad7; run 37351459281 has 19 jobs (18 success, 1 in progress, 0 failed). Across 22 checks, 20 succeeded, one separate image-publish check was cancelled, one remains in progress, and Required is pending.
 - Qualification dispatch 37336033812 completed two readiness, SQL, and cleanup attempts (29.835 seconds). Physical host, daemon binary, and outer image identity remain unknown; this does not prove deployment.
-- R1 branch codex/ci-performance-r1-checkpoint-20261006 has WIP commits 7d4c145ace13760d97e1942a56c1bcbc16b0c8e4 and dd93ee82335013eabc66fef7d7b1376bb8f528ae. Independent byte-coverage audit is pending. Integrated runner tests/build remain incomplete; baseline was 243 pass and 13 fail out of 256 selected.
+- R1 branch codex/ci-performance-r1-checkpoint-20261006 has WIP commits 7d4c145ace13760d97e1942a56c1bcbc16b0c8e4 and dd93ee82335013eabc66fef7d7b1376bb8f528ae (tree 3ca41fc604c3a11d239973b8baf7e76b35a3e0c6). Independent byte checks confirmed four preserved follow-up files: worker/resources.rs, nested Cargo.lock, launch/steps.rs, and launch/steps/assigned_resume_tests.rs. The R1 integration worktree was removed after matching the remote tree and finding no open handles. Integrated runner tests/build remain incomplete; baseline was 243 pass and 13 fail out of 256 selected.
 - Guest sampler passed 52/52 on isolated tree 9ff328ee98840d032d1b536d44cf4871653d8710; this is component-only evidence.
-- Local publication commits a33f76702dbd354f6a11a9bd7b454b6739e4dcc6 and e6fbaec74788844f43b4a4a16e59f849a2a9e156 passed the focused 3-test publisher filter and independent source review. They remained local-only at last check.
+- Publication source was pushed for preservation on codex/chainargos-ci-performance: docs commit 638ac17d556969f4f484be7efd978bcd7873030e and WIP commit a860822d0a4e6a48ff1d9a45346ed9cbaa67819e. Focused tag-publication tests passed 3/3 on the preserved unit; the product has not been published.
 - No deployed daemon/image identity, complete consumer run, two independent warm readers, or final matched performance sample is established. Keep the goal open.
 
 ## Cleanup inventory
 
-The table lists registered /private/tmp worktrees at capture time. The 10 permanent worktrees and primary checkout are excluded. All entries marked candidate still require Release to verify remote coverage, dirty files, and process handles. Three paths are held: archive-fixture-reproduction is unrelated; local-release-manifest-verify contains separate dirty release WIP; subagent-model-policy contains separate model-policy and runner-stage history. Raw logs, container captures, runtime databases, credentials, and generated artifacts are excluded from this ledger and from Git staging.
+The table lists registered /private/tmp worktrees at capture time. The 10 permanent worktrees and primary checkout are excluded. All entries marked candidate still require Release to verify remote coverage, dirty files, and process handles. Four paths are held: archive-fixture-reproduction is unrelated; local-release-manifest-verify contains separate dirty release WIP; subagent-model-policy contains separate model-policy and runner-stage history; runner-null-stats-current-2217 has unresolved ownership. Since capture, the R1 integration worktree was removed after exact remote-tree verification.
+
+G0 preservation has one remaining missing blob: docs/wip/g0-merge-state-2026-10-06.md, Git blob 6bef5d9e67d6e197ae7acf20f415f79a486b761e, is present in the conflict snapshot but absent from pushed WIP ref 9ca089fe591d0dbae7beb651bfc83c2f516f8f80. Preserve the exact note under a distinct archival path/ref before removing the conflict snapshot directory. Raw logs, container captures, runtime databases, credentials, and generated artifacts are excluded from this ledger and from Git staging.
 
 ### Registered temporary worktrees (87 at capture)
 
@@ -70,7 +72,7 @@ The table lists registered /private/tmp worktrees at capture time. The 10 perman
 | /private/tmp/velnor-r1-runner-test-accf | 2b0f5d83dd798a8745f6c8cfa18f4b859eb67744 | detached | candidate: audit before removal |
 | /private/tmp/velnor-release-protocol-ac3 | 0f67e848ad227c16e29cd8a00493d4d6f9a172ed | detached | candidate: audit before removal |
 | /private/tmp/velnor-runner-lineage-implementation | 630ec33ba08cc1737d384691a135cbbfa3d4df12 | detached | candidate: audit before removal |
-| /private/tmp/velnor-runner-null-stats-current-2217 | ffeb6b01cb75bd28e7ef6cbccc3a3cc347fb4e0b | codex/runner-null-stats-progress-2217 | candidate: audit before removal |
+| /private/tmp/velnor-runner-null-stats-current-2217 | ffeb6b01cb75bd28e7ef6cbccc3a3cc347fb4e0b | codex/runner-null-stats-progress-2217 | hold: ownership unresolved |
 | /private/tmp/velnor-runner-readiness | 91b37bccfec1146199524d9017846eb9d0575c42 | codex/runner-readiness-pr | candidate: audit before removal |
 | /private/tmp/velnor-runner-shell-semantics | 9595984327980bfcc123dfc089ddc7ae39a5c86b | codex/runner-shell-semantics | candidate: audit before removal |
 | /private/tmp/velnor-scheduler-capacity | 11a7a516c698f880ecfd67bb1ece613f5840d991 | detached | candidate: audit before removal |

@@ -12,11 +12,11 @@ Release small changes quickly. Deploy each useful release. Measure it. Fix regre
 
 This checkpoint supersedes earlier status notes below where they differ. It records preservation, merge, and focused-test evidence; it does not establish complete acceptance or deployment. See [checkpoint-cleanup-20261006.md](checkpoint-cleanup-20261006.md) for the sanitized current evidence summary and point-in-time temporary-worktree inventory.
 
-- PR #74 merged as `bdb1e14509225d18b4d8ee180731825d0826c16f`; PR #88 merged as `787157ed`; PR #89 merged as `540e12a4a225683e78378e63bfdbba2ddba29d86`. Current-main CI run `37347111265` was pending at the last refresh and must be checked again.
+- PR #74 merged as `bdb1e14509225d18b4d8ee180731825d0826c16f`; PR #88 merged as `787157ed`; PR #89 merged as `540e12a4a225683e78378e63bfdbba2ddba29d86`. Current main is `4f6def90e7b1008626db18675d1cac129b8f2ad7`; run `37351459281` has 19 jobs (18 success, 1 in progress, 0 failed). Across 22 checks, 20 succeeded, one separate image-publish check was cancelled, one remains in progress, and Required is pending.
 - Qualification dispatch `37336033812` completed the self-hosted composite preflight, including two readiness, SQL, and cleanup attempts. This does not identify the physical host or prove a daemon installation.
-- Runner branch `codex/ci-performance-r1-checkpoint-20261006` contains WIP preservation commits `7d4c145ace13760d97e1942a56c1bcbc16b0c8e4` and `dd93ee82335013eabc66fef7d7b1376bb8f528ae`. The second commit is awaiting independent byte-coverage verification. The integrated runner work remains incomplete and lacks a final passing build/test gate.
+- Runner branch `codex/ci-performance-r1-checkpoint-20261006` contains WIP preservation commits `7d4c145ace13760d97e1942a56c1bcbc16b0c8e4` and `dd93ee82335013eabc66fef7d7b1376bb8f528ae`. Independent byte checks confirmed the four follow-up files; the integration worktree was removed after matching the remote tree. The integrated runner work remains incomplete and lacks a final passing build/test gate.
 - Guest sampler focus passed 52/52 on isolated tree `9ff328ee98840d032d1b536d44cf4871653d8710`; this is not integrated runner acceptance. The earlier R1 baseline selected 256 tests, with 243 passing and 13 failing.
-- Local publication commits `a33f76702dbd354f6a11a9bd7b454b6739e4dcc6` and `e6fbaec74788844f43b4a4a16e59f849a2a9e156` passed their focused publication tests and independent source review, but remained local-only at the last check.
+- Publication source was pushed for preservation on `codex/chainargos-ci-performance`: docs commit `638ac17d556969f4f484be7efd978bcd7873030e` and WIP commit `a860822d0a4e6a48ff1d9a45346ed9cbaa67819e`. The product has not been published.
 - No deployed daemon or worker image identity, complete consumer run, two independent warm readers, or final matched performance sample is established. Keep the goal open.
 
 ## Latest execution checkpoint — 2026-10-05 (13:05 UTC)
