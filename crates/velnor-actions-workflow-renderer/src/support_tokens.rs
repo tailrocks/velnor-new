@@ -42,21 +42,18 @@ pub(crate) fn check_token_hygiene(jobs: &BTreeMap<String, Job>) -> Result<(), Re
 /// not here. Both pinned-tool install steps and source fetch download
 /// tools and sources with registry auth; nested fetch names carry a
 /// manifest suffix.
-/// The pinned offline analyzers (deny, machete, zizmor, actionlint)
-/// execute no repository code and cold-install their tools, so they
-/// run ambient: scrubbing broke `ubi:` installs (API 401) and zizmor
-/// (empty-token abort), CI run 36815180228. Plan and fetch-reports are
-/// internal steps with no shell env to gate, and release publishes
-/// through `gh` (allowlisted by job ID below).
-const AMBIENT_AUTH_STEPS: [&str; 8] = [
+/// Tool-install preparation and source fetch need ambient network auth.
+/// Cargo Deny's combined install-and-check vector removes credentials
+/// after install and before its isolated Cargo payload. Other validator
+/// executions use the standard scrubbed shell step. Plan and
+/// fetch-reports are internal steps; release publishes through `gh`
+/// (allowlisted by job ID below).
+const AMBIENT_AUTH_STEPS: [&str; 5] = [
     "Prepare pinned tools",
     "Prepare pre-seed MBX",
     "Prepare Rust components",
     "Fetch Cargo sources",
     crate::steps::DENY_STEP_NAME,
-    crate::steps::MACHETE_STEP_NAME,
-    "Run zizmor",
-    "Run actionlint",
 ];
 
 /// True when a step name carries ambient-auth permission.
