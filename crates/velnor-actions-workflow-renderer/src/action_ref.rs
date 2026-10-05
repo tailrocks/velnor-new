@@ -4,7 +4,7 @@
 use crate::RenderError;
 use velnor_actions_contract::workflow::step_identity::TOOL_SEED_USES;
 
-/// Prefix for renderer-generated shared ToFu setup composites.
+/// Prefix for renderer-generated shared `ToFu` setup composites.
 pub(crate) const TOFU_PROVIDER_PRELUDE_ACTION_PREFIX: &str =
     "./.github/actions/tofu-provider-prelude-";
 
