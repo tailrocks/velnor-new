@@ -80,6 +80,34 @@ mod unix_tests {
         fs::metadata(path).expect("home metadata").uid()
     }
 
+    fn orb_uid(runtime: &Path, socket: &Path) -> u32 {
+        let uid = home_uid(runtime);
+        if uid > 0 {
+            return uid;
+        }
+        let uid = 501;
+        for path in [
+            runtime,
+            &runtime.join("status"),
+            &runtime.join("vmgr.version"),
+            socket,
+        ] {
+            set_fixture_owner(path, uid);
+        }
+        uid
+    }
+
+    fn set_fixture_owner(path: &Path, uid: u32) {
+        rustix::fs::chownat(
+            rustix::fs::CWD,
+            path,
+            Some(rustix::fs::Uid::from_raw(uid)),
+            None,
+            rustix::fs::AtFlags::empty(),
+        )
+        .expect("fixture owner");
+    }
+
     #[test]
     fn docker_projection_is_credential_free_and_revalidates_exact_tree() {
         let temp = tempfile::TempDir::new().expect("temp");
@@ -161,7 +189,7 @@ mod unix_tests {
         fs::write(runtime.join("vmgr.version"), b"1").expect("version");
         let path = runtime.join("docker.sock");
         let listener = socket(&path);
-        let profile = orb_profile(&path, &runtime, home_uid(&home));
+        let profile = orb_profile(&path, &runtime, orb_uid(&runtime, &path));
         let error = prepare_runtime(&home, &profile).expect_err("owned socket must fit ABI");
         assert!(
             error.to_string().contains("runtime_socket_path_too_long"),
@@ -176,6 +204,23 @@ mod unix_tests {
     }
 
     #[test]
+    fn orb_rejects_root_runtime_owner_independently_of_fixture_uid() {
+        let temp = tempfile::TempDir::new().expect("temp");
+        let home = temp.path().canonicalize().expect("canonical home");
+        fs::create_dir(home.join("docker")).expect("docker config");
+        let runtime = home.join("runtime");
+        fs::create_dir(&runtime).expect("runtime");
+        fs::create_dir(runtime.join("status")).expect("status");
+        fs::write(runtime.join("vmgr.version"), b"1").expect("version");
+        let path = runtime.join("docker.sock");
+        let listener = socket(&path);
+        let profile = orb_profile(&path, &runtime, 0);
+        let error = prepare_runtime(&home, &profile).expect_err("root owner is unsupported");
+        assert!(error.to_string().contains("orbstack_runtime_owner"));
+        drop(listener);
+    }
+
+    #[test]
     fn orb_projection_records_authority_and_owned_link() {
         let temp = tempfile::TempDir::new().expect("temp");
         let home = temp.path().canonicalize().expect("canonical home");
@@ -186,7 +231,7 @@ mod unix_tests {
         fs::write(runtime.join("vmgr.version"), b"1").expect("version");
         let path = runtime.join("docker.sock");
         let listener = socket(&path);
-        let profile = orb_profile(&path, &runtime, home_uid(&home));
+        let profile = orb_profile(&path, &runtime, orb_uid(&runtime, &path));
         let projection = prepare_runtime(&home, &profile).expect("projection");
         assert_eq!(projection.runtime_dir.as_deref(), Some(runtime.as_path()));
         assert_eq!(
@@ -226,9 +271,14 @@ mod unix_tests {
         fs::write(runtime.join("vmgr.version"), b"1").expect("version");
         let path = runtime.join("docker.sock");
         let listener = socket(&path);
-        let profile = orb_profile(&path, &runtime, home_uid(&home));
+        let profile = orb_profile(&path, &runtime, orb_uid(&runtime, &path));
         let projection = prepare_runtime(&home, &profile).expect("projection");
         fs::write(runtime.join("status/workload"), b"mutable").expect("workload");
+        let runtime_uid = match &profile {
+            HostContainerProfile::OrbStack { sdk, .. } => sdk.runtime_uid,
+            HostContainerProfile::Docker { .. } => unreachable!("fixture profile is OrbStack"),
+        };
+        set_fixture_owner(&runtime.join("status/workload"), runtime_uid);
         revalidate_runtime(&projection).expect("mutable runtime remains admitted");
         drop(listener);
     }
@@ -253,7 +303,7 @@ mod unix_tests {
         fs::set_permissions(&runtime, unsafe_permissions).expect("unsafe mode");
         let path = runtime.join("docker.sock");
         let listener = socket(&path);
-        let profile = orb_profile(&path, &runtime, home_uid(&home));
+        let profile = orb_profile(&path, &runtime, orb_uid(&runtime, &path));
         assert!(prepare_runtime(&home, &profile).is_err());
         let mut restored = fs::metadata(&runtime)
             .expect("runtime metadata")
@@ -274,7 +324,7 @@ mod unix_tests {
         fs::write(runtime.join("vmgr.version"), b"1").expect("version");
         let path = runtime.join("docker.sock");
         let listener = socket(&path);
-        let profile = orb_profile(&path, &runtime, home_uid(&home));
+        let profile = orb_profile(&path, &runtime, orb_uid(&runtime, &path));
         let projection = prepare_runtime(&home, &profile).expect("projection");
         let original = fs::metadata(&runtime)
             .expect("runtime metadata")
@@ -308,7 +358,7 @@ mod unix_tests {
         let target = home.join("credentials");
         fs::write(&target, b"secret").expect("credential fixture");
         std::os::unix::fs::symlink(&target, runtime.join("credentials")).expect("runtime symlink");
-        let profile = orb_profile(&path, &runtime, home_uid(&home));
+        let profile = orb_profile(&path, &runtime, orb_uid(&runtime, &path));
         assert!(prepare_runtime(&home, &profile).is_err());
         drop(listener);
     }
@@ -324,7 +374,7 @@ mod unix_tests {
         fs::write(runtime.join("vmgr.version"), vec![0_u8; 64 * 1024 + 1]).expect("version");
         let path = runtime.join("docker.sock");
         let listener = socket(&path);
-        let profile = orb_profile(&path, &runtime, home_uid(&home));
+        let profile = orb_profile(&path, &runtime, orb_uid(&runtime, &path));
         assert!(prepare_runtime(&home, &profile).is_err());
         drop(listener);
     }
