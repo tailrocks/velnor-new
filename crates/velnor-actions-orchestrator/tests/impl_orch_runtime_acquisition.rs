@@ -69,7 +69,7 @@ fn acquisition_requires_bound_plan_and_verified_archive() -> TestResult {
     )?;
     let preparation = std::fs::read_to_string(super::orch_src().join("check_prepare.rs"))?;
     assert!(preparation.contains("#[path = \"check_tool_acquire.rs\"]\nmod acquisition;"));
-    assert!(preparation.contains("acquisition::acquire(&qualified, check, home)?;"));
+    assert!(preparation.contains("acquisition::acquire(&qualified, check, home, deadline)?;"));
     let acquisition = std::fs::read_to_string(super::orch_src().join("check_tool_acquire.rs"))?;
     assert!(acquisition.contains("pub(super) fn acquire("));
     assert!(!acquisition.contains("std::process::Command"));
@@ -77,10 +77,10 @@ fn acquisition_requires_bound_plan_and_verified_archive() -> TestResult {
         &acquisition,
         &[
             "handle.qualified_fetch_command(&tool.id, dependency, index)",
-            "read_staged_bytes(&downloaded, 1024 * 1024 * 1024)",
-            "sha256_hex(&bytes) != artifact.sha256",
-            "write_exclusive(&verified, &bytes, \"qualified_tool_archive\")",
-            "archive::extract_archive(&verified, &root, &artifact.url, expanded)",
+            "read_with_deadline(&downloaded, 1024 * 1024 * 1024, deadline)",
+            "sha256_with_deadline(&bytes, deadline)? != artifact.sha256",
+            "write_exclusive_until(",
+            "archive::extract_archive(&verified, &root, &artifact.url, expanded, deadline)",
         ],
     )?;
     Ok(())

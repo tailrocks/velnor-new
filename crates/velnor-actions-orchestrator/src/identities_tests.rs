@@ -406,7 +406,12 @@ fn ordinary_stack_runner_platform_cannot_expand_with_named_check_catalog() {
     );
     let tofu = tofu_task("validate");
     for task in [rust, tofu] {
-        for target in ["host", "x86_64-unknown-linux-gnu", "aarch64-apple-darwin"] {
+        for target in [
+            "host",
+            "x86_64-unknown-linux-gnu",
+            "aarch64-apple-darwin",
+            "x86_64-apple-darwin",
+        ] {
             let mut task = task.clone();
             task.identity.target = target.to_owned();
             assert!(platform_id_for_group("macos-15", &task).is_err());

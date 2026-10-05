@@ -246,7 +246,12 @@ mod tests {
 
     #[test]
     fn target_grammar_accepts_host_and_triples_only() {
-        for target in ["host", "x86_64-unknown-linux-gnu", "aarch64-apple-darwin"] {
+        for target in [
+            "host",
+            "x86_64-unknown-linux-gnu",
+            "aarch64-apple-darwin",
+            "x86_64-apple-darwin",
+        ] {
             assert!(is_valid_rust_target(target), "{target}");
         }
         // Proven X2 PoC plus metacharacter and flag-shaped values.

@@ -48,8 +48,8 @@ fn plan_and_generate_share_one_prepare_path() -> TestResult {
     config_calls.sort();
     assert_eq!(
         config_calls,
-        ["check_runtime.rs", "prepare.rs"],
-        "execution reloads its source-bound definition"
+        ["check_runtime.rs", "prepare.rs", "routing.rs"],
+        "preparation, execution, and routing load configuration at their boundaries"
     );
     let internal = std::fs::read_to_string(orch_src().join("internal.rs"))?;
     assert!(internal.contains("prepare(&root)"), "plan runs preparation");

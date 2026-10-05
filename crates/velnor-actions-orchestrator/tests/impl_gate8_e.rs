@@ -21,8 +21,10 @@ fn binary_record(target: &str, sha: &str) -> String {
 }
 
 fn lock_text(sha: &str) -> String {
-    let bins = binary_record("x86_64-unknown-linux-gnu", sha)
-        + &binary_record("aarch64-apple-darwin", sha);
+    let bins = velnor_actions_contract::SUPPORTED_TARGETS
+        .iter()
+        .map(|target| binary_record(target, sha))
+        .collect::<String>();
     format!(
         "schema = 1\n[generator]\nbinary = \"velnor-actions\"\nversion = \"0.1.0\"\ncommit = \"{}\"\n{bins}[mise-bootstrap]\nversion = \"2026.10.0\"\nartifact = \"https://example.invalid/mise\"\nsha256 = \"{}\"\n",
         "a".repeat(40),
