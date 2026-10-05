@@ -332,7 +332,8 @@ mod tests {
     fn positive_hash_and_freeze() {
         let root = source();
         let expected = tree_sha256(root.path(), deadline()).expect("hash");
-        let entries = collect(root.path(), deadline()).expect("entries");
+        let canonical_root = root.path().canonicalize().expect("canonical root");
+        let entries = collect(&canonical_root, deadline()).expect("entries");
         let manifest = entries
             .iter()
             .map(|entry| match entry {
