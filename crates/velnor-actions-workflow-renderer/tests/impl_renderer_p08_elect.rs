@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 use velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION;
-use velnor_actions_contract::{Job, JobTimeout, Step, StepKind};
+use velnor_actions_contract::{Job, JobTimeout, Step, StepId, StepKind, StepRole};
 use velnor_actions_workflow_renderer::RenderError;
 use velnor_actions_workflow_renderer::cache_p08::{
     elect_mise_cache_writers, elect_tofu_provider_savers, mise_setup_step_p08,
@@ -158,7 +158,7 @@ fn provider_saves(job: &Job) -> Vec<&Step> {
 
 /// One provider-restore job over an explicit key + path.
 fn provider_job(key: &str, path: &str) -> Result<Job, RenderError> {
-    let restore = cache_action_step(
+    let mut restore = cache_action_step(
         true,
         TOOLS_RESTORE_USES,
         "tofu-providers",
@@ -166,6 +166,8 @@ fn provider_job(key: &str, path: &str) -> Result<Job, RenderError> {
         &[],
         &[path.to_owned()],
     )?;
+    restore.id = Some(StepId::TofuProviders);
+    restore.role = Some(StepRole::TofuProvidersRestore);
     Ok(Job {
         display_name: "Provider".to_owned(),
         runs_on: LABEL.to_owned(),

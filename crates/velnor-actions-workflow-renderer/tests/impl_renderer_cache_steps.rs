@@ -1,10 +1,10 @@
 //! Gate 4 renderer cases: MBX objects, cache actions, lane target dirs.
 
 use velnor_actions_contract::{Step, StepKind};
+use velnor_actions_workflow_renderer::lane_target::target_dir_for_lane;
 use velnor_actions_workflow_renderer::steps::{
     CompileDriver, MBX_CACHE_MODE_ENV, TOOLS_CACHE_PATH, TOOLS_RESTORE_NAME, TOOLS_SAVE_NAME,
-    cache_action_step, mbx_steps_for_driver, target_dir_for_lane, tools_cache_key,
-    tools_restore_step, tools_save_step,
+    cache_action_step, mbx_steps_for_driver, tools_cache_key, tools_restore_step, tools_save_step,
 };
 
 use super::impl_renderer_fixtures::*;

@@ -83,6 +83,7 @@ fn yaml_uses(yaml: &str) -> BTreeSet<String> {
     yaml.lines()
         .filter_map(|line| line.trim().strip_prefix("uses:"))
         .map(|value| value.trim().to_owned())
+        .filter(|uses| !uses.starts_with("./.github/actions/"))
         .collect()
 }
 

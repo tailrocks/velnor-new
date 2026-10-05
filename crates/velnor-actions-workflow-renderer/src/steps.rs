@@ -4,7 +4,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Step, StepKind};
+use velnor_actions_contract::{Step, StepKind, StepRole};
 
 use crate::{RenderError, commands, marker};
 
@@ -116,6 +116,9 @@ pub fn scan_for_private_subcommands(text: &str) -> Result<(), RenderError> {
 /// Validate an `owner/repo@<40 hex>` action ref; branches are rejected.
 /// # Errors
 pub fn validate_uses(uses: &str) -> Result<(), RenderError> {
+    if uses == crate::tofu_cache::TOFU_PROVIDER_ADMISSION_USES {
+        return Ok(());
+    }
     let Some((name, sha)) = uses.split_once('@') else {
         return Err(RenderError::BadActionRef(format!("missing_sha:{uses}")));
     };
@@ -144,7 +147,9 @@ pub fn checkout_step(uses: &str) -> Result<Step, RenderError> {
         return Err(RenderError::BadActionRef(format!("not_checkout:{uses}")));
     }
     let with = BTreeMap::from([("persist-credentials".to_owned(), "false".to_owned())]);
-    action_step("Checkout", uses, with)
+    let mut step = action_step("Checkout", uses, with)?;
+    step.role = Some(StepRole::Checkout);
+    Ok(step)
 }
 
 /// Validated pinned-action step.
@@ -189,6 +194,8 @@ pub fn action_step_with_env(
     crate::commands::validate_env(&env)?;
     Ok(Step {
         name: name.to_owned(),
+        id: None,
+        role: None,
         condition: None,
         kind: StepKind::Action {
             uses: uses.to_owned(),
@@ -243,6 +250,8 @@ pub fn shell_step(
     env_map.extend(crate::toolchain_env::credential_scrub());
     Ok(Step {
         name: name.to_owned(),
+        id: None,
+        role: None,
         condition: None,
         kind: StepKind::Shell { run, env: env_map },
     })
@@ -273,6 +282,8 @@ pub fn ambient_shell_step(
     scan_for_private_subcommands(name)?;
     Ok(Step {
         name: name.to_owned(),
+        id: None,
+        role: None,
         condition: None,
         kind: StepKind::Shell { run: argv, env },
     })
@@ -371,7 +382,9 @@ pub fn acquire_velnor_step(
     if !downloads || !verifies {
         return Err(RenderError::BadCommand("acquire_without_verify".to_owned()));
     }
-    shell_step(ACQUIRE_NAME, argv, env.clone())
+    let mut step = shell_step(ACQUIRE_NAME, argv, env.clone())?;
+    step.role = Some(StepRole::AcquireVelnor);
+    Ok(step)
 }
 
 /// True for `owner/repo` over alphanumerics plus `.-_`.
@@ -380,19 +393,4 @@ fn is_action_name(name: &str) -> bool {
         && name
             .bytes()
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'/' | b'.' | b'-' | b'_'))
-}
-
-/// Target-directory prefix isolating one lane.
-pub const TARGET_DIR_PREFIX: &str = "$RUNNER_TEMP/velnor/target/";
-
-/// Isolated target directory for one lane.
-#[must_use]
-pub fn target_dir_for_lane(lane_id: &str) -> String {
-    format!("{TARGET_DIR_PREFIX}{lane_id}")
-}
-
-/// `CARGO_TARGET_DIR` env pair isolating one lane (CACHE-1.20).
-#[must_use]
-pub fn lane_cargo_target_env(lane_id: &str) -> (String, String) {
-    ("CARGO_TARGET_DIR".to_owned(), target_dir_for_lane(lane_id))
 }

@@ -6,7 +6,7 @@ use super::{CompileDriver, MBX_ACTION_NAME};
 use crate::RenderError;
 use crate::steps::{action_step_with_env, shell_step, validate_uses};
 use velnor_actions_contract::cachekey::mbx_cache_generation;
-use velnor_actions_contract::{Job, Step};
+use velnor_actions_contract::{Job, Step, StepRole};
 
 /// Display name for the strict MBX and Rust PATH preflight.
 pub const MBX_PREFLIGHT_NAME: &str = "Verify MBX and Rust toolchains";
@@ -192,11 +192,13 @@ fn mbx_path_preflight_step(
         "printf '%s\\n' \"$rust_root\" \"$mbx_root\" >> \"$GITHUB_PATH\"".to_owned(),
     ]
     .join("; ");
-    shell_step(
+    let mut step = shell_step(
         MBX_PREFLIGHT_NAME,
         vec!["sh".to_owned(), "-c".to_owned(), script],
         env,
-    )
+    )?;
+    step.role = Some(StepRole::MbxPreflight);
+    Ok(step)
 }
 
 /// Objects-mode action restore; the prior preflight owns installation.
@@ -245,7 +247,9 @@ fn mbx_objects_action_step(
         MBX_ACTION_CACHE_MODE.to_owned(),
     );
     env.insert("VELNOR_MBX_VERSION".to_owned(), mbx_version.to_owned());
-    action_step_with_env(MBX_RESTORE_NAME, uses, with, env)
+    let mut step = action_step_with_env(MBX_RESTORE_NAME, uses, with, env)?;
+    step.role = Some(StepRole::MbxCache);
+    Ok(step)
 }
 
 /// Generation binds the runner-independent `OUT_DIR` policy and action SHA.

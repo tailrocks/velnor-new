@@ -5,7 +5,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Job, StepKind};
+use velnor_actions_contract::{Job, StepKind, StepRole};
 
 use crate::{RenderError, setup::MISE_ACTION_NAME};
 
@@ -66,6 +66,13 @@ pub fn elect_tofu_provider_savers(jobs: &mut BTreeMap<String, Job>) -> Result<()
     let mut path_for: BTreeMap<String, String> = BTreeMap::new();
     for (id, job) in jobs.iter() {
         if let Some((key, path)) = provider_restore_entry(job) {
+            if let Some(existing) = path_for.get(&key)
+                && existing != &path
+            {
+                return Err(RenderError::InvalidWorkflow(format!(
+                    "tofu_cache_key_path_mismatch:{id}"
+                )));
+            }
             path_for.entry(key.clone()).or_insert(path);
             by_key.entry(key).or_default().push(id.clone());
         }
@@ -91,6 +98,9 @@ pub fn elect_tofu_provider_savers(jobs: &mut BTreeMap<String, Job>) -> Result<()
 /// move an election.
 fn provider_restore_entry(job: &Job) -> Option<(String, String)> {
     job.steps.iter().find_map(|step| {
+        if step.role != Some(StepRole::TofuProvidersRestore) {
+            return None;
+        }
         let StepKind::Action { uses, with, .. } = &step.kind else {
             return None;
         };
@@ -119,7 +129,7 @@ fn append_provider_save(job: &mut Job, key: &str, path: &str) -> Result<(), Rend
     if job
         .steps
         .iter()
-        .any(|step| step.name == crate::tofu_cache::TOFU_PROVIDERS_SAVE_NAME)
+        .any(|step| step.role == Some(StepRole::TofuProvidersSave))
     {
         return Ok(());
     }
@@ -132,6 +142,9 @@ fn append_provider_save(job: &mut Job, key: &str, path: &str) -> Result<(), Rend
 /// This job's Mise built-in cache key, when its setup carries one.
 fn setup_cache_key(job: &Job) -> Option<String> {
     job.steps.iter().find_map(|step| {
+        if step.role != Some(StepRole::MiseSetup) {
+            return None;
+        }
         let StepKind::Action { uses, with, .. } = &step.kind else {
             return None;
         };
@@ -153,7 +166,7 @@ fn append_tools_save(job: &mut Job, key: &str) -> Result<(), RenderError> {
     if job
         .steps
         .iter()
-        .any(|step| step.name == crate::cache_steps::TOOLS_SAVE_NAME)
+        .any(|step| step.role == Some(StepRole::ToolsCacheSave))
     {
         return Ok(());
     }

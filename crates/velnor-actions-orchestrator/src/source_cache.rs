@@ -12,7 +12,7 @@ use velnor_actions_actionlint::{
     actions::{CACHE_ACTION_SHA, CACHE_ACTION_VERSION},
     rust_cache_inputs_schema, validate_action_inputs,
 };
-use velnor_actions_contract::{Step, StepKind};
+use velnor_actions_contract::{Step, StepKind, StepRole};
 
 use crate::OrchestratorError;
 
@@ -126,6 +126,11 @@ fn sources_step(
     } else {
         "Save Cargo sources".to_owned()
     };
+    step.role = Some(if restore {
+        StepRole::CargoSourcesRestore
+    } else {
+        StepRole::CargoSourcesSave
+    });
     if !restore {
         let gate = velnor_actions_mise::cache_trust::authorize_trusted_save().map_err(wrap)?;
         step.condition = Some(gate.to_owned());
@@ -172,6 +177,8 @@ pub(crate) fn rust_cache_step(shared_key: &str, save_if: bool) -> Result<Step, O
     validate_action_inputs(&rust_cache_inputs_schema(), &with).map_err(OrchestratorError::from)?;
     Ok(Step {
         name: "Restore Cargo registry".to_owned(),
+        id: None,
+        role: Some(StepRole::CargoRegistryRestore),
         condition: None,
         kind: StepKind::Action {
             uses,

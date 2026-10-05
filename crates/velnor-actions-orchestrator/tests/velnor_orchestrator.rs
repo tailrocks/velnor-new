@@ -84,6 +84,7 @@ mod impl_schema2_verification_tasks;
 mod impl_select;
 mod impl_select_base;
 mod impl_select_removed;
+mod impl_step_role_name_authority;
 mod impl_strict_envelope;
 mod impl_task_source_prep;
 mod impl_tofu_t09;

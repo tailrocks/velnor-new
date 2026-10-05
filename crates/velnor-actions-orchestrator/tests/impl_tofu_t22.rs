@@ -2,10 +2,12 @@
 //! restore-before-work ordering, and lock/version negatives that
 //! diagnose without breaking provider transport.
 use std::fs;
+use std::path::Path;
+use std::process::{Command, Output};
 
 use serde_json::json;
 use tempfile::TempDir;
-use velnor_actions_contract::{ObligationDecision, Plan};
+use velnor_actions_contract::{ObligationDecision, Plan, Step, StepKind, StepRole};
 use velnor_actions_mise::cache_sources as mise_sources;
 use velnor_actions_orchestrator::{
     GenerateOptions, finalized_jobs, generate, plan_internal, prepare,
@@ -103,6 +105,100 @@ fn finalized_tofu_jobs_order_restore_before_work_before_save() -> TestResult {
     }
     assert_eq!(seen, 1, "one tofu job for one root");
     Ok(())
+}
+
+#[test]
+fn provider_admission_discards_prefix_and_missing_matches() -> TestResult {
+    let repo = make_repo(&tofu_config("stacks/a"))?;
+    fs::create_dir_all(repo.path().join("stacks/a"))?;
+    fs::write(repo.path().join("stacks/a/main.tf"), "variable \"x\" {}\n")?;
+    let jobs = finalized_jobs(&prepare(repo.path())?)?;
+    let admission = jobs
+        .values()
+        .flat_map(|job| &job.steps)
+        .find(|step| step.role == Some(StepRole::TofuProvidersAdmission))
+        .ok_or("finalized tofu job misses provider admission")?;
+    let StepKind::Action { uses, with, .. } = &admission.kind else {
+        return Err("provider admission is not a local action call".into());
+    };
+    assert_eq!(
+        uses,
+        velnor_actions_workflow_renderer::tofu_cache::TOFU_PROVIDER_ADMISSION_USES
+    );
+    let expected = with
+        .get("expected-key")
+        .ok_or("provider admission misses expected key")?;
+    let slug = with
+        .get("cache-slug")
+        .ok_or("provider admission misses owned path")?;
+    let temp = tempfile::tempdir()?;
+    let leaf = temp.path().join("velnor/tofu-cache").join(slug);
+    fs::create_dir_all(&leaf)?;
+    fs::write(leaf.join("verified-provider"), b"cached")?;
+
+    let exact = run_admission(admission, temp.path(), "true", expected, false)?;
+    assert!(
+        exact.status.success(),
+        "{}",
+        String::from_utf8_lossy(&exact.stderr)
+    );
+    assert!(
+        leaf.join("verified-provider").exists(),
+        "exact hit is retained"
+    );
+
+    for (hit, matched) in [
+        ("true", format!("{expected}-older-prefix")),
+        ("false", String::new()),
+    ] {
+        fs::write(leaf.join("verified-provider"), b"must be removed")?;
+        let rejected = run_admission(admission, temp.path(), hit, &matched, true)?;
+        assert!(
+            rejected.status.success(),
+            "{}",
+            String::from_utf8_lossy(&rejected.stderr)
+        );
+    }
+    Ok(())
+}
+
+fn run_admission(
+    step: &Step,
+    runner_temp: &Path,
+    hit: &str,
+    matched: &str,
+    verify_cleared: bool,
+) -> std::io::Result<Output> {
+    let StepKind::Action { with, .. } = &step.kind else {
+        return Err(std::io::Error::other(
+            "admission step is not an action step",
+        ));
+    };
+    let expected = with
+        .get("expected-key")
+        .ok_or_else(|| std::io::Error::other("admission misses expected key"))?;
+    let slug = with
+        .get("cache-slug")
+        .ok_or_else(|| std::io::Error::other("admission misses cache slug"))?;
+    let script = if verify_cleared {
+        format!(
+            "{}; test ! -e \"$RUNNER_TEMP/velnor/tofu-cache/$TOFU_PROVIDER_CACHE_SLUG/verified-provider\"",
+            velnor_actions_workflow_renderer::tofu_cache::TOFU_PROVIDER_ADMISSION_SCRIPT
+        )
+    } else {
+        velnor_actions_workflow_renderer::tofu_cache::TOFU_PROVIDER_ADMISSION_SCRIPT.to_owned()
+    };
+    let mut command = Command::new("sh");
+    command
+        .arg("-c")
+        .arg(script)
+        .env("RUNNER_TEMP", runner_temp);
+    command
+        .env("TOFU_CACHE_HIT", hit)
+        .env("TOFU_MATCHED_KEY", matched)
+        .env("TOFU_EXPECTED_KEY", expected)
+        .env("TOFU_PROVIDER_CACHE_SLUG", slug);
+    command.output()
 }
 
 /// Git-initialized pure-tofu repo: `config` plus `files`, no Cargo.

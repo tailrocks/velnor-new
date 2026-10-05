@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Job, Step, StepKind};
+use velnor_actions_contract::{Job, Step, StepKind, StepRole};
 
 use crate::RenderError;
 use crate::composite::shared_call;
@@ -111,7 +111,7 @@ fn append_steps(
 }
 
 fn valid_shared_checkout(checkout: &Step, expected_uses: &str) -> bool {
-    checkout.name == "Checkout"
+    checkout.role == Some(StepRole::Checkout)
         && checkout.condition.is_none()
         && matches!(
             &checkout.kind,

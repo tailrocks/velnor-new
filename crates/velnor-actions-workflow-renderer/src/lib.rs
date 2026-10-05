@@ -23,6 +23,7 @@ mod final_steps;
 pub mod freshness;
 pub mod guard;
 mod lane_share;
+pub mod lane_target;
 pub mod marker;
 mod matrix;
 mod matrix_output_mode;
@@ -107,9 +108,9 @@ pub use steps::{
     REQUEST_FILE_ENV, RUN_KEY_EXPR, STAGED_BINARY_PREFIX, WRITE_PRESEED_MANIFEST_OPERATION,
     WRITE_REQUEST_OPERATION, acquire_velnor_step, action_step, action_step_with_env,
     ambient_shell_step, baseline_publish_upload_step, check_cache_step_order, check_mbx_gating,
-    checkout_step, crate_job_report_upload_step, internal_step, lane_cargo_target_env,
-    matrix_report_upload_step, mbx_steps_for_driver, merge_step, plan_step, publish_step,
-    scan_for_private_subcommands, shell_step, validate_uses, write_request_step,
+    checkout_step, crate_job_report_upload_step, internal_step, matrix_report_upload_step,
+    mbx_steps_for_driver, merge_step, plan_step, publish_step, scan_for_private_subcommands,
+    shell_step, validate_uses, write_request_step,
 };
 pub use tree::{render_tree, render_tree_with_extra};
 pub use verification_jobs::{

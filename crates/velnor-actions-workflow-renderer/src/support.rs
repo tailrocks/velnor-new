@@ -15,7 +15,7 @@ pub(crate) use tokens::check_token_hygiene;
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{
-    Job, JobTimeout, Step, StepKind, ValidatorKind, VelnorSupportWorkflow,
+    Job, JobTimeout, Step, StepKind, StepRole, ValidatorKind, VelnorSupportWorkflow,
 };
 
 use crate::{
@@ -201,6 +201,8 @@ pub(crate) fn alint_job(ctx: &RenderContext) -> Result<Job, RenderError> {
             checkout,
             Step {
                 name: "Run Alint".to_owned(),
+                id: None,
+                role: None,
                 condition: None,
                 kind: StepKind::Action {
                     uses: ALINT_USES.to_owned(),
@@ -227,6 +229,18 @@ pub(crate) fn validator_job(
     validator: ValidatorKind,
 ) -> Result<Job, RenderError> {
     let command = find_validator_command(&ctx.validator_commands, validator)?;
+    let mut step = steps::ambient_shell_step(&command.name, command.argv.clone(), BTreeMap::new())?;
+    step.role = Some(match validator {
+        ValidatorKind::CargoDeny => StepRole::CargoDeny,
+        ValidatorKind::CargoMachete => StepRole::CargoMachete,
+        ValidatorKind::Zizmor => StepRole::Zizmor,
+        ValidatorKind::Alint | ValidatorKind::Actionlint => {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "validator_not_shell:{}",
+                validator.job_id()
+            )));
+        }
+    });
     Ok(Job {
         display_name: validator.display_name().to_owned(),
         runs_on: ctx.runs_on.clone(),
@@ -235,10 +249,7 @@ pub(crate) fn validator_job(
         condition: None,
         permissions: None,
         environment: None,
-        steps: vec![
-            steps::checkout_step(&ctx.checkout_uses)?,
-            steps::ambient_shell_step(&command.name, command.argv.clone(), BTreeMap::new())?,
-        ],
+        steps: vec![steps::checkout_step(&ctx.checkout_uses)?, step],
     })
 }
 

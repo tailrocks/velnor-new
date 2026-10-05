@@ -1,7 +1,7 @@
 //! P08 renderer cases: built-in Mise cache, sources paths, rust-cache gates.
 
 use std::collections::BTreeMap;
-use velnor_actions_contract::{Job, JobTimeout, StepKind};
+use velnor_actions_contract::{Job, JobTimeout, StepKind, StepRole};
 use velnor_actions_workflow_renderer::cache_p08::{
     check_mbx_before_fetch, check_no_rust_cache_with_mbx, infer_job_tools,
     mise_cache_key_for_tools, mise_setup_step_p08, tools_digest,
@@ -204,6 +204,8 @@ fn rust_cache_never_stacks_over_mbx() {
     .expect("mbx steps");
     let rust_cache = velnor_actions_contract::Step {
         name: "Restore Cargo registry".to_owned(),
+        id: None,
+        role: None,
         condition: None,
         kind: StepKind::Action {
             uses: format!("Swatinem/rust-cache@{sha}"),
@@ -238,6 +240,8 @@ fn rust_cache_never_stacks_over_mbx() {
 fn mbx_restore_precedes_fetch() {
     let fetch = velnor_actions_contract::Step {
         name: "Fetch Cargo sources".to_owned(),
+        id: None,
+        role: Some(StepRole::CargoSourcesFetch),
         condition: None,
         kind: StepKind::Shell {
             run: vec!["sh".to_owned()],
@@ -246,6 +250,8 @@ fn mbx_restore_precedes_fetch() {
     };
     let mbx = velnor_actions_contract::Step {
         name: "Restore MBX objects".to_owned(),
+        id: None,
+        role: Some(StepRole::MbxCache),
         condition: None,
         kind: StepKind::Action {
             uses: format!("jdx/mr-boxington-action@{}", "d".repeat(40)),

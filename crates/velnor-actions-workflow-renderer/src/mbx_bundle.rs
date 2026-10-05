@@ -8,12 +8,11 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Job, RunsOn, Step, StepKind};
+use velnor_actions_contract::{Job, RunsOn, Step, StepId, StepKind, StepRole};
 
 use crate::RenderError;
 use crate::cache_steps::{
-    MBX_ACTION_NAME, MBX_CACHE_MODE_ENV, MBX_RESTORE_NAME, TOOLS_RESTORE_USES, TOOLS_SAVE_USES,
-    is_mbx_action,
+    MBX_ACTION_NAME, MBX_CACHE_MODE_ENV, TOOLS_RESTORE_USES, TOOLS_SAVE_USES, is_mbx_action,
 };
 
 /// Display name of the reclaim-and-export step.
@@ -31,34 +30,27 @@ pub(crate) const MBX_BUNDLE_IMPORT_NAME: &str = "Import MBX single bundle";
 /// Bundle path outside the mbx store. `actions/cache` archives only this path.
 pub(crate) const MBX_BUNDLE_PATH: &str = "${{ runner.temp }}/mbx-single-bundle";
 /// Only protected default-branch misses produce trusted MBX exports.
-const PREP_IF: &str = "success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.mbx-bundle.outputs.cache-hit != 'true'";
+fn prepare_condition() -> String {
+    format!(
+        "success() && github.event_name == 'push' && github.ref == format('refs/heads/{{0}}', github.event.repository.default_branch) && github.ref_protected == true && steps.{}.outputs.cache-hit != 'true'",
+        StepId::MbxBundle.as_str()
+    )
+}
+
 /// Save gate. Empty exports set `ready=false` and must not call `actions/cache`.
-const SAVE_IF: &str = "success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.mbx-bundle.outputs.cache-hit != 'true' && steps.mbx-export.outputs.ready == 'true'";
+fn save_condition() -> String {
+    format!(
+        "success() && github.event_name == 'push' && github.ref == format('refs/heads/{{0}}', github.event.repository.default_branch) && github.ref_protected == true && steps.{}.outputs.cache-hit != 'true' && steps.{}.outputs.ready == 'true'",
+        StepId::MbxBundle.as_str(),
+        StepId::MbxExport.as_str()
+    )
+}
 /// One-line script: gc, one external bundle, delete the store only after it exists.
 const EXPORT_SCRIPT: &str = r#"set -eu; df -B1 -P "$RUNNER_TEMP"; df -i -P "$RUNNER_TEMP"; mbx gc; mbx cache dir > "$RUNNER_TEMP/mbx-store-path"; IFS= read -r store < "$RUNNER_TEMP/mbx-store-path"; test -n "$store"; bundle="$RUNNER_TEMP/mbx-single-bundle"; case "$bundle" in "$store"|"$store"/*) exit 1 ;; esac; case "$store" in /|.) exit 1 ;; *mbx*) ;; *) exit 1 ;; esac; rm -rf "$bundle"; if mbx cache export --group "$MBX_CACHE_EXPORT_GROUP" --format directory "$bundle" >"$RUNNER_TEMP/mbx-export.out" 2>&1; then test -d "$bundle"; rm -rf "$store"; df -B1 -P "$RUNNER_TEMP"; df -i -P "$RUNNER_TEMP"; echo "ready=true" >> "$GITHUB_OUTPUT"; else rm -rf "$bundle"; if grep -q "no completed mbx builds are recorded for export group" "$RUNNER_TEMP/mbx-export.out"; then echo "ready=false" >> "$GITHUB_OUTPUT"; exit 0; fi; cat "$RUNNER_TEMP/mbx-export.out"; exit 1; fi"#;
 /// Drop the commit suffix so an older bundle for this toolchain still restores.
 const KEY_SCRIPT: &str = r#"set -eu; case "$RUNNER_OS:$RUNNER_ARCH" in Linux:X64) os=linux; arch=x64 ;; Linux:ARM64) os=linux; arch=arm64 ;; macOS:X64) os=darwin; arch=x64 ;; macOS:ARM64) os=darwin; arch=arm64 ;; Windows:X64) os=win32; arch=x64 ;; Windows:ARM64) os=win32; arch=arm64 ;; *) printf 'unsupported MBX runner %s/%s\n' "$RUNNER_OS" "$RUNNER_ARCH" >&2; exit 1 ;; esac; test -n "$CACHE_REVISION"; rust_file="$RUNNER_TEMP/mbx-rustc-identity-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_JOB}"; digest_file="${rust_file}-sha256"; rustc "+$RUST_TOOLCHAIN" -vV > "$rust_file"; if [ "$os" = darwin ]; then shasum -a 256 "$rust_file" > "$digest_file"; else sha256sum "$rust_file" > "$digest_file"; fi; IFS=' ' read -r identity _ < "$digest_file"; rm -f "$rust_file" "$digest_file"; identity="${identity:0:12}"; test -n "$identity"; toolchain="rust-${identity}"; key="${os}-${arch}-mbx-${CACHE_GENERATION}-dir-${toolchain}-${GITHUB_JOB}-${CACHE_REVISION}"; case "$key" in ''|*-) exit 1 ;; esac; prefix="${key%-*}-"; printf 'key=%s\nprefix=%s\n' "$key" "$prefix" >> "$GITHUB_OUTPUT"; if [ "$CREATE_EXPORT_GROUP" = true ]; then test -r /proc/sys/kernel/random/uuid; IFS= read -r group_id < /proc/sys/kernel/random/uuid; test -n "$group_id"; group="github-actions-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${group_id}"; printf 'MBX_CACHE_EXPORT_GROUP=%s\n' "$group" >> "$GITHUB_ENV"; fi"#;
 /// Import when the restore matched. A miss, a missing directory, or a failed import stays cold.
 const IMPORT_SCRIPT: &str = r#"set -eu; bundle="$RUNNER_TEMP/mbx-single-bundle"; df -B1 -P "$RUNNER_TEMP"; df -i -P "$RUNNER_TEMP"; if [ -z "$MATCHED" ]; then echo "no mbx bundle matched"; exit 0; fi; if [ ! -d "$bundle" ]; then echo "mbx bundle missing; continuing cold"; exit 0; fi; if ! mbx cache import "$bundle"; then echo "mbx bundle import failed; continuing cold"; rm -rf "$bundle"; exit 0; fi"#;
-
-/// YAML step id for the MBX restore and export steps, when they have one.
-pub(crate) fn step_yaml_id(name: &str) -> Option<&'static str> {
-    match name {
-        MBX_RESTORE_NAME => Some("mbx"),
-        MBX_CACHE_KEY_NAME => Some("mbx-cache-key"),
-        MBX_BUNDLE_RESTORE_NAME => Some("mbx-bundle"),
-        MBX_BUNDLE_EXPORT_NAME => Some("mbx-export"),
-        _ => None,
-    }
-}
-
-/// Emit `id:` for the two MBX steps whose later steps read outputs.
-pub(crate) fn push_step_id(entries: &mut Vec<(String, crate::yaml::Yaml)>, name: &str) {
-    let Some(id) = step_yaml_id(name) else {
-        return;
-    };
-    entries.push(("id".to_owned(), crate::yaml::Yaml::str(id.to_owned())));
-}
 
 /// Gate hosted cache writes and append the Scale Set single-bundle save.
 ///
@@ -80,7 +72,7 @@ pub(crate) fn append_single_bundle_saves(
         if job
             .steps
             .iter()
-            .any(|step| step.name == MBX_BUNDLE_EXPORT_NAME)
+            .any(|step| step.role == Some(StepRole::MbxBundleExport))
         {
             continue;
         }
@@ -116,7 +108,11 @@ fn configure_runner_scoped_cache(job: &mut Job) -> Result<bool, RenderError> {
             .ok_or_else(|| RenderError::InvalidWorkflow("mbx_missing_toolchain".to_owned()))?;
         (action_sha, mbx_version, rust_toolchain)
     };
-    if !job.steps.iter().any(|step| step.name == MBX_CACHE_KEY_NAME) {
+    if !job
+        .steps
+        .iter()
+        .any(|step| step.role == Some(StepRole::MbxBundleKey))
+    {
         let key = key_step(&action_sha, &mbx_version, &rust_toolchain, scale_set)?;
         job.steps.insert(action_index, key);
     }
@@ -144,20 +140,24 @@ fn configure_runner_scoped_cache(job: &mut Job) -> Result<bool, RenderError> {
         with.remove("restore-keys");
         env.remove(MBX_CACHE_MODE_ENV);
         MBX_LOCAL_SETUP_NAME.clone_into(&mut step.name);
+        step.role = Some(StepRole::MbxLocalSetup);
     } else {
         with.insert("backend".to_owned(), "github".to_owned());
         with.insert(
             "cache-key".to_owned(),
-            "${{ steps.mbx-cache-key.outputs.key }}".to_owned(),
+            output_ref(StepId::MbxBundleKey, "key"),
         );
         with.insert(
             "restore-keys".to_owned(),
-            "${{ steps.mbx-cache-key.outputs.prefix }}".to_owned(),
+            output_ref(StepId::MbxBundleKey, "prefix"),
         );
         env.insert(
             MBX_CACHE_MODE_ENV.to_owned(),
             "${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}".to_owned(),
         );
+    }
+    if !scale_set {
+        step.role = Some(StepRole::MbxCache);
     }
     Ok(scale_set)
 }
@@ -166,7 +166,7 @@ fn insert_bundle_restore(job: &mut Job) -> Result<(), RenderError> {
     if job
         .steps
         .iter()
-        .any(|step| step.name == MBX_BUNDLE_RESTORE_NAME)
+        .any(|step| step.role == Some(StepRole::MbxBundleRestore))
     {
         return Ok(());
     }
@@ -201,43 +201,45 @@ fn key_step(
         ),
         ("RUST_TOOLCHAIN".to_owned(), rust_toolchain.to_owned()),
     ]);
-    let step = crate::steps::shell_step(
+    let mut step = crate::steps::shell_step(
         MBX_CACHE_KEY_NAME,
         vec!["bash".to_owned(), "-c".to_owned(), KEY_SCRIPT.to_owned()],
         env,
     )?;
+    step.id = Some(StepId::MbxBundleKey);
+    step.role = Some(StepRole::MbxBundleKey);
     Ok(step)
 }
 
 fn restore_step() -> Result<Step, RenderError> {
-    let step = crate::steps::action_step(
+    let mut step = crate::steps::action_step(
         MBX_BUNDLE_RESTORE_NAME,
         TOOLS_RESTORE_USES,
         BTreeMap::from([
-            (
-                "key".to_owned(),
-                "${{ steps.mbx-cache-key.outputs.key }}".to_owned(),
-            ),
+            ("key".to_owned(), output_ref(StepId::MbxBundleKey, "key")),
             (
                 "restore-keys".to_owned(),
-                "${{ steps.mbx-cache-key.outputs.prefix }}".to_owned(),
+                output_ref(StepId::MbxBundleKey, "prefix"),
             ),
             ("path".to_owned(), MBX_BUNDLE_PATH.to_owned()),
         ]),
     )?;
+    step.id = Some(StepId::MbxBundle);
+    step.role = Some(StepRole::MbxBundleRestore);
     Ok(step)
 }
 
 fn import_step() -> Result<Step, RenderError> {
     let env = BTreeMap::from([(
         "MATCHED".to_owned(),
-        "${{ steps.mbx-bundle.outputs.cache-matched-key }}".to_owned(),
+        output_ref(StepId::MbxBundle, "cache-matched-key"),
     )]);
-    let step = crate::steps::shell_step(
+    let mut step = crate::steps::shell_step(
         MBX_BUNDLE_IMPORT_NAME,
         vec!["bash".to_owned(), "-c".to_owned(), IMPORT_SCRIPT.to_owned()],
         env,
     )?;
+    step.role = Some(StepRole::MbxBundleImport);
     Ok(step)
 }
 
@@ -247,7 +249,9 @@ fn export_step() -> Result<Step, RenderError> {
         vec!["bash".to_owned(), "-c".to_owned(), EXPORT_SCRIPT.to_owned()],
         BTreeMap::new(),
     )?;
-    step.condition = Some(PREP_IF.to_owned());
+    step.condition = Some(prepare_condition());
+    step.id = Some(StepId::MbxExport);
+    step.role = Some(StepRole::MbxBundleExport);
     Ok(step)
 }
 
@@ -256,13 +260,16 @@ fn save_step() -> Result<Step, RenderError> {
         MBX_BUNDLE_SAVE_NAME,
         TOOLS_SAVE_USES,
         BTreeMap::from([
-            (
-                "key".to_owned(),
-                "${{ steps.mbx-cache-key.outputs.key }}".to_owned(),
-            ),
+            ("key".to_owned(), output_ref(StepId::MbxBundleKey, "key")),
             ("path".to_owned(), MBX_BUNDLE_PATH.to_owned()),
         ]),
     )?;
-    step.condition = Some(SAVE_IF.to_owned());
+    step.condition = Some(save_condition());
+    step.role = Some(StepRole::MbxBundleSave);
     Ok(step)
+}
+
+/// One typed output reference used by downstream MBX cache steps.
+fn output_ref(id: StepId, output: &str) -> String {
+    format!("${{{{ steps.{}.outputs.{output} }}}}", id.as_str())
 }

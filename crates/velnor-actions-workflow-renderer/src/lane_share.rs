@@ -7,7 +7,7 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::workflow::lanes::{HOSTED_SUFFIX, SCALE_SUFFIX};
-use velnor_actions_contract::{Job, Step, StepKind};
+use velnor_actions_contract::{Job, Step, StepKind, StepRole};
 
 use crate::composite::composite_yaml;
 use crate::document_steps::step_to_yaml;
@@ -75,6 +75,15 @@ pub(crate) fn share_lanes(
     let mut files = Vec::new();
     let mut next = jobs.clone();
     let mut env_steps = BTreeMap::new();
+    if next.values().any(|job| {
+        job.steps
+            .iter()
+            .any(|step| step.role == Some(StepRole::TofuProvidersAdmission))
+    }) {
+        files.push(crate::tofu_cache::provider_admission_file(
+            &ctx.generator_version,
+        )?);
+    }
     for hosted_id in hosted_ids(jobs) {
         let Some(logical) = logical_id(&hosted_id) else {
             return Err(RenderError::InvalidWorkflow(format!(
@@ -110,7 +119,7 @@ pub(crate) fn share_lanes(
         postludes.insert(hosted_id.clone(), parts.hosted_postlude);
         postludes.insert(local_id.clone(), parts.local_postlude);
     }
-    Ok(LaneShare {
+    let shared = LaneShare {
         jobs: next,
         calls,
         checkouts,
@@ -119,7 +128,35 @@ pub(crate) fn share_lanes(
         preludes,
         postludes,
         files,
-    })
+    };
+    validate_serialized_scopes(&shared)?;
+    Ok(shared)
+}
+
+/// Validate the expanded workflow-job and composite-action step scopes.
+fn validate_serialized_scopes(shared: &LaneShare) -> Result<(), RenderError> {
+    for (id, job) in &shared.jobs {
+        let Some(checkout) = shared.checkouts.get(id) else {
+            velnor_actions_contract::workflow::step_identity::validate_step_sequence(
+                &job.steps, id,
+            )
+            .map_err(RenderError::Contract)?;
+            continue;
+        };
+        let mut steps = vec![checkout.clone()];
+        if let Some(prefix) = shared.prefixes.get(id) {
+            steps.extend(prefix.iter().cloned());
+        }
+        if let Some(prelude) = shared.preludes.get(id) {
+            steps.extend(prelude.iter().cloned());
+        }
+        if let Some(postlude) = shared.postludes.get(id) {
+            steps.extend(postlude.iter().cloned());
+        }
+        velnor_actions_contract::workflow::step_identity::validate_step_sequence(&steps, id)
+            .map_err(RenderError::Contract)?;
+    }
+    Ok(())
 }
 
 fn hosted_ids(jobs: &BTreeMap<String, Job>) -> Vec<String> {
@@ -206,7 +243,7 @@ fn split_shared_steps(
 fn mbx_prelude_index(steps: &[Step]) -> Option<usize> {
     let preflight = steps
         .iter()
-        .position(|step| step.name == crate::cache_steps::MBX_PREFLIGHT_NAME)?;
+        .position(|step| step.role == Some(StepRole::MbxPreflight))?;
     (preflight < steps.len()).then_some(preflight)
 }
 
@@ -220,7 +257,7 @@ fn peel_mbx_prelude(steps: &[Step]) -> Option<(Vec<Step>, &[Step])> {
         }
     }
     let prelude = &steps[..end];
-    if prelude.first()?.name != crate::cache_steps::MBX_PREFLIGHT_NAME
+    if prelude.first()?.role != Some(StepRole::MbxPreflight)
         || !prelude.iter().any(crate::cache_steps::is_mbx_action)
     {
         return None;
@@ -230,13 +267,15 @@ fn peel_mbx_prelude(steps: &[Step]) -> Option<(Vec<Step>, &[Step])> {
 
 fn is_mbx_prelude_step(step: &Step) -> bool {
     matches!(
-        step.name.as_str(),
-        crate::cache_steps::MBX_PREFLIGHT_NAME
-            | crate::cache_steps::MBX_RESTORE_NAME
-            | crate::mbx_bundle::MBX_CACHE_KEY_NAME
-            | crate::mbx_bundle::MBX_LOCAL_SETUP_NAME
-            | crate::mbx_bundle::MBX_BUNDLE_RESTORE_NAME
-            | crate::mbx_bundle::MBX_BUNDLE_IMPORT_NAME
+        step.role,
+        Some(
+            StepRole::MbxPreflight
+                | StepRole::MbxCache
+                | StepRole::MbxBundleKey
+                | StepRole::MbxLocalSetup
+                | StepRole::MbxBundleRestore
+                | StepRole::MbxBundleImport
+        )
     )
 }
 
@@ -256,14 +295,14 @@ fn peel_postlude(steps: &[Step]) -> (Vec<Step>, Vec<Step>) {
 fn is_postlude_step(step: &Step) -> bool {
     is_elected_save(step)
         || matches!(
-            step.name.as_str(),
-            crate::mbx_bundle::MBX_BUNDLE_EXPORT_NAME | crate::mbx_bundle::MBX_BUNDLE_SAVE_NAME
+            step.role,
+            Some(StepRole::MbxBundleExport | StepRole::MbxBundleSave)
         )
 }
 
 fn peel_checkout<'a>(steps: &'a [Step], checkout_uses: &str) -> Option<(&'a Step, &'a [Step])> {
     let (checkout, remaining) = steps.split_first()?;
-    let is_expected_checkout = checkout.name == "Checkout"
+    let is_expected_checkout = checkout.role == Some(StepRole::Checkout)
         && checkout.condition.is_none()
         && matches!(
             &checkout.kind,
@@ -279,7 +318,7 @@ fn peel_checkout<'a>(steps: &'a [Step], checkout_uses: &str) -> Option<(&'a Step
 }
 
 fn is_checkout_step(step: &Step) -> bool {
-    step.name == "Checkout"
+    step.role == Some(StepRole::Checkout)
         || matches!(
             &step.kind,
             StepKind::Action { uses, .. }
@@ -288,8 +327,10 @@ fn is_checkout_step(step: &Step) -> bool {
 }
 
 fn is_elected_save(step: &Step) -> bool {
-    step.name == crate::cache_steps::TOOLS_SAVE_NAME
-        || step.name == crate::tofu_cache::TOFU_PROVIDERS_SAVE_NAME
+    matches!(
+        step.role,
+        Some(StepRole::ToolsCacheSave | StepRole::TofuProvidersSave)
+    )
 }
 
 fn set_steps(jobs: &mut BTreeMap<String, Job>, id: &str, steps: Vec<Step>) {
@@ -303,6 +344,11 @@ fn composite_file(
     steps: &[Step],
     ctx: &RenderContext,
 ) -> Result<RenderedFile, RenderError> {
+    velnor_actions_contract::workflow::step_identity::validate_step_sequence(
+        steps,
+        &format!("composite:{logical}"),
+    )
+    .map_err(RenderError::Contract)?;
     let mut rendered = Vec::with_capacity(steps.len());
     let empty_job_env = BTreeMap::new();
     for step in steps {

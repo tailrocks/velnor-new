@@ -185,6 +185,7 @@ fn render_workflow_parts(
     closure::insert_task_closure(&mut jobs)?;
     closure::insert_final_closure(&mut jobs)?;
     final_steps::insert_final_fanin(&mut jobs, ctx)?;
+    validate_final_jobs(ir, &jobs)?;
     render_merged(ir, &jobs, ctx)
 }
 
@@ -278,16 +279,26 @@ pub fn finalize_jobs(
     closure::insert_task_closure(&mut jobs)?;
     closure::insert_final_closure(&mut jobs)?;
     final_steps::insert_final_fanin(&mut jobs, ctx)?;
+    validate_final_jobs(ir, &jobs)?;
     Ok(jobs)
 }
 
-/// Sorted unique `uses:` refs across every action step (plan display).
+/// Revalidate each complete job after policy merge and all internal expansion.
+fn validate_final_jobs(ir: &WorkflowIr, jobs: &BTreeMap<String, Job>) -> Result<(), RenderError> {
+    let mut finalized = ir.clone();
+    finalized.jobs.clone_from(jobs);
+    finalized.validate().map_err(RenderError::Contract)
+}
+
+/// Sorted unique pinned remote `uses:` refs across every action step (plan display).
 #[must_use]
 pub fn action_pins(jobs: &BTreeMap<String, Job>) -> Vec<String> {
     let mut pins = std::collections::BTreeSet::new();
     for job in jobs.values() {
         for step in &job.steps {
-            if let velnor_actions_contract::StepKind::Action { uses, .. } = &step.kind {
+            if let velnor_actions_contract::StepKind::Action { uses, .. } = &step.kind
+                && !uses.starts_with("./.github/actions/")
+            {
                 pins.insert(uses.clone());
             }
         }
@@ -359,7 +370,6 @@ fn render_merged(
         matrix::attach_plan_outputs(&mut document)?;
     }
     matrix::attach_crate_job_caps(&mut document, &caps)?;
-    matrix::insert_publish_step_id(&mut document)?;
     let document = crate::yaml::quote_run_values_in_yaml(document);
     let text = marker::with_marker(&ctx.generator_version, &render_yaml(&document))?;
     crate::workflow_size::check_workflow_size(WORKFLOW_PATH, &text)?;

@@ -12,6 +12,8 @@ pub mod permissions;
 pub mod plan;
 pub mod qualification;
 pub mod report;
+pub mod step;
+pub mod step_identity;
 pub mod timeout;
 pub mod trust;
 pub use artifacts::{
@@ -23,7 +25,7 @@ pub use baseline::{BaselineProof, BaselineStatus, ManifestTaskProof, PlanBaselin
 pub use cache_ids::EntryCacheIds;
 pub use crate_job::{CrateJob, CrateObligation};
 pub use execute::{ExecuteTaskIds, ExecuteTaskRef};
-pub use ir::{Concurrency, Job, Step, StepKind, Trigger, WorkflowIr};
+pub use ir::{Concurrency, Job, Trigger, WorkflowIr};
 pub use jobs::{
     CI_WORKFLOW_PATH, CRATE_JOB_ID_PREFIX, FRESHNESS_CRON_WEEKLY, FRESHNESS_WORKFLOW_PATH,
     PLAN_DISPLAY_NAME, PLAN_JOB_ID, REQUIRED_CONDITION, REQUIRED_DISPLAY_NAME, REQUIRED_JOB_ID,
@@ -51,5 +53,7 @@ pub use report::{
     CacheLayer, CacheOutcome, CacheResult, MatrixReport, MatrixStatus, MatrixTaskEntry,
     NotSelectedReason, TaskReport, TaskStatus, TaskTiming,
 };
+pub use step::{Step, StepKind};
+pub use step_identity::{StepId, StepRole};
 pub use timeout::JobTimeout;
 pub use trust::{Trust, trust_for_event};

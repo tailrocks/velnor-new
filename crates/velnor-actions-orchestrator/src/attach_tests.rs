@@ -350,13 +350,16 @@ mod mbx_tests;
 
 #[test]
 fn preseed_skips_mbx_restore_for_cargo_only_plans() {
+    use velnor_actions_contract::StepRole;
     use velnor_actions_workflow_renderer::{PRESEED_BUILD_NAME, PRESEED_VERIFY_NAME};
     let mut plan = preseed_fixture(false, &[String::new()]);
     attach_preseed(&mut plan, "ubuntu-26.04", "0.1.0").expect("attach");
     let steps = &plan.ir.jobs["plan"].steps;
     let names: Vec<&str> = steps.iter().map(|step| step.name.as_str()).collect();
     assert!(
-        !names.contains(&MBX_RESTORE_NAME),
+        !steps
+            .iter()
+            .any(|step| step.role == Some(StepRole::MbxCache)),
         "cargo-only plans stay rust-cache-only: {names:?}"
     );
     let probe = names
