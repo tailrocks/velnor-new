@@ -130,7 +130,7 @@ fn preseed_verify_fails_when_mise_emits_version_then_exits_nonzero()
 
     let step = preseed_verify_step(
         &mise_argv("rust@1.98.1", "mbx", &["--version"]),
-        "1.22.0",
+        "1.21.1",
         &BTreeMap::new(),
     )?;
     let velnor_actions_contract::StepKind::Shell { run, .. } = &step.kind else {
@@ -161,7 +161,7 @@ fn preseed_verify_fails_when_mise_emits_version_then_exits_nonzero()
     let mise = bin.join("mise");
     std::fs::write(
         &mise,
-        "#!/bin/sh\nprintf '%s\\n' 'mbx 1.22.0'\nprintf invoked > \"$MISE_MARKER\"\nexit 7\n",
+        "#!/bin/sh\nprintf '%s\\n' 'mbx 1.21.1'\nprintf invoked > \"$MISE_MARKER\"\nexit 7\n",
     )?;
     let mut permissions = std::fs::metadata(&mise)?.permissions();
     permissions.set_mode(0o755);
@@ -181,7 +181,7 @@ fn preseed_verify_fails_when_mise_emits_version_then_exits_nonzero()
     let version_output = std::fs::read_to_string(runner_temp.join("velnor/preseed-mbx-version"))?;
     std::fs::remove_dir_all(&root)?;
     assert_eq!(called, "invoked");
-    assert_eq!(version_output, "mbx 1.22.0\n");
+    assert_eq!(version_output, "mbx 1.21.1\n");
     assert!(
         !output.status.success(),
         "the rendered verification step accepted a failed MBX producer"
