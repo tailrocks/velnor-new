@@ -3,6 +3,10 @@
 use std::collections::BTreeMap;
 use std::error::Error;
 
+#[path = "impl_repo_archive_deps.rs"]
+mod archive_deps;
+use archive_deps::reviewed_archive_dependency;
+
 use crate::impl_repo_policy::{
     MEMBERS, dep_key, dep_lines, dep_referenced, manifest, p11_toml, read, repo_root, test_markers,
     tree_files,
@@ -63,8 +67,9 @@ fn external_deps_allowlisted_used_and_narrow() -> Result<(), Box<dyn Error>> {
         "anyhow",
         "tracing",
         "tempfile",
-        // Reviewed OS shim for the P09 atomic directory exchange; already
-        // in the lockfile via tempfile, zero new crates.
+        // Reviewed OS shim already in the lockfile via tempfile, zero new
+        // crates. `fs` supports the P09 atomic directory exchange; `process`
+        // supports PR20 deadline-bound Unix process-group termination.
         "rustix",
         // Reviewed hash impl for the pre-seed manifest writer (SHA-256 of
         // the fresh helper) and generator SHA-256 identity (replaces
@@ -89,23 +94,25 @@ fn external_deps_allowlisted_used_and_narrow() -> Result<(), Box<dyn Error>> {
             if key.starts_with("velnor-actions") {
                 continue;
             }
-            assert!(allowed.contains(&key), "{dir} uses {key}");
-            if let Some(index) = line.find("features") {
+            let archive_decoder = reviewed_archive_dependency(dir, key, line);
+            assert!(
+                allowed.contains(&key) || archive_decoder,
+                "{dir} uses {key}"
+            );
+            if let Some(index) = line.find("features").filter(|_| !archive_decoder) {
                 let quoted: Vec<&str> = line[index..].split('"').collect();
                 for feature in quoted.into_iter().skip(1).step_by(2) {
-                    // Only `derive` globally, plus `fs` on rustix for the
-                    // P09 atomic directory exchange (no net/pty/terminal).
+                    // Only `derive` globally, plus the narrowly used `fs`
+                    // and `process` rustix features (no net/pty/terminal).
                     let narrow = feature == "derive"
-                        || (key == "rustix" && feature == "fs")
-                        || (key == "flate2" && feature == "rust_backend")
-                        || (key == "zip" && feature == "deflate-flate2");
+                        || (key == "rustix" && matches!(feature, "fs" | "process"));
                     assert!(narrow, "{dir}/{key} feature {feature}");
                 }
             }
             let feature_backend =
                 key == "flate2" && body.contains("zip = ") && body.contains("deflate-flate2");
             assert!(
-                dep_referenced(dir, key)? || feature_backend,
+                dep_referenced(dir, &key.replace('-', "_"))? || feature_backend,
                 "{dir} never uses {key}"
             );
         }

@@ -85,7 +85,7 @@ fn check_step_tokens(id: &str, step: &Step) -> Result<(), RenderError> {
                 }
             }
         }
-        StepKind::Internal { operation }
+        StepKind::Internal { operation, .. }
             if operation == crate::steps::RESOLVE_QUALIFICATION_OPERATION
                 && (id != PLAN_JOB_ID
                     || step.condition.as_deref()

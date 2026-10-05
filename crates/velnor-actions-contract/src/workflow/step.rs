@@ -50,6 +50,9 @@ pub enum StepKind {
     Internal {
         /// Internal operation name.
         operation: String,
+        /// Fixed environment values attached by workflow expansion.
+        #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+        env: std::collections::BTreeMap<String, String>,
     },
 }
 
@@ -103,9 +106,11 @@ impl Step {
 fn validate_id_kind(id: Option<StepId>, kind: &StepKind, job: &str) -> Result<(), ContractError> {
     let Some(id) = id else { return Ok(()) };
     let valid = match id {
-        StepId::Plan => matches!(kind, StepKind::Internal { operation } if operation == "plan-v1"),
+        StepId::Plan => {
+            matches!(kind, StepKind::Internal { operation, .. } if operation == "plan-v1")
+        }
         StepId::PublishBaseline => {
-            matches!(kind, StepKind::Internal { operation } if operation == "publish-baseline-v1")
+            matches!(kind, StepKind::Internal { operation, .. } if operation == "publish-baseline-v1")
         }
         StepId::TofuProviders => {
             matches!(kind, StepKind::Action { uses, .. } if uses == TOFU_PROVIDER_ADMISSION_USES)
@@ -145,7 +150,7 @@ fn validate_kind(kind: &StepKind, job: &str) -> Result<(), ContractError> {
                 ));
             }
         }
-        StepKind::Internal { operation } => {
+        StepKind::Internal { operation, .. } => {
             if operation.trim().is_empty() {
                 return Err(ContractError::identity(
                     "step.operation",

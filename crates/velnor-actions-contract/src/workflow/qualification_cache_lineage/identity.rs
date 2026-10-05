@@ -257,7 +257,8 @@ pub(crate) fn identity_commitment(
         .as_ref()
         .ok_or_else(|| ContractError::identity("qualification.cache_ids", "missing"))?;
     ids.validate()?;
-    let target = crate::target_for_runner_label(&plan.runner.label)
+    let target = crate::ReleaseTarget::for_runner_label(&plan.runner.label)
+        .map(crate::ReleaseTarget::triple)
         .ok_or_else(|| ContractError::identity("qualification.runner", "unsupported_target"))?;
     let adapter_metadata = canonical_adapter_metadata(plan, &entry.adapter_metadata)?;
     let driver_id = digest_b3(&canonical_json_bytes(&adapter_metadata)?);
@@ -293,7 +294,8 @@ pub(crate) fn runtime_requirements(
         .as_ref()
         .ok_or_else(|| ContractError::identity("qualification.cache_ids", "missing"))?;
     ids.validate()?;
-    let target = crate::target_for_runner_label(&plan.runner.label)
+    let target = crate::ReleaseTarget::for_runner_label(&plan.runner.label)
+        .map(crate::ReleaseTarget::triple)
         .ok_or_else(|| ContractError::identity("qualification.runner", "unsupported_target"))?;
     Ok(QualificationRuntimeIdentityRequirements {
         runner_label: plan.runner.label.clone(),

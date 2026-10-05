@@ -16,12 +16,12 @@ use std::process::ExitCode;
 
 use clap::Parser;
 use velnor_actions_orchestrator::{
-    DYNAMIC_MATRIX_OUTPUT_MODE, FETCH_OP, MERGE_OP, OrchestratorError, PLAN_MATRIX_OUTPUT_MODE_ENV,
-    PLAN_OP, PRESEED_MANIFEST_OP, PUBLISH_OP, PlanOutputMode, QUALIFICATION_RESOLVER_OP, REPORT_OP,
-    REQUEST_FILE_ENV, WRITE_REQUEST_OP, merge_internal, merge_passed, plan_internal,
-    plan_outputs_from_staged_admission, publish_final_report, publish_plan_files,
-    resolve_qualification_admission, response_path_for, retrieve_reports, write_preseed_manifest,
-    write_request, write_task_report,
+    DYNAMIC_MATRIX_OUTPUT_MODE, EXECUTE_CHECK_OP, FETCH_OP, MERGE_OP, OrchestratorError,
+    PLAN_MATRIX_OUTPUT_MODE_ENV, PLAN_OP, PRESEED_MANIFEST_OP, PUBLISH_OP, PlanOutputMode,
+    QUALIFICATION_RESOLVER_OP, REPORT_OP, REQUEST_FILE_ENV, WRITE_REQUEST_OP, execute_check,
+    merge_internal, merge_passed, plan_internal, plan_outputs_from_staged_admission,
+    publish_final_report, publish_plan_files, resolve_qualification_admission, response_path_for,
+    retrieve_reports, write_preseed_manifest, write_request, write_task_report,
 };
 
 use crate::args::{Cli, Command};
@@ -43,6 +43,7 @@ const GITHUB_EVENT_PATH_ENV: &str = "GITHUB_EVENT_PATH";
 enum InternalOp {
     /// Materialize the request file from the GitHub environment.
     WriteRequest,
+    ExecuteCheck,
     /// Plan operation.
     Plan,
     /// Merge operation.
@@ -99,6 +100,7 @@ pub(crate) fn try_internal() -> Option<ExitCode> {
 /// takes no request file either: runner temp scopes its output.
 fn gate_request() -> Option<InternalRequest> {
     let op = match env::var(OP_ENV).as_deref() {
+        Ok(tag) if tag == EXECUTE_CHECK_OP => InternalOp::ExecuteCheck,
         Ok(tag) if tag == WRITE_REQUEST_OP => InternalOp::WriteRequest,
         Ok(tag) if tag == PLAN_OP => InternalOp::Plan,
         Ok(tag) if tag == MERGE_OP => InternalOp::Merge,
@@ -109,7 +111,7 @@ fn gate_request() -> Option<InternalRequest> {
         Ok(tag) if tag == QUALIFICATION_RESOLVER_OP => InternalOp::ResolveQualification,
         _ => return None,
     };
-    if op == InternalOp::Fetch || op == InternalOp::Report {
+    if op == InternalOp::Fetch || op == InternalOp::Report || op == InternalOp::ExecuteCheck {
         if env::var("GITHUB_RUN_ID").is_ok_and(|id| !id.is_empty()) {
             return runner_velnor_dir().map(|path| InternalRequest { op, path });
         }
@@ -146,7 +148,10 @@ fn gate_request() -> Option<InternalRequest> {
                 return None;
             }
         }
-        InternalOp::Fetch | InternalOp::Report | InternalOp::PreseedManifest => {}
+        InternalOp::Fetch
+        | InternalOp::Report
+        | InternalOp::PreseedManifest
+        | InternalOp::ExecuteCheck => {}
     }
     Some(InternalRequest { op, path })
 }
@@ -165,6 +170,10 @@ fn runner_velnor_dir() -> Option<PathBuf> {
 /// Run one validated private operation.
 fn run_internal(request: &InternalRequest) -> ExitCode {
     match request.op {
+        InternalOp::ExecuteCheck => match execute_check() {
+            Ok(_) => ExitCode::SUCCESS,
+            Err(error) => fail_internal(&error.to_string()),
+        },
         InternalOp::WriteRequest => match write_request() {
             Ok(_) => ExitCode::SUCCESS,
             Err(error) => fail_internal(&error.to_string()),
@@ -206,13 +215,6 @@ fn run_plan_internal(path: &Path) -> ExitCode {
         Ok(response) => response,
         Err(error) => return fail_internal(&error.to_string()),
     };
-    let sibling = match response_path_for(path) {
-        Ok(sibling) => sibling,
-        Err(error) => return fail_internal(&error.to_string()),
-    };
-    if let Err(error) = fs::write(&sibling, &response) {
-        return fail_internal(&format!("write response: {error}"));
-    }
     let Some(runner_temp) = env::var_os(RUNNER_TEMP_ENV).filter(|value| !value.is_empty()) else {
         return fail_internal("missing runner temp");
     };
@@ -221,6 +223,13 @@ fn run_plan_internal(path: &Path) -> ExitCode {
         Ok(outputs) => outputs,
         Err(error) => return fail_internal(&error.to_string()),
     };
+    let sibling = match response_path_for(path) {
+        Ok(sibling) => sibling,
+        Err(error) => return fail_internal(&error.to_string()),
+    };
+    if let Err(error) = fs::write(&sibling, &response) {
+        return fail_internal(&format!("write response: {error}"));
+    }
     let Some(output_path) = env::var_os(GITHUB_OUTPUT_ENV).filter(|value| !value.is_empty()) else {
         return fail_internal("missing github output");
     };

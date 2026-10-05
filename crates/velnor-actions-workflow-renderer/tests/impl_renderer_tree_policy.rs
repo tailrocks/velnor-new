@@ -36,6 +36,7 @@ fn plan_job() -> Result<Job, RenderError> {
     Ok(Job {
         display_name: "Plan".to_owned(),
         runs_on: LABEL.to_owned(),
+        check_runner: None,
         timeout_minutes: JobTimeout::PLAN,
         needs: Vec::new(),
         condition: None,
@@ -94,6 +95,7 @@ fn simple_job(display: &str, needs: Vec<String>, steps: Vec<Step>) -> Job {
     Job {
         display_name: display.to_owned(),
         runs_on: LABEL.to_owned(),
+        check_runner: None,
         timeout_minutes: JobTimeout::CRATE,
         needs,
         condition: None,
@@ -273,6 +275,7 @@ fn final_gate_keeps_exact_name_and_condition() -> Result<(), RenderError> {
         Job {
             display_name: "Wrong Name".to_owned(),
             runs_on: LABEL.to_owned(),
+            check_runner: None,
             timeout_minutes: JobTimeout::CRATE,
             needs: vec!["plan".to_owned()],
             condition: Some("always()".to_owned()),
@@ -288,6 +291,7 @@ fn final_gate_keeps_exact_name_and_condition() -> Result<(), RenderError> {
         Job {
             display_name: "Required".to_owned(),
             runs_on: LABEL.to_owned(),
+            check_runner: None,
             timeout_minutes: JobTimeout::REQUIRED,
             needs: vec!["plan".to_owned()],
             condition: None,
@@ -303,6 +307,7 @@ fn final_gate_keeps_exact_name_and_condition() -> Result<(), RenderError> {
         Job {
             display_name: "Required".to_owned(),
             runs_on: LABEL.to_owned(),
+            check_runner: None,
             timeout_minutes: JobTimeout::REQUIRED,
             needs: vec!["plan".to_owned()],
             condition: Some("always()".to_owned()),

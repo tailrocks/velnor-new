@@ -1,6 +1,7 @@
 //! Schema-1 affected plan and generic matrix entries.
 use super::baseline::{BaselineProof, PlanBaseline};
-pub use super::matrix_entry::{MatrixEntry, validate_matrix_run};
+use super::lanes::NamedCheckLaneVariant;
+pub use super::matrix_entry::MatrixEntry;
 use super::qualification_dispatch::QualificationDispatch;
 use super::trust::Trust;
 use crate::canonical::validate_digest;
@@ -20,7 +21,7 @@ use serde::{Deserialize, Serialize};
 pub const PLAN_MATRIX_OUTPUT_MODE_ENV: &str = "VELNOR_PLAN_MATRIX_OUTPUT_MODE";
 /// Exact value of [`PLAN_MATRIX_OUTPUT_MODE_ENV`] for dynamic matrices.
 pub const DYNAMIC_MATRIX_OUTPUT_MODE: &str = "dynamic_matrix";
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 /// Schema-1 affected plan.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -210,6 +211,7 @@ impl Plan {
                 return Err(ContractError::Collision(detail));
             }
         }
+        validate_named_check_lane_pairs(&self.matrix.include)?;
         check_obligation_agreement(&self.task_ids, &self.obligations)?;
         for package in &self.packages {
             check_sorted(&package.reasons, "packages.reasons")?;
@@ -222,6 +224,53 @@ impl Plan {
         Ok(())
     }
 }
+
+fn validate_named_check_lane_pairs(entries: &[MatrixEntry]) -> Result<(), ContractError> {
+    let mut singles = BTreeSet::new();
+    let mut pairs = BTreeMap::<&str, u8>::new();
+    for entry in entries {
+        match entry.lane_variant {
+            None => {
+                if pairs.contains_key(entry.task_id.as_str()) {
+                    return Err(ContractError::identity(
+                        "matrix.lane_variant",
+                        "mixed_single_and_paired_lanes",
+                    ));
+                }
+                singles.insert(entry.task_id.as_str());
+            }
+            Some(variant) => {
+                let task_id = entry.task_id.as_str();
+                if singles.contains(task_id) {
+                    return Err(ContractError::identity(
+                        "matrix.lane_variant",
+                        "mixed_single_and_paired_lanes",
+                    ));
+                }
+                let bit = match variant {
+                    NamedCheckLaneVariant::Hosted => 1,
+                    NamedCheckLaneVariant::ScaleSet => 2,
+                };
+                let seen = pairs.entry(task_id).or_default();
+                if *seen & bit != 0 {
+                    return Err(ContractError::identity(
+                        "matrix.lane_variant",
+                        "duplicate_named_check_lane",
+                    ));
+                }
+                *seen |= bit;
+            }
+        }
+    }
+    if pairs.values().any(|seen| *seen != 3) {
+        return Err(ContractError::identity(
+            "matrix.lane_variant",
+            "incomplete_named_check_lane_pair",
+        ));
+    }
+    Ok(())
+}
+
 impl PlanObligation {
     /// Validate one obligation record.
     fn validate(&self) -> Result<(), ContractError> {
@@ -248,6 +297,25 @@ impl PlanObligation {
         Ok(())
     }
 }
+/// Validate one leg command: nonempty single line (GITHUB_OUTPUT-safe).
+/// # Errors
+pub fn validate_matrix_run(value: &str) -> Result<(), ContractError> {
+    if value.is_empty() {
+        return Err(ContractError::identity("run", "empty_run"));
+    }
+    if value
+        .chars()
+        .any(|ch| ch == '\0' || ch == '\n' || ch == '\r')
+    {
+        return Err(ContractError::identity("run", "multiline_run"));
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+#[path = "plan_tests.rs"]
+mod tests;
+
 /// Check `task_ids` contains every obligation ID, nothing else (wf §4).
 fn check_obligation_agreement(
     task_ids: &[String],

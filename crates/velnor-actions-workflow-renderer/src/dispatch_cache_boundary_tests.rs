@@ -28,6 +28,7 @@ fn job(needs: &[&str], step: Step) -> Job {
     Job {
         display_name: "cache job".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
+        check_runner: None,
         timeout_minutes: JobTimeout::CRATE,
         needs: needs.iter().map(|need| (*need).to_owned()).collect(),
         condition: None,
@@ -116,6 +117,7 @@ fn dispatch_plan_job(staged: &str) -> Result<Job, crate::RenderError> {
     Ok(Job {
         display_name: "Velnor Plan".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
+        check_runner: None,
         timeout_minutes: JobTimeout::CRATE,
         needs: Vec::new(),
         condition: None,

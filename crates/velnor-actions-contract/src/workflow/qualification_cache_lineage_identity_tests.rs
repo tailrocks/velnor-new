@@ -114,6 +114,7 @@ fn matrix_for_id(package_id: &str, input: &str) -> MatrixEntry {
         matrix_key: "matrix-demo-test".to_owned(),
         stack_id: "rust".to_owned(),
         task_id: "demo-test".to_owned(),
+        lane_variant: None,
         run: "mise run test".to_owned(),
         task_digest: digest_b3(b"task configuration"),
         adapter_metadata: serde_json::json!({

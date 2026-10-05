@@ -69,6 +69,7 @@ fn request(actual_qualification: Option<QualificationDispatch>) -> MergeRequest 
         matrix: None,
         matrix_reports: Vec::new(),
         task_reports: Vec::new(),
+        check_proofs: Vec::new(),
         required_job_ids: Vec::new(),
         required_jobs: Vec::new(),
         assembly_errors: Vec::new(),
