@@ -23,6 +23,7 @@ tokio = { version = "=1.49.0", features = ["rt-multi-thread", "macros", "time", 
 bollard = { version = "=0.21.1", default-features = false, features = ["pipe"] }
 turso = { version = "=0.8.1" }
 zeroize = { version = "=1.8.1", features = ["derive"] }
+getrandom = { version = "=0.4.3" }
 toml = { version = "=0.9.12" }
 
 [workspace.lints.rust]

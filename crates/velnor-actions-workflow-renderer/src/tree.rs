@@ -153,6 +153,9 @@ pub fn render_tree_with_extra(
         files.push(file.clone());
     }
     files.sort_by(|left, right| left.path.cmp(&right.path));
+    for file in &files {
+        crate::workflow_size::check_workflow_size(&file.path, &file.bytes)?;
+    }
     for pair in files.windows(2) {
         if pair[0].path == pair[1].path {
             return Err(RenderError::UnsafePath("tree_path_duplicate".to_owned()));
