@@ -25,7 +25,7 @@ pub struct PlanOutputs {
     pub qualification_phase: String,
     /// Whether this run may restore isolated qualification caches.
     pub qualification_cache_enabled: bool,
-    /// Whether this run may write isolated qualification cache successors.
+    /// Legacy global writer gate; writes require the typed per-layer directives.
     pub qualification_cache_write: bool,
     /// Canonical typed cache directive map, empty outside Qualification.
     pub qualification_cache_directives: String,
@@ -66,8 +66,7 @@ pub fn plan_outputs_with_admission(
         qualification_phase: qualification
             .map_or_else(String::new, |value| value.phase.as_str().to_owned()),
         qualification_cache_enabled: qualification.is_some_and(|value| value.phase.cache_enabled()),
-        qualification_cache_write: qualification
-            .is_some_and(|value| value.phase.cache_write_allowed()),
+        qualification_cache_write: false,
         qualification_cache_directives: directive
             .as_ref()
             .map(canonical_json_str)
@@ -85,6 +84,18 @@ pub fn plan_outputs_with_admission(
         job_outputs_utf16_bytes: bytes,
         ..outputs
     })
+}
+
+/// Load the fixed runner-temp admission file before deriving qualification outputs.
+/// # Errors
+pub fn plan_outputs_from_staged_admission(
+    response_json: &str,
+    mode: PlanOutputMode,
+    runner_temp: &std::path::Path,
+) -> Result<PlanOutputs, OrchestratorError> {
+    let admission =
+        crate::qualification_resolver::read_qualification_admission(response_json, runner_temp)?;
+    plan_outputs_with_admission(response_json, mode, admission.as_ref())
 }
 
 /// GitHub's maximum jobs created by one matrix strategy.

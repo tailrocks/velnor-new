@@ -59,9 +59,15 @@ pub(crate) fn check_tools_save_shape(job: &JobText) -> Result<(), String> {
         check_cache_action(save, "actions/cache/save@", job)?;
         if !save
             .body
-            .contains("if: success() && github.event_name == 'push'")
+            .contains("success() && github.event_name == 'push'")
+            || !save
+                .body
+                .contains("github.event_name != 'workflow_dispatch'")
         {
-            return Err(format!("{}: tools save is not push-gated", job.id));
+            return Err(format!(
+                "{}: tools save lacks push policy or dispatch denial",
+                job.id
+            ));
         }
         if step_key(save).as_deref() != Some(&key) {
             return Err(format!(

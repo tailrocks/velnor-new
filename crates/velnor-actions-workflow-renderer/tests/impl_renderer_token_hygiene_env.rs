@@ -7,7 +7,8 @@ use std::collections::BTreeMap;
 use velnor_actions_contract::{Job, WorkflowPolicy};
 use velnor_actions_workflow_renderer::{
     RenderError, action_step_with_env, ambient_shell_step, checkout_step, plan_step,
-    render_workflow_ir, steps::MBX_CACHE_MODE_ENV,
+    render_workflow_ir, steps::MBX_CACHE_MODE_ENV, steps::RESOLVE_QUALIFICATION_OPERATION,
+    steps::internal_step,
 };
 
 use super::impl_renderer_fixtures::*;
@@ -62,6 +63,38 @@ fn benign_mbx_cache_mode_env_passes() -> Result<(), RenderError> {
         None,
         &fixture_ctx(),
     )?;
+    Ok(())
+}
+
+#[test]
+fn qualification_resolver_is_scoped_to_dispatch_in_plan_job() -> Result<(), RenderError> {
+    let mut resolver = internal_step(
+        "Resolve qualification predecessor",
+        RESOLVE_QUALIFICATION_OPERATION,
+    )?;
+    resolver.condition = Some("github.event_name == 'workflow_dispatch'".to_owned());
+    render_workflow_ir(
+        &fixture_ir(vec![action_plan_job(vec![resolver])?]),
+        WorkflowPolicy::ConsumerV1,
+        None,
+        &fixture_ctx(),
+    )?;
+
+    let unguarded = internal_step(
+        "Resolve qualification predecessor",
+        RESOLVE_QUALIFICATION_OPERATION,
+    )?;
+    let error = render_workflow_ir(
+        &fixture_ir(vec![action_plan_job(vec![unguarded])?]),
+        WorkflowPolicy::ConsumerV1,
+        None,
+        &fixture_ctx(),
+    )
+    .expect_err("resolver must require workflow_dispatch condition");
+    assert!(
+        matches!(error, RenderError::InvalidWorkflow(ref problem) if problem.contains("qualification_resolver_scope")),
+        "{error}"
+    );
     Ok(())
 }
 

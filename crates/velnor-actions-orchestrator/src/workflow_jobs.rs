@@ -13,7 +13,8 @@ use velnor_actions_mise::{
 };
 use velnor_actions_workflow_renderer::render::{FINAL_CONDITION, FINAL_DISPLAY_NAME, PLAN_JOB_ID};
 use velnor_actions_workflow_renderer::steps::{
-    MERGE_OPERATION, PLAN_OPERATION, merge_step, plan_step, write_request_step,
+    MERGE_OPERATION, PLAN_OPERATION, RESOLVE_QUALIFICATION_OPERATION, merge_step, plan_step,
+    write_request_step,
 };
 
 use crate::OrchestratorError;
@@ -61,12 +62,13 @@ pub(crate) fn plan_job(
     use_mbx: bool,
     use_nextest: bool,
     use_opentofu: bool,
+    use_gh: bool,
     fetch_roots: &[String],
 ) -> Result<Job, OrchestratorError> {
     let mut steps = vec![checkout_history_action()?];
     let prepare = prepare_pinned_tools_step(
         catalog,
-        plan_tools(use_rust, use_mbx, use_nextest, use_opentofu),
+        plan_tools(use_rust, use_mbx, use_nextest, use_opentofu, use_gh),
         use_rust,
     )?;
     steps.push(prepare);
@@ -79,6 +81,17 @@ pub(crate) fn plan_job(
     steps.extend(cached.save);
     steps.extend(acquire);
     steps.push(request_step(PLAN_OPERATION)?);
+    if use_gh {
+        let mut resolve = velnor_actions_workflow_renderer::steps::internal_step(
+            "Resolve qualification predecessor",
+            RESOLVE_QUALIFICATION_OPERATION,
+        )
+        .map_err(|err| OrchestratorError::Contract {
+            problem: err.to_string(),
+        })?;
+        resolve.condition = Some("github.event_name == 'workflow_dispatch'".to_owned());
+        steps.push(resolve);
+    }
     steps.push(plan_step());
     Ok(Job {
         display_name: "Plan".to_owned(),
@@ -191,6 +204,7 @@ fn plan_tools(
     use_mbx: bool,
     use_nextest: bool,
     use_opentofu: bool,
+    use_gh: bool,
 ) -> Vec<PinnedTool> {
     let mut tools = Vec::new();
     tools.extend(use_rust.then_some(PinnedTool::Rust));
@@ -202,6 +216,7 @@ fn plan_tools(
     ]);
     tools.extend(use_nextest.then_some(PinnedTool::Nextest));
     tools.extend(use_opentofu.then_some(PinnedTool::Opentofu));
+    tools.extend(use_gh.then_some(PinnedTool::Gh));
     tools
 }
 

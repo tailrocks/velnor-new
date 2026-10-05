@@ -5,14 +5,15 @@
 //! the companion test file.
 #[path = "wire_w1.rs"]
 pub(crate) mod wire_w1;
+#[path = "workflow_dispatch.rs"]
+mod workflow_dispatch;
 
 use std::collections::BTreeMap;
 
 use velnor_actions_actionlint::{ActionlintConfigInput, IgnorePolicy, StepSyntax};
 use velnor_actions_contract::{
-    Concurrency, DispatchInput, DispatchInputType, GeneratorValidation, Job, Permissions, Stack,
-    Step, StepKind, Trigger, ValidatorKind, VelnorConfig, VelnorSupportWorkflow, WorkflowDispatch,
-    WorkflowIr, WorkflowPolicy,
+    Concurrency, GeneratorValidation, Job, Permissions, Stack, Step, StepKind, Trigger,
+    ValidatorKind, VelnorConfig, VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy,
 };
 use velnor_actions_mise::{
     PREPARE_RUST_COMPONENTS_STEP, PrepareRustComponents, ToolCatalog, ToolHomes,
@@ -78,6 +79,7 @@ fn build_plan_job(
     use_mbx: bool,
     use_nextest: bool,
     use_opentofu: bool,
+    use_gh: bool,
     fetch_roots: &[String],
     discovery: &Discovery,
 ) -> Result<Job, OrchestratorError> {
@@ -89,6 +91,7 @@ fn build_plan_job(
         use_mbx,
         use_nextest,
         use_opentofu,
+        use_gh,
         fetch_roots,
     )?;
     if let Some(format) = wire_w1::workspace_format_step(discovery, catalog)? {
@@ -136,6 +139,7 @@ pub(crate) fn build_workflow(
         use_mbx,
         use_nextest,
         use_opentofu,
+        policy == WorkflowPolicy::VelnorRepositoryV1,
         fetch_roots,
         discovery,
     )?;
@@ -162,7 +166,7 @@ pub(crate) fn build_workflow(
             push_branches: vec![branch.to_owned()],
             merge_group: true,
             workflow_dispatch: (policy == WorkflowPolicy::VelnorRepositoryV1)
-                .then(qualification_dispatch),
+                .then(workflow_dispatch::qualification_dispatch),
             schedule: None,
         },
         permissions: Permissions::default(),
@@ -188,34 +192,6 @@ pub(crate) fn build_workflow(
         context,
         actionlint,
     })
-}
-
-/// Closed dispatch inputs for the protected hosted qualification workflow.
-fn qualification_dispatch() -> WorkflowDispatch {
-    WorkflowDispatch {
-        inputs: vec![
-            DispatchInput {
-                name: "campaign".to_owned(),
-                required: true,
-                input_type: DispatchInputType::String,
-                choices: Vec::new(),
-                default: None,
-            },
-            DispatchInput {
-                name: "phase".to_owned(),
-                required: true,
-                input_type: DispatchInputType::Choice,
-                choices: vec![
-                    "cold".to_owned(),
-                    "control".to_owned(),
-                    "third".to_owned(),
-                    "useful_delta".to_owned(),
-                    "warm".to_owned(),
-                ],
-                default: None,
-            },
-        ],
-    }
 }
 
 fn support_workflow(

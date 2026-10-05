@@ -45,11 +45,59 @@ fn plan_job_writes_request_before_plan() {
             false,
             false,
             false,
+            false,
             &[],
         )
         .expect("plan job");
         assert_request_before(&job, "Plan", "write-request-v1:plan-v1", PLAN_OPERATION);
+        assert!(
+            !job.steps
+                .iter()
+                .any(|step| step.name == "Resolve qualification predecessor"),
+            "consumer planner has no resolver: {:?}",
+            job.steps
+        );
     }
+}
+
+#[test]
+fn qualification_resolver_is_scoped_between_request_and_plan() {
+    let catalog = ToolCatalog::pinned();
+    let job = plan_job(
+        "ubuntu-26.04",
+        None,
+        &catalog,
+        true,
+        false,
+        false,
+        false,
+        true,
+        &[],
+    )
+    .expect("qualification plan job");
+    let names: Vec<&str> = job.steps.iter().map(|step| step.name.as_str()).collect();
+    let request = names
+        .iter()
+        .position(|name| *name == "Write request")
+        .expect("request step");
+    let resolver = names
+        .iter()
+        .position(|name| *name == "Resolve qualification predecessor")
+        .expect("resolver step");
+    let plan = names
+        .iter()
+        .position(|name| *name == "Plan")
+        .expect("plan step");
+    assert!(request < resolver && resolver < plan, "{names:?}");
+    assert_eq!(
+        job.steps[resolver].condition.as_deref(),
+        Some("github.event_name == 'workflow_dispatch'")
+    );
+    let tools = plan_tools(true, false, false, false, true);
+    assert!(
+        tools.contains(&PinnedTool::Gh),
+        "resolver installs pinned gh"
+    );
 }
 
 #[test]
@@ -60,6 +108,7 @@ fn plan_job_checks_out_full_history_for_archaeology() {
         None,
         &catalog,
         true,
+        false,
         false,
         false,
         false,
@@ -87,7 +136,7 @@ fn plan_job_checks_out_full_history_for_archaeology() {
 #[test]
 fn plan_tools_follow_role_in_all_order() {
     assert_eq!(
-        plan_tools(true, false, false, false),
+        plan_tools(true, false, false, false, false),
         vec![
             PinnedTool::Rust,
             PinnedTool::Actionlint,
@@ -96,7 +145,7 @@ fn plan_tools_follow_role_in_all_order() {
         ]
     );
     assert_eq!(
-        plan_tools(false, false, false, true),
+        plan_tools(false, false, false, true, false),
         vec![
             PinnedTool::Actionlint,
             PinnedTool::Shellcheck,
@@ -106,7 +155,7 @@ fn plan_tools_follow_role_in_all_order() {
         "pure-tofu plans carry opentofu plus the validators, no Rust"
     );
     assert_eq!(
-        plan_tools(true, true, true, true),
+        plan_tools(true, true, true, true, false),
         vec![
             PinnedTool::Rust,
             PinnedTool::MrBoxington,
@@ -119,9 +168,9 @@ fn plan_tools_follow_role_in_all_order() {
         "mixed plans carry the union"
     );
     for tools in [
-        plan_tools(true, false, false, false),
-        plan_tools(false, false, false, true),
-        plan_tools(true, true, true, true),
+        plan_tools(true, false, false, false, false),
+        plan_tools(false, false, false, true, false),
+        plan_tools(true, true, true, true, false),
     ] {
         let order: Vec<usize> = tools
             .iter()
@@ -149,6 +198,7 @@ fn plan_job_prepares_pinned_tools_before_generate_consumers() {
             true,
             use_mbx,
             use_nextest,
+            false,
             false,
             &[],
         )
@@ -246,6 +296,7 @@ fn pure_tofu_plan_drops_all_rust_setup() {
         false,
         false,
         true,
+        false,
         &[],
     )
     .expect("plan job");

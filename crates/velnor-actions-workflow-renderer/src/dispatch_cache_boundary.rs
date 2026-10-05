@@ -49,7 +49,6 @@ fn is_cache_access(step: &Step) -> bool {
     };
     uses.starts_with("actions/cache@")
         || uses.starts_with("actions/cache/")
-        || uses.starts_with("Swatinem/rust-cache@")
         || uses.starts_with("jdx/mr-boxington-action@")
 }
 
@@ -63,6 +62,11 @@ fn is_mbx_bundle_shell(step: &Step) -> bool {
 }
 
 fn suppress_dispatch(step: &mut Step) {
+    if step.name == crate::cache_steps::TOOLS_RESTORE_NAME
+        && step.condition.as_deref() == Some(crate::cache_p08::TOOLS_CACHE_RESTORE_CONDITION)
+    {
+        return;
+    }
     let prior = step
         .condition
         .take()
@@ -138,7 +142,7 @@ mod tests {
             ),
             (
                 "crate".to_owned(),
-                job(&["plan"], cache_step("Swatinem/rust-cache@sha", "cargo")),
+                job(&["plan"], cache_step("actions/cache/save@sha", "cargo")),
             ),
         ]);
 

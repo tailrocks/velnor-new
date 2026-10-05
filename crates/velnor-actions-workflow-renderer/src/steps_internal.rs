@@ -9,7 +9,7 @@ use crate::{
     RenderError,
     steps::{
         FETCH_OPERATION, MERGE_OPERATION, PLAN_OPERATION, PUBLISH_OPERATION,
-        WRITE_REQUEST_OPERATION, scan_for_private_subcommands,
+        RESOLVE_QUALIFICATION_OPERATION, WRITE_REQUEST_OPERATION, scan_for_private_subcommands,
     },
 };
 
@@ -21,6 +21,9 @@ use crate::{
 /// `write-request-v1` while materializing the target's request file.
 /// # Errors
 pub(crate) fn split_internal_operation(operation: &str) -> Result<(&str, &str), RenderError> {
+    if operation == RESOLVE_QUALIFICATION_OPERATION {
+        return Ok((operation, PLAN_OPERATION));
+    }
     if operation == PLAN_OPERATION
         || operation == MERGE_OPERATION
         || operation == FETCH_OPERATION

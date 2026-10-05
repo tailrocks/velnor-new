@@ -13,10 +13,17 @@ fn scratch_dir(test: &str) -> Result<PathBuf, String> {
 }
 
 #[test]
-fn allowlist_accepts_exactly_five_verbs() {
+fn allowlist_accepts_exactly_six_verbs() {
     assert_eq!(
         ALLOWED_GIT_VERBS,
-        ["rev-parse", "ls-files", "diff", "show", "config"]
+        [
+            "rev-parse",
+            "ls-files",
+            "diff",
+            "show",
+            "config",
+            "merge-base"
+        ]
     );
     for verb in ALLOWED_GIT_VERBS {
         assert!(is_allowed_git_verb(verb), "verb must be allowed: {verb}");
@@ -30,6 +37,7 @@ fn allowlist_accepts_exactly_five_verbs() {
     assert_eq!(GitRequest::diff(Vec::new()).verb(), "diff");
     assert_eq!(GitRequest::show(Vec::new()).verb(), "show");
     assert_eq!(GitRequest::config(Vec::new()).verb(), "config");
+    assert_eq!(GitRequest::merge_base(Vec::new()).verb(), "merge-base");
 }
 
 #[test]

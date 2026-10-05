@@ -26,8 +26,10 @@ pub const TOOLS_CACHE_IDENTITY_NAME: &str = "Identify Mise cache runtime";
 /// Step output owner used by both V2 restore and save expressions.
 pub const TOOLS_CACHE_IDENTITY_STEP_ID: &str = "velnor-tool-cache-identity";
 /// Cache restore is unavailable unless runtime roots/image were qualified.
-pub const TOOLS_CACHE_RESTORE_CONDITION: &str =
-    "steps.velnor-tool-cache-identity.outputs.enabled == 'true'";
+pub const TOOLS_CACHE_RESTORE_CONDITION: &str = concat!(
+    "steps.velnor-tool-cache-identity.outputs.enabled == 'true' && ",
+    "github.event_name != 'workflow_dispatch'"
+);
 /// Cache writes require an eligible trusted producer and qualified identity.
 pub(crate) fn tools_cache_save_condition() -> String {
     save_policy::condition()
