@@ -9,6 +9,7 @@ license.workspace = true
 workspace = true
 
 [dependencies]
+libc = { workspace = true }
 bollard = { workspace = true }
 getrandom = { workspace = true }
 serde = { workspace = true }

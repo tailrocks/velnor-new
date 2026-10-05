@@ -72,6 +72,18 @@ delete the set.
 States include `waiting_for_engine`, `waiting_for_credentials`, `reconciling`,
 `ready`, `draining`, and `degraded`.
 
+The read-only `status` and `doctor` observer must not report `ready` from an
+empty journal alone. It can report prerequisite failures or `reconciling`;
+`ready` requires a bounded controller-owned snapshot proving Docker ownership,
+journal state, and GitHub session/runner state agree. The CLI runs its current
+partial observer in a private child process and kills and reaps that child at
+the shared deadline; the child receives no secret argv, environment, or output.
+Config reads require a regular file and size cap. Journal inspection has a
+bounded file size, row count, and query deadline; exhausting any bound is
+degraded. A confirmed missing configuration or absent credential may report
+`waiting_for_credentials`; malformed, nonregular, oversized, and unreadable
+configuration reports `degraded`.
+
 Per-user LaunchAgent runs `velnor-host daemon run` in the foreground. No
 double-fork. State under `~/Library/Application Support/Velnor/`. Logs under
 `~/Library/Logs/Velnor/`. Private Unix socket. Not a root LaunchDaemon.
