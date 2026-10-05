@@ -6,7 +6,8 @@ use super::*;
 use crate::tool_seed_test_support::mock_trust_commands;
 
 fn scratch(name: &str) -> PathBuf {
-    let path = std::env::temp_dir().join(format!(
+    let temp_root = fs::canonicalize(std::env::temp_dir()).expect("canonical temp root");
+    let path = temp_root.join(format!(
         "velnor-seed-admission-{name}-{}",
         std::process::id()
     ));

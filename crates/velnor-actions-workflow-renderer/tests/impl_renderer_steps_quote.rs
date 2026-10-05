@@ -150,7 +150,7 @@ fn inline_shell_script_bytes_remain_unchanged_for_the_inner_shell()
     Ok(())
 }
 
-fn shell_argv(
+pub(crate) fn shell_argv(
     run_line: &str,
     runner_temp: Option<&str>,
     home: &str,
