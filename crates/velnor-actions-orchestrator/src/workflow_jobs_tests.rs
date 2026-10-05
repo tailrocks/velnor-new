@@ -162,6 +162,42 @@ fn plan_job_prepares_pinned_tools_before_generate_consumers() {
             Some(1),
             "prepare sits after checkout: {names:?}"
         );
+        let gh_at = names
+            .iter()
+            .position(|name| *name == "Prepare GitHub CLI for trust lookup (best effort)");
+        assert_eq!(
+            gh_at,
+            Some(2),
+            "gh is an independent optional install: {names:?}"
+        );
+        assert!(
+            prepare_at.is_some_and(|prepare| Some(prepare) < gh_at),
+            "required tools prepare before optional gh: {names:?}"
+        );
+        let StepKind::Shell { run, env } = &job.steps[gh_at.expect("best-effort gh step")].kind
+        else {
+            panic!("best-effort gh install must be a shell step: {names:?}");
+        };
+        assert_eq!(run.first().map(String::as_str), Some("bash"));
+        assert_eq!(run.get(1).map(String::as_str), Some("-c"));
+        assert!(
+            run[2].ends_with(" || true"),
+            "gh failure is cold fallback: {run:?}"
+        );
+        assert!(
+            run[2].contains(&format!("gh@{}", catalog.version(PinnedTool::Gh))),
+            "gh stays exact-pinned: {run:?}"
+        );
+        for key in ["MISE_NO_CONFIG", "MISE_NO_ENV", "MISE_NO_HOOKS"] {
+            assert!(
+                env.contains_key(key),
+                "optional install misses {key}: {env:?}"
+            );
+        }
+        assert!(
+            !env.contains_key("GH_TOKEN") && !env.contains_key("GITHUB_TOKEN"),
+            "the optional installer gets no API token: {env:?}"
+        );
         let write_at = names.iter().position(|name| *name == "Write request");
         let plan_at = names.iter().position(|name| *name == "Plan");
         assert!(
@@ -174,15 +210,15 @@ fn plan_job_prepares_pinned_tools_before_generate_consumers() {
         };
         assert_eq!(run[0], "mise");
         let install_at = run.iter().position(|arg| arg == "install");
-        let mut specs = vec![
-            catalog.tool_spec(PinnedTool::Rust),
+        let mut specs = vec![catalog.tool_spec(PinnedTool::Rust)];
+        if use_mbx {
+            specs.push(catalog.tool_spec(PinnedTool::MrBoxington));
+        }
+        specs.extend([
             catalog.tool_spec(PinnedTool::Actionlint),
             catalog.tool_spec(PinnedTool::Shellcheck),
             catalog.tool_spec(PinnedTool::Zizmor),
-        ];
-        if use_mbx {
-            specs.insert(1, catalog.tool_spec(PinnedTool::MrBoxington));
-        }
+        ]);
         if use_nextest {
             specs.push(catalog.tool_spec(PinnedTool::Nextest));
         }
