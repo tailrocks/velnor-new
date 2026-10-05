@@ -1,16 +1,12 @@
 //! Tofu provider-cache step cases: save shape, path allowlist, layer admission.
 use velnor_actions_contract::StepKind;
 use velnor_actions_workflow_renderer::RenderError;
-use velnor_actions_workflow_renderer::steps::{
-    TOOLS_RESTORE_USES, TOOLS_SAVE_USES, cache_action_step,
-};
+use velnor_actions_workflow_renderer::steps::TOOLS_SAVE_USES;
 use velnor_actions_workflow_renderer::tofu_cache::{
-    TOFU_PROVIDER_CACHE_BASE_EXPR, TOFU_PROVIDERS_RESTORE_NAME, TOFU_PROVIDERS_SAVE_NAME,
+    TOFU_PROVIDER_ADMISSION_USES, TOFU_PROVIDER_CACHE_BASE_EXPR, TOFU_PROVIDERS_KEY_OUTPUT_EXPR,
+    TOFU_PROVIDERS_PATH_OUTPUT_EXPR, TOFU_PROVIDERS_RESTORE_NAME, TOFU_PROVIDERS_SAVE_NAME,
     TOFU_PROVIDERS_SAVE_USES, tofu_providers_path_ok, tofu_providers_save_step,
 };
-
-const KEY: &str = "velnor-v1-tofu-providers-x86_64-unknown-linux-gnu-1.13.1-b3-0000000000000000000000000000000000000000000000000000000000000000-${{hashFiles('.terraform.lock.hcl')}}";
-const PATH: &str = "${{ runner.temp }}/velnor/tofu-cache/b3-0000000000000000000000000000000000000000000000000000000000000000";
 
 #[test]
 fn provider_save_step_shape_and_pin_parity() -> Result<(), RenderError> {
@@ -19,14 +15,20 @@ fn provider_save_step_shape_and_pin_parity() -> Result<(), RenderError> {
         "${{ runner.temp }}/velnor/tofu-cache"
     );
     assert_eq!(TOFU_PROVIDERS_SAVE_USES, TOOLS_SAVE_USES);
-    let save = tofu_providers_save_step(KEY, PATH)?;
+    let save = tofu_providers_save_step()?;
     assert_eq!(save.name, TOFU_PROVIDERS_SAVE_NAME);
     let StepKind::Action { uses, with, .. } = &save.kind else {
         panic!("save must be an action step");
     };
     assert_eq!(uses, TOOLS_SAVE_USES);
-    assert_eq!(with.get("key").map(String::as_str), Some(KEY));
-    assert_eq!(with.get("path").map(String::as_str), Some(PATH));
+    assert_eq!(
+        with.get("key").map(String::as_str),
+        Some(TOFU_PROVIDERS_KEY_OUTPUT_EXPR)
+    );
+    assert_eq!(
+        with.get("path").map(String::as_str),
+        Some(TOFU_PROVIDERS_PATH_OUTPUT_EXPR)
+    );
     assert!(
         !with.contains_key("restore-keys"),
         "saves carry no restore keys"
@@ -35,43 +37,22 @@ fn provider_save_step_shape_and_pin_parity() -> Result<(), RenderError> {
 }
 
 #[test]
-fn provider_layer_admits_exact_keys_without_restore_prefix() -> Result<(), RenderError> {
-    let restore = cache_action_step(
-        true,
-        TOOLS_RESTORE_USES,
-        "tofu-providers",
-        KEY,
-        &[],
-        &[PATH.to_owned()],
-    )?;
-    let StepKind::Action { with, .. } = &restore.kind else {
-        panic!("restore must be an action step");
-    };
-    assert_eq!(with.get("key").map(String::as_str), Some(KEY));
+fn provider_restore_and_admission_share_one_typed_composite() {
     assert_eq!(
-        with.get("restore-keys").map(String::as_str),
-        Some(""),
-        "L2 exact-key restore carries no prefix"
+        TOFU_PROVIDER_ADMISSION_USES,
+        "./.github/actions/tofu-provider-admission"
     );
     assert_eq!(TOFU_PROVIDERS_RESTORE_NAME, "Restore Tofu providers");
-    assert!(
-        cache_action_step(
-            true,
-            TOOLS_RESTORE_USES,
-            "mbx",
-            KEY,
-            &[],
-            &[PATH.to_owned()]
-        )
-        .is_err(),
-        "the new arm widens nothing else"
-    );
-    Ok(())
 }
 
 #[test]
 fn provider_paths_stay_under_the_owned_base() {
-    assert!(tofu_providers_path_ok(PATH));
+    assert!(tofu_providers_path_ok(
+        "${{ runner.temp }}/velnor/tofu-cache/b3-0000000000000000000000000000000000000000000000000000000000000000"
+    ));
+    assert!(tofu_providers_path_ok(
+        "${{ runner.temp }}/velnor/tofu-cache/root-0123456789ab"
+    ));
     assert!(tofu_providers_path_ok(
         "${{ runner.temp }}/velnor/tofu-cache/b3-1111111111111111111111111111111111111111111111111111111111111111"
     ));

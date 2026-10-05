@@ -7,13 +7,12 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{GeneratorLock, ReleaseTarget, Step, WorkflowIr, is_crate_job_id};
-use velnor_actions_mise::{
-    PREPARE_PINNED_TOOLS_STEP, PREPARE_RUST_COMPONENTS_STEP, PinnedTool, ToolCatalog,
+use velnor_actions_contract::{
+    GeneratorLock, ReleaseTarget, Step, StepRole, WorkflowIr, is_crate_job_id,
 };
-use velnor_actions_workflow_renderer::cache_p08::{RESTORE_SOURCES_NAME, RUST_CACHE_NAME};
+use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_workflow_renderer::render::{FINAL_JOB_ID, PLAN_JOB_ID, PUBLISH_JOB_ID};
-use velnor_actions_workflow_renderer::steps::{MBX_RESTORE_NAME, STAGED_BINARY_PREFIX};
+use velnor_actions_workflow_renderer::steps::STAGED_BINARY_PREFIX;
 use velnor_actions_workflow_renderer::{
     PreseedStageSource, preseed_build_step, preseed_download_step, preseed_manifest_step,
     preseed_manifest_verify_step, preseed_stage_step, preseed_upload_step, preseed_verify_step,
@@ -65,7 +64,11 @@ pub(crate) fn attach_lock_acquire(
     for (id, job) in &mut ir.jobs {
         if let Some(runner) = &job.check_runner {
             let step = lock_acquire_for_runner(lock, runner, &staged)?;
-            if !job.steps.iter().any(|step| step.name == "Acquire Velnor") {
+            if !job
+                .steps
+                .iter()
+                .any(|step| step.role == Some(StepRole::AcquireVelnor))
+            {
                 job.steps.insert(1.min(job.steps.len()), step);
             }
         } else if is_crate_job_id(id) {
@@ -188,7 +191,7 @@ fn preseed_consumers(target: &str, staged: &str) -> Result<Vec<Step>, Orchestrat
 fn after_prepare(steps: &[Step]) -> usize {
     steps
         .iter()
-        .position(|step| step.name == PREPARE_PINNED_TOOLS_STEP)
+        .position(|step| step.role == Some(StepRole::PreparePinnedTools))
         .map_or(1, |index| index + 1)
 }
 
@@ -211,7 +214,7 @@ fn insert_plan_mbx_restore(
     replace_plan_registry_cache(catalog, label, fetch_roots, steps)?;
     let restore_at = steps
         .iter()
-        .position(|step| step.name == RESTORE_SOURCES_NAME)
+        .position(|step| step.role == Some(StepRole::CargoSourcesRestore))
         .map_or_else(|| after_rust_setup(steps), |index| index + 1);
     for (offset, step) in crate::mbx_preflight::steps_for_catalog(catalog)?
         .into_iter()
@@ -236,7 +239,7 @@ fn replace_plan_registry_cache(
     let registry: Vec<usize> = steps
         .iter()
         .enumerate()
-        .filter(|(_, step)| is_rust_cache_action(step))
+        .filter(|(_, step)| step.role == Some(StepRole::CargoRegistryRestore))
         .map(|(index, _)| index)
         .collect();
     if registry.is_empty() {
@@ -262,10 +265,7 @@ fn replace_plan_registry_cache(
     let save = crate::source_cache::sources_save_step(&key)?;
     let after_source_collection = steps
         .iter()
-        .rposition(|step| {
-            step.name
-                .starts_with(crate::source_prep::FETCH_SOURCES_STEP)
-        })
+        .rposition(|step| step.role == Some(StepRole::CargoSourcesFetch))
         .map(|index| index + 1)
         .ok_or_else(|| OrchestratorError::Contract {
             problem: "preseed_registry_cache_missing_source_step".to_owned(),
@@ -278,21 +278,17 @@ fn replace_plan_registry_cache(
 fn after_rust_setup(steps: &[Step]) -> usize {
     steps
         .iter()
-        .position(|step| step.name == PREPARE_RUST_COMPONENTS_STEP)
+        .position(|step| step.role == Some(StepRole::PrepareRustComponents))
         .or_else(|| {
             steps
                 .iter()
-                .position(|step| step.name == PREPARE_PINNED_TOOLS_STEP)
+                .position(|step| step.role == Some(StepRole::PreparePinnedTools))
         })
         .map_or(1, |index| index + 1)
 }
 
 fn is_mbx_action(step: &Step) -> bool {
-    matches!(&step.kind, velnor_actions_contract::StepKind::Action { uses, .. } if uses.starts_with("jdx/mr-boxington-action@"))
-}
-
-fn is_rust_cache_action(step: &Step) -> bool {
-    matches!(&step.kind, velnor_actions_contract::StepKind::Action { uses, .. } if uses.starts_with("Swatinem/rust-cache@"))
+    step.role == Some(StepRole::MbxCache)
 }
 
 /// Insert index for the plan-job pre-seed build block.
@@ -306,10 +302,9 @@ fn preseed_anchor(steps: &[Step]) -> usize {
         .iter()
         .enumerate()
         .filter(|(_, step)| {
-            step.name
-                .starts_with(crate::source_prep::FETCH_SOURCES_STEP)
-                || is_plan_restore(&step.name)
-                || step.name == velnor_actions_workflow_renderer::MBX_VERSION_CHECK_NAME
+            step.role == Some(StepRole::CargoSourcesFetch)
+                || is_plan_restore(step)
+                || step.role == Some(StepRole::MbxVersionCheck)
         })
         .map(|(index, _)| index)
         .max();
@@ -317,8 +312,11 @@ fn preseed_anchor(steps: &[Step]) -> usize {
 }
 
 /// True for plan-job restore steps (shared, registry, MBX objects).
-fn is_plan_restore(name: &str) -> bool {
-    name == RESTORE_SOURCES_NAME || name == RUST_CACHE_NAME || name == MBX_RESTORE_NAME
+fn is_plan_restore(step: &Step) -> bool {
+    matches!(
+        step.role,
+        Some(StepRole::CargoSourcesRestore | StepRole::CargoRegistryRestore | StepRole::MbxCache)
+    )
 }
 
 #[cfg(test)]

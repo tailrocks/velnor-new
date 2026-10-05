@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 use std::ffi::OsString;
 
-use velnor_actions_contract::{CrateObligation, Stack, Step, sanitize_error_detail};
+use velnor_actions_contract::{CrateObligation, Stack, Step, StepRole, sanitize_error_detail};
 use velnor_actions_mise::{ISOLATION_ENV, NO_AUTO_INSTALL_ENV, ToolCatalog, ToolHomes};
 use velnor_actions_rust::{payload_env_for_kind, step_base_name};
 use velnor_actions_workflow_renderer::plan_format::FORMAT_STEP_NAME;
@@ -238,6 +238,9 @@ pub(crate) fn obligation_step(
     let run = report_wrapper_argv(&joined, &helper_path_for_version());
     let mut step = velnor_actions_workflow_renderer::shell_step(&obligation.step_name, run, env)
         .map_err(OrchestratorError::from)?;
+    if !needs_rust {
+        step.role = Some(StepRole::TofuProviderUse);
+    }
     // Skip when the plan covered this obligation: unknown coverage
     // (absent output) executes, so the gate can only skip proven work.
     //

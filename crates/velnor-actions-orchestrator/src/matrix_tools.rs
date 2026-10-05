@@ -3,7 +3,7 @@
 //! Declared via `#[path]` from `matrix_step.rs` (no `lib.rs` edit);
 //! `matrix_step` re-exports the constructors and suite resolver.
 
-use velnor_actions_contract::{Step, WorkflowPolicy};
+use velnor_actions_contract::{Step, StepRole, WorkflowPolicy};
 use velnor_actions_mise::{
     PREPARE_PINNED_TOOLS_STEP, PinnedTool, PreparePinnedTools, ToolCatalog, ToolHomes,
 };
@@ -234,8 +234,11 @@ pub(crate) fn prepare_crate_tools_step(
         strings_of_env(&prepare.env_without_homes())
     }
     .map_err(|problem| OrchestratorError::Contract { problem })?;
-    velnor_actions_workflow_renderer::ambient_shell_step(PREPARE_PINNED_TOOLS_STEP, run, env)
-        .map_err(OrchestratorError::from)
+    let mut step =
+        velnor_actions_workflow_renderer::ambient_shell_step(PREPARE_PINNED_TOOLS_STEP, run, env)
+            .map_err(OrchestratorError::from)?;
+    step.role = Some(StepRole::PreparePinnedTools);
+    Ok(step)
 }
 
 #[cfg(test)]

@@ -279,7 +279,15 @@ never saves); push-gated trusted save; restore still faces readonly init;
 hit MUST still run init+validate (T23). State, plans, and credentials remain
 outside the provider cache. Compiler reuse stays under
 `rust-quality-contract.md` §3 (MBX profiles); this layer caches provider
-artifacts only. Env: approved
+artifacts only. Because `actions/cache/restore` may extract a prefix match
+even when `restore-keys` is omitted, the generated provider composite MUST
+admit bytes only when the same restore reports `cache-hit=true` and
+`cache-matched-key` equals the configured full key. A miss, partial match,
+or missing output MUST clear and recreate only the validated job-private
+plugin-cache leaf before provider use; `TF_DATA_DIR` is never part of that
+path. The composite runs unconditionally before every provider consumer, so
+cold fallback still reaches read-only, lock-verified init and mandatory
+validate. Env: approved
 `TF_IN_AUTOMATION=1`, `TF_INPUT=0`, per-root `TF_DATA_DIR`, generated
 `TF_CLI_CONFIG_FILE`, `TF_PLUGIN_CACHE_DIR` + isolation quartet +
 install-disable; deny `TF_CLI_ARGS*`, `TF_VAR_*`, `TF_TOKEN_*`/cloud creds,

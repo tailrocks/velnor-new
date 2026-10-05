@@ -5,7 +5,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::WorkflowPolicy;
+use velnor_actions_contract::{StepRole, WorkflowPolicy};
 use velnor_actions_workflow_renderer::{
     RenderError, ambient_shell_step, checkout_step, plan_step, render_workflow_ir,
     toolchain_env::credential_unset_prelude,
@@ -22,19 +22,17 @@ fn token_hygiene_strips_midscript_prelude_command() -> Result<(), RenderError> {
         "{{ mise install 'tool@1.0.0' && {} }} && true",
         credential_unset_prelude()
     );
+    let mut deny = ambient_shell_step(
+        "Renamed validator display",
+        vec!["sh".to_owned(), "-c".to_owned(), script],
+        BTreeMap::new(),
+    )?;
+    deny.role = Some(StepRole::CargoDeny);
     let mixed = job(
         "plan",
         "Plan",
         Vec::new(),
-        vec![
-            checkout_step(&checkout_pin())?,
-            ambient_shell_step(
-                "Run cargo-deny",
-                vec!["sh".to_owned(), "-c".to_owned(), script],
-                BTreeMap::new(),
-            )?,
-            plan_step(),
-        ],
+        vec![checkout_step(&checkout_pin())?, deny, plan_step()],
     );
     render_workflow_ir(
         &fixture_ir(vec![mixed]),
