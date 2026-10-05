@@ -116,25 +116,35 @@ fn overlap_ratio_stays_descriptive() {
 #[test]
 fn cache_paths_have_single_owners() {
     use velnor_actions_workflow_renderer::steps::{
-        TARGET_DIR_PREFIX, TASK_ARTIFACTS_DIR, TOOLS_CACHE_PATH,
+        TARGET_DIR_PREFIX, TASK_ARTIFACTS_DIR, TOOLS_CACHE_PATHS,
     };
     let table = cache_ownership_table();
     let mut seen: std::collections::BTreeMap<&str, &str> = std::collections::BTreeMap::new();
     for (path, owner) in &table {
         assert!(seen.insert(path, owner).is_none(), "duplicate path {path}");
     }
-    assert!(table.len() >= 5, "all five layers owned");
+    assert!(
+        table.len() >= TOOLS_CACHE_PATHS.len() + 6,
+        "all tool roots and shared cache layers owned"
+    );
     for (index, (left, _)) in table.iter().enumerate() {
         for (other, _) in table.iter().skip(index + 1) {
             assert!(
-                !left.starts_with(other) && !other.starts_with(left),
+                !std::path::Path::new(left).starts_with(other)
+                    && !std::path::Path::new(other).starts_with(left),
                 "{left} vs {other}"
             );
         }
     }
     let paths: Vec<&str> = table.iter().map(|(path, _)| *path).collect();
     assert!(paths.contains(&TARGET_DIR_PREFIX), "target lane owner");
-    assert!(paths.contains(&TOOLS_CACHE_PATH), "tool owner");
+    for path in TOOLS_CACHE_PATHS {
+        assert_eq!(
+            seen.get(path).copied(),
+            Some("catalog/tools"),
+            "tool owner for {path}"
+        );
+    }
     assert!(paths.contains(&TASK_ARTIFACTS_DIR), "task-result owner");
     assert!(
         !paths.iter().any(|path| path.contains("candidate")),
@@ -154,14 +164,12 @@ fn preview_dirs_are_unique_tmp_roots() {
 }
 
 #[test]
-fn failed_tasks_never_save_results() {
+fn unverified_writer_context_never_saves_results() {
     use velnor_actions_mise::cache::save_allowed;
-    for event in ["push", "pull_request", "merge_group"] {
-        assert!(!save_allowed("trusted", event, false), "{event}");
-    }
-    assert!(save_allowed("trusted", "push", true));
-    assert!(!save_allowed("trusted", "pull_request", true));
-    assert!(!save_allowed("trusted", "merge_group", true));
+    let writer = velnor_actions_mise::CacheWriterContext::default();
+    assert!(!save_allowed("trusted", &writer, false));
+    assert!(!save_allowed("trusted", &writer, true));
+    assert!(!save_allowed("pr", &writer, true));
 }
 
 #[test]

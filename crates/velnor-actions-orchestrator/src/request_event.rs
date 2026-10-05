@@ -1,6 +1,6 @@
 //! Runner-observed event resolution shared by plan and merge.
 
-use velnor_actions_contract::WorkflowEvent;
+use velnor_actions_contract::{CacheWriterFacts, WorkflowEvent};
 
 use crate::OrchestratorError;
 use crate::internal::internal;
@@ -30,6 +30,25 @@ pub(crate) fn workflow_event_for(
         "merge_group" => Ok(WorkflowEvent::MergeGroup),
         "local" => Ok(WorkflowEvent::Local),
         _ => Err(internal("unsupported_event")),
+    }
+}
+
+/// Capture event, ref, default, and repository facts without inferring protection.
+pub(crate) fn cache_writer_facts(
+    event: WorkflowEvent,
+    payload: &serde_json::Value,
+    repository: Option<&str>,
+) -> CacheWriterFacts {
+    CacheWriterFacts {
+        event: Some(event),
+        git_ref: payload["ref"].as_str().map(str::to_owned),
+        default_branch: payload["repository"]["default_branch"]
+            .as_str()
+            .map(str::to_owned),
+        repository: repository.map(str::to_owned),
+        event_repository: payload["repository"]["full_name"]
+            .as_str()
+            .map(str::to_owned),
     }
 }
 

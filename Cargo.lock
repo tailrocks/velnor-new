@@ -630,6 +630,8 @@ name = "velnor-actions-mise"
 version = "0.1.0"
 dependencies = [
  "serde",
+ "serde_json",
+ "tempfile",
  "velnor-actions-contract",
  "velnor-actions-tofu",
 ]

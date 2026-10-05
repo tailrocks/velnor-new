@@ -369,7 +369,15 @@ mod tests {
     #[test]
     fn elected_save_stays_on_the_winner_job() {
         let mut jobs = paired(&[echo_step(0, "one")]);
-        let save = crate::cache_steps::tools_save_step("mise-v1").expect("save");
+        let mise_sha256 = "a".repeat(64);
+        let key = crate::cache_p08::tools_cache_key_for_tools(
+            "x86_64-unknown-linux-gnu",
+            "2026.9.16",
+            &mise_sha256,
+            &["rust@1.98.1".to_owned()],
+        )
+        .expect("canonical key");
+        let save = crate::cache_steps::tools_save_step(&key).expect("save");
         jobs.get_mut("rust-0__hosted")
             .expect("hosted")
             .steps

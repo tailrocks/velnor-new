@@ -90,24 +90,20 @@ pub struct Job {
     /// Ordered steps.
     pub steps: Vec<Step>,
 }
-/// Runtime gate for cache saves: producer success on pushes (trusted scope).
+/// Runtime gate for cache saves: successful pushes to the protected default branch.
 ///
 /// A step-level `if:` REPLACES GitHub's default `success()`, so the gate
 /// must restate it: without `success()`, the save step would run after a
 /// failed producer and poison the trusted layer with failed output.
-/// `pull_request` runs — same-repo or fork — restore read-only: the pinned
-/// cache actions have no PR-scoped save support, so a PR save could never
-/// promote safely. Push runs save into the repository that owns the run
-/// (GitHub cache scope is per-repo), keeping fork pushes confined to the
-/// fork. The Mise adapter's trust predicates implement this same policy
-/// over runtime values; this string is its generation-time spelling.
-pub const CACHE_SAVE_CONDITION: &str = "success() && github.event_name == 'push'";
+/// Only a protected default-branch push can populate trusted entries. PR,
+/// merge-group, tag, feature-branch, and missing-ref metadata stay read-only.
+/// The Mise adapter implements the same decision over typed runtime facts.
+pub const CACHE_SAVE_CONDITION: &str = "success() && github.event_name == 'push' && github.ref_protected == true && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)";
 /// `env:` spelling of the push-only writer policy for cache-mode inputs.
 ///
-/// Evaluates to `write` on push runs and `read` everywhere else, so a
-/// cache action that saves from its post step restores on every event
-/// but only ever writes on push (same policy as
-/// [`CACHE_SAVE_CONDITION`], in the value position the mode supports).
+/// Evaluates to `write` on push runs and `read` elsewhere for action
+/// behavior only. This client hint does not authorize trusted saves;
+/// [`CACHE_SAVE_CONDITION`] gates explicit save steps.
 pub const CACHE_MODE_PUSH_WRITE_EXPR: &str =
     "${{ github.event_name == 'push' && 'write' || 'read' }}";
 

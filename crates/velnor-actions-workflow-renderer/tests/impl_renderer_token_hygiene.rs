@@ -15,7 +15,7 @@ fn token_hygiene_scopes_gh_token_to_plan() -> Result<(), RenderError> {
     use velnor_actions_contract::{Step, StepKind};
     use velnor_actions_workflow_renderer::toolchain_env::with_credential_scrub;
     // The shell constructor rejects `github.token` env values outright:
-    // only the render-time fetch binding may carry one.
+    // only fixed internal plan/fetch/merge/publish bindings may carry one.
     let err = shell_step(
         "Plan",
         vec!["true".to_owned()],
@@ -106,6 +106,45 @@ fn token_hygiene_allows_final_fetch_token() -> Result<(), RenderError> {
     assert!(
         text.contains("GH_TOKEN: ${{ github.token }}"),
         "fetch must bind the token:\n{text}"
+    );
+    assert_eq!(
+        text.matches("GH_TOKEN: ${{ github.token }}").count(),
+        3,
+        "only plan, fetch, and merge internal steps receive branch-read credentials:\n{text}"
+    );
+    Ok(())
+}
+
+#[test]
+fn token_hygiene_scopes_publish_token_to_internal_step() -> Result<(), RenderError> {
+    use velnor_actions_workflow_renderer::steps::{PUBLISH_OPERATION, internal_step};
+    let (required_id, mut required) = job(
+        "required",
+        "Required",
+        vec!["plan".to_owned()],
+        vec![checkout_step(&checkout_pin())?, merge_step()],
+    );
+    required.condition = Some("always()".to_owned());
+    let (publish_id, publish) = job(
+        "publish-baseline",
+        "Publish baseline",
+        vec!["required".to_owned()],
+        vec![internal_step("Publish baseline", PUBLISH_OPERATION)?],
+    );
+    let text = render_workflow_ir(
+        &fixture_ir(vec![
+            minimal_plan_job()?,
+            (required_id, required),
+            (publish_id, publish),
+        ]),
+        WorkflowPolicy::ConsumerV1,
+        None,
+        &fixture_ctx(),
+    )?;
+    assert_eq!(
+        text.matches("GH_TOKEN: ${{ github.token }}").count(),
+        4,
+        "plan, report-fetch, merge, and baseline-publish internals receive scoped read credentials:\n{text}"
     );
     Ok(())
 }
