@@ -83,10 +83,13 @@ fn external_deps_allowlisted_used_and_narrow() -> Result<(), Box<dyn Error>> {
         // compile-gated at 1.98.1); default features only, facade-owned
         // byte/count/depth caps, no expression evaluation.
         "hcl",
+        // Reviewed proc-macro token tree for the test-source scanner.
+        "proc-macro2",
+        // Reviewed Rust AST (`full`, `visit`) for the test-source closure guard.
+        "syn",
         "flate2",
         "rustls",
         "rustls-native-certs",
-        "syn",
         "ureq",
     ];
     for (dir, _) in MEMBERS {
@@ -120,7 +123,10 @@ fn external_deps_allowlisted_used_and_narrow() -> Result<(), Box<dyn Error>> {
                             && ((key == "flate2" && feature == "rust_backend")
                                 || (key == "rustls" && feature == "ring")
                                 || (key == "syn" && ["full", "parsing"].contains(&feature))
-                                || (key == "ureq" && feature == "rustls-no-provider")));
+                                || (key == "ureq" && feature == "rustls-no-provider")))
+                        || (dir == "crates/velnor-actions-cli"
+                            && key == "syn"
+                            && matches!(feature, "full" | "visit"));
                     assert!(narrow, "{dir}/{key} feature {feature}");
                 }
             }
