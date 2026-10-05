@@ -85,7 +85,7 @@ fn plan_100_crates_reports_matrix_budget() -> TestResult {
     Ok(())
 }
 
-/// Generate one small workspace and reject 10/100-crate output over the cap.
+/// Generate 1/10-crate workspaces and reject 100-crate output over the cap.
 #[test]
 fn generate_scales_with_crate_count() -> TestResult {
     for members in [1_usize, 10, 100] {
@@ -98,7 +98,7 @@ fn generate_scales_with_crate_count() -> TestResult {
         let opts = GenerateOptions {
             output_dir: Some(target),
         };
-        if members == 1 {
+        if members < 100 {
             let (report, gen_ms) = timed(|| generate(&prep, &opts));
             let report = report?;
             assert!(!report.files_written.is_empty(), "files staged");
@@ -107,7 +107,10 @@ fn generate_scales_with_crate_count() -> TestResult {
                 report.files_written.len()
             );
         } else {
-            let error = err_of(generate(&prep, &opts), "oversized generated workflow")?;
+            let error = err_of(
+                generate(&prep, &opts),
+                "100-crate generated workflow size guard",
+            )?;
             assert_workflow_size_rejection(&error);
             assert!(!out.path().join(format!("gen-{members}")).exists());
             eprintln!(
