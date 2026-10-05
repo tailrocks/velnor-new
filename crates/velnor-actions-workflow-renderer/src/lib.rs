@@ -51,6 +51,9 @@ mod steps_plain;
 mod support;
 pub mod tofu_cache;
 mod tool_seed;
+mod tool_seed_admission;
+#[cfg(test)]
+mod tool_seed_test_support;
 pub mod toolchain_env;
 pub mod tree;
 mod verification_jobs;
