@@ -185,7 +185,6 @@ fn render_all(
     extra.extend(crate::freshness_emit::freshness_files(prep)?);
     extra.extend(crate::routing::extra_files(&prep.config, version)?);
     extra.extend(rendered.shared);
-    extra.extend(crate::foundation_qualification::files(prep)?);
     let tree = render_tree_with_extra(&workflow, &actionlint, &extra, version)?;
     Ok(tree)
 }

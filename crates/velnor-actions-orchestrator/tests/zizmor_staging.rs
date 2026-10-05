@@ -17,12 +17,12 @@ use velnor_actions_actionlint::config::{
 use velnor_actions_contract::FRESHNESS_WORKFLOW_PATH;
 use velnor_actions_mise::{PinnedTool, PinnedToolExec, ProcessOutput, ToolCatalog};
 use velnor_actions_orchestrator::{GenerateOptions, generate, prepare};
-use velnor_actions_workflow_renderer::{
-    foundation_qualification::WORKFLOW_PATH as FOUNDATION_WORKFLOW_PATH, render::WORKFLOW_PATH,
-};
+use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
 #[path = "fixture_package.rs"]
 mod fixture_package;
+#[path = "zizmor_staging_retired.rs"]
+mod retired_foundation;
 
 /// Test error shortcut.
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -146,7 +146,7 @@ fn policy_preview() -> Result<PolicyPreview, Box<dyn std::error::Error>> {
             output_dir: Some(preview.clone()),
         },
     )?;
-    assert_eq!(report.files_written.len(), 6, "six generated items");
+    assert_eq!(report.files_written.len(), 5, "five generated items");
     assert!(
         report
             .files_written
@@ -156,13 +156,21 @@ fn policy_preview() -> Result<PolicyPreview, Box<dyn std::error::Error>> {
         report.files_written
     );
     let workflow_paths = generated_workflow_paths(&report.files_written);
-    let expected_paths = vec![
-        WORKFLOW_PATH.to_owned(),
-        FOUNDATION_WORKFLOW_PATH.to_owned(),
-        FRESHNESS_WORKFLOW_PATH.to_owned(),
-    ];
+    let expected_paths = vec![WORKFLOW_PATH.to_owned(), FRESHNESS_WORKFLOW_PATH.to_owned()];
     assert_eq!(workflow_paths, expected_paths, "exact Velnor workflow set");
+    assert!(
+        !preview
+            .join(".github/workflows/foundation-qualification.yml")
+            .exists(),
+        "Velnor generation omits the retired Foundation workflow"
+    );
     let workflows = read_generated_workflows(&preview, &workflow_paths)?;
+    assert!(
+        workflows.iter().all(|workflow| !workflow
+            .text
+            .contains("8758d976a1b25eb387f48aa04ea86f57739b84cf")),
+        "Velnor workflows contain no Foundation action pin"
+    );
     let yaml = fs::read_to_string(preview.join(WORKFLOW_PATH))?;
     Ok((repo, parent, preview, yaml, report.validated_by, workflows))
 }

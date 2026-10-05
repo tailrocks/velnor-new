@@ -2,8 +2,16 @@
 
 Status: qualification protocol prepared; hosted experiments remain pending.
 This document records evidence and prerequisites, never substitutes for T01–T26.
-Scope is exactly `scope.json`: generator plus 46 consumers. Private raw evidence
+The reconstructed `scope.json` lists the generator and 46 consumer rows, but its
+provenance is unknown. A separate repository scan found an additional candidate;
+the current direct/indirect consumer closure remains partial. Private raw evidence
 stays outside repository checkouts; publish only reviewed, redacted measurements.
+
+The one-off collection and analysis utilities were retired on 2026-10-05 after
+the current in-repository caller and ref audit. The external direct/indirect
+consumer audit remains partial. This page retains the historical baseline and
+pending experiment requirements; its removed script commands are not supported.
+T01–T26 remain pending.
 
 ## Reproduced baseline
 
@@ -25,36 +33,18 @@ transfers. Source archive was 18,244,511 compressed bytes and MBX archive
 compiler work nor a qualified baseline. Later MBX save was suppressed after
 an exact hit; fresh-run persistence still requires T03/T04/T17.
 
-## Collection commands
+## Retired collection utility
 
-`scripts/collect-ci-performance.py` reads completed run-attempt metadata, every
-jobs page, full job logs, and all run artifact pages through supported `gh api`
-endpoints. It writes mode-0600 files in a mode-0700 external directory. It performs
-no dispatch, publication, cache deletion, or merge. `--reuse` reuses immutable
-responses; mismatched repository/run/attempt identities fail collection.
-Incomplete or inconsistent pagination and cross-run/source artifact listings fail
-collection. Reads/writes reject symlinks and multiply linked files; output cannot
-be inside any Git checkout. The summary records its creation time and whether
-existing evidence was reused; that timestamp is not a fetched log's origin time.
-
-```sh
-rtk proxy /usr/bin/python3 scripts/collect-ci-performance.py \
-  tailrocks/velnor-new 37012391691 --attempt 1 \
-  --output /absolute/private/evidence/tailrocks-velnor-new/r37012391691-a1
-```
-
-Keep one output directory per exact run/attempt. Repeated collection without
-`--reuse` refreshes API evidence. Logs can expire; missing logs are explicit
-unavailable evidence. Raw API/log bodies are never printed by the collector.
-GitHub masking does not make raw private logs suitable for public publication.
-
-Job/step wall times are measured from their timestamps. The initial start delay
-includes scheduling, so it is not pure queue time. The earliest-job to latest-job
-envelope is not the dependency critical path; recompute that from the validated
-plan and exact workflow graph. A sum with a missing job duration remains unknown.
-Artifact listing is run-wide: inspect artifact names/manifests and attempts before
-using an artifact as attempt-bound evidence. MBX summary sessions remain separate;
-do not sum repeated counters without checking their owning process/session.
+The retired one-off collector read run-attempt metadata, job pages, logs, and
+artifact pages. Its private-output, pagination, identity, and file-safety checks
+applied to that utility only; its command is no longer supported. The adopted
+cleanup specification retains read-only `gh`/GitHub API evidence export, so no
+replacement collector or approval process is required. Preserve run, attempt,
+source, and job identities and keep raw API/log bodies private. Exported evidence
+alone does not qualify a result. The historical timing interpretation remains
+unchanged: scheduling affects the earliest-job envelope, missing durations
+remain unknown, artifact listings are run-wide, and MBX session counters must
+not be summed across owners.
 
 ## Hosted cold/warm/persistence procedure
 
@@ -75,10 +65,11 @@ do not sum repeated counters without checking their owning process/session.
    If complete baseline coverage omits them, the attempt proves coverage only;
    it cannot qualify compiler reuse. Use an explicitly supported conservative
    qualification plan, never a handwritten workflow or invented config flag.
-5. Collect each completed attempt with the script. A relevant controlled command
-   is `rtk gh run rerun RUN_ID --repo OWNER/REPO`; after completion, read the
-   actual attempt number from `rtk gh api repos/OWNER/REPO/actions/runs/RUN_ID`.
-   Then collect with that exact `--attempt`. Poll with bounded frequency.
+5. Use the existing read-only `gh`/GitHub API evidence export for run-attempt
+   metadata, every job page, logs, and artifact pages. Preserve raw bytes and
+   their source/run/attempt identities. Keep each T01–T26 row pending until its
+   listed evidence proves the required outcome; do not infer results from the
+   historical baseline or missing evidence.
 6. Match validation snapshots and compiler/prediction work from T01/T02 to T03.
    Independently compare raw counters, tool payloads, archive transfers, real
    compiler work and output correctness. Only then mark the applicable cases
@@ -209,6 +200,8 @@ attestations, or protected release infrastructure.
    them; waived CI remains `CI_WAIVED_PERF_UNVERIFIED`. Never force production
    execution to manufacture measurements.
 
-Final closure retains exactly 47 unique rows and distinguishes `PERF_VERIFIED`,
-`STATIC_ONLY`, `CI_WAIVED_PERF_UNVERIFIED`, `INACCESSIBLE`, and `INCOMPLETE`.
-Neither the collector nor this protocol assigns `PERF_VERIFIED` automatically.
+The reconstructed inventory contains 47 unique rows and distinguishes
+`PERF_VERIFIED`, `STATIC_ONLY`, `CI_WAIVED_PERF_UNVERIFIED`, `INACCESSIBLE`, and
+`INCOMPLETE`. This row count is not proof of a complete consumer universe; scope
+provenance remains unknown and direct/indirect closure remains partial. The
+retired collector and this protocol did not assign `PERF_VERIFIED` automatically.
