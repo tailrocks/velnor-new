@@ -55,6 +55,7 @@ fn velnor_cleanup_is_deterministic() -> TestResult {
             ".github/AGENTS.md",
             ".github/CLAUDE.md",
             ".github/actionlint.yaml",
+            ".github/actions/velnor-tool-seed/action.yml",
             ".github/workflows/ci.yml",
             ".github/workflows/freshness.yml",
         ]
@@ -115,6 +116,7 @@ fn consumer_generation_is_deterministic() -> TestResult {
             ".github/AGENTS.md",
             ".github/CLAUDE.md",
             ".github/actionlint.yaml",
+            ".github/actions/velnor-tool-seed/action.yml",
             ".github/workflows/ci.yml",
         ]
         .map(str::to_owned)

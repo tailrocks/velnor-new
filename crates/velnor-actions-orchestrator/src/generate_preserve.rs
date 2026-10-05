@@ -4,12 +4,18 @@
 //! entries are copied without following symbolic links. Unsupported file types
 //! fail before the existing tree is replaced.
 
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
-use velnor_actions_contract::DECLARED_GITHUB_FORMATS;
+use velnor_actions_contract::{
+    DECLARED_GITHUB_FORMATS, MARKER_PREFIX, OLD_MARKER_PREFIX, is_generated_marker_line,
+};
 use velnor_actions_workflow_renderer::release_tree::RELEASE_TREE_PATHS;
 
 use crate::OrchestratorError;
+
+const TOOL_SEED_ACTION_RELATIVE: &str = "actions/velnor-tool-seed/action.yml";
+const SHARED_SCRIPTS_RELATIVE: &str = "scripts/velnor-shared";
 
 /// Capture only the repository root's own directory mode, never a link target.
 pub(super) fn root_permissions(
@@ -128,8 +134,8 @@ pub(super) fn copy_repository_content(
 }
 
 /// Ownership derives from output inventories, including disabled release paths.
-fn generator_owned(relative: &Path) -> bool {
-    relative.starts_with("workflows")
+fn generator_owned(source: &Path, relative: &Path) -> Result<bool, OrchestratorError> {
+    let fixed_inventory = relative.starts_with("workflows")
         || DECLARED_GITHUB_FORMATS
             .iter()
             .map(|format| format.path)
@@ -138,7 +144,35 @@ fn generator_owned(relative: &Path) -> bool {
                 Path::new(path)
                     .strip_prefix(".github")
                     .is_ok_and(|rel| rel == relative)
-            })
+            });
+    if fixed_inventory {
+        return Ok(true);
+    }
+    let shared_script = relative
+        .strip_prefix(SHARED_SCRIPTS_RELATIVE)
+        .is_ok_and(|suffix| !suffix.as_os_str().is_empty());
+    if relative != Path::new(TOOL_SEED_ACTION_RELATIVE) && !shared_script {
+        return Ok(false);
+    }
+    generated_marker_file(source)
+}
+
+/// Treat only marked regular files as replaceable generator-owned assets.
+fn generated_marker_file(source: &Path) -> Result<bool, OrchestratorError> {
+    let metadata = std::fs::symlink_metadata(source).map_err(|err| io(source, &err))?;
+    if !metadata.is_file() || metadata.file_type().is_symlink() {
+        return Ok(false);
+    }
+    let file = std::fs::File::open(source).map_err(|err| io(source, &err))?;
+    let prefix_limit = MARKER_PREFIX.len().max(OLD_MARKER_PREFIX.len());
+    let mut prefix = Vec::with_capacity(prefix_limit);
+    file.take(prefix_limit as u64)
+        .read_to_end(&mut prefix)
+        .map_err(|err| io(source, &err))?;
+    let Ok(first_line) = std::str::from_utf8(&prefix) else {
+        return Ok(false);
+    };
+    Ok(is_generated_marker_line(first_line))
 }
 
 /// Preserve files, directory permissions, and links as entries, never targets.
@@ -148,7 +182,7 @@ fn copy_entry(
     relative: &Path,
     directories: &mut Vec<(PathBuf, std::fs::Permissions)>,
 ) -> Result<(), OrchestratorError> {
-    if generator_owned(relative) {
+    if generator_owned(source, relative)? {
         return Ok(());
     }
     let metadata = std::fs::symlink_metadata(source).map_err(|err| io(source, &err))?;

@@ -13,7 +13,6 @@ name: CI
   merge_group:
 permissions:
   contents: read
-  actions: read
 concurrency:
   group: velnor-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -27,6 +26,10 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
+      - name: Restore Velnor tool seed
+        uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
+        with:
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-75c77caa4018556f
       - name: Setup Mise
         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
@@ -71,6 +74,10 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
+      - name: Restore Velnor tool seed
+        uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
+        with:
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-1e88d9dde00a53da
       - name: Setup Mise
         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
@@ -98,6 +105,10 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
+      - name: Restore Velnor tool seed
+        uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
+        with:
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-507563a85b3135e7
       - name: Setup Mise
         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
@@ -141,6 +152,9 @@ jobs:
       NODE_AUTH_TOKEN: ""
       NPM_TOKEN: ""
       RUSTUP_TOOLCHAIN: 1.98.1
+    permissions:
+      contents: read
+      actions: read
     outputs:
       covered_tasks: ${{ steps.plan.outputs.covered_tasks }}
     steps:
@@ -149,6 +163,10 @@ jobs:
         with:
           fetch-depth: "0"
           persist-credentials: "false"
+      - name: Restore Velnor tool seed
+        uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
+        with:
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-cd6926493099032f
       - name: Setup Mise
         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
@@ -226,7 +244,7 @@ jobs:
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; test -x target/release/velnor-actions && mise --no-config --no-env --no-hooks exec mr-boxington@1.21.1 -- mbx --version | grep -qxF \"mbx 1.21.1\"'"
+        run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; test -x target/release/velnor-actions && mkdir -p \"$RUNNER_TEMP/velnor\" && mise --no-config --no-env --no-hooks exec mr-boxington@1.21.1 -- mbx --version > \"$RUNNER_TEMP/velnor/preseed-mbx-version\" && grep -qxF \"mbx 1.21.1\" \"$RUNNER_TEMP/velnor/preseed-mbx-version\"'"
       - name: Write helper manifest (pre-seed trust-on-review)
         env:
           VELNOR_INTERNAL_OP: write-preseed-manifest-v1
@@ -264,6 +282,8 @@ jobs:
       - name: Plan
         id: plan
         env:
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
           VELNOR_INTERNAL_OP: plan-v1
           VELNOR_REQUEST_FILE: ${{ runner.temp }}/velnor/request/plan-v1-request.json
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
@@ -365,6 +385,9 @@ jobs:
       NODE_AUTH_TOKEN: ""
       NPM_TOKEN: ""
       RUSTUP_TOOLCHAIN: 1.98.1
+    permissions:
+      contents: read
+      actions: read
     needs:
       - plan
       - rust-velnor-actions-actionlint
@@ -483,6 +506,10 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
+      - name: Restore Velnor tool seed
+        uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
+        with:
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-ac88a89731444aab
       - name: Setup Mise
         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
@@ -672,6 +699,10 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
+      - name: Restore Velnor tool seed
+        uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
+        with:
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-cd6926493099032f
       - name: Setup Mise
         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
@@ -845,6 +876,10 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
+      - name: Restore Velnor tool seed
+        uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
+        with:
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-ac88a89731444aab
       - name: Setup Mise
         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
@@ -1028,6 +1063,10 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
+      - name: Restore Velnor tool seed
+        uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
+        with:
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-82e6ea144dfe6a19
       - name: Setup Mise
         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
@@ -1217,6 +1256,10 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
+      - name: Restore Velnor tool seed
+        uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
+        with:
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-ac88a89731444aab
       - name: Setup Mise
         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
@@ -1400,6 +1443,10 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
+      - name: Restore Velnor tool seed
+        uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
+        with:
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-cd6926493099032f
       - name: Setup Mise
         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
@@ -1583,6 +1630,10 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
+      - name: Restore Velnor tool seed
+        uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
+        with:
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-ac88a89731444aab
       - name: Setup Mise
         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
@@ -1766,6 +1817,10 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
+      - name: Restore Velnor tool seed
+        uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
+        with:
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-ac88a89731444aab
       - name: Setup Mise
         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
@@ -1949,6 +2004,10 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
+      - name: Restore Velnor tool seed
+        uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
+        with:
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-ac88a89731444aab
       - name: Setup Mise
         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
@@ -2132,6 +2191,10 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
+      - name: Restore Velnor tool seed
+        uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
+        with:
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-ac88a89731444aab
       - name: Setup Mise
         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
@@ -2315,6 +2378,10 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
+      - name: Restore Velnor tool seed
+        uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
+        with:
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-ac88a89731444aab
       - name: Setup Mise
         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
@@ -2498,6 +2565,10 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
+      - name: Restore Velnor tool seed
+        uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
+        with:
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-ac88a89731444aab
       - name: Setup Mise
         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
@@ -2681,6 +2752,10 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
+      - name: Restore Velnor tool seed
+        uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
+        with:
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-ac88a89731444aab
       - name: Setup Mise
         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:
@@ -2841,6 +2916,10 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: "false"
+      - name: Restore Velnor tool seed
+        uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
+        with:
+          cache_key: mise-v1-x86_64-unknown-linux-gnu-2026.9.18-8f52c1fc1d8f90d8
       - name: Setup Mise
         uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
         with:

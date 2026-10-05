@@ -124,7 +124,7 @@ pub use internal::{
 };
 pub use merge::merge_internal;
 pub use merge_request::assemble_merge_request;
-pub use pins::consumer_acquire_step_with_manifest;
+pub use pins::{acquire_script_argv, consumer_acquire_step_with_manifest};
 pub use plan::{plan_text, plan_text_checked};
 pub use plan_output_limits::{JOB_OUTPUTS_BUDGET_UTF16_BYTES, PlanOutputMode};
 pub use prepare::{GenerationPreparation, prepare};
