@@ -40,6 +40,7 @@ enum Failure {
     UnauthorizedTag,
     ForbiddenTag,
     TransientTag,
+    TagMovedBeforePublish,
     WrongDraftReleaseId,
     WrongDraftDigest,
     WrongDraftUrl,
@@ -60,6 +61,7 @@ fn complete_publish_script_uses_parent_tag_and_checks_all_assets() -> Result<(),
         Failure::UnauthorizedTag,
         Failure::ForbiddenTag,
         Failure::TransientTag,
+        Failure::TagMovedBeforePublish,
         Failure::WrongDraftReleaseId,
         Failure::WrongDraftDigest,
         Failure::WrongDraftUrl,
@@ -160,6 +162,9 @@ fn run_publish_command(
         .env("GH_PATCH_LOG", root.join("patch-log"))
         .env("GH_CALLS", root.join("gh-calls"))
         .env("MISE_CALLS", root.join("mise-calls"))
+        .env("GH_TAG_SOURCE", root.join("tag-source"))
+        .env("GH_TAG_READS", root.join("tag-reads"))
+        .env("GH_MOVED_SHA", "1111111111111111111111111111111111111111")
         .env("MOCK_GH", root.join("mock-bin/gh"));
     cli_tests::isolate_gh_environment(&mut command, root)?;
     Ok(command.output()?)
@@ -191,6 +196,7 @@ fn assert_publish_result(
             | Failure::ChangedReleaseId
             | Failure::WrongPublishedDigest
             | Failure::MutablePublished
+            | Failure::TagMovedBeforePublish
     );
     if create_is_expected {
         assert_eq!(fs::read_to_string(root.join("created-tag"))?, "v0.1.1\n");
@@ -213,6 +219,18 @@ fn assert_publish_result(
         }
     } else {
         assert_no_release_created(root);
+    }
+    if case == Failure::TagMovedBeforePublish {
+        assert_eq!(
+            fs::read_to_string(root.join("tag-source"))?,
+            "1111111111111111111111111111111111111111\n"
+        );
+        assert_eq!(fs::read_to_string(root.join("tag-reads"))?, "2\n");
+        assert!(
+            !root.join("patch-log").exists(),
+            "publisher must not make the release public after the tag moves"
+        );
+        assert!(!root.join("release-accepted").exists());
     }
     Ok(())
 }

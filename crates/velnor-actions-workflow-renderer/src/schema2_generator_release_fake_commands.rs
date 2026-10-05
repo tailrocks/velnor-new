@@ -32,9 +32,18 @@ if [ "$1" = api ]; then
       if [ "$2" = --jq ] && [ "$3" = .sha ]; then printf '%s\n' "$GITHUB_SHA"; else printf '{"sha":"%s"}\n' "$GITHUB_SHA"; fi ;;
     repos/tailrocks/velnor-new/git/refs)
       test "$2 $3" = '--method POST'
+      printf '%s\n' "$GITHUB_SHA" > "$GH_TAG_SOURCE"
       printf '{"ref":"refs/tags/v0.1.1","object":{"type":"commit","sha":"%s"}}\n' "$GITHUB_SHA" ;;
     repos/tailrocks/velnor-new/git/ref/tags/v0.1.1)
-      printf '{"object":{"type":"commit","sha":"%s"}}\n' "$GITHUB_SHA" ;;
+      if [ "$GH_CASE" = TagMovedBeforePublish ]; then
+        count=0
+        if [ -f "$GH_TAG_READS" ]; then count="$(cat "$GH_TAG_READS")"; fi
+        count=$((count + 1))
+        printf '%s\n' "$count" > "$GH_TAG_READS"
+        if [ "$count" -eq 2 ]; then printf '%s\n' "$GH_MOVED_SHA" > "$GH_TAG_SOURCE"; fi
+      fi
+      tag_source="$(cat "$GH_TAG_SOURCE")"
+      printf '{"object":{"type":"commit","sha":"%s"}}\n' "$tag_source" ;;
     repos/tailrocks/velnor-new/releases/123)
       if [ "${2:-} ${3:-}" = '--method PATCH' ]; then
         test "$4 $5" = '-F draft=false'

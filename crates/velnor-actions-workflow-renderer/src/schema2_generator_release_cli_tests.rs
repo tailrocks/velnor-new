@@ -95,6 +95,7 @@ pub(super) fn assert_pinned_publish_calls(
             | Failure::WrongDraftUrl
             | Failure::WrongDraftSize
             | Failure::WrongDraftInventory => 1,
+            Failure::TagMovedBeforePublish => 1,
             _ => 3,
         };
         assert_eq!(release_reads, expected_reads, "{calls}");
