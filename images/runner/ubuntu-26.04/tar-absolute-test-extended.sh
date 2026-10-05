@@ -47,20 +47,31 @@ case_dash_positional() {
 }
 
 case_dash_attached_values() {
-  local root="$work/dash-attached" plain old
+  local root="$work/dash-attached" plain gnu_plain old gnu_old old_cluster gnu_old_cluster
   rm -rf -- "$root"
   mkdir -p "$root/cache" "$root/out"
   printf 'attached-ok\n' >"$root/cache/payload"
   (
     cd "$root" || return 1
     bash "$shim" -cfarchive.tar -Ccache payload || return 1
+    tar.gnu -cfgnu-attached.tar -Ccache payload || return 1
     bash "$shim" cfz oldstyle.tar -Ccache payload || return 1
+    bash "$shim" cfCz oldstyle-cluster.tar cache payload || return 1
+    tar.gnu cfCz gnu-oldstyle-cluster.tar cache payload || return 1
   ) || return 1
   [ -f "$root/archive.tar" ] || return 1
+  [ -f "$root/gnu-attached.tar" ] || return 1
   [ -f "$root/oldstyle.tar" ] || return 1
+  [ -f "$root/oldstyle-cluster.tar" ] || return 1
+  [ -f "$root/gnu-oldstyle-cluster.tar" ] || return 1
   plain="$(tar.gnu -tf "$root/archive.tar")"
+  gnu_plain="$(tar.gnu -tf "$root/gnu-attached.tar")"
   old="$(tar.gnu -tzf "$root/oldstyle.tar")"
-  [ "$plain" = payload ] && [ "$old" = payload ] || return 1
+  old_cluster="$(tar.gnu -tzf "$root/oldstyle-cluster.tar")"
+  gnu_old_cluster="$(tar.gnu -tzf "$root/gnu-oldstyle-cluster.tar")"
+  [ "$plain" = "$gnu_plain" ] && [ "$plain" = payload ] || return 1
+  [ "$old" = payload ] || return 1
+  [ "$old_cluster" = "$gnu_old_cluster" ] && [ "$old_cluster" = payload ] || return 1
   bash "$shim" -xf "$root/archive.tar" -C "$root/out" || return 1
   cmp -s "$root/cache/payload" "$root/out/payload"
 }

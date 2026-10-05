@@ -115,6 +115,8 @@ while [ "$i" -lt "${#args[@]}" ]; do
       ;;
     -[^-]*)
       cluster="${arg#-}"
+      cluster_legacy="$legacy_cluster"
+      legacy_cluster=0
       k=0
       while [ "$k" -lt "${#cluster}" ]; do
         flag="${cluster:$k:1}"
@@ -135,7 +137,7 @@ while [ "$i" -lt "${#args[@]}" ]; do
             rest="${cluster:$((k + 1))}"
             attached=0
             if [ -n "$rest" ]; then
-              if [ "$legacy_cluster" -eq 0 ] || [ "$i" -ne 0 ]; then
+              if [ "$cluster_legacy" -eq 0 ]; then
                 attached=1
               else
                 case "${rest:0:1}" in
