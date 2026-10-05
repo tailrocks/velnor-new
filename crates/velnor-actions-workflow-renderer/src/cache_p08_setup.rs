@@ -52,7 +52,19 @@ pub(crate) fn ensure_tools_cache_v2(
         )));
     }
     reject_v2_steps(job_id, job)?;
+    if !checkout_precedes_setup(job, setup_index) {
+        return Ok(());
+    }
+    insert_tools_prelude(job_id, job, setup, target, setup_index)
+}
 
+fn insert_tools_prelude(
+    job_id: &str,
+    job: &mut Job,
+    setup: &MiseSetup,
+    target: &str,
+    setup_index: usize,
+) -> Result<(), RenderError> {
     let specs = cache_p08::infer_job_tools(job);
     if specs.is_empty() {
         return Ok(());
@@ -93,6 +105,13 @@ pub(crate) fn ensure_tools_cache_v2(
     job.steps
         .splice(setup_index..setup_index, [identity, restore]);
     Ok(())
+}
+
+fn checkout_precedes_setup(job: &Job, setup_index: usize) -> bool {
+    job.steps
+        .iter()
+        .position(|step| step.name == "Checkout")
+        .is_some_and(|checkout_index| checkout_index < setup_index)
 }
 
 fn reject_v2_steps(job_id: &str, job: &Job) -> Result<(), RenderError> {

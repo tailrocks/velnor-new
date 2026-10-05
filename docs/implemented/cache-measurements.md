@@ -108,7 +108,7 @@ zero because no MBX seed exists).
 
 Per-goal dimensions (green run), recorded separately: queue 91 s
 (created→first-job-start 21:04:36→21:06:07); setup 5–8 s/job
-(checkout + mise + helper/plan downloads); tool-install 12–18 s/job cold (every job —
+(checkout + mise + helper/plan downloads); tool-install 12–18 s/job cold (checked-out jobs —
 the tools MISS dominates job startup, ~114 s run-wide); transfer
 above; compile per crate (clippy+build, cold target, warm
 sources, no MBX): actionlint 13 s, contract 14 s, mise 16 s, rust
