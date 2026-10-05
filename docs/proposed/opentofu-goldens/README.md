@@ -2,14 +2,19 @@
 
 ## PR41 + PR46 integration checkpoint (2026-10-05)
 
-The merged renderer captured and byte-checked all five fixture trees with
-`scripts/capture-opentofu-goldens.sh`; `dogfood.verdict` is `DIFFERS` because
-the checked-in `ci.yml` and `qualification.yml` still predate the seed-action
-source carried by this integration. `dogfood.diff` records the complete
-difference; the generator-release workflow and actions match. This is not a
-whole-repository producer-parity pass. Regenerate after syncing the current
-main branch. No authentic same-run three-target candidate manifest is present,
-so `check-release` and hosted qualification remain unverified.
+After integrating the PR71 generator correction and applying the source
+policy fix, the pinned debug CLI regenerated the checked-in `.github` tree and
+recaptured all five fixture trees. A separate
+`scripts/capture-opentofu-goldens.sh check` reports **all five match**, and
+`dogfood.verdict` is `identical`. Under
+`VelnorRepositoryV1`, discovery neither reads nor synthesizes the consumer
+manifest; the generated source tree contains no debug-only manifest data. The
+regression in `impl_consumer_manifest_file.rs` proves this path still emits no
+consumer `Acquire Velnor` step. No authentic same-run three-target candidate
+manifest is present; `check-release`, hosted qualification, immutable
+publication, and infrastructure protection remain unverified. This snapshot
+predates the merged PR73 seed-authority correction; normal main synchronization
+and its final exact-head gates are still pending.
 
 Pre-refactor capture at `a12efd7` (behavior-identical to `origin/main`
 106bfd7; docs-only delta). Every T06 ownership move must re-run the
