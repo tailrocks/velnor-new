@@ -20,6 +20,8 @@ use crate::retrieve_reports::read_staged_bytes;
 pub const GENERATOR_RELEASE_MANIFEST_ASSEMBLE_OP: &str = "assemble-generator-release-manifest-v1";
 /// Private operation that verifies a manifest against actual release assets.
 pub const GENERATOR_RELEASE_MANIFEST_VERIFY_OP: &str = "verify-generator-release-manifest-v1";
+/// Private operation that creates one target's checksum sidecar from binary bytes.
+pub const GENERATOR_RELEASE_SIDECAR_WRITE_OP: &str = "write-generator-release-sidecar-v1";
 
 /// Environment key naming the directory of exact generator release assets.
 pub const GENERATOR_RELEASE_ASSET_DIR_ENV: &str = "VELNOR_RELEASE_ASSET_DIR";
@@ -31,6 +33,8 @@ pub const GENERATOR_RELEASE_TAG_ENV: &str = "VELNOR_RELEASE_TAG";
 pub const GENERATOR_RELEASE_REPOSITORY_ENV: &str = "VELNOR_RELEASE_REPOSITORY";
 /// Environment key carrying the source commit from release eligibility.
 pub const GENERATOR_RELEASE_SOURCE_ENV: &str = "VELNOR_SOURCE_SHA";
+/// Environment key carrying one exact supported target triple.
+pub const GENERATOR_RELEASE_TARGET_ENV: &str = "VELNOR_RELEASE_TARGET";
 
 const MAX_ASSET_BYTES: u64 = 536_870_912;
 const MAX_SIDECAR_BYTES: u64 = 512;
@@ -83,6 +87,37 @@ fn assemble_for(context: &ReleaseContext) -> Result<(), OrchestratorError> {
 pub fn verify_generator_release_manifest() -> Result<(), OrchestratorError> {
     let context = release_context_from_env()?;
     verify_for(&context)
+}
+
+/// Write one target sidecar from the actual staged binary bytes.
+///
+/// # Errors
+///
+/// Returns an error for an invalid release context, unsupported target,
+/// unreadable/empty binary, or an existing sidecar.
+pub fn write_generator_release_sidecar() -> Result<(), OrchestratorError> {
+    let context = release_context_from_env()?;
+    validate_context(&context)?;
+    let target = nonempty_env(GENERATOR_RELEASE_TARGET_ENV)?;
+    write_sidecar_for(&context, &target)
+}
+
+fn write_sidecar_for(context: &ReleaseContext, target: &str) -> Result<(), OrchestratorError> {
+    if !SUPPORTED_TARGETS.contains(&target) {
+        return Err(internal("release_target_unsupported"));
+    }
+    let name = asset_filename(&context.version, target);
+    let binary = read_asset(&context.asset_dir.join(&name), MAX_ASSET_BYTES, "binary")?;
+    if binary.is_empty() {
+        return Err(internal("release_binary_empty"));
+    }
+    let checksum = sha256_lower(&binary);
+    let bytes = format!("{checksum}  {name}\n");
+    write_exclusive(
+        &context.asset_dir.join(format!("{name}.sha256")),
+        bytes.as_bytes(),
+        "generator_release_sidecar",
+    )
 }
 
 fn verify_for(context: &ReleaseContext) -> Result<(), OrchestratorError> {

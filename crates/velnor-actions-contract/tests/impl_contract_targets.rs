@@ -12,13 +12,10 @@ use velnor_actions_contract::{
 fn supported_targets_and_naming() {
     assert_eq!(
         SUPPORTED_TARGETS,
-        [
-            "x86_64-unknown-linux-gnu",
-            "aarch64-apple-darwin",
-            "x86_64-apple-darwin",
-        ]
+        ["x86_64-unknown-linux-gnu", "aarch64-apple-darwin"]
     );
     assert!(is_supported_target("x86_64-unknown-linux-gnu"));
+    assert!(!is_supported_target("x86_64-apple-darwin"));
     assert!(!is_supported_target("wasm32-unknown-unknown"));
     assert_eq!(
         RELEASE_MANIFEST_FILENAME,

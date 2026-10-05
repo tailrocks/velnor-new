@@ -13,11 +13,7 @@ const SOURCE_ENV: &str = "VELNOR_SOURCE_SHA";
 const ASSEMBLE_OP: &str = "assemble-generator-release-manifest-v1";
 const VERIFY_OP: &str = "verify-generator-release-manifest-v1";
 
-const TARGETS: [&str; 3] = [
-    "x86_64-unknown-linux-gnu",
-    "aarch64-apple-darwin",
-    "x86_64-apple-darwin",
-];
+const TARGETS: [&str; 2] = ["x86_64-unknown-linux-gnu", "aarch64-apple-darwin"];
 
 #[test]
 fn release_manifest_operations_fail_closed_without_context() -> Result<(), Box<dyn Error>> {
@@ -91,7 +87,7 @@ fn release_manifest_operations_assemble_and_verify_explicit_context() -> Result<
     assert_eq!(value["commit"], source);
     assert_eq!(
         value["targets"].as_array().ok_or("targets missing")?.len(),
-        3
+        2
     );
 
     let mut verify = context.to_vec();

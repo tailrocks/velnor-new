@@ -1,4 +1,6 @@
-use super::{ReleaseContext, assemble_for, sha256_lower, validate_inventory, verify_for};
+use super::{
+    ReleaseContext, assemble_for, sha256_lower, validate_inventory, verify_for, write_sidecar_for,
+};
 use std::fs;
 use velnor_actions_contract::{
     RELEASE_MANIFEST_FILENAME, ReleaseManifest, SUPPORTED_TARGETS, asset_filename,
@@ -34,7 +36,7 @@ fn write_assets(context: &ReleaseContext) -> Result<(), std::io::Error> {
 }
 
 #[test]
-fn assembly_is_canonical_and_verification_binds_all_three_assets() {
+fn assembly_is_canonical_and_verification_binds_all_supported_targets() {
     let (_root, context) = fixture("valid release assets");
     assemble_for(&context).expect("assemble canonical manifest");
     verify_for(&context).expect("verify actual assets");
@@ -77,7 +79,7 @@ fn assembly_rejects_missing_extra_and_mismatched_sidecar_assets() {
     let (_root, missing) = fixture("missing asset");
     let missing_asset = missing.asset_dir.join(format!(
         "{}.sha256",
-        asset_filename(&missing.version, SUPPORTED_TARGETS[2])
+        asset_filename(&missing.version, SUPPORTED_TARGETS[1])
     ));
     fs::remove_file(missing_asset).expect("remove sidecar");
     assert!(assemble_for(&missing).is_err());
@@ -101,12 +103,85 @@ fn assembly_rejects_missing_extra_and_mismatched_sidecar_assets() {
 }
 
 #[test]
+fn sidecar_is_written_from_exact_binary_bytes_without_replacement() {
+    let (_root, context) = fixture("sidecar target");
+    let target = SUPPORTED_TARGETS[1];
+    let name = asset_filename(&context.version, target);
+    let binary = fs::read(context.asset_dir.join(&name)).expect("binary bytes");
+    let sidecar_path = context.asset_dir.join(format!("{name}.sha256"));
+    fs::remove_file(&sidecar_path).expect("remove fixture sidecar");
+
+    write_sidecar_for(&context, target).expect("write sidecar");
+    assert_eq!(
+        fs::read(&sidecar_path).expect("sidecar bytes"),
+        format!("{}  {name}\n", sha256_lower(&binary)).as_bytes()
+    );
+    assert!(
+        write_sidecar_for(&context, target)
+            .expect_err("existing sidecar must not be replaced")
+            .to_string()
+            .contains("generator_release_sidecar_exists")
+    );
+}
+
+#[test]
+fn sidecar_rejects_unsupported_target_and_empty_binary() {
+    let (_root, unsupported) = fixture("unsupported target");
+    assert!(
+        write_sidecar_for(&unsupported, "x86_64-unknown-linux-musl")
+            .expect_err("unsupported target must fail")
+            .to_string()
+            .contains("release_target_unsupported")
+    );
+    assert!(
+        write_sidecar_for(&unsupported, "x86_64-apple-darwin")
+            .expect_err("Intel macOS target must fail")
+            .to_string()
+            .contains("release_target_unsupported")
+    );
+
+    let (_root, empty) = fixture("empty binary");
+    let name = asset_filename(&empty.version, SUPPORTED_TARGETS[1]);
+    fs::write(empty.asset_dir.join(&name), b"").expect("empty binary");
+    assert!(
+        write_sidecar_for(&empty, SUPPORTED_TARGETS[1])
+            .expect_err("empty binary must fail")
+            .to_string()
+            .contains("release_binary_empty")
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn sidecar_rejects_linked_binary_without_changing_its_target() {
+    let (root, linked) = fixture("linked sidecar binary");
+    let target = SUPPORTED_TARGETS[0];
+    let name = asset_filename(&linked.version, target);
+    let binary_path = linked.asset_dir.join(&name);
+    let sidecar_path = linked.asset_dir.join(format!("{name}.sha256"));
+    fs::remove_file(&sidecar_path).expect("remove fixture sidecar");
+    let sentinel = root.path().join("binary-sentinel");
+    let original = fs::read(&binary_path).expect("binary bytes");
+    fs::rename(&binary_path, &sentinel).expect("move binary outside asset directory");
+    std::os::unix::fs::symlink(&sentinel, &binary_path).expect("plant binary symlink");
+
+    assert!(
+        write_sidecar_for(&linked, target)
+            .expect_err("linked binary must fail")
+            .to_string()
+            .contains("release_binary_symlink")
+    );
+    assert_eq!(fs::read(&sentinel).expect("sentinel bytes"), original);
+    assert!(!sidecar_path.exists());
+}
+
+#[test]
 fn verification_rejects_changed_assets_and_context_mismatch() {
     let (_root, changed) = fixture("changed asset");
     assemble_for(&changed).expect("assemble");
     let binary = changed
         .asset_dir
-        .join(asset_filename(&changed.version, SUPPORTED_TARGETS[2]));
+        .join(asset_filename(&changed.version, SUPPORTED_TARGETS[1]));
     fs::write(binary, b"changed binary").expect("change x64 bytes");
     assert!(
         verify_for(&changed)
