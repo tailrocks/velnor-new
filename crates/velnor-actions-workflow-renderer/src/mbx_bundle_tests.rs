@@ -1,12 +1,22 @@
 //! MBX bundle key and restore-prefix regressions.
 
+use std::collections::BTreeMap;
 use std::error::Error;
 use std::process::{Command, Output};
+
+use velnor_actions_contract::{Step, StepKind};
 
 use super::KEY_SCRIPT;
 
 const GENERATION: &str = "velnor-mbx-1.21.1-dir";
 const COMPATIBILITY: &str = "linux-x64-mbx-velnor-mbx-1.21.1-dir-rust-eaa76ad37f36";
+const TOOL_HOME_ENV_KEYS: [&str; 5] = [
+    "MISE_RUSTUP_HOME",
+    "MISE_CARGO_HOME",
+    "RUSTUP_TOOLCHAIN",
+    "RUSTUP_HOME",
+    "CARGO_HOME",
+];
 
 fn output_for<'a>(script_output: &'a str, name: &str) -> Option<&'a str> {
     script_output
@@ -77,6 +87,57 @@ host: x86_64-unknown-linux-gnu'
         .env("MBX_RUN_ATTEMPT", run_attempt)
         .env("GITHUB_OUTPUT", github_output)
         .output()
+}
+
+fn run_key_script_with_owned_homes(home_env: &BTreeMap<String, String>) -> std::io::Result<Output> {
+    let script = format!(
+        r#"rustc() {{
+  [ "$1" = "+1.98.1" ] && [ "$2" = "-vV" ] || return 1
+  [ "${{MISE_RUSTUP_HOME:-}}" = "/worker/mise/rustup" ] || return 1
+  [ "${{MISE_CARGO_HOME:-}}" = "/worker/mise/cargo" ] || return 1
+  [ "${{RUSTUP_TOOLCHAIN:-}}" = "1.98.1" ] || return 1
+  [ "${{RUSTUP_HOME:-}}" = "/worker/rustup" ] || return 1
+  [ "${{CARGO_HOME:-}}" = "/worker/cargo" ] || return 1
+  printf '%s' 'rustc 1.98.1
+host: x86_64-unknown-linux-gnu'
+}}
+{KEY_SCRIPT}"#
+    );
+    let mut command = Command::new("bash");
+    command
+        .args(["-c", &script])
+        .env_clear()
+        .env("PATH", std::env::var_os("PATH").unwrap_or_default())
+        .env("RUNNER_OS", "Linux")
+        .env("RUNNER_ARCH", "X64")
+        .env("MBX_GENERATION", GENERATION)
+        .env("MBX_TOOLCHAIN", "1.98.1")
+        .env("MBX_JOB_ID", "rust-app__local")
+        .env("MBX_MATRIX_KEY", "")
+        .env("MBX_RUN_ID", "100")
+        .env("MBX_RUN_ATTEMPT", "1")
+        .env("GITHUB_OUTPUT", "/dev/stdout");
+    for key in TOOL_HOME_ENV_KEYS {
+        if let Some(value) = home_env.get(key) {
+            command.env(key, value);
+        }
+    }
+    command.output()
+}
+
+fn mbx_action(env: BTreeMap<String, String>) -> Step {
+    Step {
+        name: "Restore MBX objects".to_owned(),
+        condition: None,
+        kind: StepKind::Action {
+            uses: "jdx/mr-boxington-action@1687e54eb349cadf61fa38b5813a77875489e8e6".to_owned(),
+            with: BTreeMap::from([
+                ("cache-generation".to_owned(), GENERATION.to_owned()),
+                ("toolchain".to_owned(), "1.98.1".to_owned()),
+            ]),
+            env,
+        },
+    }
 }
 
 #[test]
@@ -226,5 +287,61 @@ fn failed_key_output_handoff_fails_the_step() -> Result<(), Box<dyn Error>> {
     let output = run_key_script_with_output("rust-app", "", "100", "1", "/dev/null/output")?;
     assert!(!output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr).contains("handoff failed"));
+    Ok(())
+}
+
+#[test]
+fn key_probe_uses_action_owned_tool_homes_and_keeps_empty_defaults() -> Result<(), Box<dyn Error>> {
+    let empty_default = super::key_step(false, &mbx_action(BTreeMap::new()))?;
+    let StepKind::Shell { env, .. } = empty_default.kind else {
+        return Err(std::io::Error::other("MBX key step is not a shell step").into());
+    };
+    assert!(TOOL_HOME_ENV_KEYS.iter().all(|key| !env.contains_key(*key)));
+
+    let empty_homes = TOOL_HOME_ENV_KEYS
+        .iter()
+        .map(|key| ((*key).to_owned(), String::new()))
+        .collect();
+    let empty_values = super::key_step(false, &mbx_action(empty_homes))?;
+    let StepKind::Shell { env, .. } = empty_values.kind else {
+        return Err(std::io::Error::other("MBX key step is not a shell step").into());
+    };
+    assert!(TOOL_HOME_ENV_KEYS.iter().all(|key| !env.contains_key(*key)));
+
+    let homes = BTreeMap::from([
+        (
+            "MISE_RUSTUP_HOME".to_owned(),
+            "/worker/mise/rustup".to_owned(),
+        ),
+        (
+            "MISE_CARGO_HOME".to_owned(),
+            "/worker/mise/cargo".to_owned(),
+        ),
+        ("RUSTUP_TOOLCHAIN".to_owned(), "1.98.1".to_owned()),
+        ("RUSTUP_HOME".to_owned(), "/worker/rustup".to_owned()),
+        ("CARGO_HOME".to_owned(), "/worker/cargo".to_owned()),
+    ]);
+    let key_step = super::key_step(false, &mbx_action(homes.clone()))?;
+    let StepKind::Shell { env, .. } = key_step.kind else {
+        return Err(std::io::Error::other("MBX key step is not a shell step").into());
+    };
+    for (key, value) in &homes {
+        assert_eq!(env.get(key), Some(value));
+    }
+    let probe_homes = TOOL_HOME_ENV_KEYS
+        .iter()
+        .filter_map(|key| {
+            env.get(*key)
+                .map(|value| ((*key).to_owned(), value.clone()))
+        })
+        .collect();
+    let output = run_key_script_with_owned_homes(&probe_homes)?;
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let output = String::from_utf8(output.stdout)?;
+    assert_eq!(output_for(&output, "ready"), Some("true"));
     Ok(())
 }

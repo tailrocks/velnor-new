@@ -234,7 +234,12 @@ fn insert_bundle_restore(job: &mut Job, matrix_job: bool) -> Result<(), RenderEr
 }
 
 fn key_step(matrix_job: bool, action: &Step) -> Result<Step, RenderError> {
-    let StepKind::Action { with, .. } = &action.kind else {
+    let StepKind::Action {
+        with,
+        env: action_env,
+        ..
+    } = &action.kind
+    else {
         return Err(RenderError::InvalidWorkflow(
             "mbx_bundle_key_without_action".to_owned(),
         ));
@@ -256,6 +261,14 @@ fn key_step(matrix_job: bool, action: &Step) -> Result<Step, RenderError> {
         ("MBX_GENERATION".to_owned(), generation),
         ("MBX_TOOLCHAIN".to_owned(), toolchain.clone()),
     ]);
+    for key in crate::toolchain_env::TOOLCHAIN_HOME_KEYS
+        .into_iter()
+        .chain(["RUSTUP_HOME", "CARGO_HOME"])
+    {
+        if let Some(value) = action_env.get(key).filter(|value| !value.is_empty()) {
+            env.insert(key.to_owned(), value.clone());
+        }
+    }
     if matrix_job {
         env.insert(
             "MBX_MATRIX_KEY".to_owned(),
