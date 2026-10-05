@@ -1,0 +1,7 @@
+﻿2026-10-04T00:02:43.2426108Z Post job cleanup.
+2026-10-04T00:02:43.3634734Z [command]/opt/hostedtoolcache/mbx-780ccb52aa3a95ac1b0ee0ecf5184561b1a4bdf1fe88180333dc0e11a92980f5/1.21.1/x64/mbx cache export --group github-actions-37163556069-1-65e20002-3af2-4b05-a2c6-847d95f2b94c --format directory /home/runner/.cache/mbx/actions/github-actions-cache-v1
+2026-10-04T00:02:43.5705765Z exported 23 actions and 135 objects (90.3 MiB) for export group "github-actions-37163556069-1-65e20002-3af2-4b05-a2c6-847d95f2b94c"
+2026-10-04T00:02:43.5878190Z [command]/usr/bin/tar --posix -cf cache.tzst --exclude cache.tzst -P -C /home/runner/work/velnor-new/velnor-new --files-from manifest.txt --use-compress-program zstdmt
+2026-10-04T00:02:45.1154642Z Sent 23855104 of 29062963 (82.1%), 22.7 MBs/sec
+2026-10-04T00:02:45.3336004Z Sent 29062963 of 29062963 (100.0%), 22.7 MBs/sec
+2026-10-04T00:02:45.6047568Z Saved mbx cache linux-x64-mbx-velnor-mbx-1.21.1-dir-rust-39d372ba6fa2-47815c83b9eeadbaf84b741918fffa7ea550da89 (ID 8467894819)

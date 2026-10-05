@@ -27,23 +27,34 @@ pub(super) fn render_context(
     debug_assert!(REQUEST_DIR.starts_with(REQUEST_DIR_PREFIX));
     let velnor = config.workflow.policy == WorkflowPolicy::VelnorRepositoryV1;
     let validator_commands = if velnor {
-        vec![
+        let mut commands = vec![
             ValidatorCommand {
                 validator: ValidatorKind::CargoDeny,
                 name: DENY_STEP_NAME.to_owned(),
                 argv: deny_argv()?,
+                prepare_argv: Vec::new(),
+                source_units: Vec::new(),
+                tool_inputs: Vec::new(),
             },
             ValidatorCommand {
                 validator: ValidatorKind::CargoMachete,
                 name: MACHETE_STEP_NAME.to_owned(),
                 argv: machete_argv()?,
+                prepare_argv: Vec::new(),
+                source_units: Vec::new(),
+                tool_inputs: Vec::new(),
             },
             ValidatorCommand {
                 validator: ValidatorKind::Zizmor,
                 name: ZIZMOR_STEP_NAME.to_owned(),
                 argv: zizmor_argv(catalog)?,
+                prepare_argv: Vec::new(),
+                source_units: Vec::new(),
+                tool_inputs: Vec::new(),
             },
-        ]
+        ];
+        commands.push(crate::python_source_units::validator_command(catalog)?);
+        commands
     } else {
         Vec::new()
     };

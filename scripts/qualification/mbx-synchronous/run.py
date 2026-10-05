@@ -102,6 +102,7 @@ def config_inputs(workspace, environment):
 
 def environment(args, run):
     home = run / "home"
+    # The owned 0700 run root is this run's TMPDIR and contains the fixture.
     return dict(PATH=str(args.toolchain_root / "bin") + os.pathsep + "/usr/bin:/bin",
                 HOME=str(home), CARGO_HOME=str(run / "cargo-home"),
                 RUSTUP_HOME=str(run / "rustup-home"), RUSTC=str(args.rustc),
@@ -110,7 +111,7 @@ def environment(args, run):
                 XDG_CONFIG_HOME=str(home / ".config"),
                 XDG_CACHE_HOME=str(home / ".cache"),
                 XDG_DATA_HOME=str(home / ".local/share"),
-                TMPDIR=str(run / "tmp"), LANG="C", LC_ALL="C", TZ="UTC",
+                TMPDIR=str(run), LANG="C", LC_ALL="C", TZ="UTC",
                 MBX_CACHE_DIR=str(run / "cache"), MBX_GC_AUTO="0",
                 MBX_CACHE_EXPORT_GROUP=args.group,
                 MBX_SUMMARY="off", MBX_DISPLAY="plain")
@@ -118,30 +119,43 @@ def environment(args, run):
 
 def prepare(args, number, manifest):
     run = args.output / ("run-" + str(number))
-    run.mkdir()
+    run.mkdir(mode=0o700)
+    require(run.stat().st_uid == os.getuid() and run.stat().st_mode & 0o077 == 0,
+            "private run root must be owned and private")
     for name in ("home", "cargo-home", "rustup-home", "target", "cache", "tmp", "logs"):
-        (run / name).mkdir()
+        (run / name).mkdir(mode=0o700)
     workspace = run / "workspace"
-    shutil.copytree(ROOT / manifest["fixture"]["root"], workspace)
+    BIND.materialize_fixture(workspace, manifest, private_root=run)
     seed_registry(args, run / "cargo-home")
     env = environment(args, run)
     configs = config_inputs(workspace, env)
     registry_inventory = write_json(run / "registry-inputs.json", tree(run / "cargo-home/registry"))
     archive = run / "cargo-home" / args.archive_relative
     source = run / "cargo-home" / args.source_relative
-    return dict(id=number, cwd=str(workspace), environment=env, config_inputs=configs,
+    return dict(id=number, cwd=str(workspace), run_root=str(run),
+                environment=env, config_inputs=configs,
                 registry_archive=str(archive), registry_source=str(source),
                 registry_inputs=registry_inventory, commands=[], transport=[])
 
 
+def run_root(run):
+    path = Path(run["run_root"])
+    require(path.is_absolute() and path == path.resolve(strict=True),
+            "absolute canonical run root required")
+    return path
+
+
 def bind(args, run, label):
     workspace = Path(run["cwd"])
+    root = run_root(run)
+    require(workspace.parent == root and Path(run["environment"]["TMPDIR"]) == root,
+            "fixture must be the private TMPDIR workspace")
     inputs = argparse.Namespace(expected_manifest_sha256=args.expected_manifest_sha256,
                                 fixture_root=workspace,
                                 registry_archive=Path(run["registry_archive"]),
                                 registry_source=Path(run["registry_source"]))
     manifest, checksum = BIND.verify(inputs)
-    require(tree(workspace.parent / "cargo-home/registry") ==
+    require(tree(root / "cargo-home/registry") ==
             json.loads(Path(run["registry_inputs"]["path"]).read_bytes()),
             "copied registry inputs changed")
     receipt = dict(status="fixture-inputs-verified", manifest_sha256=checksum,
@@ -150,7 +164,7 @@ def bind(args, run, label):
                    registry_archive_sha256=manifest["registry"]["archive_sha256"],
                    registry_inventory_sha256=manifest["registry"]["inventory_sha256"],
                    registry_inputs=run["registry_inputs"], native_authority=None)
-    return write_json(workspace.parent / "logs" / (label + "-inputs.json"), receipt)
+    return write_json(root / "logs" / (label + "-inputs.json"), receipt)
 
 
 def execute(argv, cwd, env, logs, name):
@@ -175,9 +189,10 @@ def retain_reports(record, reports):
 
 def observed_command(args, run, command, label):
     workspace = Path(run["cwd"])
-    logs = workspace.parent / "logs"
+    root = run_root(run)
+    logs = root / "logs"
     before = bind(args, run, label + "-before")
-    reports = workspace.parent / (label + "-reports")
+    reports = root / (label + "-reports")
     reports.mkdir(mode=0o700)
     require(reports.stat().st_uid == os.getuid() and reports.stat().st_mode & 0o077 == 0,
             "native report directory must be owned and private")
@@ -219,6 +234,7 @@ def seed_registry(args, destination):
 
 def transport(args, run, operation, bundle, baseline, manifest):
     workspace = Path(run["cwd"])
+    root = run_root(run)
     argv = [args.mbx, "cache", operation]
     if operation == "export":
         argv += [bundle, "--format", "directory", "--json", "--group", args.group,
@@ -228,16 +244,15 @@ def transport(args, run, operation, bundle, baseline, manifest):
         require(artifact(Path(witness["path"])) == witness, "retained bundle witness changed")
         retained = json.loads(Path(witness["path"]).read_bytes())
         require(tree(bundle) == retained, "retained native bundle inventory changed")
-        disposable = workspace.parent / "import-bundle"
+        disposable = root / "import-bundle"
         shutil.copytree(bundle, disposable)
         require(tree(disposable) == retained, "transport copy inventory differs")
-        import_inventory = write_json(workspace.parent / "import-bundle-inventory.json", retained)
+        import_inventory = write_json(root / "import-bundle-inventory.json", retained)
         argv += [disposable, "--comparison-state", baseline, "--json", "--",
                  *manifest["commands"][0][1:]]
     else:
         argv += [baseline, "--json"]
-    record = execute(argv, workspace, run["environment"],
-                     workspace.parent / "logs", operation)
+    record = execute(argv, workspace, run["environment"], root / "logs", operation)
     run["transport"].append(record)
     if operation == "import":
         record["input_bundle_inventory"] = import_inventory
@@ -255,7 +270,7 @@ def transport(args, run, operation, bundle, baseline, manifest):
         require(not bundle.exists(), "skipped export unexpectedly created bundle")
         return None
     require(bundle.is_dir() and tree(bundle), "empty MBX directory bundle")
-    record["bundle_inventory"] = write_json(workspace.parent / "bundle-inventory.json", tree(bundle))
+    record["bundle_inventory"] = write_json(root / "bundle-inventory.json", tree(bundle))
     args.bundle_witnesses[str(bundle)] = record["bundle_inventory"]
     return bundle
 
@@ -306,12 +321,12 @@ def run_all(args, record):
         if number == 1:
             record["registry_seed_inventory"] = run["registry_inputs"]
             tool_observations(args, record, run)
-        baseline = Path(run["cwd"]).parent / "comparison-state.json"
+        baseline = run_root(run) / "comparison-state.json"
         operation = "comparison-state" if number == 1 else "import"
         transport(args, run, operation, bundle, baseline, manifest)
         for index, command in enumerate(manifest["commands"]):
             observed_command(args, run, command, "command-" + str(index + 1))
-        candidate = Path(run["cwd"]).parent / "mbx-cache-bundle"
+        candidate = run_root(run) / "mbx-cache-bundle"
         exported = transport(args, run, "export", candidate, baseline, manifest)
         require(exported is not None or bundle is not None, "cold export produced no bundle")
         bundle = exported or bundle

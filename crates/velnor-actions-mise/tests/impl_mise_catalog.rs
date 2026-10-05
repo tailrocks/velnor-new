@@ -3,8 +3,9 @@ use velnor_actions_mise::catalog::{MbxProvisioning, NEXTEST_VERSION};
 use velnor_actions_mise::{
     ACTIONLINT_VERSION, GH_VERSION, MISE_VERSION, MR_BOXINGTON_VERSION, MiseError,
     OPENTOFU_SHA256_DARWIN_AMD64, OPENTOFU_SHA256_DARWIN_ARM64, OPENTOFU_SHA256_LINUX_AMD64,
-    OPENTOFU_SHA256_LINUX_ARM64, OPENTOFU_VERSION, PinnedTool, RUST_TARGET_TRIPLE, RUST_VERSION,
-    SHELLCHECK_VERSION, ToolCatalog, ZIZMOR_VERSION, validate_exact_version,
+    OPENTOFU_SHA256_LINUX_ARM64, OPENTOFU_VERSION, PYTHON_BINARY_SHA256_LINUX_X64,
+    PYTHON_PBS_SHA256, PYTHON_PBS_SIZE_BYTES, PYTHON_PBS_URL, PinnedTool, RUST_TARGET_TRIPLE,
+    RUST_VERSION, SHELLCHECK_VERSION, ToolCatalog, ZIZMOR_VERSION, validate_exact_version,
 };
 
 #[test]
@@ -33,7 +34,7 @@ fn pinned_catalog_matches_qualified_versions() {
 }
 
 #[test]
-fn tool_specs_use_registry_names() {
+fn tool_specs_use_exact_catalog_selectors() {
     let catalog = ToolCatalog::pinned();
     assert_eq!(catalog.tool_spec(PinnedTool::Rust), "rust@1.98.1");
     assert_eq!(
@@ -55,7 +56,14 @@ fn tool_specs_use_registry_names() {
         "aqua:nextest-rs/nextest/cargo-nextest@0.9.146"
     );
     assert_eq!(catalog.tool_spec(PinnedTool::Opentofu), "opentofu@1.13.1");
-    assert_eq!(catalog.tool_spec(PinnedTool::Python), "python@3.14.8");
+    assert_eq!(
+        catalog.tool_spec(PinnedTool::Python),
+        format!(concat!(
+            "http:python[url={PYTHON_PBS_URL},",
+            "checksum=sha256:{PYTHON_PBS_SHA256},",
+            "strip_components=1,bin_path=bin]@3.14.8"
+        ))
+    );
     assert_eq!(catalog.tool_spec(PinnedTool::Uv), "uv@0.12.23");
     assert_eq!(
         catalog.tool_spec(PinnedTool::Reuse),
@@ -238,6 +246,35 @@ fn opentofu_catalog_digest_binds_qualified_artifact() {
     let spec = catalog.tool_spec(PinnedTool::Opentofu);
     assert_eq!(spec, "opentofu@1.13.1");
     assert!(!spec.contains(':'), "mise selector stays bare shorthand");
+}
+
+#[test]
+fn python_catalog_binds_exact_pbs_archive_and_binary() {
+    let catalog = ToolCatalog::pinned();
+    let identity = catalog.tool_identity(PinnedTool::Python);
+    assert_eq!(identity.version, "3.14.8");
+    assert_eq!(identity.digest, PYTHON_PBS_SHA256);
+    assert_eq!(
+        identity.source,
+        "https://github.com/astral-sh/python-build-standalone/releases/tag/20261001"
+    );
+    assert_eq!(PYTHON_PBS_SIZE_BYTES, "36292523");
+    assert_eq!(
+        PYTHON_PBS_URL,
+        concat!(
+            "https://github.com/astral-sh/python-build-standalone/releases/download/",
+            "20261001/cpython-3.14.8%2B20261001-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz"
+        )
+    );
+    assert_eq!(
+        PYTHON_BINARY_SHA256_LINUX_X64,
+        "4b67d7e58e4e3f58339106f9192dbd66421608dc2fcc6a705b20115ba588232b"
+    );
+    assert!(identity.validate("catalog").is_ok());
+    let selector = catalog.tool_spec(PinnedTool::Python);
+    let checksum_options =
+        format!("checksum=sha256:{PYTHON_PBS_SHA256},strip_components=1,bin_path=bin");
+    assert!(selector.contains(&checksum_options));
 }
 
 #[test]

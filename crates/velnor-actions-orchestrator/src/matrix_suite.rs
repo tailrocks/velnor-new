@@ -31,6 +31,7 @@ fn registered_suite_tools(package: &str) -> Option<SuiteTools> {
             generate_validators: false,
             opentofu: true,
         }),
+        "mbx-synchronous-registry-fixture" => Some(SuiteTools::NONE),
         "velnor-actions-contract"
         | "velnor-actions-native"
         | "velnor-actions-rust"
