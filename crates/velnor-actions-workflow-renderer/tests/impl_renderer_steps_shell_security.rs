@@ -39,6 +39,21 @@ fn env_separator_assignments_do_not_hide_shell_operators() {
 }
 
 #[test]
+fn env_separator_ignore_environment_marker_does_not_hide_shell_operators() {
+    let err = validate_command_argv(&argv(&[
+        "env",
+        "--",
+        "-",
+        "FOO=bar",
+        "bash",
+        "-c",
+        "sleep 1&echo done",
+    ]))
+    .expect_err("env ignore marker after -- must not hide a shell launcher");
+    assert!(err.to_string().contains("background_shell"), "{err}");
+}
+
+#[test]
 fn env_separator_assignment_keeps_the_inline_script_quoted() -> Result<(), RenderError> {
     for assignment in ["FOO-BAR=value", "=value"] {
         let rendered = join_argv_for_run(&argv(&[
@@ -54,5 +69,15 @@ fn env_separator_assignment_keeps_the_inline_script_quoted() -> Result<(), Rende
             format!("env -- {assignment} bash -c 'echo $value'")
         );
     }
+    let rendered = join_argv_for_run(&argv(&[
+        "env",
+        "--",
+        "-",
+        "FOO=bar",
+        "bash",
+        "-c",
+        "echo $value",
+    ]))?;
+    assert_eq!(rendered, "env -- - FOO=bar bash -c 'echo $value'");
     Ok(())
 }

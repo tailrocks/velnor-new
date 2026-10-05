@@ -206,6 +206,9 @@ fn env_command_index(argv: &[String], env_index: usize) -> Result<Option<usize>,
         match arg.as_str() {
             "--" => {
                 index += 1;
+                if argv.get(index).is_some_and(|value| value == "-") {
+                    index += 1;
+                }
                 while argv
                     .get(index)
                     .is_some_and(|value| is_env_assignment(value))
