@@ -41,7 +41,7 @@ pub(crate) use capacity::{install_job_capacity, job_capacity};
 #[cfg(test)]
 pub(crate) use capacity::{
     Admit, Seat, admit, needs_running, parse_admit_target, parse_job_capacity, poll_limit,
-    statistics_blocked, wide_poll_limit,
+    wide_poll_limit,
 };
 #[cfg(test)]
 pub(crate) use steps::{Idle, idle};
