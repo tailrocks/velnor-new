@@ -6,10 +6,50 @@ use velnor_actions_contract::cachekey::{
     restore_prefix, toolchain_id, workspace_id,
 };
 use velnor_actions_contract::{
-    CacheLayer, CacheOutcome, CacheResult, ContractError, EntryCacheIds, TaskReport, TaskStatus,
-    Trust, WorkflowEvent, canonical_json_str, digest_b3, input_digest, is_secret_env_name,
-    parse_strict_json, run_key_for_ci, task_report_id_for_task,
+    CacheLayer, CacheOutcome, CacheResult, ContractError, EntryCacheIds, MatrixEntry,
+    PlatformBinding, PlatformUnavailableReason, TaskReport, TaskStatus, Trust, WorkflowEvent,
+    canonical_json_str, digest_b3, input_digest, is_secret_env_name, parse_strict_json,
+    run_key_for_ci, task_report_id_for_task,
 };
+
+fn executed_report(
+    run_key: &str,
+    entry: &MatrixEntry,
+    task_digest: &str,
+    key: String,
+) -> Result<TaskReport, ContractError> {
+    Ok(TaskReport {
+        schema: TaskReport::SCHEMA,
+        task_report_id: task_report_id_for_task(run_key, &entry.matrix_key, task_digest)?,
+        run_key: run_key.to_owned(),
+        event: WorkflowEvent::PullRequest,
+        trust: Trust::Pr,
+        matrix_id: entry.id.clone(),
+        matrix_key: entry.matrix_key.clone(),
+        task_id: TASK.to_owned(),
+        task_digest: task_digest.to_owned(),
+        status: TaskStatus::Executed,
+        not_selected_reason: None,
+        cache: CacheOutcome {
+            layer: CacheLayer::Task,
+            key,
+            result: CacheResult::Hit,
+            miss_reason: None,
+        },
+        platform_binding: PlatformBinding::Unavailable {
+            planned_platform_id: digest_b3(b"planned-platform"),
+            reason: PlatformUnavailableReason::ObservationNotRecorded,
+        },
+        exit_code: 0,
+        duration_ms: Some(1),
+        outputs: vec![],
+        lane: None,
+        queue: None,
+        partition: None,
+        reason: None,
+        timing: None,
+    })
+}
 
 #[test]
 fn cache_secret_env_never_enters_identity() {
@@ -217,33 +257,7 @@ fn cache_key_shape_and_bound() -> Result<(), ContractError> {
     let run_key = run_key_for_ci(20, 1);
     let entry = sample_entry(&run_key)?;
     let task_digest = digest_b3(b"task-bytes");
-    let mut report = TaskReport {
-        schema: 1,
-        task_report_id: task_report_id_for_task(&run_key, &entry.matrix_key, &task_digest)?,
-        run_key,
-        event: WorkflowEvent::PullRequest,
-        trust: Trust::Pr,
-        matrix_id: entry.id.clone(),
-        matrix_key: entry.matrix_key.clone(),
-        task_id: TASK.to_owned(),
-        task_digest,
-        status: TaskStatus::Executed,
-        not_selected_reason: None,
-        cache: CacheOutcome {
-            layer: CacheLayer::Task,
-            key,
-            result: CacheResult::Hit,
-            miss_reason: None,
-        },
-        exit_code: 0,
-        duration_ms: Some(1),
-        outputs: vec![],
-        lane: None,
-        queue: None,
-        partition: None,
-        reason: None,
-        timing: None,
-    };
+    let mut report = executed_report(&run_key, &entry, &task_digest, key)?;
     report.validate()?;
     report.cache.key = overlong;
     let err = report.validate().expect_err("overlong key");

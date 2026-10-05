@@ -2,9 +2,10 @@
 use crate::impl_contract_ids::{TASK, sample_entry, sample_identity};
 use velnor_actions_contract::cachekey::{MISS_REASONS, cache_key, validate_miss_reason};
 use velnor_actions_contract::{
-    CacheLayer, CacheOutcome, CacheResult, ContractError, RUST_EXTENSION_REQUIRED_SLOTS,
-    StackExtension, TOFU_EXTENSION_REQUIRED_SLOTS, TaskReport, TaskStatus, Trust, WorkflowEvent,
-    digest_b3, final_report_id_for_run, final_report_relpath, input_digest, join_runner_temp,
+    CacheLayer, CacheOutcome, CacheResult, ContractError, PlatformBinding,
+    PlatformUnavailableReason, RUST_EXTENSION_REQUIRED_SLOTS, StackExtension,
+    TOFU_EXTENSION_REQUIRED_SLOTS, TaskReport, TaskStatus, Trust, WorkflowEvent, digest_b3,
+    final_report_id_for_run, final_report_relpath, input_digest, join_runner_temp,
     matrix_report_relpath, run_key_for_ci, task_report_id_for_task, task_report_relpath,
     validate_rust_extension, validate_tofu_extension,
 };
@@ -34,7 +35,7 @@ fn cache_miss_reason_membership_enforced() -> Result<(), ContractError> {
     let entry = sample_entry(&run_key)?;
     let task_digest = digest_b3(b"task-bytes");
     let mut report = TaskReport {
-        schema: 1,
+        schema: TaskReport::SCHEMA,
         task_report_id: task_report_id_for_task(&run_key, &entry.matrix_key, &task_digest)?,
         run_key: run_key.clone(),
         event: WorkflowEvent::PullRequest,
@@ -50,6 +51,10 @@ fn cache_miss_reason_membership_enforced() -> Result<(), ContractError> {
             key: "k".to_owned(),
             result: CacheResult::Miss,
             miss_reason: Some("no_entry".to_owned()),
+        },
+        platform_binding: PlatformBinding::Unavailable {
+            planned_platform_id: digest_b3(b"planned-platform"),
+            reason: PlatformUnavailableReason::ObservationNotRecorded,
         },
         exit_code: 0,
         duration_ms: Some(1),
@@ -118,7 +123,7 @@ fn cache_report_outputs_declared_and_secret_free() -> Result<(), ContractError> 
     let entry = sample_entry(&run_key)?;
     let task_digest = digest_b3(b"task-bytes");
     let mut report = TaskReport {
-        schema: 1,
+        schema: TaskReport::SCHEMA,
         task_report_id: task_report_id_for_task(&run_key, &entry.matrix_key, &task_digest)?,
         run_key,
         event: WorkflowEvent::PullRequest,
@@ -134,6 +139,10 @@ fn cache_report_outputs_declared_and_secret_free() -> Result<(), ContractError> 
             key: "k".to_owned(),
             result: CacheResult::Hit,
             miss_reason: None,
+        },
+        platform_binding: PlatformBinding::Unavailable {
+            planned_platform_id: digest_b3(b"planned-platform"),
+            reason: PlatformUnavailableReason::ObservationNotRecorded,
         },
         exit_code: 0,
         duration_ms: Some(1),
@@ -298,7 +307,7 @@ fn cache_provider_layer_reports_only_closed_reasons() -> Result<(), ContractErro
     let entry = sample_entry(&run_key)?;
     let task_digest = digest_b3(b"task-bytes");
     let mut report = TaskReport {
-        schema: 1,
+        schema: TaskReport::SCHEMA,
         task_report_id: task_report_id_for_task(&run_key, &entry.matrix_key, &task_digest)?,
         run_key: run_key.clone(),
         event: WorkflowEvent::PullRequest,
@@ -314,6 +323,10 @@ fn cache_provider_layer_reports_only_closed_reasons() -> Result<(), ContractErro
             key: "k".to_owned(),
             result: CacheResult::Miss,
             miss_reason: Some("no_entry".to_owned()),
+        },
+        platform_binding: PlatformBinding::Unavailable {
+            planned_platform_id: digest_b3(b"planned-platform"),
+            reason: PlatformUnavailableReason::ObservationNotRecorded,
         },
         exit_code: 0,
         duration_ms: Some(1),

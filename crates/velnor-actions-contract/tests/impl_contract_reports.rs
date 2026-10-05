@@ -5,11 +5,11 @@ use velnor_actions_contract::{
     BaselineProof, CacheLayer, CacheOutcome, CacheResult, Concurrency, ContractError, FinalCounts,
     FinalReport, FinalStatus, Job, JobConclusion, JobTimeout, MatrixReport, MatrixStatus,
     NotSelectedReason, ObligationDecision, Permissions, Plan, PlanBaseline, PlanGenerator,
-    PlanMatrix, PlanObligation, PlanPackage, PlanRunner, RequiredJobResult, RunnerSelection, Step,
-    StepKind, TaskReport, TaskStatus, Trigger, Trust, WorkflowEvent, WorkflowIr,
-    artifact_id_for_matrix, artifact_id_for_plan, canonical_json_bytes, digest_b3,
-    final_report_id_for_run, plan_id_for_run, run_key_for_ci, task_report_id_for_task,
-    validate_final_report_id,
+    PlanMatrix, PlanObligation, PlanPackage, PlanRunner, PlatformBinding,
+    PlatformUnavailableReason, RequiredJobResult, RunnerSelection, Step, StepKind, TaskReport,
+    TaskStatus, Trigger, Trust, WorkflowEvent, WorkflowIr, artifact_id_for_matrix,
+    artifact_id_for_plan, canonical_json_bytes, digest_b3, final_report_id_for_run,
+    plan_id_for_run, run_key_for_ci, task_report_id_for_task, validate_final_report_id,
 };
 
 #[test]
@@ -85,7 +85,7 @@ fn task_and_matrix_reports_validate() -> Result<(), ContractError> {
     let entry = sample_entry(&run_key)?;
     let task_digest = digest_b3(b"task-bytes");
     let report = TaskReport {
-        schema: 1,
+        schema: TaskReport::SCHEMA,
         task_report_id: task_report_id_for_task(&run_key, &entry.matrix_key, &task_digest)?,
         run_key: run_key.clone(),
         event: WorkflowEvent::PullRequest,
@@ -101,6 +101,10 @@ fn task_and_matrix_reports_validate() -> Result<(), ContractError> {
             key: "velnor-v1-task-pr-x".to_owned(),
             result: CacheResult::Miss,
             miss_reason: Some("no_entry".to_owned()),
+        },
+        platform_binding: PlatformBinding::Unavailable {
+            planned_platform_id: digest_b3(b"planned-platform"),
+            reason: PlatformUnavailableReason::ObservationNotRecorded,
         },
         exit_code: 0,
         duration_ms: Some(12),
@@ -267,7 +271,7 @@ fn reports_validate_only_when_matrix_id_matches_entry() -> Result<(), ContractEr
     )?;
     let task_digest = digest_b3(b"task-bytes");
     let report = TaskReport {
-        schema: 1,
+        schema: TaskReport::SCHEMA,
         task_report_id: task_report_id_for_task(&run_key, &entry.matrix_key, &task_digest)?,
         run_key: run_key.clone(),
         event: WorkflowEvent::PullRequest,
@@ -283,6 +287,10 @@ fn reports_validate_only_when_matrix_id_matches_entry() -> Result<(), ContractEr
             key: "velnor-v1-task-pr-x".to_owned(),
             result: CacheResult::Miss,
             miss_reason: Some("no_entry".to_owned()),
+        },
+        platform_binding: PlatformBinding::Unavailable {
+            planned_platform_id: digest_b3(b"planned-platform"),
+            reason: PlatformUnavailableReason::ObservationNotRecorded,
         },
         exit_code: 0,
         duration_ms: Some(12),
@@ -331,7 +339,7 @@ fn reports_validate_only_when_matrix_id_matches_entry() -> Result<(), ContractEr
 #[test]
 fn absent_duration_deserializes_to_none_and_skips() -> Result<(), ContractError> {
     let value = serde_json::json!({
-        "schema": 1,
+        "schema": TaskReport::SCHEMA,
         "task_report_id": "task-local-m-0000000000000000-0000000000000000000000000000000000000000000000000000000000000000",
         "run_key": "local",
         "event": "pull_request",
@@ -342,6 +350,11 @@ fn absent_duration_deserializes_to_none_and_skips() -> Result<(), ContractError>
         "task_digest": "b3-0000000000000000000000000000000000000000000000000000000000000000",
         "status": "executed",
         "cache": {"layer": "task", "key": "", "result": "not_attempted"},
+        "platform_binding": {
+            "state": "unavailable",
+            "planned_platform_id": "b3-0000000000000000000000000000000000000000000000000000000000000000",
+            "reason": "observation_not_recorded"
+        },
         "exit_code": 0,
         "outputs": [],
     });
