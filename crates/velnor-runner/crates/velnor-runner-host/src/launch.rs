@@ -280,7 +280,8 @@ async fn drive_ready<T>(
 where
     T: Transport + Lane,
 {
-    if slot::busy(journal, docker, capacity).await? {
+    let except = steps::mint_subject(ready.polled);
+    if slot::busy_except(journal, docker, capacity, except.as_deref()).await? {
         return Ok(None);
     }
     let ctx = Drive {
