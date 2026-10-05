@@ -14,7 +14,7 @@ use crate::{
 };
 use velnor_actions_contract::{
     Job, Permissions, RunsOn, StepKind, Trigger, WorkflowIr,
-    workflow::{DispatchInput, permissions::PermissionLevel},
+    workflow::{DispatchInput, DispatchInputType, permissions::PermissionLevel},
 };
 
 #[cfg(test)]
@@ -36,6 +36,7 @@ pub(crate) fn workflow_to_yaml(
     let jobs = &shared.jobs;
     if shared.calls.keys().ne(shared.checkouts.keys())
         || shared.calls.keys().ne(shared.env_steps.keys())
+        || shared.calls.keys().ne(shared.runtime_preludes.keys())
         || shared.calls.keys().ne(shared.prefixes.keys())
         || shared.calls.keys().ne(shared.preludes.keys())
         || shared.calls.keys().ne(shared.postludes.keys())
@@ -91,6 +92,7 @@ fn lane_steps(shared: &LaneShare) -> crate::document_lanes::SharedLaneSteps<'_> 
     crate::document_lanes::SharedLaneSteps {
         checkouts: &shared.checkouts,
         env_steps: &shared.env_steps,
+        runtime_preludes: &shared.runtime_preludes,
         prefixes: &shared.prefixes,
         preludes: &shared.preludes,
         postludes: &shared.postludes,
@@ -209,10 +211,16 @@ fn dispatch_input_to_yaml(input: &DispatchInput) -> Yaml {
     let mut fields = vec![
         (
             "type".to_owned(),
-            Yaml::str(DispatchInput::INPUT_TYPE.to_owned()),
+            Yaml::str(input.input_type.as_str().to_owned()),
         ),
         ("required".to_owned(), Yaml::Bool(input.required)),
     ];
+    if input.input_type == DispatchInputType::Choice {
+        fields.push((
+            "options".to_owned(),
+            Yaml::Seq(input.choices.iter().cloned().map(Yaml::str).collect()),
+        ));
+    }
     if let Some(default) = &input.default {
         fields.push(("default".to_owned(), Yaml::str(default.clone())));
     }

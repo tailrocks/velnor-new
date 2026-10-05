@@ -55,6 +55,7 @@ fn rendered_condition(step: &Step) -> String {
         validator_commands: Vec::new(),
         candidate: None,
         preseed: false,
+        verification_tasks: Vec::new(),
         plan_consumer_env: BTreeMap::new(),
     };
     let Yaml::Map(entries) = crate::document_steps::step_to_yaml(

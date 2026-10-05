@@ -92,7 +92,7 @@ pub(crate) fn plan_job(
     })
 }
 
-/// Always-on lint job: checkout plus pinned actionlint over the tree.
+/// Always-on lint job: checkout, pinned installation, then actionlint.
 pub(crate) fn lint_job(label: &str, catalog: &ToolCatalog) -> Result<Job, OrchestratorError> {
     let program = OsString::from("actionlint");
     let exec = PinnedToolExec::new(
@@ -105,6 +105,11 @@ pub(crate) fn lint_job(label: &str, catalog: &ToolCatalog) -> Result<Job, Orches
     })?;
     let argv = strings_of(exec.argv(catalog))
         .map_err(|problem| OrchestratorError::Contract { problem })?;
+    let prepare = prepare_pinned_tools_step(
+        catalog,
+        vec![PinnedTool::Actionlint, PinnedTool::Shellcheck],
+        false,
+    )?;
     Ok(Job {
         display_name: LINT_DISPLAY_NAME.to_owned(),
         runs_on: label.to_owned(),
@@ -115,12 +120,9 @@ pub(crate) fn lint_job(label: &str, catalog: &ToolCatalog) -> Result<Job, Orches
         environment: None,
         steps: vec![
             checkout_action()?,
-            velnor_actions_workflow_renderer::ambient_shell_step(
-                "Run actionlint",
-                argv,
-                BTreeMap::new(),
-            )
-            .map_err(|err| OrchestratorError::Contract {
+            prepare,
+            velnor_actions_workflow_renderer::shell_step("Run actionlint", argv, BTreeMap::new())
+                .map_err(|err| OrchestratorError::Contract {
                 problem: err.to_string(),
             })?,
         ],

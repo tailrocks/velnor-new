@@ -1,6 +1,8 @@
 //! Runner-observed event resolution shared by plan and merge.
 
-use velnor_actions_contract::{QualificationDispatch, QualificationPhase, WorkflowEvent};
+use velnor_actions_contract::{
+    QualificationDispatch, QualificationPhase, QualificationRunRef, WorkflowEvent,
+};
 
 use crate::OrchestratorError;
 use crate::internal::internal;
@@ -73,6 +75,7 @@ pub(crate) fn qualification_dispatch_for_parts(
         Some("control") => QualificationPhase::Control,
         _ => return Err(internal("invalid_qualification_phase")),
     };
+    let predecessor = qualification_predecessor(inputs)?;
     let run_id = run_id
         .and_then(|value| value.parse::<u64>().ok())
         .ok_or_else(|| internal("invalid_qualification_run_id"))?;
@@ -91,11 +94,41 @@ pub(crate) fn qualification_dispatch_for_parts(
         source_sha: required_context(source_sha, "source_sha")?,
         run_id,
         run_attempt,
+        predecessor,
     };
     context
         .validate_shape()
         .map_err(|_| internal("invalid_qualification_context"))?;
     Ok(Some(context))
+}
+
+/// Parse the optional paired run locator. The contract applies phase rules;
+/// this boundary rejects malformed or partial identifiers before admission.
+fn qualification_predecessor(
+    inputs: &serde_json::Value,
+) -> Result<Option<QualificationRunRef>, OrchestratorError> {
+    let run_id = nonempty(inputs["predecessor_run_id"].as_str());
+    let run_attempt = nonempty(inputs["predecessor_run_attempt"].as_str());
+    match (run_id, run_attempt) {
+        (None, None) => Ok(None),
+        (Some(run_id), Some(run_attempt)) => {
+            let run_id = run_id
+                .parse::<u64>()
+                .ok()
+                .filter(|value| *value > 0)
+                .ok_or_else(|| internal("invalid_qualification_predecessor_run_id"))?;
+            let run_attempt = run_attempt
+                .parse::<u32>()
+                .ok()
+                .filter(|value| *value > 0)
+                .ok_or_else(|| internal("invalid_qualification_predecessor_run_attempt"))?;
+            Ok(Some(QualificationRunRef {
+                run_id,
+                run_attempt,
+            }))
+        }
+        _ => Err(internal("incomplete_qualification_predecessor")),
+    }
 }
 
 /// Require one non-empty runner-owned context value.
@@ -187,7 +220,12 @@ mod qualification_tests {
     #[test]
     fn dispatch_inputs_select_typed_phase_and_bind_runner_identity() {
         let payload = serde_json::json!({
-            "inputs": { "campaign": "campaign-2030", "phase": "third" },
+            "inputs": {
+                "campaign": "campaign-2030",
+                "phase": "third",
+                "predecessor_run_id": "39",
+                "predecessor_run_attempt": "2"
+            },
             "ref": "refs/heads/main",
             "repository": {
                 "full_name": "owner/project",
@@ -212,6 +250,7 @@ mod qualification_tests {
         assert_eq!(context.campaign, "campaign-2030");
         assert_eq!(context.run_id, 41);
         assert_eq!(context.run_attempt, 3);
+        assert_eq!(context.predecessor.unwrap().run_id, 39);
     }
 
     #[test]
@@ -219,6 +258,59 @@ mod qualification_tests {
         for inputs in [
             serde_json::json!({ "campaign": "campaign-2030", "phase": "schedule" }),
             serde_json::json!({ "phase": "cold" }),
+        ] {
+            let payload = serde_json::json!({
+                "inputs": inputs,
+                "ref": "refs/heads/main",
+                "repository": {
+                    "full_name": "owner/project",
+                    "default_branch": "main"
+                }
+            });
+            assert!(
+                qualification_dispatch_for_parts(
+                    "workflow_dispatch",
+                    &payload,
+                    Some("owner/project"),
+                    Some("refs/heads/main"),
+                    Some("true"),
+                    Some("owner/project/.github/workflows/ci.yml@refs/heads/main"),
+                    Some("0123456789abcdef0123456789abcdef01234567"),
+                    Some("0123456789abcdef0123456789abcdef01234567"),
+                    Some("41"),
+                    Some("1"),
+                )
+                .is_err()
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_partial_or_nonpositive_predecessor_locators() {
+        for inputs in [
+            serde_json::json!({
+                "campaign": "campaign-2030",
+                "phase": "warm",
+                "predecessor_run_id": "39"
+            }),
+            serde_json::json!({
+                "campaign": "campaign-2030",
+                "phase": "warm",
+                "predecessor_run_id": "0",
+                "predecessor_run_attempt": "2"
+            }),
+            serde_json::json!({
+                "campaign": "campaign-2030",
+                "phase": "warm",
+                "predecessor_run_id": "39",
+                "predecessor_run_attempt": "0"
+            }),
+            serde_json::json!({
+                "campaign": "campaign-2030",
+                "phase": "warm",
+                "predecessor_run_id": "39",
+                "predecessor_run_attempt": "2; exit 1"
+            }),
         ] {
             let payload = serde_json::json!({
                 "inputs": inputs,

@@ -21,6 +21,9 @@ use crate::{
     preseed_closure, steps, support, workflow_policy, yaml::render_yaml,
 };
 
+#[path = "validator_tools.rs"]
+mod validator_tools;
+
 pub use crate::matrix::{
     COVERED_TASKS_OUTPUT, MATRIX_MAX_PARALLEL_ENV, MATRIX_NEEDS_JOB_ENV, MATRIX_OUTPUT_ENV,
     MatrixSource, PLAN_ID_OUTPUT, PLAN_STEP_ID, RUN_KEY_OUTPUT,
@@ -111,6 +114,8 @@ pub struct ValidatorCommand {
     pub name: String,
     /// Fixed argument vector.
     pub argv: Vec<String>,
+    /// Explicit pinned-tool installation argv executed before `argv`.
+    pub prepare_argv: Vec<String>,
 }
 
 /// Fixed candidate-job vectors (Velnor policy only).
@@ -144,6 +149,10 @@ impl RenderContext {
             }
             if command.name.trim().is_empty() {
                 return Err(RenderError::BadCommand("empty_validator_name".to_owned()));
+            }
+            validator_tools::validate_validator_tool_closure(command)?;
+            if !command.prepare_argv.is_empty() {
+                commands::validate_command_argv(&command.prepare_argv)?;
             }
             commands::validate_command_argv(&command.argv)?;
         }
@@ -262,13 +271,13 @@ pub fn finalize_jobs(
             velnor_actions_contract::target_for_runner_label(&ctx.runs_on).ok_or_else(|| {
                 RenderError::InvalidWorkflow(format!("tools_cache_unsupported_target:{id}"))
             })?;
-        cache_p08::ensure_setup_p08(id, job, mise, always, target)?;
-        cache_p08::check_no_rust_cache_with_mbx(id, job)?;
+        cache_p08::ensure_tools_cache_v2(id, job, mise, always, target)?;
+        cache_p08::check_no_legacy_rust_cache(id, job)?;
         cache_p08::check_mbx_before_fetch(id, job)?;
         closure::check_internal_staged(id, job, ctx.preseed)?;
     }
     // Writer election needs every setup inserted: one saver per key.
-    cache_p08::elect_mise_cache_writers(&mut jobs)?;
+    cache_p08::elect_tools_cache_writers(&mut jobs)?;
     // Provider election needs every restore inserted: one saver per key.
     cache_p08::elect_tofu_provider_savers(&mut jobs)?;
     closure::check_plan_anchor(&jobs)?;
@@ -278,6 +287,7 @@ pub fn finalize_jobs(
     closure::insert_task_closure(&mut jobs)?;
     closure::insert_final_closure(&mut jobs)?;
     final_steps::insert_final_fanin(&mut jobs, ctx)?;
+    crate::dispatch_cache_boundary::suppress_unvalidated_cache_access(&mut jobs);
     Ok(jobs)
 }
 
