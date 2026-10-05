@@ -169,15 +169,20 @@ pub(crate) fn final_job(
         timeout_minutes: JobTimeout::REQUIRED,
         needs,
         condition: Some(FINAL_CONDITION.to_owned()),
-        permissions: Some(Permissions {
-            contents: PermissionLevel::Read,
-            pull_requests: PermissionLevel::None,
-            id_token: PermissionLevel::None,
-            actions: PermissionLevel::Read,
-        }),
+        permissions: Some(read_actions_permissions()),
         environment: None,
         steps,
     })
+}
+
+/// Job-level permissions for the two authenticated Actions-artifact readers.
+pub(crate) fn read_actions_permissions() -> Permissions {
+    Permissions {
+        contents: PermissionLevel::Read,
+        pull_requests: PermissionLevel::None,
+        id_token: PermissionLevel::None,
+        actions: PermissionLevel::Read,
+    }
 }
 
 /// Plan-job install set per role: drivers, the `generate` validators, Nextest when used.
