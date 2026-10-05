@@ -5,6 +5,8 @@
 # by `verify_version_policy` during dogfood generate); the [[actions]]
 # mirror MUST equal the action pins in .velnor/freshness-inventory.json
 # (qualified 2026-10-04; checked by scripts/check-freshness.sh).
+# [tool_artifacts.python] binds the non-floating PBS release, URL, checksum,
+# and extraction ABI used by the no-config Python source-suite install.
 # [validation-tools] pins repo-local verification tools activated for
 # manual risk-triggered runs (cargo-mutants; NOT wired into CI).
 # Consumer repositories do not need this file; the generator never
@@ -29,6 +31,19 @@ release-plz = "0.3.169"
 reuse = "6.2.0"
 python = "3.14.8"
 uv = "0.12.23"
+
+[tool_artifacts.python]
+provider = "http"
+release = "20261001"
+platform = "x86_64-unknown-linux-gnu"
+flavor = "install_only_stripped"
+source = "https://github.com/astral-sh/python-build-standalone/releases/tag/20261001"
+url = "https://github.com/astral-sh/python-build-standalone/releases/download/20261001/cpython-3.14.8%2B20261001-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz"
+checksum = "b373a4a4e4e70fc05f368c9b53d7738bf37637682b650d96c742805d2da26c32"
+size_bytes = 36292523
+strip_components = 1
+bin_path = "bin"
+binary_sha256 = "4b67d7e58e4e3f58339106f9192dbd66421608dc2fcc6a705b20115ba588232b"
 
 [github_runner_images.linux_x64]
 default = "ubuntu-26.04"

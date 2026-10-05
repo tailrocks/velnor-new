@@ -13,6 +13,9 @@ use crate::impl_repo_policy::{
 
 /// Intra-workspace edges allowed per member package.
 fn expected_internal(dir: &str) -> Vec<&str> {
+    if dir == crate::impl_repo_policy::REGISTRY_FIXTURE_DIR {
+        return vec![];
+    }
     match dir {
         "crates/velnor-actions-contract" => vec![],
         "crates/velnor-actions-orchestrator" => vec![
@@ -82,6 +85,8 @@ fn external_deps_allowlisted_used_and_narrow() -> Result<(), Box<dyn Error>> {
         // compile-gated at 1.98.1); default features only, facade-owned
         // byte/count/depth caps, no expression evaluation.
         "hcl",
+        // Genuine registry dependency pinned by the MBX standalone fixture.
+        "itoa",
     ];
     for (dir, _) in MEMBERS {
         let body = manifest(dir)?;
@@ -164,7 +169,12 @@ fn one_test_entry_per_crate() -> Result<(), Box<dyn Error>> {
     for (dir, _) in MEMBERS {
         let body = manifest(dir)?;
         assert!(body.contains("autotests = false"), "{dir}");
-        assert!(body.contains("name = \"velnor_"), "{dir}");
+        let test_name = if dir == crate::impl_repo_policy::REGISTRY_FIXTURE_DIR {
+            "name = \"mbx_registry_fixture\""
+        } else {
+            "name = \"velnor_"
+        };
+        assert!(body.contains(test_name), "{dir}");
         let entries = body.matches("[[test]]").count();
         assert!((1..=2).contains(&entries), "{dir} has {entries} entries");
         assert!(

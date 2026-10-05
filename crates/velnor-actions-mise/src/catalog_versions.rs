@@ -8,6 +8,52 @@ use velnor_actions_contract::{FreshnessRequirement, validate_freshness_class};
 use super::PinnedTool;
 use crate::error::MiseError;
 
+/// Immutable Astral PBS release supplying the Linux runner Python.
+pub const PYTHON_PBS_RELEASE: &str = "20261001";
+/// Immutable release source for the selected PBS archive.
+pub const PYTHON_PBS_SOURCE: &str =
+    "https://github.com/astral-sh/python-build-standalone/releases/tag/20261001";
+/// Direct x86_64 Linux GNU PBS artifact selected by the catalog.
+pub const PYTHON_PBS_URL: &str = concat!(
+    "https://github.com/astral-sh/python-build-standalone/releases/download/",
+    "20261001/cpython-3.14.8%2B20261001-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz"
+);
+/// SHA-256 of the exact PBS archive, verified against release metadata and bytes.
+pub const PYTHON_PBS_SHA256: &str =
+    "b373a4a4e4e70fc05f368c9b53d7738bf37637682b650d96c742805d2da26c32";
+/// Download size of the selected PBS archive.
+pub const PYTHON_PBS_SIZE_BYTES: &str = "36292523";
+/// SHA-256 of `python/bin/python3.14` after the selected archive is extracted.
+pub const PYTHON_BINARY_SHA256_LINUX_X64: &str =
+    "4b67d7e58e4e3f58339106f9192dbd66421608dc2fcc6a705b20115ba588232b";
+/// Policy mirror values for the compiled Python PBS artifact identity.
+pub const PYTHON_ARTIFACT_POLICY: [(&str, &str); 11] = [
+    ("provider", "http"),
+    ("release", PYTHON_PBS_RELEASE),
+    ("platform", "x86_64-unknown-linux-gnu"),
+    ("flavor", "install_only_stripped"),
+    ("source", PYTHON_PBS_SOURCE),
+    ("url", PYTHON_PBS_URL),
+    ("checksum", PYTHON_PBS_SHA256),
+    ("size_bytes", PYTHON_PBS_SIZE_BYTES),
+    ("strip_components", "1"),
+    ("bin_path", "bin"),
+    ("binary_sha256", PYTHON_BINARY_SHA256_LINUX_X64),
+];
+
+/// Build the only accepted Python HTTP selector at the pinned version.
+pub(crate) fn python_tool_spec(version: &str) -> String {
+    if version == super::PYTHON_VERSION {
+        format!(concat!(
+            "http:python[url={PYTHON_PBS_URL},",
+            "checksum=sha256:{PYTHON_PBS_SHA256},",
+            "strip_components=1,bin_path=bin]@{version}"
+        ))
+    } else {
+        format!("python@{version}")
+    }
+}
+
 /// Reject loose selectors: only exact `major.minor.patch` pins qualify.
 ///
 /// # Errors
@@ -60,6 +106,7 @@ pub(crate) fn tool_source(tool: PinnedTool, version: &str) -> String {
         }
         PinnedTool::ReleasePlz => format!("https://crates.io/api/v1/crates/release-plz/{version}"),
         PinnedTool::Reuse => format!("https://pypi.org/pypi/reuse/{version}/json"),
+        PinnedTool::Python if version == super::PYTHON_VERSION => PYTHON_PBS_SOURCE.to_owned(),
         PinnedTool::Python => format!(
             "https://www.python.org/downloads/release/python-{}/",
             version.replace('.', "")
