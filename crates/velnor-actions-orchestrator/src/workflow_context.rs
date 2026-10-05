@@ -1,9 +1,9 @@
 //! Renderer-specific context assembly for workflow plans.
 
-use velnor_actions_actionlint::{ActionlintConfigInput, IgnorePolicy};
 use velnor_actions_contract::{GeneratorValidation, ValidatorKind, VelnorConfig, WorkflowPolicy};
 use velnor_actions_mise::ToolCatalog;
-use velnor_actions_workflow_renderer::render::{RenderContext, ValidatorCommand, WORKFLOW_PATH};
+use velnor_actions_workflow_renderer::VerificationTaskPolicy;
+use velnor_actions_workflow_renderer::render::{RenderContext, ValidatorCommand};
 use velnor_actions_workflow_renderer::steps::{
     DENY_STEP_NAME, MACHETE_STEP_NAME, REQUEST_DIR_PREFIX, STAGED_BINARY_PREFIX,
 };
@@ -12,7 +12,7 @@ use crate::OrchestratorError;
 use crate::discover::Discovery;
 use crate::vectors::{ZIZMOR_STEP_NAME, candidate_spec, deny_argv, machete_argv, zizmor_argv};
 
-use super::{CHECKOUT_USES, REQUEST_DIR, wire_w1};
+use super::{CHECKOUT_USES, REQUEST_DIR};
 
 /// Renderer scalars: version, label, staged path, request dir, pins.
 ///
@@ -26,6 +26,7 @@ pub(super) fn render_context(
     catalog: &ToolCatalog,
     discovery: &Discovery,
     plan_needs_rust: bool,
+    verification_tasks: Vec<VerificationTaskPolicy>,
 ) -> Result<RenderContext, OrchestratorError> {
     debug_assert!(REQUEST_DIR.starts_with(REQUEST_DIR_PREFIX));
     let velnor = config.workflow.policy == WorkflowPolicy::VelnorRepositoryV1;
@@ -49,6 +50,7 @@ pub(super) fn render_context(
         validator_commands,
         candidate,
         preseed: false,
+        verification_tasks,
         plan_consumer_env: crate::matrix_step::task_step_env(
             catalog,
             &std::collections::BTreeMap::new(),
@@ -87,28 +89,4 @@ fn repository_validator_commands(
         },
     ]);
     Ok(commands)
-}
-
-/// Actionlint input: workflow path, declared variables, and policy ignores.
-///
-/// The bridge label is the effective configured runner label: its
-/// `self-hosted-runner` entry must match `runs-on`, never a hardcoded distro.
-pub(super) fn actionlint_input(
-    config: &VelnorConfig,
-    version: &str,
-    label: &str,
-) -> ActionlintConfigInput {
-    let policy = config.workflow.policy;
-    let mut input = ActionlintConfigInput::new(version)
-        .with_workflow_path(WORKFLOW_PATH)
-        .with_config_variables(wire_w1::declared_config_variables())
-        .with_runner_label(label);
-    if let Some(execution) = &config.execution {
-        input.extra_runner_labels = execution.actionlint_labels();
-    }
-    input.policy = match policy {
-        WorkflowPolicy::ConsumerV1 => IgnorePolicy::Consumer,
-        WorkflowPolicy::VelnorRepositoryV1 => IgnorePolicy::VelnorProtected,
-    };
-    input
 }

@@ -49,6 +49,7 @@ mod noop_report;
 mod origin;
 mod pins;
 mod plan;
+mod plan_output_limits;
 mod plan_stacks;
 mod prepare;
 mod preseed_manifest;
@@ -86,6 +87,7 @@ mod validate_shell;
 mod validate_zizmor;
 mod validators;
 mod vectors;
+mod verification_tasks;
 mod workflow;
 mod workflow_jobs;
 mod workflow_jobs_cache;
@@ -124,6 +126,7 @@ pub use merge::merge_internal;
 pub use merge_request::assemble_merge_request;
 pub use pins::consumer_acquire_step_with_manifest;
 pub use plan::{plan_text, plan_text_checked};
+pub use plan_output_limits::{JOB_OUTPUTS_BUDGET_UTF16_BYTES, PlanOutputMode};
 pub use prepare::{GenerationPreparation, prepare};
 pub use preseed_manifest::{PRESEED_MANIFEST_OP, write_preseed_manifest};
 pub use provenance::{EvidenceProvenance, ProfileProvenance};
@@ -141,6 +144,7 @@ pub use validators::{
     validate_select_diff_args, validate_select_show_args, validate_show_args, validate_show_path,
 };
 pub use velnor_actions_contract::ExecutionMode;
+pub use velnor_actions_contract::{DYNAMIC_MATRIX_OUTPUT_MODE, PLAN_MATRIX_OUTPUT_MODE_ENV};
 pub use workflow::{CHECKOUT_USES, DEFAULT_RUNNER_LABEL, WorkflowPlan};
 
 /// Version marker for the orchestrator shell.

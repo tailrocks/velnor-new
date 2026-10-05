@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 
 use super::HostError;
-use super::stage::{PairEngine, PairStop, decide, drive};
+use super::stage::{Forget, PairEngine, PairStop, decide, drive};
 use super::worker::CreateProjection;
 
 struct Fake {
@@ -69,12 +69,17 @@ impl PairEngine for Fake {
         push(&self.events, "volumes")
     }
 
-    async fn create(&self, _spec: &CreateProjection) -> Result<String, HostError> {
+    async fn create(&self, spec: &CreateProjection) -> Result<String, HostError> {
         self.hit("create")?;
         push(&self.events, "create")?;
         let mut ids = self.ids.lock().map_err(|_| HostError::Docker)?;
         let id = format!("{:012x}", ids.len() + 1);
         ids.push(id.clone());
+        drop(ids);
+        self.names
+            .lock()
+            .map_err(|_| HostError::Docker)?
+            .insert(spec.name.clone(), id.clone());
         Ok(id)
     }
 
@@ -106,6 +111,24 @@ impl PairEngine for Fake {
         let names = self.names.lock().map_err(|_| HostError::Docker)?;
         Ok(names.get(name).cloned())
     }
+
+    async fn worker_id_for_name(
+        &self,
+        name: &str,
+        _volume: &str,
+        _role: &str,
+    ) -> Result<Option<String>, HostError> {
+        let names = self.names.lock().map_err(|_| HostError::Docker)?;
+        Ok(names.get(name).cloned())
+    }
+
+    async fn remove_worker_volumes(&self, _volume: &str) -> Result<bool, HostError> {
+        Ok(true)
+    }
+
+    async fn running(&self, _id: &str) -> Result<bool, HostError> {
+        Ok(false)
+    }
 }
 
 fn push(events: &Mutex<Vec<&'static str>>, event: &'static str) -> Result<(), HostError> {
@@ -116,7 +139,7 @@ fn push(events: &Mutex<Vec<&'static str>>, event: &'static str) -> Result<(), Ho
 #[tokio::test]
 async fn dind_created_does_not_start() -> Result<(), HostError> {
     let engine = Fake::new();
-    let partial = drive(&engine, "worker_a", b"jit", PairStop::DindCreated).await?;
+    let partial = drive(&engine, "worker_a", b"jit", PairStop::DindCreated, &Forget).await?;
     assert_eq!(partial.dind_id.as_deref(), Some("000000000001"));
     assert_eq!(partial.runner_id, None);
     assert_eq!(engine.events(), ["volumes", "create"]);
@@ -126,7 +149,7 @@ async fn dind_created_does_not_start() -> Result<(), HostError> {
 #[tokio::test]
 async fn jit_stop_writes_stdin_after_both_starts() -> Result<(), HostError> {
     let engine = Fake::new();
-    let partial = drive(&engine, "worker_a", b"jit", PairStop::Jit).await?;
+    let partial = drive(&engine, "worker_a", b"jit", PairStop::Jit, &Forget).await?;
     assert!(partial.dind_id.is_some());
     assert!(partial.runner_id.is_some());
     assert_eq!(
@@ -167,7 +190,7 @@ async fn remove_recorded_keeps_a_foreign_id() -> Result<(), HostError> {
 #[tokio::test]
 async fn volumes_stop_creates_no_container() -> Result<(), HostError> {
     let engine = Fake::new();
-    let partial = drive(&engine, "worker_a", b"jit", PairStop::Volumes).await?;
+    let partial = drive(&engine, "worker_a", b"jit", PairStop::Volumes, &Forget).await?;
     assert_eq!(partial.dind_id, None);
     assert_eq!(partial.runner_id, None);
     assert_eq!(engine.events(), ["volumes"]);
@@ -177,7 +200,7 @@ async fn volumes_stop_creates_no_container() -> Result<(), HostError> {
 #[tokio::test]
 async fn dind_started_does_not_create_the_runner() -> Result<(), HostError> {
     let engine = Fake::new();
-    let partial = drive(&engine, "worker_a", b"jit", PairStop::DindStarted).await?;
+    let partial = drive(&engine, "worker_a", b"jit", PairStop::DindStarted, &Forget).await?;
     assert_eq!(partial.dind_id.as_deref(), Some("000000000001"));
     assert_eq!(partial.runner_id, None);
     assert_eq!(engine.events(), ["volumes", "create", "start"]);
@@ -187,7 +210,14 @@ async fn dind_started_does_not_create_the_runner() -> Result<(), HostError> {
 #[tokio::test]
 async fn runner_created_does_not_start() -> Result<(), HostError> {
     let engine = Fake::new();
-    let partial = drive(&engine, "worker_a", b"jit", PairStop::RunnerCreated).await?;
+    let partial = drive(
+        &engine,
+        "worker_a",
+        b"jit",
+        PairStop::RunnerCreated,
+        &Forget,
+    )
+    .await?;
     assert!(partial.dind_id.is_some() && partial.runner_id.is_some());
     assert_eq!(engine.events(), ["volumes", "create", "start", "create"]);
     Ok(())
@@ -196,7 +226,14 @@ async fn runner_created_does_not_start() -> Result<(), HostError> {
 #[tokio::test]
 async fn runner_started_does_not_write_jit() -> Result<(), HostError> {
     let engine = Fake::new();
-    let partial = drive(&engine, "worker_a", b"jit", PairStop::RunnerStarted).await?;
+    let partial = drive(
+        &engine,
+        "worker_a",
+        b"jit",
+        PairStop::RunnerStarted,
+        &Forget,
+    )
+    .await?;
     assert!(partial.runner_id.is_some());
     assert_eq!(
         engine.events(),
@@ -214,7 +251,7 @@ async fn second_create_failure_removes_only_the_owned_dind() -> Result<(), HostE
         .lock()
         .map_err(|_| HostError::Docker)?
         .insert("foreign".to_owned(), "bbbbbbbbbbbb".to_owned());
-    let Err(error) = drive(&engine, "worker_a", b"jit", PairStop::Jit).await else {
+    let Err(error) = drive(&engine, "worker_a", b"jit", PairStop::Jit, &Forget).await else {
         return Err(HostError::Docker);
     };
     assert_eq!(error, HostError::Docker);

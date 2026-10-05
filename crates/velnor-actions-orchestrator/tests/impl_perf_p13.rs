@@ -11,20 +11,22 @@ pub(crate) mod perf_fixtures_p13;
 pub(crate) mod perf_harness_p13;
 
 use velnor_actions_orchestrator::{
-    GenerateOptions, OrchestratorError, generate, plan_internal, prepare,
+    GenerateOptions, OrchestratorError, PlanOutputMode, generate, plan_internal, plan_outputs,
+    prepare,
 };
 use velnor_actions_rust::parse_metadata_json;
+use velnor_actions_workflow_renderer::MAX_WORKFLOW_BYTES;
 
 use self::perf_fixtures_p13::{malformed_repo, nested_path_dep_repo, nested_repo, workspace_repo};
 use self::perf_harness_p13::{
     commit_two, obligation_task_ids, perf_line, plan_at, plan_two_commits, timed,
 };
-use crate::impl_common::TestResult;
 use crate::impl_common::err_of;
+use crate::impl_common::{TestResult, git, git_line};
 
 /// Plan wall time plus obligation counts on 1/10/40-crate workspaces.
 ///
-/// 40 stays under the 320 KiB matrix budget; 60 already exceeds it by
+/// 40 stays under the 512 KiB matrix-artifact budget; 60 exceeds it by
 /// design (`matrix_budget_enforced_never_truncated` pins that ceiling).
 #[test]
 fn plan_scales_with_crate_count() -> TestResult {
@@ -36,6 +38,47 @@ fn plan_scales_with_crate_count() -> TestResult {
         assert!(!plan.obligations.is_empty(), "obligations exist");
         perf_line("plan", members, wall_ms, &plan);
     }
+    Ok(())
+}
+
+/// A full 44-crate dynamic plan fits both independent platform budgets.
+#[test]
+fn full_44_crate_matrix_fits_artifact_and_job_output_budgets() -> TestResult {
+    let repo = workspace_repo(43)?;
+    let root = repo.path();
+    git(&["add", "."], root)?;
+    git(&["commit", "-m", "initial"], root)?;
+    let head = git_line(&["rev-parse", "HEAD"], root)?;
+    let request = serde_json::json!({
+        "schema": 1,
+        "run_key": "local",
+        "base": serde_json::Value::Null,
+        "head": head,
+        "event": "push",
+        "root": root.display().to_string(),
+    });
+    let response = plan_internal(&request.to_string())?;
+    let value: serde_json::Value = serde_json::from_str(&response)?;
+    let plan: velnor_actions_contract::Plan = serde_json::from_value(value["plan"].clone())?;
+    assert_eq!(plan.packages.len(), 44, "root package plus 43 members");
+    assert!(!plan.matrix.include.is_empty(), "dynamic matrix has work");
+    assert!(
+        plan.matrix.include.len() <= 256,
+        "within Actions matrix job cap"
+    );
+    let outputs = plan_outputs(&response, PlanOutputMode::DynamicMatrix)?;
+    assert!(outputs.matrix.len() <= 512 * 1024, "matrix artifact budget");
+    assert!(
+        outputs.job_outputs_utf16_bytes <= 900_000,
+        "aggregate UTF-16 output budget"
+    );
+    eprintln!(
+        "matrix-acceptance: crates={} matrix_entries={} matrix_bytes={} job_outputs_utf16_bytes={}",
+        plan.packages.len(),
+        plan.matrix.include.len(),
+        outputs.matrix.len(),
+        outputs.job_outputs_utf16_bytes,
+    );
     Ok(())
 }
 
@@ -84,10 +127,10 @@ fn plan_100_crates_reports_matrix_budget() -> TestResult {
     Ok(())
 }
 
-/// Generate wall time on 1/10/100-crate workspaces (preview dir, no writes).
+/// Generate within the workflow-file limit and fail closed above it.
 #[test]
-fn generate_scales_with_crate_count() -> TestResult {
-    for members in [1_usize, 10, 100] {
+fn generate_scales_to_workflow_file_limit_then_fails_closed() -> TestResult {
+    for members in [1_usize, 10, 40, 100] {
         let repo = workspace_repo(members)?;
         let root = repo.path();
         let prep = timed(|| prepare(root));
@@ -95,15 +138,50 @@ fn generate_scales_with_crate_count() -> TestResult {
         let out = tempfile::TempDir::new()?;
         let target = out.path().join(format!("gen-{members}"));
         let opts = GenerateOptions {
-            output_dir: Some(target),
+            output_dir: Some(target.clone()),
         };
-        let (report, gen_ms) = timed(|| generate(&prep, &opts));
-        let report = report?;
-        assert!(!report.files_written.is_empty(), "files staged");
-        eprintln!(
-            "perf: op=generate crates={members} prepare_ms={prep_ms} generate_ms={gen_ms} files={}",
-            report.files_written.len()
-        );
+        let (result, gen_ms) = timed(|| generate(&prep, &opts));
+        if members == 100 {
+            let Err(error) = result else {
+                return Err(std::io::Error::other(
+                    "oversized workflow generation unexpectedly succeeded",
+                )
+                .into());
+            };
+            let diagnostic = error.to_string();
+            let actual_bytes = diagnostic
+                .strip_prefix(
+                    "render: invalid workflow: workflow_too_large:.github/workflows/ci.yml:",
+                )
+                .and_then(|detail| detail.strip_suffix(&format!(":{MAX_WORKFLOW_BYTES}")))
+                .ok_or_else(|| format!("unexpected workflow-size diagnostic: {diagnostic}"))?
+                .parse::<usize>()?;
+            assert!(
+                actual_bytes > MAX_WORKFLOW_BYTES,
+                "diagnostic reported {actual_bytes} bytes"
+            );
+            assert!(
+                !target.exists(),
+                "failed preview generation left a partial output tree"
+            );
+            eprintln!(
+                "perf: op=generate crates={members} prepare_ms={prep_ms} generate_ms={gen_ms} failed_closed_bytes={actual_bytes} limit_bytes={MAX_WORKFLOW_BYTES}"
+            );
+        } else {
+            let report = result?;
+            assert!(!report.files_written.is_empty(), "files staged");
+            let workflow = std::fs::read(target.join(".github/workflows/ci.yml"))?;
+            assert!(
+                workflow.len() <= MAX_WORKFLOW_BYTES,
+                "{members} members generated {} bytes, limit is {MAX_WORKFLOW_BYTES}",
+                workflow.len()
+            );
+            eprintln!(
+                "perf: op=generate crates={members} prepare_ms={prep_ms} generate_ms={gen_ms} files={} ci_bytes={}",
+                report.files_written.len(),
+                workflow.len()
+            );
+        }
     }
     Ok(())
 }

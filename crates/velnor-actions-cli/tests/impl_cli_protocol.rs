@@ -4,8 +4,13 @@ use std::error::Error;
 use std::path::Path;
 
 use crate::impl_cli_tmp::{
-    cleanup, code, commit_all, fresh_tempdir, git_init, head_sha, spawn_isolated,
+    cleanup, code, commit_all, fresh_tempdir, git_init, head_sha, spawn_isolated, write_workspace,
 };
+
+/// Serialized workflow marker selecting dynamic matrix output accounting.
+const PLAN_MATRIX_OUTPUT_MODE_ENV: &str = "VELNOR_PLAN_MATRIX_OUTPUT_MODE";
+/// Exact serialized marker value emitted by the renderer.
+const DYNAMIC_MATRIX_OUTPUT_MODE: &str = "dynamic_matrix";
 
 /// Pin the push branch so plan works without origin/HEAD.
 fn pin_branch(repo: &Path) -> Result<(), Box<dyn Error>> {
@@ -127,6 +132,7 @@ fn plan_writes_response_and_github_outputs() -> Result<(), Box<dyn Error>> {
             ("GITHUB_RUN_ATTEMPT", "2"),
             ("GITHUB_OUTPUT", outputs.to_str().unwrap_or("/")),
             ("RUNNER_TEMP", runner_temp.to_str().unwrap_or("/")),
+            (PLAN_MATRIX_OUTPUT_MODE_ENV, DYNAMIC_MATRIX_OUTPUT_MODE),
         ],
         &repo,
     )?;
@@ -137,14 +143,18 @@ fn plan_writes_response_and_github_outputs() -> Result<(), Box<dyn Error>> {
     assert!(response.contains("\"run_key\":\"r7-a2\""), "{response}");
     let body = std::fs::read_to_string(&outputs)?;
     let lines: Vec<&str> = body.lines().collect();
-    assert_eq!(lines.len(), 4, "{body}");
+    assert_eq!(lines.len(), 5, "{body}");
     assert_eq!(lines[0], "seed=1");
     let matrix = lines[1].strip_prefix("matrix=").ok_or("matrix line")?;
-    let plan = lines[2].strip_prefix("plan=").ok_or("plan line")?;
-    assert_eq!(lines[3], "covered_tasks=");
+    assert_eq!(lines[2], "plan_id=plan-r7-a2");
+    assert_eq!(lines[3], "run_key=r7-a2");
+    assert_eq!(lines[4], "covered_tasks=");
     assert!(matrix.starts_with("{\"include\":"), "{matrix}");
-    assert!(plan.contains("\"run_key\":\"r7-a2\""), "{plan}");
-    assert!(plan.contains(matrix), "matrix must agree with plan");
+    let response: serde_json::Value = serde_json::from_str(&response)?;
+    assert_eq!(
+        serde_json::from_str::<serde_json::Value>(matrix)?,
+        response["matrix"]
+    );
     cleanup(&repo);
     Ok(())
 }
@@ -232,12 +242,17 @@ fn plan_publishes_plan_artifact_files() -> Result<(), Box<dyn Error>> {
     assert!(plan_json.contains("\"run_key\":\"r7-a2\""), "{plan_json}");
     let body = std::fs::read_to_string(&outputs)?;
     let lines: Vec<&str> = body.lines().collect();
-    assert_eq!(lines.len(), 3, "{body}");
+    assert_eq!(lines.len(), 4, "{body}");
     let matrix = lines[0].strip_prefix("matrix=").ok_or("matrix line")?;
-    let plan = lines[1].strip_prefix("plan=").ok_or("plan line")?;
-    assert_eq!(lines[2], "covered_tasks=");
+    assert_eq!(lines[1], "plan_id=plan-r7-a2");
+    assert_eq!(lines[2], "run_key=r7-a2");
+    assert_eq!(lines[3], "covered_tasks=");
     assert_eq!(matrix_json, matrix, "matrix.json agrees with GITHUB_OUTPUT");
-    assert_eq!(plan_json, plan, "plan.json agrees with GITHUB_OUTPUT");
+    let plan: serde_json::Value = serde_json::from_str(&plan_json)?;
+    assert_eq!(
+        plan["matrix"],
+        serde_json::from_str::<serde_json::Value>(matrix)?
+    );
     cleanup(&repo);
     Ok(())
 }
@@ -262,6 +277,76 @@ fn plan_without_runner_temp_exits_one() -> Result<(), Box<dyn Error>> {
     assert_eq!(output.stdout, [] as [u8; 0]);
     assert_no_leak(&output);
     assert!(repo.join("plan-v1-response.json").is_file());
+    cleanup(&repo);
+    Ok(())
+}
+
+#[test]
+fn plan_rejects_unknown_output_mode_before_computation() -> Result<(), Box<dyn Error>> {
+    let repo = empty_repo()?;
+    let request = stage_plan_request(&repo)?;
+    let outputs = repo.join("github-outputs");
+    std::fs::write(&outputs, "seed=1\n")?;
+    let runner_temp = repo.join("runner-temp");
+    std::fs::create_dir_all(&runner_temp)?;
+    let output = spawn_isolated(
+        &[],
+        &[
+            ("VELNOR_INTERNAL_OP", "plan-v1"),
+            ("VELNOR_REQUEST_FILE", request.to_str().unwrap_or("/")),
+            ("GITHUB_OUTPUT", outputs.to_str().unwrap_or("/")),
+            ("RUNNER_TEMP", runner_temp.to_str().unwrap_or("/")),
+            (PLAN_MATRIX_OUTPUT_MODE_ENV, "unknown"),
+        ],
+        &repo,
+    )?;
+    assert_eq!(code(&output), 1);
+    assert!(String::from_utf8_lossy(&output.stderr).contains("bad_plan_matrix_output_mode"));
+    assert_no_leak(&output);
+    assert!(!repo.join("plan-v1-response.json").exists());
+    assert_eq!(std::fs::read_to_string(&outputs)?, "seed=1\n");
+    assert!(!runner_temp.join("velnor").exists());
+    cleanup(&repo);
+    Ok(())
+}
+
+#[test]
+fn dynamic_matrix_over_job_limit_preserves_response_but_publishes_nothing()
+-> Result<(), Box<dyn Error>> {
+    let repo = empty_repo()?;
+    write_workspace(&repo, 65)?;
+    commit_all(&repo)?;
+    let request = stage_plan_request(&repo)?;
+    let outputs = repo.join("github-outputs");
+    std::fs::write(&outputs, "seed=1\n")?;
+    let runner_temp = repo.join("runner-temp");
+    std::fs::create_dir_all(&runner_temp)?;
+    let output = spawn_isolated(
+        &[],
+        &[
+            ("VELNOR_INTERNAL_OP", "plan-v1"),
+            ("VELNOR_REQUEST_FILE", request.to_str().unwrap_or("/")),
+            ("GITHUB_RUN_ID", "7"),
+            ("GITHUB_RUN_ATTEMPT", "2"),
+            ("GITHUB_OUTPUT", outputs.to_str().unwrap_or("/")),
+            ("RUNNER_TEMP", runner_temp.to_str().unwrap_or("/")),
+            (PLAN_MATRIX_OUTPUT_MODE_ENV, DYNAMIC_MATRIX_OUTPUT_MODE),
+        ],
+        &repo,
+    )?;
+    assert_eq!(code(&output), 1, "stderr: {:?}", output.stderr);
+    assert!(String::from_utf8_lossy(&output.stderr).contains("matrix_jobs_exceeded"));
+    assert_no_leak(&output);
+    let response = std::fs::read_to_string(repo.join("plan-v1-response.json"))?;
+    let response: serde_json::Value = serde_json::from_str(&response)?;
+    assert_eq!(response["schema"], 1);
+    assert!(
+        response["matrix"]["include"]
+            .as_array()
+            .is_some_and(|rows| rows.len() > 256)
+    );
+    assert_eq!(std::fs::read_to_string(&outputs)?, "seed=1\n");
+    assert!(!runner_temp.join("velnor").exists());
     cleanup(&repo);
     Ok(())
 }

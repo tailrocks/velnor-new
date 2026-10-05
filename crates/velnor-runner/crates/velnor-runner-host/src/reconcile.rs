@@ -13,8 +13,12 @@ pub struct IntentRow {
     pub subject: String,
     /// Durable state.
     pub state: IntentState,
-    /// Docker container id. Not a name.
+    /// Runner container id. Not a name.
     pub docker_id: Option<String>,
+    /// Private `DinD` container id. Not a name.
+    pub dind_id: Option<String>,
+    /// Worker volume base durably recorded before volume creation.
+    pub worker_volume: Option<String>,
     /// GitHub runner id. Not a token.
     pub github_runner_id: Option<String>,
     /// Cleanup of the recorded ids was proven.
@@ -91,6 +95,9 @@ fn blocks(rows: &[IntentRow], observed_docker: &[&str], observed_github: &[&str]
 }
 
 fn row_blocks(row: &IntentRow, observed_docker: &[&str], observed_github: &[&str]) -> bool {
+    if row.cleanup_proven {
+        return false;
+    }
     if !matches!(row.state, IntentState::Done | IntentState::Failed) {
         return true;
     }
