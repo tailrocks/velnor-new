@@ -45,6 +45,16 @@ pub enum PlatformRunnerEnvironment {
     Unknown,
 }
 
+/// Runner class fixed by the generated workflow before a job starts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum PlannedRunnerEnvironment {
+    /// A GitHub-hosted runner selected from the exact label catalog.
+    GithubHosted,
+    /// A custom or Scale Set runner selected by the generated workflow.
+    SelfHosted,
+}
+
 impl PlatformRunnerEnvironment {
     /// Parse the closed values emitted by `${{ runner.environment }}`.
     #[must_use]
@@ -170,7 +180,7 @@ impl PlatformBinding {
         planned_platform_id: &str,
         runs_on: &str,
         target: &str,
-        expected_environment: PlatformRunnerEnvironment,
+        expected_environment: PlannedRunnerEnvironment,
     ) -> Result<(), ContractError> {
         self.validate()?;
         if self.planned_platform_id() != planned_platform_id {
@@ -187,7 +197,7 @@ impl PlatformBinding {
                 runner_environment, ..
             } => *runner_environment,
         };
-        if recorded_environment != expected_environment {
+        if !environment_matches_plan(self, recorded_environment, expected_environment) {
             return Err(ContractError::identity(
                 "platform_binding.runner_environment",
                 "plan_mismatch",
@@ -212,6 +222,27 @@ impl PlatformBinding {
             }
         }
         Ok(())
+    }
+}
+
+/// Compare runner evidence with the class fixed in the immutable plan.
+fn environment_matches_plan(
+    binding: &PlatformBinding,
+    recorded: PlatformRunnerEnvironment,
+    expected: PlannedRunnerEnvironment,
+) -> bool {
+    match (recorded, expected) {
+        (PlatformRunnerEnvironment::GithubHosted, PlannedRunnerEnvironment::GithubHosted)
+        | (PlatformRunnerEnvironment::SelfHosted, PlannedRunnerEnvironment::SelfHosted) => true,
+        (PlatformRunnerEnvironment::Unknown, _) => matches!(
+            binding,
+            PlatformBinding::Unavailable {
+                reason: PlatformUnavailableReason::InvalidRuntimeFacts
+                    | PlatformUnavailableReason::ObservationNotRecorded,
+                ..
+            }
+        ),
+        _ => false,
     }
 }
 
