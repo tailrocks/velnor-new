@@ -3,7 +3,7 @@
 use crate::error::HostError;
 use crate::journal::{IntentState, Journal, one_row, token_rejected};
 
-use super::{assigned_request, finish_transaction, is_session_name};
+use super::{assigned_request, finish_transaction, is_message_name, is_session_name};
 
 impl Journal {
     /// Persist launch identity before an external effect. Repeated identical binds are safe.
@@ -110,8 +110,8 @@ impl Journal {
         finish_transaction(&connection, result).await
     }
 
-    /// Persist the JIT attempt before making its HTTP request.
-    pub(crate) async fn claim_assigned_jit(&self, id: i64) -> Result<bool, HostError> {
+    /// Persist one JIT attempt before making its HTTP request.
+    pub(crate) async fn claim_launch_jit(&self, id: i64) -> Result<bool, HostError> {
         if id <= 0 {
             return Err(HostError::Journal);
         }
@@ -122,7 +122,7 @@ impl Journal {
             .map_err(|_| HostError::Journal)?;
         let result = connection
             .execute(
-                "UPDATE intents SET jit_requested = 1 WHERE id = ?1 AND kind = 'launch' AND state = 'pending' AND cleanup_proven = 0 AND acquire_attempted = 1 AND acquire_resolved = 1 AND acquired = 1 AND jit_requested = 0",
+                "UPDATE intents SET jit_requested = 1 WHERE id = ?1 AND kind = 'launch' AND state = 'pending' AND cleanup_proven = 0 AND runner_name IS NOT NULL AND jit_requested = 0 AND ((runner_request_id IS NULL AND acquire_attempted = 0 AND acquire_resolved = 0 AND acquired = 0) OR (runner_request_id IS NOT NULL AND acquire_attempted = 1 AND acquire_resolved = 1 AND acquired = 1))",
                 [id],
             )
             .await
@@ -141,7 +141,7 @@ async fn bind_identity_row(
 ) -> Result<(), HostError> {
     let mut rows = connection
         .query(
-            "SELECT subject FROM intents WHERE id = ?1 AND kind = 'launch'",
+            "SELECT subject, scale_set_id, runner_request_id, runner_name, cleanup_proven, state FROM intents WHERE id = ?1 AND kind = 'launch'",
             [id],
         )
         .await
@@ -150,7 +150,35 @@ async fn bind_identity_row(
         return Err(HostError::Journal);
     };
     let subject: String = row.get(0).map_err(|_| HostError::Journal)?;
+    let stored_set: Option<i64> = row.get(1).map_err(|_| HostError::Journal)?;
+    let stored_request: Option<i64> = row.get(2).map_err(|_| HostError::Journal)?;
+    let stored_name: Option<String> = row.get(3).map_err(|_| HostError::Journal)?;
+    let cleanup_proven: bool = row.get(4).map_err(|_| HostError::Journal)?;
+    let state_text: String = row.get(5).map_err(|_| HostError::Journal)?;
+    let state = IntentState::parse(&state_text)?;
     if !valid_launch_identity(&subject, request_id, runner_name) {
+        return Err(HostError::Journal);
+    }
+    let exact = stored_set == Some(scale_set_id)
+        && stored_request == request_id
+        && stored_name.as_deref() == Some(runner_name);
+    if exact && !cleanup_proven && state != IntentState::Failed {
+        return Ok(());
+    }
+    let legacy_done_backfill = state == IntentState::Done
+        && request_id.is_some()
+        && assigned_request(&subject) == request_id
+        && stored_set.is_none()
+        && stored_request.is_none()
+        && stored_name.is_none();
+    if cleanup_proven
+        || (state != IntentState::Pending && !legacy_done_backfill)
+        || stored_set.is_some_and(|stored| stored != scale_set_id)
+        || stored_request.is_some_and(|stored| Some(stored) != request_id)
+        || stored_name
+            .as_deref()
+            .is_some_and(|stored| stored != runner_name)
+    {
         return Err(HostError::Journal);
     }
     let changed = connection
@@ -171,14 +199,14 @@ async fn assigned_launch_row(
     runner_name: &str,
 ) -> Result<(i64, bool), HostError> {
     let matches = matching_assigned_rows(connection, scale_set_id, request_id, runner_name).await?;
+    if matches.len() > 1 {
+        return Err(HostError::Journal);
+    }
     let active: Vec<AssignedLaunchRow> = matches
         .iter()
         .filter(|row| !row.cleanup_proven)
         .copied()
         .collect();
-    if active.len() > 1 {
-        return Err(HostError::Journal);
-    }
     let completed = completed_assignment(connection, scale_set_id, request_id, runner_name).await?;
     if let Some(active) = active.first().copied() {
         if completed.is_some_and(|id| id != active.id) {
@@ -205,6 +233,12 @@ async fn assigned_launch_row(
         )
         .await?;
         return Ok((active.id, false));
+    }
+    if let Some(cleaned) = matches.first().filter(|row| row.cleanup_proven) {
+        if completed.is_some_and(|id| id != cleaned.id) {
+            return Err(HostError::Journal);
+        }
+        return Ok((cleaned.id, false));
     }
     if let Some(id) = completed {
         return Ok((id, false));
@@ -261,11 +295,22 @@ fn assigned_row_match(
     let row_name: Option<String> = row.get(9).map_err(|_| HostError::Journal)?;
     let same_request_subject = assigned_request(&subject) == Some(request_id);
     let same_set_request = row_scale == Some(scale_set_id) && row_request == Some(request_id);
+    let same_set_name = row_scale == Some(scale_set_id)
+        && row_name.as_deref() == Some(runner_name);
+    if same_set_name
+        && (row_request.is_some_and(|value| value != request_id)
+            || assigned_request(&subject).is_some_and(|value| value != request_id))
+    {
+        return Err(HostError::Journal);
+    }
     if row_scale.is_some_and(|value| value != scale_set_id) {
+        if same_request_subject || row_request == Some(request_id) {
+            return Err(HostError::Journal);
+        }
         return Ok(None);
     }
     let legacy_subject = same_request_subject;
-    if !same_set_request && !legacy_subject {
+    if !same_set_request && !legacy_subject && !same_set_name {
         return Ok(None);
     }
     if row_request.is_some_and(|value| value != request_id)
@@ -340,6 +385,8 @@ fn valid_launch_identity(subject: &str, request_id: Option<i64>, runner_name: &s
     if let Some(subject_request) = assigned_request(subject) {
         request_id == Some(subject_request) && runner_name == format!("v{subject_request}")
     } else {
-        request_id.is_none() && is_session_name(subject) && subject == runner_name
+        request_id.is_none()
+            && (is_session_name(subject) || is_message_name(subject))
+            && subject == runner_name
     }
 }

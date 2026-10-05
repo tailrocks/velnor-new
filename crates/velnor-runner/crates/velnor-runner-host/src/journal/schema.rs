@@ -94,6 +94,36 @@ pub(super) async fn ensure_columns(conn: &turso::Connection) -> Result<(), HostE
     )
     .await
     .map_err(|_| HostError::Journal)?;
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS completion_inbox (scale_set_id INTEGER NOT NULL CHECK (scale_set_id > 0), message_id INTEGER NOT NULL CHECK (message_id >= 0), raw_body TEXT NOT NULL CHECK (length(CAST(raw_body AS BLOB)) BETWEEN 1 AND 262144), attempts INTEGER NOT NULL DEFAULT 0 CHECK (attempts >= 0), retry_after INTEGER NOT NULL DEFAULT 0 CHECK (retry_after >= 0), PRIMARY KEY (scale_set_id, message_id))",
+        (),
+    )
+    .await
+    .map_err(|_| HostError::Journal)?;
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS launch_recovery (intent_id INTEGER PRIMARY KEY REFERENCES intents(id), generation INTEGER NOT NULL DEFAULT 0 CHECK (generation >= 0), attempts INTEGER NOT NULL DEFAULT 0 CHECK (attempts >= 0), retry_after INTEGER NOT NULL DEFAULT 0 CHECK (retry_after >= 0), lease_until INTEGER NOT NULL DEFAULT 0 CHECK (lease_until >= 0))",
+        (),
+    )
+    .await
+    .map_err(|_| HostError::Journal)?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS launch_recovery_due ON launch_recovery(retry_after, lease_until, intent_id)",
+        (),
+    )
+    .await
+    .map_err(|_| HostError::Journal)?;
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS guest_probe_owner (id INTEGER PRIMARY KEY CHECK (id = 1), owner_token TEXT NOT NULL CHECK (length(owner_token) = 32 AND owner_token NOT GLOB '*[^0-9a-f]*'))",
+        (),
+    )
+    .await
+    .map_err(|_| HostError::Journal)?;
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS completion_inbox_due ON completion_inbox(retry_after, scale_set_id, message_id)",
+        (),
+    )
+    .await
+    .map_err(|_| HostError::Journal)?;
     let mut has_runner_absent = false;
     let mut rows = conn
         .query("PRAGMA table_info(completion_cleanup)", ())

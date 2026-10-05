@@ -10,8 +10,16 @@ mod assignment;
 mod claim;
 #[path = "journal_completion_claim_bind.rs"]
 mod claim_bind;
+#[path = "journal_completion_inbox.rs"]
+mod inbox;
 #[path = "journal_completion_record.rs"]
 mod record;
+#[path = "journal_completion_recovery.rs"]
+mod recovery;
+
+pub(crate) use inbox::{
+    CompletionInboxEntry, MAX_COMPLETION_BODY_BYTES, MAX_COMPLETION_INBOX_SCAN,
+};
 
 /// One leased completion cleanup attempt.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -44,6 +52,40 @@ pub(crate) struct CompletedLaunch {
     pub(crate) intent: IntentRow,
     /// Identity that the cleanup caller must validate before deleting a runner.
     pub(crate) identity: CompletionIdentity,
+}
+
+/// Immutable launch identity used to fence one incomplete-worker recovery.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct RecoveryIdentity {
+    /// Owning runner scale set.
+    pub(crate) scale_set_id: i64,
+    /// Assigned request id, absent for session launches.
+    pub(crate) runner_request_id: Option<i64>,
+    /// Exact generated runner name.
+    pub(crate) runner_name: String,
+    /// Durable AcquireJobs attempt marker.
+    pub(crate) acquire_attempted: bool,
+    /// Durable AcquireJobs result marker.
+    pub(crate) acquire_resolved: bool,
+    /// Whether this request consumed an assigned job.
+    pub(crate) acquired: bool,
+    /// Durable one-shot JIT request marker.
+    pub(crate) jit_requested: bool,
+}
+
+/// One incomplete launch leased for bounded ownership recovery.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct RecoveryLease {
+    /// Original host intent and durable container/volume ids.
+    pub(crate) intent: IntentRow,
+    /// Exact persisted launch identity and one-shot markers.
+    pub(crate) identity: RecoveryIdentity,
+    /// Monotonic fencing generation.
+    pub(crate) generation: i64,
+    /// Current lease expiration in Unix seconds.
+    pub(crate) lease_until: i64,
+    /// Saturated retry count for bounded backoff selection.
+    pub(crate) attempts: u32,
 }
 
 impl Journal {
@@ -125,6 +167,15 @@ pub(super) fn is_session_name(name: &str) -> bool {
         && suffix.bytes().all(|byte| byte.is_ascii_alphanumeric())
 }
 
+pub(super) fn is_message_name(name: &str) -> bool {
+    let Some(suffix) = name.strip_prefix('m') else {
+        return false;
+    };
+    suffix
+        .parse::<i64>()
+        .is_ok_and(|value| suffix == value.to_string())
+}
+
 #[cfg(test)]
 #[path = "journal_completion_tests.rs"]
 mod tests;
@@ -132,3 +183,11 @@ mod tests;
 #[cfg(test)]
 #[path = "journal_completion_claim_tests.rs"]
 mod claim_tests;
+
+#[cfg(test)]
+#[path = "journal_completion_inbox_tests.rs"]
+mod inbox_tests;
+
+#[cfg(test)]
+#[path = "journal_completion_recovery_tests.rs"]
+mod recovery_tests;

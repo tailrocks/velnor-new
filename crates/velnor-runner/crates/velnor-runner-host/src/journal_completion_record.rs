@@ -3,7 +3,7 @@
 use crate::error::HostError;
 use crate::journal::{Journal, token_rejected};
 
-use super::{assigned_request, finish_transaction, is_session_name};
+use super::{assigned_request, finish_transaction, is_message_name, is_session_name};
 
 impl Journal {
     /// Record one exact runner completion before acknowledging its queue message.
@@ -138,7 +138,7 @@ async fn completion_candidate(
 ) -> Result<Option<(i64, bool)>, HostError> {
     let mut rows = connection
         .query(
-            "SELECT id, subject, scale_set_id, runner_request_id, runner_name FROM intents WHERE kind = 'launch' AND state != 'failed' AND cleanup_proven = 0 ORDER BY id",
+            "SELECT id, subject, scale_set_id, runner_request_id, runner_name FROM intents WHERE kind = 'launch' AND cleanup_proven = 0 ORDER BY id",
             (),
         )
         .await
@@ -166,8 +166,8 @@ fn candidate_row(
     let row_request: Option<i64> = row.get(3).map_err(|_| HostError::Journal)?;
     let row_name: Option<String> = row.get(4).map_err(|_| HostError::Journal)?;
     let assigned = assigned_request(&subject) == Some(request_id);
-    let session = is_session_name(&subject) && subject == runner_name;
-    if !assigned && !session {
+    let named = (is_session_name(&subject) || is_message_name(&subject)) && subject == runner_name;
+    if !assigned && !named {
         return Ok(None);
     }
     if row_scale.is_some_and(|value| value != scale_set_id) {
@@ -181,10 +181,10 @@ fn candidate_row(
     {
         return Err(HostError::Journal);
     }
-    if session && (row_scale != Some(scale_set_id) || row_name.as_deref() != Some(runner_name)) {
+    if named && (row_scale != Some(scale_set_id) || row_name.as_deref() != Some(runner_name)) {
         return Err(HostError::Journal);
     }
-    if assigned && row_request.is_some_and(|value| value != request_id) {
+    if row_request.is_some_and(|value| value != request_id) {
         return Err(HostError::Journal);
     }
     Ok(Some((id, assigned)))

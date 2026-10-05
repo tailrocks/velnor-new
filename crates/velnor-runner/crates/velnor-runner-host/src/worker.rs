@@ -17,6 +17,7 @@ use crate::error::HostError;
 use crate::stage::PairStop;
 
 mod volumes;
+pub(crate) mod resources;
 pub(crate) use volumes::{
     VerifiedWorkerVolume, WorkerVolumeRemoval, WorkerVolumeRole, WorkerVolumeVerification,
     create_named_volumes, remove_verified_worker_volume, remove_worker_volumes,

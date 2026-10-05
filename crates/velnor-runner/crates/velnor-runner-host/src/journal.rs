@@ -2,18 +2,26 @@
 //! before the caller runs an external effect.
 
 use std::ops::AsyncFnOnce;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use crate::error::HostError;
 use crate::reconcile::IntentRow;
+use file_identity::JournalFile;
 
 #[path = "journal_completion.rs"]
 mod completion;
+mod file_identity;
+mod guest_probe_owner;
 mod launch;
+mod read;
 mod schema;
 mod worker_volume;
 
-pub(crate) use completion::{CompletedLaunch, CompletionIdentity};
+pub(crate) use completion::{
+    CleanupClaim, CompletedLaunch, CompletionIdentity, CompletionInboxEntry,
+    MAX_COMPLETION_BODY_BYTES, MAX_COMPLETION_INBOX_SCAN, RecoveryLease,
+};
+pub(crate) use guest_probe_owner::GuestProbeLease;
 
 /// Durable intent row.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -63,7 +71,7 @@ pub enum Outcome {
 /// File-backed journal.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Journal {
-    path: PathBuf,
+    file: JournalFile,
 }
 
 impl Journal {
@@ -74,7 +82,7 @@ impl Journal {
     /// Returns [`HostError::Journal`] when turso cannot open the path.
     pub async fn open(path: &Path) -> Result<Self, HostError> {
         let journal = Self {
-            path: path.to_path_buf(),
+            file: JournalFile::open(path).await?,
         };
         journal.bootstrap().await?;
         Ok(journal)
@@ -246,27 +254,6 @@ impl Journal {
         one_row(changed)
     }
 
-    /// Load every row. The connection closes before this returns.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`HostError::Journal`] on I/O or a corrupt state.
-    pub async fn rows(&self) -> Result<Vec<IntentRow>, HostError> {
-        let conn = self.connection().await?;
-        let mut query = conn
-            .query(
-                "SELECT id, kind, subject, state, docker_id, github_runner_id, cleanup_proven, dind_id, worker_volume FROM intents ORDER BY id",
-                (),
-            )
-            .await
-            .map_err(|_| HostError::Journal)?;
-        let mut out = Vec::new();
-        while let Some(row) = query.next().await.map_err(|_| HostError::Journal)? {
-            out.push(intent_row(&row)?);
-        }
-        Ok(out)
-    }
-
     async fn bootstrap(&self) -> Result<(), HostError> {
         let conn = self.connection().await?;
         conn.execute(
@@ -279,12 +266,7 @@ impl Journal {
     }
 
     async fn connection(&self) -> Result<turso::Connection, HostError> {
-        let text = self.path.to_str().ok_or(HostError::Path)?;
-        let db = turso::Builder::new_local(text)
-            .build()
-            .await
-            .map_err(|_| HostError::Journal)?;
-        db.connect().map_err(|_| HostError::Journal)
+        self.file.connection().await
     }
 }
 

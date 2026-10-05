@@ -8,6 +8,7 @@ use super::steps::scale_unacked;
 #[tokio::test]
 async fn a_second_statistics_name_mints_again() -> Result<(), String> {
     let (scratch, journal) = open("scale-subject").await?;
+    let mut first_starts = 0;
     let mut first = Script {
         calls: Vec::new(),
         mode: Mode::Ok,
@@ -16,12 +17,15 @@ async fn a_second_statistics_name_mints_again() -> Result<(), String> {
         &mut first,
         &ctx(),
         &journal,
-        "s-one",
-        |_name, _jit, _bind| async {
-            Ok(Started {
-                dind_id: "dind-1".to_owned(),
-                runner_id: "runner-1".to_owned(),
-            })
+        "sone1",
+        |_name, _jit, _bind| {
+            first_starts += 1;
+            async {
+                Ok(Started {
+                    dind_id: "dind-1".to_owned(),
+                    runner_id: "runner-1".to_owned(),
+                })
+            }
         },
     )
     .await
@@ -31,6 +35,8 @@ async fn a_second_statistics_name_mints_again() -> Result<(), String> {
         Some("runner-1")
     );
     assert_eq!(first.calls, ["jit"]);
+    assert_eq!(first_starts, 1);
+    let mut second_starts = 0;
     let mut second = Script {
         calls: Vec::new(),
         mode: Mode::Ok,
@@ -39,12 +45,15 @@ async fn a_second_statistics_name_mints_again() -> Result<(), String> {
         &mut second,
         &ctx(),
         &journal,
-        "s-two",
-        |_name, _jit, _bind| async {
-            Ok(Started {
-                dind_id: "dind-2".to_owned(),
-                runner_id: "runner-2".to_owned(),
-            })
+        "stwo2",
+        |_name, _jit, _bind| {
+            second_starts += 1;
+            async {
+                Ok(Started {
+                    dind_id: "dind-2".to_owned(),
+                    runner_id: "runner-2".to_owned(),
+                })
+            }
         },
     )
     .await
@@ -54,6 +63,8 @@ async fn a_second_statistics_name_mints_again() -> Result<(), String> {
         Some("runner-2")
     );
     assert_eq!(second.calls, ["jit"]);
+    assert_eq!(second_starts, 1);
+    let mut replay_starts = 0;
     let mut replay = Script {
         calls: Vec::new(),
         mode: Mode::Ok,
@@ -62,22 +73,26 @@ async fn a_second_statistics_name_mints_again() -> Result<(), String> {
         &mut replay,
         &ctx(),
         &journal,
-        "s-one",
-        |_name, _jit, _bind| async {
-            Ok(Started {
-                dind_id: "dind-3".to_owned(),
-                runner_id: "runner-3".to_owned(),
-            })
+        "sone1",
+        |_name, _jit, _bind| {
+            replay_starts += 1;
+            async {
+                Ok(Started {
+                    dind_id: "dind-3".to_owned(),
+                    runner_id: "runner-3".to_owned(),
+                })
+            }
         },
     )
     .await
     .map_err(|err| err.to_string())?;
     assert_eq!(repeated, None);
     assert!(replay.calls.is_empty());
+    assert_eq!(replay_starts, 0);
     let rows = journal.rows().await.map_err(|err| err.to_string())?;
     assert_eq!(rows.len(), 2);
-    assert_eq!(rows[0].subject, "s-one");
-    assert_eq!(rows[1].subject, "s-two");
+    assert_eq!(rows[0].subject, "sone1");
+    assert_eq!(rows[1].subject, "stwo2");
     assert_eq!(rows[0].state, IntentState::Done);
     assert_eq!(rows[1].state, IntentState::Done);
     absent(&scratch.file())
