@@ -333,17 +333,13 @@ fn composite_file(
 ) -> Result<RenderedFile, RenderError> {
     let mut rendered = Vec::with_capacity(steps.len());
     let empty_job_env = BTreeMap::new();
+    let step_context = crate::document_lanes::JobStepContext {
+        job_env: &empty_job_env,
+        runs_on: None,
+        actions_read: false,
+    };
     for step in steps {
-        rendered.push(step_to_yaml(
-            logical,
-            step,
-            ctx,
-            &[],
-            true,
-            &empty_job_env,
-            None,
-            false,
-        )?);
+        rendered.push(step_to_yaml(logical, step, ctx, &[], true, &step_context)?);
     }
     let body = composite_yaml(logical, rendered)?;
     let quoted = crate::yaml::quote_run_values_in_yaml(body);

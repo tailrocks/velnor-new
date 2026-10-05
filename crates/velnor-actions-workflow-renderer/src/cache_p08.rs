@@ -29,6 +29,8 @@ pub const SAVE_SOURCES_NAME: &str = "Save Cargo sources";
 pub const TOOLS_CACHE_IDENTITY_NAME: &str = "V2 identity";
 /// Step output owner used by both V2 restore and save expressions.
 pub const TOOLS_CACHE_IDENTITY_STEP_ID: &str = "v2";
+/// Composite-action input carrying the V2 static tools digest.
+pub(crate) const TOOLS_CACHE_IDENTITY_DIGEST_INPUT: &str = "d";
 /// Cache restore is unavailable unless runtime roots/image were qualified.
 pub const TOOLS_CACHE_RESTORE_CONDITION: &str = "steps.v2.outputs.enabled == 'true'";
 /// Cache writes require an eligible trusted producer and qualified identity.

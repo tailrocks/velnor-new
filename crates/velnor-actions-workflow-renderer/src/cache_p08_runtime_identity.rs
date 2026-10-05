@@ -115,7 +115,10 @@ pub(super) fn step(payload: &ToolsCachePayload) -> Result<Step, RenderError> {
         condition: None,
         kind: StepKind::Action {
             uses: uses.to_owned(),
-            with: BTreeMap::from([("d".to_owned(), payload.static_digest.clone())]),
+            with: BTreeMap::from([(
+                cache_p08::TOOLS_CACHE_IDENTITY_DIGEST_INPUT.to_owned(),
+                payload.static_digest.clone(),
+            )]),
             env: BTreeMap::new(),
         },
     })
@@ -133,13 +136,13 @@ pub(super) fn validate_action_call(
         || Some(uses) != action_uses(runs_on)
         || !env.is_empty()
         || with.len() != 1
-        || !with.contains_key("d")
+        || !with.contains_key(cache_p08::TOOLS_CACHE_IDENTITY_DIGEST_INPUT)
     {
         return Err(RenderError::InvalidWorkflow(
             "malformed_tools_cache_identity_action".to_owned(),
         ));
     }
-    let Some(digest) = with.get("d") else {
+    let Some(digest) = with.get(cache_p08::TOOLS_CACHE_IDENTITY_DIGEST_INPUT) else {
         return Err(RenderError::InvalidWorkflow(
             "malformed_tools_cache_identity_action".to_owned(),
         ));
@@ -231,7 +234,7 @@ fn input_entries() -> Yaml {
         ])
     };
     Yaml::Map(vec![(
-        "d".to_owned(),
+        cache_p08::TOOLS_CACHE_IDENTITY_DIGEST_INPUT.to_owned(),
         required_input("Static V2 identity of the tool pins and owned paths."),
     )])
 }
@@ -279,7 +282,10 @@ fn inner_step(runs_on: &str) -> Result<Step, RenderError> {
         ("VELNOR_CACHE_LANE".to_owned(), runs_on.to_owned()),
         (
             "VELNOR_CACHE_STATIC_DIGEST".to_owned(),
-            "${{ inputs.digest }}".to_owned(),
+            format!(
+                "${{{{ inputs.{} }}}}",
+                cache_p08::TOOLS_CACHE_IDENTITY_DIGEST_INPUT
+            ),
         ),
     ]);
     let run = vec![
