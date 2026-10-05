@@ -1,7 +1,7 @@
-Only in generated/.github: actions
+Only in generated/.github/actions: u26
 Only in generated/.github: scripts
 diff -r shipping/.github/workflows/ci.yml generated/.github/workflows/ci.yml
-48,61c48,52
+72,85c72,76
 <       - name: Identify Mise cache runtime
 <         id: velnor-tool-cache-identity
 <         env:
@@ -22,23 +22,23 @@ diff -r shipping/.github/workflows/ci.yml generated/.github/workflows/ci.yml
 >         uses: ./.github/actions/u26 # zizmor: ignore[self-repository]
 >         with:
 >           d: 97190eef167066fff58bef17bf9186ae7514e35f27bbc39417666efed2076810
-63c54
-<         if: steps.velnor-tool-cache-identity.outputs.enabled == 'true'
+87c78
+<         if: steps.velnor-tool-cache-identity.outputs.enabled == 'true' && github.event_name != 'workflow_dispatch'
 ---
->         if: steps.v2.outputs.enabled == 'true'
-66c57
+>         if: steps.v2.outputs.enabled == 'true' && github.event_name != 'workflow_dispatch'
+90c81
 <           key: mise-tools-v2-97190eef167066fff58bef17bf9186ae7514e35f27bbc39417666efed2076810-${{steps.velnor-tool-cache-identity.outputs.identity}}
 ---
 >           key: mise-tools-v2-97190eef167066fff58bef17bf9186ae7514e35f27bbc39417666efed2076810-${{steps.v2.outputs.identity}}
-83c74
-<         if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.velnor-tool-cache-identity.outputs.enabled == 'true'
+107c98
+<         if: (success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.velnor-tool-cache-identity.outputs.enabled == 'true') && github.event_name != 'workflow_dispatch'
 ---
->         if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true'
-86c77
+>         if: (success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true') && github.event_name != 'workflow_dispatch'
+110c101
 <           key: mise-tools-v2-97190eef167066fff58bef17bf9186ae7514e35f27bbc39417666efed2076810-${{steps.velnor-tool-cache-identity.outputs.identity}}
 ---
 >           key: mise-tools-v2-97190eef167066fff58bef17bf9186ae7514e35f27bbc39417666efed2076810-${{steps.v2.outputs.identity}}
-109,126d99
+133,150d123
 <     env:
 <       ACTIONS_ID_TOKEN_REQUEST_TOKEN: ""
 <       ACTIONS_ID_TOKEN_REQUEST_URL: ""
@@ -57,7 +57,7 @@ diff -r shipping/.github/workflows/ci.yml generated/.github/workflows/ci.yml
 <       MISE_NO_HOOKS: "1"
 <       NODE_AUTH_TOKEN: ""
 <       NPM_TOKEN: ""
-132,145c105,109
+161,174c134,138
 <       - name: Identify Mise cache runtime
 <         id: velnor-tool-cache-identity
 <         env:
@@ -78,23 +78,23 @@ diff -r shipping/.github/workflows/ci.yml generated/.github/workflows/ci.yml
 >         uses: ./.github/actions/u26 # zizmor: ignore[self-repository]
 >         with:
 >           d: 7c8e857f67b6a50cc9222700686bd1eddbb45c09942b9f3f2600df32666b13b9
-147c111
-<         if: steps.velnor-tool-cache-identity.outputs.enabled == 'true'
+176c140
+<         if: steps.velnor-tool-cache-identity.outputs.enabled == 'true' && github.event_name != 'workflow_dispatch'
 ---
->         if: steps.v2.outputs.enabled == 'true'
-150c114
+>         if: steps.v2.outputs.enabled == 'true' && github.event_name != 'workflow_dispatch'
+179c143
 <           key: mise-tools-v2-7c8e857f67b6a50cc9222700686bd1eddbb45c09942b9f3f2600df32666b13b9-${{steps.velnor-tool-cache-identity.outputs.identity}}
 ---
 >           key: mise-tools-v2-7c8e857f67b6a50cc9222700686bd1eddbb45c09942b9f3f2600df32666b13b9-${{steps.v2.outputs.identity}}
-165c129
-<         if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.velnor-tool-cache-identity.outputs.enabled == 'true'
+194c158
+<         if: (success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.velnor-tool-cache-identity.outputs.enabled == 'true') && github.event_name != 'workflow_dispatch'
 ---
->         if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true'
-168c132
+>         if: (success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true') && github.event_name != 'workflow_dispatch'
+197c161
 <           key: mise-tools-v2-7c8e857f67b6a50cc9222700686bd1eddbb45c09942b9f3f2600df32666b13b9-${{steps.velnor-tool-cache-identity.outputs.identity}}
 ---
 >           key: mise-tools-v2-7c8e857f67b6a50cc9222700686bd1eddbb45c09942b9f3f2600df32666b13b9-${{steps.v2.outputs.identity}}
-197,210c161,165
+231,244c195,199
 <       - name: Identify Mise cache runtime
 <         id: velnor-tool-cache-identity
 <         env:
@@ -115,23 +115,23 @@ diff -r shipping/.github/workflows/ci.yml generated/.github/workflows/ci.yml
 >         uses: ./.github/actions/u26 # zizmor: ignore[self-repository]
 >         with:
 >           d: 4afedde0a3fa3dd2ea95f73e43100d08b5baddf1f2f684d70746c2832b0a52b2
-212c167
-<         if: steps.velnor-tool-cache-identity.outputs.enabled == 'true'
+246c201
+<         if: steps.velnor-tool-cache-identity.outputs.enabled == 'true' && github.event_name != 'workflow_dispatch'
 ---
->         if: steps.v2.outputs.enabled == 'true'
-215c170
+>         if: steps.v2.outputs.enabled == 'true' && github.event_name != 'workflow_dispatch'
+249c204
 <           key: mise-tools-v2-4afedde0a3fa3dd2ea95f73e43100d08b5baddf1f2f684d70746c2832b0a52b2-${{steps.velnor-tool-cache-identity.outputs.identity}}
 ---
 >           key: mise-tools-v2-4afedde0a3fa3dd2ea95f73e43100d08b5baddf1f2f684d70746c2832b0a52b2-${{steps.v2.outputs.identity}}
-232c187
-<         if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.velnor-tool-cache-identity.outputs.enabled == 'true'
+266c221
+<         if: (success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.velnor-tool-cache-identity.outputs.enabled == 'true') && github.event_name != 'workflow_dispatch'
 ---
->         if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true'
-235c190
+>         if: (success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true') && github.event_name != 'workflow_dispatch'
+269c224
 <           key: mise-tools-v2-4afedde0a3fa3dd2ea95f73e43100d08b5baddf1f2f684d70746c2832b0a52b2-${{steps.velnor-tool-cache-identity.outputs.identity}}
 ---
 >           key: mise-tools-v2-4afedde0a3fa3dd2ea95f73e43100d08b5baddf1f2f684d70746c2832b0a52b2-${{steps.v2.outputs.identity}}
-270,283c225,229
+317,330c272,276
 <       - name: Identify Mise cache runtime
 <         id: velnor-tool-cache-identity
 <         env:
@@ -143,7 +143,7 @@ diff -r shipping/.github/workflows/ci.yml generated/.github/workflows/ci.yml
 <           VELNOR_CACHE_EXPECTED_ARCH: X64
 <           VELNOR_CACHE_EXPECTED_IMAGE_OS: ubuntu26
 <           VELNOR_CACHE_LANE: ubuntu-26.04
-<           VELNOR_CACHE_STATIC_DIGEST: 5e6ebd611bc7cc5b66544cc5cee7c3c5fb5bb3c05e811ce742184fefe7d40a11
+<           VELNOR_CACHE_STATIC_DIGEST: b75120cf97a7bf90b30bb29b6a4b4508a8e2974062c070ad4fcc8a6e267ea390
 <           VELNOR_CACHE_TARGET: x86_64-unknown-linux-gnu
 <         run: "bash -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; export LC_ALL=C; set -eu; umask 077; : \"${GITHUB_OUTPUT:?missing GITHUB_OUTPUT}\"; scratch_root=; scratch_dir=; runner_os=${RUNNER_OS-}; runner_arch=${RUNNER_ARCH-}; image_os=${ImageOS-}; image_version=${ImageVersion-}; home=${HOME-}; runner_temp=${RUNNER_TEMP-}; mise_rustup=${MISE_RUSTUP_HOME-}; rustup_home=${RUSTUP_HOME-}; mise_cargo=${MISE_CARGO_HOME-}; cargo_home=${CARGO_HOME-}; valid_path() { value=$1; case \"$value\" in /*) ;; *) return 1 ;; esac; [ \"$value\" != / ] || return 1; case \"$value\" in *[![:print:]]*|*//*|*/./*|*/../*|*/.|*/..) return 1 ;; esac; remaining=${value#/}; prefix=; while [ -n \"$remaining\" ]; do case \"$remaining\" in */*) part=${remaining%%/*}; remaining=${remaining#*/} ;; *) part=$remaining; remaining= ;; esac; [ -n \"$part\" ] || return 1; prefix=\"$prefix/$part\"; [ ! -L \"$prefix\" ] || return 1; done; }; cleanup_scratch() { [ -n \"$scratch_dir\" ] || return 0; case \"$scratch_dir\" in \"$scratch_root\"/runtime-identity.*) ;; *) return 1 ;; esac; [ -d \"$scratch_dir\" ] && [ ! -L \"$scratch_dir\" ] || return 1; rm -rf -- \"$scratch_dir\" || return 1; scratch_dir=; }; on_exit() { status=$1; trap - EXIT; if ! cleanup_scratch; then status=1; fi; exit \"$status\"; }; trap '\\''status=$?; on_exit \"$status\"'\\'' EXIT; trap '\\''exit 129'\\'' HUP; trap '\\''exit 130'\\'' INT; trap '\\''exit 143'\\'' TERM; disable() { reason=$1; if ! cleanup_scratch; then printf '\\''enabled=false\\nreason=identity_scratch_cleanup_failed\\n'\\'' >> \"$GITHUB_OUTPUT\"; exit 1; fi; printf '\\''enabled=false\\nreason=%s\\n'\\'' \"$reason\" >> \"$GITHUB_OUTPUT\"; exit 0; }; case \"$VELNOR_CACHE_LANE\" in scale-set:*) disable scale_set_image_unqualified ;; esac; [ -n \"$runner_os\" ] || disable runner_os_missing; [ \"$runner_os\" = Linux ] || disable runner_os_mismatch; [ -n \"$runner_arch\" ] || disable runner_arch_missing; [ \"$runner_arch\" = \"$VELNOR_CACHE_EXPECTED_ARCH\" ] || disable runner_arch_mismatch; [ -n \"$image_os\" ] || disable image_os_missing; [ \"$image_os\" = \"$VELNOR_CACHE_EXPECTED_IMAGE_OS\" ] || disable image_os_mismatch; [ -n \"$image_version\" ] || disable image_version_missing; case \"$image_version\" in *[!0-9.]*) disable image_version_invalid ;; esac; case \"$image_version\" in *[0-9]*) ;; *) disable image_version_invalid ;; esac; [ -n \"$home\" ] && [ -d \"$home\" ] || disable home_missing; [ -n \"$runner_temp\" ] && [ -d \"$runner_temp\" ] || disable runner_temp_missing; valid_path \"$home\" || disable home_aliased; valid_path \"$runner_temp\" || disable runner_temp_aliased; expected_mise=\"$home/.local/share/mise\"; effective_mise=${MISE_DATA_DIR-}; if [ -z \"$effective_mise\" ]; then if [ -n \"${XDG_DATA_HOME-}\" ]; then effective_mise=\"$XDG_DATA_HOME/mise\"; else effective_mise=$expected_mise; fi; fi; valid_path \"$expected_mise\" || disable mise_root_aliased; valid_path \"$effective_mise\" || disable mise_root_invalid; [ \"$effective_mise\" = \"$expected_mise\" ] || disable mise_root_not_archived; expected_rustup=\"$runner_temp/velnor/rustup\"; expected_cargo=\"$runner_temp/velnor/cargo\"; [ \"$mise_rustup\" = \"$expected_rustup\" ] || disable mise_rustup_home_mismatch; [ \"$rustup_home\" = \"$expected_rustup\" ] || disable rustup_home_mismatch; [ \"$mise_cargo\" = \"$expected_cargo\" ] || disable mise_cargo_home_mismatch; [ \"$cargo_home\" = \"$expected_cargo\" ] || disable cargo_home_mismatch; valid_path \"$expected_rustup\" || disable rustup_root_invalid; valid_path \"$expected_cargo\" || disable cargo_root_invalid; scratch_root=\"$runner_temp/velnor\"; valid_path \"$scratch_root\" || disable cache_scratch_aliased; mkdir -p \"$scratch_root\" || disable cache_scratch_unavailable; [ -d \"$scratch_root\" ] && [ ! -L \"$scratch_root\" ] || disable cache_scratch_invalid; scratch_dir=\"$scratch_root/runtime-identity.$$\"; if ! mkdir -m 700 \"$scratch_dir\"; then scratch_dir=; disable identity_scratch_unavailable; fi; case \"$scratch_dir\" in \"$scratch_root\"/runtime-identity.*) ;; *) disable cache_scratch_invalid ;; esac; valid_path \"$scratch_dir\" && [ -d \"$scratch_dir\" ] && [ ! -L \"$scratch_dir\" ] || disable cache_scratch_invalid; identity_file=\"$scratch_dir/preimage\"; sum_file=\"$scratch_dir/digest\"; set -C; if ! : > \"$identity_file\"; then set +C; disable identity_file_unavailable; fi; if ! : > \"$sum_file\"; then set +C; disable identity_file_unavailable; fi; set +C; valid_path \"$identity_file\" && [ -f \"$identity_file\" ] && [ ! -L \"$identity_file\" ] || disable identity_file_invalid; valid_path \"$sum_file\" && [ -f \"$sum_file\" ] && [ ! -L \"$sum_file\" ] || disable identity_file_invalid; for value in \"velnor-tools-runtime-v2\" \"$VELNOR_CACHE_STATIC_DIGEST\" \"$VELNOR_CACHE_LANE\" \"$VELNOR_CACHE_TARGET\" \"$runner_os\" \"$runner_arch\" \"$image_os\" \"$image_version\" \"$home\" \"$runner_temp\" \"$effective_mise\" \"$expected_rustup\" \"$expected_cargo\"; do if ! printf '\\''%s:%s\\n'\\'' \"${#value}\" \"$value\" >> \"$identity_file\"; then disable identity_file_write_failed; fi; done; if command -v sha256sum >/dev/null 2>&1; then if ! sha256sum < \"$identity_file\" > \"$sum_file\"; then disable identity_hash_failed; fi; elif command -v shasum >/dev/null 2>&1; then if ! shasum -a 256 < \"$identity_file\" > \"$sum_file\"; then disable identity_hash_failed; fi; else disable sha256_tool_missing; fi; if ! IFS='\\'' '\\'' read -r fingerprint _ < \"$sum_file\"; then disable fingerprint_missing; fi; [ ${#fingerprint} -eq 64 ] || disable fingerprint_invalid; case \"$fingerprint\" in *[!0-9a-f]*) disable fingerprint_invalid ;; esac; if ! cleanup_scratch; then disable identity_scratch_cleanup_failed; fi; printf '\\''identity=%s\\nenabled=true\\nreason=qualified_hosted_image\\n'\\'' \"$fingerprint\" >> \"$GITHUB_OUTPUT\"'"
 ---
@@ -151,24 +151,36 @@ diff -r shipping/.github/workflows/ci.yml generated/.github/workflows/ci.yml
 >         id: v2
 >         uses: ./.github/actions/u26 # zizmor: ignore[self-repository]
 >         with:
->           d: 5e6ebd611bc7cc5b66544cc5cee7c3c5fb5bb3c05e811ce742184fefe7d40a11
-285c231
-<         if: steps.velnor-tool-cache-identity.outputs.enabled == 'true'
+>           d: b75120cf97a7bf90b30bb29b6a4b4508a8e2974062c070ad4fcc8a6e267ea390
+332c278
+<         if: steps.velnor-tool-cache-identity.outputs.enabled == 'true' && github.event_name != 'workflow_dispatch'
 ---
->         if: steps.v2.outputs.enabled == 'true'
-288c234
-<           key: mise-tools-v2-5e6ebd611bc7cc5b66544cc5cee7c3c5fb5bb3c05e811ce742184fefe7d40a11-${{steps.velnor-tool-cache-identity.outputs.identity}}
+>         if: steps.v2.outputs.enabled == 'true' && github.event_name != 'workflow_dispatch'
+335c281
+<           key: mise-tools-v2-b75120cf97a7bf90b30bb29b6a4b4508a8e2974062c070ad4fcc8a6e267ea390-${{steps.velnor-tool-cache-identity.outputs.identity}}
 ---
->           key: mise-tools-v2-5e6ebd611bc7cc5b66544cc5cee7c3c5fb5bb3c05e811ce742184fefe7d40a11-${{steps.v2.outputs.identity}}
-419c365
-<         if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.velnor-tool-cache-identity.outputs.enabled == 'true'
+>           key: mise-tools-v2-b75120cf97a7bf90b30bb29b6a4b4508a8e2974062c070ad4fcc8a6e267ea390-${{steps.v2.outputs.identity}}
+358c304
+<         if: (success()) && github.event_name != 'workflow_dispatch'
 ---
->         if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true'
-422c368
-<           key: mise-tools-v2-5e6ebd611bc7cc5b66544cc5cee7c3c5fb5bb3c05e811ce742184fefe7d40a11-${{steps.velnor-tool-cache-identity.outputs.identity}}
+>         if: github.event_name != 'workflow_dispatch'
+373c319
+<         if: (success()) && github.event_name != 'workflow_dispatch'
 ---
->           key: mise-tools-v2-5e6ebd611bc7cc5b66544cc5cee7c3c5fb5bb3c05e811ce742184fefe7d40a11-${{steps.v2.outputs.identity}}
-527,540c473,477
+>         if: github.event_name != 'workflow_dispatch'
+382c328
+<         if: (success()) && github.event_name != 'workflow_dispatch'
+---
+>         if: github.event_name != 'workflow_dispatch'
+478c424
+<         if: (success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.velnor-tool-cache-identity.outputs.enabled == 'true') && github.event_name != 'workflow_dispatch'
+---
+>         if: (success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true') && github.event_name != 'workflow_dispatch'
+481c427
+<           key: mise-tools-v2-b75120cf97a7bf90b30bb29b6a4b4508a8e2974062c070ad4fcc8a6e267ea390-${{steps.velnor-tool-cache-identity.outputs.identity}}
+---
+>           key: mise-tools-v2-b75120cf97a7bf90b30bb29b6a4b4508a8e2974062c070ad4fcc8a6e267ea390-${{steps.v2.outputs.identity}}
+589,602c535,539
 <       - name: Identify Mise cache runtime
 <         id: velnor-tool-cache-identity
 <         env:
@@ -189,23 +201,23 @@ diff -r shipping/.github/workflows/ci.yml generated/.github/workflows/ci.yml
 >         uses: ./.github/actions/u26 # zizmor: ignore[self-repository]
 >         with:
 >           d: 7e3d4db8a565e5bbdd358ccdd5b80c13f6d352fd3dcf39d3a81d9470689a7d24
-542c479
-<         if: steps.velnor-tool-cache-identity.outputs.enabled == 'true'
+604c541
+<         if: steps.velnor-tool-cache-identity.outputs.enabled == 'true' && github.event_name != 'workflow_dispatch'
 ---
->         if: steps.v2.outputs.enabled == 'true'
-545c482
+>         if: steps.v2.outputs.enabled == 'true' && github.event_name != 'workflow_dispatch'
+607c544
 <           key: mise-tools-v2-7e3d4db8a565e5bbdd358ccdd5b80c13f6d352fd3dcf39d3a81d9470689a7d24-${{steps.velnor-tool-cache-identity.outputs.identity}}
 ---
 >           key: mise-tools-v2-7e3d4db8a565e5bbdd358ccdd5b80c13f6d352fd3dcf39d3a81d9470689a7d24-${{steps.v2.outputs.identity}}
-598c535
-<         if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.velnor-tool-cache-identity.outputs.enabled == 'true'
+660c597
+<         if: (success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.velnor-tool-cache-identity.outputs.enabled == 'true') && github.event_name != 'workflow_dispatch'
 ---
->         if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true'
-601c538
+>         if: (success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true') && github.event_name != 'workflow_dispatch'
+663c600
 <           key: mise-tools-v2-7e3d4db8a565e5bbdd358ccdd5b80c13f6d352fd3dcf39d3a81d9470689a7d24-${{steps.velnor-tool-cache-identity.outputs.identity}}
 ---
 >           key: mise-tools-v2-7e3d4db8a565e5bbdd358ccdd5b80c13f6d352fd3dcf39d3a81d9470689a7d24-${{steps.v2.outputs.identity}}
-643,656c580,584
+710,723c647,651
 <       - name: Identify Mise cache runtime
 <         id: velnor-tool-cache-identity
 <         env:
@@ -226,23 +238,35 @@ diff -r shipping/.github/workflows/ci.yml generated/.github/workflows/ci.yml
 >         uses: ./.github/actions/u26 # zizmor: ignore[self-repository]
 >         with:
 >           d: cb6154172aef71407cfc4cea6423696284901069a5210559a4a53724be1317aa
-658c586
-<         if: steps.velnor-tool-cache-identity.outputs.enabled == 'true'
+725c653
+<         if: steps.velnor-tool-cache-identity.outputs.enabled == 'true' && github.event_name != 'workflow_dispatch'
 ---
->         if: steps.v2.outputs.enabled == 'true'
-661c589
+>         if: steps.v2.outputs.enabled == 'true' && github.event_name != 'workflow_dispatch'
+728c656
 <           key: mise-tools-v2-cb6154172aef71407cfc4cea6423696284901069a5210559a4a53724be1317aa-${{steps.velnor-tool-cache-identity.outputs.identity}}
 ---
 >           key: mise-tools-v2-cb6154172aef71407cfc4cea6423696284901069a5210559a4a53724be1317aa-${{steps.v2.outputs.identity}}
-815c743
-<         if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.velnor-tool-cache-identity.outputs.enabled == 'true'
+765c693
+<         if: (success()) && github.event_name != 'workflow_dispatch'
 ---
->         if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true'
-818c746
+>         if: github.event_name != 'workflow_dispatch'
+780c708
+<         if: (success()) && github.event_name != 'workflow_dispatch'
+---
+>         if: github.event_name != 'workflow_dispatch'
+789c717
+<         if: (success()) && github.event_name != 'workflow_dispatch'
+---
+>         if: github.event_name != 'workflow_dispatch'
+885c813
+<         if: (success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.velnor-tool-cache-identity.outputs.enabled == 'true') && github.event_name != 'workflow_dispatch'
+---
+>         if: (success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true') && github.event_name != 'workflow_dispatch'
+888c816
 <           key: mise-tools-v2-cb6154172aef71407cfc4cea6423696284901069a5210559a4a53724be1317aa-${{steps.velnor-tool-cache-identity.outputs.identity}}
 ---
 >           key: mise-tools-v2-cb6154172aef71407cfc4cea6423696284901069a5210559a4a53724be1317aa-${{steps.v2.outputs.identity}}
-852,865c780,784
+927,940c855,859
 <       - name: Identify Mise cache runtime
 <         id: velnor-tool-cache-identity
 <         env:
@@ -263,15 +287,35 @@ diff -r shipping/.github/workflows/ci.yml generated/.github/workflows/ci.yml
 >         uses: ./.github/actions/u26 # zizmor: ignore[self-repository]
 >         with:
 >           d: 5e6ebd611bc7cc5b66544cc5cee7c3c5fb5bb3c05e811ce742184fefe7d40a11
-867c786
-<         if: steps.velnor-tool-cache-identity.outputs.enabled == 'true'
+942c861
+<         if: steps.velnor-tool-cache-identity.outputs.enabled == 'true' && github.event_name != 'workflow_dispatch'
 ---
->         if: steps.v2.outputs.enabled == 'true'
-870c789
+>         if: steps.v2.outputs.enabled == 'true' && github.event_name != 'workflow_dispatch'
+945c864
 <           key: mise-tools-v2-5e6ebd611bc7cc5b66544cc5cee7c3c5fb5bb3c05e811ce742184fefe7d40a11-${{steps.velnor-tool-cache-identity.outputs.identity}}
 ---
 >           key: mise-tools-v2-5e6ebd611bc7cc5b66544cc5cee7c3c5fb5bb3c05e811ce742184fefe7d40a11-${{steps.v2.outputs.identity}}
-1045,1058c964,968
+982c901
+<         if: (success()) && github.event_name != 'workflow_dispatch'
+---
+>         if: github.event_name != 'workflow_dispatch'
+997c916
+<         if: (success()) && github.event_name != 'workflow_dispatch'
+---
+>         if: github.event_name != 'workflow_dispatch'
+1006c925
+<         if: (success()) && github.event_name != 'workflow_dispatch'
+---
+>         if: github.event_name != 'workflow_dispatch'
+1092c1011
+<         if: (success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.velnor-tool-cache-identity.outputs.enabled == 'true') && github.event_name != 'workflow_dispatch'
+---
+>         if: (success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true') && github.event_name != 'workflow_dispatch'
+1095c1014
+<           key: mise-tools-v2-5e6ebd611bc7cc5b66544cc5cee7c3c5fb5bb3c05e811ce742184fefe7d40a11-${{steps.velnor-tool-cache-identity.outputs.identity}}
+---
+>           key: mise-tools-v2-5e6ebd611bc7cc5b66544cc5cee7c3c5fb5bb3c05e811ce742184fefe7d40a11-${{steps.v2.outputs.identity}}
+1134,1147c1053,1057
 <       - name: Identify Mise cache runtime
 <         id: velnor-tool-cache-identity
 <         env:
@@ -292,15 +336,27 @@ diff -r shipping/.github/workflows/ci.yml generated/.github/workflows/ci.yml
 >         uses: ./.github/actions/u26 # zizmor: ignore[self-repository]
 >         with:
 >           d: cb6154172aef71407cfc4cea6423696284901069a5210559a4a53724be1317aa
-1060c970
-<         if: steps.velnor-tool-cache-identity.outputs.enabled == 'true'
+1149c1059
+<         if: steps.velnor-tool-cache-identity.outputs.enabled == 'true' && github.event_name != 'workflow_dispatch'
 ---
->         if: steps.v2.outputs.enabled == 'true'
-1063c973
+>         if: steps.v2.outputs.enabled == 'true' && github.event_name != 'workflow_dispatch'
+1152c1062
 <           key: mise-tools-v2-cb6154172aef71407cfc4cea6423696284901069a5210559a4a53724be1317aa-${{steps.velnor-tool-cache-identity.outputs.identity}}
 ---
 >           key: mise-tools-v2-cb6154172aef71407cfc4cea6423696284901069a5210559a4a53724be1317aa-${{steps.v2.outputs.identity}}
-1248,1261c1158,1162
+1189c1099
+<         if: (success()) && github.event_name != 'workflow_dispatch'
+---
+>         if: github.event_name != 'workflow_dispatch'
+1204c1114
+<         if: (success()) && github.event_name != 'workflow_dispatch'
+---
+>         if: github.event_name != 'workflow_dispatch'
+1213c1123
+<         if: (success()) && github.event_name != 'workflow_dispatch'
+---
+>         if: github.event_name != 'workflow_dispatch'
+1345,1358c1255,1259
 <       - name: Identify Mise cache runtime
 <         id: velnor-tool-cache-identity
 <         env:
@@ -321,23 +377,35 @@ diff -r shipping/.github/workflows/ci.yml generated/.github/workflows/ci.yml
 >         uses: ./.github/actions/u26 # zizmor: ignore[self-repository]
 >         with:
 >           d: 6ec997273d191d69409da580e2a4fc035f930f4ebc8e72c1b9937220b0f57257
-1263c1164
-<         if: steps.velnor-tool-cache-identity.outputs.enabled == 'true'
+1360c1261
+<         if: steps.velnor-tool-cache-identity.outputs.enabled == 'true' && github.event_name != 'workflow_dispatch'
 ---
->         if: steps.v2.outputs.enabled == 'true'
-1266c1167
+>         if: steps.v2.outputs.enabled == 'true' && github.event_name != 'workflow_dispatch'
+1363c1264
 <           key: mise-tools-v2-6ec997273d191d69409da580e2a4fc035f930f4ebc8e72c1b9937220b0f57257-${{steps.velnor-tool-cache-identity.outputs.identity}}
 ---
 >           key: mise-tools-v2-6ec997273d191d69409da580e2a4fc035f930f4ebc8e72c1b9937220b0f57257-${{steps.v2.outputs.identity}}
-1420c1321
-<         if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.velnor-tool-cache-identity.outputs.enabled == 'true'
+1400c1301
+<         if: (success()) && github.event_name != 'workflow_dispatch'
 ---
->         if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true'
-1423c1324
+>         if: github.event_name != 'workflow_dispatch'
+1415c1316
+<         if: (success()) && github.event_name != 'workflow_dispatch'
+---
+>         if: github.event_name != 'workflow_dispatch'
+1424c1325
+<         if: (success()) && github.event_name != 'workflow_dispatch'
+---
+>         if: github.event_name != 'workflow_dispatch'
+1520c1421
+<         if: (success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.velnor-tool-cache-identity.outputs.enabled == 'true') && github.event_name != 'workflow_dispatch'
+---
+>         if: (success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true') && github.event_name != 'workflow_dispatch'
+1523c1424
 <           key: mise-tools-v2-6ec997273d191d69409da580e2a4fc035f930f4ebc8e72c1b9937220b0f57257-${{steps.velnor-tool-cache-identity.outputs.identity}}
 ---
 >           key: mise-tools-v2-6ec997273d191d69409da580e2a4fc035f930f4ebc8e72c1b9937220b0f57257-${{steps.v2.outputs.identity}}
-1457,1470c1358,1362
+1562,1575c1463,1467
 <       - name: Identify Mise cache runtime
 <         id: velnor-tool-cache-identity
 <         env:
@@ -358,15 +426,27 @@ diff -r shipping/.github/workflows/ci.yml generated/.github/workflows/ci.yml
 >         uses: ./.github/actions/u26 # zizmor: ignore[self-repository]
 >         with:
 >           d: 5e6ebd611bc7cc5b66544cc5cee7c3c5fb5bb3c05e811ce742184fefe7d40a11
-1472c1364
-<         if: steps.velnor-tool-cache-identity.outputs.enabled == 'true'
+1577c1469
+<         if: steps.velnor-tool-cache-identity.outputs.enabled == 'true' && github.event_name != 'workflow_dispatch'
 ---
->         if: steps.v2.outputs.enabled == 'true'
-1475c1367
+>         if: steps.v2.outputs.enabled == 'true' && github.event_name != 'workflow_dispatch'
+1580c1472
 <           key: mise-tools-v2-5e6ebd611bc7cc5b66544cc5cee7c3c5fb5bb3c05e811ce742184fefe7d40a11-${{steps.velnor-tool-cache-identity.outputs.identity}}
 ---
 >           key: mise-tools-v2-5e6ebd611bc7cc5b66544cc5cee7c3c5fb5bb3c05e811ce742184fefe7d40a11-${{steps.v2.outputs.identity}}
-1660,1673c1552,1556
+1617c1509
+<         if: (success()) && github.event_name != 'workflow_dispatch'
+---
+>         if: github.event_name != 'workflow_dispatch'
+1632c1524
+<         if: (success()) && github.event_name != 'workflow_dispatch'
+---
+>         if: github.event_name != 'workflow_dispatch'
+1641c1533
+<         if: (success()) && github.event_name != 'workflow_dispatch'
+---
+>         if: github.event_name != 'workflow_dispatch'
+1773,1786c1665,1669
 <       - name: Identify Mise cache runtime
 <         id: velnor-tool-cache-identity
 <         env:
@@ -387,15 +467,27 @@ diff -r shipping/.github/workflows/ci.yml generated/.github/workflows/ci.yml
 >         uses: ./.github/actions/u26 # zizmor: ignore[self-repository]
 >         with:
 >           d: cb6154172aef71407cfc4cea6423696284901069a5210559a4a53724be1317aa
-1675c1558
-<         if: steps.velnor-tool-cache-identity.outputs.enabled == 'true'
+1788c1671
+<         if: steps.velnor-tool-cache-identity.outputs.enabled == 'true' && github.event_name != 'workflow_dispatch'
 ---
->         if: steps.v2.outputs.enabled == 'true'
-1678c1561
+>         if: steps.v2.outputs.enabled == 'true' && github.event_name != 'workflow_dispatch'
+1791c1674
 <           key: mise-tools-v2-cb6154172aef71407cfc4cea6423696284901069a5210559a4a53724be1317aa-${{steps.velnor-tool-cache-identity.outputs.identity}}
 ---
 >           key: mise-tools-v2-cb6154172aef71407cfc4cea6423696284901069a5210559a4a53724be1317aa-${{steps.v2.outputs.identity}}
-1863,1876c1746,1750
+1828c1711
+<         if: (success()) && github.event_name != 'workflow_dispatch'
+---
+>         if: github.event_name != 'workflow_dispatch'
+1843c1726
+<         if: (success()) && github.event_name != 'workflow_dispatch'
+---
+>         if: github.event_name != 'workflow_dispatch'
+1852c1735
+<         if: (success()) && github.event_name != 'workflow_dispatch'
+---
+>         if: github.event_name != 'workflow_dispatch'
+1984,1997c1867,1871
 <       - name: Identify Mise cache runtime
 <         id: velnor-tool-cache-identity
 <         env:
@@ -416,15 +508,27 @@ diff -r shipping/.github/workflows/ci.yml generated/.github/workflows/ci.yml
 >         uses: ./.github/actions/u26 # zizmor: ignore[self-repository]
 >         with:
 >           d: cb6154172aef71407cfc4cea6423696284901069a5210559a4a53724be1317aa
-1878c1752
-<         if: steps.velnor-tool-cache-identity.outputs.enabled == 'true'
+1999c1873
+<         if: steps.velnor-tool-cache-identity.outputs.enabled == 'true' && github.event_name != 'workflow_dispatch'
 ---
->         if: steps.v2.outputs.enabled == 'true'
-1881c1755
+>         if: steps.v2.outputs.enabled == 'true' && github.event_name != 'workflow_dispatch'
+2002c1876
 <           key: mise-tools-v2-cb6154172aef71407cfc4cea6423696284901069a5210559a4a53724be1317aa-${{steps.velnor-tool-cache-identity.outputs.identity}}
 ---
 >           key: mise-tools-v2-cb6154172aef71407cfc4cea6423696284901069a5210559a4a53724be1317aa-${{steps.v2.outputs.identity}}
-2066,2079c1940,1944
+2039c1913
+<         if: (success()) && github.event_name != 'workflow_dispatch'
+---
+>         if: github.event_name != 'workflow_dispatch'
+2054c1928
+<         if: (success()) && github.event_name != 'workflow_dispatch'
+---
+>         if: github.event_name != 'workflow_dispatch'
+2063c1937
+<         if: (success()) && github.event_name != 'workflow_dispatch'
+---
+>         if: github.event_name != 'workflow_dispatch'
+2195,2208c2069,2073
 <       - name: Identify Mise cache runtime
 <         id: velnor-tool-cache-identity
 <         env:
@@ -445,15 +549,27 @@ diff -r shipping/.github/workflows/ci.yml generated/.github/workflows/ci.yml
 >         uses: ./.github/actions/u26 # zizmor: ignore[self-repository]
 >         with:
 >           d: cb6154172aef71407cfc4cea6423696284901069a5210559a4a53724be1317aa
-2081c1946
-<         if: steps.velnor-tool-cache-identity.outputs.enabled == 'true'
+2210c2075
+<         if: steps.velnor-tool-cache-identity.outputs.enabled == 'true' && github.event_name != 'workflow_dispatch'
 ---
->         if: steps.v2.outputs.enabled == 'true'
-2084c1949
+>         if: steps.v2.outputs.enabled == 'true' && github.event_name != 'workflow_dispatch'
+2213c2078
 <           key: mise-tools-v2-cb6154172aef71407cfc4cea6423696284901069a5210559a4a53724be1317aa-${{steps.velnor-tool-cache-identity.outputs.identity}}
 ---
 >           key: mise-tools-v2-cb6154172aef71407cfc4cea6423696284901069a5210559a4a53724be1317aa-${{steps.v2.outputs.identity}}
-2269,2282c2134,2138
+2250c2115
+<         if: (success()) && github.event_name != 'workflow_dispatch'
+---
+>         if: github.event_name != 'workflow_dispatch'
+2265c2130
+<         if: (success()) && github.event_name != 'workflow_dispatch'
+---
+>         if: github.event_name != 'workflow_dispatch'
+2274c2139
+<         if: (success()) && github.event_name != 'workflow_dispatch'
+---
+>         if: github.event_name != 'workflow_dispatch'
+2406,2419c2271,2275
 <       - name: Identify Mise cache runtime
 <         id: velnor-tool-cache-identity
 <         env:
@@ -474,15 +590,27 @@ diff -r shipping/.github/workflows/ci.yml generated/.github/workflows/ci.yml
 >         uses: ./.github/actions/u26 # zizmor: ignore[self-repository]
 >         with:
 >           d: cb6154172aef71407cfc4cea6423696284901069a5210559a4a53724be1317aa
-2284c2140
-<         if: steps.velnor-tool-cache-identity.outputs.enabled == 'true'
+2421c2277
+<         if: steps.velnor-tool-cache-identity.outputs.enabled == 'true' && github.event_name != 'workflow_dispatch'
 ---
->         if: steps.v2.outputs.enabled == 'true'
-2287c2143
+>         if: steps.v2.outputs.enabled == 'true' && github.event_name != 'workflow_dispatch'
+2424c2280
 <           key: mise-tools-v2-cb6154172aef71407cfc4cea6423696284901069a5210559a4a53724be1317aa-${{steps.velnor-tool-cache-identity.outputs.identity}}
 ---
 >           key: mise-tools-v2-cb6154172aef71407cfc4cea6423696284901069a5210559a4a53724be1317aa-${{steps.v2.outputs.identity}}
-2472,2485c2328,2332
+2461c2317
+<         if: (success()) && github.event_name != 'workflow_dispatch'
+---
+>         if: github.event_name != 'workflow_dispatch'
+2476c2332
+<         if: (success()) && github.event_name != 'workflow_dispatch'
+---
+>         if: github.event_name != 'workflow_dispatch'
+2485c2341
+<         if: (success()) && github.event_name != 'workflow_dispatch'
+---
+>         if: github.event_name != 'workflow_dispatch'
+2617,2630c2473,2477
 <       - name: Identify Mise cache runtime
 <         id: velnor-tool-cache-identity
 <         env:
@@ -503,15 +631,27 @@ diff -r shipping/.github/workflows/ci.yml generated/.github/workflows/ci.yml
 >         uses: ./.github/actions/u26 # zizmor: ignore[self-repository]
 >         with:
 >           d: cb6154172aef71407cfc4cea6423696284901069a5210559a4a53724be1317aa
-2487c2334
-<         if: steps.velnor-tool-cache-identity.outputs.enabled == 'true'
+2632c2479
+<         if: steps.velnor-tool-cache-identity.outputs.enabled == 'true' && github.event_name != 'workflow_dispatch'
 ---
->         if: steps.v2.outputs.enabled == 'true'
-2490c2337
+>         if: steps.v2.outputs.enabled == 'true' && github.event_name != 'workflow_dispatch'
+2635c2482
 <           key: mise-tools-v2-cb6154172aef71407cfc4cea6423696284901069a5210559a4a53724be1317aa-${{steps.velnor-tool-cache-identity.outputs.identity}}
 ---
 >           key: mise-tools-v2-cb6154172aef71407cfc4cea6423696284901069a5210559a4a53724be1317aa-${{steps.v2.outputs.identity}}
-2675,2688c2522,2526
+2672c2519
+<         if: (success()) && github.event_name != 'workflow_dispatch'
+---
+>         if: github.event_name != 'workflow_dispatch'
+2687c2534
+<         if: (success()) && github.event_name != 'workflow_dispatch'
+---
+>         if: github.event_name != 'workflow_dispatch'
+2696c2543
+<         if: (success()) && github.event_name != 'workflow_dispatch'
+---
+>         if: github.event_name != 'workflow_dispatch'
+2828,2841c2675,2679
 <       - name: Identify Mise cache runtime
 <         id: velnor-tool-cache-identity
 <         env:
@@ -532,15 +672,27 @@ diff -r shipping/.github/workflows/ci.yml generated/.github/workflows/ci.yml
 >         uses: ./.github/actions/u26 # zizmor: ignore[self-repository]
 >         with:
 >           d: cb6154172aef71407cfc4cea6423696284901069a5210559a4a53724be1317aa
-2690c2528
-<         if: steps.velnor-tool-cache-identity.outputs.enabled == 'true'
+2843c2681
+<         if: steps.velnor-tool-cache-identity.outputs.enabled == 'true' && github.event_name != 'workflow_dispatch'
 ---
->         if: steps.v2.outputs.enabled == 'true'
-2693c2531
+>         if: steps.v2.outputs.enabled == 'true' && github.event_name != 'workflow_dispatch'
+2846c2684
 <           key: mise-tools-v2-cb6154172aef71407cfc4cea6423696284901069a5210559a4a53724be1317aa-${{steps.velnor-tool-cache-identity.outputs.identity}}
 ---
 >           key: mise-tools-v2-cb6154172aef71407cfc4cea6423696284901069a5210559a4a53724be1317aa-${{steps.v2.outputs.identity}}
-2878,2891c2716,2720
+2883c2721
+<         if: (success()) && github.event_name != 'workflow_dispatch'
+---
+>         if: github.event_name != 'workflow_dispatch'
+2898c2736
+<         if: (success()) && github.event_name != 'workflow_dispatch'
+---
+>         if: github.event_name != 'workflow_dispatch'
+2907c2745
+<         if: (success()) && github.event_name != 'workflow_dispatch'
+---
+>         if: github.event_name != 'workflow_dispatch'
+3039,3052c2877,2881
 <       - name: Identify Mise cache runtime
 <         id: velnor-tool-cache-identity
 <         env:
@@ -561,15 +713,27 @@ diff -r shipping/.github/workflows/ci.yml generated/.github/workflows/ci.yml
 >         uses: ./.github/actions/u26 # zizmor: ignore[self-repository]
 >         with:
 >           d: cb6154172aef71407cfc4cea6423696284901069a5210559a4a53724be1317aa
-2893c2722
-<         if: steps.velnor-tool-cache-identity.outputs.enabled == 'true'
+3054c2883
+<         if: steps.velnor-tool-cache-identity.outputs.enabled == 'true' && github.event_name != 'workflow_dispatch'
 ---
->         if: steps.v2.outputs.enabled == 'true'
-2896c2725
+>         if: steps.v2.outputs.enabled == 'true' && github.event_name != 'workflow_dispatch'
+3057c2886
 <           key: mise-tools-v2-cb6154172aef71407cfc4cea6423696284901069a5210559a4a53724be1317aa-${{steps.velnor-tool-cache-identity.outputs.identity}}
 ---
 >           key: mise-tools-v2-cb6154172aef71407cfc4cea6423696284901069a5210559a4a53724be1317aa-${{steps.v2.outputs.identity}}
-3076,3089c2905,2909
+3094c2923
+<         if: (success()) && github.event_name != 'workflow_dispatch'
+---
+>         if: github.event_name != 'workflow_dispatch'
+3109c2938
+<         if: (success()) && github.event_name != 'workflow_dispatch'
+---
+>         if: github.event_name != 'workflow_dispatch'
+3118c2947
+<         if: (success()) && github.event_name != 'workflow_dispatch'
+---
+>         if: github.event_name != 'workflow_dispatch'
+3245,3258c3074,3078
 <       - name: Identify Mise cache runtime
 <         id: velnor-tool-cache-identity
 <         env:
@@ -590,19 +754,19 @@ diff -r shipping/.github/workflows/ci.yml generated/.github/workflows/ci.yml
 >         uses: ./.github/actions/u26 # zizmor: ignore[self-repository]
 >         with:
 >           d: a21dbe84396fab45169a04832176ae9cb399b640e80b09ebdd84dee6496a1266
-3091c2911
-<         if: steps.velnor-tool-cache-identity.outputs.enabled == 'true'
+3260c3080
+<         if: steps.velnor-tool-cache-identity.outputs.enabled == 'true' && github.event_name != 'workflow_dispatch'
 ---
->         if: steps.v2.outputs.enabled == 'true'
-3094c2914
+>         if: steps.v2.outputs.enabled == 'true' && github.event_name != 'workflow_dispatch'
+3263c3083
 <           key: mise-tools-v2-a21dbe84396fab45169a04832176ae9cb399b640e80b09ebdd84dee6496a1266-${{steps.velnor-tool-cache-identity.outputs.identity}}
 ---
 >           key: mise-tools-v2-a21dbe84396fab45169a04832176ae9cb399b640e80b09ebdd84dee6496a1266-${{steps.v2.outputs.identity}}
-3111c2931
-<         if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.velnor-tool-cache-identity.outputs.enabled == 'true'
+3280c3100
+<         if: (success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.velnor-tool-cache-identity.outputs.enabled == 'true') && github.event_name != 'workflow_dispatch'
 ---
->         if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true'
-3114c2934
+>         if: (success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true') && github.event_name != 'workflow_dispatch'
+3283c3103
 <           key: mise-tools-v2-a21dbe84396fab45169a04832176ae9cb399b640e80b09ebdd84dee6496a1266-${{steps.velnor-tool-cache-identity.outputs.identity}}
 ---
 >           key: mise-tools-v2-a21dbe84396fab45169a04832176ae9cb399b640e80b09ebdd84dee6496a1266-${{steps.v2.outputs.identity}}

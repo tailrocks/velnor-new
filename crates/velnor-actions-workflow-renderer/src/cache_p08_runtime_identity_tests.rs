@@ -125,9 +125,10 @@ fn identity_command(
     fs::create_dir_all(script_path.parent().expect("script parent"))
         .expect("create script directory");
     fs::write(&script_path, script_file.bytes).expect("write generated script");
-    let action_path = super::action_uses(&payload.runs_on)
-        .map(|uses| fixture.root.join(uses.trim_start_matches("./")))
-        .unwrap_or_else(|| fixture.root.join(".github/actions/test"));
+    let action_path = super::action_uses(&payload.runs_on).map_or_else(
+        || fixture.root.join(".github/actions/test"),
+        |uses| fixture.root.join(uses.trim_start_matches("./")),
+    );
     fs::create_dir_all(&action_path).expect("create action directory");
     let mut command = Command::new("env");
     command

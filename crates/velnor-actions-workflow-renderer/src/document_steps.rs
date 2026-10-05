@@ -12,6 +12,16 @@ use crate::{
     yaml::Yaml,
 };
 
+pub(crate) struct StepRenderContext<'a> {
+    pub job_id: &'a str,
+    pub ctx: &'a RenderContext,
+    pub needs_envs: &'a [(String, String)],
+    pub composite: bool,
+    pub job_env: &'a BTreeMap<String, String>,
+    pub actions_read: bool,
+    pub runs_on: Option<&'a str>,
+}
+
 /// True for the final job's plan download (fetch is gated inline below).
 ///
 /// An absent plan artifact (failed plan) must still reach the merge
@@ -153,15 +163,16 @@ pub(crate) fn string_map_yaml(map: &BTreeMap<String, String>) -> Yaml {
 /// Render one step; internal ops become env plus request file, never argv.
 /// Every action ref (including the Alint pin) must be a full-SHA pin.
 pub(crate) fn step_to_yaml(
-    job_id: &str,
     step: &Step,
-    ctx: &RenderContext,
-    needs_envs: &[(String, String)],
-    composite: bool,
-    job_env: &BTreeMap<String, String>,
-    actions_read: bool,
-    runs_on: Option<&str>,
+    render: &StepRenderContext<'_>,
 ) -> Result<Yaml, RenderError> {
+    let job_id = render.job_id;
+    let ctx = render.ctx;
+    let needs_envs = render.needs_envs;
+    let composite = render.composite;
+    let job_env = render.job_env;
+    let actions_read = render.actions_read;
+    let runs_on = render.runs_on;
     steps::scan_for_private_subcommands(&step.name)?;
     match &step.kind {
         StepKind::Action { uses, with, env } => {

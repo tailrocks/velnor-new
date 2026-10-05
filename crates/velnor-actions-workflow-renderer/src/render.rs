@@ -9,17 +9,15 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{
-    CI_WORKFLOW_PATH, Job, PLAN_JOB_ID as CONTRACT_PLAN_JOB_ID,
-    REQUIRED_CONDITION as CONTRACT_REQUIRED_CONDITION,
-    REQUIRED_DISPLAY_NAME as CONTRACT_REQUIRED_DISPLAY_NAME,
-    REQUIRED_JOB_ID as CONTRACT_REQUIRED_JOB_ID, ValidatorKind, VelnorSupportWorkflow, WorkflowIr,
-    WorkflowPolicy,
+    Job, ValidatorKind, VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy,
 };
 
 use crate::{
     RenderError, cache_p08, closure, commands, document, final_steps, guard, marker, matrix, msrv,
     preseed_closure, steps, support, workflow_policy, yaml::render_yaml,
 };
+
+pub use crate::render_constants::*;
 
 #[path = "validator_tools.rs"]
 mod validator_tools;
@@ -29,47 +27,6 @@ pub use crate::matrix::{
     MatrixSource, PLAN_ID_OUTPUT, PLAN_STEP_ID, RUN_KEY_OUTPUT,
 };
 pub use crate::setup::MiseSetup;
-
-/// Generated workflow path inside the repository.
-///
-/// Alias of the contract's [`CI_WORKFLOW_PATH`]: the migration plan
-/// ([`velnor_actions_contract::RequiredCheckMigration`]) and the
-/// emitted tree share one source of truth, never retyped mirrors.
-pub const WORKFLOW_PATH: &str = CI_WORKFLOW_PATH;
-/// Generated actionlint config path inside the repository.
-pub const ACTIONLINT_PATH: &str = ".github/actionlint.yaml";
-/// Exact pull-request event types.
-pub const EXPECTED_PR_TYPES: &[&str] = &["opened", "synchronize", "reopened", "ready_for_review"];
-/// Exact concurrency group expression.
-pub const CONCURRENCY_GROUP: &str =
-    "velnor-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}";
-/// Exact cancel-in-progress expression (PR events only).
-pub const CONCURRENCY_CANCEL: &str = "${{ github.event_name == 'pull_request' }}";
-/// Final gate job ID (contract [`CONTRACT_REQUIRED_JOB_ID`] alias).
-pub const FINAL_JOB_ID: &str = CONTRACT_REQUIRED_JOB_ID;
-/// Exact required-check display name (contract alias).
-pub const FINAL_DISPLAY_NAME: &str = CONTRACT_REQUIRED_DISPLAY_NAME;
-/// Final gate condition (contract [`CONTRACT_REQUIRED_CONDITION`] alias).
-pub const FINAL_CONDITION: &str = CONTRACT_REQUIRED_CONDITION;
-/// Planner job ID: the sole matrix producer (contract alias).
-pub const PLAN_JOB_ID: &str = CONTRACT_PLAN_JOB_ID;
-/// Matrix consumer job ID.
-pub const TASK_JOB_ID: &str = "velnor-task";
-/// Candidate validation job ID (Velnor policy only).
-pub const CANDIDATE_JOB_ID: &str = "candidate";
-/// Baseline-publish job ID: runs after the final gate passes.
-pub const PUBLISH_JOB_ID: &str = "publish-baseline";
-/// Full-SHA Alint pin for the repository-policy `alint` job.
-pub const ALINT_USES: &str = "asamarts/alint@9f9d34ba0eae3888299b9e570f43338b0e7f2cdb";
-/// Pinned Alint binary release tag for the step's `version:` input.
-///
-/// Per the action's `action.yml`, a SHA-pinned `uses:` falls back to
-/// installing `latest` unless `version:` is set — a floating binary. Mirror of
-/// `ALINT_ACTION_VERSION` (`velnor-actions-actionlint`, same qualified
-/// release); the renderer cannot depend on that crate, so
-/// `scripts/check-freshness.sh` pins this mirror to the reviewed
-/// `asamarts/alint` inventory row instead of trusting the duplication.
-pub const ALINT_BINARY_VERSION: &str = "v0.16.1";
 
 /// Caller-supplied validated scalars the IR cannot carry.
 #[derive(Debug, Clone)]

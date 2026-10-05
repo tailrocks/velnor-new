@@ -168,7 +168,7 @@ pub(crate) fn passing(prefix: &str) -> Result<Fixture, Box<dyn Error>> {
             include_str!("p12_config.txt"),
         ),
         (
-            "crates/velnor-actions-workflow-renderer/src/render.rs",
+            "crates/velnor-actions-workflow-renderer/src/render_constants.rs",
             include_str!("p12_render.txt"),
         ),
         (

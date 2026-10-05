@@ -10,7 +10,7 @@ use velnor_actions_contract::workflow::lanes::{HOSTED_SUFFIX, SCALE_SUFFIX};
 use velnor_actions_contract::{Job, Step, StepKind};
 
 use crate::composite::composite_yaml;
-use crate::document_steps::step_to_yaml;
+use crate::document_steps::{StepRenderContext, step_to_yaml};
 use crate::render::RenderContext;
 use crate::tree::RenderedFile;
 use crate::{RenderError, marker, steps, yaml::render_yaml};
@@ -333,17 +333,17 @@ fn composite_file(
 ) -> Result<RenderedFile, RenderError> {
     let mut rendered = Vec::with_capacity(steps.len());
     let empty_job_env = BTreeMap::new();
+    let render_context = StepRenderContext {
+        job_id: logical,
+        ctx,
+        needs_envs: &[],
+        composite: true,
+        job_env: &empty_job_env,
+        actions_read: false,
+        runs_on: None,
+    };
     for step in steps {
-        rendered.push(step_to_yaml(
-            logical,
-            step,
-            ctx,
-            &[],
-            true,
-            &empty_job_env,
-            false,
-            None,
-        )?);
+        rendered.push(step_to_yaml(step, &render_context)?);
     }
     let body = composite_yaml(logical, rendered)?;
     let quoted = crate::yaml::quote_run_values_in_yaml(body);

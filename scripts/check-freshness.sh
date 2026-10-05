@@ -255,7 +255,7 @@ ACTIONS = "crates/velnor-actions-actionlint/src/actions.rs"
 TOOLS = "crates/velnor-actions-actionlint/src/tools.rs"
 CAPABILITIES = "crates/velnor-actions-actionlint/src/capabilities.rs"
 CONFIG = "crates/velnor-actions-actionlint/src/config.rs"
-RENDERER = "crates/velnor-actions-workflow-renderer/src/render.rs"
+RENDER_CONSTANTS = "crates/velnor-actions-workflow-renderer/src/render_constants.rs"
 
 EXPECTED_TOOLS = {
     "mise": "MISE_VERSION",
@@ -339,8 +339,8 @@ pin_row("tool actionlint mirror (capabilities.rs)",
 pin_row("tool shellcheck mirror (tools.rs)",
         rust_const(TOOLS, "SHELLCHECK_VERSION"),
         tool_pinned.get("shellcheck"))
-pin_row("action asamarts/alint binary mirror (render.rs)",
-        rust_const(RENDERER, "ALINT_BINARY_VERSION"),
+pin_row("action asamarts/alint binary mirror (render_constants.rs)",
+        rust_const(RENDER_CONSTANTS, "ALINT_BINARY_VERSION"),
         action_pinned.get("asamarts/alint", {}).get("pinned_version"))
 
 runner = inv.get("runner") or {}

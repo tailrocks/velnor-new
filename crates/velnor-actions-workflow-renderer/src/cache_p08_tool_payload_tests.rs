@@ -58,17 +58,18 @@ fn rendered_condition(step: &Step) -> String {
         verification_tasks: Vec::new(),
         plan_consumer_env: BTreeMap::new(),
     };
-    let Yaml::Map(entries) = crate::document_steps::step_to_yaml(
-        "rust-amq",
-        step,
-        &context,
-        &[],
-        false,
-        &BTreeMap::new(),
-        false,
-        None,
-    )
-    .expect("render consumer step") else {
+    let render_context = crate::document_steps::StepRenderContext {
+        job_id: "rust-amq",
+        ctx: &context,
+        needs_envs: &[],
+        composite: false,
+        job_env: &BTreeMap::new(),
+        actions_read: false,
+        runs_on: None,
+    };
+    let Yaml::Map(entries) =
+        crate::document_steps::step_to_yaml(step, &render_context).expect("render consumer step")
+    else {
         panic!("a rendered step is a mapping");
     };
     entries
