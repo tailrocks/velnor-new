@@ -317,7 +317,7 @@ test "$(printf '%s\n' "$run" | jq -r .conclusion)" = success
 run_id="$(printf '%s\n' "$run" | jq -r .id)"
 attempt="$(printf '%s\n' "$run" | jq -r .run_attempt)"
 jobs="$(gh api --paginate --slurp "repos/{REPOSITORY}/actions/runs/$run_id/attempts/$attempt/jobs?per_page=100")"
-printf '%s\n' "$jobs" | jq -e --arg sha "$GITHUB_SHA" '[.[] | (.jobs // [])[] | select(.name == "Required" and .head_sha == $sha and .head_branch == "main" and .status == "completed" and .conclusion == "success")] | length == 1' >/dev/null
+printf '%s\n' "$jobs" | jq -e --arg sha "$GITHUB_SHA" '[.[] | (.jobs // [])[] | select(.name == "Required")] | length == 1 and .[0].head_sha == $sha and .[0].head_branch == "main" and .[0].status == "completed" and .[0].conclusion == "success"' >/dev/null
 test "$(gh api repos/{REPOSITORY}/commits/main --jq .sha)" = "$GITHUB_SHA""#
     )
 }

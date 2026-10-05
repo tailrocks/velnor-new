@@ -34,6 +34,7 @@ impl Drop for Scratch {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum Failure {
     None,
+    DuplicateRequired,
     WrongSidecarName,
     MissingBinary,
     StaleManifest,
@@ -54,6 +55,7 @@ enum Failure {
 fn complete_publish_script_uses_parent_tag_and_checks_all_assets() -> Result<(), Box<dyn Error>> {
     for case in [
         Failure::None,
+        Failure::DuplicateRequired,
         Failure::WrongSidecarName,
         Failure::MissingBinary,
         Failure::StaleManifest,

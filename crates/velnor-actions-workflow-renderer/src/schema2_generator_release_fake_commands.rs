@@ -14,7 +14,11 @@ if [ "$1" = api ]; then
       *actions/workflows/ci.yml/runs*)
         printf '[{"workflow_runs":[{"id":91,"run_number":9,"run_attempt":1,"path":".github/workflows/ci.yml","head_sha":"%s","head_branch":"main","head_repository":{"full_name":"tailrocks/velnor-new"},"event":"push","status":"completed","conclusion":"success"}]}]\n' "$GITHUB_SHA" ;;
       *actions/runs/91/attempts/1/jobs*)
-        printf '[{"jobs":[{"name":"Required","head_sha":"%s","head_branch":"main","status":"completed","conclusion":"success"}]}]\n' "$GITHUB_SHA" ;;
+        if [ "${GH_CASE:-}" = DuplicateRequired ]; then
+          printf '[{"jobs":[{"name":"Required","head_sha":"%s","head_branch":"main","status":"completed","conclusion":"success"},{"name":"Required","head_sha":"%s","head_branch":"main","status":"completed","conclusion":"cancelled"}]}]\n' "$GITHUB_SHA" "$GITHUB_SHA"
+        else
+          printf '[{"jobs":[{"name":"Required","head_sha":"%s","head_branch":"main","status":"completed","conclusion":"success"}]}]\n' "$GITHUB_SHA"
+        fi ;;
       *) exit 43 ;;
     esac
     exit 0
