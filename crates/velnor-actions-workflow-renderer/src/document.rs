@@ -43,6 +43,8 @@ pub(crate) fn workflow_to_yaml(
     let mut rendered_jobs = Vec::with_capacity(jobs.len());
     for (id, job) in jobs {
         let call = shared.get(id).map(String::as_str);
+        let actions_read =
+            job.permissions.as_ref().unwrap_or(&ir.permissions).actions == PermissionLevel::Read;
         rendered_jobs.push((
             id.clone(),
             job_to_yaml(
@@ -53,6 +55,7 @@ pub(crate) fn workflow_to_yaml(
                 call,
                 checkouts,
                 mbx_gc_jobs.contains(id),
+                actions_read,
             )?,
         ));
     }
@@ -199,7 +202,6 @@ fn dispatch_input_to_yaml(input: &DispatchInput) -> Yaml {
     Yaml::Map(fields)
 }
 
-/// Render one job: name, runs-on, timeout, environment, permissions, needs, if, steps.
 fn job_to_yaml(
     id: &str,
     job: &Job,
@@ -208,6 +210,7 @@ fn job_to_yaml(
     shared: Option<&str>,
     checkouts: &BTreeMap<String, Step>,
     mbx_gc_auto: bool,
+    actions_read: bool,
 ) -> Result<Yaml, RenderError> {
     steps::scan_for_private_subcommands(&job.display_name)?;
     let runner = RunsOn::parse(&job.runs_on).map_err(RenderError::Contract)?;
@@ -272,7 +275,16 @@ fn job_to_yaml(
     }
     let mut entries = job_header_fields(job, runs_on);
     append_job_options(&mut entries, job, scale_set, &job_env)?;
-    let rendered_steps = render_job_steps(id, job, ctx, needs_envs, shared, checkouts, &job_env)?;
+    let rendered_steps = render_job_steps(
+        id,
+        job,
+        ctx,
+        needs_envs,
+        shared,
+        checkouts,
+        &job_env,
+        actions_read,
+    )?;
     entries.push(("steps".to_owned(), Yaml::Seq(rendered_steps)));
     Ok(Yaml::Map(entries))
 }
@@ -331,6 +343,7 @@ fn render_job_steps(
     shared: Option<&str>,
     checkouts: &BTreeMap<String, Step>,
     job_env: &BTreeMap<String, String>,
+    actions_read: bool,
 ) -> Result<Vec<Yaml>, RenderError> {
     let mut rendered_steps =
         Vec::with_capacity(job.steps.len() + 2 * usize::from(shared.is_some()));
@@ -345,7 +358,15 @@ fn render_job_steps(
                 "shared_lane_invalid_checkout:{id}"
             )));
         }
-        rendered_steps.push(step_to_yaml(id, checkout, ctx, needs_envs, false, job_env)?);
+        rendered_steps.push(step_to_yaml(
+            id,
+            checkout,
+            ctx,
+            needs_envs,
+            false,
+            job_env,
+            actions_read,
+        )?);
         rendered_steps.push(shared_call(uses)?);
     } else if checkouts.contains_key(id) {
         return Err(RenderError::InvalidWorkflow(format!(
@@ -353,7 +374,15 @@ fn render_job_steps(
         )));
     }
     for step in &job.steps {
-        rendered_steps.push(step_to_yaml(id, step, ctx, needs_envs, false, job_env)?);
+        rendered_steps.push(step_to_yaml(
+            id,
+            step,
+            ctx,
+            needs_envs,
+            false,
+            job_env,
+            actions_read,
+        )?);
     }
     Ok(rendered_steps)
 }
