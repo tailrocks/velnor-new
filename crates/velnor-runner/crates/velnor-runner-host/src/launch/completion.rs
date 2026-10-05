@@ -1,13 +1,13 @@
 //! Reconcile completed jobs before admitting work from the next poll.
 
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::sync::{
+    Arc, OnceLock,
+    atomic::{AtomicUsize, Ordering},
+};
 
 use velnor_runner_github::{InnerJob, InnerKind, Transport, get_runner_by_name, remove_runner};
 
 use super::capacity;
-use crate::action_archive_seed::ActionArchiveLease;
-use crate::error::HostError;
 use crate::journal::Journal;
 use crate::listen::Secret;
 use crate::reconcile::IntentRow;
@@ -18,10 +18,17 @@ const CLEANUP_CONCURRENCY_LIMIT: u32 = 4;
 const CLEANUP_SCAN_LIMIT: u32 = 128;
 const CLEANUP_LEASE_SECONDS: i64 = 120;
 
-static ACTIVE_CLEANUPS: AtomicUsize = AtomicUsize::new(0);
+static ACTIVE_CLEANUPS: OnceLock<Arc<AtomicUsize>> = OnceLock::new();
 
 #[cfg(test)]
 mod tests;
+
+mod support;
+
+use support::{
+    completion_error, held, log_cleanup_error, map_journal, open_archive_store, retry_at,
+    runner_matches, unix_seconds,
+};
 
 pub(super) async fn record_completion_events(
     journal: &Journal,
@@ -49,6 +56,56 @@ where
     T: Transport + Clone + Send + 'static,
     E: PairEngine + Clone + Send + Sync + 'static,
 {
+    schedule_completed_with_slots(
+        transport,
+        set_id,
+        admin_token,
+        journal,
+        docker,
+        cleanup_slots(),
+        usize::try_from(capacity::job_capacity().min(CLEANUP_CONCURRENCY_LIMIT))
+            .unwrap_or(usize::MAX),
+    )
+    .await
+}
+
+#[cfg(test)]
+pub(super) async fn schedule_completed_isolated<T, E>(
+    transport: T,
+    set_id: i64,
+    admin_token: &str,
+    journal: Journal,
+    docker: E,
+) -> Result<Vec<tokio::task::JoinHandle<()>>, EnsureError>
+where
+    T: Transport + Clone + Send + 'static,
+    E: PairEngine + Clone + Send + Sync + 'static,
+{
+    schedule_completed_with_slots(
+        transport,
+        set_id,
+        admin_token,
+        journal,
+        docker,
+        Arc::new(AtomicUsize::new(0)),
+        usize::try_from(CLEANUP_CONCURRENCY_LIMIT).unwrap_or(usize::MAX),
+    )
+    .await
+}
+
+async fn schedule_completed_with_slots<T, E>(
+    transport: T,
+    set_id: i64,
+    admin_token: &str,
+    journal: Journal,
+    docker: E,
+    active: Arc<AtomicUsize>,
+    limit: usize,
+) -> Result<Vec<tokio::task::JoinHandle<()>>, EnsureError>
+where
+    T: Transport + Clone + Send + 'static,
+    E: PairEngine + Clone + Send + Sync + 'static,
+{
     let now = unix_seconds()?;
     let pending = journal
         .due_completed_launches(now, CLEANUP_SCAN_LIMIT)
@@ -56,26 +113,24 @@ where
         .map_err(map_journal)?;
     let mut handles = Vec::new();
     let token = Secret::new(admin_token);
-    let limit = usize::try_from(capacity::job_capacity().min(CLEANUP_CONCURRENCY_LIMIT))
-        .unwrap_or(usize::MAX);
     let lease_until = now
         .checked_add(CLEANUP_LEASE_SECONDS)
         .ok_or_else(completion_error)?;
     for row in pending {
-        if !claim_cleanup_slot(limit) {
+        if !claim_cleanup_slot(&active, limit) {
             continue;
         }
         let claim = journal
             .claim_completion_cleanup(row.id, now, lease_until)
             .await;
-        let attempt = match claim {
-            Ok(Some(attempt)) => attempt,
+        let claim = match claim {
+            Ok(Some(claim)) => claim,
             Ok(None) => {
-                ACTIVE_CLEANUPS.fetch_sub(1, Ordering::AcqRel);
+                active.fetch_sub(1, Ordering::AcqRel);
                 continue;
             }
             Err(error) => {
-                ACTIVE_CLEANUPS.fetch_sub(1, Ordering::AcqRel);
+                active.fetch_sub(1, Ordering::AcqRel);
                 return Err(map_journal(error));
             }
         };
@@ -84,8 +139,9 @@ where
         let task_token = Secret::new(token.expose());
         let task_row = row.clone();
         let mut task_transport = transport.clone();
+        let task_active = Arc::clone(&active);
         handles.push(tokio::task::spawn_blocking(move || {
-            let _permit = CleanupPermit;
+            let _permit = CleanupPermit(task_active);
             let runtime = tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build();
@@ -101,10 +157,10 @@ where
                 task_row.clone(),
             ));
             if !matches!(result, Ok(true)) {
-                if let Ok(retry_at) = retry_at(attempt) {
+                if let Ok(retry_at) = retry_at(claim.attempt) {
                     if let Err(error) = runtime.block_on(task_journal.retry_completion_cleanup(
                         task_row.id,
-                        attempt,
+                        claim.generation,
                         retry_at,
                     )) {
                         log_cleanup_error(&task_row, "retry-journal", &error.to_string());
@@ -113,8 +169,10 @@ where
             }
             if result.is_err() {
                 eprintln!(
-                    "completion_cleanup=hold launch_id={} attempt={attempt}",
-                    task_row.launch_id.as_deref().unwrap_or("-")
+                    "completion_cleanup=hold launch_id={} attempt={} claim_generation={}",
+                    task_row.launch_id.as_deref().unwrap_or("-"),
+                    claim.attempt,
+                    claim.generation
                 );
             }
         }));
@@ -153,16 +211,49 @@ async fn reconcile_one<T: Transport + ?Sized, E: PairEngine>(
     row: IntentRow,
 ) -> Result<bool, EnsureError> {
     let identity = journal.launch_identity(row.id).await.map_err(map_journal)?;
-    if row.seed_generation_id.is_some() {
-        return held(&row, "archive-lease-unavailable");
+    let archive_store = if row.seed_generation_id.is_some() {
+        match open_archive_store(journal) {
+            Ok(store) => Some(store),
+            Err(_) => return held(&row, "archive-store-unavailable"),
+        }
+    } else {
+        None
+    };
+    if journal
+        .completion_worker_cleanup_proven(row.id)
+        .await
+        .map_err(map_journal)?
+    {
+        if let (Some(store), Some(generation)) =
+            (archive_store.as_ref(), row.seed_generation_id.as_deref())
+        {
+            if store
+                .release_after_confirmed_cleanup(identity.launch_id(), generation)
+                .is_err()
+            {
+                return held(&row, "archive-lease-retirement");
+            }
+        }
+        journal.record_cleanup(row.id).await.map_err(map_journal)?;
+        return Ok(true);
     }
+    let archive_lease = match (archive_store.as_ref(), row.seed_generation_id.as_deref()) {
+        (Some(store), Some(generation)) => {
+            match store.open_existing_lease(identity.launch_id(), generation) {
+                Ok(lease) => Some(lease),
+                Err(_) => return held(&row, "archive-lease-unavailable"),
+            }
+        }
+        (None, None) => None,
+        _ => return held(&row, "archive-lease-identity"),
+    };
     let runner_name = format!("v{}", identity.launch_id());
     let observed = match reconcile_worker(
         docker,
         &identity,
         row.docker_id.as_deref(),
         row.dind_id.as_deref(),
-        None,
+        archive_lease.as_ref(),
     )
     .await
     {
@@ -214,60 +305,42 @@ async fn reconcile_one<T: Transport + ?Sized, E: PairEngine>(
         &identity,
         observed.runner_id().or(row.docker_id.as_deref()),
         observed.dind_id().or(row.dind_id.as_deref()),
-        Option::<&ActionArchiveLease>::None,
+        archive_lease.as_ref(),
     )
     .await
     .is_err()
     {
         return held(&row, "docker-cleanup");
     }
+    journal
+        .mark_completion_worker_cleanup_proven(row.id)
+        .await
+        .map_err(map_journal)?;
+    if let (Some(store), Some(generation)) =
+        (archive_store.as_ref(), row.seed_generation_id.as_deref())
+    {
+        if store
+            .release_after_confirmed_cleanup(identity.launch_id(), generation)
+            .is_err()
+        {
+            return held(&row, "archive-lease-retirement");
+        }
+    }
     journal.record_cleanup(row.id).await.map_err(map_journal)?;
     Ok(true)
 }
 
-fn runner_matches(
-    runner: &velnor_runner_github::RunnerReference,
-    runner_id: i64,
-    set_id: i64,
-    runner_name: &str,
-) -> bool {
-    runner.id == runner_id && runner.runner_scale_set_id == set_id && runner.name == runner_name
+fn cleanup_slots() -> Arc<AtomicUsize> {
+    Arc::clone(ACTIVE_CLEANUPS.get_or_init(|| Arc::new(AtomicUsize::new(0))))
 }
 
-fn map_journal(error: HostError) -> EnsureError {
-    match error {
-        HostError::Endpoint => EnsureError::Endpoint,
-        _ => EnsureError::Unexpected {
-            status: 0,
-            step: "journal",
-        },
-    }
-}
-
-fn completion_error() -> EnsureError {
-    EnsureError::Unexpected {
-        status: 0,
-        step: "completion-event",
-    }
-}
-
-fn held(row: &IntentRow, stage: &str) -> Result<bool, EnsureError> {
-    if std::env::var_os("VELNOR_HTTPS_TRACE").is_some() {
-        eprintln!(
-            "completion_cleanup=hold launch_id={} stage={stage}",
-            row.launch_id.as_deref().unwrap_or("-")
-        );
-    }
-    Ok(false)
-}
-
-fn claim_cleanup_slot(limit: usize) -> bool {
-    let mut active = ACTIVE_CLEANUPS.load(Ordering::Acquire);
+fn claim_cleanup_slot(active_count: &AtomicUsize, limit: usize) -> bool {
+    let mut active = active_count.load(Ordering::Acquire);
     loop {
         if active >= limit {
             return false;
         }
-        match ACTIVE_CLEANUPS.compare_exchange_weak(
+        match active_count.compare_exchange_weak(
             active,
             active.saturating_add(1),
             Ordering::AcqRel,
@@ -279,34 +352,10 @@ fn claim_cleanup_slot(limit: usize) -> bool {
     }
 }
 
-struct CleanupPermit;
+struct CleanupPermit(Arc<AtomicUsize>);
 
 impl Drop for CleanupPermit {
     fn drop(&mut self) {
-        ACTIVE_CLEANUPS.fetch_sub(1, Ordering::AcqRel);
-    }
-}
-
-fn unix_seconds() -> Result<i64, EnsureError> {
-    let seconds = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|_| completion_error())?
-        .as_secs();
-    i64::try_from(seconds).map_err(|_| completion_error())
-}
-
-fn retry_at(attempt: u32) -> Result<i64, EnsureError> {
-    let delay = 2_u64.saturating_pow(attempt).min(30);
-    unix_seconds()?
-        .checked_add(i64::try_from(delay).map_err(|_| completion_error())?)
-        .ok_or_else(completion_error)
-}
-
-fn log_cleanup_error(row: &IntentRow, stage: &str, detail: &str) {
-    if std::env::var_os("VELNOR_HTTPS_TRACE").is_some() {
-        eprintln!(
-            "completion_cleanup=error launch_id={} stage={stage} detail={detail}",
-            row.launch_id.as_deref().unwrap_or("-")
-        );
+        self.0.fetch_sub(1, Ordering::AcqRel);
     }
 }

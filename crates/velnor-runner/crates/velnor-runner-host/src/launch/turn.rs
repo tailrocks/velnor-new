@@ -10,6 +10,7 @@ use crate::scale_set::EnsureError;
 use crate::worker::Started;
 
 use super::capacity::{self, Admit};
+use super::capacity::{CapacityHysteresis, GuestResourceLimits};
 use super::completion;
 use super::slot;
 use super::steps;
@@ -39,13 +40,26 @@ pub(super) async fn poll_and_drive(
 ) -> Result<Vec<Started>, EnsureError> {
     trace::session(session);
     let mut workers = Vec::new();
-    let capacity = capacity::job_capacity();
+    let configured_capacity = capacity::job_capacity();
+    let initial_occupied = slot::occupied_count(journal).await?;
+    let mut capacity_policy = CapacityHysteresis::new();
+    let initial_capacity = capacity_policy.update(
+        configured_capacity,
+        GuestResourceLimits::default(),
+        initial_occupied,
+    );
+    let capacity = initial_capacity.ceiling;
     let population = session
         .statistics()
         .map_or(0, velnor_runner_github::Statistics::assigned_population);
-    if let Some(started) = scale_if_free(journal, docker, capacity, population, || {
-        scale_session(link, set_id, session, admin_token, journal, docker)
-    })
+    if let Some(started) = scale_if_free_with_occupancy(
+        journal,
+        docker,
+        capacity,
+        population,
+        initial_capacity.occupied,
+        || scale_session(link, set_id, session, admin_token, journal, docker),
+    )
     .await?
     {
         workers.push(started);
@@ -58,6 +72,8 @@ pub(super) async fn poll_and_drive(
         admin_token,
         journal,
         docker,
+        configured_capacity,
+        capacity_policy,
         capacity,
         target,
     };
@@ -81,13 +97,28 @@ where
     S: FnOnce() -> F,
     F: Future<Output = Result<Option<Started>, EnsureError>>,
 {
+    let occupied = slot::occupied_count(journal).await?;
+    scale_if_free_with_occupancy(journal, docker, capacity, population, occupied, scale).await
+}
+
+async fn scale_if_free_with_occupancy<S, F>(
+    journal: &Journal,
+    docker: &bollard::Docker,
+    capacity: u32,
+    population: i64,
+    occupied: u32,
+    scale: S,
+) -> Result<Option<Started>, EnsureError>
+where
+    S: FnOnce() -> F,
+    F: Future<Output = Result<Option<Started>, EnsureError>>,
+{
     let Ok(assigned) = u64::try_from(population) else {
         return Ok(None);
     };
     if assigned == 0 {
         return Ok(None);
     }
-    let occupied = slot::occupied_count(journal).await?;
     if occupied >= capacity {
         return Ok(None);
     }
@@ -220,12 +251,22 @@ struct Turn<'a> {
     admin_token: &'a str,
     journal: &'a Journal,
     docker: &'a bollard::Docker,
+    configured_capacity: u32,
+    capacity_policy: CapacityHysteresis,
     capacity: u32,
     target: u32,
 }
 
 impl Turn<'_> {
     async fn drive_poll(&mut self, workers: &mut Vec<Started>) -> Result<bool, EnsureError> {
+        let occupied = slot::occupied_count(self.journal).await?;
+        let capacity = self.capacity_policy.update(
+            self.configured_capacity,
+            GuestResourceLimits::default(),
+            occupied,
+        );
+        self.capacity = capacity.ceiling;
+        self.target = capacity::admit_target(self.capacity);
         let (saved, path) = point_at_queue(self.link, &self.session.message_queue_url)?;
         let queue = saved.as_ref().map(|_| self.link.base().to_owned());
         let polled = poll_path(self.link, self.session, &path, self.capacity);

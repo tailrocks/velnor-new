@@ -1,3 +1,4 @@
+use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 use crate::launch::capacity::Admit;
@@ -17,29 +18,17 @@ async fn stalled_remote_cleanup_does_not_block_a_free_slot() -> Result<(), Strin
     completion::record_completion_events(&journal, 7, &completion_poll(85, 95, &runner_name))
         .await
         .map_err(|error| error.to_string())?;
-    let mut tasks = Vec::new();
-    for _ in 0..100 {
-        let started = Instant::now();
-        tasks.extend(
-            completion::schedule_completed(
-                api.clone(),
-                7,
-                "admin-token",
-                journal.clone(),
-                engine.clone(),
-            )
-            .await
-            .map_err(|error| error.to_string())?,
-        );
-        if started.elapsed() > Duration::from_secs(1) {
-            api.release();
-            return Err("queue scheduling waited for remote cleanup".to_owned());
-        }
-        if api.entered.load(Ordering::Acquire) {
-            break;
-        }
-        tokio::time::sleep(Duration::from_millis(10)).await;
-    }
+    let started = Instant::now();
+    let tasks = completion::schedule_completed_isolated(
+        api.clone(),
+        7,
+        "admin-token",
+        journal.clone(),
+        engine.clone(),
+    )
+    .await
+    .map_err(|error| error.to_string())?;
+    assert!(started.elapsed() < Duration::from_secs(1));
     wait_for_lookup(&api).await?;
 
     let admission = turn::admission(&journal, 7, 2, 2, 0, 0, &available(&[86]))
@@ -89,9 +78,11 @@ fn completion_cleanup_drives_io_while_listener_runtime_is_blocked() -> Result<()
     let (scratch, journal) = listener.block_on(open("completion-listener-blocked"))?;
     let (id, identity, runner_id, dind_id) = listener.block_on(launch(&journal, 7, 87))?;
     let runner_name = format!("v{}", identity.launch_id());
-    let engine = CompletionEngine::with_stopped_pair(&identity, &runner_id, &dind_id)?;
-    engine.delay_verify.store(true, Ordering::Release);
-    let verify_entered = engine.verify_entered.clone();
+    let (verified, verify_ready) = mpsc::channel();
+    let (removed, volume_ready) = mpsc::channel();
+    let engine = CompletionEngine::with_stopped_pair(&identity, &runner_id, &dind_id)?
+        .with_progress_senders(verified, removed)
+        .with_verify_timer();
     let removed_volumes = engine.removed_volumes.clone();
     let api = BlockingRunnerApi::released(&runner_name, 97);
 
@@ -105,35 +96,25 @@ fn completion_cleanup_drives_io_while_listener_runtime_is_blocked() -> Result<()
             .await
         })
         .map_err(|error| error.to_string())?;
-    let mut tasks = Vec::new();
-    for _ in 0..100 {
-        tasks.extend(
-            listener
-                .block_on(completion::schedule_completed(
-                    api.clone(),
-                    7,
-                    "admin-token",
-                    journal.clone(),
-                    engine.clone(),
-                ))
-                .map_err(|error| error.to_string())?,
-        );
-        if verify_entered.load(Ordering::Acquire) {
-            break;
-        }
-        listener.block_on(async {
-            tokio::time::sleep(Duration::from_millis(10)).await;
-        });
+    let tasks = listener
+        .block_on(completion::schedule_completed_isolated(
+            api,
+            7,
+            "admin-token",
+            journal.clone(),
+            engine,
+        ))
+        .map_err(|error| error.to_string())?;
+    if tasks.len() != 1 {
+        return Err("completion cleanup did not claim one row".to_owned());
     }
-    if !verify_entered.load(Ordering::Acquire) {
-        for task in tasks {
-            listener.block_on(task).map_err(|error| error.to_string())?;
-        }
-        return Err("cleanup engine probe did not start".to_owned());
-    }
-
-    // launch_blocking uses this current-thread runtime while curl waits on the queue.
-    std::thread::sleep(Duration::from_millis(250));
+    // Block this current-thread listener while the cleanup runtime advances its timer and I/O.
+    verify_ready
+        .recv_timeout(Duration::from_secs(2))
+        .map_err(|error| format!("cleanup verify was not reached: {error}"))?;
+    volume_ready
+        .recv_timeout(Duration::from_secs(2))
+        .map_err(|error| format!("cleanup did not remove volumes: {error}"))?;
     let progressed_during_poll = removed_volumes.load(Ordering::Acquire);
     listener.block_on(async {
         for task in tasks {

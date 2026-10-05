@@ -43,6 +43,12 @@ async fn bootstrap_transaction(connection: &Connection) -> Result<(), HostError>
     ensure_column(connection, "acquired", "INTEGER NOT NULL DEFAULT 0").await?;
     ensure_column(connection, "jit_requested", "INTEGER NOT NULL DEFAULT 0").await?;
     ensure_column(connection, "runner_completed", "INTEGER NOT NULL DEFAULT 0").await?;
+    ensure_column(
+        connection,
+        "worker_cleanup_proven",
+        "INTEGER NOT NULL DEFAULT 0",
+    )
+    .await?;
     connection
         .execute(
             "CREATE TABLE IF NOT EXISTS journal_meta (singleton INTEGER PRIMARY KEY CHECK(singleton = 1), instance_id TEXT NOT NULL, engine_id TEXT, revision INTEGER NOT NULL DEFAULT 0, lineage_pinned INTEGER NOT NULL DEFAULT 0)",
@@ -52,7 +58,21 @@ async fn bootstrap_transaction(connection: &Connection) -> Result<(), HostError>
         .map_err(|_| HostError::Journal)?;
     connection
         .execute(
-            "CREATE TABLE IF NOT EXISTS completion_cleanup (intent_id INTEGER PRIMARY KEY, attempts INTEGER NOT NULL DEFAULT 0, retry_after INTEGER NOT NULL DEFAULT 0, lease_until INTEGER NOT NULL DEFAULT 0)",
+            "CREATE TABLE IF NOT EXISTS completion_cleanup (intent_id INTEGER PRIMARY KEY, attempts INTEGER NOT NULL DEFAULT 0, claim_generation INTEGER NOT NULL DEFAULT 0, retry_after INTEGER NOT NULL DEFAULT 0, lease_until INTEGER NOT NULL DEFAULT 0)",
+            (),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    ensure_table_column(
+        connection,
+        "completion_cleanup",
+        "claim_generation",
+        "INTEGER NOT NULL DEFAULT 0",
+    )
+    .await?;
+    connection
+        .execute(
+            "UPDATE completion_cleanup SET claim_generation = attempts WHERE claim_generation < attempts",
             (),
         )
         .await
@@ -310,6 +330,23 @@ async fn ensure_column(connection: &Connection, name: &str, kind: &str) -> Resul
         return Ok(());
     }
     let statement = format!("ALTER TABLE intents ADD COLUMN {name} {kind}");
+    connection
+        .execute(&statement, ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    Ok(())
+}
+
+async fn ensure_table_column(
+    connection: &Connection,
+    table: &str,
+    name: &str,
+    kind: &str,
+) -> Result<(), HostError> {
+    if has_column_named(connection, table, name).await? {
+        return Ok(());
+    }
+    let statement = format!("ALTER TABLE {table} ADD COLUMN {name} {kind}");
     connection
         .execute(&statement, ())
         .await

@@ -26,7 +26,7 @@ async fn cleanup_failure_retries_and_refills_the_capacity_wave() -> Result<(), S
             .as_secs(),
     )
     .map_err(|error| error.to_string())?;
-    let first = completion::schedule_completed(
+    let first = completion::schedule_completed_isolated(
         api.clone(),
         7,
         "admin-token",
@@ -61,9 +61,10 @@ async fn cleanup_failure_retries_and_refills_the_capacity_wave() -> Result<(), S
         "restart discarded the durable cleanup backoff"
     );
     tokio::time::sleep(Duration::from_secs(2)).await;
-    let retry = completion::schedule_completed(api, 7, "admin-token", journal.clone(), engine)
-        .await
-        .map_err(|error| error.to_string())?;
+    let retry =
+        completion::schedule_completed_isolated(api, 7, "admin-token", journal.clone(), engine)
+            .await
+            .map_err(|error| error.to_string())?;
     assert_eq!(retry.len(), 1);
     for task in retry {
         task.await.map_err(|error| error.to_string())?;

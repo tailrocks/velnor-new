@@ -136,7 +136,7 @@ async fn old_failed_rows_do_not_starve_later_cleanup() -> Result<(), String> {
     let mut sweeps = 0;
     while sweeps < 5 {
         sweeps += 1;
-        let tasks = completion::schedule_completed(
+        let tasks = completion::schedule_completed_isolated(
             api.clone(),
             7,
             "admin-token",

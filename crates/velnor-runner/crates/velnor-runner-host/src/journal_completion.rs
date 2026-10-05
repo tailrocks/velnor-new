@@ -5,6 +5,14 @@ use crate::journal::Journal;
 use crate::journal_sql::one_row;
 use crate::reconcile::IntentRow;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct CleanupClaim {
+    /// Monotonic fencing token for this cleanup attempt.
+    pub(crate) generation: i64,
+    /// Bounded retry count used only to select a backoff delay.
+    pub(crate) attempt: u32,
+}
+
 impl Journal {
     /// Commit one exact scale-set completion before its queue message can be acknowledged.
     ///
@@ -87,7 +95,7 @@ impl Journal {
         id: i64,
         now: i64,
         lease_until: i64,
-    ) -> Result<Option<u32>, HostError> {
+    ) -> Result<Option<CleanupClaim>, HostError> {
         if id <= 0 || lease_until <= now {
             return Err(HostError::Journal);
         }
@@ -112,20 +120,64 @@ impl Journal {
     pub(crate) async fn retry_completion_cleanup(
         &self,
         id: i64,
-        attempt: u32,
+        generation: i64,
         retry_after: i64,
+    ) -> Result<bool, HostError> {
+        if id <= 0 || generation <= 0 || retry_after < 0 {
+            return Err(HostError::Journal);
+        }
+        let _write = self.write_guard().await;
+        self.sync_lineage().await?;
+        let connection = self.connection().await?;
+        let changed = connection
+            .execute(
+                "UPDATE completion_cleanup SET retry_after = ?1, lease_until = 0 WHERE intent_id = ?2 AND claim_generation = ?3 AND lease_until > 0",
+                (retry_after, id, generation),
+            )
+            .await
+            .map_err(|_| HostError::Journal);
+        let changed = self.sync_after(changed).await?;
+        Ok(changed == 1)
+    }
+
+    /// Mark worker and official-runner cleanup as proven before archive-lease retirement.
+    ///
+    /// This marker lets restart recovery finish lease retirement after a crash without
+    /// repeating Docker or GitHub cleanup.
+    pub(crate) async fn mark_completion_worker_cleanup_proven(
+        &self,
+        id: i64,
     ) -> Result<(), HostError> {
         let _write = self.write_guard().await;
         self.sync_lineage().await?;
         let connection = self.connection().await?;
         let changed = connection
             .execute(
-                "UPDATE completion_cleanup SET retry_after = ?1, lease_until = 0 WHERE intent_id = ?2 AND attempts = ?3",
-                (retry_after, id, i64::from(attempt)),
+                "UPDATE intents SET worker_cleanup_proven = 1 WHERE id = ?1 AND kind = 'launch' AND runner_completed = 1 AND cleanup_proven = 0",
+                [id],
             )
             .await
             .map_err(|_| HostError::Journal);
         self.sync_after(changed.and_then(one_row)).await
+    }
+
+    /// Return whether cleanup proof was committed before archive-lease retirement.
+    pub(crate) async fn completion_worker_cleanup_proven(
+        &self,
+        id: i64,
+    ) -> Result<bool, HostError> {
+        let connection = self.connection().await?;
+        let mut rows = connection
+            .query(
+                "SELECT worker_cleanup_proven FROM intents WHERE id = ?1 AND kind = 'launch' AND runner_completed = 1",
+                [id],
+            )
+            .await
+            .map_err(|_| HostError::Journal)?;
+        let row = rows.next().await.map_err(|_| HostError::Journal)?;
+        row.ok_or(HostError::Journal)?
+            .get(0)
+            .map_err(|_| HostError::Journal)
     }
 }
 
@@ -134,10 +186,10 @@ async fn claim_cleanup_row(
     id: i64,
     now: i64,
     lease_until: i64,
-) -> Result<Option<u32>, HostError> {
+) -> Result<Option<CleanupClaim>, HostError> {
     let mut rows = connection
         .query(
-            "SELECT COALESCE(c.attempts, 0), COALESCE(c.retry_after, 0), COALESCE(c.lease_until, 0) FROM intents AS i LEFT JOIN completion_cleanup AS c ON c.intent_id = i.id WHERE i.id = ?1 AND i.kind = 'launch' AND i.runner_completed = 1 AND i.cleanup_proven = 0",
+            "SELECT COALESCE(c.attempts, 0), COALESCE(c.claim_generation, 0), COALESCE(c.retry_after, 0), COALESCE(c.lease_until, 0) FROM intents AS i LEFT JOIN completion_cleanup AS c ON c.intent_id = i.id WHERE i.id = ?1 AND i.kind = 'launch' AND i.runner_completed = 1 AND i.cleanup_proven = 0",
             [id],
         )
         .await
@@ -146,21 +198,31 @@ async fn claim_cleanup_row(
         return Ok(None);
     };
     let attempts: i64 = row.get(0).map_err(|_| HostError::Journal)?;
-    let retry_after: i64 = row.get(1).map_err(|_| HostError::Journal)?;
-    let current_lease: i64 = row.get(2).map_err(|_| HostError::Journal)?;
+    let generation: i64 = row.get(1).map_err(|_| HostError::Journal)?;
+    let retry_after: i64 = row.get(2).map_err(|_| HostError::Journal)?;
+    let current_lease: i64 = row.get(3).map_err(|_| HostError::Journal)?;
     if retry_after > now || current_lease > now {
         return Ok(None);
     }
-    connection
+    if attempts < 0 || generation < 0 {
+        return Err(HostError::Journal);
+    }
+    let next_generation = generation.checked_add(1).ok_or(HostError::Journal)?;
+    let attempt = attempts.saturating_add(1).min(5);
+    let changed = connection
         .execute(
-            "INSERT INTO completion_cleanup (intent_id, attempts, retry_after, lease_until) VALUES (?1, 1, 0, ?2) ON CONFLICT(intent_id) DO UPDATE SET attempts = min(attempts + 1, 5), lease_until = ?2 WHERE retry_after <= ?3 AND lease_until <= ?3",
-            (id, lease_until, now),
+            "INSERT INTO completion_cleanup (intent_id, attempts, claim_generation, retry_after, lease_until) VALUES (?1, 1, 1, 0, ?2) ON CONFLICT(intent_id) DO UPDATE SET attempts = min(attempts + 1, 5), claim_generation = claim_generation + 1, lease_until = ?2 WHERE retry_after <= ?3 AND lease_until <= ?3 AND claim_generation = ?4",
+            (id, lease_until, now, generation),
         )
         .await
         .map_err(|_| HostError::Journal)?;
-    let attempt =
-        u32::try_from(attempts.saturating_add(1).min(5)).map_err(|_| HostError::Journal)?;
-    Ok(Some(attempt))
+    if changed != 1 {
+        return Ok(None);
+    }
+    Ok(Some(CleanupClaim {
+        generation: next_generation,
+        attempt: u32::try_from(attempt).map_err(|_| HostError::Journal)?,
+    }))
 }
 
 async fn completion_row(
