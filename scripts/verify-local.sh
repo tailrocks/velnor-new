@@ -163,7 +163,9 @@ if [ -f "$RUNNER_MANIFEST" ]; then
     stage runner-test "${MISE_EXEC[@]}" cargo test --manifest-path "$RUNNER_MANIFEST" --locked --workspace
   fi
   stage runner-doctest "${MISE_EXEC[@]}" cargo test --manifest-path "$RUNNER_MANIFEST" --locked --workspace --doc
-  stage runner-deny mise exec "cargo-deny@0.20.2" -- cargo deny --locked --manifest-path "$RUNNER_MANIFEST" --config "crates/velnor-runner/deny.toml" check
+  # `cargo deny` is a cargo subcommand. A cargo shim can fail its metadata
+  # probe before deny starts. The pinned binary is `cargo-deny`.
+  stage runner-deny mise exec "cargo-deny@0.20.2" -- cargo-deny --locked --manifest-path "$RUNNER_MANIFEST" --config "crates/velnor-runner/deny.toml" check
 fi
 
 # --- repo policy -----------------------------------------------------------
