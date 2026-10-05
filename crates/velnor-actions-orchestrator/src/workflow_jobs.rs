@@ -85,6 +85,7 @@ pub(crate) fn plan_job(
     Ok(Job {
         display_name: "Plan".to_owned(),
         runs_on: label.to_owned(),
+        check_runner: None,
         timeout_minutes: JobTimeout::PLAN,
         needs: Vec::new(),
         condition: None,
@@ -110,6 +111,7 @@ pub(crate) fn lint_job(label: &str, catalog: &ToolCatalog) -> Result<Job, Orches
     Ok(Job {
         display_name: LINT_DISPLAY_NAME.to_owned(),
         runs_on: label.to_owned(),
+        check_runner: None,
         timeout_minutes: JobTimeout::VALIDATOR,
         needs: Vec::new(),
         condition: None,
@@ -166,6 +168,7 @@ pub(crate) fn final_job(
     Ok(Job {
         display_name: FINAL_DISPLAY_NAME.to_owned(),
         runs_on: label.to_owned(),
+        check_runner: None,
         timeout_minutes: JobTimeout::REQUIRED,
         needs,
         condition: Some(FINAL_CONDITION.to_owned()),

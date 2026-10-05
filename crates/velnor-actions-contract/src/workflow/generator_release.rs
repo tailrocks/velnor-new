@@ -2,7 +2,7 @@
 
 use crate::errors::ContractError;
 use crate::require_release_version;
-use crate::targets::{RELEASE_MANIFEST_FILENAME, SUPPORTED_TARGETS, asset_filename};
+use crate::targets::{RELEASE_MANIFEST_FILENAME, ReleaseTarget, asset_filename};
 
 const RELEASE_MANIFEST_CHECKSUM_FILENAME: &str = "velnor-actions-release-manifest.json.sha256";
 
@@ -19,13 +19,19 @@ impl GeneratorReleaseTarget {
     /// Every supported target, in release-manifest order.
     pub const ALL: [Self; 2] = [Self::LinuxX86_64, Self::MacosArm64];
 
+    /// Canonical release target represented by this producer target.
+    #[must_use]
+    pub const fn release_target(self) -> ReleaseTarget {
+        match self {
+            Self::LinuxX86_64 => ReleaseTarget::LinuxX86_64,
+            Self::MacosArm64 => ReleaseTarget::MacosArm64,
+        }
+    }
+
     /// Rust target triple recorded in the canonical release manifest.
     #[must_use]
     pub const fn triple(self) -> &'static str {
-        match self {
-            Self::LinuxX86_64 => SUPPORTED_TARGETS[0],
-            Self::MacosArm64 => SUPPORTED_TARGETS[1],
-        }
+        self.release_target().triple()
     }
 
     /// Native runner selector used to build this target.

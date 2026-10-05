@@ -1,5 +1,5 @@
 use super::{GeneratorReleasePlan, GeneratorReleaseSourceBinding, GeneratorReleaseTarget};
-use crate::{RELEASE_MANIFEST_FILENAME, SUPPORTED_TARGETS};
+use crate::{RELEASE_MANIFEST_FILENAME, ReleaseTarget};
 
 const SOURCE_SHA: &str = "0123456789abcdef0123456789abcdef01234567";
 
@@ -13,7 +13,10 @@ fn release_plan_binds_version_source_tag_targets_and_metadata() {
     assert_eq!(plan.repository(), "tailrocks/velnor-new");
     assert_eq!(
         plan.targets().map(GeneratorReleaseTarget::triple),
-        SUPPORTED_TARGETS
+        [
+            ReleaseTarget::LinuxX86_64.triple(),
+            ReleaseTarget::MacosArm64.triple(),
+        ]
     );
     assert_eq!(
         plan.targets().map(GeneratorReleaseTarget::runner_label),
@@ -110,7 +113,10 @@ fn current_workflow_binding_resolves_to_an_exact_source_bound_plan() {
     assert_eq!(binding.version(), "0.1.1");
     assert_eq!(
         binding.targets().map(GeneratorReleaseTarget::triple),
-        SUPPORTED_TARGETS
+        [
+            ReleaseTarget::LinuxX86_64.triple(),
+            ReleaseTarget::MacosArm64.triple(),
+        ]
     );
     assert_eq!(
         binding.staged_asset_names(),
