@@ -129,6 +129,17 @@ pub(crate) fn fixture_manifest_json() -> String {
     )
 }
 
+/// Install the explicit test-only consumer manifest in a positive fixture.
+pub(crate) fn install_fixture_release_manifest(
+    root: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    fs::write(
+        root.join(".velnor/release-manifest.json"),
+        fixture_manifest_json(),
+    )?;
+    Ok(())
+}
+
 /// Build a git fixture: config plus one root crate (uncommitted).
 pub(crate) fn make_repo(config: &str) -> Result<TempDir, Box<dyn std::error::Error>> {
     let dir = TempDir::new()?;
