@@ -20,6 +20,7 @@ mod launch_blocking;
 mod listen;
 mod plist;
 mod readiness;
+mod readiness_scan;
 mod reconcile;
 mod scale_set;
 mod stage;
@@ -44,6 +45,7 @@ pub use launch_blocking::{ListenFault, launch_blocking};
 pub use listen::{SessionCensus, SessionProbe, probe_once, queue_path, session_census};
 pub use plist::{keychain_import_argv, launch_agent_plist};
 pub use readiness::{Readiness, doctor_json, readiness_for_empty, status_json};
+pub use readiness_scan::controller_readiness;
 pub use reconcile::{
     IntentRow, Reconcile, ReleaseFact, before_advertise, occupies, release_permitted,
 };

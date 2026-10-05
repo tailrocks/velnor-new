@@ -34,7 +34,7 @@ impl IntentState {
         }
     }
 
-    fn parse(text: &str) -> Result<Self, HostError> {
+    pub(crate) fn parse(text: &str) -> Result<Self, HostError> {
         match text {
             "pending" => Ok(Self::Pending),
             "done" => Ok(Self::Done),

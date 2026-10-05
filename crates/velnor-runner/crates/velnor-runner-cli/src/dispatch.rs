@@ -7,7 +7,8 @@ use std::process::ExitCode;
 use clap::Parser;
 use velnor_runner_host::{
     ConnectPlan, DisconnectEffect, HostConfig, HostError, Readiness, SetOwnership, connect_plan,
-    disconnect_effects, doctor_json, import_secret, read_secret, readiness_for_empty, status_json,
+    controller_readiness, disconnect_effects, doctor_json, import_secret, read_secret,
+    readiness_for_empty, status_json,
 };
 
 use crate::args::{Cli, Command, DaemonAction};
@@ -84,8 +85,11 @@ fn print_doctor(state: &Path, probe: bool) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-fn observe(_state: &Path) -> Readiness {
-    readiness_for_empty()
+fn observe(state: &Path) -> Readiness {
+    if !state.is_dir() {
+        return readiness_for_empty();
+    }
+    controller_readiness(state, KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT)
 }
 
 fn logs(follow: bool) -> ExitCode {
