@@ -12,7 +12,24 @@ repository = Path(sys.argv[1])
 directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
 file_flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK
 root_fd = os.open(repository, directory_flags)
+root_metadata = os.fstat(root_fd)
+root_named = os.stat(repository, follow_symlinks=False)
+if (not stat.S_ISDIR(root_metadata.st_mode) or root_metadata.st_uid != os.getuid()
+        or root_metadata.st_mode & 0o022
+        or (root_metadata.st_dev, root_metadata.st_ino, root_metadata.st_mode,
+            root_metadata.st_uid) != (root_named.st_dev, root_named.st_ino,
+                                      root_named.st_mode, root_named.st_uid)):
+    raise ValueError("archive checkout directory changed or has untrusted provenance")
 scripts_fd = os.open("scripts", directory_flags, dir_fd=root_fd)
+scripts_metadata = os.fstat(scripts_fd)
+scripts_named = os.stat("scripts", dir_fd=root_fd, follow_symlinks=False)
+if (not stat.S_ISDIR(scripts_metadata.st_mode)
+        or scripts_metadata.st_uid != os.getuid() or scripts_metadata.st_mode & 0o022
+        or (scripts_metadata.st_dev, scripts_metadata.st_ino,
+            scripts_metadata.st_mode, scripts_metadata.st_uid)
+        != (scripts_named.st_dev, scripts_named.st_ino,
+            scripts_named.st_mode, scripts_named.st_uid)):
+    raise ValueError("archive scripts directory changed or has untrusted provenance")
 descriptor = os.open("owned_archive_preflight.py", file_flags, dir_fd=scripts_fd)
 try:
     before = os.fstat(descriptor)
@@ -31,8 +48,11 @@ try:
     after_identity = (after.st_dev, after.st_ino, after.st_size,
                       after.st_mtime_ns, after.st_ctime_ns, after.st_mode,
                       after.st_nlink, after.st_uid)
+    named_identity = (named.st_dev, named.st_ino, named.st_size,
+                      named.st_mtime_ns, named.st_ctime_ns, named.st_mode,
+                      named.st_nlink, named.st_uid)
     if (len(source) > 16 * 1024 * 1024 or before_identity != after_identity
-            or (before.st_dev, before.st_ino) != (named.st_dev, named.st_ino)):
+            or before_identity != named_identity):
         raise ValueError("archive preflight source changed during verification")
 finally:
     os.close(descriptor)
