@@ -78,8 +78,19 @@ fn arch112_alint_scopes_product_paths() -> Result<(), Box<dyn Error>> {
     for include in [
         "crates/velnor-actions-*/src/**/*.rs",
         "crates/velnor-actions-*/tests/**/*.rs",
+        "crates/velnor-archive-guard/src/**/*.rs",
+        "crates/velnor-archive-guard/tests/**/*.rs",
     ] {
-        assert!(config.contains(include), "alint misses product {include}");
+        assert!(
+            config.contains(include),
+            "alint misses handwritten Rust source {include}"
+        );
+    }
+    for include in [
+        "crates/velnor-archive-guard/src/lib.rs",
+        "crates/velnor-archive-guard/src/main.rs",
+    ] {
+        assert!(config.contains(include), "alint misses helper {include}");
     }
     for exclude in ["**/fixtures/**", "**/testdata/**"] {
         assert!(
