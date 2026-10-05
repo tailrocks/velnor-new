@@ -5,7 +5,9 @@ use std::sync::{Arc, Mutex};
 use velnor_runner_github::{ParsedBatch, Poll};
 
 use crate::launch::{Idle, drive_offer, idle};
-use crate::launch_harness::{CANARY, Mode, Script, absent, assigned_wait, available, ctx, open};
+use crate::launch_harness::{
+    CANARY, Mode, Script, absent, assigned_wait, available, ctx, open, started_progress,
+};
 use crate::launch_test_support::valid_worker_volume;
 use crate::{EnsureError, HostError, IntentState, Started};
 
@@ -23,6 +25,7 @@ fn statistics_advance_and_offers_stay() {
     assert_eq!(idle(&assigned_wait(7, 1)), Idle::Scale);
     assert_eq!(idle(&assigned_wait(7, 0)), Idle::Ack);
     assert_eq!(idle(&assigned_wait(8, -1)), Idle::Blocked);
+    assert_eq!(idle(&started_progress(11, 5)), Idle::Ack);
 }
 
 #[tokio::test]

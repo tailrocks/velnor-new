@@ -40,6 +40,7 @@ pub(crate) fn idle(polled: &Poll) -> Idle {
         Poll::Empty => Idle::Empty,
         Poll::Batch(batch) => match offer(polled) {
             Offer::Acquire { ids, .. } if ids.len() == 1 => Idle::Launch,
+            Offer::Wait if may_ack(batch, true) && crate::assign::progress_only(batch) => Idle::Ack,
             Offer::Wait if may_ack(batch, true) => match assigned_population(batch) {
                 Some(population) if population > 0 => Idle::Scale,
                 Some(0) => Idle::Ack,
