@@ -1,4 +1,4 @@
-//! Keep nested Cargo checks outside the source worktree.
+//! Resolve nested checks to Cargo's workspace target directory.
 
 use std::ffi::OsString;
 use std::fs;
@@ -10,32 +10,30 @@ use serde_json::Value;
 use super::{Outcome, PackagePlan, TestTarget, WorkspacePlan};
 use crate::impl_repo_policy::{WORKSPACE_ROOTS, repo_root};
 
-pub(super) fn cargo_target_dir() -> std::io::Result<PathBuf> {
-    Ok(selected_target_dir(
-        std::env::var_os("CARGO_TARGET_DIR"),
-        std::env::var_os("CARGO_TARGET_TMPDIR"),
-        &std::env::current_dir()?,
-        &std::env::temp_dir(),
-        std::process::id(),
-    ))
+pub(super) fn cargo_target_dir_for_manifest(manifest: &Path) -> Outcome<PathBuf> {
+    if let Some(configured) = std::env::var_os("CARGO_TARGET_DIR") {
+        let current_dir = std::env::current_dir()?;
+        return Ok(absolute_path(&current_dir, Path::new(&configured)));
+    }
+    let metadata = cargo_output(
+        manifest,
+        &["metadata", "--no-deps", "--format-version", "1", "--locked"],
+    )?;
+    let document: Value = serde_json::from_slice(&metadata.stdout)?;
+    let root = manifest
+        .parent()
+        .ok_or("workspace manifest has no parent")?
+        .canonicalize()?;
+    metadata_target_directory(&document, &root)
 }
 
-fn selected_target_dir(
-    configured: Option<OsString>,
-    test_temp: Option<OsString>,
-    current_dir: &Path,
-    temp_dir: &Path,
-    process_id: u32,
-) -> PathBuf {
-    let target = configured.or(test_temp).map_or_else(
-        || temp_dir.join(format!("velnor-test-registration-{process_id}")),
-        PathBuf::from,
+fn metadata_target_directory(document: &Value, root: &Path) -> Outcome<PathBuf> {
+    let target_directory = PathBuf::from(
+        document["target_directory"]
+            .as_str()
+            .ok_or("metadata target directory")?,
     );
-    if target.is_absolute() {
-        target
-    } else {
-        current_dir.join(target)
-    }
+    existing_or_absolute(root, &target_directory)
 }
 
 fn cargo() -> OsString {
@@ -47,20 +45,34 @@ pub(super) fn cargo_output_at_target(
     args: &[&str],
     target_dir: &Path,
 ) -> Outcome<Output> {
+    cargo_output_with_target(manifest, args, Some(target_dir))
+}
+
+fn cargo_output(manifest: &Path, args: &[&str]) -> Outcome<Output> {
+    cargo_output_with_target(manifest, args, None)
+}
+
+fn cargo_output_with_target(
+    manifest: &Path,
+    args: &[&str],
+    target_dir: Option<&Path>,
+) -> Outcome<Output> {
     let current_dir = std::env::current_dir()?;
     let manifest_dir = manifest
         .parent()
         .ok_or("workspace manifest has no parent")?;
     let (command, options) = args.split_first().ok_or("empty cargo command")?;
-    let target_dir = absolute_path(&current_dir, target_dir);
-    let output = Command::new(cargo())
+    let mut process = Command::new(cargo());
+    process
         .arg(command)
         .arg("--manifest-path")
         .arg(manifest)
         .args(options)
-        .env("CARGO_TARGET_DIR", target_dir)
-        .current_dir(manifest_dir)
-        .output()?;
+        .current_dir(manifest_dir);
+    if let Some(target_dir) = target_dir {
+        process.env("CARGO_TARGET_DIR", absolute_path(&current_dir, target_dir));
+    }
+    let output = process.output()?;
     if !output.status.success() {
         return Err(format!(
             "cargo {} failed for {}: {}{}",
@@ -75,7 +87,7 @@ pub(super) fn cargo_output_at_target(
 }
 
 pub(super) fn workspace_plan(manifest: &Path) -> Outcome<WorkspacePlan> {
-    let target_dir = cargo_target_dir()?;
+    let target_dir = cargo_target_dir_for_manifest(manifest)?;
     workspace_plan_at_target(manifest, &target_dir)
 }
 
@@ -192,31 +204,12 @@ pub(super) fn workspace_plans(root: &Path) -> Outcome<Vec<WorkspacePlan>> {
 }
 
 #[test]
-fn nested_cargo_target_is_absolute_and_anchored_before_chdir() {
-    let checkout = Path::new("/checkout");
-    let temp = Path::new("/task-tmp");
+fn nested_workspace_uses_cargo_metadata_target_directory() -> Outcome<()> {
+    let root = repo_root().canonicalize()?;
+    let document = serde_json::json!({ "target_directory": "/shared/cargo-target" });
     assert_eq!(
-        selected_target_dir(
-            Some(OsString::from("cache/cargo")),
-            None,
-            checkout,
-            temp,
-            17,
-        ),
-        checkout.join("cache/cargo")
+        metadata_target_directory(&document, &root)?,
+        PathBuf::from("/shared/cargo-target")
     );
-    assert_eq!(
-        selected_target_dir(
-            None,
-            Some(OsString::from("/outer/target/tmp")),
-            checkout,
-            temp,
-            17
-        ),
-        Path::new("/outer/target/tmp")
-    );
-    assert_eq!(
-        selected_target_dir(None, None, checkout, temp, 17),
-        temp.join("velnor-test-registration-17")
-    );
+    Ok(())
 }
