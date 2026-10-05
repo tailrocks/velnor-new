@@ -53,6 +53,8 @@ mod impl_renderer_p08;
 mod impl_renderer_p08_elect;
 #[path = "impl_renderer_p08_tofu_elect.rs"]
 mod impl_renderer_p08_tofu_elect;
+#[path = "impl_renderer_p08_tools_election.rs"]
+mod impl_renderer_p08_tools_election;
 #[path = "impl_renderer_planclose.rs"]
 mod impl_renderer_planclose;
 #[path = "impl_renderer_planformat.rs"]

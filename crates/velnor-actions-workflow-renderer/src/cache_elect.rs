@@ -16,15 +16,23 @@ use crate::RenderError;
 ///
 /// # Errors
 ///
-/// Returns [`RenderError`] when a winner's save step fails to build
-/// (unreachable for keys read back from valid setups).
+/// Returns [`RenderError`] when a restore or existing save is malformed,
+/// when a save is orphaned or belongs to a non-elected job, or when a
+/// winner's save step cannot be built.
 pub fn elect_tools_cache_writers(jobs: &mut BTreeMap<String, Job>) -> Result<(), RenderError> {
     let mut by_identity: BTreeMap<(String, String), Vec<String>> = BTreeMap::new();
     for (id, job) in jobs.iter() {
-        if let Some(identity) = tools_restore_identity(id, job)? {
+        let identity = tools_restore_identity(id, job)?;
+        if identity.is_none() && has_tools_save(job) {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "tools_cache_save_orphan:{id}"
+            )));
+        }
+        if let Some(identity) = identity {
             by_identity.entry(identity).or_default().push(id.clone());
         }
     }
+    let mut elected_keys = BTreeMap::new();
     for ((key, _static_digest), owners) in &by_identity {
         let winner = owners
             .iter()
@@ -32,9 +40,68 @@ pub fn elect_tools_cache_writers(jobs: &mut BTreeMap<String, Job>) -> Result<(),
             .or_else(|| owners.iter().min())
             .map(String::as_str)
             .unwrap_or_default();
-        if let Some(job) = jobs.get_mut(winner) {
-            append_tools_save(job, key)?;
+        elected_keys.insert(winner.to_owned(), key.clone());
+    }
+    for (id, job) in jobs.iter() {
+        let saves = tools_save_steps(job);
+        if let Some(key) = elected_keys.get(id) {
+            validate_existing_tools_save(job, key)?;
+        } else if !saves.is_empty() {
+            let kind = if has_tools_restore(job) {
+                "tools_cache_save_not_elected"
+            } else {
+                "tools_cache_save_orphan"
+            };
+            return Err(RenderError::InvalidWorkflow(format!("{kind}:{id}")));
         }
+    }
+    for (id, key) in elected_keys {
+        let Some(job) = jobs.get_mut(&id) else {
+            return Err(RenderError::InvalidWorkflow(
+                "tools_cache_winner_missing".to_owned(),
+            ));
+        };
+        append_tools_save(job, &key)?;
+    }
+    Ok(())
+}
+
+fn has_tools_restore(job: &Job) -> bool {
+    job.steps
+        .iter()
+        .any(|step| step.role == Some(StepRole::ToolsCacheRestore))
+}
+
+fn has_tools_save(job: &Job) -> bool {
+    job.steps
+        .iter()
+        .any(|step| step.role == Some(StepRole::ToolsCacheSave))
+}
+
+fn tools_save_steps(job: &Job) -> Vec<&Step> {
+    job.steps
+        .iter()
+        .filter(|step| step.role == Some(StepRole::ToolsCacheSave))
+        .collect()
+}
+
+fn expected_tools_save(key: &str) -> Result<Step, RenderError> {
+    let mut expected = crate::steps::tools_cache_step(
+        false,
+        key,
+        Some(crate::cache_p08::tools_cache_save_condition()),
+    )?;
+    expected.role = Some(StepRole::ToolsCacheSave);
+    Ok(expected)
+}
+
+fn validate_existing_tools_save(job: &Job, key: &str) -> Result<(), RenderError> {
+    let expected = expected_tools_save(key)?;
+    let saves = tools_save_steps(job);
+    if saves.len() > 1 || saves.first().is_some_and(|step| *step != &expected) {
+        return Err(RenderError::InvalidWorkflow(
+            "tools_cache_save_shape".to_owned(),
+        ));
     }
     Ok(())
 }
@@ -249,17 +316,8 @@ fn tools_restore_identity(id: &str, job: &Job) -> Result<Option<(String, String)
 /// restore of the key. Closures and fan-in steps added after the
 /// election install no tools, so the capture stays complete.
 fn append_tools_save(job: &mut Job, key: &str) -> Result<(), RenderError> {
-    let mut expected = crate::steps::tools_cache_step(
-        false,
-        key,
-        Some(crate::cache_p08::tools_cache_save_condition()),
-    )?;
-    expected.role = Some(StepRole::ToolsCacheSave);
-    let existing = job
-        .steps
-        .iter()
-        .filter(|step| step.role == Some(StepRole::ToolsCacheSave))
-        .collect::<Vec<_>>();
+    let expected = expected_tools_save(key)?;
+    let existing = tools_save_steps(job);
     if existing.len() > 1 || existing.first().is_some_and(|step| *step != &expected) {
         return Err(RenderError::InvalidWorkflow(
             "tools_cache_save_shape".to_owned(),
