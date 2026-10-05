@@ -1,16 +1,30 @@
 # Owned-source retirement ledger
 
-Status: PR #12 is open and unmerged at `9ccb1d43f6ca385086f8f73fe5091af214bc3988`.
+Status: PR #12 is open and unmerged at `0977a7ec88d8f61900ca0d5d800d4d5c991a365e`.
 Its history contains the pushed owned-source/Foundation retirement commit
 `4bf20ed69dcb456c311a7470a7407aea6375a0c3`, which removes 40 dedicated scripts:
 the 25-path private candidate/performance/Git slice below and the coordinated
-15-path source/publication closure. The targeted retired-module/import scan is
-clean. Overall source cleanup, cache/release qualification, consumer migration,
+15-path source/publication closure. The newer MBX retirement commit
+`0977a7ec88d8f61900ca0d5d800d4d5c991a365e` removes 29 dedicated Python suite
+scripts, its README/manifest/source-owner contract, and three exclusive registry
+fixture files. Across those two slices, 69 dedicated scripts are retired. The
+MBX commit changes one generic fixture-exclusion regression to use a nested
+Cargo fixture identity; it has 36 changed paths total (35 deletions and that
+one test update). The exact diff received independent Sol review and approval
+under patch SHA
+`8936b2f8d456fea5cf5c9a244bd99ec506d331a313ad86362c667500a40329b8`. The
+registered test
+`repo_sample_excludes_nested_cargo_test_fixtures_before_admission` passed
+(1 passed, 679 filtered); log SHA-256 is
+`e0e59e561042e407868f504fb4a1f140aa35f62e8ee56b67a6c491d053dd0ce2`.
+
+The retired-module/import scan for the owned-source slice is clean. Overall
+source cleanup, cache/hosted/release qualification, external consumer migration,
 and snapshot/branch/tag retirement remain PARTIAL. No branch or tag deletion is
 authorized or claimed here. Historical publications, receipts, reports, and
 their source identities remain passive evidence.
 
-## Refreshed tracked-path inventory
+## Prior tracked-path inventory (historical)
 
 At 2026-10-05T02:41:57Z, the read-only tree scan compared main
 `7fb8367d7daa67f13ccaa7c76caae47d55d6262b`, PR #12
@@ -63,13 +77,14 @@ Other open PR heads in that scan were: #57
 `f53081d700d18e5f42723d5237679c4bccf72a78`.
 
 This is a tracked-path presence scan, not proof that no runtime can invoke a
-script by another name or through an external repository. The inventory owner
-reports no Python invocation strings in its workflow scan, but the reconstructed
-`.velnor/scope.json` has unknown provenance and the complete direct/indirect
-caller scan across all 47 consumers is not certified. Treat consumer closure as
-PARTIAL. The underlying scope hashes and limits are recorded in
-`docs/reviews/ci-performance-scope-audit.md`; this ledger does not claim an
-authoritative original scope provider.
+script by another name or through an external repository. It records PR #12 at
+`8625f5d…`; it is not a current main or all-open-PR inventory. The inventory
+owner reported no Python invocation strings in its workflow scan, but the
+reconstructed `.velnor/scope.json` has unknown provenance and the complete
+direct/indirect caller scan across all 47 consumers is not certified. Treat
+consumer closure as PARTIAL. The underlying scope hashes and limits are recorded
+in `docs/reviews/ci-performance-scope-audit.md`; this ledger does not claim an
+authoritative original scope provider or current all-ref closure.
 
 ## Foundation workflow retirement evidence
 
@@ -127,20 +142,22 @@ under `scripts/`. No branch or tag cleanup is part of this candidate.
 owned source/receipt modules. It was removed with `test_qualify_owned_tool.py`
 and the private observer closure. It is a root-level owned-candidate test, not
 part of the separate 29-file MBX synchronous suite audited by the MBX owner; do
-not cite that suite audit as its caller proof. The current tree scan found no
-workflow, task, or Rust invocation of this root test, while the broader
-47-consumer caller audit remains partial. Preserve ordinary stock MBX task and
-runner/workload behavior independently of this private candidate observer.
+not cite that suite audit as its caller proof. The earlier exact-candidate scan
+at `8625f5d…` found no workflow, task, or Rust invocation of this root test,
+while the broader 47-consumer caller audit remains partial. Preserve ordinary
+stock MBX task and runner/workload behavior independently of this private
+candidate observer.
 
-The separate MBX audit’s boundary is 29 Python suite sources plus its README,
-manifest, and source-owner contract under `scripts/qualification/mbx-synchronous/`,
-and three exclusive registry fixture files under
+The separate MBX audit’s boundary was 29 Python suite sources plus its README,
+manifest, and source-owner contract under
+`scripts/qualification/mbx-synchronous/`, and three exclusive registry fixture
+files under
 `crates/velnor-actions-mise/tests/fixtures/mbx-synchronous/registry-fixture/`.
-That audit preserves the generic registry fixture-exclusion test and stock MBX
-cache, setup, and workload behavior. It does not cover the root-level test above
-or authorize changes to those suite paths in this slice. Its recorded artifact
-closure evidence remains historical and explicitly does not qualify MBX/T06 or
-hosted performance.
+Commit `0977a7e` retired those paths while preserving the generic nested-Cargo
+fixture-exclusion behavior in the registered regression test. It does not cover
+the root-level test above. Stock MBX cache, setup, and workload behavior remain
+preserved. The retained historical artifact-closure evidence does not qualify
+MBX/T06 or hosted performance.
 
 `test_git_optional_locks.py` imports the retired staging script, but its generic
 Git policy remains covered by `crates/velnor-actions-mise/src/command_git.rs`
@@ -166,21 +183,21 @@ inventories, hashes, and failed experiment outcomes unchanged. T01–T26 remain
 pending until each row's evidence requirements are met; no archived report is
 promoted by this cleanup.
 
-The current consumer packet includes a default-branch indexed search and a
-workflow scan, not a certified all-ref or complete literal-pin/call-path audit.
+The previously recorded consumer packet includes a default-branch indexed
+search and a workflow scan, not a certified all-ref or complete
+literal-pin/call-path audit.
 The 47-consumer inventory was reconstructed and its provenance is UNKNOWN.
 Source snapshot, consumer, branch, tag, and upstream-retention closure therefore
 remain PARTIAL. This ledger makes no claim that external branches, tags,
 snapshots, or published assets were deleted.
 
-The last recorded full guard scan ran in the detached retirement candidate
-based on PR #12 head `8625f5d191bffc807f7b80a607ad1fc51cbc171b`. It reported 42
+The only recorded full guard scan ran in a detached retirement candidate based
+on PR #12 head `8625f5d191bffc807f7b80a607ad1fc51cbc171b`. It reported 42
 findings and zero scan errors; its output was not saved as a separate log
-artifact. That scan is not evidence from the current remote head. An exact-head
-source inventory at PR #12 head `9ccb1d43f6ca385086f8f73fe5091af214bc3988`
-identifies the same 42 active-path findings: 29 `.py` files in the MBX
-synchronous suite, 11 freshness `.py` files, and two shell launch sites. These
-are 42 findings, not 42 Python files. The 11-file freshness port closure is:
+artifact. That scan is not evidence from the current remote head. The 42
+findings then comprised 29 MBX `.py` suite files, 11 freshness `.py` files, and
+two shell launch sites; this is 42 findings, not 42 Python files. The MBX files
+were retired in `0977a7e`. The 11-file freshness port closure is:
 
 ```text
 scripts/check_freshness.py
@@ -196,18 +213,18 @@ scripts/test_freshness_probe.py
 scripts/test_freshness_probe_check.py
 ```
 
-At exact PR #12 head `9ccb1d43f6ca385086f8f73fe5091af214bc3988`, these 11
-freshness Python paths and both interpreter calls from `check-freshness.sh`
-and `verify-local.sh` remain. The shell entrypoints are retained; native
-dispatch is only in a separate pending candidate, not in the pushed PR head.
-The 29-file MBX suite retirement is separately reviewed and pending integration.
-No full guard scan is recorded on the exact current head, and no passing result
-or mandatory wiring is claimed.
+At exact PR #12 head `0977a7ec88d8f61900ca0d5d800d4d5c991a365e`, the 11
+freshness Python paths and the two shell launch sites in `check-freshness.sh`
+and `verify-local.sh` remain. The freshness workflow calls `check-freshness.sh`;
+`verify-local.sh` contains four inline interpreter helpers. Both shell
+entrypoints remain pending their native port. A full guard scan was not run at
+exact head `0977`; no passing result or mandatory wiring is claimed.
 
 The original 100 tracked Python sources are accounted for as 40 owned-source
-scripts deleted, 11 freshness files to port to native Rust, 29 MBX suite files
-to retire, and 20 unrelated passive Python sources preserved outside active
-paths. At exact `9ccb`, the 20 passive sources are 13 OCI modules/tests and 7
-release-source/admission/intent modules/tests; current in-repository callers do
-not execute them. The lexical scanner does not prove absence of arbitrary
+scripts deleted, 29 MBX suite scripts deleted, 11 freshness files pending a
+native Rust port, and 20 unrelated passive Python sources preserved outside
+these active paths. The exact `0977` tracked tree contains 31 `.py` paths: the
+11 freshness paths listed above and 20 passive sources (13 OCI modules/tests
+and 7 release-source/admission/intent modules/tests). This count describes
+tracked paths only; the lexical scanner does not prove absence of arbitrary
 dynamic launchers or close external consumer scope.
