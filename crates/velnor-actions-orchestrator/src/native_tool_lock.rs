@@ -14,6 +14,7 @@ pub(crate) struct NativeLockedTool {
     pub(crate) version: Option<String>,
     pub(crate) backend: Option<String>,
     pub(crate) options: BTreeMap<String, String>,
+    pub(crate) linux_x64: Option<NativeLockedArtifact>,
     pub(crate) macos_arm64: Option<NativeLockedArtifact>,
     pub(crate) unsupported_fields: Vec<String>,
     pub(crate) valid_shape: bool,
@@ -106,6 +107,7 @@ pub(crate) fn parse_native_mise_lock(value: &toml::Value) -> Option<NativeMiseLo
                     .and_then(toml::Value::as_str)
                     .map(ToOwned::to_owned),
                 options,
+                linux_x64: platforms.remove("linux-x64"),
                 macos_arm64: platforms.remove("macos-arm64"),
                 unsupported_fields,
                 valid_shape: true,

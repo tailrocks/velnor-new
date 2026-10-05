@@ -48,6 +48,7 @@ pub(crate) struct NativeMiseTask {
     pub(crate) run_field_present: bool,
     pub(crate) run_commands: Option<Vec<String>>,
     pub(crate) dependencies: Vec<String>,
+    pub(crate) task_tools: BTreeMap<String, String>,
     pub(crate) unsupported_fields: Vec<String>,
     pub(crate) valid_shape: bool,
 }
@@ -104,55 +105,9 @@ fn parse_native_mise_config(value: &toml::Value) -> Option<NativeMiseConfig> {
     }
     if let Some(tasks) = root.get("tasks") {
         for (name, value) in tasks.as_table()? {
-            let Some(table) = value.as_table() else {
-                config.tasks.insert(
-                    name.clone(),
-                    NativeMiseTask {
-                        valid_shape: false,
-                        ..NativeMiseTask::default()
-                    },
-                );
-                continue;
-            };
-            let run = table.get("run");
-            let dependencies = table
-                .get("depends")
-                .and_then(toml::Value::as_array)
-                .and_then(|items| {
-                    items
-                        .iter()
-                        .map(|item| item.as_str().map(ToOwned::to_owned))
-                        .collect::<Option<Vec<_>>>()
-                })
-                .unwrap_or_default();
-            let mut unsupported_fields = table
-                .keys()
-                .filter(|key| !matches!(key.as_str(), "run" | "description" | "usage" | "depends"))
-                .cloned()
-                .collect::<Vec<_>>();
-            for key in ["description", "usage"] {
-                if table.get(key).is_some_and(|value| value.as_str().is_none()) {
-                    unsupported_fields.push(format!("{key}.shape"));
-                }
-            }
-            if table.contains_key("depends")
-                && !table
-                    .get("depends")
-                    .and_then(toml::Value::as_array)
-                    .is_some_and(|items| items.iter().all(|item| item.as_str().is_some()))
-            {
-                unsupported_fields.push("depends.shape".to_owned());
-            }
-            config.tasks.insert(
-                name.clone(),
-                NativeMiseTask {
-                    run_field_present: run.is_some(),
-                    run_commands: parse_native_task_run(run),
-                    dependencies,
-                    unsupported_fields,
-                    valid_shape: true,
-                },
-            );
+            config
+                .tasks
+                .insert(name.clone(), crate::native_mise_tasks::parse_task(value));
         }
     }
     if let Some(settings) = root.get("settings") {
@@ -216,24 +171,6 @@ fn parse_native_tool_selector(value: &toml::Value) -> NativeToolSelector {
         config_options,
         unsupported_options,
         valid_shape,
-    }
-}
-
-fn parse_native_task_run(value: Option<&toml::Value>) -> Option<Vec<String>> {
-    match value? {
-        toml::Value::String(run) if !run.trim().is_empty() => Some(vec![run.clone()]),
-        toml::Value::Array(items)
-            if !items.is_empty()
-                && items
-                    .iter()
-                    .all(|item| item.as_str().is_some_and(|run| !run.trim().is_empty())) =>
-        {
-            items
-                .iter()
-                .map(|item| item.as_str().map(ToOwned::to_owned))
-                .collect()
-        }
-        _ => None,
     }
 }
 

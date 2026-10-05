@@ -35,6 +35,10 @@ fn emitted_verification_job_scrubs_credentials_without_disabling_mise_config() {
             version: "2026.9.18".to_owned(),
             sha256: "a".repeat(64),
         },
+        selected_tools: Vec::new(),
+        mise_config_sha256: None,
+        mise_lock_sha256: None,
+        rust_toolchain_sha256: None,
     };
     let id = policy.job_id();
     let job = build_verification_task_job(
@@ -81,17 +85,14 @@ fn emitted_verification_job_scrubs_credentials_without_disabling_mise_config() {
     assert!(rendered.contains("GITHUB_TOKEN: \"\""));
     assert!(rendered.contains("GH_TOKEN: \"\""));
     assert!(rendered.contains("env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN"));
-    for key in [
-        "MISE_NO_CONFIG",
-        "MISE_NO_ENV",
-        "MISE_NO_HOOKS",
-        "MISE_LOCKFILE",
-    ] {
+    for key in ["MISE_NO_CONFIG", "MISE_LOCKFILE"] {
         assert!(
             !rendered.contains(key),
             "task job must inherit no {key} override"
         );
     }
-    assert!(rendered.contains("mise install --locked"));
-    assert!(rendered.contains("mise run desktop-format-check"));
+    assert!(rendered.contains("export MISE_NO_ENV=1"));
+    assert!(rendered.contains("export MISE_NO_HOOKS=1"));
+    assert!(!rendered.contains("mise --no-env --locked --no-hooks install"));
+    assert!(rendered.contains("mise --no-env --no-hooks run --skip-tools desktop-format-check"));
 }

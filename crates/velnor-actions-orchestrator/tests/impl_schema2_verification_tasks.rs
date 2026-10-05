@@ -318,6 +318,9 @@ command = "mbx"
 [wrappers.cargo.env]
 MBX_CARGO_SHIM_MODE = "1"
 
+[tasks.lint-linux]
+run = "echo lint-linux"
+
 [tasks.desktop-ci]
 description = "Native desktop build task"
 run = '''

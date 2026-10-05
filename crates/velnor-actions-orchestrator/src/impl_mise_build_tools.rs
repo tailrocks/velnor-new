@@ -126,12 +126,35 @@ rust = [
         macos.checksum.as_deref(),
         Some("sha256:ce3a47b5c398cbb9c327098a612b431f30db15d353d62cee4e4637540fa8321a")
     );
+    assert!(selected.linux_x64.is_none());
 
     let rust = lock.tools.get("rust").expect("Rust lock entry");
     assert!(rust.valid_shape);
     assert_eq!(rust.backend.as_deref(), Some("core:rust"));
     assert_eq!(rust.version.as_deref(), Some("1.98.0"));
     assert!(rust.macos_arm64.is_none());
+}
+
+#[test]
+fn mise_lock_projects_exact_linux_x64_artifact() {
+    let value = toml::from_str(
+        r#"
+[tools]
+"github:example/linter" = [
+  { version = "1.2.3", backend = "github:example/linter", "platforms.linux-x64" = { url = "https://github.com/example/linter/releases/download/v1.2.3/linter-linux-x64.tar.gz", checksum = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" } }
+]
+"#,
+    )
+    .expect("valid Linux lock TOML");
+    let lock = parse_native_mise_lock(&value).expect("Mise lock projection");
+    let tool = lock.tools.get("github:example/linter").expect("tool row");
+    let linux = tool.linux_x64.as_ref().expect("Linux x64 artifact");
+    assert!(tool.macos_arm64.is_none());
+    assert_eq!(tool.version.as_deref(), Some("1.2.3"));
+    assert_eq!(
+        linux.url.as_deref(),
+        Some("https://github.com/example/linter/releases/download/v1.2.3/linter-linux-x64.tar.gz")
+    );
 }
 
 #[test]

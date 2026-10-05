@@ -199,7 +199,7 @@ fn visit_task(
 }
 
 fn task_children(task: &NativeMiseTask) -> Result<Vec<String>, OrchestratorError> {
-    if !task.valid_shape || !task.unsupported_fields.is_empty() {
+    if !task.valid_shape || !task.unsupported_fields.is_empty() || !task.task_tools.is_empty() {
         return Err(failure("build_task_task_shape"));
     }
     if task.run_field_present && task.run_commands.is_none() {

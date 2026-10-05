@@ -5,20 +5,43 @@ use std::collections::BTreeMap;
 use crate::RenderError;
 use crate::build_task_jobs::{BuildTaskArtifact, BuildTaskPolicy};
 
-const BOLTFFI_KEY: &str = "github:boltffi/boltffi";
-const BOLTFFI_MATCHING_REGEX: &str = r"^boltffi-(darwin-aarch64|darwin-x86_64|linux-aarch64(-musl)?|linux-x86_64(-musl)?|windows-arm64|windows-x86_64)\.(tar\.gz|zip)$";
+pub(super) const BOLTFFI_KEY: &str = "github:boltffi/boltffi";
+pub(super) const BOLTFFI_MATCHING_REGEX: &str = r"^boltffi-(darwin-aarch64|darwin-x86_64|linux-aarch64(-musl)?|linux-x86_64(-musl)?|windows-arm64|windows-x86_64)\.(tar\.gz|zip)$";
 
 pub(super) fn selected_mise_files(
     policy: &BuildTaskPolicy,
 ) -> Result<(String, String), RenderError> {
     validate_selected_tools(policy)?;
+    selected_mise_files_for(&policy.selected_tools, "macos", "macos-arm64", true)
+}
+
+pub(super) fn selected_mise_files_for(
+    selected_tools: &[crate::build_task_jobs::BuildTaskTool],
+    mise_os: &str,
+    lock_platform: &str,
+    cargo_wrapper: bool,
+) -> Result<(String, String), RenderError> {
+    if !matches!(
+        (mise_os, lock_platform),
+        ("linux", "linux-x64") | ("macos", "macos-arm64")
+    ) {
+        return Err(RenderError::InvalidWorkflow(
+            "verification_tool_platform".to_owned(),
+        ));
+    }
     let mut config = Vec::new();
-    for tool in &policy.selected_tools {
+    for tool in selected_tools {
+        if !(tool.os.is_empty() || tool.os == [mise_os]) {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "selected_tool_os:{}",
+                tool.key
+            )));
+        }
         let key = toml_string(&tool.key);
         config.push(format!("[tools.{key}]"));
         config.push(format!("version = {}", toml_string(&tool.version)));
         if !tool.os.is_empty() {
-            config.push("os = [\"macos\"]".to_owned());
+            config.push(format!("os = [\"{mise_os}\"]"));
         }
         for (name, value) in &tool.config_options {
             config.push(format!("{name} = {}", toml_option_string(name, value)));
@@ -29,20 +52,24 @@ pub(super) fn selected_mise_files(
         String::new(),
         "[settings]".to_owned(),
         "lockfile = true".to_owned(),
-        String::new(),
-        "[settings.cargo]".to_owned(),
-        "binstall = true".to_owned(),
-        "binstall_only = true".to_owned(),
-        String::new(),
-        "[wrappers.cargo]".to_owned(),
-        "command = \"mbx\"".to_owned(),
-        String::new(),
-        "[wrappers.cargo.env]".to_owned(),
-        "MBX_CARGO_SHIM_MODE = \"1\"".to_owned(),
     ]);
+    if cargo_wrapper {
+        config.extend([
+            String::new(),
+            "[settings.cargo]".to_owned(),
+            "binstall = true".to_owned(),
+            "binstall_only = true".to_owned(),
+            String::new(),
+            "[wrappers.cargo]".to_owned(),
+            "command = \"mbx\"".to_owned(),
+            String::new(),
+            "[wrappers.cargo.env]".to_owned(),
+            "MBX_CARGO_SHIM_MODE = \"1\"".to_owned(),
+        ]);
+    }
 
     let mut lock = Vec::new();
-    for tool in &policy.selected_tools {
+    for tool in selected_tools {
         let key = toml_string(&tool.key);
         lock.push(format!("[[tools.{key}]]"));
         lock.push(format!("version = {}", toml_string(&tool.version)));
@@ -56,7 +83,7 @@ pub(super) fn selected_mise_files(
         }
         if let Some(artifact) = &tool.artifact {
             lock.push(String::new());
-            lock.push(format!("[tools.{key}.\"platforms.macos-arm64\"]"));
+            lock.push(format!("[tools.{key}.\"platforms.{lock_platform}\"]"));
             lock.push(format!("checksum = {}", toml_string(&artifact.checksum)));
             lock.push(format!("url = {}", toml_string(&artifact.url)));
             append_lock_string(&mut lock, "url_api", artifact.url_api.as_deref());
@@ -216,7 +243,10 @@ fn validate_tool_backend(tool: &crate::build_task_jobs::BuildTaskTool) -> Result
     Ok(())
 }
 
-fn validate_artifact(key: &str, artifact: &BuildTaskArtifact) -> Result<(), RenderError> {
+pub(super) fn validate_artifact(
+    key: &str,
+    artifact: &BuildTaskArtifact,
+) -> Result<(), RenderError> {
     let checksum = artifact
         .checksum
         .strip_prefix("sha256:")
@@ -243,7 +273,7 @@ fn validate_artifact(key: &str, artifact: &BuildTaskArtifact) -> Result<(), Rend
     Ok(())
 }
 
-fn locked_github_url(value: &str, prefix: &str) -> bool {
+pub(super) fn locked_github_url(value: &str, prefix: &str) -> bool {
     value.strip_prefix(prefix).is_some_and(|path| {
         !path.is_empty()
             && !path.starts_with('/')
@@ -254,7 +284,7 @@ fn locked_github_url(value: &str, prefix: &str) -> bool {
     })
 }
 
-fn safe_version(value: &str) -> bool {
+pub(super) fn safe_version(value: &str) -> bool {
     !value.is_empty()
         && value.len() <= 64
         && value
@@ -262,7 +292,7 @@ fn safe_version(value: &str) -> bool {
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'+' | b'_' | b'-'))
 }
 
-fn exact_rust_version(value: &str) -> bool {
+pub(super) fn exact_rust_version(value: &str) -> bool {
     let components = value.split('.').collect::<Vec<_>>();
     components.len() == 3
         && components
@@ -270,7 +300,7 @@ fn exact_rust_version(value: &str) -> bool {
             .all(|part| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit()))
 }
 
-fn safe_backend(value: &str) -> bool {
+pub(super) fn safe_backend(value: &str) -> bool {
     !value.is_empty()
         && value.len() <= 200
         && value.bytes().all(|byte| {
@@ -278,7 +308,7 @@ fn safe_backend(value: &str) -> bool {
         })
 }
 
-fn safe_option_value(value: &str) -> bool {
+pub(super) fn safe_option_value(value: &str) -> bool {
     !value.is_empty()
         && value.len() <= 512
         && value
@@ -286,7 +316,7 @@ fn safe_option_value(value: &str) -> bool {
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b',' | b'.' | b'_' | b'-'))
 }
 
-fn safe_identity(value: &str) -> bool {
+pub(super) fn safe_identity(value: &str) -> bool {
     !value.is_empty()
         && value.len() <= 512
         && value.bytes().all(|byte| {

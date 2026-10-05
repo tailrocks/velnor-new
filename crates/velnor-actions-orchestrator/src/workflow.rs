@@ -119,7 +119,7 @@ pub(crate) fn build_workflow(
     let catalog = ToolCatalog::pinned();
     let version = env!("CARGO_PKG_VERSION").to_owned();
     let policy = config.workflow.policy;
-    let verification_policies = crate::verification_tasks::policies(config)?;
+    let verification_policies = crate::verification_tasks::policies(config, discovery)?;
     let build_policies = crate::build_tasks::policies(config, discovery)?;
     let mut workflow_tasks = verification_policies
         .iter()

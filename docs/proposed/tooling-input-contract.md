@@ -92,13 +92,25 @@ required check.
 Task jobs grant only `contents: read`; other workflow permission scopes are
 explicitly `none`. Checkout disables persisted credentials. The pinned Mise
 setup action does not install project tools, activate repository env, or use
-cache inputs. The job unsets the credential denylist before both
-`mise install --locked` and `mise run <mise_task>`. It creates no task cache,
-artifact, or downstream output. The verification kind is for platform and
-other non-Rust checks only. Keeping task scripts free of Rust compilation is
-an authoring and review invariant; V1 does not inspect or enforce task bodies.
-Rust compilation remains in the existing MBX-backed lane or the typed
-`build` variant below.
+cache inputs. The job resolves only the selected task's `tools` maps, including
+tasks reached through declared dependencies and simple nested `mise run`
+calls. If that closure is nonempty, every selected tool must have an exact
+version and a source-bound current-platform lock row with an accepted prebuilt
+backend, HTTPS release URL, and SHA-256. Cargo registry and Git source
+backends, unlocked tools, unsupported selector or lock options, and
+unsupported task shapes fail closed. The only modeled options are the exact
+BoltFFI asset regex and Rust components/targets copied from the idiomatic
+toolchain file. Other root tools are excluded from the private install config, so an
+unrelated `cargo:` tool cannot be installed by a verification job. An empty
+closure does not emit an install step. When tools are installed, the task runs
+with `mise run --skip-tools`; all runs disable auto-install, env loading, and
+hooks. The checked-out task config, lock, and Rust toolchain inputs are
+hash-bound to planning and checked again before the task runs. It creates no
+task cache, artifact, or downstream output. The verification kind is for
+platform and other non-Rust checks only. Keeping task scripts free of Rust
+compilation is an authoring and review invariant; V1 does not inspect or
+enforce task bodies. Rust compilation remains in the existing MBX-backed lane
+or the typed `build` variant below.
 Protected release/signing is separate and is not provided by this kind.
 
 ## 1.3. Isolated native build variant

@@ -7,7 +7,7 @@ use velnor_actions_contract::{
     VerificationRunner, VerificationTask, WORKFLOW_TASK_JOB_PREFIX,
 };
 
-use crate::{MiseSetup, RenderError, mise_setup_step, shell_step, steps};
+use crate::{MiseSetup, RenderError};
 
 #[cfg(test)]
 #[path = "verification_jobs_tests.rs"]
@@ -24,10 +24,18 @@ pub struct VerificationTaskPolicy {
     pub scale_set_token: Option<String>,
     /// Mise setup action with the binary digest for this runner target.
     pub mise_setup: MiseSetup,
+    /// Per-task explicitly declared tools, resolved to locked prebuilt rows.
+    pub selected_tools: Vec<BuildTaskTool>,
+    /// SHA-256 of the source task config, if present.
+    pub mise_config_sha256: Option<String>,
+    /// SHA-256 of the source Mise lock, if present.
+    pub mise_lock_sha256: Option<String>,
+    /// SHA-256 of the source Rust toolchain file, if present.
+    pub rust_toolchain_sha256: Option<String>,
 }
 
-/// Step installing the repo's locked task tool closure.
-pub const INSTALL_VERIFICATION_TOOLS_NAME: &str = "Install locked task tools";
+/// Step installing only the declared task's locked prebuilt tool closure.
+pub const INSTALL_VERIFICATION_TOOLS_NAME: &str = "Install declared prebuilt task tools";
 /// Step running the declared, credential-scrubbed Mise task.
 pub const RUN_VERIFICATION_TASK_NAME: &str = "Run declared Mise task";
 
@@ -212,28 +220,7 @@ fn verification_steps(
     policy: &VerificationTaskPolicy,
     checkout_uses: &str,
 ) -> Result<Vec<Step>, RenderError> {
-    Ok(vec![
-        steps::checkout_step(checkout_uses)?,
-        mise_setup_step(&policy.mise_setup)?,
-        shell_step(
-            INSTALL_VERIFICATION_TOOLS_NAME,
-            vec![
-                "mise".to_owned(),
-                "install".to_owned(),
-                "--locked".to_owned(),
-            ],
-            BTreeMap::new(),
-        )?,
-        shell_step(
-            RUN_VERIFICATION_TASK_NAME,
-            vec![
-                "mise".to_owned(),
-                "run".to_owned(),
-                policy.task.mise_task.clone(),
-            ],
-            BTreeMap::new(),
-        )?,
-    ])
+    crate::verification_task_mise::steps(policy, checkout_uses)
 }
 
 /// Validate the task schema and runner-to-platform binding.
@@ -248,7 +235,8 @@ fn validate_policy(policy: &VerificationTaskPolicy) -> Result<(), RenderError> {
             policy.task.id
         )));
     }
-    policy.mise_setup.validate()
+    policy.mise_setup.validate()?;
+    crate::verification_task_mise::validate_policy(policy)
 }
 
 /// Exact least-privilege token scopes for isolated task jobs.

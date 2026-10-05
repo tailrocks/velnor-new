@@ -60,6 +60,7 @@ mod tool_seed_test_support;
 pub mod toolchain_env;
 pub mod tree;
 mod verification_jobs;
+mod verification_task_mise;
 mod workflow_policy;
 mod workflow_size;
 mod workflow_task_jobs;
