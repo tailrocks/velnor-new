@@ -61,10 +61,10 @@ pub const CACHE_ACTION_VERSION: &str = "v6.1.0";
 /// Full commit SHA for [`CACHE_ACTION_VERSION`] (`v6` moves with it; v6 is current, no replacement).
 pub const CACHE_ACTION_SHA: &str = "55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
 /// Qualified `jdx/mr-boxington-action` release.
-/// Source: `https://api.github.com/repos/jdx/mr-boxington-action/releases`; checked 2026-09-28.
-pub const MR_BOXINGTON_ACTION_VERSION: &str = "v1.5.0";
-/// Full commit SHA for [`MR_BOXINGTON_ACTION_VERSION`] (`v1` moves with it).
-pub const MR_BOXINGTON_ACTION_SHA: &str = "9df1d4b18b2147788a7ee7a2c7b84ecf62fd89d3";
+/// Source: `https://api.github.com/repos/jdx/mr-boxington-action/releases`; checked 2026-10-03.
+pub const MR_BOXINGTON_ACTION_VERSION: &str = "v1.6.0";
+/// Full commit SHA for [`MR_BOXINGTON_ACTION_VERSION`] (immutable release tag).
+pub const MR_BOXINGTON_ACTION_SHA: &str = "1687e54eb349cadf61fa38b5813a77875489e8e6";
 
 /// Action key for the Cargo-only Rust cache (P08-7, never with MBX).
 pub const RUST_CACHE_ACTION: &str = "Swatinem/rust-cache";

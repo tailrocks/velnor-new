@@ -6,12 +6,12 @@ use crate::impl_common::{TestResult, passing_reports, plan_for_source_change};
 use crate::impl_orch_plansel::merge_status;
 
 /// Orchestrator `src/` directory.
-fn orch_src() -> PathBuf {
+pub(crate) fn orch_src() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src")
 }
 
 /// Sorted `.rs` files directly under `src/`.
-fn src_files() -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
+pub(crate) fn src_files() -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
     let mut out = Vec::new();
     for entry in std::fs::read_dir(orch_src())? {
         let path = entry?.path();
@@ -46,7 +46,7 @@ fn strip_line_comment(line: &str) -> &str {
 }
 
 /// Code lines of one file: `(number, code)` with comments stripped.
-fn code_of(path: &Path) -> Result<Vec<(usize, String)>, Box<dyn std::error::Error>> {
+pub(crate) fn code_of(path: &Path) -> Result<Vec<(usize, String)>, Box<dyn std::error::Error>> {
     let text = std::fs::read_to_string(path)?;
     Ok(text
         .lines()
@@ -139,44 +139,6 @@ fn orch_spawns_no_processes_and_confines_shell_wrappers() -> TestResult {
             "source_prep.rs".to_owned(),
         ]),
         "fixed sh wrappers live in matrix_step/pins/qualify/source_prep only"
-    );
-    Ok(())
-}
-
-#[test]
-fn plan_and_generate_share_one_prepare_path() -> TestResult {
-    let mut discover_calls = Vec::new();
-    let mut config_calls = Vec::new();
-    for path in src_files()? {
-        let name = path
-            .file_name()
-            .map(|name| name.to_string_lossy().into_owned())
-            .unwrap_or_default();
-        for (line, code) in code_of(&path)? {
-            if code.contains("discover(") && !code.contains("fn discover(") {
-                discover_calls.push(format!("{name}:{line}"));
-            }
-            if code.contains("load_config(") && !code.contains("fn load_config(") {
-                config_calls.push(format!("{name}:{line}"));
-            }
-        }
-    }
-    assert_eq!(discover_calls.len(), 1, "{discover_calls:?}");
-    assert!(
-        discover_calls[0].starts_with("prepare.rs"),
-        "{discover_calls:?}"
-    );
-    assert_eq!(config_calls.len(), 1, "{config_calls:?}");
-    assert!(
-        config_calls[0].starts_with("prepare.rs"),
-        "{config_calls:?}"
-    );
-    let internal = std::fs::read_to_string(orch_src().join("internal.rs"))?;
-    assert!(internal.contains("prepare(&root)"), "plan runs prepare");
-    let generate = std::fs::read_to_string(orch_src().join("generate.rs"))?;
-    assert!(
-        generate.contains("prep: &GenerationPreparation"),
-        "generate consumes preparation"
     );
     Ok(())
 }

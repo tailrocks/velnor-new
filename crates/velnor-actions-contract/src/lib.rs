@@ -43,11 +43,13 @@ pub use canonical::{
 };
 pub use closure::{ClosureBuilder, Provenance, TaskInputClosure};
 pub use config::{
-    DeclaredCompileDriver, DeclaredTestRunner, DiscoveryConfig, GeneratorValidation,
-    ResourcesConfig, RootProblem, RunnerSelection, RustConfiguration, RustStackConfig,
+    DeclaredCompileDriver, DeclaredTestRunner, DiscoveryConfig, ExecutionConfig, ExecutionMode,
+    ExecutionRole, GeneratorValidation, ProfileKind, ResourcesConfig, RootProblem, RoutingWorkflow,
+    RunnerSelection, RunsOn, RustConfiguration, RustStackConfig, SCALE_SET_NAME, ScaleSetSelector,
     ShardTimingEvidence, StacksConfig, TestShardingConfig, TofuStackConfig, Utf8RepoRelDir,
-    VelnorConfig, VelnorSupportWorkflow, WorkflowConfig, WorkflowPolicy, is_valid_custom_task_name,
-    is_valid_feature_name, is_valid_rust_target, validate_shard_changes_need_evidence,
+    VELNOR_LABEL, VelnorConfig, VelnorSupportWorkflow, WorkflowConfig, WorkflowPolicy,
+    is_valid_custom_task_name, is_valid_feature_name, is_valid_rust_target,
+    validate_shard_changes_need_evidence,
 };
 pub use discover::{
     BUILTIN_EXCLUSIONS, DETECTION_SCHEMA, DetectError, DetectedProject, DetectionStatus,
@@ -118,10 +120,11 @@ pub use workflow::{
     ScheduleTrigger, Step, StepKind, TOFU_DISPLAY_PREFIX, TOFU_JOB_ID_PREFIX, TaskReport,
     TaskStatus, TaskTiming, Trigger, Trust, ValidatorKind, WORKFLOW_DISPLAY_NAME, WorkflowEvent,
     WorkflowIr, assign_crate_job_ids, check_matrix_agreement, crate_display_label,
-    crate_display_name, final_report_id_for_run, final_report_relpath, is_crate_job_id,
-    is_safe_display_name, join_runner_temp, matrix_json_bytes, matrix_report_relpath,
-    plan_json_bytes, slugify_segment, task_report_relpath, tofu_display_name, trust_for_event,
-    validate_final_report_id, validate_job_id, validate_matrix_run,
+    crate_display_name, expand_workflow, final_report_id_for_run, final_report_relpath,
+    is_crate_job_id, is_safe_display_name, join_runner_temp, matrix_json_bytes,
+    matrix_report_relpath, plan_json_bytes, slugify_segment, task_report_relpath,
+    tofu_display_name, trust_for_event, validate_final_report_id, validate_job_id,
+    validate_matrix_run,
 };
 
 /// Version marker for the contract schema shell.

@@ -13,6 +13,7 @@ mod candidate;
 pub mod closure;
 mod closure_paths;
 mod commands;
+mod composite;
 mod document;
 mod error;
 mod expressions;
@@ -20,8 +21,11 @@ mod final_steps;
 pub mod foundation_qualification;
 pub mod freshness;
 pub mod guard;
+mod lane_share;
 pub mod marker;
 mod matrix;
+mod mbx_bundle;
+mod mbx_gc_policy;
 pub mod msrv;
 pub mod overlap;
 pub mod plan_format;
@@ -35,6 +39,8 @@ pub mod release_permissions;
 pub mod release_spec;
 pub mod release_tree;
 pub mod render;
+mod runs_on;
+pub mod schema2;
 pub mod setup;
 pub mod steps;
 mod steps_artifact;
@@ -86,6 +92,7 @@ pub use render::{
     RenderedFile, RenderedSymlink, RenderedTree, TASK_JOB_ID, ValidatorCommand, WORKFLOW_PATH,
     action_pins, finalize_jobs, render_workflow_ir, render_workflow_ir_strict,
 };
+pub use schema2::{MbxQualificationPins, Schema2WorkflowRequest, render_schema2_workflows};
 pub use setup::{MISE_ACTION_NAME, SETUP_MISE_NAME, mise_setup_step};
 pub use steps::{
     ACQUIRE_NAME, ASSET_SHA_ENV, ASSET_URL_ENV, BASELINE_PUBLISH_UPLOAD_NAME,

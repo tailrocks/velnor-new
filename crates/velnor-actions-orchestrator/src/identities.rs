@@ -3,7 +3,8 @@
 
 use serde::{Deserialize, Serialize};
 use velnor_actions_contract::cachekey::{
-    FormatInputs, LaneInputs, ToolchainInputs, cache_format_id, lane_id, toolchain_id,
+    FormatInputs, LaneInputs, ToolchainInputs, cache_format_id, lane_id, mbx_cache_generation,
+    toolchain_id,
 };
 use velnor_actions_contract::{
     ContractError, ProposedTask, Stack, component_id_for_unit, digest_b3,
@@ -357,10 +358,16 @@ pub(crate) fn toolchain_digest_for(
 /// The single cache format is versioned here; the typed driver admits
 /// no unknown spelling, so no fallback digest can ever trigger.
 pub(crate) fn cache_format_id_for(driver: CompileDriver) -> String {
+    let generation = match driver {
+        CompileDriver::Cargo => "1".to_owned(),
+        CompileDriver::Mbx => {
+            mbx_cache_generation(velnor_actions_mise::catalog::MR_BOXINGTON_VERSION)
+        }
+    };
     if let Ok(id) = cache_format_id(&FormatInputs {
         adapter: driver.as_str().to_owned(),
         format: CACHE_FORMAT_LABEL.to_owned(),
-        generation: "1".to_owned(),
+        generation,
     }) {
         return id;
     }
