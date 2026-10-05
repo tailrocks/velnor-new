@@ -82,7 +82,13 @@ fn yaml_job_ids(yaml: &str) -> BTreeSet<String> {
 fn yaml_uses(yaml: &str) -> BTreeSet<String> {
     yaml.lines()
         .filter_map(|line| line.trim().strip_prefix("uses:"))
-        .map(|value| value.trim().to_owned())
+        .map(|value| {
+            value
+                .split_once(" #")
+                .map_or(value, |(uses, _)| uses)
+                .trim()
+                .to_owned()
+        })
         .collect()
 }
 

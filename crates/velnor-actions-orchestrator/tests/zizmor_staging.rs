@@ -130,7 +130,19 @@ fn policy_preview() -> Result<PolicyPreview, Box<dyn std::error::Error>> {
             output_dir: Some(preview.clone()),
         },
     )?;
-    assert_eq!(report.files_written.len(), 5, "five generated files");
+    assert_eq!(report.files_written.len(), 7, "seven generated files");
+    assert!(
+        report
+            .files_written
+            .iter()
+            .any(|path| { path == ".github/actions/u26/action.yml" })
+    );
+    assert!(
+        report
+            .files_written
+            .iter()
+            .any(|path| path == ".github/scripts/velnor-tools-cache-identity.sh")
+    );
     assert!(
         report
             .files_written
@@ -153,6 +165,16 @@ fn stage(preview: &Path, yaml: &str) -> Result<TempDir, Box<dyn std::error::Erro
         root.join(".github/actionlint.yaml"),
         fs::read(preview.join(".github/actionlint.yaml"))?,
     )?;
+    for relative in [
+        ".github/actions/u26/action.yml",
+        ".github/scripts/velnor-tools-cache-identity.sh",
+    ] {
+        let destination = root.join(relative);
+        if let Some(parent) = destination.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::copy(preview.join(relative), destination)?;
+    }
     let freshness = fs::read_to_string(preview.join(FRESHNESS_WORKFLOW_PATH))?;
     fs::write(root.join(FRESHNESS_WORKFLOW_PATH), &freshness)?;
     let input = ZizmorConfigInput {
@@ -228,18 +250,23 @@ fn velnor_policy_blessed_sha_validates_green() -> TestResult {
 
 /// The two suppressed findings are `undocumented-permissions` (low,
 /// auditor/pedantic-only): Plan and Required each grant Actions read to their
-/// bounded internal baseline/artifact operation. Zero ignores: every emitted
-/// ref is hash-pinned.
+/// bounded internal baseline/artifact operation. The staged config has no
+/// unpinned-uses ignores; zizmor also reports unrelated ignored audit checks.
 #[test]
 fn staging_suppressions_stable_no_new() -> TestResult {
     let (_repo, _parent, preview, yaml, _) = policy_preview()?;
     let staged = stage(&preview, &yaml)?;
     let output = run_zizmor(staged.path())?;
     let text = streams(&output);
+    let config = fs::read_to_string(staged.path().join(".zizmor.yml"))?;
+    assert!(
+        config.contains("  unpinned-uses:\n    ignore: []\n"),
+        "unpinned-uses ignore list is empty: {config}"
+    );
     assert!(output.success, "staged config greens zizmor: {text}");
     assert!(
-        !text.contains("ignored"),
-        "SHA-pinned refs leave nothing ignored: {text}"
+        text.contains("No findings to report."),
+        "SHA-pinned refs produce no findings: {text}"
     );
     assert!(text.contains("2 suppressed"), "no new suppressions: {text}");
     Ok(())

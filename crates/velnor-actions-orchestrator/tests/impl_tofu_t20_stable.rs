@@ -81,6 +81,8 @@ fn tofu_cross_checkout_determinism() -> TestResult {
                 ".github/AGENTS.md",
                 ".github/CLAUDE.md",
                 ".github/actionlint.yaml",
+                ".github/actions/u26/action.yml",
+                ".github/scripts/velnor-tools-cache-identity.sh",
                 ".github/workflows/ci.yml",
             ],
             "tofu workflows compose with generated agent docs (PR #11)"

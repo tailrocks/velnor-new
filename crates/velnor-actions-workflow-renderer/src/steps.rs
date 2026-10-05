@@ -16,6 +16,8 @@ pub use crate::cache_steps::{
     TOOLS_SAVE_USES, cache_action_step, check_cache_step_order, check_mbx_gating,
     is_never_archive_path, mbx_steps_for_driver,
 };
+pub(crate) use crate::steps_shell::composite_shell_step;
+pub use crate::steps_shell::{ambient_shell_step, shell_step};
 
 pub use crate::steps_artifact::{
     ARTIFACT_NAME_OUTPUT, BASELINE_PUBLISH_UPLOAD_NAME, BASELINE_RETENTION_DAYS, PUBLISH_STEP_ID,
@@ -195,105 +197,6 @@ pub fn action_step_with_env(
             with,
             env,
         },
-    })
-}
-
-/// Validated fixed-argv shell step, scrubbed and unset by construction.
-///
-/// The default posture for every `run:` step: env leaves carrying the
-/// empty-string scrub overlay, and credentials leave truly removed by
-/// the mechanism matching the argv shape — an `unset` prelude inside
-/// `sh -c`/`bash -c` scripts, an `env -u` prefix on direct-exec
-/// vectors — so a step that forgets credential handling fails safe
-/// instead of leaking. The split is load-bearing: shellcheck cannot
-/// see through `env … sh -c` (SC2016 on the script's `$`), while the
-/// in-script prelude keeps the recognized `sh -c '…'` shape. Callers
-/// pass the unscrubbed base env (validated before the overlay lands);
-/// the overlay overwrites any caller-supplied denied key rather than
-/// trusting it: any denied key in the base fails loud, so the
-/// constructor alone owns the scrub overlay. Steps that genuinely
-/// need ambient auth (tool acquisition, `gh` publishing, forge-bound
-/// release phases) use [`ambient_shell_step`] instead, keeping the
-/// exception greppable.
-/// # Errors
-pub fn shell_step(
-    name: &str,
-    argv: Vec<String>,
-    env: BTreeMap<String, String>,
-) -> Result<Step, RenderError> {
-    shell_step_with_env_validation(name, argv, env, commands::validate_env)
-}
-
-/// Validated scrubbed shell step inside a generated composite action.
-/// # Errors
-pub(crate) fn composite_shell_step(
-    name: &str,
-    argv: Vec<String>,
-    env: BTreeMap<String, String>,
-) -> Result<Step, RenderError> {
-    shell_step_with_env_validation(name, argv, env, commands::validate_composite_env)
-}
-
-fn shell_step_with_env_validation(
-    name: &str,
-    argv: Vec<String>,
-    env: BTreeMap<String, String>,
-    validate_env: fn(&BTreeMap<String, String>) -> Result<(), RenderError>,
-) -> Result<Step, RenderError> {
-    if name.trim().is_empty() {
-        return Err(RenderError::BadCommand("empty_name".to_owned()));
-    }
-    crate::expressions::check_name_content(name)?;
-    commands::validate_command_argv(&argv)?;
-    validate_env(&env)?;
-    crate::toolchain_env::reject_denied_step_keys(&env)?;
-    scan_for_private_subcommands(name)?;
-    let run = if commands::is_inline_shell(&argv) {
-        let mut scripted = argv;
-        let preluded = crate::toolchain_env::with_credential_unset_script(&scripted[2]);
-        scripted[2] = preluded;
-        scripted
-    } else {
-        let mut run = crate::toolchain_env::with_env_unset_argv(&[]);
-        run.extend(argv);
-        run
-    };
-    let mut env_map = env;
-    env_map.extend(crate::toolchain_env::credential_scrub());
-    Ok(Step {
-        name: name.to_owned(),
-        condition: None,
-        kind: StepKind::Shell { run, env: env_map },
-    })
-}
-
-/// Validated fixed-argv shell step with ambient credentials intact.
-///
-/// The explicit exception to [`shell_step`]: no `env -u` prefix, no
-/// scrub overlay. Allowed only when the step executes no repository
-/// code and needs network auth to function: pinned-tool acquisition
-/// (`mise install`, where authenticated quota beats flaky anonymous
-/// limits), Cargo Deny's combined install-and-check vector (which removes
-/// credentials between those phases), and `gh` release publishing.
-/// Validators whose preparation runs separately use [`shell_step`]
-/// for execution.
-/// # Errors
-pub fn ambient_shell_step(
-    name: &str,
-    argv: Vec<String>,
-    env: BTreeMap<String, String>,
-) -> Result<Step, RenderError> {
-    if name.trim().is_empty() {
-        return Err(RenderError::BadCommand("empty_name".to_owned()));
-    }
-    crate::expressions::check_name_content(name)?;
-    commands::validate_command_argv(&argv)?;
-    commands::validate_env(&env)?;
-    scan_for_private_subcommands(name)?;
-    Ok(Step {
-        name: name.to_owned(),
-        condition: None,
-        kind: StepKind::Shell { run: argv, env },
     })
 }
 
