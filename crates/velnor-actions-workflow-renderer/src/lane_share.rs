@@ -14,11 +14,10 @@ use velnor_actions_contract::workflow::lanes::{
 };
 use velnor_actions_contract::{Job, Step, StepKind, StepRole};
 
-use crate::composite::composite_yaml;
-use crate::document_steps::step_to_yaml;
+use crate::RenderError;
+use crate::lane_share_composite::composite_file;
 use crate::render::RenderContext;
 use crate::tree::RenderedFile;
-use crate::{RenderError, marker, steps, yaml::render_yaml};
 
 /// CI workflow plus composite actions for duplicated lanes.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -80,6 +79,7 @@ pub(crate) fn share_lanes(
     let mut files = Vec::new();
     let mut next = jobs.clone();
     let mut env_steps = BTreeMap::new();
+    let mut acquire_actions = crate::acquire_action::AcquireActions::default();
     if next.values().any(|job| {
         job.steps
             .iter()
@@ -102,13 +102,18 @@ pub(crate) fn share_lanes(
         let Some(hosted) = jobs.get(&hosted_id) else {
             continue;
         };
-        let Some(parts) = split_pair(hosted, local, &ctx.checkout_uses) else {
+        let Some(mut parts) = split_pair(hosted, local, &ctx.checkout_uses) else {
             return Err(RenderError::InvalidWorkflow(format!(
                 "lane_body_differs:{logical}"
             )));
         };
         let uses = format!("./.github/actions/{logical}");
-        files.push(composite_file(logical, &parts.common, ctx)?);
+        files.push(composite_for_pair(
+            logical,
+            &mut parts,
+            ctx,
+            &mut acquire_actions,
+        )?);
         calls.insert(hosted_id.clone(), uses.clone());
         calls.insert(local_id.clone(), uses);
         checkouts.insert(hosted_id.clone(), parts.checkout.clone());
@@ -134,8 +139,45 @@ pub(crate) fn share_lanes(
         postludes,
         files,
     };
+    finalize_shared_lanes(shared, ctx, acquire_actions)
+}
+
+fn finalize_shared_lanes(
+    mut shared: LaneShare,
+    ctx: &RenderContext,
+    mut acquire_actions: crate::acquire_action::AcquireActions,
+) -> Result<LaneShare, RenderError> {
     validate_serialized_scopes(&shared)?;
+    for (id, job) in &mut shared.jobs {
+        let replaced_acquire = !shared.postludes.contains_key(id)
+            && acquire_actions.transform_steps(&mut job.steps, ctx)?;
+        if replaced_acquire {
+            velnor_actions_contract::workflow::step_identity::validate_step_sequence(
+                &job.steps, id,
+            )
+            .map_err(RenderError::Contract)?;
+        }
+    }
+    validate_serialized_scopes(&shared)?;
+    acquire_actions.append_files(&mut shared.files);
+    shared
+        .files
+        .sort_by(|left, right| left.path.cmp(&right.path));
     Ok(shared)
+}
+
+fn composite_for_pair(
+    logical: &str,
+    parts: &mut SharedLaneParts,
+    ctx: &RenderContext,
+    acquire_actions: &mut crate::acquire_action::AcquireActions,
+) -> Result<RenderedFile, RenderError> {
+    acquire_actions.transform_steps(&mut parts.prefix, ctx)?;
+    acquire_actions.transform_steps(&mut parts.hosted_prelude, ctx)?;
+    acquire_actions.transform_steps(&mut parts.local_prelude, ctx)?;
+    acquire_actions.transform_steps(&mut parts.hosted_postlude, ctx)?;
+    acquire_actions.transform_steps(&mut parts.local_postlude, ctx)?;
+    composite_file(logical, &parts.common, ctx, acquire_actions)
 }
 
 /// Validate the expanded workflow-job and composite-action step scopes.
@@ -351,39 +393,6 @@ fn set_steps(jobs: &mut BTreeMap<String, Job>, id: &str, steps: Vec<Step>) {
     if let Some(job) = jobs.get_mut(id) {
         job.steps = steps;
     }
-}
-
-fn composite_file(
-    logical: &str,
-    steps: &[Step],
-    ctx: &RenderContext,
-) -> Result<RenderedFile, RenderError> {
-    velnor_actions_contract::workflow::step_identity::validate_step_identity_scope(
-        steps,
-        &format!("composite:{logical}"),
-    )
-    .map_err(RenderError::Contract)?;
-    let mut rendered = Vec::with_capacity(steps.len());
-    let empty_job_env = BTreeMap::new();
-    for step in steps {
-        rendered.push(step_to_yaml(
-            logical,
-            step,
-            ctx,
-            &[],
-            true,
-            &empty_job_env,
-            false,
-        )?);
-    }
-    let body = composite_yaml(logical, rendered)?;
-    let quoted = crate::yaml::quote_run_values_in_yaml(body);
-    let bytes = marker::with_marker(&ctx.generator_version, &render_yaml(&quoted))?;
-    steps::scan_for_private_subcommands(&bytes)?;
-    Ok(RenderedFile {
-        path: format!(".github/actions/{logical}/action.yml"),
-        bytes,
-    })
 }
 
 #[cfg(test)]

@@ -57,6 +57,38 @@ fn role_kind_mismatch_fails_even_when_display_name_matches() {
     assert!(error.to_string().contains("role_kind_mismatch"));
 }
 
+#[test]
+fn acquire_action_role_requires_content_digest_and_no_caller_inputs() {
+    let uses = format!(
+        "{}{digest}",
+        velnor_actions_contract::workflow::step_identity::ACQUIRE_VELNOR_ACTION_PREFIX,
+        digest = "a".repeat(64)
+    );
+    let mut step = Step {
+        name: "Acquire Velnor".to_owned(),
+        id: None,
+        role: Some(StepRole::AcquireVelnor),
+        condition: None,
+        kind: StepKind::Action {
+            uses,
+            with: BTreeMap::new(),
+            env: BTreeMap::new(),
+        },
+    };
+    validate_step_sequence(std::slice::from_ref(&step), "plan")
+        .expect("fixed local action has no caller-controlled tuple");
+
+    if let StepKind::Action { env, .. } = &mut step.kind {
+        env.insert("VELNOR_ASSET_SHA256".to_owned(), "f".repeat(64));
+    }
+    assert!(
+        validate_step_sequence(&[step], "plan")
+            .expect_err("caller env cannot override the immutable source")
+            .to_string()
+            .contains("role_kind_mismatch")
+    );
+}
+
 fn tofu_restore() -> Step {
     Step {
         name: "Restore Tofu providers".to_owned(),

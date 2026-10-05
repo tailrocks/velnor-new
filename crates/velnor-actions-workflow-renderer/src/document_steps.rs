@@ -139,7 +139,9 @@ fn action_step_to_yaml(
         }
         crate::tool_seed::validate_seed_action(step, None)?;
     }
-    let uses_yaml = if matches!(uses, TOOL_SEED_USES | TOFU_PROVIDER_ADMISSION_USES) {
+    let uses_yaml = if matches!(uses, TOOL_SEED_USES | TOFU_PROVIDER_ADMISSION_USES)
+        || crate::acquire_action::is_acquire_action_uses(uses)
+    {
         Yaml::annotated(uses, "zizmor: ignore[self-repository]")
     } else {
         Yaml::str(uses.to_owned())
@@ -148,11 +150,8 @@ fn action_step_to_yaml(
     if !with.is_empty() {
         entries.push(("with".to_owned(), string_map_yaml(with)));
     }
-    let filtered_env: BTreeMap<String, String> = env
-        .iter()
-        .filter(|(k, v)| job_env.get(*k).map(String::as_str) != Some(v.as_str()))
-        .map(|(k, v)| (k.clone(), v.clone()))
-        .collect();
+    let filtered_env = step_env(step, env, job_env);
+    commands::validate_env(&filtered_env)?;
     if !filtered_env.is_empty() {
         entries.push(("env".to_owned(), string_map_yaml(&filtered_env)));
     }
@@ -193,11 +192,8 @@ pub(crate) fn step_to_yaml(
                 steps::scan_for_private_subcommands(condition)?;
                 entries.push(("if".to_owned(), Yaml::str(condition.clone())));
             }
-            let filtered_env: BTreeMap<String, String> = env
-                .iter()
-                .filter(|(k, v)| job_env.get(*k).map(String::as_str) != Some(v.as_str()))
-                .map(|(k, v)| (k.clone(), v.clone()))
-                .collect();
+            let filtered_env = step_env(step, env, job_env);
+            commands::validate_env(&filtered_env)?;
             if !filtered_env.is_empty() {
                 entries.push(("env".to_owned(), string_map_yaml(&filtered_env)));
             }
@@ -245,4 +241,26 @@ pub(crate) fn step_to_yaml(
             Ok(Yaml::Map(entries))
         }
     }
+}
+
+/// Keep acquisition provenance in the generated action's literal step env.
+/// `GITHUB_ENV` mutates the runner's later-step `env` expression context, so
+/// expressions and inherited job values cannot be authority for this tuple.
+fn step_env(
+    step: &Step,
+    env: &BTreeMap<String, String>,
+    job_env: &BTreeMap<String, String>,
+) -> BTreeMap<String, String> {
+    env.iter()
+        .filter_map(|(key, value)| {
+            if (step.role == Some(StepRole::AcquireVelnor)
+                && crate::acquire_action::is_provenance_key(key))
+                || job_env.get(key).map(String::as_str) != Some(value.as_str())
+            {
+                Some((key.clone(), value.clone()))
+            } else {
+                None
+            }
+        })
+        .collect()
 }

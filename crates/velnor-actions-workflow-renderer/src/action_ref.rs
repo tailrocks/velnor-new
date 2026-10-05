@@ -1,13 +1,14 @@
-//! Action `uses` checks. The fixed local seed and provider-admission actions
-//! are allowed; every other ref must be `owner/repo` at a 40-hex commit.
+//! Action `uses` checks. Three generated local actions and remote actions
+//! pinned to full commits are allowed.
 
 use crate::RenderError;
 use velnor_actions_contract::workflow::step_identity::TOOL_SEED_USES;
 
 /// Validate an `owner/repo@<40 hex>` action ref. Branch names are rejected.
 ///
-/// The tool seed and provider-admission composites are the only local paths
-/// this renderer emits. Every other local path is rejected.
+/// Tool seed, provider admission, and content-addressed acquisition actions
+/// are the only local paths this renderer emits. Every other local path is
+/// rejected.
 ///
 /// # Errors
 ///
@@ -17,7 +18,8 @@ pub fn validate_uses(uses: &str) -> Result<(), RenderError> {
     if matches!(
         uses,
         TOOL_SEED_USES | crate::tofu_cache::TOFU_PROVIDER_ADMISSION_USES
-    ) {
+    ) || crate::acquire_action::is_acquire_action_uses(uses)
+    {
         return Ok(());
     }
     let Some((name, sha)) = uses.split_once('@') else {
