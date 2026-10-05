@@ -1,4 +1,6 @@
 //! Integration test entry point; cases live in the sibling files.
+#[path = "impl_archive_guard_builder.rs"]
+mod impl_archive_guard_builder;
 #[path = "impl_cli.rs"]
 mod impl_cli;
 #[path = "impl_cli_args.rs"]
