@@ -83,6 +83,32 @@ pub(super) fn bash_run_step(name: &str, script: &str) -> Yaml {
     ])
 }
 
+pub(super) fn bash_run_step_with_id(id: &str, name: &str, script: &str) -> Yaml {
+    Yaml::Map(vec![
+        ("name".to_owned(), Yaml::str(name)),
+        ("id".to_owned(), Yaml::str(id)),
+        ("shell".to_owned(), Yaml::str("bash")),
+        ("run".to_owned(), Yaml::str(script)),
+    ])
+}
+
+pub(super) fn bash_run_step_with_env(
+    name: &str,
+    script: &str,
+    env_name: &str,
+    env_value: &str,
+) -> Yaml {
+    Yaml::Map(vec![
+        ("name".to_owned(), Yaml::str(name)),
+        (
+            "env".to_owned(),
+            Yaml::Map(vec![(env_name.to_owned(), Yaml::str(env_value))]),
+        ),
+        ("shell".to_owned(), Yaml::str("bash")),
+        ("run".to_owned(), Yaml::str(script)),
+    ])
+}
+
 pub(super) fn token_bash_run_step(name: &str, script: &str) -> Yaml {
     Yaml::Map(vec![
         ("name".to_owned(), Yaml::str(name)),
