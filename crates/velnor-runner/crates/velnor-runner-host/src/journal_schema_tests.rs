@@ -121,6 +121,38 @@ async fn snapshot(path: &Path) -> Result<Snapshot, String> {
     })
 }
 
+async fn replace_with_duplicate_ids(path: &Path) -> Result<(), String> {
+    let text = path
+        .to_str()
+        .ok_or_else(|| "journal test path is not UTF-8".to_owned())?;
+    let db = turso::Builder::new_local(text)
+        .build()
+        .await
+        .map_err(|error| error.to_string())?;
+    let connection = db.connect().map_err(|error| error.to_string())?;
+    connection
+        .execute("DROP TABLE intents", ())
+        .await
+        .map_err(|error| error.to_string())?;
+    connection
+        .execute(
+            "CREATE TABLE intents (id INTEGER, kind TEXT NOT NULL, subject TEXT NOT NULL, state TEXT NOT NULL, docker_id TEXT, github_runner_id TEXT, cleanup_proven INTEGER NOT NULL DEFAULT 0, dind_id TEXT, worker_volume TEXT)",
+            (),
+        )
+        .await
+        .map_err(|error| error.to_string())?;
+    connection
+        .execute(
+            "INSERT INTO intents (id, kind, subject, state, cleanup_proven) VALUES (7, 'launch', 'first', 'uncertain', 0), (7, 'launch', 'second', 'uncertain', 0)",
+            (),
+        )
+        .await
+        .map_err(|error| error.to_string())?;
+    drop(connection);
+    drop(db);
+    Ok(())
+}
+
 #[tokio::test]
 async fn current_schema_rejects_duplicate_ids_without_mutating_rows() -> Result<(), String> {
     let scratch = Scratch::new()?;
@@ -184,5 +216,78 @@ async fn current_schema_rejects_wrong_types_and_required_nullability() -> Result
     .await?;
 
     assert!(Journal::open(&path).await.is_err());
+    Ok(())
+}
+
+#[tokio::test]
+async fn current_schema_rejects_a_composite_primary_key() -> Result<(), String> {
+    let scratch = Scratch::new()?;
+    let path = scratch.file();
+    seed(
+        &path,
+        1,
+        "CREATE TABLE intents (id INTEGER, kind TEXT NOT NULL, subject TEXT NOT NULL, state TEXT NOT NULL, docker_id TEXT, github_runner_id TEXT, cleanup_proven INTEGER NOT NULL DEFAULT 0, dind_id TEXT, worker_volume TEXT, PRIMARY KEY (id, subject))",
+        "",
+    )
+    .await?;
+
+    assert!(Journal::open(&path).await.is_err());
+    Ok(())
+}
+
+#[tokio::test]
+async fn row_id_updates_rollback_when_identity_becomes_ambiguous() -> Result<(), String> {
+    #[derive(Clone, Copy)]
+    enum Mutation {
+        Finish,
+        Bind,
+        BindWorker,
+        RecordCleanup,
+        BindWorkerVolume,
+    }
+
+    for mutation in [
+        Mutation::Finish,
+        Mutation::Bind,
+        Mutation::BindWorker,
+        Mutation::RecordCleanup,
+        Mutation::BindWorkerVolume,
+    ] {
+        let scratch = Scratch::new()?;
+        let path = scratch.file();
+        let journal = Journal::open(&path)
+            .await
+            .map_err(|error| error.to_string())?;
+        replace_with_duplicate_ids(&path).await?;
+        let result = match mutation {
+            Mutation::Finish => journal.finish(7, crate::Outcome::DefiniteFailure).await,
+            Mutation::Bind => journal.bind(7, Some("runner"), Some("github")).await,
+            Mutation::BindWorker => journal.bind_worker(7, Some("runner"), Some("dind")).await,
+            Mutation::RecordCleanup => journal.record_cleanup(7).await,
+            Mutation::BindWorkerVolume => journal.bind_worker_volume(7, "volume").await,
+        };
+        assert_eq!(result, Err(crate::HostError::Journal));
+        let state = snapshot(&path).await?;
+        assert_eq!(state.rows.len(), 2);
+        assert!(
+            state
+                .rows
+                .iter()
+                .all(|row| { row.2 == "uncertain" && row.3 == 0 })
+        );
+        assert!(
+            journal
+                .rows()
+                .await
+                .map_err(|error| error.to_string())?
+                .iter()
+                .all(|row| {
+                    row.docker_id.is_none()
+                        && row.github_runner_id.is_none()
+                        && row.dind_id.is_none()
+                        && row.worker_volume.is_none()
+                })
+        );
+    }
     Ok(())
 }

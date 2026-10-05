@@ -9,6 +9,7 @@ use crate::reconcile::IntentRow;
 
 mod launch;
 mod schema;
+mod transaction;
 mod worker_volume;
 
 /// Durable intent row.
@@ -103,14 +104,17 @@ impl Journal {
             Outcome::DefiniteFailure => IntentState::Failed,
         };
         let conn = self.connection().await?;
-        let changed = conn
-            .execute(
-                "UPDATE intents SET state = ?1 WHERE id = ?2",
-                (state.as_str().to_owned(), id),
-            )
-            .await
-            .map_err(|_| HostError::Journal)?;
-        one_row(changed)
+        transaction::with_unique_id(&conn, id, async move |conn| {
+            let changed = conn
+                .execute(
+                    "UPDATE intents SET state = ?1 WHERE id = ?2",
+                    (state.as_str().to_owned(), id),
+                )
+                .await
+                .map_err(|_| HostError::Journal)?;
+            one_row(changed)
+        })
+        .await
     }
 
     /// Read a row back, including after a new [`Journal::open`].
@@ -173,18 +177,19 @@ impl Journal {
             return Err(HostError::Journal);
         }
         let conn = self.connection().await?;
-        let changed = conn
-            .execute(
-                "UPDATE intents SET docker_id = COALESCE(?1, docker_id), github_runner_id = COALESCE(?2, github_runner_id) WHERE id = ?3",
-                (
-                    docker_id.map(str::to_owned),
-                    github_runner_id.map(str::to_owned),
-                    id,
-                ),
-            )
-            .await
-            .map_err(|_| HostError::Journal)?;
-        one_row(changed)
+        let docker_id = docker_id.map(str::to_owned);
+        let github_runner_id = github_runner_id.map(str::to_owned);
+        transaction::with_unique_id(&conn, id, async move |conn| {
+            let changed = conn
+                .execute(
+                    "UPDATE intents SET docker_id = COALESCE(?1, docker_id), github_runner_id = COALESCE(?2, github_runner_id) WHERE id = ?3",
+                    (docker_id, github_runner_id, id),
+                )
+                .await
+                .map_err(|_| HostError::Journal)?;
+            one_row(changed)
+        })
+        .await
     }
 
     /// Store the runner id and the private `DinD` id. `None` keeps the column.
@@ -204,22 +209,23 @@ impl Journal {
             return Err(HostError::Journal);
         }
         let conn = self.connection().await?;
-        let changed = conn
-            .execute(
-                "UPDATE intents SET docker_id = COALESCE(docker_id, ?1), dind_id = COALESCE(dind_id, ?2) WHERE id = ?3 AND (?1 IS NULL OR docker_id IS NULL OR docker_id = ?1) AND (?2 IS NULL OR dind_id IS NULL OR dind_id = ?2)",
-                (
-                    runner_id.map(str::to_owned),
-                    dind_id.map(str::to_owned),
-                    id,
-                ),
-            )
-            .await
-            .map_err(|_| HostError::Journal)?;
-        match changed {
-            1 => Ok(()),
-            0 => same_ids(&conn, id, runner_id, dind_id).await,
-            _ => Err(HostError::Journal),
-        }
+        let runner_id = runner_id.map(str::to_owned);
+        let dind_id = dind_id.map(str::to_owned);
+        transaction::with_unique_id(&conn, id, async move |conn| {
+            let changed = conn
+                .execute(
+                    "UPDATE intents SET docker_id = COALESCE(docker_id, ?1), dind_id = COALESCE(dind_id, ?2) WHERE id = ?3 AND (?1 IS NULL OR docker_id IS NULL OR docker_id = ?1) AND (?2 IS NULL OR dind_id IS NULL OR dind_id = ?2)",
+                    (runner_id.clone(), dind_id.clone(), id),
+                )
+                .await
+                .map_err(|_| HostError::Journal)?;
+            match changed {
+                1 => Ok(()),
+                0 => same_ids(conn, id, runner_id.as_deref(), dind_id.as_deref()).await,
+                _ => Err(HostError::Journal),
+            }
+        })
+        .await
     }
 
     /// Record that cleanup of this row's ids is proven.
@@ -229,11 +235,14 @@ impl Journal {
     /// Returns [`HostError::Journal`] when the row is missing.
     pub async fn record_cleanup(&self, id: i64) -> Result<(), HostError> {
         let conn = self.connection().await?;
-        let changed = conn
-            .execute("UPDATE intents SET cleanup_proven = 1 WHERE id = ?1", [id])
-            .await
-            .map_err(|_| HostError::Journal)?;
-        one_row(changed)
+        transaction::with_unique_id(&conn, id, async move |conn| {
+            let changed = conn
+                .execute("UPDATE intents SET cleanup_proven = 1 WHERE id = ?1", [id])
+                .await
+                .map_err(|_| HostError::Journal)?;
+            one_row(changed)
+        })
+        .await
     }
 
     /// Load every row. The connection closes before this returns.
