@@ -132,13 +132,14 @@ fn provider_admission_discards_prefix_and_missing_matches() -> TestResult {
         .get("cache-path")
         .ok_or("provider composite misses owned path")?;
     let temp = tempfile::tempdir()?;
+    let runner_temp = temp.path().canonicalize()?;
     let resolved_path =
-        cache_path.replace("${{ runner.temp }}", &temp.path().display().to_string());
+        cache_path.replace("${{ runner.temp }}", &runner_temp.display().to_string());
     let leaf = Path::new(&resolved_path);
     fs::create_dir_all(leaf)?;
     fs::write(leaf.join("verified-provider"), b"cached")?;
 
-    let exact = run_admission(restore, temp.path(), "true", expected, false)?;
+    let exact = run_admission(restore, &runner_temp, "true", expected, false)?;
     assert!(
         exact.status.success(),
         "{}",
@@ -154,7 +155,7 @@ fn provider_admission_discards_prefix_and_missing_matches() -> TestResult {
         ("false", String::new()),
     ] {
         fs::write(leaf.join("verified-provider"), b"must be removed")?;
-        let rejected = run_admission(restore, temp.path(), hit, &matched, true)?;
+        let rejected = run_admission(restore, &runner_temp, hit, &matched, true)?;
         assert!(
             rejected.status.success(),
             "{}",

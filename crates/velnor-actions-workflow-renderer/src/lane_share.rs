@@ -9,14 +9,10 @@ use std::collections::BTreeMap;
 use velnor_actions_contract::workflow::lanes::{HOSTED_SUFFIX, SCALE_SUFFIX};
 use velnor_actions_contract::{Job, Step, StepKind, StepRole};
 
-use crate::composite::composite_yaml;
-use crate::document_steps::step_to_yaml;
+use crate::RenderError;
 use crate::render::RenderContext;
 use crate::tree::RenderedFile;
-use crate::{RenderError, marker, steps, yaml::render_yaml};
 
-#[path = "lane_share_check.rs"]
-mod check;
 #[path = "lane_share_runtime.rs"]
 mod runtime;
 
@@ -113,7 +109,11 @@ pub(crate) fn share_lanes(
             )));
         };
         let uses = format!("./.github/actions/{logical}");
-        files.push(composite_file(logical, &parts.common, ctx)?);
+        files.push(crate::lane_share_sections::composite_file(
+            logical,
+            &parts.common,
+            ctx,
+        )?);
         calls.insert(hosted_id.clone(), uses.clone());
         calls.insert(local_id.clone(), uses);
         checkouts.insert(hosted_id.clone(), parts.checkout.clone());
@@ -131,6 +131,7 @@ pub(crate) fn share_lanes(
         postludes.insert(hosted_id.clone(), parts.hosted_postlude);
         postludes.insert(local_id.clone(), parts.local_postlude);
     }
+    crate::lane_share_sections::factor_provider_preludes(&mut preludes, &mut files, ctx)?;
     let shared = LaneShare {
         jobs: next,
         calls,
@@ -201,7 +202,7 @@ fn logical_id(hosted_id: &str) -> Option<&str> {
 
 fn split_pair(hosted: &Job, local: &Job, checkout_uses: &str) -> Option<SharedLaneParts> {
     if hosted.timeout_minutes != local.timeout_minutes
-        || !check::same_or_admitted_condition(hosted, local)
+        || !crate::lane_share_sections::same_or_admitted_check_condition(hosted, local)
         || hosted.permissions != local.permissions
         || hosted.environment != local.environment
     {
@@ -329,36 +330,6 @@ fn set_steps(jobs: &mut BTreeMap<String, Job>, id: &str, steps: Vec<Step>) {
     if let Some(job) = jobs.get_mut(id) {
         job.steps = steps;
     }
-}
-
-fn composite_file(
-    logical: &str,
-    steps: &[Step],
-    ctx: &RenderContext,
-) -> Result<RenderedFile, RenderError> {
-    velnor_actions_contract::workflow::step_identity::validate_step_identity_scope(
-        steps,
-        &format!("composite:{logical}"),
-    )
-    .map_err(RenderError::Contract)?;
-    let mut rendered = Vec::with_capacity(steps.len());
-    let empty_job_env = BTreeMap::new();
-    let step_context = crate::document_lanes::JobStepContext {
-        job_env: &empty_job_env,
-        runs_on: None,
-        actions_read: false,
-    };
-    for step in steps {
-        rendered.push(step_to_yaml(logical, step, ctx, &[], true, &step_context)?);
-    }
-    let body = composite_yaml(logical, rendered)?;
-    let quoted = crate::yaml::quote_run_values_in_yaml(body);
-    let bytes = marker::with_marker(&ctx.generator_version, &render_yaml(&quoted))?;
-    steps::scan_for_private_subcommands(&bytes)?;
-    Ok(RenderedFile {
-        path: format!(".github/actions/{logical}/action.yml"),
-        bytes,
-    })
 }
 
 #[cfg(test)]

@@ -48,10 +48,9 @@ fn native_action_is_the_only_mbx_cache_owner_on_both_lanes() -> Result<(), Rende
         assert!(yaml.contains("uses: jdx/mr-boxington-action@"), "{yaml}");
         assert!(yaml.contains("version: 1.21.1"), "{yaml}");
         assert!(yaml.contains("github-cache-mode: objects"), "{yaml}");
-        assert_eq!(
+        assert!(
             yaml.contains("MBX_GC_AUTO: \"1\""),
-            !scale_set,
-            "automatic MBX GC is disabled on ephemeral hosted Linux only: {yaml}"
+            "native MBX consumers set the shared collection policy: {yaml}"
         );
         assert!(yaml.contains("MBX_SHARE_OUT_DIR: \"0\""), "{yaml}");
         assert_eq!(

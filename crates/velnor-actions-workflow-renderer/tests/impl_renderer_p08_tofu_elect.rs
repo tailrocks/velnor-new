@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION;
 use velnor_actions_contract::{Job, JobTimeout, Step, StepId, StepKind, StepRole};
 use velnor_actions_workflow_renderer::RenderError;
-use velnor_actions_workflow_renderer::cache_p08::elect_tofu_provider_savers;
+use velnor_actions_workflow_renderer::cache_p08::elect_cache_writers;
 use velnor_actions_workflow_renderer::tofu_cache::{
     TOFU_PROVIDER_ADMISSION_USES, TOFU_PROVIDERS_SAVE_USES, tofu_providers_save_step,
 };
@@ -101,7 +101,7 @@ fn provider_writer_election_elects_lowest_id_per_key() -> Result<(), RenderError
             provider_job(PROVIDER_KEY_B, PROVIDER_PATH_B),
         ),
     ]);
-    elect_tofu_provider_savers(&mut jobs)?;
+    elect_cache_writers(&mut jobs)?;
     assert_eq!(
         provider_saved_key(&jobs["tofu-a"]),
         Some(velnor_actions_contract::workflow::step_identity::TOFU_PROVIDERS_KEY_OUTPUT_EXPR),
@@ -126,7 +126,7 @@ fn provider_writer_election_saves_push_gated_exact_entry() -> Result<(), RenderE
         "tofu-a".to_owned(),
         provider_job(PROVIDER_KEY_A, PROVIDER_PATH_A),
     )]);
-    elect_tofu_provider_savers(&mut jobs)?;
+    elect_cache_writers(&mut jobs)?;
     let saves = provider_saves(&jobs["tofu-a"]);
     assert_eq!(saves.len(), 1, "winner saves once");
     let save = saves[0];
@@ -170,8 +170,8 @@ fn provider_writer_election_skips_keyless_and_reruns() -> Result<(), RenderError
             provider_job(PROVIDER_KEY_A, PROVIDER_PATH_A),
         ),
     ]);
-    elect_tofu_provider_savers(&mut jobs)?;
-    elect_tofu_provider_savers(&mut jobs)?;
+    elect_cache_writers(&mut jobs)?;
+    elect_cache_writers(&mut jobs)?;
     assert!(jobs["bare"].steps.is_empty(), "keyless job untouched");
     assert_eq!(
         provider_saves(&jobs["tofu-a"]).len(),
@@ -190,8 +190,7 @@ fn provider_writer_election_rejects_mismatched_or_weak_existing_save() -> Result
     }
     wrong_key.steps.push(key_save);
     assert!(
-        elect_tofu_provider_savers(&mut BTreeMap::from([("tofu-a".to_owned(), wrong_key)]))
-            .is_err(),
+        elect_cache_writers(&mut BTreeMap::from([("tofu-a".to_owned(), wrong_key)])).is_err(),
         "an existing save must use the exact restore key"
     );
 
@@ -202,8 +201,7 @@ fn provider_writer_election_rejects_mismatched_or_weak_existing_save() -> Result
     }
     wrong_path.steps.push(path_save);
     assert!(
-        elect_tofu_provider_savers(&mut BTreeMap::from([("tofu-a".to_owned(), wrong_path)]))
-            .is_err(),
+        elect_cache_writers(&mut BTreeMap::from([("tofu-a".to_owned(), wrong_path)])).is_err(),
         "an existing save must use the exact restore path"
     );
 
@@ -212,8 +210,7 @@ fn provider_writer_election_rejects_mismatched_or_weak_existing_save() -> Result
     gate_save.condition = Some("success()".to_owned());
     weak_gate.steps.push(gate_save);
     assert!(
-        elect_tofu_provider_savers(&mut BTreeMap::from([("tofu-a".to_owned(), weak_gate)]))
-            .is_err(),
+        elect_cache_writers(&mut BTreeMap::from([("tofu-a".to_owned(), weak_gate)])).is_err(),
         "an existing save must keep the exact push gate"
     );
 
@@ -221,15 +218,14 @@ fn provider_writer_election_rejects_mismatched_or_weak_existing_save() -> Result
     duplicate.steps.push(provider_save()?);
     duplicate.steps.push(provider_save()?);
     assert!(
-        elect_tofu_provider_savers(&mut BTreeMap::from([("tofu-a".to_owned(), duplicate)]))
-            .is_err(),
+        elect_cache_writers(&mut BTreeMap::from([("tofu-a".to_owned(), duplicate)])).is_err(),
         "duplicate provider saves must be rejected"
     );
 
     let mut matching = provider_job(PROVIDER_KEY_A, PROVIDER_PATH_A);
     matching.steps.push(provider_save()?);
     let mut matching_jobs = BTreeMap::from([("tofu-a".to_owned(), matching)]);
-    elect_tofu_provider_savers(&mut matching_jobs)?;
+    elect_cache_writers(&mut matching_jobs)?;
     assert_eq!(
         provider_saves(&matching_jobs["tofu-a"]).len(),
         1,
@@ -249,9 +245,16 @@ fn provider_writer_election_rejects_a_valid_save_on_a_losing_owner() -> Result<(
         ),
         ("tofu-b".to_owned(), losing),
     ]);
+    let original_steps: BTreeMap<String, Vec<Step>> = jobs
+        .iter()
+        .map(|(id, job)| (id.clone(), job.steps.clone()))
+        .collect();
     assert!(
-        elect_tofu_provider_savers(&mut jobs).is_err(),
+        elect_cache_writers(&mut jobs).is_err(),
         "only the elected owner can carry the save"
     );
+    for (id, steps) in original_steps {
+        assert_eq!(jobs[&id].steps, steps, "rejected election mutated {id}");
+    }
     Ok(())
 }

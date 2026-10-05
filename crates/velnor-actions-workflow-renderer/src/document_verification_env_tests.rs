@@ -70,8 +70,7 @@ fn emitted_verification_job_scrubs_credentials_without_disabling_mise_config() {
         None,
         &lanes,
         super::MbxJobPolicy {
-            gc_auto_disabled: false,
-            share_out_dir_disabled: false,
+            native_mbx: false,
             actions_read: false,
         },
     )

@@ -2,7 +2,7 @@
 //!
 //! Restore steps arrive from the orchestrator (per-root keys need the
 //! catalog tofu pin); saves append post-hoc through writer election
-//! ([`elect_tofu_provider_savers`](crate::cache_p08::elect_tofu_provider_savers)).
+//! ([`elect_cache_writers`](crate::cache_p08::elect_cache_writers)).
 //! Both archive exactly one job-private plugin-cache dir, never the
 //! data dir beside it.
 

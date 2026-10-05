@@ -1,4 +1,4 @@
-//! Per-key tools-cache writer election.
+//! Per-key cache writer election.
 //!
 //! Exactly one saver per V2 runtime-qualified key, elected after every
 //! restore is inserted. Split from `cache_p08` (size gate).
@@ -9,7 +9,7 @@ use velnor_actions_contract::{Job, Step, StepKind, StepRole};
 
 use crate::RenderError;
 
-/// Elect one V2 tools-cache writer per runtime-qualified key across jobs.
+/// Validate both cache families, then append every elected save atomically.
 ///
 /// Exactly one job per key receives a push-gated save. The plan job wins
 /// when it shares the key; otherwise the lowest job ID is deterministic.
@@ -19,7 +19,23 @@ use crate::RenderError;
 /// Returns [`RenderError`] when a restore or existing save is malformed,
 /// when a save is orphaned or belongs to a non-elected job, or when a
 /// winner's save step cannot be built.
-pub fn elect_tools_cache_writers(jobs: &mut BTreeMap<String, Job>) -> Result<(), RenderError> {
+pub fn elect_cache_writers(jobs: &mut BTreeMap<String, Job>) -> Result<(), RenderError> {
+    let mut planned = Vec::new();
+    planned.extend(plan_tools_saves(jobs)?);
+    planned.extend(plan_provider_saves(jobs)?);
+    for (id, save) in planned {
+        let Some(job) = jobs.get_mut(&id) else {
+            return Err(RenderError::InvalidWorkflow(
+                "cache_writer_missing".to_owned(),
+            ));
+        };
+        job.steps.push(save);
+    }
+    Ok(())
+}
+
+/// Construct, but do not append, validated V2 tools saves.
+fn plan_tools_saves(jobs: &BTreeMap<String, Job>) -> Result<Vec<(String, Step)>, RenderError> {
     let mut by_identity: BTreeMap<(String, String), Vec<String>> = BTreeMap::new();
     for (id, job) in jobs.iter() {
         let identity = tools_restore_identity(id, job)?;
@@ -55,15 +71,18 @@ pub fn elect_tools_cache_writers(jobs: &mut BTreeMap<String, Job>) -> Result<(),
             return Err(RenderError::InvalidWorkflow(format!("{kind}:{id}")));
         }
     }
+    let mut planned = Vec::new();
     for (id, key) in elected_keys {
-        let Some(job) = jobs.get_mut(&id) else {
+        let Some(job) = jobs.get(&id) else {
             return Err(RenderError::InvalidWorkflow(
                 "tools_cache_winner_missing".to_owned(),
             ));
         };
-        append_tools_save(job, &key)?;
+        if tools_save_steps(job).is_empty() {
+            planned.push((id, expected_tools_save(&key)?));
+        }
     }
-    Ok(())
+    Ok(planned)
 }
 
 fn has_tools_restore(job: &Job) -> bool {
@@ -106,7 +125,7 @@ fn validate_existing_tools_save(job: &Job, key: &str) -> Result<(), RenderError>
     Ok(())
 }
 
-/// Elect one provider-cache writer per key across jobs.
+/// Construct, but do not append, validated ToFu provider saves.
 ///
 /// Every tofu job restores its own root key read-only; exactly one
 /// job per key gets a push-gated `Save Tofu providers` step over
@@ -120,7 +139,7 @@ fn validate_existing_tools_save(job: &Job, key: &str) -> Result<(), RenderError>
 ///
 /// Returns [`RenderError`] when a winner's save step fails to build
 /// (unreachable for keys read back from valid restores).
-pub fn elect_tofu_provider_savers(jobs: &mut BTreeMap<String, Job>) -> Result<(), RenderError> {
+fn plan_provider_saves(jobs: &BTreeMap<String, Job>) -> Result<Vec<(String, Step)>, RenderError> {
     let mut by_key: BTreeMap<String, Vec<String>> = BTreeMap::new();
     let mut path_for: BTreeMap<String, String> = BTreeMap::new();
     for (id, job) in jobs.iter() {
@@ -136,6 +155,7 @@ pub fn elect_tofu_provider_savers(jobs: &mut BTreeMap<String, Job>) -> Result<()
             by_key.entry(key).or_default().push(id.clone());
         }
     }
+    let mut planned = Vec::new();
     for (key, owners) in &by_key {
         let Some(winner) = owners.iter().min() else {
             continue;
@@ -144,18 +164,26 @@ pub fn elect_tofu_provider_savers(jobs: &mut BTreeMap<String, Job>) -> Result<()
             continue;
         };
         for owner in owners {
-            if let Some(job) = jobs.get_mut(owner) {
-                if owner == winner {
-                    append_provider_save(job, key, path)?;
-                } else if has_provider_save(job) {
-                    return Err(RenderError::InvalidWorkflow(format!(
-                        "tofu_provider_save_not_elected:{owner}"
-                    )));
-                }
+            let Some(job) = jobs.get(owner) else {
+                return Err(RenderError::InvalidWorkflow(
+                    "tofu_provider_owner_missing".to_owned(),
+                ));
+            };
+            if owner != winner && has_provider_save(job) {
+                return Err(RenderError::InvalidWorkflow(format!(
+                    "tofu_provider_save_not_elected:{owner}"
+                )));
+            }
+            validate_provider_save(job, key, path)?;
+            if owner == winner && !has_provider_save(job) {
+                let mut save = crate::tofu_cache::tofu_providers_save_step()?;
+                save.condition =
+                    Some(velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION.to_owned());
+                planned.push((owner.clone(), save));
             }
         }
     }
-    Ok(())
+    Ok(planned)
 }
 
 /// This job's provider-restore `(key, path)`, when it restores one.
@@ -168,10 +196,12 @@ fn provider_restore_entry(job: &Job) -> Option<(String, String)> {
         if step.role != Some(StepRole::TofuProvidersRestore) {
             return None;
         }
-        let StepKind::Action { uses, with, .. } = &step.kind else {
+        let StepKind::Action { uses, with, env } = &step.kind else {
             return None;
         };
-        if uses != velnor_actions_contract::workflow::step_identity::TOFU_PROVIDER_ADMISSION_USES {
+        if uses != velnor_actions_contract::workflow::step_identity::TOFU_PROVIDER_ADMISSION_USES
+            || !env.is_empty()
+        {
             return None;
         }
         let key = with.get("cache-key")?;
@@ -192,7 +222,7 @@ fn provider_restore_entry(job: &Job) -> Option<(String, String)> {
 /// read-only, and the step archives the exact entry the restore
 /// reads, so a push-seeded entry warms every later restore of the
 /// key. Jobs that already carry the save keep exactly one.
-fn append_provider_save(job: &mut Job, key: &str, path: &str) -> Result<(), RenderError> {
+fn validate_provider_save(job: &Job, key: &str, path: &str) -> Result<(), RenderError> {
     if provider_restore_entry(job)
         .as_ref()
         .is_none_or(|(restore_key, restore_path)| restore_key != key || restore_path != path)
@@ -238,9 +268,6 @@ fn append_provider_save(job: &mut Job, key: &str, path: &str) -> Result<(), Rend
         }
         return Ok(());
     }
-    let mut save = crate::tofu_cache::tofu_providers_save_step()?;
-    save.condition = Some(velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION.to_owned());
-    job.steps.push(save);
     Ok(())
 }
 
@@ -258,14 +285,14 @@ fn tools_restore_identity(id: &str, job: &Job) -> Result<Option<(String, String)
         .iter()
         .filter(|step| step.role == Some(StepRole::ToolsCacheRestore))
         .collect::<Vec<_>>();
-    if restores.is_empty() {
-        return Ok(None);
-    }
     let identities = job
         .steps
         .iter()
         .filter(|step| step.role == Some(StepRole::ToolsCacheIdentity))
         .collect::<Vec<_>>();
+    if restores.is_empty() && identities.is_empty() {
+        return Ok(None);
+    }
     if restores.len() != 1 || identities.len() != 1 {
         return Err(RenderError::InvalidWorkflow(format!(
             "tools_cache_restore_shape:{id}"
@@ -308,25 +335,4 @@ fn tools_restore_identity(id: &str, job: &Job) -> Result<Option<(String, String)
             RenderError::InvalidWorkflow(format!("tools_cache_identity_digest_missing:{id}"))
         })?;
     Ok(Some((key, static_digest)))
-}
-
-/// Append the push-gated tools save over `key` to one writer job.
-///
-/// Mirrors `Save Cargo sources`: the trusted save gate keeps PR runs
-/// read-only, and the step archives the exact tool payload the V2
-/// restore reads, so a push-seeded entry warms every later
-/// restore of the key. Closures and fan-in steps added after the
-/// election install no tools, so the capture stays complete.
-fn append_tools_save(job: &mut Job, key: &str) -> Result<(), RenderError> {
-    let expected = expected_tools_save(key)?;
-    let existing = tools_save_steps(job);
-    if existing.len() > 1 || existing.first().is_some_and(|step| *step != &expected) {
-        return Err(RenderError::InvalidWorkflow(
-            "tools_cache_save_shape".to_owned(),
-        ));
-    }
-    if existing.is_empty() {
-        job.steps.push(expected);
-    }
-    Ok(())
 }
