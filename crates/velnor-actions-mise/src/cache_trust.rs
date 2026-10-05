@@ -10,6 +10,7 @@
 //! from service data (`gh cache list --json`, `.../cache/usage`), never
 //! a hardcoded limit: callers pass the limit in.
 
+use crate::cache_writer::CacheWriterContext;
 use crate::error::MiseError;
 
 /// Velnor does not opt in to the action's same-repository PR cache writes.
@@ -47,37 +48,37 @@ pub fn pr_outputs_trusted(trust: &str) -> bool {
     clippy::struct_excessive_bools,
     reason = "P08 names four independent save conditions; folding them hides the policy"
 )]
-pub struct SaveGate {
+pub struct SaveGate<'a> {
     /// The producer step/job succeeded.
     pub producer_passed: bool,
     /// The export carries a useful delta (nonempty, changed).
     pub useful_delta: bool,
-    /// The current trust scope permits saving this namespace.
-    pub trust_scope_ok: bool,
+    /// Opaque result of matching runner facts and GitHub protection evidence.
+    pub writer: &'a CacheWriterContext,
     /// Every concurrent writer finished before the save.
     pub writers_finished: bool,
 }
 
 /// Save only producer-successful useful deltas, in scope, writers done.
 #[must_use]
-pub fn save_after_success(gate: SaveGate) -> bool {
-    gate.producer_passed && gate.useful_delta && gate.trust_scope_ok && gate.writers_finished
+pub fn save_after_success(gate: SaveGate<'_>) -> bool {
+    gate.producer_passed
+        && gate.useful_delta
+        && gate.writer.permits_trusted_write()
+        && gate.writers_finished
 }
 
 /// Authorize one trusted-layer save step; return its runtime gate.
 ///
-/// Fails closed unless the save policy allows exactly protected pushes:
-/// [`save_after_success`] must still require all four gate conditions,
-/// [`crate::restore::save_decision`] must permit only the
-/// trusted/push/passed combination, [`crate::cache::save_allowed`] must
-/// agree, and the generator must not enable PR saves. The
-/// returned condition is the `if:` gate the emitted save step carries;
-/// policy drift fails generation instead of emitting a stale gate.
+/// Validate that emitted save policy requires producer success and a current
+/// protected default-branch push. Runtime save functions separately require
+/// the opaque Mise context; workflow predicates remain GitHub's server-side
+/// authorization layer. PR-save support must stay disabled.
 ///
 /// # Errors
 ///
 /// Returns [`MiseError::Contract`] when the policy no longer matches
-/// the emitted push-only gate.
+/// the emitted protected-default gate.
 pub fn authorize_trusted_save() -> Result<&'static str, MiseError> {
     authorize_trusted_save_for(MBX_PR_SAVE_OPTED_IN)
 }
@@ -90,102 +91,23 @@ pub fn authorize_trusted_save() -> Result<&'static str, MiseError> {
 /// # Errors
 ///
 /// Returns [`MiseError::Contract`] when the policy no longer matches
-/// the emitted push-only gate.
+/// the emitted protected-default gate.
 pub fn authorize_trusted_save_for(pr_save_supported: bool) -> Result<&'static str, MiseError> {
-    use crate::restore::{SaveInputs, save_decision};
-    let open = SaveGate {
-        producer_passed: true,
-        useful_delta: true,
-        trust_scope_ok: true,
-        writers_finished: true,
-    };
-    if !save_after_success(open) {
-        return Err(contract("save_gate_weakened"));
-    }
     if pr_save_supported {
         return Err(contract("save_policy_drift:pr_save_supported"));
     }
-    let allowed = SaveInputs {
-        layer_trust: "trusted",
-        event: "push",
-        passed: true,
-        unavailable: false,
-        active_writer: false,
-    };
-    if save_decision(&allowed).is_err() {
-        return Err(contract("save_policy_drift:push_denied"));
-    }
-    deny_non_push_variants(&allowed)?;
-    for denied in [
-        SaveInputs {
-            passed: false,
-            ..allowed
-        },
-        SaveInputs {
-            unavailable: true,
-            ..allowed
-        },
-        SaveInputs {
-            active_writer: true,
-            ..allowed
-        },
-    ] {
-        if save_decision(&denied).is_ok() {
-            return Err(contract("save_policy_drift:overpermissive"));
-        }
-    }
-    if !crate::cache::save_allowed("trusted", "push", true)
-        || crate::cache::save_allowed("trusted", "push", false)
-    {
-        return Err(contract("save_policy_drift:allowlist"));
-    }
     let gate = velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION;
-    if !gate.contains("success()") {
-        return Err(contract("save_gate_missing_success"));
+    for required in [
+        "success()",
+        "github.event_name == 'push'",
+        "github.ref_protected == true",
+        "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)",
+    ] {
+        if !gate.contains(required) {
+            return Err(contract("save_gate_missing_trust_fact"));
+        }
     }
     Ok(gate)
-}
-
-/// Deny every non-push event and unknown trust spelling around `allowed`.
-///
-/// The allowlist is `push` only; `schedule`, `workflow_dispatch`, and
-/// any future trigger stay denied, as do unknown trust spellings and
-/// case variants. Both the decision model and the raw predicate must
-/// agree, or the emitted gate is stale.
-///
-/// # Errors
-///
-/// Returns [`MiseError::Contract`] when any variant would save.
-fn deny_non_push_variants(allowed: &crate::restore::SaveInputs<'_>) -> Result<(), MiseError> {
-    use crate::restore::save_decision;
-    for event in [
-        "pull_request",
-        "pull_request_target",
-        "merge_group",
-        "schedule",
-        "workflow_dispatch",
-        "workflow_call",
-        "",
-        "Push",
-    ] {
-        let denied = crate::restore::SaveInputs { event, ..*allowed };
-        if save_decision(&denied).is_ok() {
-            return Err(contract("save_policy_drift:event_allowed"));
-        }
-        if crate::cache::save_allowed("trusted", event, true) {
-            return Err(contract("save_policy_drift:allowlist"));
-        }
-    }
-    for layer_trust in ["", "untrusted", "prerelease"] {
-        let denied = crate::restore::SaveInputs {
-            layer_trust,
-            ..*allowed
-        };
-        if save_decision(&denied).is_ok() {
-            return Err(contract("save_policy_drift:trust_allowed"));
-        }
-    }
-    Ok(())
 }
 
 /// Cache errors never turn successful verification into failure.
