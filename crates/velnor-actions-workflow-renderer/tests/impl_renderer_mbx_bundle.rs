@@ -45,7 +45,7 @@ fn assert_hosted_cache_policy(text: &str, action: &str, restore: usize) {
         "cache writes stay runner-gated: {action}"
     );
     assert!(
-        action.contains("github.ref_protected == true && 'write' || 'read' }}"),
+        action.contains("github.ref_protected == true && 'write' || 'read'"),
         "only protected default-branch pushes write: {action}"
     );
     assert!(
@@ -195,13 +195,21 @@ fn hosted_isolation_keeps_scale_set_bundle_guarded() -> Result<(), RenderError> 
 fn scale_set_save_matches_and_skips_hosted_gc_env() -> Result<(), RenderError> {
     let text = render_mbx("rust-demo__local", true)?;
     assert!(text.contains("name: Export MBX single bundle"), "{text}");
+    let mode = text.find("ACTIONS_CACHE_MODE:").expect("cache mode");
+    let mode_line = text[mode..].lines().next().expect("mode line");
     assert!(
-        text.contains("ACTIONS_CACHE_MODE: ${{ runner.environment == 'github-hosted'"),
-        "Scale Set action resolves to read off hosted runners: {text}"
+        mode_line.contains("|| 'none'"),
+        "non-hosted cache mode is none: {mode_line}"
     );
+    let restore = text
+        .find("name: Restore MBX single bundle")
+        .expect("bundle restore");
+    let import = text
+        .find("name: Import MBX single bundle")
+        .expect("bundle import");
     assert!(
-        text.contains("if: runner.environment != 'github-hosted'"),
-        "bundle steps stay gated: {text}"
+        text[restore..import].contains("if: runner.environment != 'github-hosted'"),
+        "bundle restore stays on the Scale Set route: {text}"
     );
     assert!(!text.contains("MBX_GC_AUTO"), "{text}");
     assert!(!text.contains("MBX_SHARE_OUT_DIR"), "{text}");

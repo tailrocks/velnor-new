@@ -40,7 +40,8 @@ const ISOLATE_HOSTED_CACHE: &str =
 const HOSTED_CACHE_KEY_SUFFIX: &str =
     "${{ runner.environment == 'github-hosted' && github.job || '' }}";
 /// Hosted writes only for a protected push to the repository default branch.
-const HOSTED_CACHE_MODE: &str = "${{ runner.environment == 'github-hosted' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}";
+/// A non-hosted runner resolves to none.
+const HOSTED_CACHE_MODE: &str = "${{ runner.environment == 'github-hosted' && (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read') || 'none' }}";
 /// Bundle route stays on Scale Set runners. Hosted jobs skip these steps.
 const SCALE_SET_ONLY_IF: &str = "runner.environment != 'github-hosted'";
 

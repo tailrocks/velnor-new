@@ -52,7 +52,8 @@ fn expression_spans(text: &str) -> Option<Vec<&str>> {
 /// fixed secret bindings (bootstrap registry plus the release forge
 /// token, whose placements the release gates still police separately),
 /// and the runner-scoped MBX cache-mode selector. Hosted writes require a
-/// protected push to the default branch; every other run stays read-only.
+/// protected push to the default branch; every other hosted run stays
+/// read-only. A non-hosted runner resolves to none.
 /// Notably absent: `github.token` (render-time fetch binding only)
 /// and run IDs (never in env).
 const ENV_EXPRESSIONS: [&str; 9] = [
@@ -60,7 +61,7 @@ const ENV_EXPRESSIONS: [&str; 9] = [
     "github.ref_name",
     "github.event_name",
     "github.event_name == 'push' && 'write' || 'read'",
-    "runner.environment == 'github-hosted' && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read'",
+    "runner.environment == 'github-hosted' && (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read') || 'none'",
     "secrets.CARGO_REGISTRY_TOKEN",
     "secrets.GITHUB_TOKEN",
     "steps.mbx.outputs.cache-primary-key",
