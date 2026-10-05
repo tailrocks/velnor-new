@@ -127,7 +127,7 @@ pub(crate) fn build_workflow(
     let use_nextest = plan_uses_nextest(discovery);
     let use_opentofu = plan_uses_opentofu(discovery);
     let use_rust = plan_uses_rust(discovery);
-    let plan = build_plan_job(
+    let mut plan = build_plan_job(
         label,
         acquire.clone(),
         &catalog,
@@ -138,6 +138,9 @@ pub(crate) fn build_workflow(
         fetch_roots,
         discovery,
     )?;
+    if policy == WorkflowPolicy::VelnorRepositoryV1 {
+        plan.permissions = Some(crate::workflow_jobs::read_actions_permissions());
+    }
     jobs.insert(PLAN_JOB_ID.to_owned(), plan);
     let built = crate::crate_jobs::build_for_workflow(
         config,
