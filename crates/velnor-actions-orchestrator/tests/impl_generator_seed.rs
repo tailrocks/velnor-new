@@ -7,6 +7,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::process::{Command, Output};
 
+use velnor_actions_contract::ReleaseTarget;
 use velnor_actions_orchestrator::acquire_script_argv;
 
 #[test]
@@ -20,13 +21,13 @@ fn generator_seed_hit_skips_curl_and_a_bad_hash_does_not_copy()
         "/tmp/$(id)/velnor-actions-0.1.0",
         "$RUNNER_TEMP/velnor/bin/$(id)",
     ] {
-        assert!(acquire_script_argv(unsafe_staged, root_text, "x86_64-unknown-linux-gnu").is_err());
+        assert!(acquire_script_argv(unsafe_staged, root_text, ReleaseTarget::LinuxX86_64).is_err());
     }
     assert!(
         acquire_script_argv(
             "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0",
             root_text,
-            "x86_64-unknown-linux-gnu",
+            ReleaseTarget::LinuxX86_64,
         )
         .is_ok()
     );
@@ -38,7 +39,7 @@ fn generator_seed_hit_skips_curl_and_a_bad_hash_does_not_copy()
     let argv = acquire_script_argv(
         staged.to_str().ok_or("staged")?,
         root.to_str().ok_or("root")?,
-        "x86_64-unknown-linux-gnu",
+        ReleaseTarget::LinuxX86_64,
     )?;
     let bin = root.join("bin");
     std::fs::create_dir_all(&bin)?;

@@ -120,9 +120,8 @@ fn consumer_acquire_from(
     version: &str,
     json: Option<&str>,
 ) -> Result<Step, OrchestratorError> {
-    let target = ReleaseTarget::for_runner_label(label)
-        .map(ReleaseTarget::triple)
-        .ok_or_else(|| OrchestratorError::Contract {
+    let target =
+        ReleaseTarget::for_runner_label(label).ok_or_else(|| OrchestratorError::Contract {
             problem: format!("unsupported_target_for_runner:{label}"),
         })?;
     consumer_acquire_for_target(target, version, json)
@@ -137,11 +136,11 @@ pub(crate) fn consumer_acquire_for_runner(
     json: Option<&str>,
 ) -> Result<Step, OrchestratorError> {
     runner.validate("workflow", "check.runner")?;
-    consumer_acquire_for_target(runner.platform.target(), version, json)
+    consumer_acquire_for_target(runner.platform.release_target(), version, json)
 }
 
 fn consumer_acquire_for_target(
-    target: &str,
+    target: ReleaseTarget,
     version: &str,
     json: Option<&str>,
 ) -> Result<Step, OrchestratorError> {
@@ -161,17 +160,18 @@ fn consumer_acquire_for_target(
             ),
         });
     }
-    let record = manifest
-        .record_for_target(target)
-        .ok_or_else(|| OrchestratorError::Contract {
-            problem: format!("manifest_missing_target:{target}"),
-        })?;
+    let record =
+        manifest
+            .record_for_target(target.triple())
+            .ok_or_else(|| OrchestratorError::Contract {
+                problem: format!("manifest_missing_target:{}", target.triple()),
+            })?;
     // Defense in depth: re-bind the consumed record's URL even though
     // `validate` already bound every record (X1).
     check_release_artifact(
         &record.artifact,
         &manifest.version,
-        target,
+        target.triple(),
         "release-manifest.json",
         "targets.artifact",
     )?;
@@ -190,9 +190,8 @@ pub(crate) fn lock_acquire_step(
     label: &str,
     staged: &str,
 ) -> Result<Step, OrchestratorError> {
-    let target = ReleaseTarget::for_runner_label(label)
-        .map(ReleaseTarget::triple)
-        .ok_or_else(|| OrchestratorError::Contract {
+    let target =
+        ReleaseTarget::for_runner_label(label).ok_or_else(|| OrchestratorError::Contract {
             problem: format!("unsupported_target_for_runner:{label}"),
         })?;
     lock_acquire_for_target(lock, target, staged)
@@ -204,19 +203,19 @@ pub(crate) fn lock_acquire_for_runner(
     staged: &str,
 ) -> Result<Step, OrchestratorError> {
     runner.validate("workflow", "check.runner")?;
-    lock_acquire_for_target(lock, runner.platform.target(), staged)
+    lock_acquire_for_target(lock, runner.platform.release_target(), staged)
 }
 
 fn lock_acquire_for_target(
     lock: &GeneratorLock,
-    target: &str,
+    target: ReleaseTarget,
     staged: &str,
 ) -> Result<Step, OrchestratorError> {
-    let record = lock
-        .binary_for_target(target)
-        .ok_or_else(|| OrchestratorError::Contract {
-            problem: format!("lock_missing_target:{target}"),
-        })?;
+    let record =
+        lock.binary_for_target(target.triple())
+            .ok_or_else(|| OrchestratorError::Contract {
+                problem: format!("lock_missing_target:{}", target.triple()),
+            })?;
     acquire_step(
         &record.artifact,
         &record.sha256,
@@ -233,7 +232,7 @@ fn acquire_step(
     sha: &str,
     commit: &str,
     staged: &str,
-    target: &str,
+    target: ReleaseTarget,
 ) -> Result<Step, OrchestratorError> {
     let provenance = HelperProvenance::ReleaseAsset {
         url: url.to_owned(),
@@ -257,20 +256,15 @@ const GENERATOR_SEED_ROOT: &str = "/opt/velnor/seed";
 /// # Errors
 ///
 /// Returns [`OrchestratorError::Contract`] when the seed root or staged
-/// path is outside its closed safe-path grammar or the target is unsupported.
+/// path is outside its closed safe-path grammar.
 pub fn acquire_script_argv(
     staged: &str,
     seed_root: &str,
-    target: &str,
+    target: ReleaseTarget,
 ) -> Result<Vec<String>, OrchestratorError> {
     let digest = match target {
-        "x86_64-unknown-linux-gnu" => "sha256sum -c -",
-        "aarch64-apple-darwin" | "x86_64-apple-darwin" => "shasum -a 256 -c -",
-        _ => {
-            return Err(OrchestratorError::Contract {
-                problem: format!("acquire_unsupported_target:{target}"),
-            });
-        }
+        ReleaseTarget::LinuxX86_64 => "sha256sum -c -",
+        ReleaseTarget::MacosArm64 | ReleaseTarget::MacosX86_64 => "shasum -a 256 -c -",
     };
     if !absolute_token(seed_root) {
         return Err(OrchestratorError::Contract {
@@ -296,7 +290,7 @@ pub fn acquire_script_argv(
     Ok(vec!["sh".to_owned(), "-c".to_owned(), script])
 }
 
-fn acquire_argv(staged: &str, target: &str) -> Result<Vec<String>, OrchestratorError> {
+fn acquire_argv(staged: &str, target: ReleaseTarget) -> Result<Vec<String>, OrchestratorError> {
     acquire_script_argv(staged, GENERATOR_SEED_ROOT, target)
 }
 

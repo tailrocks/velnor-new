@@ -203,7 +203,7 @@ fn macos_helper_asset_and_native_digest_match_runner() {
 }
 
 #[test]
-fn acquisition_rejects_tampered_platform_and_unsupported_target() {
+fn acquisition_rejects_tampered_platform() {
     use velnor_actions_contract::config::{CheckExecutor, CheckPlatform, CheckRunner};
     let runner = CheckRunner {
         label: "macos-15".to_owned(),
@@ -219,13 +219,26 @@ fn acquisition_rejects_tampered_platform_and_unsupported_target() {
         )
         .is_err()
     );
-    assert!(
-        acquire_argv(
+}
+
+#[test]
+fn acquisition_template_selects_native_checksum_by_typed_target() {
+    for (target, expected) in [
+        (ReleaseTarget::LinuxX86_64, "sha256sum -c -"),
+        (ReleaseTarget::MacosArm64, "shasum -a 256 -c -"),
+        (ReleaseTarget::MacosX86_64, "shasum -a 256 -c -"),
+    ] {
+        let argv = acquire_script_argv(
             "${{ runner.temp }}/velnor/bin/velnor-actions-0.1.0",
-            "aarch64-unknown-linux-gnu"
+            "/opt/velnor/seed",
+            target,
         )
-        .is_err()
-    );
+        .expect("supported typed target");
+        assert!(argv[2].contains(expected), "{target:?}: {}", argv[2]);
+        if target != ReleaseTarget::LinuxX86_64 {
+            assert!(!argv[2].contains("sha256sum"), "{target:?}: {}", argv[2]);
+        }
+    }
 }
 
 #[test]
