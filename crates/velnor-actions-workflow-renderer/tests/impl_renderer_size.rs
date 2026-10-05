@@ -2,14 +2,14 @@
 
 use std::collections::BTreeSet;
 use velnor_actions_contract::{RoutingWorkflow, ScheduleTrigger, WorkflowPolicy};
-use velnor_actions_workflow_renderer::freshness::FreshnessSpec;
+use velnor_actions_workflow_renderer::freshness::{FreshnessSpec, render_freshness_workflow};
 use velnor_actions_workflow_renderer::release_tree::render_release_workflow;
 use velnor_actions_workflow_renderer::schema2::MbxQualificationPins;
 use velnor_actions_workflow_renderer::schema2::Schema2WorkflowRequest;
 use velnor_actions_workflow_renderer::setup::MiseSetup;
 use velnor_actions_workflow_renderer::{
-    MAX_WORKFLOW_BYTES, RenderError, RenderedFile, render_freshness_workflow,
-    render_schema2_workflows, render_tree, render_tree_with_extra, render_workflow_ir, with_marker,
+    MAX_WORKFLOW_BYTES, RenderError, RenderedFile, render_schema2_workflows, render_tree,
+    render_tree_with_extra, render_workflow_ir, with_marker,
 };
 
 const VERSION: &str = "0.1.0";
