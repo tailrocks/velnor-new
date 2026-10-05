@@ -11,6 +11,8 @@ use velnor_actions_contract::StepKind;
 
 use super::{export_step, import_script, import_step, save_step};
 
+const JOB: &str = "rust-tron-migration__local";
+
 fn scratch(name: &str) -> PathBuf {
     let path = std::env::temp_dir().join(format!("velnor-mbx-seed-{name}-{}", std::process::id()));
     fs::remove_dir_all(&path).ok();
@@ -36,6 +38,17 @@ fn fake_mbx(bin: &Path) {
 }
 
 fn run(script: &str, root: &Path, matched: &str, prefix: &str, exit: &str) -> (String, String) {
+    run_job(script, root, matched, prefix, exit, JOB)
+}
+
+fn run_job(
+    script: &str,
+    root: &Path,
+    matched: &str,
+    prefix: &str,
+    exit: &str,
+    job: &str,
+) -> (String, String) {
     let bin = root.join("bin");
     let home = root.join("home");
     let runner = root.join("rt");
@@ -56,6 +69,7 @@ fn run(script: &str, root: &Path, matched: &str, prefix: &str, exit: &str) -> (S
         .env("RUNNER_TEMP", &runner)
         .env("MATCHED", matched)
         .env("PREFIX", prefix)
+        .env("GITHUB_JOB", job)
         .env("MBX_LOG", &log)
         .env("MBX_EXIT", exit)
         .env("PATH", path)
@@ -79,7 +93,9 @@ fn shipped_import_uses_the_fixed_root_and_push_save_stays() {
     };
     let script = import_script("/opt/velnor/seed").expect("script");
     assert!(run[2].contains(&script), "{}", run[2]);
-    assert!(run[2].contains("/opt/velnor/seed/mbx"), "{}", run[2]);
+    assert!(run[2].contains("job=\"$GITHUB_JOB\""), "{}", run[2]);
+    assert!(run[2].contains("/opt/velnor/seed/mbx/$job"), "{}", run[2]);
+    assert!(run[2].contains("*[!A-Za-z0-9_.-]*"), "{}", run[2]);
     assert!(!run[2].contains("test -d"), "{}", run[2]);
     assert_eq!(
         env.get("PREFIX").map(String::as_str),
@@ -97,9 +113,9 @@ fn shipped_import_uses_the_fixed_root_and_push_save_stays() {
 fn seed_hit_imports_the_seed_bundle_and_keeps_it() {
     let root = scratch("hit");
     let seed = root.join("seed");
-    fs::create_dir_all(seed.join("mbx/bundle")).expect("bundle");
-    fs::write(seed.join("mbx/PREFIX"), "tool-1.98.1-").expect("prefix");
-    fs::write(seed.join("mbx/bundle/marker"), "objects").expect("marker");
+    fs::create_dir_all(seed.join(format!("mbx/{JOB}/bundle"))).expect("bundle");
+    fs::write(seed.join(format!("mbx/{JOB}/PREFIX")), "tool-1.98.1-").expect("prefix");
+    fs::write(seed.join(format!("mbx/{JOB}/bundle/marker")), "objects").expect("marker");
     let script = import_script(seed.to_str().expect("utf8")).expect("script");
     let (text, calls) = run(&script, &root, "", "tool-1.98.1-", "0");
     let private = root.join("rt/mbx-seed-bundle");
@@ -108,13 +124,13 @@ fn seed_hit_imports_the_seed_bundle_and_keeps_it() {
         "{calls}"
     );
     assert!(
-        !calls.contains(&format!("cache import {}/mbx/bundle", seed.display())),
+        !calls.contains(&format!("cache import {}/mbx/{JOB}/bundle", seed.display())),
         "{calls}"
     );
     assert!(!text.contains("no mbx bundle matched"), "{text}");
     assert!(!private.exists(), "private copy is removed");
     assert_eq!(
-        fs::read_to_string(seed.join("mbx/bundle/marker")).expect("kept"),
+        fs::read_to_string(seed.join(format!("mbx/{JOB}/bundle/marker"))).expect("kept"),
         "objects"
     );
     let (text, calls) = run(&script, &root, "", "tool-1.98.1-", "0");
@@ -122,7 +138,7 @@ fn seed_hit_imports_the_seed_bundle_and_keeps_it() {
     assert_eq!(calls.matches(&needle).count(), 2, "{calls}");
     assert!(!text.contains("no mbx bundle matched"), "{text}");
     assert_eq!(
-        fs::read_to_string(seed.join("mbx/bundle/marker")).expect("second hit"),
+        fs::read_to_string(seed.join(format!("mbx/{JOB}/bundle/marker"))).expect("second hit"),
         "objects"
     );
     fs::remove_dir_all(&root).ok();
@@ -132,9 +148,9 @@ fn seed_hit_imports_the_seed_bundle_and_keeps_it() {
 fn wrong_prefix_absent_seed_and_failed_import_leave_the_seed() {
     let root = scratch("miss");
     let seed = root.join("seed");
-    fs::create_dir_all(seed.join("mbx/bundle")).expect("bundle");
-    fs::write(seed.join("mbx/PREFIX"), "other-").expect("prefix");
-    fs::write(seed.join("mbx/bundle/marker"), "objects").expect("marker");
+    fs::create_dir_all(seed.join(format!("mbx/{JOB}/bundle"))).expect("bundle");
+    fs::write(seed.join(format!("mbx/{JOB}/PREFIX")), "other-").expect("prefix");
+    fs::write(seed.join(format!("mbx/{JOB}/bundle/marker")), "objects").expect("marker");
     let script = import_script(seed.to_str().expect("utf8")).expect("script");
     let (text, calls) = run(&script, &root, "", "tool-1.98.1-", "0");
     assert!(text.contains("no mbx bundle matched"), "{text}");
@@ -153,7 +169,7 @@ fn wrong_prefix_absent_seed_and_failed_import_leave_the_seed() {
         "failed import removes only the private copy"
     );
     assert_eq!(
-        fs::read_to_string(seed.join("mbx/bundle/marker")).expect("kept"),
+        fs::read_to_string(seed.join(format!("mbx/{JOB}/bundle/marker"))).expect("kept"),
         "objects"
     );
     let bundle = root.join("rt/mbx-single-bundle");
@@ -165,6 +181,27 @@ fn wrong_prefix_absent_seed_and_failed_import_leave_the_seed() {
         "{text}"
     );
     assert!(!bundle.exists(), "cache bundle is removed");
-    assert!(seed.join("mbx/bundle/marker").exists(), "seed stays");
+    assert!(
+        seed.join(format!("mbx/{JOB}/bundle/marker")).exists(),
+        "seed stays"
+    );
+    fs::remove_dir_all(&root).ok();
+}
+
+#[test]
+fn unsafe_job_id_does_not_import() {
+    let root = scratch("bad-job");
+    let seed = root.join("seed");
+    fs::create_dir_all(seed.join(format!("mbx/{JOB}/bundle"))).expect("bundle");
+    fs::write(seed.join(format!("mbx/{JOB}/PREFIX")), "tool-1.98.1-").expect("prefix");
+    fs::write(seed.join(format!("mbx/{JOB}/bundle/marker")), "objects").expect("marker");
+    let script = import_script(seed.to_str().expect("utf8")).expect("script");
+    let (text, calls) = run_job(&script, &root, "", "tool-1.98.1-", "0", "../secret");
+    assert!(text.contains("no mbx bundle matched"), "{text}");
+    assert!(calls.is_empty(), "{calls}");
+    assert_eq!(
+        fs::read_to_string(seed.join(format!("mbx/{JOB}/bundle/marker"))).expect("kept"),
+        "objects"
+    );
     fs::remove_dir_all(&root).ok();
 }
