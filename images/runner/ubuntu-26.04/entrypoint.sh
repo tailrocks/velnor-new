@@ -7,6 +7,7 @@ set -euo pipefail
 root="/home/runner"
 work="${root}/_work"
 listener="${root}/bin/Runner.Listener"
+entrypoint_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 # Stay under Linux MAX_ARG_STRLEN so --jitconfig fits in one argv slot.
 max=131071
 
@@ -50,4 +51,5 @@ fi
 
 cd "$root"
 # Shell variable only. No export. Image ENV/ARG/labels never carry this.
+"${entrypoint_dir}/velnor-wait-docker-api" "unix:///var/run/docker.sock"
 exec "$listener" run --jitconfig "$payload"
