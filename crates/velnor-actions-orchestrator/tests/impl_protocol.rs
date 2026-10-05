@@ -234,6 +234,43 @@ fn plan_outputs_encode_covered_tasks() -> TestResult {
     Ok(())
 }
 
+#[test]
+fn plan_outputs_bind_qualification_phase_and_cache_policy() -> TestResult {
+    let (repo, _) = plan_for_source_change()?;
+    let root = repo.path();
+    let head = git_line(&["rev-parse", "HEAD"], root)?;
+    let context = serde_json::json!({
+        "campaign": "protocol-test",
+        "phase": "third",
+        "repository": "owner/project",
+        "default_branch": "testmain",
+        "git_ref": "refs/heads/testmain",
+        "ref_protected": true,
+        "workflow_ref": "owner/project/.github/workflows/ci.yml@refs/heads/testmain",
+        "workflow_sha": head,
+        "source_sha": head,
+        "run_id": 7,
+        "run_attempt": 2,
+    });
+    let request = serde_json::json!({
+        "schema": 1,
+        "run_key": "r7-a2",
+        "base": null,
+        "head": head,
+        "event": "qualification",
+        "qualification": context,
+        "root": root.display().to_string(),
+        "repository": "owner/project",
+    });
+    let response = plan_internal(&request.to_string())?;
+    let outputs = plan_outputs(&response)?;
+    assert_eq!(outputs.qualification_campaign, "protocol-test");
+    assert_eq!(outputs.qualification_phase, "third");
+    assert!(outputs.qualification_cache_enabled);
+    assert!(!outputs.qualification_cache_write);
+    Ok(())
+}
+
 /// Producer/consumer agreement: assembled files feed the merge unchanged.
 #[test]
 fn merge_assembled_request_roundtrips_to_passed() -> TestResult {

@@ -17,11 +17,12 @@ use std::process::ExitCode;
 use clap::Parser;
 use velnor_actions_orchestrator::{
     COVERED_TASKS_OUTPUT, FETCH_OP, GenerateOptions, MERGE_OP, OrchestratorError, PLAN_OP,
-    PRESEED_MANIFEST_OP, PUBLISH_OP, REPORT_OP, REQUEST_FILE_ENV, WRITE_REQUEST_OP,
-    generate_dispatched, init_config, merge_internal, merge_passed, parse_dispatch_mode,
-    plan_internal, plan_outputs, plan_text_checked, prepare, publish_final_report,
-    publish_plan_files, resolve_root, response_path_for, retrieve_reports, write_preseed_manifest,
-    write_request, write_task_report,
+    PRESEED_MANIFEST_OP, PUBLISH_OP, QUALIFICATION_CACHE_ENABLED_OUTPUT,
+    QUALIFICATION_CACHE_WRITE_OUTPUT, QUALIFICATION_CAMPAIGN_OUTPUT, QUALIFICATION_PHASE_OUTPUT,
+    REPORT_OP, REQUEST_FILE_ENV, WRITE_REQUEST_OP, generate_dispatched, init_config,
+    merge_internal, merge_passed, parse_dispatch_mode, plan_internal, plan_outputs,
+    plan_text_checked, prepare, publish_final_report, publish_plan_files, resolve_root,
+    response_path_for, retrieve_reports, write_preseed_manifest, write_request, write_task_report,
 };
 
 use crate::args::{Cli, Command};
@@ -212,6 +213,13 @@ fn run_plan_internal(path: &Path) -> ExitCode {
     body.push('=');
     body.push_str(&outputs.covered_tasks);
     body.push('\n');
+    body.push_str(&format!(
+        "{QUALIFICATION_CAMPAIGN_OUTPUT}={}\n{QUALIFICATION_PHASE_OUTPUT}={}\n{QUALIFICATION_CACHE_ENABLED_OUTPUT}={}\n{QUALIFICATION_CACHE_WRITE_OUTPUT}={}\n",
+        outputs.qualification_campaign,
+        outputs.qualification_phase,
+        outputs.qualification_cache_enabled,
+        outputs.qualification_cache_write,
+    ));
     match fs::OpenOptions::new()
         .append(true)
         .create(true)

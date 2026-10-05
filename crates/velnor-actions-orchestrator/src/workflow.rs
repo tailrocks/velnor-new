@@ -10,8 +10,9 @@ use std::collections::BTreeMap;
 
 use velnor_actions_actionlint::{ActionlintConfigInput, IgnorePolicy, StepSyntax};
 use velnor_actions_contract::{
-    Concurrency, GeneratorValidation, Job, Permissions, Stack, Step, StepKind, Trigger,
-    ValidatorKind, VelnorConfig, VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy,
+    Concurrency, DispatchInput, DispatchInputType, GeneratorValidation, Job, Permissions, Stack,
+    Step, StepKind, Trigger, ValidatorKind, VelnorConfig, VelnorSupportWorkflow, WorkflowDispatch,
+    WorkflowIr, WorkflowPolicy,
 };
 use velnor_actions_mise::{
     PREPARE_RUST_COMPONENTS_STEP, PrepareRustComponents, ToolCatalog, ToolHomes,
@@ -170,7 +171,8 @@ pub(crate) fn build_workflow(
             pull_request_types: EXPECTED_PR_TYPES.iter().map(ToString::to_string).collect(),
             push_branches: vec![branch.to_owned()],
             merge_group: true,
-            workflow_dispatch: None,
+            workflow_dispatch: (policy == WorkflowPolicy::VelnorRepositoryV1)
+                .then(qualification_dispatch),
             schedule: None,
         },
         permissions: Permissions::default(),
@@ -188,6 +190,34 @@ pub(crate) fn build_workflow(
         context,
         actionlint,
     })
+}
+
+/// Closed dispatch inputs for the protected hosted qualification workflow.
+fn qualification_dispatch() -> WorkflowDispatch {
+    WorkflowDispatch {
+        inputs: vec![
+            DispatchInput {
+                name: "campaign".to_owned(),
+                required: true,
+                input_type: DispatchInputType::String,
+                choices: Vec::new(),
+                default: None,
+            },
+            DispatchInput {
+                name: "phase".to_owned(),
+                required: true,
+                input_type: DispatchInputType::Choice,
+                choices: vec![
+                    "cold".to_owned(),
+                    "control".to_owned(),
+                    "third".to_owned(),
+                    "useful_delta".to_owned(),
+                    "warm".to_owned(),
+                ],
+                default: None,
+            },
+        ],
+    }
 }
 
 /// Insert the lint, final-gate, and baseline-publish jobs.

@@ -111,6 +111,10 @@ fn strategy_shape_exact_and_marker_stripped() -> Result<(), RenderError> {
         "      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}",
         "    outputs:",
         "      matrix: ${{ steps.plan.outputs.matrix }}",
+        "      qualification_campaign: ${{ steps.plan.outputs.qualification_campaign }}",
+        "      qualification_phase: ${{ steps.plan.outputs.qualification_phase }}",
+        "      qualification_cache_enabled: ${{ steps.plan.outputs.qualification_cache_enabled }}",
+        "      qualification_cache_write: ${{ steps.plan.outputs.qualification_cache_write }}",
         "        id: plan",
     ] {
         assert!(text.contains(line), "missing {line}:\n{text}");

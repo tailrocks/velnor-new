@@ -32,13 +32,15 @@ mod needs_channel;
 
 use std::path::{Path, PathBuf};
 
-use velnor_actions_contract::{NEEDS_EXPECTED_ENV, canonical_json_str, parse_strict_json};
+use velnor_actions_contract::{
+    NEEDS_EXPECTED_ENV, QualificationDispatch, canonical_json_str, parse_strict_json,
+};
 
 use self::needs_channel::{NEEDS_ENV, parse_needs};
 use crate::OrchestratorError;
 use crate::internal::{internal, internal_contract};
 use crate::internal_request::resolve_run_key;
-use crate::request_event::workflow_event_for;
+use crate::request_event::{qualification_dispatch_for_parts, workflow_event_for};
 
 /// Assemble one canonical merge request from a run directory.
 ///
@@ -100,6 +102,7 @@ pub(crate) fn assemble_with_needs(
 ) -> Result<String, OrchestratorError> {
     let mut errors = Vec::new();
     let actual_event = resolve_actual_event(event_name, event_payload, &mut errors);
+    let actual_qualification = resolve_actual_qualification(event_name, event_payload, &mut errors);
     let plan = read_json(run_dir, "plan.json", "plan", true, &mut errors);
     let matrix = read_json(run_dir, "matrix.json", "matrix", true, &mut errors);
     let (reports, task_reports) = crate::retrieve_reports::read_staged_reports(
@@ -115,6 +118,7 @@ pub(crate) fn assemble_with_needs(
         "schema": 1,
         "run_key": run_key,
         "actual_event": actual_event,
+        "actual_qualification": actual_qualification,
         "candidate_attestation": attestation,
         "plan": plan,
         "matrix": matrix,
@@ -177,7 +181,7 @@ fn resolve_actual_event(
                 return None;
             }
         }
-        None if name == "pull_request" => {
+        None if matches!(name, "pull_request" | "workflow_dispatch") => {
             errors.push("missing_actual_payload".to_owned());
             return None;
         }
@@ -191,6 +195,55 @@ fn resolve_actual_event(
         }
         Err(_) => {
             errors.push("actual_event_error".to_owned());
+            None
+        }
+    }
+}
+
+/// Reacquire qualification provenance from this merge runner's actual
+/// dispatch payload and immutable GitHub environment.
+fn resolve_actual_qualification(
+    event_name: Option<&str>,
+    event_payload: Option<&str>,
+    errors: &mut Vec<String>,
+) -> Option<QualificationDispatch> {
+    let Some(name) = event_name else {
+        return None;
+    };
+    if name != "workflow_dispatch" {
+        return None;
+    }
+    let Some(text) = event_payload else {
+        errors.push("missing_actual_payload".to_owned());
+        return None;
+    };
+    let payload = match parse_strict_json(text) {
+        Ok(payload) => payload,
+        Err(_) => {
+            errors.push("malformed_actual_payload".to_owned());
+            return None;
+        }
+    };
+    let read = |name: &str| std::env::var(name).ok();
+    match qualification_dispatch_for_parts(
+        name,
+        &payload,
+        read("GITHUB_REPOSITORY").as_deref(),
+        read("GITHUB_REF").as_deref(),
+        read("GITHUB_REF_PROTECTED").as_deref(),
+        read("GITHUB_WORKFLOW_REF").as_deref(),
+        read("GITHUB_WORKFLOW_SHA").as_deref(),
+        read("GITHUB_SHA").as_deref(),
+        read("GITHUB_RUN_ID").as_deref(),
+        read("GITHUB_RUN_ATTEMPT").as_deref(),
+    ) {
+        Ok(context) => context,
+        Err(OrchestratorError::Internal { problem }) => {
+            errors.push(problem);
+            None
+        }
+        Err(_) => {
+            errors.push("actual_qualification_error".to_owned());
             None
         }
     }

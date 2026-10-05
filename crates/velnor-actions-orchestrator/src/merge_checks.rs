@@ -18,6 +18,10 @@ use crate::cover::revalidate_coverage;
 use crate::cover::shard::{check_entry_shards, validate_budgets};
 use crate::internal::{SCHEMA, internal_contract};
 
+#[cfg(test)]
+#[path = "merge_qualification_tests.rs"]
+mod qualification_tests;
+
 /// Check 1: `matrix.json` agrees with the plan matrix (WF-4.16).
 pub(crate) fn check_agreement(
     matrix: Option<&PlanMatrix>,
@@ -71,7 +75,17 @@ pub(crate) fn check_trust_coherence(
         }
         None => false,
     };
-    if !coherent {
+    let qualification_coherent = match plan.event {
+        velnor_actions_contract::WorkflowEvent::Qualification => {
+            plan.qualification.as_ref() == request.actual_qualification.as_ref()
+                && request
+                    .actual_qualification
+                    .as_ref()
+                    .is_some_and(|context| context.source_sha == plan.head)
+        }
+        _ => plan.qualification.is_none() && request.actual_qualification.is_none(),
+    };
+    if !coherent || !qualification_coherent {
         signals.planning_failed = true;
         miss_reasons.insert("trust_scope_mismatch".to_owned());
     }
