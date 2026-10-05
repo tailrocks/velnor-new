@@ -7,20 +7,20 @@ use tokio::net::{UnixListener, UnixStream};
 
 use super::TIMEOUT;
 
-pub(super) struct DockerResponse {
+pub(in crate::launch) struct DockerResponse {
     status: Option<u16>,
     body: String,
     hang: bool,
 }
 
-pub(super) struct DockerStub {
-    pub(super) docker: Docker,
+pub(in crate::launch) struct DockerStub {
+    pub(in crate::launch) docker: Docker,
     path: PathBuf,
     task: Option<tokio::task::JoinHandle<Result<(), String>>>,
 }
 
 impl DockerStub {
-    pub(super) fn open(responses: Vec<DockerResponse>) -> Result<Self, String> {
+    pub(in crate::launch) fn open(responses: Vec<DockerResponse>) -> Result<Self, String> {
         static NEXT: AtomicU64 = AtomicU64::new(0);
         let number = NEXT.fetch_add(1, Ordering::Relaxed);
         let path = PathBuf::from(format!(
@@ -52,7 +52,7 @@ impl DockerStub {
         })
     }
 
-    pub(super) async fn finish(mut self) -> Result<(), String> {
+    pub(in crate::launch) async fn finish(mut self) -> Result<(), String> {
         let mut task = self
             .task
             .take()

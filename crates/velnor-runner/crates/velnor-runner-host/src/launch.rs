@@ -265,17 +265,19 @@ struct Ready<'a> {
     session: &'a QueueSession,
     admin_token: &'a str,
     path: String,
-    queue: Option<String>,
     polled: &'a Poll,
 }
 
-async fn drive_ready(
-    link: &mut Link,
+async fn drive_ready<T>(
+    lane: &mut T,
     ready: Ready<'_>,
     journal: &Journal,
     docker: &bollard::Docker,
     capacity: u32,
-) -> Result<Option<Started>, EnsureError> {
+) -> Result<Option<Started>, EnsureError>
+where
+    T: Transport + Lane,
+{
     if slot::busy(journal, docker, capacity).await? {
         return Ok(None);
     }
@@ -285,23 +287,11 @@ async fn drive_ready(
         queue_token: ready.session.token().to_owned(),
         admin_token: ready.admin_token.to_owned(),
     };
-    let admin = link.base().to_owned();
-    let mut lane = HostLane {
-        link,
-        admin,
-        queue: ready.queue,
-    };
-    drive_offer(
-        &mut lane,
-        &ctx,
-        ready.polled,
-        journal,
-        |volume, jit, bind| {
-            let volume = volume.to_owned();
-            let payload = jit.to_vec();
-            async move { bind::start_bound(docker, &volume, &payload, &bind).await }
-        },
-    )
+    drive_offer(lane, &ctx, ready.polled, journal, |volume, jit, bind| {
+        let volume = volume.to_owned();
+        let payload = jit.to_vec();
+        async move { bind::start_bound(docker, &volume, &payload, &bind).await }
+    })
     .await
 }
 

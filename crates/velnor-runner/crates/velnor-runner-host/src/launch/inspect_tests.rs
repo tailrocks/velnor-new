@@ -8,7 +8,8 @@ use crate::launch_harness::Scratch;
 use crate::{EnsureError, HostError, IntentState, Journal, Outcome};
 
 mod docker_stub;
-use self::docker_stub::{DockerStub, closed, hanging, http};
+pub(super) use self::docker_stub::DockerStub;
+use self::docker_stub::{closed, hanging, http};
 
 const TIMEOUT: Duration = Duration::from_secs(2);
 
