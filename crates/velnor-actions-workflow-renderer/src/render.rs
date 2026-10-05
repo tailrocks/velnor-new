@@ -17,8 +17,9 @@ use velnor_actions_contract::{
 };
 
 use crate::{
-    RenderError, cache_p08, closure, commands, document, final_steps, guard, marker, matrix, msrv,
-    preseed_closure, steps, support, workflow_policy, yaml::render_yaml,
+    RenderError, cache_p08, closure, commands, dispatch_cache_boundary, document, final_steps,
+    guard, marker, matrix, msrv, preseed_closure, steps, support, workflow_policy,
+    yaml::render_yaml,
 };
 
 pub use crate::matrix::{
@@ -268,6 +269,7 @@ pub fn finalize_jobs(
     closure::insert_task_closure(&mut jobs)?;
     closure::insert_final_closure(&mut jobs)?;
     final_steps::insert_final_fanin(&mut jobs, ctx)?;
+    dispatch_cache_boundary::suppress_unvalidated_cache_access(&mut jobs);
     Ok(jobs)
 }
 

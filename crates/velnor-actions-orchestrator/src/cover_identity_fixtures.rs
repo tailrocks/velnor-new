@@ -24,6 +24,7 @@ pub(super) fn plan_with(task_ids: &[&str]) -> Plan {
         base: None,
         head: "head".to_owned(),
         event: WorkflowEvent::PullRequest,
+        qualification: None,
         runner: PlanRunner {
             label: "ubuntu-26.04".to_owned(),
             selection: RunnerSelection::LatestDefault,

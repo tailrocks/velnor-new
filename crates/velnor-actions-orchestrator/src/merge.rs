@@ -13,8 +13,8 @@ use std::collections::BTreeSet;
 use serde::Deserialize;
 use velnor_actions_contract::{
     FinalCounts, FinalReport, FinalStatus, MatrixReport, ObligationDecision, Plan, PlanMatrix,
-    RequiredJobResult, TaskReport, WorkflowEvent, final_report_id_for_run, parse_strict_json,
-    validate_run_key,
+    QualificationDispatch, RequiredJobResult, TaskReport, WorkflowEvent, final_report_id_for_run,
+    parse_strict_json, validate_run_key,
 };
 
 use self::merge_checks::{
@@ -44,6 +44,9 @@ pub(crate) struct MergeRequest {
     /// stronger event fails closed instead of inheriting its stamp).
     #[serde(default)]
     actual_event: Option<WorkflowEvent>,
+    /// Qualification provenance recaptured from the actual merge runner.
+    #[serde(default)]
+    actual_qualification: Option<QualificationDispatch>,
     /// Head-bound candidate attestation; required in candidate mode.
     #[serde(default)]
     candidate_attestation: Option<CandidateAttestation>,

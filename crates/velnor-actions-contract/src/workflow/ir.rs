@@ -1,4 +1,5 @@
 //! Stack-neutral GitHub Actions workflow IR.
+use super::dispatch::WorkflowDispatch;
 use super::jobs::{ScheduleTrigger, is_safe_display_name};
 use super::permissions::{PermissionLevel, Permissions};
 use super::timeout::JobTimeout;
@@ -28,36 +29,13 @@ pub struct Trigger {
     pub push_branches: Vec<String>,
     /// Whether `merge_group` is enabled.
     pub merge_group: bool,
-    /// Optional `workflow_dispatch` inputs (exact-plan bootstrap dispatch).
+    /// Optional typed `workflow_dispatch` inputs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub workflow_dispatch: Option<WorkflowDispatch>,
     /// Optional cron schedule.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub schedule: Option<ScheduleTrigger>,
 }
-/// Typed `workflow_dispatch` inputs (exact-plan references only).
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WorkflowDispatch {
-    /// Dispatch inputs, sorted by name, unique.
-    pub inputs: Vec<DispatchInput>,
-}
-/// One typed dispatch input (always rendered as `type: string`).
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DispatchInput {
-    /// Input name (`[a-z0-9-_]`).
-    pub name: String,
-    /// Whether the dispatcher must supply a value.
-    pub required: bool,
-    /// Optional default value (ASCII, no control characters).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub default: Option<String>,
-}
-
-impl DispatchInput {
-    /// Rendered input type: always `string`, never boolean/choice.
-    pub const INPUT_TYPE: &'static str = "string";
-}
-
 /// Concurrency group.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Concurrency {
@@ -193,61 +171,6 @@ impl Trigger {
         }
         if let Some(schedule) = &self.schedule {
             schedule.validate()?;
-        }
-        Ok(())
-    }
-}
-impl WorkflowDispatch {
-    /// Validate input names (charset, sorted, unique) and defaults.
-    fn validate(&self) -> Result<(), ContractError> {
-        let names: Vec<&str> = self
-            .inputs
-            .iter()
-            .map(|input| input.name.as_str())
-            .collect();
-        let mut sorted = names.clone();
-        sorted.sort_unstable();
-        if sorted != names {
-            return Err(ContractError::identity(
-                "trigger.dispatch.inputs",
-                "must_be_sorted",
-            ));
-        }
-        let unique: BTreeSet<&str> = names.iter().copied().collect();
-        if unique.len() != names.len() {
-            return Err(ContractError::identity(
-                "trigger.dispatch.inputs",
-                "duplicate_input",
-            ));
-        }
-        for input in &self.inputs {
-            input.validate()?;
-        }
-        Ok(())
-    }
-}
-impl DispatchInput {
-    /// Validate name charset and default value safety.
-    fn validate(&self) -> Result<(), ContractError> {
-        let name = self.name.as_str();
-        let charset = name
-            .bytes()
-            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || matches!(b, b'-' | b'_'));
-        if name.is_empty() || !charset {
-            return Err(ContractError::identity(
-                "trigger.dispatch.inputs.name",
-                format!("bad_name:{name}"),
-            ));
-        }
-        if let Some(default) = &self.default {
-            let safe =
-                !default.is_empty() && default.bytes().all(|b| b.is_ascii_graphic() || b == b' ');
-            if !safe {
-                return Err(ContractError::identity(
-                    "trigger.dispatch.inputs.default",
-                    format!("bad_default:{name}"),
-                ));
-            }
         }
         Ok(())
     }

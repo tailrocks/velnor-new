@@ -9,8 +9,8 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use velnor_actions_contract::{
-    ContractError, Plan, PlanBaseline, PlanMatrix, PlanRunner, ProposedTask, RunnerSelection,
-    WorkflowEvent, canonical_json_bytes, parse_strict_json, plan_id_for_run,
+    ContractError, Plan, PlanBaseline, PlanMatrix, PlanRunner, ProposedTask, QualificationDispatch,
+    RunnerSelection, WorkflowEvent, canonical_json_bytes, parse_strict_json, plan_id_for_run,
 };
 use velnor_actions_mise::ToolCatalog;
 
@@ -72,6 +72,9 @@ struct PlanRequest {
     head: String,
     /// Triggering event.
     event: WorkflowEvent,
+    /// Runner context for a protected hosted qualification dispatch.
+    #[serde(default)]
+    qualification: Option<QualificationDispatch>,
     /// Repository root override; defaults to the resolved root.
     #[serde(default)]
     root: Option<PathBuf>,
@@ -130,6 +133,7 @@ pub fn plan_internal(request_json: &str) -> Result<String, OrchestratorError> {
     let root = plan_root(request.root.as_deref())?;
     verify_checkout(&root, request.event, &request.head)?;
     let prep = prepare(&root)?;
+    validate_qualification_request(&request, &prep.default_branch)?;
     let catalog = ToolCatalog::pinned();
     let mut warnings = Vec::new();
     warnings.extend(crate::evidence::workspace_drift_warnings(
@@ -165,26 +169,49 @@ pub fn plan_internal(request_json: &str) -> Result<String, OrchestratorError> {
             })
             .ok()
     });
-    apply_baseline(
-        &mut plan,
-        request.event,
-        BaselineInputs {
-            branch: &prep.default_branch,
-            root: &prep.root,
-            workflow: velnor_actions_workflow_renderer::render::WORKFLOW_PATH,
-            catalog: &catalog,
-            repository: request.repository.as_deref(),
-        },
-        manifest.clone(),
-        &prep.discovery,
-        changed.as_ref(),
-    )?;
+    if request.event != WorkflowEvent::Qualification {
+        apply_baseline(
+            &mut plan,
+            request.event,
+            BaselineInputs {
+                branch: &prep.default_branch,
+                root: &prep.root,
+                workflow: velnor_actions_workflow_renderer::render::WORKFLOW_PATH,
+                catalog: &catalog,
+                repository: request.repository.as_deref(),
+            },
+            manifest.clone(),
+            &prep.discovery,
+            changed.as_ref(),
+        )?;
+    }
     plan.validate().map_err(internal_contract)?;
     check_matrix_budget(&plan.matrix)?;
     let response = plan_response(plan, manifest);
     serde_json::to_string(&response).map_err(|err| OrchestratorError::Internal {
         problem: format!("response_encode:{err}"),
     })
+}
+
+/// Bind any qualification context to this request and prepared repository.
+fn validate_qualification_request(
+    request: &PlanRequest,
+    default_branch: &str,
+) -> Result<(), OrchestratorError> {
+    match (request.event, request.qualification.as_ref()) {
+        (WorkflowEvent::Qualification, Some(context)) => {
+            let repository = request
+                .repository
+                .as_deref()
+                .ok_or_else(|| internal("missing_qualification_repository"))?;
+            context
+                .validate_for(default_branch, repository, &request.head)
+                .map_err(internal_contract)
+        }
+        (WorkflowEvent::Qualification, None) => Err(internal("missing_qualification_context")),
+        (_, Some(_)) => Err(internal("qualification_context_on_wrong_event")),
+        (_, None) => Ok(()),
+    }
 }
 
 /// Assemble the `plan-v1` response, staging trusted bytes when covered.
@@ -330,6 +357,7 @@ fn build_plan(
         base: request.base.clone(),
         head: request.head.clone(),
         event: request.event,
+        qualification: request.qualification.clone(),
         runner: PlanRunner {
             label: label.to_owned(),
             selection,

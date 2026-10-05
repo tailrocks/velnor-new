@@ -14,6 +14,7 @@ pub mod closure;
 mod closure_paths;
 mod commands;
 mod composite;
+mod dispatch_cache_boundary;
 mod document;
 mod document_steps;
 mod error;

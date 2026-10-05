@@ -107,24 +107,25 @@ pub use vcs::VcsInputs;
 pub use workflow::{
     BaselineProof, BaselineStatus, CANDIDATE_ATTESTATION_FILENAME, CANDIDATE_EVIDENCE_SUBDIR,
     CI_WORKFLOW_PATH, CRATE_JOB_ID_PREFIX, CacheLayer, CacheOutcome, CacheResult, Concurrency,
-    CrateJob, CrateObligation, DYNAMIC_MATRIX_OUTPUT_MODE, EntryCacheIds, ExecuteTaskIds,
+    CrateJob, CrateObligation, DispatchInput, DispatchInputType, EntryCacheIds, ExecuteTaskIds,
     ExecuteTaskRef, FINAL_JSON_FILENAME, FRESHNESS_CRON_WEEKLY, FRESHNESS_WORKFLOW_PATH,
     FinalCounts, FinalReport, FinalStatus, Job, JobConclusion, JobTimeout, MATRIX_JSON_FILENAME,
     ManifestTaskProof, MatrixEntry, MatrixReport, MatrixStatus, MatrixTaskEntry, NEEDS_CHANNEL_ENV,
     NEEDS_CHANNEL_EXPRESSION, NEEDS_EXPECTED_ENV, NeedsConclusions, NotSelectedReason,
-    ObligationDecision, PLAN_DISPLAY_NAME, PLAN_JOB_ID, PLAN_JSON_FILENAME,
-    PLAN_MATRIX_OUTPUT_MODE_ENV, PermissionLevel, Permissions, Plan, PlanBaseline, PlanGenerator,
-    PlanMatrix, PlanObligation, PlanPackage, PlanRunner, REQUIRED_CONDITION, REQUIRED_DISPLAY_NAME,
-    REQUIRED_JOB_ID, RequiredCheckMigration, RequiredJobResult, STALE_WORKFLOW_PATHS,
-    ScheduleTrigger, Step, StepKind, TOFU_DISPLAY_PREFIX, TOFU_JOB_ID_PREFIX, TaskReport,
-    TaskStatus, TaskTiming, Trigger, Trust, ValidatorKind, WORKFLOW_DISPLAY_NAME, WorkflowEvent,
-    WorkflowIr, assign_crate_job_ids, check_matrix_agreement, crate_display_label,
-    crate_display_name, expand_workflow, final_report_id_for_run, final_report_relpath,
-    is_crate_job_id, is_safe_display_name, join_runner_temp, matrix_json_bytes,
-    matrix_report_relpath, plan_json_bytes, slugify_segment, task_report_relpath,
-    tofu_display_name, trust_for_event, validate_final_report_id, validate_job_id,
-    validate_matrix_run,
+    ObligationDecision, PLAN_DISPLAY_NAME, PLAN_JOB_ID, PLAN_JSON_FILENAME, PermissionLevel,
+    Permissions, Plan, PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation, PlanPackage,
+    PlanRunner, QualificationDispatch, QualificationPhase, REQUIRED_CONDITION,
+    REQUIRED_DISPLAY_NAME, REQUIRED_JOB_ID, RequiredCheckMigration, RequiredJobResult,
+    STALE_WORKFLOW_PATHS, ScheduleTrigger, Step, StepKind, TOFU_DISPLAY_PREFIX, TOFU_JOB_ID_PREFIX,
+    TaskReport, TaskStatus, TaskTiming, Trigger, Trust, ValidatorKind, WORKFLOW_DISPLAY_NAME,
+    WorkflowDispatch, WorkflowEvent, WorkflowIr, assign_crate_job_ids, check_matrix_agreement,
+    crate_display_label, crate_display_name, expand_workflow, final_report_id_for_run,
+    final_report_relpath, is_crate_job_id, is_safe_display_name, join_runner_temp,
+    matrix_json_bytes, matrix_report_relpath, plan_json_bytes, slugify_segment,
+    task_report_relpath, tofu_display_name, trust_for_event, validate_final_report_id,
+    validate_job_id, validate_matrix_run,
 };
+pub use workflow::{DYNAMIC_MATRIX_OUTPUT_MODE, PLAN_MATRIX_OUTPUT_MODE_ENV};
 
 /// Version marker for the contract schema shell.
 pub const CONTRACT_VERSION: u32 = 0;

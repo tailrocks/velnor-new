@@ -2,6 +2,7 @@
 use super::baseline::{BaselineProof, PlanBaseline};
 use super::cache_ids::EntryCacheIds;
 use super::execute::{ExecuteTaskIds, ExecuteTaskRef};
+use super::qualification_dispatch::QualificationDispatch;
 use super::trust::Trust;
 use crate::canonical::{normalize_posix_path, validate_digest};
 use crate::config::{RUNNER_LABEL_CATALOG, RunnerSelection, VelnorConfig};
@@ -78,6 +79,9 @@ pub struct Plan {
     pub head: String,
     /// Triggering event.
     pub event: WorkflowEvent,
+    /// Authenticated dispatch context, required only for qualification runs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub qualification: Option<QualificationDispatch>,
     /// Selected runner.
     pub runner: PlanRunner,
     /// Trust scope.
@@ -115,6 +119,8 @@ pub enum WorkflowEvent {
     Local,
     /// Fork pull-request run (untrusted, read-only caches).
     Fork,
+    /// Protected default-branch hosted qualification dispatch.
+    Qualification,
 }
 /// Selected runner record.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -307,6 +313,7 @@ impl Plan {
         if plan_id_for_run(&self.run_key)? != self.plan_id {
             return Err(ContractError::identity("plan_id", "plan_mismatch"));
         }
+        super::qualification_dispatch::validate_plan_qualification(self)?;
         self.runner.validate()?;
         check_sorted_unique(&self.task_ids, "task_ids")?;
         check_sorted_by(&self.packages, "packages", |pkg| pkg.package_id.as_str())?;

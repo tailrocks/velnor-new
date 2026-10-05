@@ -3,6 +3,7 @@ pub mod artifacts;
 pub mod baseline;
 pub mod cache_ids;
 pub mod crate_job;
+pub mod dispatch;
 pub mod execute;
 pub mod ir;
 pub mod jobs;
@@ -11,6 +12,8 @@ pub mod needs;
 pub mod permissions;
 pub mod plan;
 pub mod qualification;
+pub mod qualification_dispatch;
+pub mod qualification_phase;
 pub mod report;
 pub mod timeout;
 pub mod trust;
@@ -22,6 +25,7 @@ pub use artifacts::{
 pub use baseline::{BaselineProof, BaselineStatus, ManifestTaskProof, PlanBaseline};
 pub use cache_ids::EntryCacheIds;
 pub use crate_job::{CrateJob, CrateObligation};
+pub use dispatch::{DispatchInput, DispatchInputType, WorkflowDispatch};
 pub use execute::{ExecuteTaskIds, ExecuteTaskRef};
 pub use ir::{Concurrency, Job, Step, StepKind, Trigger, WorkflowIr};
 pub use jobs::{
@@ -46,6 +50,11 @@ pub use qualification::{
     FinalCounts, FinalReport, FinalStatus, JobConclusion, RequiredJobResult,
     final_report_id_for_run, final_report_relpath, join_runner_temp, matrix_report_relpath,
     task_report_relpath, validate_final_report_id,
+};
+pub use qualification_dispatch::QualificationDispatch;
+pub use qualification_phase::{
+    QUALIFICATION_CACHE_ENABLED_OUTPUT, QUALIFICATION_CACHE_WRITE_OUTPUT,
+    QUALIFICATION_CAMPAIGN_OUTPUT, QUALIFICATION_PHASE_OUTPUT, QualificationPhase,
 };
 pub use report::{
     CacheLayer, CacheOutcome, CacheResult, MatrixReport, MatrixStatus, MatrixTaskEntry,
