@@ -14,12 +14,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{
-    CrateJob, CrateObligation, Job, JobTimeout, ProposedTask, Stack, Step, VelnorConfig,
-    WorkflowPolicy, crate_display_name, matrix_id_for_task_group, matrix_key_for_id,
-    tofu_display_name,
+    CrateJob, CrateObligation, Job, JobTimeout, ProposedTask, Step, VelnorConfig, WorkflowPolicy,
+    crate_display_name, matrix_id_for_task_group, matrix_key_for_id, tofu_display_name,
 };
 use velnor_actions_mise::{PinnedTool, TaskCacheMode, ToolCatalog};
-use velnor_actions_rust::task_kind_rank;
 use velnor_actions_workflow_renderer::render::PLAN_JOB_ID;
 use velnor_actions_workflow_renderer::steps::CompileDriver as RenderDriver;
 
@@ -28,6 +26,7 @@ use crate::crate_job_ids::{assign_group_ids, group_is_tofu, group_runnable};
 use crate::discover::Discovery;
 use crate::internal::internal;
 use crate::matrix_step::step_name_for;
+use crate::obligation_order::obligation_order_key;
 
 #[path = "crate_jobs_stage.rs"]
 mod stage;
@@ -175,19 +174,6 @@ pub(crate) fn build_crate_jobs(
 /// Shared with `plan` so its obligation list matches emission exactly.
 pub(crate) fn is_runnable(task: &ProposedTask) -> bool {
     !task.no_targets && !task.identity.unit_id.is_empty()
-}
-
-/// Shared key for the order rendered into each crate job's task steps.
-pub(crate) fn obligation_order_key<'a>(
-    stack_id: &str,
-    task_kind: &str,
-    task_id: &'a str,
-) -> (u32, &'a str) {
-    let rank = match Stack::from_id(stack_id) {
-        Some(Stack::Tofu) => velnor_actions_tofu::task_kind_rank(task_kind),
-        _ => task_kind_rank(task_kind),
-    };
-    (rank, task_id)
 }
 
 /// Rank one proposal through the shared task-order key.
