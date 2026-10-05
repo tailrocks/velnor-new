@@ -7,6 +7,8 @@ mod impl_renderer_acquire;
 mod impl_renderer_cache_steps;
 #[path = "impl_renderer_cache_t22.rs"]
 mod impl_renderer_cache_t22;
+#[path = "impl_renderer_cache_writer_gate.rs"]
+mod impl_renderer_cache_writer_gate;
 #[path = "impl_renderer_f2close.rs"]
 mod impl_renderer_f2close;
 #[path = "impl_renderer_f2close_hygiene.rs"]

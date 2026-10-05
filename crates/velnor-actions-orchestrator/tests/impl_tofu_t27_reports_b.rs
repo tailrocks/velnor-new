@@ -131,7 +131,7 @@ fn tofu_pr_plan_stamps_pr_event_and_trust() -> TestResult {
     Ok(())
 }
 
-/// A merged-main push stamps the push event and trusted scope.
+/// A push without protected-default facts stays in the PR namespace.
 #[test]
 fn tofu_push_plan_stamps_push_event_and_trust() -> TestResult {
     let dir = make_pure_tofu_repo(
@@ -158,7 +158,11 @@ fn tofu_push_plan_stamps_push_event_and_trust() -> TestResult {
     let plan: Plan = serde_json::from_value(value["plan"].clone())?;
     plan.validate()?;
     assert_eq!(plan.event, WorkflowEvent::Push);
-    assert_eq!(plan.trust, Trust::Trusted);
+    assert_eq!(
+        plan.trust,
+        Trust::Pr,
+        "missing branch API facts fail closed"
+    );
     assert!(!plan.obligations.is_empty(), "push plans tofu work");
     assert_eq!(merge_passing(&plan)?, FinalStatus::Passed);
     Ok(())
@@ -181,7 +185,7 @@ fn tofu_event_mismatch_fails_required_planning_failed() -> TestResult {
     let (plan, _) = plan_pr(root, Some(&base), &head)?;
     let (pushed, _) = plan_push(root, Some(&base), &head)?;
     assert_eq!(pushed.event, WorkflowEvent::Push);
-    assert_eq!(pushed.trust, Trust::Trusted);
+    assert_eq!(pushed.trust, Trust::Pr, "event alone cannot grant trust");
     let reports = passing_reports(&plan)?;
     let plan_value = serde_json::to_value(&plan)?;
     let mut request = merge_request(

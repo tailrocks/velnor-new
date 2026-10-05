@@ -9,10 +9,10 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use velnor_actions_contract::{
-    ContractError, Plan, PlanBaseline, PlanMatrix, PlanRunner, ProposedTask, RunnerSelection,
-    WorkflowEvent, canonical_json_bytes, parse_strict_json, plan_id_for_run,
+    CacheWriterFacts, ContractError, Plan, PlanBaseline, PlanMatrix, PlanRunner, ProposedTask,
+    RunnerSelection, WorkflowEvent, canonical_json_bytes, parse_strict_json, plan_id_for_run,
 };
-use velnor_actions_mise::ToolCatalog;
+use velnor_actions_mise::{CacheWriterContext, ToolCatalog};
 
 use self::plan_obligation::{GroupInputs, changed_keys, lane_table, member_changed, plan_group};
 use crate::OrchestratorError;
@@ -90,6 +90,9 @@ struct PlanRequest {
     /// run: the git origin is the fallback.
     #[serde(default)]
     repository: Option<String>,
+    /// Event/ref/repository facts; protected status is queried from GitHub.
+    #[serde(default)]
+    cache_writer: CacheWriterFacts,
 }
 
 /// `plan-v1` response: schema plus plan and matrix copies.
@@ -135,6 +138,12 @@ pub fn plan_internal(request_json: &str) -> Result<String, OrchestratorError> {
     verify_checkout(&root, request.event, &request.head)?;
     let prep = prepare(&root)?;
     let catalog = ToolCatalog::pinned();
+    let cache_writer = crate::cache_writer::context_for_facts(
+        &request.cache_writer,
+        request.event,
+        &catalog,
+        &root,
+    );
     let mut warnings = Vec::new();
     warnings.extend(crate::evidence::workspace_drift_warnings(
         &prep.root,
@@ -160,6 +169,7 @@ pub fn plan_internal(request_json: &str) -> Result<String, OrchestratorError> {
         prep.runner_selection,
         &catalog,
         warnings,
+        &cache_writer,
     )?;
     let manifest = request.baseline_manifest.and_then(|value| {
         serde_json::from_value::<BaselineManifest>(value)
@@ -276,6 +286,7 @@ fn build_plan(
     selection: RunnerSelection,
     catalog: &ToolCatalog,
     warnings: Vec<String>,
+    cache_writer: &CacheWriterContext,
 ) -> Result<Plan, OrchestratorError> {
     let mut obligations = Vec::with_capacity(universe.len());
     let mut entries = Vec::with_capacity(universe.len());
@@ -338,7 +349,7 @@ fn build_plan(
             label: label.to_owned(),
             selection,
         },
-        trust: velnor_actions_contract::trust_for_event(request.event),
+        trust: cache_writer.trust(),
         baseline: PlanBaseline::unavailable(Some("baseline_lookup_deferred"))?,
         generator,
         packages: plan_packages(discovery, &selected_ids),

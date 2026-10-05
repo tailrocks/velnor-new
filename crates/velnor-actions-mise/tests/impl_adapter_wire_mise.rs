@@ -28,38 +28,32 @@ fn fork_event_is_read_only() {
 
 #[test]
 fn save_decision_denies_with_reasons() {
-    let save = |trust: &str, event: &str, passed: bool| {
+    let writer = velnor_actions_mise::CacheWriterContext::default();
+    let save = |trust: &str, passed: bool| {
         save_decision(&SaveInputs {
             layer_trust: trust,
-            event,
+            writer: &writer,
             passed,
             unavailable: false,
             active_writer: false,
         })
     };
-    assert_eq!(save("trusted", "push", true), Ok(()));
-    assert_eq!(save("pr", "push", true), Ok(()));
-    for (trust, event, passed) in [
-        ("trusted", "pull_request", true),
-        ("trusted", "push", false),
-        ("pr", "pull_request", true),
-        ("pr", "pull_request", false),
-        ("pr", "push", false),
-        ("pr", "merge_group", true),
-        ("pr", "fork", true),
-        ("pr", "release", true),
-        ("pr", "local", true),
-        ("unknown", "push", true),
+    assert_eq!(save("trusted", true), Err(MissReason::CACHE_WRITE_DISABLED));
+    for (trust, passed) in [
+        ("trusted", false),
+        ("pr", true),
+        ("pr", false),
+        ("unknown", true),
     ] {
         assert_eq!(
-            save(trust, event, passed),
+            save(trust, passed),
             Err(MissReason::CACHE_WRITE_DISABLED),
-            "{trust} {event} {passed}"
+            "{trust} {passed}"
         );
     }
     let down = save_decision(&SaveInputs {
         layer_trust: "pr",
-        event: "push",
+        writer: &writer,
         passed: true,
         unavailable: true,
         active_writer: false,
@@ -67,7 +61,7 @@ fn save_decision_denies_with_reasons() {
     assert_eq!(down, Err(MissReason::CACHE_UNAVAILABLE));
     let overlap = save_decision(&SaveInputs {
         layer_trust: "pr",
-        event: "push",
+        writer: &writer,
         passed: true,
         unavailable: false,
         active_writer: true,
