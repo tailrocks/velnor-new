@@ -197,7 +197,20 @@ move_member() {
   mv -f -- "$actual" "$intended"
 }
 
-# A symlink may point only inside the extract root. A later member must
+# -P may place a member under the runner work tree, outside the workspace
+# directory. The inode and the resolved target must stay under the workspace
+# or under /home/runner/work or /home/runner/_work.
+job_path() {
+  local path="$1"
+  local root
+  root="$(norm_path "${chdir:-$PWD}")"
+  path_under "$root" "$path" && return 0
+  path_under /home/runner/work "$path" && return 0
+  path_under /home/runner/_work "$path" && return 0
+  return 1
+}
+
+# A symlink may point only inside an allowed root. A later member must
 # not walk through an archive symlink or a symlink already on disk.
 reject_symlink_traversal() {
   local -A links=()
@@ -210,6 +223,7 @@ reject_symlink_traversal() {
     [ "${mem_type[$i]}" = 2 ] || continue
     name="${mem_name[$i]}"
     member_intended "$name" key
+    job_path "$key" || die "symlink escapes destination: $name"
     links["$key"]=1
     target="${mem_link[$i]}"
     [ -n "$target" ] || die "symlink escapes destination: $name"
@@ -219,7 +233,7 @@ reject_symlink_traversal() {
       dir="$(dirname -- "$key")"
       intended="$(norm_path "$dir/$target")"
     fi
-    if ! path_under "$root" "$intended"; then
+    if ! job_path "$intended"; then
       if [ "$absolute" -eq 1 ] && [[ "$target" != /* ]]; then
         continue
       fi
