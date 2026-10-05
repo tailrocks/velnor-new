@@ -142,14 +142,11 @@ fn generate_scales_to_workflow_file_limit_then_fails_closed() -> TestResult {
         };
         let (result, gen_ms) = timed(|| generate(&prep, &opts));
         if members == 100 {
-            let error = match result {
-                Err(error) => error,
-                Ok(_) => {
-                    return Err(std::io::Error::other(
-                        "oversized workflow generation unexpectedly succeeded",
-                    )
-                    .into());
-                }
+            let Err(error) = result else {
+                return Err(std::io::Error::other(
+                    "oversized workflow generation unexpectedly succeeded",
+                )
+                .into());
             };
             let diagnostic = error.to_string();
             let actual_bytes = diagnostic

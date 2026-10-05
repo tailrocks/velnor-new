@@ -50,8 +50,8 @@ impl VerificationTaskPolicy {
 
 /// Build the exact read-only-token verification job for one declaration.
 ///
-/// The only repository-controlled work runs in the final `mise run` step,
-/// after both direct-exec Mise steps have removed runner credentials.
+/// The shared renderer removes runner credentials before both direct Mise
+/// steps: locked install reads repo config/hooks, and `run` executes the task.
 /// # Errors
 pub fn build_verification_task_job(
     policy: &VerificationTaskPolicy,
