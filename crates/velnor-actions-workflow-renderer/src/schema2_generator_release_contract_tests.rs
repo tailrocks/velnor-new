@@ -100,14 +100,14 @@ fn asset_names(records: &[String]) -> Result<Vec<String>, Box<dyn Error>> {
 fn assert_rendered_release_contract(
     source_plan: &GeneratorReleasePlan,
 ) -> Result<(), Box<dyn Error>> {
-    let request = super::Schema2WorkflowRequest {
+    let request = super::super::Schema2WorkflowRequest {
         version: RELEASE_VERSION.to_owned(),
         hosted_label: "ubuntu-26.04".to_owned(),
-        scale_set: super::Schema2WorkflowRequest::canonical_scale_set()?,
+        scale_set: super::super::Schema2WorkflowRequest::canonical_scale_set()?,
         workflows: std::collections::BTreeSet::from([RoutingWorkflow::GeneratorRelease]),
         mbx_qualification: None,
     };
-    let workflow = crate::yaml::render_yaml(&super::generator_release(&request)?);
+    let workflow = crate::yaml::render_yaml(&super::super::generator_release(&request)?);
     for expected in [
         "VELNOR_RELEASE_SOURCE_SHA: ${{ github.sha }}".to_owned(),
         source_plan.final_asset_names()[0].clone(),
@@ -146,14 +146,14 @@ fn record_name(record: &str) -> Result<String, Box<dyn Error>> {
 #[test]
 fn publisher_uploads_acceptance_metadata_only_after_release_verification()
 -> Result<(), Box<dyn Error>> {
-    let request = super::Schema2WorkflowRequest {
+    let request = super::super::Schema2WorkflowRequest {
         version: RELEASE_VERSION.to_owned(),
         hosted_label: "ubuntu-26.04".to_owned(),
-        scale_set: super::Schema2WorkflowRequest::canonical_scale_set()?,
+        scale_set: super::super::Schema2WorkflowRequest::canonical_scale_set()?,
         workflows: std::collections::BTreeSet::from([RoutingWorkflow::GeneratorRelease]),
         mbx_qualification: None,
     };
-    let workflow = crate::yaml::render_yaml(&super::generator_release(&request)?);
+    let workflow = crate::yaml::render_yaml(&super::super::generator_release(&request)?);
     let publish = workflow
         .find("name: Publish GitHub release")
         .ok_or("missing publication step")?;
