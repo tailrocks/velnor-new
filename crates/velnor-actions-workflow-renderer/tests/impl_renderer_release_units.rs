@@ -123,6 +123,7 @@ fn release_job_shape_roundtrip() -> Result<(), RenderError> {
             condition: None,
             kind: StepKind::Internal {
                 operation: "plan-v1".to_owned(),
+                env: std::collections::BTreeMap::new(),
             },
         }],
         ..job.clone()

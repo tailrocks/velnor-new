@@ -27,6 +27,16 @@ pub(crate) fn path_is_symlink(path: &Path) -> bool {
 /// `missing`, symlinks `symlink`, non-files `unreadable`, and
 /// over-bound reads `oversize`.
 pub(crate) fn read_staged_bytes(path: &Path, bound: u64) -> Result<Vec<u8>, &'static str> {
+    read_staged_bytes_until(path, bound, || Ok(()))
+}
+
+/// Read staged bytes in bounded chunks, checking a caller's shared deadline.
+pub(crate) fn read_staged_bytes_until(
+    path: &Path,
+    bound: u64,
+    mut checkpoint: impl FnMut() -> Result<(), &'static str>,
+) -> Result<Vec<u8>, &'static str> {
+    checkpoint()?;
     let fd = rustix::fs::open(
         path,
         rustix::fs::OFlags::RDONLY | rustix::fs::OFlags::NOFOLLOW | rustix::fs::OFlags::CLOEXEC,
@@ -47,13 +57,27 @@ pub(crate) fn read_staged_bytes(path: &Path, bound: u64) -> Result<Vec<u8>, &'st
     if filetype != rustix::fs::FileType::RegularFile {
         return Err("unreadable");
     }
+    let mut file = fs::File::from(fd).take(bound.saturating_add(1));
     let mut bytes = Vec::new();
-    fs::File::from(fd)
-        .take(bound.saturating_add(1))
-        .read_to_end(&mut bytes)
-        .map_err(|_| "unreadable")?;
-    if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > bound {
-        return Err("oversize");
+    let mut buffer = vec![0_u8; 64 * 1024].into_boxed_slice();
+    loop {
+        checkpoint()?;
+        let remaining = bound
+            .saturating_add(1)
+            .saturating_sub(u64::try_from(bytes.len()).unwrap_or(u64::MAX));
+        if remaining == 0 {
+            return Err("oversize");
+        }
+        let limit = usize::try_from(remaining.min(buffer.len() as u64)).unwrap_or(buffer.len());
+        let count = file.read(&mut buffer[..limit]).map_err(|_| "unreadable")?;
+        checkpoint()?;
+        if count == 0 {
+            break;
+        }
+        bytes.extend_from_slice(&buffer[..count]);
+        if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > bound {
+            return Err("oversize");
+        }
     }
     Ok(bytes)
 }

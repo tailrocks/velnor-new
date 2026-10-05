@@ -1,22 +1,24 @@
 //! Request-file materialization and response splitting for internal ops.
 
+use std::collections::BTreeMap;
 use std::env;
 use std::path::{Path, PathBuf};
 
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use velnor_actions_contract::{
-    FINAL_JSON_FILENAME, FinalStatus, MATRIX_JSON_FILENAME, PLAN_JSON_FILENAME, WorkflowEvent,
-    canonical_json_bytes, canonical_json_str, matrix_json_bytes, plan_json_bytes, run_key_for_ci,
+    NAMED_CHECK_LANES_ENV, NamedCheckLane, WorkflowEvent, canonical_json_bytes, run_key_for_ci,
     validate_run_key,
 };
 
 use crate::OrchestratorError;
-use crate::decisions::plan_artifact_dir;
-use crate::internal::{
-    MERGE_OP, PLAN_OP, PlanResponse, SCHEMA, check_schema, internal, internal_contract,
-};
-use crate::plan_output_limits::{PlanOutputMode, check_plan_outputs};
+use crate::internal::{MERGE_OP, PLAN_OP, SCHEMA, internal, internal_contract};
 use crate::request_event::{request_refs, workflow_event_for};
+
+#[path = "internal_request_outputs.rs"]
+mod outputs;
+pub use outputs::{
+    PlanOutputs, merge_passed, plan_outputs, publish_final_report, publish_plan_files,
+};
 
 /// Plan-time request: `{schema, op, event, base, head, root}` (schema 1).
 #[derive(Debug, Serialize)]
@@ -40,21 +42,10 @@ struct EventRequest {
     /// Omitted when unset (local runs fall back to the git origin).
     #[serde(skip_serializing_if = "Option::is_none")]
     repository: Option<String>,
-}
-
-/// Canonical `plan`/`matrix` outputs for `$GITHUB_OUTPUT`.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PlanOutputs {
-    /// Canonical matrix JSON (single line).
-    pub matrix: String,
-    /// Plan ID for step outputs (WF-4.15).
-    pub plan_id: String,
-    /// Run key for step outputs (WF-4.15).
-    pub run_key: String,
-    /// Comma-wrapped covered task IDs (empty when none covered).
-    pub covered_tasks: String,
-    /// Aggregate UTF-16 byte size of values promoted by this output mode.
-    pub job_outputs_utf16_bytes: usize,
+    /// Exact emitted named-check job and report identities, when schema 2
+    /// expands checks across execution lanes.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    named_check_lanes: Option<BTreeMap<String, Vec<NamedCheckLane>>>,
 }
 
 /// Materialize the canonical request file from the GitHub environment.
@@ -92,13 +83,20 @@ pub fn write_request() -> Result<PathBuf, OrchestratorError> {
     let repository = env::var(crate::origin::GITHUB_REPOSITORY_ENV)
         .ok()
         .filter(|slug| !slug.is_empty());
-    write_request_parts(
+    let named_check_lanes = env::var(NAMED_CHECK_LANES_ENV)
+        .ok()
+        .map(|value| {
+            serde_json::from_str(&value).map_err(|_| internal("malformed_named_check_lanes"))
+        })
+        .transpose()?;
+    write_request_parts_with_lanes(
         &path,
         &event_name,
         &payload_json,
         sha.as_deref(),
         repository.as_deref(),
         &anchor,
+        named_check_lanes,
     )
 }
 
@@ -124,6 +122,26 @@ pub fn write_request_parts(
     github_sha: Option<&str>,
     repository: Option<&str>,
     anchor: &Path,
+) -> Result<PathBuf, OrchestratorError> {
+    write_request_parts_with_lanes(
+        request_path,
+        event_name,
+        payload_json,
+        github_sha,
+        repository,
+        anchor,
+        None,
+    )
+}
+
+fn write_request_parts_with_lanes(
+    request_path: &Path,
+    event_name: &str,
+    payload_json: &str,
+    github_sha: Option<&str>,
+    repository: Option<&str>,
+    anchor: &Path,
+    named_check_lanes: Option<BTreeMap<String, Vec<NamedCheckLane>>>,
 ) -> Result<PathBuf, OrchestratorError> {
     let path = request_path.to_path_buf();
     let op = request_op(&path)?;
@@ -154,6 +172,7 @@ pub fn write_request_parts(
         repository: repository
             .filter(|slug| !slug.is_empty())
             .map(str::to_owned),
+        named_check_lanes,
     };
     let bytes = canonical_json_bytes(&request).map_err(internal_contract)?;
     if let Some(parent) = path.parent() {
@@ -184,167 +203,6 @@ pub fn response_path_for(request_path: &Path) -> Result<PathBuf, OrchestratorErr
     Ok(parent.join(format!("{op}-response.json")))
 }
 
-/// Split one `plan-v1` response into canonical `$GITHUB_OUTPUT` values.
-///
-/// # Errors
-///
-/// Returns [`OrchestratorError::Internal`] for malformed responses.
-pub fn plan_outputs(
-    response_json: &str,
-    mode: PlanOutputMode,
-) -> Result<PlanOutputs, OrchestratorError> {
-    let response: PlanResponse =
-        serde_json::from_str(response_json).map_err(|_| internal("malformed_response"))?;
-    check_schema(response.schema)?;
-    let mut outputs = PlanOutputs {
-        matrix: canonical_json_str(&response.matrix).map_err(internal_contract)?,
-        plan_id: response.plan.plan_id.clone(),
-        run_key: response.plan.run_key.clone(),
-        covered_tasks: crate::covered_tasks::CoveredTasks::for_plan(&response.plan).encode(),
-        job_outputs_utf16_bytes: 0,
-    };
-    outputs.job_outputs_utf16_bytes = check_plan_outputs(
-        mode,
-        response.matrix.include.len(),
-        &outputs.promoted_job_outputs(mode),
-    )?;
-    Ok(outputs)
-}
-
-impl PlanOutputs {
-    /// Required named outputs written by the plan step, in stable order.
-    #[must_use]
-    pub fn step_outputs(&self) -> Vec<(&'static str, &str)> {
-        vec![
-            ("matrix", &self.matrix),
-            ("plan_id", &self.plan_id),
-            ("run_key", &self.run_key),
-            (crate::COVERED_TASKS_OUTPUT, &self.covered_tasks),
-        ]
-    }
-
-    /// Output records promoted to job outputs by this workflow path.
-    #[must_use]
-    pub fn promoted_job_outputs(&self, mode: PlanOutputMode) -> Vec<(&'static str, &str)> {
-        match mode {
-            PlanOutputMode::Static => {
-                vec![(crate::COVERED_TASKS_OUTPUT, &self.covered_tasks)]
-            }
-            PlanOutputMode::DynamicMatrix => self.step_outputs(),
-        }
-    }
-}
-
-/// Publish `plan.json` + `matrix.json` for the plan artifact.
-///
-/// Contract §4 fixes the artifact content under `<velnor-dir>/<run-key>/`
-/// (the plan step passes `$RUNNER_TEMP/velnor`), which `Publish plan`
-/// uploads; without these files the upload fails with no-files-found.
-/// The run key comes from the response plan, so the files always land in
-/// the directory the upload step names.
-///
-/// # Errors
-///
-/// Returns [`OrchestratorError::Internal`] for malformed responses and
-/// [`OrchestratorError::Io`] for unwritable directories.
-pub fn publish_plan_files(
-    response_json: &str,
-    velnor_dir: &Path,
-) -> Result<PathBuf, OrchestratorError> {
-    let response: PlanResponse =
-        serde_json::from_str(response_json).map_err(|_| internal("malformed_response"))?;
-    check_schema(response.schema)?;
-    let dir = plan_artifact_dir(velnor_dir, &response.plan.run_key)?;
-    write_plan_files(&response, velnor_dir, &dir)?;
-    Ok(dir)
-}
-
-/// Write canonical `plan.json` plus `matrix.json` into one directory.
-///
-/// `matrix.json` is exactly `{"include": [...]}`: the same matrix the
-/// plan step emits through `$GITHUB_OUTPUT`. When obligations covered,
-/// the trusted `baseline.json` rides along so the merge revalidates
-/// covered claims against the exact planner evidence.
-///
-/// # Errors
-///
-/// Returns [`OrchestratorError::Internal`] for encoding failures and
-/// [`OrchestratorError::Io`] for unwritable directories.
-pub(crate) fn write_plan_files(
-    response: &PlanResponse,
-    velnor_dir: &Path,
-    dir: &Path,
-) -> Result<(), OrchestratorError> {
-    crate::exclusive_write::create_dir_no_symlink(artifact_anchor(velnor_dir)?, dir)?;
-    let plan = plan_json_bytes(&response.plan).map_err(internal_contract)?;
-    let matrix = matrix_json_bytes(&response.matrix).map_err(internal_contract)?;
-    crate::exclusive_write::write_exclusive(&dir.join(PLAN_JSON_FILENAME), &plan, "plan_artifact")?;
-    crate::exclusive_write::write_exclusive(
-        &dir.join(MATRIX_JSON_FILENAME),
-        &matrix,
-        "plan_artifact",
-    )?;
-    if let Some(manifest) = response.baseline_manifest.as_ref() {
-        let bytes = canonical_json_bytes(manifest).map_err(internal_contract)?;
-        crate::exclusive_write::write_exclusive(
-            &dir.join(crate::baseline_publish::BASELINE_FILENAME),
-            &bytes,
-            "plan_artifact",
-        )?;
-    }
-    Ok(())
-}
-
-/// Publish `final-report.json` for the final artifact.
-///
-/// Contract §3 fixes the verdict file under `<velnor-dir>/<run-key>/`
-/// (the merge step passes `$RUNNER_TEMP/velnor`), which `Publish final
-/// report` uploads; without it the upload fails with no-files-found.
-/// Runs for every verdict, passing or not, before the exit-code check.
-///
-/// # Errors
-///
-/// Returns [`OrchestratorError::Internal`] for malformed responses and
-/// [`OrchestratorError::Io`] for unwritable directories.
-pub fn publish_final_report(
-    response_json: &str,
-    velnor_dir: &Path,
-) -> Result<PathBuf, OrchestratorError> {
-    let report: velnor_actions_contract::FinalReport =
-        serde_json::from_str(response_json).map_err(|_| internal("malformed_response"))?;
-    check_schema(report.schema)?;
-    let dir = plan_artifact_dir(velnor_dir, &report.run_key)?;
-    crate::exclusive_write::create_dir_no_symlink(artifact_anchor(velnor_dir)?, &dir)?;
-    let bytes = canonical_json_bytes(&report).map_err(internal_contract)?;
-    crate::exclusive_write::write_exclusive(
-        &dir.join(FINAL_JSON_FILENAME),
-        &bytes,
-        "plan_artifact",
-    )?;
-    Ok(dir)
-}
-
-/// True when one `merge-v1` response is a passing verdict.
-///
-/// Only `passed` passes: `no_work` proves nothing validated, so the gate
-/// stays red; every other status fails.
-///
-/// # Errors
-///
-/// Returns [`OrchestratorError::Internal`] for malformed responses.
-pub fn merge_passed(response_json: &str) -> Result<bool, OrchestratorError> {
-    #[derive(Debug, Deserialize)]
-    struct Verdict {
-        status: FinalStatus,
-    }
-    let verdict: Verdict =
-        serde_json::from_str(response_json).map_err(|_| internal("malformed_response"))?;
-    Ok(matches!(
-        verdict.status,
-        FinalStatus::Passed | FinalStatus::NoWork
-    ))
-}
-
 /// Explicit run key, else `r<run-id>-a<attempt>` from the GitHub environment.
 pub(crate) fn resolve_run_key(explicit: Option<&str>) -> Result<String, OrchestratorError> {
     if let Some(key) = explicit.filter(|key| !key.trim().is_empty()) {
@@ -361,18 +219,6 @@ pub(crate) fn resolve_run_key(explicit: Option<&str>) -> Result<String, Orchestr
     let id: u64 = id.parse().map_err(|_| internal("bad_run_id"))?;
     let attempt: u64 = attempt.parse().map_err(|_| internal("bad_run_attempt"))?;
     Ok(run_key_for_ci(id, attempt))
-}
-
-/// Trust root for artifact dirs: the runner-owned parent of `velnor_dir`.
-///
-/// `velnor_dir` itself (`$RUNNER_TEMP/velnor`) is first created by a
-/// producer, so it cannot anchor: a planted symlink there would sail
-/// through its own anchor check. Its parent is runner-created (or
-/// test-staged) and exists before any producer runs.
-fn artifact_anchor(velnor_dir: &Path) -> Result<&Path, OrchestratorError> {
-    velnor_dir
-        .parent()
-        .ok_or_else(|| internal("missing_dir_anchor"))
 }
 
 /// Consuming op from one `<op>-request.json` file name.
