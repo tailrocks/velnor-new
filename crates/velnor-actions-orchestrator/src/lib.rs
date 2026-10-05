@@ -80,6 +80,7 @@ mod source_cache;
 mod source_prep;
 mod task_report;
 mod task_report_aggregate;
+mod tofu_apply_emit;
 mod tofu_cache;
 mod toolcheck;
 mod toolfindings;

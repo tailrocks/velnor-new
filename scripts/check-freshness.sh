@@ -270,6 +270,7 @@ EXPECTED_TOOLS = {
     "release-plz": "RELEASE_PLZ_VERSION",
 }
 EXPECTED_ACTIONS = {
+    "aws-actions/configure-aws-credentials": "AWS_CREDENTIALS_ACTION",
     "jdx/mise-action": "MISE_ACTION",
     "actions/checkout": "CHECKOUT_ACTION",
     "actions/download-artifact": "DOWNLOAD_ARTIFACT_ACTION",

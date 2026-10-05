@@ -1,5 +1,5 @@
 //! Workflow section of `.velnor/config.toml`: naming, policy, runner labels.
-use crate::config::VerificationTask;
+use crate::config::{TofuApplyConfig, VerificationTask};
 use crate::errors::ContractError;
 use crate::workflow::ValidatorKind;
 use serde::{Deserialize, Serialize};
@@ -42,6 +42,9 @@ pub struct WorkflowConfig {
     /// Sorted, explicit isolated validation jobs.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tasks: Vec<VerificationTask>,
+    /// Optional protected post-merge OpenTofu apply workflow.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tofu_apply: Option<TofuApplyConfig>,
 }
 
 /// Workflow policy selector.
@@ -134,6 +137,16 @@ impl WorkflowConfig {
             ));
         }
         self.validate_tasks(file)?;
+        if let Some(tofu_apply) = &self.tofu_apply {
+            tofu_apply.validate(file)?;
+            if self.default_branch.is_none() {
+                return Err(ContractError::config(
+                    file,
+                    "workflow.default_branch",
+                    "required_for_tofu_apply",
+                ));
+            }
+        }
         Ok(())
     }
 
@@ -172,6 +185,7 @@ mod tests {
             max_parallel_jobs: 2,
             runner_label: None,
             tasks: Vec::new(),
+            tofu_apply: None,
         }
     }
 

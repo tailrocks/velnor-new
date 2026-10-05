@@ -90,6 +90,7 @@ mod impl_select_removed;
 mod impl_step_role_name_authority;
 mod impl_strict_envelope;
 mod impl_task_source_prep;
+mod impl_tofu_apply_emit;
 mod impl_tofu_t09;
 mod impl_tofu_t11;
 mod impl_tofu_t12;

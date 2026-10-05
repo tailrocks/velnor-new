@@ -24,6 +24,7 @@ pub(crate) fn valid_config() -> VelnorConfig {
             max_parallel_jobs: 2,
             runner_label: None,
             tasks: Vec::new(),
+            tofu_apply: None,
         },
         resources: ResourcesConfig {
             compiler_process_budget: 2,

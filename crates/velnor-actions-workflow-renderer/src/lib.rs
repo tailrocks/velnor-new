@@ -51,6 +51,7 @@ mod steps_artifact;
 mod steps_internal;
 mod steps_plain;
 mod support;
+pub mod tofu_apply;
 pub mod tofu_cache;
 mod tool_seed;
 mod tool_seed_admission;
@@ -118,6 +119,11 @@ pub use steps::{
     check_mbx_gating, checkout_step, crate_job_report_upload_step, internal_step,
     lane_cargo_target_env, matrix_report_upload_step, mbx_steps_for_driver, merge_step, plan_step,
     publish_step, scan_for_private_subcommands, shell_step, validate_uses, write_request_step,
+};
+pub use tofu_apply::{
+    AWS_CREDENTIALS_STEP_ID, AWS_CREDENTIALS_USES, AWS_CREDENTIALS_VERSION,
+    TOFU_APPLY_CONCURRENCY_GROUP, TOFU_APPLY_JOB_ID, TOFU_APPLY_TIMEOUT_MINUTES,
+    TOFU_APPLY_WORKFLOW_NAME, TofuApplySpec, render_tofu_apply_workflow,
 };
 pub use tree::{render_tree, render_tree_with_extra};
 pub use verification_jobs::{
