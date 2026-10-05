@@ -36,6 +36,7 @@ fn typed_mbx_owner_precedes_cargo_source_fetch_independent_of_labels() {
     let job = Job {
         display_name: "Demo".to_owned(),
         runs_on: LABEL.to_owned(),
+        check_runner: None,
         timeout_minutes: JobTimeout::CRATE,
         needs: Vec::new(),
         condition: None,

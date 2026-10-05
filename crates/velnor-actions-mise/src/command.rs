@@ -1,11 +1,18 @@
 //! Fixed subprocess wrapper: the sole `std::process::Command` constructor.
 //! Policy (`command_env.rs`) and output (`command_output.rs`) declare here.
+#[path = "command_cancellable.rs"]
+mod cancellable;
+#[path = "check_command.rs"]
+mod check;
 #[path = "command_env.rs"]
 mod env;
 #[path = "command_output.rs"]
 mod output;
+#[path = "qualified_acquisition.rs"]
+mod qualified_acquisition;
 #[path = "command_tofu.rs"]
 mod tofu;
+pub use check::resolve_program as resolve_check_program;
 
 pub use self::env::{
     CREDENTIAL_ALLOWLIST_BASELINE, CREDENTIAL_ALLOWLIST_BOOTSTRAP, CREDENTIAL_ENV_KEYS,
@@ -18,15 +25,13 @@ pub use self::env::{
 use self::env::{pairs_of, redact_env_for_debug, strip_credentials};
 pub(crate) use self::output::redact_argv_for_debug;
 pub use self::output::{
-    CancelHandle, ProcessOutput, SPAWN_CANCELLED_MESSAGE, SPAWN_TIMEOUT_MESSAGE_PREFIX,
-    is_cancel_or_timeout,
+    CancelHandle, ProcessOutput, SPAWN_CANCELLED_MESSAGE, SPAWN_DEADLINE_MESSAGE,
+    SPAWN_TIMEOUT_MESSAGE_PREFIX, is_cancel_or_timeout,
 };
-use self::output::{read_capped, signal_of};
-
 use std::ffi::{OsStr, OsString};
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use crate::error::MiseError;
 
@@ -197,12 +202,18 @@ impl IsolatedCommand {
 
     /// Full environment the spawner applies: overlay first, then extras.
     ///
-    /// Every policy takes the full isolation overlay: no mise command
-    /// ever loads repo config, so installs and execs share one hermetic
-    /// base and differ only in parent inheritance and extras.
+    /// Qualified probes receive explicit extras only. Qualified checks
+    /// retain task config visibility; other policies keep the fixed overlay.
     #[must_use]
     pub fn full_env(&self) -> Vec<(OsString, OsString)> {
-        let mut env = Self::env_overlay();
+        let mut env = if self.policy == EnvPolicy::QualifiedProbe {
+            Vec::new()
+        } else {
+            Self::env_overlay()
+        };
+        if self.policy == EnvPolicy::QualifiedCheck {
+            env.retain(|(key, _)| key != "MISE_NO_CONFIG");
+        }
         env.extend(self.extra_env.iter().cloned());
         env
     }
@@ -240,88 +251,17 @@ impl IsolatedCommand {
         self.run_cancellable(cap, timeout, &CancelHandle::new())
     }
 
-    /// Spawn the child under explicit bounds plus external cancellation.
-    /// Residual: grandchildren inheriting the pipes can delay EOF after kill.
-    ///
-    /// A pre-cancelled handle fails without spawning; mid-run
-    /// cancellation kills the child. Both surface as typed
-    /// [`MiseError::SpawnFailed`], classified by [`is_cancel_or_timeout`].
-    ///
-    /// # Errors
-    ///
-    /// Returns [`MiseError::SpawnFailed`] on spawn failure, output-limit
-    /// breach, reader failure, timeout, or cancellation.
-    pub fn run_cancellable(
-        &self,
-        cap: usize,
-        timeout: Duration,
-        cancel: &CancelHandle,
-    ) -> Result<ProcessOutput, MiseError> {
-        let program = self.program.to_string_lossy().into_owned();
-        let fail = |message: &str| MiseError::SpawnFailed {
-            program: program.clone(),
-            message: message.to_owned(),
-        };
-        if cancel.is_cancelled() {
-            return Err(fail(SPAWN_CANCELLED_MESSAGE));
-        }
-        let mut child = self
-            .command()
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .map_err(|err| fail(&err.to_string()))?;
-        let (stdout, stderr) = (child.stdout.take(), child.stderr.take());
-        let out_reader = std::thread::spawn(move || read_capped(stdout, cap));
-        let err_reader = std::thread::spawn(move || read_capped(stderr, cap));
-        let deadline = Instant::now() + timeout;
-        loop {
-            if cancel.is_cancelled() {
-                drop((child.kill(), child.wait(), out_reader, err_reader));
-                return Err(fail(SPAWN_CANCELLED_MESSAGE));
-            }
-            let status = child.try_wait().map_err(|err| fail(&err.to_string()))?;
-            if let Some(status) = status {
-                let (out, out_capped) = out_reader
-                    .join()
-                    .map_err(|_| fail("reader_panicked:stdout"))?;
-                let (err, err_capped) = err_reader
-                    .join()
-                    .map_err(|_| fail("reader_panicked:stderr"))?;
-                if out_capped || err_capped {
-                    let stream = if out_capped { "stdout" } else { "stderr" };
-                    return Err(fail(&format!("{stream}_limit_exceeded:{cap}")));
-                }
-                let code = status.code();
-                let success = status.success();
-                return Ok(ProcessOutput {
-                    stdout: out,
-                    stderr: err,
-                    code,
-                    signal: signal_of(status),
-                    success,
-                });
-            }
-            if Instant::now() >= deadline {
-                drop((child.kill(), child.wait(), out_reader, err_reader));
-                let message = format!("{SPAWN_TIMEOUT_MESSAGE_PREFIX}{}", timeout.as_secs());
-                return Err(fail(&message));
-            }
-            std::thread::sleep(Duration::from_millis(5));
-        }
-    }
-
     fn command(&self) -> Command {
         let mut command = Command::new(&self.program);
         command.args(&self.args);
-        if self.policy == EnvPolicy::RepoTask {
-            command.env_clear();
-            let parent: Vec<(OsString, OsString)> = std::env::vars_os().collect();
-            for (key, value) in proxy_passthrough(&parent) {
-                command.env(key, value);
-            }
-        } else {
+        if self.policy.inherits_parent() {
             strip_credentials(&mut command, self.policy);
+        } else {
+            command.env_clear();
+            if self.policy.allows_proxy_passthrough() {
+                let parent: Vec<(OsString, OsString)> = std::env::vars_os().collect();
+                command.envs(proxy_passthrough(&parent));
+            }
         }
         for (key, value) in self.full_env() {
             command.env(key, value);

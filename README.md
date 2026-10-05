@@ -24,7 +24,7 @@ prints concise text instead of YAML, and writes no repository files.
 
 No ambient Cargo, Rust, or MBX is required: `mise.toml` pins every tool
 (Rust 1.98.1, MBX 1.21.1, Nextest 0.9.146) and `mise install` resolves them.
-Proved 2026-10-01 at `34550e8` in a fresh clone with `cargo`/`mbx` absent
+Historical clean-checkout proof, 2026-10-01 at `34550e8` in a fresh clone with `cargo`/`mbx` absent
 from `PATH`:
 
 ```sh
@@ -39,6 +39,11 @@ mise exec -- cargo build --locked -p velnor-actions-cli
 ./target/debug/velnor-actions generate --output-dir /private/tmp/velnor-preview
 diff -r .github /private/tmp/velnor-preview/.github  # no output: preview matches
 ```
+
+Retained tool pins on 2026-10-05: Mise 2026.9.18 under hold #6 and MBX
+1.21.1 under hold #29. The MBX macOS ARM64 binary passed an isolated Rust
+1.98.1 build/test and cache export/import/rebuild fixture; the historical
+output above is unchanged.
 
 Notes: `plan`/`generate` require the checkout's origin to be
 `tailrocks/velnor-new` (a local-path clone is identity-rejected until its

@@ -266,7 +266,7 @@ fn final_download_at(job: &Job) -> usize {
     let want = [steps::WRITE_REQUEST_OPERATION, steps::MERGE_OPERATION].join(":");
     let at = |op: &str| {
         job.steps.iter().position(
-            |step| matches!(&step.kind, StepKind::Internal { operation } if operation == op),
+            |step| matches!(&step.kind, StepKind::Internal { operation, .. } if operation == op),
         )
     };
     at(&want)
@@ -288,7 +288,7 @@ pub(crate) fn insert_plan_closure(
         return Ok(());
     };
     let Some(at) = plan.steps.iter().position(|step| {
-        matches!(&step.kind, StepKind::Internal { operation } if operation == steps::PLAN_OPERATION)
+        matches!(&step.kind, StepKind::Internal { operation, .. } if operation == steps::PLAN_OPERATION)
     }) else {
         return Ok(());
     };
@@ -301,7 +301,7 @@ pub(crate) fn insert_plan_closure(
         plan.steps.insert(at, check);
     }
     let Some(at) = plan.steps.iter().position(|step| {
-        matches!(&step.kind, StepKind::Internal { operation } if operation == steps::PLAN_OPERATION)
+        matches!(&step.kind, StepKind::Internal { operation, .. } if operation == steps::PLAN_OPERATION)
     }) else {
         return Ok(());
     };
@@ -335,13 +335,13 @@ pub(crate) fn insert_request_closure(
         };
         let want = format!("{}:{target}", steps::WRITE_REQUEST_OPERATION);
         let present = job.steps.iter().any(
-            |step| matches!(&step.kind, StepKind::Internal { operation } if operation == &want),
+            |step| matches!(&step.kind, StepKind::Internal { operation, .. } if operation == &want),
         );
         if present {
             continue;
         }
         if let Some(at) = job.steps.iter().position(
-            |step| matches!(&step.kind, StepKind::Internal { operation } if operation == target),
+            |step| matches!(&step.kind, StepKind::Internal { operation, .. } if operation == target),
         ) {
             job.steps.insert(at, steps::write_request_step(target)?);
         }
@@ -379,7 +379,7 @@ pub(crate) fn check_plan_anchor(
 ) -> Result<(), RenderError> {
     let anchored = jobs.get(PLAN_JOB_ID).is_some_and(|plan| {
         plan.steps.iter().any(|step| {
-            matches!(&step.kind, StepKind::Internal { operation } if operation == steps::PLAN_OPERATION)
+            matches!(&step.kind, StepKind::Internal { operation, .. } if operation == steps::PLAN_OPERATION)
         })
     });
     if anchored || !jobs.contains_key(PLAN_JOB_ID) {

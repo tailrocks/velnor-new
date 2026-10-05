@@ -17,10 +17,11 @@ use std::collections::{BTreeMap, BTreeSet};
 use velnor_actions_contract::workflow::step_identity::is_configured_checkout;
 use velnor_actions_contract::{Job, Step, StepKind, StepRole};
 
-use crate::{
-    MiseSetup, RenderError, cache_p08_detect::detector_words, setup::MISE_ACTION_NAME,
-    steps::validate_uses,
-};
+use crate::{MiseSetup, RenderError, cache_p08_detect::detector_words, setup::MISE_ACTION_NAME};
+
+#[path = "cache_p08_shape.rs"]
+mod shape;
+use shape::setup_shape_ok;
 
 #[path = "cache_p08_seed_key.rs"]
 mod seed_key;
@@ -269,11 +270,16 @@ fn upgrade_setup(
             "setup_mise_role_mismatch:{job_id}"
         )));
     }
-    if setup_shape_ok(&job.steps[index], setup, true, key) {
+    if setup_shape_ok(&job.steps[index], setup, true, Some(key)) {
         job.steps[index].role = Some(StepRole::MiseSetup);
         return Ok(());
     }
-    if !setup_shape_ok(&job.steps[index], setup, false, key) {
+    if setup_shape_ok(&job.steps[index], setup, true, None) {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "setup_mise_pin_mismatch:{job_id}"
+        )));
+    }
+    if !setup_shape_ok(&job.steps[index], setup, false, None) {
         return Err(RenderError::InvalidWorkflow(format!(
             "setup_mise_malformed:{job_id}"
         )));
@@ -317,41 +323,6 @@ fn insert_at(job: &Job, checkout_uses: &str) -> usize {
         .iter()
         .position(|step| is_configured_checkout(step, checkout_uses))
         .map_or(0, |index| index + 1)
-}
-
-/// True for qualified (`cache:true`+key) or legacy (`cache:false`) shapes.
-fn setup_shape_ok(
-    step: &Step,
-    setup: &MiseSetup,
-    qualified: bool,
-    key: &MiseToolsCacheKey,
-) -> bool {
-    let StepKind::Action { uses, with, env } = &step.kind else {
-        return false;
-    };
-    if validate_uses(uses).is_err() {
-        return false;
-    }
-    // Setup steps carry no step env; anything attached is foreign shape.
-    let base = step.condition.is_none()
-        && uses == &setup.uses
-        && env.is_empty()
-        && with.len() == usize::from(qualified) + 6
-        && with.get("install").is_some_and(|v| v == "false")
-        && with.get("env").is_some_and(|v| v == "false")
-        && with.get("version").is_some_and(|v| v == &setup.version)
-        && with.get("sha256").is_some_and(|v| v == &setup.sha256);
-    if !base {
-        return false;
-    }
-    if qualified {
-        with.get("cache").is_some_and(|v| v == "true")
-            && with.get("cache_save").is_some_and(|v| v == "false")
-            && with.get("cache_key").is_some_and(|v| v == key.as_str())
-    } else {
-        with.get("cache").is_some_and(|v| v == "false")
-            && with.get("cache_save").is_some_and(|v| v == "false")
-    }
 }
 
 /// Reject `Swatinem/rust-cache` in MBX jobs (P08-6/7: one owner).

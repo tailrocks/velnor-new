@@ -74,7 +74,7 @@ pub fn matrix_report_upload_step() -> Result<Step, RenderError> {
 /// # Errors
 pub fn crate_job_report_upload_step(job_id: &str) -> Result<Step, RenderError> {
     velnor_actions_contract::validate_job_id(job_id).map_err(RenderError::Contract)?;
-    action_step(
+    let mut step = action_step(
         CRATE_REPORT_UPLOAD_NAME,
         UPLOAD_ARTIFACT_USES,
         BTreeMap::from([
@@ -92,7 +92,9 @@ pub fn crate_job_report_upload_step(job_id: &str) -> Result<Step, RenderError> {
                 ARTIFACT_RETENTION_DAYS.to_string(),
             ),
         ]),
-    )
+    )?;
+    step.role = Some(StepRole::MatrixReportUpload);
+    Ok(step)
 }
 
 /// Baseline-publish upload step display name.

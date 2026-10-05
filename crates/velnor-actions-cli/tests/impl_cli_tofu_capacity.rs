@@ -65,7 +65,12 @@ fn cli_schema2_paired_tofu_stays_within_capacity_and_fails_closed() -> Result<()
         &[],
         &repo,
     )?;
-    assert_eq!(code(&generated), 0, "stderr: {:?}", generated.stderr);
+    assert_eq!(
+        code(&generated),
+        0,
+        "stderr: {}",
+        String::from_utf8_lossy(&generated.stderr)
+    );
     let workflow = std::fs::read(workflow_path(&preview))?;
     assert!(
         workflow.len() <= MAX_WORKFLOW_BYTES,
