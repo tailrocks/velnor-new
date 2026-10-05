@@ -4,15 +4,13 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-const REPOSITORY: &str = "tailrocks/velnor-new";
-const RELEASE_VERSION: &str = "0.1.0";
-const MANIFEST_NAME: &str = "velnor-actions-release-manifest.json";
-const LINUX_TARGET: &str = "x86_64-unknown-linux-gnu";
-const MACOS_TARGET: &str = "aarch64-apple-darwin";
-const LINUX_SHA: &str = "2e43e05be6002cfe3837d95b0501673bc2ab21f9d1ad7f97da87b427dcdd82b0";
-const MACOS_SHA: &str = "f690c2a737e988a7d26b6e718daf2fc37f86ab07400a5e70d6bfa3e626658f58";
-const LINUX_SIDECAR_SHA: &str = "d57170b4b32945ec812c9206e0fb24fbe89d2704fa44e362877d7fc04a70b248";
-const MACOS_SIDECAR_SHA: &str = "73d6fb595617adc0d5ee5f3a399899e2f0d8dcbc312730710f4731fe76c3bba8";
+#[path = "schema2_generator_release_api_fixtures.rs"]
+mod api_fixtures;
+use self::api_fixtures::{
+    LINUX_SHA, LINUX_TARGET, MACOS_SHA, MACOS_TARGET, MANIFEST_CHECKSUM_NAME, MANIFEST_NAME,
+    RELEASE_VERSION, REPOSITORY, assert_failure, assert_success, asset_record, asset_records,
+    asset_records_without_url, asset_url, output_text, release_json, write_local_assets,
+};
 
 struct Scratch(PathBuf);
 
@@ -102,13 +100,24 @@ fn manifest_uses_actual_api_urls_and_verifies_the_published_release() -> Result<
         .lines()
         .find_map(|line| line.strip_prefix("release_manifest_sha256="))
         .ok_or("missing manifest digest")?;
+    let checksum_digest = output_text(&output)?
+        .lines()
+        .find_map(|line| line.strip_prefix("release_manifest_checksum_sha256="))
+        .ok_or("missing manifest checksum digest")?;
     let manifest_size = fs::metadata(fixture.manifest())?.len();
+    let checksum_size = fs::metadata(fixture.asset_dir.join(MANIFEST_CHECKSUM_NAME))?.len();
     let mut final_records = fixture.records.clone();
     final_records.push(asset_record(
         MANIFEST_NAME,
         manifest_size,
         digest,
         Some(&asset_url(&fixture.tag, MANIFEST_NAME)),
+    ));
+    final_records.push(asset_record(
+        MANIFEST_CHECKSUM_NAME,
+        checksum_size,
+        checksum_digest,
+        Some(&asset_url(&fixture.tag, MANIFEST_CHECKSUM_NAME)),
     ));
     let draft = release_json(true, false, &fixture.tag, &final_records);
     let output = run_helper(
@@ -240,6 +249,36 @@ fn source_target_version_digest_and_asset_path_mismatches_fail() -> Result<(), B
     Ok(())
 }
 
+#[test]
+fn publisher_uploads_acceptance_metadata_only_after_release_verification()
+-> Result<(), Box<dyn Error>> {
+    use std::collections::BTreeSet;
+    use velnor_actions_contract::RoutingWorkflow;
+
+    let request = super::Schema2WorkflowRequest {
+        version: RELEASE_VERSION.to_owned(),
+        hosted_label: "ubuntu-26.04".to_owned(),
+        scale_set: super::Schema2WorkflowRequest::canonical_scale_set()?,
+        workflows: BTreeSet::from([RoutingWorkflow::GeneratorRelease]),
+        mbx_qualification: None,
+    };
+    let workflow = crate::yaml::render_yaml(&super::generator_release(&request)?);
+    let publication = workflow
+        .find("name: Publish GitHub release")
+        .ok_or("missing publication step")?;
+    let acceptance = workflow
+        .find("name: Upload verified release metadata")
+        .ok_or("missing acceptance artifact step")?;
+    assert!(publication < acceptance);
+    assert!(workflow.contains("actions: write"));
+    assert!(workflow.contains("contents: write"));
+    assert!(workflow.contains("velnor-actions-release-manifest.json.sha256"));
+    assert!(workflow.contains("velnor-actions-release-acceptance.json"));
+    assert!(workflow.contains("if-no-files-found: error"));
+    assert!(workflow.contains("retention-days: 14"));
+    Ok(())
+}
+
 fn run_helper(
     fixture: &Fixture,
     mode: &str,
@@ -289,101 +328,6 @@ fn run_helper_with_tag_commit(
 fn helper_path() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../scripts/generator-release/create-release-manifest.py")
-}
-
-fn write_local_assets(directory: &Path, version: &str) -> Result<(), Box<dyn Error>> {
-    for (target, bytes, digest) in [
-        (
-            LINUX_TARGET,
-            b"linux binary fixture\n".as_slice(),
-            LINUX_SHA,
-        ),
-        (
-            MACOS_TARGET,
-            b"macos binary fixture\n".as_slice(),
-            MACOS_SHA,
-        ),
-    ] {
-        let name = format!("velnor-actions-{version}-{target}");
-        fs::write(directory.join(&name), bytes)?;
-        fs::write(
-            directory.join(format!("{name}.sha256")),
-            format!("{digest}  {name}\n"),
-        )?;
-    }
-    Ok(())
-}
-
-fn asset_records(version: &str, tag: &str) -> Vec<String> {
-    let mut records = Vec::new();
-    for (target, binary_digest, sidecar_digest, binary_size, sidecar_size) in [
-        (LINUX_TARGET, LINUX_SHA, LINUX_SIDECAR_SHA, 21, 112),
-        (MACOS_TARGET, MACOS_SHA, MACOS_SIDECAR_SHA, 21, 108),
-    ] {
-        let name = format!("velnor-actions-{version}-{target}");
-        records.push(asset_record(
-            &name,
-            binary_size,
-            binary_digest,
-            Some(&asset_url(tag, &name)),
-        ));
-        let sidecar = format!("{name}.sha256");
-        records.push(asset_record(
-            &sidecar,
-            sidecar_size,
-            sidecar_digest,
-            Some(&asset_url(tag, &sidecar)),
-        ));
-    }
-    records
-}
-
-fn asset_records_without_url(version: &str, tag: &str) -> Vec<String> {
-    let mut records = asset_records(version, tag);
-    let url_start = records[0]
-        .find(",\"browser_download_url\"")
-        .expect("fixture URL");
-    let end = records[0].rfind('}').expect("fixture object");
-    records[0].replace_range(url_start..end, "");
-    records
-}
-
-fn asset_record(name: &str, size: u64, digest: &str, url: Option<&str>) -> String {
-    let url = url.map_or_else(String::new, |value| {
-        format!(",\"browser_download_url\":\"{value}\"")
-    });
-    format!(
-        "{{\"name\":\"{name}\",\"state\":\"uploaded\",\"size\":{size},\"digest\":\"sha256:{digest}\"{url}}}"
-    )
-}
-
-fn release_json(draft: bool, immutable: bool, tag: &str, assets: &[String]) -> String {
-    format!(
-        "{{\"id\":741852963,\"tag_name\":\"{tag}\",\"target_commitish\":\"main\",\"draft\":{draft},\"prerelease\":false,\"immutable\":{immutable},\"assets\":[{}]}}",
-        assets.join(",")
-    )
-}
-
-fn asset_url(tag: &str, asset: &str) -> String {
-    format!("https://github.com/{REPOSITORY}/releases/download/{tag}/{asset}")
-}
-
-fn assert_success(output: &Output) {
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-}
-
-fn assert_failure(output: &Output, reason: &str) {
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(!output.status.success(), "expected {reason}: {stderr}");
-    assert!(stderr.contains(reason), "expected {reason}: {stderr}");
-}
-
-fn output_text(output: &Output) -> Result<String, Box<dyn Error>> {
-    Ok(String::from_utf8(output.stdout.clone())?)
 }
 
 #[cfg(test)]

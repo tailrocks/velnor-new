@@ -6,6 +6,7 @@ use super::{
 use std::error::Error;
 use std::fs;
 
+const MANIFEST_CHECKSUM_NAME: &str = "velnor-actions-release-manifest.json.sha256";
 const BAD_SIDECAR_SHA: &str = "20c131057bedc10ae24bdae230efd695d3aebc91d453ce9e30fc18c61027e121";
 const TAMPERED_MANIFEST_SHA: &str =
     "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356";
@@ -114,6 +115,11 @@ fn reject_bad_sidecar_and_tampered_manifest() -> Result<(), Box<dyn Error>> {
     let draft = release_json(true, false, &fixture.tag, &fixture.records);
     let output = run_helper(&fixture, "create", &draft, RELEASE_VERSION, &fixture.commit);
     assert_success(&output);
+    let checksum_digest = output_text(&output)?
+        .lines()
+        .find_map(|line| line.strip_prefix("release_manifest_checksum_sha256="))
+        .ok_or("missing manifest checksum digest")?;
+    let checksum_size = fs::metadata(fixture.asset_dir.join(MANIFEST_CHECKSUM_NAME))?.len();
     fs::write(fixture.manifest(), b"{}\n")?;
     let mut records = fixture.records.clone();
     records.push(asset_record(
@@ -121,6 +127,12 @@ fn reject_bad_sidecar_and_tampered_manifest() -> Result<(), Box<dyn Error>> {
         3,
         TAMPERED_MANIFEST_SHA,
         Some(&asset_url(&fixture.tag, MANIFEST_NAME)),
+    ));
+    records.push(asset_record(
+        MANIFEST_CHECKSUM_NAME,
+        checksum_size,
+        checksum_digest,
+        Some(&asset_url(&fixture.tag, MANIFEST_CHECKSUM_NAME)),
     ));
     let release = release_json(true, false, &fixture.tag, &records);
     let output = run_helper(
@@ -130,6 +142,6 @@ fn reject_bad_sidecar_and_tampered_manifest() -> Result<(), Box<dyn Error>> {
         RELEASE_VERSION,
         &fixture.commit,
     );
-    assert_failure(&output, "manifest_does_not_match_published_assets");
+    assert_failure(&output, "release_manifest_sidecar_mismatch");
     Ok(())
 }

@@ -16,6 +16,7 @@ from urllib.parse import urlsplit
 
 REPOSITORY = "tailrocks/velnor-new"
 MANIFEST_NAME = "velnor-actions-release-manifest.json"
+MANIFEST_CHECKSUM_NAME = f"{MANIFEST_NAME}.sha256"
 TARGETS = ("x86_64-unknown-linux-gnu", "aarch64-apple-darwin")
 
 
@@ -56,6 +57,13 @@ def asset_names(version: str) -> tuple[str, ...]:
         binary = f"velnor-actions-{version}-{target}"
         names.extend((binary, f"{binary}.sha256"))
     return tuple(names)
+
+
+def release_asset_names(version: str, mode: str) -> set[str]:
+    expected = set(asset_names(version))
+    if mode in ("verify-draft", "verify"):
+        expected.update((MANIFEST_NAME, MANIFEST_CHECKSUM_NAME))
+    return expected
 
 
 def valid_url(value: object, tag: str, asset: str) -> str:
@@ -135,14 +143,20 @@ def validate_assets(
     tag: str,
     mode: str,
     manifest_path: Path,
+    manifest_checksum_path: Path,
 ) -> dict[str, str]:
-    expected = set(asset_names(version))
-    if mode in ("verify-draft", "verify"):
-        expected.add(MANIFEST_NAME)
-    if set(indexed) != expected:
-        fail("release_asset_set_mismatch")
+    expected_names = release_asset_names(version, mode)
+    if set(indexed) != expected_names:
+        fail(
+            "release_asset_set_mismatch:"
+            f"missing={sorted(expected_names - set(indexed))}:"
+            f"unexpected={sorted(set(indexed) - expected_names)}"
+        )
 
-    if manifest_path.parent.resolve() != asset_dir.resolve():
+    if any(
+        path.parent.resolve() != asset_dir.resolve()
+        for path in (manifest_path, manifest_checksum_path)
+    ):
         fail("manifest_path_outside_asset_directory")
 
     digests: dict[str, str] = {}
@@ -165,13 +179,22 @@ def validate_assets(
 
     if mode in ("verify-draft", "verify"):
         manifest = read_regular(manifest_path)
-        record = indexed[MANIFEST_NAME]
-        if record.get("state") != "uploaded" or record.get("size") != len(manifest):
-            fail("release_manifest_state_or_size_mismatch")
-        if record.get("digest") != f"sha256:{sha256(manifest)}":
-            fail("release_manifest_digest_mismatch")
-        valid_url(record.get("browser_download_url"), tag, MANIFEST_NAME)
-        digests[MANIFEST_NAME] = sha256(manifest)
+        manifest_digest = sha256(manifest)
+        manifest_sidecar = read_regular(manifest_checksum_path)
+        if manifest_sidecar != checksum_bytes(manifest_digest, MANIFEST_NAME):
+            fail("release_manifest_sidecar_mismatch")
+        for name, local in (
+            (MANIFEST_NAME, manifest),
+            (MANIFEST_CHECKSUM_NAME, manifest_sidecar),
+        ):
+            record = indexed[name]
+            digest = sha256(local)
+            if record.get("state") != "uploaded" or record.get("size") != len(local):
+                fail(f"release_asset_state_or_size_mismatch:{name}")
+            if record.get("digest") != f"sha256:{digest}":
+                fail(f"release_asset_digest_mismatch:{name}")
+            valid_url(record.get("browser_download_url"), tag, name)
+            digests[name] = digest
     return digests
 
 
@@ -203,6 +226,10 @@ def manifest_bytes(
     return (json.dumps(value, separators=(",", ":"), sort_keys=True) + "\n").encode("utf-8")
 
 
+def checksum_bytes(digest: str, name: str) -> bytes:
+    return f"{digest}  {name}\n".encode("ascii")
+
+
 def write_exclusive(path: Path, value: bytes) -> None:
     descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     try:
@@ -223,10 +250,19 @@ def validate_release(
     mode: str,
     asset_dir: Path,
     manifest_path: Path,
+    manifest_checksum_path: Path,
 ) -> bytes:
     validate_identity(release, version, repository, commit, tag, tag_commit, mode)
     indexed = release_assets(release)
-    digests = validate_assets(asset_dir, indexed, version, tag, mode, manifest_path)
+    digests = validate_assets(
+        asset_dir,
+        indexed,
+        version,
+        tag,
+        mode,
+        manifest_path,
+        manifest_checksum_path,
+    )
     return manifest_bytes(indexed, version, repository, commit, tag, digests)
 
 
@@ -250,6 +286,9 @@ def main() -> int:
             args.release_json,
             args.asset_dir,
             args.manifest,
+            args.manifest.with_name(MANIFEST_CHECKSUM_NAME)
+            if args.manifest is not None
+            else None,
             args.repository,
             args.commit,
             args.tag,
@@ -268,12 +307,25 @@ def main() -> int:
             args.mode,
             args.asset_dir,
             args.manifest,
+            args.manifest.with_name(MANIFEST_CHECKSUM_NAME),
         )
         if args.mode == "create":
             write_exclusive(args.manifest, expected)
+            write_exclusive(
+                args.manifest.with_name(MANIFEST_CHECKSUM_NAME),
+                checksum_bytes(sha256(expected), MANIFEST_NAME),
+            )
         elif read_regular(args.manifest) != expected:
             fail("manifest_does_not_match_published_assets")
+        elif read_regular(args.manifest.with_name(MANIFEST_CHECKSUM_NAME)) != checksum_bytes(
+            sha256(expected), MANIFEST_NAME
+        ):
+            fail("manifest_checksum_does_not_match_published_assets")
         print(f"release_manifest_sha256={sha256(expected)}")
+        print(
+            "release_manifest_checksum_sha256="
+            f"{sha256(checksum_bytes(sha256(expected), MANIFEST_NAME))}"
+        )
         return 0
     except (OSError, ValueError, UnicodeError) as error:
         print(f"generator release manifest: {error}", file=sys.stderr)

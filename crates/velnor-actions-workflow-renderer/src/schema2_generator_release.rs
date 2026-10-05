@@ -30,6 +30,12 @@ const MACOS_ARTIFACT: &str = "generator-macos-assets";
 const LINUX_DIR: &str = "linux-assets";
 const MACOS_DIR: &str = "macos-assets";
 const ASSET_DIR: &str = "assets";
+const ACCEPTED_MANIFEST: &str =
+    "${{ runner.temp }}/velnor-generator-accepted/velnor-actions-release-manifest.json";
+const ACCEPTED_CHECKSUM: &str =
+    "${{ runner.temp }}/velnor-generator-accepted/velnor-actions-release-manifest.json.sha256";
+const ACCEPTANCE_RECEIPT: &str =
+    "${{ runner.temp }}/velnor-generator-accepted/velnor-actions-release-acceptance.json";
 
 const RUST_INSTALL: &str = "\
 set -eu
@@ -149,7 +155,7 @@ fn sum_script(command: &str, asset: &str, sidecar: &str) -> String {
 
 fn publish_script() -> String {
     format!(
-        "set -eu\npython3 scripts/generator-release/publish_generator_release.py --version {RELEASE_VERSION}"
+        "set -eu\nPYTHONDONTWRITEBYTECODE=1 python3 scripts/generator-release/publish_generator_release.py --version {RELEASE_VERSION}"
     )
 }
 
@@ -209,6 +215,7 @@ fn publish_job(hosted: Yaml) -> (String, Yaml) {
             download_step("Download Linux assets", LINUX_ARTIFACT, LINUX_DIR),
             download_step("Download macOS assets", MACOS_ARTIFACT, MACOS_DIR),
             publish_step(&publish_script()),
+            upload_accepted_metadata_step(),
         ],
     )
 }
@@ -316,7 +323,36 @@ fn attest_permissions() -> Yaml {
 
 /// Only the release-upload job may write repository contents.
 fn publish_permissions() -> Yaml {
-    perm(&[("actions", "read"), ("contents", "write")])
+    perm(&[("actions", "write"), ("contents", "write")])
+}
+
+fn upload_accepted_metadata_step() -> Yaml {
+    Yaml::Map(vec![
+        (
+            "name".to_owned(),
+            Yaml::str("Upload verified release metadata"),
+        ),
+        ("uses".to_owned(), Yaml::str(UPLOAD_ARTIFACT_USES)),
+        (
+            "with".to_owned(),
+            Yaml::Map(vec![
+                ("if-no-files-found".to_owned(), Yaml::str("error")),
+                (
+                    "name".to_owned(),
+                    Yaml::str("velnor-generator-accepted-${{ github.sha }}"),
+                ),
+                (
+                    "path".to_owned(),
+                    Yaml::str(newline_list(&[
+                        ACCEPTED_MANIFEST,
+                        ACCEPTED_CHECKSUM,
+                        ACCEPTANCE_RECEIPT,
+                    ])),
+                ),
+                ("retention-days".to_owned(), Yaml::Int(14)),
+            ]),
+        ),
+    ])
 }
 
 fn perm(pairs: &[(&str, &str)]) -> Yaml {

@@ -42,11 +42,6 @@ if args[0] == "api":
     endpoint = args[endpoint_index]
     if endpoint == "repos/tailrocks/velnor-new/commits/main":
         result = {"sha": os.environ["GH_FAKE_MAIN_SHA"]}
-    elif endpoint == "repos/tailrocks/velnor-new/immutable-releases":
-        policy = os.environ["GH_FAKE_IMMUTABLE"]
-        if policy == "unavailable":
-            raise SystemExit(77)
-        result = {"enabled": policy == "enabled", "enforced_by_owner": False}
     elif endpoint == "repos/tailrocks/velnor-new/git/refs" and args[args.index("--method") + 1] == "POST":
         fields = [args[index + 1] for index, value in enumerate(args) if value == "-f"]
         values = dict(value.split("=", 1) for value in fields)
@@ -67,6 +62,8 @@ if args[0] == "api":
     elif endpoint == "repos/tailrocks/velnor-new/releases/741852963":
         if not Path(os.environ["GH_FAKE_RELEASE_CREATED"]).exists():
             raise SystemExit(96)
+        if Path(os.environ["GH_FAKE_ACCEPTED_DIRECTORY"]).exists():
+            raise SystemExit(83)
         index_file = Path(os.environ["GH_FAKE_RELEASE_INDEX"])
         index = int(index_file.read_text()) if index_file.exists() else 0
         index_file.write_text(str(index + 1))
@@ -76,8 +73,13 @@ if args[0] == "api":
         raise SystemExit(96)
     print(json.dumps(result, separators=(",", ":")))
 elif args[0] == "release" and args[1] == "upload":
+    if Path(os.environ["GH_FAKE_RELEASE_PUBLISHED"]).exists():
+        raise SystemExit(81)
+    if Path(os.environ["GH_FAKE_ACCEPTED_DIRECTORY"]).exists():
+        raise SystemExit(83)
     if args[args.index("--repo") + 1] != "tailrocks/velnor-new":
         raise SystemExit(90)
+    uploaded = []
     index = 3
     while index < len(args):
         value = args[index]
@@ -88,7 +90,12 @@ elif args[0] == "release" and args[1] == "upload":
             raise SystemExit(95)
         if path.name == "velnor-actions-release-manifest.json":
             shutil.copyfile(path, os.environ["GH_FAKE_MANIFEST_COPY"])
+        if path.name == "velnor-actions-release-manifest.json.sha256":
+            shutil.copyfile(path, os.environ["GH_FAKE_MANIFEST_CHECKSUM_COPY"])
+        uploaded.append(path.name)
         index += 1
+    with open(os.environ["GH_FAKE_UPLOADS"], "a", encoding="utf-8") as log:
+        log.write("draft-upload:" + ",".join(uploaded) + "\n")
 elif args[0] == "release" and args[1] in ("create", "edit"):
     if args[1] == "create":
         if args[args.index("--repo") + 1] != "tailrocks/velnor-new":
@@ -107,7 +114,13 @@ elif args[0] == "release" and args[1] in ("create", "edit"):
             raise SystemExit(90)
         if "--draft=false" not in args:
             raise SystemExit(91)
+        if Path(os.environ["GH_FAKE_RELEASE_PUBLISHED"]).exists():
+            raise SystemExit(82)
+        if Path(os.environ["GH_FAKE_ACCEPTED_DIRECTORY"]).exists():
+            raise SystemExit(83)
         Path(os.environ["GH_FAKE_RELEASE_PUBLISHED"]).write_text("true", encoding="utf-8")
+        with open(os.environ["GH_FAKE_UPLOADS"], "a", encoding="utf-8") as log:
+            log.write("publish\n")
 elif args[0] == "release" and args[1] == "view":
     tag = args[2]
     created = Path(os.environ["GH_FAKE_RELEASE_CREATED"])
@@ -132,6 +145,9 @@ pub(super) struct PublisherFixture {
     pub(super) release_created: PathBuf,
     pub(super) release_published: PathBuf,
     pub(super) manifest_copy: PathBuf,
+    pub(super) manifest_checksum_copy: PathBuf,
+    pub(super) accepted_directory: PathBuf,
+    pub(super) upload_log: PathBuf,
     pub(super) commit: String,
     pub(super) tag: String,
 }
@@ -154,6 +170,9 @@ impl PublisherFixture {
         let release_created = scratch.path().join("release-created");
         let release_published = scratch.path().join("release-published");
         let manifest_copy = scratch.path().join("uploaded-manifest.json");
+        let manifest_checksum_copy = scratch.path().join("uploaded-manifest.sha256");
+        let accepted_directory = runner_temp.join("velnor-generator-accepted");
+        let upload_log = scratch.path().join("uploads.txt");
         let output = Command::new("git")
             .args(["init", "-b", "main"])
             .current_dir(&workspace)
@@ -203,6 +222,9 @@ impl PublisherFixture {
             release_created,
             release_published,
             manifest_copy,
+            manifest_checksum_copy,
+            accepted_directory,
+            upload_log,
             commit,
             tag,
         };
@@ -214,7 +236,25 @@ impl PublisherFixture {
         responses: &[String],
         tag_commit: &str,
         event_commit: &str,
-        immutable_status: &str,
+    ) -> Result<Output, Box<dyn Error>> {
+        self.run_with_workflow(
+            responses,
+            tag_commit,
+            event_commit,
+            "workflow_dispatch",
+            "refs/heads/main",
+            "tailrocks/velnor-new/.github/workflows/generator-release.yml@refs/heads/main",
+        )
+    }
+
+    pub(super) fn run_with_workflow(
+        &self,
+        responses: &[String],
+        tag_commit: &str,
+        event_commit: &str,
+        event_name: &str,
+        ref_name: &str,
+        workflow_ref: &str,
     ) -> Result<Output, Box<dyn Error>> {
         for (index, response) in responses.iter().enumerate() {
             fs::write(self.api.join(format!("release-{index}.json")), response)?;
@@ -228,16 +268,16 @@ impl PublisherFixture {
             .current_dir(&self.workspace)
             .env("PATH", path)
             .env("RUNNER_TEMP", &self.runner_temp)
+            .env("PYTHONDONTWRITEBYTECODE", "1")
             .env("GITHUB_REPOSITORY", REPOSITORY)
-            .env("GITHUB_REF", "refs/heads/main")
-            .env("GITHUB_EVENT_NAME", "workflow_dispatch")
-            .env(
-                "GITHUB_WORKFLOW_REF",
-                "tailrocks/velnor-new/.github/workflows/generator-release.yml@refs/heads/main",
-            )
+            .env("GITHUB_REF", ref_name)
+            .env("GITHUB_EVENT_NAME", event_name)
+            .env("GITHUB_WORKFLOW_REF", workflow_ref)
             .env("GITHUB_WORKFLOW_SHA", event_commit)
             .env("GITHUB_SHA", event_commit)
             .env("GH_TOKEN", "fixture-token")
+            .env("GITHUB_TOKEN", "")
+            .env("MISE_GITHUB_TOKEN", "")
             .env("GH_FAKE_MAIN_SHA", &self.commit)
             .env("GH_FAKE_TAG_SHA", tag_commit)
             .env("GH_FAKE_API_DIR", &self.api)
@@ -245,10 +285,15 @@ impl PublisherFixture {
             .env("GH_FAKE_TAG_PATH", &self.tag_path)
             .env("GH_FAKE_RELEASE_CREATED", &self.release_created)
             .env("GH_FAKE_RELEASE_PUBLISHED", &self.release_published)
-            .env("GH_FAKE_IMMUTABLE", immutable_status)
+            .env("GH_FAKE_ACCEPTED_DIRECTORY", &self.accepted_directory)
             .env("GH_FAKE_CALLS", &self.calls)
             .env("GH_FAKE_MISE_CALLS", &self.mise_calls)
             .env("GH_FAKE_MANIFEST_COPY", &self.manifest_copy)
+            .env(
+                "GH_FAKE_MANIFEST_CHECKSUM_COPY",
+                &self.manifest_checksum_copy,
+            )
+            .env("GH_FAKE_UPLOADS", &self.upload_log)
             .output()?)
     }
 
@@ -288,13 +333,31 @@ impl PublisherFixture {
             .lines()
             .find_map(|line| line.strip_prefix("release_manifest_sha256="))
             .ok_or("missing manifest digest")?;
+        let checksum_digest = output_text(&output)?
+            .lines()
+            .find_map(|line| line.strip_prefix("release_manifest_checksum_sha256="))
+            .ok_or("missing manifest checksum digest")?;
         let size = fs::metadata(self.assets.join(MANIFEST_NAME))?.len();
+        let checksum_size = fs::metadata(
+            self.assets
+                .join("velnor-actions-release-manifest.json.sha256"),
+        )?
+        .len();
         let mut final_records = records;
         final_records.push(asset_record(
             MANIFEST_NAME,
             size,
             digest,
             Some(&asset_url(&self.tag, MANIFEST_NAME)),
+        ));
+        final_records.push(asset_record(
+            "velnor-actions-release-manifest.json.sha256",
+            checksum_size,
+            checksum_digest,
+            Some(&asset_url(
+                &self.tag,
+                "velnor-actions-release-manifest.json.sha256",
+            )),
         ));
         Ok(final_records)
     }
