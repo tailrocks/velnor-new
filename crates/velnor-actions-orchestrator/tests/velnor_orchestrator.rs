@@ -7,6 +7,7 @@ mod impl_config_internal;
 mod impl_consumer_manifest_file;
 mod impl_cover_pipeline;
 mod impl_crate_graph;
+mod impl_discovery_cache;
 mod impl_e2e_scrub;
 mod impl_e2e_tools_save;
 mod impl_e2e_wiring;
@@ -29,6 +30,7 @@ mod impl_generator_seed;
 mod impl_git_authority_p10;
 mod impl_git_paths_p10;
 mod impl_lane_isolation;
+mod impl_local_release_manifest_fs;
 #[path = "impl_local_shared_action.rs"]
 mod impl_local_shared_action;
 mod impl_matrix;

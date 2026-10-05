@@ -3,7 +3,6 @@
 use std::error::Error;
 use std::fs;
 use std::path::PathBuf;
-use std::process::Command;
 
 use serde_json::{Value, json};
 use tempfile::TempDir;
@@ -216,7 +215,7 @@ fn empty_binary_and_binary_size_limit_fail() -> Result<(), Box<dyn Error>> {
 
 #[cfg(unix)]
 #[test]
-fn symlink_directory_and_fifo_inputs_are_rejected_without_blocking() -> Result<(), Box<dyn Error>> {
+fn symlink_and_directory_inputs_are_rejected() -> Result<(), Box<dyn Error>> {
     use std::os::unix::fs::symlink;
 
     let fixture = Fixture::new()?;
@@ -224,9 +223,5 @@ fn symlink_directory_and_fifo_inputs_are_rejected_without_blocking() -> Result<(
     symlink(&fixture.linux, &symlink_path)?;
     assert!(sha256_nonempty_file(&symlink_path, 100).is_err());
     assert!(sha256_nonempty_file(fixture.directory.path(), 100).is_err());
-    let fifo = fixture.directory.path().join("fifo-binary");
-    let fifo_status = Command::new("mkfifo").arg(&fifo).status()?;
-    assert!(fifo_status.success(), "mkfifo must create the test FIFO");
-    assert!(sha256_nonempty_file(&fifo, 100).is_err());
     Ok(())
 }
