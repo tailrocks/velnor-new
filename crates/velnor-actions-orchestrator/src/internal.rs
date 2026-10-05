@@ -29,9 +29,10 @@ use crate::select::{classify_changed, select_universe, verify_checkout};
 use crate::select_edges::plan_task_graph;
 
 pub use crate::internal_request::{
-    PlanOutputs, merge_passed, plan_outputs, publish_final_report, publish_plan_files,
-    response_path_for, write_request, write_request_parts,
+    merge_passed, publish_final_report, publish_plan_files, response_path_for, write_request,
+    write_request_parts,
 };
+pub use crate::plan_output_limits::{PlanOutputs, plan_outputs, plan_outputs_with_admission};
 
 /// Schema version accepted by both internal entrypoints.
 pub(crate) const SCHEMA: u32 = 1;

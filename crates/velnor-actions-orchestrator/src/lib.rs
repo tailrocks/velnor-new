@@ -116,8 +116,8 @@ pub use generate::{
 pub use init::{InitReport, init_config};
 pub use internal::{
     MERGE_OP, PLAN_OP, PlanOutputs, REQUEST_FILE_ENV, WRITE_REQUEST_OP, merge_passed,
-    plan_internal, plan_outputs, publish_final_report, publish_plan_files, response_path_for,
-    write_request, write_request_parts,
+    plan_internal, plan_outputs, plan_outputs_with_admission, publish_final_report,
+    publish_plan_files, response_path_for, write_request, write_request_parts,
 };
 pub use merge::merge_internal;
 pub use merge_request::assemble_merge_request;
@@ -141,11 +141,11 @@ pub use validators::{
     validate_select_diff_args, validate_select_show_args, validate_show_args, validate_show_path,
 };
 pub use velnor_actions_contract::ExecutionMode;
-pub use velnor_actions_contract::{DYNAMIC_MATRIX_OUTPUT_MODE, PLAN_MATRIX_OUTPUT_MODE_ENV};
 pub use velnor_actions_contract::workflow::{
     QUALIFICATION_CACHE_ENABLED_OUTPUT, QUALIFICATION_CACHE_WRITE_OUTPUT,
     QUALIFICATION_CAMPAIGN_OUTPUT, QUALIFICATION_PHASE_OUTPUT,
 };
+pub use velnor_actions_contract::{DYNAMIC_MATRIX_OUTPUT_MODE, PLAN_MATRIX_OUTPUT_MODE_ENV};
 pub use workflow::{CHECKOUT_USES, DEFAULT_RUNNER_LABEL, WorkflowPlan};
 
 /// Version marker for the orchestrator shell.

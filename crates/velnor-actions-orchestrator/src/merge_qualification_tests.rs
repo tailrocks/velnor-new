@@ -22,6 +22,7 @@ fn context() -> QualificationDispatch {
         source_sha: SHA.to_owned(),
         run_id: 123,
         run_attempt: 1,
+        predecessor: None,
     }
 }
 

@@ -245,7 +245,7 @@ fn plan_outputs_bind_qualification_phase_and_cache_policy() -> TestResult {
     let head = git_line(&["rev-parse", "HEAD"], root)?;
     let context = serde_json::json!({
         "campaign": "protocol-test",
-        "phase": "third",
+        "phase": "cold",
         "repository": "owner/project",
         "default_branch": "testmain",
         "git_ref": "refs/heads/testmain",
@@ -269,7 +269,7 @@ fn plan_outputs_bind_qualification_phase_and_cache_policy() -> TestResult {
     let response = plan_internal(&request.to_string())?;
     let outputs = plan_outputs(&response, PlanOutputMode::Static)?;
     assert_eq!(outputs.qualification_campaign, "protocol-test");
-    assert_eq!(outputs.qualification_phase, "third");
+    assert_eq!(outputs.qualification_phase, "cold");
     assert!(outputs.qualification_cache_enabled);
     assert!(!outputs.qualification_cache_write);
     let step_names: Vec<&str> = outputs
@@ -288,14 +288,21 @@ fn plan_outputs_bind_qualification_phase_and_cache_policy() -> TestResult {
             "qualification_phase",
             "qualification_cache_enabled",
             "qualification_cache_write",
+            "qualification_cache_directives",
         ]
+    );
+    let directives: serde_json::Value =
+        serde_json::from_str(&outputs.qualification_cache_directives)?;
+    assert_eq!(directives["phase"], "cold");
+    assert!(
+        directives["lanes"]
+            .as_array()
+            .is_some_and(|lanes| !lanes.is_empty())
     );
     let promoted = outputs.promoted_job_outputs(PlanOutputMode::Static);
     let expected_bytes = promoted
         .iter()
-        .map(|(name, value)| {
-            (name.encode_utf16().count() + value.encode_utf16().count() + 2) * 2
-        })
+        .map(|(name, value)| (name.encode_utf16().count() + value.encode_utf16().count() + 2) * 2)
         .sum::<usize>();
     assert_eq!(outputs.job_outputs_utf16_bytes, expected_bytes);
     Ok(())

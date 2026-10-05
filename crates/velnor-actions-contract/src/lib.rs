@@ -114,7 +114,7 @@ pub use workflow::{
     NEEDS_CHANNEL_EXPRESSION, NEEDS_EXPECTED_ENV, NeedsConclusions, NotSelectedReason,
     ObligationDecision, PLAN_DISPLAY_NAME, PLAN_JOB_ID, PLAN_JSON_FILENAME, PermissionLevel,
     Permissions, Plan, PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation, PlanPackage,
-    PlanRunner, QualificationDispatch, QualificationPhase, REQUIRED_CONDITION,
+    PlanRunner, QualificationDispatch, QualificationPhase, QualificationRunRef, REQUIRED_CONDITION,
     REQUIRED_DISPLAY_NAME, REQUIRED_JOB_ID, RequiredCheckMigration, RequiredJobResult,
     STALE_WORKFLOW_PATHS, ScheduleTrigger, Step, StepKind, TOFU_DISPLAY_PREFIX, TOFU_JOB_ID_PREFIX,
     TaskReport, TaskStatus, TaskTiming, Trigger, Trust, ValidatorKind, WORKFLOW_DISPLAY_NAME,
@@ -124,6 +124,24 @@ pub use workflow::{
     matrix_json_bytes, matrix_report_relpath, plan_json_bytes, slugify_segment,
     task_report_relpath, tofu_display_name, trust_for_event, validate_final_report_id,
     validate_job_id, validate_matrix_run,
+};
+pub use workflow::{
+    BoundQualificationCacheKeys, MAX_QUALIFICATION_CACHE_LANES, MAX_QUALIFICATION_RECEIPT_BYTES,
+    MAX_QUALIFICATION_RECEIPT_DEPTH, QUALIFICATION_CACHE_DIRECTIVES_OUTPUT,
+    QUALIFICATION_CACHE_RECEIPT_ARTIFACT, QUALIFICATION_CACHE_RECEIPT_FILENAME,
+    QualificationCacheAdmission, QualificationCacheArtifact, QualificationCacheBackendEntry,
+    QualificationCacheBackendObservation, QualificationCacheDirective,
+    QualificationCacheLaneDirective, QualificationCacheLaneReceipt, QualificationCacheLayer,
+    QualificationCacheLayerDirective, QualificationCacheLayerReceipt,
+    QualificationCacheProducerContext, QualificationCacheReceipt,
+    QualificationCacheReceiptArtifactDocument, QualificationCacheReceiptLink,
+    QualificationCacheRestore, QualificationCacheRestoreDirective,
+    QualificationCacheRestoreExpectation, QualificationCacheRestorePolicy,
+    QualificationCacheRestoreResult, QualificationCacheRunMetadata, QualificationCacheSave,
+    QualificationCacheSaveActionResult, QualificationCacheSavePolicy, QualificationCacheSlot,
+    QualificationRuntimeIdentity, QualificationRuntimeIdentityField,
+    QualificationRuntimeIdentityRequirements, QualificationRuntimePlatform,
+    QualificationSourceDelta,
 };
 pub use workflow::{DYNAMIC_MATRIX_OUTPUT_MODE, PLAN_MATRIX_OUTPUT_MODE_ENV};
 

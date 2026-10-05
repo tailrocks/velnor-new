@@ -2,7 +2,7 @@ use super::{
     JOB_OUTPUTS_BUDGET_UTF16_BYTES, MATRIX_JOB_LIMIT, PlanOutputMode, check_plan_outputs,
     output_record_utf16_bytes,
 };
-use crate::internal_request::PlanOutputs;
+use crate::PlanOutputs;
 
 #[test]
 fn utf16_budget_counts_ascii_and_surrogate_pairs() {
@@ -59,6 +59,7 @@ fn step_outputs_remain_complete_while_static_job_promotion_is_narrow() {
         qualification_phase: "cold".to_owned(),
         qualification_cache_enabled: true,
         qualification_cache_write: true,
+        qualification_cache_directives: "{\"schema\":1}".to_owned(),
         job_outputs_utf16_bytes: 0,
     };
     let step_names: Vec<&str> = outputs
@@ -77,6 +78,7 @@ fn step_outputs_remain_complete_while_static_job_promotion_is_narrow() {
             "qualification_phase",
             "qualification_cache_enabled",
             "qualification_cache_write",
+            "qualification_cache_directives",
         ]
     );
     assert_eq!(outputs.step_outputs()[6].1, "true");
@@ -94,6 +96,7 @@ fn step_outputs_remain_complete_while_static_job_promotion_is_narrow() {
             "qualification_phase",
             "qualification_cache_enabled",
             "qualification_cache_write",
+            "qualification_cache_directives",
         ]
     );
     let dynamic_job_names: Vec<&str> = outputs
@@ -123,6 +126,7 @@ fn matrix_and_coverage_outputs_share_one_aggregate_budget() {
                 ("qualification_phase", "useful_delta"),
                 ("qualification_cache_enabled", "true"),
                 ("qualification_cache_write", "true"),
+                ("qualification_cache_directives", "{\"schema\":1}"),
             ],
         )
         .is_err_and(|error| error.to_string().contains("job_outputs_budget_exceeded"))
