@@ -3,19 +3,23 @@
 use std::future::Future;
 
 use velnor_runner_github::{
-    Ack, AckScope, AcquireOutcome, Certainty, EncodedJit, Poll, RefreshGate, SessionError, ack,
-    acquire, jit, jit_request, may_ack,
+    AcquireOutcome, Certainty, EncodedJit, Poll, RefreshGate, SessionError, acquire, jit,
+    jit_request, may_ack,
 };
 
 use crate::Offer;
 use crate::error::HostError;
-use crate::journal::{Journal, Outcome};
+use crate::journal::{Journal, LaunchIdentity, Outcome};
 use crate::listen::map_listen;
 use crate::offer;
+use crate::reconcile::LaunchPhase;
 use crate::scale_set::EnsureError;
 use crate::worker::Started;
 
 use super::{Drive, Lane};
+
+mod acknowledge;
+pub(super) use acknowledge::acknowledge;
 
 /// What one poll allows before acquire.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -97,20 +101,48 @@ where
     S: FnOnce(&str, &[u8], super::bind::Bind) -> F,
     F: Future<Output = Result<Started, HostError>>,
 {
-    lane.on_admin()?;
     let subject = format!("m{}r{request_id}", batch.message_id);
-    let (id, fresh) = journal.begin_launch(&subject).await.map_err(map_journal)?;
+    let name = format!("v{request_id}");
+    let identity = launch_identity(ctx, Some(request_id), &name)?;
+    lane.on_admin()?;
+    let (id, fresh) = journal
+        .begin_prepared_launch(&subject, &identity)
+        .await
+        .map_err(map_journal)?;
     if docker_of(journal, id).await?.is_some() {
         return ack_bound(lane, ctx, batch, journal, id).await;
     }
     if !fresh {
         return hold(journal, id, EnsureError::Uncertain).await;
     }
+    journal
+        .advance_launch_phase(id, LaunchPhase::AcquireRequested)
+        .await
+        .map_err(map_journal)?;
     match taken(lane, ctx, request_id) {
-        Ok(AcquireOutcome::Acquired(ids)) if ids.is_empty() => reject_empty(journal, id).await,
-        Ok(_) => {
-            let name = format!("v{request_id}");
-            mint(lane, ctx, Some(batch), journal, id, &name, start).await
+        Ok(AcquireOutcome::Acquired(ids)) if ids.is_empty() => {
+            journal
+                .advance_launch_phase(id, LaunchPhase::Acquired)
+                .await
+                .map_err(map_journal)?;
+            reject_empty(journal, id).await
+        }
+        Ok(AcquireOutcome::Acquired(_)) | Ok(AcquireOutcome::Noop) => {
+            journal
+                .advance_launch_phase(id, LaunchPhase::Acquired)
+                .await
+                .map_err(map_journal)?;
+            mint(
+                lane,
+                ctx,
+                Some(batch),
+                journal,
+                id,
+                &identity.worker_volume,
+                &name,
+                start,
+            )
+            .await
         }
         Err(error) => fail_acquire(journal, id, error).await,
     }
@@ -207,15 +239,29 @@ where
     S: FnOnce(&str, &[u8], super::bind::Bind) -> F,
     F: Future<Output = Result<Started, HostError>>,
 {
+    let identity = launch_identity(ctx, None, name)?;
     lane.on_admin()?;
-    let (id, fresh) = journal.begin_launch(subject).await.map_err(map_journal)?;
+    let (id, fresh) = journal
+        .begin_prepared_launch(subject, &identity)
+        .await
+        .map_err(map_journal)?;
     if docker_of(journal, id).await?.is_some() {
         return finish_live(lane, ctx, journal, id, batch).await;
     }
     if !fresh {
         return hold(journal, id, EnsureError::Uncertain).await;
     }
-    mint(lane, ctx, batch, journal, id, name, start).await
+    mint(
+        lane,
+        ctx,
+        batch,
+        journal,
+        id,
+        &identity.worker_volume,
+        name,
+        start,
+    )
+    .await
 }
 
 async fn mint<T, S, F>(
@@ -224,6 +270,7 @@ async fn mint<T, S, F>(
     batch: Option<&velnor_runner_github::ParsedBatch>,
     journal: &Journal,
     id: i64,
+    volume: &str,
     name: &str,
     start: S,
 ) -> Result<Option<Started>, EnsureError>
@@ -232,6 +279,10 @@ where
     S: FnOnce(&str, &[u8], super::bind::Bind) -> F,
     F: Future<Output = Result<Started, HostError>>,
 {
+    journal
+        .advance_launch_phase(id, LaunchPhase::JitRequested)
+        .await
+        .map_err(map_journal)?;
     let encoded = match fetch_jit(lane, ctx, name) {
         Ok(encoded) => encoded,
         Err(error) => {
@@ -246,29 +297,31 @@ where
             return hold(journal, id, mapped).await;
         }
     };
+    journal
+        .advance_launch_phase(id, LaunchPhase::JitReceived)
+        .await
+        .map_err(map_journal)?;
     let bound = super::bind::Bind::new(journal, id);
-    let Ok(volume) = crate::worker::new_worker_volume() else {
-        return hold(
-            journal,
-            id,
-            EnsureError::Unexpected {
-                status: 0,
-                step: "worker identity",
-            },
-        )
-        .await;
-    };
-    let Ok(started) = start(&volume, encoded.expose().as_bytes(), bound).await else {
+    let Ok(started) = start(volume, encoded.expose().as_bytes(), bound).await else {
         return hold(journal, id, EnsureError::Uncertain).await;
     };
     journal
         .bind_worker(id, Some(&started.runner_id), Some(&started.dind_id))
         .await
         .map_err(map_journal)?;
+    journal
+        .advance_launch_phase(id, LaunchPhase::WorkerReady)
+        .await
+        .map_err(map_journal)?;
     if let Some(batch) = batch
-        && let Err(error) = acknowledge(lane, ctx, batch)
     {
-        return hold(journal, id, error).await;
+        journal
+            .advance_launch_phase(id, LaunchPhase::AcknowledgementRequested)
+            .await
+            .map_err(map_journal)?;
+        if let Err(error) = acknowledge(lane, ctx, batch) {
+            return hold(journal, id, error).await;
+        }
     }
     mark_done(journal, id).await?;
     Ok(Some(started))
@@ -293,44 +346,16 @@ where
     T: velnor_runner_github::Transport + Lane,
 {
     if let Some(batch) = batch
-        && let Err(error) = acknowledge(lane, ctx, batch)
     {
-        return hold(journal, id, error).await;
+        advance_phase_if_known(journal, id, LaunchPhase::AcknowledgementRequested).await?;
+        if let Err(error) = acknowledge(lane, ctx, batch) {
+            return hold(journal, id, error).await;
+        }
     }
     mark_done(journal, id).await?;
     // Already recorded. Counting it fills `started` and the session stops
     // before a later JobAvailable. A live container still occupies its slot.
     Ok(None)
-}
-
-pub(super) fn acknowledge<T>(
-    lane: &mut T,
-    ctx: &Drive,
-    batch: &velnor_runner_github::ParsedBatch,
-) -> Result<(), EnsureError>
-where
-    T: velnor_runner_github::Transport + Lane,
-{
-    lane.on_queue()?;
-    let gate = RefreshGate::new();
-    let refresh = || Ok(());
-    let scope = AckScope {
-        replay_safe: true,
-        sole_unacquired_offer: false,
-        queue_token: &ctx.queue_token,
-    };
-    let acked = ack(lane, &ctx.queue_path, batch, &scope, &gate, refresh);
-    let restored = lane.on_admin();
-    let deleted = match acked {
-        Ok(Ack::Deleted) => Ok(()),
-        Ok(Ack::Suppressed) => Err(EnsureError::Unexpected {
-            status: 0,
-            step: "ack",
-        }),
-        Err(error) => Err(map_listen(error)),
-    };
-    restored?;
-    deleted
 }
 
 async fn ack_bound<T>(
@@ -343,6 +368,7 @@ async fn ack_bound<T>(
 where
     T: velnor_runner_github::Transport + Lane,
 {
+    advance_phase_if_known(journal, id, LaunchPhase::AcknowledgementRequested).await?;
     if let Err(error) = acknowledge(lane, ctx, batch) {
         return hold(journal, id, error).await;
     }
@@ -363,6 +389,7 @@ async fn hold(
 }
 
 async fn mark_done(journal: &Journal, id: i64) -> Result<(), EnsureError> {
+    advance_phase_if_known(journal, id, LaunchPhase::Complete).await?;
     if journal.read(id).await.map_err(map_journal)? == crate::IntentState::Done {
         return Ok(());
     }
@@ -375,6 +402,62 @@ async fn docker_of(journal: &Journal, id: i64) -> Result<Option<String>, EnsureE
         .into_iter()
         .find(|row| row.id == id)
         .and_then(|row| row.docker_id))
+}
+
+fn launch_identity(
+    ctx: &Drive,
+    request_id: Option<i64>,
+    runner_name: &str,
+) -> Result<LaunchIdentity, EnsureError> {
+    let docker_engine_id = ctx
+        .docker_engine_id
+        .clone()
+        .filter(|id| !id.trim().is_empty())
+        .ok_or(EnsureError::Unexpected {
+            status: 0,
+            step: "docker identity",
+        })?;
+    let worker_volume = crate::worker::new_worker_volume().map_err(|_| {
+        EnsureError::Unexpected {
+            status: 0,
+            step: "worker identity",
+        }
+    })?;
+    if ctx.set_id <= 0 || runner_name.is_empty() {
+        return Err(EnsureError::Unexpected {
+            status: 0,
+            step: "worker identity",
+        });
+    }
+    Ok(LaunchIdentity {
+        scale_set_id: ctx.set_id,
+        request_id,
+        runner_name: runner_name.to_owned(),
+        worker_volume,
+        docker_engine_id,
+    })
+}
+
+async fn advance_phase_if_known(
+    journal: &Journal,
+    id: i64,
+    phase: LaunchPhase,
+) -> Result<(), EnsureError> {
+    let rows = journal.rows().await.map_err(map_journal)?;
+    let row = rows
+        .iter()
+        .find(|row| row.id == id)
+        .ok_or(EnsureError::Unexpected {
+            status: 0,
+            step: "journal",
+        })?;
+    if row.launch_phase.is_some() {
+        journal
+            .advance_launch_phase(id, phase)
+            .await
+            .map_err(map_journal)?;
+    }
+    Ok(())
 }
 
 fn map_journal(error: HostError) -> EnsureError {
