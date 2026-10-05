@@ -226,12 +226,7 @@ aliases in every generated `runs-on` field. V1 emits no self-hosted labels. The 
 Every generated job MUST carry a per-job `timeout-minutes` below GitHub's 360 minute default; the bound is a required typed Job IR field (1–360 minutes),
 rendered right after `runs-on`. Per-kind defaults follow the measured green-run walls in `docs/implemented/performance.md`: 30 minutes for crate-shaped jobs, 10 minutes for `plan`, `required`, validator, and release jobs.
 
-`plan` MUST upload its plan report with `if: always()`. It MUST fail when canonical `matrix.json` exceeds
-512 KiB. This artifact byte cap is independent of job outputs. When the workflow promotes plan outputs to
-an output-fed matrix, `plan` MUST fail above 256 expanded matrix jobs and when the aggregate promoted output
-records exceed 900,000 UTF-16 bytes. Count the actual `matrix.include` entries only for that dynamic path;
-static artifact rows are not matrix jobs. GitHub documents a 1 MB per-job output limit, approximated in
-UTF-16, and a 256-job matrix maximum in its [workflow syntax reference](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax).
+`plan` MUST upload its plan report with `if: always()` and fail above a 512 KiB canonical `matrix.json` artifact or, when the workflow promotes an output-fed matrix, above 256 expanded jobs or 900,000 aggregate UTF-16 bytes across promoted job outputs. The artifact cap is independent of job outputs; count actual `matrix.include` entries only on the dynamic path because static artifact rows are not matrix jobs. GitHub documents a 1 MB per-job output limit approximated in UTF-16 and a 256-job matrix maximum in its [workflow syntax reference](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax).
 `plan` MUST report a clear planning error and request a broadened or reduced plan instead of truncating entries.
 
 The generated jobs MUST use these step sequences and commands. Action steps are the pinned allowlisted actions
