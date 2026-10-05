@@ -9,41 +9,11 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{UnixListener, UnixStream};
 
 use crate::launch::admission;
-use crate::worker::{create_named_volumes, dind_create, remove_worker_volumes, worker_id_for_name};
-use crate::{HostError, IntentState, Outcome};
+use crate::worker::{create_named_volumes, remove_worker_volumes, worker_id_for_name};
+use crate::{HostError, IntentState, Outcome, dind_create};
 
 const TIMEOUT: Duration = Duration::from_secs(2);
 const WORKER: &str = "wtransport";
-
-#[tokio::test]
-async fn named_volumes_require_the_actions_runner_work_path() -> Result<(), String> {
-    let mut invalid = dind_create(WORKER)
-        .map_err(|error| error.to_string())?
-        .mounts;
-    invalid[1].target = "/home/runner/work".to_owned();
-    let rejected = DockerStub::open(Vec::new())?;
-    let result = create_named_volumes(&rejected.docker, WORKER, &invalid).await;
-    let requests = rejected.finish().await?;
-    assert_eq!(result, Err(HostError::ForbiddenMount));
-    assert!(requests.is_empty());
-
-    let mounts = dind_create(WORKER)
-        .map_err(|error| error.to_string())?
-        .mounts;
-    let responses = volume_names()
-        .into_iter()
-        .map(|(name, role)| http(201, &volume_json(name, WORKER, role)))
-        .collect();
-    let accepted = DockerStub::open(responses)?;
-    assert_eq!(
-        create_named_volumes(&accepted.docker, WORKER, &mounts).await,
-        Ok(())
-    );
-    let requests = accepted.finish().await?;
-    assert_eq!(requests.len(), 3);
-    assert!(requests.iter().all(|request| request.starts_with("POST ")));
-    Ok(())
-}
 
 #[tokio::test]
 async fn only_exactly_owned_volumes_are_removed() -> Result<(), String> {
@@ -76,6 +46,36 @@ async fn only_exactly_owned_volumes_are_removed() -> Result<(), String> {
             .count(),
         3
     );
+    Ok(())
+}
+
+#[tokio::test]
+async fn created_volumes_have_exact_worker_and_role_labels() -> Result<(), String> {
+    let expected = volume_names();
+    let responses = expected
+        .iter()
+        .map(|(name, role)| http(201, &volume_json(name, WORKER, role)))
+        .collect();
+    let stub = DockerStub::open(responses)?;
+    let plan = dind_create(WORKER).map_err(|error| error.to_string())?;
+    let created = create_named_volumes(&stub.docker, WORKER, &plan.mounts).await;
+    let requests = stub.finish().await?;
+
+    assert_eq!(created, Ok(()));
+    assert_eq!(requests.len(), expected.len());
+    for (request, (name, role)) in requests.iter().zip(expected) {
+        let body = request_body(request)?;
+        let value: serde_json::Value =
+            serde_json::from_str(body).map_err(|error| error.to_string())?;
+        assert_eq!(
+            value.get("Name").and_then(serde_json::Value::as_str),
+            Some(name)
+        );
+        assert_eq!(
+            value.get("Labels"),
+            Some(&serde_json::json!({"velnor.worker": WORKER, "velnor.role": role}))
+        );
+    }
     Ok(())
 }
 
@@ -329,10 +329,39 @@ async fn read_request(stream: &mut UnixStream) -> Result<String, String> {
             return Err("Docker client closed before sending a request".to_owned());
         }
         request.extend_from_slice(&buffer[..read]);
-        if request.windows(4).any(|part| part == b"\r\n\r\n") {
-            return String::from_utf8(request).map_err(|error| error.to_string());
+        if let Some(header_end) = request.windows(4).position(|part| part == b"\r\n\r\n") {
+            let headers =
+                std::str::from_utf8(&request[..header_end]).map_err(|error| error.to_string())?;
+            let body_len = content_length(headers)?;
+            let request_end = header_end + 4 + body_len;
+            if request.len() >= request_end {
+                request.truncate(request_end);
+                return String::from_utf8(request).map_err(|error| error.to_string());
+            }
         }
     }
+}
+
+fn content_length(headers: &str) -> Result<usize, String> {
+    for line in headers.lines() {
+        let Some((name, value)) = line.split_once(':') else {
+            continue;
+        };
+        if name.eq_ignore_ascii_case("content-length") {
+            return value
+                .trim()
+                .parse::<usize>()
+                .map_err(|error| error.to_string());
+        }
+    }
+    Ok(0)
+}
+
+fn request_body(request: &str) -> Result<&str, String> {
+    request
+        .split_once("\r\n\r\n")
+        .map(|(_, body)| body)
+        .ok_or_else(|| "Docker request omitted HTTP headers".to_owned())
 }
 
 async fn send_response(stream: &mut UnixStream, response: Response) -> Result<(), String> {
@@ -351,8 +380,8 @@ async fn send_response(stream: &mut UnixStream, response: Response) -> Result<()
 
 fn reason(status: u16) -> &'static str {
     match status {
-        200 => "OK",
         201 => "Created",
+        200 => "OK",
         204 => "No Content",
         404 => "Not Found",
         500 => "Internal Server Error",

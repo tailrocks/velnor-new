@@ -48,4 +48,6 @@ Controller must:
   register the JIT runner with `workFolder: "_work"`. The official runner
   resolves that folder under `/home/runner`; it contains work, `_temp`,
   `_actions`, and `_tool`. Share the same absolute path with this worker's DinD
-  container. `externals` is `/home/runner/externals`.
+  container. The entrypoint stages JIT in a private, mode-`0600` `/tmp` file,
+  removes it before listener start, and never stores it in the work volume.
+  `externals` is `/home/runner/externals`.

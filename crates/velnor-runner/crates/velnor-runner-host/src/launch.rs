@@ -41,7 +41,7 @@ pub(crate) use capacity::{install_job_capacity, job_capacity};
 #[cfg(test)]
 pub(crate) use capacity::{
     Admit, Seat, admit, needs_running, parse_admit_target, parse_job_capacity, poll_limit,
-    wide_poll_limit,
+    statistics_blocked, wide_poll_limit,
 };
 #[cfg(test)]
 pub(crate) use steps::{Idle, idle};
@@ -57,18 +57,6 @@ pub struct LaunchReport {
     pub started: Option<Started>,
     /// Every worker started in this call, in start order. No JIT and no token.
     pub workers: Vec<Started>,
-}
-
-/// Prove exited runners are gone and free their slots.
-///
-/// # Errors
-///
-/// Returns [`EnsureError`] when the journal or Docker lookup fails.
-pub(crate) async fn release_slots<E: crate::stage::PairEngine + ?Sized>(
-    journal: &Journal,
-    docker: &E,
-) -> Result<(), EnsureError> {
-    slot::release_exited(journal, docker).await
 }
 
 /// Open one session, start the admitted workers, then delete that session.
@@ -90,6 +78,14 @@ pub async fn launch_once(
     journal: &Journal,
 ) -> Result<LaunchReport, EnsureError> {
     slot::release_exited(journal, docker).await?;
+    let ceiling = job_capacity();
+    let capacity = crate::guest::discover_guest_capacity(docker, ceiling)
+        .await
+        .map_err(|_| EnsureError::Unexpected {
+            status: 0,
+            step: "docker budget",
+        })?;
+    let _capacity = install_job_capacity(capacity);
     let set = ensure_product_scale_set(pat, owner, repo)?;
     if std::env::var("VELNOR_RECONCILE").ok().as_deref() == Some("1") {
         let decision = gate::reconcile_gate(journal, docker).await?;
@@ -185,7 +181,7 @@ where
     S: FnOnce(&str, &[u8], bind::Bind) -> F,
     F: Future<Output = Result<Started, HostError>>,
 {
-    if matches!(steps::idle(polled), steps::Idle::Scale | steps::Idle::Mint) {
+    if matches!(steps::idle(polled), steps::Idle::Scale) {
         let Poll::Batch(batch) = polled else {
             return Ok(None);
         };
@@ -269,17 +265,19 @@ struct Ready<'a> {
     session: &'a QueueSession,
     admin_token: &'a str,
     path: String,
-    queue: Option<String>,
     polled: &'a Poll,
 }
 
-async fn drive_ready(
-    link: &mut Link,
+async fn drive_ready<T>(
+    lane: &mut T,
     ready: Ready<'_>,
     journal: &Journal,
     docker: &bollard::Docker,
     capacity: u32,
-) -> Result<Option<Started>, EnsureError> {
+) -> Result<Option<Started>, EnsureError>
+where
+    T: Transport + Lane,
+{
     if slot::busy(journal, docker, capacity).await? {
         return Ok(None);
     }
@@ -289,23 +287,11 @@ async fn drive_ready(
         queue_token: ready.session.token().to_owned(),
         admin_token: ready.admin_token.to_owned(),
     };
-    let admin = link.base().to_owned();
-    let mut lane = HostLane {
-        link,
-        admin,
-        queue: ready.queue,
-    };
-    drive_offer(
-        &mut lane,
-        &ctx,
-        ready.polled,
-        journal,
-        |volume, jit, bind| {
-            let volume = volume.to_owned();
-            let payload = jit.to_vec();
-            async move { bind::start_bound(docker, &volume, &payload, &bind).await }
-        },
-    )
+    drive_offer(lane, &ctx, ready.polled, journal, |volume, jit, bind| {
+        let volume = volume.to_owned();
+        let payload = jit.to_vec();
+        async move { bind::start_bound(docker, &volume, &payload, &bind).await }
+    })
     .await
 }
 

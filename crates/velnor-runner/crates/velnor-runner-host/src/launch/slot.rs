@@ -68,7 +68,7 @@ async fn release_row<E: PairEngine + ?Sized>(
         return Ok(());
     }
     let Some(volume) = row.worker_volume.as_deref() else {
-        return release_unscoped(journal, engine, row).await;
+        return Ok(());
     };
     let (runner, dind) = recover_pair(journal, engine, row).await?;
     if let Some(runner) = runner.as_deref()
@@ -91,41 +91,6 @@ async fn release_row<E: PairEngine + ?Sized>(
     }
     journal.record_cleanup(row.id).await.map_err(map_journal)?;
     Ok(())
-}
-
-async fn release_unscoped<E: PairEngine + ?Sized>(
-    journal: &Journal,
-    engine: &E,
-    row: &IntentRow,
-) -> Result<(), EnsureError> {
-    let Some(runner) = row.docker_id.as_deref().filter(|id| !id.is_empty()) else {
-        return Ok(());
-    };
-    if engine.running(runner).await.map_err(map_docker)? || !delete_recorded(engine, runner).await?
-    {
-        return Ok(());
-    }
-    if let Some(dind) = row.dind_id.as_deref().filter(|id| !id.is_empty())
-        && !delete_recorded(engine, dind).await?
-    {
-        return Ok(());
-    }
-    journal.record_cleanup(row.id).await.map_err(map_journal)?;
-    Ok(())
-}
-
-async fn delete_recorded<E: PairEngine + ?Sized>(
-    engine: &E,
-    id: &str,
-) -> Result<bool, EnsureError> {
-    match engine.id_for_name(id).await.map_err(map_docker)? {
-        None => Ok(true),
-        Some(found) if found == id => {
-            engine.remove(id).await.map_err(map_docker)?;
-            Ok(true)
-        }
-        Some(_) => Ok(false),
-    }
 }
 
 async fn recover_pair<E: PairEngine + ?Sized>(
@@ -220,27 +185,6 @@ async fn delete_owned<E: PairEngine + ?Sized>(
         }
         Some(_) => Ok(false),
     }
-}
-
-/// True when this launch subject still has a docker id the engine reports up.
-pub(super) async fn subject_running<E: PairEngine + ?Sized>(
-    journal: &Journal,
-    engine: &E,
-    subject: &str,
-) -> Result<bool, EnsureError> {
-    let rows = journal.rows().await.map_err(map_journal)?;
-    for row in &rows {
-        if row.kind != "launch" || row.subject != subject {
-            continue;
-        }
-        let Some(id) = row.docker_id.as_deref().filter(|id| !id.is_empty()) else {
-            continue;
-        };
-        if engine.running(id).await.map_err(map_docker)? {
-            return Ok(true);
-        }
-    }
-    Ok(false)
 }
 
 pub(super) fn holds(row: &IntentRow) -> bool {

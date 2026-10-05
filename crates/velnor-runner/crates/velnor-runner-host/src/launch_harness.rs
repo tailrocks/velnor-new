@@ -134,10 +134,6 @@ pub(crate) fn assigned_wait(message_id: i64, assigned: i64) -> Poll {
     kind_wait(message_id, assigned, InnerKind::Assigned)
 }
 
-pub(crate) fn started_wait(message_id: i64, assigned: i64) -> Poll {
-    kind_wait(message_id, assigned, InnerKind::Started)
-}
-
 fn kind_wait(message_id: i64, assigned: i64, kind: InnerKind) -> Poll {
     Poll::Batch(ParsedBatch {
         message_id,

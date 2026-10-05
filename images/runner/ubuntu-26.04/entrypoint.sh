@@ -5,6 +5,7 @@ set +o allexport
 set -euo pipefail
 
 root="/home/runner"
+work="${root}/_work"
 listener="${root}/bin/Runner.Listener"
 # Stay under Linux MAX_ARG_STRLEN so --jitconfig fits in one argv slot.
 max=131071
@@ -14,8 +15,9 @@ if [[ ! -x "$listener" ]]; then
   exit 1
 fi
 
+mkdir -p "$work"
 umask 077
-jit_file="$(mktemp /tmp/jit.XXXXXX)"
+jit_file="$(mktemp /tmp/velnor-jit.XXXXXX)"
 chmod 0600 "$jit_file"
 trap 'rm -f "$jit_file"' EXIT
 

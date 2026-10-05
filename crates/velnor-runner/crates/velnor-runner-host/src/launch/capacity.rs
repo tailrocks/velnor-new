@@ -7,7 +7,6 @@ use std::cell::Cell;
 
 use super::steps::Idle;
 
-const JOB_MAX: u32 = 8;
 const POLL_DEFAULT: usize = 8;
 const POLL_MAX: usize = 8;
 const POLL_MAX_MULTI: usize = 24;
@@ -44,10 +43,9 @@ pub(crate) struct Seat {
     pub(crate) capacity: u32,
     /// Starts this session should reach. Equals capacity unless admission is widened.
     pub(crate) target: u32,
-    /// Workers this call already started, including the statistics runner.
-    /// This does not cover a slot after that worker has exited.
+    /// Workers this call already started. An exited start does not keep the slot.
     pub(crate) started: u32,
-    /// Launch rows that still hold a permit. Uncertain rows count. Proven cleanup does not.
+    /// Launch rows that still hold a permit. Unresolved rows count. History does not.
     pub(crate) occupied: u32,
     /// Running runner containers.
     pub(crate) running: u32,
@@ -57,11 +55,10 @@ pub(crate) struct Seat {
     pub(crate) idle: Idle,
 }
 
-/// Decide one poll. Occupancy is `occupied` and `running`, not historical `started`.
+/// Decide one poll. A free slot starts the next job. Historical `started` does not.
 ///
-/// A free slot mints the next job even when this call already started `capacity`
-/// workers. `Idle::Mint` never acknowledges from the running count. `Idle::Scale`
-/// acknowledges only when a running container covers the assigned population.
+/// An uncovered assignment is not acknowledged. One full slot holds that offer.
+/// It does not hide another free slot.
 #[must_use]
 pub(crate) const fn admit(seat: Seat) -> Admit {
     match seat.idle {
@@ -78,7 +75,6 @@ pub(crate) const fn admit(seat: Seat) -> Admit {
         },
         Idle::Launch => admit_launch(seat),
         Idle::Scale => admit_scale(seat),
-        Idle::Mint => admit_mint(seat),
     }
 }
 
@@ -104,33 +100,9 @@ const fn admit_scale(seat: Seat) -> Admit {
     if !scale_covered(seat) {
         return Admit::Hold;
     }
-    // A covered population is acknowledged, not minted again.
     Admit::Ack {
-        stop: covered_ack_stops(seat.capacity, seat.target, seat.started),
+        stop: seat.capacity == 1 || started_done(seat),
     }
-}
-
-const fn admit_mint(seat: Seat) -> Admit {
-    if slot_full(seat) {
-        return Admit::Hold;
-    }
-    Admit::Start {
-        stop: at_limit(seat),
-    }
-}
-
-/// Stop flag for a covered scale ack and for a live `JobAssigned` replay.
-pub(super) const fn covered_ack_stops(capacity: u32, target: u32, started: u32) -> bool {
-    let seat = Seat {
-        capacity,
-        target,
-        started,
-        occupied: 0,
-        running: 0,
-        assigned: 0,
-        idle: Idle::Ack,
-    };
-    seat.capacity == 1 || started_done(seat)
 }
 
 const fn scale_covered(seat: Seat) -> bool {
@@ -158,10 +130,10 @@ const fn limit(seat: Seat) -> u32 {
     }
 }
 
-/// Launch, scale, and mint always need the docker count. A full `started` must not hide it.
+/// Launch and scale always read Docker. A full `started` count must not hide a free slot.
 #[must_use]
 pub(crate) const fn needs_running(idle: Idle) -> bool {
-    matches!(idle, Idle::Launch | Idle::Scale | Idle::Mint)
+    matches!(idle, Idle::Launch | Idle::Scale)
 }
 
 /// True when session statistics must not mint another pair.
@@ -182,30 +154,34 @@ thread_local! {
     static JOB_CAPACITY_OVERRIDE: Cell<Option<u32>> = const { Cell::new(None) };
 }
 
-/// Clears the thread-local capacity when dropped.
+/// Restores the prior thread-local capacity when dropped.
 #[must_use]
-pub(crate) struct CapacityGuard;
+pub(crate) struct CapacityGuard {
+    previous: Option<u32>,
+}
 
 impl Drop for CapacityGuard {
     fn drop(&mut self) {
-        JOB_CAPACITY_OVERRIDE.with(|slot| slot.set(None));
+        JOB_CAPACITY_OVERRIDE.with(|slot| slot.set(self.previous));
     }
 }
 
 /// Prefer `max_jobs` from the host file over `VELNOR_MAX_JOBS` on this thread.
+///
+/// Zero becomes 1. The value is not clamped to a fixed maximum.
 pub(crate) fn install_job_capacity(max_jobs: u32) -> CapacityGuard {
-    let clamped = if max_jobs == 0 {
-        1
-    } else {
-        max_jobs.min(JOB_MAX)
-    };
-    JOB_CAPACITY_OVERRIDE.with(|slot| slot.set(Some(clamped)));
-    CapacityGuard
+    let stored = if max_jobs == 0 { 1 } else { max_jobs };
+    let previous = JOB_CAPACITY_OVERRIDE.with(|slot| {
+        let previous = slot.get();
+        slot.set(Some(stored));
+        previous
+    });
+    CapacityGuard { previous }
 }
 
 /// Installed host capacity, else `VELNOR_MAX_JOBS`.
 ///
-/// Unset, empty, zero, or unparsable env is 1. Clamped to 1..=8.
+/// Unset, empty, zero, or unparsable env is 1. There is no fixed upper clamp.
 #[must_use]
 pub(crate) fn job_capacity() -> u32 {
     if let Some(value) = JOB_CAPACITY_OVERRIDE.with(Cell::get) {
@@ -220,12 +196,13 @@ pub(crate) fn parse_job_capacity(text: Option<&str>) -> u32 {
     let Some(text) = text.map(str::trim).filter(|value| !value.is_empty()) else {
         return 1;
     };
-    text.parse::<u32>()
-        .map_or(1, |parsed| parsed.clamp(1, JOB_MAX))
+    match text.parse::<u32>() {
+        Ok(0) | Err(_) => 1,
+        Ok(parsed) => parsed,
+    }
 }
 
 /// `VELNOR_ADMIT_TARGET`. Unset, empty, unparsable, or below `capacity` is `capacity`.
-/// Clamped to `capacity`..=8.
 #[must_use]
 pub(crate) fn admit_target(capacity: u32) -> u32 {
     parse_admit_target(
@@ -243,11 +220,7 @@ pub(crate) fn parse_admit_target(capacity: u32, raw: Option<&str>) -> u32 {
     let Ok(parsed) = text.parse::<u32>() else {
         return capacity;
     };
-    if parsed < capacity {
-        return capacity;
-    }
-    let hi = JOB_MAX.max(capacity);
-    if parsed > hi { hi } else { parsed }
+    if parsed < capacity { capacity } else { parsed }
 }
 
 /// `VELNOR_LAUNCH_POLLS` for `capacity`. Unset or unparsable is 8.

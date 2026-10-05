@@ -1,9 +1,13 @@
 # Runner work-volume contract proof
 
-This records a source-bound check of the PR25 runner and DinD image inputs,
-including the runner tar helpers present in that source snapshot. It verifies
-the `_work` path and first-mount ownership on the local Docker engine. It does
-not qualify a live Scale Set, start a DinD daemon, or run an Actions job.
+This file preserves the pre-PR48 PR25 receipt and records a rebuilt check of
+the merged PR25/PR48 image inputs. The earlier image IDs are historical and
+are superseded by the final combined receipt below. Neither local check
+qualifies a live Scale Set, starts a DinD daemon, or runs an Actions job.
+The separate PR48-only image receipt is preserved in
+[`runner-work-volume-pr48-proof.md`](runner-work-volume-pr48-proof.md).
+
+## Earlier PR25-only image receipt (superseded)
 
 ## Path contract
 
@@ -154,3 +158,115 @@ All probe containers used `--rm`; container inspections confirmed none
 remained. The labeled volume was removed and a subsequent inspection confirmed
 it was absent. The transcript uses the exact immutable image IDs above and is
 stored at `/tmp/runner25-work-volume-proof-probe-final2.log`.
+
+## Merged PR25 + PR48 image receipt
+
+The `b3aec0818fadfcccafe7c4aaa6b0ea7474dd8e76` merge changed the runner
+entrypoint and image documentation. I rebuilt both combined images and
+repeated the new-empty-volume check against their immutable IDs. The source
+manifest below contains every regular file in both build contexts except
+`.dockerignore`, sorted by path and newline-terminated. Its exact SHA-256 is
+`5377cb5d6572fb7ddc67276247265dcddc3a4a8aff54391826c9f43601bb6349`.
+
+Regenerate and check the manifest with:
+
+```sh
+find images/dind images/runner/ubuntu-26.04 -type f ! -name .dockerignore -print0 \
+  | LC_ALL=C sort -z \
+  | xargs -0 sha256sum > /tmp/runner25-main-b3-context.sha256
+sha256sum /tmp/runner25-main-b3-context.sha256
+```
+
+```text
+9e6af678c45a8881d85327fce53e4a1d2549445f147d43214ebf3686b564cefc  images/dind/Dockerfile
+a20a6cc25ced02df1ba542aefc896150818d2dde8a55058ab144d8eb586ec35f  images/dind/README.md
+756962f1ff22bedfd2cfce04fe14a843b518fb54e9f9b972b90550462fa03402  images/dind/entrypoint-test.sh
+75e153571a29bc9e192b99568845f95ee86ceee2940236298903019a5c8fb1c7  images/dind/entrypoint.sh
+b33e893d1a0be6d819b009e22b0bbddf2d57180bb32fb5dcad3074c8d4789d76  images/runner/ubuntu-26.04/Dockerfile
+00a4bcef73aafe4be2ff61242576ec4d7de0e4249f86b6691574dff34b02202a  images/runner/ubuntu-26.04/README.md
+95746eb84e0896d408eea6afd4dd1eb0a9571b122445352f815fd2d3a98f1171  images/runner/ubuntu-26.04/clear-dockerenv-test.sh
+4e8fcacb646c4fe61b5ba4f1cf1e376e5a4a641f79e5097dd920e5e06d363f52  images/runner/ubuntu-26.04/clear-dockerenv.sh
+8dbf0ef0200055c2a1d4c4dd0f45ac384690139de1b92c2b568e666de8ca2673  images/runner/ubuntu-26.04/entrypoint.sh
+67916fc6eefb9e94fedde1b8d27fd4cb5c1d540c489de0538344c9f5a0f84a91  images/runner/ubuntu-26.04/runner-job-env-test.sh
+c40231f0247d9f79576ce78f50d46e68eff1b3bb2df39eaebeacedc8d7509410  images/runner/ubuntu-26.04/runner-job-env.sh
+a4ada6e2840a4c0a6305c7c9c891100b3c65e8471141eab4a9188e4dfe471000  images/runner/ubuntu-26.04/tar-absolute-test-extended.sh
+9ff9341a7dc96413ac6284bd328cec82b5d4676fd75c599660aa11b7f21d9bac  images/runner/ubuntu-26.04/tar-absolute-test.sh
+cf1a41eb021d6287348effb5bc61a33253ed9c3e9ed73ee93c7c3bdbd58ce172  images/runner/ubuntu-26.04/tar-absolute.sh
+9e3fe7b805b6f50b29a5e5e6edaf7373dc0e8e805885d4008c99d449ec9ad40d  images/runner/ubuntu-26.04/tar-extract-plan.sh
+c3b811fa95396723947eb170cd5b359af0b001b4bf2ff009f223f4095d46a5e2  images/runner/ubuntu-26.04/tar-extract.sh
+00c5649fc19c1479805e94d0e5d9991855f7b7630d822efbd57b99657cccbf12  images/runner/ubuntu-26.04/tar-member-rewrite.pl
+bf7a376b0e161c2cdf8c0065f2ae92542ec64b24470c367581308ff4c097de20  images/runner/ubuntu-26.04/tar-member-stream.pl
+eafebc28c0643148b7ca21b3037ce7f487db9444f6be7312a227a297aa064ccd  images/runner/ubuntu-26.04/tar-member.pl
+897516dbaf91a2413ee74ccde6f1b2b2e2fd90506aaa5cb750df2fb0e5e32915  images/runner/ubuntu-26.04/tar-pax.pl
+e575ae760d87ef630505f380ec8e20fc6ae292736281e82588062cfd82982759  images/runner/ubuntu-26.04/tar-semantics-planned-test.sh
+2ba20ed2628a5d0ad1a31302b56e2c398ba35bff8ec8d9f72ebe8bfd6ee8408f  images/runner/ubuntu-26.04/tar-semantics-test.sh
+19c7c1f10c78d14dfffc70fa33f2522e1131b5b4f7d188250bdca0c81e3cd0d2  images/runner/ubuntu-26.04/tar-shim.sh
+37558be915ac85228df4789ce2a95486edd092af2a942b9dffd5a218228d34ab  images/runner/ubuntu-26.04/wait-docker-sock-test.sh
+f6ba95c71712ef7c1b382877503433b545035df87f83cef95d416f126c996a29  images/runner/ubuntu-26.04/wait-docker-sock.sh
+```
+
+The pinned base was `ubuntu:26.04`, image ID and manifest digest
+`sha256:f144425ff09be612d6d9ad965196e9cdc23dae1f42110a8a11a3e9a8198759f7`.
+Docker Engine was `29.8.2`, Linux x86_64, ID
+`217d445c-e773-41da-b749-d0b32b0881e9`. The exact rebuild commands were:
+
+```sh
+docker build --pull --progress=plain --platform linux/amd64 \
+  -t velnor-dind:pr25-b3-combined-20261005 images/dind
+docker build --pull --progress=plain --platform linux/amd64 \
+  -t velnor-runner:pr25-b3-combined-20261005 images/runner/ubuntu-26.04
+```
+
+| Image | Immutable ID | Inspected configuration |
+|---|---|---|
+| DinD | `sha256:9ef60885d75d21869db5a4f1a190a9020acba2a1798a430588d447cd0b50ded4` | `linux/amd64`, entrypoint `/usr/local/bin/velnor-dind-entrypoint` |
+| Runner | `sha256:bcb0413d6ad3510293543a67095c1f7314c9f455a6896d4d339b83effbe4f065` | `linux/amd64`, user `runner`, workdir `/home/runner`, entrypoint `/usr/local/bin/velnor-runner-entrypoint` |
+
+The fresh volume was explicitly absent before creation. DinD's first mount
+copied up `/home/runner/_work` as `1000:1000 755`. The default runner user
+`uid=1000(runner)` read the DinD marker, wrote a `1000:1000 644` file, and read
+both markers. The actual entrypoint consumed a dummy JIT payload and exited
+with the expected `docker socket missing` status because this probe supplied
+no socket. A follow-up check found neither `jit.*` nor `velnor-jit.*` under
+the durable work volume. All four named containers were absent after their
+`--rm` runs, and the volume was removed and then confirmed absent.
+
+The reproducible probe invocation, including the immutable IDs and container
+names used for cleanup inspection, was:
+
+```sh
+set -euo pipefail
+volume=velnor-runner25-b3-work-proof-20261005
+dind=sha256:9ef60885d75d21869db5a4f1a190a9020acba2a1798a430588d447cd0b50ded4
+runner=sha256:bcb0413d6ad3510293543a67095c1f7314c9f455a6896d4d339b83effbe4f065
+cleanup() {
+  docker rm -f runner25-b3-dind-proof-20261005 runner25-b3-runner-proof-20261005 runner25-b3-entrypoint-proof-20261005 runner25-b3-volume-proof-20261005 >/dev/null 2>&1 || true
+  docker volume rm "$volume" >/dev/null 2>&1 || true
+}
+trap cleanup EXIT
+if docker volume inspect "$volume" --format 'name={{.Name}}'; then exit 1; else printf 'expected: volume absent before create\n'; fi
+docker volume create --label velnor.worker=runner25-b3-proof --label velnor.role=work "$volume"
+docker run --rm --network none --name runner25-b3-dind-proof-20261005 --mount "type=volume,src=$volume,dst=/home/runner/_work" --entrypoint /bin/sh "$dind" -ec 'id; stat -c "%u:%g %a %n" /home/runner/_work; printf "dind-probe\n" > /home/runner/_work/dind-probe; stat -c "%u:%g %a %n" /home/runner/_work/dind-probe'
+docker run --rm --network none --name runner25-b3-runner-proof-20261005 --mount "type=volume,src=$volume,dst=/home/runner/_work" --entrypoint /bin/sh "$runner" -ec 'id; stat -c "%u:%g %a %n" /home/runner/_work; test "$(cat /home/runner/_work/dind-probe)" = dind-probe; printf "runner-probe\n" > /home/runner/_work/runner-probe; stat -c "%u:%g %a %n" /home/runner/_work/runner-probe; cat /home/runner/_work/dind-probe; cat /home/runner/_work/runner-probe'
+if entrypoint_output=$(printf '{}' | docker run --rm --network none --interactive --name runner25-b3-entrypoint-proof-20261005 --env WAIT_DOCKER_SOCK_TRIES=1 --mount "type=volume,src=$volume,dst=/home/runner/_work" "$runner" 2>&1); then entrypoint_status=0; else entrypoint_status=$?; fi
+printf '%s\n' "$entrypoint_output"
+printf 'entrypoint_status=%s\n' "$entrypoint_status"
+test "$entrypoint_status" -eq 1
+test "$entrypoint_output" = 'docker socket missing'
+docker run --rm --network none --name runner25-b3-volume-proof-20261005 --mount "type=volume,src=$volume,dst=/home/runner/_work" --entrypoint /bin/sh "$runner" -ec 'if find /home/runner/_work -maxdepth 1 \( -name "jit.*" -o -name "velnor-jit.*" \) -print -quit | grep -q .; then exit 1; fi; stat -c "%u:%g %a %n" /home/runner/_work; cat /home/runner/_work/dind-probe; cat /home/runner/_work/runner-probe'
+docker volume inspect "$volume" --format 'labels={{.Labels}}'
+for name in runner25-b3-dind-proof-20261005 runner25-b3-runner-proof-20261005 runner25-b3-entrypoint-proof-20261005 runner25-b3-volume-proof-20261005; do
+  if docker container inspect "$name" >/dev/null 2>&1; then exit 1; else printf 'expected: container absent: %s\n' "$name"; fi
+done
+docker volume rm "$volume"
+trap - EXIT
+if docker volume inspect "$volume" --format 'name={{.Name}}'; then exit 1; else printf 'expected: volume absent after cleanup\n'; fi
+```
+
+The entrypoint invocation is expected to exit 1 with exactly `docker socket
+missing`; the other probe commands pass. The complete build and probe receipts
+are retained at `/tmp/runner25-b3-image-build.log` and
+`/tmp/runner25-b3-work-volume-probe.log`. The nested source contract test also
+checks the `_work` mount, private `/tmp/velnor-jit.*` location, and absence of
+a runner mount at `/tmp`. Its source SHA-256 is
+`6e27926566362fb05ca792437ed8a148644c31589cfbdb56af77745620c3fe04`.

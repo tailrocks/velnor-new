@@ -3,8 +3,8 @@
 use std::future::Future;
 
 use velnor_runner_github::{
-    Ack, AckScope, AcquireOutcome, Certainty, EncodedJit, InnerKind, Poll, RefreshGate,
-    SessionError, ack, acquire, jit, jit_request, may_ack,
+    Ack, AckScope, AcquireOutcome, Certainty, EncodedJit, Poll, RefreshGate, SessionError, ack,
+    acquire, jit, jit_request, may_ack,
 };
 
 use crate::Offer;
@@ -24,41 +24,27 @@ pub(crate) enum Idle {
     Empty,
     /// One `JobAvailable` id. Do not acknowledge yet.
     Launch,
-    /// Positive assigned population that is not `JobAssigned`.
+    /// Assigned population is positive. Mint one JIT runner, then acknowledge.
     Scale,
-    /// `JobAssigned` that must be minted or held. Never acked from the count.
-    Mint,
     /// No offer and no assigned job. Delete the message so the next one can arrive.
     Ack,
     /// A message that must stay on the queue.
     Blocked,
 }
 
-/// Classify one poll. One available id is acquired. `JobAssigned` is minted or
-/// held. Any other assigned population can scale. A safe leftover is acked.
+/// Classify one poll. One available id is acquired. An assigned population
+/// starts one runner before ack. Anything else that is safe to delete is acked.
 #[must_use]
 pub(crate) fn idle(polled: &Poll) -> Idle {
     match polled {
         Poll::Empty => Idle::Empty,
         Poll::Batch(batch) => match offer(polled) {
             Offer::Acquire { ids, .. } if ids.len() == 1 => Idle::Launch,
-            Offer::Wait
-                if needs_scale(batch) && assigned_message(batch) && may_ack(batch, true) =>
-            {
-                Idle::Mint
-            }
             Offer::Wait if needs_scale(batch) && may_ack(batch, true) => Idle::Scale,
             Offer::Wait if may_ack(batch, true) => Idle::Ack,
             Offer::Acquire { .. } | Offer::Wait => Idle::Blocked,
         },
     }
-}
-
-fn assigned_message(batch: &velnor_runner_github::ParsedBatch) -> bool {
-    batch
-        .jobs
-        .iter()
-        .any(|job| matches!(job.kind, InnerKind::Assigned))
 }
 
 fn needs_scale(batch: &velnor_runner_github::ParsedBatch) -> bool {

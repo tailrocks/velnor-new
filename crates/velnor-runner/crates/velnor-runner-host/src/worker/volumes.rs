@@ -26,7 +26,8 @@ pub(crate) async fn create_named_volumes(
     let volumes = volumes(worker)?;
     if mounts.len() != volumes.len()
         || mounts.iter().zip(&volumes).any(|(mount, volume)| {
-            mount.source != format!("volume:{}", volume.name) || mount.target != target(volume.role)
+            mount.source != format!("volume:{}", volume.name)
+                || target(volume.role).as_deref() != Some(mount.target.as_str())
         })
     {
         return Err(HostError::ForbiddenMount);
@@ -108,12 +109,12 @@ fn labels(worker: &str, role: &str) -> HashMap<String, String> {
     ])
 }
 
-fn target(role: &str) -> String {
+fn target(role: &str) -> Option<String> {
     match role {
-        "socket" => "/run".to_owned(),
-        "work" => runner_work_path(),
-        "dind-data" => "/var/lib/docker".to_owned(),
-        _ => String::new(),
+        "socket" => Some("/run".to_owned()),
+        "work" => Some(runner_work_path()),
+        "dind-data" => Some("/var/lib/docker".to_owned()),
+        _ => None,
     }
 }
 

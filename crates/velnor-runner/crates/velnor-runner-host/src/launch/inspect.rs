@@ -3,10 +3,14 @@
 use bollard::Docker;
 use bollard::errors::Error as DockerError;
 
+use crate::docker_client::docker_deadline;
 use crate::scale_set::EnsureError;
 
 pub(crate) async fn container_running(docker: &Docker, id: &str) -> Result<bool, EnsureError> {
-    classify_inspect(docker.inspect_container(id, None).await)
+    let response = docker_deadline(docker.inspect_container(id, None))
+        .await
+        .map_err(|_| inspect_error(0))?;
+    classify_inspect(response)
 }
 
 pub(crate) fn classify_inspect(
@@ -102,13 +106,15 @@ mod tests {
     }
 
     #[test]
-    fn created_stays_live_and_exited_does_not() -> Result<(), String> {
+    fn nonterminal_states_keep_the_slot_until_exit() -> Result<(), String> {
         for (body, expected) in [
             (r#"{"State":{"Status":"created","Running":false}}"#, true),
             (r#"{"State":{"Status":"paused","Running":false}}"#, true),
+            (r#"{"State":{"Status":"restarting","Running":false}}"#, true),
+            (r#"{"State":{"Status":"removing","Running":false}}"#, true),
+            (r#"{"State":{"Status":"stopping","Running":false}}"#, true),
             (r#"{"State":{"Status":"exited","Running":false}}"#, false),
             (r#"{"State":{"Status":"dead","Running":false}}"#, false),
-            (r#"{"State":{"Status":"stopping","Running":false}}"#, true),
         ] {
             let info = serde_json::from_str(body).map_err(|error| error.to_string())?;
             assert_eq!(classify_inspect(Ok(info)), Ok(expected));
