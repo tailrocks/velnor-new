@@ -283,13 +283,7 @@ async fn ack_failure_keeps_the_runner_bound() -> Result<(), String> {
         },
     )
     .await;
-    assert_eq!(
-        error,
-        Err(EnsureError::Unexpected {
-            status: 0,
-            step: "session",
-        })
-    );
+    assert_eq!(error, Err(EnsureError::Uncertain));
     assert_eq!(script.calls, ["acquire", "jit", "ack"]);
     let rows = journal.rows().await.map_err(|err| err.to_string())?;
     assert_eq!(rows[0].state, IntentState::Uncertain);

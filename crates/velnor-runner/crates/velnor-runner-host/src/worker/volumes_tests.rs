@@ -15,6 +15,8 @@ use crate::{HostError, IntentState, Outcome, dind_create};
 const TIMEOUT: Duration = Duration::from_secs(2);
 const WORKER: &str = "wtransport";
 
+mod release_tests;
+
 #[tokio::test]
 async fn only_exactly_owned_volumes_are_removed() -> Result<(), String> {
     let foreign = DockerStub::open(vec![http(
@@ -132,7 +134,7 @@ async fn container_identity_requires_id_and_exact_labels() -> Result<(), String>
 }
 
 #[tokio::test]
-async fn uncertain_volume_skips_docker_cleanup_without_remote_settlement() -> Result<(), String> {
+async fn uncertain_volume_holds_without_remote_settlement() -> Result<(), String> {
     let scratch = crate::launch_harness::Scratch::new("volume-post-delete")
         .map_err(|error| error.to_string())?;
     let journal = crate::Journal::open(&scratch.file())

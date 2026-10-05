@@ -93,7 +93,9 @@ Go module.
   classic repository `generate-jitconfig` route.
 - Acquire is `POST .../{id}/acquirejobs` with a JSON array of int64 request ids.
   Response is `{count, value}`. Partial success keeps only returned ids that
-  were requested. Uncertain transport keeps the reservation.
+  were requested. An unusable success response or server failure keeps the
+  reservation. After a requested id is acquired, a later JIT conflict does not
+  settle that acquisition; keep the reservation uncertain and do not retry it.
 - Poll header `X-ScaleSetMaxCapacity` is total capacity, not free slots.
 - HTTP 202 is an empty poll, not an error, and is not acknowledged.
 - Queue envelope `messageType` must be `RunnerScaleSetJobMessages`. `body` is a

@@ -3,8 +3,8 @@
 use std::future::Future;
 
 use velnor_runner_github::{
-    Ack, AckScope, AcquireOutcome, Certainty, EncodedJit, Poll, RefreshGate, SessionError, ack,
-    acquire, jit, jit_request, may_ack,
+    Ack, AckScope, AcquireOutcome, Certainty, Poll, RefreshGate, SessionError, ack, acquire,
+    may_ack,
 };
 
 use crate::Offer;
@@ -15,6 +15,9 @@ use crate::offer;
 use crate::scale_set::EnsureError;
 use crate::worker::Started;
 
+mod mint;
+
+use super::mint_origin::MintOrigin;
 use super::{Drive, Lane};
 
 /// What one poll allows before acquire.
@@ -110,7 +113,17 @@ where
         Ok(AcquireOutcome::Acquired(ids)) if ids.is_empty() => reject_empty(journal, id).await,
         Ok(_) => {
             let name = format!("v{request_id}");
-            mint(lane, ctx, Some(batch), journal, id, &name, start).await
+            mint::run(
+                lane,
+                ctx,
+                Some(batch),
+                journal,
+                id,
+                &name,
+                MintOrigin::AcquiredJob,
+                start,
+            )
+            .await
         }
         Err(error) => fail_acquire(journal, id, error).await,
     }
@@ -215,71 +228,17 @@ where
     if !fresh {
         return hold(journal, id, EnsureError::Uncertain).await;
     }
-    mint(lane, ctx, batch, journal, id, name, start).await
-}
-
-async fn mint<T, S, F>(
-    lane: &mut T,
-    ctx: &Drive,
-    batch: Option<&velnor_runner_github::ParsedBatch>,
-    journal: &Journal,
-    id: i64,
-    name: &str,
-    start: S,
-) -> Result<Option<Started>, EnsureError>
-where
-    T: velnor_runner_github::Transport + Lane,
-    S: FnOnce(&str, &[u8], super::bind::Bind) -> F,
-    F: Future<Output = Result<Started, HostError>>,
-{
-    let encoded = match fetch_jit(lane, ctx, name) {
-        Ok(encoded) => encoded,
-        Err(error) => {
-            let mapped = map_listen(error);
-            if matches!(mapped, EnsureError::Conflict) {
-                journal
-                    .finish(id, Outcome::DefiniteFailure)
-                    .await
-                    .map_err(map_journal)?;
-                return Err(mapped);
-            }
-            return hold(journal, id, mapped).await;
-        }
-    };
-    let bound = super::bind::Bind::new(journal, id);
-    let Ok(volume) = crate::worker::new_worker_volume() else {
-        return hold(
-            journal,
-            id,
-            EnsureError::Unexpected {
-                status: 0,
-                step: "worker identity",
-            },
-        )
-        .await;
-    };
-    let Ok(started) = start(&volume, encoded.expose().as_bytes(), bound).await else {
-        return hold(journal, id, EnsureError::Uncertain).await;
-    };
-    journal
-        .bind_worker(id, Some(&started.runner_id), Some(&started.dind_id))
-        .await
-        .map_err(map_journal)?;
-    if let Some(batch) = batch
-        && let Err(error) = acknowledge(lane, ctx, batch)
-    {
-        return hold(journal, id, error).await;
-    }
-    mark_done(journal, id).await?;
-    Ok(Some(started))
-}
-
-fn fetch_jit<T>(lane: &mut T, ctx: &Drive, name: &str) -> Result<EncodedJit, SessionError>
-where
-    T: velnor_runner_github::Transport + ?Sized,
-{
-    let body = jit_request(name)?;
-    jit(lane, ctx.set_id, &ctx.admin_token, &body)
+    mint::run(
+        lane,
+        ctx,
+        batch,
+        journal,
+        id,
+        name,
+        MintOrigin::AssignedPopulation,
+        start,
+    )
+    .await
 }
 
 async fn finish_live<T>(
