@@ -69,13 +69,6 @@ fn is_mbx_bundle_shell(step: &Step) -> bool {
 }
 
 fn suppress_dispatch(step: &mut Step) {
-    if step
-        .condition
-        .as_deref()
-        .is_some_and(|prior| prior.contains(DISPATCH_DENY))
-    {
-        return;
-    }
     let prior = step
         .condition
         .take()
@@ -184,6 +177,22 @@ mod tests {
             jobs["plan"].steps[0].condition.as_deref(),
             Some(
                 "(success() && github.event_name == 'push') && github.event_name != 'workflow_dispatch'"
+            )
+        );
+    }
+
+    #[test]
+    fn dispatch_deny_remains_outermost_for_existing_disjunctions() {
+        let mut step = cache_step("actions/cache/save@sha", "sources");
+        step.condition = Some("(github.event_name != 'workflow_dispatch' || always())".to_owned());
+        let mut jobs = BTreeMap::from([("plan".to_owned(), job(&[], step))]);
+
+        suppress_unvalidated_cache_access(&mut jobs);
+
+        assert_eq!(
+            jobs["plan"].steps[0].condition.as_deref(),
+            Some(
+                "((github.event_name != 'workflow_dispatch' || always())) && github.event_name != 'workflow_dispatch'"
             )
         );
     }
