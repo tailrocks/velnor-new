@@ -1,7 +1,6 @@
 # Velnor V1 Cache and Report Contract
 
-Status: proposed; no implementation is claimed. Defines task identity, cache ownership/trust, reports, and
-final result aggregation.
+Status: proposed; no implementation is claimed. Defines task identity, cache ownership/trust, reports, and final result aggregation.
 
 ## 1. Task identity and canonical digests
 
@@ -18,10 +17,10 @@ output contract and generator identity
 stack_extension (typed, versioned adapter data)
 ```
 
-The contract crate owns this envelope and canonical serialization. Each detector supplies a typed
-`stack_extension`; Mise supplies tool, environment, and generated-task identity. Only the orchestrator
-combines them and decides reuse eligibility. The renderer never computes cache identity. An unknown extension
-schema disables reuse and baseline coverage.
+The contract crate owns this envelope and canonical serialization. Detectors supply typed `stack_extension` values;
+Mise supplies tool, environment, and generated-task identity. The orchestrator combines them and decides task-result
+reuse eligibility. The renderer separately computes V2 static tools identity and runtime identity; they qualify only
+that tools archive and do not determine task-result reuse. Unknown extension schemas disable reuse and baseline coverage.
 
 For `stack_id = "rust"`, `stack_extension` is a `RustTaskIdentityExtension` containing the Cargo package ID,
 normalized manifest path, workspace/local-package graph digest, target kinds and names, features and required
@@ -115,10 +114,8 @@ Hosted Linux uses action `github`; typed Scale Set uses `local` plus `actions/ca
 group bound to action SHA, MBX generation, OS/architecture, Rust identity, revision, run, and attempt. This
 route archives only the exported directory and is selected by typed runner identity.
 
-Cache save is allowed only after its producer succeeded, the current run is trusted for that namespace, and
-the export has a useful delta. A task-result cache hit, failed/cancelled task, untrusted PR, empty export, or
-unavailable producer MUST NOT trigger a trusted save. Restore and save destinations MUST not overlap active
-compiler writers.
+Cache save is allowed only after its producer succeeded, the current run is trusted for that namespace, and the export has a useful delta.
+A task-result hit, failed/cancelled task, untrusted PR, empty export, or unavailable producer MUST NOT trigger a trusted save. Restore and save destinations MUST not overlap active compiler writers.
 
 The generated workflow MUST use these paths. `CARGO_TARGET_DIR` is never an archive path:
 
@@ -135,12 +132,15 @@ MISE_TASK_ARTIFACTS   = $MISE_TASK_CACHE_DIR/task-artifacts/v2
 REPORT_DIR            = $RUNNER_TEMP/velnor/<run-key>/<matrix-key>
 ```
 
-Generated tasks use isolated `CARGO_HOME`; the source archive MUST include only the listed registry and Git paths,
-excluding credentials and other Cargo-home files. Mise stores task artifacts under `$MISE_TASK_CACHE_DIR/task-artifacts/v2`; CI sets that variable before Mise starts and archives that directory.
+Generated tasks use isolated `CARGO_HOME`; its root is an identity input, while the source archive includes only the listed registry and Git paths,
+excluding credentials and other Cargo-home files. Mise stores task artifacts under `$MISE_TASK_CACHE_DIR/task-artifacts/v2`; CI sets that variable before Mise starts and archives it.
 
-`actions/cache/restore` and `/save` MAY archive `CARGO_SOURCE_PATHS`, qualified `MISE_TASK_ARTIFACTS`, and the exported MBX bundle. Hosted MBX writes are gated to protected default-branch pushes; other runs are read-only.
-Scale Set uses the separate one-directory bundle route; every typed MBX consumer sets `MBX_SHARE_OUT_DIR=0`, and hosted Linux also disables automatic MBX collection. Misses/import failures stay cold.
-Velnor MUST NOT reimplement MBX serialization/import; Cargo-profile jobs omit the action.
+`actions/cache/restore` and `/save` MAY archive `CARGO_SOURCE_PATHS`, qualified `MISE_TASK_ARTIFACTS`, and the
+exported MBX bundle. Hosted MBX writes are gated to protected default-branch pushes; `ACTIONS_CACHE_MODE=read`
+skips the action post (run `37114238559`). Scale Set uses the separate one-directory bundle route; every typed
+MBX consumer sets `MBX_SHARE_OUT_DIR=0`, and hosted Linux also disables automatic MBX collection. Misses and
+import failures stay cold. Velnor MUST NOT reimplement MBX serialization/import; Cargo-profile jobs omit the
+action.
 
 Velnor MUST NOT configure Mise `task.cache.remote_url`, remote namespaces, remote tokens, or OIDC task-cache
 credentials in V1. There is no Velnor cache server. The selected task-result transport is an opaque GitHub

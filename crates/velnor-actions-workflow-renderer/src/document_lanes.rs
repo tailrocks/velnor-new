@@ -29,7 +29,16 @@ pub(crate) fn render_job_steps(
 ) -> Result<Vec<Yaml>, RenderError> {
     let mut rendered = Vec::with_capacity(job.steps.len() + 2 * usize::from(shared.is_some()));
     if let Some(uses) = shared {
-        append_shared_lane_steps(id, uses, ctx, needs_envs, lanes, job_env, &mut rendered)?;
+        append_shared_lane_steps(
+            id,
+            uses,
+            &job.runs_on,
+            ctx,
+            needs_envs,
+            lanes,
+            job_env,
+            &mut rendered,
+        )?;
     } else {
         if lanes.checkouts.contains_key(id) {
             return Err(RenderError::InvalidWorkflow(format!(
@@ -37,7 +46,15 @@ pub(crate) fn render_job_steps(
             )));
         }
         for step in &job.steps {
-            rendered.push(step_to_yaml(id, step, ctx, needs_envs, false, job_env)?);
+            rendered.push(step_to_yaml(
+                id,
+                step,
+                ctx,
+                needs_envs,
+                false,
+                job_env,
+                Some(&job.runs_on),
+            )?);
         }
     }
     Ok(rendered)
@@ -46,6 +63,7 @@ pub(crate) fn render_job_steps(
 fn append_shared_lane_steps(
     id: &str,
     uses: &str,
+    runs_on: &str,
     ctx: &RenderContext,
     needs_envs: &[(String, String)],
     lanes: &SharedLaneSteps<'_>,
@@ -62,12 +80,21 @@ fn append_shared_lane_steps(
             "shared_lane_invalid_checkout:{id}"
         )));
     }
-    rendered.push(step_to_yaml(id, checkout, ctx, needs_envs, false, job_env)?);
+    rendered.push(step_to_yaml(
+        id,
+        checkout,
+        ctx,
+        needs_envs,
+        false,
+        job_env,
+        Some(runs_on),
+    )?);
     append_steps(
         id,
         lanes.runtime_preludes,
         ctx,
         needs_envs,
+        runs_on,
         job_env,
         rendered,
         "runtime_prelude",
@@ -77,6 +104,7 @@ fn append_shared_lane_steps(
         lanes.prefixes,
         ctx,
         needs_envs,
+        runs_on,
         job_env,
         rendered,
         "prefix",
@@ -86,6 +114,7 @@ fn append_shared_lane_steps(
         lanes.preludes,
         ctx,
         needs_envs,
+        runs_on,
         job_env,
         rendered,
         "prelude",
@@ -96,6 +125,7 @@ fn append_shared_lane_steps(
         lanes.postludes,
         ctx,
         needs_envs,
+        runs_on,
         job_env,
         rendered,
         "postlude",
@@ -107,6 +137,7 @@ fn append_steps(
     source: &BTreeMap<String, Vec<Step>>,
     ctx: &RenderContext,
     needs_envs: &[(String, String)],
+    runs_on: &str,
     job_env: &BTreeMap<String, String>,
     rendered: &mut Vec<Yaml>,
     label: &str,
@@ -115,7 +146,15 @@ fn append_steps(
         .get(id)
         .ok_or_else(|| RenderError::InvalidWorkflow(format!("shared_lane_missing_{label}:{id}")))?;
     for step in steps {
-        rendered.push(step_to_yaml(id, step, ctx, needs_envs, false, job_env)?);
+        rendered.push(step_to_yaml(
+            id,
+            step,
+            ctx,
+            needs_envs,
+            false,
+            job_env,
+            Some(runs_on),
+        )?);
     }
     Ok(())
 }

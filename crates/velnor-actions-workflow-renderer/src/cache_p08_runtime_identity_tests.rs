@@ -104,15 +104,35 @@ fn identity_command(
     removed: &[&str],
 ) -> Command {
     fs::write(&fixture.github_output, "").expect("clear outputs");
-    let step = payload.runtime_identity_step().expect("identity step");
-    let StepKind::Shell { run, env } = step.kind else {
-        panic!("identity is a shell step");
+    if payload.runtime_identity_supported() {
+        let step = payload.runtime_identity_step().expect("identity action");
+        let StepKind::Action { uses, with, env } = step.kind else {
+            panic!("identity is a composite action step");
+        };
+        assert_eq!(Some(uses.as_str()), super::action_uses(&payload.runs_on));
+        assert!(env.is_empty());
+        assert_eq!(
+            with.get("d").map(String::as_str),
+            Some(payload.static_digest())
+        );
+    }
+    let inner = super::inner_step(&payload.runs_on).expect("composite identity shell step");
+    let StepKind::Shell { run, env } = inner.kind else {
+        panic!("composite identity body is a shell step");
     };
-    let script = run.last().expect("shell script");
-    let mut command = Command::new("bash");
+    let script_file = super::script_file(env!("CARGO_PKG_VERSION")).expect("identity script file");
+    let script_path = fixture.root.join(&script_file.path);
+    fs::create_dir_all(script_path.parent().expect("script parent"))
+        .expect("create script directory");
+    fs::write(&script_path, script_file.bytes).expect("write generated script");
+    let action_path = super::action_uses(&payload.runs_on)
+        .map(|uses| fixture.root.join(uses.trim_start_matches("./")))
+        .unwrap_or_else(|| fixture.root.join(".github/actions/test"));
+    fs::create_dir_all(&action_path).expect("create action directory");
+    let mut command = Command::new("env");
     command
-        .arg("-c")
-        .arg(script)
+        .args(run)
+        .current_dir(&fixture.root)
         .env_clear()
         .envs(env)
         .env("HOME", &fixture.home)
@@ -128,6 +148,9 @@ fn identity_command(
         .env("RUNNER_ARCH", "X64")
         .env("ImageOS", "ubuntu26")
         .env("ImageVersion", "20261004.1")
+        .env("GITHUB_ACTION_PATH", &action_path)
+        .env("VELNOR_CACHE_LANE", &payload.runs_on)
+        .env("VELNOR_CACHE_STATIC_DIGEST", payload.static_digest())
         .env("GITHUB_OUTPUT", &fixture.github_output);
     for (key, value) in overrides {
         command.env(key, value);
@@ -191,56 +214,29 @@ fn hosted_identity_hashes_the_validated_image_and_owned_roots() -> Result<(), Bo
 }
 
 #[test]
-fn runtime_fingerprint_is_stable_and_binds_image_and_absolute_roots() -> Result<(), Box<dyn Error>>
-{
-    let fixture = Fixture::new()?;
-    let hosted = payload("ubuntu-26.04");
-    let (output, baseline) = run_and_read(&hosted, &fixture, &[]);
-    assert!(output.status.success(), "{output:?}");
-    let baseline_identity = identity(&baseline).to_owned();
-
-    let (output, repeated) = run_and_read(&hosted, &fixture, &[]);
-    assert!(output.status.success(), "{output:?}");
-    assert_eq!(identity(&repeated), baseline_identity);
-
-    let (output, image_changed) = run_and_read(
-        &hosted,
-        &fixture,
-        &[("ImageVersion", "20261005.1".to_owned())],
-    );
-    assert!(output.status.success(), "{output:?}");
-    assert_ne!(identity(&image_changed), baseline_identity);
-
-    let alternative_home = fixture.root.join("alternate home");
-    fs::create_dir_all(alternative_home.join(".local/share"))?;
-    let (output, home_changed) = run_and_read(
-        &hosted,
-        &fixture,
-        &[("HOME", alternative_home.to_string_lossy().into_owned())],
-    );
-    assert!(output.status.success(), "{output:?}");
-    assert_ne!(identity(&home_changed), baseline_identity);
-
-    let alternative_temp = fixture.root.join("alternate runner temp");
-    fs::create_dir_all(&alternative_temp)?;
-    let rustup_home = alternative_temp.join("velnor/rustup");
-    let cargo_home = alternative_temp.join("velnor/cargo");
-    let overrides = [
+fn generated_identity_actions_bind_each_supported_hosted_lane() -> Result<(), Box<dyn Error>> {
+    for (lane, path, uses) in [
         (
-            "RUNNER_TEMP",
-            alternative_temp.to_string_lossy().into_owned(),
+            "ubuntu-22.04",
+            ".github/actions/u22/action.yml",
+            "./.github/actions/u22",
         ),
         (
-            "MISE_RUSTUP_HOME",
-            rustup_home.to_string_lossy().into_owned(),
+            "ubuntu-24.04",
+            ".github/actions/u24/action.yml",
+            "./.github/actions/u24",
         ),
-        ("RUSTUP_HOME", rustup_home.to_string_lossy().into_owned()),
-        ("MISE_CARGO_HOME", cargo_home.to_string_lossy().into_owned()),
-        ("CARGO_HOME", cargo_home.to_string_lossy().into_owned()),
-    ];
-    let (output, temp_changed) = run_and_read(&hosted, &fixture, &overrides);
-    assert!(output.status.success(), "{output:?}");
-    assert_ne!(identity(&temp_changed), baseline_identity);
+        (
+            "ubuntu-26.04",
+            ".github/actions/u26/action.yml",
+            "./.github/actions/u26",
+        ),
+    ] {
+        let file = super::action_file(lane, env!("CARGO_PKG_VERSION"))?;
+        assert_eq!(file.path, path);
+        assert!(file.bytes.contains(&format!("VELNOR_CACHE_LANE: {lane}")));
+        assert_eq!(super::action_uses(lane), Some(uses));
+    }
     Ok(())
 }
 
@@ -352,11 +348,20 @@ fn scale_set_identity_is_a_successful_cold_path_without_digest_injection()
 
 #[test]
 fn identity_step_binds_fixed_tool_home_environment() {
-    let step = payload("ubuntu-26.04")
-        .runtime_identity_step()
-        .expect("identity step");
-    let StepKind::Shell { env, .. } = step.kind else {
-        panic!("identity is a shell step");
+    let payload = payload("ubuntu-26.04");
+    let step = payload.runtime_identity_step().expect("identity step");
+    let StepKind::Action { uses, with, env } = step.kind else {
+        panic!("identity is a composite action step");
+    };
+    assert_eq!(Some(uses.as_str()), super::action_uses("ubuntu-26.04"));
+    assert!(env.is_empty());
+    assert_eq!(
+        with.get("d").map(String::as_str),
+        Some(payload.static_digest())
+    );
+    let inner = super::inner_step("ubuntu-26.04").expect("composite identity shell step");
+    let StepKind::Shell { env, .. } = inner.kind else {
+        panic!("composite identity body is a shell step");
     };
     let homes = BTreeMap::from([
         ("MISE_RUSTUP_HOME", "${{ runner.temp }}/velnor/rustup"),
@@ -369,6 +374,9 @@ fn identity_step_binds_fixed_tool_home_environment() {
     }
     assert_eq!(step.name, crate::cache_p08::TOOLS_CACHE_IDENTITY_NAME);
 }
+
+#[path = "cache_p08_runtime_identity_fingerprint_tests.rs"]
+mod fingerprint_tests;
 
 #[path = "cache_p08_runtime_identity_scratch_tests.rs"]
 mod scratch_tests;

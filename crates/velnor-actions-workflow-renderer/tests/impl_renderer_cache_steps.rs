@@ -92,8 +92,7 @@ fn cache_restore_accepts_only_owned_paths() {
 #[test]
 fn tools_layer_accepts_only_its_exact_v2_payload_paths() {
     let uses = format!("actions/cache/restore@{}", sha());
-    let key =
-        "mise-tools-v2-typed-static-digest-${{steps.velnor-tool-cache-identity.outputs.identity}}";
+    let key = "mise-tools-v2-typed-static-digest-${{steps.v2.outputs.identity}}";
     let paths = TOOLS_CACHE_PATHS.map(str::to_owned);
     let restore = cache_action_step(true, &uses, "tools", key, &[], &paths).expect("restore");
     let StepKind::Action { with, .. } = restore.kind else {
@@ -180,8 +179,8 @@ fn strict_wires_runtime_qualified_tools_cache_before_setup_and_saves_once()
         "checkout, runtime identity, restore, then setup: {names:?}"
     );
     for need in [
-        "name: Identify Mise cache runtime",
-        "id: velnor-tool-cache-identity",
+        "name: V2 identity",
+        "id: v2",
         "outputs.enabled == 'true'",
         "mise-tools-v2-",
         "cache: \"false\"",

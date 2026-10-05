@@ -11,6 +11,33 @@ use crate::{MiseSetup, RenderError, cache_p08, steps};
 #[path = "cache_p08_runtime_identity.rs"]
 mod runtime_identity;
 
+pub(crate) fn runtime_identity_script_file(
+    version: &str,
+) -> Result<crate::tree::RenderedFile, RenderError> {
+    runtime_identity::script_file(version)
+}
+
+pub(crate) fn runtime_identity_action_file(
+    runs_on: &str,
+    version: &str,
+) -> Result<crate::tree::RenderedFile, RenderError> {
+    runtime_identity::action_file(runs_on, version)
+}
+
+pub(crate) fn validate_runtime_identity_action(
+    name: &str,
+    uses: &str,
+    runs_on: &str,
+    with: &std::collections::BTreeMap<String, String>,
+    env: &std::collections::BTreeMap<String, String>,
+) -> Result<(), RenderError> {
+    runtime_identity::validate_action_call(name, uses, runs_on, with, env)
+}
+
+pub(crate) fn runtime_identity_action_uses(runs_on: &str) -> Option<&'static str> {
+    runtime_identity::action_uses(runs_on)
+}
+
 /// Inputs resolved from a job's typed preparation/catalog obligations.
 #[derive(Debug, Clone, Copy)]
 pub struct ToolsCacheInputs<'a> {
@@ -74,6 +101,12 @@ impl ToolsCachePayload {
     #[must_use]
     pub fn static_digest(&self) -> &str {
         &self.static_digest
+    }
+
+    /// Whether this lane has an exact hosted image identity for V2 restores.
+    #[must_use]
+    pub fn runtime_identity_supported(&self) -> bool {
+        runtime_identity::is_supported_lane(&self.runs_on, &self.target)
     }
 
     /// Canonical exact paths archived by both restore and save.

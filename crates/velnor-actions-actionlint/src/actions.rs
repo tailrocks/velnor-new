@@ -72,7 +72,6 @@ pub const MR_BOXINGTON_ACTION_SHA: &str = "1687e54eb349cadf61fa38b5813a77875489e
 pub const MR_BOXINGTON_ACTION_CANDIDATE_VERSION: &str = "v1.7.1";
 /// Full commit SHA of [`MR_BOXINGTON_ACTION_CANDIDATE_VERSION`], kept as an unqualified experiment target.
 pub const MR_BOXINGTON_ACTION_CANDIDATE_SHA: &str = "d0825fbaf3cc36ca2609aa38e71046265a1f1e37";
-
 /// One pinned action reference: `repo[/path]@sha` plus version comment.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PinnedActionRef {

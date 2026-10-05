@@ -156,7 +156,7 @@ fn tools_restore_key(id: &str, job: &Job) -> Result<Option<String>, RenderError>
     if uses != crate::cache_steps::TOOLS_RESTORE_USES
         || with.get("path").map(String::as_str) != Some(expected_paths.as_str())
         || !key.starts_with("mise-tools-v2-")
-        || !key.contains("${{steps.velnor-tool-cache-identity.outputs.identity}}")
+        || !key.contains("${{steps.v2.outputs.identity}}")
         || step.condition.as_deref() != Some(crate::cache_p08::TOOLS_CACHE_RESTORE_CONDITION)
     {
         return Err(RenderError::InvalidWorkflow(format!(

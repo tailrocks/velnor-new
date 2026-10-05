@@ -1,4 +1,6 @@
 a63e6a4550e75e14c2dd2ebe6efefe1360a847967c0ee2f28803eb43949dc6e4  ./.github/AGENTS.md
 b3f39f72416eee5077f2fd187f860e6d9a0a9ea4b33fdf3cfc671b1afbb34e0e  ./.github/actionlint.yaml
-44fa383cebb5b945ae7c8a9192d88d6c8d616c000a2e6222715d57c5bffe7280  ./.github/workflows/ci.yml
+e4633926cddd6a55b3fae200f58db4be8abd05984929384bd7de1ae29010634d  ./.github/actions/u26/action.yml
+6f920a59933f32b86120fc1e0b6196a34ecca31bebb153b2e86e558d99f0a910  ./.github/scripts/velnor-tools-cache-identity.sh
+73303577d98de8c73f5c921dbc3839bc082f7f9235f376f158d7c30f29831c74  ./.github/workflows/ci.yml
 link ./.github/CLAUDE.md -> AGENTS.md

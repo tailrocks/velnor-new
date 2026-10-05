@@ -54,11 +54,10 @@ fn tofu_prepare_scales_to_100_roots() -> TestResult {
     Ok(())
 }
 
-/// Generate below the V2 workflow-size boundary and fail closed above it.
+/// Generate measured 40/60-root positives and fail closed above the byte cap.
 ///
-/// This `ToFu` fixture reaches the 500,000-byte contract at 32 roots after
-/// per-job cache identity and provider restore steps are included; 31 stays
-/// below the limit, while 32/40/60/100 prove rejection without partial output.
+/// The shared runtime identity helper is emitted once; each typed job retains
+/// its own lane identity, tool payload, and provider restore operations.
 #[test]
 fn tofu_generate_scales_with_root_count() -> TestResult {
     for roots in [1_usize, 10, 31, 32, 40, 60, 100] {
@@ -72,7 +71,7 @@ fn tofu_generate_scales_with_root_count() -> TestResult {
             output_dir: Some(target.clone()),
         };
         let (result, gen_ms) = timed(|| generate(&prep, &opts));
-        if roots >= 32 {
+        if roots >= 100 {
             let Err(error) = result else {
                 return Err(std::io::Error::other(format!(
                     "{roots}-root workflow unexpectedly fit the contract"
