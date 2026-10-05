@@ -74,41 +74,7 @@ impl PublisherFixture {
         let manifest_checksum_copy = scratch.path().join("uploaded-manifest.sha256");
         let accepted_directory = runner_temp.join("velnor-generator-accepted");
         let upload_log = scratch.path().join("uploads.txt");
-        let output = isolated_command(&git, &bin, &home, &xdg, &templates)
-            .args(["init", "-b", "main"])
-            .current_dir(&workspace)
-            .output()?;
-        assert_success(&output);
-        fs::write(workspace.join("source.txt"), b"fixture source\n")?;
-        let output = isolated_command(&git, &bin, &home, &xdg, &templates)
-            .args(["add", "source.txt"])
-            .current_dir(&workspace)
-            .output()?;
-        assert_success(&output);
-        let hooks_path = format!("core.hooksPath={}", hooks.display());
-        let output = isolated_command(&git, &bin, &home, &xdg, &templates)
-            .args([
-                "-c",
-                "user.name=Fixture",
-                "-c",
-                "user.email=fixture@example.invalid",
-                "-c",
-                &hooks_path,
-                "-c",
-                "commit.gpgSign=false",
-                "commit",
-                "-m",
-                "fixture source",
-            ])
-            .current_dir(&workspace)
-            .output()?;
-        assert_success(&output);
-        let output = isolated_command(&git, &bin, &home, &xdg, &templates)
-            .args(["rev-parse", "HEAD"])
-            .current_dir(&workspace)
-            .output()?;
-        assert_success(&output);
-        let commit = String::from_utf8(output.stdout)?.trim().to_owned();
+        let commit = initialize_workspace(&git, &bin, &home, &xdg, &templates, &hooks, &workspace)?;
         let tag = format!("generator-{commit}");
         write_local_assets(&assets, RELEASE_VERSION)?;
         copy_build_assets(&assets, &workspace)?;
@@ -301,11 +267,76 @@ fn copy_build_assets(source: &Path, workspace: &Path) -> Result<(), Box<dyn Erro
     Ok(())
 }
 
+fn initialize_workspace(
+    git: &Path,
+    bin: &Path,
+    home: &Path,
+    xdg: &Path,
+    templates: &Path,
+    hooks: &Path,
+    workspace: &Path,
+) -> Result<String, Box<dyn Error>> {
+    let output = isolated_command(git, bin, home, xdg, templates)
+        .args(["init", "-b", "main"])
+        .current_dir(workspace)
+        .output()?;
+    assert_success(&output);
+    fs::write(workspace.join("source.txt"), b"fixture source\n")?;
+    let output = isolated_command(git, bin, home, xdg, templates)
+        .args(["add", "source.txt"])
+        .current_dir(workspace)
+        .output()?;
+    assert_success(&output);
+    let hooks_path = format!("core.hooksPath={}", hooks.display());
+    let output = isolated_command(git, bin, home, xdg, templates)
+        .args([
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.invalid",
+            "-c",
+            &hooks_path,
+            "-c",
+            "commit.gpgSign=false",
+            "commit",
+            "-m",
+            "fixture source",
+        ])
+        .current_dir(workspace)
+        .output()?;
+    assert_success(&output);
+    let output = isolated_command(git, bin, home, xdg, templates)
+        .args(["rev-parse", "HEAD"])
+        .current_dir(workspace)
+        .output()?;
+    assert_success(&output);
+    Ok(String::from_utf8(output.stdout)?.trim().to_owned())
+}
+
 fn find_executable(name: &str) -> Result<PathBuf, Box<dyn Error>> {
     let path = env::var_os("PATH").ok_or("fixture PATH is unavailable")?;
-    for directory in env::split_paths(&path) {
-        let candidate = directory.join(name);
-        if candidate.is_file() {
+    let working_directory = env::current_dir()?;
+    find_executable_in_path(name, &path, &working_directory)
+}
+
+fn find_executable_in_path(
+    name: &str,
+    path: &std::ffi::OsStr,
+    working_directory: &Path,
+) -> Result<PathBuf, Box<dyn Error>> {
+    for directory in env::split_paths(path) {
+        let directory = if directory.is_absolute() {
+            directory
+        } else {
+            working_directory.join(directory)
+        };
+        let Ok(candidate) = directory.join(name).canonicalize() else {
+            continue;
+        };
+        let Ok(metadata) = fs::metadata(&candidate) else {
+            continue;
+        };
+        if metadata.is_file() && metadata.permissions().mode() & 0o111 != 0 {
             return Ok(candidate);
         }
     }
@@ -351,3 +382,7 @@ fn publisher_path() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../scripts/generator-release/publish_generator_release.py")
 }
+
+#[cfg(test)]
+#[path = "schema2_generator_release_publisher_executable_tests.rs"]
+mod executable_tests;
