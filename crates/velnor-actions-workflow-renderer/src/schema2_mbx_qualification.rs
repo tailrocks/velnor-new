@@ -39,8 +39,9 @@ pub fn cache_probe() -> u64 { 42 }
 EOF
 mbx build --manifest-path "$root/Cargo.toml"
 "#;
-const IMPORT_PROBE: &str = "mbx cache stats --json | jq -e '.objects > 0' >/dev/null";
-const REUSE_PROBE: &str = "mbx stats --json | jq -e '.savings.cached_compilations > 0' >/dev/null";
+const DISK_SAMPLE: &str = "df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"";
+const IMPORT_PROBE: &str = "df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; mbx cache stats --json | tee \"$RUNNER_TEMP/mbx-object-stats.json\" | jq -e '.objects > 0' >/dev/null";
+const REUSE_PROBE: &str = "df -B1 -P \"$RUNNER_TEMP\"; df -i -P \"$RUNNER_TEMP\"; mbx stats --json | tee \"$RUNNER_TEMP/mbx-reuse-stats.json\" | jq -e '.savings.cached_compilations > 0' >/dev/null";
 
 /// Emit isolated writer and reader jobs for the pinned MBX runtime.
 ///
@@ -109,6 +110,9 @@ fn job(request: &MbxQualificationPins, hosted: &RunnerSpec, writer: bool) -> (St
         steps.push(run_step("Require imported MBX objects", IMPORT_PROBE));
     }
     steps.push(build_step());
+    if writer {
+        steps.push(run_step("Sample runner disk", DISK_SAMPLE));
+    }
     if !writer {
         steps.push(run_step("Require reused compilation", REUSE_PROBE));
     }
