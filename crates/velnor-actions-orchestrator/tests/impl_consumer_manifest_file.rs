@@ -6,9 +6,12 @@
 //! closed; no bake or environment carries provenance.
 use std::fs;
 
-use velnor_actions_orchestrator::prepare;
+use velnor_actions_orchestrator::{prepare, render_staged_tree};
+use velnor_actions_workflow_renderer::WORKFLOW_PATH;
 
-use crate::impl_common::{TestResult, config_with_branch, make_repo};
+use crate::impl_common::{
+    TestResult, config_with_branch, git, make_repo, without_ambient_identity,
+};
 
 /// Realistic release manifest: GitHub asset URLs at the generator version.
 ///
@@ -59,11 +62,10 @@ fn render_consumer_yaml(manifest: &str) -> Result<String, Box<dyn std::error::Er
 fn expected_acquire_block() -> String {
     let version = env!("CARGO_PKG_VERSION");
     format!(
-        "- name: Acquire Velnor\n        run: \"sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \\\"$RUNNER_TEMP/velnor/bin\\\" && s=\\\"/opt/velnor/seed/generator/velnor-actions-{version}\\\" d=\\\"$RUNNER_TEMP/velnor/bin/velnor-actions-{version}\\\" && if [ -f \\\"$s\\\" ] && echo \\\"$VELNOR_ASSET_SHA256  $s\\\" | sha256sum -c -; then cp \\\"$s\\\" \\\"$d\\\"; else curl -fsSL --proto '\\\\''=https'\\\\'' --tlsv1.2 \\\"$VELNOR_ASSET_URL\\\" -o \\\"$d\\\" && echo \\\"$VELNOR_ASSET_SHA256  $d\\\" | sha256sum -c -; fi && chmod +x \\\"$d\\\"'\"",
+        "- name: Acquire Velnor\n        run: \"sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; d=\\\"$RUNNER_TEMP/velnor/bin/velnor-actions-{version}\\\"&&mkdir -p \\\"${{d%/*}}\\\"&&s=\\\"/opt/velnor/seed/generator/${{d##*/}}\\\"&&v() {{ echo \\\"$VELNOR_ASSET_SHA256  $1\\\"|sha256sum -c -;}}&&if [ -f \\\"$s\\\" ]&&v \\\"$s\\\";then cp \\\"$s\\\" \\\"$d\\\";else curl -fsSL --proto '\\\\''=https'\\\\'' --tlsv1.2 \\\"$VELNOR_ASSET_URL\\\" -o \\\"$d\\\"&&v \\\"$d\\\";fi&&chmod +x \\\"$d\\\"'\"",
     )
 }
 
-/// Extract the full `- name: Acquire Velnor` step block from `yaml`.
 fn acquire_block(yaml: &str) -> Result<&str, Box<dyn std::error::Error>> {
     let acquire = yaml
         .find("- name: Acquire Velnor")
@@ -116,7 +118,7 @@ fn absent_manifest_fails_closed_without_provenance() {
     use velnor_actions_orchestrator::consumer_acquire_step_with_manifest;
     // The release twin returns `None` for an absent file; the pure gate
     // must fail closed with the contract error (no URL, no digest).
-    let err = consumer_acquire_step_with_manifest("ubuntu-26.04", "0.1.0", None)
+    let err = consumer_acquire_step_with_manifest("ubuntu-26.04", env!("CARGO_PKG_VERSION"), None)
         .expect_err("absent manifest fails");
     let text = err.to_string();
     assert!(text.contains("consumer_requires_release_install"), "{text}");
@@ -157,4 +159,38 @@ fn symlink_manifest_fails_closed() -> TestResult {
         "unexpected: {err}"
     );
     Ok(())
+}
+
+/// The producer policy does not consume or synthesize a consumer manifest.
+#[test]
+fn velnor_repository_generation_needs_no_consumer_manifest() -> TestResult {
+    without_ambient_identity(
+        "velnor_repository_generation_needs_no_consumer_manifest",
+        || {
+            let config = "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\npolicy = \"velnor-repository-v1\"\n";
+            let repo = make_repo(config)?;
+            fs::remove_file(repo.path().join(".velnor/release-manifest.json"))?;
+            git(
+                &[
+                    "remote",
+                    "add",
+                    "origin",
+                    "https://github.com/tailrocks/velnor-new.git",
+                ],
+                repo.path(),
+            )?;
+
+            let prep = prepare(repo.path())?;
+            assert_eq!(prep.discovery.consumer_manifest_json, None);
+            assert!(!prep.discovery.consumer_manifest_stand_in);
+            let tree = render_staged_tree(&prep)?;
+            let yaml = tree
+                .get(WORKFLOW_PATH)
+                .ok_or_else(|| std::io::Error::other("missing generated CI workflow"))?;
+            assert!(!yaml.contains("Acquire Velnor"), "{yaml}");
+            assert!(!yaml.contains(&"a".repeat(64)), "{yaml}");
+            assert!(!yaml.contains(&"b".repeat(40)), "{yaml}");
+            Ok(())
+        },
+    )
 }

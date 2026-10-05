@@ -283,8 +283,10 @@ fn split_shared_steps(
         crate::lane_share_sections::peel_postlude(hosted_tail);
     let (local_common, local_cache_postlude) =
         crate::lane_share_sections::peel_postlude(local_tail);
-    let (hosted_common, hosted_lane_specific) = check::peel_lane_specific(&hosted_common);
-    let (local_common, local_lane_specific) = check::peel_lane_specific(&local_common);
+    let (hosted_common, hosted_lane_specific) =
+        crate::lane_share_sections::peel_lane_specific(&hosted_common);
+    let (local_common, local_lane_specific) =
+        crate::lane_share_sections::peel_lane_specific(&local_common);
     let mut hosted_postlude = hosted_lane_specific;
     hosted_postlude.extend(hosted_cache_postlude);
     let mut local_postlude = local_lane_specific;

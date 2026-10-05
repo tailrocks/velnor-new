@@ -20,8 +20,6 @@ pub(crate) fn push_explicit_step_id(entries: &mut Vec<(String, Yaml)>, id: &str)
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
-
     use super::push_step_id;
     use velnor_actions_contract::{Step, StepId, StepKind, StepRole};
 
@@ -37,7 +35,7 @@ mod tests {
             condition: None,
             kind: StepKind::Internal {
                 operation: "publish-baseline-v1".to_owned(),
-                env: BTreeMap::new(),
+                env: std::collections::BTreeMap::new(),
             },
         };
         push_step_id(&mut entries, &step);
