@@ -38,7 +38,7 @@ mod capture;
 mod unix {
     use std::io::Read;
     use std::os::unix::process::CommandExt;
-    use std::process::{Child, ChildStderr, ChildStdout, Command, ExitStatus, Stdio};
+    use std::process::{Child, ChildStderr, ChildStdout, Command, Stdio};
     use std::thread;
     use std::time::{Duration, Instant};
 
@@ -217,7 +217,7 @@ mod unix {
         }
         if !reaped {
             match child.try_wait() {
-                Ok(Some(_)) => reaped = true,
+                Ok(Some(_)) => {}
                 Ok(None) => failures.push("child was not reaped before the deadline".to_owned()),
                 Err(error) => failures.push(format!("process reaping failed ({error})")),
             }
