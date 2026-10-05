@@ -69,7 +69,7 @@ fn digest(byte: u8) -> String {
 }
 
 /// One single-task plan entry plus its obligation digest.
-fn entry_for(
+pub(super) fn entry_for(
     stack: &str,
     task_id: &str,
     kind: &str,
@@ -95,7 +95,7 @@ fn entry_for(
 }
 
 /// One execute obligation.
-fn obligation_for(task_id: &str, task_digest: String, seed: u8) -> PlanObligation {
+pub(super) fn obligation_for(task_id: &str, task_digest: String, seed: u8) -> PlanObligation {
     PlanObligation {
         task_id: task_id.to_owned(),
         decision: ObligationDecision::Execute,
@@ -164,7 +164,7 @@ pub(super) fn staged_run(plan: &Plan, run_key: &str) -> TempDir {
 }
 
 /// Read and validate one staged task report plus its aggregate.
-fn read_entry(
+pub(super) fn read_entry(
     temp: &TempDir,
     run_key: &str,
     matrix_key: &str,
