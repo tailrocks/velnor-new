@@ -108,7 +108,7 @@ fn missing_or_synthesized_api_urls_fail_without_a_manifest() -> Result<(), Box<d
 }
 
 #[test]
-fn source_target_version_digest_and_asset_path_mismatches_fail() -> Result<(), Box<dyn Error>> {
+fn source_and_target_inventory_mismatches_fail() -> Result<(), Box<dyn Error>> {
     let fixture = Fixture::new("wrong-source")?;
     let release = release_json(true, false, &fixture.tag, &fixture.records);
     let output = run_helper_with_tag_commit(
@@ -165,7 +165,11 @@ fn source_target_version_digest_and_asset_path_mismatches_fail() -> Result<(), B
             .iter()
             .any(|(target, _, _, _, _)| *target == MACOS_X86_64_TARGET)
     );
+    Ok(())
+}
 
+#[test]
+fn malformed_or_unexpected_versions_fail() -> Result<(), Box<dyn Error>> {
     let fixture = Fixture::new("wrong-version")?;
     let release = release_json(true, false, &fixture.tag, &fixture.records);
     let output = run_helper(&fixture, "create", &release, "0.1.1", &fixture.commit);
@@ -189,7 +193,11 @@ fn source_target_version_digest_and_asset_path_mismatches_fail() -> Result<(), B
     );
     assert_failure(&output, "malformed_version");
     assert!(!fixture.manifest().exists());
+    Ok(())
+}
 
+#[test]
+fn asset_digest_state_and_path_mismatches_fail() -> Result<(), Box<dyn Error>> {
     let fixture = Fixture::new("wrong-digest")?;
     let mut records = fixture.records.clone();
     records[0] = records[0].replace(LINUX_SHA, &"0".repeat(64));

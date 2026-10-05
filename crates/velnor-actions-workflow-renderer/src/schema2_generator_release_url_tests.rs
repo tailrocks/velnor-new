@@ -1,6 +1,6 @@
 use super::{
-    Fixture, LINUX_TARGET, MANIFEST_NAME, assert_failure, assert_success, asset_record, asset_url,
-    output_text, release_json, run_helper,
+    Fixture, LINUX_TARGET, MANIFEST_NAME, RELEASE_VERSION, assert_failure, assert_success,
+    asset_record, asset_url, output_text, release_json, run_helper,
 };
 use std::error::Error;
 use std::fs;
