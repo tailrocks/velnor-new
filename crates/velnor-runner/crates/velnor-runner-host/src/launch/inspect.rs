@@ -13,8 +13,8 @@ pub(crate) fn classify_inspect(
     response: Result<bollard::models::ContainerInspectResponse, DockerError>,
 ) -> Result<bool, EnsureError> {
     match response {
-        Ok(info) => match info.state.and_then(|state| state.running) {
-            Some(running) => Ok(running),
+        Ok(info) => match info.state {
+            Some(state) => still_live(&state),
             None => Err(inspect_error(200)),
         },
         Err(DockerError::DockerResponseServerError {
@@ -24,6 +24,28 @@ pub(crate) fn classify_inspect(
             Err(inspect_error(status_code))
         }
         Err(_) => Err(inspect_error(0)),
+    }
+}
+
+/// A container that has not exited still owns its slot.
+///
+/// `created` is recorded before start, so `Running: false` is not cleanup.
+fn still_live(state: &bollard::models::ContainerState) -> Result<bool, EnsureError> {
+    use bollard::models::ContainerStateStatusEnum as Status;
+    match state.status {
+        Some(
+            Status::CREATED
+            | Status::RUNNING
+            | Status::PAUSED
+            | Status::RESTARTING
+            | Status::REMOVING
+            | Status::STOPPING,
+        ) => Ok(true),
+        Some(Status::EXITED | Status::DEAD) => Ok(false),
+        Some(Status::EMPTY) | None => match state.running {
+            Some(running) => Ok(running),
+            None => Err(inspect_error(200)),
+        },
     }
 }
 
@@ -72,6 +94,21 @@ mod tests {
         for (body, expected) in [
             (r#"{"State":{"Running":false}}"#, false),
             (r#"{"State":{"Running":true}}"#, true),
+        ] {
+            let info = serde_json::from_str(body).map_err(|error| error.to_string())?;
+            assert_eq!(classify_inspect(Ok(info)), Ok(expected));
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn created_stays_live_and_exited_does_not() -> Result<(), String> {
+        for (body, expected) in [
+            (r#"{"State":{"Status":"created","Running":false}}"#, true),
+            (r#"{"State":{"Status":"paused","Running":false}}"#, true),
+            (r#"{"State":{"Status":"exited","Running":false}}"#, false),
+            (r#"{"State":{"Status":"dead","Running":false}}"#, false),
+            (r#"{"State":{"Status":"stopping","Running":false}}"#, true),
         ] {
             let info = serde_json::from_str(body).map_err(|error| error.to_string())?;
             assert_eq!(classify_inspect(Ok(info)), Ok(expected));

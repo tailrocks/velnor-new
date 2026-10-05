@@ -6,6 +6,7 @@ use warnings;
 use bytes;
 use Fcntl qw(O_WRONLY O_NONBLOCK F_GETFL F_SETFL);
 use FindBin qw($RealBin);
+require "$RealBin/tar-member-stream.pl";
 require "$RealBin/tar-member-rewrite.pl";
 
 binmode STDIN,  ":raw" or die "velnor-tar-member: binmode: $!\n";
@@ -270,6 +271,7 @@ sub walk {
         $state->{gnu_name} = undef;
         $state->{gnu_link} = undef;
     }
+    Velnor::Tar::Stream::drain_stdin(\*STDIN);
     return $index;
 }
 

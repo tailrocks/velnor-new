@@ -30,6 +30,9 @@ fi
 if [ -f "$here/tar-member-rewrite.pl" ]; then
   cp "$here/tar-member-rewrite.pl" "$rundir/"
 fi
+if [ -f "$here/tar-member-stream.pl" ]; then
+  cp "$here/tar-member-stream.pl" "$rundir/"
+fi
 chmod 0755 "$rundir/tar-shim.sh" "$rundir/velnor-tar-pax"
 shim="$rundir/tar-shim.sh"
 pass=0

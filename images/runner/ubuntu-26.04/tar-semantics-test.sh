@@ -23,6 +23,7 @@ rundir="$(mktemp -d /tmp/tar-sem-layout.XXXXXX)"
 cp "$here/tar-shim.sh" "$here/tar-absolute.sh" "$here/tar-extract.sh" "$here/tar-extract-plan.sh" "$rundir/"
 cp "$here/tar-pax.pl" "$rundir/velnor-tar-pax"
 cp "$here/tar-member.pl" "$rundir/"
+cp "$here/tar-member-stream.pl" "$rundir/"
 cp "$here/tar-member-rewrite.pl" "$rundir/"
 chmod 0755 "$rundir/tar-shim.sh" "$rundir/velnor-tar-pax" "$rundir/tar-member.pl"
 shim="$rundir/tar-shim.sh"
@@ -292,6 +293,28 @@ case_corrupt_header() {
   grep -F -q 'bad checksum' "$root/perlerr" || return 1
 }
 
+case_list_drains_tail() {
+  local root="$work/drain" status=0
+  rm -rf -- "$root"
+  mkdir -p "$root"
+  write_ustar "$root/arc.tar" f note.txt hello || return 1
+  # The writer keeps the pipe open after the end marker. A reader that
+  # stops there makes the later write SIGPIPE, and pipefail fails the list.
+  set +e
+  (
+    set -o pipefail
+    {
+      cat "$root/arc.tar"
+      sleep 0.2
+      printf 'x'
+    } | perl "$rundir/tar-member.pl" --list >"$root/list"
+  )
+  status=$?
+  set -e
+  [ "$status" -eq 0 ] || return 1
+  grep -F -q 'note.txt' "$root/list" || return 1
+}
+
 case_partial_archive() {
   local root="$work/partial" err status=0 pstatus=0
   rm -rf -- "$root"
@@ -350,6 +373,7 @@ run_case empty-dir case_empty_dir
 run_case long-and-deep case_long_and_deep
 run_case space-name case_space_name
 run_case corrupt-header case_corrupt_header
+run_case list-drains-tail case_list_drains_tail
 run_case partial-archive case_partial_archive
 run_case disk-full case_disk_full
 

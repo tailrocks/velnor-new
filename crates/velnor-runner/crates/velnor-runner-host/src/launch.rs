@@ -59,6 +59,18 @@ pub struct LaunchReport {
     pub workers: Vec<Started>,
 }
 
+/// Prove exited runners are gone and free their slots.
+///
+/// # Errors
+///
+/// Returns [`EnsureError`] when the journal or Docker lookup fails.
+pub(crate) async fn release_slots<E: crate::stage::PairEngine + ?Sized>(
+    journal: &Journal,
+    docker: &E,
+) -> Result<(), EnsureError> {
+    slot::release_exited(journal, docker).await
+}
+
 /// Open one session, start the admitted workers, then delete that session.
 ///
 /// # Errors

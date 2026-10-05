@@ -55,3 +55,23 @@ async fn drive(
     let journal = Journal::open(journal_path).await?;
     Ok(launch::launch_once(pat, owner, repo, &docker, &journal).await?)
 }
+
+/// Mark exited launch rows gone. Does not load a token or open a session.
+///
+/// # Errors
+///
+/// Returns [`ListenFault`] when the runtime, socket, journal, or release fails.
+/// The display text is the inner error and does not include a token.
+pub fn release_blocking(endpoint: &str, journal_path: &Path) -> Result<(), ListenFault> {
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|_| HostError::Journal)?;
+    runtime.block_on(release(endpoint, journal_path))
+}
+
+async fn release(endpoint: &str, journal_path: &Path) -> Result<(), ListenFault> {
+    let docker = connect_unix(endpoint)?;
+    let journal = Journal::open(journal_path).await?;
+    Ok(launch::release_slots(&journal, &docker).await?)
+}
