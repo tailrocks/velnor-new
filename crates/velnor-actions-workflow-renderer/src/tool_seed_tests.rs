@@ -1,129 +1,214 @@
+use std::collections::BTreeMap;
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::process::{Command, Output};
+
+use velnor_actions_contract::{Job, Step, StepKind};
+
 use super::*;
+use crate::tool_seed_test_support::mock_trust_commands;
 
-fn key() -> String {
-    seed_key_for_tools(
-        "x86_64-unknown-linux-gnu",
-        "2026.9.18",
-        &["rust@1.98.1".to_owned()],
-    )
-    .expect("key")
-}
+const TARGET: &str = "x86_64-unknown-linux-gnu";
+const CHECKOUT: &str = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
+const SETUP_USES: &str = "jdx/mise-action@0123456789abcdef0123456789abcdef01234567";
 
-fn scratch(name: &str) -> std::path::PathBuf {
+fn scratch(name: &str) -> PathBuf {
     let path = std::env::temp_dir().join(format!("velnor-tool-seed-{name}-{}", std::process::id()));
-    std::fs::remove_dir_all(&path).ok();
-    std::fs::create_dir_all(&path).expect("scratch");
+    fs::remove_dir_all(&path).ok();
+    fs::create_dir_all(&path).expect("scratch");
     path
 }
 
-fn run_key(script: &str, home: &std::path::Path, seed_key: Option<&str>) -> String {
-    let mut command = std::process::Command::new("bash");
-    command
+fn cache_key() -> String {
+    crate::cache_p08::mise_cache_key_for_tools(TARGET, "2026.9.18", &["rust@1.98.1".to_owned()])
+        .expect("cache key")
+}
+
+fn ready_seed(seed: &Path, key: &str) {
+    fs::create_dir_all(seed.join("mise/tree/installs")).expect("mise tree");
+    fs::create_dir_all(seed.join("rustup/tree/toolchains")).expect("rustup tree");
+    fs::write(seed.join("PROVENANCE"), "velnor-host-seed-v1\n").expect("provenance");
+    fs::write(seed.join("mise/KEY"), key).expect("key file");
+    fs::write(seed.join("mise/tree/installs/marker"), "mise-bytes").expect("mise marker");
+    fs::write(seed.join("rustup/tree/toolchains/marker"), "rustup-bytes").expect("rustup marker");
+}
+
+fn run(script: &str, home: &Path, seed: &Path, mounts: &str) -> Output {
+    let test_dir = seed.parent().expect("seed parent");
+    let script = mock_trust_commands(script, test_dir);
+    Command::new("bash")
         .arg("-c")
         .arg(script)
         .env("HOME", home)
-        .env("RUNNER_TEMP", home.join("rt"));
-    if let Some(seed_key) = seed_key {
-        command.env("SEED_KEY", seed_key);
-    }
-    let output = command.output().expect("bash");
-    assert!(output.status.success(), "{output:?}");
-    String::from_utf8_lossy(&output.stdout).into_owned()
+        .env("RUNNER_TEMP", home.join("runner-temp"))
+        .env("RUNNER_OS", "Linux")
+        .env("SEED_KEY", cache_key())
+        .env("SEED_TEST_ROOT", seed)
+        .env("SEED_TEST_MOUNTS", mounts)
+        .env("SEED_TEST_SKIP_OWNER_SCAN", "1")
+        .output()
+        .expect("run seed action")
+}
+
+fn mount(seed: &Path) -> String {
+    format!("{} ext4 0:77 ro,nosuid,nodev", seed.display())
 }
 
 #[test]
-fn matching_seed_copies_mise_and_rustup_and_keeps_the_seed() {
+fn matching_tool_seed_copies_both_trees_after_admission_and_keeps_source() {
     let root = scratch("hit");
-    let home = root.join("home");
-    std::fs::create_dir_all(home.join("keep")).expect("home");
     let seed = root.join("seed");
-    let cache_key = key();
-    std::fs::create_dir_all(seed.join("mise/tree/installs")).expect("tree");
-    std::fs::create_dir_all(seed.join("rustup/tree/toolchains")).expect("rustup");
-    std::fs::write(seed.join("mise/KEY"), &cache_key).expect("key file");
-    std::fs::write(seed.join("mise/tree/installs/marker"), "mise-bytes").expect("marker");
-    std::fs::write(seed.join("rustup/tree/toolchains/marker"), "rustup-bytes").expect("marker");
-    let script = tool_seed_action_script(seed.to_str().expect("utf8")).expect("script");
-    let text = run_key(&script, &home, Some(&cache_key));
+    let home = root.join("home");
+    let key = cache_key();
+    ready_seed(&seed, &key);
+    let script = tool_seed_action_script(seed.to_str().expect("seed path")).expect("script");
+    let output = run(&script, &home, &seed, &mount(&seed));
+    assert!(output.status.success(), "{output:?}");
+    let text = String::from_utf8_lossy(&output.stdout);
     assert!(text.contains("tool seed restored share-dir"), "{text}");
     assert!(text.contains("tool seed restored toolchain-dir"), "{text}");
     assert_eq!(
-        std::fs::read_to_string(home.join(".local/share/mise/installs/marker")).expect("copy"),
+        fs::read_to_string(home.join(".local/share/mise/installs/marker")).expect("mise copy"),
         "mise-bytes"
     );
     assert_eq!(
-        std::fs::read_to_string(home.join("rt/velnor/rustup/toolchains/marker")).expect("copy"),
+        fs::read_to_string(home.join("runner-temp/velnor/rustup/toolchains/marker"))
+            .expect("rustup copy"),
         "rustup-bytes"
     );
     assert_eq!(
-        std::fs::read_to_string(seed.join("mise/tree/installs/marker")).expect("seed"),
+        fs::read_to_string(seed.join("mise/tree/installs/marker")).expect("seed kept"),
         "mise-bytes"
     );
-    std::fs::remove_dir_all(&root).ok();
+    fs::remove_dir_all(root).expect("cleanup");
 }
 
 #[test]
-fn wrong_key_and_absent_seed_do_not_copy() {
-    let root = scratch("miss");
-    let home = root.join("home");
-    std::fs::create_dir_all(&home).expect("home");
+fn rejected_mount_and_mismatched_key_leave_destinations_untouched() {
+    let root = scratch("cold");
     let seed = root.join("seed");
-    let cache_key = key();
-    std::fs::create_dir_all(seed.join("mise/tree")).expect("tree");
-    std::fs::write(seed.join("mise/KEY"), "mise-v1-other-key-0123456789abcdef").expect("key");
-    std::fs::write(seed.join("mise/tree/marker"), "secret").expect("marker");
-    let wrong = tool_seed_action_script(seed.to_str().expect("utf8")).expect("script");
-    let text = run_key(&wrong, &home, Some(&cache_key));
-    assert!(text.contains("tool seed key mismatch"), "{text}");
-    assert!(!home.join(".local/share/mise/marker").exists());
-    assert_eq!(
-        std::fs::read_to_string(seed.join("mise/tree/marker")).expect("seed"),
-        "secret"
+    let home = root.join("home");
+    ready_seed(&seed, &cache_key());
+    let script = tool_seed_action_script(seed.to_str().expect("seed path")).expect("script");
+    let writable = format!("{} ext4 0:77 rw", seed.display());
+    let output = run(&script, &home, &seed, &writable);
+    assert!(
+        output.status.success(),
+        "untrusted seed stays cold: {output:?}"
     );
-    let absent =
-        tool_seed_action_script(root.join("missing").to_str().expect("utf8")).expect("script");
-    let text = run_key(&absent, &home, Some(&cache_key));
-    assert!(text.contains("tool seed absent"), "{text}");
-    assert!(tool_seed_action_script("relative").is_err());
-    std::fs::remove_dir_all(&root).ok();
+    assert!(
+        String::from_utf8_lossy(&output.stdout).contains("untrusted tool seed"),
+        "{output:?}"
+    );
+    assert!(!home.exists(), "admission failure creates no destination");
+
+    fs::write(seed.join("mise/KEY"), "mise-v1-other-key-0123456789abcdef").expect("wrong key");
+    let output = run(&script, &home, &seed, &mount(&seed));
+    assert!(
+        output.status.success(),
+        "key mismatch stays cold: {output:?}"
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stdout).contains("tool seed key mismatch"),
+        "{output:?}"
+    );
+    assert!(!home.exists(), "key mismatch creates no destination");
+
+    fs::write(seed.join("mise/KEY"), format!("{}\nextra\n", cache_key())).expect("multiline key");
+    let output = run(&script, &home, &seed, &mount(&seed));
+    assert!(
+        output.status.success(),
+        "multiline key stays cold: {output:?}"
+    );
+    assert!(
+        String::from_utf8_lossy(&output.stdout).contains("tool seed key mismatch"),
+        "{output:?}"
+    );
+    assert!(!home.exists(), "multiline key creates no destination");
+    fs::remove_dir_all(root).expect("cleanup");
 }
 
 #[test]
-fn action_script_reads_seed_key_and_the_action_file_keeps_the_seed() {
-    let root = scratch("action");
-    let home = root.join("home");
-    std::fs::create_dir_all(&home).expect("home");
-    let seed = root.join("seed");
-    let cache_key = key();
-    std::fs::create_dir_all(seed.join("mise/tree")).expect("tree");
-    std::fs::write(seed.join("mise/KEY"), &cache_key).expect("key");
-    std::fs::write(seed.join("mise/tree/marker"), "kept").expect("marker");
-    let script = tool_seed_action_script(seed.to_str().expect("utf8")).expect("script");
-    let text = run_key(&script, &home, Some(&cache_key));
-    assert!(text.contains("tool seed restored share-dir"), "{text}");
+fn step_key_is_derived_from_pinned_job_tools_and_configured_checkout_payload() {
+    let setup = setup_config();
+    let expected = cache_key();
+    let mut checkout = crate::steps::checkout_step(CHECKOUT).expect("checkout");
+    checkout.name = "Fetch source".to_owned();
+    let mut rendered_job = job(vec![checkout, mise_shell()]);
+    crate::cache_p08::ensure_tools_cache_v2(
+        "fixture",
+        &mut rendered_job,
+        &setup,
+        false,
+        TARGET,
+        CHECKOUT,
+    )
+    .expect("setup and seed");
+    assert_eq!(rendered_job.steps[1].name, TOOL_SEED_NAME);
+    let StepKind::Action { with, .. } = &rendered_job.steps[1].kind else {
+        panic!("seed must be an action")
+    };
     assert_eq!(
-        std::fs::read_to_string(home.join(".local/share/mise/marker")).expect("copy"),
-        "kept"
+        with.get("cache_key").map(String::as_str),
+        Some(expected.as_str())
     );
-    assert_eq!(
-        std::fs::read_to_string(seed.join("mise/tree/marker")).expect("seed"),
-        "kept"
-    );
-    let wrong = run_key(&script, &home, Some("mise-v1-other-key-0123456789abcdef"));
-    assert!(wrong.contains("tool seed key mismatch"), "{wrong}");
-    let file = action_file("0.1.0").expect("action");
-    assert_eq!(file.path, ".github/actions/velnor-tool-seed/action.yml");
-    assert!(file.bytes.contains("/opt/velnor/seed"), "{}", file.bytes);
-    assert!(file.bytes.contains("$SEED_KEY"), "{}", file.bytes);
-    assert!(file.bytes.contains("inputs.cache_key"), "{}", file.bytes);
-    assert!(file.bytes.contains("unset "), "{}", file.bytes);
-    assert!(!file.bytes.contains("rm "), "{}", file.bytes);
-    std::fs::remove_dir_all(&root).ok();
+    assert_eq!(rendered_job.steps[2].name, "V2 identity");
+    assert_eq!(rendered_job.steps[4].name, "Setup Mise");
+    let seed_key = MiseToolsCacheKey::derive(TARGET, &setup.version, &["rust@1.98.1".to_owned()])
+        .expect("typed seed key");
+    crate::tool_seed::insert_before_setup(&mut rendered_job, 4, CHECKOUT, &seed_key)
+        .expect("existing seed is admitted before setup");
+
+    let fake = Step {
+        name: "Checkout".to_owned(),
+        condition: None,
+        kind: StepKind::Shell {
+            run: vec!["true".to_owned()],
+            env: BTreeMap::new(),
+        },
+    };
+    let mut fake_job = job(vec![fake, mise_shell()]);
+    crate::cache_p08::ensure_tools_cache_v2(
+        "fake-checkout",
+        &mut fake_job,
+        &setup,
+        false,
+        TARGET,
+        CHECKOUT,
+    )
+    .expect("cold setup");
+    assert!(fake_job.steps.iter().all(|step| !is_tool_seed_action(step)));
+}
+
+fn setup_config() -> crate::MiseSetup {
+    crate::MiseSetup {
+        uses: SETUP_USES.to_owned(),
+        version: "2026.9.18".to_owned(),
+        sha256: "a".repeat(64),
+    }
+}
+
+fn mise_shell() -> Step {
+    Step {
+        name: "Run Cargo".to_owned(),
+        condition: None,
+        kind: StepKind::Shell {
+            run: vec![
+                "mise".to_owned(),
+                "exec".to_owned(),
+                "rust@1.98.1".to_owned(),
+                "--".to_owned(),
+                "cargo".to_owned(),
+                "check".to_owned(),
+            ],
+            env: BTreeMap::new(),
+        },
+    }
 }
 
 fn job(steps: Vec<Step>) -> Job {
     Job {
-        display_name: "Required".to_owned(),
+        display_name: "Seed fixture".to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
         timeout_minutes: velnor_actions_contract::JobTimeout::PLAN,
         needs: Vec::new(),
@@ -134,33 +219,144 @@ fn job(steps: Vec<Step>) -> Job {
     }
 }
 
-fn setup() -> Step {
-    crate::steps::action_step(
-        "Setup Mise",
-        "jdx/mise-action@0123456789abcdef0123456789abcdef01234567",
-        BTreeMap::new(),
+#[test]
+fn existing_seed_must_match_exact_job_key_and_payload() {
+    let setup = setup_config();
+    let mut rendered_job = job(vec![
+        crate::steps::checkout_step(CHECKOUT).expect("checkout"),
+        mise_shell(),
+    ]);
+    crate::cache_p08::ensure_tools_cache_v2(
+        "fixture",
+        &mut rendered_job,
+        &setup,
+        false,
+        TARGET,
+        CHECKOUT,
     )
-    .expect("setup")
+    .expect("setup and seed");
+    let seed_index = rendered_job
+        .steps
+        .iter()
+        .position(is_tool_seed_action)
+        .expect("seed action");
+    let setup_index = rendered_job
+        .steps
+        .iter()
+        .position(|step| step.name == crate::setup::SETUP_MISE_NAME)
+        .expect("Setup Mise");
+    let expected_key =
+        MiseToolsCacheKey::derive(TARGET, &setup.version, &["rust@1.98.1".to_owned()])
+            .expect("typed seed key");
+    let mut mismatched_key = rendered_job.clone();
+    if let StepKind::Action { with, .. } = &mut mismatched_key.steps[seed_index].kind {
+        with.insert(
+            "cache_key".to_owned(),
+            "mise-v1-x86_64-unknown-linux-gnu-2026.9.18-0123456789abcdef".to_owned(),
+        );
+    }
+    assert!(
+        crate::tool_seed::insert_before_setup(
+            &mut mismatched_key,
+            setup_index,
+            CHECKOUT,
+            &expected_key,
+        )
+        .is_err()
+    );
+
+    let mut mismatched_setup = rendered_job;
+    let setup_index = mismatched_setup
+        .steps
+        .iter()
+        .position(|step| step.name == crate::setup::SETUP_MISE_NAME)
+        .expect("Setup Mise");
+    if let StepKind::Action { with, .. } = &mut mismatched_setup.steps[setup_index].kind {
+        with.insert("cache".to_owned(), "true".to_owned());
+    }
+    assert!(
+        crate::cache_p08::ensure_tools_cache_v2(
+            "wrong-setup-key",
+            &mut mismatched_setup,
+            &setup,
+            false,
+            TARGET,
+            CHECKOUT,
+        )
+        .is_err()
+    );
 }
 
 #[test]
-fn local_seed_requires_a_prior_checkout() {
-    let cache_key = key();
-    let mut bare = job(vec![setup()]);
-    let index = insert_before_setup(&mut bare, 0, &cache_key).expect("bare");
-    assert_eq!(index, 0);
-    assert!(bare.steps.iter().all(|step| step.name != TOOL_SEED_NAME));
-    let checkout =
-        crate::steps::checkout_step("actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1")
-            .expect("checkout");
-    let mut checked = job(vec![checkout, setup()]);
-    let index = insert_before_setup(&mut checked, 1, &cache_key).expect("checked");
-    assert_eq!(index, 2);
-    assert_eq!(checked.steps[1].name, TOOL_SEED_NAME);
-    assert_eq!(
-        checked.steps[1].condition.as_deref(),
-        Some("github.event_name != 'workflow_dispatch'")
+fn local_seed_action_payload_and_order_are_not_name_authorized() {
+    let setup = setup_config();
+    let mut rendered_job = job(vec![
+        crate::steps::checkout_step(CHECKOUT).expect("checkout"),
+        mise_shell(),
+    ]);
+    crate::cache_p08::ensure_tools_cache_v2(
+        "fixture",
+        &mut rendered_job,
+        &setup,
+        false,
+        TARGET,
+        CHECKOUT,
+    )
+    .expect("setup and seed");
+    let seed_index = rendered_job
+        .steps
+        .iter()
+        .position(is_tool_seed_action)
+        .expect("seed action");
+    rendered_job.steps[seed_index].name = "Checkout".to_owned();
+    let setup_index = rendered_job
+        .steps
+        .iter()
+        .position(|step| step.name == crate::setup::SETUP_MISE_NAME)
+        .expect("Setup Mise");
+    let seed_key = MiseToolsCacheKey::derive(TARGET, &setup.version, &["rust@1.98.1".to_owned()])
+        .expect("typed seed key");
+    crate::tool_seed::insert_before_setup(&mut rendered_job, setup_index, CHECKOUT, &seed_key)
+        .expect("presentation name is ignored");
+    assert_eq!(rendered_job.steps[seed_index].name, "Checkout");
+
+    let mut conditional = job(vec![
+        {
+            let mut step = crate::steps::checkout_step(CHECKOUT).expect("checkout");
+            step.condition = Some("always()".to_owned());
+            step
+        },
+        mise_shell(),
+    ]);
+    crate::cache_p08::ensure_tools_cache_v2(
+        "conditional-checkout",
+        &mut conditional,
+        &setup,
+        false,
+        TARGET,
+        CHECKOUT,
+    )
+    .expect("cold setup");
+    assert!(
+        conditional
+            .steps
+            .iter()
+            .all(|step| !is_tool_seed_action(step))
     );
-    let again = insert_before_setup(&mut checked, 2, &cache_key).expect("again");
-    assert_eq!(again, 2);
+}
+
+#[test]
+fn action_composite_contains_the_guarded_fixed_root_and_exact_input() {
+    let file = action_file("0.1.0").expect("action");
+    assert_eq!(file.path, TOOL_SEED_ACTION_PATH);
+    assert!(file.bytes.contains("/opt/velnor/seed"), "{}", file.bytes);
+    assert!(file.bytes.contains("$SEED_KEY"), "{}", file.bytes);
+    assert!(file.bytes.contains("inputs.cache_key"), "{}", file.bytes);
+    assert!(
+        file.bytes.contains("trusted_seed_is_trusted"),
+        "{}",
+        file.bytes
+    );
+    assert!(file.bytes.contains("unset "), "{}", file.bytes);
+    assert!(!file.bytes.contains("rm "), "{}", file.bytes);
 }
