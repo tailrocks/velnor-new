@@ -44,14 +44,19 @@ pub(crate) struct Script {
     pub(crate) mode: Mode,
 }
 
+#[derive(Clone, Copy)]
 pub(crate) enum Mode {
     Ok,
     Empty,
     Timeout,
     Forbidden,
+    AcquireMalformed,
+    AcquireForeign,
+    AcquireServerError,
     AckFail,
     JitFail,
     JitConflict,
+    JitMalformed,
 }
 
 impl Transport for Script {
@@ -71,6 +76,12 @@ impl Transport for Script {
             if matches!(self.mode, Mode::JitFail) {
                 return Err(TransportFail::Http(500));
             }
+            if matches!(self.mode, Mode::JitMalformed) {
+                return Ok(Exchange {
+                    status: 200,
+                    body: br#"{"encodedJITConfig":""}"#.to_vec(),
+                });
+            }
             let body = format!(r#"{{"encodedJITConfig":"{CANARY}"}}"#);
             return Ok(Exchange {
                 status: 200,
@@ -87,15 +98,26 @@ impl Transport for Script {
 
 impl Script {
     fn acquire(&self, body: &[u8]) -> Result<Exchange, TransportFail> {
+        if matches!(self.mode, Mode::AcquireServerError) {
+            return Err(TransportFail::Http(500));
+        }
         if matches!(self.mode, Mode::Timeout) {
             return Err(TransportFail::Timeout);
         }
         if matches!(self.mode, Mode::Forbidden) {
             return Err(TransportFail::Http(403));
         }
+        if matches!(self.mode, Mode::AcquireMalformed) {
+            return Ok(Exchange {
+                status: 200,
+                body: b"not-json".to_vec(),
+            });
+        }
         let ids: Vec<i64> = serde_json::from_slice(body).map_err(|_| TransportFail::Http(400))?;
         let value = if matches!(self.mode, Mode::Empty) {
             Vec::new()
+        } else if matches!(self.mode, Mode::AcquireForeign) {
+            vec![i64::MAX]
         } else {
             ids
         };

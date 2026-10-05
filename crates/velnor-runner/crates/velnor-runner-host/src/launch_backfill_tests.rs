@@ -171,7 +171,8 @@ async fn capacity_one_mints_after_the_pair_is_removed() -> Result<(), String> {
 }
 
 #[tokio::test]
-async fn dind_only_recovery_removes_owned_container_and_volumes() -> Result<(), String> {
+async fn uncertain_dind_only_recovery_keeps_reservation_and_owned_resources() -> Result<(), String>
+{
     let (scratch, journal) = open("backfill-c").await?;
     let engine = Arc::new(Engine::new());
     let foreign = hex(99);
@@ -209,23 +210,20 @@ async fn dind_only_recovery_removes_owned_container_and_volumes() -> Result<(), 
     let decision = admission(&*engine, &journal, 1, 1, 0, &assigned_wait(5, 1))
         .await
         .map_err(|err| err.to_string())?;
-    assert_eq!(decision, Admit::Start { stop: true });
-    let removed = engine.removed().map_err(|err| err.to_string())?;
-    assert_eq!(removed.len(), 1);
-    assert_eq!(removed.first().map(String::as_str), Some(dind.as_str()));
-    assert_eq!(
-        engine.removed_volumes().map_err(|err| err.to_string())?,
-        [
-            volume.clone(),
-            format!("{volume}-work"),
-            format!("{volume}-docker")
-        ]
+    assert_eq!(decision, Admit::Hold);
+    assert!(engine.removed().map_err(|err| err.to_string())?.is_empty());
+    assert!(
+        engine
+            .removed_volumes()
+            .map_err(|err| err.to_string())?
+            .is_empty()
     );
     assert!(engine.alive(&foreign).map_err(|err| err.to_string())?);
-    assert!(!engine.alive(&dind).map_err(|err| err.to_string())?);
+    assert!(engine.alive(&dind).map_err(|err| err.to_string())?);
     let rows = journal.rows().await.map_err(|err| err.to_string())?;
-    assert!(rows[0].cleanup_proven);
+    assert!(!rows[0].cleanup_proven);
     assert_eq!(rows[0].state, IntentState::Uncertain);
+    assert_eq!(rows[0].worker_volume.as_deref(), Some(volume.as_str()));
     absent(&scratch.file())
 }
 

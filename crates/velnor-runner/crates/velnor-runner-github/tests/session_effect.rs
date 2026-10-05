@@ -131,15 +131,16 @@ fn acquire_keeps_partial_ids_and_rejects_foreign_ids() -> Result<(), &'static st
         &gate,
         || Ok(()),
     ))?;
-    assert_eq!(err, SessionError::Wire(WireError::OutsideRequest));
-    assert_eq!(err.certainty(), Certainty::Definite);
+    assert_eq!(err, SessionError::Uncertain);
+    assert_eq!(err.certainty(), Certainty::Uncertain);
     let mut same = Script::once(200, r#"{"count":2,"value":[2,1]}"#);
     let noop =
         acquire(&mut same, 3, &[1, 2], &[1, 2], TOKEN, &gate, || Ok(())).map_err(|_| "noop")?;
     assert_eq!(noop, AcquireOutcome::Noop);
     let mut bad = Script::once(200, r#"{"count":1,"value":[1,2]}"#);
     let err = must_err(&acquire(&mut bad, 3, &[1, 2], &[], TOKEN, &gate, || Ok(())))?;
-    assert_eq!(err, SessionError::Wire(WireError::Malformed));
+    assert_eq!(err, SessionError::Uncertain);
+    assert_eq!(err.certainty(), Certainty::Uncertain);
     Ok(())
 }
 
@@ -290,24 +291,44 @@ fn jit_bytes_stay_out_of_debug_and_errors() -> Result<(), &'static str> {
     assert!(!rendered.contains(request_canary));
     assert!(!rendered.contains(response_canary));
     assert_eq!(script.seen.len(), 1);
-    assert_eq!(err.certainty(), Certainty::Definite);
+    assert_eq!(err.certainty(), Certainty::Uncertain);
+    let mut malformed = Script::once(200, r#"{"encodedJITConfig":""}"#);
+    let err = must_err(&jit(&mut malformed, 7, ADMIN, request.as_bytes()))?;
+    assert_eq!(err, SessionError::Uncertain);
+    assert_eq!(err.certainty(), Certainty::Uncertain);
     Ok(())
 }
 
 #[test]
 fn delete_session_rejects_non_204() -> Result<(), &'static str> {
     let cases = [
-        (200, SessionError::Wire(WireError::UnexpectedStatus)),
-        (401, SessionError::Wire(WireError::UnexpectedStatus)),
-        (403, SessionError::Wire(WireError::Forbidden)),
-        (409, SessionError::Conflict),
-        (500, SessionError::Wire(WireError::UnexpectedStatus)),
+        (
+            200,
+            SessionError::Wire(WireError::UnexpectedStatus),
+            Certainty::Uncertain,
+        ),
+        (
+            401,
+            SessionError::Wire(WireError::UnexpectedStatus),
+            Certainty::Uncertain,
+        ),
+        (
+            403,
+            SessionError::Wire(WireError::Forbidden),
+            Certainty::Definite,
+        ),
+        (409, SessionError::Conflict, Certainty::Definite),
+        (
+            500,
+            SessionError::Wire(WireError::UnexpectedStatus),
+            Certainty::Uncertain,
+        ),
     ];
-    for (status, expected) in cases {
+    for (status, expected, certainty) in cases {
         let mut script = Script::once(status, "delete-body-canary");
         let err = must_err(&delete_session(&mut script, 7, "sess", ADMIN))?;
         assert_eq!(err, expected);
-        assert_ne!(err.certainty(), Certainty::Uncertain);
+        assert_eq!(err.certainty(), certainty);
         assert_eq!(script.seen.len(), 1);
         assert_eq!(script.seen[0].method, Method::Delete);
         assert!(script.seen[0].path.ends_with("/7/sessions/sess"));
