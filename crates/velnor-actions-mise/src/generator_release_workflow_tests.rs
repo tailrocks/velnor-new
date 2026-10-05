@@ -9,7 +9,7 @@ use std::process::{Command, Stdio};
 use velnor_actions_contract::{GeneratorReleaseTarget, Step, StepKind};
 
 #[cfg(unix)]
-use super::NATIVE_HOST_GUARD_AWK;
+use super::checks::NATIVE_HOST_GUARD_AWK;
 use super::{
     apple_linker_check_step, apple_sdk_check_step, binary_format_architecture_check_step,
     generator_release_mise_binary_sha256, gnu_runtime_abi_check_step, help_smoke_check_step,

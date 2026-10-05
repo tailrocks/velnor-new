@@ -66,7 +66,7 @@ END {
 }
 "#;
 
-const NATIVE_HOST_GUARD_AWK: &str =
+pub(super) const NATIVE_HOST_GUARD_AWK: &str =
     r#"{ print "Native host: " $0 } END { if (NR != 1 || $0 != expected) exit 1 }"#;
 
 /// Require the selected native runner OS and machine to match the target.
