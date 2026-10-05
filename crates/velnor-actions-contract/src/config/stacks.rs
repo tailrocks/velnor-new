@@ -1,6 +1,5 @@
 //! Stack selection and per-stack options.
 use super::VelnorConfig;
-use super::mise::is_valid_mise_task_name;
 use super::release::RustReleaseConfig;
 use super::tofu::TofuStackConfig;
 use crate::errors::ContractError;
@@ -62,10 +61,6 @@ pub struct RustStackConfig {
     /// Rust release policy (`[stacks.rust.release]`); disabled by default.
     #[serde(default)]
     pub release: RustReleaseConfig,
-    /// Allowlisted Mise custom-task names; only these become `mise run`
-    /// steps. Sorted, duplicate-free; empty (the default) emits none.
-    #[serde(default)]
-    pub custom_tasks: Vec<String>,
 }
 
 /// Documented default: one `default` configuration variant list.
@@ -132,7 +127,6 @@ impl RustStackConfig {
             test_runner: None,
             run_ignored: None,
             release: RustReleaseConfig::default(),
-            custom_tasks: Vec::new(),
         }
     }
 }
@@ -238,49 +232,13 @@ impl RustStackConfig {
             ));
         }
         self.release.validate(file)?;
-        self.validate_custom_tasks(file)?;
-        Ok(())
-    }
-
-    /// Validate the custom-task allowlist: sorted, unique, safe names.
-    ///
-    /// The name rule is [`is_valid_mise_task_name`], shared with the
-    /// `mise run` argv builder and the qualified-task paths.
-    /// # Errors
-    fn validate_custom_tasks(&self, file: &str) -> Result<(), ContractError> {
-        let mut sorted = self.custom_tasks.clone();
-        sorted.sort();
-        if sorted != self.custom_tasks {
-            return Err(ContractError::config(
-                file,
-                "stacks.rust.custom_tasks",
-                "must_be_sorted",
-            ));
-        }
-        let unique: BTreeSet<&str> = self.custom_tasks.iter().map(String::as_str).collect();
-        if unique.len() != self.custom_tasks.len() {
-            return Err(ContractError::config(
-                file,
-                "stacks.rust.custom_tasks",
-                "duplicate_custom_task",
-            ));
-        }
-        for task in &self.custom_tasks {
-            if !is_valid_mise_task_name(task) {
-                return Err(ContractError::config(
-                    file,
-                    "stacks.rust.custom_tasks",
-                    format!("bad_custom_task:{task}"),
-                ));
-            }
-        }
         Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{RustConfiguration, is_valid_mise_task_name, is_valid_rust_target};
+    use super::{RustConfiguration, is_valid_rust_target};
     use crate::config::RustStackConfig;
 
     #[test]
@@ -305,17 +263,7 @@ mod tests {
     }
 
     #[test]
-    fn task_name_grammar_matches_mise_tasks() {
-        for task in ["audit", "build:all", "a-b_c.d:e", "Test123"] {
-            assert!(is_valid_mise_task_name(task), "{task}");
-        }
-        for task in ["", "a b", "a/b", "${{ x }}", "$t", "`t`", "a\nb"] {
-            assert!(!is_valid_mise_task_name(task), "{task:?}");
-        }
-    }
-
-    #[test]
-    fn hostile_target_and_task_fail_validation() {
+    fn hostile_target_fails_validation() {
         let mut stack = RustStackConfig::default_config();
         stack.configurations = vec![RustConfiguration {
             name: "default".to_owned(),
@@ -324,9 +272,5 @@ mod tests {
         }];
         let err = stack.validate("config.toml").expect_err("PoC target fails");
         assert!(err.to_string().contains("bad_target"), "{err}");
-        let mut stack = RustStackConfig::default_config();
-        stack.custom_tasks = vec!["audit".to_owned(), "evil task".to_owned()];
-        let err = stack.validate("config.toml").expect_err("bad task fails");
-        assert!(err.to_string().contains("bad_custom_task"), "{err}");
     }
 }

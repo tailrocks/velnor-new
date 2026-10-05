@@ -73,7 +73,7 @@ fn release_manifest_asset_url_uses_canonical_name() {
     assert!(check(&seed).is_ok());
 
     for invalid in [
-        canonical.replace(RELEASE_MANIFEST_FILENAME, "release-manifest.json"),
+        canonical.replace(RELEASE_MANIFEST_FILENAME, "other-manifest.json"),
         canonical.replace("github.com", "evil.example"),
         canonical.replace("v0.1.0", "latest"),
         format!("{canonical}?download=1"),

@@ -36,22 +36,117 @@ exit 79
 STUB
 chmod u+x "$STUB_BIN/cargo"
 
+test_file_sha256() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk 'NR == 1 { print $1; next } { exit 1 } END { if (NR != 1) exit 1 }'
+  else
+    shasum -a 256 "$1" | awk 'NR == 1 { print $1; next } { exit 1 } END { if (NR != 1) exit 1 }'
+  fi
+}
+
+test_stdin_sha256() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum | awk 'NR == 1 { print $1; next } { exit 1 } END { if (NR != 1) exit 1 }'
+  else
+    shasum -a 256 | awk 'NR == 1 { print $1; next } { exit 1 } END { if (NR != 1) exit 1 }'
+  fi
+}
+
 golden_fingerprint() {
   (
     cd "$GOLDEN_DIR" || exit 2
     {
       find . -type f -print | LC_ALL=C sort | while IFS= read -r path; do
-        printf 'file %s ' "$path"
-        sha256sum "$path"
+        digest="$(test_file_sha256 "$path")" || exit 2
+        printf 'file %s %s\n' "$path" "$digest"
       done
       find . -type l -print | LC_ALL=C sort | while IFS= read -r path; do
         printf 'link %s -> %s\n' "$path" "$(readlink "$path")"
       done
-    } | sha256sum | awk '{print $1}'
+    } | test_stdin_sha256
   )
 }
 
 BEFORE="$(golden_fingerprint)" || exit 2
+SOURCE_SHA="$(git -C "$ROOT" rev-parse HEAD)" || exit 2
+CLI_VERSION="$("$CLI_BIN" --version | awk 'NR == 1 && NF == 2 && $1 == "velnor-actions" { print $2; next } { exit 1 } END { if (NR != 1) exit 1 }')" || exit 2
+if command -v sha256sum >/dev/null 2>&1; then
+  CLI_SHA="$(sha256sum "$CLI_BIN" | awk 'NR == 1 { print $1; next } { exit 1 } END { if (NR != 1) exit 1 }')" || exit 2
+else
+  CLI_SHA="$(shasum -a 256 "$CLI_BIN" | awk 'NR == 1 { print $1; next } { exit 1 } END { if (NR != 1) exit 1 }')" || exit 2
+fi
+case "$(uname -s):$(uname -m)" in
+  Linux:x86_64|Linux:amd64) HOST_TARGET="x86_64-unknown-linux-gnu" ;;
+  Darwin:arm64|Darwin:aarch64) HOST_TARGET="aarch64-apple-darwin" ;;
+  Darwin:x86_64|Darwin:amd64) HOST_TARGET="x86_64-apple-darwin" ;;
+  *) echo "FATAL: unsupported test host $(uname -s)/$(uname -m)" >&2; exit 2 ;;
+esac
+case "$HOST_TARGET" in
+  x86_64-unknown-linux-gnu)
+    HOST_TARGET_INDEX=0
+    OTHER_TARGET_INDEX=1
+    TEST_LINUX_SHA="$CLI_SHA"
+    TEST_ARM_SHA="$(printf '%064d' 0 | tr '0' 'b')"
+    TEST_INTEL_SHA="$(printf '%064d' 0 | tr '0' 'c')"
+    ;;
+  aarch64-apple-darwin)
+    HOST_TARGET_INDEX=1
+    OTHER_TARGET_INDEX=0
+    TEST_LINUX_SHA="$(printf '%064d' 0 | tr '0' 'b')"
+    TEST_ARM_SHA="$CLI_SHA"
+    TEST_INTEL_SHA="$(printf '%064d' 0 | tr '0' 'c')"
+    ;;
+  x86_64-apple-darwin)
+    HOST_TARGET_INDEX=2
+    OTHER_TARGET_INDEX=0
+    TEST_LINUX_SHA="$(printf '%064d' 0 | tr '0' 'b')"
+    TEST_ARM_SHA="$(printf '%064d' 0 | tr '0' 'c')"
+    TEST_INTEL_SHA="$CLI_SHA"
+    ;;
+esac
+
+write_test_manifest() {
+  local manifest="$1" commit="$2" linux_sha="$3" arm_sha="$4" intel_sha="$5"
+  jq -n --arg version "$CLI_VERSION" --arg commit "$commit" \
+    --arg linux "$linux_sha" --arg arm "$arm_sha" --arg intel "$intel_sha" '
+    {schema:1, version:$version, repository:"tailrocks/velnor-new", commit:$commit,
+     targets:[
+       {target:"x86_64-unknown-linux-gnu",
+        artifact:("https://github.com/tailrocks/velnor-new/releases/download/v" + $version + "/velnor-actions-" + $version + "-x86_64-unknown-linux-gnu"),
+        sha256:$linux},
+       {target:"aarch64-apple-darwin",
+        artifact:("https://github.com/tailrocks/velnor-new/releases/download/v" + $version + "/velnor-actions-" + $version + "-aarch64-apple-darwin"),
+        sha256:$arm},
+       {target:"x86_64-apple-darwin",
+        artifact:("https://github.com/tailrocks/velnor-new/releases/download/v" + $version + "/velnor-actions-" + $version + "-x86_64-apple-darwin"),
+        sha256:$intel}
+     ]}' >"$manifest"
+}
+
+expect_release_rejected() {
+  local label="$1" expected="$2" manifest="$3" digest="$4" source="$5"
+  local status=0 log="$WORK/$label.log"
+  GITHUB_SHA="$source" GITHUB_REPOSITORY=tailrocks/velnor-new \
+    PATH="$STUB_BIN:$ORIGINAL_PATH" VELNOR_TEST_CARGO_MARKER="$MARKER" \
+    "$SCRIPT" check-release "$CLI_BIN" "$manifest" "$digest" >"$log" 2>&1 || status=$?
+  if [ "$status" -ne 2 ] || ! grep -Fq "$expected" "$log"; then
+    cat "$log" >&2
+    echo "FAIL: release manifest rejection $label exit=$status did not report $expected" >&2
+    exit 1
+  fi
+  if [ -e "$MARKER" ]; then
+    echo "FAIL: release manifest rejection $label unexpectedly invoked cargo" >&2
+    exit 1
+  fi
+  local after
+  after="$(golden_fingerprint)" || exit 2
+  if [ "$after" != "$BEFORE" ]; then
+    echo "FAIL: release manifest rejection $label changed goldens" >&2
+    exit 1
+  fi
+  echo "passed release manifest rejection: $label"
+}
+
 expect_rejected() {
   local label="$1" expected="$2" status=0
   shift 2
@@ -74,6 +169,39 @@ expect_rejected() {
   fi
 echo "passed rejection: $label"
 }
+
+expect_rejected missing-manifest-argument 'usage:' check-release "$CLI_BIN"
+expect_rejected missing-manifest-sha-argument 'usage:' \
+  check-release "$CLI_BIN" "$WORK/missing candidate manifest"
+expect_release_rejected missing-manifest 'candidate manifest must be a regular non-symlink file' \
+  "$WORK/missing candidate manifest" "$(printf '%064d' 0)" "$SOURCE_SHA"
+printf 'not json\n' >"$WORK/malformed manifest.json"
+expect_release_rejected malformed-manifest 'candidate manifest is malformed JSON' \
+  "$WORK/malformed manifest.json" "$(test_file_sha256 "$WORK/malformed manifest.json")" "$SOURCE_SHA"
+
+write_test_manifest "$WORK/valid manifest.json" "$SOURCE_SHA" \
+  "$TEST_LINUX_SHA" "$TEST_ARM_SHA" "$TEST_INTEL_SHA"
+expect_release_rejected wrong-manifest-sha 'candidate manifest bytes do not match expected SHA-256' \
+  "$WORK/valid manifest.json" "$(printf '%064d' 0)" "$SOURCE_SHA"
+jq --argjson index "$HOST_TARGET_INDEX" \
+  '.targets[$index].sha256 = "0000000000000000000000000000000000000000000000000000000000000000"' \
+  "$WORK/valid manifest.json" >"$WORK/wrong digest.json"
+expect_release_rejected wrong-digest 'candidate manifest digest does not match candidate CLI' \
+  "$WORK/wrong digest.json" "$(test_file_sha256 "$WORK/wrong digest.json")" "$SOURCE_SHA"
+jq --argjson host "$HOST_TARGET_INDEX" --argjson other "$OTHER_TARGET_INDEX" \
+  --arg digest "$CLI_SHA" \
+  '.targets[$host].sha256 = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd" |
+   .targets[$other].sha256 = $digest' \
+  "$WORK/valid manifest.json" >"$WORK/wrong host target.json"
+expect_release_rejected wrong-host-target 'candidate manifest digest does not match candidate CLI' \
+  "$WORK/wrong host target.json" "$(test_file_sha256 "$WORK/wrong host target.json")" "$SOURCE_SHA"
+write_test_manifest "$WORK/wrong source.json" "$(printf '%040d' 0 | tr '0' 'b')" \
+  "$TEST_LINUX_SHA" "$TEST_ARM_SHA" "$TEST_INTEL_SHA"
+expect_release_rejected wrong-manifest-source 'candidate manifest source does not match GITHUB_SHA' \
+  "$WORK/wrong source.json" "$(test_file_sha256 "$WORK/wrong source.json")" "$SOURCE_SHA"
+expect_release_rejected wrong-checkout-source 'checked-out source does not match GITHUB_SHA' \
+  "$WORK/valid manifest.json" "$(test_file_sha256 "$WORK/valid manifest.json")" \
+  "$(printf '%040d' 0 | tr '0' 'f')"
 
 expect_execution_failure() {
   local status=0 log="$WORK/failing-binary.log"
@@ -146,8 +274,8 @@ SPACED_BIN="$WORK/space path/velnor-actions"
 mkdir -p "$(dirname "$SPACED_BIN")"
 cp "$CLI_BIN" "$SPACED_BIN"
 chmod u+x "$SPACED_BIN"
-source_digest="$(sha256sum "$CLI_BIN" | awk '{print $1}')"
-copy_digest="$(sha256sum "$SPACED_BIN" | awk '{print $1}')"
+source_digest="$(test_file_sha256 "$CLI_BIN")"
+copy_digest="$(test_file_sha256 "$SPACED_BIN")"
 if [ "$source_digest" != "$copy_digest" ]; then
   echo "FAIL: spaced CLI copy differs from supplied binary" >&2
   exit 1

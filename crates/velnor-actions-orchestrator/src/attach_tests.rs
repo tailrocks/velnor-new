@@ -5,7 +5,7 @@
 use super::*;
 use crate::publish_job::baseline_publish_job;
 use crate::workflow::{CHECKOUT_USES, REQUEST_DIR};
-use crate::workflow_jobs::{final_job, plan_job};
+use crate::workflow_jobs::{PlanJobToolNeeds, PlanRustNeed, final_job, plan_job};
 use std::collections::BTreeMap;
 use velnor_actions_contract::{Concurrency, Job, JobTimeout, Permissions, Trigger};
 use velnor_actions_workflow_renderer::render::{RenderContext, WORKFLOW_PATH};
@@ -45,15 +45,15 @@ fn bare_ir(jobs: BTreeMap<String, velnor_actions_contract::Job>) -> WorkflowIr {
     }
 }
 
-#[test]
-fn lock_acquire_inserts_digest_verified_stage() {
+fn generator_lock(commit: &str) -> GeneratorLock {
     use velnor_actions_contract::{GeneratorBinary, LockedGenerator, MiseBootstrap};
-    let lock = GeneratorLock {
+
+    GeneratorLock {
         schema: 1,
         generator: LockedGenerator {
             binary: "velnor-actions".to_owned(),
             version: "0.1.0".to_owned(),
-            commit: "ab".repeat(20),
+            commit: commit.to_owned(),
             binaries: vec![GeneratorBinary {
                 target: "x86_64-unknown-linux-gnu".to_owned(),
                 artifact: "https://example.invalid/r".to_owned(),
@@ -66,7 +66,12 @@ fn lock_acquire_inserts_digest_verified_stage() {
             sha256: "b".repeat(64),
         },
         actions: Vec::new(),
-    };
+    }
+}
+
+#[test]
+fn lock_acquire_inserts_digest_verified_stage() {
+    let lock = generator_lock(&"ab".repeat(20));
     let catalog = ToolCatalog::pinned();
     let mut ir = bare_ir(BTreeMap::from([
         (
@@ -75,11 +80,12 @@ fn lock_acquire_inserts_digest_verified_stage() {
                 "ubuntu-26.04",
                 None,
                 &catalog,
-                true,
-                false,
-                false,
-                false,
-                false,
+                PlanJobToolNeeds {
+                    rust: PlanRustNeed::CompilerAndComponents,
+                    mbx: false,
+                    nextest: false,
+                    opentofu: false,
+                },
                 &[],
             )
             .expect("plan job"),
@@ -130,27 +136,9 @@ fn lock_acquire_inserts_digest_verified_stage() {
 
 #[test]
 fn lock_acquire_records_source_commit() {
-    use velnor_actions_contract::{GeneratorBinary, LockedGenerator, MiseBootstrap, StepKind};
+    use velnor_actions_contract::StepKind;
     use velnor_actions_workflow_renderer::steps::RELEASE_COMMIT_ENV;
-    let lock = GeneratorLock {
-        schema: 1,
-        generator: LockedGenerator {
-            binary: "velnor-actions".to_owned(),
-            version: "0.1.0".to_owned(),
-            commit: "cd".repeat(20),
-            binaries: vec![GeneratorBinary {
-                target: "x86_64-unknown-linux-gnu".to_owned(),
-                artifact: "https://example.invalid/r".to_owned(),
-                sha256: "a".repeat(64),
-            }],
-        },
-        mise_bootstrap: MiseBootstrap {
-            version: "2026.9.18".to_owned(),
-            artifact: "https://example.invalid/m".to_owned(),
-            sha256: "b".repeat(64),
-        },
-        actions: Vec::new(),
-    };
+    let lock = generator_lock(&"cd".repeat(20));
     let catalog = ToolCatalog::pinned();
     let mut ir = bare_ir(BTreeMap::from([(
         "plan".to_owned(),
@@ -158,11 +146,12 @@ fn lock_acquire_records_source_commit() {
             "ubuntu-26.04",
             None,
             &catalog,
-            true,
-            false,
-            false,
-            false,
-            false,
+            PlanJobToolNeeds {
+                rust: PlanRustNeed::CompilerAndComponents,
+                mbx: false,
+                nextest: false,
+                opentofu: false,
+            },
             &[],
         )
         .expect("plan job"),
@@ -204,11 +193,12 @@ fn preseed_attach_builds_once_and_sets_mode() {
                     "ubuntu-26.04",
                     None,
                     &catalog,
-                    true,
-                    false,
-                    false,
-                    false,
-                    false,
+                    PlanJobToolNeeds {
+                        rust: PlanRustNeed::CompilerAndComponents,
+                        mbx: false,
+                        nextest: false,
+                        opentofu: false,
+                    },
                     &[],
                 )
                 .expect("plan job"),
@@ -315,11 +305,12 @@ fn preseed_fixture(use_mbx: bool, fetch_roots: &[String]) -> WorkflowPlan {
                     "ubuntu-26.04",
                     None,
                     &catalog,
-                    true,
-                    use_mbx,
-                    false,
-                    false,
-                    false,
+                    PlanJobToolNeeds {
+                        rust: PlanRustNeed::CompilerAndComponents,
+                        mbx: use_mbx,
+                        nextest: false,
+                        opentofu: false,
+                    },
                     fetch_roots,
                 )
                 .expect("plan job"),

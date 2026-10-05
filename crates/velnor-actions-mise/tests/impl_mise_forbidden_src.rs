@@ -46,7 +46,6 @@ fn expected_modules() -> Vec<&'static str> {
         "command_git.rs",
         "command_output.rs",
         "command_tofu.rs",
-        "custom_run.rs",
         "error.rs",
         "gate6.rs",
         "gh.rs",

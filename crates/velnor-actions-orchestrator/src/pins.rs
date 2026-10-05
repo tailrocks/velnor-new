@@ -41,6 +41,11 @@ const MISE_BINARY_SHA256_LINUX_X64: &str =
 const MISE_BINARY_SHA256_MACOS_ARM64: &str =
     "484c135bd4329975d608d3f77e26c2ece5d2f5590f18ca71f44440294f8cfa6f";
 
+/// Installed `mise` binary digest for mise 2026.9.18 on macOS x86-64.
+/// Source: official `SHASUMS256.txt` for the `mise-v2026.9.18-macos-x64` binary.
+const MISE_BINARY_SHA256_MACOS_X64: &str =
+    "02d8ba561847f996925e361262c0610a24f59fcd9e06ba9ed0b6022e19b317c3";
+
 /// Runner target the compiled mise digest covers.
 const LINUX_X64_TARGET: &str = "x86_64-unknown-linux-gnu";
 
@@ -60,10 +65,23 @@ pub(crate) fn resolve_mise_setup(
             problem: format!("mise_setup_unsupported_target:{label}"),
         });
     }
+    resolve_mise_setup_for_release_target(config, ReleaseTarget::LinuxX86_64)
+}
+
+/// Resolve a release runner's Mise setup by its explicit target ID.
+pub(crate) fn resolve_mise_setup_for_release_target(
+    config: &VelnorConfig,
+    target: ReleaseTarget,
+) -> Result<MiseSetup, OrchestratorError> {
+    let sha256 = match target {
+        ReleaseTarget::LinuxX86_64 => MISE_BINARY_SHA256_LINUX_X64,
+        ReleaseTarget::MacosArm64 => MISE_BINARY_SHA256_MACOS_ARM64,
+        ReleaseTarget::MacosX86_64 => MISE_BINARY_SHA256_MACOS_X64,
+    };
     Ok(MiseSetup {
         uses: mise_action_uses(config)?,
         version: MISE_VERSION.to_owned(),
-        sha256: MISE_BINARY_SHA256_LINUX_X64.to_owned(),
+        sha256: sha256.to_owned(),
     })
 }
 
@@ -123,7 +141,12 @@ pub(crate) fn consumer_acquire_for_runner(
     json: Option<&str>,
 ) -> Result<Step, OrchestratorError> {
     runner.validate("workflow", "check.runner")?;
-    consumer_acquire_for_target(runner.platform.target(), version, json)
+    let target = ReleaseTarget::parse_triple(runner.platform.target()).ok_or_else(|| {
+        OrchestratorError::Contract {
+            problem: format!("unsupported_target_for_runner:{}", runner.label),
+        }
+    })?;
+    consumer_acquire_for_target(target, version, json)
 }
 
 /// Consumer Acquire step from an explicit manifest (pure; `None` fails).
@@ -149,16 +172,15 @@ fn consumer_acquire_from(
     version: &str,
     json: Option<&str>,
 ) -> Result<Step, OrchestratorError> {
-    let target = ReleaseTarget::for_runner_label(label)
-        .map(ReleaseTarget::triple)
-        .ok_or_else(|| OrchestratorError::Contract {
+    let target =
+        ReleaseTarget::for_runner_label(label).ok_or_else(|| OrchestratorError::Contract {
             problem: format!("unsupported_target_for_runner:{label}"),
         })?;
     consumer_acquire_for_target(target, version, json)
 }
 
 fn consumer_acquire_for_target(
-    target: &str,
+    target: ReleaseTarget,
     version: &str,
     json: Option<&str>,
 ) -> Result<Step, OrchestratorError> {
@@ -178,18 +200,19 @@ fn consumer_acquire_for_target(
             ),
         });
     }
-    let record = manifest
-        .record_for_target(target)
-        .ok_or_else(|| OrchestratorError::Contract {
-            problem: format!("manifest_missing_target:{target}"),
-        })?;
+    let record =
+        manifest
+            .record_for_target(target.triple())
+            .ok_or_else(|| OrchestratorError::Contract {
+                problem: format!("manifest_missing_target:{}", target.triple()),
+            })?;
     // Defense in depth: re-bind the consumed record's URL even though
     // `validate` already bound every record (X1).
     check_release_artifact(
         &record.artifact,
         &manifest.version,
         &manifest.commit,
-        target,
+        target.triple(),
         "release-manifest.json",
         "targets.artifact",
     )?;
@@ -197,6 +220,7 @@ fn consumer_acquire_for_target(
         &record.artifact,
         &record.sha256,
         &manifest.commit,
+        target,
         &format!("{STAGED_BINARY_PREFIX}{version}"),
     )
 }
@@ -207,9 +231,8 @@ pub(crate) fn lock_acquire_step(
     label: &str,
     staged: &str,
 ) -> Result<Step, OrchestratorError> {
-    let target = ReleaseTarget::for_runner_label(label)
-        .map(ReleaseTarget::triple)
-        .ok_or_else(|| OrchestratorError::Contract {
+    let target =
+        ReleaseTarget::for_runner_label(label).ok_or_else(|| OrchestratorError::Contract {
             problem: format!("unsupported_target_for_runner:{label}"),
         })?;
     lock_acquire_for_target(lock, target, staged)
@@ -222,23 +245,29 @@ pub(crate) fn lock_acquire_for_runner(
     staged: &str,
 ) -> Result<Step, OrchestratorError> {
     runner.validate("workflow", "check.runner")?;
-    lock_acquire_for_target(lock, runner.platform.target(), staged)
+    let target = ReleaseTarget::parse_triple(runner.platform.target()).ok_or_else(|| {
+        OrchestratorError::Contract {
+            problem: format!("unsupported_target_for_runner:{}", runner.label),
+        }
+    })?;
+    lock_acquire_for_target(lock, target, staged)
 }
 
 fn lock_acquire_for_target(
     lock: &GeneratorLock,
-    target: &str,
+    target: ReleaseTarget,
     staged: &str,
 ) -> Result<Step, OrchestratorError> {
-    let record = lock
-        .binary_for_target(target)
-        .ok_or_else(|| OrchestratorError::Contract {
-            problem: format!("lock_missing_target:{target}"),
-        })?;
+    let record =
+        lock.binary_for_target(target.triple())
+            .ok_or_else(|| OrchestratorError::Contract {
+                problem: format!("lock_missing_target:{}", target.triple()),
+            })?;
     acquire_step(
         &record.artifact,
         &record.sha256,
         &lock.generator.commit,
+        target,
         staged,
     )
 }
@@ -249,6 +278,7 @@ fn acquire_step(
     url: &str,
     sha: &str,
     commit: &str,
+    target: ReleaseTarget,
     staged: &str,
 ) -> Result<Step, OrchestratorError> {
     let provenance = HelperProvenance::ReleaseAsset {
@@ -258,14 +288,14 @@ fn acquire_step(
     };
     Ok(provision_acquire_step(
         &provenance,
-        acquire_script_argv(staged, GENERATOR_SEED_ROOT)?,
+        acquire_script_argv(staged, GENERATOR_SEED_ROOT, target)?,
     )?)
 }
 
 /// Host path of the read-only generator seed. Not a job input.
 const GENERATOR_SEED_ROOT: &str = "/opt/velnor/seed";
 
-/// Fixed acquisition argv. A matching seed file is copied. Otherwise curl.
+/// Fixed, target-specific acquisition argv. A matching seed file is copied. Otherwise curl.
 ///
 /// Curl stays HTTPS-only (`--proto '=https'`) over TLS 1.2+. The staged
 /// path stays double-quoted. A hash mismatch does not copy the seed.
@@ -277,6 +307,7 @@ const GENERATOR_SEED_ROOT: &str = "/opt/velnor/seed";
 pub fn acquire_script_argv(
     staged: &str,
     seed_root: &str,
+    target: ReleaseTarget,
 ) -> Result<Vec<String>, OrchestratorError> {
     if !absolute_token(seed_root) {
         return Err(OrchestratorError::Contract {
@@ -296,8 +327,12 @@ pub fn acquire_script_argv(
         });
     }
     let seed = format!("{seed_root}/generator/{name}");
+    let checksum_command = match target {
+        ReleaseTarget::LinuxX86_64 => "sha256sum",
+        ReleaseTarget::MacosArm64 | ReleaseTarget::MacosX86_64 => "shasum -a 256",
+    };
     let script = format!(
-        "mkdir -p \"{dir}\" && s=\"{seed}\" d=\"{staged}\" && if [ -f \"$s\" ] && echo \"$VELNOR_ASSET_SHA256  $s\" | sha256sum -c -; then cp \"$s\" \"$d\"; else curl -fsSL --proto '=https' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\" && echo \"$VELNOR_ASSET_SHA256  $d\" | sha256sum -c -; fi && chmod +x \"$d\""
+        "mkdir -p \"{dir}\" && s=\"{seed}\" d=\"{staged}\" && if [ -f \"$s\" ] && echo \"$VELNOR_ASSET_SHA256  $s\" | {checksum_command} -c -; then cp \"$s\" \"$d\"; else curl -fsSL --proto '=https' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\" && echo \"$VELNOR_ASSET_SHA256  $d\" | {checksum_command} -c -; fi && chmod +x \"$d\""
     );
     Ok(vec!["sh".to_owned(), "-c".to_owned(), script])
 }

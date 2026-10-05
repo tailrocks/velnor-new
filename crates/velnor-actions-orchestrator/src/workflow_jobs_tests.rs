@@ -9,6 +9,9 @@ use crate::workflow::plan_uses_rust;
 use velnor_actions_contract::StepKind;
 use velnor_actions_contract::WorkflowPolicy;
 
+#[path = "workflow_jobs_final_tests.rs"]
+mod final_tests;
+
 /// Discovery with no selected workloads.
 fn empty_discovery() -> Discovery {
     Discovery {
@@ -105,11 +108,12 @@ fn plan_job_writes_request_before_plan() {
             "ubuntu-26.04",
             acquire,
             &catalog,
-            true,
-            true,
-            false,
-            false,
-            false,
+            PlanJobToolNeeds {
+                rust: PlanRustNeed::CompilerAndComponents,
+                mbx: false,
+                nextest: false,
+                opentofu: false,
+            },
             &[],
         )
         .expect("plan job");
@@ -124,11 +128,12 @@ fn plan_job_checks_out_full_history_for_archaeology() {
         "ubuntu-26.04",
         None,
         &catalog,
-        true,
-        true,
-        false,
-        false,
-        false,
+        PlanJobToolNeeds {
+            rust: PlanRustNeed::CompilerAndComponents,
+            mbx: false,
+            nextest: false,
+            opentofu: false,
+        },
         &[],
     )
     .expect("plan job");
@@ -211,11 +216,12 @@ fn plan_job_prepares_pinned_tools_before_generate_consumers() {
             "ubuntu-26.04",
             None,
             &catalog,
-            true,
-            true,
-            use_mbx,
-            use_nextest,
-            false,
+            PlanJobToolNeeds {
+                rust: PlanRustNeed::CompilerAndComponents,
+                mbx: use_mbx,
+                nextest: use_nextest,
+                opentofu: false,
+            },
             &[],
         )
         .expect("plan job");
@@ -285,11 +291,12 @@ fn pure_tofu_plan_drops_all_rust_setup() {
         "ubuntu-26.04",
         None,
         &catalog,
-        false,
-        false,
-        false,
-        false,
-        true,
+        PlanJobToolNeeds {
+            rust: PlanRustNeed::None,
+            mbx: false,
+            nextest: false,
+            opentofu: true,
+        },
         &[],
     )
     .expect("plan job");
@@ -338,39 +345,24 @@ fn pure_tofu_plan_drops_all_rust_setup() {
 }
 
 #[test]
-fn final_job_writes_request_before_merge() {
-    let catalog = ToolCatalog::pinned();
-    for acquire in [None, Some(checkout_action().expect("checkout step"))] {
-        let job = final_job("ubuntu-26.04", &["rust-demo".to_owned()], acquire, &catalog)
-            .expect("final job");
-        assert_request_before(
-            &job,
-            "Merge reports",
-            "write-request-v1:merge-v1",
-            MERGE_OPERATION,
-        );
-    }
-}
+fn plan_job_supports_rust_without_format_components() {
+    use velnor_actions_mise::PREPARE_RUST_COMPONENTS_STEP;
 
-#[test]
-fn final_job_needs_plan_crates_and_lint() {
     let catalog = ToolCatalog::pinned();
-    let job = final_job(
+    let job = plan_job(
         "ubuntu-26.04",
-        &["rust-demo".to_owned(), "rust-nested".to_owned()],
         None,
         &catalog,
+        PlanJobToolNeeds {
+            rust: PlanRustNeed::Compiler,
+            mbx: false,
+            nextest: false,
+            opentofu: false,
+        },
+        &[],
     )
-    .expect("final job");
-    assert_eq!(
-        job.needs,
-        [
-            PLAN_JOB_ID.to_owned(),
-            "rust-demo".to_owned(),
-            "rust-nested".to_owned(),
-            LINT_JOB_ID.to_owned(),
-        ]
-    );
-    let job = final_job("ubuntu-26.04", &[], None, &catalog).expect("final job");
-    assert_eq!(job.needs, [PLAN_JOB_ID.to_owned(), LINT_JOB_ID.to_owned()]);
+    .expect("plan job");
+    let names: Vec<&str> = job.steps.iter().map(|step| step.name.as_str()).collect();
+    assert!(names.contains(&PREPARE_PINNED_TOOLS_STEP));
+    assert!(!names.contains(&PREPARE_RUST_COMPONENTS_STEP));
 }

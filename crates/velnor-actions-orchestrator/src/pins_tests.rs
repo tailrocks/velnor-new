@@ -276,11 +276,11 @@ fn setup_uses_extracted_binary_digest_for_each_platform() {
         MISE_BINARY_SHA256_MACOS_ARM64, MISE_BINARY_SHA256_MACOS_X64,
     };
     let config = config_with(BTreeMap::new());
-    for (label, expected) in [
-        ("macos-15", MISE_BINARY_SHA256_MACOS_ARM64),
-        ("macos-15-intel", MISE_BINARY_SHA256_MACOS_X64),
+    for (target, expected) in [
+        (ReleaseTarget::MacosArm64, MISE_BINARY_SHA256_MACOS_ARM64),
+        (ReleaseTarget::MacosX86_64, MISE_BINARY_SHA256_MACOS_X64),
     ] {
-        let setup = resolve_mise_setup(&config, label).expect("verified setup");
+        let setup = resolve_mise_setup_for_release_target(&config, target).expect("verified setup");
         assert_eq!(setup.sha256, expected);
         assert_ne!(setup.sha256, MISE_BINARY_SHA256_LINUX_X64);
     }
