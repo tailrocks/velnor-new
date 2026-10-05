@@ -6,7 +6,8 @@ use std::task::{Context, Wake, Waker};
 use std::time::Duration;
 
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tokio::net::UnixListener;
+use tokio::net::{UnixListener, UnixStream};
+use tokio::sync::oneshot;
 
 use crate::worker::{
     VerifiedWorkerVolume, WorkerVolumeRemoval, WorkerVolumeRole, WorkerVolumeVerification,
@@ -120,6 +121,35 @@ async fn cancelling_finish_aborts_stub_and_cleans_socket() -> Result<(), String>
     wait_for_flag(stopped).await
 }
 
+#[tokio::test]
+async fn stub_catches_late_request_before_finish_signal() -> Result<(), String> {
+    let stub = ScriptedDocker::open(Vec::new())?;
+    let path = stub.path.clone();
+    let started = Arc::clone(&stub.server_started);
+    let stopped = Arc::clone(&stub.server_stopped);
+    wait_for_flag(started).await?;
+    tokio::time::sleep(Duration::from_millis(75)).await;
+    assert!(!stopped.load(Ordering::SeqCst));
+
+    let mut connection = UnixStream::connect(path)
+        .await
+        .map_err(|error| error.to_string())?;
+    connection
+        .write_all(b"GET /late HTTP/1.1\r\nHost: docker\r\n\r\n")
+        .await
+        .map_err(|error| error.to_string())?;
+    drop(connection);
+    wait_for_flag(stopped).await?;
+
+    let result = stub.finish().await;
+    assert!(matches!(
+        result,
+        Err(error) if error.contains("unexpected request") && error.contains("GET /late HTTP/1.1")
+    ));
+    assert!(!path.exists());
+    Ok(())
+}
+
 async fn verified_work_volume(docker: &bollard::Docker) -> Result<VerifiedWorkerVolume, String> {
     match verify_worker_volume(docker, WORKER, WorkerVolumeRole::Work)
         .await
@@ -134,6 +164,7 @@ struct ScriptedDocker {
     docker: bollard::Docker,
     path: PathBuf,
     task: Option<tokio::task::JoinHandle<Result<Vec<String>, String>>>,
+    completion: Option<oneshot::Sender<()>>,
     server_started: Arc<AtomicBool>,
     server_stopped: Arc<AtomicBool>,
     finished: bool,
@@ -165,15 +196,17 @@ impl ScriptedDocker {
         let server_stopped = Arc::new(AtomicBool::new(false));
         let task_started = Arc::clone(&server_started);
         let task_stopped = Arc::clone(&server_stopped);
+        let (completion, wait_for_completion) = oneshot::channel();
         let task = tokio::spawn(async move {
             let _completion = TaskCompletion(task_stopped);
             task_started.store(true, Ordering::SeqCst);
-            serve_volume_stub(listener, responses).await
+            serve_volume_stub(listener, responses, wait_for_completion).await
         });
         Ok(Self {
             docker,
             path,
             task: Some(task),
+            completion: Some(completion),
             server_started,
             server_stopped,
             finished: false,
@@ -181,6 +214,13 @@ impl ScriptedDocker {
     }
 
     async fn finish(mut self) -> Result<Vec<String>, String> {
+        let signal_error = self
+            .completion
+            .take()
+            .ok_or_else(|| "stub completion already signaled".to_owned())?
+            .send(())
+            .err()
+            .map(|_| "stub stopped before completion signal".to_owned());
         let result = {
             let task = self
                 .task
@@ -191,6 +231,9 @@ impl ScriptedDocker {
                 Err(_) => return Err("Docker stub timed out".to_owned()),
             }
         };
+        if let Some(error) = signal_error {
+            return Err(error);
+        }
         self.task = None;
         remove_socket_after_finish(&self.path)?;
         self.finished = true;
@@ -228,6 +271,7 @@ impl Drop for ScriptedDocker {
 async fn serve_volume_stub(
     listener: UnixListener,
     responses: Vec<(u16, String)>,
+    mut wait_for_completion: oneshot::Receiver<()>,
 ) -> Result<Vec<String>, String> {
     let mut requests = Vec::new();
     for (status, body) in responses {
@@ -249,13 +293,37 @@ async fn serve_volume_stub(
             .await
             .map_err(|error| error.to_string())?;
     }
-    if tokio::time::timeout(Duration::from_millis(50), listener.accept())
-        .await
-        .is_ok()
-    {
-        return Err("unexpected request after scripted responses".to_owned());
+    loop {
+        tokio::select! {
+            signal = &mut wait_for_completion => {
+                signal.map_err(|error| error.to_string())?;
+                break;
+            }
+            accepted = listener.accept() => {
+                let (stream, _) = accepted.map_err(|error| error.to_string())?;
+                let request = read_request_line(stream).await?;
+                return Err(format!("unexpected request before finish: {request}"));
+            }
+        }
     }
-    Ok(requests)
+    match tokio::time::timeout(Duration::from_millis(50), listener.accept()).await {
+        Ok(Ok((stream, _))) => {
+            let request = read_request_line(stream).await?;
+            Err(format!("unexpected request after finish: {request}"))
+        }
+        Ok(Err(error)) => Err(error.to_string()),
+        Err(_) => Ok(requests),
+    }
+}
+
+async fn read_request_line(stream: UnixStream) -> Result<String, String> {
+    let mut stream = BufReader::new(stream);
+    let mut request = String::new();
+    stream
+        .read_line(&mut request)
+        .await
+        .map_err(|error| error.to_string())?;
+    Ok(request.trim_end().to_owned())
 }
 
 fn volume_json(name: &str, worker: &str, role: &str) -> String {
