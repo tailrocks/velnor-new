@@ -156,7 +156,13 @@ fn velnor_jobs_carry_trio_only_where_executed() -> TestResult {
         for spec in trio {
             assert!(!required.contains(spec), "required must not carry {spec}");
         }
-        for id in ["alint", "cargo-deny", "cargo-machete", "zizmor"] {
+        for id in [
+            "alint",
+            "cargo-deny",
+            "cargo-machete",
+            "zizmor",
+            "python-source-tests",
+        ] {
             assert!(
                 !runs.contains_key(id),
                 "dedicated {id} has no Prepare step to trim"

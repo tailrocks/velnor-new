@@ -183,7 +183,12 @@ fn velnor_policy_renders_with_empty_matrix() -> Result<(), RenderError> {
         &ctx,
     )?;
     assert!(text.contains("alint:"), "alint:\n{text}");
-    for id in ["cargo-deny:", "cargo-machete:", "zizmor:"] {
+    for id in [
+        "cargo-deny:",
+        "cargo-machete:",
+        "zizmor:",
+        "python-source-tests:",
+    ] {
         assert!(text.contains(id), "{id}:\n{text}");
     }
     assert!(!text.contains("velnor-task:"), "empty matrix:\n{text}");
@@ -203,13 +208,21 @@ fn velnor_policy_renders_with_empty_matrix() -> Result<(), RenderError> {
     assert!(window.contains(&pinned), "missing {pinned}:\n{window}");
     let start = text.find("required:").expect("final job");
     let window = snip(&text, start, 600);
-    for need in ["plan", "alint", "cargo-deny", "cargo-machete", "zizmor"] {
+    for need in [
+        "plan",
+        "alint",
+        "cargo-deny",
+        "cargo-machete",
+        "zizmor",
+        "python-source-tests",
+    ] {
         assert!(window.contains(need), "missing need {need}:\n{window}");
     }
     for (id, name) in [
         ("cargo-deny:", "Run cargo-deny"),
         ("cargo-machete:", "Run cargo-machete"),
         ("zizmor:", "Run zizmor"),
+        ("python-source-tests:", "Run Python source tests"),
     ] {
         let start = text.find(id).unwrap_or_else(|| panic!("{id} job:\n{text}"));
         let window = snip(&text, start, 900);

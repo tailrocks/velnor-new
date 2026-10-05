@@ -15,7 +15,7 @@ mod p11_metadata;
 #[path = "fixtures/p11_toml.rs"]
 pub(crate) mod p11_toml;
 #[path = "fixtures/p12_harness.rs"]
-mod p12_harness;
+pub(crate) mod p12_harness;
 #[path = "fixtures/p12_live.rs"]
 mod p12_live;
 #[path = "fixtures/p12_manifest.rs"]
@@ -29,8 +29,11 @@ mod p12_policy_b;
 #[path = "fixtures/p12_upstream.rs"]
 mod p12_upstream;
 
-/// Expected members as (directory, package name).
-pub(crate) const MEMBERS: [(&str, &str); 9] = [
+/// Explicit non-product registry fixture member.
+pub(crate) const REGISTRY_FIXTURE_DIR: &str = "crates/mbx-synchronous-registry-fixture";
+
+/// Expected workspace members as (directory, package name).
+pub(crate) const MEMBERS: [(&str, &str); 10] = [
     (
         "crates/velnor-actions-actionlint",
         "velnor-actions-actionlint",
@@ -49,6 +52,7 @@ pub(crate) const MEMBERS: [(&str, &str); 9] = [
         "crates/velnor-actions-workflow-renderer",
         "velnor-actions-workflow-renderer",
     ),
+    (REGISTRY_FIXTURE_DIR, "mbx-synchronous-registry-fixture"),
 ];
 
 /// Repo root: two levels above this crate's manifest directory.
@@ -142,7 +146,7 @@ pub(crate) fn dep_referenced(dir: &str, dep: &str) -> Result<bool, Box<dyn Error
 }
 
 #[test]
-fn workspace_lists_registered_owner_members() -> Result<(), Box<dyn Error>> {
+fn workspace_lists_registered_members() -> Result<(), Box<dyn Error>> {
     let root = read("Cargo.toml")?;
     let start = root.find("members = [").ok_or("members block")?;
     let block = root[start..].split(']').next().ok_or("members end")?;
@@ -166,10 +170,14 @@ fn root_manifest_is_virtual_with_explicit_members() -> Result<(), Box<dyn Error>
 }
 
 #[test]
-fn package_names_use_purpose_suffix() -> Result<(), Box<dyn Error>> {
+fn package_names_match_registered_purpose() -> Result<(), Box<dyn Error>> {
     for (dir, package) in MEMBERS {
         let body = manifest(dir)?;
         assert!(body.contains(&format!("name = \"{package}\"")), "{dir}");
+        if dir == REGISTRY_FIXTURE_DIR {
+            assert_eq!(package, "mbx-synchronous-registry-fixture");
+            continue;
+        }
         let purpose = package.strip_prefix("velnor-actions-").ok_or(package)?;
         assert!(!purpose.is_empty(), "{dir}");
     }
