@@ -60,23 +60,23 @@ pub fn check_tool_inputs(root: &Path) -> Vec<ToolInputCheck> {
     TOOL_INPUT_PATHS
         .iter()
         .map(|path| {
-            // P09-7: `NotFound` is missing; any other IO failure is
-            // unreadable. `.ok()` would collapse the two, hiding an
-            // inaccessible file behind a "not found" diagnosis.
-            let read = match std::fs::read(root.join(path)) {
-                Ok(bytes) => Ok(Some(bytes)),
-                Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(None),
-                Err(_) => Err(()),
+            let content = match crate::safe_read::read_repo_file(
+                root,
+                path,
+                crate::safe_read::MAX_REPO_FILE_BYTES,
+            ) {
+                Ok(crate::safe_read::RepoRead::Absent) => None,
+                Ok(crate::safe_read::RepoRead::Text(text)) => Some(text),
+                Err(_) => return inaccessible(path),
             };
-            match read {
-                Err(()) => inaccessible(path),
-                Ok(bytes) => {
-                    if *path == TOOL_INPUT_PATHS[0] {
-                        check_toolchain(path, bytes.as_deref())
-                    } else {
-                        check_mise_file(path, bytes.as_deref(), *path == TOOL_INPUT_PATHS[2])
-                    }
-                }
+            if *path == TOOL_INPUT_PATHS[0] {
+                check_toolchain(path, content.as_deref().map(str::as_bytes))
+            } else {
+                check_mise_file(
+                    path,
+                    content.as_deref().map(str::as_bytes),
+                    *path == TOOL_INPUT_PATHS[2],
+                )
             }
         })
         .collect()
@@ -393,5 +393,45 @@ mod tests {
             !lines.iter().any(|line| line.contains("mise.lock")),
             "missing stays silent: {lines:?}"
         );
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn symlinked_tool_input_is_rejected_without_following() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let outside = tempfile::tempdir().expect("outside tempdir");
+        std::fs::write(
+            outside.path().join("mise.toml"),
+            "[tools]\nrust = \"1.85.0\"\n",
+        )
+        .expect("write outside tool config");
+        std::os::unix::fs::symlink(
+            outside.path().join("mise.toml"),
+            dir.path().join("mise.toml"),
+        )
+        .expect("symlink tool config");
+
+        let checks = check_tool_inputs(dir.path());
+        let mise = checks
+            .iter()
+            .find(|check| check.path == "mise.toml")
+            .expect("mise");
+        assert_eq!(mise.parse, ToolParse::Unreadable);
+        assert!(mise.digest.is_none());
+    }
+
+    #[test]
+    fn oversized_tool_input_is_rejected_before_parsing() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let bytes = vec![b'x'; crate::safe_read::MAX_REPO_FILE_BYTES as usize + 1];
+        std::fs::write(dir.path().join("mise.lock"), bytes).expect("write oversized lock");
+
+        let checks = check_tool_inputs(dir.path());
+        let lock = checks
+            .iter()
+            .find(|check| check.path == "mise.lock")
+            .expect("lock");
+        assert_eq!(lock.parse, ToolParse::Unreadable);
+        assert!(lock.digest.is_none());
     }
 }
