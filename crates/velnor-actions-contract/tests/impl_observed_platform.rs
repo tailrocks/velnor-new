@@ -4,8 +4,8 @@ use velnor_actions_contract::cachekey::{
     MAX_OBSERVED_PLATFORM_FACT_BYTES, PlatformInputs, observed_platform_id, platform_id,
 };
 use velnor_actions_contract::{
-    ContractError, PlatformBinding, PlatformRunnerEnvironment, PlatformUnavailableReason,
-    RunnerImageEvidence, UNOBSERVED_IMAGE_VALUE,
+    ContractError, PlannedPlatform, PlatformBinding, PlatformRunnerEnvironment,
+    PlatformUnavailableReason, RunnerImageEvidence, UNOBSERVED_IMAGE_VALUE,
 };
 
 fn inputs() -> PlatformInputs {
@@ -64,10 +64,9 @@ fn observed_identity_rejects_missing_unknown_and_oversized_facts() {
 #[test]
 fn report_binding_proves_the_observation_matches_the_planned_platform() {
     let observed = inputs();
-    let mut planned = observed.clone();
-    planned.image_os = UNOBSERVED_IMAGE_VALUE.to_owned();
-    planned.image_version = UNOBSERVED_IMAGE_VALUE.to_owned();
-    let planned_id = platform_id(&planned).expect("planned ID");
+    let planned =
+        PlannedPlatform::new("ubuntu-26.04", "x86_64-unknown-linux-gnu").expect("planned platform");
+    let planned_id = planned.platform_id.clone();
     let binding = PlatformBinding::observed(
         &planned_id,
         PlatformRunnerEnvironment::GithubHosted,
@@ -75,68 +74,33 @@ fn report_binding_proves_the_observation_matches_the_planned_platform() {
     )
     .expect("binding");
     binding
-        .validate_for_plan(
-            &planned_id,
-            "ubuntu-26.04",
-            "x86_64-unknown-linux-gnu",
-            PlatformRunnerEnvironment::GithubHosted,
-        )
+        .validate_for_plan(&planned)
         .expect("valid plan binding");
-    assert!(
-        binding
-            .validate_for_plan(
-                &planned_id,
-                "ubuntu-26.04",
-                "x86_64-unknown-linux-gnu",
-                PlatformRunnerEnvironment::SelfHosted,
-            )
-            .is_err()
-    );
+    let custom = PlannedPlatform::new(
+        "scale-set:velnor+ubuntu-26.04-scale-set",
+        "x86_64-unknown-linux-gnu",
+    )
+    .expect("custom runner platform");
+    assert!(binding.validate_for_plan(&custom).is_err());
 
-    assert!(
-        binding
-            .validate_for_plan(
-                &planned_id,
-                "ubuntu-24.04",
-                "x86_64-unknown-linux-gnu",
-                PlatformRunnerEnvironment::GithubHosted,
-            )
-            .is_err()
-    );
-    assert!(
-        binding
-            .validate_for_plan(
-                &planned_id,
-                "ubuntu-26.04",
-                "aarch64-apple-darwin",
-                PlatformRunnerEnvironment::GithubHosted,
-            )
-            .is_err()
-    );
-    assert!(
-        binding
-            .validate_for_plan(
-                &platform_id(&inputs()).expect("different planned ID"),
-                "ubuntu-26.04",
-                "x86_64-unknown-linux-gnu",
-                PlatformRunnerEnvironment::GithubHosted,
-            )
-            .is_err()
-    );
+    let other_label = PlannedPlatform::new("ubuntu-24.04", "x86_64-unknown-linux-gnu")
+        .expect("other hosted platform");
+    assert!(binding.validate_for_plan(&other_label).is_err());
+    let other_target = PlannedPlatform::new("ubuntu-26.04", "aarch64-apple-darwin")
+        .expect("other target platform");
+    assert!(binding.validate_for_plan(&other_target).is_err());
+    let other_identity = PlannedPlatform::new("ubuntu-24.04", "x86_64-unknown-linux-gnu")
+        .expect("other planned identity");
+    assert!(binding.validate_for_plan(&other_identity).is_err());
 
     let unavailable = PlatformBinding::unavailable(
-        &planned_id,
+        &custom.platform_id,
         PlatformRunnerEnvironment::SelfHosted,
         PlatformUnavailableReason::CustomRunner,
     )
     .expect("unavailable binding");
     unavailable
-        .validate_for_plan(
-            &planned_id,
-            "ubuntu-26.04",
-            "x86_64-unknown-linux-gnu",
-            PlatformRunnerEnvironment::SelfHosted,
-        )
+        .validate_for_plan(&custom)
         .expect("unavailable evidence still binds the plan");
 }
 

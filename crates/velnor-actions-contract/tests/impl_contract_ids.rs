@@ -2,8 +2,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 use velnor_actions_contract::{
     CRATE_JOB_ID_PREFIX, CompatibilityInputs, ContractError, ExecuteTaskIds, ExecuteTaskRef,
-    MatrixEntry, StackExtension, TaskConfiguration, TaskGenerator, TaskIdentity, TaskInput,
-    VcsInputs, artifact_id_for_final, artifact_id_for_matrix, artifact_id_for_plan,
+    MatrixEntry, PlannedPlatform, StackExtension, TaskConfiguration, TaskGenerator, TaskIdentity,
+    TaskInput, VcsInputs, artifact_id_for_final, artifact_id_for_matrix, artifact_id_for_plan,
     assign_crate_job_ids, canonical_json_bytes, canonical_json_str, compatibility_id, digest_b3,
     input_digest, manifest_key_for_cargo_manifest, matrix_id_for_task_group, matrix_key_for_id,
     plan_id_for_run, report_id_for_matrix, run_key_for_ci, slugify_segment, split_shard_suffix,
@@ -86,6 +86,7 @@ pub(crate) fn sample_entry(run_key: &str) -> Result<MatrixEntry, ContractError> 
         &digest_b3(b"entry-inputs"),
         run_key,
         "plan",
+        PlannedPlatform::new("ubuntu-26.04", "x86_64-unknown-linux-gnu")?,
     )
 }
 
@@ -333,6 +334,8 @@ fn matrix_entry_rejects_bad_run_and_digest() -> Result<(), ContractError> {
             &digest_b3(b"entry-inputs"),
             &run_key,
             "plan",
+            PlannedPlatform::new("ubuntu-26.04", "x86_64-unknown-linux-gnu")
+                .expect("planned platform"),
         )
     };
     assert!(derive("", &digest_b3(b"task-bytes")).is_err());

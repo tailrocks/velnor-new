@@ -18,7 +18,7 @@ use velnor_actions_mise::ToolCatalog;
 pub(super) fn plan_with(task_ids: &[&str]) -> Plan {
     let digest = digest_b3(b"digest");
     Plan {
-        schema: 1,
+        schema: Plan::SCHEMA,
         run_key: "local".to_owned(),
         plan_id: "plan-local".to_owned(),
         base: None,

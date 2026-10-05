@@ -20,8 +20,9 @@ use std::path::{Path, PathBuf};
 
 use velnor_actions_contract::{
     CacheLayer, CacheOutcome, CacheResult, ExecuteTaskRef, MatrixEntry, MatrixReport, Plan,
-    TaskReport, TaskStatus, canonical_json_bytes, parse_strict_json, task_report_id_for_task,
-    validate_run_key, validate_task_id,
+    PlatformBinding, PlatformRunnerEnvironment, PlatformUnavailableReason, TaskReport, TaskStatus,
+    canonical_json_bytes, parse_strict_json, task_report_id_for_task, validate_run_key,
+    validate_task_id,
 };
 
 use crate::OrchestratorError;
@@ -329,6 +330,11 @@ fn terminal_task_report(
             result: CacheResult::NotAttempted,
             miss_reason: None,
         },
+        platform_binding: PlatformBinding::unavailable(
+            &entry.planned_platform.platform_id,
+            PlatformRunnerEnvironment::Unknown,
+            PlatformUnavailableReason::ObservationNotRecorded,
+        )?,
         exit_code,
         duration_ms,
         outputs: Vec::new(),

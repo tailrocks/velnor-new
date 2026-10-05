@@ -6,11 +6,12 @@ use crate::ids::{
     matrix_key_for_id, task_report_id_for_task, validate_matrix_key, validate_report_id,
     validate_run_key, validate_task_id, validate_task_report_id,
 };
+use crate::workflow::matrix_entry::MatrixEntry;
 use crate::workflow::report::{CacheResult, MatrixReport, TaskReport, TaskStatus};
 
 impl TaskReport {
     /// Report schema version.
-    pub const SCHEMA: u32 = 2;
+    pub const SCHEMA: u32 = 3;
 
     /// Validate schema, derived ID, digests, binding, and status coherence.
     /// # Errors
@@ -60,6 +61,20 @@ impl TaskReport {
             }
         }
         Ok(())
+    }
+
+    /// Validate this report against the immutable matrix placement in the plan.
+    /// # Errors
+    pub fn validate_for_plan_entry(&self, entry: &MatrixEntry) -> Result<(), ContractError> {
+        self.validate()?;
+        if self.matrix_id != entry.id || self.matrix_key != entry.matrix_key {
+            return Err(ContractError::identity(
+                "task_report.matrix",
+                "plan_mismatch",
+            ));
+        }
+        self.platform_binding
+            .validate_for_plan(&entry.planned_platform)
     }
 
     /// Check that outputs list only declared task outputs.
@@ -150,7 +165,7 @@ fn check_schema(schema: u32, expected: u32) -> Result<(), ContractError> {
             field: "schema",
             found: schema.to_string(),
             expected: if expected == TaskReport::SCHEMA {
-                "2"
+                "3"
             } else {
                 "1"
             },

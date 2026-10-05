@@ -8,6 +8,7 @@ pub mod generator_release;
 pub mod ir;
 pub mod jobs;
 pub mod lanes;
+pub mod matrix_entry;
 pub mod needs;
 pub mod permissions;
 pub mod plan;
@@ -37,16 +38,20 @@ pub use jobs::{
     slugify_segment, tofu_display_name, validate_job_id,
 };
 pub use lanes::{HOSTED_SUFFIX, LaneClass, SCALE_SUFFIX, expand_workflow, lane_class};
+pub use matrix_entry::MatrixEntry;
 pub use needs::{
     NEEDS_CHANNEL_ENV, NEEDS_CHANNEL_EXPRESSION, NEEDS_EXPECTED_ENV, NeedsConclusions,
 };
 pub use permissions::{PermissionLevel, Permissions};
 pub use plan::{
-    DYNAMIC_MATRIX_OUTPUT_MODE, MatrixEntry, ObligationDecision, PLAN_MATRIX_OUTPUT_MODE_ENV, Plan,
+    DYNAMIC_MATRIX_OUTPUT_MODE, ObligationDecision, PLAN_MATRIX_OUTPUT_MODE_ENV, Plan,
     PlanGenerator, PlanMatrix, PlanObligation, PlanPackage, PlanRunner, WorkflowEvent,
     validate_matrix_run,
 };
-pub use platform::{PlatformBinding, PlatformRunnerEnvironment, PlatformUnavailableReason};
+pub use platform::{
+    PlannedPlatform, PlannedRunnerEnvironment, PlatformBinding, PlatformRunnerEnvironment,
+    PlatformUnavailableReason,
+};
 pub use qualification::{
     FinalCounts, FinalReport, FinalStatus, JobConclusion, RequiredJobResult,
     final_report_id_for_run, final_report_relpath, join_runner_temp, matrix_report_relpath,

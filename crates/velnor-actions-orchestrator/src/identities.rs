@@ -235,17 +235,28 @@ pub(crate) fn platform_id_for_group(
     label: &str,
     task: &ProposedTask,
 ) -> Result<String, ContractError> {
-    let target = if task.identity.target == "host" {
-        velnor_actions_contract::target_for_runner_label(label).ok_or_else(|| {
-            ContractError::identity(
-                "runner_label",
-                format!("unsupported_target_for_runner:{label}"),
-            )
-        })?
+    let target = platform_target_for_group(label, task)?;
+    platform_id_for(label, &target)
+}
+
+/// Resolve a task's concrete target without inferring facts from host state.
+/// # Errors
+pub(crate) fn platform_target_for_group(
+    label: &str,
+    task: &ProposedTask,
+) -> Result<String, ContractError> {
+    if task.identity.target == "host" {
+        velnor_actions_contract::target_for_runner_label(label)
+            .map(str::to_owned)
+            .ok_or_else(|| {
+                ContractError::identity(
+                    "runner_label",
+                    format!("unsupported_target_for_runner:{label}"),
+                )
+            })
     } else {
-        task.identity.target.as_str()
-    };
-    platform_id_for(label, target)
+        Ok(task.identity.target.clone())
+    }
 }
 
 /// Writer lane from responsibility: shard suffix when sharded, else primary.

@@ -8,7 +8,7 @@ use std::fs;
 use super::*;
 use velnor_actions_contract::{
     ExecuteTaskIds, ExecuteTaskRef, MatrixEntry, ObligationDecision, Plan, PlanBaseline,
-    PlanGenerator, PlanMatrix, PlanObligation, PlanRunner, RunnerSelection, Trust,
+    PlanGenerator, PlanMatrix, PlanObligation, PlanRunner, PlannedPlatform, RunnerSelection, Trust,
     artifact_id_for_baseline, plan_id_for_run,
 };
 
@@ -57,6 +57,7 @@ fn entry_for(task_id: &str, kind: &str, seed: u8, run_key: &str) -> (MatrixEntry
         &digest(seed + 10),
         run_key,
         "rust-demo",
+        PlannedPlatform::new("ubuntu-26.04", "x86_64-unknown-linux-gnu").expect("planned platform"),
     )
     .expect("entry derives");
     (entry, task_digest)
@@ -87,7 +88,7 @@ fn fixture_plan(head: &str, run_key: &str) -> Plan {
     let (clippy_entry, clippy_digest) = entry_for(clippy, "clippy", 1, run_key);
     let (test_entry, test_digest) = entry_for(test, "test", 2, run_key);
     let plan = Plan {
-        schema: 1,
+        schema: Plan::SCHEMA,
         run_key: run_key.to_owned(),
         plan_id: plan_id_for_run(run_key).expect("plan id"),
         base: Some("b".repeat(40)),

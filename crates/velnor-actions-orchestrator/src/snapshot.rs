@@ -10,9 +10,8 @@
 //! unknown inputs are explicit states, never silent `None`s.
 
 use serde::Serialize;
-use velnor_actions_contract::cachekey::{PlatformInputs, platform_id};
 use velnor_actions_contract::{
-    ContractError, UNOBSERVED_IMAGE_VALUE, canonical_json_bytes, digest_b3, parse_strict_json,
+    ContractError, PlannedPlatform, canonical_json_bytes, digest_b3, parse_strict_json,
 };
 
 /// Explicit unknown marker for unverifiable archive sources.
@@ -78,45 +77,6 @@ pub(crate) fn check_canonical_version(found: u32) -> Result<(), ContractError> {
     }
 }
 
-/// Platform inputs for one runner label plus execution target.
-///
-/// The label is recorded verbatim in `runs_on` (a genuine request
-/// input); image evidence is explicitly unobserved. The generator
-/// never sees the provisioned runner, so label text is never split
-/// into `ImageOS`/`ImageVersion` facts: real values arrive only as
-/// observed provisioner evidence, and until then the digest commits
-/// to the label plus the target triple, nothing more (P03-4).
-/// OS/arch come from the release target mapping.
-///
-/// # Errors
-///
-/// Returns [`ContractError`] for targets outside the supported set;
-/// unknown targets never silently take the build host's arch/OS.
-pub(crate) fn platform_inputs_for(
-    label: &str,
-    target: &str,
-) -> Result<PlatformInputs, ContractError> {
-    let (arch, os_name) = match target {
-        "x86_64-unknown-linux-gnu" => ("x86_64", "linux"),
-        "aarch64-apple-darwin" => ("aarch64", "macos"),
-        "x86_64-apple-darwin" => ("x86_64", "macos"),
-        _ => {
-            return Err(ContractError::identity(
-                "target",
-                format!("unsupported_target:{target}"),
-            ));
-        }
-    };
-    Ok(PlatformInputs {
-        os: os_name.to_owned(),
-        arch: arch.to_owned(),
-        runs_on: label.to_owned(),
-        image_os: UNOBSERVED_IMAGE_VALUE.to_owned(),
-        image_version: UNOBSERVED_IMAGE_VALUE.to_owned(),
-        target: target.to_owned(),
-    })
-}
-
 /// Platform identity digest over runner image evidence (P03-4).
 ///
 /// # Errors
@@ -124,8 +84,7 @@ pub(crate) fn platform_inputs_for(
 /// Returns [`ContractError`] for unsupported targets and invalid
 /// platform inputs; no fallback digest is ever substituted.
 pub(crate) fn platform_id_for(label: &str, target: &str) -> Result<String, ContractError> {
-    let inputs = platform_inputs_for(label, target)?;
-    platform_id(&inputs)
+    Ok(PlannedPlatform::new(label, target)?.platform_id)
 }
 
 /// One immutable execution snapshot per analysis (P03-1).
@@ -202,6 +161,7 @@ impl ExecutionSnapshot {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use velnor_actions_contract::cachekey::PlatformInputs;
 
     #[test]
     fn canonical_bytes_ignore_key_order() {
@@ -238,11 +198,26 @@ mod tests {
 
     #[test]
     fn platform_image_evidence_is_unobserved_not_label_split() {
-        for label in ["ubuntu-26.04", "ubuntu-24.04", "self-hosted"] {
-            let inputs = platform_inputs_for(label, "x86_64-unknown-linux-gnu").expect("platform");
+        for label in [
+            "ubuntu-26.04",
+            "ubuntu-24.04",
+            "scale-set:velnor+ubuntu-26.04-scale-set",
+        ] {
+            let inputs = PlannedPlatform::new(label, "x86_64-unknown-linux-gnu")
+                .expect("platform")
+                .inputs()
+                .expect("inputs");
             assert_eq!(inputs.runs_on, label);
-            assert_eq!(inputs.image_os, UNOBSERVED_IMAGE_VALUE, "{label}");
-            assert_eq!(inputs.image_version, UNOBSERVED_IMAGE_VALUE, "{label}");
+            assert_eq!(
+                inputs.image_os,
+                velnor_actions_contract::UNOBSERVED_IMAGE_VALUE,
+                "{label}"
+            );
+            assert_eq!(
+                inputs.image_version,
+                velnor_actions_contract::UNOBSERVED_IMAGE_VALUE,
+                "{label}"
+            );
         }
         let fabricated = PlatformInputs {
             os: "linux".to_owned(),
@@ -253,7 +228,7 @@ mod tests {
             target: "x86_64-unknown-linux-gnu".to_owned(),
         };
         let honest = platform_id_for("ubuntu-26.04", "x86_64-unknown-linux-gnu").expect("id");
-        let fake = platform_id(&fabricated).expect("id");
+        let fake = velnor_actions_contract::cachekey::platform_id(&fabricated).expect("id");
         assert_ne!(honest, fake);
     }
 

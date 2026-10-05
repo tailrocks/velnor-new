@@ -5,7 +5,7 @@ use velnor_actions_contract::{
     BaselineProof, CacheLayer, CacheOutcome, CacheResult, Concurrency, ContractError, FinalCounts,
     FinalReport, FinalStatus, Job, JobConclusion, JobTimeout, MatrixReport, MatrixStatus,
     NotSelectedReason, ObligationDecision, Permissions, Plan, PlanBaseline, PlanGenerator,
-    PlanMatrix, PlanObligation, PlanPackage, PlanRunner, PlatformBinding,
+    PlanMatrix, PlanObligation, PlanPackage, PlanRunner, PlannedPlatform, PlatformBinding,
     PlatformRunnerEnvironment, PlatformUnavailableReason, RequiredJobResult, RunnerSelection, Step,
     StepKind, TaskReport, TaskStatus, Trigger, Trust, WorkflowEvent, WorkflowIr,
     artifact_id_for_matrix, artifact_id_for_plan, canonical_json_bytes, digest_b3,
@@ -18,7 +18,7 @@ fn plan_validates_sorting_and_matrix() -> Result<(), ContractError> {
     let run_key = run_key_for_ci(3, 1);
     let entry = sample_entry(&run_key)?;
     let plan = Plan {
-        schema: 1,
+        schema: Plan::SCHEMA,
         run_key: run_key.clone(),
         plan_id: plan_id_for_run(&run_key)?,
         base: None,
@@ -118,6 +118,7 @@ fn task_and_matrix_reports_validate() -> Result<(), ContractError> {
         timing: None,
     };
     report.validate()?;
+    rejects_task_report_v2(&report);
     let skipped = TaskReport {
         status: TaskStatus::NotSelected,
         not_selected_reason: Some(NotSelectedReason::UpstreamFailed),
@@ -155,6 +156,19 @@ fn task_and_matrix_reports_validate() -> Result<(), ContractError> {
     };
     matrix.validate()?;
     Ok(())
+}
+
+fn rejects_task_report_v2(report: &TaskReport) {
+    let mut legacy_report = report.clone();
+    legacy_report.schema = 2;
+    assert!(matches!(
+        legacy_report.validate(),
+        Err(ContractError::UnsupportedSchema {
+            field: "schema",
+            found,
+            expected: "3"
+        }) if found == "2"
+    ));
 }
 
 #[test]
@@ -270,6 +284,7 @@ fn reports_validate_only_when_matrix_id_matches_entry() -> Result<(), ContractEr
         &digest_b3(b"entry-inputs"),
         &run_key,
         "plan",
+        PlannedPlatform::new("ubuntu-26.04", "x86_64-unknown-linux-gnu")?,
     )?;
     let task_digest = digest_b3(b"task-bytes");
     let report = TaskReport {
@@ -305,6 +320,19 @@ fn reports_validate_only_when_matrix_id_matches_entry() -> Result<(), ContractEr
         timing: None,
     };
     report.validate()?;
+    let other = "stack:rust|task:internal/plan/default".to_owned();
+    let mut bad_task = report;
+    bad_task.matrix_id = other;
+    assert!(bad_task.validate().is_err());
+    Ok(())
+}
+
+#[test]
+fn matrix_report_rejects_foreign_matrix_id() -> Result<(), ContractError> {
+    let run_key = run_key_for_ci(12, 1);
+    let entry = sample_entry(&run_key)?;
+    let task_digest = digest_b3(b"task-bytes");
+    let task_report_id = task_report_id_for_task(&run_key, &entry.matrix_key, &task_digest)?;
     let matrix = MatrixReport {
         schema: 1,
         report_id: entry.report_id.clone(),
@@ -313,9 +341,9 @@ fn reports_validate_only_when_matrix_id_matches_entry() -> Result<(), ContractEr
         matrix_key: entry.matrix_key.clone(),
         status: MatrixStatus::Passed,
         expected_task_ids: vec![TASK.to_owned()],
-        task_report_ids: vec![report.task_report_id.clone()],
+        task_report_ids: vec![task_report_id.clone()],
         tasks: vec![velnor_actions_contract::MatrixTaskEntry {
-            task_report_id: report.task_report_id.clone(),
+            task_report_id,
             task_id: TASK.to_owned(),
             status: TaskStatus::Executed,
             exit_code: 0,
@@ -330,9 +358,6 @@ fn reports_validate_only_when_matrix_id_matches_entry() -> Result<(), ContractEr
     };
     matrix.validate()?;
     let other = "stack:rust|task:internal/plan/default".to_owned();
-    let mut bad_task = report.clone();
-    bad_task.matrix_id = other.clone();
-    assert!(bad_task.validate().is_err());
     let mut bad_matrix = matrix.clone();
     bad_matrix.matrix_id = other;
     assert!(bad_matrix.validate().is_err());

@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct TaskReport {
-    /// Report schema version; must be 2.
+    /// Report schema version; must be 3.
     pub schema: u32,
     /// Derived task-report ID.
     pub task_report_id: String,

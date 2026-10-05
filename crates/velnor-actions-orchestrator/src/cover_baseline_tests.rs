@@ -100,7 +100,7 @@ fn marker_plan(marker: &str) -> velnor_actions_contract::Plan {
     };
     let digest = digest_b3(b"d");
     Plan {
-        schema: 1,
+        schema: Plan::SCHEMA,
         run_key: "local".to_owned(),
         plan_id: "plan-local".to_owned(),
         base: Some("a".repeat(40)),

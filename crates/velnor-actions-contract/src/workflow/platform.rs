@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::cachekey::{PlatformInputs, observed_platform_id, platform_id};
 use crate::canonical::validate_digest;
+use crate::config::RunsOn;
 use crate::errors::ContractError;
 use crate::freshness::RunnerImageEvidence;
 
@@ -43,6 +44,71 @@ pub enum PlatformRunnerEnvironment {
     SelfHosted,
     /// The observation operation did not obtain a recognized value.
     Unknown,
+}
+
+/// Runner class fixed by the generated workflow before a job starts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum PlannedRunnerEnvironment {
+    /// A GitHub-hosted runner selected from the exact label catalog.
+    GithubHosted,
+    /// A custom or Scale Set runner selected by the generated workflow.
+    SelfHosted,
+}
+
+/// Immutable runner, target, and platform identity selected by generation.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PlannedPlatform {
+    /// Exact hosted label or Scale Set selector emitted in `runs-on`.
+    pub runs_on: String,
+    /// Runner class fixed by that selector.
+    pub runner_environment: PlannedRunnerEnvironment,
+    /// Compile or execution target bound by the plan.
+    pub target: String,
+    /// Canonical digest with image facts explicitly marked unobserved.
+    pub platform_id: String,
+}
+
+impl PlannedPlatform {
+    /// Construct the canonical planned platform record.
+    /// # Errors
+    pub fn new(runs_on: &str, target: &str) -> Result<Self, ContractError> {
+        let runner_environment = runner_environment_for_selector(runs_on)?;
+        let inputs = planned_inputs(runs_on, target)?;
+        Ok(Self {
+            runs_on: runs_on.to_owned(),
+            runner_environment,
+            target: target.to_owned(),
+            platform_id: platform_id(&inputs)?,
+        })
+    }
+
+    /// Rebuild the canonical plan preimage with its explicit unknown image values.
+    /// # Errors
+    pub fn inputs(&self) -> Result<PlatformInputs, ContractError> {
+        self.validate()?;
+        planned_inputs(&self.runs_on, &self.target)
+    }
+
+    /// Recompute the identity and selector class from the immutable fields.
+    /// # Errors
+    pub fn validate(&self) -> Result<(), ContractError> {
+        if runner_environment_for_selector(&self.runs_on)? != self.runner_environment {
+            return Err(ContractError::identity(
+                "planned_platform.runner_environment",
+                "selector_mismatch",
+            ));
+        }
+        validate_digest(&self.platform_id)?;
+        if platform_id(&planned_inputs(&self.runs_on, &self.target)?)? != self.platform_id {
+            return Err(ContractError::identity(
+                "planned_platform.platform_id",
+                "identity_mismatch",
+            ));
+        }
+        Ok(())
+    }
 }
 
 impl PlatformRunnerEnvironment {
@@ -165,15 +231,10 @@ impl PlatformBinding {
 
     /// Bind the observation to the exact plan label, target, and identity.
     /// # Errors
-    pub fn validate_for_plan(
-        &self,
-        planned_platform_id: &str,
-        runs_on: &str,
-        target: &str,
-        expected_environment: PlatformRunnerEnvironment,
-    ) -> Result<(), ContractError> {
+    pub fn validate_for_plan(&self, planned: &PlannedPlatform) -> Result<(), ContractError> {
+        planned.validate()?;
         self.validate()?;
-        if self.planned_platform_id() != planned_platform_id {
+        if self.planned_platform_id() != planned.platform_id {
             return Err(ContractError::identity(
                 "platform_binding.planned_platform_id",
                 "plan_mismatch",
@@ -187,14 +248,14 @@ impl PlatformBinding {
                 runner_environment, ..
             } => *runner_environment,
         };
-        if recorded_environment != expected_environment {
+        if !environment_matches_plan(self, recorded_environment, planned.runner_environment) {
             return Err(ContractError::identity(
                 "platform_binding.runner_environment",
                 "plan_mismatch",
             ));
         }
         if let Self::Observed { inputs, .. } = self {
-            if inputs.runs_on != runs_on || inputs.target != target {
+            if inputs.runs_on != planned.runs_on || inputs.target != planned.target {
                 return Err(ContractError::identity(
                     "platform_binding.inputs",
                     "plan_mismatch",
@@ -204,7 +265,7 @@ impl PlatformBinding {
             let unknown = RunnerImageEvidence::unobserved();
             planned.image_os = unknown.image_os;
             planned.image_version = unknown.image_version;
-            if platform_id(&planned)? != planned_platform_id {
+            if platform_id(&planned)? != self.planned_platform_id() {
                 return Err(ContractError::identity(
                     "platform_binding.inputs",
                     "planned_identity_mismatch",
@@ -212,6 +273,76 @@ impl PlatformBinding {
             }
         }
         Ok(())
+    }
+}
+
+/// Compare runner evidence with the class fixed in the immutable plan.
+fn environment_matches_plan(
+    binding: &PlatformBinding,
+    recorded: PlatformRunnerEnvironment,
+    expected: PlannedRunnerEnvironment,
+) -> bool {
+    match (recorded, expected) {
+        (PlatformRunnerEnvironment::GithubHosted, PlannedRunnerEnvironment::GithubHosted)
+        | (PlatformRunnerEnvironment::SelfHosted, PlannedRunnerEnvironment::SelfHosted) => true,
+        (PlatformRunnerEnvironment::Unknown, _) => matches!(
+            binding,
+            PlatformBinding::Unavailable {
+                reason: PlatformUnavailableReason::InvalidRuntimeFacts
+                    | PlatformUnavailableReason::ObservationNotRecorded,
+                ..
+            }
+        ),
+        _ => false,
+    }
+}
+
+/// Construct plan-time facts without inventing runner image metadata.
+fn planned_inputs(runs_on: &str, target: &str) -> Result<PlatformInputs, ContractError> {
+    let (arch, os) = match target {
+        "x86_64-unknown-linux-gnu" => ("x86_64", "linux"),
+        "aarch64-apple-darwin" => ("aarch64", "macos"),
+        "x86_64-apple-darwin" => ("x86_64", "macos"),
+        _ => {
+            return Err(ContractError::identity(
+                "target",
+                format!("unsupported_target:{target}"),
+            ));
+        }
+    };
+    match RunsOn::parse(runs_on)? {
+        RunsOn::Hosted(_) => {}
+        RunsOn::ScaleSet(_) if target == "x86_64-unknown-linux-gnu" => {}
+        RunsOn::ScaleSet(_) => {
+            return Err(ContractError::identity(
+                "planned_platform.target",
+                "scale_set_target_mismatch",
+            ));
+        }
+    }
+    let unobserved = RunnerImageEvidence::unobserved();
+    Ok(PlatformInputs {
+        os: os.to_owned(),
+        arch: arch.to_owned(),
+        runs_on: runs_on.to_owned(),
+        image_os: unobserved.image_os,
+        image_version: unobserved.image_version,
+        target: target.to_owned(),
+    })
+}
+
+fn runner_environment_for_selector(
+    runs_on: &str,
+) -> Result<PlannedRunnerEnvironment, ContractError> {
+    match RunsOn::parse(runs_on)? {
+        RunsOn::Hosted(label) if crate::config::RUNNER_LABEL_CATALOG.contains(&label.as_str()) => {
+            Ok(PlannedRunnerEnvironment::GithubHosted)
+        }
+        RunsOn::Hosted(_) => Err(ContractError::identity(
+            "planned_platform.runs_on",
+            "unsupported_hosted_label",
+        )),
+        RunsOn::ScaleSet(_) => Ok(PlannedRunnerEnvironment::SelfHosted),
     }
 }
 

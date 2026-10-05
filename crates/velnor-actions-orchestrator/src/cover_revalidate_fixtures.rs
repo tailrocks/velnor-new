@@ -73,7 +73,7 @@ pub(crate) fn plan_for(manifest: &BaselineManifest, base: Option<&str>) -> Plan 
     )
     .expect("proof");
     Plan {
-        schema: 1,
+        schema: Plan::SCHEMA,
         run_key: "local".to_owned(),
         plan_id: "plan-local".to_owned(),
         base: base.map(str::to_owned),

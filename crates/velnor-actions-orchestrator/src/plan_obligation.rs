@@ -11,8 +11,8 @@ use std::path::Path;
 
 use serde::Serialize;
 use velnor_actions_contract::{
-    MatrixEntry, PlanObligation, ProposedTask, Stack, StackExtension, canonical_json_bytes,
-    digest_b3,
+    MatrixEntry, PlanObligation, PlannedPlatform, ProposedTask, Stack, StackExtension,
+    canonical_json_bytes, digest_b3,
 };
 use velnor_actions_mise::ToolCatalog;
 use velnor_actions_mise::restore::probe_tool_availability;
@@ -24,6 +24,7 @@ use crate::internal::{internal, internal_contract};
 use crate::internal_plan::closure::resolve_closure_at_root;
 use crate::internal_plan::identities::{
     ExtensionBundle, extension_bundle_with_snapshot, platform_id_for_group,
+    platform_target_for_group,
 };
 use crate::internal_plan::snapshot::{ExecutionSnapshot, canonical_digest};
 use crate::internal_plan::wire_w2::{self, GroupWire};
@@ -190,7 +191,8 @@ pub(crate) fn plan_group(
     let _ = inputs.lane;
     let toolchain = toolchain_id(task, inputs.catalog).map_err(internal_contract)?;
     let argv = task_argv(task, inputs.catalog)?;
-    let platform_id = platform_id_for_group(inputs.label, task).map_err(internal_contract)?;
+    let planned_platform = planned_platform_for_group(inputs.label, task)?;
+    let platform_id = planned_platform.platform_id.clone();
     let identity = planned_identity(inputs, &argv, &toolchain, &platform_id, &mut *reads)?;
     let (_, reuse_eligible) = extension_for_task(task, inputs.root, &identity.bundle, reads)?;
     let input_digest = identity.input_digest;
@@ -263,12 +265,26 @@ pub(crate) fn plan_group(
         &input_digest,
         inputs.run_key,
         &job_id,
+        planned_platform,
     )
     .map_err(internal_contract)?;
     let cache_ids = cache_ids_for(task, inputs.label, &toolchain).map_err(internal_contract)?;
     record_lane_target_dir(&mut entry.adapter_metadata, cache_ids.lane_id());
     entry.cache_ids = Some(cache_ids);
     Ok((obligation, entry))
+}
+
+/// Bind one task group's canonical plan identity to its selected label and target.
+fn planned_platform_for_group(
+    label: &str,
+    task: &ProposedTask,
+) -> Result<PlannedPlatform, OrchestratorError> {
+    let target = platform_target_for_group(label, task).map_err(internal_contract)?;
+    let planned = PlannedPlatform::new(label, &target).map_err(internal_contract)?;
+    if planned.platform_id != platform_id_for_group(label, task).map_err(internal_contract)? {
+        return Err(internal("planned_platform_identity_mismatch"));
+    }
+    Ok(planned)
 }
 
 /// Record the lane's isolated `CARGO_TARGET_DIR` on entry metadata.
