@@ -6,7 +6,9 @@
 mod args;
 mod dispatch;
 mod dispatch_config;
+mod dispatch_internal;
 mod dispatch_publish;
+mod dispatch_qualification;
 
 use std::process::ExitCode;
 

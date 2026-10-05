@@ -123,7 +123,7 @@ pub(crate) fn discover(root: &Path, config: &VelnorConfig) -> Result<Discovery, 
     Ok(Discovery {
         statuses,
         workspaces,
-        proposals,
+        proposals: proposals.to_vec(),
         feature_fallbacks: fallbacks,
         tool_checks,
         clippy_memory,
