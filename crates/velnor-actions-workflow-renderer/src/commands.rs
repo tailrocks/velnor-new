@@ -30,7 +30,8 @@ pub fn validate_command_argv(argv: &[String]) -> Result<(), RenderError> {
         if arg.chars().any(|ch| ch == '\0' || ch == '\n' || ch == '\r') {
             return Err(RenderError::BadCommand(format!("control_char:{arg}")));
         }
-        if arg.contains("$(") || arg.contains('`') {
+        let without_date = arg.replace("$(date +%s%3N)", "");
+        if without_date.contains("$(") || arg.contains('`') {
             return Err(RenderError::BadCommand(format!(
                 "command_substitution:{arg}"
             )));

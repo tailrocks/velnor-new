@@ -221,6 +221,33 @@ fn job_to_yaml(
     } else {
         BTreeMap::new()
     };
+    if step_has_env {
+        for step in &job.steps {
+            let step_env = match &step.kind {
+                StepKind::Shell { env, .. } | StepKind::Action { env, .. } => Some(env),
+                StepKind::Internal { .. } => None,
+            };
+            if let Some(env) = step_env {
+                if let Some(toolchain) = env.get("RUSTUP_TOOLCHAIN") {
+                    job_env.insert("RUSTUP_TOOLCHAIN".to_owned(), toolchain.clone());
+                }
+                if let Some(flags) = env.get("RUSTDOCFLAGS") {
+                    job_env.insert("RUSTDOCFLAGS".to_owned(), flags.clone());
+                }
+                if step.name == crate::steps::ACQUIRE_NAME {
+                    for key in [
+                        crate::steps::ASSET_SHA_ENV,
+                        crate::steps::ASSET_URL_ENV,
+                        crate::steps::RELEASE_COMMIT_ENV,
+                    ] {
+                        if let Some(val) = env.get(key) {
+                            job_env.insert(key.to_owned(), val.clone());
+                        }
+                    }
+                }
+            }
+        }
+    }
     if mbx_gc_auto {
         job_env.insert(
             crate::cache_steps::MBX_GC_AUTO_ENV.to_owned(),

@@ -58,10 +58,8 @@ fn render_consumer_yaml(manifest: &str) -> Result<String, Box<dyn std::error::Er
 /// env (sorted map order); the download itself stays unchanged.
 fn expected_acquire_block() -> String {
     let version = env!("CARGO_PKG_VERSION");
-    let sha = "c".repeat(64);
-    let commit = "d".repeat(40);
     format!(
-        "- name: Acquire Velnor\n        env:\n          VELNOR_ASSET_SHA256: {sha}\n          VELNOR_ASSET_URL: https://github.com/tailrocks/velnor-new/releases/download/v{version}/velnor-actions-{version}-x86_64-unknown-linux-gnu\n          VELNOR_RELEASE_COMMIT: {commit}\n        run: \"sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \\\"$RUNNER_TEMP/velnor/bin\\\" && curl -fsSL --proto '\\\\''=https'\\\\'' --tlsv1.2 \\\"$VELNOR_ASSET_URL\\\" -o \\\"$RUNNER_TEMP/velnor/bin/velnor-actions-{version}\\\" && echo \\\"$VELNOR_ASSET_SHA256  $RUNNER_TEMP/velnor/bin/velnor-actions-{version}\\\" | sha256sum -c - && chmod +x \\\"$RUNNER_TEMP/velnor/bin/velnor-actions-{version}\\\"'\"",
+        "- name: Acquire Velnor\n        run: \"sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \\\"$RUNNER_TEMP/velnor/bin\\\" && curl -fsSL --proto '\\\\''=https'\\\\'' --tlsv1.2 \\\"$VELNOR_ASSET_URL\\\" -o \\\"$RUNNER_TEMP/velnor/bin/velnor-actions-{version}\\\" && echo \\\"$VELNOR_ASSET_SHA256  $RUNNER_TEMP/velnor/bin/velnor-actions-{version}\\\" | sha256sum -c - && chmod +x \\\"$RUNNER_TEMP/velnor/bin/velnor-actions-{version}\\\"'\"",
     )
 }
 
@@ -141,10 +139,7 @@ fn debug_absent_file_keeps_standin() -> TestResult {
     let expect = format!(
         "https://github.com/tailrocks/velnor-new/releases/download/v{version}/velnor-actions-{version}-x86_64-unknown-linux-gnu"
     );
-    assert!(
-        acquire_block(&yaml)?.contains(&expect),
-        "debug stand-in preserved:\n{yaml}"
-    );
+    assert!(yaml.contains(&expect), "debug stand-in preserved:\n{yaml}");
     Ok(())
 }
 
