@@ -9,6 +9,12 @@ publication. Source and local tests do not prove a hosted qualification run,
 an immutable release, or GitHub environment protection. No release was
 published while preparing this change.
 
+This release integration checkpoint does not constitute whole-tree source
+acceptance. The inherited tool-seed admission path and native MBX cache-owner
+migration remain under corrective review; no hosted cache or seed qualification
+is established by the release-source checks below. The catalog correction that
+keeps the unqualified native-owner version out of production is also pending.
+
 ## Seed and first release (BOOT)
 
 - BOOT-4.2 (seed v0): NEEDS-HUMAN. Unblock = a manually reviewed build with
