@@ -19,6 +19,8 @@ pub const DETECTION_SCHEMA: u32 = 1;
 /// Known stacks for closed per-stack dispatch.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Stack {
+    /// Explicit repository-owned Mise checks (`mise`).
+    Mise,
     /// Rust/Cargo stack (`rust`).
     Rust,
     /// `OpenTofu` stack (`tofu`).
@@ -29,15 +31,26 @@ impl Stack {
     /// Every known stack, in registry (ascending id) order.
     #[must_use]
     pub fn all() -> &'static [Self] {
-        &[Self::Rust, Self::Tofu]
+        &[Self::Mise, Self::Rust, Self::Tofu]
     }
 
     /// Registered stack id for this stack.
     #[must_use]
     pub const fn id(self) -> &'static str {
         match self {
+            Self::Mise => "mise",
             Self::Rust => "rust",
             Self::Tofu => "tofu",
+        }
+    }
+
+    /// Whether detector-based stack selection can suppress this stack.
+    /// Explicit Mise check declarations remain mandatory once configured.
+    #[must_use]
+    pub const fn is_ignorable(self) -> bool {
+        match self {
+            Self::Mise => false,
+            Self::Rust | Self::Tofu => true,
         }
     }
 

@@ -187,12 +187,26 @@ fn cancel_or_timeout_classifier_separates_abortions_from_outcomes() {
         "cancelled",
         "timeout_after_secs:1",
         "timeout_after_secs:600",
+        "cancelled;cleanup_failed:kill_group:permission denied",
+        "timeout_after_absolute_deadline;cleanup_failed:reap_child:still running",
+        "timeout_after_secs:30;cleanup_failed:kill_group:permission denied",
     ] {
         let error = MiseError::SpawnFailed {
             program: "sh".to_owned(),
             message: message.to_owned(),
         };
         assert!(is_cancel_or_timeout(&error), "{message} must classify");
+    }
+    for message in [
+        "cancelled_extra;cleanup_failed:permission denied",
+        "timeout_after_absolute_deadline_extra;cleanup_failed:still running",
+        "cancelled;cleanup_failed:",
+    ] {
+        let error = MiseError::SpawnFailed {
+            program: "sh".to_owned(),
+            message: message.to_owned(),
+        };
+        assert!(!is_cancel_or_timeout(&error), "{message} must not classify");
     }
     for error in [
         MiseError::SpawnFailed {

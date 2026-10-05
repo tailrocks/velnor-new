@@ -139,6 +139,7 @@ fn marker_plan(marker: &str) -> velnor_actions_contract::Plan {
 /// Discovery without task groups.
 fn empty_discovery() -> crate::discover::Discovery {
     crate::discover::Discovery {
+        mise_checks: Vec::new(),
         statuses: Vec::new(),
         workspaces: Vec::new(),
         proposals: Vec::new(),
@@ -150,7 +151,6 @@ fn empty_discovery() -> crate::discover::Discovery {
         },
         recommendations: Vec::new(),
         consumer_manifest_json: None,
-        consumer_manifest_stand_in: false,
         skipped_non_utf8: false,
         tofu_note: None,
         tofu_units: Vec::new(),

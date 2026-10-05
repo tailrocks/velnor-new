@@ -55,6 +55,7 @@ pub fn internal_step(name: &str, operation: &str) -> Result<Step, RenderError> {
         condition: None,
         kind: StepKind::Internal {
             operation: operation.to_owned(),
+            env: std::collections::BTreeMap::new(),
         },
     })
 }
@@ -72,6 +73,7 @@ pub fn write_request_step(target: &str) -> Result<Step, RenderError> {
         condition: None,
         kind: StepKind::Internal {
             operation: format!("{WRITE_REQUEST_OPERATION}:{target}"),
+            env: std::collections::BTreeMap::new(),
         },
     })
 }
@@ -84,6 +86,7 @@ pub fn plan_step() -> Step {
         condition: None,
         kind: StepKind::Internal {
             operation: PLAN_OPERATION.to_owned(),
+            env: std::collections::BTreeMap::new(),
         },
     }
 }
@@ -96,6 +99,7 @@ pub fn merge_step() -> Step {
         condition: None,
         kind: StepKind::Internal {
             operation: MERGE_OPERATION.to_owned(),
+            env: std::collections::BTreeMap::new(),
         },
     }
 }
@@ -108,6 +112,7 @@ pub fn publish_step() -> Step {
         condition: None,
         kind: StepKind::Internal {
             operation: PUBLISH_OPERATION.to_owned(),
+            env: std::collections::BTreeMap::new(),
         },
     }
 }

@@ -27,7 +27,7 @@ use crate::OrchestratorError;
 ///
 /// Matches the contract's untrusted-document bound: legitimate config,
 /// manifest, and event-payload documents are kilobytes.
-pub(crate) const MAX_REPO_FILE_BYTES: u64 = 8 * 1024 * 1024;
+pub(crate) const MAX_REPO_FILE_BYTES: u64 = velnor_actions_contract::MAX_CHECK_SOURCE_BYTES as u64;
 
 /// Outcome of a root-constrained repo file read.
 #[derive(Debug)]
@@ -36,6 +36,15 @@ pub(crate) enum RepoRead {
     Absent,
     /// The file read within the bound.
     Text(String),
+}
+
+/// Outcome of reading bounded root-contained repository bytes.
+#[derive(Debug)]
+pub(crate) enum RepoBytes {
+    /// The file is absent.
+    Absent,
+    /// The file read within the bound without an encoding assumption.
+    Bytes(Vec<u8>),
 }
 
 /// Read one repo-relative file: absent, or text within `max_bytes`.
@@ -47,9 +56,64 @@ pub(crate) fn read_repo_file(
     rel: &str,
     max_bytes: u64,
 ) -> Result<RepoRead, OrchestratorError> {
+    read_repo_file_until_inner(root, rel, max_bytes, None)
+}
+
+/// Read a root-contained text file while checking a shared check deadline.
+pub(crate) fn read_repo_file_until(
+    root: &Path,
+    rel: &str,
+    max_bytes: u64,
+    deadline: velnor_actions_mise::CheckDeadline,
+) -> Result<RepoRead, OrchestratorError> {
+    read_repo_file_until_inner(root, rel, max_bytes, Some(deadline))
+}
+
+fn read_repo_file_until_inner(
+    root: &Path,
+    rel: &str,
+    max_bytes: u64,
+    deadline: Option<velnor_actions_mise::CheckDeadline>,
+) -> Result<RepoRead, OrchestratorError> {
+    match read_repo_bytes_until_inner(root, rel, max_bytes, deadline)? {
+        RepoBytes::Absent => Ok(RepoRead::Absent),
+        RepoBytes::Bytes(bytes) => String::from_utf8(bytes)
+            .map(RepoRead::Text)
+            .map_err(|error| unreadable(&root.join(rel), error.to_string())),
+    }
+}
+
+/// Read bounded repository bytes without requiring UTF-8 text.
+///
+/// Preserves the text reader's root containment, symlink rejection, regular-file
+/// requirement and handle-pinned size bound.
+pub(crate) fn read_repo_bytes(
+    root: &Path,
+    rel: &str,
+    max_bytes: u64,
+) -> Result<RepoBytes, OrchestratorError> {
+    read_repo_bytes_until_inner(root, rel, max_bytes, None)
+}
+
+/// Read root-contained bytes while checking a shared named-check deadline.
+pub(crate) fn read_repo_bytes_until(
+    root: &Path,
+    rel: &str,
+    max_bytes: u64,
+    deadline: velnor_actions_mise::CheckDeadline,
+) -> Result<RepoBytes, OrchestratorError> {
+    read_repo_bytes_until_inner(root, rel, max_bytes, Some(deadline))
+}
+
+fn read_repo_bytes_until_inner(
+    root: &Path,
+    rel: &str,
+    max_bytes: u64,
+    deadline: Option<velnor_actions_mise::CheckDeadline>,
+) -> Result<RepoBytes, OrchestratorError> {
     let path = root.join(rel);
     match fs::symlink_metadata(&path) {
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(RepoRead::Absent),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(RepoBytes::Absent),
         Err(err) => return Err(unreadable(&path, err.to_string())),
         Ok(meta) if meta.file_type().is_symlink() => {
             return Err(unsafe_path(&path, "symlink_refused"));
@@ -66,7 +130,9 @@ pub(crate) fn read_repo_file(
     if !canonical.starts_with(&canonical_root) {
         return Err(unsafe_path(&path, "root_escape"));
     }
-    Ok(RepoRead::Text(read_capped(&canonical, max_bytes)?))
+    Ok(RepoBytes::Bytes(read_capped_bytes_until(
+        &canonical, max_bytes, deadline,
+    )?))
 }
 
 /// Read one repo-relative file through the shared pinned compartment.
@@ -119,6 +185,19 @@ pub(crate) fn read_event_file(path: &Path, max_bytes: u64) -> Result<String, Orc
 /// swapped in after the pre-checks refuses exactly like a pre-check
 /// symlink.
 fn read_capped(path: &Path, max_bytes: u64) -> Result<String, OrchestratorError> {
+    let bytes = read_capped_bytes(path, max_bytes)?;
+    String::from_utf8(bytes).map_err(|err| unreadable(path, err.to_string()))
+}
+
+fn read_capped_bytes(path: &Path, max_bytes: u64) -> Result<Vec<u8>, OrchestratorError> {
+    read_capped_bytes_until(path, max_bytes, None)
+}
+
+fn read_capped_bytes_until(
+    path: &Path,
+    max_bytes: u64,
+    deadline: Option<velnor_actions_mise::CheckDeadline>,
+) -> Result<Vec<u8>, OrchestratorError> {
     let fd = rustix::fs::open(
         path,
         rustix::fs::OFlags::RDONLY | rustix::fs::OFlags::NOFOLLOW | rustix::fs::OFlags::CLOEXEC,
@@ -137,15 +216,42 @@ fn read_capped(path: &Path, max_bytes: u64) -> Result<String, OrchestratorError>
     if filetype != rustix::fs::FileType::RegularFile {
         return Err(unreadable(path, "not_a_file"));
     }
-    let file = fs::File::from(fd);
-    let mut text = String::new();
-    file.take(max_bytes.saturating_add(1))
-        .read_to_string(&mut text)
-        .map_err(|err| unreadable(path, err.to_string()))?;
-    if u64::try_from(text.len()).unwrap_or(u64::MAX) > max_bytes {
-        return Err(unreadable(path, "oversize"));
+    let mut file = fs::File::from(fd);
+    let mut bytes = Vec::new();
+    let mut buffer = vec![0_u8; 64 * 1024].into_boxed_slice();
+    loop {
+        check_deadline(deadline)?;
+        let remaining = max_bytes
+            .saturating_add(1)
+            .saturating_sub(u64::try_from(bytes.len()).unwrap_or(u64::MAX));
+        if remaining == 0 {
+            return Err(unreadable(path, "oversize"));
+        }
+        let limit = usize::try_from(remaining.min(buffer.len() as u64)).unwrap_or(buffer.len());
+        let count = file
+            .read(&mut buffer[..limit])
+            .map_err(|err| unreadable(path, err.to_string()))?;
+        check_deadline(deadline)?;
+        if count == 0 {
+            break;
+        }
+        bytes.extend_from_slice(&buffer[..count]);
+        if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > max_bytes {
+            return Err(unreadable(path, "oversize"));
+        }
     }
-    Ok(text)
+    Ok(bytes)
+}
+
+fn check_deadline(
+    deadline: Option<velnor_actions_mise::CheckDeadline>,
+) -> Result<(), OrchestratorError> {
+    if let Some(deadline) = deadline {
+        deadline
+            .remaining()
+            .map_err(|error| crate::internal::internal(&error.to_string()))?;
+    }
+    Ok(())
 }
 
 /// Build an IO error for one path.
