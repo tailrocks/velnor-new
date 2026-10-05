@@ -216,6 +216,8 @@ case_grouped_external_restore() {
   [ "$count" -gt 0 ] || return 1
   rm -rf -- "$root"
   mkdir -p "$root/dest/workspace/repo" "$root/stage" "$root/bin"
+  records+=(d "../external/" 0750 1600000000)
+  records+=(d "../external/cache/" 0710 1600000001)
   for i in $(seq 1 "$count"); do
     file="$(printf 'file-%05d' "$i")"
     records+=(f "../external/cache/$file" "payload-$i")
@@ -256,6 +258,10 @@ EOF
     grep -qx "payload-$i" "$root/dest/workspace/external/cache/$file" || return 1
   done
   [ "$(find "$root/dest/workspace/external/cache" -type f | wc -l | tr -d ' ')" = "$count" ] || return 1
+  [ "$(stat -c %a "$root/dest/workspace/external")" = 750 ] || return 1
+  [ "$(stat -c %Y "$root/dest/workspace/external")" = 1600000000 ] || return 1
+  [ "$(stat -c %a "$root/dest/workspace/external/cache")" = 710 ] || return 1
+  [ "$(stat -c %Y "$root/dest/workspace/external/cache")" = 1600000001 ] || return 1
   [ -z "$(find "$root/stage" -mindepth 1 -print -quit)" ] || return 1
 }
 
