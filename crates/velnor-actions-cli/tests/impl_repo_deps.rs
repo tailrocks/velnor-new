@@ -54,6 +54,8 @@ const ALLOWED_EXTERNAL_DEPS: &[&str] = &[
     // depend on or invoke these analyzers. Syn 3 needs `printing` for spans.
     "proc-macro2",
     "syn",
+    // CLI trailer compatibility preserves Python Unicode word-boundary semantics.
+    "unicode-general-category",
     // Reviewed HCL structural parser for the tofu stack (T10, S8):
     // `hcl` renames `hcl-rs` 0.19.8 (Q1 pre-qualified; MSRV
     // compile-gated at 1.98.1); default features only, facade-owned
@@ -157,10 +159,10 @@ fn assert_external_dependency_is_narrow(
     assert_test_scanner_is_test_only(dir, body, key)?;
     assert_narrow_features(dir, key, line);
     assert_archive_dependency_is_narrow(dir, body, key, line)?;
-    let import_name = if key == "proc-macro2" {
-        "proc_macro2"
-    } else {
-        key
+    let import_name = match key {
+        "proc-macro2" => "proc_macro2",
+        "unicode-general-category" => "unicode_general_category",
+        _ => key,
     };
     assert!(dep_referenced(dir, import_name)?, "{dir} never uses {key}");
     Ok(())
