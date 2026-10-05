@@ -133,8 +133,8 @@ fn direct_schema2_renderer_rejects_an_oversized_workflow() -> Result<(), RenderE
                 version: "2026.9.18".to_owned(),
                 sha256: "a".repeat(64),
             },
-            mbx_action_uses: "jdx/mr-boxington-action@0123456789abcdef0123456789abcdef01234567"
-                .to_owned(),
+            candidate_action_uses:
+                "jdx/mr-boxington-action@0123456789abcdef0123456789abcdef01234567".to_owned(),
             mbx_version: large_mbx_version,
             rust_version: "1.98.0".to_owned(),
         }),

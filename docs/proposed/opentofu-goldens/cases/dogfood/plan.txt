@@ -1,4 +1,4 @@
-Velnor Actions plan 0.1.1
+Velnor Actions plan 0.1.0
 Repository: <repo>
 
 Detected stacks
@@ -40,21 +40,21 @@ Workflow to generate
     - alint (2 steps)
     - cargo-deny (4 steps)
     - cargo-machete (4 steps)
-    - plan (26 steps)
+    - plan (21 steps)
     - publish-baseline (7 steps)
     - required (11 steps)
-    - rust-velnor-actions-actionlint (27 steps)
-    - rust-velnor-actions-cli (25 steps)
-    - rust-velnor-actions-contract (26 steps)
-    - rust-velnor-actions-mise (27 steps)
-    - rust-velnor-actions-orchestrator (26 steps)
-    - rust-velnor-actions-rust (26 steps)
-    - rust-velnor-actions-tofu (26 steps)
-    - rust-velnor-actions-workflow-renderer (26 steps)
-    - rust-velnor-runner-cli (26 steps)
-    - rust-velnor-runner-core (26 steps)
-    - rust-velnor-runner-github (26 steps)
-    - rust-velnor-runner-host (26 steps)
+    - rust-velnor-actions-actionlint (22 steps)
+    - rust-velnor-actions-cli (20 steps)
+    - rust-velnor-actions-contract (21 steps)
+    - rust-velnor-actions-mise (22 steps)
+    - rust-velnor-actions-orchestrator (21 steps)
+    - rust-velnor-actions-rust (21 steps)
+    - rust-velnor-actions-tofu (21 steps)
+    - rust-velnor-actions-workflow-renderer (21 steps)
+    - rust-velnor-runner-cli (21 steps)
+    - rust-velnor-runner-core (21 steps)
+    - rust-velnor-runner-github (21 steps)
+    - rust-velnor-runner-host (21 steps)
     - zizmor (4 steps)
     - 12 Rust crate jobs
       Each: Clippy -> build -> run tests -> doctests -> doc build -> format check
@@ -172,4 +172,4 @@ Recommendations
   mise.toml is read-only input; Velnor never modifies it
   rust-toolchain.toml not found; Velnor will not create it
   shadowed_nextest_config: .config/nextest.toml shadowed by crates/velnor-runner/.config/nextest.toml; profile selected from crates/velnor-runner/.config/nextest.toml
-  tool_install_unverified:9 installs skip verification (no mise.lock): actionlint@1.7.12, cargo-deny@0.20.2, gh@2.102.0, mr-boxington@1.22.0, nextest@0.9.146, opentofu@1.13.1, rust@1.98.1, shellcheck@0.11.0, zizmor@1.30.1; install on the CI platform and commit the resulting lock
+  tool_install_unverified:9 installs skip verification (no mise.lock): actionlint@1.7.12, cargo-deny@0.20.2, gh@2.102.0, mr-boxington@1.21.1, nextest@0.9.146, opentofu@1.13.1, rust@1.98.1, shellcheck@0.11.0, zizmor@1.30.1; install on the CI platform and commit the resulting lock
