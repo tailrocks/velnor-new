@@ -82,6 +82,7 @@ mod impl_protocol_render_gate;
 mod impl_required_evidence;
 mod impl_required_reports;
 mod impl_required_validators;
+mod impl_required_validators_support;
 mod impl_schema2_mbx_pr_qualification;
 mod impl_schema2_mbx_qualification;
 mod impl_schema2_routing;

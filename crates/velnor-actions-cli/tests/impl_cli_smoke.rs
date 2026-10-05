@@ -4,6 +4,7 @@ use std::error::Error;
 
 use crate::impl_cli_tmp::{
     add_crate_pair, cleanup, code, fresh_tempdir, git_init, init_repo, spawn,
+    write_consumer_manifest,
 };
 
 #[test]
@@ -96,6 +97,7 @@ fn plan_emits_recommendations_once_to_stdout_only() -> Result<(), Box<dyn Error>
     git_init(&tmp)?;
     assert_eq!(code(&spawn(&["init"], &[], &tmp)?), 0);
     pin_branch(&tmp)?;
+    write_consumer_manifest(&tmp)?;
     let plan = spawn(&["plan"], &[], &tmp)?;
     assert_eq!(code(&plan), 0);
     let stdout = String::from_utf8_lossy(&plan.stdout).into_owned();
@@ -143,6 +145,7 @@ fn generate_keeps_recommendations_on_stderr() -> Result<(), Box<dyn Error>> {
     git_init(&tmp)?;
     assert_eq!(code(&spawn(&["init"], &[], &tmp)?), 0);
     pin_branch(&tmp)?;
+    write_consumer_manifest(&tmp)?;
     let plan = spawn(&["plan"], &[], &tmp)?;
     assert_eq!(code(&plan), 0);
     let expected = plan_recommendations(&String::from_utf8_lossy(&plan.stdout));
@@ -158,8 +161,8 @@ fn generate_keeps_recommendations_on_stderr() -> Result<(), Box<dyn Error>> {
     assert!(generated.stdout.is_empty());
     let stderr = String::from_utf8_lossy(&generated.stderr).into_owned();
     assert!(
-        stderr.contains("WARNING: .velnor/release-manifest.json is absent; generated workflows use a debug-only stand-in"),
-        "consumer policy must report its debug manifest stand-in: {stderr}"
+        !stderr.contains("debug-only stand-in"),
+        "consumer generation has no debug-only provenance path: {stderr}"
     );
     for rec in &expected {
         assert!(
@@ -223,6 +226,7 @@ fn generate_writes_manual_change_suggestions_for_malformed_tools() -> Result<(),
     git_init(&tmp)?;
     assert_eq!(code(&spawn(&["init"], &[], &tmp)?), 0);
     pin_branch(&tmp)?;
+    write_consumer_manifest(&tmp)?;
     // TOOL-2.2: malformed tool files stay read-only inputs; both commands
     // report `tooling_input_invalid` plus a concrete manual-change suggestion.
     std::fs::write(tmp.join("mise.toml"), "[tools\nrust = \n")?;

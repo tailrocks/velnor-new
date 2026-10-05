@@ -1,9 +1,9 @@
 //! Exact named-check job/report identities shared by workflow and plan.
 
-use super::ir::{StepKind, WorkflowIr};
+use super::ir::WorkflowIr;
 use super::jobs::PLAN_JOB_ID;
 use super::lanes::{Placement, placement_for};
-use super::{HOSTED_SUFFIX, SCALE_SUFFIX, lane_class};
+use super::{HOSTED_SUFFIX, SCALE_SUFFIX, lane_class, step::StepKind};
 use crate::config::{ExecutionMode, VelnorConfig};
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};

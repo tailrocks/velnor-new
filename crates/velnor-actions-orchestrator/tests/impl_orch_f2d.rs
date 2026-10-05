@@ -156,6 +156,10 @@ fn undetected_stacks_plan_no_work() -> TestResult {
     git(&["config", "commit.gpgsign", "false"], root)?;
     std::fs::create_dir_all(root.join(".velnor"))?;
     std::fs::write(root.join(".velnor/config.toml"), config_with_branch())?;
+    std::fs::write(
+        root.join(".velnor/release-manifest.json"),
+        crate::impl_common::fixture_manifest_json(),
+    )?;
     std::fs::write(root.join("README.md"), "no manifests here\n")?;
     let head = commit(root, "one")?;
     let request = serde_json::json!({"schema": 1, "run_key": "local", "base": None::<String>, "head": head, "event": "push", "root": root.display().to_string()});

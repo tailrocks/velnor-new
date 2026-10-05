@@ -2,6 +2,9 @@
 
 Minimal consumer repos mirroring detector/validator cases.
 Each subdir is self-contained (<=15 small files, no target/).
+`consumer-release-manifest.json` is the explicit deterministic schema
+fixture copied into positive consumer CLI/parity cases; it is test data,
+not candidate qualification evidence.
 Detector/validator behavior itself is proven by synthetic
 `TempDir`/`ProfileInputs` cases (e.g.
 `handwritten_workflow_invoking_mbx_is_strong_evidence`,

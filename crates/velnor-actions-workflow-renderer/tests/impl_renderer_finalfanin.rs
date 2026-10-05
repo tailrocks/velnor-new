@@ -1,6 +1,6 @@
 //! Final fan-in: fetch placement, publish, tolerant downloads, no wildcards.
 use velnor_actions_contract::{
-    GeneratorValidation, NeedsConclusions, Permissions, WorkflowPolicy,
+    GeneratorValidation, NeedsConclusions, Permissions, WorkflowPolicy, needs_inventory_digest,
     workflow::permissions::PermissionLevel,
 };
 use velnor_actions_workflow_renderer::{
@@ -182,8 +182,8 @@ fn merge_steps_carry_needs_channel_matching_final_needs() -> Result<(), RenderEr
     // just its presence: parse the merge step scalar back to JSON.
     let (key, value) = conclusions.expected_env();
     assert_eq!(key, "VELNOR_NEEDS_EXPECTED");
-    // JSON of the asserted `["plan"]` inventory above.
-    assert_eq!(value, "[\"plan\"]");
+    // The static digest binds the full inventory without repeating the IDs.
+    assert_eq!(value, needs_inventory_digest(&["plan".to_owned()]));
     let line = merge
         .lines()
         .find(|line| line.contains("VELNOR_NEEDS_EXPECTED:"))
@@ -196,7 +196,7 @@ fn merge_steps_carry_needs_channel_matching_final_needs() -> Result<(), RenderEr
     let unquoted = scalar
         .strip_prefix('"')
         .and_then(|inner| inner.strip_suffix('"'))
-        .unwrap_or_default();
+        .unwrap_or(scalar);
     assert_eq!(unquoted.replace("\\\"", "\""), value);
     Ok(())
 }

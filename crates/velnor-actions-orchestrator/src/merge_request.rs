@@ -15,11 +15,11 @@
 //! channel: a JSON object mapping each job in the final gate's `needs`
 //! to its conclusion, either directly (`{"plan": "success"}`) or in
 //! `toJSON(needs)` shape (`{"plan": {"result": "success"}}`). The
-//! renderer also emits the static expected inventory through
-//! `VELNOR_NEEDS_EXPECTED`; assembly declares it as the required
-//! inventory (minus the matrix-driver job, whose legs prove themselves
-//! through per-leg reports) and fails closed on a missing or unparsable
-//! channel or any observed-vs-expected divergence.
+//! renderer also emits a static digest of the expected `needs` IDs
+//! through `VELNOR_NEEDS_EXPECTED`; assembly checks the complete
+//! observed key set against it, then excludes the matrix-driver job
+//! from validator conclusions because its legs prove themselves through
+//! per-leg reports.
 //!
 //! Assembly never drops evidence silently: every missing or unparsable
 //! artifact becomes an explicit `assembly_errors` entry that fails the
@@ -85,8 +85,8 @@ fn event_payload_from(value: &std::ffi::OsStr) -> Option<String> {
 /// Assemble one merge request with explicit needs and event channels.
 ///
 /// The public wrapper reads `VELNOR_NEEDS_JSON` plus
-/// `VELNOR_NEEDS_EXPECTED` plus the GitHub event name/payload; tests
-/// pass every channel explicitly for determinism.
+/// `VELNOR_NEEDS_EXPECTED` digest plus the GitHub event name/payload;
+/// tests pass every channel explicitly for determinism.
 ///
 /// # Errors
 ///

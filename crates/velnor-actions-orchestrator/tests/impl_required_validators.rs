@@ -1,145 +1,17 @@
-//! Validator-failure negatives against the rendered needs inventory.
+//! Validator-failure negatives against the rendered needs inventory digest.
 //!
 //! Earlier negatives hand-set a two-job inventory; these tests render a
 //! real Velnor-policy workflow, extract `VELNOR_NEEDS_EXPECTED` from the
-//! emitted YAML, and fail one global validator against passing crates.
+//! emitted YAML, confirm it binds the Required needs set, and fail one
+//! global validator against passing crates.
 
 use std::fs;
 
-use velnor_actions_contract::{FinalReport, FinalStatus, JobConclusion, Plan};
-use velnor_actions_orchestrator::{
-    GenerationPreparation, merge_passed, plan_internal, prepare, render_staged_tree,
-};
+use velnor_actions_contract::{FinalStatus, JobConclusion, Plan};
+use velnor_actions_orchestrator::{merge_passed, plan_internal, prepare};
 
-use crate::impl_common::{
-    TestResult, git, git_line, make_repo, passing_reports, without_ambient_identity,
-};
-use crate::impl_orch_core::{merge, merge_request};
-
-/// Velnor-policy config: repository validators join the workflow.
-fn velnor_config() -> String {
-    "schema = 1\n[workflow]\npolicy = \"velnor-repository-v1\"\ndefault_branch = \"testmain\"\n"
-        .to_owned()
-}
-
-/// Fixture accepted by the Velnor-repository identity check.
-fn make_velnor_repo() -> Result<tempfile::TempDir, Box<dyn std::error::Error>> {
-    let repo = make_repo(&velnor_config())?;
-    let git_config = repo.path().join(".git/config");
-    let mut text = fs::read_to_string(&git_config)?;
-    text.push_str("[remote \"origin\"]\n\turl = https://github.com/tailrocks/velnor-new.git\n");
-    fs::write(&git_config, text)?;
-    Ok(repo)
-}
-
-/// Rendered `ci.yml` text for one preparation.
-fn rendered_workflow(prep: &GenerationPreparation) -> Result<String, Box<dyn std::error::Error>> {
-    let tree = render_staged_tree(prep)?;
-    tree.get(".github/workflows/ci.yml")
-        .map(str::to_owned)
-        .ok_or_else(|| {
-            Box::new(std::io::Error::other("missing workflow")) as Box<dyn std::error::Error>
-        })
-}
-
-/// `VELNOR_NEEDS_EXPECTED` inventory parsed from rendered YAML.
-///
-/// Mirrors assembly (`parse_expected`): the matrix-driver job needs no
-/// conclusion because per-leg reports prove it, so it leaves the
-/// required inventory.
-fn rendered_needs_inventory(yaml: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
-    let line = yaml
-        .lines()
-        .find(|line| line.contains("VELNOR_NEEDS_EXPECTED:"))
-        .ok_or("missing needs-expected line")?;
-    let scalar = line
-        .split_once("VELNOR_NEEDS_EXPECTED:")
-        .ok_or("needs-expected shape")?
-        .1
-        .trim();
-    // Double-quoted YAML scalar: strip the quotes, unescape the JSON.
-    let unquoted = scalar
-        .strip_prefix('"')
-        .and_then(|inner| inner.strip_suffix('"'))
-        .ok_or("needs-expected quoting")?;
-    let raw = unquoted.replace("\\\"", "\"");
-    let mut inventory: Vec<String> = serde_json::from_str(&raw)?;
-    inventory.retain(|id| id != velnor_actions_workflow_renderer::render::TASK_JOB_ID);
-    inventory.sort();
-    Ok(inventory)
-}
-
-/// Merge verdict over passing crates with one validator at `conclusion`.
-fn merge_with_validator(
-    plan: &Plan,
-    inventory: &[String],
-    failing: &str,
-    conclusion: &str,
-) -> Result<FinalReport, Box<dyn std::error::Error>> {
-    let reports = passing_reports(plan)?;
-    let jobs: Vec<serde_json::Value> = inventory
-        .iter()
-        .map(|id| {
-            let result = if id == failing { conclusion } else { "success" };
-            serde_json::json!({"job_id": id, "conclusion": result})
-        })
-        .collect();
-    let plan_value = serde_json::to_value(plan)?;
-    let mut request = merge_request(
-        &plan_value,
-        &plan_value["matrix"].clone(),
-        &serde_json::to_value(&reports)?,
-        &serde_json::Value::Array(jobs),
-    );
-    request["required_job_ids"] = serde_json::to_value(inventory)?;
-    merge(&request)
-}
-
-/// Merge verdict over passing crates with `missing` never reporting.
-///
-/// The inventory still declares the validator, so merge marks it
-/// `missing` and fails closed with `planning_failed`.
-fn merge_omitting_validator(
-    plan: &Plan,
-    inventory: &[String],
-    missing: &str,
-) -> Result<FinalReport, Box<dyn std::error::Error>> {
-    let reports = passing_reports(plan)?;
-    let jobs: Vec<serde_json::Value> = inventory
-        .iter()
-        .filter(|id| id.as_str() != missing)
-        .map(|id| serde_json::json!({"job_id": id, "conclusion": "success"}))
-        .collect();
-    let plan_value = serde_json::to_value(plan)?;
-    let mut request = merge_request(
-        &plan_value,
-        &plan_value["matrix"].clone(),
-        &serde_json::to_value(&reports)?,
-        &serde_json::Value::Array(jobs),
-    );
-    request["required_job_ids"] = serde_json::to_value(inventory)?;
-    merge(&request)
-}
-
-/// Assert the verdict blames `failing` with `conclusion`.
-fn assert_validator_blamed(
-    report: &FinalReport,
-    failing: &str,
-    conclusion: JobConclusion,
-    status: FinalStatus,
-) {
-    assert_eq!(report.status, status, "{failing} verdict");
-    let blamed = report
-        .required_job_results
-        .iter()
-        .find(|job| job.job_id == failing);
-    assert_eq!(
-        blamed.map(|job| job.conclusion),
-        Some(conclusion),
-        "{failing} blamed: {:?}",
-        report.required_job_results
-    );
-}
+use crate::impl_common::{TestResult, git, git_line, without_ambient_identity};
+use crate::impl_required_validators_support::*;
 
 #[test]
 fn rendered_inventory_validator_failure_fails_required() -> TestResult {

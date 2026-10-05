@@ -3,14 +3,14 @@
 //! Declared via `#[path]` from `merge_request.rs` under `cfg(test)`;
 //! staging helpers live in `merge_request_tests`.
 
-use super::merge_request_tests::{error_list, plan_with, staged};
+use super::merge_request_tests::{error_list, expected_needs, plan_with, staged};
 use super::*;
 
 #[test]
 fn assembly_captures_actual_event() {
     let dir = staged(&plan_with(&[]), &[]);
     let needs = Some(r#"{"plan":"success"}"#);
-    let expected = Some(r#"["plan"]"#);
+    let expected = expected_needs(&["plan"]);
     let actual_of = |request: &str| {
         serde_json::from_str::<serde_json::Value>(request).expect("json")["actual_event"].clone()
     };
@@ -19,8 +19,15 @@ fn assembly_captures_actual_event() {
         ("merge_group", "merge_group"),
         ("local", "local"),
     ] {
-        let request = assemble_with_needs("local", dir.path(), needs, expected, Some(name), None)
-            .expect("assemble");
+        let request = assemble_with_needs(
+            "local",
+            dir.path(),
+            needs,
+            Some(&expected),
+            Some(name),
+            None,
+        )
+        .expect("assemble");
         assert_eq!(actual_of(&request), serde_json::json!(want), "{name}");
         assert!(error_list(&request).is_empty(), "{request}");
     }
@@ -30,7 +37,7 @@ fn assembly_captures_actual_event() {
             "local",
             dir.path(),
             needs,
-            expected,
+            Some(&expected),
             Some("pull_request"),
             Some(&payload),
         )
@@ -45,8 +52,9 @@ fn assembly_captures_actual_event() {
         (Some("pull_request"), None, "missing_actual_payload"),
         (Some("pull_request"), Some("{}"), "indeterminate_fork"),
     ] {
-        let request = assemble_with_needs("local", dir.path(), needs, expected, name, payload)
-            .expect("assemble");
+        let request =
+            assemble_with_needs("local", dir.path(), needs, Some(&expected), name, payload)
+                .expect("assemble");
         assert!(actual_of(&request).is_null(), "{name:?}");
         assert!(
             error_list(&request).contains(&want.to_owned()),
@@ -65,13 +73,13 @@ fn assembly_reads_attestation_in_candidate_mode() {
         )
     };
     let needs = Some(r#"{"candidate":"success","plan":"success"}"#);
-    let expected = Some(r#"["candidate","plan"]"#);
+    let expected = expected_needs(&["candidate", "plan"]);
     let dir = file(r#"{"schema":1,"commit":"abc"}"#);
     let request = assemble_with_needs(
         "local",
         dir.path(),
         needs,
-        expected,
+        Some(&expected),
         Some("push"),
         Some("{}"),
     )
@@ -85,7 +93,7 @@ fn assembly_reads_attestation_in_candidate_mode() {
         "local",
         bare.path(),
         needs,
-        expected,
+        Some(&expected),
         Some("push"),
         Some("{}"),
     )
@@ -102,7 +110,7 @@ fn assembly_reads_attestation_in_candidate_mode() {
         "local",
         dir.path(),
         needs,
-        expected,
+        Some(&expected),
         Some("push"),
         Some("{}"),
     )
@@ -116,7 +124,7 @@ fn assembly_reads_attestation_in_candidate_mode() {
         "local",
         bare.path(),
         Some(r#"{"plan":"success"}"#),
-        Some(r#"["plan"]"#),
+        Some(&expected_needs(&["plan"])),
         Some("push"),
         Some("{}"),
     )

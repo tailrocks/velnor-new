@@ -56,7 +56,7 @@ pub(super) fn tofu_plugin_cache_dir_for_extra(
         return Ok(None);
     };
     velnor_actions_tofu::tofu_cache_dir_under(
-        crate::tofu_cache::TOFU_PROVIDER_CACHE_BASE_EXPR,
+        velnor_actions_contract::workflow::step_identity::TOFU_PROVIDER_CACHE_BASE_EXPR,
         &root,
     )
     .map(Some)

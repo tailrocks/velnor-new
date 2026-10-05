@@ -65,9 +65,10 @@ environment (no runner temp, no numeric run ID) fails outright
 ## `needs` cross-check (the "unverifiable" step)
 
 Merge assembly parses the `VELNOR_NEEDS_JSON` conclusions plus the
-rendered `VELNOR_NEEDS_EXPECTED` inventory (`merge_request.rs:112`) and
-fails closed on any observed-vs-expected divergence
-(`needs_channel.rs:81-83`, `needs_inventory_mismatch`). The merge
+rendered BLAKE3 digest in `VELNOR_NEEDS_EXPECTED` (`merge_request.rs`)
+and fails closed when the complete observed `needs` key set does not
+match that static inventory (`needs_channel.rs`,
+`needs_inventory_mismatch`). The merge
 re-enforces the exact set: empty inventory, duplicates, extras, and gaps
 all fail closed (`required_evidence.rs:110-145`); conclusions fold with
 skipped as `not_run` and missing as `failed`

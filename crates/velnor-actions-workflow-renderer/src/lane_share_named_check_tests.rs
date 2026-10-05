@@ -36,6 +36,8 @@ fn named_check_identity_and_report_upload_stay_on_their_exact_lane() {
         let id = format!("check-demo{suffix}");
         let checkout = Step {
             name: "Checkout".to_owned(),
+            id: None,
+            role: Some(velnor_actions_contract::StepRole::Checkout),
             condition: None,
             kind: StepKind::Action {
                 uses: ctx().checkout_uses,
@@ -46,6 +48,8 @@ fn named_check_identity_and_report_upload_stay_on_their_exact_lane() {
         let mut steps = vec![checkout, echo_step(0, "shared-preparation")];
         steps.push(Step {
             name: "Execute named check".to_owned(),
+            id: None,
+            role: None,
             condition: None,
             kind: StepKind::Shell {
                 run: vec!["velnor-actions".to_owned()],
@@ -57,6 +61,8 @@ fn named_check_identity_and_report_upload_stay_on_their_exact_lane() {
         });
         steps.push(Step {
             name: "Upload reports".to_owned(),
+            id: None,
+            role: Some(velnor_actions_contract::StepRole::MatrixReportUpload),
             condition: Some("always()".to_owned()),
             kind: StepKind::Action {
                 uses: crate::steps::UPLOAD_ARTIFACT_USES.to_owned(),

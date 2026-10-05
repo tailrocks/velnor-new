@@ -12,14 +12,34 @@ pub const NEEDS_CHANNEL_ENV: &str = "VELNOR_NEEDS_JSON";
 /// GitHub expression producing the `needs` conclusions payload.
 pub const NEEDS_CHANNEL_EXPRESSION: &str = "${{ toJSON(needs) }}";
 
-/// Env key carrying the rendered expected validator inventory.
+/// Env key carrying the rendered expected validator inventory digest.
 ///
-/// Static JSON array of the finalized gate's `needs`, emitted beside
-/// the runtime conclusions so the merge binds the required inventory
-/// to the committed workflow instead of deriving it from whatever the
-/// run happened to observe (a dropped validator would otherwise shrink
-/// both sides of the check and pass silently).
+/// Static BLAKE3 digest of the finalized gate's sorted `needs` IDs,
+/// emitted beside the runtime conclusions so the merge binds the
+/// required inventory to the committed workflow instead of deriving it
+/// from whatever the run happened to observe (a dropped validator
+/// would otherwise shrink both sides of the check and pass silently).
 pub const NEEDS_EXPECTED_ENV: &str = "VELNOR_NEEDS_EXPECTED";
+
+/// Digest the exact sorted set of required-job IDs.
+///
+/// Each ID is length-prefixed before hashing, so arbitrary strings have
+/// an unambiguous representation. Sorting makes the digest independent
+/// of YAML/map iteration order; duplicates remain significant and fail
+/// against GitHub's unique `needs` object keys.
+#[must_use]
+pub fn needs_inventory_digest(inventory: &[String]) -> String {
+    let mut sorted = inventory.to_vec();
+    sorted.sort();
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(b"velnor-required-needs-v1\0");
+    for job_id in sorted {
+        let bytes = job_id.as_bytes();
+        hasher.update(&(bytes.len() as u64).to_be_bytes());
+        hasher.update(bytes);
+    }
+    format!("b3-{}", hasher.finalize().to_hex())
+}
 
 /// Producer model of the final-gate `needs` channel (P01-3/4).
 ///
@@ -29,8 +49,8 @@ pub const NEEDS_EXPECTED_ENV: &str = "VELNOR_NEEDS_EXPECTED";
 /// gate) admitted downstream jobs the gate cannot need without a cycle,
 /// so the merge saw `needs_inventory_mismatch` on every run; the gate
 /// list is the single source of truth. The renderer emits
-/// [`NEEDS_CHANNEL_ENV`] with [`NEEDS_CHANNEL_EXPRESSION`] so merge
-/// conclusions match the plan.
+/// [`NEEDS_CHANNEL_ENV`] with [`NEEDS_CHANNEL_EXPRESSION`] and a digest
+/// of this inventory so merge conclusions match the plan.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NeedsConclusions {
     /// Required-gate job ID.
@@ -78,18 +98,16 @@ impl NeedsConclusions {
         )
     }
 
-    /// Expected-inventory binding the renderer emits on the merge step.
+    /// Expected-inventory digest the renderer emits on the merge step.
     ///
-    /// Static JSON array of the finalized inventory (sorted by
-    /// construction from the ordered job map), so the merge compares
-    /// observed conclusions against the committed workflow.
+    /// Static digest of the finalized `needs` IDs, so the merge compares
+    /// the observed key set against the committed workflow without
+    /// repeating a large JSON array in the generated workflow.
     #[must_use]
     pub fn expected_env(&self) -> (String, String) {
-        let mut inventory = self.inventory.clone();
-        inventory.sort();
         (
             NEEDS_EXPECTED_ENV.to_owned(),
-            serde_json::to_string(&inventory).unwrap_or_else(|_| "[]".to_owned()),
+            needs_inventory_digest(&self.inventory),
         )
     }
 
@@ -117,14 +135,15 @@ mod tests {
     }
 
     #[test]
-    fn expected_env_emits_sorted_inventory_json() {
+    fn expected_env_emits_order_independent_inventory_digest() {
         let (key, value) = conclusions(&["zizmor", "plan", "alint"]).expected_env();
         assert_eq!(key, NEEDS_EXPECTED_ENV);
-        assert_eq!(value, "[\"alint\",\"plan\",\"zizmor\"]");
         assert_eq!(
-            serde_json::from_str::<Vec<String>>(&value).expect("valid json"),
-            ["alint", "plan", "zizmor"],
+            value,
+            needs_inventory_digest(&["alint".to_owned(), "plan".to_owned(), "zizmor".to_owned(),])
         );
+        assert!(crate::is_valid_digest(&value));
+        assert_ne!(value, needs_inventory_digest(&["plan".to_owned()]));
     }
 
     /// Minimal job with the given `needs` for inventory tests.
@@ -154,7 +173,7 @@ mod tests {
         assert_eq!(conclusions.inventory, vec!["plan".to_owned()]);
         assert!(conclusions.gate_matches(&jobs));
         let (_, value) = conclusions.expected_env();
-        assert_eq!(value, "[\"plan\"]");
+        assert_eq!(value, needs_inventory_digest(&["plan".to_owned()]));
     }
 
     #[test]
@@ -177,9 +196,12 @@ mod tests {
         let (key, value) = conclusions(&["plan"]).expected_env();
         assert_eq!(
             (key.as_str(), value.as_str()),
-            (NEEDS_EXPECTED_ENV, "[\"plan\"]")
+            (
+                NEEDS_EXPECTED_ENV,
+                needs_inventory_digest(&["plan".to_owned()]).as_str()
+            )
         );
         let (_, value) = conclusions(&[]).expected_env();
-        assert_eq!(value, "[]", "empty inventory stays explicit");
+        assert_eq!(value, needs_inventory_digest(&[]));
     }
 }

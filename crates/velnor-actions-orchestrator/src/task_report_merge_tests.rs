@@ -6,7 +6,7 @@
 use std::fs;
 
 use tempfile::TempDir;
-use velnor_actions_contract::{FinalStatus, Plan};
+use velnor_actions_contract::{FinalStatus, Plan, needs_inventory_digest};
 
 use super::task_report_tests::{CLIPPY, TEST, fixture_plan, staged_run};
 use super::*;
@@ -47,6 +47,11 @@ fn stage_downloads(plan: &Plan, temp: &TempDir) {
 /// capture `pull_request` or trust coherence fails the merge closed.
 const PR_PAYLOAD: &str = r#"{"pull_request":{"head":{"repo":{"fork":false}}}}"#;
 
+/// Expected static digest for this fixture's single required job.
+fn plan_needs_digest() -> String {
+    needs_inventory_digest(&["plan".to_owned()])
+}
+
 #[test]
 fn merge_flips_not_run_to_executed_end_to_end() {
     let plan = fixture_plan();
@@ -58,7 +63,7 @@ fn merge_flips_not_run_to_executed_end_to_end() {
         "local",
         &run,
         needs,
-        Some(r#"["plan"]"#),
+        Some(&plan_needs_digest()),
         Some("pull_request"),
         Some(PR_PAYLOAD),
     )
@@ -86,7 +91,7 @@ fn merge_flips_not_run_to_executed_end_to_end() {
         "local",
         &run,
         needs,
-        Some(r#"["plan"]"#),
+        Some(&plan_needs_digest()),
         Some("pull_request"),
         Some(PR_PAYLOAD),
     )
@@ -129,7 +134,7 @@ fn merge_fails_failing_obligation_and_blocks_downstream() {
         "local",
         &run,
         needs,
-        Some(r#"["plan"]"#),
+        Some(&plan_needs_digest()),
         Some("pull_request"),
         Some(PR_PAYLOAD),
     )
@@ -169,7 +174,7 @@ fn merge_blocks_all_skipped_noop_end_to_end() {
         "local",
         &run,
         Some(r#"{"plan":"success"}"#),
-        Some(r#"["plan"]"#),
+        Some(&plan_needs_digest()),
         Some("pull_request"),
         Some(PR_PAYLOAD),
     )
@@ -208,7 +213,7 @@ fn merge_lists_shared_job_artifact_once() {
         "local",
         &run,
         Some(r#"{"plan":"success"}"#),
-        Some(r#"["plan"]"#),
+        Some(&plan_needs_digest()),
         Some("pull_request"),
         Some(PR_PAYLOAD),
     )
