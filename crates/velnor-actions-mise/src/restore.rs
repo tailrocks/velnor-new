@@ -300,10 +300,10 @@ pub fn probe_tool_availability(qualified: bool, probe_failed: bool) -> ToolAvail
 /// Save-decision inputs for one cache layer (CACHE-2.x).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SaveInputs<'a> {
-    /// Layer trust scope (`trusted` saves only on protected pushes).
+    /// Layer trust scope (`trusted` saves only with a verified protected push).
     pub layer_trust: &'a str,
-    /// Workflow event name.
-    pub event: &'a str,
+    /// Opaque result of matching runner facts and current branch API evidence.
+    pub writer: &'a crate::cache_writer::CacheWriterContext,
     /// Whether required checks passed.
     pub passed: bool,
     /// Cache backend unavailable.
@@ -327,7 +327,7 @@ pub fn save_decision(inputs: &SaveInputs<'_>) -> Result<(), MissReason> {
     if inputs.active_writer {
         return Err(MissReason::CACHE_WRITE_DISABLED);
     }
-    if !crate::cache::save_allowed(inputs.layer_trust, inputs.event, inputs.passed) {
+    if !crate::cache::save_allowed(inputs.layer_trust, inputs.writer, inputs.passed) {
         return Err(MissReason::CACHE_WRITE_DISABLED);
     }
     Ok(())

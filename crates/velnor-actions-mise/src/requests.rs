@@ -10,6 +10,9 @@
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 
+#[path = "requests_gh.rs"]
+mod gh;
+
 use crate::catalog::{PinnedTool, ToolCatalog};
 use crate::command::{
     IsolatedCommand, ProcessOutput, mise_argv_tail, mise_install_argv_tail, redact_argv_for_debug,

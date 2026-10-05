@@ -1,6 +1,10 @@
 //! Pinned Mise setup emission: template shape plus strict insertion.
 use std::collections::BTreeMap;
 use velnor_actions_contract::Step;
+use velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION;
+use velnor_actions_workflow_renderer::steps::{
+    TOOLS_CACHE_RESTORE_CONDITION, TOOLS_CACHE_SAVE_CONDITION,
+};
 use velnor_actions_workflow_renderer::{
     MiseSetup, RenderError, SETUP_MISE_NAME, checkout_step, mise_setup_step, plan_step,
 };
@@ -11,7 +15,7 @@ use super::impl_renderer_fixtures::*;
 fn setup_step_shape_exact() -> Result<(), RenderError> {
     let step = mise_setup_step(&mise())?;
     assert_eq!(step.name, SETUP_MISE_NAME);
-    let velnor_actions_contract::StepKind::Action { uses, with, .. } = &step.kind else {
+    let velnor_actions_contract::StepKind::Action { uses, with, env } = &step.kind else {
         panic!("setup must be an action step");
     };
     assert_eq!(uses, MISE_USES);
@@ -24,6 +28,19 @@ fn setup_step_shape_exact() -> Result<(), RenderError> {
             ("env".to_owned(), "false".to_owned()),
             ("cache".to_owned(), "false".to_owned()),
             ("cache_save".to_owned(), "false".to_owned()),
+        ])
+    );
+    assert_eq!(
+        env,
+        &BTreeMap::from([
+            (
+                "MISE_DATA_DIR".to_owned(),
+                "${{ runner.temp }}/velnor/mise-bootstrap".to_owned()
+            ),
+            ("MISE_NO_CONFIG".to_owned(), "1".to_owned()),
+            ("MISE_NO_ENV".to_owned(), "1".to_owned()),
+            ("MISE_NO_HOOKS".to_owned(), "1".to_owned()),
+            ("MISE_LOCKFILE".to_owned(), "0".to_owned()),
         ])
     );
     Ok(())
@@ -80,26 +97,38 @@ fn strict_inserts_setup_before_mise_exec() -> Result<(), RenderError> {
     let setup_at = text.find(SETUP_MISE_NAME).expect("setup inserted");
     let mise_at = text.find("mise --no-config").expect("mise step kept");
     assert!(setup_at < mise_at, "setup must precede mise:\n{text}");
+    let image_at = text
+        .find("Resolve tool-cache image")
+        .expect("runner image probe inserted");
+    let restore_at = text
+        .find("Restore Mise tools")
+        .expect("explicit restore inserted");
+    let guard_at = text
+        .find("Verify restored Mise bootstrap")
+        .expect("restored bootstrap guard inserted");
+    assert!(
+        image_at < restore_at && restore_at < guard_at && guard_at < setup_at,
+        "image probe, restore, verification, and executable setup order:\n{text}"
+    );
     for line in [
         format!("uses: {MISE_USES}"),
         format!("version: {MISE_VERSION}"),
         format!("sha256: {MISE_SHA256}"),
         "install: \"false\"".to_owned(),
         "env: \"false\"".to_owned(),
-        "cache: \"true\"".to_owned(),
+        "cache: \"false\"".to_owned(),
         "cache_save: \"false\"".to_owned(),
-        "cache_key: mise-v1-".to_owned(),
+        "MISE_DATA_DIR: ${{ runner.temp }}/velnor/mise-bootstrap".to_owned(),
     ] {
         assert!(text.contains(&line), "missing {line}:\n{text}");
     }
-    assert!(
-        !text.contains("Restore Mise tools"),
-        "P08: restores stay built-in:\n{text}"
-    );
+    assert!(text.contains(&format!("if: {TOOLS_CACHE_RESTORE_CONDITION}")));
+    assert!(text.contains(&format!(
+        "if: {CACHE_SAVE_CONDITION} && {TOOLS_CACHE_SAVE_CONDITION}"
+    )));
     for line in [
         "- name: Save Mise tools".to_owned(),
-        "key: mise-v1-".to_owned(),
-        "if: success() && github.event_name == 'push'".to_owned(),
+        "key: mise-v3-${{ runner.os }}-${{ runner.arch }}-${{ env.VELNOR_CACHE_IMAGE_OS }}-${{ env.VELNOR_CACHE_IMAGE_VERSION }}-".to_owned(),
     ] {
         assert!(text.contains(&line), "sole owner saves {line}:\n{text}");
     }
@@ -156,6 +185,20 @@ fn strict_keeps_single_wellformed_setup() -> Result<(), RenderError> {
     );
     let text = strict(&fixture_ir(vec![lint]), &fixture_ctx())?;
     assert_eq!(text.matches(SETUP_MISE_NAME).count(), 1, "{text}");
+    let image_at = text
+        .find("Resolve tool-cache image")
+        .expect("legacy setup gets cache gate");
+    let restore_at = text
+        .find("Restore Mise tools")
+        .expect("legacy setup gets explicit restore");
+    let guard_at = text
+        .find("Verify restored Mise bootstrap")
+        .expect("legacy setup gets bootstrap verification");
+    let setup_at = text.find(SETUP_MISE_NAME).expect("setup remains singular");
+    assert!(
+        image_at < restore_at && restore_at < guard_at && guard_at < setup_at,
+        "bare setup upgrades to the complete cache lifecycle:\n{text}"
+    );
     Ok(())
 }
 

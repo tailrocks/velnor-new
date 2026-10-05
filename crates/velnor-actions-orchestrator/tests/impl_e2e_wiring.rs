@@ -101,7 +101,7 @@ fn uses_staged_helper(step: &StepText) -> bool {
         && step.body.contains("$RUNNER_TEMP/velnor/bin")
 }
 
-/// Setup Mise must be first (modulo Checkout plus tools restore) and precede every `mise` use.
+/// Setup Mise follows image qualification, exact restore, and bootstrap verification.
 fn check_setup_first(job: &JobText) -> Result<(), String> {
     let setup = job.steps.iter().position(|s| s.name == "Setup Mise");
     let first_mise = job.steps.iter().position(uses_mise);
@@ -116,29 +116,42 @@ fn check_setup_first(job: &JobText) -> Result<(), String> {
     }
 }
 
-/// Setup position is legal at 0-1 (right after Checkout; P08 has no
-/// manual tools restore ahead of it).
-fn setup_is_early(_job: &JobText, at: usize) -> bool {
-    at <= 1
+/// The typed scaffold is inserted immediately after Checkout, when present.
+fn setup_is_early(job: &JobText, at: usize) -> bool {
+    let names = job
+        .steps
+        .iter()
+        .map(|step| step.name.as_str())
+        .collect::<Vec<_>>();
+    let offset = usize::from(names.first() == Some(&"Checkout"));
+    names.get(offset..offset + 4)
+        == Some(
+            &[
+                "Resolve tool-cache image",
+                "Restore Mise tools",
+                "Verify restored Mise bootstrap",
+                "Setup Mise",
+            ][..],
+        )
+        && at == offset + 3
 }
 
-/// Setup Mise must enable the qualified built-in cache: `cache:true` with
-/// an explicit tool-union `cache_key` (never the workspace-hashing default
-/// that ELOOPs on the symlink-loop fixture, never a job-role suffix).
-/// Every setup restores read-only (`cache_save: "false"`): the pinned
-/// action saves only inside its disabled `install` leg, so no setup may
-/// promise a built-in save. Push-gated saves are explicit `Save Mise
-/// tools` steps on the elected writer per key.
+/// Setup Mise's internal cache stays disabled; explicit actions own reuse.
 fn check_setup_cache_on(job: &JobText) -> Result<(), String> {
     for step in job.steps.iter().filter(|s| s.name == "Setup Mise") {
         for need in [
-            "cache: \"true\"",
-            "cache_key: mise-v1-",
+            "install: \"false\"",
+            "env: \"false\"",
+            "cache: \"false\"",
             "cache_save: \"false\"",
+            "MISE_DATA_DIR: \"${{ runner.temp }}/velnor/mise-bootstrap\"",
         ] {
             if !step.body.contains(need) {
                 return Err(format!("{}: Setup Mise misses {need}", job.id));
             }
+        }
+        if step.body.contains("cache_key:") {
+            return Err(format!("{}: disabled Mise cache has a key", job.id));
         }
         if step.body.contains("cache_save: ${{") {
             return Err(format!("{}: Setup Mise must not promise a save", job.id));
