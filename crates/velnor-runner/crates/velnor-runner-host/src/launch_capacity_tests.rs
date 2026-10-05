@@ -83,6 +83,35 @@ fn ack_does_not_start_or_free_a_slot() {
 }
 
 #[test]
+fn mint_holds_a_full_slot_even_when_the_count_covers() {
+    assert!(needs_running(Idle::Mint));
+    assert_eq!(
+        admit(Seat {
+            capacity: 1,
+            target: 1,
+            started: 0,
+            occupied: 1,
+            running: 1,
+            assigned: 1,
+            idle: Idle::Mint,
+        }),
+        Admit::Hold
+    );
+    assert_eq!(
+        admit(Seat {
+            capacity: 2,
+            target: 2,
+            started: 0,
+            occupied: 1,
+            running: 1,
+            assigned: 1,
+            idle: Idle::Mint,
+        }),
+        Admit::Start { stop: false }
+    );
+}
+
+#[test]
 fn scale_does_not_mint_again_once_assigned_is_covered() {
     assert_eq!(
         admit(Seat {

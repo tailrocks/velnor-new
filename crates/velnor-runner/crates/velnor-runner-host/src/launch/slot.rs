@@ -103,6 +103,27 @@ async fn delete_recorded<E: PairEngine + ?Sized>(
     }
 }
 
+/// True when this launch subject still has a docker id the engine reports up.
+pub(super) async fn subject_running<E: PairEngine + ?Sized>(
+    journal: &Journal,
+    engine: &E,
+    subject: &str,
+) -> Result<bool, EnsureError> {
+    let rows = journal.rows().await.map_err(map_journal)?;
+    for row in &rows {
+        if row.kind != "launch" || row.subject != subject {
+            continue;
+        }
+        let Some(id) = row.docker_id.as_deref().filter(|id| !id.is_empty()) else {
+            continue;
+        };
+        if engine.running(id).await.map_err(map_docker)? {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
 pub(super) fn holds(row: &IntentRow) -> bool {
     row.kind == "launch" && !row.cleanup_proven && row.state != IntentState::Failed
 }

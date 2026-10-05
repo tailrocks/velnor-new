@@ -185,7 +185,7 @@ where
     S: FnOnce(&str, &[u8], bind::Bind) -> F,
     F: Future<Output = Result<Started, HostError>>,
 {
-    if matches!(steps::idle(polled), steps::Idle::Scale) {
+    if matches!(steps::idle(polled), steps::Idle::Scale | steps::Idle::Mint) {
         let Poll::Batch(batch) = polled else {
             return Ok(None);
         };

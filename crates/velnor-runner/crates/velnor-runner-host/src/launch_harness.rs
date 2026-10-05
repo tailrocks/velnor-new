@@ -131,6 +131,14 @@ pub(crate) fn ctx() -> Drive {
 }
 
 pub(crate) fn assigned_wait(message_id: i64, assigned: i64) -> Poll {
+    kind_wait(message_id, assigned, InnerKind::Assigned)
+}
+
+pub(crate) fn started_wait(message_id: i64, assigned: i64) -> Poll {
+    kind_wait(message_id, assigned, InnerKind::Started)
+}
+
+fn kind_wait(message_id: i64, assigned: i64, kind: InnerKind) -> Poll {
     Poll::Batch(ParsedBatch {
         message_id,
         statistics: Some(Statistics {
@@ -143,7 +151,7 @@ pub(crate) fn assigned_wait(message_id: i64, assigned: i64) -> Poll {
             total_idle_runners: 0,
         }),
         jobs: vec![InnerJob {
-            kind: InnerKind::Assigned,
+            kind,
             request_id: Some(0),
             job_id: None,
             labels: Vec::new(),

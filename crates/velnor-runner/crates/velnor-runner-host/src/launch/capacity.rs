@@ -60,8 +60,8 @@ pub(crate) struct Seat {
 /// Decide one poll. Occupancy is `occupied` and `running`, not historical `started`.
 ///
 /// A free slot mints the next job even when this call already started `capacity`
-/// workers. An uncovered assignment is not acknowledged. Capacity 1 still leaves
-/// after an acknowledgement once the running container is the one that covers it.
+/// workers. `Idle::Mint` never acknowledges from the running count. `Idle::Scale`
+/// acknowledges only when a running container covers the assigned population.
 #[must_use]
 pub(crate) const fn admit(seat: Seat) -> Admit {
     match seat.idle {
@@ -78,6 +78,7 @@ pub(crate) const fn admit(seat: Seat) -> Admit {
         },
         Idle::Launch => admit_launch(seat),
         Idle::Scale => admit_scale(seat),
+        Idle::Mint => admit_mint(seat),
     }
 }
 
@@ -105,8 +106,31 @@ const fn admit_scale(seat: Seat) -> Admit {
     }
     // A covered population is acknowledged, not minted again.
     Admit::Ack {
-        stop: seat.capacity == 1 || started_done(seat),
+        stop: covered_ack_stops(seat.capacity, seat.target, seat.started),
     }
+}
+
+const fn admit_mint(seat: Seat) -> Admit {
+    if slot_full(seat) {
+        return Admit::Hold;
+    }
+    Admit::Start {
+        stop: at_limit(seat),
+    }
+}
+
+/// Stop flag for a covered scale ack and for a live `JobAssigned` replay.
+pub(super) const fn covered_ack_stops(capacity: u32, target: u32, started: u32) -> bool {
+    let seat = Seat {
+        capacity,
+        target,
+        started,
+        occupied: 0,
+        running: 0,
+        assigned: 0,
+        idle: Idle::Ack,
+    };
+    seat.capacity == 1 || started_done(seat)
 }
 
 const fn scale_covered(seat: Seat) -> bool {
@@ -134,10 +158,10 @@ const fn limit(seat: Seat) -> u32 {
     }
 }
 
-/// Launch and scale always need the docker count. A full `started` must not hide it.
+/// Launch, scale, and mint always need the docker count. A full `started` must not hide it.
 #[must_use]
 pub(crate) const fn needs_running(idle: Idle) -> bool {
-    matches!(idle, Idle::Launch | Idle::Scale)
+    matches!(idle, Idle::Launch | Idle::Scale | Idle::Mint)
 }
 
 /// True when session statistics must not mint another pair.
