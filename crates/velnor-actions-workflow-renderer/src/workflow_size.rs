@@ -1,6 +1,7 @@
 //! Byte limit for every generated GitHub Actions workflow document.
 
 use crate::RenderError;
+use std::path::Path;
 
 /// Maximum rendered workflow size, including the generator marker.
 pub const MAX_WORKFLOW_BYTES: usize = 500_000;
@@ -22,7 +23,10 @@ pub(crate) fn check_workflow_size(path: &str, bytes: &str) -> Result<(), RenderE
 
 /// True for generated `.yml` or `.yaml` files under GitHub's workflow tree.
 fn is_workflow_path(path: &str) -> bool {
-    path.starts_with(".github/workflows/") && (path.ends_with(".yml") || path.ends_with(".yaml"))
+    path.starts_with(".github/workflows/")
+        && Path::new(path).extension().is_some_and(|extension| {
+            extension.eq_ignore_ascii_case("yml") || extension.eq_ignore_ascii_case("yaml")
+        })
 }
 
 #[cfg(test)]
@@ -75,5 +79,14 @@ mod tests {
         let over = "x".repeat(MAX_WORKFLOW_BYTES + 1);
         assert!(check_workflow_size(".github/actionlint.yaml", &over).is_ok());
         assert!(check_workflow_size("docs/ci.yml", &over).is_ok());
+    }
+
+    #[test]
+    fn size_limit_recognizes_case_insensitive_workflow_extensions() {
+        let over = "x".repeat(MAX_WORKFLOW_BYTES + 1);
+        let error = check_workflow_size(".github/workflows/ci.YML", &over)
+            .expect_err("case-insensitive workflow extensions must be limited");
+        assert!(matches!(error, RenderError::InvalidWorkflow(problem)
+            if problem == "workflow_too_large:.github/workflows/ci.YML:500001:500000"));
     }
 }
