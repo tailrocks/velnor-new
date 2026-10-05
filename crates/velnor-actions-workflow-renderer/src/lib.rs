@@ -43,6 +43,7 @@ pub mod release_permissions;
 pub mod release_spec;
 pub mod release_tree;
 pub mod render;
+mod render_constants;
 mod runs_on;
 pub mod schema2;
 pub mod setup;

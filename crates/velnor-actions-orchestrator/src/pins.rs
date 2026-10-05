@@ -247,7 +247,7 @@ pub fn acquire_script_argv(
     }
     let seed = format!("{seed_root}/generator/{name}");
     let script = format!(
-        "mkdir -p \"{dir}\" && if [ -f \"{seed}\" ] && echo \"$VELNOR_ASSET_SHA256  {seed}\" | sha256sum -c -; then cp \"{seed}\" \"{staged}\"; else curl -fsSL --proto '=https' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"{staged}\" && echo \"$VELNOR_ASSET_SHA256  {staged}\" | sha256sum -c -; fi && chmod +x \"{staged}\""
+        "mkdir -p \"{dir}\" && s=\"{seed}\" d=\"{staged}\" && if [ -f \"$s\" ] && echo \"$VELNOR_ASSET_SHA256  $s\" | sha256sum -c -; then cp \"$s\" \"$d\"; else curl -fsSL --proto '=https' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\" && echo \"$VELNOR_ASSET_SHA256  $d\" | sha256sum -c -; fi && chmod +x \"$d\""
     );
     Ok(vec!["sh".to_owned(), "-c".to_owned(), script])
 }

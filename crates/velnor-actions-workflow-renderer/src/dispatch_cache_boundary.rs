@@ -71,10 +71,17 @@ fn suppress_dispatch(step: &mut Step) {
     if step.condition.as_deref() == Some(DISPATCH_DENY) {
         return;
     }
-    let prior = step
-        .condition
-        .take()
-        .unwrap_or_else(|| "success()".to_owned());
+    let Some(prior) = step.condition.take() else {
+        // GitHub applies its implicit success() check when an if expression
+        // does not contain a status-check function. Keep the deny predicate
+        // short for the common no-condition cache step.
+        step.condition = Some(DISPATCH_DENY.to_owned());
+        return;
+    };
+    if prior == "success()" {
+        step.condition = Some(DISPATCH_DENY.to_owned());
+        return;
+    }
     step.condition = Some(format!("({prior}) && {DISPATCH_DENY}"));
 }
 
@@ -157,7 +164,7 @@ mod tests {
                 .condition
                 .as_deref()
                 .expect("pre-plan cache condition");
-            assert!(condition.contains("github.event_name != 'workflow_dispatch'"));
+            assert_eq!(condition, DISPATCH_DENY);
         }
         let StepKind::Action { with, .. } = &jobs["actionlint"].steps[0].kind else {
             panic!("mise setup remains an action");

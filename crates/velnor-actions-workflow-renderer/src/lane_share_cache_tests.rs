@@ -1,4 +1,6 @@
-use velnor_actions_contract::StepKind;
+use std::collections::BTreeMap;
+
+use velnor_actions_contract::{Job, StepKind};
 
 use super::{HOSTED_RUNS, ctx, echo_step, paired, render_jobs, share_lanes, workflow_ir};
 
@@ -84,21 +86,7 @@ fn only_qualified_hosted_lane_keeps_a_tools_cache_prelude() {
         .steps
         .splice(1..1, hosted_prelude);
 
-    let mut wrong_lane = jobs.clone();
-    let identity = wrong_lane
-        .get_mut(hosted_id)
-        .expect("hosted lane")
-        .steps
-        .iter_mut()
-        .find(|step| step.name == crate::cache_p08::TOOLS_CACHE_IDENTITY_NAME)
-        .expect("runtime identity");
-    let StepKind::Action { uses, .. } = &mut identity.kind else {
-        panic!("identity uses a local composite action");
-    };
-    *uses = crate::cache_p08::runtime_identity_action_uses("ubuntu-24.04")
-        .expect("supported fixture lane")
-        .to_owned();
-    assert!(share_lanes(&wrong_lane, &ctx()).is_err());
+    assert_wrong_runtime_lane_is_rejected(&jobs, hosted_id);
 
     let shared = share_lanes(&jobs, &ctx()).expect("lane-specific prelude factors");
     let hosted_prelude = &shared.runtime_preludes[hosted_id];
@@ -139,4 +127,22 @@ fn only_qualified_hosted_lane_keeps_a_tools_cache_prelude() {
     let local = &yaml[local_start..];
     assert!(!local.contains("V2 identity"), "{local}");
     assert!(!local.contains("Restore Mise tools"), "{local}");
+}
+
+fn assert_wrong_runtime_lane_is_rejected(jobs: &BTreeMap<String, Job>, hosted_id: &str) {
+    let mut wrong_lane = jobs.clone();
+    let identity = wrong_lane
+        .get_mut(hosted_id)
+        .expect("hosted lane")
+        .steps
+        .iter_mut()
+        .find(|step| step.name == crate::cache_p08::TOOLS_CACHE_IDENTITY_NAME)
+        .expect("runtime identity");
+    let StepKind::Action { uses, .. } = &mut identity.kind else {
+        panic!("identity uses a local composite action");
+    };
+    *uses = crate::cache_p08::runtime_identity_action_uses("ubuntu-24.04")
+        .expect("supported fixture lane")
+        .to_owned();
+    assert!(share_lanes(&wrong_lane, &ctx()).is_err());
 }
