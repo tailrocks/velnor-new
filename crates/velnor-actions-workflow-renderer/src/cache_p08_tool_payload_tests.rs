@@ -190,6 +190,15 @@ fn restore_composite_binds_marker_pin_key_and_paths() {
         assert!(restore_action.bytes.contains(path), "missing {path}");
     }
     assert!(restore_action.bytes.contains("restore-keys: \"\""));
+    assert!(restore_action.bytes.contains("outputs.cache-hit"));
+    assert!(restore_action.bytes.contains("outputs.cache-matched-key"));
+    assert!(restore_action.bytes.contains("rm -rf"));
+    assert!(restore_action.bytes.contains("TOOLS_CACHE_HIT\\\" = true"));
+    assert!(
+        restore_action
+            .bytes
+            .contains("TOOLS_MATCHED_KEY\\\" = \\\"$TOOLS_EXPECTED_KEY\\\"")
+    );
 }
 
 #[test]
