@@ -2,7 +2,8 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{
-    Concurrency, Job, JobTimeout, Permissions, Step, Trigger, WorkflowIr, WorkflowPolicy,
+    Concurrency, Job, JobTimeout, Permissions, SUPPORTED_TARGETS, Step, Trigger, WorkflowIr,
+    WorkflowPolicy,
 };
 use velnor_actions_mise::catalog::lock::{
     parse_generator_lock, parse_release_manifest, verify_lock_against_manifest,
@@ -23,7 +24,7 @@ fn binary_record(target: &str, sha: &str) -> String {
 }
 
 fn lock_text(sha: &str) -> String {
-    let bins = velnor_actions_contract::SUPPORTED_TARGETS
+    let bins = SUPPORTED_TARGETS
         .iter()
         .map(|target| binary_record(target, sha))
         .collect::<String>();

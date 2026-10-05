@@ -42,7 +42,7 @@ fn target_ids_round_trip_without_ordinal_mapping() {
 
 #[test]
 fn versioned_macos_labels_bind_explicit_architecture() {
-    for label in ["macos-14", "macos-15", "macos-26"] {
+    for label in ["macos-14", "macos-15", "macos-15-arm64", "macos-26"] {
         assert_eq!(
             ReleaseTarget::for_runner_label(label),
             Some(ReleaseTarget::MacosArm64)
@@ -112,7 +112,7 @@ fn release_manifest_json_round_trip_and_tamper() -> Result<(), ContractError> {
     let json = manifest_json(
         "0.1.0",
         "tailrocks/velnor-new",
-        &bound_artifact("0.1.0", "x86_64-unknown-linux-gnu"),
+        &bound_artifact("0.1.0", ReleaseTarget::LinuxX86_64.triple()),
     );
     assert!(json.contains(&commit));
     assert!(json.contains(&sha));
@@ -133,7 +133,7 @@ fn manifest_json(version: &str, repository: &str, artifact: &str) -> String {
     let targets = SUPPORTED_TARGETS
         .iter()
         .map(|target| {
-            let target_artifact = if *target == "x86_64-unknown-linux-gnu" {
+            let target_artifact = if *target == ReleaseTarget::LinuxX86_64.triple() {
                 artifact.to_owned()
             } else {
                 bound_artifact(version, target)
@@ -182,7 +182,7 @@ fn release_manifest_binds_repository_and_artifact_urls() -> Result<(), ContractE
     let good = manifest_json(
         "0.1.0",
         "tailrocks/velnor-new",
-        &bound_artifact("0.1.0", "x86_64-unknown-linux-gnu"),
+        &bound_artifact("0.1.0", ReleaseTarget::LinuxX86_64.triple()),
     );
     ReleaseManifest::parse_json(&good, "m.json")?.validate("m.json")?;
     // Wrong repository, even a lookalike, fails closed.
@@ -195,7 +195,7 @@ fn release_manifest_binds_repository_and_artifact_urls() -> Result<(), ContractE
         let json = manifest_json(
             "0.1.0",
             repository,
-            &bound_artifact("0.1.0", "x86_64-unknown-linux-gnu"),
+            &bound_artifact("0.1.0", ReleaseTarget::LinuxX86_64.triple()),
         );
         assert!(
             ReleaseManifest::parse_json(&json, "m.json")?
@@ -229,7 +229,7 @@ fn release_manifest_binds_repository_and_artifact_urls() -> Result<(), ContractE
     let downgrade = manifest_json(
         "0.2.0",
         "tailrocks/velnor-new",
-        &bound_artifact("0.1.0", "x86_64-unknown-linux-gnu"),
+        &bound_artifact("0.1.0", ReleaseTarget::LinuxX86_64.triple()),
     );
     assert!(
         ReleaseManifest::parse_json(&downgrade, "m.json")?
@@ -257,7 +257,7 @@ fn release_manifest_requires_commit() -> Result<(), ContractError> {
     let good = manifest_json(
         "0.1.0",
         "tailrocks/velnor-new",
-        &bound_artifact("0.1.0", "x86_64-unknown-linux-gnu"),
+        &bound_artifact("0.1.0", ReleaseTarget::LinuxX86_64.triple()),
     );
     let manifest = ReleaseManifest::parse_json(&good, "m.json")?;
     manifest.validate("m.json")?;
