@@ -47,6 +47,7 @@ mod mbx_preflight;
 mod merge;
 mod merge_request;
 mod noop_report;
+mod obligation_order;
 mod origin;
 mod pins;
 mod plan;
