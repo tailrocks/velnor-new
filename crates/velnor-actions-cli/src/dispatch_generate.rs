@@ -32,11 +32,6 @@ pub(crate) fn run_generate(output_dir: Option<PathBuf>, mode: Option<String>) ->
     };
     match generate_dispatched(&preparation, &options, dispatch) {
         Ok(report) => {
-            if preparation.discovery.consumer_manifest_stand_in {
-                eprintln!(
-                    "velnor-actions: WARNING: .velnor/release-manifest.json is absent; generated workflows use a debug-only stand-in that MUST NOT ship"
-                );
-            }
             if let Some(dir) = &options.output_dir {
                 eprintln!("Preview: {}", absolute_preview(&cwd, dir).display());
                 eprintln!("Repository: {}", root.display());
