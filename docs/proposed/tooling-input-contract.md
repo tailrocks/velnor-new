@@ -92,16 +92,23 @@ required check.
 Task jobs grant only `contents: read`; other workflow permission scopes are
 explicitly `none`. Checkout disables persisted credentials. The pinned Mise
 setup action does not install project tools, activate repository env, or use
-cache inputs. The job resolves only the selected task's `tools` maps, including
-tasks reached through declared dependencies and simple nested `mise run`
-calls. If that closure is nonempty, every selected tool must have an exact
-version and a source-bound current-platform lock row with an accepted prebuilt
-backend, HTTPS release URL, and SHA-256. Cargo registry and Git source
+cache inputs. The job resolves only the selected task's `tools` maps from root
+`mise.toml`, including tasks reached through declared dependencies and simple
+nested `mise run` calls. External `.mise/tasks` scripts and dependencies
+without an inline root task definition fail closed because their tool closure
+is not represented in the checked input. If that closure is nonempty, every
+selected tool must have an exact version and a source-bound current-platform
+lock row with an accepted prebuilt backend, HTTPS release URL, and SHA-256.
+Cargo registry and Git source
 backends, unlocked tools, unsupported selector or lock options, and
 unsupported task shapes fail closed. The only modeled options are the exact
 BoltFFI asset regex and Rust components/targets copied from the idiomatic
-toolchain file. Other root tools are excluded from the private install config, so an
-unrelated `cargo:` tool cannot be installed by a verification job. An empty
+toolchain file. Present settings must set `lockfile = true`; the only accepted
+idiomatic-version selector is `rust`, and Cargo binstall settings cannot turn
+either modeled flag off. Declared Cargo wrappers bind exactly to `mbx` with
+`MBX_CARGO_SHIM_MODE=1`. Other root tools are excluded from the private
+install config, so an unrelated `cargo:` tool cannot be installed by a
+verification job. An empty
 closure does not emit an install step. When tools are installed, the task runs
 with `mise run --skip-tools`; all runs disable auto-install, env loading, and
 hooks. The checked-out task config, lock, and Rust toolchain inputs are
