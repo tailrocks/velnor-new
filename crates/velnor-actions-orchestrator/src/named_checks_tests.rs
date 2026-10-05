@@ -92,6 +92,40 @@ fn declared_source_and_native_task_edits_change_identity() {
     .expect("edit native task");
     assert_ne!(source_edit.input_digest, derive().input_digest);
 }
+
+#[test]
+fn binary_declared_input_changes_digest_and_stays_executable() {
+    let (dir, check) = fixture();
+    std::fs::write(dir.path().join("image.png"), [0x89, b'P', b'N', b'G', 0xff])
+        .expect("binary input");
+    let mut binary_check = check;
+    binary_check.inputs = vec!["image.png".to_owned()];
+    let derive = || {
+        let item = discovered_check(dir.path(), &binary_check);
+        plan::derive(
+            dir.path(),
+            &item,
+            "local",
+            &generator(),
+            &ToolCatalog::pinned(),
+        )
+        .expect("binary input plans")
+    };
+    let (first, _) = derive();
+    assert_eq!(
+        first.decision,
+        velnor_actions_contract::ObligationDecision::Execute
+    );
+    std::fs::write(dir.path().join("image.png"), [0x89, b'P', b'N', b'G', 0xfe])
+        .expect("mutate binary input");
+    let (second, _) = derive();
+    assert_eq!(
+        second.decision,
+        velnor_actions_contract::ObligationDecision::Execute
+    );
+    assert_ne!(first.input_digest, second.input_digest);
+    assert_ne!(first.closure_digest, second.closure_digest);
+}
 #[test]
 fn check_platform_ignores_global_linux_label() {
     let (dir, check) = fixture();

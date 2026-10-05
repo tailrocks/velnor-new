@@ -2,7 +2,7 @@
 #[path = "named_check_plan.rs"]
 pub(crate) mod plan;
 use crate::discover::Discovery;
-use crate::safe_read::{MAX_REPO_FILE_BYTES, RepoRead, read_repo_file};
+use crate::safe_read::{MAX_REPO_FILE_BYTES, RepoBytes, read_repo_bytes};
 use std::path::Path;
 use velnor_actions_contract::cachekey::ToolchainInputs;
 use velnor_actions_contract::{
@@ -97,13 +97,13 @@ pub(crate) fn resolve_closure(
             },
         );
     for path in &task.identity.declared_inputs {
-        let read = read_repo_file(root, path, MAX_REPO_FILE_BYTES)
+        let read = read_repo_bytes(root, path, MAX_REPO_FILE_BYTES)
             .map_err(|e| ContractError::identity("check_input", e.to_string()))?;
         let provenance = match read {
-            RepoRead::Text(text) => Provenance::Known {
-                digest: digest_b3(text.as_bytes()),
+            RepoBytes::Bytes(bytes) => Provenance::Known {
+                digest: digest_b3(&bytes),
             },
-            RepoRead::Absent => Provenance::AbsentProven {
+            RepoBytes::Absent => Provenance::AbsentProven {
                 evidence: "checkout_absent".to_owned(),
             },
         };
