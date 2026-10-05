@@ -3,7 +3,7 @@
 //! Operation travels via env, never argv; the staged binary dispatches
 //! on it at event time.
 
-use velnor_actions_contract::{Step, StepKind};
+use velnor_actions_contract::{Step, StepId, StepKind, StepRole};
 
 use crate::{
     RenderError,
@@ -52,6 +52,8 @@ pub fn internal_step(name: &str, operation: &str) -> Result<Step, RenderError> {
     scan_for_private_subcommands(name)?;
     Ok(Step {
         name: name.to_owned(),
+        id: None,
+        role: None,
         condition: None,
         kind: StepKind::Internal {
             operation: operation.to_owned(),
@@ -69,6 +71,8 @@ pub fn write_request_step(target: &str) -> Result<Step, RenderError> {
     }
     Ok(Step {
         name: "Write request".to_owned(),
+        id: None,
+        role: None,
         condition: None,
         kind: StepKind::Internal {
             operation: format!("{WRITE_REQUEST_OPERATION}:{target}"),
@@ -81,6 +85,8 @@ pub fn write_request_step(target: &str) -> Result<Step, RenderError> {
 pub fn plan_step() -> Step {
     Step {
         name: "Plan".to_owned(),
+        id: Some(StepId::Plan),
+        role: Some(StepRole::PlanProducer),
         condition: None,
         kind: StepKind::Internal {
             operation: PLAN_OPERATION.to_owned(),
@@ -93,6 +99,8 @@ pub fn plan_step() -> Step {
 pub fn merge_step() -> Step {
     Step {
         name: "Merge reports".to_owned(),
+        id: None,
+        role: None,
         condition: None,
         kind: StepKind::Internal {
             operation: MERGE_OPERATION.to_owned(),
@@ -105,6 +113,8 @@ pub fn merge_step() -> Step {
 pub fn publish_step() -> Step {
     Step {
         name: "Publish baseline".to_owned(),
+        id: Some(StepId::PublishBaseline),
+        role: Some(StepRole::BaselinePublisher),
         condition: None,
         kind: StepKind::Internal {
             operation: PUBLISH_OPERATION.to_owned(),

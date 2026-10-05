@@ -38,6 +38,8 @@ fn token_hygiene_scopes_gh_token_to_plan() -> Result<(), RenderError> {
             checkout_step(&checkout_pin())?,
             Step {
                 name: "Plan".to_owned(),
+                id: None,
+                role: None,
                 condition: None,
                 kind: StepKind::Shell {
                     run: vec!["true".to_owned()],
@@ -69,6 +71,8 @@ fn token_hygiene_scopes_gh_token_to_plan() -> Result<(), RenderError> {
             checkout_step(&checkout_pin())?,
             Step {
                 name: "Leak".to_owned(),
+                id: None,
+                role: None,
                 condition: None,
                 kind: StepKind::Shell {
                     run: vec!["true".to_owned()],
@@ -135,6 +139,8 @@ fn token_hygiene_rejects_prints_and_task_tokens() -> Result<(), RenderError> {
         vec!["plan".to_owned()],
         vec![velnor_actions_contract::Step {
             name: "Run task".to_owned(),
+            id: None,
+            role: None,
             condition: None,
             kind: velnor_actions_contract::StepKind::Shell {
                 run: vec!["true".to_owned()],
@@ -198,6 +204,8 @@ fn token_hygiene_constructor_owns_overlay_and_rejects_all_nine_keys() -> Result<
             vec!["plan".to_owned()],
             vec![Step {
                 name: "Run task".to_owned(),
+                id: None,
+                role: None,
                 condition: None,
                 kind: StepKind::Shell {
                     run: vec!["true".to_owned()],
@@ -235,6 +243,8 @@ fn scrub_coverage_rejects_bare_and_partial_shell_env() -> Result<(), RenderError
                 checkout_step(&checkout_pin())?,
                 Step {
                     name: "Run task".to_owned(),
+                    id: None,
+                    role: None,
                     condition: None,
                     kind: StepKind::Shell {
                         run: vec!["true".to_owned()],
@@ -261,26 +271,27 @@ fn scrub_coverage_rejects_bare_and_partial_shell_env() -> Result<(), RenderError
 
 #[test]
 fn scrub_coverage_allows_ambient_auth_steps_and_release() -> Result<(), RenderError> {
-    use velnor_actions_workflow_renderer::steps::DENY_STEP_NAME;
-    // Ambient constructor (no scrub overlay): the gate must exempt by
-    // allowlisted name, or these fail. A scrubbed step would pass
-    // without touching the allowlist, proving nothing.
-    for name in [
-        "Prepare pinned tools",
-        "Prepare Rust components",
-        "Fetch Cargo sources",
-        "Fetch Cargo sources (nested/Cargo.toml)",
-        DENY_STEP_NAME,
+    use velnor_actions_contract::StepRole;
+    use velnor_actions_workflow_renderer::steps::{DENY_STEP_NAME, MACHETE_STEP_NAME};
+    // Ambient constructor (no scrub overlay): the typed role is the
+    // authority, independent of the presentation name.
+    for (name, role) in [
+        ("Pinned tools", StepRole::PreparePinnedTools),
+        ("Rust components", StepRole::PrepareRustComponents),
+        ("Cargo source fetch", StepRole::CargoSourcesFetch),
+        ("Nested source fetch", StepRole::CargoSourcesFetch),
+        (DENY_STEP_NAME, StepRole::CargoDeny),
+        (MACHETE_STEP_NAME, StepRole::CargoMachete),
+        ("Run zizmor", StepRole::Zizmor),
+        ("Run actionlint", StepRole::Actionlint),
     ] {
+        let mut ambient = ambient_shell_step(name, vec!["true".to_owned()], BTreeMap::new())?;
+        ambient.role = Some(role);
         let allowed = job(
             "plan",
             "Plan",
             Vec::new(),
-            vec![
-                checkout_step(&checkout_pin())?,
-                ambient_shell_step(name, vec!["true".to_owned()], BTreeMap::new())?,
-                plan_step(),
-            ],
+            vec![checkout_step(&checkout_pin())?, ambient, plan_step()],
         );
         render_workflow_ir(
             &fixture_ir(vec![allowed]),
@@ -289,6 +300,31 @@ fn scrub_coverage_allows_ambient_auth_steps_and_release() -> Result<(), RenderEr
             &fixture_ctx(),
         )?;
     }
+    let mislabeled = ambient_shell_step(
+        "Prepare pinned tools",
+        vec!["true".to_owned()],
+        BTreeMap::new(),
+    )?;
+    let denied = job(
+        "plan",
+        "Plan",
+        Vec::new(),
+        vec![checkout_step(&checkout_pin())?, mislabeled, plan_step()],
+    );
+    assert!(
+        format!(
+            "{:?}",
+            render_workflow_ir(
+                &fixture_ir(vec![denied]),
+                WorkflowPolicy::ConsumerV1,
+                None,
+                &fixture_ctx(),
+            )
+            .expect_err("display names carry no ambient-auth authority")
+        )
+        .contains("missing_scrub"),
+        "renamed or forged presentation names do not grant auth"
+    );
     let release = job(
         "release",
         "Release",
@@ -305,24 +341,6 @@ fn scrub_coverage_allows_ambient_auth_steps_and_release() -> Result<(), RenderEr
         None,
         &fixture_ctx(),
     )?;
-    Ok(())
-}
-
-#[test]
-fn validator_execs_cannot_keep_ambient_credentials() -> Result<(), RenderError> {
-    for name in ["Run cargo-machete", "Run zizmor", "Run actionlint"] {
-        let exposed = job(
-            "plan",
-            "Plan",
-            Vec::new(),
-            vec![
-                checkout_step(&checkout_pin())?,
-                ambient_shell_step(name, vec!["true".to_owned()], BTreeMap::new())?,
-                plan_step(),
-            ],
-        );
-        render_fails_with(vec![exposed], "missing_scrub");
-    }
     Ok(())
 }
 

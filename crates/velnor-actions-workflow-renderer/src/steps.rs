@@ -4,17 +4,17 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Step, StepKind};
+use velnor_actions_contract::{Step, StepKind, StepRole};
 
 use crate::{RenderError, commands, marker};
 
 pub(crate) use crate::cache_steps::tools_cache_step;
 pub use crate::cache_steps::{
     CACHE_RESTORE_NAME, CACHE_SAVE_NAME, CompileDriver, MBX_ACTION_NAME, MBX_CACHE_MODE_ENV,
-    MBX_PREFLIGHT_NAME, MBX_RESTORE_NAME, NEVER_ARCHIVE_MARKERS, TASK_ARTIFACTS_DIR,
-    TOOLS_CACHE_PATH, TOOLS_CACHE_PATHS, TOOLS_RESTORE_NAME, TOOLS_RESTORE_USES, TOOLS_SAVE_NAME,
-    TOOLS_SAVE_USES, cache_action_step, check_cache_step_order, check_mbx_gating,
-    is_never_archive_path, mbx_steps_for_driver,
+    MBX_PREFLIGHT_NAME, MBX_RESTORE_NAME, MBX_VERSION_CHECK_NAME, NEVER_ARCHIVE_MARKERS,
+    TASK_ARTIFACTS_DIR, TOOLS_CACHE_PATH, TOOLS_CACHE_PATHS, TOOLS_RESTORE_NAME,
+    TOOLS_RESTORE_USES, TOOLS_SAVE_NAME, TOOLS_SAVE_USES, cache_action_step,
+    check_cache_step_order, check_mbx_gating, is_never_archive_path, mbx_steps_for_driver,
 };
 pub(crate) use crate::steps_shell::composite_shell_step;
 pub use crate::steps_shell::{ambient_shell_step, shell_step};
@@ -124,7 +124,9 @@ pub fn checkout_step(uses: &str) -> Result<Step, RenderError> {
         return Err(RenderError::BadActionRef(format!("not_checkout:{uses}")));
     }
     let with = BTreeMap::from([("persist-credentials".to_owned(), "false".to_owned())]);
-    action_step("Checkout", uses, with)
+    let mut step = action_step("Checkout", uses, with)?;
+    step.role = Some(StepRole::Checkout);
+    Ok(step)
 }
 
 /// Validated pinned-action step.
@@ -169,6 +171,8 @@ pub fn action_step_with_env(
     crate::commands::validate_env(&env)?;
     Ok(Step {
         name: name.to_owned(),
+        id: None,
+        role: None,
         condition: None,
         kind: StepKind::Action {
             uses: uses.to_owned(),
@@ -271,7 +275,9 @@ pub fn acquire_velnor_step(
     if !downloads || !verifies {
         return Err(RenderError::BadCommand("acquire_without_verify".to_owned()));
     }
-    shell_step(ACQUIRE_NAME, argv, env.clone())
+    let mut step = shell_step(ACQUIRE_NAME, argv, env.clone())?;
+    step.role = Some(StepRole::AcquireVelnor);
+    Ok(step)
 }
 
 /// Target-directory prefix isolating one lane.

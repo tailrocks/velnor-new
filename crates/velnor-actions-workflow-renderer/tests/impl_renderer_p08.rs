@@ -157,7 +157,7 @@ fn sources_subset_accepted_under_owned_home_only() {
 #[test]
 fn retired_rust_cache_is_rejected_for_every_lane() {
     let sha = "c".repeat(40);
-    let [preflight, mbx] = mbx_tool_steps(
+    let [preflight, mbx, _] = mbx_tool_steps(
         &format!("jdx/mr-boxington-action@{sha}"),
         "1.19.0",
         "1.98.1",
@@ -165,6 +165,8 @@ fn retired_rust_cache_is_rejected_for_every_lane() {
     .expect("mbx steps");
     let rust_cache = velnor_actions_contract::Step {
         name: "Restore Cargo registry".to_owned(),
+        id: None,
+        role: None,
         condition: None,
         kind: StepKind::Action {
             uses: format!("Swatinem/rust-cache@{sha}"),
@@ -194,6 +196,8 @@ fn retired_rust_cache_is_rejected_for_every_lane() {
 fn mbx_restore_precedes_fetch() {
     let fetch = velnor_actions_contract::Step {
         name: "Fetch Cargo sources".to_owned(),
+        id: None,
+        role: Some(velnor_actions_contract::StepRole::CargoSourcesFetch),
         condition: None,
         kind: StepKind::Shell {
             run: vec!["sh".to_owned()],
@@ -202,6 +206,8 @@ fn mbx_restore_precedes_fetch() {
     };
     let mbx = velnor_actions_contract::Step {
         name: "Restore MBX objects".to_owned(),
+        id: None,
+        role: Some(velnor_actions_contract::StepRole::MbxCache),
         condition: None,
         kind: StepKind::Action {
             uses: format!("jdx/mr-boxington-action@{}", "d".repeat(40)),

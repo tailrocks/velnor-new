@@ -1,8 +1,8 @@
 //! Runner-specific V2 tools-cache steps kept outside shared lane actions.
 
-use velnor_actions_contract::{RunsOn, Step, StepKind};
+use velnor_actions_contract::{RunsOn, Step, StepKind, StepRole};
 
-/// Peel runtime identity and restore steps before the common lane prefix.
+/// Peel typed runtime identity, seed, and restore steps before lane sharing.
 pub(super) fn peel_tools_cache_prelude(
     steps: &[Step],
     runs_on: &str,
@@ -10,10 +10,7 @@ pub(super) fn peel_tools_cache_prelude(
     let mut prelude = Vec::new();
     let mut common = Vec::new();
     for step in steps {
-        if matches!(
-            step.name.as_str(),
-            crate::cache_p08::TOOLS_CACHE_IDENTITY_NAME | crate::cache_steps::TOOLS_RESTORE_NAME
-        ) {
+        if is_tools_prelude_step(step.role) {
             prelude.push(step.clone());
         } else {
             common.push(step.clone());
@@ -22,60 +19,84 @@ pub(super) fn peel_tools_cache_prelude(
     if !valid_tools_cache_prelude(&prelude, runs_on) {
         return None;
     }
-    if let Some(setup) = steps
+    let setup = steps
         .iter()
-        .position(|step| step.name == crate::setup::SETUP_MISE_NAME)
-        && steps.iter().enumerate().any(|(index, step)| {
-            matches!(
-                step.name.as_str(),
-                crate::cache_p08::TOOLS_CACHE_IDENTITY_NAME
-                    | crate::cache_steps::TOOLS_RESTORE_NAME
-            ) && index > setup
-        })
-    {
+        .position(|step| step.role == Some(StepRole::MiseSetup));
+    if setup.is_some_and(|setup| {
+        steps
+            .iter()
+            .enumerate()
+            .any(|(index, step)| is_tools_prelude_step(step.role) && index > setup)
+    }) {
         return None;
     }
     Some((prelude, common))
 }
 
+fn is_tools_prelude_step(role: Option<StepRole>) -> bool {
+    matches!(
+        role,
+        Some(StepRole::ToolsCacheIdentity | StepRole::ToolSeed | StepRole::ToolsCacheRestore)
+    )
+}
+
 fn valid_tools_cache_prelude(steps: &[Step], runs_on: &str) -> bool {
     match steps {
         [] => true,
-        [identity, restore] => {
-            let identity_ok = identity.name == crate::cache_p08::TOOLS_CACHE_IDENTITY_NAME
-                && identity.condition.is_none()
-                && matches!(
-                    &identity.kind,
-                    StepKind::Action { uses, with, env }
-                        if crate::cache_p08::validate_runtime_identity_action(
-                            &identity.name,
-                            uses,
-                            runs_on,
-                            with,
-                            env,
-                        )
-                        .is_ok()
-                );
-            let expected_paths = crate::cache_steps::TOOLS_CACHE_PATHS.join("\n");
-            let restore_ok = matches!(
-                &restore.kind,
-                StepKind::Action { uses, with, env }
-                    if restore.name == crate::cache_steps::TOOLS_RESTORE_NAME
-                        && uses == crate::cache_steps::TOOLS_RESTORE_USES
-                        && env.is_empty()
-                        && with.get("path").map(String::as_str) == Some(expected_paths.as_str())
-                        && with.get("key").is_some_and(|key| tool_cache_key_digest(key).is_some())
-            );
-            identity_ok
-                && restore_ok
-                && restore.condition.as_deref()
-                    == Some(crate::cache_p08::TOOLS_CACHE_RESTORE_CONDITION)
+        [identity, seed, restore] => {
+            valid_identity(identity, runs_on) && valid_seed(seed) && valid_restore(restore)
         }
         _ => false,
     }
 }
 
-/// Ensure both runners use the same exact V2 payload shape while retaining lane identity.
+fn valid_identity(step: &Step, runs_on: &str) -> bool {
+    step.role == Some(StepRole::ToolsCacheIdentity)
+        && step.condition.is_none()
+        && matches!(
+            &step.kind,
+            StepKind::Action { uses, with, env }
+                if crate::cache_p08::validate_runtime_identity_action(
+                    step,
+                    uses,
+                    runs_on,
+                    with,
+                    env,
+                )
+                .is_ok()
+        )
+}
+
+fn valid_seed(step: &Step) -> bool {
+    if step.role != Some(StepRole::ToolSeed) {
+        return false;
+    }
+    let StepKind::Action { uses, with, env } = &step.kind else {
+        return false;
+    };
+    crate::tool_seed::validate_action_call(step, uses, with, env).is_ok()
+        && with
+            .get("cache_key")
+            .is_some_and(|key| tool_cache_key_digest(key).is_some())
+}
+
+fn valid_restore(step: &Step) -> bool {
+    let expected_paths = crate::cache_steps::TOOLS_CACHE_PATHS.join("\n");
+    step.role == Some(StepRole::ToolsCacheRestore)
+        && step.condition.as_deref() == Some(crate::cache_p08::TOOLS_CACHE_RESTORE_CONDITION)
+        && matches!(
+            &step.kind,
+            StepKind::Action { uses, with, env }
+                if uses == crate::cache_steps::TOOLS_RESTORE_USES
+                    && env.is_empty()
+                    && with.len() == 3
+                    && with.get("path").map(String::as_str) == Some(expected_paths.as_str())
+                    && with.get("restore-keys").is_some_and(String::is_empty)
+                    && with.get("key").is_some_and(|key| tool_cache_key_digest(key).is_some())
+        )
+}
+
+/// Ensure the lane-specific preludes have the same action and key structure.
 pub(super) fn same_tools_cache_prelude_shape(
     hosted: &[Step],
     local: &[Step],
@@ -97,49 +118,75 @@ pub(super) fn same_tools_cache_prelude_shape(
     if hosted.len() != local.len() {
         return false;
     }
-    hosted.iter().zip(local).all(|(hosted, local)| {
-        if hosted.name != local.name || hosted.condition != local.condition {
-            return false;
+    hosted
+        .iter()
+        .zip(local)
+        .all(|(hosted, local)| same_tools_step(hosted, local, hosted_runs_on, local_runs_on))
+}
+
+fn same_tools_step(hosted: &Step, local: &Step, hosted_runs_on: &str, local_runs_on: &str) -> bool {
+    if hosted.role != local.role || hosted.condition != local.condition {
+        return false;
+    }
+    match (hosted.role, &hosted.kind, &local.kind) {
+        (
+            Some(StepRole::ToolsCacheIdentity),
+            StepKind::Action {
+                uses: hosted_uses,
+                with: hosted_with,
+                env: hosted_env,
+            },
+            StepKind::Action {
+                uses: local_uses,
+                with: local_with,
+                env: local_env,
+            },
+        ) => {
+            Some(hosted_uses.as_str())
+                == crate::cache_p08::runtime_identity_action_uses(hosted_runs_on)
+                && Some(local_uses.as_str())
+                    == crate::cache_p08::runtime_identity_action_uses(local_runs_on)
+                && hosted_env == local_env
+                && hosted_with.keys().eq(local_with.keys())
         }
-        match (&hosted.kind, &local.kind) {
-            (
-                StepKind::Shell {
-                    run: hosted_run,
-                    env: hosted_env,
-                },
-                StepKind::Shell {
-                    run: local_run,
-                    env: local_env,
-                },
-            ) => hosted_run == local_run && hosted_env.keys().eq(local_env.keys()),
-            (
-                StepKind::Action {
-                    uses: hosted_uses,
-                    with: hosted_with,
-                    env: hosted_env,
-                },
-                StepKind::Action {
-                    uses: local_uses,
-                    with: local_with,
-                    env: local_env,
-                },
-            ) => {
-                if hosted.name == crate::cache_p08::TOOLS_CACHE_IDENTITY_NAME {
-                    Some(hosted_uses.as_str())
-                        == crate::cache_p08::runtime_identity_action_uses(hosted_runs_on)
-                        && Some(local_uses.as_str())
-                            == crate::cache_p08::runtime_identity_action_uses(local_runs_on)
-                        && hosted_env == local_env
-                        && hosted_with.keys().eq(local_with.keys())
-                } else {
-                    hosted_uses == local_uses
-                        && hosted_env == local_env
-                        && same_cache_inputs(hosted_with, local_with)
-                }
-            }
-            _ => false,
+        (
+            Some(StepRole::ToolSeed),
+            StepKind::Action {
+                uses: hosted_uses,
+                with: hosted_with,
+                env: hosted_env,
+            },
+            StepKind::Action {
+                uses: local_uses,
+                with: local_with,
+                env: local_env,
+            },
+        ) => {
+            hosted_uses == crate::tool_seed::TOOL_SEED_USES
+                && local_uses == crate::tool_seed::TOOL_SEED_USES
+                && hosted_env == local_env
+                && same_keyed_inputs(hosted_with, local_with, "cache_key")
         }
-    })
+        (
+            Some(StepRole::ToolsCacheRestore),
+            StepKind::Action {
+                uses: hosted_uses,
+                with: hosted_with,
+                env: hosted_env,
+            },
+            StepKind::Action {
+                uses: local_uses,
+                with: local_with,
+                env: local_env,
+            },
+        ) => {
+            hosted_uses == crate::cache_steps::TOOLS_RESTORE_USES
+                && local_uses == crate::cache_steps::TOOLS_RESTORE_USES
+                && hosted_env == local_env
+                && same_keyed_inputs(hosted_with, local_with, "key")
+        }
+        _ => false,
+    }
 }
 
 fn tool_cache_key_digest(key: &str) -> Option<&str> {
@@ -153,11 +200,12 @@ fn tool_cache_key_digest(key: &str) -> Option<&str> {
     .then_some(digest)
 }
 
-fn same_cache_inputs(
+fn same_keyed_inputs(
     hosted: &std::collections::BTreeMap<String, String>,
     local: &std::collections::BTreeMap<String, String>,
+    field: &str,
 ) -> bool {
-    let (Some(hosted_key), Some(local_key)) = (hosted.get("key"), local.get("key")) else {
+    let (Some(hosted_key), Some(local_key)) = (hosted.get(field), local.get(field)) else {
         return false;
     };
     if tool_cache_key_digest(hosted_key).is_none() || tool_cache_key_digest(local_key).is_none() {
@@ -166,7 +214,7 @@ fn same_cache_inputs(
     let mut hosted_shape = hosted.clone();
     let mut local_shape = local.clone();
     let normalized = "mise-tools-v2-{static-identity}-${{steps.v2.outputs.identity}}";
-    hosted_shape.insert("key".to_owned(), normalized.to_owned());
-    local_shape.insert("key".to_owned(), normalized.to_owned());
+    hosted_shape.insert(field.to_owned(), normalized.to_owned());
+    local_shape.insert(field.to_owned(), normalized.to_owned());
     hosted_shape == local_shape
 }

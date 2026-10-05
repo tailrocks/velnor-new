@@ -1,5 +1,6 @@
 //! Insert the typed V2 tools-cache prelude into rendered jobs.
 
+use velnor_actions_contract::workflow::step_identity::is_configured_checkout;
 use velnor_actions_contract::{Job, Step, StepKind};
 
 use crate::{MiseSetup, RenderError, cache_p08, cache_p08::ToolsCacheInputs};
@@ -71,25 +72,26 @@ fn insert_tools_prelude(
         return Ok(());
     }
     let rust_version = specs.iter().find_map(|spec| spec.strip_prefix("rust@"));
-    let components = if let Some(version) = rust_version {
-        job.steps
-            .iter()
-            .find(|step| step.name == "Prepare Rust components")
-            .map(|step| cache_p08::rust_components(step, version, target))
-            .transpose()?
-            .unwrap_or_default()
-    } else {
-        if job
-            .steps
-            .iter()
-            .any(|step| step.name == "Prepare Rust components")
-        {
-            return Err(RenderError::InvalidWorkflow(format!(
-                "rust_components_without_toolchain:{job_id}"
-            )));
-        }
-        Vec::new()
-    };
+    let components =
+        if let Some(version) = rust_version {
+            job.steps
+                .iter()
+                .find(|step| {
+                    step.role == Some(velnor_actions_contract::StepRole::PrepareRustComponents)
+                })
+                .map(|step| cache_p08::rust_components(step, version, target))
+                .transpose()?
+                .unwrap_or_default()
+        } else {
+            if job.steps.iter().any(|step| {
+                step.role == Some(velnor_actions_contract::StepRole::PrepareRustComponents)
+            }) {
+                return Err(RenderError::InvalidWorkflow(format!(
+                    "rust_components_without_toolchain:{job_id}"
+                )));
+            }
+            Vec::new()
+        };
     let payload = cache_p08::ToolsCachePayload::new(ToolsCacheInputs {
         runs_on: &job.runs_on,
         target,
@@ -117,32 +119,48 @@ fn checkout_precedes_setup(job: &Job, setup_index: usize, expected_uses: &str) -
 }
 
 fn is_typed_checkout(step: &Step, expected_uses: &str) -> bool {
-    step.condition.is_none()
-        && matches!(
-            &step.kind,
-            StepKind::Action { uses, with, env }
-                if uses == expected_uses
-                    && uses.starts_with("actions/checkout@")
-                    && crate::steps::validate_uses(uses).is_ok()
-                    && with.len() == 1
-                    && with.get("persist-credentials").map(String::as_str) == Some("false")
-                    && env.is_empty()
-        )
+    is_configured_checkout(step, expected_uses)
 }
 
 fn reject_v2_steps(job_id: &str, job: &Job) -> Result<(), RenderError> {
-    for name in [
-        cache_p08::TOOLS_CACHE_IDENTITY_NAME,
-        crate::cache_steps::TOOLS_RESTORE_NAME,
-        crate::cache_steps::TOOLS_SAVE_NAME,
-    ] {
-        if job.steps.iter().any(|step| step.name == name) {
-            return Err(RenderError::InvalidWorkflow(format!(
-                "renderer_owned_tools_cache_step:{job_id}:{name}"
-            )));
-        }
+    if job
+        .steps
+        .iter()
+        .any(|step| has_v2_cache_authority(step, job))
+    {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "renderer_owned_tools_cache_step:{job_id}"
+        )));
     }
     Ok(())
+}
+
+fn has_v2_cache_authority(step: &Step, job: &Job) -> bool {
+    if matches!(
+        step.role,
+        Some(
+            velnor_actions_contract::StepRole::ToolSeed
+                | velnor_actions_contract::StepRole::ToolsCacheIdentity
+                | velnor_actions_contract::StepRole::ToolsCacheRestore
+                | velnor_actions_contract::StepRole::ToolsCacheSave
+        )
+    ) {
+        return true;
+    }
+    let StepKind::Action { uses, with, .. } = &step.kind else {
+        return false;
+    };
+    if uses == velnor_actions_contract::workflow::step_identity::TOOL_SEED_USES {
+        return true;
+    }
+    if cache_p08::runtime_identity_action_uses(&job.runs_on) == Some(uses.as_str()) {
+        return true;
+    }
+    let tools_paths = crate::cache_steps::TOOLS_CACHE_PATHS
+        .map(str::to_owned)
+        .join("\n");
+    uses == crate::cache_steps::TOOLS_RESTORE_USES
+        && with.get("path").is_some_and(|path| path == &tools_paths)
 }
 
 fn step_uses_mise(step: &Step) -> bool {

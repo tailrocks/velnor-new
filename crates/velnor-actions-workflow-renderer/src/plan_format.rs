@@ -7,9 +7,9 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Job, Step, StepKind};
+use velnor_actions_contract::{Job, Step, StepKind, StepRole};
 
-use crate::{RenderError, closure, render::PLAN_JOB_ID, steps};
+use crate::{RenderError, render::PLAN_JOB_ID, steps};
 
 /// Contract-fixed display name of the plan format step.
 pub const FORMAT_STEP_NAME: &str = "Format";
@@ -25,7 +25,9 @@ pub fn format_step(argv: Vec<String>, env: &BTreeMap<String, String>) -> Result<
     if argv.first().is_none_or(|program| program != "mise") {
         return Err(RenderError::BadCommand("format_without_mise".to_owned()));
     }
-    steps::shell_step(FORMAT_STEP_NAME, argv, env.clone())
+    let mut step = steps::shell_step(FORMAT_STEP_NAME, argv, env.clone())?;
+    step.role = Some(StepRole::PlanFormat);
+    Ok(step)
 }
 
 /// Insert `Format` into the plan job between staging and freshness.
@@ -42,7 +44,11 @@ pub fn ensure_plan_format(
     let Some(plan) = jobs.get_mut(PLAN_JOB_ID) else {
         return Ok(());
     };
-    if let Some(format) = plan.steps.iter().find(|step| step.name == FORMAT_STEP_NAME) {
+    if let Some(format) = plan
+        .steps
+        .iter()
+        .find(|step| step.role == Some(StepRole::PlanFormat))
+    {
         return check_format_shape(format);
     }
     let step = format_step(argv, env)?;
@@ -66,16 +72,16 @@ fn check_format_shape(format: &Step) -> Result<(), RenderError> {
 fn format_insert_at(plan: &Job) -> usize {
     plan.steps
         .iter()
-        .position(|step| step.name == closure::CHECK_GENERATED_NAME)
+        .position(|step| step.role == Some(StepRole::CheckGenerated))
         .or_else(|| {
-            plan.steps.iter().position(|step| {
-                matches!(&step.kind, StepKind::Internal { operation } if operation == steps::PLAN_OPERATION)
-            })
+            plan.steps
+                .iter()
+                .position(|step| step.role == Some(StepRole::PlanProducer))
         })
         .or_else(|| {
             plan.steps
                 .iter()
-                .position(|step| step.name == closure::PUBLISH_PLAN_NAME)
+                .position(|step| step.role == Some(StepRole::PublishPlan))
         })
         .unwrap_or(plan.steps.len())
 }

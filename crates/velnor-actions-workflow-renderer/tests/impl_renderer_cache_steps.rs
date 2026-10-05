@@ -223,7 +223,7 @@ fn strict_wires_runtime_qualified_tools_cache_before_setup_and_saves_once()
         .find(|file| file.path == ".github/actions/velnor-tool-seed/action.yml")
         .expect("renderer emits seed action for a matching checkout");
     assert!(seed.bytes.contains("velnor-host-seed-v1"), "{}", seed.bytes);
-    assert!(text.contains("${{ steps.v2.outputs.identity }}"));
+    assert!(text.contains("${{steps.v2.outputs.identity}}"));
     Ok(())
 }
 
@@ -267,7 +267,10 @@ fn seed_and_tools_prelude_require_the_configured_unconditional_checkout()
         ],
     );
     let text = strict(&fixture_ir(vec![real]), &fixture_ctx())?;
-    assert!(text.contains("name: V2 identity"), "renamed typed checkout: {text}");
+    assert!(
+        text.contains("name: V2 identity"),
+        "renamed typed checkout: {text}"
+    );
     assert!(text.contains("Restore Velnor tool seed"), "{text}");
 
     let mut conditional = checkout_step(&checkout_pin())?;
@@ -333,8 +336,8 @@ fn lane_target_dirs_stay_isolated() {
 #[test]
 fn mbx_objects_step_gates_save_to_push_via_cache_mode() {
     let uses = format!("jdx/mr-boxington-action@{}", sha());
-    let [_, direct] = mbx_tool_steps(&uses, "1.19.0", "1.98.1").expect("direct MBX steps");
-    let [_, driven] = mbx_steps_for_driver(
+    let [_, direct, _] = mbx_tool_steps(&uses, "1.19.0", "1.98.1").expect("direct MBX steps");
+    let [_, driven, _] = mbx_steps_for_driver(
         &uses,
         CompileDriver::Mbx,
         "1.19.0",
@@ -349,8 +352,10 @@ fn mbx_objects_step_gates_save_to_push_via_cache_mode() {
         };
         assert_eq!(
             env.get(MBX_CACHE_MODE_ENV).map(String::as_str),
-            Some("read"),
-            "the action stays restore-only so its post cannot triple the store"
+            Some(
+                "${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}"
+            ),
+            "native object saves are limited to protected default-branch pushes"
         );
     }
     assert!(

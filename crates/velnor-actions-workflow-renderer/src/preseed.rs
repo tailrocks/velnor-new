@@ -21,7 +21,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::Step;
+use velnor_actions_contract::{Step, StepRole};
 
 use crate::{
     RenderError,
@@ -105,7 +105,9 @@ pub fn preseed_build_step(
     env: &BTreeMap<String, String>,
 ) -> Result<Step, RenderError> {
     debug_assert!(PRESEED_BUILD_NAME.ends_with(TRUST_MARK));
-    steps::shell_step(PRESEED_BUILD_NAME, build.to_vec(), env.clone())
+    let mut step = steps::shell_step(PRESEED_BUILD_NAME, build.to_vec(), env.clone())?;
+    step.role = Some(StepRole::PreseedBuild);
+    Ok(step)
 }
 
 /// Fixed MBX-compile verification: output executable plus pinned-route proof.
@@ -134,43 +136,43 @@ pub fn preseed_verify_step(
         "test -x {PRESEED_BUILD_OUTPUT} && mkdir -p \"$RUNNER_TEMP/velnor\" && {} > \"{PRESEED_MBX_VERSION_OUTPUT}\" && grep -qxF \"mbx {mbx_version}\" \"{PRESEED_MBX_VERSION_OUTPUT}\"",
         probe.join(" ")
     );
-    steps::shell_step(
+    let mut step = steps::shell_step(
         PRESEED_VERIFY_NAME,
         vec!["sh".to_owned(), "-c".to_owned(), script],
         env.clone(),
-    )
+    )?;
+    step.role = Some(StepRole::PreseedVerifyBuild);
+    Ok(step)
 }
 
-/// Probe shape: isolated `mise exec <spec@exact> -- mbx --version`.
+/// Probe shape: isolated `mise exec rust@<exact> -- mbx --version`.
 ///
-/// First arg `mise`, at least one `spec@exact` tool spec between `exec`
-/// and `--`, tail exactly `mbx --version`, every arg shell-plain (no
-/// whitespace, quotes, expansions, or operators) so script embedding is
-/// injection-free.
+/// The native action owns MBX installation. This route selects only Rust
+/// through Mise and inherits the action's PATH; every arg is shell-plain
+/// so script embedding is injection-free.
 fn check_probe_shape(probe: &[String]) -> Result<(), RenderError> {
     let malformed = || RenderError::BadCommand("preseed_bad_mbx_probe".to_owned());
-    if probe.len() < 6
-        || probe.first().is_some_and(|arg| arg != "mise")
+    if probe.len() != 9
         || probe.iter().any(|arg| !is_probe_token(arg))
+        || probe.iter().take(5).map(String::as_str).ne([
+            "mise",
+            "--no-config",
+            "--no-env",
+            "--no-hooks",
+            "exec",
+        ])
+        || probe
+            .iter()
+            .skip(6)
+            .map(String::as_str)
+            .ne(["--", "mbx", "--version"])
     {
         return Err(malformed());
     }
-    let (Some(exec), Some(sep)) = (
-        probe.iter().position(|arg| arg == "exec"),
-        probe.iter().position(|arg| arg == "--"),
-    ) else {
+    let Some(rust_spec) = probe[5].strip_prefix("rust@") else {
         return Err(malformed());
     };
-    if exec == 0 || sep <= exec + 1 || probe[1..exec].iter().any(|arg| !arg.starts_with('-')) {
-        return Err(malformed());
-    }
-    if probe[exec + 1..sep]
-        .iter()
-        .any(|arg| arg.starts_with('-') || !is_exact_tool_spec(arg))
-    {
-        return Err(malformed());
-    }
-    if probe[sep + 1..] != ["mbx".to_owned(), "--version".to_owned()] {
+    if !is_exact_version(rust_spec) {
         return Err(malformed());
     }
     Ok(())
@@ -182,12 +184,6 @@ fn is_probe_token(arg: &str) -> bool {
         && arg.bytes().all(|b| {
             b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.' | b'@' | b':' | b'/' | b'+')
         })
-}
-
-/// Tool specs pin an exact `major.minor.patch` after `@`.
-fn is_exact_tool_spec(spec: &str) -> bool {
-    spec.rsplit_once('@')
-        .is_some_and(|(_, version)| is_exact_version(version))
 }
 
 /// Exact versions: three nonempty numeric dot parts, nothing else.
@@ -219,7 +215,7 @@ pub fn preseed_manifest_step(build: &[String], target: &str) -> Result<Step, Ren
         )));
     }
     let toolchain = crate::candidate::toolchain_identity(build)?;
-    steps::shell_step(
+    let mut step = steps::shell_step(
         PRESEED_MANIFEST_NAME,
         vec![PRESEED_BUILD_OUTPUT.to_owned()],
         std::collections::BTreeMap::from([
@@ -238,14 +234,16 @@ pub fn preseed_manifest_step(build: &[String], target: &str) -> Result<Step, Ren
             (PRESEED_MANIFEST_TARGET_ENV.to_owned(), target.to_owned()),
             (PRESEED_MANIFEST_TOOLCHAIN_ENV.to_owned(), toolchain),
         ]),
-    )
+    )?;
+    step.role = Some(StepRole::PreseedManifest);
+    Ok(step)
 }
 
 /// Pre-seed helper upload step (exact artifact name, fails loud).
 /// # Errors
 pub fn preseed_upload_step() -> Result<Step, RenderError> {
     debug_assert!(PRESEED_UPLOAD_NAME.ends_with(TRUST_MARK));
-    steps::action_step(
+    let mut step = steps::action_step(
         PRESEED_UPLOAD_NAME,
         steps::UPLOAD_ARTIFACT_USES,
         std::collections::BTreeMap::from([
@@ -257,21 +255,25 @@ pub fn preseed_upload_step() -> Result<Step, RenderError> {
                 steps::ARTIFACT_RETENTION_DAYS.to_string(),
             ),
         ]),
-    )
+    )?;
+    step.role = Some(StepRole::PreseedUpload);
+    Ok(step)
 }
 
 /// Pre-seed helper download step (exact artifact name, no wildcards).
 /// # Errors
 pub fn preseed_download_step() -> Result<Step, RenderError> {
     debug_assert!(PRESEED_DOWNLOAD_NAME.ends_with(TRUST_MARK));
-    steps::action_step(
+    let mut step = steps::action_step(
         PRESEED_DOWNLOAD_NAME,
         steps::DOWNLOAD_ARTIFACT_USES,
         std::collections::BTreeMap::from([
             ("name".to_owned(), PRESEED_ARTIFACT_NAME.to_owned()),
             ("path".to_owned(), PRESEED_STAGE_DIR_EXPR.to_owned()),
         ]),
-    )
+    )?;
+    step.role = Some(StepRole::PreseedDownload);
+    Ok(step)
 }
 
 /// Fixed script verifying the downloaded manifest before any staging.
@@ -311,7 +313,7 @@ pub fn preseed_manifest_verify_step(target: &str) -> Result<Step, RenderError> {
             "preseed_unsupported_target:{target}"
         )));
     }
-    steps::shell_step(
+    let mut step = steps::shell_step(
         PRESEED_VERIFY_MANIFEST_NAME,
         vec![
             "sh".to_owned(),
@@ -319,7 +321,9 @@ pub fn preseed_manifest_verify_step(target: &str) -> Result<Step, RenderError> {
             preseed_manifest_verify_script(target),
         ],
         std::collections::BTreeMap::new(),
-    )
+    )?;
+    step.role = Some(StepRole::PreseedVerifyManifest);
+    Ok(step)
 }
 
 /// Pre-seed staging step: copy the helper to the staged binary path.
@@ -336,11 +340,13 @@ pub fn preseed_stage_step(source: PreseedStageSource, staged: &str) -> Result<St
         "mkdir -p {dir} && cp {} {staged} && chmod +x {staged}",
         source.path()
     );
-    steps::shell_step(
+    let mut step = steps::shell_step(
         PRESEED_STAGE_NAME,
         vec!["sh".to_owned(), "-c".to_owned(), script],
         std::collections::BTreeMap::new(),
-    )
+    )?;
+    step.role = Some(StepRole::PreseedStage);
+    Ok(step)
 }
 
 /// Staged paths stay under the fixed helper prefix without traversal.

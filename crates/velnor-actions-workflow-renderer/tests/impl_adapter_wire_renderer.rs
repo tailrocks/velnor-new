@@ -3,6 +3,7 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::WorkflowPolicy;
+use velnor_actions_workflow_renderer::lane_target::lane_cargo_target_env;
 use velnor_actions_workflow_renderer::steps::{
     TOOLS_CACHE_PATH, TOOLS_RESTORE_USES, TOOLS_SAVE_USES, cache_action_step,
 };
@@ -11,7 +12,7 @@ use velnor_actions_workflow_renderer::toolchain_env::{
 };
 use velnor_actions_workflow_renderer::{
     RenderError, check_cache_step_order, check_no_bare_cargo, check_release_build,
-    lane_cargo_target_env, render_workflow_ir,
+    render_workflow_ir,
 };
 
 use super::impl_renderer_fixtures::{fixture_ctx, fixture_ir, job, mise_argv, scrubbed_shell_step};

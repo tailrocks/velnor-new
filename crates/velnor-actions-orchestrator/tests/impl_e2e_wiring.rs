@@ -6,7 +6,6 @@
 //! staged-binary use, the Velnor policy carries deny plus machete, and every
 //! step is named.
 
-use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_orchestrator::{prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::WORKFLOW_PATH;
 
@@ -14,6 +13,9 @@ use crate::impl_common::{
     TestResult, config_with_branch, git, make_repo, without_ambient_identity,
 };
 use crate::impl_e2e_tools_save::{check_one_tools_saver_per_key, check_tools_save_shape};
+
+#[path = "impl_e2e_wiring_preseed.rs"]
+mod preseed_tests;
 
 /// One parsed step: display name plus full step body.
 pub(crate) struct StepText {
@@ -120,8 +122,14 @@ fn check_setup_first(job: &JobText) -> Result<(), String> {
 fn setup_is_early(job: &JobText, at: usize) -> bool {
     at <= 1
         || (at == 4
-            && job.steps.first().is_some_and(|step| step.name == "Checkout")
-            && job.steps.get(1).is_some_and(|step| step.name == "V2 identity")
+            && job
+                .steps
+                .first()
+                .is_some_and(|step| step.name == "Checkout")
+            && job
+                .steps
+                .get(1)
+                .is_some_and(|step| step.name == "V2 identity")
             && job
                 .steps
                 .get(2)
@@ -276,87 +284,6 @@ fn emitted_yaml_wires_helpers_velnor_policy() -> TestResult {
         }
         Ok(())
     })
-}
-
-#[test]
-fn emitted_yaml_preseed_builds_once_and_shares_artifact() -> TestResult {
-    without_ambient_identity(
-        "emitted_yaml_preseed_builds_once_and_shares_artifact",
-        || {
-            let repo = make_velnor_repo()?;
-            assert!(
-                !repo.path().join(".velnor/generator.lock").exists(),
-                "pre-seed fixture must not carry a lock"
-            );
-            let prep = prepare(repo.path())?;
-            let tree = render_staged_tree(&prep)?;
-            let yaml = tree
-                .get(WORKFLOW_PATH)
-                .ok_or("missing workflow in staged tree")?;
-            let jobs = check_tree(yaml).map_err(|err| format!("{err}:\n{yaml}"))?;
-            let builds: Vec<(&str, &str)> = jobs
-                .iter()
-                .flat_map(|job| {
-                    job.steps.iter().filter_map(|step| {
-                        if step.body.contains("mbx build --release --locked") {
-                            Some((job.id.as_str(), step.body.as_str()))
-                        } else {
-                            None
-                        }
-                    })
-                })
-                .collect();
-            assert_eq!(builds.len(), 1, "exactly one helper build:\n{yaml}");
-            assert_eq!(builds[0].0, "plan", "build lives in plan");
-            for fragment in [
-                "rust@",
-                "mr-boxington@",
-                "--package velnor-actions-cli --bin velnor-actions",
-            ] {
-                assert!(
-                    builds[0].1.contains(fragment),
-                    "build misses {fragment}:\n{yaml}"
-                );
-            }
-            let plan = jobs
-                .iter()
-                .find(|job| job.id == "plan")
-                .ok_or("missing plan job")?;
-            assert!(
-                plan.steps
-                    .iter()
-                    .any(|step| step.body.contains("name: velnor-preseed-helper")),
-                "plan misses exact artifact upload:\n{yaml}"
-            );
-            let mbx = ToolCatalog::pinned()
-                .version(PinnedTool::MrBoxington)
-                .to_owned();
-            check_verify_mbx(plan, &mbx)?;
-            assert!(
-                !yaml.contains("pattern:"),
-                "no wildcard artifact matching:\n{yaml}"
-            );
-            for job in jobs
-                .iter()
-                .filter(|job| job.id == "required" || job.id.starts_with("rust-"))
-            {
-                let has_dl = job
-                    .steps
-                    .iter()
-                    .any(|step| step.name.contains("Download helper"));
-                assert!(has_dl, "{} misses download", job.id);
-            }
-            assert!(
-                yaml.contains("pre-seed trust-on-review"),
-                "trust marking missing:\n{yaml}"
-            );
-            assert!(
-                !yaml.contains("Acquire Velnor"),
-                "no digest path exists pre-seed:\n{yaml}"
-            );
-            Ok(())
-        },
-    )
 }
 
 #[test]

@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{RunsOn, Step, StepKind};
+use velnor_actions_contract::{RunsOn, Step, StepKind, StepRole};
 
 use crate::{RenderError, cache_p08, commands, marker, steps, tree::RenderedFile, yaml::Yaml};
 
@@ -112,6 +112,8 @@ pub(super) fn step(payload: &ToolsCachePayload) -> Result<Step, RenderError> {
     })?;
     Ok(Step {
         name: cache_p08::TOOLS_CACHE_IDENTITY_NAME.to_owned(),
+        id: None,
+        role: Some(StepRole::ToolsCacheIdentity),
         condition: None,
         kind: StepKind::Action {
             uses: uses.to_owned(),
@@ -126,13 +128,13 @@ pub(super) fn step(payload: &ToolsCachePayload) -> Result<Step, RenderError> {
 
 /// Validate the only local action call accepted by the workflow renderer.
 pub(super) fn validate_action_call(
-    name: &str,
+    step: &Step,
     uses: &str,
     runs_on: &str,
     with: &BTreeMap<String, String>,
     env: &BTreeMap<String, String>,
 ) -> Result<(), RenderError> {
-    if name != cache_p08::TOOLS_CACHE_IDENTITY_NAME
+    if step.role != Some(StepRole::ToolsCacheIdentity)
         || Some(uses) != action_uses(runs_on)
         || !env.is_empty()
         || with.len() != 1
@@ -188,7 +190,7 @@ pub(super) fn action_file(runs_on: &str, version: &str) -> Result<RenderedFile, 
         ));
     };
     let mut entries = vec![("name".to_owned(), Yaml::str(inner.name))];
-    crate::step_ids::push_step_id(&mut entries, cache_p08::TOOLS_CACHE_IDENTITY_NAME);
+    crate::step_ids::push_explicit_step_id(&mut entries, cache_p08::TOOLS_CACHE_IDENTITY_STEP_ID);
     entries.extend([
         (
             "env".to_owned(),

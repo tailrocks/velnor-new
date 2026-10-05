@@ -30,7 +30,8 @@ pub const TOOLS_CACHE_IDENTITY_NAME: &str = "V2 identity";
 /// Step output owner used by both V2 restore and save expressions.
 pub const TOOLS_CACHE_IDENTITY_STEP_ID: &str = "v2";
 /// Composite-action input carrying the V2 static tools digest.
-pub(crate) const TOOLS_CACHE_IDENTITY_DIGEST_INPUT: &str = "d";
+pub(crate) const TOOLS_CACHE_IDENTITY_DIGEST_INPUT: &str =
+    velnor_actions_contract::workflow::step_identity::TOOLS_CACHE_IDENTITY_DIGEST_INPUT;
 /// Cache restore is unavailable unless runtime roots/image were qualified.
 pub const TOOLS_CACHE_RESTORE_CONDITION: &str = "steps.v2.outputs.enabled == 'true'";
 /// Cache writes require an eligible trusted producer and qualified identity.
@@ -67,12 +68,13 @@ pub fn check_no_legacy_rust_cache(job_id: &str, job: &Job) -> Result<(), RenderE
 /// Require MBX object restore before every Cargo source fetch step.
 /// # Errors
 pub fn check_mbx_before_fetch(job_id: &str, job: &Job) -> Result<(), RenderError> {
-    let at = |name: &str| job.steps.iter().position(|step| step.name == name);
+    let at = |role| job.steps.iter().position(|step| step.role == Some(role));
+    let mbx = at(velnor_actions_contract::StepRole::MbxCache);
     let fetch = job
         .steps
         .iter()
-        .position(|step| step.name.starts_with("Fetch Cargo sources"));
-    if let (Some(mbx), Some(fetch_at)) = (at("Restore MBX objects"), fetch)
+        .position(|step| step.role == Some(velnor_actions_contract::StepRole::CargoSourcesFetch));
+    if let (Some(mbx), Some(fetch_at)) = (mbx, fetch)
         && fetch_at < mbx
     {
         return Err(RenderError::InvalidWorkflow(format!(

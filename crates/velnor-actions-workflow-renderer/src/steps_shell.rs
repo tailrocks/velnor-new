@@ -56,6 +56,8 @@ fn shell_step_with_env_validation(
     env_map.extend(crate::toolchain_env::credential_scrub());
     Ok(Step {
         name: name.to_owned(),
+        id: None,
+        role: None,
         condition: None,
         kind: StepKind::Shell { run, env: env_map },
     })
@@ -81,6 +83,8 @@ pub fn ambient_shell_step(
     steps::scan_for_private_subcommands(name)?;
     Ok(Step {
         name: name.to_owned(),
+        id: None,
+        role: None,
         condition: None,
         kind: StepKind::Shell { run: argv, env },
     })

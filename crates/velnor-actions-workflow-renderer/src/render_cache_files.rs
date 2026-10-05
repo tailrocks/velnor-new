@@ -12,9 +12,9 @@ pub(crate) fn with_runtime_identity_files(
     let lanes: BTreeSet<String> = jobs
         .values()
         .filter(|job| {
-            job.steps
-                .iter()
-                .any(|step| step.name == cache_p08::TOOLS_CACHE_IDENTITY_NAME)
+            job.steps.iter().any(|step| {
+                step.role == Some(velnor_actions_contract::StepRole::ToolsCacheIdentity)
+            })
         })
         .map(|job| job.runs_on.clone())
         .collect();

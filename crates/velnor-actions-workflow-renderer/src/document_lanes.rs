@@ -156,13 +156,12 @@ fn append_steps(
 }
 
 fn valid_shared_checkout(checkout: &Step, expected_uses: &str) -> bool {
-    checkout.name == "Checkout"
+    checkout.role == Some(velnor_actions_contract::StepRole::Checkout)
         && checkout.condition.is_none()
         && matches!(
             &checkout.kind,
-            StepKind::Action { uses, with, env }
+            StepKind::Action { uses, with, .. }
                 if uses == expected_uses
                     && with.get("persist-credentials").map(String::as_str) == Some("false")
-                    && env.is_empty()
         )
 }

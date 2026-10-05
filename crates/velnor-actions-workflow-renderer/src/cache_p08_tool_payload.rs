@@ -25,13 +25,13 @@ pub(crate) fn runtime_identity_action_file(
 }
 
 pub(crate) fn validate_runtime_identity_action(
-    name: &str,
+    step: &Step,
     uses: &str,
     runs_on: &str,
     with: &std::collections::BTreeMap<String, String>,
     env: &std::collections::BTreeMap<String, String>,
 ) -> Result<(), RenderError> {
-    runtime_identity::validate_action_call(name, uses, runs_on, with, env)
+    runtime_identity::validate_action_call(step, uses, runs_on, with, env)
 }
 
 pub(crate) fn runtime_identity_action_uses(runs_on: &str) -> Option<&'static str> {
