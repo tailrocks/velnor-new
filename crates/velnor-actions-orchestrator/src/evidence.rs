@@ -15,6 +15,9 @@ use velnor_actions_rust::{
 use crate::OrchestratorError;
 use crate::discover::PlannedWorkspace;
 
+#[path = "mbx_producer_passthrough.rs"]
+pub(crate) mod mbx_producer_passthrough;
+
 /// Detect the execution profile from bytes read under `root`.
 ///
 /// Generated workflow output (current or historical marker) is never
@@ -206,6 +209,7 @@ fn collect_handwritten(root: &Path, index: &FileIndex) -> Vec<(String, String)> 
     let mut out = Vec::new();
     for path in index.files() {
         if is_workflow_path(path)
+            && !mbx_producer_passthrough::is_allowlisted_path(path)
             && let Some(text) = read_optional(root, path)
             && !starts_generated(&text)
         {

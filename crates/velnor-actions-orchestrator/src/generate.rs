@@ -176,7 +176,8 @@ fn render_all(
     extra.extend(crate::freshness_emit::freshness_files(prep)?);
     extra.extend(crate::routing::extra_files(&prep.config, version)?);
     extra.extend(rendered.shared);
-    let tree = render_tree_with_extra(&workflow, &actionlint, &extra, version)?;
+    let mut tree = render_tree_with_extra(&workflow, &actionlint, &extra, version)?;
+    crate::evidence::mbx_producer_passthrough::append_allowlisted(&prep.root, &mut tree)?;
     Ok(tree)
 }
 
