@@ -158,13 +158,11 @@ fn shared_script_dialect(path: &str) -> Option<workflow::ShellDialect> {
         .and_then(|rest| rest.strip_suffix(".sh"))
     {
         (digest, workflow::ShellDialect::Sh)
-    } else if let Some(digest) = filename
-        .strip_prefix("bash-b3-")
-        .and_then(|rest| rest.strip_suffix(".bash"))
-    {
-        (digest, workflow::ShellDialect::Bash)
     } else {
-        return None;
+        let digest = filename
+            .strip_prefix("bash-b3-")
+            .and_then(|rest| rest.strip_suffix(".bash"))?;
+        (digest, workflow::ShellDialect::Bash)
     };
     let valid_digest = digest.len() == 64
         && digest
