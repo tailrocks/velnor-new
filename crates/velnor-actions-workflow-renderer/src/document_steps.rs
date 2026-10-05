@@ -236,6 +236,7 @@ pub(crate) fn step_to_yaml(
     }
 }
 
+/// Render one internal planner step. The operation travels in env, never argv.
 fn internal_step_to_yaml(
     job_id: &str,
     step: &Step,
@@ -250,7 +251,7 @@ fn internal_step_to_yaml(
     } = &step.kind
     else {
         return Err(RenderError::InvalidWorkflow(
-            "internal_step_kind_changed".to_owned(),
+            "internal_step_required".to_owned(),
         ));
     };
     let (op, target) = steps::split_internal_operation(operation)?;
@@ -264,8 +265,10 @@ fn internal_step_to_yaml(
         steps::scan_for_private_subcommands(condition)?;
         entries.push(("if".to_owned(), Yaml::str(condition.clone())));
     }
-    // No `continue-on-error` on the fetch step (F5): the helper retries
-    // each leg bounded; hard environment failures remain unmasked.
+    // No `continue-on-error` on the fetch step (F5): the helper
+    // retries each leg bounded and still exits success on
+    // per-leg failure, so the merge judges honestly; only hard
+    // environment failures fail the job, unmasked.
     let channel = if job_id == FINAL_JOB_ID && target == steps::MERGE_OPERATION {
         needs_envs
     } else {

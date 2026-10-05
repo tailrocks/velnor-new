@@ -25,7 +25,7 @@ use crate::discover::Discovery;
 const MISE_ACTION_KEY: &str = "jdx/mise-action";
 
 use velnor_actions_workflow_renderer::setup::{
-    MISE_BINARY_SHA256_LINUX_X64, MISE_BINARY_SHA256_MACOS_ARM64,
+    MISE_BINARY_SHA256_LINUX_X64, MISE_BINARY_SHA256_MACOS_ARM64, MISE_BINARY_SHA256_MACOS_X64,
 };
 
 /// Resolve typed Mise setup pins: overrides plus the compiled catalog.
@@ -50,6 +50,23 @@ pub(crate) fn resolve_mise_setup(
         sha256: MISE_BINARY_SHA256_LINUX_X64.to_owned(),
     }
     .for_target(target)?)
+}
+
+/// Resolve a release runner's Mise setup pins from the named platform ID.
+pub(crate) fn resolve_mise_setup_for_release_target(
+    config: &VelnorConfig,
+    target: ReleaseTarget,
+) -> Result<MiseSetup, OrchestratorError> {
+    let sha256 = match target {
+        ReleaseTarget::LinuxX86_64 => MISE_BINARY_SHA256_LINUX_X64,
+        ReleaseTarget::MacosArm64 => MISE_BINARY_SHA256_MACOS_ARM64,
+        ReleaseTarget::MacosX86_64 => MISE_BINARY_SHA256_MACOS_X64,
+    };
+    Ok(MiseSetup {
+        uses: mise_action_uses(config)?,
+        version: MISE_VERSION.to_owned(),
+        sha256: sha256.to_owned(),
+    })
 }
 
 /// Resolve cache-off Mise setup for an isolated verification runner.
@@ -252,6 +269,10 @@ const GENERATOR_SEED_ROOT: &str = "/opt/velnor/seed";
 ///
 /// Curl stays HTTPS-only (`--proto '=https'`) over TLS 1.2+. Paths are
 /// double-quoted, and a seed with the wrong digest is never copied.
+/// One digest function keeps each repeated step inside the 500_000-byte
+/// workflow cap. The staged path stays a literal `$RUNNER_TEMP/velnor/bin/velnor-actions-`
+/// prefix. `&&` still skips `chmod` when mkdir, copy, download, or the
+/// digest check fails.
 ///
 /// # Errors
 ///
@@ -276,16 +297,14 @@ pub fn acquire_script_argv(
             problem: format!("bad_staged_path:{staged}"),
         });
     }
-    let dir = staged.rsplit_once('/').map_or(staged, |(head, _)| head);
     let name = staged.rsplit_once('/').map_or(staged, |(_, tail)| tail);
     if !file_token(name) {
         return Err(OrchestratorError::Contract {
             problem: format!("bad_staged_name:{name}"),
         });
     }
-    let seed = format!("{seed_root}/generator/{name}");
     let script = format!(
-        "mkdir -p \"{dir}\" && s=\"{seed}\" d=\"{staged}\" && if [ -f \"$s\" ] && echo \"$VELNOR_ASSET_SHA256  $s\" | {digest}; then cp \"$s\" \"$d\"; else curl -fsSL --proto '=https' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\" && echo \"$VELNOR_ASSET_SHA256  $d\" | {digest}; fi && chmod +x \"$d\""
+        "d=\"{staged}\"&&mkdir -p \"${{d%/*}}\"&&s=\"{seed_root}/generator/${{d##*/}}\"&&v() {{ echo \"$VELNOR_ASSET_SHA256  $1\"|{digest};}}&&if [ -f \"$s\" ]&&v \"$s\";then cp \"$s\" \"$d\";else curl -fsSL --proto '=https' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\"&&v \"$d\";fi&&chmod +x \"$d\""
     );
     Ok(vec!["sh".to_owned(), "-c".to_owned(), script])
 }
