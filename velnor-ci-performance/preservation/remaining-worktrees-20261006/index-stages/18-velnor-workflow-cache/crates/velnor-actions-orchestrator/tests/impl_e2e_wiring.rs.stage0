@@ -1,0 +1,376 @@
+//! End-to-end emitted-YAML wiring cases over tempdir fixtures.
+//!
+//! Runs the real `prepare` → `render_staged_tree` path and asserts on the
+//! emitted workflow text: Mise setup precedes every static `mise` use, the
+//! task template always carries setup, helper provisioning precedes every
+//! staged-binary use, the Velnor policy carries deny plus machete, and every
+//! step is named.
+
+use velnor_actions_mise::{PinnedTool, ToolCatalog};
+use velnor_actions_orchestrator::{prepare, render_staged_tree};
+use velnor_actions_workflow_renderer::WORKFLOW_PATH;
+
+use crate::impl_common::{
+    TestResult, config_with_branch, git, make_repo, without_ambient_identity,
+};
+use crate::impl_e2e_tools_save::{check_one_tools_saver_per_key, check_tools_save_shape};
+
+/// One parsed step: display name plus full step body.
+pub(crate) struct StepText {
+    /// Step display name; empty when the entry carries no `name:`.
+    pub(crate) name: String,
+    /// First line plus every continuation line of the step.
+    pub(crate) body: String,
+}
+
+/// One parsed job section in step order.
+pub(crate) struct JobText {
+    /// Job ID from the section header.
+    pub(crate) id: String,
+    /// Steps in render order.
+    pub(crate) steps: Vec<StepText>,
+}
+
+/// Parse every job section plus its steps from workflow text.
+fn parse_jobs(yaml: &str) -> Vec<JobText> {
+    let mut jobs: Vec<JobText> = Vec::new();
+    let mut in_jobs = false;
+    let mut in_steps = false;
+    for line in yaml.lines() {
+        if line == "jobs:" {
+            in_jobs = true;
+        } else if in_jobs && is_job_header(line) {
+            in_steps = false;
+            jobs.push(JobText {
+                id: header_id(line),
+                steps: Vec::new(),
+            });
+        } else if in_jobs && line == "    steps:" {
+            in_steps = true;
+        } else if in_jobs && in_steps {
+            push_step_line(&mut jobs, line);
+        }
+    }
+    jobs
+}
+
+/// True for a two-space job section header (`  <id>:`).
+fn is_job_header(line: &str) -> bool {
+    line.len() > 3 && line.starts_with("  ") && !line.starts_with("   ") && line.ends_with(':')
+}
+
+/// Job ID from a validated section header.
+fn header_id(line: &str) -> String {
+    line.trim().trim_end_matches(':').to_owned()
+}
+
+/// Append one steps-block line to the current job's steps.
+fn push_step_line(jobs: &mut [JobText], line: &str) {
+    let Some(job) = jobs.last_mut() else {
+        return;
+    };
+    if let Some(rest) = line.strip_prefix("      - ") {
+        let name = rest
+            .strip_prefix("name: ")
+            .unwrap_or_default()
+            .trim()
+            .trim_matches('"')
+            .to_owned();
+        job.steps.push(StepText {
+            name,
+            body: line.to_owned(),
+        });
+    } else if let Some(step) = job.steps.last_mut() {
+        step.body.push('\n');
+        step.body.push_str(line);
+    }
+}
+
+/// True for shell steps invoking the `mise` program.
+fn uses_mise(step: &StepText) -> bool {
+    step.body.contains("run:") && step.body.contains("mise ")
+}
+
+/// Pre-seed staging step display name, asserted as emitted text.
+const PRESEED_STAGE_TEXT: &str = "Stage helper (pre-seed trust-on-review)";
+
+/// True for steps invoking the staged helper (excluding the stagers).
+fn uses_staged_helper(step: &StepText) -> bool {
+    step.name != "Acquire Velnor"
+        && step.name != PRESEED_STAGE_TEXT
+        && step.body.contains("$RUNNER_TEMP/velnor/bin")
+}
+
+/// Setup Mise must be first (modulo Checkout plus tools restore) and precede every `mise` use.
+fn check_setup_first(job: &JobText) -> Result<(), String> {
+    let setup = job.steps.iter().position(|s| s.name == "Setup Mise");
+    let first_mise = job.steps.iter().position(uses_mise);
+    match (setup, first_mise) {
+        (Some(at), Some(first)) if at < first && setup_is_early(job, at) => Ok(()),
+        (Some(_) | None, None) => Ok(()),
+        (None, Some(_)) => Err(format!("{}: mise use without Setup Mise", job.id)),
+        (Some(at), Some(first)) => Err(format!(
+            "{}: Setup Mise at {at}, first mise use at {first}",
+            job.id
+        )),
+    }
+}
+
+/// Setup position is legal at 0-1 (right after Checkout; P08 has no
+/// manual tools restore ahead of it).
+fn setup_is_early(_job: &JobText, at: usize) -> bool {
+    at <= 1
+}
+
+/// Setup Mise must enable the qualified built-in cache: `cache:true` with
+/// an explicit tool-union `cache_key` (never the workspace-hashing default
+/// that ELOOPs on the symlink-loop fixture, never a job-role suffix).
+/// Every setup restores read-only (`cache_save: "false"`): the pinned
+/// action saves only inside its disabled `install` leg, so no setup may
+/// promise a built-in save. Push-gated saves are explicit `Save Mise
+/// tools` steps on the elected writer per key.
+fn check_setup_cache_on(job: &JobText) -> Result<(), String> {
+    for step in job.steps.iter().filter(|s| s.name == "Setup Mise") {
+        for need in [
+            "cache: \"true\"",
+            "cache_key: mise-v1-",
+            "cache_save: \"false\"",
+        ] {
+            if !step.body.contains(need) {
+                return Err(format!("{}: Setup Mise misses {need}", job.id));
+            }
+        }
+        if step.body.contains("cache_save: ${{") {
+            return Err(format!("{}: Setup Mise must not promise a save", job.id));
+        }
+        if step.body.contains("hashFiles(") {
+            return Err(format!("{}: Setup Mise must not hashFiles", job.id));
+        }
+    }
+    Ok(())
+}
+
+/// Verify-MBX step must keep the executable check and prove the pinned route.
+fn check_verify_mbx(plan: &JobText, mbx: &str) -> Result<(), String> {
+    let verify = plan
+        .steps
+        .iter()
+        .find(|step| step.name.contains("Verify MBX compile"))
+        .ok_or("missing Verify MBX compile step")?;
+    for need in [
+        "test -x target/release/velnor-actions".to_owned(),
+        "mbx --version".to_owned(),
+        format!("grep -qxF \\\"mbx {mbx}\\\""),
+    ] {
+        if !verify.body.contains(&need) {
+            return Err(format!("verify misses {need}"));
+        }
+    }
+    Ok(())
+}
+
+/// Every staged-helper use must follow an Acquire or pre-seed Stage step.
+fn check_provisioned(job: &JobText) -> Result<(), String> {
+    for (index, step) in job.steps.iter().enumerate() {
+        if uses_staged_helper(step)
+            && !job.steps[..index]
+                .iter()
+                .any(|prior| prior.name == "Acquire Velnor" || prior.name == PRESEED_STAGE_TEXT)
+        {
+            return Err(format!(
+                "{}: step {:?} uses the staged helper without provisioning",
+                job.id, step.name
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Every step entry must carry a display name.
+fn check_named(job: &JobText) -> Result<(), String> {
+    for step in &job.steps {
+        if step.name.is_empty() {
+            return Err(format!("{}: unnamed step: {:?}", job.id, step.body));
+        }
+    }
+    Ok(())
+}
+
+/// Shared wiring checks for every job in one emitted tree.
+fn check_tree(yaml: &str) -> Result<Vec<JobText>, String> {
+    let jobs = parse_jobs(yaml);
+    if jobs.is_empty() {
+        return Err("no jobs parsed".to_owned());
+    }
+    for job in &jobs {
+        check_setup_first(job)?;
+        check_setup_cache_on(job)?;
+        check_tools_save_shape(job)?;
+        check_provisioned(job)?;
+        check_named(job)?;
+    }
+    check_one_tools_saver_per_key(&jobs)?;
+    Ok(jobs)
+}
+
+/// Velnor-policy fixture: canonical origin, lock optional (pre-seed omits it).
+fn make_velnor_repo() -> Result<tempfile::TempDir, Box<dyn std::error::Error>> {
+    let repo = make_repo(
+        "schema = 1\n[workflow]\nname = \"CI\"\npolicy = \"velnor-repository-v1\"\ndefault_branch = \"testmain\"\n",
+    )?;
+    git(
+        &[
+            "remote",
+            "add",
+            "origin",
+            "https://github.com/tailrocks/velnor-new.git",
+        ],
+        repo.path(),
+    )?;
+    Ok(repo)
+}
+
+/// Three-target generator lock turning a Velnor fixture post-seed.
+fn write_lock(repo: &tempfile::TempDir) -> Result<(), Box<dyn std::error::Error>> {
+    let version = env!("CARGO_PKG_VERSION");
+    let mut bins = String::new();
+    for target in velnor_actions_contract::SUPPORTED_TARGETS {
+        use std::fmt::Write as _;
+        write!(
+            bins,
+            "[[generator.binaries]]\ntarget = \"{target}\"\nartifact = \"https://example.invalid/r/{target}\"\nsha256 = \"{}\"\n",
+            "a".repeat(64)
+        )?;
+    }
+    let lock = format!(
+        "schema = 1\n[generator]\nbinary = \"velnor-actions\"\nversion = \"{version}\"\ncommit = \"{}\"\n{bins}[mise-bootstrap]\nversion = \"2026.9.18\"\nartifact = \"https://example.invalid/mise\"\nsha256 = \"{}\"\n",
+        "e".repeat(40),
+        "b".repeat(64)
+    );
+    std::fs::write(repo.path().join(".velnor/generator.lock"), lock)?;
+    Ok(())
+}
+
+#[test]
+fn emitted_yaml_wires_helpers_velnor_policy() -> TestResult {
+    without_ambient_identity("emitted_yaml_wires_helpers_velnor_policy", || {
+        let repo = make_velnor_repo()?;
+        write_lock(&repo)?;
+        let prep = prepare(repo.path())?;
+        let tree = render_staged_tree(&prep)?;
+        let yaml = tree
+            .get(WORKFLOW_PATH)
+            .ok_or("missing workflow in staged tree")?;
+        let jobs = check_tree(yaml).map_err(|err| format!("{err}:\n{yaml}"))?;
+        assert!(jobs.iter().all(|job| job.id != "policy"), "no umbrella");
+        for (id, want) in [
+            ("cargo-deny", "Run cargo-deny"),
+            ("cargo-machete", "Run cargo-machete"),
+            ("zizmor", "Run zizmor"),
+        ] {
+            let job = jobs.iter().find(|job| job.id == id);
+            let job = job.unwrap_or_else(|| panic!("missing {id} job"));
+            assert!(
+                job.steps.iter().any(|step| step.name == want),
+                "{id} misses {want}"
+            );
+        }
+        Ok(())
+    })
+}
+
+#[test]
+fn emitted_yaml_preseed_builds_once_and_shares_artifact() -> TestResult {
+    without_ambient_identity(
+        "emitted_yaml_preseed_builds_once_and_shares_artifact",
+        || {
+            let repo = make_velnor_repo()?;
+            assert!(
+                !repo.path().join(".velnor/generator.lock").exists(),
+                "pre-seed fixture must not carry a lock"
+            );
+            let prep = prepare(repo.path())?;
+            let tree = render_staged_tree(&prep)?;
+            let yaml = tree
+                .get(WORKFLOW_PATH)
+                .ok_or("missing workflow in staged tree")?;
+            let jobs = check_tree(yaml).map_err(|err| format!("{err}:\n{yaml}"))?;
+            let builds: Vec<(&str, &str)> = jobs
+                .iter()
+                .flat_map(|job| {
+                    job.steps.iter().filter_map(|step| {
+                        if step.body.contains("mbx build --release --locked") {
+                            Some((job.id.as_str(), step.body.as_str()))
+                        } else {
+                            None
+                        }
+                    })
+                })
+                .collect();
+            assert_eq!(builds.len(), 1, "exactly one helper build:\n{yaml}");
+            assert_eq!(builds[0].0, "plan", "build lives in plan");
+            for fragment in [
+                "rust@",
+                "mr-boxington@",
+                "--package velnor-actions-cli --bin velnor-actions",
+            ] {
+                assert!(
+                    builds[0].1.contains(fragment),
+                    "build misses {fragment}:\n{yaml}"
+                );
+            }
+            let plan = jobs
+                .iter()
+                .find(|job| job.id == "plan")
+                .ok_or("missing plan job")?;
+            assert!(
+                plan.steps
+                    .iter()
+                    .any(|step| step.body.contains("name: velnor-preseed-helper")),
+                "plan misses exact artifact upload:\n{yaml}"
+            );
+            let mbx = ToolCatalog::pinned()
+                .version(PinnedTool::MrBoxington)
+                .to_owned();
+            check_verify_mbx(plan, &mbx)?;
+            assert!(
+                !yaml.contains("pattern:"),
+                "no wildcard artifact matching:\n{yaml}"
+            );
+            for job in jobs
+                .iter()
+                .filter(|job| job.id == "required" || job.id.starts_with("rust-"))
+            {
+                let has_dl = job
+                    .steps
+                    .iter()
+                    .any(|step| step.name.contains("Download helper"));
+                assert!(has_dl, "{} misses download", job.id);
+            }
+            assert!(
+                yaml.contains("pre-seed trust-on-review"),
+                "trust marking missing:\n{yaml}"
+            );
+            assert!(
+                !yaml.contains("Acquire Velnor"),
+                "no digest path exists pre-seed:\n{yaml}"
+            );
+            Ok(())
+        },
+    )
+}
+
+#[test]
+fn emitted_yaml_wires_helpers_consumer() -> TestResult {
+    let repo = make_repo(config_with_branch())?;
+    let prep = prepare(repo.path())?;
+    let tree = render_staged_tree(&prep)?;
+    let yaml = tree
+        .get(WORKFLOW_PATH)
+        .ok_or("missing workflow in staged tree")?;
+    let jobs = check_tree(yaml).map_err(|err| format!("{err}:\n{yaml}"))?;
+    for id in ["alint", "cargo-deny", "cargo-machete", "zizmor"] {
+        assert!(jobs.iter().all(|job| job.id != id), "consumer emits {id}");
+    }
+    Ok(())
+}
