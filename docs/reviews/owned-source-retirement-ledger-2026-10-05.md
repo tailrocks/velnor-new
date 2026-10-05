@@ -1,13 +1,14 @@
 # Owned-source retirement ledger
 
-Status: reversible removal draft, not a completion claim. The direct and
-indirect 47-consumer caller audit remains partial, and no branch or tag deletion
-is authorized or claimed here. Historical publications, receipts, reports, and
-their source identities remain passive evidence. The detached draft removes the
-25 listed script paths and their executable examples. The coordinated 15-path
-source/publication slice is also removed, and the targeted retired-module/import
-scan is clean. Final combined review and the direct consumer audit are still
-pending. Nothing has been committed, pushed, or merged.
+Status: PR #12 is open and unmerged at `9ccb1d43f6ca385086f8f73fe5091af214bc3988`.
+Its history contains the pushed owned-source/Foundation retirement commit
+`4bf20ed69dcb456c311a7470a7407aea6375a0c3`, which removes 40 dedicated scripts:
+the 25-path private candidate/performance/Git slice below and the coordinated
+15-path source/publication closure. The targeted retired-module/import scan is
+clean. Overall source cleanup, cache/release qualification, consumer migration,
+and snapshot/branch/tag retirement remain PARTIAL. No branch or tag deletion is
+authorized or claimed here. Historical publications, receipts, reports, and
+their source identities remain passive evidence.
 
 ## Refreshed tracked-path inventory
 
@@ -107,8 +108,8 @@ publication, release-policy, and semver helpers/tests are in the coordinated
 `source_closure_audit` deletion slice. In particular, downloader/evidence and
 fixture modules import `source_qualification_execution`; the qualifier loads
 the builder; the source-release transaction test reuses the source-publication
-test fixture. These paths are removed together in this import-closed integration
-candidate; a targeted search across scripts, crates, workflows, and tasks found
+test fixture. These paths were removed together in the pushed import-closed
+retirement commit; a targeted search across scripts, crates, workflows, and tasks found
 no remaining retired-module/import references. Historical source-only releases,
 receipts, asset IDs, hashes, and review records stay unchanged and passive.
 
@@ -172,12 +173,41 @@ Source snapshot, consumer, branch, tag, and upstream-retention closure therefore
 remain PARTIAL. This ledger makes no claim that external branches, tags,
 snapshots, or published assets were deleted.
 
-The native `scripts/check-no-python.sh` fixture self-test passes, but its full
-candidate-tree diagnostic still reports 42 findings and zero scan errors after
-the coordinated deletions. Thirteen findings belong to the freshness wrapper
-and helper family; keep those paths until their native replacements pass the
-required parity, security, and qualification checks. The other 29 findings are
-the MBX synchronous Python suite, whose separately audited deletion candidate
-has not yet landed here. The guard remains unwired while these findings exist.
-This is a bounded scanner result, not a claim that every passive Python source
-has been removed or that arbitrary dynamic launches can be proven absent.
+The last recorded full guard scan ran in the detached retirement candidate
+based on PR #12 head `8625f5d191bffc807f7b80a607ad1fc51cbc171b`. It reported 42
+findings and zero scan errors; its output was not saved as a separate log
+artifact. That scan is not evidence from the current remote head. An exact-head
+source inventory at PR #12 head `9ccb1d43f6ca385086f8f73fe5091af214bc3988`
+identifies the same 42 active-path findings: 29 `.py` files in the MBX
+synchronous suite, 11 freshness `.py` files, and two shell launch sites. These
+are 42 findings, not 42 Python files. The 11-file freshness port closure is:
+
+```text
+scripts/check_freshness.py
+scripts/freshness_context.py
+scripts/freshness_dependencies.py
+scripts/freshness_evidence.py
+scripts/freshness_inventory.py
+scripts/freshness_probe.py
+scripts/freshness_probe_check.py
+scripts/freshness_validation.py
+scripts/test_freshness_context.py
+scripts/test_freshness_probe.py
+scripts/test_freshness_probe_check.py
+```
+
+At exact PR #12 head `9ccb1d43f6ca385086f8f73fe5091af214bc3988`, these 11
+freshness Python paths and both interpreter calls from `check-freshness.sh`
+and `verify-local.sh` remain. The shell entrypoints are retained; native
+dispatch is only in a separate pending candidate, not in the pushed PR head.
+The 29-file MBX suite retirement is separately reviewed and pending integration.
+No full guard scan is recorded on the exact current head, and no passing result
+or mandatory wiring is claimed.
+
+The original 100 tracked Python sources are accounted for as 40 owned-source
+scripts deleted, 11 freshness files to port to native Rust, 29 MBX suite files
+to retire, and 20 unrelated passive Python sources preserved outside active
+paths. At exact `9ccb`, the 20 passive sources are 13 OCI modules/tests and 7
+release-source/admission/intent modules/tests; current in-repository callers do
+not execute them. The lexical scanner does not prove absence of arbitrary
+dynamic launchers or close external consumer scope.
