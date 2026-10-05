@@ -12,6 +12,9 @@ use crate::launch::admission;
 use crate::worker::{create_named_volumes, remove_worker_volumes, worker_id_for_name};
 use crate::{HostError, IntentState, Outcome, dind_create};
 
+#[path = "volumes_effect_tests.rs"]
+mod effect_tests;
+
 const TIMEOUT: Duration = Duration::from_secs(2);
 const WORKER: &str = "wtransport";
 

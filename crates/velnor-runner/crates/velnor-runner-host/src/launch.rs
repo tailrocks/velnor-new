@@ -24,6 +24,7 @@ mod bind;
 #[cfg(all(test, unix))]
 mod busy_slot_tests;
 mod capacity;
+mod completion;
 mod gate;
 mod inspect;
 #[cfg(all(test, unix))]
@@ -87,7 +88,6 @@ pub async fn launch_once(
             step: "docker budget",
         })?;
     let _capacity = install_job_capacity(capacity);
-    slot::release_exited(journal, docker).await?;
     let set = ensure_product_scale_set(pat, owner, repo)?;
     if std::env::var("VELNOR_RECONCILE").ok().as_deref() == Some("1") {
         let decision = gate::reconcile_gate(journal, docker).await?;
@@ -304,8 +304,15 @@ fn ack_ready(
     queue: Option<String>,
     polled: &Poll,
 ) -> Result<(), EnsureError> {
-    let Poll::Batch(batch) = polled else {
-        return Ok(());
+    let batch = match polled {
+        Poll::Batch(batch) => batch.clone(),
+        Poll::Quarantined(batch) => velnor_runner_github::ParsedBatch {
+            message_id: batch.message_id,
+            raw_body: batch.raw_body.clone(),
+            statistics: None,
+            jobs: Vec::new(),
+        },
+        Poll::Empty => return Ok(()),
     };
     let ctx = Drive {
         set_id: 0,
@@ -315,7 +322,7 @@ fn ack_ready(
     };
     let admin = link.base().to_owned();
     let mut lane = HostLane { link, admin, queue };
-    steps::acknowledge(&mut lane, &ctx, batch)
+    steps::acknowledge(&mut lane, &ctx, &batch)
 }
 
 struct HostLane<'a> {
