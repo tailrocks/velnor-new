@@ -153,15 +153,16 @@ technical reason, `granted` and `expires` (YYYY-MM-DD), and is recorded in
 
 ## Advisories
 
-`deny.toml` MUST keep `[advisories] ignore` empty: every ignored advisory
-fails the gate and must become a policy exception instead. The live
-`cargo deny check advisories` scan runs as the CI Cargo Deny job (or
-locally via `--with-advisories`); only findings it reports against this
-dependency graph count, each with its advisory id, package, and severity
-as evidence. Never invent vulnerability claims from version numbers or
-from the absence of a local audit tool. `cargo-deny` and `cargo-machete`
-remain separate security and unused-dependency checks and do not prove
-freshness.
+Every discovered Cargo workspace MUST have its own `deny.toml`, and each
+file MUST keep `[advisories] ignore` empty: every ignored advisory fails the
+gate and must become a policy exception instead. The live
+`cargo deny check advisories` scan runs once per workspace in the CI Cargo
+Deny job (or locally via `--with-advisories`), using that workspace's
+manifest, lockfile, and `deny.toml`; only findings it reports against the
+dependency graph count, each with its advisory id, package, and severity as
+evidence. Never invent vulnerability claims from version numbers or from the
+absence of a local audit tool. `cargo-deny` and `cargo-machete` remain
+separate security and unused-dependency checks and do not prove freshness.
 
 ## Risk-triggered verification (RQ-9.8)
 
