@@ -167,7 +167,8 @@ pub(crate) async fn admission<E: crate::stage::PairEngine + ?Sized>(
 ) -> Result<Admit, EnsureError> {
     slot::release_exited(journal, engine).await?;
     let idle = steps::idle(polled);
-    let occupied = slot::occupied(journal).await?;
+    let except = steps::mint_subject(polled);
+    let occupied = slot::occupied_except(journal, except.as_deref()).await?;
     let running = if capacity::needs_running(idle) {
         slot::running_count(journal, engine).await?
     } else {

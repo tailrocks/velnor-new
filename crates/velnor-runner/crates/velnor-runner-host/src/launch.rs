@@ -248,7 +248,8 @@ async fn drive_ready(
     capacity: u32,
     rest: Rest<'_>,
 ) -> Result<Option<Started>, EnsureError> {
-    if slot::busy(journal, docker, capacity).await? {
+    let except = steps::mint_subject(ready.polled);
+    if slot::busy_except(journal, docker, capacity, except.as_deref()).await? {
         return Ok(None);
     }
     let ctx = Drive::from_rest(

@@ -7,24 +7,51 @@ use crate::reconcile::IntentRow;
 use crate::scale_set::EnsureError;
 use crate::stage::PairEngine;
 
-pub(super) async fn busy<E: PairEngine + ?Sized>(
+pub(super) async fn busy_except<E: PairEngine + ?Sized>(
     journal: &Journal,
     engine: &E,
     capacity: u32,
+    except: Option<&str>,
 ) -> Result<bool, EnsureError> {
-    if occupied(journal).await? >= capacity {
+    if occupied_except(journal, except).await? >= capacity {
         return Ok(true);
     }
     Ok(running_count(journal, engine).await? >= capacity)
 }
 
 pub(super) async fn occupied(journal: &Journal) -> Result<u32, EnsureError> {
+    occupied_except(journal, None).await
+}
+
+/// Occupied permits, excluding one idless uncertain subject.
+///
+/// That subject is the redelivered `m{message_id}`. Its empty row must not
+/// block `ensure_runner`, which fails the row only after the directory is clear.
+/// A docker id, a dind id, or a worker volume still holds the permit.
+pub(super) async fn occupied_except(
+    journal: &Journal,
+    except: Option<&str>,
+) -> Result<u32, EnsureError> {
     let rows = journal.rows().await.map_err(map_journal)?;
-    let count = rows.iter().filter(|row| holds(row)).count();
+    let count = rows
+        .iter()
+        .filter(|row| holds(row) && !idless_self(row, except))
+        .count();
     u32::try_from(count).map_err(|_| EnsureError::Unexpected {
         status: 0,
         step: "capacity",
     })
+}
+
+fn idless_self(row: &IntentRow, except: Option<&str>) -> bool {
+    let Some(subject) = except else {
+        return false;
+    };
+    row.subject == subject
+        && row.state == IntentState::Uncertain
+        && row.docker_id.as_deref().is_none_or(str::is_empty)
+        && row.dind_id.as_deref().is_none_or(str::is_empty)
+        && row.worker_volume.as_deref().is_none_or(str::is_empty)
 }
 
 pub(super) async fn running_count<E: PairEngine + ?Sized>(

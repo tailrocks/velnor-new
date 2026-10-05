@@ -57,6 +57,19 @@ pub(crate) fn idle(polled: &Poll) -> Idle {
     }
 }
 
+/// Subject of a redelivered `JobAssigned`. Other polls have no exception.
+#[must_use]
+pub(super) fn mint_subject(polled: &Poll) -> Option<String> {
+    let Poll::Batch(batch) = polled else {
+        return None;
+    };
+    if idle(polled) == Idle::Mint {
+        Some(format!("m{}", batch.message_id))
+    } else {
+        None
+    }
+}
+
 fn assigned_message(batch: &velnor_runner_github::ParsedBatch) -> bool {
     batch
         .jobs
