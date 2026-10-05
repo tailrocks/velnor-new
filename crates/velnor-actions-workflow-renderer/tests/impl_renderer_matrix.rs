@@ -29,6 +29,7 @@ fn fixture_ctx() -> RenderContext {
         candidate: None,
         preseed: false,
         pull_request_cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        verification_tasks: Vec::new(),
         plan_consumer_env: std::collections::BTreeMap::new(),
     }
 }
@@ -112,6 +113,7 @@ fn strategy_shape_exact_and_marker_stripped() -> Result<(), RenderError> {
         "      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}",
         "    outputs:",
         "      matrix: ${{ steps.plan.outputs.matrix }}",
+        "VELNOR_PLAN_MATRIX_OUTPUT_MODE: dynamic_matrix",
         "        id: plan",
     ] {
         assert!(text.contains(line), "missing {line}:\n{text}");
@@ -130,6 +132,10 @@ fn max_parallel_honored() -> Result<(), RenderError> {
 #[test]
 fn static_task_renders_no_strategy() -> Result<(), RenderError> {
     let text = render(task_job(&BTreeMap::new(), vec!["plan".to_owned()])?)?;
+    assert!(
+        !text.contains("VELNOR_PLAN_MATRIX_OUTPUT_MODE"),
+        "static mode:\n{text}"
+    );
     // The plan job legitimately publishes `covered_tasks`; only the
     // static task job must stay free of matrix machinery.
     let start = text.find("velnor-task:").expect("task job renders");

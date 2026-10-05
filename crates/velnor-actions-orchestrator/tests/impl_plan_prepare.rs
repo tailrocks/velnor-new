@@ -87,22 +87,23 @@ fn check_install_specs(body: &str, specs: &[String]) -> Result<(), String> {
     Ok(())
 }
 
-/// Install step must carry the verification-plus-homes env.
-fn check_install_env(body: &str) -> Result<(), String> {
-    for key in [
-        "MISE_NO_CONFIG:",
-        "MISE_NO_ENV:",
-        "MISE_NO_HOOKS:",
-        "MISE_RUSTUP_HOME:",
-        "MISE_CARGO_HOME:",
-        "RUSTUP_TOOLCHAIN:",
-    ] {
+/// Install step and job must carry the verification-plus-homes env.
+fn check_install_env(body: &str, yaml: &str) -> Result<(), String> {
+    for key in ["MISE_RUSTUP_HOME:", "MISE_CARGO_HOME:"] {
         if !body.contains(key) {
-            return Err(format!("install env misses {key}:\n{body}"));
+            return Err(format!("install step env misses {key}:\n{body}"));
         }
     }
-    if !body.contains("MISE_LOCKFILE: \"0\"") {
-        return Err(format!("install env must pin MISE_LOCKFILE off:\n{body}"));
+    if !yaml.contains("RUSTUP_TOOLCHAIN: 1.98.1") {
+        return Err(format!("job env misses RUSTUP_TOOLCHAIN:\n{yaml}"));
+    }
+    for key in ["MISE_NO_CONFIG:", "MISE_NO_ENV:", "MISE_NO_HOOKS:"] {
+        if !yaml.contains(key) {
+            return Err(format!("job env misses {key}:\n{yaml}"));
+        }
+    }
+    if !yaml.contains("MISE_LOCKFILE: \"0\"") {
+        return Err(format!("job env must pin MISE_LOCKFILE off:\n{yaml}"));
     }
     Ok(())
 }
@@ -130,7 +131,7 @@ fn consumer_plan_installs_validators_before_check_generated() -> TestResult {
     .collect::<Vec<_>>();
     let body = &steps[prepare_at].1;
     check_install_specs(body, &specs).map_err(|err| format!("{err}\n{yaml}"))?;
-    check_install_env(body).map_err(|err| format!("{err}\n{yaml}"))?;
+    check_install_env(body, &yaml).map_err(|err| format!("{err}\n{yaml}"))?;
     assert!(
         !body.contains("mr-boxington"),
         "cargo fixture must stay MBX-free:\n{body}"

@@ -6,6 +6,9 @@ use velnor_actions_rust::tasks::{
 };
 use velnor_actions_rust::{CompileDriver, Evidence, EvidenceStrength, NextestProfile, TestRunner};
 
+#[path = "impl_rust_argv_ignored.rs"]
+mod ignored;
+
 fn group(kind: TaskKind) -> TaskGroup {
     TaskGroup {
         task_id: "t".to_owned(),
@@ -28,6 +31,7 @@ fn group(kind: TaskKind) -> TaskGroup {
         uses_network: false,
         uses_clock: false,
         uses_random: false,
+        run_ignored: None,
         nextest_profile: NextestProfile::Default,
     }
 }

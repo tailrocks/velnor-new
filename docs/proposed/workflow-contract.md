@@ -6,9 +6,8 @@ This document fixes V1 defaults; unsupported configuration MUST be rejected.
 
 ## 1. Product boundary
 
-Velnor Actions is a stack-generic workflow generator and focused task executor. V1 registers only Rust/Cargo
-and runs locally or on GitHub-hosted runners. Self-hosted runners, Docker supervision, a workflow interpreter,
-and a distributed cache service are deferred.
+Velnor Actions is a stack-generic workflow generator, not a task interpreter. V1 registers Rust/Cargo and
+typed verification declarations in one workflow IR; GitHub Actions runs jobs on hosted or configured Scale Set runners, while V1 never runs scripts locally or manages runner lifecycle.
 
 Each registered stack adapter owns its discovery and task proposals. The Mise adapter owns tool selection,
 command construction and execution, and cache integration. The actionlint crate owns actionlint configuration
@@ -55,6 +54,8 @@ With no `--output-dir`, it stages all output and replaces the repository's entir
 With `--output-dir PATH`, PATH is the exact fresh preview root; it MUST be absent or empty, and the command
 writes `PATH/.github` without modifying the repository. CI and local callers MUST choose a unique directory
 under `/tmp` or the runner temp directory.
+
+Workflow files under `.github/workflows` MUST be at most 500,000 UTF-8 bytes, including the marker, within GitHub Actions' [published 500 KB per-file limit](https://docs.github.com/en/actions/reference/limits). Larger files fail with `workflow_too_large:<path>:<actual_bytes>:500000` before writes; V1 never truncates or leaves partial output.
 
 The CLI has no public scan, doctor, task, report, root, stack, profile, format, or check options. `plan`
 prints only the concise human report specified in the CLI contract; it does not expose internal JSON
@@ -116,9 +117,8 @@ task variants after detection. Unknown keys, duplicate configurations, unknown s
 MUST fail before workflow output is written.
 
 The generator MUST render deterministically, reject raw YAML fragments, and fail on invalid generated output.
-Tool-file findings are advisory; generation never writes them. Without `--output-dir`, it atomically replaces
-the entire `.github` tree; with `--output-dir PATH`, PATH is a fresh exact preview root containing the same
-tree and the repository is unchanged.
+Tool-file findings are advisory; generation never writes them. Without `--output-dir`, it atomically replaces the entire `.github` tree;
+with `--output-dir PATH`, PATH is a fresh exact preview root containing the same tree and the repository is unchanged.
 
 The generator MUST discover workspaces through Git file enumeration followed by Cargo metadata. It MUST handle
 nested workspaces, standalone packages, additions, deletions, renames, path dependencies, build scripts,
@@ -164,8 +164,10 @@ cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 ```
 
 For `workflow.policy = "consumer-v1"`, compose detections into `plan`, one `rust-<slug>` crate job
-per selected crate, `actionlint`, and `required`. V1 permits only Rust, so the selected set is empty or `{rust}`;
-future adapters add namespaced crate jobs without CLI selectors.
+per selected crate, `actionlint`, and `required`. V1 registers only the Rust stack detector, so the selected
+stack set is empty or `{rust}`; future adapters add namespaced crate jobs without CLI selectors.
+
+Typed `[[workflow.tasks]]` verification jobs join `Required` under either workflow policy; schema-2 routing, fail-closed admission, and authoring limits are defined in the [tooling input contract](tooling-input-contract.md).
 
 The following labels are GitHub Actions job IDs only. They are not Cargo packages, executable
 names, generated command labels, or CLI subcommands. The sole Velnor executable is `velnor-actions`.
@@ -226,8 +228,8 @@ aliases in every generated `runs-on` field. V1 emits no self-hosted labels. The 
 Every generated job MUST carry a per-job `timeout-minutes` below GitHub's 360 minute default; the bound is a required typed Job IR field (1–360 minutes),
 rendered right after `runs-on`. Per-kind defaults follow the measured green-run walls in `docs/implemented/performance.md`: 30 minutes for crate-shaped jobs, 10 minutes for `plan`, `required`, validator, and release jobs.
 
-`plan` MUST upload its plan report with `if: always()`. It MUST fail when its matrix JSON exceeds 256
-KiB. It MUST report a clear planning error and request a broadened or reduced plan instead of truncating entries.
+`plan` MUST upload its plan report with `if: always()` and fail above a 512 KiB canonical `matrix.json` artifact or, when the workflow promotes an output-fed matrix, above 256 expanded jobs or 900,000 aggregate UTF-16 bytes across promoted job outputs. The artifact cap is independent of job outputs; count actual `matrix.include` entries only on the dynamic path because static artifact rows are not matrix jobs. GitHub documents a 1 MB per-job output limit approximated in UTF-16 and a 256-job matrix maximum in its [workflow syntax reference](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax).
+`plan` MUST report a clear planning error and request a broadened or reduced plan instead of truncating entries.
 
 The generated jobs MUST use these step sequences and commands. Action steps are the pinned allowlisted actions
 above; every shell step is generated with fixed arguments and may not contain repository-provided shell text.
@@ -395,6 +397,4 @@ stacks. The plan artifact MUST contain `plan.json` and `matrix.json`, where `mat
 
 ## 5. Task execution
 
-Per-matrix steps, exact generated commands, Mise invocation, cache mode, and task-report requirements for V1
-Rust tasks are fixed in the [Rust task execution contract](task-execution-contract.md). Future stack adapters
-provide their own typed task execution profiles.
+Rust task profiles follow the [task execution contract](task-execution-contract.md); future adapters own typed profiles.

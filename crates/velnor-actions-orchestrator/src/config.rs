@@ -7,7 +7,7 @@ use serde::Deserialize;
 use velnor_actions_contract::config::{ActionPinOverride, ActionsConfig};
 use velnor_actions_contract::{
     DiscoveryConfig, GeneratorValidation, PullRequestCachePolicy, ResourcesConfig,
-    TestShardingConfig, VelnorConfig, WorkflowConfig, WorkflowPolicy,
+    TestShardingConfig, VelnorConfig, VerificationTask, WorkflowConfig, WorkflowPolicy,
 };
 
 use crate::OrchestratorError;
@@ -135,6 +135,9 @@ struct PartialWorkflow {
     pull_request_cache_policy: PullRequestCachePolicy,
     /// Pinned runner-label override.
     runner_label: Option<String>,
+    /// Explicit isolated verification tasks.
+    #[serde(default)]
+    tasks: Vec<VerificationTask>,
 }
 
 /// Resources section with every value optional.
@@ -208,6 +211,7 @@ impl PartialWorkflow {
             max_parallel_jobs: self.max_parallel_jobs.unwrap_or(2),
             pull_request_cache_policy: self.pull_request_cache_policy,
             runner_label: self.runner_label,
+            tasks: self.tasks,
         }
     }
 }

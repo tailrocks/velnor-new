@@ -14,7 +14,7 @@ const CAP: usize = 500_000;
 const LOGICAL_JOBS: usize = 21;
 const STEPS_PER_JOB: usize = 48;
 
-fn ctx() -> RenderContext {
+pub(super) fn ctx() -> RenderContext {
     RenderContext {
         generator_version: "0.1.0".to_owned(),
         runs_on: HOSTED_RUNS.to_owned(),
@@ -25,11 +25,12 @@ fn ctx() -> RenderContext {
         candidate: None,
         preseed: false,
         pull_request_cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        verification_tasks: Vec::new(),
         plan_consumer_env: BTreeMap::new(),
     }
 }
 
-fn workflow_ir() -> WorkflowIr {
+pub(super) fn workflow_ir() -> WorkflowIr {
     WorkflowIr {
         name: "CI".to_owned(),
         triggers: Trigger {
@@ -60,7 +61,7 @@ fn scale_token() -> String {
     .token()
 }
 
-fn echo_step(index: usize, payload: &str) -> Step {
+pub(super) fn echo_step(index: usize, payload: &str) -> Step {
     Step {
         name: format!("echo {index}"),
         condition: None,
@@ -96,7 +97,7 @@ fn checkout() -> Step {
     }
 }
 
-fn render_jobs(
+pub(super) fn render_jobs(
     ir: &WorkflowIr,
     jobs: &BTreeMap<String, Job>,
     ctx: &RenderContext,
@@ -121,7 +122,7 @@ fn heavy_steps(payload: &str) -> Vec<Step> {
         .collect()
 }
 
-fn paired(steps: &[Step]) -> BTreeMap<String, Job> {
+pub(super) fn paired(steps: &[Step]) -> BTreeMap<String, Job> {
     let scale = scale_token();
     let mut lane_steps = vec![checkout()];
     lane_steps.extend_from_slice(steps);

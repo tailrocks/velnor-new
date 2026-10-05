@@ -59,7 +59,7 @@ fn prep_overlap_joins_independent_branches() -> Result<(), RenderError> {
         );
     }
     let join_at = text.find("velnor-prep-join:").expect("join job");
-    let window = snip(&text, join_at, 600);
+    let window = snip(&text, join_at, 1600);
     assert!(
         window.contains("- velnor-prep-download"),
         "join needs:\n{window}"

@@ -6,7 +6,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_actions_contract::{ScheduleTrigger, is_valid_branch_name};
+use velnor_actions_contract::{ScheduleTrigger, is_valid_branch_shorthand};
 
 use crate::{RenderError, steps::scan_for_private_subcommands};
 
@@ -106,7 +106,7 @@ impl ReleaseTriggers {
             return Err(RenderError::InvalidWorkflow("no_push_branch".to_owned()));
         }
         for branch in &self.push_branches {
-            if !is_valid_branch_name(branch) {
+            if !is_valid_branch_shorthand(branch) {
                 return Err(RenderError::InvalidWorkflow(format!(
                     "bad_push_branch:{branch}"
                 )));

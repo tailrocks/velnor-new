@@ -11,14 +11,13 @@
 //! opentofu crates, the MBX local setup on MBX crates, and one
 //! shell step per obligation in gate order.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use velnor_actions_contract::{
-    CrateJob, CrateObligation, Job, JobTimeout, ProposedTask, Stack, Step, WorkflowPolicy,
-    crate_display_name, matrix_id_for_task_group, matrix_key_for_id, tofu_display_name,
+    CrateJob, Job, JobTimeout, ProposedTask, Step, VelnorConfig, WorkflowPolicy,
+    crate_display_name, tofu_display_name,
 };
 use velnor_actions_mise::{PinnedTool, TaskCacheMode, ToolCatalog};
-use velnor_actions_rust::task_kind_rank;
 use velnor_actions_workflow_renderer::render::PLAN_JOB_ID;
 use velnor_actions_workflow_renderer::steps::CompileDriver as RenderDriver;
 
@@ -31,12 +30,16 @@ use crate::matrix_step::step_name_for;
 #[path = "crate_jobs_mbx_setup.rs"]
 mod mbx_setup;
 
+#[path = "crate_jobs_obligations.rs"]
+mod obligations;
+
 #[path = "crate_jobs_stage.rs"]
 mod stage;
 
 #[cfg(test)]
 pub(crate) use stage::needs;
 pub(crate) use stage::{is_mbx, is_nextest, is_opentofu, is_rust};
+pub(crate) use obligations::{gates_for, obligation_rank, obligations_for};
 
 /// Built crate jobs plus their driver selections for MBX gating.
 pub(crate) struct CrateBuild {
@@ -44,6 +47,33 @@ pub(crate) struct CrateBuild {
     pub(crate) jobs: Vec<(String, Job)>,
     /// Render-driver selection per crate job ID.
     pub(crate) drivers: BTreeMap<String, RenderDriver>,
+}
+
+/// Build crate jobs with the repository's workflow and Rust-stack config.
+/// # Errors
+pub(crate) fn build_for_workflow(
+    config: &VelnorConfig,
+    label: &str,
+    discovery: &Discovery,
+    catalog: &ToolCatalog,
+    fetch_roots: &[String],
+    acquire: Option<&Step>,
+) -> Result<CrateBuild, OrchestratorError> {
+    let custom_tasks: &[String] = config
+        .stacks
+        .rust
+        .as_ref()
+        .map_or(&[], |rust| &rust.custom_tasks);
+    build_crate_jobs(
+        label,
+        config.workflow.policy,
+        discovery,
+        catalog,
+        fetch_roots,
+        custom_tasks,
+        acquire,
+        config.workflow.max_parallel_jobs,
+    )
 }
 
 /// Build one ordered IR job per runnable crate from discovery proposals.
@@ -150,71 +180,6 @@ pub(crate) fn build_crate_jobs(
 /// Shared with `plan` so its obligation list matches emission exactly.
 pub(crate) fn is_runnable(task: &ProposedTask) -> bool {
     !task.no_targets && !task.identity.unit_id.is_empty()
-}
-
-/// Obligation order rank for one task, dispatched by stack.
-fn obligation_rank(task: &ProposedTask) -> u32 {
-    match Stack::from_id(&task.stack_id) {
-        Some(Stack::Tofu) => velnor_actions_tofu::task_kind_rank(&task.task_kind),
-        _ => task_kind_rank(&task.task_kind),
-    }
-}
-
-/// Ordered validated obligations for one crate's tasks.
-fn obligations_for(
-    tasks: &[&ProposedTask],
-    catalog: &ToolCatalog,
-) -> Result<Vec<CrateObligation>, OrchestratorError> {
-    let executed: BTreeSet<&str> = tasks.iter().map(|task| task.task_id.as_str()).collect();
-    let mut ordered = tasks.to_vec();
-    ordered.sort_by(|left, right| {
-        (obligation_rank(left), &left.task_id).cmp(&(obligation_rank(right), &right.task_id))
-    });
-    let mut obligations = Vec::with_capacity(ordered.len());
-    for task in ordered {
-        obligations.push(obligation_for(task, &executed, catalog)?);
-    }
-    Ok(obligations)
-}
-
-/// One obligation: identities, same-crate gates, fixed argv.
-fn obligation_for(
-    task: &ProposedTask,
-    executed: &BTreeSet<&str>,
-    catalog: &ToolCatalog,
-) -> Result<CrateObligation, OrchestratorError> {
-    let argv = crate::vectors::task_argv(task, catalog)?;
-    let toolchain = crate::internal_plan::toolchain_id(task, catalog)?;
-    let digest = crate::internal::plan_obligation::task_digest(&task.task_id, &argv, &toolchain)?;
-    let matrix_id = matrix_id_for_task_group(&task.stack_id, &task.task_id)?;
-    let matrix_key = matrix_key_for_id(&matrix_id)?;
-    Ok(CrateObligation {
-        task_id: task.task_id.clone(),
-        kind: task.task_kind.clone(),
-        step_name: step_name_for(&task.task_kind, &task.task_id),
-        gated_by: gates_for(task, executed),
-        matrix_key,
-        task_digest: digest,
-        run: argv,
-    })
-}
-
-/// Sorted same-crate gates: quality gates plus data producers.
-///
-/// Gates naming skipped tasks (test-less doctests) are vacuous: the
-/// kind order still sequences the survivors, and dangling references
-/// would fail the strictly-earlier validation.
-fn gates_for(task: &ProposedTask, executed: &BTreeSet<&str>) -> Vec<String> {
-    let mut gates: Vec<String> = task
-        .gated_by
-        .iter()
-        .chain(task.depends_on.iter())
-        .filter(|gate| executed.contains(gate.as_str()))
-        .cloned()
-        .collect();
-    gates.sort();
-    gates.dedup();
-    gates
 }
 
 /// Render one validated crate model to its fixed IR job.

@@ -2,6 +2,7 @@
 use super::VelnorConfig;
 use super::release::RustReleaseConfig;
 use super::tofu::TofuStackConfig;
+use super::verification::is_valid_mise_task_name;
 use crate::errors::ContractError;
 use crate::ids::is_component_byte;
 use serde::{Deserialize, Serialize};
@@ -55,6 +56,9 @@ pub struct RustStackConfig {
     /// Sticky declared test runner; conflicts with durable evidence fail closed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub test_runner: Option<DeclaredTestRunner>,
+    /// Ignored test execution mode ("all", "only", "ignored-only", "default").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub run_ignored: Option<String>,
     /// Rust release policy (`[stacks.rust.release]`); disabled by default.
     #[serde(default)]
     pub release: RustReleaseConfig,
@@ -117,24 +121,6 @@ pub fn is_valid_feature_name(feature: &str) -> bool {
         })
 }
 
-/// True for a render-safe Mise custom-task name.
-///
-/// Single source for the config allowlist, the fixed `mise run` argv,
-/// and the gate-6 grant: namespaced (`:`) task names plus safe
-/// punctuation, never whitespace, separators, or expansions. The first
-/// byte must be alphanumeric or `_`: a leading `-` would parse as a
-/// `mise run` flag and a leading `.` as a relative path, so both fail
-/// closed here before any argv is built.
-#[must_use]
-pub fn is_valid_custom_task_name(task: &str) -> bool {
-    let mut bytes = task.bytes();
-    match bytes.next() {
-        Some(first) if first.is_ascii_alphanumeric() || first == b'_' => {}
-        _ => return false,
-    }
-    bytes.all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.' | b':'))
-}
-
 impl RustStackConfig {
     /// Documented default: one `default` configuration, no declarations,
     /// release disabled.
@@ -144,6 +130,7 @@ impl RustStackConfig {
             configurations: default_configurations(),
             compile_driver: None,
             test_runner: None,
+            run_ignored: None,
             release: RustReleaseConfig::default(),
             custom_tasks: Vec::new(),
         }
@@ -241,6 +228,15 @@ impl RustStackConfig {
                 }
             }
         }
+        if let Some(mode) = &self.run_ignored
+            && !matches!(mode.as_str(), "all" | "only" | "ignored-only" | "default")
+        {
+            return Err(ContractError::config(
+                file,
+                "stacks.rust.run_ignored",
+                format!("bad_run_ignored:{mode}"),
+            ));
+        }
         self.release.validate(file)?;
         self.validate_custom_tasks(file)?;
         Ok(())
@@ -248,7 +244,7 @@ impl RustStackConfig {
 
     /// Validate the custom-task allowlist: sorted, unique, safe names.
     ///
-    /// The name rule is [`is_valid_custom_task_name`], shared with the
+    /// The name rule is [`is_valid_mise_task_name`], shared with the
     /// `mise run` argv builder and the qualified-task paths.
     /// # Errors
     fn validate_custom_tasks(&self, file: &str) -> Result<(), ContractError> {
@@ -270,7 +266,7 @@ impl RustStackConfig {
             ));
         }
         for task in &self.custom_tasks {
-            if !is_valid_custom_task_name(task) {
+            if !is_valid_mise_task_name(task) {
                 return Err(ContractError::config(
                     file,
                     "stacks.rust.custom_tasks",
@@ -284,7 +280,7 @@ impl RustStackConfig {
 
 #[cfg(test)]
 mod tests {
-    use super::{RustConfiguration, is_valid_custom_task_name, is_valid_rust_target};
+    use super::{RustConfiguration, is_valid_mise_task_name, is_valid_rust_target};
     use crate::config::RustStackConfig;
 
     #[test]
@@ -311,10 +307,10 @@ mod tests {
     #[test]
     fn task_name_grammar_matches_mise_tasks() {
         for task in ["audit", "build:all", "a-b_c.d:e", "Test123"] {
-            assert!(is_valid_custom_task_name(task), "{task}");
+            assert!(is_valid_mise_task_name(task), "{task}");
         }
         for task in ["", "a b", "a/b", "${{ x }}", "$t", "`t`", "a\nb"] {
-            assert!(!is_valid_custom_task_name(task), "{task:?}");
+            assert!(!is_valid_mise_task_name(task), "{task:?}");
         }
     }
 

@@ -189,7 +189,7 @@ impl Trigger {
     /// Validate push branch names, dispatch inputs, and schedule.
     fn validate(&self) -> Result<(), ContractError> {
         for branch in &self.push_branches {
-            if !crate::is_valid_branch_name(branch) {
+            if !crate::is_valid_branch_shorthand(branch) {
                 return Err(ContractError::identity(
                     "trigger.push_branches",
                     format!("malformed_branch:{branch}"),

@@ -137,7 +137,7 @@ fn resolve_default_branch(root: &Path, config: &VelnorConfig) -> Result<String, 
 /// Strip the `origin/` prefix, rejecting empty or malformed branches.
 fn branch_from_origin_head(text: &str) -> Option<String> {
     let branch = text.strip_prefix("origin/").unwrap_or(text);
-    velnor_actions_contract::is_valid_branch_name(branch).then(|| branch.to_owned())
+    velnor_actions_contract::is_valid_branch_shorthand(branch).then(|| branch.to_owned())
 }
 
 /// Require the canonical identity for the Velnor-repository policy.

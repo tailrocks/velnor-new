@@ -15,6 +15,8 @@ mod schema2_generator_release_snapshots;
 mod schema2_release_snapshots;
 #[path = "impl_schema2_routing_snapshots.rs"]
 mod schema2_routing_snapshots;
+#[path = "impl_schema2_routing_shell.rs"]
+mod shell_tests;
 
 const HOSTED_RUNS: &str = "runs-on: ubuntu-26.04";
 const SCALE_RUNS: &str = "runs-on: [velnor, ubuntu-26.04-scale-set]";
@@ -148,7 +150,7 @@ fn assert_both_ci(ci: &str) -> TestResult {
     assert!(local.contains(SCALE_RUNS), "{local}");
     assert!(!local.contains(SCALE_REVERSED), "{local}");
     assert!(!local.contains("runs-on: ubuntu-26.04\n"), "{local}");
-    assert_eq!(tool_lines(hosted), tool_lines(local));
+    shell_tests::assert_scale_set_shell_and_same_steps(hosted, local);
     let plan = job_body(ci, "plan")?;
     assert!(plan.contains(HOSTED_RUNS), "{plan}");
     assert!(!plan.contains("ubuntu-26.04-scale-set"), "{plan}");
@@ -199,12 +201,6 @@ pub(super) fn job_body<'a>(yaml: &'a str, id: &str) -> Result<&'a str, Box<dyn s
 
 fn jobs_section(yaml: &str) -> &str {
     yaml.split_once("jobs:\n").map_or("", |(_, rest)| rest)
-}
-
-fn tool_lines(body: &str) -> Vec<&str> {
-    body.lines()
-        .filter(|line| line.trim().starts_with("run:") || line.trim().starts_with("uses:"))
-        .collect()
 }
 
 fn join_files(tree: &RenderedTree) -> String {
@@ -366,6 +362,9 @@ jobs:
     name: Scale set lane
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash -e {0}
     steps:
       - name: Run scale-set lane
         run: echo scale-set-lane

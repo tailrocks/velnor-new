@@ -1,8 +1,8 @@
 //! Supported release targets and release-asset naming.
 //!
 //! Bootstrap/release contract §2-§3: one immutable asset per target plus a
-//! versioned release manifest. Runner labels map to the single Linux target;
-//! macOS targets exist for local release installs only.
+//! versioned release manifest. Runner labels map only to the matching host
+//! artifact; CI generation remains Linux-only for consumer workflows.
 
 /// Every supported release target triple, in manifest order.
 pub const SUPPORTED_TARGETS: [&str; 3] = [
@@ -12,7 +12,7 @@ pub const SUPPORTED_TARGETS: [&str; 3] = [
 ];
 
 /// Release-manifest JSON asset filename (version is inside the JSON).
-pub const RELEASE_MANIFEST_FILENAME: &str = "velnor-actions-release-manifest.json";
+pub const RELEASE_MANIFEST_FILENAME: &str = "release-manifest.json";
 
 /// Whether `target` is a supported release triple.
 #[must_use]
@@ -36,6 +36,8 @@ pub fn asset_filename(version: &str, target: &str) -> String {
 pub fn target_for_runner_label(label: &str) -> Option<&'static str> {
     match label {
         "ubuntu-22.04" | "ubuntu-24.04" | "ubuntu-26.04" => Some(SUPPORTED_TARGETS[0]),
+        "macos-15" | "macos-15-arm64" => Some(SUPPORTED_TARGETS[1]),
+        "macos-15-intel" => Some(SUPPORTED_TARGETS[2]),
         _ => None,
     }
 }

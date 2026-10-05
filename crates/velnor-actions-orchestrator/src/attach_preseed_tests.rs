@@ -48,6 +48,7 @@ fn preseed_fixture(use_mbx: bool, fetch_roots: &[String]) -> WorkflowPlan {
             candidate: None,
             preseed: false,
             pull_request_cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+            verification_tasks: Vec::new(),
             plan_consumer_env: BTreeMap::new(),
         },
         actionlint: ActionlintConfigInput::new("0.1.0").with_workflow_path(WORKFLOW_PATH),

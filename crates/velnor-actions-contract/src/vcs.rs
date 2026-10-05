@@ -9,6 +9,29 @@ use std::collections::BTreeMap;
 use crate::canonical::{normalize_posix_path, validate_digest};
 use crate::errors::ContractError;
 
+/// Whether a literal branch shorthand is safe across generated workflow and
+/// shell boundaries.
+///
+/// This deliberately accepts a closed ASCII grammar rather than all names
+/// accepted by Git. Components cannot be empty, start with a dot or hyphen,
+/// end with a dot or lowercase `.lock`, or contain `..`.
+#[must_use]
+pub fn is_valid_branch_shorthand(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 255
+        && value != "HEAD"
+        && !value.contains("..")
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'/' | b'-' | b'_' | b'.'))
+        && value.split('/').all(|part| {
+            !part.is_empty()
+                && !part.starts_with(['.', '-'])
+                && !part.ends_with('.')
+                && !part.as_bytes().ends_with(b".lock")
+        })
+}
+
 /// VCS revision inputs block of [`TaskIdentity`](crate::canonical::TaskIdentity).
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct VcsInputs {
@@ -81,7 +104,74 @@ fn is_valid_git_ref_name(value: &str) -> bool {
 mod tests {
     use std::collections::BTreeMap;
 
-    use super::VcsInputs;
+    use super::{VcsInputs, is_valid_branch_shorthand};
+
+    #[test]
+    fn branch_shorthand_accepts_literal_names() {
+        for branch in [
+            "main",
+            "trunk",
+            "release/1.2",
+            "feature/x_y-z",
+            "Main",
+            "main.LOCK",
+            "a/b.Lock",
+        ] {
+            assert!(is_valid_branch_shorthand(branch), "{branch:?}");
+        }
+    }
+
+    #[test]
+    fn branch_shorthand_rejects_expression_yaml_shell_and_git_names() {
+        for branch in [
+            "",
+            "HEAD",
+            "-main",
+            "/main",
+            "main/",
+            "a//b",
+            ".main",
+            "a/.b",
+            "main.",
+            "main.lock",
+            "a/b.lock",
+            "a..b",
+            "a/../b",
+            "a/./b",
+            "a/-b",
+            "a b",
+            "a\nb",
+            "a\rb",
+            "a\tb",
+            "a\0b",
+            "a\u{7f}b",
+            "máin",
+            "a'b",
+            "a\"b",
+            "a|b",
+            "a&b",
+            "a;b",
+            "a`b",
+            "a$b",
+            "a(b)",
+            "a{b}",
+            "a[b]",
+            "a*b",
+            "a?b",
+            "a!b",
+            "a:b",
+            "a~b",
+            "a^b",
+            "a\\b",
+            "a@b",
+            "${{github.ref}}",
+            "main'||true||'",
+            "main\non: [push]",
+        ] {
+            assert!(!is_valid_branch_shorthand(branch), "{branch:?}");
+        }
+        assert!(!is_valid_branch_shorthand(&"a".repeat(256)));
+    }
 
     #[test]
     fn commit_width_rejects_empty_and_uppercase() {

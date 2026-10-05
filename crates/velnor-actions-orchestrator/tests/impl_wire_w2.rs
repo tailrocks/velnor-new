@@ -6,7 +6,7 @@ use std::path::Path;
 use serde_json::json;
 use velnor_actions_contract as C;
 use velnor_actions_orchestrator::{
-    decisions::plan_json_path, plan_outputs, prepare, publish_plan_files,
+    PlanOutputMode, decisions::plan_json_path, plan_outputs, prepare, publish_plan_files,
 };
 
 use super::impl_common::{
@@ -332,7 +332,7 @@ fn plan_files_match_contract_renderers() -> TestResult {
     assert_eq!(fs::read(out.join("plan.json"))?, C::plan_json_bytes(&plan)?);
     let matrix_bytes = C::matrix_json_bytes(&plan.matrix)?;
     assert_eq!(fs::read(out.join("matrix.json"))?, matrix_bytes);
-    let outputs = plan_outputs(&response.to_string())?;
+    let outputs = plan_outputs(&response.to_string(), PlanOutputMode::Static)?;
     assert_eq!(outputs.plan_id.as_str(), plan.plan_id.as_str());
     assert_eq!(outputs.run_key.as_str(), plan.run_key.as_str());
     let joined = plan_json_path(Path::new("/tmp/x/velnor"), "local")?;

@@ -23,6 +23,7 @@ pub(crate) fn valid_config() -> VelnorConfig {
             max_parallel_jobs: 2,
             pull_request_cache_policy: PullRequestCachePolicy::default(),
             runner_label: None,
+            tasks: Vec::new(),
         },
         resources: ResourcesConfig {
             compiler_process_budget: 2,

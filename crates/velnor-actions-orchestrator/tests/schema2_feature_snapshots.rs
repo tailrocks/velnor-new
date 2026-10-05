@@ -24,6 +24,9 @@ jobs:
     if: inputs.mode == 'both'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash -e {0}
     steps:
       - name: Qualify scale-set lane
         run: echo qualification-scale-set
@@ -57,6 +60,9 @@ jobs:
     if: inputs.mode == 'features' || inputs.mode == 'js'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -85,6 +91,9 @@ jobs:
     if: inputs.mode == 'features' || inputs.mode == 'services'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
     services:
       redis:
         image: redis:7-alpine
@@ -116,6 +125,9 @@ jobs:
     if: inputs.mode == 'features' || inputs.mode == 'artifacts'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
     permissions:
       contents: read
       actions: write
@@ -141,6 +153,9 @@ jobs:
     if: inputs.mode == 'features' || inputs.mode == 'buildx'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
     steps:
       - name: Buildx probe
         run: docker buildx version && printf 'FROM scratch\n' > Dockerfile && docker buildx build --progress=plain -t velnor-g4:probe .
@@ -157,6 +172,9 @@ jobs:
     if: inputs.mode == 'negative'
     runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 10
+    defaults:
+      run:
+        shell: bash -e {0}
     steps:
       - name: Intentional failure
         run: echo expected-negative && exit 1
@@ -165,4 +183,6 @@ jobs:
     include_str!("schema2_class_snapshot_parts/qualification-01.txt"),
     include_str!("schema2_class_snapshot_parts/qualification-02.txt"),
     include_str!("schema2_class_snapshot_parts/qualification-03.txt"),
+    include_str!("schema2_class_snapshot.txt"),
+    include_str!("schema2_class_snapshot_continuation.txt"),
 );

@@ -1,0 +1,323 @@
+  cancel-service-hosted:
+    name: Cancel service / GitHub hosted
+    if: inputs.mode == 'cancel-service'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    services:
+      redis:
+        image: redis:7-alpine
+        options: "--health-cmd \"redis-cli ping\" --health-interval 5s --health-timeout 5s --health-retries 12"
+        ports:
+          - "6379:6379"
+    steps:
+      - name: Probe service then sleep
+        run: "i=0; while [ \"$i\" -lt 30 ]; do nc -z -w 1 127.0.0.1 6379 && break; i=$((i+1)); sleep 1; done; nc -z -w 1 127.0.0.1 6379 && echo service-up && sleep 900"
+  cancel-service-scale-set:
+    name: Cancel service / Velnor Scale Set
+    if: inputs.mode == 'cancel-service'
+    runs-on: [velnor, ubuntu-26.04-scale-set]
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
+    services:
+      redis:
+        image: redis:7-alpine
+        options: "--health-cmd \"redis-cli ping\" --health-interval 5s --health-timeout 5s --health-retries 12"
+        ports:
+          - "6379:6379"
+    steps:
+      - name: Probe service then sleep
+        run: "i=0; while [ \"$i\" -lt 30 ]; do nc -z -w 1 127.0.0.1 6379 && break; i=$((i+1)); sleep 1; done; nc -z -w 1 127.0.0.1 6379 && echo service-up && sleep 900"
+  testcontainers-hosted:
+    name: Testcontainers / GitHub hosted
+    if: inputs.mode == 'testcontainers'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: "false"
+      - name: Install and reap
+        run: npm ci --prefix qualification/testcontainers && node qualification/testcontainers/reap.mjs
+  testcontainers-scale-set:
+    name: Testcontainers / Velnor Scale Set
+    if: inputs.mode == 'testcontainers'
+    runs-on: [velnor, ubuntu-26.04-scale-set]
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash -e {0}
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: "false"
+      - name: Install and reap
+        run: npm ci --prefix qualification/testcontainers && node qualification/testcontainers/reap.mjs
+  submodule-hosted:
+    name: Submodule / GitHub hosted
+    if: inputs.mode == 'submodule'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          submodules: recursive
+          lfs: "true"
+          persist-credentials: "false"
+      - name: Prove submodule and LFS
+        run: "git rev-parse HEAD > \"$RUNNER_TEMP/g4-head\" && grep -qx \"$GITHUB_SHA\" \"$RUNNER_TEMP/g4-head\" && grep -qx submodule-ok qualification/fixtures/submodule/MARKER && grep -qx lfs-ok qualification/fixtures/lfs-marker.txt"
+  submodule-scale-set:
+    name: Submodule / Velnor Scale Set
+    if: inputs.mode == 'submodule'
+    runs-on: [velnor, ubuntu-26.04-scale-set]
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          submodules: recursive
+          lfs: "true"
+          persist-credentials: "false"
+      - name: Prove submodule and LFS
+        run: "git rev-parse HEAD > \"$RUNNER_TEMP/g4-head\" && grep -qx \"$GITHUB_SHA\" \"$RUNNER_TEMP/g4-head\" && grep -qx submodule-ok qualification/fixtures/submodule/MARKER && grep -qx lfs-ok qualification/fixtures/lfs-marker.txt"
+  ports-a-hosted:
+    name: Ports A / GitHub hosted
+    if: inputs.mode == 'ports'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    steps:
+      - name: Hold host port
+        run: "docker run -d --name g4-hold -p 8080:80 alpine:3.22 sleep 120 && i=0 && while [ \"$i\" -lt 30 ]; do docker port g4-hold 80 | grep -q 8080 && break; i=$((i+1)); sleep 1; done && docker port g4-hold 80 | grep -q 8080 && echo port-held && sleep 45 && docker rm -f g4-hold"
+  ports-b-hosted:
+    name: Ports B / GitHub hosted
+    if: inputs.mode == 'ports'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    steps:
+      - name: Hold host port
+        run: "docker run -d --name g4-hold -p 8080:80 alpine:3.22 sleep 120 && i=0 && while [ \"$i\" -lt 30 ]; do docker port g4-hold 80 | grep -q 8080 && break; i=$((i+1)); sleep 1; done && docker port g4-hold 80 | grep -q 8080 && echo port-held && sleep 45 && docker rm -f g4-hold"
+  ports-a-scale-set:
+    name: Ports A / Velnor Scale Set
+    if: inputs.mode == 'ports'
+    runs-on: [velnor, ubuntu-26.04-scale-set]
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash -e {0}
+    steps:
+      - name: Hold host port
+        run: "docker run -d --name g4-hold -p 8080:80 alpine:3.22 sleep 120 && i=0 && while [ \"$i\" -lt 30 ]; do docker port g4-hold 80 | grep -q 8080 && break; i=$((i+1)); sleep 1; done && docker port g4-hold 80 | grep -q 8080 && echo port-held && sleep 45 && docker rm -f g4-hold"
+  ports-b-scale-set:
+    name: Ports B / Velnor Scale Set
+    if: inputs.mode == 'ports'
+    runs-on: [velnor, ubuntu-26.04-scale-set]
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash -e {0}
+    steps:
+      - name: Hold host port
+        run: "docker run -d --name g4-hold -p 8080:80 alpine:3.22 sleep 120 && i=0 && while [ \"$i\" -lt 30 ]; do docker port g4-hold 80 | grep -q 8080 && break; i=$((i+1)); sleep 1; done && docker port g4-hold 80 | grep -q 8080 && echo port-held && sleep 45 && docker rm -f g4-hold"
+  pressure-a-hosted:
+    name: Pressure A / GitHub hosted
+    if: inputs.mode == 'pressure'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    steps:
+      - name: Pressure sleep
+        run: echo pressure-start && sleep 150 && echo pressure-ok
+  pressure-b-hosted:
+    name: Pressure B / GitHub hosted
+    if: inputs.mode == 'pressure'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    steps:
+      - name: Pressure sleep
+        run: echo pressure-start && sleep 150 && echo pressure-ok
+  pressure-c-hosted:
+    name: Pressure C / GitHub hosted
+    if: inputs.mode == 'pressure'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    steps:
+      - name: Pressure sleep
+        run: echo pressure-start && sleep 150 && echo pressure-ok
+  pressure-a-scale-set:
+    name: Pressure A / Velnor Scale Set
+    if: inputs.mode == 'pressure'
+    runs-on: [velnor, ubuntu-26.04-scale-set]
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash -e {0}
+    steps:
+      - name: Pressure sleep
+        run: echo pressure-start && sleep 150 && echo pressure-ok
+  pressure-b-scale-set:
+    name: Pressure B / Velnor Scale Set
+    if: inputs.mode == 'pressure'
+    runs-on: [velnor, ubuntu-26.04-scale-set]
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash -e {0}
+    steps:
+      - name: Pressure sleep
+        run: echo pressure-start && sleep 150 && echo pressure-ok
+  pressure-c-scale-set:
+    name: Pressure C / Velnor Scale Set
+    if: inputs.mode == 'pressure'
+    runs-on: [velnor, ubuntu-26.04-scale-set]
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash -e {0}
+    steps:
+      - name: Pressure sleep
+        run: echo pressure-start && sleep 150 && echo pressure-ok
+  secret-hosted:
+    name: Secret / GitHub hosted
+    if: inputs.mode == 'secret'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    steps:
+      - name: Hold secret canary
+        env:
+          G3_CANARY: ${{ secrets.G3_CANARY }}
+        run: "test -n \"$G3_CANARY\" && sleep 180"
+  secret-scale-set:
+    name: Secret / Velnor Scale Set
+    if: inputs.mode == 'secret'
+    runs-on: [velnor, ubuntu-26.04-scale-set]
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
+    steps:
+      - name: Hold secret canary
+        env:
+          G3_CANARY: ${{ secrets.G3_CANARY }}
+        run: "test -n \"$G3_CANARY\" && sleep 180"
+  mbx-cache-write-hosted:
+    name: MBX objects cache / protected-main writer
+    if: inputs.mode == 'mbx-cache-roundtrip' && github.ref == 'refs/heads/main' && github.ref_protected == true
+    runs-on: ubuntu-26.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      actions: write
+    env:
+      MBX_GC_AUTO: "1"
+      ACTIONS_CACHE_MODE: write
+      CARGO_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/cargo
+      MISE_AUTO_INSTALL: "false"
+      MISE_CARGO_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/cargo
+      MISE_EXEC_AUTO_INSTALL: "false"
+      MISE_LOCKFILE: "0"
+      MISE_NO_CONFIG: "1"
+      MISE_NO_ENV: "1"
+      MISE_NO_HOOKS: "1"
+      MISE_RUSTUP_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/rustup
+      RUSTUP_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/rustup
+      RUSTUP_TOOLCHAIN: 1.98.1
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: "false"
+      - name: Set up Mise
+        uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
+        with:
+          version: 2026.9.18
+          sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
+          install: "false"
+          env: "false"
+          cache: "false"
+          cache_save: "false"
+      - name: Install pinned Rust toolchain
+        run: "mise install rust@1.98.1 && printf '%s/bin\\n' \"$(mise exec rust@1.98.1 -- rustc --print sysroot)\" >> \"$GITHUB_PATH\""
+      - name: Restore MBX objects
+        uses: jdx/mr-boxington-action@1687e54eb349cadf61fa38b5813a77875489e8e6
+        id: mbx_cache
+        with:
+          github-cache-mode: objects
+          version: 1.21.1
+          cache-generation: velnor-qualification-mbx-1.21.1-action-1687e54eb349cadf61fa38b5813a77875489e8e6-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+          save-on-workflow-dispatch: "true"
+      - name: Verify MBX action identity and write policy
+        env:
+          MBX_VERSION: ${{ steps.mbx_cache.outputs.mbx-version }}
+          CACHE_SAVE_ELIGIBLE: ${{ steps.mbx_cache.outputs.cache-save-eligible }}
+          CACHE_SAVE_REASON: ${{ steps.mbx_cache.outputs.cache-save-reason }}
+          CACHE_HIT: ${{ steps.mbx_cache.outputs.cache-hit }}
+        run: "test \"$MBX_VERSION\" = '1.21.1' && test \"$CACHE_SAVE_ELIGIBLE\" = 'true' && test \"$CACHE_SAVE_REASON\" = 'workflow_dispatch'"
+      - name: Compile MBX cache probe
+        run: "set -eu\nroot=\"$GITHUB_WORKSPACE/.velnor-mbx-cache-qualification\"\nmkdir -p \"$root/src\"\ncat > \"$root/Cargo.toml\" <<'EOF'\n[package]\nname = \"mbx-cache-qualification\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[workspace]\nmembers = [\".\"]\nresolver = \"3\"\n\n[lib]\npath = \"src/lib.rs\"\nEOF\ncat > \"$root/src/lib.rs\" <<'EOF'\npub fn cache_probe() -> u64 { 42 }\nEOF\nmbx build --manifest-path \"$root/Cargo.toml\"\n"
+  mbx-cache-read-hosted:
+    name: MBX objects cache / read-only reuse
+    if: inputs.mode == 'mbx-cache-roundtrip' && github.ref == 'refs/heads/main' && github.ref_protected == true
+    runs-on: ubuntu-26.04
+    timeout-minutes: 45
+    needs:
+      - mbx-cache-write-hosted
+    permissions:
+      contents: read
+      actions: read
+    env:
+      MBX_GC_AUTO: "1"
+      ACTIONS_CACHE_MODE: read
+      CARGO_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/cargo
+      MISE_AUTO_INSTALL: "false"
+      MISE_CARGO_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/cargo
+      MISE_EXEC_AUTO_INSTALL: "false"
+      MISE_LOCKFILE: "0"
+      MISE_NO_CONFIG: "1"
+      MISE_NO_ENV: "1"
+      MISE_NO_HOOKS: "1"
+      MISE_RUSTUP_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/rustup
+      RUSTUP_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/rustup
+      RUSTUP_TOOLCHAIN: 1.98.1
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: "false"
+      - name: Set up Mise
+        uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
+        with:
+          version: 2026.9.18
+          sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
+          install: "false"
+          env: "false"
+          cache: "false"
+          cache_save: "false"
+      - name: Install pinned Rust toolchain
+        run: "mise install rust@1.98.1 && printf '%s/bin\\n' \"$(mise exec rust@1.98.1 -- rustc --print sysroot)\" >> \"$GITHUB_PATH\""
+      - name: Restore MBX objects
+        uses: jdx/mr-boxington-action@1687e54eb349cadf61fa38b5813a77875489e8e6
+        id: mbx_cache
+        with:
+          github-cache-mode: objects
+          version: 1.21.1
+          cache-generation: velnor-qualification-mbx-1.21.1-action-1687e54eb349cadf61fa38b5813a77875489e8e6-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}
+          save-on-workflow-dispatch: "false"
+      - name: Verify MBX action identity and write policy
+        env:
+          MBX_VERSION: ${{ steps.mbx_cache.outputs.mbx-version }}
+          CACHE_SAVE_ELIGIBLE: ${{ steps.mbx_cache.outputs.cache-save-eligible }}
+          CACHE_SAVE_REASON: ${{ steps.mbx_cache.outputs.cache-save-reason }}
+          CACHE_HIT: ${{ steps.mbx_cache.outputs.cache-hit }}
+        run: "test \"$MBX_VERSION\" = '1.21.1' && test \"$CACHE_SAVE_ELIGIBLE\" = 'false' && test \"$CACHE_SAVE_REASON\" = 'workflow_dispatch; save-on-workflow-dispatch is off' && test \"$CACHE_HIT\" = 'false'"
+      - name: Require imported MBX objects
+        run: mbx cache stats --json | jq -e '.objects > 0' >/dev/null
+      - name: Compile MBX cache probe
+        run: "set -eu\nroot=\"$GITHUB_WORKSPACE/.velnor-mbx-cache-qualification\"\nmkdir -p \"$root/src\"\ncat > \"$root/Cargo.toml\" <<'EOF'\n[package]\nname = \"mbx-cache-qualification\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[workspace]\nmembers = [\".\"]\nresolver = \"3\"\n\n[lib]\npath = \"src/lib.rs\"\nEOF\ncat > \"$root/src/lib.rs\" <<'EOF'\npub fn cache_probe() -> u64 { 42 }\nEOF\nmbx build --manifest-path \"$root/Cargo.toml\"\n"
+      - name: Require reused compilation
+        run: mbx stats --json | jq -e '.savings.cached_compilations > 0' >/dev/null

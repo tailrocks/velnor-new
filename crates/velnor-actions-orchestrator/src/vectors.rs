@@ -131,7 +131,8 @@ fn exec_argv(
     strings_of(exec.argv(catalog)).map_err(|problem| OrchestratorError::Contract { problem })
 }
 
-/// Fixed validator-job vector: privilege-dropping `cargo deny`.
+/// Fixed validator-job vector: privilege-dropping `cargo deny` for each
+/// repository-owned Cargo workspace.
 ///
 /// Deny shells `cargo metadata`, which reads repo `.cargo/config.toml`
 /// even from outside the checkout (deny resolves config from the
@@ -140,15 +141,27 @@ fn exec_argv(
 /// an ambient-credential `mise install` (isolation trio, so no repo
 /// config loads) warms the pinned tool, then the shared
 /// credential-unset prelude removes every ambient secret, and only
-/// then does the isolated deny payload run (absolute
-/// `--manifest-path` spliced before the trailing `check`: deny takes
-/// global flags pre-subcommand). A repo provider executing past this
-/// point observes an empty credential environment. A drifted payload
+/// then does the isolated deny payload run for both the generator and
+/// nested runner workspaces. Each invocation supplies that workspace's
+/// absolute manifest and deny configuration before the trailing `check`:
+/// deny takes global flags pre-subcommand. A repo provider executing past
+/// this point observes an empty credential environment. A drifted payload
 /// shape fails closed instead of splicing into the wrong position.
 /// Shell assembly lives in [`crate::source_prep::privilege_drop_argv`]:
 /// this module composes typed argv only, keeping the orchestrator's
 /// `sh` confinement set closed.
-pub(crate) fn deny_argv() -> Result<Vec<String>, OrchestratorError> {
+pub(crate) fn deny_argv(workspace_roots: &[String]) -> Result<Vec<String>, OrchestratorError> {
+    let mut roots = workspace_roots.to_vec();
+    roots.sort();
+    roots.dedup();
+    if roots.is_empty() {
+        return Err(OrchestratorError::Contract {
+            problem: "deny_requires_workspace".to_owned(),
+        });
+    }
+    for root in &roots {
+        crate::source_prep::validate_root(root)?;
+    }
     let mut inner = validator_argv(
         "cargo-deny",
         CARGO_DENY_VERSION,
@@ -166,10 +179,22 @@ pub(crate) fn deny_argv() -> Result<Vec<String>, OrchestratorError> {
         })?;
     let install_argv =
         strings_of(install.argv()).map_err(|problem| OrchestratorError::Contract { problem })?;
-    let mut payload = join_quoted_argv(&inner);
-    payload.push(' ');
-    payload.push_str(&crate::source_prep::isolated_manifest_flag(""));
-    payload.push_str(" check");
+    let payload = roots
+        .iter()
+        .map(|workspace| {
+            let config = if workspace.is_empty() {
+                "deny.toml".to_owned()
+            } else {
+                format!("{workspace}/deny.toml")
+            };
+            format!(
+                "{} {} --config \"$GITHUB_WORKSPACE/{config}\" check",
+                join_quoted_argv(&inner),
+                crate::source_prep::isolated_manifest_flag(workspace)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(" && ");
     Ok(crate::source_prep::privilege_drop_argv(
         &join_quoted_argv(&install_argv),
         &payload,

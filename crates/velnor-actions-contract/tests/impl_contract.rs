@@ -24,6 +24,7 @@ fn config_validation_reports_key_paths() {
             max_parallel_jobs: 2,
             pull_request_cache_policy: PullRequestCachePolicy::default(),
             runner_label: None,
+            tasks: Vec::new(),
         },
         resources: ResourcesConfig {
             compiler_process_budget: 2,
@@ -43,6 +44,7 @@ fn config_validation_reports_key_paths() {
                 }],
                 compile_driver: None,
                 test_runner: None,
+                run_ignored: None,
                 custom_tasks: Vec::new(),
                 release: RustReleaseConfig::default(),
             }),
@@ -96,6 +98,7 @@ fn runner_label_uses_exact_catalog_match() {
             max_parallel_jobs: 2,
             pull_request_cache_policy: PullRequestCachePolicy::default(),
             runner_label: None,
+            tasks: Vec::new(),
         },
         resources: ResourcesConfig {
             compiler_process_budget: 2,
@@ -160,6 +163,7 @@ fn uppercase_rust_config_name_rejected_with_key_path() {
             max_parallel_jobs: 2,
             pull_request_cache_policy: PullRequestCachePolicy::default(),
             runner_label: None,
+            tasks: Vec::new(),
         },
         resources: ResourcesConfig {
             compiler_process_budget: 2,
@@ -179,6 +183,7 @@ fn uppercase_rust_config_name_rejected_with_key_path() {
                 }],
                 compile_driver: None,
                 test_runner: None,
+                run_ignored: None,
                 custom_tasks: Vec::new(),
                 release: RustReleaseConfig::default(),
             }),

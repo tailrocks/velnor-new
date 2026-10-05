@@ -84,7 +84,8 @@ fn merge_anchors_from_parts(
 /// branch name); push jobs fall back to `GITHUB_REF` when it already
 /// names a protected branch ref. Anything else yields no expectation.
 fn protected_ref_from(base_ref: Option<&str>, git_ref: Option<&str>) -> Option<String> {
-    if let Some(base) = base_ref.filter(|base| velnor_actions_contract::is_valid_branch_name(base))
+    if let Some(base) =
+        base_ref.filter(|base| velnor_actions_contract::is_valid_branch_shorthand(base))
     {
         return Some(format!("refs/heads/{base}"));
     }
@@ -94,7 +95,7 @@ fn protected_ref_from(base_ref: Option<&str>, git_ref: Option<&str>) -> Option<S
                 && git_ref.len() > "refs/heads/".len()
                 && git_ref
                     .strip_prefix("refs/heads/")
-                    .is_some_and(velnor_actions_contract::is_valid_branch_name)
+                    .is_some_and(velnor_actions_contract::is_valid_branch_shorthand)
         })
         .map(str::to_owned)
 }
@@ -281,7 +282,7 @@ fn manifest_provenance_matches_plan(
 fn ref_shape_ok(git_ref: &str) -> bool {
     git_ref
         .strip_prefix("refs/heads/")
-        .is_some_and(velnor_actions_contract::is_valid_branch_name)
+        .is_some_and(velnor_actions_contract::is_valid_branch_shorthand)
 }
 
 /// The workflow ref parses and agrees with the manifest's own ref.
