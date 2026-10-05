@@ -91,6 +91,8 @@ rules:
       include:
         - "crates/velnor-actions-*/src/**/*.rs"
         - "crates/velnor-actions-*/tests/**/*.rs"
+        - "crates/velnor-archive-guard/src/**/*.rs"
+        - "crates/velnor-archive-guard/tests/**/*.rs"
         - "crates/velnor-runner/crates/*/src/**/*.rs"
         - "crates/velnor-runner/crates/*/tests/**/*.rs"
       exclude:
@@ -99,4 +101,3 @@ rules:
     max_lines: 400
     level: error
     message: "Rust source exceeds 400 physical lines (rust-quality-contract §5)"
-

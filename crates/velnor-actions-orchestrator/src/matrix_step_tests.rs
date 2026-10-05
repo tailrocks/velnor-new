@@ -340,6 +340,7 @@ fn every_workspace_member_is_classified() {
             "velnor-actions-workflow-renderer",
             "velnor-actions-actionlint",
             "velnor-actions-freshness",
+            "velnor-archive-guard",
         ]
         .contains(&member.as_str());
         assert!(
