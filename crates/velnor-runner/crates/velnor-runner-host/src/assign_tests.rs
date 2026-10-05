@@ -18,6 +18,9 @@ fn job(kind: InnerKind, request_id: Option<i64>) -> InnerJob {
         request_id,
         job_id: None,
         labels: Vec::new(),
+        runner_id: None,
+        runner_name: None,
+        result: None,
         fields: Vec::new(),
     }
 }

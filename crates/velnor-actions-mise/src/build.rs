@@ -1,4 +1,4 @@
-//! Fixed candidate-build vector through pinned Rust plus MBX (boot §4).
+//! Fixed candidate-build vector through pinned Rust and action-owned MBX (boot §4).
 //!
 //! The candidate compiles `velnor-actions-cli` with the exact pinned
 //! toolchain; one byte-exact shape serves the candidate build and the
@@ -33,10 +33,10 @@ const BUILD_ARGS: [&str; 7] = [
     CANDIDATE_BUILD_BIN,
 ];
 
-/// Candidate compilation under the exact pinned Rust plus MBX toolchain.
+/// Candidate compilation under exact Rust; the native action owns MBX on PATH.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CandidateBuild {
-    /// Fixed pinned execution: `mbx build --release --locked ...`.
+    /// Fixed pinned-Rust execution: action-owned `mbx build --release --locked ...`.
     exec: PinnedToolExec,
 }
 
@@ -51,7 +51,7 @@ impl CandidateBuild {
         let args = BUILD_ARGS.iter().map(OsString::from).collect();
         Ok(Self {
             exec: PinnedToolExec::new(
-                vec![PinnedTool::Rust, PinnedTool::MrBoxington],
+                vec![PinnedTool::Rust],
                 std::ffi::OsStr::new(MBX_PROGRAM),
                 args,
             )?,

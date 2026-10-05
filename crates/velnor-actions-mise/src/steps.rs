@@ -204,15 +204,9 @@ const FORBIDDEN_ACKNOWLEDGED_RUSTUP: &str = "rustup";
 
 /// Fixed `rustup component add` for the pinned toolchain as one named step.
 ///
-/// Mise installs the pinned Rust toolchain with rustup's minimal profile
-/// and ignores tool options on config-less CLI specs, so clippy/rustfmt
-/// arrive through this step instead of `tool_spec`. This is the pinned
-/// toolchain's own rustup running one fixed deterministic argv that writes
-/// only the Velnor-owned `RUSTUP_HOME` during the online prepare phase:
-/// Mise installing components, not an ad hoc installer. The explicit
-/// `--toolchain <exact>-<triple>` cannot resolve an ambient toolchain,
-/// and implicit installation stays disabled, so a toolchain missing from
-/// the owned homes fails as a preparation error instead of installing.
+/// The step sets `RUSTUP_HOME` and `CARGO_HOME` to the owned Mise homes.
+/// `rustup` reads those process variables. A missing toolchain fails.
+/// It does not install a second toolchain under the default home.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PrepareRustComponents {
     /// Owned homes carried by the step env.
@@ -253,13 +247,12 @@ impl PrepareRustComponents {
         argv
     }
 
-    /// Full step env: isolation plus install-disable plus owned homes.
-    ///
-    /// Matches [`Self::command`]'s spawner env exactly; the
-    /// correspondence is pinned by test, not by construction comment.
+    /// Step env. It matches [`Self::command`] and sets the process homes.
     #[must_use]
     pub fn env(&self, catalog: &ToolCatalog) -> Vec<(OsString, OsString)> {
-        self.homes.exec_env(catalog)
+        let mut env = self.homes.exec_env(catalog);
+        env.extend(self.process_homes());
+        env
     }
 
     /// Isolated command running this installation under the owned homes.
@@ -270,8 +263,22 @@ impl PrepareRustComponents {
     /// empty, which construction rules out.
     pub fn command(&self, catalog: &ToolCatalog) -> Result<IsolatedCommand, MiseError> {
         let specs = catalog.tool_specs(&[PinnedTool::Rust]);
-        IsolatedCommand::mise_exec(&specs, &Self::payload(catalog))?
-            .with_env(&self.homes.env(catalog))
+        let mut extra = self.homes.env(catalog);
+        extra.extend(self.process_homes());
+        IsolatedCommand::mise_exec(&specs, &Self::payload(catalog))?.with_env(&extra)
+    }
+
+    fn process_homes(&self) -> [(OsString, OsString); 2] {
+        [
+            (
+                OsString::from("RUSTUP_HOME"),
+                OsString::from(self.homes.rustup_home()),
+            ),
+            (
+                OsString::from("CARGO_HOME"),
+                OsString::from(self.homes.cargo_home()),
+            ),
+        ]
     }
 
     /// Fixed payload: `rustup component add --toolchain <name> clippy rustfmt`.

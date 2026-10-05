@@ -175,12 +175,17 @@ fn catalog_pins_ignore_project_selectors() -> Result<(), String> {
     let first = CandidateBuild::new().map_err(|err| err.to_string())?;
     let second = CandidateBuild::new().map_err(|err| err.to_string())?;
     assert_eq!(first.argv(&pinned()), second.argv(&pinned()));
+    assert_eq!(
+        catalog.tool_spec(PinnedTool::MrBoxington),
+        "mr-boxington@1.21.1",
+        "the action-owned MBX pin remains exact in the catalog"
+    );
     assert!(
-        first
+        !first
             .argv(&pinned())
             .iter()
-            .any(|arg| arg == "mr-boxington@1.21.1"),
-        "exact MBX invocation never downgrades"
+            .any(|arg| arg.to_string_lossy().starts_with("mr-boxington@")),
+        "the candidate command leaves MBX selection to its native action"
     );
     Ok(())
 }
