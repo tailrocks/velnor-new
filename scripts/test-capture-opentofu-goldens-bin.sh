@@ -175,12 +175,23 @@ expect_rejected missing-manifest-sha-argument 'usage:' \
   check-release "$CLI_BIN" "$WORK/missing candidate manifest"
 expect_release_rejected missing-manifest 'candidate manifest must be a regular non-symlink file' \
   "$WORK/missing candidate manifest" "$(printf '%064d' 0)" "$SOURCE_SHA"
+mkdir "$WORK/directory manifest"
+expect_release_rejected directory-manifest 'candidate manifest must be a regular non-symlink file' \
+  "$WORK/directory manifest" "$(printf '%064d' 0)" "$SOURCE_SHA"
+dd if=/dev/zero of="$WORK/oversized manifest.json" bs=8388609 count=1 2>/dev/null
+expect_release_rejected oversized-manifest 'candidate manifest must not exceed 8388608 bytes' \
+  "$WORK/oversized manifest.json" "$(printf '%064d' 0)" "$SOURCE_SHA"
 printf 'not json\n' >"$WORK/malformed manifest.json"
 expect_release_rejected malformed-manifest 'candidate manifest is malformed JSON' \
   "$WORK/malformed manifest.json" "$(test_file_sha256 "$WORK/malformed manifest.json")" "$SOURCE_SHA"
 
 write_test_manifest "$WORK/valid manifest.json" "$SOURCE_SHA" \
   "$TEST_LINUX_SHA" "$TEST_ARM_SHA" "$TEST_INTEL_SHA"
+ln -s "$WORK/valid manifest.json" "$WORK/symlink manifest.json"
+expect_release_rejected symlink-manifest 'candidate manifest must be a regular non-symlink file' \
+  "$WORK/symlink manifest.json" "$(test_file_sha256 "$WORK/valid manifest.json")" "$SOURCE_SHA"
+expect_release_rejected malformed-github-sha 'GITHUB_SHA must be a lowercase 40-character source SHA' \
+  "$WORK/valid manifest.json" "$(test_file_sha256 "$WORK/valid manifest.json")" 'invalid-source-sha'
 expect_release_rejected wrong-manifest-sha 'candidate manifest bytes do not match expected SHA-256' \
   "$WORK/valid manifest.json" "$(printf '%064d' 0)" "$SOURCE_SHA"
 jq --argjson index "$HOST_TARGET_INDEX" \
