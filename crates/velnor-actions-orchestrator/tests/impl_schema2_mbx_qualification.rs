@@ -26,6 +26,19 @@ fn assert_candidate_ref(writer: &str) {
     );
 }
 
+fn assert_candidate_owner(job: &str) {
+    for fragment in [
+        "version: 1.22.0",
+        "toolchain: 1.98.1",
+        "isolate-objects-cache: \"true\"",
+        "RUSTUP_TOOLCHAIN: 1.98.1",
+        "MBX_SHARE_OUT_DIR: \"0\"",
+        "CARGO_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/cargo",
+    ] {
+        assert!(job.contains(fragment), "{job}");
+    }
+}
+
 #[test]
 fn protected_main_mbx_roundtrip_is_run_bound_and_read_only_on_restore() -> TestResult {
     let repo = make_repo(&crate::impl_schema2_routing::workflow_config())?;
@@ -53,16 +66,17 @@ fn assert_writer(writer: &str) {
         "{writer}"
     );
     assert!(
-        writer.contains("velnor-qualification-mbx-1.21.1-action-d0825fbaf3cc36ca2609aa38e71046265a1f1e37-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}"),
+        writer.contains("velnor-qualification-mbx-1.22.0-share-out-dir-disabled-v1-action-d0825fbaf3cc36ca2609aa38e71046265a1f1e37-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}"),
         "{writer}"
     );
-    assert!(writer.contains("version: 1.21.1"), "{writer}");
+    assert!(writer.contains("version: 1.22.0"), "{writer}");
     assert!(writer.contains("RUSTUP_TOOLCHAIN: 1.98.1"), "{writer}");
     assert!(
         writer
             .contains("CARGO_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/cargo"),
         "{writer}"
     );
+    assert_candidate_owner(writer);
     assert!(writer.contains("rustc --print sysroot"), "{writer}");
     assert!(
         writer.contains("df -B1 -P \\\"$RUNNER_TEMP\\\""),
@@ -88,11 +102,11 @@ fn assert_reader(reader: &str) {
         "{reader}"
     );
     assert!(
-        reader.contains("velnor-qualification-mbx-1.21.1-action-d0825fbaf3cc36ca2609aa38e71046265a1f1e37-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}"),
+        reader.contains("velnor-qualification-mbx-1.22.0-share-out-dir-disabled-v1-action-d0825fbaf3cc36ca2609aa38e71046265a1f1e37-run-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.sha }}"),
         "{reader}"
     );
     assert!(
-        reader.contains("test \\\"$CACHE_HIT\\\" = 'false'"),
+        reader.contains("test \\\"$CACHE_HIT\\\" = 'true'"),
         "{reader}"
     );
     assert!(
@@ -106,6 +120,7 @@ fn assert_reader(reader: &str) {
         reader.contains(".savings.cached_compilations > 0"),
         "{reader}"
     );
+    assert!(reader.contains("version: 1.22.0"), "{reader}");
     assert!(
         reader.contains("df -B1 -P \\\"$RUNNER_TEMP\\\""),
         "{reader}"
@@ -133,13 +148,13 @@ fn assert_reader(reader: &str) {
         ),
         "{reader}"
     );
-    assert!(reader.contains("version: 1.21.1"), "{reader}");
     assert!(reader.contains("RUSTUP_TOOLCHAIN: 1.98.1"), "{reader}");
     assert!(
         reader
             .contains("CARGO_HOME: ${{ github.workspace }}/.velnor-mbx-cache-qualification/cargo"),
         "{reader}"
     );
+    assert_candidate_owner(reader);
 }
 
 #[cfg(unix)]

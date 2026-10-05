@@ -32,7 +32,6 @@ fn archive_argv_is_byte_exact_per_driver() -> Result<(), String> {
             "--no-hooks",
             "exec",
             "rust@1.98.1",
-            "mr-boxington@1.21.1",
             "aqua:nextest-rs/nextest/cargo-nextest@0.9.146",
             "--",
             "mbx",
@@ -87,7 +86,6 @@ fn list_argv_is_byte_exact() -> Result<(), String> {
             "--no-hooks",
             "exec",
             "rust@1.98.1",
-            "mr-boxington@1.21.1",
             "aqua:nextest-rs/nextest/cargo-nextest@0.9.146",
             "--",
             "mbx",
@@ -128,7 +126,6 @@ fn run_argv_is_byte_exact_with_no_tests_fail() -> Result<(), String> {
             "--no-hooks",
             "exec",
             "rust@1.98.1",
-            "mr-boxington@1.21.1",
             "aqua:nextest-rs/nextest/cargo-nextest@0.9.146",
             "--",
             "mbx",
@@ -179,11 +176,7 @@ fn driver_selects_program_and_tools() {
     );
     assert_eq!(
         NextestDriver::Mbx.tools(),
-        vec![
-            PinnedTool::Rust,
-            PinnedTool::MrBoxington,
-            PinnedTool::Nextest
-        ]
+        vec![PinnedTool::Rust, PinnedTool::Nextest]
     );
 }
 

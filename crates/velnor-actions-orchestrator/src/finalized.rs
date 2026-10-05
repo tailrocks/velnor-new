@@ -31,18 +31,19 @@ pub(crate) fn owned_preparation(
 ) -> Result<GenerationPreparation, OrchestratorError> {
     let mut owned = prep.clone();
     if prep.config.workflow.policy == WorkflowPolicy::VelnorRepositoryV1 {
-        match verify_velnor_repository_files(&prep.root)? {
-            Some(lock) => attach_lock_acquire(
+        if let Some(lock) = verify_velnor_repository_files(&prep.root)? {
+            attach_lock_acquire(
                 &mut owned.workflow.ir,
                 &lock,
                 &prep.runner_label,
                 env!("CARGO_PKG_VERSION"),
-            )?,
-            None => attach_preseed(
+            )?;
+        } else {
+            attach_preseed(
                 &mut owned.workflow,
                 &prep.runner_label,
                 env!("CARGO_PKG_VERSION"),
-            )?,
+            )?;
         }
     }
     Ok(owned)
