@@ -12,6 +12,7 @@ pub(crate) fn ensure_tools_cache_v2(
     setup: &MiseSetup,
     always: bool,
     target: &str,
+    checkout_uses: &str,
 ) -> Result<(), RenderError> {
     setup.validate()?;
     let setup_indices = job
@@ -29,6 +30,7 @@ pub(crate) fn ensure_tools_cache_v2(
     let needed = always || job.steps.iter().any(step_uses_mise);
     if !needed && setup_indices.is_empty() {
         reject_v2_steps(job_id, job)?;
+        crate::tool_seed::reject_orphan_seed(job_id, job)?;
         return Ok(());
     }
     let expected_setup = cache_p08::setup_step(setup)?;
@@ -40,7 +42,7 @@ pub(crate) fn ensure_tools_cache_v2(
         }
         index
     } else {
-        let at = insert_at(job).min(job.steps.len());
+        let at = insert_at(job, checkout_uses);
         job.steps.insert(at, expected_setup);
         at
     };
@@ -54,7 +56,15 @@ pub(crate) fn ensure_tools_cache_v2(
     reject_v2_steps(job_id, job)?;
 
     let specs = cache_p08::infer_job_tools(job);
-    let Some(setup_index) = insert_tool_seed(job, setup_index, setup, always, target, &specs)?
+    let Some(setup_index) = insert_tool_seed(
+        job,
+        setup_index,
+        setup,
+        always,
+        target,
+        checkout_uses,
+        &specs,
+    )?
     else {
         return Ok(());
     };
@@ -70,6 +80,7 @@ fn insert_tool_seed(
     setup: &MiseSetup,
     always: bool,
     target: &str,
+    checkout_uses: &str,
     specs: &[String],
 ) -> Result<Option<usize>, RenderError> {
     let seed_specs = if specs.is_empty() && always {
@@ -80,8 +91,8 @@ fn insert_tool_seed(
     if seed_specs.is_empty() {
         return Ok(None);
     }
-    let seed_key = crate::tool_seed::seed_key_for_tools(target, &setup.version, &seed_specs)?;
-    crate::tool_seed::insert_before_setup(job, setup_index, &seed_key).map(Some)
+    let seed_key = cache_p08::MiseToolsCacheKey::derive(target, &setup.version, &seed_specs)?;
+    crate::tool_seed::insert_before_setup(job, setup_index, checkout_uses, &seed_key).map(Some)
 }
 
 fn insert_tools_cache(
@@ -163,11 +174,11 @@ fn is_setup_step(step: &Step) -> bool {
         if uses.starts_with(&format!("{}@", crate::setup::MISE_ACTION_NAME)))
 }
 
-fn insert_at(job: &Job) -> usize {
+fn insert_at(job: &Job, checkout_uses: &str) -> usize {
     job.steps
-        .first()
-        .filter(|step| step.name == "Checkout")
-        .map_or(0, |_| 1)
+        .iter()
+        .position(|step| crate::tool_seed::is_configured_checkout(step, checkout_uses))
+        .map_or(0, |index| index + 1)
 }
 
 /// Parse the exact pinned components step that populated this tool payload.
