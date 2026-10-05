@@ -111,3 +111,99 @@ The source-bound tests additionally assert the JIT request value, resolved
 path, both container mount plans, runner installation and entrypoint paths,
 the `/tmp` JIT scratch path with no work-volume mount there, UID 1000 image
 setup, DinD volume initialization, and worker/role labels.
+
+## Fresh-volume absence witness
+
+The first probe above did not record an inspection before its named-volume
+create. This follow-up closes that evidence gap. On the same Docker Engine, it
+uses the same immutable DinD and runner image IDs above and a distinct volume
+name. Both image IDs were inspected before the test. The pre-create inspect
+returned status 1 and Docker's `no such volume` response before `docker volume
+create`; the volume was then mounted first into DinD and next into the runner.
+
+The exact commands were:
+
+```sh
+set -Eeuo pipefail
+volume=velnor-runner48-proof-freshness-20261005
+worker=runner48-proof-freshness-20261005
+dind_image=sha256:c75f47ba6049197aa3ca0161bcaaf29eb4756b6c63f370e1e65bfec234d49395
+runner_image=sha256:28183f6f55daa486d1901415ffcf6d884930bed120ab7a70e57dced77789ec46
+docker image inspect "$dind_image" --format 'dind={{.Id}} {{.Os}}/{{.Architecture}}'
+docker image inspect "$runner_image" --format 'runner={{.Id}} {{.Os}}/{{.Architecture}} {{.Config.User}} {{.Config.WorkingDir}} {{json .Config.Entrypoint}}'
+if docker volume inspect "$volume" > /tmp/runner48-volume-freshness-preinspect-20261005.txt 2>&1; then
+  cat /tmp/runner48-volume-freshness-preinspect-20261005.txt
+  exit 1
+else
+  preinspect_status=$?
+  printf 'precreate-inspect-status=%s\n' "$preinspect_status"
+  cat /tmp/runner48-volume-freshness-preinspect-20261005.txt
+  test "$preinspect_status" -eq 1
+  grep -F 'no such volume' /tmp/runner48-volume-freshness-preinspect-20261005.txt
+fi
+docker volume create --label "velnor.worker=$worker" --label velnor.role=work "$volume"
+docker run --rm --volume "$volume:/home/runner/_work" --entrypoint /bin/sh "$dind_image" -ec 'id; stat -c "%u:%g %a %n" /home/runner/_work; printf "dind-ok\\n" > /home/runner/_work/dind-probe; stat -c "%u:%g %a %n" /home/runner/_work/dind-probe'
+runner_status=0
+if docker run --rm -i --volume "$volume:/home/runner/_work" "$runner_image" </dev/null; then
+  exit 1
+else
+  runner_status=$?
+fi
+test "$runner_status" -eq 2
+printf 'empty-payload-entrypoint-status=%s\n' "$runner_status"
+docker run --rm --volume "$volume:/home/runner/_work" --entrypoint /bin/sh "$runner_image" -ec 'id; stat -c "%u:%g %a %n" /home/runner/_work; test "$(cat /home/runner/_work/dind-probe)" = dind-ok; test -z "$(find /home/runner/_work -maxdepth 1 -name "jit.*" -print -quit)"; printf "runner-ok\\n" > /home/runner/_work/runner-probe; stat -c "%u:%g %a %n" /home/runner/_work/runner-probe; cat /home/runner/_work/dind-probe'
+docker volume inspect "$volume" --format 'labels={{.Labels}}'
+docker volume rm "$volume"
+if docker volume inspect "$volume" > /tmp/runner48-volume-freshness-afterinspect-20261005.txt 2>&1; then
+  cat /tmp/runner48-volume-freshness-afterinspect-20261005.txt
+  exit 1
+else
+  afterinspect_status=$?
+  printf 'postremove-inspect-status=%s\n' "$afterinspect_status"
+  cat /tmp/runner48-volume-freshness-afterinspect-20261005.txt
+  test "$afterinspect_status" -eq 1
+  grep -F 'no such volume' /tmp/runner48-volume-freshness-afterinspect-20261005.txt
+fi
+printf 'cleanup=confirmed volume=%s absent\n' "$volume"
+```
+
+The pre-create witness was `precreate-inspect-status=1` with
+`Error response from daemon: get velnor-runner48-proof-freshness-20261005: no
+such volume`. The DinD-first mount copied up `/home/runner/_work` as
+`1000:1000`, mode `0755`; root wrote its marker as `0:0`, mode `0644`. The
+actual runner entrypoint rejected empty input with status 2. The subsequent
+default `runner` user was `uid=1000`, read the DinD marker, and wrote its own
+marker as `1000:1000`, mode `0644`. Volume labels were
+`velnor.role=work` and `velnor.worker=runner48-proof-freshness-20261005`.
+After removal, a second inspect again returned status 1 and `no such volume`.
+The full command trace is `/tmp/runner48-volume-freshness-probe-20261005.log`
+and the executed script is `/tmp/runner48-volume-freshness-probe-20261005.sh`.
+This is a fresh-volume, normal-exit probe; it does not assert crash or forced
+termination behavior.
+
+Observed follow-up output:
+
+```text
+dind=sha256:c75f47ba6049197aa3ca0161bcaaf29eb4756b6c63f370e1e65bfec234d49395 linux/amd64
+runner=sha256:28183f6f55daa486d1901415ffcf6d884930bed120ab7a70e57dced77789ec46 linux/amd64 runner /home/runner ["/usr/local/bin/velnor-runner-entrypoint"]
+precreate-inspect-status=1
+[]
+Error response from daemon: get velnor-runner48-proof-freshness-20261005: no such volume
+velnor-runner48-proof-freshness-20261005
+created-volume=velnor-runner48-proof-freshness-20261005 worker=runner48-proof-freshness-20261005 role=work
+uid=0(root) gid=0(root) groups=0(root)
+1000:1000 755 /home/runner/_work
+0:0 644 /home/runner/_work/dind-probe
+empty jit
+empty-payload-entrypoint-status=2
+uid=1000(runner) gid=1000(runner) groups=1000(runner),999(docker)
+1000:1000 755 /home/runner/_work
+1000:1000 644 /home/runner/_work/runner-probe
+dind-ok
+labels=map[velnor.role:work velnor.worker:runner48-proof-freshness-20261005]
+velnor-runner48-proof-freshness-20261005
+postremove-inspect-status=1
+[]
+Error response from daemon: get velnor-runner48-proof-freshness-20261005: no such volume
+cleanup=confirmed volume=velnor-runner48-proof-freshness-20261005 absent
+```
