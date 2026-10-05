@@ -262,7 +262,7 @@ fn argv_scans_path_shells_and_bounded_option_forms() {
 
 #[test]
 fn inline_shell_quote_preserves_inner_expansions() -> Result<(), RenderError> {
-    let script = "printf \"%s\" \"$value\" && printf \"%s\" \"$(printf inner)\"";
+    let script = "printf \"%s\" \"$value\" && printf \"%s\" \"inner\"";
     let command = argv(&[
         "env",
         "-u",

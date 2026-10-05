@@ -41,11 +41,8 @@ fn validate_argv(argv: &[String], script_index: Option<usize>) -> Result<(), Ren
         {
             return Err(RenderError::BadCommand(format!("control_char:{arg}")));
         }
-        // The shared shell parser makes this script one outer-shell argument.
-        if script_index != Some(index)
-            && shell_script_index != Some(index)
-            && (arg.contains("$(") || arg.contains('`'))
-        {
+        // Only the exact named MBX script may contain substitutions.
+        if script_index != Some(index) && (arg.contains("$(") || arg.contains('`')) {
             return Err(RenderError::BadCommand(format!(
                 "command_substitution:{arg}"
             )));

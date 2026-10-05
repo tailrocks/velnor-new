@@ -68,6 +68,21 @@ pub(crate) fn trusted_script_argument(name: &str, argv: &[String]) -> Option<usi
     (script == expected || script == &credential_prefixed).then_some(prefix + 2)
 }
 
+/// Recognize only the one complete renderer-owned MBX export step in a job.
+pub(crate) fn is_exact_generated_export_step(job: &Job, candidate: &Step) -> bool {
+    let Ok(expected) = export_step() else {
+        return false;
+    };
+    if candidate != &expected {
+        return false;
+    }
+    let mut exports = job
+        .steps
+        .iter()
+        .filter(|step| step.name == MBX_BUNDLE_EXPORT_NAME);
+    exports.next().is_some_and(|step| step == candidate) && exports.next().is_none()
+}
+
 /// Push-only export gate. A failed import handoff cannot publish a bundle.
 const PREP_IF: &str = "success() && github.event_name == 'push' && steps.mbx-import.outcome == 'success' && (steps.mbx-import.outputs.cache-state == 'cold' || steps.mbx-import.outputs.cache-state == 'imported') && steps.mbx-bundle.outputs.cache-hit != 'true'";
 /// Save gate. Empty exports set `ready=false` and must not call `actions/cache`.

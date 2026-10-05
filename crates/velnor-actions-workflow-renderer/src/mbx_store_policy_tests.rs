@@ -181,6 +181,57 @@ fn v16_action_routes_hosted_cache_to_github_and_scaleset_to_manual_bundle()
 }
 
 #[test]
+fn generated_export_recognizer_requires_one_exact_full_step() -> Result<(), Box<dyn Error>> {
+    let job = job_with_bundle_route()?;
+    let export = job
+        .steps
+        .iter()
+        .find(|step| step.name == MBX_BUNDLE_EXPORT_NAME)
+        .ok_or_else(|| std::io::Error::other("generated MBX export missing"))?;
+    assert!(super::is_exact_generated_export_step(&job, export));
+
+    let mut changed_name = export.clone();
+    changed_name.name.push_str(" altered");
+    assert!(!super::is_exact_generated_export_step(&job, &changed_name));
+
+    let mut changed_body = export.clone();
+    let StepKind::Shell { run, .. } = &mut changed_body.kind else {
+        return Err(std::io::Error::other("generated MBX export is not a shell step").into());
+    };
+    run.get_mut(2)
+        .ok_or_else(|| std::io::Error::other("generated MBX export body missing"))?
+        .push(' ');
+    assert!(!super::is_exact_generated_export_step(&job, &changed_body));
+
+    let mut changed_env = export.clone();
+    let StepKind::Shell { env, .. } = &mut changed_env.kind else {
+        return Err(std::io::Error::other("generated MBX export is not a shell step").into());
+    };
+    env.insert("UNEXPECTED".to_owned(), "value".to_owned());
+    assert!(!super::is_exact_generated_export_step(&job, &changed_env));
+
+    let mut changed_condition = export.clone();
+    changed_condition.condition = Some("always()".to_owned());
+    assert!(!super::is_exact_generated_export_step(
+        &job,
+        &changed_condition
+    ));
+
+    let mut changed_kind = export.clone();
+    changed_kind.kind = StepKind::Action {
+        uses: "example/action@0000000000000000000000000000000000000000".to_owned(),
+        with: BTreeMap::new(),
+        env: BTreeMap::new(),
+    };
+    assert!(!super::is_exact_generated_export_step(&job, &changed_kind));
+
+    let mut duplicate = job.clone();
+    duplicate.steps.push(export.clone());
+    assert!(!super::is_exact_generated_export_step(&duplicate, export));
+    Ok(())
+}
+
+#[test]
 fn matrix_store_initializer_exports_matrix_scoped_producer_group() -> Result<(), Box<dyn Error>> {
     let job = matrix_job_with_bundle_route()?;
     let init = job

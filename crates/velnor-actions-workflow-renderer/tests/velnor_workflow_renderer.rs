@@ -89,6 +89,8 @@ mod impl_renderer_steps;
 mod impl_renderer_steps_env;
 #[path = "impl_renderer_steps_quote.rs"]
 mod impl_renderer_steps_quote;
+#[path = "impl_renderer_steps_shell_security.rs"]
+mod impl_renderer_steps_shell_security;
 #[path = "impl_renderer_sweep.rs"]
 mod impl_renderer_sweep;
 #[path = "impl_renderer_timeout.rs"]
