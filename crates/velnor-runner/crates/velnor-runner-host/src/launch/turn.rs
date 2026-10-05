@@ -231,37 +231,22 @@ impl Turn<'_> {
             admin,
             queue: queue.clone(),
         };
-        let launched = drive_ready(
+        start_turn(
             &mut lane,
+            workers,
             Ready {
                 set_id: self.set_id,
                 session: self.session,
                 admin_token: self.admin_token,
-                path: path.clone(),
+                path,
                 polled,
             },
             self.journal,
             self.docker,
             self.capacity,
+            stop,
         )
-        .await;
-        if let Err(EnsureError::Conflict) = &launched
-            && super::name_taken::should_ack(
-                steps::idle(polled),
-                self.session
-                    .statistics()
-                    .map(velnor_runner_github::Statistics::assigned_population),
-            )
-            && super::name_taken::fail_unstarted(self.journal, polled).await?
-        {
-            ack_ready(self.link, self.session, path, queue, polled)?;
-            return Ok(false);
-        }
-        let Some(worker) = launched? else {
-            return Ok(false);
-        };
-        workers.push(worker);
-        Ok(stop)
+        .await
     }
 
     async fn stay(&self, workers: &[Started]) -> Result<bool, EnsureError> {
@@ -278,6 +263,27 @@ impl Turn<'_> {
         }
         Ok(true)
     }
+}
+
+/// Start one admitted poll through an injectable lane. A conflict remains an
+/// error so the current message is redelivered; only a bound worker covers it.
+async fn start_turn<T>(
+    lane: &mut T,
+    workers: &mut Vec<Started>,
+    ready: Ready<'_>,
+    journal: &Journal,
+    docker: &bollard::Docker,
+    capacity: u32,
+    stop: bool,
+) -> Result<bool, EnsureError>
+where
+    T: velnor_runner_github::Transport + super::Lane,
+{
+    let Some(worker) = drive_ready(lane, ready, journal, docker, capacity).await? else {
+        return Ok(false);
+    };
+    workers.push(worker);
+    Ok(stop)
 }
 
 #[cfg(test)]
@@ -318,3 +324,6 @@ mod tests {
         Ok(())
     }
 }
+
+#[cfg(all(test, unix))]
+mod start_tests;
