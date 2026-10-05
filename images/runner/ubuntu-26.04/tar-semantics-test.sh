@@ -291,6 +291,29 @@ case_partial_archive() {
   grep -F -q 'short read' "$root/perlerr" || return 1
 }
 
+case_cargo_work_symlink() {
+  local repo err status=0
+  repo=/home/runner/work/repo/repo
+  rm -rf -- /home/runner/work
+  mkdir -p "$repo"
+  write_ustar "$work/rls.tar" s ../../_temp/velnor/cargo/bin/rls rustup || return 1
+  bash "$shim" -xf "$work/rls.tar" -P -C "$repo" || return 1
+  [ -L /home/runner/work/_temp/velnor/cargo/bin/rls ] || return 1
+  [ "$(readlink /home/runner/work/_temp/velnor/cargo/bin/rls)" = rustup ] || return 1
+  write_ustar "$work/bad.tar" s ../../_temp/velnor/cargo/bin/bad /etc/passwd || return 1
+  err="$work/bad.err"
+  bash "$shim" -xf "$work/bad.tar" -P -C "$repo" >"$err" 2>&1 || status=$?
+  [ "$status" -ne 0 ] || return 1
+  grep -F -q 'escapes' "$err" || return 1
+  [ ! -e /home/runner/work/_temp/velnor/cargo/bin/bad ] || return 1
+  [ ! -L /etc/passwd ] || return 1
+  status=0
+  write_ustar "$work/out.tar" s ../../../../../etc/outside-link passwd || return 1
+  bash "$shim" -xf "$work/out.tar" -P -C "$repo" >"$err" 2>&1 || status=$?
+  [ "$status" -ne 0 ] || return 1
+  [ ! -e /etc/outside-link ] && [ ! -L /etc/outside-link ] || return 1
+}
+
 case_disk_full() {
   local root="$work/diskfull" err status=0 bytes
   [ -d /lowdisk ] || return 1
@@ -314,6 +337,7 @@ run_case dot-symlink-walk case_dot_symlink_walk
 run_case symlink-escape case_symlink_escape
 run_case preexisting-symlink case_preexisting_symlink
 run_case symlink-inside case_symlink_inside
+run_case cargo-work-symlink case_cargo_work_symlink
 run_case mode-and-mtime case_mode_and_mtime
 run_case empty-dir case_empty_dir
 run_case long-and-deep case_long_and_deep
