@@ -11,6 +11,9 @@ mod launch;
 mod schema;
 mod worker_volume;
 
+#[cfg(test)]
+mod schema_metadata_tests;
+
 /// Durable intent row.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IntentState {
