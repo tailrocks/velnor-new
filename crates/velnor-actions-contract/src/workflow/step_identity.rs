@@ -239,7 +239,9 @@ fn valid_checkout_payload(kind: &StepKind) -> bool {
 fn valid_configured_checkout_payload(kind: &StepKind) -> bool {
     matches!(kind, StepKind::Action { with, env, .. }
         if valid_checkout_payload(kind)
-            && with.len() == 1
+            && (with.len() == 1
+                || (with.len() == 2
+                    && with.get("fetch-depth").is_some_and(|value| value == "0")))
             && env.is_empty())
 }
 

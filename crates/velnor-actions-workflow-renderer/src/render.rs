@@ -255,6 +255,7 @@ pub fn finalize_jobs(
             .iter()
             .any(|task| task.owns_job_id(id))
         {
+            crate::tool_seed::reject_orphan_seed(id, job)?;
             closure::check_internal_staged(id, job, ctx.preseed)?;
             continue;
         }

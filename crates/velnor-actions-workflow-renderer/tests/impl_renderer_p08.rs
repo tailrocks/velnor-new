@@ -255,6 +255,7 @@ fn mbx_restore_precedes_fetch() {
     };
     let mbx = velnor_actions_contract::Step {
         name: "Restore MBX objects".to_owned(),
+        id: None,
         role: Some(StepRole::MbxCache),
         condition: None,
         kind: StepKind::Action {

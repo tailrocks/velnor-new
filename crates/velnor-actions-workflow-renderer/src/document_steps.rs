@@ -2,8 +2,10 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Step, StepKind, StepRole};
-use velnor_actions_contract::workflow::step_identity::TOOL_SEED_USES;
+use velnor_actions_contract::workflow::step_identity::{
+    StepRole, TOOL_SEED_USES, TOFU_PROVIDER_ADMISSION_USES,
+};
+use velnor_actions_contract::{Step, StepKind};
 
 use crate::{
     RenderError, commands,
@@ -112,10 +114,15 @@ fn action_step_to_yaml(
     if job_id == FINAL_JOB_ID && is_verdict_download(step) {
         entries.push(("continue-on-error".to_owned(), Yaml::Bool(true)));
     }
-    let uses_yaml = if matches!(
-        uses,
-        crate::tofu_cache::TOFU_PROVIDER_ADMISSION_USES | TOOL_SEED_USES
-    ) {
+    if uses.starts_with(TOOL_SEED_USES) {
+        if uses != TOOL_SEED_USES {
+            return Err(RenderError::InvalidWorkflow(
+                "tool_seed_bad_action_ref".to_owned(),
+            ));
+        }
+        crate::tool_seed::validate_seed_action(step, None)?;
+    }
+    let uses_yaml = if matches!(uses, TOOL_SEED_USES | TOFU_PROVIDER_ADMISSION_USES) {
         Yaml::annotated(uses, "zizmor: ignore[self-repository]")
     } else {
         Yaml::str(uses.to_owned())
