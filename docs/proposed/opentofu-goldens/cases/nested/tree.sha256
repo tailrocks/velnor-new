@@ -1,5 +1,5 @@
 4778fbe08a93634a2e5d2f4dfa53dceb2694697b5bd53aaf8cd1bc6eb164bde9  ./.github/AGENTS.md
 e8b37bd2c2e072053779a49aa8c24e3f07cb382690cab7dc59756b8899b61854  ./.github/actionlint.yaml
 6139179ce61ff5097625f4ea76159d97de3ea4275e0aeea4ab0b86e3272c61e8  ./.github/actions/velnor-tool-seed/action.yml
-0f27e2e5215b50eec5dd8b7ebc0e3593b7a9f63ef7d11ea3942d72a45a800df1  ./.github/workflows/ci.yml
+8224304461acda865e657d240c2603649d0fb423ddca695dc9d507cac1c7f217  ./.github/workflows/ci.yml
 link ./.github/CLAUDE.md -> AGENTS.md
