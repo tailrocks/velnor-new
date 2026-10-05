@@ -161,7 +161,3 @@ fn invalid_step_input(field: &str, value: &str) -> MiseError {
         value: value.to_owned(),
     }
 }
-
-#[cfg(test)]
-#[path = "generator_release_workflow_tests.rs"]
-mod tests;

@@ -307,7 +307,3 @@ fn shell_quote(value: &str) -> String {
     quoted.push('\'');
     quoted
 }
-
-#[cfg(test)]
-#[path = "generator_release_workflow_checks_tests.rs"]
-mod tests;

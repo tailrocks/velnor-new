@@ -1,8 +1,9 @@
 use velnor_actions_contract::{GeneratorReleaseTarget, Step, StepKind};
 
-use super::{generator_release_mise_binary_sha256, rust_exec_step, setup_rust_steps};
-use crate::catalog::{MISE_VERSION, ToolCatalog};
-use crate::steps::ToolHomes;
+use velnor_actions_mise::{
+    MISE_VERSION, ToolCatalog, ToolHomes, generator_release_mise_binary_sha256, rust_exec_step,
+    setup_rust_steps,
+};
 
 const MISE_USES: &str = "jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5";
 
@@ -27,16 +28,22 @@ fn setup_lowers_target_matched_action_checksum_and_rust_tool_install() {
             generator_release_mise_binary_sha256(target),
             &homes,
             &catalog,
-        )
-        .expect("target setup steps");
-        assert_setup_steps(&steps, target, digest);
+        );
+        assert!(steps.is_ok(), "target setup steps must be valid");
+        if let Ok(steps) = steps {
+            assert!(assert_setup_steps(&steps, target, digest));
+        }
     }
 }
 
-fn assert_setup_steps(steps: &[Step], target: GeneratorReleaseTarget, expected_digest: &str) {
+fn assert_setup_steps(
+    steps: &[Step],
+    target: GeneratorReleaseTarget,
+    expected_digest: &str,
+) -> bool {
     assert_eq!(steps.len(), 2);
     let StepKind::Action { uses, with, .. } = &steps[0].kind else {
-        panic!("Mise action step expected");
+        return false;
     };
     assert_eq!(uses, MISE_USES);
     assert_eq!(with.get("version").map(String::as_str), Some(MISE_VERSION));
@@ -51,7 +58,7 @@ fn assert_setup_steps(steps: &[Step], target: GeneratorReleaseTarget, expected_d
         expected_digest
     );
     let StepKind::Shell { run, env } = &steps[1].kind else {
-        panic!("Rust install shell step expected");
+        return false;
     };
     assert_eq!(
         run,
@@ -68,6 +75,7 @@ fn assert_setup_steps(steps: &[Step], target: GeneratorReleaseTarget, expected_d
         env.get("MISE_RUSTUP_HOME").map(String::as_str),
         Some("${{ runner.temp }}/velnor/rustup")
     );
+    true
 }
 
 #[test]
@@ -90,25 +98,27 @@ fn rust_exec_lowers_pinned_cargo_args_and_owned_environment() {
         &args,
         &homes,
         &catalog,
-    )
-    .expect("Cargo execution step");
-    let StepKind::Shell { run, env } = step.kind else {
-        panic!("Cargo shell step expected");
-    };
-    assert!(run.windows(2).any(|pair| pair == ["exec", "rust@1.98.1"]));
-    assert!(run.windows(2).any(|pair| pair == ["--", "cargo"]));
-    assert!(
-        run.windows(2)
-            .any(|pair| pair == ["--target", "x86_64-unknown-linux-gnu"])
     );
-    assert!(
-        run.windows(2)
-            .any(|pair| pair == ["--target-dir", "target"])
-    );
-    assert_eq!(
-        env.get("RUSTUP_TOOLCHAIN").map(String::as_str),
-        Some("1.98.1")
-    );
+    assert!(step.is_ok(), "Cargo execution step must be valid");
+    if let Ok(step) = step {
+        assert!(matches!(step.kind, StepKind::Shell { .. }));
+        if let StepKind::Shell { run, env } = step.kind {
+            assert!(run.windows(2).any(|pair| pair == ["exec", "rust@1.98.1"]));
+            assert!(run.windows(2).any(|pair| pair == ["--", "cargo"]));
+            assert!(
+                run.windows(2)
+                    .any(|pair| pair == ["--target", "x86_64-unknown-linux-gnu"])
+            );
+            assert!(
+                run.windows(2)
+                    .any(|pair| pair == ["--target-dir", "target"])
+            );
+            assert_eq!(
+                env.get("RUSTUP_TOOLCHAIN").map(String::as_str),
+                Some("1.98.1")
+            );
+        }
+    }
 }
 
 #[test]
