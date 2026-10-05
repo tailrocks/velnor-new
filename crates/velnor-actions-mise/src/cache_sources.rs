@@ -2,11 +2,10 @@
 //!
 //! Sources live at the Cargo home actually used (`MISE_CARGO_HOME`,
 //! `${{ runner.temp }}/velnor/cargo`), never the ambient `~/.cargo`.
-//! Only the sufficient subset is archived (Cargo CI guidance):
-//! `.crates.toml`, `.crates2.json`, `bin/`, `registry/index/`,
-//! `registry/cache/`, `git/db/`. Extracted `registry/src/` is omitted
-//! (re-extracted from cache; avoids cache/src duplication). Credentials
-//! (`credentials*`, token-bearing configs) are never archived.
+//! Only registry indexes/downloads and git checkouts are archived.
+//! Cargo proxy binaries and install metadata belong to the tool cache;
+//! extracted `registry/src/` is regenerated from the registry cache.
+//! Credentials (`credentials*`, token-bearing configs) are never archived.
 //!
 //! One race-safe trusted writer (the plan job) seeds the shared immutable
 //! snapshot; crate jobs restore read-only and never save the same key.
@@ -15,14 +14,7 @@
 use crate::error::MiseError;
 
 /// Sufficient Cargo-home subset (relative to the owned home).
-pub const SOURCE_SUBSET: [&str; 6] = [
-    ".crates.toml",
-    ".crates2.json",
-    "bin",
-    "registry/index",
-    "registry/cache",
-    "git/db",
-];
+pub const SOURCE_SUBSET: [&str; 3] = ["registry/index", "registry/cache", "git/db"];
 
 /// Role allowed to save the shared sources snapshot.
 pub const TRUSTED_WRITER_ROLE: &str = "plan";
@@ -93,11 +85,9 @@ pub fn validate_sources_subset(paths: &[String], cargo_home: &str) -> Result<(),
         if suffix.starts_with("registry/src") {
             return Err(reject(path));
         }
-        let allowed = SOURCE_SUBSET.iter().any(|ok| {
-            suffix == *ok
-                || suffix.starts_with(&format!("{ok}/"))
-                || *ok == "bin" && suffix == "bin"
-        });
+        let allowed = SOURCE_SUBSET
+            .iter()
+            .any(|ok| suffix == *ok || suffix.starts_with(&format!("{ok}/")));
         if !allowed {
             return Err(reject(path));
         }
