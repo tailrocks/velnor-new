@@ -370,8 +370,8 @@ mod task_report_cover_tests;
 #[path = "task_report_merge_tests.rs"]
 mod task_report_merge_tests;
 #[cfg(test)]
-#[path = "task_report_tests.rs"]
-mod task_report_tests;
-#[cfg(test)]
 #[path = "task_report_order_tests.rs"]
 mod task_report_order_tests;
+#[cfg(test)]
+#[path = "task_report_tests.rs"]
+mod task_report_tests;

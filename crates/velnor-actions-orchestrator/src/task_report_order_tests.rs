@@ -29,7 +29,9 @@ fn order_fixture() -> Plan {
     }
     let mut plan = fixture_plan();
     plan.matrix.include = entries;
-    plan.matrix.include.sort_by(|left, right| left.id.cmp(&right.id));
+    plan.matrix
+        .include
+        .sort_by(|left, right| left.id.cmp(&right.id));
     plan.obligations = obligations;
     plan.obligations
         .sort_by(|left, right| left.task_id.cmp(&right.task_id));
@@ -48,12 +50,18 @@ fn task_report(plan: &Plan, temp: &TempDir, task_id: &str) -> TaskReport {
         .matrix
         .include
         .iter()
-        .find(|entry| entry.execute_task_ids.tasks.values().any(|task_ref| match task_ref {
-            velnor_actions_contract::ExecuteTaskRef::Single(id) => id == task_id,
-            velnor_actions_contract::ExecuteTaskRef::Shards(ids) => {
-                ids.iter().any(|id| id == task_id)
-            }
-        }))
+        .find(|entry| {
+            entry
+                .execute_task_ids
+                .tasks
+                .values()
+                .any(|task_ref| match task_ref {
+                    velnor_actions_contract::ExecuteTaskRef::Single(id) => id == task_id,
+                    velnor_actions_contract::ExecuteTaskRef::Shards(ids) => {
+                        ids.iter().any(|id| id == task_id)
+                    }
+                })
+        })
         .expect("task entry");
     let digest = plan
         .obligations
@@ -80,9 +88,11 @@ fn emitted_order(plan: &Plan) -> Vec<String> {
                 ExecuteTaskRef::Single(id) => ordered.push(
                     crate::crate_jobs::obligation_order_key(&entry.stack_id, kind, id),
                 ),
-                ExecuteTaskRef::Shards(ids) => ordered.extend(ids.iter().map(|id| {
-                    crate::crate_jobs::obligation_order_key(&entry.stack_id, kind, id)
-                })),
+                ExecuteTaskRef::Shards(ids) => {
+                    ordered.extend(ids.iter().map(|id| {
+                        crate::crate_jobs::obligation_order_key(&entry.stack_id, kind, id)
+                    }))
+                }
             }
         }
     }
