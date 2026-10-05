@@ -243,12 +243,23 @@ pub fn aggregate_timings(timings: &[TaskTiming]) -> TaskTiming {
 /// action-managed MBX objects, per-lane target dirs, and task artifacts.
 #[must_use]
 pub fn cache_ownership_table() -> Vec<(&'static str, &'static str)> {
-    vec![
-        ("~/.local/share/mise", "catalog/tools"),
-        ("$CARGO_HOME/registry", "velnor/sources"),
-        ("$CARGO_HOME/git", "velnor/sources"),
+    let mut paths = velnor_actions_workflow_renderer::steps::TOOLS_CACHE_PATHS
+        .into_iter()
+        .map(|path| (path, "catalog/tools"))
+        .collect::<Vec<_>>();
+    paths.extend([
+        (
+            "${{ runner.temp }}/velnor/cargo/registry/cache",
+            "velnor/sources",
+        ),
+        (
+            "${{ runner.temp }}/velnor/cargo/registry/index",
+            "velnor/sources",
+        ),
+        ("${{ runner.temp }}/velnor/cargo/git/db", "velnor/sources"),
         ("mr-boxington-action/objects", "mr-boxington/MBX"),
         ("$RUNNER_TEMP/velnor/target/", "job/target"),
         ("$MISE_TASK_CACHE_DIR/task-artifacts/v2", "mise/task-result"),
-    ]
+    ]);
+    paths
 }

@@ -279,49 +279,47 @@ fn fetch_decision_keeps_its_closed_reason_set() {
 }
 
 #[test]
-fn save_decision_keeps_single_writer_push_gated_saves() {
+fn public_default_context_never_authorizes_cache_saves() {
+    use velnor_actions_mise::CacheWriterContext;
     fn save<'a>(
         layer_trust: &'a str,
-        event: &'a str,
+        writer: &'a CacheWriterContext,
         passed: bool,
         active_writer: bool,
     ) -> SaveInputs<'a> {
         SaveInputs {
             layer_trust,
-            event,
+            writer,
             passed,
             unavailable: false,
             active_writer,
         }
     }
-    assert!(save_decision(&save("trusted", "push", true, false)).is_ok());
-    assert!(save_decision(&save("pr", "push", true, false)).is_ok());
+    let writer = CacheWriterContext::default();
     assert_eq!(
-        save_decision(&save("trusted", "push", true, true)),
+        save_decision(&save("trusted", &writer, true, false)),
         Err(MissReason::CACHE_WRITE_DISABLED),
-        "one writer per key"
+        "public cold context is untrusted"
     );
-    for event in ["pull_request", "fork", "merge_group", "release", "local"] {
-        assert_eq!(
-            save_decision(&save("trusted", event, true, false)),
-            Err(MissReason::CACHE_WRITE_DISABLED),
-            "{event} never saves"
-        );
-    }
     assert_eq!(
-        save_decision(&save("trusted", "push", false, false)),
+        save_decision(&save("trusted", &writer, true, true)),
+        Err(MissReason::CACHE_WRITE_DISABLED),
+        "untrusted context and a writer collision both deny"
+    );
+    assert_eq!(
+        save_decision(&save("trusted", &writer, false, false)),
         Err(MissReason::CACHE_WRITE_DISABLED),
         "failed runs never save"
     );
     assert_eq!(
-        save_decision(&save("unknown", "push", true, false)),
+        save_decision(&save("pr", &writer, true, false)),
         Err(MissReason::CACHE_WRITE_DISABLED),
-        "unknown trust denies closed"
+        "PR namespace does not save"
     );
     assert_eq!(
         save_decision(&SaveInputs {
             layer_trust: "trusted",
-            event: "push",
+            writer: &writer,
             passed: true,
             unavailable: true,
             active_writer: false,

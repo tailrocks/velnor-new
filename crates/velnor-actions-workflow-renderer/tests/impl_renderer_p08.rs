@@ -1,37 +1,57 @@
-//! P08 renderer cases: built-in Mise cache, sources paths, rust-cache gates.
+//! P08 renderer cases: canonical tool cache, sources paths, rust-cache gates.
 
 use std::collections::BTreeMap;
 use velnor_actions_contract::{Job, JobTimeout, StepKind};
 use velnor_actions_workflow_renderer::cache_p08::{
-    check_mbx_before_fetch, check_no_rust_cache_with_mbx, infer_job_tools,
-    mise_cache_key_for_tools, mise_setup_step_p08, tools_digest,
+    check_mbx_before_fetch, check_no_rust_cache_with_mbx, infer_job_tools, mise_setup_step_p08,
+    tools_cache_key_for_tools, tools_digest,
 };
 use velnor_actions_workflow_renderer::steps::cache_action_step;
 
 use super::impl_renderer_fixtures::*;
 
 #[test]
-fn builtin_key_shares_same_tools_without_job_id() {
+fn canonical_key_shares_same_tool_union_without_job_id() {
     let a = ["rust@1.98.1".to_owned(), "mr-boxington@1.19.0".to_owned()];
     let b = ["mr-boxington@1.19.0".to_owned(), "rust@1.98.1".to_owned()];
-    let one = mise_cache_key_for_tools("x86_64-unknown-linux-gnu", "2026.9.16", &a).expect("key");
-    let two = mise_cache_key_for_tools("x86_64-unknown-linux-gnu", "2026.9.16", &b).expect("key");
+    let one = tools_cache_key_for_tools("x86_64-unknown-linux-gnu", "2026.9.16", MISE_SHA256, &a)
+        .expect("key");
+    let two = tools_cache_key_for_tools("x86_64-unknown-linux-gnu", "2026.9.16", MISE_SHA256, &b)
+        .expect("key");
     assert_eq!(one, two, "tool order must not fork keys");
-    assert!(!one.contains("plan") && !one.contains("rust-"), "{one}");
+    assert!(!one.contains("plan"), "{one}");
     assert!(
-        one.starts_with("mise-v1-x86_64-unknown-linux-gnu-2026.9.16-"),
+        one.starts_with(&format!("mise-v3-${{{{ runner.os }}}}-${{{{ runner.arch }}}}-${{{{ env.VELNOR_CACHE_IMAGE_OS }}}}-${{{{ env.VELNOR_CACHE_IMAGE_VERSION }}}}-x86_64-unknown-linux-gnu-2026.9.16-{MISE_SHA256}-")),
         "{one}"
     );
-    let other = mise_cache_key_for_tools(
+    let other = tools_cache_key_for_tools(
         "x86_64-unknown-linux-gnu",
         "2026.9.16",
+        MISE_SHA256,
         &["actionlint@1.7.12".to_owned()],
     )
     .expect("other");
     assert_ne!(one, other, "distinct tools need distinct keys");
-    assert!(mise_cache_key_for_tools("x86_64-unknown-linux-gnu", "latest", &a).is_err());
-    assert!(mise_cache_key_for_tools("riscv-none", "2026.9.16", &a).is_err());
-    assert!(mise_cache_key_for_tools("x86_64-unknown-linux-gnu", "2026.9.16", &[]).is_err());
+    assert!(
+        tools_cache_key_for_tools("x86_64-unknown-linux-gnu", "latest", MISE_SHA256, &a).is_err()
+    );
+    assert!(tools_cache_key_for_tools("riscv-none", "2026.9.16", MISE_SHA256, &a).is_err());
+    assert!(
+        tools_cache_key_for_tools("x86_64-unknown-linux-gnu", "2026.9.16", MISE_SHA256, &[])
+            .is_err()
+    );
+    assert!(
+        tools_cache_key_for_tools("x86_64-unknown-linux-gnu", "2026.9.16", "bad-sha", &a).is_err()
+    );
+    assert_ne!(
+        one.replace("${{ env.VELNOR_CACHE_IMAGE_VERSION }}", "20260928.1"),
+        one.replace("${{ env.VELNOR_CACHE_IMAGE_VERSION }}", "20261003.1")
+    );
+    assert_ne!(
+        one,
+        tools_cache_key_for_tools("x86_64-unknown-linux-gnu", "2026.9.16", &"a".repeat(64), &a,)
+            .expect("different Mise binary pin")
+    );
 }
 
 #[test]
@@ -138,30 +158,27 @@ fn job_tools_inferred_from_quoted_spec() {
 }
 
 #[test]
-fn setup_p08_enables_builtin_cache_with_key() {
-    let key = mise_cache_key_for_tools(
-        "x86_64-unknown-linux-gnu",
-        "2026.9.16",
-        &["rust@1.98.1".to_owned()],
-    )
-    .expect("key");
-    let step = mise_setup_step_p08(&mise(), &key).expect("setup");
-    let StepKind::Action { with, .. } = &step.kind else {
+fn setup_p08_disables_implicit_cache_and_uses_isolated_bootstrap_home() {
+    let step = mise_setup_step_p08(&mise()).expect("setup");
+    let StepKind::Action { with, env, .. } = &step.kind else {
         panic!("setup must be an action step");
     };
-    assert_eq!(with.get("cache").map(String::as_str), Some("true"));
+    assert_eq!(with.get("cache").map(String::as_str), Some("false"));
     assert_eq!(
         with.get("cache_save").map(String::as_str),
         Some("false"),
         "setups restore-only: the action saves only inside its disabled install leg"
     );
+    assert!(!with.contains_key("cache_key"));
+    assert_eq!(with.len(), 6);
     assert_eq!(
-        with.get("cache_key").map(String::as_str),
-        Some(key.as_str())
+        env.get("MISE_DATA_DIR").map(String::as_str),
+        Some("${{ runner.temp }}/velnor/mise-bootstrap")
     );
-    assert_eq!(with.len(), 7);
-    assert!(mise_setup_step_p08(&mise(), "bad key").is_err());
-    assert!(mise_setup_step_p08(&mise(), "mise-tools-v1-plan").is_err());
+    assert_eq!(env.get("MISE_NO_CONFIG").map(String::as_str), Some("1"));
+    assert_eq!(env.get("MISE_NO_ENV").map(String::as_str), Some("1"));
+    assert_eq!(env.get("MISE_NO_HOOKS").map(String::as_str), Some("1"));
+    assert_eq!(env.get("MISE_LOCKFILE").map(String::as_str), Some("0"));
 }
 
 #[test]
@@ -173,7 +190,6 @@ fn sources_subset_accepted_under_owned_home_only() {
         format!("{home}/registry/cache"),
         format!("{home}/registry/index"),
         format!("{home}/git/db"),
-        format!("{home}/.crates.toml"),
     ];
     assert!(
         cache_action_step(true, &uses, "sources", "k", &[], &good).is_ok(),
@@ -303,11 +319,11 @@ fn step_conditions_serialize_as_if_with_upload_default()
         &fixture_ctx(),
     )?;
     let save_at = text.find("Save Cargo sources").expect("save step");
+    let expected_source_condition =
+        format!("Save Cargo sources\n        if: {CACHE_SAVE_CONDITION}");
     assert!(
-        text[save_at..].starts_with(
-            "Save Cargo sources\n        if: success() && github.event_name == 'push'",
-        ),
-        "save carries push-only if:\n{text}"
+        text[save_at..].starts_with(&expected_source_condition),
+        "save carries protected-default if:\n{text}"
     );
     let check_at = text.find("- name: Check\n").expect("check step");
     assert!(
@@ -324,66 +340,6 @@ fn step_conditions_serialize_as_if_with_upload_default()
     assert!(
         text[upload_at..].starts_with("Upload matrix report\n        if: always()"),
         "upload keeps always() default:\n{text}"
-    );
-    Ok(())
-}
-
-#[test]
-fn strict_render_elects_single_writer_per_shared_key()
--> Result<(), velnor_actions_workflow_renderer::RenderError> {
-    use velnor_actions_workflow_renderer::{plan_step, shell_step};
-    let prepare = || {
-        shell_step(
-            "Prepare pinned tools",
-            vec![
-                "mise".to_owned(),
-                "install".to_owned(),
-                "rust@1.98.1".to_owned(),
-            ],
-            BTreeMap::new(),
-        )
-    };
-    let text = strict(
-        &fixture_ir(vec![
-            job(
-                "plan",
-                "Plan",
-                Vec::new(),
-                vec![prepare()?, acquire_fixture()?, plan_step()],
-            ),
-            job(
-                "rust-demo",
-                "Rust / demo",
-                vec!["plan".to_owned()],
-                vec![prepare()?],
-            ),
-        ]),
-        &fixture_ctx(),
-    )?;
-    let plan_at = text.find("\n  plan:\n").expect("plan block");
-    let crate_at = text.find("\n  rust-demo:\n").expect("crate block");
-    let (plan_block, crate_block) = text.split_at(crate_at);
-    let plan_block = &plan_block[plan_at..];
-    assert!(
-        plan_block.contains("- name: Save Mise tools"),
-        "plan wins the shared key:\n{text}"
-    );
-    assert!(
-        plan_block.contains("if: success() && github.event_name == 'push'"),
-        "winner saves push-only:\n{text}"
-    );
-    assert!(
-        !crate_block.contains("Save Mise tools"),
-        "crate restores read-only:\n{text}"
-    );
-    assert_eq!(
-        text.matches("- name: Save Mise tools").count(),
-        1,
-        "exactly one saver per key:\n{text}"
-    );
-    assert!(
-        !text.contains("cache_save: ${{"),
-        "no setup promises a built-in save:\n{text}"
     );
     Ok(())
 }

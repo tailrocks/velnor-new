@@ -217,3 +217,104 @@ fn pinned_exec_rejects_empty_toolchain_and_program() {
         Err(MiseError::EmptyCommand { .. })
     ));
 }
+
+#[test]
+fn official_gh_api_uses_internal_config_after_scrubbing_parent() -> Result<(), String> {
+    let request = PinnedToolExec::new(
+        vec![PinnedTool::Gh],
+        OsStr::new("gh"),
+        strings(&[
+            "api",
+            "repos/tailrocks/velnor-new",
+            "--hostname",
+            "github.com",
+            "--jq",
+            ".default_branch",
+        ]),
+    )
+    .map_err(|err| err.to_string())?;
+    let config_dir = tempfile::tempdir().map_err(|err| err.to_string())?;
+    let command = request
+        .command_with_isolated_gh_config(&pinned(), config_dir.path())
+        .map_err(|err| err.to_string())?;
+    let parent = vec![
+        (OsString::from("GH_CONFIG_DIR"), OsString::from("/hostile")),
+        (OsString::from("GH_HOST"), OsString::from("github.attacker")),
+        (OsString::from("GH_TOKEN"), OsString::from("token")),
+    ];
+    let env = command.spawn_env(&parent);
+    let configs: Vec<_> = env
+        .iter()
+        .filter(|(key, _)| key == "GH_CONFIG_DIR")
+        .collect();
+    assert_eq!(configs.len(), 1);
+    assert_eq!(configs[0].1, config_dir.path().as_os_str());
+    assert!(!env.iter().any(|(key, _)| key == "GH_HOST"));
+    assert!(
+        env.iter()
+            .any(|(key, value)| key == "GH_TOKEN" && value == "token")
+    );
+    Ok(())
+}
+
+#[test]
+fn isolated_gh_config_rejects_nonofficial_host_and_non_api_payload() -> Result<(), String> {
+    let bad_host = PinnedToolExec::new(
+        vec![PinnedTool::Gh],
+        OsStr::new("gh"),
+        strings(&[
+            "api",
+            "repos/tailrocks/velnor-new",
+            "--hostname",
+            "github.attacker",
+            "--jq",
+            ".default_branch",
+        ]),
+    )
+    .map_err(|err| err.to_string())?;
+    let directory = tempfile::tempdir().map_err(|err| err.to_string())?;
+    assert!(
+        bad_host
+            .command_with_isolated_gh_config(&pinned(), directory.path())
+            .is_err()
+    );
+
+    let non_api = PinnedToolExec::new(
+        vec![PinnedTool::Gh],
+        OsStr::new("gh"),
+        strings(&["run", "list"]),
+    )
+    .map_err(|err| err.to_string())?;
+    assert!(
+        non_api
+            .command_with_isolated_gh_config(&pinned(), directory.path())
+            .is_err()
+    );
+    Ok(())
+}
+
+#[test]
+fn isolated_gh_config_rejects_nonempty_directory() -> Result<(), String> {
+    let request = PinnedToolExec::new(
+        vec![PinnedTool::Gh],
+        OsStr::new("gh"),
+        strings(&[
+            "api",
+            "repos/tailrocks/velnor-new",
+            "--hostname",
+            "github.com",
+            "--jq",
+            ".default_branch",
+        ]),
+    )
+    .map_err(|err| err.to_string())?;
+    let directory = tempfile::tempdir().map_err(|err| err.to_string())?;
+    std::fs::write(directory.path().join("hosts.yml"), "github.com: hostile\n")
+        .map_err(|err| err.to_string())?;
+    assert!(
+        request
+            .command_with_isolated_gh_config(&pinned(), directory.path())
+            .is_err()
+    );
+    Ok(())
+}

@@ -16,7 +16,7 @@
 //! well-formed requests never reach this fallback.
 
 use serde::Deserialize;
-use velnor_actions_contract::{RequiredJobResult, WorkflowEvent};
+use velnor_actions_contract::{CacheWriterFacts, RequiredJobResult, WorkflowEvent};
 
 use super::MergeRequest;
 use crate::cover::shard::{ResourceLimits, ShardProof};
@@ -32,6 +32,9 @@ struct LenientRequest {
     /// Merge-time triggering event captured at assembly.
     #[serde(default)]
     actual_event: Option<WorkflowEvent>,
+    /// Current run writer facts; preserved through the lenient fallback.
+    #[serde(default)]
+    actual_cache_writer: CacheWriterFacts,
     /// Head-bound candidate attestation; required in candidate mode.
     #[serde(default)]
     candidate_attestation: Option<serde_json::Value>,
@@ -101,6 +104,7 @@ pub(crate) fn lenient_request(envelope: &serde_json::Value) -> Option<MergeReque
         schema: raw.schema,
         run_key: raw.run_key,
         actual_event: raw.actual_event,
+        actual_cache_writer: raw.actual_cache_writer,
         candidate_attestation,
         plan,
         matrix,
@@ -150,4 +154,46 @@ where
             }
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn lenient_fallback_preserves_cache_writer_facts() {
+        let envelope = serde_json::json!({
+            "schema": 1,
+            "run_key": "r1-a1",
+            "actual_event": "push",
+            "actual_cache_writer": {
+                "event": "push",
+                "git_ref": "refs/heads/main",
+                "default_branch": "main",
+                "repository": "o/r",
+                "event_repository": "o/r"
+            },
+            "plan": "malformed staged plan",
+            "matrix_reports": [],
+            "required_job_ids": [],
+            "required_jobs": []
+        });
+        let request = lenient_request(&envelope).expect("well-formed envelope");
+        assert_eq!(request.actual_event, Some(WorkflowEvent::Push));
+        assert_eq!(
+            request.actual_cache_writer,
+            CacheWriterFacts {
+                event: Some(WorkflowEvent::Push),
+                git_ref: Some("refs/heads/main".to_owned()),
+                default_branch: Some("main".to_owned()),
+                repository: Some("o/r".to_owned()),
+                event_repository: Some("o/r".to_owned()),
+            }
+        );
+        assert!(
+            request
+                .assembly_errors
+                .contains(&"unparsable_plan".to_owned())
+        );
+    }
 }
