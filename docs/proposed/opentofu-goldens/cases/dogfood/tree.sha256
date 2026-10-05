@@ -11,11 +11,11 @@ c20a84e7ad6a52544c385086b4ce0dbb0ead0e76c9655e1682fd3d85b78ecd21  ./.github/acti
 a88d087045b854c30133558455b0c824d3b55c2e60403c542402d38980dc69fb  ./.github/actions/generator-release-qualify-linux/action.yml
 7a0655cea003c1da24978d0228dd1a87ef01eb16f21128b0e5411f1dba795747  ./.github/actions/generator-release-qualify-macos-intel/action.yml
 638f25ba758258048e427a16e9b4c7014f8ebc33dfdbef9e2a0aacbc6ede8b65  ./.github/actions/generator-release-qualify-macos/action.yml
-c1098afeb9f939f0f9518dca251ae6e8207d75a18aee0ab0e7dc16655b176551  ./.github/workflows/ci.yml
+a7154f4655e691ca64984b1828138b6289f74337cb85e872b4671b01b9b86abb  ./.github/workflows/ci.yml
 c6873ba49e8c184dd71d7b80d55c9734ee4e491429a798f07d7e3c66285d729b  ./.github/workflows/freshness.yml
 2da100e89a9964f5ddbe4e8a04e60fdb02bdaf4aa1b326a008efbb887db64a94  ./.github/workflows/product-release-binary.yml
 348491d04fcb4adda4c560575f54820f811597c4189f88318cf7c0242c42554e  ./.github/workflows/product-release-generator.yml
 68cfaea9c49416f1c1037ee142ec47890fd51fa5a7338a01345716c344d7559d  ./.github/workflows/product-release-images.yml
 3b8152db14503ea8c21ea55f0efea2ca7a83f3437db72c9466cf5d54968860d0  ./.github/workflows/product-release.yml
-9b7a474d8833caddd8128759eed845357847ced89a329ae81e65d1f045829fd8  ./.github/workflows/qualification.yml
+3e34a910b9f44908fefd4ac07d344ced0a42176af472d8b5d56e8d7342c74123  ./.github/workflows/qualification.yml
 link ./.github/CLAUDE.md -> AGENTS.md

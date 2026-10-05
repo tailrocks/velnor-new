@@ -207,12 +207,15 @@ prevents a cache from an earlier dispatch from satisfying this check. The
 reader's `cache-hit=false` assertion intentionally expects the action's
 run-specific writer key to be reached by its restore prefix.
 
-Both jobs set `MBX_GC_AUTO=1` intentionally: this exercises the same hosted
-policy that Velnor emits for production MBX object-cache jobs, overriding the
-action's hosted default. Dispatch once from protected `main` with mode
+Both jobs set `MBX_GC_AUTO=1` for this protected-main round-trip probe.
+Production MBX jobs set `MBX_SHARE_OUT_DIR=0` on every typed runner lane;
+only hosted Linux jobs set `MBX_GC_AUTO=0`. Scale Set jobs keep MBX's normal
+collection behavior before export. This probe does not exercise either
+production lane route. Dispatch once from protected `main` with mode
 `mbx-cache-roundtrip`; the writer and reader run in order at the same SHA.
 
-This is a small end-to-end action and cache round-trip probe. It does not
-measure disk or inode peaks and does not qualify the affected ChainArgos
-workload. That evidence must come from the consumer's affected crates after
-adoption; a green probe alone is not an ENOSPC repair verdict.
+This is a small end-to-end action and cache round-trip probe. The writer
+samples `df -B1 -P` and `df -i -P` on `$RUNNER_TEMP` after the probe build.
+The reader prints those same lines and tees the MBX stats JSON before the
+`jq -e` checks. It still does not qualify the affected ChainArgos workload.
+A green probe alone is not an ENOSPC repair verdict.

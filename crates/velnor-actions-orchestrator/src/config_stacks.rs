@@ -138,6 +138,23 @@ mod tests {
     }
 
     #[test]
+    fn workflow_verification_tasks_parse_and_default_empty() {
+        let load = load_config;
+        let root = rooted(
+            "schema = 1\n[[workflow.tasks]]\nid = \"native-swift-format\"\nkind = \"verification\"\nmise_task = \"desktop-format-check\"\nrunner = \"macos-arm64\"\ntimeout_minutes = 10\n",
+        );
+        let config = load(root.path()).expect("verification task");
+        let task = config.workflow.tasks.first().expect("declared task");
+        assert_eq!(task.id, "native-swift-format");
+        assert_eq!(task.mise_task, "desktop-format-check");
+        assert_eq!(task.runner.runs_on(), "macos-15");
+
+        let root = rooted("schema = 1\n");
+        let config = load(root.path()).expect("minimal config");
+        assert!(config.workflow.tasks.is_empty());
+    }
+
+    #[test]
     fn render_unsafe_stack_values_are_rejected() {
         let load = load_config;
         for (body, want) in [

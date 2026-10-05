@@ -5,6 +5,7 @@
 //! (`perf:` lines), not hosted deployment performance.
 
 use velnor_actions_orchestrator::{GenerateOptions, generate, prepare};
+use velnor_actions_workflow_renderer::MAX_WORKFLOW_BYTES;
 
 use crate::impl_common::TestResult;
 use crate::impl_perf_p13::perf_harness_p13::{perf_line, timed};
@@ -53,10 +54,10 @@ fn tofu_prepare_scales_to_100_roots() -> TestResult {
     Ok(())
 }
 
-/// Generate wall time on 1/10/100 roots (preview dir, no writes).
+/// Generate below the workflow-file limit and fail closed above it.
 #[test]
 fn tofu_generate_scales_with_root_count() -> TestResult {
-    for roots in [1_usize, 10, 100] {
+    for roots in [1_usize, 10, 60, 100] {
         let repo = tofu_repo(roots)?;
         let root = repo.path();
         let (prep, prep_ms) = timed(|| prepare(root));
@@ -64,15 +65,50 @@ fn tofu_generate_scales_with_root_count() -> TestResult {
         let out = tempfile::TempDir::new()?;
         let target = out.path().join(format!("gen-{roots}"));
         let opts = GenerateOptions {
-            output_dir: Some(target),
+            output_dir: Some(target.clone()),
         };
-        let (report, gen_ms) = timed(|| generate(&prep, &opts));
-        let report = report?;
-        assert!(!report.files_written.is_empty(), "files staged");
-        eprintln!(
-            "perf: op=generate roots={roots} prepare_ms={prep_ms} generate_ms={gen_ms} files={}",
-            report.files_written.len()
-        );
+        let (result, gen_ms) = timed(|| generate(&prep, &opts));
+        if roots == 100 {
+            let Err(error) = result else {
+                return Err(std::io::Error::other(
+                    "oversized workflow generation unexpectedly succeeded",
+                )
+                .into());
+            };
+            let diagnostic = error.to_string();
+            let actual_bytes = diagnostic
+                .strip_prefix(
+                    "render: invalid workflow: workflow_too_large:.github/workflows/ci.yml:",
+                )
+                .and_then(|detail| detail.strip_suffix(&format!(":{MAX_WORKFLOW_BYTES}")))
+                .ok_or_else(|| format!("unexpected workflow-size diagnostic: {diagnostic}"))?
+                .parse::<usize>()?;
+            assert!(
+                actual_bytes > MAX_WORKFLOW_BYTES,
+                "diagnostic reported {actual_bytes} bytes"
+            );
+            assert!(
+                !target.exists(),
+                "failed preview generation left a partial output tree"
+            );
+            eprintln!(
+                "perf: op=generate roots={roots} prepare_ms={prep_ms} generate_ms={gen_ms} failed_closed_bytes={actual_bytes} limit_bytes={MAX_WORKFLOW_BYTES}"
+            );
+        } else {
+            let report = result?;
+            assert!(!report.files_written.is_empty(), "files staged");
+            let workflow = std::fs::read(target.join(".github/workflows/ci.yml"))?;
+            assert!(
+                workflow.len() <= MAX_WORKFLOW_BYTES,
+                "{roots} roots generated {} bytes, limit is {MAX_WORKFLOW_BYTES}",
+                workflow.len()
+            );
+            eprintln!(
+                "perf: op=generate roots={roots} prepare_ms={prep_ms} generate_ms={gen_ms} files={} ci_bytes={}",
+                report.files_written.len(),
+                workflow.len()
+            );
+        }
     }
     Ok(())
 }

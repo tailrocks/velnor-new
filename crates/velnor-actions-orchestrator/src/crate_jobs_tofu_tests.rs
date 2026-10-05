@@ -3,6 +3,7 @@
 //! Declared via `#[path]` from `crate_jobs.rs` under `cfg(test)`.
 
 use super::*;
+use crate::matrix_step::step_name_for;
 use velnor_actions_rust::TaskKind;
 
 /// Tofu proposal via the T12 adapter constructor.

@@ -21,7 +21,11 @@ fn request() -> Schema2WorkflowRequest {
                 version: "2026.1.0".to_owned(),
                 sha256: "a".repeat(64),
             },
-            mbx_action_uses: format!("{}@{}", crate::cache_steps::MBX_ACTION_NAME, "b".repeat(40)),
+            candidate_action_uses: format!(
+                "{}@{}",
+                crate::cache_steps::MBX_ACTION_NAME,
+                "b".repeat(40)
+            ),
             mbx_version: "1.0.0".to_owned(),
             rust_version: "1.98.1".to_owned(),
         }),
