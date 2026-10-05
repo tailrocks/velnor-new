@@ -1,5 +1,11 @@
 # MBX native-owner implementation evidence — 2026-10-05
 
+This is a historical implementation checkpoint, not a current qualification
+record. The protected production pin remains MBX `1.21.1` under the #29 hold;
+the `1.22.0` proposal recorded below did not establish release qualification.
+The current source-bound platform-identity and cold-restore requirements are
+tracked separately from this earlier test evidence.
+
 This checkpoint records verified implementation and test evidence. It does
 not qualify a release, establish performance savings, or prove hosted cache
 reuse.

@@ -155,6 +155,15 @@
       "reason": "probe 2026-10-04T11:28:54Z found latest v2026.10.1 at the recorded release source; keep 2026.9.18 until the #6 update set"
     },
     {
+      "expires": "2026-10-18",
+      "granted": "2026-10-04",
+      "held_version": "1.21.1",
+      "issue": "#29",
+      "key": "mr-boxington",
+      "owner": "@donbeave",
+      "reason": "latest v1.22.0 resolves to commit 10474d43342ad65df3b02323dd8092d18ab38101; keep the qualified 1.21.1 pin pending #29 current-source cache lifecycle, disk, and input qualification"
+    },
+    {
       "expires": "2026-10-15",
       "granted": "2026-10-01",
       "held_version": "1.98.1",
@@ -187,10 +196,10 @@
       "checked_at": "2026-10-05T00:51:30Z",
       "latest": "v1.22.0",
       "name": "mr-boxington",
-      "pinned": "1.22.0",
-      "qualified": "1.22.0",
+      "pinned": "1.21.1",
+      "qualified": "1.21.1",
       "source": "https://api.github.com/repos/jdx/mr-boxington/releases/latest",
-      "status": "current",
+      "status": "held",
       "latest_sha": "10474d43342ad65df3b02323dd8092d18ab38101"
     },
     {
