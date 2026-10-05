@@ -7,9 +7,13 @@ use std::path::{Path, PathBuf};
 use crate::error::HostError;
 use crate::reconcile::IntentRow;
 
+#[path = "journal_completion.rs"]
+mod completion;
 mod launch;
 mod schema;
 mod worker_volume;
+
+pub(crate) use completion::{CleanupClaim, CompletedLaunch, CompletionIdentity};
 
 /// Durable intent row.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
