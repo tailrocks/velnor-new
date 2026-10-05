@@ -1,6 +1,27 @@
 //! Unix-socket Docker client. The configured path is the only endpoint.
 
+use std::future::Future;
+use std::time::Duration;
+
 use crate::error::HostError;
+
+/// Deadline for one request to the selected Docker engine.
+pub(crate) const DOCKER_OPERATION_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// Bound one Docker request while preserving its result for caller classification.
+pub(crate) async fn docker_deadline<F: Future>(future: F) -> Result<F::Output, HostError> {
+    docker_deadline_after(future, DOCKER_OPERATION_TIMEOUT).await
+}
+
+/// Deadline seam for tests and callers with a narrower operation budget.
+pub(crate) async fn docker_deadline_after<F: Future>(
+    future: F,
+    timeout: Duration,
+) -> Result<F::Output, HostError> {
+    tokio::time::timeout(timeout, future)
+        .await
+        .map_err(|_| HostError::Docker)
+}
 
 /// Open the selected socket. This is the only constructor the host calls.
 ///
