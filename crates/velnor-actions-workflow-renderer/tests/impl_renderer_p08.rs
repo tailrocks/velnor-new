@@ -1,49 +1,14 @@
-//! P08 renderer cases: built-in Mise cache, sources paths, rust-cache gates.
+//! P08 renderer cases: V2 tools selectors, sources paths, rust-cache gates.
 
 use std::collections::BTreeMap;
 use velnor_actions_contract::{Job, JobTimeout, StepKind};
 use velnor_actions_workflow_renderer::cache_p08::{
     check_mbx_before_fetch, check_no_rust_cache_with_mbx, infer_job_tools,
-    mise_cache_key_for_tools, mise_setup_step_p08, tools_digest,
 };
 use velnor_actions_workflow_renderer::steps::cache_action_step;
+use velnor_actions_workflow_renderer::{MiseSetup, setup::mise_setup_step};
 
 use super::impl_renderer_fixtures::*;
-
-#[test]
-fn builtin_key_shares_same_tools_without_job_id() {
-    let a = ["rust@1.98.1".to_owned(), "mr-boxington@1.19.0".to_owned()];
-    let b = ["mr-boxington@1.19.0".to_owned(), "rust@1.98.1".to_owned()];
-    let one = mise_cache_key_for_tools("x86_64-unknown-linux-gnu", "2026.9.16", &a).expect("key");
-    let two = mise_cache_key_for_tools("x86_64-unknown-linux-gnu", "2026.9.16", &b).expect("key");
-    assert_eq!(one, two, "tool order must not fork keys");
-    assert!(!one.contains("plan") && !one.contains("rust-"), "{one}");
-    assert!(
-        one.starts_with("mise-v1-x86_64-unknown-linux-gnu-2026.9.16-"),
-        "{one}"
-    );
-    let other = mise_cache_key_for_tools(
-        "x86_64-unknown-linux-gnu",
-        "2026.9.16",
-        &["actionlint@1.7.12".to_owned()],
-    )
-    .expect("other");
-    assert_ne!(one, other, "distinct tools need distinct keys");
-    assert!(mise_cache_key_for_tools("x86_64-unknown-linux-gnu", "latest", &a).is_err());
-    assert!(mise_cache_key_for_tools("riscv-none", "2026.9.16", &a).is_err());
-    assert!(mise_cache_key_for_tools("x86_64-unknown-linux-gnu", "2026.9.16", &[]).is_err());
-}
-
-#[test]
-fn tools_digest_is_order_stable_short_hex() {
-    let digest = tools_digest(&["b@2".to_owned(), "a@1".to_owned()]);
-    assert_eq!(digest.len(), 16);
-    assert!(digest.bytes().all(|b| b.is_ascii_hexdigit()));
-    assert_eq!(
-        digest,
-        tools_digest(&["a@1".to_owned(), "b@2".to_owned(), "a@1".to_owned()])
-    );
-}
 
 #[test]
 fn job_tools_inferred_from_install_and_exec() {
@@ -138,30 +103,24 @@ fn job_tools_inferred_from_quoted_spec() {
 }
 
 #[test]
-fn setup_p08_enables_builtin_cache_with_key() {
-    let key = mise_cache_key_for_tools(
-        "x86_64-unknown-linux-gnu",
-        "2026.9.16",
-        &["rust@1.98.1".to_owned()],
-    )
-    .expect("key");
-    let step = mise_setup_step_p08(&mise(), &key).expect("setup");
+fn setup_disables_action_owned_cache_for_v2_tools_layer() {
+    let step = mise_setup_step(&MiseSetup {
+        uses: MISE_USES.to_owned(),
+        version: MISE_VERSION.to_owned(),
+        sha256: MISE_SHA256.to_owned(),
+    })
+    .expect("setup");
     let StepKind::Action { with, .. } = &step.kind else {
         panic!("setup must be an action step");
     };
-    assert_eq!(with.get("cache").map(String::as_str), Some("true"));
+    assert_eq!(with.get("cache").map(String::as_str), Some("false"));
     assert_eq!(
         with.get("cache_save").map(String::as_str),
         Some("false"),
-        "setups restore-only: the action saves only inside its disabled install leg"
+        "the action owns no cache restore or save"
     );
-    assert_eq!(
-        with.get("cache_key").map(String::as_str),
-        Some(key.as_str())
-    );
-    assert_eq!(with.len(), 7);
-    assert!(mise_setup_step_p08(&mise(), "bad key").is_err());
-    assert!(mise_setup_step_p08(&mise(), "mise-tools-v1-plan").is_err());
+    assert!(!with.contains_key("cache_key"));
+    assert_eq!(with.len(), 6);
 }
 
 #[test]
@@ -173,7 +132,6 @@ fn sources_subset_accepted_under_owned_home_only() {
         format!("{home}/registry/cache"),
         format!("{home}/registry/index"),
         format!("{home}/git/db"),
-        format!("{home}/.crates.toml"),
     ];
     assert!(
         cache_action_step(true, &uses, "sources", "k", &[], &good).is_ok(),
@@ -181,6 +139,9 @@ fn sources_subset_accepted_under_owned_home_only() {
     );
     for bad in [
         format!("{home}/registry/src/x"),
+        format!("{home}/.crates.toml"),
+        format!("{home}/.crates2.json"),
+        format!("{home}/bin"),
         format!("{home}/credentials.toml"),
         format!("{home}/../escape"),
         "~/.cargo/registry/cache".to_owned(),

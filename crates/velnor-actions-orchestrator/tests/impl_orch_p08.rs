@@ -2,7 +2,7 @@
 //!
 //! Cargo-only fixtures use pinned `rust-cache` (registry-only, shared key);
 //! MBX fixtures use objects + one shared `actions/cache` snapshot (plan
-//! writes, crates read). Tools use the built-in Mise cache only.
+//! writes, crates read). Tools use the runtime-qualified V2 Mise cache.
 
 use std::fs;
 
@@ -63,26 +63,42 @@ fn job_names(job: &str, mbx: bool) -> Result<Vec<String>, Box<dyn std::error::Er
 }
 
 #[test]
-fn c2_builtin_mise_restore_with_elected_tools_saves() -> TestResult {
+fn c2_v2_mise_cache_restores_with_elected_tools_saves() -> TestResult {
     for mbx in [false, true] {
         let yaml = yaml_for(mbx)?;
         assert!(
-            !yaml.contains("Restore Mise tools"),
-            "restores stay built-in (mbx={mbx})"
+            yaml.contains("- name: Restore Mise tools"),
+            "V2 tools cache restores explicitly (mbx={mbx})"
         );
         assert!(
             yaml.contains("- name: Save Mise tools"),
             "elected writers save (mbx={mbx})"
         );
+        assert!(!yaml.contains("mise-tools-v1-"), "V2 tool keys (mbx={mbx})");
         assert!(
-            !yaml.contains("mise-tools-v1-"),
-            "no role-suffixed tools keys (mbx={mbx})"
+            yaml.contains("key: mise-tools-v2-"),
+            "runtime-qualified tools cache key (mbx={mbx})"
         );
         assert!(
-            yaml.contains("cache_key: mise-v1-"),
-            "built-in cache key (mbx={mbx})"
+            yaml.contains("outputs.enabled == 'true'"),
+            "runtime gate (mbx={mbx})"
         );
-        assert!(yaml.contains("cache: \"true\""), "built-in on (mbx={mbx})");
+        assert!(
+            yaml.contains("cache: \"false\""),
+            "action cache disabled (mbx={mbx})"
+        );
+        assert!(
+            !yaml.contains("cache_key:"),
+            "no action-owned cache key (mbx={mbx})"
+        );
+        for path in [
+            "${{ runner.temp }}/velnor/rustup",
+            "${{ runner.temp }}/velnor/cargo/.crates.toml",
+            "${{ runner.temp }}/velnor/cargo/.crates2.json",
+            "${{ runner.temp }}/velnor/cargo/bin",
+        ] {
+            assert!(yaml.contains(path), "V2 payload misses {path} (mbx={mbx})");
+        }
     }
     Ok(())
 }
@@ -91,8 +107,8 @@ fn c2_builtin_mise_restore_with_elected_tools_saves() -> TestResult {
 fn c3_sources_subset_at_owned_home_single_writer() -> TestResult {
     let yaml = yaml_for(true)?;
     for need in [
-        "${{ runner.temp }}/velnor/cargo/registry/cache",
         "${{ runner.temp }}/velnor/cargo/registry/index",
+        "${{ runner.temp }}/velnor/cargo/registry/cache",
         "${{ runner.temp }}/velnor/cargo/git/db",
         "velnor-v1-sources-",
         "hashFiles('Cargo.lock')",
@@ -289,13 +305,18 @@ fn c11_cache_saves_push_only_prs_and_forks_read_only() -> TestResult {
     Ok(())
 }
 
-/// YAML: one push-gated tools save per restored `mise-v1-` key (plus the
-/// sources save), every setup restore-only.
+/// YAML: one push-gated tools save per restored V2 key (plus the sources
+/// save), every action-owned Mise cache disabled.
 fn assert_tools_saves_push_gated_per_key(yaml: &str) {
     let mut keys = std::collections::BTreeSet::new();
+    let mut in_tools_restore = false;
     for line in yaml.lines() {
-        if let Some(key) = line.trim().strip_prefix("cache_key: ") {
-            keys.insert(key.to_owned());
+        if let Some(name) = line.trim().strip_prefix("- name: ") {
+            in_tools_restore = name.trim_matches('"') == "Restore Mise tools";
+        }
+        if in_tools_restore && let Some(key) = line.trim().strip_prefix("key: ") {
+            keys.insert(key.trim_matches('"').to_owned());
+            in_tools_restore = false;
         }
     }
     assert!(!keys.is_empty(), "at least one restored tools key:\n{yaml}");
@@ -323,10 +344,10 @@ fn assert_tools_saves_push_gated_per_key(yaml: &str) {
     );
     for line in yaml.lines() {
         if let Some(key) = line.trim().strip_prefix("key: ")
-            && key.starts_with("mise-v1-")
+            && key.starts_with("mise-tools-v2-")
         {
             assert!(
-                keys.contains(key),
+                keys.contains(key.trim_matches('"')),
                 "tools save archives a restored key:\n{yaml}"
             );
         }
