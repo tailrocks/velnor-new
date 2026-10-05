@@ -214,6 +214,7 @@ action's hosted default. Dispatch once from protected `main` with mode
 
 This is a small end-to-end action and cache round-trip probe. The writer
 samples `df -B1 -P` and `df -i -P` on `$RUNNER_TEMP` after the probe build.
-The reader prints those same lines and tees the MBX stats JSON before the
-`jq -e` checks. It still does not qualify the affected ChainArgos workload.
+The reader prints those same lines. `tee` writes each MBX stats JSON to the
+step log and to a file, and `jq -e` reads that file. It still does not qualify
+the affected ChainArgos workload.
 A green probe alone is not an ENOSPC repair verdict.
