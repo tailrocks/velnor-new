@@ -42,6 +42,7 @@ fn assert_generator(body: &str, actions: &Actions) -> Result<(), Box<dyn std::er
     assert_source_gate(body)?;
     security_snapshots::assert_isolated_candidate_execution(body, actions)?;
     assert_asset_catalog(&action_text(actions));
+    assert_pinned_gh_invocations(&action_text(actions));
     assert_target_builds(body, actions)?;
     assert_manifest_job(body, actions)?;
     assert_publish_job(body, actions)?;
@@ -208,6 +209,11 @@ fn assert_manifest_job(body: &str, actions: &Actions) -> Result<(), Box<dyn std:
     assert_attest(body, actions, "attest-manifest", "ubuntu-26.04")?;
     assert_job_action(body, "attest-manifest", "generator-release-manifest")?;
     let manifest = action(actions, "generator-release-manifest")?;
+    assert!(manifest.contains("name: Setup Mise"), "{manifest}");
+    assert!(
+        manifest.contains("mise --no-config --no-env --no-hooks install gh@2.102.0"),
+        "{manifest}"
+    );
     assert!(
         manifest.contains("create-release-manifest.sh '0.1.1' 'tailrocks/velnor-new'"),
         "{manifest}"
@@ -241,6 +247,20 @@ fn assert_manifest_job(body: &str, actions: &Actions) -> Result<(), Box<dyn std:
     assert!(manifest_job.contains("- attest-linux"), "{manifest_job}");
     assert!(manifest_job.contains("- attest-macos"), "{manifest_job}");
     Ok(())
+}
+
+fn assert_pinned_gh_invocations(actions: &str) {
+    const PREFIX: &str = "mise --no-config --no-env --no-hooks exec gh@2.102.0 -- ";
+    for (offset, _) in actions.match_indices("gh ") {
+        let prefix_start = offset
+            .checked_sub(PREFIX.len())
+            .expect("gh invocation prefix");
+        assert_eq!(
+            &actions[prefix_start..offset],
+            PREFIX,
+            "all generated release GitHub CLI commands must select the exact Mise pin"
+        );
+    }
 }
 
 fn assert_publish_job(body: &str, actions: &Actions) -> Result<(), Box<dyn std::error::Error>> {

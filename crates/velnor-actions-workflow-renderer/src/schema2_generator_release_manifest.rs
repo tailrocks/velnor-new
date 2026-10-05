@@ -30,12 +30,13 @@ pub(super) fn job(
         .iter()
         .map(|asset| asset.attest_job)
         .collect::<Vec<_>>();
-    let mut steps = ASSETS
-        .iter()
-        .flat_map(|asset| {
-            assets::download_steps(*asset, &format!("Download {} assets", asset.target))
-        })
-        .collect::<Vec<_>>();
+    let mut steps = vec![
+        workflow_steps::mise_step(),
+        workflow_steps::bash_step("Install pinned GitHub CLI", &assets::install_pinned_gh()),
+    ];
+    steps.extend(ASSETS.iter().flat_map(|asset| {
+        assets::download_steps(*asset, &format!("Download {} assets", asset.target))
+    }));
     let bundle_path = manifest_attestation_bundle_path();
     steps.extend([
         workflow_steps::bash_step(
@@ -90,9 +91,10 @@ pub(super) fn publish_script() -> String {
     let assets = release_asset_paths();
     let preflight = tag_preflight_script();
     let postflight = published_release_verify_script();
-    format!(
-        "set -eu\ntag=\"v{VERSION}\"\n{verify}\n{preflight}\ngh release create \"$tag\" -R \"${{GITHUB_REPOSITORY}}\" --target \"$GITHUB_SHA\" --title \"velnor-actions $tag\" --latest=false --notes \"velnor-actions {VERSION} built from ${{GITHUB_SHA}}.\" {assets}\n{postflight}"
-    )
+    let create = assets::pinned_gh(&format!(
+        "release create \"$tag\" -R \"${{GITHUB_REPOSITORY}}\" --target \"$GITHUB_SHA\" --title \"velnor-actions $tag\" --latest=false --notes \"velnor-actions {VERSION} built from ${{GITHUB_SHA}}.\" {assets}"
+    ));
+    format!("set -eu\ntag=\"v{VERSION}\"\n{verify}\n{preflight}\n{create}\n{postflight}")
 }
 
 /// Require confirmed 404 responses for both immutable tag and release lookups.
@@ -108,8 +110,12 @@ pub(super) fn published_release_verify_script() -> String {
         .map(|path| format!("  '{path}'"))
         .collect::<Vec<_>>()
         .join("\n");
+    let tag_ref = assets::pinned_gh("api \"repos/$GITHUB_REPOSITORY/git/ref/tags/$tag\"");
+    let tag_object =
+        assets::pinned_gh("api \"repos/$GITHUB_REPOSITORY/git/tags/$ref_sha\" --jq .object.sha");
+    let release_lookup = assets::pinned_gh("api \"repos/$GITHUB_REPOSITORY/releases/tags/$tag\"");
     format!(
-        "set -eu\ntag=\"v{VERSION}\"\nref=\"$(gh api \"repos/$GITHUB_REPOSITORY/git/ref/tags/$tag\")\"\nref_type=\"$(printf '%s\\n' \"$ref\" | jq -er .object.type)\"\nref_sha=\"$(printf '%s\\n' \"$ref\" | jq -er .object.sha)\"\ncase \"$ref_type\" in\n  commit) tag_commit=\"$ref_sha\" ;;\n  tag) tag_commit=\"$(gh api \"repos/$GITHUB_REPOSITORY/git/tags/$ref_sha\" --jq .object.sha)\" ;;\n  *) echo \"release tag has unexpected object type: $ref_type\" >&2; exit 1 ;;\nesac\ntest \"$tag_commit\" = \"$GITHUB_SHA\"\nrelease=\"$(gh api \"repos/$GITHUB_REPOSITORY/releases/tags/$tag\")\"\nprintf '%s\\n' \"$release\" | jq -e --arg tag \"$tag\" '.tag_name == $tag and .draft == false and .prerelease == false and .immutable == true' > /dev/null\npaths=(\n{bash_paths}\n)\ntest \"$(printf '%s\\n' \"$release\" | jq -r '.assets | length')\" -eq {}\nfor path in \"${{paths[@]}}\"; do\n  name=\"${{path##*/}}\"\n  digest=\"$(sha256sum \"$path\" | awk 'NR == 1 {{ print $1; next }} {{ exit 1 }} END {{ if (NR != 1) exit 1 }}')\"\n  expected=\"sha256:$digest\"\n  actual=\"$(printf '%s\\n' \"$release\" | jq -er --arg name \"$name\" '[.assets[] | select(.name == $name)] | if length == 1 then .[0].digest else error(\"missing or duplicate release asset\") end')\"\n  test \"$actual\" = \"$expected\"\ndone",
+        "set -eu\ntag=\"v{VERSION}\"\nref=\"$({tag_ref})\"\nref_type=\"$(printf '%s\\n' \"$ref\" | jq -er .object.type)\"\nref_sha=\"$(printf '%s\\n' \"$ref\" | jq -er .object.sha)\"\ncase \"$ref_type\" in\n  commit) tag_commit=\"$ref_sha\" ;;\n  tag) tag_commit=\"$({tag_object})\" ;;\n  *) echo \"release tag has unexpected object type: $ref_type\" >&2; exit 1 ;;\nesac\ntest \"$tag_commit\" = \"$GITHUB_SHA\"\nrelease=\"$({release_lookup})\"\nprintf '%s\\n' \"$release\" | jq -e --arg tag \"$tag\" '.tag_name == $tag and .draft == false and .prerelease == false and .immutable == true' > /dev/null\npaths=(\n{bash_paths}\n)\ntest \"$(printf '%s\\n' \"$release\" | jq -r '.assets | length')\" -eq {}\nfor path in \"${{paths[@]}}\"; do\n  name=\"${{path##*/}}\"\n  digest=\"$(sha256sum \"$path\" | awk 'NR == 1 {{ print $1; next }} {{ exit 1 }} END {{ if (NR != 1) exit 1 }}')\"\n  expected=\"sha256:$digest\"\n  actual=\"$(printf '%s\\n' \"$release\" | jq -er --arg name \"$name\" '[.assets[] | select(.name == $name)] | if length == 1 then .[0].digest else error(\"missing or duplicate release asset\") end')\"\n  test \"$actual\" = \"$expected\"\ndone",
         paths.len()
     )
 }
@@ -163,16 +169,23 @@ pub(super) fn manifest_attestation_bundle_path() -> String {
 }
 
 fn attestation_fetch_script(subject: &str, name: &str) -> String {
+    let download = assets::pinned_gh(
+        "attestation download \"$subject\" --repo \"$GITHUB_REPOSITORY\" --predicate-type https://slsa.dev/provenance/v1 --limit 10",
+    );
+    let verify = assets::pinned_gh(
+        "attestation verify \"$subject\" --repo \"$GITHUB_REPOSITORY\" --bundle \"$bundle\" --source-digest \"$GITHUB_SHA\" --source-ref refs/heads/main --signer-workflow \"${{GITHUB_REPOSITORY}}/.github/workflows/generator-release.yml\" > /dev/null",
+    );
     format!(
-        "subject='{subject}'\ndigest=\"$(sha256sum \"$subject\" | awk 'NR == 1 {{ print $1; next }} {{ exit 1 }} END {{ if (NR != 1) exit 1 }}')\"\ntest \"${{#digest}}\" -eq 64\ncase \"$digest\" in *[!0123456789abcdef]*|'') exit 1 ;; esac\nbundle=\"sha256:${{digest}}.jsonl\"\ntest ! -e \"$bundle\"\ndownloaded=false\nfor attempt in 1 2 3 4 5; do\n  if gh attestation download \"$subject\" --repo \"$GITHUB_REPOSITORY\" --predicate-type https://slsa.dev/provenance/v1 --limit 10 && test -s \"$bundle\"; then downloaded=true; break; fi\n  if test \"$attempt\" -lt 5; then sleep 3; fi\ndone\ntest \"$downloaded\" = true\ngh attestation verify \"$subject\" --repo \"$GITHUB_REPOSITORY\" --bundle \"$bundle\" --source-digest \"$GITHUB_SHA\" --source-ref refs/heads/main --signer-workflow \"${{GITHUB_REPOSITORY}}/.github/workflows/generator-release.yml\" > /dev/null\nmv \"$bundle\" \"{ATTESTATION_DIR}/{name}.intoto.jsonl\""
+        "subject='{subject}'\ndigest=\"$(sha256sum \"$subject\" | awk 'NR == 1 {{ print $1; next }} {{ exit 1 }} END {{ if (NR != 1) exit 1 }}')\"\ntest \"${{#digest}}\" -eq 64\ncase \"$digest\" in *[!0123456789abcdef]*|'') exit 1 ;; esac\nbundle=\"sha256:${{digest}}.jsonl\"\ntest ! -e \"$bundle\"\ndownloaded=false\nfor attempt in 1 2 3 4 5; do\n  if {download} && test -s \"$bundle\"; then downloaded=true; break; fi\n  if test \"$attempt\" -lt 5; then sleep 3; fi\ndone\ntest \"$downloaded\" = true\n{verify}\nmv \"$bundle\" \"{ATTESTATION_DIR}/{name}.intoto.jsonl\""
     )
 }
 
 fn attestation_verify_script(subject: &str, name: &str) -> String {
     let bundle = format!("{ATTESTATION_DIR}/{name}.intoto.jsonl");
-    format!(
-        "test -f '{bundle}'\ntest ! -L '{bundle}'\ntest -s '{bundle}'\ngh attestation verify '{subject}' --repo \"$GITHUB_REPOSITORY\" --bundle '{bundle}' --source-digest \"$GITHUB_SHA\" --source-ref refs/heads/main --signer-workflow \"${{GITHUB_REPOSITORY}}/.github/workflows/generator-release.yml\" > /dev/null"
-    )
+    let verify = assets::pinned_gh(&format!(
+        "attestation verify '{subject}' --repo \"$GITHUB_REPOSITORY\" --bundle '{bundle}' --source-digest \"$GITHUB_SHA\" --source-ref refs/heads/main --signer-workflow \"${{GITHUB_REPOSITORY}}/.github/workflows/generator-release.yml\" > /dev/null"
+    ));
+    format!("test -f '{bundle}'\ntest ! -L '{bundle}'\ntest -s '{bundle}'\n{verify}")
 }
 
 /// Release assets published in stable target order, followed by the manifest.
@@ -202,105 +215,5 @@ fn release_asset_path_list() -> Vec<String> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{FILE, manifest_attestation_bundle_script, manifest_script, tag_preflight_script};
-    use std::error::Error;
-    use std::fs;
-    use std::os::unix::fs::PermissionsExt;
-    use std::path::PathBuf;
-    use std::process::Command;
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    struct Scratch(PathBuf);
-
-    impl Drop for Scratch {
-        fn drop(&mut self) {
-            drop(fs::remove_dir_all(&self.0));
-        }
-    }
-
-    fn scratch() -> Result<Scratch, Box<dyn Error>> {
-        let nonce = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
-        let directory = std::env::temp_dir().join(format!(
-            "velnor-release-preflight-{}-{nonce}",
-            std::process::id()
-        ));
-        fs::create_dir(&directory)?;
-        Ok(Scratch(directory))
-    }
-
-    #[test]
-    fn manifest_bundle_uses_the_created_and_attested_file() {
-        let create = manifest_script();
-        let fetch = manifest_attestation_bundle_script();
-        assert!(create.contains("create-release-manifest.sh"));
-        assert!(fetch.contains(&format!("subject='{FILE}'")), "{fetch}");
-        assert!(!fetch.contains("manifest-assets/release-manifest.json"));
-    }
-
-    #[test]
-    fn tag_preflight_accepts_only_confirmed_not_found_responses() -> Result<(), Box<dyn Error>> {
-        for (case, accepted) in [
-            ("confirmed-404", true),
-            ("forbidden", false),
-            ("network", false),
-            ("malformed", false),
-            ("missing-status", false),
-        ] {
-            let scratch = scratch()?;
-            let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .join("../..")
-                .canonicalize()?;
-            let gh = scratch.0.join("gh");
-            fs::write(
-                &gh,
-                r#"#!/bin/sh
-printf '%s\n' "$*" >> "$GH_CALLS"
-case "$GH_CASE" in
-  confirmed-404) printf 'HTTP/2 404\r\ncontent-type: application/json\r\n\r\n{"message":"Not Found","status":"404"}\n'; exit 1 ;;
-  forbidden) printf 'HTTP/2 403\r\n\r\n{"message":"Forbidden","status":"403"}\n'; exit 1 ;;
-  network) exit 22 ;;
-  malformed) printf 'not-an-http-response\n\nnot-json\n'; exit 1 ;;
-  missing-status) printf 'HTTP/2 404\r\n\r\n{"message":"Not Found"}\n'; exit 1 ;;
-esac
-"#,
-            )?;
-            let mut permissions = fs::metadata(&gh)?.permissions();
-            permissions.set_mode(0o755);
-            fs::set_permissions(&gh, permissions)?;
-            let mut paths = vec![scratch.0.clone()];
-            paths.extend(std::env::split_paths(
-                &std::env::var_os("PATH").ok_or("missing PATH")?,
-            ));
-            let path = std::env::join_paths(paths)?;
-            let output = Command::new("bash")
-                .arg("-c")
-                .arg(tag_preflight_script())
-                .current_dir(workspace)
-                .env("PATH", path)
-                .env("GH_CALLS", scratch.0.join("calls"))
-                .env("GH_CASE", case)
-                .env("GITHUB_REPOSITORY", "tailrocks/velnor-new")
-                .output()?;
-            let calls = fs::read_to_string(scratch.0.join("calls"))?;
-            assert_eq!(
-                output.status.success(),
-                accepted,
-                "case {case}; stderr: {}; calls: {calls}",
-                String::from_utf8_lossy(&output.stderr)
-            );
-            assert_eq!(
-                calls.lines().next(),
-                Some("api --include repos/tailrocks/velnor-new/git/ref/tags/v0.1.1")
-            );
-            assert_eq!(calls.lines().count(), if accepted { 2 } else { 1 });
-            if accepted {
-                assert_eq!(
-                    calls.lines().nth(1),
-                    Some("api --include repos/tailrocks/velnor-new/releases/tags/v0.1.1")
-                );
-            }
-        }
-        Ok(())
-    }
-}
+#[path = "schema2_generator_release_manifest_tests.rs"]
+mod tests;

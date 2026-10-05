@@ -8,6 +8,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 const REPOSITORY: &str = "tailrocks/velnor-new";
 const SOURCE_SHA: &str = "0123456789abcdef0123456789abcdef01234567";
+const PINNED_MISE_ARGUMENTS: &str = "--no-config --no-env --no-hooks exec gh@2.102.0 --";
 
 struct Scratch(PathBuf);
 
@@ -63,7 +64,8 @@ fn run_publish_case(case: Failure) -> Result<(), Box<dyn Error>> {
     copy_release_helpers(&scratch.0)?;
     write_candidate_records(&scratch.0, case)?;
     write_attestation_files(&scratch.0)?;
-    let manifest_status = Command::new("bash")
+    let mut manifest_command = Command::new("bash");
+    manifest_command
         .args([
             "scripts/generator-release/create-release-manifest.sh",
             "0.1.1",
@@ -71,8 +73,9 @@ fn run_publish_case(case: Failure) -> Result<(), Box<dyn Error>> {
         ])
         .current_dir(&scratch.0)
         .env("GITHUB_REPOSITORY", REPOSITORY)
-        .env("GITHUB_SHA", SOURCE_SHA)
-        .status()?;
+        .env("GITHUB_SHA", SOURCE_SHA);
+    cli_tests::isolate_gh_environment(&mut manifest_command, &scratch.0)?;
+    let manifest_status = manifest_command.status()?;
     let invalid_manifest = matches!(case, Failure::WrongSidecarName | Failure::MissingBinary);
     if invalid_manifest {
         assert!(!manifest_status.success(), "accepted {case:?}");
@@ -100,7 +103,8 @@ fn run_publish_case(case: Failure) -> Result<(), Box<dyn Error>> {
     install_mock_gh(&scratch.0)?;
     let script = scratch.0.join("publish.sh");
     fs::write(&script, manifest::publish_script())?;
-    let output = Command::new("bash")
+    let mut command = Command::new("bash");
+    command
         .arg(&script)
         .current_dir(&scratch.0)
         .env("PATH", path_with_mock_gh(&scratch.0)?)
@@ -110,7 +114,12 @@ fn run_publish_case(case: Failure) -> Result<(), Box<dyn Error>> {
         .env("GH_RELEASE_JSON", scratch.0.join("release.json"))
         .env("GH_CREATE_TAG", scratch.0.join("created-tag"))
         .env("GH_ASSET_ARGS", scratch.0.join("asset-args"))
-        .output()?;
+        .env("GH_CALLS", scratch.0.join("gh-calls"))
+        .env("MISE_CALLS", scratch.0.join("mise-calls"))
+        .env("MOCK_GH", scratch.0.join("mock-bin/gh"));
+    cli_tests::isolate_gh_environment(&mut command, &scratch.0)?;
+    let output = command.output()?;
+    cli_tests::assert_pinned_publish_calls(&scratch.0, case)?;
     let should_succeed = case == Failure::None;
     assert_eq!(
         output.status.success(),
@@ -230,6 +239,8 @@ fn install_mock_gh(root: &Path) -> Result<(), Box<dyn Error>> {
         &mock,
         r#"#!/bin/sh
 set -eu
+printf '%s\n' "$*" >> "$GH_CALLS"
+if [ "$1" = attestation ] && [ "$2" = verify ]; then exit 0; fi
 if [ "$1" = api ]; then
   shift
   if [ "$1" = --include ]; then
@@ -270,6 +281,26 @@ exit 46
     let mut permissions = fs::metadata(&mock)?.permissions();
     permissions.set_mode(0o755);
     fs::set_permissions(mock, permissions)?;
+    install_mock_mise(&bin)?;
+    Ok(())
+}
+
+fn install_mock_mise(bin: &Path) -> Result<(), Box<dyn Error>> {
+    let mise = bin.join("mise");
+    fs::write(
+        &mise,
+        r#"#!/bin/sh
+set -eu
+printf '%s\n' "$*" >> "$MISE_CALLS"
+if [ "$#" -lt 8 ] || [ "$1" != "--no-config" ] || [ "$2" != "--no-env" ] || [ "$3" != "--no-hooks" ] || [ "$4" != "exec" ] || [ "$5" != "gh@2.102.0" ] || [ "$6" != "--" ] || [ "$7" != "gh" ]; then exit 70; fi
+shift 7
+test -x "$MOCK_GH"
+exec "$MOCK_GH" "$@"
+"#,
+    )?;
+    let mut permissions = fs::metadata(&mise)?.permissions();
+    permissions.set_mode(0o755);
+    fs::set_permissions(mise, permissions)?;
     Ok(())
 }
 
@@ -309,3 +340,6 @@ fn sha256(path: &Path) -> Result<String, Box<dyn Error>> {
         .map(str::to_owned)
         .ok_or_else(|| "sha256sum returned no digest".into())
 }
+
+#[path = "schema2_generator_release_cli_tests.rs"]
+mod cli_tests;

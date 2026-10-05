@@ -9,7 +9,19 @@ use super::workflow_steps::{self, checkout_step, with_permissions};
 pub(super) const VERSION: &str = "0.1.1";
 pub(super) const REPOSITORY: &str = "tailrocks/velnor-new";
 const CI_WORKFLOW: &str = "ci.yml";
-const GH_VERSION: &str = "2.102.0";
+pub(super) const GH_VERSION: &str = "2.102.0";
+
+pub(super) fn pinned_gh_prefix() -> String {
+    format!("mise --no-config --no-env --no-hooks exec gh@{GH_VERSION} -- gh ")
+}
+
+pub(super) fn pinned_gh(arguments: &str) -> String {
+    format!("{}{arguments}", pinned_gh_prefix())
+}
+
+pub(super) fn install_pinned_gh() -> String {
+    format!("mise --no-config --no-env --no-hooks install gh@{GH_VERSION}")
+}
 
 /// One target binary, checksum sidecar, and source-bound build record.
 #[derive(Clone, Copy)]

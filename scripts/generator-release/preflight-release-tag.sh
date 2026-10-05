@@ -12,7 +12,7 @@ fi
 tag="v${version}"
 require_missing() {
   local route="$1" response status body
-  response="$(gh api --include "repos/${repository}/${route}" 2>/dev/null)" || true
+  response="$(mise --no-config --no-env --no-hooks exec gh@2.102.0 -- gh api --include "repos/${repository}/${route}" 2>/dev/null)" || true
   status="$(printf '%s\n' "$response" | awk 'NR == 1 { sub(/\r$/, "", $2); if ($1 ~ /^HTTP\// && $2 ~ /^[0-9][0-9][0-9]$/) print $2; exit }')"
   if [[ "$status" != "404" ]]; then
     echo "cannot prove release object is absent: ${route} (HTTP ${status:-unknown})" >&2

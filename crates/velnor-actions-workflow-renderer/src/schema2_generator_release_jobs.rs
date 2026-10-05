@@ -65,10 +65,7 @@ pub(super) fn attest_job(
     let downloads = assets::download_build_steps(product, "Download built asset archive");
     let mut action_steps = vec![
         workflow_steps::mise_step(),
-        workflow_steps::bash_step(
-            "Install pinned GitHub CLI",
-            "mise --no-config --no-env --no-hooks install gh@2.102.0",
-        ),
+        workflow_steps::bash_step("Install pinned GitHub CLI", &assets::install_pinned_gh()),
     ];
     action_steps.extend(downloads);
     action_steps.extend([
@@ -127,7 +124,7 @@ pub(super) fn publish_job(
     let mut steps = vec![workflow_steps::mise_step()];
     steps.push(workflow_steps::bash_step(
         "Install pinned GitHub CLI",
-        "mise --no-config --no-env --no-hooks install gh@2.102.0",
+        &assets::install_pinned_gh(),
     ));
     steps.extend(
         assets::ASSETS
