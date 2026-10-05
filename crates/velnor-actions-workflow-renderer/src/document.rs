@@ -1,6 +1,6 @@
 //! Workflow-IR to YAML document builders.
 //!
-//! Fixed key order: name, on, permissions, concurrency, jobs.
+//! Fixed key order: name, on, permissions, env, concurrency, jobs.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -47,6 +47,7 @@ pub(crate) fn workflow_to_yaml(
     }
     let needs_env = needs_channel_envs(jobs)?;
     let lane_steps = lane_steps(shared);
+    let workflow_env = crate::toolchain_env::credential_scrub();
     let mut rendered_jobs = Vec::with_capacity(jobs.len());
     for (id, job) in jobs {
         let call = shared.calls.get(id).map(String::as_str);
@@ -61,6 +62,7 @@ pub(crate) fn workflow_to_yaml(
                 &needs_env,
                 call,
                 &lane_steps,
+                &workflow_env,
                 MbxJobPolicy {
                     native_mbx: mbx_jobs.contains(id),
                     actions_read,
@@ -75,6 +77,7 @@ pub(crate) fn workflow_to_yaml(
             "permissions".to_owned(),
             permissions_to_yaml(&ir.permissions),
         ),
+        ("env".to_owned(), string_map_yaml(&workflow_env)),
         (
             "concurrency".to_owned(),
             Yaml::Map(vec![
@@ -249,6 +252,7 @@ fn job_to_yaml(
     needs_envs: &[(String, String)],
     shared: Option<&str>,
     lanes: &crate::document_lanes::SharedLaneSteps<'_>,
+    workflow_env: &BTreeMap<String, String>,
     mbx_policy: MbxJobPolicy,
 ) -> Result<Yaml, RenderError> {
     steps::scan_for_private_subcommands(&job.display_name)?;
@@ -317,7 +321,7 @@ fn job_to_yaml(
         );
     }
     let mut entries = job_header_fields(job, runs_on);
-    append_job_options(&mut entries, job, scale_set, &job_env)?;
+    append_job_options(&mut entries, job, scale_set, &job_env, workflow_env)?;
     let rendered_steps = crate::document_lanes::render_job_steps(
         id,
         job,
@@ -350,14 +354,16 @@ fn append_job_options(
     job: &Job,
     scale_set: bool,
     job_env: &BTreeMap<String, String>,
+    workflow_env: &BTreeMap<String, String>,
 ) -> Result<(), RenderError> {
     if scale_set {
         entries.push(crate::runs_on::run_shell_defaults_field(
             crate::runs_on::SCALE_SET_RUN_SHELL,
         ));
     }
+    let job_env = crate::document_env::exclude_inherited(job_env, workflow_env);
     if !job_env.is_empty() {
-        entries.push(("env".to_owned(), string_map_yaml(job_env)));
+        entries.push(("env".to_owned(), string_map_yaml(&job_env)));
     }
     if let Some(environment) = &job.environment {
         entries.push(("environment".to_owned(), Yaml::str(environment.clone())));

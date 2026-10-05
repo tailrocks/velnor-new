@@ -174,7 +174,7 @@ fn default_permissions_block_omits_ungranted_actions() -> Result<(), RenderError
         &fixture_ctx(),
     )?;
     let start = text.find("permissions:").expect("permissions");
-    let end = text.find("concurrency:").expect("concurrency");
+    let end = text.find("\nenv:").expect("workflow environment") + 1;
     assert_eq!(&text[start..end], "permissions:\n  contents: read\n");
     Ok(())
 }
