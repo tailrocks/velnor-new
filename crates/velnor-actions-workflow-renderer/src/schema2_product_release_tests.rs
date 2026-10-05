@@ -169,7 +169,7 @@ fn generator_prepare_uses_the_canonical_inventory_and_manifest_bytes() {
         "$temp_dir/linux-assets/velnor-actions-0.1.1-x86_64-unknown-linux-gnu.sha256",
         "$temp_dir/macos-assets/velnor-actions-0.1.1-aarch64-apple-darwin.sha256",
         "$temp_dir/macos-intel-assets/velnor-actions-0.1.1-x86_64-apple-darwin.sha256",
-        "cmp -s 'release-manifest.json' 'manifest-assets/release-manifest.json'",
+        "cmp release-manifest.json manifest-assets/release-manifest.json",
         "readonly fixed_tag='v0.1.1'",
         "tag does not resolve to the exact source commit",
     ] {

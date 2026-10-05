@@ -155,7 +155,7 @@ pub(super) fn generator_release(
         &source_step,
         &mut actions,
     )?);
-    jobs.push(candidate_manifest::job(hosted.clone(), pins));
+    jobs.push(candidate_manifest::job(hosted.clone(), pins)?);
     jobs.push(manifest::job(hosted.clone(), pins, &mut actions)?);
     jobs.push(jobs::publish_job(hosted, pins, &mut actions)?);
     Ok(GeneratorRelease {

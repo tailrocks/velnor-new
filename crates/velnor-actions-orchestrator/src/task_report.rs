@@ -31,7 +31,7 @@ use crate::internal_request::resolve_run_key;
 pub(crate) use crate::task_report_aggregate::single_task_aggregate;
 
 #[path = "task_report_order.rs"]
-mod task_report_order;
+pub(crate) mod task_report_order;
 
 /// Report-production operation tag.
 pub const REPORT_OP: &str = "write-task-report-v1";

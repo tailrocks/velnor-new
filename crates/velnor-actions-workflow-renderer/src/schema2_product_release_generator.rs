@@ -71,7 +71,7 @@ fn merge_needs(fields: &[(String, Yaml)], role: JobRole) -> Yaml {
 
 fn condition(role: JobRole) -> String {
     match role {
-        JobRole::Publish => "always() && (inputs.release_action == 'complete' || (inputs.release_action == 'build' && needs.attest-linux.result == 'success' && needs.attest-macos.result == 'success' && needs.attest-macos-intel.result == 'success' && needs.attest-manifest.result == 'success'))".to_owned(),
+        JobRole::Publish => "always() && inputs.release_action == 'build' && needs.attest-linux.result == 'success' && needs.attest-macos.result == 'success' && needs.attest-macos-intel.result == 'success' && needs.attest-manifest.result == 'success'".to_owned(),
         JobRole::Build(_)
         | JobRole::CandidateManifest
         | JobRole::Qualify(_)

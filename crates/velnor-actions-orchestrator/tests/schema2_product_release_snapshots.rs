@@ -48,7 +48,10 @@ pub(super) fn assert_rendered(tree: &RenderedTree) -> Result<(), Box<dyn std::er
 }
 
 /// The checked-in workflows and actions match schema-2 output.
-pub(super) fn assert_committed(root: &Path) -> Result<(), Box<dyn std::error::Error>> {
+pub(super) fn assert_committed(
+    root: &Path,
+    tree: &RenderedTree,
+) -> Result<(), Box<dyn std::error::Error>> {
     let paths = [
         (".github/workflows/product-release.yml", PRODUCT_RELEASE),
         (
@@ -65,14 +68,17 @@ pub(super) fn assert_committed(root: &Path) -> Result<(), Box<dyn std::error::Er
         ),
     ];
     let mut workflows = Vec::new();
-    for (relative, expected) in paths {
+    for (relative, _) in paths {
         let path = root.join(relative);
         let body = std::fs::read_to_string(&path)?;
-        assert_eq!(body, super::marked(expected), "{}", path.display());
+        let expected = tree
+            .get(relative)
+            .ok_or_else(|| format!("missing generated workflow: {relative}"))?;
+        assert_eq!(&body, expected, "{}", path.display());
         workflows.push(body);
     }
     let workflow_refs = workflows.iter().map(String::as_str).collect::<Vec<_>>();
-    let actions = action_snapshots::committed_actions(root)?;
+    let actions = action_snapshots::committed_actions_matching_tree(root, tree)?;
     assert_product(&workflow_refs, &actions)
 }
 

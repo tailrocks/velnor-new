@@ -15,6 +15,7 @@ Repository: <repo>
 .github/actions/generator-release-qualify-linux/action.yml
 .github/actions/generator-release-qualify-macos-intel/action.yml
 .github/actions/generator-release-qualify-macos/action.yml
+.github/actions/velnor-tool-seed/action.yml
 .github/workflows/ci.yml
 .github/workflows/freshness.yml
 .github/workflows/product-release-binary.yml

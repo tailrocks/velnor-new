@@ -15,22 +15,24 @@ published while preparing this change.
   pinned Mise + MBX (no Velnor binary), 2 distinct admin approvals, and an
   independent reproducible rebuild (second party, pinned catalog, sha256
   match) recorded in the seed PR (Gap E review). Pre-seed is trust-on-review.
-- BOOT-2.1 (release assets): SOURCE-PENDING ARCHIVE ADMISSION REVIEW, NOT
-  RELEASED. The source-bound workflow builds three target binaries and binds
-  qualification and the canonical versioned manifest to measured candidate
-  bytes. Candidate extraction still needs the independently reviewed native
-  archive guard before parsing headers. Unblock = integrate that guard, then
-  complete a successful exact-source hosted run on all three native targets
-  and publish the immutable assets and manifest; a separate review then
-  verifies the published bytes and updates consumer provenance.
+- BOOT-2.1 (release assets): SOURCE-IMPLEMENTED, HOSTED QUALIFICATION AND
+  PUBLICATION UNVERIFIED, NOT RELEASED. The source-bound workflow builds three
+  target binaries, admits each candidate TAR through the checkout-owned native
+  guard before parsing, and binds qualification, attestations, and the
+  canonical versioned manifest to the same measured artifact bytes. No
+  successful exact-source hosted run has qualified all three native targets;
+  `check-release`, immutable publication, and the resulting external asset
+  provenance remain unverified. Unblock = complete that hosted qualification
+  and publication, then separately review the published bytes and update
+  consumer provenance.
 - BOOT-4.7 (protected release job): SOURCE-IMPLEMENTED, INFRASTRUCTURE
-  UNVERIFIED. The renderer emits a dispatch-only coordinator and a generator publisher
-  with a protected `generator-release` environment, serialized publication,
-  source/CI rechecks,
-  immutable-tag preflight, and digest/attestation verification. Unblock =
-  verify the repository's actual environment rules and branch protections,
-  complete a qualified hosted run, and land the bootstrap-lock update in a
-  SEPARATE reviewed change while ordinary CI keeps using the previous seed.
+  UNVERIFIED. The renderer emits a dispatch-only coordinator and a generator
+  publisher with a protected `generator-release` environment, serialized
+  publication, source/CI rechecks, immutable-tag preflight, and
+  digest/attestation verification. Unblock = verify the repository's actual
+  environment rules and branch protections, complete a qualified hosted run,
+  and land the bootstrap-lock update in a SEPARATE reviewed change while
+  ordinary CI keeps using the previous seed.
 - BOOT-3.4 (mise-bootstrap equality): half done (`.mise-version` ==
   `MISE_VERSION` const). Unblock = seed creates `.velnor/generator.lock`
   with the same exact Mise release + SHA-256; the equality check then

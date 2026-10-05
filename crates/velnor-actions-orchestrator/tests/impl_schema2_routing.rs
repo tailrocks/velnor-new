@@ -135,7 +135,8 @@ fn schema2_workflows_match_expected_bytes() -> TestResult {
 #[test]
 fn committed_release_files_match_schema2_bytes() -> TestResult {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    schema2_product_release_snapshots::assert_committed(&root)?;
+    let tree = render_staged_tree(&prepare(&root)?)?;
+    schema2_product_release_snapshots::assert_committed(&root, &tree)?;
     Ok(())
 }
 

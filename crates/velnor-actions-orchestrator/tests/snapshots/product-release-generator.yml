@@ -45,7 +45,6 @@ jobs:
         shell: bash
         run: "set -euo pipefail\n[[ \"$GITHUB_REPOSITORY\" == 'tailrocks/velnor-new' ]]\n[[ \"$GITHUB_REF\" == 'refs/heads/main' ]]\n[[ \"$GITHUB_WORKFLOW_REF\" == 'tailrocks/velnor-new/.github/workflows/product-release.yml@refs/heads/main' ]]\n[[ \"$GITHUB_EVENT_NAME\" == 'workflow_dispatch' ]]\n[[ \"$GITHUB_SHA\" == \"$VELNOR_SOURCE_SHA\" && \"$GITHUB_WORKFLOW_SHA\" == \"$VELNOR_WORKFLOW_AUTHORITY_SHA\" ]]\n[[ \"$GITHUB_RUN_ID\" == \"$VELNOR_CALLER_RUN_ID\" && \"$GITHUB_RUN_ATTEMPT\" == \"$VELNOR_CALLER_ATTEMPT\" ]]\n[[ \"$VELNOR_SOURCE_SHA\" =~ ^[0-9a-f]{40}$ && \"$VELNOR_WORKFLOW_AUTHORITY_SHA\" =~ ^[0-9a-f]{40}$ ]]\n[[ \"$VELNOR_CI_RUN_ID\" =~ ^[0-9]+$ && \"$VELNOR_CI_ATTEMPT\" =~ ^[0-9]+$ ]]\n[[ \"$VELNOR_RELEASE_ACTION\" == build || \"$VELNOR_RELEASE_ACTION\" == complete ]]"
   build-linux:
-    name: Build Linux velnor-actions
     runs-on: ubuntu-26.04
     timeout-minutes: 120
     permissions:
@@ -98,7 +97,6 @@ jobs:
           manifest_artifact_id: ${{ needs.candidate-manifest.outputs.artifact_id }}
           manifest_sha256: ${{ needs.candidate-manifest.outputs.manifest_sha256 }}
   attest-linux:
-    name: Attest Linux velnor-actions
     runs-on: ubuntu-26.04
     timeout-minutes: 20
     permissions:
@@ -124,7 +122,6 @@ jobs:
         with:
           artifact_id: ${{ needs.build-linux.outputs.artifact_id }}
   build-macos:
-    name: Build macOS velnor-actions
     runs-on: macos-15
     timeout-minutes: 120
     permissions:
@@ -177,7 +174,6 @@ jobs:
           manifest_artifact_id: ${{ needs.candidate-manifest.outputs.artifact_id }}
           manifest_sha256: ${{ needs.candidate-manifest.outputs.manifest_sha256 }}
   attest-macos:
-    name: Attest macOS velnor-actions
     runs-on: macos-15
     timeout-minutes: 20
     permissions:
@@ -203,7 +199,6 @@ jobs:
         with:
           artifact_id: ${{ needs.build-macos.outputs.artifact_id }}
   build-macos-intel:
-    name: Build macOS x86_64 velnor-actions
     runs-on: macos-15-intel
     timeout-minutes: 120
     permissions:
@@ -256,7 +251,6 @@ jobs:
           manifest_artifact_id: ${{ needs.candidate-manifest.outputs.artifact_id }}
           manifest_sha256: ${{ needs.candidate-manifest.outputs.manifest_sha256 }}
   attest-macos-intel:
-    name: Attest macOS x86_64 velnor-actions
     runs-on: macos-15-intel
     timeout-minutes: 20
     permissions:
@@ -303,6 +297,15 @@ jobs:
           fetch-depth: "1"
           persist-credentials: "false"
           ref: ${{ inputs.source_sha }}
+      - name: Setup Mise
+        uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
+        with:
+          version: 2026.9.18
+          sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
+          install: "false"
+          env: "false"
+          cache: "false"
+          cache_save: "false"
       - name: Download exact build artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
@@ -310,7 +313,7 @@ jobs:
           path: linux-assets
       - name: Prevalidate and extract uploaded candidate archive
         shell: bash
-        run: "set -eu\npython3 scripts/generator-release/extract-candidate.py 'linux-assets/generator-linux-assets.tar' 'linux-assets' 'velnor-actions-0.1.1-x86_64-unknown-linux-gnu' 'velnor-actions-0.1.1-x86_64-unknown-linux-gnu.sha256' 'velnor-actions-0.1.1-x86_64-unknown-linux-gnu.provenance.json'"
+        run: "set -eu\nbash scripts/with-owned-archive-guard.sh -- python3 scripts/generator-release/extract-candidate.py 'linux-assets/generator-linux-assets.tar' 'linux-assets' 'velnor-actions-0.1.1-x86_64-unknown-linux-gnu' 'velnor-actions-0.1.1-x86_64-unknown-linux-gnu.sha256' 'velnor-actions-0.1.1-x86_64-unknown-linux-gnu.provenance.json'"
       - name: Verify extracted candidate file types and executable mode
         shell: bash
         run: "set -eu\ntest -f linux-assets/velnor-actions-0.1.1-x86_64-unknown-linux-gnu\ntest ! -L linux-assets/velnor-actions-0.1.1-x86_64-unknown-linux-gnu\ntest -x linux-assets/velnor-actions-0.1.1-x86_64-unknown-linux-gnu\ntest -f linux-assets/velnor-actions-0.1.1-x86_64-unknown-linux-gnu.sha256\ntest ! -L linux-assets/velnor-actions-0.1.1-x86_64-unknown-linux-gnu.sha256\ntest ! -x linux-assets/velnor-actions-0.1.1-x86_64-unknown-linux-gnu.sha256\ntest -f linux-assets/velnor-actions-0.1.1-x86_64-unknown-linux-gnu.provenance.json\ntest ! -L linux-assets/velnor-actions-0.1.1-x86_64-unknown-linux-gnu.provenance.json\ntest ! -x linux-assets/velnor-actions-0.1.1-x86_64-unknown-linux-gnu.provenance.json"
@@ -324,7 +327,7 @@ jobs:
           path: macos-assets
       - name: Prevalidate and extract uploaded candidate archive
         shell: bash
-        run: "set -eu\npython3 scripts/generator-release/extract-candidate.py 'macos-assets/generator-macos-assets.tar' 'macos-assets' 'velnor-actions-0.1.1-aarch64-apple-darwin' 'velnor-actions-0.1.1-aarch64-apple-darwin.sha256' 'velnor-actions-0.1.1-aarch64-apple-darwin.provenance.json'"
+        run: "set -eu\nbash scripts/with-owned-archive-guard.sh -- python3 scripts/generator-release/extract-candidate.py 'macos-assets/generator-macos-assets.tar' 'macos-assets' 'velnor-actions-0.1.1-aarch64-apple-darwin' 'velnor-actions-0.1.1-aarch64-apple-darwin.sha256' 'velnor-actions-0.1.1-aarch64-apple-darwin.provenance.json'"
       - name: Verify extracted candidate file types and executable mode
         shell: bash
         run: "set -eu\ntest -f macos-assets/velnor-actions-0.1.1-aarch64-apple-darwin\ntest ! -L macos-assets/velnor-actions-0.1.1-aarch64-apple-darwin\ntest -x macos-assets/velnor-actions-0.1.1-aarch64-apple-darwin\ntest -f macos-assets/velnor-actions-0.1.1-aarch64-apple-darwin.sha256\ntest ! -L macos-assets/velnor-actions-0.1.1-aarch64-apple-darwin.sha256\ntest ! -x macos-assets/velnor-actions-0.1.1-aarch64-apple-darwin.sha256\ntest -f macos-assets/velnor-actions-0.1.1-aarch64-apple-darwin.provenance.json\ntest ! -L macos-assets/velnor-actions-0.1.1-aarch64-apple-darwin.provenance.json\ntest ! -x macos-assets/velnor-actions-0.1.1-aarch64-apple-darwin.provenance.json"
@@ -338,7 +341,7 @@ jobs:
           path: macos-intel-assets
       - name: Prevalidate and extract uploaded candidate archive
         shell: bash
-        run: "set -eu\npython3 scripts/generator-release/extract-candidate.py 'macos-intel-assets/generator-macos-intel-assets.tar' 'macos-intel-assets' 'velnor-actions-0.1.1-x86_64-apple-darwin' 'velnor-actions-0.1.1-x86_64-apple-darwin.sha256' 'velnor-actions-0.1.1-x86_64-apple-darwin.provenance.json'"
+        run: "set -eu\nbash scripts/with-owned-archive-guard.sh -- python3 scripts/generator-release/extract-candidate.py 'macos-intel-assets/generator-macos-intel-assets.tar' 'macos-intel-assets' 'velnor-actions-0.1.1-x86_64-apple-darwin' 'velnor-actions-0.1.1-x86_64-apple-darwin.sha256' 'velnor-actions-0.1.1-x86_64-apple-darwin.provenance.json'"
       - name: Verify extracted candidate file types and executable mode
         shell: bash
         run: "set -eu\ntest -f macos-intel-assets/velnor-actions-0.1.1-x86_64-apple-darwin\ntest ! -L macos-intel-assets/velnor-actions-0.1.1-x86_64-apple-darwin\ntest -x macos-intel-assets/velnor-actions-0.1.1-x86_64-apple-darwin\ntest -f macos-intel-assets/velnor-actions-0.1.1-x86_64-apple-darwin.sha256\ntest ! -L macos-intel-assets/velnor-actions-0.1.1-x86_64-apple-darwin.sha256\ntest ! -x macos-intel-assets/velnor-actions-0.1.1-x86_64-apple-darwin.sha256\ntest -f macos-intel-assets/velnor-actions-0.1.1-x86_64-apple-darwin.provenance.json\ntest ! -L macos-intel-assets/velnor-actions-0.1.1-x86_64-apple-darwin.provenance.json\ntest ! -x macos-intel-assets/velnor-actions-0.1.1-x86_64-apple-darwin.provenance.json"
@@ -398,11 +401,10 @@ jobs:
           manifest_artifact_id: ${{ needs.candidate-manifest.outputs.artifact_id }}
           manifest_sha256: ${{ needs.candidate-manifest.outputs.manifest_sha256 }}
   publish-generator:
-    name: Publish velnor-actions
     runs-on: ubuntu-26.04
     timeout-minutes: 30
     permissions:
-      actions: read
+      actions: write
       contents: write
     environment:
       name: generator-release
@@ -416,7 +418,7 @@ jobs:
       - build-linux
       - build-macos
       - build-macos-intel
-    if: always() && (inputs.release_action == 'complete' || (inputs.release_action == 'build' && needs.attest-linux.result == 'success' && needs.attest-macos.result == 'success' && needs.attest-macos-intel.result == 'success' && needs.attest-manifest.result == 'success'))
+    if: always() && inputs.release_action == 'build' && needs.attest-linux.result == 'success' && needs.attest-macos.result == 'success' && needs.attest-macos-intel.result == 'success' && needs.attest-manifest.result == 'success'
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -432,3 +434,10 @@ jobs:
           macos_x86_64_artifact_id: ${{ needs.build-macos-intel.outputs.artifact_id }}
           manifest_artifact_id: ${{ needs.candidate-manifest.outputs.artifact_id }}
           manifest_sha256: ${{ needs.candidate-manifest.outputs.manifest_sha256 }}
+      - name: Upload verified immutable release acceptance
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          if-no-files-found: error
+          name: generator-release-accepted-${{ github.sha }}
+          path: "release-accepted/release-manifest.json\nrelease-accepted/release-acceptance.json"
+          retention-days: 1

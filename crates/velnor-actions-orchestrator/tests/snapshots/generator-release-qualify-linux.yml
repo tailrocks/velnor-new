@@ -13,6 +13,15 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Setup Mise
+      uses: jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5
+      with:
+        version: 2026.9.18
+        sha256: d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4
+        install: "false"
+        env: "false"
+        cache: "false"
+        cache_save: "false"
     - name: Download built asset archive
       uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
       with:
@@ -20,7 +29,7 @@ runs:
         path: linux-assets
     - name: Prevalidate and extract uploaded candidate archive
       shell: bash
-      run: "set -eu\npython3 scripts/generator-release/extract-candidate.py 'linux-assets/generator-linux-assets.tar' 'linux-assets' 'velnor-actions-0.1.1-x86_64-unknown-linux-gnu' 'velnor-actions-0.1.1-x86_64-unknown-linux-gnu.sha256' 'velnor-actions-0.1.1-x86_64-unknown-linux-gnu.provenance.json'"
+      run: "set -eu\nbash scripts/with-owned-archive-guard.sh -- python3 scripts/generator-release/extract-candidate.py 'linux-assets/generator-linux-assets.tar' 'linux-assets' 'velnor-actions-0.1.1-x86_64-unknown-linux-gnu' 'velnor-actions-0.1.1-x86_64-unknown-linux-gnu.sha256' 'velnor-actions-0.1.1-x86_64-unknown-linux-gnu.provenance.json'"
     - name: Verify extracted candidate file types and executable mode
       shell: bash
       run: "set -eu\ntest -f linux-assets/velnor-actions-0.1.1-x86_64-unknown-linux-gnu\ntest ! -L linux-assets/velnor-actions-0.1.1-x86_64-unknown-linux-gnu\ntest -x linux-assets/velnor-actions-0.1.1-x86_64-unknown-linux-gnu\ntest -f linux-assets/velnor-actions-0.1.1-x86_64-unknown-linux-gnu.sha256\ntest ! -L linux-assets/velnor-actions-0.1.1-x86_64-unknown-linux-gnu.sha256\ntest ! -x linux-assets/velnor-actions-0.1.1-x86_64-unknown-linux-gnu.sha256\ntest -f linux-assets/velnor-actions-0.1.1-x86_64-unknown-linux-gnu.provenance.json\ntest ! -L linux-assets/velnor-actions-0.1.1-x86_64-unknown-linux-gnu.provenance.json\ntest ! -x linux-assets/velnor-actions-0.1.1-x86_64-unknown-linux-gnu.provenance.json"

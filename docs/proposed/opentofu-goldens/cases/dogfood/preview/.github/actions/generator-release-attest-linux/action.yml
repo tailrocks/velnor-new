@@ -27,7 +27,7 @@ runs:
         path: linux-assets
     - name: Prevalidate and extract uploaded candidate archive
       shell: bash
-      run: "set -eu\npython3 scripts/generator-release/extract-candidate.py 'linux-assets/generator-linux-assets.tar' 'linux-assets' 'velnor-actions-0.1.1-x86_64-unknown-linux-gnu' 'velnor-actions-0.1.1-x86_64-unknown-linux-gnu.sha256' 'velnor-actions-0.1.1-x86_64-unknown-linux-gnu.provenance.json'"
+      run: "set -eu\nbash scripts/with-owned-archive-guard.sh -- python3 scripts/generator-release/extract-candidate.py 'linux-assets/generator-linux-assets.tar' 'linux-assets' 'velnor-actions-0.1.1-x86_64-unknown-linux-gnu' 'velnor-actions-0.1.1-x86_64-unknown-linux-gnu.sha256' 'velnor-actions-0.1.1-x86_64-unknown-linux-gnu.provenance.json'"
     - name: Verify extracted candidate file types and executable mode
       shell: bash
       run: "set -eu\ntest -f linux-assets/velnor-actions-0.1.1-x86_64-unknown-linux-gnu\ntest ! -L linux-assets/velnor-actions-0.1.1-x86_64-unknown-linux-gnu\ntest -x linux-assets/velnor-actions-0.1.1-x86_64-unknown-linux-gnu\ntest -f linux-assets/velnor-actions-0.1.1-x86_64-unknown-linux-gnu.sha256\ntest ! -L linux-assets/velnor-actions-0.1.1-x86_64-unknown-linux-gnu.sha256\ntest ! -x linux-assets/velnor-actions-0.1.1-x86_64-unknown-linux-gnu.sha256\ntest -f linux-assets/velnor-actions-0.1.1-x86_64-unknown-linux-gnu.provenance.json\ntest ! -L linux-assets/velnor-actions-0.1.1-x86_64-unknown-linux-gnu.provenance.json\ntest ! -x linux-assets/velnor-actions-0.1.1-x86_64-unknown-linux-gnu.provenance.json"

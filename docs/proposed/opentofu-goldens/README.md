@@ -1,5 +1,16 @@
 # T04 Rust-only golden evidence (Phase A behavior bracket)
 
+## PR41 + PR46 integration checkpoint (2026-10-05)
+
+The merged renderer captured and byte-checked all five fixture trees with
+`scripts/capture-opentofu-goldens.sh`; `dogfood.verdict` is `DIFFERS` because
+the checked-in `ci.yml` and `qualification.yml` still predate the seed-action
+source carried by this integration. `dogfood.diff` records the complete
+difference; the generator-release workflow and actions match. This is not a
+whole-repository producer-parity pass. Regenerate after syncing the current
+main branch. No authentic same-run three-target candidate manifest is present,
+so `check-release` and hosted qualification remain unverified.
+
 Pre-refactor capture at `a12efd7` (behavior-identical to `origin/main`
 106bfd7; docs-only delta). Every T06 ownership move must re-run the
 brackets below with byte-identical results. Never re-bless blindly:
