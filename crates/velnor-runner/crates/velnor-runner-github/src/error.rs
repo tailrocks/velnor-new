@@ -1,5 +1,7 @@
 //! Wire failures. Bodies that may contain JIT are not copied into Display.
 
+use crate::acquire::TransportFail;
+
 /// Protocol or transport failure.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum WireError {
@@ -30,4 +32,24 @@ pub enum WireError {
     /// A mutex was poisoned.
     #[error("lock poisoned")]
     Poisoned,
+}
+
+/// Failure from a scale-set call.
+///
+/// [`Copy`] on purpose: a response body cannot fit, so `Debug` and `Display`
+/// cannot contain encoded JIT configuration.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum DriverError {
+    /// Protocol rejection. The response body was discarded.
+    #[error(transparent)]
+    Wire(#[from] WireError),
+    /// The call did not complete as HTTP. Timeout and reset stay uncertain.
+    #[error("transport failed")]
+    Transport(TransportFail),
+}
+
+impl From<TransportFail> for DriverError {
+    fn from(fail: TransportFail) -> Self {
+        Self::Transport(fail)
+    }
 }

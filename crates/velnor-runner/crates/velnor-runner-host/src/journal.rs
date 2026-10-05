@@ -74,9 +74,9 @@ impl Journal {
     ///
     /// # Errors
     ///
-    /// Returns [`HostError::Journal`] on I/O failure.
+    /// Returns [`HostError::Journal`] on I/O failure or a rejected kind.
     pub async fn begin(&self, kind: &str) -> Result<i64, HostError> {
-        if kind.is_empty() || kind.contains('\'') {
+        if kind_rejected(kind) {
             return Err(HostError::Journal);
         }
         let conn = self.connection().await?;
@@ -150,4 +150,8 @@ impl Journal {
             .map_err(|_| HostError::Journal)?;
         db.connect().map_err(|_| HostError::Journal)
     }
+}
+
+fn kind_rejected(kind: &str) -> bool {
+    kind.is_empty() || kind.chars().any(|ch| matches!(ch, '\'' | '"'))
 }
