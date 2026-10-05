@@ -92,7 +92,7 @@ impl CacheAdmission {
             .is_some_and(|cache_root| target.starts_with(cache_root))
     }
 
-    /// Fail if the configured cache root changed after it was resolved.
+    /// Fail if the configured cache root or its resolved target changed.
     pub(crate) fn ensure_cache_root_unchanged(&self) -> Result<(), IndexError> {
         let expected = self.cache_root_identity.as_ref().ok_or_else(|| {
             IndexError::ReadFailed(format!(
@@ -103,12 +103,19 @@ impl CacheAdmission {
         let current = CacheRootIdentity::read(&self.cache_root_path)
             .map_err(|error| IndexError::ReadFailed(error.to_string()))?;
         if &current != expected {
-            return Err(IndexError::ReadFailed(format!(
-                "reserved cache root changed during index operation: {}",
-                self.cache_root_path.display()
-            )));
+            return Err(self.cache_root_changed());
+        }
+        if self.cache_root_path.canonicalize().ok().as_ref() != self.canonical_cache_root.as_ref() {
+            return Err(self.cache_root_changed());
         }
         Ok(())
+    }
+
+    fn cache_root_changed(&self) -> IndexError {
+        IndexError::ReadFailed(format!(
+            "reserved cache root changed during index operation: {}",
+            self.cache_root_path.display()
+        ))
     }
 
     /// Whether an enumerated path resolves through any symlink into the cache.

@@ -240,6 +240,37 @@ fn listed_path_rejects_replaced_cache_root_symlink() -> TestResult {
     Ok(())
 }
 
+/// Retargeting an intermediate symlink fails closed despite a stable cache link.
+#[test]
+#[cfg(unix)]
+fn listed_path_rejects_retargeted_cache_root_chain() -> TestResult {
+    let root = TempDir::new()?;
+    let repo = root.path();
+    write_file(repo, "old-cache/payload.crate")?;
+    write_file(repo, "new-cache/payload.crate")?;
+    let cache_link = repo.join("cache-link");
+    std::os::unix::fs::symlink("old-cache", &cache_link)?;
+    let cache_parent = repo.join(".velnor");
+    fs::create_dir_all(&cache_parent)?;
+    std::os::unix::fs::symlink("../cache-link", cache_parent.join("cache"))?;
+    write_file(repo, "src/ordinary.txt")?;
+    let alias = repo.join("src/cache-alias.crate");
+    std::os::unix::fs::symlink("../new-cache/payload.crate", &alias)?;
+
+    let admission = CacheAdmission::new(repo);
+    assert!(!admission.listed_path_is_reserved(repo, "src/ordinary.txt")?);
+
+    fs::remove_file(&cache_link)?;
+    std::os::unix::fs::symlink("new-cache", &cache_link)?;
+
+    let error = admission
+        .listed_path_is_reserved(repo, "src/cache-alias.crate")
+        .expect_err("a retargeted cache chain must not use stale resolution");
+    assert!(matches!(error, IndexError::ReadFailed(_)));
+    assert!(error.to_string().contains("reserved cache root changed"));
+    Ok(())
+}
+
 /// Create a file and parent directories under `root`.
 fn write_file(root: &Path, relative: &str) -> TestResult {
     let file = root.join(relative);
