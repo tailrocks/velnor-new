@@ -29,28 +29,40 @@ pub(crate) enum Idle {
     Launch,
     /// Assigned population is positive. Mint one JIT runner, then acknowledge.
     Scale,
-    /// No offer and no assigned job. Delete the message so the next one can arrive.
+    /// The batch is safe to acknowledge, even when assigned population is unknown.
+    /// Deleting it does not free a running slot.
     Ack,
     /// A message that must stay on the queue.
     Blocked,
 }
 
 /// Classify one poll. One available id is acquired. A positive current assigned
-/// population starts one runner before ack. Missing or invalid census stays queued.
+/// population starts one runner before ack. Missing census allows only empty or
+/// start/completion-only batches to be acknowledged; it never implies zero jobs.
 #[must_use]
 pub(crate) fn idle(polled: &Poll) -> Idle {
     match polled {
         Poll::Empty => Idle::Empty,
         Poll::Batch(batch) => match offer(polled) {
             Offer::Acquire { ids, .. } if ids.len() == 1 => Idle::Launch,
-            Offer::Wait if may_ack(batch, true) => match assigned_population(batch) {
-                Some(population) if population > 0 => Idle::Scale,
-                Some(0) => Idle::Ack,
-                Some(_) | None => Idle::Blocked,
-            },
+            Offer::Wait if may_ack(batch, true) => {
+                if absent_census_progress(batch) {
+                    Idle::Ack
+                } else {
+                    match assigned_population(batch) {
+                        Some(population) if population > 0 => Idle::Scale,
+                        Some(0) => Idle::Ack,
+                        Some(_) | None => Idle::Blocked,
+                    }
+                }
+            }
             Offer::Acquire { .. } | Offer::Wait => Idle::Blocked,
         },
     }
+}
+
+fn absent_census_progress(batch: &velnor_runner_github::ParsedBatch) -> bool {
+    batch.statistics.is_none() && (batch.jobs.is_empty() || crate::assign::progress_only(batch))
 }
 
 fn assigned_population(batch: &velnor_runner_github::ParsedBatch) -> Option<i64> {
