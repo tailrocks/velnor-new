@@ -1,18 +1,9 @@
-[workspace]
-
-[workspace.package]
-edition = "2024"
-rust-version = "1.98"
-
-[workspace.lints.rust]
-unsafe_code = "forbid"
-unused_must_use = "deny"
-
 [package]
 name = "mbx-synchronous-registry-fixture"
-version = "0.0.0"
+version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+license.workspace = true
 publish = false
 build = false
 autobins = false

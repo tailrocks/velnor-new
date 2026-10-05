@@ -12,8 +12,8 @@ use velnor_actions_contract::{
     CI_WORKFLOW_PATH, Concurrency, Job, PLAN_JOB_ID as CONTRACT_PLAN_JOB_ID,
     REQUIRED_CONDITION as CONTRACT_REQUIRED_CONDITION,
     REQUIRED_DISPLAY_NAME as CONTRACT_REQUIRED_DISPLAY_NAME,
-    REQUIRED_JOB_ID as CONTRACT_REQUIRED_JOB_ID, Trigger, ValidatorKind, VelnorSupportWorkflow,
-    WorkflowIr, WorkflowPolicy,
+    REQUIRED_JOB_ID as CONTRACT_REQUIRED_JOB_ID, Trigger, VelnorSupportWorkflow, WorkflowIr,
+    WorkflowPolicy,
 };
 
 use crate::{
@@ -67,7 +67,7 @@ pub const ALINT_USES: &str = "asamarts/alint@9f9d34ba0eae3888299b9e570f43338b0e7
 /// `scripts/check-freshness.sh` pins this mirror to the reviewed
 /// `asamarts/alint` inventory row instead of trusting the duplication.
 pub const ALINT_BINARY_VERSION: &str = "v0.16.1";
-
+/// Display name of the install-only Python test-runtime step.
 /// Caller-supplied validated scalars the IR cannot carry.
 #[derive(Debug, Clone)]
 pub struct RenderContext {
@@ -100,17 +100,6 @@ pub struct RenderContext {
     pub plan_consumer_env: BTreeMap<String, String>,
 }
 
-/// One fixed validator-job shell step: kind plus display name plus argv.
-#[derive(Debug, Clone)]
-pub struct ValidatorCommand {
-    /// Repository validator owning this step's job.
-    pub validator: ValidatorKind,
-    /// Step display name.
-    pub name: String,
-    /// Fixed argument vector.
-    pub argv: Vec<String>,
-}
-
 /// Fixed candidate-job vectors (Velnor policy only).
 #[derive(Debug, Clone)]
 pub struct CandidateSpec {
@@ -122,6 +111,10 @@ pub struct CandidateSpec {
 
 pub use crate::lane_share::RenderedWorkflow;
 pub use crate::tree::{RenderedFile, RenderedSymlink, RenderedTree};
+pub use crate::validator_command::{
+    PYTHON_SOURCE_PREPARE_NAME, PYTHON_SOURCE_RUN_NAME, ValidatorCommand, ValidatorSourceInput,
+    ValidatorSourceInputKind, ValidatorSourceUnit,
+};
 pub use velnor_actions_contract::{AGENTS_MD_PATH, CLAUDE_MD_PATH, CLAUDE_MD_TARGET};
 
 impl RenderContext {
@@ -137,13 +130,7 @@ impl RenderContext {
         guard::validate_request_dir(&self.request_dir)?;
         steps::checkout_step(&self.checkout_uses).map(|_| ())?;
         for command in &self.validator_commands {
-            if command.validator == ValidatorKind::Actionlint {
-                return Err(RenderError::BadCommand("actionlint_not_support".to_owned()));
-            }
-            if command.name.trim().is_empty() {
-                return Err(RenderError::BadCommand("empty_validator_name".to_owned()));
-            }
-            commands::validate_command_argv(&command.argv)?;
+            crate::validator_command::validate(command)?;
         }
         if let Some(candidate) = &self.candidate {
             commands::validate_command_argv(&candidate.build)?;

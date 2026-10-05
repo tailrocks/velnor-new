@@ -1,0 +1,28 @@
+{
+  "files": [
+    {
+      "contents": "IyBUaGlzIGZpbGUgaXMgYXV0b21hdGljYWxseSBAZ2VuZXJhdGVkIGJ5IENhcmdvLgojIEl0IGlzIG5vdCBpbnRlbmRlZCBmb3IgbWFudWFsIGVkaXRpbmcuCnZlcnNpb24gPSA0CgpbW3BhY2thZ2VdXQpuYW1lID0gIml0b2EiCnZlcnNpb24gPSAiMS4wLjE4Igpzb3VyY2UgPSAicmVnaXN0cnkraHR0cHM6Ly9naXRodWIuY29tL3J1c3QtbGFuZy9jcmF0ZXMuaW8taW5kZXgiCmNoZWNrc3VtID0gIjhmNDJhNjBjYmRmOWE5N2Y1ZDIzMDVmMDhhODdkYzRlMDkzMDhkMTI3NmQyOGM4NjljNjg0ZDc3Nzc2ODU2ODIiCgpbW3BhY2thZ2VdXQpuYW1lID0gIm1ieC1zeW5jaHJvbm91cy1yZWdpc3RyeS1maXh0dXJlIgp2ZXJzaW9uID0gIjAuMC4wIgpkZXBlbmRlbmNpZXMgPSBbCiAiaXRvYSIsCl0K",
+      "kind": "base64",
+      "path": "Cargo.lock",
+      "sha256": "f254f31dee5596afe3321c9e0fcbb73aba3861957dd6e0a9e12f9662ee972f68",
+      "size": 393
+    },
+    {
+      "contents": "W3dvcmtzcGFjZV0KClt3b3Jrc3BhY2UucGFja2FnZV0KZWRpdGlvbiA9ICIyMDI0IgpydXN0LXZlcnNpb24gPSAiMS45OCIKClt3b3Jrc3BhY2UubGludHMucnVzdF0KdW5zYWZlX2NvZGUgPSAiZm9yYmlkIgp1bnVzZWRfbXVzdF91c2UgPSAiZGVueSIKCltwYWNrYWdlXQpuYW1lID0gIm1ieC1zeW5jaHJvbm91cy1yZWdpc3RyeS1maXh0dXJlIgp2ZXJzaW9uID0gIjAuMC4wIgplZGl0aW9uLndvcmtzcGFjZSA9IHRydWUKcnVzdC12ZXJzaW9uLndvcmtzcGFjZSA9IHRydWUKcHVibGlzaCA9IGZhbHNlCmJ1aWxkID0gZmFsc2UKYXV0b2JpbnMgPSBmYWxzZQphdXRvZXhhbXBsZXMgPSBmYWxzZQphdXRvdGVzdHMgPSBmYWxzZQphdXRvYmVuY2hlcyA9IGZhbHNlCgpbbGliXQpwYXRoID0gInNyYy9saWIucnMiCmRvY3Rlc3QgPSBmYWxzZQoKW2RlcGVuZGVuY2llc10KaXRvYSA9IHsgdmVyc2lvbiA9ICI9MS4wLjE4IiwgZGVmYXVsdC1mZWF0dXJlcyA9IGZhbHNlIH0KCltsaW50c10Kd29ya3NwYWNlID0gdHJ1ZQo=",
+      "kind": "base64",
+      "path": "Cargo.toml",
+      "sha256": "285241b6050f4ee7ebee7b07a150c9bee837a4fdcdc62684ddfdb356794b95e3",
+      "size": 518
+    },
+    {
+      "kind": "repository_file",
+      "path": "src/lib.rs",
+      "sha256": "c0c3f953e32e7066e610359ef7a45e0d1236a9a7afe35ceda52d302d143c75e4",
+      "size": 362,
+      "source": "crates/mbx-synchronous-registry-fixture/src/lib.rs"
+    }
+  ],
+  "materialization": "private_tmpdir",
+  "schema": 1,
+  "scope": "standalone_workspace_fixture_v1"
+}

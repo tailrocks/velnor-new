@@ -9,6 +9,7 @@ members = [
     "crates/velnor-actions-orchestrator",
     "crates/velnor-actions-cli",
     "crates/velnor-actions-tofu",
+    "crates/mbx-synchronous-registry-fixture",
 ]
 exclude = ["crates/velnor-runner"]
 resolver = "3"
