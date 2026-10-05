@@ -1,12 +1,12 @@
 #!/usr/bin/perl
-# List tar members and copy selected members' raw bytes.
-# --list and --emit read the archive on stdin in one forward pass.
-# Extract stays BusyBox. Pax and GNU long-name headers stay attached
-# to the member they describe. No seek: a pipe is not an archive file.
+# List tar members and copy selected raw bytes in one forward pass. Extraction
+# stays BusyBox; pax and GNU long-name headers stay attached to their member.
 use strict;
 use warnings;
 use bytes;
 use Fcntl qw(O_WRONLY O_NONBLOCK F_GETFL F_SETFL);
+use FindBin qw($RealBin);
+require "$RealBin/tar-member-rewrite.pl";
 
 binmode STDIN,  ":raw" or die "velnor-tar-member: binmode: $!\n";
 binmode STDOUT;
@@ -258,7 +258,7 @@ sub walk {
             $state, header_name($hdr), cstr(substr $hdr, 157, 100),
         );
         my ($out, $after) = $cb->(
-            $index, $type, $name, $link, $hdr, $size, $prelude, \@globals,
+            $index, $type, $name, $link, $hdr, $size, $prelude, \@globals, $state,
         );
         transfer(\*STDIN, $size, $out);
         transfer(\*STDIN, pad_len($size), $out);
@@ -276,8 +276,9 @@ sub walk {
 sub cmd_list {
     walk(
         sub {
-            my ($index, $type, $name, $link) = @_;
-            print "$index\n$type\n$link\n$name\n"
+            my ($index, $type, $name, $link, $header) = @_;
+            my $mode = sprintf "%o", parse_size(substr $header, 100, 8);
+            print "$index\n$type\n$link\n$name\n$mode\n"
                 or die "velnor-tar-member: write: $!\n";
             return;
         }
@@ -317,8 +318,9 @@ sub wait_done {
 }
 
 sub cmd_emit {
-    my ($plan, $dir) = @_;
+    my ($plan, $dir, $map_file) = @_;
     my @groups = read_groups($plan);
+    my %rewrite = defined($map_file) ? read_rewrite_map($map_file) : ();
     my %seq_of;
     my %end_of;
     my $seq = 0;
@@ -331,9 +333,12 @@ sub cmd_emit {
     my $writing_seq = -1;
     my $gwritten    = 0;
     my $finished    = 0;
+    my %rewritten;
+    die "velnor-tar-member: rewrite index not selected\n"
+        if grep { !exists $seq_of{$_} } keys %rewrite;
     walk(
         sub {
-            my ($index, $type, $name, $link, $hdr, $size, $prelude, $globals) = @_;
+            my ($index, $type, $name, $link, $hdr, $size, $prelude, $globals, $state) = @_;
             return if !exists $seq_of{$index};
             my $group = $seq_of{$index};
             if (defined $out && $group != $writing_seq) {
@@ -351,6 +356,14 @@ sub cmd_emit {
             if (length $prelude) {
                 print $out $prelude or die "velnor-tar-member: write: $!\n";
             }
+            if (exists $rewrite{$index}) {
+                my ($pax, $rewritten_hdr) = rewrite_member(
+                    $rewrite{$index}, $index, $hdr, $state,
+                );
+                print $out $pax or die "velnor-tar-member: write: $!\n" if $pax ne "";
+                $hdr = $rewritten_hdr;
+                $rewritten{$index} = 1;
+            }
             print $out $hdr or die "velnor-tar-member: write: $!\n";
             my $after;
             if ($end_of{$index}) {
@@ -365,6 +378,8 @@ sub cmd_emit {
         }
     );
     die "velnor-tar-member: index out of range\n" if $finished != @groups;
+    die "velnor-tar-member: rewrite index missing\n"
+        if grep { !exists $rewritten{$_} } keys %rewrite;
     wait_done($dir);
 }
 
@@ -375,8 +390,9 @@ if ($cmd eq "--list") {
 } elsif ($cmd eq "--emit") {
     my $plan = shift @ARGV // die "velnor-tar-member: missing plan\n";
     my $dir  = shift @ARGV // die "velnor-tar-member: missing fifo dir\n";
+    my $map_file = shift @ARGV;
     die "velnor-tar-member: unsupported extra args\n" if @ARGV;
-    cmd_emit($plan, $dir);
+    cmd_emit($plan, $dir, $map_file);
 } else {
     die "velnor-tar-member: unsupported $cmd\n";
 }

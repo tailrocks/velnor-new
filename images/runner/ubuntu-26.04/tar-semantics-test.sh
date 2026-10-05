@@ -3,20 +3,27 @@
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
+repo="$(cd "$here/../../.." && pwd)"
 
-if ! command -v busybox >/dev/null 2>&1 || ! command -v tar.gnu >/dev/null 2>&1 || ! command -v perl >/dev/null 2>&1; then
-  # /lowdisk is the disk-full case. The extract must fail closed there.
-  exec docker run --rm --platform linux/amd64 --network none --entrypoint bash \
+if ! command -v busybox >/dev/null 2>&1 || ! command -v tar.gnu >/dev/null 2>&1 || \
+  ! command -v perl >/dev/null 2>&1 || ! command -v runuser >/dev/null 2>&1 || \
+  [ "$(id -u)" -ne 0 ] || [ ! -d /lowdisk ]; then
+  exec docker run --rm \
+    -e DEBIAN_FRONTEND=noninteractive \
+    -e VELNOR_PERF_COUNT \
+    -e VELNOR_ONLY_GROUPED \
     --tmpfs /lowdisk:rw,mode=1777,size=1048576 \
-    -v "$here:/scripts:ro" \
-    velnor-runner:ubuntu-26.04-2.337.0 \
-    /scripts/tar-semantics-test.sh
+    -v "$repo:/src:ro" \
+    -w /src \
+    debian:bookworm-slim \
+    bash -lc 'apt-get update -qq && apt-get install -y -qq busybox tar perl gzip util-linux >/dev/null && ln -sfn "$(command -v tar)" /usr/bin/tar.gnu && exec bash images/runner/ubuntu-26.04/tar-semantics-test.sh'
 fi
 
 rundir="$(mktemp -d /tmp/tar-sem-layout.XXXXXX)"
-cp "$here/tar-shim.sh" "$here/tar-absolute.sh" "$here/tar-extract.sh" "$rundir/"
+cp "$here/tar-shim.sh" "$here/tar-absolute.sh" "$here/tar-extract.sh" "$here/tar-extract-plan.sh" "$rundir/"
 cp "$here/tar-pax.pl" "$rundir/velnor-tar-pax"
 cp "$here/tar-member.pl" "$rundir/"
+cp "$here/tar-member-rewrite.pl" "$rundir/"
 chmod 0755 "$rundir/tar-shim.sh" "$rundir/velnor-tar-pax" "$rundir/tar-member.pl"
 shim="$rundir/tar-shim.sh"
 pass=0
@@ -46,16 +53,18 @@ my $out = shift @ARGV;
 open my $fh, ">:raw", $out or die $!;
 select $fh;
 sub header {
-    my ($name, $type, $size, $link) = @_;
+    my ($name, $type, $size, $link, $mode, $mtime) = @_;
     $link //= "";
+    $mode //= 0644;
+    $mtime //= 0;
     my $buf = "\0" x 512;
     die "name too long\n" if length($name) > 100;
     substr($buf, 0, length($name)) = $name;
-    substr($buf, 100, 7) = sprintf("%07o", 0644);
+    substr($buf, 100, 7) = sprintf("%07o", $mode);
     substr($buf, 108, 7) = sprintf("%07o", 0);
     substr($buf, 116, 7) = sprintf("%07o", 0);
     substr($buf, 124, 11) = sprintf("%011o", $size);
-    substr($buf, 136, 11) = sprintf("%011o", 0);
+    substr($buf, 136, 11) = sprintf("%011o", $mtime);
     substr($buf, 148, 8) = "        ";
     substr($buf, 156, 1) = $type;
     die "link too long\n" if length($link) > 100;
@@ -80,6 +89,26 @@ while (@ARGV) {
         my $name = shift @ARGV;
         my $target = shift @ARGV;
         header($name, "2", 0, $target);
+    } elsif ($kind eq "d") {
+        my $name = shift @ARGV;
+        my $mode = oct(shift @ARGV);
+        my $mtime = shift @ARGV;
+        header($name, "5", 0, "", $mode, $mtime);
+    } elsif ($kind eq "x") {
+        my $name = shift @ARGV;
+        my $path = shift @ARGV;
+        my $body = " path=$path\n";
+        my $length = length($body) + 1;
+        my $record;
+        while (1) {
+            $record = "$length$body";
+            last if length($record) == $length;
+            $length = length($record);
+        }
+        header($name, "x", length($record), "");
+        print $record or die $!;
+        my $pad = (512 - (length($record) % 512)) % 512;
+        print "\0" x $pad if $pad;
     } else {
         die "bad record $kind\n";
     }
@@ -87,6 +116,8 @@ while (@ARGV) {
 print "\0" x 1024 or die $!;
 END_PERL
 }
+
+. "$here/tar-semantics-planned-test.sh"
 
 case_newline() {
   local root="$work/newline" err status=0
@@ -209,18 +240,26 @@ case_space_name() {
 }
 
 case_absolute_relative_target() {
-  local root="$work/absrel" err status=0 link
+  local root="$work/absrel" link
   rm -rf -- "$root"
   mkdir -p "$root/dest" "$root/pit"
   link="$root/pit/link"
   write_ustar "$root/arc.tar" s "$link" tmp || return 1
-  err="$root/err"
-  bash "$shim" -xf "$root/arc.tar" -P -C "$root/dest" >"$err" 2>&1 || status=$?
-  [ "$status" -ne 0 ] || return 1
-  grep -E -q 'escapes|traverses' "$err" || return 1
-  [ ! -e "$link" ] || return 1
-  [ ! -L "$link" ] || return 1
+  bash "$shim" -xf "$root/arc.tar" -P -C "$root/dest" || return 1
+  [ -L "$link" ] || return 1
+  [ "$(readlink "$link")" = tmp ] || return 1
   [ ! -e "$root/pit/tmp" ] || return 1
+}
+
+case_absolute_link_target() {
+  local root="$work/abslink" status=0
+  rm -rf -- "$root"
+  mkdir -p "$root/dest" "$root/outside"
+  write_ustar "$root/arc.tar" s link "$root/outside" || return 1
+  bash "$shim" -xf "$root/arc.tar" -P -C "$root/dest" >"$root/err" 2>&1 || status=$?
+  [ "$status" -ne 0 ] || return 1
+  grep -F -q 'symlink escapes destination' "$root/err" || return 1
+  [ ! -e "$root/dest/link" ] && [ ! -L "$root/dest/link" ] || return 1
 }
 
 case_dot_symlink_walk() {
@@ -286,13 +325,27 @@ case_disk_full() {
   fi
 }
 
+if [ "${VELNOR_ONLY_GROUPED:-0}" = 1 ]; then
+  run_case grouped-external-restore case_grouped_external_restore
+  printf 'RESULT pass=%s fail=%s\n' "$pass" "$fail"
+  [ "$fail" -eq 0 ]
+  exit
+fi
+
 run_case newline-rejected case_newline
-run_case absolute-relative-target case_absolute_relative_target
+run_case absolute-relative-target-preserved case_absolute_relative_target
+run_case absolute-link-target-rejected case_absolute_link_target
 run_case dot-symlink-walk case_dot_symlink_walk
 run_case symlink-escape case_symlink_escape
 run_case preexisting-symlink case_preexisting_symlink
 run_case symlink-inside case_symlink_inside
+run_case external-relative-symlink case_external_relative_symlink
 run_case mode-and-mtime case_mode_and_mtime
+run_case directory-metadata case_directory_metadata
+run_case restrictive-parent-metadata case_restrictive_parent_metadata
+run_case rewritten-long-paths case_rewritten_long_paths
+run_case rewritten-pax-member case_rewritten_pax_member
+run_case grouped-external-restore case_grouped_external_restore
 run_case empty-dir case_empty_dir
 run_case long-and-deep case_long_and_deep
 run_case space-name case_space_name
