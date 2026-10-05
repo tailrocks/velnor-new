@@ -312,7 +312,7 @@ fn lane_target_dirs_stay_isolated() {
 }
 
 #[test]
-fn mbx_objects_step_lets_a_scale_set_write_and_keeps_hosted_push_gated() {
+fn mbx_objects_step_gates_save_to_push_via_cache_mode() {
     let uses = format!("jdx/mr-boxington-action@{}", sha());
     let [_, direct, _] = mbx_tool_steps(&uses, "1.19.0", "1.98.1").expect("direct MBX steps");
     let [_, driven, _] = mbx_steps_for_driver(
@@ -331,9 +331,9 @@ fn mbx_objects_step_lets_a_scale_set_write_and_keeps_hosted_push_gated() {
         assert_eq!(
             env.get(MBX_CACHE_MODE_ENV).map(String::as_str),
             Some(
-                "${{ runner.environment != 'github-hosted' && 'write' || (github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read') }}"
+                "${{ github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && 'write' || 'read' }}"
             ),
-            "a Scale Set runner may write; a hosted runner writes only on a protected default-branch push"
+            "only protected default-branch pushes may write"
         );
     }
     assert!(
