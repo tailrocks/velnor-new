@@ -349,15 +349,10 @@ fn render_merged(
         jobs.clone()
     };
     let mbx_gc_jobs = crate::mbx_gc_policy::jobs_with_hosted_linux_mbx_objects(&jobs);
+    let mbx_share_out_jobs = crate::mbx_gc_policy::jobs_with_mbx_objects(&jobs);
     let shared = crate::lane_share::share_lanes(&jobs, ctx)?;
-    let mut document = document::workflow_to_yaml(
-        ir,
-        &shared.jobs,
-        ctx,
-        &shared.calls,
-        &shared.checkouts,
-        &mbx_gc_jobs,
-    )?;
+    let mut document =
+        document::workflow_to_yaml(ir, &shared, ctx, &mbx_gc_jobs, &mbx_share_out_jobs)?;
     if let Some((source, max_parallel)) = &matrix {
         matrix::attach_task_matrix(&mut document, source, *max_parallel)?;
     } else {
