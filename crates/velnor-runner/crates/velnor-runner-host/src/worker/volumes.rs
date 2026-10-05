@@ -53,7 +53,7 @@ pub(crate) async fn remove_worker_volumes(
         let Some(observed) = inspect_volume(docker, &volume.name).await? else {
             continue;
         };
-        if !owns(worker, &volume, &observed) {
+        if !releasable(worker, &volume, &observed) {
             return Ok(false);
         }
         docker_deadline(docker.remove_volume(&volume.name, None::<RemoveVolumeOptions>))
@@ -117,7 +117,106 @@ fn target(role: &str) -> &'static str {
 }
 
 fn owns(worker: &str, expected: &WorkerVolume, observed: &Volume) -> bool {
+    labeled(worker, expected, observed)
+}
+
+/// An exact name with no labels belongs to this worker.
+/// A foreign label or a partial label keeps the volume.
+fn releasable(worker: &str, expected: &WorkerVolume, observed: &Volume) -> bool {
+    if observed.name != expected.name {
+        return false;
+    }
+    if observed.labels.is_empty() {
+        return true;
+    }
+    observed.labels.len() == 2 && labeled(worker, expected, observed)
+}
+
+fn labeled(worker: &str, expected: &WorkerVolume, observed: &Volume) -> bool {
     observed.name == expected.name
         && observed.labels.get("velnor.worker").map(String::as_str) == Some(worker)
         && observed.labels.get("velnor.role").map(String::as_str) == Some(expected.role)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use bollard::models::Volume;
+
+    use super::{WorkerVolume, releasable};
+
+    fn sample(name: &str, labels: &[(&str, &str)]) -> Volume {
+        Volume {
+            name: name.to_owned(),
+            driver: "local".to_owned(),
+            mountpoint: "/var/lib/docker/volumes/test".to_owned(),
+            created_at: None,
+            status: None,
+            labels: labels
+                .iter()
+                .map(|(key, value)| ((*key).to_owned(), (*value).to_owned()))
+                .collect(),
+            scope: None,
+            cluster_volume: None,
+            options: HashMap::new(),
+            usage_data: None,
+        }
+    }
+
+    fn expected() -> WorkerVolume {
+        WorkerVolume {
+            name: "w135-work".to_owned(),
+            role: "work",
+        }
+    }
+
+    #[test]
+    fn unlabeled_exact_name_is_releasable() {
+        let volume = sample("w135-work", &[]);
+        assert!(releasable("w135", &expected(), &volume));
+    }
+
+    #[test]
+    fn exact_labels_are_releasable() {
+        let volume = sample(
+            "w135-work",
+            &[("velnor.worker", "w135"), ("velnor.role", "work")],
+        );
+        assert!(releasable("w135", &expected(), &volume));
+    }
+
+    #[test]
+    fn foreign_worker_label_is_kept() {
+        let volume = sample(
+            "w135-work",
+            &[("velnor.worker", "other"), ("velnor.role", "work")],
+        );
+        assert!(!releasable("w135", &expected(), &volume));
+    }
+
+    #[test]
+    fn partial_label_is_kept() {
+        let volume = sample("w135-work", &[("velnor.worker", "w135")]);
+        assert!(!releasable("w135", &expected(), &volume));
+    }
+
+    #[test]
+    fn extra_label_is_kept() {
+        let volume = sample(
+            "w135-work",
+            &[
+                ("velnor.worker", "w135"),
+                ("velnor.role", "work"),
+                ("other", "1"),
+            ],
+        );
+        assert!(!releasable("w135", &expected(), &volume));
+    }
+
+    #[test]
+    fn wrong_name_is_kept() {
+        let volume = sample("other", &[]);
+        assert!(!releasable("w135", &expected(), &volume));
+    }
 }
