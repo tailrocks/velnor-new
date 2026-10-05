@@ -5,9 +5,10 @@ Status: proposed; no producer or hosted qualification is claimed.
 An optional host-image seed at `/opt/velnor/seed` is a separate bootstrap input, not another cache
 archive or a replacement for the `actions/cache` transport. The only permitted importer copies from
 it; seed import never deletes or writes into the seed. Mise admission requires its stored key to equal
-the key derived from that job's complete pinned Mise tool set. MBX admission requires an exact stored
-restore-prefix match. Missing, malformed, or mismatched seed data MUST take the cold path before any
-restore destination is created or modified.
+the key derived from that job's complete pinned Mise tool set. The generated workflow has no MBX host-seed
+importer; the pinned native MBX action owns object-cache transport. Any future seeded consumer MUST match
+its exact stored layer key before copying. Missing, malformed, or mismatched seed data MUST take the cold
+path before any restore destination is created or modified.
 
 The seed boundary requires an external provisioner assumption: image provisioning completes before
 repository-controlled workflow code runs, controls the root-owned seed and its exact read-only mount,
