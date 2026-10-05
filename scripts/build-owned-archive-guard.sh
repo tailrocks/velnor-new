@@ -268,6 +268,10 @@ for config in "$cargo_home/config" "$cargo_home/config.toml"; do
     fail "isolated Cargo configuration is forbidden: $config"
   fi
 done
+run_tmp="$(mktemp -d "$build_tmp_root/archive-guard.XXXXXX")"
+chmod 700 "$run_tmp"
+check_directory "$run_tmp"
+trap cleanup EXIT
 
 run_mise() {
   env -i \
@@ -348,10 +352,6 @@ rustc_version="$(run_mise exec rust@1.98.1 -- rustc --version)"
 cargo_version="$(run_mise exec rust@1.98.1 -- cargo --version)"
 [[ "$rustc_version" == 'rustc 1.98.1 '* ]] || fail "unexpected compiler: $rustc_version"
 [[ "$cargo_version" == 'cargo 1.98.1 '* ]] || fail "unexpected Cargo: $cargo_version"
-run_tmp="$(mktemp -d "$build_tmp_root/archive-guard.XXXXXX")"
-chmod 700 "$run_tmp"
-check_directory "$run_tmp"
-trap cleanup EXIT
 source_fingerprint="$(archive_guard_source_fingerprint)"
 target_identity="$(archive_guard_target_identity)"
 guard_target="$guard_target_root/$source_fingerprint-$target_identity"
