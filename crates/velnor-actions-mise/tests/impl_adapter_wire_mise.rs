@@ -1,7 +1,7 @@
 //! Adapter-wire cases: event modes, save decisions, identities, freshness,
 //! policy headers, archive identity, transfers, inventories, and Mise
 //! tool-file routing plus inspection (F2 mise/rust halves).
-use velnor_actions_contract::{FreshnessRequirement, digest_b3};
+use velnor_actions_contract::{CacheWriterContext, FreshnessRequirement, digest_b3};
 use velnor_actions_mise::cache::mode_for_event;
 use velnor_actions_mise::catalog::lock::{parse_version_policy, verify_policy_header};
 use velnor_actions_mise::{
@@ -11,6 +11,15 @@ use velnor_actions_mise::{
     inspect_mise_file, is_allowed_mise_subcommand, is_mise_env_symbol, lock_tool_versions,
     requires_archive_transfer, save_decision, save_useful, stack_for_symbol, writers_overlap,
 };
+
+fn writer(event: &str) -> CacheWriterContext<'_> {
+    CacheWriterContext {
+        event,
+        reference: Some("refs/heads/main"),
+        default_branch: Some("main"),
+        ref_protected: true,
+    }
+}
 
 #[test]
 fn fork_event_is_read_only() {
@@ -31,7 +40,7 @@ fn save_decision_denies_with_reasons() {
     let save = |trust: &str, event: &str, passed: bool| {
         save_decision(&SaveInputs {
             layer_trust: trust,
-            event,
+            writer: writer(event),
             passed,
             unavailable: false,
             active_writer: false,
@@ -59,7 +68,7 @@ fn save_decision_denies_with_reasons() {
     }
     let down = save_decision(&SaveInputs {
         layer_trust: "pr",
-        event: "push",
+        writer: writer("push"),
         passed: true,
         unavailable: true,
         active_writer: false,
@@ -67,7 +76,7 @@ fn save_decision_denies_with_reasons() {
     assert_eq!(down, Err(MissReason::CACHE_UNAVAILABLE));
     let overlap = save_decision(&SaveInputs {
         layer_trust: "pr",
-        event: "push",
+        writer: writer("push"),
         passed: true,
         unavailable: false,
         active_writer: true,

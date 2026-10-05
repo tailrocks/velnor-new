@@ -7,6 +7,8 @@ mod impl_renderer_acquire;
 mod impl_renderer_cache_steps;
 #[path = "impl_renderer_cache_t22.rs"]
 mod impl_renderer_cache_t22;
+#[path = "impl_renderer_canonical_cache.rs"]
+mod impl_renderer_canonical_cache;
 #[path = "impl_renderer_f2close.rs"]
 mod impl_renderer_f2close;
 #[path = "impl_renderer_f2close_hygiene.rs"]
@@ -97,6 +99,8 @@ mod impl_renderer_token_hygiene_env;
 mod impl_renderer_token_prelude;
 #[path = "impl_renderer_toolchain_contract.rs"]
 mod impl_renderer_toolchain_contract;
+#[path = "impl_renderer_tools_cache.rs"]
+mod impl_renderer_tools_cache;
 #[path = "impl_renderer_tree.rs"]
 mod impl_renderer_tree;
 #[path = "impl_renderer_tree_policy.rs"]

@@ -51,4 +51,4 @@ pub use report::{
     NotSelectedReason, TaskReport, TaskStatus, TaskTiming,
 };
 pub use timeout::JobTimeout;
-pub use trust::{Trust, trust_for_event};
+pub use trust::{CacheWriterContext, Trust, trust_for_event};

@@ -2,6 +2,7 @@
 //! poisoned links, wrong platform/tool/lock, and cold recovery.
 use std::path::PathBuf;
 
+use velnor_actions_contract::CacheWriterContext;
 use velnor_actions_contract::cachekey::MISS_REASONS;
 use velnor_actions_contract::digest_b3;
 use velnor_actions_mise::cache_sources as sources;
@@ -13,6 +14,15 @@ use velnor_actions_mise::restore_evidence::{
     RestoreObservation, output_bytes_complete, verify_provider_restore,
 };
 use velnor_actions_mise::{MiseError, read_artifact_bytes, verify_artifact_digest};
+
+fn writer(event: &str) -> CacheWriterContext<'_> {
+    CacheWriterContext {
+        event,
+        reference: Some("refs/heads/main"),
+        default_branch: Some("main"),
+        ref_protected: true,
+    }
+}
 
 fn scratch_dir(test: &str) -> Result<PathBuf, String> {
     let dir = std::env::temp_dir().join(format!("velnor-mise-{test}-{}", std::process::id()));
@@ -288,7 +298,7 @@ fn save_decision_keeps_single_writer_push_gated_saves() {
     ) -> SaveInputs<'a> {
         SaveInputs {
             layer_trust,
-            event,
+            writer: writer(event),
             passed,
             unavailable: false,
             active_writer,
@@ -321,7 +331,7 @@ fn save_decision_keeps_single_writer_push_gated_saves() {
     assert_eq!(
         save_decision(&SaveInputs {
             layer_trust: "trusted",
-            event: "push",
+            writer: writer("push"),
             passed: true,
             unavailable: true,
             active_writer: false,

@@ -11,7 +11,9 @@ use std::path::{Component, Path, PathBuf};
 use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
-use velnor_actions_contract::{canonical_json_bytes, digest_b3, validate_digest};
+use velnor_actions_contract::{
+    CacheWriterContext, canonical_json_bytes, digest_b3, validate_digest,
+};
 
 use crate::error::MiseError;
 
@@ -384,13 +386,11 @@ fn ineligible(task: &str, reason: &str) -> MiseError {
     }
 }
 
-/// Save allowlist: producer-successful pushes only, for every layer.
+/// Save allowlist: producer-successful protected default-branch pushes.
 ///
-/// A save needs its producer to have passed and a protected-push event;
-/// failed runs never save, and PR, fork, merge-group, release, local,
-/// and unknown events never save through this path (PR task caches are
-/// read-only; release caching is off). Unknown trust scopes deny closed.
+/// Event names alone never authorize writes. Both the exact default ref and
+/// GitHub's immutable protected-ref fact are required; missing metadata denies.
 #[must_use]
-pub fn save_allowed(layer_trust: &str, event: &str, passed: bool) -> bool {
-    passed && event == "push" && matches!(layer_trust, "trusted" | "pr")
+pub fn save_allowed(layer_trust: &str, writer: CacheWriterContext<'_>, passed: bool) -> bool {
+    passed && writer.is_protected_default_push() && matches!(layer_trust, "trusted" | "pr")
 }

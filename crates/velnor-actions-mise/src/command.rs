@@ -11,11 +11,16 @@ mod tofu;
 
 pub use self::env::{
     CREDENTIAL_ALLOWLIST_BASELINE, CREDENTIAL_ALLOWLIST_BOOTSTRAP, CREDENTIAL_ENV_KEYS,
-    ENDPOINT_ENV_KEYS, EnvPolicy, ISOLATION_ENV, MISE_CARGO_HOME_ENV, MISE_RUSTUP_HOME_ENV,
-    NO_AUTO_INSTALL_ENV, PROXY_ENV_KEYS, RUSTUP_TOOLCHAIN_ENV, TF_CLI_CONFIG_FILE_ENV,
-    TF_DATA_DIR_ENV, TF_IN_AUTOMATION_ENV, TF_IN_AUTOMATION_ON, TF_INPUT_ENV, TF_INPUT_OFF,
-    TF_PLUGIN_CACHE_DIR_ENV, is_denied_credential_key, is_denied_endpoint_key, is_reserved_env_key,
-    proxy_passthrough, toolchain_env,
+    ENDPOINT_ENV_KEYS, EnvPolicy, ISOLATION_ENV, MISE_CARGO_HOME_ENV, MISE_DATA_DIR_ENV,
+    MISE_DATA_DIR_EXPR, MISE_RUSTUP_HOME_ENV, NO_AUTO_INSTALL_ENV, PROXY_ENV_KEYS,
+    RUSTUP_TOOLCHAIN_ENV, TF_CLI_CONFIG_FILE_ENV, TF_DATA_DIR_ENV, TF_IN_AUTOMATION_ENV,
+    TF_IN_AUTOMATION_ON, TF_INPUT_ENV, TF_INPUT_OFF, TF_PLUGIN_CACHE_DIR_ENV,
+    is_denied_credential_key, is_denied_endpoint_key, is_reserved_env_key, proxy_passthrough,
+    toolchain_env,
+};
+pub(crate) use self::env::{
+    local_mise_data_dir, toolchain_env_with_data_dir, unresolved_workflow_expression,
+    validate_local_path,
 };
 use self::env::{pairs_of, redact_env_for_debug, strip_credentials};
 pub(crate) use self::output::redact_argv_for_debug;
@@ -109,7 +114,10 @@ impl IsolatedCommand {
         args: Vec<OsString>,
         declared: &[(OsString, OsString)],
     ) -> Result<Self, MiseError> {
-        for (key, _) in declared {
+        for (key, value) in declared {
+            if let Some(error) = unresolved_workflow_expression(key, value) {
+                return Err(error);
+            }
             if is_reserved_env_key(&key.to_string_lossy()) {
                 return Err(MiseError::InvalidStepInput {
                     field: key.to_string_lossy().into_owned(),
@@ -139,7 +147,16 @@ impl IsolatedCommand {
     pub fn with_env(mut self, extra: &[(OsString, OsString)]) -> Result<Self, MiseError> {
         for pair in extra {
             let key = pair.0.to_string_lossy();
-            if is_reserved_env_key(&key) || (self.program == "git" && key == "GIT_OPTIONAL_LOCKS") {
+            if let Some(error) = unresolved_workflow_expression(&pair.0, &pair.1) {
+                return Err(error);
+            }
+            let owned_data_dir = self.program == OsStr::new("mise") && key == MISE_DATA_DIR_ENV;
+            if owned_data_dir {
+                validate_local_path(&key, &pair.1.to_string_lossy())?;
+            }
+            if (is_reserved_env_key(&key) && !owned_data_dir)
+                || (self.program == "git" && key == "GIT_OPTIONAL_LOCKS")
+            {
                 return Err(MiseError::InvalidStepInput {
                     field: key.into_owned(),
                     value: "reserved_env_key".to_owned(),

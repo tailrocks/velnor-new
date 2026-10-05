@@ -17,8 +17,12 @@ use crate::{
 mod tools;
 
 pub use tools::{
-    TOOLS_CACHE_PATH, TOOLS_KEY_PREFIX, TOOLS_RESTORE_NAME, TOOLS_RESTORE_USES, TOOLS_SAVE_NAME,
-    TOOLS_SAVE_USES, tools_cache_key, tools_restore_step, tools_save_step,
+    TOOLS_CACHE_ELIGIBLE_ENV, TOOLS_CACHE_PATHS, TOOLS_CACHE_RESTORE_CONDITION,
+    TOOLS_CACHE_SAVE_CONDITION, TOOLS_IMAGE_IDENTITY_NAME, TOOLS_IMAGE_OS_ENV,
+    TOOLS_IMAGE_VERSION_ENV, TOOLS_KEY_PREFIX, TOOLS_MISE_BOOTSTRAP_BINARY,
+    TOOLS_MISE_BOOTSTRAP_DATA_DIR, TOOLS_MISE_DATA_DIR, TOOLS_RESTORE_NAME, TOOLS_RESTORE_USES,
+    TOOLS_SAVE_NAME, TOOLS_SAVE_USES, is_tools_cache_key, is_tools_cache_path,
+    tools_cache_image_identity_step, tools_cache_path_input, tools_restore_step, tools_save_step,
 };
 
 /// Pinned mr-boxington action name (objects mode).
@@ -208,8 +212,39 @@ fn is_exact_mbx_version(version: &str) -> bool {
 }
 
 /// Cache restore/save step over `actions/cache`; MBX never archives here.
+/// Every generic saver gets the protected-default success gate at this
+/// constructor boundary. The tool-cache wrapper extends it with image
+/// eligibility; no caller can accidentally emit an ungated save.
 /// # Errors
 pub fn cache_action_step(
+    restore: bool,
+    uses: &str,
+    layer: &str,
+    key: &str,
+    restore_keys: &[String],
+    paths: &[String],
+) -> Result<Step, RenderError> {
+    if layer == "tools" {
+        return Err(RenderError::BadCommand(
+            "tools_cache_requires_typed_builder".to_owned(),
+        ));
+    }
+    cache_action_step_inner(restore, uses, layer, key, restore_keys, paths)
+}
+
+/// Construct one canonical tools action; only the typed restore/save
+/// wrappers in the child module may call this path.
+fn tools_cache_action_step(
+    restore: bool,
+    uses: &str,
+    key: &str,
+    paths: &[String],
+) -> Result<Step, RenderError> {
+    cache_action_step_inner(restore, uses, "tools", key, &[], paths)
+}
+
+/// Shared constructor after public layer policy has been checked.
+fn cache_action_step_inner(
     restore: bool,
     uses: &str,
     layer: &str,
@@ -229,8 +264,17 @@ pub fn cache_action_step(
     if !matches!(layer, "sources" | "task" | "tools" | "tofu-providers") {
         return Err(RenderError::BadCommand("mbx_needs_objects_mode".to_owned()));
     }
-    if key.trim().is_empty() || key.contains(' ') || key.contains('\n') {
+    if key.trim().is_empty()
+        || key.contains('\n')
+        || layer != "tools" && key.contains(' ')
+        || layer == "tools" && !is_tools_cache_key(key)
+    {
         return Err(RenderError::BadCommand("bad_cache_key".to_owned()));
+    }
+    if layer == "tools" && !restore_keys.is_empty() {
+        return Err(RenderError::BadCommand(
+            "tools_cache_restore_prefix_forbidden".to_owned(),
+        ));
     }
     if paths.is_empty() {
         return Err(RenderError::BadCommand("empty_cache_paths".to_owned()));
@@ -242,7 +286,7 @@ pub fn cache_action_step(
         ("key".to_owned(), key.to_owned()),
         ("path".to_owned(), paths.join("\n")),
     ]);
-    if restore {
+    if restore && !restore_keys.is_empty() {
         with.insert("restore-keys".to_owned(), restore_keys.join("\n"));
     }
     let name = if restore {
@@ -250,15 +294,18 @@ pub fn cache_action_step(
     } else {
         "Save cache"
     };
-    action_step(name, uses, with)
+    let mut step = action_step(name, uses, with)?;
+    if !restore {
+        step.condition =
+            Some(velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION.to_owned());
+    }
+    Ok(step)
 }
 
 fn validate_cache_path(layer: &str, path: &str) -> Result<(), RenderError> {
-    let second = path.split('/').nth(1);
-    let legacy_ok = path.starts_with("$CARGO_HOME/") && matches!(second, Some("registry" | "git"));
-    if layer == "sources" && (legacy_ok || sources_subset_ok(path))
+    if layer == "sources" && sources_subset_ok(path)
         || layer == "task" && path == TASK_ARTIFACTS_DIR
-        || layer == "tools" && path == TOOLS_CACHE_PATH
+        || layer == "tools" && is_tools_cache_path(path)
         || layer == "tofu-providers" && crate::tofu_cache::tofu_providers_path_ok(path)
     {
         Ok(())
@@ -279,13 +326,10 @@ fn sources_subset_ok(path: &str) -> bool {
     if suffix.starts_with("registry/src") {
         return false;
     }
-    matches!(
-        suffix,
-        ".crates.toml" | ".crates2.json" | "bin" | "registry/index" | "registry/cache" | "git/db"
-    ) || suffix.starts_with("registry/index/")
+    matches!(suffix, "registry/index" | "registry/cache" | "git/db")
+        || suffix.starts_with("registry/index/")
         || suffix.starts_with("registry/cache/")
         || suffix.starts_with("git/db/")
-        || suffix.starts_with("bin/")
 }
 
 /// Check restore-before/save-after ordering over cache action steps.

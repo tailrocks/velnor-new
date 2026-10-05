@@ -6,6 +6,8 @@
 
 use std::fmt::{Display, Formatter, Result as FmtResult};
 
+use velnor_actions_contract::CacheWriterContext;
+
 use crate::cache::verify_reused_outputs;
 use crate::command::is_cancel_or_timeout;
 use crate::error::MiseError;
@@ -302,8 +304,8 @@ pub fn probe_tool_availability(qualified: bool, probe_failed: bool) -> ToolAvail
 pub struct SaveInputs<'a> {
     /// Layer trust scope (`trusted` saves only on protected pushes).
     pub layer_trust: &'a str,
-    /// Workflow event name.
-    pub event: &'a str,
+    /// Immutable event/ref facts used for trusted-write authorization.
+    pub writer: CacheWriterContext<'a>,
     /// Whether required checks passed.
     pub passed: bool,
     /// Cache backend unavailable.
@@ -327,7 +329,7 @@ pub fn save_decision(inputs: &SaveInputs<'_>) -> Result<(), MissReason> {
     if inputs.active_writer {
         return Err(MissReason::CACHE_WRITE_DISABLED);
     }
-    if !crate::cache::save_allowed(inputs.layer_trust, inputs.event, inputs.passed) {
+    if !crate::cache::save_allowed(inputs.layer_trust, inputs.writer, inputs.passed) {
         return Err(MissReason::CACHE_WRITE_DISABLED);
     }
     Ok(())
