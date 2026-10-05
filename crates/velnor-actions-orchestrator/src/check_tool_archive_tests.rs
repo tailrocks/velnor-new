@@ -364,3 +364,6 @@ mod metadata_tests;
 
 #[path = "check_tool_archive_deadline_tests.rs"]
 mod deadline_tests;
+
+#[path = "check_tool_archive_tar_admission_tests.rs"]
+mod tar_admission_tests;
