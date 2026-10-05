@@ -1,0 +1,47 @@
+    Checking typenum v1.20.1
+    Checking hybrid-array v0.4.15
+    Checking serde_core v1.0.229
+    Checking cpufeatures v0.3.1
+    Checking cfg-if v1.0.5
+    Checking zmij v1.0.23
+    Checking crypto-common v0.2.2
+    Checking block-buffer v0.12.1
+    Checking constant_time_eq v0.4.2
+    Checking const-oid v0.10.2
+    Checking memchr v2.8.3
+    Checking itoa v1.0.18
+    Checking arrayvec v0.7.8
+    Checking blake3 v1.8.7
+    Checking serde_json v1.0.151
+    Checking digest v0.11.3
+    Checking serde v1.0.229
+    Checking thiserror v2.0.21
+    Checking velnor-actions-contract v0.1.0 (/root/Projects/tailrocks/velnor-project/velnor-new-pr-12/crates/velnor-actions-contract)
+    Checking sha2 v0.11.0
+    Checking velnor-actions-workflow-renderer v0.1.0 (/root/Projects/tailrocks/velnor-project/velnor-new-pr-12/crates/velnor-actions-workflow-renderer)
+error: this function has too many lines (81/80)
+   --> crates/velnor-actions-workflow-renderer/src/document.rs:181:1
+    |
+181 | / fn job_to_yaml(
+182 | |     id: &str,
+183 | |     job: &Job,
+184 | |     ctx: &RenderContext,
+...   |
+187 | |     mbx_gc_auto: bool,
+188 | | ) -> Result<Yaml, RenderError> {
+    | |______________________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#too_many_lines
+    = note: requested on the command line with `-D clippy::too-many-lines`
+
+error: very complex type used. Consider factoring parts into `type` definitions
+   --> crates/velnor-actions-workflow-renderer/src/lane_share_lcs.rs:208:6
+    |
+208 | ) -> Result<(Vec<SharedCall>, Vec<SharedCall>, Vec<RenderedFile>), RenderError> {
+    |      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.99.0/index.html#type_complexity
+    = note: `-D clippy::type-complexity` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::type_complexity)]`
+
+error: could not compile `velnor-actions-workflow-renderer` (lib) due to 2 previous errors
