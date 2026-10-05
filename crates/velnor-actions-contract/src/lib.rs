@@ -41,14 +41,15 @@ pub use canonical::{
 };
 pub use closure::{ClosureBuilder, Provenance, TaskInputClosure};
 pub use config::{
-    DeclaredCompileDriver, DeclaredTestRunner, DiscoveryConfig, ExecutionConfig, ExecutionMode,
-    ExecutionRole, GeneratorValidation, ProfileKind, ResourcesConfig, RootProblem, RoutingWorkflow,
-    RunnerSelection, RunsOn, RustConfiguration, RustStackConfig, SCALE_SET_NAME, ScaleSetSelector,
-    ShardTimingEvidence, StacksConfig, TestShardingConfig, TofuStackConfig, Utf8RepoRelDir,
-    VELNOR_LABEL, VERIFICATION_TASK_JOB_PREFIX, VelnorConfig, VelnorSupportWorkflow,
-    VerificationRunner, VerificationTask, VerificationTaskKind, WorkflowConfig, WorkflowPolicy,
-    is_valid_feature_name, is_valid_mise_task_name, is_valid_rust_target,
-    is_valid_verification_task_id, validate_shard_changes_need_evidence,
+    BuildTask, BuildTaskRunner, DeclaredCompileDriver, DeclaredTestRunner, DiscoveryConfig,
+    ExecutionConfig, ExecutionMode, ExecutionRole, GeneratorValidation, ProfileKind,
+    ResourcesConfig, RootProblem, RoutingWorkflow, RunnerSelection, RunsOn, RustConfiguration,
+    RustStackConfig, SCALE_SET_NAME, ScaleSetSelector, ShardTimingEvidence, StacksConfig,
+    TestShardingConfig, TofuStackConfig, Utf8RepoRelDir, VELNOR_LABEL, VelnorConfig,
+    VelnorSupportWorkflow, VerificationRunner, VerificationTask, WORKFLOW_TASK_JOB_PREFIX,
+    WorkflowConfig, WorkflowPolicy, WorkflowTask, is_valid_build_tool_key, is_valid_feature_name,
+    is_valid_mise_task_name, is_valid_rust_target, is_valid_workflow_task_id,
+    validate_shard_changes_need_evidence,
 };
 pub use discover::{
     BUILTIN_EXCLUSIONS, DETECTION_SCHEMA, DetectError, DetectedProject, DetectionStatus,

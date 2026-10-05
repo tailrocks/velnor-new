@@ -4,8 +4,8 @@
 //! one hosted job. `both` duplicates eligible verification only.
 
 use crate::config::{
-    ExecutionConfig, ExecutionMode, ExecutionRole, VERIFICATION_TASK_JOB_PREFIX, VelnorConfig,
-    VerificationRunner,
+    ExecutionConfig, ExecutionMode, ExecutionRole, VelnorConfig, VerificationRunner,
+    WORKFLOW_TASK_JOB_PREFIX, WorkflowTask,
 };
 use crate::errors::ContractError;
 
@@ -84,11 +84,11 @@ pub fn expand_workflow(
         .as_ref()
         .ok_or_else(|| ContractError::config("config.toml", "execution", "missing_execution"))?;
     check_override_keys(ir, execution)?;
-    let map = id_map(ir, execution, dispatch)?;
+    let map = id_map(ir, config, execution, dispatch)?;
     let mut jobs = std::collections::BTreeMap::new();
     for (id, job) in &ir.jobs {
         let class = lane_class(id);
-        let placement = placement_for(execution, dispatch, class, id, job)?;
+        let placement = placement_for(config, execution, dispatch, class, id, job)?;
         emit_job(&mut jobs, id, job, execution, class, placement, &map)?;
     }
     let mut expanded = ir.clone();
@@ -111,12 +111,13 @@ fn check_override_keys(ir: &WorkflowIr, execution: &ExecutionConfig) -> Result<(
 
 fn id_map(
     ir: &WorkflowIr,
+    config: &VelnorConfig,
     execution: &ExecutionConfig,
     dispatch: Option<ExecutionMode>,
 ) -> Result<std::collections::BTreeMap<String, Vec<String>>, ContractError> {
     let mut map = std::collections::BTreeMap::new();
     for (id, job) in &ir.jobs {
-        let placement = placement_for(execution, dispatch, lane_class(id), id, job)?;
+        let placement = placement_for(config, execution, dispatch, lane_class(id), id, job)?;
         let ids = match placement {
             Placement::Both => vec![
                 format!("{id}{HOSTED_SUFFIX}"),
@@ -130,6 +131,7 @@ fn id_map(
 }
 
 fn placement_for(
+    config: &VelnorConfig,
     execution: &ExecutionConfig,
     dispatch: Option<ExecutionMode>,
     class: LaneClass,
@@ -148,16 +150,27 @@ fn placement_for(
     if class != LaneClass::Verification {
         return Ok(Placement::HostedOnly);
     }
-    if !verification_task_supports_scale_set(job_id, job)? {
+    if !workflow_task_supports_scale_set(job_id, job, config)? {
         if execution
             .overrides
             .get(job_id)
             .is_some_and(|over| over.profile == execution.scale_set_profile)
         {
+            let issue = if config
+                .workflow
+                .tasks
+                .iter()
+                .find(|task| format!("{WORKFLOW_TASK_JOB_PREFIX}{}", task.id()) == job_id)
+                .is_some_and(|task| matches!(task, WorkflowTask::Build(_)))
+            {
+                "workflow_task_hosted_only_scale_set_override"
+            } else {
+                "verification_runner_incompatible_with_scale_set"
+            };
             return Err(ContractError::config(
                 "config.toml",
                 format!("execution.overrides.{job_id}.profile"),
-                "verification_runner_incompatible_with_scale_set",
+                issue,
             ));
         }
         return Ok(Placement::HostedOnly);
@@ -188,20 +201,42 @@ fn placement_for(
     }
 }
 
-/// Native macOS tasks cannot use the Linux/amd64 Scale Set profile.
-fn verification_task_supports_scale_set(job_id: &str, job: &Job) -> Result<bool, ContractError> {
-    if !job_id.starts_with(VERIFICATION_TASK_JOB_PREFIX) {
+/// Only Linux-x64 verification variants can use the Linux/amd64 Scale Set.
+fn workflow_task_supports_scale_set(
+    job_id: &str,
+    job: &Job,
+    config: &VelnorConfig,
+) -> Result<bool, ContractError> {
+    let Some(task_id) = job_id.strip_prefix(WORKFLOW_TASK_JOB_PREFIX) else {
         return Ok(true);
-    }
-    match job.runs_on.as_str() {
-        label if label == VerificationRunner::LinuxX64.runs_on() => Ok(true),
-        label if label == VerificationRunner::MacosArm64.runs_on() => Ok(false),
-        label => Err(ContractError::config(
+    };
+    let Some(task) = config
+        .workflow
+        .tasks
+        .iter()
+        .find(|task| task.id() == task_id)
+    else {
+        return Err(ContractError::config(
+            "config.toml",
+            format!("workflow.tasks.id:{task_id}"),
+            "task_job_without_declaration",
+        ));
+    };
+    let (expected_runner, supports_scale_set) = match task {
+        WorkflowTask::Verification(verification) => (
+            verification.runner.runs_on(),
+            verification.runner == VerificationRunner::LinuxX64,
+        ),
+        WorkflowTask::Build(build) => (build.runner.runs_on(), false),
+    };
+    if job.runs_on != expected_runner {
+        return Err(ContractError::config(
             "config.toml",
             format!("workflow.tasks.runner:{job_id}"),
-            format!("unsupported_verification_runner:{label}"),
-        )),
+            format!("runner_mismatch:{expected_runner}:{}", job.runs_on),
+        ));
     }
+    Ok(supports_scale_set)
 }
 
 fn role_matches(role: ExecutionRole, class: LaneClass) -> bool {

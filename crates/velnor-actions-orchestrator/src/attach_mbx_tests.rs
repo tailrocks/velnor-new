@@ -146,7 +146,7 @@ fn preseed_attach_builds_once_and_sets_mode() {
             validator_commands: Vec::new(),
             candidate: None,
             preseed: false,
-            verification_tasks: Vec::new(),
+            workflow_tasks: Vec::new(),
             plan_consumer_env: std::collections::BTreeMap::new(),
         },
         actionlint: ActionlintConfigInput::new("0.1.0").with_workflow_path(WORKFLOW_PATH),

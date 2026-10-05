@@ -259,14 +259,9 @@ fn job_to_yaml(
         StepKind::Internal { .. } => false,
     });
     let mut job_env = if step_has_env {
-        if ctx
-            .verification_tasks
-            .iter()
-            .any(|task| task.owns_job_id(id))
-        {
-            // Verification jobs intentionally execute repository-declared
-            // Mise tasks, so they need Mise config while retaining the same
-            // credential scrub as every other repository-code step.
+        if ctx.workflow_tasks.iter().any(|task| task.owns_job_id(id)) {
+            // Typed tasks intentionally execute repository-declared work, so
+            // they retain the same credential scrub as other repository steps.
             crate::toolchain_env::credential_scrub()
         } else {
             crate::toolchain_env::job_level_env()

@@ -3,6 +3,7 @@
 //! Unknown fields are rejected; validation reports file, key path, problem.
 
 mod actions;
+mod build_task;
 mod discovery;
 mod execution;
 mod release;
@@ -12,8 +13,10 @@ mod stacks;
 mod tofu;
 mod verification;
 mod workflow;
+mod workflow_task;
 
 pub use actions::{ActionPinOverride, ActionsConfig, OVERRIDABLE_ACTIONS};
+pub use build_task::{BuildTask, BuildTaskRunner, is_valid_build_tool_key};
 pub use discovery::DiscoveryConfig;
 pub use execution::{
     ExecutionConfig, ExecutionMode, ExecutionOverride, ExecutionParity, ExecutionProfile,
@@ -32,14 +35,12 @@ pub use stacks::{
     is_valid_feature_name, is_valid_rust_target,
 };
 pub use tofu::{RootProblem, TofuStackConfig, Utf8RepoRelDir};
-pub use verification::{
-    VERIFICATION_TASK_JOB_PREFIX, VerificationRunner, VerificationTask, VerificationTaskKind,
-    is_valid_mise_task_name, is_valid_verification_task_id,
-};
+pub use verification::{VerificationRunner, VerificationTask, is_valid_mise_task_name};
 pub use workflow::{
     GeneratorValidation, LATEST_RUNNER_LABEL, RUNNER_LABEL_CATALOG, RunnerSelection,
     VelnorSupportWorkflow, WorkflowConfig, WorkflowPolicy,
 };
+pub use workflow_task::{WORKFLOW_TASK_JOB_PREFIX, WorkflowTask, is_valid_workflow_task_id};
 
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};

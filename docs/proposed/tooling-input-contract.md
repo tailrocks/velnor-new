@@ -70,12 +70,13 @@ uncached; they do not change the Rust lane's install path.
 
 Non-empty `[stacks.rust].custom_tasks` remains rejected with
 `custom_tasks_unqualified`; arbitrary Mise commands never run inside
-the credential-bearing Rust lane. Generic no-Rust checks use sorted
-`[[workflow.tasks]]` declarations instead.
+the credential-bearing Rust lane. Explicit verification and native jobs use
+the same sorted `[[workflow.tasks]]` list with a strict `kind` discriminator.
 
 ## 1.2. Isolated verification tasks
 
-Each `workflow.tasks` entry declares `id`, `kind = "verification"`, an exact
+Each verification entry in `workflow.tasks` declares `id`,
+`kind = "verification"`, an exact
 `mise_task`, `runner`, and bounded `timeout_minutes`. IDs must be sorted,
 unique, and safe as job keys; the generated base ID is `task-{id}`. The only
 V1 runners are `linux-x64` (`ubuntu-26.04`) and `macos-arm64` (`macos-15`),
@@ -96,9 +97,73 @@ cache inputs. The job unsets the credential denylist before both
 artifact, or downstream output. The verification kind is for platform and
 other non-Rust checks only. Keeping task scripts free of Rust compilation is
 an authoring and review invariant; V1 does not inspect or enforce task bodies.
-Rust compilation remains in the existing MBX-backed lane pending a separate
-reviewed capability.
+Rust compilation remains in the existing MBX-backed lane or the typed
+`build` variant below.
 Protected release/signing is separate and is not provided by this kind.
+
+## 1.3. Isolated native build variant
+
+At most one `workflow.tasks` entry with `kind = "build"` declares a task that
+may compile repository code. It carries a stable `id`, exact `mise_task`,
+`runner = "macos-26-arm64"`, a `timeout_minutes` from 1 through 180,
+`cargo_build_jobs` from 1 through 2, and `nextest_test_threads` from 1 through
+2. The task uses the same workflow-wide ID namespace and sorted list as every
+other task kind. The generated job key is `task-{id}`. This native job remains
+a single hosted macOS 26 ARM64 job in every schema-2 execution mode; it checks out the same run source and
+does not accept a repository or ref override.
+
+The job checks for Xcode 26.6 build 17F113 and macOS SDK 26.5 under
+`/Applications/Xcode_26.6.app/Contents/Developer`. Checkout disables
+persisted credentials. The pinned Mise action sets up only Mise itself. The
+job verifies the checked-out `mise.toml`, `mise.lock`, and
+`rust-toolchain.toml` against the source-bound digests, then creates a private
+task-owned Mise home containing only the declared tool closure and its exact
+locked rows, including the locked ARM64 checksum artifacts where required.
+It installs that isolated closure once with
+`MISE_CARGO_BINSTALL_ONLY=1`; any selected tool without an accepted locked
+prebuilt backend or artifact fails closed. The project Cargo selector is not
+installed as a tool: the checked-out `mise.toml` must route Cargo through the
+verified `mbx` wrapper, and the task's Rust compilation runs through that
+wrapper. All Mise inspection, install, exec, and task commands set
+`--no-env`; the task also inherits `MISE_NO_ENV=1`, so repository env files
+and `env._.source` directives cannot run or alter the selected tools. The
+checked config-file chain is compared before install and before task
+execution. The declared task runs from the checked-out root with
+`CARGO_BUILD_JOBS` and `NEXTEST_TEST_THREADS` from the validated limits,
+Mise task and exec auto-install disabled, and the same Xcode developer
+directory. Every shell step clears credential variables; the job grants only
+`contents: read` and creates no cache, artifact, or downstream output. The consumer's own
+task must bound SwiftPM invocation in its explicit task argv; Velnor does not
+invent a SwiftPM environment alias.
+
+Each declared native job is reconstructed and compared exactly during strict
+rendering. Undeclared `task-*` jobs, alternate runner labels, checkout
+source overrides, extra permissions, caches, artifacts, or altered task steps
+fail closed. Every native job ID is added to `Required.needs`, so failure,
+skip, or cancellation prevents the required check from succeeding. The
+compile-free `verification` variant remains separate in behavior and cannot
+acquire the native build capability by adding fields.
+
+## 1.4. Native platform image validation
+
+One `workflow.tasks` entry with `kind = "native-image"` declares an
+unconditional native-host image validation job in the same sorted ID
+namespace and generated `task-{id}` job namespace. Its closed fields are
+`id`, `platform = "linux-arm64"`, a repository-owned `script` below
+`maintained-image-build/`, `timeout_minutes` from 1 through 60, and
+`cache = "task-owned-builder"`. The script must be a tracked regular file
+whose path components are not symlinks. The runner is fixed to
+`ubuntu-26.04-arm`, and the generator passes `--platform linux/arm64` to the
+script. The build runs on native ARM64 hardware without QEMU emulation.
+
+BuildKit cache is owned by one uniquely named task builder derived from the
+workflow run ID, run attempt, and task ID. An unconditional cleanup step
+removes that exact builder with `docker buildx rm --force`; it never runs a
+global prune command. `--no-cache` alone is not cleanup. Native-image jobs are
+hosted-only in every schema-2 execution mode, grant only `contents: read`,
+and join `Required`. Strict rendering reconstructs the exact runner,
+checkout, task command, resource limit, and cleanup sequence; undeclared
+`task-*` jobs or altered cache ownership fail closed.
 
 Checksums are TOFU (trust on first use): the first download that
 records a checksum trusts the bytes it received. Accepted residual,
@@ -110,7 +175,7 @@ bytes under the same exact pin. Out of scope for V1 (independent
 shasum channel, artifact transparency).
 
 Determinism follows per class: fixed Rust-lane steps from exact catalog
-pins, and verification jobs from the sorted committed task declarations.
+pins, and all typed-task jobs from the sorted committed task declarations.
 See
 [task-execution §2](task-execution-contract.md) for the fixed vectors
 and [workflow §3](workflow-contract.md) for the prepare step.

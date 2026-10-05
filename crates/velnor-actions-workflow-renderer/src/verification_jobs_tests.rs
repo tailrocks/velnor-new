@@ -1,14 +1,15 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{
-    Job, JobTimeout, PermissionLevel, VerificationRunner, VerificationTask, VerificationTaskKind,
+    Job, JobTimeout, PermissionLevel, VerificationRunner, VerificationTask,
 };
 
 use super::{
     HOSTED_TASK_NAME_SUFFIX, SCALE_TASK_NAME_SUFFIX, VerificationTaskPolicy,
-    build_verification_task_job, extend_required_needs, validate_verification_jobs,
+    build_verification_task_job, validate_verification_jobs,
 };
 use crate::MiseSetup;
+use crate::workflow_task_jobs::extend_required_needs;
 
 const CHECKOUT: &str = "actions/checkout@0123456789abcdef0123456789abcdef01234567";
 
@@ -16,7 +17,6 @@ fn policy(id: &str, runner: VerificationRunner) -> VerificationTaskPolicy {
     VerificationTaskPolicy {
         task: VerificationTask {
             id: id.to_owned(),
-            kind: VerificationTaskKind::Verification,
             mise_task: format!("lint-{id}"),
             runner,
             timeout_minutes: 10,

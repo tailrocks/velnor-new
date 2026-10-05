@@ -22,6 +22,9 @@ use velnor_actions_workflow_renderer::render::{
     PUBLISH_JOB_ID, RenderContext, WORKFLOW_PATH,
 };
 use velnor_actions_workflow_renderer::steps::PLAN_OPERATION;
+use velnor_actions_workflow_renderer::{
+    WorkflowTaskPolicy, build_build_task_job, build_verification_task_job,
+};
 
 use crate::OrchestratorError;
 use crate::discover::Discovery;
@@ -116,7 +119,20 @@ pub(crate) fn build_workflow(
     let catalog = ToolCatalog::pinned();
     let version = env!("CARGO_PKG_VERSION").to_owned();
     let policy = config.workflow.policy;
-    let verification_tasks = crate::verification_tasks::policies(config)?;
+    let verification_policies = crate::verification_tasks::policies(config)?;
+    let build_policies = crate::build_tasks::policies(config, discovery)?;
+    let mut workflow_tasks = verification_policies
+        .iter()
+        .cloned()
+        .map(WorkflowTaskPolicy::Verification)
+        .chain(
+            build_policies
+                .iter()
+                .cloned()
+                .map(WorkflowTaskPolicy::Build),
+        )
+        .collect::<Vec<_>>();
+    workflow_tasks.sort_by(|left, right| left.id().cmp(right.id()));
     let use_mbx = plan_uses_mbx(discovery);
     let support = support_workflow(policy, config.workflow.generator_validation, discovery);
     let mut jobs = BTreeMap::new();
@@ -154,7 +170,7 @@ pub(crate) fn build_workflow(
     for (id, job) in built.jobs {
         jobs.insert(id, job);
     }
-    crate::verification_tasks::insert_jobs(&mut jobs, &verification_tasks)?;
+    insert_workflow_task_jobs(&mut jobs, &workflow_tasks)?;
     insert_gate_jobs(&mut jobs, label, branch, &crate_ids, acquire, &catalog)?;
     wire_w1::check_crate_mbx_gating(&jobs, &built.drivers)?;
     let ir = WorkflowIr {
@@ -180,7 +196,7 @@ pub(crate) fn build_workflow(
         &catalog,
         discovery,
         use_rust,
-        verification_tasks,
+        workflow_tasks,
     )?;
     let actionlint = actionlint_input(config, &version, label);
     Ok(WorkflowPlan {
@@ -189,6 +205,31 @@ pub(crate) fn build_workflow(
         context,
         actionlint,
     })
+}
+
+/// Insert task jobs from the single validated variant-dispatched inventory.
+fn insert_workflow_task_jobs(
+    jobs: &mut BTreeMap<String, Job>,
+    tasks: &[WorkflowTaskPolicy],
+) -> Result<(), OrchestratorError> {
+    for task in tasks {
+        let (id, job) = match task {
+            WorkflowTaskPolicy::Verification(policy) => (
+                policy.job_id(),
+                build_verification_task_job(policy, CHECKOUT_USES)?,
+            ),
+            WorkflowTaskPolicy::Build(policy) => (
+                policy.job_id(),
+                build_build_task_job(policy, CHECKOUT_USES)?,
+            ),
+        };
+        if jobs.insert(id.clone(), job).is_some() {
+            return Err(OrchestratorError::Contract {
+                problem: format!("workflow_task_job_collision:{id}"),
+            });
+        }
+    }
+    Ok(())
 }
 
 fn support_workflow(

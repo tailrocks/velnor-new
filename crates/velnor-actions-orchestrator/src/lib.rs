@@ -7,6 +7,7 @@
 
 mod attach;
 mod baseline_publish;
+mod build_tasks;
 mod clippy_groups;
 mod config;
 mod config_stacks;
@@ -43,6 +44,8 @@ mod matrix_step;
 mod mbx_preflight;
 mod merge;
 mod merge_request;
+mod native_tool_input;
+mod native_tool_lock;
 mod noop_report;
 mod origin;
 mod pins;

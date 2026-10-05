@@ -2,8 +2,8 @@ use super::*;
 use std::collections::BTreeMap;
 use velnor_actions_contract::config::{ActionPinOverride, ActionsConfig};
 use velnor_actions_contract::{
-    DiscoveryConfig, GeneratorValidation, ResourcesConfig, StacksConfig, TestShardingConfig,
-    VerificationRunner, WorkflowConfig, WorkflowPolicy,
+    BuildTaskRunner, DiscoveryConfig, GeneratorValidation, ResourcesConfig, StacksConfig,
+    TestShardingConfig, VerificationRunner, WorkflowConfig, WorkflowPolicy,
 };
 
 /// Config carrying exactly the given action-pin overrides.
@@ -185,4 +185,14 @@ fn verification_mise_setup_pins_each_runner_architecture() {
     assert_eq!(macos.version, MISE_VERSION);
     assert_eq!(macos.sha256, MISE_BINARY_SHA256_MACOS_ARM64);
     assert_ne!(linux.sha256, macos.sha256);
+}
+
+#[test]
+fn native_build_task_mise_setup_uses_macos_arm64_binary_pin() {
+    let setup =
+        resolve_build_task_mise_setup(&config_with(BTreeMap::new()), BuildTaskRunner::Macos26Arm64)
+            .expect("macOS 26 Mise pin");
+
+    assert_eq!(setup.version, MISE_VERSION);
+    assert_eq!(setup.sha256, MISE_BINARY_SHA256_MACOS_ARM64);
 }

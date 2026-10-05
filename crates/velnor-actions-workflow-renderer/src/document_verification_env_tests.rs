@@ -3,9 +3,12 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::workflow::permissions::PermissionLevel;
-use velnor_actions_contract::{VerificationRunner, VerificationTask, VerificationTaskKind};
+use velnor_actions_contract::{VerificationRunner, VerificationTask};
 
-use crate::{MiseSetup, RenderContext, VerificationTaskPolicy, build_verification_task_job};
+use crate::{
+    MiseSetup, RenderContext, VerificationTaskPolicy, WorkflowTaskPolicy,
+    build_verification_task_job,
+};
 
 use super::job_to_yaml;
 
@@ -21,7 +24,6 @@ fn emitted_verification_job_scrubs_credentials_without_disabling_mise_config() {
     let policy = VerificationTaskPolicy {
         task: VerificationTask {
             id: "native-format".to_owned(),
-            kind: VerificationTaskKind::Verification,
             mise_task: "desktop-format-check".to_owned(),
             runner: VerificationRunner::MacosArm64,
             timeout_minutes: 10,
@@ -49,7 +51,7 @@ fn emitted_verification_job_scrubs_credentials_without_disabling_mise_config() {
         validator_commands: Vec::new(),
         candidate: None,
         preseed: false,
-        verification_tasks: vec![policy],
+        workflow_tasks: vec![WorkflowTaskPolicy::Verification(policy)],
         plan_consumer_env: BTreeMap::new(),
     };
     let checkouts = BTreeMap::new();

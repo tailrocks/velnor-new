@@ -4,7 +4,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{
     HOSTED_SUFFIX, Job, JobTimeout, PermissionLevel, Permissions, RunsOn, SCALE_SUFFIX, Step,
-    VERIFICATION_TASK_JOB_PREFIX, VerificationRunner, VerificationTask,
+    VerificationRunner, VerificationTask, WORKFLOW_TASK_JOB_PREFIX,
 };
 
 use crate::{MiseSetup, RenderError, mise_setup_step, shell_step, steps};
@@ -35,7 +35,7 @@ impl VerificationTaskPolicy {
     /// Generated GitHub job key for this declaration.
     #[must_use]
     pub fn job_id(&self) -> String {
-        format!("{VERIFICATION_TASK_JOB_PREFIX}{}", self.task.id)
+        format!("{WORKFLOW_TASK_JOB_PREFIX}{}", self.task.id)
     }
 
     /// Whether `job_id` is this declaration's base or schema-2 lane copy.
@@ -133,14 +133,6 @@ pub(crate) fn validate_verification_jobs(
         }
         last_id = Some(policy.task.id.as_str());
     }
-    if jobs.keys().any(|id| {
-        id.starts_with(VERIFICATION_TASK_JOB_PREFIX)
-            && !job_ids.iter().any(|expected| expected == id)
-    }) {
-        return Err(RenderError::InvalidWorkflow(
-            "undeclared_verification_job".to_owned(),
-        ));
-    }
     Ok(job_ids)
 }
 
@@ -213,26 +205,6 @@ fn is_scale_set(runs_on: &str) -> bool {
 /// Mismatch diagnostic for an unsupported verification-task placement.
 fn runner_mismatch(policy: &VerificationTaskPolicy) -> RenderError {
     RenderError::InvalidWorkflow(format!("verification_runner_mismatch:{}", policy.task.id))
-}
-
-/// Add every verification job to the required-check fan-in.
-/// # Errors
-pub(crate) fn extend_required_needs(
-    jobs: &mut BTreeMap<String, Job>,
-    verification_ids: &[String],
-) -> Result<(), RenderError> {
-    if verification_ids.is_empty() {
-        return Ok(());
-    }
-    let required = jobs.get_mut(crate::render::FINAL_JOB_ID).ok_or_else(|| {
-        RenderError::InvalidWorkflow("verification_tasks_require_required_job".to_owned())
-    })?;
-    for id in verification_ids {
-        if !required.needs.contains(id) {
-            required.needs.push(id.clone());
-        }
-    }
-    Ok(())
 }
 
 /// Build the exact step sequence, with credentials absent before Mise reads config.
