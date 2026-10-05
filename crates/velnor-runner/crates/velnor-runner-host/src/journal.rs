@@ -74,7 +74,7 @@ impl Journal {
 
     /// Insert a pending intent and commit before returning.
     ///
-    /// The same `kind` and `subject` reuse the live row. A failed row starts a new id.
+    /// The same `kind` and `subject` reuse the live row. A failed or cleaned row starts a new id.
     ///
     /// # Errors
     ///
@@ -316,7 +316,7 @@ async fn live_id(
 ) -> Result<Option<i64>, HostError> {
     let mut rows = conn
         .query(
-            "SELECT id FROM intents WHERE kind = ?1 AND subject = ?2 AND state != 'failed' ORDER BY id LIMIT 1",
+            "SELECT id FROM intents WHERE kind = ?1 AND subject = ?2 AND state != 'failed' AND cleanup_proven = 0 ORDER BY id LIMIT 1",
             (kind.to_owned(), subject.to_owned()),
         )
         .await

@@ -1,10 +1,14 @@
 //! A launch row with no container id does not occupy a slot.
 
-use crate::launch::{Admit, admission};
-use crate::launch_harness::{absent, assigned_wait, open};
+use crate::launch::{Admit, admission, drive_offer};
+use crate::launch_harness::{Mode, Script, absent, assigned_wait, ctx, open};
 use crate::stage::PairEngine;
 use crate::worker::CreateProjection;
-use crate::{HostError, Journal, Outcome};
+use crate::{HostError, Journal, Outcome, Started};
+
+fn hex(n: u64) -> String {
+    format!("{n:064x}")
+}
 
 struct Idle;
 
@@ -65,5 +69,58 @@ async fn idless_uncertain_rows_free_both_slots() -> Result<(), String> {
     let rows = journal.rows().await.map_err(|err| err.to_string())?;
     assert_eq!(rows.len(), 2);
     assert!(rows.iter().all(|row| row.cleanup_proven));
+    absent(&scratch.file())
+}
+
+#[tokio::test]
+async fn cleaned_subject_mints_again_instead_of_acking() -> Result<(), String> {
+    let (scratch, journal) = open("cleaned-replay").await?;
+    let old_runner = hex(1);
+    let id = journal
+        .begin("launch", "m9")
+        .await
+        .map_err(|err| err.to_string())?;
+    journal
+        .bind_worker(id, Some(&old_runner), Some(&hex(2)))
+        .await
+        .map_err(|err| err.to_string())?;
+    journal
+        .finish(id, Outcome::Done)
+        .await
+        .map_err(|err| err.to_string())?;
+    let decision = admission(&Idle, &journal, 2, 2, 0, &assigned_wait(9, 1))
+        .await
+        .map_err(|err| err.to_string())?;
+    assert_eq!(decision, Admit::Start { stop: false });
+    let seeded = journal.rows().await.map_err(|err| err.to_string())?;
+    assert!(seeded[0].cleanup_proven);
+    assert_eq!(seeded[0].docker_id.as_deref(), Some(old_runner.as_str()));
+    let mut calls = Script {
+        calls: Vec::new(),
+        mode: Mode::Ok,
+    };
+    let minted = drive_offer(
+        &mut calls,
+        &ctx(),
+        &assigned_wait(9, 1),
+        &journal,
+        |_name, _jit, _bind| async {
+            Ok(Started {
+                dind_id: hex(4),
+                runner_id: hex(3),
+            })
+        },
+    )
+    .await
+    .map_err(|err| err.to_string())?;
+    assert!(minted.is_some());
+    assert_eq!(calls.calls, ["jit", "ack"]);
+    let rows = journal.rows().await.map_err(|err| err.to_string())?;
+    assert_eq!(rows.len(), 2);
+    assert!(rows[0].cleanup_proven);
+    assert_eq!(rows[0].docker_id.as_deref(), Some(old_runner.as_str()));
+    assert!(!rows[1].cleanup_proven);
+    assert_eq!(rows[1].docker_id.as_deref(), Some(hex(3).as_str()));
+    assert_ne!(rows[0].id, rows[1].id);
     absent(&scratch.file())
 }
