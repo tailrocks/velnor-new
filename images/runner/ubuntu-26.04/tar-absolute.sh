@@ -197,9 +197,8 @@ move_member() {
   mv -f -- "$actual" "$intended"
 }
 
-# -P may place a member under the runner work tree, outside the workspace
-# directory. The inode and the resolved target must stay under the workspace
-# or under /home/runner/work or /home/runner/_work.
+# -P may place a member under the runner work tree, outside the workspace.
+# The inode and the resolved target must stay in an allowed root.
 job_path() {
   local path="$1"
   local root
@@ -275,21 +274,22 @@ reject_symlink_traversal() {
 # shellcheck disable=SC1091
 . "$_velnor_tar_here/tar-extract.sh"
 
-# One BusyBox extract for a contiguous run of unique stripped -P members.
-# The move still uses member_intended. Colliding stripped paths stay alone.
+# A directory member stays put. Moving it drops later children still in the stage.
 extract_stage_fifo() {
-  local fifo="$1"
-  local indices="$2"
-  local i
+  local fifo="$1" indices="$2" i intended
   stage_dir="$(mktemp -d "${TMPDIR:-/tmp}/velnor-tar-mstage.XXXXXX")"
   mkdir -p -- "$stage_dir/root"
   busybox tar -xf "$fifo" -C "$stage_dir/root" &
   bb_pid=$!
   wait_child "$bb_pid" "$prod_pid" || die "member extract failed"
   bb_pid=""
-  # Indices are decimal and space-separated by the plan writer.
   for i in $indices; do
-    install_member "$stage_dir/root" "$i"
+    if [ "${mem_type[$i]}" = 5 ] || [[ "${mem_name[$i]}" == */ ]]; then
+      intended="$(member_intended "${mem_name[$i]}")"
+      mkdir -p -- "$intended"
+    else
+      install_member "$stage_dir/root" "$i"
+    fi
   done
   rm -rf -- "$stage_dir"
   stage_dir=""
