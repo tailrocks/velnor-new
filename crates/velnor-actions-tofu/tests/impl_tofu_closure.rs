@@ -15,7 +15,7 @@ use crate::support::{Outcome, TempDir};
 /// Minimal tofu proposal for `kind` in `unit`.
 pub(crate) fn proposal(kind: &str, unit: &str) -> ProposedTask {
     ProposedTask {
-        task_id: format!("stack/tofu/root/{kind}/default"),
+        task_id: format!("stack/tofu/dir-/{kind}/default"),
         stack_id: "tofu".to_owned(),
         component_id: format!("tofu:{unit}"),
         task_kind: kind.to_owned(),
@@ -38,7 +38,7 @@ pub(crate) fn proposal(kind: &str, unit: &str) -> ProposedTask {
         },
         identity: IdentityInputs {
             unit_id: String::new(),
-            unit_key: "root".to_owned(),
+            unit_key: "dir-".to_owned(),
             unit_path: unit.to_owned(),
             project_root: ".".to_owned(),
             target: "host".to_owned(),
