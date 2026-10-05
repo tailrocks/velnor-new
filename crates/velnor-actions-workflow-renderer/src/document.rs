@@ -231,6 +231,9 @@ fn job_to_yaml(
                 if let Some(toolchain) = env.get("RUSTUP_TOOLCHAIN") {
                     job_env.insert("RUSTUP_TOOLCHAIN".to_owned(), toolchain.clone());
                 }
+                if let Some(flags) = env.get("RUSTDOCFLAGS") {
+                    job_env.insert("RUSTDOCFLAGS".to_owned(), flags.clone());
+                }
                 if step.name == crate::steps::ACQUIRE_NAME {
                     for key in [
                         crate::steps::ASSET_SHA_ENV,
