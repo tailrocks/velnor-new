@@ -5,7 +5,10 @@
 //! re-exports the public surface so `command::X` paths keep working.
 
 use std::ffi::OsString;
+use std::path::Path;
 use std::process::Command;
+
+use crate::error::MiseError;
 
 /// Isolation environment applied to every spawned process.
 pub const ISOLATION_ENV: [(&str, &str); 4] = [
@@ -26,6 +29,12 @@ pub const MISE_RUSTUP_HOME_ENV: &str = "MISE_RUSTUP_HOME";
 
 /// Environment name for the Velnor-owned mise Cargo home.
 pub const MISE_CARGO_HOME_ENV: &str = "MISE_CARGO_HOME";
+
+/// Environment name for the Velnor-owned mise data directory.
+pub const MISE_DATA_DIR_ENV: &str = "MISE_DATA_DIR";
+
+/// Workflow expression for the job-private mise data directory.
+pub const MISE_DATA_DIR_EXPR: &str = "${{ runner.temp }}/velnor/mise";
 
 /// Environment name selecting the exact Rust toolchain for Cargo runs.
 pub const RUSTUP_TOOLCHAIN_ENV: &str = "RUSTUP_TOOLCHAIN";
@@ -333,6 +342,53 @@ pub fn toolchain_env(rustup: &str, cargo: &str, toolchain: &str) -> Vec<(OsStrin
     .iter()
     .map(|(key, value)| (OsString::from(key), OsString::from(value)))
     .collect()
+}
+
+pub(crate) fn toolchain_env_with_data_dir(
+    data_dir: &str,
+    rustup: &str,
+    cargo: &str,
+    toolchain: &str,
+) -> Vec<(OsString, OsString)> {
+    let mut env = vec![(OsString::from(MISE_DATA_DIR_ENV), OsString::from(data_dir))];
+    env.extend(toolchain_env(rustup, cargo, toolchain));
+    env
+}
+
+pub(crate) fn unresolved_workflow_expression(
+    key: &OsString,
+    value: &OsString,
+) -> Option<MiseError> {
+    if key.to_string_lossy().contains("${{") || value.to_string_lossy().contains("${{") {
+        Some(MiseError::InvalidStepInput {
+            field: key.to_string_lossy().into_owned(),
+            value: "unresolved_workflow_expression".to_owned(),
+        })
+    } else {
+        None
+    }
+}
+
+pub(crate) fn validate_local_path(field: &str, value: &str) -> Result<(), MiseError> {
+    if !value.is_empty() && !value.contains("${{") && Path::new(value).is_absolute() {
+        Ok(())
+    } else {
+        Err(MiseError::InvalidStepInput {
+            field: field.to_owned(),
+            value: value.to_owned(),
+        })
+    }
+}
+
+pub(crate) fn local_mise_data_dir(cargo_home: &str) -> Result<String, MiseError> {
+    validate_local_path("cargo_home", cargo_home)?;
+    Path::new(cargo_home)
+        .parent()
+        .map(|parent| parent.join("mise").to_string_lossy().into_owned())
+        .ok_or_else(|| MiseError::InvalidStepInput {
+            field: "cargo_home".to_owned(),
+            value: cargo_home.to_owned(),
+        })
 }
 
 pub(crate) fn pairs_of<const N: usize>(table: &[(&str, &str); N]) -> Vec<(OsString, OsString)> {

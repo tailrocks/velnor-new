@@ -132,6 +132,16 @@ fn mise_setup_step(request: &MbxQualificationPins) -> Yaml {
                 ("cache_save", "false"),
             ]),
         ),
+        (
+            "env".to_owned(),
+            mapping(&[
+                ("MISE_DATA_DIR", "${{ runner.temp }}/velnor/mise-bootstrap"),
+                ("MISE_NO_CONFIG", "1"),
+                ("MISE_NO_ENV", "1"),
+                ("MISE_NO_HOOKS", "1"),
+                ("MISE_LOCKFILE", "0"),
+            ]),
+        ),
     ])
 }
 
@@ -240,6 +250,7 @@ fn qualification_env(request: &MbxQualificationPins, writer: bool) -> Yaml {
         ("MISE_CARGO_HOME", &format!("{home}/cargo")),
         ("MISE_EXEC_AUTO_INSTALL", "false"),
         ("MISE_LOCKFILE", "0"),
+        ("MISE_DATA_DIR", "${{ runner.temp }}/velnor/mise"),
         ("MISE_NO_CONFIG", "1"),
         ("MISE_NO_ENV", "1"),
         ("MISE_NO_HOOKS", "1"),

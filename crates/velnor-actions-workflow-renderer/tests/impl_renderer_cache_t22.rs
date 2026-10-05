@@ -1,4 +1,5 @@
 //! T22 never-archive exclusions in rendered cache steps.
+use velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION;
 use velnor_actions_workflow_renderer::RenderError;
 use velnor_actions_workflow_renderer::steps::{
     NEVER_ARCHIVE_MARKERS, TOOLS_RESTORE_USES, cache_action_step, is_never_archive_path,
@@ -74,12 +75,12 @@ fn provider_steps_reject_never_archive_paths() -> Result<(), RenderError> {
 }
 
 #[test]
-fn provider_save_carries_no_gate_itself() -> Result<(), RenderError> {
+fn provider_save_carries_protected_default_gate() -> Result<(), RenderError> {
     let good = format!("{TOFU_PROVIDER_CACHE_BASE_EXPR}/root-0123456789ab");
     let save = tofu_providers_save_step(PROVIDER_KEY, &good)?;
     assert!(
-        save.condition.is_none(),
-        "the push gate arrives from the election caller, never the template"
+        save.condition.as_deref() == Some(CACHE_SAVE_CONDITION),
+        "every generic cache saver has the shared protected-default gate"
     );
     Ok(())
 }
