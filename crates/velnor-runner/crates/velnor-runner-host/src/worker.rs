@@ -13,7 +13,7 @@ use bollard::query_parameters::{
 };
 use tokio::io::AsyncWriteExt;
 
-use crate::docker_spec::{ContainerPlan, Mount, audit_plan, runner_plan};
+use crate::docker_spec::{ACTION_ARCHIVE_VOLUME, ContainerPlan, Mount, audit_plan, runner_plan};
 use crate::error::HostError;
 use crate::stage::PairStop;
 
@@ -128,7 +128,8 @@ pub(crate) fn dind_data_volume(private_volume: &str) -> Result<String, HostError
 ///
 /// Mounts are the runner plan's socket volume at `/run`, the work volume at
 /// `/home/runner/_work`, and the private data volume at `/var/lib/docker`.
-/// The data volume is not on the runner.
+/// The data volume is not on the runner. The action archive volume is not
+/// mounted here.
 ///
 /// # Errors
 ///
@@ -136,10 +137,20 @@ pub(crate) fn dind_data_volume(private_volume: &str) -> Result<String, HostError
 pub fn dind_create(private_volume: &str) -> Result<CreateProjection, HostError> {
     let runner = runner_plan(private_volume)?;
     let data = dind_data_volume(private_volume)?;
-    let mut mounts = runner.mounts;
+    let mut mounts = runner
+        .mounts
+        .into_iter()
+        .filter(|mount| {
+            mount
+                .source
+                .strip_prefix("volume:")
+                .is_none_or(|name| name != ACTION_ARCHIVE_VOLUME)
+        })
+        .collect::<Vec<_>>();
     mounts.push(Mount {
         source: format!("volume:{data}"),
         target: "/var/lib/docker".to_owned(),
+        read_only: false,
     });
     Ok(CreateProjection {
         image: DIND_IMAGE.to_owned(),
@@ -240,12 +251,18 @@ fn docker_mounts(mounts: &[Mount]) -> Result<Option<Vec<DockerMount>>, HostError
     Ok(Some(out))
 }
 
-fn docker_mount(mount: &Mount) -> Result<DockerMount, HostError> {
+/// One Docker mount. `read_only` follows the plan.
+///
+/// # Errors
+///
+/// Returns [`HostError::ForbiddenMount`] when the source is not `volume:<name>`.
+pub(crate) fn docker_mount(mount: &Mount) -> Result<DockerMount, HostError> {
     let (typ, source) = mount_source(&mount.source)?;
     Ok(DockerMount {
         target: Some(mount.target.clone()),
         source: Some(source),
         typ: Some(typ),
+        read_only: Some(mount.read_only),
         ..Default::default()
     })
 }

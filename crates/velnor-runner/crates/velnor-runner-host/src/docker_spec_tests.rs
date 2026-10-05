@@ -23,6 +23,7 @@ fn plan_with_mount(source: &str, target: &str) -> ContainerPlan {
     plan.mounts.push(Mount {
         source: source.to_owned(),
         target: target.to_owned(),
+        read_only: false,
     });
     plan
 }
@@ -41,12 +42,12 @@ fn runner_plan_is_not_privileged() -> Result<(), HostError> {
     assert!(!plan.privileged);
     assert_eq!(plan.platform, "linux/amd64");
     assert_eq!(plan.image, "velnor-runner:ubuntu-26.04-2.337.0");
-    assert_eq!(plan.mounts.len(), 2);
+    assert_eq!(plan.mounts.len(), 3);
     assert_eq!(plan.mounts[0].source, "volume:worker_a");
     assert_eq!(plan.mounts[0].target, "/run");
     assert_eq!(plan.mounts[1].source, "volume:worker_a-work");
     assert_eq!(plan.mounts[1].target, "/home/runner/_work");
-    assert_eq!(plan.env.len(), 0);
+    assert_eq!(plan.env.len(), 1);
     assert!(audit_plan(&plan).is_ok());
     let mut privileged = plan;
     privileged.privileged = true;
@@ -186,8 +187,40 @@ fn canary_is_found_in_env_cmd_labels_and_mounts() -> Result<(), HostError> {
     plan.mounts.push(Mount {
         source: format!("volume:{canary}"),
         target: "/mnt".to_owned(),
+        read_only: false,
     });
     assert!(plan_contains(&plan, canary));
+    Ok(())
+}
+
+#[test]
+fn action_archive_is_read_only_and_rejects_a_home_path() -> Result<(), HostError> {
+    let plan = runner_plan("worker_a")?;
+    assert!(
+        plan.env.iter().any(|entry| {
+            entry == "ACTIONS_RUNNER_ACTION_ARCHIVE_CACHE=/opt/action-archive-cache"
+        })
+    );
+    let archive = plan
+        .mounts
+        .iter()
+        .find(|mount| mount.source == "volume:velnor-action-archive")
+        .ok_or(HostError::Docker)?;
+    assert_eq!(archive.target, "/opt/action-archive-cache");
+    assert!(archive.read_only);
+    assert_eq!(
+        plan.mounts.iter().filter(|mount| mount.read_only).count(),
+        1
+    );
+    assert!(audit_plan(&plan).is_ok());
+    let mut home = plan;
+    let entry = home
+        .env
+        .iter_mut()
+        .find(|entry| entry.starts_with("ACTIONS_RUNNER_ACTION_ARCHIVE_CACHE="))
+        .ok_or(HostError::Docker)?;
+    *entry = "ACTIONS_RUNNER_ACTION_ARCHIVE_CACHE=/home/runner/action-archive".to_owned();
+    assert_eq!(audit_plan(&home), Err(HostError::ForbiddenMount));
     Ok(())
 }
 

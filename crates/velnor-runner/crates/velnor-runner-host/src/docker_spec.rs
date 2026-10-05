@@ -9,6 +9,8 @@ pub struct Mount {
     pub source: String,
     /// Container path.
     pub target: String,
+    /// When true, Docker mounts this path read-only.
+    pub read_only: bool,
 }
 
 /// Docker create projection the controller is allowed to send.
@@ -48,6 +50,9 @@ const RUNNER_IMAGE: &str = "velnor-runner:ubuntu-26.04-2.337.0";
 const ENTRYPOINT: &str = "/usr/local/bin/velnor-runner-entrypoint";
 const SOCKET_TARGET: &str = "/run";
 const WORK_TARGET: &str = "/home/runner/_work";
+/// Shared action archive volume name.
+pub(crate) const ACTION_ARCHIVE_VOLUME: &str = "velnor-action-archive";
+const ACTION_ARCHIVE_TARGET: &str = "/opt/action-archive-cache";
 
 const HOST_NEEDLES: &[&str] = &[
     "ssh-agent",
@@ -62,7 +67,8 @@ const HOST_NEEDLES: &[&str] = &[
 
 /// Build the runner plan. `private_volume` is this worker's socket volume.
 ///
-/// The work tree uses `{private_volume}-work`. JIT is not accepted.
+/// The work tree uses `{private_volume}-work`. The shared archive is one
+/// read-only volume at `/opt/action-archive-cache`. JIT is not accepted.
 ///
 /// # Errors
 ///
@@ -76,7 +82,9 @@ pub fn runner_plan(private_volume: &str) -> Result<ContainerPlan, HostError> {
         privileged: false,
         platform: RUNNER_PLATFORM.to_owned(),
         image: RUNNER_IMAGE.to_owned(),
-        env: Vec::new(),
+        env: vec![format!(
+            "ACTIONS_RUNNER_ACTION_ARCHIVE_CACHE={ACTION_ARCHIVE_TARGET}"
+        )],
         cmd: vec![ENTRYPOINT.to_owned()],
         labels: vec![
             "velnor.role=runner".to_owned(),
@@ -86,10 +94,17 @@ pub fn runner_plan(private_volume: &str) -> Result<ContainerPlan, HostError> {
             Mount {
                 source: format!("volume:{private_volume}"),
                 target: SOCKET_TARGET.to_owned(),
+                read_only: false,
             },
             Mount {
                 source: format!("volume:{work}"),
                 target: WORK_TARGET.to_owned(),
+                read_only: false,
+            },
+            Mount {
+                source: format!("volume:{ACTION_ARCHIVE_VOLUME}"),
+                target: ACTION_ARCHIVE_TARGET.to_owned(),
+                read_only: true,
             },
         ],
     })
