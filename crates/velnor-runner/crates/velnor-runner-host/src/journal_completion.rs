@@ -10,8 +10,14 @@ mod assignment;
 mod claim;
 #[path = "journal_completion_claim_bind.rs"]
 mod claim_bind;
+#[path = "journal_completion_inbox.rs"]
+mod inbox;
 #[path = "journal_completion_record.rs"]
 mod record;
+
+pub(crate) use inbox::{
+    CompletionInboxEntry, MAX_COMPLETION_BODY_BYTES, MAX_COMPLETION_INBOX_SCAN,
+};
 
 /// One leased completion cleanup attempt.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -125,6 +131,15 @@ pub(super) fn is_session_name(name: &str) -> bool {
         && suffix.bytes().all(|byte| byte.is_ascii_alphanumeric())
 }
 
+pub(super) fn is_message_name(name: &str) -> bool {
+    let Some(suffix) = name.strip_prefix('m') else {
+        return false;
+    };
+    suffix
+        .parse::<i64>()
+        .is_ok_and(|value| suffix == value.to_string())
+}
+
 #[cfg(test)]
 #[path = "journal_completion_tests.rs"]
 mod tests;
@@ -132,3 +147,7 @@ mod tests;
 #[cfg(test)]
 #[path = "journal_completion_claim_tests.rs"]
 mod claim_tests;
+
+#[cfg(test)]
+#[path = "journal_completion_inbox_tests.rs"]
+mod inbox_tests;
