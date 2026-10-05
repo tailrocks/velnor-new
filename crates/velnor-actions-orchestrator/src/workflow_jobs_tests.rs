@@ -56,6 +56,7 @@ fn rust_proposals_require_rust_without_inventory_records() {
         runner_source: velnor_actions_rust::ProfileSource::Detected,
         nextest_profile: velnor_actions_rust::NextestProfile::Default,
         nextest_config: None,
+        run_ignored: None,
     };
     let group =
         velnor_actions_rust::derive_workspace_fmt("Cargo.toml", &profile, "default", "host")

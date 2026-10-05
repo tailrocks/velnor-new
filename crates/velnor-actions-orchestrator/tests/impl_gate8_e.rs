@@ -22,8 +22,7 @@ fn binary_record(target: &str, sha: &str) -> String {
 
 fn lock_text(sha: &str) -> String {
     let bins = binary_record("x86_64-unknown-linux-gnu", sha)
-        + &binary_record("aarch64-apple-darwin", sha)
-        + &binary_record("x86_64-apple-darwin", sha);
+        + &binary_record("aarch64-apple-darwin", sha);
     format!(
         "schema = 1\n[generator]\nbinary = \"velnor-actions\"\nversion = \"0.1.0\"\ncommit = \"{}\"\n{bins}[mise-bootstrap]\nversion = \"2026.9.18\"\nartifact = \"https://example.invalid/mise\"\nsha256 = \"{}\"\n",
         "a".repeat(40),
@@ -32,7 +31,7 @@ fn lock_text(sha: &str) -> String {
 }
 
 fn manifest_text(sha: &str) -> String {
-    let targets = ["x86_64-unknown-linux-gnu", "aarch64-apple-darwin", "x86_64-apple-darwin"]
+    let targets = velnor_actions_contract::SUPPORTED_TARGETS
         .iter()
         .map(|t| format!("{{\"target\":\"{t}\",\"artifact\":\"https://github.com/tailrocks/velnor-new/releases/download/v0.1.0/velnor-actions-0.1.0-{t}\",\"sha256\":\"{sha}\"}}"))
         .collect::<Vec<_>>()
@@ -54,6 +53,7 @@ fn ctx() -> RenderContext {
         candidate: None,
         preseed: false,
         pull_request_cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        verification_tasks: Vec::new(),
         plan_consumer_env: std::collections::BTreeMap::new(),
     }
 }

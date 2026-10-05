@@ -119,7 +119,7 @@ fn parse_default_branch(text: &str) -> Option<String> {
         .and_then(|inner| inner.strip_suffix('"'))
         .unwrap_or(trimmed);
     let branch = unquoted;
-    if !velnor_actions_contract::is_valid_branch_name(branch) {
+    if !velnor_actions_contract::is_valid_branch_shorthand(branch) {
         return None;
     }
     Some(branch.to_owned())

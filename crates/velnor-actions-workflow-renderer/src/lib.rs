@@ -24,6 +24,7 @@ pub mod guard;
 mod lane_share;
 pub mod marker;
 mod matrix;
+mod matrix_output_mode;
 mod mbx_bundle;
 mod mbx_gc_policy;
 pub mod msrv;
@@ -50,7 +51,9 @@ mod support;
 pub mod tofu_cache;
 pub mod toolchain_env;
 pub mod tree;
+mod verification_jobs;
 mod workflow_policy;
+mod workflow_size;
 pub mod yaml;
 
 pub use artifact_paths::{
@@ -108,6 +111,11 @@ pub use steps::{
     shell_step, validate_uses, write_request_step,
 };
 pub use tree::{render_tree, render_tree_with_extra};
+pub use verification_jobs::{
+    INSTALL_VERIFICATION_TOOLS_NAME, RUN_VERIFICATION_TASK_NAME, VerificationTaskPolicy,
+    build_verification_task_job,
+};
+pub use workflow_size::MAX_WORKFLOW_BYTES;
 pub use yaml::{Yaml, quote_scalar, render_yaml};
 
 pub use error::RenderError;

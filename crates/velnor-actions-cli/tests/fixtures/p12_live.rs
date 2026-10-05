@@ -87,6 +87,28 @@ fn deny_ignore_fails() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
+fn nested_deny_ignore_fails() -> Result<(), Box<dyn Error>> {
+    let fixture = harness::passing("p12-nested-deny")?;
+    harness::add_nested_workspace(&fixture)?;
+    harness::mutate(
+        &fixture.dir,
+        "crates/runner/deny.toml",
+        "ignore = []",
+        "ignore = [\"RUSTSEC-2026-0001\"]",
+    )?;
+    let run = harness::run_script(&fixture.dir, &[])?;
+    harness::assert_fail(&run, "crates/runner/deny.toml");
+    assert!(
+        run.stdout
+            .contains("ignored advisory must be a policy exception"),
+        "{}",
+        run.stdout
+    );
+    harness::cleanup(&fixture);
+    Ok(())
+}
+
+#[test]
 fn missing_deny_fails() -> Result<(), Box<dyn Error>> {
     let fixture = harness::passing("p12-deny-missing")?;
     std::fs::remove_file(fixture.dir.join("deny.toml"))?;

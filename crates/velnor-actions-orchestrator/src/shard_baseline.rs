@@ -56,7 +56,7 @@ impl BaselineLookup {
         if base.len() != 40 || !base.bytes().all(|b| b.is_ascii_hexdigit()) {
             return Err("base_must_be_full_sha".into());
         }
-        if !velnor_actions_contract::is_valid_branch_name(branch) {
+        if !velnor_actions_contract::is_valid_branch_shorthand(branch) {
             return Err("bad_lookup_input".into());
         }
         let spam = ["://", "*", "$", ";", " "]

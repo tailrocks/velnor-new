@@ -18,7 +18,7 @@ fn checkout_pin() -> String {
     format!("actions/checkout@{:040x}", 0)
 }
 
-fn fixture_ctx() -> RenderContext {
+pub(crate) fn fixture_ctx() -> RenderContext {
     RenderContext {
         generator_version: VERSION.to_owned(),
         runs_on: LABEL.to_owned(),
@@ -29,6 +29,7 @@ fn fixture_ctx() -> RenderContext {
         candidate: None,
         preseed: false,
         pull_request_cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
+        verification_tasks: Vec::new(),
         plan_consumer_env: std::collections::BTreeMap::new(),
     }
 }
@@ -66,7 +67,7 @@ fn plan_job() -> Result<Job, RenderError> {
     })
 }
 
-fn fixture_ir() -> Result<WorkflowIr, RenderError> {
+pub(crate) fn fixture_ir() -> Result<WorkflowIr, RenderError> {
     let mut jobs = BTreeMap::new();
     jobs.insert("plan".to_owned(), plan_job()?);
     Ok(WorkflowIr {

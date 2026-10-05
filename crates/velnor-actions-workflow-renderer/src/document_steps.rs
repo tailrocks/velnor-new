@@ -38,6 +38,7 @@ fn internal_env(
     target: &str,
     ctx: &RenderContext,
     needs_envs: &[(String, String)],
+    job_env: &BTreeMap<String, String>,
 ) -> Yaml {
     if op == steps::FETCH_OPERATION {
         return Yaml::Map(vec![
@@ -54,7 +55,9 @@ fn internal_env(
     env.push((REQUEST_FILE_ENV.to_owned(), Yaml::str(request)));
     if op == steps::PLAN_OPERATION && target == steps::PLAN_OPERATION {
         for (key, value) in &ctx.plan_consumer_env {
-            env.push((key.clone(), Yaml::str(value.clone())));
+            if job_env.get(key).map(String::as_str) != Some(value.as_str()) {
+                env.push((key.clone(), Yaml::str(value.clone())));
+            }
         }
     }
     Yaml::Map(env)
@@ -70,6 +73,7 @@ fn action_step_to_yaml(
     uses: &str,
     with: &BTreeMap<String, String>,
     env: &BTreeMap<String, String>,
+    job_env: &BTreeMap<String, String>,
 ) -> Result<Yaml, RenderError> {
     steps::validate_uses(uses)?;
     for (key, value) in with {
@@ -97,14 +101,19 @@ fn action_step_to_yaml(
     if !with.is_empty() {
         entries.push(("with".to_owned(), string_map_yaml(with)));
     }
-    if !env.is_empty() {
-        entries.push(("env".to_owned(), string_map_yaml(env)));
+    let filtered_env: BTreeMap<String, String> = env
+        .iter()
+        .filter(|(k, v)| job_env.get(*k).map(String::as_str) != Some(v.as_str()))
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect();
+    if !filtered_env.is_empty() {
+        entries.push(("env".to_owned(), string_map_yaml(&filtered_env)));
     }
     Ok(Yaml::Map(entries))
 }
 
 /// Sorted string map as YAML (shared by `with:` and `env:` emission).
-fn string_map_yaml(map: &BTreeMap<String, String>) -> Yaml {
+pub(crate) fn string_map_yaml(map: &BTreeMap<String, String>) -> Yaml {
     Yaml::Map(
         map.iter()
             .map(|(key, value)| (key.clone(), Yaml::str(value.clone())))
@@ -120,10 +129,13 @@ pub(crate) fn step_to_yaml(
     ctx: &RenderContext,
     needs_envs: &[(String, String)],
     composite: bool,
+    job_env: &BTreeMap<String, String>,
 ) -> Result<Yaml, RenderError> {
     steps::scan_for_private_subcommands(&step.name)?;
     match &step.kind {
-        StepKind::Action { uses, with, env } => action_step_to_yaml(job_id, step, uses, with, env),
+        StepKind::Action { uses, with, env } => {
+            action_step_to_yaml(job_id, step, uses, with, env, job_env)
+        }
         StepKind::Shell { run, env } => {
             commands::validate_command_argv(run)?;
             commands::validate_env(env)?;
@@ -133,12 +145,13 @@ pub(crate) fn step_to_yaml(
                 steps::scan_for_private_subcommands(condition)?;
                 entries.push(("if".to_owned(), Yaml::str(condition.clone())));
             }
-            if !env.is_empty() {
-                let vars: Vec<(String, Yaml)> = env
-                    .iter()
-                    .map(|(key, value)| (key.clone(), Yaml::str(value.clone())))
-                    .collect();
-                entries.push(("env".to_owned(), Yaml::Map(vars)));
+            let filtered_env: BTreeMap<String, String> = env
+                .iter()
+                .filter(|(k, v)| job_env.get(*k).map(String::as_str) != Some(v.as_str()))
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect();
+            if !filtered_env.is_empty() {
+                entries.push(("env".to_owned(), string_map_yaml(&filtered_env)));
             }
             push_composite_shell(&mut entries, composite);
             entries.push((
@@ -163,7 +176,10 @@ pub(crate) fn step_to_yaml(
             } else {
                 &[]
             };
-            entries.push(("env".to_owned(), internal_env(op, target, ctx, channel)));
+            entries.push((
+                "env".to_owned(),
+                internal_env(op, target, ctx, channel, job_env),
+            ));
             push_composite_shell(&mut entries, composite);
             entries.push((
                 "run".to_owned(),

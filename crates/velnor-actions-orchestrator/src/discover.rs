@@ -16,7 +16,6 @@ use velnor_actions_rust::{
 use crate::OrchestratorError;
 use crate::clippy_groups::{ClippyMemoryPlan, clippy_memory_groups};
 use crate::discover_index::build_file_index;
-use crate::discover_manifest::for_policy as discover_manifest_for_policy;
 use crate::inventory::{qualify_workspaces, run_inventories};
 use crate::recommendations::collect_recommendations;
 use crate::toolcheck::{ToolInputCheck, check_tool_inputs};
@@ -52,17 +51,17 @@ pub struct Discovery {
     pub clippy_memory: ClippyMemoryPlan,
     /// Sorted unique recommendations.
     pub recommendations: Vec<String>,
-    /// Release-manifest text for consumer policy from the committed file.
+    /// Release-manifest text from the committed repo file.
     ///
-    /// Consumer debug builds fall back to a stand-in when the file is absent
+    /// Debug builds fall back to a stand-in when the file is absent
     /// (flagged by [`Discovery::consumer_manifest_stand_in`], warned at
     /// generation); release builds keep `None` so generation fails
     /// closed with `consumer_requires_release_install`.
     pub consumer_manifest_json: Option<String>,
     /// Whether the manifest text above is the debug-only stand-in.
     ///
-    /// False for Velnor policy and release builds. `generate` warns when
-    /// consumer policy uses the debug stand-in; `plan` stays silent.
+    /// Always false in release builds (no fallback exists there).
+    /// `generate` warns loudly when this is set; `plan` stays silent.
     pub consumer_manifest_stand_in: bool,
     /// Whether index enumeration skipped any non-UTF-8 name.
     ///
@@ -117,7 +116,7 @@ pub(crate) fn discover(root: &Path, config: &VelnorConfig) -> Result<Discovery, 
     let recommendations =
         collect_recommendations(root, config, &index, &workspaces, &tool_checks, &mut reads);
     let (consumer_manifest_json, consumer_manifest_stand_in) =
-        discover_manifest_for_policy(root, config.workflow.policy)?;
+        crate::discover_manifest::for_policy(root, config.workflow.policy)?;
     Ok(Discovery {
         statuses,
         workspaces,

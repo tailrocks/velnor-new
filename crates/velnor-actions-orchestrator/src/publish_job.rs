@@ -66,7 +66,7 @@ pub(crate) fn baseline_publish_job(
 ///
 /// Returns a contract error for branch names outside the supported grammar.
 fn publish_gate_condition(branch: &str) -> Result<String, OrchestratorError> {
-    if !velnor_actions_contract::is_valid_branch_name(branch) {
+    if !velnor_actions_contract::is_valid_branch_shorthand(branch) {
         return Err(OrchestratorError::Contract {
             problem: format!("bad_publish_branch:{branch}"),
         });

@@ -10,6 +10,7 @@ mod daemon_lock;
 mod docker_client;
 mod docker_spec;
 mod error;
+mod guest;
 mod https;
 mod ipc;
 mod journal;
@@ -33,6 +34,7 @@ pub use docker_spec::{
     ContainerPlan, DeleteDecision, audit_plan, delete_decision, plan_contains, runner_plan,
 };
 pub use error::HostError;
+pub use guest::guest_slots;
 pub use https::HttpsTransport;
 pub use ipc::{MAX_FRAME, SOCKET_DIR_MODE, decode_frame, encode_frame};
 pub use journal::{IntentState, Journal, Outcome};
@@ -67,21 +69,33 @@ mod ipc_tests;
 #[cfg(test)]
 mod journal_tests;
 #[cfg(test)]
+mod journal_worker_volume_tests;
+#[cfg(test)]
 mod keychain_tests;
+#[cfg(test)]
+mod launch_backfill_tests;
 #[cfg(test)]
 mod launch_capacity_tests;
 #[cfg(test)]
 mod launch_harness;
 #[cfg(test)]
+mod launch_idless_tests;
+#[cfg(test)]
 mod launch_scale_tests;
 #[cfg(test)]
+mod launch_test_support;
+#[cfg(test)]
 mod launch_tests;
+#[cfg(test)]
+mod launch_worker_cleanup_tests;
 #[cfg(test)]
 mod listen_tests;
 #[cfg(test)]
 mod plist_tests;
 #[cfg(test)]
 mod readiness_tests;
+#[cfg(test)]
+mod runner_image_contract_tests;
 #[cfg(test)]
 mod stage_tests;
 #[cfg(test)]

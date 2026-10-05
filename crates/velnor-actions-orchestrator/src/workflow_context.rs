@@ -1,13 +1,15 @@
-//! Renderer context construction from validated workflow configuration.
+//! Renderer context construction from discovered repository evidence.
 
 use velnor_actions_contract::{GeneratorValidation, ValidatorKind, VelnorConfig, WorkflowPolicy};
 use velnor_actions_mise::ToolCatalog;
+use velnor_actions_workflow_renderer::VerificationTaskPolicy;
 use velnor_actions_workflow_renderer::render::{RenderContext, ValidatorCommand};
 use velnor_actions_workflow_renderer::steps::{
     DENY_STEP_NAME, MACHETE_STEP_NAME, REQUEST_DIR_PREFIX, STAGED_BINARY_PREFIX,
 };
 
 use crate::OrchestratorError;
+use crate::discover::Discovery;
 use crate::vectors::{ZIZMOR_STEP_NAME, candidate_spec, deny_argv, machete_argv, zizmor_argv};
 
 use super::{CHECKOUT_USES, REQUEST_DIR};
@@ -22,17 +24,27 @@ pub(super) fn render_context(
     label: &str,
     version: &str,
     catalog: &ToolCatalog,
+    discovery: &Discovery,
     plan_needs_rust: bool,
+    verification_tasks: Vec<VerificationTaskPolicy>,
 ) -> Result<RenderContext, OrchestratorError> {
     debug_assert!(REQUEST_DIR.starts_with(REQUEST_DIR_PREFIX));
     let velnor = config.workflow.policy == WorkflowPolicy::VelnorRepositoryV1;
-    let validator_commands = if velnor {
-        vec![
-            ValidatorCommand {
+    let mut validator_commands = Vec::new();
+    if velnor {
+        let workspaces = discovery
+            .workspaces
+            .iter()
+            .map(|workspace| workspace.record.workspace_root.clone())
+            .collect::<Vec<_>>();
+        if !workspaces.is_empty() {
+            validator_commands.push(ValidatorCommand {
                 validator: ValidatorKind::CargoDeny,
                 name: DENY_STEP_NAME.to_owned(),
-                argv: deny_argv()?,
-            },
+                argv: deny_argv(&workspaces)?,
+            });
+        }
+        validator_commands.extend([
             ValidatorCommand {
                 validator: ValidatorKind::CargoMachete,
                 name: MACHETE_STEP_NAME.to_owned(),
@@ -43,10 +55,8 @@ pub(super) fn render_context(
                 name: ZIZMOR_STEP_NAME.to_owned(),
                 argv: zizmor_argv(catalog)?,
             },
-        ]
-    } else {
-        Vec::new()
-    };
+        ]);
+    }
     let candidate =
         if velnor && config.workflow.generator_validation == GeneratorValidation::Candidate {
             Some(candidate_spec(catalog)?)
@@ -63,6 +73,7 @@ pub(super) fn render_context(
         candidate,
         preseed: false,
         pull_request_cache_policy: config.workflow.pull_request_cache_policy,
+        verification_tasks,
         plan_consumer_env: crate::matrix_step::task_step_env(
             catalog,
             &std::collections::BTreeMap::new(),

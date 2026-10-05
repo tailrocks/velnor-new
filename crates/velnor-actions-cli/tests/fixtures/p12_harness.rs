@@ -35,6 +35,30 @@ pub(crate) fn days_iso(offset: i64) -> Result<String, Box<dyn Error>> {
         .as_secs()
         / 86_400;
     let days = i64::try_from(whole_days).map_err(|err| err.to_string())? + offset;
+    Ok(date_iso(days))
+}
+
+/// UTC timestamp relative to the current instant, formatted for inventory evidence.
+pub(crate) fn timestamp_iso(offset_seconds: i64) -> Result<String, Box<dyn Error>> {
+    let epoch_seconds = i64::try_from(
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|err| err.to_string())?
+            .as_secs(),
+    )
+    .map_err(|err| err.to_string())?;
+    let seconds = epoch_seconds
+        .checked_add(offset_seconds)
+        .ok_or_else(|| "timestamp offset overflow".to_owned())?;
+    let day_seconds = seconds.rem_euclid(86_400);
+    let date = date_iso(seconds.div_euclid(86_400));
+    let hour = day_seconds / 3_600;
+    let minute = (day_seconds % 3_600) / 60;
+    let second = day_seconds % 60;
+    Ok(format!("{date}T{hour:02}:{minute:02}:{second:02}Z"))
+}
+
+fn date_iso(days: i64) -> String {
     // Howard Hinnant's civil-from-days algorithm (shift to civil epoch).
     let shifted = days + 719_468;
     let era = shifted.div_euclid(146_097);
@@ -47,7 +71,7 @@ pub(crate) fn days_iso(offset: i64) -> Result<String, Box<dyn Error>> {
     let day = day_of_year - (153 * month + 2) / 5 + 1;
     let month = if month < 10 { month + 3 } else { month - 9 };
     let year = if month <= 2 { year + 1 } else { year };
-    Ok(format!("{year:04}-{month:02}-{day:02}"))
+    format!("{year:04}-{month:02}-{day:02}")
 }
 
 /// Write `body` to `dir/rel`, creating parent directories.
@@ -167,6 +191,37 @@ pub(crate) fn passing(prefix: &str) -> Result<Fixture, Box<dyn Error>> {
         "# pinned: cargo-mutants = \"27.1.0\"\nexamine_globs = [\n    \"crates/aaa/Cargo.toml\",\n]\n",
     )?;
     Ok(Fixture { dir })
+}
+
+/// Add an excluded nested workspace with a dependency unique to its lock.
+pub(crate) fn add_nested_workspace(fixture: &Fixture) -> Result<(), Box<dyn Error>> {
+    mutate(
+        &fixture.dir,
+        "Cargo.toml",
+        "[workspace]\n",
+        "[workspace]\nexclude = [\"crates/runner\"]\n",
+    )?;
+    write(
+        &fixture.dir,
+        "crates/runner/Cargo.toml",
+        "[workspace]\nmembers = [\"crates/worker\"]\nresolver = \"3\"\n",
+    )?;
+    write(
+        &fixture.dir,
+        "crates/runner/crates/worker/Cargo.toml",
+        "[package]\nname = \"worker\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[dependencies]\nrunneronly = \"=1.2.3\"\n",
+    )?;
+    write(
+        &fixture.dir,
+        "crates/runner/Cargo.lock",
+        "version = 4\n\n[[package]]\nname = \"worker\"\nversion = \"0.1.0\"\ndependencies = [\"runneronly\"]\n\n[[package]]\nname = \"runneronly\"\nversion = \"1.2.3\"\nsource = \"registry+https://github.com/rust-lang/crates.io-index\"\n",
+    )?;
+    write(
+        &fixture.dir,
+        "crates/runner/deny.toml",
+        "[advisories]\nignore = []\n",
+    )?;
+    Ok(())
 }
 
 /// Remove a fixture tree; cleanup must never fail a test.

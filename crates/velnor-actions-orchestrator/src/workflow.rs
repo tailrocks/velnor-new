@@ -9,8 +9,8 @@ use std::collections::BTreeMap;
 
 use velnor_actions_actionlint::{ActionlintConfigInput, IgnorePolicy, StepSyntax};
 use velnor_actions_contract::{
-    Concurrency, Job, Permissions, Stack, Step, StepKind, Trigger, VelnorConfig,
-    VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy,
+    Concurrency, GeneratorValidation, Job, Permissions, Stack, Step, StepKind, Trigger,
+    ValidatorKind, VelnorConfig, VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy,
 };
 use velnor_actions_mise::{
     PREPARE_RUST_COMPONENTS_STEP, PrepareRustComponents, ToolCatalog, ToolHomes,
@@ -112,13 +112,9 @@ pub(crate) fn build_workflow(
     let catalog = ToolCatalog::pinned();
     let version = env!("CARGO_PKG_VERSION").to_owned();
     let policy = config.workflow.policy;
+    let verification_tasks = crate::verification_tasks::policies(config)?;
     let use_mbx = plan_uses_mbx(discovery);
-    let support = match policy {
-        WorkflowPolicy::ConsumerV1 => None,
-        WorkflowPolicy::VelnorRepositoryV1 => {
-            Some(policy.support_workflow(config.workflow.generator_validation))
-        }
-    };
+    let support = support_workflow(policy, config.workflow.generator_validation, discovery);
     let mut jobs = BTreeMap::new();
     let acquire = match policy {
         WorkflowPolicy::ConsumerV1 => Some(consumer_acquire_step(label, &version, discovery)?),
@@ -139,25 +135,19 @@ pub(crate) fn build_workflow(
         discovery,
     )?;
     jobs.insert(PLAN_JOB_ID.to_owned(), plan);
-    let custom_tasks: &[String] = config
-        .stacks
-        .rust
-        .as_ref()
-        .map_or(&[], |rust| &rust.custom_tasks);
-    let built = crate::crate_jobs::build_crate_jobs(
+    let built = crate::crate_jobs::build_for_workflow(
+        config,
         label,
-        policy,
         discovery,
         &catalog,
         fetch_roots,
-        custom_tasks,
         acquire.as_ref(),
-        config.workflow.max_parallel_jobs,
     )?;
     let crate_ids: Vec<String> = built.jobs.iter().map(|(id, _)| id.clone()).collect();
     for (id, job) in built.jobs {
         jobs.insert(id, job);
     }
+    crate::verification_tasks::insert_jobs(&mut jobs, &verification_tasks)?;
     insert_gate_jobs(&mut jobs, label, branch, &crate_ids, acquire, &catalog)?;
     wire_w1::check_crate_mbx_gating(&jobs, &built.drivers)?;
     let ir = WorkflowIr {
@@ -176,7 +166,15 @@ pub(crate) fn build_workflow(
         },
         jobs,
     };
-    let context = workflow_context::render_context(config, label, &version, &catalog, use_rust)?;
+    let context = workflow_context::render_context(
+        config,
+        label,
+        &version,
+        &catalog,
+        discovery,
+        use_rust,
+        verification_tasks,
+    )?;
     let actionlint = actionlint_input(config, &version, label);
     Ok(WorkflowPlan {
         ir,
@@ -184,6 +182,23 @@ pub(crate) fn build_workflow(
         context,
         actionlint,
     })
+}
+
+fn support_workflow(
+    policy: WorkflowPolicy,
+    validation: GeneratorValidation,
+    discovery: &Discovery,
+) -> Option<VelnorSupportWorkflow> {
+    let mut support = match policy {
+        WorkflowPolicy::ConsumerV1 => return None,
+        WorkflowPolicy::VelnorRepositoryV1 => policy.support_workflow(validation),
+    };
+    if discovery.workspaces.is_empty() {
+        support
+            .validators
+            .retain(|validator| *validator != ValidatorKind::CargoDeny);
+    }
+    Some(support)
 }
 
 /// Insert the lint, final-gate, and baseline-publish jobs.
@@ -250,10 +265,8 @@ fn insert_format_step(plan: &mut Job, format: Step) {
     plan.steps.insert(at, format);
 }
 
-/// True when any selected workspace compiles through MBX.
-///
-/// The plan job pre-installs the MBX driver only on detected project
-/// evidence, never by default; consumers without MBX stay Cargo-only.
+/// True when any selected workspace compiles through MBX. Only detected
+/// evidence enables pre-install; consumers without it stay Cargo-only.
 pub(crate) fn plan_uses_mbx(discovery: &Discovery) -> bool {
     discovery
         .workspaces
@@ -261,11 +274,8 @@ pub(crate) fn plan_uses_mbx(discovery: &Discovery) -> bool {
         .any(|workspace| workspace.profile.compile_driver == CompileDriver::Mbx)
 }
 
-/// True when any selected workspace runs tests through Nextest.
-///
-/// Both prepare steps union the Nextest runner on this signal, so
-/// `cargo_nextest` legs resolve the pinned runner while `cargo_test`
-/// legs never carry it.
+/// True when any selected workspace runs tests through Nextest; only those
+/// legs resolve the pinned runner.
 fn plan_uses_nextest(discovery: &Discovery) -> bool {
     discovery
         .workspaces

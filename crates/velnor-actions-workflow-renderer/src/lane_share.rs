@@ -225,8 +225,9 @@ fn composite_file(
     cache_policy: PullRequestCachePolicy,
 ) -> Result<RenderedFile, RenderError> {
     let mut rendered = Vec::with_capacity(steps.len());
+    let empty_job_env = BTreeMap::new();
     for step in steps {
-        rendered.push(step_to_yaml(logical, step, ctx, &[], true)?);
+        rendered.push(step_to_yaml(logical, step, ctx, &[], true, &empty_job_env)?);
     }
     let outputs = has_mbx_cache.then(|| {
         let mut outputs = vec![
@@ -292,6 +293,10 @@ fn composite_file(
 #[cfg(test)]
 #[path = "lane_share_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "lane_share_shell_tests.rs"]
+mod shell_tests;
 
 #[cfg(test)]
 #[path = "lane_share_unpinned_tests.rs"]
