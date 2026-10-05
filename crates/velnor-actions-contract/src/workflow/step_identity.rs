@@ -7,6 +7,8 @@ use std::collections::BTreeSet;
 
 /// Fixed local action path used for exact provider-cache admission.
 pub const TOFU_PROVIDER_ADMISSION_USES: &str = "./.github/actions/tofu-provider-admission";
+/// Fixed local action path for the exact-key host tool seed.
+pub const TOOL_SEED_USES: &str = "./.github/actions/velnor-tool-seed";
 /// Expression path for the job-private `OpenTofu` plugin cache.
 pub const TOFU_PROVIDER_CACHE_BASE_EXPR: &str = "${{ runner.temp }}/velnor/tofu-cache";
 /// Exact-key layer identity shared by the restore and save protocol.
@@ -54,6 +56,8 @@ impl StepId {
 pub enum StepRole {
     /// Checkout whose credentials are disabled.
     Checkout,
+    /// Copy from the trusted, exact-key host tool seed.
+    ToolSeed,
     /// Install the exact catalog tools used by later steps.
     PreparePinnedTools,
     /// Install the pinned Rust components used by task work.
@@ -158,9 +162,8 @@ impl StepRole {
     /// Match one role against its fixed kind and payload family.
     fn matches_payload(self, kind: &StepKind) -> bool {
         match self {
-            Self::Checkout => matches!(kind, StepKind::Action { uses, with, .. }
-                if action_has_prefix(uses, "actions/checkout@")
-                    && with.get("persist-credentials").is_some_and(|value| value == "false")),
+            Self::Checkout => valid_checkout_payload(kind),
+            Self::ToolSeed => valid_tool_seed_payload(kind),
             Self::MiseSetup => valid_mise_setup(kind),
             Self::TofuProvidersAdmission => valid_tofu_admission(kind),
             Self::TofuProviderUse => super::step_protocol::valid_provider_use(kind),
@@ -234,6 +237,44 @@ impl StepRole {
             StepId::TofuProviders => Self::TofuProvidersRestore,
         }
     }
+}
+
+/// Check that a step is the configured checkout owner in this workflow scope.
+///
+/// Checkout is a semantic role, not a display-name convention. The caller
+/// supplies the exact pinned action ref from its validated render context.
+#[must_use]
+pub fn is_configured_checkout(step: &Step, expected_uses: &str) -> bool {
+    step.role == Some(StepRole::Checkout)
+        && step.condition.is_none()
+        && matches!(&step.kind, StepKind::Action { uses, .. } if uses == expected_uses)
+        && valid_checkout_payload(&step.kind)
+}
+
+/// Check that a step is the unconditional local tool-seed consumer.
+#[must_use]
+pub fn is_tool_seed_step(step: &Step) -> bool {
+    step.role == Some(StepRole::ToolSeed)
+        && step.condition.is_none()
+        && valid_tool_seed_payload(&step.kind)
+}
+
+/// Require the standard credential-free checkout action payload.
+fn valid_checkout_payload(kind: &StepKind) -> bool {
+    matches!(kind, StepKind::Action { uses, with, env }
+        if action_has_prefix(uses, "actions/checkout@")
+            && with.len() == 1
+            && with.get("persist-credentials").is_some_and(|value| value == "false")
+            && env.is_empty())
+}
+
+/// Require the fixed local seed action and its one explicit cache identity.
+fn valid_tool_seed_payload(kind: &StepKind) -> bool {
+    matches!(kind, StepKind::Action { uses, with, env }
+        if uses == TOOL_SEED_USES
+            && with.len() == 1
+            && with.get("cache_key").is_some_and(|key| !key.is_empty())
+            && env.is_empty())
 }
 
 /// True when an action payload uses a fixed name prefix.

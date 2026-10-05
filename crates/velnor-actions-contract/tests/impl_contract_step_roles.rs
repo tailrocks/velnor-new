@@ -297,3 +297,48 @@ fn tofu_provider_save_must_match_restore_gate_and_order() {
             .contains("tofu_provider_save_before_use")
     );
 }
+
+#[test]
+fn configured_checkout_authority_is_typed_exact_and_name_independent() {
+    use velnor_actions_contract::workflow::step_identity::is_configured_checkout;
+
+    const CHECKOUT_USES: &str = "actions/checkout@0123456789abcdef0123456789abcdef01234567";
+    let mut checkout = Step {
+        name: "Checkout".to_owned(),
+        id: None,
+        role: Some(StepRole::Checkout),
+        condition: None,
+        kind: StepKind::Action {
+            uses: CHECKOUT_USES.to_owned(),
+            with: BTreeMap::from([("persist-credentials".to_owned(), "false".to_owned())]),
+            env: BTreeMap::new(),
+        },
+    };
+    assert!(is_configured_checkout(&checkout, CHECKOUT_USES));
+
+    checkout.name = "Presentation label only".to_owned();
+    assert!(is_configured_checkout(&checkout, CHECKOUT_USES));
+
+    checkout.role = None;
+    assert!(!is_configured_checkout(&checkout, CHECKOUT_USES));
+    checkout.role = Some(StepRole::Checkout);
+
+    assert!(!is_configured_checkout(
+        &checkout,
+        "actions/checkout@fedcba9876543210fedcba9876543210fedcba98"
+    ));
+
+    checkout.condition = Some("success()".to_owned());
+    assert!(!is_configured_checkout(&checkout, CHECKOUT_USES));
+    checkout.condition = None;
+
+    if let StepKind::Action { with, .. } = &mut checkout.kind {
+        with.insert("fetch-depth".to_owned(), "0".to_owned());
+    }
+    assert!(!is_configured_checkout(&checkout, CHECKOUT_USES));
+    if let StepKind::Action { with, env, .. } = &mut checkout.kind {
+        with.remove("fetch-depth");
+        env.insert("GIT_CONFIG_COUNT".to_owned(), "1".to_owned());
+    }
+    assert!(!is_configured_checkout(&checkout, CHECKOUT_USES));
+}

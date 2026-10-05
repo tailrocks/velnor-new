@@ -25,6 +25,8 @@ mod impl_contract_release_modes;
 mod impl_contract_reports;
 #[path = "impl_contract_step_roles.rs"]
 mod impl_contract_step_roles;
+#[path = "impl_contract_step_seed.rs"]
+mod impl_contract_step_seed;
 #[path = "impl_contract_targets.rs"]
 mod impl_contract_targets;
 #[path = "impl_contract_tofu_config.rs"]
