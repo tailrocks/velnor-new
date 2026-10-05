@@ -1,11 +1,13 @@
 //! Per-product asset contracts and immutable release scripts.
 
-use crate::yaml::Yaml;
+use std::collections::BTreeMap;
+
+use crate::RenderError;
+use crate::schema2::ProductReleasePins;
+use velnor_actions_contract::ReleaseTarget;
 
 use super::release_eligibility as eligibility;
 
-const MISE_USES: &str = "jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5";
-const MISE_VERSION: &str = "2026.9.18";
 const PREPARE_TEMPLATE: &str = include_str!("schema2_release_prepare.sh");
 const PUBLISH_TEMPLATE: &str = include_str!("schema2_release_publish.sh");
 
@@ -26,44 +28,29 @@ impl Family {
         match self {
             Self::Images => "runner",
             Self::Binary => "binary",
-            Self::Generator => "generator",
+            Self::Generator => "",
         }
     }
 
-    /// Exact release asset names. Checksum sidecars are attested assets too.
-    pub(super) const fn assets(self) -> &'static [&'static str] {
+    fn fixed_tag(self) -> Option<String> {
         match self {
-            Self::Images => &[
-                "velnor-runner-linux-amd64.tar",
-                "velnor-dind-linux-amd64.tar",
-                "SHA256SUMS",
-            ],
-            Self::Binary => &["velnor-host", "SHA256SUMS"],
-            Self::Generator => &[
-                "velnor-actions-0.1.0-x86_64-unknown-linux-gnu",
-                "velnor-actions-0.1.0-x86_64-unknown-linux-gnu.sha256",
-                "velnor-actions-0.1.0-aarch64-apple-darwin",
-                "velnor-actions-0.1.0-aarch64-apple-darwin.sha256",
-            ],
+            Self::Images | Self::Binary => None,
+            Self::Generator => Some(format!("v{}", super::generator_release::release_version())),
         }
     }
 
-    /// Build and attestation IDs from the existing family DAG.
+    /// Build and attestation IDs for the two legacy non-generator families.
     pub(super) const fn job_ids(
         self,
-    ) -> (
+    ) -> Option<(
         &'static [&'static str],
         &'static [&'static str],
         &'static str,
-    ) {
+    )> {
         match self {
-            Self::Images => (&["build-images"], &["attest-images"], "publish-images"),
-            Self::Binary => (&["build-binary"], &["attest-binary"], "publish-binary"),
-            Self::Generator => (
-                &["build-linux", "build-macos"],
-                &["attest-linux", "attest-macos"],
-                "publish-generator",
-            ),
+            Self::Images => Some((&["build-images"], &["attest-images"], "publish-images")),
+            Self::Binary => Some((&["build-binary"], &["attest-binary"], "publish-binary")),
+            Self::Generator => None,
         }
     }
 
@@ -73,6 +60,32 @@ impl Family {
             Self::Images => "prepare-images",
             Self::Binary => "prepare-binary",
             Self::Generator => "prepare-generator",
+        }
+    }
+
+    /// Reusable workflow path reached by the dispatch-only coordinator.
+    pub(super) const fn workflow_path(self) -> &'static str {
+        match self {
+            Self::Images => ".github/workflows/product-release-images.yml",
+            Self::Binary => ".github/workflows/product-release-binary.yml",
+            Self::Generator => ".github/workflows/product-release-generator.yml",
+        }
+    }
+
+    /// Stable caller job identity for this reusable workflow.
+    pub(super) const fn call_id(self) -> &'static str {
+        match self {
+            Self::Images => "release-images",
+            Self::Binary => "release-binary",
+            Self::Generator => "release-generator",
+        }
+    }
+
+    /// Runner target that owns this family's pinned GitHub CLI setup.
+    pub(super) const fn runner_target(self) -> ReleaseTarget {
+        match self {
+            Self::Images | Self::Generator => ReleaseTarget::LinuxX86_64,
+            Self::Binary => ReleaseTarget::MacosArm64,
         }
     }
 
@@ -87,126 +100,180 @@ impl Family {
 
     /// Paths where same-run workflow artifacts are downloaded.
     fn asset_paths(self) -> Vec<String> {
-        self.assets()
-            .iter()
-            .enumerate()
-            .map(|(index, asset)| {
-                let directory = match self {
-                    Self::Images | Self::Binary => "assets",
-                    Self::Generator if index < 2 => "linux-assets",
-                    Self::Generator => "macos-assets",
-                };
-                format!("{directory}/{asset}")
-            })
+        match self {
+            Self::Images => [
+                "velnor-runner-linux-amd64.tar",
+                "velnor-dind-linux-amd64.tar",
+                "SHA256SUMS",
+            ]
+            .map(|name| format!("assets/{name}"))
+            .to_vec(),
+            Self::Binary => ["velnor-host", "SHA256SUMS"]
+                .map(|name| format!("assets/{name}"))
+                .to_vec(),
+            Self::Generator => super::generator_release::publication_asset_paths(),
+        }
+    }
+
+    fn asset_names(self) -> Vec<String> {
+        self.asset_paths()
+            .into_iter()
+            .filter_map(|path| path.rsplit('/').next().map(str::to_owned))
             .collect()
     }
 }
 
 /// Install Mise and the one canonical GitHub CLI version.
-pub(super) fn setup_steps() -> Vec<Yaml> {
-    vec![
-        Yaml::Map(vec![
-            ("name".to_owned(), Yaml::str("Setup pinned Mise")),
-            ("uses".to_owned(), Yaml::str(MISE_USES)),
-            (
-                "with".to_owned(),
-                Yaml::Map(vec![
-                    ("cache".to_owned(), Yaml::str("false")),
-                    ("env".to_owned(), Yaml::str("false")),
-                    ("install".to_owned(), Yaml::str("false")),
-                    ("version".to_owned(), Yaml::str(MISE_VERSION)),
-                ]),
-            ),
-        ]),
-        Yaml::Map(vec![
-            ("name".to_owned(), Yaml::str("Install pinned GitHub CLI")),
-            (
-                "run".to_owned(),
-                Yaml::str(format!(
-                    "mise --no-config --no-env --no-hooks install gh@{}",
-                    eligibility::GH_VERSION
-                )),
-            ),
-        ]),
-    ]
-}
-
 /// Validate an existing release or require the exact tag to be absent.
-pub(super) fn prepare_script(family: Family) -> String {
-    PREPARE_TEMPLATE
+pub(super) fn prepare_script(
+    family: Family,
+    pins: &ProductReleasePins,
+) -> Result<String, RenderError> {
+    let checksum = checksum_check(family, "$temp_dir", Some(pins))?;
+    let downloads = download_commands(family)?;
+    let gh_function = super::generator_release::gh_function(pins)?;
+    Ok(PREPARE_TEMPLATE
+        .replace("@GH_FUNCTION@", &gh_function)
         .replace("@REPOSITORY@", eligibility::REPOSITORY)
-        .replace("@GH_VERSION@", eligibility::GH_VERSION)
-        .replace("@WORKFLOW_PATH@", eligibility::WORKFLOW_PATH)
         .replace("@TAG_PREFIX@", family.tag_prefix())
+        .replace("@FIXED_TAG@", family.fixed_tag().as_deref().unwrap_or(""))
         .replace("@LABEL@", family.label())
-        .replace("@ASSET_NAMES_JSON@", &json_asset_array(family.assets()))
-        .replace("@DOWNLOAD_COMMANDS@", &download_commands(family))
-        .replace("@CHECKSUM_COMMAND@", &checksum_check(family, "$temp_dir"))
+        .replace(
+            "@ASSET_NAMES_JSON@",
+            &json_asset_array(&family.asset_names()),
+        )
+        .replace("@DOWNLOAD_COMMANDS@", &downloads)
+        .replace("@CHECKSUM_COMMAND@", &checksum)
         .replace(
             "@ASSET_VERIFY_COMMANDS@",
             &prepare_asset_verification(family),
-        )
+        ))
 }
 
 /// Recheck source eligibility, then publish or idempotently validate one family.
-pub(super) fn publish_script(family: Family) -> String {
-    PUBLISH_TEMPLATE
-        .replace("@ELIGIBILITY_SCRIPT@", &eligibility::publisher_script())
-        .replace("@PREPARE_SCRIPT@", &prepare_script(family))
+pub(super) fn publish_script(
+    family: Family,
+    pins: &ProductReleasePins,
+) -> Result<String, RenderError> {
+    if family == Family::Generator {
+        return Err(RenderError::InvalidWorkflow(
+            "generator_publisher_must_remain_inside_typed_graph".to_owned(),
+        ));
+    }
+    let gh_function = super::generator_release::gh_function(pins)?;
+    Ok(PUBLISH_TEMPLATE
+        .replace("@GH_FUNCTION@", &gh_function)
+        .replace(
+            "@ELIGIBILITY_SCRIPT@",
+            &eligibility::publisher_script(pins)?,
+        )
+        .replace("@PREPARE_SCRIPT@", &prepare_script(family, pins)?)
         .replace("@REPOSITORY@", eligibility::REPOSITORY)
-        .replace("@GH_VERSION@", eligibility::GH_VERSION)
-        .replace("@WORKFLOW_PATH@", eligibility::WORKFLOW_PATH)
+        .replace("@WORKFLOW_PATH@", family.workflow_path())
         .replace("@TAG_PREFIX@", family.tag_prefix())
+        .replace("@FIXED_TAG@", family.fixed_tag().as_deref().unwrap_or(""))
         .replace("@LABEL@", family.label())
-        .replace("@ASSET_NAMES_JSON@", &json_asset_array(family.assets()))
+        .replace(
+            "@ASSET_NAMES_JSON@",
+            &json_asset_array(&family.asset_names()),
+        )
         .replace("@ASSET_PATHS@", &shell_words(&family.asset_paths()))
-        .replace("@CHECKSUM_COMMAND@", &checksum_check(family, "."))
+        .replace(
+            "@CHECKSUM_COMMAND@",
+            &checksum_check(family, ".", Some(pins))?,
+        )
         .replace(
             "@ASSET_VERIFY_COMMANDS@",
             &publish_asset_verification(family),
-        )
+        ))
 }
 
 /// Return commands that download each asset into its consumer-compatible path.
-fn download_commands(family: Family) -> String {
+fn download_commands(family: Family) -> Result<String, RenderError> {
     match family {
-        Family::Images | Family::Binary => format!(
+        Family::Images | Family::Binary => Ok(format!(
             "mkdir -p \"$temp_dir/assets\" || fail 'could not create release asset directory'\ngh release download \"$prepare_tag\" --repo \"$repository\" --dir \"$temp_dir/assets\" {} || fail 'release asset download failed'",
-            download_patterns(family.assets())
-        ),
-        Family::Generator => format!(
-            "mkdir -p \"$temp_dir/linux-assets\" \"$temp_dir/macos-assets\" || fail 'could not create generator asset directories'\ngh release download \"$prepare_tag\" --repo \"$repository\" --dir \"$temp_dir/linux-assets\" {} || fail 'Linux generator asset download failed'\ngh release download \"$prepare_tag\" --repo \"$repository\" --dir \"$temp_dir/macos-assets\" {} || fail 'macOS generator asset download failed'",
-            download_patterns(&family.assets()[..2]),
-            download_patterns(&family.assets()[2..])
-        ),
+            download_patterns(&family.asset_names())
+        )),
+        Family::Generator => grouped_download_commands(family.asset_paths()),
     }
 }
 
-/// Return local checksum validation commands for downloaded or new assets.
-fn checksum_check(family: Family, root: &str) -> String {
-    match family {
-        Family::Images | Family::Binary => {
+fn grouped_download_commands(paths: Vec<String>) -> Result<String, RenderError> {
+    let mut groups = BTreeMap::<String, Vec<String>>::new();
+    for path in paths {
+        let Some((directory, name)) = path.rsplit_once('/') else {
+            return Err(RenderError::InvalidWorkflow(
+                "generator_release_asset_path_missing_directory".to_owned(),
+            ));
+        };
+        groups
+            .entry(directory.to_owned())
+            .or_default()
+            .push(name.to_owned());
+    }
+    if groups.is_empty() {
+        return Err(RenderError::InvalidWorkflow(
+            "generator_release_asset_inventory_empty".to_owned(),
+        ));
+    }
+    Ok(groups
+        .into_iter()
+        .map(|(directory, assets)| {
             format!(
-                "(cd \"{root}/assets\" && shasum -a 256 --check SHA256SUMS) || fail 'release asset checksum verification failed'"
+                "mkdir -p \"$temp_dir/{directory}\" || fail 'could not create release asset directory: {directory}'\ngh release download \"$prepare_tag\" --repo \"$repository\" --dir \"$temp_dir/{directory}\" {} || fail 'release asset download failed: {directory}'",
+                download_patterns(&assets)
             )
+        })
+        .collect::<Vec<_>>()
+        .join("\n"))
+}
+
+/// Return local checksum validation commands for downloaded or new assets.
+fn checksum_check(
+    family: Family,
+    root: &str,
+    pins: Option<&ProductReleasePins>,
+) -> Result<String, RenderError> {
+    match family {
+        Family::Images | Family::Binary => Ok(format!(
+            "(cd \"{root}/assets\" && shasum -a 256 --check SHA256SUMS) || fail 'release asset checksum verification failed'"
+        )),
+        Family::Generator => {
+            let pins = pins.ok_or_else(|| {
+                RenderError::InvalidWorkflow("product_release_pins_missing".to_owned())
+            })?;
+            Ok(super::generator_release::verify_published_manifest_script(
+                pins,
+            ))
         }
-        Family::Generator => format!(
-            "(cd \"{root}/linux-assets\" && shasum -a 256 --check velnor-actions-0.1.0-x86_64-unknown-linux-gnu.sha256) || fail 'Linux generator checksum verification failed'\n(cd \"{root}/macos-assets\" && shasum -a 256 --check velnor-actions-0.1.0-aarch64-apple-darwin.sha256) || fail 'macOS generator checksum verification failed'"
-        ),
     }
 }
 
 fn prepare_asset_verification(family: Family) -> String {
-    family
-        .asset_paths()
+    let assets = family.asset_paths();
+    let mut commands = assets
         .iter()
         .map(|path| {
-            format!(
-                "gh release verify-asset \"$prepare_tag\" \"$temp_dir/{path}\" --repo \"$repository\" >/dev/null || fail 'release asset verification failed: {path}'\ngh attestation verify \"$temp_dir/{path}\" --repo \"$repository\" --source-ref refs/heads/main --source-digest \"$source_sha\" --signer-workflow \"$repository/$workflow_path\" --signer-digest \"$authority_sha\" >/dev/null || fail 'asset attestation verification failed: {path}'"
-            )
+            if family == Family::Generator {
+                format!(
+                    "gh release verify-asset \"$prepare_tag\" \"$temp_dir/{path}\" --repo \"$repository\" >/dev/null || fail 'release asset verification failed: {path}'"
+                )
+            } else {
+                format!(
+                    "gh release verify-asset \"$prepare_tag\" \"$temp_dir/{path}\" --repo \"$repository\" >/dev/null || fail 'release asset verification failed: {path}'\ngh attestation verify \"$temp_dir/{path}\" --repo \"$repository\" --source-ref refs/heads/main --source-digest \"$source_sha\" --signer-workflow \"$repository/{}\" --signer-digest \"$authority_sha\" >/dev/null || fail 'asset attestation verification failed: {path}'",
+                    family.workflow_path()
+                )
+            }
         })
-        .collect::<Vec<_>>()
-        .join("\n")
+        .collect::<Vec<_>>();
+    if family == Family::Generator {
+        commands.push(format!(
+            "(cd \"$temp_dir\" && {}) || fail 'generator attestation bundle verification failed'",
+            super::generator_release::verify_attestation_bundles_script()
+        ));
+    }
+    commands.join("\n")
 }
 
 fn publish_asset_verification(family: Family) -> String {
@@ -222,7 +289,7 @@ fn publish_asset_verification(family: Family) -> String {
         .join("\n")
 }
 
-fn download_patterns(assets: &[&str]) -> String {
+fn download_patterns(assets: &[String]) -> String {
     assets
         .iter()
         .map(|asset| format!("--pattern '{asset}'"))
@@ -238,7 +305,7 @@ fn shell_words(words: &[String]) -> String {
         .join(" ")
 }
 
-fn json_asset_array(assets: &[&str]) -> String {
+fn json_asset_array(assets: &[String]) -> String {
     format!(
         "[{}]",
         assets
@@ -248,8 +315,3 @@ fn json_asset_array(assets: &[&str]) -> String {
             .join(",")
     )
 }
-
-/// Captured release verification flags from the pinned GitHub CLI binary.
-#[cfg(test)]
-pub(super) const GH_RELEASE_CAPABILITIES: &str =
-    include_str!("schema2_release_gh_capabilities.txt");

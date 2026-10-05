@@ -30,22 +30,19 @@ fn git(args: &[&str], cwd: &Path) -> TestResult {
 
 /// Release-manifest fixture for `prepare`.
 fn manifest_json() -> String {
-    let targets = [
-        "x86_64-unknown-linux-gnu",
-        "aarch64-apple-darwin",
-        "x86_64-apple-darwin",
-    ]
+    let version = env!("CARGO_PKG_VERSION");
+    let targets = velnor_actions_contract::SUPPORTED_TARGETS
     .iter()
     .map(|target| {
         format!(
-            "{{\"target\":\"{target}\",\"artifact\":\"https://github.com/tailrocks/velnor-new/releases/download/v0.1.0/velnor-actions-0.1.0-{target}\",\"sha256\":\"{}\"}}",
+            "{{\"target\":\"{target}\",\"artifact\":\"https://github.com/tailrocks/velnor-new/releases/download/v{version}/velnor-actions-{version}-{target}\",\"sha256\":\"{}\"}}",
             "a".repeat(64)
         )
     })
     .collect::<Vec<_>>()
     .join(",");
     format!(
-        "{{\"schema\":1,\"version\":\"0.1.0\",\"repository\":\"tailrocks/velnor-new\",\"commit\":\"{}\",\"targets\":[{targets}]}}",
+        "{{\"schema\":1,\"version\":\"{version}\",\"repository\":\"tailrocks/velnor-new\",\"commit\":\"{}\",\"targets\":[{targets}]}}",
         "a".repeat(40)
     )
 }
@@ -60,11 +57,13 @@ fn binary_record(target: &str) -> String {
 
 /// Generator-lock fixture for Velnor-policy `prepare`.
 fn lock_text() -> String {
-    let bins = binary_record("x86_64-unknown-linux-gnu")
-        + &binary_record("aarch64-apple-darwin")
-        + &binary_record("x86_64-apple-darwin");
+    let version = env!("CARGO_PKG_VERSION");
+    let bins = velnor_actions_contract::SUPPORTED_TARGETS
+        .iter()
+        .map(|target| binary_record(target))
+        .collect::<String>();
     format!(
-        "schema = 1\n[generator]\nbinary = \"velnor-actions\"\nversion = \"0.1.0\"\ncommit = \"{}\"\n{bins}[mise-bootstrap]\nversion = \"2026.9.18\"\nartifact = \"https://example.invalid/mise\"\nsha256 = \"{}\"\n",
+        "schema = 1\n[generator]\nbinary = \"velnor-actions\"\nversion = \"{version}\"\ncommit = \"{}\"\n{bins}[mise-bootstrap]\nversion = \"2026.9.18\"\nartifact = \"https://example.invalid/mise\"\nsha256 = \"{}\"\n",
         "e".repeat(40),
         "b".repeat(64)
     )

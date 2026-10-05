@@ -115,7 +115,7 @@ fn final_gate_needs_plan_lint_and_support() -> Result<(), RenderError> {
         &ctx,
     )?;
     let start = text.find("required:").expect("final job");
-    let window = snip(&text, start, 600);
+    let window = snip(&text, start, 1600);
     for need in [
         "plan",
         "actionlint",

@@ -4,7 +4,9 @@
 use std::collections::BTreeSet;
 
 use velnor_actions_contract::config::is_hosted_catalog;
-use velnor_actions_contract::{RoutingWorkflow, SCALE_SET_NAME, ScaleSetSelector, VELNOR_LABEL};
+use velnor_actions_contract::{
+    ReleaseTarget, RoutingWorkflow, SCALE_SET_NAME, ScaleSetSelector, VELNOR_LABEL,
+};
 
 use crate::RenderError;
 use crate::marker::with_marker;
@@ -59,7 +61,7 @@ impl RunnerSpec {
 
 /// Qualification workflow path.
 pub const QUALIFICATION_WORKFLOW: &str = ".github/workflows/qualification.yml";
-/// Shared product-release coordinator workflow path.
+/// Shared product-release workflow path.
 pub const PRODUCT_RELEASE_WORKFLOW: &str = product_release::WORKFLOW_PATH;
 /// Queue-monitoring workflow path.
 pub const MONITORING_WORKFLOW: &str = ".github/workflows/monitoring.yml";
@@ -86,6 +88,10 @@ pub mod release_eligibility;
 #[path = "schema2_runner_shell_tests.rs"]
 mod runner_shell_tests;
 
+#[cfg(test)]
+#[path = "schema2_product_release_test_pins.rs"]
+pub(super) mod product_release_test_pins;
+
 /// Which schema 2 workflows to emit, plus the selectors they use.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Schema2WorkflowRequest {
@@ -99,6 +105,56 @@ pub struct Schema2WorkflowRequest {
     pub workflows: BTreeSet<RoutingWorkflow>,
     /// Pinned tool inputs, required only when qualification is emitted.
     pub mbx_qualification: Option<MbxQualificationPins>,
+    /// Orchestrator-resolved Mise setup and command vectors for product releases.
+    pub product_release: Option<ProductReleasePins>,
+}
+
+/// Pinned tools and runner-specific Mise setup for composed product releases.
+///
+/// The orchestrator builds every command vector through the Mise adapter.
+/// The renderer only joins validated argv into workflow steps.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProductReleasePins {
+    /// Setup pins for each supported release runner target.
+    pub linux_x86_64_setup: MiseSetup,
+    /// Setup pins for each supported release runner target.
+    pub macos_arm64_setup: MiseSetup,
+    /// Setup pins for each supported release runner target.
+    pub macos_x86_64_setup: MiseSetup,
+    /// Exact `mise install` argv for source-policy tools.
+    pub install_gate_tools_argv: Vec<String>,
+    /// Exact `mise install` argv for native candidate build tools.
+    pub install_build_tools_argv: Vec<String>,
+    /// Exact `mise install` argv for the macOS host binary build.
+    pub install_runner_build_tools_argv: Vec<String>,
+    /// Exact `mise install` argv for GitHub CLI.
+    pub install_gh_argv: Vec<String>,
+    /// Exact pinned `mbx build` argv.
+    pub build_argv: Vec<String>,
+    /// Exact pinned macOS host binary build argv.
+    pub runner_build_argv: Vec<String>,
+    /// Exact pinned actionlint argv.
+    pub actionlint_argv: Vec<String>,
+    /// Exact pinned zizmor argv.
+    pub zizmor_argv: Vec<String>,
+    /// Exact pinned GitHub CLI invocation prefix.
+    pub gh_argv: Vec<String>,
+    /// Exact Rust toolchain release selected by the Mise catalog.
+    pub rust_version: String,
+    /// Exact MBX release selected by the Mise catalog.
+    pub mr_boxington_version: String,
+}
+
+impl ProductReleasePins {
+    /// Setup action pins associated with a release target.
+    #[must_use]
+    pub fn setup_for(&self, target: ReleaseTarget) -> &MiseSetup {
+        match target {
+            ReleaseTarget::LinuxX86_64 => &self.linux_x86_64_setup,
+            ReleaseTarget::MacosArm64 => &self.macos_arm64_setup,
+            ReleaseTarget::MacosX86_64 => &self.macos_x86_64_setup,
+        }
+    }
 }
 
 /// Exact tools used by the hosted MBX cache qualification.
@@ -146,12 +202,18 @@ pub fn render_schema2_workflows(
             &qualification(request)?,
         )?);
     }
-    if let Some(product_release) = product_release::render(request)? {
+    if let Some(generated) = product_release::render(request)? {
         files.push(file(
             PRODUCT_RELEASE_WORKFLOW,
             &request.version,
-            &product_release,
+            &generated.workflow,
         )?);
+        for (path, workflow) in generated.family_workflows {
+            files.push(file(&path, &request.version, &workflow)?);
+        }
+        for (path, action) in generated.actions {
+            files.push(file(&path, &request.version, &action)?);
+        }
     }
     if request.workflows.contains(&RoutingWorkflow::Monitoring) {
         files.push(file(
@@ -234,6 +296,8 @@ fn with_if((id, body): (String, Yaml), when: &str) -> (String, Yaml) {
 }
 
 fn monitoring(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> {
+    let scale = RunnerSpec::scale_set(runs_on_yaml(&request.scale_set.token())?);
+    let hosted = RunnerSpec::hosted(&request.hosted_label)?;
     Ok(document(
         "Scale set monitoring",
         empty_dispatch(),
@@ -241,7 +305,7 @@ fn monitoring(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> {
             job(
                 "scale-set-lane",
                 "Scale set lane",
-                &RunnerSpec::scale_set(runs_on_yaml(&request.scale_set.token())?),
+                &scale,
                 30,
                 Vec::new(),
                 "Run scale-set lane",
@@ -250,7 +314,7 @@ fn monitoring(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> {
             job(
                 "queue-monitor",
                 "Queue monitor",
-                &RunnerSpec::hosted(&request.hosted_label)?,
+                &hosted,
                 10,
                 Vec::new(),
                 "Watch admission",

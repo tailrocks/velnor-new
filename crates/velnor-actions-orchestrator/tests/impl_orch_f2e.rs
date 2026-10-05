@@ -6,8 +6,8 @@ use std::path::{Path, PathBuf};
 use serde_json::Value as Json;
 use tempfile::TempDir;
 use velnor_actions_orchestrator::{
-    GenerateOptions, GenerateReport, GenerationPreparation, OrchestratorError, generate,
-    plan_internal, plan_outputs, prepare, publish_plan_files,
+    GenerateOptions, GenerateReport, GenerationPreparation, OrchestratorError, PlanOutputMode,
+    generate, plan_internal, plan_outputs, prepare, publish_plan_files,
 };
 
 use crate::impl_common::{
@@ -84,14 +84,15 @@ fn plan_and_workflow_ids_agree() -> TestResult {
 #[test]
 fn source_build_consumer_gate_registered() -> TestResult {
     use velnor_actions_orchestrator::consumer_acquire_step_with_manifest;
+    let version = env!("CARGO_PKG_VERSION");
     let err =
-        consumer_acquire_step_with_manifest("ubuntu-26.04", "0.1.0", None).expect_err("None fails");
+        consumer_acquire_step_with_manifest("ubuntu-26.04", version, None).expect_err("None fails");
     let text = err.to_string();
     assert!(text.contains("consumer_requires_release_install"), "{text}");
     assert!(text.contains("official"), "{text}");
     let step = consumer_acquire_step_with_manifest(
         "ubuntu-26.04",
-        "0.1.0",
+        version,
         Some(&fixture_manifest_json()),
     )?;
     assert_eq!(step.name, "Acquire Velnor");
@@ -119,7 +120,7 @@ fn qualify_argv_runs_artifact_only_registered() -> TestResult {
 #[test]
 fn plan_json_matches_github_outputs() -> TestResult {
     let (_repo, response) = plan_response_for_source_change()?;
-    let outputs = plan_outputs(&response)?;
+    let outputs = plan_outputs(&response, PlanOutputMode::Static)?;
     let velnor_dir = TempDir::new()?;
     let dir = publish_plan_files(&response, velnor_dir.path())?;
     assert_eq!(dir, velnor_dir.path().join("local"));
@@ -134,9 +135,9 @@ fn plan_json_matches_github_outputs() -> TestResult {
         "matrix.json agrees with GITHUB_OUTPUT"
     );
     let plan_value: Json = serde_json::from_str(&plan_json)?;
-    let outputs_value: Json = serde_json::from_str(&outputs.plan)?;
+    let response_value: Json = serde_json::from_str(&response)?;
     let matrix_value: Json = serde_json::from_str(&matrix_json)?;
-    assert_eq!(plan_value["matrix"], outputs_value["matrix"]);
+    assert_eq!(plan_value["matrix"], response_value["matrix"]);
     assert_eq!(plan_value["matrix"], matrix_value);
     Ok(())
 }

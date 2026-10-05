@@ -10,7 +10,7 @@ use velnor_actions_actionlint::overrides::{
     ActionPinOverride as ApprovedOverride, ApprovedPinCatalog,
 };
 use velnor_actions_contract::{
-    GeneratorLock, ReleaseManifest, Step, VelnorConfig, check_release_artifact,
+    GeneratorLock, ReleaseManifest, ReleaseTarget, Step, VelnorConfig, check_release_artifact,
     target_for_runner_label,
 };
 use velnor_actions_mise::MISE_VERSION;
@@ -34,6 +34,20 @@ const MISE_ACTION_KEY: &str = "jdx/mise-action";
 const MISE_BINARY_SHA256_LINUX_X64: &str =
     "d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4";
 
+/// Installed `mise` binary digest for mise 2026.9.18 on macOS arm64.
+///
+/// Source: `SHASUMS256.txt` from the `jdx/mise` `v2026.9.18` release;
+/// verified by hashing the extracted `mise/bin/mise` binary.
+const MISE_BINARY_SHA256_MACOS_ARM64: &str =
+    "484c135bd4329975d608d3f77e26c2ece5d2f5590f18ca71f44440294f8cfa6f";
+
+/// Installed `mise` binary digest for mise 2026.9.18 on macOS x86-64.
+///
+/// Source: `SHASUMS256.txt` from the `jdx/mise` `v2026.9.18` release;
+/// verified by hashing the extracted `mise/bin/mise` binary.
+const MISE_BINARY_SHA256_MACOS_X64: &str =
+    "02d8ba561847f996925e361262c0610a24f59fcd9e06ba9ed0b6022e19b317c3";
+
 /// Runner target the compiled mise digest covers.
 const LINUX_X64_TARGET: &str = "x86_64-unknown-linux-gnu";
 
@@ -53,10 +67,23 @@ pub(crate) fn resolve_mise_setup(
             problem: format!("mise_setup_unsupported_target:{label}"),
         });
     }
+    resolve_mise_setup_for_release_target(config, ReleaseTarget::LinuxX86_64)
+}
+
+/// Resolve a release runner's Mise setup pins from the named platform ID.
+pub(crate) fn resolve_mise_setup_for_release_target(
+    config: &VelnorConfig,
+    target: ReleaseTarget,
+) -> Result<MiseSetup, OrchestratorError> {
+    let sha256 = match target {
+        ReleaseTarget::LinuxX86_64 => MISE_BINARY_SHA256_LINUX_X64,
+        ReleaseTarget::MacosArm64 => MISE_BINARY_SHA256_MACOS_ARM64,
+        ReleaseTarget::MacosX86_64 => MISE_BINARY_SHA256_MACOS_X64,
+    };
     Ok(MiseSetup {
         uses: mise_action_uses(config)?,
         version: MISE_VERSION.to_owned(),
-        sha256: MISE_BINARY_SHA256_LINUX_X64.to_owned(),
+        sha256: sha256.to_owned(),
     })
 }
 
@@ -207,12 +234,14 @@ fn acquire_argv(staged: &str) -> Vec<String> {
 #[cfg(test)]
 fn test_manifest_json() -> String {
     let version = env!("CARGO_PKG_VERSION");
-    let targets = ["x86_64-unknown-linux-gnu", "aarch64-apple-darwin", "x86_64-apple-darwin"]
+    let targets = velnor_actions_contract::ReleaseTarget::ALL
         .iter()
         .map(|target| {
             format!(
-                "{{\"target\":\"{target}\",\"artifact\":\"https://github.com/tailrocks/velnor-new/releases/download/v{version}/velnor-actions-{version}-{target}\",\"sha256\":\"{}\"}}",
-                "a".repeat(64)
+                "{{\"target\":\"{}\",\"artifact\":\"https://github.com/tailrocks/velnor-new/releases/download/v{version}/velnor-actions-{version}-{}\",\"sha256\":\"{}\"}}",
+                target.triple(),
+                target.triple(),
+                "a".repeat(64),
             )
         })
         .collect::<Vec<_>>()

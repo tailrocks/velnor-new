@@ -36,6 +36,7 @@ fn group(kind: TaskKind, task_id: &str, driver: CompileDriver, runner: TestRunne
         uses_network: false,
         uses_clock: false,
         uses_random: false,
+        run_ignored: None,
         nextest_profile: NextestProfile::Default,
     };
     let task = velnor_actions_rust::propose_task(&group).expect("fixture proposes");
@@ -239,7 +240,7 @@ fn compiler_spec_versions_flip_the_digest() {
     alien.identity.target = "riscv64-unknown-linux-gnu".to_owned();
     let err = platform_id_for_group("ubuntu-26.04", &alien).expect_err("target");
     assert!(err.to_string().contains("unsupported_target"), "{err}");
-    for label in ["ubuntu-26.04-arm", "macos-15", "windows-2025", ""] {
+    for label in ["ubuntu-26.04-arm", "macos-14", "windows-2025", ""] {
         let err = platform_id_for_group(label, &group).expect_err("label");
         assert!(
             err.to_string().contains("unsupported_target_for_runner"),

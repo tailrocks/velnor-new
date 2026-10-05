@@ -3,14 +3,20 @@ set -euo pipefail
 @ELIGIBILITY_SCRIPT@
 
 readonly release_repository='@REPOSITORY@'
-readonly release_gh_version='@GH_VERSION@'
 readonly release_workflow_path='@WORKFLOW_PATH@'
 readonly release_source_sha="$VELNOR_SOURCE_SHA"
 readonly release_authority_sha="$VELNOR_WORKFLOW_AUTHORITY_SHA"
 readonly release_ci_run_id="$VELNOR_CI_RUN_ID"
 readonly release_ci_attempt="$VELNOR_CI_ATTEMPT"
 readonly release_action="$VELNOR_RELEASE_ACTION"
-readonly release_tag='@TAG_PREFIX@-'"$release_source_sha"
+readonly tag_prefix='@TAG_PREFIX@'
+readonly fixed_tag='@FIXED_TAG@'
+if [[ -n "$fixed_tag" ]]; then
+  release_tag="$fixed_tag"
+else
+  release_tag="${tag_prefix}-${release_source_sha}"
+fi
+readonly release_tag
 readonly expected_assets='@ASSET_NAMES_JSON@'
 readonly release_asset_paths=(@ASSET_PATHS@)
 
@@ -25,15 +31,13 @@ family_fail() {
 [[ "$release_ci_attempt" =~ ^[0-9]+$ ]] || family_fail 'initial CI attempt is malformed'
 [[ -n "$GH_TOKEN" ]] || family_fail 'GitHub token is missing'
 
-family_gh() {
-  mise --no-config --no-env --no-hooks exec "gh@$release_gh_version" -- gh "$@"
-}
+@GH_FUNCTION@
+family_gh() { gh "$@"; }
 
 check_eligibility_identity() {
   local output actual_source actual_authority actual_run actual_attempt
   output="$(mktemp)"
-  if ! GITHUB_OUTPUT="$output" bash -c \
-    "set -euo pipefail; $(declare -f release_eligibility); release_eligibility"; then
+  if ! (GITHUB_OUTPUT="$output"; release_eligibility); then
     rm -f "$output"
     return 1
   fi

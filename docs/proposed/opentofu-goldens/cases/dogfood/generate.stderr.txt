@@ -4,11 +4,23 @@ Repository: <repo>
 .github/AGENTS.md
 .github/CLAUDE.md
 .github/actionlint.yaml
+.github/actions/generator-release-attest-linux/action.yml
+.github/actions/generator-release-attest-macos-intel/action.yml
+.github/actions/generator-release-attest-macos/action.yml
+.github/actions/generator-release-attest-manifest/action.yml
+.github/actions/generator-release-build-linux/action.yml
+.github/actions/generator-release-build-macos-intel/action.yml
+.github/actions/generator-release-build-macos/action.yml
+.github/actions/generator-release-publish/action.yml
+.github/actions/generator-release-qualify-linux/action.yml
+.github/actions/generator-release-qualify-macos-intel/action.yml
+.github/actions/generator-release-qualify-macos/action.yml
 .github/workflows/ci.yml
 .github/workflows/freshness.yml
-.github/workflows/generator-release.yml
-.github/workflows/image-release.yml
-.github/workflows/macos-binary-release.yml
+.github/workflows/product-release-binary.yml
+.github/workflows/product-release-generator.yml
+.github/workflows/product-release-images.yml
+.github/workflows/product-release.yml
 .github/workflows/qualification.yml
 mise.lock not found; Velnor will not create or refresh it
 mise.toml is read-only input; Velnor never modifies it

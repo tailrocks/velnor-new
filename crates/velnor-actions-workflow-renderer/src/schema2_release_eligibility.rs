@@ -1,12 +1,12 @@
 //! Exact-source eligibility shared by every product release job.
 
+use crate::RenderError;
 use crate::yaml::Yaml;
 
-use super::features::{CHECKOUT_USES, base, finish, run_step};
+use super::features::{CHECKOUT_USES, base, finish};
+use super::generator_release;
+use super::{ProductReleasePins, ReleaseTarget};
 
-const MISE_USES: &str = "jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5";
-const MISE_VERSION: &str = "2026.9.18";
-pub(super) const GH_VERSION: &str = "2.102.0";
 pub(super) const REPOSITORY: &str = "tailrocks/velnor-new";
 pub(super) const WORKFLOW_PATH: &str = ".github/workflows/product-release.yml";
 const CI_WORKFLOW_PATH: &str = ".github/workflows/ci.yml";
@@ -54,8 +54,11 @@ pub const JOB_ID: &str = "release-eligibility";
 
 /// Read-only source and required-CI gate. Its outputs bind all build jobs to
 /// one immutable event SHA and identify the authority and CI attempt.
-#[must_use]
-pub fn job(runs_on: Yaml) -> (String, Yaml) {
+///
+/// # Errors
+///
+/// Returns an error when a pinned tool command cannot be rendered.
+pub fn job(runs_on: Yaml, pins: &ProductReleasePins) -> Result<(String, Yaml), RenderError> {
     let mut fields = base("Check release source eligibility", runs_on, 70);
     fields.push((
         "permissions".to_owned(),
@@ -85,60 +88,58 @@ pub fn job(runs_on: Yaml) -> (String, Yaml) {
             ),
         ]),
     ));
-    finish(
-        JOB_ID,
-        fields,
-        vec![
-            checkout_step(),
-            mise_step(),
-            run_step(
-                "Install pinned GitHub CLI",
-                &format!("mise --no-config --no-env --no-hooks install gh@{GH_VERSION}"),
-            ),
-            check_step(),
-        ],
-    )
+    let mut steps = vec![
+        checkout_step(),
+        generator_release::mise_setup_step(pins, ReleaseTarget::LinuxX86_64)?,
+    ];
+    steps.extend(generator_release::release_gate_steps(pins)?);
+    steps.push(check_step(pins)?);
+    Ok(finish(JOB_ID, fields, steps))
 }
 
 /// Bash gate run before build and again inside each publisher.
-pub(super) fn script() -> String {
-    render_script(false)
+pub(super) fn script(pins: &ProductReleasePins) -> Result<String, RenderError> {
+    render_script(false, pins)
 }
 
 /// Eligibility check embedded in a publisher; succeeds without ending that step.
-pub(super) fn publisher_script() -> String {
-    render_script(true)
+pub(super) fn publisher_script(pins: &ProductReleasePins) -> Result<String, RenderError> {
+    render_script(true, pins)
 }
 
-fn render_script(continue_on_success: bool) -> String {
-    ELIGIBILITY_SCRIPT
+fn render_script(
+    continue_on_success: bool,
+    pins: &ProductReleasePins,
+) -> Result<String, RenderError> {
+    let gh_function = generator_release::gh_function(pins)?;
+    Ok(ELIGIBILITY_SCRIPT
+        .replace("@GH_FUNCTION@", &gh_function)
         .replace("@REPOSITORY@", REPOSITORY)
         .replace("@WORKFLOW_PATH@", WORKFLOW_PATH)
         .replace("@CI_WORKFLOW_PATH@", CI_WORKFLOW_PATH)
         .replace("@CI_WORKFLOW_API_ID@", CI_WORKFLOW_API_ID)
-        .replace("@GH_VERSION@", GH_VERSION)
         .replace("@LATEST_RUN_JQ@", LATEST_RUN_JQ)
         .replace("@REQUIRED_JOB_JQ@", REQUIRED_JOB_JQ)
         .replace("@SUCCESS_ACTION@", "successful=true; break")
         .replace(
             "@CALL@",
             if continue_on_success {
-                ""
+                "release_eligibility"
             } else {
                 "release_eligibility\nexit 0"
             },
-        )
+        ))
 }
 
 const ELIGIBILITY_SCRIPT: &str = r#"set -euo pipefail
 
+@GH_FUNCTION@
+
 release_eligibility() {
 local -r repository='@REPOSITORY@'
-local -r workflow_path='@WORKFLOW_PATH@'
 local -r ci_workflow_path='@CI_WORKFLOW_PATH@'
 local -r source_sha="${GITHUB_SHA-}"
 local -r authority_sha="${GITHUB_WORKFLOW_SHA-}"
-local -r gh_version='@GH_VERSION@'
 
 fail() {
   printf 'release eligibility: %s\n' "$1" >&2
@@ -152,9 +153,9 @@ is_sha() {
 
 [[ "${GITHUB_REPOSITORY-}" == "$repository" ]] || fail 'unexpected repository'
 [[ "${GITHUB_REF-}" == 'refs/heads/main' ]] || fail 'source ref is not main'
-[[ "${GITHUB_WORKFLOW_REF-}" == "$repository/$workflow_path@refs/heads/main" ]] || fail 'unexpected workflow authority path or ref'
+[[ "${GITHUB_WORKFLOW_REF-}" == "$repository/@WORKFLOW_PATH@@refs/heads/main" ]] || fail 'unexpected workflow authority path or ref'
 case "${GITHUB_EVENT_NAME-}" in
-  push|schedule|workflow_dispatch) ;;
+  workflow_dispatch) ;;
   *) fail 'event is not eligible' ;;
 esac
 is_sha "$source_sha" || fail 'source SHA is malformed'
@@ -169,7 +170,7 @@ local poll_seconds="${VELNOR_RELEASE_CI_POLL_SECONDS:-15}"
 [[ "$poll_seconds" =~ ^[0-9]+$ ]] || fail 'poll interval is invalid'
 
 gh_api() {
-  mise --no-config --no-env --no-hooks exec "gh@$gh_version" -- gh api "$@"
+  gh api "$@"
 }
 
 current_main_sha() {
@@ -286,24 +287,8 @@ fn checkout_step() -> Yaml {
     ])
 }
 
-fn mise_step() -> Yaml {
-    Yaml::Map(vec![
-        ("name".to_owned(), Yaml::str("Set up pinned Mise")),
-        ("uses".to_owned(), Yaml::str(MISE_USES)),
-        (
-            "with".to_owned(),
-            Yaml::Map(vec![
-                ("cache".to_owned(), Yaml::str("false")),
-                ("env".to_owned(), Yaml::str("false")),
-                ("install".to_owned(), Yaml::str("false")),
-                ("version".to_owned(), Yaml::str(MISE_VERSION)),
-            ]),
-        ),
-    ])
-}
-
-fn check_step() -> Yaml {
-    Yaml::Map(vec![
+fn check_step(pins: &ProductReleasePins) -> Result<Yaml, RenderError> {
+    Ok(Yaml::Map(vec![
         (
             "name".to_owned(),
             Yaml::str("Verify main and latest Required CI"),
@@ -317,8 +302,8 @@ fn check_step() -> Yaml {
             )]),
         ),
         ("shell".to_owned(), Yaml::str("bash")),
-        ("run".to_owned(), Yaml::str(script())),
-    ])
+        ("run".to_owned(), Yaml::str(script(pins)?)),
+    ]))
 }
 
 #[cfg(test)]

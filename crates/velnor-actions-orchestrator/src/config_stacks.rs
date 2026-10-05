@@ -37,6 +37,8 @@ pub(crate) struct PartialRustStack {
     compile_driver: Option<DeclaredCompileDriver>,
     /// Sticky declared test runner.
     test_runner: Option<DeclaredTestRunner>,
+    /// Ignored test execution mode.
+    run_ignored: Option<String>,
     /// Rust release policy; disabled by default.
     release: Option<RustReleaseConfig>,
     /// Allowlisted Mise custom-task names; empty by default.
@@ -60,6 +62,7 @@ impl PartialStacks {
                 configurations: stack.configurations.unwrap_or(defaults.configurations),
                 compile_driver: stack.compile_driver,
                 test_runner: stack.test_runner,
+                run_ignored: stack.run_ignored,
                 release: stack.release.unwrap_or_default(),
                 custom_tasks: stack.custom_tasks.unwrap_or_default(),
             }
@@ -184,6 +187,19 @@ mod tests {
             let root = rooted(body);
             let err = load(root.path()).expect_err("unknown key must fail");
             assert!(err.to_string().contains(CONFIG_REL), "got {err}");
+        }
+    }
+
+    #[test]
+    fn nextest_no_tests_overrides_are_rejected() {
+        let load = load_config;
+        for action in ["warn", "pass"] {
+            let root = rooted(&format!(
+                "schema = 1\n[stacks.rust]\nno_tests = \"{action}\"\n"
+            ));
+            let err = load(root.path()).expect_err("empty-suite override must fail closed");
+            assert!(err.to_string().contains("unknown_config_field"), "{err}");
+            assert!(err.to_string().contains("no_tests"), "{err}");
         }
     }
 

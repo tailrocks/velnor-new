@@ -1,7 +1,7 @@
 use std::error::Error;
 
 use self::fixture::{Fixture, contains_mutation};
-use super::{Family, family};
+use super::{Family, family, test_pins};
 
 #[path = "schema2_product_release_exec_fixture.rs"]
 mod fixture;
@@ -9,30 +9,9 @@ mod fixture;
 #[test]
 fn absent_family_is_marked_build_without_mutating_github() -> Result<(), Box<dyn Error>> {
     let fixture = Fixture::new(Family::Binary, "absent")?;
-    let result = fixture.run(family::prepare_script(Family::Binary), None)?;
+    let result = fixture.run(family::prepare_script(Family::Binary, &test_pins())?, None)?;
     assert!(result.success, "{}", result.stderr);
     assert!(result.output.contains("action=build"));
-    assert!(!contains_mutation(&result.calls));
-    Ok(())
-}
-
-#[test]
-fn complete_family_is_downloaded_into_consumer_paths_and_is_immutable() -> Result<(), Box<dyn Error>>
-{
-    let fixture = Fixture::new(Family::Generator, "complete")?;
-    let result = fixture.run(family::prepare_script(Family::Generator), None)?;
-    assert!(result.success, "{}", result.stderr);
-    assert!(
-        result.output.contains("action=complete"),
-        "output={:?}; stderr={}; calls={}",
-        result.output,
-        result.stderr,
-        result.calls
-    );
-    assert!(result.calls.contains("--dir"));
-    assert!(result.calls.contains("--dir "), "{}", result.calls);
-    assert!(result.calls.contains("/linux-assets"));
-    assert!(result.calls.contains("/macos-assets"));
     assert!(!contains_mutation(&result.calls));
     Ok(())
 }
@@ -41,7 +20,7 @@ fn complete_family_is_downloaded_into_consumer_paths_and_is_immutable() -> Resul
 fn draft_and_orphan_tags_fail_closed_without_mutation() -> Result<(), Box<dyn Error>> {
     for mode in ["draft", "orphan"] {
         let fixture = Fixture::new(Family::Binary, mode)?;
-        let result = fixture.run(family::prepare_script(Family::Binary), None)?;
+        let result = fixture.run(family::prepare_script(Family::Binary, &test_pins())?, None)?;
         assert!(!result.success, "mode {mode} unexpectedly passed");
         assert!(!contains_mutation(&result.calls));
     }
@@ -51,7 +30,7 @@ fn draft_and_orphan_tags_fail_closed_without_mutation() -> Result<(), Box<dyn Er
 #[test]
 fn wrong_tag_target_fails_closed_without_mutation() -> Result<(), Box<dyn Error>> {
     let fixture = Fixture::new(Family::Binary, "wrong-target")?;
-    let result = fixture.run(family::prepare_script(Family::Binary), None)?;
+    let result = fixture.run(family::prepare_script(Family::Binary, &test_pins())?, None)?;
     assert!(!result.success);
     assert!(
         result
@@ -68,7 +47,10 @@ fn wrong_tag_target_fails_closed_without_mutation() -> Result<(), Box<dyn Error>
 fn stale_main_fails_publisher_before_tag_or_release_mutation() -> Result<(), Box<dyn Error>> {
     let fixture = Fixture::new(Family::Binary, "stale")?;
     fixture.create_build_assets()?;
-    let result = fixture.run(family::publish_script(Family::Binary), Some("build"))?;
+    let result = fixture.run(
+        family::publish_script(Family::Binary, &test_pins())?,
+        Some("build"),
+    )?;
     assert!(!result.success);
     assert!(result.stderr.contains("source is no longer the main tip"));
     assert!(!contains_mutation(&result.calls));
@@ -79,7 +61,10 @@ fn stale_main_fails_publisher_before_tag_or_release_mutation() -> Result<(), Box
 fn changed_latest_ci_attempt_fails_before_tag_creation() -> Result<(), Box<dyn Error>> {
     let fixture = Fixture::new(Family::Binary, "attempt-changed")?;
     fixture.create_build_assets()?;
-    let result = fixture.run(family::publish_script(Family::Binary), Some("build"))?;
+    let result = fixture.run(
+        family::publish_script(Family::Binary, &test_pins())?,
+        Some("build"),
+    )?;
     assert!(!result.success);
     assert!(
         result
@@ -95,7 +80,10 @@ fn publisher_creates_exact_tag_after_eligibility_then_publishes_verified_assets(
 -> Result<(), Box<dyn Error>> {
     let fixture = Fixture::new(Family::Binary, "absent")?;
     fixture.create_build_assets()?;
-    let result = fixture.run(family::publish_script(Family::Binary), Some("build"))?;
+    let result = fixture.run(
+        family::publish_script(Family::Binary, &test_pins())?,
+        Some("build"),
+    )?;
     assert!(result.success, "{}", result.stderr);
     assert_order(&result.calls, "/attempts/1/jobs?per_page=100", "git/refs")?;
     assert_order(&result.calls, "git/refs", "release create")?;
@@ -104,24 +92,6 @@ fn publisher_creates_exact_tag_after_eligibility_then_publishes_verified_assets(
     assert!(result.calls.contains("--source-ref refs/heads/main"));
     assert!(result.calls.contains("--signer-digest"));
     assert!(result.calls.contains("--source-digest"));
-    Ok(())
-}
-
-#[test]
-fn complete_publisher_revalidates_without_artifact_upload_or_mutation() -> Result<(), Box<dyn Error>>
-{
-    let fixture = Fixture::new(Family::Generator, "complete")?;
-    let result = fixture.run(family::publish_script(Family::Generator), Some("complete"))?;
-    assert!(result.success, "{}", result.stderr);
-    assert!(result.calls.contains("--dir"));
-    assert!(result.calls.contains("linux-assets"));
-    assert!(result.calls.contains("macos-assets"));
-    assert!(
-        result.output.is_empty(),
-        "nested revalidation output leaked to the publisher step: {}",
-        result.output
-    );
-    assert!(!contains_mutation(&result.calls));
     Ok(())
 }
 
@@ -139,7 +109,7 @@ fn complete_publisher_fails_closed_on_release_verification_errors() -> Result<()
     ] {
         let fixture = Fixture::new(Family::Binary, "complete")?;
         let result = fixture.run_with_failure(
-            family::publish_script(Family::Binary),
+            family::publish_script(Family::Binary, &test_pins())?,
             Some("complete"),
             Some(failure),
         )?;
@@ -183,7 +153,7 @@ fn complete_publisher_fails_closed_on_authoritative_read_errors() -> Result<(), 
     ] {
         let fixture = Fixture::new(Family::Binary, mode)?;
         let result = fixture.run_with_failure(
-            family::publish_script(Family::Binary),
+            family::publish_script(Family::Binary, &test_pins())?,
             Some("complete"),
             Some(failure),
         )?;
@@ -211,7 +181,10 @@ fn complete_publisher_fails_closed_on_authoritative_read_errors() -> Result<(), 
 fn mutable_post_publish_result_fails_qualification_after_upload() -> Result<(), Box<dyn Error>> {
     let fixture = Fixture::new(Family::Binary, "mutable")?;
     fixture.create_build_assets()?;
-    let result = fixture.run(family::publish_script(Family::Binary), Some("build"))?;
+    let result = fixture.run(
+        family::publish_script(Family::Binary, &test_pins())?,
+        Some("build"),
+    )?;
     assert!(!result.success);
     assert!(
         result
@@ -226,14 +199,17 @@ fn mutable_post_publish_result_fails_qualification_after_upload() -> Result<(), 
 fn draft_creation_failure_leaves_an_orphan_tag_that_retry_rejects() -> Result<(), Box<dyn Error>> {
     let fixture = Fixture::new(Family::Binary, "draft-fails")?;
     fixture.create_build_assets()?;
-    let publish = fixture.run(family::publish_script(Family::Binary), Some("build"))?;
+    let publish = fixture.run(
+        family::publish_script(Family::Binary, &test_pins())?,
+        Some("build"),
+    )?;
     assert!(!publish.success);
     assert!(publish.calls.contains("git/refs"));
     assert!(publish.calls.contains("release create"));
     assert!(!publish.calls.contains("release upload"));
 
     let previous_calls = publish.calls.len();
-    let retry = fixture.run(family::prepare_script(Family::Binary), None)?;
+    let retry = fixture.run(family::prepare_script(Family::Binary, &test_pins())?, None)?;
     assert!(!retry.success);
     assert!(
         retry

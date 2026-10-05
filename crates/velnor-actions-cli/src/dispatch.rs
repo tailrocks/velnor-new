@@ -5,10 +5,9 @@
 //! pre-existing file, `plan-v1`/`merge-v1`/`publish-baseline-v1` need a
 //! pre-existing request file, `fetch-reports-v1`/`write-task-report-v1`
 //! need runner temp plus the numeric run ID instead, and
-//! `write-preseed-manifest-v1` needs runner temp only. Generator release
-//! manifest operations use their own explicit asset/version/tag/repository/
-//! source context. Anything else falls through to Clap, so public behavior
-//! is byte-identical with or without the environment set.
+//! `write-preseed-manifest-v1` needs runner temp only. Anything else falls
+//! through to Clap, so public behavior is byte-identical with or without the
+//! environment set.
 
 use std::env;
 use std::fs;
@@ -17,12 +16,12 @@ use std::process::ExitCode;
 
 use clap::Parser;
 use velnor_actions_orchestrator::{
-    COVERED_TASKS_OUTPUT, FETCH_OP, GenerateOptions, MERGE_OP, OrchestratorError, PLAN_OP,
-    PRESEED_MANIFEST_OP, PUBLISH_OP, REPORT_OP, REQUEST_FILE_ENV, WRITE_REQUEST_OP,
-    generate_dispatched, init_config, merge_internal, merge_passed, parse_dispatch_mode,
-    plan_internal, plan_outputs, plan_text_checked, prepare, publish_final_report,
-    publish_plan_files, resolve_root, response_path_for, retrieve_reports, write_preseed_manifest,
-    write_request, write_task_report,
+    DYNAMIC_MATRIX_OUTPUT_MODE, FETCH_OP, GenerateOptions, MERGE_OP, OrchestratorError,
+    PLAN_MATRIX_OUTPUT_MODE_ENV, PLAN_OP, PRESEED_MANIFEST_OP, PUBLISH_OP, PlanOutputMode,
+    REPORT_OP, REQUEST_FILE_ENV, WRITE_REQUEST_OP, generate_dispatched, init_config,
+    merge_internal, merge_passed, parse_dispatch_mode, plan_internal, plan_outputs,
+    plan_text_checked, prepare, publish_final_report, publish_plan_files, resolve_root,
+    response_path_for, retrieve_reports, write_preseed_manifest, write_request, write_task_report,
 };
 
 use crate::args::{Cli, Command};
@@ -85,9 +84,6 @@ pub(crate) fn run_public() -> ExitCode {
 /// to Clap; bare invocations then fail with the usage diagnostic (exit 2),
 /// keeping public behavior byte-identical with or without the environment.
 pub(crate) fn try_internal() -> Option<ExitCode> {
-    if let Some(outcome) = crate::dispatch_generator_release::try_internal() {
-        return Some(outcome);
-    }
     let request = gate_request()?;
     Some(run_internal(&request))
 }
@@ -184,6 +180,11 @@ fn run_plan_internal(path: &Path) -> ExitCode {
         Ok(text) => text,
         Err(error) => return fail_internal(&format!("read request: {error}")),
     };
+    let mode = match env::var_os(PLAN_MATRIX_OUTPUT_MODE_ENV) {
+        None => PlanOutputMode::Static,
+        Some(value) if value == DYNAMIC_MATRIX_OUTPUT_MODE => PlanOutputMode::DynamicMatrix,
+        Some(_) => return fail_internal("bad_plan_matrix_output_mode"),
+    };
     let response = match plan_internal(&text) {
         Ok(response) => response,
         Err(error) => return fail_internal(&error.to_string()),
@@ -195,27 +196,26 @@ fn run_plan_internal(path: &Path) -> ExitCode {
     if let Err(error) = fs::write(&sibling, &response) {
         return fail_internal(&format!("write response: {error}"));
     }
-    let Some(runner_temp) = env::var_os(RUNNER_TEMP_ENV).filter(|value| !value.is_empty()) else {
-        return fail_internal("missing runner temp");
-    };
-    if let Err(error) = publish_plan_files(&response, &Path::new(&runner_temp).join("velnor")) {
-        return fail_internal(&error.to_string());
-    }
-    let outputs = match plan_outputs(&response) {
+    let outputs = match plan_outputs(&response, mode) {
         Ok(outputs) => outputs,
         Err(error) => return fail_internal(&error.to_string()),
+    };
+    let Some(runner_temp) = env::var_os(RUNNER_TEMP_ENV).filter(|value| !value.is_empty()) else {
+        return fail_internal("missing runner temp");
     };
     let Some(output_path) = env::var_os(GITHUB_OUTPUT_ENV).filter(|value| !value.is_empty()) else {
         return fail_internal("missing github output");
     };
-    let mut body = format!("matrix={}\nplan={}\n", outputs.matrix, outputs.plan);
-    // Always emitted, even when empty: the skip gate reads this output
-    // through GitHub's evaluator, so an explicitly empty value keeps
-    // the contract independent of unset-output semantics.
-    body.push_str(COVERED_TASKS_OUTPUT);
-    body.push('=');
-    body.push_str(&outputs.covered_tasks);
-    body.push('\n');
+    if let Err(error) = publish_plan_files(&response, &Path::new(&runner_temp).join("velnor")) {
+        return fail_internal(&error.to_string());
+    }
+    let mut body = String::new();
+    for (name, value) in outputs.step_outputs() {
+        body.push_str(name);
+        body.push('=');
+        body.push_str(value);
+        body.push('\n');
+    }
     match fs::OpenOptions::new()
         .append(true)
         .create(true)

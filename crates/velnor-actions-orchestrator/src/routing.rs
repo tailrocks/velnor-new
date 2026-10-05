@@ -147,11 +147,22 @@ fn workflow_request(
     } else {
         None
     };
+    let product_release_requested = [
+        RoutingWorkflow::ImageRelease,
+        RoutingWorkflow::MacosBinaryRelease,
+        RoutingWorkflow::GeneratorRelease,
+    ]
+    .iter()
+    .any(|workflow| execution.workflows.contains(workflow));
+    let product_release = product_release_requested
+        .then(|| crate::product_release_pins::resolve(config))
+        .transpose()?;
     Ok(Schema2WorkflowRequest {
         version: version.to_owned(),
         hosted_label: hosted,
         scale_set,
         workflows: execution.workflows.clone(),
         mbx_qualification,
+        product_release,
     })
 }

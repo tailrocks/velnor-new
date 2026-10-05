@@ -9,6 +9,10 @@ use crate::impl_common::{TestResult, config_with_branch, git, make_repo};
 
 #[path = "schema2_feature_snapshots.rs"]
 mod schema2_feature_snapshots;
+#[path = "schema2_product_release_snapshots.rs"]
+mod schema2_product_release_snapshots;
+#[path = "impl_schema2_routing_shell.rs"]
+mod shell_tests;
 
 const HOSTED_RUNS: &str = "runs-on: ubuntu-26.04";
 const SCALE_RUNS: &str = "runs-on: [velnor, ubuntu-26.04-scale-set]";
@@ -115,18 +119,12 @@ fn schema2_workflows_match_expected_bytes() -> TestResult {
         qualification,
         &marked(schema2_feature_snapshots::QUALIFICATION)
     );
-    let product_release = required_file(&tree, ".github/workflows/product-release.yml")?;
-    assert_product_release(product_release)?;
-    for obsolete in [
-        ".github/workflows/image-release.yml",
-        ".github/workflows/macos-binary-release.yml",
-        ".github/workflows/generator-release.yml",
-    ] {
-        assert!(
-            tree.get(obsolete).is_none(),
-            "obsolete workflow emitted: {obsolete}"
-        );
-    }
+    required_file(&tree, ".github/workflows/product-release.yml")?;
+    schema2_product_release_snapshots::assert_rendered(&tree)?;
+    let images = required_file(&tree, ".github/workflows/product-release-images.yml")?;
+    let binary = required_file(&tree, ".github/workflows/product-release-binary.yml")?;
+    assert_image_producer(images)?;
+    assert_macos_producer(binary)?;
     assert_eq!(
         required_file(&tree, ".github/workflows/monitoring.yml")?,
         &marked(MONITORING)
@@ -134,71 +132,10 @@ fn schema2_workflows_match_expected_bytes() -> TestResult {
     Ok(())
 }
 
-fn assert_product_release(body: &str) -> TestResult {
-    assert!(body.contains("name: Velnor product releases\n"), "{body}");
-    assert!(body.contains("cancel-in-progress: false"), "{body}");
-    assert!(body.contains("workflow_dispatch: {}"), "{body}");
-    assert!(body.contains("cron: 17 * * * *"), "{body}");
-    let ids = job_ids(body);
-    for required in [
-        "release-eligibility",
-        "prepare-images",
-        "build-images",
-        "attest-images",
-        "publish-images",
-        "prepare-binary",
-        "build-binary",
-        "attest-binary",
-        "publish-binary",
-        "prepare-generator",
-        "build-linux",
-        "attest-linux",
-        "build-macos",
-        "attest-macos",
-        "publish-generator",
-    ] {
-        assert!(ids.contains(&required), "missing job {required}: {ids:?}");
-    }
-    assert!(body.contains("needs.release-eligibility.outputs.source_sha"));
-    assert!(body.contains("needs.release-eligibility.outputs.ci_attempt"));
-    assert!(body.contains("needs.prepare-generator.outputs.action == 'build'"));
-
-    let images = job_body(body, "build-images")?;
-    assert!(images.contains("docker build --platform linux/amd64"));
-    assert!(images.contains("images/runner/ubuntu-26.04"));
-    assert!(images.contains("images/dind"));
-    assert!(images.contains("docker save"));
-    assert!(images.contains("sha256sum"));
-
-    let binary = job_body(body, "build-binary")?;
-    assert!(binary.contains("runs-on: macos-15"), "{binary}");
-    assert!(binary.contains("cargo build --locked --manifest-path crates/velnor-runner/Cargo.toml --release -p velnor-runner-cli"));
-    assert!(binary.contains("Mach-O"));
-    assert!(binary.contains("arm64"));
-
-    let linux = job_body(body, "build-linux")?;
-    assert!(linux.contains("ELF"), "{linux}");
-    assert!(linux.contains("x86-64"), "{linux}");
-    let macos = job_body(body, "build-macos")?;
-    assert!(macos.contains("Mach-O"), "{macos}");
-    assert!(macos.contains("arm64"), "{macos}");
-
-    let publisher = job_body(body, "publish-generator")?;
-    assert!(
-        publisher.contains("release_tag='generator-'") && publisher.contains("$release_source_sha"),
-        "{publisher}"
-    );
-    assert!(publisher.contains("Setup pinned Mise"), "{publisher}");
-    assert!(
-        publisher.contains("Install pinned GitHub CLI"),
-        "{publisher}"
-    );
-    assert!(publisher.contains("git/refs"), "{publisher}");
-    assert!(publisher.contains("--signer-digest"), "{publisher}");
-    assert!(publisher.contains("--source-digest"), "{publisher}");
-    assert!(!publisher.contains("--clobber"), "{publisher}");
-    assert!(!body.contains("pull_request"), "{body}");
-    assert!(!body.contains("packages: write"), "{body}");
+#[test]
+fn committed_release_files_match_schema2_bytes() -> TestResult {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    schema2_product_release_snapshots::assert_committed(&root)?;
     Ok(())
 }
 
@@ -217,12 +154,7 @@ fn assert_both_ci(ci: &str) -> TestResult {
     assert!(local.contains(SCALE_RUNS), "{local}");
     assert!(!local.contains(SCALE_REVERSED), "{local}");
     assert!(!local.contains("runs-on: ubuntu-26.04\n"), "{local}");
-    assert!(
-        local.contains("defaults:\n      run:\n        shell: bash -e {0}"),
-        "{local}"
-    );
-    assert!(!hosted.contains("defaults:"), "{hosted}");
-    assert_eq!(tool_lines(hosted), tool_lines(local));
+    shell_tests::assert_scale_set_shell_and_same_steps(hosted, local);
     let plan = job_body(ci, "plan")?;
     assert!(plan.contains(HOSTED_RUNS), "{plan}");
     assert!(!plan.contains("ubuntu-26.04-scale-set"), "{plan}");
@@ -273,30 +205,6 @@ pub(super) fn job_body<'a>(yaml: &'a str, id: &str) -> Result<&'a str, Box<dyn s
 
 fn jobs_section(yaml: &str) -> &str {
     yaml.split_once("jobs:\n").map_or("", |(_, rest)| rest)
-}
-
-fn tool_lines(body: &str) -> Vec<&str> {
-    let mut in_steps = false;
-    body.lines()
-        .filter(|line| {
-            let indent = line.bytes().take_while(|byte| *byte == b' ').count();
-            let content = line.trim();
-            if indent == 4 {
-                in_steps = content == "steps:";
-                return false;
-            }
-            in_steps && indent == 8 && (content.starts_with("run:") || content.starts_with("uses:"))
-        })
-        .collect()
-}
-
-#[test]
-fn tool_lines_ignores_defaults_but_detects_step_differences() {
-    let hosted = "    steps:\n      - name: run\n        run: cargo test\n";
-    let scaled = "    defaults:\n      run:\n        shell: bash -e {0}\n    steps:\n      - name: run\n        run: cargo test\n";
-    let changed = scaled.replace("cargo test", "cargo check");
-    assert_eq!(tool_lines(hosted), tool_lines(scaled));
-    assert_ne!(tool_lines(hosted), tool_lines(&changed));
 }
 
 fn join_files(tree: &RenderedTree) -> String {
@@ -372,6 +280,81 @@ fn marked(body: &str) -> String {
         "# Generated by Velnor Actions {}; edit .velnor/config.toml and regenerate.\n{body}",
         env!("CARGO_PKG_VERSION")
     )
+}
+
+fn assert_image_producer(body: &str) -> TestResult {
+    assert!(body.contains("docker build --platform linux/amd64"));
+    assert!(body.contains("images/runner/ubuntu-26.04"));
+    assert!(body.contains("images/dind"));
+    assert!(body.contains("{{.Architecture}}"));
+    assert!(body.contains("= amd64"));
+    assert!(body.contains("docker save"));
+    assert!(body.contains("sha256sum"));
+    assert!(
+        body.contains("actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8")
+    );
+    assert!(body.contains("gh release create"));
+    assert!(body.contains("readonly tag_prefix='runner'"));
+    assert!(body.contains("${tag_prefix}-${release_source_sha}"));
+    assert!(body.contains(HOSTED_RUNS));
+    assert_release_permissions(body, "attest-images", "publish-images")?;
+    assert!(!body.contains("echo release"));
+    assert!(body.contains("workflow_call:"));
+    assert!(!body.contains("workflow_dispatch:"));
+    assert!(!body.contains("packages:"));
+    assert!(!body.contains("CARGO_REGISTRY_TOKEN"));
+    assert!(!body.contains("secrets:"));
+    assert!(!body.contains("pull_request"));
+    Ok(())
+}
+
+fn assert_macos_producer(body: &str) -> TestResult {
+    let build = job_body(body, "build-binary")?;
+    assert!(build.contains("runs-on: macos-15"), "{build}");
+    assert!(build.contains("jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5"));
+    assert!(build.contains("rust@1.98.1"), "{build}");
+    assert!(body.contains(
+        "cargo build --locked --manifest-path crates/velnor-runner/Cargo.toml --release -p velnor-runner-cli"
+    ));
+    assert!(body.contains("Mach-O"));
+    assert!(body.contains("arm64"));
+    assert!(body.contains("shasum -a 256"));
+    assert!(
+        body.contains("actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8")
+    );
+    assert!(body.contains("gh release create"));
+    assert!(body.contains("readonly tag_prefix='binary'"));
+    assert!(body.contains("${tag_prefix}-${release_source_sha}"));
+    assert_release_permissions(body, "attest-binary", "publish-binary")?;
+    assert!(!body.contains("echo release"));
+    assert!(body.contains("workflow_call:"));
+    assert!(!body.contains("workflow_dispatch:"));
+    assert!(!body.contains("packages:"));
+    assert!(!body.contains("CARGO_REGISTRY_TOKEN"));
+    Ok(())
+}
+
+fn assert_release_permissions(body: &str, attest: &str, publish: &str) -> TestResult {
+    assert!(body.contains("workflow_call:"), "{body}");
+    assert!(!body.contains("workflow_dispatch:"), "{body}");
+    let attest_body = job_body(body, attest)?;
+    let publish_body = job_body(body, publish)?;
+    assert!(attest_body.contains("id-token: write"), "{attest_body}");
+    assert!(!attest_body.contains("contents: write"), "{attest_body}");
+    assert!(!attest_body.contains("packages:"), "{attest_body}");
+    assert!(publish_body.contains("contents: write"), "{publish_body}");
+    assert!(
+        publish_body.contains("GH_TOKEN: ${{ github.token }}"),
+        "{publish_body}"
+    );
+    assert!(publish_body.contains("actions/checkout@"), "{publish_body}");
+    assert!(
+        publish_body.contains("release_repository='tailrocks/velnor-new'"),
+        "{publish_body}"
+    );
+    assert!(!attest_body.contains("GH_TOKEN"), "{attest_body}");
+    assert!(!publish_body.contains("id-token:"), "{publish_body}");
+    Ok(())
 }
 
 const MONITORING: &str = r#"name: Scale set monitoring

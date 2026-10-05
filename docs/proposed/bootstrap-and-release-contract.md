@@ -1,6 +1,9 @@
 # Velnor Actions bootstrap and release contract
 
-**Status:** Proposed. No release or bootstrap behavior is implemented.
+**Status:** Proposed. The renderer emits a source-bound, dispatch-only
+`product-release.yml` coordinator and reusable image, binary, and generator
+release modules; no bootstrap seed, successful hosted qualification, or
+published release has been verified.
 
 This contract defines how generated consumer workflows acquire Velnor, how
 Velnor pins its tools, and how a candidate becomes a release. Consumer
@@ -61,9 +64,14 @@ release assets need no bake.
 ## 2.1. Release process: immutable tags and attestations (F3)
 
 Code enforces the manifest shape (`commit` required, 40 lowercase
-hex) and records the pinned commit in generated steps; the rest is
-release PROCESS, documented here rather than faked in code. No
-generator code verifies signatures or attestations today.
+hex) and records the pinned commit in generated steps. The
+product-release workflow family also builds and qualifies exact target
+artifacts, assembles a same-run manifest, verifies source-bound
+attestations, and publishes generator assets only through its protected
+`generator-release` environment.
+Consumer generation still does not verify release signatures or
+attestations; the external release and seed procedure below remains
+in force.
 
 The release manager MUST follow this exact process for every
 official release:

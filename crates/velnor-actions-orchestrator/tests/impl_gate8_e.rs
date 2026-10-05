@@ -2,7 +2,8 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::{
-    Concurrency, Job, JobTimeout, Permissions, Step, Trigger, WorkflowIr, WorkflowPolicy,
+    Concurrency, Job, JobTimeout, Permissions, SUPPORTED_TARGETS, Step, Trigger, WorkflowIr,
+    WorkflowPolicy,
 };
 use velnor_actions_mise::catalog::lock::{
     parse_generator_lock, parse_release_manifest, verify_lock_against_manifest,
@@ -14,40 +15,43 @@ use velnor_actions_workflow_renderer::{
 
 use crate::impl_common::TestResult;
 
+const GENERATOR_VERSION: &str = env!("CARGO_PKG_VERSION");
+
 fn binary_record(target: &str, sha: &str) -> String {
     format!(
-        "[[generator.binaries]]\ntarget = \"{target}\"\nartifact = \"https://github.com/tailrocks/velnor-new/releases/download/v0.1.0/velnor-actions-0.1.0-{target}\"\nsha256 = \"{sha}\"\n"
+        "[[generator.binaries]]\ntarget = \"{target}\"\nartifact = \"https://github.com/tailrocks/velnor-new/releases/download/v{GENERATOR_VERSION}/velnor-actions-{GENERATOR_VERSION}-{target}\"\nsha256 = \"{sha}\"\n"
     )
 }
 
 fn lock_text(sha: &str) -> String {
-    let bins = binary_record("x86_64-unknown-linux-gnu", sha)
-        + &binary_record("aarch64-apple-darwin", sha)
-        + &binary_record("x86_64-apple-darwin", sha);
+    let bins = SUPPORTED_TARGETS
+        .iter()
+        .map(|target| binary_record(target, sha))
+        .collect::<String>();
     format!(
-        "schema = 1\n[generator]\nbinary = \"velnor-actions\"\nversion = \"0.1.0\"\ncommit = \"{}\"\n{bins}[mise-bootstrap]\nversion = \"2026.9.18\"\nartifact = \"https://example.invalid/mise\"\nsha256 = \"{}\"\n",
+        "schema = 1\n[generator]\nbinary = \"velnor-actions\"\nversion = \"{GENERATOR_VERSION}\"\ncommit = \"{}\"\n{bins}[mise-bootstrap]\nversion = \"2026.9.18\"\nartifact = \"https://example.invalid/mise\"\nsha256 = \"{}\"\n",
         "a".repeat(40),
         "c".repeat(64)
     )
 }
 
 fn manifest_text(sha: &str) -> String {
-    let targets = ["x86_64-unknown-linux-gnu", "aarch64-apple-darwin", "x86_64-apple-darwin"]
+    let targets = velnor_actions_contract::SUPPORTED_TARGETS
         .iter()
-        .map(|t| format!("{{\"target\":\"{t}\",\"artifact\":\"https://github.com/tailrocks/velnor-new/releases/download/v0.1.0/velnor-actions-0.1.0-{t}\",\"sha256\":\"{sha}\"}}"))
+        .map(|t| format!("{{\"target\":\"{t}\",\"artifact\":\"https://github.com/tailrocks/velnor-new/releases/download/v{GENERATOR_VERSION}/velnor-actions-{GENERATOR_VERSION}-{t}\",\"sha256\":\"{sha}\"}}"))
         .collect::<Vec<_>>()
         .join(",");
     format!(
-        "{{\"schema\":1,\"version\":\"0.1.0\",\"repository\":\"tailrocks/velnor-new\",\"commit\":\"{}\",\"targets\":[{targets}]}}",
+        "{{\"schema\":1,\"version\":\"{GENERATOR_VERSION}\",\"repository\":\"tailrocks/velnor-new\",\"commit\":\"{}\",\"targets\":[{targets}]}}",
         "a".repeat(40)
     )
 }
 
 fn ctx() -> RenderContext {
     RenderContext {
-        generator_version: "0.1.0".to_owned(),
+        generator_version: GENERATOR_VERSION.to_owned(),
         runs_on: "ubuntu-26.04".to_owned(),
-        staged_binary: "$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.0".to_owned(),
+        staged_binary: format!("$RUNNER_TEMP/velnor/bin/velnor-actions-{GENERATOR_VERSION}"),
         request_dir: "${{ runner.temp }}/velnor/r".to_owned(),
         checkout_uses: format!("actions/checkout@{:040x}", 0),
         validator_commands: Vec::new(),

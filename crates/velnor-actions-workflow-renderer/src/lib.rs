@@ -24,6 +24,7 @@ pub mod guard;
 mod lane_share;
 pub mod marker;
 mod matrix;
+mod matrix_output_mode;
 mod mbx_bundle;
 mod mbx_gc_policy;
 pub mod msrv;
@@ -93,7 +94,9 @@ pub use render::{
     RenderedFile, RenderedSymlink, RenderedTree, TASK_JOB_ID, ValidatorCommand, WORKFLOW_PATH,
     action_pins, finalize_jobs, render_workflow_ir, render_workflow_ir_strict,
 };
-pub use schema2::{MbxQualificationPins, Schema2WorkflowRequest, render_schema2_workflows};
+pub use schema2::{
+    MbxQualificationPins, ProductReleasePins, Schema2WorkflowRequest, render_schema2_workflows,
+};
 pub use setup::{MISE_ACTION_NAME, SETUP_MISE_NAME, mise_setup_step};
 pub use steps::{
     ACQUIRE_NAME, ASSET_SHA_ENV, ASSET_URL_ENV, BASELINE_PUBLISH_UPLOAD_NAME,
