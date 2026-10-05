@@ -7,8 +7,8 @@ use velnor_actions_contract::{FinalStatus, ObligationDecision, Plan};
 use velnor_actions_orchestrator::{merge_internal, plan_internal};
 
 use crate::impl_common::{
-    TestResult, config_with_branch, fixture_manifest_json, git, make_repo, passing_reports,
-    plan_for_source_change,
+    TestResult, config_with_branch, git, install_fixture_release_manifest, make_repo,
+    passing_reports, plan_for_source_change,
 };
 use crate::impl_orch_plansel::{
     BUMP, anchor_repo, commit, entries_for, has, make_ws, manifest_for, merge_status, plan_at,
@@ -157,10 +157,7 @@ fn undetected_stacks_plan_no_work() -> TestResult {
     git(&["config", "commit.gpgsign", "false"], root)?;
     std::fs::create_dir_all(root.join(".velnor"))?;
     std::fs::write(root.join(".velnor/config.toml"), config_with_branch())?;
-    std::fs::write(
-        root.join(".velnor/release-manifest.json"),
-        fixture_manifest_json(),
-    )?;
+    install_fixture_release_manifest(root)?;
     std::fs::write(root.join("README.md"), "no manifests here\n")?;
     let head = commit(root, "one")?;
     let request = serde_json::json!({"schema": 1, "run_key": "local", "base": None::<String>, "head": head, "event": "push", "root": root.display().to_string()});

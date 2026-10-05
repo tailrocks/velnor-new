@@ -58,7 +58,7 @@ fn checkout(case: &str) -> Result<(PathBuf, String), Box<dyn Error>> {
     let repo = dir.join("repo");
     std::fs::create_dir_all(&repo)?;
     copy_dir(&corpus(case).join("input"), &repo)?;
-    if case != "malformed" && case != "malformed-ignored" {
+    if !FAIL_CASES.contains(&case) {
         install_consumer_manifest(&repo)?;
     }
     git_init(&repo)?;
@@ -363,6 +363,7 @@ fn consumer_cli_rejects_a_missing_manifest() -> Result<(), Box<dyn Error>> {
     let (repo, _) = checkout("minimal-cargo")?;
     std::fs::remove_file(repo.join(".velnor/release-manifest.json"))?;
     let plan = spawn(&["plan"], &[], &repo)?;
+    cleanup(repo.parent().ok_or("repo lacks parent")?);
     let stderr = String::from_utf8_lossy(&plan.stderr);
     if code(&plan) == 0 || !stderr.contains("consumer_requires_release_install") {
         return Err(format!(
@@ -371,6 +372,5 @@ fn consumer_cli_rejects_a_missing_manifest() -> Result<(), Box<dyn Error>> {
         )
         .into());
     }
-    cleanup(repo.parent().ok_or("repo lacks parent")?);
     Ok(())
 }

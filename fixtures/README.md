@@ -59,3 +59,9 @@ are built dynamically in TempDirs by
 every generic tree-walker (cargo-machete scan, mise-action
 `**` cache-key glob in run 36753845572), so hazards must
 never rest in the tree.
+
+Consumer-generation harnesses install the checked-in
+`consumer-release-manifest.json` into temporary ConsumerV1 repositories.
+Its placeholder commit and digests prove canonical schema serialization
+only; they are not a release record or qualification evidence. The actual
+CLI suite separately verifies that a missing manifest is rejected.

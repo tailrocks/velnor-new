@@ -23,11 +23,10 @@ use crate::clippy_groups::{ClippyMemoryPlan, clippy_memory_groups};
 use crate::discover_index::build_file_index;
 use crate::inventory::{qualify_workspaces, run_inventories};
 use crate::recommendations::collect_recommendations;
-use crate::toolcheck::{ToolInputCheck, check_tool_inputs};
-use crate::{discover_tofu::qualify_tofu_step, evidence::profile_for_workspace};
-
 #[path = "consumer_manifest.rs"]
 mod consumer_manifest;
+use crate::toolcheck::{ToolInputCheck, check_tool_inputs};
+use crate::{discover_tofu::qualify_tofu_step, evidence::profile_for_workspace};
 
 /// One workspace with its inventory, profile, and recommendations.
 #[derive(Debug, Clone)]
@@ -61,8 +60,10 @@ pub struct Discovery {
     pub clippy_memory: ClippyMemoryPlan,
     /// Non-fatal generation recommendations.
     pub recommendations: Vec<String>,
-    /// Consumer release-manifest text from the committed repo file.
-    /// Only `ConsumerV1` reads it; absent files fail closed during acquire.
+    /// Release-manifest text from the committed repo file.
+    ///
+    /// Only `ConsumerV1` reads it; absent files remain `None` so consumer
+    /// acquisition fails closed with `consumer_requires_release_install`.
     pub consumer_manifest_json: Option<String>,
     /// Whether non-UTF-8 names require broad selection.
     pub skipped_non_utf8: bool,
@@ -120,8 +121,8 @@ pub(crate) fn discover(root: &Path, config: &VelnorConfig) -> Result<Discovery, 
     let clippy_memory = clippy_memory_groups(&proposals);
     let recommendations =
         collect_recommendations(root, config, &index, &workspaces, &tool_checks, &mut reads);
-    // The source repository bootstraps from source or its own generator
-    // lock; the consumer manifest is not an input under this policy.
+    // Velnor's source policy bootstraps from source or its generator lock.
+    // Only consumer policy reads the installed-product manifest.
     let consumer_manifest_json = if config.workflow.policy == WorkflowPolicy::ConsumerV1 {
         consumer_manifest::consumer_manifest_text(root)?
     } else {

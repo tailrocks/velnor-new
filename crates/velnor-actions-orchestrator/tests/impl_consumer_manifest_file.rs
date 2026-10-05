@@ -3,7 +3,7 @@
 //! Generating and checking binaries read the same committed
 //! `.velnor/release-manifest.json`, so identical output follows by
 //! construction. Absent, invalid, or version-mismatched files fail
-//! closed; no bake or environment carries provenance.
+//! closed in every build mode; no bake or environment carries provenance.
 use std::fs;
 
 use velnor_actions_orchestrator::{prepare, render_staged_tree};
@@ -115,6 +115,16 @@ fn invalid_manifest_fails_prepare() -> TestResult {
 }
 
 #[test]
+fn duplicate_manifest_keys_fail_prepare() {
+    let duplicate =
+        release_manifest_json().replacen("\"schema\":1,", "\"schema\":1,\"schema\":1,", 1);
+    assert!(
+        render_consumer_yaml(&duplicate).is_err(),
+        "duplicate manifest keys must be rejected"
+    );
+}
+
+#[test]
 fn absent_manifest_fails_closed_without_provenance() {
     use velnor_actions_orchestrator::consumer_acquire_step_with_manifest;
     // The release twin returns `None` for an absent file; the pure gate
@@ -127,14 +137,27 @@ fn absent_manifest_fails_closed_without_provenance() {
 }
 
 #[test]
-fn absent_manifest_fails_prepare_without_debug_fallback() -> TestResult {
+fn absent_manifest_fails_prepare_in_all_build_modes() -> TestResult {
     let repo = make_repo(config_with_branch())?;
     fs::remove_file(repo.path().join(".velnor/release-manifest.json"))?;
-    let err = prepare(repo.path()).expect_err("absent manifest fails closed");
-    assert!(
-        err.to_string()
-            .contains("consumer_requires_release_install"),
-        "{err}"
+    let err = prepare(repo.path()).expect_err("missing consumer provenance fails closed");
+    let text = err.to_string();
+    assert!(text.contains("consumer_requires_release_install"), "{text}");
+    assert!(text.contains("official"), "{text}");
+    Ok(())
+}
+
+#[test]
+fn golden_manifest_fixture_uses_the_canonical_release_schema() -> TestResult {
+    let manifest = velnor_actions_contract::ReleaseManifest::parse_json(
+        include_str!("../../../fixtures/consumer-release-manifest.json"),
+        "fixtures/consumer-release-manifest.json",
+    )?;
+    manifest.validate("fixtures/consumer-release-manifest.json")?;
+    assert_eq!(manifest.version, env!("CARGO_PKG_VERSION"));
+    assert_eq!(
+        manifest.targets.len(),
+        velnor_actions_contract::ReleaseTarget::ALL.len()
     );
     Ok(())
 }

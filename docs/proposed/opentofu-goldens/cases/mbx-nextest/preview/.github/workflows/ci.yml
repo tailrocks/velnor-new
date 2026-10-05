@@ -104,17 +104,17 @@ jobs:
       - name: Restore Velnor tool seed
         uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
         with:
-          cache_key: ${{ github.event_name != 'workflow_dispatch' && 'mise-v1-x86_64-unknown-linux-gnu-2026.9.18-d69bac5b10ec730f' || '' }}
+          cache_key: ${{ github.event_name != 'workflow_dispatch' && 'mise-v1-x86_64-unknown-linux-gnu-2026.9.18-ccc5d847fd871b3b' || '' }}
       - name: V2 identity
         id: v2
         uses: ./.github/actions/u26 # zizmor: ignore[self-repository]
         with:
-          d: 0debdf8c43ff50f085904b717c05953a27a90f0956629034c6852d5e48c0953e
+          d: 52a2398e1d829c627e037d0c8872d58cd5949d4f3445d64c42d3dea1157a6511
       - name: Restore Mise tools
         if: steps.v2.outputs.enabled == 'true' && github.event_name != 'workflow_dispatch'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
-          key: mise-tools-v2-0debdf8c43ff50f085904b717c05953a27a90f0956629034c6852d5e48c0953e-${{steps.v2.outputs.identity}}
+          key: mise-tools-v2-52a2398e1d829c627e037d0c8872d58cd5949d4f3445d64c42d3dea1157a6511-${{steps.v2.outputs.identity}}
           path: "~/.local/share/mise\n${{ runner.temp }}/velnor/rustup\n${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin"
           restore-keys: ""
       - name: Setup Mise
@@ -130,14 +130,7 @@ jobs:
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-        run: mise --no-config --no-env --no-hooks install rust@1.98.1 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.30.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 opentofu@1.13.1
-      - name: Prepare Rust components
-        env:
-          CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-          RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 -- rustup component add --toolchain 1.98.1-x86_64-unknown-linux-gnu clippy rustfmt
+        run: mise --no-config --no-env --no-hooks install rust@1.98.1 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.30.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146
       - name: Acquire Velnor
         run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \"$RUNNER_TEMP/velnor/bin\" && s=\"/opt/velnor/seed/generator/velnor-actions-0.1.1\" d=\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.1\" && if [ -f \"$s\" ] && echo \"$VELNOR_ASSET_SHA256  $s\" | sha256sum -c -; then cp \"$s\" \"$d\"; else curl -fsSL --proto '\\''=https'\\'' --tlsv1.2 \"$VELNOR_ASSET_URL\" -o \"$d\" && echo \"$VELNOR_ASSET_SHA256  $d\" | sha256sum -c -; fi && chmod +x \"$d\"'"
       - name: Write request
@@ -170,7 +163,7 @@ jobs:
         if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
-          key: mise-tools-v2-0debdf8c43ff50f085904b717c05953a27a90f0956629034c6852d5e48c0953e-${{steps.v2.outputs.identity}}
+          key: mise-tools-v2-52a2398e1d829c627e037d0c8872d58cd5949d4f3445d64c42d3dea1157a6511-${{steps.v2.outputs.identity}}
           path: "~/.local/share/mise\n${{ runner.temp }}/velnor/rustup\n${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin"
   publish-baseline:
     name: Publish baseline

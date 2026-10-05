@@ -135,17 +135,7 @@ fn preseed_attach_builds_once_and_sets_mode() {
         ir: bare_ir(BTreeMap::from([
             (
                 "plan".to_owned(),
-                plan_job(
-                    "ubuntu-26.04",
-                    None,
-                    &catalog,
-                    true,
-                    false,
-                    false,
-                    false,
-                    &[],
-                )
-                .expect("plan job"),
+                plan_job("ubuntu-26.04", None, &catalog, rust_plan_needs(), &[]).expect("plan job"),
             ),
             ("rust-demo".to_owned(), legacy_task_job()),
             (

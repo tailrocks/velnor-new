@@ -130,7 +130,7 @@ pub(crate) fn init_repo(dir: &Path) -> Result<(), Box<dyn Error>> {
 
 /// Install the explicit schema fixture required by positive consumer tests.
 ///
-/// This harness input has placeholder provenance and is not release evidence.
+/// Placeholder values in this fixture are not release evidence.
 pub(crate) fn install_consumer_manifest(dir: &Path) -> Result<(), Box<dyn Error>> {
     let source =
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/consumer-release-manifest.json");

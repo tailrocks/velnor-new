@@ -229,17 +229,17 @@ jobs:
       - name: Restore Velnor tool seed
         uses: ./.github/actions/velnor-tool-seed # zizmor: ignore[self-repository]
         with:
-          cache_key: ${{ github.event_name != 'workflow_dispatch' && 'mise-v1-x86_64-unknown-linux-gnu-2026.9.18-d69bac5b10ec730f' || '' }}
+          cache_key: ${{ github.event_name != 'workflow_dispatch' && 'mise-v1-x86_64-unknown-linux-gnu-2026.9.18-b787f1c9bdf34630' || '' }}
       - name: V2 identity
         id: v2
         uses: ./.github/actions/u26 # zizmor: ignore[self-repository]
         with:
-          d: 0debdf8c43ff50f085904b717c05953a27a90f0956629034c6852d5e48c0953e
+          d: e3de34973a3e3e025388102e33940020f992c724d9986e140f0016a52a22fd6d
       - name: Restore Mise tools
         if: steps.v2.outputs.enabled == 'true' && github.event_name != 'workflow_dispatch'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
-          key: mise-tools-v2-0debdf8c43ff50f085904b717c05953a27a90f0956629034c6852d5e48c0953e-${{steps.v2.outputs.identity}}
+          key: mise-tools-v2-e3de34973a3e3e025388102e33940020f992c724d9986e140f0016a52a22fd6d-${{steps.v2.outputs.identity}}
           path: "~/.local/share/mise\n${{ runner.temp }}/velnor/rustup\n${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin"
           restore-keys: ""
       - name: Setup Mise
@@ -255,14 +255,7 @@ jobs:
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-        run: mise --no-config --no-env --no-hooks install rust@1.98.1 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.30.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 opentofu@1.13.1
-      - name: Prepare Rust components
-        env:
-          CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
-          MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-          RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-        run: mise --no-config --no-env --no-hooks exec rust@1.98.1 -- rustup component add --toolchain 1.98.1-x86_64-unknown-linux-gnu clippy rustfmt
+        run: mise --no-config --no-env --no-hooks install rust@1.98.1 actionlint@1.7.12 shellcheck@0.11.0 zizmor@1.30.1 aqua:nextest-rs/nextest/cargo-nextest@0.9.146 gh@2.102.0
       - name: Restore Cargo sources
         if: github.event_name != 'workflow_dispatch'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -354,6 +347,13 @@ jobs:
           VELNOR_INTERNAL_OP: write-request-v1
           VELNOR_REQUEST_FILE: ${{ runner.temp }}/velnor/request/plan-v1-request.json
         run: "\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.1\""
+      - name: Resolve qualification predecessor
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VELNOR_INTERNAL_OP: resolve-qualification-v1
+          VELNOR_REQUEST_FILE: ${{ runner.temp }}/velnor/request/plan-v1-request.json
+        run: "\"$RUNNER_TEMP/velnor/bin/velnor-actions-0.1.1\""
       - name: Check generated files
         env:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
@@ -381,7 +381,7 @@ jobs:
         if: success() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && steps.v2.outputs.enabled == 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
-          key: mise-tools-v2-0debdf8c43ff50f085904b717c05953a27a90f0956629034c6852d5e48c0953e-${{steps.v2.outputs.identity}}
+          key: mise-tools-v2-e3de34973a3e3e025388102e33940020f992c724d9986e140f0016a52a22fd6d-${{steps.v2.outputs.identity}}
           path: "~/.local/share/mise\n${{ runner.temp }}/velnor/rustup\n${{ runner.temp }}/velnor/cargo/.crates.toml\n${{ runner.temp }}/velnor/cargo/.crates2.json\n${{ runner.temp }}/velnor/cargo/bin"
   publish-baseline:
     name: Publish baseline
