@@ -256,7 +256,7 @@ fn concurrent_generate_lock_refused() -> TestResult {
     assert_eq!(fs::read(github.join("workflows/old.yml"))?, b"old: true\n");
     fs::remove_dir(root.join(".github.velnor-generate.lock"))?;
     let report = generate(&prep, &opts)?;
-    assert_eq!(report.files_written.len(), 4, "lock removal unblocks");
+    assert_eq!(report.files_written.len(), 6, "lock removal unblocks");
     Ok(())
 }
 
