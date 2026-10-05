@@ -330,29 +330,61 @@ fn restore_mbx_fetch_order_every_crate_job() -> TestResult {
 }
 
 #[test]
-fn cargo_only_shared_registry_single_shape() -> TestResult {
+fn cargo_only_uses_same_exact_sources_archive() -> TestResult {
     let (_repo, prep) = prep_for(false)?;
     let mut jobs = vec!["plan".to_owned()];
     jobs.extend(crate_jobs(&prep));
     let mut shared = String::new();
     for job in &jobs {
-        let with = action_inputs(job_steps(&prep, job)?, "Restore Cargo registry")?;
-        let key = with.get("shared-key").cloned().ok_or("shared-key")?;
-        assert!(key.starts_with("velnor-cargo-"), "shared prefix: {key}");
+        let steps = job_steps(&prep, job)?;
+        let with = action_inputs(steps, "Restore Cargo sources")?;
+        let key = with.get("key").cloned().ok_or("key")?;
+        assert!(
+            key.starts_with("velnor-v1-sources-"),
+            "shared prefix: {key}"
+        );
         if shared.is_empty() {
             shared.clone_from(&key);
         }
-        assert_eq!(key, shared, "{job} shares the registry key");
-        let save = with.get("save-if").cloned().unwrap_or_default();
-        assert_eq!(
-            save,
-            if job == "plan" { "true" } else { "false" },
-            "{job} save-if"
-        );
+        assert_eq!(key, shared, "{job} shares the sources key");
+        let path = with.get("path").cloned().ok_or("path")?;
+        for owned in [
+            "${{ runner.temp }}/velnor/cargo/registry/index",
+            "${{ runner.temp }}/velnor/cargo/registry/cache",
+            "${{ runner.temp }}/velnor/cargo/git/db",
+        ] {
+            assert!(
+                path.contains(owned),
+                "{job} sources path omits {owned}: {path}"
+            );
+        }
+        for excluded in [
+            "${{ runner.temp }}/velnor/cargo/bin",
+            ".crates.toml",
+            ".crates2.json",
+        ] {
+            assert!(
+                !path.contains(excluded),
+                "{job} sources path includes {excluded}: {path}"
+            );
+        }
+        if job == "plan" {
+            let save = action_inputs(steps, "Save Cargo sources")?;
+            assert_eq!(save.get("key"), Some(&key));
+        } else {
+            assert!(!steps.iter().any(|step| step.name == "Save Cargo sources"));
+        }
     }
     let yaml = yaml_for(false)?;
     assert!(!yaml.contains("mr-boxington-action"), "no MBX stacked");
-    assert!(!yaml.contains("Save Cargo sources"), "no snapshot save");
+    assert!(
+        yaml.contains("Save Cargo sources"),
+        "plan seeds one snapshot"
+    );
+    assert!(
+        !yaml.contains("Swatinem/rust-cache"),
+        "broad archive removed"
+    );
     Ok(())
 }
 

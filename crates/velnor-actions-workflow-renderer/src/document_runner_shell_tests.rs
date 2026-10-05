@@ -82,6 +82,7 @@ fn typed_scale_set_jobs_declare_bash_while_hosted_jobs_keep_default() {
         &context(),
         &BTreeMap::new(),
         &BTreeMap::new(),
+        &BTreeMap::new(),
         &BTreeSet::new(),
     )
     .expect("workflow renders");

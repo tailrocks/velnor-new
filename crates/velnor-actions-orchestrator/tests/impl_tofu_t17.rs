@@ -144,12 +144,13 @@ fn pure_tofu_repo_drops_all_rust_setup() -> TestResult {
     let tree = render_staged_tree(&prep)?;
     let yaml = tree.get(WORKFLOW_PATH).ok_or("missing workflow")?;
     let plan_window = job_window(yaml, "plan")?;
-    for key in ["MISE_RUSTUP_HOME:", "MISE_CARGO_HOME:", "RUSTUP_TOOLCHAIN:"] {
-        assert!(
-            !plan_window.contains(key),
-            "rendered plan job (freshness included) carries no {key}:\n{plan_window}"
-        );
-    }
+    assert!(plan_window.contains("name: Identify Mise cache runtime"));
+    assert!(plan_window.contains("MISE_RUSTUP_HOME:"));
+    assert!(plan_window.contains("MISE_CARGO_HOME:"));
+    assert!(
+        !plan_window.contains("RUSTUP_TOOLCHAIN:"),
+        "pure-tofu plan configures no Rust toolchain:\n{plan_window}"
+    );
     Ok(())
 }
 

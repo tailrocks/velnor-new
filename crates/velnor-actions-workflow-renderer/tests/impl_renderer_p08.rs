@@ -1,9 +1,9 @@
-//! P08 renderer cases: V2 tools selectors, sources paths, rust-cache gates.
+//! P08 renderer cases: V2 tools selectors and exact sources paths.
 
 use std::collections::BTreeMap;
 use velnor_actions_contract::{Job, JobTimeout, StepKind};
 use velnor_actions_workflow_renderer::cache_p08::{
-    check_mbx_before_fetch, check_no_rust_cache_with_mbx, infer_job_tools,
+    check_mbx_before_fetch, check_no_legacy_rust_cache, infer_job_tools,
 };
 use velnor_actions_workflow_renderer::steps::cache_action_step;
 use velnor_actions_workflow_renderer::{MiseSetup, setup::mise_setup_step};
@@ -155,7 +155,7 @@ fn sources_subset_accepted_under_owned_home_only() {
 }
 
 #[test]
-fn rust_cache_never_stacks_over_mbx() {
+fn retired_rust_cache_is_rejected_for_every_lane() {
     let sha = "c".repeat(40);
     let [preflight, mbx] = mbx_tool_steps(
         &format!("jdx/mr-boxington-action@{sha}"),
@@ -172,7 +172,7 @@ fn rust_cache_never_stacks_over_mbx() {
             env: BTreeMap::new(),
         },
     };
-    let both = Job {
+    let cargo_only = Job {
         display_name: "Both".to_owned(),
         runs_on: LABEL.to_owned(),
         timeout_minutes: JobTimeout::CRATE,
@@ -180,19 +180,14 @@ fn rust_cache_never_stacks_over_mbx() {
         condition: None,
         permissions: None,
         environment: None,
-        steps: vec![preflight.clone(), mbx.clone(), rust_cache.clone()],
+        steps: vec![rust_cache.clone()],
     };
-    assert!(check_no_rust_cache_with_mbx("demo", &both).is_err());
-    let cargo_only = Job {
-        steps: vec![rust_cache],
-        ..both.clone()
+    let both = Job {
+        steps: vec![preflight, mbx, rust_cache],
+        ..cargo_only.clone()
     };
-    assert!(check_no_rust_cache_with_mbx("demo", &cargo_only).is_ok());
-    let mbx_only = Job {
-        steps: vec![mbx],
-        ..both.clone()
-    };
-    assert!(check_no_rust_cache_with_mbx("demo", &mbx_only).is_ok());
+    assert!(check_no_legacy_rust_cache("cargo-only", &cargo_only).is_err());
+    assert!(check_no_legacy_rust_cache("both", &both).is_err());
 }
 
 #[test]

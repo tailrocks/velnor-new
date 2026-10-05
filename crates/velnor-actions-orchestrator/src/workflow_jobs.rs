@@ -73,8 +73,7 @@ pub(crate) fn plan_job(
     if use_rust {
         steps.push(crate::workflow::prepare_rust_components_step(catalog)?);
     }
-    let cached =
-        crate::workflow_jobs_cache::cache_steps_for_plan(label, catalog, use_mbx, fetch_roots)?;
+    let cached = crate::workflow_jobs_cache::cache_steps_for_plan(label, catalog, fetch_roots)?;
     steps.extend(cached.restore);
     steps.extend(fetch_steps_for_plan(catalog, fetch_roots)?);
     steps.extend(cached.save);

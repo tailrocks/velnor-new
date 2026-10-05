@@ -117,11 +117,6 @@ fn probe_action_rows() -> Vec<ProbeRow> {
             "alint.json",
             "{\"tag_name\": \"v0.16.1\"}",
         ),
-        (
-            "https://api.github.com/repos/Swatinem/rust-cache/tags",
-            "rust-cache.json",
-            "[{\"name\": \"v2.9.2\"}]",
-        ),
     ]
 }
 

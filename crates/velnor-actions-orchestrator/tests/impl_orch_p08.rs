@@ -1,13 +1,13 @@
 //! P08 generator integration: qualified caches in emitted workflows.
 //!
-//! Cargo-only fixtures use pinned `rust-cache` (registry-only, shared key);
-//! MBX fixtures use objects + one shared `actions/cache` snapshot (plan
-//! writes, crates read). Tools use the runtime-qualified V2 Mise cache.
+//! Cargo-only and MBX fixtures use one exact `actions/cache` sources
+//! snapshot (plan writes, crates read). Tools use the runtime-qualified V2
+//! Mise cache.
 
 use std::fs;
 
 use velnor_actions_contract::StepKind;
-use velnor_actions_orchestrator::{prepare, render_staged_tree};
+use velnor_actions_orchestrator::{GenerationPreparation, prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
 use super::impl_common::{TestResult, config_with_branch, make_repo};
@@ -30,13 +30,7 @@ fn with_mbx(root: &std::path::Path) -> TestResult {
 
 /// Rendered workflow text for a lockful fixture (MBX when `mbx`).
 fn yaml_for(mbx: bool) -> Result<String, Box<dyn std::error::Error>> {
-    let repo = make_repo(config_with_branch())?;
-    let root = repo.path();
-    fs::write(root.join("Cargo.lock"), demo_lock("demo"))?;
-    if mbx {
-        with_mbx(root)?;
-    }
-    let prep = prepare(root)?;
+    let prep = preparation_for(mbx)?;
     let tree = render_staged_tree(&prep)?;
     Ok(tree
         .get(WORKFLOW_PATH)
@@ -44,15 +38,20 @@ fn yaml_for(mbx: bool) -> Result<String, Box<dyn std::error::Error>> {
         .to_owned())
 }
 
-/// Step names of one IR job in a lockful fixture (MBX when `mbx`).
-fn job_names(job: &str, mbx: bool) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+/// Prepare the lockful fixture used by cache assertions.
+fn preparation_for(mbx: bool) -> Result<GenerationPreparation, Box<dyn std::error::Error>> {
     let repo = make_repo(config_with_branch())?;
     let root = repo.path();
     fs::write(root.join("Cargo.lock"), demo_lock("demo"))?;
     if mbx {
         with_mbx(root)?;
     }
-    let prep = prepare(root)?;
+    Ok(prepare(root)?)
+}
+
+/// Step names of one IR job in a lockful fixture (MBX when `mbx`).
+fn job_names(job: &str, mbx: bool) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    let prep = preparation_for(mbx)?;
     let found = prep
         .workflow
         .ir
@@ -105,30 +104,69 @@ fn c2_v2_mise_cache_restores_with_elected_tools_saves() -> TestResult {
 
 #[test]
 fn c3_sources_subset_at_owned_home_single_writer() -> TestResult {
-    let yaml = yaml_for(true)?;
-    for need in [
-        "${{ runner.temp }}/velnor/cargo/registry/index",
-        "${{ runner.temp }}/velnor/cargo/registry/cache",
-        "${{ runner.temp }}/velnor/cargo/git/db",
-        "velnor-v1-sources-",
-        "hashFiles('Cargo.lock')",
-    ] {
-        assert!(yaml.contains(need), "sources snapshot misses {need}");
+    for mbx in [false, true] {
+        let yaml = yaml_for(mbx)?;
+        for need in [
+            "${{ runner.temp }}/velnor/cargo/registry/index",
+            "${{ runner.temp }}/velnor/cargo/registry/cache",
+            "${{ runner.temp }}/velnor/cargo/git/db",
+            "velnor-v1-sources-",
+            "hashFiles('Cargo.lock')",
+        ] {
+            assert!(
+                yaml.contains(need),
+                "sources snapshot misses {need} (mbx={mbx})"
+            );
+        }
+        for banned in ["credentials.toml", "registry/src", "Swatinem/rust-cache"] {
+            assert!(
+                !yaml.contains(banned),
+                "sources must exclude {banned} (mbx={mbx})"
+            );
+        }
+        let prep = preparation_for(mbx)?;
+        let expected_paths = [
+            "${{ runner.temp }}/velnor/cargo/registry/index",
+            "${{ runner.temp }}/velnor/cargo/registry/cache",
+            "${{ runner.temp }}/velnor/cargo/git/db",
+        ];
+        for job_id in ["plan", "rust-demo"] {
+            let job = prep
+                .workflow
+                .ir
+                .jobs
+                .get(job_id)
+                .ok_or_else(|| std::io::Error::other(format!("missing {job_id}")))?;
+            let source_steps = job.steps.iter().filter(|step| {
+                matches!(
+                    step.name.as_str(),
+                    "Restore Cargo sources" | "Save Cargo sources"
+                )
+            });
+            for step in source_steps {
+                let StepKind::Action { with, .. } = &step.kind else {
+                    return Err(format!("source cache is not an action: {}", step.name).into());
+                };
+                let paths = with
+                    .get("path")
+                    .ok_or_else(|| std::io::Error::other("source cache path"))?
+                    .lines()
+                    .collect::<Vec<_>>();
+                assert_eq!(paths, expected_paths, "exact source ownership: {job_id}");
+            }
+        }
+        let plan = job_names("plan", mbx)?;
+        assert!(plan.contains(&"Save Cargo sources".to_owned()), "{plan:?}");
+        let crates = job_names("rust-demo", mbx)?;
+        assert!(
+            crates.contains(&"Restore Cargo sources".to_owned()),
+            "{crates:?}"
+        );
+        assert!(
+            !crates.contains(&"Save Cargo sources".to_owned()),
+            "readers never save: {crates:?}"
+        );
     }
-    for banned in ["credentials.toml", "registry/src"] {
-        assert!(!yaml.contains(banned), "sources must exclude {banned}");
-    }
-    let plan = job_names("plan", true)?;
-    assert!(plan.contains(&"Save Cargo sources".to_owned()), "{plan:?}");
-    let crates = job_names("rust-demo", true)?;
-    assert!(
-        crates.contains(&"Restore Cargo sources".to_owned()),
-        "{crates:?}"
-    );
-    assert!(
-        !crates.contains(&"Save Cargo sources".to_owned()),
-        "readers never save: {crates:?}"
-    );
     Ok(())
 }
 
@@ -163,19 +201,26 @@ fn c4_mbx_and_restore_precede_fetch_with_offline_skip() -> TestResult {
 }
 
 #[test]
-fn c7_cargo_only_uses_pinned_rust_cache_never_with_mbx() -> TestResult {
+fn c7_cargo_only_uses_exact_sources_transport_without_legacy_fallback() -> TestResult {
     let cargo_yaml = yaml_for(false)?;
-    assert!(
-        cargo_yaml.contains("Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6"),
-        "full-SHA pin:\n{cargo_yaml}"
-    );
     for need in [
-        "shared-key: velnor-cargo-",
-        "cache-targets: \"false\"",
-        "cache-on-failure: \"false\"",
+        "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+        "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+        "Restore Cargo sources",
+        "Save Cargo sources",
+        "${{ runner.temp }}/velnor/cargo/registry/index",
+        "${{ runner.temp }}/velnor/cargo/registry/cache",
+        "${{ runner.temp }}/velnor/cargo/git/db",
     ] {
-        assert!(cargo_yaml.contains(need), "rust-cache misses {need}");
+        assert!(
+            cargo_yaml.contains(need),
+            "Cargo-only sources misses {need}"
+        );
     }
+    assert!(
+        !cargo_yaml.contains("Swatinem/rust-cache"),
+        "retired archive:\n{cargo_yaml}"
+    );
     assert!(
         !cargo_yaml.contains("mr-boxington-action"),
         "cargo-only has no MBX"
@@ -183,7 +228,7 @@ fn c7_cargo_only_uses_pinned_rust_cache_never_with_mbx() -> TestResult {
     let mbx_yaml = yaml_for(true)?;
     assert!(
         !mbx_yaml.contains("Swatinem/rust-cache"),
-        "MBX never stacks rust-cache"
+        "no broad fallback"
     );
     assert!(
         !mbx_yaml.contains("server-url") && !mbx_yaml.contains("backend: server"),
@@ -191,13 +236,18 @@ fn c7_cargo_only_uses_pinned_rust_cache_never_with_mbx() -> TestResult {
     );
     let plan = job_names("plan", false)?;
     assert!(
-        plan.contains(&"Restore Cargo registry".to_owned()),
+        plan.contains(&"Restore Cargo sources".to_owned()),
         "{plan:?}"
     );
+    assert!(plan.contains(&"Save Cargo sources".to_owned()), "{plan:?}");
     let crates = job_names("rust-demo", false)?;
     assert!(
-        crates.contains(&"Restore Cargo registry".to_owned()),
+        crates.contains(&"Restore Cargo sources".to_owned()),
         "{crates:?}"
+    );
+    assert!(
+        !crates.contains(&"Save Cargo sources".to_owned()),
+        "reader only: {crates:?}"
     );
     Ok(())
 }
@@ -239,6 +289,7 @@ fn c8_crate_jobs_install_validators_for_test_spawns() -> TestResult {
 
 #[test]
 fn c10_only_plan_saves_producer_successful_deltas() -> TestResult {
+    use velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION;
     // MBX repo: plan saves after fetch; crates restore only.
     let plan = job_names("plan", true)?;
     let fetch = plan
@@ -250,10 +301,23 @@ fn c10_only_plan_saves_producer_successful_deltas() -> TestResult {
         .position(|name| name == "Save Cargo sources")
         .ok_or("plan save")?;
     assert!(fetch < save, "save after the writer finishes: {plan:?}");
-    // Cargo-only repo: rust-cache writers save via post on success only.
-    let yaml = yaml_for(false)?;
-    assert!(yaml.contains("save-if: \"true\""), "writer saves");
-    assert!(yaml.contains("save-if: \"false\""), "readers restore-only");
+    // Cargo-only source archives use the same single successful writer.
+    let prep = preparation_for(false)?;
+    let job = prep
+        .workflow
+        .ir
+        .jobs
+        .get("plan")
+        .ok_or_else(|| std::io::Error::other("missing plan"))?;
+    let save_step = job
+        .steps
+        .iter()
+        .find(|step| step.name == "Save Cargo sources")
+        .ok_or("plan source save")?;
+    assert_eq!(save_step.condition.as_deref(), Some(CACHE_SAVE_CONDITION));
+    let readers = job_names("rust-demo", false)?;
+    assert!(readers.contains(&"Restore Cargo sources".to_owned()));
+    assert!(!readers.contains(&"Save Cargo sources".to_owned()));
     Ok(())
 }
 

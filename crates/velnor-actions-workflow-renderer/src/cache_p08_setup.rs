@@ -58,26 +58,24 @@ pub(crate) fn ensure_tools_cache_v2(
         return Ok(());
     }
     let rust_version = specs.iter().find_map(|spec| spec.strip_prefix("rust@"));
-    let components = match rust_version {
-        Some(version) => job
-            .steps
+    let components = if let Some(version) = rust_version {
+        job.steps
             .iter()
             .find(|step| step.name == "Prepare Rust components")
             .map(|step| cache_p08::rust_components(step, version, target))
             .transpose()?
-            .unwrap_or_default(),
-        None => {
-            if job
-                .steps
-                .iter()
-                .any(|step| step.name == "Prepare Rust components")
-            {
-                return Err(RenderError::InvalidWorkflow(format!(
-                    "rust_components_without_toolchain:{job_id}"
-                )));
-            }
-            Vec::new()
+            .unwrap_or_default()
+    } else {
+        if job
+            .steps
+            .iter()
+            .any(|step| step.name == "Prepare Rust components")
+        {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "rust_components_without_toolchain:{job_id}"
+            )));
         }
+        Vec::new()
     };
     let payload = cache_p08::ToolsCachePayload::new(ToolsCacheInputs {
         runs_on: &job.runs_on,

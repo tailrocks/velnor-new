@@ -33,6 +33,8 @@ pub(crate) struct LaneShare {
     pub calls: BTreeMap<String, String>,
     /// Job id to the original checkout step rendered before each shared call.
     pub checkouts: BTreeMap<String, Step>,
+    /// Lane-specific runtime cache steps rendered after checkout and before each shared call.
+    pub preludes: BTreeMap<String, Vec<Step>>,
     /// Composite action files, one per logical job.
     pub files: Vec<RenderedFile>,
 }
@@ -40,6 +42,8 @@ pub(crate) struct LaneShare {
 struct SharedLaneParts {
     checkout: Step,
     common: Vec<Step>,
+    hosted_prelude: Vec<Step>,
+    local_prelude: Vec<Step>,
     hosted_extra: Vec<Step>,
     local_extra: Vec<Step>,
 }
@@ -58,6 +62,7 @@ pub(crate) fn share_lanes(
 ) -> Result<LaneShare, RenderError> {
     let mut calls = BTreeMap::new();
     let mut checkouts = BTreeMap::new();
+    let mut preludes = BTreeMap::new();
     let mut files = Vec::new();
     let mut next = jobs.clone();
     for hosted_id in hosted_ids(jobs) {
@@ -84,6 +89,8 @@ pub(crate) fn share_lanes(
         calls.insert(local_id.clone(), uses);
         checkouts.insert(hosted_id.clone(), parts.checkout.clone());
         checkouts.insert(local_id.clone(), parts.checkout);
+        preludes.insert(hosted_id.clone(), parts.hosted_prelude);
+        preludes.insert(local_id.clone(), parts.local_prelude);
         set_steps(&mut next, &hosted_id, parts.hosted_extra);
         set_steps(&mut next, &local_id, parts.local_extra);
     }
@@ -91,6 +98,7 @@ pub(crate) fn share_lanes(
         jobs: next,
         calls,
         checkouts,
+        preludes,
         files,
     })
 }
@@ -124,13 +132,127 @@ fn split_pair(hosted: &Job, local: &Job, checkout_uses: &str) -> Option<SharedLa
     if hosted_checkout != local_checkout {
         return None;
     }
-    let (hosted_common, hosted_extra) = peel_saves(hosted_steps);
-    let (local_common, local_extra) = peel_saves(local_steps);
+    let (hosted_prelude, hosted_steps) = peel_tools_cache_prelude(hosted_steps)?;
+    let (local_prelude, local_steps) = peel_tools_cache_prelude(local_steps)?;
+    if !same_prelude_shape(&hosted_prelude, &local_prelude) {
+        return None;
+    }
+    let (hosted_common, hosted_extra) = peel_saves(&hosted_steps);
+    let (local_common, local_extra) = peel_saves(&local_steps);
     (hosted_common == local_common).then_some(SharedLaneParts {
         checkout: hosted_checkout.clone(),
         common: hosted_common,
+        hosted_prelude,
+        local_prelude,
         hosted_extra,
         local_extra,
+    })
+}
+
+/// Keep runner-specific V2 identity and restore steps outside shared actions.
+fn peel_tools_cache_prelude(steps: &[Step]) -> Option<(Vec<Step>, Vec<Step>)> {
+    let mut prelude = Vec::new();
+    let mut common = Vec::new();
+    for step in steps {
+        if matches!(
+            step.name.as_str(),
+            crate::cache_p08::TOOLS_CACHE_IDENTITY_NAME | crate::cache_steps::TOOLS_RESTORE_NAME
+        ) {
+            prelude.push(step.clone());
+        } else {
+            common.push(step.clone());
+        }
+    }
+    if !valid_tools_cache_prelude(&prelude) {
+        return None;
+    }
+    if let Some(setup) = steps
+        .iter()
+        .position(|step| step.name == crate::setup::SETUP_MISE_NAME)
+        && steps.iter().enumerate().any(|(index, step)| {
+            matches!(
+                step.name.as_str(),
+                crate::cache_p08::TOOLS_CACHE_IDENTITY_NAME
+                    | crate::cache_steps::TOOLS_RESTORE_NAME
+            ) && index > setup
+        })
+    {
+        return None;
+    }
+    Some((prelude, common))
+}
+
+fn valid_tools_cache_prelude(steps: &[Step]) -> bool {
+    match steps {
+        [] => true,
+        [identity, restore] => {
+            let identity_ok = identity.name == crate::cache_p08::TOOLS_CACHE_IDENTITY_NAME
+                && identity.condition.is_none()
+                && matches!(&identity.kind, StepKind::Shell { .. });
+            let expected_paths = crate::cache_steps::TOOLS_CACHE_PATHS.join("\n");
+            let restore_ok = matches!(
+                &restore.kind,
+                StepKind::Action { uses, with, env }
+                    if restore.name == crate::cache_steps::TOOLS_RESTORE_NAME
+                        && uses == crate::cache_steps::TOOLS_RESTORE_USES
+                        && env.is_empty()
+                        && with.get("path").map(String::as_str) == Some(expected_paths.as_str())
+                        && with.get("key").is_some_and(|key| {
+                            key.starts_with("mise-tools-v2-")
+                                && key.contains("${{steps.velnor-tool-cache-identity.outputs.identity}}")
+                        })
+            );
+            identity_ok
+                && restore_ok
+                && restore.condition.as_deref()
+                    == Some(crate::cache_p08::TOOLS_CACHE_RESTORE_CONDITION)
+        }
+        _ => false,
+    }
+}
+
+fn same_prelude_shape(hosted: &[Step], local: &[Step]) -> bool {
+    if !valid_tools_cache_prelude(hosted)
+        || !valid_tools_cache_prelude(local)
+        || hosted.len() != local.len()
+    {
+        return false;
+    }
+    hosted.iter().zip(local).all(|(hosted, local)| {
+        if hosted.name != local.name || hosted.condition != local.condition {
+            return false;
+        }
+        match (&hosted.kind, &local.kind) {
+            (
+                StepKind::Shell {
+                    run: hosted_run,
+                    env: hosted_env,
+                },
+                StepKind::Shell {
+                    run: local_run,
+                    env: local_env,
+                },
+            ) => hosted_run == local_run && hosted_env.keys().eq(local_env.keys()),
+            (
+                StepKind::Action {
+                    uses: hosted_uses,
+                    with: hosted_with,
+                    env: hosted_env,
+                },
+                StepKind::Action {
+                    uses: local_uses,
+                    with: local_with,
+                    env: local_env,
+                },
+            ) => {
+                hosted_uses == local_uses
+                    && hosted_env == local_env
+                    && hosted_with.keys().eq(local_with.keys())
+                    && hosted_with.get("path") == local_with.get("path")
+                    && hosted_with.get("restore-keys") == local_with.get("restore-keys")
+            }
+            _ => false,
+        }
     })
 }
 
