@@ -14,7 +14,10 @@ pub(super) fn assert_scale_set_shell_and_same_steps(
     let shared = position(hosted, "uses: ./.github/actions/rust-demo")?;
     assert!(checkout < identity && identity < restore && restore < shared);
     assert!(named_step(hosted, "V2 identity")?.contains("uses: ./.github/actions/u26"));
-    assert!(named_step(hosted, "Restore Mise tools")?.contains("actions/cache/restore@"));
+    assert!(
+        named_step(hosted, "Restore Mise tools")?
+            .contains("./.github/actions/velnor-tools-cache-restore")
+    );
     if let Some(save) = optional_named_step(hosted, "Save Mise tools") {
         let save_at = position(hosted, "name: Save Mise tools")?;
         assert!(shared < save_at && save.contains("actions/cache/save@"));

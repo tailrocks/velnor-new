@@ -12,6 +12,12 @@ use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
 use super::impl_common::{TestResult, config_with_branch, make_repo};
 
+type ToolsCacheIdentity = (String, String);
+type ToolsCacheIdentities = (
+    std::collections::BTreeSet<ToolsCacheIdentity>,
+    Vec<ToolsCacheIdentity>,
+);
+
 /// Hand-written lock for a no-deps fixture package: hermetic, no network.
 fn demo_lock(name: &str) -> String {
     format!("version = 4\n\n[[package]]\nname = \"{name}\"\nversion = \"0.1.0\"\n")
@@ -272,29 +278,20 @@ fn c11_cache_saves_push_only_prs_and_forks_read_only() -> TestResult {
 /// YAML: one push-gated tools save per restored V2 key (plus the sources
 /// save), every action-owned Mise cache disabled.
 fn assert_tools_saves_push_gated_per_key(yaml: &str) {
-    let mut keys = std::collections::BTreeSet::new();
-    let mut in_tools_restore = false;
-    for line in yaml.lines() {
-        if let Some(name) = line.trim().strip_prefix("- name: ") {
-            in_tools_restore = name.trim_matches('"') == "Restore Mise tools";
-        }
-        if in_tools_restore && let Some(key) = line.trim().strip_prefix("key: ") {
-            keys.insert(key.trim_matches('"').to_owned());
-            in_tools_restore = false;
-        }
-    }
+    let (keys, saves) = tools_cache_identities(yaml);
     assert!(!keys.is_empty(), "at least one restored tools key:\n{yaml}");
+    assert_one_save_per_identity(&keys, &saves, yaml);
     let mbx_saves = yaml.matches("- name: Save MBX single bundle").count();
     let mbx_exports = yaml.matches("- name: Export MBX single bundle").count();
     assert_eq!(
         yaml.matches("actions/cache/save@").count(),
-        1 + keys.len() + mbx_saves,
+        1 + saves.len() + mbx_saves,
         "sources plus one tools save per key plus the MBX bundle:\n{yaml}"
     );
     assert_eq!(
         yaml.matches("if: success() && github.event_name == 'push'")
             .count(),
-        1 + keys.len(),
+        1 + saves.len(),
         "cargo and tools saves stay push-gated:\n{yaml}"
     );
     assert_eq!(
@@ -311,19 +308,9 @@ fn assert_tools_saves_push_gated_per_key(yaml: &str) {
     );
     assert_eq!(
         yaml.matches("- name: Save Mise tools").count(),
-        keys.len(),
+        saves.len(),
         "exactly one tools saver per key:\n{yaml}"
     );
-    for line in yaml.lines() {
-        if let Some(key) = line.trim().strip_prefix("key: ")
-            && key.starts_with("mise-tools-v2-")
-        {
-            assert!(
-                keys.contains(key.trim_matches('"')),
-                "tools save archives a restored key:\n{yaml}"
-            );
-        }
-    }
     assert!(
         !yaml.contains("cache_save: \"true\""),
         "no unconditional mise save:\n{yaml}"
@@ -335,4 +322,62 @@ fn assert_tools_saves_push_gated_per_key(yaml: &str) {
     let setups = yaml.matches("- name: Setup Mise").count();
     let demoted = yaml.matches("cache_save: \"false\"").count();
     assert_eq!(setups, demoted, "every setup restore-only:\n{yaml}");
+}
+
+fn assert_one_save_per_identity(
+    restored: &std::collections::BTreeSet<ToolsCacheIdentity>,
+    saves: &[ToolsCacheIdentity],
+    yaml: &str,
+) {
+    for identity in restored {
+        assert_eq!(
+            saves.iter().filter(|saved| *saved == identity).count(),
+            1,
+            "exactly one writer for {identity:?}:\n{yaml}"
+        );
+    }
+    assert!(
+        saves.iter().all(|saved| restored.contains(saved)),
+        "every tools writer has a restored identity:\n{yaml}"
+    );
+}
+
+fn tools_cache_identities(yaml: &str) -> ToolsCacheIdentities {
+    let mut restored = std::collections::BTreeSet::new();
+    let mut saves = Vec::new();
+    let mut digest = None;
+    let mut identity_step = false;
+    let mut cache_step = None;
+    for line in yaml.lines() {
+        let trimmed = line.trim();
+        if line.starts_with("  ") && !line.starts_with("   ") && trimmed.ends_with(':') {
+            digest = None;
+        }
+        if let Some(name) = trimmed.strip_prefix("- name: ") {
+            identity_step = name.trim_matches('"') == "V2 identity";
+            cache_step = match name.trim_matches('"') {
+                "Restore Mise tools" => Some(false),
+                "Save Mise tools" => Some(true),
+                _ => None,
+            };
+            continue;
+        }
+        if identity_step && let Some(value) = trimmed.strip_prefix("d: ") {
+            digest = Some(value.to_owned());
+            identity_step = false;
+        }
+        if let Some(is_save) = cache_step
+            && let Some(key) = trimmed.strip_prefix("key: ")
+            && let Some(digest) = &digest
+        {
+            let identity = (key.trim_matches('"').to_owned(), digest.clone());
+            if is_save {
+                saves.push(identity);
+            } else {
+                restored.insert(identity);
+            }
+            cache_step = None;
+        }
+    }
+    (restored, saves)
 }

@@ -54,34 +54,16 @@ fn elected_save_stays_on_the_winner_job() {
 
 #[test]
 fn only_qualified_hosted_lane_keeps_a_tools_cache_prelude() {
-    use crate::cache_p08::{ToolsCacheInputs, ToolsCachePayload};
-
     let setup = crate::setup::MiseSetup {
         uses: "jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5".to_owned(),
         version: "2026.9.18".to_owned(),
         sha256: "d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4".to_owned(),
     };
-    let specs = ["actionlint@1.7.12".to_owned()];
-    let prelude = |runs_on: &str| {
-        let payload = ToolsCachePayload::new(ToolsCacheInputs {
-            runs_on,
-            target: "x86_64-unknown-linux-gnu",
-            mise_setup: &setup,
-            tool_specs: &specs,
-            rustup_toolchain: None,
-            rustup_components: &[],
-        })?;
-        Ok::<_, crate::RenderError>(vec![
-            payload.runtime_identity_step()?,
-            crate::tool_seed::seed_step(&payload)?,
-            payload.restore_step()?,
-        ])
-    };
     let setup_step = crate::setup::mise_setup_step(&setup).expect("cache-disabled setup");
     let mut jobs = paired(&[setup_step, echo_step(0, "same tool work")]);
     let hosted_id = "rust-0__hosted";
     let local_id = "rust-0__local";
-    let hosted_prelude = prelude(HOSTED_RUNS).expect("hosted V2 prelude");
+    let hosted_prelude = tools_cache_prelude(HOSTED_RUNS).expect("hosted V2 prelude");
     jobs.get_mut(hosted_id)
         .expect("hosted lane")
         .steps
@@ -125,7 +107,39 @@ fn only_qualified_hosted_lane_keeps_a_tools_cache_prelude() {
     assert!(composite.bytes.contains("Setup Mise"));
     assert!(!composite.bytes.contains("V2 identity"));
     assert!(!composite.bytes.contains("Restore Mise tools"));
-    let yaml = render_jobs(&workflow_ir(), &shared, &ctx()).expect("shared workflow");
+    assert_emitted_restore_is_hosted_only(&shared, hosted_id, local_id);
+}
+
+fn tools_cache_prelude(
+    runs_on: &str,
+) -> Result<Vec<velnor_actions_contract::Step>, crate::RenderError> {
+    let setup = crate::setup::MiseSetup {
+        uses: "jdx/mise-action@9149ea85001c7435d5a66bb127d6a1b6227cb0a5".to_owned(),
+        version: "2026.9.18".to_owned(),
+        sha256: "d24fe0bf7e613824ad99f7b8dac3f2b381a37b9f75f84dd250855217095a8de4".to_owned(),
+    };
+    let specs = ["actionlint@1.7.12".to_owned()];
+    let payload = crate::cache_p08::ToolsCachePayload::new(crate::cache_p08::ToolsCacheInputs {
+        runs_on,
+        target: "x86_64-unknown-linux-gnu",
+        mise_setup: &setup,
+        tool_specs: &specs,
+        rustup_toolchain: None,
+        rustup_components: &[],
+    })?;
+    Ok(vec![
+        payload.runtime_identity_step()?,
+        crate::tool_seed::seed_step(&payload)?,
+        payload.restore_step()?,
+    ])
+}
+
+fn assert_emitted_restore_is_hosted_only(
+    shared: &crate::lane_share::LaneShare,
+    hosted_id: &str,
+    local_id: &str,
+) {
+    let yaml = render_jobs(&workflow_ir(), shared, &ctx()).expect("shared workflow");
     assert_eq!(
         yaml.matches(crate::cache_steps::TOOLS_RESTORE_USES).count(),
         1
@@ -133,9 +147,14 @@ fn only_qualified_hosted_lane_keeps_a_tools_cache_prelude() {
     let checkout = yaml.find("name: Checkout").expect("checkout");
     let identity = yaml.find("name: V2 identity").expect("identity");
     let restore = yaml.find("name: Restore Mise tools").expect("restore");
-    let call = yaml.find("uses: ./.github/actions/rust-0").expect("call");
+    let shared_id = hosted_id
+        .strip_suffix("__hosted")
+        .expect("hosted lane suffix");
+    let call = yaml
+        .find(&format!("uses: ./.github/actions/{shared_id}"))
+        .expect("call");
     assert!(checkout < identity && identity < restore && restore < call);
-    let local_start = yaml.find("rust-0__local:").expect("Scale Set job");
+    let local_start = yaml.find(&format!("{local_id}:")).expect("Scale Set job");
     let local = &yaml[local_start..];
     assert!(!local.contains("V2 identity"), "{local}");
     assert!(!local.contains("Restore Mise tools"), "{local}");

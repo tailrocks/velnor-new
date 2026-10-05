@@ -297,10 +297,10 @@ pub fn action_pins(jobs: &BTreeMap<String, Job>) -> Vec<String> {
     let mut pins = std::collections::BTreeSet::new();
     for job in jobs.values() {
         for step in &job.steps {
-            if let velnor_actions_contract::StepKind::Action { uses, .. } = &step.kind {
-                if !uses.starts_with("./.github/actions/") {
-                    pins.insert(uses.clone());
-                }
+            if let velnor_actions_contract::StepKind::Action { uses, .. } = &step.kind
+                && !uses.starts_with("./.github/actions/")
+            {
+                pins.insert(uses.clone());
             }
         }
     }
