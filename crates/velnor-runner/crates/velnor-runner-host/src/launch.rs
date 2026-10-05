@@ -21,14 +21,14 @@ use crate::scale_set::EnsureError;
 use crate::worker::Started;
 
 mod bind;
+#[cfg(all(test, unix))]
+mod busy_slot_tests;
 mod capacity;
 mod gate;
 mod inspect;
-mod name_taken;
-#[cfg(all(test, unix))]
-mod busy_slot_tests;
 #[cfg(all(test, unix))]
 mod inspect_tests;
+mod name_taken;
 
 pub(crate) use inspect::classify_inspect;
 mod session;
