@@ -10,10 +10,13 @@ use crate::impl_cli_tmp::{
 const MAX_WORKFLOW_BYTES: usize = 500_000;
 
 /// Build a schema-2 ToFu-only repo using both hosted and scale-set lanes.
+///
+/// Default policy is `ConsumerV1`, so generation requires the release manifest.
 fn paired_tofu_repo(roots: usize) -> Result<std::path::PathBuf, Box<dyn Error>> {
     let repo = fresh_tempdir(&format!("tofu-paired-{roots}"))?;
     git_init(&repo)?;
     std::fs::create_dir_all(repo.join(".velnor"))?;
+    install_consumer_manifest(&repo)?;
     let names = (0..roots)
         .map(|index| format!("stacks/r{index:03}"))
         .collect::<Vec<_>>();
@@ -36,7 +39,6 @@ fn paired_tofu_repo(roots: usize) -> Result<std::path::PathBuf, Box<dyn Error>> 
              platform = \"linux/amd64\"\n[stacks.tofu]\nroots = [{roots}]\n"
         ),
     )?;
-    install_consumer_manifest(&repo)?;
     for name in names {
         let root = repo.join(&name);
         std::fs::create_dir_all(&root)?;
@@ -68,12 +70,7 @@ fn cli_schema2_paired_tofu_stays_within_capacity_and_fails_closed() -> Result<()
         &[],
         &repo,
     )?;
-    assert_eq!(
-        code(&generated),
-        0,
-        "stderr: {}",
-        String::from_utf8_lossy(&generated.stderr)
-    );
+    assert_eq!(code(&generated), 0, "stderr: {:?}", generated.stderr);
     let workflow = std::fs::read(workflow_path(&preview))?;
     assert!(
         workflow.len() <= MAX_WORKFLOW_BYTES,

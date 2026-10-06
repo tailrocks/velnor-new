@@ -62,11 +62,10 @@ fn render_consumer_yaml(manifest: &str) -> Result<String, Box<dyn std::error::Er
 fn expected_acquire_block() -> String {
     let version = env!("CARGO_PKG_VERSION");
     format!(
-        "- name: Acquire Velnor\n        run: \"sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; mkdir -p \\\"$RUNNER_TEMP/velnor/bin\\\" && s=\\\"/opt/velnor/seed/generator/velnor-actions-{version}\\\" d=\\\"$RUNNER_TEMP/velnor/bin/velnor-actions-{version}\\\" && if [ -f \\\"$s\\\" ] && echo \\\"$VELNOR_ASSET_SHA256  $s\\\" | sha256sum -c -; then cp \\\"$s\\\" \\\"$d\\\"; else curl -fsSL --retry 5 --retry-all-errors --proto '\\\\''=https'\\\\'' --tlsv1.2 \\\"$VELNOR_ASSET_URL\\\" -o \\\"$d\\\" && echo \\\"$VELNOR_ASSET_SHA256  $d\\\" | sha256sum -c -; fi && chmod +x \\\"$d\\\"'\"",
+        "- name: Acquire Velnor\n        run: \"sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; d=\\\"$RUNNER_TEMP/velnor/bin/velnor-actions-{version}\\\"&&mkdir -p \\\"${{d%/*}}\\\"&&s=\\\"/opt/velnor/seed/generator/${{d##*/}}\\\"&&p=\\\"$VELNOR_ASSET_SHA256  \\\"&&if [ -f \\\"$s\\\" ]&&echo \\\"$p$s\\\"|sha256sum -c -;then cp \\\"$s\\\" \\\"$d\\\";else curl -fsSL --retry 5 --retry-all-errors --proto '\\\\''=https'\\\\'' --tlsv1.2 \\\"$VELNOR_ASSET_URL\\\" -o \\\"$d\\\"&&echo \\\"$p$d\\\"|sha256sum -c -;fi&&chmod +x \\\"$d\\\"'\"",
     )
 }
 
-/// Extract the full `- name: Acquire Velnor` step block from `yaml`.
 fn acquire_block(yaml: &str) -> Result<&str, Box<dyn std::error::Error>> {
     let acquire = yaml
         .find("- name: Acquire Velnor")

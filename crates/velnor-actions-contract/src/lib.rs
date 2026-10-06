@@ -1,5 +1,4 @@
 //! Stack-neutral workflow/task contracts.
-//!
 //! Owns task graphs, identities, reports, and recommendations. Must not own
 //! Rust/Cargo, Mise, process, filesystem, YAML, CLI, or generic app models.
 //!

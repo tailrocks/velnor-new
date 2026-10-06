@@ -1,7 +1,7 @@
 //! Stack-neutral GitHub Actions workflow IR.
 use super::jobs::{ScheduleTrigger, is_safe_display_name};
 use super::permissions::{PermissionLevel, Permissions};
-pub use super::step::{Step, StepKind};
+use super::step::Step;
 #[path = "job_validation.rs"]
 mod job_validation;
 use super::timeout::JobTimeout;

@@ -277,7 +277,7 @@ fn cache_action_transport_never_carries_mbx() {
     let restore = uses("actions/cache/restore");
     let save = uses("actions/cache/save");
     let key = "velnor-sources-abc";
-    let sources = vec!["$CARGO_HOME/registry/cache/x".to_owned()];
+    let sources = vec!["${{ runner.temp }}/velnor/cargo/registry/cache/x".to_owned()];
     assert!(cache_action_step(true, &restore, "sources", key, &[], &sources).is_ok());
     assert!(
         cache_action_step(

@@ -191,8 +191,8 @@ fn ver_freshness_entry_schema() {
 }
 
 #[test]
-fn ver_overridable_actions_are_exact_eight() {
-    assert_eq!(OVERRIDABLE_ACTIONS.len(), 8);
+fn ver_overridable_actions_are_exact_seven() {
+    assert_eq!(OVERRIDABLE_ACTIONS.len(), 7);
     assert_eq!(
         OVERRIDABLE_ACTIONS,
         [
@@ -203,7 +203,6 @@ fn ver_overridable_actions_are_exact_eight() {
             "actions/cache/restore",
             "actions/cache/save",
             "jdx/mr-boxington-action",
-            "Swatinem/rust-cache",
         ]
     );
     // The Alint pin is policy-owned, not consumer-overridable

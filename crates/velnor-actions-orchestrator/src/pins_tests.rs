@@ -190,7 +190,7 @@ fn assert_native_checksum_utility(step: velnor_actions_contract::Step, target: R
         ReleaseTarget::MacosArm64 | ReleaseTarget::MacosX86_64 => "shasum -a 256",
     };
     let other = match target {
-        ReleaseTarget::LinuxX86_64 => "shasum -a 256",
+        ReleaseTarget::LinuxX86_64 => "shasum",
         ReleaseTarget::MacosArm64 | ReleaseTarget::MacosX86_64 => "sha256sum",
     };
     assert_eq!(
@@ -199,16 +199,16 @@ fn assert_native_checksum_utility(step: velnor_actions_contract::Step, target: R
         "{script}"
     );
     assert!(
-        script.contains(&format!(
-            "echo \"$VELNOR_ASSET_SHA256  $s\" | {expected} -c -"
-        )),
+        script.contains(&format!("echo \"$p$s\"|{expected} -c -")),
         "{script}"
     );
     assert!(script.contains("cp \"$s\" \"$d\""), "{script}");
     assert!(
-        script.contains(&format!(
-            "echo \"$VELNOR_ASSET_SHA256  $d\" | {expected} -c -"
-        )),
+        script.contains("curl -fsSL --retry 5 --retry-all-errors"),
+        "{script}"
+    );
+    assert!(
+        script.contains(&format!("echo \"$p$d\"|{expected} -c -")),
         "{script}"
     );
     assert!(!script.contains(other), "{script}");
@@ -327,6 +327,22 @@ fn acquisition_template_selects_native_checksum_by_typed_target() {
         let argv = acquire_script_argv(&staged, "/opt/velnor/seed", target)
             .expect("supported typed target");
         assert!(argv[2].contains(expected), "{target:?}: {}", argv[2]);
+        assert!(
+            argv[2].contains("--proto '=https' --tlsv1.2"),
+            "{target:?}: {}",
+            argv[2]
+        );
+        assert!(
+            argv[2].contains("s=\"/opt/velnor/seed/generator/${d##*/}\""),
+            "{target:?}: {}",
+            argv[2]
+        );
+        assert!(argv[2].contains(&staged), "{target:?}: {}", argv[2]);
+        assert!(
+            argv[2].contains("cp \"$s\" \"$d\""),
+            "{target:?}: {}",
+            argv[2]
+        );
         if target != ReleaseTarget::LinuxX86_64 {
             assert!(!argv[2].contains("sha256sum"), "{target:?}: {}", argv[2]);
         }

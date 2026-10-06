@@ -5,8 +5,8 @@ fn preseed_restores_mbx_builds_after_sources_with_homes() {
     use velnor_actions_contract::StepRole;
     use velnor_actions_workflow_renderer::{PRESEED_BUILD_NAME, PRESEED_VERIFY_NAME};
     let roots = [String::new()];
-    let mut plan = preseed_fixture(true, &roots);
-    attach_preseed(&mut plan, "ubuntu-26.04", "0.1.0", &roots).expect("attach");
+    let mut plan = preseed_fixture(&roots);
+    attach_preseed(&mut plan, "ubuntu-26.04", "0.1.0").expect("attach");
     let steps = &plan.ir.jobs["plan"].steps;
     let names: Vec<&str> = steps.iter().map(|step| step.name.as_str()).collect();
     let roles: Vec<Option<StepRole>> = steps.iter().map(|step| step.role).collect();
@@ -27,14 +27,23 @@ fn preseed_restores_mbx_builds_after_sources_with_homes() {
         at(StepRole::CargoSourcesSave),
     );
     assert!(
-        restore < preflight
+        at(StepRole::PreparePinnedTools) < restore
+            && restore < preflight
             && preflight < mbx
             && mbx < version_check
             && version_check < probe
             && probe < build
             && build < verify
             && verify < save,
-        "preseed order: {names:?}"
+        "the native action owns MBX installation after Rust is ready: {names:?}"
+    );
+    assert!(
+        steps.iter().all(|step| !matches!(
+            &step.kind,
+            velnor_actions_contract::StepKind::Shell { run, .. }
+                if run.iter().any(|argument| argument == "mr-boxington@1.21.1")
+        )),
+        "Mise must not install action-owned MBX: {names:?}"
     );
     assert_owned_homes(steps, StepRole::MbxPreflight, "MBX preflight");
     let mbx_action = steps

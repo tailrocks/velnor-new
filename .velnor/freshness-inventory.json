@@ -90,17 +90,6 @@
       "status": "held"
     },
     {
-      "checked_at": "2026-10-05T12:26:50Z",
-      "key": "Swatinem/rust-cache",
-      "latest": "v2.9.2",
-      "pinned_sha": "6323deb102c322ba6fcbdcafc7e3dddab59af2b6",
-      "pinned_version": "v2.9.2",
-      "qualified_sha": "6323deb102c322ba6fcbdcafc7e3dddab59af2b6",
-      "qualified_version": "v2.9.2",
-      "source": "https://api.github.com/repos/Swatinem/rust-cache/tags",
-      "status": "current"
-    },
-    {
       "checked_at": "2026-10-05T18:27:23Z",
       "key": "aws-actions/configure-aws-credentials",
       "latest": "v6.3.0",

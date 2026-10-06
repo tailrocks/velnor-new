@@ -23,6 +23,8 @@ use crate::{
 
 #[path = "render_action_pins.rs"]
 mod action_pins_impl;
+#[path = "validator_tools.rs"]
+mod validator_tools;
 pub use action_pins_impl::action_pins;
 
 pub use crate::matrix::{
@@ -115,6 +117,8 @@ pub struct ValidatorCommand {
     pub name: String,
     /// Fixed argument vector.
     pub argv: Vec<String>,
+    /// Explicit pinned-tool installation argv executed before `argv`.
+    pub prepare_argv: Vec<String>,
 }
 
 /// Fixed candidate-job vectors (Velnor policy only).
@@ -148,6 +152,10 @@ impl RenderContext {
             }
             if command.name.trim().is_empty() {
                 return Err(RenderError::BadCommand("empty_validator_name".to_owned()));
+            }
+            validator_tools::validate_validator_tool_closure(command)?;
+            if !command.prepare_argv.is_empty() {
+                commands::validate_command_argv(&command.prepare_argv)?;
             }
             commands::validate_command_argv(&command.argv)?;
         }
@@ -259,7 +267,6 @@ pub fn finalize_jobs(
             .iter()
             .any(|task| task.owns_job_id(id))
         {
-            crate::tool_seed::reject_orphan_seed(id, job)?;
             closure::check_internal_staged(id, job, ctx.preseed)?;
             continue;
         }
@@ -277,15 +284,13 @@ pub fn finalize_jobs(
         } else {
             mise.clone()
         };
-        cache_p08::ensure_setup_p08(id, job, &setup, always, target, &ctx.checkout_uses)?;
-        cache_p08::check_no_rust_cache_with_mbx(id, job)?;
+        cache_p08::ensure_tools_cache_v2(id, job, &setup, always, target, &ctx.checkout_uses)?;
+        cache_p08::check_no_legacy_rust_cache(id, job)?;
         cache_p08::check_mbx_before_fetch(id, job)?;
         closure::check_internal_staged(id, job, ctx.preseed)?;
     }
-    // Writer election needs every setup inserted: one saver per key.
-    cache_p08::elect_mise_cache_writers(&mut jobs)?;
-    // Provider election needs every restore inserted: one saver per key.
-    cache_p08::elect_tofu_provider_savers(&mut jobs)?;
+    // Both cache families are validated globally before either gets a save.
+    cache_p08::elect_cache_writers(&mut jobs)?;
     closure::check_plan_anchor(&jobs)?;
     preseed_closure::check_preseed_closure(&jobs, ctx.preseed)?;
     closure::insert_plan_closure(&mut jobs, ctx)?;
@@ -297,7 +302,7 @@ pub fn finalize_jobs(
     Ok(jobs)
 }
 
-/// Revalidate each complete job after policy merge and all internal expansion.
+/// Validate every finalized job after policy merging and internal expansion.
 fn validate_final_jobs(ir: &WorkflowIr, jobs: &BTreeMap<String, Job>) -> Result<(), RenderError> {
     let mut finalized = ir.clone();
     finalized.jobs.clone_from(jobs);
@@ -339,6 +344,7 @@ fn merged_jobs(
     support::check_candidate_invariants(&jobs)?;
     support::check_final_gate(&jobs)?;
     support::check_token_hygiene(&jobs)?;
+    support::check_token_hygiene(&jobs)?;
     Ok(jobs)
 }
 
@@ -367,13 +373,18 @@ fn render_merged(
     let text = marker::with_marker(&ctx.generator_version, &render_yaml(&document))?;
     crate::workflow_size::check_workflow_size(WORKFLOW_PATH, &text)?;
     steps::scan_for_private_subcommands(&text)?;
-    let mut files = shared.files;
-    if crate::tool_seed::any_job_has_seed(&jobs) {
-        files.push(crate::tool_seed::action_file(&ctx.generator_version)?);
+    let shared_files = crate::render_cache_files::with_runtime_identity_files(
+        shared.files,
+        &jobs,
+        &ctx.generator_version,
+    )?;
+    if crate::tool_seed::any_job_has_seed(&jobs)? {
+        return Err(RenderError::InvalidWorkflow(
+            "tool_seed_requires_tools_prelude".to_owned(),
+        ));
     }
     Ok(RenderedWorkflow {
         yaml: text,
-        shared: files,
+        shared: shared_files,
     })
 }
-

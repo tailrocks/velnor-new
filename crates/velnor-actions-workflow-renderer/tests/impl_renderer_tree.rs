@@ -204,6 +204,7 @@ fn validator_commands() -> Vec<ValidatorCommand> {
         validator: *validator,
         name: (*name).to_owned(),
         argv: vec!["deny".to_owned()],
+        prepare_argv: Vec::new(),
     })
     .collect()
 }

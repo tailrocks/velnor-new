@@ -3,13 +3,14 @@
 //! Argv arrives as validated vectors; quoting preserves `$` expansion spans
 //! for runner variables while quoting every other character.
 
-use std::collections::BTreeMap;
-
 use crate::{
     RenderError,
     commands_scan::{expansion_end, is_expansion_at, quote_expansion},
     steps::scan_for_private_subcommands,
 };
+
+pub(crate) use crate::commands_env::validate_composite_env;
+pub use crate::commands_env::validate_env;
 
 /// Validate a fixed argument vector: nonempty, no shell fragments.
 ///
@@ -57,36 +58,6 @@ pub fn validate_command_argv(argv: &[String]) -> Result<(), RenderError> {
     Ok(())
 }
 
-/// Validate a fixed env map: `A-Z0-9_` keys, single-line clean values.
-///
-/// Expressions stay allowlisted, never blanket-banned: only fixed
-/// runner-provided spans pass (see the private `expressions` module).
-///
-/// # Errors
-///
-/// Returns [`RenderError::BadCommand`] or [`RenderError::PrivateSubcommand`].
-pub fn validate_env(env: &BTreeMap<String, String>) -> Result<(), RenderError> {
-    for (key, value) in env {
-        if key.is_empty()
-            || (key != "TF_VAR_github_tokens"
-                && !key
-                    .bytes()
-                    .all(|b| b.is_ascii_uppercase() || b.is_ascii_digit() || b == b'_'))
-        {
-            return Err(RenderError::BadCommand(format!("bad_env_key:{key}")));
-        }
-        if value
-            .chars()
-            .any(|ch| ch == '\0' || ch == '\n' || ch == '\r')
-        {
-            return Err(RenderError::BadCommand(format!("bad_env_value:{key}")));
-        }
-        crate::expressions::check_env_value(key, value)?;
-        scan_for_private_subcommands(key)?;
-        scan_for_private_subcommands(value)?;
-    }
-    Ok(())
-}
 /// Join validated argv into one `run:` line with POSIX quoting.
 ///
 /// `$NAME`/`${...}` spans pass through for runner expansion; every other

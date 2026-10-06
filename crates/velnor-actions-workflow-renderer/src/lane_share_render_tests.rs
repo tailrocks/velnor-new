@@ -29,6 +29,7 @@ fn shared_lanes_keep_ci_under_github_file_cap() {
         calls: BTreeMap::new(),
         checkouts: BTreeMap::new(),
         env_steps: BTreeMap::new(),
+        runtime_preludes: BTreeMap::new(),
         prefixes: BTreeMap::new(),
         preludes: BTreeMap::new(),
         postludes: BTreeMap::new(),
@@ -115,7 +116,7 @@ fn paired_tofu_restore_output_owner_stays_in_outer_job_scope() {
             ]),
         },
     };
-    let mut jobs = paired(&[echo_step(0, "shared-prelude"), restore, consumer]);
+    let mut jobs = paired(&[restore, consumer]);
     let mut save = tofu_providers_save_step().expect("provider save step");
     save.condition = Some(velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION.to_owned());
     jobs.get_mut("rust-0__hosted")
@@ -125,9 +126,6 @@ fn paired_tofu_restore_output_owner_stays_in_outer_job_scope() {
 
     let shared = share_lanes(&jobs, &ctx()).expect("paired provider lanes share");
     let hosted = render_jobs(&workflow_ir(), &shared, &ctx()).expect("workflow renders");
-    let setup_at = hosted
-        .find("uses: ./.github/actions/tofu-provider-prelude-0")
-        .expect("shared provider prelude call");
     let restore_at = hosted.find("id: tofu-providers").expect("outer restore id");
     let composite_at = hosted
         .find("uses: ./.github/actions/rust-0")
@@ -135,13 +133,7 @@ fn paired_tofu_restore_output_owner_stays_in_outer_job_scope() {
     let save_at = hosted
         .find("name: Save Tofu providers")
         .expect("elected outer save");
-    assert!(setup_at < restore_at && restore_at < composite_at && composite_at < save_at);
-    assert_eq!(
-        hosted
-            .matches("uses: ./.github/actions/tofu-provider-prelude-0")
-            .count(),
-        LOGICAL_JOBS * 2
-    );
+    assert!(restore_at < composite_at && composite_at < save_at);
     assert!(hosted.contains("steps.tofu-providers.outputs.cache-key"));
     assert!(hosted.contains("steps.tofu-providers.outputs.cache-path"));
 
@@ -153,12 +145,5 @@ fn paired_tofu_restore_output_owner_stays_in_outer_job_scope() {
     assert!(common.bytes.contains("name: Init for validate"));
     assert!(!common.bytes.contains("id: tofu-providers"));
     assert!(!common.bytes.contains("tofu-provider-admission"));
-    let provider_prelude = shared
-        .files
-        .iter()
-        .find(|file| file.path == ".github/actions/tofu-provider-prelude-0/action.yml")
-        .expect("shared typed setup prefix");
-    assert!(provider_prelude.bytes.contains("shared-prelude"));
-    assert!(!provider_prelude.bytes.contains("id: tofu-providers"));
     assert_eq!(hosted.matches("id: tofu-providers").count(), 42);
 }
