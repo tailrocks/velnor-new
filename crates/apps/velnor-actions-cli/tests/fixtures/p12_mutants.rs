@@ -52,17 +52,17 @@ fn mutant_scope_covers_risk_wiring() -> Result<(), Box<dyn Error>> {
     }
     assert!(globs >= 20, "only {globs} scope globs");
     for file in [
-        "crates/velnor-actions-contract/src/strict_json.rs",
-        "crates/velnor-actions-contract/src/ids/**/*.rs",
-        "crates/velnor-actions-rust/src/identity.rs",
-        "crates/velnor-actions-mise/src/toolfiles.rs",
-        "crates/velnor-actions-orchestrator/src/select.rs",
-        "crates/velnor-actions-orchestrator/src/select_affected.rs",
-        "crates/velnor-actions-orchestrator/src/cover_identity.rs",
-        "crates/velnor-actions-orchestrator/src/merge_request.rs",
-        "crates/velnor-actions-orchestrator/src/pins.rs",
-        "crates/velnor-actions-orchestrator/src/validate.rs",
-        "crates/velnor-actions-orchestrator/src/wire_w1.rs",
+        "crates/core/velnor-actions-contract/src/strict_json.rs",
+        "crates/core/velnor-actions-contract/src/ids/**/*.rs",
+        "crates/adapters/velnor-actions-rust/src/identity.rs",
+        "crates/adapters/velnor-actions-mise/src/toolfiles.rs",
+        "crates/services/velnor-actions-orchestrator/src/select.rs",
+        "crates/services/velnor-actions-orchestrator/src/select_affected.rs",
+        "crates/services/velnor-actions-orchestrator/src/cover_identity.rs",
+        "crates/services/velnor-actions-orchestrator/src/merge_request.rs",
+        "crates/services/velnor-actions-orchestrator/src/pins.rs",
+        "crates/services/velnor-actions-orchestrator/src/validate.rs",
+        "crates/services/velnor-actions-orchestrator/src/wire_w1.rs",
     ] {
         assert!(mutants.contains(file), "scope misses {file}");
     }

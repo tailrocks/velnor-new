@@ -33,7 +33,7 @@ const UPDATE_ENV: &str = "VELNOR_UPDATE_GOLDENS";
 /// Corpus directory for one case.
 fn corpus(case: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../fixtures/parity")
+        .join("../../../fixtures/parity")
         .join(case)
 }
 

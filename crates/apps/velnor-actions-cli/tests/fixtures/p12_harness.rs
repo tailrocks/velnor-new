@@ -148,27 +148,27 @@ pub(crate) fn passing(prefix: &str) -> Result<Fixture, Box<dyn Error>> {
     let dir = crate::impl_cli_tmp::fresh_tempdir(prefix)?;
     for (rel, body) in [
         (
-            "crates/velnor-actions-mise/src/catalog.rs",
+            "crates/adapters/velnor-actions-mise/src/catalog.rs",
             include_str!("p12_catalog.txt"),
         ),
         (
-            "crates/velnor-actions-actionlint/src/actions.rs",
+            "crates/adapters/velnor-actions-actionlint/src/actions.rs",
             include_str!("p12_actions.txt"),
         ),
         (
-            "crates/velnor-actions-actionlint/src/capabilities.rs",
+            "crates/adapters/velnor-actions-actionlint/src/capabilities.rs",
             include_str!("p12_capabilities.txt"),
         ),
         (
-            "crates/velnor-actions-actionlint/src/tools.rs",
+            "crates/adapters/velnor-actions-actionlint/src/tools.rs",
             include_str!("p12_tools.txt"),
         ),
         (
-            "crates/velnor-actions-actionlint/src/config.rs",
+            "crates/adapters/velnor-actions-actionlint/src/config.rs",
             include_str!("p12_config.txt"),
         ),
         (
-            "crates/velnor-actions-workflow-renderer/src/render.rs",
+            "crates/services/velnor-actions-workflow-renderer/src/render.rs",
             include_str!("p12_render.txt"),
         ),
         (

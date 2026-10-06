@@ -15,8 +15,8 @@ use crate::impl_repo_policy::{
 /// Intra-workspace edges allowed per member package.
 fn expected_internal(dir: &str) -> Vec<&str> {
     match dir {
-        "crates/velnor-actions-contract" => vec![],
-        "crates/velnor-actions-orchestrator" => vec![
+        "crates/core/velnor-actions-contract" => vec![],
+        "crates/services/velnor-actions-orchestrator" => vec![
             "velnor-actions-actionlint",
             "velnor-actions-contract",
             "velnor-actions-mise",
@@ -24,7 +24,7 @@ fn expected_internal(dir: &str) -> Vec<&str> {
             "velnor-actions-tofu",
             "velnor-actions-workflow-renderer",
         ],
-        "crates/velnor-actions-cli" => vec!["velnor-actions-orchestrator"],
+        "crates/apps/velnor-actions-cli" => vec!["velnor-actions-orchestrator"],
         _ => vec!["velnor-actions-contract"],
     }
 }
@@ -196,7 +196,7 @@ fn cli_tests_assert_through_binary_only() -> Result<(), Box<dyn Error>> {
     let stem = ["velnor", "actions"].join("_");
     let import = format!("use {stem}");
     let path_use = format!("{stem}::");
-    for path in tree_files("crates/velnor-actions-cli/tests", "rs")? {
+    for path in tree_files("crates/apps/velnor-actions-cli/tests", "rs")? {
         let body = std::fs::read_to_string(&path)?;
         assert!(
             !body.contains(&import),
@@ -261,8 +261,8 @@ fn lockfile_committed_and_locked_used() -> Result<(), Box<dyn Error>> {
         .output()?;
     assert!(tracked.status.success(), "Cargo.lock not committed");
     for file in [
-        "crates/velnor-actions-mise/src/requests.rs",
-        "crates/velnor-actions-orchestrator/src/vectors.rs",
+        "crates/adapters/velnor-actions-mise/src/requests.rs",
+        "crates/services/velnor-actions-orchestrator/src/vectors.rs",
         ".github/workflows/ci.yml",
     ] {
         assert!(read(file)?.contains("--locked"), "{file} misses --locked");
@@ -288,7 +288,7 @@ fn cli_invokes_no_tools_directly() -> Result<(), Box<dyn Error>> {
         "Shell",
         "sh -c",
     ];
-    for path in tree_files("crates/velnor-actions-cli/src", "rs")? {
+    for path in tree_files("crates/apps/velnor-actions-cli/src", "rs")? {
         let body = std::fs::read_to_string(&path)?;
         for token in banned {
             assert!(!body.contains(token), "{} leaks {token}", path.display());
@@ -307,7 +307,7 @@ fn cli_invokes_no_tools_directly() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn init_reads_no_tool_files() -> Result<(), Box<dyn Error>> {
-    let body = read("crates/velnor-actions-orchestrator/src/init.rs")?;
+    let body = read("crates/services/velnor-actions-orchestrator/src/init.rs")?;
     for token in [
         "read_to_string",
         "File::open",
@@ -323,14 +323,14 @@ fn init_reads_no_tool_files() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn parse_tests_live_outside_src() -> Result<(), Box<dyn Error>> {
-    for path in tree_files("crates/velnor-actions-cli/src", "rs")? {
+    for path in tree_files("crates/apps/velnor-actions-cli/src", "rs")? {
         assert!(
             !std::fs::read_to_string(&path)?.contains("#[test]"),
             "{}",
             path.display()
         );
     }
-    assert!(read("crates/velnor-actions-cli/tests/impl_cli_args.rs")?.contains("#[test]"));
+    assert!(read("crates/apps/velnor-actions-cli/tests/impl_cli_args.rs")?.contains("#[test]"));
     Ok(())
 }
 
@@ -392,7 +392,7 @@ fn fixtures_stay_independent_and_cover_failures() -> Result<(), Box<dyn Error>> 
     }
     assert!(tempdir_files >= 10, "only {tempdir_files} TempDir files");
     assert!(failure_cases >= 50, "only {failure_cases} failure cases");
-    let helper = read("crates/velnor-actions-cli/tests/impl_cli_tmp.rs")?;
+    let helper = read("crates/apps/velnor-actions-cli/tests/impl_cli_tmp.rs")?;
     for token in ["std::process::id()", "fetch_add", "create_dir_all"] {
         assert!(helper.contains(token), "fresh_tempdir loses {token}");
     }

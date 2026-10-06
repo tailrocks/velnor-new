@@ -32,20 +32,20 @@ mod p12_upstream;
 /// Expected members as (directory, package name).
 pub(crate) const MEMBERS: [(&str, &str); 8] = [
     (
-        "crates/velnor-actions-actionlint",
+        "crates/adapters/velnor-actions-actionlint",
         "velnor-actions-actionlint",
     ),
-    ("crates/velnor-actions-cli", "velnor-actions-cli"),
-    ("crates/velnor-actions-contract", "velnor-actions-contract"),
-    ("crates/velnor-actions-mise", "velnor-actions-mise"),
+    ("crates/apps/velnor-actions-cli", "velnor-actions-cli"),
+    ("crates/core/velnor-actions-contract", "velnor-actions-contract"),
+    ("crates/adapters/velnor-actions-mise", "velnor-actions-mise"),
     (
-        "crates/velnor-actions-orchestrator",
+        "crates/services/velnor-actions-orchestrator",
         "velnor-actions-orchestrator",
     ),
-    ("crates/velnor-actions-rust", "velnor-actions-rust"),
-    ("crates/velnor-actions-tofu", "velnor-actions-tofu"),
+    ("crates/adapters/velnor-actions-rust", "velnor-actions-rust"),
+    ("crates/adapters/velnor-actions-tofu", "velnor-actions-tofu"),
     (
-        "crates/velnor-actions-workflow-renderer",
+        "crates/services/velnor-actions-workflow-renderer",
         "velnor-actions-workflow-renderer",
     ),
 ];
@@ -54,7 +54,7 @@ pub(crate) const WORKSPACE_ROOTS: [&str; 2] = ["", "crates/velnor-runner"];
 
 /// Repo root: two levels above this crate's manifest directory.
 pub(crate) fn repo_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..")
 }
 
 /// Read a repo-relative file to a string.
@@ -169,7 +169,7 @@ fn workspace_lists_eight_product_crates_and_archive_guard() -> Result<(), Box<dy
         assert!(block.contains(&format!("\"{dir}\"")), "{dir} not listed");
     }
     assert!(
-        block.contains("\"crates/velnor-archive-guard\""),
+        block.contains("\"crates/tools/velnor-archive-guard\""),
         "archive guard workspace member missing"
     );
     Ok(())
@@ -224,7 +224,7 @@ fn velnor_name_never_published() -> Result<(), Box<dyn Error>> {
         bins += body.matches("[[bin]]").count();
     }
     assert_eq!(bins, 1, "sole binary must be velnor-actions");
-    let cli = manifest("crates/velnor-actions-cli")?;
+    let cli = manifest("crates/apps/velnor-actions-cli")?;
     assert!(cli.contains("name = \"velnor-actions\""));
     if let Ok(cargo_config) = read(".cargo/config.toml") {
         assert!(!cargo_config.contains("[alias]"));
@@ -255,7 +255,7 @@ pub(crate) fn minor(version: &str) -> String {
 
 #[test]
 fn rust_version_tracks_toolchain() -> Result<(), Box<dyn Error>> {
-    let catalog_src = read("crates/velnor-actions-mise/src/catalog.rs")?;
+    let catalog_src = read("crates/adapters/velnor-actions-mise/src/catalog.rs")?;
     let catalog = quoted_value(&catalog_src, "RUST_VERSION")?;
     let mise = quoted_value(&read("mise.toml")?, "rust = ")?;
     for workspace_root in WORKSPACE_ROOTS {
@@ -276,7 +276,7 @@ fn members_inherit_workspace_settings() -> Result<(), Box<dyn Error>> {
     for (dir, _) in MEMBERS
         .into_iter()
         .chain(p11_metadata::RUNNER_MEMBERS)
-        .chain([("crates/velnor-archive-guard", "velnor-archive-guard")])
+        .chain([("crates/tools/velnor-archive-guard", "velnor-archive-guard")])
     {
         let body = manifest(dir)?;
         let package = manifest_section(&body, "package");

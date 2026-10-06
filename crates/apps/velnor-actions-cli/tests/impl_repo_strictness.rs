@@ -28,7 +28,7 @@ fn no_nightly_toolchain() -> Result<(), Box<dyn Error>> {
     for file in [
         "Cargo.toml",
         "mise.toml",
-        "crates/velnor-actions-mise/src/catalog.rs",
+        "crates/adapters/velnor-actions-mise/src/catalog.rs",
         ".github/workflows/ci.yml",
     ] {
         assert!(!read(file)?.to_lowercase().contains("nightly"), "{file}");
@@ -110,7 +110,7 @@ fn unsafe_forbidden_and_absent() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn strictness_identifiers_are_newtypes() -> Result<(), Box<dyn Error>> {
-    let ids = read("crates/velnor-actions-contract/src/ids/mod.rs")?;
+    let ids = read("crates/core/velnor-actions-contract/src/ids/mod.rs")?;
     for name in [
         "RunKey",
         "ManifestKey",
@@ -140,12 +140,12 @@ fn strictness_identifiers_are_newtypes() -> Result<(), Box<dyn Error>> {
         ids.contains("fn validate_manifest_key"),
         "manifest key unvalidated"
     );
-    let artifact = read("crates/velnor-actions-contract/src/ids/artifact.rs")?;
+    let artifact = read("crates/core/velnor-actions-contract/src/ids/artifact.rs")?;
     assert!(
         artifact.contains("fn validate_target_key"),
         "target key unvalidated"
     );
-    let canonical = read("crates/velnor-actions-contract/src/canonical.rs")?;
+    let canonical = read("crates/core/velnor-actions-contract/src/canonical.rs")?;
     for name in ["Digest", "PosixPath"] {
         assert!(
             canonical.contains(&format!("pub struct {name}(String);")),
@@ -161,7 +161,7 @@ fn strictness_identifiers_are_newtypes() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn strictness_proofs_need_validating_constructors() -> Result<(), Box<dyn Error>> {
-    let baseline = read("crates/velnor-actions-contract/src/workflow/baseline.rs")?;
+    let baseline = read("crates/core/velnor-actions-contract/src/workflow/baseline.rs")?;
     for marker in [
         "pub fn new(",
         "pub fn used(",
@@ -188,7 +188,7 @@ fn strictness_proofs_need_validating_constructors() -> Result<(), Box<dyn Error>
     ] {
         assert!(!baseline.contains(field), "forgable field {field}");
     }
-    let cache_ids = read("crates/velnor-actions-contract/src/workflow/cache_ids.rs")?;
+    let cache_ids = read("crates/core/velnor-actions-contract/src/workflow/cache_ids.rs")?;
     assert!(
         cache_ids.contains("pub fn new("),
         "cache ids lack a constructor"
@@ -199,11 +199,11 @@ fn strictness_proofs_need_validating_constructors() -> Result<(), Box<dyn Error>
 
 #[test]
 fn strictness_no_proof_literals_anywhere() -> Result<(), Box<dyn Error>> {
-    let mut files = tree_files("crates/velnor-actions-contract/src", "rs")?;
-    files.extend(tree_files("crates/velnor-actions-contract/tests", "rs")?);
-    files.extend(tree_files("crates/velnor-actions-orchestrator/src", "rs")?);
+    let mut files = tree_files("crates/core/velnor-actions-contract/src", "rs")?;
+    files.extend(tree_files("crates/core/velnor-actions-contract/tests", "rs")?);
+    files.extend(tree_files("crates/services/velnor-actions-orchestrator/src", "rs")?);
     files.extend(tree_files(
-        "crates/velnor-actions-orchestrator/tests",
+        "crates/services/velnor-actions-orchestrator/tests",
         "rs",
     )?);
     for name in [
@@ -241,7 +241,7 @@ fn strictness_no_proof_literals_anywhere() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn strictness_resource_bounds_reject_zero() -> Result<(), Box<dyn Error>> {
-    let graph = read("crates/velnor-actions-contract/src/graph.rs")?;
+    let graph = read("crates/core/velnor-actions-contract/src/graph.rs")?;
     for name in ["CpuMilli", "MemoryMb"] {
         assert!(
             graph.contains(&format!("pub struct {name}(u32);")),
@@ -262,7 +262,7 @@ fn strictness_resource_bounds_reject_zero() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn strictness_documents_have_size_bound() -> Result<(), Box<dyn Error>> {
-    let strict = read("crates/velnor-actions-contract/src/strict_json.rs")?;
+    let strict = read("crates/core/velnor-actions-contract/src/strict_json.rs")?;
     for marker in [
         "MAX_UNTRUSTED_DOCUMENT_BYTES",
         "fn check_document_size",
@@ -271,9 +271,9 @@ fn strictness_documents_have_size_bound() -> Result<(), Box<dyn Error>> {
     ] {
         assert!(strict.contains(marker), "strict_json.rs misses {marker}");
     }
-    let errors = read("crates/velnor-actions-contract/src/errors.rs")?;
+    let errors = read("crates/core/velnor-actions-contract/src/errors.rs")?;
     assert!(errors.contains("DocumentTooLarge"), "no oversize variant");
-    let manifest = read("crates/velnor-actions-contract/src/manifest.rs")?;
+    let manifest = read("crates/core/velnor-actions-contract/src/manifest.rs")?;
     assert!(
         manifest.contains("fn parse_json_with_limit"),
         "no manifest override"
@@ -283,7 +283,7 @@ fn strictness_documents_have_size_bound() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn strictness_matrix_agreement_uses_strict_boundary() -> Result<(), Box<dyn Error>> {
-    let artifacts = read("crates/velnor-actions-contract/src/workflow/artifacts.rs")?;
+    let artifacts = read("crates/core/velnor-actions-contract/src/workflow/artifacts.rs")?;
     assert!(
         artifacts.contains("parse_strict_json_bytes"),
         "lenient matrix parse"
@@ -297,7 +297,7 @@ fn strictness_matrix_agreement_uses_strict_boundary() -> Result<(), Box<dyn Erro
 
 #[test]
 fn strictness_orchestrator_errors_stay_distinct() -> Result<(), Box<dyn Error>> {
-    let source = read("crates/velnor-actions-orchestrator/src/error.rs")?;
+    let source = read("crates/services/velnor-actions-orchestrator/src/error.rs")?;
     for marker in [
         "Cancelled {",
         "Unsupported {",
@@ -318,55 +318,55 @@ fn strictness_orchestrator_errors_stay_distinct() -> Result<(), Box<dyn Error>> 
 fn strictness_negative_coverage_pinned() -> Result<(), Box<dyn Error>> {
     let cases = [
         (
-            "crates/velnor-actions-contract/src/ids/artifact.rs",
+            "crates/core/velnor-actions-contract/src/ids/artifact.rs",
             "newtypes_accept_valid_and_reject_invalid",
         ),
         (
-            "crates/velnor-actions-contract/src/ids/artifact.rs",
+            "crates/core/velnor-actions-contract/src/ids/artifact.rs",
             "digest_and_path_newtypes_validate",
         ),
         (
-            "crates/velnor-actions-contract/src/strict_json_tests.rs",
+            "crates/core/velnor-actions-contract/src/strict_json_tests.rs",
             "oversize_doc_fails_with_size_detail",
         ),
         (
-            "crates/velnor-actions-contract/src/strict_json_tests.rs",
+            "crates/core/velnor-actions-contract/src/strict_json_tests.rs",
             "bytes_entry_rejects_bad_utf8_and_dup_keys",
         ),
         (
-            "crates/velnor-actions-contract/src/strict_json_tests.rs",
+            "crates/core/velnor-actions-contract/src/strict_json_tests.rs",
             "nesting_boundary_matches_serde_json",
         ),
         (
-            "crates/velnor-actions-contract/src/strict_json_tests.rs",
+            "crates/core/velnor-actions-contract/src/strict_json_tests.rs",
             "nesting_budget_counts_objects_and_mixed_shapes",
         ),
         (
-            "crates/velnor-actions-contract/src/workflow/artifacts.rs",
+            "crates/core/velnor-actions-contract/src/workflow/artifacts.rs",
             "agreement_rejects_duplicate_keys",
         ),
         (
-            "crates/velnor-actions-contract/src/workflow/cache_ids.rs",
+            "crates/core/velnor-actions-contract/src/workflow/cache_ids.rs",
             "cache_ids_need_five_valid_digests",
         ),
         (
-            "crates/velnor-actions-contract/src/ids/artifact.rs",
+            "crates/core/velnor-actions-contract/src/ids/artifact.rs",
             "proof_constructor_validates_every_input",
         ),
         (
-            "crates/velnor-actions-contract/src/ids/artifact.rs",
+            "crates/core/velnor-actions-contract/src/ids/artifact.rs",
             "baseline_states_are_exhaustive",
         ),
         (
-            "crates/velnor-actions-contract/src/ids/artifact.rs",
+            "crates/core/velnor-actions-contract/src/ids/artifact.rs",
             "task_proof_needs_valid_ids_and_digests",
         ),
         (
-            "crates/velnor-actions-orchestrator/src/error.rs",
+            "crates/services/velnor-actions-orchestrator/src/error.rs",
             "cancelled_and_unsupported_stay_distinct",
         ),
         (
-            "crates/velnor-actions-orchestrator/src/error.rs",
+            "crates/services/velnor-actions-orchestrator/src/error.rs",
             "unsupported_schema_maps_to_unsupported",
         ),
     ];

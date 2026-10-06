@@ -279,9 +279,9 @@ fn cargo_targets_register_every_test_bearing_source() -> Outcome<()> {
     let workspaces = cargo_config::workspace_plans(&root)?;
     let (registered, orphans) = registration_audit(&workspaces)?;
     for expected in [
-        "crates/velnor-actions-orchestrator/tests/impl_generator_seed.rs",
-        "crates/velnor-actions-tofu/tests/impl_tofu_t27_select.rs",
-        "crates/velnor-actions-tofu/tests/impl_tofu_file_cache.rs",
+        "crates/services/velnor-actions-orchestrator/tests/impl_generator_seed.rs",
+        "crates/adapters/velnor-actions-tofu/tests/impl_tofu_t27_select.rs",
+        "crates/adapters/velnor-actions-tofu/tests/impl_tofu_file_cache.rs",
     ] {
         assert!(
             registered.contains(&root.join(expected).canonicalize()?),

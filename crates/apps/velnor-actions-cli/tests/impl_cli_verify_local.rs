@@ -16,7 +16,7 @@ use std::process::Command;
 
 /// Workspace root derived from this crate's manifest dir.
 fn workspace_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..")
 }
 
 /// Script text for the local verification entrypoint.

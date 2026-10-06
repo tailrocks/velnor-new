@@ -7,7 +7,7 @@ members = [
     "crates/adapters/velnor-actions-actionlint",
     "crates/services/velnor-actions-workflow-renderer",
     "crates/services/velnor-actions-orchestrator",
-    "crates/velnor-actions-cli",
+    "crates/apps/velnor-actions-cli",
     "crates/adapters/velnor-actions-tofu",
     "crates/tools/velnor-runner-cli",
     "crates/tools/velnor-runner-core",

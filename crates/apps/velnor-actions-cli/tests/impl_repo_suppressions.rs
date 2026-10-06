@@ -197,7 +197,7 @@ fn extra_denies_match_tested_set() -> Result<(), Box<dyn Error>> {
     for (table, key, fixture) in DENY_FIXTURES {
         want.insert((table, key.to_owned()));
         let body = read(&format!(
-            "crates/velnor-actions-cli/tests/fixtures/{fixture}"
+            "crates/apps/velnor-actions-cli/tests/fixtures/{fixture}"
         ))?;
         assert!(!body.trim().is_empty(), "{fixture} is empty");
     }

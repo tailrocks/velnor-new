@@ -18,7 +18,7 @@
 # `$.package.edition` would reject all seven manifests. Adoption §4
 # requires the inheritance-aware form instead, enforced and tested by the
 # Rust policy suite (`cargo metadata` effective edition plus TOML
-# inheritance predicates in `crates/velnor-actions-cli/tests/fixtures/`).
+# inheritance predicates in `crates/apps/velnor-actions-cli/tests/fixtures/`).
 #
 # Schema: alint config model (`version` + `rules`, each rule with
 # id/kind/level). The top-level `command` rule is trusted and checks only

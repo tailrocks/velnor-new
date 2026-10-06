@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use std::process::Command;
 
 fn workspace_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..")
 }
 
 #[test]

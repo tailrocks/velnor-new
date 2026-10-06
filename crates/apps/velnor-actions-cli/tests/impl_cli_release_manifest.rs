@@ -6,7 +6,7 @@ use std::process::Command;
 
 #[test]
 fn check_release_rejects_invalid_candidate_manifests() -> Result<(), Box<dyn Error>> {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..");
     let root = root.canonicalize()?;
     let harness = root.join("scripts/test-capture-opentofu-goldens-bin.sh");
     let output = Command::new("bash")

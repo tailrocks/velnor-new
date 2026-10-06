@@ -14,7 +14,7 @@ mod p12_property;
 #[test]
 fn boot34_mise_version_matches_catalog() -> Result<(), Box<dyn Error>> {
     let pinned = read(".mise-version")?;
-    let catalog = read("crates/velnor-actions-mise/src/catalog.rs")?;
+    let catalog = read("crates/adapters/velnor-actions-mise/src/catalog.rs")?;
     assert_eq!(
         pinned.trim(),
         quoted_value(&catalog, "MISE_VERSION")?.as_str()
@@ -85,7 +85,7 @@ fn rq98_risk_triggers_documented() -> Result<(), Box<dyn Error>> {
         "mutant scope must be set"
     );
     assert!(
-        mutants.contains("crates/velnor-actions-orchestrator/src/select.rs"),
+        mutants.contains("crates/services/velnor-actions-orchestrator/src/select.rs"),
         "selection must be in mutant scope"
     );
     assert!(
