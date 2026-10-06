@@ -65,7 +65,7 @@ const HOST_NEEDLES: &[&str] = &[
 /// Build the runner plan. `private_volume` is this worker's socket volume.
 ///
 /// The work tree uses `{private_volume}-work`. The archive cache env points
-/// at the shared read-only volume appended by [`runner_mounts`]. JIT is not
+/// at the shared read-only volume appended by `runner_mounts`. JIT is not
 /// accepted.
 ///
 /// # Errors
