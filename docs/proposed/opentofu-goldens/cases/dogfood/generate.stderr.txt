@@ -20,6 +20,7 @@ Repository: <repo>
 .github/workflows/generator-release.yml
 .github/workflows/image-release.yml
 .github/workflows/macos-binary-release.yml
+.github/workflows/owned-tools.yml
 .github/workflows/qualification.yml
 mise.lock not found; Velnor will not create or refresh it
 mise.toml is read-only input; Velnor never modifies it

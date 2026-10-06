@@ -35,6 +35,7 @@ pub use super::internal::{
 };
 pub use super::merge::merge_internal;
 pub use super::merge_request::assemble_merge_request;
+pub use super::owned_tool_preview::{SourceQualificationTrigger, preview_owned_tool_candidates};
 pub use super::pins::{acquire_script_argv, consumer_acquire_step_with_manifest};
 pub use super::plan::{plan_text, plan_text_checked};
 pub use super::plan_output_limits::{JOB_OUTPUTS_BUDGET_UTF16_BYTES, PlanOutputMode};

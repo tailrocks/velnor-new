@@ -49,6 +49,8 @@ mod merge_request;
 mod noop_report;
 mod obligation_order;
 mod origin;
+mod owned_tool_preview;
+mod owned_tool_publication;
 mod pins;
 mod plan;
 mod plan_output_limits;

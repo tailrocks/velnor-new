@@ -170,7 +170,10 @@ fn branch_from_origin_head(text: &str) -> Option<String> {
 /// The local `origin` URL is the authority. `GITHUB_REPOSITORY` is only a
 /// consistency hint: a mismatch fails closed and never unlocks, and a
 /// matching hint without a canonical origin unlocks nothing either.
-fn check_velnor_identity(root: &Path, config: &VelnorConfig) -> Result<(), OrchestratorError> {
+pub(crate) fn check_velnor_identity(
+    root: &Path,
+    config: &VelnorConfig,
+) -> Result<(), OrchestratorError> {
     if config.workflow.policy == WorkflowPolicy::ConsumerV1 {
         return Ok(());
     }
