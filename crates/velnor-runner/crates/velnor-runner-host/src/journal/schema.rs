@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use crate::error::HostError;
 
 const JOURNAL_VERSION: i64 = 1;
-const CURRENT_COLUMNS: [ColumnShape; 18] = [
+const CURRENT_COLUMNS: [ColumnShape; 23] = [
     ColumnShape::new("id", "INTEGER", false, None),
     ColumnShape::new("kind", "TEXT", true, None),
     ColumnShape::new("subject", "TEXT", true, None),
@@ -24,6 +24,11 @@ const CURRENT_COLUMNS: [ColumnShape; 18] = [
     ColumnShape::new("jit_requested", "INTEGER", true, Some("0")),
     ColumnShape::new("docker_engine_id", "TEXT", false, None),
     ColumnShape::new("launch_phase", "TEXT", false, None),
+    ColumnShape::new("launch_id", "TEXT", false, None),
+    ColumnShape::new("assignment_key", "TEXT", false, None),
+    ColumnShape::new("seed_generation_id", "TEXT", false, None),
+    ColumnShape::new("runner_completed", "INTEGER", true, Some("0")),
+    ColumnShape::new("worker_cleanup_proven", "INTEGER", true, Some("0")),
 ];
 
 #[derive(Clone, Copy)]
@@ -76,6 +81,8 @@ async fn bootstrap_transaction(conn: &turso::Connection) -> Result<(), HostError
         0 => migrate_version_zero(conn).await,
         JOURNAL_VERSION => {
             ensure_completion_objects(conn).await?;
+            crate::journal_schema::bootstrap(conn).await?;
+            crate::journal_schema::install_revision_triggers(conn).await?;
             validate_current_schema(conn).await
         }
         _ => Err(HostError::Journal),
@@ -96,6 +103,10 @@ async fn journal_version(conn: &turso::Connection) -> Result<i64, HostError> {
 }
 
 async fn migrate_version_zero(conn: &turso::Connection) -> Result<(), HostError> {
+    // Extended statements run first so legacy rows are quarantined before the
+    // lifecycle flags exist with a default; the single transaction keeps the
+    // migration atomic when validation fails below.
+    crate::journal_schema::bootstrap(conn).await?;
     conn.execute(
         "CREATE TABLE IF NOT EXISTS intents (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, subject TEXT NOT NULL, state TEXT NOT NULL, docker_id TEXT, github_runner_id TEXT, cleanup_proven INTEGER NOT NULL DEFAULT 0, dind_id TEXT, worker_volume TEXT)",
         (),
@@ -104,6 +115,7 @@ async fn migrate_version_zero(conn: &turso::Connection) -> Result<(), HostError>
     .map_err(|_| HostError::Journal)?;
     ensure_legacy_columns(conn).await?;
     ensure_completion_objects(conn).await?;
+    crate::journal_schema::install_revision_triggers(conn).await?;
     validate_current_schema(conn).await?;
     conn.execute(
         "UPDATE intents SET state = CASE WHEN state = 'failed' THEN 'uncertain' ELSE state END, cleanup_proven = 0 WHERE kind = 'launch' AND state IN ('failed', 'pending', 'uncertain')",

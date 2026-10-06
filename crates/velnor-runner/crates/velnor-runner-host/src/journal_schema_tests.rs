@@ -136,7 +136,7 @@ async fn replace_with_duplicate_ids(path: &Path) -> Result<(), String> {
         .map_err(|error| error.to_string())?;
     connection
         .execute(
-            "CREATE TABLE intents (id INTEGER, kind TEXT NOT NULL, subject TEXT NOT NULL, state TEXT NOT NULL, docker_id TEXT, github_runner_id TEXT, cleanup_proven INTEGER NOT NULL DEFAULT 0, dind_id TEXT, worker_volume TEXT, scale_set_id INTEGER, runner_request_id INTEGER, runner_name TEXT, acquire_attempted INTEGER NOT NULL DEFAULT 0, acquire_resolved INTEGER NOT NULL DEFAULT 0, acquired INTEGER NOT NULL DEFAULT 0, jit_requested INTEGER NOT NULL DEFAULT 0, docker_engine_id TEXT, launch_phase TEXT)",
+            "CREATE TABLE intents (id INTEGER, kind TEXT NOT NULL, subject TEXT NOT NULL, state TEXT NOT NULL, docker_id TEXT, github_runner_id TEXT, cleanup_proven INTEGER NOT NULL DEFAULT 0, dind_id TEXT, worker_volume TEXT, scale_set_id INTEGER, runner_request_id INTEGER, runner_name TEXT, acquire_attempted INTEGER NOT NULL DEFAULT 0, acquire_resolved INTEGER NOT NULL DEFAULT 0, acquired INTEGER NOT NULL DEFAULT 0, jit_requested INTEGER NOT NULL DEFAULT 0, docker_engine_id TEXT, launch_phase TEXT, launch_id TEXT, assignment_key TEXT, seed_generation_id TEXT, runner_completed INTEGER NOT NULL DEFAULT 0, worker_cleanup_proven INTEGER NOT NULL DEFAULT 0)",
             (),
         )
         .await

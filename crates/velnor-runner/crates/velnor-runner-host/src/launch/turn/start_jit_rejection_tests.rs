@@ -13,10 +13,7 @@ async fn definite_assigned_jit_rejection_releases_then_redelivery_retries() -> R
     let session = zero_assignment_session()?;
     let polled = assigned_wait(91, 1);
     // One best-effort engine identity probe per turn; empty ID keeps `None`.
-    let docker = DockerStub::open(vec![
-        http(200, r#"{"ID":""}"#),
-        http(200, r#"{"ID":""}"#),
-    ])?;
+    let docker = DockerStub::open(vec![http(200, r#"{"ID":""}"#), http(200, r#"{"ID":""}"#)])?;
     let mut rejected = Script {
         calls: Vec::new(),
         mode: Mode::JitForbidden,

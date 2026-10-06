@@ -17,17 +17,20 @@ mod launch_identity;
 mod launch_phase;
 mod read;
 mod schema;
+mod sql;
 mod transaction;
 mod worker_volume;
 
 #[cfg(test)]
 mod schema_metadata_tests;
+pub(crate) use crate::journal_assignment::LaunchReservation;
 pub(crate) use completion::{
     CleanupClaim, CompletedLaunch, CompletionIdentity, CompletionInboxEntry,
     MAX_COMPLETION_BODY_BYTES, MAX_COMPLETION_INBOX_SCAN, RecoveryLease,
 };
 pub(crate) use guest_probe_owner::GuestProbeLease;
 pub(crate) use launch_identity::LaunchIdentity;
+use sql::{one_row, token_rejected};
 
 /// Durable intent row.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -111,9 +114,11 @@ impl Journal {
 
     /// Record the outcome of exactly one row on a new connection.
     ///
+    /// Rows with proven cleanup are terminal and cannot be finished again.
+    ///
     /// # Errors
     ///
-    /// Returns [`HostError::Journal`] when the id is missing or the write fails.
+    /// Returns [`HostError::Journal`] when the id is missing, cleanup was proven, or the write fails.
     pub async fn finish(&self, id: i64, outcome: Outcome) -> Result<(), HostError> {
         let state = match outcome {
             Outcome::Done => IntentState::Done,
@@ -124,7 +129,7 @@ impl Journal {
         transaction::with_unique_id(&conn, id, async move |conn| {
             let changed = conn
                 .execute(
-                    "UPDATE intents SET state = ?1 WHERE id = ?2",
+                    "UPDATE intents SET state = ?1 WHERE id = ?2 AND cleanup_proven = 0",
                     (state.as_str().to_owned(), id),
                 )
                 .await
@@ -273,8 +278,12 @@ impl Journal {
         schema::bootstrap(&conn).await
     }
 
-    async fn connection(&self) -> Result<turso::Connection, HostError> {
+    pub(super) async fn connection(&self) -> Result<turso::Connection, HostError> {
         self.file.connection().await
+    }
+
+    pub(super) fn path(&self) -> &Path {
+        self.file.path()
     }
 }
 
@@ -354,6 +363,14 @@ fn intent_row(row: &turso::Row) -> Result<IntentRow, HostError> {
             .transpose()?,
         github_runner_id: row.get(5).map_err(|_| HostError::Journal)?,
         cleanup_proven: row.get(6).map_err(|_| HostError::Journal)?,
+        launch_id: row.get(14).map_err(|_| HostError::Journal)?,
+        assignment_key: row.get(15).map_err(|_| HostError::Journal)?,
+        seed_generation_id: row.get(16).map_err(|_| HostError::Journal)?,
+        acquire_attempted: row.get(17).map_err(|_| HostError::Journal)?,
+        acquire_resolved: row.get(18).map_err(|_| HostError::Journal)?,
+        acquired: row.get(19).map_err(|_| HostError::Journal)?,
+        jit_requested: row.get(20).map_err(|_| HostError::Journal)?,
+        runner_completed: row.get(21).map_err(|_| HostError::Journal)?,
     })
 }
 
@@ -379,16 +396,4 @@ async fn same_ids(
     } else {
         Err(HostError::Journal)
     }
-}
-
-fn one_row(changed: u64) -> Result<(), HostError> {
-    if changed == 1 {
-        Ok(())
-    } else {
-        Err(HostError::Journal)
-    }
-}
-
-fn token_rejected(token: &str) -> bool {
-    token.is_empty() || token.chars().any(|ch| matches!(ch, '\'' | '"'))
 }

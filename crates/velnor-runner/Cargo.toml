@@ -26,6 +26,8 @@ turso = { version = "=0.8.1" }
 zeroize = { version = "=1.8.1", features = ["derive"] }
 getrandom = { version = "=0.4.3" }
 toml = { version = "=0.9.12" }
+sha2 = { version = "=0.11.0" }
+flate2 = { version = "=1.1.10" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

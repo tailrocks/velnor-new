@@ -88,6 +88,14 @@ fn intent(state: IntentState, kind: &str) -> IntentRow {
         launch_phase: None,
         github_runner_id: None,
         cleanup_proven: false,
+        launch_id: None,
+        assignment_key: None,
+        seed_generation_id: None,
+        acquire_attempted: false,
+        acquire_resolved: false,
+        acquired: false,
+        jit_requested: false,
+        runner_completed: false,
     }
 }
 

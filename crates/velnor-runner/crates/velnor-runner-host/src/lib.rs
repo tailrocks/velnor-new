@@ -3,6 +3,7 @@
 //! Callers persist intent before an external effect and never hold a
 //! transaction across that effect.
 
+pub(crate) mod action_archive_seed;
 mod assign;
 mod config;
 mod connect;
@@ -14,9 +15,15 @@ mod guest;
 mod https;
 mod ipc;
 mod journal;
+mod journal_assignment;
+mod journal_effects;
+mod journal_identity;
+mod journal_schema;
+mod journal_sql;
 mod keychain;
 mod launch;
 mod launch_blocking;
+mod launch_identity;
 mod listen;
 mod plist;
 mod readiness;
@@ -34,7 +41,7 @@ pub use docker_client::connect_unix;
 pub use docker_spec::{
     ContainerPlan, DeleteDecision, audit_plan, delete_decision, plan_contains, runner_plan,
 };
-pub use error::HostError;
+pub use error::{HostError, PreparationCause};
 pub use guest::guest_slots;
 pub use https::HttpsTransport;
 pub use ipc::{MAX_FRAME, SOCKET_DIR_MODE, decode_frame, encode_frame};
@@ -69,7 +76,13 @@ mod https_tests;
 #[cfg(test)]
 mod ipc_tests;
 #[cfg(test)]
+mod journal_effects_tests;
+#[cfg(test)]
+mod journal_identity_tests;
+#[cfg(test)]
 mod journal_launch_phase_tests;
+#[cfg(test)]
+mod journal_migration_tests;
 #[cfg(test)]
 mod journal_schema_tests;
 #[cfg(test)]
@@ -104,6 +117,8 @@ mod listen_tests;
 mod plist_tests;
 #[cfg(test)]
 mod readiness_tests;
+#[cfg(test)]
+mod reconcile_tests;
 #[cfg(test)]
 mod runner_image_contract_tests;
 #[cfg(test)]
