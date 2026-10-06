@@ -49,9 +49,29 @@ pub(crate) fn normalized_response(
     // as passed and its canonicalization); digests never do. Normalize
     // both spellings so package records compare exactly.
     let canonical = repo.canonicalize().unwrap_or_else(|_| repo.to_path_buf());
-    let mut text = text
-        .replace(sha, "<generator-sha>")
-        .replace(target, "<target>")
+    // Scoped to the generator object itself: on hosts whose triple equals a
+    // planned platform triple (x86_64 Linux CI), a global replace would also
+    // rewrite the plan's legitimate `planned_platform.target` values. The
+    // generator object is flat (`version`/`target`/`sha256`, all plain
+    // strings), so its first `}` closes it.
+    let marker = "\"generator\":{";
+    let start = text.find(marker).ok_or("response lacks generator object")? + marker.len();
+    let end = text[start..]
+        .find('}')
+        .ok_or("generator object unterminated")?
+        + start;
+    let span = &text[start..end];
+    if !span.contains(target) || !span.contains(sha) {
+        return Err("generator identity missing from generator object".into());
+    }
+    let mut text = format!(
+        "{}{}{}",
+        &text[..start],
+        span.replace(sha, "<generator-sha>")
+            .replace(target, "<target>"),
+        &text[end..]
+    );
+    text = text
         .replace(head, "<head>")
         .replace(&canonical.display().to_string(), "<repo>")
         .replace(&repo.display().to_string(), "<repo>");
@@ -102,4 +122,32 @@ fn input_digests(value: &serde_json::Value) -> Result<Vec<&str>, Box<dyn Error>>
     }
     // Empty is legitimate: ignored-stack plans carry no obligations.
     Ok(digests)
+}
+
+#[test]
+fn generator_scrub_keeps_planned_platform_triples() {
+    // On x86_64 Linux CI the generator triple equals the planned platform
+    // triple, so only the generator object itself may be scrubbed.
+    let sha = "a".repeat(64);
+    let digest = format!("b3-{}", "b".repeat(64));
+    let head = "c".repeat(40);
+    let response = format!(
+        "{{\"plan\":{{\"head\":\"{head}\",\"generator\":{{\"version\":\"0.1.1\",\
+         \"target\":\"x86_64-unknown-linux-gnu\",\"sha256\":\"{sha}\"}},\
+         \"obligations\":[{{\"input_digest\":\"{digest}\"}}],\
+         \"matrix\":{{\"include\":[{{\"input_digest\":\"{digest}\",\
+         \"planned_platform\":{{\"target\":\"x86_64-unknown-linux-gnu\"}}}}]}}}}}}"
+    );
+    let out = String::from_utf8(
+        normalized_response(Path::new("/nonexistent-repo"), &head, response.as_bytes())
+            .expect("normalize"),
+    )
+    .expect("utf8");
+    assert!(out.contains(r#""target":"<target>""#), "{out}");
+    assert!(out.contains("<generator-sha>"), "{out}");
+    assert!(!out.contains(&sha), "{out}");
+    assert!(
+        out.contains(r#""planned_platform":{"target":"x86_64-unknown-linux-gnu"}"#),
+        "{out}"
+    );
 }
