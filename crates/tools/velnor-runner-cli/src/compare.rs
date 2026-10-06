@@ -197,3 +197,6 @@ fn archive(value: &Value) -> Result<ArchiveSafety, Fail> {
         _ => Err(Fail::Closed),
     }
 }
+
+#[cfg(test)]
+mod tests;

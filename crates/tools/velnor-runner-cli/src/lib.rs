@@ -8,6 +8,3 @@ mod service;
 
 pub use args::Cli;
 pub use dispatch::run;
-
-#[cfg(test)]
-mod compare_tests;

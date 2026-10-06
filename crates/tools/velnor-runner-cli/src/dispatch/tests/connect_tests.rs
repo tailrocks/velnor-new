@@ -1,12 +1,10 @@
-//! `connect` stores stdin in the test Keychain service and writes `host.toml`.
-
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use clap::CommandFactory;
 
-use super::{ConnectRequest, connect_with};
+use super::super::{ConnectRequest, connect_with};
 
 #[cfg(target_os = "macos")]
 const TEST_SERVICE: &str = "com.tailrocks.velnor.host.test";
@@ -38,7 +36,7 @@ fn connect_empty_stdin_does_not_create_or_overwrite() -> Result<(), String> {
     #[cfg(target_os = "macos")]
     let _guard = KeychainItem {
         service: EMPTY_SERVICE,
-        account: super::KEYCHAIN_ACCOUNT,
+        account: super::super::KEYCHAIN_ACCOUNT,
     };
     let missing = dir.path().join("host.toml");
     let mut empty = Cursor::new(b"");
@@ -66,7 +64,7 @@ fn connect_writes_host_toml_without_the_token() -> Result<(), String> {
     let dir = TempDir::new("connect")?;
     let _guard = KeychainItem {
         service: TEST_SERVICE,
-        account: super::KEYCHAIN_ACCOUNT,
+        account: super::super::KEYCHAIN_ACCOUNT,
     };
     let canary = b"canary-token\n";
     let mut input = Cursor::new(&canary[..]);
@@ -82,7 +80,7 @@ fn connect_writes_host_toml_without_the_token() -> Result<(), String> {
     let stored = security_framework::passwords::generic_password(
         security_framework::passwords::PasswordOptions::new_generic_password(
             TEST_SERVICE,
-            super::KEYCHAIN_ACCOUNT,
+            super::super::KEYCHAIN_ACCOUNT,
         ),
     )
     .map_err(|_| "keychain read".to_owned())?;

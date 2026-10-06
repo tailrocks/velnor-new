@@ -320,3 +320,6 @@ fn verified(
         effect: Effect::ReleaseCapacity,
     })
 }
+
+#[cfg(test)]
+mod tests;

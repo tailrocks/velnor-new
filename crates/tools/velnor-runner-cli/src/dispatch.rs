@@ -253,7 +253,7 @@ fn not_proven() -> ExitCode {
 }
 
 #[cfg(test)]
-mod connect_tests;
+mod tests;
 
 fn disconnect(drain: bool) -> ExitCode {
     let effects = disconnect_effects(SetOwnership::Adopted, drain);

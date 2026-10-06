@@ -1,0 +1,49 @@
+core+cli nextest list 34/34 stable; 16 pure renames (daemon_run::tests, service::tests paths unchanged):
+
+before: velnor-runner-core lifecycle_tests::acquire_failure_and_cleanup_mismatch_do_not_release
+after: velnor-runner-core lifecycle::tests::acquire_failure_and_cleanup_mismatch_do_not_release
+
+before: velnor-runner-cli compare_tests::bad_conclusions_are_not_proven
+after: velnor-runner-cli compare::tests::rejections::bad_conclusions_are_not_proven
+
+before: velnor-runner-cli compare_tests::cached_success_is_not_proven
+after: velnor-runner-cli compare::tests::rejections::cached_success_is_not_proven
+
+before: velnor-runner-cli dispatch::connect_tests::connect_empty_stdin_does_not_create_or_overwrite
+after: velnor-runner-cli dispatch::tests::connect_tests::connect_empty_stdin_does_not_create_or_overwrite
+
+before: velnor-runner-cli dispatch::connect_tests::connect_help_reads_stdin_and_has_no_token_flag
+after: velnor-runner-cli dispatch::tests::connect_tests::connect_help_reads_stdin_and_has_no_token_flag
+
+before: velnor-runner-cli dispatch::connect_tests::connect_writes_host_toml_without_the_token
+after: velnor-runner-cli dispatch::tests::connect_tests::connect_writes_host_toml_without_the_token
+
+before: velnor-runner-cli compare_tests::duplicate_execution_is_not_proven
+after: velnor-runner-cli compare::tests::rejections::duplicate_execution_is_not_proven
+
+before: velnor-runner-cli compare_tests::hosted_and_scale_set_pair_is_proven
+after: velnor-runner-cli compare::tests::proven::hosted_and_scale_set_pair_is_proven
+
+before: velnor-runner-core lifecycle_tests::illegal_event_does_not_release_occupied_states
+after: velnor-runner-core lifecycle::tests::illegal_event_does_not_release_occupied_states
+
+before: velnor-runner-cli compare_tests::missing_lane_is_not_proven
+after: velnor-runner-cli compare::tests::rejections::missing_lane_is_not_proven
+
+before: velnor-runner-cli compare_tests::missing_or_empty_directory_is_not_proven
+after: velnor-runner-cli compare::tests::proven::missing_or_empty_directory_is_not_proven
+
+before: velnor-runner-cli compare_tests::omitted_page_is_not_proven
+after: velnor-runner-cli compare::tests::rejections::omitted_page_is_not_proven
+
+before: velnor-runner-core lifecycle_tests::quarantine_does_not_release_occupied_states
+after: velnor-runner-core lifecycle::tests::quarantine_does_not_release_occupied_states
+
+before: velnor-runner-cli compare_tests::swapped_artifact_is_not_proven
+after: velnor-runner-cli compare::tests::rejections::swapped_artifact_is_not_proven
+
+before: velnor-runner-cli compare_tests::unsafe_archives_are_not_proven
+after: velnor-runner-cli compare::tests::rejections::unsafe_archives_are_not_proven
+
+before: velnor-runner-cli compare_tests::wrong_attempt_is_not_proven
+after: velnor-runner-cli compare::tests::rejections::wrong_attempt_is_not_proven
