@@ -3,9 +3,9 @@ use super::*;
 use crate::ids::{plan_id_for_run, run_key_for_ci};
 use crate::workflow::{
     EntryCacheIds, ExecuteTaskIds, MatrixEntry, ObligationDecision, Plan, PlanBaseline,
-    PlanGenerator, PlanMatrix, PlanObligation, PlanPackage, PlanRunner, QualificationDispatch,
-    QualificationPhase, QualificationRuntimeIdentity, QualificationRuntimeIdentityRequirements,
-    QualificationRuntimePlatform, WorkflowEvent,
+    PlanGenerator, PlanMatrix, PlanObligation, PlanPackage, PlanRunner, PlannedPlatform,
+    QualificationDispatch, QualificationPhase, QualificationRuntimeIdentity,
+    QualificationRuntimeIdentityRequirements, QualificationRuntimePlatform, WorkflowEvent,
 };
 use crate::{RunnerSelection, Trust, digest_b3};
 
@@ -154,6 +154,7 @@ fn qualification_entry(
         input_digest,
         run_key,
         "rust-demo",
+        PlannedPlatform::new("ubuntu-26.04", "x86_64-unknown-linux-gnu")?,
     )?;
     entry.cache_ids = Some(EntryCacheIds::new(
         &digest_b3(b"workspace"),
