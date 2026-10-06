@@ -1,0 +1,8 @@
+wrappers = { cargo = { command = "mbx", env = { MBX_CARGO_SHIM_MODE = "1" } } }
+[tools]
+rust = "1.98.1"
+# `mbx` binary required by wrappers.cargo.command above (P07-9). Exact pin
+# mirrors catalog MR_BOXINGTON_VERSION; clean checkouts resolve MBX from
+# this file via `mise install`, never from a global install.
+mr-boxington = "1.21.1"
+"aqua:nextest-rs/nextest/cargo-nextest" = "0.9.146"
