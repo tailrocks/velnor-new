@@ -2,7 +2,7 @@
 //!
 //! The resolver — not manifest substrings — is the source of truth here:
 //! effective edition and MSRV per package (inheritance resolved), the
-//! exact eight-member set, and the locked dependency graph (registry-only
+//! exact ten-member set, and the locked dependency graph (registry-only
 //! sources, exact requirements). Runs fully offline: any unlocked input
 //! fails the command instead of fetching.
 
@@ -251,7 +251,7 @@ fn json_parser_reads_every_shape() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
-fn metadata_members_match_eight() -> Result<(), Box<dyn Error>> {
+fn metadata_members_match_ten() -> Result<(), Box<dyn Error>> {
     let doc = metadata()?;
     let mut names: Vec<&str> = workspace_packages(&doc)?
         .iter()
@@ -261,6 +261,70 @@ fn metadata_members_match_eight() -> Result<(), Box<dyn Error>> {
     let mut want: Vec<&str> = super::MEMBERS.iter().map(|member| member.1).collect();
     want.sort_unstable();
     assert_eq!(names, want, "resolver member set drift");
+    Ok(())
+}
+
+#[test]
+fn metadata_registry_fixture_has_exact_locked_itoa() -> Result<(), Box<dyn Error>> {
+    const FIXTURE: &str = "mbx-synchronous-registry-fixture";
+    const REGISTRY: &str = "registry+https://github.com/rust-lang/crates.io-index";
+    const CHECKSUM: &str = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682";
+
+    let doc = metadata()?;
+    let fixture = workspace_packages(&doc)?
+        .into_iter()
+        .find(|package| package.get("name").and_then(Json::as_str) == Some(FIXTURE))
+        .ok_or("registry fixture missing from workspace metadata")?;
+    assert_eq!(fixture.get("edition").and_then(Json::as_str), Some("2024"));
+    assert_eq!(
+        fixture.get("rust_version").and_then(Json::as_str),
+        Some("1.98")
+    );
+
+    let dependencies = fixture
+        .get("dependencies")
+        .and_then(Json::as_arr)
+        .ok_or("registry fixture dependencies missing")?;
+    let itoa_dependency = dependencies
+        .iter()
+        .find(|dependency| dependency.get("name").and_then(Json::as_str) == Some("itoa"))
+        .ok_or("registry fixture itoa dependency missing")?;
+    assert_eq!(
+        itoa_dependency.get("req").and_then(Json::as_str),
+        Some("=1.0.18")
+    );
+    assert_eq!(
+        itoa_dependency.get("source").and_then(Json::as_str),
+        Some(REGISTRY)
+    );
+
+    let packages = doc
+        .get("packages")
+        .and_then(Json::as_arr)
+        .ok_or("resolved package list missing")?;
+    assert!(packages.iter().any(|package| {
+        package.get("name").and_then(Json::as_str) == Some("itoa")
+            && package.get("version").and_then(Json::as_str) == Some("1.0.18")
+            && package.get("source").and_then(Json::as_str) == Some(REGISTRY)
+    }));
+
+    let lock = super::read("Cargo.lock")?;
+    let package = lock
+        .split("[[package]]")
+        .skip(1)
+        .find(|entry| entry.lines().any(|line| line.trim() == "name = \"itoa\""))
+        .ok_or("itoa package missing from Cargo.lock")?;
+    for expected in [
+        "version = \"1.0.18\"",
+        "source = \"registry+https://github.com/rust-lang/crates.io-index\"",
+    ] {
+        assert!(
+            package.lines().any(|line| line.trim() == expected),
+            "{expected}"
+        );
+    }
+    let checksum = format!("checksum = \"{CHECKSUM}\"");
+    assert!(package.lines().any(|line| line.trim() == checksum));
     Ok(())
 }
 

@@ -5,11 +5,14 @@ use velnor_actions_contract::workflow::jobs::ValidatorKind;
 use velnor_actions_contract::{
     Concurrency, Job, JobTimeout, Permissions, Step, StepKind, Trigger, WorkflowIr,
 };
-use velnor_actions_mise::PREPARE_PINNED_TOOLS_STEP;
+use velnor_actions_mise::{PREPARE_PINNED_TOOLS_STEP, ToolCatalog};
 use velnor_actions_workflow_renderer::render::ValidatorCommand;
 use velnor_actions_workflow_renderer::steps::DENY_STEP_NAME;
 
 use super::audit_prepare_installs;
+use super::validator::{
+    CommandInstalls, audit_validator_command, validator_command_specs, validator_subject,
+};
 use crate::vectors::CARGO_DENY_VERSION;
 
 fn shell_job(run: Vec<String>) -> Job {
@@ -38,6 +41,9 @@ fn deny_command(script: &str) -> ValidatorCommand {
         validator: ValidatorKind::CargoDeny,
         name: DENY_STEP_NAME.to_owned(),
         argv: vec!["sh".to_owned(), "-c".to_owned(), script.to_owned()],
+        prepare_argv: Vec::new(),
+        source_units: Vec::new(),
+        tool_inputs: Vec::new(),
     }
 }
 
@@ -192,6 +198,9 @@ fn deny_drift_blocks() {
             "-c".to_owned(),
             "cargo install foo && mise --no-env exec rust@1.98.1 -- cargo build".to_owned(),
         ],
+        prepare_argv: Vec::new(),
+        source_units: Vec::new(),
+        tool_inputs: Vec::new(),
     }];
     let outcome = audit_prepare_installs(dir.path(), &ir, "ubuntu-26.04", &commands);
     assert_eq!(outcome.blocking, [] as [String; 0]);
@@ -290,4 +299,56 @@ fn oversized_tool_file_blocks() {
         "oversized lock must block: {:?}",
         outcome.blocking
     );
+}
+
+#[test]
+fn python_source_install_resolves_through_the_catalog_pin() {
+    let catalog = ToolCatalog::pinned();
+    let command = crate::python_source_units::validator_command(&catalog)
+        .expect("pinned source-suite command");
+    assert!(matches!(
+        validator_command_specs(&command),
+        CommandInstalls::Specs(specs) if specs == vec!["python@3.14.8".to_owned()]
+    ));
+    assert_eq!(command.argv[2].matches("mise --no-config").count(), 4);
+    let mut subjects = Vec::new();
+    let mut blocking = Vec::new();
+    audit_validator_command(&command, &catalog, &mut subjects, &mut blocking);
+    assert_eq!(blocking, Vec::<String>::new());
+    assert_eq!(subjects.len(), 1, "only Python install is lock-audited");
+    assert_eq!(
+        validator_subject("python@3.14.8", &catalog).map(|subject| subject.display),
+        Some("python@3.14.8".to_owned())
+    );
+}
+
+#[test]
+fn python_source_audit_rejects_unclassifiable_exec_after_install() {
+    let catalog = ToolCatalog::pinned();
+    let mut command = crate::python_source_units::validator_command(&catalog)
+        .expect("pinned source-suite command");
+    command.argv[2] =
+        "mise --no-config --no-env --no-hooks exec python@3.14.8 -- true && mise unknown"
+            .to_owned();
+    assert!(matches!(
+        validator_command_specs(&command),
+        CommandInstalls::Unclassifiable(detail) if detail == "unexpected_subcommand:unknown"
+    ));
+}
+
+#[test]
+fn validator_prepare_must_be_install_even_when_run_contains_install() {
+    let mut command = deny_command("mise --no-config install cargo-deny@0.20.2");
+    command.prepare_argv = vec![
+        "mise".to_owned(),
+        "--no-config".to_owned(),
+        "exec".to_owned(),
+        "python@3.14.8".to_owned(),
+        "--".to_owned(),
+        "true".to_owned(),
+    ];
+    assert!(matches!(
+        validator_command_specs(&command),
+        CommandInstalls::Unclassifiable(detail) if detail == "prepare_without_install"
+    ));
 }
