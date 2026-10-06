@@ -155,10 +155,10 @@ async fn completion_candidate(
         .map_err(|_| HostError::Journal)?;
     let mut candidate = None;
     while let Some(row) = rows.next().await.map_err(|_| HostError::Journal)? {
-        if let Some(id) = candidate_row(&row, scale_set_id, request_id, runner_name)? {
-            if candidate.replace(id).is_some() {
-                return Err(HostError::Journal);
-            }
+        if let Some(id) = candidate_row(&row, scale_set_id, request_id, runner_name)?
+            && candidate.replace(id).is_some()
+        {
+            return Err(HostError::Journal);
         }
     }
     Ok(candidate)

@@ -9,8 +9,6 @@ use std::sync::{Arc, Mutex, OnceLock};
 use crate::error::HostError;
 use serde::{Deserialize, Serialize};
 
-#[path = "daemon_lock_existing.rs"]
-mod existing;
 #[path = "daemon_lock_identity.rs"]
 mod identity;
 

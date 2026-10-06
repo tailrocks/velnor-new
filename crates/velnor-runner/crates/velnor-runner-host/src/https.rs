@@ -33,6 +33,7 @@ impl HttpsTransport {
 
     /// Clone this origin with a short deadline for background cleanup requests.
     #[must_use]
+    #[cfg(test)]
     pub(crate) fn cleanup_client(&self) -> Self {
         Self {
             base: self.base.clone(),

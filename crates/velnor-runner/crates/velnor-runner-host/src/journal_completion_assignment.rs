@@ -80,10 +80,10 @@ impl Journal {
         finish_transaction(&connection, result).await
     }
 
-    /// Record a definite AcquireJobs response before a JIT call.
+    /// Record a definite `AcquireJobs` response before a JIT call.
     ///
     /// A rejected response clears the attempt marker for a safe retry; an acquired
-    /// response permanently fences AcquireJobs for this request.
+    /// response permanently fences `AcquireJobs` for this request.
     pub(crate) async fn record_assigned_acquire(
         &self,
         id: i64,

@@ -41,6 +41,7 @@ mod projection_tests;
 
 const PLATFORM: &str = "linux/amd64";
 const DIND_IMAGE: &str = "velnor-dind:29.8.2";
+#[cfg(test)]
 const DIND_ENTRYPOINT: [&str; 1] = ["/usr/local/bin/velnor-dind-entrypoint"];
 const IDENTITY_HEX: &[u8; 16] = b"0123456789abcdef";
 

@@ -123,28 +123,6 @@ impl Journal {
         finish_transaction(&connection, result).await
     }
 
-    /// Check a generation against fresh time inside the write transaction.
-    pub(crate) async fn completion_cleanup_claim_current(
-        &self,
-        id: i64,
-        generation: i64,
-    ) -> Result<bool, HostError> {
-        if id <= 0 || generation <= 0 {
-            return Err(HostError::Journal);
-        }
-        let connection = self.connection().await?;
-        connection
-            .execute("BEGIN IMMEDIATE", ())
-            .await
-            .map_err(|_| HostError::Journal)?;
-        let result = async {
-            let now = unix_seconds()?;
-            current_claim(&connection, id, generation, now).await
-        }
-        .await;
-        finish_transaction(&connection, result).await
-    }
-
     #[cfg(test)]
     pub(crate) async fn completion_cleanup_claim_current_at(
         &self,

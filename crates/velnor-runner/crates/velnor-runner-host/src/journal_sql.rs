@@ -1,9 +1,12 @@
 //! Transaction and row decoding helpers for the file-backed journal.
 
 use crate::error::HostError;
+#[cfg(test)]
 use crate::journal::IntentState;
+#[cfg(test)]
 use crate::reconcile::IntentRow;
 
+#[cfg(test)]
 pub(super) fn intent_row(row: &turso::Row) -> Result<IntentRow, HostError> {
     let state_text: String = row.get(3).map_err(|_| HostError::Journal)?;
     Ok(IntentRow {

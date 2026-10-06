@@ -133,8 +133,8 @@ async fn retry_attempt_backoff_caps_while_generation_keeps_increasing() -> Resul
     let scratch = Scratch::new("attempt-cap")?;
     let journal = Journal::open(&scratch.file()).await?;
     let id = completed_launch(&journal).await?;
-    let mut now = 0;
-    for ordinal in 1..=7 {
+    for (index, ordinal) in (1..=7).enumerate() {
+        let now = i64::try_from(index).map_err(|_| HostError::Journal)?;
         let claim = journal
             .claim_completion_cleanup_at(id, now, 1)
             .await?
@@ -142,7 +142,6 @@ async fn retry_attempt_backoff_caps_while_generation_keeps_increasing() -> Resul
         assert_eq!(claim.generation, i64::from(ordinal));
         let expected_attempt = u32::try_from(ordinal.min(5)).map_err(|_| HostError::Journal)?;
         assert_eq!(claim.attempt, expected_attempt);
-        now += 1;
     }
     Ok(())
 }
@@ -164,7 +163,7 @@ async fn effect_renewal_blocks_reclaim_until_response_and_backoff() -> Result<()
     let effect = tokio::spawn(async move {
         running_journal
             .run_completion_cleanup_effect_at(id, generation, 119, 120, move || async move {
-                started_tx.send(()).map_err(|_| HostError::Journal)?;
+                started_tx.send(()).map_err(|()| HostError::Journal)?;
                 finish_rx.await.map_err(|_| HostError::Journal)?;
                 Ok(())
             })
@@ -177,7 +176,7 @@ async fn effect_renewal_blocks_reclaim_until_response_and_backoff() -> Result<()
             .await?
             .is_none()
     );
-    finish_tx.send(()).map_err(|_| HostError::Journal)?;
+    finish_tx.send(()).map_err(|()| HostError::Journal)?;
     assert_eq!(effect.await.map_err(|_| HostError::Journal)??, Some(()));
     assert!(
         second_handle
@@ -215,7 +214,7 @@ async fn overlapping_effects_keep_the_longest_claim_deadline() -> Result<(), Hos
     let first_effect = tokio::spawn(async move {
         running_journal
             .run_completion_cleanup_effect_at(id, generation, 119, 120, move || async move {
-                started_tx.send(()).map_err(|_| HostError::Journal)?;
+                started_tx.send(()).map_err(|()| HostError::Journal)?;
                 finish_rx.await.map_err(|_| HostError::Journal)?;
                 Ok(())
             })
@@ -234,7 +233,7 @@ async fn overlapping_effects_keep_the_longest_claim_deadline() -> Result<(), Hos
             .is_none()
     );
 
-    finish_tx.send(()).map_err(|_| HostError::Journal)?;
+    finish_tx.send(()).map_err(|()| HostError::Journal)?;
     assert_eq!(
         first_effect.await.map_err(|_| HostError::Journal)??,
         Some(())

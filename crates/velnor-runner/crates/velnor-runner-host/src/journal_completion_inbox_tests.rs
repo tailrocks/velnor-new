@@ -93,7 +93,7 @@ async fn missing_id_and_oversized_body_fail_closed() -> Result<(), String> {
 #[tokio::test]
 async fn inbox_persists_overflow_beyond_bounded_retry_page() -> Result<(), String> {
     let (_scratch, journal) = open("completion-inbox-full").await?;
-    for message_id in 0..EXISTING_BACKLOG_ROWS + 1 {
+    for message_id in 0..=EXISTING_BACKLOG_ROWS {
         journal
             .store_completion_inbox(7, message_id, "[]")
             .await

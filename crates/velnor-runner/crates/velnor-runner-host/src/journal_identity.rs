@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 
-use crate::daemon_lock::{EngineLineageGuard, canonical_journal_path};
+use crate::daemon_lock::EngineLineageGuard;
 use crate::error::HostError;
 use crate::journal::Journal;
 use crate::journal_schema;
@@ -34,10 +34,10 @@ fn process_state(path: &Path) -> Result<Arc<JournalProcessState>, HostError> {
 }
 
 fn release_process_state(path: &Path) {
-    if let Some(states) = STATES.get() {
-        if let Ok(mut states) = states.lock() {
-            states.remove(path);
-        }
+    if let Some(states) = STATES.get()
+        && let Ok(mut states) = states.lock()
+    {
+        states.remove(path);
     }
 }
 
@@ -89,36 +89,6 @@ impl Journal {
 }
 
 impl Journal {
-    /// Bind this journal to one validated, engine-scoped external lineage.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`HostError::Journal`] for a changed engine or restored state.
-    pub(crate) async fn establish_engine_lineage(
-        &self,
-        engine_id: &str,
-        guard: EngineLineageGuard,
-    ) -> Result<(), HostError> {
-        if self
-            .engine_binding()
-            .await?
-            .is_some_and(|stored| stored != engine_id)
-        {
-            return Err(HostError::Journal);
-        }
-        let path = canonical_journal_path(self.path())?;
-        let instance_id = self.instance_id().await?;
-        let revision = self.revision().await?;
-        if self.lineage_pinned().await? {
-            guard.verify_existing_lineage(&path, &instance_id, revision)?;
-        } else {
-            guard.verify_lineage(&path, &instance_id, revision)?;
-        }
-        self.attach_lineage_guard(guard)?;
-        self.bind_engine(engine_id).await?;
-        self.pin_lineage().await
-    }
-
     /// Bind this journal to one Docker engine. A changed engine fails closed.
     ///
     /// # Errors
@@ -150,36 +120,6 @@ impl Journal {
     pub(crate) async fn revision(&self) -> Result<u64, HostError> {
         let conn = self.connection().await?;
         journal_schema::revision(&conn).await
-    }
-
-    async fn engine_binding(&self) -> Result<Option<String>, HostError> {
-        let conn = self.connection().await?;
-        journal_schema::engine_id_optional(&conn).await
-    }
-
-    async fn lineage_pinned(&self) -> Result<bool, HostError> {
-        let conn = self.connection().await?;
-        journal_schema::lineage_pinned(&conn).await
-    }
-
-    async fn pin_lineage(&self) -> Result<(), HostError> {
-        let _write = self.write_guard().await;
-        self.sync_lineage().await?;
-        let conn = self.connection().await?;
-        let changed = conn
-            .execute(
-                "UPDATE journal_meta SET lineage_pinned = 1 WHERE singleton = 1 AND lineage_pinned = 0",
-                (),
-            )
-            .await
-            .map_err(|_| HostError::Journal)?;
-        if changed == 1 {
-            self.sync_lineage().await
-        } else if self.lineage_pinned().await? {
-            Ok(())
-        } else {
-            Err(HostError::Journal)
-        }
     }
 
     /// Read one launch identity after the engine is bound.
@@ -229,32 +169,6 @@ impl Journal {
             .execute(
                 "UPDATE intents SET docker_id = COALESCE(docker_id, ?1), dind_id = COALESCE(dind_id, ?2) WHERE id = ?3 AND kind = 'launch' AND cleanup_proven = 0 AND (docker_id IS NULL OR docker_id = ?1) AND (dind_id IS NULL OR dind_id = ?2)",
                 (runner_id, dind_id, id),
-            )
-            .await
-            .map_err(|_| HostError::Journal);
-        self.sync_after(changed.and_then(one_row)).await
-    }
-
-    /// Bind one immutable GitHub runner id to a launch.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`HostError::Journal`] when the row or identity conflicts.
-    pub(crate) async fn bind_github_runner(
-        &self,
-        id: i64,
-        github_runner_id: &str,
-    ) -> Result<(), HostError> {
-        if token_rejected(github_runner_id) {
-            return Err(HostError::Journal);
-        }
-        let _write = self.write_guard().await;
-        self.sync_lineage().await?;
-        let conn = self.connection().await?;
-        let changed = conn
-            .execute(
-                "UPDATE intents SET github_runner_id = COALESCE(github_runner_id, ?1) WHERE id = ?2 AND kind = 'launch' AND cleanup_proven = 0 AND jit_requested = 1 AND (github_runner_id IS NULL OR github_runner_id = ?1)",
-                (github_runner_id, id),
             )
             .await
             .map_err(|_| HostError::Journal);

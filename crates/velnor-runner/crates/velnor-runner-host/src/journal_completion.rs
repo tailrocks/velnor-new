@@ -52,40 +52,6 @@ pub(crate) struct CompletedLaunch {
     pub(crate) identity: CompletionIdentity,
 }
 
-/// Immutable launch identity used to fence one incomplete-worker recovery.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct RecoveryIdentity {
-    /// Owning runner scale set.
-    pub(crate) scale_set_id: i64,
-    /// Assigned request id, absent for session launches.
-    pub(crate) runner_request_id: Option<i64>,
-    /// Exact generated runner name.
-    pub(crate) runner_name: String,
-    /// Durable AcquireJobs attempt marker.
-    pub(crate) acquire_attempted: bool,
-    /// Durable AcquireJobs result marker.
-    pub(crate) acquire_resolved: bool,
-    /// Whether this request consumed an assigned job.
-    pub(crate) acquired: bool,
-    /// Durable one-shot JIT request marker.
-    pub(crate) jit_requested: bool,
-}
-
-/// One incomplete launch leased for bounded ownership recovery.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct RecoveryLease {
-    /// Original host intent and durable container/volume ids.
-    pub(crate) intent: IntentRow,
-    /// Exact persisted launch identity and one-shot markers.
-    pub(crate) identity: RecoveryIdentity,
-    /// Monotonic fencing generation.
-    pub(crate) generation: i64,
-    /// Current lease expiration in Unix seconds.
-    pub(crate) lease_until: i64,
-    /// Saturated retry count for bounded backoff selection.
-    pub(crate) attempts: u32,
-}
-
 impl Journal {
     /// Read due, completed launches in retry order.
     pub(crate) async fn due_completed_launches(

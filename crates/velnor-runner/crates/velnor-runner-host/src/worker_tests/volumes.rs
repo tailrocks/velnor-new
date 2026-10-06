@@ -2,7 +2,7 @@ use std::future::Future;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::task::{Context, Wake, Waker};
+use std::task::{Context, Waker};
 use std::time::Duration;
 
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
@@ -112,8 +112,8 @@ async fn cancelling_finish_aborts_stub_and_cleans_socket() -> Result<(), String>
     wait_for_flag(started).await?;
 
     let mut finish = Box::pin(stub.finish());
-    let waker = Waker::from(Arc::new(NoopWake));
-    let mut context = Context::from_waker(&waker);
+    let waker = Waker::noop();
+    let mut context = Context::from_waker(waker);
     assert!(finish.as_mut().poll(&mut context).is_pending());
     drop(finish);
 
@@ -220,7 +220,7 @@ impl ScriptedDocker {
             .ok_or_else(|| "stub completion already signaled".to_owned())?
             .send(())
             .err()
-            .map(|_| "stub stopped before completion signal".to_owned());
+            .map(|()| "stub stopped before completion signal".to_owned());
         let result = {
             let task = self
                 .task
@@ -249,21 +249,15 @@ impl Drop for TaskCompletion {
     }
 }
 
-struct NoopWake;
-
-impl Wake for NoopWake {
-    fn wake(self: Arc<Self>) {}
-}
-
 impl Drop for ScriptedDocker {
     fn drop(&mut self) {
         if let Some(task) = self.task.take() {
             task.abort();
         }
-        if !self.finished {
-            if let Err(error) = std::fs::remove_file(&self.path) {
-                eprintln!("Docker stub socket cleanup failed: {error}");
-            }
+        if !self.finished
+            && let Err(error) = std::fs::remove_file(&self.path)
+        {
+            eprintln!("Docker stub socket cleanup failed: {error}");
         }
     }
 }
@@ -293,17 +287,14 @@ async fn serve_volume_stub(
             .await
             .map_err(|error| error.to_string())?;
     }
-    loop {
-        tokio::select! {
-            signal = &mut wait_for_completion => {
-                signal.map_err(|error| error.to_string())?;
-                break;
-            }
-            accepted = listener.accept() => {
-                let (stream, _) = accepted.map_err(|error| error.to_string())?;
-                let request = read_request_line(stream).await?;
-                return Err(format!("unexpected request before finish: {request}"));
-            }
+    tokio::select! {
+        signal = &mut wait_for_completion => {
+            signal.map_err(|error| error.to_string())?;
+        }
+        accepted = listener.accept() => {
+            let (stream, _) = accepted.map_err(|error| error.to_string())?;
+            let request = read_request_line(stream).await?;
+            return Err(format!("unexpected request before finish: {request}"));
         }
     }
     match tokio::time::timeout(Duration::from_millis(50), listener.accept()).await {

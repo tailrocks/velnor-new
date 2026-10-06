@@ -239,22 +239,6 @@ pub(super) async fn revision(connection: &Connection) -> Result<u64, HostError> 
     u64::try_from(revision).map_err(|_| HostError::Journal)
 }
 
-pub(super) async fn lineage_pinned(connection: &Connection) -> Result<bool, HostError> {
-    let mut rows = connection
-        .query(
-            "SELECT lineage_pinned FROM journal_meta WHERE singleton = 1",
-            (),
-        )
-        .await
-        .map_err(|_| HostError::Journal)?;
-    let row = rows
-        .next()
-        .await
-        .map_err(|_| HostError::Journal)?
-        .ok_or(HostError::Journal)?;
-    row.get(0).map_err(|_| HostError::Journal)
-}
-
 pub(super) async fn engine_id_optional(
     connection: &Connection,
 ) -> Result<Option<String>, HostError> {
