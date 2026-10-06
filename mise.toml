@@ -6,3 +6,11 @@ rust = "1.98.1"
 # this file via `mise install`, never from a global install.
 mr-boxington = "1.21.1"
 "aqua:nextest-rs/nextest/cargo-nextest" = "0.9.146"
+
+[tasks.test-maintenance-helpers]
+description = "Run repository-only maintenance helper test suites"
+run = '''
+set -e
+cargo --config build.jobs=2 nextest run --locked --manifest-path Cargo.toml --package velnor-actions-freshness --no-tests fail --jobs 2
+cargo --config build.jobs=2 nextest run --locked --manifest-path Cargo.toml --package velnor-archive-guard --no-tests fail --jobs 2
+'''

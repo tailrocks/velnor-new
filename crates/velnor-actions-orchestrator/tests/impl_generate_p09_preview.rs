@@ -112,6 +112,7 @@ fn rendered_crate_steps_carry_validated_contract() -> TestResult {
     let yaml = tree
         .get(WORKFLOW_PATH)
         .ok_or_else(|| std::io::Error::other("missing workflow"))?;
+    let workflow_env = window(yaml, "env:\n", "concurrency:")?;
     let task = window(yaml, "  rust-demo:", "  required:")?;
     let run_at = task.find("- name: Clippy").ok_or("first obligation")?;
     let run_block = &task[run_at..];
@@ -130,7 +131,7 @@ fn rendered_crate_steps_carry_validated_contract() -> TestResult {
         "MISE_AUTO_INSTALL:",
         "MISE_EXEC_AUTO_INSTALL:",
     ] {
-        assert!(task.contains(key), "task misses {key}");
+        assert!(workflow_env.contains(key), "workflow misses {key}");
     }
     for key in [
         "MISE_GITHUB_TOKEN",
@@ -142,8 +143,8 @@ fn rendered_crate_steps_carry_validated_contract() -> TestResult {
         "CARGO_REGISTRY_TOKEN",
     ] {
         assert!(
-            task.contains(&format!("{key}: \"\"")),
-            "task must scrub {key} empty"
+            workflow_env.contains(&format!("{key}: \"\"")),
+            "workflow must scrub {key} empty"
         );
     }
     Ok(())
@@ -256,7 +257,12 @@ fn concurrent_generate_lock_refused() -> TestResult {
     assert_eq!(fs::read(github.join("workflows/old.yml"))?, b"old: true\n");
     fs::remove_dir(root.join(".github.velnor-generate.lock"))?;
     let report = generate(&prep, &opts)?;
-    assert_eq!(report.files_written.len(), 5, "lock removal unblocks");
+    assert_eq!(
+        report.files_written.len(),
+        9,
+        "lock removal unblocks with V2 support assets: {:?}",
+        report.files_written
+    );
     Ok(())
 }
 

@@ -9,7 +9,8 @@ use velnor_actions_mise::GitRequest;
 use crate::OrchestratorError;
 use crate::config::load_config;
 use crate::decisions::runner_image_evidence;
-use crate::discover::{Discovery, discover};
+use crate::discover::{Discovery, discover, discover_with_phase_timings};
+use crate::internal::phase_timing::PlanPhaseTimings;
 use crate::source_prep::lockful_roots;
 use crate::workflow::{DEFAULT_RUNNER_LABEL, WorkflowPlan, build_workflow};
 
@@ -48,6 +49,20 @@ pub struct GenerationPreparation {
 ///
 /// Returns root, config, branch, identity, discovery, or workflow errors.
 pub fn prepare(root: &Path) -> Result<GenerationPreparation, OrchestratorError> {
+    prepare_inner(root, None)
+}
+
+pub(crate) fn prepare_with_phase_timings(
+    root: &Path,
+    phases: &mut PlanPhaseTimings,
+) -> Result<GenerationPreparation, OrchestratorError> {
+    prepare_inner(root, Some(phases))
+}
+
+fn prepare_inner(
+    root: &Path,
+    phases: Option<&mut PlanPhaseTimings>,
+) -> Result<GenerationPreparation, OrchestratorError> {
     let canonical = root
         .canonicalize()
         .map_err(|err| OrchestratorError::io(root.display().to_string(), err.to_string()))?;
@@ -59,10 +74,14 @@ pub fn prepare(root: &Path) -> Result<GenerationPreparation, OrchestratorError> 
     let config = load_config(&canonical)?;
     let default_branch = resolve_default_branch(&canonical, &config)?;
     check_velnor_identity(&canonical, &config)?;
-    let mut discovery = discover(&canonical, &config)?;
+    let mut discovery = match phases {
+        Some(phases) => discover_with_phase_timings(&canonical, &config, phases)?,
+        None => discover(&canonical, &config)?,
+    };
     let fetch_roots = lockful_roots(&canonical, &discovery.workspaces);
     let (runner_label, runner_selection) = runner_label_for(&config);
     let workflow = build_workflow(
+        &canonical,
         &config,
         &default_branch,
         &runner_label,
@@ -137,14 +156,7 @@ fn resolve_default_branch(root: &Path, config: &VelnorConfig) -> Result<String, 
 /// Strip the `origin/` prefix, rejecting empty or malformed branches.
 fn branch_from_origin_head(text: &str) -> Option<String> {
     let branch = text.strip_prefix("origin/").unwrap_or(text);
-    if branch.is_empty()
-        || branch.contains(char::is_whitespace)
-        || branch.contains("..")
-        || branch == "HEAD"
-    {
-        return None;
-    }
-    Some(branch.to_owned())
+    velnor_actions_contract::is_valid_branch_name(branch).then(|| branch.to_owned())
 }
 
 /// Require the canonical identity for the Velnor-repository policy.
@@ -152,7 +164,10 @@ fn branch_from_origin_head(text: &str) -> Option<String> {
 /// The local `origin` URL is the authority. `GITHUB_REPOSITORY` is only a
 /// consistency hint: a mismatch fails closed and never unlocks, and a
 /// matching hint without a canonical origin unlocks nothing either.
-fn check_velnor_identity(root: &Path, config: &VelnorConfig) -> Result<(), OrchestratorError> {
+pub(crate) fn check_velnor_identity(
+    root: &Path,
+    config: &VelnorConfig,
+) -> Result<(), OrchestratorError> {
     if config.workflow.policy == WorkflowPolicy::ConsumerV1 {
         return Ok(());
     }
@@ -224,3 +239,7 @@ pub(crate) fn split_host_path(url: &str) -> Option<(&str, &str)> {
     }
     Some((host, path))
 }
+
+#[cfg(test)]
+#[path = "prepare_branch_tests.rs"]
+mod prepare_branch_tests;

@@ -40,6 +40,27 @@ where
     S: FnOnce(&str, &[u8], super::super::bind::Bind) -> F,
     F: Future<Output = Result<Started, HostError>>,
 {
+    if !request
+        .journal
+        .claim_launch_jit(request.id)
+        .await
+        .map_err(map_journal)?
+    {
+        return hold(request.journal, request.id, EnsureError::Uncertain).await;
+    }
+    run_claimed(lane, request, start).await
+}
+
+pub(super) async fn run_claimed<T, S, F>(
+    lane: &mut T,
+    request: Request<'_>,
+    start: S,
+) -> Result<Option<Started>, EnsureError>
+where
+    T: Transport + Lane,
+    S: FnOnce(&str, &[u8], super::super::bind::Bind) -> F,
+    F: Future<Output = Result<Started, HostError>>,
+{
     let Request {
         ctx,
         batch,
@@ -50,7 +71,12 @@ where
     } = request;
     let encoded = match fetch_jit(lane, ctx, name) {
         Ok(encoded) => encoded,
-        Err(error) => return fail_jit(journal, id, origin, error).await,
+        Err(error) => {
+            return super::super::runner_dir::after_jit(
+                lane, ctx, journal, id, name, origin, error,
+            )
+            .await;
+        }
     };
     let bound = super::super::bind::Bind::new(journal, id);
     let Ok(volume) = crate::worker::new_worker_volume() else {
@@ -80,21 +106,18 @@ where
     Ok(Some(started))
 }
 
-async fn fail_jit(
+pub(super) async fn fail_jit(
     journal: &Journal,
     id: i64,
     origin: MintOrigin,
     error: SessionError,
 ) -> Result<Option<Started>, EnsureError> {
     let mapped = map_listen(error);
-    if matches!(mapped, EnsureError::Conflict) {
-        journal
-            .finish(id, origin.conflict_outcome())
-            .await
-            .map_err(map_journal)?;
-        return Err(mapped);
-    }
-    hold(journal, id, mapped).await
+    journal
+        .finish(id, origin.error_outcome(error.certainty()))
+        .await
+        .map_err(map_journal)?;
+    Err(mapped)
 }
 
 fn fetch_jit<T>(lane: &mut T, ctx: &Drive, name: &str) -> Result<EncodedJit, SessionError>
@@ -102,5 +125,5 @@ where
     T: Transport + ?Sized,
 {
     let body = jit_request(name)?;
-    jit(lane, ctx.set_id, &ctx.admin_token, &body)
+    jit(lane, ctx.set_id, &ctx.admin_token, &body).map(|result| result.encoded_jit_config)
 }

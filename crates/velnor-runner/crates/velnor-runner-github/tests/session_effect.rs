@@ -76,7 +76,7 @@ fn must_err<T>(result: &Result<T, SessionError>) -> Result<SessionError, &'stati
 fn batch_of(body: &str) -> Result<ParsedBatch, &'static str> {
     match parse_poll(200, body).map_err(|_| "batch")? {
         Poll::Batch(batch) => Ok(batch),
-        Poll::Empty => Err("batch"),
+        Poll::Empty | Poll::Quarantined(_) => Err("batch"),
     }
 }
 
@@ -170,6 +170,7 @@ fn ack_skips_unsafe_batches_and_deletes_real_ids() -> Result<(), &'static str> {
     suppressed(&unknown, true, false)?;
     let negative = ParsedBatch {
         message_id: -1,
+        raw_body: String::new(),
         statistics: None,
         jobs: Vec::new(),
     };
@@ -181,6 +182,7 @@ fn ack_skips_unsafe_batches_and_deletes_real_ids() -> Result<(), &'static str> {
     suppressed(&available, false, false)?;
     let zero = ParsedBatch {
         message_id: 0,
+        raw_body: String::new(),
         statistics: None,
         jobs: Vec::new(),
     };
@@ -218,6 +220,7 @@ fn ack_skips_unsafe_batches_and_deletes_real_ids() -> Result<(), &'static str> {
 fn ack_non_204_fails_and_unauthorized_retries_once() -> Result<(), &'static str> {
     let zero = ParsedBatch {
         message_id: 0,
+        raw_body: String::new(),
         statistics: None,
         jobs: Vec::new(),
     };
@@ -266,11 +269,21 @@ fn jit_bytes_stay_out_of_debug_and_errors() -> Result<(), &'static str> {
     let request_canary = "request-jit-canary";
     let response_canary = "response-jit-canary";
     let request = format!(r#"{{"name":"{request_canary}"}}"#);
-    let response = format!(r#"{{"encodedJITConfig":"{response_canary}"}}"#);
+    let response = format!(
+        r#"{{"runner":{{"id":8,"name":"runner-eight","runnerScaleSetId":7}},"encodedJITConfig":"{response_canary}"}}"#
+    );
     let mut script = Script::once(200, &response);
     let config = jit(&mut script, 7, ADMIN, request.as_bytes()).map_err(|_| "jit")?;
-    assert_eq!(config.expose(), response_canary);
-    assert!(!config.expose().contains("encodedJITConfig"));
+    assert_eq!(config.encoded_jit_config.expose(), response_canary);
+    assert_eq!(config.runner.id, 8);
+    assert_eq!(config.runner.name, "runner-eight");
+    assert_eq!(config.runner.runner_scale_set_id, 7);
+    assert!(
+        !config
+            .encoded_jit_config
+            .expose()
+            .contains("encodedJITConfig")
+    );
     assert!(!format!("{config:?}").contains(response_canary));
     let rendered = format!("{:?}", script.seen[0]);
     assert!(!rendered.contains(request_canary));
@@ -296,6 +309,24 @@ fn jit_bytes_stay_out_of_debug_and_errors() -> Result<(), &'static str> {
     let err = must_err(&jit(&mut malformed, 7, ADMIN, request.as_bytes()))?;
     assert_eq!(err, SessionError::Uncertain);
     assert_eq!(err.certainty(), Certainty::Uncertain);
+    Ok(())
+}
+
+#[test]
+fn jit_requires_both_response_values() -> Result<(), &'static str> {
+    let request = br#"{"name":"runner-eight","workFolder":""}"#;
+    for body in [
+        r#"{"encodedJITConfig":"jit-canary"}"#,
+        r#"{"runner":null,"encodedJITConfig":"jit-canary"}"#,
+        r#"{"runner":{"id":8,"name":"runner-eight"},"encodedJITConfig":"jit-canary"}"#,
+        r#"{"runner":{"id":8,"name":"runner-eight","runnerScaleSetId":7},"encodedJITConfig":""}"#,
+    ] {
+        let mut script = Script::once(200, body);
+        let err = must_err(&jit(&mut script, 7, ADMIN, request))?;
+        assert_eq!(err, SessionError::Uncertain);
+        assert_eq!(err.certainty(), Certainty::Uncertain);
+        assert!(!format!("{err} {err:?} {:?}", script.seen[0]).contains("jit-canary"));
+    }
     Ok(())
 }
 

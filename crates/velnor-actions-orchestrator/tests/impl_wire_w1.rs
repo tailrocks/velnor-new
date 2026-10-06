@@ -259,6 +259,7 @@ fn w1_plan_format_runs_fmt_check() -> TestResult {
     let prep = prepare(repo.path())?;
     let tree = render_staged_tree(&prep)?;
     let yaml = tree.get(WORKFLOW_PATH).ok_or("missing workflow")?;
+    let workflow_env = window(yaml, "env:\n", "concurrency:")?;
     // R28: per-package Fmt groups own every file, so the plan job carries no
     // overlapping `fmt --all` scope; the crate job keeps its Format step.
     let plan = window(yaml, "  plan:", "  required:")?;
@@ -310,7 +311,10 @@ fn w1_plan_format_runs_fmt_check() -> TestResult {
         "job env misses RUSTUP_TOOLCHAIN:\n{job}"
     );
     for key in ["MISE_AUTO_INSTALL:", "MISE_EXEC_AUTO_INSTALL:"] {
-        assert!(job.contains(key), "job env misses {key}:\n{job}");
+        assert!(
+            workflow_env.contains(key),
+            "workflow env misses {key}:\n{workflow_env}"
+        );
     }
     // Regression: exactly one Format step per crate job, none in plan.
     let formats = yaml.matches("- name: Format").count();

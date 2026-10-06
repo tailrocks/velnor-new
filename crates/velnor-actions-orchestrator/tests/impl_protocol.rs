@@ -5,16 +5,16 @@ use std::fs;
 use tempfile::TempDir;
 use velnor_actions_contract::canonical_json_str;
 use velnor_actions_orchestrator::{
-    PlanOutputMode, assemble_merge_request, merge_internal, merge_passed, plan_internal,
-    plan_outputs, publish_plan_files, response_path_for, write_request_parts,
+    PlanOutputMode, plan_internal, plan_outputs, response_path_for, write_request_parts,
 };
 
 use crate::impl_common::{
-    TestResult, config_with_branch, err_of, git, git_line, make_repo, passing_reports,
-    plan_for_source_change,
+    TestResult, config_with_branch, err_of, git, git_line, make_repo, plan_for_source_change,
 };
-use crate::impl_merge::task_reports_for;
 use crate::impl_orch_core_cover::covered_plan;
+
+#[path = "impl_protocol_merge.rs"]
+mod merge_tests;
 
 #[test]
 fn write_request_materializes_pull_request() -> TestResult {
@@ -238,152 +238,72 @@ fn plan_outputs_encode_covered_tasks() -> TestResult {
     Ok(())
 }
 
-/// Producer/consumer agreement: assembled files feed the merge unchanged.
 #[test]
-fn merge_assembled_request_roundtrips_to_passed() -> TestResult {
-    let (_repo, plan) = plan_for_source_change()?;
-    let reports = passing_reports(&plan)?;
-    assert!(!reports.is_empty(), "fixture must carry reports");
-    let dir = TempDir::new()?;
-    let run = dir.path().join("run");
-    fs::create_dir_all(run.join("reports"))?;
-    fs::write(run.join("plan.json"), serde_json::to_string(&plan)?)?;
-    fs::write(
-        run.join("matrix.json"),
-        serde_json::to_string(&plan.matrix)?,
-    )?;
-    let plan_value = serde_json::to_value(&plan)?;
-    let task_files = task_reports_for(&plan_value, &serde_json::to_value(&reports)?);
-    for report in &reports {
-        let entry = plan
-            .matrix
-            .include
-            .iter()
-            .find(|entry| entry.report_id == report.report_id)
-            .ok_or_else(|| std::io::Error::other("report without entry"))?;
-        let dir = run
-            .join("reports")
-            .join(&entry.artifact_id)
-            .join(&entry.matrix_key);
-        fs::create_dir_all(dir.join("tasks"))?;
-        fs::write(
-            dir.join("matrix-report.json"),
-            serde_json::to_string(report)?,
-        )?;
-        for task in &report.tasks {
-            let want = Some(task.task_report_id.as_str());
-            let file = task_files
-                .as_array()
-                .and_then(|files| files.iter().find(|f| f["task_report_id"].as_str() == want))
-                .ok_or_else(|| std::io::Error::other("task without file"))?;
-            let path = dir
-                .join("tasks")
-                .join(format!("{}.json", task.task_report_id));
-            fs::write(path, serde_json::to_string(file)?)?;
-        }
-    }
-    let request = assemble_merge_request("local", &run)?;
-    let mut value: serde_json::Value = serde_json::from_str(&request)?;
-    assert!(value.get("base").is_none(), "merge shape: {request}");
-    // The needs channel is env-provided (unit-tested); patch it in to prove
-    // artifact agreement end to end without racing process-global env.
-    value["required_job_ids"] = serde_json::json!(["plan"]);
-    value["required_jobs"] = serde_json::json!([{"job_id": "plan", "conclusion": "success"}]);
-    value["assembly_errors"] = serde_json::json!([]);
-    value["actual_event"] = value["plan"]["event"].clone();
-    let final_report: velnor_actions_contract::FinalReport =
-        serde_json::from_str(&merge_internal(&value.to_string())?)?;
-    assert_eq!(
-        final_report.status,
-        velnor_actions_contract::FinalStatus::Passed
-    );
-    Ok(())
-}
-
-#[test]
-fn merge_assembly_nulls_missing_plan_to_planning_failed() -> TestResult {
-    let dir = TempDir::new()?;
-    let request = assemble_merge_request("local", dir.path())?;
-    let value: serde_json::Value = serde_json::from_str(&request)?;
-    assert!(value["plan"].is_null(), "null plan: {request}");
-    assert!(
-        value["assembly_errors"]
-            .as_array()
-            .is_some_and(|e| e.len() >= 3),
-        "gaps recorded: {request}"
-    );
-    let final_report: velnor_actions_contract::FinalReport =
-        serde_json::from_str(&merge_internal(&request)?)?;
-    final_report.validate()?;
-    assert_eq!(
-        final_report.status,
-        velnor_actions_contract::FinalStatus::PlanningFailed
-    );
-    for token in ["source_missing", "no_entry"] {
-        assert!(
-            final_report.miss_reasons.contains(&token.to_owned()),
-            "diagnosed: {:?}",
-            final_report.miss_reasons
-        );
-    }
-    Ok(())
-}
-
-/// Plan artifact: response publishes the exact pair `Publish plan` uploads.
-#[test]
-fn publish_plan_files_writes_artifact_pair() -> TestResult {
-    let repo = make_repo(config_with_branch())?;
+fn plan_outputs_bind_qualification_phase_and_cache_policy() -> TestResult {
+    let (repo, _) = plan_for_source_change()?;
     let root = repo.path();
-    git(&["add", "."], root)?;
-    git(&["commit", "-m", "one"], root)?;
     let head = git_line(&["rev-parse", "HEAD"], root)?;
+    let context = serde_json::json!({
+        "campaign": "protocol-test",
+        "phase": "cold",
+        "repository": "owner/project",
+        "default_branch": "testmain",
+        "git_ref": "refs/heads/testmain",
+        "ref_protected": true,
+        "workflow_ref": "owner/project/.github/workflows/ci.yml@refs/heads/testmain",
+        "workflow_sha": head,
+        "source_sha": head,
+        "run_id": 7,
+        "run_attempt": 2,
+    });
     let request = serde_json::json!({
         "schema": 1,
-        "run_key": "local",
+        "run_key": "r7-a2",
         "base": null,
         "head": head,
-        "event": "push",
+        "event": "qualification",
+        "qualification": context,
         "root": root.display().to_string(),
+        "repository": "owner/project",
     });
     let response = plan_internal(&request.to_string())?;
-    let dir = TempDir::new()?;
-    let run = publish_plan_files(&response, &dir.path().join("velnor"))?;
-    assert_eq!(run, dir.path().join("velnor").join("local"));
-    let plan_text = fs::read_to_string(run.join("plan.json"))?;
-    let matrix_text = fs::read_to_string(run.join("matrix.json"))?;
-    let value: serde_json::Value = serde_json::from_str(&response)?;
-    assert_eq!(plan_text, canonical_json_str(&value["plan"])?);
-    assert_eq!(matrix_text, canonical_json_str(&value["matrix"])?);
-    assert!(matrix_text.starts_with("{\"include\":"), "{matrix_text}");
-    let err = err_of(
-        publish_plan_files(&response, &dir.path().join("velnor")),
-        "second publish refused",
-    )?;
-    assert!(err.to_string().contains("plan_artifact_exists"), "{err}");
-    assert!(
-        err_of(
-            publish_plan_files("not json", dir.path()),
-            "garbage refused"
-        )
-        .is_ok()
+    let outputs = plan_outputs(&response, PlanOutputMode::Static)?;
+    assert_eq!(outputs.qualification_campaign, "protocol-test");
+    assert_eq!(outputs.qualification_phase, "cold");
+    assert!(outputs.qualification_cache_enabled);
+    assert!(!outputs.qualification_cache_write);
+    let step_names: Vec<&str> = outputs
+        .step_outputs()
+        .iter()
+        .map(|(name, _)| *name)
+        .collect();
+    assert_eq!(
+        step_names,
+        [
+            "matrix",
+            "plan_id",
+            "run_key",
+            "covered_tasks",
+            "qualification_campaign",
+            "qualification_phase",
+            "qualification_cache_enabled",
+            "qualification_cache_write",
+            "qualification_cache_directives",
+        ]
     );
-    Ok(())
-}
-
-#[test]
-fn merge_verdict_mapping() -> TestResult {
-    for (status, passed) in [
-        ("passed", true),
-        ("no_work", true),
-        ("failed", false),
-        ("cancelled", false),
-        ("blocked", false),
-        ("not_run", false),
-        ("planning_failed", false),
-    ] {
-        let response = format!(r#"{{"schema":1,"status":"{status}"}}"#);
-        assert_eq!(merge_passed(&response)?, passed, "{status}");
-    }
-    assert!(err_of(merge_passed("not json"), "verdict rejects garbage").is_ok());
+    let directives: serde_json::Value =
+        serde_json::from_str(&outputs.qualification_cache_directives)?;
+    assert_eq!(directives["phase"], "cold");
+    assert!(
+        directives["lanes"]
+            .as_array()
+            .is_some_and(|lanes| !lanes.is_empty())
+    );
+    let promoted = outputs.promoted_job_outputs(PlanOutputMode::Static);
+    let expected_bytes = promoted
+        .iter()
+        .map(|(name, value)| (name.encode_utf16().count() + value.encode_utf16().count() + 2) * 2)
+        .sum::<usize>();
+    assert_eq!(outputs.job_outputs_utf16_bytes, expected_bytes);
     Ok(())
 }

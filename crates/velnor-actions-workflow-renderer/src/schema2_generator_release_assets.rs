@@ -2,11 +2,10 @@
 
 use velnor_actions_contract::ReleaseTarget;
 
-use crate::yaml::Yaml;
-
 use super::super::features::{base, finish};
 use super::archive;
 use super::workflow_steps::{self, checkout_step, with_permissions};
+use crate::yaml::Yaml;
 
 pub(super) const VERSION: &str = "0.1.1";
 pub(super) const REPOSITORY: &str = "tailrocks/velnor-new";
@@ -24,6 +23,7 @@ pub(super) struct ProductAsset {
     pub directory: &'static str,
     pub build_job: &'static str,
     pub qualify_job: &'static str,
+    pub attest_job: &'static str,
     pub upload_name: &'static str,
     pub sum_command: &'static str,
     pub checksum_command: &'static str,
@@ -40,6 +40,7 @@ pub(super) const LINUX: ProductAsset = ProductAsset {
     directory: "linux-assets",
     build_job: "build-linux",
     qualify_job: "qualify-linux",
+    attest_job: "attest-linux",
     upload_name: "Upload Linux assets",
     sum_command: "sha256sum",
     checksum_command: "sha256sum --check",
@@ -56,6 +57,7 @@ pub(super) const MACOS_ARM64: ProductAsset = ProductAsset {
     directory: "macos-assets",
     build_job: "build-macos",
     qualify_job: "qualify-macos",
+    attest_job: "attest-macos",
     upload_name: "Upload macOS assets",
     sum_command: "shasum -a 256",
     checksum_command: "shasum -a 256 --check",
@@ -72,6 +74,7 @@ pub(super) const MACOS_X86_64: ProductAsset = ProductAsset {
     directory: "macos-intel-assets",
     build_job: "build-macos-intel",
     qualify_job: "qualify-macos-intel",
+    attest_job: "attest-macos-intel",
     upload_name: "Upload macOS x86_64 assets",
     sum_command: "shasum -a 256",
     checksum_command: "shasum -a 256 --check",
@@ -84,7 +87,7 @@ pub(super) fn build_steps(
     product: ProductAsset,
     verify_name: &str,
     verify: &str,
-    pins: &crate::schema2::GeneratorReleasePins,
+    pins: &crate::schema2::ProductReleasePins,
 ) -> Result<Vec<Yaml>, crate::RenderError> {
     let build = build_script(product.binary, &pins.build_argv)?;
     Ok(vec![
@@ -138,7 +141,7 @@ fn sum_script(command: &str, asset: &str, sidecar: &str) -> String {
 
 fn candidate_provenance_script(
     product: ProductAsset,
-    pins: &crate::schema2::GeneratorReleasePins,
+    pins: &crate::schema2::ProductReleasePins,
 ) -> String {
     let digest = archive::sidecar_digest_command(product.sidecar, product.binary);
     format!(
@@ -223,7 +226,7 @@ fn download_steps_with(asset: ProductAsset, download: Yaml) -> Vec<Yaml> {
 /// Verify source, target, digest, and exact toolchain recorded in the candidate archive.
 pub(super) fn verify_provenance_script(
     asset: ProductAsset,
-    pins: &crate::schema2::GeneratorReleasePins,
+    pins: &crate::schema2::ProductReleasePins,
 ) -> String {
     verify_provenance_in_directory(
         asset,
@@ -259,10 +262,10 @@ pub(super) fn qualification_script(binary: &str, directory: &str) -> String {
     )
 }
 
-/// Check the dispatched commit and required CI before building candidates.
+/// Check the dispatched source and its required CI before native builds.
 pub(super) fn source_gate_job(
     hosted: Yaml,
-    pins: &crate::schema2::GeneratorReleasePins,
+    pins: &crate::schema2::ProductReleasePins,
 ) -> Result<(String, Yaml), crate::RenderError> {
     let steps = vec![
         checkout_step(),
@@ -294,7 +297,7 @@ pub(super) fn source_gate_job(
     Ok(finish("verify-release-source", fields, steps))
 }
 
-fn ci_check_step(pins: &crate::schema2::GeneratorReleasePins) -> Result<Yaml, crate::RenderError> {
+fn ci_check_step(pins: &crate::schema2::ProductReleasePins) -> Result<Yaml, crate::RenderError> {
     workflow_steps::bash_step_with_token(
         "Require successful CI at exact main SHA",
         &ci_check_script(),
@@ -317,7 +320,7 @@ test "$(printf '%s\n' "$run" | jq -r .conclusion)" = success
 run_id="$(printf '%s\n' "$run" | jq -r .id)"
 attempt="$(printf '%s\n' "$run" | jq -r .run_attempt)"
 jobs="$(gh api --paginate --slurp "repos/{REPOSITORY}/actions/runs/$run_id/attempts/$attempt/jobs?per_page=100")"
-printf '%s\n' "$jobs" | jq -e --arg sha "$GITHUB_SHA" '[.[] | (.jobs // [])[] | select(.name == "Required" and .head_sha == $sha and .head_branch == "main" and .status == "completed" and .conclusion == "success")] | length == 1' >/dev/null
+printf '%s\n' "$jobs" | jq -e --arg sha "$GITHUB_SHA" '[.[] | (.jobs // [])[] | select(.name == "Required")] | length == 1 and .[0].head_sha == $sha and .[0].head_branch == "main" and .[0].status == "completed" and .[0].conclusion == "success"' >/dev/null
 test "$(gh api repos/{REPOSITORY}/commits/main --jq .sha)" = "$GITHUB_SHA""#
     )
 }

@@ -33,6 +33,18 @@ pub enum Command {
         /// Total permits. Defaults to 1.
         #[arg(long)]
         max_jobs: Option<u32>,
+        /// Runner CPU allocation in millicores.
+        #[arg(long)]
+        runner_cpu_millicores: u64,
+        /// Runner memory limit in bytes.
+        #[arg(long)]
+        runner_memory_bytes: u64,
+        /// Private `DinD` CPU allocation in millicores.
+        #[arg(long)]
+        dind_cpu_millicores: u64,
+        /// Private `DinD` memory limit in bytes.
+        #[arg(long)]
+        dind_memory_bytes: u64,
         /// Docker context name.
         #[arg(long)]
         docker_context: Option<String>,

@@ -8,7 +8,7 @@
 //! unbranded IDs, gates referencing strictly earlier obligations),
 //! then renders each group to a fixed IR job: checkout, pinned tools,
 //! components, lockful sources, the per-root provider restore on
-//! opentofu crates, the MBX objects restore on MBX crates, and one
+//! opentofu crates, the MBX local setup on MBX crates, and one
 //! shell step per obligation in gate order.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -124,7 +124,6 @@ pub(crate) fn build_crate_jobs(
             obligations: obligations_for(tasks, catalog)?,
         };
         model.validate()?;
-        let repo_has_mbx = crate::workflow::plan_uses_mbx(discovery);
         let job = render_job(
             label,
             policy,
@@ -135,7 +134,6 @@ pub(crate) fn build_crate_jobs(
             use_mbx,
             use_nextest,
             use_opentofu,
-            repo_has_mbx,
             acquire,
             max_parallel_jobs,
         )?;
@@ -229,7 +227,7 @@ fn gates_for(task: &ProposedTask, executed: &BTreeSet<&str>) -> Vec<String> {
 /// Render one validated crate model to its fixed IR job.
 ///
 /// P08 order: helper staging, plan download (report identities bind
-/// the plan), restore shared sources (or Cargo-only registry), the
+/// the plan), restore the exact shared Cargo sources subset, the
 /// per-root provider restore on opentofu roles, then MBX objects,
 /// then probe-and-fetch, then report-wrapped obligations, then one
 /// always-on crate-report upload carrying every entry. Readers never
@@ -251,20 +249,20 @@ fn render_job(
     use_mbx: bool,
     use_nextest: bool,
     use_opentofu: bool,
-    repo_has_mbx: bool,
     acquire: Option<&Step>,
     max_parallel_jobs: u32,
 ) -> Result<Job, OrchestratorError> {
     let mut steps = vec![crate::workflow::wire_w1::checkout_step()?];
     steps.extend(acquire.cloned());
     steps.push(crate::matrix_step::download_plan_step()?);
-    let needs_validators =
-        crate::matrix_step::crate_needs_generate_validators(policy, &model.package_name);
+    let suite: Option<crate::matrix_step::CrateSuite> =
+        crate::matrix_step::suite_for_package(&model.package_name);
+    let needs_validators = crate::matrix_step::crate_needs_generate_validators(policy, suite);
     steps.push(crate::matrix_step::prepare_crate_tools_step(
         catalog,
         use_rust,
         use_nextest,
-        crate::matrix_step::prepare_install_opentofu(policy, &model.package_name, use_opentofu),
+        crate::matrix_step::prepare_install_opentofu(policy, suite, use_opentofu),
         needs_validators,
     )?);
     if use_rust {
@@ -275,8 +273,6 @@ fn render_job(
         catalog,
         fetch_roots,
         use_rust,
-        use_mbx,
-        repo_has_mbx,
     )?);
     if use_opentofu {
         let root = crate::tofu_cache::tofu_root_for_obligations(&model.obligations)?;
@@ -327,20 +323,17 @@ fn render_job(
     })
 }
 
-/// Restore step for one crate: shared sources, or Cargo-only registry.
+/// Restore the exact shared Cargo source subset for one crate.
 ///
 /// Lockless emits nothing, and tofu roles restore providers through
-/// the separate provider-cache step (never here). Cargo-only repos
-/// (no MBX anywhere) restore via pinned `rust-cache` (read-only);
-/// every other lockful crate restores the shared `actions/cache`
-/// snapshot (read-only, never saves the shared key).
+/// the separate provider-cache step (never here). The separate V2 tools
+/// layer owns Cargo binaries and tool receipts. Compiler driver does not
+/// change which shared-source payload readers restore.
 fn restore_step_for_crate(
     label: &str,
     catalog: &ToolCatalog,
     fetch_roots: &[String],
     use_rust: bool,
-    use_mbx: bool,
-    repo_has_mbx: bool,
 ) -> Result<Option<Step>, OrchestratorError> {
     if !use_rust || fetch_roots.is_empty() {
         return Ok(None);
@@ -351,13 +344,6 @@ fn restore_step_for_crate(
             problem: format!("bad_label:{label}"),
         })?;
     let rust = catalog.version(PinnedTool::Rust);
-    if !use_mbx && !repo_has_mbx {
-        let shared = format!(
-            "{}-{target}-{rust}",
-            crate::source_cache::RUST_CACHE_SHARED_PREFIX
-        );
-        return crate::source_cache::rust_cache_step(&shared, false).map(Some);
-    }
     let key = crate::source_cache::sources_cache_key(target, rust, fetch_roots)?;
     let prefix = crate::source_cache::sources_restore_prefix(&key);
     crate::source_cache::sources_restore_step(&key, &[prefix]).map(Some)

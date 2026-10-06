@@ -32,9 +32,27 @@ use crate::{
 mod tools;
 
 pub use tools::{
-    TOOLS_CACHE_PATH, TOOLS_KEY_PREFIX, TOOLS_RESTORE_NAME, TOOLS_RESTORE_USES, TOOLS_SAVE_NAME,
-    TOOLS_SAVE_USES, tools_cache_key, tools_restore_step, tools_save_step,
+    TOOLS_CACHE_PATH, TOOLS_CACHE_PATHS, TOOLS_RESTORE_ACTION_USES, TOOLS_RESTORE_NAME,
+    TOOLS_RESTORE_USES, TOOLS_SAVE_NAME, TOOLS_SAVE_USES,
 };
+
+#[cfg(test)]
+pub(crate) use tools::assert_rendered_admission_parses;
+pub(crate) use tools::restore_action_file as tools_restore_action_file;
+
+/// Build one V2 tools-cache action over the fixed path set.
+/// # Errors
+pub(crate) fn tools_cache_step(
+    restore: bool,
+    key: &str,
+    condition: Option<String>,
+) -> Result<Step, RenderError> {
+    tools::cache_step(restore, key, condition)
+}
+
+pub(crate) fn validate_tools_restore_call(step: &Step) -> Result<&str, RenderError> {
+    tools::validate_restore_call(step)
+}
 
 /// Pinned mr-boxington action name (objects mode).
 pub const MBX_ACTION_NAME: &str = "jdx/mr-boxington-action";
@@ -119,11 +137,9 @@ pub fn cache_action_step(
 }
 
 fn validate_cache_path(layer: &str, path: &str) -> Result<(), RenderError> {
-    let second = path.split('/').nth(1);
-    let legacy_ok = path.starts_with("$CARGO_HOME/") && matches!(second, Some("registry" | "git"));
-    if layer == "sources" && (legacy_ok || sources_subset_ok(path))
+    if layer == "sources" && sources_subset_ok(path)
         || layer == "task" && path == TASK_ARTIFACTS_DIR
-        || layer == "tools" && path == TOOLS_CACHE_PATH
+        || layer == "tools" && tools::tools_cache_path_ok(path)
         || layer == "tofu-providers" && crate::tofu_cache::tofu_providers_path_ok(path)
     {
         Ok(())
@@ -144,13 +160,10 @@ fn sources_subset_ok(path: &str) -> bool {
     if suffix.starts_with("registry/src") {
         return false;
     }
-    matches!(
-        suffix,
-        ".crates.toml" | ".crates2.json" | "bin" | "registry/index" | "registry/cache" | "git/db"
-    ) || suffix.starts_with("registry/index/")
+    matches!(suffix, "registry/index" | "registry/cache" | "git/db")
+        || suffix.starts_with("registry/index/")
         || suffix.starts_with("registry/cache/")
         || suffix.starts_with("git/db/")
-        || suffix.starts_with("bin/")
 }
 
 /// Check restore-before/save-after ordering over cache action steps.
@@ -165,7 +178,8 @@ pub fn check_cache_step_order(steps: &[Step]) -> Result<(), RenderError> {
         let StepKind::Action { uses, .. } = &step.kind else {
             continue;
         };
-        if uses.starts_with("actions/cache/restore@")
+        if uses == TOOLS_RESTORE_USES
+            || uses.starts_with("actions/cache/restore@")
             || uses.starts_with(&format!("{MBX_ACTION_NAME}@"))
         {
             last_restore = Some(index);

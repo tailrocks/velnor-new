@@ -103,7 +103,7 @@ fn uses_staged_helper(step: &StepText) -> bool {
         && step.body.contains("$RUNNER_TEMP/velnor/bin")
 }
 
-/// Setup Mise must be first (modulo Checkout plus tools restore) and precede every `mise` use.
+/// Setup Mise follows checkout, composite seed/identity, and tools restore.
 fn check_setup_first(job: &JobText) -> Result<(), String> {
     let setup = job.steps.iter().position(|s| s.name == "Setup Mise");
     let first_mise = job.steps.iter().position(uses_mise);
@@ -118,31 +118,27 @@ fn check_setup_first(job: &JobText) -> Result<(), String> {
     }
 }
 
-/// Setup position is legal at 0-1, or at 2 when the tool seed is the only
-/// step between Checkout and Setup Mise.
+/// Setup position is legal after the V2 wrapper and restore, or on the cold path.
 fn setup_is_early(job: &JobText, at: usize) -> bool {
     at <= 1
-        || (at == 2
+        || (at == 3
+            && job
+                .steps
+                .first()
+                .is_some_and(|step| step.name == "Checkout")
             && job
                 .steps
                 .get(1)
-                .is_some_and(|step| step.name == "Restore Velnor tool seed"))
+                .is_some_and(|step| step.name == "V2 identity")
+            && job.steps.get(2).is_some_and(|step| {
+                step.name == velnor_actions_workflow_renderer::steps::TOOLS_RESTORE_NAME
+            }))
 }
 
-/// Setup Mise must enable the qualified built-in cache: `cache:true` with
-/// an explicit tool-union `cache_key` (never the workspace-hashing default
-/// that ELOOPs on the symlink-loop fixture, never a job-role suffix).
-/// Every setup restores read-only (`cache_save: "false"`): the pinned
-/// action saves only inside its disabled `install` leg, so no setup may
-/// promise a built-in save. Push-gated saves are explicit `Save Mise
-/// tools` steps on the elected writer per key.
-fn check_setup_cache_on(job: &JobText) -> Result<(), String> {
+/// Setup Mise must leave restore and save ownership to the explicit V2 layer.
+fn check_setup_cache_disabled(job: &JobText) -> Result<(), String> {
     for step in job.steps.iter().filter(|s| s.name == "Setup Mise") {
-        for need in [
-            "cache: \"true\"",
-            "cache_key: mise-v1-",
-            "cache_save: \"false\"",
-        ] {
+        for need in ["cache: \"false\"", "cache_save: \"false\""] {
             if !step.body.contains(need) {
                 return Err(format!("{}: Setup Mise misses {need}", job.id));
             }
@@ -150,8 +146,8 @@ fn check_setup_cache_on(job: &JobText) -> Result<(), String> {
         if step.body.contains("cache_save: ${{") {
             return Err(format!("{}: Setup Mise must not promise a save", job.id));
         }
-        if step.body.contains("hashFiles(") {
-            return Err(format!("{}: Setup Mise must not hashFiles", job.id));
+        if step.body.contains("cache_key:") {
+            return Err(format!("{}: Setup Mise must not own a tools key", job.id));
         }
     }
     Ok(())
@@ -211,7 +207,7 @@ fn check_tree(yaml: &str) -> Result<Vec<JobText>, String> {
     }
     for job in &jobs {
         check_setup_first(job)?;
-        check_setup_cache_on(job)?;
+        check_setup_cache_disabled(job)?;
         check_tools_save_shape(job)?;
         check_provisioned(job)?;
         check_named(job)?;
@@ -268,6 +264,14 @@ fn emitted_yaml_wires_helpers_velnor_policy() -> TestResult {
         let yaml = tree
             .get(WORKFLOW_PATH)
             .ok_or("missing workflow in staged tree")?;
+        assert!(
+            yaml.contains("predecessor_run_attempt:"),
+            "dispatch carries the exact predecessor attempt:\n{yaml}"
+        );
+        assert!(
+            yaml.contains("predecessor_run_id:"),
+            "dispatch carries the exact predecessor run:\n{yaml}"
+        );
         let jobs = check_tree(yaml).map_err(|err| format!("{err}:\n{yaml}"))?;
         assert!(jobs.iter().all(|job| job.id != "policy"), "no umbrella");
         for (id, want) in [

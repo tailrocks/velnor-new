@@ -1,10 +1,9 @@
-//! Pinned Mise setup pins plus the legacy cache-off template.
+//! Pinned Mise setup pins and the cache-disabled action template.
 //!
 //! Pins arrive as typed [`MiseSetup`] from the orchestrator's compiled
-//! catalog; the renderer never invents them. Strict insertion with the
-//! qualified built-in cache lives in `cache_p08` (P08); this module keeps
-//! the pin type, its validation, and the legacy `cache:false` template
-//! for fixtures and upgrade inputs.
+//! catalog; the renderer never invents them. Strict insertion of the
+//! typed V2 tools archive lives in `cache_p08`; this module keeps the pin
+//! type, its validation, and the cache-disabled action used to install Mise.
 
 use velnor_actions_contract::{Step, StepRole};
 
@@ -94,14 +93,14 @@ impl MiseSetup {
     }
 }
 
-/// Legacy `Setup Mise` step: exact pins, `cache:false` (upgrade input).
+/// `Setup Mise` step with exact pins and the action-owned cache disabled.
 ///
 /// `install: false` keeps project tool files, tasks, and hooks from
 /// running; `env: false` keeps Mise env out of subsequent steps.
 /// Retained for fixtures and as the upgrade input that strict rendering
-/// replaces with the qualified built-in-cache shape (`cache:true` plus
-/// an explicit `cache_key`, never the workspace-hashing default that
-/// ELOOPs on symlink loops). The `with` map is exactly these six keys.
+/// The explicit V2 tools-cache steps restore and save the owned paths;
+/// this action installs Mise itself and loads no repository environment.
+/// The `with` map is exactly these six keys.
 /// # Errors
 pub fn mise_setup_step(setup: &MiseSetup) -> Result<Step, RenderError> {
     setup.validate()?;

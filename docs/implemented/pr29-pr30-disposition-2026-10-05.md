@@ -1,8 +1,9 @@
 # PR29 and PR30 disposition (2026-10-05)
 
-**Status:** Read-only lineage disposition. This record does not merge, close,
-reply to, or resolve either pull request. It does not claim MBX qualification,
-runtime cleanup, or release runtime proof.
+**Status:** Read-only lineage disposition. The analysis below is the 2026-10-05
+snapshot before the coordinator's closeout actions. The later replies and
+without-merge closures are recorded at the end. This record does not claim MBX
+qualification, runtime cleanup, or release runtime proof.
 
 The comparison base is protected `main` at
 `4fffbc22ce159305c62ae039668da2a14e2e3366`. The exact PR heads, run IDs,
@@ -10,7 +11,7 @@ review feedback, and changed-path inventories below were rechecked on
 2026-10-05. The decisions refer to the source at those immutable PR heads, not
 to later branch movement.
 
-## Current PR state and unique scope
+## PR state and unique scope at the analysis snapshot
 
 | PR | Remote state at snapshot | Unique behavior | Disposition |
 | --- | --- | --- | --- |
@@ -19,12 +20,12 @@ to later branch movement.
 
 The PR29 base and PR30 base reported by GitHub are older than the comparison
 `main` SHA above. Their status checks therefore describe their recorded source
-and base, not a candidate after current-main integration. PR29 has one
-`COMMENTED` Codex review on older SHA `89cdc772cb` and two resolved inline
+and base, not a candidate after current-main integration. At this snapshot,
+PR29 had one `COMMENTED` Codex review on older SHA `89cdc772cb` and two resolved inline
 threads without replies: [lane factoring](https://github.com/tailrocks/velnor-new/pull/29#discussion_r4176060915)
 and [lifecycle contract alignment](https://github.com/tailrocks/velnor-new/pull/29#discussion_r4176060919).
-PR30 has no formal reviews or inline findings; its only issue comment is an
-informational Codex summary.
+At this snapshot, PR30 had no formal reviews or inline findings; its only issue
+comment was an informational Codex summary.
 
 PR29's body claims MBX `1.22.0` and released action `v1.7.1` at `d082`. The
 recorded PR29 source instead selects MBX `1.22.0` and candidate action commit
@@ -174,10 +175,10 @@ readback, protected-environment verification, or authentic same-run
 three-target candidate qualification. Do not count the PR65 receipt mapping as
 runtime release proof.
 
-## Proposed PR dispositions (not posted)
+## Draft disposition text from the analysis snapshot
 
-The text below is a drafting aid only. No GitHub reply has been posted and no
-review thread has been changed by this record.
+The text below preserves the drafting aid from the original snapshot; it is
+not the later posted wording.
 
 ### PR29 inline thread: shared lane factoring
 
@@ -215,7 +216,22 @@ review thread has been changed by this record.
 > a peak ENOSPC event. No current-main runtime behavior or qualification is
 > claimed here.
 
-Do not close either PR based solely on this record. The coordinator should make
-any later supersession decision only after unique behavior has an independently
-reviewed replacement on protected `main`, and after the PR's current feedback
-and status are checked again.
+At the analysis snapshot, these were proposed dispositions pending a coordinator
+decision and refreshed feedback/status checks.
+
+## Coordinator follow-up (2026-10-05)
+
+After auditing the current feedback and disposition evidence, the coordinator
+replied to both PR29 inline threads and closed PR29 without merge at
+2026-10-05 14:28:41 UTC. The [lane-factoring reply](https://github.com/tailrocks/velnor-new/pull/29#discussion_r4185104549)
+points to the shared-lane implementation and regression on current `main`; the
+[lifecycle reply](https://github.com/tailrocks/velnor-new/pull/29#discussion_r4185105621)
+retains the held MBX/action pair and states that no current-head protected
+writer/fresh-reader qualification is claimed. The [PR29 closeout comment](https://github.com/tailrocks/velnor-new/pull/29#issuecomment-5996511558)
+records the without-merge disposition and links back to this evidence.
+
+The coordinator closed PR30 without merge at 2026-10-05 14:28:46 UTC. Its
+[closeout comment](https://github.com/tailrocks/velnor-new/pull/30#issuecomment-5996515814)
+records the exact-head Plan/Alint/Required failures and retains the Cargo-source
+pruning algorithm as future non-V1 runtime-owner design evidence. Neither
+closeout promotes runtime cleanup, MBX qualification, or release qualification.

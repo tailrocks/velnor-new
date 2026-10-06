@@ -6,8 +6,9 @@ use std::process::ExitCode;
 
 use clap::Parser;
 use velnor_runner_host::{
-    ConnectPlan, DisconnectEffect, HostConfig, HostError, Readiness, SetOwnership, connect_plan,
-    disconnect_effects, doctor_json, import_secret, read_secret, readiness_for_empty, status_json,
+    ConnectPlan, DisconnectEffect, HostConfig, HostError, READINESS_BUDGET, Readiness,
+    SetOwnership, connect_plan, disconnect_effects, doctor_json, import_secret, read_secret,
+    status_json,
 };
 
 use crate::args::{Cli, Command, DaemonAction};
@@ -15,6 +16,9 @@ use crate::args::{Cli, Command, DaemonAction};
 /// Parse argv and run one command.
 #[must_use]
 pub fn run() -> ExitCode {
+    if let Some(code) = crate::readiness_probe::run_internal() {
+        return code;
+    }
     match Cli::try_parse() {
         Ok(cli) => dispatch(&cli),
         Err(error) => {
@@ -42,6 +46,10 @@ fn dispatch(cli: &Cli) -> ExitCode {
             max_jobs,
             docker_context,
             endpoint,
+            runner_cpu_millicores,
+            runner_memory_bytes,
+            dind_cpu_millicores,
+            dind_memory_bytes,
         } => connect(&ConnectRequest {
             state: &state,
             repo,
@@ -50,6 +58,10 @@ fn dispatch(cli: &Cli) -> ExitCode {
             max_jobs: *max_jobs,
             docker_context: docker_context.as_deref(),
             endpoint: endpoint.as_deref(),
+            runner_cpu_millicores: *runner_cpu_millicores,
+            runner_memory_bytes: *runner_memory_bytes,
+            dind_cpu_millicores: *dind_cpu_millicores,
+            dind_memory_bytes: *dind_memory_bytes,
         }),
         Command::Service { action } => crate::service::service(*action),
         Command::Daemon { action } => daemon(&state, *action),
@@ -84,8 +96,16 @@ fn print_doctor(state: &Path, probe: bool) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-fn observe(_state: &Path) -> Readiness {
-    readiness_for_empty()
+fn observe(state: &Path) -> Readiness {
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_time()
+        .enable_io()
+        .build();
+    let Ok(runtime) = runtime else {
+        return Readiness::Degraded;
+    };
+    let deadline = tokio::time::Instant::now() + READINESS_BUDGET;
+    runtime.block_on(crate::readiness_probe::check(state.to_path_buf(), deadline))
 }
 
 fn logs(follow: bool) -> ExitCode {
@@ -130,6 +150,10 @@ struct ConnectRequest<'a> {
     max_jobs: Option<u32>,
     docker_context: Option<&'a str>,
     endpoint: Option<&'a str>,
+    runner_cpu_millicores: u64,
+    runner_memory_bytes: u64,
+    dind_cpu_millicores: u64,
+    dind_memory_bytes: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -175,14 +199,18 @@ fn connect_with<R: Read>(
     service: &str,
     request: &ConnectRequest<'_>,
 ) -> Result<(), ConnectError> {
-    let text = sample_config(
-        request.repo,
-        request.scale_set,
-        request.platform,
-        request.max_jobs.unwrap_or(1),
-        request.docker_context,
-        request.endpoint,
-    );
+    let text = sample_config(&SampleConfig {
+        repo: request.repo,
+        scale_set: request.scale_set,
+        platform: request.platform,
+        max_jobs: request.max_jobs.unwrap_or(1),
+        docker_context: request.docker_context,
+        endpoint: request.endpoint,
+        runner_cpu_millicores: request.runner_cpu_millicores,
+        runner_memory_bytes: request.runner_memory_bytes,
+        dind_cpu_millicores: request.dind_cpu_millicores,
+        dind_memory_bytes: request.dind_memory_bytes,
+    });
     let parsed = HostConfig::parse(&text).map_err(|_| ConnectError::Config)?;
     if binding_rejected(request.state, &parsed) {
         return Err(ConnectError::Rejected);
@@ -215,18 +243,36 @@ fn persist_host(state: &Path, text: &str) -> Result<(), ConnectError> {
     Ok(())
 }
 
-fn sample_config(
-    repo: &str,
-    scale_set: &str,
-    platform: &str,
+#[derive(Clone, Copy)]
+struct SampleConfig<'a> {
+    repo: &'a str,
+    scale_set: &'a str,
+    platform: &'a str,
     max_jobs: u32,
-    docker_context: Option<&str>,
-    endpoint: Option<&str>,
-) -> String {
-    let context = docker_context.unwrap_or("orbstack");
-    let socket = endpoint.unwrap_or("unix:///var/run/docker.sock");
+    docker_context: Option<&'a str>,
+    endpoint: Option<&'a str>,
+    runner_cpu_millicores: u64,
+    runner_memory_bytes: u64,
+    dind_cpu_millicores: u64,
+    dind_memory_bytes: u64,
+}
+
+fn sample_config(params: &SampleConfig<'_>) -> String {
+    let context = params.docker_context.unwrap_or("orbstack");
+    let socket = params.endpoint.unwrap_or("unix:///var/run/docker.sock");
+    let SampleConfig {
+        repo,
+        scale_set,
+        platform,
+        max_jobs,
+        runner_cpu_millicores,
+        runner_memory_bytes,
+        dind_cpu_millicores,
+        dind_memory_bytes,
+        ..
+    } = *params;
     format!(
-        "schema = 1\n[github]\nrepository = \"{repo}\"\nscale_set_name = \"{scale_set}\"\ncredential_ref = \"keychain:com.tailrocks.velnor.host/local\"\n[host]\nmax_jobs = {max_jobs}\n[docker]\ncontext = \"{context}\"\nplatform = \"{platform}\"\nendpoint = \"{socket}\"\n"
+        "schema = 1\n[github]\nrepository = \"{repo}\"\nscale_set_name = \"{scale_set}\"\ncredential_ref = \"keychain:com.tailrocks.velnor.host/local\"\n[host]\nmax_jobs = {max_jobs}\n[host.resources]\nrunner_cpu_millicores = {runner_cpu_millicores}\nrunner_memory_bytes = {runner_memory_bytes}\ndind_cpu_millicores = {dind_cpu_millicores}\ndind_memory_bytes = {dind_memory_bytes}\n[docker]\ncontext = \"{context}\"\nplatform = \"{platform}\"\nendpoint = \"{socket}\"\n"
     )
 }
 

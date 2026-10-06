@@ -10,6 +10,8 @@ use super::features::{
 };
 use crate::yaml::Yaml;
 
+#[path = "schema2_empty_cache.rs"]
+mod empty_cache;
 #[path = "schema2_more.rs"]
 mod more;
 #[path = "schema2_class_steps.rs"]
@@ -102,6 +104,7 @@ fn state_classes(hosted: &RunnerSpec, scale: &RunnerSpec) -> Vec<(String, Yaml)>
         Extras::default(),
     ));
     jobs.extend(cache_jobs(hosted, scale));
+    jobs.extend(empty_cache::jobs(hosted, scale));
     jobs.extend(both(
         "oidc",
         "OIDC",

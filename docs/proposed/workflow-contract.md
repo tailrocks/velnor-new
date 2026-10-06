@@ -175,7 +175,7 @@ For `workflow.policy = "consumer-v1"`, compose detections into `plan`, one `rust
 per selected crate, `actionlint`, and `required`. V1 registers only the Rust stack detector, so the selected
 stack set is empty or `{rust}`; future adapters add namespaced crate jobs without CLI selectors.
 
-Typed `[[workflow.tasks]]` verification jobs join `Required` under either workflow policy; schema-2 routing, fail-closed admission, and authoring limits are defined in the [tooling input contract](tooling-input-contract.md).
+Every `[[workflow.tasks]]` variant joins the same `Required` fan-in under either workflow policy. Verification tasks may use eligible hosted/local pairs; Build and NativeImage tasks remain hosted-only. See the [tooling input contract](tooling-input-contract.md) for schema-2 routing and authoring limits.
 
 The following labels are GitHub Actions job IDs only. They are not Cargo packages, executable
 names, generated command labels, or CLI subcommands. The sole Velnor executable is `velnor-actions`.
@@ -292,7 +292,6 @@ actions/cache/save
 actions/upload-artifact
 actions/download-artifact
 asamarts/alint
-Swatinem/rust-cache
 ```
 
 Velnor's compiled-in action registry supplies the latest stable release, full
@@ -303,8 +302,8 @@ the [version policy](version-policy.md). The workflow renderer MUST emit
 `jdx/mise-action` for Mise setup, `actions/checkout` for source access,
 cache restore/save for their respective cache phases, and upload/download
 artifact actions for required reports or transferred outputs. It MUST emit
-`jdx/mr-boxington-action` only when the Rust detector selects MBX, and `Swatinem/rust-cache` only for
-Cargo-only repositories (registry-only, shared key, never over MBX-owned paths).
+`jdx/mr-boxington-action` only when the Rust detector selects MBX. Every Rust lane uses the shared
+exact-path Cargo sources archive; broad Cargo-home cache actions are forbidden.
 `asamarts/alint` is limited to Velnor's own repository-policy job. Branches,
 moving refs, `pull_request_target`, `actions/setup-*`, and
 `taiki-e/install-action` MUST NOT appear. `actionlint` and `zizmor` MUST

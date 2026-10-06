@@ -26,6 +26,14 @@ pub mod release_plz;
 pub mod mbx;
 pub use mbx::MbxProvisioning;
 
+/// Measured official bootstrap assets for source building only.
+#[path = "catalog_source_build_bootstrap.rs"]
+pub mod source_build_bootstrap;
+
+/// Reviewed owned source staging identities, separate from distribution qualification.
+#[path = "catalog_owned_source.rs"]
+pub mod owned_source;
+
 /// Exact-version validation plus qualification sources (split for size).
 #[path = "catalog_versions.rs"]
 mod versions;

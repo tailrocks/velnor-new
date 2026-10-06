@@ -36,11 +36,10 @@ fn emitted_yaml_scrubs_repo_code_steps() -> TestResult {
     Ok(())
 }
 
-/// Steps that execute no repository code keep ambient auth: no scrub
-/// overlay, no unset wrapper. Scrubbing them broke tool bootstrap
-/// (mise `ubi:` 401, zizmor empty-token abort, CI run 36815180228).
+/// Pinned-tool preparation and Cargo source acquisition keep ambient
+/// auth. Separate validator execution is scrubbed after installation.
 #[test]
-fn emitted_yaml_keeps_ambient_auth_steps_unscrubbed() -> TestResult {
+fn emitted_yaml_keeps_preparation_auth_unscrubbed() -> TestResult {
     let repo = make_repo(config_with_branch())?;
     // Lockful: fetch steps only emit when a lockfile selects them.
     std::fs::write(repo.path().join("Cargo.lock"), demo_lock("demo"))?;

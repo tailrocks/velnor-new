@@ -12,7 +12,9 @@ use super::{MAX_ENTRIES, MAX_ENTRY_BYTES, MAX_TOTAL_BYTES, archive_error};
 const TAR_BLOCK_BYTES: u64 = 512;
 pub(super) const MAX_TAR_EXTENSION_ENTRY_BYTES: u64 = 64 * 1024;
 const MAX_TAR_EXTENSION_BYTES: u64 = 1024 * 1024;
-const MAX_TAR_EXTENSION_ENTRIES: usize = 64;
+// The pinned Rust 1.98.1 Linux std archive contains 65 GNU long-name records;
+// 256 caps extension headers at 128 KiB while payloads remain capped at 1 MiB.
+pub(super) const MAX_TAR_EXTENSION_ENTRIES: usize = 256;
 
 pub(super) fn preflight_tar<R: Read>(mut reader: R) -> Result<usize, OrchestratorError> {
     let mut count = 0_usize;
@@ -53,7 +55,10 @@ pub(super) fn preflight_tar<R: Read>(mut reader: R) -> Result<usize, Orchestrato
             extension_count = extension_count
                 .checked_add(1)
                 .ok_or_else(|| internal("tool_archive_metadata_entry_limit"))?;
-            if extension_count > MAX_TAR_EXTENSION_ENTRIES || size > MAX_TAR_EXTENSION_ENTRY_BYTES {
+            if extension_count > MAX_TAR_EXTENSION_ENTRIES {
+                return Err(internal("tool_archive_metadata_entry_limit"));
+            }
+            if size > MAX_TAR_EXTENSION_ENTRY_BYTES {
                 return Err(internal("tool_archive_metadata_entry_size_limit"));
             }
             extension_bytes = extension_bytes

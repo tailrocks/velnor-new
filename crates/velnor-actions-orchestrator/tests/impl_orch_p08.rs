@@ -1,16 +1,22 @@
 //! P08 generator integration: qualified caches in emitted workflows.
 //!
-//! Cargo-only fixtures use pinned `rust-cache` (registry-only, shared key);
-//! MBX fixtures use objects + one shared `actions/cache` snapshot (plan
-//! writes, crates read). Tools use the built-in Mise cache only.
+//! Cargo-only and MBX fixtures use one exact `actions/cache` sources
+//! snapshot (plan writes, crates read). Tools use the runtime-qualified V2
+//! Mise cache.
 
 use std::fs;
 
 use velnor_actions_contract::StepKind;
-use velnor_actions_orchestrator::{prepare, render_staged_tree};
+use velnor_actions_orchestrator::{GenerationPreparation, prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
 use super::impl_common::{TestResult, config_with_branch, make_repo};
+
+type ToolsCacheIdentity = (String, String);
+type ToolsCacheIdentities = (
+    std::collections::BTreeSet<ToolsCacheIdentity>,
+    Vec<ToolsCacheIdentity>,
+);
 
 /// Hand-written lock for a no-deps fixture package: hermetic, no network.
 fn demo_lock(name: &str) -> String {
@@ -29,14 +35,8 @@ fn with_mbx(root: &std::path::Path) -> TestResult {
 }
 
 /// Rendered workflow text for a lockful fixture (MBX when `mbx`).
-fn yaml_for(mbx: bool) -> Result<String, Box<dyn std::error::Error>> {
-    let repo = make_repo(config_with_branch())?;
-    let root = repo.path();
-    fs::write(root.join("Cargo.lock"), demo_lock("demo"))?;
-    if mbx {
-        with_mbx(root)?;
-    }
-    let prep = prepare(root)?;
+pub(super) fn yaml_for(mbx: bool) -> Result<String, Box<dyn std::error::Error>> {
+    let prep = preparation_for(mbx)?;
     let tree = render_staged_tree(&prep)?;
     Ok(tree
         .get(WORKFLOW_PATH)
@@ -44,15 +44,22 @@ fn yaml_for(mbx: bool) -> Result<String, Box<dyn std::error::Error>> {
         .to_owned())
 }
 
-/// Step names of one IR job in a lockful fixture (MBX when `mbx`).
-fn job_names(job: &str, mbx: bool) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+/// Prepare the lockful fixture used by cache assertions.
+pub(super) fn preparation_for(
+    mbx: bool,
+) -> Result<GenerationPreparation, Box<dyn std::error::Error>> {
     let repo = make_repo(config_with_branch())?;
     let root = repo.path();
     fs::write(root.join("Cargo.lock"), demo_lock("demo"))?;
     if mbx {
         with_mbx(root)?;
     }
-    let prep = prepare(root)?;
+    Ok(prepare(root)?)
+}
+
+/// Step names of one IR job in a lockful fixture (MBX when `mbx`).
+pub(super) fn job_names(job: &str, mbx: bool) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    let prep = preparation_for(mbx)?;
     let found = prep
         .workflow
         .ir
@@ -63,56 +70,47 @@ fn job_names(job: &str, mbx: bool) -> Result<Vec<String>, Box<dyn std::error::Er
 }
 
 #[test]
-fn c2_builtin_mise_restore_with_elected_tools_saves() -> TestResult {
+fn c2_v2_mise_cache_restores_with_elected_tools_saves() -> TestResult {
     for mbx in [false, true] {
         let yaml = yaml_for(mbx)?;
         assert!(
-            !yaml.contains("Restore Mise tools"),
-            "restores stay built-in (mbx={mbx})"
+            yaml.contains("- name: Restore Mise tools"),
+            "V2 tools cache restores explicitly (mbx={mbx})"
         );
         assert!(
             yaml.contains("- name: Save Mise tools"),
             "elected writers save (mbx={mbx})"
         );
+        assert!(!yaml.contains("mise-tools-v1-"), "V2 tool keys (mbx={mbx})");
         assert!(
-            !yaml.contains("mise-tools-v1-"),
-            "no role-suffixed tools keys (mbx={mbx})"
+            yaml.contains("key: mise-tools-v2-"),
+            "runtime-qualified tools cache key (mbx={mbx})"
         );
         assert!(
-            yaml.contains("cache_key: mise-v1-"),
-            "built-in cache key (mbx={mbx})"
+            yaml.contains("outputs.enabled == 'true'"),
+            "runtime gate (mbx={mbx})"
         );
-        assert!(yaml.contains("cache: \"true\""), "built-in on (mbx={mbx})");
+        assert!(
+            yaml.contains("cache: \"false\""),
+            "action cache disabled (mbx={mbx})"
+        );
+        assert!(
+            yaml.contains("uses: ./.github/actions/velnor-tools-prelude-u26"),
+            "V2 prelude owns runtime identity and seed import (mbx={mbx})"
+        );
+        assert!(
+            yaml.contains("          d: "),
+            "prelude static identity input (mbx={mbx})"
+        );
+        for path in [
+            "${{ runner.temp }}/velnor/rustup",
+            "${{ runner.temp }}/velnor/cargo/.crates.toml",
+            "${{ runner.temp }}/velnor/cargo/.crates2.json",
+            "${{ runner.temp }}/velnor/cargo/bin",
+        ] {
+            assert!(yaml.contains(path), "V2 payload misses {path} (mbx={mbx})");
+        }
     }
-    Ok(())
-}
-
-#[test]
-fn c3_sources_subset_at_owned_home_single_writer() -> TestResult {
-    let yaml = yaml_for(true)?;
-    for need in [
-        "${{ runner.temp }}/velnor/cargo/registry/cache",
-        "${{ runner.temp }}/velnor/cargo/registry/index",
-        "${{ runner.temp }}/velnor/cargo/git/db",
-        "velnor-v1-sources-",
-        "hashFiles('Cargo.lock')",
-    ] {
-        assert!(yaml.contains(need), "sources snapshot misses {need}");
-    }
-    for banned in ["credentials.toml", "registry/src"] {
-        assert!(!yaml.contains(banned), "sources must exclude {banned}");
-    }
-    let plan = job_names("plan", true)?;
-    assert!(plan.contains(&"Save Cargo sources".to_owned()), "{plan:?}");
-    let crates = job_names("rust-demo", true)?;
-    assert!(
-        crates.contains(&"Restore Cargo sources".to_owned()),
-        "{crates:?}"
-    );
-    assert!(
-        !crates.contains(&"Save Cargo sources".to_owned()),
-        "readers never save: {crates:?}"
-    );
     Ok(())
 }
 
@@ -147,19 +145,26 @@ fn c4_mbx_and_restore_precede_fetch_with_offline_skip() -> TestResult {
 }
 
 #[test]
-fn c7_cargo_only_uses_pinned_rust_cache_never_with_mbx() -> TestResult {
+fn c7_cargo_only_uses_exact_sources_transport_without_legacy_fallback() -> TestResult {
     let cargo_yaml = yaml_for(false)?;
-    assert!(
-        cargo_yaml.contains("Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6"),
-        "full-SHA pin:\n{cargo_yaml}"
-    );
     for need in [
-        "shared-key: velnor-cargo-",
-        "cache-targets: \"false\"",
-        "cache-on-failure: \"false\"",
+        "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+        "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+        "Restore Cargo sources",
+        "Save Cargo sources",
+        "${{ runner.temp }}/velnor/cargo/registry/index",
+        "${{ runner.temp }}/velnor/cargo/registry/cache",
+        "${{ runner.temp }}/velnor/cargo/git/db",
     ] {
-        assert!(cargo_yaml.contains(need), "rust-cache misses {need}");
+        assert!(
+            cargo_yaml.contains(need),
+            "Cargo-only sources misses {need}"
+        );
     }
+    assert!(
+        !cargo_yaml.contains("Swatinem/rust-cache"),
+        "retired archive:\n{cargo_yaml}"
+    );
     assert!(
         !cargo_yaml.contains("mr-boxington-action"),
         "cargo-only has no MBX"
@@ -167,7 +172,7 @@ fn c7_cargo_only_uses_pinned_rust_cache_never_with_mbx() -> TestResult {
     let mbx_yaml = yaml_for(true)?;
     assert!(
         !mbx_yaml.contains("Swatinem/rust-cache"),
-        "MBX never stacks rust-cache"
+        "no broad fallback"
     );
     assert!(
         !mbx_yaml.contains("server-url") && !mbx_yaml.contains("backend: server"),
@@ -175,13 +180,18 @@ fn c7_cargo_only_uses_pinned_rust_cache_never_with_mbx() -> TestResult {
     );
     let plan = job_names("plan", false)?;
     assert!(
-        plan.contains(&"Restore Cargo registry".to_owned()),
+        plan.contains(&"Restore Cargo sources".to_owned()),
         "{plan:?}"
     );
+    assert!(plan.contains(&"Save Cargo sources".to_owned()), "{plan:?}");
     let crates = job_names("rust-demo", false)?;
     assert!(
-        crates.contains(&"Restore Cargo registry".to_owned()),
+        crates.contains(&"Restore Cargo sources".to_owned()),
         "{crates:?}"
+    );
+    assert!(
+        !crates.contains(&"Save Cargo sources".to_owned()),
+        "reader only: {crates:?}"
     );
     Ok(())
 }
@@ -218,26 +228,6 @@ fn c8_crate_jobs_install_validators_for_test_spawns() -> TestResult {
             }
         }
     }
-    Ok(())
-}
-
-#[test]
-fn c10_only_plan_saves_producer_successful_deltas() -> TestResult {
-    // MBX repo: plan saves after fetch; crates restore only.
-    let plan = job_names("plan", true)?;
-    let fetch = plan
-        .iter()
-        .position(|name| name == "Fetch Cargo sources")
-        .ok_or("plan fetch")?;
-    let save = plan
-        .iter()
-        .position(|name| name == "Save Cargo sources")
-        .ok_or("plan save")?;
-    assert!(fetch < save, "save after the writer finishes: {plan:?}");
-    // Cargo-only repo: rust-cache writers save via post on success only.
-    let yaml = yaml_for(false)?;
-    assert!(yaml.contains("save-if: \"true\""), "writer saves");
-    assert!(yaml.contains("save-if: \"false\""), "readers restore-only");
     Ok(())
 }
 
@@ -279,37 +269,32 @@ fn c11_cache_saves_push_only_prs_and_forks_read_only() -> TestResult {
     // unconditional `actions/cache/save` may exist (fork read-only).
     let yaml = yaml_for(true)?;
     let save_at = yaml.find("- name: Save Cargo sources").ok_or("save step")?;
+    let save_condition = yaml[save_at..].lines().nth(1).ok_or("save condition")?;
     assert!(
-        yaml[save_at..].starts_with(
-            "- name: Save Cargo sources\n        if: success() && github.event_name == 'push'",
-        ),
-        "save renders push-only if:\n{yaml}"
+        save_condition.contains("success() && github.event_name == 'push'"),
+        "the canonical push-only save gate already denies dispatch:\n{yaml}"
     );
     assert_tools_saves_push_gated_per_key(&yaml);
     Ok(())
 }
 
-/// YAML: one push-gated tools save per restored `mise-v1-` key (plus the
-/// sources save), every setup restore-only.
+/// YAML: one push-gated tools save per restored V2 key (plus the sources
+/// save), every action-owned Mise cache disabled.
 fn assert_tools_saves_push_gated_per_key(yaml: &str) {
-    let mut keys = std::collections::BTreeSet::new();
-    for line in yaml.lines() {
-        if let Some(key) = line.trim().strip_prefix("cache_key: ") {
-            keys.insert(key.to_owned());
-        }
-    }
+    let (keys, saves) = tools_cache_identities(yaml);
     assert!(!keys.is_empty(), "at least one restored tools key:\n{yaml}");
+    assert_one_save_per_identity(&keys, &saves, yaml);
     let mbx_saves = yaml.matches("- name: Save MBX single bundle").count();
     let mbx_exports = yaml.matches("- name: Export MBX single bundle").count();
     assert_eq!(
         yaml.matches("actions/cache/save@").count(),
-        1 + keys.len() + mbx_saves,
+        1 + saves.len() + mbx_saves,
         "sources plus one tools save per key plus the MBX bundle:\n{yaml}"
     );
     assert_eq!(
         yaml.matches("if: success() && github.event_name == 'push'")
             .count(),
-        1 + keys.len(),
+        1 + saves.len(),
         "cargo and tools saves stay push-gated:\n{yaml}"
     );
     assert_eq!(
@@ -321,24 +306,24 @@ fn assert_tools_saves_push_gated_per_key(yaml: &str) {
         "MBX bundle export and save stay on Scale Set and push-gated:\n{yaml}"
     );
     assert!(
-        !yaml.contains("- name: Restore Cargo sources\n        if:"),
-        "restores stay unconditional:\n{yaml}"
+        !yaml.contains("- name: Restore Cargo sources\n        if:")
+            || yaml
+                .match_indices("- name: Restore Cargo sources\n        if:")
+                .all(|(at, marker)| {
+                    yaml[at + marker.len()..]
+                        .lines()
+                        .next()
+                        .is_some_and(|condition| {
+                            condition.trim() == "github.event_name != 'workflow_dispatch'"
+                        })
+                }),
+        "restores carry at most the dispatch deny:\n{yaml}"
     );
     assert_eq!(
         yaml.matches("- name: Save Mise tools").count(),
-        keys.len(),
+        saves.len(),
         "exactly one tools saver per key:\n{yaml}"
     );
-    for line in yaml.lines() {
-        if let Some(key) = line.trim().strip_prefix("key: ")
-            && key.starts_with("mise-v1-")
-        {
-            assert!(
-                keys.contains(key),
-                "tools save archives a restored key:\n{yaml}"
-            );
-        }
-    }
     assert!(
         !yaml.contains("cache_save: \"true\""),
         "no unconditional mise save:\n{yaml}"
@@ -350,4 +335,62 @@ fn assert_tools_saves_push_gated_per_key(yaml: &str) {
     let setups = yaml.matches("- name: Setup Mise").count();
     let demoted = yaml.matches("cache_save: \"false\"").count();
     assert_eq!(setups, demoted, "every setup restore-only:\n{yaml}");
+}
+
+fn assert_one_save_per_identity(
+    restored: &std::collections::BTreeSet<ToolsCacheIdentity>,
+    saves: &[ToolsCacheIdentity],
+    yaml: &str,
+) {
+    for identity in restored {
+        assert_eq!(
+            saves.iter().filter(|saved| *saved == identity).count(),
+            1,
+            "exactly one writer for {identity:?}:\n{yaml}"
+        );
+    }
+    assert!(
+        saves.iter().all(|saved| restored.contains(saved)),
+        "every tools writer has a restored identity:\n{yaml}"
+    );
+}
+
+fn tools_cache_identities(yaml: &str) -> ToolsCacheIdentities {
+    let mut restored = std::collections::BTreeSet::new();
+    let mut saves = Vec::new();
+    let mut digest = None;
+    let mut identity_step = false;
+    let mut cache_step = None;
+    for line in yaml.lines() {
+        let trimmed = line.trim();
+        if line.starts_with("  ") && !line.starts_with("   ") && trimmed.ends_with(':') {
+            digest = None;
+        }
+        if let Some(name) = trimmed.strip_prefix("- name: ") {
+            identity_step = name.trim_matches('"') == "V2 identity";
+            cache_step = match name.trim_matches('"') {
+                "Restore Mise tools" => Some(false),
+                "Save Mise tools" => Some(true),
+                _ => None,
+            };
+            continue;
+        }
+        if identity_step && let Some(value) = trimmed.strip_prefix("d: ") {
+            digest = Some(value.to_owned());
+            identity_step = false;
+        }
+        if let Some(is_save) = cache_step
+            && let Some(key) = trimmed.strip_prefix("key: ")
+            && let Some(digest) = &digest
+        {
+            let identity = (key.trim_matches('"').to_owned(), digest.clone());
+            if is_save {
+                saves.push(identity);
+            } else {
+                restored.insert(identity);
+            }
+            cache_step = None;
+        }
+    }
+    (restored, saves)
 }

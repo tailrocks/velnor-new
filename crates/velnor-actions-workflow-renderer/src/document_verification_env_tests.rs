@@ -3,9 +3,12 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::workflow::permissions::PermissionLevel;
-use velnor_actions_contract::{VerificationRunner, VerificationTask, VerificationTaskKind};
+use velnor_actions_contract::{VerificationRunner, VerificationTask};
 
-use crate::{MiseSetup, RenderContext, VerificationTaskPolicy, build_verification_task_job};
+use crate::{
+    MiseSetup, RenderContext, VerificationTaskPolicy, build_verification_task_job,
+    verification_jobs::WorkflowTaskPolicy,
+};
 
 use super::job_to_yaml;
 
@@ -21,7 +24,6 @@ fn emitted_verification_job_scrubs_credentials_without_disabling_mise_config() {
     let policy = VerificationTaskPolicy {
         task: VerificationTask {
             id: "native-format".to_owned(),
-            kind: VerificationTaskKind::Verification,
             mise_task: "desktop-format-check".to_owned(),
             runner: VerificationRunner::MacosArm64,
             timeout_minutes: 10,
@@ -33,6 +35,10 @@ fn emitted_verification_job_scrubs_credentials_without_disabling_mise_config() {
             version: "2026.9.18".to_owned(),
             sha256: "a".repeat(64),
         },
+        selected_tools: Vec::new(),
+        mise_config_sha256: None,
+        mise_lock_sha256: None,
+        rust_toolchain_sha256: None,
     };
     let id = policy.job_id();
     let job = build_verification_task_job(
@@ -49,7 +55,8 @@ fn emitted_verification_job_scrubs_credentials_without_disabling_mise_config() {
         validator_commands: Vec::new(),
         candidate: None,
         preseed: false,
-        verification_tasks: vec![policy],
+        workflow_tasks: vec![WorkflowTaskPolicy::Verification(policy)],
+        pull_request_cache_policy: velnor_actions_contract::PullRequestCachePolicy::ReadOnly,
         plan_consumer_env: BTreeMap::new(),
     };
     let checkouts = BTreeMap::new();
@@ -57,6 +64,7 @@ fn emitted_verification_job_scrubs_credentials_without_disabling_mise_config() {
     let lanes = crate::document_lanes::SharedLaneSteps {
         checkouts: &checkouts,
         env_steps: &steps,
+        runtime_preludes: &steps,
         prefixes: &steps,
         preludes: &steps,
         postludes: &steps,
@@ -68,9 +76,10 @@ fn emitted_verification_job_scrubs_credentials_without_disabling_mise_config() {
         &[],
         None,
         &lanes,
-        super::MbxJobPolicy {
+        super::JobRenderPolicy {
             native_mbx: false,
             actions_read: false,
+            workflow_env: &BTreeMap::new(),
         },
     )
     .expect("render verification job");
@@ -78,18 +87,15 @@ fn emitted_verification_job_scrubs_credentials_without_disabling_mise_config() {
 
     assert!(rendered.contains("GITHUB_TOKEN: \"\""));
     assert!(rendered.contains("GH_TOKEN: \"\""));
-    assert!(rendered.contains("env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN"));
-    for key in [
-        "MISE_NO_CONFIG",
-        "MISE_NO_ENV",
-        "MISE_NO_HOOKS",
-        "MISE_LOCKFILE",
-    ] {
+    assert!(rendered.contains("unset ACTIONS_ID_TOKEN_REQUEST_TOKEN"));
+    for key in ["MISE_NO_CONFIG", "MISE_LOCKFILE"] {
         assert!(
             !rendered.contains(key),
             "task job must inherit no {key} override"
         );
     }
-    assert!(rendered.contains("mise install --locked"));
-    assert!(rendered.contains("mise run desktop-format-check"));
+    assert!(rendered.contains("export MISE_NO_ENV=1"));
+    assert!(rendered.contains("export MISE_NO_HOOKS=1"));
+    assert!(!rendered.contains("mise --no-env --locked --no-hooks install"));
+    assert!(rendered.contains("mise --no-env --no-hooks run --skip-tools desktop-format-check"));
 }

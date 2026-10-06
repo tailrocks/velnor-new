@@ -1,9 +1,8 @@
 //! F2 closure: cache layers and forbidden content.
 use std::collections::BTreeMap;
 use velnor_actions_contract::{GeneratorValidation, WorkflowPolicy};
-use velnor_actions_workflow_renderer::steps::{
-    TOOLS_RESTORE_USES, cache_action_step, tools_cache_key,
-};
+use velnor_actions_workflow_renderer::cache_p08::{ToolsCacheInputs, ToolsCachePayload};
+use velnor_actions_workflow_renderer::steps::{TOOLS_RESTORE_ACTION_USES, cache_action_step};
 use velnor_actions_workflow_renderer::{
     ALINT_BINARY_VERSION, PUBLISH_PLAN_NAME, RenderError, merge_step, render_workflow_ir,
     shell_step,
@@ -14,72 +13,85 @@ use super::impl_renderer_fixtures::*;
 #[test]
 fn cache_action_rejects_empty_paths_and_keys() {
     assert!(
-        cache_action_step(true, TOOLS_RESTORE_USES, "sources", "k", &[], &[])
+        cache_action_step(true, TOOLS_RESTORE_ACTION_USES, "sources", "k", &[], &[])
             .is_err_and(|err| format!("{err:?}").contains("empty_cache_paths")),
         "empty paths must fail"
     );
-    assert!(cache_action_step(true, TOOLS_RESTORE_USES, "sources", "", &[], &[]).is_err());
-    assert!(cache_action_step(true, TOOLS_RESTORE_USES, "sources", "has space", &[], &[]).is_err());
-}
-
-#[test]
-fn tools_key_bounded_and_hashed() -> Result<(), RenderError> {
-    let key = tools_cache_key("x86_64-unknown-linux-gnu", "2026.9.16", "0.1.0", "plan")?;
-    for part in [
-        "mise-tools-v1",
-        "x86_64-unknown-linux-gnu",
-        "2026.9.16",
-        "0.1.0",
-        "plan",
-        "hashFiles(",
-    ] {
-        assert!(key.contains(part), "missing {part}:\n{key}");
-    }
-    assert!(!key.contains(' '), "spaces:\n{key}");
-    for bad in ["latest", "", "has space"] {
-        assert!(
-            tools_cache_key("x86_64-unknown-linux-gnu", bad, "0.1.0", "plan").is_err(),
-            "version {bad} must fail"
-        );
-    }
-    assert!(tools_cache_key("riscv-none", "2026.9.16", "0.1.0", "plan").is_err());
-    Ok(())
+    assert!(cache_action_step(true, TOOLS_RESTORE_ACTION_USES, "sources", "", &[], &[]).is_err());
+    assert!(
+        cache_action_step(
+            true,
+            TOOLS_RESTORE_ACTION_USES,
+            "sources",
+            "has space",
+            &[],
+            &[]
+        )
+        .is_err()
+    );
 }
 
 #[test]
 fn cache_layers_restore_independently() -> Result<(), RenderError> {
     let sources = cache_action_step(
         true,
-        TOOLS_RESTORE_USES,
+        TOOLS_RESTORE_ACTION_USES,
         "sources",
         "k",
         &[],
-        &["$CARGO_HOME/registry".to_owned()],
+        &["${{ runner.temp }}/velnor/cargo/registry/cache".to_owned()],
     )?;
     let task = cache_action_step(
         true,
-        TOOLS_RESTORE_USES,
+        TOOLS_RESTORE_ACTION_USES,
         "task",
         "k",
         &[],
         &[velnor_actions_workflow_renderer::steps::TASK_ARTIFACTS_DIR.to_owned()],
     )?;
-    let tools = velnor_actions_workflow_renderer::steps::tools_restore_step(&tools_cache_key(
-        "x86_64-unknown-linux-gnu",
-        "2026.9.16",
-        "0.1.0",
-        "plan",
-    )?)?;
-    for step in [&sources, &task, &tools] {
+    let specs = ["actionlint@1.7.12".to_owned()];
+    let payload = ToolsCachePayload::new(ToolsCacheInputs {
+        runs_on: LABEL,
+        target: "x86_64-unknown-linux-gnu",
+        mise_setup: &mise(),
+        tool_specs: &specs,
+        rustup_toolchain: None,
+        rustup_components: &[],
+    })?;
+    let identity = payload.runtime_prelude_step()?;
+    let tools = payload.restore_step()?;
+    assert_eq!(
+        payload.paths(),
+        [
+            "~/.local/share/mise",
+            "${{ runner.temp }}/velnor/rustup",
+            "${{ runner.temp }}/velnor/cargo/.crates.toml",
+            "${{ runner.temp }}/velnor/cargo/.crates2.json",
+            "${{ runner.temp }}/velnor/cargo/bin",
+        ]
+    );
+    for step in [&sources, &task] {
         let velnor_actions_contract::StepKind::Action { uses, .. } = &step.kind else {
             panic!("restore must be an action step");
         };
         assert!(uses.starts_with("actions/cache/restore@"), "{uses}");
     }
+    let velnor_actions_contract::StepKind::Action { uses, .. } = &tools.kind else {
+        panic!("tools restore is an action step");
+    };
+    assert_eq!(
+        uses,
+        velnor_actions_workflow_renderer::steps::TOOLS_RESTORE_USES
+    );
+    assert_eq!(identity.name, "V2 identity");
+    assert_eq!(
+        tools.condition.as_deref(),
+        Some(velnor_actions_workflow_renderer::cache_p08::TOOLS_CACHE_RESTORE_CONDITION)
+    );
     assert!(
         cache_action_step(
             true,
-            TOOLS_RESTORE_USES,
+            TOOLS_RESTORE_ACTION_USES,
             "sources",
             "k",
             &[],

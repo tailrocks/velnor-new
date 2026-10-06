@@ -1,14 +1,12 @@
 //! Create projection. No live Docker daemon.
 
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use bollard::models::MountType;
 
 use crate::{
-    BollardCreate, CreateProjection, HostError, bollard_create, connect_unix, dind_create,
-    runner_create, runner_plan, start_pair,
+    BollardCreate, CreateProjection, HostError, bollard_create, dind_create, runner_create,
+    runner_plan,
 };
 
 fn projection(volume: &str) -> Result<CreateProjection, HostError> {
@@ -27,15 +25,22 @@ fn runner_create_opens_stdin_and_is_not_privileged() -> Result<(), HostError> {
     assert!(!spec.privileged);
     assert_eq!(spec.platform, "linux/amd64");
     assert_eq!(spec.image, "velnor-runner:ubuntu-26.04-2.337.0");
-    assert_eq!(spec.mounts.len(), 2);
+    assert_eq!(spec.mounts.len(), 4);
     assert_eq!(spec.mounts[0].source, "volume:worker_a");
     assert_eq!(spec.mounts[0].target, "/run");
+    assert_eq!(spec.mounts[2].source, "volume:velnor-seed");
+    assert_eq!(spec.mounts[2].target, "/opt/velnor/seed");
+    assert_eq!(spec.mounts[3].source, "volume:velnor-action-archive");
+    assert_eq!(spec.mounts[3].target, "/opt/action-archive-cache");
     assert!(
         spec.mounts
             .iter()
             .all(|mount| mount.target != "/var/lib/docker")
     );
-    assert_eq!(spec.env, Vec::<String>::new());
+    assert!(
+        spec.env.is_empty(),
+        "archive env comes from projection, not the plan"
+    );
     assert!(spec.network_mode.is_none());
     Ok(())
 }
@@ -82,6 +87,11 @@ fn dind_is_privileged_and_shares_the_runner_volumes() -> Result<(), HostError> {
             .map(|mount| (mount.source.as_str(), mount.target.as_str())),
         Some(("volume:worker_a-docker", "/var/lib/docker"))
     );
+    assert!(
+        spec.mounts
+            .iter()
+            .all(|mount| mount.source != "volume:velnor-action-archive")
+    );
     assert!(spec.network_mode.is_none());
     Ok(())
 }
@@ -90,6 +100,9 @@ fn dind_is_privileged_and_shares_the_runner_volumes() -> Result<(), HostError> {
 fn runner_joins_only_its_dind_netns() -> Result<(), HostError> {
     let spec = projection("worker_a")?;
     let not_hex = "g".repeat(64);
+    let twelve = "a".repeat(12);
+    let sixty_three = "b".repeat(63);
+    let sixty_five = "c".repeat(65);
     for bad in [
         "",
         "host",
@@ -97,6 +110,9 @@ fn runner_joins_only_its_dind_netns() -> Result<(), HostError> {
         "../id",
         "short",
         not_hex.as_str(),
+        twelve.as_str(),
+        sixty_three.as_str(),
+        sixty_five.as_str(),
     ] {
         assert_eq!(
             crate::worker::join_dind_net(spec.clone(), bad).err(),
@@ -135,6 +151,20 @@ fn bollard_config_from_a_clean_plan_omits_canary() -> Result<(), HostError> {
         .as_ref()
         .ok_or(HostError::Docker)?;
     assert_eq!(host.privileged, Some(false));
+    let mounts = host.mounts.as_ref().ok_or(HostError::Docker)?;
+    assert_eq!(mounts.len(), 4);
+    assert_eq!(mounts[2].source.as_deref(), Some("velnor-seed"));
+    assert_eq!(mounts[2].target.as_deref(), Some("/opt/velnor/seed"));
+    assert_eq!(mounts[2].read_only, Some(true));
+    assert_eq!(mounts[3].source.as_deref(), Some("velnor-action-archive"));
+    assert_eq!(
+        mounts[3].target.as_deref(),
+        Some("/opt/action-archive-cache")
+    );
+    assert_eq!(mounts[3].typ, Some(MountType::VOLUME));
+    assert_eq!(mounts[3].read_only, Some(true));
+    assert_eq!(mounts[0].read_only, None);
+    assert_eq!(mounts[1].read_only, None);
     let text = format!("{created:?}");
     assert!(!text.contains("canary-jit"));
     assert!(!text.to_ascii_lowercase().contains("jitconfig"));
@@ -158,43 +188,43 @@ fn bollard_config_from_a_clean_plan_omits_canary() -> Result<(), HostError> {
     assert_eq!(mounts[2].target.as_deref(), Some("/var/lib/docker"));
     assert_eq!(mounts[2].source.as_deref(), Some("worker_a-docker"));
     assert_eq!(mounts[2].typ, Some(MountType::VOLUME));
+    assert!(
+        mounts
+            .iter()
+            .all(|mount| mount.source.as_deref() != Some("velnor-seed"))
+    );
+    assert!(
+        mounts
+            .iter()
+            .all(|mount| mount.source.as_deref() != Some("velnor-action-archive"))
+    );
     let text = format!("{dind:?}");
     assert!(!text.contains("canary-jit"));
     assert!(!text.contains("/var/run/docker.sock"));
     Ok(())
 }
 
-struct IdleDocker {
-    path: PathBuf,
-    docker: bollard::Docker,
-}
-
-impl IdleDocker {
-    fn open() -> Result<Self, HostError> {
-        static NEXT: AtomicU64 = AtomicU64::new(0);
-        let n = NEXT.fetch_add(1, Ordering::Relaxed);
-        let tick = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_err(|_| HostError::Docker)?
-            .as_nanos();
-        let path = PathBuf::from(format!(
-            "/tmp/velnor-w-{}-{n}-{tick}.sock",
-            std::process::id()
-        ));
-        let listener =
-            std::os::unix::net::UnixListener::bind(&path).map_err(|_| HostError::Docker)?;
-        let text = path.to_str().ok_or(HostError::Path)?;
-        let docker = connect_unix(text)?;
-        drop(listener);
-        Ok(Self { path, docker })
-    }
-}
-
-impl Drop for IdleDocker {
-    fn drop(&mut self) {
-        let removed = std::fs::remove_file(&self.path);
-        let _kept = removed.err().map(|err| err.kind());
-    }
+#[test]
+fn archive_mount_projects_read_only() -> Result<(), HostError> {
+    let created = bollard("worker_a")?;
+    let host = created
+        .config
+        .host_config
+        .as_ref()
+        .ok_or(HostError::Docker)?;
+    let mounts = host.mounts.as_ref().ok_or(HostError::Docker)?;
+    let read_only = mounts
+        .iter()
+        .filter(|mount| mount.read_only == Some(true))
+        .collect::<Vec<_>>();
+    assert_eq!(read_only.len(), 2);
+    let archive = read_only
+        .iter()
+        .find(|mount| mount.source.as_deref() == Some("velnor-action-archive"))
+        .ok_or(HostError::Docker)?;
+    assert_eq!(archive.target.as_deref(), Some("/opt/action-archive-cache"));
+    assert_eq!(archive.typ, Some(MountType::VOLUME));
+    Ok(())
 }
 
 #[test]
@@ -205,20 +235,6 @@ fn bollard_create_rejects_a_host_bind() -> Result<(), HostError> {
     Ok(())
 }
 
-#[tokio::test]
-async fn empty_jit_does_not_create() -> Result<(), HostError> {
-    let idle = IdleDocker::open()?;
-    assert_eq!(
-        start_pair(&idle.docker, "a/b", b"").await,
-        Err(HostError::EmptyJit)
-    );
-    assert_eq!(
-        start_pair(&idle.docker, "worker_a", b"").await,
-        Err(HostError::EmptyJit)
-    );
-    Ok(())
-}
-
 #[test]
 fn malformed_ownership_label_is_rejected() -> Result<(), HostError> {
     let mut spec = projection("worker_a")?;
@@ -226,3 +242,29 @@ fn malformed_ownership_label_is_rejected() -> Result<(), HostError> {
     assert_eq!(bollard_create(&spec), Err(HostError::ForbiddenMount));
     Ok(())
 }
+
+#[test]
+fn bollard_create_rejects_writable_or_unapproved_bind_mounts() -> Result<(), HostError> {
+    let identity = crate::launch_identity::LaunchIdentity::new(
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        7,
+        "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "engine-test",
+    )?;
+    let path = PathBuf::from("/tmp/velnor-action-cache");
+    let mut spec = crate::worker::runner_create_for_identity(&identity, Some(&path))?;
+    spec.bind_mounts[0].read_only = false;
+    assert_eq!(bollard_create(&spec), Err(HostError::ForbiddenMount));
+
+    let mut spec = crate::worker::runner_create_for_identity(&identity, Some(&path))?;
+    spec.bind_mounts[0].target = "/etc".to_owned();
+    assert_eq!(bollard_create(&spec), Err(HostError::ForbiddenMount));
+
+    let mut spec = crate::worker::runner_create_for_identity(&identity, Some(&path))?;
+    spec.env.clear();
+    assert_eq!(bollard_create(&spec), Err(HostError::ForbiddenMount));
+    Ok(())
+}
+
+#[cfg(unix)]
+mod volumes;

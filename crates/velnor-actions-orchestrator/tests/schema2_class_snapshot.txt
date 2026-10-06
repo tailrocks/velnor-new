@@ -198,6 +198,89 @@
           fail-on-cache-miss: "true"
       - name: Check restore
         run: grep -qx cache-ok g4-cache.txt
+  empty-cache-hosted:
+    name: Empty cache / GitHub hosted
+    if: inputs.mode == 'empty-cache'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - name: Restore absent cache
+        id: empty
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: g4-cache.txt
+          key: g4-empty-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
+          fail-on-cache-miss: "false"
+      - name: Require cache miss
+        env:
+          HIT: ${{ steps.empty.outputs.cache-hit }}
+        run: "test -z \"$HIT\" || test \"$HIT\" = false"
+      - name: Write spaced path
+        run: "mkdir -p \"g4 cache\" && printf '%s\n' cache-ok > \"g4 cache/note.txt\""
+      - name: Save spaced path
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: "g4 cache/note.txt"
+          key: g4-space-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
+      - name: Remove spaced path
+        run: "rm -f \"g4 cache/note.txt\""
+      - name: Restore spaced path
+        id: space
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: "g4 cache/note.txt"
+          key: g4-space-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
+          fail-on-cache-miss: "true"
+      - name: Require spaced restore
+        env:
+          HIT: ${{ steps.space.outputs.cache-hit }}
+        run: "grep -qx cache-ok \"g4 cache/note.txt\" && test \"$HIT\" = true"
+  empty-cache-scale-set:
+    name: Empty cache / Velnor Scale Set
+    if: inputs.mode == 'empty-cache'
+    runs-on: [velnor, ubuntu-26.04-scale-set]
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash -e {0}
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - name: Restore absent cache
+        id: empty
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: g4-cache.txt
+          key: g4-empty-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
+          fail-on-cache-miss: "false"
+      - name: Require cache miss
+        env:
+          HIT: ${{ steps.empty.outputs.cache-hit }}
+        run: "test -z \"$HIT\" || test \"$HIT\" = false"
+      - name: Write spaced path
+        run: "mkdir -p \"g4 cache\" && printf '%s\n' cache-ok > \"g4 cache/note.txt\""
+      - name: Save spaced path
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: "g4 cache/note.txt"
+          key: g4-space-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
+      - name: Remove spaced path
+        run: "rm -f \"g4 cache/note.txt\""
+      - name: Restore spaced path
+        id: space
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: "g4 cache/note.txt"
+          key: g4-space-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}
+          fail-on-cache-miss: "true"
+      - name: Require spaced restore
+        env:
+          HIT: ${{ steps.space.outputs.cache-hit }}
+        run: "grep -qx cache-ok \"g4 cache/note.txt\" && test \"$HIT\" = true"
   oidc-hosted:
     name: OIDC / GitHub hosted
     if: inputs.mode == 'oidc'

@@ -1,5 +1,5 @@
 //! Preparation and execution share the named-check identity derivation.
-use super::{TestResult, code_of, orch_src, src_files};
+use super::{TestResult, code_of, orch_src, product_src_files};
 /// Match the complete invoked identifier, excluding declarations and suffix names.
 fn invokes(code: &str, name: &str) -> bool {
     if code.contains(&format!("fn {name}(")) {
@@ -23,7 +23,7 @@ fn exact_invocation_scan_excludes_neighbor_identifiers() {
 fn plan_and_generate_share_one_prepare_path() -> TestResult {
     let mut discover_calls = Vec::new();
     let mut config_calls = Vec::new();
-    for path in src_files()? {
+    for path in product_src_files()? {
         let name = path
             .file_name()
             .map(|name| name.to_string_lossy().into_owned())
@@ -48,8 +48,13 @@ fn plan_and_generate_share_one_prepare_path() -> TestResult {
     config_calls.sort();
     assert_eq!(
         config_calls,
-        ["check_runtime.rs", "prepare.rs", "routing.rs"],
-        "preparation, execution, and routing load configuration at their boundaries"
+        [
+            "check_runtime.rs",
+            "owned_tool_preview.rs",
+            "prepare.rs",
+            "routing.rs",
+        ],
+        "preparation, execution, routing, and owned preview load configuration at their boundaries"
     );
     let internal = std::fs::read_to_string(orch_src().join("internal.rs"))?;
     assert!(internal.contains("prepare(&root)"), "plan runs preparation");

@@ -37,6 +37,8 @@ version: 1
 # product code, so it is excluded from the walked index (ARCH-1.12).
 ignore:
   - "fixtures/**"
+  # Recovery snapshots and scratch prototypes are retained only for
+  # provenance; they are not active first-party source or instruction files.
 
 extends:
   - alint://bundled/oss-baseline@v1
@@ -95,14 +97,44 @@ rules:
     level: error
     message: "AGENTS.md exceeds 16 KiB; move detailed guidance into docs"
 
-  # First-party Rust packages live only under crates/ (ARCH-1.10).
+  # First-party Rust sources live ONLY in canonical crate dirs (ARCH-1.10,
+  # strict placement). Allowed: crates/<crate>/{src,tests,benches,examples,
+  # fixtures,testdata}/**, build.rs, build_support/**, the shared
+  # crates/test_support/** (#[path]-included helpers), and the same canonical
+  # layout one level deeper for the nested velnor-runner workspace. Everything
+  # else (crate roots, docs/, scripts/, snapshots) is forbidden. fixtures/**
+  # test inputs stay covered by the global ignore above.
   - id: crates-only
     kind: file_absent
     paths:
       include: ["**/*.rs"]
-      exclude: ["crates/**"]
+      exclude:
+        - "crates/*/src/**"
+        - "crates/*/tests/**"
+        - "crates/*/benches/**"
+        - "crates/*/examples/**"
+        - "crates/*/fixtures/**"
+        - "crates/*/testdata/**"
+        - "crates/*/build.rs"
+        - "crates/*/build_support/**"
+        - "crates/test_support/**"
+        - "crates/velnor-runner/crates/*/src/**"
+        - "crates/velnor-runner/crates/*/tests/**"
+        - "crates/velnor-runner/crates/*/benches/**"
+        - "crates/velnor-runner/crates/*/examples/**"
+        - "crates/velnor-runner/crates/*/build.rs"
     level: error
-    message: "First-party Rust sources MUST live under crates/"
+    message: "Rust sources MUST live in canonical crate dirs (ARCH-1.10 strict placement)"
+
+  # Snapshot .source duplicates are forbidden everywhere: compare against the
+  # live file, merge the best hunks, delete the snapshot. No .source file has
+  # a legitimate reason to exist (fixtures/** stays globally ignored).
+  - id: velnor-no-source-suffix
+    kind: file_absent
+    paths:
+      include: ["**/*.source"]
+    level: error
+    message: "Snapshot .source duplicates are forbidden; merge into the live file"
 
   # The bundled nested-lock rules are excepted above. These replacements
   # still forbid stray locks, and name the two locks the bundles cannot see:

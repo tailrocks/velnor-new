@@ -1,9 +1,11 @@
 //! A launch row without worker IDs stays occupied until cleanup is proven.
 
 use crate::launch::{Admit, admission};
-use crate::launch_harness::{absent, assigned_wait, open, started_progress};
+use crate::launch_harness::{
+    absent, assigned_wait, available, open, started_progress, started_wait,
+};
 use crate::stage::PairEngine;
-use crate::worker::CreateProjection;
+use crate::worker::{CreateProjection, WorkerVolumeRole, WorkerVolumeVerification};
 use crate::{HostError, Journal, Outcome};
 
 struct Idle;
@@ -46,6 +48,14 @@ impl PairEngine for Idle {
         Ok(None)
     }
 
+    async fn verify_volume(
+        &self,
+        _worker: &str,
+        _role: WorkerVolumeRole,
+    ) -> Result<WorkerVolumeVerification, HostError> {
+        Ok(WorkerVolumeVerification::Absent)
+    }
+
     async fn remove_worker_volumes(&self, _volume: &str) -> Result<bool, HostError> {
         Ok(true)
     }
@@ -80,6 +90,17 @@ async fn idless_uncertain_rows_keep_both_slots() -> Result<(), String> {
     assert!(rows.iter().all(|row| !row.cleanup_proven));
     absent(&scratch.file())
 }
+#[tokio::test]
+async fn own_idless_uncertain_row_does_not_block_its_mint() -> Result<(), String> {
+    let (scratch, journal) = open("idless-self-launch").await?;
+    uncertain_without_ids(&journal, "m4r41").await?;
+    let decision = admission(&Idle, &journal, 1, 1, 0, &available(&[41]))
+        .await
+        .map_err(|err| err.to_string())?;
+    assert_eq!(decision, Admit::Start { stop: true });
+    absent(&scratch.file())
+}
+
 #[tokio::test]
 async fn own_idless_uncertain_row_keeps_its_reservation() -> Result<(), String> {
     let (scratch, journal) = open("idless-self").await?;
@@ -158,5 +179,58 @@ async fn free_slot_still_scales_started_progress() -> Result<(), String> {
         .await
         .map_err(|err| err.to_string())?;
     assert_eq!(decision, Admit::Start { stop: false });
+    absent(&scratch.file())
+}
+
+#[tokio::test]
+async fn failed_row_with_partial_pair_keeps_its_slot() -> Result<(), String> {
+    let (scratch, journal) = open("failed-pair").await?;
+    let id = journal
+        .begin("launch", "m7r61")
+        .await
+        .map_err(|err| err.to_string())?;
+    journal
+        .bind_worker(id, Some("runner-7"), Some("dind-7"))
+        .await
+        .map_err(|err| err.to_string())?;
+    journal
+        .finish(id, Outcome::DefiniteFailure)
+        .await
+        .map_err(|err| err.to_string())?;
+
+    let decision = admission(&Idle, &journal, 1, 1, 0, &assigned_wait(9, 1))
+        .await
+        .map_err(|err| err.to_string())?;
+    assert_eq!(decision, Admit::Hold);
+    assert!(
+        journal
+            .rows()
+            .await
+            .map_err(|err| err.to_string())?
+            .iter()
+            .any(|row| row.id == id && !row.cleanup_proven)
+    );
+    absent(&scratch.file())
+}
+
+#[tokio::test]
+async fn full_slot_started_notice_is_acknowledged() -> Result<(), String> {
+    let (scratch, journal) = open("progress-full").await?;
+    let id = journal
+        .begin("launch", "m8")
+        .await
+        .map_err(|err| err.to_string())?;
+    journal
+        .bind_worker(id, None, Some(&hex(1)))
+        .await
+        .map_err(|err| err.to_string())?;
+    journal
+        .finish(id, Outcome::Uncertain)
+        .await
+        .map_err(|err| err.to_string())?;
+    let decision = admission(&Idle, &journal, 1, 1, 0, &started_wait(9, 5))
+        .await
+        .map_err(|err| err.to_string())?;
+    assert_eq!(decision, Admit::Ack { stop: false });
     absent(&scratch.file())
 }

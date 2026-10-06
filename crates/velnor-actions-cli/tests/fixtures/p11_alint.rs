@@ -129,8 +129,9 @@ pub(crate) fn check_extends(text: &str) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-/// Narrow lockfile replacements. Same-id overrides of [`EXPECTED`] stay banned.
-const NARROW_LOCKS: [super::alint_miniyaml::ExpectedRule; 2] = [
+/// Extra local rules beyond the frozen seven: narrow lockfile replacements
+/// plus repo-hygiene rules. Same-id overrides of [`EXPECTED`] stay banned.
+const EXTRA_RULES: [super::alint_miniyaml::ExpectedRule; 3] = [
     super::alint_miniyaml::ExpectedRule {
         id: "velnor-no-stray-cargo-lock",
         kind: "file_absent",
@@ -158,20 +159,26 @@ const NARROW_LOCKS: [super::alint_miniyaml::ExpectedRule; 2] = [
         ],
         pairs: &[],
     },
+    super::alint_miniyaml::ExpectedRule {
+        id: "velnor-no-source-suffix",
+        kind: "file_absent",
+        paths: &[("paths.include", &["**/*.source"])],
+        pairs: &[],
+    },
 ];
 
-/// The two replacement ids, exact paths. Anything else is an unpinned rule.
-fn check_narrow_locks(rules: &[super::alint_miniyaml::AlintRule]) -> Result<(), Box<dyn Error>> {
+/// The extra rule ids, exact paths. Anything else is an unpinned rule.
+fn check_extra_rules(rules: &[super::alint_miniyaml::AlintRule]) -> Result<(), Box<dyn Error>> {
     let mut ids: Vec<&str> = rules.iter().map(|rule| rule.id.as_str()).collect();
     ids.sort_unstable();
-    let mut want: Vec<&str> = NARROW_LOCKS.iter().map(|row| row.id).collect();
+    let mut want: Vec<&str> = EXTRA_RULES.iter().map(|row| row.id).collect();
     want.sort_unstable();
     if ids != want {
         return Err(format!("unpinned rule ids {ids:?}, want {want:?}").into());
     }
     for rule in rules {
         super::alint_miniyaml::check_rule_shape(rule)?;
-        let row = NARROW_LOCKS
+        let row = EXTRA_RULES
             .iter()
             .find(|row| row.id == rule.id)
             .ok_or_else(|| format!("unknown rule {}", rule.id))?;
@@ -196,7 +203,7 @@ fn check_narrow_locks(rules: &[super::alint_miniyaml::AlintRule]) -> Result<(), 
     Ok(())
 }
 
-/// Full policy: frozen legacy seven plus the two narrow lockfile rules.
+/// Full policy: frozen legacy seven plus the extra local rules.
 pub(crate) fn check_extended_policy(text: &str) -> Result<(), Box<dyn Error>> {
     assert_eq!(super::alint_miniyaml::ALLOWED_KINDS.len(), 6);
     assert!(super::alint_miniyaml::ALLOWED_KINDS.contains(&"pair"));
@@ -218,7 +225,7 @@ pub(crate) fn check_extended_policy(text: &str) -> Result<(), Box<dyn Error>> {
         version: config.version,
         rules: legacy,
     })?;
-    check_narrow_locks(&extra)?;
+    check_extra_rules(&extra)?;
     Ok(())
 }
 

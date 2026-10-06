@@ -15,6 +15,7 @@ use crate::error::HostError;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HttpsTransport {
     base: String,
+    max_time_seconds: u64,
 }
 
 impl HttpsTransport {
@@ -26,7 +27,25 @@ impl HttpsTransport {
     pub fn new(base: &str) -> Result<Self, HostError> {
         Ok(Self {
             base: checked_base(base)?,
+            max_time_seconds: 60,
         })
+    }
+
+    /// Clone this origin with a short deadline for background cleanup requests.
+    #[must_use]
+    #[cfg(test)]
+    pub(crate) fn cleanup_client(&self) -> Self {
+        Self {
+            base: self.base.clone(),
+            max_time_seconds: 5,
+        }
+    }
+
+    /// Maximum curl operation time in seconds.
+    #[must_use]
+    #[cfg(test)]
+    pub(crate) const fn timeout_seconds(&self) -> u64 {
+        self.max_time_seconds
     }
 
     /// Replace the origin after the admin exchange returns the service URL.
@@ -42,7 +61,7 @@ impl HttpsTransport {
 
 impl Transport for HttpsTransport {
     fn exchange(&mut self, request: &SessionRequest) -> Result<Exchange, TransportFail> {
-        match perform(&self.base, request) {
+        match perform(&self.base, self.max_time_seconds, request) {
             Ok(exchange) => Ok(exchange),
             Err(CurlFail::Timeout) => Err(TransportFail::Timeout),
             Err(CurlFail::Reset) => Err(TransportFail::Reset),
@@ -55,13 +74,17 @@ enum CurlFail {
     Reset,
 }
 
-fn perform(base: &str, request: &SessionRequest) -> Result<Exchange, CurlFail> {
+fn perform(
+    base: &str,
+    max_time_seconds: u64,
+    request: &SessionRequest,
+) -> Result<Exchange, CurlFail> {
     let url = join_url(base, &request.path, request.query.as_deref()).ok_or(CurlFail::Reset)?;
     let scratch = Scratch::create()?;
     let body_path = scratch.path("body");
     let out_path = scratch.path("out");
     write_private(&body_path, &request.body)?;
-    let config = curl_config(&url, request, &body_path, &out_path)?;
+    let config = curl_config(&url, request, &body_path, &out_path, max_time_seconds)?;
     let status = run_curl(&config)?;
     let body = read_output(&out_path)?;
     trace(base, request, status, &body);
@@ -133,13 +156,14 @@ fn curl_config(
     request: &SessionRequest,
     body: &Path,
     output: &Path,
+    max_time_seconds: u64,
 ) -> Result<String, CurlFail> {
     let mut lines = vec![
         format!("request = \"{}\"", method_name(request.method)),
         quoted("url", url)?,
         format!("output = \"{}\"", display_path(output)?),
         "write-out = \"%{http_code}\"".to_owned(),
-        "max-time = 60".to_owned(),
+        format!("max-time = {max_time_seconds}"),
     ];
     for (name, value) in &request.headers {
         let header = format!("{name}: {value}");

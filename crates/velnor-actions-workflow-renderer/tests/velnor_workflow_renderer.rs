@@ -3,8 +3,12 @@
 mod impl_adapter_wire_renderer;
 #[path = "impl_renderer_acquire.rs"]
 mod impl_renderer_acquire;
+#[path = "impl_renderer_cache_script.rs"]
+mod impl_renderer_cache_script;
 #[path = "impl_renderer_cache_steps.rs"]
 mod impl_renderer_cache_steps;
+#[path = "impl_renderer_cache_steps_b.rs"]
+mod impl_renderer_cache_steps_b;
 #[path = "impl_renderer_cache_t22.rs"]
 mod impl_renderer_cache_t22;
 #[path = "impl_renderer_f2close.rs"]
@@ -15,6 +19,8 @@ mod impl_renderer_f2close_hygiene;
 mod impl_renderer_f2close_matrix;
 #[path = "impl_renderer_finalfanin.rs"]
 mod impl_renderer_finalfanin;
+#[path = "impl_renderer_finalfanin_cache.rs"]
+mod impl_renderer_finalfanin_cache;
 #[path = "impl_renderer_fixtures.rs"]
 mod impl_renderer_fixtures;
 #[path = "impl_renderer_gate8.rs"]
@@ -47,8 +53,14 @@ mod impl_renderer_overlap;
 mod impl_renderer_p08;
 #[path = "impl_renderer_p08_elect.rs"]
 mod impl_renderer_p08_elect;
+#[path = "impl_renderer_p08_elect_names.rs"]
+mod impl_renderer_p08_elect_names;
+#[path = "impl_renderer_p08_spec.rs"]
+mod impl_renderer_p08_spec;
 #[path = "impl_renderer_p08_tofu_elect.rs"]
 mod impl_renderer_p08_tofu_elect;
+#[path = "impl_renderer_p08_tools_election.rs"]
+mod impl_renderer_p08_tools_election;
 #[path = "impl_renderer_planclose.rs"]
 mod impl_renderer_planclose;
 #[path = "impl_renderer_planformat.rs"]
@@ -91,6 +103,8 @@ mod impl_renderer_size;
 mod impl_renderer_steps;
 #[path = "impl_renderer_steps_env.rs"]
 mod impl_renderer_steps_env;
+#[path = "impl_renderer_steps_parameter_expansion.rs"]
+mod impl_renderer_steps_parameter_expansion;
 #[path = "impl_renderer_steps_quote.rs"]
 mod impl_renderer_steps_quote;
 #[path = "impl_renderer_sweep.rs"]
@@ -113,6 +127,8 @@ mod impl_renderer_toolchain_contract;
 mod impl_renderer_tree;
 #[path = "impl_renderer_tree_policy.rs"]
 mod impl_renderer_tree_policy;
+#[path = "impl_renderer_tree_policy_b.rs"]
+mod impl_renderer_tree_policy_b;
 #[path = "impl_renderer_tree_rejections.rs"]
 mod impl_renderer_tree_rejections;
 #[path = "impl_renderer_typed_ir.rs"]

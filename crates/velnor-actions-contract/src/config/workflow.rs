@@ -1,5 +1,5 @@
 //! Workflow section of `.velnor/config.toml`: naming, policy, runner labels.
-use crate::config::VerificationTask;
+use crate::config::{TofuApplyConfig, WorkflowTask};
 use crate::errors::ContractError;
 use crate::workflow::ValidatorKind;
 use serde::{Deserialize, Serialize};
@@ -36,12 +36,29 @@ pub struct WorkflowConfig {
     pub generator_validation: GeneratorValidation,
     /// Maximum parallel matrix jobs.
     pub max_parallel_jobs: u32,
+    /// Cache writes from pull requests; same-repository scope requires explicit opt-in.
+    #[serde(default)]
+    pub pull_request_cache_policy: PullRequestCachePolicy,
     /// Pinned older runner-label override; omit for latest.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub runner_label: Option<String>,
-    /// Sorted, explicit isolated validation jobs.
+    /// Sorted, unique typed task graph shared by verification and build variants.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub tasks: Vec<VerificationTask>,
+    pub tasks: Vec<WorkflowTask>,
+    /// Optional protected post-merge `OpenTofu` apply workflow.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tofu_apply: Option<TofuApplyConfig>,
+}
+
+/// Cache-write policy for pull-request workflows.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
+pub enum PullRequestCachePolicy {
+    /// Pull requests restore caches and never save them.
+    #[default]
+    ReadOnly,
+    /// Same-repository pull requests may save only to pull-request-scoped caches.
+    SameRepositoryScoped,
 }
 
 /// Workflow policy selector.
@@ -116,7 +133,7 @@ impl WorkflowConfig {
             ));
         }
         if let Some(branch) = &self.default_branch
-            && (branch.trim().is_empty() || branch.contains(' ') || branch.contains(".."))
+            && !crate::is_valid_branch_name(branch)
         {
             return Err(ContractError::config(
                 file,
@@ -134,6 +151,16 @@ impl WorkflowConfig {
             ));
         }
         self.validate_tasks(file)?;
+        if let Some(tofu_apply) = &self.tofu_apply {
+            tofu_apply.validate(file)?;
+            if self.default_branch.is_none() {
+                return Err(ContractError::config(
+                    file,
+                    "workflow.default_branch",
+                    "required_for_tofu_apply",
+                ));
+            }
+        }
         Ok(())
     }
 
@@ -141,94 +168,45 @@ impl WorkflowConfig {
     /// # Errors
     fn validate_tasks(&self, file: &str) -> Result<(), ContractError> {
         let mut previous = None;
+        let mut build_tasks = 0;
+        let mut native_image_tasks = 0;
         for task in &self.tasks {
             task.validate(file)?;
-            if previous.is_some_and(|id: &str| id >= task.id.as_str()) {
-                let problem = if previous == Some(task.id.as_str()) {
-                    format!("duplicate_verification_task:{}", task.id)
+            if matches!(task, WorkflowTask::Build(_)) {
+                build_tasks += 1;
+                if build_tasks > 1 {
+                    return Err(ContractError::config(
+                        file,
+                        "workflow.tasks",
+                        "more_than_one_native_build_task",
+                    ));
+                }
+            }
+            if matches!(task, WorkflowTask::NativeImage(_)) {
+                native_image_tasks += 1;
+                if native_image_tasks > 1 {
+                    return Err(ContractError::config(
+                        file,
+                        "workflow.tasks",
+                        "more_than_one_native_image_task",
+                    ));
+                }
+            }
+            let id = task.id();
+            if previous.is_some_and(|previous_id: &str| previous_id >= id) {
+                let problem = if previous == Some(id) {
+                    format!("duplicate_workflow_task_id:{id}")
                 } else {
                     "tasks_must_be_sorted_by_id".to_owned()
                 };
                 return Err(ContractError::config(file, "workflow.tasks", problem));
             }
-            previous = Some(task.id.as_str());
+            previous = Some(id);
         }
         Ok(())
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{GeneratorValidation, WorkflowConfig, WorkflowPolicy};
-    use crate::config::{VerificationRunner, VerificationTask, VerificationTaskKind};
-
-    /// Workflow config carrying `name`, all else default.
-    fn named(name: &str) -> WorkflowConfig {
-        WorkflowConfig {
-            name: name.to_owned(),
-            policy: WorkflowPolicy::ConsumerV1,
-            default_branch: None,
-            generator_validation: GeneratorValidation::Bootstrap,
-            max_parallel_jobs: 2,
-            runner_label: None,
-            tasks: Vec::new(),
-        }
-    }
-
-    #[test]
-    fn workflow_name_rejects_expressions_and_controls() {
-        assert!(named("CI").validate("config.toml").is_ok());
-        for name in ["${{ github.ref }}", "a\nb", "a\rb", "a\tb"] {
-            let err = named(name)
-                .validate("config.toml")
-                .expect_err("bad name fails");
-            assert!(err.to_string().contains("bad_name"), "{err}");
-        }
-    }
-
-    #[test]
-    fn generic_workflow_runner_catalog_is_linux_only() {
-        assert!(
-            super::RUNNER_LABEL_CATALOG
-                .iter()
-                .all(|label| label.starts_with("ubuntu-"))
-        );
-        let mut config = named("CI");
-        config.runner_label = Some("macos-15".to_owned());
-        assert!(
-            config
-                .validate("config.toml")
-                .expect_err("macOS checks use their separate typed runner config")
-                .to_string()
-                .contains("unsupported_label:macos-15")
-        );
-    }
-
-    #[test]
-    fn workflow_tasks_require_sorted_unique_safe_ids() {
-        let make = |id: &str| VerificationTask {
-            id: id.to_owned(),
-            kind: VerificationTaskKind::Verification,
-            mise_task: format!("check-{id}"),
-            runner: VerificationRunner::LinuxX64,
-            timeout_minutes: 10,
-        };
-        let mut valid = named("CI");
-        valid.tasks = vec![make("native-format"), make("native-lint")];
-        assert!(valid.validate("config.toml").is_ok());
-
-        valid.tasks.reverse();
-        let error = valid.validate("config.toml").expect_err("unsorted fails");
-        assert!(error.to_string().contains("tasks_must_be_sorted_by_id"));
-
-        valid.tasks = vec![make("native-lint"), make("native-lint")];
-        let error = valid.validate("config.toml").expect_err("duplicate fails");
-        assert!(error.to_string().contains("duplicate_verification_task"));
-
-        valid.tasks = vec![make("required")];
-        let error = valid
-            .validate("config.toml")
-            .expect_err("reserved ID fails");
-        assert!(error.to_string().contains("bad_verification_task_id"));
-    }
-}
+#[path = "workflow_tests.rs"]
+mod tests;

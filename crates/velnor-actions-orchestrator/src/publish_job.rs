@@ -65,9 +65,9 @@ pub(crate) fn baseline_publish_job(
 ///
 /// # Errors
 ///
-/// Returns a contract error for empty or whitespace-bearing branches.
+/// Returns a contract error for branch names outside the supported grammar.
 fn publish_gate_condition(branch: &str) -> Result<String, OrchestratorError> {
-    if branch.trim().is_empty() || branch.chars().any(char::is_whitespace) {
+    if !velnor_actions_contract::is_valid_branch_name(branch) {
         return Err(OrchestratorError::Contract {
             problem: format!("bad_publish_branch:{branch}"),
         });

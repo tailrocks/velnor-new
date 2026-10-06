@@ -11,6 +11,7 @@ const RUNNER_ENTRYPOINT: &str =
 const RUNNER_README: &str = include_str!("../../../../../images/runner/ubuntu-26.04/README.md");
 const DIND_DOCKERFILE: &str = include_str!("../../../../../images/dind/Dockerfile");
 const DIND_README: &str = include_str!("../../../../../images/dind/README.md");
+const DIND_ENTRYPOINT: &str = include_str!("../../../../../images/dind/entrypoint.sh");
 
 #[test]
 fn jit_work_folder_resolves_to_both_worker_mounts() -> Result<(), String> {
@@ -63,6 +64,13 @@ fn checked_in_images_prepare_the_shared_path_for_runner_uid_1000() {
     assert!(RUNNER_ENTRYPOINT.contains("mktemp /tmp/velnor-jit.XXXXXX"));
     assert!(!RUNNER_ENTRYPOINT.contains("mktemp \"${work}/"));
     assert!(RUNNER_ENTRYPOINT.contains("mkdir -p \"$work\""));
+    assert!(!RUNNER_ENTRYPOINT.contains("CARGO_BUILD_JOBS"));
+    assert!(!RUNNER_ENTRYPOINT.contains("runner-job-env"));
+    assert!(!RUNNER_DOCKERFILE.contains("CARGO_BUILD_JOBS"));
+    assert!(!RUNNER_DOCKERFILE.contains("nproc"));
+    assert!(!RUNNER_DOCKERFILE.contains("runner-job-env"));
+    assert!(!RUNNER_README.contains("half of `nproc`"));
+    assert!(RUNNER_README.contains("The image does not override Cargo's job count."));
 
     assert!(DIND_DOCKERFILE.contains("mkdir -p /var/lib/docker /run /home/runner/_work"));
     assert!(DIND_DOCKERFILE.contains("chown 1000:1000 /home/runner/_work"));
@@ -70,4 +78,17 @@ fn checked_in_images_prepare_the_shared_path_for_runner_uid_1000() {
     assert!(RUNNER_README.contains("/home/runner/_work"));
     assert!(RUNNER_README.contains("workFolder: \"_work\""));
     assert!(DIND_README.contains("uid/gid `1000:1000`"));
+}
+
+#[test]
+fn dind_publishes_only_a_ready_daemon_without_pulling_workload_images() {
+    assert!(!DIND_ENTRYPOINT.contains("docker pull"));
+    assert!(!DIND_ENTRYPOINT.contains("rabbitmq"));
+    assert!(DIND_ENTRYPOINT.contains("if [ \"$i\" -gt 100 ]; then"));
+    assert!(DIND_ENTRYPOINT.contains("dockerd socket did not appear"));
+    assert!(DIND_ENTRYPOINT.contains("dockerd exited before socket appeared"));
+    assert!(DIND_ENTRYPOINT.contains("kill -KILL \"$pid\""));
+    assert!(DIND_ENTRYPOINT.contains("exit 1"));
+    assert!(DIND_ENTRYPOINT.contains("ln -sfn docker.sock.real \"$public\""));
+    assert!(DIND_README.contains("about 10 seconds"));
 }

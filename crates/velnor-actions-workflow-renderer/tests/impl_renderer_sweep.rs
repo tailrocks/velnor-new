@@ -174,7 +174,7 @@ fn default_permissions_block_omits_ungranted_actions() -> Result<(), RenderError
         &fixture_ctx(),
     )?;
     let start = text.find("permissions:").expect("permissions");
-    let end = text.find("concurrency:").expect("concurrency");
+    let end = text.find("\nenv:").expect("workflow environment") + 1;
     assert_eq!(&text[start..end], "permissions:\n  contents: read\n");
     Ok(())
 }
@@ -314,6 +314,12 @@ fn tree_has_exactly_two_tool_free_files() -> Result<(), RenderError> {
     assert_eq!(tree.files[2].path, ".github/workflows/ci.yml");
     assert_eq!(tree.symlinks[0].path, ".github/CLAUDE.md");
     assert_eq!(tree.symlinks[0].target, "AGENTS.md");
+    let agents = &tree.files[0].bytes;
+    assert!(agents.contains("complete `.github/workflows/` namespace"));
+    assert!(agents.contains(
+        "Other existing files and directories under `.github/` are repository-owned and preserved by generation, including empty directories."
+    ));
+    assert!(!agents.contains("Every manual change will be overwritten"));
     for file in &tree.files {
         for tool_file in [
             "mise.toml",

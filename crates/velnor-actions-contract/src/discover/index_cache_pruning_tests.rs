@@ -158,7 +158,7 @@ fn listed_dot_path_cannot_bypass_reserved_cache_filter() -> TestResult {
 
     let index = build_index_from_list(repo, &["./.velnor/cache/payload.crate".to_owned()], &[])?;
 
-    assert!(index.files().is_empty());
+    assert_eq!(index.files(), Vec::<String>::new());
     Ok(())
 }
 

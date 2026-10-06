@@ -71,32 +71,34 @@ stat_source_identity() {
 }
 
 validate_source_tree() {
-  local relative="$1" full entry find_pid discovered=0 directories=1
+  local relative="$1" full entry find_status discovered=0 directories=1
   full="$repository/$relative"
   check_source_parent_dirs "$relative" false
   check_directory "$full"
-  while IFS= read -r -d '' entry; do
-    discovered=$((discovered + 1))
-    (( discovered <= 512 )) \
-      || fail "archive guard source tree entry count exceeded: $relative"
-    if [[ -L "$entry" ]]; then
-      fail "archive guard source tree contains a symlink: $entry"
-    elif [[ -d "$entry" ]]; then
-      check_directory "$entry"
-      directories=$((directories + 1))
-      (( directories <= 512 )) \
-        || fail "archive guard source tree directory count exceeded: $relative"
-    elif [[ -f "$entry" ]]; then
-      check_source_file "${entry#"$repository"/}" false
-      check_source_size
-    else
-      fail "archive guard source tree contains a special file: $entry"
-    fi
-  done < <(find "$full" -mindepth 1 -print0)
-  find_pid=$!
-  if ! wait "$find_pid"; then
+  find_status="$(mktemp "${TMPDIR:-/tmp}/archive-guard-find.XXXXXX")"
+  (find "$full" -mindepth 1 -print0; printf '%s\n' "$?" >"$find_status") |
+    while IFS= read -r -d '' entry; do
+      discovered=$((discovered + 1))
+      (( discovered <= 512 )) \
+        || fail "archive guard source tree entry count exceeded: $relative"
+      if [[ -L "$entry" ]]; then
+        fail "archive guard source tree contains a symlink: $entry"
+      elif [[ -d "$entry" ]]; then
+        check_directory "$entry"
+        directories=$((directories + 1))
+        (( directories <= 512 )) \
+          || fail "archive guard source tree directory count exceeded: $relative"
+      elif [[ -f "$entry" ]]; then
+        check_source_file "${entry#"$repository"/}" false
+        check_source_size
+      else
+        fail "archive guard source tree contains a special file: $entry"
+      fi
+    done
+  if [[ "$(cat "$find_status")" != 0 ]]; then
     fail "cannot enumerate archive guard source tree: $relative"
   fi
+  rm -f "$find_status"
 }
 
 validate_source_manifest() {

@@ -142,7 +142,8 @@ discovery-only exception.
 
 Do not run `cargo install`, ad hoc Rust component installers, absolute Cargo
 paths, or `taiki-e/install-action`. Until task-result caching is qualified,
-commands use direct `mise exec`; afterward only qualified cached tasks may use
+commands use direct `mise exec` with `--no-config --no-env --no-hooks`;
+afterward only qualified cached tasks may use
 the temporary task definition. Nextest MUST compile its selected configuration
 once and reuse its archive/metadata for execution; it does not run doctests.
 Project `rust-toolchain.toml`, `mise.toml`, and `mise.lock` remain byte-identical.
@@ -153,11 +154,11 @@ omits `--target`.
 
 | Task kind | Cargo profile | MBX profile |
 |---|---|---|
-| `clippy` | `mise --no-config exec rust@<rust> -- cargo clippy --package <package> --all-targets --locked -- -D warnings` | `mise --no-config exec rust@<rust> mr-boxington@<mbx> -- mbx clippy --package <package> --all-targets --locked -- -D warnings` |
-| `test` | `mise --no-config exec rust@<rust> -- cargo test --package <package> <metadata-derived-non-doc-target-flags> --locked` | `mise --no-config exec rust@<rust> mr-boxington@<mbx> -- mbx test --package <package> <metadata-derived-non-doc-target-flags> --locked` |
-| `nextest` | `mise --no-config exec rust@<rust> cargo-nextest@<nextest> -- cargo nextest run --package <package> --locked` | `mise --no-config exec rust@<rust> mr-boxington@<mbx> cargo-nextest@<nextest> -- mbx nextest run --package <package> --locked` |
-| `doctest` | `mise --no-config exec rust@<rust> -- cargo test --package <package> --doc --locked` | `mise --no-config exec rust@<rust> mr-boxington@<mbx> -- mbx test --package <package> --doc --locked` |
-| `doc` | `mise --no-config exec rust@<rust> -- cargo doc --package <package> --no-deps --locked` with `RUSTDOCFLAGS=-D warnings` | `mise --no-config exec rust@<rust> mr-boxington@<mbx> -- mbx doc --package <package> --no-deps --locked` with `RUSTDOCFLAGS=-D warnings` |
+| `clippy` | `mise --no-config --no-env --no-hooks exec rust@<rust> -- cargo clippy --package <package> --all-targets --locked -- -D warnings` | `mise --no-config --no-env --no-hooks exec rust@<rust> mr-boxington@<mbx> -- mbx clippy --package <package> --all-targets --locked -- -D warnings` |
+| `test` | `mise --no-config --no-env --no-hooks exec rust@<rust> -- cargo test --package <package> <metadata-derived-non-doc-target-flags> --locked` | `mise --no-config --no-env --no-hooks exec rust@<rust> mr-boxington@<mbx> -- mbx test --package <package> <metadata-derived-non-doc-target-flags> --locked` |
+| `nextest` | `mise --no-config --no-env --no-hooks exec rust@<rust> cargo-nextest@<nextest> -- cargo nextest run --package <package> --locked` | `mise --no-config --no-env --no-hooks exec rust@<rust> mr-boxington@<mbx> cargo-nextest@<nextest> -- mbx nextest run --package <package> --locked` |
+| `doctest` | `mise --no-config --no-env --no-hooks exec rust@<rust> -- cargo test --package <package> --doc --locked` | `mise --no-config --no-env --no-hooks exec rust@<rust> mr-boxington@<mbx> -- mbx test --package <package> --doc --locked` |
+| `doc` | `mise --no-config --no-env --no-hooks exec rust@<rust> -- cargo doc --package <package> --no-deps --locked` with `RUSTDOCFLAGS=-D warnings` | `mise --no-config --no-env --no-hooks exec rust@<rust> mr-boxington@<mbx> -- mbx doc --package <package> --no-deps --locked` with `RUSTDOCFLAGS=-D warnings` |
 
 The adapters construct these command families as argument vectors; the table is
 not shell text. Clippy names exactly one package. For Cargo-test mode, the
@@ -175,7 +176,7 @@ Each generated workflow command uses the Velnor-owned environment:
 
 ```text
 MISE_LOCKFILE=0 MISE_NO_CONFIG=1 MISE_NO_ENV=1 MISE_NO_HOOKS=1 \
-mise --no-config exec <tool>@<exact-version>... -- <fixed executable> <fixed arguments>
+mise --no-config --no-env --no-hooks exec <tool>@<exact-version>... -- <fixed executable> <fixed arguments>
 ```
 
 The generated workflow sets `MISE_RUSTUP_HOME`, `MISE_CARGO_HOME`, and exact

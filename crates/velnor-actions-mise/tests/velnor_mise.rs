@@ -93,5 +93,7 @@ mod impl_check_system_tools;
 mod impl_mise_containers;
 #[path = "impl_mise_tool_probes.rs"]
 mod impl_mise_tool_probes;
+#[path = "impl_miserc_isolation.rs"]
+mod impl_miserc_isolation;
 #[path = "impl_qualified_acquisition.rs"]
 mod impl_qualified_acquisition;

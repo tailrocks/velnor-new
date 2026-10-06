@@ -3,6 +3,7 @@
 use serde::Deserialize;
 
 use crate::error::HostError;
+use crate::worker::{ResourceBudget, ResourceBudgetConfig};
 
 /// Top-level controller file. Schema 1. Unknown fields fail.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -37,6 +38,8 @@ pub struct HostLimits {
     /// Total permits. Defaults to 1.
     #[serde(default = "default_max_jobs")]
     pub max_jobs: u32,
+    /// Required per-job runner and private `DinD` CPU and memory budgets.
+    pub(crate) resources: ResourceBudgetConfig,
 }
 
 /// Docker binding.
@@ -71,8 +74,20 @@ impl HostConfig {
         if self.schema != 1 || self.host.max_jobs == 0 {
             return Err(HostError::Config);
         }
+        self.resource_budget()?
+            .pair()
+            .docker_limits(self.host.max_jobs)?;
         validate_github(&self.github)?;
         validate_docker(&self.docker)
+    }
+
+    /// Validated container and aggregate limits from required host configuration.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`HostError::Config`] when a resource limit is zero or overflows.
+    pub(crate) fn resource_budget(&self) -> Result<ResourceBudget, HostError> {
+        self.host.resources.validate()
     }
 }
 

@@ -4,34 +4,18 @@ use super::mise::is_valid_mise_task_name;
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
 
-/// Generated job-key prefix for a declared workflow verification task.
-pub const VERIFICATION_TASK_JOB_PREFIX: &str = "task-";
-
 /// One allowlisted task executed in its own least-privilege job.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct VerificationTask {
     /// Stable lowercase identifier; the generated job ID is `task-{id}`.
     pub id: String,
-    /// Explicit task capability. Other capability kinds require separate contracts.
-    pub kind: VerificationTaskKind,
     /// Exact task name from the repository's locked Mise configuration.
     pub mise_task: String,
     /// OS and architecture used for this task.
     pub runner: VerificationRunner,
     /// Required per-job timeout in minutes.
     pub timeout_minutes: u16,
-}
-
-/// Closed verification-only task kind.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum VerificationTaskKind {
-    /// Repository-declared validation task whose body V1 does not inspect.
-    ///
-    /// Task authors and reviewers must keep this task free of Rust
-    /// compilation; the typed declaration does not enforce that property.
-    Verification,
 }
 
 /// Supported verification runner OS and architecture pairs.
@@ -69,11 +53,11 @@ impl VerificationTask {
     /// Validate task identifiers, task names, and bounded execution time.
     /// # Errors
     pub fn validate(&self, file: &str) -> Result<(), ContractError> {
-        if !is_valid_verification_task_id(&self.id) {
+        if !super::is_valid_workflow_task_id(&self.id) {
             return Err(ContractError::config(
                 file,
                 "workflow.tasks.id",
-                format!("bad_verification_task_id:{}", self.id),
+                format!("bad_workflow_task_id:{}", self.id),
             ));
         }
         if !is_valid_mise_task_name(&self.mise_task) {
@@ -94,41 +78,14 @@ impl VerificationTask {
     }
 }
 
-/// True for an argv-safe task ID that cannot collide with generator-owned names.
-#[must_use]
-pub fn is_valid_verification_task_id(id: &str) -> bool {
-    const RESERVED: [&str; 7] = [
-        "actionlint",
-        "candidate",
-        "plan",
-        "publish-baseline",
-        "required",
-        "task",
-        "velnor-task",
-    ];
-    !id.is_empty()
-        && id.len() <= 48
-        && !RESERVED.contains(&id)
-        && id.as_bytes()[0].is_ascii_lowercase()
-        && (id.as_bytes()[id.len() - 1].is_ascii_lowercase()
-            || id.as_bytes()[id.len() - 1].is_ascii_digit())
-        && id
-            .bytes()
-            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
-        && !id.contains("--")
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{
-        VerificationRunner, VerificationTask, VerificationTaskKind, is_valid_mise_task_name,
-        is_valid_verification_task_id,
-    };
+    use super::{VerificationRunner, VerificationTask};
+    use crate::config::mise::is_valid_mise_task_name;
 
     fn task(id: &str, mise_task: &str, timeout_minutes: u16) -> VerificationTask {
         VerificationTask {
             id: id.to_owned(),
-            kind: VerificationTaskKind::Verification,
             mise_task: mise_task.to_owned(),
             runner: VerificationRunner::LinuxX64,
             timeout_minutes,
@@ -138,10 +95,10 @@ mod tests {
     #[test]
     fn ids_and_mise_task_names_reject_shell_and_yaml_syntax() {
         for id in ["native-swift-format", "check1", "a-b-c"] {
-            assert!(is_valid_verification_task_id(id), "{id}");
+            assert!(super::super::is_valid_workflow_task_id(id), "{id}");
         }
         for id in ["", "Upper", "-start", "end-", "a--b", "required", "x/y"] {
-            assert!(!is_valid_verification_task_id(id), "{id:?}");
+            assert!(!super::super::is_valid_workflow_task_id(id), "{id:?}");
         }
         for name in ["audit", "lint:strict", "tool_1.test"] {
             assert!(is_valid_mise_task_name(name), "{name}");

@@ -49,11 +49,14 @@ async fn assert_assignment_is_held(journal: &Journal, message_id: i64) -> Result
     let result = super::start_turn(
         &mut script,
         &mut workers,
-        super::ready(&session, &polled),
-        journal,
-        &docker.docker,
-        1,
-        false,
+        super::StartTurn {
+            ready: super::ready(&session, &polled),
+            journal,
+            docker: &docker.docker,
+            capacity: 1,
+            rest: super::rest(),
+            stop: false,
+        },
     )
     .await;
     docker.finish().await?;

@@ -28,6 +28,7 @@ fn package(manifest: &str) -> PackageRecord {
         targets: Vec::new(),
         features: Vec::new(),
         has_build_script: false,
+        v1_task_owner: velnor_actions_rust::VelnorV1TaskOwner::Project,
     }
 }
 
