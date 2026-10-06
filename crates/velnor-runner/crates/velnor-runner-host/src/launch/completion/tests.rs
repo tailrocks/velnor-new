@@ -92,6 +92,8 @@ fn effect_window_and_budget_cover_the_complete_cleanup_chain() {
     let docker_seconds = crate::docker_client::DOCKER_OPERATION_TIMEOUT.as_secs();
     let https_source = include_str!("../../https.rs");
     assert!(https_source.contains("max-time = {max_time_seconds}"));
+    assert!(https_source.contains("max_time_seconds: 60"));
+    assert!(https_source.contains("format!(\"max-time = {max_time_seconds}\")"));
     assert_eq!(
         HttpsTransport::new("https://api.github.com").map(|transport| transport.timeout_seconds()),
         Ok(60)
