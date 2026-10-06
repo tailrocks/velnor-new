@@ -236,6 +236,8 @@ fn triggers_pin_exact_branches_without_pr_or_fork_events() {
         "has space",
         "a${{b}}",
         "!main",
+        "main;evil",
+        "main\non: [push]",
     ] {
         let mut bad = triggers();
         bad.push_branches = vec![branch.to_owned()];
