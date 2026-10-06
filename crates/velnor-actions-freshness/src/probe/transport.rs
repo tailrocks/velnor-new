@@ -77,13 +77,21 @@ pub(super) fn fetch_http_with_agent(
 }
 
 fn response_text(response: &mut ureq::http::Response<ureq::Body>) -> Result<String, String> {
-    let encoding = response
+    let mut encodings = response
         .headers()
-        .get("content-encoding")
-        .and_then(|value| value.to_str().ok())
-        .unwrap_or("identity")
-        .trim()
-        .to_ascii_lowercase();
+        .get_all("content-encoding")
+        .iter()
+        .filter_map(|value| value.to_str().ok());
+    let first = encodings.next();
+    let encoding = match first {
+        None => "identity".to_owned(),
+        Some(value) if encodings.next().is_none() => {
+            value.trim().to_ascii_lowercase()
+        }
+        _ => {
+            return Err("unsupported Content-Encoding: duplicate coding headers".to_owned());
+        }
+    };
     let mut encoded = Vec::new();
     response
         .body_mut()
@@ -93,7 +101,7 @@ fn response_text(response: &mut ureq::http::Response<ureq::Body>) -> Result<Stri
         .map_err(|error| format!("response read failed ({error})"))?;
     if encoded.len() > FETCH_CAP {
         return Err(format!(
-            "encoded freshness response exceeds {FETCH_CAP} bytes"
+            "encoded response exceeds {FETCH_CAP} bytes"
         ));
     }
     let decoded = decode_body(&encoding, &encoded)?;
@@ -309,7 +317,7 @@ pub(super) fn decode_body(encoding: &str, encoded: &[u8]) -> Result<Vec<u8>, Str
     };
     if decoded.len() > FETCH_CAP {
         return Err(format!(
-            "decoded freshness response exceeds {FETCH_CAP} bytes"
+            "decompressed response exceeds {FETCH_CAP} bytes"
         ));
     }
     Ok(decoded)
