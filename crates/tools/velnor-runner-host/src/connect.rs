@@ -61,3 +61,6 @@ pub fn disconnect_effects(ownership: SetOwnership, drain: bool) -> Vec<Disconnec
     }
     effects
 }
+
+#[cfg(test)]
+mod tests;

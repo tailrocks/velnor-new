@@ -86,3 +86,6 @@ fn read_limit() -> u64 {
         Err(_) => 0,
     }
 }
+
+#[cfg(test)]
+mod tests;

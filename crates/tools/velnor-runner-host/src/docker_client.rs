@@ -56,38 +56,4 @@ fn scheme_is(socket: &str, scheme: &str) -> bool {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::unix_socket_path;
-    use crate::error::HostError;
-
-    #[test]
-    fn absolute_unix_path_only() {
-        assert_eq!(
-            unix_socket_path("unix:///var/run/docker.sock"),
-            Ok("/var/run/docker.sock".to_owned())
-        );
-        assert_eq!(
-            unix_socket_path("/var/run/docker.sock"),
-            Ok("/var/run/docker.sock".to_owned())
-        );
-        assert_eq!(
-            unix_socket_path("tcp://127.0.0.1:2375"),
-            Err(HostError::Docker)
-        );
-        assert_eq!(
-            unix_socket_path("TCP://127.0.0.1:2375"),
-            Err(HostError::Docker)
-        );
-        assert_eq!(
-            unix_socket_path("unix://var/run/docker.sock"),
-            Err(HostError::Docker)
-        );
-        assert_eq!(unix_socket_path("relative.sock"), Err(HostError::Docker));
-        assert_eq!(unix_socket_path("unix://"), Err(HostError::Docker));
-        assert_eq!(unix_socket_path(""), Err(HostError::Docker));
-        assert_eq!(
-            unix_socket_path("ssh://example/tmp/docker.sock"),
-            Err(HostError::Docker)
-        );
-    }
-}
+mod tests;

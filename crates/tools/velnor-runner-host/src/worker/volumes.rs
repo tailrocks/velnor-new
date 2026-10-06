@@ -123,3 +123,6 @@ fn owns(worker: &str, expected: &WorkerVolume, observed: &Volume) -> bool {
         && observed.labels.get("velnor.worker").map(String::as_str) == Some(worker)
         && observed.labels.get("velnor.role").map(String::as_str) == Some(expected.role)
 }
+
+#[cfg(test)]
+mod tests;

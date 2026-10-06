@@ -41,3 +41,6 @@ pub fn decode_frame(bytes: &[u8]) -> Result<&[u8], HostError> {
     }
     Ok(&bytes[4..len.saturating_add(4)])
 }
+
+#[cfg(test)]
+mod tests;

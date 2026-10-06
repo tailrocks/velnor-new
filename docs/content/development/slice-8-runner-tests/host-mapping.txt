@@ -1,0 +1,475 @@
+host nextest list 162/162 stable; 158 pure renames, 4 unchanged (docker_client::tests, guest::tests x2, gate::tests), 2 lib->integration moves (runner_image_contract):
+
+before: velnor-runner-host assign_tests::a_batch_without_an_available_id_waits
+after:  velnor-runner-host assign::tests::a_batch_without_an_available_id_waits
+
+before: velnor-runner-host assign_tests::available_ids_are_the_only_acquire
+after:  velnor-runner-host assign::tests::available_ids_are_the_only_acquire
+
+before: velnor-runner-host assign_tests::empty_poll_waits
+after:  velnor-runner-host assign::tests::empty_poll_waits
+
+before: velnor-runner-host connect_tests::credential_is_a_keychain_ref
+after:  velnor-runner-host connect::tests::plan_tests::credential_is_a_keychain_ref
+
+before: velnor-runner-host connect_tests::disconnect_deletes_only_recorded_ownership
+after:  velnor-runner-host connect::tests::disconnect_tests::disconnect_deletes_only_recorded_ownership
+
+before: velnor-runner-host connect_tests::same_binding_is_idempotent_and_other_bindings_are_rejected
+after:  velnor-runner-host connect::tests::plan_tests::same_binding_is_idempotent_and_other_bindings_are_rejected
+
+before: velnor-runner-host connect_tests::structs_used_by_connect_plan_stay_secret_free
+after:  velnor-runner-host connect::tests::plan_tests::structs_used_by_connect_plan_stay_secret_free
+
+before: velnor-runner-host docker_client_tests::docker_deadline_preserves_results_and_fails_closed_on_timeout
+after:  velnor-runner-host docker_client::tests::docker_deadline_preserves_results_and_fails_closed_on_timeout
+
+before: velnor-runner-host docker_client_tests::rejected_sockets_do_not_need_a_daemon
+after:  velnor-runner-host docker_client::tests::rejected_sockets_do_not_need_a_daemon
+
+before: velnor-runner-host docker_client_tests::source_uses_only_the_unix_constructor
+after:  velnor-runner-host docker_client::tests::source_uses_only_the_unix_constructor
+
+before: velnor-runner-host docker_spec_tests::audit_rejects_host_and_secret_mounts
+after:  velnor-runner-host docker_spec::tests::audit_tests::audit_rejects_host_and_secret_mounts
+
+before: velnor-runner-host docker_spec_tests::audit_rejects_host_and_token_env
+after:  velnor-runner-host docker_spec::tests::audit_tests::audit_rejects_host_and_token_env
+
+before: velnor-runner-host docker_spec_tests::canary_is_found_in_env_cmd_labels_and_mounts
+after:  velnor-runner-host docker_spec::tests::plan_tests::canary_is_found_in_env_cmd_labels_and_mounts
+
+before: velnor-runner-host docker_spec_tests::cleanup_set_keeps_foreign_name_collision
+after:  velnor-runner-host docker_spec::tests::delete_tests::cleanup_set_keeps_foreign_name_collision
+
+before: velnor-runner-host docker_spec_tests::docker_sock_is_only_a_private_volume
+after:  velnor-runner-host docker_spec::tests::audit_tests::docker_sock_is_only_a_private_volume
+
+before: velnor-runner-host docker_spec_tests::names_are_not_delete_authority
+after:  velnor-runner-host docker_spec::tests::delete_tests::names_are_not_delete_authority
+
+before: velnor-runner-host docker_spec_tests::normal_plan_omits_canary
+after:  velnor-runner-host docker_spec::tests::plan_tests::normal_plan_omits_canary
+
+before: velnor-runner-host docker_spec_tests::platform_stays_linux_amd64
+after:  velnor-runner-host docker_spec::tests::plan_tests::platform_stays_linux_amd64
+
+before: velnor-runner-host docker_spec_tests::runner_plan_is_not_privileged
+after:  velnor-runner-host docker_spec::tests::plan_tests::runner_plan_is_not_privileged
+
+before: velnor-runner-host https_tests::curl_argv_has_no_header
+after:  velnor-runner-host https::tests::curl_argv_has_no_header
+
+before: velnor-runner-host https_tests::https_base_rejects_plain_http
+after:  velnor-runner-host https::tests::https_base_rejects_plain_http
+
+before: velnor-runner-host https_tests::join_keeps_the_encoded_query
+after:  velnor-runner-host https::tests::join_keeps_the_encoded_query
+
+before: velnor-runner-host ipc_tests::oversize_and_truncated_frames_are_rejected
+after:  velnor-runner-host ipc::tests::oversize_and_truncated_frames_are_rejected
+
+before: velnor-runner-host ipc_tests::roundtrip_is_big_endian
+after:  velnor-runner-host ipc::tests::roundtrip_is_big_endian
+
+before: velnor-runner-host journal_tests::around_commits_pending_before_effect_and_hides_secret
+after:  velnor-runner-host journal::tests::durability_tests::around_commits_pending_before_effect_and_hides_secret
+
+before: velnor-runner-host journal_tests::before_advertise_holds_uncertain_and_adopts
+after:  velnor-runner-host journal::tests::reconcile_tests::before_advertise_holds_uncertain_and_adopts
+
+before: velnor-runner-host journal_tests::cleanup_proof_reopens
+after:  velnor-runner-host journal::tests::durability_tests::cleanup_proof_reopens
+
+before: velnor-runner-host journal_tests::drop_does_not_delete_pending_rows
+after:  velnor-runner-host journal::tests::durability_tests::drop_does_not_delete_pending_rows
+
+before: velnor-runner-host journal_tests::empty_and_quoted_kinds_are_rejected
+after:  velnor-runner-host journal::tests::durability_tests::empty_and_quoted_kinds_are_rejected
+
+before: velnor-runner-host journal_tests::failed_acquire_does_not_occupy_and_clean_rows_advertise
+after:  velnor-runner-host journal::tests::reconcile_tests::failed_acquire_does_not_occupy_and_clean_rows_advertise
+
+before: velnor-runner-host journal_tests::missing_row_is_not_a_successful_finish
+after:  velnor-runner-host journal::tests::durability_tests::missing_row_is_not_a_successful_finish
+
+before: velnor-runner-host journal_tests::release_permitted_gates_capacity_release
+after:  velnor-runner-host journal::tests::release_tests::release_permitted_gates_capacity_release
+
+before: velnor-runner-host journal_tests::reopen_sees_the_row
+after:  velnor-runner-host journal::tests::durability_tests::reopen_sees_the_row
+
+before: velnor-runner-host journal_tests::replay_reuses_live_subject_and_failed_starts_again
+after:  velnor-runner-host journal::tests::durability_tests::replay_reuses_live_subject_and_failed_starts_again
+
+before: velnor-runner-host journal_tests::uncertain_outcome_keeps_the_row
+after:  velnor-runner-host journal::tests::durability_tests::uncertain_outcome_keeps_the_row
+
+before: velnor-runner-host journal_worker_volume_tests::cleaned_replay_gets_a_fresh_unproven_row
+after:  velnor-runner-host journal::worker_volume::tests::cleaned_replay_gets_a_fresh_unproven_row
+
+before: velnor-runner-host journal_worker_volume_tests::recovered_worker_ids_are_immutable
+after:  velnor-runner-host journal::worker_volume::tests::recovered_worker_ids_are_immutable
+
+before: velnor-runner-host journal_worker_volume_tests::worker_volume_is_durable_and_cannot_be_rebound
+after:  velnor-runner-host journal::worker_volume::tests::worker_volume_is_durable_and_cannot_be_rebound
+
+before: velnor-runner-host keychain_tests::import_secret_round_trips_the_test_service
+after:  velnor-runner-host keychain::tests::import_secret_round_trips_the_test_service
+
+before: velnor-runner-host keychain_tests::read_secret_keeps_the_canary_out_of_errors
+after:  velnor-runner-host keychain::tests::read_secret_keeps_the_canary_out_of_errors
+
+before: velnor-runner-host launch::busy_slot_tests::busy_slot_does_not_ack_scale_assignment
+after:  velnor-runner-host launch::tests::busy_slot_tests::busy_slot_does_not_ack_scale_assignment
+
+before: velnor-runner-host launch::effect_tests::unusable_successes_hold_acquired_jobs_without_retry_or_ack
+after:  velnor-runner-host launch::tests::effect_tests::unusable_successes_hold_acquired_jobs_without_retry_or_ack
+
+before: velnor-runner-host launch::inspect::tests::explicit_running_value_is_preserved
+after:  velnor-runner-host launch::inspect::tests::classify_tests::explicit_running_value_is_preserved
+
+before: velnor-runner-host launch::inspect::tests::only_not_found_is_treated_as_absent
+after:  velnor-runner-host launch::inspect::tests::classify_tests::only_not_found_is_treated_as_absent
+
+before: velnor-runner-host launch::inspect::tests::running_state_must_be_present
+after:  velnor-runner-host launch::inspect::tests::classify_tests::running_state_must_be_present
+
+before: velnor-runner-host launch::inspect_tests::closed_docker_connection_is_not_treated_as_absent
+after:  velnor-runner-host launch::inspect::tests::inspect_tests::closed_docker_connection_is_not_treated_as_absent
+
+before: velnor-runner-host launch::inspect_tests::docker_api_observations_preserve_only_known_running_states
+after:  velnor-runner-host launch::inspect::tests::inspect_tests::docker_api_observations_preserve_only_known_running_states
+
+before: velnor-runner-host launch::inspect_tests::docker_info_failure_does_not_fall_back_to_the_configured_ceiling
+after:  velnor-runner-host launch::inspect::tests::inspect_tests::docker_info_failure_does_not_fall_back_to_the_configured_ceiling
+
+before: velnor-runner-host launch::inspect_tests::failed_done_row_inspect_cannot_advertise_capacity
+after:  velnor-runner-host launch::inspect::tests::inspect_tests::failed_done_row_inspect_cannot_advertise_capacity
+
+before: velnor-runner-host launch::inspect_tests::guest_capacity_uses_the_selected_docker_engine_info
+after:  velnor-runner-host launch::inspect::tests::inspect_tests::guest_capacity_uses_the_selected_docker_engine_info
+
+before: velnor-runner-host launch::inspect_tests::hanging_docker_info_stops_at_the_configured_deadline
+after:  velnor-runner-host launch::inspect::tests::inspect_tests::hanging_docker_info_stops_at_the_configured_deadline
+
+before: velnor-runner-host launch::inspect_tests::non_not_found_inspect_error_blocks_admission_and_reconcile
+after:  velnor-runner-host launch::inspect::tests::inspect_tests::non_not_found_inspect_error_blocks_admission_and_reconcile
+
+before: velnor-runner-host launch::subject_tests::a_second_statistics_name_mints_again
+after:  velnor-runner-host launch::tests::subject_tests::a_second_statistics_name_mints_again
+
+before: velnor-runner-host launch::turn::progress_tests::ack_error_propagates_without_start_or_repoll
+after:  velnor-runner-host launch::turn::tests::progress_tests::ack_error_propagates_without_start_or_repoll
+
+before: velnor-runner-host launch::turn::progress_tests::missing_stats_notifications_ack_then_poll_again
+after:  velnor-runner-host launch::turn::tests::progress_tests::missing_stats_notifications_ack_then_poll_again
+
+before: velnor-runner-host launch::turn::start_tests::bound_running_worker_acks_without_a_second_jit_request
+after:  velnor-runner-host launch::turn::tests::start_tests::bound_running_worker_acks_without_a_second_jit_request
+
+before: velnor-runner-host launch::turn::start_tests::dind_only_live_row_keeps_the_current_assignment_unacked
+after:  velnor-runner-host launch::turn::tests::start_tests::dind_only_live_row_keeps_the_current_assignment_unacked
+
+before: velnor-runner-host launch::turn::start_tests::full_uncertain_slot_still_acks_progress_notice
+after:  velnor-runner-host launch::turn::tests::start_tests::full_uncertain_slot_still_acks_progress_notice
+
+before: velnor-runner-host launch::turn::start_tests::idless_uncertain_reservation_blocks_turn_without_jit_or_ack
+after:  velnor-runner-host launch::turn::tests::start_tests::idless_uncertain_reservation_blocks_turn_without_jit_or_ack
+
+before: velnor-runner-host launch::turn::start_tests::legacy_failed::failed_legacy_migration_rolls_back_schema_and_rows
+after:  velnor-runner-host launch::turn::tests::legacy_failed::failed_legacy_migration_rolls_back_schema_and_rows
+
+before: velnor-runner-host launch::turn::start_tests::legacy_failed::future_journal_version_is_rejected_without_creating_tables
+after:  velnor-runner-host launch::turn::tests::legacy_failed::future_journal_version_is_rejected_without_creating_tables
+
+before: velnor-runner-host launch::turn::start_tests::legacy_failed::legacy_ambiguous_launch_rows_are_quarantined_before_restart
+after:  velnor-runner-host launch::turn::tests::legacy_failed::legacy_ambiguous_launch_rows_are_quarantined_before_restart
+
+before: velnor-runner-host launch::turn::start_tests::legacy_failed::malformed_unused_column_rolls_back_before_row_migration
+after:  velnor-runner-host launch::turn::tests::legacy_failed::malformed_unused_column_rolls_back_before_row_migration
+
+before: velnor-runner-host launch::turn::start_tests::legacy_failed::new_definite_failures_remain_retryable_after_migration
+after:  velnor-runner-host launch::turn::tests::legacy_failed::new_definite_failures_remain_retryable_after_migration
+
+before: velnor-runner-host launch::turn::start_tests::missing_current_census_blocks_ack_and_start
+after:  velnor-runner-host launch::turn::tests::start_tests::missing_current_census_blocks_ack_and_start
+
+before: velnor-runner-host launch::turn::start_tests::volume_only_live_row_keeps_the_current_assignment_unacked
+after:  velnor-runner-host launch::turn::tests::start_tests::volume_only_live_row_keeps_the_current_assignment_unacked
+
+before: velnor-runner-host launch::turn::start_tests::zero_initial_census_and_positive_poll_keep_jit_conflict_unacked
+after:  velnor-runner-host launch::turn::tests::start_tests::zero_initial_census_and_positive_poll_keep_jit_conflict_unacked
+
+before: velnor-runner-host launch::turn::tests::empty_polls_keep_the_same_session
+after:  velnor-runner-host launch::turn::tests::pump_tests::empty_polls_keep_the_same_session
+
+before: velnor-runner-host launch_backfill_tests::capacity_one_mints_after_the_pair_is_removed
+after:  velnor-runner-host launch::tests::backfill_tests::capacity_one_mints_after_the_pair_is_removed
+
+before: velnor-runner-host launch_backfill_tests::capacity_two_mints_when_one_runner_exits
+after:  velnor-runner-host launch::tests::backfill_tests::capacity_two_mints_when_one_runner_exits
+
+before: velnor-runner-host launch_backfill_tests::gone_runner_without_dind_frees_the_slot
+after:  velnor-runner-host launch::tests::backfill_tests::gone_runner_without_dind_frees_the_slot
+
+before: velnor-runner-host launch_backfill_tests::replay_of_a_running_worker_does_not_mint_again
+after:  velnor-runner-host launch::tests::backfill_tests::replay_of_a_running_worker_does_not_mint_again
+
+before: velnor-runner-host launch_backfill_tests::uncertain_dind_only_recovery_keeps_reservation_and_owned_resources
+after:  velnor-runner-host launch::tests::backfill_tests::uncertain_dind_only_recovery_keeps_reservation_and_owned_resources
+
+before: velnor-runner-host launch_capacity_tests::ack_does_not_start_or_free_a_slot
+after:  velnor-runner-host launch::tests::capacity_tests::ack_does_not_start_or_free_a_slot
+
+before: velnor-runner-host launch_capacity_tests::admit_target_parser_bounds
+after:  velnor-runner-host launch::tests::capacity_tests::admit_target_parser_bounds
+
+before: velnor-runner-host launch_capacity_tests::blocked_poll_is_an_error
+after:  velnor-runner-host launch::tests::capacity_tests::blocked_poll_is_an_error
+
+before: velnor-runner-host launch_capacity_tests::capacity_one_first_launch_starts_then_stops
+after:  velnor-runner-host launch::tests::capacity_tests::capacity_one_first_launch_starts_then_stops
+
+before: velnor-runner-host launch_capacity_tests::capacity_one_refills_after_the_worker_exits
+after:  velnor-runner-host launch::tests::capacity_tests::capacity_one_refills_after_the_worker_exits
+
+before: velnor-runner-host launch_capacity_tests::capacity_two_empty_after_one_start_stays
+after:  velnor-runner-host launch::tests::capacity_tests::capacity_two_empty_after_one_start_stays
+
+before: velnor-runner-host launch_capacity_tests::capacity_two_first_launch_starts_and_stays
+after:  velnor-runner-host launch::tests::capacity_tests::capacity_two_first_launch_starts_and_stays
+
+before: velnor-runner-host launch_capacity_tests::capacity_two_second_launch_starts
+after:  velnor-runner-host launch::tests::capacity_tests::capacity_two_second_launch_starts
+
+before: velnor-runner-host launch_capacity_tests::full_capacity_holds_an_uncovered_scale_offer
+after:  velnor-runner-host launch::tests::capacity_tests::full_capacity_holds_an_uncovered_scale_offer
+
+before: velnor-runner-host launch_capacity_tests::full_launch_is_not_started_or_acked
+after:  velnor-runner-host launch::tests::capacity_tests::full_launch_is_not_started_or_acked
+
+before: velnor-runner-host launch_capacity_tests::full_progress_notice_is_acknowledged
+after:  velnor-runner-host launch::tests::capacity_tests::full_progress_notice_is_acknowledged
+
+before: velnor-runner-host launch_capacity_tests::historical_starts_do_not_cover_a_free_slot
+after:  velnor-runner-host launch::tests::capacity_tests::historical_starts_do_not_cover_a_free_slot
+
+before: velnor-runner-host launch_capacity_tests::installed_capacity_beats_the_env_parse
+after:  velnor-runner-host launch::tests::capacity_tests::installed_capacity_beats_the_env_parse
+
+before: velnor-runner-host launch_capacity_tests::job_capacity_parser_bounds
+after:  velnor-runner-host launch::tests::capacity_tests::job_capacity_parser_bounds
+
+before: velnor-runner-host launch_capacity_tests::nested_capacity_overrides_restore_the_outer_limit
+after:  velnor-runner-host launch::tests::capacity_tests::nested_capacity_overrides_restore_the_outer_limit
+
+before: velnor-runner-host launch_capacity_tests::poll_limit_follows_capacity
+after:  velnor-runner-host launch::tests::capacity_tests::poll_limit_follows_capacity
+
+before: velnor-runner-host launch_capacity_tests::scale_does_not_mint_again_once_assigned_is_covered
+after:  velnor-runner-host launch::tests::capacity_tests::scale_does_not_mint_again_once_assigned_is_covered
+
+before: velnor-runner-host launch_capacity_tests::statistics_only_block_when_population_or_capacity_is_covered
+after:  velnor-runner-host launch::tests::capacity_tests::statistics_only_block_when_population_or_capacity_is_covered
+
+before: velnor-runner-host launch_capacity_tests::target_above_capacity_queues_the_third_job
+after:  velnor-runner-host launch::tests::capacity_tests::target_above_capacity_queues_the_third_job
+
+before: velnor-runner-host launch_capacity_tests::three_waves_refill_after_exit_and_a_mid_wave_failure
+after:  velnor-runner-host launch::tests::capacity_tests::three_waves_refill_after_exit_and_a_mid_wave_failure
+
+before: velnor-runner-host launch_capacity_tests::uncertain_occupancy_does_not_mint_or_ack
+after:  velnor-runner-host launch::tests::capacity_tests::uncertain_occupancy_does_not_mint_or_ack
+
+before: velnor-runner-host launch_capacity_tests::wide_poll_limit_defaults_to_ninety
+after:  velnor-runner-host launch::tests::capacity_tests::wide_poll_limit_defaults_to_ninety
+
+before: velnor-runner-host launch_idless_tests::free_slot_still_scales_started_progress
+after:  velnor-runner-host launch::tests::idless_tests::free_slot_still_scales_started_progress
+
+before: velnor-runner-host launch_idless_tests::full_slot_acks_started_progress
+after:  velnor-runner-host launch::tests::idless_tests::full_slot_acks_started_progress
+
+before: velnor-runner-host launch_idless_tests::idless_uncertain_rows_keep_both_slots
+after:  velnor-runner-host launch::tests::idless_tests::idless_uncertain_rows_keep_both_slots
+
+before: velnor-runner-host launch_idless_tests::other_idless_uncertain_row_still_blocks_mint
+after:  velnor-runner-host launch::tests::idless_tests::other_idless_uncertain_row_still_blocks_mint
+
+before: velnor-runner-host launch_idless_tests::own_idless_uncertain_row_keeps_its_reservation
+after:  velnor-runner-host launch::tests::idless_tests::own_idless_uncertain_row_keeps_its_reservation
+
+before: velnor-runner-host launch_idless_tests::partial_uncertain_row_still_blocks_its_mint
+after:  velnor-runner-host launch::tests::idless_tests::partial_uncertain_row_still_blocks_its_mint
+
+before: velnor-runner-host launch_scale_tests::a_failed_new_statistics_subject_does_not_ack_or_change_a_pending_row
+after:  velnor-runner-host launch::tests::scale_tests::a_failed_new_statistics_subject_does_not_ack_or_change_a_pending_row
+
+before: velnor-runner-host launch_scale_tests::a_new_statistics_subject_does_not_reuse_a_bound_uncertain_row
+after:  velnor-runner-host launch::tests::scale_tests::a_new_statistics_subject_does_not_reuse_a_bound_uncertain_row
+
+before: velnor-runner-host launch_scale_tests::finished_scale_row_does_not_block_the_next_message
+after:  velnor-runner-host launch::tests::scale_tests::finished_scale_row_does_not_block_the_next_message
+
+before: velnor-runner-host launch_scale_tests::idless_uncertain_subject_keeps_its_reservation
+after:  velnor-runner-host launch::tests::scale_tests::idless_uncertain_subject_keeps_its_reservation
+
+before: velnor-runner-host launch_scale_tests::partial_uncertain_subject_does_not_mint
+after:  velnor-runner-host launch::tests::scale_tests::partial_uncertain_subject_does_not_mint
+
+before: velnor-runner-host launch_scale_tests::redelivered_scale_row_does_not_count_as_a_worker
+after:  velnor-runner-host launch::tests::scale_tests::redelivered_scale_row_does_not_count_as_a_worker
+
+before: velnor-runner-host launch_scale_tests::scale_jit_failure_is_not_acked
+after:  velnor-runner-host launch::tests::scale_tests::scale_jit_failure_is_not_acked
+
+before: velnor-runner-host launch_scale_tests::scale_mints_jit_then_acks_without_acquire
+after:  velnor-runner-host launch::tests::scale_tests::scale_mints_jit_then_acks_without_acquire
+
+before: velnor-runner-host launch_tests::ack_failure_keeps_the_runner_bound
+after:  velnor-runner-host launch::tests::launch_tests::ack_failure_keeps_the_runner_bound
+
+before: velnor-runner-host launch_tests::bound_runner_acks_without_a_second_start
+after:  velnor-runner-host launch::tests::launch_tests::bound_runner_acks_without_a_second_start
+
+before: velnor-runner-host launch_tests::empty_acquire_is_not_acked
+after:  velnor-runner-host launch::tests::launch_tests::empty_acquire_is_not_acked
+
+before: velnor-runner-host launch_tests::forbidden_acquire_is_failed_and_not_acked
+after:  velnor-runner-host launch::tests::launch_tests::forbidden_acquire_is_failed_and_not_acked
+
+before: velnor-runner-host launch_tests::launch_acks_only_after_start_and_hides_jit
+after:  velnor-runner-host launch::tests::launch_tests::launch_acks_only_after_start_and_hides_jit
+
+before: velnor-runner-host launch_tests::start_failure_after_acquire_is_not_acked
+after:  velnor-runner-host launch::tests::launch_tests::start_failure_after_acquire_is_not_acked
+
+before: velnor-runner-host launch_tests::statistics_advance_and_offers_stay
+after:  velnor-runner-host launch::tests::launch_tests::statistics_advance_and_offers_stay
+
+before: velnor-runner-host launch_tests::two_offers_are_not_acquired
+after:  velnor-runner-host launch::tests::launch_tests::two_offers_are_not_acquired
+
+before: velnor-runner-host launch_tests::uncertain_acquire_does_not_ack
+after:  velnor-runner-host launch::tests::launch_tests::uncertain_acquire_does_not_ack
+
+before: velnor-runner-host launch_worker_cleanup_tests::completed_worker_exit_recovers_ids_cleans_pair_and_starts_new_generation
+after:  velnor-runner-host launch::tests::worker_cleanup_tests::completed_worker_exit_recovers_ids_cleans_pair_and_starts_new_generation
+
+before: velnor-runner-host launch_worker_cleanup_tests::foreign_container_at_owned_name_is_not_adopted_or_removed
+after:  velnor-runner-host launch::tests::worker_cleanup_tests::foreign_container_at_owned_name_is_not_adopted_or_removed
+
+before: velnor-runner-host launch_worker_cleanup_tests::foreign_volume_prevents_cleanup_proof_and_keeps_the_slot
+after:  velnor-runner-host launch::tests::worker_cleanup_tests::foreign_volume_prevents_cleanup_proof_and_keeps_the_slot
+
+before: velnor-runner-host launch_worker_cleanup_tests::independent_journals_never_adopt_or_delete_each_others_workers
+after:  velnor-runner-host launch::tests::worker_cleanup_tests::independent_journals_never_adopt_or_delete_each_others_workers
+
+before: velnor-runner-host launch_worker_cleanup_tests::pending_and_uncertain_rows_keep_owned_volumes_without_remote_settlement
+after:  velnor-runner-host launch::tests::worker_cleanup_tests::pending_and_uncertain_rows_keep_owned_volumes_without_remote_settlement
+
+before: velnor-runner-host listen_tests::absolute_https_splits_origin_and_path
+after:  velnor-runner-host listen::tests::absolute_https_splits_origin_and_path
+
+before: velnor-runner-host listen_tests::queue_path_strips_the_admin_origin
+after:  velnor-runner-host listen::tests::queue_path_strips_the_admin_origin
+
+before: velnor-runner-host plist_tests::keychain_import_does_not_take_the_secret
+after:  velnor-runner-host plist::tests::keychain_import_does_not_take_the_secret
+
+before: velnor-runner-host plist_tests::launch_agent_runs_daemon_in_the_foreground
+after:  velnor-runner-host plist::tests::launch_agent_runs_daemon_in_the_foreground
+
+before: velnor-runner-host plist_tests::plist_escapes_the_binary_path
+after:  velnor-runner-host plist::tests::plist_escapes_the_binary_path
+
+before: velnor-runner-host readiness_tests::empty_controller_is_not_ready
+after:  velnor-runner-host readiness::tests::empty_controller_is_not_ready
+
+before: velnor-runner-host runner_image_contract_tests::checked_in_images_prepare_the_shared_path_for_runner_uid_1000
+after:  velnor-runner-host::runner_image_contract checked_in_images_prepare_the_shared_path_for_runner_uid_1000
+
+before: velnor-runner-host runner_image_contract_tests::jit_work_folder_resolves_to_both_worker_mounts
+after:  velnor-runner-host::runner_image_contract jit_work_folder_resolves_to_both_worker_mounts
+
+before: velnor-runner-host stage::tests::cleanup_fails_closed_for_uncertain_identity_and_empty_name
+after:  velnor-runner-host stage::tests::id_tests::cleanup_fails_closed_for_uncertain_identity_and_empty_name
+
+before: velnor-runner-host stage::tests::cleanup_removes_only_verified_owned_identity
+after:  velnor-runner-host stage::tests::id_tests::cleanup_removes_only_verified_owned_identity
+
+before: velnor-runner-host stage::tests::inspect_only_treats_not_found_as_absent_and_requires_id
+after:  velnor-runner-host stage::tests::id_tests::inspect_only_treats_not_found_as_absent_and_requires_id
+
+before: velnor-runner-host stage_tests::dind_created_does_not_start
+after:  velnor-runner-host stage::tests::stage_tests::dind_created_does_not_start
+
+before: velnor-runner-host stage_tests::dind_started_does_not_create_the_runner
+after:  velnor-runner-host stage::tests::stage_tests::dind_started_does_not_create_the_runner
+
+before: velnor-runner-host stage_tests::jit_stop_writes_stdin_after_both_starts
+after:  velnor-runner-host stage::tests::stage_tests::jit_stop_writes_stdin_after_both_starts
+
+before: velnor-runner-host stage_tests::missing_name_is_not_deleted
+after:  velnor-runner-host stage::tests::stage_tests::missing_name_is_not_deleted
+
+before: velnor-runner-host stage_tests::remove_recorded_deletes_only_the_owned_id
+after:  velnor-runner-host stage::tests::stage_tests::remove_recorded_deletes_only_the_owned_id
+
+before: velnor-runner-host stage_tests::remove_recorded_keeps_a_foreign_id
+after:  velnor-runner-host stage::tests::stage_tests::remove_recorded_keeps_a_foreign_id
+
+before: velnor-runner-host stage_tests::runner_created_does_not_start
+after:  velnor-runner-host stage::tests::stage_tests::runner_created_does_not_start
+
+before: velnor-runner-host stage_tests::runner_started_does_not_write_jit
+after:  velnor-runner-host stage::tests::stage_tests::runner_started_does_not_write_jit
+
+before: velnor-runner-host stage_tests::second_create_failure_removes_only_the_owned_dind
+after:  velnor-runner-host stage::tests::stage_tests::second_create_failure_removes_only_the_owned_dind
+
+before: velnor-runner-host stage_tests::volumes_stop_creates_no_container
+after:  velnor-runner-host stage::tests::stage_tests::volumes_stop_creates_no_container
+
+before: velnor-runner-host worker::volumes_tests::container_identity_requires_id_and_exact_labels
+after:  velnor-runner-host worker::volumes::tests::volumes_tests::container_identity_requires_id_and_exact_labels
+
+before: velnor-runner-host worker::volumes_tests::created_volumes_have_exact_worker_and_role_labels
+after:  velnor-runner-host worker::volumes::tests::volumes_tests::created_volumes_have_exact_worker_and_role_labels
+
+before: velnor-runner-host worker::volumes_tests::only_exactly_owned_volumes_are_removed
+after:  velnor-runner-host worker::volumes::tests::volumes_tests::only_exactly_owned_volumes_are_removed
+
+before: velnor-runner-host worker::volumes_tests::release_tests::done_post_delete_non_404_keeps_cleanup_unproven
+after:  velnor-runner-host worker::volumes::tests::release_tests::done_post_delete_non_404_keeps_cleanup_unproven
+
+before: velnor-runner-host worker::volumes_tests::uncertain_volume_holds_without_remote_settlement
+after:  velnor-runner-host worker::volumes::tests::volumes_tests::uncertain_volume_holds_without_remote_settlement
+
+before: velnor-runner-host worker::volumes_tests::volume_delete_error_fails_closed
+after:  velnor-runner-host worker::volumes::tests::volumes_tests::volume_delete_error_fails_closed
+
+before: velnor-runner-host worker_tests::bollard_config_from_a_clean_plan_omits_canary
+after:  velnor-runner-host worker::tests::create_tests::bollard_config_from_a_clean_plan_omits_canary
+
+before: velnor-runner-host worker_tests::bollard_create_rejects_a_host_bind
+after:  velnor-runner-host worker::tests::create_tests::bollard_create_rejects_a_host_bind
+
+before: velnor-runner-host worker_tests::dind_is_privileged_and_shares_the_runner_volumes
+after:  velnor-runner-host worker::tests::create_tests::dind_is_privileged_and_shares_the_runner_volumes
+
+before: velnor-runner-host worker_tests::empty_jit_does_not_create
+after:  velnor-runner-host worker::tests::start_tests::empty_jit_does_not_create
+
+before: velnor-runner-host worker_tests::malformed_ownership_label_is_rejected
+after:  velnor-runner-host worker::tests::create_tests::malformed_ownership_label_is_rejected
+
+before: velnor-runner-host worker_tests::runner_create_opens_stdin_and_is_not_privileged
+after:  velnor-runner-host worker::tests::create_tests::runner_create_opens_stdin_and_is_not_privileged
+
+before: velnor-runner-host worker_tests::runner_create_rejects_jit_in_env_or_cmd
+after:  velnor-runner-host worker::tests::create_tests::runner_create_rejects_jit_in_env_or_cmd
+
+before: velnor-runner-host worker_tests::runner_joins_only_its_dind_netns
+after:  velnor-runner-host worker::tests::create_tests::runner_joins_only_its_dind_netns

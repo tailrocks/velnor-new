@@ -261,3 +261,6 @@ pub fn plan_contains(plan: &ContainerPlan, canary: &str) -> bool {
 fn field_contains(items: &[String], canary: &str) -> bool {
     items.iter().any(|item| item.contains(canary))
 }
+
+#[cfg(test)]
+mod tests;

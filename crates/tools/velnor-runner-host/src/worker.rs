@@ -18,8 +18,6 @@ use crate::stage::PairStop;
 
 mod volumes;
 pub(crate) use volumes::{create_named_volumes, remove_worker_volumes};
-#[cfg(all(test, unix))]
-mod volumes_tests;
 
 const PLATFORM: &str = "linux/amd64";
 const DIND_IMAGE: &str = "velnor-dind:29.8.2";
@@ -383,3 +381,6 @@ pub(crate) async fn deliver_jit(docker: &Docker, id: &str, jit: &[u8]) -> Result
         .map_err(|_| HostError::Docker)?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests;

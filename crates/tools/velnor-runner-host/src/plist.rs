@@ -65,3 +65,6 @@ pub fn keychain_import_argv(service: &str) -> Vec<String> {
         "-w".to_owned(),
     ]
 }
+
+#[cfg(test)]
+mod tests;

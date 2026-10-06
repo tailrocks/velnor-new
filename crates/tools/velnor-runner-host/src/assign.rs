@@ -55,3 +55,6 @@ fn available_ids(batch: &ParsedBatch) -> Vec<i64> {
         .filter_map(|job| job.request_id)
         .collect()
 }
+
+#[cfg(test)]
+mod tests;

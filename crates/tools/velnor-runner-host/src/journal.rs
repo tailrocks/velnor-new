@@ -376,3 +376,6 @@ fn one_row(changed: u64) -> Result<(), HostError> {
 fn token_rejected(token: &str) -> bool {
     token.is_empty() || token.chars().any(|ch| matches!(ch, '\'' | '"'))
 }
+
+#[cfg(test)]
+mod tests;

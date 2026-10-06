@@ -359,3 +359,6 @@ pub(crate) fn map_listen(error: SessionError) -> EnsureError {
         },
     }
 }
+
+#[cfg(test)]
+mod tests;

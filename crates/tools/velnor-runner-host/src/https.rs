@@ -262,3 +262,6 @@ impl Drop for Scratch {
         let _removed = fs::remove_dir_all(&self.dir);
     }
 }
+
+#[cfg(test)]
+mod tests;

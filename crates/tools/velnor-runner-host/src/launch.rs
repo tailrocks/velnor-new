@@ -21,23 +21,18 @@ use crate::scale_set::EnsureError;
 use crate::worker::Started;
 
 mod bind;
-#[cfg(all(test, unix))]
-mod busy_slot_tests;
 mod capacity;
-#[cfg(all(test, unix))]
-mod effect_tests;
+mod docker_stub;
+mod fakes;
 mod gate;
+pub(crate) mod harness;
 mod inspect;
-#[cfg(all(test, unix))]
-mod inspect_tests;
 
 pub(crate) use inspect::classify_inspect;
 mod mint_origin;
 mod session;
 mod slot;
 mod steps;
-#[cfg(test)]
-mod subject_tests;
 mod trace;
 mod turn;
 
@@ -346,3 +341,6 @@ impl Lane for HostLane<'_> {
         self.link.set_base(&origin)
     }
 }
+
+#[cfg(test)]
+mod tests;

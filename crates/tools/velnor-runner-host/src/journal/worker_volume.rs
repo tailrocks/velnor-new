@@ -44,3 +44,6 @@ async fn same_volume(conn: &turso::Connection, id: i64, volume: &str) -> Result<
     let stored: Option<String> = row.get(0).map_err(|_| HostError::Journal)?;
     Ok(stored.as_deref() == Some(volume))
 }
+
+#[cfg(test)]
+mod tests;

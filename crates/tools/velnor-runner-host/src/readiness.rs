@@ -50,3 +50,6 @@ pub fn doctor_json(readiness: Readiness, probe: bool) -> String {
 pub const fn readiness_for_empty() -> Readiness {
     Readiness::WaitingForCredentials
 }
+
+#[cfg(test)]
+mod tests;
