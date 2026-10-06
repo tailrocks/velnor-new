@@ -44,7 +44,10 @@ pub(crate) const EXPECTED_ACTIONS: &[(&str, &str)] = &[
     ("jdx/mr-boxington-action", "MR_BOXINGTON_ACTION"),
     ("asamarts/alint", "ALINT_ACTION"),
     ("Swatinem/rust-cache", "RUST_CACHE_ACTION"),
-    ("aws-actions/configure-aws-credentials", "AWS_CREDENTIALS_ACTION"),
+    (
+        "aws-actions/configure-aws-credentials",
+        "AWS_CREDENTIALS_ACTION",
+    ),
 ];
 /// Load the reviewed JSON inventory, recording shape errors as gate rows.
 pub(crate) fn load_inventory(ctx: &mut FreshnessContext) -> bool {
