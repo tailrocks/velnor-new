@@ -186,10 +186,10 @@ pub(crate) fn insert_support_job(
 /// Version plus asset SHA-256, verified at runtime; bump both together.
 /// Freshness-inventory coverage for this pin is a known gap (the inventory
 /// schema has no slot for it) — see the policy rollout record.
-pub(crate) const RUST_POLICY_VERSION: &str = "0.1.1";
+pub(crate) const RUST_POLICY_VERSION: &str = "0.1.2";
 /// SHA-256 of the `rust-repository-policy-<version>.tar.gz` release asset.
 pub(crate) const RUST_POLICY_SHA256: &str =
-    "3aeb63a996df1f453b07e1647282ff7005b84306a02ce2d8bea63e6c66b424d5";
+    "cf688c1eeb84f74c3b673dcc57e2cafab0156313d25f64b17acf7eda6209d9b1";
 
 /// Policy-prerequisite step: fetch, verify, and materialize the pinned policy.
 ///

@@ -261,8 +261,8 @@ fn velnor_alint_job_materializes_policy_before_running() -> Result<(), RenderErr
     let lane = &text[alint_at..];
     for pin in [
         "Materialize Rust policy",
-        "rust-repository-policy-0.1.1.tar.gz",
-        "3aeb63a996df1f453b07e1647282ff7005b84306a02ce2d8bea63e6c66b424d5",
+        "rust-repository-policy-0.1.2.tar.gz",
+        "cf688c1eeb84f74c3b673dcc57e2cafab0156313d25f64b17acf7eda6209d9b1",
         ".cache/rust-policy",
         "sha256sum -c",
         "GITHUB_PATH",

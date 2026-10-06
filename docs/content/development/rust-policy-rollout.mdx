@@ -1,6 +1,6 @@
 ---
 title: Strict Rust policy rollout
-description: Velnor violation inventory and sequenced migration plan for rust-repository-policy v0.1.1.
+description: Velnor violation inventory and sequenced migration plan for rust-repository-policy v0.1.2.
 ---
 
 # Strict Rust policy rollout (Velnor)
@@ -709,3 +709,45 @@ Native rules: toolchain trio 3 → 0; everything else unchanged
 `size-lib-main-150` 6, `ci-build-runs-on` 6, `size-file-400` 2,
 `tests-dir-present` 1, `policy-gaps` 1345). Total 1535 → 1532
 (30 passing · 7 failing). Helper gaps unchanged at 1345.
+
+## Slice 10: re-pin to policy v0.1.2 (2026-10-06)
+
+- Policy: `tailrocks/rust-repository-policy` v0.1.2
+  (`https://github.com/tailrocks/rust-repository-policy/releases/tag/v0.1.2`,
+  sha256 `cf688c1e…6209d9b1`, verified against the `.sha256`
+  sidecar). v0.1.1→v0.1.2 is helper-only: modules, profile, and
+  schemas byte-identical (`diff -rq` clean); only the two
+  `bin/<asset>/rust-repository-policy` binaries differ
+  (union-walk inventory). Vendored `renovate.schema.json` and
+  `policy/*.json` untouched.
+- Pin sites (all four): `support.rs`
+  (`RUST_POLICY_VERSION`/`RUST_POLICY_SHA256`), renderer
+  `impl_renderer_tree.rs` lane pins, the generated `ci.yml`
+  materialize step (targeted pin-substring edit, not a full
+  regen: fresh `generate` now exceeds the renderer's own
+  `workflow_too_large` gate on `ci.yml` — 531487 > 500000 —
+  because the committed file predates the slice-9 splits; the
+  edited step text is byte-identical to what the generator
+  emits for that step), and the `.alint.yml` pin header.
+- Install gate: tarball materialized to `.cache/rust-policy/`
+  (gitignored); helper binary on PATH (macos-arm64 sha256
+  `189f61cc…54d1ae` — NOTE `--version` still reports `0.1.0`,
+  upstream version-string bug persists, identify the helper by
+  artifact sha); `alint validate-config` 37 rules loaded;
+  `alint check` 35 passing · 2 failing; `check-gaps` exit 0
+  with 6 gaps. Toolchain: alint 0.17.0, cargo 1.98.1.
+- Union-walk delta: zero. `check-gaps` before/after is the
+  same 6 findings (3 crates × SIZE-001/002) with identical
+  line/file counts (contract 18355/149, orchestrator
+  69284/455, renderer 29443/194). Native total unchanged at
+  12 (6 generator-owned `ci-build-runs-on` + 6 `policy-gaps`).
+
+### Before/after counts (slice 10, v0.1.1 → v0.1.2)
+
+| Rule ID | Before | After | Δ |
+|---|---|---|---|
+| `policy-gaps` | 6 | 6 | 0 (union-walk surfaces nothing new) |
+| `ci-build-runs-on` | 6 | 6 | 0 (generator-owned, untouched) |
+| Total (35 passing · 2 failing both sides) | 12 | 12 | 0 |
+
+Helper gaps: 6 → 6, identical to the finding.

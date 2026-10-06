@@ -2,8 +2,8 @@
 # one command rule the trust gate requires to live in the adopter's own
 # top-level config (never via extends).
 #
-# Policy: tailrocks/rust-repository-policy v0.1.1
-# (sha256 3aeb63a996df1f453b07e1647282ff7005b84306a02ce2d8bea63e6c66b424d5),
+# Policy: tailrocks/rust-repository-policy v0.1.2
+# (sha256 cf688c1eeb84f74c3b673dcc57e2cafab0156313d25f64b17acf7eda6209d9b1),
 # materialized into .cache/rust-policy/ (gitignored; CI re-materializes
 # before `alint check`). Helper `rust-repository-policy` must be on PATH.
 #
