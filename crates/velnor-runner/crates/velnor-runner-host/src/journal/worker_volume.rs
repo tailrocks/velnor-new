@@ -1,6 +1,6 @@
 //! Durable worker volume identity, stored before the first Docker mutation.
 
-use super::{Journal, token_rejected};
+use super::{Journal, token_rejected, transaction};
 use crate::error::HostError;
 
 impl Journal {
@@ -18,18 +18,21 @@ impl Journal {
             return Err(HostError::Journal);
         }
         let conn = self.connection().await?;
-        let changed = conn
-            .execute(
-                "UPDATE intents SET worker_volume = ?1 WHERE id = ?2 AND (worker_volume IS NULL OR worker_volume = ?1)",
-                (volume.to_owned(), id),
-            )
-            .await
-            .map_err(|_| HostError::Journal)?;
-        if changed == 1 || same_volume(&conn, id, volume).await? {
-            Ok(())
-        } else {
-            Err(HostError::Journal)
-        }
+        transaction::with_unique_id(&conn, id, async |conn| {
+            let changed = conn
+                .execute(
+                    "UPDATE intents SET worker_volume = ?1 WHERE id = ?2 AND (worker_volume IS NULL OR worker_volume = ?1)",
+                    (volume.to_owned(), id),
+                )
+                .await
+                .map_err(|_| HostError::Journal)?;
+            match changed {
+                1 => Ok(()),
+                0 if same_volume(conn, id, volume).await? => Ok(()),
+                _ => Err(HostError::Journal),
+            }
+        })
+        .await
     }
 }
 

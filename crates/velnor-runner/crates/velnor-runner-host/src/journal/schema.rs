@@ -1,88 +1,43 @@
 //! Versioned journal initialization and conservative legacy-row migration.
 
+use std::collections::HashMap;
+
 use crate::error::HostError;
 
 const JOURNAL_VERSION: i64 = 1;
-const CURRENT_COLUMNS: [ColumnSpec; 9] = [
-    ColumnSpec {
-        name: "id",
-        declared_type: "INTEGER",
-        not_null: 0,
-        default_value: None,
-        primary_key: 1,
-    },
-    ColumnSpec {
-        name: "kind",
-        declared_type: "TEXT",
-        not_null: 1,
-        default_value: None,
-        primary_key: 0,
-    },
-    ColumnSpec {
-        name: "subject",
-        declared_type: "TEXT",
-        not_null: 1,
-        default_value: None,
-        primary_key: 0,
-    },
-    ColumnSpec {
-        name: "state",
-        declared_type: "TEXT",
-        not_null: 1,
-        default_value: None,
-        primary_key: 0,
-    },
-    ColumnSpec {
-        name: "docker_id",
-        declared_type: "TEXT",
-        not_null: 0,
-        default_value: None,
-        primary_key: 0,
-    },
-    ColumnSpec {
-        name: "github_runner_id",
-        declared_type: "TEXT",
-        not_null: 0,
-        default_value: None,
-        primary_key: 0,
-    },
-    ColumnSpec {
-        name: "cleanup_proven",
-        declared_type: "INTEGER",
-        not_null: 1,
-        default_value: Some("0"),
-        primary_key: 0,
-    },
-    ColumnSpec {
-        name: "dind_id",
-        declared_type: "TEXT",
-        not_null: 0,
-        default_value: None,
-        primary_key: 0,
-    },
-    ColumnSpec {
-        name: "worker_volume",
-        declared_type: "TEXT",
-        not_null: 0,
-        default_value: None,
-        primary_key: 0,
-    },
+const CURRENT_COLUMNS: [ColumnShape; 9] = [
+    ColumnShape::new("id", "INTEGER", false),
+    ColumnShape::new("kind", "TEXT", true),
+    ColumnShape::new("subject", "TEXT", true),
+    ColumnShape::new("state", "TEXT", true),
+    ColumnShape::new("docker_id", "TEXT", false),
+    ColumnShape::new("github_runner_id", "TEXT", false),
+    ColumnShape::new("cleanup_proven", "INTEGER", true),
+    ColumnShape::new("dind_id", "TEXT", false),
+    ColumnShape::new("worker_volume", "TEXT", false),
 ];
 
-struct ColumnSpec {
+#[derive(Clone, Copy)]
+struct ColumnShape {
     name: &'static str,
     declared_type: &'static str,
-    not_null: i64,
-    default_value: Option<&'static str>,
-    primary_key: i64,
+    not_null: bool,
+}
+
+impl ColumnShape {
+    const fn new(name: &'static str, declared_type: &'static str, not_null: bool) -> Self {
+        Self {
+            name,
+            declared_type,
+            not_null,
+        }
+    }
 }
 
 struct ColumnInfo {
-    name: String,
     declared_type: String,
-    not_null: i64,
-    default_value: Option<String>,
-    primary_key: i64,
+    not_null: bool,
+    primary_key_position: i64,
 }
 
 pub(super) async fn bootstrap(conn: &turso::Connection) -> Result<(), HostError> {
@@ -144,10 +99,7 @@ async fn migrate_version_zero(conn: &turso::Connection) -> Result<(), HostError>
 async fn ensure_legacy_columns(conn: &turso::Connection) -> Result<(), HostError> {
     let columns = read_columns(conn).await?;
     for (column, definition) in [("dind_id", "TEXT"), ("worker_volume", "TEXT")] {
-        if !columns
-            .iter()
-            .any(|existing| existing.name.eq_ignore_ascii_case(column))
-        {
+        if !columns.contains_key(column) {
             conn.execute(
                 &format!("ALTER TABLE intents ADD COLUMN {column} {definition}"),
                 (),
@@ -161,15 +113,8 @@ async fn ensure_legacy_columns(conn: &turso::Connection) -> Result<(), HostError
 
 async fn validate_current_schema(conn: &turso::Connection) -> Result<(), HostError> {
     let columns = read_columns(conn).await?;
-    if columns.len() != CURRENT_COLUMNS.len() {
-        return Err(HostError::Journal);
-    }
-
     for expected in CURRENT_COLUMNS {
-        let Some(actual) = columns
-            .iter()
-            .find(|column| column.name.eq_ignore_ascii_case(expected.name))
-        else {
+        let Some(actual) = columns.get(expected.name) else {
             return Err(HostError::Journal);
         };
         if !actual
@@ -177,53 +122,86 @@ async fn validate_current_schema(conn: &turso::Connection) -> Result<(), HostErr
             .trim()
             .eq_ignore_ascii_case(expected.declared_type)
             || actual.not_null != expected.not_null
-            || actual.default_value.as_deref() != expected.default_value
-            || actual.primary_key != expected.primary_key
         {
             return Err(HostError::Journal);
         }
     }
-
-    if has_separate_primary_key_index(conn).await? {
+    if columns
+        .values()
+        .filter(|column| column.primary_key_position > 0)
+        .count()
+        != 1
+        || columns
+            .get("id")
+            .is_none_or(|column| column.primary_key_position != 1)
+    {
         return Err(HostError::Journal);
     }
-
+    if !has_canonical_id_column(conn).await? || has_primary_key_index(conn).await? {
+        return Err(HostError::Journal);
+    }
     Ok(())
 }
 
-async fn has_separate_primary_key_index(conn: &turso::Connection) -> Result<bool, HostError> {
+async fn has_canonical_id_column(conn: &turso::Connection) -> Result<bool, HostError> {
+    let mut rows = conn
+        .query(
+            "SELECT sql FROM sqlite_schema WHERE type = 'table' AND name = 'intents'",
+            (),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let Some(row) = rows.next().await.map_err(|_| HostError::Journal)? else {
+        return Ok(false);
+    };
+    let sql = row.get::<String>(0).map_err(|_| HostError::Journal)?;
+    let Some(open) = sql.find('(') else {
+        return Ok(false);
+    };
+    let definition = sql[open + 1..]
+        .split(',')
+        .next()
+        .ok_or(HostError::Journal)?;
+    let tokens = definition
+        .split_ascii_whitespace()
+        .map(|token| {
+            token
+                .trim_matches(['"', '`', '[', ']'])
+                .to_ascii_uppercase()
+        })
+        .collect::<Vec<_>>();
+    Ok(tokens == ["ID", "INTEGER", "PRIMARY", "KEY", "AUTOINCREMENT"])
+}
+
+async fn has_primary_key_index(conn: &turso::Connection) -> Result<bool, HostError> {
     let mut rows = conn
         .query("PRAGMA index_list(intents)", ())
         .await
         .map_err(|_| HostError::Journal)?;
     while let Some(row) = rows.next().await.map_err(|_| HostError::Journal)? {
-        if row
-            .get::<String>(3)
-            .map_err(|_| HostError::Journal)?
-            .eq_ignore_ascii_case("pk")
-        {
+        if row.get::<String>(3).map_err(|_| HostError::Journal)? == "pk" {
             return Ok(true);
         }
     }
     Ok(false)
 }
 
-async fn read_columns(conn: &turso::Connection) -> Result<Vec<ColumnInfo>, HostError> {
-    let mut columns = Vec::new();
+async fn read_columns(conn: &turso::Connection) -> Result<HashMap<String, ColumnInfo>, HostError> {
+    let mut columns = HashMap::new();
     let mut rows = conn
         .query("PRAGMA table_info(intents)", ())
         .await
         .map_err(|_| HostError::Journal)?;
     while let Some(row) = rows.next().await.map_err(|_| HostError::Journal)? {
-        columns.push(ColumnInfo {
-            name: row.get::<String>(1).map_err(|_| HostError::Journal)?,
-            declared_type: row.get::<String>(2).map_err(|_| HostError::Journal)?,
-            not_null: row.get::<i64>(3).map_err(|_| HostError::Journal)?,
-            default_value: row
-                .get::<Option<String>>(4)
-                .map_err(|_| HostError::Journal)?,
-            primary_key: row.get::<i64>(5).map_err(|_| HostError::Journal)?,
-        });
+        let name = row.get::<String>(1).map_err(|_| HostError::Journal)?;
+        columns.insert(
+            name,
+            ColumnInfo {
+                declared_type: row.get::<String>(2).map_err(|_| HostError::Journal)?,
+                not_null: row.get::<i64>(3).map_err(|_| HostError::Journal)? != 0,
+                primary_key_position: row.get::<i64>(5).map_err(|_| HostError::Journal)?,
+            },
+        );
     }
     Ok(columns)
 }

@@ -67,8 +67,6 @@ mod https_tests;
 #[cfg(test)]
 mod ipc_tests;
 #[cfg(test)]
-// Unfinished merged expectations conflict with one-row journal writes.
-#[cfg(any())]
 mod journal_schema_tests;
 #[cfg(test)]
 mod journal_tests;
