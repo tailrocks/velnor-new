@@ -1,19 +1,11 @@
 //! Idempotent container create checks.
 
 use std::collections::{HashMap, HashSet};
-use std::time::Duration;
 
-use bollard::Docker;
 use bollard::models::HostConfigCgroupnsModeEnum;
-use bollard::query_parameters::ListContainersOptionsBuilder;
-use tokio::time::timeout;
 
 use super::super::mounts::{label_map, mount_source};
-use super::super::{
-    CreateProjection, DIND_ENTRYPOINT, DIND_IMAGE, identity_labels_match,
-    launch_identity_labels_match,
-};
-use super::confirmed_not_found;
+use super::super::{CreateProjection, identity_labels_match, launch_identity_labels_match};
 use crate::error::HostError;
 
 mod environment;
@@ -21,107 +13,6 @@ use environment::environment_matches;
 #[path = "containers_limits.rs"]
 mod limits;
 use limits::resource_limits_match;
-
-const DOCKER_CALL_TIMEOUT: Duration = Duration::from_secs(5);
-
-pub(crate) async fn refuse_existing(
-    docker: &Docker,
-    spec: &CreateProjection,
-) -> Result<(), HostError> {
-    let name = spec.name.as_str();
-    let expected = label_map(&spec.labels)?.ok_or(HostError::Ownership)?;
-    let launch = expected.get("velnor.launch").ok_or(HostError::Ownership)?;
-    let instance = expected
-        .get("velnor.instance")
-        .ok_or(HostError::Ownership)?;
-    let role = expected.get("velnor.role").ok_or(HostError::Ownership)?;
-    let mut filters = HashMap::new();
-    filters.insert(
-        "label".to_owned(),
-        vec![
-            format!("velnor.launch={launch}"),
-            format!("velnor.instance={instance}"),
-        ],
-    );
-    let options = ListContainersOptionsBuilder::default()
-        .all(true)
-        .filters(&filters)
-        .build();
-    let rows = timeout(DOCKER_CALL_TIMEOUT, docker.list_containers(Some(options)))
-        .await
-        .map_err(|_| HostError::DockerTimeout)?
-        .map_err(|_| HostError::Docker)?;
-    let mut dind = Vec::new();
-    let mut runner = Vec::new();
-    for row in rows {
-        let labels = row.labels.as_ref().ok_or(HostError::Ownership)?;
-        match validate_existing_row(&expected, labels)? {
-            "dind" => dind.push(row),
-            "runner" => runner.push(row),
-            _ => return Err(HostError::Ownership),
-        }
-    }
-    reject_existing_role(docker, spec, role, &dind, &runner).await?;
-    match inspect_container(docker, name).await? {
-        Some(_) => Err(HostError::Ownership),
-        None => Ok(()),
-    }
-}
-
-async fn reject_existing_role(
-    docker: &Docker,
-    spec: &CreateProjection,
-    role: &str,
-    dind: &[bollard::models::ContainerSummary],
-    runner: &[bollard::models::ContainerSummary],
-) -> Result<(), HostError> {
-    match (role, dind, runner) {
-        ("dind", [], []) => Ok(()),
-        ("dind", [dind_row], []) => verify_existing(docker, spec, dind_row).await,
-        ("runner", [dind_row], []) => verify_dind(docker, spec, dind_row).await,
-        ("dind", [], [_]) => Err(HostError::Ownership),
-        ("runner", [], [runner_row]) => verify_existing(docker, spec, runner_row).await,
-        _ => Err(HostError::Ownership),
-    }
-}
-
-async fn verify_dind(
-    docker: &Docker,
-    runner: &CreateProjection,
-    row: &bollard::models::ContainerSummary,
-) -> Result<(), HostError> {
-    let expected = dind_projection(runner)?;
-    let id = row.id.as_deref().ok_or(HostError::Ownership)?;
-    let found = inspect_container(docker, id)
-        .await?
-        .ok_or(HostError::Ownership)?;
-    let named = expected.name.as_str();
-    let by_name = inspect_container(docker, named)
-        .await?
-        .ok_or(HostError::Ownership)?;
-    if found.id != by_name.id
-        || !topology_matches(&expected, &found)?
-        || found.state.as_ref().and_then(|state| state.running) != Some(true)
-    {
-        return Err(HostError::Ownership);
-    }
-    Ok(())
-}
-
-async fn verify_existing(
-    docker: &Docker,
-    expected: &CreateProjection,
-    row: &bollard::models::ContainerSummary,
-) -> Result<(), HostError> {
-    let id = row.id.as_deref().ok_or(HostError::Ownership)?;
-    let found = inspect_container(docker, id)
-        .await?
-        .ok_or(HostError::Ownership)?;
-    if !topology_matches(expected, &found)? {
-        return Err(HostError::Ownership);
-    }
-    Err(HostError::Ownership)
-}
 
 fn same_launch(expected: &HashMap<String, String>, actual: &HashMap<String, String>) -> bool {
     launch_identity_labels_match(expected, actual)
@@ -138,68 +29,6 @@ fn validate_existing_row(
         Some("dind") => Ok("dind"),
         Some("runner") => Ok("runner"),
         _ => Err(HostError::Ownership),
-    }
-}
-
-fn dind_projection(runner: &CreateProjection) -> Result<CreateProjection, HostError> {
-    let mut labels = runner.labels.clone();
-    let role = labels
-        .iter_mut()
-        .find(|label| label.starts_with("velnor.role="))
-        .ok_or(HostError::Ownership)?;
-    role.replace_range(.., "velnor.role=dind");
-    let volume = runner
-        .labels
-        .iter()
-        .find_map(|label| label.strip_prefix("velnor.volume="))
-        .ok_or(HostError::Ownership)?;
-    let name = runner
-        .name
-        .strip_prefix("velnor-runner-")
-        .map(|launch| format!("velnor-dind-{launch}"))
-        .ok_or(HostError::Ownership)?;
-    let mut mounts = runner.mounts.clone();
-    mounts.push(crate::docker_spec::Mount {
-        source: format!("volume:{volume}-docker"),
-        target: "/var/lib/docker".to_owned(),
-    });
-    Ok(CreateProjection {
-        name,
-        image: DIND_IMAGE.to_owned(),
-        platform: runner.platform.clone(),
-
-        env: Vec::new(),
-        cmd: Vec::new(),
-        entrypoint: DIND_ENTRYPOINT
-            .iter()
-            .map(|item| (*item).to_owned())
-            .collect(),
-        user: None,
-        working_dir: None,
-        labels,
-        mounts,
-        bind_mounts: Vec::new(),
-        privileged: true,
-        open_stdin: false,
-        network_mode: None,
-        resource_budget: runner.resource_budget,
-    })
-}
-
-async fn inspect_container(
-    docker: &Docker,
-    id_or_name: &str,
-) -> Result<Option<bollard::models::ContainerInspectResponse>, HostError> {
-    let response = timeout(
-        DOCKER_CALL_TIMEOUT,
-        docker.inspect_container(id_or_name, None),
-    )
-    .await
-    .map_err(|_| HostError::DockerTimeout)?;
-    match response {
-        Ok(found) => Ok(Some(found)),
-        Err(error) if confirmed_not_found(&error) => Ok(None),
-        Err(_) => Err(HostError::Docker),
     }
 }
 

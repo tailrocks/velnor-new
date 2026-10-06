@@ -8,6 +8,7 @@ use bollard::Docker;
 
 use crate::docker_client::{DOCKER_OPERATION_TIMEOUT, docker_deadline_after};
 use crate::error::HostError;
+#[cfg(test)]
 use crate::worker::resources::guest::{
     GuestResourceSample,
     sampler::{GuestSampleSnapshot, GuestSampleStatus},
@@ -87,6 +88,7 @@ fn byte_slots(bytes: u64, per_job: u64) -> u32 {
 ///
 /// Any positive memory PSI means the guest observed memory stalls. Admission
 /// stays closed until a fresh sample reports no memory pressure.
+#[cfg(test)]
 pub(crate) fn sampled_guest_slots(snapshot: GuestSampleSnapshot, ceiling: u32) -> u32 {
     if snapshot.status != GuestSampleStatus::Available {
         return 0;
@@ -100,6 +102,7 @@ pub(crate) fn sampled_guest_slots(snapshot: GuestSampleSnapshot, ceiling: u32) -
     guest_slots(cpu / 1000, memory, Some(disk), ceiling)
 }
 
+#[cfg(test)]
 fn sampled_inputs(sample: GuestResourceSample) -> Option<(u32, u64, u16, u64)> {
     Some((
         sample.cpu_millicores?,

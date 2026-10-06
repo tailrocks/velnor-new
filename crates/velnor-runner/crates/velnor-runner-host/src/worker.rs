@@ -23,17 +23,19 @@ pub(crate) use volumes::{
     create_named_volumes, remove_worker_volumes, verify_worker_volume,
 };
 mod mounts;
-mod prepared;
 mod projection;
 mod resource_budget;
 #[cfg(all(test, unix))]
 mod volumes_tests;
 #[cfg(test)]
 pub(crate) use projection::{dind_create_for_identity, runner_create_for_identity};
+#[cfg(test)]
 pub(crate) use projection::{identity_labels_match, launch_identity_labels_match};
 #[cfg(test)]
+pub(crate) use resource_budget::bounded_host_limits;
+#[cfg(test)]
 pub(crate) use resource_budget::test_resource_budget;
-pub(crate) use resource_budget::{ResourceBudget, ResourceBudgetConfig, bounded_host_limits};
+pub(crate) use resource_budget::{ResourceBudget, ResourceBudgetConfig};
 #[cfg(test)]
 mod projection_tests;
 

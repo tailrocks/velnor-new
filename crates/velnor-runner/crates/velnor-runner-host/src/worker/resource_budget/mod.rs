@@ -8,6 +8,7 @@ const MILLICORES_PER_CPU: u64 = 1_000;
 const NANO_CPUS_PER_CPU: u64 = 1_000_000_000;
 const NANOS_PER_MILLICORE: u64 = NANO_CPUS_PER_CPU / MILLICORES_PER_CPU;
 const DOCKER_MIN_MEMORY_BYTES: u64 = 6_291_456;
+#[cfg(test)]
 const DOCKER_MIN_MEMORY_BYTES_I64: i64 = 6_291_456;
 
 /// TOML values for the runner and the private `DinD` container.
@@ -37,6 +38,7 @@ pub(crate) struct DockerResourceLimits {
 }
 
 /// Check that an inspected Docker `HostConfig` carries finite supported limits.
+#[cfg(test)]
 #[must_use]
 pub(crate) fn bounded_host_limits(
     nano_cpus: Option<i64>,
@@ -116,6 +118,7 @@ impl ResourceBudget {
     ///
     /// Returns [`HostError::Config`] when the Docker CPU observation is absent,
     /// invalid, or too small for both configured container limits together.
+    #[cfg(test)]
     pub(crate) fn validate_guest_cpu(self, guest_ncpu: Option<i64>) -> Result<(), HostError> {
         let guest_ncpu = guest_ncpu
             .filter(|count| *count > 0)

@@ -1,12 +1,18 @@
 //! Durable launch projections for runner and `DinD` containers.
 
+#[cfg(test)]
 use std::collections::HashMap;
+#[cfg(test)]
 use std::path::Path;
 
+#[cfg(test)]
 use crate::docker_spec::{Mount, runner_plan};
+#[cfg(test)]
 use crate::error::HostError;
+#[cfg(test)]
 use crate::launch_identity::LaunchIdentity;
 
+#[cfg(test)]
 use super::{BindMount, CreateProjection, DIND_ENTRYPOINT, DIND_IMAGE, runner_create};
 
 /// Private `DinD` create. Privilege is not a flag on the runner plan.
@@ -16,6 +22,7 @@ use super::{BindMount, CreateProjection, DIND_ENTRYPOINT, DIND_IMAGE, runner_cre
 /// # Errors
 ///
 /// Returns [`HostError::ForbiddenMount`] when the identity has an invalid volume.
+#[cfg(test)]
 pub(crate) fn dind_create_for_identity(
     identity: &LaunchIdentity,
 ) -> Result<CreateProjection, HostError> {
@@ -53,6 +60,7 @@ pub(crate) fn dind_create_for_identity(
 ///
 /// Returns [`HostError::Path`] when the cache path is not absolute or Unicode.
 /// Returns runner-plan errors from [`runner_create`].
+#[cfg(test)]
 pub(crate) fn runner_create_for_identity(
     identity: &LaunchIdentity,
     archive_cache_path: Option<&Path>,
@@ -77,10 +85,12 @@ pub(crate) fn runner_create_for_identity(
     Ok(spec)
 }
 
+#[cfg(test)]
 pub(crate) fn container_name(identity: &LaunchIdentity, role: &str) -> String {
     format!("velnor-{role}-{}", identity.launch_id())
 }
 
+#[cfg(test)]
 pub(crate) fn container_labels(identity: &LaunchIdentity, role: &str) -> Vec<String> {
     vec![
         "velnor.product=velnor".to_owned(),
@@ -96,6 +106,7 @@ pub(crate) fn container_labels(identity: &LaunchIdentity, role: &str) -> Vec<Str
 ///
 /// Docker can include image labels in inspected container configuration. Those labels
 /// do not define Velnor ownership and may be present alongside the exact launch labels.
+#[cfg(test)]
 pub(crate) fn identity_labels_match(
     expected: &HashMap<String, String>,
     actual: &HashMap<String, String>,
@@ -110,6 +121,7 @@ pub(crate) fn identity_labels_match(
 }
 
 /// Match launch identity across the `DinD` and runner roles.
+#[cfg(test)]
 pub(crate) fn launch_identity_labels_match(
     expected: &HashMap<String, String>,
     actual: &HashMap<String, String>,
