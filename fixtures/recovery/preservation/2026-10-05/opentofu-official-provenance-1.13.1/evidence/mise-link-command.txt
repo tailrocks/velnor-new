@@ -1,0 +1,1 @@
+mise --no-config link opentofu@1.13.1 /opt/velnor-task-fixtures/20261005/opentofu-1.13.1-official-provenance-20261005T1902Z/install

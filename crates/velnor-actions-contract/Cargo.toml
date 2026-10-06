@@ -1,0 +1,23 @@
+[package]
+name = "velnor-actions-contract"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+autotests = false
+
+[lints]
+workspace = true
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+blake3 = { version = "=1.8.7" }
+thiserror = { workspace = true }
+
+[[test]]
+name = "velnor_contract"
+path = "tests/velnor_contract.rs"
+
+[dev-dependencies]
+serde_json = { workspace = true }

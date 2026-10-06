@@ -1,0 +1,7 @@
+# Velnor policy audit (version-policy §2): every ref requires a hash.
+# No exceptions remain: the Alint pin is a full SHA like every other
+# action. Line-scoped ignores below would fail the policy scan until
+# re-derived (pinned by repo policy test).
+rules:
+  unpinned-uses:
+    ignore: []

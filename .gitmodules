@@ -1,0 +1,4 @@
+[submodule "qualification/fixtures/submodule"]
+	path = qualification/fixtures/submodule
+	url = https://github.com/tailrocks/velnor-new.git
+	branch = g4-submodule-fixture
