@@ -7,8 +7,8 @@ use velnor_actions_contract::config::{
 use velnor_actions_contract::{digest_b3, is_valid_digest};
 use velnor_actions_mise::checks::CheckCapabilityProof;
 
-mod generators;
 mod container_tests;
+mod generators;
 
 use generators::*;
 

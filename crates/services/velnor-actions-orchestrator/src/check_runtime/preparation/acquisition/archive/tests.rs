@@ -48,8 +48,8 @@ fn zip_file(path: &Path, entries: &[(&str, &[u8], u32)]) {
     writer.finish().expect("zip finish");
 }
 
-mod deadline_tests;
 mod archive_tests;
+mod deadline_tests;
 mod metadata_tests;
 mod tar_admission_tests;
 mod zip_admission_tests;
