@@ -98,6 +98,9 @@ fn accept_with_deadline(listener: &TcpListener) -> Option<TcpStream> {
     let deadline = Instant::now() + Duration::from_millis(500);
     while Instant::now() < deadline {
         if let Ok((stream, _)) = listener.accept() {
+            // Accepted sockets inherit the listener's nonblocking mode on
+            // macOS; the request/response loops below assume blocking I/O.
+            let _ = stream.set_nonblocking(false);
             return Some(stream);
         }
         thread::sleep(Duration::from_millis(5));
