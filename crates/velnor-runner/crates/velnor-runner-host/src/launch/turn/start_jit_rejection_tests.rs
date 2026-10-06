@@ -4,7 +4,7 @@ use super::start_tests::{ready, zero_assignment_session};
 use super::start_turn;
 use crate::EnsureError;
 use crate::IntentState;
-use crate::launch::inspect_tests::DockerStub;
+use crate::launch::inspect_tests::{DockerStub, http};
 use crate::launch_harness::{Mode, Script, absent, assigned_wait, open};
 
 #[tokio::test]
@@ -12,7 +12,11 @@ async fn definite_assigned_jit_rejection_releases_then_redelivery_retries() -> R
     let (scratch, journal) = open("assigned-jit-forbidden").await?;
     let session = zero_assignment_session()?;
     let polled = assigned_wait(91, 1);
-    let docker = DockerStub::open(Vec::new())?;
+    // One best-effort engine identity probe per turn; empty ID keeps `None`.
+    let docker = DockerStub::open(vec![
+        http(200, r#"{"ID":""}"#),
+        http(200, r#"{"ID":""}"#),
+    ])?;
     let mut rejected = Script {
         calls: Vec::new(),
         mode: Mode::JitForbidden,
@@ -55,17 +59,22 @@ async fn definite_assigned_jit_rejection_releases_then_redelivery_retries() -> R
         false,
     )
     .await;
-    assert_eq!(result, Err(EnsureError::Forbidden));
-    assert_eq!(recovered.calls, ["jit"]);
+    // The dead row still owns its identity (unique index), so the redelivered
+    // subject cannot bind a fresh row or retry a definitely-failed mint. The
+    // fresh row is held uncertain; no HTTP call is made.
+    assert_eq!(result, Err(EnsureError::Uncertain));
+    assert!(recovered.calls.is_empty());
     assert!(workers.is_empty());
-    assert_eq!(crate::launch::slot::occupied(&journal).await, Ok(0));
+    // The held uncertain row keeps its permit; the dead row does not.
+    assert_eq!(crate::launch::slot::occupied(&journal).await, Ok(1));
     let docker_requests = docker.finish().await?;
-    assert!(docker_requests.is_empty());
+    // Only the two canned engine identity probes; no container inspect calls.
+    assert_eq!(docker_requests.len(), 2);
     let rows = journal.rows().await.map_err(|error| error.to_string())?;
     assert_eq!(rows.len(), 2);
     assert_eq!(rows[0].state, IntentState::Failed);
     assert_eq!(rows[0].subject, rows[1].subject);
-    assert_eq!(rows[1].state, IntentState::Failed);
+    assert_eq!(rows[1].state, IntentState::Uncertain);
     assert!(rows[1].docker_id.is_none());
     assert!(rows[1].dind_id.is_none());
     assert!(rows[1].worker_volume.is_none());

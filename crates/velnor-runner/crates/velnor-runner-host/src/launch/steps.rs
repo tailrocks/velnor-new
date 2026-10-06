@@ -190,20 +190,6 @@ where
                 .map_err(map_journal)?;
             reject_empty(journal, id).await
         }
-        Ok(AcquireOutcome::Noop) => {
-            journal
-                .record_assigned_acquire(id, true)
-                .await
-                .map_err(map_journal)?;
-            hold(journal, id, EnsureError::Uncertain).await
-        }
-        Ok(AcquireOutcome::Acquired(_)) => {
-            journal
-                .record_assigned_acquire(id, false)
-                .await
-                .map_err(map_journal)?;
-            reject_empty(journal, id).await
-        }
         Err(error) => fail_acquire(journal, id, error).await,
     }
 }
@@ -328,10 +314,19 @@ where
         )
         .await;
     }
-    journal
+    if let Err(error) = journal
         .bind_launch_identity(id, ctx.set_id, None, name)
         .await
-        .map_err(map_journal)?;
+    {
+        if journal
+            .launch_identity_taken(ctx.set_id, name, id)
+            .await
+            .map_err(map_journal)?
+        {
+            return hold(journal, id, EnsureError::Uncertain).await;
+        }
+        return Err(map_journal(error));
+    }
     mint::run(
         lane,
         mint::Request {

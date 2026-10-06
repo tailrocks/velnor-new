@@ -258,6 +258,11 @@ fn marker_row(row: &turso::Row) -> Result<IntentRow, HostError> {
         docker_id: None,
         dind_id: None,
         worker_volume: None,
+        scale_set_id: None,
+        request_id: None,
+        runner_name: None,
+        docker_engine_id: None,
+        launch_phase: None,
         github_runner_id: None,
         cleanup_proven,
     })

@@ -261,10 +261,11 @@ async fn bound_running_worker_acks_without_a_second_jit_request() -> Result<(), 
         .map_err(|error| error.to_string())?;
     let session = zero_assignment_session()?;
     let polled = assigned_wait(93, 1);
-    let docker = DockerStub::open(vec![http(
-        200,
-        r#"{"State":{"Status":"running","Running":true}}"#,
-    )])?;
+    let docker = DockerStub::open(vec![
+        http(200, r#"{"State":{"Status":"running","Running":true}}"#),
+        // Best-effort engine identity probe; empty ID keeps the old `None` behavior.
+        http(200, r#"{"ID":""}"#),
+    ])?;
     let mut script = Script {
         calls: Vec::new(),
         mode: Mode::JitConflict,
