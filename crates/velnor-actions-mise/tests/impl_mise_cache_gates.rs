@@ -50,7 +50,7 @@ fn sources_allowlist_rejects_creds_targets_and_homes() {
     }
 }
 
-/// Task-cache modes follow the event: local/pr/merge/push/release.
+/// Task-cache modes follow the event: local/pr/merge/push/release/qualification.
 #[test]
 fn modes_follow_event_kind() {
     assert_eq!(
@@ -71,6 +71,10 @@ fn modes_follow_event_kind() {
     );
     assert_eq!(
         mode_for_event("release").expect("release"),
+        TaskCacheMode::Off
+    );
+    assert_eq!(
+        mode_for_event("qualification").expect("qualification"),
         TaskCacheMode::Off
     );
     assert!(mode_for_event("schedule").is_err());

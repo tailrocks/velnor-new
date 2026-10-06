@@ -6,12 +6,13 @@ use tempfile::TempDir;
 use velnor_actions_mise::{
     IsolatedCommand, MiseInstall, PinnedTool, PreparePinnedTools, ToolCatalog, ToolHomes,
 };
-use velnor_actions_orchestrator::prepare;
+use velnor_actions_orchestrator::{prepare, render_staged_tree};
+use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
 use crate::impl_common::{TestResult, fixture_manifest_json, git, without_ambient_identity};
 
 /// Velnor-policy workspace: a validator-spawning suite plus a plain crate.
-fn velnor_workspace() -> Result<TempDir, Box<dyn std::error::Error>> {
+pub(super) fn velnor_workspace() -> Result<TempDir, Box<dyn std::error::Error>> {
     let dir = TempDir::new()?;
     let root = dir.path();
     git(&["init", "-b", "testmain"], root)?;
@@ -114,18 +115,42 @@ fn prepare_runs(yaml: &str) -> BTreeMap<String, String> {
     runs
 }
 
+/// Extract a rendered job through the next peer job.
+fn job_section<'a>(yaml: &'a str, id: &str) -> Option<&'a str> {
+    let prefix = format!("  {id}:\n");
+    let start = yaml.find(&prefix)? + prefix.len();
+    let tail = &yaml[start..];
+    let mut end = 0;
+    for line in tail.split_inclusive('\n') {
+        if line.starts_with("  ") && !line.starts_with("   ") {
+            break;
+        }
+        end += line.len();
+    }
+    Some(&tail[..end])
+}
+
+/// Validators invoke their exact analyzer pin through isolated Mise exec.
+fn assert_pinned_exec(section: &str, tool: &str) -> Result<(), String> {
+    if section.contains("mise --no-config --no-env --no-hooks exec") && section.contains(tool) {
+        Ok(())
+    } else {
+        Err(format!(
+            "validator does not execute pinned {tool}: {section}"
+        ))
+    }
+}
+
 #[test]
 fn velnor_jobs_carry_trio_only_where_executed() -> TestResult {
     without_ambient_identity("velnor_jobs_carry_trio_only_where_executed", || {
         let repo = velnor_workspace()?;
         let prep = prepare(repo.path())?;
-        let yaml = velnor_actions_workflow_renderer::render_workflow_ir(
-            &prep.workflow.ir,
-            prep.config.workflow.policy,
-            prep.workflow.support.as_ref(),
-            &prep.workflow.context,
-        )
-        .map_err(|err| format!("render: {err}"))?;
+        let tree = render_staged_tree(&prep)?;
+        let yaml = tree
+            .get(WORKFLOW_PATH)
+            .ok_or("rendered workflow missing")?
+            .to_owned();
         let runs = prepare_runs(&yaml);
         let trio = ["actionlint@", "shellcheck@", "zizmor@"];
         let plan = runs.get("plan").ok_or("plan must prepare tools")?;
@@ -148,10 +173,18 @@ fn velnor_jobs_carry_trio_only_where_executed() -> TestResult {
         for spec in trio {
             assert!(!required.contains(spec), "required must not carry {spec}");
         }
-        for id in ["alint", "cargo-deny", "cargo-machete", "zizmor"] {
+        for (id, tool) in [
+            ("actionlint", "actionlint@1.7.12"),
+            ("cargo-machete", "ubi:bnjbvr/cargo-machete@0.9.2"),
+            ("zizmor", "zizmor@1.30.1"),
+        ] {
+            let section = job_section(&yaml, id).ok_or("validator job missing")?;
+            assert_pinned_exec(section, tool)?;
+        }
+        for id in ["alint", "cargo-deny"] {
             assert!(
                 !runs.contains_key(id),
-                "dedicated {id} has no Prepare step to trim"
+                "{id} keeps its own install boundary"
             );
         }
         Ok(())

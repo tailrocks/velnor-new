@@ -106,6 +106,7 @@ fn marker_plan(marker: &str) -> velnor_actions_contract::Plan {
         base: Some("a".repeat(40)),
         head: "head".to_owned(),
         event: WorkflowEvent::PullRequest,
+        qualification: None,
         runner: PlanRunner {
             label: "ubuntu-26.04".to_owned(),
             selection: RunnerSelection::LatestDefault,

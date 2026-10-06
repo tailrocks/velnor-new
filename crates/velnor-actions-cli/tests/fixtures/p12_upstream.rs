@@ -118,11 +118,6 @@ fn probe_action_rows() -> Vec<ProbeRow> {
             "{\"tag_name\": \"v0.16.1\"}",
         ),
         (
-            "https://api.github.com/repos/Swatinem/rust-cache/tags",
-            "rust-cache.json",
-            "[{\"name\": \"v2.9.2\"}]",
-        ),
-        (
             "https://api.github.com/repos/aws-actions/configure-aws-credentials/releases/latest",
             "aws-credentials.json",
             "{\"tag_name\": \"v6.3.0\"}",
@@ -210,7 +205,7 @@ fn probe_rows_carry_source_and_check_time() -> Result<(), Box<dyn Error>> {
         .iter()
         .filter(|line| line.contains("\"check\":\"upstream-probe\""))
         .collect();
-    assert_eq!(probe.len(), 21, "20 rows + runner note:\n{}", run.stdout);
+    assert_eq!(probe.len(), 20, "19 rows + runner note:\n{}", run.stdout);
     for line in probe {
         if line.contains("\"subject\":\"runner\"") {
             assert!(

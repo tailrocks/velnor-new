@@ -1,6 +1,7 @@
 //! Integration test entry point; cases live in the sibling files.
 mod impl_bench_p13;
 mod impl_cache_fixtures;
+mod impl_cache_sources_exact;
 mod impl_cache_warm;
 mod impl_common;
 mod impl_config_internal;
@@ -60,6 +61,7 @@ mod impl_orch_lock_audit;
 mod impl_orch_merge;
 mod impl_orch_merge_final;
 mod impl_orch_p08;
+mod impl_orch_p08_sources;
 mod impl_orch_plansel;
 mod impl_orch_release_emit;
 mod impl_orch_timeout;
@@ -69,10 +71,12 @@ mod impl_p06_detection;
 mod impl_p06_detection_malformed;
 mod impl_perf_p13;
 mod impl_permissions_scope;
+mod impl_plan_matrix_output;
 mod impl_plan_migration;
 mod impl_plan_parity;
 mod impl_plan_prepare;
 mod impl_prepare_generate;
+mod impl_preseed_cold;
 mod impl_preseed_manifest;
 mod impl_protocol;
 mod impl_protocol_fork;

@@ -8,13 +8,17 @@ use velnor_actions_contract::{Step, StepKind, StepRole};
 
 use crate::{RenderError, commands, marker};
 
+#[path = "steps_action.rs"]
+mod action;
+pub use action::{action_step, action_step_with_env};
+
+pub(crate) use crate::cache_steps::tools_cache_step;
 pub use crate::cache_steps::{
     CACHE_RESTORE_NAME, CACHE_SAVE_NAME, CompileDriver, MBX_ACTION_NAME, MBX_CACHE_MODE_ENV,
     MBX_PREFLIGHT_NAME, MBX_RESTORE_NAME, MBX_VERSION_CHECK_NAME, NEVER_ARCHIVE_MARKERS,
-    TASK_ARTIFACTS_DIR, TOOLS_CACHE_PATH, TOOLS_KEY_PREFIX, TOOLS_RESTORE_NAME, TOOLS_RESTORE_USES,
-    TOOLS_SAVE_NAME, TOOLS_SAVE_USES, cache_action_step, check_cache_step_order, check_mbx_gating,
-    is_never_archive_path, mbx_steps_for_driver, tools_cache_key, tools_restore_step,
-    tools_save_step,
+    TASK_ARTIFACTS_DIR, TOOLS_CACHE_PATH, TOOLS_CACHE_PATHS, TOOLS_RESTORE_NAME,
+    TOOLS_RESTORE_USES, TOOLS_SAVE_NAME, TOOLS_SAVE_USES, cache_action_step,
+    check_cache_step_order, check_mbx_gating, is_never_archive_path, mbx_steps_for_driver,
 };
 
 pub use crate::action_ref::validate_uses;
@@ -44,6 +48,8 @@ pub const PUBLISH_OPERATION: &str = "publish-baseline-v1";
 pub const FETCH_OPERATION: &str = "fetch-reports-v1";
 /// Write-request operation name.
 pub const WRITE_REQUEST_OPERATION: &str = "write-request-v1";
+/// Resolve exact predecessor receipts for a typed qualification plan.
+pub const RESOLVE_QUALIFICATION_OPERATION: &str = "resolve-qualification-v1";
 /// Required prefix of the digest-verified staged binary path.
 pub const STAGED_BINARY_PREFIX: &str = "$RUNNER_TEMP/velnor/bin/velnor-actions-";
 /// Required prefix of internal request directories (expression form: shell
@@ -123,59 +129,6 @@ pub fn checkout_step(uses: &str) -> Result<Step, RenderError> {
     Ok(step)
 }
 
-/// Validated pinned-action step.
-///
-/// Names share the step-name gate (no expressions); `with:` keys never
-/// carry expressions and values only allowlisted runner spans.
-/// # Errors
-pub fn action_step(
-    name: &str,
-    uses: &str,
-    with: BTreeMap<String, String>,
-) -> Result<Step, RenderError> {
-    action_step_with_env(name, uses, with, BTreeMap::new())
-}
-
-/// Validated action step with step-level environment.
-///
-/// Same gates as [`action_step`]; `env` renders as the step's `env:`
-/// map and applies to the action's main and post phases alike, which
-/// is what lets a cache mode gate the post-step save while the
-/// restore still runs on every event.
-/// # Errors
-pub fn action_step_with_env(
-    name: &str,
-    uses: &str,
-    with: BTreeMap<String, String>,
-    env: BTreeMap<String, String>,
-) -> Result<Step, RenderError> {
-    if name.trim().is_empty() {
-        return Err(RenderError::BadActionRef("empty_name".to_owned()));
-    }
-    crate::expressions::check_name_content(name)?;
-    validate_uses(uses)?;
-    scan_for_private_subcommands(name)?;
-    scan_for_private_subcommands(uses)?;
-    for (key, value) in &with {
-        crate::expressions::check_with_key(key)?;
-        crate::expressions::check_with_value(key, value)?;
-        scan_for_private_subcommands(key)?;
-        scan_for_private_subcommands(value)?;
-    }
-    crate::commands::validate_env(&env)?;
-    Ok(Step {
-        name: name.to_owned(),
-        id: None,
-        role: None,
-        condition: None,
-        kind: StepKind::Action {
-            uses: uses.to_owned(),
-            with,
-            env,
-        },
-    })
-}
-
 /// Validated fixed-argv shell step, scrubbed and unset by construction.
 ///
 /// The default posture for every `run:` step: env leaves carrying the
@@ -199,12 +152,31 @@ pub fn shell_step(
     argv: Vec<String>,
     env: BTreeMap<String, String>,
 ) -> Result<Step, RenderError> {
+    shell_step_with_env_validation(name, argv, env, commands::validate_env)
+}
+
+/// Validated scrubbed shell step inside a generated composite action.
+/// # Errors
+pub(crate) fn composite_shell_step(
+    name: &str,
+    argv: Vec<String>,
+    env: BTreeMap<String, String>,
+) -> Result<Step, RenderError> {
+    shell_step_with_env_validation(name, argv, env, commands::validate_composite_env)
+}
+
+fn shell_step_with_env_validation(
+    name: &str,
+    argv: Vec<String>,
+    env: BTreeMap<String, String>,
+    validate_env: fn(&BTreeMap<String, String>) -> Result<(), RenderError>,
+) -> Result<Step, RenderError> {
     if name.trim().is_empty() {
         return Err(RenderError::BadCommand("empty_name".to_owned()));
     }
     crate::expressions::check_name_content(name)?;
     commands::validate_command_argv(&argv)?;
-    commands::validate_env(&env)?;
+    validate_env(&env)?;
     crate::toolchain_env::reject_denied_step_keys(&env)?;
     scan_for_private_subcommands(name)?;
     let run = if commands::is_inline_shell(&argv) {
@@ -234,10 +206,10 @@ pub fn shell_step(
 /// scrub overlay. Allowed only when the step executes no repository
 /// code and needs network auth to function: pinned-tool acquisition
 /// (`mise install`, where authenticated quota beats flaky anonymous
-/// limits), offline pinned analyzers over the checkout (deny, machete,
-/// zizmor, actionlint — scrubbing broke their tool bootstrap, CI run
-/// 36815180228), and `gh` release publishing. Anything compiling or
-/// running repository code must use [`shell_step`].
+/// limits), Cargo Deny's combined install-and-check vector (which removes
+/// credentials between those phases), and `gh` release publishing.
+/// Validators whose preparation runs separately use [`shell_step`]
+/// for execution.
 /// # Errors
 pub fn ambient_shell_step(
     name: &str,

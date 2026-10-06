@@ -10,7 +10,7 @@ use velnor_actions_contract::{Job, StepKind};
 use velnor_actions_contract::{Step, StepRole};
 
 use crate::composite::composite_yaml;
-use crate::document_steps::step_to_yaml;
+use crate::document_steps::{StepRenderContext, step_to_yaml};
 use crate::render::RenderContext;
 use crate::tree::RenderedFile;
 use crate::{RenderError, marker, steps, yaml::render_yaml};
@@ -203,16 +203,17 @@ pub(crate) fn composite_file(
     .map_err(RenderError::Contract)?;
     let mut rendered = Vec::with_capacity(steps.len());
     let empty_job_env = BTreeMap::new();
+    let render_context = StepRenderContext {
+        job_id: logical,
+        ctx,
+        needs_envs: &[],
+        composite: true,
+        job_env: &empty_job_env,
+        actions_read: false,
+        runs_on: None,
+    };
     for step in steps {
-        rendered.push(step_to_yaml(
-            logical,
-            step,
-            ctx,
-            &[],
-            true,
-            &empty_job_env,
-            false,
-        )?);
+        rendered.push(step_to_yaml(step, &render_context)?);
     }
     let body = composite_yaml(logical, rendered)?;
     let bytes = marker::with_marker(&ctx.generator_version, &render_yaml(&body))?;

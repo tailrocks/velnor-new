@@ -368,14 +368,21 @@ fn ignored_rust_candidate_keeps_plan_inventory_toolchain() {
         crate::workflow::build_workflow(&config, "main", "ubuntu-26.04", &discovery, &[])
             .expect("ignored Rust workflow");
     let plan = &workflow.ir.jobs["plan"];
+    let pinned_tools = plan
+        .steps
+        .iter()
+        .find(|step| step.name == "Prepare pinned tools")
+        .expect("plan inventory prepares its exact Rust compiler");
+    assert!(matches!(
+        &pinned_tools.kind,
+        StepKind::Shell { run, .. }
+            if run.contains(&ToolCatalog::pinned().tool_spec(PinnedTool::Rust))
+    ));
     assert!(
-        plan.steps
+        !plan
+            .steps
             .iter()
-            .any(|step| step.name == "Prepare Rust components")
+            .any(|step| step.name == "Prepare Rust components"),
+        "an ignored candidate has no selected plan-owned Format step"
     );
-    assert!(plan.steps.iter().any(|step| match &step.kind {
-        StepKind::Shell { run, .. } =>
-            run.contains(&ToolCatalog::pinned().tool_spec(PinnedTool::Rust)),
-        _ => false,
-    }));
 }

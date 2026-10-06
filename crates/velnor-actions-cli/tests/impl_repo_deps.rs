@@ -5,7 +5,10 @@ use std::error::Error;
 
 #[path = "impl_repo_archive_deps.rs"]
 mod archive_deps;
+#[path = "impl_repo_size_limits.rs"]
+mod size_limits;
 use archive_deps::reviewed_archive_dependency;
+pub(crate) use size_limits::physical_lines;
 
 use crate::impl_repo_policy::{
     MEMBERS, dep_key, dep_lines, dep_referenced, manifest, p11_toml, read, repo_root, test_markers,
@@ -81,6 +84,10 @@ fn external_deps_allowlisted_used_and_narrow() -> Result<(), Box<dyn Error>> {
         // compile-gated at 1.98.1); default features only, facade-owned
         // byte/count/depth caps, no expression evaluation.
         "hcl",
+        // Bounded GitHub receipt ZIP reader; only pure-Rust deflate decoding
+        // is enabled so artifacts can be validated without extracting paths.
+        "flate2",
+        "zip",
         // Reviewed proc-macro token tree for the test-source scanner.
         "proc-macro2",
         // Reviewed Rust AST (`full`, `visit`) for the test-source closure guard.
@@ -109,9 +116,10 @@ fn external_deps_allowlisted_used_and_narrow() -> Result<(), Box<dyn Error>> {
                     assert!(narrow, "{dir}/{key} feature {feature}");
                 }
             }
-            // Cargo maps dependency hyphens to underscores in Rust identifiers.
+            let feature_backend =
+                key == "flate2" && body.contains("zip = ") && body.contains("deflate-flate2");
             assert!(
-                dep_referenced(dir, &key.replace('-', "_"))?,
+                dep_referenced(dir, &key.replace('-', "_"))? || feature_backend,
                 "{dir} never uses {key}"
             );
         }
@@ -208,44 +216,6 @@ fn cli_tests_assert_through_binary_only() -> Result<(), Box<dyn Error>> {
             "{} uses implementation",
             path.display()
         );
-    }
-    Ok(())
-}
-
-/// Physical lines: newline count, matching `wc -l`.
-pub(crate) fn physical_lines(body: &str) -> usize {
-    body.bytes().filter(|byte| *byte == b'\n').count()
-}
-
-#[test]
-fn size_limits_hold() -> Result<(), Box<dyn Error>> {
-    let mut over = Vec::new();
-    for (dir, _) in MEMBERS {
-        for area in ["src", "tests"] {
-            for path in tree_files(&format!("{dir}/{area}"), "rs")? {
-                let lines = physical_lines(&std::fs::read_to_string(&path)?);
-                if lines > 400 {
-                    over.push(format!("{} ({lines})", path.display()));
-                }
-                let name = path
-                    .file_name()
-                    .and_then(|stem| stem.to_str())
-                    .unwrap_or("");
-                if (name == "lib.rs" || name == "main.rs") && lines > 150 {
-                    over.push(format!("{} lib/main ({lines})", path.display()));
-                }
-            }
-        }
-    }
-    assert!(over.is_empty(), "over 400 lines: {}", over.join(", "));
-    assert!(read("clippy.toml")?.contains("too-many-lines-threshold = 80"));
-    assert!(read("Cargo.toml")?.contains("too_many_lines = \"deny\""));
-    let mut docs = tree_files("docs", "md")?;
-    docs.extend(tree_files(".velnor", "toml")?);
-    docs.extend(tree_files(".velnor", "json")?);
-    for path in docs {
-        let lines = physical_lines(&std::fs::read_to_string(&path)?);
-        assert!(lines <= 400, "{} has {lines} lines", path.display());
     }
     Ok(())
 }

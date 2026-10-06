@@ -176,7 +176,7 @@ fn assert_both_ci(ci: &str) -> TestResult {
     assert!(local.contains(SCALE_RUNS), "{local}");
     assert!(!local.contains(SCALE_REVERSED), "{local}");
     assert!(!local.contains("runs-on: ubuntu-26.04\n"), "{local}");
-    shell_tests::assert_scale_set_shell_and_same_steps(hosted, local);
+    shell_tests::assert_scale_set_shell_and_same_steps(hosted, local)?;
     let plan = job_body(ci, "plan")?;
     assert!(plan.contains(HOSTED_RUNS), "{plan}");
     assert!(!plan.contains("ubuntu-26.04-scale-set"), "{plan}");

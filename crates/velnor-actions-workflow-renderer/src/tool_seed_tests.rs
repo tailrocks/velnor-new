@@ -3,7 +3,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
-use velnor_actions_contract::{Job, Step, StepKind, StepRole};
+use velnor_actions_contract::{Job, Step, StepKind};
 
 use super::*;
 use crate::tool_seed_test_support::mock_trust_commands;
@@ -137,7 +137,7 @@ fn step_key_is_derived_from_pinned_job_tools_and_configured_checkout_payload() {
     let mut checkout = crate::steps::checkout_step(CHECKOUT).expect("checkout");
     checkout.name = "Fetch source".to_owned();
     let mut rendered_job = job(vec![checkout, mise_shell()]);
-    crate::cache_p08::ensure_setup_p08(
+    crate::cache_p08::ensure_tools_cache_v2(
         "fixture",
         &mut rendered_job,
         &setup,
@@ -147,32 +147,19 @@ fn step_key_is_derived_from_pinned_job_tools_and_configured_checkout_payload() {
     )
     .expect("setup and seed");
     assert_eq!(rendered_job.steps[1].name, TOOL_SEED_NAME);
-    assert_eq!(rendered_job.steps[1].role, Some(StepRole::ToolSeed));
     let StepKind::Action { with, .. } = &rendered_job.steps[1].kind else {
         panic!("seed must be an action")
     };
     assert_eq!(
         with.get("cache_key").map(String::as_str),
-        Some(expected.as_str())
+        Some(crate::tool_seed::guarded_seed_key(&expected).as_str())
     );
-    assert_eq!(rendered_job.steps[2].name, "Setup Mise");
-    assert_eq!(rendered_job.steps[2].role, Some(StepRole::MiseSetup));
-
-    let mut full_history_checkout = crate::steps::checkout_step(CHECKOUT).expect("checkout");
-    if let StepKind::Action { with, .. } = &mut full_history_checkout.kind {
-        with.insert("fetch-depth".to_owned(), "0".to_owned());
-    }
-    let mut deep_job = job(vec![full_history_checkout, mise_shell()]);
-    crate::cache_p08::ensure_setup_p08(
-        "full-history-checkout",
-        &mut deep_job,
-        &setup,
-        false,
-        TARGET,
-        CHECKOUT,
-    )
-    .expect("full-history checkout is an eligible seed owner");
-    assert!(is_tool_seed_step(&deep_job.steps[1]));
+    assert_eq!(rendered_job.steps[2].name, "V2 identity");
+    assert_eq!(rendered_job.steps[4].name, "Setup Mise");
+    let seed_key = MiseToolsCacheKey::derive(TARGET, &setup.version, &["rust@1.98.1".to_owned()])
+        .expect("typed seed key");
+    crate::tool_seed::insert_before_setup(&mut rendered_job, 4, CHECKOUT, &seed_key)
+        .expect("existing seed is admitted before setup");
 
     let fake = Step {
         name: "Checkout".to_owned(),
@@ -185,7 +172,7 @@ fn step_key_is_derived_from_pinned_job_tools_and_configured_checkout_payload() {
         },
     };
     let mut fake_job = job(vec![fake, mise_shell()]);
-    crate::cache_p08::ensure_setup_p08(
+    crate::cache_p08::ensure_tools_cache_v2(
         "fake-checkout",
         &mut fake_job,
         &setup,
@@ -196,26 +183,22 @@ fn step_key_is_derived_from_pinned_job_tools_and_configured_checkout_payload() {
     .expect("cold setup");
     assert!(fake_job.steps.iter().all(|step| !is_tool_seed_action(step)));
 
-    assert_wrong_pinned_checkout_stays_cold(&setup);
-}
-
-fn assert_wrong_pinned_checkout_stays_cold(setup: &crate::MiseSetup) {
-    let mut wrong_pin =
+    let mut wrong_checkout =
         crate::steps::checkout_step("actions/checkout@aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
-            .expect("pinned checkout shape");
-    wrong_pin.name = "Checkout".to_owned();
-    let mut wrong_pin_job = job(vec![wrong_pin, mise_shell()]);
-    crate::cache_p08::ensure_setup_p08(
+            .expect("pinned checkout");
+    wrong_checkout.name = "Checkout".to_owned();
+    let mut wrong_job = job(vec![wrong_checkout, mise_shell()]);
+    crate::cache_p08::ensure_tools_cache_v2(
         "wrong-checkout-ref",
-        &mut wrong_pin_job,
-        setup,
+        &mut wrong_job,
+        &setup,
         false,
         TARGET,
         CHECKOUT,
     )
-    .expect("mismatched checkout remains cold");
+    .expect("mismatched checkout stays cold");
     assert!(
-        wrong_pin_job
+        wrong_job
             .steps
             .iter()
             .all(|step| !is_tool_seed_action(step))
@@ -271,7 +254,7 @@ fn existing_seed_must_match_exact_job_key_and_payload() {
         crate::steps::checkout_step(CHECKOUT).expect("checkout"),
         mise_shell(),
     ]);
-    crate::cache_p08::ensure_setup_p08(
+    crate::cache_p08::ensure_tools_cache_v2(
         "fixture",
         &mut rendered_job,
         &setup,
@@ -285,6 +268,14 @@ fn existing_seed_must_match_exact_job_key_and_payload() {
         .iter()
         .position(is_tool_seed_action)
         .expect("seed action");
+    let setup_index = rendered_job
+        .steps
+        .iter()
+        .position(|step| step.name == crate::setup::SETUP_MISE_NAME)
+        .expect("Setup Mise");
+    let expected_key =
+        MiseToolsCacheKey::derive(TARGET, &setup.version, &["rust@1.98.1".to_owned()])
+            .expect("typed seed key");
     let mut mismatched_key = rendered_job.clone();
     if let StepKind::Action { with, .. } = &mut mismatched_key.steps[seed_index].kind {
         with.insert(
@@ -293,27 +284,26 @@ fn existing_seed_must_match_exact_job_key_and_payload() {
         );
     }
     assert!(
-        crate::cache_p08::ensure_setup_p08(
-            "wrong-seed-key",
+        crate::tool_seed::insert_before_setup(
             &mut mismatched_key,
-            &setup,
-            false,
-            TARGET,
+            setup_index,
             CHECKOUT,
+            &expected_key,
         )
         .is_err()
     );
 
     let mut mismatched_setup = rendered_job;
-    let setup_index = seed_index + 1;
+    let setup_index = mismatched_setup
+        .steps
+        .iter()
+        .position(|step| step.name == crate::setup::SETUP_MISE_NAME)
+        .expect("Setup Mise");
     if let StepKind::Action { with, .. } = &mut mismatched_setup.steps[setup_index].kind {
-        with.insert(
-            "cache_key".to_owned(),
-            "mise-v1-x86_64-unknown-linux-gnu-2026.9.18-0123456789abcdef".to_owned(),
-        );
+        with.insert("cache".to_owned(), "true".to_owned());
     }
     assert!(
-        crate::cache_p08::ensure_setup_p08(
+        crate::cache_p08::ensure_tools_cache_v2(
             "wrong-setup-key",
             &mut mismatched_setup,
             &setup,
@@ -332,7 +322,7 @@ fn local_seed_action_payload_and_order_are_not_name_authorized() {
         crate::steps::checkout_step(CHECKOUT).expect("checkout"),
         mise_shell(),
     ]);
-    crate::cache_p08::ensure_setup_p08(
+    crate::cache_p08::ensure_tools_cache_v2(
         "fixture",
         &mut rendered_job,
         &setup,
@@ -347,15 +337,15 @@ fn local_seed_action_payload_and_order_are_not_name_authorized() {
         .position(is_tool_seed_action)
         .expect("seed action");
     rendered_job.steps[seed_index].name = "Checkout".to_owned();
-    crate::cache_p08::ensure_setup_p08(
-        "renamed-seed",
-        &mut rendered_job,
-        &setup,
-        false,
-        TARGET,
-        CHECKOUT,
-    )
-    .expect("presentation name is ignored");
+    let setup_index = rendered_job
+        .steps
+        .iter()
+        .position(|step| step.name == crate::setup::SETUP_MISE_NAME)
+        .expect("Setup Mise");
+    let seed_key = MiseToolsCacheKey::derive(TARGET, &setup.version, &["rust@1.98.1".to_owned()])
+        .expect("typed seed key");
+    crate::tool_seed::insert_before_setup(&mut rendered_job, setup_index, CHECKOUT, &seed_key)
+        .expect("presentation name is ignored");
     assert_eq!(rendered_job.steps[seed_index].name, "Checkout");
 
     let mut conditional = job(vec![
@@ -366,7 +356,7 @@ fn local_seed_action_payload_and_order_are_not_name_authorized() {
         },
         mise_shell(),
     ]);
-    crate::cache_p08::ensure_setup_p08(
+    crate::cache_p08::ensure_tools_cache_v2(
         "conditional-checkout",
         &mut conditional,
         &setup,

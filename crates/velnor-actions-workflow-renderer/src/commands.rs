@@ -11,6 +11,11 @@ use crate::{
     steps::scan_for_private_subcommands,
 };
 
+#[path = "commands_rust_invocation.rs"]
+mod rust_invocation;
+
+pub use rust_invocation::check_no_bare_cargo;
+
 /// Validate a fixed argument vector: nonempty, no shell fragments.
 ///
 /// Rejects empty argv, empty args, control characters, command substitution,
@@ -66,6 +71,18 @@ pub fn validate_command_argv(argv: &[String]) -> Result<(), RenderError> {
 ///
 /// Returns [`RenderError::BadCommand`] or [`RenderError::PrivateSubcommand`].
 pub fn validate_env(env: &BTreeMap<String, String>) -> Result<(), RenderError> {
+    validate_env_in_scope(env, false)
+}
+
+/// Validate environment for a generated composite action's typed inputs.
+pub(crate) fn validate_composite_env(env: &BTreeMap<String, String>) -> Result<(), RenderError> {
+    validate_env_in_scope(env, true)
+}
+
+fn validate_env_in_scope(
+    env: &BTreeMap<String, String>,
+    composite: bool,
+) -> Result<(), RenderError> {
     for (key, value) in env {
         if key.is_empty()
             || (key != "TF_VAR_github_tokens"
@@ -81,7 +98,11 @@ pub fn validate_env(env: &BTreeMap<String, String>) -> Result<(), RenderError> {
         {
             return Err(RenderError::BadCommand(format!("bad_env_value:{key}")));
         }
-        crate::expressions::check_env_value(key, value)?;
+        if composite {
+            crate::expressions::check_composite_env_value(key, value)?;
+        } else {
+            crate::expressions::check_env_value(key, value)?;
+        }
         scan_for_private_subcommands(key)?;
         scan_for_private_subcommands(value)?;
     }
@@ -254,53 +275,4 @@ fn github_expression_end(bytes: &[u8], index: usize) -> Option<usize> {
         .windows(2)
         .position(|window| window == b"}}")
         .map(|offset| index + 3 + offset + 2)
-}
-
-/// Reject Rust invocations outside pinned `mise exec` (RQ-9.3).
-///
-/// Scans `run:` content only (inline values plus `|`/`>` blocks):
-/// every command line naming a Rust program must also name `mise`.
-/// Case-sensitive: uppercase env paths (`$CARGO_HOME`) are not
-/// invocations, and step names never scan.
-/// # Errors
-pub fn check_no_bare_cargo(yaml: &str) -> Result<(), RenderError> {
-    let mut in_run_block = false;
-    let mut run_indent = 0;
-    for line in yaml.lines() {
-        let trimmed = line.trim_start();
-        let indent = line.len() - trimmed.len();
-        if in_run_block {
-            if trimmed.is_empty() || indent <= run_indent {
-                in_run_block = false;
-            } else {
-                check_command_line(trimmed)?;
-                continue;
-            }
-        }
-        if let Some(rest) = trimmed.strip_prefix("run:") {
-            let rest = rest.trim();
-            if rest == "|" || rest == ">" {
-                in_run_block = true;
-                run_indent = indent;
-            } else if !rest.is_empty() {
-                check_command_line(rest)?;
-            }
-        }
-    }
-    Ok(())
-}
-
-/// Reject one command line naming a Rust program without `mise`.
-fn check_command_line(command: &str) -> Result<(), RenderError> {
-    if command.contains("mise") {
-        return Ok(());
-    }
-    for program in ["cargo", "rustc", "rustup", "mbx", "nextest"] {
-        if command.contains(program) {
-            return Err(RenderError::BadCommand(format!(
-                "bare_rust_invocation:{program}"
-            )));
-        }
-    }
-    Ok(())
 }

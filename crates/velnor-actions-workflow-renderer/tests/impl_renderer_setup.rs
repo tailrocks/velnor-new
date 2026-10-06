@@ -86,23 +86,48 @@ fn strict_inserts_setup_before_mise_exec() -> Result<(), RenderError> {
         format!("sha256: {MISE_SHA256}"),
         "install: \"false\"".to_owned(),
         "env: \"false\"".to_owned(),
-        "cache: \"true\"".to_owned(),
+        "cache: \"false\"".to_owned(),
         "cache_save: \"false\"".to_owned(),
-        "cache_key: mise-v1-".to_owned(),
     ] {
         assert!(text.contains(&line), "missing {line}:\n{text}");
     }
     assert!(
-        !text.contains("Restore Mise tools"),
-        "P08: restores stay built-in:\n{text}"
+        text.contains("- name: Restore Mise tools"),
+        "V2 tools cache restores explicitly:\n{text}"
+    );
+    assert!(
+        text.contains("name: Restore Velnor tool seed")
+            && text.contains("github.event_name != 'workflow_dispatch'"),
+        "host seed is skipped for qualification dispatch:\n{text}"
     );
     for line in [
         "- name: Save Mise tools".to_owned(),
-        "key: mise-v1-".to_owned(),
-        "if: success() && github.event_name == 'push'".to_owned(),
+        "key: mise-tools-v2-".to_owned(),
     ] {
         assert!(text.contains(&line), "sole owner saves {line}:\n{text}");
     }
+    let save_at = text
+        .find("- name: Save Mise tools")
+        .expect("tools save step");
+    let save_step = text[save_at..]
+        .split("      - name:")
+        .next()
+        .expect("tools save step boundary");
+    assert!(
+        save_step.contains("github.event_name == 'push'")
+            && save_step.contains("github.ref_protected == true")
+            && save_step.contains("steps.v2.outputs.enabled == 'true'"),
+        "sole owner saves only on protected default-branch pushes with enabled identity:\n{save_step}"
+    );
+    let setup = text
+        .split("      - name: Setup Mise")
+        .nth(1)
+        .unwrap_or_default();
+    let setup = setup.split("      - name:").next().unwrap_or_default();
+    assert!(
+        !setup.contains("cache_key:"),
+        "Mise has no archive key:\n{setup}"
+    );
     Ok(())
 }
 
@@ -250,38 +275,22 @@ fn strict_mixed_platform_checks_use_native_setup_and_keep_global_runner() -> Res
 }
 
 #[test]
-fn qualified_linux_setup_cannot_bypass_macos_artifact_selection() -> Result<(), RenderError> {
-    use velnor_actions_contract::config::{CheckExecutor, CheckPlatform, CheckRunner};
-    use velnor_actions_workflow_renderer::cache_p08::{
-        mise_cache_key_for_tools, mise_setup_step_p08,
+fn mise_setup_and_cache_identity_are_derived_from_the_typed_target() -> Result<(), RenderError> {
+    use velnor_actions_workflow_renderer::cache_p08::mise_cache_key_for_tools;
+    use velnor_actions_workflow_renderer::setup::{
+        MISE_BINARY_SHA256_LINUX_X64, MISE_BINARY_SHA256_MACOS_ARM64,
     };
-    let key = mise_cache_key_for_tools(
-        "x86_64-unknown-linux-gnu",
-        MISE_VERSION,
-        &["node@22.0.0".to_owned()],
-    )?;
-    let mut check = job(
-        "check-native",
-        "Native",
-        Vec::new(),
-        vec![
-            checkout_step(&checkout_pin())?,
-            mise_setup_step_p08(&mise(), &key)?,
-            scrubbed_shell_step(
-                "Native task",
-                mise_argv("node@22.0.0", "node", &["--version"]),
-            )?,
-        ],
-    );
-    check.1.runs_on = "macos-15".to_owned();
-    check.1.check_runner = Some(CheckRunner {
-        label: "macos-15".to_owned(),
-        platform: CheckPlatform::MacosArm64,
-        executor: CheckExecutor::Hosted,
-        container: None,
-    });
-    let error = strict(&fixture_ir(vec![check]), &fixture_ctx()).expect_err("wrong target pins");
-    assert!(error.to_string().contains("setup_mise_pin_mismatch"));
+
+    let linux = mise().for_target("x86_64-unknown-linux-gnu")?;
+    let macos = mise().for_target("aarch64-apple-darwin")?;
+    assert_eq!(linux.sha256, MISE_BINARY_SHA256_LINUX_X64);
+    assert_eq!(macos.sha256, MISE_BINARY_SHA256_MACOS_ARM64);
+    assert_ne!(linux.sha256, macos.sha256);
+    let specs = ["node@22.0.0".to_owned()];
+    let linux_key = mise_cache_key_for_tools("x86_64-unknown-linux-gnu", MISE_VERSION, &specs)?;
+    let macos_key = mise_cache_key_for_tools("aarch64-apple-darwin", MISE_VERSION, &specs)?;
+    assert_ne!(linux_key, macos_key);
+    assert!(macos_key.starts_with("mise-v1-aarch64-apple-darwin-"));
     Ok(())
 }
 

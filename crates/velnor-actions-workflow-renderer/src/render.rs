@@ -6,20 +6,18 @@
 //! helpers, and the plan anchor; the legacy entrypoint preserves the
 //! previous contract for in-flight callers.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_actions_contract::{
-    CI_WORKFLOW_PATH, Job, PLAN_JOB_ID as CONTRACT_PLAN_JOB_ID,
-    REQUIRED_CONDITION as CONTRACT_REQUIRED_CONDITION,
-    REQUIRED_DISPLAY_NAME as CONTRACT_REQUIRED_DISPLAY_NAME,
-    REQUIRED_JOB_ID as CONTRACT_REQUIRED_JOB_ID, ValidatorKind, VelnorSupportWorkflow, WorkflowIr,
-    WorkflowPolicy,
+    Job, ValidatorKind, VelnorSupportWorkflow, WorkflowIr, WorkflowPolicy,
 };
 
 use crate::{
     RenderError, cache_p08, closure, commands, document, final_steps, guard, marker, matrix, msrv,
     preseed_closure, steps, support, workflow_policy, yaml::render_yaml,
 };
+
+pub use crate::render_constants::*;
 
 #[path = "render_action_pins.rs"]
 mod action_pins_impl;
@@ -30,47 +28,6 @@ pub use crate::matrix::{
     MatrixSource, PLAN_ID_OUTPUT, PLAN_STEP_ID, RUN_KEY_OUTPUT,
 };
 pub use crate::setup::MiseSetup;
-
-/// Generated workflow path inside the repository.
-///
-/// Alias of the contract's [`CI_WORKFLOW_PATH`]: the migration plan
-/// ([`velnor_actions_contract::RequiredCheckMigration`]) and the
-/// emitted tree share one source of truth, never retyped mirrors.
-pub const WORKFLOW_PATH: &str = CI_WORKFLOW_PATH;
-/// Generated actionlint config path inside the repository.
-pub const ACTIONLINT_PATH: &str = ".github/actionlint.yaml";
-/// Exact pull-request event types.
-pub const EXPECTED_PR_TYPES: &[&str] = &["opened", "synchronize", "reopened", "ready_for_review"];
-/// Exact concurrency group expression.
-pub const CONCURRENCY_GROUP: &str =
-    "velnor-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}";
-/// Exact cancel-in-progress expression (PR events only).
-pub const CONCURRENCY_CANCEL: &str = "${{ github.event_name == 'pull_request' }}";
-/// Final gate job ID (contract [`CONTRACT_REQUIRED_JOB_ID`] alias).
-pub const FINAL_JOB_ID: &str = CONTRACT_REQUIRED_JOB_ID;
-/// Exact required-check display name (contract alias).
-pub const FINAL_DISPLAY_NAME: &str = CONTRACT_REQUIRED_DISPLAY_NAME;
-/// Final gate condition (contract [`CONTRACT_REQUIRED_CONDITION`] alias).
-pub const FINAL_CONDITION: &str = CONTRACT_REQUIRED_CONDITION;
-/// Planner job ID: the sole matrix producer (contract alias).
-pub const PLAN_JOB_ID: &str = CONTRACT_PLAN_JOB_ID;
-/// Matrix consumer job ID.
-pub const TASK_JOB_ID: &str = "velnor-task";
-/// Candidate validation job ID (Velnor policy only).
-pub const CANDIDATE_JOB_ID: &str = "candidate";
-/// Baseline-publish job ID: runs after the final gate passes.
-pub const PUBLISH_JOB_ID: &str = "publish-baseline";
-/// Full-SHA Alint pin for the repository-policy `alint` job.
-pub const ALINT_USES: &str = "asamarts/alint@9f9d34ba0eae3888299b9e570f43338b0e7f2cdb";
-/// Pinned Alint binary release tag for the step's `version:` input.
-///
-/// Per the action's `action.yml`, a SHA-pinned `uses:` falls back to
-/// installing `latest` unless `version:` is set — a floating binary. Mirror of
-/// `ALINT_ACTION_VERSION` (`velnor-actions-actionlint`, same qualified
-/// release); the renderer cannot depend on that crate, so
-/// `scripts/check-freshness.sh` pins this mirror to the reviewed
-/// `asamarts/alint` inventory row instead of trusting the duplication.
-pub const ALINT_BINARY_VERSION: &str = "v0.16.1";
 
 /// Caller-supplied validated scalars the IR cannot carry.
 #[derive(Debug, Clone)]
@@ -259,7 +216,6 @@ pub fn finalize_jobs(
             .iter()
             .any(|task| task.owns_job_id(id))
         {
-            crate::tool_seed::reject_orphan_seed(id, job)?;
             closure::check_internal_staged(id, job, ctx.preseed)?;
             continue;
         }
@@ -277,13 +233,13 @@ pub fn finalize_jobs(
         } else {
             mise.clone()
         };
-        cache_p08::ensure_setup_p08(id, job, &setup, always, target, &ctx.checkout_uses)?;
-        cache_p08::check_no_rust_cache_with_mbx(id, job)?;
+        cache_p08::ensure_tools_cache_v2(id, job, &setup, always, target, &ctx.checkout_uses)?;
+        cache_p08::check_no_legacy_rust_cache(id, job)?;
         cache_p08::check_mbx_before_fetch(id, job)?;
         closure::check_internal_staged(id, job, ctx.preseed)?;
     }
     // Writer election needs every setup inserted: one saver per key.
-    cache_p08::elect_mise_cache_writers(&mut jobs)?;
+    cache_p08::elect_tools_cache_writers(&mut jobs)?;
     // Provider election needs every restore inserted: one saver per key.
     cache_p08::elect_tofu_provider_savers(&mut jobs)?;
     closure::check_plan_anchor(&jobs)?;
@@ -293,6 +249,7 @@ pub fn finalize_jobs(
     closure::insert_task_closure(&mut jobs)?;
     closure::insert_final_closure(&mut jobs)?;
     final_steps::insert_final_fanin(&mut jobs, ctx)?;
+    crate::dispatch_cache_boundary::suppress_unvalidated_cache_access(&mut jobs);
     validate_final_jobs(ir, &jobs)?;
     Ok(jobs)
 }
@@ -356,6 +313,15 @@ fn render_merged(
         jobs.clone()
     };
     let mbx_jobs = crate::mbx_gc_policy::jobs_with_mbx_objects(&jobs);
+    let identity_lanes: BTreeSet<String> = jobs
+        .values()
+        .filter(|job| {
+            job.steps.iter().any(|step| {
+                step.role == Some(velnor_actions_contract::StepRole::ToolsCacheIdentity)
+            })
+        })
+        .map(|job| job.runs_on.clone())
+        .collect();
     let shared = crate::lane_share::share_lanes(&jobs, ctx)?;
     let mut document = document::workflow_to_yaml(ir, &shared, ctx, &mbx_jobs)?;
     if let Some((source, max_parallel)) = &matrix {
@@ -368,6 +334,17 @@ fn render_merged(
     crate::workflow_size::check_workflow_size(WORKFLOW_PATH, &text)?;
     steps::scan_for_private_subcommands(&text)?;
     let mut files = shared.files;
+    for runs_on in &identity_lanes {
+        files.push(cache_p08::runtime_identity_action_file(
+            runs_on,
+            &ctx.generator_version,
+        )?);
+    }
+    if !identity_lanes.is_empty() {
+        files.push(cache_p08::runtime_identity_script_file(
+            &ctx.generator_version,
+        )?);
+    }
     if crate::tool_seed::any_job_has_seed(&jobs) {
         files.push(crate::tool_seed::action_file(&ctx.generator_version)?);
     }
@@ -376,4 +353,3 @@ fn render_merged(
         shared: files,
     })
 }
-

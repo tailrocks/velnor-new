@@ -4,9 +4,7 @@
 //! Rust/Cargo, Mise, process, filesystem, YAML, CLI, or generic app models.
 //!
 //! All types here are effect-free data plus pure derivation/validation; derivation formulas are normative.
-
 pub mod archive;
-mod branch;
 pub mod cachekey;
 pub mod candidate_manifest;
 pub mod canonical;
@@ -33,7 +31,6 @@ pub mod tooling;
 pub mod vcs;
 pub mod workflow;
 pub use archive::{ArchiveInputs, archive_id};
-pub use branch::is_valid_branch_name;
 pub use canonical::{
     CompatibilityInputs, Digest, StackExtension, TaskConfiguration, TaskGenerator, TaskIdentity,
     TaskInput, canonical_json_bytes, canonical_json_str, compatibility_id, digest_b3, input_digest,
@@ -95,12 +92,12 @@ pub use graph::{
 };
 pub use ids::{
     artifact_id_for_baseline, artifact_id_for_crate_job, artifact_id_for_final,
-    artifact_id_for_matrix, artifact_id_for_plan, manifest_key_for_cargo_manifest,
-    matrix_id_for_task_group, matrix_key_for_id, plan_id_for_run, report_id_for_matrix,
-    run_key_for_ci, split_shard_suffix, target_key, task_id_for_internal, task_id_for_stack,
-    task_report_id_for_task, validate_artifact_id, validate_fetch_root, validate_id,
-    validate_matrix_key, validate_plan_id, validate_report_id, validate_run_key, validate_task_id,
-    validate_task_report_id,
+    artifact_id_for_matrix, artifact_id_for_plan, is_valid_branch_name,
+    manifest_key_for_cargo_manifest, matrix_id_for_task_group, matrix_key_for_id, plan_id_for_run,
+    report_id_for_matrix, run_key_for_ci, split_shard_suffix, target_key, task_id_for_internal,
+    task_id_for_stack, task_report_id_for_task, validate_artifact_id, validate_fetch_root,
+    validate_id, validate_matrix_key, validate_plan_id, validate_report_id, validate_run_key,
+    validate_task_id, validate_task_report_id,
 };
 pub use manifest::{
     ActionPin, CandidateArtifactManifest, GeneratorBinary, GeneratorLock, LockedGenerator,
@@ -124,24 +121,26 @@ pub use targets::{
 };
 pub use tooling::ToolIdentity;
 pub use vcs::VcsInputs;
+pub use workflow::qualification_cache_lineage::*;
 pub use workflow::{
     BaselineProof, BaselineStatus, CANDIDATE_ATTESTATION_FILENAME, CANDIDATE_EVIDENCE_SUBDIR,
     CI_WORKFLOW_PATH, CRATE_JOB_ID_PREFIX, CacheLayer, CacheOutcome, CacheResult, Concurrency,
-    CrateJob, CrateObligation, DYNAMIC_MATRIX_OUTPUT_MODE, EntryCacheIds, ExecuteTaskIds,
-    ExecuteTaskRef, FINAL_JSON_FILENAME, FRESHNESS_CRON_WEEKLY, FRESHNESS_WORKFLOW_PATH,
-    FinalCounts, FinalReport, FinalStatus, HOSTED_SUFFIX, Job, JobConclusion, JobTimeout,
-    MATRIX_JSON_FILENAME, ManifestTaskProof, MatrixEntry, MatrixReport, MatrixStatus,
-    MatrixTaskEntry, NAMED_CHECK_JOB_ID_ENV, NAMED_CHECK_LANE_VARIANT_ENV, NAMED_CHECK_LANES_ENV,
-    NEEDS_CHANNEL_ENV, NEEDS_CHANNEL_EXPRESSION, NEEDS_EXPECTED_ENV, NamedCheckLane,
-    NamedCheckLaneVariant, NeedsConclusions, NotSelectedReason, ObligationDecision,
+    CrateJob, CrateObligation, DYNAMIC_MATRIX_OUTPUT_MODE, DispatchInput, DispatchInputType,
+    EntryCacheIds, ExecuteTaskIds, ExecuteTaskRef, FINAL_JSON_FILENAME, FRESHNESS_CRON_WEEKLY,
+    FRESHNESS_WORKFLOW_PATH, FinalCounts, FinalReport, FinalStatus, HOSTED_SUFFIX, Job,
+    JobConclusion, JobTimeout, MATRIX_JSON_FILENAME, ManifestTaskProof, MatrixEntry, MatrixReport,
+    MatrixStatus, MatrixTaskEntry, NAMED_CHECK_JOB_ID_ENV, NAMED_CHECK_LANE_VARIANT_ENV,
+    NAMED_CHECK_LANES_ENV, NEEDS_CHANNEL_ENV, NEEDS_CHANNEL_EXPRESSION, NEEDS_EXPECTED_ENV,
+    NamedCheckLane, NamedCheckLaneVariant, NeedsConclusions, NotSelectedReason, ObligationDecision,
     PLAN_DISPLAY_NAME, PLAN_JOB_ID, PLAN_JSON_FILENAME, PLAN_MATRIX_OUTPUT_MODE_ENV,
     PermissionLevel, Permissions, Plan, PlanBaseline, PlanGenerator, PlanMatrix, PlanObligation,
     PlanPackage, PlanRunner, PlannedPlatform, PlannedRunnerEnvironment, PlatformBinding,
-    PlatformRunnerEnvironment, PlatformUnavailableReason, REQUIRED_CONDITION,
-    REQUIRED_DISPLAY_NAME, REQUIRED_JOB_ID, RequiredCheckMigration, RequiredJobResult,
-    SCALE_SUFFIX, STALE_WORKFLOW_PATHS, ScheduleTrigger, Step, StepId, StepKind, StepRole,
-    TOFU_APPLY_WORKFLOW_PATH, TOFU_DISPLAY_PREFIX, TOFU_JOB_ID_PREFIX, TaskReport, TaskStatus,
-    TaskTiming, Trigger, Trust, ValidatorKind, WORKFLOW_DISPLAY_NAME, WorkflowEvent, WorkflowIr,
+    PlatformRunnerEnvironment, PlatformUnavailableReason, QualificationDispatch,
+    QualificationPhase, QualificationRunRef, REQUIRED_CONDITION, REQUIRED_DISPLAY_NAME,
+    REQUIRED_JOB_ID, RequiredCheckMigration, RequiredJobResult, SCALE_SUFFIX, STALE_WORKFLOW_PATHS,
+    ScheduleTrigger, Step, StepId, StepKind, StepRole, TOFU_APPLY_WORKFLOW_PATH,
+    TOFU_DISPLAY_PREFIX, TOFU_JOB_ID_PREFIX, TaskReport, TaskStatus, TaskTiming, Trigger, Trust,
+    ValidatorKind, WORKFLOW_DISPLAY_NAME, WorkflowDispatch, WorkflowEvent, WorkflowIr,
     assign_crate_job_ids, check_matrix_agreement, crate_display_label, crate_display_name,
     expand_workflow, final_report_id_for_run, final_report_relpath, is_crate_job_id,
     is_safe_display_name, join_runner_temp, matrix_json_bytes, matrix_report_relpath,

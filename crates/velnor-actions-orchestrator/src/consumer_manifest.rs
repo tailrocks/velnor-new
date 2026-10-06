@@ -27,8 +27,8 @@ pub(crate) fn read_manifest_file(root: &Path) -> Result<Option<String>, Orchestr
 
 /// Read only the committed consumer manifest in every build mode.
 ///
-/// Absent files stay `None` so the consumer acquire gate fails closed
-/// with `consumer_requires_release_install`; unreadable files error.
+/// Absent files stay `None` so consumer acquisition fails closed with
+/// `consumer_requires_release_install`; present-but-unreadable files error.
 /// # Errors
 ///
 /// Returns IO or unsafe-path errors for present-but-unreadable files.

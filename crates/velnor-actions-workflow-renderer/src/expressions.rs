@@ -82,6 +82,7 @@ const WITH_EXPRESSIONS: &[&str] = &[
     "github.job",
     "github.event_name == 'push'",
     "steps.publish-baseline.outputs.artifact_name",
+    "steps.v2.outputs.identity",
     "steps.tofu-providers.outputs.cache-key",
     "steps.tofu-providers.outputs.cache-path",
 ];
@@ -116,13 +117,24 @@ fn is_hash_files(inner: &str) -> bool {
 /// Reject unlisted `${{ }}` spans in one shell-step env value.
 /// # Errors
 pub(crate) fn check_env_value(key: &str, value: &str) -> Result<(), RenderError> {
+    check_env_value_with_scope(key, value, false)
+}
+
+/// Validate env expressions scoped to a generated composite action body.
+pub(crate) fn check_composite_env_value(key: &str, value: &str) -> Result<(), RenderError> {
+    check_env_value_with_scope(key, value, true)
+}
+
+fn check_env_value_with_scope(key: &str, value: &str, composite: bool) -> Result<(), RenderError> {
     let Some(spans) = expression_spans(value) else {
         return Err(RenderError::BadCommand(format!("bad_env_expression:{key}")));
     };
     for inner in spans {
+        let composite_input = composite && inner == "inputs.digest";
         if !ENV_EXPRESSIONS.contains(&inner)
             && !is_matrix_field(inner)
             && !is_github_token_secret(inner)
+            && !composite_input
         {
             return Err(RenderError::BadCommand(format!("bad_env_expression:{key}")));
         }

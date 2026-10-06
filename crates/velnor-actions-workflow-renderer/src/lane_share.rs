@@ -13,6 +13,9 @@ use crate::RenderError;
 use crate::render::RenderContext;
 use crate::tree::RenderedFile;
 
+#[path = "lane_share_runtime.rs"]
+mod runtime;
+
 /// CI workflow plus composite actions for duplicated lanes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RenderedWorkflow {
@@ -33,6 +36,8 @@ pub(crate) struct LaneShare {
     pub checkouts: BTreeMap<String, Step>,
     /// Original step lists used to derive job-level environment values.
     pub env_steps: BTreeMap<String, Vec<Step>>,
+    /// Runner-specific V2 tools identity and restore steps, kept before setup.
+    pub runtime_preludes: BTreeMap<String, Vec<Step>>,
     /// Common setup steps rendered before each lane's cache-specific prelude.
     pub prefixes: BTreeMap<String, Vec<Step>>,
     /// Lane-specific MBX setup, restore, and import steps.
@@ -45,6 +50,8 @@ pub(crate) struct LaneShare {
 
 struct SharedLaneParts {
     checkout: Step,
+    hosted_runtime_prelude: Vec<Step>,
+    local_runtime_prelude: Vec<Step>,
     prefix: Vec<Step>,
     hosted_prelude: Vec<Step>,
     local_prelude: Vec<Step>,
@@ -57,16 +64,18 @@ struct SharedLaneParts {
 ///
 /// # Errors
 ///
-/// A pair whose timeout, condition, permissions, environment, or shared
-/// steps differ fails closed. Report uploads, named-check execution identity,
-/// and elected cache saves stay on the lane that owns them. An unsafe logical
-/// id fails closed.
+/// A pair whose timeout, condition, permissions, environment, or steps
+/// differ fails closed. Elected cache saves (`Save Mise tools`, `Save Tofu
+/// providers`), report uploads, and named-check identity stay on the job
+/// that owns them and are not part of the shared comparison. An unsafe
+/// logical id fails closed.
 pub(crate) fn share_lanes(
     jobs: &BTreeMap<String, Job>,
     ctx: &RenderContext,
 ) -> Result<LaneShare, RenderError> {
     let mut calls = BTreeMap::new();
     let mut checkouts = BTreeMap::new();
+    let mut runtime_preludes = BTreeMap::new();
     let mut prefixes = BTreeMap::new();
     let mut preludes = BTreeMap::new();
     let mut postludes = BTreeMap::new();
@@ -110,6 +119,8 @@ pub(crate) fn share_lanes(
         calls.insert(local_id.clone(), uses);
         checkouts.insert(hosted_id.clone(), parts.checkout.clone());
         checkouts.insert(local_id.clone(), parts.checkout);
+        runtime_preludes.insert(hosted_id.clone(), parts.hosted_runtime_prelude);
+        runtime_preludes.insert(local_id.clone(), parts.local_runtime_prelude);
         prefixes.insert(hosted_id.clone(), parts.prefix.clone());
         prefixes.insert(local_id.clone(), parts.prefix);
         preludes.insert(hosted_id.clone(), parts.hosted_prelude);
@@ -127,6 +138,7 @@ pub(crate) fn share_lanes(
         calls,
         checkouts,
         env_steps,
+        runtime_preludes,
         prefixes,
         preludes,
         postludes,
@@ -155,6 +167,9 @@ fn validate_serialized_scopes(shared: &LaneShare) -> Result<(), RenderError> {
             continue;
         };
         let mut steps = vec![checkout.clone()];
+        if let Some(runtime) = shared.runtime_preludes.get(id) {
+            steps.extend(runtime.iter().cloned());
+        }
         if let Some(prefix) = shared.prefixes.get(id) {
             steps.extend(prefix.iter().cloned());
         }
@@ -199,7 +214,22 @@ fn split_pair(hosted: &Job, local: &Job, checkout_uses: &str) -> Option<SharedLa
     if hosted_checkout != local_checkout {
         return None;
     }
-    split_shared_steps(hosted_checkout, hosted_steps, local_steps)
+    let (hosted_runtime_prelude, hosted_steps) =
+        runtime::peel_tools_cache_prelude(hosted_steps, &hosted.runs_on)?;
+    let (local_runtime_prelude, local_steps) =
+        runtime::peel_tools_cache_prelude(local_steps, &local.runs_on)?;
+    if !runtime::same_tools_cache_prelude_shape(
+        &hosted_runtime_prelude,
+        &local_runtime_prelude,
+        &hosted.runs_on,
+        &local.runs_on,
+    ) {
+        return None;
+    }
+    let mut parts = split_shared_steps(hosted_checkout, &hosted_steps, &local_steps)?;
+    parts.hosted_runtime_prelude = hosted_runtime_prelude;
+    parts.local_runtime_prelude = local_runtime_prelude;
+    Some(parts)
 }
 
 fn split_shared_steps(
@@ -265,6 +295,8 @@ fn split_shared_steps(
     local_postlude.extend(local_cache_postlude);
     (hosted_common == local_common).then_some(SharedLaneParts {
         checkout: checkout.clone(),
+        hosted_runtime_prelude: Vec::new(),
+        local_runtime_prelude: Vec::new(),
         prefix,
         hosted_prelude,
         local_prelude,

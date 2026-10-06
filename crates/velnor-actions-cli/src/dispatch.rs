@@ -4,25 +4,21 @@
 //! in `VELNOR_REQUEST_FILE`: `write-request-v1` needs GitHub event env and no
 //! pre-existing file, `plan-v1`/`merge-v1`/`publish-baseline-v1` need a
 //! pre-existing request file, `fetch-reports-v1`/`write-task-report-v1`
-//! need runner temp plus the numeric run ID instead, and
-//! `write-preseed-manifest-v1` needs runner temp only. Anything else falls
-//! through to Clap, so public behavior is byte-identical with or without
-//! the environment set.
+//! need runner temp plus the numeric run ID instead, `write-preseed-manifest-v1`
+//! needs runner temp only, and `resolve-qualification-v1` requires a dispatch
+//! event, request file, and read-only GitHub token. Anything else falls through
+//! to Clap, so public behavior is byte-identical with or without the environment.
 
 use std::env;
-use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use clap::Parser;
 use velnor_actions_orchestrator::{
-    DYNAMIC_MATRIX_OUTPUT_MODE, EXECUTE_CHECK_OP, FETCH_OP, GenerateOptions, MERGE_OP,
-    OrchestratorError, PLAN_MATRIX_OUTPUT_MODE_ENV, PLAN_OP, PRESEED_MANIFEST_OP, PUBLISH_OP,
-    PlanOutputMode, REPORT_OP, REQUEST_FILE_ENV, WRITE_REQUEST_OP, execute_check,
-    generate_dispatched, init_config, merge_internal, merge_passed, parse_dispatch_mode,
-    plan_internal, plan_outputs, plan_text_checked, prepare, publish_final_report,
-    publish_plan_files, resolve_root, response_path_for, retrieve_reports, write_preseed_manifest,
-    write_request, write_task_report,
+    EXECUTE_CHECK_OP, FETCH_OP, GenerateOptions, MERGE_OP, OrchestratorError, PLAN_OP,
+    PRESEED_MANIFEST_OP, PUBLISH_OP, REPORT_OP, REQUEST_FILE_ENV, WRITE_REQUEST_OP, execute_check,
+    generate_dispatched, init_config, parse_dispatch_mode, plan_text_checked, prepare,
+    resolve_root, retrieve_reports, write_preseed_manifest, write_request, write_task_report,
 };
 
 use crate::args::{Cli, Command};
@@ -32,8 +28,6 @@ mod owned_publication;
 
 /// Environment variable selecting the private operation. Never printed.
 const OP_ENV: &str = "VELNOR_INTERNAL_OP";
-/// Environment variable carrying the `$GITHUB_OUTPUT` path. Never printed.
-const GITHUB_OUTPUT_ENV: &str = "GITHUB_OUTPUT";
 /// Environment variable carrying the runner temp dir. Never printed.
 const RUNNER_TEMP_ENV: &str = "RUNNER_TEMP";
 /// Environment variable carrying the triggering event name. Never printed.
@@ -59,6 +53,8 @@ enum InternalOp {
     PreseedManifest,
     /// Baseline-publish operation.
     Publish,
+    /// Read-only predecessor resolution for hosted qualification.
+    ResolveQualification,
 }
 
 /// Validated private request: operation plus exact request-file path.
@@ -113,6 +109,9 @@ fn gate_request() -> Option<InternalRequest> {
         Ok(tag) if tag == REPORT_OP => InternalOp::Report,
         Ok(tag) if tag == PRESEED_MANIFEST_OP => InternalOp::PreseedManifest,
         Ok(tag) if tag == PUBLISH_OP => InternalOp::Publish,
+        Ok(tag) if crate::dispatch_qualification::is_resolver_op(tag) => {
+            InternalOp::ResolveQualification
+        }
         _ => return None,
     };
     if op == InternalOp::Fetch || op == InternalOp::Report || op == InternalOp::ExecuteCheck {
@@ -141,6 +140,11 @@ fn gate_request() -> Option<InternalRequest> {
         }
         InternalOp::Plan | InternalOp::Merge | InternalOp::Publish => {
             if !path.is_file() {
+                return None;
+            }
+        }
+        InternalOp::ResolveQualification => {
+            if !crate::dispatch_qualification::request_is_eligible(&path) {
                 return None;
             }
         }
@@ -174,8 +178,8 @@ fn run_internal(request: &InternalRequest) -> ExitCode {
             Ok(_) => ExitCode::SUCCESS,
             Err(error) => fail_internal(&error.to_string()),
         },
-        InternalOp::Plan => run_plan_internal(&request.path),
-        InternalOp::Merge => run_merge_internal(&request.path),
+        InternalOp::Plan => crate::dispatch_internal::run_plan(&request.path),
+        InternalOp::Merge => crate::dispatch_internal::run_merge(&request.path),
         InternalOp::Fetch => match retrieve_reports() {
             Ok(_) => ExitCode::SUCCESS,
             Err(error) => fail_internal(&error.to_string()),
@@ -189,96 +193,12 @@ fn run_internal(request: &InternalRequest) -> ExitCode {
             Err(error) => fail_internal(&error.to_string()),
         },
         InternalOp::Publish => run_publish_internal(&request.path),
-    }
-}
-
-/// Read the request, run the planner, publish files, write response plus outputs.
-fn run_plan_internal(path: &Path) -> ExitCode {
-    let text = match fs::read_to_string(path) {
-        Ok(text) => text,
-        Err(error) => return fail_internal(&format!("read request: {error}")),
-    };
-    let mode = match env::var_os(PLAN_MATRIX_OUTPUT_MODE_ENV) {
-        None => PlanOutputMode::Static,
-        Some(value) if value == DYNAMIC_MATRIX_OUTPUT_MODE => PlanOutputMode::DynamicMatrix,
-        Some(_) => return fail_internal("bad_plan_matrix_output_mode"),
-    };
-    let response = match plan_internal(&text) {
-        Ok(response) => response,
-        Err(error) => return fail_internal(&error.to_string()),
-    };
-    let sibling = match response_path_for(path) {
-        Ok(sibling) => sibling,
-        Err(error) => return fail_internal(&error.to_string()),
-    };
-    if let Err(error) = fs::write(&sibling, &response) {
-        return fail_internal(&format!("write response: {error}"));
-    }
-    let outputs = match plan_outputs(&response, mode) {
-        Ok(outputs) => outputs,
-        Err(error) => return fail_internal(&error.to_string()),
-    };
-    let Some(runner_temp) = env::var_os(RUNNER_TEMP_ENV).filter(|value| !value.is_empty()) else {
-        return fail_internal("missing runner temp");
-    };
-    let Some(output_path) = env::var_os(GITHUB_OUTPUT_ENV).filter(|value| !value.is_empty()) else {
-        return fail_internal("missing github output");
-    };
-    if let Err(error) = publish_plan_files(&response, &Path::new(&runner_temp).join("velnor")) {
-        return fail_internal(&error.to_string());
-    }
-    let mut body = String::new();
-    for (name, value) in outputs.step_outputs() {
-        body.push_str(name);
-        body.push('=');
-        body.push_str(value);
-        body.push('\n');
-    }
-    match fs::OpenOptions::new()
-        .append(true)
-        .create(true)
-        .open(&output_path)
-        .and_then(|mut file| {
-            use std::io::Write;
-            file.write_all(body.as_bytes())
-        }) {
-        Ok(()) => ExitCode::SUCCESS,
-        Err(error) => fail_internal(&format!("append outputs: {error}")),
-    }
-}
-
-/// Read the request, run the merge, publish the verdict, exit verdict.
-fn run_merge_internal(path: &Path) -> ExitCode {
-    let text = match fs::read_to_string(path) {
-        Ok(text) => text,
-        Err(error) => return fail_internal(&format!("read request: {error}")),
-    };
-    let response = match merge_internal(&text) {
-        Ok(response) => response,
-        Err(error) => return fail_internal(&error.to_string()),
-    };
-    let sibling = match response_path_for(path) {
-        Ok(sibling) => sibling,
-        Err(error) => return fail_internal(&error.to_string()),
-    };
-    if let Err(error) = fs::write(&sibling, &response) {
-        return fail_internal(&format!("write response: {error}"));
-    }
-    let Some(runner_temp) = env::var_os(RUNNER_TEMP_ENV).filter(|value| !value.is_empty()) else {
-        return fail_internal("missing runner temp");
-    };
-    if let Err(error) = publish_final_report(&response, &Path::new(&runner_temp).join("velnor")) {
-        return fail_internal(&error.to_string());
-    }
-    match merge_passed(&response) {
-        Ok(true) => ExitCode::SUCCESS,
-        Ok(false) => ExitCode::from(1),
-        Err(error) => fail_internal(&error.to_string()),
+        InternalOp::ResolveQualification => crate::dispatch_qualification::run(&request.path),
     }
 }
 
 /// Report a private failure without printing the private operation.
-fn fail_internal(problem: &str) -> ExitCode {
+pub(crate) fn fail_internal(problem: &str) -> ExitCode {
     eprintln!("velnor-actions: internal request failed: {problem}");
     ExitCode::from(1)
 }
@@ -373,7 +293,6 @@ fn absolute_preview(cwd: &Path, dir: &Path) -> PathBuf {
     };
     joined.canonicalize().unwrap_or(joined)
 }
-
 /// Read the working directory, reporting failures as exit 1.
 pub(crate) fn working_dir() -> Option<PathBuf> {
     match env::current_dir() {

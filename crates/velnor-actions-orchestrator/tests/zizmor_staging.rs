@@ -135,7 +135,21 @@ fn policy_preview() -> Result<PolicyPreview, Box<dyn std::error::Error>> {
             output_dir: Some(preview.clone()),
         },
     )?;
-    assert_eq!(report.files_written.len(), 6, "six generated files");
+    let expected_files = [
+        ".github/AGENTS.md",
+        ".github/CLAUDE.md",
+        ".github/actionlint.yaml",
+        ".github/actions/u26/action.yml",
+        ".github/actions/velnor-tool-seed/action.yml",
+        ".github/scripts/velnor-tools-cache-identity.sh",
+        WORKFLOW_PATH,
+        FRESHNESS_WORKFLOW_PATH,
+    ];
+    assert_eq!(
+        report.files_written,
+        expected_files.map(str::to_owned),
+        "rendered V2 support assets are part of the generated tree"
+    );
     assert!(
         report
             .files_written
@@ -160,9 +174,17 @@ fn stage(preview: &Path, yaml: &str) -> Result<TempDir, Box<dyn std::error::Erro
     )?;
     let freshness = fs::read_to_string(preview.join(FRESHNESS_WORKFLOW_PATH))?;
     fs::write(root.join(FRESHNESS_WORKFLOW_PATH), &freshness)?;
-    let action = ".github/actions/velnor-tool-seed/action.yml";
-    fs::create_dir_all(root.join(".github/actions/velnor-tool-seed"))?;
-    fs::copy(preview.join(action), root.join(action))?;
+    for relative in [
+        ".github/AGENTS.md",
+        ".github/CLAUDE.md",
+        ".github/actions/u26/action.yml",
+        ".github/actions/velnor-tool-seed/action.yml",
+        ".github/scripts/velnor-tools-cache-identity.sh",
+    ] {
+        let path = root.join(relative);
+        fs::create_dir_all(path.parent().ok_or("generated file parent")?)?;
+        fs::copy(preview.join(relative), path)?;
+    }
     let input = ZizmorConfigInput {
         generator_version: env!("CARGO_PKG_VERSION").to_owned(),
         workflows: vec![
@@ -262,6 +284,7 @@ fn self_repository_ignores(root: &Path) -> Result<usize, Box<dyn std::error::Err
     for relative in [
         WORKFLOW_PATH,
         FRESHNESS_WORKFLOW_PATH,
+        ".github/actions/u26/action.yml",
         ".github/actions/velnor-tool-seed/action.yml",
     ] {
         let text = fs::read_to_string(root.join(relative))?;

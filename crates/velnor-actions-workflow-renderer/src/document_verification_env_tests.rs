@@ -57,6 +57,7 @@ fn emitted_verification_job_scrubs_credentials_without_disabling_mise_config() {
     let lanes = crate::document_lanes::SharedLaneSteps {
         checkouts: &checkouts,
         env_steps: &steps,
+        runtime_preludes: &steps,
         prefixes: &steps,
         preludes: &steps,
         postludes: &steps,
@@ -68,9 +69,10 @@ fn emitted_verification_job_scrubs_credentials_without_disabling_mise_config() {
         &[],
         None,
         &lanes,
-        super::MbxJobPolicy {
+        super::JobRenderPolicy {
             native_mbx: false,
             actions_read: false,
+            workflow_env: &BTreeMap::new(),
         },
     )
     .expect("render verification job");

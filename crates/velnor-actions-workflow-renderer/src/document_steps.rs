@@ -3,9 +3,9 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::workflow::step_identity::{
-    StepRole, TOFU_PROVIDER_ADMISSION_USES, TOOL_SEED_USES,
+    TOFU_PROVIDER_ADMISSION_USES, TOOL_SEED_USES,
 };
-use velnor_actions_contract::{Step, StepKind};
+use velnor_actions_contract::{Step, StepKind, StepRole};
 
 use crate::{
     RenderError, commands,
@@ -14,6 +14,16 @@ use crate::{
     steps::{self, INTERNAL_OP_ENV, REQUEST_FILE_ENV},
     yaml::Yaml,
 };
+
+pub(crate) struct StepRenderContext<'a> {
+    pub job_id: &'a str,
+    pub ctx: &'a RenderContext,
+    pub needs_envs: &'a [(String, String)],
+    pub composite: bool,
+    pub job_env: &'a BTreeMap<String, String>,
+    pub actions_read: bool,
+    pub runs_on: Option<&'a str>,
+}
 
 /// True for the final job's plan download (fetch is gated inline below).
 ///
@@ -26,8 +36,8 @@ fn is_verdict_download(step: &Step) -> bool {
     ) && step.role == Some(StepRole::DownloadPlan)
 }
 
-/// Emit a step's explicitly declared output id.
-fn push_step_id(entries: &mut Vec<(String, Yaml)>, step: &Step) {
+/// Emit a step's explicitly declared output ID.
+pub(crate) fn push_step_id(entries: &mut Vec<(String, Yaml)>, step: &Step) {
     if let Some(id) = step.id {
         entries.push(("id".to_owned(), Yaml::str(id.as_str().to_owned())));
     }
@@ -68,6 +78,9 @@ fn internal_env(
     }
     let request = format!("{}/{target}-request.json", ctx.request_dir);
     let mut env = Vec::new();
+    if op == steps::RESOLVE_QUALIFICATION_OPERATION {
+        env.push(("GH_TOKEN".to_owned(), Yaml::str("${{ github.token }}")));
+    }
     if actions_read && op == steps::PLAN_OPERATION && target == steps::PLAN_OPERATION {
         env.push(("GH_REPO".to_owned(), Yaml::str("${{ github.repository }}")));
         env.push(("GH_TOKEN".to_owned(), Yaml::str("${{ github.token }}")));
@@ -108,11 +121,35 @@ fn action_step_to_yaml(
     with: &BTreeMap<String, String>,
     env: &BTreeMap<String, String>,
     job_env: &BTreeMap<String, String>,
+    runs_on: Option<&str>,
 ) -> Result<Yaml, RenderError> {
-    steps::validate_uses(uses)?;
+    let tool_seed = step.role == Some(StepRole::ToolSeed);
+    if tool_seed {
+        if uses != crate::tool_seed::TOOL_SEED_USES {
+            return Err(RenderError::InvalidWorkflow(
+                "tool_seed_bad_action_ref".to_owned(),
+            ));
+        }
+        crate::tool_seed::validate_seed_action(step, None)?;
+    }
+    let runtime_identity = step.role == Some(StepRole::ToolsCacheIdentity);
+    if runtime_identity {
+        let Some(lane) = runs_on else {
+            return Err(RenderError::InvalidWorkflow(
+                "tools_cache_identity_missing_runner".to_owned(),
+            ));
+        };
+        crate::cache_p08::validate_runtime_identity_action(uses, lane, with, env)?;
+    } else {
+        steps::validate_uses(uses)?;
+    }
     for (key, value) in with {
         crate::expressions::check_with_key(key)?;
-        crate::expressions::check_with_value(key, value)?;
+        let guarded_seed_key =
+            tool_seed && crate::tool_seed::is_guarded_seed_key_input(uses, with, key, value);
+        if !guarded_seed_key {
+            crate::expressions::check_with_value(key, value)?;
+        }
         steps::scan_for_private_subcommands(key)?;
         steps::scan_for_private_subcommands(value)?;
     }
@@ -131,15 +168,8 @@ fn action_step_to_yaml(
     if job_id == FINAL_JOB_ID && is_verdict_download(step) {
         entries.push(("continue-on-error".to_owned(), Yaml::Bool(true)));
     }
-    if uses.starts_with(TOOL_SEED_USES) {
-        if uses != TOOL_SEED_USES {
-            return Err(RenderError::InvalidWorkflow(
-                "tool_seed_bad_action_ref".to_owned(),
-            ));
-        }
-        crate::tool_seed::validate_seed_action(step, None)?;
-    }
-    let uses_yaml = if matches!(uses, TOOL_SEED_USES | TOFU_PROVIDER_ADMISSION_USES)
+    let uses_yaml = if runtime_identity
+        || matches!(uses, TOOL_SEED_USES | TOFU_PROVIDER_ADMISSION_USES)
         || crate::action_ref::is_generated_provider_prelude(uses)
     {
         Yaml::annotated(uses, "zizmor: ignore[self-repository]")
@@ -173,22 +203,28 @@ pub(crate) fn string_map_yaml(map: &BTreeMap<String, String>) -> Yaml {
 /// Render one step; internal ops become env plus request file, never argv.
 /// Every action ref (including the Alint pin) must be a full-SHA pin.
 pub(crate) fn step_to_yaml(
-    job_id: &str,
     step: &Step,
-    ctx: &RenderContext,
-    needs_envs: &[(String, String)],
-    composite: bool,
-    job_env: &BTreeMap<String, String>,
-    actions_read: bool,
+    render: &StepRenderContext<'_>,
 ) -> Result<Yaml, RenderError> {
+    let job_id = render.job_id;
+    let ctx = render.ctx;
+    let needs_envs = render.needs_envs;
+    let composite = render.composite;
+    let job_env = render.job_env;
+    let actions_read = render.actions_read;
+    let runs_on = render.runs_on;
     steps::scan_for_private_subcommands(&step.name)?;
     match &step.kind {
         StepKind::Action { uses, with, env } => {
-            action_step_to_yaml(job_id, step, uses, with, env, job_env)
+            action_step_to_yaml(job_id, step, uses, with, env, job_env, runs_on)
         }
         StepKind::Shell { run, env } => {
             commands::validate_command_argv(run)?;
-            commands::validate_env(env)?;
+            if composite {
+                commands::validate_composite_env(env)?;
+            } else {
+                commands::validate_env(env)?;
+            }
             let mut entries = vec![("name".to_owned(), Yaml::str(step.name.clone()))];
             push_step_id(&mut entries, step);
             if let Some(condition) = &step.condition {

@@ -74,6 +74,6 @@ The generator crates MUST NOT implement a runner, a Scale Set client, or an Acti
 18. [OpenTofu contract](opentofu-contract.md) defines the native `tofu` stack extension, tracked in `../reviews/opentofu-evidence.md`.
 19. [Rust dependency policy](rust-dependency-policy.md) defines dependency narrowness, the initial crate set, and deny/machete supply-chain gates (companion to the quality contract §7).
 20. [Rust test policy](rust-test-policy.md) defines test layout, integration entry points, doctest separation, fixture independence, and snapshot review (companion to the quality contract §4).
-20. [macOS Scale Set runner](macos-scaleset-runner.md) is the active runner specification. It supersedes conflicting deferred roadmap clauses.
+21. [macOS Scale Set runner](macos-scaleset-runner.md) is the active runner specification. It supersedes conflicting deferred roadmap clauses.
 
 The listed documents are intended to be implementable without inventing behavior. If a behavior is not specified, fail with a clear error and add a decision to the spec before implementing it. Do not silently broaden V1.

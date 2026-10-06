@@ -6,9 +6,6 @@
 
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::workflow::step_identity::{
-    TOOL_SEED_USES, is_configured_checkout, is_tool_seed_step,
-};
 use velnor_actions_contract::{Job, Step, StepKind, StepRole};
 
 use crate::yaml::Yaml;
@@ -19,6 +16,8 @@ pub(crate) use crate::tool_seed_admission::{SEED_ROOT, require_seed_root};
 
 /// Display name of the copy step ahead of `Setup Mise`.
 pub(crate) const TOOL_SEED_NAME: &str = "Restore Velnor tool seed";
+/// Workflow `uses` of the one local tool-seed composite.
+pub(crate) const TOOL_SEED_USES: &str = "./.github/actions/velnor-tool-seed";
 /// Repository path of that composite.
 const TOOL_SEED_ACTION_PATH: &str = ".github/actions/velnor-tool-seed/action.yml";
 
@@ -39,7 +38,7 @@ pub(crate) fn tool_seed_action_script(seed_root: &str) -> Result<String, RenderE
 
 fn copy_script(seed_root: &str, key_shell: &str, guard: &str) -> String {
     format!(
-        r#"set -euo pipefail; {guard}; seed="{seed_root}"; key={key_shell}; if [ ! -e "$seed" ]; then echo "tool seed absent"; exit 0; fi; if ! trusted_seed_is_trusted "$seed"; then echo "untrusted tool seed; continuing cold"; exit 0; fi; if [ -z "$key" ] || [ ! -f "$seed/mise/KEY" ]; then echo "tool seed key mismatch"; exit 0; fi; if ! trusted_seed_file_matches "$seed/mise/KEY" "$key"; then echo "tool seed key mismatch"; exit 0; fi; if [ -d "$seed/mise/tree" ]; then /bin/mkdir -p "$HOME/.local/share/mise"; /bin/cp -R "$seed/mise/tree/." "$HOME/.local/share/mise/"; echo "tool seed restored share-dir"; fi; if [ -d "$seed/rustup/tree" ]; then /bin/mkdir -p "$RUNNER_TEMP/velnor/rustup"; /bin/cp -R "$seed/rustup/tree/." "$RUNNER_TEMP/velnor/rustup/"; echo "tool seed restored toolchain-dir"; fi"#
+        r#"set -euo pipefail; seed="{seed_root}"; key={key_shell}; if [ -z "$key" ]; then echo "tool seed disabled"; exit 0; fi; {guard}; if [ ! -e "$seed" ]; then echo "tool seed absent"; exit 0; fi; if ! trusted_seed_is_trusted "$seed"; then echo "untrusted tool seed; continuing cold"; exit 0; fi; if [ ! -f "$seed/mise/KEY" ] || ! trusted_seed_file_matches "$seed/mise/KEY" "$key"; then echo "tool seed key mismatch"; exit 0; fi; if [ -d "$seed/mise/tree" ]; then /bin/mkdir -p "$HOME/.local/share/mise"; /bin/cp -R "$seed/mise/tree/." "$HOME/.local/share/mise/"; echo "tool seed restored share-dir"; fi; if [ -d "$seed/rustup/tree" ]; then /bin/mkdir -p "$RUNNER_TEMP/velnor/rustup"; /bin/cp -R "$seed/rustup/tree/." "$RUNNER_TEMP/velnor/rustup/"; echo "tool seed restored toolchain-dir"; fi"#
     )
 }
 
@@ -78,7 +77,7 @@ pub(crate) fn insert_before_setup(
     let expected = cache_key.as_str();
     if let Some(&seed_index) = seed_indices.first() {
         validate_seed_action(&job.steps[seed_index], Some(expected))?;
-        if seed_index + 1 != setup_index || seed_index <= checkout_index {
+        if seed_index <= checkout_index || seed_index >= setup_index {
             return Err(RenderError::InvalidWorkflow(
                 "tool_seed_misordered".to_owned(),
             ));
@@ -93,6 +92,10 @@ fn checkout_before(job: &Job, setup_index: usize, checkout_uses: &str) -> Option
     job.steps[..setup_index]
         .iter()
         .position(|step| is_configured_checkout(step, checkout_uses))
+}
+
+pub(crate) fn is_configured_checkout(step: &Step, expected_uses: &str) -> bool {
+    velnor_actions_contract::workflow::step_identity::is_configured_checkout(step, expected_uses)
 }
 
 pub(crate) fn reject_orphan_seed(job_id: &str, job: &Job) -> Result<(), RenderError> {
@@ -114,10 +117,8 @@ fn seed_indices(job: &Job) -> Vec<usize> {
 }
 
 fn is_tool_seed_action(step: &Step) -> bool {
-    matches!(
-        &step.kind,
-        StepKind::Action { uses, .. } if uses == TOOL_SEED_USES
-    )
+    step.role == Some(StepRole::ToolSeed)
+        && matches!(&step.kind, StepKind::Action { uses, .. } if uses == TOOL_SEED_USES)
 }
 
 pub(crate) fn validate_seed_action(
@@ -130,13 +131,16 @@ pub(crate) fn validate_seed_action(
         ));
     };
     let key = with.get("cache_key");
+    let key_ok = key.is_some_and(|value| is_guarded_seed_key(value));
+    let expected_key_ok = expected_key
+        .is_none_or(|expected| key.is_some_and(|value| value == &guarded_seed_key(expected)));
     if uses != TOOL_SEED_USES
-        || !is_tool_seed_step(step)
+        || step.role != Some(StepRole::ToolSeed)
         || step.condition.is_some()
         || !env.is_empty()
         || with.len() != 1
-        || key.is_none_or(|value| !crate::cache_p08::is_cache_key(value))
-        || expected_key.is_some_and(|expected| key.map(String::as_str) != Some(expected))
+        || !key_ok
+        || !expected_key_ok
     {
         return Err(RenderError::InvalidWorkflow(
             "tool_seed_bad_payload".to_owned(),
@@ -149,16 +153,39 @@ fn seed_step(cache_key: &MiseToolsCacheKey) -> Result<Step, RenderError> {
     let mut step = crate::steps::action_step(
         TOOL_SEED_NAME,
         TOOL_SEED_USES,
-        BTreeMap::from([("cache_key".to_owned(), cache_key.as_str().to_owned())]),
+        BTreeMap::from([("cache_key".to_owned(), guarded_seed_key(cache_key.as_str()))]),
     )?;
     step.role = Some(StepRole::ToolSeed);
     Ok(step)
 }
 
+pub(crate) fn guarded_seed_key(key: &str) -> String {
+    format!("${{{{ github.event_name != 'workflow_dispatch' && '{key}' || '' }}}}")
+}
+
+pub(crate) fn is_guarded_seed_key(value: &str) -> bool {
+    const PREFIX: &str = "${{ github.event_name != 'workflow_dispatch' && '";
+    const SUFFIX: &str = "' || '' }}";
+    value
+        .strip_prefix(PREFIX)
+        .and_then(|value| value.strip_suffix(SUFFIX))
+        .is_some_and(crate::cache_p08::is_cache_key)
+}
+
+/// True only for the seed composite's single guarded key input.
+pub(crate) fn is_guarded_seed_key_input(
+    uses: &str,
+    with: &BTreeMap<String, String>,
+    key: &str,
+    value: &str,
+) -> bool {
+    uses == TOOL_SEED_USES && with.len() == 1 && key == "cache_key" && is_guarded_seed_key(value)
+}
+
 /// True when any job renders the tool-seed step.
 pub(crate) fn any_job_has_seed(jobs: &std::collections::BTreeMap<String, Job>) -> bool {
     jobs.values()
-        .any(|job| job.steps.iter().any(is_tool_seed_step))
+        .any(|job| job.steps.iter().any(is_tool_seed_action))
 }
 
 /// One composite action for every tool-seed step.

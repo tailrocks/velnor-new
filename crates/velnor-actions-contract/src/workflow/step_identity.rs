@@ -28,6 +28,8 @@ pub enum StepId {
     PublishBaseline,
     /// `OpenTofu` provider-cache composite outputs consumed by the save step.
     TofuProviders,
+    /// Runtime-image identity output consumed by the tools restore key.
+    ToolsCacheIdentity,
 }
 
 impl StepId {
@@ -38,6 +40,7 @@ impl StepId {
             Self::Plan => "plan",
             Self::PublishBaseline => "publish-baseline",
             Self::TofuProviders => "tofu-providers",
+            Self::ToolsCacheIdentity => "v2",
         }
     }
 }
@@ -92,6 +95,10 @@ pub enum StepRole {
     MsrvQualification,
     /// One elected tools-cache writer.
     ToolsCacheSave,
+    /// Runtime-qualified identity producer for the V2 tools cache.
+    ToolsCacheIdentity,
+    /// Restore of the V2 tools cache, gated by its identity producer.
+    ToolsCacheRestore,
     /// Restore of the shared Cargo registry and git sources snapshot.
     CargoSourcesRestore,
     /// Single elected writer for the shared Cargo sources snapshot.
@@ -159,7 +166,10 @@ impl StepRole {
             Self::ToolsCacheSave | Self::CargoSourcesSave => {
                 action_has_prefix_for_kind(kind, "actions/cache/save@")
             }
-            Self::CargoSourcesRestore => action_has_prefix_for_kind(kind, "actions/cache/restore@"),
+            Self::ToolsCacheIdentity => valid_tools_cache_identity(kind),
+            Self::ToolsCacheRestore | Self::CargoSourcesRestore => {
+                action_has_prefix_for_kind(kind, "actions/cache/restore@")
+            }
             Self::TofuProvidersRestore => super::step_protocol::valid_provider_restore(kind),
             Self::TofuProvidersSave => super::step_protocol::valid_provider_save(kind),
             Self::CargoRegistryRestore => action_has_prefix_for_kind(kind, "Swatinem/rust-cache@"),
@@ -191,6 +201,7 @@ impl StepRole {
             Self::PlanProducer => Some(StepId::Plan),
             Self::BaselinePublisher => Some(StepId::PublishBaseline),
             Self::TofuProvidersRestore => Some(StepId::TofuProviders),
+            Self::ToolsCacheIdentity => Some(StepId::ToolsCacheIdentity),
             _ => None,
         }
     }
@@ -201,8 +212,18 @@ impl StepRole {
             StepId::Plan => Self::PlanProducer,
             StepId::PublishBaseline => Self::BaselinePublisher,
             StepId::TofuProviders => Self::TofuProvidersRestore,
+            StepId::ToolsCacheIdentity => Self::ToolsCacheIdentity,
         }
     }
+}
+
+/// Require one of the checked-in lane-specific tools-identity actions.
+fn valid_tools_cache_identity(kind: &StepKind) -> bool {
+    matches!(kind, StepKind::Action { uses, with, env }
+        if matches!(uses.as_str(), "./.github/actions/u22" | "./.github/actions/u24" | "./.github/actions/u26")
+            && with.len() == 1
+            && with.get("d").is_some_and(|digest| !digest.is_empty())
+            && env.is_empty())
 }
 
 /// Check that a step is the configured checkout owner in this workflow scope.

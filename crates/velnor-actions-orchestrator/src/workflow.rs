@@ -3,6 +3,8 @@
 //! W1 emission wiring lives in the child module below.
 #[path = "wire_w1.rs"]
 pub(crate) mod wire_w1;
+#[path = "workflow_dispatch.rs"]
+mod workflow_dispatch;
 
 #[path = "check_jobs.rs"]
 pub(crate) mod check_jobs;
@@ -17,7 +19,7 @@ use velnor_actions_contract::{
 use velnor_actions_mise::{
     PREPARE_RUST_COMPONENTS_STEP, PrepareRustComponents, ToolCatalog, ToolHomes,
 };
-use velnor_actions_rust::{CompileDriver, TestRunner};
+use velnor_actions_rust::TestRunner;
 use velnor_actions_workflow_renderer::render::{
     CONCURRENCY_CANCEL, CONCURRENCY_GROUP, EXPECTED_PR_TYPES, FINAL_JOB_ID, PLAN_JOB_ID,
     PUBLISH_JOB_ID, RenderContext, WORKFLOW_PATH,
@@ -28,7 +30,7 @@ use crate::OrchestratorError;
 use crate::discover::Discovery;
 use crate::pins::consumer_acquire_step;
 use crate::utf8::{strings_of, strings_of_env};
-use crate::workflow_jobs::{final_job, lint_job, plan_job};
+use crate::workflow_jobs::{PlanJobToolNeeds, PlanRustNeed, final_job, lint_job, plan_job};
 
 #[path = "workflow_context.rs"]
 mod workflow_context;
@@ -65,35 +67,15 @@ pub struct WorkflowPlan {
 /// # Errors
 ///
 /// Returns tool-request or step-construction errors.
-#[expect(
-    clippy::too_many_arguments,
-    clippy::fn_params_excessive_bools,
-    reason = "one call site threads job scope plus role selection"
-)]
 fn build_plan_job(
     label: &str,
     acquire: Option<Step>,
     catalog: &ToolCatalog,
-    use_rust: bool,
-    use_mbx: bool,
-    use_nextest: bool,
-    use_opentofu: bool,
+    needs: PlanJobToolNeeds,
     fetch_roots: &[String],
     discovery: &Discovery,
 ) -> Result<Job, OrchestratorError> {
-    let mut plan = plan_job(
-        label,
-        acquire,
-        catalog,
-        use_rust,
-        use_mbx,
-        use_nextest,
-        use_opentofu,
-        fetch_roots,
-    )?;
-    if let Some(format) = wire_w1::workspace_format_step(discovery, catalog)? {
-        insert_format_step(&mut plan, format);
-    }
+    let mut plan = plan_job(label, acquire, catalog, needs, fetch_roots)?;
     insert_format_report_steps(
         &mut plan,
         wire_w1::workspace_format_report_steps(discovery)?,
@@ -118,27 +100,35 @@ pub(crate) fn build_workflow(
     let version = env!("CARGO_PKG_VERSION").to_owned();
     let policy = config.workflow.policy;
     let verification_tasks = crate::verification_tasks::policies(config)?;
-    let use_mbx = plan_uses_mbx(discovery);
     let support = support_workflow(policy, config.workflow.generator_validation, discovery);
     let mut jobs = BTreeMap::new();
     let acquire = match policy {
         WorkflowPolicy::ConsumerV1 => Some(consumer_acquire_step(label, &version, discovery)?),
         WorkflowPolicy::VelnorRepositoryV1 => None,
     };
-    let use_nextest = plan_uses_nextest(discovery);
-    let use_opentofu = plan_uses_opentofu(discovery);
-    let use_rust = plan_uses_rust(discovery);
+    let format = wire_w1::workspace_format_step(discovery, &catalog)?;
+    let rust = match (plan_uses_rust(discovery), format.is_some()) {
+        (_, true) => PlanRustNeed::CompilerAndComponents,
+        (true, false) => PlanRustNeed::Compiler,
+        (false, false) => PlanRustNeed::None,
+    };
+    let needs = PlanJobToolNeeds {
+        rust,
+        nextest: plan_uses_nextest(discovery),
+        opentofu: plan_uses_opentofu(discovery),
+        gh: policy == WorkflowPolicy::VelnorRepositoryV1,
+    };
     let mut plan = build_plan_job(
         label,
         acquire.clone(),
         &catalog,
-        use_rust,
-        use_mbx,
-        use_nextest,
-        use_opentofu,
+        needs,
         fetch_roots,
         discovery,
     )?;
+    if let Some(format) = format {
+        insert_format_step(&mut plan, format);
+    }
     if policy == WorkflowPolicy::VelnorRepositoryV1 {
         plan.permissions = Some(crate::workflow_jobs::read_actions_permissions());
     }
@@ -162,14 +152,14 @@ pub(crate) fn build_workflow(
     crate::verification_tasks::insert_jobs(&mut jobs, &verification_tasks)?;
     insert_gate_jobs(&mut jobs, label, branch, &required_ids, acquire, &catalog)?;
     wire_w1::check_crate_mbx_gating(&jobs, &built.drivers)?;
-    let ir = workflow_ir(config, branch, jobs);
+    let ir = workflow_ir(config, branch, jobs, policy);
     let context = workflow_context::render_context(
         config,
         label,
         &version,
         &catalog,
         discovery,
-        use_rust,
+        rust.has_compiler(),
         verification_tasks,
     )?;
     let actionlint = actionlint_input(config, &version, label);
@@ -181,14 +171,20 @@ pub(crate) fn build_workflow(
     })
 }
 
-fn workflow_ir(config: &VelnorConfig, branch: &str, jobs: BTreeMap<String, Job>) -> WorkflowIr {
+fn workflow_ir(
+    config: &VelnorConfig,
+    branch: &str,
+    jobs: BTreeMap<String, Job>,
+    policy: WorkflowPolicy,
+) -> WorkflowIr {
     WorkflowIr {
         name: config.workflow.name.clone(),
         triggers: Trigger {
             pull_request_types: EXPECTED_PR_TYPES.iter().map(ToString::to_string).collect(),
             push_branches: vec![branch.to_owned()],
             merge_group: true,
-            workflow_dispatch: None,
+            workflow_dispatch: (policy == WorkflowPolicy::VelnorRepositoryV1)
+                .then(workflow_dispatch::qualification_dispatch),
             schedule: None,
         },
         permissions: Permissions::default(),
@@ -279,15 +275,6 @@ fn insert_format_step(plan: &mut Job, format: Step) {
         })
         .unwrap_or(plan.steps.len());
     plan.steps.insert(at, format);
-}
-
-/// True when any selected workspace compiles through MBX. Only detected
-/// evidence enables pre-install; consumers without it stay Cargo-only.
-pub(crate) fn plan_uses_mbx(discovery: &Discovery) -> bool {
-    discovery
-        .workspaces
-        .iter()
-        .any(|workspace| workspace.profile.compile_driver == CompileDriver::Mbx)
 }
 
 /// True when any selected workspace runs tests through Nextest; only those
