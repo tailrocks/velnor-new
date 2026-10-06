@@ -142,5 +142,4 @@ impl CrateObligation {
 }
 
 #[cfg(test)]
-#[path = "crate_job_tests.rs"]
 mod tests;

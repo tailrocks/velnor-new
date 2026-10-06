@@ -2,7 +2,6 @@
 use super::jobs::{ScheduleTrigger, is_safe_display_name};
 use super::permissions::{PermissionLevel, Permissions};
 pub use super::step::{Step, StepKind};
-#[path = "job_validation.rs"]
 mod job_validation;
 use super::timeout::JobTimeout;
 use crate::errors::ContractError;

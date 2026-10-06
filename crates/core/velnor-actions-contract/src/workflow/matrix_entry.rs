@@ -220,5 +220,4 @@ fn validate_lane_binding(
 }
 
 #[cfg(test)]
-#[path = "matrix_entry_tests.rs"]
 mod tests;

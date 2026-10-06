@@ -3,7 +3,6 @@ use super::{CheckExecutor, CheckPlatform};
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
 
-#[path = "host_container_validation.rs"]
 mod validation;
 
 /// Fully declared installed Docker host runtime, independent of native target.
@@ -195,5 +194,4 @@ impl HostContainerProfile {
 }
 
 #[cfg(test)]
-#[path = "host_container_tests.rs"]
 mod tests;

@@ -3,7 +3,6 @@ use super::CheckPlatform;
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
 
-#[path = "qualified_tool_validation.rs"]
 mod validation;
 
 /// One explicit tool identity; scoped to checks selecting its ID.
@@ -192,5 +191,4 @@ pub fn validate_qualified_tools(tools: &[QualifiedTool], file: &str) -> Result<(
 }
 
 #[cfg(test)]
-#[path = "qualified_tools_tests.rs"]
 mod tests;

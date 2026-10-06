@@ -228,5 +228,4 @@ fn add(left: usize, right: usize) -> Result<usize, ContractError> {
 }
 
 #[cfg(test)]
-#[path = "check_receipt_budget_tests.rs"]
 mod tests;

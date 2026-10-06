@@ -5,9 +5,9 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use super::super::cache_admission::CacheAdmission;
-use super::IndexError;
-use super::{build_index_from_list, build_index_walk};
+use super::super::super::cache_admission::CacheAdmission;
+use super::super::IndexError;
+use super::super::{build_index_from_list, build_index_walk};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 

@@ -383,5 +383,4 @@ impl RequiredCheckMigration {
 }
 
 #[cfg(test)]
-#[path = "jobs_tests.rs"]
 mod tests;

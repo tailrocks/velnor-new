@@ -1,6 +1,6 @@
 //! Crate-job ID and display-name unit tests.
 //!
-//! Declared via `#[path]` from `jobs.rs` under `cfg(test)`.
+//! Canonical sibling suite for `super` (declared `#[cfg(test)] mod tests;`).
 
 use super::{
     TOFU_DISPLAY_PREFIX, crate_display_label, crate_display_name, is_safe_display_name,

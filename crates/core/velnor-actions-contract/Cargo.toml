@@ -17,7 +17,7 @@ thiserror = { workspace = true }
 
 [[test]]
 name = "velnor_contract"
-path = "tests/velnor_contract.rs"
+path = "tests/main.rs"
 
 [dev-dependencies]
 serde_json = { workspace = true }

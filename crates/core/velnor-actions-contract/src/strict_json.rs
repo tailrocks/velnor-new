@@ -341,5 +341,4 @@ fn too_deep(depth: usize) -> ContractError {
 }
 
 #[cfg(test)]
-#[path = "strict_json_tests.rs"]
-mod strict_json_tests;
+mod tests;

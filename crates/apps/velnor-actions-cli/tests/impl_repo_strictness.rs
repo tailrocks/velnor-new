@@ -324,47 +324,47 @@ fn strictness_orchestrator_errors_stay_distinct() -> Result<(), Box<dyn Error>> 
 fn strictness_negative_coverage_pinned() -> Result<(), Box<dyn Error>> {
     let cases = [
         (
-            "crates/core/velnor-actions-contract/src/ids/artifact.rs",
+            "crates/core/velnor-actions-contract/src/ids/artifact/tests/newtypes.rs",
             "newtypes_accept_valid_and_reject_invalid",
         ),
         (
-            "crates/core/velnor-actions-contract/src/ids/artifact.rs",
+            "crates/core/velnor-actions-contract/src/ids/artifact/tests/newtypes.rs",
             "digest_and_path_newtypes_validate",
         ),
         (
-            "crates/core/velnor-actions-contract/src/strict_json_tests.rs",
+            "crates/core/velnor-actions-contract/src/strict_json/tests.rs",
             "oversize_doc_fails_with_size_detail",
         ),
         (
-            "crates/core/velnor-actions-contract/src/strict_json_tests.rs",
+            "crates/core/velnor-actions-contract/src/strict_json/tests.rs",
             "bytes_entry_rejects_bad_utf8_and_dup_keys",
         ),
         (
-            "crates/core/velnor-actions-contract/src/strict_json_tests.rs",
+            "crates/core/velnor-actions-contract/src/strict_json/tests.rs",
             "nesting_boundary_matches_serde_json",
         ),
         (
-            "crates/core/velnor-actions-contract/src/strict_json_tests.rs",
+            "crates/core/velnor-actions-contract/src/strict_json/tests.rs",
             "nesting_budget_counts_objects_and_mixed_shapes",
         ),
         (
-            "crates/core/velnor-actions-contract/src/workflow/artifacts.rs",
+            "crates/core/velnor-actions-contract/src/workflow/artifacts/tests.rs",
             "agreement_rejects_duplicate_keys",
         ),
         (
-            "crates/core/velnor-actions-contract/src/workflow/cache_ids.rs",
+            "crates/core/velnor-actions-contract/src/workflow/cache_ids/tests.rs",
             "cache_ids_need_five_valid_digests",
         ),
         (
-            "crates/core/velnor-actions-contract/src/ids/artifact.rs",
+            "crates/core/velnor-actions-contract/src/ids/artifact/tests/proofs.rs",
             "proof_constructor_validates_every_input",
         ),
         (
-            "crates/core/velnor-actions-contract/src/ids/artifact.rs",
+            "crates/core/velnor-actions-contract/src/ids/artifact/tests/proofs.rs",
             "baseline_states_are_exhaustive",
         ),
         (
-            "crates/core/velnor-actions-contract/src/ids/artifact.rs",
+            "crates/core/velnor-actions-contract/src/ids/artifact/tests/proofs.rs",
             "task_proof_needs_valid_ids_and_digests",
         ),
         (

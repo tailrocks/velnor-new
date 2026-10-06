@@ -5,9 +5,7 @@ use super::{
 };
 use std::collections::{BTreeMap, BTreeSet};
 
-#[path = "qualified_tool_probes.rs"]
 mod probes;
-#[path = "qualified_tool_sources.rs"]
 mod sources;
 
 pub(super) fn safe_name(value: &str) -> bool {

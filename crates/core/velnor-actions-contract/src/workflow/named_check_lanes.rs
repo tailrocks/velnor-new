@@ -137,5 +137,4 @@ pub(super) fn add_named_check_lanes(
 }
 
 #[cfg(test)]
-#[path = "named_check_lanes_tests.rs"]
 mod tests;

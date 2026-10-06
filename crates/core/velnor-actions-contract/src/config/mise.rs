@@ -3,7 +3,6 @@ use super::HostContainerProfile;
 use crate::errors::ContractError;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
-#[path = "check_system_tools.rs"]
 mod check_system_tools;
 pub use check_system_tools::{CheckSystemTool, CheckSystemToolKind};
 
@@ -253,5 +252,4 @@ impl CheckRunner {
 }
 
 #[cfg(test)]
-#[path = "mise_tests.rs"]
 mod tests;

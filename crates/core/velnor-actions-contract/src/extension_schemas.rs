@@ -10,7 +10,6 @@ pub const TOFU_EXTENSION_SCHEMA: &str = "tofu-task-identity-v1";
 /// Known stack-extension schemas; unknown schemas disable reuse/coverage.
 pub const NAMED_CHECK_EXTENSION_SCHEMA: &str = "mise-named-check-identity-v1";
 /// Typed named-check extension.
-#[path = "named_check_extension.rs"]
 pub mod named_check;
 /// Known adapter identity schemas.
 pub const KNOWN_STACK_EXTENSION_SCHEMAS: &[&str] = &[
@@ -25,20 +24,4 @@ pub fn is_known_stack_extension_schema(schema: &str) -> bool {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn unknown_extension_schemas_disable_identity() {
-        assert!(is_known_stack_extension_schema(RUST_EXTENSION_SCHEMA));
-        assert!(!is_known_stack_extension_schema("rust-task-v2"));
-        assert!(!is_known_stack_extension_schema(""));
-    }
-
-    #[test]
-    fn tofu_schema_is_known() {
-        assert!(is_known_stack_extension_schema(TOFU_EXTENSION_SCHEMA));
-        assert!(is_known_stack_extension_schema(RUST_EXTENSION_SCHEMA));
-        assert_eq!(KNOWN_STACK_EXTENSION_SCHEMAS.len(), 3);
-    }
-}
+mod tests;

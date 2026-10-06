@@ -1,6 +1,6 @@
 //! Crate-job display-gate unit tests.
 //!
-//! Declared via `#[path]` from `crate_job.rs` under `cfg(test)`.
+//! Canonical sibling suite for `super` (declared `#[cfg(test)] mod tests;`).
 
 use super::*;
 use crate::{digest_b3, matrix_id_for_task_group, matrix_key_for_id, task_id_for_stack};

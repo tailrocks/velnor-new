@@ -202,5 +202,4 @@ impl VelnorConfig {
 }
 
 #[cfg(test)]
-#[path = "check_tool_reference_tests.rs"]
-mod check_tool_reference_tests;
+mod tests;

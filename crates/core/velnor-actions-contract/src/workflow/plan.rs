@@ -306,7 +306,6 @@ pub fn validate_matrix_run(value: &str) -> Result<(), ContractError> {
 }
 
 #[cfg(test)]
-#[path = "plan_tests.rs"]
 mod tests;
 
 /// Check `task_ids` contains every obligation ID, nothing else (wf §4).

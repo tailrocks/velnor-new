@@ -1,6 +1,6 @@
 //! Strict-JSON tests: size, shape, and nesting-budget gates.
 //!
-//! Declared via `#[path]` from `strict_json.rs` under `cfg(test)`.
+//! Canonical sibling suite for `super` (declared `#[cfg(test)] mod tests;`).
 
 use std::fmt::Write as _;
 
