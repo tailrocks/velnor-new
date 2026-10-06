@@ -64,11 +64,9 @@ async fn seed_duplicate_ids(path: &Path) -> Result<(), String> {
     Ok(())
 }
 
-// Unfinished merged expectation: it asks for an ambiguous multi-row update
-// while the journal's one-row write invariant intentionally fails closed.
-#[cfg(any())]
+// Malformed duplicate IDs must fail closed and preserve every row.
 #[tokio::test]
-async fn duplicate_ids_are_accepted_and_finish_mutates_both_rows() -> Result<(), String> {
+async fn duplicate_ids_fail_closed_without_finishing() -> Result<(), String> {
     let scratch = SchemaScratch::new()?;
     let path = scratch.file();
     seed_duplicate_ids(&path).await?;
@@ -82,13 +80,12 @@ async fn duplicate_ids_are_accepted_and_finish_mutates_both_rows() -> Result<(),
     );
     let rows = journal.rows().await.map_err(|error| error.to_string())?;
     assert_eq!(rows.len(), 2);
-    assert!(rows.iter().all(|row| row.state == IntentState::Failed));
+    assert!(rows.iter().all(|row| row.state == IntentState::Uncertain));
     Ok(())
 }
 
-#[cfg(any())]
 #[tokio::test]
-async fn duplicate_ids_are_accepted_and_cleanup_mutates_both_rows() -> Result<(), String> {
+async fn duplicate_ids_fail_closed_without_cleanup_proof() -> Result<(), String> {
     let scratch = SchemaScratch::new()?;
     let path = scratch.file();
     seed_duplicate_ids(&path).await?;
@@ -102,6 +99,6 @@ async fn duplicate_ids_are_accepted_and_cleanup_mutates_both_rows() -> Result<()
     );
     let rows = journal.rows().await.map_err(|error| error.to_string())?;
     assert_eq!(rows.len(), 2);
-    assert!(rows.iter().all(|row| row.cleanup_proven));
+    assert!(rows.iter().all(|row| !row.cleanup_proven));
     Ok(())
 }
