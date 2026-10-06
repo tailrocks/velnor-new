@@ -38,27 +38,27 @@ Workflow to generate
   Push branch: main
   Runner: ubuntu-26.04 (latest pinned default)
   Jobs:
-    - actionlint (5 steps)
+    - actionlint (7 steps)
     - alint (2 steps)
-    - cargo-deny (5 steps)
-    - cargo-machete (5 steps)
-    - plan (22 steps)
+    - cargo-deny (6 steps)
+    - cargo-machete (7 steps)
+    - plan (23 steps)
     - publish-baseline (7 steps)
-    - required (11 steps)
-    - rust-velnor-actions-actionlint (23 steps)
-    - rust-velnor-actions-cli (21 steps)
-    - rust-velnor-actions-contract (22 steps)
-    - rust-velnor-actions-mise (23 steps)
-    - rust-velnor-actions-orchestrator (22 steps)
-    - rust-velnor-actions-rust (22 steps)
-    - rust-velnor-actions-tofu (22 steps)
-    - rust-velnor-actions-workflow-renderer (22 steps)
-    - rust-velnor-archive-guard (22 steps)
-    - rust-velnor-runner-cli (22 steps)
-    - rust-velnor-runner-core (22 steps)
-    - rust-velnor-runner-github (22 steps)
-    - rust-velnor-runner-host (22 steps)
-    - zizmor (5 steps)
+    - required (10 steps)
+    - rust-velnor-actions-actionlint (24 steps)
+    - rust-velnor-actions-cli (22 steps)
+    - rust-velnor-actions-contract (23 steps)
+    - rust-velnor-actions-mise (24 steps)
+    - rust-velnor-actions-orchestrator (23 steps)
+    - rust-velnor-actions-rust (23 steps)
+    - rust-velnor-actions-tofu (23 steps)
+    - rust-velnor-actions-workflow-renderer (23 steps)
+    - rust-velnor-archive-guard (23 steps)
+    - rust-velnor-runner-cli (23 steps)
+    - rust-velnor-runner-core (23 steps)
+    - rust-velnor-runner-github (23 steps)
+    - rust-velnor-runner-host (23 steps)
+    - zizmor (7 steps)
     - 13 Rust crate jobs
       Each: Clippy -> build -> run tests -> doctests -> doc build -> format check
       Entries:
@@ -182,4 +182,4 @@ Recommendations
   mise.toml is read-only input; Velnor never modifies it
   rust-toolchain.toml not found; Velnor will not create it
   shadowed_nextest_config: .config/nextest.toml shadowed by crates/velnor-runner/.config/nextest.toml; profile selected from crates/velnor-runner/.config/nextest.toml
-  tool_install_unverified:8 installs skip verification (no mise.lock): actionlint@1.7.12, cargo-deny@0.20.2, gh@2.102.0, nextest@0.9.146, opentofu@1.13.1, rust@1.98.1, shellcheck@0.11.0, zizmor@1.30.1; install on the CI platform and commit the resulting lock
+  tool_install_unverified:9 installs skip verification (no mise.lock): actionlint@1.7.12, cargo-deny@0.20.2, cargo-machete@0.9.2, gh@2.102.0, nextest@0.9.146, opentofu@1.13.1, rust@1.98.1, shellcheck@0.11.0, zizmor@1.30.1; install on the CI platform and commit the resulting lock

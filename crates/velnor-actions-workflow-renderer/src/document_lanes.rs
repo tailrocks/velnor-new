@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use velnor_actions_contract::{Job, Step, StepKind, StepRole};
+use velnor_actions_contract::{Job, Step};
 
 use crate::RenderError;
 use crate::composite::shared_call;
@@ -11,6 +11,7 @@ use crate::yaml::Yaml;
 pub(crate) struct SharedLaneSteps<'a> {
     pub checkouts: &'a BTreeMap<String, Step>,
     pub env_steps: &'a BTreeMap<String, Vec<Step>>,
+    pub runtime_preludes: &'a BTreeMap<String, Vec<Step>>,
     pub prefixes: &'a BTreeMap<String, Vec<Step>>,
     pub preludes: &'a BTreeMap<String, Vec<Step>>,
     pub postludes: &'a BTreeMap<String, Vec<Step>>,
@@ -18,6 +19,7 @@ pub(crate) struct SharedLaneSteps<'a> {
 
 pub(crate) struct JobStepContext<'a> {
     pub job_env: &'a BTreeMap<String, String>,
+    pub runs_on: Option<&'a str>,
     pub actions_read: bool,
 }
 /// Render a normal job body or a paired lane's cache prelude/composite/postlude.
@@ -54,8 +56,7 @@ pub(crate) fn render_job_steps(
                 ctx,
                 needs_envs,
                 false,
-                step_context.job_env,
-                step_context.actions_read,
+                step_context,
             )?);
         }
     }
@@ -87,9 +88,17 @@ fn append_shared_lane_steps(
         ctx,
         needs_envs,
         false,
-        step_context.job_env,
-        step_context.actions_read,
+        step_context,
     )?);
+    append_steps(
+        id,
+        lanes.runtime_preludes,
+        ctx,
+        needs_envs,
+        step_context,
+        rendered,
+        "runtime_prelude",
+    )?;
     append_steps(
         id,
         lanes.prefixes,
@@ -139,21 +148,15 @@ fn append_steps(
             ctx,
             needs_envs,
             false,
-            step_context.job_env,
-            step_context.actions_read,
+            step_context,
         )?);
     }
     Ok(())
 }
 
 fn valid_shared_checkout(checkout: &Step, expected_uses: &str) -> bool {
-    checkout.role == Some(StepRole::Checkout)
-        && checkout.condition.is_none()
-        && matches!(
-            &checkout.kind,
-            StepKind::Action { uses, with, env }
-                if uses == expected_uses
-                    && with.get("persist-credentials").map(String::as_str) == Some("false")
-                    && env.is_empty()
-        )
+    velnor_actions_contract::workflow::step_identity::is_configured_checkout(
+        checkout,
+        expected_uses,
+    )
 }

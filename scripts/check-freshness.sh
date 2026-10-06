@@ -279,7 +279,6 @@ EXPECTED_ACTIONS = {
     "actions/cache/save": "CACHE_ACTION",
     "jdx/mr-boxington-action": "MR_BOXINGTON_ACTION",
     "asamarts/alint": "ALINT_ACTION",
-    "Swatinem/rust-cache": "RUST_CACHE_ACTION",
 }
 
 

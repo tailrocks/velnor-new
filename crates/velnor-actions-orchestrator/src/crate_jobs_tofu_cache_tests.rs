@@ -168,7 +168,7 @@ fn mixed_job_restores_both_sources_and_providers() {
     assert_eq!(found.jobs.len(), 1, "shared group renders once");
     let names = crate_jobs_tests::names(&found.jobs[0].1);
     assert!(
-        names.contains(&"Restore Cargo sources") || names.contains(&"Restore Cargo registry"),
+        names.contains(&"Restore Cargo sources"),
         "mixed restores sources: {names:?}"
     );
     assert!(

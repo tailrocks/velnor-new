@@ -135,7 +135,25 @@ fn policy_preview() -> Result<PolicyPreview, Box<dyn std::error::Error>> {
             output_dir: Some(preview.clone()),
         },
     )?;
-    assert_eq!(report.files_written.len(), 6, "six generated files");
+    assert_eq!(report.files_written.len(), 10, "ten generated files");
+    assert!(
+        report
+            .files_written
+            .iter()
+            .any(|path| { path == ".github/actions/u26/action.yml" })
+    );
+    assert!(
+        report
+            .files_written
+            .iter()
+            .any(|path| path == ".github/scripts/velnor-tools-cache-identity.sh")
+    );
+    assert!(
+        report
+            .files_written
+            .iter()
+            .any(|path| { path == ".github/actions/velnor-tools-prelude-u26/action.yml" })
+    );
     assert!(
         report
             .files_written
@@ -158,11 +176,20 @@ fn stage(preview: &Path, yaml: &str) -> Result<TempDir, Box<dyn std::error::Erro
         root.join(".github/actionlint.yaml"),
         fs::read(preview.join(".github/actionlint.yaml"))?,
     )?;
+    for relative in [
+        ".github/actions/u26/action.yml",
+        ".github/actions/velnor-tool-seed/action.yml",
+        ".github/actions/velnor-tools-cache-restore/action.yml",
+        ".github/scripts/velnor-tools-cache-identity.sh",
+    ] {
+        let destination = root.join(relative);
+        if let Some(parent) = destination.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::copy(preview.join(relative), destination)?;
+    }
     let freshness = fs::read_to_string(preview.join(FRESHNESS_WORKFLOW_PATH))?;
     fs::write(root.join(FRESHNESS_WORKFLOW_PATH), &freshness)?;
-    let action = ".github/actions/velnor-tool-seed/action.yml";
-    fs::create_dir_all(root.join(".github/actions/velnor-tool-seed"))?;
-    fs::copy(preview.join(action), root.join(action))?;
     let input = ZizmorConfigInput {
         generator_version: env!("CARGO_PKG_VERSION").to_owned(),
         workflows: vec![
@@ -236,40 +263,26 @@ fn velnor_policy_blessed_sha_validates_green() -> TestResult {
 
 /// The two suppressed findings are `undocumented-permissions` (low,
 /// auditor/pedantic-only): Plan and Required each grant Actions read to their
-/// bounded internal baseline/artifact operation. Inline ignores are only
-/// `self-repository` on local actions. Zizmor must report that count.
+/// bounded internal baseline/artifact operation. The staged config has no
+/// unpinned-uses ignores; zizmor also reports unrelated ignored audit checks.
 #[test]
 fn staging_suppressions_stable_no_new() -> TestResult {
     let (_repo, _parent, preview, yaml, _) = policy_preview()?;
     let staged = stage(&preview, &yaml)?;
-    let ignores = self_repository_ignores(staged.path())?;
     let output = run_zizmor(staged.path())?;
     let text = streams(&output);
-    assert!(output.success, "staged config greens zizmor: {text}");
-    assert!(ignores > 0, "the tool-seed action needs one ignore");
+    let config = fs::read_to_string(staged.path().join(".zizmor.yml"))?;
     assert!(
-        text.contains(&format!("{ignores} ignored")),
-        "ignore count must match the local-action annotations: {text}"
+        config.contains("  unpinned-uses:\n    ignore: []\n"),
+        "unpinned-uses ignore list is empty: {config}"
+    );
+    assert!(output.success, "staged config greens zizmor: {text}");
+    assert!(
+        text.contains("No findings to report."),
+        "SHA-pinned refs produce no findings: {text}"
     );
     assert!(text.contains("2 suppressed"), "no new suppressions: {text}");
     Ok(())
-}
-
-/// Count `# zizmor: ignore[self-repository]` and reject every other ignore.
-fn self_repository_ignores(root: &Path) -> Result<usize, Box<dyn std::error::Error>> {
-    let mut matched = 0;
-    let mut any = 0;
-    for relative in [
-        WORKFLOW_PATH,
-        FRESHNESS_WORKFLOW_PATH,
-        ".github/actions/velnor-tool-seed/action.yml",
-    ] {
-        let text = fs::read_to_string(root.join(relative))?;
-        matched += text.matches("# zizmor: ignore[self-repository]").count();
-        any += text.matches("zizmor: ignore[").count();
-    }
-    assert_eq!(matched, any, "only self-repository ignores are allowed");
-    Ok(matched)
 }
 
 #[test]

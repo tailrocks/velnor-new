@@ -49,12 +49,12 @@ fn expression_spans(text: &str) -> Option<Vec<&str>> {
 /// Exact `${{ }}` inners permitted in shell-step env values.
 ///
 /// Runner paths, the release tag, plan-matrix coordinates, fixed
-/// workflow secret handles, and AWS action outputs,
-/// and the protected-default-branch cache-mode selector (the generator
-/// pins it on the native MBX action so other events stay read-only).
+/// workflow secret handles, AWS action outputs, and the MBX
+/// cache-mode selector. Hosted writes require a protected push to the
+/// default branch; Scale Set routes do not invoke action restore.
 /// Notably absent: `github.token` (render-time fetch binding only)
 /// and run IDs (never in env).
-const ENV_EXPRESSIONS: &[&str] = &[
+const ENV_EXPRESSIONS: [&str; 11] = [
     "runner.temp",
     "github.ref_name",
     "github.event_name",
@@ -74,14 +74,15 @@ const ENV_EXPRESSIONS: &[&str] = &[
 /// push-gated cache-save flag, and the publish step's derived
 /// artifact name. Notably absent: every `secrets.*` handle (rejected
 /// separately as `secret_in_action_input`).
-const WITH_EXPRESSIONS: &[&str] = &[
+const WITH_EXPRESSIONS: [&str; 10] = [
     "runner.temp",
     "github.run_id",
     "github.run_attempt",
-    "runner.environment",
-    "github.job",
     "github.event_name == 'push'",
     "steps.publish-baseline.outputs.artifact_name",
+    "steps.v2.outputs.identity",
+    "runner.environment",
+    "github.job",
     "steps.tofu-providers.outputs.cache-key",
     "steps.tofu-providers.outputs.cache-path",
 ];
@@ -116,12 +117,25 @@ fn is_hash_files(inner: &str) -> bool {
 /// Reject unlisted `${{ }}` spans in one shell-step env value.
 /// # Errors
 pub(crate) fn check_env_value(key: &str, value: &str) -> Result<(), RenderError> {
+    check_env_value_with_scope(key, value, false)
+}
+
+/// Validate env expressions scoped to a generated composite action body.
+pub(crate) fn check_composite_env_value(key: &str, value: &str) -> Result<(), RenderError> {
+    check_env_value_with_scope(key, value, true)
+}
+
+fn check_env_value_with_scope(key: &str, value: &str, composite: bool) -> Result<(), RenderError> {
     let Some(spans) = expression_spans(value) else {
         return Err(RenderError::BadCommand(format!("bad_env_expression:{key}")));
     };
     for inner in spans {
+        let composite_input = composite
+            && inner.strip_prefix("inputs.")
+                == Some(crate::cache_p08::TOOLS_CACHE_IDENTITY_DIGEST_INPUT);
         if !ENV_EXPRESSIONS.contains(&inner)
             && !is_matrix_field(inner)
+            && !composite_input
             && !is_github_token_secret(inner)
         {
             return Err(RenderError::BadCommand(format!("bad_env_expression:{key}")));

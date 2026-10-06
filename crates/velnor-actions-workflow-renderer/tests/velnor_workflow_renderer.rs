@@ -3,6 +3,8 @@
 mod impl_adapter_wire_renderer;
 #[path = "impl_renderer_acquire.rs"]
 mod impl_renderer_acquire;
+#[path = "impl_renderer_cache_script.rs"]
+mod impl_renderer_cache_script;
 #[path = "impl_renderer_cache_steps.rs"]
 mod impl_renderer_cache_steps;
 #[path = "impl_renderer_cache_t22.rs"]
@@ -15,6 +17,8 @@ mod impl_renderer_f2close_hygiene;
 mod impl_renderer_f2close_matrix;
 #[path = "impl_renderer_finalfanin.rs"]
 mod impl_renderer_finalfanin;
+#[path = "impl_renderer_finalfanin_cache.rs"]
+mod impl_renderer_finalfanin_cache;
 #[path = "impl_renderer_fixtures.rs"]
 mod impl_renderer_fixtures;
 #[path = "impl_renderer_gate8.rs"]
@@ -49,6 +53,8 @@ mod impl_renderer_p08;
 mod impl_renderer_p08_elect;
 #[path = "impl_renderer_p08_tofu_elect.rs"]
 mod impl_renderer_p08_tofu_elect;
+#[path = "impl_renderer_p08_tools_election.rs"]
+mod impl_renderer_p08_tools_election;
 #[path = "impl_renderer_planclose.rs"]
 mod impl_renderer_planclose;
 #[path = "impl_renderer_planformat.rs"]

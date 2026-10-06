@@ -21,16 +21,28 @@ pub(crate) const CARGO_DENY_VERSION: &str = "0.20.2";
 
 /// Resolve an emitted validator install spec to its pinned name and version.
 ///
-/// Only `cargo-deny` installs (machete and zizmor run through isolated
-/// `exec`, never `install`); the version must equal the pinned const or
-/// the emitted shape drifted and the audit fails closed.
+/// Supported validator installation pins. The version must equal the pinned
+/// const or the emitted shape drifted and the audit fails closed.
 #[must_use]
-pub(crate) fn validator_install_pin(spec: &str) -> Option<(&'static str, &'static str)> {
+pub(crate) fn validator_install_pin(
+    spec: &str,
+) -> Option<(&'static str, &'static str, &'static str)> {
     let (key, version) = spec.split_once('@')?;
-    if key == "cargo-deny" && version == CARGO_DENY_VERSION {
-        Some(("cargo-deny", CARGO_DENY_VERSION))
-    } else {
-        None
+    match key {
+        "cargo-deny" if version == CARGO_DENY_VERSION => {
+            Some(("cargo-deny", CARGO_DENY_VERSION, "cargo-deny"))
+        }
+        "ubi:bnjbvr/cargo-machete" if version == CARGO_MACHETE_VERSION => Some((
+            "cargo-machete",
+            CARGO_MACHETE_VERSION,
+            "ubi:bnjbvr/cargo-machete",
+        )),
+        "zizmor" if version == velnor_actions_mise::catalog::ZIZMOR_VERSION => Some((
+            "zizmor",
+            velnor_actions_mise::catalog::ZIZMOR_VERSION,
+            "zizmor",
+        )),
+        _ => None,
     }
 }
 
@@ -271,6 +283,17 @@ pub(crate) fn machete_argv() -> Result<Vec<String>, OrchestratorError> {
         "cargo",
         &args,
     )
+}
+
+/// Explicit pinned backend install for cold-cache cargo-machete execution.
+pub(crate) fn machete_install_argv() -> Result<Vec<String>, OrchestratorError> {
+    let install = IsolatedCommand::mise_install(&[format!(
+        "ubi:bnjbvr/cargo-machete@{CARGO_MACHETE_VERSION}"
+    )])
+    .map_err(|err| OrchestratorError::Contract {
+        problem: err.to_string(),
+    })?;
+    strings_of(install.argv()).map_err(|problem| OrchestratorError::Contract { problem })
 }
 
 /// One validator vector: an allowlisted tool spec plus a fixed cargo payload.

@@ -71,17 +71,7 @@ fn lock_acquire_inserts_digest_verified_stage() {
     let mut ir = bare_ir(BTreeMap::from([
         (
             "plan".to_owned(),
-            plan_job(
-                "ubuntu-26.04",
-                None,
-                &catalog,
-                true,
-                false,
-                false,
-                false,
-                &[],
-            )
-            .expect("plan job"),
+            plan_job("ubuntu-26.04", None, &catalog, true, false, false, &[]).expect("plan job"),
         ),
         (
             "required".to_owned(),
@@ -153,17 +143,7 @@ fn lock_acquire_records_source_commit() {
     let catalog = ToolCatalog::pinned();
     let mut ir = bare_ir(BTreeMap::from([(
         "plan".to_owned(),
-        plan_job(
-            "ubuntu-26.04",
-            None,
-            &catalog,
-            true,
-            false,
-            false,
-            false,
-            &[],
-        )
-        .expect("plan job"),
+        plan_job("ubuntu-26.04", None, &catalog, true, false, false, &[]).expect("plan job"),
     )]));
     ir.jobs.insert(
         "required".to_owned(),
@@ -199,17 +179,8 @@ fn preseed_attach_builds_once_and_sets_mode() {
         ir: bare_ir(BTreeMap::from([
             (
                 "plan".to_owned(),
-                plan_job(
-                    "ubuntu-26.04",
-                    None,
-                    &catalog,
-                    true,
-                    false,
-                    false,
-                    false,
-                    &[],
-                )
-                .expect("plan job"),
+                plan_job("ubuntu-26.04", None, &catalog, true, false, false, &[])
+                    .expect("plan job"),
             ),
             ("rust-demo".to_owned(), legacy_task_job()),
             (
@@ -237,7 +208,7 @@ fn preseed_attach_builds_once_and_sets_mode() {
         },
         actionlint: ActionlintConfigInput::new("0.1.0").with_workflow_path(WORKFLOW_PATH),
     };
-    assert!(attach_preseed(&mut plan, "ubuntu-26.04", "0.1.0", &[]).is_ok());
+    assert!(attach_preseed(&mut plan, "ubuntu-26.04", "0.1.0").is_ok());
     assert!(plan.context.preseed);
     let names: Vec<&str> = plan.ir.jobs["plan"]
         .steps
@@ -263,7 +234,7 @@ fn preseed_attach_builds_once_and_sets_mode() {
         ]
     );
     assert_preseed_consumers(&plan);
-    assert!(attach_preseed(&mut plan, "ubuntu-26.04-arm", "0.1.0", &[]).is_err());
+    assert!(attach_preseed(&mut plan, "ubuntu-26.04-arm", "0.1.0").is_err());
 }
 
 /// Download, verify, then stage exactly once; never rebuild.
@@ -302,7 +273,7 @@ fn assert_preseed_consumers(plan: &WorkflowPlan) {
 }
 
 /// Pre-seed fixture plan over one plan job plus the final gate.
-fn preseed_fixture(use_mbx: bool, fetch_roots: &[String]) -> WorkflowPlan {
+fn preseed_fixture(fetch_roots: &[String]) -> WorkflowPlan {
     use velnor_actions_actionlint::ActionlintConfigInput;
     let catalog = ToolCatalog::pinned();
     WorkflowPlan {
@@ -314,7 +285,6 @@ fn preseed_fixture(use_mbx: bool, fetch_roots: &[String]) -> WorkflowPlan {
                     None,
                     &catalog,
                     true,
-                    use_mbx,
                     false,
                     false,
                     fetch_roots,

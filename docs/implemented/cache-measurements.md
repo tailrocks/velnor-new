@@ -108,7 +108,7 @@ zero because no MBX seed exists).
 
 Per-goal dimensions (green run), recorded separately: queue 91 s
 (created→first-job-start 21:04:36→21:06:07); setup 5–8 s/job
-(checkout + mise + helper/plan downloads); tool-install 12–18 s/job cold (every job —
+(checkout + mise + helper/plan downloads); tool-install 12–18 s/job cold (checked-out jobs —
 the tools MISS dominates job startup, ~114 s run-wide); transfer
 above; compile per crate (clippy+build, cold target, warm
 sources, no MBX): actionlint 13 s, contract 14 s, mise 16 s, rust
@@ -147,7 +147,9 @@ restored home → exit 0, `velnor: sources hit, skipping fetch`, in
 downloads**; rerun **0.03 s** (no recompile); `test --locked
 --offline` **0.57 s, 1 passed**. Reference (machine-shared, NOT the CI
 subset): `~/.cargo` holds cache 281.37 MB + index 86.51 MB + git/db
-274.42 MB with 4.26 GB of excluded `registry/src`.
+274.42 MB with 4.26 GB of excluded `registry/src`. This full-home
+inventory is not the archived payload: the Velnor source archive contains
+only `registry/index`, `registry/cache`, and `git/db`.
 
 ## 4. Reporting path (quota helpers are live, render stays hermetic)
 
@@ -191,9 +193,10 @@ leg (`src/index.ts:run()` gates `saveCache` on the `install` input;
 `pull_request` handling), which Velnor disables (`install: false`),
 so the push-gated `cache_save` expression never saved on any event
 (all 134 runs to date are `pull_request` per the 2026-10-01 API
-census; push triggers only on `main`, unmerged). Setups are now restore-only and elected writers
-carry explicit push-gated `Save Mise tools` steps; warmth still needs
-one post-merge `main` push to seed the `mise-v1-*` entries. Full
+census; push triggers only on `main`, unmerged). Historical V1 setups
+were restore-only and had no elected tool-cache save; that path has been
+retired. Active V2 uses renderer-owned runtime-qualified identity and
+explicit elected writers, as described in the V2 sections above. Full
 per-action PR-save verdict: gate-4 doc R13 bullet.
 
 ## Hosted MBX object-cache round-trip
@@ -231,3 +234,37 @@ A failing stats producer also fails the probe even if `tee` writes valid JSON:
 both reader steps enable `pipefail` explicitly because the hosted default shell
 does not.
 A green probe alone is not an ENOSPC repair verdict.
+
+## Generated workflow size with V2 cache identity
+
+The generator enforces a fixed 500,000-byte `ci.yml` cap. After compacting the
+runtime identity body into one version-marked script plus one local composite
+action per used hosted lane, the deterministic P13 workspace fixture measured:
+
+| `workspace_repo` members | `ci.yml` bytes | Result |
+| ---: | ---: | --- |
+| 1 | 33,737 | accepted |
+| 10 | 110,831 | accepted |
+| 29 | 273,585 | accepted |
+| 30 | 282,151 | accepted |
+| 40 | 367,811 | accepted |
+| 60 | 539,131 | rejected by the byte cap |
+| 100 | 881,771 | rejected by the byte cap |
+
+The separate T24 ToFu-root fixture measured:
+
+| ToFu roots | `ci.yml` bytes | Result |
+| ---: | ---: | --- |
+| 1 | 24,016 | accepted |
+| 10 | 96,469 | accepted |
+| 31 | 265,624 | accepted |
+| 32 | 273,679 | accepted |
+| 40 | 338,119 | accepted |
+| 60 | 499,219 | accepted |
+| 100 | 821,419 | rejected by the byte cap |
+
+These are fixture-specific local generator measurements. The 60-root output is
+781 bytes below the current limit; this does not promise that other 60-root
+workflows fit. A rejected render reports its actual size and leaves no partial
+output tree. The cap remains authoritative, and these figures do not measure
+hosted cache hits, transfer size, disk usage, or build performance.

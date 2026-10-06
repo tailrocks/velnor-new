@@ -37,17 +37,8 @@ fn assert_request_before(job: &Job, target: &str, request: &str, operation: &str
 fn plan_job_writes_request_before_plan() {
     let catalog = ToolCatalog::pinned();
     for acquire in [None, Some(checkout_action().expect("checkout step"))] {
-        let job = plan_job(
-            "ubuntu-26.04",
-            acquire,
-            &catalog,
-            true,
-            false,
-            false,
-            false,
-            &[],
-        )
-        .expect("plan job");
+        let job =
+            plan_job("ubuntu-26.04", acquire, &catalog, true, false, false, &[]).expect("plan job");
         assert_request_before(&job, "Plan", "write-request-v1:plan-v1", PLAN_OPERATION);
     }
 }
@@ -55,17 +46,7 @@ fn plan_job_writes_request_before_plan() {
 #[test]
 fn plan_job_checks_out_full_history_for_archaeology() {
     let catalog = ToolCatalog::pinned();
-    let job = plan_job(
-        "ubuntu-26.04",
-        None,
-        &catalog,
-        true,
-        false,
-        false,
-        false,
-        &[],
-    )
-    .expect("plan job");
+    let job = plan_job("ubuntu-26.04", None, &catalog, true, false, false, &[]).expect("plan job");
     let StepKind::Action { with, .. } = &job.steps[0].kind else {
         panic!("plan must start with checkout");
     };
@@ -140,13 +121,12 @@ fn plan_tools_follow_role_in_all_order() {
 #[test]
 fn plan_job_prepares_pinned_tools_before_generate_consumers() {
     let catalog = ToolCatalog::pinned();
-    for (use_mbx, use_nextest) in [(false, false), (false, true), (true, true)] {
+    for use_nextest in [false, true] {
         let job = plan_job(
             "ubuntu-26.04",
             None,
             &catalog,
             true,
-            use_mbx,
             use_nextest,
             false,
             &[],
@@ -189,7 +169,7 @@ fn plan_job_prepares_pinned_tools_before_generate_consumers() {
         );
         assert!(
             !run.iter().any(|spec| spec.starts_with("mr-boxington@")),
-            "native action owns MBX installation even when selected: use_mbx={use_mbx}; {run:?}"
+            "native action owns ordinary MBX installation: {run:?}"
         );
         let keys = [
             "MISE_NO_CONFIG",
@@ -209,22 +189,36 @@ fn plan_job_prepares_pinned_tools_before_generate_consumers() {
 }
 
 #[test]
+fn lint_job_installs_exact_actionlint_tools_before_exec() -> Result<(), Box<dyn std::error::Error>>
+{
+    let job = lint_job("ubuntu-26.04", &ToolCatalog::pinned())?;
+    let names: Vec<&str> = job.steps.iter().map(|step| step.name.as_str()).collect();
+    assert_eq!(
+        names,
+        ["Checkout", PREPARE_PINNED_TOOLS_STEP, "Run actionlint"]
+    );
+    let StepKind::Shell { run, .. } = &job.steps[1].kind else {
+        return Err("pinned preparation must be a shell step".into());
+    };
+    let install_at = run.iter().position(|argument| argument == "install");
+    let installed = install_at.map(|at| run[at + 1..].to_vec());
+    assert_eq!(
+        installed,
+        Some(vec![
+            "actionlint@1.7.12".to_owned(),
+            "shellcheck@0.11.0".to_owned()
+        ])
+    );
+    Ok(())
+}
+
+#[test]
 fn pure_tofu_plan_drops_all_rust_setup() {
     use velnor_actions_mise::PREPARE_RUST_COMPONENTS_STEP;
 
     use crate::source_prep::FETCH_SOURCES_STEP;
     let catalog = ToolCatalog::pinned();
-    let job = plan_job(
-        "ubuntu-26.04",
-        None,
-        &catalog,
-        false,
-        false,
-        false,
-        true,
-        &[],
-    )
-    .expect("plan job");
+    let job = plan_job("ubuntu-26.04", None, &catalog, false, false, true, &[]).expect("plan job");
     let names: Vec<&str> = job.steps.iter().map(|step| step.name.as_str()).collect();
     assert!(
         !names.contains(&PREPARE_RUST_COMPONENTS_STEP),

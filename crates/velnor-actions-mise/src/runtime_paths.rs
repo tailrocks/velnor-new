@@ -1,4 +1,4 @@
-//! P08 exact runtime path inventory for every cache layer.
+//! Exact runtime path inventory for every cache layer.
 //!
 //! One owner per path (cache-contract §2). Cached symlinks without their
 //! targets never count as warm: a toolchain is warm only when its
@@ -21,7 +21,12 @@ pub const CARGO_REGISTRY_SUFFIX: &str = "registry";
 /// Cargo git sources under the owned home.
 pub const CARGO_GIT_SUFFIX: &str = "git";
 /// Cargo binaries under the owned home.
-pub const CARGO_BIN_SUFFIX: &str = "bin";
+pub const CARGO_BIN_PATH_EXPR: &str = "${{ runner.temp }}/velnor/cargo/bin";
+/// Cargo install receipt for tool binaries.
+pub const CARGO_INSTALL_RECEIPT_PATH_EXPR: &str = "${{ runner.temp }}/velnor/cargo/.crates.toml";
+/// Cargo install receipt for tool binaries (JSON format).
+pub const CARGO_INSTALL_RECEIPT_JSON_PATH_EXPR: &str =
+    "${{ runner.temp }}/velnor/cargo/.crates2.json";
 /// Per-lane target base (concurrent writers never share).
 pub const TARGET_BASE: &str = "$RUNNER_TEMP/velnor/target/";
 /// Velnor-owned tofu data-dir base (expression form for `env:`).
@@ -47,7 +52,7 @@ pub struct RuntimePath {
     pub owner: &'static str,
 }
 
-/// Exact inventory: Mise installs, rustup, Cargo, target, MBX, task, tofu.
+/// Exact inventory: Mise, Rustup, separate Cargo sources/tools, target, MBX, task, tofu.
 #[must_use]
 pub fn inventory() -> Vec<RuntimePath> {
     vec![
@@ -67,14 +72,29 @@ pub fn inventory() -> Vec<RuntimePath> {
             owner: "catalog/tools",
         },
         RuntimePath {
-            id: "cargo-sources",
-            path: CARGO_HOME_EXPR,
+            id: "cargo-registry-sources",
+            path: "${{ runner.temp }}/velnor/cargo/registry",
             owner: "velnor/sources",
         },
         RuntimePath {
-            id: "cargo-binaries",
-            path: CARGO_HOME_EXPR,
+            id: "cargo-git-sources",
+            path: "${{ runner.temp }}/velnor/cargo/git",
             owner: "velnor/sources",
+        },
+        RuntimePath {
+            id: "cargo-install-binaries",
+            path: CARGO_BIN_PATH_EXPR,
+            owner: "catalog/tools",
+        },
+        RuntimePath {
+            id: "cargo-install-receipt",
+            path: CARGO_INSTALL_RECEIPT_PATH_EXPR,
+            owner: "catalog/tools",
+        },
+        RuntimePath {
+            id: "cargo-install-receipt-json",
+            path: CARGO_INSTALL_RECEIPT_JSON_PATH_EXPR,
+            owner: "catalog/tools",
         },
         RuntimePath {
             id: "cargo-target",

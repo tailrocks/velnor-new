@@ -242,6 +242,17 @@ pub(crate) fn validator_job(
             )));
         }
     });
+    let mut job_steps = vec![steps::checkout_step(&ctx.checkout_uses)?];
+    if !command.prepare_argv.is_empty() {
+        let mut prepare = steps::ambient_shell_step(
+            "Prepare pinned tools",
+            command.prepare_argv.clone(),
+            BTreeMap::new(),
+        )?;
+        prepare.role = Some(StepRole::PreparePinnedTools);
+        job_steps.push(prepare);
+    }
+    job_steps.push(step);
     Ok(Job {
         display_name: validator.display_name().to_owned(),
         runs_on: ctx.runs_on.clone(),
@@ -251,7 +262,7 @@ pub(crate) fn validator_job(
         condition: None,
         permissions: None,
         environment: None,
-        steps: vec![steps::checkout_step(&ctx.checkout_uses)?, step],
+        steps: job_steps,
     })
 }
 
