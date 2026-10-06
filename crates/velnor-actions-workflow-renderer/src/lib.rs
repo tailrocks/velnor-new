@@ -24,6 +24,7 @@ mod expressions;
 mod final_steps;
 pub mod freshness;
 pub mod guard;
+mod job_runners;
 mod lane_share;
 mod lane_share_sections;
 pub mod lane_target;
@@ -105,9 +106,9 @@ pub use render::{
     CLAUDE_MD_PATH, CLAUDE_MD_TARGET, CONCURRENCY_CANCEL, CONCURRENCY_GROUP, COVERED_TASKS_OUTPUT,
     CandidateSpec, EXPECTED_PR_TYPES, FINAL_CONDITION, FINAL_DISPLAY_NAME, FINAL_JOB_ID,
     MATRIX_MAX_PARALLEL_ENV, MATRIX_NEEDS_JOB_ENV, MATRIX_OUTPUT_ENV, MatrixSource, MiseSetup,
-    PLAN_ID_OUTPUT, PLAN_JOB_ID, PLAN_STEP_ID, PUBLISH_JOB_ID, RUN_KEY_OUTPUT, RenderContext,
-    RenderedFile, RenderedSymlink, RenderedTree, TASK_JOB_ID, ValidatorCommand, WORKFLOW_PATH,
-    action_pins, finalize_jobs, render_workflow_ir, render_workflow_ir_strict,
+    MiseSetupSet, PLAN_ID_OUTPUT, PLAN_JOB_ID, PLAN_STEP_ID, PUBLISH_JOB_ID, RUN_KEY_OUTPUT,
+    RenderContext, RenderedFile, RenderedSymlink, RenderedTree, TASK_JOB_ID, ValidatorCommand,
+    WORKFLOW_PATH, action_pins, finalize_jobs, render_workflow_ir, render_workflow_ir_strict,
 };
 pub use schema2::{
     MbxQualificationPins, ProductReleasePins, Schema2WorkflowRequest, render_schema2_workflows,

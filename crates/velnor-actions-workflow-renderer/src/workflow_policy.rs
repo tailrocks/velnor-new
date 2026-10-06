@@ -68,13 +68,7 @@ pub(crate) fn check_single_label(
                 .iter()
                 .find(|task| task.owns_job_id(id))
                 .map(|task| task.runner_label.as_str());
-            if job.runs_on != label
-                && task_label != Some(job.runs_on.as_str())
-                && !velnor_actions_contract::RunsOn::parse(&job.runs_on)
-                    .is_ok_and(|selector| selector.is_scale_set())
-            {
-                return Err(RenderError::InvalidWorkflow(format!("label_mismatch:{id}")));
-            }
+            crate::job_runners::check_job_label(id, &job.runs_on, label, task_label)?;
         }
     }
     Ok(())

@@ -17,7 +17,7 @@ fn strict_preseed_accepts_staged_internal_steps() -> Result<(), RenderError> {
         WorkflowPolicy::VelnorRepositoryV1,
         None,
         &ctx,
-        &mise(),
+        &mise_set()?,
     )?;
     let plan = step_names(&text, "plan");
     for name in [
@@ -49,7 +49,7 @@ fn strict_preseed_accepts_staged_internal_steps() -> Result<(), RenderError> {
 }
 
 #[test]
-fn strict_preseed_closure_rejects_gaps() {
+fn strict_preseed_closure_rejects_gaps() -> Result<(), RenderError> {
     let mut ctx = fixture_ctx();
     ctx.preseed = true;
     let (id, mut plan) = preseed_plan().expect("plan");
@@ -60,7 +60,7 @@ fn strict_preseed_closure_rejects_gaps() {
         WorkflowPolicy::VelnorRepositoryV1,
         None,
         &ctx,
-        &mise(),
+        &mise_set()?,
     );
     assert!(
         err.is_err_and(|err| err.to_string().contains("preseed_incomplete")),
@@ -75,7 +75,7 @@ fn strict_preseed_closure_rejects_gaps() {
         WorkflowPolicy::VelnorRepositoryV1,
         None,
         &ctx,
-        &mise(),
+        &mise_set()?,
     );
     assert!(
         err.is_err_and(|err| err.to_string().contains("preseed_incomplete")),
@@ -90,7 +90,7 @@ fn strict_preseed_closure_rejects_gaps() {
         WorkflowPolicy::VelnorRepositoryV1,
         None,
         &ctx,
-        &mise(),
+        &mise_set()?,
     );
     assert!(
         err.is_err_and(|err| err.to_string().contains("internal_without_acquire")),
@@ -109,16 +109,17 @@ fn strict_preseed_closure_rejects_gaps() {
         WorkflowPolicy::VelnorRepositoryV1,
         None,
         &ctx,
-        &mise(),
+        &mise_set()?,
     );
     assert!(
         err.is_err_and(|err| err.to_string().contains("preseed_misordered")),
         "stage-before-download accepted"
     );
+    Ok(())
 }
 
 #[test]
-fn strict_preseed_closure_rejects_plan_manifest_gap() {
+fn strict_preseed_closure_rejects_plan_manifest_gap() -> Result<(), RenderError> {
     let mut ctx = fixture_ctx();
     ctx.preseed = true;
     let (id, mut plan) = preseed_plan().expect("plan");
@@ -129,16 +130,17 @@ fn strict_preseed_closure_rejects_plan_manifest_gap() {
         WorkflowPolicy::VelnorRepositoryV1,
         None,
         &ctx,
-        &mise(),
+        &mise_set()?,
     );
     assert!(
         err.is_err_and(|err| err.to_string().contains("preseed_incomplete:plan:manifest")),
         "plan without manifest accepted"
     );
+    Ok(())
 }
 
 #[test]
-fn strict_preseed_closure_rejects_verify_gaps() {
+fn strict_preseed_closure_rejects_verify_gaps() -> Result<(), RenderError> {
     let mut ctx = fixture_ctx();
     ctx.preseed = true;
     let (id, mut unverified) = preseed_final().expect("final");
@@ -150,7 +152,7 @@ fn strict_preseed_closure_rejects_verify_gaps() {
         WorkflowPolicy::VelnorRepositoryV1,
         None,
         &ctx,
-        &mise(),
+        &mise_set()?,
     );
     assert!(
         err.is_err_and(|err| err.to_string().contains("preseed_incomplete")),
@@ -169,16 +171,17 @@ fn strict_preseed_closure_rejects_verify_gaps() {
         WorkflowPolicy::VelnorRepositoryV1,
         None,
         &ctx,
-        &mise(),
+        &mise_set()?,
     );
     assert!(
         err.is_err_and(|err| err.to_string().contains("preseed_misordered")),
         "verify-after-stage accepted"
     );
+    Ok(())
 }
 
 #[test]
-fn strict_rejects_stage_without_preseed_mode() {
+fn strict_rejects_stage_without_preseed_mode() -> Result<(), RenderError> {
     let ctx = fixture_ctx();
     let err = render_workflow_ir_strict(
         &fixture_ir(vec![
@@ -188,10 +191,11 @@ fn strict_rejects_stage_without_preseed_mode() {
         WorkflowPolicy::VelnorRepositoryV1,
         None,
         &ctx,
-        &mise(),
+        &mise_set()?,
     );
     assert!(
         err.is_err_and(|err| err.to_string().contains("preseed_stage_without_mode")),
         "smuggled stage accepted"
     );
+    Ok(())
 }

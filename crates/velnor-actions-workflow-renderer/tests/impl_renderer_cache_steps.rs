@@ -226,7 +226,7 @@ fn strict_restores_builtin_and_saves_on_elected_writer()
         velnor_actions_contract::WorkflowPolicy::ConsumerV1,
         None,
         &fixture_ctx(),
-        &mise(),
+        &mise_set()?,
     )?;
     let text = &rendered.yaml;
     let names = step_names(text, "actionlint");

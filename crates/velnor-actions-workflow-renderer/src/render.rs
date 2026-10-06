@@ -29,7 +29,7 @@ pub use crate::matrix::{
     COVERED_TASKS_OUTPUT, MATRIX_MAX_PARALLEL_ENV, MATRIX_NEEDS_JOB_ENV, MATRIX_OUTPUT_ENV,
     MatrixSource, PLAN_ID_OUTPUT, PLAN_STEP_ID, RUN_KEY_OUTPUT,
 };
-pub use crate::setup::MiseSetup;
+pub use crate::setup::{MiseSetup, MiseSetupSet};
 
 /// Generated workflow path inside the repository.
 ///
@@ -211,7 +211,7 @@ pub fn render_workflow_ir_strict(
     policy: WorkflowPolicy,
     support: Option<&VelnorSupportWorkflow>,
     ctx: &RenderContext,
-    mise: &MiseSetup,
+    mise: &MiseSetupSet,
 ) -> Result<String, RenderError> {
     Ok(render_workflow_ir_strict_shared(ir, policy, support, ctx, mise)?.yaml)
 }
@@ -227,7 +227,7 @@ pub fn render_workflow_ir_strict_shared(
     policy: WorkflowPolicy,
     support: Option<&VelnorSupportWorkflow>,
     ctx: &RenderContext,
-    mise: &MiseSetup,
+    mise: &MiseSetupSet,
 ) -> Result<RenderedWorkflow, RenderError> {
     let jobs = finalize_jobs(ir, policy, support, ctx, mise)?;
     render_merged(ir, &jobs, ctx)
@@ -249,9 +249,8 @@ pub fn finalize_jobs(
     policy: WorkflowPolicy,
     support: Option<&VelnorSupportWorkflow>,
     ctx: &RenderContext,
-    mise: &MiseSetup,
+    mise: &MiseSetupSet,
 ) -> Result<BTreeMap<String, Job>, RenderError> {
-    mise.validate()?;
     let mut jobs = merged_jobs(ir, policy, support, ctx)?;
     for (id, job) in &mut jobs {
         if ctx
@@ -272,12 +271,8 @@ pub fn finalize_jobs(
             .ok_or_else(|| {
                 RenderError::InvalidWorkflow(format!("tools_cache_unsupported_target:{id}"))
             })?;
-        let setup = if job.check_runner.is_some() {
-            mise.for_target(target)?
-        } else {
-            mise.clone()
-        };
-        cache_p08::ensure_setup_p08(id, job, &setup, always, target, &ctx.checkout_uses)?;
+        let setup = mise.for_target(target)?;
+        cache_p08::ensure_setup_p08(id, job, setup, always, target, &ctx.checkout_uses)?;
         cache_p08::check_no_rust_cache_with_mbx(id, job)?;
         cache_p08::check_mbx_before_fetch(id, job)?;
         closure::check_internal_staged(id, job, ctx.preseed)?;
@@ -376,4 +371,3 @@ fn render_merged(
         shared: files,
     })
 }
-

@@ -7,7 +7,7 @@ use velnor_actions_contract::{
 };
 
 /// Config carrying exactly the given action-pin overrides.
-fn config_with(overrides: BTreeMap<String, ActionPinOverride>) -> VelnorConfig {
+pub(super) fn config_with(overrides: BTreeMap<String, ActionPinOverride>) -> VelnorConfig {
     VelnorConfig {
         checks: Vec::new(),
         qualified_tools: Vec::new(),
@@ -237,8 +237,22 @@ fn mise_setup_accepts_approved_override_only() {
             version: MISE_ACTION_VERSION.to_owned(),
         },
     )]);
-    let setup = resolve_mise_setup(&config_with(approved), "ubuntu-26.04");
-    assert!(setup.is_ok_and(|setup| setup.uses.ends_with(MISE_ACTION_SHA)));
+    let config = config_with(approved);
+    let setup = resolve_mise_setup(&config, "ubuntu-26.04").expect("approved action pin");
+    assert!(setup.uses.ends_with(MISE_ACTION_SHA));
+    let set = resolve_mise_setup_set(&config, "ubuntu-26.04", &setup)
+        .expect("approved pin on each runner");
+    for target in [
+        "x86_64-unknown-linux-gnu",
+        "aarch64-apple-darwin",
+        "x86_64-apple-darwin",
+    ] {
+        assert!(
+            set.for_target(target)
+                .is_ok_and(|pin| pin.uses.ends_with(MISE_ACTION_SHA)),
+            "{target}"
+        );
+    }
     for pin in [
         ActionPinOverride {
             sha: "0".repeat(40),
