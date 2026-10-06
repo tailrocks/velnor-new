@@ -370,12 +370,27 @@ fn consumer_cli_rejects_a_missing_manifest() -> Result<(), Box<dyn Error>> {
     let plan = spawn(&["plan"], &[], &repo)?;
     cleanup(repo.parent().ok_or("repo lacks parent")?);
     let stderr = String::from_utf8_lossy(&plan.stderr);
-    if code(&plan) == 0 || !stderr.contains("consumer_requires_release_install") {
-        return Err(format!(
-            "missing manifest must fail through the actual CLI: exit={}, stderr={stderr:?}",
-            code(&plan)
-        )
-        .into());
+    // Release builds fail closed; debug builds plan against the
+    // debug-only stand-in (`generate` warns about it, `plan` is silent).
+    #[cfg(not(debug_assertions))]
+    {
+        if code(&plan) == 0 || !stderr.contains("consumer_requires_release_install") {
+            return Err(format!(
+                "missing manifest must fail through the actual CLI: exit={}, stderr={stderr:?}",
+                code(&plan)
+            )
+            .into());
+        }
+    }
+    #[cfg(debug_assertions)]
+    {
+        if code(&plan) != 0 {
+            return Err(format!(
+                "debug builds plan against the stand-in: exit={}, stderr={stderr:?}",
+                code(&plan)
+            )
+            .into());
+        }
     }
     Ok(())
 }

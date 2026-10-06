@@ -13,12 +13,19 @@ pub(crate) fn orch_src() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src")
 }
 
-/// Sorted `.rs` files directly under `src/`.
-pub(crate) fn src_files() -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
+/// Sorted production `.rs` files directly under `src/`.
+///
+/// Unit-test companion modules are `#[cfg(test)]`; their assertions and
+/// diagnostics must not be mistaken for executable product behavior.
+pub(crate) fn product_src_files() -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
     let mut out = Vec::new();
     for entry in std::fs::read_dir(orch_src())? {
         let path = entry?.path();
-        if path.extension().is_some_and(|ext| ext == "rs") {
+        let test_companion = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name.ends_with("_tests.rs") || name.ends_with("_fixtures.rs"));
+        if path.extension().is_some_and(|ext| ext == "rs") && !test_companion {
             out.push(path);
         }
     }
@@ -62,7 +69,7 @@ pub(crate) fn code_of(path: &Path) -> Result<Vec<(usize, String)>, Box<dyn std::
 /// Every `name:line` holding `token` in orchestrator code.
 fn token_hits(token: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
     let mut hits = Vec::new();
-    for path in src_files()? {
+    for path in product_src_files()? {
         let name = path
             .file_name()
             .map(|name| name.to_string_lossy().into_owned())
@@ -116,7 +123,7 @@ fn orch_spawns_no_processes_and_confines_shell_wrappers() -> TestResult {
     // exit capture needs one shell step, and the joined argv plus helper
     // path are fixed generator values, never repository shell.
     let mut sh_files = std::collections::BTreeSet::new();
-    for path in src_files()? {
+    for path in product_src_files()? {
         // Test companions assert wrapper shape; they never ship wrappers.
         if path
             .file_name()
@@ -186,7 +193,7 @@ fn v1_registers_three_stacks_and_detects_rust_and_tofu() {
 #[test]
 fn v1_creates_no_generated_task_dirs() -> TestResult {
     let mut holders = std::collections::BTreeSet::new();
-    for path in src_files()? {
+    for path in product_src_files()? {
         let text = std::fs::read_to_string(&path)?;
         if text.contains(".mise/tasks") {
             holders.insert(
@@ -200,7 +207,7 @@ fn v1_creates_no_generated_task_dirs() -> TestResult {
         holders,
         std::collections::BTreeSet::from(["evidence.rs".to_owned()])
     );
-    for path in src_files()? {
+    for path in product_src_files()? {
         for (line, code) in code_of(&path)? {
             if code.contains("create_dir") {
                 assert!(
@@ -333,7 +340,23 @@ fn merge_consumes_no_publish_verbs() -> TestResult {
 
 #[test]
 fn offline_deps_fail_closed_without_fetch() -> TestResult {
-    for path in src_files()? {
+    let source_files = product_src_files()?;
+    assert!(
+        source_files
+            .iter()
+            .any(|path| path.file_name().is_some_and(|name| name == "vectors.rs")),
+        "production vectors remain under the offline/fetch scan"
+    );
+    assert!(
+        source_files
+            .iter()
+            .all(|path| path.file_name().is_none_or(|name| {
+                !name.to_string_lossy().ends_with("_tests.rs")
+                    && !name.to_string_lossy().ends_with("_fixtures.rs")
+            })),
+        "test-only companions must not enter product scans"
+    );
+    for path in source_files {
         let name = path
             .file_name()
             .map(|name| name.to_string_lossy().into_owned())

@@ -79,6 +79,21 @@ fn c4_restore_and_mbx_precede_fetch_with_offline_skip() {
         None,
     ];
     assert!(sources::check_restore_before_fetch(&good, true).is_ok());
+    let good_names = [
+        "Checkout",
+        "Prepare pinned tools",
+        "Restore Cargo sources",
+        "Setup MBX",
+        "Fetch Cargo sources",
+        "Clippy",
+    ]
+    .iter()
+    .map(ToString::to_string)
+    .collect::<Vec<_>>();
+    assert!(
+        sources::check_steps_before_fetch(&good_names, &["Restore Cargo sources", "Setup MBX"])
+            .is_ok()
+    );
     let fetch_first = [
         Some(StepRole::Checkout),
         Some(StepRole::CargoSourcesFetch),
@@ -86,6 +101,22 @@ fn c4_restore_and_mbx_precede_fetch_with_offline_skip() {
         Some(StepRole::CargoSourcesRestore),
     ];
     assert!(sources::check_restore_before_fetch(&fetch_first, true).is_err());
+    let fetch_first_names = [
+        "Checkout",
+        "Fetch Cargo sources",
+        "Setup MBX",
+        "Restore Cargo sources",
+    ]
+    .iter()
+    .map(ToString::to_string)
+    .collect::<Vec<_>>();
+    assert!(
+        sources::check_steps_before_fetch(
+            &fetch_first_names,
+            &["Restore Cargo sources", "Setup MBX"]
+        )
+        .is_err()
+    );
     assert_eq!(
         sources::fetch_decision(true, "no_entry").expect("skip"),
         sources::FetchDecision::OfflineSkip
@@ -142,8 +173,7 @@ fn c6_no_path_has_two_owners() {
 }
 
 #[test]
-fn c9_pr_save_needs_action_support_and_forks_stay_read_only() {
-    const _: () = assert!(!trust::MBX_PR_SAVE_OPTED_IN);
+fn c9_pr_action_capability_keeps_forks_read_only() {
     assert!(!trust::pr_save_allowed(false, false, "pull_request"));
     assert!(trust::pr_save_allowed(true, false, "pull_request"));
     assert!(!trust::pr_save_allowed(true, true, "pull_request"));
@@ -152,14 +182,6 @@ fn c9_pr_save_needs_action_support_and_forks_stay_read_only() {
     assert!(!trust::is_read_only(false));
     assert!(trust::pr_outputs_trusted("trusted"));
     assert!(!trust::pr_outputs_trusted("pr"));
-    // Velnor leaves the v1.6 action's opt-in PR save disabled, so no
-    // pull_request run (same-repo or fork) may save — push remains the gate.
-    for fork in [false, true] {
-        assert!(
-            !trust::pr_save_allowed(trust::MBX_PR_SAVE_OPTED_IN, fork, "pull_request"),
-            "PR saves forbidden (fork={fork})"
-        );
-    }
     assert_eq!(
         velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION,
         "success() && github.event_name == 'push'"
@@ -206,6 +228,8 @@ fn c10_save_needs_success_delta_scope_and_writers() {
 
 #[test]
 fn c10b_trusted_save_authorizes_only_the_push_only_gate() {
+    use velnor_actions_mise::restore::{SaveInputs, save_decision};
+
     let gate = trust::authorize_trusted_save().expect("authorized");
     assert_eq!(
         gate,
@@ -218,8 +242,41 @@ fn c10b_trusted_save_authorizes_only_the_push_only_gate() {
         gate.contains("success()"),
         "emitted gate restates success(): {gate}"
     );
-    let err = trust::authorize_trusted_save_for(true).expect_err("pr drift");
-    assert!(err.to_string().contains("save_policy_drift"), "{err}");
+    let trusted_push = SaveInputs {
+        layer_trust: "trusted",
+        event: "push",
+        passed: true,
+        unavailable: false,
+        active_writer: false,
+    };
+    assert!(save_decision(&trusted_push).is_ok());
+    assert!(velnor_actions_mise::cache::save_allowed(
+        "trusted", "push", true
+    ));
+    // An action's PR-save capability does not authorize trusted PR writes.
+    assert!(trust::pr_save_allowed(true, false, "pull_request"));
+    assert!(!trust::pr_save_allowed(true, true, "pull_request"));
+
+    for (event, source) in [
+        ("pull_request", "same-repository or fork PR"),
+        ("pull_request_target", "PR target"),
+        ("merge_group", "merge queue"),
+        ("schedule", "scheduled run"),
+        ("workflow_dispatch", "manual run"),
+        ("workflow_call", "reusable workflow"),
+        ("Push", "case variant"),
+        ("", "unknown event"),
+    ] {
+        let denied = SaveInputs {
+            event,
+            ..trusted_push
+        };
+        assert!(save_decision(&denied).is_err(), "{source} must not save");
+        assert!(
+            !velnor_actions_mise::cache::save_allowed("trusted", event, true),
+            "{source} must not pass the save allowlist"
+        );
+    }
 }
 
 #[test]

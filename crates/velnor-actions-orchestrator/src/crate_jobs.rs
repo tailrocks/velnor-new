@@ -8,7 +8,7 @@
 //! unbranded IDs, gates referencing strictly earlier obligations),
 //! then renders each group to a fixed IR job: checkout, pinned tools,
 //! components, lockful sources, the per-root provider restore on
-//! opentofu crates, the MBX objects restore on MBX crates, and one
+//! opentofu crates, the MBX local setup on MBX crates, and one
 //! shell step per obligation in gate order.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -258,13 +258,14 @@ fn render_job(
     let mut steps = vec![crate::workflow::wire_w1::checkout_step()?];
     steps.extend(acquire.cloned());
     steps.push(crate::matrix_step::download_plan_step()?);
-    let needs_validators =
-        crate::matrix_step::crate_needs_generate_validators(policy, &model.package_name);
+    let suite: Option<crate::matrix_step::CrateSuite> =
+        crate::matrix_step::suite_for_package(&model.package_name);
+    let needs_validators = crate::matrix_step::crate_needs_generate_validators(policy, suite);
     steps.push(crate::matrix_step::prepare_crate_tools_step(
         catalog,
         use_rust,
         use_nextest,
-        crate::matrix_step::prepare_install_opentofu(policy, &model.package_name, use_opentofu),
+        crate::matrix_step::prepare_install_opentofu(policy, suite, use_opentofu),
         needs_validators,
     )?);
     if use_rust {

@@ -2,8 +2,8 @@ use super::*;
 use std::collections::BTreeMap;
 use velnor_actions_contract::config::{ActionPinOverride, ActionsConfig};
 use velnor_actions_contract::{
-    DiscoveryConfig, GeneratorValidation, ResourcesConfig, StacksConfig, TestShardingConfig,
-    VerificationRunner, WorkflowConfig, WorkflowPolicy,
+    DiscoveryConfig, GeneratorValidation, PullRequestCachePolicy, ResourcesConfig, StacksConfig,
+    TestShardingConfig, VerificationRunner, WorkflowConfig, WorkflowPolicy,
 };
 
 /// Config carrying exactly the given action-pin overrides.
@@ -18,6 +18,7 @@ fn config_with(overrides: BTreeMap<String, ActionPinOverride>) -> VelnorConfig {
             default_branch: None,
             generator_validation: GeneratorValidation::Bootstrap,
             max_parallel_jobs: 2,
+            pull_request_cache_policy: PullRequestCachePolicy::default(),
             runner_label: None,
             tasks: Vec::new(),
             tofu_apply: None,
@@ -45,7 +46,7 @@ fn config_with(overrides: BTreeMap<String, ActionPinOverride>) -> VelnorConfig {
 
 #[test]
 fn source_build_consumer_generation_fails_with_provenance() {
-    let err = consumer_acquire_from("ubuntu-26.04", "0.1.0", None);
+    let err = consumer_acquire_from("ubuntu-26.04", env!("CARGO_PKG_VERSION"), None);
     assert!(err.is_err_and(|err| {
         err.to_string()
             .contains("consumer_requires_release_install")
@@ -70,27 +71,52 @@ fn consumer_manifest_mismatch_and_bad_target_fail() {
 fn consumer_gate_rejects_attacker_manifests() {
     let version = env!("CARGO_PKG_VERSION");
     let sha = "a".repeat(64);
-    let manifest = |repository: &str, artifact: &str| {
+    let manifest = |repository: &str, first_artifact: &str| {
+        let targets = velnor_actions_contract::SUPPORTED_TARGETS
+            .iter()
+            .enumerate()
+            .map(|(index, target)| {
+                let artifact = if index == 0 {
+                    first_artifact.to_owned()
+                } else {
+                    format!(
+                        "https://github.com/tailrocks/velnor-new/releases/download/v{version}/{}",
+                        velnor_actions_contract::asset_filename(version, target)
+                    )
+                };
+                format!(
+                    "{{\"target\":\"{target}\",\"artifact\":\"{artifact}\",\"sha256\":\"{sha}\"}}"
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(",");
         format!(
-            "{{\"schema\":1,\"version\":\"{version}\",\"repository\":\"{repository}\",\"commit\":\"{}\",\"targets\":[{{\"target\":\"x86_64-unknown-linux-gnu\",\"artifact\":\"{artifact}\",\"sha256\":\"{sha}\"}}]}}",
-            "a".repeat(40)
+            "{{\"schema\":1,\"version\":\"{version}\",\"repository\":\"{repository}\",\"commit\":\"{}\",\"targets\":[{targets}]}}",
+            "a".repeat(40),
         )
     };
     let bound = format!(
         "https://github.com/tailrocks/velnor-new/releases/download/v{version}/velnor-actions-{version}-x86_64-unknown-linux-gnu"
     );
-    for (repository, artifact) in [
-        ("evil/velnor-new", bound.as_str()),
+    for (repository, artifact, expected) in [
+        ("evil/velnor-new", bound.as_str(), "unexpected_repository"),
         (
             "tailrocks/velnor-new",
             "https://evil.example/r/velnor-actions-0.1.0-x86_64-unknown-linux-gnu",
+            "unexpected_artifact_url",
         ),
-        ("tailrocks/velnor-new", "https://github.com@evil.example/x"),
+        (
+            "tailrocks/velnor-new",
+            "https://github.com@evil.example/x",
+            "unexpected_artifact_url",
+        ),
     ] {
         let json = manifest(repository, artifact);
+        let err = consumer_acquire_from("ubuntu-26.04", version, Some(&json))
+            .expect_err("attacker manifest must be rejected");
         assert!(
-            consumer_acquire_from("ubuntu-26.04", version, Some(&json)).is_err(),
-            "accepted {repository} {artifact}"
+            err.to_string().contains(expected),
+            "expected {expected} for {repository} {artifact}, got {err}"
         );
     }
 }

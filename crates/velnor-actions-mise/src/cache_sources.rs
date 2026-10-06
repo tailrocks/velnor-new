@@ -144,7 +144,7 @@ pub fn fetch_decision(
     Ok(FetchDecision::ExplicitFetch { miss_reason })
 }
 
-/// Require restore/config steps before every fetch/build/test step.
+/// Check that named steps precede every fetch step when both are present.
 ///
 /// `roles` is the job's typed semantic sequence. Every source fetch must
 /// follow a sources restore and, on MBX jobs, the MBX objects restore.
@@ -178,6 +178,36 @@ pub fn check_restore_before_fetch(
                 return Err(MiseError::CacheNotEligible {
                     task: "fetch".to_owned(),
                     reason: "fetch_before_mbx".to_owned(),
+                });
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Check that named steps precede every fetch step when both are present.
+///
+/// `names` is the job's step-name sequence. `required` carries caller-owned
+/// setup and restore names; this generic checker does not know their meaning.
+///
+/// # Errors
+///
+/// Returns [`MiseError::CacheNotEligible`] when fetch precedes a required step.
+pub fn check_steps_before_fetch(names: &[String], required: &[&str]) -> Result<(), MiseError> {
+    let at = |want: &str| names.iter().position(|name| name == want);
+    let fetch = at("Fetch Cargo sources").or_else(|| {
+        names
+            .iter()
+            .position(|n| n.starts_with("Fetch Cargo sources"))
+    });
+    if let Some(fetch_at) = fetch {
+        for required_name in required {
+            if let Some(required_at) = names.iter().position(|name| name == required_name)
+                && fetch_at < required_at
+            {
+                return Err(MiseError::CacheNotEligible {
+                    task: "fetch".to_owned(),
+                    reason: "fetch_before_required_step".to_owned(),
                 });
             }
         }

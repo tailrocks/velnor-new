@@ -6,8 +6,8 @@ use std::path::Path;
 use serde::Deserialize;
 use velnor_actions_contract::config::{ActionPinOverride, ActionsConfig, MiseCheck, QualifiedTool};
 use velnor_actions_contract::{
-    DiscoveryConfig, GeneratorValidation, ResourcesConfig, TestShardingConfig, VelnorConfig,
-    VerificationTask, WorkflowConfig, WorkflowPolicy,
+    DiscoveryConfig, GeneratorValidation, PullRequestCachePolicy, ResourcesConfig,
+    TestShardingConfig, VelnorConfig, VerificationTask, WorkflowConfig, WorkflowPolicy,
 };
 
 use crate::OrchestratorError;
@@ -136,6 +136,9 @@ struct PartialWorkflow {
     generator_validation: Option<GeneratorValidation>,
     /// Maximum parallel matrix jobs.
     max_parallel_jobs: Option<u32>,
+    /// Pull-request cache-write policy.
+    #[serde(default)]
+    pull_request_cache_policy: PullRequestCachePolicy,
     /// Pinned runner-label override.
     runner_label: Option<String>,
     /// Explicit isolated verification tasks.
@@ -216,12 +219,17 @@ impl PartialWorkflow {
                 .generator_validation
                 .unwrap_or(GeneratorValidation::Bootstrap),
             max_parallel_jobs: self.max_parallel_jobs.unwrap_or(2),
+            pull_request_cache_policy: self.pull_request_cache_policy,
             runner_label: self.runner_label,
             tasks: self.tasks,
             tofu_apply: self.tofu_apply,
         }
     }
 }
+
+#[cfg(test)]
+#[path = "config_tests.rs"]
+mod config_tests;
 
 impl PartialResources {
     /// Fill resources defaults.

@@ -85,9 +85,9 @@ fn plan_after_edit(
 /// Task IDs the root-`.` triple must carry (preview-pinned shape).
 fn root_triple() -> [&'static str; 3] {
     [
-        "stack/tofu/root/fmt/default",
-        "stack/tofu/root/init/default",
-        "stack/tofu/root/validate/default",
+        "stack/tofu/dir-/fmt/default",
+        "stack/tofu/dir-/init/default",
+        "stack/tofu/dir-/validate/default",
     ]
 }
 

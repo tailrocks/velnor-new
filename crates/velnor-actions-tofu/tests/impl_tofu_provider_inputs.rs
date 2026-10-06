@@ -1,10 +1,10 @@
 //! Tofu provider-input toolchain entries: the per-root provider
 //! surface declaration bound into the toolchain identity.
 use velnor_actions_contract::ContractError;
-use velnor_actions_tofu::provider_toolchain_entries;
+use velnor_actions_tofu::{key_for_root, provider_toolchain_entries};
 
 fn entry_for(unit: &str, kind: &str, tofu: &str) -> Result<String, ContractError> {
-    let entries = provider_toolchain_entries(unit, kind, tofu)?;
+    let entries = provider_toolchain_entries(&key_for_root(unit), kind, tofu)?;
     entries
         .first()
         .cloned()
@@ -13,7 +13,7 @@ fn entry_for(unit: &str, kind: &str, tofu: &str) -> Result<String, ContractError
 
 #[test]
 fn provider_entries_are_single_sorted_valid_digests() -> Result<(), ContractError> {
-    let entries = provider_toolchain_entries("root", "init", "opentofu@1.13.1")?;
+    let entries = provider_toolchain_entries(&key_for_root(""), "init", "opentofu@1.13.1")?;
     assert_eq!(entries.len(), 1, "one surface entry per task");
     let mut sorted = entries.clone();
     sorted.sort();
@@ -41,6 +41,11 @@ fn provider_entries_flip_on_root_kind_slot_and_tofu_pin() -> Result<(), Contract
         "fmt binds the excluded slot"
     );
     assert_ne!(base, entry_for("root", "init", "opentofu@1.13.2")?);
+    assert_ne!(
+        base,
+        entry_for("", "init", "opentofu@1.13.1")?,
+        "repo root and literal root directory have distinct identities"
+    );
     Ok(())
 }
 
@@ -79,8 +84,9 @@ fn toolchain_inputs_carry_exact_pin_plus_surface() -> Result<(), ContractError> 
 fn provider_entries_reject_unknown_kinds() {
     for bad in ["", "bogus", "INIT", "fmt\n", "init --upgrade"] {
         assert!(
-            provider_toolchain_entries("root", bad, "opentofu@1.13.1").is_err(),
+            provider_toolchain_entries(&key_for_root(""), bad, "opentofu@1.13.1").is_err(),
             "{bad:?} must fail closed"
         );
     }
+    assert!(provider_toolchain_entries("root", "init", "opentofu@1.13.1").is_err());
 }

@@ -170,9 +170,20 @@ impl CacheAdmission {
                 continue;
             }
             if metadata.file_type().is_symlink() {
-                resolved = current.canonicalize().map_err(|error| {
-                    IndexError::SymlinkLoop(format!("{}: {error}", current.display()))
-                })?;
+                match current.canonicalize() {
+                    Ok(target) => resolved = target,
+                    // A dangling link resolves nowhere, so it cannot
+                    // alias into the private cache; loops still fail.
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                        return Ok(false);
+                    }
+                    Err(error) => {
+                        return Err(IndexError::SymlinkLoop(format!(
+                            "{}: {error}",
+                            current.display()
+                        )));
+                    }
+                }
             } else {
                 resolved.push(component.as_os_str());
             }

@@ -57,6 +57,7 @@ fn discovery(groups: Vec<ProposedTask>) -> Discovery {
         },
         recommendations: Vec::new(),
         consumer_manifest_json: None,
+consumer_manifest_stand_in: false,
         skipped_non_utf8: false,
         tofu_note: None,
         tofu_units: Vec::new(),
@@ -94,12 +95,18 @@ fn tofu_install_follows_executed_suite_per_policy() {
         "demo",
     ] {
         assert!(
-            !crate_needs_tofu_install(WorkflowPolicy::ConsumerV1, package),
+            !crate_needs_tofu_install(
+                WorkflowPolicy::ConsumerV1,
+                suite_for_package(package),
+            ),
             "consumer suites cannot reach our tofu_exec ctor: {package} installs no opentofu"
         );
     }
     assert!(
-        crate_needs_tofu_install(WorkflowPolicy::VelnorRepositoryV1, "velnor-actions-mise"),
+        crate_needs_tofu_install(
+            WorkflowPolicy::VelnorRepositoryV1,
+            suite_for_package("velnor-actions-mise"),
+        ),
         "mise spawns real tofu and must install opentofu"
     );
     for package in [
@@ -113,7 +120,10 @@ fn tofu_install_follows_executed_suite_per_policy() {
         "demo",
     ] {
         assert!(
-            !crate_needs_tofu_install(WorkflowPolicy::VelnorRepositoryV1, package),
+            !crate_needs_tofu_install(
+                WorkflowPolicy::VelnorRepositoryV1,
+                suite_for_package(package),
+            ),
             "{package} never spawns tofu and must not install opentofu"
         );
     }

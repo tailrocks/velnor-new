@@ -54,7 +54,7 @@ fn policy_vectors_pin_specs_and_payloads() {
         "--no-env",
         "--no-hooks",
         "exec",
-        "ubi:bnjbvr/cargo-machete@0.9.2",
+        "http:cargo-machete[url=https://github.com/bnjbvr/cargo-machete/releases/download/v0.9.2/cargo-machete-v0.9.2-x86_64-unknown-linux-musl.tar.gz,checksum=sha256:48200087f54c55aabcd4db4af1e25742b49846c02a1b1bfa134711945b35b2e9]@0.9.2",
         "--",
         "cargo",
         "machete",

@@ -55,6 +55,7 @@ fn manifest_json(base: &str, name: &str) -> serde_json::Value {
         "artifact_id": numeric,
         "artifact_name": name,
         "tasks": [],
+        "parent": null,
     })
 }
 
@@ -151,6 +152,7 @@ fn empty_discovery() -> crate::discover::Discovery {
         },
         recommendations: Vec::new(),
         consumer_manifest_json: None,
+consumer_manifest_stand_in: false,
         skipped_non_utf8: false,
         tofu_note: None,
         tofu_units: Vec::new(),
@@ -192,7 +194,7 @@ fn anchored_checkout(slug: &str) -> tempfile::TempDir {
     tmp
 }
 
-/// Valid manifest over `slug`/`base` except one forwarded proof run.
+/// Valid manifest over `slug`/`base` except an unbound forwarded proof.
 fn forwarded_manifest(slug: &str, base: &str) -> BaselineManifest {
     let digest = digest_b3(b"d");
     let name = super::provenance_check::baseline_artifact_name(base, &digest).expect("name");
@@ -217,15 +219,17 @@ fn forwarded_manifest(slug: &str, base: &str) -> BaselineManifest {
             input_digest: digest.clone(),
             closure_digest: digest,
             proof_run_id: 5,
+            carried_from: None,
             observed_run_id: 7,
             external_data: None,
             proof: None,
         }],
+        parent: None,
         expires_at_unix: None,
     }
 }
 
-/// Forwarded proofs fail closed at the caller: the plan marks the
+/// Forwarded proofs without lineage fail closed at the caller: the plan marks the
 /// baseline unavailable with the exact miss token, warns once, and
 /// keeps every obligation executing.
 #[test]

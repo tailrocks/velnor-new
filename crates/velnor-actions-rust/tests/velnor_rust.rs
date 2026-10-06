@@ -5,6 +5,8 @@ mod impl_adapter_wire_rust;
 mod impl_rust;
 #[path = "impl_rust_argv.rs"]
 mod impl_rust_argv;
+#[path = "impl_rust_argv_nextest.rs"]
+mod impl_rust_argv_nextest;
 #[path = "impl_rust_detect.rs"]
 mod impl_rust_detect;
 #[path = "impl_rust_evidence.rs"]
