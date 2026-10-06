@@ -1,6 +1,6 @@
 [package]
 name = "velnor-runner-cli"
-version = "0.1.0"
+version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -11,8 +11,8 @@ workspace = true
 [dependencies]
 clap = { workspace = true }
 serde_json = { workspace = true }
-velnor-runner-core = { version = "=0.1.0", path = "../velnor-runner-core" }
-velnor-runner-host = { version = "=0.1.0", path = "../velnor-runner-host" }
+velnor-runner-core = { version = "=0.1.1", path = "../velnor-runner-core" }
+velnor-runner-host = { version = "=0.1.1", path = "../velnor-runner-host" }
 
 [target.'cfg(target_os = "macos")'.dev-dependencies]
 security-framework = { workspace = true }

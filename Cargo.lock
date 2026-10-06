@@ -3559,7 +3559,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-runner-cli"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "clap",
  "security-framework",
@@ -3570,14 +3570,14 @@ dependencies = [
 
 [[package]]
 name = "velnor-runner-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "thiserror",
 ]
 
 [[package]]
 name = "velnor-runner-github"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -3588,7 +3588,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-runner-host"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "bollard",
  "getrandom 0.4.3",

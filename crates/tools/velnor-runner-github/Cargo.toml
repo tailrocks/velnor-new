@@ -1,6 +1,6 @@
 [package]
 name = "velnor-runner-github"
-version = "0.1.0"
+version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -13,4 +13,4 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 zeroize = { workspace = true }
-velnor-runner-core = { version = "=0.1.0", path = "../velnor-runner-core" }
+velnor-runner-core = { version = "=0.1.1", path = "../velnor-runner-core" }
