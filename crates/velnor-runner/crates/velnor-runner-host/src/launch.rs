@@ -34,6 +34,7 @@ mod inspect_tests;
 
 pub(crate) use inspect::classify_inspect;
 mod mint_origin;
+mod pressure;
 mod session;
 mod slot;
 mod steps;
@@ -43,6 +44,7 @@ mod trace;
 mod turn;
 
 pub(crate) use capacity::{install_job_capacity, job_capacity};
+pub(crate) use pressure::advertise as advertise_capacity;
 
 #[cfg(test)]
 pub(crate) use capacity::{

@@ -236,7 +236,8 @@ pub(crate) fn admin_link(pat: &str, owner: &str, repo: &str) -> Result<Link, Ens
 
 fn poll_available(link: &mut Link, session: &QueueSession) -> Result<bool, EnsureError> {
     let (saved, path) = point_at_queue(link, &session.message_queue_url)?;
-    let polled = poll_path(link, session, &path, crate::launch::job_capacity());
+    let advertised = crate::launch::advertise_capacity(crate::launch::job_capacity());
+    let polled = poll_path(link, session, &path, advertised);
     restore_base(link, saved)?;
     let polled = polled?;
     Ok(matches!(offer(&polled), Offer::Acquire { .. }))
