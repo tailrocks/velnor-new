@@ -25,6 +25,9 @@ use crate::{
 mod action_pins_impl;
 pub use action_pins_impl::action_pins;
 
+#[path = "validator_tools.rs"]
+mod validator_tools;
+
 pub use crate::matrix::{
     COVERED_TASKS_OUTPUT, MATRIX_MAX_PARALLEL_ENV, MATRIX_NEEDS_JOB_ENV, MATRIX_OUTPUT_ENV,
     MatrixSource, PLAN_ID_OUTPUT, PLAN_STEP_ID, RUN_KEY_OUTPUT,
@@ -153,6 +156,7 @@ impl RenderContext {
             if command.name.trim().is_empty() {
                 return Err(RenderError::BadCommand("empty_validator_name".to_owned()));
             }
+            validator_tools::validate_validator_tool_closure(command)?;
             if !command.prepare_argv.is_empty() {
                 commands::validate_command_argv(&command.prepare_argv)?;
             }
