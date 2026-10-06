@@ -63,8 +63,8 @@ pub struct Discovery {
     pub recommendations: Vec<String>,
     /// Release-manifest text from the committed repo file.
     ///
-    /// Absent files remain `None` in every build mode so consumer
-    /// generation fails closed with `consumer_requires_release_install`.
+    /// Only `ConsumerV1` reads it; absent files remain `None` so consumer
+    /// acquisition fails closed with `consumer_requires_release_install`.
     pub consumer_manifest_json: Option<String>,
     /// Whether non-UTF-8 names require broad selection.
     pub skipped_non_utf8: bool,

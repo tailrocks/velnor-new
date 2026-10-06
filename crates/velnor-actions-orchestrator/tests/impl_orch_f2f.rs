@@ -197,6 +197,27 @@ fn flagged(source: &str) -> Vec<&'static str> {
     hits
 }
 
+fn rust_sources_recursive(
+    root: &std::path::Path,
+) -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
+    let mut pending = vec![root.to_path_buf()];
+    let mut sources = Vec::new();
+    while let Some(directory) = pending.pop() {
+        for entry in std::fs::read_dir(directory)? {
+            let entry = entry?;
+            let kind = entry.file_type()?;
+            let path = entry.path();
+            if kind.is_dir() {
+                pending.push(path);
+            } else if kind.is_file() && path.extension().is_some_and(|ext| ext == "rs") {
+                sources.push(path);
+            }
+        }
+    }
+    sources.sort();
+    Ok(sources)
+}
+
 #[test]
 fn forbidden_token_table_is_exact() {
     assert_eq!(
@@ -257,11 +278,7 @@ fn strip_line_comment(line: &str) -> &str {
 fn orchestrator_src_passes_forbidden_table() -> TestResult {
     let src = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src");
     let mut checked = 0;
-    for entry in std::fs::read_dir(&src)? {
-        let path = entry?.path();
-        if path.extension().is_some_and(|ext| ext != "rs") {
-            continue;
-        }
+    for path in rust_sources_recursive(&src)? {
         let text = std::fs::read_to_string(&path)?;
         let code: String = text
             .lines()

@@ -264,6 +264,14 @@ fn emitted_yaml_wires_helpers_velnor_policy() -> TestResult {
         let yaml = tree
             .get(WORKFLOW_PATH)
             .ok_or("missing workflow in staged tree")?;
+        assert!(
+            yaml.contains("predecessor_run_attempt:"),
+            "dispatch carries the exact predecessor attempt:\n{yaml}"
+        );
+        assert!(
+            yaml.contains("predecessor_run_id:"),
+            "dispatch carries the exact predecessor run:\n{yaml}"
+        );
         let jobs = check_tree(yaml).map_err(|err| format!("{err}:\n{yaml}"))?;
         assert!(jobs.iter().all(|job| job.id != "policy"), "no umbrella");
         for (id, want) in [

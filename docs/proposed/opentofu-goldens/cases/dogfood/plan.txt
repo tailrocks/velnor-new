@@ -49,7 +49,7 @@ Workflow to generate
     - publish-baseline (7 steps)
     - required (10 steps)
     - rust-velnor-actions-actionlint (24 steps)
-    - rust-velnor-actions-cli (22 steps)
+    - rust-velnor-actions-cli (23 steps)
     - rust-velnor-actions-contract (23 steps)
     - rust-velnor-actions-mise (24 steps)
     - rust-velnor-actions-orchestrator (23 steps)

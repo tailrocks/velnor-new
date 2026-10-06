@@ -1,15 +1,18 @@
 //! Committed-manifest file-read plus closed-dispatch tests.
 //!
 //! Declared via `#[path]` from `discover.rs` under `cfg(test)` because it
-//! tests private detector conversion. Manifest admission uses the shared
-//! consumer-manifest reader so debug tests cover the release twin's read.
+//! tests private detector conversion. Consumer admission uses the same
+//! file-only reader in every build mode.
 
 use std::fs;
 
 use tempfile::TempDir;
 use velnor_actions_contract::StackCandidate;
 
-use super::{consumer_manifest::read_manifest_file, detected_projects};
+use super::{
+    consumer_manifest::{consumer_manifest_text, read_manifest_file},
+    detected_projects,
+};
 use crate::safe_read::MAX_REPO_FILE_BYTES;
 
 /// Present file returns its exact text.
@@ -25,13 +28,21 @@ fn present_file_returns_its_text() {
     );
 }
 
-/// Absent file returns `None` (release builds fail closed on this).
+/// Absent file returns `None` for consumer admission in every build.
 #[test]
 fn absent_file_returns_none() {
     let root = TempDir::new().expect("temp root");
     assert_eq!(read_manifest_file(root.path()).expect("absent"), None);
+    assert_eq!(
+        consumer_manifest_text(root.path()).expect("consumer absent"),
+        None
+    );
     fs::create_dir_all(root.path().join(".velnor")).expect("velnor dir");
     assert_eq!(read_manifest_file(root.path()).expect("absent"), None);
+    assert_eq!(
+        consumer_manifest_text(root.path()).expect("consumer absent"),
+        None
+    );
 }
 
 /// Non-UTF-8 file errors instead of masking as absent (X6).

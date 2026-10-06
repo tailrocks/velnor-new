@@ -160,7 +160,7 @@ fn sources_subset_accepted_under_owned_home_only() {
 #[test]
 fn retired_rust_cache_is_rejected_for_every_lane() {
     let sha = "c".repeat(40);
-    let [preflight, mbx, _] = mbx_tool_steps(
+    let [preflight, mbx, version_check] = mbx_tool_steps(
         &format!("jdx/mr-boxington-action@{sha}"),
         "1.19.0",
         "1.98.1",
@@ -189,7 +189,7 @@ fn retired_rust_cache_is_rejected_for_every_lane() {
         steps: vec![rust_cache.clone()],
     };
     let both = Job {
-        steps: vec![preflight, mbx, rust_cache],
+        steps: vec![preflight, mbx, version_check, rust_cache],
         ..cargo_only.clone()
     };
     assert!(check_no_legacy_rust_cache("cargo-only", &cargo_only).is_err());
@@ -198,7 +198,7 @@ fn retired_rust_cache_is_rejected_for_every_lane() {
 
 #[test]
 fn mbx_restore_precedes_fetch() {
-    let fetch = velnor_actions_contract::Step {
+    let mut fetch = velnor_actions_contract::Step {
         name: "Fetch Cargo sources".to_owned(),
         id: None,
         role: Some(velnor_actions_contract::StepRole::CargoSourcesFetch),
@@ -208,7 +208,7 @@ fn mbx_restore_precedes_fetch() {
             env: BTreeMap::new(),
         },
     };
-    let mbx = velnor_actions_contract::Step {
+    let mut mbx = velnor_actions_contract::Step {
         name: "Restore MBX objects".to_owned(),
         id: None,
         role: Some(velnor_actions_contract::StepRole::MbxCache),
@@ -219,6 +219,8 @@ fn mbx_restore_precedes_fetch() {
             env: BTreeMap::new(),
         },
     };
+    fetch.name = "Renamed source-fetch presentation".to_owned();
+    mbx.name = "Renamed MBX presentation".to_owned();
     let good = Job {
         display_name: "Good".to_owned(),
         runs_on: LABEL.to_owned(),
@@ -274,7 +276,7 @@ fn step_conditions_serialize_as_if_with_upload_default()
         text[save_at..].starts_with(
             "Save Cargo sources\n        if: success() && github.event_name == 'push'",
         ),
-        "save carries push-only if:\n{text}"
+        "the canonical push-only save gate already denies dispatch:\n{text}"
     );
     let check_at = text.find("- name: Check\n").expect("check step");
     assert!(
@@ -340,9 +342,16 @@ fn strict_render_elects_single_writer_per_shared_key()
         plan_block.contains("- name: Save Mise tools"),
         "plan wins the shared key:\n{text}"
     );
+    let save_at = plan_block.find("Save Mise tools").expect("tools save step");
+    let save_step = plan_block[save_at..]
+        .split("      - name:")
+        .next()
+        .expect("tools save step boundary");
     assert!(
-        plan_block.contains("if: success() && github.event_name == 'push'"),
-        "winner saves push-only:\n{text}"
+        save_step.contains("github.event_name == 'push'")
+            && save_step.contains("github.ref_protected == true")
+            && save_step.contains("steps.v2.outputs.enabled == 'true'"),
+        "winner saves only on push and not on unvalidated dispatch:\n{save_step}"
     );
     assert!(
         !crate_block.contains("Save Mise tools"),

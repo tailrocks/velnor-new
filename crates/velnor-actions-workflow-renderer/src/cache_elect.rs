@@ -48,19 +48,26 @@ fn plan_tools_saves(jobs: &BTreeMap<String, Job>) -> Result<Vec<(String, Step)>,
             by_identity.entry(identity).or_default().push(id.clone());
         }
     }
-    let mut elected_keys = BTreeMap::new();
-    for ((key, _static_digest), owners) in &by_identity {
+    let mut elected = BTreeMap::new();
+    for ((key, digest), owners) in &by_identity {
         let winner = owners
             .iter()
             .find(|id| id.as_str() == crate::render::PLAN_JOB_ID)
             .or_else(|| owners.iter().min())
             .map(String::as_str)
             .unwrap_or_default();
-        elected_keys.insert(winner.to_owned(), key.clone());
+        if elected
+            .insert(winner.to_owned(), (key.clone(), digest.clone()))
+            .is_some()
+        {
+            return Err(RenderError::InvalidWorkflow(
+                "tools_cache_multiple_winner_keys".to_owned(),
+            ));
+        }
     }
     for (id, job) in jobs {
         let saves = tools_save_steps(job);
-        if let Some(key) = elected_keys.get(id) {
+        if let Some((key, _)) = elected.get(id) {
             validate_existing_tools_save(job, key)?;
         } else if !saves.is_empty() {
             let kind = if has_tools_restore(job) {
@@ -72,7 +79,7 @@ fn plan_tools_saves(jobs: &BTreeMap<String, Job>) -> Result<Vec<(String, Step)>,
         }
     }
     let mut planned = Vec::new();
-    for (id, key) in elected_keys {
+    for (id, (key, _digest)) in elected {
         let Some(job) = jobs.get(&id) else {
             return Err(RenderError::InvalidWorkflow(
                 "tools_cache_winner_missing".to_owned(),
@@ -85,12 +92,14 @@ fn plan_tools_saves(jobs: &BTreeMap<String, Job>) -> Result<Vec<(String, Step)>,
     Ok(planned)
 }
 
+/// True when a job carries one typed V2 tools restore or identity step.
 fn has_tools_restore(job: &Job) -> bool {
     job.steps
         .iter()
         .any(|step| step.role == Some(StepRole::ToolsCacheRestore))
 }
 
+/// True when a job carries a typed V2 tools save.
 fn has_tools_save(job: &Job) -> bool {
     job.steps
         .iter()
@@ -141,8 +150,7 @@ fn validate_existing_tools_save(job: &Job, key: &str) -> Result<(), RenderError>
 ///
 /// # Errors
 ///
-/// Returns [`RenderError`] when a winner's save step fails to build
-/// (unreachable for keys read back from valid restores).
+/// Returns [`RenderError`] when any restore or existing save is malformed.
 fn plan_provider_saves(jobs: &BTreeMap<String, Job>) -> Result<Vec<(String, Step)>, RenderError> {
     let mut by_key: BTreeMap<String, Vec<String>> = BTreeMap::new();
     let mut path_for: BTreeMap<String, String> = BTreeMap::new();
@@ -165,7 +173,9 @@ fn plan_provider_saves(jobs: &BTreeMap<String, Job>) -> Result<Vec<(String, Step
             continue;
         };
         let Some(path) = path_for.get(key) else {
-            continue;
+            return Err(RenderError::InvalidWorkflow(
+                "tofu_provider_path_missing".to_owned(),
+            ));
         };
         for owner in owners {
             let Some(job) = jobs.get(owner) else {
@@ -185,6 +195,14 @@ fn plan_provider_saves(jobs: &BTreeMap<String, Job>) -> Result<Vec<(String, Step
                     Some(velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION.to_owned());
                 planned.push((owner.clone(), save));
             }
+        }
+    }
+    // A typed provider save without a restore has no elected owner.
+    for (id, job) in jobs {
+        if has_provider_save(job) && provider_restore_entry(job).is_none() {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "tofu_provider_save_orphan:{id}"
+            )));
         }
     }
     Ok(planned)
@@ -220,7 +238,7 @@ fn provider_restore_entry(job: &Job) -> Option<(String, String)> {
     })
 }
 
-/// Append the push-gated provider save over `key` to one writer job.
+/// Validate an existing push-gated provider save against its restore.
 ///
 /// Mirrors `Save Cargo sources`: the trusted save gate keeps PR runs
 /// read-only, and the step archives the exact entry the restore
@@ -258,16 +276,11 @@ fn validate_provider_save(job: &Job, key: &str, path: &str) -> Result<(), Render
                 != Some(velnor_actions_contract::workflow::step_identity::TOFU_PROVIDERS_KEY_OUTPUT_EXPR)
             || with.get("path").map(String::as_str)
                 != Some(velnor_actions_contract::workflow::step_identity::TOFU_PROVIDERS_PATH_OUTPUT_EXPR)
+            || save.condition.as_deref()
+                != Some(velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION)
         {
             return Err(RenderError::InvalidWorkflow(
                 "tofu_provider_save_restore_mismatch".to_owned(),
-            ));
-        }
-        if save.condition.as_deref()
-            != Some(velnor_actions_contract::workflow::ir::CACHE_SAVE_CONDITION)
-        {
-            return Err(RenderError::InvalidWorkflow(
-                "tofu_provider_save_gate_mismatch".to_owned(),
             ));
         }
         return Ok(());
@@ -282,7 +295,7 @@ fn has_provider_save(job: &Job) -> bool {
         .any(|step| step.role == Some(StepRole::TofuProvidersSave))
 }
 
-/// This job's V2 tools key after validating its identity-gated restore.
+/// This job's V2 tools `(key, static digest)` after identity validation.
 fn tools_restore_identity(id: &str, job: &Job) -> Result<Option<(String, String)>, RenderError> {
     let restores = job
         .steps

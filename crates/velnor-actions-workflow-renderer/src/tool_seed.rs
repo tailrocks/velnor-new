@@ -38,7 +38,7 @@ pub(crate) fn tool_seed_action_script(seed_root: &str) -> Result<String, RenderE
 
 fn copy_script(seed_root: &str, key_shell: &str, guard: &str) -> String {
     format!(
-        r#"set -euo pipefail; {guard}; seed="{seed_root}"; key={key_shell}; if [ ! -e "$seed" ]; then echo "tool seed absent"; exit 0; fi; if ! trusted_seed_is_trusted "$seed"; then echo "untrusted tool seed; continuing cold"; exit 0; fi; if [[ ! "$key" =~ ^mise-tools-v2-[0-9a-f]{{64}}$ ]] || [ ! -f "$seed/mise/KEY" ]; then echo "tool seed key mismatch"; exit 0; fi; if ! trusted_seed_file_matches "$seed/mise/KEY" "$key"; then echo "tool seed key mismatch"; exit 0; fi; if [ -d "$seed/mise/tree" ]; then /bin/mkdir -p "$HOME/.local/share/mise"; /bin/cp -R "$seed/mise/tree/." "$HOME/.local/share/mise/"; echo "tool seed restored share-dir"; fi; if [ -d "$seed/rustup/tree" ]; then /bin/mkdir -p "$RUNNER_TEMP/velnor/rustup"; /bin/cp -R "$seed/rustup/tree/." "$RUNNER_TEMP/velnor/rustup/"; echo "tool seed restored toolchain-dir"; fi"#
+        r#"set -euo pipefail; seed="{seed_root}"; key={key_shell}; if [ -z "$key" ]; then echo "tool seed disabled"; exit 0; fi; {guard}; if [ ! -e "$seed" ]; then echo "tool seed absent"; exit 0; fi; if ! trusted_seed_is_trusted "$seed"; then echo "untrusted tool seed; continuing cold"; exit 0; fi; if [[ ! "$key" =~ ^mise-tools-v2-[0-9a-f]{{64}}$ ]] || [ ! -f "$seed/mise/KEY" ]; then echo "tool seed key mismatch"; exit 0; fi; if ! trusted_seed_file_matches "$seed/mise/KEY" "$key"; then echo "tool seed key mismatch"; exit 0; fi; if [ -d "$seed/mise/tree" ]; then /bin/mkdir -p "$HOME/.local/share/mise"; /bin/cp -R "$seed/mise/tree/." "$HOME/.local/share/mise/"; echo "tool seed restored share-dir"; fi; if [ -d "$seed/rustup/tree" ]; then /bin/mkdir -p "$RUNNER_TEMP/velnor/rustup"; /bin/cp -R "$seed/rustup/tree/." "$RUNNER_TEMP/velnor/rustup/"; echo "tool seed restored toolchain-dir"; fi"#
     )
 }
 
@@ -85,6 +85,24 @@ pub(crate) fn validate_action_call(
         ));
     }
     validate_seed_action(step)
+}
+
+/// Wrap a V2 cache key so workflow dispatch reads an empty key.
+///
+/// The guard expression evaluates to the inner key only when the trigger is
+/// not `workflow_dispatch`.
+pub(crate) fn guarded_seed_key(key: &str) -> String {
+    format!("${{{{ github.event_name != 'workflow_dispatch' && '{key}' || '' }}}}")
+}
+
+/// True only for a dispatch-guarded V2 cache key.
+pub(crate) fn is_guarded_seed_key(value: &str) -> bool {
+    const PREFIX: &str = "${{ github.event_name != 'workflow_dispatch' && '";
+    const SUFFIX: &str = "' || '' }}";
+    value
+        .strip_prefix(PREFIX)
+        .and_then(|value| value.strip_suffix(SUFFIX))
+        .is_some_and(crate::cache_p08::is_v2_cache_key_expression)
 }
 
 /// True when any job renders the tool-seed step.

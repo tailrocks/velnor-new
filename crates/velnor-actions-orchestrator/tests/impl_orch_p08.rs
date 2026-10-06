@@ -269,11 +269,10 @@ fn c11_cache_saves_push_only_prs_and_forks_read_only() -> TestResult {
     // unconditional `actions/cache/save` may exist (fork read-only).
     let yaml = yaml_for(true)?;
     let save_at = yaml.find("- name: Save Cargo sources").ok_or("save step")?;
+    let save_condition = yaml[save_at..].lines().nth(1).ok_or("save condition")?;
     assert!(
-        yaml[save_at..].starts_with(
-            "- name: Save Cargo sources\n        if: success() && github.event_name == 'push'",
-        ),
-        "save renders push-only if:\n{yaml}"
+        save_condition.contains("success() && github.event_name == 'push'"),
+        "the canonical push-only save gate already denies dispatch:\n{yaml}"
     );
     assert_tools_saves_push_gated_per_key(&yaml);
     Ok(())
@@ -307,8 +306,18 @@ fn assert_tools_saves_push_gated_per_key(yaml: &str) {
         "MBX bundle export and save stay on Scale Set and push-gated:\n{yaml}"
     );
     assert!(
-        !yaml.contains("- name: Restore Cargo sources\n        if:"),
-        "restores stay unconditional:\n{yaml}"
+        !yaml.contains("- name: Restore Cargo sources\n        if:")
+            || yaml
+                .match_indices("- name: Restore Cargo sources\n        if:")
+                .all(|(at, marker)| {
+                    yaml[at + marker.len()..]
+                        .lines()
+                        .next()
+                        .is_some_and(|condition| {
+                            condition.trim() == "github.event_name != 'workflow_dispatch'"
+                        })
+                }),
+        "restores carry at most the dispatch deny:\n{yaml}"
     );
     assert_eq!(
         yaml.matches("- name: Save Mise tools").count(),

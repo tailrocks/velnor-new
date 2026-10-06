@@ -77,6 +77,11 @@ pub(super) fn cache_step(
     )?;
     crate::steps::scan_for_private_subcommands(name)?;
     name.clone_into(&mut step.name);
+    step.role = Some(if restore {
+        StepRole::ToolsCacheRestore
+    } else {
+        StepRole::ToolsCacheSave
+    });
     step.condition = condition;
     step.role = Some(StepRole::ToolsCacheSave);
     Ok(step)

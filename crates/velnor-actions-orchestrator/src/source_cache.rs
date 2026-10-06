@@ -116,15 +116,15 @@ fn sources_step(
     } else {
         "Save Cargo sources".to_owned()
     };
+    if !restore {
+        let gate = velnor_actions_mise::cache_trust::authorize_trusted_save().map_err(wrap)?;
+        step.condition = Some(gate.to_owned());
+    }
     step.role = Some(if restore {
         StepRole::CargoSourcesRestore
     } else {
         StepRole::CargoSourcesSave
     });
-    if !restore {
-        let gate = velnor_actions_mise::cache_trust::authorize_trusted_save().map_err(wrap)?;
-        step.condition = Some(gate.to_owned());
-    }
     Ok(step)
 }
 

@@ -99,6 +99,35 @@ fn typed_scale_set_jobs_declare_bash_while_hosted_jobs_keep_default() {
     );
 }
 
+#[test]
+fn credential_scrub_is_factored_to_workflow_env() {
+    let mut probe = job("ubuntu-26.04");
+    probe.steps[0].kind = StepKind::Shell {
+        run: vec!["echo".to_owned(), "probe".to_owned()],
+        env: BTreeMap::from([("PROBE_VALUE".to_owned(), "visible".to_owned())]),
+    };
+    let jobs = BTreeMap::from([("probe".to_owned(), probe)]);
+    let ctx = context();
+    let shared = crate::lane_share::share_lanes(&jobs, &ctx).expect("lane sharing validates");
+    let rendered = workflow_to_yaml(&workflow(jobs), &shared, &ctx, &BTreeSet::new())
+        .expect("workflow renders");
+    let yaml = crate::yaml::render_yaml(&rendered);
+    let workflow_env = yaml
+        .split_once("env:\n")
+        .and_then(|(_, rest)| rest.split_once("\nconcurrency:"))
+        .map(|(env, _)| env)
+        .expect("workflow environment");
+    let probe = yaml.split("  probe:\n").nth(1).expect("probe job");
+
+    assert_eq!(yaml.matches("GH_TOKEN: \"\"").count(), 1);
+    assert!(yaml.contains("env:\n  ACTIONS_ID_TOKEN_REQUEST_TOKEN: \"\""));
+    assert!(workflow_env.contains("MISE_NO_CONFIG: \"1\""));
+    assert!(workflow_env.contains("MISE_EXEC_AUTO_INSTALL: \"false\""));
+    assert!(!probe.contains("GH_TOKEN: \"\""));
+    assert!(!probe.contains("MISE_NO_CONFIG: \"1\""));
+    assert!(probe.contains("PROBE_VALUE: visible"));
+}
+
 fn field<'a>(value: &'a crate::yaml::Yaml, key: &str) -> Option<&'a crate::yaml::Yaml> {
     let crate::yaml::Yaml::Map(entries) = value else {
         return None;

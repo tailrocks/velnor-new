@@ -1,4 +1,8 @@
-use super::*;
+use super::{argv_of, fixture_ctx, fixture_ir, simple_job, validator_commands};
+use velnor_actions_contract::{GeneratorValidation, WorkflowPolicy};
+use velnor_actions_workflow_renderer::{
+    CANDIDATE_JOB_ID, CandidateSpec, RenderError, checkout_step, plan_step, render_workflow_ir,
+};
 
 #[test]
 fn candidate_never_plans_and_lock_matches_catalog_per_target() -> Result<(), RenderError> {
@@ -7,7 +11,11 @@ fn candidate_never_plans_and_lock_matches_catalog_per_target() -> Result<(), Ren
     let mut lonely = fixture_ir()?;
     lonely.jobs.insert(
         CANDIDATE_JOB_ID.to_owned(),
-        simple_job("Lonely", Vec::new(), vec![checkout_step(&checkout_pin())?]),
+        simple_job(
+            "Lonely",
+            Vec::new(),
+            vec![checkout_step(&super::checkout_pin())?],
+        ),
     );
     assert!(render_workflow_ir(&lonely, policy, None, &ctx).is_err());
     let mut planner = fixture_ir()?;
@@ -16,7 +24,7 @@ fn candidate_never_plans_and_lock_matches_catalog_per_target() -> Result<(), Ren
         simple_job(
             "Planning candidate",
             vec!["plan".to_owned()],
-            vec![checkout_step(&checkout_pin())?, plan_step()],
+            vec![checkout_step(&super::checkout_pin())?, plan_step()],
         ),
     );
     assert!(render_workflow_ir(&planner, policy, None, &ctx).is_err());
@@ -26,7 +34,7 @@ fn candidate_never_plans_and_lock_matches_catalog_per_target() -> Result<(), Ren
         simple_job(
             "Task",
             vec![CANDIDATE_JOB_ID.to_owned()],
-            vec![checkout_step(&checkout_pin())?],
+            vec![checkout_step(&super::checkout_pin())?],
         ),
     );
     thief.jobs.insert(
@@ -34,7 +42,7 @@ fn candidate_never_plans_and_lock_matches_catalog_per_target() -> Result<(), Ren
         simple_job(
             "Candidate",
             vec!["plan".to_owned()],
-            vec![checkout_step(&checkout_pin())?],
+            vec![checkout_step(&super::checkout_pin())?],
         ),
     );
     assert!(render_workflow_ir(&thief, policy, None, &ctx).is_err());

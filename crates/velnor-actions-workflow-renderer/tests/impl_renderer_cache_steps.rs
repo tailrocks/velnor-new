@@ -153,6 +153,48 @@ fn cache_save_writes_task_artifacts_only() {
     );
 }
 
+fn assert_save_gate_and_seed(
+    rendered: &velnor_actions_workflow_renderer::render::RenderedWorkflow,
+    text: &str,
+) -> Result<(), velnor_actions_workflow_renderer::RenderError> {
+    use velnor_actions_workflow_renderer::RenderError;
+    let save_at = text
+        .find("- name: Save Mise tools")
+        .ok_or_else(|| RenderError::InvalidWorkflow("save step".to_owned()))?;
+    let save_step = text[save_at..]
+        .split("      - name:")
+        .next()
+        .ok_or_else(|| RenderError::InvalidWorkflow("save boundary".to_owned()))?;
+    for gate in [
+        "github.event_name == 'push'",
+        "github.ref_protected == true",
+        "steps.v2.outputs.enabled == 'true'",
+    ] {
+        if !save_step.contains(gate) {
+            return Err(RenderError::InvalidWorkflow(format!(
+                "save requires protected-push gate {gate}:\n{save_step}",
+            )));
+        }
+    }
+    let seed = rendered
+        .shared
+        .iter()
+        .find(|file| file.path == ".github/actions/velnor-tool-seed/action.yml")
+        .ok_or_else(|| RenderError::InvalidWorkflow("renderer emits seed action".to_owned()))?;
+    if !seed.bytes.contains("velnor-host-seed-v1") {
+        return Err(RenderError::InvalidWorkflow(format!(
+            "seed provenance missing:\n{}",
+            seed.bytes
+        )));
+    }
+    if !text.contains("${{steps.v2.outputs.identity}}") {
+        return Err(RenderError::InvalidWorkflow(
+            "v2 identity output missing".to_owned(),
+        ));
+    }
+    Ok(())
+}
+
 #[test]
 fn strict_wires_runtime_qualified_tools_cache_before_setup_and_saves_once()
 -> Result<(), velnor_actions_workflow_renderer::RenderError> {
@@ -213,13 +255,16 @@ fn strict_wires_runtime_qualified_tools_cache_before_setup_and_saves_once()
         !text.contains("cache_key: mise-v1-"),
         "legacy Mise cache key:\n{text}"
     );
-    let seed = rendered
-        .shared
-        .iter()
-        .find(|file| file.path == ".github/actions/velnor-tool-seed/action.yml")
-        .expect("renderer emits seed action for a matching checkout");
-    assert!(seed.bytes.contains("velnor-host-seed-v1"), "{}", seed.bytes);
-    assert!(text.contains("${{steps.v2.outputs.identity}}"));
+    let setup = text
+        .split("      - name: Setup Mise")
+        .nth(1)
+        .unwrap_or_default();
+    let setup = setup.split("      - name:").next().unwrap_or_default();
+    assert!(
+        !setup.contains("cache_key:"),
+        "Mise does not own an archive key"
+    );
+    assert_save_gate_and_seed(&rendered, text)?;
     Ok(())
 }
 

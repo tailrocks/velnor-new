@@ -181,6 +181,8 @@ fn stage(preview: &Path, yaml: &str) -> Result<TempDir, Box<dyn std::error::Erro
         fs::read(preview.join(".github/actionlint.yaml"))?,
     )?;
     for relative in [
+        ".github/AGENTS.md",
+        ".github/CLAUDE.md",
         ".github/actions/u26/action.yml",
         ".github/actions/velnor-tool-seed/action.yml",
         ".github/actions/velnor-tools-cache-restore/action.yml",
@@ -268,11 +270,13 @@ fn velnor_policy_blessed_sha_validates_green() -> TestResult {
 /// The two suppressed findings are `undocumented-permissions` (low,
 /// auditor/pedantic-only): Plan and Required each grant Actions read to their
 /// bounded internal baseline/artifact operation. The staged config has no
-/// unpinned-uses ignores; zizmor also reports unrelated ignored audit checks.
+/// unpinned-uses ignores; inline ignores are only `self-repository` on
+/// local actions and zizmor must report that count.
 #[test]
 fn staging_suppressions_stable_no_new() -> TestResult {
     let (_repo, _parent, preview, yaml, _) = policy_preview()?;
     let staged = stage(&preview, &yaml)?;
+    let ignores = self_repository_ignores(staged.path())?;
     let output = run_zizmor(staged.path())?;
     let text = streams(&output);
     let config = fs::read_to_string(staged.path().join(".zizmor.yml"))?;
@@ -285,8 +289,31 @@ fn staging_suppressions_stable_no_new() -> TestResult {
         text.contains("No findings to report."),
         "SHA-pinned refs produce no findings: {text}"
     );
+    assert!(ignores > 0, "the tool-seed action needs one ignore");
+    assert!(
+        text.contains(&format!("{ignores} ignored")),
+        "ignore count must match the local-action annotations: {text}"
+    );
     assert!(text.contains("2 suppressed"), "no new suppressions: {text}");
     Ok(())
+}
+
+/// Count `# zizmor: ignore[self-repository]` and reject every other ignore.
+fn self_repository_ignores(root: &Path) -> Result<usize, Box<dyn std::error::Error>> {
+    let mut matched = 0;
+    let mut any = 0;
+    for relative in [
+        WORKFLOW_PATH,
+        FRESHNESS_WORKFLOW_PATH,
+        ".github/actions/u26/action.yml",
+        ".github/actions/velnor-tool-seed/action.yml",
+    ] {
+        let text = fs::read_to_string(root.join(relative))?;
+        matched += text.matches("# zizmor: ignore[self-repository]").count();
+        any += text.matches("zizmor: ignore[").count();
+    }
+    assert_eq!(matched, any, "only self-repository ignores are allowed");
+    Ok(matched)
 }
 
 #[test]

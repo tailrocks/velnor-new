@@ -64,3 +64,42 @@ fn preseed_restores_mbx_builds_after_sources_with_homes() {
     assert_owned_homes(steps, StepRole::PreseedBuild, PRESEED_BUILD_NAME);
     assert_owned_homes(steps, StepRole::PreseedVerifyBuild, PRESEED_VERIFY_NAME);
 }
+
+#[test]
+fn lockless_preseed_installs_mbx_before_the_build_without_a_restore() {
+    use velnor_actions_contract::StepRole;
+    use velnor_actions_workflow_renderer::PRESEED_BUILD_NAME;
+    let mut plan = preseed_fixture(&[]);
+    attach_preseed(&mut plan, "ubuntu-26.04", "0.1.0").expect("attach");
+    let steps = &plan.ir.jobs["plan"].steps;
+    let names: Vec<&str> = steps.iter().map(|step| step.name.as_str()).collect();
+    let roles: Vec<Option<StepRole>> = steps.iter().map(|step| step.role).collect();
+    assert!(!roles.contains(&Some(StepRole::CargoSourcesRestore)));
+    let at = |role| {
+        roles
+            .iter()
+            .position(|seen| *seen == Some(role))
+            .unwrap_or_else(|| panic!("missing {role:?}: {roles:?}"))
+    };
+    let prepare_components = at(StepRole::PrepareRustComponents);
+    let preflight = at(StepRole::MbxPreflight);
+    let action = at(StepRole::MbxCache);
+    let version_check = at(StepRole::MbxVersionCheck);
+    let build = at(StepRole::PreseedBuild);
+    assert!(
+        prepare_components < preflight
+            && preflight < action
+            && action < version_check
+            && version_check < build,
+        "Rust setup and exact MBX installation precede the build: {names:?}"
+    );
+    assert_eq!(
+        roles
+            .iter()
+            .filter(|seen| **seen == Some(StepRole::MbxCache))
+            .count(),
+        1
+    );
+    assert_owned_homes(steps, StepRole::MbxPreflight, "MBX preflight");
+    assert_owned_homes(steps, StepRole::PreseedBuild, PRESEED_BUILD_NAME);
+}

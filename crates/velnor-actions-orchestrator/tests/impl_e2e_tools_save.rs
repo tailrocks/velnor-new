@@ -63,11 +63,18 @@ pub(crate) fn check_tools_save_shape(job: &JobText) -> Result<(), String> {
     }
     for save in saves {
         check_cache_action(save, "actions/cache/save@", job)?;
-        if !save
-            .body
-            .contains("if: success() && github.event_name == 'push'")
-        {
-            return Err(format!("{}: tools save is not push-gated", job.id));
+        let required_gates = [
+            "success()",
+            "github.event_name == 'push'",
+            "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)",
+            "github.ref_protected == true",
+            "steps.v2.outputs.enabled == 'true'",
+        ];
+        if required_gates.iter().any(|gate| !save.body.contains(gate)) {
+            return Err(format!(
+                "{}: tools save lacks protected default-branch push policy or qualified identity",
+                job.id
+            ));
         }
         if step_key(save).as_deref() != Some(&key) {
             return Err(format!(

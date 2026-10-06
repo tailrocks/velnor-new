@@ -1,9 +1,5 @@
-//! Generation coordination: root, config, discovery, IR, and writes.
-//!
-//! Composes the contract, Rust, Mise, actionlint, and workflow-renderer
-//! adapters. This crate launches no child invocations, builds no fixed
-//! vectors itself, and assembles no workflow text: execution belongs to
-//! Mise, vectors to `vectors` via Mise requests, text to the renderer.
+//! Generation coordination: discovery, planning, workflow IR, and writes.
+//! Execution belongs to Mise, vector requests to vectors, and YAML to the renderer.
 
 mod api;
 mod attach;
@@ -61,6 +57,7 @@ mod preseed_manifest;
 mod product_release_pins;
 mod provenance;
 mod publish_job;
+mod qualification_resolver;
 mod qualify;
 mod recommendations;
 mod release_checkouts;

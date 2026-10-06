@@ -54,6 +54,7 @@ fn fixture_plan() -> (Plan, String) {
         base: None,
         head: "HEAD".to_owned(),
         event: WorkflowEvent::PullRequest,
+        qualification: None,
         runner: PlanRunner {
             label: "ubuntu-26.04".to_owned(),
             selection: RunnerSelection::LatestDefault,

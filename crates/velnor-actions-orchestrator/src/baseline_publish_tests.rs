@@ -12,6 +12,9 @@ use velnor_actions_contract::{
     artifact_id_for_baseline, plan_id_for_run,
 };
 
+#[path = "baseline_publish_request_tests.rs"]
+mod request_tests;
+
 /// Push payload over `head` on the default branch.
 fn push_payload(head: &str) -> String {
     serde_json::json!({
@@ -100,6 +103,7 @@ pub(super) fn fixture_plan(head: &str, run_key: &str) -> Plan {
         base: Some("b".repeat(40)),
         head: head.to_owned(),
         event: WorkflowEvent::Push,
+        qualification: None,
         runner: PlanRunner {
             label: "ubuntu-26.04".to_owned(),
             selection: RunnerSelection::LatestDefault,

@@ -9,6 +9,8 @@ mod impl_cli_args;
 mod impl_cli_gate;
 #[path = "impl_cli_gate_preseed.rs"]
 mod impl_cli_gate_preseed;
+#[path = "impl_cli_gate_qualification.rs"]
+mod impl_cli_gate_qualification;
 #[path = "impl_cli_gate_repo_policy.rs"]
 mod impl_cli_gate_repo_policy;
 #[path = "impl_cli_init.rs"]

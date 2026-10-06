@@ -1,18 +1,22 @@
 //! Event-time `plan-v1` / `merge-v1` JSON entrypoints (schema 1).
 
 // Obligation identities live beside the planner so `lib.rs` stays untouched.
+#[path = "internal_named_lanes.rs"]
+mod named_lanes;
 #[path = "phase_timing.rs"]
 pub(crate) mod phase_timing;
 #[path = "plan_obligation.rs"]
 pub(crate) mod plan_obligation;
+#[path = "plan_response.rs"]
+mod plan_response;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 use velnor_actions_contract::{
-    ContractError, ExecutionMode, NamedCheckLane, Plan, PlanBaseline, PlanMatrix, PlanRunner,
-    ProposedTask, RunnerSelection, canonical_json_bytes, named_check_lanes, plan_id_for_run,
+    ContractError, NamedCheckLane, Plan, PlanBaseline, PlanMatrix, PlanRunner, ProposedTask,
+    RunnerSelection, WorkflowEvent, canonical_json_bytes, plan_id_for_run,
 };
 use velnor_actions_mise::ToolCatalog;
 
@@ -25,14 +29,19 @@ use crate::internal_plan::snapshot::ExecutionSnapshot;
 use crate::internal_plan::wire_w2::GroupWire;
 use crate::internal_plan::{default_generator_with_phase_timings, plan_packages};
 use crate::internal_request::{PlanRequest, checked_plan_request};
+
+pub use self::plan_response::validate_plan_response;
 use crate::merge::BaselineManifest;
 use crate::prepare::{prepare, prepare_with_phase_timings};
 use crate::select::{classify_changed, select_universe};
 use crate::select_edges::plan_task_graph;
 
 pub use crate::internal_request::{
-    PlanOutputs, merge_passed, plan_outputs, publish_final_report, publish_plan_files,
-    response_path_for, write_request, write_request_parts,
+    merge_passed, publish_final_report, publish_plan_files, response_path_for, write_request,
+    write_request_parts,
+};
+pub use crate::plan_output_limits::{
+    PlanOutputs, plan_outputs, plan_outputs_from_staged_admission, plan_outputs_with_admission,
 };
 
 /// Schema version accepted by both internal entrypoints.
@@ -93,7 +102,8 @@ fn plan_internal_inner(
     } else {
         prepare(&root)?
     };
-    let named_check_lanes = resolve_named_check_lanes(&prep, request.named_check_lanes.take())?;
+    validate_qualification_request(&request, &prep.default_branch)?;
+    let named_check_lanes = named_lanes::resolve(&prep, request.named_check_lanes.take())?;
     let catalog = ToolCatalog::pinned();
     let mut warnings = Vec::new();
     warnings.extend(crate::evidence::workspace_drift_warnings(
@@ -131,20 +141,24 @@ fn plan_internal_inner(
             })
             .ok()
     });
-    let used_manifest = apply_baseline(
-        &mut plan,
-        request.event,
-        BaselineInputs {
-            branch: &prep.default_branch,
-            root: &prep.root,
-            workflow: velnor_actions_workflow_renderer::render::WORKFLOW_PATH,
-            catalog: &catalog,
-            repository: request.repository.as_deref(),
-        },
-        manifest,
-        &prep.discovery,
-        changed.as_ref(),
-    )?;
+    let used_manifest = if request.event != WorkflowEvent::Qualification {
+        apply_baseline(
+            &mut plan,
+            request.event,
+            BaselineInputs {
+                branch: &prep.default_branch,
+                root: &prep.root,
+                workflow: velnor_actions_workflow_renderer::render::WORKFLOW_PATH,
+                catalog: &catalog,
+                repository: request.repository.as_deref(),
+            },
+            manifest,
+            &prep.discovery,
+            changed.as_ref(),
+        )?
+    } else {
+        None
+    };
     plan.validate().map_err(internal_contract)?;
     check_matrix_budget(&plan.matrix)?;
     let response = plan_response(plan, used_manifest);
@@ -153,29 +167,25 @@ fn plan_internal_inner(
     })
 }
 
-fn resolve_named_check_lanes(
-    prep: &crate::prepare::GenerationPreparation,
-    supplied: Option<BTreeMap<String, Vec<NamedCheckLane>>>,
-) -> Result<BTreeMap<String, Vec<NamedCheckLane>>, OrchestratorError> {
-    let candidates = [
-        None,
-        Some(ExecutionMode::Hosted),
-        Some(ExecutionMode::ScaleSet),
-        Some(ExecutionMode::Both),
-    ];
-    let default =
-        named_check_lanes(&prep.workflow.ir, &prep.config, None).map_err(internal_contract)?;
-    let Some(supplied) = supplied else {
-        return Ok(default);
-    };
-    for dispatch in candidates {
-        let expected = named_check_lanes(&prep.workflow.ir, &prep.config, dispatch)
-            .map_err(internal_contract)?;
-        if supplied == expected {
-            return Ok(supplied);
+/// Bind qualification provenance to the prepared repository and checkout.
+fn validate_qualification_request(
+    request: &PlanRequest,
+    default_branch: &str,
+) -> Result<(), OrchestratorError> {
+    match (request.event, request.qualification.as_ref()) {
+        (WorkflowEvent::Qualification, Some(context)) => {
+            let repository = request
+                .repository
+                .as_deref()
+                .ok_or_else(|| internal("missing_qualification_repository"))?;
+            context
+                .validate_for(default_branch, repository, &request.head)
+                .map_err(internal_contract)
         }
+        (WorkflowEvent::Qualification, None) => Err(internal("missing_qualification_context")),
+        (_, Some(_)) => Err(internal("qualification_context_on_wrong_event")),
+        (_, None) => Ok(()),
     }
-    Err(internal("named_check_lane_contract_mismatch"))
 }
 
 /// Assemble the `plan-v1` response, staging trusted bytes when covered.
@@ -315,6 +325,7 @@ fn build_plan(
         base: request.base.clone(),
         head: request.head.clone(),
         event: request.event,
+        qualification: request.qualification.clone(),
         runner: PlanRunner {
             label: label.to_owned(),
             selection,

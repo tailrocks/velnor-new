@@ -39,7 +39,13 @@ Internal workflow steps MUST NOT be exposed as subcommands. Product workflow
 operations use a bare invocation (no CLI arguments)
 with `VELNOR_INTERNAL_OP` naming a versioned typed operation
 (`write-request-v1`, `plan-v1`, `merge-v1`, `fetch-reports-v1`, or
-`write-task-report-v1`) plus its gate inputs. `plan-v1` and `merge-v1`
+`write-task-report-v1`, or `resolve-qualification-v1`) plus its gate inputs.
+`resolve-qualification-v1` is restricted to a Velnor `workflow_dispatch`
+plan with a runner-temp request file and a read-only GitHub token; it resolves
+and verifies predecessor receipt lineage before `plan-v1` emits typed cache
+directives. The complete protocol is in
+[`hosted-cache-qualification-contract.md`](hosted-cache-qualification-contract.md).
+`plan-v1` and `merge-v1`
 read schema-1 JSON from the existing request file at
 `VELNOR_REQUEST_FILE` and write the schema-1 JSON result to the sibling
 `<op>-response.json` derived from the `<op>-request.json` file name;

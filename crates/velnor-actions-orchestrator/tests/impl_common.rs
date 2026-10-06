@@ -138,10 +138,7 @@ pub(crate) fn make_repo(config: &str) -> Result<TempDir, Box<dyn std::error::Err
     git(&["config", "commit.gpgsign", "false"], root)?;
     fs::create_dir_all(root.join(".velnor"))?;
     fs::write(root.join(".velnor/config.toml"), config)?;
-    fs::write(
-        root.join(".velnor/release-manifest.json"),
-        fixture_manifest_json(),
-    )?;
+    install_fixture_release_manifest(root)?;
     fs::write(
         root.join("Cargo.toml"),
         "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",

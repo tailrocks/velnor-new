@@ -63,6 +63,9 @@ fn internal_env(
         env.push(("GH_REPO".to_owned(), Yaml::str("${{ github.repository }}")));
         env.push(("GH_TOKEN".to_owned(), Yaml::str("${{ github.token }}")));
     }
+    if op == steps::RESOLVE_QUALIFICATION_OPERATION {
+        env.push(("GH_TOKEN".to_owned(), Yaml::str("${{ github.token }}")));
+    }
     env.push((INTERNAL_OP_ENV.to_owned(), Yaml::str(op.to_owned())));
     for (key, value) in needs_envs {
         env.push((key.clone(), Yaml::str(value.clone())));

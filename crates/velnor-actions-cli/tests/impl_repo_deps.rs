@@ -8,6 +8,10 @@ use std::error::Error;
 
 #[path = "impl_repo_archive_deps.rs"]
 mod archive_deps;
+#[path = "../../test_support/git_fixture.rs"]
+mod git_fixture;
+#[path = "impl_repo_size_limits.rs"]
+mod size_limits;
 use archive_deps::reviewed_archive_dependency;
 
 use crate::impl_repo_policy::{
@@ -91,6 +95,9 @@ fn external_deps_allowlisted_used_and_narrow() -> Result<(), Box<dyn Error>> {
         // Reviewed Rust AST (`full`, `visit`) for the test-source closure guard.
         "syn",
         "flate2",
+        // Bounded GitHub receipt ZIP reader; only pure-Rust deflate decoding
+        // is enabled so artifacts can be validated without extracting paths.
+        "zip",
         "rustls",
         "rustls-native-certs",
         "ureq",
@@ -136,8 +143,11 @@ fn external_deps_allowlisted_used_and_narrow() -> Result<(), Box<dyn Error>> {
                 }
             }
             // Cargo maps dependency hyphens to underscores in Rust identifiers.
+            // A lone flate2 may only serve as the reviewed zip backend.
+            let feature_backend =
+                key == "flate2" && body.contains("zip = ") && body.contains("deflate-flate2");
             assert!(
-                dep_referenced(dir, &key.replace('-', "_"))?,
+                dep_referenced(dir, &key.replace('-', "_"))? || feature_backend,
                 "{dir} never uses {key}"
             );
         }
@@ -239,6 +249,25 @@ fn cli_tests_assert_through_binary_only() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
+fn lockfile_committed_and_locked_used() -> Result<(), Box<dyn Error>> {
+    assert!(!read("Cargo.lock")?.trim().is_empty());
+    let tracked = git_fixture::command(&repo_root())?
+        .arg("ls-files")
+        .arg("--error-unmatch")
+        .arg("Cargo.lock")
+        .output()?;
+    assert!(tracked.status.success(), "Cargo.lock not committed");
+    for file in [
+        "crates/velnor-actions-mise/src/requests.rs",
+        "crates/velnor-actions-orchestrator/src/vectors.rs",
+        ".github/workflows/ci.yml",
+    ] {
+        assert!(read(file)?.contains("--locked"), "{file} misses --locked");
+    }
+    Ok(())
+}
+
+#[test]
 fn cli_invokes_no_tools_directly() -> Result<(), Box<dyn Error>> {
     let banned = [
         "process::Command",
@@ -246,6 +275,12 @@ fn cli_invokes_no_tools_directly() -> Result<(), Box<dyn Error>> {
         ".spawn(",
         ".status()",
         ".output()",
+        "cargo",
+        // "mise" stays unbanned: repo-policy names a mise-version operation.
+        "mbx",
+        "nextest",
+        "rustup",
+        "\"gh\"",
         "shell",
         "Shell",
         "sh -c",

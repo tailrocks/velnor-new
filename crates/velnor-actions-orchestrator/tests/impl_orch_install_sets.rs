@@ -130,6 +130,17 @@ fn job_section<'a>(yaml: &'a str, id: &str) -> Option<&'a str> {
     Some(&tail[..end])
 }
 
+/// Validators invoke their exact analyzer pin through isolated Mise exec.
+fn assert_pinned_exec(section: &str, tool: &str) -> Result<(), String> {
+    if section.contains("mise --no-config --no-env --no-hooks exec") && section.contains(tool) {
+        Ok(())
+    } else {
+        Err(format!(
+            "validator does not execute pinned {tool}: {section}"
+        ))
+    }
+}
+
 /// Cache miss remains executable: explicit install sits after setup and before exec.
 fn assert_cold_install_order(section: &str, command: &str) -> Result<(), String> {
     let position = |name: &str| {
@@ -189,12 +200,17 @@ fn velnor_jobs_carry_trio_only_where_executed() -> TestResult {
         );
         let zizmor = runs.get("zizmor").ok_or("zizmor must prepare")?;
         assert!(zizmor.contains("zizmor@1.30.1"), "{zizmor}");
-        for (id, command) in [
-            ("actionlint", "Run actionlint"),
-            ("cargo-machete", "Run cargo-machete"),
-            ("zizmor", "Run zizmor"),
+        for (id, tool, command) in [
+            ("actionlint", "actionlint@1.7.12", "Run actionlint"),
+            (
+                "cargo-machete",
+                "http:cargo-machete[url=https://github.com/bnjbvr/cargo-machete/releases/download/v0.9.2/cargo-machete-v0.9.2-x86_64-unknown-linux-musl.tar.gz,checksum=sha256:48200087f54c55aabcd4db4af1e25742b49846c02a1b1bfa134711945b35b2e9]@0.9.2",
+                "Run cargo-machete",
+            ),
+            ("zizmor", "zizmor@1.30.1", "Run zizmor"),
         ] {
             let section = job_section(&yaml, id).ok_or("validator job missing")?;
+            assert_pinned_exec(section, tool)?;
             assert_cold_install_order(section, command)?;
         }
         for id in ["alint", "cargo-deny"] {

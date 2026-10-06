@@ -153,7 +153,11 @@ fn uncommented_init_sample_parses_with_overrides() -> TestResult {
     // Retired `Swatinem/rust-cache` is not an overridable sample pin.
     let overrides = &prep.config.actions.overrides;
     let keys: Vec<&str> = overrides.keys().map(String::as_str).collect();
-    assert_eq!(overrides.len(), 7);
+    assert_eq!(
+        overrides.len(),
+        velnor_actions_contract::config::OVERRIDABLE_ACTIONS.len()
+    );
+    assert!(!overrides.contains_key("Swatinem/rust-cache"));
     assert_eq!(
         keys,
         [

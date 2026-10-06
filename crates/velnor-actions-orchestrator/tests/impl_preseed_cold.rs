@@ -1,4 +1,4 @@
-//! Cold pre-seed tool-owner and Rust preflight coverage.
+//! Cold pre-seed tool-owner, native MBX ordering, and Rust preflight coverage.
 
 #[cfg(unix)]
 mod unix {
@@ -70,6 +70,35 @@ esac
         let catalog = ToolCatalog::pinned();
         let rust_install = install_step("Prepare pinned tools", vec![PinnedTool::Rust], &catalog)?;
         let preflight = preflight_step(&catalog)?;
+        let [_, mbx_action, version_check] = mbx_steps(&catalog)?;
+        assert_eq!(preflight.name, "Verify Rust before MBX action");
+        assert_eq!(mbx_action.name, "Restore MBX objects");
+        assert_eq!(version_check.name, "Verify native MBX version");
+        assert!(
+            !shell_run(&rust_install)?
+                .join(" ")
+                .contains("mr-boxington@")
+        );
+        let StepKind::Action { uses, with, .. } = &mbx_action.kind else {
+            return Err(std::io::Error::other("MBX owner must be an action").into());
+        };
+        assert_eq!(
+            uses,
+            &format!("jdx/mr-boxington-action@{MR_BOXINGTON_ACTION_SHA}")
+        );
+        assert_eq!(
+            with.get("github-cache-mode").map(String::as_str),
+            Some("objects")
+        );
+        assert_eq!(
+            with.get("save-on-workflow-dispatch").map(String::as_str),
+            Some("false")
+        );
+        assert!(
+            shell_run(&version_check)?
+                .join(" ")
+                .contains("mbx --version")
+        );
         let cold_env = runner_env(
             &temp_root.join("cold-runner"),
             &stub_bin,
@@ -92,7 +121,7 @@ esac
             ready.status.success(),
             "preflight after Rust preparation: {ready:?}"
         );
-        assert_rust_install_precedes_lookup(&log)?;
+        assert_rust_install_precedes_lookup(&log, catalog.version(PinnedTool::Rust))?;
         Ok(())
     }
 
@@ -126,6 +155,21 @@ esac
             .into_iter()
             .next()
             .ok_or_else(|| std::io::Error::other("preflight step missing").into())
+    }
+
+    fn mbx_steps(catalog: &ToolCatalog) -> Result<[Step; 3], Box<dyn std::error::Error>> {
+        let uses = format!("jdx/mr-boxington-action@{MR_BOXINGTON_ACTION_SHA}");
+        let homes = ToolHomes::runner_temp();
+        let env = strings_map(homes.env(catalog))?;
+        let steps = mbx_steps_for_driver(
+            &uses,
+            CompileDriver::Mbx,
+            catalog.version(PinnedTool::MrBoxington),
+            catalog.version(PinnedTool::Rust),
+            env,
+        )?
+        .ok_or_else(|| std::io::Error::other("MBX driver steps missing"))?;
+        Ok(steps)
     }
 
     fn strings(values: Vec<OsString>) -> Result<Vec<String>, Box<dyn std::error::Error>> {
@@ -202,6 +246,15 @@ esac
         Ok(command.output()?)
     }
 
+    fn shell_run(step: &Step) -> Result<&[String], Box<dyn std::error::Error>> {
+        let StepKind::Shell { run, .. } = &step.kind else {
+            return Err(
+                std::io::Error::other(format!("{} must be a shell step", step.name)).into(),
+            );
+        };
+        Ok(run)
+    }
+
     fn write_executable(path: &Path, contents: &str) -> std::io::Result<()> {
         fs::write(path, contents)?;
         let mut permissions = fs::metadata(path)?.permissions();
@@ -209,16 +262,22 @@ esac
         fs::set_permissions(path, permissions)
     }
 
-    fn assert_rust_install_precedes_lookup(log: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    fn assert_rust_install_precedes_lookup(
+        log: &Path,
+        rust_version: &str,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let events = fs::read_to_string(log)?;
         let lines = events.lines().collect::<Vec<_>>();
+        let selector = format!("rust@{rust_version}");
+        let install_event = format!("install:{selector}");
+        let lookup_event = format!("where:{selector}");
         let install = lines
             .iter()
-            .position(|line| *line == "install:rust@1.98.1")
+            .position(|line| line == &install_event)
             .ok_or("pinned Rust install event")?;
         let lookup = lines
             .iter()
-            .rposition(|line| *line == "where:rust@1.98.1")
+            .rposition(|line| line == &lookup_event)
             .ok_or("final Rust lookup event")?;
         assert!(install < lookup, "install must precede lookup: {events}");
         Ok(())

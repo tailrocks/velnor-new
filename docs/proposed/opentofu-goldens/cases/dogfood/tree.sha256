@@ -12,11 +12,11 @@ c221a634ad4265bafc8f829778f7838dd03d84b511cb368206a708271b03e30a  ./.github/acti
 3ad4f91e954d3f82f9d5fb61894509f1260288e14d11ec39b31a9a5fc39bdb90  ./.github/actions/generator-release-qualify-macos-intel/action.yml
 3519ea6961edd336a5e4ba71ea65a2c57c4bc3aba62cb5173c4c3448413cd02f  ./.github/actions/generator-release-qualify-macos/action.yml
 59555c5e443881912c515d54d1c48ae90f86b7bb0a4ecf85e6483a055b52507f  ./.github/actions/u26/action.yml
-438c014ea38773120e967cc8abf85f420304c427bdbcb36b75f542e20262f505  ./.github/actions/velnor-tool-seed/action.yml
+d6f25c76c25d1af62f335eda33ed24c2b97e1e646433b60c43f343510606f61f  ./.github/actions/velnor-tool-seed/action.yml
 32446cf6cd7c65644cd389cbb84d091adaac788344b2b23895041c743e494b35  ./.github/actions/velnor-tools-cache-restore/action.yml
 fc002c7ca21ad80705b1f9d6571d82136013208e47a2a25eff52aa2aadf405c8  ./.github/actions/velnor-tools-prelude-u26/action.yml
 9a9fbc1c5c49dc05bfc5bf5ff857e4b8f3b92613cc95c37fec1643b88e8dee4e  ./.github/scripts/velnor-tools-cache-identity.sh
-d71bdfc673c59acd5ef4d186e87a0553d784338b6177325fb898bd2b75796351  ./.github/workflows/ci.yml
+1eac07553bcc29249b38cb4fb56b1cbea99899e7884b632946b87981d33b3e24  ./.github/workflows/ci.yml
 c6873ba49e8c184dd71d7b80d55c9734ee4e491429a798f07d7e3c66285d729b  ./.github/workflows/freshness.yml
 b248e6f46de5d946ae80fcbf6091bf71b86a98e9e4d930c857c3a5719893b37e  ./.github/workflows/owned-tools.yml
 9a006e544baa6573e47b0dcbf12ec712455e0445ffd46e41684d7a85b0f55b93  ./.github/workflows/product-release-binary.yml

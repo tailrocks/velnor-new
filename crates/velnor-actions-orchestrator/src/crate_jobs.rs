@@ -327,7 +327,8 @@ fn render_job(
 ///
 /// Lockless emits nothing, and tofu roles restore providers through
 /// the separate provider-cache step (never here). The separate V2 tools
-/// layer owns Cargo binaries and tool receipts.
+/// layer owns Cargo binaries and tool receipts. Compiler driver does not
+/// change which shared-source payload readers restore.
 fn restore_step_for_crate(
     label: &str,
     catalog: &ToolCatalog,

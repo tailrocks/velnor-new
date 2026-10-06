@@ -29,6 +29,8 @@ mod impl_contract_release_modes;
 mod impl_contract_reports;
 #[path = "impl_contract_reports_b.rs"]
 mod impl_contract_reports_b;
+#[path = "impl_contract_reports_qual.rs"]
+mod impl_contract_reports_qual;
 #[path = "impl_contract_step_roles.rs"]
 mod impl_contract_step_roles;
 #[path = "impl_contract_step_seed.rs"]

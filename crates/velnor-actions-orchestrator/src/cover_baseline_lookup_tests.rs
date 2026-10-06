@@ -19,6 +19,7 @@ fn lookup_plan(base: Option<&str>) -> Plan {
         base: base.map(str::to_owned),
         head: "head".to_owned(),
         event: WorkflowEvent::PullRequest,
+        qualification: None,
         runner: PlanRunner {
             label: "ubuntu-26.04".to_owned(),
             selection: RunnerSelection::LatestDefault,

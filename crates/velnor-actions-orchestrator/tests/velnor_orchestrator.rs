@@ -74,6 +74,7 @@ mod impl_p06_detection;
 mod impl_p06_detection_malformed;
 mod impl_perf_p13;
 mod impl_permissions_scope;
+mod impl_plan_matrix_output;
 mod impl_plan_migration;
 mod impl_plan_parity;
 mod impl_plan_prepare;

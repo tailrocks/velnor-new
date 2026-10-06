@@ -5,9 +5,10 @@
 //! pre-existing file, `plan-v1`/`merge-v1`/`publish-baseline-v1` need a
 //! pre-existing request file, `fetch-reports-v1`/`write-task-report-v1`
 //! need runner temp plus the numeric run ID instead, and
-//! `write-preseed-manifest-v1` needs runner temp only. Anything else falls
-//! through to Clap, so public behavior is byte-identical with or without the
-//! environment set.
+//! `write-preseed-manifest-v1` needs runner temp only, and
+//! `resolve-qualification-v1` requires a dispatch event, request file, and
+//! read-only GitHub token. Anything else falls through to Clap, so public
+//! behavior is byte-identical with or without the environment set.
 
 use std::env;
 use std::fs;
@@ -61,6 +62,8 @@ enum InternalOp {
     Publish,
     /// Repository-maintenance operation behind its separate private gate.
     RepoPolicy,
+    /// Read-only predecessor resolution for hosted qualification.
+    ResolveQualification,
 }
 
 /// Validated private request: operation plus exact request-file path.
@@ -116,6 +119,9 @@ fn gate_request() -> Option<InternalRequest> {
         Ok(tag) if tag == PRESEED_MANIFEST_OP => InternalOp::PreseedManifest,
         Ok(tag) if tag == PUBLISH_OP => InternalOp::Publish,
         Ok("repo-policy-v1") => InternalOp::RepoPolicy,
+        Ok(tag) if crate::dispatch_qualification::is_resolver_op(tag) => {
+            InternalOp::ResolveQualification
+        }
         _ => return None,
     };
     if op == InternalOp::Fetch || op == InternalOp::Report || op == InternalOp::ExecuteCheck {
@@ -148,6 +154,11 @@ fn gate_request() -> Option<InternalRequest> {
         }
         InternalOp::Plan | InternalOp::Merge | InternalOp::Publish => {
             if !path.is_file() {
+                return None;
+            }
+        }
+        InternalOp::ResolveQualification => {
+            if !crate::dispatch_qualification::request_is_eligible(&path) {
                 return None;
             }
         }
@@ -198,6 +209,7 @@ fn run_internal(request: &InternalRequest) -> ExitCode {
         },
         InternalOp::Publish => run_publish_internal(&request.path),
         InternalOp::RepoPolicy => crate::dispatch_repo_policy::run(&request.path),
+        InternalOp::ResolveQualification => crate::dispatch_qualification::run(&request.path),
     }
 }
 

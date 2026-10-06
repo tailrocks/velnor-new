@@ -3,6 +3,7 @@ pub mod artifacts;
 pub mod baseline;
 pub mod cache_ids;
 pub mod crate_job;
+pub mod dispatch;
 pub mod execute;
 pub mod ir;
 pub mod jobs;
@@ -14,6 +15,9 @@ pub mod permissions;
 pub mod plan;
 pub mod platform;
 pub mod qualification;
+pub mod qualification_cache_lineage;
+pub mod qualification_dispatch;
+pub mod qualification_phase;
 pub mod report;
 mod report_validate;
 pub mod step;
@@ -29,6 +33,7 @@ pub use artifacts::{
 pub use baseline::{BaselineProof, BaselineStatus, ManifestTaskProof, PlanBaseline};
 pub use cache_ids::EntryCacheIds;
 pub use crate_job::{CrateJob, CrateObligation};
+pub use dispatch::{DispatchInput, DispatchInputType, WorkflowDispatch};
 pub use execute::{ExecuteTaskIds, ExecuteTaskRef};
 pub use ir::{Concurrency, Job, Trigger, WorkflowIr};
 pub use jobs::{
@@ -44,13 +49,12 @@ pub use lanes::{
     NAMED_CHECK_LANES_ENV, NamedCheckLane, NamedCheckLaneVariant, SCALE_SUFFIX, expand_workflow,
     lane_class, named_check_lanes,
 };
-pub use matrix_entry::MatrixEntry;
 pub use needs::{
     NEEDS_CHANNEL_ENV, NEEDS_CHANNEL_EXPRESSION, NEEDS_EXPECTED_ENV, NeedsConclusions,
 };
 pub use permissions::{PermissionLevel, Permissions};
 pub use plan::{
-    DYNAMIC_MATRIX_OUTPUT_MODE, ObligationDecision, PLAN_MATRIX_OUTPUT_MODE_ENV, Plan,
+    DYNAMIC_MATRIX_OUTPUT_MODE, MatrixEntry, ObligationDecision, PLAN_MATRIX_OUTPUT_MODE_ENV, Plan,
     PlanGenerator, PlanMatrix, PlanObligation, PlanPackage, PlanRunner, WorkflowEvent,
     validate_matrix_run,
 };
@@ -62,6 +66,29 @@ pub use qualification::{
     FinalCounts, FinalReport, FinalStatus, JobConclusion, RequiredJobResult,
     final_report_id_for_run, final_report_relpath, join_runner_temp, matrix_report_relpath,
     task_report_relpath, validate_final_report_id,
+};
+pub use qualification_cache_lineage::{
+    BoundQualificationCacheKeys, MAX_QUALIFICATION_CACHE_LANES, MAX_QUALIFICATION_RECEIPT_BYTES,
+    MAX_QUALIFICATION_RECEIPT_DEPTH, QUALIFICATION_CACHE_DIRECTIVES_OUTPUT,
+    QUALIFICATION_CACHE_RECEIPT_ARTIFACT, QUALIFICATION_CACHE_RECEIPT_FILENAME,
+    QualificationCacheAdmission, QualificationCacheArtifact, QualificationCacheBackendEntry,
+    QualificationCacheBackendObservation, QualificationCacheDirective,
+    QualificationCacheLaneDirective, QualificationCacheLaneReceipt, QualificationCacheLayer,
+    QualificationCacheLayerDirective, QualificationCacheLayerReceipt,
+    QualificationCacheProducerContext, QualificationCacheReceipt,
+    QualificationCacheReceiptArtifactDocument, QualificationCacheReceiptLink,
+    QualificationCacheRestore, QualificationCacheRestoreDirective,
+    QualificationCacheRestoreExpectation, QualificationCacheRestorePolicy,
+    QualificationCacheRestoreResult, QualificationCacheRunMetadata, QualificationCacheSave,
+    QualificationCacheSaveActionResult, QualificationCacheSavePolicy, QualificationCacheSlot,
+    QualificationRuntimeIdentity, QualificationRuntimeIdentityField,
+    QualificationRuntimeIdentityRequirements, QualificationRuntimePlatform,
+    QualificationSourceDelta,
+};
+pub use qualification_dispatch::{QualificationDispatch, QualificationRunRef};
+pub use qualification_phase::{
+    QUALIFICATION_CACHE_ENABLED_OUTPUT, QUALIFICATION_CACHE_WRITE_OUTPUT,
+    QUALIFICATION_CAMPAIGN_OUTPUT, QUALIFICATION_PHASE_OUTPUT, QualificationPhase,
 };
 pub use report::{
     CacheLayer, CacheOutcome, CacheResult, MatrixReport, MatrixStatus, MatrixTaskEntry,

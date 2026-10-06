@@ -23,8 +23,6 @@ use crate::{
 
 #[path = "render_action_pins.rs"]
 mod action_pins_impl;
-#[path = "validator_tools.rs"]
-mod validator_tools;
 pub use action_pins_impl::action_pins;
 
 pub use crate::matrix::{
@@ -153,7 +151,6 @@ impl RenderContext {
             if command.name.trim().is_empty() {
                 return Err(RenderError::BadCommand("empty_validator_name".to_owned()));
             }
-            validator_tools::validate_validator_tool_closure(command)?;
             if !command.prepare_argv.is_empty() {
                 commands::validate_command_argv(&command.prepare_argv)?;
             }
@@ -298,6 +295,7 @@ pub fn finalize_jobs(
     closure::insert_task_closure(&mut jobs)?;
     closure::insert_final_closure(&mut jobs)?;
     final_steps::insert_final_fanin(&mut jobs, ctx)?;
+    crate::dispatch_cache_boundary::suppress_unvalidated_cache_access(&mut jobs);
     validate_final_jobs(ir, &jobs)?;
     Ok(jobs)
 }

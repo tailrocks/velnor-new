@@ -68,6 +68,13 @@ fn rust_proposals_require_rust_without_inventory_records() {
     assert!(plan_uses_rust(&discovery, WorkflowPolicy::ConsumerV1));
 }
 
+pub(crate) fn needs(rust: PlanRustNeed) -> PlanJobToolNeeds {
+    PlanJobToolNeeds {
+        rust,
+        ..PlanJobToolNeeds::default()
+    }
+}
+
 /// Internal operation of one step, if any.
 fn operation_of(step: &Step) -> Option<&str> {
     match &step.kind {
@@ -77,7 +84,7 @@ fn operation_of(step: &Step) -> Option<&str> {
 }
 
 /// Assert Write request precedes `target` with the expected operations.
-fn assert_request_before(job: &Job, target: &str, request: &str, operation: &str) {
+pub(crate) fn assert_request_before(job: &Job, target: &str, request: &str, operation: &str) {
     let names: Vec<&str> = job.steps.iter().map(|step| step.name.as_str()).collect();
     let write_at = names.iter().position(|name| *name == "Write request");
     let target_at = names.iter().position(|name| *name == target);
@@ -100,16 +107,78 @@ fn assert_request_before(job: &Job, target: &str, request: &str, operation: &str
 fn plan_job_writes_request_before_plan() {
     let catalog = ToolCatalog::pinned();
     for acquire in [None, Some(checkout_action().expect("checkout step"))] {
-        let job =
-            plan_job("ubuntu-26.04", acquire, &catalog, true, false, false, &[]).expect("plan job");
+        let job = plan_job(
+            "ubuntu-26.04",
+            acquire,
+            &catalog,
+            needs(PlanRustNeed::CompilerAndComponents),
+            &[],
+        )
+        .expect("plan job");
         assert_request_before(&job, "Plan", "write-request-v1:plan-v1", PLAN_OPERATION);
+        assert!(
+            !job.steps
+                .iter()
+                .any(|step| step.name == "Resolve qualification predecessor"),
+            "consumer planner has no resolver: {:?}",
+            job.steps
+        );
     }
+}
+
+#[test]
+fn qualification_resolver_is_scoped_between_request_and_plan() {
+    let catalog = ToolCatalog::pinned();
+    let job = plan_job(
+        "ubuntu-26.04",
+        None,
+        &catalog,
+        PlanJobToolNeeds {
+            gh: true,
+            ..needs(PlanRustNeed::CompilerAndComponents)
+        },
+        &[],
+    )
+    .expect("qualification plan job");
+    let names: Vec<&str> = job.steps.iter().map(|step| step.name.as_str()).collect();
+    let request = names
+        .iter()
+        .position(|name| *name == "Write request")
+        .expect("request step");
+    let resolver = names
+        .iter()
+        .position(|name| *name == "Resolve qualification predecessor")
+        .expect("resolver step");
+    let plan = names
+        .iter()
+        .position(|name| *name == "Plan")
+        .expect("plan step");
+    assert!(request < resolver && resolver < plan, "{names:?}");
+    assert_eq!(
+        job.steps[resolver].condition.as_deref(),
+        Some("github.event_name == 'workflow_dispatch'")
+    );
+    let tools = plan_tools(PlanJobToolNeeds {
+        gh: true,
+        ..needs(PlanRustNeed::CompilerAndComponents)
+    });
+    assert!(
+        tools.contains(&PinnedTool::Gh),
+        "resolver installs pinned gh"
+    );
 }
 
 #[test]
 fn plan_job_checks_out_full_history_for_archaeology() {
     let catalog = ToolCatalog::pinned();
-    let job = plan_job("ubuntu-26.04", None, &catalog, true, false, false, &[]).expect("plan job");
+    let job = plan_job(
+        "ubuntu-26.04",
+        None,
+        &catalog,
+        needs(PlanRustNeed::CompilerAndComponents),
+        &[],
+    )
+    .expect("plan job");
     let StepKind::Action { with, .. } = &job.steps[0].kind else {
         panic!("plan must start with checkout");
     };
@@ -131,7 +200,7 @@ fn plan_job_checks_out_full_history_for_archaeology() {
 #[test]
 fn plan_tools_follow_role_in_all_order() {
     assert_eq!(
-        plan_tools(true, false, false),
+        plan_tools(needs(PlanRustNeed::CompilerAndComponents)),
         vec![
             PinnedTool::Rust,
             PinnedTool::Actionlint,
@@ -140,7 +209,10 @@ fn plan_tools_follow_role_in_all_order() {
         ]
     );
     assert_eq!(
-        plan_tools(false, false, true),
+        plan_tools(PlanJobToolNeeds {
+            opentofu: true,
+            ..needs(PlanRustNeed::None)
+        }),
         vec![
             PinnedTool::Actionlint,
             PinnedTool::Shellcheck,
@@ -150,7 +222,11 @@ fn plan_tools_follow_role_in_all_order() {
         "pure-tofu plans carry opentofu plus the validators, no Rust"
     );
     assert_eq!(
-        plan_tools(true, true, true),
+        plan_tools(PlanJobToolNeeds {
+            nextest: true,
+            opentofu: true,
+            ..needs(PlanRustNeed::CompilerAndComponents)
+        }),
         vec![
             PinnedTool::Rust,
             PinnedTool::Actionlint,
@@ -162,9 +238,16 @@ fn plan_tools_follow_role_in_all_order() {
         "mixed plans carry the union"
     );
     for tools in [
-        plan_tools(true, false, false),
-        plan_tools(false, false, true),
-        plan_tools(true, true, true),
+        plan_tools(needs(PlanRustNeed::CompilerAndComponents)),
+        plan_tools(PlanJobToolNeeds {
+            opentofu: true,
+            ..needs(PlanRustNeed::None)
+        }),
+        plan_tools(PlanJobToolNeeds {
+            nextest: true,
+            opentofu: true,
+            ..needs(PlanRustNeed::CompilerAndComponents)
+        }),
     ] {
         let order: Vec<usize> = tools
             .iter()
@@ -189,9 +272,10 @@ fn plan_job_prepares_pinned_tools_before_generate_consumers() {
             "ubuntu-26.04",
             None,
             &catalog,
-            true,
-            use_nextest,
-            false,
+            PlanJobToolNeeds {
+                nextest: use_nextest,
+                ..needs(PlanRustNeed::CompilerAndComponents)
+            },
             &[],
         )
         .expect("plan job");
@@ -249,117 +333,4 @@ fn plan_job_prepares_pinned_tools_before_generate_consumers() {
             "prepare pins the lockfile off so installs never rewrite it: {env:?}"
         );
     }
-}
-
-#[test]
-fn lint_job_installs_exact_actionlint_tools_before_exec() -> Result<(), Box<dyn std::error::Error>>
-{
-    let job = lint_job("ubuntu-26.04", &ToolCatalog::pinned())?;
-    let names: Vec<&str> = job.steps.iter().map(|step| step.name.as_str()).collect();
-    assert_eq!(
-        names,
-        ["Checkout", PREPARE_PINNED_TOOLS_STEP, "Run actionlint"]
-    );
-    let StepKind::Shell { run, .. } = &job.steps[1].kind else {
-        return Err("pinned preparation must be a shell step".into());
-    };
-    let install_at = run.iter().position(|argument| argument == "install");
-    let installed = install_at.map(|at| run[at + 1..].to_vec());
-    assert_eq!(
-        installed,
-        Some(vec![
-            "actionlint@1.7.12".to_owned(),
-            "shellcheck@0.11.0".to_owned()
-        ])
-    );
-    Ok(())
-}
-
-#[test]
-fn pure_tofu_plan_drops_all_rust_setup() {
-    use velnor_actions_mise::PREPARE_RUST_COMPONENTS_STEP;
-
-    use crate::source_prep::FETCH_SOURCES_STEP;
-    let catalog = ToolCatalog::pinned();
-    let job = plan_job("ubuntu-26.04", None, &catalog, false, false, true, &[]).expect("plan job");
-    let names: Vec<&str> = job.steps.iter().map(|step| step.name.as_str()).collect();
-    assert!(
-        !names.contains(&PREPARE_RUST_COMPONENTS_STEP),
-        "no components step: {names:?}"
-    );
-    assert!(
-        !names
-            .iter()
-            .any(|name| name.starts_with(FETCH_SOURCES_STEP)),
-        "no {FETCH_SOURCES_STEP}: {names:?}"
-    );
-    let prepare_at = names
-        .iter()
-        .position(|name| *name == PREPARE_PINNED_TOOLS_STEP)
-        .expect("prepare step");
-    let StepKind::Shell { run, env } = &job.steps[prepare_at].kind else {
-        panic!("prepare must be a shell step: {names:?}");
-    };
-    let install_at = run
-        .iter()
-        .position(|arg| arg == "install")
-        .expect("install argv");
-    let specs = &run[install_at + 1..];
-    assert_eq!(
-        specs,
-        [
-            catalog.tool_spec(PinnedTool::Actionlint),
-            catalog.tool_spec(PinnedTool::Shellcheck),
-            catalog.tool_spec(PinnedTool::Zizmor),
-            catalog.tool_spec(PinnedTool::Opentofu),
-        ]
-        .as_slice(),
-        "pure-tofu plan installs opentofu plus validators: {run:?}"
-    );
-    for key in ["MISE_RUSTUP_HOME", "MISE_CARGO_HOME", "RUSTUP_TOOLCHAIN"] {
-        assert!(!env.contains_key(key), "prepare carries no {key}: {env:?}");
-    }
-    assert_eq!(
-        env.get("MISE_NO_CONFIG").map(String::as_str),
-        Some("1"),
-        "isolation overlay stays: {env:?}"
-    );
-}
-
-#[test]
-fn final_job_writes_request_before_merge() {
-    let catalog = ToolCatalog::pinned();
-    for acquire in [None, Some(checkout_action().expect("checkout step"))] {
-        let job = final_job("ubuntu-26.04", &["rust-demo".to_owned()], acquire, &catalog)
-            .expect("final job");
-        assert_request_before(
-            &job,
-            "Merge reports",
-            "write-request-v1:merge-v1",
-            MERGE_OPERATION,
-        );
-    }
-}
-
-#[test]
-fn final_job_needs_plan_crates_and_lint() {
-    let catalog = ToolCatalog::pinned();
-    let job = final_job(
-        "ubuntu-26.04",
-        &["rust-demo".to_owned(), "rust-nested".to_owned()],
-        None,
-        &catalog,
-    )
-    .expect("final job");
-    assert_eq!(
-        job.needs,
-        [
-            PLAN_JOB_ID.to_owned(),
-            "rust-demo".to_owned(),
-            "rust-nested".to_owned(),
-            LINT_JOB_ID.to_owned(),
-        ]
-    );
-    let job = final_job("ubuntu-26.04", &[], None, &catalog).expect("final job");
-    assert_eq!(job.needs, [PLAN_JOB_ID.to_owned(), LINT_JOB_ID.to_owned()]);
 }
