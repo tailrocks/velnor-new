@@ -320,7 +320,7 @@ fn assert_image_producer(body: &str) -> TestResult {
     assert!(body.contains(HOSTED_RUNS));
     assert_release_permissions(body, "attest-images", "publish-images")?;
     assert!(!body.contains("echo release"));
-    assert!(!body.contains("inputs:"));
+    assert!(body.contains("source_sha"));
     assert!(!body.contains("packages:"));
     assert!(!body.contains("CARGO_REGISTRY_TOKEN"));
     assert!(!body.contains("secrets:"));
@@ -348,7 +348,7 @@ fn assert_macos_producer(body: &str) -> TestResult {
     assert!(body.contains("binary-${GITHUB_SHA}"));
     assert_release_permissions(body, "attest-binary", "publish-binary")?;
     assert!(!body.contains("echo release"));
-    assert!(!body.contains("inputs:"));
+    assert!(body.contains("source_sha"));
     assert!(!body.contains("packages:"));
     assert!(!body.contains("CARGO_REGISTRY_TOKEN"));
     Ok(())
@@ -357,7 +357,10 @@ fn assert_macos_producer(body: &str) -> TestResult {
 fn assert_release_permissions(body: &str, attest: &str, publish: &str) -> TestResult {
     assert_eq!(body.matches("id-token: write").count(), 1, "{body}");
     assert_eq!(body.matches("contents: write").count(), 1, "{body}");
-    assert!(body.contains("workflow_dispatch: {}"), "{body}");
+    assert!(
+        body.contains("workflow_dispatch:\n    inputs:\n      source_sha:"),
+        "{body}"
+    );
     let attest_body = job_body(body, attest)?;
     let publish_body = job_body(body, publish)?;
     assert!(attest_body.contains("id-token: write"), "{attest_body}");

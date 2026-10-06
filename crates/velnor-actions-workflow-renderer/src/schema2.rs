@@ -80,6 +80,8 @@ mod generator_release_pins;
 mod mbx_qualification;
 #[path = "schema2_release.rs"]
 mod release;
+#[path = "schema2_release_workflows.rs"]
+mod release_workflows;
 pub use generator_release_pins::GeneratorReleasePins;
 /// Exact-source gates for composed product-release workflows.
 #[path = "schema2_release_eligibility.rs"]
@@ -156,7 +158,7 @@ pub fn render_schema2_workflows(
         files.push(file(
             IMAGE_RELEASE_WORKFLOW,
             &request.version,
-            &release::image_release(request)?,
+            &release_workflows::image_release(request)?,
         )?);
     }
     if request
@@ -166,7 +168,7 @@ pub fn render_schema2_workflows(
         files.push(file(
             MACOS_BINARY_RELEASE_WORKFLOW,
             &request.version,
-            &release::macos_binary_release(request)?,
+            &release_workflows::macos_binary_release(request)?,
         )?);
     }
     if request

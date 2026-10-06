@@ -41,7 +41,7 @@ impl Scenario {
         Self {
             repository: REPO.to_owned(),
             ref_name: "refs/heads/main".to_owned(),
-            event: "push".to_owned(),
+            event: "workflow_dispatch".to_owned(),
             workflow_ref: WORKFLOW.to_owned(),
             source_sha: SHA.to_owned(),
             authority_sha: AUTHORITY.to_owned(),
@@ -89,6 +89,17 @@ set -eu
 [ "$1" = "--" ] && shift
 [ "$1" = "gh" ] && shift
 exec gh "$@"
+"#;
+
+const GIT_STUB: &str = r#"#!/bin/sh
+set -eu
+for arg do
+  if [ "$arg" = "HEAD" ]; then
+    printf '%s\n' "$VELNOR_TEST_GIT_SHA"
+    exit 0
+  fi
+done
+exit 64
 "#;
 
 const GH_STUB: &str = r#"#!/bin/sh
@@ -154,6 +165,7 @@ fn create_fixture(scenario: &Scenario) -> Result<Fixture, Box<dyn Error>> {
     fs::write(&calls, "")?;
     fs::write(&output, "")?;
     write_executable(&bin.join("mise"), MISE_STUB)?;
+    write_executable(&bin.join("git"), GIT_STUB)?;
     write_executable(&bin.join("gh"), GH_STUB)?;
     Ok(Fixture {
         directory,
@@ -206,9 +218,15 @@ fn job_pages(jobs: &[String]) -> String {
 fn execute(scenario: Scenario) -> Result<Execution, Box<dyn Error>> {
     let fixture = create_fixture(&scenario)?;
     let path = std::env::var("PATH")?;
+    let workflow_path = scenario
+        .workflow_ref
+        .strip_prefix(&scenario.repository)
+        .and_then(|path| path.strip_prefix('/'))
+        .and_then(|path| path.split_once('@'))
+        .map_or(scenario.workflow_ref.as_str(), |(path, _)| path);
     let output = Command::new("bash")
         .args(["-euo", "pipefail", "-c"])
-        .arg(script())
+        .arg(script(workflow_path))
         .env("PATH", format!("{}:{path}", fixture.bin.display()))
         .env("VELNOR_TEST_FIXTURES", &fixture.directory)
         .env("VELNOR_TEST_CALLS", &fixture.calls)
@@ -218,6 +236,8 @@ fn execute(scenario: Scenario) -> Result<Execution, Box<dyn Error>> {
         .env("GITHUB_REF", scenario.ref_name)
         .env("GITHUB_EVENT_NAME", scenario.event)
         .env("GITHUB_WORKFLOW_REF", scenario.workflow_ref)
+        .env("VELNOR_RELEASE_SOURCE_SHA", scenario.source_sha.clone())
+        .env("VELNOR_TEST_GIT_SHA", scenario.source_sha.clone())
         .env("GITHUB_SHA", scenario.source_sha)
         .env("GITHUB_WORKFLOW_SHA", scenario.authority_sha)
         .env("GITHUB_OUTPUT", &fixture.output)
@@ -285,7 +305,7 @@ fn rejects_newer_failed_run_instead_of_reusing_old_success() -> Result<(), Box<d
 
 #[test]
 fn script_uses_the_expected_paginated_selectors_and_bounded_wait() {
-    let rendered = script();
+    let rendered = script(super::super::IMAGE_RELEASE_WORKFLOW);
     assert!(!rendered.contains("@LATEST_RUN_JQ@"));
     assert!(!rendered.contains("@REQUIRED_JOB_JQ@"));
     assert!(rendered.contains("/actions/runs/$run_id/attempts/$run_attempt/jobs?per_page=100"));
@@ -300,7 +320,10 @@ fn script_uses_the_expected_paginated_selectors_and_bounded_wait() {
 
 #[test]
 fn job_renders_a_read_only_source_gate() {
-    let (name, value) = job(crate::yaml::Yaml::str("ubuntu-latest"));
+    let (name, value) = job(
+        crate::yaml::Yaml::str("ubuntu-latest"),
+        super::super::IMAGE_RELEASE_WORKFLOW,
+    );
     assert_eq!(name, JOB_ID);
     let rendered = crate::yaml::render_yaml(&crate::yaml::Yaml::Map(vec![(name, value)]));
     assert!(rendered.contains("actions: read"));
