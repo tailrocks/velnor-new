@@ -157,6 +157,13 @@ worker's private DinD engine. The runner container is not privileged. The job
 does not receive the outer Docker socket, host home, Keychain, SSH agent,
 controller config, or management tokens.
 
+Admission accounts for already occupied jobs and measured guest CPU,
+available memory, and Docker-root free space. Those measurements describe
+current headroom; they are not durable quotas. In particular, Docker named
+volumes have no per-job storage-size limit here. Free-space checks cannot stop
+a job from consuming the remaining Docker-root storage, so enforced storage
+isolation remains unproven.
+
 `/var/run/docker.sock` inside the runner and inside the private daemon resolves
 to that worker's socket, never the outer engine socket. Named volumes back
 work, temp, actions, tools, and the socket. JIT is delivered on a short-lived
