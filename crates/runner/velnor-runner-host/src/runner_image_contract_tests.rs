@@ -5,12 +5,12 @@ use velnor_runner_core::{RUNNER_ROOT, RUNNER_WORK_FOLDER, runner_work_path};
 use velnor_runner_github::jit_request;
 
 const RUNNER_DOCKERFILE: &str =
-    include_str!("../../../../../images/runner/ubuntu-26.04/Dockerfile");
+    include_str!("../../../../images/runner/ubuntu-26.04/Dockerfile");
 const RUNNER_ENTRYPOINT: &str =
-    include_str!("../../../../../images/runner/ubuntu-26.04/entrypoint.sh");
-const RUNNER_README: &str = include_str!("../../../../../images/runner/ubuntu-26.04/README.md");
-const DIND_DOCKERFILE: &str = include_str!("../../../../../images/dind/Dockerfile");
-const DIND_README: &str = include_str!("../../../../../images/dind/README.md");
+    include_str!("../../../../images/runner/ubuntu-26.04/entrypoint.sh");
+const RUNNER_README: &str = include_str!("../../../../images/runner/ubuntu-26.04/README.md");
+const DIND_DOCKERFILE: &str = include_str!("../../../../images/dind/Dockerfile");
+const DIND_README: &str = include_str!("../../../../images/dind/README.md");
 
 #[test]
 fn jit_work_folder_resolves_to_both_worker_mounts() -> Result<(), String> {

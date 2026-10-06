@@ -254,3 +254,95 @@ unmoved `*_tests.rs`.
 - `docs-dir-present` / `docs-root-only-allowed` already pass and
   must stay green through the migration (new app files must not
   violate root allowlists or layout bans).
+
+## Slice 2: runner merge + centralization (2026-10-06)
+
+- Merged the 4 `velnor-runner-*` crates into the root product
+  workspace: single 13-member list, single root `Cargo.lock`, no
+  `exclude`. Nested `crates/velnor-runner/Cargo.toml`,
+  `Cargo.lock`, `deny.toml`, `clippy.toml`, `.config/nextest.toml`
+  deleted; root `deny.toml` absorbed the runner gate's `Zlib`
+  allow (foldhash via turso); root `clippy.toml` was already
+  identical; root `.config/nextest.toml` (a superset) now governs.
+- Sequencing note: the slice gate `layout-no-deep-crate-manifest =
+  0` is unsatisfiable with paths unchanged (the rule is a pure
+  depth-3+ path ban), so the runner group move landed in this
+  slice instead of Step 4: `crates/velnor-runner/crates/*` →
+  `crates/runner/*` (the Step 4 proposed group name). Remaining
+  Step 4 scope is the 8 `actions` crates + archive-guard.
+- Release versions preserved: runner crates pin `version =
+  "0.1.0"` (NOT `workspace`, which is `0.1.1`); all other keys
+  stay inherited. Cost: 4 `GAP-INHERIT-001` findings — file as an
+  upstream multi-product-version question; clears when runner cuts
+  its own 0.1.1 or policy carves out independent versions.
+- S5 centralization: root `[workspace.dependencies]` now holds all
+  22 external deps (3 old + 19 centralized); zero direct external
+  version pins remain in any member manifest. Feature-divergent
+  pairs preserved exactly: workspace `rustix` carries `fs`, mise
+  adds `process`; workspace `sha2` is `default-features = false`,
+  orchestrator adds `alloc`+`oid` (= sha2 0.11's default set).
+  Intra-workspace path deps keep inline `version`+`path` (repo
+  convention; direction-clean).
+- Registries: `owned-packages.json` 9→13;
+  `package-groups.json` adds `velnor-runner-cli: tool`,
+  core/github/host `library`. Edges stay `library→library` /
+  `tool→library`: zero direction violations. `ci-recipes.json`
+  untouched (job IDs unchanged).
+- Depth-assuming readers inside moved crates fixed (2 files):
+  `include_str!(".../images/...")` 5→4 `../` in
+  `runner_image_contract_tests.rs`; `exclusion.rs` rewritten to
+  assert the merged structure (4 runner members, no `exclude`).
+- Known breakage owned by later slices (recorded, not fixed
+  here): generated workflows still invoke
+  `crates/velnor-runner/Cargo.toml` + nested deny/lock (deny job,
+  fetch steps, cache keys) — generator slice regenerates;
+  generator tests pinning the nested layout (`p11_metadata.rs`
+  `WORKSPACE_MANIFESTS`/`RUNNER_MEMBERS`, `p11_alint*` lock
+  fixtures, `impl_schema2_routing.rs`,
+  `schema2_release_snapshots.rs`, `vectors_tests.rs`,
+  `schema2_release.rs`, `MACHETE_SCAN_CRATES`) fail on `nextest
+  run` until the generator/test slices land; `scripts/verify-local.sh`
+  references the deleted nested manifest.
+- Verify: `cargo metadata --locked` lists 13 packages (9×0.1.1 +
+  4×0.1.0); `cargo check --locked --workspace --all-targets`
+  green; `cargo nextest list --locked --workspace` enumerates 3368
+  tests; moved-crate runs green (`velnor-runner-core` 12/12,
+  `velnor-runner-host --lib` 162/162). Toolchain: alint 0.17.0,
+  `rust-repository-policy` 0.1.0, cargo 1.98.1.
+
+### Before/after counts (slice 2)
+
+Native rules:
+
+| Rule ID | Before | After | Δ |
+|---|---|---|---|
+| `layout-no-deep-crate-manifest` | 4 | 0 | −4 (gate met) |
+| `layout-no-flat-crate-manifest` | 10 | 9 | −1 (nested root manifest gone) |
+| `tests-dir-present` | 21 | 20 | −1 net (2 spurious nested matches gone, 1 REAL: `runner-host` has no `tests/`) |
+| `tests-no-test-files-in-src` | 0 | 34 | +34 armed on move day, all under `crates/runner/*/src` |
+| `ci-build-runs-on` | 6 | 6 | 0 |
+| `layout-requires-rust-toolchain` + parity pair | 3 | 3 | 0 |
+| `size-lib-main-150` | 1 | 1 | 0 |
+| `policy-gaps` | 1200 | 1429 | +229 (all under `crates/runner/`) |
+
+Newly armed-but-passing-for-real on the 4 moved crates:
+`cargo-workspace-inherit-edition/license/lints`, `tests-only-rust`.
+
+Helper gaps:
+
+| Gap ID | Before | After | Δ |
+|---|---|---|---|
+| `GAP-TEST-001` | 816 | 1039 | +223 (host 195, cli 24, core 4, github 0) |
+| `GAP-TEST-002` | 122 | 122 | 0 (runner has no `#[path]` suites) |
+| `GAP-TEST-003` | 250 | 250 | 0 |
+| `GAP-SIZE-001` | 7 | 8 | +1 (`velnor-runner-host`, 10865 lines) |
+| `GAP-SIZE-002` | 5 | 6 | +1 (`velnor-runner-host`, 76 files) |
+| `GAP-INHERIT-001` | 0 | 4 | +4 (explicit `0.1.0` versions, see above) |
+| Total | 1200 | 1429 | +229 |
+
+Step 2 plan updates: the pre-declared one-time TEST/SIZE jump
+materialized exactly (+229, all runner-attributed); the runner
+group move is done, so Step 4's remaining scope is `actions/*` (8)
++ `guard/velnor-archive-guard`. Step 3 (test normalization) must
+now also cover the 4 runner crates (223 TEST-001 + 34
+`tests-no-test-files-in-src` + host `tests/` creation).

@@ -18,13 +18,13 @@ name = "archive_guard_cli"
 path = "tests/archive_guard_cli.rs"
 
 [dependencies]
-flate2 = { version = "=1.1.10", default-features = false, features = ["rust_backend"] }
+flate2 = { workspace = true }
 
 [build-dependencies]
-sha2 = { version = "=0.11.0", default-features = false }
+sha2 = { workspace = true }
 
 [dev-dependencies]
-sha2 = { version = "=0.11.0", default-features = false }
+sha2 = { workspace = true }
 
 [lints]
 workspace = true

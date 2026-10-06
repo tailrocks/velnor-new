@@ -9,6 +9,10 @@
     "velnor-actions-rust",
     "velnor-actions-tofu",
     "velnor-actions-workflow-renderer",
-    "velnor-archive-guard"
+    "velnor-archive-guard",
+    "velnor-runner-cli",
+    "velnor-runner-core",
+    "velnor-runner-github",
+    "velnor-runner-host"
   ]
 }

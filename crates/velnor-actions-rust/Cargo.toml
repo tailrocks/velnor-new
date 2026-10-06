@@ -13,7 +13,7 @@ workspace = true
 velnor-actions-contract = { version = "=0.1.1", path = "../velnor-actions-contract" }
 serde = { workspace = true }
 serde_json = { workspace = true }
-toml = { version = "=0.9.12" }
+toml = { workspace = true }
 
 [[test]]
 name = "velnor_rust"
